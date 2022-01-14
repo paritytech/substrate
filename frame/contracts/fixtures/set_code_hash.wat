@@ -35,7 +35,7 @@
 		)
 
 		;; we return 1 after setting new code_hash
-		;; next call will NOT return this value, because contract code has been changed
+		;; next `call` will NOT return this value, because contract code has been changed
 		(call $seal_return (i32.const 0) (i32.const 36) (i32.const 4))
 	)
 

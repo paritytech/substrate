@@ -3,7 +3,7 @@
 	(import "env" "memory" (memory 1 1))
 
 	;; [0, 32) return value
-	(data (i32.const 0) "\11")
+	(data (i32.const 0) "\02")
 
 	(func (export "deploy"))
 

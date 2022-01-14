@@ -2850,12 +2850,12 @@ fn set_code_hash() {
 		.unwrap();
 		assert_return_code!(result, 1);
 
-		// Second calls new contract code that returns 17
+		// Second calls new contract code that returns 2
 		let result =
 			Contracts::bare_call(ALICE, contract_addr.clone(), 0, GAS_LIMIT, None, vec![], true)
 				.result
 				.unwrap();
-		assert_return_code!(result, 17);
+		assert_return_code!(result, 2);
 	});
 }
 
