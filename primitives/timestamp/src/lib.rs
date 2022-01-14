@@ -182,9 +182,31 @@ pub struct InherentDataProvider {
 impl InherentDataProvider {
 	/// Create `Self` while using the system time to get the timestamp.
 	pub fn from_system_time() -> Self {
+		let timestamp = current_timestamp().as_millis() as u64;
+
+		// MOONBEAM HOTFIX: mutate timestamp to make it revert back in time and have slots
+		// happen at 48x their speed from then until we have caught up with the present time.
+		const REVIVE_TIMESTAMP: u64 = 1642105111666; // 2022-01-13T20:18:31.666Z
+		const FORK_TIMESTAMP: u64 =   1642006674001; // 2022-01-12T16:57:54.001Z
+		const WARP_FACTOR: u64 = 48;
+
+		let time_since_revival = timestamp.saturating_sub(REVIVE_TIMESTAMP);
+		let warped_timestamp = FORK_TIMESTAMP + WARP_FACTOR * time_since_revival;
+
+		log::debug!(target: "babe", "timestamp warped: {:?} to {:?} ({:?} since revival)",
+			timestamp,
+			warped_timestamp,
+			time_since_revival,
+		);
+
+		// we want to ensure our timestamp is such that slots run monotonically with blocks
+		// at 1/48th of the slot_duration from this slot onwards until we catch up to the
+		// wall-clock time.
+		let timestamp = timestamp.min(warped_timestamp);
+
 		Self {
 			max_drift: std::time::Duration::from_secs(60).into(),
-			timestamp: current_timestamp().into(),
+			timestamp: timestamp.into(),
 		}
 	}
 

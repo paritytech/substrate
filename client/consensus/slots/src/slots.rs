@@ -39,6 +39,8 @@ pub fn duration_now() -> Duration {
 
 /// Returns the duration until the next slot from now.
 pub fn time_until_next_slot(slot_duration: Duration) -> Duration {
+	// MOONBEAM HOTFIX: poll the slot 48 times as often since we might be in a time warp.
+	let slot_duration = slot_duration / 48;
 	let now = duration_now().as_millis();
 
 	let next_slot = (now + slot_duration.as_millis()) / slot_duration.as_millis();
