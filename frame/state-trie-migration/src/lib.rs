@@ -22,7 +22,7 @@
 //!
 //! ## Migration Types
 //!
-//! This pallet provides 3 ways to do this, each of which is suited for a particular use-case, and
+//! This pallet provides 2 ways to do this, each of which is suited for a particular use-case, and
 //! can be enabled independently.
 //!
 //! ### Auto migration
