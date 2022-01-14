@@ -176,7 +176,7 @@ impl<
 	> ExecuteBlock<Block>
 	for Executive<System, Block, Context, UnsignedValidator, AllPallets, COnRuntimeUpgrade>
 where
-	Block::Extrinsic: IdentifyAccountWithLookup<Context> + Checkable<Context> + Codec,
+	Block::Extrinsic: IdentifyAccountWithLookup<Context, AccountId = System::AccountId> + Checkable<Context> + Codec,
 	CheckedOf<Block::Extrinsic, Context>: Applyable + GetDispatchInfo,
 	CallOf<Block::Extrinsic, Context>:
 		Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
@@ -203,7 +203,7 @@ where
 			UnsignedValidator,
 			AllPallets,
 			COnRuntimeUpgrade,
-		>::execute_block_ver(block);
+		>::execute_block_ver_impl(block);
 	}
 }
 
@@ -427,7 +427,7 @@ where
 	}
 
 	/// Actually execute all transitions for `block`.
-	pub fn execute_block_ver(block: Block) {
+	pub fn execute_block_ver_impl(block: Block) {
 		sp_io::init_tracing();
 		sp_tracing::within_span! {
 			sp_tracing::info_span!("execute_block", ?block);
