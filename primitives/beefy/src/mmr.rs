@@ -35,7 +35,7 @@ pub trait BeefyDataProvider {
 	fn extra_data() -> Vec<u8>;
 }
 
-/// A default implementation for runtimes without parachains.
+/// A default implementation for runtimes.
 impl BeefyDataProvider for () {
 	fn extra_data() -> Vec<u8> {
 		Vec::new()
