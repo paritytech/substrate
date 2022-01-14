@@ -18,15 +18,13 @@
 //! Generic implementation of an unchecked (pre-verification) extrinsic.
 
 use crate::{
-    AccountId32,
 	generic::CheckedExtrinsic,
 	traits::{
-		self, IdentifyAccountWithLookup, Checkable, Extrinsic, ExtrinsicMetadata, IdentifyAccount, MaybeDisplay, Member,
-		SignedExtension,
+		self, Checkable, Extrinsic, ExtrinsicMetadata, IdentifyAccount, IdentifyAccountWithLookup,
+		LookupError, MaybeDisplay, Member, SignedExtension,
 	},
 	transaction_validity::{InvalidTransaction, TransactionValidityError},
-    MultiAddress,
-	OpaqueExtrinsic,
+	AccountId32, OpaqueExtrinsic,
 };
 use codec::{Compact, Decode, Encode, EncodeLike, Error, Input};
 use scale_info::{build::Fields, meta_type, Path, StaticTypeInfo, Type, TypeInfo, TypeParameter};
@@ -109,9 +107,6 @@ impl<Address, Call, Signature, Extra: SignedExtension>
 	pub fn new_unsigned(function: Call) -> Self {
 		Self { signature: None, function }
 	}
-
-    pub fn foo(&self) {
-    }
 }
 
 impl<Address, Call, Signature, Extra: SignedExtension> Extrinsic
@@ -165,55 +160,23 @@ where
 }
 
 impl<Lookup, Address, Call, Signature, Extra> IdentifyAccountWithLookup<Lookup>
-    for UncheckedExtrinsic<Address, Call, Signature, Extra> where
+	for UncheckedExtrinsic<Address, Call, Signature, Extra>
+where
 	Address: Member + MaybeDisplay + Clone,
 	Signature: Member + traits::Verify + Clone,
 	<Signature as traits::Verify>::Signer: IdentifyAccount<AccountId = AccountId32>,
 	Extra: SignedExtension<AccountId = AccountId32>,
 	Lookup: traits::Lookup<Source = Address, Target = AccountId32>,
 {
-    type AccountId = AccountId32;
-	fn get_account_id(&self, lookup: &Lookup) -> Option<AccountId32>{
+	type AccountId = AccountId32;
+	fn get_account_id(&self, lookup: &Lookup) -> Result<Option<AccountId32>, LookupError> {
 		match self.signature {
-			Some((ref signed, _, _)) => {
-				Some(lookup.lookup(signed.clone()).unwrap())
-			},
-			None => None
+			Some((ref signed, _, _)) => lookup.lookup(signed.clone()).map(|addr| Some(addr)),
+			None => Ok(None),
 		}
-    }
+	}
 }
-//
-// impl<Call, Signature, Extra> HasAddress 
-//     for UncheckedExtrinsic<AccountId32, Call, Signature, Extra> where
-// 	Signature: Member + traits::Verify,
-// 	<Signature as traits::Verify>::Signer: IdentifyAccount<AccountId = AccountId32>,
-// 	Extra: SignedExtension<AccountId = AccountId32>,
-// {
-//     type AccountId = AccountId32;
-//     type Address = AccountId32;
-//
-// 	fn get_address(&self) -> Option<Self::AccountId>{
-//         self.signature.as_ref().map(|(sig,_,_)| sig).cloned()
-// 	}
-//
-// 	fn address(&self) -> Option<Self::AccountId>{
-//         self.signature.as_ref().map(|(sig,_,_)| sig).cloned()
-// 	}
-// }
 
-// impl<T, Call, Signature, Extra> HasAddress 
-//     for UncheckedExtrinsic<T, Call, Signature, Extra> where
-// 	Signature: Member + traits::Verify,
-// 	<Signature as traits::Verify>::Signer: IdentifyAccount<AccountId = T>,
-// 	Extra: SignedExtension<AccountId = T>,
-// {
-//     type AccountId = AccountId;
-//
-// 	fn get_address(&self) -> Option<Self::AccountId>{
-//         None
-// 	}
-// }
-//
 impl<Address, Call, Signature, Extra> ExtrinsicMetadata
 	for UncheckedExtrinsic<Address, Call, Signature, Extra>
 where

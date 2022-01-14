@@ -717,9 +717,9 @@ cfg_if! {
 					None
 				}
 
-                fn is_new_session(number: <<Block as BlockT>::Header as HeaderT>::Number) -> bool{
-                    false
-                }
+				fn is_new_session(_: <<Block as BlockT>::Header as HeaderT>::Number) -> bool{
+					false
+				}
 			}
 
 			impl sp_api::Metadata<Block> for Runtime {

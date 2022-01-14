@@ -676,24 +676,24 @@ pub trait Header:
 	}
 
 	/// Returns seed used for shuffling
-	fn seed(&self) -> &ShufflingSeed{
-        unimplemented!()
-    }
+	fn seed(&self) -> &ShufflingSeed {
+		unimplemented!()
+	}
 
 	/// Returns seed used for shuffling
-	fn set_seed(&mut self, _seed: ShufflingSeed){
-        unimplemented!()
-    }
+	fn set_seed(&mut self, _seed: ShufflingSeed) {
+		unimplemented!()
+	}
 
 	/// Returns seed used for shuffling
-	fn count(&self) -> &Self::Number{
-        unimplemented!()
-    }
+	fn count(&self) -> &Self::Number {
+		unimplemented!()
+	}
 
 	/// Returns seed used for shuffling
-	fn set_count(&mut self, _count: Self::Number){
-        unimplemented!()
-    }
+	fn set_count(&mut self, _count: Self::Number) {
+		unimplemented!()
+	}
 }
 
 /// Something which fulfills the abstract idea of a Substrate block. It has types for
@@ -800,10 +800,12 @@ pub trait Checkable<Context>: Sized {
 }
 
 /// Provides information about author
-pub trait IdentifyAccountWithLookup<Lookup>
-{
-    type AccountId;
-	fn get_account_id(&self, lookup: &Lookup)-> Option<Self::AccountId>;
+pub trait IdentifyAccountWithLookup<Lookup> {
+	/// type that identifis account
+	type AccountId;
+
+	/// performs lookup and returns AccountId if available
+	fn get_account_id(&self, lookup: &Lookup) -> Result<Option<Self::AccountId>, LookupError>;
 }
 
 /// A "checkable" piece of information, used by the standard Substrate Executive in order to
