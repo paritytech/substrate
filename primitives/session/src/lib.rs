@@ -47,6 +47,10 @@ sp_api::decl_runtime_apis! {
 		/// Returns the list of public raw public keys + key type.
 		fn decode_session_keys(encoded: Vec<u8>) -> Option<Vec<(Vec<u8>, KeyTypeId)>>;
 	}
+
+	pub trait SessionBoundaryApi<BlockNumber: codec::Codec> {
+		fn get_session_boundary() -> BlockNumber;
+	}
 }
 
 /// Number of validators in a given session.

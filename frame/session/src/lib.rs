@@ -145,6 +145,11 @@ pub trait ShouldEndSession<BlockNumber> {
 	/// Return `true` if the session should be ended.
 	fn should_end_session(now: BlockNumber) -> bool;
 }
+/// Returns the session boundary
+pub trait SessionBoundary<BlockNumber> {
+	/// Returns the block at which the last session ended
+	fn get_session_boundary() -> BlockNumber;
+}
 
 /// Ends the session after a fixed period of blocks.
 ///
@@ -493,6 +498,7 @@ pub mod pallet {
 
 			Validators::<T>::put(initial_validators_0);
 			<QueuedKeys<T>>::put(queued_keys);
+			SessionStart::<T>::put(T::BlockNumber::default());
 
 			T::SessionManager::start_session(0);
 		}
@@ -507,6 +513,11 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn current_index)]
 	pub type CurrentIndex<T> = StorageValue<_, SessionIndex, ValueQuery>;
+
+	/// Block number at which the current session began
+	#[pallet::storage]
+	#[pallet::getter(fn session_start)]
+	pub type SessionStart<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
 
 	/// True if the underlying economic identities or weighting behind the validators
 	/// has changed in the queued validator set.
@@ -571,7 +582,7 @@ pub mod pallet {
 		/// block of the current session.
 		fn on_initialize(n: T::BlockNumber) -> Weight {
 			if T::ShouldEndSession::should_end_session(n) {
-				Self::rotate_session();
+				Self::rotate_session(n);
 				T::BlockWeights::get().max_block
 			} else {
 				// NOTE: the non-database part of the weight for `should_end_session(n)` is
@@ -636,7 +647,7 @@ impl<T: Config> Pallet<T> {
 	/// Move on to next session. Register new validator set and session keys. Changes to the
 	/// validator set have a session of delay to take effect. This allows for equivocation
 	/// punishment after a fork.
-	pub fn rotate_session() {
+	pub fn rotate_session(n: T::BlockNumber) {
 		let session_index = <CurrentIndex<T>>::get();
 		log::trace!(target: "runtime::session", "rotating session {:?}", session_index);
 
@@ -710,6 +721,7 @@ impl<T: Config> Pallet<T> {
 
 		<QueuedKeys<T>>::put(queued_amalgamated.clone());
 		<QueuedChanged<T>>::put(next_changed);
+		SessionStart::<T>::put(n);
 
 		// Record that this happened.
 		Self::deposit_event(Event::NewSession { session_index });
@@ -953,5 +965,11 @@ impl<T: Config, Inner: FindAuthor<u32>> FindAuthor<T::ValidatorId>
 
 		let validators = <Pallet<T>>::validators();
 		validators.get(i as usize).map(|k| k.clone())
+	}
+}
+
+impl<T: Config> SessionBoundary<T::BlockNumber> for Pallet<T> {
+	fn get_session_boundary() -> T::BlockNumber {
+		Pallet::<T>::session_start()
 	}
 }
