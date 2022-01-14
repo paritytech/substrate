@@ -287,7 +287,7 @@ impl<T, S: Get<u32>> BoundedVec<T, S> {
 
 	/// Forces the insertion of `s` into `self` truncating first if necessary.
 	///
-	/// Infallible, but if the limit is zero, then it's a no-op.
+	/// Infallible, but if the bound is zero, then it's a no-op.
 	pub fn force_push(&mut self, element: T) {
 		if Self::bound() > 0 {
 			self.0.truncate(Self::bound() as usize - 1);
