@@ -39,7 +39,6 @@ use sp_std::prelude::*;
 use beefy_primitives::mmr::{BeefyDataProvider, BeefyNextAuthoritySet, MmrLeaf, MmrLeafVersion};
 use pallet_mmr::primitives::LeafDataProvider;
 
-use codec::Encode;
 use frame_support::traits::Get;
 
 pub use pallet::*;
