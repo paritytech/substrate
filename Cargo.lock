@@ -5960,6 +5960,7 @@ dependencies = [
  "scale-info",
  "sp-arithmetic",
  "sp-runtime",
+ "sp-staking",
  "sp-std",
 ]
 

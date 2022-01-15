@@ -312,7 +312,7 @@ use sp_runtime::{
 };
 use sp_staking::{
 	offence::{Offence, OffenceError, ReportOffence},
-	SessionIndex,
+	EraIndex, SessionIndex,
 };
 use sp_std::{collections::btree_map::BTreeMap, convert::From, prelude::*};
 pub use weights::WeightInfo;
@@ -331,9 +331,6 @@ macro_rules! log {
 		)
 	};
 }
-
-/// Counter for the number of eras that have passed.
-pub type EraIndex = u32;
 
 /// Counter for the number of "reward" points earned by a given validator.
 pub type RewardPoint = u32;
@@ -534,7 +531,7 @@ where
 	///
 	/// Slashes from `active` funds first, and then `unlocking`, starting with the
 	/// chunks that are closest to unlocking.
-	fn slash(&mut self, mut value: Balance, minimum_balance: Balance) -> Balance {
+	fn slash(&mut self, mut value: Balance, minimum_balance: Balance, is_pool: bool) -> Balance {
 		let pre_total = self.total;
 		let total = &mut self.total;
 		let active = &mut self.active;

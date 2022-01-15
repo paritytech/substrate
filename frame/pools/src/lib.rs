@@ -1,11 +1,27 @@
 //! Delegation pools for nominating in `pallet-staking`.
 //!
-//! Each pool is represented by: (the actively staked funds), a rewards pool (the
-//! rewards earned by the actively staked funds) and a group of unbonding pools (pools )
+//! The delegation pool abstraction is concretely composed of:
 //!
 //! * primary pool: This pool represents the actively staked funds ...
 //! * rewards pool: The rewards earned by actively staked funds. Delegator can withdraw rewards once
-//! they
+//! * sub pools: This a group of pools where we have a set of pools organized by era
+//!   (`SubPoolsContainer.with_era`) and one pool that is not associated with an era
+//!   (`SubsPoolsContainer.no_era`). Once a `with_era` pool is older then `current_era -
+//!   MaxUnbonding`, its shares and balance get merged into the `no_era` pool.
+//!
+//! # Joining
+//!
+//! # Claiming rewards
+//!
+//! # Unbonding and withdrawing
+//!
+//! # Slashing
+//!
+//! # Pool creation
+//!
+//! # Negatives
+//! - no voting
+//! - ..
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -18,12 +34,13 @@ use frame_support::{
 };
 use scale_info::TypeInfo;
 use sp_arithmetic::{FixedPointNumber, FixedU128};
-use sp_runtime::traits::{AtLeast32BitUnsigned, Convert, Saturating, Zero};
+use sp_runtime::traits::{Convert, Saturating, Zero};
+use sp_staking::EraIndex;
 
 pub use pallet::*;
 pub(crate) const LOG_TARGET: &'static str = "runtime::pools";
 
-// syntactic sugar for logging.
+// Syntactic sugar for logging.
 #[macro_export]
 macro_rules! log {
 	($level:tt, $patter:expr $(, $values:expr)* $(,)?) => {
@@ -38,31 +55,30 @@ type PoolId = u32;
 type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 type SharesOf<T> = BalanceOf<T>;
-type SubPoolsWithEra<T> = BoundedBTreeMap<<T as Config>::EraIndex, UnbondPool<T>, MaxUnbonding<T>>;
+type SubPoolsWithEra<T> = BoundedBTreeMap<EraIndex, UnbondPool<T>, <T as Config>::MaxUnbonding>;
 
 /// Trait for communication with the staking pallet.
-pub trait StakingInterface<Balance, AccountId, EraIndex> {
+pub trait StakingInterface {
+	/// Balance type used by the staking system.
+	type Balance;
+
+	/// AccountId type used by the staking system
+	type AccountId;
+
 	/// The minimum amount necessary to bond to be a nominator. This does not necessarily mean the
 	/// nomination will be counted in an election, but instead just enough to be stored as a
 	/// nominator (e.g. in the bags-list of polkadot)
-	fn minimum_bond() -> Balance;
+	fn minimum_bond() -> Self::Balance;
 
-	/// The current era for the elections system.
+	/// The current era for the staking system.
 	fn current_era() -> EraIndex;
 
-	/// Wether or not the elections system has an ongoing election. If there is an ongoing election
-	/// it is assumed that any new pool joiner's funds will not start earning rewards until the
-	/// following era.
-	// TODO: a main advantage of our snapshot system is that we should not care about when an
-	// election is ongoing. I hope and predict that this won't be needed or is being use by mistake.
-	fn is_ongoing_election() -> bool;
-
 	/// Balance `controller` has bonded for nominating.
-	fn bonded_balance(controller: &AccountId) -> Balance;
+	fn bonded_balance(controller: &Self::AccountId) -> Self::Balance;
 
-	fn bond_extra(controller: &AccountId, extra: Balance) -> DispatchResult;
+	fn bond_extra(controller: &Self::AccountId, extra: Self::Balance) -> DispatchResult;
 
-	fn unbond(controller: &AccountId, value: Balance) -> DispatchResult;
+	fn unbond(controller: &Self::AccountId, value: Self::Balance) -> DispatchResult;
 
 	/// Number of eras that staked funds must remain bonded for.
 	fn bond_duration() -> EraIndex;
@@ -81,7 +97,7 @@ pub struct Delegator<T: Config> {
 	/// TODO ^ double check the above is an OK assumption
 	reward_pool_total_earnings: BalanceOf<T>,
 	/// The era this delegator started unbonding at.
-	unbonding_era: Option<T::EraIndex>,
+	unbonding_era: Option<EraIndex>,
 }
 
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo)]
@@ -95,15 +111,10 @@ pub struct Pool<T: Config> {
 
 impl<T: Config> Pool<T> {
 	/// Get the amount of shares to issue for some new funds that will be bonded in the pool.
-	///
-	/// * `new_funds`: Incoming funds to be bonded against the pool.
 	fn shares_to_issue(&self, new_funds: BalanceOf<T>) -> SharesOf<T> {
-		// TODO: this is the great thing about having <T: Config> in storage items, you have access
-		// to lots of more things.
 		let bonded_balance = T::StakingInterface::bonded_balance(&self.account_id);
 		if bonded_balance.is_zero() || self.shares.is_zero() {
 			debug_assert!(bonded_balance.is_zero() && self.shares.is_zero());
-
 			// all pools start with a 1:1 ratio of balance:shares
 			new_funds
 		} else {
@@ -118,15 +129,12 @@ impl<T: Config> Pool<T> {
 		}
 	}
 
-	/// TODO: doc seems wrong, this just converts shares -> balance, not actually updating anything.
-	///
-	/// Based on the given shares, unbond the equivalent balance, update the pool accordingly, and
-	/// return the balance unbonded.
+	// Get the amount of balance to unbond from the pool based on a delegator's shares of the pool.
 	fn balance_to_unbond(&self, delegator_shares: SharesOf<T>) -> BalanceOf<T> {
 		let bonded_balance = T::StakingInterface::bonded_balance(&self.account_id);
 		if bonded_balance.is_zero() || delegator_shares.is_zero() {
 			// There is nothing to unbond
-			return Zero::zero()
+			return Zero::zero();
 		}
 
 		let balance_per_share = {
@@ -148,17 +156,14 @@ pub struct RewardPool<T: Config> {
 	/// The balance of this reward pool after the last claimed payout.
 	balance: BalanceOf<T>,
 	/// The shares of this reward pool after the last claimed payout
-	shares: BalanceOf<T>, // TODO maybe MaxEncodedLen or something
+	shares: BalanceOf<T>,
 	/// The total earnings _ever_ of this reward pool after the last claimed payout. I.E. the sum
-	/// of all incoming balance.
+	/// of all incoming balance through the pools life.
 	total_earnings: BalanceOf<T>,
 	/// The reward destination for the pool.
 	account_id: T::AccountId,
 }
 
-// TODO: the default or other derives don't work because the default derive will only be valid when
-// all the generics are also `Default`. In this case `T: Default` does not hold and therefore does
-// not work. For this, we have various `NoBound` derives in support.
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, DefaultNoBound)]
 #[codec(mel_bound(T: Config))]
 #[scale_info(skip_type_params(T))]
@@ -189,7 +194,7 @@ impl<T: Config> UnbondPool<T> {
 	fn balance_to_unbond(&self, delegator_shares: SharesOf<T>) -> BalanceOf<T> {
 		if self.balance.is_zero() || delegator_shares.is_zero() {
 			// There is nothing to unbond
-			return Zero::zero()
+			return Zero::zero();
 		}
 
 		let balance_per_share = {
@@ -218,16 +223,16 @@ struct SubPoolsContainer<T: Config> {
 impl<T: Config> SubPoolsContainer<T> {
 	/// Merge the oldest unbonding pool with an era into the general unbond pool with no associated
 	/// era.
-	fn maybe_merge_pools(mut self, current_era: T::EraIndex) -> Self {
-		if current_era < T::MAX_UNBONDING.into() {
+	fn maybe_merge_pools(mut self, current_era: EraIndex) -> Self {
+		if current_era < T::MaxUnbonding::get().into() {
 			// For the first `T::MAX_UNBONDING` eras of the chain we don't need to do anything.
 			// I.E. if `MAX_UNBONDING` is 5 and we are in era 4 we can add a pool for this era and
 			// have exactly `MAX_UNBONDING` pools.
-			return self
+			return self;
 		}
 
 		//  I.E. if `MAX_UNBONDING` is 5 and current era is 10, we only want to retain pools 6..=10.
-		let oldest_era_to_keep = current_era - (T::MAX_UNBONDING.saturating_add(1)).into();
+		let oldest_era_to_keep = current_era - T::MaxUnbonding::get().saturating_add(1);
 
 		let eras_to_remove: Vec<_> =
 			self.with_era.keys().cloned().filter(|era| *era < oldest_era_to_keep).collect();
@@ -241,17 +246,6 @@ impl<T: Config> SubPoolsContainer<T> {
 		}
 
 		self
-	}
-}
-
-// Wrapper for `T::MAX_UNBONDING` to satisfy `trait Get`.
-// TODO: my 2 cents on making life harder for yourself with the `const` and manually wrapping it in
-// Get: just don't, not worth the effort and you will probably regret it when wanting to make these
-// values dynamic in tests.
-pub struct MaxUnbonding<T>(PhantomData<T>);
-impl<T: Config> Get<u32> for MaxUnbonding<T> {
-	fn get() -> u32 {
-		T::MAX_UNBONDING
 	}
 }
 
@@ -282,35 +276,15 @@ pub mod pallet {
 		// Infallible method for converting `u128` to `Currency::Balance`.
 		type U128ToBalance: Convert<u128, BalanceOf<Self>>;
 
-		// TODO: This should 200% be an associated type of the `StakingInterface`.
-		// also, is EraIndex really generic anywhere? I thought it is pretty hardcoded to be u32
-		// somewhere in `sp-staking`. We could move it there and make everything easier. (again,
-		// this can be a backport PR to master ahead of time)
-
-		/// The type for unique era indexes. Likely comes from what implements `StakingInterface`.
-		type EraIndex: Member
-			+ Parameter
-			+ AtLeast32BitUnsigned
-			+ Default
-			+ Copy
-			+ MaybeSerializeDeserialize
-			+ MaxEncodedLen
-			+ TypeInfo;
-
-		// TODO: learning from my mistakes, you probably will have an easier time if you make all of
-		// these be associated types and just constrain them here, so you won't need name it when
-		// you do fully-qualified syntax e.g. `type StakingInterface: StakingInterface<Balance =
-		// BalanceOf<Self>, AccountId = Self::AccountId, EraIndex = Self::EraIndex>;`
-
 		/// The interface for nominating.
-		type StakingInterface: StakingInterface<BalanceOf<Self>, Self::AccountId, Self::EraIndex>;
+		type StakingInterface: StakingInterface<
+			Balance = BalanceOf<Self>,
+			AccountId = Self::AccountId,
+		>;
 
 		/// The maximum amount of eras an unbonding pool can exist prior to being merged with the
-		/// "average" (TODO need better terminology) unbonding pool.
-		// TODO: kian yelling don't do this to yourself :D
-		const MAX_UNBONDING: u32;
-
-		// MaxPools
+		/// `no_era	 pool. This should at least be greater then the `UnbondingDuration` for staking so delegator have a chance to withdraw unbonded before their pool gets merged with the `no_era` pool.
+		type MaxUnbonding: Get<u32>;
 	}
 
 	/// Active delegators.
@@ -337,10 +311,10 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(crate) fn deposit_event)]
 	pub enum Event<T: Config> {
-		// TODO: these operations are per delegator - so these events could become decently noisy
-		// if things scale a lot - consider not including these.
 		Joined { delegator: T::AccountId, pool: PoolId, bonded: BalanceOf<T> },
-		Payout { delegator: T::AccountId, pool: PoolId, payout: BalanceOf<T> },
+		PaidOut { delegator: T::AccountId, pool: PoolId, payout: BalanceOf<T> },
+		Unbonded { delegator: T::AccountId, pool: PoolId, amount: BalanceOf<T> },
+		Withdrawn { delegator: T::AccountId, pool: PoolId, amount: BalanceOf<T> },
 	}
 
 	#[pallet::error]
@@ -367,7 +341,11 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// Join a pre-existing pool. Note that an account can only be a member of a single pool.
+		/// Join a pre-existing pool.
+		///
+		/// Notes
+		/// * an account can only be a member of a single pool.
+		/// * this will *not* dust the delegator account, so the delegator must have at least `existential deposit + amount` in their account.
 		#[pallet::weight(666)]
 		pub fn join(origin: OriginFor<T>, amount: BalanceOf<T>, target: PoolId) -> DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -386,39 +364,34 @@ pub mod pallet {
 
 			// Transfer the funds to be bonded from `who` to the pools account so the pool can then
 			// go bond them.
-			// Note importantly that we can't error after this transfer goes through.
-			// TODO I assume this does proper keep alive checks etc but need to double check
 			T::Currency::transfer(
 				&who,
 				&primary_pool.account_id,
 				amount,
 				ExistenceRequirement::KeepAlive,
 			)?;
-			// this should now include the transferred balance
+			// This should now include the transferred balance.
 			let new_free_balance = T::Currency::free_balance(&primary_pool.account_id);
-			// we get the exact amount we can bond extra
+			// Get the exact amount we can bond extra.
 			let exact_amount_to_bond = new_free_balance.saturating_sub(old_free_balance);
 
-			// issue the new shares
+			// Issue the new shares.
 			let new_shares = primary_pool.shares_to_issue(exact_amount_to_bond);
 			primary_pool.shares = primary_pool.shares.saturating_add(new_shares);
 			let delegator = Delegator::<T> {
 				pool: target,
 				shares: new_shares,
 				// TODO this likely needs to be the reward pools total earnings at this block
-				// - go and double check
+				// - go and double check and add a test
 				reward_pool_total_earnings: Zero::zero(),
 				unbonding_era: None,
 			};
 
-			// Do bond extra
 			T::StakingInterface::bond_extra(&primary_pool.account_id, exact_amount_to_bond)?;
 
-			// Write the pool and delegator to storage
 			Delegators::insert(who.clone(), delegator);
 			PrimaryPools::insert(target, primary_pool);
 
-			// And finally emit an event to confirm the exact amount bonded
 			Self::deposit_event(Event::<T>::Joined {
 				delegator: who,
 				pool: target,
@@ -428,13 +401,11 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Claim a payout for a delegator can use this to claim their payout based on the
-		/// rewards /// that the pool has accumulated since their last claimed payout (OR since
+		/// A bonded delegator can use this to claim their payout based on the rewards that the pool
+		/// has accumulated since their last claimed payout (OR since joining if this is there first
+		/// time claiming rewards).
 		///
-		/// joining if this /// is there for). The payout will go to the delegators account.
-		///
-		/// This extrinsic is permisionless in the sense that any account can call it for any
-		/// delegator in the system.
+		/// Note that the payout will go to the delegator's account.
 		#[pallet::weight(666)]
 		pub fn claim_payout(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -453,7 +424,8 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Unbond _all_ funds.
+		/// A bonded delegator can use this to unbond _all_ funds from the pool.
+		/// In order to withdraw the funds, the delegator must wait
 		#[pallet::weight(666)]
 		pub fn unbond(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -496,13 +468,19 @@ pub mod pallet {
 			// 	.entry(current_era)
 			// 	.or_insert_with(|| UnbondPool::<T>::default());
 			{
-				let unbond_pool = sub_pools.with_era.get_mut(&current_era).unwrap();
+				let unbond_pool = sub_pools.with_era.get_mut(&current_era).unwrap(); // TODO
 				let shares_to_issue = unbond_pool.shares_to_issue(balance_to_unbond);
 				unbond_pool.shares = unbond_pool.shares.saturating_add(shares_to_issue);
 				unbond_pool.balance = unbond_pool.balance.saturating_add(balance_to_unbond);
 			}
 
 			delegator.unbonding_era = Some(current_era);
+
+			Self::deposit_event(Event::<T>::Unbonded {
+				delegator: who.clone(),
+				pool: delegator.pool,
+				amount: balance_to_unbond,
+			});
 
 			// Now that we know everything has worked write the items to storage.
 			PrimaryPools::insert(delegator.pool, primary_pool);
@@ -520,7 +498,7 @@ pub mod pallet {
 			let unbonding_era = delegator.unbonding_era.ok_or(Error::<T>::NotUnbonding)?;
 			let current_era = T::StakingInterface::current_era();
 			if current_era.saturating_sub(unbonding_era) < T::StakingInterface::bond_duration() {
-				return Err(Error::<T>::NotUnbondedYet.into())
+				return Err(Error::<T>::NotUnbondedYet.into());
 			};
 
 			let mut sub_pools = SubPools::<T>::get(delegator.pool).unwrap_or_default();
@@ -552,6 +530,12 @@ pub mod pallet {
 			)?;
 
 			SubPools::<T>::insert(delegator.pool, sub_pools);
+
+			Self::deposit_event(Event::<T>::Withdrawn {
+				delegator: who,
+				pool: delegator.pool,
+				amount: balance_to_unbond,
+			});
 
 			Ok(())
 		}
@@ -621,15 +605,8 @@ impl<T: Config> Pallet<T> {
 		pool: PoolId,
 		payout: BalanceOf<T>,
 	) -> Result<(), DispatchError> {
-		T::Currency::transfer(
-			reward_pool,
-			&delegator,
-			payout,
-			// TODO double check we are ok with dusting the account - If their is a very high
-			// ED this could lead to a non-negligible loss of rewards
-			ExistenceRequirement::AllowDeath, // Dust may be lost here
-		)?;
-		Self::deposit_event(Event::<T>::Payout { delegator, pool, payout });
+		T::Currency::transfer(reward_pool, &delegator, payout, ExistenceRequirement::AllowDeath)?;
+		Self::deposit_event(Event::<T>::PaidOut { delegator, pool, payout });
 
 		Ok(())
 	}
@@ -662,11 +639,15 @@ impl<T: Config> Pallet<T> {
 
 		Ok(())
 	}
+
+	// fn sample_slash_logic(value: Bala)
 }
 
 // TODO
-// - rebond_rewards
+// - slashing
+// - tests
 // - force pool creation
+// - rebond_rewards
 // - force pool update
 // - force pool delete?
 

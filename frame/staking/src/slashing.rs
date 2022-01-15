@@ -50,8 +50,8 @@
 //! Based on research at <https://research.web3.foundation/en/latest/polkadot/slashing/npos.html>
 
 use crate::{
-	BalanceOf, Config, EraIndex, Error, Exposure, NegativeImbalanceOf, Pallet, Perbill,
-	SessionInterface, Store, UnappliedSlash,
+	BalanceOf, Config, Error, Exposure, NegativeImbalanceOf, Pallet, Perbill, SessionInterface,
+	Store, UnappliedSlash,
 };
 use codec::{Decode, Encode};
 use frame_support::{
@@ -63,7 +63,7 @@ use sp_runtime::{
 	traits::{Saturating, Zero},
 	DispatchResult, RuntimeDebug,
 };
-use sp_staking::offence::DisableStrategy;
+use sp_staking::{offence::DisableStrategy, EraIndex};
 use sp_std::vec::Vec;
 
 /// The proportion of the slashing reward to be paid out on the first slashing detection.
@@ -641,6 +641,8 @@ pub(crate) fn apply_slash<T: Config>(unapplied_slash: UnappliedSlash<T::AccountI
 
 	for &(ref nominator, nominator_slash) in &unapplied_slash.others {
 		do_slash::<T>(&nominator, nominator_slash, &mut reward_payout, &mut slashed_imbalance);
+		// maybe_do_pool_slash(&nominator, nominator_slash, &mut reward_payout, &mut
+		// slashed_imbalance);
 	}
 
 	pay_reporters::<T>(reward_payout, slashed_imbalance, &unapplied_slash.reporters);
