@@ -87,7 +87,7 @@ impl<'a> RuntimeInterfaceFunction<'a> {
 		}
 
 		self.versions.insert(version.version, trait_item);
-		if self.latest_version_to_call.map_or(false, |v| v < version.version) &&
+		if self.latest_version_to_call.map_or(true, |v| v < version.version) &&
 			version.is_callable()
 		{
 			self.latest_version_to_call = Some(version.version);
