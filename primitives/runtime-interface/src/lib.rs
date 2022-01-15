@@ -308,7 +308,7 @@ pub use sp_std;
 ///
 /// 1. The generated functions are not callable from the native side.
 /// 2. The trait as shown above is not implemented for [`Externalities`] and is instead
-/// implemented    for `FunctionExecutor` (from `sp-wasm-interface`).
+/// implemented for `FunctionExecutor` (from `sp-wasm-interface`).
 ///
 /// # Disable tracing
 /// By addding `no_tracing` to the list of options you can prevent the wasm-side interface from
