@@ -289,17 +289,18 @@ impl InstanceFilter<Call> for ProxyType {
 			ProxyType::Any => true,
 			ProxyType::NonTransfer => !matches!(
 				c,
-				Call::Balances(..) |
-					Call::Assets(..) | Call::Uniques(..) |
-					Call::Vesting(pallet_vesting::Call::vested_transfer { .. }) |
-					Call::Indices(pallet_indices::Call::transfer { .. })
+				Call::Balances(..)
+					| Call::Assets(..) | Call::Uniques(..)
+					| Call::Vesting(pallet_vesting::Call::vested_transfer { .. })
+					| Call::Indices(pallet_indices::Call::transfer { .. })
 			),
 			ProxyType::Governance => matches!(
 				c,
-				Call::Democracy(..) |
-					Call::Council(..) | Call::Society(..) |
-					Call::TechnicalCommittee(..) |
-					Call::Elections(..) | Call::Treasury(..)
+				Call::Democracy(..)
+					| Call::Council(..) | Call::Society(..)
+					| Call::TechnicalCommittee(..)
+					| Call::Elections(..)
+					| Call::Treasury(..)
 			),
 			ProxyType::Staking => matches!(c, Call::Staking(..)),
 		}
@@ -520,8 +521,8 @@ pallet_staking_reward_curve::build! {
 
 parameter_types! {
 	pub const SessionsPerEra: sp_staking::SessionIndex = 6;
-	pub const BondingDuration: pallet_staking::EraIndex = 24 * 28;
-	pub const SlashDeferDuration: pallet_staking::EraIndex = 24 * 7; // 1/4 the bonding duration.
+	pub const BondingDuration: sp_staking::EraIndex = 24 * 28;
+	pub const SlashDeferDuration: sp_staking::EraIndex = 24 * 7; // 1/4 the bonding duration.
 	pub const RewardCurve: &'static PiecewiseLinear<'static> = &REWARD_CURVE;
 	pub const MaxNominatorRewardedPerValidator: u32 = 256;
 	pub const OffendingValidatorsThreshold: Perbill = Perbill::from_percent(17);
@@ -637,10 +638,10 @@ impl frame_support::pallet_prelude::Get<Option<(usize, sp_npos_elections::Extend
 			max @ _ => {
 				let seed = sp_io::offchain::random_seed();
 				let random = <u32>::decode(&mut TrailingZeroInput::new(&seed))
-					.expect("input is padded with zeroes; qed") %
-					max.saturating_add(1);
+					.expect("input is padded with zeroes; qed")
+					% max.saturating_add(1);
 				random as usize
-			},
+			}
 		};
 
 		Some((iters, 0))
