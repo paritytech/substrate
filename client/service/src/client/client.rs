@@ -30,7 +30,7 @@ use rand::Rng;
 use sc_block_builder::{BlockBuilderApi, BlockBuilderProvider, RecordProof};
 use sc_client_api::{
 	backend::{
-		self, apply_aux, BlockImportOperation, ClientImportOperation, Finalizer, FinalizeSummary,
+		self, apply_aux, BlockImportOperation, ClientImportOperation, FinalizeSummary, Finalizer,
 		ImportSummary, LockImportRun, NewBlockState, StorageProvider,
 	},
 	client::{
@@ -629,7 +629,8 @@ where
 			None => None,
 		};
 
-		// Ensure parent chain is finalized to maintain invariant that finality is called sequentially.
+		// Ensure parent chain is finalized to maintain invariant that finality is called
+		// sequentially.
 		if finalized && parent_exists {
 			self.apply_finality_with_block_hash(
 				operation,
@@ -688,7 +689,10 @@ where
 			if finalized {
 				let mut summary = match operation.notify_finalized.take() {
 					Some(summary) => summary,
-					None => FinalizeSummary { finalized: Vec::new(), heads: self.backend.blockchain().leaves()? }
+					None => FinalizeSummary {
+						finalized: Vec::new(),
+						heads: self.backend.blockchain().leaves()?,
+					},
 				};
 				summary.finalized.push(hash);
 				summary.heads.retain(|head| *head != parent_hash);
@@ -836,12 +840,10 @@ where
 		operation.op.mark_finalized(BlockId::Hash(block), justification)?;
 
 		if notify {
-			let finalized = route_from_finalized.enacted().iter().map(|elem| elem.hash).collect::<Vec<_>>();
+			let finalized =
+				route_from_finalized.enacted().iter().map(|elem| elem.hash).collect::<Vec<_>>();
 			let heads = self.backend.blockchain().leaves()?;
-			operation.notify_finalized = Some(FinalizeSummary {
-				finalized,
-				heads,
-			});
+			operation.notify_finalized = Some(FinalizeSummary { finalized, heads });
 		}
 
 		Ok(())
@@ -849,7 +851,7 @@ where
 
 	fn notify_finalized(
 		&self,
-		notify_finalized: Option<FinalizeSummary<Block>>
+		notify_finalized: Option<FinalizeSummary<Block>>,
 	) -> sp_blockchain::Result<()> {
 		let mut sinks = self.finality_notification_sinks.lock();
 
@@ -861,11 +863,12 @@ where
 				// would also remove any closed sinks.
 				sinks.retain(|sink| !sink.is_closed());
 				return Ok(())
-			}
+			},
 		};
 
-		let last = notify_finalized.finalized.pop()
-			.expect("At least one finalized block shall exist within a valid finalization summary; qed");
+		let last = notify_finalized.finalized.pop().expect(
+			"At least one finalized block shall exist within a valid finalization summary; qed",
+		);
 
 		let header = self.header(&BlockId::Hash(last))?.expect(
 			"Header already known to exist in DB because it is indicated in the tree route; \
@@ -886,7 +889,7 @@ where
 		let mut stale_heads = Vec::new();
 		for head in notify_finalized.heads {
 			let route_from_finalized =
-					sp_blockchain::tree_route(self.backend.blockchain(), last, head)?;
+				sp_blockchain::tree_route(self.backend.blockchain(), last, head)?;
 			let retracted = route_from_finalized.retracted();
 			let pivot = route_from_finalized.common_block();
 
