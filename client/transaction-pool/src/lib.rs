@@ -709,15 +709,17 @@ where
 				}
 				.boxed()
 			},
-			ChainEvent::Finalized { hash } => {
+			ChainEvent::Finalized { hash, tree_route } => {
 				let pool = self.pool.clone();
 				async move {
-					if let Err(e) = pool.validated_pool().on_block_finalized(hash).await {
-						log::warn!(
-							target: "txpool",
-							"Error [{}] occurred while attempting to notify watchers of finalization {}",
-							e, hash
-						)
+					for hash in tree_route.iter().chain(&[hash]) {
+						if let Err(e) = pool.validated_pool().on_block_finalized(*hash).await {
+							log::warn!(
+								target: "txpool",
+								"Error [{}] occurred while attempting to notify watchers of finalization {}",
+								e, hash
+							)
+						}
 					}
 				}
 				.boxed()

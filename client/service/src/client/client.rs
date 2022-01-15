@@ -30,7 +30,7 @@ use rand::Rng;
 use sc_block_builder::{BlockBuilderApi, BlockBuilderProvider, RecordProof};
 use sc_client_api::{
 	backend::{
-		self, apply_aux, BlockImportOperation, ClientImportOperation, Finalizer,
+		self, apply_aux, BlockImportOperation, ClientImportOperation, Finalizer, FinalizeSummary,
 		ImportSummary, LockImportRun, NewBlockState, StorageProvider,
 	},
 	client::{
@@ -274,7 +274,7 @@ where
 			let mut op = ClientImportOperation {
 				op: self.backend.begin_operation()?,
 				notify_imported: None,
-				notify_finalized: Vec::new(),
+				notify_finalized: None,
 			};
 
 			let r = f(&mut op)?;
@@ -622,24 +622,23 @@ where
 						None
 					},
 				};
-				// Ensure parent chain is finalized to maintain invariant that
-				// finality is called sequentially. This will also send finality
-				// notifications for top 250 newly finalized blocks.
-				if finalized && parent_exists {
-					self.apply_finality_with_block_hash(
-						operation,
-						parent_hash,
-						None,
-						info.best_hash,
-						make_notifications,
-					)?;
-				}
 
 				operation.op.update_cache(new_cache);
 				storage_changes
 			},
 			None => None,
 		};
+
+		// Ensure parent chain is finalized to maintain invariant that finality is called sequentially.
+		if finalized && parent_exists {
+			self.apply_finality_with_block_hash(
+				operation,
+				parent_hash,
+				None,
+				info.best_hash,
+				make_notifications,
+			)?;
+		}
 
 		let is_new_best = !gap_block &&
 			(finalized ||
@@ -687,7 +686,13 @@ where
 		// or if this import triggers a re-org
 		if make_notifications || tree_route.is_some() {
 			if finalized {
-				operation.notify_finalized.push(hash);
+				let mut summary = match operation.notify_finalized.take() {
+					Some(summary) => summary,
+					None => FinalizeSummary { finalized: Vec::new(), heads: self.backend.blockchain().leaves()? }
+				};
+				summary.finalized.push(hash);
+				summary.heads.retain(|head| *head != parent_hash);
+				operation.notify_finalized = Some(summary);
 			}
 
 			operation.notify_imported = Some(ImportSummary {
@@ -831,9 +836,12 @@ where
 		operation.op.mark_finalized(BlockId::Hash(block), justification)?;
 
 		if notify {
-			for finalized in route_from_finalized.enacted() {
-				operation.notify_finalized.push(finalized.hash)
-			}
+			let finalized = route_from_finalized.enacted().iter().map(|elem| elem.hash).collect::<Vec<_>>();
+			let heads = self.backend.blockchain().leaves()?;
+			operation.notify_finalized = Some(FinalizeSummary {
+				finalized,
+				heads,
+			});
 		}
 
 		Ok(())
@@ -841,12 +849,12 @@ where
 
 	fn notify_finalized(
 		&self,
-		notify_finalized: Vec<Block::Hash>
+		notify_finalized: Option<FinalizeSummary<Block>>
 	) -> sp_blockchain::Result<()> {
 		let mut sinks = self.finality_notification_sinks.lock();
 
-		let last = match notify_finalized.last() {
-			Some(last) => *last,
+		let mut notify_finalized = match notify_finalized {
+			Some(notify_finalized) => notify_finalized,
 			None => {
 				// cleanup any closed finality notification sinks
 				// since we won't be running the loop below which
@@ -855,6 +863,9 @@ where
 				return Ok(())
 			}
 		};
+
+		let last = notify_finalized.finalized.pop()
+			.expect("At least one finalized block shall exist within a valid finalization summary; qed");
 
 		let header = self.header(&BlockId::Hash(last))?.expect(
 			"Header already known to exist in DB because it is indicated in the tree route; \
@@ -869,19 +880,25 @@ where
 			"best" => ?last,
 		);
 
+		// Prevent inclusion of stale heads that were already included by previous calls.
+		let prev_finalized_offset = (1 + notify_finalized.finalized.len()).saturated_into();
+		let prev_finalized_number = *header.number() - prev_finalized_offset;
 		let mut stale_heads = Vec::new();
-		for head in self.backend.blockchain().leaves()? {
+		for head in notify_finalized.heads {
 			let route_from_finalized =
 					sp_blockchain::tree_route(self.backend.blockchain(), last, head)?;
-			if !route_from_finalized.retracted().is_empty() {
+			let retracted = route_from_finalized.retracted();
+			let pivot = route_from_finalized.common_block();
+
+			if !(retracted.is_empty() || prev_finalized_number > pivot.number) {
 				stale_heads.push(head);
 			}
 		}
 
 		let notification = FinalityNotification {
-			header,
 			hash: last,
-			path: Arc::new(notify_finalized),
+			header,
+			tree_route: Arc::new(notify_finalized.finalized),
 			stale_heads: Arc::new(stale_heads),
 		};
 
