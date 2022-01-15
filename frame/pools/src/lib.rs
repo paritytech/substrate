@@ -164,6 +164,19 @@ pub struct RewardPool<T: Config> {
 	account_id: T::AccountId,
 }
 
+impl<T: Config> RewardPool<T> {
+	fn update_total_earnings_and_balance(mut self) -> Self {
+		let current_balance = T::Currency::free_balance(&self.account_id);
+		// The earnings since the last time it was updated
+		let new_earnings = current_balance.saturating_sub(self.balance);
+		// The lifetime earnings of the of the reward pool
+		self.total_earnings = new_earnings.saturating_add(self.total_earnings);
+		self.balance = current_balance;
+
+		self
+	}
+}
+
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, DefaultNoBound)]
 #[codec(mel_bound(T: Config))]
 #[scale_info(skip_type_params(T))]
@@ -283,7 +296,9 @@ pub mod pallet {
 		>;
 
 		/// The maximum amount of eras an unbonding pool can exist prior to being merged with the
-		/// `no_era	 pool. This should at least be greater then the `UnbondingDuration` for staking so delegator have a chance to withdraw unbonded before their pool gets merged with the `no_era` pool.
+		/// `no_era	 pool. This should at least be greater then the `UnbondingDuration` for staking
+		/// so delegator have a chance to withdraw unbonded before their pool gets merged with the
+		/// `no_era` pool.
 		type MaxUnbonding: Get<u32>;
 	}
 
@@ -345,14 +360,15 @@ pub mod pallet {
 		///
 		/// Notes
 		/// * an account can only be a member of a single pool.
-		/// * this will *not* dust the delegator account, so the delegator must have at least `existential deposit + amount` in their account.
+		/// * this will *not* dust the delegator account, so the delegator must have at least
+		///   `existential deposit + amount` in their account.
 		#[pallet::weight(666)]
 		pub fn join(origin: OriginFor<T>, amount: BalanceOf<T>, target: PoolId) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			// if a delegator already exists that means they already belong to a pool
 			ensure!(!Delegators::<T>::contains_key(&who), Error::<T>::AccountBelongsToOtherPool);
 
-			// Ensure that the `target` pool exists
+			// Ensure that the `target` pool exists,
 			let mut primary_pool =
 				PrimaryPools::<T>::get(target).ok_or(Error::<T>::PoolNotFound)?;
 			// And that `amount` will meet the minimum bond
@@ -361,6 +377,12 @@ pub mod pallet {
 				old_free_balance.saturating_add(amount) >= T::StakingInterface::minimum_bond(),
 				Error::<T>::InsufficientBond
 			);
+			// Note that we don't actually care about writing the reward pool, we just need its
+			// total earnings at this point in time.
+			let reward_pool = RewardPools::<T>::get(target)
+				.ok_or(Error::<T>::RewardPoolNotFound)?
+				// This is important because we want the most up-to-date total earnings.
+				.update_total_earnings_and_balance();
 
 			// Transfer the funds to be bonded from `who` to the pools account so the pool can then
 			// go bond them.
@@ -381,9 +403,14 @@ pub mod pallet {
 			let delegator = Delegator::<T> {
 				pool: target,
 				shares: new_shares,
-				// TODO this likely needs to be the reward pools total earnings at this block
-				// - go and double check and add a test
-				reward_pool_total_earnings: Zero::zero(),
+				// TODO double check that this is ok.
+				// At best the reward pool has the rewards up through the previous era. If the
+				// delegator joins prior to the snapshot they will benefit from the rewards of the
+				// current era despite not contributing to the pool's vote weight. If they join
+				// after the snapshot is taken they will benefit from the rewards of the next *2*
+				// eras because there vote weight will not be counted until the snapshot in current
+				// era + 1.
+				reward_pool_total_earnings: reward_pool.total_earnings,
 				unbonding_era: None,
 			};
 
@@ -546,20 +573,16 @@ impl<T: Config> Pallet<T> {
 	/// Calculate the rewards for `delegator`.
 	fn calculate_delegator_payout(
 		primary_pool: &Pool<T>,
-		mut reward_pool: RewardPool<T>,
+		reward_pool: RewardPool<T>,
 		mut delegator: Delegator<T>,
 	) -> Result<(RewardPool<T>, Delegator<T>, BalanceOf<T>), DispatchError> {
 		// If the delegator is unbonding they cannot claim rewards. Note that when the delagator
 		// goes to unbond, the unbond function should claim rewards for the final time.
 		ensure!(delegator.unbonding_era.is_none(), Error::<T>::AlreadyUnbonding);
 
-		let current_balance = T::Currency::free_balance(&reward_pool.account_id);
-
-		// The earnings since the last claimed payout
-		let new_earnings = current_balance.saturating_sub(reward_pool.balance);
-
-		// The lifetime earnings of the of the reward pool
-		let new_total_earnings = new_earnings.saturating_add(reward_pool.total_earnings);
+		let last_total_earnings = reward_pool.total_earnings;
+		let mut reward_pool = reward_pool.update_total_earnings_and_balance();
+		let new_earnings = reward_pool.total_earnings.saturating_sub(last_total_earnings);
 
 		// The new shares that will be added to the pool. For every unit of balance that has
 		// been earned by the reward pool, we inflate the reward pool shares by
@@ -573,7 +596,7 @@ impl<T: Config> Pallet<T> {
 
 		// The rewards pool's earnings since the last time this delegator claimed a payout
 		let new_earnings_since_last_claim =
-			new_total_earnings.saturating_sub(delegator.reward_pool_total_earnings);
+			reward_pool.total_earnings.saturating_sub(delegator.reward_pool_total_earnings);
 		// The shares of the reward pool that belong to the delegator.
 		let delegator_virtual_shares =
 			delegator.shares.saturating_mul(new_earnings_since_last_claim);
@@ -585,15 +608,13 @@ impl<T: Config> Pallet<T> {
 			);
 
 			let payout = delegator_ratio_of_shares
-				.saturating_mul_int(T::BalanceToU128::convert(current_balance));
+				.saturating_mul_int(T::BalanceToU128::convert(reward_pool.balance));
 			T::U128ToBalance::convert(payout)
 		};
 
 		// Record updates
-		delegator.reward_pool_total_earnings = new_total_earnings;
+		delegator.reward_pool_total_earnings = reward_pool.total_earnings;
 		reward_pool.shares = current_shares.saturating_sub(delegator_virtual_shares);
-		reward_pool.balance = current_balance;
-		reward_pool.total_earnings = new_total_earnings;
 
 		Ok((reward_pool, delegator, delegator_payout))
 	}
