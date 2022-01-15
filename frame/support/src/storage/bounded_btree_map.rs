@@ -23,8 +23,11 @@ use crate::{
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use sp_std::{
-	borrow::Borrow, collections::btree_map::BTreeMap, convert::TryFrom, marker::PhantomData,
-	ops::Deref,
+	borrow::Borrow,
+	collections::btree_map::BTreeMap,
+	convert::TryFrom,
+	marker::PhantomData,
+	ops::{Deref, DerefMut},
 };
 
 /// A bounded map based on a B-Tree.
@@ -47,7 +50,7 @@ where
 	fn decode<I: codec::Input>(input: &mut I) -> Result<Self, codec::Error> {
 		let inner = BTreeMap::<K, V>::decode(input)?;
 		if inner.len() > S::get() as usize {
-			return Err("BoundedBTreeMap exceeds its limit".into())
+			return Err("BoundedBTreeMap exceeds its limit".into());
 		}
 		Ok(Self(inner, PhantomData))
 	}
@@ -268,6 +271,15 @@ where
 
 	fn deref(&self) -> &Self::Target {
 		&self.0
+	}
+}
+
+impl<K, V, S> DerefMut for BoundedBTreeMap<K, V, S>
+where
+	K: Ord,
+{
+	fn deref_mut(&mut self) -> &mut Self::Target {
+		&mut self.0
 	}
 }
 

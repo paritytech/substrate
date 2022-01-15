@@ -89,12 +89,13 @@ pub trait StakingInterface {
 #[scale_info(skip_type_params(T))]
 pub struct Delegator<T: Config> {
 	pool: PoolId,
-	/// The quantity of shares this delegator has in the p
+	/// The quantity of shares this delegator has in the primary pool or in an sub pool if
+	/// `Self::unbonding_era` is some.
 	shares: SharesOf<T>,
 	/// The reward pools total earnings _ever_ the last time this delegator claimed a payout.
 	/// Assuming no massive burning events, we expect this value to always be below total issuance.
+	/// ^ double check the above is an OK assumption
 	/// This value lines up with the `RewardPool.total_earnings` after a delegator claims a payout.
-	/// TODO ^ double check the above is an OK assumption
 	reward_pool_total_earnings: BalanceOf<T>,
 	/// The era this delegator started unbonding at.
 	unbonding_era: Option<EraIndex>,
@@ -152,7 +153,6 @@ impl<T: Config> Pool<T> {
 #[codec(mel_bound(T: Config))]
 #[scale_info(skip_type_params(T))]
 pub struct RewardPool<T: Config> {
-	// TODO look into using the BigUInt
 	/// The balance of this reward pool after the last claimed payout.
 	balance: BalanceOf<T>,
 	/// The shares of this reward pool after the last claimed payout
@@ -403,12 +403,12 @@ pub mod pallet {
 			let delegator = Delegator::<T> {
 				pool: target,
 				shares: new_shares,
-				// TODO double check that this is ok.
+				//  double check that this is ok.
 				// At best the reward pool has the rewards up through the previous era. If the
 				// delegator joins prior to the snapshot they will benefit from the rewards of the
 				// current era despite not contributing to the pool's vote weight. If they join
 				// after the snapshot is taken they will benefit from the rewards of the next *2*
-				// eras because there vote weight will not be counted until the snapshot in current
+				// eras because their vote weight will not be counted until the snapshot in current
 				// era + 1.
 				reward_pool_total_earnings: reward_pool.total_earnings,
 				unbonding_era: None,
@@ -469,18 +469,15 @@ pub mod pallet {
 			let mut delegator = Delegators::<T>::get(&who).ok_or(Error::<T>::DelegatorNotFound)?;
 			// Note that we lazily create the unbonding pools here if they don't already exist
 			let sub_pools = SubPools::<T>::get(delegator.pool).unwrap_or_default();
-			// TODO double check if we need to count for elections when
-			// the unbonding era.
 			let current_era = T::StakingInterface::current_era();
 
 			let balance_to_unbond = primary_pool.balance_to_unbond(delegator.shares);
 
 			// Update the primary pool. Note that we must do this *after* calculating the balance
-			// to unbond.
+			// to unbond so we have the correct shares for the balance:share ratio.
 			primary_pool.shares = primary_pool.shares.saturating_sub(delegator.shares);
 
-			// Unbond in the actual underlying pool - we can't fail after this
-			// TODO - we can only do this for as many locking chunks are accepted
+			// Unbond in the actual underlying pool
 			T::StakingInterface::unbond(&primary_pool.account_id, balance_to_unbond)?;
 
 			// Merge any older pools into the general, era agnostic unbond pool. Note that we do
@@ -490,12 +487,9 @@ pub mod pallet {
 			// Update the unbond pool associated with the current era with the
 			// unbonded funds. Note that we lazily create the unbond pool if it
 			// does not yet exist.
-			// let unbond_pool = sub_pools
-			// 	.with_era
-			// 	.entry(current_era)
-			// 	.or_insert_with(|| UnbondPool::<T>::default());
 			{
-				let unbond_pool = sub_pools.with_era.get_mut(&current_era).unwrap(); // TODO
+				let mut unbond_pool =
+					sub_pools.with_era.entry(current_era).or_insert_with(|| UnbondPool::default());
 				let shares_to_issue = unbond_pool.shares_to_issue(balance_to_unbond);
 				unbond_pool.shares = unbond_pool.shares.saturating_add(shares_to_issue);
 				unbond_pool.balance = unbond_pool.balance.saturating_add(balance_to_unbond);
@@ -588,7 +582,7 @@ impl<T: Config> Pallet<T> {
 		// been earned by the reward pool, we inflate the reward pool shares by
 		// `primary_pool.total_shares`. In effect this allows each, single unit of balance (e.g.
 		// plank) to be divvied up pro-rata among delegators based on shares.
-		// TODO this needs to be some sort of BigUInt arithmetic
+		//  this needs to be some sort of BigUInt arithmetic
 		let new_shares = primary_pool.shares.saturating_mul(new_earnings);
 
 		// The shares of the reward pool after taking into account the new earnings
@@ -664,7 +658,7 @@ impl<T: Config> Pallet<T> {
 	// fn sample_slash_logic(value: Bala)
 }
 
-// TODO
+//
 // - slashing
 // - tests
 // - force pool creation
