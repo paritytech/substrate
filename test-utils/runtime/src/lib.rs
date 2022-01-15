@@ -295,7 +295,7 @@ impl<B: BlockT> Encode for DecodeFails<B> {
 impl<B: BlockT> codec::EncodeLike for DecodeFails<B> {}
 
 impl<B: BlockT> Default for DecodeFails<B> {
-	/// Create a new instance.
+	/// Create a default instance.
 	fn default() -> DecodeFails<B> {
 		DecodeFails { _phantom: Default::default() }
 	}
@@ -650,10 +650,8 @@ fn code_using_trie() -> u64 {
 	let mut root = sp_std::default::Default::default();
 	let _ = {
 		let mut t = TrieDBMut::<Hashing>::new(&mut mdb, &mut root);
-		for pair in &pairs {
-			let key: &[u8] = &pair.0;
-			let val: &[u8] = &pair.1;
-			if t.insert(key, val).is_err() {
+		for (key, value) in &pairs {
+			if t.insert(key, value).is_err() {
 				return 101
 			}
 		}
