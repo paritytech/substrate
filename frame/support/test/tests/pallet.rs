@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -892,7 +892,7 @@ fn pallet_expand_deposit_event() {
 
 #[test]
 fn pallet_new_call_variant() {
-	Call::Example(pallet::Call::new_call_variant_foo(3, 4));
+	pallet::Call::<Runtime>::new_call_variant_foo(3, 4);
 }
 
 #[test]

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -496,7 +496,6 @@ impl State {
 						state_snapshot: snapshot_path.as_ref().map(SnapshotConfig::new),
 						pallets: pallets.clone().unwrap_or_default(),
 						at,
-						..Default::default()
 					}))
 					.inject_hashed_key(
 						&[twox_128(b"System"), twox_128(b"LastRuntimeUpgrade")].concat(),
@@ -799,7 +798,7 @@ pub(crate) fn state_machine_call_with_proof<Block: BlockT, D: NativeExecutionDis
 pub(crate) fn local_spec<Block: BlockT, D: NativeExecutionDispatch + 'static>(
 	ext: &TestExternalities,
 	executor: &NativeElseWasmExecutor<D>,
-) -> (String, u32) {
+) -> (String, u32, sp_core::storage::StateVersion) {
 	let (_, encoded) = state_machine_call::<Block, D>(
 		&ext,
 		&executor,
@@ -811,6 +810,9 @@ pub(crate) fn local_spec<Block: BlockT, D: NativeExecutionDispatch + 'static>(
 	.expect("all runtimes should have version; qed");
 	<sp_version::RuntimeVersion as Decode>::decode(&mut &*encoded)
 		.map_err(|e| format!("failed to decode output: {:?}", e))
-		.map(|v| (v.spec_name.into(), v.spec_version))
+		.map(|v| {
+			let state_version = v.state_version();
+			(v.spec_name.into(), v.spec_version, state_version)
+		})
 		.expect("all runtimes should have version; qed")
 }

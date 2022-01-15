@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -485,7 +485,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		let config_dir = base_path.config_dir(chain_spec.id());
 		let net_config_dir = config_dir.join(DEFAULT_NETWORK_CONFIG_PATH);
 		let client_id = C::client_id();
-		let database_cache_size = self.database_cache_size()?.unwrap_or(128);
+		let database_cache_size = self.database_cache_size()?.unwrap_or(1024);
 		let database = self.database()?.unwrap_or(Database::RocksDb);
 		let node_key = self.node_key(&net_config_dir)?;
 		let role = self.role(is_dev)?;

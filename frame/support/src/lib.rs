@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -46,7 +46,7 @@ pub use sp_core_hashing_proc_macro;
 #[doc(hidden)]
 pub use sp_io::{self, storage::root as storage_root};
 #[doc(hidden)]
-pub use sp_runtime::RuntimeDebug;
+pub use sp_runtime::{RuntimeDebug, StateVersion};
 #[cfg(feature = "std")]
 #[doc(hidden)]
 pub use sp_state_machine::BasicExternalities;
@@ -756,9 +756,9 @@ macro_rules! assert_noop {
 		$x:expr,
 		$y:expr $(,)?
 	) => {
-		let h = $crate::storage_root();
+		let h = $crate::storage_root($crate::StateVersion::V1);
 		$crate::assert_err!($x, $y);
-		assert_eq!(h, $crate::storage_root());
+		assert_eq!(h, $crate::storage_root($crate::StateVersion::V1));
 	};
 }
 
@@ -771,9 +771,9 @@ macro_rules! assert_storage_noop {
 	(
 		$x:expr
 	) => {
-		let h = $crate::storage_root();
+		let h = $crate::storage_root($crate::StateVersion::V1);
 		$x;
-		assert_eq!(h, $crate::storage_root());
+		assert_eq!(h, $crate::storage_root($crate::StateVersion::V1));
 	};
 }
 

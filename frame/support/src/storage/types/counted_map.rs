@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -285,14 +285,7 @@ where
 	///
 	/// NOTE: If a value failed to decode because storage is corrupted then it is skipped.
 	pub fn iter_values() -> crate::storage::PrefixIterator<Value, OnRemovalCounterUpdate<Prefix>> {
-		let map_iterator = <Self as MapWrapper>::Map::iter_values();
-		crate::storage::PrefixIterator {
-			prefix: map_iterator.prefix,
-			previous_key: map_iterator.previous_key,
-			drain: map_iterator.drain,
-			closure: map_iterator.closure,
-			phantom: Default::default(),
-		}
+		<Self as MapWrapper>::Map::iter_values().convert_on_removal()
 	}
 
 	/// Translate the values of all elements by a function `f`, in the map in no particular order.
@@ -374,28 +367,14 @@ where
 	///
 	/// If you alter the map while doing this, you'll get undefined results.
 	pub fn iter() -> crate::storage::PrefixIterator<(Key, Value), OnRemovalCounterUpdate<Prefix>> {
-		let map_iterator = <Self as MapWrapper>::Map::iter();
-		crate::storage::PrefixIterator {
-			prefix: map_iterator.prefix,
-			previous_key: map_iterator.previous_key,
-			drain: map_iterator.drain,
-			closure: map_iterator.closure,
-			phantom: Default::default(),
-		}
+		<Self as MapWrapper>::Map::iter().convert_on_removal()
 	}
 
 	/// Remove all elements from the map and iterate through them in no particular order.
 	///
 	/// If you add elements to the map while doing this, you'll get undefined results.
 	pub fn drain() -> crate::storage::PrefixIterator<(Key, Value), OnRemovalCounterUpdate<Prefix>> {
-		let map_iterator = <Self as MapWrapper>::Map::drain();
-		crate::storage::PrefixIterator {
-			prefix: map_iterator.prefix,
-			previous_key: map_iterator.previous_key,
-			drain: map_iterator.drain,
-			closure: map_iterator.closure,
-			phantom: Default::default(),
-		}
+		<Self as MapWrapper>::Map::drain().convert_on_removal()
 	}
 
 	/// Translate the values of all elements by a function `f`, in the map in no particular order.
@@ -411,6 +390,16 @@ where
 			}
 			res
 		})
+	}
+
+	/// Enumerate all elements in the counted map after a specified `starting_raw_key` in no
+	/// particular order.
+	///
+	/// If you alter the map while doing this, you'll get undefined results.
+	pub fn iter_from(
+		starting_raw_key: Vec<u8>,
+	) -> crate::storage::PrefixIterator<(Key, Value), OnRemovalCounterUpdate<Prefix>> {
+		<Self as MapWrapper>::Map::iter_from(starting_raw_key).convert_on_removal()
 	}
 }
 
@@ -1019,6 +1008,25 @@ mod test {
 			assert_eq!(A::drain().collect::<Vec<_>>(), vec![(2, 4)]);
 
 			assert_eq!(A::count(), 0);
+		})
+	}
+
+	#[test]
+	fn test_iter_from() {
+		type A = CountedStorageMap<Prefix, Twox64Concat, u16, u32>;
+		TestExternalities::default().execute_with(|| {
+			A::insert(1, 1);
+			A::insert(2, 2);
+			A::insert(3, 3);
+			A::insert(4, 4);
+
+			// no prefix is same as normal iter.
+			assert_eq!(A::iter_from(vec![]).collect::<Vec<_>>(), A::iter().collect::<Vec<_>>());
+
+			let iter_all = A::iter().collect::<Vec<_>>();
+			let (before, after) = iter_all.split_at(2);
+			let last_key = before.last().map(|(k, _)| k).unwrap();
+			assert_eq!(A::iter_from(A::hashed_key_for(last_key)).collect::<Vec<_>>(), after);
 		})
 	}
 

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -36,7 +36,7 @@ pub use sp_arithmetic::traits::{
 	CheckedShr, CheckedSub, IntegerSquareRoot, One, SaturatedConversion, Saturating,
 	UniqueSaturatedFrom, UniqueSaturatedInto, Zero,
 };
-use sp_core::{self, Hasher, RuntimeDebug, TypeId};
+use sp_core::{self, storage::StateVersion, Hasher, RuntimeDebug, TypeId};
 use sp_std::{
 	self,
 	convert::{TryFrom, TryInto},
@@ -459,10 +459,10 @@ pub trait Hash:
 	}
 
 	/// The ordered Patricia tree root of the given `input`.
-	fn ordered_trie_root(input: Vec<Vec<u8>>) -> Self::Output;
+	fn ordered_trie_root(input: Vec<Vec<u8>>, state_version: StateVersion) -> Self::Output;
 
 	/// The Patricia tree root of the given mapping.
-	fn trie_root(input: Vec<(Vec<u8>, Vec<u8>)>) -> Self::Output;
+	fn trie_root(input: Vec<(Vec<u8>, Vec<u8>)>, state_version: StateVersion) -> Self::Output;
 }
 
 /// Blake2-256 Hash implementation.
@@ -483,12 +483,12 @@ impl Hasher for BlakeTwo256 {
 impl Hash for BlakeTwo256 {
 	type Output = sp_core::H256;
 
-	fn trie_root(input: Vec<(Vec<u8>, Vec<u8>)>) -> Self::Output {
-		sp_io::trie::blake2_256_root(input)
+	fn trie_root(input: Vec<(Vec<u8>, Vec<u8>)>, version: StateVersion) -> Self::Output {
+		sp_io::trie::blake2_256_root(input, version)
 	}
 
-	fn ordered_trie_root(input: Vec<Vec<u8>>) -> Self::Output {
-		sp_io::trie::blake2_256_ordered_root(input)
+	fn ordered_trie_root(input: Vec<Vec<u8>>, version: StateVersion) -> Self::Output {
+		sp_io::trie::blake2_256_ordered_root(input, version)
 	}
 }
 
@@ -510,12 +510,12 @@ impl Hasher for Keccak256 {
 impl Hash for Keccak256 {
 	type Output = sp_core::H256;
 
-	fn trie_root(input: Vec<(Vec<u8>, Vec<u8>)>) -> Self::Output {
-		sp_io::trie::keccak_256_root(input)
+	fn trie_root(input: Vec<(Vec<u8>, Vec<u8>)>, version: StateVersion) -> Self::Output {
+		sp_io::trie::keccak_256_root(input, version)
 	}
 
-	fn ordered_trie_root(input: Vec<Vec<u8>>) -> Self::Output {
-		sp_io::trie::keccak_256_ordered_root(input)
+	fn ordered_trie_root(input: Vec<Vec<u8>>, version: StateVersion) -> Self::Output {
+		sp_io::trie::keccak_256_ordered_root(input, version)
 	}
 }
 
@@ -1074,7 +1074,7 @@ impl SignedExtension for () {
 		info: &DispatchInfoOf<Self::Call>,
 		len: usize,
 	) -> Result<Self::Pre, TransactionValidityError> {
-		Ok(self.validate(who, call, info, len).map(|_| ())?)
+		self.validate(who, call, info, len).map(|_| ())
 	}
 }
 
