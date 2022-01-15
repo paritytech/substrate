@@ -23,7 +23,7 @@ parity-scale-codec = "2.3.1"
 hex = "0.4.2"
 rand = "0.7.3"
 tiny-bip39 = "0.8.2"
-serde_json = "1.0.71"
+serde_json = "1.0.74"
 sc-keystore = { version = "4.0.0-dev", path = "../keystore" }
 sp-panic-handler = { version = "4.0.0", path = "../../primitives/panic-handler" }
 sc-client-api = { version = "4.0.0-dev", path = "../api" }

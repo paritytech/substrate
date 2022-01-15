@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -24,7 +24,8 @@ use crate::{
 	storage::Storage,
 	wasm::{PrefabWasmModule, ReturnCode as RuntimeReturnCode},
 	weights::WeightInfo,
-	BalanceOf, Code, CodeStorage, Config, ContractInfoOf, Error, Pallet, Schedule,
+	BalanceOf, Code, CodeStorage, Config, ContractInfoOf, DefaultAddressGenerator, Error, Pallet,
+	Schedule,
 };
 use assert_matches::assert_matches;
 use codec::Encode;
@@ -285,6 +286,7 @@ impl Config for Test {
 	type Schedule = MySchedule;
 	type DepositPerByte = DepositPerByte;
 	type DepositPerItem = DepositPerItem;
+	type AddressGenerator = DefaultAddressGenerator;
 }
 
 pub const ALICE: AccountId32 = AccountId32::new([1u8; 32]);
@@ -531,7 +533,8 @@ fn run_out_of_gas() {
 }
 
 fn initialize_block(number: u64) {
-	System::initialize(&number, &[0u8; 32].into(), &Default::default(), Default::default());
+	System::reset_events();
+	System::initialize(&number, &[0u8; 32].into(), &Default::default());
 }
 
 #[test]
@@ -1543,7 +1546,8 @@ fn lazy_removal_partial_remove_works() {
 
 		// Put value into the contracts child trie
 		for val in &vals {
-			Storage::<Test>::write(&info.trie_id, &val.0, Some(val.2.clone()), None).unwrap();
+			Storage::<Test>::write(&info.trie_id, &val.0, Some(val.2.clone()), None, false)
+				.unwrap();
 		}
 		<ContractInfoOf<Test>>::insert(&addr, info.clone());
 
@@ -1627,7 +1631,8 @@ fn lazy_removal_does_no_run_on_full_block() {
 
 		// Put value into the contracts child trie
 		for val in &vals {
-			Storage::<Test>::write(&info.trie_id, &val.0, Some(val.2.clone()), None).unwrap();
+			Storage::<Test>::write(&info.trie_id, &val.0, Some(val.2.clone()), None, false)
+				.unwrap();
 		}
 		<ContractInfoOf<Test>>::insert(&addr, info.clone());
 
@@ -1710,7 +1715,8 @@ fn lazy_removal_does_not_use_all_weight() {
 
 		// Put value into the contracts child trie
 		for val in &vals {
-			Storage::<Test>::write(&info.trie_id, &val.0, Some(val.2.clone()), None).unwrap();
+			Storage::<Test>::write(&info.trie_id, &val.0, Some(val.2.clone()), None, false)
+				.unwrap();
 		}
 		<ContractInfoOf<Test>>::insert(&addr, info.clone());
 

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -134,12 +134,12 @@ fn discard_descendants<BlockHash: Hash, Key: Hash>(
 	hash: &BlockHash,
 ) -> u32 {
 	let (first, mut remainder) = if let Some((first, rest)) = levels.0.split_first_mut() {
-		(Some(first), (rest, &mut levels.1[..]))
+		(Some(first), (rest, &mut *levels.1))
 	} else {
 		if let Some((first, rest)) = levels.1.split_first_mut() {
-			(Some(first), (&mut levels.0[..], rest))
+			(Some(first), (&mut *levels.0, rest))
 		} else {
-			(None, (&mut levels.0[..], &mut levels.1[..]))
+			(None, (&mut *levels.0, &mut *levels.1))
 		}
 	};
 	let mut pinned_children = 0;
@@ -210,9 +210,10 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 						insert_values(&mut values, record.inserted);
 						trace!(
 							target: "state-db",
-							"Uncanonicalized journal entry {}.{} ({} inserted, {} deleted)",
+							"Uncanonicalized journal entry {}.{} ({:?}) ({} inserted, {} deleted)",
 							block,
 							index,
+							record.hash,
 							overlay.inserted.len(),
 							overlay.deleted.len()
 						);
@@ -261,8 +262,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 				.push((to_meta_key(LAST_CANONICAL, &()), last_canonicalized.encode()));
 			self.last_canonicalized = Some(last_canonicalized);
 		} else if self.last_canonicalized.is_some() {
-			if number < front_block_number ||
-				number >= front_block_number + self.levels.len() as u64 + 1
+			if number < front_block_number || number > front_block_number + self.levels.len() as u64
 			{
 				trace!(target: "state-db", "Failed to insert block {}, current is {} .. {})",
 					number,
@@ -296,6 +296,9 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 
 		if level.blocks.len() >= MAX_BLOCKS_PER_LEVEL as usize {
 			return Err(Error::TooManySiblingBlocks)
+		}
+		if level.blocks.iter().any(|b| b.hash == *hash) {
+			return Err(Error::BlockAlreadyExists)
 		}
 
 		let index = level.available_index();
@@ -642,7 +645,7 @@ mod tests {
 	use super::{to_journal_key, NonCanonicalOverlay};
 	use crate::{
 		test::{make_changeset, make_db},
-		ChangeSet, CommitSet, MetaDb,
+		ChangeSet, CommitSet, Error, MetaDb,
 	};
 	use sp_core::H256;
 	use std::io;
@@ -709,6 +712,20 @@ mod tests {
 		overlay
 			.insert::<io::Error>(&h2, 2, &H256::default(), ChangeSet::default())
 			.unwrap();
+	}
+
+	#[test]
+	fn insert_existing_fails() {
+		let db = make_db(&[]);
+		let h1 = H256::random();
+		let mut overlay = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
+		overlay
+			.insert::<io::Error>(&h1, 2, &H256::default(), ChangeSet::default())
+			.unwrap();
+		assert!(matches!(
+			overlay.insert::<io::Error>(&h1, 2, &H256::default(), ChangeSet::default()),
+			Err(Error::BlockAlreadyExists)
+		));
 	}
 
 	#[test]
