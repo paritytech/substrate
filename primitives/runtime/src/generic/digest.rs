@@ -358,8 +358,8 @@ impl<'a> DigestItemRef<'a> {
 			(OpaqueDigestItemId::Seal(w), &Self::Seal(v, s)) |
 			(OpaqueDigestItemId::PreRuntime(w), &Self::PreRuntime(v, s))
 				if v == w =>
-				Some(&s[..]),
-			(OpaqueDigestItemId::Other, &Self::Other(s)) => Some(&s[..]),
+				Some(s),
+			(OpaqueDigestItemId::Other, &Self::Other(s)) => Some(s),
 			_ => None,
 		}
 	}
