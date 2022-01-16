@@ -120,7 +120,7 @@ impl BenchmarkCmd {
 		let pallet = self.pallet.clone().unwrap_or_else(|| String::new());
 		let pallet = pallet.as_bytes();
 		let extrinsic = self.extrinsic.clone().unwrap_or_else(|| String::new());
-		let extrinsic_split:Vec<&str> = extrinsic.split(',').collect();
+		let extrinsic_split: Vec<&str> = extrinsic.split(',').collect();
 		let extrinsic: Vec<_> = extrinsic_split.iter().map(|x| x.trim().as_bytes()).collect();
 
 		let genesis_storage = spec.build_storage()?;
@@ -178,7 +178,9 @@ impl BenchmarkCmd {
 			.for_each(|item| {
 				for benchmark in &item.benchmarks {
 					let benchmark_name = &benchmark.name;
-					if extrinsic.is_empty() || extrinsic.contains(&&b"*"[..]) || extrinsic.contains(&&benchmark_name[..])
+					if extrinsic.is_empty() ||
+						extrinsic.contains(&&b"*"[..]) ||
+						extrinsic.contains(&&benchmark_name[..])
 					{
 						benchmarks_to_run.push((
 							item.pallet.clone(),
