@@ -63,7 +63,7 @@ benchmarks! {
 	}
 
 	multiplication {
-		let i in 0 .. 1_000_000;
+		let i = 1_000_000;
 		let mut out = 0;
 	}:  {
 		(1..=i).for_each(|j| out = 2 * j);
@@ -72,7 +72,7 @@ benchmarks! {
 	}
 
 	division {
-		let i in 0 .. 1_000_000;
+		let i = 1_000_000;
 		let mut out = 0;
 	}: {
 		(0..=i).for_each(|j| out = j / 2);
