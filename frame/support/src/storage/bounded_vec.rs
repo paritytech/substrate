@@ -25,7 +25,7 @@ use crate::{
 };
 use codec::{Decode, Encode, EncodeLike, MaxEncodedLen};
 use core::{
-	ops::{Deref, Index, IndexMut},
+	ops::{Deref, DerefMut, Index, IndexMut},
 	slice::SliceIndex,
 };
 use sp_std::{marker::PhantomData, prelude::*};
@@ -90,7 +90,7 @@ impl<T: Decode, S: Get<u32>> Decode for BoundedVec<T, S> {
 	fn decode<I: codec::Input>(input: &mut I) -> Result<Self, codec::Error> {
 		let inner = Vec::<T>::decode(input)?;
 		if inner.len() > S::get() as usize {
-			return Err("BoundedVec exceeds its limit".into())
+			return Err("BoundedVec exceeds its limit".into());
 		}
 		Ok(Self(inner, PhantomData))
 	}
@@ -293,6 +293,13 @@ impl<T, S> Deref for BoundedVec<T, S> {
 
 	fn deref(&self) -> &Self::Target {
 		&self.0
+	}
+}
+
+// Allows for mutable borrow operations of `Vec<T>` on `BoundedVec<T>`.
+impl<T, S> DerefMut for BoundedVec<T, S> {
+	fn deref_mut(&mut self) -> &mut Self::Target {
+		&mut self.0
 	}
 }
 

@@ -301,8 +301,10 @@ mod pallet;
 
 use codec::{Decode, Encode, HasCompact};
 use frame_support::{
+	parameter_types,
 	traits::{ConstU32, Currency, Get},
 	weights::Weight,
+	BoundedVec,
 };
 use scale_info::TypeInfo;
 use sp_runtime::{
@@ -348,6 +350,10 @@ type PositiveImbalanceOf<T> = <<T as Config>::Currency as Currency<
 type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<
 	<T as frame_system::Config>::AccountId,
 >>::NegativeImbalance;
+
+parameter_types! {
+	pub MaxUnlockingChunks: u32 = 32;
+}
 
 /// Information regarding the active era (era in used in session).
 #[derive(Encode, Decode, RuntimeDebug, TypeInfo)]
@@ -451,7 +457,7 @@ pub struct StakingLedger<AccountId, Balance: HasCompact> {
 	/// Any balance that is becoming free, which may eventually be transferred out of the stash
 	/// (assuming it doesn't get slashed first). It is assumed that this will be treated as a first
 	/// in, first out queue where the new (higher value) eras get pushing on the back.
-	pub unlocking: Vec<UnlockChunk<Balance>>,
+	pub unlocking: BoundedVec<UnlockChunk<Balance>, MaxUnlockingChunks>,
 	/// List of eras for which the stakers behind a validator have claimed rewards. Only updated
 	/// for validators.
 	pub claimed_rewards: Vec<EraIndex>,
@@ -466,7 +472,7 @@ impl<AccountId, Balance: HasCompact + Copy + Saturating + AtLeast32BitUnsigned +
 			stash,
 			total: Zero::zero(),
 			active: Zero::zero(),
-			unlocking: vec![],
+			unlocking: Default::default(),
 			claimed_rewards: vec![],
 		}
 	}
@@ -475,7 +481,7 @@ impl<AccountId, Balance: HasCompact + Copy + Saturating + AtLeast32BitUnsigned +
 	/// total by the sum of their balances.
 	fn consolidate_unlocked(self, current_era: EraIndex) -> Self {
 		let mut total = self.total;
-		let unlocking = self
+		let unlocking: BoundedVec<_, _> = self
 			.unlocking
 			.into_iter()
 			.filter(|chunk| {
@@ -486,7 +492,9 @@ impl<AccountId, Balance: HasCompact + Copy + Saturating + AtLeast32BitUnsigned +
 					false
 				}
 			})
-			.collect();
+			.collect::<Vec<_>>()
+			.try_into()
+			.expect("removing items from a bounded vec always leaves length less than bounds. qed");
 
 		Self {
 			stash: self.stash,
@@ -517,7 +525,7 @@ impl<AccountId, Balance: HasCompact + Copy + Saturating + AtLeast32BitUnsigned +
 			}
 
 			if unlocking_balance >= value {
-				break
+				break;
 			}
 		}
 

@@ -40,12 +40,11 @@ pub use impls::*;
 
 use crate::{
 	log, migrations, slashing, weights::WeightInfo, ActiveEraInfo, BalanceOf, EraIndex, EraPayout,
-	EraRewardPoints, Exposure, Forcing, NegativeImbalanceOf, Nominations, PositiveImbalanceOf,
-	Releases, RewardDestination, SessionInterface, StakingLedger, UnappliedSlash, UnlockChunk,
-	ValidatorPrefs,
+	EraRewardPoints, Exposure, Forcing, MaxUnlockingChunks, NegativeImbalanceOf, Nominations,
+	PositiveImbalanceOf, Releases, RewardDestination, SessionInterface, StakingLedger,
+	UnappliedSlash, UnlockChunk, ValidatorPrefs,
 };
 
-pub const MAX_UNLOCKING_CHUNKS: usize = 32;
 const STAKING_ID: LockIdentifier = *b"staking ";
 
 #[frame_support::pallet]
@@ -771,7 +770,7 @@ pub mod pallet {
 				stash,
 				total: value,
 				active: value,
-				unlocking: vec![],
+				unlocking: Default::default(),
 				claimed_rewards: (last_reward_era..current_era).collect(),
 			};
 			Self::update_ledger(&controller, &item);
@@ -836,7 +835,7 @@ pub mod pallet {
 		/// Once the unlock period is done, you can call `withdraw_unbonded` to actually move
 		/// the funds out of management ready for transfer.
 		///
-		/// No more than a limited number of unlocking chunks (see `MAX_UNLOCKING_CHUNKS`)
+		/// No more than a limited number of unlocking chunks (see `MaxUnlockingChunks`)
 		/// can co-exists at the same time. In that case, [`Call::withdraw_unbonded`] need
 		/// to be called first to remove some of the chunks (if possible).
 		///
@@ -853,7 +852,10 @@ pub mod pallet {
 		) -> DispatchResult {
 			let controller = ensure_signed(origin)?;
 			let mut ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
-			ensure!(ledger.unlocking.len() < MAX_UNLOCKING_CHUNKS, Error::<T>::NoMoreChunks,);
+			ensure!(
+				ledger.unlocking.len() < MaxUnlockingChunks::get() as usize,
+				Error::<T>::NoMoreChunks,
+			);
 
 			let mut value = value.min(ledger.active);
 
@@ -888,7 +890,10 @@ pub mod pallet {
 					// be the last one.
 					chunk.value = chunk.value.saturating_add(value)
 				} else {
-					ledger.unlocking.push(UnlockChunk { value, era });
+					ledger
+						.unlocking
+						.try_push(UnlockChunk { value, era })
+						.map_err(|_| Error::<T>::NoMoreChunks)?;
 				};
 				// NOTE: ledger must be updated prior to calling `Self::weight_of`.
 				Self::update_ledger(&controller, &ledger);
@@ -930,24 +935,23 @@ pub mod pallet {
 				ledger = ledger.consolidate_unlocked(current_era)
 			}
 
-			let post_info_weight = if ledger.unlocking.is_empty() &&
-				ledger.active < T::Currency::minimum_balance()
-			{
-				// This account must have called `unbond()` with some value that caused the active
-				// portion to fall below existential deposit + will have no more unlocking chunks
-				// left. We can now safely remove all staking-related information.
-				Self::kill_stash(&stash, num_slashing_spans)?;
-				// Remove the lock.
-				T::Currency::remove_lock(STAKING_ID, &stash);
-				// This is worst case scenario, so we use the full weight and return None
-				None
-			} else {
-				// This was the consequence of a partial unbond. just update the ledger and move on.
-				Self::update_ledger(&controller, &ledger);
+			let post_info_weight =
+				if ledger.unlocking.is_empty() && ledger.active < T::Currency::minimum_balance() {
+					// This account must have called `unbond()` with some value that caused the active
+					// portion to fall below existential deposit + will have no more unlocking chunks
+					// left. We can now safely remove all staking-related information.
+					Self::kill_stash(&stash, num_slashing_spans)?;
+					// Remove the lock.
+					T::Currency::remove_lock(STAKING_ID, &stash);
+					// This is worst case scenario, so we use the full weight and return None
+					None
+				} else {
+					// This was the consequence of a partial unbond. just update the ledger and move on.
+					Self::update_ledger(&controller, &ledger);
 
-				// This is only an update, so we use less overall weight.
-				Some(T::WeightInfo::withdraw_unbonded_update(num_slashing_spans))
-			};
+					// This is only an update, so we use less overall weight.
+					Some(T::WeightInfo::withdraw_unbonded_update(num_slashing_spans))
+				};
 
 			// `old_total` should never be less than the new total because
 			// `consolidate_unlocked` strictly subtracts balance.
@@ -1379,10 +1383,10 @@ pub mod pallet {
 		///
 		/// # <weight>
 		/// - Time complexity: O(L), where L is unlocking chunks
-		/// - Bounded by `MAX_UNLOCKING_CHUNKS`.
+		/// - Bounded by `MaxUnlockingChunks`.
 		/// - Storage changes: Can't increase storage, only decrease it.
 		/// # </weight>
-		#[pallet::weight(T::WeightInfo::rebond(MAX_UNLOCKING_CHUNKS as u32))]
+		#[pallet::weight(T::WeightInfo::rebond(MaxUnlockingChunks::get() as u32))]
 		pub fn rebond(
 			origin: OriginFor<T>,
 			#[pallet::compact] value: BalanceOf<T>,
@@ -1473,8 +1477,8 @@ pub mod pallet {
 			let _ = ensure_signed(origin)?;
 
 			let ed = T::Currency::minimum_balance();
-			let reapable = T::Currency::total_balance(&stash) < ed ||
-				Self::ledger(Self::bonded(stash.clone()).ok_or(Error::<T>::NotStash)?)
+			let reapable = T::Currency::total_balance(&stash) < ed
+				|| Self::ledger(Self::bonded(stash.clone()).ok_or(Error::<T>::NotStash)?)
 					.map(|l| l.total)
 					.unwrap_or_default() < ed;
 			ensure!(reapable, Error::<T>::FundedTarget);
