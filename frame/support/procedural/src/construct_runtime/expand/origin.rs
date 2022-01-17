@@ -179,15 +179,15 @@ pub fn expand_outer_origin(
 			}
 
 			fn none() -> Self {
-				#scrate::dispatch::RawOrigin::None.into()
+				#scrate::base_origin::BaseOrigin::None.into()
 			}
 
 			fn root() -> Self {
-				#scrate::dispatch::RawOrigin::Root.into()
+				#scrate::base_origin::BaseOrigin::Root.into()
 			}
 
 			fn signed(by: <#runtime as #system_path::Config>::AccountId) -> Self {
-				#scrate::dispatch::RawOrigin::Signed(by).into()
+				#scrate::base_origin::BaseOrigin::Signed(by).into()
 			}
 		}
 

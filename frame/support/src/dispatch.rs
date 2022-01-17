@@ -61,28 +61,6 @@ pub trait Callable<T> {
 // https://github.com/rust-lang/rust/issues/51331
 pub type CallableCallFor<A, R> = <A as Callable<R>>::Call;
 
-/// Origin for the System pallet.
-#[derive(PartialEq, Eq, Clone, RuntimeDebug, Encode, Decode, TypeInfo)]
-pub enum RawOrigin<AccountId> {
-	/// The system itself ordained this dispatch to happen: this is the highest privilege level.
-	Root,
-	/// It is signed by some public key and we provide the `AccountId`.
-	Signed(AccountId),
-	/// It is signed by nobody, can be either:
-	/// * included and agreed upon by the validators anyway,
-	/// * or unsigned transaction validated by a pallet.
-	None,
-}
-
-impl<AccountId> From<Option<AccountId>> for RawOrigin<AccountId> {
-	fn from(s: Option<AccountId>) -> RawOrigin<AccountId> {
-		match s {
-			Some(who) => RawOrigin::Signed(who),
-			None => RawOrigin::None,
-		}
-	}
-}
-
 /// A type that can be used as a parameter in a dispatchable function.
 ///
 /// When using `decl_module` all arguments for call functions must implement this trait.

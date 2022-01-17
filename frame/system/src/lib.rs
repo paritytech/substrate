@@ -69,8 +69,8 @@ use serde::Serialize;
 use sp_runtime::{
 	generic,
 	traits::{
-		self, AtLeast32Bit, AtLeast32BitUnsigned, BadOrigin, BlockNumberProvider, Bounded,
-		CheckEqual, Dispatchable, Hash, Lookup, LookupError, MaybeDisplay, MaybeMallocSizeOf,
+		self, AtLeast32Bit, AtLeast32BitUnsigned, BlockNumberProvider, Bounded, CheckEqual,
+		Dispatchable, Hash, Lookup, LookupError, MaybeDisplay, MaybeMallocSizeOf,
 		MaybeSerializeDeserialize, Member, One, Saturating, SimpleBitOps, StaticLookup, Zero,
 	},
 	DispatchError, Perbill, RuntimeDebug,
@@ -124,7 +124,9 @@ pub use extensions::{
 };
 // Backward compatible re-export.
 pub use extensions::check_mortality::CheckMortality as CheckEra;
-pub use frame_support::dispatch::RawOrigin;
+pub use frame_support::base_origin::{
+	ensure_none, ensure_root, ensure_signed, ensure_signed_or_root, BaseOrigin as RawOrigin,
+};
 pub use weights::WeightInfo;
 
 /// Compute the trie root of a list of extrinsics.
@@ -873,56 +875,6 @@ impl<O, T> EnsureOrigin<O> for EnsureNever<T> {
 	}
 }
 
-/// Ensure that the origin `o` represents a signed extrinsic (i.e. transaction).
-/// Returns `Ok` with the account that signed the extrinsic or an `Err` otherwise.
-pub fn ensure_signed<OuterOrigin, AccountId>(o: OuterOrigin) -> Result<AccountId, BadOrigin>
-where
-	OuterOrigin: Into<Result<RawOrigin<AccountId>, OuterOrigin>>,
-{
-	match o.into() {
-		Ok(RawOrigin::Signed(t)) => Ok(t),
-		_ => Err(BadOrigin),
-	}
-}
-
-/// Ensure that the origin `o` represents either a signed extrinsic (i.e. transaction) or the root.
-/// Returns `Ok` with the account that signed the extrinsic, `None` if it was root,  or an `Err`
-/// otherwise.
-pub fn ensure_signed_or_root<OuterOrigin, AccountId>(
-	o: OuterOrigin,
-) -> Result<Option<AccountId>, BadOrigin>
-where
-	OuterOrigin: Into<Result<RawOrigin<AccountId>, OuterOrigin>>,
-{
-	match o.into() {
-		Ok(RawOrigin::Root) => Ok(None),
-		Ok(RawOrigin::Signed(t)) => Ok(Some(t)),
-		_ => Err(BadOrigin),
-	}
-}
-
-/// Ensure that the origin `o` represents the root. Returns `Ok` or an `Err` otherwise.
-pub fn ensure_root<OuterOrigin, AccountId>(o: OuterOrigin) -> Result<(), BadOrigin>
-where
-	OuterOrigin: Into<Result<RawOrigin<AccountId>, OuterOrigin>>,
-{
-	match o.into() {
-		Ok(RawOrigin::Root) => Ok(()),
-		_ => Err(BadOrigin),
-	}
-}
-
-/// Ensure that the origin `o` represents an unsigned extrinsic. Returns `Ok` or an `Err` otherwise.
-pub fn ensure_none<OuterOrigin, AccountId>(o: OuterOrigin) -> Result<(), BadOrigin>
-where
-	OuterOrigin: Into<Result<RawOrigin<AccountId>, OuterOrigin>>,
-{
-	match o.into() {
-		Ok(RawOrigin::None) => Ok(()),
-		_ => Err(BadOrigin),
-	}
-}
-
 /// Reference status; can be either referenced or unreferenced.
 #[derive(RuntimeDebug)]
 pub enum RefStatus {
@@ -1624,7 +1576,9 @@ impl<T: Config> Lookup for ChainContext<T> {
 
 /// Prelude to be used alongside pallet macro, for ease of use.
 pub mod pallet_prelude {
-	pub use crate::{ensure_none, ensure_root, ensure_signed, ensure_signed_or_root};
+	pub use frame_support::base_origin::{
+		ensure_none, ensure_root, ensure_signed, ensure_signed_or_root,
+	};
 
 	/// Type alias for the `Origin` associated type of system config.
 	pub type OriginFor<T> = <T as crate::Config>::Origin;

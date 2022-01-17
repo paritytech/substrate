@@ -340,7 +340,7 @@ mod origin_test {
 		origin.set_caller_from(Origin::root());
 		assert!(matches!(
 			origin.caller,
-			OriginCaller::system(frame_support::dispatch::RawOrigin::Root)
+			OriginCaller::system(frame_support::base_origin::BaseOrigin::Root)
 		));
 
 		// Root origin bypass all filter.
@@ -420,7 +420,7 @@ fn integrity_test_works() {
 fn origin_codec() {
 	use codec::Encode;
 
-	let origin = OriginCaller::system(frame_support::dispatch::RawOrigin::None);
+	let origin = OriginCaller::system(frame_support::base_origin::BaseOrigin::None);
 	assert_eq!(origin.encode()[0], 30);
 
 	let origin = OriginCaller::Module1_1(module1::Origin(Default::default()));

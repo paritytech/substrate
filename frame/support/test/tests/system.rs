@@ -16,8 +16,8 @@
 // limitations under the License.
 
 use frame_support::{
+	base_origin::BaseOrigin,
 	codec::{Decode, Encode, EncodeLike},
-	dispatch::RawOrigin,
 	traits::Get,
 	weights::RuntimeDbWeight,
 };
