@@ -9611,7 +9611,7 @@ dependencies = [
 
 [[package]]
 name = "sp-keyring"
-version = "4.0.0-dev"
+version = "4.1.0-dev"
 dependencies = [
  "lazy_static",
  "sp-core",
