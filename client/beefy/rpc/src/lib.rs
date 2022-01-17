@@ -260,8 +260,7 @@ mod tests {
 		let (io, _) = setup_io_handler();
 
 		let request = r#"{"jsonrpc":"2.0","method":"beefy_getFinalizedHead","params":[],"id":1}"#;
-		let response = r#"{"jsonrpc":"2.0","error":{"code":1,"message":"BEEFY RPC endpoint not
-	ready"},"id":1}"#;
+		let response = r#"{"jsonrpc":"2.0","error":{"code":1,"message":"BEEFY RPC endpoint not ready"},"id":1}"#;
 
 		let meta = sc_rpc::Metadata::default();
 		assert_eq!(Some(response.into()), io.handle_request_sync(request, meta));
@@ -302,8 +301,7 @@ mod tests {
 			std::thread::sleep(std::time::Duration::from_millis(50));
 		}
 		panic!(
-			"Deadline reached while waiting for best BEEFY block to update. Perhaps the background task
-	is broken?" 	);
+			"Deadline reached while waiting for best BEEFY block to update. Perhaps the background task is broken?");
 	}
 
 	#[test]
@@ -336,8 +334,7 @@ mod tests {
 		assert_eq!(
 			io.handle_request_sync(&unsub_req, meta),
 			Some(
-				r#"{"jsonrpc":"2.0","error":{"code":-32602,"message":"Invalid subscription
-	id."},"id":1}"#
+				r#"{"jsonrpc":"2.0","error":{"code":-32602,"message":"Invalid subscription id."},"id":1}"#
 					.into()
 			),
 		);
@@ -362,8 +359,7 @@ mod tests {
 				meta.clone()
 			),
 			Some(
-				r#"{"jsonrpc":"2.0","error":{"code":-32602,"message":"Invalid subscription
-	id."},"id":1}"#
+				r#"{"jsonrpc":"2.0","error":{"code":-32602,"message":"Invalid subscription id."},"id":1}"#
 					.into()
 			)
 		);
