@@ -100,7 +100,7 @@ where
 	B: Block + Codec,
 	BE: Backend<B>,
 	C: Client<B, BE>,
-	C::Api: BeefyApi<B> + sp_session::SessionBoundaryApi<B, NumberFor<B>>,
+	C::Api: BeefyApi<B, NumberFor<B>>,
 {
 	/// Return a new BEEFY worker instance.
 	///
@@ -146,7 +146,7 @@ where
 	B: Block,
 	BE: Backend<B>,
 	C: Client<B, BE>,
-	C::Api: BeefyApi<B> + sp_session::SessionBoundaryApi<B, NumberFor<B>>,
+	C::Api: BeefyApi<B, NumberFor<B>>,
 {
 	/// Return `true`, if we should vote on block `number`
 	fn should_vote_on(&self, number: NumberFor<B>) -> bool {
@@ -257,8 +257,8 @@ where
 				// this metric is kind of 'fake'. Best BEEFY block should only be updated once
 				// we have a signed commitment for the block. Remove once the above TODO is
 				// done.
-				if session_boundary.is_some() {
-					metric_set!(self, beefy_best_block, session_boundary.unwrap());
+				if let Some(session_boundary) = session_boundary {
+					metric_set!(self, beefy_best_block, session_boundary);
 				}
 			}
 		}

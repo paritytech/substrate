@@ -111,7 +111,7 @@ where
 	B: Block,
 	BE: Backend<B>,
 	C: Client<B, BE>,
-	C::Api: BeefyApi<B> + sp_session::SessionBoundaryApi<B, NumberFor<B>>,
+	C::Api: BeefyApi<B, NumberFor<B>>,
 	N: GossipNetwork<B> + Clone + Send + 'static,
 {
 	/// BEEFY client
@@ -142,7 +142,7 @@ where
 	B: Block,
 	BE: Backend<B>,
 	C: Client<B, BE>,
-	C::Api: BeefyApi<B> + sp_session::SessionBoundaryApi<B, NumberFor<B>>,
+	C::Api: BeefyApi<B, NumberFor<B>>,
 	N: GossipNetwork<B> + Clone + Send + 'static,
 {
 	let BeefyParams {

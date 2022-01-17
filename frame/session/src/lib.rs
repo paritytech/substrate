@@ -145,11 +145,6 @@ pub trait ShouldEndSession<BlockNumber> {
 	/// Return `true` if the session should be ended.
 	fn should_end_session(now: BlockNumber) -> bool;
 }
-/// Returns the session boundary
-pub trait SessionBoundary<BlockNumber> {
-	/// Returns the block number at which the session began
-	fn get_session_boundary() -> BlockNumber;
-}
 
 /// Ends the session after a fixed period of blocks.
 ///
@@ -910,6 +905,11 @@ impl<T: Config> Pallet<T> {
 	fn clear_key_owner(id: KeyTypeId, key_data: &[u8]) {
 		<KeyOwner<T>>::remove((id, key_data));
 	}
+
+	/// Returns the block number at which the session began
+	fn get_session_boundary() -> T::BlockNumber {
+		Pallet::<T>::session_start()
+	}
 }
 
 impl<T: Config> ValidatorRegistration<T::ValidatorId> for Pallet<T> {
@@ -965,11 +965,5 @@ impl<T: Config, Inner: FindAuthor<u32>> FindAuthor<T::ValidatorId>
 
 		let validators = <Pallet<T>>::validators();
 		validators.get(i as usize).map(|k| k.clone())
-	}
-}
-
-impl<T: Config> SessionBoundary<T::BlockNumber> for Pallet<T> {
-	fn get_session_boundary() -> T::BlockNumber {
-		Pallet::<T>::session_start()
 	}
 }
