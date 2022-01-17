@@ -19,6 +19,7 @@
 
 //! A crate which contains primitives that are useful for implementation that uses staking
 //! approaches in general. Definitions related to sessions, slashing, etc go here.
+use sp_std::collections::btree_map::BTreeMap;
 
 pub mod offence;
 
@@ -27,3 +28,15 @@ pub type SessionIndex = u32;
 
 /// Counter for the number of eras that have passed.
 pub type EraIndex = u32;
+
+pub trait PoolsInterface {
+	type AccountId;
+	type Balance;
+
+	fn slash_pool(
+		account_id: Self::AccountId,
+		slash_amount: Balance,
+	) -> Option<(Balance, BTreeMap<EraIndex, Balance>), ()>;
+}
+
+

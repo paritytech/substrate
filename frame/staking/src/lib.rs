@@ -513,7 +513,7 @@ impl<AccountId, Balance: HasCompact + Copy + Saturating + AtLeast32BitUnsigned +
 			}
 
 			if unlocking_balance >= value {
-				break
+				break;
 			}
 		}
 
@@ -521,17 +521,51 @@ impl<AccountId, Balance: HasCompact + Copy + Saturating + AtLeast32BitUnsigned +
 	}
 }
 
+enum LedgerSlash<Balance> {
+	BySum(Balance),
+	ByEra(BTreeMap<EraIndex, Balance>),
+}
+
 impl<AccountId, Balance> StakingLedger<AccountId, Balance>
 where
 	Balance: AtLeast32BitUnsigned + Saturating + Copy,
 {
-	/// Slash the validator for a given amount of balance. This can grow the value
-	/// of the slash in the case that the validator has less than `minimum_balance`
+	/// Slash the staker for a given amount of balance. This can grow the value
+	/// of the slash in the case that the staker has less than `minimum_balance`
 	/// active funds. Returns the amount of funds actually slashed.
 	///
 	/// Slashes from `active` funds first, and then `unlocking`, starting with the
 	/// chunks that are closest to unlocking.
-	fn slash(&mut self, mut value: Balance, minimum_balance: Balance, is_pool: bool) -> Balance {
+	fn slash(&mut self, mut value: Balance, minimum_balance: Balance) -> Balance {
+		if Some(slashed_active, slashed_chunks) = T::PoolsInterface::slash(self.stash, value) {
+			self.slash_by_eras(slashed_active, slashed_chunks)
+		} else {
+			self.slash_by_sum(value, minimum_balance)
+		}
+	}
+
+	/// Slash a nominating pool account
+	fn pool_slash(&mut self, new_active: Balance, slashed_chunks: Balance) -> Balance {
+		let total_slashed = Zero::zero();
+
+		self.unlocking.for_each(|chunk| {
+			if let Some(new_balance) = slashed_chunks.get(chunk.era) {
+				let slashed_amount = chunk.balance.saturating_sub(new_balance);
+				self.total = self.total.saturating_sub(slashed_amount);
+				total_slashed = total_slashed.saturating_add(slashed_amount);
+
+				chunk.balance = new_balance;
+			}
+		});
+
+		let slashed_amount = self.active.saturating_sub(new_active);
+		self.active = new_active;
+
+		total_slashed.saturating_add(slashed_amount)
+	}
+
+	// Slash a validator or nominator's stash
+	fn standard_slash(value: Balance, minimum_balance: Balance) -> Balance {
 		let pre_total = self.total;
 		let total = &mut self.total;
 		let active = &mut self.active;

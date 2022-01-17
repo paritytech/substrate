@@ -670,8 +670,8 @@ impl<T: Config> Pallet<T> {
 		apply_era: EraIndex,
 		//
 		slash_era: EraIndex,
-	) -> Result<(BalanceOf<T>, BTreeMap<EraIndex, BalanceOf<T>>), DispatchError> {
-		let pool_id = PoolIds::<T>::get(&pool_account).ok_or(Error::<T>::PoolNotFound)?;
+	) -> Option<(BalanceOf<T>, BTreeMap<EraIndex, BalanceOf<T>>)> {
+		let pool_id = PoolIds::<T>::get(&pool_account)?;
 		let mut sub_pools = SubPools::<T>::get(pool_id).unwrap_or_default();
 
 		// TODO double check why we do slash_era + 1
