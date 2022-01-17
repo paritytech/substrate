@@ -45,19 +45,18 @@ use std::iter::Iterator;
 /// implementations for the host functions on the host.
 pub fn generate(trait_def: &ItemTrait, is_wasm_only: bool) -> Result<TokenStream> {
 	let trait_name = &trait_def.ident;
-	let extern_host_function_impls = get_runtime_interface(trait_def)?.latest_versions().try_fold(
-		TokenStream::new(),
-		|mut t, (version, method)| {
+	let extern_host_function_impls = get_runtime_interface(trait_def)?
+		.latest_versions_to_call()
+		.try_fold(TokenStream::new(), |mut t, (version, method)| {
 			t.extend(generate_extern_host_function(method, version, trait_name)?);
 			Ok::<_, Error>(t)
-		},
-	)?;
-	let exchangeable_host_functions = get_runtime_interface(trait_def)?
-		.latest_versions()
-		.try_fold(TokenStream::new(), |mut t, (_, m)| {
-			t.extend(generate_exchangeable_host_function(m)?);
-			Ok::<_, Error>(t)
 		})?;
+	let exchangeable_host_functions = get_runtime_interface(trait_def)?
+		.latest_versions_to_call()
+		.try_fold(TokenStream::new(), |mut t, (_, m)| {
+		t.extend(generate_exchangeable_host_function(m)?);
+		Ok::<_, Error>(t)
+	})?;
 	let host_functions_struct = generate_host_functions_struct(trait_def, is_wasm_only)?;
 
 	Ok(quote! {

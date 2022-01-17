@@ -347,7 +347,11 @@ impl Config {
 	{
 		trace!(target: "babe", "Getting slot duration");
 
-		let best_block_id = BlockId::Hash(client.usage_info().chain.best_hash);
+		let mut best_block_id = BlockId::Hash(client.usage_info().chain.best_hash);
+		if client.usage_info().chain.finalized_state.is_none() {
+			debug!(target: "babe", "No finalized state is available. Reading config from genesis");
+			best_block_id = BlockId::Hash(client.usage_info().chain.genesis_hash);
+		}
 		let runtime_api = client.runtime_api();
 
 		let version = runtime_api.api_version::<dyn BabeApi<B>>(&best_block_id)?;
