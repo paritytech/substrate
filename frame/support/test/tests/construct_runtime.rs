@@ -338,7 +338,10 @@ mod origin_test {
 		// Now test for root origin and filters:
 		let mut origin = Origin::from(Some(0));
 		origin.set_caller_from(Origin::root());
-		assert!(matches!(origin.caller, OriginCaller::system(frame_support::dispatch::RawOrigin::Root)));
+		assert!(matches!(
+			origin.caller,
+			OriginCaller::system(frame_support::dispatch::RawOrigin::Root)
+		));
 
 		// Root origin bypass all filter.
 		assert_eq!(origin.filter_call(&accepted_call), true);
