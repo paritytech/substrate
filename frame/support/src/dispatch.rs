@@ -2583,9 +2583,9 @@ mod tests {
 			type DbWeight: Get<RuntimeDbWeight>;
 		}
 
-		pub use super::super::RawOrigin;
+		pub use crate::origin::BaseOrigin;
 
-		pub type Origin<T> = RawOrigin<<T as Config>::AccountId>;
+		pub type Origin<T> = BaseOrigin<<T as Config>::AccountId>;
 	}
 
 	decl_module! {
