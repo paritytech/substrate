@@ -5475,7 +5475,6 @@ dependencies = [
  "pallet-utility",
  "parity-scale-codec",
  "pretty_assertions",
- "pwasm-utils",
  "rand 0.8.4",
  "rand_pcg 0.3.1",
  "scale-info",
@@ -5486,6 +5485,7 @@ dependencies = [
  "sp-runtime",
  "sp-sandbox",
  "sp-std",
+ "wasm-instrument",
  "wasmi-validation",
  "wat",
 ]
@@ -6958,17 +6958,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pwasm-utils"
-version = "0.18.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "880b3384fb00b8f6ecccd5d358b93bd2201900ae3daad213791d1864f6441f5c"
-dependencies = [
- "byteorder",
- "log 0.4.14",
- "parity-wasm 0.42.2",
-]
-
-[[package]]
 name = "quick-error"
 version = "1.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8094,13 +8083,13 @@ dependencies = [
  "derive_more",
  "environmental",
  "parity-scale-codec",
- "pwasm-utils",
  "sc-allocator",
  "sp-core",
  "sp-maybe-compressed-blob",
  "sp-serializer",
  "sp-wasm-interface",
  "thiserror",
+ "wasm-instrument",
  "wasmer",
  "wasmer-compiler-singlepass",
  "wasmi",
@@ -11304,6 +11293,15 @@ dependencies = [
  "log 0.4.14",
  "parity-wasm 0.32.0",
  "rustc-demangle",
+]
+
+[[package]]
+name = "wasm-instrument"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8e67369bb53d409b67e57ef31797b1b2d628955fc82f86f2ea78bb403acc7c73"
+dependencies = [
+ "parity-wasm 0.42.2",
 ]
 
 [[package]]
