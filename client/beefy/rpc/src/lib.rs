@@ -446,7 +446,7 @@ mod tests {
 		r.unwrap();
 
 		// Inspect what we received
-		// We should have received only teo commitments
+		// We should have received only two commitments
 		let recvs = futures::executor::block_on(receiver.take(2).collect::<Vec<_>>());
 		let recv: Notification = serde_json::from_str(&recvs[0]).unwrap();
 		let mut json_map = match recv.params {
