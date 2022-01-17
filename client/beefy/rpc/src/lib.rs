@@ -188,14 +188,8 @@ where
 
 		self.manager.add(subscriber, |sink| {
 			stream
-				.forward(sink.sink_map_err(|e| {
-					warn!("Error sending notifications: {:?}", e);
-					println!("Error sending: {:?}", e);
-				}))
-				.map(|_| {
-					println!("Sent notification");
-					()
-				})
+				.forward(sink.sink_map_err(|e| warn!("Error sending notifications: {:?}", e)))
+				.map(|_| ())
 		});
 	}
 
