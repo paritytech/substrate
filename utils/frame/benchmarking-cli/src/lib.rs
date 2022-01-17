@@ -114,7 +114,7 @@ pub struct BenchmarkCmd {
 	pub shared_params: sc_cli::SharedParams,
 
 	/// The execution strategy that should be used for benchmarks
-	#[clap(long = "execution", value_name = "STRATEGY", arg_enum, ignore_case = true)]
+	#[clap(long, value_name = "STRATEGY", arg_enum, ignore_case = true)]
 	pub execution: Option<ExecutionStrategy>,
 
 	/// Method for executing Wasm runtime code.

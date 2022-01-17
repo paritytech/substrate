@@ -50,7 +50,7 @@ pub struct ImportParams {
 	/// When running as a validator it is highly recommended to disable state
 	/// pruning (i.e. 'archive') which is the default. The node will refuse to
 	/// start as a validator if pruning is enabled unless this option is set.
-	#[clap(long = "unsafe-pruning")]
+	#[clap(long)]
 	pub unsafe_pruning: bool,
 
 	/// Method for executing Wasm runtime code.
@@ -74,7 +74,7 @@ pub struct ImportParams {
 	pub execution_strategies: ExecutionStrategiesParams,
 
 	/// Specify the state cache size.
-	#[clap(long = "state-cache-size", value_name = "Bytes", default_value = "67108864")]
+	#[clap(long, value_name = "Bytes", default_value = "67108864")]
 	pub state_cache_size: usize,
 }
 
@@ -131,40 +131,30 @@ impl ImportParams {
 pub struct ExecutionStrategiesParams {
 	/// The means of execution used when calling into the runtime for importing blocks as
 	/// part of an initial sync.
-	#[clap(long = "execution-syncing", value_name = "STRATEGY", arg_enum, ignore_case = true)]
+	#[clap(long, value_name = "STRATEGY", arg_enum, ignore_case = true)]
 	pub execution_syncing: Option<ExecutionStrategy>,
 
 	/// The means of execution used when calling into the runtime for general block import
 	/// (including locally authored blocks).
-	#[clap(long = "execution-import-block", value_name = "STRATEGY", arg_enum, ignore_case = true)]
+	#[clap(long, value_name = "STRATEGY", arg_enum, ignore_case = true)]
 	pub execution_import_block: Option<ExecutionStrategy>,
 
 	/// The means of execution used when calling into the runtime while constructing blocks.
-	#[clap(
-		long = "execution-block-construction",
-		value_name = "STRATEGY",
-		arg_enum,
-		ignore_case = true
-	)]
+	#[clap(long, value_name = "STRATEGY", arg_enum, ignore_case = true)]
 	pub execution_block_construction: Option<ExecutionStrategy>,
 
 	/// The means of execution used when calling into the runtime while using an off-chain worker.
-	#[clap(
-		long = "execution-offchain-worker",
-		value_name = "STRATEGY",
-		arg_enum,
-		ignore_case = true
-	)]
+	#[clap(long, value_name = "STRATEGY", arg_enum, ignore_case = true)]
 	pub execution_offchain_worker: Option<ExecutionStrategy>,
 
 	/// The means of execution used when calling into the runtime while not syncing, importing or
 	/// constructing blocks.
-	#[clap(long = "execution-other", value_name = "STRATEGY", arg_enum, ignore_case = true)]
+	#[clap(long, value_name = "STRATEGY", arg_enum, ignore_case = true)]
 	pub execution_other: Option<ExecutionStrategy>,
 
 	/// The execution strategy that should be used by all execution contexts.
 	#[clap(
-		long = "execution",
+		long,
 		value_name = "STRATEGY",
 		arg_enum,
 		ignore_case = true,

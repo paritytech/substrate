@@ -139,12 +139,9 @@ pub trait SubstrateCli: Sized {
 					AppSettings::SubcommandsNegateReqs,
 			);
 
-		let matches = match app.try_get_matches_from(iter) {
-			Ok(matches) => matches,
-			Err(e) => e.exit(),
-		};
+		let matches = app.try_get_matches_from(iter).unwrap_or_else(|e| e.exit());
 
-		<Self as FromArgMatches>::from_arg_matches(&matches).unwrap()
+		<Self as FromArgMatches>::from_arg_matches(&matches).unwrap_or_else(|e| e.exit())
 	}
 
 	/// Helper function used to parse the command line arguments. This is the equivalent of

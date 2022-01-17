@@ -34,11 +34,11 @@ use std::{borrow::Cow, path::PathBuf};
 #[derive(Debug, Clone, Args)]
 pub struct NetworkParams {
 	/// Specify a list of bootnodes.
-	#[clap(long = "bootnodes", value_name = "ADDR")]
+	#[clap(long, value_name = "ADDR")]
 	pub bootnodes: Vec<MultiaddrWithPeerId>,
 
 	/// Specify a list of reserved node addresses.
-	#[clap(long = "reserved-nodes", value_name = "ADDR")]
+	#[clap(long, value_name = "ADDR")]
 	pub reserved_nodes: Vec<MultiaddrWithPeerId>,
 
 	/// Whether to only synchronize the chain with reserved nodes.
@@ -49,7 +49,7 @@ pub struct NetworkParams {
 	/// In particular, if you are a validator your node might still connect to other
 	/// validator nodes and collator nodes regardless of whether they are defined as
 	/// reserved nodes.
-	#[clap(long = "reserved-only")]
+	#[clap(long)]
 	pub reserved_only: bool,
 
 	/// The public address that other nodes will use to connect to it.
@@ -62,46 +62,46 @@ pub struct NetworkParams {
 	/// By default:
 	/// If `--validator` is passed: `/ip4/0.0.0.0/tcp/<port>` and `/ip6/[::]/tcp/<port>`.
 	/// Otherwise: `/ip4/0.0.0.0/tcp/<port>/ws` and `/ip6/[::]/tcp/<port>/ws`.
-	#[clap(long = "listen-addr", value_name = "LISTEN_ADDR")]
+	#[clap(long, value_name = "LISTEN_ADDR")]
 	pub listen_addr: Vec<Multiaddr>,
 
 	/// Specify p2p protocol TCP port.
-	#[clap(long = "port", value_name = "PORT", conflicts_with_all = &[ "listen-addr" ])]
+	#[clap(long, value_name = "PORT", conflicts_with_all = &[ "listen-addr" ])]
 	pub port: Option<u16>,
 
 	/// Always forbid connecting to private IPv4 addresses (as specified in
 	/// [RFC1918](https://tools.ietf.org/html/rfc1918)), unless the address was passed with
 	/// `--reserved-nodes` or `--bootnodes`. Enabled by default for chains marked as "live" in
 	/// their chain specifications.
-	#[clap(long = "no-private-ipv4", conflicts_with_all = &["allow-private-ipv4"])]
+	#[clap(long, conflicts_with_all = &["allow-private-ipv4"])]
 	pub no_private_ipv4: bool,
 
 	/// Always accept connecting to private IPv4 addresses (as specified in
 	/// [RFC1918](https://tools.ietf.org/html/rfc1918)). Enabled by default for chains marked as
 	/// "local" in their chain specifications, or when `--dev` is passed.
-	#[clap(long = "allow-private-ipv4", conflicts_with_all = &["no-private-ipv4"])]
+	#[clap(long, conflicts_with_all = &["no-private-ipv4"])]
 	pub allow_private_ipv4: bool,
 
 	/// Specify the number of outgoing connections we're trying to maintain.
-	#[clap(long = "out-peers", value_name = "COUNT", default_value = "25")]
+	#[clap(long, value_name = "COUNT", default_value = "25")]
 	pub out_peers: u32,
 
 	/// Specify the maximum number of incoming connections we're accepting.
-	#[clap(long = "in-peers", value_name = "COUNT", default_value = "25")]
+	#[clap(long, value_name = "COUNT", default_value = "25")]
 	pub in_peers: u32,
 
 	/// Disable mDNS discovery.
 	///
 	/// By default, the network will use mDNS to discover other nodes on the
 	/// local network. This disables it. Automatically implied when using --dev.
-	#[clap(long = "no-mdns")]
+	#[clap(long)]
 	pub no_mdns: bool,
 
 	/// Maximum number of peers from which to ask for the same blocks in parallel.
 	///
 	/// This allows downloading announced blocks from multiple peers. Decrease to save
 	/// traffic and risk increased latency.
-	#[clap(long = "max-parallel-downloads", value_name = "COUNT", default_value = "5")]
+	#[clap(long, value_name = "COUNT", default_value = "5")]
 	pub max_parallel_downloads: u32,
 
 	#[allow(missing_docs)]

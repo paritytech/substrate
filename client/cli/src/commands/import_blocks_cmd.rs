@@ -43,7 +43,7 @@ pub struct ImportBlocksCmd {
 	/// The default number of 64KB pages to ever allocate for Wasm execution.
 	///
 	/// Don't alter this unless you know what you're doing.
-	#[clap(long = "default-heap-pages", value_name = "COUNT")]
+	#[clap(long, value_name = "COUNT")]
 	pub default_heap_pages: Option<u32>,
 
 	/// Try importing blocks from binary format rather than JSON.

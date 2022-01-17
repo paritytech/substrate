@@ -23,11 +23,11 @@ use sc_service::config::TransactionPoolOptions;
 #[derive(Debug, Clone, Args)]
 pub struct TransactionPoolParams {
 	/// Maximum number of transactions in the transaction pool.
-	#[clap(long = "pool-limit", value_name = "COUNT", default_value = "8192")]
+	#[clap(long, value_name = "COUNT", default_value = "8192")]
 	pub pool_limit: usize,
 
 	/// Maximum number of kilobytes of all transactions stored in the pool.
-	#[clap(long = "pool-kbytes", value_name = "COUNT", default_value = "20480")]
+	#[clap(long, value_name = "COUNT", default_value = "20480")]
 	pub pool_kbytes: usize,
 }
 

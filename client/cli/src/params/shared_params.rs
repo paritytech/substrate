@@ -72,17 +72,11 @@ pub struct SharedParams {
 	pub enable_log_reloading: bool,
 
 	/// Sets a custom profiling filter. Syntax is the same as for logging: <target>=<level>
-	#[clap(long = "tracing-targets", value_name = "TARGETS")]
+	#[clap(long, value_name = "TARGETS")]
 	pub tracing_targets: Option<String>,
 
 	/// Receiver to process tracing messages.
-	#[clap(
-		long = "tracing-receiver",
-		value_name = "RECEIVER",
-		arg_enum,
-		ignore_case = true,
-		default_value = "Log"
-	)]
+	#[clap(long, value_name = "RECEIVER", arg_enum, ignore_case = true, default_value = "Log")]
 	pub tracing_receiver: TracingReceiver,
 }
 

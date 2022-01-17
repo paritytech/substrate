@@ -38,13 +38,13 @@ pub struct ExportBlocksCmd {
 	/// Specify starting block number.
 	///
 	/// Default is 1.
-	#[clap(long = "from", value_name = "BLOCK")]
+	#[clap(long, value_name = "BLOCK")]
 	pub from: Option<GenericNumber>,
 
 	/// Specify last block number.
 	///
 	/// Default is best block.
-	#[clap(long = "to", value_name = "BLOCK")]
+	#[clap(long, value_name = "BLOCK")]
 	pub to: Option<GenericNumber>,
 
 	/// Use binary output rather than JSON.

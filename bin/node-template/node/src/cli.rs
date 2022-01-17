@@ -12,8 +12,9 @@ pub struct Cli {
 #[derive(Debug, clap::Subcommand)]
 pub enum Subcommand {
 	/// Key management cli utilities
-	#[clap(flatten)]
+	#[clap(subcommand)]
 	Key(sc_cli::KeySubcommand),
+
 	/// Build a chain specification.
 	BuildSpec(sc_cli::BuildSpecCmd),
 

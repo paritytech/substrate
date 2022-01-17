@@ -51,7 +51,7 @@ pub struct RunCmd {
 	pub no_grandpa: bool,
 
 	/// Experimental: Run in light client mode.
-	#[clap(long = "light")]
+	#[clap(long)]
 	pub light: bool,
 
 	/// Listen to all RPC interfaces.
@@ -60,7 +60,7 @@ pub struct RunCmd {
 	/// proxy server to filter out dangerous methods. More details:
 	/// <https://docs.substrate.io/v3/runtime/custom-rpcs/#public-rpcs>.
 	/// Use `--unsafe-rpc-external` to suppress the warning if you understand the risks.
-	#[clap(long = "rpc-external")]
+	#[clap(long)]
 	pub rpc_external: bool,
 
 	/// Listen to all RPC interfaces.
@@ -91,44 +91,44 @@ pub struct RunCmd {
 	/// proxy server to filter out dangerous methods. More details:
 	/// <https://docs.substrate.io/v3/runtime/custom-rpcs/#public-rpcs>.
 	/// Use `--unsafe-ws-external` to suppress the warning if you understand the risks.
-	#[clap(long = "ws-external")]
+	#[clap(long)]
 	pub ws_external: bool,
 
 	/// Listen to all Websocket interfaces.
 	///
 	/// Same as `--ws-external` but doesn't warn you about it.
-	#[clap(long = "unsafe-ws-external")]
+	#[clap(long)]
 	pub unsafe_ws_external: bool,
 
 	/// Set the the maximum RPC payload size for both requests and responses (both http and ws), in
 	/// megabytes. Default is 15MiB.
-	#[clap(long = "rpc-max-payload")]
+	#[clap(long)]
 	pub rpc_max_payload: Option<usize>,
 
 	/// Expose Prometheus exporter on all interfaces.
 	///
 	/// Default is local.
-	#[clap(long = "prometheus-external")]
+	#[clap(long)]
 	pub prometheus_external: bool,
 
 	/// Specify IPC RPC server path
-	#[clap(long = "ipc-path", value_name = "PATH")]
+	#[clap(long, value_name = "PATH")]
 	pub ipc_path: Option<String>,
 
 	/// Specify HTTP RPC server TCP port.
-	#[clap(long = "rpc-port", value_name = "PORT")]
+	#[clap(long, value_name = "PORT")]
 	pub rpc_port: Option<u16>,
 
 	/// Specify WebSockets RPC server TCP port.
-	#[clap(long = "ws-port", value_name = "PORT")]
+	#[clap(long, value_name = "PORT")]
 	pub ws_port: Option<u16>,
 
 	/// Maximum number of WS RPC server connections.
-	#[clap(long = "ws-max-connections", value_name = "COUNT")]
+	#[clap(long, value_name = "COUNT")]
 	pub ws_max_connections: Option<usize>,
 
 	/// Set the the maximum WebSocket output buffer size in MiB. Default is 16.
-	#[clap(long = "ws-max-out-buffer-capacity")]
+	#[clap(long)]
 	pub ws_max_out_buffer_capacity: Option<usize>,
 
 	/// Specify browser Origins allowed to access the HTTP & WS RPC servers.
@@ -137,29 +137,29 @@ pub struct RunCmd {
 	/// value). Value of `all` will disable origin validation. Default is to
 	/// allow localhost and <https://polkadot.js.org> origins. When running in
 	/// --dev mode the default is to allow all origins.
-	#[clap(long = "rpc-cors", value_name = "ORIGINS", parse(from_str = parse_cors))]
+	#[clap(long, value_name = "ORIGINS", parse(from_str = parse_cors))]
 	pub rpc_cors: Option<Cors>,
 
 	/// Specify Prometheus exporter TCP Port.
-	#[clap(long = "prometheus-port", value_name = "PORT")]
+	#[clap(long, value_name = "PORT")]
 	pub prometheus_port: Option<u16>,
 
 	/// Do not expose a Prometheus exporter endpoint.
 	///
 	/// Prometheus metric endpoint is enabled by default.
-	#[clap(long = "no-prometheus")]
+	#[clap(long)]
 	pub no_prometheus: bool,
 
 	/// The human-readable name for this node.
 	///
 	/// The node name will be reported to the telemetry server, if enabled.
-	#[clap(long = "name", value_name = "NAME")]
+	#[clap(long, value_name = "NAME")]
 	pub name: Option<String>,
 
 	/// Disable connecting to the Substrate telemetry server.
 	///
 	/// Telemetry is on by default on global chains.
-	#[clap(long = "no-telemetry")]
+	#[clap(long)]
 	pub no_telemetry: bool,
 
 	/// The URL of the telemetry server to connect to.
@@ -225,7 +225,7 @@ pub struct RunCmd {
 	pub two: bool,
 
 	/// Enable authoring even when offline.
-	#[clap(long = "force-authoring")]
+	#[clap(long)]
 	pub force_authoring: bool,
 
 	#[allow(missing_docs)]
