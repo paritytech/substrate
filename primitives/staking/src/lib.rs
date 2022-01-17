@@ -24,3 +24,6 @@ pub mod offence;
 
 /// Simple index type with which we can count sessions.
 pub type SessionIndex = u32;
+
+/// Counter for the number of eras that have passed.
+pub type EraIndex = u32;

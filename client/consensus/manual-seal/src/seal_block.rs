@@ -153,9 +153,14 @@ pub async fn seal_block<B, BI, SC, C, E, TP, CIDP>(
 			digest_provider.append_block_import(&parent, &mut params, &inherent_data)?;
 		}
 
+		// Make sure we return the same post-hash that will be calculated when importing the block
+		// This is important in case the digest_provider added any signature, seal, ect.
+		let mut post_header = header.clone();
+		post_header.digest_mut().logs.extend(params.post_digests.iter().cloned());
+
 		match block_import.import_block(params, HashMap::new()).await? {
 			ImportResult::Imported(aux) =>
-				Ok(CreatedBlock { hash: <B as BlockT>::Header::hash(&header), aux }),
+				Ok(CreatedBlock { hash: <B as BlockT>::Header::hash(&post_header), aux }),
 			other => Err(other.into()),
 		}
 	};

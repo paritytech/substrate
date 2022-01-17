@@ -123,6 +123,15 @@ pub trait TestApi {
 		data == 42
 	}
 
+	fn test_versionning_register_only(&self, data: u32) -> bool {
+		data == 80
+	}
+
+	#[version(2, register_only)]
+	fn test_versionning_register_only(&self, data: u32) -> bool {
+		data == 42
+	}
+
 	/// Returns the input values as tuple.
 	fn return_input_as_tuple(
 		a: Vec<u8>,
@@ -269,6 +278,13 @@ wasm_export_functions! {
 
 		assert!(!test_api::test_versionning(50));
 		assert!(!test_api::test_versionning(102));
+	}
+
+	fn test_versionning_register_only_works() {
+		// Ensure that we will import the version of the runtime interface function that
+		// isn't tagged with `register_only`.
+		assert!(!test_api::test_versionning_register_only(42));
+		assert!(test_api::test_versionning_register_only(80));
 	}
 
 	fn test_return_input_as_tuple() {
