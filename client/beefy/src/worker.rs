@@ -249,7 +249,7 @@ where
 
 				let at = BlockId::hash(notification.header.hash());
 				let session_boundary = self.client.runtime_api().get_session_boundary(&at).ok();
-				self.best_beefy_block = Some(session_boundary);
+				self.best_beefy_block = session_boundary.clone();
 				self.beefy_best_block_sender
 					.notify(|| Ok::<_, ()>(notification.hash.clone()))
 					.expect("forwards closure result; the closure always returns Ok; qed.");
@@ -257,7 +257,9 @@ where
 				// this metric is kind of 'fake'. Best BEEFY block should only be updated once
 				// we have a signed commitment for the block. Remove once the above TODO is
 				// done.
-				metric_set!(self, beefy_best_block, session_boundary);
+				if session_boundary.is_some() {
+					metric_set!(self, beefy_best_block, session_boundary.unwrap());
+				}
 			}
 		}
 
