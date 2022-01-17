@@ -1385,6 +1385,7 @@ mod mmr {
 	pub type Hashing = <Runtime as pallet_mmr::Config>::Hashing;
 }
 
+#[cfg(feature = "runtime-benchmarks")]
 #[macro_use]
 extern crate frame_benchmarking;
 

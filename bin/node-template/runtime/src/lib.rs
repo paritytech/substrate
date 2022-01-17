@@ -318,6 +318,7 @@ pub type Executive = frame_executive::Executive<
 	AllPalletsWithSystem,
 >;
 
+#[cfg(feature = "runtime-benchmarks")]
 #[macro_use]
 extern crate frame_benchmarking;
 
