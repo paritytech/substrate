@@ -301,7 +301,8 @@ mod tests {
 			std::thread::sleep(std::time::Duration::from_millis(50));
 		}
 		panic!(
-			"Deadline reached while waiting for best BEEFY block to update. Perhaps the background task is broken?");
+			"Deadline reached while waiting for best BEEFY block to update. Perhaps the background task is broken?"
+		);
 	}
 
 	#[test]
