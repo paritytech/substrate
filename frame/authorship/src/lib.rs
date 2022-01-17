@@ -596,7 +596,8 @@ mod tests {
 			};
 
 			let initialize_block = |number, hash: H256| {
-				System::initialize(&number, &hash, &Default::default(), Default::default())
+				System::reset_events();
+				System::initialize(&number, &hash, &Default::default())
 			};
 
 			for number in 1..8 {
@@ -689,7 +690,8 @@ mod tests {
 				seal_header(create_header(1, Default::default(), [1; 32].into()), author);
 
 			header.digest_mut().pop(); // pop the seal off.
-			System::initialize(&1, &Default::default(), header.digest(), Default::default());
+			System::reset_events();
+			System::initialize(&1, &Default::default(), header.digest());
 
 			assert_eq!(Authorship::author(), Some(author));
 		});

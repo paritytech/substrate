@@ -374,12 +374,15 @@ pub mod pallet {
 
 		/// Type representing the weight of this pallet
 		type WeightInfo: WeightInfo;
+
+		type SomeBound: Get<u32>;
 	}
 
 	// Simple declaration of the `Pallet` type. It is placeholder we use to implement traits and
 	// method.
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
+	#[pallet::generate_storage_info]
 	pub struct Pallet<T>(_);
 
 	// Pallet implements [`Hooks`] trait to define some logic to execute in some context.
@@ -562,6 +565,11 @@ pub mod pallet {
 			// All good, no refund.
 			Ok(())
 		}
+
+		#[pallet::weight(0)]
+		pub fn lol(origin: OriginFor<T>, foo: BoundedVec<u32, T::SomeBound>) -> DispatchResult {
+			unimplemented!()
+		}
 	}
 
 	/// Events are a simple means of reporting specific conditions and
@@ -617,6 +625,9 @@ pub mod pallet {
 
 	#[pallet::storage]
 	pub type CountedMap<T> = CountedStorageMap<_, Blake2_128Concat, u8, u16>;
+
+	#[pallet::storage]
+	pub type Blah<T: Config> = StorageValue<_, BoundedVec<u32, T::SomeBound>, ValueQuery>;
 
 	// The genesis config type.
 	#[pallet::genesis_config]

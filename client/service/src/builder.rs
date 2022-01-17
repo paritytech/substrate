@@ -57,7 +57,7 @@ use sp_core::traits::{CodeExecutor, SpawnNamed};
 use sp_keystore::{CryptoStore, SyncCryptoStore, SyncCryptoStorePtr};
 use sp_runtime::{
 	generic::BlockId,
-	traits::{Block as BlockT, BlockIdTo, Zero},
+	traits::{Block as BlockT, BlockIdTo, NumberFor, Zero},
 	BuildStorage,
 };
 use std::{str::FromStr, sync::Arc, time::SystemTime};
@@ -227,7 +227,6 @@ pub fn new_full_client<TBl, TRtApi, TExec>(
 where
 	TBl: BlockT,
 	TExec: CodeExecutor + RuntimeVersionOf + Clone,
-	TBl::Hash: FromStr,
 {
 	new_full_parts(config, telemetry, executor).map(|parts| parts.0)
 }
@@ -241,7 +240,6 @@ pub fn new_full_parts<TBl, TRtApi, TExec>(
 where
 	TBl: BlockT,
 	TExec: CodeExecutor + RuntimeVersionOf + Clone,
-	TBl::Hash: FromStr,
 {
 	let keystore_container = KeystoreContainer::new(&config.keystore)?;
 
@@ -281,14 +279,16 @@ where
 			.chain_spec
 			.code_substitutes()
 			.into_iter()
-			.map(|(h, c)| {
-				let hash = TBl::Hash::from_str(&h).map_err(|_| {
+			.map(|(n, c)| {
+				let number = NumberFor::<TBl>::from_str(&n).map_err(|_| {
 					Error::Application(Box::from(format!(
-						"Failed to parse `{}` as block hash for code substitutes.",
-						h
+						"Failed to parse `{}` as block number for code substitutes. \
+						 In an old version the key for code substitute was a block hash. \
+						 Please update the chain spec to a version that is compatible with your node.",
+						n
 					)))
 				})?;
-				Ok((hash, c))
+				Ok((number, c))
 			})
 			.collect::<Result<std::collections::HashMap<_, _>, Error>>()?;
 

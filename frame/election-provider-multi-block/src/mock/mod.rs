@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,21 +15,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod signed;
+mod staking;
+mod weight_info;
+pub use signed::*;
+pub use staking::*;
+
 use super::*;
 use crate::{
 	self as multi_block,
+	signed::{self as signed_pallet},
 	unsigned::{
 		self as unsigned_pallet,
 		miner::{BaseMiner, MinerError},
 	},
-	verifier::{
-		self as verifier_pallet, SignedVerifier, SolutionDataProvider, Status, VerificationResult,
-	},
+	verifier::{self as verifier_pallet, SignedVerifier, Status},
 };
 use codec::{Decode, Encode, MaxEncodedLen};
-use frame_election_provider_support::{data_provider, ElectionDataProvider};
 pub use frame_support::{assert_noop, assert_ok};
-use frame_support::{bounded_vec, parameter_types, traits::Hooks, weights::Weight};
+use frame_support::{parameter_types, traits::Hooks, weights::Weight};
 use parking_lot::RwLock;
 use sp_core::{
 	offchain::{
@@ -44,11 +48,17 @@ use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup},
 	PerU16, Perbill,
 };
-use std::{borrow::BorrowMut, sync::Arc, vec};
+use std::{sync::Arc, vec};
 
 pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
 pub type Extrinsic = sp_runtime::testing::TestXt<Call, ()>;
 pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<AccountId, Call, (), ()>;
+
+pub type Balance = u64;
+pub type AccountId = u64;
+pub type BlockNumber = u64;
+pub type VoterIndex = u32;
+pub type TargetIndex = u16;
 
 frame_support::construct_runtime!(
 	pub enum Runtime where
@@ -59,16 +69,11 @@ frame_support::construct_runtime!(
 		System: frame_system::{Pallet, Call, Event<T>, Config},
 		Balances: pallet_balances::{Pallet, Call, Event<T>, Config<T>},
 		MultiBlock: multi_block::{Pallet, Event<T>},
+		SignedPallet: signed_pallet::{Pallet, Event<T>},
 		VerifierPallet: verifier_pallet::{Pallet, Event<T>},
 		UnsignedPallet: unsigned_pallet::{Pallet, Call, ValidateUnsigned},
 	}
 );
-
-pub(crate) type Balance = u64;
-pub(crate) type AccountId = u64;
-pub(crate) type BlockNumber = u64;
-pub(crate) type VoterIndex = u32;
-pub(crate) type TargetIndex = u16;
 
 sp_npos_elections::generate_solution_type!(
 	pub struct TestNposSolution::<VoterIndex = VoterIndex, TargetIndex = TargetIndex, Accuracy = PerU16>(16)
@@ -76,7 +81,7 @@ sp_npos_elections::generate_solution_type!(
 
 impl codec::MaxEncodedLen for TestNposSolution {
 	fn max_encoded_len() -> usize {
-		todo!()
+		todo!("need to move solution type macro and trait to frame, properly derive or implement MaxEncodedLen for it, ")
 	}
 }
 
@@ -127,38 +132,20 @@ impl pallet_balances::Config for Runtime {
 }
 
 parameter_types! {
-	pub static Targets: Vec<AccountId> = vec![10, 20, 30, 40];
-	pub static Voters: Vec<VoterOf<Runtime>> = vec![
-		(1, 10, bounded_vec![10, 20]),
-		(2, 10, bounded_vec![30, 40]),
-		(3, 10, bounded_vec![40]),
-		(4, 10, bounded_vec![10, 20, 40]),
-		(5, 10, bounded_vec![10, 30, 40]),
-		(6, 10, bounded_vec![20, 30, 40]),
-		(7, 10, bounded_vec![20, 30]),
-		(8, 10, bounded_vec![10]),
-		// self votes.
-		(10, 10, bounded_vec![10]),
-		(20, 20, bounded_vec![20]),
-		(30, 30, bounded_vec![30]),
-		(40, 40, bounded_vec![40]),
-	];
-	pub static LastIteratedVoterIndex: Option<usize> = None;
+	pub static Pages: PageIndex = 3;
+	pub static UnsignedPhase: BlockNumber = 5;
+	pub static SignedPhase: BlockNumber = 5;
+	pub static SignedValidationPhase: BlockNumber = 5;
 
 	pub static OnChianFallback: bool = false;
-	pub static DesiredTargets: u32 = 2;
-	pub static SignedPhase: BlockNumber = 10;
-	pub static UnsignedPhase: BlockNumber = 5;
 	pub static MinerMaxIterations: u32 = 5;
 	pub static MinerTxPriority: u64 = 100;
 	pub static SolutionImprovementThreshold: Perbill = Perbill::zero();
 	pub static OffchainRepeat: BlockNumber = 5;
 	pub static MinerMaxWeight: Weight = BlockWeights::get().max_block;
 	pub static MinerMaxLength: u32 = 256;
-	pub static MockWeightInfo: bool = false;
 	pub static MaxVotesPerVoter: u32 = <TestNposSolution as NposSolution>::LIMIT as u32;
 
-	pub static EpochLength: u64 = 30;
 	// by default we stick to 3 pages to host our 12 voters.
 	pub static VoterSnapshotPerBlock: VoterIndex = 4;
 	pub static TargetSnapshotPerBlock: TargetIndex = 8;
@@ -166,112 +153,12 @@ parameter_types! {
 
 	// we have 12 voters in the default setting, this should be enough to make sure they are not
 	// trimmed accidentally in any test.
-	#[derive(Encode, Decode, PartialEq, Eq, Debug, scale_info::TypeInfo, MaxEncodedLen)]
+	#[derive(Encode, Decode, PartialEq, Eq, Debug, scale_info::TypeInfo, MaxEncodedLen)] // TODO: should be removed
 	pub static MaxBackersPerWinner: u32 = 12;
 	// we have 4 targets in total and we desire `Desired` thereof, no single page can represent more
 	// than the min of these two.
 	#[derive(Encode, Decode, PartialEq, Eq, Debug, scale_info::TypeInfo, MaxEncodedLen)]
-	pub static MaxWinnersPerPage: u32 = (Targets::get().len() as u32).min(DesiredTargets::get());
-	pub static Pages: PageIndex = 3;
-}
-
-pub struct DualMockWeightInfo;
-impl multi_block::weights::WeightInfo for DualMockWeightInfo {
-	fn on_initialize_nothing() -> Weight {
-		if MockWeightInfo::get() {
-			Zero::zero()
-		} else {
-			<() as multi_block::weights::WeightInfo>::on_initialize_nothing()
-		}
-	}
-	fn on_initialize_open_signed() -> Weight {
-		if MockWeightInfo::get() {
-			Zero::zero()
-		} else {
-			<() as multi_block::weights::WeightInfo>::on_initialize_open_signed()
-		}
-	}
-	fn on_initialize_open_unsigned_with_snapshot() -> Weight {
-		if MockWeightInfo::get() {
-			Zero::zero()
-		} else {
-			<() as multi_block::weights::WeightInfo>::on_initialize_open_unsigned_with_snapshot()
-		}
-	}
-	fn on_initialize_open_unsigned_without_snapshot() -> Weight {
-		if MockWeightInfo::get() {
-			Zero::zero()
-		} else {
-			<() as multi_block::weights::WeightInfo>::on_initialize_open_unsigned_without_snapshot()
-		}
-	}
-	fn finalize_signed_phase_accept_solution() -> Weight {
-		if MockWeightInfo::get() {
-			Zero::zero()
-		} else {
-			<() as multi_block::weights::WeightInfo>::finalize_signed_phase_accept_solution()
-		}
-	}
-	fn finalize_signed_phase_reject_solution() -> Weight {
-		if MockWeightInfo::get() {
-			Zero::zero()
-		} else {
-			<() as multi_block::weights::WeightInfo>::finalize_signed_phase_reject_solution()
-		}
-	}
-	fn submit(c: u32) -> Weight {
-		if MockWeightInfo::get() {
-			Zero::zero()
-		} else {
-			<() as multi_block::weights::WeightInfo>::submit(c)
-		}
-	}
-	fn elect_queued(v: u32, t: u32, a: u32, d: u32) -> Weight {
-		if MockWeightInfo::get() {
-			Zero::zero()
-		} else {
-			<() as multi_block::weights::WeightInfo>::elect_queued(v, t, a, d)
-		}
-	}
-	fn submit_unsigned(v: u32, t: u32, a: u32, d: u32) -> Weight {
-		if MockWeightInfo::get() {
-			// 10 base
-			// 5 per edge.
-			(10 as Weight).saturating_add((5 as Weight).saturating_mul(a as Weight))
-		} else {
-			<() as multi_block::weights::WeightInfo>::submit_unsigned(v, t, a, d)
-		}
-	}
-	fn feasibility_check(v: u32, t: u32, a: u32, d: u32) -> Weight {
-		if MockWeightInfo::get() {
-			// 10 base
-			// 5 per edge.
-			(10 as Weight).saturating_add((5 as Weight).saturating_mul(a as Weight))
-		} else {
-			<() as multi_block::weights::WeightInfo>::feasibility_check(v, t, a, d)
-		}
-	}
-}
-
-parameter_types! {
-	pub static MockSignedNextSolution: BoundedVec<SolutionOf<Runtime>, Pages> = Default::default();
-	pub static MockSignedNextScore: ElectionScore = Default::default();
-	pub static MockSignedResults: Vec<VerificationResult> = Default::default();
-}
-pub struct MockSignedPhase;
-impl SolutionDataProvider for MockSignedPhase {
-	type Solution = <Runtime as crate::Config>::Solution;
-	fn get_page(page: PageIndex) -> Self::Solution {
-		MockSignedNextSolution::get().get(page as usize).cloned().unwrap_or_default()
-	}
-
-	fn get_score() -> ElectionScore {
-		MockSignedNextScore::get()
-	}
-
-	fn report_result(result: verifier::VerificationResult) {
-		MOCK_SIGNED_RESULTS.with(|r| r.borrow_mut().push(result));
-	}
+	pub static MaxWinnersPerPage: u32 = (staking::Targets::get().len() as u32).min(staking::DesiredTargets::get());
 }
 
 impl crate::verifier::Config for Runtime {
@@ -280,7 +167,7 @@ impl crate::verifier::Config for Runtime {
 	type ForceOrigin = frame_system::EnsureRoot<AccountId>;
 	type MaxBackersPerWinner = MaxBackersPerWinner;
 	type MaxWinnersPerPage = MaxWinnersPerPage;
-	type SolutionDataProvider = MockSignedPhase;
+	type SolutionDataProvider = signed::DualSignedPhase;
 }
 
 pub struct MockUnsignedWeightInfo;
@@ -304,15 +191,16 @@ impl crate::unsigned::Config for Runtime {
 impl crate::Config for Runtime {
 	type Event = Event;
 	type SignedPhase = SignedPhase;
+	type SignedValidationPhase = SignedValidationPhase;
 	type UnsignedPhase = UnsignedPhase;
-	type DataProvider = MockStaking;
+	type DataProvider = staking::MockStaking;
 	type BenchmarkingConfig = ();
 	type Fallback = MockFallback;
 	type TargetSnapshotPerBlock = TargetSnapshotPerBlock;
 	type VoterSnapshotPerBlock = VoterSnapshotPerBlock;
 	type Lookahead = Lookahead;
 	type Solution = TestNposSolution;
-	type WeightInfo = DualMockWeightInfo;
+	type WeightInfo = weight_info::DualMockWeightInfo;
 	type Verifier = VerifierPallet;
 	type Pages = Pages;
 }
@@ -327,7 +215,7 @@ where
 
 impl onchain::Config for Runtime {
 	type Accuracy = sp_runtime::Perbill;
-	type DataProvider = MockStaking;
+	type DataProvider = staking::MockStaking;
 	type TargetPageSize = ();
 	type VoterPageSize = ();
 	type MaxBackersPerWinner = MaxBackersPerWinner;
@@ -339,7 +227,7 @@ impl ElectionProvider for MockFallback {
 	type AccountId = AccountId;
 	type BlockNumber = u64;
 	type Error = &'static str;
-	type DataProvider = MockStaking;
+	type DataProvider = staking::MockStaking;
 	type Pages = ConstU32<1>;
 	type MaxBackersPerWinner = MaxBackersPerWinner;
 	type MaxWinnersPerPage = MaxWinnersPerPage;
@@ -357,113 +245,32 @@ impl ElectionProvider for MockFallback {
 	}
 }
 
-pub struct MockStaking;
-impl ElectionDataProvider for MockStaking {
-	type AccountId = AccountId;
-	type BlockNumber = u64;
-	type MaxVotesPerVoter = MaxVotesPerVoter;
+pub struct ExtBuilder {}
 
-	fn targets(
-		maybe_max_len: Option<usize>,
-		remaining: PageIndex,
-	) -> data_provider::Result<Vec<AccountId>> {
-		let targets = Targets::get();
-
-		if remaining != 0 {
-			return Err("targets shall not have more than a single page")
-		}
-		if maybe_max_len.map_or(false, |max_len| targets.len() > max_len) {
-			return Err("Targets too big")
-		}
-
-		Ok(targets)
+impl ExtBuilder {
+	pub fn full() -> Self {
+		Self {}
 	}
 
-	fn voters(
-		maybe_max_len: Option<usize>,
-		remaining: PageIndex,
-	) -> data_provider::Result<
-		Vec<(AccountId, VoteWeight, BoundedVec<AccountId, Self::MaxVotesPerVoter>)>,
-	> {
-		let mut voters = Voters::get();
-
-		// jump to the first non-iterated, if this is a follow up.
-		if let Some(index) = LastIteratedVoterIndex::get() {
-			voters = voters.iter().skip(index).cloned().collect::<Vec<_>>();
-		}
-
-		// take as many as you can.
-		if let Some(max_len) = maybe_max_len {
-			voters.truncate(max_len)
-		}
-
-		if voters.is_empty() {
-			return Ok(vec![])
-		}
-
-		if remaining > 0 {
-			let last = voters.last().cloned().unwrap();
-			LastIteratedVoterIndex::set(Some(
-				Voters::get().iter().position(|v| v == &last).map(|i| i + 1).unwrap(),
-			));
-		} else {
-			LastIteratedVoterIndex::set(None)
-		}
-
-		Ok(voters)
+	pub fn verifier() -> Self {
+		SignedPhase::set(0);
+		SignedValidationPhase::set(0);
+		signed::SignedPhaseSwitch::set(signed::SignedSwitch::Mock);
+		Self {}
 	}
 
-	fn desired_targets() -> data_provider::Result<u32> {
-		Ok(DesiredTargets::get())
+	pub fn unsigned() -> Self {
+		SignedPhase::set(0);
+		SignedValidationPhase::set(0);
+		signed::SignedPhaseSwitch::set(signed::SignedSwitch::Mock);
+		Self {}
 	}
 
-	fn next_election_prediction(now: u64) -> u64 {
-		now + EpochLength::get() - now % EpochLength::get()
-	}
-
-	#[cfg(any(feature = "runtime-benchmarks", test))]
-	fn put_snapshot(
-		voters: Vec<(AccountId, VoteWeight, BoundedVec<AccountId, MaxVotesPerVoter>)>,
-		targets: Vec<AccountId>,
-		_target_stake: Option<VoteWeight>,
-	) {
-		Targets::set(targets);
-		Voters::set(voters);
-	}
-
-	#[cfg(any(feature = "runtime-benchmarks", test))]
-	fn clear() {
-		Targets::set(vec![]);
-		Voters::set(vec![]);
-	}
-
-	#[cfg(any(feature = "runtime-benchmarks", test))]
-	fn add_voter(
-		voter: AccountId,
-		weight: VoteWeight,
-		targets: BoundedVec<AccountId, MaxVotesPerVoter>,
-	) {
-		let mut current = Voters::get();
-		current.push((voter, weight, targets));
-		Voters::set(current);
-	}
-
-	#[cfg(any(feature = "runtime-benchmarks", test))]
-	fn add_target(target: AccountId) {
-		let mut current = Targets::get();
-		current.push(target);
-		Targets::set(current);
-
-		// to be on-par with staking, we add a self vote as well. the stake is really not that
-		// important.
-		let mut current = Voters::get();
-		current.push((target, ExistentialDeposit::get() as u64, vec![target].try_into().unwrap()));
-		Voters::set(current);
+	pub fn signed() -> Self {
+		UnsignedPhase::set(0);
+		Self {}
 	}
 }
-
-#[derive(Default)]
-pub struct ExtBuilder {}
 
 impl ExtBuilder {
 	pub(crate) fn max_backing_per_target(self, c: u32) -> Self {
@@ -478,11 +285,6 @@ impl ExtBuilder {
 		<SolutionImprovementThreshold>::set(p);
 		self
 	}
-	pub(crate) fn phases(self, signed: u64, unsigned: u64) -> Self {
-		<SignedPhase>::set(signed);
-		<UnsignedPhase>::set(unsigned);
-		self
-	}
 	pub(crate) fn pages(self, pages: PageIndex) -> Self {
 		<Pages>::set(pages);
 		self
@@ -495,16 +297,20 @@ impl ExtBuilder {
 		<MinerMaxWeight>::set(weight);
 		self
 	}
-	pub(crate) fn miner_length(self, len: u32) -> Self {
+	pub(crate) fn miner_max_length(self, len: u32) -> Self {
 		<MinerMaxLength>::set(len);
 		self
 	}
 	pub(crate) fn desired_targets(self, t: u32) -> Self {
-		<DesiredTargets>::set(t);
+		<staking::DesiredTargets>::set(t);
+		self
+	}
+	pub(crate) fn signed_phase(self, d: BlockNumber) -> Self {
+		SignedPhase::set(d);
 		self
 	}
 	pub(crate) fn add_voter(self, who: AccountId, stake: Balance, targets: Vec<AccountId>) -> Self {
-		VOTERS.with(|v| v.borrow_mut().push((who, stake, targets.try_into().unwrap())));
+		staking::VOTERS.with(|v| v.borrow_mut().push((who, stake, targets.try_into().unwrap())));
 		self
 	}
 	pub(crate) fn onchain_fallback(self, enable: bool) -> Self {
@@ -530,17 +336,10 @@ impl ExtBuilder {
 	}
 
 	/// Warning: this does not execute the post-sanity-checks.
-	pub(crate) fn build_offchainify(
-		self,
-		iters: u32,
-	) -> (sp_io::TestExternalities, Arc<RwLock<PoolState>>) {
+	pub(crate) fn build_offchainify(self) -> (sp_io::TestExternalities, Arc<RwLock<PoolState>>) {
 		let mut ext = self.build_unchecked();
 		let (offchain, offchain_state) = TestOffchainExt::new();
 		let (pool, pool_state) = TestTransactionPoolExt::new();
-
-		let mut seed = [0_u8; 32];
-		seed[0..4].copy_from_slice(&iters.to_le_bytes());
-		offchain_state.write().seed = seed;
 
 		ext.register_extension(OffchainDbExt::new(offchain.clone()));
 		ext.register_extension(OffchainWorkerExt::new(offchain));
@@ -602,15 +401,6 @@ pub fn roll_to_full_verification() -> Vec<BoundedSupportsOf<MultiBlock>> {
 	(MultiBlock::lsp()..=MultiBlock::msp())
 		.map(|p| VerifierPallet::get_queued_solution_page(p).unwrap_or_default())
 		.collect::<Vec<_>>()
-}
-
-/// Load a full raw paged solution for verification.
-pub fn load_and_start_verification(raw_paged: PagedRawSolution<Runtime>) {
-	MockSignedNextSolution::set(raw_paged.solution_pages.pad_solution_pages(Pages::get()));
-	MockSignedNextScore::set(raw_paged.score);
-
-	// Let's gooooo!
-	<VerifierPallet as SignedVerifier>::start();
 }
 
 /// Generate a single page of `TestNposSolution` from the give supports.
@@ -710,31 +500,44 @@ pub fn roll_to(n: BlockNumber) {
 		MultiBlock::on_initialize(i);
 		VerifierPallet::on_initialize(i);
 		UnsignedPallet::on_initialize(i);
+		if matches!(SignedPhaseSwitch::get(), SignedSwitch::Real) {
+			SignedPallet::on_initialize(i);
+		}
 	}
 }
 
 /// proceed block number to whenever the snapshot is fully created (`Phase::Snapshot(0)`).
 pub fn roll_to_snapshot_created() {
-	let mut now = System::block_number() + 1;
 	while !matches!(MultiBlock::current_phase(), Phase::Snapshot(0)) {
-		System::set_block_number(now);
-		MultiBlock::on_initialize(now);
-		VerifierPallet::on_initialize(now);
-		UnsignedPallet::on_initialize(now);
-		now += 1;
+		roll_next()
 	}
 }
 
 /// proceed block number to whenever the unsigned phase is open (`Phase::Unsigned(_)`).
 pub fn roll_to_unsigned_open() {
-	let mut now = System::block_number() + 1;
 	while !matches!(MultiBlock::current_phase(), Phase::Unsigned(_)) {
-		System::set_block_number(now);
-		MultiBlock::on_initialize(now);
-		VerifierPallet::on_initialize(now);
-		UnsignedPallet::on_initialize(now);
-		now += 1;
+		roll_next()
 	}
+}
+
+/// proceed block number to whenever the signed phase is open (`Phase::Signed(_)`).
+pub fn roll_to_signed_open() {
+	while !matches!(MultiBlock::current_phase(), Phase::Signed) {
+		roll_next();
+	}
+}
+
+/// proceed block number to whenever the signed validation phase is open
+/// (`Phase::SignedValidation(_)`).
+pub fn roll_to_signed_validation_open() {
+	while !matches!(MultiBlock::current_phase(), Phase::SignedValidation(_)) {
+		roll_next()
+	}
+}
+
+/// Proceed one block.
+pub fn roll_next() {
+	roll_to(System::block_number() + 1);
 }
 
 /// proceed block number to `n`, while running all offchain workers as well.
@@ -793,79 +596,5 @@ pub fn raw_paged_solution_low_score() -> PagedRawSolution<Runtime> {
 			20,  // total staked
 			200, // sum of stakes squared
 		],
-	}
-}
-
-#[cfg(test)]
-mod tests {
-	use super::*;
-
-	#[test]
-	fn targets() {
-		ExtBuilder::default().build_and_execute(|| {
-			assert_eq!(Targets::get().len(), 4);
-
-			// any non-zero page is error
-			assert!(MockStaking::targets(None, 1).is_err());
-			assert!(MockStaking::targets(None, 2).is_err());
-
-			// but 0 is fine.
-			assert_eq!(MockStaking::targets(None, 0).unwrap().len(), 4);
-
-			// fetch less targets is error.
-			assert!(MockStaking::targets(Some(2), 0).is_err());
-
-			// more targets is fine.
-			assert!(MockStaking::targets(Some(4), 0).is_ok());
-			assert!(MockStaking::targets(Some(5), 0).is_ok());
-		});
-	}
-
-	#[test]
-	fn multi_page_votes() {
-		ExtBuilder::default().build_and_execute(|| {
-			assert_eq!(MockStaking::voters(None, 0).unwrap().len(), 12);
-			assert!(LastIteratedVoterIndex::get().is_none());
-
-			assert_eq!(
-				MockStaking::voters(Some(4), 0)
-					.unwrap()
-					.into_iter()
-					.map(|(x, _, _)| x)
-					.collect::<Vec<_>>(),
-				vec![1, 2, 3, 4],
-			);
-			assert!(LastIteratedVoterIndex::get().is_none());
-
-			assert_eq!(
-				MockStaking::voters(Some(4), 2)
-					.unwrap()
-					.into_iter()
-					.map(|(x, _, _)| x)
-					.collect::<Vec<_>>(),
-				vec![1, 2, 3, 4],
-			);
-			assert_eq!(LastIteratedVoterIndex::get().unwrap(), 4);
-
-			assert_eq!(
-				MockStaking::voters(Some(4), 1)
-					.unwrap()
-					.into_iter()
-					.map(|(x, _, _)| x)
-					.collect::<Vec<_>>(),
-				vec![5, 6, 7, 8],
-			);
-			assert_eq!(LastIteratedVoterIndex::get().unwrap(), 8);
-
-			assert_eq!(
-				MockStaking::voters(Some(4), 0)
-					.unwrap()
-					.into_iter()
-					.map(|(x, _, _)| x)
-					.collect::<Vec<_>>(),
-				vec![10, 20, 30, 40],
-			);
-			assert!(LastIteratedVoterIndex::get().is_none());
-		})
 	}
 }

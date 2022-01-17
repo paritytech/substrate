@@ -585,6 +585,7 @@ impl<AccountId, Bound: Get<u32>> TryFrom<sp_npos_elections::Support<AccountId>>
 	}
 }
 
+// TODO: exercise: relax the Get<u32> as much as possible.
 /// A vector of [`BoundedSupport`].
 ///
 /// This is a newtype rather than an alias so that we can implement certain foreign traits for it.
@@ -595,6 +596,15 @@ impl<AccountId, Bound: Get<u32>> TryFrom<sp_npos_elections::Support<AccountId>>
 pub struct BoundedSupports<AccountId, BOuter: Get<u32>, BInner: Get<u32>>(
 	pub BoundedVec<(AccountId, BoundedSupport<AccountId, BInner>), BOuter>,
 );
+
+impl<AccountId, BOuter: Get<u32>, BInner: Get<u32>>
+	From<BoundedVec<(AccountId, BoundedSupport<AccountId, BInner>), BOuter>>
+	for BoundedSupports<AccountId, BOuter, BInner>
+{
+	fn from(t: BoundedVec<(AccountId, BoundedSupport<AccountId, BInner>), BOuter>) -> Self {
+		Self(t)
+	}
+}
 
 impl<AccountId: Clone, BOuter: Get<u32>, BInner: Get<u32>> Clone
 	for BoundedSupports<AccountId, BOuter, BInner>
@@ -634,15 +644,6 @@ impl<AccountId, BOuter: Get<u32>, BInner: Get<u32>> IntoIterator
 
 	fn into_iter(self) -> Self::IntoIter {
 		self.0.into_iter()
-	}
-}
-
-impl<AccountId, BOuter: Get<u32>, BInner: Get<u32>>
-	From<BoundedVec<(AccountId, BoundedSupport<AccountId, BInner>), BOuter>>
-	for BoundedSupports<AccountId, BOuter, BInner>
-{
-	fn from(t: BoundedVec<(AccountId, BoundedSupport<AccountId, BInner>), BOuter>) -> Self {
-		Self(t)
 	}
 }
 

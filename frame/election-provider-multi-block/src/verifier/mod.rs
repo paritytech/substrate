@@ -25,12 +25,11 @@ mod impls;
 use crate::{SolutionOf, SupportsOf};
 use frame_election_provider_support::PageIndex;
 use frame_support::RuntimeDebug;
-use impls::pallet::QueuedSolution;
 use sp_npos_elections::ElectionScore;
 use std::fmt::Debug;
 
 pub use impls::{
-	pallet::{Call, Config, Error, Event, Pallet, __substrate_event_check},
+	pallet::{Call, Config, Error, Event, Pallet, QueuedSolution, __substrate_event_check},
 	Status,
 };
 
@@ -131,26 +130,82 @@ pub trait Verifier {
 	);
 }
 
+/// Simple enum to encapsulate the result of the verification of a candidate solution.
 #[derive(Clone, Copy, RuntimeDebug)]
 #[cfg_attr(test, derive(PartialEq, Eq))]
 pub enum VerificationResult {
+	/// Solution is valid.
 	Valid,
+	/// Solution is invalid.
 	Invalid,
 }
 
+/// Something that can provide candidate solutions to the verifier.
+///
+/// In reality, this can be implemented by the [`crate::signed::Pallet`], where signed solutions are
+/// queued and sorted based on claimed score, and they are put forth one by one, from best to worse.
 pub trait SolutionDataProvider {
+	/// The opaque solution type.
 	type Solution;
-	fn get_page(page: PageIndex) -> Self::Solution;
-	fn get_score() -> ElectionScore;
+
+	/// Return the `page`th page of the current best solution that the data provider has in store.
+	///
+	/// If no candidate solutions are available, then None is returned.
+	fn get_page(page: PageIndex) -> Option<Self::Solution>;
+
+	/// Get the claimed score of the current best solution.
+	fn get_score() -> Option<ElectionScore>;
+
+	/// Hook to report back the results of the verification of the current candidate solution that
+	/// is being exposed via [`get_page`] and [`get_score`].
+	///
+	/// Every time that this is called, the verifier [`SignedVerifier`] goes back to the
+	/// [`Status::Nothing`] state, and it is the responsibility of [`Self`] to call `start` again,
+	/// if desired.
 	fn report_result(result: VerificationResult);
 }
 
 /// Something that can do the verification, with the flavour that is suitable for the signed phase.
 pub trait SignedVerifier: Verifier {
+	/// The data provider that can provide the candidate solution, and to whom we report back the
+	/// results.
 	type SolutionDataProvider: SolutionDataProvider;
+
+	/// Start a verification process.
+	///
+	/// From the coming block onwards, the verifier will start and fetch the relevant information
+	/// and solution pages from [`SolutionDataProvider`]. It is expected that the
+	/// [`SolutionDataProvider`] is ready before calling [`start`].
+	///
+	/// Pages of the solution are fetched sequentially and in order from [`SolutionDataProvider`],
+	/// from `msp` to `lsp`.
+	///
+	/// This ends in either of the two:
+	///
+	/// 1. All pages, including the final checks (like score and other facts that can only be
+	///    derived from a full solution) are valid and the solution is verified. The solution is
+	///    queued and is ready for further export.
+	/// 2. The solution checks verification at one of the steps. Nothing is stored inside the
+	///    verifier pallet and all intermediary data is removed.
+	///
+	/// In both cases, the [`SolutionDataProvider`] is informed via
+	/// [`SolutionDataProvider::report_result`]. It is sensible for the data provide to call `start`
+	/// again if the verification has failed, and nothing otherwise. Indeed, the
+	/// [`SolutionDataProvider`] must adjust its internal state such that it returns a new candidate
+	/// solution after each failure.
 	fn start();
+
+	/// Stop the verification.
+	///
+	/// This is a force-stop operation, and should only be used in extreme cases where the
+	/// [`SolutionDataProvider`] wants to suddenly bail-out.
+	///
+	/// An implementation should make sure that no loose ends remain state-wise, and everything is
+	/// cleaned.
+	fn stop();
 }
 
+// TODO: we can probably simply this quite a lot, maybe even merge the two traits.
 impl<T: Config> Verifier for Pallet<T> {
 	type AccountId = T::AccountId;
 	type Solution = SolutionOf<T>;
@@ -170,6 +225,7 @@ impl<T: Config> Verifier for Pallet<T> {
 	}
 
 	fn kill() {
+		// TODO: shan't we clear anything else here?
 		QueuedSolution::<T>::kill();
 	}
 

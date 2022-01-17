@@ -318,13 +318,13 @@ mod validate_unsigned {
 
 	#[test]
 	fn retracts_weak_score_accepts_threshold_better() {
-		ExtBuilder::default()
+		ExtBuilder::unsigned()
 			.solution_improvement_threshold(sp_runtime::Perbill::from_percent(10))
 			.build_and_execute(|| {
 				roll_to_snapshot_created();
 
 				let solution = mine_full_solution().unwrap();
-				load_and_start_verification(solution.clone());
+				load_mock_signed_and_start_verification(solution.clone());
 				roll_to_full_verification();
 
 				// Some good solution is queued now.
@@ -367,7 +367,7 @@ mod validate_unsigned {
 
 	#[test]
 	fn retracts_wrong_round() {
-		ExtBuilder::default().build_and_execute(|| {
+		ExtBuilder::unsigned().build_and_execute(|| {
 			roll_to_unsigned_open();
 
 			let mut attempt = fake_unsigned_solution([5, 0, 0]);
@@ -384,7 +384,7 @@ mod validate_unsigned {
 
 	#[test]
 	fn retracts_too_many_pages_unsigned() {
-		ExtBuilder::default().pages(3).build_and_execute(|| {
+		ExtBuilder::unsigned().build_and_execute(|| {
 			// NOTE: unsigned solutions should have just 1 page, regardless of the configured
 			// page count.
 			roll_to_unsigned_open();
@@ -414,7 +414,7 @@ mod validate_unsigned {
 
 	#[test]
 	fn retracts_wrong_winner_count() {
-		ExtBuilder::default().desired_targets(2).build_and_execute(|| {
+		ExtBuilder::unsigned().desired_targets(2).build_and_execute(|| {
 			roll_to_unsigned_open();
 
 			let paged = raw_paged_from_supports(
@@ -434,9 +434,8 @@ mod validate_unsigned {
 
 	#[test]
 	fn retracts_wrong_phase() {
-		ExtBuilder::default().build_and_execute(|| {
+		ExtBuilder::unsigned().signed_phase(5).build_and_execute(|| {
 			let solution = raw_paged_solution_low_score();
-
 			let call = Call::submit_unsigned { paged_solution: Box::new(solution.clone()) };
 
 			// initial
@@ -456,7 +455,7 @@ mod validate_unsigned {
 			));
 
 			// signed
-			roll_to(15);
+			roll_to(20);
 			assert_eq!(MultiBlock::current_phase(), Phase::Signed);
 			assert!(matches!(
 				<UnsignedPallet as ValidateUnsigned>::validate_unsigned(
@@ -482,7 +481,7 @@ mod validate_unsigned {
 			assert_ok!(<UnsignedPallet as ValidateUnsigned>::pre_dispatch(&call));
 
 			// unsigned -- but not enabled.
-			<crate::CurrentPhase<Runtime>>::put(Phase::Unsigned((false, 25)));
+			<crate::CurrentPhase<Runtime>>::put(Phase::Unsigned((false, 20)));
 			assert!(MultiBlock::current_phase().is_unsigned());
 			assert!(matches!(
 				<UnsignedPallet as ValidateUnsigned>::validate_unsigned(
@@ -501,7 +500,7 @@ mod validate_unsigned {
 
 	#[test]
 	fn priority_is_set() {
-		ExtBuilder::default()
+		ExtBuilder::unsigned()
 			.miner_tx_priority(20)
 			.desired_targets(0)
 			.build_and_execute(|| {
@@ -529,6 +528,11 @@ mod call {
 	use crate::{mock::*, AssignmentOf};
 
 	type Assignment = AssignmentOf<Runtime>;
+
+	#[test]
+	fn unsigned_submission_e2e() {
+		todo!("")
+	}
 
 	#[test]
 	fn unfeasible_solution_panics() {

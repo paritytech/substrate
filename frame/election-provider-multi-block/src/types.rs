@@ -28,7 +28,10 @@ pub use frame_election_provider_support::PageIndex;
 use frame_election_provider_support::{BoundedSupports, ElectionProvider};
 use scale_info::TypeInfo;
 pub use sp_npos_elections::{ElectionResult, ElectionScore, NposSolution};
-use sp_runtime::SaturatedConversion;
+use sp_runtime::{
+	traits::{One, Saturating, Zero},
+	SaturatedConversion,
+};
 
 /// The supports that's returned from a given [`Verifier`]. TODO: rename this
 pub type SupportsOf<V> = BoundedSupports<
@@ -220,13 +223,69 @@ impl Default for ElectionCompute {
 	}
 }
 
+#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, MaxEncodedLen, Debug, TypeInfo)]
+pub enum PhaseExperimental<BlockNumber> {
+	Off,
+	Snapshot(BlockNumber),
+	Signed(BlockNumber),
+	SignedValidation(BlockNumber),
+	Unsigned(BlockNumber),
+	Emergency,
+}
+
+impl<BlockNumber: Saturating + Zero + One> PhaseExperimental<BlockNumber> {
+	pub fn tick(self, next_phase_len: BlockNumber) -> Self {
+		use PhaseExperimental::*;
+		match self {
+			Off => Snapshot(next_phase_len),
+			Snapshot(x) =>
+				if x.is_zero() {
+					Signed(next_phase_len)
+				} else {
+					Snapshot(x.saturating_sub(One::one()))
+				},
+			Signed(x) =>
+				if x.is_zero() {
+					SignedValidation(next_phase_len)
+				} else {
+					Signed(x.saturating_sub(One::one()))
+				},
+			SignedValidation(x) =>
+				if x.is_zero() {
+					Unsigned(next_phase_len)
+				} else {
+					SignedValidation(x.saturating_sub(One::one()))
+				},
+
+			Unsigned(x) =>
+				if x.is_zero() {
+					// note this: unsigned phase does not really end, only elect can end it.
+					Unsigned(Zero::zero())
+				} else {
+					Unsigned(x.saturating_sub(One::one()))
+				},
+			Emergency => Emergency,
+		}
+	}
+}
+
 /// Current phase of the pallet.
 #[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, MaxEncodedLen, Debug, TypeInfo)]
 pub enum Phase<Bn> {
-	/// Nothing, the election is not happening.
+	/// Nothing is happening, and nothing will happen.
+	Halted,
+	/// Nothing is happening, but it might.
 	Off,
 	/// Signed phase is open.
 	Signed,
+	/// We are validating results.
+	///
+	/// The inner value is the block number at which this phase started. This helps with
+	/// synchronizing different sub-systems.
+	///
+	/// This always follows the signed phase, and is a window of time in which we try to validate
+	/// our signed results.
+	SignedValidation(Bn),
 	/// Unsigned phase. First element is whether it is active or not, second the starting block
 	/// number.
 	///
@@ -237,19 +296,19 @@ pub enum Phase<Bn> {
 	/// As validator nodes are free to edit their OCW code, they could simply ignore this advisory
 	/// and always compute their own solution. However, by default, when the unsigned phase is
 	/// passive, the offchain workers will not bother running.
-	Unsigned((bool, Bn)),
-	/// The emergency phase. This is enabled upon a failing call to `T::ElectionProvider::elect`.
-	/// After that, the only way to leave this phase is through a successful
-	/// `T::ElectionProvider::elect`.
-	Emergency,
+	Unsigned((bool, Bn)), // TODO: remove the bool
 	/// Snapshot is being created. No other operation is allowed. This can be one or more blocks.
 	/// Inner value is `0` if the snapshot is complete and we are ready to move on. Otherwise, it
 	/// indicates hte remaining pages for each of which we need 1 block.
 	Snapshot(PageIndex),
-	/// The first call to `ElectionProvider::elect` has happened, and we are expecting more calls.
-	/// No further operation is permitted, freeze all storage items and export `QueuedSolution`.
-	/// This can be one or more blocks.
-	Export(PageIndex),
+	/// Exporting has begun.
+	///
+	/// Once this is active, no more signed or solutions will be accepted.
+	Export,
+	/// The emergency phase. This is enabled upon a failing call to `T::ElectionProvider::elect`.
+	/// After that, the only way to leave this phase is through a successful
+	/// `T::ElectionProvider::elect`.
+	Emergency,
 }
 
 impl<Bn> Default for Phase<Bn> {
@@ -287,6 +346,26 @@ impl<Bn: PartialEq + Eq> Phase<Bn> {
 	/// Whether the phase is off or not.
 	pub fn is_off(&self) -> bool {
 		matches!(self, Phase::Off)
+	}
+
+	/// Whether the phase is export or not.
+	pub fn is_export(&self) -> bool {
+		matches!(self, Phase::Export)
+	}
+
+	/// Whether the phase is halted or not.
+	pub fn is_halted(&self) -> bool {
+		matches!(self, Phase::Halted)
+	}
+
+	/// Whether the phase is signed validation or not.
+	pub fn is_signed_validation(&self) -> bool {
+		matches!(self, Phase::SignedValidation(_))
+	}
+
+	/// Whether the phase is signed validation or not, with specific start.
+	pub fn is_signed_validation_open_at(&self, at: Bn) -> bool {
+		matches!(self, Phase::SignedValidation(real) if *real == at)
 	}
 }
 

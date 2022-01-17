@@ -41,18 +41,6 @@ use sp_std::{marker::PhantomData, prelude::*};
 #[scale_info(skip_type_params(S))]
 pub struct BoundedVec<T, S>(Vec<T>, PhantomData<S>);
 
-impl<T: PartialOrd, Bound: Get<u32>> PartialOrd for BoundedVec<T, Bound> {
-	fn partial_cmp(&self, other: &Self) -> Option<sp_std::cmp::Ordering> {
-		self.0.partial_cmp(&other.0)
-	}
-}
-
-impl<T: Ord, Bound: Get<u32>> Ord for BoundedVec<T, Bound> {
-	fn cmp(&self, other: &Self) -> sp_std::cmp::Ordering {
-		self.0.cmp(&other.0)
-	}
-}
-
 /// A bounded slice.
 ///
 /// Similar to a `BoundedVec`, but not owned and cannot be decoded.
@@ -68,6 +56,18 @@ impl<'a, T: Encode + Decode, S: Get<u32>> EncodeLike<WeakBoundedVec<T, S>>
 {
 }
 impl<'a, T: Encode + Decode, S: Get<u32>> EncodeLike<Vec<T>> for BoundedSlice<'a, T, S> {}
+
+impl<T: PartialOrd, Bound: Get<u32>> PartialOrd for BoundedVec<T, Bound> {
+	fn partial_cmp(&self, other: &Self) -> Option<sp_std::cmp::Ordering> {
+		self.0.partial_cmp(&other.0)
+	}
+}
+
+impl<T: Ord, Bound: Get<u32>> Ord for BoundedVec<T, Bound> {
+	fn cmp(&self, other: &Self) -> sp_std::cmp::Ordering {
+		self.0.cmp(&other.0)
+	}
+}
 
 impl<'a, T, S: Get<u32>> TryFrom<&'a [T]> for BoundedSlice<'a, T, S> {
 	type Error = ();
@@ -127,6 +127,13 @@ impl<T, S> BoundedVec<T, S> {
 		F: FnMut(&T, &T) -> sp_std::cmp::Ordering,
 	{
 		self.0.sort_by(compare)
+	}
+
+	/// Exactly the same semantics as [`Vec::pop`].
+	///
+	/// This is safe since popping can only shrink the inner vector.
+	pub fn pop(&mut self) -> Option<T> {
+		self.0.pop()
 	}
 
 	/// Exactly the same semantics as [`Vec::remove`].
@@ -587,5 +594,16 @@ pub mod test {
 		let b1: BoundedVec<u32, B1> = vec![1, 2, 3].try_into().unwrap();
 		let b2: BoundedVec<u32, B2> = vec![1, 2, 3].try_into().unwrap();
 		assert_eq!(b1, b2);
+	}
+
+	#[test]
+	fn ord_works() {
+		use std::cmp::Ordering;
+		let b1: BoundedVec<u32, ConstU32<7>> = vec![1, 2, 3].try_into().unwrap();
+		let b2: BoundedVec<u32, ConstU32<7>> = vec![1, 3, 2].try_into().unwrap();
+
+		// ordering for vec is lexicographic.
+		assert_eq!(b1.cmp(&b2), Ordering::Less);
+		assert_eq!(b1.cmp(&b2), b1.into_inner().cmp(&b2.into_inner()));
 	}
 }

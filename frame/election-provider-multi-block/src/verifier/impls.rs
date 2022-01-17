@@ -29,7 +29,7 @@ use frame_support::{dispatch::Weight, ensure, traits::Get, RuntimeDebug};
 use pallet::*;
 
 #[derive(Encode, Decode, scale_info::TypeInfo, Clone, Copy, MaxEncodedLen, RuntimeDebug)]
-#[cfg_attr(test, derive(PartialEq, Eq))]
+#[cfg_attr(any(test, debug_assertions), derive(PartialEq, Eq))]
 pub enum Status {
 	Ongoing(PageIndex),
 	Nothing,
@@ -116,10 +116,15 @@ pub(crate) mod pallet {
 		/// respected.
 		type MaxBackersPerWinner: Get<u32> + TypeInfo + MaxEncodedLen + sp_std::fmt::Debug;
 
+		// TODO: why do we need the bounds?
+
 		/// Maximum number of supports (aka. winners/validators/targets) that can be represented in
 		/// a page of results.
 		type MaxWinnersPerPage: Get<u32> + TypeInfo + MaxEncodedLen + sp_std::fmt::Debug;
 
+		/// Something that can provide the solution data to the verifier.
+		///
+		/// In reality, this will be fulfilled by the signed phase.
 		type SolutionDataProvider: crate::verifier::SolutionDataProvider<Solution = Self::Solution>;
 	}
 
@@ -132,6 +137,8 @@ pub(crate) mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T> {
+		/// The verification data was unavailable and it could not continue.
+		VerificationDataUnavailable,
 		/// A verification failed at the given page.
 		///
 		/// NOTE: if the index is 0, then this could mean either the feasibility of the last page
@@ -146,7 +153,7 @@ pub(crate) mod pallet {
 
 	// ---- All storage items about the verifying solution.
 	/// A wrapper interface for the storage items related to the queued solution.
-	pub(crate) struct QueuedSolution<T: Config>(sp_std::marker::PhantomData<T>);
+	pub struct QueuedSolution<T: Config>(sp_std::marker::PhantomData<T>);
 	impl<T: Config> QueuedSolution<T> {
 		/// Return the `score` and `winner_count` of verifying solution.
 		///
@@ -324,6 +331,14 @@ pub(crate) mod pallet {
 			}
 		}
 
+		fn valid() -> ValidSolution {
+			QueuedValidVariant::<T>::get()
+		}
+
+		fn invalid() -> ValidSolution {
+			QueuedValidVariant::<T>::get().other()
+		}
+
 		#[cfg(test)]
 		pub(crate) fn valid_iter() -> impl Iterator<Item = (PageIndex, SupportsOf<Pallet<T>>)> {
 			match Self::valid() {
@@ -332,7 +347,7 @@ pub(crate) mod pallet {
 			}
 		}
 
-		#[cfg(test)]
+		#[cfg(any(test, debug_assertions))]
 		pub(crate) fn invalid_iter() -> impl Iterator<Item = (PageIndex, SupportsOf<Pallet<T>>)> {
 			match Self::invalid() {
 				ValidSolution::X => QueuedSolutionX::<T>::iter(),
@@ -370,12 +385,12 @@ pub(crate) mod pallet {
 			QueuedSolutionBackings::<T>::iter()
 		}
 
-		fn valid() -> ValidSolution {
-			QueuedValidVariant::<T>::get()
-		}
-
-		fn invalid() -> ValidSolution {
-			QueuedValidVariant::<T>::get().other()
+		/// Ensure that all the storage items managed by this struct are in `kill` state, meaning
+		/// that in the expect state after an election is OVER.
+		#[cfg(any(test, debug_assertions))]
+		pub(crate) fn ensure_killed() {
+			use frame_support::assert_storage_noop;
+			assert_storage_noop!(Self::kill());
 		}
 	}
 
@@ -510,13 +525,33 @@ impl<T: Config> crate::verifier::SignedVerifier for Pallet<T> {
 	fn start() {
 		StatusStorage::<T>::put(Status::Ongoing(crate::Pallet::<T>::msp()));
 	}
+	fn stop() {
+		// we clear any ongoing solution's no been verified in any case, although this should only
+		// exist if we were doing something.
+		debug_assert!(
+			!matches!(StatusStorage::<T>::get(), Status::Ongoing(_)) ||
+				(matches!(StatusStorage::<T>::get(), Status::Ongoing(_)) &&
+					QueuedSolution::<T>::invalid_iter().count() > 0)
+		);
+		QueuedSolution::<T>::clear_invalid();
+	}
 }
 
 impl<T: Config> Pallet<T> {
 	fn do_on_initialize() -> Weight {
 		if let Status::Ongoing(current_page) = Self::status_storage() {
-			let page_solution =
+			let maybe_page_solution =
 				<T::SolutionDataProvider as SolutionDataProvider>::get_page(current_page);
+			if maybe_page_solution.is_none() {
+				// the data provider has zilch, revert to a clean state, waiting for a new `start`.
+				QueuedSolution::<T>::clear_invalid();
+				StatusStorage::<T>::put(Status::Nothing);
+				Self::deposit_event(Event::<T>::VerificationDataUnavailable);
+				// TODO: test, specially that state is clean, example: first pages comes in, next
+				// one is None.
+				return 0
+			}
+			let page_solution = maybe_page_solution.expect("Option checked to not be None; qed");
 			let maybe_supports =
 				<Self as Verifier>::feasibility_check_page(page_solution, current_page);
 
@@ -538,22 +573,19 @@ impl<T: Config> Pallet<T> {
 						StatusStorage::<T>::put(Status::Ongoing(current_page.saturating_sub(1)));
 					} else {
 						// last page, finalize everything.
-						let claimed_score = T::SolutionDataProvider::get_score();
+						let claimed_score = T::SolutionDataProvider::get_score().unwrap(); // TODO: defensive unwrap or default
+
+						// in both cases of the following match, we are not back to the nothing
+						// state.
+						StatusStorage::<T>::put(Status::Nothing);
+
 						match Self::finalize_verification(claimed_score) {
 							Ok(_) => {
 								T::SolutionDataProvider::report_result(VerificationResult::Valid);
 							},
-							Err(err) => {
-								Self::deposit_event(Event::<T>::VerificationFailed(
-									current_page,
-									err,
-								));
-								QueuedSolution::<T>::clear_invalid();
-								T::SolutionDataProvider::report_result(VerificationResult::Invalid)
-							},
-							// in both cases, we are not back to the nothing state.
+							Err(err) =>
+								T::SolutionDataProvider::report_result(VerificationResult::Invalid),
 						}
-						StatusStorage::<T>::put(Status::Nothing);
 					}
 				},
 				Err(err) => {
@@ -600,6 +632,8 @@ impl<T: Config> Pallet<T> {
 				sublog!(warn, "verifier", "Finalizing solution was invalid due to {:?}.", err);
 				// In case of any of the errors, kill the solution.
 				QueuedSolution::<T>::clear_invalid();
+				// and deposit an event about it.
+				Self::deposit_event(Event::<T>::VerificationFailed(0, err.clone()));
 				err
 			});
 		sublog!(debug, "verifier", "finalize verification outcome: {:?}", outcome);
@@ -727,13 +761,13 @@ mod feasibility_check {
 
 	#[test]
 	fn missing_snapshot() {
-		ExtBuilder::default().build_unchecked().execute_with(|| {
+		ExtBuilder::verifier().build_unchecked().execute_with(|| {
 			// create snapshot just so that we can create a solution..
 			roll_to_snapshot_created();
 			let paged = mine_full_solution().unwrap();
 
 			// ..remove the only page of the target snapshot.
-			crate::Snapshot::<Runtime>::remove_voter_page(0);
+			crate::Snapshot::<Runtime>::remove_target_page(0);
 
 			assert_noop!(
 				VerifierPallet::feasibility_check_page(paged.solution_pages[0].clone(), 0),
@@ -741,8 +775,7 @@ mod feasibility_check {
 			);
 		});
 
-		ExtBuilder::default().pages(2).build_unchecked().execute_with(|| {
-			// create snapshot just so that we can create a solution..
+		ExtBuilder::verifier().pages(2).build_unchecked().execute_with(|| {
 			roll_to_snapshot_created();
 			let paged = mine_full_solution().unwrap();
 
@@ -755,19 +788,17 @@ mod feasibility_check {
 			);
 		});
 
-		ExtBuilder::default().pages(2).build_unchecked().execute_with(|| {
-			// create snapshot just so that we can create a solution..
+		ExtBuilder::verifier().pages(2).build_unchecked().execute_with(|| {
 			roll_to_snapshot_created();
 			let paged = mine_full_solution().unwrap();
 
-			// ..removing this page is not important.
+			// ..removing this page is not important. // TODO: WTFFFF
 			crate::Snapshot::<Runtime>::remove_voter_page(1);
 
 			assert_ok!(VerifierPallet::feasibility_check_page(paged.solution_pages[0].clone(), 0));
 		});
 
-		ExtBuilder::default().pages(2).build_unchecked().execute_with(|| {
-			// create snapshot just so that we can create a solution..
+		ExtBuilder::verifier().pages(2).build_unchecked().execute_with(|| {
 			roll_to_snapshot_created();
 			let paged = mine_full_solution().unwrap();
 
@@ -780,10 +811,8 @@ mod feasibility_check {
 			);
 		});
 
-		ExtBuilder::default().pages(2).build_unchecked().execute_with(|| {
-			// create snapshot just so that we can create a solution..
+		ExtBuilder::verifier().pages(2).build_unchecked().execute_with(|| {
 			roll_to_snapshot_created();
-			roll_to(25);
 			let paged = mine_full_solution().unwrap();
 
 			// `DesiredTargets` is not checked here.
@@ -798,7 +827,7 @@ mod feasibility_check {
 
 	#[test]
 	fn winner_indices_single_page_must_be_in_bounds() {
-		ExtBuilder::default().pages(1).desired_targets(2).build_and_execute(|| {
+		ExtBuilder::verifier().pages(1).desired_targets(2).build_and_execute(|| {
 			roll_to_snapshot_created();
 			let mut paged = mine_full_solution().unwrap();
 			assert_eq!(crate::Snapshot::<Runtime>::targets().unwrap().len(), 4);
@@ -820,7 +849,7 @@ mod feasibility_check {
 
 	#[test]
 	fn voter_indices_per_page_must_be_in_bounds() {
-		ExtBuilder::default()
+		ExtBuilder::verifier()
 			.pages(1)
 			.voter_per_page(Bounded::max_value())
 			.desired_targets(2)
@@ -851,7 +880,7 @@ mod feasibility_check {
 
 	#[test]
 	fn voter_must_have_same_targets_as_snapshot() {
-		ExtBuilder::default()
+		ExtBuilder::verifier()
 			.pages(1)
 			.voter_per_page(Bounded::max_value())
 			.desired_targets(2)
@@ -880,7 +909,7 @@ mod feasibility_check {
 
 	#[test]
 	fn desired_targets() {
-		ExtBuilder::default().max_backing_per_target(2).build_and_execute(|| {
+		ExtBuilder::verifier().max_backing_per_target(2).build_and_execute(|| {
 			roll_to(25);
 			ensure_full_snapshot();
 
@@ -894,7 +923,7 @@ mod feasibility_check {
 			assert_eq!(VerifierPallet::status_storage(), Status::Nothing);
 			assert!(MockSignedResults::get().is_empty());
 
-			load_and_start_verification(paged);
+			load_mock_signed_and_start_verification(paged);
 			assert_eq!(VerifierPallet::status_storage(), Status::Ongoing(2));
 
 			// now let it verify
@@ -925,7 +954,7 @@ mod feasibility_check {
 
 	#[test]
 	fn score() {
-		ExtBuilder::default().build_and_execute(|| {
+		ExtBuilder::verifier().build_and_execute(|| {
 			roll_to_snapshot_created();
 			let mut paged = mine_full_solution().unwrap();
 
@@ -933,7 +962,7 @@ mod feasibility_check {
 			paged.score[0] += 1;
 			assert!(<VerifierPallet as Verifier>::queued_solution().is_none());
 
-			load_and_start_verification(paged);
+			load_mock_signed_and_start_verification(paged);
 			roll_to_full_verification();
 
 			// nothing is verified.
@@ -954,7 +983,7 @@ mod feasibility_check {
 
 	#[test]
 	fn heuristic_max_backers_per_winner_per_page() {
-		ExtBuilder::default().max_backing_per_target(2).build_and_execute(|| {
+		ExtBuilder::verifier().max_backing_per_target(2).build_and_execute(|| {
 			roll_to(25);
 			ensure_full_snapshot();
 
@@ -968,7 +997,7 @@ mod feasibility_check {
 				solution_pages: vec![solution].try_into().unwrap(),
 				..Default::default()
 			};
-			load_and_start_verification(paged);
+			load_mock_signed_and_start_verification(paged);
 			assert_eq!(VerifierPallet::status(), Status::Ongoing(2));
 
 			// now let it verify. It should fail on the first page.
@@ -987,7 +1016,7 @@ mod feasibility_check {
 
 	#[test]
 	fn heuristic_desired_target_check_per_page() {
-		ExtBuilder::default().desired_targets(2).build_and_execute(|| {
+		ExtBuilder::verifier().desired_targets(2).build_and_execute(|| {
 			roll_to(25);
 			ensure_full_snapshot();
 
@@ -1006,7 +1035,7 @@ mod feasibility_check {
 				solution_pages: vec![solution].try_into().unwrap(),
 				..Default::default()
 			};
-			load_and_start_verification(paged);
+			load_mock_signed_and_start_verification(paged);
 			assert_eq!(VerifierPallet::status(), Status::Ongoing(2));
 
 			// now let it verify. It should fail on the first page.
@@ -1031,13 +1060,13 @@ mod misc {
 
 	#[test]
 	fn basic_single_verification_works() {
-		ExtBuilder::default().pages(1).build_and_execute(|| {
+		ExtBuilder::verifier().pages(1).build_and_execute(|| {
 			// load a solution after the snapshot has been created.
 			roll_to(25);
 			ensure_full_snapshot();
 
 			let solution = mine_full_solution().unwrap();
-			load_and_start_verification(solution);
+			load_mock_signed_and_start_verification(solution);
 
 			// now let it verify
 			roll_to(26);
@@ -1057,7 +1086,7 @@ mod misc {
 
 	#[test]
 	fn basic_multi_verification_works() {
-		ExtBuilder::default().pages(3).build_and_execute(|| {
+		ExtBuilder::verifier().pages(3).build_and_execute(|| {
 			// load a solution after the snapshot has been created.
 			roll_to(25);
 			ensure_full_snapshot();
@@ -1065,7 +1094,7 @@ mod misc {
 			let solution = mine_full_solution().unwrap();
 			// ------------- ^^^^^^^^^^^^
 
-			load_and_start_verification(solution);
+			load_mock_signed_and_start_verification(solution);
 			assert_eq!(VerifierPallet::status(), Status::Ongoing(2));
 			assert_eq!(QueuedSolution::<Runtime>::valid_iter().count(), 0);
 
@@ -1112,7 +1141,7 @@ mod misc {
 
 	#[test]
 	fn basic_multi_verification_partial() {
-		ExtBuilder::default().pages(3).build_and_execute(|| {
+		ExtBuilder::verifier().pages(3).build_and_execute(|| {
 			// load a solution after the snapshot has been created.
 			roll_to(25);
 			ensure_full_snapshot();
@@ -1120,7 +1149,7 @@ mod misc {
 			let solution = mine_solution(2).unwrap();
 			// -------------------------^^^
 
-			load_and_start_verification(solution);
+			load_mock_signed_and_start_verification(solution);
 
 			assert_eq!(VerifierPallet::status(), Status::Ongoing(2));
 			assert_eq!(QueuedSolution::<Runtime>::valid_iter().count(), 0);
@@ -1570,3 +1599,5 @@ mod misc {
 // 		// not sure what to do about `force_set_single_page_valid`
 // 	}
 // }
+
+// TODO: we also need more tests around `start` and `stop` here. Stop should clean the state.

@@ -231,6 +231,7 @@ use frame_election_provider_support::{
 	onchain, BoundedSupportsOf, ElectionDataProvider, ElectionProvider, PageIndex,
 };
 use frame_support::{
+	dispatch::Weight,
 	ensure,
 	traits::{ConstU32, Get},
 	BoundedVec,
@@ -343,8 +344,11 @@ impl<T: Config> From<verifier::FeasibilityError> for ElectionError<T> {
 
 #[frame_support::pallet]
 pub mod pallet {
-
-	use crate::{types::*, verifier, BenchmarkingConfig, WeightInfo};
+	use crate::{
+		types::*,
+		verifier::{self},
+		BenchmarkingConfig, WeightInfo,
+	};
 	use frame_election_provider_support::{
 		ElectionDataProvider, ElectionProvider, NposSolution, PageIndex,
 	};
@@ -366,6 +370,12 @@ pub mod pallet {
 		/// Duration of the signed phase.
 		#[pallet::constant]
 		type SignedPhase: Get<Self::BlockNumber>;
+		/// Duration of the singed validation phase.
+		///
+		/// The duration of this should not be less than `T::Pages`, and there is no point in it
+		/// being more than `SignedPhase::MaxSubmission::get() * T::Pages`. TODO: integrity test for
+		/// it.
+		type SignedValidationPhase: Get<Self::BlockNumber>;
 
 		/// The number of snapshot voters to fetch per block.
 		#[pallet::constant]
@@ -413,17 +423,18 @@ pub mod pallet {
 			Pages = ConstU32<1>,
 		>;
 
+		/// The verifier pallet's interface.
+		type Verifier: verifier::Verifier<Solution = SolutionOf<Self>, AccountId = Self::AccountId>
+			+ verifier::SignedVerifier;
+
+		/// The number of blocks ahead of time to try and have the election results ready by.
+		type Lookahead: Get<Self::BlockNumber>;
+
 		/// The configuration of benchmarking.
 		type BenchmarkingConfig: BenchmarkingConfig;
 
 		/// The weight of the pallet.
 		type WeightInfo: WeightInfo;
-
-		/// The verifier pallet's interface.
-		type Verifier: verifier::Verifier<Solution = SolutionOf<Self>, AccountId = Self::AccountId>;
-
-		/// The number of blocks ahead of time to try and have the election results ready by.
-		type Lookahead: Get<Self::BlockNumber>;
 	}
 
 	#[pallet::call]
@@ -443,9 +454,11 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(now: T::BlockNumber) -> Weight {
-			// first, calculate the 3 main phase switches.
+			// first, calculate the main phase switches thresholds.
 			let unsigned_deadline = T::UnsignedPhase::get();
-			let signed_deadline = T::SignedPhase::get().saturating_add(unsigned_deadline);
+			let signed_validation_deadline =
+				T::SignedValidationPhase::get().saturating_add(unsigned_deadline);
+			let signed_deadline = T::SignedPhase::get().saturating_add(signed_validation_deadline);
 			let snapshot_deadline = signed_deadline.saturating_add(T::Pages::get().into());
 
 			let next_election = T::DataProvider::next_election_prediction(now)
@@ -463,8 +476,11 @@ pub mod pallet {
 			);
 
 			match current_phase {
-				// from Off to snapshot
-				Phase::Off if remaining_blocks <= snapshot_deadline => {
+				// start and continue snapshot.
+				Phase::Off
+					if remaining_blocks <= snapshot_deadline &&
+						remaining_blocks > signed_deadline =>
+				{
 					let remaining_pages = Self::msp();
 					log!(info, "starting snapshot creation, remaining block: {}", remaining_pages);
 					let _ = Self::create_targets_snapshot().unwrap();
@@ -472,8 +488,6 @@ pub mod pallet {
 					CurrentPhase::<T>::put(Phase::Snapshot(remaining_pages));
 					0
 				},
-
-				// snapshot to signed
 				Phase::Snapshot(x) if x > 0 => {
 					// we don't check block numbers here, snapshot creation is mandatory.
 					let remaining_pages = x.saturating_sub(1);
@@ -482,10 +496,13 @@ pub mod pallet {
 					Self::create_voters_snapshot_paged(remaining_pages).unwrap();
 					0
 				},
+
+				// start signed.
 				Phase::Snapshot(0)
 					if remaining_blocks <= signed_deadline &&
-						remaining_blocks > unsigned_deadline =>
+						remaining_blocks > signed_validation_deadline =>
 				{
+					// NOTE: if signed-phase length is zero, second part of the if-condition fails.
 					// TODO: even though we have the integrity test, what if we open the signed
 					// phase, and there's not enough blocks to finalize it? that can happen under
 					// any circumstance and we should deal with it.
@@ -495,14 +512,28 @@ pub mod pallet {
 						Snapshot::<T>::assert_snapshot(true, T::Pages::get());
 					}
 
-					// NOTE: if signed-phase length is zero, second part of the if-condition fails.
 					<CurrentPhase<T>>::put(Phase::Signed);
 					Self::deposit_event(Event::SignedPhaseStarted(Self::round()));
 					0
 				},
 
-				// signed or snapshot to unsigned
-				Phase::Signed | Phase::Snapshot(0)
+				// start signed verification.
+				Phase::Signed
+					if remaining_blocks <= signed_validation_deadline &&
+						remaining_blocks > unsigned_deadline =>
+				{
+					// Start verification of the signed stuff.
+					<CurrentPhase<T>>::put(Phase::SignedValidation(now));
+					Self::deposit_event(Event::SignedValidationPhaseStarted(Self::round()));
+					// we don't do anything else here. We expect the signed sub-pallet to handle
+					// whatever else needs to be done.
+					// TODO: this notification system based on block numbers is 100% based on the
+					// on_initialize of the parent pallet is called before the rest of them.
+					0
+				},
+
+				// start unsigned
+				Phase::Signed | Phase::SignedValidation(_) | Phase::Snapshot(0)
 					if remaining_blocks <= unsigned_deadline && remaining_blocks > Zero::zero() =>
 				{
 					<CurrentPhase<T>>::put(Phase::Unsigned((true, now)));
@@ -567,6 +598,8 @@ pub mod pallet {
 	pub enum Event<T: Config> {
 		/// The signed phase of the given round has started.
 		SignedPhaseStarted(u32),
+		/// The unsigned validation phase of the given round has started.
+		SignedValidationPhaseStarted(u32),
 		/// The unsigned phase of the given round has started.
 		UnsignedPhaseStarted(u32),
 	}
@@ -1035,6 +1068,17 @@ where
 					Err(err)
 				}
 			})
+			.map(|supports| {
+				// if either of `Verifier` or `Fallback` was okay, and if this is the last page,
+				// then clear everything.
+				if remaining.is_zero() {
+					log!(info, "receiving last call to elect(0), rotating round");
+					Self::rotate_round()
+				} else {
+					<CurrentPhase<T>>::put(Phase::Export);
+				}
+				supports.into()
+			})
 			.map_err(|err| {
 				// if any pages returns an error, we go into the emergency phase and don't do
 				// anything else anymore. This will prevent any new submissions to signed and
@@ -1043,16 +1087,6 @@ where
 				log!(error, "fetching page {} failed. entering emergency mode.", remaining);
 				<CurrentPhase<T>>::put(Phase::Emergency);
 				err
-			})
-			.map(|supports| {
-				// if either of `Verifier` or `Fallback` was okay, and if this is the last page,
-				// then clear everything.
-				if remaining.is_zero() {
-					log!(debug, "processing last page of election");
-					Self::rotate_round()
-				}
-
-				supports.into()
 			})
 	}
 }
@@ -1064,11 +1098,11 @@ mod phase_rotation {
 	use frame_election_provider_support::ElectionProvider;
 
 	#[test]
-	fn phase_rotation_single_page() {
-		ExtBuilder::default().pages(1).onchain_fallback(true).build_and_execute(|| {
-			// 0 ------- 14 15 ------- 25 ------- 30 -------------- 44 45 ------- 55 ------- 60
-			//              |           |          |                 |   |           |          |
-			//            Signed      Unsigned   Elect        Snapshot  Signed     Unsigned    Elect
+	fn single_page() {
+		ExtBuilder::full().pages(1).onchain_fallback(true).build_and_execute(|| {
+			// 0 -------- 14 15 --------- 20 ------------- 25 ---------- 30
+			//            |  |            |                |             |
+			//    Snapshot Signed  SignedValidation    Unsigned       elect
 
 			assert_eq!(System::block_number(), 0);
 			assert_eq!(MultiBlock::current_phase(), Phase::Off);
@@ -1091,8 +1125,21 @@ mod phase_rotation {
 			Snapshot::<Runtime>::assert_snapshot(true, 1);
 			assert_eq!(MultiBlock::round(), 0);
 
-			roll_to(24);
+			roll_to(19);
 			assert_eq!(MultiBlock::current_phase(), Phase::Signed);
+			Snapshot::<Runtime>::assert_snapshot(true, 1);
+			assert_eq!(MultiBlock::round(), 0);
+
+			roll_to(20);
+			assert_eq!(MultiBlock::current_phase(), Phase::SignedValidation(20));
+			assert_eq!(
+				multi_block_events(),
+				vec![Event::SignedPhaseStarted(0), Event::SignedValidationPhaseStarted(0)],
+			);
+			Snapshot::<Runtime>::assert_snapshot(true, 1);
+
+			roll_to(24);
+			assert_eq!(MultiBlock::current_phase(), Phase::SignedValidation(20));
 			Snapshot::<Runtime>::assert_snapshot(true, 1);
 			assert_eq!(MultiBlock::round(), 0);
 
@@ -1100,12 +1147,12 @@ mod phase_rotation {
 			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, 25)));
 			assert_eq!(
 				multi_block_events(),
-				vec![Event::SignedPhaseStarted(0), Event::UnsignedPhaseStarted(0)],
+				vec![
+					Event::SignedPhaseStarted(0),
+					Event::SignedValidationPhaseStarted(0),
+					Event::UnsignedPhaseStarted(0)
+				],
 			);
-			Snapshot::<Runtime>::assert_snapshot(true, 1);
-
-			roll_to(29);
-			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, 25)));
 			Snapshot::<Runtime>::assert_snapshot(true, 1);
 
 			roll_to(30);
@@ -1127,10 +1174,13 @@ mod phase_rotation {
 			assert_eq!(MultiBlock::current_phase(), Phase::Off);
 
 			roll_to(44);
-			assert_eq!(MultiBlock::current_phase(), Phase::Snapshot(0)); // TODO: this event type could have a tuple inside of it, round and page.
+			assert_eq!(MultiBlock::current_phase(), Phase::Snapshot(0));
 
 			roll_to(45);
 			assert!(MultiBlock::current_phase().is_signed());
+
+			roll_to(50);
+			assert!(MultiBlock::current_phase().is_signed_validation_open_at(50));
 
 			roll_to(55);
 			assert!(MultiBlock::current_phase().is_unsigned_open_at(55));
@@ -1138,11 +1188,11 @@ mod phase_rotation {
 	}
 
 	#[test]
-	fn phase_rotation_multi_page_2() {
-		ExtBuilder::default().pages(2).onchain_fallback(true).build_and_execute(|| {
-			// 0 -------13 14 15 ------- 25 ------- 30 -------------- 43 44 45 ------- 55 ------- 60
-			//           |     |          |          |                 |     |          |          |
-			//    Snapshot    Signed    Unsigned   Elect        Snapshot    Signed    Unsigned
+	fn multi_page_2() {
+		ExtBuilder::full().pages(2).onchain_fallback(true).build_and_execute(|| {
+			// 0 -------13 14 15 ------- 20 ---- 25 ------- 30
+			//           |     |         |       |          |
+			//    Snapshot    Signed SigValid  Unsigned   Elect
 
 			assert_eq!(System::block_number(), 0);
 			assert_eq!(MultiBlock::current_phase(), Phase::Off);
@@ -1170,8 +1220,21 @@ mod phase_rotation {
 			Snapshot::<Runtime>::assert_snapshot(true, 2);
 			assert_eq!(MultiBlock::round(), 0);
 
-			roll_to(24);
+			roll_to(19);
 			assert_eq!(MultiBlock::current_phase(), Phase::Signed);
+			Snapshot::<Runtime>::assert_snapshot(true, 2);
+			assert_eq!(MultiBlock::round(), 0);
+
+			roll_to(20);
+			assert_eq!(MultiBlock::current_phase(), Phase::SignedValidation(20));
+			assert_eq!(
+				multi_block_events(),
+				vec![Event::SignedPhaseStarted(0), Event::SignedValidationPhaseStarted(0)],
+			);
+			Snapshot::<Runtime>::assert_snapshot(true, 2);
+
+			roll_to(24);
+			assert_eq!(MultiBlock::current_phase(), Phase::SignedValidation(20));
 			Snapshot::<Runtime>::assert_snapshot(true, 2);
 			assert_eq!(MultiBlock::round(), 0);
 
@@ -1179,7 +1242,11 @@ mod phase_rotation {
 			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, 25)));
 			assert_eq!(
 				multi_block_events(),
-				vec![Event::SignedPhaseStarted(0), Event::UnsignedPhaseStarted(0)],
+				vec![
+					Event::SignedPhaseStarted(0),
+					Event::SignedValidationPhaseStarted(0),
+					Event::UnsignedPhaseStarted(0)
+				],
 			);
 			Snapshot::<Runtime>::assert_snapshot(true, 2);
 
@@ -1195,10 +1262,9 @@ mod phase_rotation {
 			roll_to(32);
 			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, 25)));
 
-			// we fast track to the last elect call with page 0 -- this should clear everything.
-			MultiBlock::elect(0).unwrap();
-
+			MultiBlock::elect(0).unwrap(); // and even this one's coming from the fallback.
 			assert!(MultiBlock::current_phase().is_off());
+
 			// all snapshots are gone.
 			Snapshot::<Runtime>::assert_snapshot(false, 2);
 			assert_eq!(MultiBlock::round(), 1);
@@ -1215,18 +1281,21 @@ mod phase_rotation {
 			roll_to(45);
 			assert!(MultiBlock::current_phase().is_signed());
 
+			roll_to(50);
+			assert!(MultiBlock::current_phase().is_signed_validation_open_at(50));
+
 			roll_to(55);
 			assert!(MultiBlock::current_phase().is_unsigned_open_at(55));
 		})
 	}
 
 	#[test]
-	fn phase_rotation_multi_page_3() {
-		ExtBuilder::default().pages(3).onchain_fallback(true).build_and_execute(|| {
+	fn multi_page_3() {
+		ExtBuilder::full().pages(3).onchain_fallback(true).build_and_execute(|| {
 			#[rustfmt::skip]
-	 		// 0 ------- 12 13 14 15 ------- 25 ------- 30 -------------- 42 43 44 45 ------- 55 ------- 60
-			//            |     |             |          |                |        |          |       |
-	 		//     Snapshot    Signed    Unsigned   Elect         Snapshot       Signed    Unsigned  Elect
+	 		// 0 ------- 12 13 14 15 ----------- 20 ---------25 ------- 30
+			//            |       |              |            |          |
+	 		//     Snapshot      Signed   SignedValidation  Unsigned   Elect
 
 			assert_eq!(System::block_number(), 0);
 			assert_eq!(MultiBlock::current_phase(), Phase::Off);
@@ -1258,16 +1327,33 @@ mod phase_rotation {
 			Snapshot::<Runtime>::assert_snapshot(true, 3);
 			assert_eq!(MultiBlock::round(), 0);
 
-			roll_to(24);
+			roll_to(19);
 			assert_eq!(MultiBlock::current_phase(), Phase::Signed);
-			Snapshot::<Runtime>::assert_snapshot(true, 3);
+			Snapshot::<Runtime>::assert_snapshot(true, 2);
+			assert_eq!(MultiBlock::round(), 0);
+
+			roll_to(20);
+			assert_eq!(MultiBlock::current_phase(), Phase::SignedValidation(20));
+			assert_eq!(
+				multi_block_events(),
+				vec![Event::SignedPhaseStarted(0), Event::SignedValidationPhaseStarted(0)],
+			);
+			Snapshot::<Runtime>::assert_snapshot(true, 2);
+
+			roll_to(24);
+			assert_eq!(MultiBlock::current_phase(), Phase::SignedValidation(20));
+			Snapshot::<Runtime>::assert_snapshot(true, 2);
 			assert_eq!(MultiBlock::round(), 0);
 
 			roll_to(25);
 			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, 25)));
 			assert_eq!(
 				multi_block_events(),
-				vec![Event::SignedPhaseStarted(0), Event::UnsignedPhaseStarted(0)],
+				vec![
+					Event::SignedPhaseStarted(0),
+					Event::SignedValidationPhaseStarted(0),
+					Event::UnsignedPhaseStarted(0)
+				],
 			);
 			Snapshot::<Runtime>::assert_snapshot(true, 3);
 
@@ -1283,10 +1369,9 @@ mod phase_rotation {
 			roll_to(32);
 			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, 25)));
 
-			// we fast track to the last elect call with page 0 -- this should clear everything.
 			MultiBlock::elect(0).unwrap();
-
 			assert!(MultiBlock::current_phase().is_off());
+
 			// all snapshots are gone.
 			Snapshot::<Runtime>::assert_snapshot(false, 3);
 			assert_eq!(MultiBlock::round(), 1);
@@ -1306,19 +1391,37 @@ mod phase_rotation {
 			roll_to(45);
 			assert!(MultiBlock::current_phase().is_signed());
 
+			roll_to(50);
+			assert!(MultiBlock::current_phase().is_signed_validation_open_at(50));
+
 			roll_to(55);
 			assert!(MultiBlock::current_phase().is_unsigned_open_at(55));
 		})
 	}
 
 	#[test]
-	fn phase_rotation_multi_with_lookahead() {
+	fn multi_with_lookahead() {
 		todo!();
 	}
 
 	#[test]
-	fn fingerprint_works() {
-		todo!("one hardcoded test of the fingerprint value.");
+	fn no_unsigned_phase() {
+		todo!()
+	}
+
+	#[test]
+	fn no_signed_phase() {
+		todo!()
+	}
+
+	#[test]
+	fn no_any_phase() {
+		todo!()
+	}
+
+	#[test]
+	fn incorrect_signed_validation_phase() {
+		todo!()
 	}
 }
 
@@ -1330,149 +1433,230 @@ mod election_provider {
 	use frame_support::assert_storage_noop;
 
 	#[test]
-	fn multi_page_elect_works() {
-		ExtBuilder::default().pages(3).build_and_execute(|| {
-			// TODO: this test is quite similar to `basic_multi_verification_works`, except this one
-			// should ideally be written using a real signed phase implementation.
-			roll_to(25);
-			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, 25)));
+	fn multi_page_elect_simple_works() {
+		ExtBuilder::full().build_and_execute(|| {
+			roll_to_signed_open();
+			assert_eq!(MultiBlock::current_phase(), Phase::Signed);
 
 			// load a solution into the verifier
 			let paged = BaseMiner::<Runtime>::mine_solution(Pages::get(), false).unwrap();
 			let score = paged.score.clone();
-			load_and_start_verification(paged);
+
+			// now let's submit this one by one, into the signed phase.
+			load_signed_for_verification(99, paged);
+
+			// now the solution should start being verified.
+			roll_to_signed_validation_open();
+			assert_eq!(
+				multi_block_events(),
+				vec![
+					crate::Event::SignedPhaseStarted(0),
+					crate::Event::SignedValidationPhaseStarted(0)
+				]
+			);
+			assert_eq!(verifier_events(), vec![]);
 
 			// there is no queued solution prior to the last page of the solution getting verified
 			assert_eq!(<Runtime as crate::Config>::Verifier::queued_solution(), None);
 
-			// roll to the block it is finalized.
-			roll_to(28);
+			// proceed until it is fully verified.
+			roll_next();
+			assert_eq!(verifier_events(), vec![verifier::Event::Verified(2, 2)]);
+
+			roll_next();
+			assert_eq!(
+				verifier_events(),
+				vec![verifier::Event::Verified(2, 2), verifier::Event::Verified(1, 2)]
+			);
+
+			roll_next();
+			assert_eq!(
+				verifier_events(),
+				vec![
+					verifier::Event::Verified(2, 2),
+					verifier::Event::Verified(1, 2),
+					verifier::Event::Verified(0, 2),
+					verifier::Event::Queued([55, 130, 8650], None),
+				]
+			);
 
 			// there is now a queued solution.
 			assert_eq!(<Runtime as crate::Config>::Verifier::queued_solution(), Some(score));
 
+			// now let's go to unsigned phase, but we don't expect anything to happen there since we
+			// don't run OCWs.
+			roll_to_unsigned_open();
+
 			// pre-elect state
 			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, 25)));
 			assert_eq!(Round::<Runtime>::get(), 0);
-			assert!(Snapshot::<Runtime>::metadata().is_some());
-			assert!(Snapshot::<Runtime>::desired_targets().is_some());
-			assert!(Snapshot::<Runtime>::targets().is_some());
+			ensure_full_snapshot();
 
 			// call elect for each page
 			let _paged_solution = (MultiBlock::lsp()..MultiBlock::msp())
 				.rev() // 2, 1, 0
 				.map(|page| {
-					crate::Pallet::<Runtime>::elect(page as PageIndex).unwrap();
+					MultiBlock::elect(page as PageIndex).unwrap();
+					if page == 0 {
+						assert!(MultiBlock::current_phase().is_off())
+					} else {
+						assert!(MultiBlock::current_phase().is_export())
+					}
 				})
 				.collect::<Vec<_>>();
 
 			// after the last elect, verifier is cleared,
-			assert_eq!(<Runtime as crate::Config>::Verifier::queued_solution(), None);
+			verifier::QueuedSolution::<Runtime>::ensure_killed();
 			// the phase is off,
 			assert_eq!(MultiBlock::current_phase(), Phase::Off);
 			// the round is incremented,
 			assert_eq!(Round::<Runtime>::get(), 1);
-			// and the snapshot is cleared.
+			// and the snapshot is cleared,
 			assert_storage_noop!(Snapshot::<Runtime>::kill());
+			// signed pallet is clean.
+			// NOTE: in the future, if and when we add lazy cleanup to the signed pallet, this
+			// assertion might break.
+			signed::Submissions::<Runtime>::ensure_killed();
 		});
 	}
 
 	#[test]
 	fn multi_page_elect_fast_track() {
-		ExtBuilder::default().pages(3).build_and_execute(|| {
-			roll_to(25);
-			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, 25)));
+		ExtBuilder::full().build_and_execute(|| {
+			roll_to_signed_open();
+			assert_eq!(MultiBlock::current_phase(), Phase::Signed);
 
 			// load a solution into the verifier
 			let paged = BaseMiner::<Runtime>::mine_solution(Pages::get(), false).unwrap();
 			let score = paged.score.clone();
-			load_and_start_verification(paged);
+			load_signed_for_verification_and_start(99, paged, 0);
 
 			// there is no queued solution prior to the last page of the solution getting verified
 			assert_eq!(<Runtime as crate::Config>::Verifier::queued_solution(), None);
 
 			// roll to the block it is finalized
-			roll_to(28);
+			roll_next();
+			roll_next();
+			roll_next();
+			assert_eq!(
+				verifier_events(),
+				vec![
+					verifier::Event::Verified(2, 2),
+					verifier::Event::Verified(1, 2),
+					verifier::Event::Verified(0, 2),
+					verifier::Event::Queued([55, 130, 8650], None),
+				]
+			);
 
-			// there is now a queued solution
+			// there is now a queued solution.
 			assert_eq!(<Runtime as crate::Config>::Verifier::queued_solution(), Some(score));
+
+			// not much impact, just for the sane-ness of the test.
+			roll_to_unsigned_open();
 
 			// pre-elect state:
 			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, 25)));
 			assert_eq!(Round::<Runtime>::get(), 0);
-			assert!(Snapshot::<Runtime>::metadata().is_some());
-			assert!(Snapshot::<Runtime>::desired_targets().is_some());
-			assert!(Snapshot::<Runtime>::targets().is_some());
+			ensure_full_snapshot();
 
 			// there are 3 pages (indexes 2..=0), but we short circuit by just calling 0.
 			let _solution = crate::Pallet::<Runtime>::elect(0).unwrap();
 
 			// after elect(0) is called, verifier is cleared,
-			assert_eq!(<Runtime as crate::Config>::Verifier::queued_solution(), None);
+			verifier::QueuedSolution::<Runtime>::ensure_killed();
 			// the phase is off,
 			assert_eq!(MultiBlock::current_phase(), Phase::Off);
 			// the round is incremented,
 			assert_eq!(Round::<Runtime>::get(), 1);
-			// and the snapshot is cleared.
+			// the snapshot is cleared,
 			assert_storage_noop!(Snapshot::<Runtime>::kill());
+			// and signed pallet is clean.
+			signed::Submissions::<Runtime>::ensure_killed();
 		});
 	}
 
 	#[test]
 	fn elect_does_not_finish_without_call_of_page_0() {
-		ExtBuilder::default().pages(3).build_and_execute(|| {
-			roll_to(25);
-			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, 25)));
+		ExtBuilder::full().build_and_execute(|| {
+			roll_to_signed_open();
+			assert_eq!(MultiBlock::current_phase(), Phase::Signed);
 
 			// load a solution into the verifier
 			let paged = BaseMiner::<Runtime>::mine_solution(Pages::get(), false).unwrap();
 			let score = paged.score.clone();
-			load_and_start_verification(paged);
+			load_signed_for_verification_and_start(99, paged, 0);
 
 			// there is no queued solution prior to the last page of the solution getting verified
 			assert_eq!(<Runtime as crate::Config>::Verifier::queued_solution(), None);
 
 			// roll to the block it is finalized
-			roll_to(28);
+			roll_next();
+			roll_next();
+			roll_next();
+			assert_eq!(
+				verifier_events(),
+				vec![
+					verifier::Event::Verified(2, 2),
+					verifier::Event::Verified(1, 2),
+					verifier::Event::Verified(0, 2),
+					verifier::Event::Queued([55, 130, 8650], None),
+				]
+			);
 
 			// there is now a queued solution
 			assert_eq!(<Runtime as crate::Config>::Verifier::queued_solution(), Some(score));
 
+			// not much impact, just for the sane-ness of the test.
+			roll_to_unsigned_open();
+
 			// pre-elect state:
 			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, 25)));
 			assert_eq!(Round::<Runtime>::get(), 0);
-			assert!(Snapshot::<Runtime>::metadata().is_some());
-			assert!(Snapshot::<Runtime>::desired_targets().is_some());
-			assert!(Snapshot::<Runtime>::targets().is_some());
+			ensure_full_snapshot();
 
 			// call elect for page 2 and 1, but NOT 0
 			let solutions = (1..=MultiBlock::msp())
 				.rev() // 2, 1
 				.map(|page| {
 					crate::Pallet::<Runtime>::elect(page as PageIndex).unwrap();
+					assert!(MultiBlock::current_phase().is_export());
 				})
 				.collect::<Vec<_>>();
 			assert_eq!(solutions.len(), 2);
 
-			// nothing changes from the prelect state
-			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, 25)));
+			// nothing changes from the prelect state, except phase is now export.
+			assert!(MultiBlock::current_phase().is_export());
 			assert_eq!(Round::<Runtime>::get(), 0);
-			assert!(Snapshot::<Runtime>::metadata().is_some());
-			assert!(Snapshot::<Runtime>::desired_targets().is_some());
-			assert!(Snapshot::<Runtime>::targets().is_some());
+			ensure_full_snapshot();
 		});
 	}
 
 	#[test]
 	fn when_passive_stay_in_phase_unsigned() {
-		ExtBuilder::default().build_and_execute(|| {
+		ExtBuilder::full().build_and_execute(|| {
 			// once the unsigned phase starts, it will not be changed by on_initialize (something
 			// like `elect` must be called).
-			for page in 25..55 {
-				roll_to(page);
-				assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, 25)));
+			roll_to_unsigned_open();
+			for next in 0..100 {
+				roll_next();
+				assert!(matches!(MultiBlock::current_phase(), Phase::Unsigned((_, _))));
 			}
 		});
+	}
+
+	#[test]
+	fn skip_unsigned_phase() {
+		todo!("first call to elect comes before the start of the unsigned phase")
+	}
+
+	#[test]
+	fn call_to_elect_should_prevent_any_submission() {
+		todo!("once first call to elect comes, we shall go into a new phase where everything else should be over");
+	}
+
+	#[test]
+	fn force_clear() {
+		todo!("something very similar to the scenario of elect_does_not_finish_without_call_of_page_0, where we want to forcefully clear and put everything into halt phase")
 	}
 
 	#[test]
@@ -1494,78 +1678,15 @@ mod snapshot {
 	fn fetches_exact_targets() {
 		todo!("fetches correct number of targets, based on T::TargetSnapshotPerBlock");
 	}
+
+	#[test]
+	fn fingerprint_works() {
+		todo!("one hardcoded test of the fingerprint value.");
+	}
 }
 
 // #[cfg(test)]
 // mod tests {
-
-// 	#[test]
-// 	fn signed_phase_void() {
-// 		ExtBuilder::default().phases(0, 10).build_and_execute(|| {
-// 			roll_to(15);
-// 			assert!(MultiBlock::current_phase().is_off());
-
-// 			roll_to(19);
-// 			assert!(MultiBlock::current_phase().is_off());
-
-// 			roll_to(20);
-// 			assert!(MultiBlock::current_phase().is_unsigned_open_at(20));
-// 			assert!(MultiBlock::snapshot().is_some());
-
-// 			roll_to(30);
-// 			assert!(MultiBlock::current_phase().is_unsigned_open_at(20));
-
-// 			MultiBlock::elect().unwrap();
-
-// 			assert!(MultiBlock::current_phase().is_off());
-// 			assert!(MultiBlock::snapshot().is_none());
-// 		});
-// 	}
-
-// 	#[test]
-// 	fn unsigned_phase_void() {
-// 		ExtBuilder::default().phases(10, 0).build_and_execute(|| {
-// 			roll_to(15);
-// 			assert!(MultiBlock::current_phase().is_off());
-
-// 			roll_to(19);
-// 			assert!(MultiBlock::current_phase().is_off());
-
-// 			roll_to(20);
-// 			assert!(MultiBlock::current_phase().is_signed());
-// 			assert!(MultiBlock::snapshot().is_some());
-
-// 			roll_to(30);
-// 			assert!(MultiBlock::current_phase().is_signed());
-
-// 			assert_ok!(MultiBlock::elect());
-
-// 			assert!(MultiBlock::current_phase().is_off());
-// 			assert!(MultiBlock::snapshot().is_none());
-// 		});
-// 	}
-
-// 	#[test]
-// 	fn both_phases_void() {
-// 		ExtBuilder::default().phases(0, 0).build_and_execute(|| {
-// 			roll_to(15);
-// 			assert!(MultiBlock::current_phase().is_off());
-
-// 			roll_to(19);
-// 			assert!(MultiBlock::current_phase().is_off());
-
-// 			roll_to(20);
-// 			assert!(MultiBlock::current_phase().is_off());
-
-// 			roll_to(30);
-// 			assert!(MultiBlock::current_phase().is_off());
-
-// 			// This module is now only capable of doing on-chain backup.
-// 			assert_ok!(MultiBlock::elect());
-
-// 			assert!(MultiBlock::current_phase().is_off());
-// 		});
-// 	}
 
 // 	#[test]
 // 	fn early_termination() {
