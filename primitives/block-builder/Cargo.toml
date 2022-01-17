@@ -13,7 +13,7 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../runtime" }
+sp-runtime = { version = "4.0.0", default-features = false, path = "../runtime" }
 sp-api = { version = "4.0.0-dev", default-features = false, path = "../api" }
 sp-std = { version = "4.0.0", default-features = false, path = "../std" }
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false }

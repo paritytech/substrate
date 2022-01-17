@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -22,6 +22,16 @@ use codec::{CompactLen, Decode, DecodeAll, Encode, EncodeLike, Input, MaxEncoded
 use scale_info::{build::Fields, meta_type, Path, Type, TypeInfo, TypeParameter};
 use sp_runtime::{traits::Block as BlockT, DispatchError};
 use sp_std::{cmp::Ordering, prelude::*};
+
+/// Try and collect into a collection `C`.
+pub trait TryCollect<C> {
+	type Error;
+	/// Consume self and try to collect the results into `C`.
+	///
+	/// This is useful in preventing the undesirable `.collect().try_into()` call chain on
+	/// collections that need to be converted into a bounded type (e.g. `BoundedVec`).
+	fn try_collect(self) -> Result<C, Self::Error>;
+}
 
 /// Anything that can have a `::len()` method.
 pub trait Len {
@@ -92,6 +102,12 @@ impl_const_get!(ConstI128, i128);
 pub trait TryDrop: Sized {
 	/// Drop an instance cleanly. Only works if its value represents "no-operation".
 	fn try_drop(self) -> Result<(), Self>;
+}
+
+impl TryDrop for () {
+	fn try_drop(self) -> Result<(), Self> {
+		Ok(())
+	}
 }
 
 /// Return type used when we need to return one of two items, each of the opposite direction or
@@ -575,6 +591,65 @@ impl<T: TypeInfo + 'static> TypeInfo for WrapperKeepOpaque<T> {
 					.field(|f| f.ty::<T>().type_name("T")),
 			)
 	}
+}
+
+/// A interface for looking up preimages from their hash on chain.
+pub trait PreimageProvider<Hash> {
+	/// Returns whether a preimage exists for a given hash.
+	///
+	/// A value of `true` implies that `get_preimage` is `Some`.
+	fn have_preimage(hash: &Hash) -> bool;
+
+	/// Returns the preimage for a given hash.
+	fn get_preimage(hash: &Hash) -> Option<Vec<u8>>;
+
+	/// Returns whether a preimage request exists for a given hash.
+	fn preimage_requested(hash: &Hash) -> bool;
+
+	/// Request that someone report a preimage. Providers use this to optimise the economics for
+	/// preimage reporting.
+	fn request_preimage(hash: &Hash);
+
+	/// Cancel a previous preimage request.
+	fn unrequest_preimage(hash: &Hash);
+}
+
+impl<Hash> PreimageProvider<Hash> for () {
+	fn have_preimage(_: &Hash) -> bool {
+		false
+	}
+	fn get_preimage(_: &Hash) -> Option<Vec<u8>> {
+		None
+	}
+	fn preimage_requested(_: &Hash) -> bool {
+		false
+	}
+	fn request_preimage(_: &Hash) {}
+	fn unrequest_preimage(_: &Hash) {}
+}
+
+/// A interface for managing preimages to hashes on chain.
+///
+/// Note that this API does not assume any underlying user is calling, and thus
+/// does not handle any preimage ownership or fees. Other system level logic that
+/// uses this API should implement that on their own side.
+pub trait PreimageRecipient<Hash>: PreimageProvider<Hash> {
+	/// Maximum size of a preimage.
+	type MaxSize: Get<u32>;
+
+	/// Store the bytes of a preimage on chain.
+	fn note_preimage(bytes: crate::BoundedVec<u8, Self::MaxSize>);
+
+	/// Clear a previously noted preimage. This is infallible and should be treated more like a
+	/// hint - if it was not previously noted or if it is now requested, then this will not do
+	/// anything.
+	fn unnote_preimage(hash: &Hash);
+}
+
+impl<Hash> PreimageRecipient<Hash> for () {
+	type MaxSize = ();
+	fn note_preimage(_: crate::BoundedVec<u8, Self::MaxSize>) {}
+	fn unnote_preimage(_: &Hash) {}
 }
 
 #[cfg(test)]

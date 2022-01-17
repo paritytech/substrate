@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -354,26 +354,26 @@ fn test_add_reset_log_filter() {
 	};
 
 	// Initiate logs loop in child process
-	child_in.write(b"\n").unwrap();
+	child_in.write_all(b"\n").unwrap();
 	assert!(read_line().contains(EXPECTED_BEFORE_ADD));
 
 	// Initiate add directive & reload in child process
-	child_in.write(b"add_reload\n").unwrap();
+	child_in.write_all(b"add_reload\n").unwrap();
 	assert!(read_line().contains(EXPECTED_BEFORE_ADD));
 	assert!(read_line().contains(EXPECTED_AFTER_ADD));
 
 	// Check that increasing the max log level works
-	child_in.write(b"add_trace\n").unwrap();
+	child_in.write_all(b"add_trace\n").unwrap();
 	assert!(read_line().contains(EXPECTED_WITH_TRACE));
 	assert!(read_line().contains(EXPECTED_BEFORE_ADD));
 	assert!(read_line().contains(EXPECTED_AFTER_ADD));
 
 	// Initiate logs filter reset in child process
-	child_in.write(b"reset\n").unwrap();
+	child_in.write_all(b"reset\n").unwrap();
 	assert!(read_line().contains(EXPECTED_BEFORE_ADD));
 
 	// Return from child process
-	child_in.write(b"exit\n").unwrap();
+	child_in.write_all(b"exit\n").unwrap();
 	assert!(child_process.wait().expect("Error waiting for child process").success());
 
 	// Check for EOF

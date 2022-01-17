@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -73,7 +73,7 @@ use sp_api::ProvideRuntimeApi;
 use sp_application_crypto::AppKey;
 use sp_blockchain::{Error as ClientError, HeaderBackend, HeaderMetadata};
 use sp_consensus::SelectChain;
-use sp_core::crypto::Public;
+use sp_core::crypto::ByteArray;
 use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 use sp_runtime::{
 	generic::BlockId,
@@ -123,6 +123,7 @@ pub mod warp_proof;
 
 pub use authorities::{AuthoritySet, AuthoritySetChanges, SharedAuthoritySet};
 pub use aux_schema::best_justification;
+pub use communication::grandpa_protocol_name::standard_name as protocol_standard_name;
 pub use finality_grandpa::voter::report;
 pub use finality_proof::{FinalityProof, FinalityProofError, FinalityProofProvider};
 pub use import::{find_forced_change, find_scheduled_change, GrandpaBlockImport};
@@ -263,11 +264,13 @@ pub struct Config {
 	pub keystore: Option<SyncCryptoStorePtr>,
 	/// TelemetryHandle instance.
 	pub telemetry: Option<TelemetryHandle>,
+	/// Chain specific GRANDPA protocol name. See [`crate::protocol_standard_name`].
+	pub protocol_name: std::borrow::Cow<'static, str>,
 }
 
 impl Config {
 	fn name(&self) -> &str {
-		self.name.as_ref().map(|s| s.as_str()).unwrap_or("<unknown>")
+		self.name.as_deref().unwrap_or("<unknown>")
 	}
 }
 
@@ -714,10 +717,14 @@ pub struct GrandpaParams<Block: BlockT, C, N, SC, VR> {
 
 /// Returns the configuration value to put in
 /// [`sc_network::config::NetworkConfiguration::extra_sets`].
-pub fn grandpa_peers_set_config() -> sc_network::config::NonDefaultSetConfig {
+/// For standard protocol name see [`crate::protocol_standard_name`].
+pub fn grandpa_peers_set_config(
+	protocol_name: std::borrow::Cow<'static, str>,
+) -> sc_network::config::NonDefaultSetConfig {
+	use communication::grandpa_protocol_name;
 	sc_network::config::NonDefaultSetConfig {
-		notifications_protocol: communication::GRANDPA_PROTOCOL_NAME.into(),
-		fallback_names: Vec::new(),
+		notifications_protocol: protocol_name,
+		fallback_names: grandpa_protocol_name::LEGACY_NAMES.iter().map(|&n| n.into()).collect(),
 		// Notifications reach ~256kiB in size at the time of writing on Kusama and Polkadot.
 		max_notification_size: 1024 * 1024,
 		set_config: sc_network::config::SetConfig {
@@ -786,8 +793,8 @@ where
 			let events = telemetry_on_connect.for_each(move |_| {
 				let current_authorities = authorities.current_authorities();
 				let set_id = authorities.set_id();
-				let authority_id = local_authority_id(&current_authorities, conf.keystore.as_ref())
-					.unwrap_or_default();
+				let maybe_authority_id =
+					local_authority_id(&current_authorities, conf.keystore.as_ref());
 
 				let authorities =
 					current_authorities.iter().map(|(id, _)| id.to_string()).collect::<Vec<_>>();
@@ -801,7 +808,7 @@ where
 					telemetry;
 					CONSENSUS_INFO;
 					"afg.authority_set";
-					"authority_id" => authority_id.to_string(),
+					"authority_id" => maybe_authority_id.map_or("".into(), |s| s.to_string()),
 					"authority_set_id" => ?set_id,
 					"authorities" => authorities,
 				);
@@ -940,8 +947,9 @@ where
 	fn rebuild_voter(&mut self) {
 		debug!(target: "afg", "{}: Starting new voter with set ID {}", self.env.config.name(), self.env.set_id);
 
-		let authority_id = local_authority_id(&self.env.voters, self.env.config.keystore.as_ref())
-			.unwrap_or_default();
+		let maybe_authority_id =
+			local_authority_id(&self.env.voters, self.env.config.keystore.as_ref());
+		let authority_id = maybe_authority_id.map_or("<unknown>".into(), |s| s.to_string());
 
 		telemetry!(
 			self.telemetry;
@@ -949,7 +957,7 @@ where
 			"afg.starting_new_voter";
 			"name" => ?self.env.config.name(),
 			"set_id" => ?self.env.set_id,
-			"authority_id" => authority_id.to_string(),
+			"authority_id" => authority_id,
 		);
 
 		let chain_info = self.env.client.info();
@@ -966,7 +974,7 @@ where
 			"afg.authority_set";
 			"number" => ?chain_info.finalized_number,
 			"hash" => ?chain_info.finalized_hash,
-			"authority_id" => authority_id.to_string(),
+			"authority_id" => authority_id,
 			"authority_set_id" => ?self.env.set_id,
 			"authorities" => authorities,
 		);

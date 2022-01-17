@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -190,7 +190,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 		let local_peer_id = local_public.clone().to_peer_id();
 		info!(
 			target: "sub-libp2p",
-			"🏷 Local node identity is: {}",
+			"🏷  Local node identity is: {}",
 			local_peer_id.to_base58(),
 		);
 

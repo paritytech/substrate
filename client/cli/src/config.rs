@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -485,7 +485,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		let config_dir = base_path.config_dir(chain_spec.id());
 		let net_config_dir = config_dir.join(DEFAULT_NETWORK_CONFIG_PATH);
 		let client_id = C::client_id();
-		let database_cache_size = self.database_cache_size()?.unwrap_or(128);
+		let database_cache_size = self.database_cache_size()?.unwrap_or(1024);
 		let database = self.database()?.unwrap_or(Database::RocksDb);
 		let node_key = self.node_key(&net_config_dir)?;
 		let role = self.role(is_dev)?;
@@ -581,10 +581,40 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 	/// This method:
 	///
 	/// 1. Sets the panic handler
+	/// 2. Optionally customize logger/profiling
 	/// 2. Initializes the logger
 	/// 3. Raises the FD limit
-	fn init<C: SubstrateCli>(&self) -> Result<()> {
-		sp_panic_handler::set(&C::support_url(), &C::impl_version());
+	///
+	/// The `logger_hook` closure is executed before the logger is constructed
+	/// and initialized. It is useful for setting up a custom profiler.
+	///
+	/// Example:
+	/// ```
+	/// use sc_tracing::{SpanDatum, TraceEvent};
+	/// struct TestProfiler;
+	///
+	/// impl sc_tracing::TraceHandler for TestProfiler {
+	///  	fn handle_span(&self, sd: &SpanDatum) {}
+	/// 		fn handle_event(&self, _event: &TraceEvent) {}
+	/// };
+	///
+	/// fn logger_hook() -> impl FnOnce(&mut sc_cli::LoggerBuilder, &sc_service::Configuration) -> () {
+	/// 	|logger_builder, config| {
+	/// 			logger_builder.with_custom_profiling(Box::new(TestProfiler{}));
+	/// 	}
+	/// }
+	/// ```
+	fn init<F>(
+		&self,
+		support_url: &String,
+		impl_version: &String,
+		logger_hook: F,
+		config: &Configuration,
+	) -> Result<()>
+	where
+		F: FnOnce(&mut LoggerBuilder, &Configuration),
+	{
+		sp_panic_handler::set(support_url, impl_version);
 
 		let mut logger = LoggerBuilder::new(self.log_filters()?);
 		logger
@@ -599,6 +629,9 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		if self.disable_log_color()? {
 			logger.with_colors(false);
 		}
+
+		// Call hook for custom profiling setup.
+		logger_hook(&mut logger, &config);
 
 		logger.init()?;
 

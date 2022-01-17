@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -602,6 +602,13 @@ impl NonDefaultSetConfig {
 	/// Add a node to the list of reserved nodes.
 	pub fn add_reserved(&mut self, peer: MultiaddrWithPeerId) {
 		self.set_config.reserved_nodes.push(peer);
+	}
+
+	/// Add a list of protocol names used for backward compatibility.
+	///
+	/// See the explanations in [`NonDefaultSetConfig::fallback_names`].
+	pub fn add_fallback_names(&mut self, fallback_names: Vec<Cow<'static, str>>) {
+		self.fallback_names.extend(fallback_names);
 	}
 }
 

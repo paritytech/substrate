@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -31,7 +31,7 @@ use sp_runtime::{
 	traits::{CheckedSub, SaturatedConversion, StaticLookup, Zero},
 	DispatchError, Perbill, Percent,
 };
-use sp_staking::SessionIndex;
+use sp_staking::{EraIndex, SessionIndex};
 use sp_std::{convert::From, prelude::*, result};
 
 mod impls;
@@ -39,7 +39,7 @@ mod impls;
 pub use impls::*;
 
 use crate::{
-	log, migrations, slashing, weights::WeightInfo, ActiveEraInfo, BalanceOf, EraIndex, EraPayout,
+	log, migrations, slashing, weights::WeightInfo, ActiveEraInfo, BalanceOf, EraPayout,
 	EraRewardPoints, Exposure, Forcing, NegativeImbalanceOf, Nominations, PositiveImbalanceOf,
 	Releases, RewardDestination, SessionInterface, StakingLedger, UnappliedSlash, UnlockChunk,
 	ValidatorPrefs,
@@ -79,16 +79,16 @@ pub mod pallet {
 
 		/// Something that provides the election functionality.
 		type ElectionProvider: frame_election_provider_support::ElectionProvider<
-			Self::AccountId,
-			Self::BlockNumber,
+			AccountId = Self::AccountId,
+			BlockNumber = Self::BlockNumber,
 			// we only accept an election provider that has staking as data provider.
 			DataProvider = Pallet<Self>,
 		>;
 
 		/// Something that provides the election functionality at genesis.
 		type GenesisElectionProvider: frame_election_provider_support::ElectionProvider<
-			Self::AccountId,
-			Self::BlockNumber,
+			AccountId = Self::AccountId,
+			BlockNumber = Self::BlockNumber,
 			DataProvider = Pallet<Self>,
 		>;
 

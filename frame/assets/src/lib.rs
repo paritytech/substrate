@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -467,8 +467,9 @@ pub mod pallet {
 		BadWitness,
 		/// Minimum balance should be non-zero.
 		MinBalanceZero,
-		/// No provider reference exists to allow a non-zero balance of a non-self-sufficient
-		/// asset.
+		/// Unable to increment the consumer reference counters on the account. Either no provider
+		/// reference exists to allow a non-zero balance of a non-self-sufficient asset, or the
+		/// maximum number of consumers has been reached.
 		NoProvider,
 		/// Invalid metadata given.
 		BadMetadata,

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -62,11 +62,11 @@ impl HostState {
 /// A `HostContext` implements `FunctionContext` for making host calls from a Wasmtime
 /// runtime. The `HostContext` exists only for the lifetime of the call and borrows state from
 /// a longer-living `HostState`.
-pub(crate) struct HostContext<'a, 'b> {
-	pub(crate) caller: &'a mut Caller<'b, StoreData>,
+pub(crate) struct HostContext<'a> {
+	pub(crate) caller: Caller<'a, StoreData>,
 }
 
-impl<'a, 'b> HostContext<'a, 'b> {
+impl<'a> HostContext<'a> {
 	fn host_state(&self) -> &HostState {
 		self.caller
 			.data()
@@ -98,7 +98,7 @@ impl<'a, 'b> HostContext<'a, 'b> {
 	}
 }
 
-impl<'a, 'b> sp_wasm_interface::FunctionContext for HostContext<'a, 'b> {
+impl<'a> sp_wasm_interface::FunctionContext for HostContext<'a> {
 	fn read_memory_into(
 		&self,
 		address: Pointer<u8>,
@@ -136,7 +136,7 @@ impl<'a, 'b> sp_wasm_interface::FunctionContext for HostContext<'a, 'b> {
 	}
 }
 
-impl<'a, 'b> Sandbox for HostContext<'a, 'b> {
+impl<'a> Sandbox for HostContext<'a> {
 	fn memory_get(
 		&mut self,
 		memory_id: MemoryId,
@@ -195,7 +195,7 @@ impl<'a, 'b> Sandbox for HostContext<'a, 'b> {
 		&mut self,
 		instance_id: u32,
 		export_name: &str,
-		args: &[u8],
+		mut args: &[u8],
 		return_val: Pointer<u8>,
 		return_val_len: u32,
 		state: u32,
@@ -203,7 +203,7 @@ impl<'a, 'b> Sandbox for HostContext<'a, 'b> {
 		trace!(target: "sp-sandbox", "invoke, instance_idx={}", instance_id);
 
 		// Deserialize arguments and convert them into wasmi types.
-		let args = Vec::<sp_wasm_interface::Value>::decode(&mut &args[..])
+		let args = Vec::<sp_wasm_interface::Value>::decode(&mut args)
 			.map_err(|_| "Can't decode serialized arguments for the invocation")?
 			.into_iter()
 			.map(Into::into)
@@ -320,12 +320,12 @@ impl<'a, 'b> Sandbox for HostContext<'a, 'b> {
 	}
 }
 
-struct SandboxContext<'a, 'b, 'c> {
-	host_context: &'a mut HostContext<'b, 'c>,
+struct SandboxContext<'a, 'b> {
+	host_context: &'a mut HostContext<'b>,
 	dispatch_thunk: Func,
 }
 
-impl<'a, 'b, 'c> sandbox::SandboxContext for SandboxContext<'a, 'b, 'c> {
+impl<'a, 'b> sandbox::SandboxContext for SandboxContext<'a, 'b> {
 	fn invoke(
 		&mut self,
 		invoke_args_ptr: Pointer<u8>,

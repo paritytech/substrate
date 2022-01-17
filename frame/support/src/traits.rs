@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -53,8 +53,9 @@ pub use misc::{
 	Backing, ConstBool, ConstI128, ConstI16, ConstI32, ConstI64, ConstI8, ConstU128, ConstU16,
 	ConstU32, ConstU64, ConstU8, EnsureInherentsAreFirst, EqualPrivilegeOnly, EstimateCallFee,
 	ExecuteBlock, ExtrinsicCall, Get, GetBacking, GetDefault, HandleLifetime, IsSubType, IsType,
-	Len, OffchainWorker, OnKilledAccount, OnNewAccount, PrivilegeCmp, SameOrOther, Time, TryDrop,
-	UnixTime, WrapperKeepOpaque, WrapperOpaque,
+	Len, OffchainWorker, OnKilledAccount, OnNewAccount, PreimageProvider, PreimageRecipient,
+	PrivilegeCmp, SameOrOther, Time, TryCollect, TryDrop, UnixTime, WrapperKeepOpaque,
+	WrapperOpaque,
 };
 
 mod stored_map;

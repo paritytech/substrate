@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -198,23 +198,43 @@ impl<T: AsRef<str>> From<T> for DeriveJunction {
 }
 
 /// An error type for SS58 decoding.
+#[cfg_attr(feature = "std", derive(thiserror::Error))]
+#[cfg_attr(not(feature = "std"), derive(Debug))]
+#[derive(Clone, Copy, Eq, PartialEq)]
+#[allow(missing_docs)]
 #[cfg(feature = "full_crypto")]
-#[derive(Clone, Copy, Eq, PartialEq, Debug)]
 pub enum PublicError {
-	/// Bad alphabet.
+	#[cfg_attr(feature = "std", error("Base 58 requirement is violated"))]
 	BadBase58,
-	/// Bad length.
+	#[cfg_attr(feature = "std", error("Length is bad"))]
 	BadLength,
-	/// Unknown identifier for the encoding.
-	UnknownVersion,
-	/// Invalid checksum.
+	#[cfg_attr(
+		feature = "std",
+		error(
+			"Unknown SS58 address format `{}`. ` \
+		`To support this address format, you need to call `set_default_ss58_version` at node start up.",
+			_0
+		)
+	)]
+	UnknownSs58AddressFormat(Ss58AddressFormat),
+	#[cfg_attr(feature = "std", error("Invalid checksum"))]
 	InvalidChecksum,
-	/// Invalid format.
+	#[cfg_attr(feature = "std", error("Invalid SS58 prefix byte."))]
+	InvalidPrefix,
+	#[cfg_attr(feature = "std", error("Invalid SS58 format."))]
 	InvalidFormat,
-	/// Invalid derivation path.
+	#[cfg_attr(feature = "std", error("Invalid derivation path."))]
 	InvalidPath,
-	/// Disallowed SS58 Address Format for this datatype.
+	#[cfg_attr(feature = "std", error("Disallowed SS58 Address Format for this datatype."))]
 	FormatNotAllowed,
+}
+
+#[cfg(feature = "std")]
+impl sp_std::fmt::Debug for PublicError {
+	fn fmt(&self, f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
+		// Just use the `Display` implementation
+		write!(f, "{}", self)
+	}
 }
 
 /// Key that can be encoded to/from SS58.
@@ -222,7 +242,7 @@ pub enum PublicError {
 /// See <https://docs.substrate.io/v3/advanced/ss58/>
 /// for information on the codec.
 #[cfg(feature = "full_crypto")]
-pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + Default {
+pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + ByteArray {
 	/// A format filterer, can be used to ensure that `from_ss58check` family only decode for
 	/// allowed identifiers. By default just refuses the two reserved identifiers.
 	fn format_is_allowed(f: Ss58AddressFormat) -> bool {
@@ -235,7 +255,7 @@ pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + Default {
 		Self::from_ss58check_with_version(s).and_then(|(r, v)| match v {
 			v if !v.is_custom() => Ok(r),
 			v if v == default_ss58_version() => Ok(r),
-			_ => Err(PublicError::UnknownVersion),
+			v => Err(PublicError::UnknownSs58AddressFormat(v)),
 		})
 	}
 
@@ -243,10 +263,7 @@ pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + Default {
 	#[cfg(feature = "std")]
 	fn from_ss58check_with_version(s: &str) -> Result<(Self, Ss58AddressFormat), PublicError> {
 		const CHECKSUM_LEN: usize = 2;
-		let mut res = Self::default();
-
-		// Must decode to our type.
-		let body_len = res.as_mut().len();
+		let body_len = Self::LEN;
 
 		let data = s.from_base58().map_err(|_| PublicError::BadBase58)?;
 		if data.len() < 2 {
@@ -264,7 +281,7 @@ pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + Default {
 				let upper = data[1] & 0b00111111;
 				(2, (lower as u16) | ((upper as u16) << 8))
 			},
-			_ => return Err(PublicError::UnknownVersion),
+			_ => return Err(PublicError::InvalidPrefix),
 		};
 		if data.len() != prefix_len + body_len + CHECKSUM_LEN {
 			return Err(PublicError::BadLength)
@@ -280,8 +297,10 @@ pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + Default {
 			// Invalid checksum.
 			return Err(PublicError::InvalidChecksum)
 		}
-		res.as_mut().copy_from_slice(&data[prefix_len..body_len + prefix_len]);
-		Ok((res, format))
+
+		let result = Self::from_slice(&data[prefix_len..body_len + prefix_len])
+			.map_err(|()| PublicError::BadLength)?;
+		Ok((result, format))
 	}
 
 	/// Some if the string is a properly encoded SS58Check address, optionally with
@@ -291,7 +310,7 @@ pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + Default {
 		Self::from_string_with_version(s).and_then(|(r, v)| match v {
 			v if !v.is_custom() => Ok(r),
 			v if v == default_ss58_version() => Ok(r),
-			_ => Err(PublicError::UnknownVersion),
+			v => Err(PublicError::UnknownSs58AddressFormat(v)),
 		})
 	}
 
@@ -360,7 +379,7 @@ static DEFAULT_VERSION: core::sync::atomic::AtomicU16 = std::sync::atomic::Atomi
 	from_known_address_format(Ss58AddressFormatRegistry::SubstrateAccount),
 );
 
-/// Returns default ss58 format used by the current active process.
+/// Returns default SS58 format used by the current active process.
 #[cfg(feature = "std")]
 pub fn default_ss58_version() -> Ss58AddressFormat {
 	DEFAULT_VERSION.load(std::sync::atomic::Ordering::Relaxed).into()
@@ -372,9 +391,15 @@ pub fn unwrap_or_default_ss58_version(network: Option<Ss58AddressFormat>) -> Ss5
 	network.unwrap_or_else(default_ss58_version)
 }
 
-/// Set the default "version" (actually, this is a bit of a misnomer and the version byte is
-/// typically used not just to encode format/version but also network identity) that is used for
-/// encoding and decoding SS58 addresses.
+/// Set the default SS58 "version".
+///
+/// This SS58 version/format will be used when encoding/decoding SS58 addresses.
+///
+/// If you want to support a custom SS58 prefix (that isn't yet registered in the `ss58-registry`),
+/// you are required to call this function with your desired prefix [`Ss58AddressFormat::custom`].
+/// This will enable the node to decode ss58 addresses with this prefix.
+///
+/// This SS58 version/format is also only used by the node and not by the runtime.
 #[cfg(feature = "std")]
 pub fn set_default_ss58_version(new_default: Ss58AddressFormat) {
 	DEFAULT_VERSION.store(new_default.into(), std::sync::atomic::Ordering::Relaxed);
@@ -391,19 +416,13 @@ lazy_static::lazy_static! {
 }
 
 #[cfg(feature = "std")]
-impl<T: Sized + AsMut<[u8]> + AsRef<[u8]> + Default + Derive> Ss58Codec for T {
+impl<T: Sized + AsMut<[u8]> + AsRef<[u8]> + Public + Derive> Ss58Codec for T {
 	fn from_string(s: &str) -> Result<Self, PublicError> {
 		let cap = SS58_REGEX.captures(s).ok_or(PublicError::InvalidFormat)?;
 		let s = cap.name("ss58").map(|r| r.as_str()).unwrap_or(DEV_ADDRESS);
 		let addr = if let Some(stripped) = s.strip_prefix("0x") {
 			let d = hex::decode(stripped).map_err(|_| PublicError::InvalidFormat)?;
-			let mut r = Self::default();
-			if d.len() == r.as_ref().len() {
-				r.as_mut().copy_from_slice(&d);
-				r
-			} else {
-				return Err(PublicError::BadLength)
-			}
+			Self::from_slice(&d).map_err(|()| PublicError::BadLength)?
 		} else {
 			Self::from_ss58check(s)?
 		};
@@ -431,25 +450,15 @@ impl<T: Sized + AsMut<[u8]> + AsRef<[u8]> + Default + Derive> Ss58Codec for T {
 	}
 }
 
-/// Trait suitable for typical cryptographic PKI key public type.
-pub trait Public:
-	AsRef<[u8]>
-	+ AsMut<[u8]>
-	+ Default
-	+ Derive
-	+ CryptoType
-	+ PartialEq
-	+ Eq
-	+ Clone
-	+ Send
-	+ Sync
-	+ for<'a> TryFrom<&'a [u8]>
-{
-	/// A new instance from the given slice.
-	///
-	/// NOTE: No checking goes on to ensure this is a real public key. Only use it if
-	/// you are certain that the array actually is a pubkey. GIGO!
-	fn from_slice(data: &[u8]) -> Self;
+/// Trait used for types that are really just a fixed-length array.
+pub trait ByteArray: AsRef<[u8]> + AsMut<[u8]> + for<'a> TryFrom<&'a [u8], Error = ()> {
+	/// The "length" of the values of this type, which is always the same.
+	const LEN: usize;
+
+	/// A new instance from the given slice that should be `Self::LEN` bytes long.
+	fn from_slice(data: &[u8]) -> Result<Self, ()> {
+		Self::try_from(data)
+	}
 
 	/// Return a `Vec<u8>` filled with raw data.
 	fn to_raw_vec(&self) -> Vec<u8> {
@@ -460,7 +469,10 @@ pub trait Public:
 	fn as_slice(&self) -> &[u8] {
 		self.as_ref()
 	}
+}
 
+/// Trait suitable for typical cryptographic PKI key public type.
+pub trait Public: ByteArray + Derive + CryptoType + PartialEq + Eq + Clone + Send + Sync {
 	/// Return `CryptoTypePublicPair` from public key.
 	fn to_public_crypto_pair(&self) -> CryptoTypePublicPair;
 }
@@ -486,6 +498,10 @@ impl UncheckedFrom<crate::hash::H256> for AccountId32 {
 	fn unchecked_from(h: crate::hash::H256) -> Self {
 		AccountId32(h.into())
 	}
+}
+
+impl ByteArray for AccountId32 {
+	const LEN: usize = 32;
 }
 
 #[cfg(feature = "std")]
@@ -650,9 +666,10 @@ mod dummy {
 
 	impl Derive for Dummy {}
 
-	impl Public for Dummy {
-		fn from_slice(_: &[u8]) -> Self {
-			Self
+	impl ByteArray for Dummy {
+		const LEN: usize = 0;
+		fn from_slice(_: &[u8]) -> Result<Self, ()> {
+			Ok(Self)
 		}
 		#[cfg(feature = "std")]
 		fn to_raw_vec(&self) -> Vec<u8> {
@@ -661,8 +678,10 @@ mod dummy {
 		fn as_slice(&self) -> &[u8] {
 			b""
 		}
+	}
+	impl Public for Dummy {
 		fn to_public_crypto_pair(&self) -> CryptoTypePublicPair {
-			CryptoTypePublicPair(CryptoTypeId(*b"dumm"), Public::to_raw_vec(self))
+			CryptoTypePublicPair(CryptoTypeId(*b"dumm"), <Self as ByteArray>::to_raw_vec(self))
 		}
 	}
 
@@ -1102,8 +1121,6 @@ pub mod key_types {
 	pub const AUTHORITY_DISCOVERY: KeyTypeId = KeyTypeId(*b"audi");
 	/// Key type for staking, built-in. Identified as `stak`.
 	pub const STAKING: KeyTypeId = KeyTypeId(*b"stak");
-	/// Key type for equivocation reporting, built-in. Identified as `fish`.
-	pub const REPORTING: KeyTypeId = KeyTypeId(*b"fish");
 	/// A key type ID useful for tests.
 	pub const DUMMY: KeyTypeId = KeyTypeId(*b"dumy");
 }
@@ -1146,17 +1163,22 @@ mod tests {
 	impl<'a> TryFrom<&'a [u8]> for TestPublic {
 		type Error = ();
 
-		fn try_from(_: &'a [u8]) -> Result<Self, ()> {
-			Ok(Self)
+		fn try_from(data: &'a [u8]) -> Result<Self, ()> {
+			Self::from_slice(data)
 		}
 	}
 	impl CryptoType for TestPublic {
 		type Pair = TestPair;
 	}
 	impl Derive for TestPublic {}
-	impl Public for TestPublic {
-		fn from_slice(_bytes: &[u8]) -> Self {
-			Self
+	impl ByteArray for TestPublic {
+		const LEN: usize = 0;
+		fn from_slice(bytes: &[u8]) -> Result<Self, ()> {
+			if bytes.len() == 0 {
+				Ok(Self)
+			} else {
+				Err(())
+			}
 		}
 		fn as_slice(&self) -> &[u8] {
 			&[]
@@ -1164,6 +1186,8 @@ mod tests {
 		fn to_raw_vec(&self) -> Vec<u8> {
 			vec![]
 		}
+	}
+	impl Public for TestPublic {
 		fn to_public_crypto_pair(&self) -> CryptoTypePublicPair {
 			CryptoTypePublicPair(CryptoTypeId(*b"dumm"), self.to_raw_vec())
 		}
