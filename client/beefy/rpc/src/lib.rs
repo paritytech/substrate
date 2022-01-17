@@ -186,7 +186,7 @@ where
 			})
 			.map(|x| Ok::<_, ()>(Ok(notification::EncodedSignedCommitment::new::<Block>(x))));
 
-		self.manager.add(subscriber, move |sink| {
+		self.manager.add(subscriber, |sink| {
 			stream
 				.forward(sink.sink_map_err(|e| {
 					warn!("Error sending notifications: {:?}", e);
