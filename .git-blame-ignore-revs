@@ -1,0 +1,15 @@
+# You can easily exclude big automated code changes by running
+#
+#     git config blame.ignoreRevsFile .git-blame-ignore-revs
+#
+# in your local repository. It will work also in IDE integrations.
+#
+# On versions of Git 2.20 and later comments (#), empty lines, and any leading and
+# trailing whitespace is ignored. Everything but a SHA-1 per line will error out on
+# older versions.
+#
+# You should add new commit hashes to this file when you create or find such big
+# automated refactorings while reading code history. If you only know the short hash,
+# use `git rev-parse 1d5abf01` to expand it to the full SHA1 hash needed in this file.
+
+1d5abf01abafdb6c15bcd0172f5de09fd87c5fbf # Run cargo fmt on the whole code base (#9394)

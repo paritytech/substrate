@@ -46,7 +46,8 @@ use crate::{
 	keystore::BeefyKeystore,
 	metric_inc, metric_set,
 	metrics::Metrics,
-	notification, round, Client,
+	notification::{BeefyBestBlockSender, BeefySignedCommitmentSender},
+	round, Client,
 };
 
 pub(crate) struct WorkerParams<B, BE, C>
@@ -56,7 +57,8 @@ where
 	pub client: Arc<C>,
 	pub backend: Arc<BE>,
 	pub key_store: BeefyKeystore,
-	pub signed_commitment_sender: notification::BeefySignedCommitmentSender<B>,
+	pub signed_commitment_sender: BeefySignedCommitmentSender<B>,
+	pub beefy_best_block_sender: BeefyBestBlockSender<B>,
 	pub gossip_engine: GossipEngine<B>,
 	pub gossip_validator: Arc<GossipValidator<B>>,
 	pub min_block_delta: u32,
@@ -73,7 +75,7 @@ where
 	client: Arc<C>,
 	backend: Arc<BE>,
 	key_store: BeefyKeystore,
-	signed_commitment_sender: notification::BeefySignedCommitmentSender<B>,
+	signed_commitment_sender: BeefySignedCommitmentSender<B>,
 	gossip_engine: Arc<Mutex<GossipEngine<B>>>,
 	gossip_validator: Arc<GossipValidator<B>>,
 	/// Min delta in block numbers between two blocks, BEEFY should vote on
@@ -85,6 +87,8 @@ where
 	best_grandpa_block: NumberFor<B>,
 	/// Best block a BEEFY voting round has been concluded for
 	best_beefy_block: Option<NumberFor<B>>,
+	/// Used to keep RPC worker up to date on latest/best beefy
+	beefy_best_block_sender: BeefyBestBlockSender<B>,
 	/// Validator set id for the last signed commitment
 	last_signed_id: u64,
 	// keep rustc happy
@@ -110,6 +114,7 @@ where
 			backend,
 			key_store,
 			signed_commitment_sender,
+			beefy_best_block_sender,
 			gossip_engine,
 			gossip_validator,
 			min_block_delta,
@@ -130,6 +135,7 @@ where
 			best_grandpa_block: client.info().finalized_number,
 			best_beefy_block: None,
 			last_signed_id: 0,
+			beefy_best_block_sender,
 			_backend: PhantomData,
 		}
 	}
@@ -242,6 +248,9 @@ where
 				debug!(target: "beefy", "🥩 New Rounds for id: {:?}", id);
 
 				self.best_beefy_block = Some(*notification.header.number());
+				self.beefy_best_block_sender
+					.notify(|| Ok::<_, ()>(notification.hash.clone()))
+					.expect("forwards closure result; the closure always returns Ok; qed.");
 
 				// this metric is kind of 'fake'. Best BEEFY block should only be updated once we
 				// have a signed commitment for the block. Remove once the above TODO is done.
@@ -329,22 +338,23 @@ where
 				// id is stored for skipped session metric calculation
 				self.last_signed_id = rounds.validator_set_id();
 
+				let block_num = round.1;
 				let commitment = Commitment {
 					payload: round.0,
-					block_number: round.1,
+					block_number: block_num,
 					validator_set_id: self.last_signed_id,
 				};
 
 				let signed_commitment = SignedCommitment { commitment, signatures };
 
-				metric_set!(self, beefy_round_concluded, round.1);
+				metric_set!(self, beefy_round_concluded, block_num);
 
 				info!(target: "beefy", "🥩 Round #{} concluded, committed: {:?}.", round.1, signed_commitment);
 
 				if self
 					.backend
 					.append_justification(
-						BlockId::Number(round.1),
+						BlockId::Number(block_num),
 						(
 							BEEFY_ENGINE_ID,
 							VersionedFinalityProof::V1(signed_commitment.clone()).encode(),
@@ -356,11 +366,23 @@ where
 					// conclude certain rounds multiple times.
 					trace!(target: "beefy", "🥩 Failed to append justification: {:?}", signed_commitment);
 				}
+				self.signed_commitment_sender
+					.notify(|| Ok::<_, ()>(signed_commitment))
+					.expect("forwards closure result; the closure always returns Ok; qed.");
 
-				self.signed_commitment_sender.notify(signed_commitment);
-				self.best_beefy_block = Some(round.1);
+				self.best_beefy_block = Some(block_num);
+				if let Err(err) = self.client.hash(block_num).map(|h| {
+					if let Some(hash) = h {
+						self.beefy_best_block_sender
+							.notify(|| Ok::<_, ()>(hash))
+							.expect("forwards closure result; the closure always returns Ok; qed.");
+					}
+				}) {
+					error!(target: "beefy", "🥩 Failed to get hash for block number {}; err: {:?}",
+						block_num, err);
+				}
 
-				metric_set!(self, beefy_best_block, round.1);
+				metric_set!(self, beefy_best_block, block_num);
 			}
 		}
 	}
