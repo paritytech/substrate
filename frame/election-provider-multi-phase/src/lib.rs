@@ -687,7 +687,10 @@ pub mod pallet {
 			DataProvider = Self::DataProvider,
 		>;
 
-		/// Configuration of the governance-only fallback.
+     /// Configuration of the governance-only fallback.
+     ///
+     /// As a side-note, it is recommend for test-nets to use `type ElectionProvider = 
+	/// OnChainSeqPhragmen<_>` if the test-net is not expected to have thousands of nominators.
 		type GovernanceFallback: InstantElectionProvider<
 			AccountId = Self::AccountId,
 			BlockNumber = Self::BlockNumber,
