@@ -20,7 +20,7 @@ codec = { package = "parity-scale-codec", version = "2.2.0", default-features = 
 ] }
 scale-info = { version = "1.0", default-features = false, features = ["derive"] }
 log = { version = "0.4", default-features = false }
-pwasm-utils = { version = "0.18.2", default-features = false }
+wasm-instrument = { version = "0.1", default-features = false }
 serde = { version = "1", optional = true, features = ["derive"] }
 smallvec = { version = "1", default-features = false, features = [
 	"const_generics",
@@ -71,7 +71,7 @@ std = [
 	"frame-benchmarking/std",
 	"frame-support/std",
 	"frame-system/std",
-	"pwasm-utils/std",
+	"wasm-instrument/std",
 	"wasmi-validation/std",
 	"pallet-contracts-primitives/std",
 	"pallet-contracts-proc-macro/full",
