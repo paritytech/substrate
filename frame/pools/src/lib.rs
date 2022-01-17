@@ -34,8 +34,9 @@ use frame_support::{
 };
 use scale_info::TypeInfo;
 use sp_arithmetic::{FixedPointNumber, FixedU128};
-use sp_runtime::traits::{Convert, Saturating, Zero};
+use sp_runtime::traits::{Convert, One, Saturating, Zero};
 use sp_staking::EraIndex;
+use sp_std::collections::btree_map::BTreeMap;
 
 pub use pallet::*;
 pub(crate) const LOG_TARGET: &'static str = "runtime::pools";
@@ -298,7 +299,7 @@ pub mod pallet {
 		/// The maximum amount of eras an unbonding pool can exist prior to being merged with the
 		/// `no_era	 pool. This should at least be greater then the `UnbondingDuration` for staking
 		/// so delegator have a chance to withdraw unbonded before their pool gets merged with the
-		/// `no_era` pool.
+		/// `no_era` pool. This *must* at least be greater then the slash deffer duration.
 		type MaxUnbonding: Get<u32>;
 	}
 
@@ -306,6 +307,11 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(crate) type Delegators<T: Config> =
 		CountedStorageMap<_, Twox64Concat, T::AccountId, Delegator<T>>;
+
+	/// `PoolId` lookup from the pool's `AccountId`. Useful for pool lookup from the slashing
+	/// system.
+	#[pallet::storage]
+	pub(crate) type PoolIds<T: Config> = CountedStorageMap<_, Twox64Concat, T::AccountId, PoolId>;
 
 	/// Bonded pools.
 	#[pallet::storage]
@@ -655,7 +661,72 @@ impl<T: Config> Pallet<T> {
 		Ok(())
 	}
 
-	// fn sample_slash_logic(value: Bala)
+	fn slash_pool(
+		// This would be the nominator account
+		pool_account: T::AccountId,
+		// Value of slash
+		slash_amount: BalanceOf<T>,
+		//
+		apply_era: EraIndex,
+		//
+		slash_era: EraIndex,
+	) -> Result<(BalanceOf<T>, BTreeMap<EraIndex, BalanceOf<T>>), DispatchError> {
+		let pool_id = PoolIds::<T>::get(&pool_account).ok_or(Error::<T>::PoolNotFound)?;
+		let mut sub_pools = SubPools::<T>::get(pool_id).unwrap_or_default();
+
+		// TODO double check why we do slash_era + 1
+		let affected_range = (slash_era + 1)..=apply_era;
+
+		let bonded_balance = T::StakingInterface::bonded_balance(&pool_account);
+
+		// Note that this doesn't count the balance in the `no_era` pool
+		let unbonding_affected_balance: BalanceOf<T> =
+			affected_range.clone().fold(BalanceOf::<T>::zero(), |balance_sum, era| {
+				if let Some(unbond_pool) = sub_pools.with_era.get(&era) {
+					balance_sum.saturating_add(unbond_pool.balance)
+				} else {
+					balance_sum
+				}
+			});
+		let total_affected_balance = bonded_balance.saturating_add(unbonding_affected_balance);
+
+		if slash_amount < total_affected_balance {
+			// TODO this shouldn't happen as long as MaxBonding pools is greater thant the slash
+			// defer duration, which it should implicitly be because we expect it be longer then the
+			// UnbondindDuration. TODO clearly document these assumptions
+		};
+
+		let slash_ratio = FixedU128::saturating_from_rational(
+			T::BalanceToU128::convert(slash_amount),
+			T::BalanceToU128::convert(total_affected_balance),
+		);
+		let slash_multiplier = FixedU128::one().saturating_sub(slash_ratio);
+
+		let unlock_chunk_balances: BTreeMap<_, _> = affected_range
+			.filter_map(|era| {
+				if let Some(mut unbond_pool) = sub_pools.with_era.get_mut(&era) {
+					let pre_slash_balance = T::BalanceToU128::convert(unbond_pool.balance);
+					let after_slash_balance = T::U128ToBalance::convert(
+						slash_multiplier.saturating_mul_int(pre_slash_balance),
+					);
+					unbond_pool.balance = after_slash_balance;
+
+					Some((era, after_slash_balance))
+				} else {
+					None
+				}
+			})
+			.collect();
+
+		SubPools::<T>::insert(pool_id, sub_pools);
+
+		let slashed_bonded_pool_balance = {
+			let pre_slash_balance = T::BalanceToU128::convert(bonded_balance);
+			T::U128ToBalance::convert(slash_multiplier.saturating_mul_int(pre_slash_balance))
+		};
+
+		Ok((slashed_bonded_pool_balance, unlock_chunk_balances))
+	}
 }
 
 //
