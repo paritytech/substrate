@@ -249,7 +249,9 @@ where
 
 				self.best_beefy_block = Some(*notification.header.number());
 				self.beefy_best_block_sender
-					.notify(|| Ok::<_, ()>(notification.hash.clone()))
+					.notify(|| {
+						Ok::<_, ()>((notification.hash.clone(), *notification.header.number()))
+					})
 					.expect("forwards closure result; the closure always returns Ok; qed.");
 
 				// this metric is kind of 'fake'. Best BEEFY block should only be updated once we
@@ -374,7 +376,7 @@ where
 				if let Err(err) = self.client.hash(block_num).map(|h| {
 					if let Some(hash) = h {
 						self.beefy_best_block_sender
-							.notify(|| Ok::<_, ()>(hash))
+							.notify(|| Ok::<_, ()>((hash, block_num)))
 							.expect("forwards closure result; the closure always returns Ok; qed.");
 					}
 				}) {

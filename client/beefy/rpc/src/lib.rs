@@ -23,9 +23,9 @@
 use parking_lot::RwLock;
 use std::sync::Arc;
 
-use sp_runtime::traits::Block as BlockT;
+use sp_runtime::traits::{Block as BlockT, NumberFor};
 
-use futures::{task::SpawnError, FutureExt, SinkExt, StreamExt, TryFutureExt};
+use futures::{future, task::SpawnError, FutureExt, SinkExt, StreamExt, TryFutureExt};
 use jsonrpc_derive::rpc;
 use jsonrpc_pubsub::{manager::SubscriptionManager, typed::Subscriber, SubscriptionId};
 use log::warn;
@@ -120,6 +120,7 @@ pub struct BeefyRpcHandler<Block: BlockT> {
 	signed_commitment_stream: BeefySignedCommitmentStream<Block>,
 	beefy_best_block: Arc<RwLock<Option<Block::Hash>>>,
 	manager: SubscriptionManager,
+	beefy_best_block_num: Arc<RwLock<Option<NumberFor<Block>>>>,
 }
 
 impl<Block: BlockT> BeefyRpcHandler<Block> {
@@ -133,13 +134,17 @@ impl<Block: BlockT> BeefyRpcHandler<Block> {
 		E: futures::task::Spawn + Send + Sync + 'static,
 	{
 		let beefy_best_block = Arc::new(RwLock::new(None));
+		let beefy_best_block_num = Arc::new(RwLock::new(None));
 
 		let stream = best_block_stream.subscribe();
 		let closure_clone = beefy_best_block.clone();
+		let beefy_block_num_clone = beefy_best_block_num.clone();
 		let future = stream.for_each(move |best_beefy| {
 			let async_clone = closure_clone.clone();
+			let async_block_num_clone = beefy_block_num_clone.clone();
 			async move {
-				*async_clone.write() = Some(best_beefy);
+				*async_clone.write() = Some(best_beefy.0);
+				*async_block_num_clone.write() = Some(best_beefy.1)
 			}
 		});
 
@@ -151,7 +156,7 @@ impl<Block: BlockT> BeefyRpcHandler<Block> {
 			})?;
 
 		let manager = SubscriptionManager::new(Arc::new(executor));
-		Ok(Self { signed_commitment_stream, beefy_best_block, manager })
+		Ok(Self { signed_commitment_stream, beefy_best_block, manager, beefy_best_block_num })
 	}
 }
 
@@ -166,15 +171,31 @@ where
 		_metadata: Self::Metadata,
 		subscriber: Subscriber<notification::EncodedSignedCommitment>,
 	) {
+		let beefy_block_num = self.beefy_best_block_num.clone();
 		let stream = self
 			.signed_commitment_stream
 			.subscribe()
+			.filter(move |x| {
+				let best_block_clone = beefy_block_num.clone();
+				let best_block = best_block_clone.read();
+				if let Some(best_block) = *best_block {
+					future::ready(x.commitment.block_number > best_block)
+				} else {
+					future::ready(true)
+				}
+			})
 			.map(|x| Ok::<_, ()>(Ok(notification::EncodedSignedCommitment::new::<Block>(x))));
 
-		self.manager.add(subscriber, |sink| {
+		self.manager.add(subscriber, move |sink| {
 			stream
-				.forward(sink.sink_map_err(|e| warn!("Error sending notifications: {:?}", e)))
-				.map(|_| ())
+				.forward(sink.sink_map_err(|e| {
+					warn!("Error sending notifications: {:?}", e);
+					println!("Error sending: {:?}", e);
+				}))
+				.map(|_| {
+					println!("Sent notification");
+					()
+				})
 		});
 	}
 
@@ -245,7 +266,8 @@ mod tests {
 		let (io, _) = setup_io_handler();
 
 		let request = r#"{"jsonrpc":"2.0","method":"beefy_getFinalizedHead","params":[],"id":1}"#;
-		let response = r#"{"jsonrpc":"2.0","error":{"code":1,"message":"BEEFY RPC endpoint not ready"},"id":1}"#;
+		let response = r#"{"jsonrpc":"2.0","error":{"code":1,"message":"BEEFY RPC endpoint not
+	ready"},"id":1}"#;
 
 		let meta = sc_rpc::Metadata::default();
 		assert_eq!(Some(response.into()), io.handle_request_sync(request, meta));
@@ -257,7 +279,7 @@ mod tests {
 		let (io, _) = setup_io_handler_with_best_block_stream(stream);
 
 		let hash = BlakeTwo256::hash(b"42");
-		let r: Result<(), ()> = sender.notify(|| Ok(hash));
+		let r: Result<(), ()> = sender.notify(|| Ok((hash, 0)));
 		r.unwrap();
 
 		// Verify RPC `beefy_getFinalizedHead` returns expected hash.
@@ -286,8 +308,8 @@ mod tests {
 			std::thread::sleep(std::time::Duration::from_millis(50));
 		}
 		panic!(
-			"Deadline reached while waiting for best BEEFY block to update. Perhaps the background task is broken?"
-		);
+			"Deadline reached while waiting for best BEEFY block to update. Perhaps the background task
+	is broken?" 	);
 	}
 
 	#[test]
@@ -319,7 +341,11 @@ mod tests {
 		// Unsubscribe again and fail
 		assert_eq!(
 			io.handle_request_sync(&unsub_req, meta),
-			Some(r#"{"jsonrpc":"2.0","error":{"code":-32602,"message":"Invalid subscription id."},"id":1}"#.into()),
+			Some(
+				r#"{"jsonrpc":"2.0","error":{"code":-32602,"message":"Invalid subscription
+	id."},"id":1}"#
+					.into()
+			),
 		);
 	}
 
@@ -341,18 +367,18 @@ mod tests {
 				r#"{"jsonrpc":"2.0","method":"beefy_unsubscribeJustifications","params":["FOO"],"id":1}"#,
 				meta.clone()
 			),
-			Some(r#"{"jsonrpc":"2.0","error":{"code":-32602,"message":"Invalid subscription id."},"id":1}"#.into())
+			Some(
+				r#"{"jsonrpc":"2.0","error":{"code":-32602,"message":"Invalid subscription
+	id."},"id":1}"#
+					.into()
+			)
 		);
 	}
 
-	fn create_commitment() -> BeefySignedCommitment<Block> {
+	fn create_commitment(block_number: u64) -> BeefySignedCommitment<Block> {
 		let payload = Payload::new(known_payload_ids::MMR_ROOT_ID, "Hello World!".encode());
 		BeefySignedCommitment::<Block> {
-			commitment: beefy_primitives::Commitment {
-				payload,
-				block_number: 5,
-				validator_set_id: 0,
-			},
+			commitment: beefy_primitives::Commitment { payload, block_number, validator_set_id: 0 },
 			signatures: vec![],
 		}
 	}
@@ -371,7 +397,7 @@ mod tests {
 		let sub_id: String = serde_json::from_value(resp["result"].take()).unwrap();
 
 		// Notify with commitment
-		let commitment = create_commitment();
+		let commitment = create_commitment(5);
 		let r: Result<(), ()> = commitment_sender.notify(|| Ok(commitment.clone()));
 		r.unwrap();
 
@@ -392,5 +418,73 @@ mod tests {
 		assert_eq!(recv.method, "beefy_justifications");
 		assert_eq!(recv_sub_id, sub_id);
 		assert_eq!(recv_commitment, commitment);
+	}
+
+	#[test]
+	fn should_not_send_signed_commitment_multiple_times() {
+		let (sender, stream) = BeefyBestBlockStream::<Block>::channel();
+		let (io, commitment_sender) = setup_io_handler_with_best_block_stream(stream);
+		let (meta, receiver) = setup_session();
+
+		// Subscribe
+		let sub_request =
+			r#"{"jsonrpc":"2.0","method":"beefy_subscribeJustifications","params":[],"id":1}"#;
+		let resp = io.handle_request_sync(sub_request, meta.clone());
+		let resp: Output = serde_json::from_str(&resp.unwrap()).unwrap();
+
+		let sub_id = match resp {
+			Output::Success(success) => success.result,
+			_ => panic!(),
+		};
+
+		// Notify with commitment
+		let commitment = create_commitment(5);
+		let r: Result<(), ()> = commitment_sender.notify(|| Ok(commitment.clone()));
+		r.unwrap();
+		let hash = BlakeTwo256::hash(b"43");
+		let r: Result<(), ()> = sender.notify(|| Ok((hash, 5)));
+		r.unwrap();
+
+		let r: Result<(), ()> = commitment_sender.notify(|| Ok(commitment.clone()));
+		r.unwrap();
+
+		let commitment_1 = create_commitment(6);
+
+		let r: Result<(), ()> = commitment_sender.notify(|| Ok(commitment_1.clone()));
+		r.unwrap();
+
+		// Inspect what we received
+		let recvs = futures::executor::block_on(receiver.take(2).collect::<Vec<_>>());
+		let recv: Notification = serde_json::from_str(&recvs[0]).unwrap();
+		let mut json_map = match recv.params {
+			Params::Map(json_map) => json_map,
+			_ => panic!(),
+		};
+
+		let recv_sub_id: String = serde_json::from_value(json_map["subscription"].take()).unwrap();
+		let recv_commitment: sp_core::Bytes =
+			serde_json::from_value(json_map["result"].take()).unwrap();
+		let recv_commitment: BeefySignedCommitment<Block> =
+			Decode::decode(&mut &recv_commitment[..]).unwrap();
+
+		assert_eq!(recv.method, "beefy_justifications");
+		assert_eq!(recv_sub_id, sub_id);
+		assert_eq!(recv_commitment, commitment);
+
+		let recv: Notification = serde_json::from_str(&recvs[1]).unwrap();
+		let mut json_map = match recv.params {
+			Params::Map(json_map) => json_map,
+			_ => panic!(),
+		};
+
+		let recv_sub_id: String = serde_json::from_value(json_map["subscription"].take()).unwrap();
+		let recv_commitment: sp_core::Bytes =
+			serde_json::from_value(json_map["result"].take()).unwrap();
+		let recv_commitment: BeefySignedCommitment<Block> =
+			Decode::decode(&mut &recv_commitment[..]).unwrap();
+
+		assert_eq!(recv.method, "beefy_justifications");
+		assert_eq!(recv_sub_id, sub_id);
+		assert_eq!(recv_commitment, commitment_1);
 	}
 }
