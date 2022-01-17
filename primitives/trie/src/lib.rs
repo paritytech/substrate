@@ -188,7 +188,7 @@ pub mod trie_types {
 	use super::*;
 
 	/// Persistent trie database read-access interface for the a given hasher.
-    ///
+	///
 	/// Read only V1 and V0 are compatible, thus we always use V1.
 	pub type TrieDB<'a, 'cache, H> = super::TrieDB<'a, 'cache, LayoutV1<H>>;
 	/// Builder for creating a [`TrieDB`].
@@ -282,7 +282,7 @@ where
 }
 
 /// Read a value from the trie.
-pub fn read_trie_value<L, DB>(
+pub fn read_trie_value<L: TrieLayout, DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue>>(
 	db: &DB,
 	root: &TrieHash<L>,
 	key: &[u8],
@@ -291,7 +291,11 @@ pub fn read_trie_value<L, DB>(
 }
 
 /// Read a value from the trie with given Query.
-pub fn read_trie_value_with<L, Q, DB>(
+pub fn read_trie_value_with<
+	L: TrieLayout,
+	Q: Query<L::Hash, Item = Vec<u8>>,
+	DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue>,
+>(
 	db: &DB,
 	root: &TrieHash<L>,
 	key: &[u8],

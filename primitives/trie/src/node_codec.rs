@@ -25,7 +25,7 @@ use sp_std::{borrow::Borrow, marker::PhantomData, ops::Range, vec::Vec};
 use trie_db::{
 	self, nibble_ops,
 	node::{NibbleSlicePlan, NodeHandlePlan, NodePlan, Value, ValuePlan},
-	ChildReference, NodeCodec as NodeCodecT, Partial,
+	ChildReference, NodeCodec as NodeCodecT,
 };
 
 /// Helper struct for trie node decoder. This implements `codec::Input` on a byte slice, while
@@ -185,7 +185,7 @@ where
 		&[trie_constants::EMPTY_TRIE]
 	}
 
-	fn leaf_node(partial: impl Iterator<Item = u8>, number_nibble: usize, value: &[u8]) -> Vec<u8> {
+	fn leaf_node(partial: impl Iterator<Item = u8>, number_nibble: usize, value: Value) -> Vec<u8> {
 		let contains_hash = matches!(&value, Value::Node(..));
 		let mut output = if contains_hash {
 			partial_from_iterator_encode(partial, number_nibble, NodeKind::HashedValueLeaf)

@@ -15,29 +15,34 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::Layout;
-use hash_db::Hasher;
+use crate::{TrieLayout, TrieHash};
 use parking_lot::{
 	MappedRwLockWriteGuard, Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard,
 };
 use std::{
 	collections::{hash_map::Entry, HashMap},
+	marker::PhantomData,
 	sync::Arc,
 };
-use trie_db::{node::NodeOwned, Bytes, CError};
+use trie_db::{node::NodeOwned, Bytes, CError, Trie};
 
-pub struct SharedTrieNodeCache<H: Hasher> {
-	node_cache: Arc<RwLock<HashMap<H::Out, NodeOwned<H::Out>>>>,
-	data_cache: Option<Arc<RwLock<HashMap<H::Out, HashMap<Vec<u8>, Option<Bytes>>>>>>,
+pub struct SharedTrieNodeCache<T: TrieLayout> {
+	node_cache: Arc<RwLock<HashMap<TrieHash<T>, NodeOwned<TrieHash<T>>>>>,
+	data_cache: Option<Arc<RwLock<HashMap<TrieHash<T>, HashMap<Vec<u8>, Option<Bytes>>>>>>,
+	_phantom: PhantomData<T>,
 }
 
-impl<H: Hasher> Clone for SharedTrieNodeCache<H> {
+impl<T: TrieLayout> Clone for SharedTrieNodeCache<T> {
 	fn clone(&self) -> Self {
-		Self { node_cache: self.node_cache.clone(), data_cache: self.data_cache.clone() }
+		Self {
+			node_cache: self.node_cache.clone(),
+			data_cache: self.data_cache.clone(),
+			_phantom: PhantomData,
+		}
 	}
 }
 
-impl<H: Hasher> SharedTrieNodeCache<H> {
+impl<T: TrieLayout> SharedTrieNodeCache<T> {
 	/// Create a new [`SharedTrieNodeCache`].
 	///
 	/// If `enable_data_cache` is `true`, the special data cache will be enabled. The data cache
@@ -47,25 +52,26 @@ impl<H: Hasher> SharedTrieNodeCache<H> {
 		Self {
 			node_cache: Default::default(),
 			data_cache: enable_data_cache.then(|| Default::default()),
+			_phantom: PhantomData,
 		}
 	}
 
 	/// Create a new [`LocalTrieNodeCache`] instance from this shared cache.
-	pub fn local_cache(&self) -> LocalTrieNodeCache<H> {
+	pub fn local_cache(&self) -> LocalTrieNodeCache<T> {
 		LocalTrieNodeCache { shared: self.clone(), local: Default::default() }
 	}
 }
 
-pub struct LocalTrieNodeCache<H: Hasher> {
-	shared: SharedTrieNodeCache<H>,
-	local: Mutex<HashMap<H::Out, NodeOwned<H::Out>>>,
+pub struct LocalTrieNodeCache<T: TrieLayout> {
+	shared: SharedTrieNodeCache<T>,
+	local: Mutex<HashMap<TrieHash<T>, NodeOwned<TrieHash<T>>>>,
 }
 
-impl<H: Hasher> LocalTrieNodeCache<H> {
+impl<T: TrieLayout> LocalTrieNodeCache<T> {
 	/// Return self as a [`TrieDB`](trie_db::TrieDB) compatible cache.
 	///
 	/// The given `storage_root` needs to be the storage root of the trie this cache is used for.
-	pub fn as_trie_db_cache<'a>(&'a self, storage_root: H::Out) -> TrieNodeCache<'a, H> {
+	pub fn as_trie_db_cache<'a>(&'a self, storage_root: TrieHash<T>) -> TrieNodeCache<'a, T> {
 		let data_cache = if let Some(ref cache) = self.shared.data_cache {
 			DataCache::ForStorageRoot(RwLockWriteGuard::map(cache.write(), |cache| {
 				cache.entry(storage_root).or_default()
@@ -88,7 +94,7 @@ impl<H: Hasher> LocalTrieNodeCache<H> {
 	/// cache instance. If the function is not called, cached data is just thrown away and not
 	/// propagated to the shared cache. So, accessing these new items will be slower, but nothing
 	/// would break because of this.
-	pub fn as_trie_db_mut_cache<'a>(&'a self) -> TrieNodeCache<'a, H> {
+	pub fn as_trie_db_mut_cache<'a>(&'a self) -> TrieNodeCache<'a, T> {
 		TrieNodeCache {
 			shared_cache: self.shared.node_cache.read(),
 			local_cache: self.local.lock(),
@@ -97,7 +103,7 @@ impl<H: Hasher> LocalTrieNodeCache<H> {
 	}
 }
 
-impl<H: Hasher> Drop for LocalTrieNodeCache<H> {
+impl<T: TrieLayout> Drop for LocalTrieNodeCache<T> {
 	fn drop(&mut self) {
 		let mut shared = self.shared.node_cache.write();
 		shared.extend(self.local.lock().drain());
@@ -141,20 +147,20 @@ impl DataCache<'_> {
 	}
 }
 
-pub struct TrieNodeCache<'a, H: Hasher> {
-	shared_cache: RwLockReadGuard<'a, HashMap<H::Out, NodeOwned<H::Out>>>,
-	local_cache: MutexGuard<'a, HashMap<H::Out, NodeOwned<H::Out>>>,
+pub struct TrieNodeCache<'a, T: TrieLayout> {
+	shared_cache: RwLockReadGuard<'a, HashMap<TrieHash<T>, NodeOwned<TrieHash<T>>>>,
+	local_cache: MutexGuard<'a, HashMap<TrieHash<T>, NodeOwned<TrieHash<T>>>>,
 	data_cache: DataCache<'a>,
 }
 
-impl<'a, H: Hasher> TrieNodeCache<'a, H> {
+impl<'a, T: TrieLayout> TrieNodeCache<'a, T> {
 	/// Merge this cache into the given [`LocalTrieNodeCache`].
 	///
 	/// This function is only required to be called when this instance was created through
 	/// [`LocalTrieNodeCache::as_trie_db_mut_cache`], otherwise this method is a no-op. The given
 	/// `storage_root` is the new storage root that was obtained after finishing all operations
 	/// using the [`TrieDBMut`](trie_db::TrieDBMut).
-	pub fn merge_into(self, local: &LocalTrieNodeCache<H>, storage_root: H::Out) {
+	pub fn merge_into(self, local: &LocalTrieNodeCache<T>, storage_root: TrieHash<T>) {
 		let cache = if let DataCache::Fresh(cache) = self.data_cache { cache } else { return };
 
 		if let Some(ref data_cache) = local.shared.data_cache {
@@ -163,13 +169,16 @@ impl<'a, H: Hasher> TrieNodeCache<'a, H> {
 	}
 }
 
-impl<'a, H: Hasher> trie_db::TrieCache<Layout<H>> for TrieNodeCache<'a, H> {
+impl<'a, T: TrieLayout> trie_db::TrieCache<T> for TrieNodeCache<'a, T> {
 	fn get_or_insert_node(
 		&mut self,
-		hash: H::Out,
-		fetch_node: &mut dyn FnMut()
-			-> trie_db::Result<NodeOwned<H::Out>, H::Out, CError<Layout<H>>>,
-	) -> trie_db::Result<&NodeOwned<H::Out>, H::Out, CError<Layout<H>>> {
+		hash: TrieHash<T>,
+		fetch_node: &mut dyn FnMut() -> trie_db::Result<
+			NodeOwned<TrieHash<T>>,
+			TrieHash<T>,
+			CError<T>,
+		>,
+	) -> trie_db::Result<&mut NodeOwned<TrieHash<T>>, TrieHash<T>, CError<T>> {
 		if let Some(res) = self.shared_cache.get(&hash) {
 			return Ok(res)
 		}
@@ -183,11 +192,11 @@ impl<'a, H: Hasher> trie_db::TrieCache<Layout<H>> for TrieNodeCache<'a, H> {
 		}
 	}
 
-	fn insert_node(&mut self, hash: H::Out, node: NodeOwned<H::Out>) {
+	fn insert_node(&mut self, hash: TrieHash<T>, node: NodeOwned<TrieHash<T>>) {
 		self.local_cache.insert(hash, node);
 	}
 
-	fn get_node(&mut self, hash: &H::Out) -> Option<&NodeOwned<H::Out>> {
+	fn get_node(&mut self, hash: &TrieHash<T>) -> Option<&NodeOwned<TrieHash<T>>> {
 		if let Some(node) = self.shared_cache.get(hash) {
 			return Some(node)
 		}
@@ -299,7 +308,8 @@ mod tests {
 		let mut cache = local_cache.as_trie_db_mut_cache();
 
 		{
-			let mut trie = TrieDBMutBuilder::<Layout>::from_existing(&mut db, &mut new_root).unwrap()
+			let mut trie = TrieDBMutBuilder::<Layout>::from_existing(&mut db, &mut new_root)
+				.unwrap()
 				.with_cache(&mut cache)
 				.build();
 
