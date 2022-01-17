@@ -85,8 +85,8 @@ use frame_support::{
 	dispatch::{DispatchResult, DispatchResultWithPostInfo},
 	storage,
 	traits::{
-		ConstU32, Contains, EnsureOrigin, Get, HandleLifetime, OnKilledAccount, OnNewAccount,
-		OriginTrait, PalletInfo, SortedMembers, StoredMap,
+		ConstU32, Contains, Get, HandleLifetime, OnKilledAccount, OnNewAccount, OriginTrait,
+		PalletInfo, StoredMap,
 	},
 	weights::{
 		extract_actual_weight, DispatchClass, DispatchInfo, PerDispatchClass, RuntimeDbWeight,
@@ -124,8 +124,9 @@ pub use extensions::{
 };
 // Backward compatible re-export.
 pub use extensions::check_mortality::CheckMortality as CheckEra;
-pub use frame_support::base_origin::{
+pub use frame_support::origin::{
 	ensure_none, ensure_root, ensure_signed, ensure_signed_or_root, BaseOrigin as RawOrigin,
+	EnsureNever, EnsureNone, EnsureRoot, EnsureSigned, EnsureSignedBy,
 };
 pub use weights::WeightInfo;
 
@@ -775,106 +776,6 @@ impl From<sp_version::RuntimeVersion> for LastRuntimeUpgradeInfo {
 		Self { spec_version: version.spec_version.into(), spec_name: version.spec_name }
 	}
 }
-
-pub struct EnsureRoot<AccountId>(sp_std::marker::PhantomData<AccountId>);
-impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>, AccountId>
-	EnsureOrigin<O> for EnsureRoot<AccountId>
-{
-	type Success = ();
-	fn try_origin(o: O) -> Result<Self::Success, O> {
-		o.into().and_then(|o| match o {
-			RawOrigin::Root => Ok(()),
-			r => Err(O::from(r)),
-		})
-	}
-
-	#[cfg(feature = "runtime-benchmarks")]
-	fn successful_origin() -> O {
-		O::from(RawOrigin::Root)
-	}
-}
-
-pub struct EnsureSigned<AccountId>(sp_std::marker::PhantomData<AccountId>);
-impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>, AccountId: Decode>
-	EnsureOrigin<O> for EnsureSigned<AccountId>
-{
-	type Success = AccountId;
-	fn try_origin(o: O) -> Result<Self::Success, O> {
-		o.into().and_then(|o| match o {
-			RawOrigin::Signed(who) => Ok(who),
-			r => Err(O::from(r)),
-		})
-	}
-
-	#[cfg(feature = "runtime-benchmarks")]
-	fn successful_origin() -> O {
-		let zero_account_id =
-			AccountId::decode(&mut sp_runtime::traits::TrailingZeroInput::zeroes())
-				.expect("infinite length input; no invalid inputs for type; qed");
-		O::from(RawOrigin::Signed(zero_account_id))
-	}
-}
-
-pub struct EnsureSignedBy<Who, AccountId>(sp_std::marker::PhantomData<(Who, AccountId)>);
-impl<
-		O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>,
-		Who: SortedMembers<AccountId>,
-		AccountId: PartialEq + Clone + Ord + Decode,
-	> EnsureOrigin<O> for EnsureSignedBy<Who, AccountId>
-{
-	type Success = AccountId;
-	fn try_origin(o: O) -> Result<Self::Success, O> {
-		o.into().and_then(|o| match o {
-			RawOrigin::Signed(ref who) if Who::contains(who) => Ok(who.clone()),
-			r => Err(O::from(r)),
-		})
-	}
-
-	#[cfg(feature = "runtime-benchmarks")]
-	fn successful_origin() -> O {
-		let zero_account_id =
-			AccountId::decode(&mut sp_runtime::traits::TrailingZeroInput::zeroes())
-				.expect("infinite length input; no invalid inputs for type; qed");
-		let members = Who::sorted_members();
-		let first_member = match members.get(0) {
-			Some(account) => account.clone(),
-			None => zero_account_id,
-		};
-		O::from(RawOrigin::Signed(first_member.clone()))
-	}
-}
-
-pub struct EnsureNone<AccountId>(sp_std::marker::PhantomData<AccountId>);
-impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>, AccountId>
-	EnsureOrigin<O> for EnsureNone<AccountId>
-{
-	type Success = ();
-	fn try_origin(o: O) -> Result<Self::Success, O> {
-		o.into().and_then(|o| match o {
-			RawOrigin::None => Ok(()),
-			r => Err(O::from(r)),
-		})
-	}
-
-	#[cfg(feature = "runtime-benchmarks")]
-	fn successful_origin() -> O {
-		O::from(RawOrigin::None)
-	}
-}
-
-pub struct EnsureNever<T>(sp_std::marker::PhantomData<T>);
-impl<O, T> EnsureOrigin<O> for EnsureNever<T> {
-	type Success = T;
-	fn try_origin(o: O) -> Result<Self::Success, O> {
-		Err(o)
-	}
-
-	#[cfg(feature = "runtime-benchmarks")]
-	fn successful_origin() -> O {
-		unimplemented!()
-	}
-}
-
 /// Reference status; can be either referenced or unreferenced.
 #[derive(RuntimeDebug)]
 pub enum RefStatus {
@@ -1576,7 +1477,7 @@ impl<T: Config> Lookup for ChainContext<T> {
 
 /// Prelude to be used alongside pallet macro, for ease of use.
 pub mod pallet_prelude {
-	pub use frame_support::base_origin::{
+	pub use frame_support::origin::{
 		ensure_none, ensure_root, ensure_signed, ensure_signed_or_root,
 	};
 
