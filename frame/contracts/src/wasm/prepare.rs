@@ -372,26 +372,34 @@ fn check_and_instrument<C: ImportSatisfyCheck, T: Config>(
 	original_code: &[u8],
 	schedule: &Schedule<T>,
 ) -> Result<(Vec<u8>, (u32, u32)), &'static str> {
-	let contract_module = ContractModule::new(&original_code, schedule)?;
-	contract_module.scan_exports()?;
-	contract_module.ensure_no_internal_memory()?;
-	contract_module.ensure_table_size_limit(schedule.limits.table_size)?;
-	contract_module.ensure_global_variable_limit(schedule.limits.globals)?;
-	contract_module.ensure_no_floating_types()?;
-	contract_module.ensure_parameter_limit(schedule.limits.parameters)?;
-	contract_module.ensure_br_table_size_limit(schedule.limits.br_table_size)?;
+	let result = (|| {
+		let contract_module = ContractModule::new(&original_code, schedule)?;
+		contract_module.scan_exports()?;
+		contract_module.ensure_no_internal_memory()?;
+		contract_module.ensure_table_size_limit(schedule.limits.table_size)?;
+		contract_module.ensure_global_variable_limit(schedule.limits.globals)?;
+		contract_module.ensure_no_floating_types()?;
+		contract_module.ensure_parameter_limit(schedule.limits.parameters)?;
+		contract_module.ensure_br_table_size_limit(schedule.limits.br_table_size)?;
 
-	// We disallow importing `gas` function here since it is treated as implementation detail.
-	let disallowed_imports = [b"gas".as_ref()];
-	let memory_limits =
-		get_memory_limits(contract_module.scan_imports::<C>(&disallowed_imports)?, schedule)?;
+		// We disallow importing `gas` function here since it is treated as implementation detail.
+		let disallowed_imports = [b"gas".as_ref()];
+		let memory_limits =
+			get_memory_limits(contract_module.scan_imports::<C>(&disallowed_imports)?, schedule)?;
 
-	let code = contract_module
-		.inject_gas_metering()?
-		.inject_stack_height_metering()?
-		.into_wasm_code()?;
+		let code = contract_module
+			.inject_gas_metering()?
+			.inject_stack_height_metering()?
+			.into_wasm_code()?;
 
-	Ok((code, memory_limits))
+		Ok((code, memory_limits))
+	})();
+
+	if let Err(msg) = &result {
+		log::debug!(target: "runtime::contracts", "CodeRejected: {}", msg);
+	}
+
+	result
 }
 
 fn do_preparation<C: ImportSatisfyCheck, T: Config>(
