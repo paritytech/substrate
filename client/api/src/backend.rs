@@ -73,16 +73,13 @@ pub struct ImportSummary<Block: BlockT> {
 /// Finalization operation summary.
 ///
 /// Contains information about the block that just got finalized,
-/// including tree heads that were present at the moment of finalization.
-///
-/// Tree heads are collected within this summary because some of them may become
-/// unavailable after that the block import operations are applied on the backed.
+/// including tree heads that became stale at the moment of finalization.
 pub struct FinalizeSummary<Block: BlockT> {
-	/// List of blocks that were finalized.
-	/// Only the last entry is the one that has been explicitly finalized.
+	/// Blocks that were finalized.
+	/// The last entry is the one that has been explicitly finalized.
 	pub finalized: Vec<Block::Hash>,
-	/// Full list of heads that were present at finalization time.
-	pub heads: Vec<Block::Hash>,
+	/// Heads that became stale during this finalization operation.
+	pub stale_heads: Vec<Block::Hash>,
 }
 
 /// Import operation wrapper.

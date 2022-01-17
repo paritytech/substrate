@@ -683,19 +683,26 @@ where
 
 		operation.op.insert_aux(aux)?;
 
-		// we only notify when we are already synced to the tip of the chain
+		// We only notify when we are already synced to the tip of the chain
 		// or if this import triggers a re-org
 		if make_notifications || tree_route.is_some() {
 			if finalized {
 				let mut summary = match operation.notify_finalized.take() {
 					Some(summary) => summary,
-					None => FinalizeSummary {
-						finalized: Vec::new(),
-						heads: self.backend.blockchain().leaves()?,
-					},
+					None => FinalizeSummary { finalized: Vec::new(), stale_heads: Vec::new() },
 				};
 				summary.finalized.push(hash);
-				summary.heads.retain(|head| *head != parent_hash);
+				// Add to the stale list all heads that are branching from parent.
+				for head in self.backend.blockchain().leaves()? {
+					if head == parent_hash {
+						continue
+					}
+					let route_from_parent =
+						sp_blockchain::tree_route(self.backend.blockchain(), parent_hash, head)?;
+					if route_from_parent.retracted().is_empty() {
+						summary.stale_heads.push(head);
+					}
+				}
 				operation.notify_finalized = Some(summary);
 			}
 
@@ -842,8 +849,24 @@ where
 		if notify {
 			let finalized =
 				route_from_finalized.enacted().iter().map(|elem| elem.hash).collect::<Vec<_>>();
-			let heads = self.backend.blockchain().leaves()?;
-			operation.notify_finalized = Some(FinalizeSummary { finalized, heads });
+
+			// Prevent inclusion of stale heads that were already included in previous calls.
+			let last_finalized_number = self
+				.backend
+				.blockchain()
+				.number(last_finalized)?
+				.expect("Finalized block expected to be onchain. qed");
+			let mut stale_heads = Vec::new();
+			for head in self.backend.blockchain().leaves()? {
+				let route_from_finalized =
+					sp_blockchain::tree_route(self.backend.blockchain(), block, head)?;
+				let retracted = route_from_finalized.retracted();
+				let pivot = route_from_finalized.common_block();
+				if !(retracted.is_empty() || last_finalized_number > pivot.number) {
+					stale_heads.push(head);
+				}
+			}
+			operation.notify_finalized = Some(FinalizeSummary { finalized, stale_heads });
 		}
 
 		Ok(())
@@ -858,7 +881,7 @@ where
 		let mut notify_finalized = match notify_finalized {
 			Some(notify_finalized) => notify_finalized,
 			None => {
-				// cleanup any closed finality notification sinks
+				// Cleanup any closed finality notification sinks
 				// since we won't be running the loop below which
 				// would also remove any closed sinks.
 				sinks.retain(|sink| !sink.is_closed());
@@ -883,26 +906,11 @@ where
 			"best" => ?last,
 		);
 
-		// Prevent inclusion of stale heads that were already included by previous calls.
-		let prev_finalized_offset = (1 + notify_finalized.finalized.len()).saturated_into();
-		let prev_finalized_number = *header.number() - prev_finalized_offset;
-		let mut stale_heads = Vec::new();
-		for head in notify_finalized.heads {
-			let route_from_finalized =
-				sp_blockchain::tree_route(self.backend.blockchain(), last, head)?;
-			let retracted = route_from_finalized.retracted();
-			let pivot = route_from_finalized.common_block();
-
-			if !(retracted.is_empty() || prev_finalized_number > pivot.number) {
-				stale_heads.push(head);
-			}
-		}
-
 		let notification = FinalityNotification {
 			hash: last,
 			header,
 			tree_route: Arc::new(notify_finalized.finalized),
-			stale_heads: Arc::new(stale_heads),
+			stale_heads: Arc::new(notify_finalized.stale_heads),
 		};
 
 		sinks.retain(|sink| sink.unbounded_send(notification.clone()).is_ok());
