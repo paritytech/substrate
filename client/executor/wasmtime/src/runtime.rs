@@ -344,6 +344,7 @@ fn common_config(semantics: &Semantics) -> std::result::Result<wasmtime::Config,
 	config.wasm_multi_memory(false);
 	config.wasm_module_linking(false);
 	config.wasm_threads(false);
+	config.wasm_memory64(false);
 
 	Ok(config)
 }
