@@ -907,7 +907,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Returns the block number at which the session began
-	fn get_session_boundary() -> T::BlockNumber {
+	pub fn get_session_boundary() -> T::BlockNumber {
 		Pallet::<T>::session_start()
 	}
 }
