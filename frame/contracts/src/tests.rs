@@ -1385,7 +1385,7 @@ fn disabled_chain_extension_wont_deploy() {
 				vec![],
 				vec![],
 			),
-			"module uses chain extensions but chain extensions are disabled",
+			<Error<Test>>::CodeRejected,
 		);
 	});
 }
