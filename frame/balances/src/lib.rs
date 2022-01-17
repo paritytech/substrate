@@ -492,7 +492,7 @@ pub mod pallet {
 	/// The balance of an account.
 	/// # Example
 	///
-	/// ```
+	/// ```nocompile
 	///  impl pallet_balances::Config for Runtime {
 	///    type AccountStore = StorageMapShim<Self::Account<Runtime>, frame_system::Provider<Runtime>, AccountId, Self::AccountData<Balance>>
 	///  }
