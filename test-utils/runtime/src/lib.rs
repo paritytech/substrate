@@ -132,8 +132,7 @@ impl Transfer {
 	pub fn into_signed_tx(self) -> Extrinsic {
 		let signature = sp_keyring::AccountKeyring::from_public(&self.from)
 			.expect("Creates keyring from public key.")
-			.sign(&self.encode())
-			.into();
+			.sign(&self.encode());
 		Extrinsic::Transfer { transfer: self, signature, exhaust_resources_when_not_first: false }
 	}
 
@@ -144,8 +143,7 @@ impl Transfer {
 	pub fn into_resources_exhausting_tx(self) -> Extrinsic {
 		let signature = sp_keyring::AccountKeyring::from_public(&self.from)
 			.expect("Creates keyring from public key.")
-			.sign(&self.encode())
-			.into();
+			.sign(&self.encode());
 		Extrinsic::Transfer { transfer: self, signature, exhaust_resources_when_not_first: true }
 	}
 }
@@ -277,9 +275,9 @@ pub fn run_tests(mut input: &[u8]) -> Vec<u8> {
 	print("run_tests...");
 	let block = Block::decode(&mut input).unwrap();
 	print("deserialized block.");
-	let stxs = block.extrinsics.iter().map(Encode::encode).collect::<Vec<_>>();
+	let stxs = block.extrinsics.iter().map(Encode::encode);
 	print("reserialized transactions.");
-	[stxs.len() as u8].encode()
+	[stxs.count() as u8].encode()
 }
 
 /// A type that can not be decoded.
@@ -296,9 +294,9 @@ impl<B: BlockT> Encode for DecodeFails<B> {
 
 impl<B: BlockT> codec::EncodeLike for DecodeFails<B> {}
 
-impl<B: BlockT> DecodeFails<B> {
-	/// Create a new instance.
-	pub fn new() -> DecodeFails<B> {
+impl<B: BlockT> Default for DecodeFails<B> {
+	/// Create a default instance.
+	fn default() -> DecodeFails<B> {
 		DecodeFails { _phantom: Default::default() }
 	}
 }
@@ -436,8 +434,8 @@ impl From<frame_system::Origin<Runtime>> for Origin {
 		unimplemented!("Not required in tests!")
 	}
 }
-impl Into<Result<frame_system::Origin<Runtime>, Origin>> for Origin {
-	fn into(self) -> Result<frame_system::Origin<Runtime>, Origin> {
+impl From<Origin> for Result<frame_system::Origin<Runtime>, Origin> {
+	fn from(_origin: Origin) -> Result<frame_system::Origin<Runtime>, Origin> {
 		unimplemented!("Not required in tests!")
 	}
 }
@@ -651,12 +649,9 @@ fn code_using_trie() -> u64 {
 	let mut mdb = PrefixedMemoryDB::default();
 	let mut root = sp_std::default::Default::default();
 	let _ = {
-		let v = &pairs;
 		let mut t = TrieDBMut::<Hashing>::new(&mut mdb, &mut root);
-		for i in 0..v.len() {
-			let key: &[u8] = &v[i].0;
-			let val: &[u8] = &v[i].1;
-			if !t.insert(key, val).is_ok() {
+		for (key, value) in &pairs {
+			if t.insert(key, value).is_err() {
 				return 101
 			}
 		}
@@ -761,7 +756,7 @@ cfg_if! {
 				fn fail_convert_parameter(_: DecodeFails<Block>) {}
 
 				fn fail_convert_return_value() -> DecodeFails<Block> {
-					DecodeFails::new()
+					DecodeFails::default()
 				}
 
 				fn function_signature_changed() -> u64 {
@@ -1015,7 +1010,7 @@ cfg_if! {
 				fn fail_convert_parameter(_: DecodeFails<Block>) {}
 
 				fn fail_convert_return_value() -> DecodeFails<Block> {
-					DecodeFails::new()
+					DecodeFails::default()
 				}
 
 				fn function_signature_changed() -> Vec<u64> {
