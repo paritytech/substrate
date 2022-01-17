@@ -378,6 +378,7 @@ fn generate_call_api_at_calls(decl: &ItemTrait) -> Result<TokenStream> {
 		// Generate the generator function
 		result.push(quote!(
 			#[cfg(any(feature = "std", test))]
+			#[allow(clippy::too_many_arguments)]
 			pub fn #fn_name<
 				R: #crate_::Encode + #crate_::Decode + PartialEq,
 				NC: FnOnce() -> std::result::Result<R, #crate_::ApiError> + std::panic::UnwindSafe,

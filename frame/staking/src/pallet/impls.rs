@@ -37,13 +37,13 @@ use sp_runtime::{
 };
 use sp_staking::{
 	offence::{DisableStrategy, OffenceDetails, OnOffenceHandler},
-	SessionIndex,
+	EraIndex, SessionIndex,
 };
 use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 
 use crate::{
-	log, slashing, weights::WeightInfo, ActiveEraInfo, BalanceOf, EraIndex, EraPayout, Exposure,
-	ExposureOf, Forcing, IndividualExposure, Nominations, PositiveImbalanceOf, RewardDestination,
+	log, slashing, weights::WeightInfo, ActiveEraInfo, BalanceOf, EraPayout, Exposure, ExposureOf,
+	Forcing, IndividualExposure, Nominations, PositiveImbalanceOf, RewardDestination,
 	SessionInterface, StakingLedger, ValidatorPrefs,
 };
 
@@ -1245,13 +1245,12 @@ impl<T: Config> VoteWeightProvider<T::AccountId> for Pallet<T> {
 		// this will clearly results in an inconsistent state, but it should not matter for a
 		// benchmark.
 		let active: BalanceOf<T> = weight.try_into().map_err(|_| ()).unwrap();
-		let ledger = match Self::ledger(who) {
+		let mut ledger = match Self::ledger(who) {
 			None => StakingLedger::default_from(who.clone()),
-			Some(mut l) => {
-				l.active = active;
-				l
-			},
+			Some(l) => l,
 		};
+		ledger.active = active;
+
 		<Ledger<T>>::insert(who, ledger);
 		<Bonded<T>>::insert(who, who);
 

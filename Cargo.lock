@@ -324,6 +324,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "async-stream"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "171374e7e3b2504e0e5236e3b59260560f9fe94bfe9ac39ba5e4e929c5590625"
+dependencies = [
+ "async-stream-impl",
+ "futures-core",
+]
+
+[[package]]
+name = "async-stream-impl"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "648ed8c8d2ce5409ccd57453d9d1b214b342a0d69376a6feda1fd6cae3299308"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "async-task"
 version = "4.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -481,6 +502,7 @@ dependencies = [
  "log 0.4.14",
  "parity-scale-codec",
  "parking_lot 0.11.2",
+ "sc-chain-spec",
  "sc-client-api",
  "sc-keystore",
  "sc-network",
@@ -507,6 +529,7 @@ version = "4.0.0-dev"
 dependencies = [
  "beefy-gadget",
  "beefy-primitives",
+ "derive_more",
  "futures 0.3.16",
  "jsonrpc-core",
  "jsonrpc-core-client",
@@ -514,12 +537,15 @@ dependencies = [
  "jsonrpc-pubsub",
  "log 0.4.14",
  "parity-scale-codec",
+ "parking_lot 0.11.2",
  "sc-rpc",
+ "sc-utils",
  "serde",
  "serde_json",
  "sp-core",
  "sp-runtime",
  "substrate-test-runtime-client",
+ "thiserror",
 ]
 
 [[package]]
@@ -6865,9 +6891,9 @@ checksum = "dbf0c48bc1d91375ae5c3cd81e3722dff1abcf81a30960240640d223f59fe0e5"
 
 [[package]]
 name = "proc-macro2"
-version = "1.0.32"
+version = "1.0.36"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ba508cc11742c0dc5c1659771673afbab7a0efab23aa17e854cbab0837ed0b43"
+checksum = "c7342d5883fbccae1cc37a2353b09c87c9b0f3afd73f5fb9bba687a1f733b029"
 dependencies = [
  "unicode-xid",
 ]
@@ -7969,6 +7995,7 @@ dependencies = [
  "sc-basic-authorship",
  "sc-client-api",
  "sc-consensus",
+ "sc-consensus-aura",
  "sc-consensus-babe",
  "sc-consensus-epochs",
  "sc-transaction-pool",
@@ -7977,6 +8004,7 @@ dependencies = [
  "sp-api",
  "sp-blockchain",
  "sp-consensus",
+ "sp-consensus-aura",
  "sp-consensus-babe",
  "sp-consensus-slots",
  "sp-core",
@@ -8159,6 +8187,7 @@ dependencies = [
  "parking_lot 0.11.2",
  "rand 0.8.4",
  "sc-block-builder",
+ "sc-chain-spec",
  "sc-client-api",
  "sc-consensus",
  "sc-keystore",
@@ -8741,7 +8770,9 @@ dependencies = [
  "futures 0.3.16",
  "futures-timer",
  "lazy_static",
+ "parking_lot 0.11.2",
  "prometheus",
+ "tokio-test",
 ]
 
 [[package]]
@@ -10429,73 +10460,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "test-runner"
-version = "0.9.0"
-dependencies = [
- "frame-system",
- "futures 0.3.16",
- "jsonrpc-core",
- "log 0.4.14",
- "num-traits",
- "sc-basic-authorship",
- "sc-cli",
- "sc-client-api",
- "sc-consensus",
- "sc-consensus-babe",
- "sc-consensus-manual-seal",
- "sc-executor",
- "sc-finality-grandpa",
- "sc-informant",
- "sc-network",
- "sc-rpc",
- "sc-rpc-server",
- "sc-service",
- "sc-transaction-pool",
- "sc-transaction-pool-api",
- "sp-api",
- "sp-block-builder",
- "sp-blockchain",
- "sp-consensus",
- "sp-consensus-babe",
- "sp-core",
- "sp-externalities",
- "sp-finality-grandpa",
- "sp-inherents",
- "sp-keyring",
- "sp-offchain",
- "sp-runtime",
- "sp-runtime-interface",
- "sp-session",
- "sp-state-machine",
- "sp-transaction-pool",
- "sp-wasm-interface",
- "tokio",
-]
-
-[[package]]
-name = "test-runner-example"
-version = "0.1.0"
-dependencies = [
- "frame-benchmarking",
- "frame-system",
- "node-cli",
- "node-primitives",
- "node-runtime",
- "pallet-asset-tx-payment",
- "pallet-transaction-payment",
- "sc-consensus",
- "sc-consensus-babe",
- "sc-consensus-manual-seal",
- "sc-executor",
- "sc-finality-grandpa",
- "sc-service",
- "sp-consensus-babe",
- "sp-keyring",
- "sp-runtime",
- "test-runner",
-]
-
-[[package]]
 name = "textwrap"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10741,6 +10705,19 @@ dependencies = [
  "mio 0.6.23",
  "tokio-io",
  "tokio-reactor",
+]
+
+[[package]]
+name = "tokio-test"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "53474327ae5e166530d17f2d956afcb4f8a004de581b3cae10f12006bc8163e3"
+dependencies = [
+ "async-stream",
+ "bytes 1.1.0",
+ "futures-core",
+ "tokio",
+ "tokio-stream",
 ]
 
 [[package]]
@@ -11026,9 +11003,9 @@ checksum = "5e66dcbec4290c69dd03c57e76c2469ea5c7ce109c6dd4351c13055cf71ea055"
 
 [[package]]
 name = "twox-hash"
-version = "1.6.1"
+version = "1.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1f559b464de2e2bdabcac6a210d12e9b5a5973c251e102c44c585c71d51bd78e"
+checksum = "4ee73e6e4924fe940354b8d4d98cad5231175d615cd855b758adc658c0aac6a0"
 dependencies = [
  "cfg-if 1.0.0",
  "rand 0.8.4",

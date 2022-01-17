@@ -8,8 +8,11 @@ repository = "https://github.com/paritytech/substrate"
 description = "RPC for the BEEFY Client gadget for substrate"
 
 [dependencies]
+derive_more = "0.99"
 futures = "0.3.16"
 log = "0.4"
+parking_lot = "0.11"
+thiserror = "1.0"
 serde = { version = "1.0.132", features = ["derive"] }
 
 jsonrpc-core = "18.0.0"
@@ -20,6 +23,7 @@ jsonrpc-pubsub = "18.0.0"
 codec = { version = "2.2.0", package = "parity-scale-codec", features = ["derive"] }
 
 sc-rpc = { version = "4.0.0-dev", path = "../../rpc" }
+sc-utils = { version = "4.0.0-dev", path = "../../utils" }
 
 sp-core = { version = "4.1.0-dev", path = "../../../primitives/core" }
 sp-runtime = { version = "4.0.0", path = "../../../primitives/runtime" }

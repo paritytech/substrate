@@ -26,6 +26,7 @@ sp-core = { version = "4.1.0-dev", path = "../../primitives/core" }
 sp-keystore = { version = "0.10.0", path = "../../primitives/keystore" }
 sp-runtime = { version = "4.0.0", path = "../../primitives/runtime" }
 
+sc-chain-spec = { version = "4.0.0-dev", path = "../../client/chain-spec" }
 sc-utils = { version = "4.0.0-dev", path = "../utils" }
 sc-client-api = { version = "4.0.0-dev", path = "../api" }
 sc-keystore = { version = "4.0.0-dev", path = "../keystore" }

@@ -280,7 +280,7 @@ pub mod pallet {
 		///   - be less than the number of possible candidates. Note that all current members and
 		///     runners-up are also automatically candidates for the next round.
 		///
-		/// If `value` is more than `who`'s total balance, then the maximum of the two is used.
+		/// If `value` is more than `who`'s free balance, then the maximum of the two is used.
 		///
 		/// The dispatch origin of this call must be signed.
 		///
@@ -342,7 +342,7 @@ pub mod pallet {
 			};
 
 			// Amount to be locked up.
-			let locked_stake = value.min(T::Currency::total_balance(&who));
+			let locked_stake = value.min(T::Currency::free_balance(&who));
 			T::Currency::set_lock(T::PalletId::get(), &who, locked_stake, WithdrawReasons::all());
 
 			Voting::<T>::insert(&who, Voter { votes, deposit: new_deposit, stake: locked_stake });
@@ -1667,11 +1667,13 @@ mod tests {
 			System::set_block_number(5);
 			Elections::on_initialize(System::block_number());
 
+			assert_eq!(balances(&4), (34, 6));
+			assert_eq!(balances(&5), (45, 5));
 			assert_eq!(
 				Elections::members(),
 				vec![
-					SeatHolder { who: 4, stake: 40, deposit: 4 },
-					SeatHolder { who: 5, stake: 50, deposit: 3 },
+					SeatHolder { who: 4, stake: 34, deposit: 4 },
+					SeatHolder { who: 5, stake: 45, deposit: 3 },
 				]
 			);
 		})
@@ -1762,7 +1764,7 @@ mod tests {
 			assert_ok!(vote(Origin::signed(2), vec![5], 20));
 
 			assert_eq!(balances(&2), (18, 2));
-			assert_eq!(has_lock(&2), 20);
+			assert_eq!(has_lock(&2), 18);
 		});
 	}
 
@@ -1789,9 +1791,10 @@ mod tests {
 			assert_ok!(submit_candidacy(Origin::signed(4)));
 			assert_ok!(vote(Origin::signed(2), vec![5], 20));
 
+			// User only locks up to their free balance.
 			assert_eq!(balances(&2), (18, 2));
-			assert_eq!(has_lock(&2), 20);
-			assert_eq!(locked_stake_of(&2), 20);
+			assert_eq!(has_lock(&2), 18);
+			assert_eq!(locked_stake_of(&2), 18);
 
 			// can update; different stake; different lock and reserve.
 			assert_ok!(vote(Origin::signed(2), vec![5, 4], 15));
@@ -1856,8 +1859,8 @@ mod tests {
 			// 2 + 2
 			assert_eq!(balances(&2), (16, 4));
 			assert_eq!(Elections::voting(&2).deposit, 4);
-			assert_eq!(has_lock(&2), 18);
-			assert_eq!(locked_stake_of(&2), 18);
+			assert_eq!(has_lock(&2), 16);
+			assert_eq!(locked_stake_of(&2), 16);
 
 			// back to 1 vote.
 			assert_ok!(vote(Origin::signed(2), vec![4], 12));
@@ -2031,15 +2034,18 @@ mod tests {
 	}
 
 	#[test]
-	fn can_vote_for_more_than_total_balance_but_moot() {
+	fn can_vote_for_more_than_free_balance_but_moot() {
 		ExtBuilder::default().build_and_execute(|| {
 			assert_ok!(submit_candidacy(Origin::signed(5)));
 			assert_ok!(submit_candidacy(Origin::signed(4)));
 
-			assert_ok!(vote(Origin::signed(2), vec![4, 5], 30));
-			// you can lie but won't get away with it.
-			assert_eq!(locked_stake_of(&2), 20);
-			assert_eq!(has_lock(&2), 20);
+			// User has 100 free and 50 reserved.
+			assert_ok!(Balances::set_balance(Origin::root(), 2, 100, 50));
+			// User tries to vote with 150 tokens.
+			assert_ok!(vote(Origin::signed(2), vec![4, 5], 150));
+			// We truncate to only their free balance, after reserving additional for voting.
+			assert_eq!(locked_stake_of(&2), 98);
+			assert_eq!(has_lock(&2), 98);
 		});
 	}
 
@@ -2052,8 +2058,10 @@ mod tests {
 			assert_ok!(vote(Origin::signed(3), vec![5], 30));
 
 			assert_eq_uvec!(all_voters(), vec![2, 3]);
-			assert_eq!(locked_stake_of(&2), 20);
-			assert_eq!(locked_stake_of(&3), 30);
+			assert_eq!(balances(&2), (12, 8));
+			assert_eq!(locked_stake_of(&2), 12);
+			assert_eq!(balances(&3), (22, 8));
+			assert_eq!(locked_stake_of(&3), 22);
 			assert_eq!(votes_of(&2), vec![5]);
 			assert_eq!(votes_of(&3), vec![5]);
 
@@ -2133,7 +2141,10 @@ mod tests {
 			System::set_block_number(5);
 			Elections::on_initialize(System::block_number());
 
-			assert_eq!(members_and_stake(), vec![(3, 30), (5, 20)]);
+			assert_eq!(balances(&3), (25, 5));
+			// votes for 5
+			assert_eq!(balances(&2), (18, 2));
+			assert_eq!(members_and_stake(), vec![(3, 25), (5, 18)]);
 			assert!(Elections::runners_up().is_empty());
 
 			assert_eq_uvec!(all_voters(), vec![2, 3, 4]);
@@ -2168,10 +2179,10 @@ mod tests {
 			Elections::on_initialize(System::block_number());
 
 			System::assert_last_event(Event::Elections(super::Event::NewTerm {
-				new_members: vec![(4, 40), (5, 50)],
+				new_members: vec![(4, 35), (5, 45)],
 			}));
 
-			assert_eq!(members_and_stake(), vec![(4, 40), (5, 50)]);
+			assert_eq!(members_and_stake(), vec![(4, 35), (5, 45)]);
 			assert_eq!(runners_up_and_stake(), vec![]);
 
 			assert_ok!(Elections::remove_voter(Origin::signed(5)));
@@ -2202,7 +2213,7 @@ mod tests {
 			System::set_block_number(5);
 			Elections::on_initialize(System::block_number());
 
-			assert_eq!(members_and_stake(), vec![(5, 50)]);
+			assert_eq!(members_and_stake(), vec![(5, 45)]);
 			assert_eq!(Elections::election_rounds(), 1);
 
 			// but now it has a valid target.
@@ -2212,7 +2223,7 @@ mod tests {
 			Elections::on_initialize(System::block_number());
 
 			// candidate 4 is affected by an old vote.
-			assert_eq!(members_and_stake(), vec![(4, 30), (5, 50)]);
+			assert_eq!(members_and_stake(), vec![(4, 28), (5, 45)]);
 			assert_eq!(Elections::election_rounds(), 2);
 			assert_eq_uvec!(all_voters(), vec![3, 5]);
 		});
@@ -2300,16 +2311,16 @@ mod tests {
 
 			System::set_block_number(5);
 			Elections::on_initialize(System::block_number());
-			assert_eq!(members_and_stake(), vec![(4, 40), (5, 50)]);
-			assert_eq!(runners_up_and_stake(), vec![(2, 20), (3, 30)]);
+			assert_eq!(members_and_stake(), vec![(4, 35), (5, 45)]);
+			assert_eq!(runners_up_and_stake(), vec![(2, 15), (3, 25)]);
 
-			assert_ok!(vote(Origin::signed(5), vec![5], 15));
+			assert_ok!(vote(Origin::signed(5), vec![5], 10));
 
 			System::set_block_number(10);
 			Elections::on_initialize(System::block_number());
 
-			assert_eq!(members_and_stake(), vec![(3, 30), (4, 40)]);
-			assert_eq!(runners_up_and_stake(), vec![(5, 15), (2, 20)]);
+			assert_eq!(members_and_stake(), vec![(3, 25), (4, 35)]);
+			assert_eq!(runners_up_and_stake(), vec![(5, 10), (2, 15)]);
 		});
 	}
 
@@ -2443,8 +2454,8 @@ mod tests {
 				System::set_block_number(b.into());
 				Elections::on_initialize(System::block_number());
 				// we keep re-electing the same folks.
-				assert_eq!(members_and_stake(), vec![(4, 40), (5, 50)]);
-				assert_eq!(runners_up_and_stake(), vec![(2, 20), (3, 30)]);
+				assert_eq!(members_and_stake(), vec![(4, 35), (5, 45)]);
+				assert_eq!(runners_up_and_stake(), vec![(2, 15), (3, 25)]);
 				// no new candidates but old members and runners-up are always added.
 				assert!(candidate_ids().is_empty());
 				assert_eq!(Elections::election_rounds(), b / 5);
@@ -2596,7 +2607,7 @@ mod tests {
 			Elections::on_initialize(System::block_number());
 
 			// 3, 4 are new members, must still be bonded, nothing slashed.
-			assert_eq!(members_and_stake(), vec![(3, 30), (4, 48)]);
+			assert_eq!(members_and_stake(), vec![(3, 25), (4, 43)]);
 			assert_eq!(balances(&3), (25, 5));
 			assert_eq!(balances(&4), (35, 5));
 
@@ -2607,7 +2618,7 @@ mod tests {
 			assert_eq!(balances(&5), (45, 2));
 
 			System::assert_has_event(Event::Elections(super::Event::NewTerm {
-				new_members: vec![(4, 40), (5, 50)],
+				new_members: vec![(4, 35), (5, 45)],
 			}));
 		})
 	}
@@ -2646,9 +2657,9 @@ mod tests {
 			System::set_block_number(5);
 			Elections::on_initialize(System::block_number());
 			// id: low -> high.
-			assert_eq!(members_and_stake(), vec![(4, 50), (5, 40)]);
+			assert_eq!(members_and_stake(), vec![(4, 45), (5, 35)]);
 			// merit: low -> high.
-			assert_eq!(runners_up_and_stake(), vec![(3, 20), (2, 30)]);
+			assert_eq!(runners_up_and_stake(), vec![(3, 15), (2, 25)]);
 		});
 	}
 

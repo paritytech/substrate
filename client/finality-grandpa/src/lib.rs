@@ -123,6 +123,7 @@ pub mod warp_proof;
 
 pub use authorities::{AuthoritySet, AuthoritySetChanges, SharedAuthoritySet};
 pub use aux_schema::best_justification;
+pub use communication::grandpa_protocol_name::standard_name as protocol_standard_name;
 pub use finality_grandpa::voter::report;
 pub use finality_proof::{FinalityProof, FinalityProofError, FinalityProofProvider};
 pub use import::{find_forced_change, find_scheduled_change, GrandpaBlockImport};
@@ -263,6 +264,8 @@ pub struct Config {
 	pub keystore: Option<SyncCryptoStorePtr>,
 	/// TelemetryHandle instance.
 	pub telemetry: Option<TelemetryHandle>,
+	/// Chain specific GRANDPA protocol name. See [`crate::protocol_standard_name`].
+	pub protocol_name: std::borrow::Cow<'static, str>,
 }
 
 impl Config {
@@ -714,10 +717,14 @@ pub struct GrandpaParams<Block: BlockT, C, N, SC, VR> {
 
 /// Returns the configuration value to put in
 /// [`sc_network::config::NetworkConfiguration::extra_sets`].
-pub fn grandpa_peers_set_config() -> sc_network::config::NonDefaultSetConfig {
+/// For standard protocol name see [`crate::protocol_standard_name`].
+pub fn grandpa_peers_set_config(
+	protocol_name: std::borrow::Cow<'static, str>,
+) -> sc_network::config::NonDefaultSetConfig {
+	use communication::grandpa_protocol_name;
 	sc_network::config::NonDefaultSetConfig {
-		notifications_protocol: communication::GRANDPA_PROTOCOL_NAME.into(),
-		fallback_names: Vec::new(),
+		notifications_protocol: protocol_name,
+		fallback_names: grandpa_protocol_name::LEGACY_NAMES.iter().map(|&n| n.into()).collect(),
 		// Notifications reach ~256kiB in size at the time of writing on Kusama and Polkadot.
 		max_notification_size: 1024 * 1024,
 		set_config: sc_network::config::SetConfig {
