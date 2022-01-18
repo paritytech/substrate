@@ -2,7 +2,7 @@
 	(import "seal0" "seal_input" (func $seal_input (param i32 i32)))
 	(import "seal0" "seal_get_storage" (func $seal_get_storage (param i32 i32 i32) (result i32)))
 	(import "seal0" "seal_set_storage" (func $seal_set_storage (param i32 i32 i32)))
-	(import "__unstable__" "seal_call_code" (func $seal_call_code (param i32 i32 i32 i32 i32 i32) (result i32)))
+	(import "__unstable__" "seal_delegate_call" (func $seal_delegate_call (param i32 i32 i32 i32 i32 i32) (result i32)))
 	(import "env" "memory" (memory 3 3))
 
 	;; [0, 32) storage key
@@ -20,7 +20,7 @@
 
 	;; [104, 136) seal_get_storage buffer
 
-	;; 'seal_call_code' input data buffer
+	;; 'seal_delegate_call' input data buffer
 	(data (i32.const 136) "\20")
 
 	(func $assert (param i32)
@@ -72,7 +72,7 @@
 
 		;; Call deployed library contract code.
 		(set_local $exit_code
-			(call $seal_call_code
+			(call $seal_delegate_call
 				(i32.const 1)   ;; Set FORWARD_INPUT bit
 				(i32.const 64)	;; Pointer to "callee" code_hash.
 				(i32.const 136)	;; Pointer to input data buffer address

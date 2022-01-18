@@ -362,7 +362,7 @@ mod tests {
 			self.calls.push(CallEntry { to, value, data, allows_reentry });
 			Ok(ExecReturnValue { flags: ReturnFlags::empty(), data: call_return_data() })
 		}
-		fn call_code(
+		fn delegate_call(
 			&mut self,
 			code_hash: CodeHash<Self::T>,
 			data: Vec<u8>,
@@ -591,10 +591,10 @@ mod tests {
 
 	#[test]
 	#[cfg(feature = "unstable-interface")]
-	fn contract_call_code() {
+	fn contract_delegate_call() {
 		const CODE: &str = r#"
 (module
-	;; seal_call_code(
+	;; seal_delegate_call(
 	;;    flags: u32,
 	;;    code_hash_ptr: u32,
 	;;    input_data_ptr: u32,
@@ -602,11 +602,11 @@ mod tests {
 	;;    output_ptr: u32,
 	;;    output_len_ptr: u32
 	;;) -> u32
-	(import "__unstable__" "seal_call_code" (func $seal_call_code (param i32 i32 i32 i32 i32 i32) (result i32)))
+	(import "__unstable__" "seal_delegate_call" (func $seal_delegate_call (param i32 i32 i32 i32 i32 i32) (result i32)))
 	(import "env" "memory" (memory 1 1))
 	(func (export "call")
 		(drop
-			(call $seal_call_code
+			(call $seal_delegate_call
 				(i32.const 0) ;; No flags are set
 				(i32.const 4)  ;; Pointer to "callee" code_hash.
 				(i32.const 36) ;; Pointer to input data buffer address

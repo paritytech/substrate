@@ -190,9 +190,9 @@ pub enum RuntimeCosts {
 	Transfer,
 	/// Weight of calling `seal_call` for the given input size.
 	CallBase(u32),
-	/// Weight of calling `seal_call_code` for the given input size.
+	/// Weight of calling `seal_delegate_call` for the given input size.
 	#[cfg(feature = "unstable-interface")]
-	CallCode(u32),
+	DelegateCall(u32),
 	/// Weight of the transfer performed during a call.
 	CallSurchargeTransfer,
 	/// Weight of output received through `seal_call` for the given size.
@@ -269,7 +269,8 @@ impl RuntimeCosts {
 			CallSurchargeTransfer => s.call_transfer_surcharge,
 			CallCopyOut(len) => s.call_per_output_byte.saturating_mul(len.into()),
 			#[cfg(feature = "unstable-interface")]
-			CallCode(len) => s.call_code.saturating_add(s.call_per_input_byte.saturating_mul(len.into())),
+			DelegateCall(len) =>
+				s.delegate_call.saturating_add(s.call_per_input_byte.saturating_mul(len.into())),
 			InstantiateBase { input_data_len, salt_len } => s
 				.instantiate
 				.saturating_add(s.instantiate_per_input_byte.saturating_mul(input_data_len.into()))
@@ -364,12 +365,12 @@ bitflags! {
 
 /// Invariant of the call performed.
 ///
-/// CallCode is to execute deployed code in caller contract context
+/// DelegateCall is to execute deployed code in caller contract context
 /// Call is to call to another instantiated contract
 enum CallType {
 	Call(u32),
 	#[cfg(feature = "unstable-interface")]
-	CallCode(u32),
+	DelegateCall(u32),
 }
 
 /// This is only appropriate when writing out data of constant size that does not depend on user
@@ -721,7 +722,7 @@ where
 		let call_cost = match callee {
 			CallType::Call(_) => RuntimeCosts::CallBase(input_data_len),
 			#[cfg(feature = "unstable-interface")]
-			CallType::CallCode(_) => RuntimeCosts::CallCode(input_data_len),
+			CallType::DelegateCall(_) => RuntimeCosts::DelegateCall(input_data_len),
 		};
 		self.charge_gas(call_cost)?;
 		let value: BalanceOf<<E as Ext>::T> = self.read_sandbox_memory_as(value_ptr)?;
@@ -738,9 +739,9 @@ where
 
 		let call_outcome = match callee {
 			#[cfg(feature = "unstable-interface")]
-			CallType::CallCode(code_hash_ptr) => {
+			CallType::DelegateCall(code_hash_ptr) => {
 				let code_hash = self.read_sandbox_memory_as(code_hash_ptr)?;
-				self.ext.call_code(code_hash, input_data)
+				self.ext.delegate_call(code_hash, input_data)
 			},
 			CallType::Call(callee_ptr) => {
 				let callee: <<E as Ext>::T as frame_system::Config>::AccountId =
@@ -1902,7 +1903,7 @@ define_env!(Env, <E: Ext>,
 	// `ReturnCode::CalleeReverted`: Output buffer is returned.
 	// `ReturnCode::CalleeTrapped`
 	// `ReturnCode::CodeNotFound`
-	[__unstable__] seal_call_code(
+	[__unstable__] seal_delegate_call(
 		ctx,
 		flags: u32,
 		code_hash_ptr: u32,
@@ -1913,7 +1914,7 @@ define_env!(Env, <E: Ext>,
 	) -> ReturnCode => {
 		ctx.call(
 			CallFlags::from_bits(flags).ok_or_else(|| "used reserved bit in CallFlags")?,
-			CallType::CallCode(code_hash_ptr),
+			CallType::DelegateCall(code_hash_ptr),
 			0u64,
 			0u32,
 			input_data_ptr,

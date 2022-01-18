@@ -1334,7 +1334,7 @@ benchmarks! {
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
-	seal_call_code {
+	seal_delegate_call {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let hashes = (0..r * API_BENCHMARK_BATCH_SIZE)
 			.map(|i| {
@@ -1352,7 +1352,7 @@ benchmarks! {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
 				module: "__unstable__",
-				name: "seal_call_code",
+				name: "seal_delegate_call",
 				params: vec![
 					ValueType::I32,
 					ValueType::I32,

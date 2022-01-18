@@ -111,7 +111,7 @@ pub trait Ext: sealing::Sealed {
 	/// # Return Value
 	///
 	/// Result<(ExecReturnValue, CodeSize), (ExecError, CodeSize)>
-	fn call_code(
+	fn delegate_call(
 		&mut self,
 		code: CodeHash<Self::T>,
 		input_data: Vec<u8>,
@@ -964,7 +964,7 @@ where
 		result
 	}
 
-	fn call_code(
+	fn delegate_call(
 		&mut self,
 		code_hash: CodeHash<Self::T>,
 		input_data: Vec<u8>,

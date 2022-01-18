@@ -84,7 +84,7 @@ pub trait WeightInfo {
 	fn seal_transfer(r: u32, ) -> Weight;
 	fn seal_call(r: u32, ) -> Weight;
 	fn seal_call_per_transfer_input_output_kb(t: u32, i: u32, o: u32, ) -> Weight;
-	fn seal_call_code(r: u32, ) -> Weight;
+	fn seal_delegate_call(r: u32, ) -> Weight;
 	fn seal_instantiate(r: u32, ) -> Weight;
 	fn seal_instantiate_per_input_output_salt_kb(i: u32, o: u32, s: u32, ) -> Weight;
 	fn seal_hash_sha2_256(r: u32, ) -> Weight;
@@ -597,7 +597,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
-	fn seal_call_code(r: u32, ) -> Weight {
+	fn seal_delegate_call(r: u32, ) -> Weight {
 		(2_725_749_000 as Weight)
 			// Standard Error: 88_096_000
 			.saturating_add((18_477_261_000 as Weight).saturating_mul(r as Weight))
@@ -1439,7 +1439,7 @@ impl WeightInfo for () {
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
-	fn seal_call_code(r: u32, ) -> Weight {
+	fn seal_delegate_call(r: u32, ) -> Weight {
 		(2_725_749_000 as Weight)
 			// Standard Error: 88_096_000
 			.saturating_add((18_477_261_000 as Weight).saturating_mul(r as Weight))
