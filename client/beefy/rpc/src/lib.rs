@@ -428,6 +428,8 @@ mod tests {
 			_ => panic!(),
 		};
 
+		let sub_id: String = serde_json::from_value(sub_id).unwrap();
+
 		// Notify with commitment
 		let commitment = create_commitment(5);
 		let r: Result<(), ()> = commitment_sender.notify(|| Ok(commitment.clone()));
@@ -448,36 +450,12 @@ mod tests {
 		// Inspect what we received
 		// We should have received only two commitments
 		let recvs = futures::executor::block_on(receiver.take(2).collect::<Vec<_>>());
-		let recv: Notification = serde_json::from_str(&recvs[0]).unwrap();
-		let mut json_map = match recv.params {
-			Params::Map(json_map) => json_map,
-			_ => panic!(),
-		};
-
-		let recv_sub_id: String = serde_json::from_value(json_map["subscription"].take()).unwrap();
-		let recv_commitment: sp_core::Bytes =
-			serde_json::from_value(json_map["result"].take()).unwrap();
-		let recv_commitment: BeefySignedCommitment<Block> =
-			Decode::decode(&mut &recv_commitment[..]).unwrap();
-
-		assert_eq!(recv.method, "beefy_justifications");
-		assert_eq!(recv_sub_id, sub_id);
-		assert_eq!(recv_commitment, commitment);
-
-		let recv: Notification = serde_json::from_str(&recvs[1]).unwrap();
-		let mut json_map = match recv.params {
-			Params::Map(json_map) => json_map,
-			_ => panic!(),
-		};
-
-		let recv_sub_id: String = serde_json::from_value(json_map["subscription"].take()).unwrap();
-		let recv_commitment: sp_core::Bytes =
-			serde_json::from_value(json_map["result"].take()).unwrap();
-		let recv_commitment: BeefySignedCommitment<Block> =
-			Decode::decode(&mut &recv_commitment[..]).unwrap();
-
-		assert_eq!(recv.method, "beefy_justifications");
-		assert_eq!(recv_sub_id, sub_id);
-		assert_eq!(recv_commitment, commitment_1);
+		assert_eq!(
+			recvs,
+			vec![
+				format!("{{\"jsonrpc\":\"2.0\",\"method\":\"beefy_justifications\",\"params\":{{\"result\":\"0x046d68343048656c6c6f20576f726c64210500000000000000000000000000000004000000000000\",\"subscription\":\"{}\"}}}}", sub_id), 
+				format!("{{\"jsonrpc\":\"2.0\",\"method\":\"beefy_justifications\",\"params\":{{\"result\":\"0x046d68343048656c6c6f20576f726c64210600000000000000000000000000000004000000000000\",\"subscription\":\"{}\"}}}}", sub_id)
+			]
+		);
 	}
 }
