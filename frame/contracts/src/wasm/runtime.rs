@@ -323,7 +323,7 @@ where
 }
 
 bitflags! {
-	/// Flags used to change the behaviour of `seal_call`.
+	/// Flags used to change the behaviour of `seal_call` and `seal_delegate_call`.
 	struct CallFlags: u32 {
 		/// Forward the input of current function to the callee.
 		///
@@ -359,6 +359,8 @@ bitflags! {
 		/// Without this flag any reentrancy into the current contract that originates from
 		/// the callee (or any of its callees) is denied. This includes the first callee:
 		/// You cannot call into yourself with this flag set.
+		/// For `seal_delegate_call` should be always unset, otherwise
+		/// [`Error::InvalidCallFlags`] is returned.
 		const ALLOW_REENTRY = 0b0000_1000;
 	}
 }
@@ -1089,6 +1091,10 @@ define_env!(Env, <E: Ext>,
 	},
 
 	// Execute code in the context of the current contract.
+	//
+	// The code is executed in the same storage transaction as the caller.
+	// Reentrancy protection is always disabled because you need to trust
+	// the callee anyways
 	//
 	// # Parameters
 	//
