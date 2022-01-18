@@ -355,7 +355,7 @@ impl MemoryWrapper {
 	/// See `[memory_as_slice]`. In addition to those requirements, since a mutable reference is
 	/// returned it must be ensured that only one mutable and no shared references to memory
 	/// exists at the same time.
-	unsafe fn memory_as_slice_mut(memory: &wasmer::Memory) -> &mut [u8] {
+	unsafe fn memory_as_slice_mut(memory: &mut wasmer::Memory) -> &mut [u8] {
 		let ptr = memory.data_ptr();
 		let len: usize = memory.data_size().try_into().expect("data size should fit into usize");
 
@@ -417,11 +417,11 @@ impl MemoryTransfer for MemoryWrapper {
 
 	fn write_from(&self, dest_addr: Pointer<u8>, source: &[u8]) -> Result<()> {
 		unsafe {
-			let memory = self.buffer.borrow_mut();
+			let memory = &mut self.buffer.borrow_mut();
 
 			// This should be safe since we don't grow up memory while caching this reference
 			// and we give up the reference before returning from this function.
-			let destination = Self::memory_as_slice_mut(&memory);
+			let destination = Self::memory_as_slice_mut(memory);
 
 			let range = checked_range(dest_addr.into(), source.len(), destination.len())
 				.ok_or_else(|| Error::Other("memory write is out of bounds".into()))?;
