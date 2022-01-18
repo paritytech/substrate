@@ -610,44 +610,35 @@ where
 		gas_limit: Weight,
 		schedule: &Schedule<T>,
 	) -> Result<(Frame<T>, E, Option<u64>), ExecError> {
-		let (account_id, contract_info, executable, entry_point, allows_reentry, account_counter) =
-			match frame_args {
-				FrameArgs::Call { dest, cached_info, executable } => {
-					let contract = if let Some(contract) = cached_info {
-						contract
-					} else {
-						<ContractInfoOf<T>>::get(&dest).ok_or(<Error<T>>::ContractNotFound)?
-					};
+		let (account_id, contract_info, executable, entry_point, account_counter) = match frame_args
+		{
+			FrameArgs::Call { dest, cached_info, executable } => {
+				let contract = if let Some(contract) = cached_info {
+					contract
+				} else {
+					<ContractInfoOf<T>>::get(&dest).ok_or(<Error<T>>::ContractNotFound)?
+				};
 
-					let mut allows_reentry = true;
-					let executable = if let Some(executable) = executable {
-						allows_reentry = false;
-						executable
-					} else {
-						E::from_storage(contract.code_hash, schedule, gas_meter)?
-					};
+				let executable = if let Some(executable) = executable {
+					executable
+				} else {
+					E::from_storage(contract.code_hash, schedule, gas_meter)?
+				};
 
-					(dest, contract, executable, ExportedFunction::Call, allows_reentry, None)
-				},
-				FrameArgs::Instantiate { sender, trie_seed, executable, salt } => {
-					let account_id =
-						<Contracts<T>>::contract_address(&sender, executable.code_hash(), &salt);
-					let trie_id = Storage::<T>::generate_trie_id(&account_id, trie_seed);
-					let contract = Storage::<T>::new_contract(
-						&account_id,
-						trie_id,
-						executable.code_hash().clone(),
-					)?;
-					(
-						account_id,
-						contract,
-						executable,
-						ExportedFunction::Constructor,
-						true,
-						Some(trie_seed),
-					)
-				},
-			};
+				(dest, contract, executable, ExportedFunction::Call, None)
+			},
+			FrameArgs::Instantiate { sender, trie_seed, executable, salt } => {
+				let account_id =
+					<Contracts<T>>::contract_address(&sender, executable.code_hash(), &salt);
+				let trie_id = Storage::<T>::generate_trie_id(&account_id, trie_seed);
+				let contract = Storage::<T>::new_contract(
+					&account_id,
+					trie_id,
+					executable.code_hash().clone(),
+				)?;
+				(account_id, contract, executable, ExportedFunction::Constructor, Some(trie_seed))
+			},
+		};
 
 		let frame = Frame {
 			value_transferred,
@@ -656,7 +647,7 @@ where
 			entry_point,
 			nested_gas: gas_meter.nested(gas_limit)?,
 			nested_storage: storage_meter.nested(),
-			allows_reentry,
+			allows_reentry: true,
 		};
 
 		Ok((frame, executable, account_counter))
