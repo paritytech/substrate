@@ -565,7 +565,7 @@ pub mod pallet {
 	pub enum Error<T> {
 		/// A new schedule must have a greater version than the current one.
 		InvalidScheduleVersion,
-		/// Invalid CallFlags combination
+		/// Invalid combination of flags supplied to `seal_[delegate]_call`.
 		InvalidCallFlags,
 		/// The executed contract exhausted its gas limit.
 		OutOfGas,

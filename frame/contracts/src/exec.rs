@@ -104,7 +104,7 @@ pub trait Ext: sealing::Sealed {
 		allows_reentry: bool,
 	) -> Result<ExecReturnValue, ExecError>;
 
-	/// Execute code in the current frame
+	/// Execute code in the current frame.
 	///
 	/// Returns the original code size of the called contract.
 	///

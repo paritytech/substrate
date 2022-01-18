@@ -368,10 +368,20 @@ bitflags! {
 /// The kind of call that should be performed.
 enum CallType {
 	/// Call is to call to another instantiated contract
-	Call { callee_ptr: u32, value_ptr: u32 },
+	Call { callee_ptr: u32, value_ptr: u32, gas: u64 },
 	#[cfg(feature = "unstable-interface")]
 	/// DelegateCall is to execute deployed code in caller contract context
-	DelegateCall(u32),
+	DelegateCall { code_hash_ptr: u32 },
+}
+
+impl CallType {
+	fn cost(&self, input_data_len: u32) -> RuntimeCosts {
+		match &self {
+			CallType::Call { .. } => RuntimeCosts::CallBase(input_data_len),
+			#[cfg(feature = "unstable-interface")]
+			CallType::DelegateCall { .. } => RuntimeCosts::DelegateCallBase(input_data_len),
+		}
+	}
 }
 
 /// This is only appropriate when writing out data of constant size that does not depend on user
@@ -712,19 +722,13 @@ where
 	fn call(
 		&mut self,
 		flags: CallFlags,
-		callee: CallType,
-		gas: u64,
+		call_type: CallType,
 		input_data_ptr: u32,
 		input_data_len: u32,
 		output_ptr: u32,
 		output_len_ptr: u32,
 	) -> Result<ReturnCode, TrapReason> {
-		let call_cost = match callee {
-			CallType::Call { .. } => RuntimeCosts::CallBase(input_data_len),
-			#[cfg(feature = "unstable-interface")]
-			CallType::DelegateCall(_) => RuntimeCosts::DelegateCallBase(input_data_len),
-		};
-		self.charge_gas(call_cost)?;
+		self.charge_gas(call_type.cost(input_data_len))?;
 		let input_data = if flags.contains(CallFlags::CLONE_INPUT) {
 			self.input_data.as_ref().ok_or_else(|| Error::<E::T>::InputForwarded)?.clone()
 		} else if flags.contains(CallFlags::FORWARD_INPUT) {
@@ -733,16 +737,16 @@ where
 			self.read_sandbox_memory(input_data_ptr, input_data_len)?
 		};
 
-		let call_outcome = match callee {
+		let call_outcome = match call_type {
 			#[cfg(feature = "unstable-interface")]
-			CallType::DelegateCall(code_hash_ptr) => {
+			CallType::DelegateCall { code_hash_ptr } => {
 				if flags.contains(CallFlags::ALLOW_REENTRY) {
 					return Err(Error::<E::T>::InvalidCallFlags.into())
 				}
 				let code_hash = self.read_sandbox_memory_as(code_hash_ptr)?;
 				self.ext.delegate_call(code_hash, input_data)
 			},
-			CallType::Call { callee_ptr, value_ptr } => {
+			CallType::Call { callee_ptr, value_ptr, gas } => {
 				let callee: <<E as Ext>::T as frame_system::Config>::AccountId =
 					self.read_sandbox_memory_as(callee_ptr)?;
 				let value: BalanceOf<<E as Ext>::T> = self.read_sandbox_memory_as(value_ptr)?;
@@ -1030,8 +1034,7 @@ define_env!(Env, <E: Ext>,
 	) -> ReturnCode => {
 		ctx.call(
 			CallFlags::ALLOW_REENTRY,
-			CallType::Call{callee_ptr, value_ptr},
-			gas,
+			CallType::Call{callee_ptr, value_ptr, gas},
 			input_data_ptr,
 			input_data_len,
 			output_ptr,
@@ -1081,8 +1084,7 @@ define_env!(Env, <E: Ext>,
 	) -> ReturnCode => {
 		ctx.call(
 			CallFlags::from_bits(flags).ok_or_else(|| Error::<E::T>::InvalidCallFlags)?,
-			CallType::Call{callee_ptr, value_ptr},
-			gas,
+			CallType::Call{callee_ptr, value_ptr, gas},
 			input_data_ptr,
 			input_data_len,
 			output_ptr,
@@ -1094,7 +1096,7 @@ define_env!(Env, <E: Ext>,
 	//
 	// The code is executed in the same storage transaction as the caller.
 	// Reentrancy protection is always disabled because you need to trust
-	// the callee anyways
+	// the callee anyways.
 	//
 	// # Parameters
 	//
@@ -1125,8 +1127,7 @@ define_env!(Env, <E: Ext>,
 	) -> ReturnCode => {
 		ctx.call(
 			CallFlags::from_bits(flags).ok_or_else(|| Error::<E::T>::InvalidCallFlags)?,
-			CallType::DelegateCall(code_hash_ptr),
-			0u64,
+			CallType::DelegateCall{code_hash_ptr},
 			input_data_ptr,
 			input_data_len,
 			output_ptr,

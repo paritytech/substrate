@@ -7,7 +7,8 @@
 
 	;; [0, 32) storage key
 	(data (i32.const 0) "\01")
-    ;; [32, 64) storage value
+
+	;; [32, 64) storage key
 	(data (i32.const 32) "\02")
 
 	;; [64, 96) buffer where input is copied
@@ -19,9 +20,6 @@
 	(data (i32.const 100) "\20")
 
 	;; [104, 136) seal_get_storage buffer
-
-	;; 'seal_delegate_call' input data buffer
-	(data (i32.const 136) "\20")
 
 	(func $assert (param i32)
 		(block $ok
@@ -76,10 +74,10 @@
 			(call $seal_delegate_call
 				(i32.const 0)   ;; Set no call flags
 				(i32.const 64)	;; Pointer to "callee" code_hash.
-				(i32.const 136)	;; Pointer to input data buffer address
-				(i32.const 4)	;; Length of input data buffer
+				(i32.const 0)   ;; Random input
+				(i32.const 0)   ;; Length is ignored in this case
 				(i32.const 4294967295) ;; u32 max sentinel value: do not copy output
-				(i32.const 0) ;; Length is ignored in this case
+				(i32.const 0)   ;; Length is ignored in this case
 			)
 		)
 
@@ -99,7 +97,7 @@
 			)
 		)
 
-        ;; Make sure that 'callee' code changed the value
+		;; Make sure that 'callee' code changed the value
 		(call $assert
 			(i32.eq
 				(i32.load (i32.const 104))
