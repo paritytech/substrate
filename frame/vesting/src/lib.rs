@@ -45,13 +45,14 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 mod benchmarking;
-mod migrations;
+
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
 mod tests;
 mod vesting_info;
 
+pub mod migrations;
 pub mod weights;
 
 use codec::{Decode, Encode, MaxEncodedLen};
