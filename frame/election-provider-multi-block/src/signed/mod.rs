@@ -31,7 +31,6 @@
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_election_provider_support::PageIndex;
 use frame_support::{
-	dispatch::DispatchResult,
 	ensure,
 	traits::{Currency, Get, ReservableCurrency},
 	BoundedVec,
@@ -43,7 +42,9 @@ use sp_runtime::traits::Zero;
 /// Exports of this pallet
 pub use pallet::*;
 
-use crate::verifier::{SignedVerifier, SolutionDataProvider, Status, VerificationResult, Verifier};
+use crate::verifier::{
+	AsynchronousVerifier, SolutionDataProvider, Status, VerificationResult, Verifier,
+};
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
@@ -80,69 +81,82 @@ impl<T: Config> SolutionDataProvider for Pallet<T> {
 
 	fn report_result(result: crate::verifier::VerificationResult) {
 		// assumption of the trait.
-		debug_assert_eq!(<T::Verifier as Verifier>::status(), Status::Nothing);
+		debug_assert_eq!(<T::Verifier as AsynchronousVerifier>::status(), Status::Nothing);
 
-		if let VerificationResult::Valid = result {
-			// defensive: if there is a result to be reported, then we must have had some leader.
-			if let Some(winner) = Submissions::<T>::leader().map(|(x, _)| x) {
-				let metadata = Submissions::<T>::metadata(&winner).unwrap();
+		match result {
+			VerificationResult::Queued => {
+				// defensive: if there is a result to be reported, then we must have had some
+				// leader.
+				if let Some(winner) = Submissions::<T>::leader().map(|(x, _)| x) {
+					let metadata = Submissions::<T>::metadata(&winner).unwrap();
 
-				// first, let's give them their reward.
-				let reward = metadata.reward + metadata.fee;
-				let imbalance = T::Currency::deposit_creating(&winner, reward);
-				Self::deposit_event(Event::<T>::Rewarded(winner.clone(), reward));
+					// first, let's give them their reward.
+					let reward = metadata.reward + metadata.fee;
+					let imbalance = T::Currency::deposit_creating(&winner, reward);
+					Self::deposit_event(Event::<T>::Rewarded(winner.clone(), reward));
 
-				// then, unreserve their deposit
-				let _remaining = T::Currency::unreserve(&winner, metadata.deposit);
-				debug_assert!(_remaining.is_zero());
-
-				// remove the winning data of the winner, we don't need it anymore.
-				Submissions::<T>::remove_data(&winner);
-
-				// For now, I will wipe everything on the spot, but in ideal case, we would do it
-				// over time. TODO
-				for discarded in Submissions::<T>::sorted_submitters().into_iter().skip(1) {
-					let discarded_metadata = Submissions::<T>::metadata(&discarded).unwrap();
-					let _remaining = T::Currency::unreserve(&discarded, discarded_metadata.deposit);
+					// then, unreserve their deposit
+					let _remaining = T::Currency::unreserve(&winner, metadata.deposit);
 					debug_assert!(_remaining.is_zero());
-					Submissions::<T>::remove_data(&discarded);
-					Self::deposit_event(Event::<T>::Discarded(discarded));
+
+					// remove the winning data of the winner, we don't need it anymore.
+					Submissions::<T>::remove_data(&winner);
+
+					// For now, I will wipe everything on the spot, but in ideal case, we would do
+					// it over time.
+					// TODO: what we need a generic "StateGarbageCollector", to which you give a
+					// bunch of storage keys, and it will clean them for you on_idle. It should just
+					// be able to accept one job at a time, and report back to you if it is done
+					// doing what it was doing, or not.
+					for discarded in Submissions::<T>::sorted_submitters().into_iter().skip(1) {
+						let discarded_metadata = Submissions::<T>::metadata(&discarded).unwrap();
+						let _remaining =
+							T::Currency::unreserve(&discarded, discarded_metadata.deposit);
+						debug_assert!(_remaining.is_zero());
+						Submissions::<T>::remove_data(&discarded);
+						Self::deposit_event(Event::<T>::Discarded(discarded));
+					}
+
+					// finally, kill the overall sorted list as well.
+					Submissions::<T>::clear_list();
+
+					// everything should have been clean.
+					debug_assert_eq!(Submissions::<T>::submissions_iter().count(), 0);
+					debug_assert_eq!(Submissions::<T>::metadata_iter().count(), 0);
+					debug_assert!(Submissions::<T>::sorted_submitters().is_empty());
+				} else {
+					debug_assert!(false);
 				}
+			},
+			VerificationResult::Rejected => {
+				// defensive: if there is a result to be reported, then we must have had some
+				// leader.
+				if let Some(loser) = Submissions::<T>::take_leader().map(|(x, _)| x) {
+					let metadata = Submissions::<T>::metadata(&loser).unwrap();
 
-				// finally, kill the overall sorted list as well.
-				Submissions::<T>::clear_list();
+					// first, let's slash their deposit.
+					let slash = metadata.deposit;
+					let (imbalance, _remainder) = T::Currency::slash_reserved(&loser, slash);
+					debug_assert!(_remainder.is_zero());
+					Self::deposit_event(Event::<T>::Slashed(loser.clone(), slash));
 
-				// everything should have been clean.
-				debug_assert_eq!(Submissions::<T>::submissions_iter().count(), 0);
-				debug_assert_eq!(Submissions::<T>::metadata_iter().count(), 0);
-				debug_assert!(Submissions::<T>::sorted_submitters().is_empty());
-			} else {
-				debug_assert!(false);
-			}
-		} else {
-			// defensive: if there is a result to be reported, then we must have had some leader.
-			if let Some(loser) = Submissions::<T>::take_leader().map(|(x, _)| x) {
-				let metadata = Submissions::<T>::metadata(&loser).unwrap();
+					// they are already removed from the sorted list, next remove their submission
+					// data as well.
+					Submissions::<T>::remove_data(&loser);
+					debug_assert!(!Submissions::<T>::sorted_submitters().contains(&loser));
 
-				// first, let's slash their deposit.
-				let slash = metadata.deposit;
-				let (imbalance, _remainder) = T::Currency::slash_reserved(&loser, slash);
-				debug_assert!(_remainder.is_zero());
-				Self::deposit_event(Event::<T>::Slashed(loser.clone(), slash));
-
-				// they are already removed from the sorted list, next remove their submission data
-				// as well.
-				Submissions::<T>::remove_data(&loser);
-				debug_assert!(!Submissions::<T>::sorted_submitters().contains(&loser));
-
-				// inform the verifier that they can now try again, if we're still in the signed
-				// validation phase.
-				if crate::Pallet::<T>::current_phase().is_signed_validation() {
-					<T::Verifier as SignedVerifier>::start();
+					// inform the verifier that they can now try again, if we're still in the signed
+					// validation phase.
+					if crate::Pallet::<T>::current_phase().is_signed_validation() {
+						<T::Verifier as AsynchronousVerifier>::start();
+					}
+				} else {
+					debug_assert!(false)
 				}
-			} else {
-				debug_assert!(false)
-			}
+			},
+			VerificationResult::DataUnavailable => {
+				unreachable!("TODO")
+			},
 		}
 	}
 }
@@ -150,7 +164,7 @@ impl<T: Config> SolutionDataProvider for Pallet<T> {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use crate::verifier::SignedVerifier;
+	use crate::verifier::AsynchronousVerifier;
 	use frame_support::{
 		dispatch::DispatchResultWithPostInfo,
 		pallet_prelude::{StorageDoubleMap, ValueQuery, *},
@@ -444,14 +458,14 @@ pub mod pallet {
 				);
 				// start an attempt to verify our best thing.
 				if Submissions::<T>::leader().is_some() {
-					<T::Verifier as SignedVerifier>::start();
+					<T::Verifier as AsynchronousVerifier>::start();
 				}
 			}
 
 			if crate::Pallet::<T>::current_phase().is_unsigned_open_at(now) {
 				// signed validation phase just ended, make sure you stop any ongoing operation.
 				sublog!(info, "signed", "signed validation ended, sending validation stop signal",);
-				<T::Verifier as SignedVerifier>::stop();
+				<T::Verifier as AsynchronousVerifier>::stop();
 			}
 
 			0

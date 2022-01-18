@@ -121,24 +121,15 @@ mod pallet {
 				.into_inner()
 				.pop()
 				.expect("length of `solution_pages` is always `T::Pages`, `T::Pages` is always greater than 1, can be popped; qed.");
-			let supports = <T::Verifier as Verifier>::feasibility_check_page(
+			let claimed_score = paged_solution.score;
+			let supports = <T::Verifier as Verifier>::verify_synchronous(
 				only_page,
+				claimed_score,
 				crate::Pallet::<T>::msp(),
 			)
 			.expect(error_message);
 
-			// we know that the claimed score is better then what we currently have because of the
-			// pre-dispatch checks, now we only check if the claimed score was *valid*.
-
-			use sp_npos_elections::EvaluateSupport;
-			let valid_score = supports.evaluate();
-			assert_eq!(valid_score, paged_solution.score, "{}", error_message);
-
-			sublog!(info, "unsigned", "queued an unsigned solution with score {:?}", valid_score);
-
-			// all good, now we write this to the verifier directly.
-			T::Verifier::force_set_single_page_verified_solution(supports, valid_score);
-
+			sublog!(info, "unsigned", "queued an unsigned solution with score {:?}", claimed_score);
 			Ok(None.into())
 		}
 	}
@@ -324,7 +315,7 @@ mod validate_unsigned {
 				roll_to_snapshot_created();
 
 				let solution = mine_full_solution().unwrap();
-				load_mock_signed_and_start_verification(solution.clone());
+				load_mock_signed_and_start(solution.clone());
 				roll_to_full_verification();
 
 				// Some good solution is queued now.

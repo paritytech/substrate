@@ -882,7 +882,7 @@ mod trim_weight_length {
 				8
 			);
 
-			load_mock_signed_and_start_verification(solution);
+			load_mock_signed_and_start(solution);
 			let supports = roll_to_full_verification();
 
 			// NOTE: this test is a bit funny because our msp snapshot page actually contains voters
@@ -926,7 +926,7 @@ mod trim_weight_length {
 				4
 			);
 
-			load_mock_signed_and_start_verification(solution);
+			load_mock_signed_and_start(solution);
 			let supports = roll_to_full_verification();
 
 			// a solution is queued.
@@ -965,7 +965,7 @@ mod trim_weight_length {
 				7
 			);
 
-			load_mock_signed_and_start_verification(solution);
+			load_mock_signed_and_start(solution);
 			let supports = roll_to_full_verification();
 
 			// a solution is queued.
@@ -1006,7 +1006,7 @@ mod trim_weight_length {
 				4
 			);
 
-			load_mock_signed_and_start_verification(solution);
+			load_mock_signed_and_start(solution);
 			let supports = roll_to_full_verification();
 
 			// a solution is queued.
@@ -1046,7 +1046,7 @@ mod trim_weight_length {
 				1
 			);
 
-			load_mock_signed_and_start_verification(solution);
+			load_mock_signed_and_start(solution);
 			let supports = roll_to_full_verification();
 
 			// nothing is queued
@@ -1079,7 +1079,7 @@ mod trim_weight_length {
 
 			assert_eq!(solution.solution_pages.encoded_size(), 105);
 
-			load_mock_signed_and_start_verification(solution);
+			load_mock_signed_and_start(solution);
 			let supports = roll_to_full_verification();
 
 			// a solution is queued.
@@ -1121,7 +1121,7 @@ mod trim_weight_length {
 
 			assert_eq!(solution.solution_pages.encoded_size(), 99);
 
-			load_mock_signed_and_start_verification(solution);
+			load_mock_signed_and_start(solution);
 			let supports = roll_to_full_verification();
 
 			// a solution is queued.
@@ -1209,7 +1209,7 @@ mod base_miner {
 			BaseMiner::<Runtime>::check_solution(&paged, None, true, "mined").unwrap();
 
 			// now do a realistic full verification
-			load_mock_signed_and_start_verification(paged.clone());
+			load_mock_signed_and_start(paged.clone());
 			let supports = roll_to_full_verification();
 
 			assert_eq!(
@@ -1292,7 +1292,7 @@ mod base_miner {
 			BaseMiner::<Runtime>::check_solution(&paged, None, false, "mined").unwrap();
 
 			// it must also be verified in the verifier
-			load_mock_signed_and_start_verification(paged.clone());
+			load_mock_signed_and_start(paged.clone());
 			let supports = roll_to_full_verification();
 
 			assert_eq!(
@@ -1375,7 +1375,7 @@ mod base_miner {
 			// this solution must be feasible and submittable.
 			BaseMiner::<Runtime>::check_solution(&paged, None, true, "mined").unwrap();
 			// now do a realistic full verification
-			load_mock_signed_and_start_verification(paged.clone());
+			load_mock_signed_and_start(paged.clone());
 			let supports = roll_to_full_verification();
 
 			assert_eq!(
@@ -1451,7 +1451,7 @@ mod base_miner {
 			// this solution must be feasible and submittable.
 			BaseMiner::<Runtime>::check_solution(&paged, None, true, "mined").unwrap();
 			// now do a realistic full verification.
-			load_mock_signed_and_start_verification(paged.clone());
+			load_mock_signed_and_start(paged.clone());
 			let supports = roll_to_full_verification();
 
 			assert_eq!(
@@ -1542,7 +1542,7 @@ mod base_miner {
 			// this solution must be feasible and submittable.
 			BaseMiner::<Runtime>::check_solution(&paged, None, true, "mined").unwrap();
 			// now do a realistic full verification.
-			load_mock_signed_and_start_verification(paged.clone());
+			load_mock_signed_and_start(paged.clone());
 			let supports = roll_to_full_verification();
 
 			assert_eq!(
@@ -1604,7 +1604,7 @@ mod base_miner {
 
 				// now we let the miner mine something for us..
 				let paged = mine_full_solution().unwrap();
-				load_mock_signed_and_start_verification(paged.clone());
+				load_mock_signed_and_start(paged.clone());
 
 				// this must be correct
 				let supports = roll_to_full_verification();

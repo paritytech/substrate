@@ -18,6 +18,7 @@
 mod signed;
 mod staking;
 mod weight_info;
+use frame_system::EnsureRoot;
 pub use signed::*;
 pub use staking::*;
 
@@ -29,7 +30,7 @@ use crate::{
 		self as unsigned_pallet,
 		miner::{BaseMiner, MinerError},
 	},
-	verifier::{self as verifier_pallet, SignedVerifier, Status},
+	verifier::{self as verifier_pallet, AsynchronousVerifier, Status},
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 pub use frame_support::{assert_noop, assert_ok};
@@ -202,6 +203,7 @@ impl crate::Config for Runtime {
 	type Solution = TestNposSolution;
 	type WeightInfo = weight_info::DualMockWeightInfo;
 	type Verifier = VerifierPallet;
+	type AdminOrigin = EnsureRoot<AccountId>;
 	type Pages = Pages;
 }
 
@@ -274,39 +276,47 @@ impl ExtBuilder {
 
 impl ExtBuilder {
 	pub(crate) fn max_backing_per_target(self, c: u32) -> Self {
-		<MaxBackersPerWinner>::set(c);
+		MaxBackersPerWinner::set(c);
 		self
 	}
 	pub(crate) fn miner_tx_priority(self, p: u64) -> Self {
-		<MinerTxPriority>::set(p);
+		MinerTxPriority::set(p);
 		self
 	}
 	pub(crate) fn solution_improvement_threshold(self, p: Perbill) -> Self {
-		<SolutionImprovementThreshold>::set(p);
+		SolutionImprovementThreshold::set(p);
 		self
 	}
 	pub(crate) fn pages(self, pages: PageIndex) -> Self {
-		<Pages>::set(pages);
+		Pages::set(pages);
+		self
+	}
+	pub(crate) fn lookahead(self, lookahead: BlockNumber) -> Self {
+		Lookahead::set(lookahead);
 		self
 	}
 	pub(crate) fn voter_per_page(self, count: u32) -> Self {
-		<VoterSnapshotPerBlock>::set(count);
+		VoterSnapshotPerBlock::set(count);
 		self
 	}
 	pub(crate) fn miner_weight(self, weight: Weight) -> Self {
-		<MinerMaxWeight>::set(weight);
+		MinerMaxWeight::set(weight);
 		self
 	}
 	pub(crate) fn miner_max_length(self, len: u32) -> Self {
-		<MinerMaxLength>::set(len);
+		MinerMaxLength::set(len);
 		self
 	}
 	pub(crate) fn desired_targets(self, t: u32) -> Self {
-		<staking::DesiredTargets>::set(t);
+		staking::DesiredTargets::set(t);
 		self
 	}
 	pub(crate) fn signed_phase(self, d: BlockNumber) -> Self {
 		SignedPhase::set(d);
+		self
+	}
+	pub(crate) fn signed_validation_phase(self, d: BlockNumber) -> Self {
+		SignedValidationPhase::set(d);
 		self
 	}
 	pub(crate) fn add_voter(self, who: AccountId, stake: Balance, targets: Vec<AccountId>) -> Self {
@@ -511,6 +521,7 @@ pub fn roll_to_snapshot_created() {
 	while !matches!(MultiBlock::current_phase(), Phase::Snapshot(0)) {
 		roll_next()
 	}
+	ensure_full_snapshot();
 }
 
 /// proceed block number to whenever the unsigned phase is open (`Phase::Unsigned(_)`).
