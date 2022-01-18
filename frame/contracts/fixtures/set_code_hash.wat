@@ -28,7 +28,7 @@
 		(call $seal_input (i32.const 0) (i32.const 32))
 
 		(set_local $exit_code
-		    (call $seal_set_code_hash (i32.const 0)) ;; Pointer to the input data.
+			(call $seal_set_code_hash (i32.const 0)) ;; Pointer to the input data.
 		)
 		(call $assert
 			(i32.eq (get_local $exit_code) (i32.const 0)) ;; ReturnCode::Success
