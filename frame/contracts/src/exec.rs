@@ -973,13 +973,14 @@ where
 		let top_frame = self.top_frame_mut();
 		let contract_info = top_frame.contract_info().clone();
 		let account_id = top_frame.account_id.clone();
+		let value = top_frame.value_transferred.clone();
 		let executable = self.push_frame(
 			FrameArgs::Call {
 				dest: account_id,
 				cached_info: Some(contract_info),
 				executable: Some(executable),
 			},
-			self.minimum_balance(),
+			value,
 			0,
 		)?;
 		self.run(executable, input_data)
