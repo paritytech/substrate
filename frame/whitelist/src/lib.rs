@@ -42,7 +42,7 @@ pub mod weights;
 use sp_runtime::traits::Dispatchable;
 use sp_std::prelude::*;
 
-use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
+use codec::{Decode, DecodeLimit, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{
 	ensure,
 	traits::{PreimageProvider, PreimageRecipient},
@@ -167,8 +167,11 @@ pub mod pallet {
 			let call = T::PreimageProvider::get_preimage(&call_hash)
 				.ok_or(Error::<T>::UnavailablePreImage)?;
 
-			let call = <T as Config>::Call::decode(&mut &call[..])
-				.map_err(|_| Error::<T>::UndecodableCall)?;
+			let call = <T as Config>::Call::decode_with_depth_limit(
+				sp_api::MAX_EXTRINSIC_DEPTH,
+				&mut &call[..],
+			)
+			.map_err(|_| Error::<T>::UndecodableCall)?;
 
 			ensure!(
 				call.get_dispatch_info().weight <= call_weight_witness,
