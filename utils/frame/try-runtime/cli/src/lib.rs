@@ -381,13 +381,7 @@ pub struct SharedParams {
 	pub shared_params: sc_cli::SharedParams,
 
 	/// The execution strategy that should be used.
-	#[clap(
-		long = "execution",
-		value_name = "STRATEGY",
-		arg_enum,
-		ignore_case = true,
-		default_value = "Wasm"
-	)]
+	#[clap(long, value_name = "STRATEGY", arg_enum, ignore_case = true, default_value = "Wasm")]
 	pub execution: ExecutionStrategy,
 
 	/// Type of wasm execution used.
