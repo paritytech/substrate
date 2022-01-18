@@ -50,6 +50,8 @@ pub trait StakingInterface {
 	/// AccountId type used by the staking system
 	type AccountId;
 
+	type LookupSource;
+
 	/// The minimum amount necessary to bond to be a nominator. This does not necessarily mean the
 	/// nomination will be counted in an election, but instead just enough to be stored as a
 	/// nominator (e.g. in the bags-list of polkadot)
@@ -67,4 +69,13 @@ pub trait StakingInterface {
 	fn bond_extra(controller: &Self::AccountId, extra: Self::Balance) -> DispatchResult;
 
 	fn unbond(controller: &Self::AccountId, value: Self::Balance) -> DispatchResult;
+
+	fn bond(
+		stash: Self::AccountId,
+		controller: Self::AccountId,
+		amount: Self::Balance,
+		payee: Self::AccountId,
+	) -> DispatchResult;
+
+	fn nominate(controller: Self::AccountId, targets: Vec<Self::LookupSource>) -> DispatchResult;
 }

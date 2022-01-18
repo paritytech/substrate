@@ -1,4 +1,4 @@
-e// This file is part of Substrate.
+// This file is part of Substrate.
 
 // Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0

@@ -34,13 +34,14 @@ use frame_support::{
 };
 use scale_info::TypeInfo;
 use sp_arithmetic::{FixedPointNumber, FixedU128};
-use sp_runtime::traits::{Convert, One, Saturating, Zero};
-use sp_staking::EraIndex;
-use sp_staking::{PoolsInterface, StakingInterface};
+use sp_runtime::traits::{Convert, One, Saturating, StaticLookup, TrailingZeroInput, Zero};
+use sp_staking::{EraIndex, PoolsInterface, StakingInterface};
 use sp_std::collections::btree_map::BTreeMap;
 
 #[cfg(test)]
-pub mod mock;
+mod mock;
+#[cfg(test)]
+mod tests;
 
 pub use pallet::*;
 pub(crate) const LOG_TARGET: &'static str = "runtime::pools";
@@ -50,7 +51,7 @@ pub(crate) const LOG_TARGET: &'static str = "runtime::pools";
 macro_rules! log {
 	($level:tt, $patter:expr $(, $values:expr)* $(,)?) => {
 		log::$level!(
-			target: crate::LOG_TARGET,
+			target: LOG_TARGET,
 			concat!("[{:?}] 💰", $patter), <frame_system::Pallet<T>>::block_number() $(, $values)*
 		)
 	};
@@ -271,6 +272,7 @@ pub mod pallet {
 		type StakingInterface: StakingInterface<
 			Balance = BalanceOf<Self>,
 			AccountId = Self::AccountId,
+			LookupSource = <Self::Lookup as StaticLookup>::Source,
 		>;
 
 		/// The maximum amount of eras an unbonding pool can exist prior to being merged with the
@@ -335,6 +337,10 @@ pub mod pallet {
 		NotUnbonding,
 		/// Unbonded funds cannot be withdrawn yet because the bond duration has not passed.
 		NotUnbondedYet,
+		/// The given pool id cannot be used to create a new pool because it is already in use.
+		IdInUse,
+		/// The amount does not meet the minimum bond to start nominating.
+		MinimiumBondNotMet,
 	}
 
 	#[pallet::call]
@@ -543,6 +549,62 @@ pub mod pallet {
 
 			Ok(())
 		}
+
+		#[pallet::weight(666)]
+		pub fn create(
+			origin: OriginFor<T>,
+			id: PoolId,
+			targets: Vec<<T::Lookup as StaticLookup>::Source>,
+			amount: BalanceOf<T>,
+		) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+
+			ensure!(!PrimaryPools::<T>::contains_key(id), Error::<T>::IdInUse);
+			ensure!(amount > T::StakingInterface::minimum_bond(), Error::<T>::MinimiumBondNotMet);
+
+			let (stash, reward_dest) = Self::create_accounts(&who, id);
+
+			T::Currency::transfer(&who, &stash, amount, ExistenceRequirement::AllowDeath)?;
+
+			// T::StakingInterface::can_bond()
+			// T::StakingInterface::can_nominate()
+
+			T::StakingInterface::bond(
+				stash.clone(),
+				// We make the stash and controller the same for simplicity
+				stash.clone(),
+				amount,
+				reward_dest.clone(),
+			)?;
+
+			T::StakingInterface::nominate(stash.clone(), targets)?;
+
+			let mut primary_pool = Pool::<T> { shares: Zero::zero(), account_id: stash };
+			let shares_to_issue = primary_pool.shares_to_issue(amount);
+			primary_pool.shares = shares_to_issue;
+
+			Delegators::<T>::insert(
+				who,
+				Delegator::<T> {
+					pool: id,
+					shares: shares_to_issue,
+					reward_pool_total_earnings: Zero::zero(),
+					unbonding_era: None,
+				},
+			);
+			PrimaryPools::<T>::insert(id, primary_pool);
+			RewardPools::<T>::insert(
+				id,
+				RewardPool::<T> {
+					balance: Zero::zero(),
+					shares: Zero::zero(),
+					total_earnings: Zero::zero(),
+					account_id: reward_dest,
+				},
+			);
+
+			Ok(())
+		}
 	}
 
 	#[pallet::hooks]
@@ -559,6 +621,23 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
+	fn create_accounts(who: &T::AccountId, id: PoolId) -> (T::AccountId, T::AccountId) {
+		let parent_hash = frame_system::Pallet::<T>::parent_hash();
+		let ext_index = frame_system::Pallet::<T>::extrinsic_index().unwrap_or_default();
+
+		let stash_entropy =
+			(b"pools/stash", who, id, parent_hash, ext_index).using_encoded(sp_core::blake2_256);
+		let reward_entropy =
+			(b"pools/rewards", who, id, parent_hash, ext_index).using_encoded(sp_core::blake2_256);
+
+		(
+			Decode::decode(&mut TrailingZeroInput::new(stash_entropy.as_ref()))
+				.expect("infinite length input; no invalid inputs for type; qed"),
+			Decode::decode(&mut TrailingZeroInput::new(reward_entropy.as_ref()))
+				.expect("infinite length input; no invalid inputs for type; qed"),
+		)
+	}
+
 	/// Calculate the rewards for `delegator`.
 	fn calculate_delegator_payout(
 		primary_pool: &Pool<T>,

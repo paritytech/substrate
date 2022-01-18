@@ -14,6 +14,7 @@ pub struct StakingMock;
 impl sp_staking::StakingInterface for StakingMock {
 	type Balance = Balance;
 	type AccountId = AccountId;
+	type LookupSource = Self::AccountId;
 
 	fn minimum_bond() -> Self::Balance {
 		10
@@ -36,6 +37,19 @@ impl sp_staking::StakingInterface for StakingMock {
 	}
 
 	fn unbond(_: &Self::AccountId, _: Self::Balance) -> DispatchResult {
+		Ok(())
+	}
+
+	fn bond(
+		_: Self::AccountId,
+		_: Self::AccountId,
+		_: Self::Balance,
+		_: Self::AccountId,
+	) -> DispatchResult {
+		Ok(())
+	}
+
+	fn nominate(_: Self::AccountId, _: Vec<Self::LookupSource>) -> DispatchResult {
 		Ok(())
 	}
 }

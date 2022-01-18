@@ -23,13 +23,13 @@ sp-arithmetic = { version = "4.0.0", default-features = false, path = "../../pri
 sp-runtime = { version = "4.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
 sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../primitives/staking" }
+sp-core = { version = "4.1.0-dev", default-features = false, path = "../../primitives/core" }
 
 # third party
 log = { version = "0.4.14", default-features = false }
 
 [dev-dependencies]
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
-sp-core = { version = "4.1.0-dev", path = "../../primitives/core" }
 
 [features]
 default = ["std"]
