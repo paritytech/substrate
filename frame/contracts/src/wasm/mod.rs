@@ -26,7 +26,10 @@ mod runtime;
 
 #[cfg(feature = "runtime-benchmarks")]
 pub use self::code_cache::reinstrument;
-pub use self::runtime::{ReturnCode, Runtime, RuntimeCosts};
+pub use self::{
+	code_cache::{decrement_refcount, increment_refcount},
+	runtime::{ReturnCode, Runtime, RuntimeCosts},
+};
 use crate::{
 	exec::{ExecResult, Executable, ExportedFunction, Ext},
 	gas::GasMeter,
@@ -406,8 +409,9 @@ mod tests {
 			}
 			Ok(result)
 		}
-		fn set_code_hash(&mut self, hash: CodeHash<Self::T>) {
+		fn set_code_hash(&mut self, hash: CodeHash<Self::T>) -> Result<(), DispatchError> {
 			self.storage.insert(StorageKey::from(hash), vec![1, 2, 3]);
+			Ok(())
 		}
 		fn caller(&self) -> &AccountIdOf<Self::T> {
 			&ALICE

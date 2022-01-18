@@ -831,7 +831,7 @@ define_env!(Env, <E: Ext>,
 	[__unstable__] seal_set_code_hash(ctx, code_hash_ptr: u32) -> ReturnCode => {
 		ctx.charge_gas(RuntimeCosts::SetCodeHash)?;
 		let code_hash: CodeHash<<E as Ext>::T> = ctx.read_sandbox_memory_as(code_hash_ptr)?;
-		ctx.ext.set_code_hash(code_hash);
+		ctx.ext.set_code_hash(code_hash)?;
 		Ok(ReturnCode::Success)
 	},
 

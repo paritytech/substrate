@@ -118,6 +118,16 @@ pub fn decrement_refcount<T: Config>(code_hash: CodeHash<T>) -> Result<(), Dispa
 	Ok(())
 }
 
+/// Increment the refcount of a code in-storage by one.
+pub fn increment_refcount<T: Config>(code_hash: CodeHash<T>) -> Result<(), DispatchError> {
+	<OwnerInfoOf<T>>::mutate(code_hash, |existing| {
+		if let Some(info) = existing {
+			info.refcount = info.refcount.saturating_add(1);
+		}
+	});
+	Ok(())
+}
+
 /// Try to remove code together with all associated information.
 pub fn try_remove<T: Config>(origin: &T::AccountId, code_hash: CodeHash<T>) -> DispatchResult {
 	<OwnerInfoOf<T>>::try_mutate_exists(&code_hash, |existing| {
