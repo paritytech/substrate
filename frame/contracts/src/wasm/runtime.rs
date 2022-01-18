@@ -178,12 +178,9 @@ pub enum RuntimeCosts {
 	ContainsStorage,
 	/// Weight of calling `seal_get_storage` with the specified size in storage.
 	GetStorage(u32),
-	/// Weight of calling `seal_take_storage` without output weight.
+	/// Weight of calling `seal_take_storage` for the given size.
 	#[cfg(feature = "unstable-interface")]
-	TakeStorageBase,
-	/// Weight of an item received via `seal_take_storage` for the given size.
-	#[cfg(feature = "unstable-interface")]
-	TakeStorageCopyOut(u32),
+	TakeStorage(u32),
 	/// Weight of calling `seal_transfer`.
 	Transfer,
 	/// Weight of calling `seal_call` for the given input size.
@@ -255,9 +252,9 @@ impl RuntimeCosts {
 			GetStorage(len) =>
 				s.get_storage.saturating_add(s.get_storage_per_byte.saturating_mul(len.into())),
 			#[cfg(feature = "unstable-interface")]
-			TakeStorageBase => s.take_storage,
-			#[cfg(feature = "unstable-interface")]
-			TakeStorageCopyOut(len) => s.take_storage_per_byte.saturating_mul(len.into()),
+			TakeStorage(len) => s
+				.take_storage
+				.saturating_add(s.take_storage_per_byte.saturating_mul(len.into())),
 			Transfer => s.transfer,
 			CallBase(len) =>
 				s.call.saturating_add(s.call_per_input_byte.saturating_mul(len.into())),
@@ -914,15 +911,15 @@ define_env!(Env, <E: Ext>,
 	//
 	// `ReturnCode::KeyNotFound`
 	[__unstable__] seal_take_storage(ctx, key_ptr: u32, out_ptr: u32, out_len_ptr: u32) -> ReturnCode => {
-		ctx.charge_gas(RuntimeCosts::TakeStorageBase)?;
+		let charged = ctx.charge_gas(RuntimeCosts::TakeStorage(ctx.ext.schedule().limits.payload_len))?;
 		let mut key: StorageKey = [0; 32];
 		ctx.read_sandbox_memory_into_buf(key_ptr, &mut key)?;
 		if let WriteOutcome::Taken(value) = ctx.ext.set_storage(key, None, true)? {
-			ctx.write_sandbox_output(out_ptr, out_len_ptr, &value, false, |len| {
-				Some(RuntimeCosts::TakeStorageCopyOut(len))
-			})?;
+			ctx.adjust_gas(charged, RuntimeCosts::TakeStorage(value.len() as u32));
+			ctx.write_sandbox_output(out_ptr, out_len_ptr, &value, false, already_charged)?;
 			Ok(ReturnCode::Success)
 		} else {
+			ctx.adjust_gas(charged, RuntimeCosts::TakeStorage(0));
 			Ok(ReturnCode::KeyNotFound)
 		}
 	},
