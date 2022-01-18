@@ -52,7 +52,7 @@ sp-runtime = { version = "4.0.0", path = "../../../primitives/runtime" }
 sp-timestamp = { version = "4.0.0-dev", path = "../../../primitives/timestamp" }
 sp-authorship = { version = "4.0.0-dev", path = "../../../primitives/authorship" }
 sp-inherents = { version = "4.0.0-dev", path = "../../../primitives/inherents" }
-sp-keyring = { version = "4.0.0-dev", path = "../../../primitives/keyring" }
+sp-keyring = { version = "4.1.0-dev", path = "../../../primitives/keyring" }
 sp-keystore = { version = "0.10.0", path = "../../../primitives/keystore" }
 sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
 sp-transaction-pool = { version = "4.0.0-dev", path = "../../../primitives/transaction-pool" }

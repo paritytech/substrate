@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -239,7 +239,8 @@ mod tests {
 		let mut parent_hash = System::parent_hash();
 
 		for i in 1..(blocks + 1) {
-			System::initialize(&i, &parent_hash, &Default::default(), frame_system::InitKind::Full);
+			System::reset_events();
+			System::initialize(&i, &parent_hash, &Default::default());
 			CollectiveFlip::on_initialize(i);
 
 			let header = System::finalize();

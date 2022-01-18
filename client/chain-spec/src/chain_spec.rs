@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -164,6 +164,7 @@ struct ClientSpec<E> {
 	boot_nodes: Vec<MultiaddrWithPeerId>,
 	telemetry_endpoints: Option<TelemetryEndpoints>,
 	protocol_id: Option<String>,
+	fork_id: Option<String>,
 	properties: Option<Properties>,
 	#[serde(flatten)]
 	extensions: E,
@@ -175,10 +176,10 @@ struct ClientSpec<E> {
 	#[serde(skip_serializing)]
 	#[allow(unused)]
 	genesis: serde::de::IgnoredAny,
-	/// Mapping from `block_hash` to `wasm_code`.
+	/// Mapping from `block_number` to `wasm_code`.
 	///
-	/// The given `wasm_code` will be used to substitute the on-chain wasm code from the given
-	/// block hash onwards.
+	/// The given `wasm_code` will be used to substitute the on-chain wasm code starting with the
+	/// given block number until the `spec_version` on chain changes.
 	#[serde(default)]
 	code_substitutes: BTreeMap<String, Bytes>,
 }
@@ -223,7 +224,12 @@ impl<G, E> ChainSpec<G, E> {
 
 	/// Network protocol id.
 	pub fn protocol_id(&self) -> Option<&str> {
-		self.client_spec.protocol_id.as_ref().map(String::as_str)
+		self.client_spec.protocol_id.as_deref()
+	}
+
+	/// Optional network fork identifier.
+	pub fn fork_id(&self) -> Option<&str> {
+		self.client_spec.fork_id.as_deref()
 	}
 
 	/// Additional loosly-typed properties of the chain.
@@ -257,6 +263,7 @@ impl<G, E> ChainSpec<G, E> {
 		boot_nodes: Vec<MultiaddrWithPeerId>,
 		telemetry_endpoints: Option<TelemetryEndpoints>,
 		protocol_id: Option<&str>,
+		fork_id: Option<&str>,
 		properties: Option<Properties>,
 		extensions: E,
 	) -> Self {
@@ -267,6 +274,7 @@ impl<G, E> ChainSpec<G, E> {
 			boot_nodes,
 			telemetry_endpoints,
 			protocol_id: protocol_id.map(str::to_owned),
+			fork_id: fork_id.map(str::to_owned),
 			properties,
 			extensions,
 			consensus_engine: (),
@@ -382,6 +390,10 @@ where
 
 	fn protocol_id(&self) -> Option<&str> {
 		ChainSpec::protocol_id(self)
+	}
+
+	fn fork_id(&self) -> Option<&str> {
+		ChainSpec::fork_id(self)
 	}
 
 	fn properties(&self) -> Properties {

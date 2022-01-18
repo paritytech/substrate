@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -881,7 +881,7 @@ fn pallet_expand_deposit_event() {
 
 #[test]
 fn pallet_new_call_variant() {
-	Call::Example(pallet::Call::new_call_variant_foo(3, 4));
+	pallet::Call::<Runtime>::new_call_variant_foo(3, 4);
 }
 
 #[test]
@@ -1100,6 +1100,14 @@ fn migrate_from_pallet_version_to_storage_version() {
 fn metadata() {
 	use frame_support::metadata::*;
 
+	fn maybe_docs(doc: Vec<&'static str>) -> Vec<&'static str> {
+		if cfg!(feature = "no-metadata-docs") {
+			vec![]
+		} else {
+			doc
+		}
+	}
+
 	let pallets = vec![
 		PalletMetadata {
 			index: 1,
@@ -1269,7 +1277,7 @@ fn metadata() {
 						modifier: StorageEntryModifier::Default,
 						ty: StorageEntryType::Plain(meta_type::<u32>()),
 						default: vec![0, 0, 0, 0],
-						docs: vec!["Counter for the related counted storage map"],
+						docs: maybe_docs(vec!["Counter for the related counted storage map"]),
 					},
 					StorageEntryMetadata {
 						name: "Unbounded",
@@ -1287,13 +1295,13 @@ fn metadata() {
 					name: "MyGetParam",
 					ty: meta_type::<u32>(),
 					value: vec![10, 0, 0, 0],
-					docs: vec![" Some comment", " Some comment"],
+					docs: maybe_docs(vec![" Some comment", " Some comment"]),
 				},
 				PalletConstantMetadata {
 					name: "MyGetParam2",
 					ty: meta_type::<u32>(),
 					value: vec![11, 0, 0, 0],
-					docs: vec![" Some comment", " Some comment"],
+					docs: maybe_docs(vec![" Some comment", " Some comment"]),
 				},
 				PalletConstantMetadata {
 					name: "MyGetParam3",
@@ -1305,19 +1313,19 @@ fn metadata() {
 					name: "some_extra",
 					ty: meta_type::<u64>(),
 					value: vec![100, 0, 0, 0, 0, 0, 0, 0],
-					docs: vec![" Some doc", " Some doc"],
+					docs: maybe_docs(vec![" Some doc", " Some doc"]),
 				},
 				PalletConstantMetadata {
 					name: "some_extra_extra",
 					ty: meta_type::<u64>(),
 					value: vec![0, 0, 0, 0, 0, 0, 0, 0],
-					docs: vec![" Some doc"],
+					docs: maybe_docs(vec![" Some doc"]),
 				},
 				PalletConstantMetadata {
 					name: "SomeExtraRename",
 					ty: meta_type::<u64>(),
 					value: vec![0, 0, 0, 0, 0, 0, 0, 0],
-					docs: vec![" Some doc"],
+					docs: maybe_docs(vec![" Some doc"]),
 				},
 			],
 			error: Some(PalletErrorMetadata { ty: meta_type::<pallet::Error<Runtime>>() }),
@@ -1351,7 +1359,7 @@ fn metadata() {
 						modifier: StorageEntryModifier::Default,
 						ty: StorageEntryType::Plain(meta_type::<u32>()),
 						default: vec![0, 0, 0, 0],
-						docs: vec!["Counter for the related counted storage map"],
+						docs: maybe_docs(vec!["Counter for the related counted storage map"]),
 					},
 				],
 			}),
@@ -1361,6 +1369,16 @@ fn metadata() {
 			error: None,
 		},
 	];
+
+	let empty_doc = pallets[0].event.as_ref().unwrap().ty.type_info().docs().is_empty() &&
+		pallets[0].error.as_ref().unwrap().ty.type_info().docs().is_empty() &&
+		pallets[0].calls.as_ref().unwrap().ty.type_info().docs().is_empty();
+
+	if cfg!(feature = "no-metadata-docs") {
+		assert!(empty_doc)
+	} else {
+		assert!(!empty_doc)
+	}
 
 	let extrinsic = ExtrinsicMetadata {
 		ty: meta_type::<UncheckedExtrinsic>(),
