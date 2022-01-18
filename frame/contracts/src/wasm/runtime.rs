@@ -416,7 +416,7 @@ where
 				// The trap was the result of the execution `return` host function.
 				TrapReason::Return(ReturnData { flags, data }) => {
 					let flags = ReturnFlags::from_bits(flags)
-						.ok_or_else(|| "used reserved bit in return flags")?;
+						.ok_or_else(|| Error::<E::T>::InvalidCallFlags)?;
 					Ok(ExecReturnValue { flags, data: Bytes(data) })
 				},
 				TrapReason::Termination =>
@@ -734,6 +734,9 @@ where
 		let call_outcome = match callee {
 			#[cfg(feature = "unstable-interface")]
 			CallType::DelegateCall(code_hash_ptr) => {
+				if flags.contains(CallFlags::ALLOW_REENTRY) {
+					return Err(Error::<E::T>::InvalidCallFlags.into())
+				}
 				let code_hash = self.read_sandbox_memory_as(code_hash_ptr)?;
 				self.ext.delegate_call(code_hash, input_data)
 			},
@@ -1075,7 +1078,7 @@ define_env!(Env, <E: Ext>,
 		output_len_ptr: u32
 	) -> ReturnCode => {
 		ctx.call(
-			CallFlags::from_bits(flags).ok_or_else(|| "used reserved bit in CallFlags")?,
+			CallFlags::from_bits(flags).ok_or_else(|| Error::<E::T>::InvalidCallFlags)?,
 			CallType::Call{callee_ptr, value_ptr},
 			gas,
 			input_data_ptr,
@@ -1115,7 +1118,7 @@ define_env!(Env, <E: Ext>,
 		output_len_ptr: u32
 	) -> ReturnCode => {
 		ctx.call(
-			CallFlags::from_bits(flags).ok_or_else(|| "used reserved bit in CallFlags")?,
+			CallFlags::from_bits(flags).ok_or_else(|| Error::<E::T>::InvalidCallFlags)?,
 			CallType::DelegateCall(code_hash_ptr),
 			0u64,
 			input_data_ptr,
