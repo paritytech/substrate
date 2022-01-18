@@ -436,7 +436,8 @@ impl<B: BlockT> Protocol<B> {
 			important_peers,
 			default_peers_set_num_full: network_config.default_peers_set_num_full as usize,
 			default_peers_set_num_light: {
-				let total = network_config.default_peers_set.out_peers + network_config.default_peers_set.in_peers;
+				let total = network_config.default_peers_set.out_peers +
+					network_config.default_peers_set.in_peers;
 				total.saturating_sub(network_config.default_peers_set_num_full) as usize
 			},
 			peerset_handle: peerset_handle.clone(),
