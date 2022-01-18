@@ -36,8 +36,11 @@ use scale_info::TypeInfo;
 use sp_arithmetic::{FixedPointNumber, FixedU128};
 use sp_runtime::traits::{Convert, One, Saturating, Zero};
 use sp_staking::EraIndex;
-use sp_staking::PoolsInterface;
+use sp_staking::{PoolsInterface, StakingInterface};
 use sp_std::collections::btree_map::BTreeMap;
+
+#[cfg(test)]
+pub mod mock;
 
 pub use pallet::*;
 pub(crate) const LOG_TARGET: &'static str = "runtime::pools";
@@ -58,33 +61,6 @@ type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 type SharesOf<T> = BalanceOf<T>;
 type SubPoolsWithEra<T> = BoundedBTreeMap<EraIndex, UnbondPool<T>, <T as Config>::MaxUnbonding>;
-
-/// Trait for communication with the staking pallet.
-pub trait StakingInterface {
-	/// Balance type used by the staking system.
-	type Balance;
-
-	/// AccountId type used by the staking system
-	type AccountId;
-
-	/// The minimum amount necessary to bond to be a nominator. This does not necessarily mean the
-	/// nomination will be counted in an election, but instead just enough to be stored as a
-	/// nominator (e.g. in the bags-list of polkadot)
-	fn minimum_bond() -> Self::Balance;
-
-	/// The current era for the staking system.
-	fn current_era() -> EraIndex;
-
-	/// Balance `controller` has bonded for nominating.
-	fn bonded_balance(controller: &Self::AccountId) -> Self::Balance;
-
-	fn bond_extra(controller: &Self::AccountId, extra: Self::Balance) -> DispatchResult;
-
-	fn unbond(controller: &Self::AccountId, value: Self::Balance) -> DispatchResult;
-
-	/// Number of eras that staked funds must remain bonded for.
-	fn bond_duration() -> EraIndex;
-}
 
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo)]
 #[codec(mel_bound(T: Config))]
@@ -525,7 +501,7 @@ pub mod pallet {
 
 			let unbonding_era = delegator.unbonding_era.ok_or(Error::<T>::NotUnbonding)?;
 			let current_era = T::StakingInterface::current_era();
-			if current_era.saturating_sub(unbonding_era) < T::StakingInterface::bond_duration() {
+			if current_era.saturating_sub(unbonding_era) < T::StakingInterface::bonding_duration() {
 				return Err(Error::<T>::NotUnbondedYet.into());
 			};
 
@@ -573,7 +549,7 @@ pub mod pallet {
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn integrity_test() {
 			assert!(
-				T::StakingInterface::bond_duration() < T::MaxUnbonding::get(),
+				T::StakingInterface::bonding_duration() < T::MaxUnbonding::get(),
 				"There must be more unbonding pools then the bonding duration /
 				so a slash can be applied to relevant unboding pools. (We assume /
 				the bonding duration > slash deffer duration.",

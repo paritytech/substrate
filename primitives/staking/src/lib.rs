@@ -19,6 +19,7 @@
 
 //! A crate which contains primitives that are useful for implementation that uses staking
 //! approaches in general. Definitions related to sessions, slashing, etc go here.
+use sp_runtime::DispatchResult;
 use sp_std::collections::btree_map::BTreeMap;
 
 pub mod offence;
@@ -39,4 +40,31 @@ pub trait PoolsInterface {
 		slash_era: EraIndex,
 		active_era: EraIndex,
 	) -> Option<(Self::Balance, BTreeMap<EraIndex, Self::Balance>)>;
+}
+
+/// Trait for communication with the staking pallet.
+pub trait StakingInterface {
+	/// Balance type used by the staking system.
+	type Balance;
+
+	/// AccountId type used by the staking system
+	type AccountId;
+
+	/// The minimum amount necessary to bond to be a nominator. This does not necessarily mean the
+	/// nomination will be counted in an election, but instead just enough to be stored as a
+	/// nominator (e.g. in the bags-list of polkadot)
+	fn minimum_bond() -> Self::Balance;
+
+	/// Number of eras that staked funds must remain bonded for.
+	fn bonding_duration() -> EraIndex;
+
+	/// The current era for the staking system.
+	fn current_era() -> EraIndex;
+
+	/// Balance `controller` has bonded for nominating.
+	fn bonded_balance(controller: &Self::AccountId) -> Self::Balance;
+
+	fn bond_extra(controller: &Self::AccountId, extra: Self::Balance) -> DispatchResult;
+
+	fn unbond(controller: &Self::AccountId, value: Self::Balance) -> DispatchResult;
 }
