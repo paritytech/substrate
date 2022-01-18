@@ -8,7 +8,7 @@
 	;; [0, 32) storage key
 	(data (i32.const 0) "\01")
     ;; [32, 64) storage value
-	(data (i32.const 32) "\20")
+	(data (i32.const 32) "\02")
 
 	;; [64, 96) buffer where input is copied
 
@@ -35,6 +35,7 @@
 	(func (export "call")
 		(local $exit_code i32)
 
+		;; Reading "callee" code_hash
 		(call $seal_input (i32.const 64) (i32.const 96))
 
 		;; assert input size == 32
@@ -48,7 +49,7 @@
 		;; place a value in storage, the size of which is specified by the call input.
 		(call $seal_set_storage
 			(i32.const 0)		;; Pointer to storage key
-			(i32.const 32)		;; Pointer to value
+			(i32.const 32)		;; Pointer to initial value
 		    (i32.load (i32.const 100))		;; Size of value
 		)
 
@@ -65,20 +66,20 @@
 
 		(call $assert
 			(i32.eq
-				(i32.load (i32.const 104))
-				(i32.load (i32.const 32))
+				(i32.load (i32.const 104))		;; value received from storage
+				(i32.load (i32.const 32))		;; initial value
 			)
 		)
 
 		;; Call deployed library contract code.
 		(set_local $exit_code
 			(call $seal_delegate_call
-				(i32.const 1)   ;; Set FORWARD_INPUT bit
+				(i32.const 0)   ;; Set no call flags
 				(i32.const 64)	;; Pointer to "callee" code_hash.
 				(i32.const 136)	;; Pointer to input data buffer address
 				(i32.const 4)	;; Length of input data buffer
-				(i32.const 140)  ;; Ptr to output buffer (any value)
-				(i32.const 32)  ;; Output buffer len (any value)
+				(i32.const 4294967295) ;; u32 max sentinel value: do not copy output
+				(i32.const 0) ;; Length is ignored in this case
 			)
 		)
 

@@ -192,7 +192,7 @@ pub enum RuntimeCosts {
 	CallBase(u32),
 	/// Weight of calling `seal_delegate_call` for the given input size.
 	#[cfg(feature = "unstable-interface")]
-	DelegateCall(u32),
+	DelegateCallBase(u32),
 	/// Weight of the transfer performed during a call.
 	CallSurchargeTransfer,
 	/// Weight of output received through `seal_call` for the given size.
@@ -269,7 +269,7 @@ impl RuntimeCosts {
 			CallSurchargeTransfer => s.call_transfer_surcharge,
 			CallCopyOut(len) => s.call_per_output_byte.saturating_mul(len.into()),
 			#[cfg(feature = "unstable-interface")]
-			DelegateCall(len) =>
+			DelegateCallBase(len) =>
 				s.delegate_call.saturating_add(s.call_per_input_byte.saturating_mul(len.into())),
 			InstantiateBase { input_data_len, salt_len } => s
 				.instantiate
@@ -363,13 +363,12 @@ bitflags! {
 	}
 }
 
-/// Invariant of the call performed.
-///
-/// DelegateCall is to execute deployed code in caller contract context
-/// Call is to call to another instantiated contract
+/// The kind of call that should be performed.
 enum CallType {
-	Call(u32),
+	/// Call is to call to another instantiated contract
+	Call { callee_ptr: u32, value_ptr: u32 },
 	#[cfg(feature = "unstable-interface")]
+	/// DelegateCall is to execute deployed code in caller contract context
 	DelegateCall(u32),
 }
 
@@ -713,19 +712,17 @@ where
 		flags: CallFlags,
 		callee: CallType,
 		gas: u64,
-		value_ptr: u32,
 		input_data_ptr: u32,
 		input_data_len: u32,
 		output_ptr: u32,
 		output_len_ptr: u32,
 	) -> Result<ReturnCode, TrapReason> {
 		let call_cost = match callee {
-			CallType::Call(_) => RuntimeCosts::CallBase(input_data_len),
+			CallType::Call { .. } => RuntimeCosts::CallBase(input_data_len),
 			#[cfg(feature = "unstable-interface")]
-			CallType::DelegateCall(_) => RuntimeCosts::DelegateCall(input_data_len),
+			CallType::DelegateCall(_) => RuntimeCosts::DelegateCallBase(input_data_len),
 		};
 		self.charge_gas(call_cost)?;
-		let value: BalanceOf<<E as Ext>::T> = self.read_sandbox_memory_as(value_ptr)?;
 		let input_data = if flags.contains(CallFlags::CLONE_INPUT) {
 			self.input_data.as_ref().ok_or_else(|| Error::<E::T>::InputForwarded)?.clone()
 		} else if flags.contains(CallFlags::FORWARD_INPUT) {
@@ -733,9 +730,6 @@ where
 		} else {
 			self.read_sandbox_memory(input_data_ptr, input_data_len)?
 		};
-		if value > 0u32.into() {
-			self.charge_gas(RuntimeCosts::CallSurchargeTransfer)?;
-		}
 
 		let call_outcome = match callee {
 			#[cfg(feature = "unstable-interface")]
@@ -743,9 +737,13 @@ where
 				let code_hash = self.read_sandbox_memory_as(code_hash_ptr)?;
 				self.ext.delegate_call(code_hash, input_data)
 			},
-			CallType::Call(callee_ptr) => {
+			CallType::Call { callee_ptr, value_ptr } => {
 				let callee: <<E as Ext>::T as frame_system::Config>::AccountId =
 					self.read_sandbox_memory_as(callee_ptr)?;
+				let value: BalanceOf<<E as Ext>::T> = self.read_sandbox_memory_as(value_ptr)?;
+				if value > 0u32.into() {
+					self.charge_gas(RuntimeCosts::CallSurchargeTransfer)?;
+				}
 				self.ext.call(
 					gas,
 					callee,
@@ -1027,9 +1025,8 @@ define_env!(Env, <E: Ext>,
 	) -> ReturnCode => {
 		ctx.call(
 			CallFlags::ALLOW_REENTRY,
-			CallType::Call(callee_ptr),
+			CallType::Call{callee_ptr, value_ptr},
 			gas,
-			value_ptr,
 			input_data_ptr,
 			input_data_len,
 			output_ptr,
@@ -1079,9 +1076,48 @@ define_env!(Env, <E: Ext>,
 	) -> ReturnCode => {
 		ctx.call(
 			CallFlags::from_bits(flags).ok_or_else(|| "used reserved bit in CallFlags")?,
-			CallType::Call(callee_ptr),
+			CallType::Call{callee_ptr, value_ptr},
 			gas,
-			value_ptr,
+			input_data_ptr,
+			input_data_len,
+			output_ptr,
+			output_len_ptr,
+		)
+	},
+
+	// Execute code in the context of the current contract.
+	//
+	// # Parameters
+	//
+	// - flags: See [`CallFlags`] for a documentation of the supported flags.
+	// - code_hash: a pointer to the hash of the code to be called.
+	// - input_data_ptr: a pointer to a buffer to be used as input data to the callee.
+	// - input_data_len: length of the input data buffer.
+	// - output_ptr: a pointer where the output buffer is copied to.
+	// - output_len_ptr: in-out pointer to where the length of the buffer is read from
+	//   and the actual length is written to.
+	//
+	// # Errors
+	//
+	// An error means that the call wasn't successful output buffer is returned unless
+	// stated otherwise.
+	//
+	// `ReturnCode::CalleeReverted`: Output buffer is returned.
+	// `ReturnCode::CalleeTrapped`
+	// `ReturnCode::CodeNotFound`
+	[__unstable__] seal_delegate_call(
+		ctx,
+		flags: u32,
+		code_hash_ptr: u32,
+		input_data_ptr: u32,
+		input_data_len: u32,
+		output_ptr: u32,
+		output_len_ptr: u32
+	) -> ReturnCode => {
+		ctx.call(
+			CallFlags::from_bits(flags).ok_or_else(|| "used reserved bit in CallFlags")?,
+			CallType::DelegateCall(code_hash_ptr),
+			0u64,
 			input_data_ptr,
 			input_data_len,
 			output_ptr,
@@ -1881,46 +1917,5 @@ define_env!(Env, <E: Ext>,
 			},
 			Err(_) => Ok(ReturnCode::EcdsaRecoverFailed),
 		}
-	},
-
-	// Execute code in the context of the current contract.
-	//
-	// # Parameters
-	//
-	// - flags: See [`CallFlags`] for a documentation of the supported flags.
-	// - code_hash: a pointer to the hash of the code to be called.
-	// - input_data_ptr: a pointer to a buffer to be used as input data to the callee.
-	// - input_data_len: length of the input data buffer.
-	// - output_ptr: a pointer where the output buffer is copied to.
-	// - output_len_ptr: in-out pointer to where the length of the buffer is read from
-	//   and the actual length is written to.
-	//
-	// # Errors
-	//
-	// An error means that the call wasn't successful output buffer is returned unless
-	// stated otherwise.
-	//
-	// `ReturnCode::CalleeReverted`: Output buffer is returned.
-	// `ReturnCode::CalleeTrapped`
-	// `ReturnCode::CodeNotFound`
-	[__unstable__] seal_delegate_call(
-		ctx,
-		flags: u32,
-		code_hash_ptr: u32,
-		input_data_ptr: u32,
-		input_data_len: u32,
-		output_ptr: u32,
-		output_len_ptr: u32
-	) -> ReturnCode => {
-		ctx.call(
-			CallFlags::from_bits(flags).ok_or_else(|| "used reserved bit in CallFlags")?,
-			CallType::DelegateCall(code_hash_ptr),
-			0u64,
-			0u32,
-			input_data_ptr,
-			input_data_len,
-			output_ptr,
-			output_len_ptr,
-		)
 	},
 );

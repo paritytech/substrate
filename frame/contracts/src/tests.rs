@@ -581,44 +581,6 @@ fn storage_max_value_limit() {
 }
 
 #[test]
-#[cfg(feature = "unstable-interface")]
-fn call_code() {
-	let (caller_wasm, caller_code_hash) = compile_module::<Test>("delegate_call").unwrap();
-	let (callee_wasm, callee_code_hash) = compile_module::<Test>("delegate_call_lib").unwrap();
-	let caller_addr = Contracts::contract_address(&ALICE, &caller_code_hash, &[]);
-
-	ExtBuilder::default().existential_deposit(500).build().execute_with(|| {
-		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
-
-		// Instantiate the 'caller'
-		assert_ok!(Contracts::instantiate_with_code(
-			Origin::signed(ALICE),
-			300_000,
-			GAS_LIMIT,
-			None,
-			caller_wasm,
-			vec![],
-			vec![],
-		));
-		// Only deploy 'callee' code
-		assert_ok!(Contracts::upload_code(
-			Origin::signed(ALICE),
-			callee_wasm,
-			Some(codec::Compact(100_000)),
-		));
-
-		assert_ok!(Contracts::call(
-			Origin::signed(ALICE),
-			caller_addr.clone(),
-			0,
-			GAS_LIMIT,
-			None,
-			callee_code_hash.as_ref().to_vec(),
-		));
-	});
-}
-
-#[test]
 fn deploy_and_call_other_contract() {
 	let (caller_wasm, caller_code_hash) = compile_module::<Test>("caller_contract").unwrap();
 	let (callee_wasm, callee_code_hash) = compile_module::<Test>("return_with_data").unwrap();
@@ -726,6 +688,44 @@ fn deploy_and_call_other_contract() {
 				},
 			]
 		);
+	});
+}
+
+#[test]
+#[cfg(feature = "unstable-interface")]
+fn delegate_call() {
+	let (caller_wasm, caller_code_hash) = compile_module::<Test>("delegate_call").unwrap();
+	let (callee_wasm, callee_code_hash) = compile_module::<Test>("delegate_call_lib").unwrap();
+	let caller_addr = Contracts::contract_address(&ALICE, &caller_code_hash, &[]);
+
+	ExtBuilder::default().existential_deposit(500).build().execute_with(|| {
+		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+
+		// Instantiate the 'caller'
+		assert_ok!(Contracts::instantiate_with_code(
+			Origin::signed(ALICE),
+			300_000,
+			GAS_LIMIT,
+			None,
+			caller_wasm,
+			vec![],
+			vec![],
+		));
+		// Only upload 'callee' code
+		assert_ok!(Contracts::upload_code(
+			Origin::signed(ALICE),
+			callee_wasm,
+			Some(codec::Compact(100_000)),
+		));
+
+		assert_ok!(Contracts::call(
+			Origin::signed(ALICE),
+			caller_addr.clone(),
+			0,
+			GAS_LIMIT,
+			None,
+			callee_code_hash.as_ref().to_vec(),
+		));
 	});
 }
 
