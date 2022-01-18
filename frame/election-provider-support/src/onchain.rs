@@ -47,8 +47,14 @@ impl From<sp_npos_elections::Error> for Error {
 /// implementation ignores the additional data of the election data provider and gives no insight on
 /// how much weight was consumed.
 ///
-/// Finally, this implementation does not impose any limits on the number of voters and targets that
-/// are provided.
+/// Finally, the [`ElectionProvider`] implementation of this type does not impose any limits on the
+/// number of voters and targets that are fetched. This could potentially make this unsuitable for
+/// execution onchain. On the other hand, the [`InstantElectionProvider`] implementation does limit
+/// these inputs.
+///
+/// It is advisable to use the former ([`ElectionProvider::elect`]) only at genesis, or for testing,
+/// the latter [`InstantElectionProvider::instant_elect`] for onchain operations, with thoughtful
+/// bounds.
 pub struct OnChainSequentialPhragmen<T: Config>(PhantomData<T>);
 
 /// Configuration trait of [`OnChainSequentialPhragmen`].
