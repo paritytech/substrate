@@ -36,6 +36,7 @@ use scale_info::TypeInfo;
 use sp_arithmetic::{FixedPointNumber, FixedU128};
 use sp_runtime::traits::{Convert, One, Saturating, Zero};
 use sp_staking::EraIndex;
+use sp_staking::PoolsInterface;
 use sp_std::collections::btree_map::BTreeMap;
 
 pub use pallet::*;
@@ -661,23 +662,23 @@ impl<T: Config> Pallet<T> {
 		Ok(())
 	}
 
-	fn slash_pool(
+	fn do_slash(
 		// This would be the nominator account
-		pool_account: T::AccountId,
+		pool_account: &T::AccountId,
 		// Value of slash
 		slash_amount: BalanceOf<T>,
-		//
-		apply_era: EraIndex,
-		//
+		// Era the slash was initially reported
 		slash_era: EraIndex,
+		// Era the slash is applied in
+		apply_era: EraIndex,
 	) -> Option<(BalanceOf<T>, BTreeMap<EraIndex, BalanceOf<T>>)> {
-		let pool_id = PoolIds::<T>::get(&pool_account)?;
+		let pool_id = PoolIds::<T>::get(pool_account)?;
 		let mut sub_pools = SubPools::<T>::get(pool_id).unwrap_or_default();
 
 		// TODO double check why we do slash_era + 1
 		let affected_range = (slash_era + 1)..=apply_era;
 
-		let bonded_balance = T::StakingInterface::bonded_balance(&pool_account);
+		let bonded_balance = T::StakingInterface::bonded_balance(pool_account);
 
 		// Note that this doesn't count the balance in the `no_era` pool
 		let unbonding_affected_balance: BalanceOf<T> =
@@ -725,7 +726,23 @@ impl<T: Config> Pallet<T> {
 			T::U128ToBalance::convert(slash_multiplier.saturating_mul_int(pre_slash_balance))
 		};
 
-		Ok((slashed_bonded_pool_balance, unlock_chunk_balances))
+		Some((slashed_bonded_pool_balance, unlock_chunk_balances))
+	}
+}
+
+impl<T: Config> PoolsInterface for Pallet<T> {
+	type AccountId = T::AccountId;
+	type Balance = BalanceOf<T>;
+
+	fn slash_pool(
+		pool_account: &Self::AccountId,
+		slash_amount: Self::Balance,
+		slash_era: 
+		EraIndex,
+		apply_era: 
+		EraIndex,
+	) -> Option<(Self::Balance, BTreeMap<EraIndex, Self::Balance>)> {
+		Self::do_slash(pool_account, slash_amount, slash_era, apply_era)
 	}
 }
 

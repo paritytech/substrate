@@ -124,7 +124,7 @@ impl SlashingSpans {
 	pub(crate) fn end_span(&mut self, now: EraIndex) -> bool {
 		let next_start = now + 1;
 		if next_start <= self.last_start {
-			return false;
+			return false
 		}
 
 		let last_length = next_start - self.last_start;
@@ -171,7 +171,7 @@ impl SlashingSpans {
 				self.prior.truncate(o);
 				let new_earliest = self.span_index - self.prior.len() as SpanIndex;
 				Some((earliest_span_index, new_earliest))
-			}
+			},
 			None => None,
 		};
 
@@ -236,7 +236,7 @@ pub(crate) fn compute_slash<T: Config>(
 		// kick out the validator even if they won't be slashed,
 		// as long as the misbehavior is from their most recent slashing span.
 		kick_out_if_recent::<T>(params);
-		return None;
+		return None
 	}
 
 	let (prior_slash_p, _era_slash) =
@@ -259,7 +259,7 @@ pub(crate) fn compute_slash<T: Config>(
 		// pays out some reward even if the latest report is not max-in-era.
 		// we opt to avoid the nominator lookups and edits and leave more rewards
 		// for more drastic misbehavior.
-		return None;
+		return None
 	}
 
 	// apply slash to validator.
@@ -352,7 +352,7 @@ fn add_offending_validator<T: Config>(stash: &T::AccountId, disable: bool) {
 				if disable {
 					T::SessionInterface::disable_validator(validator_index_u32);
 				}
-			}
+			},
 			Ok(index) => {
 				if disable && !offending[index].1 {
 					// the validator had previously offended without being disabled,
@@ -360,7 +360,7 @@ fn add_offending_validator<T: Config>(stash: &T::AccountId, disable: bool) {
 					offending[index].1 = true;
 					T::SessionInterface::disable_validator(validator_index_u32);
 				}
-			}
+			},
 		}
 	});
 }
@@ -542,7 +542,7 @@ impl<'a, T: 'a + Config> Drop for InspectingSpans<'a, T> {
 	fn drop(&mut self) {
 		// only update on disk if we slashed this account.
 		if !self.dirty {
-			return;
+			return
 		}
 
 		if let Some((start, end)) = self.spans.prune(self.window_start) {
@@ -598,6 +598,8 @@ pub fn do_slash<T: Config>(
 	value: BalanceOf<T>,
 	reward_payout: &mut BalanceOf<T>,
 	slashed_imbalance: &mut NegativeImbalanceOf<T>,
+	slash_era: EraIndex,
+	apply_era: EraIndex,
 ) {
 	let controller = match <Pallet<T>>::bonded(stash) {
 		None => return, // defensive: should always exist.
@@ -609,7 +611,12 @@ pub fn do_slash<T: Config>(
 		None => return, // nothing to do.
 	};
 
-	let value = ledger.slash(value, T::Currency::minimum_balance());
+	let value = ledger.slash::<T::PoolsInterface>(
+		value,
+		T::Currency::minimum_balance(),
+		slash_era,
+		apply_era,
+	);
 
 	if !value.is_zero() {
 		let (imbalance, missing) = T::Currency::slash(stash, value);
@@ -628,7 +635,11 @@ pub fn do_slash<T: Config>(
 }
 
 /// Apply a previously-unapplied slash.
-pub(crate) fn apply_slash<T: Config>(unapplied_slash: UnappliedSlash<T::AccountId, BalanceOf<T>>) {
+pub(crate) fn apply_slash<T: Config>(
+	unapplied_slash: UnappliedSlash<T::AccountId, BalanceOf<T>>,
+	slash_era: EraIndex,
+	active_era: EraIndex,
+) {
 	let mut slashed_imbalance = NegativeImbalanceOf::<T>::zero();
 	let mut reward_payout = unapplied_slash.payout;
 
@@ -637,14 +648,19 @@ pub(crate) fn apply_slash<T: Config>(unapplied_slash: UnappliedSlash<T::AccountI
 		unapplied_slash.own,
 		&mut reward_payout,
 		&mut slashed_imbalance,
+		slash_era,
+		active_era,
 	);
 
 	for &(ref nominator, nominator_slash) in &unapplied_slash.others {
-		if T::PoolsInterface::is_pool() {
-			T::PoolsInterface::slash_pool()
-		} else {
-			do_slash::<T>(&nominator, nominator_slash, &mut reward_payout, &mut slashed_imbalance);
-		}
+		do_slash::<T>(
+			&nominator,
+			nominator_slash,
+			&mut reward_payout,
+			&mut slashed_imbalance,
+			slash_era,
+			active_era,
+		);
 	}
 
 	pay_reporters::<T>(reward_payout, slashed_imbalance, &unapplied_slash.reporters);
@@ -660,7 +676,7 @@ fn pay_reporters<T: Config>(
 		// nobody to pay out to or nothing to pay;
 		// just treat the whole value as slashed.
 		T::Slash::on_unbalanced(slashed_imbalance);
-		return;
+		return
 	}
 
 	// take rewards out of the slashed imbalance.

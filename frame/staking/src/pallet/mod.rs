@@ -31,7 +31,7 @@ use sp_runtime::{
 	traits::{CheckedSub, SaturatedConversion, StaticLookup, Zero},
 	DispatchError, Perbill, Percent,
 };
-use sp_staking::{EraIndex, SessionIndex};
+use sp_staking::{EraIndex, PoolsInterface, SessionIndex};
 use sp_std::{convert::From, prelude::*, result};
 
 mod impls;
@@ -152,6 +152,8 @@ pub mod pallet {
 		/// original use case for this was designed with `pallet_bags_list::Pallet` in mind. If
 		/// the bags-list is not desired, [`impls::UseNominatorsMap`] is likely the desired option.
 		type SortedListProvider: SortedListProvider<Self::AccountId>;
+
+		type PoolsInterface: PoolsInterface<AccountId = Self::AccountId, Balance = BalanceOf<Self>>;
 
 		/// Some parameters of the benchmarking.
 		type BenchmarkingConfig: BenchmarkingConfig;

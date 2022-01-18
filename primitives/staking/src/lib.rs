@@ -34,9 +34,9 @@ pub trait PoolsInterface {
 	type Balance;
 
 	fn slash_pool(
-		account_id: Self::AccountId,
-		slash_amount: Balance,
-	) -> Option<(Balance, BTreeMap<EraIndex, Balance>), ()>;
+		account_id: &Self::AccountId,
+		slash_amount: Self::Balance,
+		slash_era: EraIndex,
+		active_era: EraIndex,
+	) -> Option<(Self::Balance, BTreeMap<EraIndex, Self::Balance>)>;
 }
-
-
