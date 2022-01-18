@@ -91,7 +91,7 @@ pub struct NetworkParams {
 	pub in_peers: u32,
 	/// Maximum number of inbound light nodes peers.
 	#[structopt(long = "in-peers-light", value_name = "COUNT", default_value = "100")]
-	pub in_peers_light: u32
+	pub in_peers_light: u32,
 
 	/// Disable mDNS discovery.
 	///
