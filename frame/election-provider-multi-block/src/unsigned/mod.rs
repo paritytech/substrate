@@ -324,7 +324,7 @@ mod validate_unsigned {
 				roll_to_unsigned_open();
 
 				// this is just worse
-				let attempt = fake_unsigned_solution([20, 0, 0]);
+				let attempt = fake_solution([20, 0, 0]);
 				let call = Call::submit_unsigned { paged_solution: Box::new(attempt) };
 				assert_eq!(
 					UnsignedPallet::validate_unsigned(TransactionSource::Local, &call).unwrap_err(),
@@ -333,7 +333,7 @@ mod validate_unsigned {
 
 				// this is better, but not enough better.
 				let insufficient_improvement = 55 * 105 / 100;
-				let attempt = fake_unsigned_solution([insufficient_improvement, 0, 0]);
+				let attempt = fake_solution([insufficient_improvement, 0, 0]);
 				let call = Call::submit_unsigned { paged_solution: Box::new(attempt) };
 				assert_eq!(
 					UnsignedPallet::validate_unsigned(TransactionSource::Local, &call).unwrap_err(),
@@ -361,7 +361,7 @@ mod validate_unsigned {
 		ExtBuilder::unsigned().build_and_execute(|| {
 			roll_to_unsigned_open();
 
-			let mut attempt = fake_unsigned_solution([5, 0, 0]);
+			let mut attempt = fake_solution([5, 0, 0]);
 			attempt.round += 1;
 			let call = Call::submit_unsigned { paged_solution: Box::new(attempt) };
 
@@ -498,7 +498,7 @@ mod validate_unsigned {
 				roll_to(25);
 				assert!(MultiBlock::current_phase().is_unsigned());
 
-				let solution = fake_unsigned_solution([5, 0, 0]);
+				let solution = fake_solution([5, 0, 0]);
 				let call = Call::submit_unsigned { paged_solution: Box::new(solution.clone()) };
 
 				assert_eq!(

@@ -525,6 +525,32 @@ impl<T: Config> Pallet<T> {
 		0
 	}
 
+	fn do_verify_synchronous(
+		partial_solution: T::Solution,
+		claimed_score: ElectionScore,
+		page: PageIndex,
+	) -> Result<SupportsOf<Self>, FeasibilityError> {
+		// first, ensure this score will be good enough, even if valid..
+		let _ = Self::ensure_score_quality(claimed_score)?;
+
+		// then actually check feasibility...
+		// NOTE: `MaxBackersPerWinner` is also already checked here.
+		let supports = Self::feasibility_check_page_inner(partial_solution, page)?;
+
+		// then check that the number of winners was exactly enough..
+		let desired_targets =
+			crate::Snapshot::<T>::desired_targets().ok_or(FeasibilityError::SnapshotUnavailable)?;
+		ensure!(supports.len() as u32 == desired_targets, FeasibilityError::WrongWinnerCount);
+
+		// then check the score was truth..
+		let truth_score = supports.evaluate();
+		ensure!(truth_score == claimed_score, FeasibilityError::InvalidScore);
+
+		// and finally queue the solution.
+		QueuedSolution::<T>::force_set_single_page_valid(0, supports.clone(), truth_score);
+
+		Ok(supports)
+	}
 	/// This should only be called when all pages of an async verification are done.
 	///
 	/// Returns `Ok()` if everything is okay, at which point the valid variant of the queued
@@ -668,10 +694,9 @@ impl<T: Config> Pallet<T> {
 		// almost-defensive-only: `MaxBackersPerWinner` is already checked. A sane value of
 		// `MaxWinnersPerPage` should be more than any possible value of `desired_targets()`, which
 		// is ALSO checked, so this conversion can almost never fail.
-		let bounded_supports = supports.try_into_bounded_supports().map_err(|_| {
-			debug_assert!(false);
-			FeasibilityError::WrongWinnerCount
-		})?;
+		let bounded_supports = supports
+			.try_into_bounded_supports()
+			.map_err(|_| FeasibilityError::WrongWinnerCount)?;
 		Ok(bounded_supports)
 	}
 
@@ -713,26 +738,20 @@ impl<T: Config> Verifier for Pallet<T> {
 		claimed_score: ElectionScore,
 		page: PageIndex,
 	) -> Result<SupportsOf<Self>, FeasibilityError> {
-		// first, ensure this score will be good enough, even if valid..
-		let _ = Self::ensure_score_quality(claimed_score)?;
-
-		// then actually check feasibility...
-		// NOTE: `MaxBackersPerWinner` is also already checked here.
-		let supports = Self::feasibility_check_page_inner(partial_solution, page)?;
-
-		// then check that the number of winners was exactly enough..
-		let desired_targets =
-			crate::Snapshot::<T>::desired_targets().ok_or(FeasibilityError::SnapshotUnavailable)?;
-		ensure!(supports.len() as u32 == desired_targets, FeasibilityError::WrongWinnerCount);
-
-		// then check the score was truth..
-		let truth_score = supports.evaluate();
-		ensure!(truth_score == claimed_score, FeasibilityError::InvalidScore);
-
-		// and finally queue the solution.
-		QueuedSolution::<T>::force_set_single_page_valid(0, supports.clone(), truth_score);
-
-		Ok(supports)
+		let maybe_current_score = Self::queued_solution();
+		match Self::do_verify_synchronous(partial_solution, claimed_score, page) {
+			Ok(supports) => {
+				sublog!(info, "verifier", "queued a sync solution with score {:?}.", claimed_score);
+				Self::deposit_event(Event::<T>::Verified(page, supports.len() as u32));
+				Self::deposit_event(Event::<T>::Queued(claimed_score, maybe_current_score));
+				Ok(supports)
+			},
+			Err(fe) => {
+				sublog!(warn, "verifier", "sync verification failed due to {:?}.", fe);
+				Self::deposit_event(Event::<T>::VerificationFailed(page, fe.clone()));
+				Err(fe)
+			},
+		}
 	}
 
 	fn feasibility_check_page(

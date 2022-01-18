@@ -34,7 +34,7 @@ use crate::{
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 pub use frame_support::{assert_noop, assert_ok};
-use frame_support::{parameter_types, traits::Hooks, weights::Weight};
+use frame_support::{bounded_vec, parameter_types, traits::Hooks, weights::Weight};
 use parking_lot::RwLock;
 use sp_core::{
 	offchain::{
@@ -580,10 +580,10 @@ pub fn roll_to_with_ocw(n: BlockNumber, maybe_pool: Option<Arc<RwLock<PoolState>
 }
 
 /// An invalid solution with any score.
-pub fn fake_unsigned_solution(score: ElectionScore) -> PagedRawSolution<Runtime> {
+pub fn fake_solution(score: ElectionScore) -> PagedRawSolution<Runtime> {
 	PagedRawSolution {
 		score,
-		solution_pages: vec![Default::default()].try_into().unwrap(),
+		solution_pages: bounded_vec![Default::default()],
 		..Default::default()
 	}
 }

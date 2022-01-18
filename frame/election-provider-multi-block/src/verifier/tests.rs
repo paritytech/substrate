@@ -810,43 +810,394 @@ mod async_verification {
 }
 
 mod sync_verification {
+	use frame_election_provider_support::Support;
+	use frame_support::bounded_vec;
+	use sp_runtime::Perbill;
+
+	use crate::{
+		mock::{
+			fake_solution, mine_solution, roll_to_snapshot_created, solution_from_supports,
+			verifier_events, ExtBuilder, MaxBackersPerWinner, MaxWinnersPerPage, MultiBlock,
+			Runtime, VerifierPallet,
+		},
+		verifier::{Event, FeasibilityError, Verifier},
+		PagedRawSolution, Snapshot,
+	};
+
 	#[test]
 	fn basic_sync_verification_works() {
-		todo!()
+		ExtBuilder::verifier().build_and_execute(|| {
+			roll_to_snapshot_created();
+			let single_page = mine_solution(1).unwrap();
+
+			assert_eq!(verifier_events(), vec![]);
+			assert_eq!(<VerifierPallet as Verifier>::queued_solution(), None);
+
+			let _ = <VerifierPallet as Verifier>::verify_synchronous(
+				single_page.solution_pages.first().cloned().unwrap(),
+				single_page.score,
+				MultiBlock::msp(),
+			)
+			.unwrap();
+
+			assert_eq!(
+				verifier_events(),
+				vec![
+					Event::<Runtime>::Verified(2, 2),
+					Event::<Runtime>::Queued(single_page.score, None)
+				]
+			);
+			assert_eq!(<VerifierPallet as Verifier>::queued_solution(), Some(single_page.score));
+		})
 	}
 
 	#[test]
-	fn winner_count_checked() {
-		todo!()
+	fn winner_count_more() {
+		ExtBuilder::verifier().build_and_execute(|| {
+			roll_to_snapshot_created();
+			let single_page = mine_solution(1).unwrap();
+
+			// change the snapshot, as if the desired targets is now 1. This solution is then valid,
+			// but has too many.
+			Snapshot::<Runtime>::set_desired_targets(1);
+
+			assert_eq!(verifier_events(), vec![]);
+			assert_eq!(<VerifierPallet as Verifier>::queued_solution(), None);
+
+			// note: this is NOT a storage_noop! because we do emit events.
+			assert_eq!(
+				<VerifierPallet as Verifier>::verify_synchronous(
+					single_page.solution_pages.first().cloned().unwrap(),
+					single_page.score,
+					MultiBlock::msp(),
+				)
+				.unwrap_err(),
+				FeasibilityError::WrongWinnerCount
+			);
+
+			assert_eq!(
+				verifier_events(),
+				vec![Event::<Runtime>::VerificationFailed(2, FeasibilityError::WrongWinnerCount)]
+			);
+			assert_eq!(<VerifierPallet as Verifier>::queued_solution(), None);
+		})
 	}
 
 	#[test]
-	fn weak_score_is_insta_rejected() {
-		todo!()
+	fn winner_count_less() {
+		ExtBuilder::verifier().build_and_execute(|| {
+			roll_to_snapshot_created();
+			let single_page = mine_solution(1).unwrap();
+
+			assert_eq!(verifier_events(), vec![]);
+			assert_eq!(<VerifierPallet as Verifier>::queued_solution(), None);
+
+			// Valid solution, but has now too few.
+			Snapshot::<Runtime>::set_desired_targets(3);
+
+			assert_eq!(
+				<VerifierPallet as Verifier>::verify_synchronous(
+					single_page.solution_pages.first().cloned().unwrap(),
+					single_page.score,
+					MultiBlock::msp(),
+				)
+				.unwrap_err(),
+				FeasibilityError::WrongWinnerCount
+			);
+
+			assert_eq!(
+				verifier_events(),
+				vec![Event::<Runtime>::VerificationFailed(2, FeasibilityError::WrongWinnerCount)]
+			);
+			assert_eq!(<VerifierPallet as Verifier>::queued_solution(), None);
+		})
 	}
 
 	#[test]
 	fn incorrect_score_is_rejected() {
-		todo!()
+		ExtBuilder::verifier().build_and_execute(|| {
+			roll_to_snapshot_created();
+
+			let single_page = mine_solution(1).unwrap();
+			let mut score_incorrect = single_page.score;
+			score_incorrect[0] += 1;
+
+			assert_eq!(
+				<VerifierPallet as Verifier>::verify_synchronous(
+					single_page.solution_pages.first().cloned().unwrap(),
+					score_incorrect,
+					MultiBlock::msp(),
+				)
+				.unwrap_err(),
+				FeasibilityError::InvalidScore
+			);
+
+			assert_eq!(
+				verifier_events(),
+				vec![Event::<Runtime>::VerificationFailed(2, FeasibilityError::InvalidScore),]
+			);
+		})
 	}
 
 	#[test]
 	fn minimum_untrusted_score_is_rejected() {
-		todo!()
-	}
+		ExtBuilder::verifier().build_and_execute(|| {
+			roll_to_snapshot_created();
 
-	#[test]
-	fn bad_score_is_rejected() {
-		todo!()
+			let single_page = mine_solution(1).unwrap();
+
+			// raise the bar such that we don't meet it.
+			let mut unattainable_score = single_page.score;
+			unattainable_score[0] += 1;
+
+			<VerifierPallet as Verifier>::set_minimum_score(unattainable_score);
+
+			assert_eq!(
+				<VerifierPallet as Verifier>::verify_synchronous(
+					single_page.solution_pages.first().cloned().unwrap(),
+					single_page.score,
+					MultiBlock::msp(),
+				)
+				.unwrap_err(),
+				FeasibilityError::ScoreTooLow
+			);
+
+			assert_eq!(
+				verifier_events(),
+				vec![Event::<Runtime>::VerificationFailed(2, FeasibilityError::ScoreTooLow)]
+			);
+		})
 	}
 
 	#[test]
 	fn bad_bounds_rejected() {
-		todo!()
+		// MaxBackersPerWinner.
+		ExtBuilder::verifier().build_and_execute(|| {
+			roll_to_snapshot_created();
+
+			let single_page = mine_solution(1).unwrap();
+			// note: change this after the miner is done, otherwise it is smart enough to trim.
+			MaxBackersPerWinner::set(1);
+
+			assert_eq!(
+				<VerifierPallet as Verifier>::verify_synchronous(
+					single_page.solution_pages.first().cloned().unwrap(),
+					single_page.score,
+					MultiBlock::msp(),
+				)
+				.unwrap_err(),
+				FeasibilityError::TooManyBackings
+			);
+
+			assert_eq!(
+				verifier_events(),
+				vec![Event::<Runtime>::VerificationFailed(2, FeasibilityError::TooManyBackings)]
+			);
+		});
+
+		// MaxWinnersPerPage.
+		ExtBuilder::verifier().build_and_execute(|| {
+			roll_to_snapshot_created();
+
+			let single_page = mine_solution(1).unwrap();
+			// note: the miner does feasibility internally, change this parameter afterwards.
+			MaxWinnersPerPage::set(1);
+
+			assert_eq!(
+				<VerifierPallet as Verifier>::verify_synchronous(
+					single_page.solution_pages.first().cloned().unwrap(),
+					single_page.score,
+					MultiBlock::msp(),
+				)
+				.unwrap_err(),
+				FeasibilityError::WrongWinnerCount
+			);
+
+			assert_eq!(
+				verifier_events(),
+				vec![Event::<Runtime>::VerificationFailed(2, FeasibilityError::WrongWinnerCount)]
+			);
+		});
 	}
 
 	#[test]
 	fn solution_improvement_threshold_respected() {
-		todo!();
+		ExtBuilder::verifier()
+			.solution_improvement_threshold(Perbill::from_percent(10))
+			.build_and_execute(|| {
+				roll_to_snapshot_created();
+
+				// submit something good.
+				let single_page = mine_solution(1).unwrap();
+				let _ = <VerifierPallet as Verifier>::verify_synchronous(
+					single_page.solution_pages.first().cloned().unwrap(),
+					single_page.score,
+					MultiBlock::msp(),
+				)
+				.unwrap();
+
+				// the slightly better solution need not even be correct. We improve it by 5%, but
+				// we need 10%.
+				let mut better_score = single_page.score;
+				let improvement = Perbill::from_percent(5) * better_score[0];
+				better_score[0] += improvement;
+				let slightly_better = fake_solution(better_score);
+
+				assert_eq!(
+					<VerifierPallet as Verifier>::verify_synchronous(
+						slightly_better.solution_pages.first().cloned().unwrap(),
+						slightly_better.score,
+						MultiBlock::msp(),
+					)
+					.unwrap_err(),
+					FeasibilityError::ScoreTooLow
+				);
+			});
+	}
+
+	#[test]
+	fn weak_score_is_insta_rejected() {
+		ExtBuilder::verifier().build_and_execute(|| {
+			roll_to_snapshot_created();
+
+			// queue something useful.
+			let single_page = mine_solution(1).unwrap();
+			let _ = <VerifierPallet as Verifier>::verify_synchronous(
+				single_page.solution_pages.first().cloned().unwrap(),
+				single_page.score,
+				MultiBlock::msp(),
+			)
+			.unwrap();
+			assert_eq!(<VerifierPallet as Verifier>::queued_solution(), Some(single_page.score));
+
+			// now try and submit that's really weak. Doesn't even need to be valid, since the score
+			// is checked first.
+			let mut bad_score = single_page.score;
+			bad_score[0] -= 1;
+			let weak = fake_solution(bad_score);
+
+			assert_eq!(
+				<VerifierPallet as Verifier>::verify_synchronous(
+					weak.solution_pages.first().cloned().unwrap(),
+					weak.score,
+					MultiBlock::msp(),
+				)
+				.unwrap_err(),
+				FeasibilityError::ScoreTooLow
+			);
+
+			assert_eq!(
+				verifier_events(),
+				vec![
+					Event::<Runtime>::Verified(2, 2),
+					Event::<Runtime>::Queued(single_page.score, None),
+					Event::<Runtime>::VerificationFailed(2, FeasibilityError::ScoreTooLow),
+				]
+			);
+		})
+	}
+
+	#[test]
+	fn good_solution_replaces() {
+		ExtBuilder::verifier().build_and_execute(|| {
+			roll_to_snapshot_created();
+
+			let weak_solution = solution_from_supports(
+				vec![
+					(10, Support { total: 10, voters: vec![(1, 10)] }),
+					(20, Support { total: 10, voters: vec![(4, 10)] }),
+				],
+				2,
+			);
+
+			let weak_paged = PagedRawSolution::<Runtime> {
+				solution_pages: bounded_vec![weak_solution],
+				score: [10, 20, 200],
+				..Default::default()
+			};
+
+			let _ = <VerifierPallet as Verifier>::verify_synchronous(
+				weak_paged.solution_pages.first().cloned().unwrap(),
+				weak_paged.score,
+				MultiBlock::msp(),
+			)
+			.unwrap();
+			assert_eq!(<VerifierPallet as Verifier>::queued_solution(), Some(weak_paged.score));
+
+			// now get a better solution.
+			let better = mine_solution(1).unwrap();
+
+			let _ = <VerifierPallet as Verifier>::verify_synchronous(
+				better.solution_pages.first().cloned().unwrap(),
+				better.score,
+				MultiBlock::msp(),
+			)
+			.unwrap();
+
+			assert_eq!(<VerifierPallet as Verifier>::queued_solution(), Some(better.score));
+
+			assert_eq!(
+				verifier_events(),
+				vec![
+					Event::<Runtime>::Verified(2, 2),
+					Event::<Runtime>::Queued(weak_paged.score, None),
+					Event::<Runtime>::Verified(2, 2),
+					Event::<Runtime>::Queued(better.score, Some(weak_paged.score)),
+				]
+			);
+		})
+	}
+
+	#[test]
+	fn weak_valid_is_discarded() {
+		ExtBuilder::verifier().build_and_execute(|| {
+			roll_to_snapshot_created();
+
+			// first, submit something good
+			let better = mine_solution(1).unwrap();
+			let _ = <VerifierPallet as Verifier>::verify_synchronous(
+				better.solution_pages.first().cloned().unwrap(),
+				better.score,
+				MultiBlock::msp(),
+			)
+			.unwrap();
+			assert_eq!(<VerifierPallet as Verifier>::queued_solution(), Some(better.score));
+
+			// then try with something weaker.
+			let weak_solution = solution_from_supports(
+				vec![
+					(10, Support { total: 10, voters: vec![(1, 10)] }),
+					(20, Support { total: 10, voters: vec![(4, 10)] }),
+				],
+				2,
+			);
+			let weak_paged = PagedRawSolution::<Runtime> {
+				solution_pages: bounded_vec![weak_solution],
+				score: [10, 20, 200],
+				..Default::default()
+			};
+
+			assert_eq!(
+				<VerifierPallet as Verifier>::verify_synchronous(
+					weak_paged.solution_pages.first().cloned().unwrap(),
+					weak_paged.score,
+					MultiBlock::msp(),
+				)
+				.unwrap_err(),
+				FeasibilityError::ScoreTooLow
+			);
+
+			// queued solution has not changed.
+			assert_eq!(<VerifierPallet as Verifier>::queued_solution(), Some(better.score));
+
+			assert_eq!(
+				verifier_events(),
+				vec![
+					Event::<Runtime>::Verified(2, 2),
+					Event::<Runtime>::Queued(better.score, None),
+					Event::<Runtime>::VerificationFailed(2, FeasibilityError::ScoreTooLow),
+				]
+			);
+		})
 	}
 }
