@@ -417,7 +417,11 @@ where
 	fn build_metadata(docs: Vec<&'static str>, entries: &mut Vec<StorageEntryMetadata>) {
 		<Self as MapWrapper>::Map::build_metadata(docs, entries);
 		CounterFor::<Prefix>::build_metadata(
-			vec![&"Counter for the related counted storage map"],
+			if cfg!(feature = "no-metadata-docs") {
+				vec![]
+			} else {
+				vec![&"Counter for the related counted storage map"]
+			},
 			entries,
 		);
 	}
@@ -1054,7 +1058,11 @@ mod test {
 					modifier: StorageEntryModifier::Default,
 					ty: StorageEntryType::Plain(scale_info::meta_type::<u32>()),
 					default: vec![0, 0, 0, 0],
-					docs: vec!["Counter for the related counted storage map"],
+					docs: if cfg!(feature = "no-metadata-docs") {
+						vec![]
+					} else {
+						vec!["Counter for the related counted storage map"]
+					},
 				},
 			]
 		);

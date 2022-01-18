@@ -23,12 +23,12 @@ use crate::{weights::WeightInfo, Config};
 use codec::{Decode, Encode};
 use frame_support::{weights::Weight, DefaultNoBound};
 use pallet_contracts_proc_macro::{ScheduleDebug, WeightDebug};
-use pwasm_utils::{parity_wasm::elements, rules};
 use scale_info::TypeInfo;
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
 use sp_runtime::RuntimeDebug;
 use sp_std::{marker::PhantomData, vec::Vec};
+use wasm_instrument::{gas_metering, parity_wasm::elements};
 
 /// How many API calls are executed in a single batch. The reason for increasing the amount
 /// of API calls in batches (per benchmark component increase) is so that the linear regression
@@ -652,7 +652,7 @@ struct ScheduleRules<'a, T: Config> {
 }
 
 impl<T: Config> Schedule<T> {
-	pub(crate) fn rules(&self, module: &elements::Module) -> impl rules::Rules + '_ {
+	pub(crate) fn rules(&self, module: &elements::Module) -> impl gas_metering::Rules + '_ {
 		ScheduleRules {
 			schedule: &self,
 			params: module
@@ -668,7 +668,7 @@ impl<T: Config> Schedule<T> {
 	}
 }
 
-impl<'a, T: Config> rules::Rules for ScheduleRules<'a, T> {
+impl<'a, T: Config> gas_metering::Rules for ScheduleRules<'a, T> {
 	fn instruction_cost(&self, instruction: &elements::Instruction) -> Option<u32> {
 		use self::elements::Instruction::*;
 		let w = &self.schedule.instruction_weights;
@@ -752,10 +752,10 @@ impl<'a, T: Config> rules::Rules for ScheduleRules<'a, T> {
 		Some(weight)
 	}
 
-	fn memory_grow_cost(&self) -> Option<rules::MemoryGrowCost> {
+	fn memory_grow_cost(&self) -> gas_metering::MemoryGrowCost {
 		// We benchmarked the memory.grow instruction with the maximum allowed pages.
 		// The cost for growing is therefore already included in the instruction cost.
-		None
+		gas_metering::MemoryGrowCost::Free
 	}
 }
 
