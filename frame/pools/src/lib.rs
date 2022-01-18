@@ -7,7 +7,7 @@
 //! * sub pools: This a group of pools where we have a set of pools organized by era
 //!   (`SubPoolsContainer.with_era`) and one pool that is not associated with an era
 //!   (`SubsPoolsContainer.no_era`). Once a `with_era` pool is older then `current_era -
-//!   MaxUnbonding`, its shares and balance get merged into the `no_era` pool.
+//!   MaxUnbonding`, its points and balance get merged into the `no_era` pool.
 //!
 //! # Joining
 //!
@@ -60,7 +60,7 @@ macro_rules! log {
 type PoolId = u32;
 type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
-type SharesOf<T> = BalanceOf<T>;
+type PointsOf<T> = BalanceOf<T>;
 type SubPoolsWithEra<T> = BoundedBTreeMap<EraIndex, UnbondPool<T>, <T as Config>::MaxUnbonding>;
 
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo)]
@@ -68,9 +68,9 @@ type SubPoolsWithEra<T> = BoundedBTreeMap<EraIndex, UnbondPool<T>, <T as Config>
 #[scale_info(skip_type_params(T))]
 pub struct Delegator<T: Config> {
 	pool: PoolId,
-	/// The quantity of shares this delegator has in the primary pool or in an sub pool if
+	/// The quantity of points this delegator has in the primary pool or in an sub pool if
 	/// `Self::unbonding_era` is some.
-	shares: SharesOf<T>,
+	points: PointsOf<T>,
 	/// The reward pools total earnings _ever_ the last time this delegator claimed a payout.
 	/// Assuming no massive burning events, we expect this value to always be below total issuance.
 	/// ^ double check the above is an OK assumption
@@ -84,47 +84,47 @@ pub struct Delegator<T: Config> {
 #[codec(mel_bound(T: Config))]
 #[scale_info(skip_type_params(T))]
 pub struct Pool<T: Config> {
-	shares: SharesOf<T>, // Probably needs to be some type of BigUInt
+	points: PointsOf<T>, // Probably needs to be some type of BigUInt
 	// The _Stash_ and _Controller_ account for the pool.
 	account_id: T::AccountId,
 }
 
 impl<T: Config> Pool<T> {
-	/// Get the amount of shares to issue for some new funds that will be bonded in the pool.
-	fn shares_to_issue(&self, new_funds: BalanceOf<T>) -> SharesOf<T> {
+	/// Get the amount of points to issue for some new funds that will be bonded in the pool.
+	fn points_to_issue(&self, new_funds: BalanceOf<T>) -> PointsOf<T> {
 		let bonded_balance = T::StakingInterface::bonded_balance(&self.account_id);
-		if bonded_balance.is_zero() || self.shares.is_zero() {
-			debug_assert!(bonded_balance.is_zero() && self.shares.is_zero());
-			// all pools start with a 1:1 ratio of balance:shares
+		if bonded_balance.is_zero() || self.points.is_zero() {
+			debug_assert!(bonded_balance.is_zero() && self.points.is_zero());
+			// all pools start with a 1:1 ratio of balance:points
 			new_funds
 		} else {
-			let shares_per_balance = {
+			let points_per_balance = {
 				let balance = T::BalanceToU128::convert(bonded_balance);
-				let shares = T::BalanceToU128::convert(self.shares);
-				FixedU128::saturating_from_rational(shares, balance)
+				let points = T::BalanceToU128::convert(self.points);
+				FixedU128::saturating_from_rational(points, balance)
 			};
 			let new_funds = T::BalanceToU128::convert(new_funds);
 
-			T::U128ToBalance::convert(shares_per_balance.saturating_mul_int(new_funds))
+			T::U128ToBalance::convert(points_per_balance.saturating_mul_int(new_funds))
 		}
 	}
 
-	// Get the amount of balance to unbond from the pool based on a delegator's shares of the pool.
-	fn balance_to_unbond(&self, delegator_shares: SharesOf<T>) -> BalanceOf<T> {
+	// Get the amount of balance to unbond from the pool based on a delegator's points of the pool.
+	fn balance_to_unbond(&self, delegator_points: PointsOf<T>) -> BalanceOf<T> {
 		let bonded_balance = T::StakingInterface::bonded_balance(&self.account_id);
-		if bonded_balance.is_zero() || delegator_shares.is_zero() {
+		if bonded_balance.is_zero() || delegator_points.is_zero() {
 			// There is nothing to unbond
 			return Zero::zero();
 		}
 
 		let balance_per_share = {
 			let balance = T::BalanceToU128::convert(bonded_balance);
-			let shares = T::BalanceToU128::convert(self.shares);
-			FixedU128::saturating_from_rational(balance, shares)
+			let points = T::BalanceToU128::convert(self.points);
+			FixedU128::saturating_from_rational(balance, points)
 		};
-		let delegator_shares = T::BalanceToU128::convert(delegator_shares);
+		let delegator_points = T::BalanceToU128::convert(delegator_points);
 
-		T::U128ToBalance::convert(balance_per_share.saturating_mul_int(delegator_shares))
+		T::U128ToBalance::convert(balance_per_share.saturating_mul_int(delegator_points))
 	}
 }
 
@@ -134,8 +134,8 @@ impl<T: Config> Pool<T> {
 pub struct RewardPool<T: Config> {
 	/// The balance of this reward pool after the last claimed payout.
 	balance: BalanceOf<T>,
-	/// The shares of this reward pool after the last claimed payout
-	shares: BalanceOf<T>,
+	/// The points of this reward pool after the last claimed payout
+	points: BalanceOf<T>,
 	/// The total earnings _ever_ of this reward pool after the last claimed payout. I.E. the sum
 	/// of all incoming balance through the pools life.
 	total_earnings: BalanceOf<T>,
@@ -160,43 +160,43 @@ impl<T: Config> RewardPool<T> {
 #[codec(mel_bound(T: Config))]
 #[scale_info(skip_type_params(T))]
 struct UnbondPool<T: Config> {
-	shares: SharesOf<T>,
+	points: PointsOf<T>,
 	balance: BalanceOf<T>,
 }
 
 impl<T: Config> UnbondPool<T> {
-	fn shares_to_issue(&self, new_funds: BalanceOf<T>) -> SharesOf<T> {
-		if self.balance.is_zero() || self.shares.is_zero() {
-			debug_assert!(self.balance.is_zero() && self.shares.is_zero());
+	fn points_to_issue(&self, new_funds: BalanceOf<T>) -> PointsOf<T> {
+		if self.balance.is_zero() || self.points.is_zero() {
+			debug_assert!(self.balance.is_zero() && self.points.is_zero());
 
-			// all pools start with a 1:1 ratio of balance:shares
+			// all pools start with a 1:1 ratio of balance:points
 			new_funds
 		} else {
-			let shares_per_balance = {
+			let points_per_balance = {
 				let balance = T::BalanceToU128::convert(self.balance);
-				let shares = T::BalanceToU128::convert(self.shares);
-				FixedU128::saturating_from_rational(shares, balance)
+				let points = T::BalanceToU128::convert(self.points);
+				FixedU128::saturating_from_rational(points, balance)
 			};
 			let new_funds = T::BalanceToU128::convert(new_funds);
 
-			T::U128ToBalance::convert(shares_per_balance.saturating_mul_int(new_funds))
+			T::U128ToBalance::convert(points_per_balance.saturating_mul_int(new_funds))
 		}
 	}
 
-	fn balance_to_unbond(&self, delegator_shares: SharesOf<T>) -> BalanceOf<T> {
-		if self.balance.is_zero() || delegator_shares.is_zero() {
+	fn balance_to_unbond(&self, delegator_points: PointsOf<T>) -> BalanceOf<T> {
+		if self.balance.is_zero() || delegator_points.is_zero() {
 			// There is nothing to unbond
 			return Zero::zero();
 		}
 
 		let balance_per_share = {
 			let balance = T::BalanceToU128::convert(self.balance);
-			let shares = T::BalanceToU128::convert(self.shares);
-			FixedU128::saturating_from_rational(balance, shares)
+			let points = T::BalanceToU128::convert(self.points);
+			FixedU128::saturating_from_rational(balance, points)
 		};
-		let delegator_shares = T::BalanceToU128::convert(delegator_shares);
+		let delegator_points = T::BalanceToU128::convert(delegator_points);
 
-		T::U128ToBalance::convert(balance_per_share.saturating_mul_int(delegator_shares))
+		T::U128ToBalance::convert(balance_per_share.saturating_mul_int(delegator_points))
 	}
 }
 
@@ -230,10 +230,10 @@ impl<T: Config> SubPoolsContainer<T> {
 			self.with_era.keys().cloned().filter(|era| *era < oldest_era_to_keep).collect();
 		for era in eras_to_remove {
 			if let Some(p) = self.with_era.remove(&era) {
-				self.no_era.shares.saturating_add(p.shares);
+				self.no_era.points.saturating_add(p.points);
 				self.no_era.balance.saturating_add(p.balance);
 			} else {
-				// lol
+				// the world is broken
 			}
 		}
 
@@ -386,12 +386,12 @@ pub mod pallet {
 			// Get the exact amount we can bond extra.
 			let exact_amount_to_bond = new_free_balance.saturating_sub(old_free_balance);
 
-			// Issue the new shares.
-			let new_shares = primary_pool.shares_to_issue(exact_amount_to_bond);
-			primary_pool.shares = primary_pool.shares.saturating_add(new_shares);
+			// Issue the new points.
+			let new_points = primary_pool.points_to_issue(exact_amount_to_bond);
+			primary_pool.points = primary_pool.points.saturating_add(new_points);
 			let delegator = Delegator::<T> {
 				pool: target,
-				shares: new_shares,
+				points: new_points,
 				//  double check that this is ok.
 				// At best the reward pool has the rewards up through the previous era. If the
 				// delegator joins prior to the snapshot they will benefit from the rewards of the
@@ -449,7 +449,7 @@ pub mod pallet {
 			let mut primary_pool =
 				PrimaryPools::<T>::get(delegator.pool).ok_or(Error::<T>::PoolNotFound)?;
 
-			// Claim the the payout prior to unbonding. Once the user is unbonding their shares
+			// Claim the the payout prior to unbonding. Once the user is unbonding their points
 			// no longer exist in the primary pool and thus they can no longer claim their payouts.
 			// It is not strictly necessary to claim the rewards, but we do it here for UX.
 			Self::do_reward_payout(who.clone(), delegator, &primary_pool)?;
@@ -460,11 +460,11 @@ pub mod pallet {
 			let sub_pools = SubPools::<T>::get(delegator.pool).unwrap_or_default();
 			let current_era = T::StakingInterface::current_era();
 
-			let balance_to_unbond = primary_pool.balance_to_unbond(delegator.shares);
+			let balance_to_unbond = primary_pool.balance_to_unbond(delegator.points);
 
 			// Update the primary pool. Note that we must do this *after* calculating the balance
-			// to unbond so we have the correct shares for the balance:share ratio.
-			primary_pool.shares = primary_pool.shares.saturating_sub(delegator.shares);
+			// to unbond so we have the correct points for the balance:share ratio.
+			primary_pool.points = primary_pool.points.saturating_sub(delegator.points);
 
 			// Unbond in the actual underlying pool
 			T::StakingInterface::unbond(&primary_pool.account_id, balance_to_unbond)?;
@@ -479,8 +479,8 @@ pub mod pallet {
 			{
 				let mut unbond_pool =
 					sub_pools.with_era.entry(current_era).or_insert_with(|| UnbondPool::default());
-				let shares_to_issue = unbond_pool.shares_to_issue(balance_to_unbond);
-				unbond_pool.shares = unbond_pool.shares.saturating_add(shares_to_issue);
+				let points_to_issue = unbond_pool.points_to_issue(balance_to_unbond);
+				unbond_pool.points = unbond_pool.points.saturating_add(points_to_issue);
 				unbond_pool.balance = unbond_pool.balance.saturating_add(balance_to_unbond);
 			}
 
@@ -514,16 +514,16 @@ pub mod pallet {
 			let mut sub_pools = SubPools::<T>::get(delegator.pool).unwrap_or_default();
 
 			let balance_to_unbond = if let Some(pool) = sub_pools.with_era.get_mut(&current_era) {
-				let balance_to_unbond = pool.balance_to_unbond(delegator.shares);
-				pool.shares = pool.shares.saturating_sub(delegator.shares);
+				let balance_to_unbond = pool.balance_to_unbond(delegator.points);
+				pool.points = pool.points.saturating_sub(delegator.points);
 				pool.balance = pool.balance.saturating_sub(balance_to_unbond);
 
 				balance_to_unbond
 			} else {
 				// A pool does not belong to this era, so it must have been merged to the era-less
 				// pool.
-				let balance_to_unbond = sub_pools.no_era.balance_to_unbond(delegator.shares);
-				sub_pools.no_era.shares = sub_pools.no_era.shares.saturating_sub(delegator.shares);
+				let balance_to_unbond = sub_pools.no_era.balance_to_unbond(delegator.points);
+				sub_pools.no_era.points = sub_pools.no_era.points.saturating_sub(delegator.points);
 				sub_pools.no_era.balance =
 					sub_pools.no_era.balance.saturating_sub(balance_to_unbond);
 
@@ -579,15 +579,15 @@ pub mod pallet {
 
 			T::StakingInterface::nominate(stash.clone(), targets)?;
 
-			let mut primary_pool = Pool::<T> { shares: Zero::zero(), account_id: stash };
-			let shares_to_issue = primary_pool.shares_to_issue(amount);
-			primary_pool.shares = shares_to_issue;
+			let mut primary_pool = Pool::<T> { points: Zero::zero(), account_id: stash };
+			let points_to_issue = primary_pool.points_to_issue(amount);
+			primary_pool.points = points_to_issue;
 
 			Delegators::<T>::insert(
 				who,
 				Delegator::<T> {
 					pool: id,
-					shares: shares_to_issue,
+					points: points_to_issue,
 					reward_pool_total_earnings: Zero::zero(),
 					unbonding_era: None,
 				},
@@ -597,7 +597,7 @@ pub mod pallet {
 				id,
 				RewardPool::<T> {
 					balance: Zero::zero(),
-					shares: Zero::zero(),
+					points: Zero::zero(),
 					total_earnings: Zero::zero(),
 					account_id: reward_dest,
 				},
@@ -652,37 +652,37 @@ impl<T: Config> Pallet<T> {
 		let mut reward_pool = reward_pool.update_total_earnings_and_balance();
 		let new_earnings = reward_pool.total_earnings.saturating_sub(last_total_earnings);
 
-		// The new shares that will be added to the pool. For every unit of balance that has
-		// been earned by the reward pool, we inflate the reward pool shares by
-		// `primary_pool.total_shares`. In effect this allows each, single unit of balance (e.g.
-		// plank) to be divvied up pro-rata among delegators based on shares.
+		// The new points that will be added to the pool. For every unit of balance that has
+		// been earned by the reward pool, we inflate the reward pool points by
+		// `primary_pool.total_points`. In effect this allows each, single unit of balance (e.g.
+		// plank) to be divvied up pro-rata among delegators based on points.
 		//  this needs to be some sort of BigUInt arithmetic
-		let new_shares = primary_pool.shares.saturating_mul(new_earnings);
+		let new_points = primary_pool.points.saturating_mul(new_earnings);
 
-		// The shares of the reward pool after taking into account the new earnings
-		let current_shares = reward_pool.shares.saturating_add(new_shares);
+		// The points of the reward pool after taking into account the new earnings
+		let current_points = reward_pool.points.saturating_add(new_points);
 
 		// The rewards pool's earnings since the last time this delegator claimed a payout
 		let new_earnings_since_last_claim =
 			reward_pool.total_earnings.saturating_sub(delegator.reward_pool_total_earnings);
-		// The shares of the reward pool that belong to the delegator.
-		let delegator_virtual_shares =
-			delegator.shares.saturating_mul(new_earnings_since_last_claim);
+		// The points of the reward pool that belong to the delegator.
+		let delegator_virtual_points =
+			delegator.points.saturating_mul(new_earnings_since_last_claim);
 
 		let delegator_payout = {
-			let delegator_ratio_of_shares = FixedU128::saturating_from_rational(
-				T::BalanceToU128::convert(delegator_virtual_shares),
-				T::BalanceToU128::convert(current_shares),
+			let delegator_ratio_of_points = FixedU128::saturating_from_rational(
+				T::BalanceToU128::convert(delegator_virtual_points),
+				T::BalanceToU128::convert(current_points),
 			);
 
-			let payout = delegator_ratio_of_shares
+			let payout = delegator_ratio_of_points
 				.saturating_mul_int(T::BalanceToU128::convert(reward_pool.balance));
 			T::U128ToBalance::convert(payout)
 		};
 
 		// Record updates
 		delegator.reward_pool_total_earnings = reward_pool.total_earnings;
-		reward_pool.shares = current_shares.saturating_sub(delegator_virtual_shares);
+		reward_pool.points = current_points.saturating_sub(delegator_virtual_points);
 
 		Ok((reward_pool, delegator, delegator_payout))
 	}
