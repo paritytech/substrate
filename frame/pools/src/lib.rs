@@ -568,6 +568,18 @@ pub mod pallet {
 			Ok(())
 		}
 	}
+
+	#[pallet::hooks]
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		fn integrity_test() {
+			assert!(
+				T::StakingInterface::bond_duration() < T::MaxUnbonding::get(),
+				"There must be more unbonding pools then the bonding duration /
+				so a slash can be applied to relevant unboding pools. (We assume /
+				the bonding duration > slash deffer duration.",
+			);
+		}
+	}
 }
 
 impl<T: Config> Pallet<T> {
@@ -737,10 +749,8 @@ impl<T: Config> PoolsInterface for Pallet<T> {
 	fn slash_pool(
 		pool_account: &Self::AccountId,
 		slash_amount: Self::Balance,
-		slash_era: 
-		EraIndex,
-		apply_era: 
-		EraIndex,
+		slash_era: EraIndex,
+		apply_era: EraIndex,
 	) -> Option<(Self::Balance, BTreeMap<EraIndex, Self::Balance>)> {
 		Self::do_slash(pool_account, slash_amount, slash_era, apply_era)
 	}
