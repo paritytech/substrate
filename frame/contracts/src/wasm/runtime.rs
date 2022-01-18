@@ -176,10 +176,8 @@ pub enum RuntimeCosts {
 	/// Weight of calling `seal_contains_storage`.
 	#[cfg(feature = "unstable-interface")]
 	ContainsStorage,
-	/// Weight of calling `seal_get_storage` without output weight.
-	GetStorageBase,
-	/// Weight of an item received via `seal_get_storage` for the given size.
-	GetStorageCopyOut(u32),
+	/// Weight of calling `seal_get_storage` with the specified size in storage.
+	GetStorage(u32),
 	/// Weight of calling `seal_take_storage` without output weight.
 	#[cfg(feature = "unstable-interface")]
 	TakeStorageBase,
@@ -254,8 +252,8 @@ impl RuntimeCosts {
 			ClearStorage => s.clear_storage,
 			#[cfg(feature = "unstable-interface")]
 			ContainsStorage => s.contains_storage,
-			GetStorageBase => s.get_storage,
-			GetStorageCopyOut(len) => s.get_storage_per_byte.saturating_mul(len.into()),
+			GetStorage(len) =>
+				s.get_storage.saturating_add(s.get_storage_per_byte.saturating_mul(len.into())),
 			#[cfg(feature = "unstable-interface")]
 			TakeStorageBase => s.take_storage,
 			#[cfg(feature = "unstable-interface")]
@@ -867,15 +865,15 @@ define_env!(Env, <E: Ext>,
 	//
 	// `ReturnCode::KeyNotFound`
 	[seal0] seal_get_storage(ctx, key_ptr: u32, out_ptr: u32, out_len_ptr: u32) -> ReturnCode => {
-		ctx.charge_gas(RuntimeCosts::GetStorageBase)?;
+		let charged = ctx.charge_gas(RuntimeCosts::GetStorage(ctx.ext.schedule().limits.payload_len))?;
 		let mut key: StorageKey = [0; 32];
 		ctx.read_sandbox_memory_into_buf(key_ptr, &mut key)?;
 		if let Some(value) = ctx.ext.get_storage(&key) {
-			ctx.write_sandbox_output(out_ptr, out_len_ptr, &value, false, |len| {
-				Some(RuntimeCosts::GetStorageCopyOut(len))
-			})?;
+			ctx.adjust_gas(charged, RuntimeCosts::GetStorage(value.len() as u32));
+			ctx.write_sandbox_output(out_ptr, out_len_ptr, &value, false, already_charged)?;
 			Ok(ReturnCode::Success)
 		} else {
+			ctx.adjust_gas(charged, RuntimeCosts::GetStorage(0));
 			Ok(ReturnCode::KeyNotFound)
 		}
 	},

@@ -24,7 +24,7 @@ use crate::{
 use frame_support::{
 	dispatch::{DispatchError, DispatchResult, DispatchResultWithPostInfo, Dispatchable},
 	storage::{with_transaction, TransactionOutcome},
-	traits::{Contains, Currency, ExistenceRequirement, Get, OriginTrait, Randomness, Time},
+	traits::{Contains, Currency, ExistenceRequirement, OriginTrait, Randomness, Time},
 	weights::Weight,
 };
 use frame_system::RawOrigin;
@@ -1056,7 +1056,7 @@ where
 	}
 
 	fn max_value_size(&self) -> u32 {
-		T::Schedule::get().limits.payload_len
+		self.schedule.limits.payload_len
 	}
 
 	fn get_weight_price(&self, weight: Weight) -> BalanceOf<Self::T> {
