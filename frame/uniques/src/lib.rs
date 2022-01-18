@@ -33,14 +33,13 @@ mod benchmarking;
 pub mod mock;
 #[cfg(test)]
 mod tests;
-pub mod weights;
 
 mod functions;
 mod impl_nonfungibles;
 mod types;
-pub use types::*;
 
-mod migration;
+pub mod migration;
+pub mod weights;
 
 use codec::{Decode, Encode, HasCompact};
 use frame_support::traits::{BalanceStatus::Reserved, Currency, ReservableCurrency};
@@ -52,6 +51,7 @@ use sp_runtime::{
 use sp_std::prelude::*;
 
 pub use pallet::*;
+pub use types::*;
 pub use weights::WeightInfo;
 
 #[frame_support::pallet]

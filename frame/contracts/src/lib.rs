@@ -87,12 +87,12 @@
 mod gas;
 mod benchmarking;
 mod exec;
-mod migration;
 mod schedule;
 mod storage;
 mod wasm;
 
 pub mod chain_extension;
+pub mod migration;
 pub mod weights;
 
 #[cfg(test)]
