@@ -39,7 +39,7 @@ runtime (queried at current best imported block).
 Since the blockchain is not always linear, forks need to be correctly handled by
 the transaction pool as well. In case of a fork, some blocks are *retracted*
 from the canonical chain, and some other blocks get *enacted* on top of some
-common ancestor. The transactions from retrated blocks could simply be discarded,
+common ancestor. The transactions from retracted blocks could simply be discarded,
 but it's desirable to make sure they are still considered for inclusion in case they
 are deemed valid by the runtime state at best, recently enacted block (fork the
 chain re-organized to).
@@ -49,7 +49,7 @@ pool, it's broadcasting status, block inclusion, finality, etc.
 
 ## Transaction Validity details
 
-Information retrieved from the the runtime are encapsulated in `TransactionValidity`
+Information retrieved from the the runtime are encapsulated in the `TransactionValidity`
 type.
 
 ```rust
@@ -147,7 +147,7 @@ choosing the ones with highest priority to include to the next block first.
 
 - `priority` of transaction may change over time
 - on-chain conditions may affect `priority`
-- Given two transactions with overlapping `provides` tags, the one with higher
+- given two transactions with overlapping `provides` tags, the one with higher
   `priority` should be preferred. However we can also look at the total priority
   of a subtree rooted at that transaction and compare that instead (i.e. even though
   the transaction itself has lower `priority` it "unlocks" other high priority transactions).
@@ -163,7 +163,7 @@ the transaction is valid all that time though.
 
 - `longevity` of transaction may change over time
 - on-chain conditions may affect `longevity`
-- After `longevity` lapses the transaction may still be valid
+- after `longevity` lapses, the transaction may still be valid
 
 ### `propagate`
 
@@ -231,15 +231,16 @@ to instead of gossiping everyting have other peers request transactions they
 are interested in.
 
 Since the pool is expected to store more transactions than what can fit
-to a single block. Validating the entire pool on every block might not be
-feasible, so the actual implementation might need to take some shortcuts.
+in a single block, validating the entire pool on every block might not be
+feasible. This means that the actual implementation might need to take some 
+shortcuts.
 
 ## Suggestions & caveats
 
-1. The validity of transaction should not change significantly from block to
+1. The validity of a transaction should not change significantly from block to
    block. I.e. changes in validity should happen predictably, e.g. `longevity`
    decrements by 1, `priority` stays the same, `requires` changes if transaction
-   that provided a tag was included in block. `provides` does not change, etc.
+   that provided a tag was included in block, `provides` does not change, etc.
 
 1. That means we don't have to revalidate every transaction after every block
    import, but we need to take care of removing potentially stale transactions.
@@ -253,9 +254,9 @@ feasible, so the actual implementation might need to take some shortcuts.
 1. In the past there were many issues found when running small networks with a
    lot of re-orgs. Make sure that transactions are never lost.
 
-1. UTXO model is quite challenging. The transaction becomes valid right after
-   it's included in block, however it is waiting for exactly the same inputs to
-   be spent, so it will never really be included again.
+1. The UTXO model is quite challenging. A transaction becomes valid right after
+   it's included in a block, however it is waiting for exactly the same inputs 
+   to be spent, so it will never really be included again.
 
 1. Note that in a non-ideal implementation the state of the pool will most
    likely always be a bit off, i.e. some transactions might be still in the pool,
@@ -277,8 +278,8 @@ feasible, so the actual implementation might need to take some shortcuts.
 
 1. We periodically validate all transactions in the pool in batches.
 
-1. To minimize runtime calls, we introduce batch-verify call. Note it should reset
-   the state (overlay) after every verification.
+1. To minimize runtime calls, we introduce the batch-verify call. Note it should 
+   reset the state (overlay) after every verification.
 
 1. Consider leveraging finality. Maybe we could verify against latest finalised
    block instead. With this the pool in different nodes can be more similar
@@ -286,16 +287,16 @@ feasible, so the actual implementation might need to take some shortcuts.
    is not a strict requirement for a Substrate chain to have though.
 
 1. Perhaps we could avoid maintaining ready/future queues as currently, but
-   rather if transaction doesn't have all requirements satisfied by existing
+   rather if a transaction doesn't have all requirements satisfied by existing
    transactions we attempt to re-import it in the future.
 
 1. Instead of maintaining a full pool with total ordering we attempt to maintain
    a set of next (couple of) blocks. We could introduce batch-validate runtime
-   api  method that pretty much attempts to simulate actual block inclusion of
+   api method that pretty much attempts to simulate actual block inclusion of
    a set of such transactions (without necessarily fully running/dispatching
    them). Importing a transaction would consist of figuring out which next block
-   this transaction have a chance to be included in and then attempting to
-   either push it back or replace some of existing transactions.
+   this transaction has a chance to be included in and then attempting to
+   either push it back or replace some existing transactions.
 
 1. Perhaps we could use some immutable graph structure to easily add/remove
    transactions. We need some traversal method that takes priority and
@@ -320,7 +321,7 @@ The pool consists of basically two independent parts:
 The pool is split into `ready` pool and `future` pool. The latter contains
 transactions that don't have their requirements satisfied, and the former holds
 transactions that can be used to build a graph of dependencies. Note that the
-graph is build ad-hoc during the traversal process (getting the `ready`
+graph is built ad-hoc during the traversal process (using the `ready`
 iterator). This makes the importing process cheaper (we don't need to find the
 exact position in the queue or graph), but traversal process slower
 (logarithmic). However most of the time we will only need the beginning of the
@@ -342,26 +343,26 @@ to limit number of runtime verification calls.
 Each time a transaction is imported, we first verify it's validity and later
 find if the tags it `requires` can be satisfied by transactions already in
 `ready` pool. In case the transaction is imported to the `ready` pool we
-additionally *promote* transactions from `future` pool if the transaction
+additionally *promote* transactions from the `future` pool if the transaction
 happened to fulfill their requirements.
-Note we need to cater for cases where transaction might replace a already
+Note we need to cater for cases where a transaction might replace an already
 existing transaction in the pool. In such case we check the entire sub-tree of
 transactions that we are about to replace, compare their cumulative priority to
 determine which subtree to keep.
 
-After a block is imported we kick-off pruning procedure. We first attempt to
-figure out what tags were satisfied by transaction in that block. For each block
-transaction we either call into runtime to get it's `ValidTransaction` object,
+After a block is imported we kick-off the pruning procedure. We first attempt to
+figure out what tags were satisfied by a transaction in that block. For each block
+transaction we either call into the runtime to get it's `ValidTransaction` object,
 or we check the pool if that transaction is already known to spare the runtime
-call. From this we gather full set of `provides` tags and perform pruning of
-`ready` pool based on that. Also we promote all transactions from `future` that
-have their tags satisfied.
+call. From this we gather the full set of `provides` tags and perform pruning of
+the `ready` pool based on that. Also, we promote all transactions from `future` 
+that have their tags satisfied.
 
 In case we remove transactions that we are unsure if they were already included
-in current block or some block in the past, it is being added to revalidation
-queue and attempted to be re-imported by the background task in the future.
+in the current block or some block in the past, it gets added to the revalidation
+queue and attempts to be re-imported by the background task in the future.
 
 Runtime calls to verify transactions are performed from a separate (limited)
-thread pool to avoid interferring too much with other subsystems of the node. We
+thread pool to avoid interfering too much with other subsystems of the node. We
 definitely don't want to have all cores validating network transactions, because
 all of these transactions need to be considered untrusted (potentially DoS).
