@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -29,7 +29,7 @@ use structopt::StructOpt;
 use node_cli::chain_spec::{self, AccountId};
 use sc_keystore::LocalKeystore;
 use sp_core::{
-	crypto::{Public, Ss58Codec},
+	crypto::{ByteArray, Ss58Codec},
 	sr25519,
 };
 use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
@@ -152,6 +152,7 @@ fn generate_chain_spec(
 			)
 		},
 		vec![],
+		None,
 		None,
 		None,
 		None,

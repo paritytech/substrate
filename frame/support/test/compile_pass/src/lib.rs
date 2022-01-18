@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -22,7 +22,10 @@
 //! This crate tests that `construct_runtime!` expands the pallet parts
 //! correctly even when frame-support is renamed in Cargo.toml
 
-use frame_support::{construct_runtime, parameter_types};
+use frame_support::{
+	construct_runtime, parameter_types,
+	traits::{ConstU16, ConstU32},
+};
 use sp_core::{sr25519, H256};
 use sp_runtime::{
 	create_runtime_str, generic,
@@ -38,6 +41,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	impl_version: 0,
 	apis: sp_version::create_apis_vec!([]),
 	transaction_version: 0,
+	state_version: 0,
 };
 
 pub type Signature = sr25519::Signature;
@@ -48,7 +52,6 @@ pub type Index = u64;
 parameter_types! {
 	pub const BlockHashCount: BlockNumber = 2400;
 	pub const Version: RuntimeVersion = VERSION;
-	pub const SS58Prefix: u8 = 0;
 }
 
 impl frame_system::Config for Runtime {
@@ -73,9 +76,9 @@ impl frame_system::Config for Runtime {
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
 	type OnSetCode = ();
-	type MaxConsumers = frame_support::traits::ConstU32<16>;
+	type MaxConsumers = ConstU32<16>;
 	type SystemWeightInfo = ();
-	type SS58Prefix = SS58Prefix;
+	type SS58Prefix = ConstU16<0>;
 }
 
 pub type Header = generic::Header<BlockNumber, BlakeTwo256>;

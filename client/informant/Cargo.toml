@@ -21,5 +21,5 @@ parity-util-mem = { version = "0.10.2", default-features = false, features = ["p
 sc-client-api = { version = "4.0.0-dev", path = "../api" }
 sc-network = { version = "0.10.0-dev", path = "../network" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
-sp-runtime = { version = "4.0.0-dev", path = "../../primitives/runtime" }
+sp-runtime = { version = "4.0.0", path = "../../primitives/runtime" }
 sc-transaction-pool-api = { version = "4.0.0-dev", path = "../transaction-pool/api" }

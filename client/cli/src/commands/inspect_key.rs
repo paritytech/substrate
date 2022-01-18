@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -156,7 +156,7 @@ fn expect_public_from_phrase<Pair: sp_core::Pair>(
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sp_core::crypto::{Pair, Public};
+	use sp_core::crypto::{ByteArray, Pair};
 	use sp_runtime::traits::IdentifyAccount;
 	use structopt::StructOpt;
 

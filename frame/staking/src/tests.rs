@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -217,16 +217,17 @@ fn rewards_should_work() {
 		Payee::<Test>::insert(21, RewardDestination::Controller);
 		Payee::<Test>::insert(101, RewardDestination::Controller);
 
-		<Pallet<Test>>::reward_by_ids(vec![(11, 50)]);
-		<Pallet<Test>>::reward_by_ids(vec![(11, 50)]);
+		Pallet::<Test>::reward_by_ids(vec![(11, 50)]);
+		Pallet::<Test>::reward_by_ids(vec![(11, 50)]);
 		// This is the second validator of the current elected set.
-		<Pallet<Test>>::reward_by_ids(vec![(21, 50)]);
+		Pallet::<Test>::reward_by_ids(vec![(21, 50)]);
 
 		// Compute total payout now for whole duration of the session.
 		let total_payout_0 = current_total_payout_for_duration(reward_time_per_era());
 		let maximum_payout = maximum_payout_for_duration(reward_time_per_era());
 
 		start_session(1);
+		assert_eq_uvec!(Session::validators(), vec![11, 21]);
 
 		assert_eq!(Balances::total_balance(&10), init_balance_10);
 		assert_eq!(Balances::total_balance(&11), init_balance_11);
@@ -234,7 +235,6 @@ fn rewards_should_work() {
 		assert_eq!(Balances::total_balance(&21), init_balance_21);
 		assert_eq!(Balances::total_balance(&100), init_balance_100);
 		assert_eq!(Balances::total_balance(&101), init_balance_101);
-		assert_eq_uvec!(Session::validators(), vec![11, 21]);
 		assert_eq!(
 			Staking::eras_reward_points(active_era()),
 			EraRewardPoints {
@@ -283,7 +283,7 @@ fn rewards_should_work() {
 		assert_eq_error_rate!(Balances::total_balance(&101), init_balance_101, 2);
 
 		assert_eq_uvec!(Session::validators(), vec![11, 21]);
-		<Pallet<Test>>::reward_by_ids(vec![(11, 1)]);
+		Pallet::<Test>::reward_by_ids(vec![(11, 1)]);
 
 		// Compute total payout now for whole duration as other parameter won't change
 		let total_payout_1 = current_total_payout_for_duration(reward_time_per_era());
@@ -338,6 +338,7 @@ fn staking_should_work() {
 		// add a new candidate for being a validator. account 3 controlled by 4.
 		assert_ok!(Staking::bond(Origin::signed(3), 4, 1500, RewardDestination::Controller));
 		assert_ok!(Staking::validate(Origin::signed(4), ValidatorPrefs::default()));
+		assert_ok!(Session::set_keys(Origin::signed(4), SessionKeys { other: 4.into() }, vec![]));
 
 		// No effects will be seen so far.
 		assert_eq_uvec!(validator_controllers(), vec![20, 10]);
@@ -519,8 +520,8 @@ fn nominating_and_rewards_should_work() {
 
 			// the total reward for era 0
 			let total_payout_0 = current_total_payout_for_duration(reward_time_per_era());
-			<Pallet<Test>>::reward_by_ids(vec![(41, 1)]);
-			<Pallet<Test>>::reward_by_ids(vec![(21, 1)]);
+			Pallet::<Test>::reward_by_ids(vec![(41, 1)]);
+			Pallet::<Test>::reward_by_ids(vec![(21, 1)]);
 
 			mock::start_active_era(1);
 
@@ -561,8 +562,8 @@ fn nominating_and_rewards_should_work() {
 
 			// the total reward for era 1
 			let total_payout_1 = current_total_payout_for_duration(reward_time_per_era());
-			<Pallet<Test>>::reward_by_ids(vec![(21, 2)]);
-			<Pallet<Test>>::reward_by_ids(vec![(11, 1)]);
+			Pallet::<Test>::reward_by_ids(vec![(21, 2)]);
+			Pallet::<Test>::reward_by_ids(vec![(11, 1)]);
 
 			mock::start_active_era(2);
 
@@ -942,7 +943,7 @@ fn reward_destination_works() {
 
 		// Compute total payout now for whole duration as other parameter won't change
 		let total_payout_0 = current_total_payout_for_duration(reward_time_per_era());
-		<Pallet<Test>>::reward_by_ids(vec![(11, 1)]);
+		Pallet::<Test>::reward_by_ids(vec![(11, 1)]);
 
 		mock::start_active_era(1);
 		mock::make_all_reward_payment(0);
@@ -968,7 +969,7 @@ fn reward_destination_works() {
 
 		// Compute total payout now for whole duration as other parameter won't change
 		let total_payout_1 = current_total_payout_for_duration(reward_time_per_era());
-		<Pallet<Test>>::reward_by_ids(vec![(11, 1)]);
+		Pallet::<Test>::reward_by_ids(vec![(11, 1)]);
 
 		mock::start_active_era(2);
 		mock::make_all_reward_payment(1);
@@ -999,7 +1000,7 @@ fn reward_destination_works() {
 
 		// Compute total payout now for whole duration as other parameter won't change
 		let total_payout_2 = current_total_payout_for_duration(reward_time_per_era());
-		<Pallet<Test>>::reward_by_ids(vec![(11, 1)]);
+		Pallet::<Test>::reward_by_ids(vec![(11, 1)]);
 
 		mock::start_active_era(3);
 		mock::make_all_reward_payment(2);
@@ -1049,7 +1050,7 @@ fn validator_payment_prefs_work() {
 		// Compute total payout now for whole duration as other parameter won't change
 		let total_payout_1 = current_total_payout_for_duration(reward_time_per_era());
 		let exposure_1 = Staking::eras_stakers(active_era(), 11);
-		<Pallet<Test>>::reward_by_ids(vec![(11, 1)]);
+		Pallet::<Test>::reward_by_ids(vec![(11, 1)]);
 
 		mock::start_active_era(2);
 		mock::make_all_reward_payment(1);
@@ -1610,8 +1611,8 @@ fn reward_to_stake_works() {
 
 			// Compute total payout now for whole duration as other parameter won't change
 			let total_payout_0 = current_total_payout_for_duration(reward_time_per_era());
-			<Pallet<Test>>::reward_by_ids(vec![(11, 1)]);
-			<Pallet<Test>>::reward_by_ids(vec![(21, 1)]);
+			Pallet::<Test>::reward_by_ids(vec![(11, 1)]);
+			Pallet::<Test>::reward_by_ids(vec![(21, 1)]);
 
 			// New era --> rewards are paid --> stakes are changed
 			mock::start_active_era(1);
@@ -1707,6 +1708,7 @@ fn switching_roles() {
 		// add a new validator candidate
 		assert_ok!(Staking::bond(Origin::signed(5), 6, 1000, RewardDestination::Controller));
 		assert_ok!(Staking::validate(Origin::signed(6), ValidatorPrefs::default()));
+		assert_ok!(Session::set_keys(Origin::signed(6), SessionKeys { other: 6.into() }, vec![]));
 
 		mock::start_active_era(1);
 
@@ -1715,6 +1717,7 @@ fn switching_roles() {
 
 		// 2 decides to be a validator. Consequences:
 		assert_ok!(Staking::validate(Origin::signed(2), ValidatorPrefs::default()));
+		assert_ok!(Session::set_keys(Origin::signed(2), SessionKeys { other: 2.into() }, vec![]));
 		// new stakes:
 		// 10: 1000 self vote
 		// 20: 1000 self vote + 250 vote
@@ -1819,6 +1822,11 @@ fn bond_with_little_staked_value_bounded() {
 			// Stingy validator.
 			assert_ok!(Staking::bond(Origin::signed(1), 2, 1, RewardDestination::Controller));
 			assert_ok!(Staking::validate(Origin::signed(2), ValidatorPrefs::default()));
+			assert_ok!(Session::set_keys(
+				Origin::signed(2),
+				SessionKeys { other: 2.into() },
+				vec![]
+			));
 
 			// 1 era worth of reward. BUT, we set the timestamp after on_initialize, so outdated by
 			// one block.
@@ -2051,12 +2059,12 @@ fn reward_from_authorship_event_handler_works() {
 	ExtBuilder::default().build_and_execute(|| {
 		use pallet_authorship::EventHandler;
 
-		assert_eq!(<pallet_authorship::Pallet<Test>>::author(), 11);
+		assert_eq!(<pallet_authorship::Pallet<Test>>::author(), Some(11));
 
-		<Pallet<Test>>::note_author(11);
-		<Pallet<Test>>::note_uncle(21, 1);
+		Pallet::<Test>::note_author(11);
+		Pallet::<Test>::note_uncle(21, 1);
 		// Rewarding the same two times works.
-		<Pallet<Test>>::note_uncle(11, 1);
+		Pallet::<Test>::note_uncle(11, 1);
 
 		// Not mandatory but must be coherent with rewards
 		assert_eq_uvec!(Session::validators(), vec![11, 21]);
@@ -2079,9 +2087,9 @@ fn add_reward_points_fns_works() {
 		// Not mandatory but must be coherent with rewards
 		assert_eq_uvec!(Session::validators(), vec![21, 11]);
 
-		<Pallet<Test>>::reward_by_ids(vec![(21, 1), (11, 1), (11, 1)]);
+		Pallet::<Test>::reward_by_ids(vec![(21, 1), (11, 1), (11, 1)]);
 
-		<Pallet<Test>>::reward_by_ids(vec![(21, 1), (11, 1), (11, 1)]);
+		Pallet::<Test>::reward_by_ids(vec![(21, 1), (11, 1), (11, 1)]);
 
 		assert_eq!(
 			ErasRewardPoints::<Test>::get(active_era()),
@@ -2254,7 +2262,7 @@ fn slash_in_old_span_does_not_deselect() {
 		);
 
 		// the validator doesn't get chilled again
-		assert!(<Staking as Store>::Validators::iter().find(|(stash, _)| *stash == 11).is_some());
+		assert!(<Staking as Store>::Validators::iter().any(|(stash, _)| stash == 11));
 
 		// but we are still forcing a new era
 		assert_eq!(Staking::force_era(), Forcing::ForceNew);
@@ -2271,7 +2279,7 @@ fn slash_in_old_span_does_not_deselect() {
 		);
 
 		// the validator doesn't get chilled again
-		assert!(<Staking as Store>::Validators::iter().find(|(stash, _)| *stash == 11).is_some());
+		assert!(<Staking as Store>::Validators::iter().any(|(stash, _)| stash == 11));
 
 		// but it's disabled
 		assert!(is_disabled(10));
@@ -3091,13 +3099,13 @@ fn claim_reward_at_the_last_era_and_no_double_claim_and_invalid_claim() {
 		Payee::<Test>::insert(11, RewardDestination::Controller);
 		Payee::<Test>::insert(101, RewardDestination::Controller);
 
-		<Pallet<Test>>::reward_by_ids(vec![(11, 1)]);
+		Pallet::<Test>::reward_by_ids(vec![(11, 1)]);
 		// Compute total payout now for whole duration as other parameter won't change
 		let total_payout_0 = current_total_payout_for_duration(reward_time_per_era());
 
 		mock::start_active_era(1);
 
-		<Pallet<Test>>::reward_by_ids(vec![(11, 1)]);
+		Pallet::<Test>::reward_by_ids(vec![(11, 1)]);
 		// Change total issuance in order to modify total payout
 		let _ = Balances::deposit_creating(&999, 1_000_000_000);
 		// Compute total payout now for whole duration as other parameter won't change
@@ -3106,7 +3114,7 @@ fn claim_reward_at_the_last_era_and_no_double_claim_and_invalid_claim() {
 
 		mock::start_active_era(2);
 
-		<Pallet<Test>>::reward_by_ids(vec![(11, 1)]);
+		Pallet::<Test>::reward_by_ids(vec![(11, 1)]);
 		// Change total issuance in order to modify total payout
 		let _ = Balances::deposit_creating(&999, 1_000_000_000);
 		// Compute total payout now for whole duration as other parameter won't change
@@ -3266,7 +3274,7 @@ fn test_max_nominator_rewarded_per_validator_and_cant_steal_someone_else_reward(
 		}
 		mock::start_active_era(1);
 
-		<Pallet<Test>>::reward_by_ids(vec![(11, 1)]);
+		Pallet::<Test>::reward_by_ids(vec![(11, 1)]);
 		// compute and ensure the reward amount is greater than zero.
 		let _ = current_total_payout_for_duration(reward_time_per_era());
 
@@ -3995,8 +4003,7 @@ mod election_data_provider {
 			assert!(<Validators<Test>>::iter().map(|(x, _)| x).all(|v| Staking::voters(None)
 				.unwrap()
 				.into_iter()
-				.find(|(w, _, t)| { v == *w && t[0] == *w })
-				.is_some()))
+				.any(|(w, _, t)| { v == w && t[0] == w })))
 		})
 	}
 
@@ -4005,7 +4012,7 @@ mod election_data_provider {
 		ExtBuilder::default().build_and_execute(|| {
 			assert_eq!(Staking::nominators(101).unwrap().targets, vec![11, 21]);
 			assert_eq!(
-				<Staking as ElectionDataProvider<AccountId, BlockNumber>>::voters(None)
+				<Staking as ElectionDataProvider>::voters(None)
 					.unwrap()
 					.iter()
 					.find(|x| x.0 == 101)
@@ -4020,7 +4027,7 @@ mod election_data_provider {
 			// 11 is gone.
 			start_active_era(2);
 			assert_eq!(
-				<Staking as ElectionDataProvider<AccountId, BlockNumber>>::voters(None)
+				<Staking as ElectionDataProvider>::voters(None)
 					.unwrap()
 					.iter()
 					.find(|x| x.0 == 101)
@@ -4032,7 +4039,7 @@ mod election_data_provider {
 			// resubmit and it is back
 			assert_ok!(Staking::nominate(Origin::signed(100), vec![11, 21]));
 			assert_eq!(
-				<Staking as ElectionDataProvider<AccountId, BlockNumber>>::voters(None)
+				<Staking as ElectionDataProvider>::voters(None)
 					.unwrap()
 					.iter()
 					.find(|x| x.0 == 101)

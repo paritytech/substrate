@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -188,8 +188,6 @@ pub struct PrometheusConfig {
 
 impl PrometheusConfig {
 	/// Create a new config using the default registry.
-	///
-	/// The default registry prefixes metrics with `substrate`.
 	pub fn new_with_default_registry(port: SocketAddr, chain_id: String) -> Self {
 		let param = iter::once((String::from("chain"), chain_id)).collect();
 		Self {
