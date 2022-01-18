@@ -28,7 +28,7 @@ use sp_core::storage::{ChildInfo, ChildType, StateVersion};
 use sp_std::{boxed::Box, vec::Vec};
 use sp_trie::{
 	child_delta_trie_root, delta_trie_root, empty_child_trie_root,
-	trie_types::{TrieDB, TrieError},
+	trie_types::{TrieDBBuilder, TrieError},
 	LayoutV0, LayoutV1, Trie,
 };
 
@@ -47,7 +47,11 @@ where
 	}
 
 	/// Create new trie-based backend.
-	pub fn new_with_cache(storage: S, root: H::Out, cache: sp_trie::cache::LocalTrieNodeCache<H>) -> Self {
+	pub fn new_with_cache(
+		storage: S,
+		root: H::Out,
+		cache: sp_trie::cache::LocalTrieNodeCache<H>,
+	) -> Self {
 		TrieBackend { essence: TrieBackendEssence::new_with_cache(storage, root, cache) }
 	}
 

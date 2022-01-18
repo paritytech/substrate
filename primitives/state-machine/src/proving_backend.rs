@@ -18,83 +18,19 @@
 //! Proving state machine backend.
 
 use crate::{
-	trie_backend::TrieBackend,
-	trie_backend_essence::{Ephemeral, TrieBackendEssence, TrieBackendStorage},
-	Backend, DBValue, Error, ExecutionError,
+	trie_backend::TrieBackend, trie_backend_essence::TrieBackendStorage, Backend, DBValue, Error,
+	ExecutionError,
 };
-use codec::{Codec, Decode, Encode};
+use codec::{Codec, Encode};
 use hash_db::{HashDB, Hasher, Prefix, EMPTY_PREFIX};
-use log::debug;
 use parking_lot::RwLock;
 use sp_core::storage::{ChildInfo, StateVersion};
 pub use sp_trie::trie_types::TrieError;
-use sp_trie::{
-	empty_child_trie_root, read_child_trie_value_with, read_trie_value_with, record_all_keys,
-	LayoutV1, MemoryDB, Recorder, StorageProof,
-};
+use sp_trie::{MemoryDB, StorageProof};
 use std::{
 	collections::{hash_map::Entry, HashMap},
 	sync::Arc,
 };
-
-/// Patricia trie-based backend specialized in get value proofs.
-pub struct ProvingBackendRecorder<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> {
-	pub(crate) backend: &'a TrieBackendEssence<S, H>,
-	pub(crate) proof_recorder: &'a mut Recorder<Layout<H>>,
-}
-
-impl<'a, S, H> ProvingBackendRecorder<'a, S, H>
-where
-	S: TrieBackendStorage<H>,
-	H: Hasher,
-	H::Out: Codec,
-{
-	/// Produce proof for a key query.
-	pub fn storage(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>, String> {
-		let mut read_overlay = S::Overlay::default();
-		let eph = Ephemeral::new(self.backend.backend_storage(), &mut read_overlay);
-
-		// let map_e = |e| format!("Trie lookup error: {}", e);
-
-		// V1 is equivalent to V0 on read.
-		read_trie_value_with::<LayoutV1<H>, _, Ephemeral<S, H>>(
-			&eph,
-			self.backend.root(),
-			key,
-			&mut *self.proof_recorder,
-		)
-		.map_err(map_e)
-	}
-
-	/// Produce proof for a child key query.
-	pub fn child_storage(
-		&mut self,
-		child_info: &ChildInfo,
-		key: &[u8],
-	) -> Result<Option<Vec<u8>>, String> {
-		let storage_key = child_info.storage_key();
-		let root = self
-			.storage(storage_key)?
-			.and_then(|r| Decode::decode(&mut &r[..]).ok())
-			// V1 is equivalent to V0 on empty trie
-			.unwrap_or_else(|| empty_child_trie_root::<LayoutV1<H>>());
-
-		let mut read_overlay = S::Overlay::default();
-		let eph = Ephemeral::new(self.backend.backend_storage(), &mut read_overlay);
-
-		// let map_e = |e| format!("Trie lookup error: {}", e);
-
-		// V1 is equivalent to V0 on read
-		read_child_trie_value_with::<LayoutV1<H>, _, _>(
-			child_info.keyspace(),
-			&eph,
-			&root.as_ref(),
-			key,
-			&mut *self.proof_recorder,
-		)
-		.map_err(map_e)
-	}
-}
 
 #[derive(Default)]
 struct ProofRecorderInner<Hash> {

@@ -192,7 +192,7 @@ pub mod trie_types {
 	/// Read only V1 and V0 are compatible, thus we always use V1.
 	pub type TrieDB<'a, 'cache, H> = super::TrieDB<'a, 'cache, LayoutV1<H>>;
 	/// Builder for creating a [`TrieDB`].
-	pub type TrieDBBuilderV1<'a, 'cache, H> = super::TrieDBBuilder<'a, 'cache, LayoutV1<H>>;
+	pub type TrieDBBuilder<'a, 'cache, H> = super::TrieDBBuilder<'a, 'cache, LayoutV1<H>>;
 	/// Persistent trie database write-access interface for the a given hasher.
 	pub type TrieDBMutV0<'a, H> = super::TrieDBMut<'a, LayoutV0<H>>;
 	/// Builder for creating a [`TrieDBMutV0`].

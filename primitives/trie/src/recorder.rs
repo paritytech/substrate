@@ -16,7 +16,12 @@
 // limitations under the License.
 
 use parking_lot::{MappedMutexGuard, Mutex, MutexGuard};
-use std::{collections::{HashMap, HashSet}, hash::Hash, mem, sync::Arc};
+use std::{
+	collections::{HashMap, HashSet},
+	hash::Hash,
+	mem,
+	sync::Arc,
+};
 use trie_db::{node::NodeOwned, TrieAccess, TrieRecorder};
 
 use crate::StorageProof;
@@ -47,9 +52,11 @@ struct RecorderInner<H> {
 	/// will use these keys when building the [`StorageProof`] to traverse the trie again and
 	/// collecting the required trie nodes for accessing the data.
 	accessed_keys: HashSet<Vec<u8>>,
-	/// The [`NodeOwned`] we accessed while recording. This should only be populated when a cache is used.
+	/// The [`NodeOwned`] we accessed while recording. This should only be populated when a cache
+	/// is used.
 	accessed_owned_nodes: HashMap<H, NodeOwned<H>>,
-	/// The encoded nodes we accessed while recording. This should only be populated when no cache is used.
+	/// The encoded nodes we accessed while recording. This should only be populated when no cache
+	/// is used.
 	accessed_encoded_nodes: HashMap<H, Vec<u8>>,
 }
 
@@ -80,6 +87,10 @@ where
 					.entry(hash)
 					.or_insert_with(|| encoded_node.into_owned());
 			},
+			TrieAccess::Value { hash, value } => {
+				// We can just record this as encoded node, because we store just raw bytes anyway.
+				self.accessed_encoded_nodes.entry(hash).or_insert_with(|| value.into_owned());
+			},
 		}
 	}
 }
@@ -89,7 +100,7 @@ mod tests {
 	use trie_db::{Trie, TrieDBBuilder, TrieDBMutBuilder, TrieHash, TrieMut};
 
 	type MemoryDB = crate::MemoryDB<sp_core::Blake2Hasher>;
-	type Layout = crate::Layout<sp_core::Blake2Hasher>;
+	type Layout = crate::LayoutV1<sp_core::Blake2Hasher>;
 	type Recorder = super::Recorder<sp_core::hash::H256>;
 
 	const TEST_DATA: &[(&[u8], &[u8])] =

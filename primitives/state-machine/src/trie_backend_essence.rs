@@ -26,8 +26,8 @@ use parking_lot::RwLock;
 use sp_core::storage::ChildInfo;
 use sp_std::{boxed::Box, vec::Vec};
 use sp_trie::{
-	empty_child_trie_root, read_child_trie_value, read_trie_value,
-	trie_types::{TrieDB, TrieError},
+	empty_child_trie_root, read_child_trie_value,
+	trie_types::{TrieDBBuilder, TrieError},
 	DBValue, KeySpacedDB, PrefixedMemoryDB, Trie, TrieDBIterator, TrieDBKeyIterator,
 };
 #[cfg(feature = "std")]
@@ -386,7 +386,7 @@ where
 		child_info: Option<&ChildInfo>,
 	) {
 		let mut iter = move |db| -> sp_std::result::Result<(), Box<TrieError<H::Out>>> {
-			let trie = TrieDB::<H>::new(db, root)?;
+			let trie = TrieDBBuilder::<H>::new(db, root)?.build();
 			let iter = if let Some(prefix) = prefix.as_ref() {
 				TrieDBKeyIterator::new_prefixed(&trie, prefix)?
 			} else {
