@@ -923,7 +923,6 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 		let stake = <BalanceOf<T>>::try_from(weight).unwrap_or_else(|_| {
 			panic!("cannot convert a VoteWeight into BalanceOf, benchmark needs reconfiguring.")
 		});
-		let targets = targets.try_into().unwrap();
 		<Bonded<T>>::insert(voter.clone(), voter.clone());
 		<Ledger<T>>::insert(
 			voter.clone(),
