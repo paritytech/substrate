@@ -176,10 +176,10 @@ struct ClientSpec<E> {
 	#[serde(skip_serializing)]
 	#[allow(unused)]
 	genesis: serde::de::IgnoredAny,
-	/// Mapping from `block_hash` to `wasm_code`.
+	/// Mapping from `block_number` to `wasm_code`.
 	///
-	/// The given `wasm_code` will be used to substitute the on-chain wasm code from the given
-	/// block hash onwards.
+	/// The given `wasm_code` will be used to substitute the on-chain wasm code starting with the
+	/// given block number until the `spec_version` on chain changes.
 	#[serde(default)]
 	code_substitutes: BTreeMap<String, Bytes>,
 }

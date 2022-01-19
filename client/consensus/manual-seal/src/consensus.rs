@@ -23,7 +23,9 @@ use sc_consensus::BlockImportParams;
 use sp_inherents::InherentData;
 use sp_runtime::{traits::Block as BlockT, Digest};
 
+pub mod aura;
 pub mod babe;
+pub mod timestamp;
 
 /// Consensus data provider, manual seal uses this trait object for authoring blocks valid
 /// for any runtime.

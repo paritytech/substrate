@@ -490,24 +490,34 @@ fn aura_err<B: BlockT>(error: Error<B>) -> Error<B> {
 	error
 }
 
+/// Aura Errors
 #[derive(derive_more::Display, Debug)]
-enum Error<B: BlockT> {
+pub enum Error<B: BlockT> {
+	/// Multiple Aura pre-runtime headers
 	#[display(fmt = "Multiple Aura pre-runtime headers")]
 	MultipleHeaders,
+	/// No Aura pre-runtime digest found
 	#[display(fmt = "No Aura pre-runtime digest found")]
 	NoDigestFound,
+	/// Header is unsealed
 	#[display(fmt = "Header {:?} is unsealed", _0)]
 	HeaderUnsealed(B::Hash),
+	/// Header has a bad seal
 	#[display(fmt = "Header {:?} has a bad seal", _0)]
 	HeaderBadSeal(B::Hash),
+	/// Slot Author not found
 	#[display(fmt = "Slot Author not found")]
 	SlotAuthorNotFound,
+	/// Bad signature
 	#[display(fmt = "Bad signature on {:?}", _0)]
 	BadSignature(B::Hash),
+	/// Client Error
 	Client(sp_blockchain::Error),
+	/// Unknown inherent error for identifier
 	#[display(fmt = "Unknown inherent error for identifier: {}", "String::from_utf8_lossy(_0)")]
 	UnknownInherentError(sp_inherents::InherentIdentifier),
 	#[display(fmt = "Inherent error: {}", _0)]
+	/// Inherents Error
 	Inherent(sp_inherents::Error),
 }
 
@@ -517,7 +527,8 @@ impl<B: BlockT> std::convert::From<Error<B>> for String {
 	}
 }
 
-fn find_pre_digest<B: BlockT, Signature: Codec>(header: &B::Header) -> Result<Slot, Error<B>> {
+/// Get pre-digests from the header
+pub fn find_pre_digest<B: BlockT, Signature: Codec>(header: &B::Header) -> Result<Slot, Error<B>> {
 	if header.number().is_zero() {
 		return Ok(0.into())
 	}

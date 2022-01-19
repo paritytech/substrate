@@ -802,6 +802,19 @@ pub struct PrefixIterator<T, OnRemoval = ()> {
 	phantom: core::marker::PhantomData<OnRemoval>,
 }
 
+impl<T, OnRemoval1> PrefixIterator<T, OnRemoval1> {
+	/// Converts to the same iterator but with the different 'OnRemoval' type
+	pub fn convert_on_removal<OnRemoval2>(self) -> PrefixIterator<T, OnRemoval2> {
+		PrefixIterator::<T, OnRemoval2> {
+			prefix: self.prefix,
+			previous_key: self.previous_key,
+			drain: self.drain,
+			closure: self.closure,
+			phantom: Default::default(),
+		}
+	}
+}
+
 /// Trait for specialising on removal logic of [`PrefixIterator`].
 pub trait PrefixIteratorOnRemoval {
 	/// This function is called whenever a key/value is removed.
