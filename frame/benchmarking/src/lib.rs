@@ -1701,7 +1701,6 @@ pub fn show_benchmark_debug_info(
 /// type Council2 = TechnicalCommittee;
 /// add_benchmark!(params, batches, pallet_collective, Council2); // pallet_collective_council_2.rs
 /// ```
-
 #[macro_export]
 macro_rules! add_benchmark {
 	( $params:ident, $batches:ident, $name:path, $( $location:tt )* ) => (
@@ -1803,7 +1802,6 @@ macro_rules! cb_add_benchmarks {
 /// ```
 ///
 /// This should match what exists with the `add_benchmark!` macro.
-
 #[macro_export]
 macro_rules! list_benchmark {
 	( $list:ident, $extra:ident, $name:path, $( $location:tt )* ) => (
@@ -1820,7 +1818,6 @@ macro_rules! list_benchmark {
 }
 
 /// Callback for `define_benchmarks` to call `list_benchmark`.
-
 #[macro_export]
 macro_rules! cb_list_benchmarks {
     // anchor
@@ -1848,7 +1845,6 @@ macro_rules! define_benchmarks {
 		/// ```ignore
 		/// list_benchmarks!(list, extra);
 		/// ```
-
 		#[macro_export]
         macro_rules! list_benchmarks {
             ( $list:ident, $extra:ident ) => {
@@ -1863,7 +1859,6 @@ macro_rules! define_benchmarks {
 		/// ```ignore
 		/// add_benchmarks!(params, batches);
 		/// ```
-
 		#[macro_export]
         macro_rules! add_benchmarks {
             ( $params:ident, $batches:ident ) => {
