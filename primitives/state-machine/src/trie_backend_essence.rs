@@ -633,7 +633,8 @@ mod test {
 	use super::*;
 	use sp_core::{Blake2Hasher, H256};
 	use sp_trie::{
-		trie_types::TrieDBMutV1 as TrieDBMut, KeySpacedDBMut, PrefixedMemoryDB, TrieMut,
+		trie_types::{TrieDBMutBuilderV1 as TrieDBMutBuilder, TrieDBMutV1 as TrieDBMut},
+		KeySpacedDBMut, PrefixedMemoryDB, TrieMut,
 	};
 
 	#[test]
@@ -647,7 +648,7 @@ mod test {
 
 		let mut mdb = PrefixedMemoryDB::<Blake2Hasher>::default();
 		{
-			let mut trie = TrieDBMut::new(&mut mdb, &mut root_1);
+			let mut trie = TrieDBMutBuilder::new(&mut mdb, &mut root_1).build();
 			trie.insert(b"3", &[1]).expect("insert failed");
 			trie.insert(b"4", &[1]).expect("insert failed");
 			trie.insert(b"6", &[1]).expect("insert failed");
@@ -656,13 +657,13 @@ mod test {
 			let mut mdb = KeySpacedDBMut::new(&mut mdb, child_info.keyspace());
 			// reuse of root_1 implicitly assert child trie root is same
 			// as top trie (contents must remain the same).
-			let mut trie = TrieDBMut::new(&mut mdb, &mut root_1);
+			let mut trie = TrieDBMutBuilder::new(&mut mdb, &mut root_1).build();
 			trie.insert(b"3", &[1]).expect("insert failed");
 			trie.insert(b"4", &[1]).expect("insert failed");
 			trie.insert(b"6", &[1]).expect("insert failed");
 		}
 		{
-			let mut trie = TrieDBMut::new(&mut mdb, &mut root_2);
+			let mut trie = TrieDBMutBuilder::new(&mut mdb, &mut root_2).build();
 			trie.insert(child_info.prefixed_storage_key().as_slice(), root_1.as_ref())
 				.expect("insert failed");
 		};

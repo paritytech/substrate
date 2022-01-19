@@ -293,7 +293,7 @@ pub mod tests {
 	use sp_core::H256;
 	use sp_runtime::traits::BlakeTwo256;
 	use sp_trie::{
-		trie_types::{TrieDBMutV0, TrieDBMutV1},
+		trie_types::{TrieDBMutBuilderV0, TrieDBMutBuilderV1},
 		KeySpacedDBMut, PrefixedMemoryDB, TrieMut,
 	};
 	use std::{collections::HashSet, iter};
@@ -308,12 +308,12 @@ pub mod tests {
 			let mut mdb = KeySpacedDBMut::new(&mut mdb, child_info.keyspace());
 			match state_version {
 				StateVersion::V0 => {
-					let mut trie = TrieDBMutV0::new(&mut mdb, &mut root);
+					let mut trie = TrieDBMutBuilderV0::new(&mut mdb, &mut root).build();
 					trie.insert(b"value3", &[142; 33]).expect("insert failed");
 					trie.insert(b"value4", &[124; 33]).expect("insert failed");
 				},
 				StateVersion::V1 => {
-					let mut trie = TrieDBMutV1::new(&mut mdb, &mut root);
+					let mut trie = TrieDBMutBuilderV1::new(&mut mdb, &mut root).build();
 					trie.insert(b"value3", &[142; 33]).expect("insert failed");
 					trie.insert(b"value4", &[124; 33]).expect("insert failed");
 				},
@@ -342,11 +342,11 @@ pub mod tests {
 
 			match state_version {
 				StateVersion::V0 => {
-					let trie = TrieDBMutV0::new(&mut mdb, &mut root);
+					let trie = TrieDBMutBuilderV0::new(&mut mdb, &mut root).build();
 					build(trie, &child_info, &sub_root[..])
 				},
 				StateVersion::V1 => {
-					let trie = TrieDBMutV1::new(&mut mdb, &mut root);
+					let trie = TrieDBMutBuilderV1::new(&mut mdb, &mut root).build();
 					build(trie, &child_info, &sub_root[..])
 				},
 			};

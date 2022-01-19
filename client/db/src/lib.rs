@@ -88,7 +88,7 @@ use sp_state_machine::{
 	backend::Backend as StateBackend, ChildStorageCollection, DBValue, IndexOperation,
 	OffchainChangesCollection, StateMachineStats, StorageCollection, UsageInfo as StateUsageInfo,
 };
-use sp_trie::{prefixed_key, MemoryDB, PrefixedMemoryDB};
+use sp_trie::{cache::SharedTrieNodeCache, prefixed_key, MemoryDB, PrefixedMemoryDB};
 
 // Re-export the Database trait so that one can pass an implementation of it.
 pub use sc_state_db::PruningMode;
@@ -1020,8 +1020,7 @@ pub struct Backend<Block: BlockT> {
 	io_stats: FrozenForDuration<(kvdb::IoStats, StateUsageInfo)>,
 	state_usage: Arc<StateUsageStats>,
 	genesis_state: RwLock<Option<Arc<DbGenesisStorage<Block>>>>,
-	trie_node_cache: Option<sp_trie::SharedTrieNodeCache<HashFor<Block>>>,
-	trie_node_cache_enable_fast_cache: bool,
+	trie_node_cache: Option<sp_trie::cache::SharedTrieNodeCache<HashFor<Block>>>,
 }
 
 impl<Block: BlockT> Backend<Block> {
@@ -1099,8 +1098,10 @@ impl<Block: BlockT> Backend<Block> {
 			keep_blocks: config.keep_blocks.clone(),
 			transaction_storage: config.transaction_storage.clone(),
 			genesis_state: RwLock::new(None),
-			trie_node_cache: config.trie_node_cache_settings.enable.then(|| Default::default()),
-			trie_node_cache_enable_fast_cache: config.trie_node_cache_settings.fast_cache,
+			trie_node_cache: config
+				.trie_node_cache_settings
+				.enable
+				.then(|| SharedTrieNodeCache::new(config.trie_node_cache_settings.fast_cache)),
 		};
 
 		// Older DB versions have no last state key. Check if the state is available and set it.
@@ -1166,7 +1167,7 @@ impl<Block: BlockT> Backend<Block> {
 						(&r.number, &r.hash)
 					);
 
-					return Err(::sp_blockchain::Error::NotInFinalizedChain.into())
+					return Err(sp_blockchain::Error::NotInFinalizedChain.into())
 				}
 
 				retracted.push(r.hash.clone());
@@ -1752,7 +1753,7 @@ impl<Block: BlockT> Backend<Block> {
 			DbState::<Block>::new_with_cache(
 				self.storage.clone(),
 				root,
-				sp_trie::LocalTrieNodeCache::new(
+				sp_trie::cache::LocalTrieNodeCache::new(
 					cache.clone(),
 					self.trie_node_cache_enable_fast_cache,
 				),
@@ -2215,7 +2216,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 					DbState::<Block>::new_with_cache(
 						genesis_state.clone(),
 						root,
-						sp_trie::LocalTrieNodeCache::new(
+						sp_trie::cache::LocalTrieNodeCache::new(
 							cache.clone(),
 							self.trie_node_cache_enable_fast_cache,
 						),
@@ -2257,7 +2258,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 						DbState::<Block>::new_with_cache(
 							self.storage.clone(),
 							root,
-							sp_trie::LocalTrieNodeCache::new(
+							sp_trie::cache::LocalTrieNodeCache::new(
 								cache.clone(),
 								self.trie_node_cache_enable_fast_cache,
 							),

@@ -221,7 +221,7 @@ mod tests {
 	type Cache = super::SharedTrieNodeCache<sp_core::Blake2Hasher>;
 
 	const TEST_DATA: &[(&[u8], &[u8])] =
-		&[(b"key1", b"val1"), (b"key2", b"val2"), (b"key3", b"val3"), (b"key4", b"val4")];
+		&[(b"key1", b"val1"), (b"key2", &[2; 64]), (b"key3", b"val3"), (b"key4", &[4; 64])];
 
 	fn create_trie() -> (MemoryDB, TrieHash<Layout>) {
 		let mut db = MemoryDB::default();

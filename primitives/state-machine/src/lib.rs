@@ -1357,6 +1357,7 @@ mod tests {
 		NativeOrEncoded, NeverNativeValue,
 	};
 	use sp_runtime::traits::BlakeTwo256;
+	use sp_trie::trie_types::{TrieDBMutBuilderV0, TrieDBMutBuilderV1};
 	use std::{
 		collections::{BTreeMap, HashMap},
 		panic::UnwindSafe,
@@ -2014,7 +2015,7 @@ mod tests {
 		let mut state_version = StateVersion::V0;
 		let (mut mdb, mut root) = trie_backend::tests::test_db(state_version);
 		{
-			let mut trie = TrieDBMutV0::from_existing(&mut mdb, &mut root).unwrap();
+			let mut trie = TrieDBMutBuilderV0::from_existing(&mut mdb, &mut root).unwrap().build();
 			trie.insert(b"foo", vec![1u8; 1_000].as_slice()) // big inner hash
 				.expect("insert failed");
 			trie.insert(b"foo2", vec![3u8; 16].as_slice()) // no inner hash
@@ -2048,7 +2049,7 @@ mod tests {
 		// do switch
 		state_version = StateVersion::V1;
 		{
-			let mut trie = TrieDBMutV1::from_existing(&mut mdb, &mut root).unwrap();
+			let mut trie = TrieDBMutBuilderV1::from_existing(&mut mdb, &mut root).unwrap().build();
 			trie.insert(b"foo222", vec![5u8; 100].as_slice()) // inner hash
 				.expect("insert failed");
 			// update with same value do change
