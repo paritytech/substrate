@@ -170,6 +170,11 @@ fn test_versionining_with_new_host_works() {
 }
 
 #[test]
+fn test_versionining_register_only() {
+	call_wasm_method::<HostFunctions>(wasm_binary_unwrap(), "test_versionning_register_only_works");
+}
+
+#[test]
 fn test_tracing() {
 	use std::fmt;
 	use tracing::span::Id as SpanId;
