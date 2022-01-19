@@ -64,6 +64,7 @@ pub trait DefensiveUnwrap<T> {
 		T: Default;
 }
 
+/// Subset of methods similar to [`DefensiveUnwrap`] that can only work for a `Result`.
 pub trait DefensiveResult<T, E> {
 	/// Defensively map the error into another return type, but you are really sure that this
 	/// conversion should never be needed.
@@ -78,6 +79,7 @@ pub trait DefensiveResult<T, E> {
 	fn defensive_ok(self) -> Option<T>;
 }
 
+/// Subset of methods similar to [`DefensiveUnwrap`] that can only work for a `Option`.
 pub trait DefensiveOption<T> {
 	/// Potentially map and unpack the value to something else (`U`), or call the default callback
 	/// if `None`, which should never happen.
