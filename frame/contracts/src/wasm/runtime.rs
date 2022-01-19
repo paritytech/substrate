@@ -21,7 +21,6 @@ use crate::{
 	exec::{ExecError, ExecResult, Ext, StorageKey, TopicOf},
 	gas::{ChargedAmount, Token},
 	schedule::HostFnWeights,
-	storage::WriteOutcome,
 	wasm::env_def::ConvertibleToWasm,
 	BalanceOf, CodeHash, Config, Error,
 };
@@ -169,8 +168,8 @@ pub enum RuntimeCosts {
 	DepositEvent { num_topic: u32, len: u32 },
 	/// Weight of calling `seal_debug_message`.
 	DebugMessage,
-	/// Weight of calling `seal_set_storage` for the given storage item size.
-	SetStorage(u32),
+	/// Weight of calling `seal_set_storage` for the given storage item sizes.
+	SetStorage { old_bytes: u32, new_bytes: u32 },
 	/// Weight of calling `seal_clear_storage`.
 	ClearStorage,
 	/// Weight of calling `seal_contains_storage`.
@@ -244,8 +243,10 @@ impl RuntimeCosts {
 				.saturating_add(s.deposit_event_per_topic.saturating_mul(num_topic.into()))
 				.saturating_add(s.deposit_event_per_byte.saturating_mul(len.into())),
 			DebugMessage => s.debug_message,
-			SetStorage(len) =>
-				s.set_storage.saturating_add(s.set_storage_per_byte.saturating_mul(len.into())),
+			SetStorage { new_bytes, old_bytes } => s
+				.set_storage
+				.saturating_add(s.set_storage_per_new_byte.saturating_mul(new_bytes.into()))
+				.saturating_add(s.set_storage_per_old_byte.saturating_mul(old_bytes.into())),
 			ClearStorage => s.clear_storage,
 			#[cfg(feature = "unstable-interface")]
 			ContainsStorage => s.contains_storage,
@@ -643,38 +644,27 @@ where
 		}
 	}
 
-	/// Extracts the size of the overwritten value or `u32::MAX` if there
-	/// was no value in storage.
-	///
-	/// # Note
-	///
-	/// We cannot use `0` as sentinel value because there could be a zero sized
-	/// storage entry which is different from a non existing one.
-	fn overwritten_len(outcome: WriteOutcome) -> u32 {
-		match outcome {
-			WriteOutcome::New => u32::MAX,
-			WriteOutcome::Overwritten(len) => len,
-			WriteOutcome::Taken(value) => value.len() as u32,
-		}
-	}
-
 	fn set_storage(
 		&mut self,
 		key_ptr: u32,
 		value_ptr: u32,
 		value_len: u32,
 	) -> Result<u32, TrapReason> {
-		self.charge_gas(RuntimeCosts::SetStorage(value_len))?;
-		if value_len > self.ext.max_value_size() {
+		let max_size = self.ext.max_value_size();
+		let charged = self
+			.charge_gas(RuntimeCosts::SetStorage { new_bytes: value_len, old_bytes: max_size })?;
+		if value_len > max_size {
 			Err(Error::<E::T>::ValueTooLarge)?;
 		}
 		let mut key: StorageKey = [0; 32];
 		self.read_sandbox_memory_into_buf(key_ptr, &mut key)?;
 		let value = Some(self.read_sandbox_memory(value_ptr, value_len)?);
-		self.ext
-			.set_storage(key, value, false)
-			.map(Self::overwritten_len)
-			.map_err(Into::into)
+		let write_outcome = self.ext.set_storage(key, value, false)?;
+		self.adjust_gas(
+			charged,
+			RuntimeCosts::SetStorage { new_bytes: value_len, old_bytes: write_outcome.old_len() },
+		);
+		Ok(write_outcome.old_len_with_sentinel())
 	}
 
 	fn clear_storage(&mut self, key_ptr: u32) -> Result<u32, TrapReason> {
@@ -683,7 +673,7 @@ where
 		self.read_sandbox_memory_into_buf(key_ptr, &mut key)?;
 		self.ext
 			.set_storage(key, None, false)
-			.map(Self::overwritten_len)
+			.map(|val| val.old_len_with_sentinel())
 			.map_err(Into::into)
 	}
 

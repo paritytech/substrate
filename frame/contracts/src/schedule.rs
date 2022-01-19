@@ -316,8 +316,11 @@ pub struct HostFnWeights<T: Config> {
 	/// Weight of calling `seal_set_storage`.
 	pub set_storage: Weight,
 
-	/// Weight per byte of an item stored with `seal_set_storage`.
-	pub set_storage_per_byte: Weight,
+	/// Weight per written byten of an item stored with `seal_set_storage`.
+	pub set_storage_per_new_byte: Weight,
+
+	/// Weight per overwritten byte of an item stored with `seal_set_storage`.
+	pub set_storage_per_old_byte: Weight,
 
 	/// Weight of calling `seal_clear_storage`.
 	pub clear_storage: Weight,
@@ -586,7 +589,8 @@ impl<T: Config> Default for HostFnWeights<T> {
 			),
 			debug_message: cost_batched!(seal_debug_message),
 			set_storage: cost_batched!(seal_set_storage),
-			set_storage_per_byte: cost_byte_batched!(seal_set_storage_per_kb),
+			set_storage_per_new_byte: cost_byte_batched!(seal_set_storage_per_new_kb),
+			set_storage_per_old_byte: cost_byte_batched!(seal_set_storage_per_old_kb),
 			clear_storage: cost_batched!(seal_clear_storage),
 			contains_storage: cost_batched!(seal_contains_storage),
 			get_storage: cost_batched!(seal_get_storage),

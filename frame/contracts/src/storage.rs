@@ -87,6 +87,33 @@ pub enum WriteOutcome {
 	Taken(Vec<u8>),
 }
 
+impl WriteOutcome {
+	/// Extracts the size of the overwritten value or `0` if there
+	/// was no value in storage.
+	pub fn old_len(&self) -> u32 {
+		match self {
+			Self::New => 0,
+			Self::Overwritten(len) => *len,
+			Self::Taken(value) => value.len() as u32,
+		}
+	}
+
+	/// Extracts the size of the overwritten value or `u32::MAX` if there
+	/// was no value in storage.
+	///
+	/// # Note
+	///
+	/// We cannot use `0` as sentinel value because there could be a zero sized
+	/// storage entry which is different from a non existing one.
+	pub fn old_len_with_sentinel(&self) -> u32 {
+		match self {
+			Self::New => u32::MAX,
+			Self::Overwritten(len) => *len,
+			Self::Taken(value) => value.len() as u32,
+		}
+	}
+}
+
 pub struct Storage<T>(PhantomData<T>);
 
 impl<T> Storage<T>
