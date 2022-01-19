@@ -22,9 +22,16 @@ frame-system = { version = "4.0.0-dev", default-features = false, path = "../sys
 sp-arithmetic = { version = "4.0.0", default-features = false, path = "../../primitives/arithmetic" }
 sp-runtime = { version = "4.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
+sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../primitives/staking" }
+sp-core = { version = "4.1.0-dev", default-features = false, path = "../../primitives/core" }
 
 # third party
 log = { version = "0.4.14", default-features = false }
+
+[dev-dependencies]
+pallet-balances = { version = "4.0.0-dev", path = "../balances" }
+sp-io = { version = "4.0.0-dev", path = "../../primitives/io"}
+sp-tracing = { version = "4.0.0", path = "../../primitives/tracing" }
 
 [features]
 default = ["std"]

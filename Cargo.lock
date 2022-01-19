@@ -5956,11 +5956,16 @@ dependencies = [
  "frame-support",
  "frame-system",
  "log 0.4.14",
+ "pallet-balances",
  "parity-scale-codec",
  "scale-info",
  "sp-arithmetic",
+ "sp-core",
+ "sp-io",
  "sp-runtime",
+ "sp-staking",
  "sp-std",
+ "sp-tracing",
 ]
 
 [[package]]

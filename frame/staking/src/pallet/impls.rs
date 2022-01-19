@@ -37,13 +37,13 @@ use sp_runtime::{
 };
 use sp_staking::{
 	offence::{DisableStrategy, OffenceDetails, OnOffenceHandler},
-	SessionIndex,
+	EraIndex, SessionIndex,
 };
 use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 
 use crate::{
-	log, slashing, weights::WeightInfo, ActiveEraInfo, BalanceOf, EraIndex, EraPayout, Exposure,
-	ExposureOf, Forcing, IndividualExposure, Nominations, PositiveImbalanceOf, RewardDestination,
+	log, slashing, weights::WeightInfo, ActiveEraInfo, BalanceOf, EraPayout, Exposure, ExposureOf,
+	Forcing, IndividualExposure, Nominations, PositiveImbalanceOf, RewardDestination,
 	SessionInterface, StakingLedger, ValidatorPrefs,
 };
 
@@ -594,7 +594,7 @@ impl<T: Config> Pallet<T> {
 				for era in (*earliest)..keep_from {
 					let era_slashes = <Self as Store>::UnappliedSlashes::take(&era);
 					for slash in era_slashes {
-						slashing::apply_slash::<T>(slash);
+						slashing::apply_slash::<T>(slash, era, active_era);
 					}
 				}
 
@@ -1210,7 +1210,7 @@ where
 				unapplied.reporters = details.reporters.clone();
 				if slash_defer_duration == 0 {
 					// Apply right away.
-					slashing::apply_slash::<T>(unapplied);
+					slashing::apply_slash::<T>(unapplied, slash_era, active_era);
 					{
 						let slash_cost = (6, 5);
 						let reward_cost = (2, 2);

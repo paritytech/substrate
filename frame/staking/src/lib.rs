@@ -312,7 +312,7 @@ use sp_runtime::{
 };
 use sp_staking::{
 	offence::{Offence, OffenceError, ReportOffence},
-	SessionIndex,
+	EraIndex, SessionIndex,
 };
 use sp_std::{collections::btree_map::BTreeMap, convert::From, prelude::*};
 pub use weights::WeightInfo;
@@ -331,9 +331,6 @@ macro_rules! log {
 		)
 	};
 }
-
-/// Counter for the number of eras that have passed.
-pub type EraIndex = u32;
 
 /// Counter for the number of "reward" points earned by a given validator.
 pub type RewardPoint = u32;
@@ -527,14 +524,59 @@ impl<AccountId, Balance: HasCompact + Copy + Saturating + AtLeast32BitUnsigned +
 impl<AccountId, Balance> StakingLedger<AccountId, Balance>
 where
 	Balance: AtLeast32BitUnsigned + Saturating + Copy,
+	AccountId: Clone,
 {
-	/// Slash the validator for a given amount of balance. This can grow the value
-	/// of the slash in the case that the validator has less than `minimum_balance`
+	/// Slash the staker for a given amount of balance. This can grow the value
+	/// of the slash in the case that the staker has less than `minimum_balance`
 	/// active funds. Returns the amount of funds actually slashed.
 	///
 	/// Slashes from `active` funds first, and then `unlocking`, starting with the
 	/// chunks that are closest to unlocking.
-	fn slash(&mut self, mut value: Balance, minimum_balance: Balance) -> Balance {
+	fn slash<P: sp_staking::PoolsInterface<AccountId = AccountId, Balance = Balance>>(
+		&mut self,
+		value: Balance,
+		minimum_balance: Balance,
+		slash_era: EraIndex,
+		active_era: EraIndex,
+	) -> Balance {
+		if let Some((new_active, new_chunk_balances)) =
+			P::slash_pool(&self.stash, value, slash_era, active_era)
+		{
+			self.pool_slash(new_active, new_chunk_balances)
+		} else {
+			self.standard_slash(value, minimum_balance)
+		}
+	}
+
+	/// Slash a pool account
+	fn pool_slash(
+		&mut self,
+		new_active: Balance,
+		new_chunk_balances: BTreeMap<EraIndex, Balance>,
+	) -> Balance {
+		let mut total_slashed = Balance::zero();
+
+		// Modify the unlocking chunks in place
+		for chunk in &mut self.unlocking {
+			if let Some(new_balance) = new_chunk_balances.get(&chunk.era) {
+				let slashed_amount = chunk.value.saturating_sub(*new_balance);
+				self.total = self.total.saturating_sub(slashed_amount);
+				total_slashed = total_slashed.saturating_add(slashed_amount);
+
+				chunk.value = *new_balance;
+			}
+		}
+
+		// Update the actively bonded
+		let slashed_amount = self.active.saturating_sub(new_active);
+		self.total = self.total.saturating_sub(slashed_amount);
+		self.active = new_active;
+
+		total_slashed.saturating_add(slashed_amount)
+	}
+
+	// Slash a validator or nominator's stash
+	fn standard_slash(&mut self, mut value: Balance, minimum_balance: Balance) -> Balance {
 		let pre_total = self.total;
 		let total = &mut self.total;
 		let active = &mut self.active;

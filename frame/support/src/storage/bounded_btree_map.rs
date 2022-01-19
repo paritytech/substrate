@@ -23,8 +23,11 @@ use crate::{
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use sp_std::{
-	borrow::Borrow, collections::btree_map::BTreeMap, convert::TryFrom, marker::PhantomData,
-	ops::Deref,
+	borrow::Borrow,
+	collections::btree_map::BTreeMap,
+	convert::TryFrom,
+	marker::PhantomData,
+	ops::{Deref, DerefMut},
 };
 
 /// A bounded map based on a B-Tree.
@@ -268,6 +271,15 @@ where
 
 	fn deref(&self) -> &Self::Target {
 		&self.0
+	}
+}
+
+impl<K, V, S> DerefMut for BoundedBTreeMap<K, V, S>
+where
+	K: Ord,
+{
+	fn deref_mut(&mut self) -> &mut Self::Target {
+		&mut self.0
 	}
 }
 
