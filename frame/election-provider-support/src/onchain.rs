@@ -123,8 +123,8 @@ impl<T: Config> ElectionProvider for OnChainSequentialPhragmen<T> {
 
 impl<T: Config> InstantElectionProvider for OnChainSequentialPhragmen<T> {
 	fn instant_elect(
-		maybe_max_voters: Option<u32>,
-		maybe_max_targets: Option<u32>,
+		maybe_max_voters: Option<usize>,
+		maybe_max_targets: Option<usize>,
 	) -> Result<Supports<Self::AccountId>, Self::Error> {
 		Self::elect_with(maybe_max_voters, maybe_max_targets)
 	}
