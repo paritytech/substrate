@@ -15,6 +15,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Old macros don't support the flag `no-metadata-docs` so the result differs when the feature is
+// activated.
+#![cfg(not(feature = "no-metadata-docs"))]
+
 use frame_support::traits::{ConstU32, ConstU64};
 
 mod pallet_old {

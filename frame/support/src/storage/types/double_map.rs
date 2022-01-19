@@ -530,6 +530,8 @@ where
 	MaxValues: Get<Option<u32>>,
 {
 	fn build_metadata(docs: Vec<&'static str>, entries: &mut Vec<StorageEntryMetadata>) {
+		let docs = if cfg!(feature = "no-metadata-docs") { vec![] } else { docs };
+
 		let entry = StorageEntryMetadata {
 			name: Prefix::STORAGE_PREFIX,
 			modifier: QueryKind::METADATA,
