@@ -170,11 +170,11 @@ pub enum RuntimeCosts {
 	DebugMessage,
 	/// Weight of calling `seal_set_storage` for the given storage item sizes.
 	SetStorage { old_bytes: u32, new_bytes: u32 },
-	/// Weight of calling `seal_clear_storage`.
-	ClearStorage,
-	/// Weight of calling `seal_contains_storage`.
+	/// Weight of calling `seal_clear_storage` per cleared byte.
+	ClearStorage(u32),
+	/// Weight of calling `seal_contains_storage` per byte of the checked item.
 	#[cfg(feature = "unstable-interface")]
-	ContainsStorage,
+	ContainsStorage(u32),
 	/// Weight of calling `seal_get_storage` with the specified size in storage.
 	GetStorage(u32),
 	/// Weight of calling `seal_take_storage` for the given size.
@@ -247,9 +247,13 @@ impl RuntimeCosts {
 				.set_storage
 				.saturating_add(s.set_storage_per_new_byte.saturating_mul(new_bytes.into()))
 				.saturating_add(s.set_storage_per_old_byte.saturating_mul(old_bytes.into())),
-			ClearStorage => s.clear_storage,
+			ClearStorage(len) => s
+				.clear_storage
+				.saturating_add(s.clear_storage_per_byte.saturating_mul(len.into())),
 			#[cfg(feature = "unstable-interface")]
-			ContainsStorage => s.contains_storage,
+			ContainsStorage(len) => s
+				.contains_storage
+				.saturating_add(s.contains_storage_per_byte.saturating_mul(len.into())),
 			GetStorage(len) =>
 				s.get_storage.saturating_add(s.get_storage_per_byte.saturating_mul(len.into())),
 			#[cfg(feature = "unstable-interface")]
@@ -668,13 +672,12 @@ where
 	}
 
 	fn clear_storage(&mut self, key_ptr: u32) -> Result<u32, TrapReason> {
-		self.charge_gas(RuntimeCosts::ClearStorage)?;
+		let charged = self.charge_gas(RuntimeCosts::ClearStorage(self.ext.max_value_size()))?;
 		let mut key: StorageKey = [0; 32];
 		self.read_sandbox_memory_into_buf(key_ptr, &mut key)?;
-		self.ext
-			.set_storage(key, None, false)
-			.map(|val| val.old_len_with_sentinel())
-			.map_err(Into::into)
+		let outcome = self.ext.set_storage(key, None, false)?;
+		self.adjust_gas(charged, RuntimeCosts::ClearStorage(outcome.old_len()));
+		Ok(outcome.old_len_with_sentinel())
 	}
 
 	fn call(
@@ -852,7 +855,7 @@ define_env!(Env, <E: Ext>,
 	//
 	// `ReturnCode::KeyNotFound`
 	[seal0] seal_get_storage(ctx, key_ptr: u32, out_ptr: u32, out_len_ptr: u32) -> ReturnCode => {
-		let charged = ctx.charge_gas(RuntimeCosts::GetStorage(ctx.ext.schedule().limits.payload_len))?;
+		let charged = ctx.charge_gas(RuntimeCosts::GetStorage(ctx.ext.max_value_size()))?;
 		let mut key: StorageKey = [0; 32];
 		ctx.read_sandbox_memory_into_buf(key_ptr, &mut key)?;
 		if let Some(value) = ctx.ext.get_storage(&key) {
@@ -867,24 +870,24 @@ define_env!(Env, <E: Ext>,
 
 	// Checks whether there is a value stored under the given key.
 	//
-	// Returns `ReturnCode::Success` if there is a key in storage. Otherwise an error
-	// is returned.
-	//
 	// # Parameters
 	//
 	// - `key_ptr`: pointer into the linear memory where the key of the requested value is placed.
 	//
-	// # Errors
+	// # Return Value
 	//
-	// `ReturnCode::KeyNotFound`
-	[__unstable__] seal_contains_storage(ctx, key_ptr: u32) -> ReturnCode => {
-		ctx.charge_gas(RuntimeCosts::ContainsStorage)?;
+	// Returns the size of the pre-existing value at the specified key if any. Otherwise
+	// `u32::MAX` is returned as a sentinel value.
+	[__unstable__] seal_contains_storage(ctx, key_ptr: u32) -> u32 => {
+		let charged = ctx.charge_gas(RuntimeCosts::ContainsStorage(ctx.ext.max_value_size()))?;
 		let mut key: StorageKey = [0; 32];
 		ctx.read_sandbox_memory_into_buf(key_ptr, &mut key)?;
-		if ctx.ext.contains_storage(&key) {
-			Ok(ReturnCode::Success)
+		if let Some(len) = ctx.ext.get_storage_size(&key) {
+			ctx.adjust_gas(charged, RuntimeCosts::ContainsStorage(len));
+			Ok(len)
 		} else {
-			Ok(ReturnCode::KeyNotFound)
+			ctx.adjust_gas(charged, RuntimeCosts::ContainsStorage(0));
+			Ok(u32::MAX)
 		}
 	},
 
@@ -901,10 +904,10 @@ define_env!(Env, <E: Ext>,
 	//
 	// `ReturnCode::KeyNotFound`
 	[__unstable__] seal_take_storage(ctx, key_ptr: u32, out_ptr: u32, out_len_ptr: u32) -> ReturnCode => {
-		let charged = ctx.charge_gas(RuntimeCosts::TakeStorage(ctx.ext.schedule().limits.payload_len))?;
+		let charged = ctx.charge_gas(RuntimeCosts::TakeStorage(ctx.ext.max_value_size()))?;
 		let mut key: StorageKey = [0; 32];
 		ctx.read_sandbox_memory_into_buf(key_ptr, &mut key)?;
-		if let WriteOutcome::Taken(value) = ctx.ext.set_storage(key, None, true)? {
+		if let crate::storage::WriteOutcome::Taken(value) = ctx.ext.set_storage(key, None, true)? {
 			ctx.adjust_gas(charged, RuntimeCosts::TakeStorage(value.len() as u32));
 			ctx.write_sandbox_output(out_ptr, out_len_ptr, &value, false, already_charged)?;
 			Ok(ReturnCode::Success)

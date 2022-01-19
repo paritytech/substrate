@@ -130,8 +130,8 @@ where
 	}
 
 	/// Returns `true` iff the `key` exists in storage.
-	pub fn contains(trie_id: &TrieId, key: &StorageKey) -> bool {
-		child::exists(&child_trie_info(trie_id), &blake2_256(key))
+	pub fn size(trie_id: &TrieId, key: &StorageKey) -> Option<u32> {
+		child::len(&child_trie_info(trie_id), &blake2_256(key))
 	}
 
 	/// Update a storage entry into a contract's kv storage.

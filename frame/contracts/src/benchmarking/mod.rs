@@ -918,7 +918,7 @@ benchmarks! {
 			Storage::<T>::write(
 				&info.trie_id,
 				key.as_slice().try_into().map_err(|e| "Key has wrong length")?,
-				Some(vec![42; T::Schedule::get().limits.payload_len as usize]),
+				Some(vec![]),
 				None,
 				false,
 			)
@@ -931,7 +931,6 @@ benchmarks! {
 	seal_clear_storage_per_kb {
 		let n in 0 .. T::Schedule::get().limits.payload_len / 1024;
 		let key = T::Hashing::hash_of(&1u32).as_ref().to_vec();
-		let key_len = key.len();
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
