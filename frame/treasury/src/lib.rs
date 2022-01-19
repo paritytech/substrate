@@ -409,7 +409,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// The needed bond for a proposal whose spend is `value`.
 	fn calculate_bond(value: BalanceOf<T, I>) -> BalanceOf<T, I> {
 		let mut r = T::ProposalBondMinimum::get().max(T::ProposalBond::get() * value);
-		T::ProposalBondMaximum::get().map(|m| r = r.min(m));
+		if let Some(m) = T::ProposalBondMaximum::get() {
+			r = r.min(m);
+		}
 		r
 	}
 
