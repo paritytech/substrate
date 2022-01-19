@@ -20,7 +20,7 @@
 use crate::dispatch::Parameter;
 use codec::{CompactLen, Decode, DecodeAll, Encode, EncodeLike, Input, MaxEncodedLen};
 use scale_info::{build::Fields, meta_type, Path, Type, TypeInfo, TypeParameter};
-use sp_arithmetic::traits::{Bounded, CheckedAdd, CheckedMul, CheckedSub};
+use sp_arithmetic::traits::{CheckedAdd, CheckedMul, CheckedSub, Saturating};
 use sp_runtime::{traits::Block as BlockT, DispatchError};
 use sp_std::{cmp::Ordering, prelude::*};
 
@@ -72,7 +72,7 @@ pub trait DefensiveResult<T, E> {
 
 	/// Defensively map and unpack the value to something else (`U`), or call the default callback
 	/// if `Err`, which should never happen.
-	fn defensive_map_or_else<U, F: FnOnce(T) -> U, D: FnOnce(E) -> U>(self, default: D, f: F) -> U;
+	fn defensive_map_or_else<U, D: FnOnce(E) -> U, F: FnOnce(T) -> U>(self, default: D, f: F) -> U;
 
 	/// Defensively transform this result into an option, discarding the `Err` variant if it
 	/// happens, which should never happen.
@@ -83,7 +83,7 @@ pub trait DefensiveResult<T, E> {
 pub trait DefensiveOption<T> {
 	/// Potentially map and unpack the value to something else (`U`), or call the default callback
 	/// if `None`, which should never happen.
-	fn defensive_map_or_else<U, F: FnOnce(T) -> U, D: FnOnce() -> U>(self, f: F, default: D) -> U;
+	fn defensive_map_or_else<U, D: FnOnce() -> U, F: FnOnce(T) -> U>(self, default: D, f: F) -> U;
 
 	/// Defensively transform this option to a result.
 	fn defensive_ok_or_else<E, F: FnOnce() -> E>(self, err: F) -> Result<T, E>;
@@ -206,7 +206,7 @@ impl<T, E: sp_std::fmt::Debug> DefensiveResult<T, E> for Result<T, E> {
 		})
 	}
 
-	fn defensive_map_or_else<U, F: FnOnce(T) -> U, D: FnOnce(E) -> U>(self, default: D, f: F) -> U {
+	fn defensive_map_or_else<U, D: FnOnce(E) -> U, F: FnOnce(T) -> U>(self, default: D, f: F) -> U {
 		self.map_or_else(
 			|e| {
 				debug_assert!(false, "{}: {:?}", DEFENSIVE_OP_INTERNAL_ERROR, e);
@@ -240,7 +240,7 @@ impl<T, E: sp_std::fmt::Debug> DefensiveResult<T, E> for Result<T, E> {
 }
 
 impl<T> DefensiveOption<T> for Option<T> {
-	fn defensive_map_or_else<U, F: FnOnce(T) -> U, D: FnOnce() -> U>(self, f: F, default: D) -> U {
+	fn defensive_map_or_else<U, D: FnOnce() -> U, F: FnOnce(T) -> U>(self, default: D, f: F) -> U {
 		self.map_or_else(
 			|| {
 				debug_assert!(false, "{}", DEFENSIVE_OP_INTERNAL_ERROR);
@@ -281,15 +281,15 @@ pub trait DefensiveSaturating {
 
 // NOTE: A bit unfortunate, since T has to be bound by all the traits needed. Could make it
 // `DefensiveSaturating<T>` to mitigate, but anyways okay for a draft PR.
-impl<T: CheckedAdd + CheckedMul + CheckedSub + Bounded> DefensiveSaturating for T {
+impl<T: Saturating + CheckedAdd + CheckedMul + CheckedSub> DefensiveSaturating for T {
 	fn defensive_saturating_add(self, other: Self) -> Self {
-		self.checked_add(&other).defensive_unwrap_or_else(Bounded::max_value)
+		self.checked_add(&other).defensive_unwrap_or_else(|| self.saturating_add(other))
 	}
 	fn defensive_saturating_sub(self, other: Self) -> Self {
-		self.checked_sub(&other).defensive_unwrap_or_else(Bounded::min_value)
+		self.checked_sub(&other).defensive_unwrap_or_else(|| self.saturating_sub(other))
 	}
 	fn defensive_saturating_mul(self, other: Self) -> Self {
-		self.checked_mul(&other).defensive_unwrap_or_else(Bounded::max_value)
+		self.checked_mul(&other).defensive_unwrap_or_else(|| self.saturating_mul(other))
 	}
 }
 
