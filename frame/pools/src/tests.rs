@@ -2,7 +2,7 @@
 
 use super::*;
 use crate::mock::{Balances, ExtBuilder, Pools, Runtime};
-use frame_support::assert_noop;
+use frame_support::{assert_err, assert_noop};
 
 // Pool 0's primary account id (i.e. its stash and controller account).
 const PRIMARY_ACCOUNT: u32 = 1382160961;
@@ -152,6 +152,25 @@ mod claim_payout {
 		// 	assert_noop!(
 		// 		calculate_delegator_payout(&primary_pool, reward_pool, delegator),
 		// 	);
+	}
+
+	#[test]
+	fn calculate_delegator_payout_works_with_a_pool_of_3() {}
+
+	#[test]
+	fn calculate_delegator_payout_errors_when_unbonding_era_is_some() {
+		ExtBuilder::default().build_and_execute(|| {
+			let primary_pool = PrimaryPools::<Runtime>::get(0).unwrap();
+			let reward_pool = RewardPools::<Runtime>::get(0).unwrap();
+			let mut delegator = Delegators::<Runtime>::get(10).unwrap();
+
+			delegator.unbonding_era = Some(0);
+
+			assert_noop!(
+				Pools::calculate_delegator_payout(&primary_pool, reward_pool, delegator),
+				Error::<Runtime>::AlreadyUnbonding
+			);
+		})
 	}
 }
 
