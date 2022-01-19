@@ -824,7 +824,9 @@ impl<B: BlockT> Protocol<B> {
 			debug!(target: "sync", "Too many full nodes, rejecting {}", who);
 			self.behaviour.disconnect_peer(&who, HARDCODED_PEERSETS_SYNC);
 			return Err(())
-		} else if status.roles.is_light() &&
+		}
+
+		if status.roles.is_light() &&
 			(self.peers.len() - self.sync.num_peers()) < self.default_peers_set_num_light
 		{
 			// Make sure that not all slots are occupied by light clients.
