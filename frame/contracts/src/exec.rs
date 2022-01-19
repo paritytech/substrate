@@ -362,8 +362,10 @@ enum FrameArgs<'a, T: Config, E> {
 		dest: T::AccountId,
 		/// If `None` the contract info needs to be reloaded from storage.
 		cached_info: Option<ContractInfo<T>>,
-		/// The executable whose `call` function is run.
-		executable: Option<E>,
+		/// This frame was created by `seal_delegate_call` and hence uses a different code than
+		/// what is stored at [`Self::dest`]. It also uses a different caller than the previous
+		/// frames [`Self::dest`].
+		delegated_call: Option<E>,
 	},
 	Instantiate {
 		/// The contract or signed origin which instantiates the new contract.
@@ -519,7 +521,7 @@ where
 		debug_message: Option<&'a mut Vec<u8>>,
 	) -> Result<ExecReturnValue, ExecError> {
 		let (mut stack, executable) = Self::new(
-			FrameArgs::Call { dest, cached_info: None, executable: None },
+			FrameArgs::Call { dest, cached_info: None, delegated_call: None },
 			origin,
 			gas_meter,
 			storage_meter,
@@ -612,14 +614,14 @@ where
 	) -> Result<(Frame<T>, E, Option<u64>), ExecError> {
 		let (account_id, contract_info, executable, entry_point, account_counter) = match frame_args
 		{
-			FrameArgs::Call { dest, cached_info, executable } => {
+			FrameArgs::Call { dest, cached_info, delegated_call } => {
 				let contract = if let Some(contract) = cached_info {
 					contract
 				} else {
 					<ContractInfoOf<T>>::get(&dest).ok_or(<Error<T>>::ContractNotFound)?
 				};
 
-				let executable = if let Some(executable) = executable {
+				let executable = if let Some(executable) = delegated_call {
 					executable
 				} else {
 					E::from_storage(contract.code_hash, schedule, gas_meter)?
@@ -909,6 +911,22 @@ where
 	fn initial_trie_seed() -> u64 {
 		<AccountCounter<T>>::get().wrapping_add(1)
 	}
+
+	// Looking for a caller frame recursively
+	// TODO: store caller information on the frame
+	fn caller_frame(&self, start_from: usize) -> Option<&Frame<T>> {
+		let caller_frame = self.frames().nth(start_from + 1);
+		let callee_frame = self.frames().nth(start_from);
+		if caller_frame.map(|f| &f.account_id) == callee_frame.map(|f| &f.account_id) &&
+			caller_frame.map(|f| &f.nested_gas).unwrap_or(&self.gas_meter).gas_left() == 0
+		{
+			// in the case of `delegate_call` the caller and callee are the same and all gas is
+			// passed to the callee
+			self.caller_frame(start_from + 1)
+		} else {
+			caller_frame
+		}
+	}
 }
 
 impl<'a, T, E> Ext for Stack<'a, T, E>
@@ -947,7 +965,7 @@ where
 					_ => None,
 				});
 			let executable = self.push_frame(
-				FrameArgs::Call { dest: to, cached_info, executable: None },
+				FrameArgs::Call { dest: to, cached_info, delegated_call: None },
 				value,
 				gas_limit,
 			)?;
@@ -977,7 +995,7 @@ where
 			FrameArgs::Call {
 				dest: account_id,
 				cached_info: Some(contract_info),
-				executable: Some(executable),
+				delegated_call: Some(executable),
 			},
 			value,
 			0,
@@ -1065,7 +1083,12 @@ where
 	}
 
 	fn caller(&self) -> &T::AccountId {
-		self.frames().nth(1).map(|f| &f.account_id).unwrap_or(&self.origin)
+		let frame = if self.frames().collect::<Vec<_>>().len() <= 1 {
+			self.frames().nth(1)
+		} else {
+			self.caller_frame(0)
+		};
+		frame.map(|f| &f.account_id).unwrap_or(&self.origin)
 	}
 
 	fn balance(&self) -> BalanceOf<T> {

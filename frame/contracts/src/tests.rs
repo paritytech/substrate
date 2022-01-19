@@ -721,7 +721,7 @@ fn delegate_call() {
 		assert_ok!(Contracts::call(
 			Origin::signed(ALICE),
 			caller_addr.clone(),
-			0,
+			1337,
 			GAS_LIMIT,
 			None,
 			callee_code_hash.as_ref().to_vec(),
