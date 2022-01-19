@@ -1750,14 +1750,7 @@ impl<Block: BlockT> Backend<Block> {
 	fn empty_state(&self) -> ClientResult<SyncingCachingState<RefTrackingState<Block>, Block>> {
 		let root = EmptyStorage::<Block>::new().0; // Empty trie
 		let db_state = if let Some(ref cache) = self.trie_node_cache {
-			DbState::<Block>::new_with_cache(
-				self.storage.clone(),
-				root,
-				sp_trie::cache::LocalTrieNodeCache::new(
-					cache.clone(),
-					self.trie_node_cache_enable_fast_cache,
-				),
-			)
+			DbState::<Block>::new_with_cache(self.storage.clone(), root, cache.local_cache())
 		} else {
 			DbState::<Block>::new(self.storage.clone(), root)
 		};
@@ -2216,10 +2209,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 					DbState::<Block>::new_with_cache(
 						genesis_state.clone(),
 						root,
-						sp_trie::cache::LocalTrieNodeCache::new(
-							cache.clone(),
-							self.trie_node_cache_enable_fast_cache,
-						),
+						cache.local_cache(),
 					)
 				} else {
 					DbState::<Block>::new(genesis_state.clone(), root)
@@ -2258,10 +2248,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 						DbState::<Block>::new_with_cache(
 							self.storage.clone(),
 							root,
-							sp_trie::cache::LocalTrieNodeCache::new(
-								cache.clone(),
-								self.trie_node_cache_enable_fast_cache,
-							),
+							cache.local_cache(),
 						)
 					} else {
 						DbState::<Block>::new(self.storage.clone(), root)

@@ -24,6 +24,7 @@ pub mod cache;
 mod error;
 mod node_codec;
 mod node_header;
+#[cfg(feature = "std")]
 pub mod recorder;
 mod storage_proof;
 mod trie_codec;
