@@ -19,29 +19,47 @@
 use std::sync::Arc;
 
 use log::debug;
+use notification::BeefyJustificationStream;
 use prometheus::Registry;
 
 use sc_client_api::{Backend, BlockchainEvents, Finalizer};
 use sc_network_gossip::{GossipEngine, Network as GossipNetwork};
 
-use sp_api::ProvideRuntimeApi;
+use sp_api::{NumberFor, ProvideRuntimeApi};
 use sp_blockchain::HeaderBackend;
 use sp_keystore::SyncCryptoStorePtr;
-use sp_runtime::traits::Block;
+use sp_runtime::traits::Block as BlockT;
 
-use beefy_primitives::BeefyApi;
+use beefy_primitives::{crypto::Signature, BeefyApi};
 
 use crate::notification::{BeefyBestBlockSender, BeefySignedCommitmentSender};
 
 mod error;
 mod gossip;
+mod import;
+mod justification;
 mod keystore;
 mod metrics;
 mod round;
 mod worker;
 
+use import::BeefyBlockImport;
+
 pub mod notification;
 pub use beefy_protocol_name::standard_name as protocol_standard_name;
+
+/// Link between the block importer and the beefy client.
+/// It provides access to the justification stream
+pub struct LinkHalf<Block: BlockT> {
+	justification_stream: BeefyJustificationStream<NumberFor<Block>, Signature>,
+}
+
+impl<Block: BlockT> LinkHalf<Block> {
+	/// Get the receiving end of justification notifications.
+	pub fn justification_stream(&self) -> BeefyJustificationStream<NumberFor<Block>, Signature> {
+		self.justification_stream.clone()
+	}
+}
 
 pub(crate) mod beefy_protocol_name {
 	use sc_chain_spec::ChainSpec;
@@ -78,6 +96,18 @@ pub fn beefy_peers_set_config(
 	cfg
 }
 
+/// Produce a BEEFY block import object and a link half for tying it to the client
+pub fn block_import<BE, Client, Block: BlockT, I>(
+	wrapped_block_import: I,
+	client: Arc<Client>,
+) -> (BeefyBlockImport<BE, Block, Client, I>, LinkHalf<Block>) {
+	let (justification_sender, justification_stream) = BeefyJustificationStream::channel();
+	let import =
+		BeefyBlockImport::new(client.clone(), wrapped_block_import, justification_sender.clone());
+
+	(import, LinkHalf { justification_stream })
+}
+
 /// A convenience BEEFY client trait that defines all the type bounds a BEEFY client
 /// has to satisfy. Ideally that should actually be a trait alias. Unfortunately as
 /// of today, Rust does not allow a type alias to be used as a trait bound. Tracking
@@ -85,7 +115,7 @@ pub fn beefy_peers_set_config(
 pub trait Client<B, BE>:
 	BlockchainEvents<B> + HeaderBackend<B> + Finalizer<B, BE> + ProvideRuntimeApi<B> + Send + Sync
 where
-	B: Block,
+	B: BlockT,
 	BE: Backend<B>,
 {
 	// empty
@@ -93,7 +123,7 @@ where
 
 impl<B, BE, T> Client<B, BE> for T
 where
-	B: Block,
+	B: BlockT,
 	BE: Backend<B>,
 	T: BlockchainEvents<B>
 		+ HeaderBackend<B>
@@ -108,7 +138,7 @@ where
 /// BEEFY gadget initialization parameters.
 pub struct BeefyParams<B, BE, C, N>
 where
-	B: Block,
+	B: BlockT,
 	BE: Backend<B>,
 	C: Client<B, BE>,
 	C::Api: BeefyApi<B>,
@@ -139,7 +169,7 @@ where
 /// This is a thin shim around running and awaiting a BEEFY worker.
 pub async fn start_beefy_gadget<B, BE, C, N>(beefy_params: BeefyParams<B, BE, C, N>)
 where
-	B: Block,
+	B: BlockT,
 	BE: Backend<B>,
 	C: Client<B, BE>,
 	C::Api: BeefyApi<B>,

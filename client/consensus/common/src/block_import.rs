@@ -28,7 +28,7 @@ use std::{any::Any, borrow::Cow, collections::HashMap, sync::Arc};
 use sp_consensus::{BlockOrigin, CacheKeyId, Error};
 
 /// Block import result.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum ImportResult {
 	/// Block imported.
 	Imported(ImportedAux),
@@ -43,7 +43,7 @@ pub enum ImportResult {
 }
 
 /// Auxiliary data associated with an imported block result.
-#[derive(Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Default, PartialEq, Eq, Serialize, Deserialize, Clone)]
 pub struct ImportedAux {
 	/// Only the header has been imported. Block body verification was skipped.
 	pub header_only: bool,

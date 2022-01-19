@@ -16,6 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+use beefy_primitives::VersionedFinalityProof;
 use sc_utils::notification::{NotificationSender, NotificationStream, TracingKeyStr};
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 
@@ -41,6 +42,15 @@ pub type BeefySignedCommitmentSender<Block> = NotificationSender<BeefySignedComm
 pub type BeefySignedCommitmentStream<Block> =
 	NotificationStream<BeefySignedCommitment<Block>, BeefySignedCommitmentTracingKey>;
 
+/// The sending half of the notifications channel(s) used to send notifications
+/// about imported justifications.
+pub type BeefyJustificationSender<N, S> = NotificationSender<VersionedFinalityProof<N, S>>;
+
+/// The receiving half of a notifications channel used to receive notifications
+/// about justifications from imported blocks
+pub type BeefyJustificationStream<N, S> =
+	NotificationStream<VersionedFinalityProof<N, S>, BeefyJustificationTracingKey>;
+
 /// Provides tracing key for BEEFY best block stream.
 #[derive(Clone)]
 pub struct BeefyBestBlockTracingKey;
@@ -53,4 +63,11 @@ impl TracingKeyStr for BeefyBestBlockTracingKey {
 pub struct BeefySignedCommitmentTracingKey;
 impl TracingKeyStr for BeefySignedCommitmentTracingKey {
 	const TRACING_KEY: &'static str = "mpsc_beefy_signed_commitments_notification_stream";
+}
+
+/// Provides tracing key for BEEFY justification stream.
+#[derive(Clone)]
+pub struct BeefyJustificationTracingKey;
+impl TracingKeyStr for BeefyJustificationTracingKey {
+	const TRACING_KEY: &'static str = "mpsc_beefy_justification_notification_stream";
 }
