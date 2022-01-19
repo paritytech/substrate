@@ -19,7 +19,8 @@
 //! Prometheus basic proposer metrics.
 
 use prometheus_endpoint::{
-	register, Gauge, Histogram, HistogramOpts, PrometheusError, Registry, U64,
+	prometheus::CounterVec, register, Gauge, Histogram, HistogramOpts, Opts, PrometheusError,
+	Registry, U64,
 };
 
 /// Optional shareable link to basic authorship metrics.
@@ -47,6 +48,8 @@ impl MetricsLink {
 pub struct Metrics {
 	pub block_constructed: Histogram,
 	pub number_of_transactions: Gauge<U64>,
+	pub hit_block_size_limit: CounterVec,
+	pub hit_block_weight_limit: CounterVec,
 	pub create_inherents_time: Histogram,
 	pub create_block_proposal_time: Histogram,
 }
@@ -80,6 +83,26 @@ impl Metrics {
 					"substrate_proposer_block_proposal_time",
 					"Histogram of time taken to construct a block and prepare it for proposal",
 				))?,
+				registry,
+			)?,
+			hit_block_size_limit: register(
+				CounterVec::new(
+					Opts::new(
+						"substrate_proposer_hit_block_size_limit",
+						"Block proposing ended because of hitting the block size limit",
+					),
+					&["status"],
+				)?,
+				registry,
+			)?,
+			hit_block_weight_limit: register(
+				CounterVec::new(
+					Opts::new(
+						"substrate_proposer_hit_weight_limit",
+						"Block proposing ended because of hitting the block weight limit",
+					),
+					&["status"],
+				)?,
 				registry,
 			)?,
 		})

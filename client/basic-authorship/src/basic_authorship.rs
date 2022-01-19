@@ -413,6 +413,7 @@ where
 		debug!("Pool status: {:?}", self.transaction_pool.status());
 		let mut transaction_pushed = false;
 		let mut hit_block_size_limit = false;
+		let mut hit_block_weight_limit = false;
 
 		while let Some(pending_tx) = pending_iterator.next() {
 			let now = (self.now)();
@@ -473,7 +474,8 @@ where
 							 so we will try a bit more before quitting."
 						);
 					} else {
-						debug!("Block is full, proceed with proposing.");
+						debug!("Block is full, proceeding with proposing.");
+						hit_block_weight_limit = true;
 						break
 					}
 				},
@@ -507,6 +509,15 @@ where
 		self.metrics.report(|metrics| {
 			metrics.number_of_transactions.set(block.extrinsics().len() as u64);
 			metrics.block_constructed.observe(block_timer.elapsed().as_secs_f64());
+
+			metrics
+				.hit_block_size_limit
+				.with_label_values(if hit_block_size_limit { &["true"] } else { &["falses"] })
+				.inc();
+			metrics
+				.hit_block_weight_limit
+				.with_label_values(if hit_block_weight_limit { &["true"] } else { &["falses"] })
+				.inc();
 		});
 
 		info!(
@@ -518,7 +529,7 @@ where
 			block.extrinsics().len(),
 			block.extrinsics()
 				.iter()
-				.map(|xt| format!("{}", BlakeTwo256::hash_of(xt)))
+				.map(|xt| BlakeTwo256::hash_of(xt).to_string())
 				.collect::<Vec<_>>()
 				.join(", ")
 		);
