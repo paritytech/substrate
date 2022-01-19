@@ -26,6 +26,3 @@ pub mod runtime_blob;
 pub mod sandbox;
 pub mod util;
 pub mod wasm_runtime;
-
-mod wasmer_backend;
-mod wasmi_backend;

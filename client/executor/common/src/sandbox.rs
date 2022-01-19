@@ -20,11 +20,12 @@
 //!
 //! Sandboxing is backed by wasmi and wasmer, depending on the configuration.
 
+mod wasmer_backend;
+mod wasmi_backend;
+
 use crate::{
 	error::{Error, Result},
 	util,
-	wasmer_backend::{instantiate_wasmer, invoke_wasmer, wasmer_new_memory, WasmerBackend},
-	wasmi_backend::{instantiate_wasmi, invoke_wasmi},
 };
 use codec::Decode;
 use sp_core::sandbox as sandbox_primitives;
@@ -33,8 +34,9 @@ use std::{collections::HashMap, rc::Rc};
 use wasmi::{memory_units::Pages, MemoryInstance, RuntimeValue, Trap, TrapKind};
 
 #[cfg(feature = "wasmer-sandbox")]
-use crate::wasmer_backend::MemoryWrapper as WasmerMemoryWrapper;
-use crate::wasmi_backend::MemoryWrapper as WasmiMemoryWrapper;
+use wasmer_backend::{instantiate_wasmer, invoke_wasmer, wasmer_new_memory, WasmerBackend, MemoryWrapper as WasmerMemoryWrapper};
+
+use wasmi_backend::{instantiate_wasmi, invoke_wasmi, MemoryWrapper as WasmiMemoryWrapper};
 
 /// Index of a function inside the supervisor.
 ///
