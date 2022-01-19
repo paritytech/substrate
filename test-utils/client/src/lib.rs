@@ -108,7 +108,6 @@ impl<Block: BlockT, ExecutorDispatch, G: GenesisInit>
 		let backend = Arc::new(Backend::new_test_with_tx_storage(
 			keep_blocks,
 			0,
-			sc_client_db::TransactionStorageMode::StorageChain,
 		));
 		Self::with_backend(backend)
 	}
