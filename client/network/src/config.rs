@@ -416,6 +416,11 @@ pub struct NetworkConfiguration {
 	pub request_response_protocols: Vec<RequestResponseConfig>,
 	/// Configuration for the default set of nodes used for block syncing and transactions.
 	pub default_peers_set: SetConfig,
+	/// Number of substreams to reserve for full nodes for block syncing and transactions.
+	/// Any other slot will be dedicated to light nodes.
+	///
+	/// This value is implicitly capped to `default_set.out_peers + default_set.in_peers`.
+	pub default_peers_set_num_full: u32,
 	/// Configuration for extra sets of nodes.
 	pub extra_sets: Vec<NonDefaultSetConfig>,
 	/// Client identifier. Sent over the wire for debugging purposes.
@@ -473,6 +478,7 @@ impl NetworkConfiguration {
 		node_key: NodeKeyConfig,
 		net_config_path: Option<PathBuf>,
 	) -> Self {
+		let default_peers_set = SetConfig::default();
 		Self {
 			net_config_path,
 			listen_addresses: Vec::new(),
@@ -480,7 +486,8 @@ impl NetworkConfiguration {
 			boot_nodes: Vec::new(),
 			node_key,
 			request_response_protocols: Vec::new(),
-			default_peers_set: Default::default(),
+			default_peers_set_num_full: default_peers_set.in_peers + default_peers_set.out_peers,
+			default_peers_set,
 			extra_sets: Vec::new(),
 			client_version: client_version.into(),
 			node_name: node_name.into(),
