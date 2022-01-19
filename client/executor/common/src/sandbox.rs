@@ -34,7 +34,10 @@ use std::{collections::HashMap, rc::Rc};
 use wasmi::{memory_units::Pages, MemoryInstance, RuntimeValue, Trap, TrapKind};
 
 #[cfg(feature = "wasmer-sandbox")]
-use wasmer_backend::{instantiate_wasmer, invoke_wasmer, wasmer_new_memory, WasmerBackend, MemoryWrapper as WasmerMemoryWrapper};
+use wasmer_backend::{
+	instantiate_wasmer, invoke_wasmer, wasmer_new_memory, MemoryWrapper as WasmerMemoryWrapper,
+	WasmerBackend,
+};
 
 use wasmi_backend::{instantiate_wasmi, invoke_wasmi, MemoryWrapper as WasmiMemoryWrapper};
 
@@ -80,10 +83,7 @@ impl GuestToSupervisorFunctionMapping {
 	}
 
 	/// Find supervisor function index by its corresponding guest function index
-	fn func_by_guest_index(
-		&self,
-		guest_func_idx: GuestFuncIndex,
-	) -> Option<SupervisorFuncIndex> {
+	fn func_by_guest_index(&self, guest_func_idx: GuestFuncIndex) -> Option<SupervisorFuncIndex> {
 		self.funcs.get(guest_func_idx.0).cloned()
 	}
 }
@@ -98,11 +98,7 @@ struct Imports {
 }
 
 impl Imports {
-	fn func_by_name(
-		&self,
-		module_name: &str,
-		func_name: &str,
-	) -> Option<GuestFuncIndex> {
+	fn func_by_name(&self, module_name: &str, func_name: &str) -> Option<GuestFuncIndex> {
 		self.func_map
 			.get(&(module_name.as_bytes().to_owned(), func_name.as_bytes().to_owned()))
 			.cloned()
