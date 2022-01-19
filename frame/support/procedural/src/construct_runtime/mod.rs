@@ -488,6 +488,11 @@ fn decl_static_assertions(
 		// and thus doesn't appear in the same module namespace as the tt_call macro. We use a
 		// re-export hack to make the macro appear in the same module namespace.
 		let assert_macro_name = format_ident!("__assert_error_encoded_size_{}", count);
+		let assert_message = format!(
+			"The maximum encoded size of the error type in the `{}` pallet exceeds \
+			`MAX_PALLET_ERROR_ENCODED_SIZE`",
+			decl.name,
+		);
 		let macro_alias = format_ident!("assert_error_encoded_size_{}", count);
 
 		quote! {
@@ -503,11 +508,12 @@ fn decl_static_assertions(
 				{
 					error = [{ $error:ident }]
 				} => {
-					#scrate::const_assert! {
+					const _: () = assert!(
 						<
 							#path::$error<#runtime> as #scrate::traits::PalletError
-						>::MAX_ENCODED_SIZE <= #scrate::MAX_PALLET_ERROR_ENCODED_SIZE
-					}
+						>::MAX_ENCODED_SIZE <= #scrate::MAX_PALLET_ERROR_ENCODED_SIZE,
+						#assert_message
+					);
 				};
 				{} => {};
 			}

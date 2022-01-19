@@ -2126,7 +2126,6 @@ dependencies = [
  "sp-state-machine",
  "sp-std",
  "sp-tracing",
- "static_assertions",
  "tt-call",
 ]
 
