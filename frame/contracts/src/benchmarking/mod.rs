@@ -35,7 +35,7 @@ use crate::{
 	storage::Storage,
 	Pallet as Contracts, *,
 };
-use codec::Encode;
+use codec::{Encode, MaxEncodedLen};
 use frame_benchmarking::{account, benchmarks, whitelisted_caller};
 use frame_support::weights::Weight;
 use frame_system::RawOrigin;
@@ -1529,7 +1529,7 @@ benchmarks! {
 		assert!(value > 0u32.into());
 		let value_bytes = value.encode();
 		let value_len = value_bytes.len();
-		let addr_len = sp_std::mem::size_of::<T::AccountId>();
+		let addr_len = T::AccountId::max_encoded_len();
 
 		// offsets where to place static data in contract memory
 		let value_offset = 0;
@@ -1653,7 +1653,7 @@ benchmarks! {
 		assert!(value > 0u32.into());
 		let value_bytes = value.encode();
 		let value_len = value_bytes.len();
-		let addr_len = sp_std::mem::size_of::<T::AccountId>();
+		let addr_len = T::AccountId::max_encoded_len();
 
 		// offsets where to place static data in contract memory
 		let input_offset = 0;
