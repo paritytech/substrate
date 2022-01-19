@@ -43,7 +43,7 @@ pub mod defensive_prelude {
 ///
 /// 1. It panics on `#[debug_assertions]`, so if the infallible code is reached in any of the tests,
 ///    you realize.
-/// 2. It will log a warning using the runtime logging system. This might help you detect such bugs
+/// 2. It will log an error using the runtime logging system. This might help you detect such bugs
 ///    in production as well. Note that the log message, as of now, are not super expressive. Your
 ///    best shot of fully diagnosing the error would be to infer the block number of which the log
 ///    message was emitted, then re-execute that block using `check-block` or `try-runtime`
