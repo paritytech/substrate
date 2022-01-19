@@ -20,7 +20,9 @@
 //!
 //! Sandboxing is backed by wasmi and wasmer, depending on the configuration.
 
+#[cfg(feature = "wasmer-sandbox")]
 mod wasmer_backend;
+
 mod wasmi_backend;
 
 use crate::{
