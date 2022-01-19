@@ -22,7 +22,7 @@ codec = { package = "parity-scale-codec", version = "2.0.0" }
 sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
 sc-consensus = { version = "0.10.0-dev", path = "../../../client/consensus/common" }
 sp-consensus-slots = { version = "0.10.0-dev", path = "../../../primitives/consensus/slots" }
-derive_more = "0.99.16"
+thiserror = "1.0"
 futures = "0.3.9"
 sp-inherents = { version = "4.0.0-dev", path = "../../../primitives/inherents" }
 log = "0.4.8"

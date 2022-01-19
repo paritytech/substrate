@@ -47,28 +47,34 @@ pub fn register<T: Clone + Collector + 'static>(
 	Ok(metric)
 }
 
-#[derive(Debug, derive_more::Display, derive_more::From)]
+#[derive(Debug, thiserror::Error)]
 pub enum Error {
 	/// Hyper internal error.
-	Hyper(hyper::Error),
+	#[error(transparent)]
+	Hyper(#[from] hyper::Error),
+
 	/// Http request error.
-	Http(hyper::http::Error),
+	#[error(transparent)]
+	Http(#[from] hyper::http::Error),
+
 	/// i/o error.
-	Io(std::io::Error),
-	#[display(fmt = "Prometheus port {} already in use.", _0)]
+	#[error(transparent)]
+	Io(#[from] std::io::Error),
+
+	#[error("Prometheus port {0} already in use.")]
 	PortInUse(SocketAddr),
 }
 
-impl std::error::Error for Error {
-	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-		match self {
-			Error::Hyper(error) => Some(error),
-			Error::Http(error) => Some(error),
-			Error::Io(error) => Some(error),
-			Error::PortInUse(_) => None,
-		}
-	}
-}
+// impl std::error::Error for Error {
+// 	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+// 		match self {
+// 			Error::Hyper(error) => Some(error),
+// 			Error::Http(error) => Some(error),
+// 			Error::Io(error) => Some(error),
+// 			Error::PortInUse(_) => None,
+// 		}
+// 	}
+// }
 
 async fn request_metrics(req: Request<Body>, registry: Registry) -> Result<Response<Body>, Error> {
 	if req.uri().path() == "/metrics" {
