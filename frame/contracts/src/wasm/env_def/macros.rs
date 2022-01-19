@@ -28,7 +28,7 @@ macro_rules! convert_args {
 macro_rules! gen_signature {
 	( ( $( $params: ty ),* ) ) => (
 		{
-			pwasm_utils::parity_wasm::elements::FunctionType::new(
+			wasm_instrument::parity_wasm::elements::FunctionType::new(
 				convert_args!($($params),*), vec![],
 			)
 		}
@@ -36,7 +36,7 @@ macro_rules! gen_signature {
 
 	( ( $( $params: ty ),* ) -> $returns: ty ) => (
 		{
-			pwasm_utils::parity_wasm::elements::FunctionType::new(
+			wasm_instrument::parity_wasm::elements::FunctionType::new(
 				convert_args!($($params),*),
 				vec![{use $crate::wasm::env_def::ConvertibleToWasm; <$returns>::VALUE_TYPE}],
 			)
@@ -220,7 +220,7 @@ macro_rules! define_env {
 			fn can_satisfy(
 				module: &[u8],
 				name: &[u8],
-				func_type: &pwasm_utils::parity_wasm::elements::FunctionType,
+				func_type: &wasm_instrument::parity_wasm::elements::FunctionType,
 			) -> bool
 			{
 				#[cfg(not(feature = "unstable-interface"))]
@@ -260,9 +260,9 @@ mod tests {
 		wasm::{runtime::TrapReason, tests::MockExt, Runtime},
 		Weight,
 	};
-	use pwasm_utils::parity_wasm::elements::{FunctionType, ValueType};
 	use sp_runtime::traits::Zero;
 	use sp_sandbox::{ReturnValue, Value};
+	use wasm_instrument::parity_wasm::elements::{FunctionType, ValueType};
 
 	struct TestRuntime {
 		value: u32,
