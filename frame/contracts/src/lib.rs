@@ -834,7 +834,7 @@ where
 		module: &mut PrefabWasmModule<T>,
 		schedule: &Schedule<T>,
 	) -> frame_support::dispatch::DispatchResult {
-		self::wasm::reinstrument(module, schedule)
+		self::wasm::reinstrument(module, schedule).map(|_| ())
 	}
 
 	/// Internal function that does the actual call.
