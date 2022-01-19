@@ -92,6 +92,7 @@ pub use self::{
 		IterableStorageDoubleMap, IterableStorageMap, IterableStorageNMap, StorageDoubleMap,
 		StorageMap, StorageNMap, StoragePrefixedMap, StorageValue,
 	},
+	traits::ConstU32,
 };
 pub use sp_runtime::{self, print, traits::Printable, ConsensusEngineId};
 
@@ -112,6 +113,15 @@ pub struct PalletId(pub [u8; 8]);
 
 impl TypeId for PalletId {
 	const TYPE_ID: [u8; 4] = *b"modl";
+}
+
+/// A parent blockchain identifier. Used primarily when parachains need to refer to a parent chain's
+/// `AccountId`.
+#[derive(Clone, Eq, PartialEq, Encode, Decode, TypeInfo)]
+pub struct ParentChainId(pub BoundedVec<u8, ConstU32<20>>);
+
+impl TypeId for ParentChainId {
+	const TYPE_ID: [u8; 4] = *b"prnt";
 }
 
 /// Generate a new type alias for [`storage::types::StorageValue`],
