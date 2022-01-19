@@ -119,13 +119,19 @@ pub fn decrement_refcount<T: Config>(code_hash: CodeHash<T>) -> Result<(), Dispa
 }
 
 /// Increment the refcount of a code in-storage by one.
+///
+/// # Errors
+///
+/// DispatchError::CannotLookup is returned if there is no info for specified code_hash
 pub fn increment_refcount<T: Config>(code_hash: CodeHash<T>) -> Result<(), DispatchError> {
-	<OwnerInfoOf<T>>::mutate(code_hash, |existing| {
+	<OwnerInfoOf<T>>::mutate(code_hash, |existing| -> Result<(), DispatchError> {
 		if let Some(info) = existing {
 			info.refcount = info.refcount.saturating_add(1);
+			Ok(())
+		} else {
+			Err(DispatchError::CannotLookup)
 		}
-	});
-	Ok(())
+	})
 }
 
 /// Try to remove code together with all associated information.

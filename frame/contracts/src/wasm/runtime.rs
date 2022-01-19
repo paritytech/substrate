@@ -818,7 +818,7 @@ define_env!(Env, <E: Ext>,
 		ctx.set_storage(key_ptr, value_ptr, value_len).map(|_| ())
 	},
 
-	// Replace contract code
+	// Replace contract code.
 	//
 	// # Parameters
 	//

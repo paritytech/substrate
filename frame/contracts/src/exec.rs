@@ -19,8 +19,8 @@ use crate::{
 	gas::GasMeter,
 	storage::{self, Storage, WriteOutcome},
 	wasm::{decrement_refcount, increment_refcount},
-	AccountCounter, BalanceOf, CodeHash, CodeStorage, Config, ContractInfo, ContractInfoOf, Error,
-	Event, OwnerInfoOf, Pallet as Contracts, PristineCode, Schedule,
+	AccountCounter, BalanceOf, CodeHash, Config, ContractInfo, ContractInfoOf, Error, Event,
+	Pallet as Contracts, Schedule,
 };
 use frame_support::{
 	dispatch::{DispatchError, DispatchResult, DispatchResultWithPostInfo, Dispatchable},
@@ -894,12 +894,6 @@ where
 	fn initial_trie_seed() -> u64 {
 		<AccountCounter<T>>::get().wrapping_add(1)
 	}
-
-	fn code_exists(hash: &CodeHash<T>) -> bool {
-		<PristineCode<T>>::contains_key(hash) &&
-			<CodeStorage<T>>::contains_key(&hash) &&
-			<OwnerInfoOf<T>>::contains_key(&hash)
-	}
 }
 
 impl<'a, T, E> Ext for Stack<'a, T, E>
@@ -1029,11 +1023,7 @@ where
 	fn set_code_hash(&mut self, hash: CodeHash<Self::T>) -> Result<(), DispatchError> {
 		let top_frame = &mut self.top_frame_mut();
 		let prev_hash = top_frame.contract_info().code_hash.clone();
-		if !Self::code_exists(&hash) {
-			return Err(DispatchError::CannotLookup)
-		}
 		top_frame.contract_info().code_hash = hash;
-		<ContractInfoOf<T>>::insert(top_frame.account_id.clone(), top_frame.contract_info());
 		increment_refcount::<Self::T>(hash)?;
 		decrement_refcount::<Self::T>(prev_hash)?;
 		Ok(())
