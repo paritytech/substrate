@@ -119,7 +119,7 @@ impl<T: Config> PrimaryPool<T> {
 		let bonded_balance = T::StakingInterface::bonded_balance(&self.account_id);
 		if bonded_balance.is_zero() || delegator_points.is_zero() {
 			// There is nothing to unbond
-			return Zero::zero()
+			return Zero::zero();
 		}
 
 		let balance_per_share = {
@@ -194,7 +194,7 @@ impl<T: Config> UnbondPool<T> {
 	fn balance_to_unbond(&self, delegator_points: PointsOf<T>) -> BalanceOf<T> {
 		if self.balance.is_zero() || delegator_points.is_zero() {
 			// There is nothing to unbond
-			return Zero::zero()
+			return Zero::zero();
 		}
 
 		let balance_per_share = {
@@ -230,7 +230,7 @@ impl<T: Config> SubPoolsContainer<T> {
 			// For the first `T::MAX_UNBONDING` eras of the chain we don't need to do anything.
 			// I.E. if `MAX_UNBONDING` is 5 and we are in era 4 we can add a pool for this era and
 			// have exactly `MAX_UNBONDING` pools.
-			return self
+			return self;
 		}
 
 		//  I.E. if `MAX_UNBONDING` is 5 and current era is 10, we only want to retain pools 6..=10.
@@ -519,7 +519,7 @@ pub mod pallet {
 			let unbonding_era = delegator.unbonding_era.ok_or(Error::<T>::NotUnbonding)?;
 			let current_era = T::StakingInterface::current_era();
 			if current_era.saturating_sub(unbonding_era) < T::StakingInterface::bonding_duration() {
-				return Err(Error::<T>::NotUnbondedYet.into())
+				return Err(Error::<T>::NotUnbondedYet.into());
 			};
 
 			let mut sub_pools = SubPools::<T>::get(delegator.pool).unwrap_or_default();
@@ -573,7 +573,7 @@ pub mod pallet {
 			ensure!(!PrimaryPools::<T>::contains_key(id), Error::<T>::IdInUse);
 			ensure!(amount >= T::StakingInterface::minimum_bond(), Error::<T>::MinimiumBondNotMet);
 
-			let (stash, reward_dest) = Self::create_accounts(&who, id);
+			let (stash, reward_dest) = Self::create_accounts(id);
 
 			T::Currency::transfer(&who, &stash, amount, ExistenceRequirement::AllowDeath)?;
 
@@ -632,14 +632,14 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
-	fn create_accounts(who: &T::AccountId, id: PoolId) -> (T::AccountId, T::AccountId) {
+	fn create_accounts(id: PoolId) -> (T::AccountId, T::AccountId) {
 		let parent_hash = frame_system::Pallet::<T>::parent_hash();
 		let ext_index = frame_system::Pallet::<T>::extrinsic_index().unwrap_or_default();
 
 		let stash_entropy =
-			(b"pools/stash", who, id, parent_hash, ext_index).using_encoded(sp_core::blake2_256);
+			(b"pools/stash", id, parent_hash, ext_index).using_encoded(sp_core::blake2_256);
 		let reward_entropy =
-			(b"pools/rewards", who, id, parent_hash, ext_index).using_encoded(sp_core::blake2_256);
+			(b"pools/rewards", id, parent_hash, ext_index).using_encoded(sp_core::blake2_256);
 
 		(
 			Decode::decode(&mut TrailingZeroInput::new(stash_entropy.as_ref()))
@@ -782,7 +782,7 @@ impl<T: Config> Pallet<T> {
 
 		// Panics if denominator is zero
 		let slash_ratio = if total_affected_balance <= Zero::zero() {
-			return Some((Zero::zero(), Default::default()))
+			return Some((Zero::zero(), Default::default()));
 		} else {
 			// REMINDER: `saturating_from_rational` panics if denominator is zero
 			FixedU128::saturating_from_rational(

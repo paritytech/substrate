@@ -5,9 +5,9 @@ use crate::mock::{Balances, ExtBuilder, Pools, Runtime};
 use frame_support::{assert_err, assert_noop};
 
 // Pool 0's primary account id (i.e. its stash and controller account).
-const PRIMARY_ACCOUNT: u32 = 1382160961;
+const PRIMARY_ACCOUNT: u32 = 2536596763;
 // Pool 0's reward destination.
-const REWARDS_ACCOUNT: u32 = 2625016280;
+const REWARDS_ACCOUNT: u32 = 736857005;
 
 #[test]
 fn test_setup_works() {
@@ -19,7 +19,7 @@ fn test_setup_works() {
 
 		assert_eq!(
 			PrimaryPools::<Runtime>::get(0).unwrap(),
-			PrimaryPool::<Runtime> { points: 10, account_id: 1382160961 }
+			PrimaryPool::<Runtime> { points: 10, account_id: PRIMARY_ACCOUNT }
 		);
 		assert_eq!(
 			RewardPools::<Runtime>::get(0).unwrap(),
@@ -27,7 +27,7 @@ fn test_setup_works() {
 				balance: 0,
 				points: 0,
 				total_earnings: 0,
-				account_id: 2625016280
+				account_id: REWARDS_ACCOUNT
 			}
 		);
 		assert_eq!(
