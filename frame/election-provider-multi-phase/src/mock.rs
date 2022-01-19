@@ -18,7 +18,7 @@
 use super::*;
 use crate as multi_phase;
 use frame_election_provider_support::{
-	data_provider, onchain, ElectionDataProvider, IntoUnboundedVoters, SequentialPhragmen,
+	data_provider, onchain, ElectionDataProvider, SequentialPhragmen,
 };
 pub use frame_support::{assert_noop, assert_ok};
 use frame_support::{
@@ -132,13 +132,8 @@ pub fn trim_helpers() -> TrimHelpers {
 
 	let desired_targets = MultiPhase::desired_targets().unwrap();
 
-	let ElectionResult { mut assignments, .. } = seq_phragmen::<_, SolutionAccuracyOf<Runtime>>(
-		desired_targets as usize,
-		targets.clone(),
-		voters.clone().into_unbounded_voters(),
-		None,
-	)
-	.unwrap();
+	let ElectionResult::<_, SolutionAccuracyOf<Runtime>> { mut assignments, .. } =
+		seq_phragmen(desired_targets as usize, targets.clone(), voters.clone(), None).unwrap();
 
 	// sort by decreasing order of stake
 	assignments.sort_unstable_by_key(|assignment| {
@@ -164,14 +159,8 @@ pub fn raw_solution() -> RawSolution<SolutionOf<Runtime>> {
 	let RoundSnapshot { voters, targets } = MultiPhase::snapshot().unwrap();
 	let desired_targets = MultiPhase::desired_targets().unwrap();
 
-	let ElectionResult { winners: _, assignments } =
-		seq_phragmen::<_, SolutionAccuracyOf<Runtime>>(
-			desired_targets as usize,
-			targets.clone(),
-			voters.clone().into_unbounded_voters(),
-			None,
-		)
-		.unwrap();
+	let ElectionResult::<_, SolutionAccuracyOf<Runtime>> { winners: _, assignments } =
+		seq_phragmen(desired_targets as usize, targets.clone(), voters.clone(), None).unwrap();
 
 	// closures
 	let cache = helpers::generate_voter_cache::<Runtime>(&voters);

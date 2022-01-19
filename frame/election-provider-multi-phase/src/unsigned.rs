@@ -23,7 +23,7 @@ use crate::{
 	WeightInfo,
 };
 use codec::Encode;
-use frame_election_provider_support::{IntoUnboundedVoters, NposSolver, PerThing128};
+use frame_election_provider_support::{NposSolver, PerThing128};
 use frame_support::{dispatch::DispatchResult, ensure, traits::Get};
 use frame_system::offchain::SubmitTransaction;
 use sp_arithmetic::Perbill;
@@ -277,7 +277,7 @@ impl<T: Config> Pallet<T> {
 			Self::snapshot().ok_or(MinerError::SnapshotUnAvailable)?;
 		let desired_targets = Self::desired_targets().ok_or(MinerError::SnapshotUnAvailable)?;
 
-		S::solve(desired_targets as usize, targets, voters.into_unbounded_voters())
+		S::solve(desired_targets as usize, targets, voters)
 			.map_err(|e| MinerError::Solver::<T>(e))
 			.and_then(|e| Self::prepare_election_result::<S::Accuracy>(e))
 	}
