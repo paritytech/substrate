@@ -1029,13 +1029,13 @@ where
 	fn set_code_hash(&mut self, hash: CodeHash<Self::T>) -> Result<(), DispatchError> {
 		let top_frame = &mut self.top_frame_mut();
 		let prev_hash = top_frame.contract_info().code_hash.clone();
-		top_frame.contract_info().code_hash = hash;
 		if !Self::code_exists(&hash) {
 			return Err(DispatchError::CannotLookup)
 		}
+		top_frame.contract_info().code_hash = hash;
 		<ContractInfoOf<T>>::insert(top_frame.account_id.clone(), top_frame.contract_info());
-		increment_refcount::<Self::T>(hash);
-		decrement_refcount::<Self::T>(prev_hash);
+		increment_refcount::<Self::T>(hash)?;
+		decrement_refcount::<Self::T>(prev_hash)?;
 		Ok(())
 	}
 
