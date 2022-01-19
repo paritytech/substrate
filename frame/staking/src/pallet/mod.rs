@@ -31,7 +31,7 @@ use sp_runtime::{
 	traits::{CheckedSub, SaturatedConversion, StaticLookup, Zero},
 	DispatchError, Perbill, Percent,
 };
-use sp_staking::SessionIndex;
+use sp_staking::{EraIndex, SessionIndex};
 use sp_std::{convert::From, prelude::*};
 
 mod impls;
