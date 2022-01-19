@@ -47,6 +47,7 @@ where
 	}
 
 	/// Create new trie-based backend.
+	#[cfg(feature = "std")]
 	pub fn new_with_cache(
 		storage: S,
 		root: H::Out,

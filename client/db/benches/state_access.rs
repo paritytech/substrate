@@ -21,13 +21,14 @@ use pprof::criterion::{Output, PProfProfiler};
 use rand::{distributions::Uniform, rngs::StdRng, Rng, SeedableRng};
 use sc_client_api::{Backend as _, BlockImportOperation, NewBlockState, StateBackend};
 use sc_client_db::{
-	Backend, DatabaseSettings, DatabaseSource, KeepBlocks, PruningMode, TransactionStorageMode, TrieNodeCacheSettings
+	Backend, DatabaseSettings, DatabaseSource, KeepBlocks, PruningMode, TransactionStorageMode,
+	TrieNodeCacheSettings,
 };
 use sp_core::H256;
 use sp_runtime::{
 	generic::BlockId,
 	testing::{Block as RawBlock, ExtrinsicWrapper, Header},
-	Storage,
+	StateVersion, Storage,
 };
 use std::path::PathBuf;
 use tempfile::TempDir;
@@ -51,6 +52,7 @@ fn insert_blocks(db: &Backend<Block>, storage: Vec<(Vec<u8>, Vec<u8>)>) -> H256 
 				children_default: Default::default(),
 			},
 			true,
+			StateVersion::V1,
 		)
 		.unwrap();
 
@@ -85,7 +87,7 @@ fn insert_blocks(db: &Backend<Block>, storage: Vec<(Vec<u8>, Vec<u8>)>) -> H256 
 		let (state_root, tx) = db
 			.state_at(BlockId::Number(number - 1))
 			.unwrap()
-			.storage_root(changes.iter().map(|(k, v)| (k.as_slice(), v.as_deref())));
+			.storage_root(changes.iter().map(|(k, v)| (k.as_slice(), v.as_deref())), StateVersion::V1);
 		header.state_root = state_root;
 
 		op.update_db_storage(tx).unwrap();
@@ -116,9 +118,12 @@ fn create_backend(config: BenchmarkConfig, temp_dir: &TempDir) -> Backend<Block>
 
 	let (state_cache_size, trie_node_cache_settings) = match config {
 		BenchmarkConfig::NoCache => (0, TrieNodeCacheSettings { enable: false, fast_cache: false }),
-		BenchmarkConfig::TrieNodeCache => (0, TrieNodeCacheSettings { enable: true, fast_cache: true }),
-		BenchmarkConfig::TrieNodeCacheWithoutFastCache => (0, TrieNodeCacheSettings { enable: true, fast_cache: false }),
-		BenchmarkConfig::StateCache => (2048 * 1024 * 1024, TrieNodeCacheSettings { enable: false, fast_cache: false }),
+		BenchmarkConfig::TrieNodeCache =>
+			(0, TrieNodeCacheSettings { enable: true, fast_cache: true }),
+		BenchmarkConfig::TrieNodeCacheWithoutFastCache =>
+			(0, TrieNodeCacheSettings { enable: true, fast_cache: false }),
+		BenchmarkConfig::StateCache =>
+			(2048 * 1024 * 1024, TrieNodeCacheSettings { enable: false, fast_cache: false }),
 	};
 
 	let settings = DatabaseSettings {
@@ -189,14 +194,38 @@ fn state_access_benchmarks(c: &mut Criterion) {
 		});
 	};
 
-	bench_multiple_values(BenchmarkConfig::StateCache, "with state cache and reading each key once", 1);
-	bench_multiple_values(BenchmarkConfig::TrieNodeCache, "with trie node cache and reading each key once", 1);
-	bench_multiple_values(BenchmarkConfig::TrieNodeCacheWithoutFastCache, "with trie node cache (without fast cache) and reading each key once", 1);
+	bench_multiple_values(
+		BenchmarkConfig::StateCache,
+		"with state cache and reading each key once",
+		1,
+	);
+	bench_multiple_values(
+		BenchmarkConfig::TrieNodeCache,
+		"with trie node cache and reading each key once",
+		1,
+	);
+	bench_multiple_values(
+		BenchmarkConfig::TrieNodeCacheWithoutFastCache,
+		"with trie node cache (without fast cache) and reading each key once",
+		1,
+	);
 	bench_multiple_values(BenchmarkConfig::NoCache, "no cache and reading each key once", 1);
 
-	bench_multiple_values(BenchmarkConfig::StateCache, "with state cache and reading 4 times each key", 4);
-	bench_multiple_values(BenchmarkConfig::TrieNodeCache, "with trie node cache and reading 4 times each key", 4);
-	bench_multiple_values(BenchmarkConfig::TrieNodeCacheWithoutFastCache, "with trie node cache (without fast cache) and reading 4 times each key", 4);
+	bench_multiple_values(
+		BenchmarkConfig::StateCache,
+		"with state cache and reading 4 times each key",
+		4,
+	);
+	bench_multiple_values(
+		BenchmarkConfig::TrieNodeCache,
+		"with trie node cache and reading 4 times each key",
+		4,
+	);
+	bench_multiple_values(
+		BenchmarkConfig::TrieNodeCacheWithoutFastCache,
+		"with trie node cache (without fast cache) and reading 4 times each key",
+		4,
+	);
 	bench_multiple_values(BenchmarkConfig::NoCache, "no cache and reading 4 times each key", 4);
 
 	group.finish();
@@ -221,13 +250,33 @@ fn state_access_benchmarks(c: &mut Criterion) {
 	};
 
 	bench_single_value(BenchmarkConfig::StateCache, "with state cache and reading the key once", 1);
-	bench_single_value(BenchmarkConfig::TrieNodeCache, "with trie node cache and reading the key once", 1);
-	bench_single_value(BenchmarkConfig::TrieNodeCacheWithoutFastCache, "with trie node cache (without fast cache) and reading the key once", 1);
+	bench_single_value(
+		BenchmarkConfig::TrieNodeCache,
+		"with trie node cache and reading the key once",
+		1,
+	);
+	bench_single_value(
+		BenchmarkConfig::TrieNodeCacheWithoutFastCache,
+		"with trie node cache (without fast cache) and reading the key once",
+		1,
+	);
 	bench_single_value(BenchmarkConfig::NoCache, "no cache and reading the key once", 1);
 
-	bench_single_value(BenchmarkConfig::StateCache, "with state cache and reading 4 times the key", 4);
-	bench_single_value(BenchmarkConfig::TrieNodeCache, "with trie node cache and reading 4 times the key", 4);
-	bench_single_value(BenchmarkConfig::TrieNodeCacheWithoutFastCache, "with trie node cache (without fast cache) and reading 4 times the key", 4);
+	bench_single_value(
+		BenchmarkConfig::StateCache,
+		"with state cache and reading 4 times the key",
+		4,
+	);
+	bench_single_value(
+		BenchmarkConfig::TrieNodeCache,
+		"with trie node cache and reading 4 times the key",
+		4,
+	);
+	bench_single_value(
+		BenchmarkConfig::TrieNodeCacheWithoutFastCache,
+		"with trie node cache (without fast cache) and reading 4 times the key",
+		4,
+	);
 	bench_single_value(BenchmarkConfig::NoCache, "no cache and reading 4 times the key", 4);
 
 	group.finish();

@@ -30,7 +30,7 @@ use sp_std::{marker::PhantomData, prelude::*};
 use sp_application_crypto::{ecdsa, ed25519, sr25519, RuntimeAppPublic};
 use sp_core::{offchain::KeyTypeId, OpaqueMetadata, RuntimeDebug};
 use sp_trie::{
-	trie_types::{TrieDB, TrieDBBuilder, TrieDBMut, TrieDBMutBuilder},
+	trie_types::{TrieDB, TrieDBBuilder, TrieDBMutV1, TrieDBMutBuilderV1},
 	PrefixedMemoryDB, StorageProof,
 };
 use trie_db::{Trie, TrieMut};
@@ -652,7 +652,7 @@ fn code_using_trie() -> u64 {
 	let mut mdb = PrefixedMemoryDB::default();
 	let mut root = sp_std::default::Default::default();
 	let _ = {
-		let mut t = TrieDBMutBuilder::<Hashing>::new(&mut mdb, &mut root).build();
+		let mut t = TrieDBMutBuilderV1::<Hashing>::new(&mut mdb, &mut root).build();
 		for (key, value) in &pairs {
 			if t.insert(key, value).is_err() {
 				return 101
