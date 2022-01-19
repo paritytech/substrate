@@ -22,13 +22,16 @@ use codec::Encode;
 use sp_wasm_interface::{FunctionContext, Pointer, Value, WordSize};
 use std::rc::Rc;
 
-use wasmi::{ImportResolver, Module, ModuleInstance, RuntimeArgs, RuntimeValue, Trap};
+use wasmi::{
+	memory_units::Pages, ImportResolver, MemoryInstance, Module, ModuleInstance, RuntimeArgs,
+	RuntimeValue, Trap,
+};
 
 use crate::{
 	error,
 	sandbox::{
 		deserialize_result, trap, BackendInstance, GuestEnvironment, GuestExternals,
-		GuestFuncIndex, Imports, InstantiationError, SandboxContext, SandboxInstance,
+		GuestFuncIndex, Imports, InstantiationError, Memory, SandboxContext, SandboxInstance,
 	},
 	util::{checked_range, MemoryTransfer},
 };
@@ -90,6 +93,15 @@ impl ImportResolver for Imports {
 	) -> std::result::Result<wasmi::TableRef, wasmi::Error> {
 		Err(wasmi::Error::Instantiation(format!("Export {}:{} not found", module_name, field_name)))
 	}
+}
+
+pub fn wasmi_new_memory(initial: u32, maximum: Option<u32>) -> crate::error::Result<Memory> {
+	let memory = Memory::Wasmi(MemoryWrapper::new(MemoryInstance::alloc(
+		Pages(initial as usize),
+		maximum.map(|m| Pages(m as usize)),
+	)?));
+
+	Ok(memory)
 }
 
 /// Wasmi provides direct access to its memory using slices.

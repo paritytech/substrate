@@ -33,7 +33,7 @@ use codec::Decode;
 use sp_core::sandbox as sandbox_primitives;
 use sp_wasm_interface::{FunctionContext, Pointer, WordSize};
 use std::{collections::HashMap, rc::Rc};
-use wasmi::{memory_units::Pages, MemoryInstance, RuntimeValue, Trap, TrapKind};
+use wasmi::{RuntimeValue, Trap, TrapKind};
 
 #[cfg(feature = "wasmer-sandbox")]
 use wasmer_backend::{
@@ -41,7 +41,9 @@ use wasmer_backend::{
 	WasmerBackend,
 };
 
-use wasmi_backend::{instantiate_wasmi, invoke_wasmi, MemoryWrapper as WasmiMemoryWrapper};
+use wasmi_backend::{
+	instantiate_wasmi, invoke_wasmi, wasmi_new_memory, MemoryWrapper as WasmiMemoryWrapper,
+};
 
 /// Index of a function inside the supervisor.
 ///
@@ -492,10 +494,7 @@ impl<DT: Clone> Store<DT> {
 		};
 
 		let memory = match &backend_context {
-			BackendContext::Wasmi => Memory::Wasmi(WasmiMemoryWrapper::new(MemoryInstance::alloc(
-				Pages(initial as usize),
-				maximum.map(|m| Pages(m as usize)),
-			)?)),
+			BackendContext::Wasmi => wasmi_new_memory(initial, maximum)?,
 
 			#[cfg(feature = "wasmer-sandbox")]
 			BackendContext::Wasmer(context) => wasmer_new_memory(context, initial, maximum)?,
