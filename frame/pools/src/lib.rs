@@ -65,26 +65,26 @@ type SubPoolsWithEra<T> = BoundedBTreeMap<EraIndex, UnbondPool<T>, <T as Config>
 
 const POINTS_TO_BALANCE_INIT_RATIO: u32 = 1;
 
-#[derive(Encode, Decode, MaxEncodedLen, TypeInfo)]
-#[cfg_attr(feature = "std", derive(frame_support::DebugNoBound, Clone, PartialEq))]
+#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, frame_support::RuntimeDebugNoBound)]
+#[cfg_attr(feature = "std", derive(Clone, PartialEq))]
 #[codec(mel_bound(T: Config))]
 #[scale_info(skip_type_params(T))]
 pub struct Delegator<T: Config> {
 	pool: PoolId,
-	/// The quantity of points this delegator has in the primary pool or in an sub pool if
+	/// The quantity of points this delegator has in the primary pool or in a sub pool if
 	/// `Self::unbonding_era` is some.
 	points: PointsOf<T>,
 	/// The reward pools total earnings _ever_ the last time this delegator claimed a payout.
 	/// Assuming no massive burning events, we expect this value to always be below total issuance.
-	/// ^ double check the above is an OK assumption
+	// TODO: ^ double check the above is an OK assumption
 	/// This value lines up with the `RewardPool.total_earnings` after a delegator claims a payout.
 	reward_pool_total_earnings: BalanceOf<T>,
 	/// The era this delegator started unbonding at.
 	unbonding_era: Option<EraIndex>,
 }
 
-#[derive(Encode, Decode, MaxEncodedLen, TypeInfo)]
-#[cfg_attr(feature = "std", derive(frame_support::DebugNoBound, Clone, PartialEq))]
+#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, frame_support::RuntimeDebugNoBound)]
+#[cfg_attr(feature = "std", derive(Clone, PartialEq))]
 #[codec(mel_bound(T: Config))]
 #[scale_info(skip_type_params(T))]
 pub struct PrimaryPool<T: Config> {
@@ -134,8 +134,8 @@ impl<T: Config> PrimaryPool<T> {
 	}
 }
 
-#[derive(Encode, Decode, MaxEncodedLen, TypeInfo)]
-#[cfg_attr(feature = "std", derive(frame_support::DebugNoBound, Clone, PartialEq))]
+#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, frame_support::RuntimeDebugNoBound)]
+#[cfg_attr(feature = "std", derive(Clone, PartialEq))]
 #[codec(mel_bound(T: Config))]
 #[scale_info(skip_type_params(T))]
 pub struct RewardPool<T: Config> {
