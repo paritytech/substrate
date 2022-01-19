@@ -77,6 +77,15 @@ fn crate_metadata(cargo_manifest: &Path) -> Metadata {
 
 	let cargo_lock_existed = cargo_lock.exists();
 
+	// If we can find a `Cargo.lock`, we assume that this is the workspace root and there exists a
+	// `Cargo.toml` that we can use for getting the metadata.
+	let cargo_manifest = if let Some(mut cargo_lock) = find_cargo_lock(cargo_manifest) {
+		cargo_lock.set_file_name("Cargo.toml");
+		cargo_lock
+	} else {
+		cargo_manifest.to_path_buf()
+	};
+
 	let crate_metadata = MetadataCommand::new()
 		.manifest_path(cargo_manifest)
 		.exec()
@@ -151,18 +160,29 @@ fn find_cargo_lock(cargo_manifest: &Path) -> Option<PathBuf> {
 		}
 	}
 
+	if let Ok(workspace) = env::var(crate::WASM_BUILD_WORKSPACE_HINT) {
+		let path = PathBuf::from(workspace);
+
+		if path.join("Cargo.lock").exists() {
+			return Some(path.join("Cargo.lock"))
+		} else {
+			build_helper::warning!(
+				"`{}` env variable doesn't point to a directory that contains a `Cargo.lock`.",
+				crate::WASM_BUILD_WORKSPACE_HINT,
+			);
+		}
+	}
+
 	if let Some(path) = find_impl(build_helper::out_dir()) {
 		return Some(path)
 	}
 
-	if let Some(path) = find_impl(cargo_manifest.to_path_buf()) {
-		return Some(path)
-	}
-
 	build_helper::warning!(
-		"Could not find `Cargo.lock` for `{}`, while searching from `{}`.",
+		"Could not find `Cargo.lock` for `{}`, while searching from `{}`. \
+		 To fix this, point the `{}` env variable to the directory of the workspace being compiled.",
 		cargo_manifest.display(),
-		build_helper::out_dir().display()
+		build_helper::out_dir().display(),
+		crate::WASM_BUILD_WORKSPACE_HINT,
 	);
 
 	None
