@@ -494,7 +494,7 @@ impl<AccountId, Balance: HasCompact + Copy + Saturating + AtLeast32BitUnsigned +
 			})
 			.collect::<Vec<_>>()
 			.try_into()
-			.expect("removing items from a bounded vec always leaves length less than bounds. qed");
+			.expect("filtering items from a bounded vec always leaves length less than bounds. qed");
 
 		Self {
 			stash: self.stash,
