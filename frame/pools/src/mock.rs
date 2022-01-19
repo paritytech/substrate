@@ -1,6 +1,7 @@
 use super::*;
 use crate::{self as pools};
-use frame_support::parameter_types;
+use frame_support::{assert_ok, parameter_types};
+use frame_system::RawOrigin;
 
 pub type AccountId = u32;
 pub type Balance = u32;
@@ -141,3 +142,43 @@ frame_support::construct_runtime!(
 		Pools: pools::{Pallet, Call, Storage, Event<T>},
 	}
 );
+
+#[derive(Default)]
+pub struct ExtBuilder {
+	delegators: Vec<(AccountId, PoolId, Balance)>,
+}
+
+impl ExtBuilder {
+	pub(crate) fn add_delegators(mut self, delegators: Vec<(AccountId, PoolId, Balance)>) -> Self {
+		self.delegators = delegators;
+		self
+	}
+
+	pub(crate) fn build(self) -> sp_io::TestExternalities {
+		sp_tracing::try_init_simple();
+		let storage = frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
+
+		let mut ext = sp_io::TestExternalities::from(storage);
+
+		ext.execute_with(|| {
+			// make a pool
+			let amount_to_bond = <Runtime as pools::Config>::StakingInterface::minimum_bond();
+			Balances::make_free_balance_be(&10, amount_to_bond * 2);
+
+			assert_ok!(Pools::create(RawOrigin::Signed(10).into(), 0, vec![100], amount_to_bond));
+			for (account_id, pool_id, bonded) in self.delegators {
+				Balances::make_free_balance_be(&account_id, bonded * 2);
+				assert_ok!(Pools::join(RawOrigin::Signed(account_id).into(), bonded, pool_id));
+			}
+		});
+
+		ext
+	}
+
+	pub fn build_and_execute(self, test: impl FnOnce() -> ()) {
+		self.build().execute_with(|| {
+			test();
+			// post-checks can be added here
+		})
+	}
+}

@@ -30,6 +30,8 @@ log = { version = "0.4.14", default-features = false }
 
 [dev-dependencies]
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
+sp-io = { version = "4.0.0-dev", path = "../../primitives/io"}
+sp-tracing = { version = "4.0.0", path = "../../primitives/tracing" }
 
 [features]
 default = ["std"]

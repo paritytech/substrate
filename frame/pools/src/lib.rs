@@ -63,7 +63,10 @@ type BalanceOf<T> =
 type PointsOf<T> = BalanceOf<T>;
 type SubPoolsWithEra<T> = BoundedBTreeMap<EraIndex, UnbondPool<T>, <T as Config>::MaxUnbonding>;
 
+const POINTS_TO_BALANCE_INIT_RATIO: u32 = 1;
+
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo)]
+#[cfg_attr(feature = "std", derive(frame_support::DebugNoBound, Clone, PartialEq))]
 #[codec(mel_bound(T: Config))]
 #[scale_info(skip_type_params(T))]
 pub struct Delegator<T: Config> {
@@ -81,26 +84,28 @@ pub struct Delegator<T: Config> {
 }
 
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo)]
+#[cfg_attr(feature = "std", derive(frame_support::DebugNoBound, Clone, PartialEq))]
 #[codec(mel_bound(T: Config))]
 #[scale_info(skip_type_params(T))]
-pub struct Pool<T: Config> {
+pub struct PrimaryPool<T: Config> {
 	points: PointsOf<T>, // Probably needs to be some type of BigUInt
 	// The _Stash_ and _Controller_ account for the pool.
 	account_id: T::AccountId,
 }
 
-impl<T: Config> Pool<T> {
+impl<T: Config> PrimaryPool<T> {
 	/// Get the amount of points to issue for some new funds that will be bonded in the pool.
 	fn points_to_issue(&self, new_funds: BalanceOf<T>) -> PointsOf<T> {
 		let bonded_balance = T::StakingInterface::bonded_balance(&self.account_id);
 		if bonded_balance.is_zero() || self.points.is_zero() {
 			debug_assert!(bonded_balance.is_zero() && self.points.is_zero());
-			// all pools start with a 1:1 ratio of balance:points
-			new_funds
+
+			new_funds.saturating_mul(POINTS_TO_BALANCE_INIT_RATIO.into())
 		} else {
 			let points_per_balance = {
 				let balance = T::BalanceToU128::convert(bonded_balance);
 				let points = T::BalanceToU128::convert(self.points);
+				// REMINDER: `saturating_from_rational` panics if denominator is zero
 				FixedU128::saturating_from_rational(points, balance)
 			};
 			let new_funds = T::BalanceToU128::convert(new_funds);
@@ -120,6 +125,7 @@ impl<T: Config> Pool<T> {
 		let balance_per_share = {
 			let balance = T::BalanceToU128::convert(bonded_balance);
 			let points = T::BalanceToU128::convert(self.points);
+			// REMINDER: `saturating_from_rational` panics if denominator is zero
 			FixedU128::saturating_from_rational(balance, points)
 		};
 		let delegator_points = T::BalanceToU128::convert(delegator_points);
@@ -129,6 +135,7 @@ impl<T: Config> Pool<T> {
 }
 
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo)]
+#[cfg_attr(feature = "std", derive(frame_support::DebugNoBound, Clone, PartialEq))]
 #[codec(mel_bound(T: Config))]
 #[scale_info(skip_type_params(T))]
 pub struct RewardPool<T: Config> {
@@ -157,6 +164,7 @@ impl<T: Config> RewardPool<T> {
 }
 
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, DefaultNoBound)]
+#[cfg_attr(feature = "std", derive(frame_support::DebugNoBound, Clone, PartialEq))]
 #[codec(mel_bound(T: Config))]
 #[scale_info(skip_type_params(T))]
 struct UnbondPool<T: Config> {
@@ -169,12 +177,12 @@ impl<T: Config> UnbondPool<T> {
 		if self.balance.is_zero() || self.points.is_zero() {
 			debug_assert!(self.balance.is_zero() && self.points.is_zero());
 
-			// all pools start with a 1:1 ratio of balance:points
-			new_funds
+			new_funds.saturating_mul(POINTS_TO_BALANCE_INIT_RATIO.into())
 		} else {
 			let points_per_balance = {
 				let balance = T::BalanceToU128::convert(self.balance);
 				let points = T::BalanceToU128::convert(self.points);
+				// REMINDER: `saturating_from_rational` panics if denominator is zero
 				FixedU128::saturating_from_rational(points, balance)
 			};
 			let new_funds = T::BalanceToU128::convert(new_funds);
@@ -192,6 +200,7 @@ impl<T: Config> UnbondPool<T> {
 		let balance_per_share = {
 			let balance = T::BalanceToU128::convert(self.balance);
 			let points = T::BalanceToU128::convert(self.points);
+			// REMINDER: `saturating_from_rational` panics if denominator is zero
 			FixedU128::saturating_from_rational(balance, points)
 		};
 		let delegator_points = T::BalanceToU128::convert(delegator_points);
@@ -201,6 +210,7 @@ impl<T: Config> UnbondPool<T> {
 }
 
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, DefaultNoBound)]
+#[cfg_attr(feature = "std", derive(frame_support::DebugNoBound, Clone, PartialEq))]
 #[codec(mel_bound(T: Config))]
 #[scale_info(skip_type_params(T))]
 struct SubPoolsContainer<T: Config> {
@@ -294,7 +304,8 @@ pub mod pallet {
 
 	/// Bonded pools.
 	#[pallet::storage]
-	pub(crate) type PrimaryPools<T: Config> = CountedStorageMap<_, Twox64Concat, PoolId, Pool<T>>;
+	pub(crate) type PrimaryPools<T: Config> =
+		CountedStorageMap<_, Twox64Concat, PoolId, PrimaryPool<T>>;
 
 	/// Reward pools. This is where there rewards for each pool accumulate. When a delegators payout
 	/// is claimed, the balance comes out fo the reward pool.
@@ -392,7 +403,7 @@ pub mod pallet {
 			let delegator = Delegator::<T> {
 				pool: target,
 				points: new_points,
-				//  double check that this is ok.
+				// TODO double check that this is ok.
 				// At best the reward pool has the rewards up through the previous era. If the
 				// delegator joins prior to the snapshot they will benefit from the rewards of the
 				// current era despite not contributing to the pool's vote weight. If they join
@@ -560,7 +571,7 @@ pub mod pallet {
 			let who = ensure_signed(origin)?;
 
 			ensure!(!PrimaryPools::<T>::contains_key(id), Error::<T>::IdInUse);
-			ensure!(amount > T::StakingInterface::minimum_bond(), Error::<T>::MinimiumBondNotMet);
+			ensure!(amount >= T::StakingInterface::minimum_bond(), Error::<T>::MinimiumBondNotMet);
 
 			let (stash, reward_dest) = Self::create_accounts(&who, id);
 
@@ -579,7 +590,7 @@ pub mod pallet {
 
 			T::StakingInterface::nominate(stash.clone(), targets)?;
 
-			let mut primary_pool = Pool::<T> { points: Zero::zero(), account_id: stash };
+			let mut primary_pool = PrimaryPool::<T> { points: Zero::zero(), account_id: stash };
 			let points_to_issue = primary_pool.points_to_issue(amount);
 			primary_pool.points = points_to_issue;
 
@@ -640,7 +651,7 @@ impl<T: Config> Pallet<T> {
 
 	/// Calculate the rewards for `delegator`.
 	fn calculate_delegator_payout(
-		primary_pool: &Pool<T>,
+		primary_pool: &PrimaryPool<T>,
 		reward_pool: RewardPool<T>,
 		mut delegator: Delegator<T>,
 	) -> Result<(RewardPool<T>, Delegator<T>, BalanceOf<T>), DispatchError> {
@@ -656,10 +667,11 @@ impl<T: Config> Pallet<T> {
 		// been earned by the reward pool, we inflate the reward pool points by
 		// `primary_pool.total_points`. In effect this allows each, single unit of balance (e.g.
 		// plank) to be divvied up pro-rata among delegators based on points.
-		//  this needs to be some sort of BigUInt arithmetic
+		//  TODO this needs to be some sort of BigUInt arithmetic
 		let new_points = primary_pool.points.saturating_mul(new_earnings);
 
-		// The points of the reward pool after taking into account the new earnings
+		// The points of the reward pool after taking into account the new earnings. Notice that
+		// this always increases over time except for when we subtract delegator virtual shares
 		let current_points = reward_pool.points.saturating_add(new_points);
 
 		// The rewards pool's earnings since the last time this delegator claimed a payout
@@ -669,7 +681,10 @@ impl<T: Config> Pallet<T> {
 		let delegator_virtual_points =
 			delegator.points.saturating_mul(new_earnings_since_last_claim);
 
-		let delegator_payout = {
+		let delegator_payout = if delegator_virtual_points.is_zero() || current_points.is_zero() {
+			BalanceOf::<T>::zero()
+		} else {
+			// REMINDER: `saturating_from_rational` panics if denominator is zero
 			let delegator_ratio_of_points = FixedU128::saturating_from_rational(
 				T::BalanceToU128::convert(delegator_virtual_points),
 				T::BalanceToU128::convert(current_points),
@@ -683,6 +698,7 @@ impl<T: Config> Pallet<T> {
 		// Record updates
 		delegator.reward_pool_total_earnings = reward_pool.total_earnings;
 		reward_pool.points = current_points.saturating_sub(delegator_virtual_points);
+		reward_pool.balance = reward_pool.balance.saturating_sub(delegator_payout);
 
 		Ok((reward_pool, delegator, delegator_payout))
 	}
@@ -703,7 +719,7 @@ impl<T: Config> Pallet<T> {
 	fn do_reward_payout(
 		delegator_id: T::AccountId,
 		delegator: Delegator<T>,
-		primary_pool: &Pool<T>,
+		primary_pool: &PrimaryPool<T>,
 	) -> DispatchResult {
 		let reward_pool = RewardPools::<T>::get(&delegator.pool).ok_or_else(|| {
 			log!(error, "A reward pool could not be found, this is a system logic error.");
@@ -764,10 +780,17 @@ impl<T: Config> Pallet<T> {
 			// UnbondindDuration. TODO clearly document these assumptions
 		};
 
-		let slash_ratio = FixedU128::saturating_from_rational(
-			T::BalanceToU128::convert(slash_amount),
-			T::BalanceToU128::convert(total_affected_balance),
-		);
+		// Panics if denominator is zero
+		let slash_ratio = if total_affected_balance <= Zero::zero() {
+			return Some((Zero::zero(), Default::default()));
+		} else {
+			// REMINDER: `saturating_from_rational` panics if denominator is zero
+			FixedU128::saturating_from_rational(
+				T::BalanceToU128::convert(slash_amount),
+				T::BalanceToU128::convert(total_affected_balance),
+			)
+		};
+
 		let slash_multiplier = FixedU128::one().saturating_sub(slash_ratio);
 
 		let unlock_chunk_balances: BTreeMap<_, _> = affected_range
