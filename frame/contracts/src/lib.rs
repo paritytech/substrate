@@ -632,6 +632,10 @@ pub mod pallet {
 		/// or via RPC an `Ok` will be returned. In this case the caller needs to inspect the flags
 		/// to determine whether a reversion has taken place.
 		ContractReverted,
+		/// The contract's code was found to be invalid during validation or instrumentation.
+		/// A more detailed error can be found on the node console if debug messages are enabled
+		/// or in the debug buffer which is returned to RPC clients.
+		CodeRejected,
 	}
 
 	/// A mapping from an original code hash to the original code, untouched by instrumentation.
@@ -781,7 +785,8 @@ where
 		storage_deposit_limit: Option<BalanceOf<T>>,
 	) -> CodeUploadResult<CodeHash<T>, BalanceOf<T>> {
 		let schedule = T::Schedule::get();
-		let module = PrefabWasmModule::from_code(code, &schedule, origin)?;
+		let module = PrefabWasmModule::from_code(code, &schedule, origin)
+			.map_err(|_| <Error<T>>::CodeRejected)?;
 		let deposit = module.open_deposit();
 		if let Some(storage_deposit_limit) = storage_deposit_limit {
 			ensure!(storage_deposit_limit >= deposit, <Error<T>>::StorageDepositLimitExhausted);
@@ -879,7 +884,7 @@ where
 		code: Code<CodeHash<T>>,
 		data: Vec<u8>,
 		salt: Vec<u8>,
-		debug_message: Option<&mut Vec<u8>>,
+		mut debug_message: Option<&mut Vec<u8>>,
 	) -> InternalInstantiateOutput<T> {
 		let mut storage_deposit = Default::default();
 		let mut gas_meter = GasMeter::new(gas_limit);
@@ -891,8 +896,11 @@ where
 						binary.len() as u32 <= schedule.limits.code_len,
 						<Error<T>>::CodeTooLarge
 					);
-					let executable =
-						PrefabWasmModule::from_code(binary, &schedule, origin.clone())?;
+					let executable = PrefabWasmModule::from_code(binary, &schedule, origin.clone())
+						.map_err(|msg| {
+							debug_message.as_mut().map(|buffer| buffer.extend(msg.as_bytes()));
+							<Error<T>>::CodeRejected
+						})?;
 					ensure!(
 						executable.code_len() <= schedule.limits.code_len,
 						<Error<T>>::CodeTooLarge

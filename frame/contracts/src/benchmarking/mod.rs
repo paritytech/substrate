@@ -39,12 +39,12 @@ use codec::Encode;
 use frame_benchmarking::{account, benchmarks, whitelisted_caller};
 use frame_support::weights::Weight;
 use frame_system::RawOrigin;
-use pwasm_utils::parity_wasm::elements::{BlockType, BrTableData, Instruction, ValueType};
 use sp_runtime::{
 	traits::{Bounded, Hash},
 	Perbill,
 };
 use sp_std::prelude::*;
+use wasm_instrument::parity_wasm::elements::{BlockType, BrTableData, Instruction, ValueType};
 
 /// How many batches we do per API benchmark.
 const API_BENCHMARK_BATCHES: u32 = 20;
