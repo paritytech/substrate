@@ -343,7 +343,7 @@ impl<AccountId, BlockNumber> ElectionProvider for NoElection<(AccountId, BlockNu
 /// used on the implementing side of [`ElectionDataProvider`].
 pub trait SortedListProvider<AccountId> {
 	/// The list's error type.
-	type Error;
+	type Error: sp_std::fmt::Debug;
 
 	/// An iterator over the list, which can have `take` called on it.
 	fn iter() -> Box<dyn Iterator<Item = AccountId>>;

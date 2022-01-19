@@ -18,7 +18,10 @@
 //! Functions for the Assets pallet.
 
 use super::*;
-use frame_support::{traits::Get, BoundedVec};
+use frame_support::{
+	traits::{defensive_prelude::*, Get},
+	BoundedVec,
+};
 
 #[must_use]
 pub(super) enum DeadConsequence {
@@ -244,13 +247,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		ensure!(f.best_effort || actual >= amount, Error::<T, I>::BalanceLow);
 
 		let conseq = Self::can_decrease(id, target, actual, f.keep_alive);
-		let actual = match conseq.into_result() {
-			Ok(dust) => actual.saturating_add(dust), //< guaranteed by reducible_balance
-			Err(e) => {
-				debug_assert!(false, "passed from reducible_balance; qed");
-				return Err(e.into())
-			},
-		};
+		// defensive: passed from reducible_balance.
+		let actual = conseq.into_result().defensive_map_err::<DispatchError, _>(Into::into)?;
 
 		Ok(actual)
 	}

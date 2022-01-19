@@ -156,8 +156,9 @@ use codec::{Decode, Encode, Input};
 use frame_support::{
 	ensure,
 	traits::{
+		defensive_prelude::*,
 		schedule::{DispatchTime, Named as ScheduleNamed},
-		BalanceStatus, Currency, Defensive, Get, LockIdentifier, LockableCurrency, OnUnbalanced,
+		BalanceStatus, Currency, Get, LockIdentifier, LockableCurrency, OnUnbalanced,
 		ReservableCurrency, WithdrawReasons,
 	},
 	weights::Weight,

@@ -25,7 +25,7 @@ use crate::{
 use codec::{Decode, Encode, HasCompact};
 use frame_support::{
 	storage::bounded_btree_map::BoundedBTreeMap,
-	traits::{Currency, Defensive, Get, OnUnbalanced, ReservableCurrency},
+	traits::{defensive_prelude::*, Currency, Get, OnUnbalanced, ReservableCurrency},
 };
 use sp_arithmetic::traits::SaturatedConversion;
 use sp_npos_elections::{is_score_better, ElectionScore, NposSolution};

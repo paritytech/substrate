@@ -24,8 +24,19 @@ use sp_arithmetic::traits::{Bounded, CheckedAdd, CheckedMul, CheckedSub};
 use sp_runtime::{traits::Block as BlockT, DispatchError};
 use sp_std::{cmp::Ordering, prelude::*};
 
+const DEFENSIVE_OP_PUBLIC_ERROR: &'static str = "a defensive failure has been triggered; please report the block number at https://github.com/paritytech/substrate/issues";
+const DEFENSIVE_OP_INTERNAL_ERROR: &'static str = "Defensive failure has been triggered!";
+
+/// Prelude module for all defensive traits to be imported at once.
+pub mod defensive_prelude {
+	pub use super::{DefensiveOption, DefensiveResult, DefensiveUnwrap};
+}
+
 /// A trait to handle errors and options when you are really sure that a condition must hold, but
 /// not brave enough to `expect` on it, or a default fallback value makes more sense.
+///
+/// This trait focuses on methods that eventually unwrap the inner value. See [`DefensiveResult`]
+/// and [`DefensiveOption`] for methods that specifically apply to the respective types.
 ///
 /// Each function in this trait will have two side effects, aside from behaving exactly as the name
 /// would suggest:
@@ -37,13 +48,15 @@ use sp_std::{cmp::Ordering, prelude::*};
 ///    best shot of fully diagnosing the error would be to infer the block number of which the log
 ///    message was emitted, then re-execute that block using `check-block` or `try-runtime`
 ///    subcommands in substrate client.
-pub trait Defensive<T> {
+pub trait DefensiveUnwrap<T> {
 	/// Exactly the same as `unwrap_or`, but it does the defensive warnings explained in the trait
 	/// docs.
 	fn defensive_unwrap_or(self, other: T) -> T;
+
 	/// Exactly the same as `unwrap_or_else`, but it does the defensive warnings explained in the
 	/// trait docs.
 	fn defensive_unwrap_or_else<F: FnOnce() -> T>(self, f: F) -> T;
+
 	/// Exactly the same as `unwrap_or_default`, but it does the defensive warnings explained in the
 	/// trait docs.
 	fn defensive_unwrap_or_default(self) -> T
@@ -51,28 +64,210 @@ pub trait Defensive<T> {
 		T: Default;
 }
 
-/// Same as [`Defensive`], but it fixes the second issue (logs not being expressive) at the cost of
-/// having a more verbose API.
-///
-/// Each defensive operation must contain a proof as well, as it should, in principle, be
-/// infallible. The API of this trait expects this proof to be given as a string, which is in turn
-/// printed in the emitting logs and panic stack trace. This can help with easier diagnosis.
-pub trait DefensiveWithProof<T> {
-	/// Exactly the same as `unwrap_or`, but it does the defensive warnings explained in the trait
-	/// docs.
-	fn defensive_unwrap_or_proof(self, other: T, proof: &'static str) -> T;
-	/// Exactly the same as `unwrap_or_else`, but it does the defensive warnings explained in the
-	/// trait docs.
-	fn defensive_unwrap_or_else_proof<F: FnOnce() -> T>(self, f: F, proof: &'static str) -> T;
-	/// Exactly the same as `unwrap_or_default`, but it does the defensive warnings explained in the
-	/// trait docs.
-	fn defensive_unwrap_or_default_proof(self, proof: &'static str) -> T
-	where
-		T: Default;
+pub trait DefensiveResult<T, E> {
+	/// Defensively map the error into another return type, but you are really sure that this
+	/// conversion should never be needed.
+	fn defensive_map_err<F, O: FnOnce(E) -> F>(self, o: O) -> Result<T, F>;
+
+	/// Defensively map and unpack the value to something else (`U`), or call the default callback
+	/// if `Err`, which should never happen.
+	fn defensive_map_or_else<U, F: FnOnce(T) -> U, D: FnOnce(E) -> U>(self, default: D, f: F) -> U;
+
+	/// Defensively transform this result into an option, discarding the `Err` variant if it
+	/// happens, which should never happen.
+	fn defensive_ok(self) -> Option<T>;
 }
 
-/// A variant of [`Defensive`] with the same rationale, for the arithmetic operations where in case
-/// an infallible operation fails, it saturates.
+pub trait DefensiveOption<T> {
+	/// Potentially map and unpack the value to something else (`U`), or call the default callback
+	/// if `None`, which should never happen.
+	fn defensive_map_or_else<U, F: FnOnce(T) -> U, D: FnOnce() -> U>(self, f: F, default: D) -> U;
+
+	/// Defensively transform this option to a result.
+	fn defensive_ok_or_else<E, F: FnOnce() -> E>(self, err: F) -> Result<T, E>;
+}
+
+impl<T> DefensiveUnwrap<T> for Option<T> {
+	fn defensive_unwrap_or(self, or: T) -> T {
+		match self {
+			Some(inner) => inner,
+			None => {
+				debug_assert!(false, "{}", DEFENSIVE_OP_INTERNAL_ERROR);
+				frame_support::log::error!(
+					target: "runtime",
+					"{}",
+					DEFENSIVE_OP_PUBLIC_ERROR
+				);
+				or
+			},
+		}
+	}
+
+	fn defensive_unwrap_or_else<F: FnOnce() -> T>(self, f: F) -> T {
+		match self {
+			Some(inner) => inner,
+			None => {
+				debug_assert!(false, "{}", DEFENSIVE_OP_INTERNAL_ERROR);
+				frame_support::log::error!(
+					target: "runtime",
+					"{}",
+					DEFENSIVE_OP_PUBLIC_ERROR
+				);
+				f()
+			},
+		}
+	}
+
+	fn defensive_unwrap_or_default(self) -> T
+	where
+		T: Default,
+	{
+		match self {
+			Some(inner) => inner,
+			None => {
+				debug_assert!(false, "{}", DEFENSIVE_OP_INTERNAL_ERROR);
+				frame_support::log::error!(
+					target: "runtime",
+					"{}",
+					DEFENSIVE_OP_PUBLIC_ERROR
+				);
+				Default::default()
+			},
+		}
+	}
+}
+
+impl<T, E: sp_std::fmt::Debug> DefensiveUnwrap<T> for Result<T, E> {
+	fn defensive_unwrap_or(self, or: T) -> T {
+		match self {
+			Ok(inner) => inner,
+			Err(e) => {
+				debug_assert!(false, "{}: {:?}", DEFENSIVE_OP_INTERNAL_ERROR, e);
+				frame_support::log::error!(
+					target: "runtime",
+					"{}: {:?}",
+					DEFENSIVE_OP_PUBLIC_ERROR,
+					e
+				);
+				or
+			},
+		}
+	}
+
+	fn defensive_unwrap_or_else<F: FnOnce() -> T>(self, f: F) -> T {
+		match self {
+			Ok(inner) => inner,
+			Err(e) => {
+				debug_assert!(false, "{}: {:?}", DEFENSIVE_OP_INTERNAL_ERROR, e);
+				frame_support::log::error!(
+					target: "runtime",
+					"{}: {:?}",
+					DEFENSIVE_OP_PUBLIC_ERROR,
+					e
+				);
+				f()
+			},
+		}
+	}
+
+	fn defensive_unwrap_or_default(self) -> T
+	where
+		T: Default,
+	{
+		match self {
+			Ok(inner) => inner,
+			Err(e) => {
+				debug_assert!(false, "{}: {:?}", DEFENSIVE_OP_INTERNAL_ERROR, e);
+				frame_support::log::error!(
+					target: "runtime",
+					"{}: {:?}",
+					DEFENSIVE_OP_PUBLIC_ERROR,
+					e
+				);
+				Default::default()
+			},
+		}
+	}
+}
+
+impl<T, E: sp_std::fmt::Debug> DefensiveResult<T, E> for Result<T, E> {
+	fn defensive_map_err<F, O: FnOnce(E) -> F>(self, o: O) -> Result<T, F> {
+		self.map_err(|e| {
+			debug_assert!(false, "{}: {:?}", DEFENSIVE_OP_INTERNAL_ERROR, e);
+			frame_support::log::error!(
+				target: "runtime",
+				"{}: {:?}",
+				DEFENSIVE_OP_PUBLIC_ERROR,
+				e
+			);
+			o(e)
+		})
+	}
+
+	fn defensive_map_or_else<U, F: FnOnce(T) -> U, D: FnOnce(E) -> U>(self, default: D, f: F) -> U {
+		self.map_or_else(
+			|e| {
+				debug_assert!(false, "{}: {:?}", DEFENSIVE_OP_INTERNAL_ERROR, e);
+				frame_support::log::error!(
+					target: "runtime",
+					"{}: {:?}",
+					DEFENSIVE_OP_PUBLIC_ERROR,
+					e
+				);
+				default(e)
+			},
+			f,
+		)
+	}
+
+	fn defensive_ok(self) -> Option<T> {
+		match self {
+			Ok(inner) => Some(inner),
+			Err(e) => {
+				debug_assert!(false, "{}: {:?}", DEFENSIVE_OP_INTERNAL_ERROR, e);
+				frame_support::log::error!(
+					target: "runtime",
+					"{}: {:?}",
+					DEFENSIVE_OP_PUBLIC_ERROR,
+					e
+				);
+				None
+			},
+		}
+	}
+}
+
+impl<T> DefensiveOption<T> for Option<T> {
+	fn defensive_map_or_else<U, F: FnOnce(T) -> U, D: FnOnce() -> U>(self, f: F, default: D) -> U {
+		self.map_or_else(
+			|| {
+				debug_assert!(false, "{}", DEFENSIVE_OP_INTERNAL_ERROR);
+				frame_support::log::error!(
+					target: "runtime",
+					"{}",
+					DEFENSIVE_OP_PUBLIC_ERROR,
+				);
+				default()
+			},
+			f,
+		)
+	}
+
+	fn defensive_ok_or_else<E, F: FnOnce() -> E>(self, err: F) -> Result<T, E> {
+		self.ok_or_else(|| {
+			debug_assert!(false, "{}", DEFENSIVE_OP_INTERNAL_ERROR);
+			frame_support::log::error!(
+				target: "runtime",
+				"{}",
+				DEFENSIVE_OP_PUBLIC_ERROR,
+			);
+			err()
+		})
+	}
+}
+
+/// A variant of [`DefensiveUnwrap`] with the same rationale, for the arithmetic operations where in
+/// case an infallible operation fails, it saturates.
 pub trait DefensiveSaturating {
 	/// Add `self` and `other` defensively.
 	fn defensive_saturating_add(self, other: Self) -> Self;
@@ -93,111 +288,6 @@ impl<T: CheckedAdd + CheckedMul + CheckedSub + Bounded> DefensiveSaturating for 
 	}
 	fn defensive_saturating_sub(self, other: Self) -> Self {
 		self.checked_mul(&other).defensive_unwrap_or_else(Bounded::min_value)
-	}
-}
-
-const DEFENSIVE_UNWRAP_PUBLIC_ERROR: &'static str = "a defensive unwrap has been triggered; please report the block number at https://github.com/paritytech/substrate/issues";
-const DEFENSIVE_UNWRAP_INTERNAL_ERROR: &'static str = "Defensive unwrap has been triggered!";
-
-impl<T> Defensive<T> for Option<T> {
-	fn defensive_unwrap_or(self, or: T) -> T {
-		match self {
-			Some(inner) => inner,
-			None => {
-				debug_assert!(false, "{}", DEFENSIVE_UNWRAP_INTERNAL_ERROR);
-				frame_support::log::error!(
-					target: "runtime",
-					"{}",
-					DEFENSIVE_UNWRAP_PUBLIC_ERROR
-				);
-				or
-			},
-		}
-	}
-
-	fn defensive_unwrap_or_else<F: FnOnce() -> T>(self, f: F) -> T {
-		match self {
-			Some(inner) => inner,
-			None => {
-				debug_assert!(false, "{}", DEFENSIVE_UNWRAP_INTERNAL_ERROR);
-				frame_support::log::error!(
-					target: "runtime",
-					"{}",
-					DEFENSIVE_UNWRAP_PUBLIC_ERROR
-				);
-				f()
-			},
-		}
-	}
-
-	fn defensive_unwrap_or_default(self) -> T
-	where
-		T: Default,
-	{
-		match self {
-			Some(inner) => inner,
-			None => {
-				debug_assert!(false, "{}", DEFENSIVE_UNWRAP_INTERNAL_ERROR);
-				frame_support::log::error!(
-					target: "runtime",
-					"{}",
-					DEFENSIVE_UNWRAP_PUBLIC_ERROR
-				);
-				Default::default()
-			},
-		}
-	}
-}
-impl<T, E: sp_std::fmt::Debug> Defensive<T> for Result<T, E> {
-	fn defensive_unwrap_or(self, or: T) -> T {
-		match self {
-			Ok(inner) => inner,
-			Err(e) => {
-				debug_assert!(false, "{}: {:?}", DEFENSIVE_UNWRAP_INTERNAL_ERROR, e);
-				frame_support::log::error!(
-					target: "runtime",
-					"{}: {:?}",
-					DEFENSIVE_UNWRAP_PUBLIC_ERROR,
-					e
-				);
-				or
-			},
-		}
-	}
-
-	fn defensive_unwrap_or_else<F: FnOnce() -> T>(self, f: F) -> T {
-		match self {
-			Ok(inner) => inner,
-			Err(e) => {
-				debug_assert!(false, "{}: {:?}", DEFENSIVE_UNWRAP_INTERNAL_ERROR, e);
-				frame_support::log::error!(
-					target: "runtime",
-					"{}: {:?}",
-					DEFENSIVE_UNWRAP_PUBLIC_ERROR,
-					e
-				);
-				f()
-			},
-		}
-	}
-
-	fn defensive_unwrap_or_default(self) -> T
-	where
-		T: Default,
-	{
-		match self {
-			Ok(inner) => inner,
-			Err(e) => {
-				debug_assert!(false, "{}: {:?}", DEFENSIVE_UNWRAP_INTERNAL_ERROR, e);
-				frame_support::log::error!(
-					target: "runtime",
-					"{}: {:?}",
-					DEFENSIVE_UNWRAP_PUBLIC_ERROR,
-					e
-				);
-				Default::default()
-			},
-		}
 	}
 }
 

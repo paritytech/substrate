@@ -102,9 +102,9 @@ use codec::{Decode, Encode};
 use frame_support::{
 	dispatch::WithPostDispatchInfo,
 	traits::{
-		ChangeMembers, Contains, ContainsLengthBound, Currency, CurrencyToVote, Defensive, Get,
-		InitializeMembers, LockIdentifier, LockableCurrency, OnUnbalanced, ReservableCurrency,
-		SortedMembers, StorageVersion, WithdrawReasons,
+		defensive_prelude::*, ChangeMembers, Contains, ContainsLengthBound, Currency,
+		CurrencyToVote, Get, InitializeMembers, LockIdentifier, LockableCurrency, OnUnbalanced,
+		ReservableCurrency, SortedMembers, StorageVersion, WithdrawReasons,
 	},
 	weights::Weight,
 };
