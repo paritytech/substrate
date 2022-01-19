@@ -79,7 +79,9 @@ pub fn expand_constants(def: &mut Def) -> proc_macro2::TokenStream {
 		let const_type = &const_.type_;
 		let ident_str = format!("{}", const_.metadata_name.unwrap_or(const_.ident));
 
-		let doc = const_.doc.clone().into_iter();
+		let no_docs = vec![];
+		let doc = if cfg!(feature = "no-metadata-docs") { &no_docs } else { &const_.doc };
+
 		let default_byte_impl = &const_.default_byte_impl;
 
 		quote::quote!({

@@ -294,16 +294,16 @@ where
 		parent_hash: &System::Hash,
 		digest: &Digest,
 	) {
+		// Reset events before apply runtime upgrade hook.
+		// This is required to preserve events from runtime upgrade hook.
+		// This means the format of all the event related storages must always be compatible.
+		<frame_system::Pallet<System>>::reset_events();
+
 		let mut weight = 0;
 		if Self::runtime_upgraded() {
 			weight = weight.saturating_add(Self::execute_on_runtime_upgrade());
 		}
-		<frame_system::Pallet<System>>::initialize(
-			block_number,
-			parent_hash,
-			digest,
-			frame_system::InitKind::Full,
-		);
+		<frame_system::Pallet<System>>::initialize(block_number, parent_hash, digest);
 		weight = weight.saturating_add(<AllPalletsWithSystem as OnInitialize<
 			System::BlockNumber,
 		>>::on_initialize(*block_number));
@@ -510,7 +510,6 @@ where
 			&(frame_system::Pallet::<System>::block_number() + One::one()),
 			&block_hash,
 			&Default::default(),
-			frame_system::InitKind::Inspection,
 		);
 
 		enter_span! { sp_tracing::Level::TRACE, "validate_transaction" };
@@ -541,12 +540,7 @@ where
 		// OffchainWorker RuntimeApi should skip initialization.
 		let digests = header.digest().clone();
 
-		<frame_system::Pallet<System>>::initialize(
-			header.number(),
-			header.parent_hash(),
-			&digests,
-			frame_system::InitKind::Inspection,
-		);
+		<frame_system::Pallet<System>>::initialize(header.number(), header.parent_hash(), &digests);
 
 		// Frame system only inserts the parent hash into the block hashes as normally we don't know
 		// the hash for the header before. However, here we are aware of the hash and we can add it
@@ -830,6 +824,7 @@ mod tests {
 		fn on_runtime_upgrade() -> Weight {
 			sp_io::storage::set(TEST_KEY, "custom_upgrade".as_bytes());
 			sp_io::storage::set(CUSTOM_ON_RUNTIME_KEY, &true.encode());
+			System::deposit_event(frame_system::Event::CodeUpdated);
 			100
 		}
 	}
@@ -1293,6 +1288,30 @@ mod tests {
 
 			assert_eq!(&sp_io::storage::get(TEST_KEY).unwrap()[..], *b"module");
 			assert_eq!(sp_io::storage::get(CUSTOM_ON_RUNTIME_KEY).unwrap(), true.encode());
+		});
+	}
+
+	#[test]
+	fn event_from_runtime_upgrade_is_included() {
+		new_test_ext(1).execute_with(|| {
+			// Make sure `on_runtime_upgrade` is called.
+			RUNTIME_VERSION.with(|v| {
+				*v.borrow_mut() =
+					sp_version::RuntimeVersion { spec_version: 1, ..Default::default() }
+			});
+
+			// set block number to non zero so events are not exlcuded
+			System::set_block_number(1);
+
+			Executive::initialize_block(&Header::new(
+				2,
+				H256::default(),
+				H256::default(),
+				[69u8; 32].into(),
+				Digest::default(),
+			));
+
+			System::assert_last_event(frame_system::Event::<Runtime>::CodeUpdated.into());
 		});
 	}
 

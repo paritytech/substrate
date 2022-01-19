@@ -23,7 +23,7 @@
 //! ## Overview
 //!
 //! The Preimage pallet allows for the users and the runtime to store the preimage
-//! of a hash on chain. This can be used by other pallets where storing and managing
+//! of a hash on chain. This can be used by other pallets for storing and managing
 //! large byte-blobs.
 
 #![cfg_attr(not(feature = "std"), no_std)]

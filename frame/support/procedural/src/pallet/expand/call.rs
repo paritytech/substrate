@@ -137,6 +137,8 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 	let count = COUNTER.with(|counter| counter.borrow_mut().inc());
 	let macro_ident = syn::Ident::new(&format!("__is_call_part_defined_{}", count), span);
 
+	let capture_docs = if cfg!(feature = "no-metadata-docs") { "never" } else { "always" };
+
 	quote::quote_spanned!(span =>
 		#[doc(hidden)]
 		pub mod __substrate_call_check {
@@ -164,7 +166,7 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 		)]
 		#[codec(encode_bound())]
 		#[codec(decode_bound())]
-		#[scale_info(skip_type_params(#type_use_gen), capture_docs = "always")]
+		#[scale_info(skip_type_params(#type_use_gen), capture_docs = #capture_docs)]
 		#[allow(non_camel_case_types)]
 		pub enum #call_ident<#type_decl_bounded_gen> #where_clause {
 			#[doc(hidden)]

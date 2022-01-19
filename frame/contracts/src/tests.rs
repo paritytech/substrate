@@ -533,7 +533,8 @@ fn run_out_of_gas() {
 }
 
 fn initialize_block(number: u64) {
-	System::initialize(&number, &[0u8; 32].into(), &Default::default(), Default::default());
+	System::reset_events();
+	System::initialize(&number, &[0u8; 32].into(), &Default::default());
 }
 
 #[test]
@@ -1385,7 +1386,7 @@ fn disabled_chain_extension_wont_deploy() {
 				vec![],
 				vec![],
 			),
-			"module uses chain extensions but chain extensions are disabled",
+			<Error<Test>>::CodeRejected,
 		);
 	});
 }
@@ -1545,7 +1546,8 @@ fn lazy_removal_partial_remove_works() {
 
 		// Put value into the contracts child trie
 		for val in &vals {
-			Storage::<Test>::write(&info.trie_id, &val.0, Some(val.2.clone()), None).unwrap();
+			Storage::<Test>::write(&info.trie_id, &val.0, Some(val.2.clone()), None, false)
+				.unwrap();
 		}
 		<ContractInfoOf<Test>>::insert(&addr, info.clone());
 
@@ -1629,7 +1631,8 @@ fn lazy_removal_does_no_run_on_full_block() {
 
 		// Put value into the contracts child trie
 		for val in &vals {
-			Storage::<Test>::write(&info.trie_id, &val.0, Some(val.2.clone()), None).unwrap();
+			Storage::<Test>::write(&info.trie_id, &val.0, Some(val.2.clone()), None, false)
+				.unwrap();
 		}
 		<ContractInfoOf<Test>>::insert(&addr, info.clone());
 
@@ -1712,7 +1715,8 @@ fn lazy_removal_does_not_use_all_weight() {
 
 		// Put value into the contracts child trie
 		for val in &vals {
-			Storage::<Test>::write(&info.trie_id, &val.0, Some(val.2.clone()), None).unwrap();
+			Storage::<Test>::write(&info.trie_id, &val.0, Some(val.2.clone()), None, false)
+				.unwrap();
 		}
 		<ContractInfoOf<Test>>::insert(&addr, info.clone());
 
@@ -2897,5 +2901,34 @@ fn contract_reverted() {
 			.unwrap();
 		assert_eq!(result.flags, flags);
 		assert_eq!(result.data.0, buffer);
+	});
+}
+
+#[test]
+fn code_rejected_error_works() {
+	let (wasm, _) = compile_module::<Test>("invalid_import").unwrap();
+	ExtBuilder::default().existential_deposit(200).build().execute_with(|| {
+		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+
+		assert_noop!(
+			Contracts::upload_code(Origin::signed(ALICE), wasm.clone(), None),
+			<Error<Test>>::CodeRejected,
+		);
+
+		let result = Contracts::bare_instantiate(
+			ALICE,
+			0,
+			GAS_LIMIT,
+			None,
+			Code::Upload(Bytes(wasm)),
+			vec![],
+			vec![],
+			true,
+		);
+		assert_err!(result.result, <Error<Test>>::CodeRejected);
+		assert_eq!(
+			std::str::from_utf8(&result.debug_message).unwrap(),
+			"module imports a non-existent function"
+		);
 	});
 }
