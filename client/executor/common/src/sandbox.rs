@@ -55,10 +55,10 @@ impl From<SupervisorFuncIndex> for usize {
 ///
 /// This index is supposed to be used as index for `Externals`.
 #[derive(Copy, Clone, Debug, PartialEq)]
-pub(crate) struct GuestFuncIndex(pub(crate) usize);
+struct GuestFuncIndex(usize);
 
 /// This struct holds a mapping from guest index space to supervisor.
-pub struct GuestToSupervisorFunctionMapping {
+struct GuestToSupervisorFunctionMapping {
 	/// Position of elements in this vector are interpreted
 	/// as indices of guest functions and are mapped to
 	/// corresponding supervisor function indices.
@@ -80,7 +80,7 @@ impl GuestToSupervisorFunctionMapping {
 	}
 
 	/// Find supervisor function index by its corresponding guest function index
-	pub(crate) fn func_by_guest_index(
+	fn func_by_guest_index(
 		&self,
 		guest_func_idx: GuestFuncIndex,
 	) -> Option<SupervisorFuncIndex> {
@@ -89,7 +89,7 @@ impl GuestToSupervisorFunctionMapping {
 }
 
 /// Holds sandbox function and memory imports and performs name resolution
-pub struct Imports {
+struct Imports {
 	/// Maps qualified function name to its guest function index
 	func_map: HashMap<(Vec<u8>, Vec<u8>), GuestFuncIndex>,
 
@@ -98,7 +98,7 @@ pub struct Imports {
 }
 
 impl Imports {
-	pub(crate) fn func_by_name(
+	fn func_by_name(
 		&self,
 		module_name: &str,
 		func_name: &str,
@@ -108,7 +108,7 @@ impl Imports {
 			.cloned()
 	}
 
-	pub(crate) fn memory_by_name(&self, module_name: &str, memory_name: &str) -> Option<Memory> {
+	fn memory_by_name(&self, module_name: &str, memory_name: &str) -> Option<Memory> {
 		self.memories_map
 			.get(&(module_name.as_bytes().to_owned(), memory_name.as_bytes().to_owned()))
 			.cloned()
@@ -148,18 +148,18 @@ pub trait SandboxContext {
 /// [`Externals`]: ../wasmi/trait.Externals.html
 pub struct GuestExternals<'a> {
 	/// Instance of sandboxed module to be dispatched
-	pub(crate) sandbox_instance: &'a SandboxInstance,
+	sandbox_instance: &'a SandboxInstance,
 
 	/// External state passed to guest environment, see the `instantiate` function
-	pub(crate) state: u32,
+	state: u32,
 }
 
 /// Construct trap error from specified message
-pub(crate) fn trap(msg: &'static str) -> Trap {
+fn trap(msg: &'static str) -> Trap {
 	TrapKind::Host(Box::new(Error::Other(msg.into()))).into()
 }
 
-pub(crate) fn deserialize_result(
+fn deserialize_result(
 	mut serialized_result: &[u8],
 ) -> std::result::Result<Option<RuntimeValue>, Trap> {
 	use self::sandbox_primitives::HostError;
@@ -177,7 +177,7 @@ pub(crate) fn deserialize_result(
 }
 
 /// Module instance in terms of selected backend
-pub(crate) enum BackendInstance {
+enum BackendInstance {
 	/// Wasmi module instance
 	Wasmi(wasmi::ModuleRef),
 
@@ -201,8 +201,8 @@ pub(crate) enum BackendInstance {
 ///
 /// [`invoke`]: #method.invoke
 pub struct SandboxInstance {
-	pub(crate) backend_instance: BackendInstance,
-	pub(crate) guest_to_supervisor_mapping: GuestToSupervisorFunctionMapping,
+	backend_instance: BackendInstance,
+	guest_to_supervisor_mapping: GuestToSupervisorFunctionMapping,
 }
 
 impl SandboxInstance {
@@ -320,10 +320,10 @@ fn decode_environment_definition(
 /// An environment in which the guest module is instantiated.
 pub struct GuestEnvironment {
 	/// Function and memory imports of the guest module
-	pub imports: Imports,
+	imports: Imports,
 
 	/// Supervisor functinons mapped to guest index space
-	pub guest_to_supervisor_mapping: GuestToSupervisorFunctionMapping,
+	guest_to_supervisor_mapping: GuestToSupervisorFunctionMapping,
 }
 
 impl GuestEnvironment {
