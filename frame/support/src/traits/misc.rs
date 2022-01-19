@@ -283,10 +283,10 @@ impl<T: CheckedAdd + CheckedMul + CheckedSub + Bounded> DefensiveSaturating for 
 	fn defensive_saturating_add(self, other: Self) -> Self {
 		self.checked_add(&other).defensive_unwrap_or_else(Bounded::max_value)
 	}
-	fn defensive_saturating_mul(self, other: Self) -> Self {
+	fn defensive_saturating_sub(self, other: Self) -> Self {
 		self.checked_sub(&other).defensive_unwrap_or_else(Bounded::max_value)
 	}
-	fn defensive_saturating_sub(self, other: Self) -> Self {
+	fn defensive_saturating_mul(self, other: Self) -> Self {
 		self.checked_mul(&other).defensive_unwrap_or_else(Bounded::min_value)
 	}
 }
