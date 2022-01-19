@@ -125,7 +125,7 @@ where
 	fn import_justification(
 		&mut self,
 		hash: Block::Hash,
-		_number: NumberFor<Block>,
+		number: NumberFor<Block>,
 		justification: Justification,
 	) -> Result<(), ConsensusError> {
 		if justification.0 != BEEFY_ENGINE_ID {
@@ -142,8 +142,11 @@ where
 
 		if let Some(validator_set) = validator_set {
 			let encoded_proof = justification.1;
-			let _proof =
-				decode_and_verify_justification::<Block>(&encoded_proof[..], &validator_set)?;
+			let _proof = decode_and_verify_justification::<Block>(
+				number,
+				&encoded_proof[..],
+				&validator_set,
+			)?;
 		} else {
 			return Err(ConsensusError::ClientImport("Empty validator set".to_string()))
 		}
