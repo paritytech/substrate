@@ -277,6 +277,9 @@ zeroize = { opt-level = 3 }
 # Substrate runtime requires unwinding.
 panic = "unwind"
 
+[profile.production]
+inherits = "release"
+
 # Sacrifice compile speed for execution speed by using optimization flags:
 
 # https://doc.rust-lang.org/rustc/linker-plugin-lto.html
