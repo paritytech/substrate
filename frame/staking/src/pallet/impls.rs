@@ -24,8 +24,8 @@ use frame_election_provider_support::{
 use frame_support::{
 	pallet_prelude::*,
 	traits::{
-		Currency, CurrencyToVote, EstimateNextNewSession, Get, Imbalance, LockableCurrency,
-		OnUnbalanced, TryCollect, UnixTime, WithdrawReasons,
+		Currency, CurrencyToVote, DefensiveUnwrap, EstimateNextNewSession, Get, Imbalance,
+		LockableCurrency, OnUnbalanced, TryCollect, UnixTime, WithdrawReasons,
 	},
 	weights::{Weight, WithPostDispatchInfo},
 };
@@ -986,10 +986,8 @@ impl<T: Config> Pallet<T> {
 	pub fn do_add_nominator(who: &T::AccountId, nominations: Nominations<T>) {
 		if !Nominators::<T>::contains_key(who) {
 			// maybe update sorted list. Error checking is defensive-only - this should never fail.
-			if T::SortedListProvider::on_insert(who.clone(), Self::weight_of(who)).is_err() {
-				log!(warn, "attempt to insert duplicate nominator ({:#?})", who);
-				debug_assert!(false, "attempt to insert duplicate nominator");
-			};
+			let _ = T::SortedListProvider::on_insert(who.clone(), Self::weight_of(who))
+				.defensive_unwrap_or_default();
 
 			debug_assert_eq!(T::SortedListProvider::sanity_check(), Ok(()));
 		}
