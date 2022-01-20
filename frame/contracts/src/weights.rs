@@ -153,32 +153,32 @@ pub struct SubstrateWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Contracts DeletionQueue (r:1 w:0)
 	fn on_initialize() -> Weight {
-		(2_424_000 as Weight)
+		(2_599_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	fn on_initialize_per_trie_key(k: u32, ) -> Weight {
-		(15_171_000 as Weight)
+		(13_050_000 as Weight)
 			// Standard Error: 0
-			.saturating_add((821_000 as Weight).saturating_mul(k as Weight))
+			.saturating_add((824_000 as Weight).saturating_mul(k as Weight))
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes((1 as Weight).saturating_mul(k as Weight)))
 	}
 	// Storage: Contracts DeletionQueue (r:1 w:0)
 	fn on_initialize_per_queue_item(q: u32, ) -> Weight {
-		(34_837_000 as Weight)
+		(33_969_000 as Weight)
 			// Standard Error: 1_000
-			.saturating_add((139_000 as Weight).saturating_mul(q as Weight))
+			.saturating_add((147_000 as Weight).saturating_mul(q as Weight))
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 	// Storage: Contracts PristineCode (r:1 w:0)
 	// Storage: Contracts CodeStorage (r:0 w:1)
 	fn reinstrument(c: u32, ) -> Weight {
-		(23_047_000 as Weight)
-			// Standard Error: 29_000
-			.saturating_add((69_213_000 as Weight).saturating_mul(c as Weight))
+		(26_247_000 as Weight)
+			// Standard Error: 30_000
+			.saturating_add((66_920_000 as Weight).saturating_mul(c as Weight))
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
@@ -187,9 +187,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Timestamp Now (r:1 w:0)
 	// Storage: System Account (r:1 w:1)
 	fn call_with_code_kb(c: u32, ) -> Weight {
-		(182_629_000 as Weight)
-			// Standard Error: 48_000
-			.saturating_add((70_581_000 as Weight).saturating_mul(c as Weight))
+		(233_123_000 as Weight)
+			// Standard Error: 41_000
+			.saturating_add((62_347_000 as Weight).saturating_mul(c as Weight))
 			.saturating_add(T::DbWeight::get().reads(4 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
@@ -201,11 +201,11 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Contracts PristineCode (r:0 w:1)
 	// Storage: Contracts OwnerInfoOf (r:0 w:1)
 	fn instantiate_with_code(c: u32, s: u32, ) -> Weight {
-		(242_595_000 as Weight)
-			// Standard Error: 129_000
-			.saturating_add((165_852_000 as Weight).saturating_mul(c as Weight))
-			// Standard Error: 8_000
-			.saturating_add((1_744_000 as Weight).saturating_mul(s as Weight))
+		(266_377_000 as Weight)
+			// Standard Error: 179_000
+			.saturating_add((154_495_000 as Weight).saturating_mul(c as Weight))
+			// Standard Error: 11_000
+			.saturating_add((1_748_000 as Weight).saturating_mul(s as Weight))
 			.saturating_add(T::DbWeight::get().reads(5 as Weight))
 			.saturating_add(T::DbWeight::get().writes(6 as Weight))
 	}
@@ -216,9 +216,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: System Account (r:1 w:1)
 	// Storage: Contracts OwnerInfoOf (r:1 w:1)
 	fn instantiate(s: u32, ) -> Weight {
-		(178_650_000 as Weight)
-			// Standard Error: 2_000
-			.saturating_add((1_742_000 as Weight).saturating_mul(s as Weight))
+		(205_303_000 as Weight)
+			// Standard Error: 1_000
+			.saturating_add((1_716_000 as Weight).saturating_mul(s as Weight))
 			.saturating_add(T::DbWeight::get().reads(6 as Weight))
 			.saturating_add(T::DbWeight::get().writes(5 as Weight))
 	}
@@ -227,7 +227,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Timestamp Now (r:1 w:0)
 	// Storage: System Account (r:1 w:1)
 	fn call() -> Weight {
-		(133_473_000 as Weight)
+		(157_251_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(4 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
@@ -235,9 +235,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Contracts PristineCode (r:0 w:1)
 	// Storage: Contracts OwnerInfoOf (r:0 w:1)
 	fn upload_code(c: u32, ) -> Weight {
-		(64_655_000 as Weight)
-			// Standard Error: 53_000
-			.saturating_add((71_320_000 as Weight).saturating_mul(c as Weight))
+		(61_505_000 as Weight)
+			// Standard Error: 36_000
+			.saturating_add((67_797_000 as Weight).saturating_mul(c as Weight))
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(3 as Weight))
 	}
@@ -245,7 +245,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Contracts CodeStorage (r:0 w:1)
 	// Storage: Contracts PristineCode (r:0 w:1)
 	fn remove_code() -> Weight {
-		(33_417_000 as Weight)
+		(32_932_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(3 as Weight))
 	}
@@ -254,9 +254,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	fn seal_caller(r: u32, ) -> Weight {
-		(185_105_000 as Weight)
-			// Standard Error: 120_000
-			.saturating_add((70_612_000 as Weight).saturating_mul(r as Weight))
+		(231_455_000 as Weight)
+			// Standard Error: 117_000
+			.saturating_add((62_407_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(T::DbWeight::get().reads(4 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
@@ -265,9 +265,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	fn seal_address(r: u32, ) -> Weight {
-		(183_471_000 as Weight)
-			// Standard Error: 123_000
-			.saturating_add((70_849_000 as Weight).saturating_mul(r as Weight))
+		(232_478_000 as Weight)
+			// Standard Error: 114_000
+			.saturating_add((62_468_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(T::DbWeight::get().reads(4 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
@@ -276,9 +276,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	fn seal_gas_left(r: u32, ) -> Weight {
-		(172_045_000 as Weight)
-			// Standard Error: 179_000
-			.saturating_add((73_684_000 as Weight).saturating_mul(r as Weight))
+		(231_887_000 as Weight)
+			// Standard Error: 111_000
+			.saturating_add((61_789_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(T::DbWeight::get().reads(4 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
@@ -287,9 +287,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	fn seal_balance(r: u32, ) -> Weight {
-		(190_952_000 as Weight)
-			// Standard Error: 165_000
-			.saturating_add((213_952_000 as Weight).saturating_mul(r as Weight))
+		(238_169_000 as Weight)
+			// Standard Error: 162_000
+			.saturating_add((189_628_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(T::DbWeight::get().reads(5 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
@@ -298,9 +298,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	fn seal_value_transferred(r: u32, ) -> Weight {
-		(198_244_000 as Weight)
-			// Standard Error: 126_000
-			.saturating_add((69_193_000 as Weight).saturating_mul(r as Weight))
+		(230_274_000 as Weight)
+			// Standard Error: 118_000
+			.saturating_add((62_082_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(T::DbWeight::get().reads(4 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
@@ -309,9 +309,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	fn seal_minimum_balance(r: u32, ) -> Weight {
-		(198_190_000 as Weight)
-			// Standard Error: 114_000
-			.saturating_add((68_734_000 as Weight).saturating_mul(r as Weight))
+		(230_584_000 as Weight)
+			// Standard Error: 118_000
+			.saturating_add((62_493_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(T::DbWeight::get().reads(4 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
@@ -320,9 +320,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	fn seal_block_number(r: u32, ) -> Weight {
-		(195_253_000 as Weight)
-			// Standard Error: 116_000
-			.saturating_add((68_607_000 as Weight).saturating_mul(r as Weight))
+		(232_028_000 as Weight)
+			// Standard Error: 122_000
+			.saturating_add((61_542_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(T::DbWeight::get().reads(4 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
@@ -331,9 +331,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	fn seal_now(r: u32, ) -> Weight {
-		(191_299_000 as Weight)
-			// Standard Error: 126_000
-			.saturating_add((69_112_000 as Weight).saturating_mul(r as Weight))
+		(230_821_000 as Weight)
+			// Standard Error: 117_000
+			.saturating_add((61_977_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(T::DbWeight::get().reads(4 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
@@ -343,9 +343,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Timestamp Now (r:1 w:0)
 	// Storage: TransactionPayment NextFeeMultiplier (r:1 w:0)
 	fn seal_weight_to_fee(r: u32, ) -> Weight {
-		(196_178_000 as Weight)
-			// Standard Error: 153_000
-			.saturating_add((171_938_000 as Weight).saturating_mul(r as Weight))
+		(246_080_000 as Weight)
+			// Standard Error: 300_000
+			.saturating_add((158_641_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(T::DbWeight::get().reads(5 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
@@ -354,9 +354,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	fn seal_gas(r: u32, ) -> Weight {
-		(105_666_000 as Weight)
-			// Standard Error: 73_000
-			.saturating_add((29_966_000 as Weight).saturating_mul(r as Weight))
+		(139_980_000 as Weight)
+			// Standard Error: 80_000
+			.saturating_add((26_989_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(T::DbWeight::get().reads(4 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
@@ -365,9 +365,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	fn seal_input(r: u32, ) -> Weight {
-		(186_466_000 as Weight)
-			// Standard Error: 135_000
-			.saturating_add((66_622_000 as Weight).saturating_mul(r as Weight))
+		(231_441_000 as Weight)
+			// Standard Error: 116_000
+			.saturating_add((57_265_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(T::DbWeight::get().reads(4 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
@@ -376,9 +376,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	fn seal_input_per_kb(n: u32, ) -> Weight {
-		(251_610_000 as Weight)
-			// Standard Error: 14_000
-			.saturating_add((11_091_000 as Weight).saturating_mul(n as Weight))
+		(320_282_000 as Weight)
+			// Standard Error: 5_000
+			.saturating_add((10_600_000 as Weight).saturating_mul(n as Weight))
 			.saturating_add(T::DbWeight::get().reads(4 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
@@ -387,9 +387,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	fn seal_return(r: u32, ) -> Weight {
-		(188_600_000 as Weight)
-			// Standard Error: 526_000
-			.saturating_add((2_068_000 as Weight).saturating_mul(r as Weight))
+		(224_292_000 as Weight)
+			// Standard Error: 86_000
+			.saturating_add((2_246_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(T::DbWeight::get().reads(4 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
@@ -398,7 +398,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	fn seal_return_per_kb(n: u32, ) -> Weight {
-		(175_339_000 as Weight)
+		(226_572_000 as Weight)
 			// Standard Error: 0
 			.saturating_add((180_000 as Weight).saturating_mul(n as Weight))
 			.saturating_add(T::DbWeight::get().reads(4 as Weight))
@@ -411,9 +411,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Contracts DeletionQueue (r:1 w:1)
 	// Storage: Contracts OwnerInfoOf (r:1 w:1)
 	fn seal_terminate(r: u32, ) -> Weight {
-		(177_723_000 as Weight)
-			// Standard Error: 209_000
-			.saturating_add((83_400_000 as Weight).saturating_mul(r as Weight))
+		(228_047_000 as Weight)
+			// Standard Error: 125_000
+			.saturating_add((68_614_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(T::DbWeight::get().reads(4 as Weight))
 			.saturating_add(T::DbWeight::get().reads((4 as Weight).saturating_mul(r as Weight)))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
@@ -425,9 +425,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Timestamp Now (r:1 w:0)
 	// Storage: RandomnessCollectiveFlip RandomMaterial (r:1 w:0)
 	fn seal_random(r: u32, ) -> Weight {
-		(195_808_000 as Weight)
-			// Standard Error: 168_000
-			.saturating_add((238_762_000 as Weight).saturating_mul(r as Weight))
+		(237_939_000 as Weight)
+			// Standard Error: 154_000
+			.saturating_add((223_408_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(T::DbWeight::get().reads(5 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
@@ -436,9 +436,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	fn seal_deposit_event(r: u32, ) -> Weight {
-		(192_803_000 as Weight)
-			// Standard Error: 343_000
-			.saturating_add((408_324_000 as Weight).saturating_mul(r as Weight))
+		(242_091_000 as Weight)
+			// Standard Error: 185_000
+			.saturating_add((383_237_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(T::DbWeight::get().reads(4 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
@@ -448,11 +448,11 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Timestamp Now (r:1 w:0)
 	// Storage: System EventTopics (r:100 w:100)
 	fn seal_deposit_event_per_topic_and_kb(t: u32, n: u32, ) -> Weight {
-		(669_078_000 as Weight)
-			// Standard Error: 2_002_000
-			.saturating_add((397_616_000 as Weight).saturating_mul(t as Weight))
-			// Standard Error: 394_000
-			.saturating_add((80_236_000 as Weight).saturating_mul(n as Weight))
+		(636_805_000 as Weight)
+			// Standard Error: 2_142_000
+			.saturating_add((399_878_000 as Weight).saturating_mul(t as Weight))
+			// Standard Error: 422_000
+			.saturating_add((82_898_000 as Weight).saturating_mul(n as Weight))
 			.saturating_add(T::DbWeight::get().reads(4 as Weight))
 			.saturating_add(T::DbWeight::get().reads((100 as Weight).saturating_mul(t as Weight)))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
@@ -463,17 +463,17 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	fn seal_debug_message(r: u32, ) -> Weight {
-		(120_244_000 as Weight)
-			// Standard Error: 115_000
-			.saturating_add((48_077_000 as Weight).saturating_mul(r as Weight))
+		(147_877_000 as Weight)
+			// Standard Error: 76_000
+			.saturating_add((40_911_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(T::DbWeight::get().reads(4 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	fn seal_set_storage(r: u32, ) -> Weight {
-		(180_424_000 as Weight)
-			// Standard Error: 477_000
-			.saturating_add((318_843_000 as Weight).saturating_mul(r as Weight))
+		(213_132_000 as Weight)
+			// Standard Error: 538_000
+			.saturating_add((295_360_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(T::DbWeight::get().reads(5 as Weight))
 			.saturating_add(T::DbWeight::get().reads((100 as Weight).saturating_mul(r as Weight)))
 			.saturating_add(T::DbWeight::get().writes(3 as Weight))
@@ -485,17 +485,17 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Timestamp Now (r:1 w:0)
 	// Storage: unknown [0x7afa01283080ef247df84e0ba38ea5a587d25ce6633a6bfbba02068c14023441] (r:1 w:1)
 	fn seal_set_storage_per_kb(n: u32, ) -> Weight {
-		(413_041_000 as Weight)
-			// Standard Error: 199_000
-			.saturating_add((27_707_000 as Weight).saturating_mul(n as Weight))
+		(443_251_000 as Weight)
+			// Standard Error: 180_000
+			.saturating_add((27_802_000 as Weight).saturating_mul(n as Weight))
 			.saturating_add(T::DbWeight::get().reads(6 as Weight))
 			.saturating_add(T::DbWeight::get().writes(4 as Weight))
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	fn seal_clear_storage(r: u32, ) -> Weight {
 		(0 as Weight)
-			// Standard Error: 2_057_000
-			.saturating_add((849_052_000 as Weight).saturating_mul(r as Weight))
+			// Standard Error: 2_231_000
+			.saturating_add((832_952_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(T::DbWeight::get().reads(5 as Weight))
 			.saturating_add(T::DbWeight::get().reads((100 as Weight).saturating_mul(r as Weight)))
 			.saturating_add(T::DbWeight::get().writes(3 as Weight))
@@ -503,18 +503,18 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	fn seal_get_storage(r: u32, ) -> Weight {
-		(53_506_000 as Weight)
-			// Standard Error: 748_000
-			.saturating_add((441_487_000 as Weight).saturating_mul(r as Weight))
+		(90_947_000 as Weight)
+			// Standard Error: 724_000
+			.saturating_add((414_670_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(T::DbWeight::get().reads(4 as Weight))
 			.saturating_add(T::DbWeight::get().reads((100 as Weight).saturating_mul(r as Weight)))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	fn seal_contains_storage(r: u32, ) -> Weight {
-		(0 as Weight)
-			// Standard Error: 1_157_000
-			.saturating_add((557_714_000 as Weight).saturating_mul(r as Weight))
+		(5_524_000 as Weight)
+			// Standard Error: 1_057_000
+			.saturating_add((550_529_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(T::DbWeight::get().reads(4 as Weight))
 			.saturating_add(T::DbWeight::get().reads((100 as Weight).saturating_mul(r as Weight)))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
@@ -525,17 +525,17 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Timestamp Now (r:1 w:0)
 	// Storage: unknown [0x7afa01283080ef247df84e0ba38ea5a587d25ce6633a6bfbba02068c14023441] (r:1 w:0)
 	fn seal_get_storage_per_kb(n: u32, ) -> Weight {
-		(373_846_000 as Weight)
-			// Standard Error: 192_000
-			.saturating_add((55_503_000 as Weight).saturating_mul(n as Weight))
+		(406_542_000 as Weight)
+			// Standard Error: 205_000
+			.saturating_add((56_507_000 as Weight).saturating_mul(n as Weight))
 			.saturating_add(T::DbWeight::get().reads(5 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	fn seal_take_storage(r: u32, ) -> Weight {
-		(37_481_000 as Weight)
-			// Standard Error: 1_090_000
-			.saturating_add((542_696_000 as Weight).saturating_mul(r as Weight))
+		(72_987_000 as Weight)
+			// Standard Error: 975_000
+			.saturating_add((519_562_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(T::DbWeight::get().reads(5 as Weight))
 			.saturating_add(T::DbWeight::get().reads((100 as Weight).saturating_mul(r as Weight)))
 			.saturating_add(T::DbWeight::get().writes(3 as Weight))
@@ -543,9 +543,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	fn seal_take_storage_per_kb(n: u32, ) -> Weight {
-		(760_571_000 as Weight)
-			// Standard Error: 406_000
-			.saturating_add((64_750_000 as Weight).saturating_mul(n as Weight))
+		(767_811_000 as Weight)
+			// Standard Error: 405_000
+			.saturating_add((65_311_000 as Weight).saturating_mul(n as Weight))
 			.saturating_add(T::DbWeight::get().reads(105 as Weight))
 			.saturating_add(T::DbWeight::get().writes(103 as Weight))
 	}
@@ -554,9 +554,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	fn seal_transfer(r: u32, ) -> Weight {
-		(56_432_000 as Weight)
-			// Standard Error: 1_228_000
-			.saturating_add((2_537_444_000 as Weight).saturating_mul(r as Weight))
+		(97_675_000 as Weight)
+			// Standard Error: 1_294_000
+			.saturating_add((2_462_471_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(T::DbWeight::get().reads(5 as Weight))
 			.saturating_add(T::DbWeight::get().reads((100 as Weight).saturating_mul(r as Weight)))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
@@ -567,9 +567,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	fn seal_call(r: u32, ) -> Weight {
-		(2_419_244_000 as Weight)
-			// Standard Error: 20_743_000
-			.saturating_add((15_706_692_000 as Weight).saturating_mul(r as Weight))
+		(0 as Weight)
+			// Standard Error: 3_528_000
+			.saturating_add((20_883_597_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(T::DbWeight::get().reads(5 as Weight))
 			.saturating_add(T::DbWeight::get().reads((100 as Weight).saturating_mul(r as Weight)))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
@@ -580,13 +580,13 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Contracts CodeStorage (r:2 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	fn seal_call_per_transfer_input_output_kb(t: u32, i: u32, o: u32, ) -> Weight {
-		(17_281_663_000 as Weight)
-			// Standard Error: 34_237_000
-			.saturating_add((2_494_634_000 as Weight).saturating_mul(t as Weight))
-			// Standard Error: 12_000
-			.saturating_add((18_151_000 as Weight).saturating_mul(i as Weight))
-			// Standard Error: 13_000
-			.saturating_add((27_611_000 as Weight).saturating_mul(o as Weight))
+		(21_075_549_000 as Weight)
+			// Standard Error: 48_121_000
+			.saturating_add((2_421_995_000 as Weight).saturating_mul(t as Weight))
+			// Standard Error: 17_000
+			.saturating_add((17_765_000 as Weight).saturating_mul(i as Weight))
+			// Standard Error: 18_000
+			.saturating_add((28_700_000 as Weight).saturating_mul(o as Weight))
 			.saturating_add(T::DbWeight::get().reads(105 as Weight))
 			.saturating_add(T::DbWeight::get().reads((101 as Weight).saturating_mul(t as Weight)))
 			.saturating_add(T::DbWeight::get().writes(101 as Weight))
@@ -600,8 +600,8 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Contracts OwnerInfoOf (r:100 w:100)
 	fn seal_instantiate(r: u32, ) -> Weight {
 		(0 as Weight)
-			// Standard Error: 52_560_000
-			.saturating_add((27_327_443_000 as Weight).saturating_mul(r as Weight))
+			// Standard Error: 54_109_000
+			.saturating_add((30_668_697_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(T::DbWeight::get().reads(6 as Weight))
 			.saturating_add(T::DbWeight::get().reads((400 as Weight).saturating_mul(r as Weight)))
 			.saturating_add(T::DbWeight::get().writes(3 as Weight))
@@ -614,13 +614,13 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Contracts AccountCounter (r:1 w:1)
 	// Storage: Contracts OwnerInfoOf (r:1 w:1)
 	fn seal_instantiate_per_input_output_salt_kb(i: u32, o: u32, s: u32, ) -> Weight {
-		(22_388_846_000 as Weight)
-			// Standard Error: 38_000
-			.saturating_add((18_620_000 as Weight).saturating_mul(i as Weight))
-			// Standard Error: 38_000
-			.saturating_add((29_336_000 as Weight).saturating_mul(o as Weight))
-			// Standard Error: 38_000
-			.saturating_add((155_929_000 as Weight).saturating_mul(s as Weight))
+		(27_760_118_000 as Weight)
+			// Standard Error: 27_000
+			.saturating_add((17_567_000 as Weight).saturating_mul(i as Weight))
+			// Standard Error: 27_000
+			.saturating_add((28_360_000 as Weight).saturating_mul(o as Weight))
+			// Standard Error: 27_000
+			.saturating_add((155_352_000 as Weight).saturating_mul(s as Weight))
 			.saturating_add(T::DbWeight::get().reads(208 as Weight))
 			.saturating_add(T::DbWeight::get().writes(206 as Weight))
 	}
@@ -629,9 +629,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	fn seal_hash_sha2_256(r: u32, ) -> Weight {
-		(183_456_000 as Weight)
-			// Standard Error: 152_000
-			.saturating_add((98_062_000 as Weight).saturating_mul(r as Weight))
+		(227_969_000 as Weight)
+			// Standard Error: 124_000
+			.saturating_add((85_568_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(T::DbWeight::get().reads(4 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
@@ -640,9 +640,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	fn seal_hash_sha2_256_per_kb(n: u32, ) -> Weight {
-		(324_146_000 as Weight)
-			// Standard Error: 41_000
-			.saturating_add((461_781_000 as Weight).saturating_mul(n as Weight))
+		(357_560_000 as Weight)
+			// Standard Error: 38_000
+			.saturating_add((452_871_000 as Weight).saturating_mul(n as Weight))
 			.saturating_add(T::DbWeight::get().reads(4 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
@@ -651,9 +651,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	fn seal_hash_keccak_256(r: u32, ) -> Weight {
-		(178_937_000 as Weight)
-			// Standard Error: 147_000
-			.saturating_add((106_997_000 as Weight).saturating_mul(r as Weight))
+		(231_602_000 as Weight)
+			// Standard Error: 140_000
+			.saturating_add((99_263_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(T::DbWeight::get().reads(4 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
@@ -662,9 +662,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	fn seal_hash_keccak_256_per_kb(n: u32, ) -> Weight {
-		(222_831_000 as Weight)
-			// Standard Error: 22_000
-			.saturating_add((319_607_000 as Weight).saturating_mul(n as Weight))
+		(305_307_000 as Weight)
+			// Standard Error: 20_000
+			.saturating_add((318_357_000 as Weight).saturating_mul(n as Weight))
 			.saturating_add(T::DbWeight::get().reads(4 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
@@ -673,9 +673,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	fn seal_hash_blake2_256(r: u32, ) -> Weight {
-		(183_794_000 as Weight)
-			// Standard Error: 151_000
-			.saturating_add((75_956_000 as Weight).saturating_mul(r as Weight))
+		(229_649_000 as Weight)
+			// Standard Error: 112_000
+			.saturating_add((68_942_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(T::DbWeight::get().reads(4 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
@@ -684,9 +684,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	fn seal_hash_blake2_256_per_kb(n: u32, ) -> Weight {
-		(291_156_000 as Weight)
-			// Standard Error: 21_000
-			.saturating_add((119_779_000 as Weight).saturating_mul(n as Weight))
+		(408_191_000 as Weight)
+			// Standard Error: 17_000
+			.saturating_add((118_224_000 as Weight).saturating_mul(n as Weight))
 			.saturating_add(T::DbWeight::get().reads(4 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
@@ -695,9 +695,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	fn seal_hash_blake2_128(r: u32, ) -> Weight {
-		(184_195_000 as Weight)
-			// Standard Error: 138_000
-			.saturating_add((76_009_000 as Weight).saturating_mul(r as Weight))
+		(228_838_000 as Weight)
+			// Standard Error: 121_000
+			.saturating_add((68_436_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(T::DbWeight::get().reads(4 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
@@ -706,9 +706,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	fn seal_hash_blake2_128_per_kb(n: u32, ) -> Weight {
-		(308_105_000 as Weight)
-			// Standard Error: 22_000
-			.saturating_add((119_679_000 as Weight).saturating_mul(n as Weight))
+		(375_473_000 as Weight)
+			// Standard Error: 16_000
+			.saturating_add((118_308_000 as Weight).saturating_mul(n as Weight))
 			.saturating_add(T::DbWeight::get().reads(4 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
@@ -717,266 +717,266 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	fn seal_ecdsa_recover(r: u32, ) -> Weight {
-		(126_087_000 as Weight)
-			// Standard Error: 1_160_000
-			.saturating_add((15_510_356_000 as Weight).saturating_mul(r as Weight))
+		(214_935_000 as Weight)
+			// Standard Error: 1_547_000
+			.saturating_add((15_490_369_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(T::DbWeight::get().reads(4 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 	fn instr_i64const(r: u32, ) -> Weight {
-		(47_131_000 as Weight)
-			// Standard Error: 12_000
-			.saturating_add((950_000 as Weight).saturating_mul(r as Weight))
+		(74_783_000 as Weight)
+			// Standard Error: 1_000
+			.saturating_add((535_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64load(r: u32, ) -> Weight {
-		(53_462_000 as Weight)
-			// Standard Error: 13_000
-			.saturating_add((3_646_000 as Weight).saturating_mul(r as Weight))
+		(75_080_000 as Weight)
+			// Standard Error: 3_000
+			.saturating_add((2_603_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64store(r: u32, ) -> Weight {
-		(53_388_000 as Weight)
-			// Standard Error: 13_000
-			.saturating_add((3_377_000 as Weight).saturating_mul(r as Weight))
+		(74_731_000 as Weight)
+			// Standard Error: 0
+			.saturating_add((2_304_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_select(r: u32, ) -> Weight {
-		(37_684_000 as Weight)
-			// Standard Error: 17_000
-			.saturating_add((3_360_000 as Weight).saturating_mul(r as Weight))
+		(74_598_000 as Weight)
+			// Standard Error: 0
+			.saturating_add((1_528_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_if(r: u32, ) -> Weight {
-		(37_388_000 as Weight)
-			// Standard Error: 16_000
-			.saturating_add((3_386_000 as Weight).saturating_mul(r as Weight))
+		(74_411_000 as Weight)
+			// Standard Error: 0
+			.saturating_add((1_758_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_br(r: u32, ) -> Weight {
-		(39_772_000 as Weight)
-			// Standard Error: 17_000
-			.saturating_add((2_209_000 as Weight).saturating_mul(r as Weight))
+		(74_589_000 as Weight)
+			// Standard Error: 1_000
+			.saturating_add((941_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_br_if(r: u32, ) -> Weight {
-		(38_817_000 as Weight)
-			// Standard Error: 17_000
-			.saturating_add((2_858_000 as Weight).saturating_mul(r as Weight))
+		(74_537_000 as Weight)
+			// Standard Error: 1_000
+			.saturating_add((1_287_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_br_table(r: u32, ) -> Weight {
-		(45_522_000 as Weight)
-			// Standard Error: 20_000
-			.saturating_add((2_718_000 as Weight).saturating_mul(r as Weight))
+		(73_725_000 as Weight)
+			// Standard Error: 3_000
+			.saturating_add((1_635_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_br_table_per_entry(e: u32, ) -> Weight {
-		(48_332_000 as Weight)
-			// Standard Error: 3_000
-			.saturating_add((24_000 as Weight).saturating_mul(e as Weight))
+		(76_941_000 as Weight)
+			// Standard Error: 0
+			.saturating_add((5_000 as Weight).saturating_mul(e as Weight))
 	}
 	fn instr_call(r: u32, ) -> Weight {
-		(48_227_000 as Weight)
+		(73_485_000 as Weight)
 			// Standard Error: 22_000
-			.saturating_add((20_852_000 as Weight).saturating_mul(r as Weight))
+			.saturating_add((17_115_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_call_indirect(r: u32, ) -> Weight {
-		(53_241_000 as Weight)
-			// Standard Error: 30_000
-			.saturating_add((30_880_000 as Weight).saturating_mul(r as Weight))
+		(92_239_000 as Weight)
+			// Standard Error: 34_000
+			.saturating_add((27_410_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_call_indirect_per_param(p: u32, ) -> Weight {
-		(86_437_000 as Weight)
-			// Standard Error: 5_000
-			.saturating_add((1_256_000 as Weight).saturating_mul(p as Weight))
+		(120_811_000 as Weight)
+			// Standard Error: 1_000
+			.saturating_add((714_000 as Weight).saturating_mul(p as Weight))
 	}
 	fn instr_local_get(r: u32, ) -> Weight {
-		(39_425_000 as Weight)
-			// Standard Error: 14_000
-			.saturating_add((1_491_000 as Weight).saturating_mul(r as Weight))
+		(74_875_000 as Weight)
+			// Standard Error: 1_000
+			.saturating_add((559_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_local_set(r: u32, ) -> Weight {
-		(39_362_000 as Weight)
-			// Standard Error: 14_000
-			.saturating_add((1_518_000 as Weight).saturating_mul(r as Weight))
+		(75_053_000 as Weight)
+			// Standard Error: 1_000
+			.saturating_add((615_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_local_tee(r: u32, ) -> Weight {
-		(41_958_000 as Weight)
-			// Standard Error: 13_000
-			.saturating_add((2_084_000 as Weight).saturating_mul(r as Weight))
+		(75_107_000 as Weight)
+			// Standard Error: 1_000
+			.saturating_add((869_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_global_get(r: u32, ) -> Weight {
-		(44_953_000 as Weight)
-			// Standard Error: 12_000
-			.saturating_add((2_081_000 as Weight).saturating_mul(r as Weight))
+		(82_038_000 as Weight)
+			// Standard Error: 2_000
+			.saturating_add((1_109_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_global_set(r: u32, ) -> Weight {
-		(50_471_000 as Weight)
-			// Standard Error: 11_000
-			.saturating_add((1_879_000 as Weight).saturating_mul(r as Weight))
+		(81_799_000 as Weight)
+			// Standard Error: 2_000
+			.saturating_add((1_214_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_memory_current(r: u32, ) -> Weight {
-		(47_314_000 as Weight)
-			// Standard Error: 11_000
-			.saturating_add((955_000 as Weight).saturating_mul(r as Weight))
+		(75_154_000 as Weight)
+			// Standard Error: 1_000
+			.saturating_add((592_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_memory_grow(r: u32, ) -> Weight {
-		(50_184_000 as Weight)
-			// Standard Error: 1_222_000
-			.saturating_add((168_463_000 as Weight).saturating_mul(r as Weight))
+		(74_273_000 as Weight)
+			// Standard Error: 214_000
+			.saturating_add((167_380_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64clz(r: u32, ) -> Weight {
-		(44_245_000 as Weight)
-			// Standard Error: 11_000
-			.saturating_add((1_710_000 as Weight).saturating_mul(r as Weight))
+		(74_862_000 as Weight)
+			// Standard Error: 7_000
+			.saturating_add((847_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64ctz(r: u32, ) -> Weight {
-		(44_101_000 as Weight)
-			// Standard Error: 12_000
-			.saturating_add((1_714_000 as Weight).saturating_mul(r as Weight))
+		(75_028_000 as Weight)
+			// Standard Error: 2_000
+			.saturating_add((836_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64popcnt(r: u32, ) -> Weight {
-		(43_871_000 as Weight)
-			// Standard Error: 11_000
-			.saturating_add((1_713_000 as Weight).saturating_mul(r as Weight))
+		(74_831_000 as Weight)
+			// Standard Error: 1_000
+			.saturating_add((845_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64eqz(r: u32, ) -> Weight {
-		(43_724_000 as Weight)
-			// Standard Error: 11_000
-			.saturating_add((1_717_000 as Weight).saturating_mul(r as Weight))
+		(74_696_000 as Weight)
+			// Standard Error: 1_000
+			.saturating_add((859_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64extendsi32(r: u32, ) -> Weight {
-		(41_566_000 as Weight)
-			// Standard Error: 12_000
-			.saturating_add((2_127_000 as Weight).saturating_mul(r as Weight))
+		(74_756_000 as Weight)
+			// Standard Error: 1_000
+			.saturating_add((839_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64extendui32(r: u32, ) -> Weight {
-		(41_487_000 as Weight)
-			// Standard Error: 13_000
-			.saturating_add((2_127_000 as Weight).saturating_mul(r as Weight))
+		(74_971_000 as Weight)
+			// Standard Error: 1_000
+			.saturating_add((833_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i32wrapi64(r: u32, ) -> Weight {
-		(43_838_000 as Weight)
-			// Standard Error: 11_000
-			.saturating_add((1_714_000 as Weight).saturating_mul(r as Weight))
+		(74_833_000 as Weight)
+			// Standard Error: 1_000
+			.saturating_add((839_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64eq(r: u32, ) -> Weight {
-		(36_264_000 as Weight)
-			// Standard Error: 20_000
-			.saturating_add((2_828_000 as Weight).saturating_mul(r as Weight))
+		(74_635_000 as Weight)
+			// Standard Error: 0
+			.saturating_add((1_192_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64ne(r: u32, ) -> Weight {
-		(37_137_000 as Weight)
-			// Standard Error: 16_000
-			.saturating_add((2_773_000 as Weight).saturating_mul(r as Weight))
+		(74_552_000 as Weight)
+			// Standard Error: 1_000
+			.saturating_add((1_197_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64lts(r: u32, ) -> Weight {
-		(37_252_000 as Weight)
-			// Standard Error: 16_000
-			.saturating_add((2_773_000 as Weight).saturating_mul(r as Weight))
+		(74_685_000 as Weight)
+			// Standard Error: 1_000
+			.saturating_add((1_191_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64ltu(r: u32, ) -> Weight {
-		(37_255_000 as Weight)
-			// Standard Error: 16_000
-			.saturating_add((2_772_000 as Weight).saturating_mul(r as Weight))
+		(75_529_000 as Weight)
+			// Standard Error: 2_000
+			.saturating_add((1_168_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64gts(r: u32, ) -> Weight {
-		(37_201_000 as Weight)
-			// Standard Error: 16_000
-			.saturating_add((2_772_000 as Weight).saturating_mul(r as Weight))
+		(74_725_000 as Weight)
+			// Standard Error: 3_000
+			.saturating_add((1_194_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64gtu(r: u32, ) -> Weight {
-		(37_260_000 as Weight)
-			// Standard Error: 16_000
-			.saturating_add((2_770_000 as Weight).saturating_mul(r as Weight))
+		(74_923_000 as Weight)
+			// Standard Error: 1_000
+			.saturating_add((1_189_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64les(r: u32, ) -> Weight {
-		(37_278_000 as Weight)
-			// Standard Error: 16_000
-			.saturating_add((2_772_000 as Weight).saturating_mul(r as Weight))
+		(74_583_000 as Weight)
+			// Standard Error: 0
+			.saturating_add((1_194_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64leu(r: u32, ) -> Weight {
-		(36_963_000 as Weight)
-			// Standard Error: 16_000
-			.saturating_add((2_790_000 as Weight).saturating_mul(r as Weight))
+		(74_614_000 as Weight)
+			// Standard Error: 0
+			.saturating_add((1_197_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64ges(r: u32, ) -> Weight {
-		(37_000_000 as Weight)
-			// Standard Error: 16_000
-			.saturating_add((2_793_000 as Weight).saturating_mul(r as Weight))
+		(74_667_000 as Weight)
+			// Standard Error: 0
+			.saturating_add((1_191_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64geu(r: u32, ) -> Weight {
-		(36_805_000 as Weight)
-			// Standard Error: 16_000
-			.saturating_add((2_794_000 as Weight).saturating_mul(r as Weight))
+		(75_195_000 as Weight)
+			// Standard Error: 3_000
+			.saturating_add((1_180_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64add(r: u32, ) -> Weight {
-		(36_219_000 as Weight)
-			// Standard Error: 19_000
-			.saturating_add((2_830_000 as Weight).saturating_mul(r as Weight))
+		(74_845_000 as Weight)
+			// Standard Error: 1_000
+			.saturating_add((1_165_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64sub(r: u32, ) -> Weight {
-		(36_787_000 as Weight)
-			// Standard Error: 16_000
-			.saturating_add((2_794_000 as Weight).saturating_mul(r as Weight))
+		(74_743_000 as Weight)
+			// Standard Error: 1_000
+			.saturating_add((1_168_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64mul(r: u32, ) -> Weight {
-		(36_772_000 as Weight)
-			// Standard Error: 16_000
-			.saturating_add((2_797_000 as Weight).saturating_mul(r as Weight))
+		(74_796_000 as Weight)
+			// Standard Error: 1_000
+			.saturating_add((1_167_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64divs(r: u32, ) -> Weight {
-		(36_907_000 as Weight)
-			// Standard Error: 16_000
-			.saturating_add((3_353_000 as Weight).saturating_mul(r as Weight))
+		(74_788_000 as Weight)
+			// Standard Error: 1_000
+			.saturating_add((1_800_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64divu(r: u32, ) -> Weight {
-		(36_880_000 as Weight)
-			// Standard Error: 17_000
-			.saturating_add((3_104_000 as Weight).saturating_mul(r as Weight))
+		(74_768_000 as Weight)
+			// Standard Error: 1_000
+			.saturating_add((1_762_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64rems(r: u32, ) -> Weight {
-		(36_940_000 as Weight)
-			// Standard Error: 17_000
-			.saturating_add((3_351_000 as Weight).saturating_mul(r as Weight))
+		(74_643_000 as Weight)
+			// Standard Error: 2_000
+			.saturating_add((1_780_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64remu(r: u32, ) -> Weight {
-		(36_864_000 as Weight)
-			// Standard Error: 16_000
-			.saturating_add((3_074_000 as Weight).saturating_mul(r as Weight))
+		(74_550_000 as Weight)
+			// Standard Error: 3_000
+			.saturating_add((1_776_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64and(r: u32, ) -> Weight {
-		(36_922_000 as Weight)
-			// Standard Error: 16_000
-			.saturating_add((2_792_000 as Weight).saturating_mul(r as Weight))
+		(74_690_000 as Weight)
+			// Standard Error: 0
+			.saturating_add((1_169_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64or(r: u32, ) -> Weight {
-		(37_024_000 as Weight)
-			// Standard Error: 16_000
-			.saturating_add((2_787_000 as Weight).saturating_mul(r as Weight))
+		(74_509_000 as Weight)
+			// Standard Error: 3_000
+			.saturating_add((1_182_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64xor(r: u32, ) -> Weight {
-		(37_087_000 as Weight)
-			// Standard Error: 16_000
-			.saturating_add((2_789_000 as Weight).saturating_mul(r as Weight))
+		(74_729_000 as Weight)
+			// Standard Error: 1_000
+			.saturating_add((1_169_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64shl(r: u32, ) -> Weight {
-		(36_833_000 as Weight)
-			// Standard Error: 16_000
-			.saturating_add((2_797_000 as Weight).saturating_mul(r as Weight))
+		(74_746_000 as Weight)
+			// Standard Error: 1_000
+			.saturating_add((1_185_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64shrs(r: u32, ) -> Weight {
-		(36_577_000 as Weight)
-			// Standard Error: 17_000
-			.saturating_add((2_809_000 as Weight).saturating_mul(r as Weight))
+		(74_622_000 as Weight)
+			// Standard Error: 2_000
+			.saturating_add((1_189_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64shru(r: u32, ) -> Weight {
-		(36_760_000 as Weight)
-			// Standard Error: 16_000
-			.saturating_add((2_795_000 as Weight).saturating_mul(r as Weight))
+		(74_870_000 as Weight)
+			// Standard Error: 3_000
+			.saturating_add((1_184_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64rotl(r: u32, ) -> Weight {
-		(36_784_000 as Weight)
-			// Standard Error: 16_000
-			.saturating_add((2_786_000 as Weight).saturating_mul(r as Weight))
+		(74_613_000 as Weight)
+			// Standard Error: 0
+			.saturating_add((1_187_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64rotr(r: u32, ) -> Weight {
-		(36_878_000 as Weight)
-			// Standard Error: 16_000
-			.saturating_add((2_788_000 as Weight).saturating_mul(r as Weight))
+		(74_560_000 as Weight)
+			// Standard Error: 0
+			.saturating_add((1_188_000 as Weight).saturating_mul(r as Weight))
 	}
 }
 
@@ -984,32 +984,32 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 impl WeightInfo for () {
 	// Storage: Contracts DeletionQueue (r:1 w:0)
 	fn on_initialize() -> Weight {
-		(2_424_000 as Weight)
+		(2_599_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	fn on_initialize_per_trie_key(k: u32, ) -> Weight {
-		(15_171_000 as Weight)
+		(13_050_000 as Weight)
 			// Standard Error: 0
-			.saturating_add((821_000 as Weight).saturating_mul(k as Weight))
+			.saturating_add((824_000 as Weight).saturating_mul(k as Weight))
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes((1 as Weight).saturating_mul(k as Weight)))
 	}
 	// Storage: Contracts DeletionQueue (r:1 w:0)
 	fn on_initialize_per_queue_item(q: u32, ) -> Weight {
-		(34_837_000 as Weight)
+		(33_969_000 as Weight)
 			// Standard Error: 1_000
-			.saturating_add((139_000 as Weight).saturating_mul(q as Weight))
+			.saturating_add((147_000 as Weight).saturating_mul(q as Weight))
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
 	// Storage: Contracts PristineCode (r:1 w:0)
 	// Storage: Contracts CodeStorage (r:0 w:1)
 	fn reinstrument(c: u32, ) -> Weight {
-		(23_047_000 as Weight)
-			// Standard Error: 29_000
-			.saturating_add((69_213_000 as Weight).saturating_mul(c as Weight))
+		(26_247_000 as Weight)
+			// Standard Error: 30_000
+			.saturating_add((66_920_000 as Weight).saturating_mul(c as Weight))
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
@@ -1018,9 +1018,9 @@ impl WeightInfo for () {
 	// Storage: Timestamp Now (r:1 w:0)
 	// Storage: System Account (r:1 w:1)
 	fn call_with_code_kb(c: u32, ) -> Weight {
-		(182_629_000 as Weight)
-			// Standard Error: 48_000
-			.saturating_add((70_581_000 as Weight).saturating_mul(c as Weight))
+		(233_123_000 as Weight)
+			// Standard Error: 41_000
+			.saturating_add((62_347_000 as Weight).saturating_mul(c as Weight))
 			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
 	}
@@ -1032,11 +1032,11 @@ impl WeightInfo for () {
 	// Storage: Contracts PristineCode (r:0 w:1)
 	// Storage: Contracts OwnerInfoOf (r:0 w:1)
 	fn instantiate_with_code(c: u32, s: u32, ) -> Weight {
-		(242_595_000 as Weight)
-			// Standard Error: 129_000
-			.saturating_add((165_852_000 as Weight).saturating_mul(c as Weight))
-			// Standard Error: 8_000
-			.saturating_add((1_744_000 as Weight).saturating_mul(s as Weight))
+		(266_377_000 as Weight)
+			// Standard Error: 179_000
+			.saturating_add((154_495_000 as Weight).saturating_mul(c as Weight))
+			// Standard Error: 11_000
+			.saturating_add((1_748_000 as Weight).saturating_mul(s as Weight))
 			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(6 as Weight))
 	}
@@ -1047,9 +1047,9 @@ impl WeightInfo for () {
 	// Storage: System Account (r:1 w:1)
 	// Storage: Contracts OwnerInfoOf (r:1 w:1)
 	fn instantiate(s: u32, ) -> Weight {
-		(178_650_000 as Weight)
-			// Standard Error: 2_000
-			.saturating_add((1_742_000 as Weight).saturating_mul(s as Weight))
+		(205_303_000 as Weight)
+			// Standard Error: 1_000
+			.saturating_add((1_716_000 as Weight).saturating_mul(s as Weight))
 			.saturating_add(RocksDbWeight::get().reads(6 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(5 as Weight))
 	}
@@ -1058,7 +1058,7 @@ impl WeightInfo for () {
 	// Storage: Timestamp Now (r:1 w:0)
 	// Storage: System Account (r:1 w:1)
 	fn call() -> Weight {
-		(133_473_000 as Weight)
+		(157_251_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
 	}
@@ -1066,9 +1066,9 @@ impl WeightInfo for () {
 	// Storage: Contracts PristineCode (r:0 w:1)
 	// Storage: Contracts OwnerInfoOf (r:0 w:1)
 	fn upload_code(c: u32, ) -> Weight {
-		(64_655_000 as Weight)
-			// Standard Error: 53_000
-			.saturating_add((71_320_000 as Weight).saturating_mul(c as Weight))
+		(61_505_000 as Weight)
+			// Standard Error: 36_000
+			.saturating_add((67_797_000 as Weight).saturating_mul(c as Weight))
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
 	}
@@ -1076,7 +1076,7 @@ impl WeightInfo for () {
 	// Storage: Contracts CodeStorage (r:0 w:1)
 	// Storage: Contracts PristineCode (r:0 w:1)
 	fn remove_code() -> Weight {
-		(33_417_000 as Weight)
+		(32_932_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
 	}
@@ -1085,9 +1085,9 @@ impl WeightInfo for () {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	fn seal_caller(r: u32, ) -> Weight {
-		(185_105_000 as Weight)
-			// Standard Error: 120_000
-			.saturating_add((70_612_000 as Weight).saturating_mul(r as Weight))
+		(231_455_000 as Weight)
+			// Standard Error: 117_000
+			.saturating_add((62_407_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
@@ -1096,9 +1096,9 @@ impl WeightInfo for () {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	fn seal_address(r: u32, ) -> Weight {
-		(183_471_000 as Weight)
-			// Standard Error: 123_000
-			.saturating_add((70_849_000 as Weight).saturating_mul(r as Weight))
+		(232_478_000 as Weight)
+			// Standard Error: 114_000
+			.saturating_add((62_468_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
@@ -1107,9 +1107,9 @@ impl WeightInfo for () {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	fn seal_gas_left(r: u32, ) -> Weight {
-		(172_045_000 as Weight)
-			// Standard Error: 179_000
-			.saturating_add((73_684_000 as Weight).saturating_mul(r as Weight))
+		(231_887_000 as Weight)
+			// Standard Error: 111_000
+			.saturating_add((61_789_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
@@ -1118,9 +1118,9 @@ impl WeightInfo for () {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	fn seal_balance(r: u32, ) -> Weight {
-		(190_952_000 as Weight)
-			// Standard Error: 165_000
-			.saturating_add((213_952_000 as Weight).saturating_mul(r as Weight))
+		(238_169_000 as Weight)
+			// Standard Error: 162_000
+			.saturating_add((189_628_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
@@ -1129,9 +1129,9 @@ impl WeightInfo for () {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	fn seal_value_transferred(r: u32, ) -> Weight {
-		(198_244_000 as Weight)
-			// Standard Error: 126_000
-			.saturating_add((69_193_000 as Weight).saturating_mul(r as Weight))
+		(230_274_000 as Weight)
+			// Standard Error: 118_000
+			.saturating_add((62_082_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
@@ -1140,9 +1140,9 @@ impl WeightInfo for () {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	fn seal_minimum_balance(r: u32, ) -> Weight {
-		(198_190_000 as Weight)
-			// Standard Error: 114_000
-			.saturating_add((68_734_000 as Weight).saturating_mul(r as Weight))
+		(230_584_000 as Weight)
+			// Standard Error: 118_000
+			.saturating_add((62_493_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
@@ -1151,9 +1151,9 @@ impl WeightInfo for () {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	fn seal_block_number(r: u32, ) -> Weight {
-		(195_253_000 as Weight)
-			// Standard Error: 116_000
-			.saturating_add((68_607_000 as Weight).saturating_mul(r as Weight))
+		(232_028_000 as Weight)
+			// Standard Error: 122_000
+			.saturating_add((61_542_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
@@ -1162,9 +1162,9 @@ impl WeightInfo for () {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	fn seal_now(r: u32, ) -> Weight {
-		(191_299_000 as Weight)
-			// Standard Error: 126_000
-			.saturating_add((69_112_000 as Weight).saturating_mul(r as Weight))
+		(230_821_000 as Weight)
+			// Standard Error: 117_000
+			.saturating_add((61_977_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
@@ -1174,9 +1174,9 @@ impl WeightInfo for () {
 	// Storage: Timestamp Now (r:1 w:0)
 	// Storage: TransactionPayment NextFeeMultiplier (r:1 w:0)
 	fn seal_weight_to_fee(r: u32, ) -> Weight {
-		(196_178_000 as Weight)
-			// Standard Error: 153_000
-			.saturating_add((171_938_000 as Weight).saturating_mul(r as Weight))
+		(246_080_000 as Weight)
+			// Standard Error: 300_000
+			.saturating_add((158_641_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
@@ -1185,9 +1185,9 @@ impl WeightInfo for () {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	fn seal_gas(r: u32, ) -> Weight {
-		(105_666_000 as Weight)
-			// Standard Error: 73_000
-			.saturating_add((29_966_000 as Weight).saturating_mul(r as Weight))
+		(139_980_000 as Weight)
+			// Standard Error: 80_000
+			.saturating_add((26_989_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
@@ -1196,9 +1196,9 @@ impl WeightInfo for () {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	fn seal_input(r: u32, ) -> Weight {
-		(186_466_000 as Weight)
-			// Standard Error: 135_000
-			.saturating_add((66_622_000 as Weight).saturating_mul(r as Weight))
+		(231_441_000 as Weight)
+			// Standard Error: 116_000
+			.saturating_add((57_265_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
@@ -1207,9 +1207,9 @@ impl WeightInfo for () {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	fn seal_input_per_kb(n: u32, ) -> Weight {
-		(251_610_000 as Weight)
-			// Standard Error: 14_000
-			.saturating_add((11_091_000 as Weight).saturating_mul(n as Weight))
+		(320_282_000 as Weight)
+			// Standard Error: 5_000
+			.saturating_add((10_600_000 as Weight).saturating_mul(n as Weight))
 			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
@@ -1218,9 +1218,9 @@ impl WeightInfo for () {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	fn seal_return(r: u32, ) -> Weight {
-		(188_600_000 as Weight)
-			// Standard Error: 526_000
-			.saturating_add((2_068_000 as Weight).saturating_mul(r as Weight))
+		(224_292_000 as Weight)
+			// Standard Error: 86_000
+			.saturating_add((2_246_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
@@ -1229,7 +1229,7 @@ impl WeightInfo for () {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	fn seal_return_per_kb(n: u32, ) -> Weight {
-		(175_339_000 as Weight)
+		(226_572_000 as Weight)
 			// Standard Error: 0
 			.saturating_add((180_000 as Weight).saturating_mul(n as Weight))
 			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
@@ -1242,9 +1242,9 @@ impl WeightInfo for () {
 	// Storage: Contracts DeletionQueue (r:1 w:1)
 	// Storage: Contracts OwnerInfoOf (r:1 w:1)
 	fn seal_terminate(r: u32, ) -> Weight {
-		(177_723_000 as Weight)
-			// Standard Error: 209_000
-			.saturating_add((83_400_000 as Weight).saturating_mul(r as Weight))
+		(228_047_000 as Weight)
+			// Standard Error: 125_000
+			.saturating_add((68_614_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
 			.saturating_add(RocksDbWeight::get().reads((4 as Weight).saturating_mul(r as Weight)))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
@@ -1256,9 +1256,9 @@ impl WeightInfo for () {
 	// Storage: Timestamp Now (r:1 w:0)
 	// Storage: RandomnessCollectiveFlip RandomMaterial (r:1 w:0)
 	fn seal_random(r: u32, ) -> Weight {
-		(195_808_000 as Weight)
-			// Standard Error: 168_000
-			.saturating_add((238_762_000 as Weight).saturating_mul(r as Weight))
+		(237_939_000 as Weight)
+			// Standard Error: 154_000
+			.saturating_add((223_408_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
@@ -1267,9 +1267,9 @@ impl WeightInfo for () {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	fn seal_deposit_event(r: u32, ) -> Weight {
-		(192_803_000 as Weight)
-			// Standard Error: 343_000
-			.saturating_add((408_324_000 as Weight).saturating_mul(r as Weight))
+		(242_091_000 as Weight)
+			// Standard Error: 185_000
+			.saturating_add((383_237_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
@@ -1279,11 +1279,11 @@ impl WeightInfo for () {
 	// Storage: Timestamp Now (r:1 w:0)
 	// Storage: System EventTopics (r:100 w:100)
 	fn seal_deposit_event_per_topic_and_kb(t: u32, n: u32, ) -> Weight {
-		(669_078_000 as Weight)
-			// Standard Error: 2_002_000
-			.saturating_add((397_616_000 as Weight).saturating_mul(t as Weight))
-			// Standard Error: 394_000
-			.saturating_add((80_236_000 as Weight).saturating_mul(n as Weight))
+		(636_805_000 as Weight)
+			// Standard Error: 2_142_000
+			.saturating_add((399_878_000 as Weight).saturating_mul(t as Weight))
+			// Standard Error: 422_000
+			.saturating_add((82_898_000 as Weight).saturating_mul(n as Weight))
 			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
 			.saturating_add(RocksDbWeight::get().reads((100 as Weight).saturating_mul(t as Weight)))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
@@ -1294,17 +1294,17 @@ impl WeightInfo for () {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	fn seal_debug_message(r: u32, ) -> Weight {
-		(120_244_000 as Weight)
-			// Standard Error: 115_000
-			.saturating_add((48_077_000 as Weight).saturating_mul(r as Weight))
+		(147_877_000 as Weight)
+			// Standard Error: 76_000
+			.saturating_add((40_911_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	fn seal_set_storage(r: u32, ) -> Weight {
-		(180_424_000 as Weight)
-			// Standard Error: 477_000
-			.saturating_add((318_843_000 as Weight).saturating_mul(r as Weight))
+		(213_132_000 as Weight)
+			// Standard Error: 538_000
+			.saturating_add((295_360_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
 			.saturating_add(RocksDbWeight::get().reads((100 as Weight).saturating_mul(r as Weight)))
 			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
@@ -1316,17 +1316,17 @@ impl WeightInfo for () {
 	// Storage: Timestamp Now (r:1 w:0)
 	// Storage: unknown [0x7afa01283080ef247df84e0ba38ea5a587d25ce6633a6bfbba02068c14023441] (r:1 w:1)
 	fn seal_set_storage_per_kb(n: u32, ) -> Weight {
-		(413_041_000 as Weight)
-			// Standard Error: 199_000
-			.saturating_add((27_707_000 as Weight).saturating_mul(n as Weight))
+		(443_251_000 as Weight)
+			// Standard Error: 180_000
+			.saturating_add((27_802_000 as Weight).saturating_mul(n as Weight))
 			.saturating_add(RocksDbWeight::get().reads(6 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(4 as Weight))
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	fn seal_clear_storage(r: u32, ) -> Weight {
 		(0 as Weight)
-			// Standard Error: 2_057_000
-			.saturating_add((849_052_000 as Weight).saturating_mul(r as Weight))
+			// Standard Error: 2_231_000
+			.saturating_add((832_952_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
 			.saturating_add(RocksDbWeight::get().reads((100 as Weight).saturating_mul(r as Weight)))
 			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
@@ -1334,18 +1334,18 @@ impl WeightInfo for () {
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	fn seal_get_storage(r: u32, ) -> Weight {
-		(53_506_000 as Weight)
-			// Standard Error: 748_000
-			.saturating_add((441_487_000 as Weight).saturating_mul(r as Weight))
+		(90_947_000 as Weight)
+			// Standard Error: 724_000
+			.saturating_add((414_670_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
 			.saturating_add(RocksDbWeight::get().reads((100 as Weight).saturating_mul(r as Weight)))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	fn seal_contains_storage(r: u32, ) -> Weight {
-		(0 as Weight)
-			// Standard Error: 1_157_000
-			.saturating_add((557_714_000 as Weight).saturating_mul(r as Weight))
+		(5_524_000 as Weight)
+			// Standard Error: 1_057_000
+			.saturating_add((550_529_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
 			.saturating_add(RocksDbWeight::get().reads((100 as Weight).saturating_mul(r as Weight)))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
@@ -1356,17 +1356,17 @@ impl WeightInfo for () {
 	// Storage: Timestamp Now (r:1 w:0)
 	// Storage: unknown [0x7afa01283080ef247df84e0ba38ea5a587d25ce6633a6bfbba02068c14023441] (r:1 w:0)
 	fn seal_get_storage_per_kb(n: u32, ) -> Weight {
-		(373_846_000 as Weight)
-			// Standard Error: 192_000
-			.saturating_add((55_503_000 as Weight).saturating_mul(n as Weight))
+		(406_542_000 as Weight)
+			// Standard Error: 205_000
+			.saturating_add((56_507_000 as Weight).saturating_mul(n as Weight))
 			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	fn seal_take_storage(r: u32, ) -> Weight {
-		(37_481_000 as Weight)
-			// Standard Error: 1_090_000
-			.saturating_add((542_696_000 as Weight).saturating_mul(r as Weight))
+		(72_987_000 as Weight)
+			// Standard Error: 975_000
+			.saturating_add((519_562_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
 			.saturating_add(RocksDbWeight::get().reads((100 as Weight).saturating_mul(r as Weight)))
 			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
@@ -1374,9 +1374,9 @@ impl WeightInfo for () {
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	fn seal_take_storage_per_kb(n: u32, ) -> Weight {
-		(760_571_000 as Weight)
-			// Standard Error: 406_000
-			.saturating_add((64_750_000 as Weight).saturating_mul(n as Weight))
+		(767_811_000 as Weight)
+			// Standard Error: 405_000
+			.saturating_add((65_311_000 as Weight).saturating_mul(n as Weight))
 			.saturating_add(RocksDbWeight::get().reads(105 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(103 as Weight))
 	}
@@ -1385,9 +1385,9 @@ impl WeightInfo for () {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	fn seal_transfer(r: u32, ) -> Weight {
-		(56_432_000 as Weight)
-			// Standard Error: 1_228_000
-			.saturating_add((2_537_444_000 as Weight).saturating_mul(r as Weight))
+		(97_675_000 as Weight)
+			// Standard Error: 1_294_000
+			.saturating_add((2_462_471_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
 			.saturating_add(RocksDbWeight::get().reads((100 as Weight).saturating_mul(r as Weight)))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
@@ -1398,9 +1398,9 @@ impl WeightInfo for () {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	fn seal_call(r: u32, ) -> Weight {
-		(2_419_244_000 as Weight)
-			// Standard Error: 20_743_000
-			.saturating_add((15_706_692_000 as Weight).saturating_mul(r as Weight))
+		(0 as Weight)
+			// Standard Error: 3_528_000
+			.saturating_add((20_883_597_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
 			.saturating_add(RocksDbWeight::get().reads((100 as Weight).saturating_mul(r as Weight)))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
@@ -1411,13 +1411,13 @@ impl WeightInfo for () {
 	// Storage: Contracts CodeStorage (r:2 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	fn seal_call_per_transfer_input_output_kb(t: u32, i: u32, o: u32, ) -> Weight {
-		(17_281_663_000 as Weight)
-			// Standard Error: 34_237_000
-			.saturating_add((2_494_634_000 as Weight).saturating_mul(t as Weight))
-			// Standard Error: 12_000
-			.saturating_add((18_151_000 as Weight).saturating_mul(i as Weight))
-			// Standard Error: 13_000
-			.saturating_add((27_611_000 as Weight).saturating_mul(o as Weight))
+		(21_075_549_000 as Weight)
+			// Standard Error: 48_121_000
+			.saturating_add((2_421_995_000 as Weight).saturating_mul(t as Weight))
+			// Standard Error: 17_000
+			.saturating_add((17_765_000 as Weight).saturating_mul(i as Weight))
+			// Standard Error: 18_000
+			.saturating_add((28_700_000 as Weight).saturating_mul(o as Weight))
 			.saturating_add(RocksDbWeight::get().reads(105 as Weight))
 			.saturating_add(RocksDbWeight::get().reads((101 as Weight).saturating_mul(t as Weight)))
 			.saturating_add(RocksDbWeight::get().writes(101 as Weight))
@@ -1431,8 +1431,8 @@ impl WeightInfo for () {
 	// Storage: Contracts OwnerInfoOf (r:100 w:100)
 	fn seal_instantiate(r: u32, ) -> Weight {
 		(0 as Weight)
-			// Standard Error: 52_560_000
-			.saturating_add((27_327_443_000 as Weight).saturating_mul(r as Weight))
+			// Standard Error: 54_109_000
+			.saturating_add((30_668_697_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(RocksDbWeight::get().reads(6 as Weight))
 			.saturating_add(RocksDbWeight::get().reads((400 as Weight).saturating_mul(r as Weight)))
 			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
@@ -1445,13 +1445,13 @@ impl WeightInfo for () {
 	// Storage: Contracts AccountCounter (r:1 w:1)
 	// Storage: Contracts OwnerInfoOf (r:1 w:1)
 	fn seal_instantiate_per_input_output_salt_kb(i: u32, o: u32, s: u32, ) -> Weight {
-		(22_388_846_000 as Weight)
-			// Standard Error: 38_000
-			.saturating_add((18_620_000 as Weight).saturating_mul(i as Weight))
-			// Standard Error: 38_000
-			.saturating_add((29_336_000 as Weight).saturating_mul(o as Weight))
-			// Standard Error: 38_000
-			.saturating_add((155_929_000 as Weight).saturating_mul(s as Weight))
+		(27_760_118_000 as Weight)
+			// Standard Error: 27_000
+			.saturating_add((17_567_000 as Weight).saturating_mul(i as Weight))
+			// Standard Error: 27_000
+			.saturating_add((28_360_000 as Weight).saturating_mul(o as Weight))
+			// Standard Error: 27_000
+			.saturating_add((155_352_000 as Weight).saturating_mul(s as Weight))
 			.saturating_add(RocksDbWeight::get().reads(208 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(206 as Weight))
 	}
@@ -1460,9 +1460,9 @@ impl WeightInfo for () {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	fn seal_hash_sha2_256(r: u32, ) -> Weight {
-		(183_456_000 as Weight)
-			// Standard Error: 152_000
-			.saturating_add((98_062_000 as Weight).saturating_mul(r as Weight))
+		(227_969_000 as Weight)
+			// Standard Error: 124_000
+			.saturating_add((85_568_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
@@ -1471,9 +1471,9 @@ impl WeightInfo for () {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	fn seal_hash_sha2_256_per_kb(n: u32, ) -> Weight {
-		(324_146_000 as Weight)
-			// Standard Error: 41_000
-			.saturating_add((461_781_000 as Weight).saturating_mul(n as Weight))
+		(357_560_000 as Weight)
+			// Standard Error: 38_000
+			.saturating_add((452_871_000 as Weight).saturating_mul(n as Weight))
 			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
@@ -1482,9 +1482,9 @@ impl WeightInfo for () {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	fn seal_hash_keccak_256(r: u32, ) -> Weight {
-		(178_937_000 as Weight)
-			// Standard Error: 147_000
-			.saturating_add((106_997_000 as Weight).saturating_mul(r as Weight))
+		(231_602_000 as Weight)
+			// Standard Error: 140_000
+			.saturating_add((99_263_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
@@ -1493,9 +1493,9 @@ impl WeightInfo for () {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	fn seal_hash_keccak_256_per_kb(n: u32, ) -> Weight {
-		(222_831_000 as Weight)
-			// Standard Error: 22_000
-			.saturating_add((319_607_000 as Weight).saturating_mul(n as Weight))
+		(305_307_000 as Weight)
+			// Standard Error: 20_000
+			.saturating_add((318_357_000 as Weight).saturating_mul(n as Weight))
 			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
@@ -1504,9 +1504,9 @@ impl WeightInfo for () {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	fn seal_hash_blake2_256(r: u32, ) -> Weight {
-		(183_794_000 as Weight)
-			// Standard Error: 151_000
-			.saturating_add((75_956_000 as Weight).saturating_mul(r as Weight))
+		(229_649_000 as Weight)
+			// Standard Error: 112_000
+			.saturating_add((68_942_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
@@ -1515,9 +1515,9 @@ impl WeightInfo for () {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	fn seal_hash_blake2_256_per_kb(n: u32, ) -> Weight {
-		(291_156_000 as Weight)
-			// Standard Error: 21_000
-			.saturating_add((119_779_000 as Weight).saturating_mul(n as Weight))
+		(408_191_000 as Weight)
+			// Standard Error: 17_000
+			.saturating_add((118_224_000 as Weight).saturating_mul(n as Weight))
 			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
@@ -1526,9 +1526,9 @@ impl WeightInfo for () {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	fn seal_hash_blake2_128(r: u32, ) -> Weight {
-		(184_195_000 as Weight)
-			// Standard Error: 138_000
-			.saturating_add((76_009_000 as Weight).saturating_mul(r as Weight))
+		(228_838_000 as Weight)
+			// Standard Error: 121_000
+			.saturating_add((68_436_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
@@ -1537,9 +1537,9 @@ impl WeightInfo for () {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	fn seal_hash_blake2_128_per_kb(n: u32, ) -> Weight {
-		(308_105_000 as Weight)
-			// Standard Error: 22_000
-			.saturating_add((119_679_000 as Weight).saturating_mul(n as Weight))
+		(375_473_000 as Weight)
+			// Standard Error: 16_000
+			.saturating_add((118_308_000 as Weight).saturating_mul(n as Weight))
 			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
@@ -1548,265 +1548,265 @@ impl WeightInfo for () {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	fn seal_ecdsa_recover(r: u32, ) -> Weight {
-		(126_087_000 as Weight)
-			// Standard Error: 1_160_000
-			.saturating_add((15_510_356_000 as Weight).saturating_mul(r as Weight))
+		(214_935_000 as Weight)
+			// Standard Error: 1_547_000
+			.saturating_add((15_490_369_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
 	fn instr_i64const(r: u32, ) -> Weight {
-		(47_131_000 as Weight)
-			// Standard Error: 12_000
-			.saturating_add((950_000 as Weight).saturating_mul(r as Weight))
+		(74_783_000 as Weight)
+			// Standard Error: 1_000
+			.saturating_add((535_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64load(r: u32, ) -> Weight {
-		(53_462_000 as Weight)
-			// Standard Error: 13_000
-			.saturating_add((3_646_000 as Weight).saturating_mul(r as Weight))
+		(75_080_000 as Weight)
+			// Standard Error: 3_000
+			.saturating_add((2_603_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64store(r: u32, ) -> Weight {
-		(53_388_000 as Weight)
-			// Standard Error: 13_000
-			.saturating_add((3_377_000 as Weight).saturating_mul(r as Weight))
+		(74_731_000 as Weight)
+			// Standard Error: 0
+			.saturating_add((2_304_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_select(r: u32, ) -> Weight {
-		(37_684_000 as Weight)
-			// Standard Error: 17_000
-			.saturating_add((3_360_000 as Weight).saturating_mul(r as Weight))
+		(74_598_000 as Weight)
+			// Standard Error: 0
+			.saturating_add((1_528_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_if(r: u32, ) -> Weight {
-		(37_388_000 as Weight)
-			// Standard Error: 16_000
-			.saturating_add((3_386_000 as Weight).saturating_mul(r as Weight))
+		(74_411_000 as Weight)
+			// Standard Error: 0
+			.saturating_add((1_758_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_br(r: u32, ) -> Weight {
-		(39_772_000 as Weight)
-			// Standard Error: 17_000
-			.saturating_add((2_209_000 as Weight).saturating_mul(r as Weight))
+		(74_589_000 as Weight)
+			// Standard Error: 1_000
+			.saturating_add((941_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_br_if(r: u32, ) -> Weight {
-		(38_817_000 as Weight)
-			// Standard Error: 17_000
-			.saturating_add((2_858_000 as Weight).saturating_mul(r as Weight))
+		(74_537_000 as Weight)
+			// Standard Error: 1_000
+			.saturating_add((1_287_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_br_table(r: u32, ) -> Weight {
-		(45_522_000 as Weight)
-			// Standard Error: 20_000
-			.saturating_add((2_718_000 as Weight).saturating_mul(r as Weight))
+		(73_725_000 as Weight)
+			// Standard Error: 3_000
+			.saturating_add((1_635_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_br_table_per_entry(e: u32, ) -> Weight {
-		(48_332_000 as Weight)
-			// Standard Error: 3_000
-			.saturating_add((24_000 as Weight).saturating_mul(e as Weight))
+		(76_941_000 as Weight)
+			// Standard Error: 0
+			.saturating_add((5_000 as Weight).saturating_mul(e as Weight))
 	}
 	fn instr_call(r: u32, ) -> Weight {
-		(48_227_000 as Weight)
+		(73_485_000 as Weight)
 			// Standard Error: 22_000
-			.saturating_add((20_852_000 as Weight).saturating_mul(r as Weight))
+			.saturating_add((17_115_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_call_indirect(r: u32, ) -> Weight {
-		(53_241_000 as Weight)
-			// Standard Error: 30_000
-			.saturating_add((30_880_000 as Weight).saturating_mul(r as Weight))
+		(92_239_000 as Weight)
+			// Standard Error: 34_000
+			.saturating_add((27_410_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_call_indirect_per_param(p: u32, ) -> Weight {
-		(86_437_000 as Weight)
-			// Standard Error: 5_000
-			.saturating_add((1_256_000 as Weight).saturating_mul(p as Weight))
+		(120_811_000 as Weight)
+			// Standard Error: 1_000
+			.saturating_add((714_000 as Weight).saturating_mul(p as Weight))
 	}
 	fn instr_local_get(r: u32, ) -> Weight {
-		(39_425_000 as Weight)
-			// Standard Error: 14_000
-			.saturating_add((1_491_000 as Weight).saturating_mul(r as Weight))
+		(74_875_000 as Weight)
+			// Standard Error: 1_000
+			.saturating_add((559_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_local_set(r: u32, ) -> Weight {
-		(39_362_000 as Weight)
-			// Standard Error: 14_000
-			.saturating_add((1_518_000 as Weight).saturating_mul(r as Weight))
+		(75_053_000 as Weight)
+			// Standard Error: 1_000
+			.saturating_add((615_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_local_tee(r: u32, ) -> Weight {
-		(41_958_000 as Weight)
-			// Standard Error: 13_000
-			.saturating_add((2_084_000 as Weight).saturating_mul(r as Weight))
+		(75_107_000 as Weight)
+			// Standard Error: 1_000
+			.saturating_add((869_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_global_get(r: u32, ) -> Weight {
-		(44_953_000 as Weight)
-			// Standard Error: 12_000
-			.saturating_add((2_081_000 as Weight).saturating_mul(r as Weight))
+		(82_038_000 as Weight)
+			// Standard Error: 2_000
+			.saturating_add((1_109_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_global_set(r: u32, ) -> Weight {
-		(50_471_000 as Weight)
-			// Standard Error: 11_000
-			.saturating_add((1_879_000 as Weight).saturating_mul(r as Weight))
+		(81_799_000 as Weight)
+			// Standard Error: 2_000
+			.saturating_add((1_214_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_memory_current(r: u32, ) -> Weight {
-		(47_314_000 as Weight)
-			// Standard Error: 11_000
-			.saturating_add((955_000 as Weight).saturating_mul(r as Weight))
+		(75_154_000 as Weight)
+			// Standard Error: 1_000
+			.saturating_add((592_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_memory_grow(r: u32, ) -> Weight {
-		(50_184_000 as Weight)
-			// Standard Error: 1_222_000
-			.saturating_add((168_463_000 as Weight).saturating_mul(r as Weight))
+		(74_273_000 as Weight)
+			// Standard Error: 214_000
+			.saturating_add((167_380_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64clz(r: u32, ) -> Weight {
-		(44_245_000 as Weight)
-			// Standard Error: 11_000
-			.saturating_add((1_710_000 as Weight).saturating_mul(r as Weight))
+		(74_862_000 as Weight)
+			// Standard Error: 7_000
+			.saturating_add((847_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64ctz(r: u32, ) -> Weight {
-		(44_101_000 as Weight)
-			// Standard Error: 12_000
-			.saturating_add((1_714_000 as Weight).saturating_mul(r as Weight))
+		(75_028_000 as Weight)
+			// Standard Error: 2_000
+			.saturating_add((836_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64popcnt(r: u32, ) -> Weight {
-		(43_871_000 as Weight)
-			// Standard Error: 11_000
-			.saturating_add((1_713_000 as Weight).saturating_mul(r as Weight))
+		(74_831_000 as Weight)
+			// Standard Error: 1_000
+			.saturating_add((845_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64eqz(r: u32, ) -> Weight {
-		(43_724_000 as Weight)
-			// Standard Error: 11_000
-			.saturating_add((1_717_000 as Weight).saturating_mul(r as Weight))
+		(74_696_000 as Weight)
+			// Standard Error: 1_000
+			.saturating_add((859_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64extendsi32(r: u32, ) -> Weight {
-		(41_566_000 as Weight)
-			// Standard Error: 12_000
-			.saturating_add((2_127_000 as Weight).saturating_mul(r as Weight))
+		(74_756_000 as Weight)
+			// Standard Error: 1_000
+			.saturating_add((839_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64extendui32(r: u32, ) -> Weight {
-		(41_487_000 as Weight)
-			// Standard Error: 13_000
-			.saturating_add((2_127_000 as Weight).saturating_mul(r as Weight))
+		(74_971_000 as Weight)
+			// Standard Error: 1_000
+			.saturating_add((833_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i32wrapi64(r: u32, ) -> Weight {
-		(43_838_000 as Weight)
-			// Standard Error: 11_000
-			.saturating_add((1_714_000 as Weight).saturating_mul(r as Weight))
+		(74_833_000 as Weight)
+			// Standard Error: 1_000
+			.saturating_add((839_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64eq(r: u32, ) -> Weight {
-		(36_264_000 as Weight)
-			// Standard Error: 20_000
-			.saturating_add((2_828_000 as Weight).saturating_mul(r as Weight))
+		(74_635_000 as Weight)
+			// Standard Error: 0
+			.saturating_add((1_192_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64ne(r: u32, ) -> Weight {
-		(37_137_000 as Weight)
-			// Standard Error: 16_000
-			.saturating_add((2_773_000 as Weight).saturating_mul(r as Weight))
+		(74_552_000 as Weight)
+			// Standard Error: 1_000
+			.saturating_add((1_197_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64lts(r: u32, ) -> Weight {
-		(37_252_000 as Weight)
-			// Standard Error: 16_000
-			.saturating_add((2_773_000 as Weight).saturating_mul(r as Weight))
+		(74_685_000 as Weight)
+			// Standard Error: 1_000
+			.saturating_add((1_191_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64ltu(r: u32, ) -> Weight {
-		(37_255_000 as Weight)
-			// Standard Error: 16_000
-			.saturating_add((2_772_000 as Weight).saturating_mul(r as Weight))
+		(75_529_000 as Weight)
+			// Standard Error: 2_000
+			.saturating_add((1_168_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64gts(r: u32, ) -> Weight {
-		(37_201_000 as Weight)
-			// Standard Error: 16_000
-			.saturating_add((2_772_000 as Weight).saturating_mul(r as Weight))
+		(74_725_000 as Weight)
+			// Standard Error: 3_000
+			.saturating_add((1_194_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64gtu(r: u32, ) -> Weight {
-		(37_260_000 as Weight)
-			// Standard Error: 16_000
-			.saturating_add((2_770_000 as Weight).saturating_mul(r as Weight))
+		(74_923_000 as Weight)
+			// Standard Error: 1_000
+			.saturating_add((1_189_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64les(r: u32, ) -> Weight {
-		(37_278_000 as Weight)
-			// Standard Error: 16_000
-			.saturating_add((2_772_000 as Weight).saturating_mul(r as Weight))
+		(74_583_000 as Weight)
+			// Standard Error: 0
+			.saturating_add((1_194_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64leu(r: u32, ) -> Weight {
-		(36_963_000 as Weight)
-			// Standard Error: 16_000
-			.saturating_add((2_790_000 as Weight).saturating_mul(r as Weight))
+		(74_614_000 as Weight)
+			// Standard Error: 0
+			.saturating_add((1_197_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64ges(r: u32, ) -> Weight {
-		(37_000_000 as Weight)
-			// Standard Error: 16_000
-			.saturating_add((2_793_000 as Weight).saturating_mul(r as Weight))
+		(74_667_000 as Weight)
+			// Standard Error: 0
+			.saturating_add((1_191_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64geu(r: u32, ) -> Weight {
-		(36_805_000 as Weight)
-			// Standard Error: 16_000
-			.saturating_add((2_794_000 as Weight).saturating_mul(r as Weight))
+		(75_195_000 as Weight)
+			// Standard Error: 3_000
+			.saturating_add((1_180_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64add(r: u32, ) -> Weight {
-		(36_219_000 as Weight)
-			// Standard Error: 19_000
-			.saturating_add((2_830_000 as Weight).saturating_mul(r as Weight))
+		(74_845_000 as Weight)
+			// Standard Error: 1_000
+			.saturating_add((1_165_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64sub(r: u32, ) -> Weight {
-		(36_787_000 as Weight)
-			// Standard Error: 16_000
-			.saturating_add((2_794_000 as Weight).saturating_mul(r as Weight))
+		(74_743_000 as Weight)
+			// Standard Error: 1_000
+			.saturating_add((1_168_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64mul(r: u32, ) -> Weight {
-		(36_772_000 as Weight)
-			// Standard Error: 16_000
-			.saturating_add((2_797_000 as Weight).saturating_mul(r as Weight))
+		(74_796_000 as Weight)
+			// Standard Error: 1_000
+			.saturating_add((1_167_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64divs(r: u32, ) -> Weight {
-		(36_907_000 as Weight)
-			// Standard Error: 16_000
-			.saturating_add((3_353_000 as Weight).saturating_mul(r as Weight))
+		(74_788_000 as Weight)
+			// Standard Error: 1_000
+			.saturating_add((1_800_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64divu(r: u32, ) -> Weight {
-		(36_880_000 as Weight)
-			// Standard Error: 17_000
-			.saturating_add((3_104_000 as Weight).saturating_mul(r as Weight))
+		(74_768_000 as Weight)
+			// Standard Error: 1_000
+			.saturating_add((1_762_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64rems(r: u32, ) -> Weight {
-		(36_940_000 as Weight)
-			// Standard Error: 17_000
-			.saturating_add((3_351_000 as Weight).saturating_mul(r as Weight))
+		(74_643_000 as Weight)
+			// Standard Error: 2_000
+			.saturating_add((1_780_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64remu(r: u32, ) -> Weight {
-		(36_864_000 as Weight)
-			// Standard Error: 16_000
-			.saturating_add((3_074_000 as Weight).saturating_mul(r as Weight))
+		(74_550_000 as Weight)
+			// Standard Error: 3_000
+			.saturating_add((1_776_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64and(r: u32, ) -> Weight {
-		(36_922_000 as Weight)
-			// Standard Error: 16_000
-			.saturating_add((2_792_000 as Weight).saturating_mul(r as Weight))
+		(74_690_000 as Weight)
+			// Standard Error: 0
+			.saturating_add((1_169_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64or(r: u32, ) -> Weight {
-		(37_024_000 as Weight)
-			// Standard Error: 16_000
-			.saturating_add((2_787_000 as Weight).saturating_mul(r as Weight))
+		(74_509_000 as Weight)
+			// Standard Error: 3_000
+			.saturating_add((1_182_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64xor(r: u32, ) -> Weight {
-		(37_087_000 as Weight)
-			// Standard Error: 16_000
-			.saturating_add((2_789_000 as Weight).saturating_mul(r as Weight))
+		(74_729_000 as Weight)
+			// Standard Error: 1_000
+			.saturating_add((1_169_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64shl(r: u32, ) -> Weight {
-		(36_833_000 as Weight)
-			// Standard Error: 16_000
-			.saturating_add((2_797_000 as Weight).saturating_mul(r as Weight))
+		(74_746_000 as Weight)
+			// Standard Error: 1_000
+			.saturating_add((1_185_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64shrs(r: u32, ) -> Weight {
-		(36_577_000 as Weight)
-			// Standard Error: 17_000
-			.saturating_add((2_809_000 as Weight).saturating_mul(r as Weight))
+		(74_622_000 as Weight)
+			// Standard Error: 2_000
+			.saturating_add((1_189_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64shru(r: u32, ) -> Weight {
-		(36_760_000 as Weight)
-			// Standard Error: 16_000
-			.saturating_add((2_795_000 as Weight).saturating_mul(r as Weight))
+		(74_870_000 as Weight)
+			// Standard Error: 3_000
+			.saturating_add((1_184_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64rotl(r: u32, ) -> Weight {
-		(36_784_000 as Weight)
-			// Standard Error: 16_000
-			.saturating_add((2_786_000 as Weight).saturating_mul(r as Weight))
+		(74_613_000 as Weight)
+			// Standard Error: 0
+			.saturating_add((1_187_000 as Weight).saturating_mul(r as Weight))
 	}
 	fn instr_i64rotr(r: u32, ) -> Weight {
-		(36_878_000 as Weight)
-			// Standard Error: 16_000
-			.saturating_add((2_788_000 as Weight).saturating_mul(r as Weight))
+		(74_560_000 as Weight)
+			// Standard Error: 0
+			.saturating_add((1_188_000 as Weight).saturating_mul(r as Weight))
 	}
 }
