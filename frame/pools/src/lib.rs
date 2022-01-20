@@ -64,7 +64,7 @@ type SubPoolsWithEra<T> = BoundedBTreeMap<EraIndex, UnbondPool<T>, <T as Config>
 
 const POINTS_TO_BALANCE_INIT_RATIO: u32 = 1;
 
-/// Calculate the number of points to issue: `(current_points / current_balance) * new_funds`.
+/// Calculate the number of points to issue from a pool as `(current_points / current_balance) * new_funds` except for some 0 edge cases; see logic and tests for details.
 fn points_to_issue<T: Config>(
 	current_balance: BalanceOf<T>,
 	current_points: BalanceOf<T>,
@@ -92,6 +92,27 @@ fn points_to_issue<T: Config>(
 			T::U128ToBalance::convert(points_per_balance.saturating_mul_int(new_funds))
 		},
 	}
+}
+
+// Calculate the balance of a pool to unbond as `(current_balance / current_points) * delegator_points`. Returns zero if any of the inputs are zero.
+fn balance_to_unbond<T: Config>(
+	current_balance: BalanceOf<T>,
+	current_points: BalanceOf<T>,
+	delegator_points: BalanceOf<T>,
+) -> BalanceOf<T> {
+	if current_balance.is_zero() || current_points.is_zero() || delegator_points.is_zero() {
+		// There is nothing to unbond
+		return Zero::zero();
+	}
+
+	// REMINDER: `saturating_from_rational` panics if denominator is zero
+	let balance_per_share = FixedU128::saturating_from_rational(
+		T::BalanceToU128::convert(current_balance),
+		T::BalanceToU128::convert(current_points),
+	);
+	let delegator_points = T::BalanceToU128::convert(delegator_points);
+
+	T::U128ToBalance::convert(balance_per_share.saturating_mul_int(delegator_points))
 }
 
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, RuntimeDebugNoBound)]
@@ -132,20 +153,7 @@ impl<T: Config> PrimaryPool<T> {
 	// Get the amount of balance to unbond from the pool based on a delegator's points of the pool.
 	fn balance_to_unbond(&self, delegator_points: BalanceOf<T>) -> BalanceOf<T> {
 		let bonded_balance = T::StakingInterface::bonded_balance(&self.account_id);
-		if bonded_balance.is_zero() || delegator_points.is_zero() {
-			// There is nothing to unbond
-			return Zero::zero();
-		}
-
-		let balance_per_share = {
-			let balance = T::BalanceToU128::convert(bonded_balance);
-			let points = T::BalanceToU128::convert(self.points);
-			// REMINDER: `saturating_from_rational` panics if denominator is zero
-			FixedU128::saturating_from_rational(balance, points)
-		};
-		let delegator_points = T::BalanceToU128::convert(delegator_points);
-
-		T::U128ToBalance::convert(balance_per_share.saturating_mul_int(delegator_points))
+		balance_to_unbond::<T>(bonded_balance, self.points, delegator_points)
 	}
 }
 
@@ -200,20 +208,7 @@ impl<T: Config> UnbondPool<T> {
 	}
 
 	fn balance_to_unbond(&self, delegator_points: BalanceOf<T>) -> BalanceOf<T> {
-		if self.balance.is_zero() || delegator_points.is_zero() {
-			// There is nothing to unbond
-			return Zero::zero();
-		}
-
-		let balance_per_share = {
-			let balance = T::BalanceToU128::convert(self.balance);
-			let points = T::BalanceToU128::convert(self.points);
-			// REMINDER: `saturating_from_rational` panics if denominator is zero
-			FixedU128::saturating_from_rational(balance, points)
-		};
-		let delegator_points = T::BalanceToU128::convert(delegator_points);
-
-		T::U128ToBalance::convert(balance_per_share.saturating_mul_int(delegator_points))
+		balance_to_unbond::<T>(self.balance, self.points, delegator_points)
 	}
 }
 

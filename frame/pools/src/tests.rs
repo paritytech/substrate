@@ -43,16 +43,46 @@ mod points_to_issue {
 	fn points_to_issue_works() {
 		ExtBuilder::default().build_and_execute(|| {
 			let points_to_issue = points_to_issue::<Runtime>;
-			// 1 points : 1 balance ratio returns `new_funds`
+			// 1 points : 1 balance ratio
 			assert_eq!(points_to_issue(100, 100, 10), 10);
-			// 2 points : 1 balance ratio returns double of `new_funds`
+			assert_eq!(points_to_issue(100, 100, 0), 0);
+			// 2 points : 1 balance ratio
 			assert_eq!(points_to_issue(50, 100, 10), 20);
-			// 1 points: 2 balance ratio returns half of `new_funds
+			// 1 points: 2 balance ratio
 			assert_eq!(points_to_issue(100, 50, 10), 5);
-			// 100 points : 0 balance ratio returns `new_funds * 100`
+			// 100 points : 0 balance ratio
 			assert_eq!(points_to_issue(0, 100, 10), 100 * 10);
-			// 0 points : 100 balance ratio returns `new_funds`
+			// 0 points : 100 balance ratio
 			assert_eq!(points_to_issue(100, 0, 10), 10);
+			// 10 points : 3 balance ratio
+			assert_eq!(points_to_issue(30, 100, 10), 33);
+			// 2 points : 3 balance ratio
+			assert_eq!(points_to_issue(300, 200, 10), 6);
+		});
+	}
+}
+
+mod balance_to_unbond {
+	use super::*;
+	#[test]
+	fn balance_to_unbond_works() {
+		ExtBuilder::default().build_and_execute(|| {
+			let balance_to_unbond = balance_to_unbond::<Runtime>;
+			// 1 balance : 1 points ratio
+			assert_eq!(balance_to_unbond(100, 100, 10), 10);
+			assert_eq!(balance_to_unbond(100, 100, 0), 0);
+			// 1 balance : 2 points ratio
+			assert_eq!(balance_to_unbond(50, 100, 10), 5);
+			// 2 balance : 1 points ratio
+			assert_eq!(balance_to_unbond(100, 50, 10), 20);
+			// 100 balance : 0 points ratio
+			assert_eq!(balance_to_unbond(100, 0, 10), 0);
+			// 0 balance : 100 points ratio
+			assert_eq!(balance_to_unbond(0, 100, 10), 0);
+			// 10 balance : 3 points ratio
+			assert_eq!(balance_to_unbond(100, 30, 10), 33);
+			// 2 balance : 3 points ratio
+			assert_eq!(balance_to_unbond(200, 300, 10), 6);
 		});
 	}
 }
