@@ -29,14 +29,15 @@ const DEFENSIVE_OP_INTERNAL_ERROR: &'static str = "Defensive failure has been tr
 
 /// Prelude module for all defensive traits to be imported at once.
 pub mod defensive_prelude {
-	pub use super::{DefensiveOption, DefensiveResult, DefensiveUnwrap};
+	pub use super::{Defensive, DefensiveOption, DefensiveResult};
 }
 
 /// A trait to handle errors and options when you are really sure that a condition must hold, but
 /// not brave enough to `expect` on it, or a default fallback value makes more sense.
 ///
-/// This trait focuses on methods that eventually unwrap the inner value. See [`DefensiveResult`]
-/// and [`DefensiveOption`] for methods that specifically apply to the respective types.
+/// This trait mostly focuses on methods that eventually unwrap the inner value. See
+/// [`DefensiveResult`] and [`DefensiveOption`] for methods that specifically apply to the
+/// respective types.
 ///
 /// Each function in this trait will have two side effects, aside from behaving exactly as the name
 /// would suggest:
@@ -48,7 +49,7 @@ pub mod defensive_prelude {
 ///    best shot of fully diagnosing the error would be to infer the block number of which the log
 ///    message was emitted, then re-execute that block using `check-block` or `try-runtime`
 ///    subcommands in substrate client.
-pub trait DefensiveUnwrap<T> {
+pub trait Defensive<T> {
 	/// Exactly the same as `unwrap_or`, but it does the defensive warnings explained in the trait
 	/// docs.
 	fn defensive_unwrap_or(self, other: T) -> T;
@@ -62,9 +63,20 @@ pub trait DefensiveUnwrap<T> {
 	fn defensive_unwrap_or_default(self) -> T
 	where
 		T: Default;
+
+	/// Same as [`defensive_map`], but it does not alter the inner value, but it will log warnings
+	/// if the inner value is `None` or `Err`.
+	///
+	/// This is useful as:
+	/// ```nocompile
+	/// if let Some(inner) = maybe_value().defensive() {
+	/// 	 	..
+	/// }
+	/// ```
+	fn defensive(self) -> Self;
 }
 
-/// Subset of methods similar to [`DefensiveUnwrap`] that can only work for a `Result`.
+/// Subset of methods similar to [`Defensive`] that can only work for a `Result`.
 pub trait DefensiveResult<T, E> {
 	/// Defensively map the error into another return type, but you are really sure that this
 	/// conversion should never be needed.
@@ -77,9 +89,13 @@ pub trait DefensiveResult<T, E> {
 	/// Defensively transform this result into an option, discarding the `Err` variant if it
 	/// happens, which should never happen.
 	fn defensive_ok(self) -> Option<T>;
+
+	/// Exactly the same as `map`, but it prints the appropriate warnings if the value being mapped
+	/// is `Err`.
+	fn defensive_map<U, F: FnOnce(T) -> U>(self, f: F) -> Result<U, E>;
 }
 
-/// Subset of methods similar to [`DefensiveUnwrap`] that can only work for a `Option`.
+/// Subset of methods similar to [`Defensive`] that can only work for a `Option`.
 pub trait DefensiveOption<T> {
 	/// Potentially map and unpack the value to something else (`U`), or call the default callback
 	/// if `None`, which should never happen.
@@ -87,9 +103,13 @@ pub trait DefensiveOption<T> {
 
 	/// Defensively transform this option to a result.
 	fn defensive_ok_or_else<E, F: FnOnce() -> E>(self, err: F) -> Result<T, E>;
+
+	/// Exactly the same as `map`, but it prints the appropriate warnings if the value being mapped
+	/// is `None`.
+	fn defensive_map<U, F: FnOnce(T) -> U>(self, f: F) -> Option<U>;
 }
 
-impl<T> DefensiveUnwrap<T> for Option<T> {
+impl<T> Defensive<T> for Option<T> {
 	fn defensive_unwrap_or(self, or: T) -> T {
 		match self {
 			Some(inner) => inner,
@@ -137,9 +157,24 @@ impl<T> DefensiveUnwrap<T> for Option<T> {
 			},
 		}
 	}
+
+	fn defensive(self) -> Self {
+		match self {
+			Some(inner) => Some(inner),
+			None => {
+				debug_assert!(false, "{}", DEFENSIVE_OP_INTERNAL_ERROR);
+				frame_support::log::error!(
+					target: "runtime",
+					"{}",
+					DEFENSIVE_OP_PUBLIC_ERROR
+				);
+				None
+			},
+		}
+	}
 }
 
-impl<T, E: sp_std::fmt::Debug> DefensiveUnwrap<T> for Result<T, E> {
+impl<T, E: sp_std::fmt::Debug> Defensive<T> for Result<T, E> {
 	fn defensive_unwrap_or(self, or: T) -> T {
 		match self {
 			Ok(inner) => inner,
@@ -187,6 +222,22 @@ impl<T, E: sp_std::fmt::Debug> DefensiveUnwrap<T> for Result<T, E> {
 					e
 				);
 				Default::default()
+			},
+		}
+	}
+
+	fn defensive(self) -> Self {
+		match self {
+			Ok(inner) => Ok(inner),
+			Err(e) => {
+				debug_assert!(false, "{}: {:?}", DEFENSIVE_OP_INTERNAL_ERROR, e);
+				frame_support::log::error!(
+					target: "runtime",
+					"{}: {:?}",
+					DEFENSIVE_OP_PUBLIC_ERROR,
+					e
+				);
+				Err(e)
 			},
 		}
 	}
@@ -237,6 +288,22 @@ impl<T, E: sp_std::fmt::Debug> DefensiveResult<T, E> for Result<T, E> {
 			},
 		}
 	}
+
+	fn defensive_map<U, F: FnOnce(T) -> U>(self, f: F) -> Result<U, E> {
+		match self {
+			Ok(inner) => Ok(f(inner)),
+			Err(e) => {
+				debug_assert!(false, "{}: {:?}", DEFENSIVE_OP_INTERNAL_ERROR, e);
+				frame_support::log::error!(
+					target: "runtime",
+					"{}: {:?}",
+					DEFENSIVE_OP_PUBLIC_ERROR,
+					e
+				);
+				Err(e)
+			},
+		}
+	}
 }
 
 impl<T> DefensiveOption<T> for Option<T> {
@@ -266,9 +333,24 @@ impl<T> DefensiveOption<T> for Option<T> {
 			err()
 		})
 	}
+
+	fn defensive_map<U, F: FnOnce(T) -> U>(self, f: F) -> Option<U> {
+		match self {
+			Some(inner) => Some(f(inner)),
+			None => {
+				debug_assert!(false, "{}", DEFENSIVE_OP_INTERNAL_ERROR);
+				frame_support::log::error!(
+					target: "runtime",
+					"{}",
+					DEFENSIVE_OP_PUBLIC_ERROR,
+				);
+				None
+			},
+		}
+	}
 }
 
-/// A variant of [`DefensiveUnwrap`] with the same rationale, for the arithmetic operations where in
+/// A variant of [`Defensive`] with the same rationale, for the arithmetic operations where in
 /// case an infallible operation fails, it saturates.
 pub trait DefensiveSaturating {
 	/// Add `self` and `other` defensively.
@@ -342,6 +424,7 @@ impl<T: Default> Get<T> for GetDefault {
 
 macro_rules! impl_const_get {
 	($name:ident, $t:ty) => {
+		#[derive($crate::RuntimeDebug)]
 		pub struct $name<const T: $t>;
 		impl<const T: $t> Get<$t> for $name<T> {
 			fn get() -> $t {
