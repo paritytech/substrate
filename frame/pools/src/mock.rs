@@ -6,12 +6,23 @@ use frame_system::RawOrigin;
 pub type AccountId = u32;
 pub type Balance = u32;
 
+/// Pool 0's primary account id (i.e. its stash and controller account).
+pub const PRIMARY_ACCOUNT: u32 = 2536596763;
+/// Pool 0's reward destination.
+pub const REWARDS_ACCOUNT: u32 = 736857005;
+
 parameter_types! {
 	static CurrentEra: EraIndex = 0;
-	static BondedBalance: Balance = 0;
+	pub static BondedBalanceMap: std::collections::HashMap<AccountId, Balance> = Default::default();
 }
 
 pub struct StakingMock;
+impl StakingMock {
+	fn set_bonded_balance(who: AccountId, bonded: Balance) {
+		BONDED_BALANCE_MAP.with(|m| m.borrow_mut().insert(who.clone(), bonded));
+	}
+}
+
 impl sp_staking::StakingInterface for StakingMock {
 	type Balance = Balance;
 	type AccountId = AccountId;
@@ -29,24 +40,28 @@ impl sp_staking::StakingInterface for StakingMock {
 		3
 	}
 
-	fn bonded_balance(_: &Self::AccountId) -> Self::Balance {
-		BondedBalance::get()
+	fn bonded_balance(who: &Self::AccountId) -> Self::Balance {
+		BondedBalanceMap::get().get(who).map(|v| *v).unwrap_or_default()
 	}
 
-	fn bond_extra(_: &Self::AccountId, _: Self::Balance) -> DispatchResult {
+	fn bond_extra(who: &Self::AccountId, extra: Self::Balance) -> DispatchResult {
+		// Simulate bond extra in `join`
+		BONDED_BALANCE_MAP.with(|m| *m.borrow_mut().get_mut(who).unwrap() += extra);
 		Ok(())
 	}
 
-	fn unbond(_: &Self::AccountId, _: Self::Balance) -> DispatchResult {
+	fn unbond(who: &Self::AccountId, amount: Self::Balance) -> DispatchResult {
+		BONDED_BALANCE_MAP.with(|m| *m.borrow_mut().get_mut(who).unwrap() -= amount);
 		Ok(())
 	}
 
 	fn bond(
+		stash: Self::AccountId,
 		_: Self::AccountId,
-		_: Self::AccountId,
-		_: Self::Balance,
+		amount: Self::Balance,
 		_: Self::AccountId,
 	) -> DispatchResult {
+		StakingMock::set_bonded_balance(stash, amount);
 		Ok(())
 	}
 
@@ -145,11 +160,12 @@ frame_support::construct_runtime!(
 
 #[derive(Default)]
 pub struct ExtBuilder {
-	delegators: Vec<(AccountId, PoolId, Balance)>,
+	delegators: Vec<(AccountId, Balance)>,
 }
 
 impl ExtBuilder {
-	pub(crate) fn add_delegators(mut self, delegators: Vec<(AccountId, PoolId, Balance)>) -> Self {
+	// Add delegators to pool 0.
+	pub(crate) fn add_delegators(mut self, delegators: Vec<(AccountId, Balance)>) -> Self {
 		self.delegators = delegators;
 		self
 	}
@@ -166,9 +182,10 @@ impl ExtBuilder {
 			Balances::make_free_balance_be(&10, amount_to_bond * 2);
 
 			assert_ok!(Pools::create(RawOrigin::Signed(10).into(), 0, vec![100], amount_to_bond));
-			for (account_id, pool_id, bonded) in self.delegators {
+			for (account_id, bonded) in self.delegators {
 				Balances::make_free_balance_be(&account_id, bonded * 2);
-				assert_ok!(Pools::join(RawOrigin::Signed(account_id).into(), bonded, pool_id));
+
+				assert_ok!(Pools::join(RawOrigin::Signed(account_id).into(), bonded, 0));
 			}
 		});
 

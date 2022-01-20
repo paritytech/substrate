@@ -98,6 +98,9 @@ impl<T: Config> PrimaryPool<T> {
 	fn points_to_issue(&self, new_funds: BalanceOf<T>) -> PointsOf<T> {
 		let bonded_balance = T::StakingInterface::bonded_balance(&self.account_id);
 		if bonded_balance.is_zero() || self.points.is_zero() {
+			println!("bonded_balance={:?} points={:?}", bonded_balance, self.points);
+			// TODO this doesn't hold if the pool is totally slashed but we need some more logic for
+			// that case
 			debug_assert!(bonded_balance.is_zero() && self.points.is_zero());
 
 			new_funds.saturating_mul(POINTS_TO_BALANCE_INIT_RATIO.into())
@@ -175,6 +178,8 @@ struct UnbondPool<T: Config> {
 impl<T: Config> UnbondPool<T> {
 	fn points_to_issue(&self, new_funds: BalanceOf<T>) -> PointsOf<T> {
 		if self.balance.is_zero() || self.points.is_zero() {
+			// TODO this doesn't hold if the pool is totally slashed but we need some more logic for
+			// that case
 			debug_assert!(self.balance.is_zero() && self.points.is_zero());
 
 			new_funds.saturating_mul(POINTS_TO_BALANCE_INIT_RATIO.into())
@@ -397,7 +402,8 @@ pub mod pallet {
 			// Get the exact amount we can bond extra.
 			let exact_amount_to_bond = new_free_balance.saturating_sub(old_free_balance);
 
-			// Issue the new points.
+			// We must calculate the points to issue *before* we bond `who`'s funds, else the
+			// points:balance ratio will be wrong.
 			let new_points = primary_pool.points_to_issue(exact_amount_to_bond);
 			primary_pool.points = primary_pool.points.saturating_add(new_points);
 			let delegator = Delegator::<T> {
@@ -572,13 +578,21 @@ pub mod pallet {
 
 			ensure!(!PrimaryPools::<T>::contains_key(id), Error::<T>::IdInUse);
 			ensure!(amount >= T::StakingInterface::minimum_bond(), Error::<T>::MinimiumBondNotMet);
+			// TODO create can_* fns so we can bail in the beggining if some pre-conditions are not
+			// met T::StakingInterface::can_bond()
+			// T::StakingInterface::can_nominate()
 
 			let (stash, reward_dest) = Self::create_accounts(id);
 
 			T::Currency::transfer(&who, &stash, amount, ExistenceRequirement::AllowDeath)?;
 
-			// T::StakingInterface::can_bond()
-			// T::StakingInterface::can_nominate()
+			let mut primary_pool =
+				PrimaryPool::<T> { points: Zero::zero(), account_id: stash.clone() };
+
+			// We must calculate the points to issue *before* we bond who's funds, else
+			// points:balance ratio will be wrong.
+			let points_to_issue = primary_pool.points_to_issue(amount);
+			primary_pool.points = points_to_issue;
 
 			T::StakingInterface::bond(
 				stash.clone(),
@@ -589,10 +603,6 @@ pub mod pallet {
 			)?;
 
 			T::StakingInterface::nominate(stash.clone(), targets)?;
-
-			let mut primary_pool = PrimaryPool::<T> { points: Zero::zero(), account_id: stash };
-			let points_to_issue = primary_pool.points_to_issue(amount);
-			primary_pool.points = points_to_issue;
 
 			Delegators::<T>::insert(
 				who,
@@ -661,6 +671,7 @@ impl<T: Config> Pallet<T> {
 
 		let last_total_earnings = reward_pool.total_earnings;
 		let mut reward_pool = reward_pool.update_total_earnings_and_balance();
+		// Notice there is an edge case where total_earnings have not increased and this is zero
 		let new_earnings = reward_pool.total_earnings.saturating_sub(last_total_earnings);
 
 		// The new points that will be added to the pool. For every unit of balance that has
@@ -671,8 +682,9 @@ impl<T: Config> Pallet<T> {
 		let new_points = primary_pool.points.saturating_mul(new_earnings);
 
 		// The points of the reward pool after taking into account the new earnings. Notice that
-		// this always increases over time except for when we subtract delegator virtual shares
-		let current_points = reward_pool.points.saturating_add(new_points);
+		// this only stays even or increases over time except for when we subtract delegator virtual
+		// shares.
+		let current_points = reward_pool.points.saturating_add(new_points); // 39,800
 
 		// The rewards pool's earnings since the last time this delegator claimed a payout
 		let new_earnings_since_last_claim =
