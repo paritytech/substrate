@@ -27,6 +27,8 @@ use std::{
 	process,
 };
 
+use binaryen::{CodegenConfig, Module};
+
 use toml::value::Table;
 
 use build_helper::rerun_if_changed;
@@ -461,7 +463,7 @@ fn build_project(project: &Path, default_rustflags: &str, cargo_cmd: CargoComman
 	}
 }
 
-/// Compact the WASM binary using `wasm-gc` and compress it using zstd.
+/// Compact the WASM binary using `binaryen` and compress it using zstd.
 fn compact_wasm_file(
 	project: &Path,
 	cargo_manifest: &Path,
@@ -480,8 +482,17 @@ fn compact_wasm_file(
 			"{}.compact.wasm",
 			wasm_binary_name.clone().unwrap_or_else(|| default_wasm_binary_name.clone()),
 		));
-		wasm_gc::garbage_collect_file(&wasm_file, &wasm_compact_file)
-			.expect("Failed to compact generated WASM binary.");
+
+		let mut module =
+			Module::read(&fs::read(&wasm_file).expect("Failed to read generated WASM binary."))
+				.expect("Failed to open generated WASM binary.");
+		module.optimize(&CodegenConfig {
+			shrink_level: 1,
+			optimization_level: 2,
+			..CodegenConfig::default()
+		});
+		fs::write(&wasm_compact_file, module.write())
+			.expect("Failed to write compact generated WASM binary.");
 		Some(WasmBinary(wasm_compact_file))
 	} else {
 		None
