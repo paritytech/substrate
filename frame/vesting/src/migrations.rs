@@ -20,11 +20,11 @@
 use super::*;
 
 // Migration from single schedule to multiple schedules.
-pub(crate) mod v1 {
+pub mod v1 {
 	use super::*;
 
 	#[cfg(feature = "try-runtime")]
-	pub(crate) fn pre_migrate<T: Config>() -> Result<(), &'static str> {
+	pub fn pre_migrate<T: Config>() -> Result<(), &'static str> {
 		assert!(StorageVersion::<T>::get() == Releases::V0, "Storage version too high.");
 
 		log::debug!(
@@ -37,7 +37,7 @@ pub(crate) mod v1 {
 
 	/// Migrate from single schedule to multi schedule storage.
 	/// WARNING: This migration will delete schedules if `MaxVestingSchedules < 1`.
-	pub(crate) fn migrate<T: Config>() -> Weight {
+	pub fn migrate<T: Config>() -> Weight {
 		let mut reads_writes = 0;
 
 		Vesting::<T>::translate::<VestingInfo<BalanceOf<T>, T::BlockNumber>, _>(
@@ -65,7 +65,7 @@ pub(crate) mod v1 {
 	}
 
 	#[cfg(feature = "try-runtime")]
-	pub(crate) fn post_migrate<T: Config>() -> Result<(), &'static str> {
+	pub fn post_migrate<T: Config>() -> Result<(), &'static str> {
 		assert_eq!(StorageVersion::<T>::get(), Releases::V1);
 
 		for (_key, schedules) in Vesting::<T>::iter() {

@@ -120,7 +120,8 @@ impl BenchmarkCmd {
 		let pallet = self.pallet.clone().unwrap_or_else(|| String::new());
 		let pallet = pallet.as_bytes();
 		let extrinsic = self.extrinsic.clone().unwrap_or_else(|| String::new());
-		let extrinsic = extrinsic.as_bytes();
+		let extrinsic_split: Vec<&str> = extrinsic.split(',').collect();
+		let extrinsics: Vec<_> = extrinsic_split.iter().map(|x| x.trim().as_bytes()).collect();
 
 		let genesis_storage = spec.build_storage()?;
 		let mut changes = Default::default();
@@ -176,7 +177,10 @@ impl BenchmarkCmd {
 			.filter(|item| pallet.is_empty() || pallet == &b"*"[..] || pallet == &item.pallet[..])
 			.for_each(|item| {
 				for benchmark in &item.benchmarks {
-					if extrinsic.is_empty() || extrinsic == &b"*"[..] || extrinsic == benchmark.name
+					let benchmark_name = &benchmark.name;
+					if extrinsic.is_empty() ||
+						extrinsic.as_bytes() == &b"*"[..] ||
+						extrinsics.contains(&&benchmark_name[..])
 					{
 						benchmarks_to_run.push((
 							item.pallet.clone(),
@@ -333,14 +337,14 @@ impl BenchmarkCmd {
 						if elapsed >= time::Duration::from_secs(5) {
 							timer = time::SystemTime::now();
 							log::info!(
-								"Running Benchmark:\t{}\t{}\t{}/{}\t{}/{}",
+								"Running Benchmark: {}.{} {}/{} {}/{}",
 								String::from_utf8(pallet.clone())
 									.expect("Encoded from String; qed"),
 								String::from_utf8(extrinsic.clone())
 									.expect("Encoded from String; qed"),
-								s, // todo show step
+								s + 1, // s starts at 0. todo show step
 								self.steps,
-								r,
+								r + 1,
 								self.external_repeat,
 							);
 						}

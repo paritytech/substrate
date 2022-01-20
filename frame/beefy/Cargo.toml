@@ -15,7 +15,7 @@ serde = { version = "1.0.132", optional = true }
 frame-support = { version = "4.0.0-dev", path = "../support", default-features = false }
 frame-system = { version = "4.0.0-dev", path = "../system", default-features = false }
 
-sp-runtime = { version = "4.0.0", path = "../../primitives/runtime", default-features = false }
+sp-runtime = { version = "4.1.0-dev", path = "../../primitives/runtime", default-features = false }
 sp-std = { version = "4.0.0", path = "../../primitives/std", default-features = false }
 
 pallet-session = { version = "4.0.0-dev", path = "../session", default-features = false }
