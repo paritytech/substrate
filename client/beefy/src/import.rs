@@ -9,17 +9,37 @@ use sp_api::{ProvideRuntimeApi, TransactionFor};
 use sp_blockchain::well_known_cache_keys;
 use sp_consensus::Error as ConsensusError;
 use sp_runtime::{
-	generic::BlockId,
+	generic::{BlockId, OpaqueDigestItemId},
 	traits::{Block as BlockT, Header as HeaderT, NumberFor},
 	Justification,
 };
 
-use beefy_primitives::{crypto::Signature, BeefyApi, BEEFY_ENGINE_ID};
+use beefy_primitives::{
+	crypto::{AuthorityId, Signature},
+	BeefyApi, ConsensusLog, ValidatorSet, BEEFY_ENGINE_ID,
+};
 
 use crate::{
 	justification::decode_and_verify_justification, notification::BeefyJustificationSender,
 	Client as BeefyClient,
 };
+
+/// Checks the given header for a consensus digest signalling a beefy authority set change
+/// and extracts it.
+pub fn find_beefy_authority_set_change<B: BlockT>(
+	header: &B::Header,
+) -> Option<ValidatorSet<AuthorityId>> {
+	let id = OpaqueDigestItemId::Consensus(&BEEFY_ENGINE_ID);
+
+	let filter_log = |log: ConsensusLog<AuthorityId>| match log {
+		ConsensusLog::AuthoritiesChange(change) => Some(change),
+		_ => None,
+	};
+
+	// find the first consensus digest with the right ID which converts to
+	// the right kind of consensus log.
+	header.digest().convert_first(|l| l.try_to(id).and_then(filter_log))
+}
 
 /// BeefyBlockImport
 /// Wraps a type `inner` that implements [`BlockImport`]
@@ -68,11 +88,20 @@ where
 		let hash = block.post_hash();
 		let number = *block.header.number();
 		let justifications = block.justifications.clone();
+		// If this block contains a beefy authority set change then it must have a beefy
+		// justification
+		let change = find_beefy_authority_set_change::<Block>(&block.header);
 		// Run inner block import
 		let import_result = self.inner.import_block(block, new_cache).await?;
 		// Try importing beefy justification
 		let beefy_justification =
 			justifications.and_then(|just| just.into_justification(BEEFY_ENGINE_ID));
+
+		if change.is_some() && beefy_justification.is_none() {
+			return Err(ConsensusError::ClientImport(
+				"Missing beefy justification in authority set change block".to_string(),
+			))
+		}
 		if let Some(beefy_justification) = beefy_justification {
 			self.import_justification(hash, number, (BEEFY_ENGINE_ID, beefy_justification))?;
 		}
