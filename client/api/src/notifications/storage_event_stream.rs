@@ -25,8 +25,12 @@ use sc_utils::{mpsc::TracingUnboundedReceiver, pubsub::SubscriptionGuard};
 
 /// Type that implements `futures::Stream` of storage change events.
 pub struct StorageEventStream<H> {
-	pub(super) rx: TracingUnboundedReceiver<Notification<H>>,
+	// NB: this field should be declared before the `rx`.
+	// (The fields of a struct are dropped in declaration order.)[https://doc.rust-lang.org/reference/destructors.html]
 	pub(super) _subs_guard: SubscriptionGuard<StorageNotificationsImpl<H>>,
+
+	// NB: this field should be declared after the `_subs_guard`.
+	pub(super) rx: TracingUnboundedReceiver<Notification<H>>,
 	pub(super) was_triggered: bool,
 }
 

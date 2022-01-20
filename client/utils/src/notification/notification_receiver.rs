@@ -28,8 +28,12 @@ use ::futures::stream::{FusedStream, Stream};
 /// The receiving half of the notifications channel(s).
 #[derive(Debug)]
 pub struct NotificationReceiver<Payload> {
-	pub(super) underlying_rx: TracingUnboundedReceiver<Payload>,
+	// NB: this field should be declared before the `underlying_rx`.
+	// (The fields of a struct are dropped in declaration order.)[https://doc.rust-lang.org/reference/destructors.html]
 	pub(super) _subs_guard: SubscriptionGuard<Registry<Payload>>,
+
+	// NB: this field should be declared after the `_subs_guard`.
+	pub(super) underlying_rx: TracingUnboundedReceiver<Payload>,
 }
 
 impl<Payload> Unpin for NotificationReceiver<Payload> {}
