@@ -280,7 +280,7 @@ pub trait DefensiveSaturating {
 }
 
 // NOTE: A bit unfortunate, since T has to be bound by all the traits needed. Could make it
-// `DefensiveSaturating<T>` to mitigate, but anyways okay for a draft PR.
+// `DefensiveSaturating<T>` to mitigate.
 impl<T: Saturating + CheckedAdd + CheckedMul + CheckedSub> DefensiveSaturating for T {
 	fn defensive_saturating_add(self, other: Self) -> Self {
 		self.checked_add(&other).defensive_unwrap_or_else(|| self.saturating_add(other))
