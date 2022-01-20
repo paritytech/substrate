@@ -21,7 +21,7 @@ thiserror = "1.0.30"
 futures = "0.3.9"
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
 sp-consensus = { version = "0.10.0-dev", path = "../consensus/common" }
-sp-runtime = { version = "4.0.0", path = "../runtime" }
+sp-runtime = { version = "4.1.0-dev", path = "../runtime" }
 sp-state-machine = { version = "0.10.0", path = "../state-machine" }
 sp-database = { version = "4.0.0-dev", path = "../database" }
 sp-api = { version = "4.0.0-dev", path = "../api" }

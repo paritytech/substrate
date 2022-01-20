@@ -26,7 +26,7 @@ sp-state-machine = { version = "0.10.0", path = "../../state-machine" }
 futures-timer = "3.0.1"
 sp-std = { version = "4.0.0", path = "../../std" }
 sp-version = { version = "4.0.0-dev", path = "../../version" }
-sp-runtime = { version = "4.0.0", path = "../../runtime" }
+sp-runtime = { version = "4.1.0-dev", path = "../../runtime" }
 thiserror = "1.0.30"
 
 [dev-dependencies]
