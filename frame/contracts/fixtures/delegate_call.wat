@@ -74,8 +74,8 @@
 			(call $seal_delegate_call
 				(i32.const 0)   ;; Set no call flags
 				(i32.const 64)	;; Pointer to "callee" code_hash.
-				(i32.const 0)   ;; Random input
-				(i32.const 0)   ;; Length is ignored in this case
+				(i32.const 0)   ;; Input is ignored
+				(i32.const 0)   ;; Length of the input
 				(i32.const 4294967295) ;; u32 max sentinel value: do not copy output
 				(i32.const 0)   ;; Length is ignored in this case
 			)

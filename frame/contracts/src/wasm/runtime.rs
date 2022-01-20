@@ -376,7 +376,7 @@ enum CallType {
 
 impl CallType {
 	fn cost(&self, input_data_len: u32) -> RuntimeCosts {
-		match &self {
+		match self {
 			CallType::Call { .. } => RuntimeCosts::CallBase(input_data_len),
 			#[cfg(feature = "unstable-interface")]
 			CallType::DelegateCall { .. } => RuntimeCosts::DelegateCallBase(input_data_len),

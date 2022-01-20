@@ -337,6 +337,8 @@ pub struct Stack<'a, T: Config, E> {
 /// This is an internal data structure. It is exposed to the public for the sole reason
 /// of specifying [`Config::CallStack`].
 pub struct Frame<T: Config> {
+	/// The caller of the currently executing contract using `delegate_call`
+	delegate_caller: Option<T::AccountId>,
 	/// The account id of the executing contract.
 	account_id: T::AccountId,
 	/// The cached in-storage data of the contract.
@@ -353,6 +355,14 @@ pub struct Frame<T: Config> {
 	allows_reentry: bool,
 }
 
+/// Used for `seal_delegate_call` to pass original caller and library (callee) executable.
+struct DelegatedCall<T: Config, E> {
+	/// The executable whose `call` function is run.
+	executable: E,
+	/// The account id of the caller contract.
+	caller: T::AccountId,
+}
+
 /// Parameter passed in when creating a new `Frame`.
 ///
 /// It determines whether the new frame is for a call or an instantiate.
@@ -363,9 +373,9 @@ enum FrameArgs<'a, T: Config, E> {
 		/// If `None` the contract info needs to be reloaded from storage.
 		cached_info: Option<ContractInfo<T>>,
 		/// This frame was created by `seal_delegate_call` and hence uses a different code than
-		/// what is stored at [`Self::dest`]. It also uses a different caller than the previous
-		/// frames [`Self::dest`].
-		delegated_call: Option<E>,
+		/// what is stored at [`Self::dest`]. Its caller (`delegated_caller`) is a caller of the
+		/// caller contract
+		delegated_call: Option<DelegatedCall<T, E>>,
 	},
 	Instantiate {
 		/// The contract or signed origin which instantiates the new contract.
@@ -612,37 +622,46 @@ where
 		gas_limit: Weight,
 		schedule: &Schedule<T>,
 	) -> Result<(Frame<T>, E, Option<u64>), ExecError> {
-		let (account_id, contract_info, executable, entry_point, account_counter) = match frame_args
-		{
-			FrameArgs::Call { dest, cached_info, delegated_call } => {
-				let contract = if let Some(contract) = cached_info {
-					contract
-				} else {
-					<ContractInfoOf<T>>::get(&dest).ok_or(<Error<T>>::ContractNotFound)?
-				};
+		let (account_id, contract_info, executable, delegate_caller, entry_point, account_counter) =
+			match frame_args {
+				FrameArgs::Call { dest, cached_info, delegated_call } => {
+					let contract = if let Some(contract) = cached_info {
+						contract
+					} else {
+						<ContractInfoOf<T>>::get(&dest).ok_or(<Error<T>>::ContractNotFound)?
+					};
 
-				let executable = if let Some(executable) = delegated_call {
-					executable
-				} else {
-					E::from_storage(contract.code_hash, schedule, gas_meter)?
-				};
+					let (executable, delegate_caller) =
+						if let Some(DelegatedCall { executable, caller }) = delegated_call {
+							(executable, Some(caller))
+						} else {
+							(E::from_storage(contract.code_hash, schedule, gas_meter)?, None)
+						};
 
-				(dest, contract, executable, ExportedFunction::Call, None)
-			},
-			FrameArgs::Instantiate { sender, trie_seed, executable, salt } => {
-				let account_id =
-					<Contracts<T>>::contract_address(&sender, executable.code_hash(), &salt);
-				let trie_id = Storage::<T>::generate_trie_id(&account_id, trie_seed);
-				let contract = Storage::<T>::new_contract(
-					&account_id,
-					trie_id,
-					executable.code_hash().clone(),
-				)?;
-				(account_id, contract, executable, ExportedFunction::Constructor, Some(trie_seed))
-			},
-		};
+					(dest, contract, executable, delegate_caller, ExportedFunction::Call, None)
+				},
+				FrameArgs::Instantiate { sender, trie_seed, executable, salt } => {
+					let account_id =
+						<Contracts<T>>::contract_address(&sender, executable.code_hash(), &salt);
+					let trie_id = Storage::<T>::generate_trie_id(&account_id, trie_seed);
+					let contract = Storage::<T>::new_contract(
+						&account_id,
+						trie_id,
+						executable.code_hash().clone(),
+					)?;
+					(
+						account_id,
+						contract,
+						executable,
+						None,
+						ExportedFunction::Constructor,
+						Some(trie_seed),
+					)
+				},
+			};
 
 		let frame = Frame {
+			delegate_caller,
 			value_transferred,
 			contract_info: CachedContract::Cached(contract_info),
 			account_id,
@@ -911,22 +930,6 @@ where
 	fn initial_trie_seed() -> u64 {
 		<AccountCounter<T>>::get().wrapping_add(1)
 	}
-
-	// Looking for a caller frame recursively
-	// TODO: store caller information on the frame
-	fn caller_frame(&self, start_from: usize) -> Option<&Frame<T>> {
-		let caller_frame = self.frames().nth(start_from + 1);
-		let callee_frame = self.frames().nth(start_from);
-		if caller_frame.map(|f| &f.account_id) == callee_frame.map(|f| &f.account_id) &&
-			caller_frame.map(|f| &f.nested_gas).unwrap_or(&self.gas_meter).gas_left() == 0
-		{
-			// in the case of `delegate_call` the caller and callee are the same and all gas is
-			// passed to the callee
-			self.caller_frame(start_from + 1)
-		} else {
-			caller_frame
-		}
-	}
 }
 
 impl<'a, T, E> Ext for Stack<'a, T, E>
@@ -995,7 +998,7 @@ where
 			FrameArgs::Call {
 				dest: account_id,
 				cached_info: Some(contract_info),
-				delegated_call: Some(executable),
+				delegated_call: Some(DelegatedCall { executable, caller: self.caller().clone() }),
 			},
 			value,
 			0,
@@ -1083,12 +1086,11 @@ where
 	}
 
 	fn caller(&self) -> &T::AccountId {
-		let frame = if self.frames().collect::<Vec<_>>().len() <= 1 {
-			self.frames().nth(1)
+		if let Some(caller) = self.frames().nth(0).map(|f| &f.delegate_caller).unwrap() {
+			&caller
 		} else {
-			self.caller_frame(0)
-		};
-		frame.map(|f| &f.account_id).unwrap_or(&self.origin)
+			self.frames().nth(1).map(|f| &f.account_id).unwrap_or(&self.origin)
+		}
 	}
 
 	fn balance(&self) -> BalanceOf<T> {
