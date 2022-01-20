@@ -64,13 +64,13 @@ pub trait Defensive<T> {
 	where
 		T: Default;
 
-	/// Same as [`defensive_map`], but it does not alter the inner value.
+	/// Same as [`defensive_map`], but it does not alter the inner value, but it will log warnings
+	/// if the inner value is `None` or `Err`.
 	///
 	/// This is useful as:
 	/// ```nocompile
-	/// // some defensive condition
 	/// if let Some(inner) = maybe_value().defensive() {
-	/// 	 	// other code
+	/// 	 	..
 	/// }
 	/// ```
 	fn defensive(self) -> Self;
