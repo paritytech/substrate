@@ -22,9 +22,7 @@ use crate::{
 	verifier::{self},
 };
 use codec::Encode;
-use frame_election_provider_support::{
-	ExtendedBalance, IntoUnboundedVoters, NposSolver, Support, VoteWeight,
-};
+use frame_election_provider_support::{ExtendedBalance, NposSolver, Support, VoteWeight};
 use frame_support::{traits::Get, BoundedVec};
 use sp_runtime::{
 	offchain::storage::{MutateStorageError, StorageValueRef},
@@ -200,7 +198,7 @@ impl<T: Config, Solver: NposSolver<AccountId = T::AccountId, Error = OffchainSol
 		let ElectionResult { winners: _, assignments } = Solver::solve(
 			desired_targets as usize,
 			all_targets.clone().to_vec(),
-			all_voters.clone().into_inner().into_unbounded_voters(),
+			all_voters.clone().into_inner(),
 		)
 		.map_err(|e| MinerError::Solver(e))?;
 

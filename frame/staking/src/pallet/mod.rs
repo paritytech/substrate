@@ -31,7 +31,7 @@ use sp_runtime::{
 	DispatchError, Perbill, Percent,
 };
 use sp_staking::{EraIndex, SessionIndex};
-use sp_std::{convert::From, prelude::*, result};
+use sp_std::{convert::From, prelude::*};
 
 mod impls;
 
@@ -1079,7 +1079,7 @@ pub mod pallet {
 
 			let old = Nominators::<T>::get(stash).map_or_else(Vec::new, |x| x.targets.into_inner());
 
-			let targets = targets
+			let targets: BoundedVec<_, _> = targets
 				.into_iter()
 				.map(|t| T::Lookup::lookup(t).map_err(DispatchError::from))
 				.map(|n| {
@@ -1091,13 +1091,13 @@ pub mod pallet {
 						}
 					})
 				})
-				.collect::<result::Result<Vec<T::AccountId>, _>>()?
+				.collect::<Result<Vec<_>, _>>()?
 				.try_into()
-				.expect("length is checked; conversion cannot fail; qed");
+				.map_err(|_| Error::<T>::TooManyNominators)?;
 
 			let nominations = Nominations {
 				targets,
-				// Initial nominations are considered submitted at era 0. See `Nominations` doc
+				// Initial nominations are considered submitted at era 0. See `Nominations` doc.
 				submitted_in: Self::current_era().unwrap_or(0),
 				suppressed: false,
 			};

@@ -487,7 +487,7 @@ pub trait NposSolver {
 	fn solve(
 		to_elect: usize,
 		targets: Vec<Self::AccountId>,
-		voters: Vec<(Self::AccountId, VoteWeight, Vec<Self::AccountId>)>,
+		voters: Vec<(Self::AccountId, VoteWeight, impl IntoIterator<Item = Self::AccountId>)>,
 	) -> Result<ElectionResult<Self::AccountId, Self::Accuracy>, Self::Error>;
 }
 
@@ -509,7 +509,7 @@ impl<
 	fn solve(
 		winners: usize,
 		targets: Vec<Self::AccountId>,
-		voters: Vec<(Self::AccountId, VoteWeight, Vec<Self::AccountId>)>,
+		voters: Vec<(Self::AccountId, VoteWeight, impl IntoIterator<Item = Self::AccountId>)>,
 	) -> Result<ElectionResult<Self::AccountId, Self::Accuracy>, Self::Error> {
 		sp_npos_elections::seq_phragmen(winners, targets, voters, Balancing::get())
 	}
@@ -533,7 +533,7 @@ impl<
 	fn solve(
 		winners: usize,
 		targets: Vec<Self::AccountId>,
-		voters: Vec<(Self::AccountId, VoteWeight, Vec<Self::AccountId>)>,
+		voters: Vec<(Self::AccountId, VoteWeight, impl IntoIterator<Item = Self::AccountId>)>,
 	) -> Result<ElectionResult<Self::AccountId, Self::Accuracy>, Self::Error> {
 		sp_npos_elections::phragmms(winners, targets, voters, Balancing::get())
 	}
@@ -746,17 +746,3 @@ pub type Voter<AccountId, Bound> = (AccountId, VoteWeight, BoundedVec<AccountId,
 /// Same as [`Voter`], but parameterized by an [`ElectionDataProvider`].
 pub type VoterOf<D> =
 	Voter<<D as ElectionDataProvider>::AccountId, <D as ElectionDataProvider>::MaxVotesPerVoter>;
-
-/// Extension trait to easily convert from bounded voters to unbounded ones.
-///
-/// Undesirably, this cannot be done (in safe rust) without re-allocating the entire vector, so
-/// don't use it recklessly.
-pub trait IntoUnboundedVoters<AccountId> {
-	fn into_unbounded_voters(self) -> Vec<(AccountId, VoteWeight, Vec<AccountId>)>;
-}
-
-impl<AccountId, Bound: Get<u32>> IntoUnboundedVoters<AccountId> for Vec<Voter<AccountId, Bound>> {
-	fn into_unbounded_voters(self) -> Vec<(AccountId, VoteWeight, Vec<AccountId>)> {
-		self.into_iter().map(|(x, y, z)| (x, y, z.into_inner())).collect::<Vec<_>>()
-	}
-}

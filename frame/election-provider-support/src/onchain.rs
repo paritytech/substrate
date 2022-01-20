@@ -18,7 +18,7 @@
 //! An implementation of [`ElectionProvider`] that does an on-chain sequential phragmen.
 
 use crate::{
-	BoundedSupportsOf, ElectionDataProvider, ElectionProvider, IntoUnboundedVoters, PageIndex,
+	BoundedSupportsOf, ElectionDataProvider, ElectionProvider, PageIndex,
 	TruncateIntoBoundedSupports,
 };
 use frame_support::{
@@ -128,13 +128,8 @@ impl<T: Config> ElectionProvider for OnChainSequentialPhragmen<T> {
 		let stake_of =
 			|w: &T::AccountId| -> VoteWeight { stake_map.get(w).cloned().unwrap_or_default() };
 
-		let ElectionResult { winners: _, assignments } = seq_phragmen::<_, T::Accuracy>(
-			desired_targets as usize,
-			targets,
-			voters.into_unbounded_voters(),
-			None,
-		)
-		.map_err(Error::from)?;
+		let ElectionResult::<_, T::Accuracy> { winners: _, assignments } =
+			seq_phragmen(desired_targets as usize, targets, voters, None).map_err(Error::from)?;
 
 		let staked = assignment_ratio_to_staked_normalized(assignments, &stake_of)?;
 
