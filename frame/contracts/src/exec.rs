@@ -110,7 +110,7 @@ pub trait Ext: sealing::Sealed {
 	///
 	/// # Return Value
 	///
-	/// Result<(ExecReturnValue, CodeSize), (ExecError, CodeSize)>
+	/// Result<ExecReturnValue, ExecError>
 	fn delegate_call(
 		&mut self,
 		code: CodeHash<Self::T>,
