@@ -52,3 +52,4 @@ try-runtime = ["frame-support/try-runtime"]
 conditional-storage = []
 # Disable ui tests
 disable-ui-tests = []
+no-metadata-docs = ["frame-support/no-metadata-docs"]

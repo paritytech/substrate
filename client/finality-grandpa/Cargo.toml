@@ -55,7 +55,7 @@ finality-grandpa = { version = "0.14.1", features = [
 ] }
 sc-network = { version = "0.10.0-dev", path = "../network" }
 sc-network-test = { version = "0.8.0", path = "../network/test" }
-sp-keyring = { version = "4.0.0-dev", path = "../../primitives/keyring" }
+sp-keyring = { version = "4.1.0-dev", path = "../../primitives/keyring" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
 sp-tracing = { version = "4.0.0", path = "../../primitives/tracing" }
 tokio = "1.15"

@@ -34,7 +34,7 @@ sp-keystore = { version = "0.10.0", path = "../../../../primitives/keystore" }
 [dev-dependencies]
 sc-consensus = { version = "0.10.0-dev", path = "../../../consensus/common" }
 serde_json = "1.0.74"
-sp-keyring = { version = "4.0.0-dev", path = "../../../../primitives/keyring" }
+sp-keyring = { version = "4.1.0-dev", path = "../../../../primitives/keyring" }
 sc-keystore = { version = "4.0.0-dev", path = "../../../keystore" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../../../test-utils/runtime/client" }
 tempfile = "3.1.0"
