@@ -21,7 +21,7 @@ sp-tasks = { version = "4.0.0-dev", path = "../../primitives/tasks" }
 sp-trie = { version = "4.0.0", path = "../../primitives/trie" }
 sp-version = { version = "4.0.0-dev", path = "../../primitives/version" }
 sp-panic-handler = { version = "4.0.0", path = "../../primitives/panic-handler" }
-wasmi = "0.9.1"
+wasmi = "0.11"
 lazy_static = "1.4.0"
 sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
 sp-wasm-interface = { version = "4.1.0-dev", path = "../../primitives/wasm-interface" }
@@ -56,5 +56,4 @@ default = ["std"]
 std = []
 wasm-extern-trace = []
 wasmtime = ["sc-executor-wasmtime"]
-wasmi-errno = ["wasmi/errno"]
 wasmer-sandbox = ["sc-executor-common/wasmer-sandbox"]

@@ -149,7 +149,6 @@ pallet-balances = { version = "4.0.0-dev", path = "../../../frame/balances" }
 [features]
 default = ["cli"]
 cli = [
-	"node-executor/wasmi-errno",
 	"node-inspect",
 	"sc-cli",
 	"frame-benchmarking-cli",
