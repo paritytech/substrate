@@ -735,6 +735,19 @@ fn set_code_hash() {
 				.result
 				.unwrap();
 		assert_return_code!(result, 2);
+
+		// Checking for the last event only
+		assert_eq!(
+			System::events()[13],
+			EventRecord {
+				phase: Phase::Initialization,
+				event: Event::Contracts(crate::Event::ContractCodeUpdated {
+					contract: contract_addr.clone(),
+					code_hash: new_code_hash.clone(),
+				}),
+				topics: vec![],
+			},
+		);
 	});
 }
 

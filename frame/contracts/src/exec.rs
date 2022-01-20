@@ -1026,6 +1026,10 @@ where
 		top_frame.contract_info().code_hash = hash;
 		increment_refcount::<Self::T>(hash)?;
 		decrement_refcount::<Self::T>(prev_hash)?;
+		Contracts::<Self::T>::deposit_event(Event::ContractCodeUpdated {
+			contract: top_frame.account_id.clone(),
+			code_hash: hash,
+		});
 		Ok(())
 	}
 
