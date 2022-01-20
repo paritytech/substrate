@@ -26,7 +26,7 @@ rand = "0.8.4"
 parity-scale-codec = { version = "2.3.1", features = ["derive"] }
 sp-application-crypto = { version = "4.0.0", path = "../../primitives/application-crypto" }
 sp-arithmetic = { version = "4.0.0", path = "../../primitives/arithmetic" }
-sp-runtime = { version = "4.0.0", path = "../../primitives/runtime" }
+sp-runtime = { version = "4.1.0-dev", path = "../../primitives/runtime" }
 sc-chain-spec = { version = "4.0.0-dev", path = "../../client/chain-spec" }
 sc-utils = { version = "4.0.0-dev", path = "../utils" }
 sp-consensus = { version = "0.10.0-dev", path = "../../primitives/consensus/common" }

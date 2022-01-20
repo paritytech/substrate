@@ -22,6 +22,7 @@ use frame_support::{
 	weights::Weight,
 };
 
+/// Migrate the pallet storage to v1.
 pub fn migrate_to_v1<T: Config<I>, I: 'static, P: GetStorageVersion + PalletInfoAccess>(
 ) -> frame_support::weights::Weight {
 	let on_chain_storage_version = <P as GetStorageVersion>::on_chain_storage_version();

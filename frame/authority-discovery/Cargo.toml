@@ -23,7 +23,7 @@ sp-std = { version = "4.0.0", default-features = false, path = "../../primitives
 pallet-session = { version = "4.0.0-dev", features = [
 	"historical",
 ], path = "../session", default-features = false }
-sp-runtime = { version = "4.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-runtime = { version = "4.1.0-dev", default-features = false, path = "../../primitives/runtime" }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 
