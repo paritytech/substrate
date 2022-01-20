@@ -72,7 +72,7 @@ where
 						.expect("adding a missing import stub doesn't fail");
 				} else {
 					log::warn!(
-						"Missing import (instantiation will be extremely slow): '{}' {:?}",
+						"Missing import: '{}' {:?}",
 						name,
 						func_ty
 					);
