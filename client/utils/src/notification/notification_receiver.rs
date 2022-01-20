@@ -25,6 +25,13 @@ use std::{
 
 use ::futures::stream::{FusedStream, Stream};
 
+/// The receiving half of the notifications channel(s).
+#[derive(Debug)]
+pub struct NotificationReceiver<Payload> {
+	pub(super) underlying_rx: TracingUnboundedReceiver<Payload>,
+	pub(super) _subs_guard: SubscriptionGuard<Registry<Payload>>,
+}
+
 impl<Payload> Unpin for NotificationReceiver<Payload> {}
 
 impl<Payload> Stream for NotificationReceiver<Payload> {

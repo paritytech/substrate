@@ -34,10 +34,16 @@ use crate::{
 	pubsub::{SharedRegistry, SubscriptionGuard},
 };
 
-mod impl_notification_receiver;
-mod impl_notification_sender;
-mod impl_notification_stream;
-mod impl_registry;
+mod notification_receiver;
+mod notification_sender;
+mod notification_stream;
+mod registry;
+
+pub use notification_receiver::NotificationReceiver;
+pub use notification_sender::NotificationSender;
+pub use notification_stream::NotificationStream;
+
+use registry::Registry;
 
 /// Trait used to define the "tracing key" string used to tag
 /// and identify the mpsc channels.
@@ -45,36 +51,6 @@ pub trait TracingKeyStr {
 	/// Const `str` representing the "tracing key" used to tag and identify
 	/// the mpsc channels owned by the object implemeting this trait.
 	const TRACING_KEY: &'static str;
-}
-
-#[derive(Debug)]
-pub struct NotificationReceiver<Payload> {
-	underlying_rx: TracingUnboundedReceiver<Payload>,
-	_subs_guard: SubscriptionGuard<Registry<Payload>>,
-}
-
-/// The sending half of the notifications channel(s).
-///
-/// Used to send notifications from the BEEFY gadget side.
-pub struct NotificationSender<Payload> {
-	registry: SharedRegistry<Registry<Payload>>,
-}
-
-/// The receiving half of the notifications channel.
-///
-/// The `NotificationStream` entity stores the `SharedSenders` so it can be
-/// used to add more subscriptions.
-#[derive(Clone)]
-pub struct NotificationStream<Payload, TK: TracingKeyStr> {
-	registry: SharedRegistry<Registry<Payload>>,
-	_pd: std::marker::PhantomData<TK>,
-}
-
-/// The shared structure to keep track on subscribers.
-#[derive(Debug)]
-struct Registry<Payload> {
-	id_sequence: IDSequence,
-	subscribers: HashMap<SeqID, TracingUnboundedSender<Payload>>,
 }
 
 #[cfg(test)]

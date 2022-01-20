@@ -46,7 +46,8 @@ where
 	}
 }
 
-/// A guard structure that will perform unsubscription upon being dropped.
+/// A guard structure wrapping `R: Unsubscribe`, that will perform unsubscription upon being
+/// dropped.
 #[derive(Debug)]
 pub struct SubscriptionGuard<R>
 where

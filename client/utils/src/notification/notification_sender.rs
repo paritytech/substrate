@@ -18,6 +18,13 @@
 
 use super::*;
 
+/// The sending half of the notifications channel(s).
+///
+/// Used to send notifications from the BEEFY gadget side.
+pub struct NotificationSender<Payload> {
+	registry: SharedRegistry<Registry<Payload>>,
+}
+
 impl<Payload> Clone for NotificationSender<Payload> {
 	fn clone(&self) -> Self {
 		Self { registry: self.registry.clone() }

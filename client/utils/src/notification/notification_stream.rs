@@ -18,6 +18,16 @@
 
 use super::*;
 
+/// The receiving half of the notifications channel.
+///
+/// The `NotificationStream` entity stores the `SharedSenders` so it can be
+/// used to add more subscriptions.
+#[derive(Clone)]
+pub struct NotificationStream<Payload, TK: TracingKeyStr> {
+	registry: SharedRegistry<Registry<Payload>>,
+	_pd: std::marker::PhantomData<TK>,
+}
+
 impl<Payload, TK: TracingKeyStr> NotificationStream<Payload, TK> {
 	/// Creates a new pair of receiver and sender of `Payload` notifications.
 	pub fn channel() -> (NotificationSender<Payload>, Self) {

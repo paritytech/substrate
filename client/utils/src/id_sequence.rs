@@ -16,12 +16,13 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+//! Produce opaque sequential IDs.
+
 type AnInt = u64;
 
 /// A Sequence of IDs.
-///
-/// The `Clone` trait is intentionally not defined on this type.
 #[derive(Debug, Default)]
+// The `Clone` trait is intentionally not defined on this type.
 pub struct IDSequence {
 	next_id: AnInt,
 }
@@ -40,9 +41,12 @@ impl std::fmt::Display for SeqID {
 }
 
 impl IDSequence {
+	/// Create a new ID-sequence.
 	pub fn new() -> Self {
 		Default::default()
 	}
+
+	/// Obtain another ID from this sequence.
 	pub fn next_id(&mut self) -> SeqID {
 		let id = SeqID(self.next_id);
 		self.next_id += 1;

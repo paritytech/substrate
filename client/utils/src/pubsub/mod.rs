@@ -16,13 +16,31 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+//! Provides means to implement a typical Pub/Sub mechanism.
+//!
+//! When implementing a Pub/Sub it is usual to introduce types for
+//! the *producer*-side and the *consumer*-side.
+//! The *producer* keeps track on its *consumers* using a *registry*.
+//! That *registry* needs to be shared between both the *producer* and its *consumers*:
+//! - the *producer* — to dispatch the broadcast messages;
+//! - the *consumer* — in order to subscribe and unsubscribe.
+//!
+//! According to this module's idea,
+//! the shared *registry* should implement the following traits: `SubsBase`,
+//! `Subscribe<SubscribeOp>`, `Unsubscribe`.
+//!
+//! The *registry* upon subscription yields a subscription ID (defined as `SubsBase::SubsID`).
+//! The implementation should not usually touch the subscription ID from outside of the *registry*.
+//!
+//! The *producer* then holds a reference to the shared *registry* by wrapping it into
+//! `SharedRegistry<R>` (where `R` is the *registry*).
+//!
+//! The consumers hold a weak reference to the *registry* by having it wrapped
+//! into a `SubscriptionGuard<R>` (where `R` is the *registry*), along with the *consumer's*
+//! subsription ID. The unsubscription is done by the `SubscriptionGuard<R>` upon drop.
+
 mod subscription;
 pub use subscription::{SubsBase, Subscribe, Unsubscribe};
 
 mod shared_registry;
 pub use shared_registry::{SharedRegistry, SubscriptionGuard};
-
-mod channel;
-pub use channel::Channel;
-
-pub mod channels;

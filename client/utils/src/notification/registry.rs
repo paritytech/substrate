@@ -20,6 +20,13 @@ use super::*;
 
 use crate::pubsub::{SubsBase, Subscribe, Unsubscribe};
 
+/// The shared structure to keep track on subscribers.
+#[derive(Debug)]
+pub(super) struct Registry<Payload> {
+	pub(super) id_sequence: IDSequence,
+	pub(super) subscribers: HashMap<SeqID, TracingUnboundedSender<Payload>>,
+}
+
 impl<Payload> Default for Registry<Payload> {
 	fn default() -> Self {
 		Self { id_sequence: Default::default(), subscribers: Default::default() }
