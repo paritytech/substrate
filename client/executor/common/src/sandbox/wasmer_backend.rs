@@ -39,15 +39,15 @@ use crate::{
 environmental::environmental!(SandboxContextStore: trait SandboxContext);
 
 /// Wasmer specific context
-pub struct WasmerBackend {
+pub struct Backend {
 	store: wasmer::Store,
 }
 
-impl WasmerBackend {
+impl Backend {
 	pub fn new() -> Self {
 		let compiler = wasmer_compiler_singlepass::Singlepass::default();
 
-		WasmerBackend { store: wasmer::Store::new(&wasmer::JIT::new(compiler).engine()) }
+		Backend { store: wasmer::Store::new(&wasmer::JIT::new(compiler).engine()) }
 	}
 }
 
@@ -109,7 +109,7 @@ pub fn invoke_wasmer(
 }
 
 pub fn instantiate_wasmer(
-	context: &WasmerBackend,
+	context: &Backend,
 	wasm: &[u8],
 	guest_env: GuestEnvironment,
 	state: u32,
@@ -305,7 +305,7 @@ pub fn wasmer_dispatch_function(
 }
 
 pub fn wasmer_new_memory(
-	context: &WasmerBackend,
+	context: &Backend,
 	initial: u32,
 	maximum: Option<u32>,
 ) -> crate::error::Result<Memory> {

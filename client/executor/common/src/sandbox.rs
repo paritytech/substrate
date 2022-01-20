@@ -37,8 +37,8 @@ use wasmi::{RuntimeValue, Trap, TrapKind};
 
 #[cfg(feature = "wasmer-sandbox")]
 use wasmer_backend::{
-	instantiate_wasmer, invoke_wasmer, wasmer_new_memory, MemoryWrapper as WasmerMemoryWrapper,
-	WasmerBackend,
+	instantiate_wasmer, invoke_wasmer, wasmer_new_memory, Backend as WasmerBackend,
+	MemoryWrapper as WasmerMemoryWrapper,
 };
 
 use wasmi_backend::{
