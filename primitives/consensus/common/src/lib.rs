@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -332,7 +332,4 @@ impl<Block: BlockT> CanAuthorWith<Block> for NeverCanAuthor {
 pub trait SlotData {
 	/// Gets the slot duration.
 	fn slot_duration(&self) -> sp_std::time::Duration;
-
-	/// The static slot key
-	const SLOT_KEY: &'static [u8];
 }

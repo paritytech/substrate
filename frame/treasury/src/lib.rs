@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -139,7 +139,6 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
-	#[pallet::generate_storage_info]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
 	#[pallet::config]
@@ -167,6 +166,10 @@ pub mod pallet {
 		/// Minimum amount of funds that should be placed in a deposit for making a proposal.
 		#[pallet::constant]
 		type ProposalBondMinimum: Get<BalanceOf<Self, I>>;
+
+		/// Maximum amount of funds that should be placed in a deposit for making a proposal.
+		#[pallet::constant]
+		type ProposalBondMaximum: Get<Option<BalanceOf<Self, I>>>;
 
 		/// Period between successive spends.
 		#[pallet::constant]
@@ -404,7 +407,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	/// The needed bond for a proposal whose spend is `value`.
 	fn calculate_bond(value: BalanceOf<T, I>) -> BalanceOf<T, I> {
-		T::ProposalBondMinimum::get().max(T::ProposalBond::get() * value)
+		let mut r = T::ProposalBondMinimum::get().max(T::ProposalBond::get() * value);
+		if let Some(m) = T::ProposalBondMaximum::get() {
+			r = r.min(m);
+		}
+		r
 	}
 
 	/// Spend some money! returns number of approvals before spend.

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -26,9 +26,11 @@ use crate::{
 	AccountIdOf, Config, Schedule,
 };
 use codec::{Encode, MaxEncodedLen};
-use pwasm_utils::parity_wasm::elements::{self, External, Internal, MemoryType, Type, ValueType};
 use sp_runtime::traits::Hash;
 use sp_std::prelude::*;
+use wasm_instrument::parity_wasm::elements::{
+	self, External, Internal, MemoryType, Type, ValueType,
+};
 
 /// Imported memory must be located inside this module. The reason for hardcoding is that current
 /// compiler toolchains might not support specifying other modules than "env" for memory imports.
@@ -182,17 +184,16 @@ impl<'a, T: Config> ContractModule<'a, T> {
 
 	fn inject_gas_metering(self) -> Result<Self, &'static str> {
 		let gas_rules = self.schedule.rules(&self.module);
-		let contract_module = pwasm_utils::inject_gas_counter(self.module, &gas_rules, "seal0")
-			.map_err(|_| "gas instrumentation failed")?;
+		let contract_module =
+			wasm_instrument::gas_metering::inject(self.module, &gas_rules, "seal0")
+				.map_err(|_| "gas instrumentation failed")?;
 		Ok(ContractModule { module: contract_module, schedule: self.schedule })
 	}
 
 	fn inject_stack_height_metering(self) -> Result<Self, &'static str> {
-		let contract_module = pwasm_utils::stack_height::inject_limiter(
-			self.module,
-			self.schedule.limits.stack_height,
-		)
-		.map_err(|_| "stack height instrumentation failed")?;
+		let contract_module =
+			wasm_instrument::inject_stack_limiter(self.module, self.schedule.limits.stack_height)
+				.map_err(|_| "stack height instrumentation failed")?;
 		Ok(ContractModule { module: contract_module, schedule: self.schedule })
 	}
 
@@ -372,26 +373,34 @@ fn check_and_instrument<C: ImportSatisfyCheck, T: Config>(
 	original_code: &[u8],
 	schedule: &Schedule<T>,
 ) -> Result<(Vec<u8>, (u32, u32)), &'static str> {
-	let contract_module = ContractModule::new(&original_code, schedule)?;
-	contract_module.scan_exports()?;
-	contract_module.ensure_no_internal_memory()?;
-	contract_module.ensure_table_size_limit(schedule.limits.table_size)?;
-	contract_module.ensure_global_variable_limit(schedule.limits.globals)?;
-	contract_module.ensure_no_floating_types()?;
-	contract_module.ensure_parameter_limit(schedule.limits.parameters)?;
-	contract_module.ensure_br_table_size_limit(schedule.limits.br_table_size)?;
+	let result = (|| {
+		let contract_module = ContractModule::new(&original_code, schedule)?;
+		contract_module.scan_exports()?;
+		contract_module.ensure_no_internal_memory()?;
+		contract_module.ensure_table_size_limit(schedule.limits.table_size)?;
+		contract_module.ensure_global_variable_limit(schedule.limits.globals)?;
+		contract_module.ensure_no_floating_types()?;
+		contract_module.ensure_parameter_limit(schedule.limits.parameters)?;
+		contract_module.ensure_br_table_size_limit(schedule.limits.br_table_size)?;
 
-	// We disallow importing `gas` function here since it is treated as implementation detail.
-	let disallowed_imports = [b"gas".as_ref()];
-	let memory_limits =
-		get_memory_limits(contract_module.scan_imports::<C>(&disallowed_imports)?, schedule)?;
+		// We disallow importing `gas` function here since it is treated as implementation detail.
+		let disallowed_imports = [b"gas".as_ref()];
+		let memory_limits =
+			get_memory_limits(contract_module.scan_imports::<C>(&disallowed_imports)?, schedule)?;
 
-	let code = contract_module
-		.inject_gas_metering()?
-		.inject_stack_height_metering()?
-		.into_wasm_code()?;
+		let code = contract_module
+			.inject_gas_metering()?
+			.inject_stack_height_metering()?
+			.into_wasm_code()?;
 
-	Ok((code, memory_limits))
+		Ok((code, memory_limits))
+	})();
+
+	if let Err(msg) = &result {
+		log::debug!(target: "runtime::contracts", "CodeRejected: {}", msg);
+	}
+
+	result
 }
 
 fn do_preparation<C: ImportSatisfyCheck, T: Config>(

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -24,7 +24,8 @@ use crate::{
 	storage::Storage,
 	wasm::{PrefabWasmModule, ReturnCode as RuntimeReturnCode},
 	weights::WeightInfo,
-	BalanceOf, CodeStorage, Config, ContractInfoOf, Error, Pallet, Schedule,
+	BalanceOf, Code, CodeStorage, Config, ContractInfoOf, DefaultAddressGenerator, Error, Pallet,
+	Schedule,
 };
 use assert_matches::assert_matches;
 use codec::Encode;
@@ -33,7 +34,9 @@ use frame_support::{
 	dispatch::DispatchErrorWithPostInfo,
 	parameter_types,
 	storage::child,
-	traits::{BalanceStatus, Contains, Currency, OnInitialize, ReservableCurrency},
+	traits::{
+		BalanceStatus, ConstU32, ConstU64, Contains, Currency, OnInitialize, ReservableCurrency,
+	},
 	weights::{constants::WEIGHT_PER_SECOND, DispatchClass, PostDispatchInfo, Weight},
 };
 use frame_system::{self as system, EventRecord, Phase};
@@ -177,7 +180,6 @@ impl ChainExtension<Test> for TestExtension {
 }
 
 parameter_types! {
-	pub const BlockHashCount: u64 = 250;
 	pub BlockWeights: frame_system::limits::BlockWeights =
 		frame_system::limits::BlockWeights::simple_max(2 * WEIGHT_PER_SECOND);
 	pub static ExistentialDeposit: u64 = 1;
@@ -197,7 +199,7 @@ impl frame_system::Config for Test {
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = Event;
-	type BlockHashCount = BlockHashCount;
+	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
 	type AccountData = pallet_balances::AccountData<u64>;
@@ -220,13 +222,11 @@ impl pallet_balances::Config for Test {
 	type AccountStore = System;
 	type WeightInfo = ();
 }
-parameter_types! {
-	pub const MinimumPeriod: u64 = 1;
-}
+
 impl pallet_timestamp::Config for Test {
 	type Moment = u64;
 	type OnTimestampSet = ();
-	type MinimumPeriod = MinimumPeriod;
+	type MinimumPeriod = ConstU64<1>;
 	type WeightInfo = ();
 }
 impl pallet_utility::Config for Test {
@@ -237,7 +237,6 @@ impl pallet_utility::Config for Test {
 }
 parameter_types! {
 	pub const MaxValueSize: u32 = 16_384;
-	pub const DeletionQueueDepth: u32 = 1024;
 	pub const DeletionWeightLimit: Weight = 500_000_000_000;
 	pub const MaxCodeSize: u32 = 2 * 1024;
 	pub MySchedule: Schedule<Test> = <Schedule<Test>>::default();
@@ -282,11 +281,12 @@ impl Config for Test {
 	type WeightPrice = Self;
 	type WeightInfo = ();
 	type ChainExtension = TestExtension;
-	type DeletionQueueDepth = DeletionQueueDepth;
+	type DeletionQueueDepth = ConstU32<1024>;
 	type DeletionWeightLimit = DeletionWeightLimit;
 	type Schedule = MySchedule;
 	type DepositPerByte = DepositPerByte;
 	type DepositPerItem = DepositPerItem;
+	type AddressGenerator = DefaultAddressGenerator;
 }
 
 pub const ALICE: AccountId32 = AccountId32::new([1u8; 32]);
@@ -533,7 +533,8 @@ fn run_out_of_gas() {
 }
 
 fn initialize_block(number: u64) {
-	System::initialize(&number, &[0u8; 32].into(), &Default::default(), Default::default());
+	System::reset_events();
+	System::initialize(&number, &[0u8; 32].into(), &Default::default());
 }
 
 #[test]
@@ -1096,7 +1097,7 @@ fn crypto_hashes() {
 				<Pallet<Test>>::bare_call(ALICE, addr.clone(), 0, GAS_LIMIT, None, params, false)
 					.result
 					.unwrap();
-			assert!(result.is_success());
+			assert!(!result.did_revert());
 			let expected = hash_fn(input.as_ref());
 			assert_eq!(&result.data[..*expected_size], &*expected);
 		}
@@ -1385,7 +1386,7 @@ fn disabled_chain_extension_wont_deploy() {
 				vec![],
 				vec![],
 			),
-			"module uses chain extensions but chain extensions are disabled",
+			<Error<Test>>::CodeRejected,
 		);
 	});
 }
@@ -1545,7 +1546,8 @@ fn lazy_removal_partial_remove_works() {
 
 		// Put value into the contracts child trie
 		for val in &vals {
-			Storage::<Test>::write(&info.trie_id, &val.0, Some(val.2.clone()), None).unwrap();
+			Storage::<Test>::write(&info.trie_id, &val.0, Some(val.2.clone()), None, false)
+				.unwrap();
 		}
 		<ContractInfoOf<Test>>::insert(&addr, info.clone());
 
@@ -1629,7 +1631,8 @@ fn lazy_removal_does_no_run_on_full_block() {
 
 		// Put value into the contracts child trie
 		for val in &vals {
-			Storage::<Test>::write(&info.trie_id, &val.0, Some(val.2.clone()), None).unwrap();
+			Storage::<Test>::write(&info.trie_id, &val.0, Some(val.2.clone()), None, false)
+				.unwrap();
 		}
 		<ContractInfoOf<Test>>::insert(&addr, info.clone());
 
@@ -1712,7 +1715,8 @@ fn lazy_removal_does_not_use_all_weight() {
 
 		// Put value into the contracts child trie
 		for val in &vals {
-			Storage::<Test>::write(&info.trie_id, &val.0, Some(val.2.clone()), None).unwrap();
+			Storage::<Test>::write(&info.trie_id, &val.0, Some(val.2.clone()), None, false)
+				.unwrap();
 		}
 		<ContractInfoOf<Test>>::insert(&addr, info.clone());
 
@@ -1881,11 +1885,11 @@ fn reinstrument_does_charge() {
 
 		let result0 =
 			Contracts::bare_call(ALICE, addr.clone(), 0, GAS_LIMIT, None, zero.clone(), false);
-		assert!(result0.result.unwrap().is_success());
+		assert!(!result0.result.unwrap().did_revert());
 
 		let result1 =
 			Contracts::bare_call(ALICE, addr.clone(), 0, GAS_LIMIT, None, zero.clone(), false);
-		assert!(result1.result.unwrap().is_success());
+		assert!(!result1.result.unwrap().did_revert());
 
 		// They should match because both where called with the same schedule.
 		assert_eq!(result0.gas_consumed, result1.gas_consumed);
@@ -1899,7 +1903,7 @@ fn reinstrument_does_charge() {
 		// This call should trigger reinstrumentation
 		let result2 =
 			Contracts::bare_call(ALICE, addr.clone(), 0, GAS_LIMIT, None, zero.clone(), false);
-		assert!(result2.result.unwrap().is_success());
+		assert!(!result2.result.unwrap().did_revert());
 		assert!(result2.gas_consumed > result1.gas_consumed);
 		assert_eq!(
 			result2.gas_consumed,
@@ -2162,7 +2166,7 @@ fn ecdsa_recover() {
 			<Pallet<Test>>::bare_call(ALICE, addr.clone(), 0, GAS_LIMIT, None, params, false)
 				.result
 				.unwrap();
-		assert!(result.is_success());
+		assert!(!result.did_revert());
 		assert_eq!(result.data.as_ref(), &EXPECTED_COMPRESSED_PUBLIC_KEY);
 	})
 }
@@ -2805,6 +2809,126 @@ fn call_after_killed_account_needs_funding() {
 					topics: vec![],
 				},
 			]
+		);
+	});
+}
+
+#[test]
+fn contract_reverted() {
+	let (wasm, code_hash) = compile_module::<Test>("return_with_data").unwrap();
+
+	ExtBuilder::default().existential_deposit(100).build().execute_with(|| {
+		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+		let flags = ReturnFlags::REVERT;
+		let buffer = [4u8, 8, 15, 16, 23, 42];
+		let input = (flags.bits(), buffer).encode();
+
+		// We just upload the code for later use
+		assert_ok!(Contracts::upload_code(Origin::signed(ALICE), wasm.clone(), None));
+
+		// Calling extrinsic: revert leads to an error
+		assert_err_ignore_postinfo!(
+			Contracts::instantiate(
+				Origin::signed(ALICE),
+				0,
+				GAS_LIMIT,
+				None,
+				code_hash,
+				input.clone(),
+				vec![],
+			),
+			<Error<Test>>::ContractReverted,
+		);
+
+		// Calling extrinsic: revert leads to an error
+		assert_err_ignore_postinfo!(
+			Contracts::instantiate_with_code(
+				Origin::signed(ALICE),
+				0,
+				GAS_LIMIT,
+				None,
+				wasm,
+				input.clone(),
+				vec![],
+			),
+			<Error<Test>>::ContractReverted,
+		);
+
+		// Calling directly: revert leads to success but the flags indicate the error
+		// This is just a different way of transporting the error that allows the read out
+		// the `data` which is only there on success. Obviously, the contract isn't
+		// instantiated.
+		let result = Contracts::bare_instantiate(
+			ALICE,
+			0,
+			GAS_LIMIT,
+			None,
+			Code::Existing(code_hash),
+			input.clone(),
+			vec![],
+			false,
+		)
+		.result
+		.unwrap();
+		assert_eq!(result.result.flags, flags);
+		assert_eq!(result.result.data.0, buffer);
+		assert!(!<ContractInfoOf<Test>>::contains_key(result.account_id));
+
+		// Pass empty flags and therefore successfully instantiate the contract for later use.
+		let addr = Contracts::bare_instantiate(
+			ALICE,
+			0,
+			GAS_LIMIT,
+			None,
+			Code::Existing(code_hash),
+			ReturnFlags::empty().bits().encode(),
+			vec![],
+			false,
+		)
+		.result
+		.unwrap()
+		.account_id;
+
+		// Calling extrinsic: revert leads to an error
+		assert_err_ignore_postinfo!(
+			Contracts::call(Origin::signed(ALICE), addr.clone(), 0, GAS_LIMIT, None, input.clone()),
+			<Error<Test>>::ContractReverted,
+		);
+
+		// Calling directly: revert leads to success but the flags indicate the error
+		let result = Contracts::bare_call(ALICE, addr.clone(), 0, GAS_LIMIT, None, input, false)
+			.result
+			.unwrap();
+		assert_eq!(result.flags, flags);
+		assert_eq!(result.data.0, buffer);
+	});
+}
+
+#[test]
+fn code_rejected_error_works() {
+	let (wasm, _) = compile_module::<Test>("invalid_import").unwrap();
+	ExtBuilder::default().existential_deposit(200).build().execute_with(|| {
+		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+
+		assert_noop!(
+			Contracts::upload_code(Origin::signed(ALICE), wasm.clone(), None),
+			<Error<Test>>::CodeRejected,
+		);
+
+		let result = Contracts::bare_instantiate(
+			ALICE,
+			0,
+			GAS_LIMIT,
+			None,
+			Code::Upload(Bytes(wasm)),
+			vec![],
+			vec![],
+			true,
+		);
+		assert_err!(result.result, <Error<Test>>::CodeRejected);
+		assert_eq!(
+			std::str::from_utf8(&result.debug_message).unwrap(),
+			"module imports a non-existent function"
 		);
 	});
 }
