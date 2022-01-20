@@ -186,6 +186,17 @@ where
 		new
 	}
 
+	/// Return the current mmr root at header `header`.
+	fn mmr_root(&self, header: &B::Header) -> Option<MmrRootHash> {
+		let root = if find_authorities_change::<B>(header).is_some() {
+			find_mmr_root_digest::<B, AuthorityId>(header)
+		} else {
+			let at = BlockId::hash(header.hash());
+			self.client.runtime_api().mmr_root(&at).ok().flatten()
+		};
+		root
+	}
+
 	/// Verify `active` validator set for `block` against the key store
 	///
 	/// The critical case is, if we do have a public key in the key store which is not
@@ -214,7 +225,7 @@ where
 
 	fn handle_finality_notification(&mut self, notification: FinalityNotification<B>) {
 		trace!(target: "beefy", "🥩 Finality notification: {:?}", notification);
-
+		let mmr_root = self.mmr_root(&notification.header);
 		// update best GRANDPA finalized block we have seen
 		self.best_grandpa_block = *notification.header.number();
 
@@ -273,13 +284,12 @@ where
 				return
 			};
 
-			let mmr_root =
-				if let Some(hash) = find_mmr_root_digest::<B, Public>(&notification.header) {
-					hash
-				} else {
-					warn!(target: "beefy", "🥩 No MMR root digest found for: {:?}", notification.header.hash());
-					return
-				};
+			let mmr_root = if let Some(hash) = mmr_root {
+				hash
+			} else {
+				warn!(target: "beefy", "🥩 No MMR root digest found for: {:?}", notification.header.hash());
+				return
+			};
 
 			let payload = Payload::new(known_payload_ids::MMR_ROOT_ID, mmr_root.encode());
 			let commitment = Commitment {

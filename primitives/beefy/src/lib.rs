@@ -160,6 +160,8 @@ sp_api::decl_runtime_apis! {
 	{
 		/// Return the current active BEEFY validator set
 		fn validator_set() -> Option<ValidatorSet<crypto::AuthorityId>>;
+		/// Return the current mmr root hash
+		fn mmr_root() -> Option<MmrRootHash>;
 	}
 }
 
