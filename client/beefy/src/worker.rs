@@ -47,10 +47,10 @@ use crate::{
 	metric_inc, metric_set,
 	metrics::Metrics,
 	notification::{BeefyBestBlockSender, BeefySignedCommitmentSender},
-	round, Client,
+	round, Client, SyncOracle,
 };
 
-pub(crate) struct WorkerParams<B, BE, C>
+pub(crate) struct WorkerParams<B, BE, C, SO>
 where
 	B: Block,
 {
@@ -63,14 +63,16 @@ where
 	pub gossip_validator: Arc<GossipValidator<B>>,
 	pub min_block_delta: u32,
 	pub metrics: Option<Metrics>,
+	pub sync_oracle: SO,
 }
 
 /// A BEEFY worker plays the BEEFY protocol
-pub(crate) struct BeefyWorker<B, C, BE>
+pub(crate) struct BeefyWorker<B, C, BE, SO>
 where
 	B: Block,
 	BE: Backend<B>,
 	C: Client<B, BE>,
+	SO: SyncOracle + Send + Sync + Clone + 'static,
 {
 	client: Arc<C>,
 	backend: Arc<BE>,
@@ -91,16 +93,19 @@ where
 	beefy_best_block_sender: BeefyBestBlockSender<B>,
 	/// Validator set id for the last signed commitment
 	last_signed_id: u64,
+	/// Handle to the sync oracle
+	sync_oracle: SO,
 	// keep rustc happy
 	_backend: PhantomData<BE>,
 }
 
-impl<B, C, BE> BeefyWorker<B, C, BE>
+impl<B, C, BE, SO> BeefyWorker<B, C, BE, SO>
 where
 	B: Block + Codec,
 	BE: Backend<B>,
 	C: Client<B, BE>,
 	C::Api: BeefyApi<B>,
+	SO: SyncOracle + Send + Sync + Clone + 'static,
 {
 	/// Return a new BEEFY worker instance.
 	///
@@ -108,7 +113,7 @@ where
 	/// BEEFY pallet has been deployed on-chain.
 	///
 	/// The BEEFY pallet is needed in order to keep track of the BEEFY authority set.
-	pub(crate) fn new(worker_params: WorkerParams<B, BE, C>) -> Self {
+	pub(crate) fn new(worker_params: WorkerParams<B, BE, C, SO>) -> Self {
 		let WorkerParams {
 			client,
 			backend,
@@ -119,6 +124,7 @@ where
 			gossip_validator,
 			min_block_delta,
 			metrics,
+			sync_oracle,
 		} = worker_params;
 
 		BeefyWorker {
@@ -136,17 +142,19 @@ where
 			best_beefy_block: None,
 			last_signed_id: 0,
 			beefy_best_block_sender,
+			sync_oracle,
 			_backend: PhantomData,
 		}
 	}
 }
 
-impl<B, C, BE> BeefyWorker<B, C, BE>
+impl<B, C, BE, SO> BeefyWorker<B, C, BE, SO>
 where
 	B: Block,
 	BE: Backend<B>,
 	C: Client<B, BE>,
 	C::Api: BeefyApi<B>,
+	SO: SyncOracle + Send + Sync + Clone + 'static,
 {
 	/// Return `true`, if we should vote on block `number`
 	fn should_vote_on(&self, number: NumberFor<B>) -> bool {
@@ -400,6 +408,11 @@ where
 		));
 
 		loop {
+			if self.sync_oracle.is_major_syncing() {
+				debug!(target: "beefy", "Skipping initialization due to sync.");
+				continue
+			}
+
 			let engine = self.gossip_engine.clone();
 			let gossip_engine = future::poll_fn(|cx| engine.lock().poll_unpin(cx));
 
