@@ -166,13 +166,19 @@ pub struct Protocol<B: BlockT> {
 	pending_messages: VecDeque<CustomMessageOutcome<B>>,
 	config: ProtocolConfig,
 	genesis_hash: B::Hash,
+	/// State machine that handles the list of in-progress requests. Only full node peers are
+	/// registered.
 	sync: ChainSync<B>,
-	// All connected peers
+	// All connected peers. Contains both full and light node peers.
 	peers: HashMap<PeerId, Peer<B>>,
 	chain: Arc<dyn Client<B>>,
 	/// List of nodes for which we perform additional logging because they are important for the
 	/// user.
 	important_peers: HashSet<PeerId>,
+	/// Value that was passed as part of the configuration. Used to cap the number of full nodes.
+	default_peers_set_num_full: usize,
+	/// Number of slots to allocate to light nodes.
+	default_peers_set_num_light: usize,
 	/// Used to report reputation changes.
 	peerset_handle: sc_peerset::PeersetHandle,
 	/// Handles opening the unique substream and sending and receiving raw messages.
@@ -428,6 +434,12 @@ impl<B: BlockT> Protocol<B> {
 			genesis_hash: info.genesis_hash,
 			sync,
 			important_peers,
+			default_peers_set_num_full: network_config.default_peers_set_num_full as usize,
+			default_peers_set_num_light: {
+				let total = network_config.default_peers_set.out_peers +
+					network_config.default_peers_set.in_peers;
+				total.saturating_sub(network_config.default_peers_set_num_full) as usize
+			},
 			peerset_handle: peerset_handle.clone(),
 			behaviour,
 			notification_protocols: network_config
@@ -806,6 +818,21 @@ impl<B: BlockT> Protocol<B> {
 				self.behaviour.disconnect_peer(&who, HARDCODED_PEERSETS_SYNC);
 				return Err(())
 			}
+		}
+
+		if status.roles.is_full() && self.sync.num_peers() >= self.default_peers_set_num_full {
+			debug!(target: "sync", "Too many full nodes, rejecting {}", who);
+			self.behaviour.disconnect_peer(&who, HARDCODED_PEERSETS_SYNC);
+			return Err(())
+		}
+
+		if status.roles.is_light() &&
+			(self.peers.len() - self.sync.num_peers()) < self.default_peers_set_num_light
+		{
+			// Make sure that not all slots are occupied by light clients.
+			debug!(target: "sync", "Too many light nodes, rejecting {}", who);
+			self.behaviour.disconnect_peer(&who, HARDCODED_PEERSETS_SYNC);
+			return Err(())
 		}
 
 		let peer = Peer {

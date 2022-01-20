@@ -648,6 +648,11 @@ impl<B: BlockT> ChainSync<B> {
 		self.downloaded_blocks
 	}
 
+	/// Returns the current number of peers stored within this state machine.
+	pub fn num_peers(&self) -> usize {
+		self.peers.len()
+	}
+
 	/// Handle a new connected peer.
 	///
 	/// Call this method whenever we connect to a new peer.

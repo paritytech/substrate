@@ -86,9 +86,12 @@ pub struct NetworkParams {
 	#[clap(long, value_name = "COUNT", default_value = "25")]
 	pub out_peers: u32,
 
-	/// Specify the maximum number of incoming connections we're accepting.
+	/// Maximum number of inbound full nodes peers.
 	#[clap(long, value_name = "COUNT", default_value = "25")]
 	pub in_peers: u32,
+	/// Maximum number of inbound light nodes peers.
+	#[clap(long, value_name = "COUNT", default_value = "100")]
+	pub in_peers_light: u32,
 
 	/// Disable mDNS discovery.
 	///
@@ -188,22 +191,23 @@ impl NetworkParams {
 		// Activate if the user explicitly requested local discovery, `--dev` is given or the
 		// chain type is `Local`/`Development`
 		let allow_non_globals_in_dht =
-			self.discover_local ||
-				is_dev || matches!(chain_type, ChainType::Local | ChainType::Development);
+			self.discover_local
+				|| is_dev || matches!(chain_type, ChainType::Local | ChainType::Development);
 
 		let allow_private_ipv4 = match (self.allow_private_ipv4, self.no_private_ipv4) {
 			(true, true) => unreachable!("`*_private_ipv4` flags are mutually exclusive; qed"),
 			(true, false) => true,
 			(false, true) => false,
-			(false, false) =>
-				is_dev || matches!(chain_type, ChainType::Local | ChainType::Development),
+			(false, false) => {
+				is_dev || matches!(chain_type, ChainType::Local | ChainType::Development)
+			},
 		};
 
 		NetworkConfiguration {
 			boot_nodes,
 			net_config_path,
 			default_peers_set: SetConfig {
-				in_peers: self.in_peers,
+				in_peers: self.in_peers + self.in_peers_light,
 				out_peers: self.out_peers,
 				reserved_nodes: self.reserved_nodes.clone(),
 				non_reserved_mode: if self.reserved_only {
@@ -212,6 +216,7 @@ impl NetworkParams {
 					NonReservedPeerMode::Accept
 				},
 			},
+			default_peers_set_num_full: self.in_peers + self.out_peers,
 			listen_addresses,
 			public_addresses,
 			extra_sets: Vec::new(),
