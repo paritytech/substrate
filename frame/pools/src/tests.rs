@@ -64,7 +64,73 @@ mod unbond_pool {
 		// zero case
 	}
 }
-mod sub_pools_container {}
+mod sub_pools_container {
+	use super::*;
+
+	#[test]
+	fn maybe_merge_pools_works() {
+		ExtBuilder::default().build_and_execute(|| {
+			assert_eq!(<Runtime as Config>::MaxUnbonding::get(), 5);
+
+			// Given
+			let mut sp0 = SubPoolsContainer::<Runtime> {
+				no_era: UnbondPool::<Runtime>::default(),
+				with_era: std::collections::BTreeMap::from([
+					(0, UnbondPool::<Runtime>::new(10, 10)),
+					(1, UnbondPool::<Runtime>::new(10, 10)),
+					(2, UnbondPool::<Runtime>::new(20, 20)),
+					(3, UnbondPool::<Runtime>::new(30, 30)),
+					(4, UnbondPool::<Runtime>::new(40, 40)),
+				])
+				.try_into()
+				.unwrap(),
+			};
+
+			// When `current_era < MaxUnbonding`,
+			let sp1 = sp0.clone().maybe_merge_pools(3);
+
+			// Then it exits early without modifications
+			assert_eq!(sp1, sp0);
+
+			// When `current_era == MaxUnbonding`,
+			let mut sp1 = sp1.maybe_merge_pools(4);
+
+			// Then it exits early without modifications
+			assert_eq!(sp1, sp0);
+
+			// Given we have entries for era 0..=5
+			sp1.with_era.insert(5, UnbondPool::<Runtime>::new(50, 50));
+			sp0.with_era.insert(5, UnbondPool::<Runtime>::new(50, 50));
+
+			// When  `current_era - MaxUnbonding == 0`,
+			let sp1 = sp1.maybe_merge_pools(5);
+
+			// Then era 0 is merged into the `no_era` pool
+			sp0.no_era = sp0.with_era.remove(&0).unwrap();
+			assert_eq!(sp1, sp0);
+
+			// When `current_era - MaxUnbonding == 1`
+			let sp2 = sp1.maybe_merge_pools(6);
+			let era_1_pool = sp0.with_era.remove(&1).unwrap();
+
+			// Then era 1 is merged into the `no_era` pool
+			sp0.no_era.points += era_1_pool.points;
+			sp0.no_era.balance += era_1_pool.balance;
+			assert_eq!(sp2, sp0);
+
+			// When `current_era - MaxUnbonding == 5`, so all pools with era <= 4 are removed
+			let sp3 = sp2.maybe_merge_pools(10);
+
+			// Then all eras <= 5 are merged into the `no_era` pool
+			for era in 2..=5 {
+				let to_merge = sp0.with_era.remove(&era).unwrap();
+				sp0.no_era.points += to_merge.points;
+				sp0.no_era.balance += to_merge.balance;
+			}
+			assert_eq!(sp3, sp0);
+		});
+	}
+}
 
 mod join {}
 

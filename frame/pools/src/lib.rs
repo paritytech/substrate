@@ -30,7 +30,7 @@ use frame_support::{
 	pallet_prelude::*,
 	storage::bounded_btree_map::BoundedBTreeMap,
 	traits::{Currency, ExistenceRequirement, Get},
-	DefaultNoBound,
+	DefaultNoBound, RuntimeDebugNoBound,
 };
 use scale_info::TypeInfo;
 use sp_arithmetic::{FixedPointNumber, FixedU128};
@@ -65,7 +65,7 @@ type SubPoolsWithEra<T> = BoundedBTreeMap<EraIndex, UnbondPool<T>, <T as Config>
 
 const POINTS_TO_BALANCE_INIT_RATIO: u32 = 1;
 
-#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, frame_support::RuntimeDebugNoBound)]
+#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, RuntimeDebugNoBound)]
 #[cfg_attr(feature = "std", derive(Clone, PartialEq))]
 #[codec(mel_bound(T: Config))]
 #[scale_info(skip_type_params(T))]
@@ -83,7 +83,7 @@ pub struct Delegator<T: Config> {
 	unbonding_era: Option<EraIndex>,
 }
 
-#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, frame_support::RuntimeDebugNoBound)]
+#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, RuntimeDebugNoBound)]
 #[cfg_attr(feature = "std", derive(Clone, PartialEq))]
 #[codec(mel_bound(T: Config))]
 #[scale_info(skip_type_params(T))]
@@ -137,7 +137,7 @@ impl<T: Config> PrimaryPool<T> {
 	}
 }
 
-#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, frame_support::RuntimeDebugNoBound)]
+#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, RuntimeDebugNoBound)]
 #[cfg_attr(feature = "std", derive(Clone, PartialEq))]
 #[codec(mel_bound(T: Config))]
 #[scale_info(skip_type_params(T))]
@@ -166,13 +166,20 @@ impl<T: Config> RewardPool<T> {
 	}
 }
 
-#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, DefaultNoBound)]
-#[cfg_attr(feature = "std", derive(frame_support::DebugNoBound, Clone, PartialEq))]
+#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, DefaultNoBound, RuntimeDebugNoBound)]
+#[cfg_attr(feature = "std", derive(Clone, PartialEq))]
 #[codec(mel_bound(T: Config))]
 #[scale_info(skip_type_params(T))]
 struct UnbondPool<T: Config> {
 	points: PointsOf<T>,
 	balance: BalanceOf<T>,
+}
+
+impl<T: Config> UnbondPool<T> {
+	#[cfg(feature = "std")]
+	fn new(points: PointsOf<T>, balance: BalanceOf<T>) -> Self {
+		Self { points, balance }
+	}
 }
 
 impl<T: Config> UnbondPool<T> {
@@ -214,14 +221,14 @@ impl<T: Config> UnbondPool<T> {
 	}
 }
 
-#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, DefaultNoBound)]
-#[cfg_attr(feature = "std", derive(frame_support::DebugNoBound, Clone, PartialEq))]
+#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, DefaultNoBound, RuntimeDebugNoBound)]
+#[cfg_attr(feature = "std", derive(Clone, PartialEq))]
 #[codec(mel_bound(T: Config))]
 #[scale_info(skip_type_params(T))]
 struct SubPoolsContainer<T: Config> {
 	/// A general, era agnostic pool of funds that have fully unbonded. The pools
 	/// of `self.with_era` will lazily be merged into into this pool if they are
-	/// older then `current_era - T::MAX_UNBONDING`.
+	/// older then `current_era - MaxUnbonding`.
 	no_era: UnbondPool<T>,
 	/// Map of era => unbond pools.
 	with_era: SubPoolsWithEra<T>,
@@ -232,21 +239,25 @@ impl<T: Config> SubPoolsContainer<T> {
 	/// era.
 	fn maybe_merge_pools(mut self, current_era: EraIndex) -> Self {
 		if current_era < T::MaxUnbonding::get().into() {
-			// For the first `T::MAX_UNBONDING` eras of the chain we don't need to do anything.
-			// I.E. if `MAX_UNBONDING` is 5 and we are in era 4 we can add a pool for this era and
-			// have exactly `MAX_UNBONDING` pools.
+			// For the first `0..MaxUnbonding` eras of the chain we don't need to do anything.
+			// I.E. if `MaxUnbonding` is 5 and we are in era 4 we can add a pool for this era and
+			// have exactly `MaxUnbonding` pools.
 			return self;
 		}
 
-		//  I.E. if `MAX_UNBONDING` is 5 and current era is 10, we only want to retain pools 6..=10.
-		let oldest_era_to_keep = current_era - T::MaxUnbonding::get().saturating_add(1);
+		//  I.E. if `MaxUnbonding` is 5 and current era is 10, we only want to retain pools 6..=10.
+		let newest_era_to_remove = current_era.saturating_sub(T::MaxUnbonding::get());
 
-		let eras_to_remove: Vec<_> =
-			self.with_era.keys().cloned().filter(|era| *era < oldest_era_to_keep).collect();
+		let eras_to_remove: Vec<_> = self
+			.with_era
+			.keys()
+			.cloned()
+			.filter(|era| *era <= newest_era_to_remove)
+			.collect();
 		for era in eras_to_remove {
 			if let Some(p) = self.with_era.remove(&era) {
-				self.no_era.points.saturating_add(p.points);
-				self.no_era.balance.saturating_add(p.balance);
+				self.no_era.points = self.no_era.points.saturating_add(p.points);
+				self.no_era.balance = self.no_era.balance.saturating_add(p.balance);
 			} else {
 				// the world is broken
 			}

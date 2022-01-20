@@ -113,10 +113,6 @@ impl pallet_balances::Config for Runtime {
 	type WeightInfo = ();
 }
 
-parameter_types! {
-	pub static MaxUnbonding: u32 = 5;
-}
-
 pub struct BalanceToU128;
 impl Convert<Balance, u128> for BalanceToU128 {
 	fn convert(n: Balance) -> u128 {
@@ -133,6 +129,10 @@ impl Convert<u128, Balance> for U128ToBalance {
 			n as Balance
 		}
 	}
+}
+
+parameter_types! {
+	pub static MaxUnbonding: u32 = 5;
 }
 
 impl pools::Config for Runtime {
