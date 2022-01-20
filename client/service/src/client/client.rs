@@ -1726,9 +1726,8 @@ where
 			.block_status(&BlockId::Hash(hash))
 			.map_err(|e| ConsensusError::ClientImport(e.to_string()))?
 		{
-			BlockStatus::InChainWithState | BlockStatus::Queued if !import_existing =>
+			BlockStatus::InChainWithState | BlockStatus::Queued =>
 				return Ok(ImportResult::AlreadyInChain),
-			BlockStatus::InChainWithState | BlockStatus::Queued => {},
 			BlockStatus::InChainPruned if !import_existing =>
 				return Ok(ImportResult::AlreadyInChain),
 			BlockStatus::InChainPruned => {},

@@ -281,7 +281,7 @@ pub mod pallet {
 
 			// defensive only: we resize `meta.pages` once to be `T::Pages` elements once, and never
 			// resize it again; `page` is checked here to be in bound; element must exist; qed.
-			if let Some(mut page_bit) = metadata.pages.get_mut(page as usize) {
+			if let Some(page_bit) = metadata.pages.get_mut(page as usize) {
 				*page_bit = maybe_solution.is_some();
 			} else {
 				debug_assert!(false)
@@ -366,7 +366,6 @@ pub mod pallet {
 		StorageMap<_, Twox64Concat, T::AccountId, SubmissionMetadata<T>>;
 
 	#[pallet::pallet]
-	#[pallet::generate_storage_info]
 	pub struct Pallet<T>(PhantomData<T>);
 
 	#[pallet::event]

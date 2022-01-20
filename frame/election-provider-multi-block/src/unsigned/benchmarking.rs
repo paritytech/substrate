@@ -20,6 +20,6 @@ frame_benchmarking::benchmarks! {
 
 frame_benchmarking::impl_benchmark_test_suite!(
 	UnsignedPallet,
-	crate::mock::ExtBuilder::default().build_offchainify(10).0,
+	crate::mock::ExtBuilder::unsigned().build_offchainify().0,
 	crate::mock::Runtime,
 );

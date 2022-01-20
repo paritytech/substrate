@@ -1985,7 +1985,7 @@ pub mod pallet_prelude {
 /// 	pub trait Config: frame_system::Config {
 /// 		#[pallet::constant] // put the constant in metadata
 /// 		type MyGetParam: Get<u32>;
-/// 		type Balance: Parameter + From<u8>;
+/// 		type Balance: Parameter + MaxEncodedLen + From<u8>;
 /// 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 /// 	}
 ///
@@ -2174,7 +2174,7 @@ pub mod pallet_prelude {
 /// 	pub trait Config<I: 'static = ()>: frame_system::Config {
 /// 		#[pallet::constant]
 /// 		type MyGetParam: Get<u32>;
-/// 		type Balance: Parameter + From<u8>;
+/// 		type Balance: Parameter + MaxEncodedLen + From<u8>;
 /// 		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
 /// 	}
 ///

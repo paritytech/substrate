@@ -20,8 +20,8 @@
 use proc_macro2::{Span, TokenStream};
 
 use syn::{
-	parse_quote, spanned::Spanned, token, Attribute, Error, FnArg, Ident, ItemTrait, Lit, Meta,
-	NestedMeta, Pat, PatType, Result, Signature, TraitItem, TraitItemMethod, Type,
+	parse::Parse, parse_quote, spanned::Spanned, token, Error, FnArg, Ident, ItemTrait, LitInt,
+	Pat, PatType, Result, Signature, TraitItem, TraitItemMethod, Type,
 };
 
 use proc_macro_crate::{crate_name, FoundCrate};
@@ -35,31 +35,65 @@ use quote::quote;
 
 use inflector::Inflector;
 
+mod attributes {
+	syn::custom_keyword!(register_only);
+}
+
 /// Runtime interface function with all associated versions of this function.
 pub struct RuntimeInterfaceFunction<'a> {
-	latest_version: u32,
+	latest_version_to_call: Option<u32>,
 	versions: BTreeMap<u32, &'a TraitItemMethod>,
 }
 
 impl<'a> RuntimeInterfaceFunction<'a> {
-	fn new(version: u32, trait_item: &'a TraitItemMethod) -> Self {
+	fn new(version: VersionAttribute, trait_item: &'a TraitItemMethod) -> Self {
 		Self {
-			latest_version: version,
-			versions: {
-				let mut res = BTreeMap::new();
-				res.insert(version, trait_item);
-				res
-			},
+			latest_version_to_call: version.is_callable().then(|| version.version),
+			versions: BTreeMap::from([(version.version, trait_item)]),
 		}
 	}
 
-	pub fn latest_version(&self) -> (u32, &TraitItemMethod) {
-		(
-			self.latest_version,
-			self.versions.get(&self.latest_version).expect(
-				"If latest_version has a value, the key with this value is in the versions; qed",
+	/// Returns the latest version of this runtime interface function plus the actual function
+	/// implementation.
+	///
+	/// This isn't required to be the latest version, because a runtime interface function can be
+	/// annotated with `register_only` to ensure that the host exposes the host function but it
+	/// isn't used when compiling the runtime.
+	pub fn latest_version_to_call(&self) -> Option<(u32, &TraitItemMethod)> {
+		self.latest_version_to_call.map(|v| {
+			(
+			v,
+			*self.versions.get(&v).expect(
+				"If latest_version_to_call has a value, the key with this value is in the versions; qed",
 			),
 		)
+		})
+	}
+
+	/// Add a different version of the function.
+	fn add_version(
+		&mut self,
+		version: VersionAttribute,
+		trait_item: &'a TraitItemMethod,
+	) -> Result<()> {
+		if let Some(existing_item) = self.versions.get(&version.version) {
+			let mut err = Error::new(trait_item.span(), "Duplicated version attribute");
+			err.combine(Error::new(
+				existing_item.span(),
+				"Previous version with the same number defined here",
+			));
+
+			return Err(err)
+		}
+
+		self.versions.insert(version.version, trait_item);
+		if self.latest_version_to_call.map_or(true, |v| v < version.version) &&
+			version.is_callable()
+		{
+			self.latest_version_to_call = Some(version.version);
+		}
+
+		Ok(())
 	}
 }
 
@@ -69,8 +103,10 @@ pub struct RuntimeInterface<'a> {
 }
 
 impl<'a> RuntimeInterface<'a> {
-	pub fn latest_versions(&self) -> impl Iterator<Item = (u32, &TraitItemMethod)> {
-		self.items.iter().map(|(_, item)| item.latest_version())
+	/// Returns an iterator over all runtime interface function
+	/// [`latest_version_to_call`](RuntimeInterfaceFunction::latest_version).
+	pub fn latest_versions_to_call(&self) -> impl Iterator<Item = (u32, &TraitItemMethod)> {
+		self.items.iter().filter_map(|(_, item)| item.latest_version_to_call())
 	}
 
 	pub fn all_versions(&self) -> impl Iterator<Item = (u32, &TraitItemMethod)> {
@@ -199,36 +235,55 @@ fn get_trait_methods<'a>(trait_def: &'a ItemTrait) -> impl Iterator<Item = &'a T
 	})
 }
 
-/// Parse version attribute.
+/// The version attribute that can be found above a runtime interface function.
 ///
-/// Returns error if it is in incorrent format. Correct format is only `#[version(X)]`.
-fn parse_version_attribute(version: &Attribute) -> Result<u32> {
-	let meta = version.parse_meta()?;
+/// Supports the following formats:
+/// - `#[version(1)]`
+/// - `#[version(1, register_only)]`
+///
+/// While this struct is only for parsing the inner parts inside the `()`.
+struct VersionAttribute {
+	version: u32,
+	register_only: Option<attributes::register_only>,
+}
 
-	let err = Err(Error::new(
-		meta.span(),
-		"Unexpected `version` attribute. The supported format is `#[version(1)]`",
-	));
-
-	match meta {
-		Meta::List(list) =>
-			if list.nested.len() != 1 {
-				err
-			} else if let Some(NestedMeta::Lit(Lit::Int(i))) = list.nested.first() {
-				i.base10_parse()
-			} else {
-				err
-			},
-		_ => err,
+impl VersionAttribute {
+	/// Is this function version callable?
+	fn is_callable(&self) -> bool {
+		self.register_only.is_none()
 	}
 }
 
-/// Return item version (`#[version(X)]`) attribute, if present.
-fn get_item_version(item: &TraitItemMethod) -> Result<Option<u32>> {
+impl Default for VersionAttribute {
+	fn default() -> Self {
+		Self { version: 1, register_only: None }
+	}
+}
+
+impl Parse for VersionAttribute {
+	fn parse(input: syn::parse::ParseStream) -> Result<Self> {
+		let version: LitInt = input.parse()?;
+		let register_only = if input.peek(token::Comma) {
+			let _ = input.parse::<token::Comma>();
+			Some(input.parse()?)
+		} else {
+			if !input.is_empty() {
+				return Err(Error::new(input.span(), "Unexpected token, expected `,`."))
+			}
+
+			None
+		};
+
+		Ok(Self { version: version.base10_parse()?, register_only })
+	}
+}
+
+/// Return [`VersionAttribute`], if present.
+fn get_item_version(item: &TraitItemMethod) -> Result<Option<VersionAttribute>> {
 	item.attrs
 		.iter()
 		.find(|attr| attr.path.is_ident("version"))
-		.map(|attr| parse_version_attribute(attr))
+		.map(|attr| attr.parse_args())
 		.transpose()
 }
 
@@ -238,28 +293,18 @@ pub fn get_runtime_interface<'a>(trait_def: &'a ItemTrait) -> Result<RuntimeInte
 
 	for item in get_trait_methods(trait_def) {
 		let name = item.sig.ident.clone();
-		let version = get_item_version(item)?.unwrap_or(1);
+		let version = get_item_version(item)?.unwrap_or_default();
+
+		if version.version < 1 {
+			return Err(Error::new(item.span(), "Version needs to be at least `1`."))
+		}
 
 		match functions.entry(name.clone()) {
 			Entry::Vacant(entry) => {
 				entry.insert(RuntimeInterfaceFunction::new(version, item));
 			},
 			Entry::Occupied(mut entry) => {
-				if let Some(existing_item) = entry.get().versions.get(&version) {
-					let mut err = Error::new(item.span(), "Duplicated version attribute");
-					err.combine(Error::new(
-						existing_item.span(),
-						"Previous version with the same number defined here",
-					));
-
-					return Err(err)
-				}
-
-				let interface_item = entry.get_mut();
-				if interface_item.latest_version < version {
-					interface_item.latest_version = version;
-				}
-				interface_item.versions.insert(version, item);
+				entry.get_mut().add_version(version, item)?;
 			},
 		}
 	}

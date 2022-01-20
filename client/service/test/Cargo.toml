@@ -31,7 +31,7 @@ sc-service = { version = "0.10.0-dev", features = ["test-helpers"], path = "../.
 sc-network = { version = "0.10.0-dev", path = "../../network" }
 sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
 sc-consensus = { version = "0.10.0-dev", path = "../../../client/consensus/common" }
-sp-runtime = { version = "4.0.0", path = "../../../primitives/runtime" }
+sp-runtime = { version = "4.1.0-dev", path = "../../../primitives/runtime" }
 sp-core = { version = "4.1.0-dev", path = "../../../primitives/core" }
 sc-transaction-pool-api = { version = "4.0.0-dev", path = "../../../client/transaction-pool/api" }
 substrate-test-runtime = { version = "2.0.0", path = "../../../test-utils/runtime" }

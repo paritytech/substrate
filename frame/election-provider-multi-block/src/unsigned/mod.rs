@@ -93,7 +93,6 @@ mod pallet {
 	}
 
 	#[pallet::pallet]
-	#[pallet::generate_storage_info]
 	pub struct Pallet<T>(PhantomData<T>);
 
 	#[pallet::call]

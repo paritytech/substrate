@@ -133,7 +133,7 @@ pub struct BenchmarkCmd {
 	pub wasm_method: WasmExecutionMethod,
 
 	/// Limit the memory the database cache can use.
-	#[structopt(long = "db-cache", value_name = "MiB", default_value = "128")]
+	#[structopt(long = "db-cache", value_name = "MiB", default_value = "1024")]
 	pub database_cache_size: u32,
 
 	/// List the benchmarks that match your query rather than running them.

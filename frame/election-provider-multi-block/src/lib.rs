@@ -941,7 +941,6 @@ pub mod pallet {
 	type PagedTargetSnapshotHash<T: Config> = StorageMap<_, Twox64Concat, PageIndex, T::Hash>;
 
 	#[pallet::pallet]
-	#[pallet::generate_storage_info]
 	pub struct Pallet<T>(PhantomData<T>);
 }
 
