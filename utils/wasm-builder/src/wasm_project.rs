@@ -229,6 +229,7 @@ fn create_project_cargo_toml(
 	let mut release_profile = Table::new();
 	release_profile.insert("panic".into(), "abort".into());
 	release_profile.insert("lto".into(), true.into());
+	release_profile.insert("codegen-units".into(), 1.into());
 
 	let mut dev_profile = Table::new();
 	dev_profile.insert("panic".into(), "abort".into());
