@@ -337,7 +337,7 @@ pub struct Stack<'a, T: Config, E> {
 /// This is an internal data structure. It is exposed to the public for the sole reason
 /// of specifying [`Config::CallStack`].
 pub struct Frame<T: Config> {
-	/// The caller of the currently executing contract using `delegate_call`
+	/// The caller of the currently executing frame which was spawned by `delegate_call`.
 	delegate_caller: Option<T::AccountId>,
 	/// The account id of the executing contract.
 	account_id: T::AccountId,
@@ -355,9 +355,9 @@ pub struct Frame<T: Config> {
 	allows_reentry: bool,
 }
 
-/// Used for `seal_delegate_call` to pass original caller and library (callee) executable.
+/// Used in a delegate call frame arguments in order to override the executable and caller.
 struct DelegatedCall<T: Config, E> {
-	/// The executable whose `call` function is run.
+	/// The executable which is run instead of the contracts own `executable`.
 	executable: E,
 	/// The account id of the caller contract.
 	caller: T::AccountId,
@@ -1086,7 +1086,7 @@ where
 	}
 
 	fn caller(&self) -> &T::AccountId {
-		if let Some(caller) = self.frames().nth(0).map(|f| &f.delegate_caller).unwrap() {
+		if let Some(caller) = &self.top_frame().delegate_caller {
 			&caller
 		} else {
 			self.frames().nth(1).map(|f| &f.account_id).unwrap_or(&self.origin)
