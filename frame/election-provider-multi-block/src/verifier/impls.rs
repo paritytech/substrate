@@ -24,7 +24,12 @@ use sp_npos_elections::{ElectionScore, EvaluateSupport, NposSolution};
 use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 
 use super::*;
-use frame_support::{dispatch::Weight, ensure, traits::Get, RuntimeDebug};
+use frame_support::{
+	dispatch::Weight,
+	ensure,
+	traits::{Defensive, Get},
+	RuntimeDebug,
+};
 
 use pallet::*;
 
@@ -495,8 +500,12 @@ impl<T: Config> Pallet<T> {
 						// not last page, just tick forward.
 						StatusStorage::<T>::put(Status::Ongoing(current_page.saturating_sub(1)));
 					} else {
-						// last page, finalize everything.
-						let claimed_score = T::SolutionDataProvider::get_score().unwrap(); // TODO: defensive unwrap or default
+						// last page, finalize everything. Solution data provider must always have a
+						// score for us at this point. Not much point in reporting a result, we just
+						// assume default score, which will almost certainly fail and cause a proper
+						// cleanup of the pallet, which is what we want anyways.
+						let claimed_score =
+							T::SolutionDataProvider::get_score().defensive_unwrap_or_default();
 
 						// in both cases of the following match, we are not back to the nothing
 						// state.

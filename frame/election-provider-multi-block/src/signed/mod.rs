@@ -32,7 +32,7 @@ use codec::{Decode, Encode, MaxEncodedLen};
 use frame_election_provider_support::PageIndex;
 use frame_support::{
 	ensure,
-	traits::{Currency, Get, ReservableCurrency},
+	traits::{Currency, DefensiveOption, Get, ReservableCurrency},
 	BoundedVec,
 };
 use scale_info::TypeInfo;
@@ -87,7 +87,7 @@ impl<T: Config> SolutionDataProvider for Pallet<T> {
 			VerificationResult::Queued => {
 				// defensive: if there is a result to be reported, then we must have had some
 				// leader.
-				if let Some(winner) = Submissions::<T>::leader().map(|(x, _)| x) {
+				if let Some(winner) = Submissions::<T>::leader().defensive_map(|(x, _)| x) {
 					let metadata = Submissions::<T>::metadata(&winner).unwrap();
 
 					// first, let's give them their reward.
@@ -124,14 +124,12 @@ impl<T: Config> SolutionDataProvider for Pallet<T> {
 					debug_assert_eq!(Submissions::<T>::submissions_iter().count(), 0);
 					debug_assert_eq!(Submissions::<T>::metadata_iter().count(), 0);
 					debug_assert!(Submissions::<T>::sorted_submitters().is_empty());
-				} else {
-					debug_assert!(false);
 				}
 			},
 			VerificationResult::Rejected => {
 				// defensive: if there is a result to be reported, then we must have had some
 				// leader.
-				if let Some(loser) = Submissions::<T>::take_leader().map(|(x, _)| x) {
+				if let Some(loser) = Submissions::<T>::take_leader().defensive_map(|(x, _)| x) {
 					let metadata = Submissions::<T>::metadata(&loser).unwrap();
 
 					// first, let's slash their deposit.
@@ -150,8 +148,6 @@ impl<T: Config> SolutionDataProvider for Pallet<T> {
 					if crate::Pallet::<T>::current_phase().is_signed_validation() {
 						<T::Verifier as AsynchronousVerifier>::start();
 					}
-				} else {
-					debug_assert!(false)
 				}
 			},
 			VerificationResult::DataUnavailable => {
@@ -168,7 +164,7 @@ pub mod pallet {
 	use frame_support::{
 		dispatch::DispatchResultWithPostInfo,
 		pallet_prelude::{StorageDoubleMap, ValueQuery, *},
-		traits::{EstimateCallFee, TryCollect},
+		traits::{Defensive, EstimateCallFee, TryCollect},
 	};
 	use frame_system::{ensure_signed, pallet_prelude::*};
 	use sp_runtime::traits::Zero;
@@ -281,10 +277,8 @@ pub mod pallet {
 
 			// defensive only: we resize `meta.pages` once to be `T::Pages` elements once, and never
 			// resize it again; `page` is checked here to be in bound; element must exist; qed.
-			if let Some(page_bit) = metadata.pages.get_mut(page as usize) {
+			if let Some(page_bit) = metadata.pages.get_mut(page as usize).defensive() {
 				*page_bit = maybe_solution.is_some();
-			} else {
-				debug_assert!(false)
 			}
 
 			// update deposit.
