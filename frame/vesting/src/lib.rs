@@ -45,13 +45,14 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 mod benchmarking;
-mod migrations;
+
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
 mod tests;
 mod vesting_info;
 
+pub mod migrations;
 pub mod weights;
 
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -179,29 +180,6 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<(), &'static str> {
-			if StorageVersion::<T>::get() == Releases::V0 {
-				migrations::v1::pre_migrate::<T>()
-			} else {
-				Ok(())
-			}
-		}
-
-		fn on_runtime_upgrade() -> Weight {
-			if StorageVersion::<T>::get() == Releases::V0 {
-				StorageVersion::<T>::put(Releases::V1);
-				migrations::v1::migrate::<T>().saturating_add(T::DbWeight::get().reads_writes(1, 1))
-			} else {
-				T::DbWeight::get().reads(1)
-			}
-		}
-
-		#[cfg(feature = "try-runtime")]
-		fn post_upgrade() -> Result<(), &'static str> {
-			migrations::v1::post_migrate::<T>()
-		}
-
 		fn integrity_test() {
 			assert!(T::MAX_VESTING_SCHEDULES > 0, "`MaxVestingSchedules` must ge greater than 0");
 		}
