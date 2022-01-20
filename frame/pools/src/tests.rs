@@ -37,11 +37,29 @@ fn test_setup_works() {
 	})
 }
 
-mod primary_pool {
+mod points_to_issue {
+	use super::*;
 	#[test]
 	fn points_to_issue_works() {
-		// zero case
+		ExtBuilder::default().build_and_execute(|| {
+			let points_to_issue = points_to_issue::<Runtime>;
+			// 1 points : 1 balance ratio returns `new_funds`
+			assert_eq!(points_to_issue(100, 100, 10), 10);
+			// 2 points : 1 balance ratio returns double of `new_funds`
+			assert_eq!(points_to_issue(50, 100, 10), 20);
+			// 1 points: 2 balance ratio returns half of `new_funds
+			assert_eq!(points_to_issue(100, 50, 10), 5);
+			// 100 points : 0 balance ratio returns `new_funds * 100`
+			assert_eq!(points_to_issue(0, 100, 10), 100 * 10);
+			// 0 points : 100 balance ratio returns `new_funds`
+			assert_eq!(points_to_issue(100, 0, 10), 10);
+		});
 	}
+}
+
+mod primary_pool {
+	#[test]
+	fn points_to_issue_works() {}
 
 	#[test]
 	fn balance_to_unbond_works() {

@@ -5,9 +5,9 @@
 //! * primary pool: This pool represents the actively staked funds ...
 //! * rewards pool: The rewards earned by actively staked funds. Delegator can withdraw rewards once
 //! * sub pools: This a group of pools where we have a set of pools organized by era
-//!   (`SubPools.with_era`) and one pool that is not associated with an era
-//!   (`SubPools.no_era`). Once a `with_era` pool is older then `current_era -
-//!   MaxUnbonding`, its points and balance get merged into the `no_era` pool.
+//!   (`SubPools.with_era`) and one pool that is not associated with an era (`SubPools.no_era`).
+//!   Once a `with_era` pool is older then `current_era - MaxUnbonding`, its points and balance get
+//!   merged into the `no_era` pool.
 //!
 //! # Joining
 //!
@@ -64,6 +64,36 @@ type SubPoolsWithEra<T> = BoundedBTreeMap<EraIndex, UnbondPool<T>, <T as Config>
 
 const POINTS_TO_BALANCE_INIT_RATIO: u32 = 1;
 
+/// Calculate the number of points to issue: `(current_points / current_balance) * new_funds`.
+fn points_to_issue<T: Config>(
+	current_balance: BalanceOf<T>,
+	current_points: BalanceOf<T>,
+	new_funds: BalanceOf<T>,
+) -> BalanceOf<T> {
+	match (current_balance.is_zero(), current_points.is_zero()) {
+		(true, true) | (false, true) => {
+			new_funds.saturating_mul(POINTS_TO_BALANCE_INIT_RATIO.into())
+		},
+		(true, false) => {
+			// The pool was totally slashed.
+
+			// This is the equivalent of `(current_points / 1) * new_funds`. This is more favorable
+			// to the joiner then simply returning `new_funds`.
+			new_funds.saturating_mul(current_points)
+		},
+		(false, false) => {
+			// REMINDER: `saturating_from_rational` panics if denominator is zero
+			let points_per_balance = FixedU128::saturating_from_rational(
+				T::BalanceToU128::convert(current_points),
+				T::BalanceToU128::convert(current_balance),
+			);
+			let new_funds = T::BalanceToU128::convert(new_funds);
+
+			T::U128ToBalance::convert(points_per_balance.saturating_mul_int(new_funds))
+		},
+	}
+}
+
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, RuntimeDebugNoBound)]
 #[cfg_attr(feature = "std", derive(Clone, PartialEq))]
 #[codec(mel_bound(T: Config))]
@@ -96,24 +126,7 @@ impl<T: Config> PrimaryPool<T> {
 	/// Get the amount of points to issue for some new funds that will be bonded in the pool.
 	fn points_to_issue(&self, new_funds: BalanceOf<T>) -> BalanceOf<T> {
 		let bonded_balance = T::StakingInterface::bonded_balance(&self.account_id);
-		if bonded_balance.is_zero() || self.points.is_zero() {
-			println!("bonded_balance={:?} points={:?}", bonded_balance, self.points);
-			// TODO this doesn't hold if the pool is totally slashed but we need some more logic for
-			// that case
-			debug_assert!(bonded_balance.is_zero() && self.points.is_zero());
-
-			new_funds.saturating_mul(POINTS_TO_BALANCE_INIT_RATIO.into())
-		} else {
-			let points_per_balance = {
-				let balance = T::BalanceToU128::convert(bonded_balance);
-				let points = T::BalanceToU128::convert(self.points);
-				// REMINDER: `saturating_from_rational` panics if denominator is zero
-				FixedU128::saturating_from_rational(points, balance)
-			};
-			let new_funds = T::BalanceToU128::convert(new_funds);
-
-			T::U128ToBalance::convert(points_per_balance.saturating_mul_int(new_funds))
-		}
+		points_to_issue::<T>(bonded_balance, self.points, new_funds)
 	}
 
 	// Get the amount of balance to unbond from the pool based on a delegator's points of the pool.
@@ -183,23 +196,7 @@ impl<T: Config> UnbondPool<T> {
 
 impl<T: Config> UnbondPool<T> {
 	fn points_to_issue(&self, new_funds: BalanceOf<T>) -> BalanceOf<T> {
-		if self.balance.is_zero() || self.points.is_zero() {
-			// TODO this doesn't hold if the pool is totally slashed but we need some more logic for
-			// that case
-			debug_assert!(self.balance.is_zero() && self.points.is_zero());
-
-			new_funds.saturating_mul(POINTS_TO_BALANCE_INIT_RATIO.into())
-		} else {
-			let points_per_balance = {
-				let balance = T::BalanceToU128::convert(self.balance);
-				let points = T::BalanceToU128::convert(self.points);
-				// REMINDER: `saturating_from_rational` panics if denominator is zero
-				FixedU128::saturating_from_rational(points, balance)
-			};
-			let new_funds = T::BalanceToU128::convert(new_funds);
-
-			T::U128ToBalance::convert(points_per_balance.saturating_mul_int(new_funds))
-		}
+		points_to_issue::<T>(self.balance, self.points, new_funds)
 	}
 
 	fn balance_to_unbond(&self, delegator_points: BalanceOf<T>) -> BalanceOf<T> {
@@ -856,30 +853,12 @@ impl<T: Config> PoolsInterface for Pallet<T> {
 	}
 }
 
-//
-// - slashing
+// TODO
 // - tests
 // - force pool creation
 // - rebond_rewards
-// - force pool update
+// - pool update targets
+// - pool block - don't allow new joiners (or bond_extra)
+// - pool begin destroy - unbond the entire pool balance
+// - pool end destroy - once all subpools are empty delete everything from storage
 // - force pool delete?
-
-// impl<T: Config> Pallet<T> {
-// 	do_create_pool(
-// 		creator: T::AccountId,
-// 		targets: Vec<T::AccountId>,
-// 		amount: BalanceOf<T>
-// 	) -> DispatchResult {
-// Create Stash/Controller account based on parent block hash, block number, and extrinsic index
-// Create Reward Pool account based on Stash/Controller account
-// Move `amount` to the stash / controller account
-// Read in `bondable` - the free balance that we can bond after any neccesary reserv etc
-
-// Bond with `amount`, ensuring that it is over the minimum bond (by min)
-// (might has need to ensure number of targets etc is valid)
-
-// Generate a pool id (look at how assets IDs are generated for inspiration)
-
-//
-// 	}
-// }
