@@ -24,7 +24,7 @@ use frame_election_provider_support::{
 use frame_support::{
 	pallet_prelude::*,
 	traits::{
-		Currency, CurrencyToVote, DefensiveUnwrap, EstimateNextNewSession, Get, Imbalance,
+		Currency, CurrencyToVote, Defensive, EstimateNextNewSession, Get, Imbalance,
 		LockableCurrency, OnUnbalanced, UnixTime, WithdrawReasons,
 	},
 	weights::{Weight, WithPostDispatchInfo},
