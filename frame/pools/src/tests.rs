@@ -9,7 +9,7 @@ fn test_setup_works() {
 	ExtBuilder::default().build_and_execute(|| {
 		assert_eq!(PrimaryPools::<Runtime>::count(), 1);
 		assert_eq!(RewardPools::<Runtime>::count(), 1);
-		assert_eq!(SubPools::<Runtime>::count(), 0);
+		assert_eq!(SubPoolsStorage::<Runtime>::count(), 0);
 		assert_eq!(Delegators::<Runtime>::count(), 1);
 
 		assert_eq!(
@@ -64,7 +64,7 @@ mod unbond_pool {
 		// zero case
 	}
 }
-mod sub_pools_container {
+mod sub_pools {
 	use super::*;
 
 	#[test]
@@ -73,7 +73,7 @@ mod sub_pools_container {
 			assert_eq!(<Runtime as Config>::MaxUnbonding::get(), 5);
 
 			// Given
-			let mut sp0 = SubPoolsContainer::<Runtime> {
+			let mut sp0 = SubPools::<Runtime> {
 				no_era: UnbondPool::<Runtime>::default(),
 				with_era: std::collections::BTreeMap::from([
 					(0, UnbondPool::<Runtime>::new(10, 10)),

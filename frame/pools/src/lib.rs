@@ -5,8 +5,8 @@
 //! * primary pool: This pool represents the actively staked funds ...
 //! * rewards pool: The rewards earned by actively staked funds. Delegator can withdraw rewards once
 //! * sub pools: This a group of pools where we have a set of pools organized by era
-//!   (`SubPoolsContainer.with_era`) and one pool that is not associated with an era
-//!   (`SubsPoolsContainer.no_era`). Once a `with_era` pool is older then `current_era -
+//!   (`SubPools.with_era`) and one pool that is not associated with an era
+//!   (`SubPools.no_era`). Once a `with_era` pool is older then `current_era -
 //!   MaxUnbonding`, its points and balance get merged into the `no_era` pool.
 //!
 //! # Joining
@@ -60,7 +60,6 @@ macro_rules! log {
 type PoolId = u32;
 type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
-type PointsOf<T> = BalanceOf<T>;
 type SubPoolsWithEra<T> = BoundedBTreeMap<EraIndex, UnbondPool<T>, <T as Config>::MaxUnbonding>;
 
 const POINTS_TO_BALANCE_INIT_RATIO: u32 = 1;
@@ -73,7 +72,7 @@ pub struct Delegator<T: Config> {
 	pool: PoolId,
 	/// The quantity of points this delegator has in the primary pool or in a sub pool if
 	/// `Self::unbonding_era` is some.
-	points: PointsOf<T>,
+	points: BalanceOf<T>,
 	/// The reward pools total earnings _ever_ the last time this delegator claimed a payout.
 	/// Assuming no massive burning events, we expect this value to always be below total issuance.
 	// TODO: ^ double check the above is an OK assumption
@@ -88,14 +87,14 @@ pub struct Delegator<T: Config> {
 #[codec(mel_bound(T: Config))]
 #[scale_info(skip_type_params(T))]
 pub struct PrimaryPool<T: Config> {
-	points: PointsOf<T>, // Probably needs to be some type of BigUInt
+	points: BalanceOf<T>, // Probably needs to be some type of BigUInt
 	// The _Stash_ and _Controller_ account for the pool.
 	account_id: T::AccountId,
 }
 
 impl<T: Config> PrimaryPool<T> {
 	/// Get the amount of points to issue for some new funds that will be bonded in the pool.
-	fn points_to_issue(&self, new_funds: BalanceOf<T>) -> PointsOf<T> {
+	fn points_to_issue(&self, new_funds: BalanceOf<T>) -> BalanceOf<T> {
 		let bonded_balance = T::StakingInterface::bonded_balance(&self.account_id);
 		if bonded_balance.is_zero() || self.points.is_zero() {
 			println!("bonded_balance={:?} points={:?}", bonded_balance, self.points);
@@ -118,7 +117,7 @@ impl<T: Config> PrimaryPool<T> {
 	}
 
 	// Get the amount of balance to unbond from the pool based on a delegator's points of the pool.
-	fn balance_to_unbond(&self, delegator_points: PointsOf<T>) -> BalanceOf<T> {
+	fn balance_to_unbond(&self, delegator_points: BalanceOf<T>) -> BalanceOf<T> {
 		let bonded_balance = T::StakingInterface::bonded_balance(&self.account_id);
 		if bonded_balance.is_zero() || delegator_points.is_zero() {
 			// There is nothing to unbond
@@ -171,19 +170,19 @@ impl<T: Config> RewardPool<T> {
 #[codec(mel_bound(T: Config))]
 #[scale_info(skip_type_params(T))]
 struct UnbondPool<T: Config> {
-	points: PointsOf<T>,
+	points: BalanceOf<T>,
 	balance: BalanceOf<T>,
 }
 
 impl<T: Config> UnbondPool<T> {
-	#[cfg(feature = "std")]
-	fn new(points: PointsOf<T>, balance: BalanceOf<T>) -> Self {
+	#[cfg(test)]
+	fn new(points: BalanceOf<T>, balance: BalanceOf<T>) -> Self {
 		Self { points, balance }
 	}
 }
 
 impl<T: Config> UnbondPool<T> {
-	fn points_to_issue(&self, new_funds: BalanceOf<T>) -> PointsOf<T> {
+	fn points_to_issue(&self, new_funds: BalanceOf<T>) -> BalanceOf<T> {
 		if self.balance.is_zero() || self.points.is_zero() {
 			// TODO this doesn't hold if the pool is totally slashed but we need some more logic for
 			// that case
@@ -203,7 +202,7 @@ impl<T: Config> UnbondPool<T> {
 		}
 	}
 
-	fn balance_to_unbond(&self, delegator_points: PointsOf<T>) -> BalanceOf<T> {
+	fn balance_to_unbond(&self, delegator_points: BalanceOf<T>) -> BalanceOf<T> {
 		if self.balance.is_zero() || delegator_points.is_zero() {
 			// There is nothing to unbond
 			return Zero::zero();
@@ -225,7 +224,7 @@ impl<T: Config> UnbondPool<T> {
 #[cfg_attr(feature = "std", derive(Clone, PartialEq))]
 #[codec(mel_bound(T: Config))]
 #[scale_info(skip_type_params(T))]
-struct SubPoolsContainer<T: Config> {
+struct SubPools<T: Config> {
 	/// A general, era agnostic pool of funds that have fully unbonded. The pools
 	/// of `self.with_era` will lazily be merged into into this pool if they are
 	/// older then `current_era - MaxUnbonding`.
@@ -234,7 +233,7 @@ struct SubPoolsContainer<T: Config> {
 	with_era: SubPoolsWithEra<T>,
 }
 
-impl<T: Config> SubPoolsContainer<T> {
+impl<T: Config> SubPools<T> {
 	/// Merge the oldest unbonding pool with an era into the general unbond pool with no associated
 	/// era.
 	fn maybe_merge_pools(mut self, current_era: EraIndex) -> Self {
@@ -332,8 +331,8 @@ pub mod pallet {
 	/// Groups of unbonding pools. Each group of unbonding pools belongs to a primary pool,
 	/// hence the name sub-pools.
 	#[pallet::storage]
-	pub(crate) type SubPools<T: Config> =
-		CountedStorageMap<_, Twox64Concat, PoolId, SubPoolsContainer<T>>;
+	pub(crate) type SubPoolsStorage<T: Config> =
+		CountedStorageMap<_, Twox64Concat, PoolId, SubPools<T>>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(crate) fn deposit_event)]
@@ -485,7 +484,7 @@ pub mod pallet {
 			// Re-fetch the delegator because they where updated by `do_reward_payout`.
 			let mut delegator = Delegators::<T>::get(&who).ok_or(Error::<T>::DelegatorNotFound)?;
 			// Note that we lazily create the unbonding pools here if they don't already exist
-			let sub_pools = SubPools::<T>::get(delegator.pool).unwrap_or_default();
+			let sub_pools = SubPoolsStorage::<T>::get(delegator.pool).unwrap_or_default();
 			let current_era = T::StakingInterface::current_era();
 
 			let balance_to_unbond = primary_pool.balance_to_unbond(delegator.points);
@@ -522,7 +521,7 @@ pub mod pallet {
 
 			// Now that we know everything has worked write the items to storage.
 			PrimaryPools::insert(delegator.pool, primary_pool);
-			SubPools::insert(delegator.pool, sub_pools);
+			SubPoolsStorage::insert(delegator.pool, sub_pools);
 			Delegators::insert(who, delegator);
 
 			Ok(())
@@ -539,7 +538,7 @@ pub mod pallet {
 				return Err(Error::<T>::NotUnbondedYet.into());
 			};
 
-			let mut sub_pools = SubPools::<T>::get(delegator.pool).unwrap_or_default();
+			let mut sub_pools = SubPoolsStorage::<T>::get(delegator.pool).unwrap_or_default();
 
 			let balance_to_unbond = if let Some(pool) = sub_pools.with_era.get_mut(&current_era) {
 				let balance_to_unbond = pool.balance_to_unbond(delegator.points);
@@ -567,7 +566,7 @@ pub mod pallet {
 				ExistenceRequirement::AllowDeath,
 			)?;
 
-			SubPools::<T>::insert(delegator.pool, sub_pools);
+			SubPoolsStorage::<T>::insert(delegator.pool, sub_pools);
 
 			Self::deposit_event(Event::<T>::Withdrawn {
 				delegator: who,
@@ -779,7 +778,7 @@ impl<T: Config> Pallet<T> {
 		apply_era: EraIndex,
 	) -> Option<(BalanceOf<T>, BTreeMap<EraIndex, BalanceOf<T>>)> {
 		let pool_id = PoolIds::<T>::get(pool_account)?;
-		let mut sub_pools = SubPools::<T>::get(pool_id).unwrap_or_default();
+		let mut sub_pools = SubPoolsStorage::<T>::get(pool_id).unwrap_or_default();
 
 		// TODO double check why we do slash_era + 1
 		let affected_range = (slash_era + 1)..=apply_era;
@@ -832,7 +831,7 @@ impl<T: Config> Pallet<T> {
 			})
 			.collect();
 
-		SubPools::<T>::insert(pool_id, sub_pools);
+		SubPoolsStorage::<T>::insert(pool_id, sub_pools);
 
 		let slashed_bonded_pool_balance = {
 			let pre_slash_balance = T::BalanceToU128::convert(bonded_balance);
