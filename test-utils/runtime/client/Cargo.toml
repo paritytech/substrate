@@ -18,7 +18,7 @@ sc-block-builder = { version = "0.10.0-dev", path = "../../../client/block-build
 substrate-test-client = { version = "2.0.0", path = "../../client" }
 sp-core = { version = "4.1.0-dev", path = "../../../primitives/core" }
 substrate-test-runtime = { version = "2.0.0", path = "../../runtime" }
-sp-runtime = { version = "4.0.0", path = "../../../primitives/runtime" }
+sp-runtime = { version = "4.1.0-dev", path = "../../../primitives/runtime" }
 sp-api = { version = "4.0.0-dev", path = "../../../primitives/api" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
 codec = { package = "parity-scale-codec", version = "2.0.0" }
