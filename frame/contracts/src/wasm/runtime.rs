@@ -826,14 +826,17 @@ define_env!(Env, <E: Ext>,
 	//
 	// # Errors
 	//
-	// - requested buffer is not within the bounds of the sandbox memory.
-	// - the buffer contents cannot be decoded as the required type.
-	// - code for specified hash does not exist
+	// `ReturnCode::CodeNotFound`
 	[__unstable__] seal_set_code_hash(ctx, code_hash_ptr: u32) -> ReturnCode => {
 		ctx.charge_gas(RuntimeCosts::SetCodeHash)?;
 		let code_hash: CodeHash<<E as Ext>::T> = ctx.read_sandbox_memory_as(code_hash_ptr)?;
-		ctx.ext.set_code_hash(code_hash)?;
-		Ok(ReturnCode::Success)
+		match ctx.ext.set_code_hash(code_hash) {
+			Err(err) =>	{
+				let code = Runtime::<E>::err_into_return_code(err)?;
+				Ok(code)
+			},
+			Ok(()) => Ok(ReturnCode::Success)
+		}
 	},
 
 	// Set the value at the given key in the contract storage.

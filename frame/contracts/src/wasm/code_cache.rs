@@ -129,7 +129,7 @@ pub fn increment_refcount<T: Config>(code_hash: CodeHash<T>) -> Result<(), Dispa
 			info.refcount = info.refcount.saturating_add(1);
 			Ok(())
 		} else {
-			Err(DispatchError::CannotLookup)
+			Err(Error::<T>::CodeNotFound.into())
 		}
 	})
 }

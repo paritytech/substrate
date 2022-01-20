@@ -808,6 +808,7 @@ benchmarks! {
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
+	#[skip_meta]
 	seal_set_code_hash {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let code_hashes = (0..r * API_BENCHMARK_BATCH_SIZE)

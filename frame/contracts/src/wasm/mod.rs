@@ -306,6 +306,7 @@ mod tests {
 	}
 
 	pub struct MockExt {
+		code_hashes: Vec<CodeHash<Test>>,
 		storage: HashMap<StorageKey, Vec<u8>>,
 		instantiates: Vec<InstantiateEntry>,
 		terminations: Vec<TerminationEntry>,
@@ -328,6 +329,7 @@ mod tests {
 	impl Default for MockExt {
 		fn default() -> Self {
 			Self {
+				code_hashes: Default::default(),
 				storage: Default::default(),
 				instantiates: Default::default(),
 				terminations: Default::default(),
@@ -410,7 +412,7 @@ mod tests {
 			Ok(result)
 		}
 		fn set_code_hash(&mut self, hash: CodeHash<Self::T>) -> Result<(), DispatchError> {
-			self.storage.insert(StorageKey::from(hash), vec![1, 2, 3]);
+			self.code_hashes.push(hash);
 			Ok(())
 		}
 		fn caller(&self) -> &AccountIdOf<Self::T> {
@@ -2225,7 +2227,7 @@ mod tests {
 		let mut mock_ext = MockExt::default();
 		execute(CODE, [0u8; 32].encode(), &mut mock_ext).unwrap();
 
-		assert_eq!(mock_ext.storage.get(&[17u8; 32]), Some(&vec![1, 2, 3]));
+		assert_eq!(mock_ext.code_hashes.pop().unwrap(), H256::from_slice(&[17u8; 32]));
 	}
 
 	#[test]
