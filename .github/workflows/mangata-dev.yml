@@ -32,9 +32,9 @@ jobs:
         with:
           toolchain: nightly-2021-10-19
           command: test
-          args: -j1 --no-run
+          args: --release -j1 --no-run
       - name: Run UT
         uses: actions-rs/cargo@v1
         with:
           toolchain: nightly-2021-10-19
-          command: test
+          command: --release test
