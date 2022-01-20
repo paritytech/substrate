@@ -138,7 +138,7 @@ pub struct Delegating<Balance, AccountId, BlockNumber> {
 	pub balance: Balance,
 	/// The account to which the voting power is delegated.
 	pub target: AccountId,
-	/// Th conviction with which the voting power is delegated. When this gets undelegated, the
+	/// The conviction with which the voting power is delegated. When this gets undelegated, the
 	/// relevant lock begins.
 	pub conviction: Conviction,
 	/// The total amount of delegations that this account has received, post-conviction-weighting.
