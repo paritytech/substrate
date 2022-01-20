@@ -48,8 +48,19 @@ where
 
 /// A guard structure wrapping `R: Unsubscribe`, that will perform unsubscription upon being
 /// dropped.
-#[derive(Debug)]
-pub struct SubscriptionGuard<R>
+pub struct SubscriptionGuard<R, Rx>
+where
+	R: Unsubscribe,
+{
+	// NB: this field must be declared before the `rx`.
+	// (The fields of a struct are dropped in declaration order.)[https://doc.rust-lang.org/reference/destructors.html]
+	inner: SubscriptionGuardInner<R>,
+
+	// NB: this field must be declared after the `inner`.
+	rx: Rx,
+}
+
+struct SubscriptionGuardInner<R>
 where
 	R: Unsubscribe,
 {
@@ -74,16 +85,40 @@ impl<R> SharedRegistry<R> {
 	/// but instead of returning a `SubsBase::SubsID`, wraps it into a `SubscriptionGuard<R>`.
 	/// Since the `SubscriptionGuard<R>` is not cloneable it is always moved,
 	/// thus it is always clear when the unsubscription shall be performed.
-	pub fn subscribe<Op>(&self, subs_op: Op) -> SubscriptionGuard<R>
+	pub fn subscribe<Op>(&self, subs_op: Op) -> SubscriptionGuard<R, ()>
 	where
 		R: Subscribe<Op> + Unsubscribe,
 	{
 		let subs_id = self.lock().subscribe(subs_op);
-		SubscriptionGuard { registry: Arc::downgrade(&self.registry), subs_id }
+		let inner = SubscriptionGuardInner { registry: Arc::downgrade(&self.registry), subs_id };
+		SubscriptionGuard { inner, rx: () }
 	}
 }
 
-impl<R> Drop for SubscriptionGuard<R>
+impl<R> SubscriptionGuard<R, ()>
+where
+	R: Unsubscribe,
+{
+	/// This method is only defined for the case when the current `Rx` is `()`,
+	/// so that no `Rx` other than `()` shall not be dropped before the unsubscription is performed.
+	pub fn with_rx<Rx>(self, rx: Rx) -> SubscriptionGuard<R, Rx> {
+		SubscriptionGuard { inner: self.inner, rx }
+	}
+}
+
+impl<R, Rx> SubscriptionGuard<R, Rx>
+where
+	R: Unsubscribe,
+{
+	pub fn rx(&self) -> &Rx {
+		&self.rx
+	}
+	pub fn rx_mut(&mut self) -> &mut Rx {
+		&mut self.rx
+	}
+}
+
+impl<R> Drop for SubscriptionGuardInner<R>
 where
 	R: Unsubscribe,
 {
@@ -91,5 +126,18 @@ where
 		if let Some(registry) = self.registry.upgrade() {
 			let () = registry.lock().unsubscribe(&self.subs_id);
 		}
+	}
+}
+
+impl<R, Rx> std::fmt::Debug for SubscriptionGuard<R, Rx>
+where
+	R: Unsubscribe + std::fmt::Debug,
+	R::SubsID: std::fmt::Debug,
+{
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_struct("SubscriptionGuard")
+			.field("registry", &self.inner.registry)
+			.field("subs_id", &self.inner.subs_id)
+			.finish()
 	}
 }

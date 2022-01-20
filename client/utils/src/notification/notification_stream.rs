@@ -47,8 +47,8 @@ impl<Payload, TK: TracingKeyStr> NotificationStream<Payload, TK> {
 	/// Subscribe to a channel through which the generic payload can be received.
 	pub fn subscribe(&self) -> NotificationReceiver<Payload> {
 		let (underlying_tx, underlying_rx) = crate::mpsc::tracing_unbounded(TK::TRACING_KEY);
-		let subs_guard = self.registry.subscribe(underlying_tx);
-		let receiver = NotificationReceiver { underlying_rx, _subs_guard: subs_guard };
+		let subs_guard = self.registry.subscribe(underlying_tx).with_rx(underlying_rx);
+		let receiver = NotificationReceiver { subs_guard };
 		receiver
 	}
 }

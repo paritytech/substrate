@@ -68,8 +68,9 @@ impl<Block: BlockT> StorageNotifications<Block> {
 
 		let (tx, rx) = mpsc::tracing_unbounded("mpsc_storage_notification_items");
 
-		let subs_guard = self.0.subscribe(SubscribeOp { filter_keys, filter_child_keys, tx });
+		let subs_guard =
+			self.0.subscribe(SubscribeOp { filter_keys, filter_child_keys, tx }).with_rx(rx);
 
-		StorageEventStream { rx, _subs_guard: subs_guard, was_triggered: false }
+		StorageEventStream { subs_guard, was_triggered: false }
 	}
 }

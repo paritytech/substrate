@@ -25,12 +25,9 @@ use sc_utils::{mpsc::TracingUnboundedReceiver, pubsub::SubscriptionGuard};
 
 /// Type that implements `futures::Stream` of storage change events.
 pub struct StorageEventStream<H> {
-	// NB: this field should be declared before the `rx`.
-	// (The fields of a struct are dropped in declaration order.)[https://doc.rust-lang.org/reference/destructors.html]
-	pub(super) _subs_guard: SubscriptionGuard<StorageNotificationsImpl<H>>,
+	pub(super) subs_guard:
+		SubscriptionGuard<StorageNotificationsImpl<H>, TracingUnboundedReceiver<Notification<H>>>,
 
-	// NB: this field should be declared after the `_subs_guard`.
-	pub(super) rx: TracingUnboundedReceiver<Notification<H>>,
 	pub(super) was_triggered: bool,
 }
 
@@ -40,7 +37,7 @@ impl<H> Stream for StorageEventStream<H> {
 		mut self: Pin<&mut Self>,
 		cx: &mut std::task::Context<'_>,
 	) -> Poll<Option<Self::Item>> {
-		let result = Stream::poll_next(Pin::new(&mut self.rx), cx);
+		let result = Stream::poll_next(Pin::new(self.subs_guard.rx_mut()), cx);
 		if result.is_ready() {
 			self.was_triggered = true;
 		}
