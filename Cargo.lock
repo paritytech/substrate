@@ -4818,7 +4818,7 @@ dependencies = [
 
 [[package]]
 name = "node-template"
-version = "3.0.0"
+version = "4.0.0-dev"
 dependencies = [
  "frame-benchmarking",
  "frame-benchmarking-cli",
@@ -4855,7 +4855,7 @@ dependencies = [
 
 [[package]]
 name = "node-template-runtime"
-version = "3.0.0"
+version = "4.0.0-dev"
 dependencies = [
  "frame-benchmarking",
  "frame-executive",
@@ -6153,7 +6153,7 @@ dependencies = [
 
 [[package]]
 name = "pallet-template"
-version = "3.0.0"
+version = "4.0.0-dev"
 dependencies = [
  "frame-benchmarking",
  "frame-support",
