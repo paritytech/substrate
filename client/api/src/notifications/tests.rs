@@ -19,7 +19,10 @@
 use super::*;
 
 use sp_runtime::testing::{Block as RawBlock, ExtrinsicWrapper, H256 as Hash};
-use std::iter::{empty, Empty};
+use std::{
+	iter::{empty, Empty},
+	ops::DerefMut,
+};
 
 type TestChangeSet = (
 	Vec<(StorageKey, Option<StorageData>)>,
@@ -163,9 +166,9 @@ fn should_cleanup_subscribers_if_dropped() {
 		let _recv3 = futures::executor::block_on_stream(notifications.listen(None, None));
 		let _recv4 =
 			futures::executor::block_on_stream(notifications.listen(None, Some(&child_filter)));
-		assert_eq!(notifications.0.lock().listeners.len(), 2);
-		assert_eq!(notifications.0.lock().wildcard_listeners.len(), 2);
-		assert_eq!(notifications.0.lock().child_listeners.len(), 1);
+		assert_eq!(notifications.lock_registry().deref_mut().as_mut().listeners.len(), 2);
+		assert_eq!(notifications.lock_registry().deref_mut().as_mut().wildcard_listeners.len(), 2);
+		assert_eq!(notifications.lock_registry().deref_mut().as_mut().child_listeners.len(), 1);
 	}
 
 	// when
@@ -174,18 +177,18 @@ fn should_cleanup_subscribers_if_dropped() {
 	notifications.trigger(&Hash::from_low_u64_be(1), changeset.into_iter(), c_changeset);
 
 	// then
-	assert_eq!(notifications.0.lock().listeners.len(), 0);
-	assert_eq!(notifications.0.lock().wildcard_listeners.len(), 0);
-	assert_eq!(notifications.0.lock().child_listeners.len(), 0);
+	assert_eq!(notifications.lock_registry().deref_mut().as_mut().listeners.len(), 0);
+	assert_eq!(notifications.lock_registry().deref_mut().as_mut().wildcard_listeners.len(), 0);
+	assert_eq!(notifications.lock_registry().deref_mut().as_mut().child_listeners.len(), 0);
 }
 
 #[test]
 fn should_cleanup_subscriber_if_stream_is_dropped() {
 	let mut notifications = StorageNotifications::<Block>::default();
 	let stream = notifications.listen(None, None);
-	assert_eq!(notifications.0.lock().sinks.len(), 1);
+	assert_eq!(notifications.lock_registry().deref_mut().as_mut().sinks.len(), 1);
 	std::mem::drop(stream);
-	assert_eq!(notifications.0.lock().sinks.len(), 0);
+	assert_eq!(notifications.lock_registry().deref_mut().as_mut().sinks.len(), 0);
 }
 
 #[test]
@@ -204,4 +207,10 @@ fn should_not_send_empty_notifications() {
 
 	// then
 	assert_eq!(recv.next(), None);
+}
+
+impl<B: BlockT> StorageNotifications<B> {
+	fn lock_registry<'a>(&'a self) -> impl DerefMut<Target = impl AsMut<Registry>> + 'a {
+		self.0.lock_registry()
+	}
 }

@@ -1,5 +1,6 @@
 use std::{
 	collections::HashMap,
+	ops::DerefMut,
 	pin::Pin,
 	sync::{Arc, Weak},
 	task::{Context, Poll},
@@ -73,6 +74,22 @@ struct Shared<R, Tx> {
 	id_sequence: crate::id_sequence::IDSequence,
 	registry: R,
 	sinks: HashMap<SubsID, Tx>,
+}
+
+impl<R, Tx> AsMut<R> for Shared<R, Tx> {
+	fn as_mut(&mut self) -> &mut R {
+		&mut self.registry
+	}
+}
+
+impl<Ch, R> Hub<Ch, R>
+where
+	Ch: Channel,
+	R: Unsubscribe,
+{
+	pub fn lock_registry<'a>(&'a self) -> impl DerefMut<Target = impl AsMut<R>> + 'a {
+		self.shared.lock()
+	}
 }
 
 impl<R, Tx> Drop for UnsubscribeGuard<R, Tx>
