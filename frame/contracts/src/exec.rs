@@ -156,9 +156,6 @@ pub trait Ext: sealing::Sealed {
 		take_old: bool,
 	) -> Result<WriteOutcome, DispatchError>;
 
-	/// Sets new code hash for existing contract.
-	fn set_code_hash(&mut self, hash: CodeHash<Self::T>) -> Result<(), DispatchError>;
-
 	/// Returns a reference to the account id of the caller.
 	fn caller(&self) -> &AccountIdOf<Self::T>;
 
@@ -217,6 +214,9 @@ pub trait Ext: sealing::Sealed {
 
 	/// Recovers ECDSA compressed public key based on signature and message hash.
 	fn ecdsa_recover(&self, signature: &[u8; 65], message_hash: &[u8; 32]) -> Result<[u8; 33], ()>;
+
+	/// Sets new code hash for existing contract.
+	fn set_code_hash(&mut self, hash: CodeHash<Self::T>) -> Result<(), DispatchError>;
 
 	/// Tests sometimes need to modify and inspect the contract info directly.
 	#[cfg(test)]
@@ -1020,19 +1020,6 @@ where
 		)
 	}
 
-	fn set_code_hash(&mut self, hash: CodeHash<Self::T>) -> Result<(), DispatchError> {
-		increment_refcount::<Self::T>(hash)?;
-		let top_frame = self.top_frame_mut();
-		let prev_hash = top_frame.contract_info().code_hash.clone();
-		top_frame.contract_info().code_hash = hash;
-		decrement_refcount::<Self::T>(prev_hash)?;
-		Contracts::<Self::T>::deposit_event(Event::ContractCodeUpdated {
-			contract: top_frame.account_id.clone(),
-			code_hash: hash,
-		});
-		Ok(())
-	}
-
 	fn address(&self) -> &T::AccountId {
 		&self.top_frame().account_id
 	}
@@ -1107,6 +1094,19 @@ where
 
 	fn ecdsa_recover(&self, signature: &[u8; 65], message_hash: &[u8; 32]) -> Result<[u8; 33], ()> {
 		secp256k1_ecdsa_recover_compressed(&signature, &message_hash).map_err(|_| ())
+	}
+
+	fn set_code_hash(&mut self, hash: CodeHash<Self::T>) -> Result<(), DispatchError> {
+		increment_refcount::<Self::T>(hash)?;
+		let top_frame = self.top_frame_mut();
+		let prev_hash = top_frame.contract_info().code_hash.clone();
+		top_frame.contract_info().code_hash = hash;
+		decrement_refcount::<Self::T>(prev_hash)?;
+		Contracts::<Self::T>::deposit_event(Event::ContractCodeUpdated {
+			contract: top_frame.account_id.clone(),
+			code_hash: hash,
+		});
+		Ok(())
 	}
 
 	#[cfg(test)]
