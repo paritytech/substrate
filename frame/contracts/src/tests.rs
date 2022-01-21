@@ -533,7 +533,8 @@ fn run_out_of_gas() {
 }
 
 fn initialize_block(number: u64) {
-	System::initialize(&number, &[0u8; 32].into(), &Default::default(), Default::default());
+	System::reset_events();
+	System::initialize(&number, &[0u8; 32].into(), &Default::default());
 }
 
 #[test]
@@ -687,66 +688,6 @@ fn deploy_and_call_other_contract() {
 					topics: vec![],
 				},
 			]
-		);
-	});
-}
-
-#[test]
-#[cfg(feature = "unstable-interface")]
-fn set_code_hash() {
-	let (wasm, code_hash) = compile_module::<Test>("set_code_hash").unwrap();
-	let (new_wasm, new_code_hash) = compile_module::<Test>("new_set_code_hash_contract").unwrap();
-
-	let contract_addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
-
-	ExtBuilder::default().existential_deposit(100).build().execute_with(|| {
-		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
-
-		// Instantiate the 'caller'
-		assert_ok!(Contracts::instantiate_with_code(
-			Origin::signed(ALICE),
-			300_000,
-			GAS_LIMIT,
-			None,
-			wasm,
-			vec![],
-			vec![],
-		));
-		// upload new code
-		assert_ok!(Contracts::upload_code(Origin::signed(ALICE), new_wasm.clone(), None));
-
-		// First call sets new code_hash and returns 1
-		let result = Contracts::bare_call(
-			ALICE,
-			contract_addr.clone(),
-			0,
-			GAS_LIMIT,
-			None,
-			new_code_hash.as_ref().to_vec(),
-			true,
-		)
-		.result
-		.unwrap();
-		assert_return_code!(result, 1);
-
-		// Second calls new contract code that returns 2
-		let result =
-			Contracts::bare_call(ALICE, contract_addr.clone(), 0, GAS_LIMIT, None, vec![], true)
-				.result
-				.unwrap();
-		assert_return_code!(result, 2);
-
-		// Checking for the last event only
-		assert_eq!(
-			System::events()[13],
-			EventRecord {
-				phase: Phase::Initialization,
-				event: Event::Contracts(crate::Event::ContractCodeUpdated {
-					contract: contract_addr.clone(),
-					code_hash: new_code_hash.clone(),
-				}),
-				topics: vec![],
-			},
 		);
 	});
 }
@@ -1445,7 +1386,7 @@ fn disabled_chain_extension_wont_deploy() {
 				vec![],
 				vec![],
 			),
-			"module uses chain extensions but chain extensions are disabled",
+			<Error<Test>>::CodeRejected,
 		);
 	});
 }
@@ -2960,6 +2901,35 @@ fn contract_reverted() {
 			.unwrap();
 		assert_eq!(result.flags, flags);
 		assert_eq!(result.data.0, buffer);
+	});
+}
+
+#[test]
+fn code_rejected_error_works() {
+	let (wasm, _) = compile_module::<Test>("invalid_import").unwrap();
+	ExtBuilder::default().existential_deposit(200).build().execute_with(|| {
+		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+
+		assert_noop!(
+			Contracts::upload_code(Origin::signed(ALICE), wasm.clone(), None),
+			<Error<Test>>::CodeRejected,
+		);
+
+		let result = Contracts::bare_instantiate(
+			ALICE,
+			0,
+			GAS_LIMIT,
+			None,
+			Code::Upload(Bytes(wasm)),
+			vec![],
+			vec![],
+			true,
+		);
+		assert_err!(result.result, <Error<Test>>::CodeRejected);
+		assert_eq!(
+			std::str::from_utf8(&result.debug_message).unwrap(),
+			"module imports a non-existent function"
+		);
 	});
 }
 

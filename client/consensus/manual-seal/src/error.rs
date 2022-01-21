@@ -62,7 +62,6 @@ pub enum Error {
 	BlockNotFound(String),
 	/// Some string error
 	#[display(fmt = "{}", _0)]
-	#[from(ignore)]
 	StringError(String),
 	/// send error
 	#[display(fmt = "Consensus process is terminating")]

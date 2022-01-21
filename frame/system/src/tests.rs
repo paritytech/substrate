@@ -154,7 +154,8 @@ fn provider_required_to_support_consumer() {
 #[test]
 fn deposit_event_should_work() {
 	new_test_ext().execute_with(|| {
-		System::initialize(&1, &[0u8; 32].into(), &Default::default(), InitKind::Full);
+		System::reset_events();
+		System::initialize(&1, &[0u8; 32].into(), &Default::default());
 		System::note_finished_extrinsics();
 		System::deposit_event(SysEvent::CodeUpdated);
 		System::finalize();
@@ -167,7 +168,8 @@ fn deposit_event_should_work() {
 			}]
 		);
 
-		System::initialize(&2, &[0u8; 32].into(), &Default::default(), InitKind::Full);
+		System::reset_events();
+		System::initialize(&2, &[0u8; 32].into(), &Default::default());
 		System::deposit_event(SysEvent::NewAccount { account: 32 });
 		System::note_finished_initialize();
 		System::deposit_event(SysEvent::KilledAccount { account: 42 });
@@ -216,7 +218,8 @@ fn deposit_event_should_work() {
 #[test]
 fn deposit_event_uses_actual_weight() {
 	new_test_ext().execute_with(|| {
-		System::initialize(&1, &[0u8; 32].into(), &Default::default(), InitKind::Full);
+		System::reset_events();
+		System::initialize(&1, &[0u8; 32].into(), &Default::default());
 		System::note_finished_initialize();
 
 		let pre_info = DispatchInfo { weight: 1000, ..Default::default() };
@@ -275,7 +278,8 @@ fn deposit_event_topics() {
 	new_test_ext().execute_with(|| {
 		const BLOCK_NUMBER: u64 = 1;
 
-		System::initialize(&BLOCK_NUMBER, &[0u8; 32].into(), &Default::default(), InitKind::Full);
+		System::reset_events();
+		System::initialize(&BLOCK_NUMBER, &[0u8; 32].into(), &Default::default());
 		System::note_finished_extrinsics();
 
 		let topics = vec![H256::repeat_byte(1), H256::repeat_byte(2), H256::repeat_byte(3)];
@@ -333,7 +337,8 @@ fn prunes_block_hash_mappings() {
 	new_test_ext().execute_with(|| {
 		// simulate import of 15 blocks
 		for n in 1..=15 {
-			System::initialize(&n, &[n as u8 - 1; 32].into(), &Default::default(), InitKind::Full);
+			System::reset_events();
+			System::initialize(&n, &[n as u8 - 1; 32].into(), &Default::default());
 
 			System::finalize();
 		}
@@ -464,7 +469,8 @@ fn events_not_emitted_during_genesis() {
 #[test]
 fn extrinsics_root_is_calculated_correctly() {
 	new_test_ext().execute_with(|| {
-		System::initialize(&1, &[0u8; 32].into(), &Default::default(), InitKind::Full);
+		System::reset_events();
+		System::initialize(&1, &[0u8; 32].into(), &Default::default());
 		System::note_finished_initialize();
 		System::note_extrinsic(vec![1]);
 		System::note_applied_extrinsic(&Ok(().into()), Default::default());
@@ -481,7 +487,8 @@ fn extrinsics_root_is_calculated_correctly() {
 #[test]
 fn runtime_updated_digest_emitted_when_heap_pages_changed() {
 	new_test_ext().execute_with(|| {
-		System::initialize(&1, &[0u8; 32].into(), &Default::default(), InitKind::Full);
+		System::reset_events();
+		System::initialize(&1, &[0u8; 32].into(), &Default::default());
 		System::set_heap_pages(RawOrigin::Root.into(), 5).unwrap();
 		assert_runtime_updated_digest(1);
 	});

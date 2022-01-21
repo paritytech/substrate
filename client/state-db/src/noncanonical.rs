@@ -210,9 +210,10 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 						insert_values(&mut values, record.inserted);
 						trace!(
 							target: "state-db",
-							"Uncanonicalized journal entry {}.{} ({} inserted, {} deleted)",
+							"Uncanonicalized journal entry {}.{} ({:?}) ({} inserted, {} deleted)",
 							block,
 							index,
+							record.hash,
 							overlay.inserted.len(),
 							overlay.deleted.len()
 						);
@@ -295,6 +296,9 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 
 		if level.blocks.len() >= MAX_BLOCKS_PER_LEVEL as usize {
 			return Err(Error::TooManySiblingBlocks)
+		}
+		if level.blocks.iter().any(|b| b.hash == *hash) {
+			return Err(Error::BlockAlreadyExists)
 		}
 
 		let index = level.available_index();
@@ -641,7 +645,7 @@ mod tests {
 	use super::{to_journal_key, NonCanonicalOverlay};
 	use crate::{
 		test::{make_changeset, make_db},
-		ChangeSet, CommitSet, MetaDb,
+		ChangeSet, CommitSet, Error, MetaDb,
 	};
 	use sp_core::H256;
 	use std::io;
@@ -708,6 +712,20 @@ mod tests {
 		overlay
 			.insert::<io::Error>(&h2, 2, &H256::default(), ChangeSet::default())
 			.unwrap();
+	}
+
+	#[test]
+	fn insert_existing_fails() {
+		let db = make_db(&[]);
+		let h1 = H256::random();
+		let mut overlay = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
+		overlay
+			.insert::<io::Error>(&h1, 2, &H256::default(), ChangeSet::default())
+			.unwrap();
+		assert!(matches!(
+			overlay.insert::<io::Error>(&h1, 2, &H256::default(), ChangeSet::default()),
+			Err(Error::BlockAlreadyExists)
+		));
 	}
 
 	#[test]

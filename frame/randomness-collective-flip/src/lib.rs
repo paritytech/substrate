@@ -91,6 +91,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
+	#[pallet::without_storage_info]
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
@@ -239,7 +240,8 @@ mod tests {
 		let mut parent_hash = System::parent_hash();
 
 		for i in 1..(blocks + 1) {
-			System::initialize(&i, &parent_hash, &Default::default(), frame_system::InitKind::Full);
+			System::reset_events();
+			System::initialize(&i, &parent_hash, &Default::default());
 			CollectiveFlip::on_initialize(i);
 
 			let header = System::finalize();
