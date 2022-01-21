@@ -31,20 +31,17 @@
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_election_provider_support::PageIndex;
 use frame_support::{
-	ensure,
-	traits::{Currency, DefensiveOption, Get, ReservableCurrency},
+	traits::{Currency, Defensive, ReservableCurrency},
 	BoundedVec,
 };
 use scale_info::TypeInfo;
 use sp_npos_elections::ElectionScore;
-use sp_runtime::traits::Zero;
+use sp_runtime::traits::{Saturating, Zero};
 
 /// Exports of this pallet
 pub use pallet::*;
 
-use crate::verifier::{
-	AsynchronousVerifier, SolutionDataProvider, Status, VerificationResult, Verifier,
-};
+use crate::verifier::{AsynchronousVerifier, SolutionDataProvider, Status, VerificationResult};
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
@@ -55,14 +52,20 @@ mod tests;
 type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
+/// All of the (meta) data around a signed submission
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Default)]
 #[codec(mel_bound(T: Config))]
 #[scale_info(skip_type_params(T))]
 pub struct SubmissionMetadata<T: Config> {
+	/// The amount of deposit that has been held in reserve.
 	deposit: BalanceOf<T>,
+	/// The amount of transaction fee that this submission has cost for its submitter so far.
 	fee: BalanceOf<T>,
+	/// The amount of rewards that we expect to give to this submission, if deemed worthy.
 	reward: BalanceOf<T>,
+	/// The score that this submission is claiming to achieve.
 	claimed_score: ElectionScore,
+	/// A bounded-bit-vec of pages that have been submitted so far.
 	pages: BoundedVec<bool, T::Pages>,
 }
 
@@ -87,11 +90,10 @@ impl<T: Config> SolutionDataProvider for Pallet<T> {
 			VerificationResult::Queued => {
 				// defensive: if there is a result to be reported, then we must have had some
 				// leader.
-				if let Some(winner) = Submissions::<T>::leader().defensive_map(|(x, _)| x) {
-					let metadata = Submissions::<T>::metadata(&winner).unwrap();
-
+				if let Some((winner, metadata)) = Submissions::<T>::fully_take_leader().defensive()
+				{
 					// first, let's give them their reward.
-					let reward = metadata.reward + metadata.fee;
+					let reward = metadata.reward.saturating_add(metadata.fee);
 					let imbalance = T::Currency::deposit_creating(&winner, reward);
 					Self::deposit_event(Event::<T>::Rewarded(winner.clone(), reward));
 
@@ -99,53 +101,37 @@ impl<T: Config> SolutionDataProvider for Pallet<T> {
 					let _remaining = T::Currency::unreserve(&winner, metadata.deposit);
 					debug_assert!(_remaining.is_zero());
 
-					// remove the winning data of the winner, we don't need it anymore.
-					Submissions::<T>::remove_data(&winner);
-
 					// For now, I will wipe everything on the spot, but in ideal case, we would do
 					// it over time.
 					// TODO: what we need a generic "StateGarbageCollector", to which you give a
 					// bunch of storage keys, and it will clean them for you on_idle. It should just
 					// be able to accept one job at a time, and report back to you if it is done
 					// doing what it was doing, or not.
-					for discarded in Submissions::<T>::sorted_submitters().into_iter().skip(1) {
-						let discarded_metadata = Submissions::<T>::metadata(&discarded).unwrap();
-						let _remaining =
-							T::Currency::unreserve(&discarded, discarded_metadata.deposit);
+					while let Some((discarded, metadata)) = Submissions::<T>::fully_take_leader() {
+						let _remaining = T::Currency::unreserve(&discarded, metadata.deposit);
 						debug_assert!(_remaining.is_zero());
-						Submissions::<T>::remove_data(&discarded);
 						Self::deposit_event(Event::<T>::Discarded(discarded));
 					}
 
-					// finally, kill the overall sorted list as well.
-					Submissions::<T>::clear_list();
-
 					// everything should have been clean.
-					debug_assert_eq!(Submissions::<T>::submissions_iter().count(), 0);
-					debug_assert_eq!(Submissions::<T>::metadata_iter().count(), 0);
-					debug_assert!(Submissions::<T>::sorted_submitters().is_empty());
+					debug_assert!(Submissions::<T>::ensure_killed().is_ok());
 				}
 			},
 			VerificationResult::Rejected => {
 				// defensive: if there is a result to be reported, then we must have had some
 				// leader.
-				if let Some(loser) = Submissions::<T>::take_leader().defensive_map(|(x, _)| x) {
-					let metadata = Submissions::<T>::metadata(&loser).unwrap();
-
+				if let Some((loser, metadata)) = Submissions::<T>::fully_take_leader().defensive() {
 					// first, let's slash their deposit.
 					let slash = metadata.deposit;
 					let (imbalance, _remainder) = T::Currency::slash_reserved(&loser, slash);
 					debug_assert!(_remainder.is_zero());
 					Self::deposit_event(Event::<T>::Slashed(loser.clone(), slash));
 
-					// they are already removed from the sorted list, next remove their submission
-					// data as well.
-					Submissions::<T>::remove_data(&loser);
-					debug_assert!(!Submissions::<T>::sorted_submitters().contains(&loser));
-
 					// inform the verifier that they can now try again, if we're still in the signed
 					// validation phase.
-					if crate::Pallet::<T>::current_phase().is_signed_validation() {
+					if crate::Pallet::<T>::current_phase().is_signed_validation() &&
+						Submissions::<T>::has_leader()
+					{
 						<T::Verifier as AsynchronousVerifier>::start();
 					}
 				}
@@ -192,25 +178,71 @@ pub mod pallet {
 		type WeightInfo: WeightInfo;
 	}
 
+	/// Wrapper type for signed submissions.
+	///
+	/// It handles 3 storage items:
+	///
+	/// 1. [`SortedScores`]: A flat vector of all submissions' `(submitter_id, claimed_score)`.
+	/// 2. [`SubmissionStorage`]: Paginated map of of all submissions, keyed by submitter and page.
+	/// 3. [`SubmissionMetadataStorage`]: Map from submitter to the metadata of their submission.
+	///
+	/// ### Consistency:
+	///
+	/// This storage group is sane, clean, and consistent if the following invariants are held:
+	///
+	/// - For any key in `SubmissionMetadataStorage`, a corresponding value should exist in
+	/// `SortedScores` vector.
+	///       - And the value of `metadata.score` must be equal to the score stored in
+	///         `SortedScores`.
+	/// - For any first key existing in `SubmissionStorage`, a key must exist in
+	///   `SubmissionMetadataStorage`.
+	/// - For any first key in `SubmissionStorage`, the number of second keys existing should be the
+	///   same as the `true` count of `pages` in [`SubmissionMetadata`] (this already implies the
+	///   former, since it uses the metadata).
+	///
+	/// All mutating functions are only allowed to transition into states where all of the above
+	/// conditions are met.
 	pub(crate) struct Submissions<T: Config>(sp_std::marker::PhantomData<T>);
+
+	#[pallet::storage]
+	type SortedScores<T: Config> =
+		StorageValue<_, BoundedVec<(T::AccountId, ElectionScore), T::MaxSubmissions>, ValueQuery>;
+
+	/// Double map from (account, page) to a solution page.
+	#[pallet::storage]
+	type SubmissionStorage<T: Config> =
+		StorageDoubleMap<_, Twox64Concat, T::AccountId, Twox64Concat, PageIndex, T::Solution>;
+
+	/// Map from account to the metadata of their submission.
+	///
+	/// invariant: for any Key1 of type `AccountId` in [`Submissions`], this storage map also has a
+	/// value.
+	#[pallet::storage]
+	type SubmissionMetadataStorage<T: Config> =
+		StorageMap<_, Twox64Concat, T::AccountId, SubmissionMetadata<T>>;
+
 	impl<T: Config> Submissions<T> {
 		// -- mutating functions
 
-		/// Remove all data associated with this submitter, namely the metadata and all submission
-		/// pages.
+		/// Generic checked mutation helper.
 		///
-		/// NOTE: this does not remove
-		pub(crate) fn remove_data(who: &T::AccountId) {
-			SubmissionMetadataStorage::<T>::remove(who);
-			SubmissionStorage::<T>::remove_prefix(who, None);
+		/// All mutating functions must be fulled through this bad boy.
+		fn mutate_checked<R, F: FnOnce() -> R>(mutate: F) -> R {
+			let result = mutate();
+			let _ = Self::sanity_check().defensive();
+			result
 		}
 
-		pub(crate) fn clear_list() {
-			SortedScores::<T>::kill()
-		}
-
-		pub(crate) fn take_leader() -> Option<(T::AccountId, ElectionScore)> {
-			SortedScores::<T>::mutate(|sorted| sorted.pop())
+		/// *Fully* take the leader from storage, with all of its associated data.
+		///
+		/// This removes all associated data of the leader from storage, discarding the submission
+		/// data and returning the rest.
+		pub(crate) fn fully_take_leader() -> Option<(T::AccountId, SubmissionMetadata<T>)> {
+			Self::mutate_checked(|| {
+				SortedScores::<T>::mutate(|sorted| sorted.pop()).and_then(|(submitter, _score)| {
+					Self::metadata(&submitter).map(|metadata| (submitter, metadata))
+				})
+			})
 		}
 
 		// TODO: there's too much logic here, consider re-organizing it a bit better.
@@ -308,6 +340,10 @@ pub mod pallet {
 			SubmissionMetadataStorage::<T>::get(who)
 		}
 
+		pub(crate) fn has_leader() -> bool {
+			!SortedScores::<T>::get().is_empty()
+		}
+
 		pub(crate) fn leader() -> Option<(T::AccountId, ElectionScore)> {
 			SortedScores::<T>::get().last().cloned()
 		}
@@ -335,29 +371,53 @@ pub mod pallet {
 		/// Ensure that all the storage items managed by this struct are in `killed` state, meaning
 		/// that in the expect state after an election is OVER.
 		#[cfg(any(test, debug_assertions))]
-		pub(crate) fn ensure_killed() {
-			assert_eq!(Self::metadata_iter().count(), 0);
-			assert_eq!(Self::submissions_iter().count(), 0);
-			assert_eq!(Self::sorted_submitters().len(), 0);
+		pub(crate) fn ensure_killed() -> Result<(), &'static str> {
+			ensure!(Self::metadata_iter().count() == 0, "metadata_iter not cleared.");
+			ensure!(Self::submissions_iter().count() == 0, "submissions_iter not cleared.");
+			ensure!(Self::sorted_submitters().len() == 0, "sorted_submitters not cleared.");
+
+			Ok(())
+		}
+
+		/// Perform all the sanity checks of this storage item group.
+		#[cfg(any(test, debug_assertions))]
+		pub(crate) fn sanity_check() -> Result<(), &'static str> {
+			let _ = SubmissionMetadataStorage::<T>::iter()
+				.map(|(submitter, meta)| {
+					let mut matches = SortedScores::<T>::get()
+						.into_iter()
+						.filter(|(who, _score)| who == &submitter)
+						.collect::<Vec<_>>();
+
+					ensure!(
+						matches.len() == 1,
+						"item existing in metadata but missing in sorted list."
+					);
+
+					let (_, score) = matches.pop().expect("checked; qed");
+					ensure!(score == meta.claimed_score, "score mismatch");
+					Ok(())
+				})
+				.collect::<Result<Vec<_>, &'static str>>()?;
+
+			ensure!(
+				SubmissionStorage::<T>::iter_keys()
+					.map(|(k1, _k2)| k1)
+					.all(|submitter| SubmissionMetadataStorage::<T>::contains_key(submitter)),
+				"missing metadata of submitter"
+			);
+
+			for submitter in SubmissionStorage::<T>::iter_keys().map(|(k1, _k2)| k1) {
+				let pages_count = SubmissionStorage::<T>::iter_key_prefix(&submitter).count();
+				let metadata = SubmissionMetadataStorage::<T>::get(submitter)
+					.expect("metadata checked to exist for all keys; qed");
+				let assumed_pages_count = metadata.pages.iter().filter(|x| **x).count();
+				ensure!(pages_count == assumed_pages_count, "wrong page count");
+			}
+
+			Ok(())
 		}
 	}
-
-	#[pallet::storage]
-	type SortedScores<T: Config> =
-		StorageValue<_, BoundedVec<(T::AccountId, ElectionScore), T::MaxSubmissions>, ValueQuery>;
-
-	/// Double map from (account, page) to a solution page.
-	#[pallet::storage]
-	type SubmissionStorage<T: Config> =
-		StorageDoubleMap<_, Twox64Concat, T::AccountId, Twox64Concat, PageIndex, T::Solution>;
-
-	/// Map from account to the metadata of their submission.
-	///
-	/// invariant: for any Key1 of type `AccountId` in [`Submissions`], this storage map also has a
-	/// value.
-	#[pallet::storage]
-	type SubmissionMetadataStorage<T: Config> =
-		StorageMap<_, Twox64Concat, T::AccountId, SubmissionMetadata<T>>;
 
 	#[pallet::pallet]
 	pub struct Pallet<T>(PhantomData<T>);
@@ -466,4 +526,9 @@ pub mod pallet {
 	}
 }
 
-impl<T: Config> Pallet<T> {}
+impl<T: Config> Pallet<T> {
+	#[cfg(any(debug_assertions, test, feature = "try-runtime"))]
+	pub(crate) fn sanity_check() -> Result<(), &'static str> {
+		Submissions::<T>::sanity_check()
+	}
+}

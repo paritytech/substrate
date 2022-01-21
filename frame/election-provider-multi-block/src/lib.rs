@@ -1822,7 +1822,6 @@ mod election_provider {
 
 			// load a solution into the verifier
 			let paged = BaseMiner::<Runtime>::mine_solution(Pages::get(), false).unwrap();
-			let score = paged.score.clone();
 
 			load_signed_for_verification_and_start_and_roll_to_verified(99, paged, 0);
 
@@ -1866,7 +1865,6 @@ mod election_provider {
 
 			// load a solution into the verifier
 			let paged = BaseMiner::<Runtime>::mine_solution(Pages::get(), false).unwrap();
-			let score = paged.score.clone();
 			load_signed_for_verification_and_start_and_roll_to_verified(99, paged, 0);
 
 			assert_eq!(MultiBlock::current_phase(), Phase::SignedValidation(20));

@@ -653,7 +653,7 @@ mod async_verification {
 	fn invalid_solution_bad_minimum_score() {
 		ExtBuilder::verifier().build_and_execute(|| {
 			roll_to_snapshot_created();
-			let mut paged = mine_full_solution().unwrap();
+			let paged = mine_full_solution().unwrap();
 
 			// our minimum score is our score, just a bit better.
 			let mut better_score = paged.score.clone();

@@ -377,9 +377,11 @@ impl ExecuteWithSanityChecks for sp_io::TestExternalities {
 }
 
 fn sanity_checks() {
-	let _ = VerifierPallet::sanity_check().unwrap();
-	let _ = UnsignedPallet::sanity_check().unwrap();
-	let _ = MultiBlock::sanity_check().unwrap();
+	let _ = VerifierPallet::sanity_check()
+		.and(UnsignedPallet::sanity_check())
+		.and(MultiBlock::sanity_check())
+		.and(SignedPallet::sanity_check())
+		.unwrap();
 }
 
 pub fn balances(who: &u64) -> (u64, u64) {
