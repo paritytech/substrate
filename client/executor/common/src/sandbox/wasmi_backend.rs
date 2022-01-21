@@ -18,25 +18,31 @@
 
 //! Wasmi specific impls for sandbox
 
-use codec::Encode;
-use sp_wasm_interface::{FunctionContext, Pointer, Value, WordSize};
+use codec::{Encode, Decode};
+use sp_core::sandbox::HostError;
+use sp_wasm_interface::{FunctionContext, Pointer, Value, WordSize, ReturnValue};
 use std::rc::Rc;
 
 use wasmi::{
 	memory_units::Pages, ImportResolver, MemoryInstance, Module, ModuleInstance, RuntimeArgs,
-	RuntimeValue, Trap,
+	RuntimeValue, Trap, TrapKind,
 };
 
 use crate::{
-	error,
+	error::{self, Error},
 	sandbox::{
-		deserialize_result, trap, BackendInstance, GuestEnvironment, GuestExternals,
+		BackendInstance, GuestEnvironment, GuestExternals,
 		GuestFuncIndex, Imports, InstantiationError, Memory, SandboxContext, SandboxInstance,
 	},
 	util::{checked_range, MemoryTransfer},
 };
 
 environmental::environmental!(SandboxContextStore: trait SandboxContext);
+
+/// Construct trap error from specified message
+fn trap(msg: &'static str) -> Trap {
+	TrapKind::Host(Box::new(Error::Other(msg.into()))).into()
+}
 
 impl ImportResolver for Imports {
 	fn resolve_func(
@@ -252,7 +258,18 @@ impl<'a> wasmi::Externals for GuestExternals<'a> {
 				"Can't deallocate memory for dispatch thunk's result",
 			)
 			.and_then(|_| serialized_result_val)
-			.and_then(|serialized_result_val| deserialize_result(&serialized_result_val))
+			.and_then(|serialized_result_val| {
+				let result_val = std::result::Result::<ReturnValue, HostError>::decode(&mut serialized_result_val.as_slice())
+					.map_err(|_| trap("Decoding Result<ReturnValue, HostError> failed!"))?;
+
+				match result_val {
+					Ok(return_value) => Ok(match return_value {
+						ReturnValue::Unit => None,
+						ReturnValue::Value(typed_value) => Some(RuntimeValue::from(typed_value)),
+					}),
+					Err(HostError) => Err(trap("Supervisor function returned sandbox::HostError")),
+				}
+			})
 		}).expect("SandboxContextStore is set when invoking sandboxed functions; qed")
 	}
 }

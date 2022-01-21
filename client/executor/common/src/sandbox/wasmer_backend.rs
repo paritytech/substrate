@@ -24,14 +24,15 @@ use crate::{
 	util::{checked_range, MemoryTransfer},
 };
 use codec::Encode;
-use sp_wasm_interface::{FunctionContext, Pointer, Value, WordSize};
+use sp_core::sandbox::HostError;
+use sp_wasm_interface::{FunctionContext, Pointer, Value, WordSize, ReturnValue};
+use wasmer::RuntimeError;
 use std::{cell::RefCell, collections::HashMap, convert::TryInto, rc::Rc};
-use wasmi::RuntimeValue;
 
 use crate::{
 	error::Error,
 	sandbox::{
-		deserialize_result, BackendInstance, GuestEnvironment, InstantiationError, SandboxContext,
+		BackendInstance, GuestEnvironment, InstantiationError, SandboxContext,
 		SandboxInstance, SupervisorFuncIndex,
 	},
 };
@@ -216,7 +217,7 @@ pub fn wasmer_dispatch_function(
 					wasmer::Val::I64(val) => Ok(Value::I64(*val)),
 					wasmer::Val::F32(val) => Ok(Value::F32(f32::to_bits(*val))),
 					wasmer::Val::F64(val) => Ok(Value::F64(f64::to_bits(*val))),
-					_ => Err(wasmer::RuntimeError::new(format!(
+					_ => Err(RuntimeError::new(format!(
 						"Unsupported function argument: {:?}",
 						val
 					))),
@@ -231,13 +232,13 @@ pub fn wasmer_dispatch_function(
 				.supervisor_context()
 				.allocate_memory(invoke_args_len)
 				.map_err(|_| {
-					wasmer::RuntimeError::new(
+					RuntimeError::new(
 						"Can't allocate memory in supervisor for the arguments",
 					)
 				})?;
 
 			let deallocate = |fe: &mut dyn FunctionContext, ptr, fail_msg| {
-				fe.deallocate_memory(ptr).map_err(|_| wasmer::RuntimeError::new(fail_msg))
+				fe.deallocate_memory(ptr).map_err(|_| RuntimeError::new(fail_msg))
 			};
 
 			if sandbox_context
@@ -251,13 +252,13 @@ pub fn wasmer_dispatch_function(
 					"Failed dealloction after failed write of invoke arguments",
 				)?;
 
-				return Err(wasmer::RuntimeError::new("Can't write invoke args into memory"))
+				return Err(RuntimeError::new("Can't write invoke args into memory"))
 			}
 
 			// Perform the actuall call
 			let serialized_result = sandbox_context
 				.invoke(invoke_args_ptr, invoke_args_len, state, supervisor_func_index)
-				.map_err(|e| wasmer::RuntimeError::new(e.to_string()))?;
+				.map_err(|e| RuntimeError::new(e.to_string()))?;
 
 			// dispatch_thunk returns pointer to serialized arguments.
 			// Unpack pointer and len of the serialized result data.
@@ -273,7 +274,7 @@ pub fn wasmer_dispatch_function(
 				.supervisor_context()
 				.read_memory(serialized_result_val_ptr, serialized_result_val_len)
 				.map_err(|_| {
-					wasmer::RuntimeError::new(
+					RuntimeError::new(
 						"Can't read the serialized result from dispatch thunk",
 					)
 				});
@@ -285,20 +286,22 @@ pub fn wasmer_dispatch_function(
 			)
 			.and_then(|_| serialized_result_val)
 			.and_then(|serialized_result_val| {
-				deserialize_result(&serialized_result_val)
-					.map_err(|e| wasmer::RuntimeError::new(e.to_string()))
+				use codec::Decode;
+				std::result::Result::<ReturnValue, HostError>::decode(&mut serialized_result_val.as_slice())
+					.map_err(|_| RuntimeError::new("Decoding Result<ReturnValue, HostError> failed!"))?
+					.map_err(|_| RuntimeError::new("Supervisor function returned sandbox::HostError"))
 			})?;
 
-			if let Some(value) = deserialized_result {
-				Ok(vec![match value {
-					RuntimeValue::I32(val) => wasmer::Val::I32(val),
-					RuntimeValue::I64(val) => wasmer::Val::I64(val),
-					RuntimeValue::F32(val) => wasmer::Val::F32(val.into()),
-					RuntimeValue::F64(val) => wasmer::Val::F64(val.into()),
-				}])
-			} else {
-				Ok(vec![])
-			}
+			let result = match deserialized_result {
+				ReturnValue::Value(Value::I32(val)) => vec![wasmer::Val::I32(val)],
+				ReturnValue::Value(Value::I64(val)) => vec![wasmer::Val::I64(val)],
+				ReturnValue::Value(Value::F32(val)) => vec![wasmer::Val::F32(f32::from_bits(val))],
+				ReturnValue::Value(Value::F64(val)) => vec![wasmer::Val::F64(f64::from_bits(val))],
+
+				ReturnValue::Unit => vec![],
+			};
+
+			Ok(result)
 		})
 		.expect("SandboxContextStore is set when invoking sandboxed functions; qed")
 	})

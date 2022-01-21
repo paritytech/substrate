@@ -26,14 +26,13 @@ mod wasmer_backend;
 mod wasmi_backend;
 
 use crate::{
-	error::{Error, Result},
+	error::Result,
 	util,
 };
 use codec::Decode;
 use sp_core::sandbox as sandbox_primitives;
 use sp_wasm_interface::{FunctionContext, Pointer, WordSize};
 use std::{collections::HashMap, rc::Rc};
-use wasmi::{RuntimeValue, Trap, TrapKind};
 
 #[cfg(feature = "wasmer-sandbox")]
 use wasmer_backend::{
@@ -152,28 +151,6 @@ pub struct GuestExternals<'a> {
 
 	/// External state passed to guest environment, see the `instantiate` function
 	state: u32,
-}
-
-/// Construct trap error from specified message
-fn trap(msg: &'static str) -> Trap {
-	TrapKind::Host(Box::new(Error::Other(msg.into()))).into()
-}
-
-fn deserialize_result(
-	mut serialized_result: &[u8],
-) -> std::result::Result<Option<RuntimeValue>, Trap> {
-	use self::sandbox_primitives::HostError;
-	use sp_wasm_interface::ReturnValue;
-	let result_val = std::result::Result::<ReturnValue, HostError>::decode(&mut serialized_result)
-		.map_err(|_| trap("Decoding Result<ReturnValue, HostError> failed!"))?;
-
-	match result_val {
-		Ok(return_value) => Ok(match return_value {
-			ReturnValue::Unit => None,
-			ReturnValue::Value(typed_value) => Some(RuntimeValue::from(typed_value)),
-		}),
-		Err(HostError) => Err(trap("Supervisor function returned sandbox::HostError")),
-	}
 }
 
 /// Module instance in terms of selected backend
