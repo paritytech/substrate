@@ -16,39 +16,44 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use super::*;
+use std::collections::HashSet;
 
-use crate::pubsub::{SubsBase, Subscribe, Unsubscribe};
+use crate::pubsub::{Dispatch, SubsID, Subscribe, Unsubscribe};
 
 /// The shared structure to keep track on subscribers.
 #[derive(Debug)]
-pub(super) struct Registry<Payload> {
-	pub(super) id_sequence: IDSequence,
-	pub(super) subscribers: HashMap<SeqID, TracingUnboundedSender<Payload>>,
+pub(super) struct Registry {
+	pub(super) subscribers: HashSet<SubsID>,
+	// _pd: std::marker::PhantomData<Payload>,
 }
 
-impl<Payload> Default for Registry<Payload> {
+impl Default for Registry {
 	fn default() -> Self {
-		Self { id_sequence: Default::default(), subscribers: Default::default() }
+		Self { subscribers: Default::default() }
 	}
 }
 
-impl<Payload> SubsBase for Registry<Payload> {
-	type SubsID = SeqID;
+impl Subscribe<()> for Registry {
+	fn subscribe(&mut self, _subs_key: (), subs_id: SubsID) {
+		self.subscribers.insert(subs_id);
+	}
 }
-impl<Payload> Unsubscribe for Registry<Payload> {
-	fn unsubscribe(&mut self, subs_id: &Self::SubsID) {
+impl Unsubscribe for Registry {
+	fn unsubscribe(&mut self, subs_id: &SubsID) {
 		let _ = self.subscribers.remove(subs_id);
 	}
 }
 
-impl<Payload> Subscribe<TracingUnboundedSender<Payload>> for Registry<Payload> {
-	fn subscribe(&mut self, subs_op: TracingUnboundedSender<Payload>) -> Self::SubsID {
-		let subs_id = self.id_sequence.next_id();
-		assert!(self.subscribers.insert(subs_id, subs_op).is_none(), "
-			Each `subs_id` is taken from `self.id_sequence.next_id()`.
-			If we have a duplicate key here, it's either the implementation of `IDSequence` was broken, or we've overflowed `u64`.
-			We are not likely to overflow an `u64`.");
-		subs_id
+impl<Payload> Dispatch<Payload> for Registry
+where
+	Payload: Clone,
+{
+	type Item = Payload;
+
+	fn dispatch<F>(&mut self, payload: Payload, mut dispatch: F)
+	where
+		F: FnMut(SubsID, Self::Item),
+	{
+		self.subscribers.iter().for_each(|subs_id| dispatch(*subs_id, payload.clone()))
 	}
 }

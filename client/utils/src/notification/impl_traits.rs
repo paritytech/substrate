@@ -8,7 +8,7 @@ use std::{
 
 impl<Payload> Clone for NotificationSender<Payload> {
 	fn clone(&self) -> Self {
-		Self { registry: self.registry.clone() }
+		Self { hub: self.hub.clone() }
 	}
 }
 
@@ -18,12 +18,12 @@ impl<Payload> Stream for NotificationReceiver<Payload> {
 	type Item = Payload;
 
 	fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Payload>> {
-		Pin::new(self.get_mut().subs_guard.rx_mut()).poll_next(cx)
+		Pin::new(&mut self.get_mut().receiver).poll_next(cx)
 	}
 }
 
 impl<Payload> FusedStream for NotificationReceiver<Payload> {
 	fn is_terminated(&self) -> bool {
-		self.subs_guard.rx().is_terminated()
+		self.receiver.is_terminated()
 	}
 }

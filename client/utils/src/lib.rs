@@ -40,5 +40,7 @@ pub mod id_sequence;
 pub mod metrics;
 pub mod mpsc;
 pub mod notification;
-pub mod pubsub;
+pub mod pubsub_to_remove;
 pub mod status_sinks;
+
+pub mod pubsub;

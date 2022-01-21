@@ -26,13 +26,15 @@
 //!
 //! See [`sc-service::builder::RpcExtensionBuilder`] for more details.
 
-use std::collections::HashMap;
+// use std::collections::HashMap;
 
-use crate::{
-	id_sequence::{IDSequence, SeqID},
-	mpsc::{TracingUnboundedReceiver, TracingUnboundedSender},
-	pubsub::{SharedRegistry, SubscriptionGuard},
-};
+// use crate::{
+// 	id_sequence::{IDSequence, SeqID},
+// 	mpsc::{TracingUnboundedReceiver, TracingUnboundedSender},
+// 	pubsub_to_remove::{SharedRegistry, SubscriptionGuard},
+// };
+
+use crate::pubsub::{channels::TracingUnbounded, Hub, Receiver};
 
 mod impl_traits;
 
@@ -53,45 +55,37 @@ pub trait TracingKeyStr {
 /// used to add more subscriptions.
 #[derive(Clone)]
 pub struct NotificationStream<Payload, TK: TracingKeyStr> {
-	registry: SharedRegistry<Registry<Payload>>,
+	hub: Hub<TracingUnbounded<Payload>, Registry>,
 	_pd: std::marker::PhantomData<TK>,
 }
 
 /// The receiving half of the notifications channel(s).
 #[derive(Debug)]
 pub struct NotificationReceiver<Payload> {
-	subs_guard: SubscriptionGuard<Registry<Payload>, TracingUnboundedReceiver<Payload>>,
+	receiver: Receiver<TracingUnbounded<Payload>, Registry>,
 }
 
 /// The sending half of the notifications channel(s).
 ///
 /// Used to send notifications from the BEEFY gadget side.
 pub struct NotificationSender<Payload> {
-	registry: SharedRegistry<Registry<Payload>>,
+	hub: Hub<TracingUnbounded<Payload>, Registry>,
 }
 
 impl<Payload, TK: TracingKeyStr> NotificationStream<Payload, TK> {
 	/// Creates a new pair of receiver and sender of `Payload` notifications.
 	pub fn channel() -> (NotificationSender<Payload>, Self) {
-		let registry = SharedRegistry::<Registry<Payload>>::default();
-		let sender = NotificationSender::new(registry.clone());
-		let receiver = NotificationStream::new(registry);
+		let channels = TracingUnbounded::new(TK::TRACING_KEY);
+		let hub = Hub::new(channels);
+		let sender = NotificationSender { hub: hub.clone() };
+		let receiver = NotificationStream { hub, _pd: Default::default() };
 		(sender, receiver)
-	}
-
-	/// Create a new receiver of `Payload` notifications.
-	///
-	/// The `subscribers` should be shared with a corresponding `NotificationSender`.
-	fn new(registry: SharedRegistry<Registry<Payload>>) -> Self {
-		Self { registry, _pd: Default::default() }
 	}
 
 	/// Subscribe to a channel through which the generic payload can be received.
 	pub fn subscribe(&self) -> NotificationReceiver<Payload> {
-		let (underlying_tx, underlying_rx) = crate::mpsc::tracing_unbounded(TK::TRACING_KEY);
-		let subs_guard = self.registry.subscribe(underlying_tx).with_rx(underlying_rx);
-		let receiver = NotificationReceiver { subs_guard };
-		receiver
+		let receiver = self.hub.subscribe(());
+		NotificationReceiver { receiver }
 	}
 }
 
@@ -117,22 +111,10 @@ impl<Payload> NotificationSender<Payload> {
 		//
 		// So there's no need to clean up the subscribers set upon sending another message.
 
-		let registry = self.registry.lock();
-		let subscribers = &registry.subscribers;
-
-		if !subscribers.is_empty() {
-			let payload = payload()?;
-			for (_subs_id, tx) in subscribers {
-				let _ = tx.unbounded_send(payload.clone());
-			}
-		}
+		let payload = payload()?; // FIXME: Did it have to be lazily instantiated?
+		self.hub.dispatch(payload);
 
 		Ok(())
-	}
-
-	/// The `subscribers` should be shared with a corresponding `NotificationStream`.
-	fn new(registry: SharedRegistry<Registry<Payload>>) -> Self {
-		Self { registry }
 	}
 }
 

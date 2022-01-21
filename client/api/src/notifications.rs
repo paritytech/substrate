@@ -28,7 +28,7 @@ use prometheus_endpoint::Registry as PrometheusRegistry;
 use sc_utils::{
 	mpsc,
 	mpsc::TracingUnboundedReceiver,
-	pubsub::{SharedRegistry, SubscriptionGuard},
+	pubsub_to_remove::{SharedRegistry, SubscriptionGuard},
 };
 use sp_core::storage::{StorageData, StorageKey};
 use sp_runtime::traits::Block as BlockT;
