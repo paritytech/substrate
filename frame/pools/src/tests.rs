@@ -1,5 +1,3 @@
-//! Generally for pool ids we use 0-9 and delegator ids 10-99.
-
 use super::*;
 use crate::mock::{
 	Balance, Balances, CanBondExtra, ExtBuilder, Origin, Pools, Runtime, StakingMock, System,
@@ -102,7 +100,31 @@ mod primary_pool {
 
 	#[test]
 	fn ok_to_join_with_works() {
-		ExtBuilder::default().build_and_execute(|| {});
+		ExtBuilder::default().build_and_execute(|| {
+			let pool = PrimaryPool::<Runtime> { points: 100, account_id: 123 };
+
+			// Simulate a 100% slashed pool
+			StakingMock::set_bonded_balance(123, 0);
+			assert_noop!(pool.ok_to_join_with(100), Error::<Runtime>::OverflowRisk);
+
+			// Simulate a 89%
+			StakingMock::set_bonded_balance(123, 11);
+			assert_ok!(pool.ok_to_join_with(100));
+
+			// Simulate a 90% slashed pool
+			StakingMock::set_bonded_balance(123, 10);
+			assert_noop!(pool.ok_to_join_with(100), Error::<Runtime>::OverflowRisk);
+
+			let bonded = 100;
+			StakingMock::set_bonded_balance(123, bonded);
+			// New bonded balance would be over 1/10th of Balance type
+			assert_noop!(
+				pool.ok_to_join_with(Balance::MAX / 10 - bonded),
+				Error::<Runtime>::OverflowRisk
+			);
+			// and a sanity check
+			assert_ok!(pool.ok_to_join_with(Balance::MAX / 100 - bonded + 1),);
+		});
 	}
 }
 
@@ -219,33 +241,6 @@ mod join {
 		});
 	}
 
-	fn join_works_with_a_slashed_pool() {
-		ExtBuilder::default().build_and_execute(|| {
-			Balances::make_free_balance_be(&11, 5 + 2);
-
-			assert!(!Delegators::<Runtime>::contains_key(&11));
-
-			StakingMock::set_bonded_balance(PRIMARY_ACCOUNT, 0);
-
-			assert_ok!(Pools::join(Origin::signed(11), 2, 0));
-
-			// Storage is updated correctly
-			assert_eq!(
-				Delegators::<Runtime>::get(&11).unwrap(),
-				Delegator::<Runtime> {
-					pool: 0,
-					points: 20,
-					reward_pool_total_earnings: 0,
-					unbonding_era: None
-				}
-			);
-			assert_eq!(
-				PrimaryPools::<Runtime>::get(&0).unwrap(),
-				PrimaryPool::<Runtime> { points: 30, account_id: PRIMARY_ACCOUNT }
-			);
-		});
-	}
-
 	#[test]
 	fn join_errors_correctly() {
 		use super::*;
@@ -256,6 +251,10 @@ mod join {
 			);
 
 			assert_noop!(Pools::join(Origin::signed(11), 420, 420), Error::<Runtime>::PoolNotFound);
+
+			// Force the pools bonded balance to 0, simulating a 100% slash
+			StakingMock::set_bonded_balance(PRIMARY_ACCOUNT, 0);
+			assert_noop!(Pools::join(Origin::signed(11), 420, 0), Error::<Runtime>::OverflowRisk);
 
 			PrimaryPools::<Runtime>::insert(
 				1,

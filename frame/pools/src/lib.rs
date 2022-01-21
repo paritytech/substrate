@@ -168,6 +168,8 @@ impl<T: Config> PrimaryPool<T> {
 	// Check that the pool can accept a member with `new_funds`.
 	fn ok_to_join_with(&self, new_funds: BalanceOf<T>) -> Result<(), DispatchError> {
 		let bonded_balance = T::StakingInterface::bonded_balance(&self.account_id);
+		ensure!(!bonded_balance.is_zero(), Error::<T>::OverflowRisk);
+
 		let points_to_balance_ratio = FixedU128::saturating_from_rational(
 			T::BalanceToU128::convert(self.points),
 			T::BalanceToU128::convert(bonded_balance),
