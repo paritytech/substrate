@@ -560,11 +560,11 @@ pub mod pallet {
 		/// A code with the specified hash was removed.
 		CodeRemoved { code_hash: T::Hash },
 
-		/// Contract code has been updated to one specified with code_hash
+		/// A contract code has changed its code.
 		ContractCodeUpdated {
 			/// The contract that has been updated.
 			contract: T::AccountId,
-			/// New code hash that was set for the contract
+			/// New code hash that was set for the contract.
 			code_hash: T::Hash,
 		},
 	}

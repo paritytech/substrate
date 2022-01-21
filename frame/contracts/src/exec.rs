@@ -156,7 +156,7 @@ pub trait Ext: sealing::Sealed {
 		take_old: bool,
 	) -> Result<WriteOutcome, DispatchError>;
 
-	/// Sets new code hash for existing contract
+	/// Sets new code hash for existing contract.
 	fn set_code_hash(&mut self, hash: CodeHash<Self::T>) -> Result<(), DispatchError>;
 
 	/// Returns a reference to the account id of the caller.
@@ -1021,10 +1021,10 @@ where
 	}
 
 	fn set_code_hash(&mut self, hash: CodeHash<Self::T>) -> Result<(), DispatchError> {
-		let top_frame = &mut self.top_frame_mut();
+		increment_refcount::<Self::T>(hash)?;
+		let top_frame = self.top_frame_mut();
 		let prev_hash = top_frame.contract_info().code_hash.clone();
 		top_frame.contract_info().code_hash = hash;
-		increment_refcount::<Self::T>(hash)?;
 		decrement_refcount::<Self::T>(prev_hash)?;
 		Contracts::<Self::T>::deposit_event(Event::ContractCodeUpdated {
 			contract: top_frame.account_id.clone(),
