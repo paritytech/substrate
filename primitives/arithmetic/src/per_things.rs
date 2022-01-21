@@ -411,6 +411,7 @@ where
 	rem_mul_div_inner.into()
 }
 
+/// A test that the output of this macro can be used as storage value is in frame-support.
 macro_rules! implement_per_thing {
 	(
 		$name:ident,
@@ -1534,6 +1535,7 @@ macro_rules! implement_per_thing {
 	};
 }
 
+/// A test that the output of this macro can be used as storage value is in frame-support.
 macro_rules! implement_per_thing_with_perthousand {
 	(
 		$name:ident,
