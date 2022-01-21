@@ -42,7 +42,7 @@ hex-literal = "0.3.4"
 sc-runtime-test = { version = "2.0.0", path = "runtime-test" }
 substrate-test-runtime = { version = "2.0.0", path = "../../test-utils/runtime" }
 sp-state-machine = { version = "0.10.0", path = "../../primitives/state-machine" }
-sp-runtime = { version = "4.0.0", path = "../../primitives/runtime" }
+sp-runtime = { version = "4.1.0-dev", path = "../../primitives/runtime" }
 sp-maybe-compressed-blob = { version = "4.1.0-dev", path = "../../primitives/maybe-compressed-blob" }
 sc-tracing = { version = "4.0.0-dev", path = "../tracing" }
 tracing = "0.1.29"
