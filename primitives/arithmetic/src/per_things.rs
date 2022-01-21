@@ -907,6 +907,15 @@ macro_rules! implement_per_thing {
 			}
 
 			#[test]
+			fn has_max_encoded_len() {
+				struct AsMaxEncodedLen<T: codec::MaxEncodedLen> {
+					_data: T,
+				}
+
+				let _ = AsMaxEncodedLen { _data: $name(1) };
+			}
+
+			#[test]
 			fn fail_on_invalid_encoded_value() {
 				let value = <$upper_type>::from($max) * 2;
 				let casted = value as $type;
