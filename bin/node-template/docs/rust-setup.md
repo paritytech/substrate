@@ -2,11 +2,8 @@
 title: Installation
 ---
 
-This guide is as a reference only, for the latest methods:
-
-## Please see the latest information to install here:
-
-## https://docs.substrate.io/v3/getting-started/installation/
+This guide is for reference only, please check the latest information on getting starting with Substrate 
+[here](https://docs.substrate.io/v3/getting-started/installation/).
 
 This page will guide you through the **2 steps** needed to prepare a computer for **Substrate** development.
 Since Substrate is built with [the Rust programming language](https://www.rust-lang.org/), the first
@@ -15,7 +12,7 @@ on the computer's operating system. Once Rust is configured, you will use its to
 with Rust projects; the commands for Rust's toolchains will be the same for all supported,
 Unix-based operating systems.
 
-## 1. Build dependencies
+## Build dependencies
 
 Substrate development is easiest on Unix-based operating systems like macOS or Linux. The examples
 in the [Substrate Docs](https://docs.substrate.io) use Unix-style terminals to demonstrate how to
@@ -82,7 +79,7 @@ recommend to use [Windows Subsystem Linux](https://docs.microsoft.com/en-us/wind
 Please refer to the separate
 [guide for native Windows development](https://docs.substrate.io/v3/getting-started/windows-users/).
 
-## 2. Rust developer environment
+## Rust developer environment
 
 This guide uses <https://rustup.rs> installer and the `rustup` tool to manage the Rust toolchain.
 First install and configure `rustup`:
@@ -107,12 +104,6 @@ rustup target add wasm32-unknown-unknown --toolchain nightly
 
 Now the best way to ensure that you have successfully prepared a computer for Substrate
 development is to follow the steps in [our first tutorial](/tutorials/v3/create-your-first-substrate-chain).
-
-<Message
-type={`yellow`}
-title={`Information`}
-text={`For more details on _why_ these dependencies are used, and for _troubleshooting_ errors building the template, read on.`}
-/>
 
 ## Troubleshooting Substrate builds
 
