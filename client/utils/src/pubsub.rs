@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -16,7 +16,28 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use super::*;
+//! Provides means to implement a typical Pub/Sub mechanism.
+//!
+//! When implementing a Pub/Sub it is usual to introduce types for
+//! the *producer*-side and the *consumer*-side.
+//! The *producer* keeps track on its *consumers* using a *registry*.
+//! That *registry* needs to be shared between both the *producer* and its *consumers*:
+//! - the *producer* — to dispatch the broadcast messages;
+//! - the *consumer* — in order to subscribe and unsubscribe.
+//!
+//! According to this module's idea,
+//! the shared *registry* should implement the following traits: `SubsBase`,
+//! `Subscribe<SubscribeOp>`, `Unsubscribe`.
+//!
+//! The *registry* upon subscription yields a subscription ID (defined as `SubsBase::SubsID`).
+//! The implementation should not usually touch the subscription ID from outside of the *registry*.
+//!
+//! The *producer* then holds a reference to the shared *registry* by wrapping it into
+//! `SharedRegistry<R>` (where `R` is the *registry*).
+//!
+//! The consumers hold a weak reference to the *registry* by having it wrapped
+//! into a `SubscriptionGuard<R>` (where `R` is the *registry*), along with the *consumer's*
+//! subsription ID. The unsubscription is done by the `SubscriptionGuard<R>` upon drop.
 
 use std::{
 	ops::DerefMut,
@@ -25,25 +46,24 @@ use std::{
 
 use ::parking_lot::Mutex;
 
+pub trait SubsBase {
+	type SubsID;
+}
+
+pub trait Subscribe<Op>: SubsBase {
+	fn subscribe(&mut self, subs_op: Op) -> Self::SubsID;
+}
+
+pub trait Unsubscribe: SubsBase {
+	fn unsubscribe(&mut self, subs_id: &Self::SubsID);
+}
+
 /// A wrapper to share the internal subscription registry.
 ///
 /// Provides convenience methods to access the underlying registry.
 #[derive(Debug)]
 pub struct SharedRegistry<R> {
 	registry: Arc<Mutex<R>>,
-}
-impl<R> Clone for SharedRegistry<R> {
-	fn clone(&self) -> Self {
-		Self { registry: self.registry.clone() }
-	}
-}
-impl<R> Default for SharedRegistry<R>
-where
-	R: Default,
-{
-	fn default() -> Self {
-		Self::new(Default::default())
-	}
 }
 
 /// A guard structure wrapping `R: Unsubscribe`, that will perform unsubscription upon being
@@ -66,6 +86,20 @@ where
 {
 	registry: Weak<Mutex<R>>,
 	subs_id: R::SubsID,
+}
+
+impl<R> Clone for SharedRegistry<R> {
+	fn clone(&self) -> Self {
+		Self { registry: self.registry.clone() }
+	}
+}
+impl<R> Default for SharedRegistry<R>
+where
+	R: Default,
+{
+	fn default() -> Self {
+		Self::new(Default::default())
+	}
 }
 
 impl<R> SharedRegistry<R> {

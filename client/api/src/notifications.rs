@@ -16,21 +16,88 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use super::*;
+//! Storage notifications
 
-use sc_utils::{mpsc, pubsub::SharedRegistry};
+use std::{
+	collections::{HashMap, HashSet},
+	sync::Arc,
+};
 
+use prometheus_endpoint::Registry as PrometheusRegistry;
+
+use sc_utils::{
+	mpsc,
+	mpsc::TracingUnboundedReceiver,
+	pubsub::{SharedRegistry, SubscriptionGuard},
+};
+use sp_core::storage::{StorageData, StorageKey};
 use sp_runtime::traits::Block as BlockT;
+
+mod impl_traits;
+mod keys;
+mod registry;
+
+use keys::{ChildKeys, Keys};
+use registry::StorageNotificationsImpl;
+
+/// A type of a message delivered to the subscribers
+pub type Notification<Hash> = (Hash, StorageChangeSet);
+
+/// Storage change set
+#[derive(Debug)]
+pub struct StorageChangeSet {
+	changes: Arc<[(StorageKey, Option<StorageData>)]>,
+	child_changes: Arc<[(StorageKey, Vec<(StorageKey, Option<StorageData>)>)]>,
+	filter: Keys,
+	child_filters: ChildKeys,
+}
 
 /// Manages storage listeners.
 #[derive(Debug)]
 pub struct StorageNotifications<Block: BlockT>(
-	pub(super) SharedRegistry<StorageNotificationsImpl<Block::Hash>>,
+	SharedRegistry<StorageNotificationsImpl<Block::Hash>>,
 );
 
-impl<Block: BlockT> Default for StorageNotifications<Block> {
-	fn default() -> Self {
-		Self(Default::default())
+/// Type that implements `futures::Stream` of storage change events.
+pub struct StorageEventStream<H> {
+	subs_guard:
+		SubscriptionGuard<StorageNotificationsImpl<H>, TracingUnboundedReceiver<Notification<H>>>,
+
+	was_triggered: bool,
+}
+
+impl StorageChangeSet {
+	/// Convert the change set into iterator over storage items.
+	pub fn iter<'a>(
+		&'a self,
+	) -> impl Iterator<Item = (Option<&'a StorageKey>, &'a StorageKey, Option<&'a StorageData>)> + 'a
+	{
+		let top = self
+			.changes
+			.iter()
+			.filter(move |&(key, _)| match self.filter {
+				Some(ref filter) => filter.contains(key),
+				None => true,
+			})
+			.map(move |(k, v)| (None, k, v.as_ref()));
+		let children = self
+			.child_changes
+			.iter()
+			.filter_map(move |(sk, changes)| {
+				self.child_filters.as_ref().and_then(|cf| {
+					cf.get(sk).map(|filter| {
+						changes
+							.iter()
+							.filter(move |&(key, _)| match filter {
+								Some(ref filter) => filter.contains(key),
+								None => true,
+							})
+							.map(move |(k, v)| (Some(sk), k, v.as_ref()))
+					})
+				})
+			})
+			.flatten();
+		top.chain(children)
 	}
 }
 
@@ -74,3 +141,6 @@ impl<Block: BlockT> StorageNotifications<Block> {
 		StorageEventStream { subs_guard, was_triggered: false }
 	}
 }
+
+#[cfg(test)]
+mod tests;
