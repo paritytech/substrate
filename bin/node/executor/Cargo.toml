@@ -36,7 +36,7 @@ pallet-timestamp = { version = "4.0.0-dev", path = "../../../frame/timestamp" }
 pallet-treasury = { version = "4.0.0-dev", path = "../../../frame/treasury" }
 sp-application-crypto = { version = "4.0.0", path = "../../../primitives/application-crypto" }
 sp-consensus-babe = { version = "0.10.0-dev", path = "../../../primitives/consensus/babe" }
-sp-runtime = { version = "4.0.0", path = "../../../primitives/runtime" }
+sp-runtime = { version = "4.1.0-dev", path = "../../../primitives/runtime" }
 sp-externalities = { version = "0.10.0", path = "../../../primitives/externalities" }
 sp-keyring = { version = "4.1.0-dev", path = "../../../primitives/keyring" }
 wat = "1.0"
