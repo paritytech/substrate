@@ -18,9 +18,9 @@
 
 //! Wasmi specific impls for sandbox
 
-use codec::{Encode, Decode};
+use codec::{Decode, Encode};
 use sp_core::sandbox::HostError;
-use sp_wasm_interface::{FunctionContext, Pointer, Value, WordSize, ReturnValue};
+use sp_wasm_interface::{FunctionContext, Pointer, ReturnValue, Value, WordSize};
 use std::rc::Rc;
 
 use wasmi::{
@@ -31,8 +31,8 @@ use wasmi::{
 use crate::{
 	error::{self, Error},
 	sandbox::{
-		BackendInstance, GuestEnvironment, GuestExternals,
-		GuestFuncIndex, Imports, InstantiationError, Memory, SandboxContext, SandboxInstance,
+		BackendInstance, GuestEnvironment, GuestExternals, GuestFuncIndex, Imports,
+		InstantiationError, Memory, SandboxContext, SandboxInstance,
 	},
 	util::{checked_range, MemoryTransfer},
 };

@@ -25,10 +25,7 @@ mod wasmer_backend;
 
 mod wasmi_backend;
 
-use crate::{
-	error::Result,
-	util,
-};
+use crate::{error::Result, util};
 use codec::Decode;
 use sp_core::sandbox as sandbox_primitives;
 use sp_wasm_interface::{FunctionContext, Pointer, WordSize};
