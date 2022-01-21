@@ -22,7 +22,7 @@ serde = { version = "1", features = ["derive"], optional = true }
 sp-core = { version = "4.1.0-dev", path = "../../../primitives/core", default-features = false }
 sp-std = { version = "4.0.0", default-features = false, path = "../../../primitives/std" }
 sp-rpc = { version = "4.0.0-dev", path = "../../../primitives/rpc", optional = true }
-sp-runtime = { version = "4.0.0", default-features = false, path = "../../../primitives/runtime" }
+sp-runtime = { version = "4.1.0-dev", default-features = false, path = "../../../primitives/runtime" }
 
 [features]
 default = ["std"]
