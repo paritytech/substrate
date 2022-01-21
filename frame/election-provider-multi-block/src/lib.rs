@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! # Multi-phase, multi-block, offchain-capable election provider pallet.
+//! # Multi-phase, multi-block, election provider pallet.
 //!
 //! ## Overall idea
 //!
@@ -27,9 +27,10 @@
 //!
 //! This pallet takes [`pallet_election_provider_multi_phase`], keeps most of its ideas and core
 //! premises, and extends it to support paginated, multi-block operations. The final goal of this
-//! pallet is scale linearly with the number of blocks allocated to the elections. In principle,
-//! with large enough blocks (in a dedicated parachain), the number of voters included in the NPoS
-//! system can grow significantly (yet, obviously not indefinitely).
+//! pallet is scale linearly with the number of blocks allocated to the elections. Moreover, the
+//! amount of work that it does in one block should be bounded and measurable, making it suitable
+//! for a parachain. In principle, with large enough blocks (in a dedicated parachain), the number
+//! of voters included in the NPoS system can grow significantly (yet, obviously not indefinitely).
 //!
 //! Note that this pallet does not consider how the recipient is processing the results. To ensure
 //! scalability, of course, the recipient of this pallet's data (i.e. `pallet-staking`) must also be
@@ -37,9 +38,9 @@
 //!
 //! ## Companion pallets
 //!
-//! This pallet is essentially hiererichal. This particular one is the top level one. It contains
+//! This pallet is essentially hierarchical. This particular one is the top level one. It contains
 //! the shared information that all child pallets use. All child pallets can depend on on the top
-//! level pallet, or each other, but not the other way around. For those cases, traits are used.
+//! level pallet ONLY, but not the other way around. For those cases, traits are used.
 //!
 //! This pallet will only function in a sensible way if it is peered with its companion pallets.
 //!
@@ -47,8 +48,13 @@
 //!   pallet is mandatory.
 //! - The [`unsigned`] module provides the implementation of unsigned submission by validators. If
 //!   this pallet is included, then [`Config::UnsignedPhase`] will determine its duration.
-//! - TODO: signed phase
-//! - TODO: emergency phase.
+//! - The [`Signed`] module provides the implementation of the signed submission by any account. If
+//!   this pallet is included, the combined [`Config::SignedPhase`] and
+//!   [`Config::SignedValidationPhase`] will deter its duration
+//!
+//! ### Pallet Ordering:
+//!
+//! TODO: parent, verifier, signed, unsigned
 //!
 //! ## Pagination
 //!
@@ -73,24 +79,22 @@
 //!    Phase::Off   +       Phase::Signed     +      Phase::Unsigned      +
 //! ```
 //!
-//! The duration of both phases are configurable, and their existence is optional.
+//! The duration of both phases are configurable, and their existence is optional. Each of the
+//! phases can be disabled by essentially setting their length to zero. If both phases have length
+//! zero, then the pallet essentially runs only the fallback strategy, denoted by
+//! [`Config::Fallback`].
 //!
-//! Note that the prediction of the election is assume to be the **first call** to elect. For
-//! example, with 3 pages, the prediction must point to the `elect(2)`. Note that this pallet could
-//! be configured to always keep itself prepare for an election a number of blocks ahead of time.
-//! This will make sure that the data needed for the first call to `elect` is always ready a number
-//! of blocks ahead of time, potentially compensating for erronenous predictions.
-//!
-//! Note that the unsigned phase starts [`pallet::Config::UnsignedPhase`] blocks before the
+//! - Note that the prediction of the election is assume to be the **first call** to elect. For
+//! example, with 3 pages, the prediction must point to the `elect(2)`.
+//! - Note that the unsigned phase starts [`pallet::Config::UnsignedPhase`] blocks before the
 //! `next_election_prediction`, but only ends when a call to [`ElectionProvider::elect`] happens. If
-//! no `elect` happens, the signed phase is extended.
+//! no `elect` happens, the current phase (usually unsigned) is extended.
 //!
 //! > Given this, it is rather important for the user of this pallet to ensure it always terminates
 //! election via `elect` before requesting a new one.
 //!
-//! Each of the phases can be disabled by essentially setting their length to zero. If both phases
-//! have length zero, then the pallet essentially runs only the fallback strategy, denoted by
-//! [`Config::Fallback`].
+//! TODO: test case: elect(2) -> elect(1) -> elect(2)
+//! TODO: should we wipe the verifier afterwards, or just `::take()` the election result?
 //!
 //! ## Feasible Solution (correct solution)
 //!
@@ -234,8 +238,7 @@ use frame_election_provider_support::{
 use frame_support::{
 	ensure,
 	traits::{ConstU32, Get},
-	BoundedVec, CloneNoBound, DebugNoBound, DefaultNoBound, EqNoBound, PartialEqNoBound,
-	RuntimeDebugNoBound,
+	BoundedVec, CloneNoBound, EqNoBound, PartialEqNoBound, RuntimeDebugNoBound,
 };
 use scale_info::TypeInfo;
 use sp_arithmetic::traits::Zero;
@@ -490,8 +493,6 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		#[pallet::weight(0)]
 		pub fn manage(_origin: OriginFor<T>, op: AdminOperation<T>) -> DispatchResultWithPostInfo {
-			// TODO: reset everything, this should only be called in emergencies. Can also be
-			// back-ported to master earlier.
 			todo!();
 		}
 	}
@@ -1806,7 +1807,7 @@ mod election_provider {
 			// once the unsigned phase starts, it will not be changed by on_initialize (something
 			// like `elect` must be called).
 			roll_to_unsigned_open();
-			for next in 0..100 {
+			for _ in 0..100 {
 				roll_next();
 				assert!(matches!(MultiBlock::current_phase(), Phase::Unsigned((_, _))));
 			}
@@ -1927,57 +1928,9 @@ mod snapshot {
 	fn fingerprint_works() {
 		todo!("one hardcoded test of the fingerprint value.");
 	}
+
+	#[test]
+	fn snapshot_size_2second_weight() {
+		todo!()
+	}
 }
-
-// #[cfg(test)]
-// mod tests {
-
-// 	#[test]
-// 	fn untrusted_score_verification_is_respected() {
-// 		ExtBuilder::default().build_and_execute(|| {
-// 			roll_to(15);
-// 			assert_eq!(MultiBlock::current_phase(), Phase::Signed);
-
-// 			let (solution, _) = MultiBlock::mine_solution(2, falase).unwrap();
-// 			// Default solution has a score of [50, 100, 5000].
-// 			assert_eq!(solution.score, [50, 100, 5000]);
-
-// 			<MinimumUntrustedScore<Runtime>>::put([49, 0, 0]);
-// 			assert_ok!(MultiBlock::feasibility_check(solution.clone(), ElectionCompute::Signed));
-
-// 			<MinimumUntrustedScore<Runtime>>::put([51, 0, 0]);
-// 			assert_noop!(
-// 				MultiBlock::feasibility_check(solution, ElectionCompute::Signed),
-// 				FeasibilityError::UntrustedScoreTooLow,
-// 			);
-// 		})
-// 	}
-
-// 	#[test]
-// 	fn number_of_voters_allowed_2sec_block() {
-// 		// Just a rough estimate with the substrate weights.
-// 		assert!(!MockWeightInfo::get());
-
-// 		let all_voters: u32 = 10_000;
-// 		let all_targets: u32 = 5_000;
-// 		let desired: u32 = 1_000;
-// 		let weight_with = |active| {
-// 			<Runtime as Config>::WeightInfo::submit_unsigned(
-// 				all_voters,
-// 				all_targets,
-// 				active,
-// 				desired,
-// 			)
-// 		};
-
-// 		let mut active = 1;
-// 		while weight_with(active) <=
-// 			<Runtime as frame_system::Config>::BlockWeights::get().max_block ||
-// 			active == all_voters
-// 		{
-// 			active += 1;
-// 		}
-
-// 		println!("can support {} voters to yield a weight of {}", active, weight_with(active));
-// 	}
-// }

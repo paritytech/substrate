@@ -288,7 +288,7 @@ pub mod pallet {
 			let old_deposit = metadata.deposit;
 			if new_deposit > old_deposit {
 				let to_reserve = new_deposit - old_deposit;
-				T::Currency::reserve(who, to_reserve);
+				T::Currency::reserve(who, to_reserve)?;
 			} else {
 				let to_unreserve = old_deposit - new_deposit;
 				let _ = T::Currency::unreserve(who, to_unreserve);

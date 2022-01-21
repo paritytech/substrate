@@ -69,10 +69,7 @@ impl ValidSolution {
 
 #[frame_support::pallet]
 pub(crate) mod pallet {
-	use crate::{
-		types::{Pagify, SupportsOf},
-		verifier::Verifier,
-	};
+	use crate::{types::SupportsOf, verifier::Verifier};
 
 	use super::*;
 	use frame_support::pallet_prelude::{ValueQuery, *};
@@ -258,22 +255,6 @@ pub(crate) mod pallet {
 				ValidSolution::X => QueuedSolutionX::<T>::insert(page, supports),
 				ValidSolution::Y => QueuedSolutionY::<T>::insert(page, supports),
 			}
-		}
-
-		/// Forcibly set a valid solution.
-		///
-		/// Writes all the given pages, and the provided score blindly.
-		pub(crate) fn force_set_valid(
-			paged_supports: BoundedVec<SupportsOf<Pallet<T>>, T::Pages>,
-			score: ElectionScore,
-		) {
-			for (page_index, supports) in paged_supports.pagify(T::Pages::get()) {
-				match Self::valid() {
-					ValidSolution::X => QueuedSolutionX::<T>::insert(page_index, supports),
-					ValidSolution::Y => QueuedSolutionY::<T>::insert(page_index, supports),
-				}
-			}
-			QueuedSolutionScore::<T>::put(score);
 		}
 
 		/// Write a single page to the valid variant directly.
