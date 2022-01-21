@@ -24,7 +24,6 @@ use crate::pubsub::{Dispatch, SubsID, Subscribe, Unsubscribe};
 #[derive(Debug)]
 pub(super) struct Registry {
 	pub(super) subscribers: HashSet<SubsID>,
-	// _pd: std::marker::PhantomData<Payload>,
 }
 
 impl Default for Registry {
@@ -52,8 +51,8 @@ where
 
 	fn dispatch<F>(&mut self, payload: Payload, mut dispatch: F)
 	where
-		F: FnMut(SubsID, Self::Item),
+		F: FnMut(&SubsID, Self::Item),
 	{
-		self.subscribers.iter().for_each(|subs_id| dispatch(*subs_id, payload.clone()))
+		self.subscribers.iter().for_each(|subs_id| dispatch(subs_id, payload.clone()))
 	}
 }

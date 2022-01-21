@@ -26,14 +26,6 @@
 //!
 //! See [`sc-service::builder::RpcExtensionBuilder`] for more details.
 
-// use std::collections::HashMap;
-
-// use crate::{
-// 	id_sequence::{IDSequence, SeqID},
-// 	mpsc::{TracingUnboundedReceiver, TracingUnboundedSender},
-// 	pubsub_to_remove::{SharedRegistry, SubscriptionGuard},
-// };
-
 use crate::pubsub::{channels::TracingUnbounded, Hub, Receiver};
 
 mod impl_traits;

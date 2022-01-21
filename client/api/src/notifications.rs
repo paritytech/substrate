@@ -26,10 +26,10 @@ use std::{
 use prometheus_endpoint::Registry as PrometheusRegistry;
 
 use sc_utils::{
-	mpsc,
-	mpsc::TracingUnboundedReceiver,
-	pubsub_to_remove::{SharedRegistry, SubscriptionGuard},
+	pubsub::channels::TracingUnbounded,
 };
+use sc_utils::pubsub::Hub;
+use sc_utils::pubsub::Receiver;
 use sp_core::storage::{StorageData, StorageKey};
 use sp_runtime::traits::Block as BlockT;
 
@@ -38,7 +38,7 @@ mod keys;
 mod registry;
 
 use keys::{ChildKeys, Keys};
-use registry::StorageNotificationsImpl;
+use registry::Registry;
 
 /// A type of a message delivered to the subscribers
 pub type Notification<Hash> = (Hash, StorageChangeSet);
@@ -55,16 +55,11 @@ pub struct StorageChangeSet {
 /// Manages storage listeners.
 #[derive(Debug)]
 pub struct StorageNotifications<Block: BlockT>(
-	SharedRegistry<StorageNotificationsImpl<Block::Hash>>,
+	Hub<TracingUnbounded<Notification<Block::Hash>>, Registry>,
 );
 
 /// Type that implements `futures::Stream` of storage change events.
-pub struct StorageEventStream<H> {
-	subs_guard:
-		SubscriptionGuard<StorageNotificationsImpl<H>, TracingUnboundedReceiver<Notification<H>>>,
-
-	was_triggered: bool,
-}
+pub struct StorageEventStream<H>(Receiver<TracingUnbounded<Notification<H>>, Registry>);
 
 impl StorageChangeSet {
 	/// Convert the change set into iterator over storage items.
@@ -105,9 +100,13 @@ impl<Block: BlockT> StorageNotifications<Block> {
 	/// Initialize a new StorageNotifications
 	/// optionally pass a prometheus registry to send subscriber metrics to
 	pub fn new(prometheus_registry: Option<PrometheusRegistry>) -> Self {
-		StorageNotifications(SharedRegistry::new(StorageNotificationsImpl::new(
+		let channel = TracingUnbounded::new("mpsc_storage_notification_items");
+		let registry = Registry::new(
 			prometheus_registry,
-		)))
+		);
+		let hub = Hub::new_with_registry(channel, registry);
+
+		StorageNotifications(hub)
 	}
 
 	/// Trigger notification to all listeners.
@@ -122,7 +121,7 @@ impl<Block: BlockT> StorageNotifications<Block> {
 			Item = (Vec<u8>, impl Iterator<Item = (Vec<u8>, Option<Vec<u8>>)>),
 		>,
 	) {
-		self.0.lock().trigger(hash, changeset, child_changeset);
+		self.0.dispatch((hash, changeset, child_changeset));
 	}
 
 	/// Start listening for particular storage keys.
@@ -132,13 +131,10 @@ impl<Block: BlockT> StorageNotifications<Block> {
 		filter_child_keys: Option<&[(StorageKey, Option<Vec<StorageKey>>)]>,
 	) -> StorageEventStream<Block::Hash> {
 		use registry::SubscribeOp;
+		let receiver =
+			self.0.subscribe(SubscribeOp { filter_keys, filter_child_keys });
 
-		let (tx, rx) = mpsc::tracing_unbounded("mpsc_storage_notification_items");
-
-		let subs_guard =
-			self.0.subscribe(SubscribeOp { filter_keys, filter_child_keys, tx }).with_rx(rx);
-
-		StorageEventStream { subs_guard, was_triggered: false }
+		StorageEventStream(receiver)
 	}
 }
 

@@ -19,51 +19,43 @@
 use super::*;
 
 use fnv::{FnvHashMap, FnvHashSet};
-use futures::channel::mpsc::TrySendError;
 use prometheus_endpoint::{register, CounterVec, Opts, U64};
 
-use sc_utils::{
-	id_sequence::{IDSequence, SeqID},
-	mpsc,
-	mpsc::TracingUnboundedSender,
-	pubsub_to_remove::{SubsBase, Subscribe, Unsubscribe},
-};
+use sc_utils::pubsub::SubsID as SubscriberId;
+use sc_utils::pubsub::Subscribe;
+use sc_utils::pubsub::Unsubscribe;
+use sc_utils::pubsub::Dispatch;
 
 use super::keys::{PrintChildKeys, PrintKeys};
 
-type SubscriberId = SeqID;
-
 type SubscribersGauge = CounterVec<U64>;
 
-pub(super) struct SubscribeOp<'a, Hash> {
+pub(super) struct SubscribeOp<'a> {
 	pub filter_keys: Option<&'a [StorageKey]>,
 	pub filter_child_keys: Option<&'a [(StorageKey, Option<Vec<StorageKey>>)]>,
-	pub tx: mpsc::TracingUnboundedSender<Notification<Hash>>,
 }
 
 #[derive(Debug)]
-pub(super) struct StorageNotificationsImpl<Hash> {
+pub(super) struct Registry {
 	pub(super) metrics: Option<SubscribersGauge>,
-	pub(super) id_sequence: IDSequence,
 	pub(super) wildcard_listeners: FnvHashSet<SubscriberId>,
 	pub(super) listeners: HashMap<StorageKey, FnvHashSet<SubscriberId>>,
 	pub(super) child_listeners: HashMap<
 		StorageKey,
 		(HashMap<StorageKey, FnvHashSet<SubscriberId>>, FnvHashSet<SubscriberId>),
 	>,
-	pub(super) sinks: FnvHashMap<SubscriberId, SubscriberSink<Hash>>,
+	pub(super) sinks: FnvHashMap<SubscriberId, SubscriberSink>,
 }
 
 #[derive(Debug)]
-pub(super) struct SubscriberSink<Hash> {
+pub(super) struct SubscriberSink {
 	subs_id: SubscriberId,
-	tx: TracingUnboundedSender<Notification<Hash>>,
 	keys: Keys,
 	child_keys: ChildKeys,
 	was_triggered: bool,
 }
 
-impl<Hash> Drop for SubscriberSink<Hash> {
+impl Drop for SubscriberSink {
 	fn drop(&mut self) {
 		if !self.was_triggered {
 			log::trace!(
@@ -77,22 +69,21 @@ impl<Hash> Drop for SubscriberSink<Hash> {
 	}
 }
 
-impl<Hash> SubscriberSink<Hash> {
+impl SubscriberSink {
 	fn new(
 		subs_id: SubscriberId,
-		tx: TracingUnboundedSender<Notification<Hash>>,
 		keys: Keys,
 		child_keys: ChildKeys,
 	) -> Self {
-		Self { subs_id, tx, keys, child_keys, was_triggered: false }
+		Self { subs_id, keys, child_keys, was_triggered: false }
 	}
 
-	fn send(
+	fn render_notification<Hash>(
 		&mut self,
 		hash: Hash,
 		changes: Arc<[(StorageKey, Option<StorageData>)]>,
 		child_changes: Arc<[(StorageKey, Vec<(StorageKey, Option<StorageData>)>)]>,
-	) -> Result<(), TrySendError<Notification<Hash>>> {
+	) -> Notification<Hash> {
 		self.was_triggered = true;
 
 		let storage_change_set = StorageChangeSet {
@@ -102,17 +93,11 @@ impl<Hash> SubscriberSink<Hash> {
 			child_filters: self.child_keys.clone(),
 		};
 
-		let item = (hash, storage_change_set);
-
-		self.tx.unbounded_send(item)
-	}
-
-	fn is_closed(&self) -> bool {
-		self.tx.is_closed()
+		(hash, storage_change_set)
 	}
 }
 
-impl<Hash> StorageNotificationsImpl<Hash> {
+impl Registry {
 	pub(super) fn new(prometheus_registry: Option<PrometheusRegistry>) -> Self {
 		let metrics = prometheus_registry.and_then(|r| {
 			CounterVec::new(
@@ -126,15 +111,14 @@ impl<Hash> StorageNotificationsImpl<Hash> {
 			.ok()
 		});
 
-		StorageNotificationsImpl { metrics, ..Default::default() }
+		Registry { metrics, ..Default::default() }
 	}
 }
 
-impl<Hash> Default for StorageNotificationsImpl<Hash> {
+impl Default for Registry {
 	fn default() -> Self {
 		Self {
 			metrics: Default::default(),
-			id_sequence: Default::default(),
 			wildcard_listeners: Default::default(),
 			listeners: Default::default(),
 			child_listeners: Default::default(),
@@ -143,21 +127,15 @@ impl<Hash> Default for StorageNotificationsImpl<Hash> {
 	}
 }
 
-impl<H> SubsBase for StorageNotificationsImpl<H> {
-	type SubsID = SubscriberId;
-}
-
-impl<H> Unsubscribe for StorageNotificationsImpl<H> {
-	fn unsubscribe(&mut self, subs_id: &Self::SubsID) {
+impl Unsubscribe for Registry {
+	fn unsubscribe(&mut self, subs_id: &SubscriberId) {
 		let _ = self.remove_subscriber(*subs_id);
 	}
 }
 
-impl<'a, Hash> Subscribe<SubscribeOp<'a, Hash>> for StorageNotificationsImpl<Hash> {
-	fn subscribe(&mut self, subs_op: SubscribeOp<'a, Hash>) -> Self::SubsID {
-		let subs_id = self.id_sequence.next_id();
-
-		let SubscribeOp { filter_keys, filter_child_keys, tx } = subs_op;
+impl<'a> Subscribe<SubscribeOp<'a>> for Registry {
+	fn subscribe(&mut self, subs_op: SubscribeOp<'a>, subs_id: SubscriberId) {
+		let SubscribeOp { filter_keys, filter_child_keys, } = subs_op;
 
 		let keys = Self::listen_from(
 			subs_id,
@@ -190,16 +168,14 @@ impl<'a, Hash> Subscribe<SubscribeOp<'a, Hash>> for StorageNotificationsImpl<Has
 			m.with_label_values(&[&"added"]).inc();
 		}
 
-		assert!(self.sinks.insert(subs_id, SubscriberSink::new(subs_id, tx, keys,child_keys)).is_none(), "
+		assert!(self.sinks.insert(subs_id, SubscriberSink::new(subs_id, keys, child_keys)).is_none(), "
 			Each `subs_id` is taken from `self.id_sequence.next_id()`.
 			If we have a duplicate key here, it's either the implementation of `IDSequence` was broken, or we've overflowed `u64`.
 			We are not likely to overflow an `u64`.");
-
-		subs_id
 	}
 }
 
-impl<Hash> StorageNotificationsImpl<Hash> {
+impl Registry {
 	fn listen_from(
 		current_id: SubscriberId,
 		filter_keys: Option<impl AsRef<[StorageKey]>>,
@@ -227,16 +203,38 @@ impl<Hash> StorageNotificationsImpl<Hash> {
 	}
 }
 
-impl<Hash> StorageNotificationsImpl<Hash> {
-	pub(super) fn trigger(
+impl<'a, Hash, CS, CCS, CCSI> Dispatch<(&'a Hash, CS, CCS)> for Registry 
+where 
+	Hash: Clone,
+	CS: Iterator<Item = (Vec<u8>, Option<Vec<u8>>)>,
+	CCS: Iterator<
+		Item = (Vec<u8>, CCSI),
+	>,
+	CCSI: Iterator<Item = (Vec<u8>, Option<Vec<u8>>)>
+{
+	type Item = Notification<Hash>;
+
+	fn dispatch<F>(&mut self, disp_key: (&'a Hash, CS, CCS), dispatch: F)
+	where
+			F: FnMut(&SubscriberId, Self::Item) 
+	{
+		let (hash, changeset, child_changeset) = disp_key;
+		let () = self.trigger(hash, changeset, child_changeset, dispatch);
+	}
+}
+
+impl Registry {
+	pub(super) fn trigger<Hash, F>(
 		&mut self,
 		hash: &Hash,
 		changeset: impl Iterator<Item = (Vec<u8>, Option<Vec<u8>>)>,
 		child_changeset: impl Iterator<
 			Item = (Vec<u8>, impl Iterator<Item = (Vec<u8>, Option<Vec<u8>>)>),
 		>,
+		mut dispatch: F
 	) where
 		Hash: Clone,
+		F: FnMut(&SubscriberId, Notification<Hash>)
 	{
 		let has_wildcard = !self.wildcard_listeners.is_empty();
 
@@ -296,18 +294,13 @@ impl<Hash> StorageNotificationsImpl<Hash> {
 		// Trigger the events
 
 		self.sinks.iter_mut().for_each(|(subs_id, sink)| {
-			let _should_remove = {
-				if subscribers.contains(subs_id) {
-					sink.send(hash.clone(), changes.clone(), child_changes.clone()).is_err()
-				} else {
-					sink.is_closed()
-				}
-			};
+			let notification = sink.render_notification(hash.clone(), changes.clone(), child_changes.clone());
+			dispatch(subs_id, notification);
 		});
 	}
 }
 
-impl<Hash> StorageNotificationsImpl<Hash> {
+impl Registry {
 	fn remove_subscriber_from(
 		subscriber: &SubscriberId,
 		filters: &Keys,

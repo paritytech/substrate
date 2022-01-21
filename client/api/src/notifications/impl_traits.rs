@@ -23,20 +23,16 @@ use std::{pin::Pin, task::Poll};
 
 impl<Block: BlockT> Default for StorageNotifications<Block> {
 	fn default() -> Self {
-		Self(Default::default())
+		Self::new(None)
 	}
 }
 
 impl<H> Stream for StorageEventStream<H> {
-	type Item = <TracingUnboundedReceiver<Notification<H>> as Stream>::Item;
+	type Item = Notification<H>;
 	fn poll_next(
-		mut self: Pin<&mut Self>,
+		self: Pin<&mut Self>,
 		cx: &mut std::task::Context<'_>,
 	) -> Poll<Option<Self::Item>> {
-		let result = Stream::poll_next(Pin::new(self.subs_guard.rx_mut()), cx);
-		if result.is_ready() {
-			self.was_triggered = true;
-		}
-		result
+		Stream::poll_next(Pin::new(&mut self.get_mut().0), cx)
 	}
 }

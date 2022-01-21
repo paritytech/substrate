@@ -14,6 +14,8 @@ impl<Item> TracingUnbounded<Item> {
 	}
 }
 
+impl<Item> Unpin for TracingUnbounded<Item> {}
+
 impl<Item> Clone for TracingUnbounded<Item> {
 	fn clone(&self) -> Self {
 		Self { key: self.key, _pd: Default::default() }

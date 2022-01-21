@@ -33,7 +33,7 @@ pub trait Dispatch<K> {
 	type Item;
 	fn dispatch<F>(&mut self, disp_key: K, dispatch: F)
 	where
-		F: FnMut(SubsID, Self::Item);
+		F: FnMut(&SubsID, Self::Item);
 }
 
 #[derive(Debug)]
@@ -60,7 +60,7 @@ where
 }
 
 #[derive(Debug)]
-pub struct UnsubscribeGuard<R, Tx>
+struct UnsubscribeGuard<R, Tx>
 where
 	R: Unsubscribe,
 {
