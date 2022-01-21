@@ -38,7 +38,7 @@ sp-std = { version = "4.0.0", default-features = false, path = "../../../primiti
 sp-transaction-pool = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/transaction-pool" }
 sp-version = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/version" }
 
-# Used for the node template"s RPCs
+# Used for the node template's RPCs
 frame-system-rpc-runtime-api = { version = "4.0.0-dev", default-features = false, path = "../../../frame/system/rpc/runtime-api/" }
 pallet-transaction-payment-rpc-runtime-api = { version = "4.0.0-dev", default-features = false, path = "../../../frame/transaction-payment/rpc/runtime-api/" }
 
