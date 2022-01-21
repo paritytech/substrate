@@ -21,10 +21,7 @@ use super::*;
 use fnv::{FnvHashMap, FnvHashSet};
 use prometheus_endpoint::{register, CounterVec, Opts, U64};
 
-use sc_utils::pubsub::SubsID as SubscriberId;
-use sc_utils::pubsub::Subscribe;
-use sc_utils::pubsub::Unsubscribe;
-use sc_utils::pubsub::Dispatch;
+use sc_utils::pubsub::{Dispatch, SubsID as SubscriberId, Subscribe, Unsubscribe};
 
 use super::keys::{PrintChildKeys, PrintKeys};
 
@@ -70,11 +67,7 @@ impl Drop for SubscriberSink {
 }
 
 impl SubscriberSink {
-	fn new(
-		subs_id: SubscriberId,
-		keys: Keys,
-		child_keys: ChildKeys,
-	) -> Self {
+	fn new(subs_id: SubscriberId, keys: Keys, child_keys: ChildKeys) -> Self {
 		Self { subs_id, keys, child_keys, was_triggered: false }
 	}
 
@@ -135,7 +128,7 @@ impl Unsubscribe for Registry {
 
 impl<'a> Subscribe<SubscribeOp<'a>> for Registry {
 	fn subscribe(&mut self, subs_op: SubscribeOp<'a>, subs_id: SubscriberId) {
-		let SubscribeOp { filter_keys, filter_child_keys, } = subs_op;
+		let SubscribeOp { filter_keys, filter_child_keys } = subs_op;
 
 		let keys = Self::listen_from(
 			subs_id,
@@ -203,20 +196,18 @@ impl Registry {
 	}
 }
 
-impl<'a, Hash, CS, CCS, CCSI> Dispatch<(&'a Hash, CS, CCS)> for Registry 
-where 
+impl<'a, Hash, CS, CCS, CCSI> Dispatch<(&'a Hash, CS, CCS)> for Registry
+where
 	Hash: Clone,
 	CS: Iterator<Item = (Vec<u8>, Option<Vec<u8>>)>,
-	CCS: Iterator<
-		Item = (Vec<u8>, CCSI),
-	>,
-	CCSI: Iterator<Item = (Vec<u8>, Option<Vec<u8>>)>
+	CCS: Iterator<Item = (Vec<u8>, CCSI)>,
+	CCSI: Iterator<Item = (Vec<u8>, Option<Vec<u8>>)>,
 {
 	type Item = Notification<Hash>;
 
 	fn dispatch<F>(&mut self, disp_key: (&'a Hash, CS, CCS), dispatch: F)
 	where
-			F: FnMut(&SubscriberId, Self::Item) 
+		F: FnMut(&SubscriberId, Self::Item),
 	{
 		let (hash, changeset, child_changeset) = disp_key;
 		let () = self.trigger(hash, changeset, child_changeset, dispatch);
@@ -231,10 +222,10 @@ impl Registry {
 		child_changeset: impl Iterator<
 			Item = (Vec<u8>, impl Iterator<Item = (Vec<u8>, Option<Vec<u8>>)>),
 		>,
-		mut dispatch: F
+		mut dispatch: F,
 	) where
 		Hash: Clone,
-		F: FnMut(&SubscriberId, Notification<Hash>)
+		F: FnMut(&SubscriberId, Notification<Hash>),
 	{
 		let has_wildcard = !self.wildcard_listeners.is_empty();
 
@@ -294,7 +285,8 @@ impl Registry {
 		// Trigger the events
 
 		self.sinks.iter_mut().for_each(|(subs_id, sink)| {
-			let notification = sink.render_notification(hash.clone(), changes.clone(), child_changes.clone());
+			let notification =
+				sink.render_notification(hash.clone(), changes.clone(), child_changes.clone());
 			dispatch(subs_id, notification);
 		});
 	}

@@ -25,11 +25,7 @@ use std::{
 
 use prometheus_endpoint::Registry as PrometheusRegistry;
 
-use sc_utils::{
-	pubsub::channels::TracingUnbounded,
-};
-use sc_utils::pubsub::Hub;
-use sc_utils::pubsub::Receiver;
+use sc_utils::pubsub::{channels::TracingUnbounded, Hub, Receiver};
 use sp_core::storage::{StorageData, StorageKey};
 use sp_runtime::traits::Block as BlockT;
 
@@ -101,9 +97,7 @@ impl<Block: BlockT> StorageNotifications<Block> {
 	/// optionally pass a prometheus registry to send subscriber metrics to
 	pub fn new(prometheus_registry: Option<PrometheusRegistry>) -> Self {
 		let channel = TracingUnbounded::new("mpsc_storage_notification_items");
-		let registry = Registry::new(
-			prometheus_registry,
-		);
+		let registry = Registry::new(prometheus_registry);
 		let hub = Hub::new_with_registry(channel, registry);
 
 		StorageNotifications(hub)
@@ -131,8 +125,7 @@ impl<Block: BlockT> StorageNotifications<Block> {
 		filter_child_keys: Option<&[(StorageKey, Option<Vec<StorageKey>>)]>,
 	) -> StorageEventStream<Block::Hash> {
 		use registry::SubscribeOp;
-		let receiver =
-			self.0.subscribe(SubscribeOp { filter_keys, filter_child_keys });
+		let receiver = self.0.subscribe(SubscribeOp { filter_keys, filter_child_keys });
 
 		StorageEventStream(receiver)
 	}
