@@ -18,7 +18,7 @@ codec = { package = "parity-scale-codec", default-features = false, version = "2
 scale-info = { version = "1.0", default-features = false, features = ["derive"] }
 sp-std = { version = "4.0.0", default-features = false, path = "../std" }
 sp-api = { version = "4.0.0-dev", default-features = false, path = "../api" }
-sp-runtime = { version = "4.0.0", default-features = false, path = "../runtime" }
+sp-runtime = { version = "4.1.0-dev", default-features = false, path = "../runtime" }
 
 [features]
 default = ["std"]

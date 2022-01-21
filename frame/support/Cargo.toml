@@ -19,7 +19,7 @@ scale-info = { version = "1.0", default-features = false, features = ["derive"] 
 frame-metadata = { version = "14.2.0", default-features = false, features = ["v14"] }
 sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
 sp-io = { version = "4.0.0", default-features = false, path = "../../primitives/io" }
-sp-runtime = { version = "4.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-runtime = { version = "4.1.0-dev", default-features = false, path = "../../primitives/runtime" }
 sp-tracing = { version = "4.0.0", default-features = false, path = "../../primitives/tracing" }
 sp-core = { version = "4.1.0-dev", default-features = false, path = "../../primitives/core" }
 sp-arithmetic = { version = "4.0.0", default-features = false, path = "../../primitives/arithmetic" }

@@ -99,19 +99,19 @@ pub fn expand_pallet_struct(def: &mut Def) -> proc_macro2::TokenStream {
 	};
 
 	let storage_info_span =
-		def.pallet_struct.generate_storage_info.unwrap_or(def.pallet_struct.attr_span);
+		def.pallet_struct.without_storage_info.unwrap_or(def.pallet_struct.attr_span);
 
 	let storage_names = &def.storages.iter().map(|storage| &storage.ident).collect::<Vec<_>>();
 	let storage_cfg_attrs =
 		&def.storages.iter().map(|storage| &storage.cfg_attrs).collect::<Vec<_>>();
 
-	// Depending on the flag `generate_storage_info` and the storage attribute `unbounded`, we use
+	// Depending on the flag `without_storage_info` and the storage attribute `unbounded`, we use
 	// partial or full storage info from storage.
 	let storage_info_traits = &def
 		.storages
 		.iter()
 		.map(|storage| {
-			if storage.unbounded || def.pallet_struct.generate_storage_info.is_none() {
+			if storage.unbounded || def.pallet_struct.without_storage_info.is_some() {
 				quote::quote_spanned!(storage_info_span => PartialStorageInfoTrait)
 			} else {
 				quote::quote_spanned!(storage_info_span => StorageInfoTrait)
@@ -123,7 +123,7 @@ pub fn expand_pallet_struct(def: &mut Def) -> proc_macro2::TokenStream {
 		.storages
 		.iter()
 		.map(|storage| {
-			if storage.unbounded || def.pallet_struct.generate_storage_info.is_none() {
+			if storage.unbounded || def.pallet_struct.without_storage_info.is_some() {
 				quote::quote_spanned!(storage_info_span => partial_storage_info)
 			} else {
 				quote::quote_spanned!(storage_info_span => storage_info)
