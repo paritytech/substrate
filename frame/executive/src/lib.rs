@@ -1014,7 +1014,7 @@ mod tests {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
 					state_root: hex!(
-						"58e5aca3629754c5185b50dd676053c5b9466c18488bb1f4c6138a46885cd79d"
+						"2aaebbb0ef77452cf561abc6f738c33299c09b121fc3aa2ac388ccb878a2ea10"
 					)
 					.into(),
 					extrinsics_root: hex!(
@@ -1675,7 +1675,7 @@ mod tests {
 						parent_hash: [69u8; 32].into(),
 						number: 1,
 						state_root: hex!(
-							"9a58dd4cf626052f7d88e73eb5e66ba1c0997e15a9e47760fd6cf9c19ded6023"
+							"4a6ce1078f67e58eddfca9b90349e1946ca71f17983073c9c10730639f4db043"
 						)
 						.into(),
 						extrinsics_root: hex!(
