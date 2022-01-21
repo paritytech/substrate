@@ -535,27 +535,6 @@ pub mod pallet4 {
 	impl<T: Config> Pallet<T> {}
 }
 
-/// Test that `Percent`, `PerU16`, `Permill`, `Perbill` and `Perquintill`
-/// can be used as storage values.
-#[frame_support::pallet]
-pub mod pallet5 {
-	use frame_support::pallet_prelude::StorageValue;
-	use sp_arithmetic::*;
-
-	#[pallet::config]
-	pub trait Config: frame_system::Config {}
-
-	#[pallet::pallet]
-	pub struct Pallet<T>(_);
-
-	#[pallet::storage]
-	pub type SomeValue<T: Config> =
-		StorageValue<_, (Percent, PerU16, Permill, Perbill, Perquintill)>;
-
-	#[pallet::call]
-	impl<T: Config> Pallet<T> {}
-}
-
 frame_support::parameter_types!(
 	pub const MyGetParam3: u32 = 12;
 );
