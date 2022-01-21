@@ -85,19 +85,15 @@ fn points_to_issue<T: Config>(
 		(true, false) => {
 			// The pool was totally slashed.
 
-			// This is the equivalent of `(current_points / 1) * new_funds`. This is more favorable
-			// to the joiner then simply returning `new_funds`.
+			// This is the equivalent of `(current_points / 1) * new_funds`.
 			new_funds.saturating_mul(current_points)
 		},
 		(false, false) => {
-			// REMINDER: `saturating_from_rational` panics if denominator is zero
-			let points_per_balance = FixedU128::saturating_from_rational(
-				T::BalanceToU128::convert(current_points),
-				T::BalanceToU128::convert(current_balance),
-			);
-			let new_funds = T::BalanceToU128::convert(new_funds);
-
-			T::U128ToBalance::convert(points_per_balance.saturating_mul_int(new_funds))
+			// Equivalent to (current_points / current_balance) * new_funds
+			current_points
+				.saturating_mul(new_funds)
+				// We check for zero above
+				.div(current_balance)
 		},
 	}
 }
@@ -114,14 +110,11 @@ fn balance_to_unbond<T: Config>(
 		return Zero::zero()
 	}
 
-	// REMINDER: `saturating_from_rational` panics if denominator is zero
-	let balance_per_share = FixedU128::saturating_from_rational(
-		T::BalanceToU128::convert(current_balance),
-		T::BalanceToU128::convert(current_points),
-	);
-	let delegator_points = T::BalanceToU128::convert(delegator_points);
-
-	T::U128ToBalance::convert(balance_per_share.saturating_mul_int(delegator_points))
+	// Equivalent of (current_balance / current_points) * delegator_points
+	current_balance
+		.saturating_mul(delegator_points)
+		// We check for zero above
+		.div(current_points)
 }
 
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, RuntimeDebugNoBound)]
@@ -759,8 +752,7 @@ impl<T: Config> Pallet<T> {
 		let delegator_payout = if delegator_virtual_points.is_zero() || current_points.is_zero() {
 			BalanceOf::<T>::zero()
 		} else {
-			// `(delegator_virtual_points * reward_pool.balance) / current_points` is equivalent to
-			// `(delegator_virtual_points / current_points) * reward_pool.balance`
+			// Equivalent to `(delegator_virtual_points / current_points) * reward_pool.balance`
 			let payout = delegator_virtual_points
 				.saturating_mul(reward_pool.balance)
 				// We check for zero above

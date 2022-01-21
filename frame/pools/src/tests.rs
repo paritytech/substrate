@@ -59,6 +59,8 @@ mod points_to_issue {
 			assert_eq!(points_to_issue(30, 100, 10), 33);
 			// 2 points : 3 balance ratio
 			assert_eq!(points_to_issue(300, 200, 10), 6);
+			// 4 points : 9 balance ratio
+			assert_eq!(points_to_issue(900, 400, 90), 40)
 		});
 	}
 }
@@ -84,6 +86,8 @@ mod balance_to_unbond {
 			assert_eq!(balance_to_unbond(100, 30, 10), 33);
 			// 2 balance : 3 points ratio
 			assert_eq!(balance_to_unbond(200, 300, 10), 6);
+			// 4 balance : 9 points ratio
+			assert_eq!(balance_to_unbond(400, 900, 90), 40)
 		});
 	}
 }
