@@ -13,12 +13,13 @@ pub const REWARDS_ACCOUNT: u32 = 736857005;
 
 parameter_types! {
 	static CurrentEra: EraIndex = 0;
-	pub static BondedBalanceMap: std::collections::HashMap<AccountId, Balance> = Default::default();
+	static BondedBalanceMap: std::collections::HashMap<AccountId, Balance> = Default::default();
+	pub static CanBondExtra: bool = true;
 }
 
 pub struct StakingMock;
 impl StakingMock {
-	fn set_bonded_balance(who: AccountId, bonded: Balance) {
+	pub(crate) fn set_bonded_balance(who: AccountId, bonded: Balance) {
 		BONDED_BALANCE_MAP.with(|m| m.borrow_mut().insert(who.clone(), bonded));
 	}
 }
@@ -42,6 +43,10 @@ impl sp_staking::StakingInterface for StakingMock {
 
 	fn bonded_balance(who: &Self::AccountId) -> Self::Balance {
 		BondedBalanceMap::get().get(who).map(|v| *v).unwrap_or_default()
+	}
+
+	fn can_bond_extra(_: &Self::AccountId, _: Self::Balance) -> bool {
+		CanBondExtra::get()
 	}
 
 	fn bond_extra(who: &Self::AccountId, extra: Self::Balance) -> DispatchResult {
@@ -98,7 +103,7 @@ impl frame_system::Config for Runtime {
 }
 
 parameter_types! {
-	pub static ExistentialDeposit: Balance = 1;
+	pub static ExistentialDeposit: Balance = 5;
 }
 
 impl pallet_balances::Config for Runtime {

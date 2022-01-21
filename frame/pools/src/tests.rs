@@ -1,7 +1,10 @@
 //! Generally for pool ids we use 0-9 and delegator ids 10-99.
 
 use super::*;
-use crate::mock::{Balances, ExtBuilder, Pools, Runtime, PRIMARY_ACCOUNT, REWARDS_ACCOUNT};
+use crate::mock::{
+	Balance, Balances, CanBondExtra, ExtBuilder, Origin, Pools, Runtime, StakingMock, System,
+	PRIMARY_ACCOUNT, REWARDS_ACCOUNT,
+};
 use frame_support::{assert_noop, assert_ok};
 
 #[test]
@@ -88,6 +91,7 @@ mod balance_to_unbond {
 }
 
 mod primary_pool {
+	use super::*;
 	#[test]
 	fn points_to_issue_works() {}
 
@@ -95,12 +99,18 @@ mod primary_pool {
 	fn balance_to_unbond_works() {
 		// zero case
 	}
+
+	#[test]
+	fn ok_to_join_with_works() {
+		ExtBuilder::default().build_and_execute(|| {});
+	}
 }
+
 mod reward_pool {
-	use super::*;
 	#[test]
 	fn update_total_earnings_and_balance_works() {}
 }
+
 mod unbond_pool {
 	#[test]
 	fn points_to_issue_works() {
@@ -180,7 +190,111 @@ mod sub_pools {
 	}
 }
 
-mod join {}
+mod join {
+	use super::*;
+
+	#[test]
+	fn join_works() {
+		ExtBuilder::default().build_and_execute(|| {
+			Balances::make_free_balance_be(&11, 5 + 2);
+
+			assert!(!Delegators::<Runtime>::contains_key(&11));
+
+			assert_ok!(Pools::join(Origin::signed(11), 2, 0));
+
+			// Storage is updated correctly
+			assert_eq!(
+				Delegators::<Runtime>::get(&11).unwrap(),
+				Delegator::<Runtime> {
+					pool: 0,
+					points: 2,
+					reward_pool_total_earnings: 0,
+					unbonding_era: None
+				}
+			);
+			assert_eq!(
+				PrimaryPools::<Runtime>::get(&0).unwrap(),
+				PrimaryPool::<Runtime> { points: 12, account_id: PRIMARY_ACCOUNT }
+			);
+		});
+	}
+
+	fn join_works_with_a_slashed_pool() {
+		ExtBuilder::default().build_and_execute(|| {
+			Balances::make_free_balance_be(&11, 5 + 2);
+
+			assert!(!Delegators::<Runtime>::contains_key(&11));
+
+			StakingMock::set_bonded_balance(PRIMARY_ACCOUNT, 0);
+
+			assert_ok!(Pools::join(Origin::signed(11), 2, 0));
+
+			// Storage is updated correctly
+			assert_eq!(
+				Delegators::<Runtime>::get(&11).unwrap(),
+				Delegator::<Runtime> {
+					pool: 0,
+					points: 20,
+					reward_pool_total_earnings: 0,
+					unbonding_era: None
+				}
+			);
+			assert_eq!(
+				PrimaryPools::<Runtime>::get(&0).unwrap(),
+				PrimaryPool::<Runtime> { points: 30, account_id: PRIMARY_ACCOUNT }
+			);
+		});
+	}
+
+	#[test]
+	fn join_errors_correctly() {
+		use super::*;
+		ExtBuilder::default().build_and_execute(|| {
+			assert_noop!(
+				Pools::join(Origin::signed(10), 420, 420),
+				Error::<Runtime>::AccountBelongsToOtherPool
+			);
+
+			assert_noop!(Pools::join(Origin::signed(11), 420, 420), Error::<Runtime>::PoolNotFound);
+
+			PrimaryPools::<Runtime>::insert(
+				1,
+				PrimaryPool::<Runtime> { points: 100, account_id: 123 },
+			);
+			// Force the points:balance ratio to 100/10 (so 10)
+			StakingMock::set_bonded_balance(123, 10);
+			assert_noop!(Pools::join(Origin::signed(11), 420, 1), Error::<Runtime>::OverflowRisk);
+
+			// Force the points:balance ratio to be a valid 100/100
+			StakingMock::set_bonded_balance(123, 100);
+			// Cumulative balance is > 1/10 of Balance::MAX
+			assert_noop!(
+				Pools::join(Origin::signed(11), Balance::MAX / 10 - 100, 1),
+				Error::<Runtime>::OverflowRisk
+			);
+
+			CanBondExtra::set(false);
+			assert_noop!(Pools::join(Origin::signed(11), 420, 1), Error::<Runtime>::StakingError);
+			CanBondExtra::set(true);
+
+			assert_noop!(
+				Pools::join(Origin::signed(11), 420, 1),
+				Error::<Runtime>::RewardPoolNotFound
+			);
+			RewardPools::<Runtime>::insert(
+				1,
+				RewardPool::<Runtime> {
+					balance: Zero::zero(),
+					points: Zero::zero(),
+					total_earnings: Zero::zero(),
+					account_id: 321,
+				},
+			);
+
+			// Skipping Currency::transfer & StakingInterface::bond_extra errors
+		});
+	}
+}
 
 mod claim_payout {
 	use super::*;

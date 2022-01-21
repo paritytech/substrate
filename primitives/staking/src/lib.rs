@@ -66,6 +66,10 @@ pub trait StakingInterface {
 	/// Balance `controller` has bonded for nominating.
 	fn bonded_balance(controller: &Self::AccountId) -> Self::Balance;
 
+	/// If the given staker can successfully call `bond_extra` with `extra`. Assumes the `extra`
+	/// balance will be transferred in the stash.
+	fn can_bond_extra(controller: &Self::AccountId, extra: Self::Balance) -> bool;
+
 	fn bond_extra(controller: &Self::AccountId, extra: Self::Balance) -> DispatchResult;
 
 	fn unbond(controller: &Self::AccountId, value: Self::Balance) -> DispatchResult;

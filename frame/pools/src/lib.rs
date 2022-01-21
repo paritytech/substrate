@@ -22,6 +22,10 @@
 //! # Negatives
 //! - no voting
 //! - ..
+//!
+//! RUNTIME BUILDER WARNINGS
+//! - watch out for overflow of `RewardPoints` and `BalanceOf<T>` types. Consider the chains total
+//!   issuance, staking reward rate, and burn rate.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -34,9 +38,11 @@ use frame_support::{
 };
 use scale_info::TypeInfo;
 use sp_arithmetic::{FixedPointNumber, FixedU128};
-use sp_runtime::traits::{Convert, One, Saturating, StaticLookup, TrailingZeroInput, Zero};
+use sp_runtime::traits::{
+	Bounded, Convert, One, Saturating, StaticLookup, TrailingZeroInput, Zero,
+};
 use sp_staking::{EraIndex, PoolsInterface, StakingInterface};
-use sp_std::collections::btree_map::BTreeMap;
+use sp_std::{collections::btree_map::BTreeMap, ops::Div};
 
 #[cfg(test)]
 mod mock;
@@ -61,19 +67,21 @@ type PoolId = u32;
 type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 type SubPoolsWithEra<T> = BoundedBTreeMap<EraIndex, UnbondPool<T>, <T as Config>::MaxUnbonding>;
+// NOTE: this assumes the balance type u128 or smaller.
+// type RewardPoints = u256;
 
 const POINTS_TO_BALANCE_INIT_RATIO: u32 = 1;
 
-/// Calculate the number of points to issue from a pool as `(current_points / current_balance) * new_funds` except for some 0 edge cases; see logic and tests for details.
+/// Calculate the number of points to issue from a pool as `(current_points / current_balance) *
+/// new_funds` except for some zero edge cases; see logic and tests for details.
 fn points_to_issue<T: Config>(
 	current_balance: BalanceOf<T>,
 	current_points: BalanceOf<T>,
 	new_funds: BalanceOf<T>,
 ) -> BalanceOf<T> {
 	match (current_balance.is_zero(), current_points.is_zero()) {
-		(true, true) | (false, true) => {
-			new_funds.saturating_mul(POINTS_TO_BALANCE_INIT_RATIO.into())
-		},
+		(true, true) | (false, true) =>
+			new_funds.saturating_mul(POINTS_TO_BALANCE_INIT_RATIO.into()),
 		(true, false) => {
 			// The pool was totally slashed.
 
@@ -94,7 +102,8 @@ fn points_to_issue<T: Config>(
 	}
 }
 
-// Calculate the balance of a pool to unbond as `(current_balance / current_points) * delegator_points`. Returns zero if any of the inputs are zero.
+// Calculate the balance of a pool to unbond as `(current_balance / current_points) *
+// delegator_points`. Returns zero if any of the inputs are zero.
 fn balance_to_unbond<T: Config>(
 	current_balance: BalanceOf<T>,
 	current_points: BalanceOf<T>,
@@ -102,7 +111,7 @@ fn balance_to_unbond<T: Config>(
 ) -> BalanceOf<T> {
 	if current_balance.is_zero() || current_points.is_zero() || delegator_points.is_zero() {
 		// There is nothing to unbond
-		return Zero::zero();
+		return Zero::zero()
 	}
 
 	// REMINDER: `saturating_from_rational` panics if denominator is zero
@@ -138,7 +147,7 @@ pub struct Delegator<T: Config> {
 #[codec(mel_bound(T: Config))]
 #[scale_info(skip_type_params(T))]
 pub struct PrimaryPool<T: Config> {
-	points: BalanceOf<T>, // Probably needs to be some type of BigUInt
+	points: BalanceOf<T>,
 	// The _Stash_ and _Controller_ account for the pool.
 	account_id: T::AccountId,
 }
@@ -155,6 +164,30 @@ impl<T: Config> PrimaryPool<T> {
 		let bonded_balance = T::StakingInterface::bonded_balance(&self.account_id);
 		balance_to_unbond::<T>(bonded_balance, self.points, delegator_points)
 	}
+
+	// Check that the pool can accept a member with `new_funds`.
+	fn ok_to_join_with(&self, new_funds: BalanceOf<T>) -> Result<(), DispatchError> {
+		let bonded_balance = T::StakingInterface::bonded_balance(&self.account_id);
+		let points_to_balance_ratio = FixedU128::saturating_from_rational(
+			T::BalanceToU128::convert(self.points),
+			T::BalanceToU128::convert(bonded_balance),
+		);
+		// TODO make sure these checks make sense. Taken from staking design chat with Al
+		// Pool points can inflate relative to balance, but only if the pool is slashed.
+		//
+		// If we cap the ratio of points:balance so one cannot join a pool that has been slashed
+		// 90%,
+		ensure!(points_to_balance_ratio < 10.into(), Error::<T>::OverflowRisk);
+		// while restricting the balance to 1/10th of max total issuance,
+		ensure!(
+			new_funds.saturating_add(bonded_balance) <
+				BalanceOf::<T>::max_value().div(10u32.into()),
+			Error::<T>::OverflowRisk
+		);
+		// then we can be decently confident the bonding pool points will not overflow
+		// `BalanceOf<T>`.
+		Ok(())
+	}
 }
 
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, RuntimeDebugNoBound)]
@@ -162,15 +195,20 @@ impl<T: Config> PrimaryPool<T> {
 #[codec(mel_bound(T: Config))]
 #[scale_info(skip_type_params(T))]
 pub struct RewardPool<T: Config> {
-	/// The balance of this reward pool after the last claimed payout.
-	balance: BalanceOf<T>,
-	/// The points of this reward pool after the last claimed payout
-	points: BalanceOf<T>,
-	/// The total earnings _ever_ of this reward pool after the last claimed payout. I.E. the sum
-	/// of all incoming balance through the pools life.
-	total_earnings: BalanceOf<T>,
 	/// The reward destination for the pool.
 	account_id: T::AccountId,
+	/// The balance of this reward pool after the last claimed payout.
+	balance: BalanceOf<T>,
+	/// The total earnings _ever_ of this reward pool after the last claimed payout. I.E. the sum
+	/// of all incoming balance through the pools life.
+	///
+	/// NOTE: We assume this will always be less than total issuance and thus can use the runtimes
+	/// `Balance` type. However in a chain with a burn rate higher than the rate this increases,
+	/// this type should be bigger than `Balance`.
+	total_earnings: BalanceOf<T>,
+	/// The total points of this reward pool after the last claimed payout.
+	// points: RewardPoints,
+	points: BalanceOf<T>,
 }
 
 impl<T: Config> RewardPool<T> {
@@ -233,7 +271,7 @@ impl<T: Config> SubPools<T> {
 			// For the first `0..MaxUnbonding` eras of the chain we don't need to do anything.
 			// I.E. if `MaxUnbonding` is 5 and we are in era 4 we can add a pool for this era and
 			// have exactly `MaxUnbonding` pools.
-			return self;
+			return self
 		}
 
 		//  I.E. if `MaxUnbonding` is 5 and current era is 10, we only want to retain pools 6..=10.
@@ -284,6 +322,12 @@ pub mod pallet {
 
 		// Infallible method for converting `u128` to `Currency::Balance`.
 		type U128ToBalance: Convert<u128, BalanceOf<Self>>;
+
+		// Infallible method for converting `Currency::Balance` to `RewardPoints`.
+		// type BalanceToReward: Convert<BalanceOf<Self>, RewardPoints>;
+
+		// Infallible method for converting `RewardPoints` to `Currency::Balance`.
+		// type RewardToBalance: Convert<RewardPoints, BalanceOf<Self>>;
 
 		/// The interface for nominating.
 		type StakingInterface: StakingInterface<
@@ -359,6 +403,10 @@ pub mod pallet {
 		IdInUse,
 		/// The amount does not meet the minimum bond to start nominating.
 		MinimiumBondNotMet,
+		/// The transaction could not be executed due to overflow risk for the pool.
+		OverflowRisk,
+		/// An error from the staking pallet.
+		StakingError,
 	}
 
 	#[pallet::call]
@@ -372,25 +420,28 @@ pub mod pallet {
 		#[pallet::weight(666)]
 		pub fn join(origin: OriginFor<T>, amount: BalanceOf<T>, target: PoolId) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			// if a delegator already exists that means they already belong to a pool
+			// If a delegator already exists that means they already belong to a pool
 			ensure!(!Delegators::<T>::contains_key(&who), Error::<T>::AccountBelongsToOtherPool);
 
-			// Ensure that the `target` pool exists,
 			let mut primary_pool =
 				PrimaryPools::<T>::get(target).ok_or(Error::<T>::PoolNotFound)?;
-			// And that `amount` will meet the minimum bond
-			let old_free_balance = T::Currency::free_balance(&primary_pool.account_id);
-			ensure!(
-				old_free_balance.saturating_add(amount) >= T::StakingInterface::minimum_bond(),
-				Error::<T>::InsufficientBond
-			);
-			// Note that we don't actually care about writing the reward pool, we just need its
+			primary_pool.ok_to_join_with(amount)?;
+
+			// The pool should always be created in such a way its in a state to bond extra, but if
+			// the active balance is slashed below the minimum bonded or the account cannot be
+			// found, we exit early.
+			if !T::StakingInterface::can_bond_extra(&primary_pool.account_id, amount) {
+				return Err(Error::<T>::StakingError.into())
+			}
+
+			// We don't actually care about writing the reward pool, we just need its
 			// total earnings at this point in time.
 			let reward_pool = RewardPools::<T>::get(target)
 				.ok_or(Error::<T>::RewardPoolNotFound)?
 				// This is important because we want the most up-to-date total earnings.
 				.update_total_earnings_and_balance();
 
+			let old_free_balance = T::Currency::free_balance(&primary_pool.account_id);
 			// Transfer the funds to be bonded from `who` to the pools account so the pool can then
 			// go bond them.
 			T::Currency::transfer(
@@ -399,32 +450,36 @@ pub mod pallet {
 				amount,
 				ExistenceRequirement::KeepAlive,
 			)?;
+
+			// Try not to bail after the above transfer
+
 			// This should now include the transferred balance.
 			let new_free_balance = T::Currency::free_balance(&primary_pool.account_id);
 			// Get the exact amount we can bond extra.
 			let exact_amount_to_bond = new_free_balance.saturating_sub(old_free_balance);
-
 			// We must calculate the points to issue *before* we bond `who`'s funds, else the
 			// points:balance ratio will be wrong.
 			let new_points = primary_pool.points_to_issue(exact_amount_to_bond);
 			primary_pool.points = primary_pool.points.saturating_add(new_points);
-			let delegator = Delegator::<T> {
-				pool: target,
-				points: new_points,
-				// TODO double check that this is ok.
-				// At best the reward pool has the rewards up through the previous era. If the
-				// delegator joins prior to the snapshot they will benefit from the rewards of the
-				// current era despite not contributing to the pool's vote weight. If they join
-				// after the snapshot is taken they will benefit from the rewards of the next *2*
-				// eras because their vote weight will not be counted until the snapshot in current
-				// era + 1.
-				reward_pool_total_earnings: reward_pool.total_earnings,
-				unbonding_era: None,
-			};
 
 			T::StakingInterface::bond_extra(&primary_pool.account_id, exact_amount_to_bond)?;
 
-			Delegators::insert(who.clone(), delegator);
+			Delegators::insert(
+				who.clone(),
+				Delegator::<T> {
+					pool: target,
+					points: new_points,
+					// TODO double check that this is ok.
+					// At best the reward pool has the rewards up through the previous era. If the
+					// delegator joins prior to the snapshot they will benefit from the rewards of
+					// the current era despite not contributing to the pool's vote weight. If they
+					// join after the snapshot is taken they will benefit from the rewards of the
+					// next *2* eras because their vote weight will not be counted until the
+					// snapshot in current era + 1.
+					reward_pool_total_earnings: reward_pool.total_earnings,
+					unbonding_era: None,
+				},
+			);
 			PrimaryPools::insert(target, primary_pool);
 
 			Self::deposit_event(Event::<T>::Joined {
@@ -527,7 +582,7 @@ pub mod pallet {
 			let unbonding_era = delegator.unbonding_era.ok_or(Error::<T>::NotUnbonding)?;
 			let current_era = T::StakingInterface::current_era();
 			if current_era.saturating_sub(unbonding_era) < T::StakingInterface::bonding_duration() {
-				return Err(Error::<T>::NotUnbondedYet.into());
+				return Err(Error::<T>::NotUnbondedYet.into())
 			};
 
 			let mut sub_pools = SubPoolsStorage::<T>::get(delegator.pool).unwrap_or_default();
@@ -796,7 +851,7 @@ impl<T: Config> Pallet<T> {
 
 		// Panics if denominator is zero
 		let slash_ratio = if total_affected_balance <= Zero::zero() {
-			return Some((Zero::zero(), Default::default()));
+			return Some((Zero::zero(), Default::default()))
 		} else {
 			// REMINDER: `saturating_from_rational` panics if denominator is zero
 			FixedU128::saturating_from_rational(
