@@ -576,6 +576,9 @@ pub mod pallet {
 			Ok(())
 		}
 
+		// TODO the first person that withdraws for a pool withdraws there funds and then remaining
+		// funds and points are merged into the `no_era` pool - then for unbond pools we can just
+		// read balance from the unlocking chunks in staking
 		#[pallet::weight(666)]
 		pub fn withdraw_unbonded(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -598,6 +601,7 @@ pub mod pallet {
 			} else {
 				// A pool does not belong to this era, so it must have been merged to the era-less
 				// pool.
+				// trailing_pool????
 				let balance_to_unbond = sub_pools.no_era.balance_to_unbond(delegator.points);
 				sub_pools.no_era.points = sub_pools.no_era.points.saturating_sub(delegator.points);
 				sub_pools.no_era.balance =
@@ -755,15 +759,14 @@ impl<T: Config> Pallet<T> {
 		let delegator_payout = if delegator_virtual_points.is_zero() || current_points.is_zero() {
 			BalanceOf::<T>::zero()
 		} else {
-			// REMINDER: `saturating_from_rational` panics if denominator is zero
-			let delegator_ratio_of_points = FixedU128::saturating_from_rational(
-				T::BalanceToU128::convert(delegator_virtual_points),
-				T::BalanceToU128::convert(current_points),
-			);
+			// `(delegator_virtual_points * reward_pool.balance) / current_points` is equivalent to
+			// `(delegator_virtual_points / current_points) * reward_pool.balance`
+			let payout = delegator_virtual_points
+				.saturating_mul(reward_pool.balance)
+				// We check for zero above
+				.div(current_points);
 
-			let payout = delegator_ratio_of_points
-				.saturating_mul_int(T::BalanceToU128::convert(reward_pool.balance));
-			T::U128ToBalance::convert(payout)
+			payout
 		};
 
 		// Record updates
@@ -832,6 +835,7 @@ impl<T: Config> Pallet<T> {
 		// TODO double check why we do slash_era + 1
 		let affected_range = (slash_era + 1)..=apply_era;
 
+		// TODO Can have this as an input because we are inside of staking ledger
 		let bonded_balance = T::StakingInterface::bonded_balance(pool_account);
 
 		// Note that this doesn't count the balance in the `no_era` pool
@@ -845,7 +849,7 @@ impl<T: Config> Pallet<T> {
 			});
 		let total_affected_balance = bonded_balance.saturating_add(unbonding_affected_balance);
 
-		if slash_amount < total_affected_balance {
+		if slash_amount > total_affected_balance {
 			// TODO this shouldn't happen as long as MaxBonding pools is greater thant the slash
 			// defer duration, which it should implicitly be because we expect it be longer then the
 			// UnbondindDuration. TODO clearly document these assumptions
