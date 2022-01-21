@@ -163,16 +163,18 @@ impl<T: Config> PrimaryPool<T> {
 		let bonded_balance = T::StakingInterface::bonded_balance(&self.account_id);
 		ensure!(!bonded_balance.is_zero(), Error::<T>::OverflowRisk);
 
-		let points_to_balance_ratio = FixedU128::saturating_from_rational(
-			T::BalanceToU128::convert(self.points),
-			T::BalanceToU128::convert(bonded_balance),
-		);
+		let points_to_balance_ratio_floor = self
+			.points
+			// We checked for zero above
+			.div(bonded_balance);
+
 		// TODO make sure these checks make sense. Taken from staking design chat with Al
+
 		// Pool points can inflate relative to balance, but only if the pool is slashed.
 		//
 		// If we cap the ratio of points:balance so one cannot join a pool that has been slashed
 		// 90%,
-		ensure!(points_to_balance_ratio < 10.into(), Error::<T>::OverflowRisk);
+		ensure!(points_to_balance_ratio_floor < 10u32.into(), Error::<T>::OverflowRisk);
 		// while restricting the balance to 1/10th of max total issuance,
 		ensure!(
 			new_funds.saturating_add(bonded_balance) <
@@ -841,32 +843,25 @@ impl<T: Config> Pallet<T> {
 			});
 		let total_affected_balance = bonded_balance.saturating_add(unbonding_affected_balance);
 
+		if total_affected_balance.is_zero() {
+			return Some((Zero::zero(), Default::default()))
+		}
 		if slash_amount > total_affected_balance {
 			// TODO this shouldn't happen as long as MaxBonding pools is greater thant the slash
 			// defer duration, which it should implicitly be because we expect it be longer then the
 			// UnbondindDuration. TODO clearly document these assumptions
 		};
 
-		// Panics if denominator is zero
-		let slash_ratio = if total_affected_balance <= Zero::zero() {
-			return Some((Zero::zero(), Default::default()))
-		} else {
-			// REMINDER: `saturating_from_rational` panics if denominator is zero
-			FixedU128::saturating_from_rational(
-				T::BalanceToU128::convert(slash_amount),
-				T::BalanceToU128::convert(total_affected_balance),
-			)
-		};
-
-		let slash_multiplier = FixedU128::one().saturating_sub(slash_ratio);
-
 		let unlock_chunk_balances: BTreeMap<_, _> = affected_range
 			.filter_map(|era| {
 				if let Some(mut unbond_pool) = sub_pools.with_era.get_mut(&era) {
-					let pre_slash_balance = T::BalanceToU128::convert(unbond_pool.balance);
-					let after_slash_balance = T::U128ToBalance::convert(
-						slash_multiplier.saturating_mul_int(pre_slash_balance),
-					);
+					// Equivalent to `(slash_amount / total_affected_balance) * unbond_pool.balance`
+					let pool_slash_amount = slash_amount
+						.saturating_mul(unbond_pool.balance)
+						// We check for zero above
+						.div(total_affected_balance);
+					let after_slash_balance = unbond_pool.balance.saturating_sub(pool_slash_amount);
+
 					unbond_pool.balance = after_slash_balance;
 
 					Some((era, after_slash_balance))
@@ -878,10 +873,11 @@ impl<T: Config> Pallet<T> {
 
 		SubPoolsStorage::<T>::insert(pool_id, sub_pools);
 
-		let slashed_bonded_pool_balance = {
-			let pre_slash_balance = T::BalanceToU128::convert(bonded_balance);
-			T::U128ToBalance::convert(slash_multiplier.saturating_mul_int(pre_slash_balance))
-		};
+		// Equivalent to `(slash_amount / total_affected_balance) * bonded_balance`
+		let slashed_bonded_pool_balance = slash_amount
+			.saturating_mul(bonded_balance)
+			// We check for zero above
+			.div(total_affected_balance);
 
 		Some((slashed_bonded_pool_balance, unlock_chunk_balances))
 	}
