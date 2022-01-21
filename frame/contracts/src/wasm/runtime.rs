@@ -822,7 +822,7 @@ define_env!(Env, <E: Ext>,
 	//
 	// # Parameters
 	//
-	// - code_hash_ptr: a pointer to the buffer that contains new contract code
+	// - code_hash_ptr: A pointer to the buffer that contains the new code hash.
 	//
 	// # Errors
 	//
