@@ -1329,8 +1329,7 @@ impl<T: Config> Pallet<T> {
 			<BlockHash<T>>::remove(to_remove);
 		}
 
-		let version = T::Version::get().state_version();
-		let storage_root = T::Hash::decode(&mut &sp_io::storage::root(version)[..])
+		let storage_root = T::Hash::decode(&mut &sp_io::storage::root()[..])
 			.expect("Node is configured to use the same hash; qed");
 
 		<T::Header as traits::Header>::new(
