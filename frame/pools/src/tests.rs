@@ -8,17 +8,17 @@ use frame_support::{assert_noop, assert_ok};
 #[test]
 fn test_setup_works() {
 	ExtBuilder::default().build_and_execute(|| {
-		assert_eq!(PrimaryPools::<Runtime>::count(), 1);
-		assert_eq!(RewardPools::<Runtime>::count(), 1);
+		assert_eq!(BondedPoolStorage::<Runtime>::count(), 1);
+		assert_eq!(RewardPoolStorage::<Runtime>::count(), 1);
 		assert_eq!(SubPoolsStorage::<Runtime>::count(), 0);
-		assert_eq!(Delegators::<Runtime>::count(), 1);
+		assert_eq!(DelegatorStorage::<Runtime>::count(), 1);
 
 		assert_eq!(
-			PrimaryPools::<Runtime>::get(0).unwrap(),
-			PrimaryPool::<Runtime> { points: 10, account_id: PRIMARY_ACCOUNT }
+			BondedPoolStorage::<Runtime>::get(0).unwrap(),
+			BondedPool::<Runtime> { points: 10, account_id: PRIMARY_ACCOUNT }
 		);
 		assert_eq!(
-			RewardPools::<Runtime>::get(0).unwrap(),
+			RewardPoolStorage::<Runtime>::get(0).unwrap(),
 			RewardPool::<Runtime> {
 				balance: 0,
 				points: 0.into(),
@@ -27,7 +27,7 @@ fn test_setup_works() {
 			}
 		);
 		assert_eq!(
-			Delegators::<Runtime>::get(10).unwrap(),
+			DelegatorStorage::<Runtime>::get(10).unwrap(),
 			Delegator::<Runtime> {
 				pool: 0,
 				points: 10,
@@ -105,7 +105,7 @@ mod primary_pool {
 	#[test]
 	fn ok_to_join_with_works() {
 		ExtBuilder::default().build_and_execute(|| {
-			let pool = PrimaryPool::<Runtime> { points: 100, account_id: 123 };
+			let pool = BondedPool::<Runtime> { points: 100, account_id: 123 };
 
 			// Simulate a 100% slashed pool
 			StakingMock::set_bonded_balance(123, 0);
@@ -246,13 +246,13 @@ mod join {
 		ExtBuilder::default().build_and_execute(|| {
 			Balances::make_free_balance_be(&11, 5 + 2);
 
-			assert!(!Delegators::<Runtime>::contains_key(&11));
+			assert!(!DelegatorStorage::<Runtime>::contains_key(&11));
 
 			assert_ok!(Pools::join(Origin::signed(11), 2, 0));
 
 			// Storage is updated correctly
 			assert_eq!(
-				Delegators::<Runtime>::get(&11).unwrap(),
+				DelegatorStorage::<Runtime>::get(&11).unwrap(),
 				Delegator::<Runtime> {
 					pool: 0,
 					points: 2,
@@ -261,8 +261,8 @@ mod join {
 				}
 			);
 			assert_eq!(
-				PrimaryPools::<Runtime>::get(&0).unwrap(),
-				PrimaryPool::<Runtime> { points: 12, account_id: PRIMARY_ACCOUNT }
+				BondedPoolStorage::<Runtime>::get(&0).unwrap(),
+				BondedPool::<Runtime> { points: 12, account_id: PRIMARY_ACCOUNT }
 			);
 		});
 	}
@@ -282,9 +282,9 @@ mod join {
 			StakingMock::set_bonded_balance(PRIMARY_ACCOUNT, 0);
 			assert_noop!(Pools::join(Origin::signed(11), 420, 0), Error::<Runtime>::OverflowRisk);
 
-			PrimaryPools::<Runtime>::insert(
+			BondedPoolStorage::<Runtime>::insert(
 				1,
-				PrimaryPool::<Runtime> { points: 100, account_id: 123 },
+				BondedPool::<Runtime> { points: 100, account_id: 123 },
 			);
 			// Force the points:balance ratio to 100/10 (so 10)
 			StakingMock::set_bonded_balance(123, 10);
@@ -306,7 +306,7 @@ mod join {
 				Pools::join(Origin::signed(11), 420, 1),
 				Error::<Runtime>::RewardPoolNotFound
 			);
-			RewardPools::<Runtime>::insert(
+			RewardPoolStorage::<Runtime>::insert(
 				1,
 				RewardPool::<Runtime> {
 					balance: Zero::zero(),
@@ -327,9 +327,9 @@ mod claim_payout {
 	#[test]
 	fn calculate_delegator_payout_errors_if_a_delegator_is_unbonding() {
 		ExtBuilder::default().build_and_execute(|| {
-			let primary_pool = PrimaryPools::<Runtime>::get(0).unwrap();
-			let reward_pool = RewardPools::<Runtime>::get(0).unwrap();
-			let mut delegator = Delegators::<Runtime>::get(10).unwrap();
+			let primary_pool = BondedPoolStorage::<Runtime>::get(0).unwrap();
+			let reward_pool = RewardPoolStorage::<Runtime>::get(0).unwrap();
+			let mut delegator = DelegatorStorage::<Runtime>::get(10).unwrap();
 			delegator.unbonding_era = Some(0);
 
 			assert_noop!(
@@ -354,9 +354,9 @@ mod claim_payout {
 			unbonding_era: None,
 		};
 		ExtBuilder::default().build_and_execute(|| {
-			let primary_pool = PrimaryPools::<Runtime>::get(0).unwrap();
-			let reward_pool = RewardPools::<Runtime>::get(0).unwrap();
-			let delegator = Delegators::<Runtime>::get(10).unwrap();
+			let primary_pool = BondedPoolStorage::<Runtime>::get(0).unwrap();
+			let reward_pool = RewardPoolStorage::<Runtime>::get(0).unwrap();
+			let delegator = DelegatorStorage::<Runtime>::get(10).unwrap();
 
 			// Given no rewards have been earned
 			// When
@@ -424,16 +424,16 @@ mod claim_payout {
 		ExtBuilder::default()
 			.add_delegators(vec![(40, 40), (50, 50)])
 			.build_and_execute(|| {
-				let mut primary_pool = PrimaryPools::<Runtime>::get(0).unwrap();
+				let mut primary_pool = BondedPoolStorage::<Runtime>::get(0).unwrap();
 				primary_pool.points = 100;
 
-				let reward_pool = RewardPools::<Runtime>::get(0).unwrap();
+				let reward_pool = RewardPoolStorage::<Runtime>::get(0).unwrap();
 				// Delegator with 10 points
-				let del_10 = Delegators::<Runtime>::get(10).unwrap();
+				let del_10 = DelegatorStorage::<Runtime>::get(10).unwrap();
 				// Delegator with 40 points
-				let del_40 = Delegators::<Runtime>::get(40).unwrap();
+				let del_40 = DelegatorStorage::<Runtime>::get(40).unwrap();
 				// Delegator with 50 points
-				let del_50 = Delegators::<Runtime>::get(50).unwrap();
+				let del_50 = DelegatorStorage::<Runtime>::get(50).unwrap();
 
 				// Given we have a total of 100 points split among the delegators
 				assert_eq!(del_50.points + del_40.points + del_10.points, 100);
