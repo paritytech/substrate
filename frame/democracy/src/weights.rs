@@ -46,6 +46,7 @@ use sp_std::marker::PhantomData;
 /// Weight functions needed for pallet_democracy.
 pub trait WeightInfo {
 	fn propose() -> Weight;
+    fn promote() -> Weight;
 	fn second(s: u32, ) -> Weight;
 	fn vote_new(r: u32, ) -> Weight;
 	fn vote_existing(r: u32, ) -> Weight;
@@ -85,6 +86,14 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(3 as Weight))
 			.saturating_add(T::DbWeight::get().writes(3 as Weight))
 	}
+    // Storage: Democracy PublicProps (r:1 w:0)
+    // Storage: Democracy Promoted (r:1 w:1)
+    fn promote() -> Weight {
+        (337_936_000 as Weight)
+            .saturating_add(T::DbWeight::get().reads(2 as Weight))
+            .saturating_add(T::DbWeight::get().writes(1 as Weight))
+    }
+
 	// Storage: Democracy DepositOf (r:1 w:1)
 	fn second(s: u32, ) -> Weight {
 		(41_157_000 as Weight)
@@ -320,6 +329,15 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
 	}
+
+    // Storage: Democracy PublicProps (r:1 w:0)
+    // Storage: Democracy Promoted (r:1 w:1)
+    fn promote() -> Weight {
+        (337_936_000 as Weight)
+            .saturating_add(RocksDbWeight::get().reads(2 as Weight))
+            .saturating_add(RocksDbWeight::get().writes(1 as Weight))
+    }
+
 	// Storage: Democracy DepositOf (r:1 w:1)
 	fn second(s: u32, ) -> Weight {
 		(41_157_000 as Weight)

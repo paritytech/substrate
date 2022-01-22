@@ -103,6 +103,23 @@ benchmarks! {
 		assert_eq!(Democracy::<T>::public_props().len(), p as usize, "Proposals not created.");
 	}
 
+    promote {
+        let p = T::MaxProposals::get();
+        let origin = T::PromotionOrigin::successful_origin();
+        let hash = T::Hashing::hash_of(&0);
+        
+        for i in 0 .. (p - 1) {
+            add_proposal::<T>(i)?;
+        }
+
+    }: _<T::Origin>(origin.clone(), hash.clone())
+    verify {
+        // proposal has been promoted
+        assert_noop!(
+            Democracy::<T>::promote(origin.clone(), hash.clone()), Error::<T>::AlreadyPromoted
+        );
+    }
+
 	second {
 		let s in 0 .. MAX_SECONDERS;
 

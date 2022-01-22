@@ -246,7 +246,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
-	#[pallet::without_storage_info]
+    #[pallet::without_storage_info]
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
@@ -285,7 +285,10 @@ pub mod pallet {
 		#[pallet::constant]
 		type MinimumDeposit: Get<BalanceOf<Self>>;
 
-		/// Origin from which the next tabled referendum may be forced. This is a normal
+		/// Origin from which public proposals may be promoted.
+        type PromotionOrigin: EnsureOrigin<Self::Origin, Success = Self::AccountId>;
+
+        /// Origin from which the next tabled referendum may be forced. This is a normal
 		/// "super-majority-required" referendum.
 		type ExternalOrigin: EnsureOrigin<Self::Origin>;
 
@@ -382,7 +385,18 @@ pub mod pallet {
 	pub type PublicProps<T: Config> =
 		StorageValue<_, Vec<(PropIndex, T::Hash, T::AccountId)>, ValueQuery>;
 
-	/// Those who have locked a deposit.
+	/// Those who have promoted a particular public proposal.
+    #[pallet::storage]
+    #[pallet::getter(fn promoted)]
+    pub type Promoted<T: Config> = 
+        StorageMap<
+        _,
+        Twox64Concat, 
+        T::Hash, 
+        Vec<T::AccountId>
+    >;
+
+    /// Those who have locked a deposit.
 	///
 	/// TWOX-NOTE: Safe, as increasing integer keys are safe.
 	#[pallet::storage]
@@ -503,6 +517,8 @@ pub mod pallet {
 	pub enum Event<T: Config> {
 		/// A motion has been proposed by a public account.
 		Proposed { proposal_index: PropIndex, deposit: BalanceOf<T> },
+        /// A public proposal has been promoted.
+        PromotedBy { proposal_hash: T::Hash, who: T::AccountId }, 
 		/// A public proposal has been tabled for referendum vote.
 		Tabled { proposal_index: PropIndex, deposit: BalanceOf<T>, depositors: Vec<T::AccountId> },
 		/// An external proposal has been tabled.
@@ -564,6 +580,8 @@ pub mod pallet {
 		InvalidHash,
 		/// No external proposal
 		NoProposal,
+        /// Cannot may not promote a proposal twice
+        AlreadyPromoted,
 		/// Identity may not veto a proposal twice
 		AlreadyVetoed,
 		/// Preimage already noted
@@ -658,6 +676,25 @@ pub mod pallet {
 			Self::deposit_event(Event::<T>::Proposed { proposal_index: index, deposit: value });
 			Ok(())
 		}
+
+        #[pallet::weight(T::WeightInfo::promote())]
+        pub fn promote(
+            origin: OriginFor<T>,
+            proposal_hash: T::Hash,
+        ) -> DispatchResult {
+            let who = T::PromotionOrigin::ensure_origin(origin)?;
+
+            let public_props = PublicProps::<T>::get();
+            public_props.iter().position(|p| p.1 == proposal_hash).ok_or_else(|| Error::<T>::ProposalMissing)?;
+
+            let mut promoted_by = <Promoted<T>>::get(&proposal_hash).unwrap_or_else(Vec::new);
+            let insert_positions = promoted_by.binary_search(&who).err().ok_or(Error::<T>::AlreadyPromoted)?;
+            promoted_by.insert(insert_positions, who.clone());
+            <Promoted<T>>::insert(&proposal_hash, promoted_by);
+            Self::deposit_event(Event::<T>::PromotedBy { proposal_hash, who });
+
+            Ok(())
+        }
 
 		/// Signals agreement with a particular proposal.
 		///
@@ -1361,7 +1398,7 @@ impl<T: Config> Pallet<T> {
 	fn try_vote(
 		who: &T::AccountId,
 		ref_index: ReferendumIndex,
-		vote: AccountVote<BalanceOf<T>>,
+	vote: AccountVote<BalanceOf<T>>,
 	) -> DispatchResult {
 		let mut status = Self::referendum_status(ref_index)?;
 		ensure!(vote.balance() <= T::Currency::free_balance(who), Error::<T>::InsufficientFunds);
