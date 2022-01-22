@@ -103,11 +103,11 @@ rustup target add wasm32-unknown-unknown --toolchain nightly
 ## Test your set-up
 
 Now the best way to ensure that you have successfully prepared a computer for Substrate
-development is to follow the steps in [our first tutorial](/tutorials/v3/create-your-first-substrate-chain).
+development is to follow the steps in [our first Substrate tutorial](https://docs.substrate.io/tutorials/v3/create-your-first-substrate-chain/).
 
 ## Troubleshooting Substrate builds
 
-Sometimes you can't get the [Substrate node template](https://github.com/substrate-developer-hub/substrate-node-template)
+Sometimes you can't get the Substrate node template
 to compile out of the box. Here are some tips to help you work through that.
 
 ### Rust configuration check
@@ -177,7 +177,7 @@ rustup target add wasm32-unknown-unknown --toolchain nightly
 > and stable toolchains will be pulled to the most recent release, and for nightly, it is
 > generally _not_ expected to compile WASM without error (although it very often does).
 > Be sure to [specify your nightly version](#specifying-nightly-version) if you get WASM build errors
-> from \`rustup\` and [downgrade nightly as needed](#downgrading-rust-nightly).
+> from `rustup` and [downgrade nightly as needed](#downgrading-rust-nightly).
 
 #### Rust nightly toolchain
 
