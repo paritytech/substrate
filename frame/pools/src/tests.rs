@@ -21,7 +21,7 @@ fn test_setup_works() {
 			RewardPools::<Runtime>::get(0).unwrap(),
 			RewardPool::<Runtime> {
 				balance: 0,
-				points: 0,
+				points: 0.into(),
 				total_earnings: 0,
 				account_id: REWARDS_ACCOUNT
 			}
@@ -310,7 +310,7 @@ mod join {
 				1,
 				RewardPool::<Runtime> {
 					balance: Zero::zero(),
-					points: Zero::zero(),
+					points: U256::zero(),
 					total_earnings: Zero::zero(),
 					account_id: 321,
 				},
@@ -341,9 +341,9 @@ mod claim_payout {
 
 	#[test]
 	fn calculate_delegator_payout_works_with_a_pool_of_1() {
-		let rew = |balance, points, total_earnings| RewardPool::<Runtime> {
+		let rew = |balance, points: u32, total_earnings| RewardPool::<Runtime> {
 			balance,
-			points,
+			points: points.into(),
 			total_earnings,
 			account_id: REWARDS_ACCOUNT,
 		};
@@ -408,9 +408,9 @@ mod claim_payout {
 
 	#[test]
 	fn calculate_delegator_payout_works_with_a_pool_of_3() {
-		let rew = |balance, points, total_earnings| RewardPool::<Runtime> {
+		let rew = |balance, points: u32, total_earnings| RewardPool::<Runtime> {
 			balance,
-			points,
+			points: points.into(),
 			total_earnings,
 			account_id: REWARDS_ACCOUNT,
 		};

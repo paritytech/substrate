@@ -118,21 +118,17 @@ impl pallet_balances::Config for Runtime {
 	type WeightInfo = ();
 }
 
-pub struct BalanceToU128;
-impl Convert<Balance, u128> for BalanceToU128 {
-	fn convert(n: Balance) -> u128 {
-		n as u128
+pub struct BalanceToU256;
+impl Convert<Balance, U256> for BalanceToU256 {
+	fn convert(n: Balance) -> U256 {
+		n.into()
 	}
 }
 
-pub struct U128ToBalance;
-impl Convert<u128, Balance> for U128ToBalance {
-	fn convert(n: u128) -> Balance {
-		if n > Balance::MAX as u128 {
-			Balance::MAX
-		} else {
-			n as Balance
-		}
+pub struct U256ToBalance;
+impl Convert<U256, Balance> for U256ToBalance {
+	fn convert(n: U256) -> Balance {
+		n.try_into().unwrap()
 	}
 }
 
@@ -143,8 +139,8 @@ parameter_types! {
 impl pools::Config for Runtime {
 	type Event = Event;
 	type Currency = Balances;
-	type BalanceToU128 = BalanceToU128;
-	type U128ToBalance = U128ToBalance;
+	type BalanceToU256 = BalanceToU256;
+	type U256ToBalance = U256ToBalance;
 	type StakingInterface = StakingMock;
 	type MaxUnbonding = MaxUnbonding;
 }

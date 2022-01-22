@@ -37,10 +37,8 @@ use frame_support::{
 	DefaultNoBound, RuntimeDebugNoBound,
 };
 use scale_info::TypeInfo;
-use sp_arithmetic::{FixedPointNumber, FixedU128};
-use sp_runtime::traits::{
-	Bounded, Convert, One, Saturating, StaticLookup, TrailingZeroInput, Zero,
-};
+use sp_core::U256;
+use sp_runtime::traits::{Bounded, Convert, Saturating, StaticLookup, TrailingZeroInput, Zero};
 use sp_staking::{EraIndex, PoolsInterface, StakingInterface};
 use sp_std::{collections::btree_map::BTreeMap, ops::Div};
 
@@ -68,7 +66,7 @@ type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 type SubPoolsWithEra<T> = BoundedBTreeMap<EraIndex, UnbondPool<T>, <T as Config>::MaxUnbonding>;
 // NOTE: this assumes the balance type u128 or smaller.
-// type RewardPoints = u256;
+type RewardPoints = U256;
 
 const POINTS_TO_BALANCE_INIT_RATIO: u32 = 1;
 
@@ -204,8 +202,7 @@ pub struct RewardPool<T: Config> {
 	/// this type should be bigger than `Balance`.
 	total_earnings: BalanceOf<T>,
 	/// The total points of this reward pool after the last claimed payout.
-	// points: RewardPoints,
-	points: BalanceOf<T>,
+	points: RewardPoints,
 }
 
 impl<T: Config> RewardPool<T> {
@@ -314,17 +311,11 @@ pub mod pallet {
 		/// The nominating balance.
 		type Currency: Currency<Self::AccountId>;
 
-		// Infallible method for converting `Currency::Balance` to `u128`.
-		type BalanceToU128: Convert<BalanceOf<Self>, u128>;
+		// Infallible method for converting `Currency::Balance` to `U256`.
+		type BalanceToU256: Convert<BalanceOf<Self>, U256>;
 
-		// Infallible method for converting `u128` to `Currency::Balance`.
-		type U128ToBalance: Convert<u128, BalanceOf<Self>>;
-
-		// Infallible method for converting `Currency::Balance` to `RewardPoints`.
-		// type BalanceToReward: Convert<BalanceOf<Self>, RewardPoints>;
-
-		// Infallible method for converting `RewardPoints` to `Currency::Balance`.
-		// type RewardToBalance: Convert<RewardPoints, BalanceOf<Self>>;
+		// Infallible method for converting `U256` to `Currency::Balance`.
+		type U256ToBalance: Convert<U256, BalanceOf<Self>>;
 
 		/// The interface for nominating.
 		type StakingInterface: StakingInterface<
@@ -676,7 +667,7 @@ pub mod pallet {
 				id,
 				RewardPool::<T> {
 					balance: Zero::zero(),
-					points: Zero::zero(),
+					points: U256::zero(),
 					total_earnings: Zero::zero(),
 					account_id: reward_dest,
 				},
@@ -730,14 +721,17 @@ impl<T: Config> Pallet<T> {
 		let last_total_earnings = reward_pool.total_earnings;
 		let mut reward_pool = reward_pool.update_total_earnings_and_balance();
 		// Notice there is an edge case where total_earnings have not increased and this is zero
-		let new_earnings = reward_pool.total_earnings.saturating_sub(last_total_earnings);
+		let new_earnings = T::BalanceToU256::convert(
+			reward_pool.total_earnings.saturating_sub(last_total_earnings),
+		);
 
 		// The new points that will be added to the pool. For every unit of balance that has
 		// been earned by the reward pool, we inflate the reward pool points by
 		// `primary_pool.total_points`. In effect this allows each, single unit of balance (e.g.
 		// plank) to be divvied up pro-rata among delegators based on points.
 		//  TODO this needs to be some sort of BigUInt arithmetic
-		let new_points = primary_pool.points.saturating_mul(new_earnings);
+		let new_points =
+			T::BalanceToU256::convert(primary_pool.points).saturating_mul(new_earnings);
 
 		// The points of the reward pool after taking into account the new earnings. Notice that
 		// this only stays even or increases over time except for when we subtract delegator virtual
@@ -748,19 +742,19 @@ impl<T: Config> Pallet<T> {
 		let new_earnings_since_last_claim =
 			reward_pool.total_earnings.saturating_sub(delegator.reward_pool_total_earnings);
 		// The points of the reward pool that belong to the delegator.
-		let delegator_virtual_points =
-			delegator.points.saturating_mul(new_earnings_since_last_claim);
+		let delegator_virtual_points = T::BalanceToU256::convert(delegator.points)
+			.saturating_mul(T::BalanceToU256::convert(new_earnings_since_last_claim));
 
 		let delegator_payout = if delegator_virtual_points.is_zero() || current_points.is_zero() {
-			BalanceOf::<T>::zero()
+			Zero::zero()
 		} else {
 			// Equivalent to `(delegator_virtual_points / current_points) * reward_pool.balance`
-			let payout = delegator_virtual_points
-				.saturating_mul(reward_pool.balance)
-				// We check for zero above
-				.div(current_points);
-
-			payout
+			T::U256ToBalance::convert(
+				delegator_virtual_points
+					.saturating_mul(T::BalanceToU256::convert(reward_pool.balance))
+					// We check for zero above
+					.div(current_points),
+			)
 		};
 
 		// Record updates

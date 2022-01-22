@@ -549,7 +549,7 @@ where
 	}
 
 	// TODO look into how to decouple this
-	// move sensitive logic here
+	// move sensitive logic
 	/// Slash a pool account
 	fn pool_slash(
 		&mut self,
