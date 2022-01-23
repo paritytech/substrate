@@ -1295,7 +1295,9 @@ pub trait AccountIdConversion<AccountId>: Sized {
 
 /// Format is TYPE_ID ++ encode(sub-seed) ++ 00.... where 00... is indefinite trailing zeroes to
 /// fill AccountId.
-impl<T: Encode + Decode + MaxEncodedLen, Id: Encode + Decode + TypeId> AccountIdConversion<T> for Id {
+impl<T: Encode + Decode + MaxEncodedLen, Id: Encode + Decode + TypeId> AccountIdConversion<T>
+	for Id
+{
 	// Take the `sub` seed, and put as much of it as possible into the generated account, but
 	// allowing truncation of the seed if it would not fit into the account id in full. This can
 	// lead to two different `sub` seeds with the same account generated.
@@ -1307,13 +1309,14 @@ impl<T: Encode + Decode + MaxEncodedLen, Id: Encode + Decode + TypeId> AccountId
 
 	// Same as `into_sub_account_truncating`, but returns `None` if any bytes would be truncated.
 	fn try_into_sub_account<S: Encode>(&self, sub: S) -> Option<T> {
-		(Id::TYPE_ID, self, sub)
-			.using_encoded(|b| {
-				if b.len() > T::max_encoded_len() { return None };
-				let account = T::decode(&mut TrailingZeroInput(b))
-					.expect("All byte sequences are valid `AccountIds`; qed");
-				return Some(account)
-			})
+		(Id::TYPE_ID, self, sub).using_encoded(|b| {
+			if b.len() > T::max_encoded_len() {
+				return None
+			};
+			let account = T::decode(&mut TrailingZeroInput(b))
+				.expect("All byte sequences are valid `AccountIds`; qed");
+			return Some(account)
+		})
 	}
 
 	fn try_from_sub_account<S: Decode>(x: &T) -> Option<(Self, S)> {
