@@ -199,7 +199,8 @@ where
 			};
 
 			let _ = sink.pipe_from_stream(stream).await;
-		}.boxed();
+		}
+		.boxed();
 
 		self.executor
 			.spawn_obj(fut.into())

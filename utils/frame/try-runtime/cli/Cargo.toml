@@ -23,7 +23,7 @@ sc-cli = { version = "0.10.0-dev", path = "../../../../client/cli" }
 sc-executor = { version = "0.10.0-dev", path = "../../../../client/executor" }
 sc-chain-spec = { version = "4.0.0-dev", path = "../../../../client/chain-spec" }
 sp-state-machine = { version = "0.10.0", path = "../../../../primitives/state-machine" }
-sp-runtime = { version = "4.0.0", path = "../../../../primitives/runtime" }
+sp-runtime = { version = "4.1.0-dev", path = "../../../../primitives/runtime" }
 sp-core = { version = "4.1.0-dev", path = "../../../../primitives/core" }
 sp-io = { version = "4.0.0-dev", path = "../../../../primitives/io" }
 sp-keystore = { version = "0.10.0", path = "../../../../primitives/keystore" }
