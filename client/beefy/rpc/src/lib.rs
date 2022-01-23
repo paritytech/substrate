@@ -27,7 +27,6 @@ use sc_rpc::SubscriptionTaskExecutor;
 use sp_runtime::traits::Block as BlockT;
 
 use futures::{
-	future,
 	task::{Spawn, SpawnError},
 	FutureExt, StreamExt,
 };
@@ -109,27 +108,13 @@ impl<Block> BeefyApiServer<notification::EncodedSignedCommitment, Block::Hash>
 where
 	Block: BlockT,
 {
-	fn subscribe_justifications(&self, mut sink: SubscriptionSink) -> RpcResult<()> {
-		fn log_err(err: JsonRpseeError) -> bool {
-			log::debug!(
-				"Could not send data to beefy_justifications subscription. Error: {:?}",
-				err
-			);
-			false
-		}
-
+	fn subscribe_justifications(&self, sink: SubscriptionSink) -> RpcResult<()> {
 		let stream = self
 			.signed_commitment_stream
 			.subscribe()
 			.map(|sc| notification::EncodedSignedCommitment::new::<Block>(sc));
 
-		let fut = async move {
-			stream
-				.take_while(|sc| future::ready(sink.send(sc).map_or_else(log_err, |_| true)))
-				.for_each(|_| future::ready(()))
-				.await
-		}
-		.boxed();
+		let fut = sink.pipe_from_stream(stream).map(|_| ()).boxed();
 
 		self.executor
 			.spawn_obj(fut.into())

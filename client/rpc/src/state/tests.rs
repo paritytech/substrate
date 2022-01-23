@@ -553,7 +553,7 @@ async fn should_notify_on_runtime_version_initially() {
 	assert_matches!(timeout_secs(10, sub.next::<RuntimeVersion>()).await, Ok(Some(_)));
 
 	sub.close();
-	assert_matches!(timeout_secs(10, sub.next::<RuntimeVersion>()).await, Ok(None));
+	assert_matches!(timeout_secs(10, sub.next::<SubscriptionClosed>()).await, Ok(_));
 }
 
 #[test]

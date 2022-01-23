@@ -23,7 +23,7 @@ use crate::SubscriptionTaskExecutor;
 use std::{marker::PhantomData, sync::Arc};
 
 use futures::{
-	future,
+	future::{self, FutureExt},
 	stream::{self, Stream, StreamExt},
 	task::Spawn,
 };
@@ -75,7 +75,6 @@ where
 		subscribe_headers(
 			&self.client,
 			&self.executor,
-			"chain_subscribeAllHeads",
 			sink,
 			|| self.client().info().best_hash,
 			|| {
@@ -90,7 +89,6 @@ where
 		subscribe_headers(
 			&self.client,
 			&self.executor,
-			"chain_subscribeNewHeads",
 			sink,
 			|| self.client().info().best_hash,
 			|| {
@@ -106,7 +104,6 @@ where
 		subscribe_headers(
 			&self.client,
 			&self.executor,
-			"chain_subscribeFinalizedHeads",
 			sink,
 			|| self.client().info().finalized_hash,
 			|| {
@@ -122,8 +119,7 @@ where
 fn subscribe_headers<Block, Client, F, G, S>(
 	client: &Arc<Client>,
 	executor: &SubscriptionTaskExecutor,
-	method: &'static str,
-	mut sink: SubscriptionSink,
+	sink: SubscriptionSink,
 	best_block_hash: G,
 	stream: F,
 ) -> Result<(), Error>
@@ -133,7 +129,7 @@ where
 	Client: HeaderBackend<Block> + 'static,
 	F: FnOnce() -> S,
 	G: FnOnce() -> Block::Hash,
-	S: Stream<Item = Block::Header> + Send + 'static,
+	S: Stream<Item = Block::Header> + Send + Unpin + 'static,
 {
 	// send current head right at the start.
 	let maybe_header = client
@@ -146,32 +142,12 @@ where
 		})
 		.ok();
 
-	// send further subscriptions
-	let stream = stream();
-
 	// NOTE: by the time we set up the stream there might be a new best block and so there is a risk
 	// that the stream has a hole in it. The alternative would be to look up the best block *after*
 	// we set up the stream and chain it to the stream. Consuming code would need to handle
 	// duplicates at the beginning of the stream though.
-	let fut = async move {
-		stream::iter(maybe_header)
-			.chain(stream)
-			.take_while(|storage| {
-				future::ready(sink.send(&storage).map_or_else(
-					|e| {
-						log::debug!(
-							"Could not send data to subscription: {} error: {:?}",
-							method,
-							e
-						);
-						false
-					},
-					|_| true,
-				))
-			})
-			.for_each(|_| future::ready(()))
-			.await;
-	};
+	let stream = stream::iter(maybe_header).chain(stream());
+	let fut = sink.pipe_from_stream(stream).map(|_| ()).boxed();
 
-	executor.spawn_obj(Box::pin(fut).into()).map_err(|e| Error::Client(Box::new(e)))
+	executor.spawn_obj(fut.into()).map_err(|e| Error::Client(Box::new(e)))
 }

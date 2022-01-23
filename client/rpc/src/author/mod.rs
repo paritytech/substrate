@@ -26,7 +26,7 @@ use std::{convert::TryInto, sync::Arc};
 use crate::SubscriptionTaskExecutor;
 
 use codec::{Decode, Encode};
-use futures::{task::Spawn, StreamExt};
+use futures::{task::Spawn, FutureExt};
 use jsonrpsee::{
 	core::{async_trait, Error as JsonRpseeError, RpcResult},
 	SubscriptionSink,
@@ -193,30 +193,16 @@ where
 			{
 				Ok(stream) => stream,
 				Err(err) => {
-					let _ = sink.close(&err.to_string());
+					let _ = sink.close_with_custom_message(&err.to_string());
 					return
 				},
 			};
 
-			stream
-				.take_while(|item| {
-					futures::future::ready(sink.send(&item).map_or_else(
-						|e| {
-							log::debug!(
-								"subscription author_watchExtrinsic failed: {:?}; closing",
-								e
-							);
-							false
-						},
-						|_| true,
-					))
-				})
-				.for_each(|_| futures::future::ready(()))
-				.await;
-		};
+			let _ = sink.pipe_from_stream(stream).await;
+		}.boxed();
 
 		self.executor
-			.spawn_obj(Box::pin(fut).into())
+			.spawn_obj(fut.into())
 			.map_err(|e| JsonRpseeError::to_call_error(e))
 	}
 }

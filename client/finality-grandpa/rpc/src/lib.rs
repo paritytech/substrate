@@ -19,7 +19,7 @@
 //! RPC API for GRANDPA.
 #![warn(missing_docs)]
 
-use futures::{future, task::Spawn, FutureExt, StreamExt};
+use futures::{task::Spawn, FutureExt, StreamExt};
 use log::warn;
 use std::sync::Arc;
 
@@ -102,30 +102,14 @@ where
 			.map_err(|e| JsonRpseeError::to_call_error(e))
 	}
 
-	fn subscribe_justifications(&self, mut sink: SubscriptionSink) -> RpcResult<()> {
+	fn subscribe_justifications(&self, sink: SubscriptionSink) -> RpcResult<()> {
 		let stream = self.justification_stream.subscribe().map(
 			|x: sc_finality_grandpa::GrandpaJustification<Block>| {
 				JustificationNotification::from(x)
 			},
 		);
 
-		fn log_err(err: JsonRpseeError) -> bool {
-			log::error!(
-				"Could not send data to grandpa_justifications subscription. Error: {:?}",
-				err
-			);
-			false
-		}
-
-		let fut = async move {
-			stream
-				.take_while(|justification| {
-					future::ready(sink.send(justification).map_or_else(log_err, |_| true))
-				})
-				.for_each(|_| future::ready(()))
-				.await;
-		}
-		.boxed();
+		let fut = sink.pipe_from_stream(stream).map(|_| ()).boxed();
 		self.executor
 			.spawn_obj(fut.into())
 			.map_err(|e| JsonRpseeError::to_call_error(e))

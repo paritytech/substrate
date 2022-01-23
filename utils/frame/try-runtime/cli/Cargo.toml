@@ -31,5 +31,5 @@ sp-externalities = { version = "0.10.0", path = "../../../../primitives/external
 sp-version = { version = "4.0.0-dev", path = "../../../../primitives/version" }
 
 remote-externalities = { version = "0.10.0-dev", path = "../../remote-externalities" }
-jsonrpsee = { version = "0.7.0", default-features = false, features = ["ws-client"] }
+jsonrpsee = { version = "0.8.0", default-features = false, features = ["ws-client"] }
 zstd = "0.9.0"

@@ -360,24 +360,22 @@ where
 			.map_err(client_err)
 	}
 
-	fn subscribe_runtime_version(
-		&self,
-		mut sink: SubscriptionSink,
-	) -> std::result::Result<(), Error> {
+	fn subscribe_runtime_version(&self, sink: SubscriptionSink) -> std::result::Result<(), Error> {
 		let client = self.client.clone();
 
-		let version = self
+		let initial = self
 			.block_or_best(None)
 			.and_then(|block| {
 				self.client.runtime_version_at(&BlockId::Hash(block)).map_err(Into::into)
 			})
 			.map_err(|e| Error::Client(Box::new(e)))?;
-		let mut previous_version = version.clone();
+		let mut previous_version = initial.clone();
 
-		// A stream of all best blocks.
-		let stream = client.import_notification_stream().filter(|n| future::ready(n.is_new_best));
-		let fut = async move {
-			let stream = stream.filter_map(move |n| {
+		// A stream of new versions
+		let version_stream = client
+			.import_notification_stream()
+			.filter(|n| future::ready(n.is_new_best))
+			.filter_map(move |n| {
 				let version = client
 					.runtime_version_at(&BlockId::hash(n.hash))
 					.map_err(|e| Error::Client(Box::new(e)));
@@ -391,29 +389,15 @@ where
 				}
 			});
 
-			futures::stream::once(future::ready(version))
-				.chain(stream)
-				.take_while(|version| {
-					future::ready(sink.send(&version).map_or_else(
-						|e| {
-							log::debug!("Could not send data to the state_subscribeRuntimeVersion subscriber: {:?}", e);
-							false
-						},
-						|_| true,
-					))
-				})
-				.for_each(|_| future::ready(()))
-				.await;
-			()
-		}
-		.boxed();
+		let stream = futures::stream::once(future::ready(initial)).chain(version_stream);
+		let fut = sink.pipe_from_stream(stream).map(|_| ()).boxed();
 
 		self.executor.spawn_obj(fut.into()).map_err(|e| Error::Client(Box::new(e)))
 	}
 
 	fn subscribe_storage(
 		&self,
-		mut sink: SubscriptionSink,
+		sink: SubscriptionSink,
 		keys: Option<Vec<StorageKey>>,
 	) -> std::result::Result<(), Error> {
 		let stream = self
@@ -434,32 +418,19 @@ where
 			StorageChangeSet { block, changes }
 		}));
 
-		let fut = async move {
-			let stream = stream.map(|(block, changes)| StorageChangeSet {
-				block,
-				changes: changes
-					.iter()
-					.filter_map(|(o_sk, k, v)| o_sk.is_none().then(|| (k.clone(), v.cloned())))
-					.collect(),
-			});
+		let storage_stream = stream.map(|(block, changes)| StorageChangeSet {
+			block,
+			changes: changes
+				.iter()
+				.filter_map(|(o_sk, k, v)| o_sk.is_none().then(|| (k.clone(), v.cloned())))
+				.collect(),
+		});
 
-			initial
-				.chain(stream)
-				.filter(|storage| future::ready(!storage.changes.is_empty()))
-				.take_while(|storage| {
-					future::ready(sink.send(&storage).map_or_else(
-						|e| {
-							log::debug!("Could not send data to the state_subscribeStorage subscriber: {:?}", e);
-							false
-						},
-						|_| true,
-					))
-				})
-				.for_each(|_| future::ready(()))
-				.await;
-		}
-		.boxed();
+		let stream = initial
+			.chain(storage_stream)
+			.filter(|storage| future::ready(!storage.changes.is_empty()));
 
+		let fut = sink.pipe_from_stream(stream).map(|_| ()).boxed();
 		self.executor.spawn_obj(fut.into()).map_err(|e| Error::Client(Box::new(e)))
 	}
 
