@@ -72,7 +72,7 @@ impl PalletIdCmd {
 			"Cannot convert argument to palletid: argument should be 8-character string"
 		})?;
 
-		let account_id: R::AccountId = PalletId(id_fixed_array).into_account();
+		let account_id: R::AccountId = PalletId(id_fixed_array).into_account_truncating();
 
 		with_crypto_scheme!(
 			self.crypto_scheme.scheme,
