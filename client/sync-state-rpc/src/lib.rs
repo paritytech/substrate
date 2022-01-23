@@ -37,7 +37,7 @@
 //! ```
 //!
 //! If the [`LightSyncStateExtension`] is not added as an extension to the chain spec,
-//! the [`SyncStateRpcHandler`] will fail at instantiation.
+//! the [`SyncStateRpc`] will fail at instantiation.
 
 #![deny(unused_crate_dependencies)]
 

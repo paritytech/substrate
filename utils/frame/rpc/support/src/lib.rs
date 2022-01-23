@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Combines [sc_rpc_api::state::StateClient] with [frame_support::storage::generator] traits
+//! Combines [sc_rpc_api::state::StateApiClient] with [frame_support::storage::generator] traits
 //! to provide strongly typed chain state queries over rpc.
 
 #![warn(missing_docs)]
@@ -65,7 +65,7 @@ use sp_storage::{StorageData, StorageKey};
 ///
 /// #[tokio::main]
 /// async fn main() -> Result<(), RpcError> {
-///     let cl = WsClientBuilder::default().build("ws://[::1]:9933").await?;
+///     let cl = WsClientBuilder::default().build("ws://[::1]:9944").await?;
 ///
 ///     let q = StorageQuery::value::<LastActionId>();
 ///     let hash = None::<Hash>;
