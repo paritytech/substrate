@@ -257,9 +257,11 @@ impl Registry {
 		// Trigger the events
 
 		self.sinks.iter_mut().for_each(|(subs_id, sink)| {
-			let notification =
-				sink.render_notification(hash.clone(), changes.clone(), child_changes.clone());
-			dispatch(subs_id, notification);
+			if subscribers.contains(subs_id) {
+				let notification =
+					sink.render_notification(hash.clone(), changes.clone(), child_changes.clone());
+				dispatch(subs_id, notification);
+			}
 		});
 	}
 }
