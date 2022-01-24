@@ -5,7 +5,7 @@
 # - With `deploy` sub-command, it will checkout the passed-in branch/tag ref, build the rustdocs
 #   locally (this takes some time), update the `index.html` index page, and push it to remote
 #   `gh-pages` branch. So users running this command need to have write access to the remote
-#   `gh-pages` branch. This sub-command depends on [@jimmychu0807/index-tpl-crud](https://www.npmjs.com/package/@jimmychu0807/index-tpl-crud)
+#   `gh-pages` branch. This sub-command depends on [@substrate/index-tpl-crud](https://www.npmjs.com/package/@substrate/index-tpl-crud)
 #   to update the DOM of index.html page.
 # - With `remove` sub-command, it will remove the deployed rustdocs from `gh-pages`, and update the
 #   index.html page as necessary. It may remove the `latest` symbolic link.
@@ -24,7 +24,7 @@
 #   rustdocs-release.sh remove monthly-2021-10
 #
 # Dependencies:
-#   - @jimmychu0807/index-tpl-crud - https://www.npmjs.com/package/@jimmychu0807/index-tpl-crud
+#   - @substrate/index-tpl-crud - https://www.npmjs.com/package/@substrate/index-tpl-crud
 #
 
 # Script setting
@@ -93,12 +93,12 @@ build_rustdocs() {
 
 upsert_index_page() {
   # Check if `index-tpl-crud` exists
-  which index-tpl-crud &> /dev/null || yarn global add @jimmychu0807/index-tpl-crud
+  which index-tpl-crud &> /dev/null || yarn global add @substrate/index-tpl-crud
   index-tpl-crud upsert $($1 && echo "-l") ./index.html "$2"
 }
 
 rm_index_page() {
-  which index-tpl-crud &> /dev/null || yarn global add @jimmychu0807/index-tpl-crud
+  which index-tpl-crud &> /dev/null || yarn global add @substrate/index-tpl-crud
   index-tpl-crud rm ./index.html "$1"
 }
 
