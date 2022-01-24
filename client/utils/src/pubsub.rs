@@ -31,21 +31,33 @@ use ::parking_lot::Mutex;
 
 pub mod channels;
 
+/// The type to identify subscribers.
 pub type SubsID = crate::id_sequence::SeqID;
 
 /// Unsubscribe: unregisters a previously created subscription.
 pub trait Unsubscribe {
+	/// Remove all registrations of the subscriber with ID `subs_id`.
 	fn unsubscribe(&mut self, subs_id: &SubsID);
 }
 
 /// Subscribe using a key of type `K`
 pub trait Subscribe<K> {
+	/// Register subscriber with the ID `subs_id` as having interest to the key `K`.
 	fn subscribe(&mut self, subs_key: K, subs_id: SubsID);
 }
 
 /// Dispatch a message of type `M`.
 pub trait Dispatch<M> {
+	/// The type of the that shall be sent through the channel as a result of such dispatch.
 	type Item;
+
+	/// Dispatch the message of type `M`.
+	///
+	/// The implementation is given an instance of `M` and is supposed to invoke `dispatch` for
+	/// each matching subscriber, with an argument of type `Self::Item` matching that subscriber.
+	///
+	/// Note that this does not have to be of the same type with the item that will be sent through
+	/// to the subscribers. The subscribers will receive a message of type `Self::Item`.
 	fn dispatch<F>(&mut self, message: M, dispatch: F)
 	where
 		F: FnMut(&SubsID, Self::Item);
@@ -55,11 +67,19 @@ pub trait Dispatch<M> {
 ///
 /// Allows to create a pair of tx and rx, and to send a message over the tx.
 pub trait Channel {
+	/// The sending side of the channel.
 	type Tx;
+
+	/// The receiving side of the channel.
 	type Rx;
+
+	/// The type of an item that can be sent through this channel.
 	type Item;
 
+	/// Create a pair of connected `Tx` and `Rx`.
 	fn create(&self) -> (Self::Tx, Self::Rx);
+
+	/// Send an `Item` through the `Tx`.
 	fn send(&self, tx: &mut Self::Tx, item: Self::Item);
 }
 
