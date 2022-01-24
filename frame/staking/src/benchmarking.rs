@@ -51,7 +51,7 @@ type MaxNominators<T> = <<T as Config>::BenchmarkingConfig as BenchmarkingConfig
 // read and write operations.
 fn add_slashing_spans<T: Config>(who: &T::AccountId, spans: u32) {
 	if spans == 0 {
-		return
+		return;
 	}
 
 	// For the first slashing span, we initialize
@@ -652,7 +652,7 @@ benchmarks! {
 		let mut staking_ledger = Ledger::<T>::get(controller.clone()).unwrap();
 
 		for _ in 0 .. l {
-			staking_ledger.unlocking.push(unlock_chunk.clone())
+			staking_ledger.unlocking.try_push(unlock_chunk.clone()).unwrap()
 		}
 		Ledger::<T>::insert(controller.clone(), staking_ledger.clone());
 		let original_bonded: BalanceOf<T> = staking_ledger.active;
@@ -796,7 +796,7 @@ benchmarks! {
 			era: EraIndex::zero(),
 		};
 		for _ in 0 .. l {
-			staking_ledger.unlocking.push(unlock_chunk.clone())
+			staking_ledger.unlocking.try_push(unlock_chunk.clone()).unwrap();
 		}
 		Ledger::<T>::insert(controller, staking_ledger);
 		let slash_amount = T::Currency::minimum_balance() * 10u32.into();
