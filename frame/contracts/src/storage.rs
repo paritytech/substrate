@@ -129,7 +129,10 @@ where
 		child::get_raw(&child_trie_info(trie_id), &blake2_256(key))
 	}
 
-	/// Returns `true` iff the `key` exists in storage.
+	/// Returns `Some(len)` (in bytes) if a storage item exists at `key`.
+	///
+	/// Returns `None` if the `key` wasn't previously set by `set_storage` or
+	/// was deleted.
 	pub fn size(trie_id: &TrieId, key: &StorageKey) -> Option<u32> {
 		child::len(&child_trie_info(trie_id), &blake2_256(key))
 	}

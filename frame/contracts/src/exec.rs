@@ -140,7 +140,7 @@ pub trait Ext: sealing::Sealed {
 	/// was deleted.
 	fn get_storage(&mut self, key: &StorageKey) -> Option<Vec<u8>>;
 
-	/// Returns Some(len) if a storage item exists at `key`.
+	/// Returns `Some(len)` (in bytes) if a storage item exists at `key`.
 	///
 	/// Returns `None` if the `key` wasn't previously set by `set_storage` or
 	/// was deleted.
