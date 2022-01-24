@@ -17,6 +17,22 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Provides means to implement a typical Pub/Sub mechanism.
+//!
+//! This module provides a type `Hub` which can be used both to subscribe,
+//! and to send the broadcast messages.
+//!
+//! The `Hub` type is parametrized by two other types:
+//! - `Channel` — operates with the underlying channels;
+//! - `Registry` — implementation of the subscription/dispatch logic.
+//!
+//! A Registry is implemented by defining the following traits:
+//! - `Subscribe<K>`;
+//! - `Dispatch<M>`;
+//! - `Unsubscribe`.
+//!
+//! As a result of subscription `Hub::subscribe` method returns an instance of `Receiver<Channel,
+//! Registry>`. That can be used as a `futures::Stream` to receive the messages.
+//! Upon drop the `Receiver<Channel, Registry>` shall unregister itself from the `Hub`.
 
 use std::{
 	collections::HashMap,
