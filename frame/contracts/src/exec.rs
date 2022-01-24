@@ -2440,7 +2440,7 @@ mod tests {
 			);
 			assert_eq!(ctx.ext.set_storage([2; 32], Some(vec![]), false), Ok(WriteOutcome::New));
 			assert_eq!(ctx.ext.get_storage_size(&[1; 32]), Some(3));
-			assert_eq!(ctx.ext.get_storage_size(&[1; 32]), Some(3));
+			assert_eq!(ctx.ext.get_storage_size(&[2; 32]), Some(0));
 			assert_eq!(ctx.ext.get_storage_size(&[3; 32]), None);
 
 			exec_success()
