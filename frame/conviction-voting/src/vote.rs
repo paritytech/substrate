@@ -18,7 +18,7 @@
 //! The vote datatype.
 
 use crate::{Conviction, Delegations};
-use codec::{Decode, Encode, EncodeLike, Input, Output};
+use codec::{Decode, Encode, EncodeLike, Input, Output, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_runtime::{
 	traits::{Saturating, Zero},
@@ -27,7 +27,7 @@ use sp_runtime::{
 use sp_std::{convert::TryFrom, prelude::*, result::Result};
 
 /// A number of lock periods, plus a vote, one way or the other.
-#[derive(Copy, Clone, Eq, PartialEq, Default, RuntimeDebug)]
+#[derive(Copy, Clone, Eq, PartialEq, Default, RuntimeDebug, MaxEncodedLen)]
 pub struct Vote {
 	pub aye: bool,
 	pub conviction: Conviction,
@@ -66,7 +66,7 @@ impl TypeInfo for Vote {
 }
 
 /// A vote for a referendum of a particular account.
-#[derive(Encode, Decode, Copy, Clone, Eq, PartialEq, RuntimeDebug, TypeInfo)]
+#[derive(Encode, Decode, Copy, Clone, Eq, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub enum AccountVote<Balance> {
 	/// A standard vote, one-way (approve or reject) with a given amount of conviction.
 	Standard { vote: Vote, balance: Balance },
@@ -108,7 +108,7 @@ impl<Balance: Saturating> AccountVote<Balance> {
 
 /// A "prior" lock, i.e. a lock for some now-forgotten reason.
 #[derive(
-	Encode, Decode, Default, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, RuntimeDebug, TypeInfo,
+	Encode, Decode, Default, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, RuntimeDebug, TypeInfo, MaxEncodedLen,
 )]
 pub struct PriorLock<BlockNumber, Balance>(BlockNumber, Balance);
 
@@ -132,7 +132,7 @@ impl<BlockNumber: Ord + Copy + Zero, Balance: Ord + Copy + Zero> PriorLock<Block
 }
 
 /// Information concerning the delegation of some voting power.
-#[derive(Encode, Decode, Clone, Eq, PartialEq, RuntimeDebug, TypeInfo)]
+#[derive(Encode, Decode, Clone, Eq, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct Delegating<Balance, AccountId, BlockNumber> {
 	/// The amount of balance delegated.
 	pub balance: Balance,

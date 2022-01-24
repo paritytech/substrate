@@ -21,7 +21,7 @@ use sp_std::marker::PhantomData;
 
 use super::*;
 use crate::{AccountVote, Conviction, Vote};
-use codec::{Codec, Decode, Encode};
+use codec::{Codec, Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	traits::VoteTally, CloneNoBound, DefaultNoBound, EqNoBound, PartialEqNoBound,
 	RuntimeDebugNoBound,
@@ -42,6 +42,7 @@ use sp_runtime::{
 	TypeInfo,
 	Encode,
 	Decode,
+	MaxEncodedLen,
 )]
 #[scale_info(skip_type_params(Total))]
 pub struct Tally<
@@ -190,7 +191,7 @@ impl<
 }
 
 /// Amount of votes and capital placed in delegation for an account.
-#[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
+#[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct Delegations<Balance> {
 	/// The number of votes (this is post-conviction).
 	pub votes: Balance,
