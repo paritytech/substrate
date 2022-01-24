@@ -24,6 +24,7 @@ use std::sync::Arc;
 
 enum Method {
 	Interpreted,
+	#[cfg(feature = "wasmtime")]
 	Compiled { fast_instance_reuse: bool },
 }
 
