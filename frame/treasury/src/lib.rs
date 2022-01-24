@@ -74,14 +74,14 @@ use sp_std::prelude::*;
 use frame_support::{
 	print,
 	traits::{
-		Currency, ExistenceRequirement::KeepAlive, Get, Imbalance, OnUnbalanced,
-		ReservableCurrency, WithdrawReasons, Instance, TryDrop
+		Currency, ExistenceRequirement::KeepAlive, Get, Imbalance, Instance, OnUnbalanced,
+		ReservableCurrency, TryDrop, WithdrawReasons,
 	},
 	weights::Weight,
 	PalletId,
 };
 
-use orml_tokens::{MultiTokenNegativeImbalance, MultiTokenCurrency, MultiTokenCurrencyAdapter};
+use orml_tokens::{MultiTokenCurrency, MultiTokenCurrencyAdapter, MultiTokenNegativeImbalance};
 
 pub use pallet::*;
 pub use weights::WeightInfo;
@@ -504,27 +504,31 @@ impl<T: Config<I>, I: 'static> OnUnbalanced<NegativeImbalanceOf<T, I>> for Palle
 	}
 }
 
-pub struct MultiOnUnbalancedWrapper<Pallet>{
-    _marker: sp_std::marker::PhantomData<Pallet>,
+pub struct MultiOnUnbalancedWrapper<Pallet> {
+	_marker: sp_std::marker::PhantomData<Pallet>,
 }
 
-impl<T,I,Tokens> OnUnbalanced<MultiTokenNegativeImbalance<Tokens>> for MultiOnUnbalancedWrapper<Pallet<T,I>> where
+impl<T, I, Tokens> OnUnbalanced<MultiTokenNegativeImbalance<Tokens>>
+	for MultiOnUnbalancedWrapper<Pallet<T, I>>
+where
 	T: Config<I>,
 	I: 'static,
 	Tokens: orml_tokens::Config,
 	Tokens::AccountId: From<T::AccountId>,
-    <T::Currency as Currency<T::AccountId>>::Balance : From<u128>,
-	MultiTokenNegativeImbalance<Tokens>: TryDrop + Imbalance<BalanceOf<T, I>>
+	<T::Currency as Currency<T::AccountId>>::Balance: From<u128>,
+	MultiTokenNegativeImbalance<Tokens>: TryDrop + Imbalance<BalanceOf<T, I>>,
 {
-
 	fn on_nonzero_unbalanced(amount: MultiTokenNegativeImbalance<Tokens>) {
 		let numeric_amount = amount.peek().into();
 		let currency_id = amount.0;
 
 		// Must resolve into existing but better to be safe.
-		let _ = MultiTokenCurrencyAdapter::<Tokens>::resolve_creating(currency_id, &Pallet::<T,I>::account_id().into(), amount);
+		let _ = MultiTokenCurrencyAdapter::<Tokens>::resolve_creating(
+			currency_id,
+			&Pallet::<T, I>::account_id().into(),
+			amount,
+		);
 
-		Pallet::<T,I>::deposit_event(Event::Deposit(numeric_amount));
+		Pallet::<T, I>::deposit_event(Event::Deposit(numeric_amount));
 	}
-
 }

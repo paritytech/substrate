@@ -11,13 +11,13 @@ use sp_core::H256;
 use sp_std::{collections::vec_deque::VecDeque, vec::Vec};
 
 #[cfg(feature = "std")]
-use ver_api::VerApi;
-#[cfg(feature = "std")]
 use sp_api::{ApiExt, ApiRef, ProvideRuntimeApi, TransactionOutcome};
 #[cfg(feature = "std")]
 use sp_core::crypto::Ss58Codec;
 #[cfg(feature = "std")]
 use sp_runtime::generic::BlockId;
+#[cfg(feature = "std")]
+use ver_api::VerApi;
 
 pub struct Xoshiro256PlusPlus {
 	s: [u64; 4],
@@ -89,13 +89,14 @@ pub fn shuffle_using_seed<A: Encode + Clone, E: Encode>(
 
 	// generate exact number of slots for each account
 	// [ Alice, Alice, Alice, ... , Bob, Bob, Bob, ... ]
-	let mut slots: Vec<Option<_>> =
-		extrinsics.iter().map(|(who, _)| who).cloned().collect();
+	let mut slots: Vec<Option<_>> = extrinsics.iter().map(|(who, _)| who).cloned().collect();
 
 	let mut grouped_extrinsics: BTreeMap<Option<_>, VecDeque<_>> =
 		extrinsics.into_iter().fold(BTreeMap::new(), |mut groups, (who, tx)| {
-			groups.entry(who.as_ref().map(BlakeTwo256::hash_of))
-                  .or_insert_with(VecDeque::new).push_back(tx);
+			groups
+				.entry(who.as_ref().map(BlakeTwo256::hash_of))
+				.or_insert_with(VecDeque::new)
+				.push_back(tx);
 			groups
 		});
 
@@ -108,7 +109,13 @@ pub fn shuffle_using_seed<A: Encode + Clone, E: Encode>(
 	// [ AliceExtrinsic1, BobExtrinsic1, ... , AliceExtrinsicN, BobExtrinsicN ]
 	let shuffled_extrinsics: Vec<_> = slots
 		.into_iter()
-		.map(|who| grouped_extrinsics.get_mut(&who.as_ref().map(BlakeTwo256::hash_of)).unwrap().pop_front().unwrap())
+		.map(|who| {
+			grouped_extrinsics
+				.get_mut(&who.as_ref().map(BlakeTwo256::hash_of))
+				.unwrap()
+				.pop_front()
+				.unwrap()
+		})
 		.collect();
 
 	log::debug!(target: "block_shuffler", "shuffled order:[");
@@ -135,9 +142,9 @@ where
 	Api: ProvideRuntimeApi<Block> + 'a,
 	Api::Api: VerApi<Block>,
 {
-    if extrinsics.len() <= 1 {
-        return extrinsics;
-    }
+	if extrinsics.len() <= 1 {
+		return extrinsics
+	}
 	let extrinsics: Vec<(Option<AccountId32>, Block::Extrinsic)> = extrinsics
 		.into_iter()
 		.map(|tx| {

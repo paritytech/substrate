@@ -206,17 +206,19 @@ where
 		})
 	}
 
-	pub fn record_valid_extrinsics_and_revert_changes<F: FnOnce(&'_ A::Api) -> Vec<Block::Extrinsic>>(& mut self, call: F) -> ()
-    {
-        let valid_txs = self.api.execute_in_transaction(|api|
-            {
-                let txs = call(&api);
-                TransactionOutcome::Rollback(txs)
-            }
-        );
-        log::debug!(target: "block_builder", "consume {} valid transactios", valid_txs.len());
-        self.extrinsics.extend(valid_txs);
-    }
+	pub fn record_valid_extrinsics_and_revert_changes<
+		F: FnOnce(&'_ A::Api) -> Vec<Block::Extrinsic>,
+	>(
+		&mut self,
+		call: F,
+	) -> () {
+		let valid_txs = self.api.execute_in_transaction(|api| {
+			let txs = call(&api);
+			TransactionOutcome::Rollback(txs)
+		});
+		log::debug!(target: "block_builder", "consume {} valid transactios", valid_txs.len());
+		self.extrinsics.extend(valid_txs);
+	}
 
 	/// Push onto the block's list of extrinsics.
 	///
@@ -249,6 +251,7 @@ where
 	pub fn apply_previous_block_extrinsics(&mut self, seed: ShufflingSeed) {
 		let parent_hash = self.parent_hash;
 		let block_id = &self.block_id;
+		self.api.store_seed(&block_id, seed.seed);
 
 		let previous_block_header =
 			self.backend.blockchain().header(BlockId::Hash(parent_hash)).unwrap().unwrap();
@@ -417,11 +420,12 @@ pub fn validate_transaction<'a, Block, Api>(
 	at: &BlockId<Block>,
 	api: &'_ Api::Api,
 	xt: <Block as BlockT>::Extrinsic,
-) -> Result<(), Error> where
-Block: BlockT,
-Api: ProvideRuntimeApi<Block> + 'a,
-Api::Api: VerApi<Block>,
-Api::Api: BlockBuilderApi<Block>,
+) -> Result<(), Error>
+where
+	Block: BlockT,
+	Api: ProvideRuntimeApi<Block> + 'a,
+	Api::Api: VerApi<Block>,
+	Api::Api: BlockBuilderApi<Block>,
 {
 	match api.get_signer(at, xt.clone()).unwrap() {
 		Some((who, nonce)) => log::debug!(target: "block_builder",
@@ -429,16 +433,11 @@ Api::Api: BlockBuilderApi<Block>,
 		_ => {},
 	};
 	api.execute_in_transaction(|api| {
-		match api.apply_extrinsic_with_context(
-			at,
-			ExecutionContext::BlockConstruction,
-			xt.clone(),
-		) {
-			Ok(Ok(_)) => {
-				TransactionOutcome::Commit(Ok(()))
-			},
+		match api.apply_extrinsic_with_context(at, ExecutionContext::BlockConstruction, xt.clone())
+		{
+			Ok(Ok(_)) => TransactionOutcome::Commit(Ok(())),
 			Ok(Err(tx_validity)) => TransactionOutcome::Rollback(Err(
-					ApplyExtrinsicFailed::Validity(tx_validity).into(),
+				ApplyExtrinsicFailed::Validity(tx_validity).into(),
 			)),
 			Err(e) => TransactionOutcome::Rollback(Err(Error::from(e))),
 		}

@@ -18,15 +18,13 @@
 //! Generic implementation of an unchecked (pre-verification) extrinsic.
 
 use crate::{
-    AccountId32,
 	generic::CheckedExtrinsic,
 	traits::{
-		self, HasAddress, Checkable, Extrinsic, ExtrinsicMetadata, IdentifyAccount, MaybeDisplay, Member,
-		SignedExtension,
+		self, Checkable, Extrinsic, ExtrinsicMetadata, HasAddress, IdentifyAccount, MaybeDisplay,
+		Member, SignedExtension,
 	},
 	transaction_validity::{InvalidTransaction, TransactionValidityError},
-    MultiAddress,
-	OpaqueExtrinsic,
+	AccountId32, MultiAddress, OpaqueExtrinsic,
 };
 use codec::{Compact, Decode, Encode, EncodeLike, Error, Input};
 use scale_info::{build::Fields, meta_type, Path, StaticTypeInfo, Type, TypeInfo, TypeParameter};
@@ -161,38 +159,39 @@ where
 	}
 }
 
-impl<AccountId, AccountIndex, Call, Signature, Extra> HasAddress 
-    for UncheckedExtrinsic<MultiAddress<AccountId,AccountIndex>, Call, Signature, Extra> where
-    AccountId: Clone,
+impl<AccountId, AccountIndex, Call, Signature, Extra> HasAddress
+	for UncheckedExtrinsic<MultiAddress<AccountId, AccountIndex>, Call, Signature, Extra>
+where
+	AccountId: Clone,
 	Signature: Member + traits::Verify,
 	<Signature as traits::Verify>::Signer: IdentifyAccount<AccountId = AccountId>,
 	Extra: SignedExtension<AccountId = AccountId>,
 {
-    type AccountId = AccountId;
+	type AccountId = AccountId;
 
-	fn get_address(&self) -> Option<Self::AccountId>{
-        match &self.signature {
-            Some((MultiAddress::<AccountId, AccountIndex>::Id(addr),_,_)) => Some(addr.clone()),
-            Some(_) => panic!("unsupported address"),
-            _ => None
-        }
+	fn get_address(&self) -> Option<Self::AccountId> {
+		match &self.signature {
+			Some((MultiAddress::<AccountId, AccountIndex>::Id(addr), _, _)) => Some(addr.clone()),
+			Some(_) => panic!("unsupported address"),
+			_ => None,
+		}
 	}
 }
 
-impl<Call, Signature, Extra> HasAddress 
-    for UncheckedExtrinsic<AccountId32, Call, Signature, Extra> where
+impl<Call, Signature, Extra> HasAddress for UncheckedExtrinsic<AccountId32, Call, Signature, Extra>
+where
 	Signature: Member + traits::Verify,
 	<Signature as traits::Verify>::Signer: IdentifyAccount<AccountId = AccountId32>,
 	Extra: SignedExtension<AccountId = AccountId32>,
 {
-    type AccountId = AccountId32;
+	type AccountId = AccountId32;
 
-	fn get_address(&self) -> Option<Self::AccountId>{
-        self.signature.as_ref().map(|(sig,_,_)| sig).cloned()
+	fn get_address(&self) -> Option<Self::AccountId> {
+		self.signature.as_ref().map(|(sig, _, _)| sig).cloned()
 	}
 }
 
-// impl<T, Call, Signature, Extra> HasAddress 
+// impl<T, Call, Signature, Extra> HasAddress
 //     for UncheckedExtrinsic<T, Call, Signature, Extra> where
 // 	Signature: Member + traits::Verify,
 // 	<Signature as traits::Verify>::Signer: IdentifyAccount<AccountId = T>,

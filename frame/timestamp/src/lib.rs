@@ -98,7 +98,7 @@ mod benchmarking;
 pub mod weights;
 
 use frame_support::traits::{OnTimestampSet, Time, UnixTime};
-use sp_runtime::traits::{AtLeast32Bit, SaturatedConversion, Scale, Zero, One};
+use sp_runtime::traits::{AtLeast32Bit, One, SaturatedConversion, Scale, Zero};
 use sp_std::{cmp, result};
 use sp_timestamp::{InherentError, InherentType, INHERENT_IDENTIFIER};
 pub use weights::WeightInfo;
@@ -165,9 +165,11 @@ pub mod pallet {
 		/// - 1 storage deletion (codec `O(1)`).
 		/// # </weight>
 		fn on_finalize(_n: BlockNumberFor<T>) {
-			if !<frame_system::Module<T>>::block_number().is_zero() && !<frame_system::Module<T>>::block_number().is_one(){
-                assert!(DidUpdate::<T>::take(), "Timestamp must be updated once in the block");
-            }
+			if !<frame_system::Module<T>>::block_number().is_zero() &&
+				!<frame_system::Module<T>>::block_number().is_one()
+			{
+				assert!(DidUpdate::<T>::take(), "Timestamp must be updated once in the block");
+			}
 		}
 	}
 
@@ -199,8 +201,8 @@ pub mod pallet {
 			let prev = Self::now();
 			assert!(
 				!<frame_system::Module<T>>::block_number().is_zero() ||
-				!<frame_system::Module<T>>::block_number().is_one() ||
-				prev.is_zero() || now >= prev + T::MinimumPeriod::get(),
+					!<frame_system::Module<T>>::block_number().is_one() ||
+					prev.is_zero() || now >= prev + T::MinimumPeriod::get(),
 				"Timestamp must increment by at least <MinimumPeriod> between sequential blocks"
 			);
 			Now::<T>::put(now);

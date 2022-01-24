@@ -278,9 +278,6 @@ zeroize = { opt-level = 3 }
 # Substrate runtime requires unwinding.
 panic = "unwind"
 
-[patch."https://github.com/mangata-finance/mangata-node"]
-mangata-primitives = { path = "../mangata-node/primitives/mangata" }
-
 [patch."https://github.com/mangata-finance/substrate"]
 sp-debug-derive = { path = "../substrate/primitives/debug-derive" }
 sp-tasks = { path = "../substrate/primitives/tasks" }
@@ -431,9 +428,3 @@ pallet-grandpa = { path = "../substrate/frame/grandpa" }
 pallet-proxy = { path = "../substrate/frame/proxy" }
 pallet-balances = { path = "../substrate/frame/balances" }
 pallet-multisig = { path = "../substrate/frame/multisig" }
-
-
-# [patch."https://github.com/mangata-finance/open-runtime-module-library"]
-# orml-tokens = { path = "../open-runtime-module-library/tokens" }
-# orml-utilities = { path = "../open-runtime-module-library/utilities" }
-# orml-traits = { path = "../open-runtime-module-library/traits" }
