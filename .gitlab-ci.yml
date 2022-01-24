@@ -782,7 +782,7 @@ publish-rustdoc:
     - cp README.md /tmp/doc/
     - git checkout gh-pages
     # Install `index-tpl-crud` and generate index.html based on RUSTDOCS_DEPLOY_REFS
-    - which index-tpl-crud &> /dev/null || yarn global add @jimmychu0807/index-tpl-crud
+    - which index-tpl-crud &> /dev/null || yarn global add @substrate/index-tpl-crud
     - index-tpl-crud upsert ./index.html ${CI_COMMIT_REF_NAME}
     # Ensure the destination dir doesn't exist.
     - rm -rf ${CI_COMMIT_REF_NAME}
