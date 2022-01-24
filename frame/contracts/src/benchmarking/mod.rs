@@ -1146,7 +1146,7 @@ benchmarks! {
 			Storage::<T>::write(
 				&info.trie_id,
 				key.as_slice().try_into().map_err(|e| "Key has wrong length")?,
-				Some(vec![42; T::Schedule::get().limits.payload_len as usize]),
+				Some(vec![]),
 				None,
 				false,
 			)
