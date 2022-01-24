@@ -27,6 +27,7 @@
 //! or are completely standalone, but heavily inspired by Polkadot.
 
 use codec::{Decode, Encode, MaxEncodedLen};
+use crate::Vec;
 use scale_info::TypeInfo;
 
 /// A provider for extra data that gets added to the Mmr leaf
