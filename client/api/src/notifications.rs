@@ -20,8 +20,12 @@
 
 use std::{
 	collections::{HashMap, HashSet},
+	pin::Pin,
 	sync::Arc,
+	task::Poll,
 };
+
+use futures::Stream;
 
 use prometheus_endpoint::Registry as PrometheusRegistry;
 
@@ -29,15 +33,17 @@ use sc_utils::pubsub::{channels::TracingUnbounded, Hub, Receiver};
 use sp_core::storage::{StorageData, StorageKey};
 use sp_runtime::traits::Block as BlockT;
 
-mod impl_traits;
-mod keys;
 mod registry;
 
-use keys::{ChildKeys, Keys};
 use registry::Registry;
 
+
+#[cfg(test)]
+mod tests;
+
+
 /// A type of a message delivered to the subscribers
-pub type Notification<Hash> = (Hash, StorageChangeSet);
+pub type StorageNotification<Hash> = (Hash, StorageChangeSet);
 
 /// Storage change set
 #[derive(Debug)]
@@ -51,11 +57,14 @@ pub struct StorageChangeSet {
 /// Manages storage listeners.
 #[derive(Debug)]
 pub struct StorageNotifications<Block: BlockT>(
-	Hub<TracingUnbounded<Notification<Block::Hash>>, Registry>,
+	Hub<TracingUnbounded<StorageNotification<Block::Hash>>, Registry>,
 );
 
 /// Type that implements `futures::Stream` of storage change events.
-pub struct StorageEventStream<H>(Receiver<TracingUnbounded<Notification<H>>, Registry>);
+pub struct StorageEventStream<H>(Receiver<TracingUnbounded<StorageNotification<H>>, Registry>);
+
+type Keys = Option<HashSet<StorageKey>>;
+type ChildKeys = Option<HashMap<StorageKey, Option<HashSet<StorageKey>>>>;
 
 impl StorageChangeSet {
 	/// Convert the change set into iterator over storage items.
@@ -89,6 +98,16 @@ impl StorageChangeSet {
 			})
 			.flatten();
 		top.chain(children)
+	}
+}
+
+impl<H> Stream for StorageEventStream<H> {
+	type Item = StorageNotification<H>;
+	fn poll_next(
+		self: Pin<&mut Self>,
+		cx: &mut std::task::Context<'_>,
+	) -> Poll<Option<Self::Item>> {
+		Stream::poll_next(Pin::new(&mut self.get_mut().0), cx)
 	}
 }
 
@@ -131,5 +150,8 @@ impl<Block: BlockT> StorageNotifications<Block> {
 	}
 }
 
-#[cfg(test)]
-mod tests;
+impl<Block: BlockT> Default for StorageNotifications<Block> {
+	fn default() -> Self {
+		Self::new(None)
+	}
+}

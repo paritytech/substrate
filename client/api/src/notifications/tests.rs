@@ -29,7 +29,6 @@ type TestChangeSet = (
 	Vec<(StorageKey, Vec<(StorageKey, Option<StorageData>)>)>,
 );
 
-#[cfg(test)]
 impl From<TestChangeSet> for StorageChangeSet {
 	fn from(changes: TestChangeSet) -> Self {
 		// warning hardcoded child trie wildcard to test upon
@@ -48,7 +47,6 @@ impl From<TestChangeSet> for StorageChangeSet {
 	}
 }
 
-#[cfg(test)]
 impl PartialEq for StorageChangeSet {
 	fn eq(&self, other: &Self) -> bool {
 		self.iter().eq(other.iter())

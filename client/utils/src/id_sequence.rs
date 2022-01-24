@@ -18,13 +18,11 @@
 
 //! Produce opaque sequential IDs.
 
-type AnInt = u64;
-
 /// A Sequence of IDs.
 #[derive(Debug, Default)]
 // The `Clone` trait is intentionally not defined on this type.
 pub struct IDSequence {
-	next_id: AnInt,
+	next_id: u64,
 }
 
 /// A Sequential ID.
@@ -32,7 +30,7 @@ pub struct IDSequence {
 /// Its integer value is intentionally not public: it is supposed to be instantiated from within
 /// this module only.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct SeqID(AnInt);
+pub struct SeqID(u64);
 
 impl std::fmt::Display for SeqID {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

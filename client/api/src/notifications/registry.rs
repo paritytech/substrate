@@ -18,12 +18,12 @@
 
 use super::*;
 
+use sp_core::hexdisplay::HexDisplay;
+
 use fnv::{FnvHashMap, FnvHashSet};
 use prometheus_endpoint::{register, CounterVec, Opts, U64};
 
 use sc_utils::pubsub::{Dispatch, SubsID as SubscriberId, Subscribe, Unsubscribe};
-
-use super::keys::{PrintChildKeys, PrintKeys};
 
 type SubscribersGauge = CounterVec<U64>;
 
@@ -76,7 +76,7 @@ impl SubscriberSink {
 		hash: Hash,
 		changes: Arc<[(StorageKey, Option<StorageData>)]>,
 		child_changes: Arc<[(StorageKey, Vec<(StorageKey, Option<StorageData>)>)]>,
-	) -> Notification<Hash> {
+	) -> StorageNotification<Hash> {
 		self.was_triggered = true;
 
 		let storage_change_set = StorageChangeSet {
@@ -130,7 +130,7 @@ impl<'a> Subscribe<SubscribeOp<'a>> for Registry {
 	fn subscribe(&mut self, subs_op: SubscribeOp<'a>, subs_id: SubscriberId) {
 		let SubscribeOp { filter_keys, filter_child_keys } = subs_op;
 
-		let keys = Self::listen_from(
+		let keys = helpers::listen_from(
 			subs_id,
 			filter_keys.as_ref(),
 			&mut self.listeners,
@@ -142,11 +142,11 @@ impl<'a> Subscribe<SubscribeOp<'a>> for Registry {
 				.iter()
 				.map(|(c_key, o_keys)| {
 					let (c_listeners, c_wildcards) =
-						self.child_listeners.entry(c_key.clone()).or_insert_with(Default::default);
+						self.child_listeners.entry(c_key.clone()).or_default();
 
 					(
 						c_key.clone(),
-						Self::listen_from(
+						helpers::listen_from(
 							subs_id,
 							o_keys.as_ref(),
 							&mut *c_listeners,
@@ -168,34 +168,6 @@ impl<'a> Subscribe<SubscribeOp<'a>> for Registry {
 	}
 }
 
-impl Registry {
-	fn listen_from(
-		current_id: SubscriberId,
-		filter_keys: Option<impl AsRef<[StorageKey]>>,
-		listeners: &mut HashMap<StorageKey, FnvHashSet<SubscriberId>>,
-		wildcards: &mut FnvHashSet<SubscriberId>,
-	) -> Keys {
-		match filter_keys {
-			None => {
-				wildcards.insert(current_id);
-				None
-			},
-			Some(keys) => Some(
-				keys.as_ref()
-					.iter()
-					.map(|key| {
-						listeners
-							.entry(key.clone())
-							.or_insert_with(Default::default)
-							.insert(current_id);
-						key.clone()
-					})
-					.collect(),
-			),
-		}
-	}
-}
-
 impl<'a, Hash, CS, CCS, CCSI> Dispatch<(&'a Hash, CS, CCS)> for Registry
 where
 	Hash: Clone,
@@ -203,14 +175,14 @@ where
 	CCS: Iterator<Item = (Vec<u8>, CCSI)>,
 	CCSI: Iterator<Item = (Vec<u8>, Option<Vec<u8>>)>,
 {
-	type Item = Notification<Hash>;
+	type Item = StorageNotification<Hash>;
 
-	fn dispatch<F>(&mut self, disp_key: (&'a Hash, CS, CCS), dispatch: F)
+	fn dispatch<F>(&mut self, message: (&'a Hash, CS, CCS), dispatch: F)
 	where
 		F: FnMut(&SubscriberId, Self::Item),
 	{
-		let (hash, changeset, child_changeset) = disp_key;
-		let () = self.trigger(hash, changeset, child_changeset, dispatch);
+		let (hash, changeset, child_changeset) = message;
+		self.trigger(hash, changeset, child_changeset, dispatch);
 	}
 }
 
@@ -225,7 +197,7 @@ impl Registry {
 		mut dispatch: F,
 	) where
 		Hash: Clone,
-		F: FnMut(&SubscriberId, Notification<Hash>),
+		F: FnMut(&SubscriberId, StorageNotification<Hash>),
 	{
 		let has_wildcard = !self.wildcard_listeners.is_empty();
 
@@ -293,7 +265,93 @@ impl Registry {
 }
 
 impl Registry {
-	fn remove_subscriber_from(
+	fn remove_subscriber(&mut self, subscriber: SubscriberId) -> Option<(Keys, ChildKeys)> {
+		let sink = self.sinks.remove(&subscriber)?;
+
+		helpers::remove_subscriber_from(
+			&subscriber,
+			&sink.keys,
+			&mut self.listeners,
+			&mut self.wildcard_listeners,
+		);
+		if let Some(child_filters) = &sink.child_keys {
+			for (c_key, filters) in child_filters {
+				if let Some((listeners, wildcards)) = self.child_listeners.get_mut(&c_key) {
+					helpers::remove_subscriber_from(
+						&subscriber,
+						&filters,
+						&mut *listeners,
+						&mut *wildcards,
+					);
+
+					if listeners.is_empty() && wildcards.is_empty() {
+						self.child_listeners.remove(&c_key);
+					}
+				}
+			}
+		}
+		if let Some(m) = self.metrics.as_ref() {
+			m.with_label_values(&[&"removed"]).inc();
+		}
+
+		Some((sink.keys.clone(), sink.child_keys.clone()))
+	}
+}
+
+pub(super) struct PrintKeys<'a>(pub &'a Keys);
+impl<'a> std::fmt::Debug for PrintKeys<'a> {
+	fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
+		if let Some(keys) = self.0 {
+			fmt.debug_list().entries(keys.iter().map(HexDisplay::from)).finish()
+		} else {
+			write!(fmt, "None")
+		}
+	}
+}
+
+pub(super) struct PrintChildKeys<'a>(pub &'a ChildKeys);
+impl<'a> std::fmt::Debug for PrintChildKeys<'a> {
+	fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
+		if let Some(map) = self.0 {
+			fmt.debug_map()
+				.entries(map.iter().map(|(key, values)| (HexDisplay::from(key), PrintKeys(values))))
+				.finish()
+		} else {
+			write!(fmt, "None")
+		}
+	}
+}
+
+mod helpers {
+	use super::*;
+
+	pub fn listen_from(
+		current_id: SubscriberId,
+		filter_keys: Option<impl AsRef<[StorageKey]>>,
+		listeners: &mut HashMap<StorageKey, FnvHashSet<SubscriberId>>,
+		wildcards: &mut FnvHashSet<SubscriberId>,
+	) -> Keys {
+		match filter_keys {
+			None => {
+				wildcards.insert(current_id);
+				None
+			},
+			Some(keys) => Some(
+				keys.as_ref()
+					.iter()
+					.map(|key| {
+						listeners
+							.entry(key.clone())
+							.or_default()
+							.insert(current_id);
+						key.clone()
+					})
+					.collect(),
+			),
+		}
+	}
+
+	pub fn remove_subscriber_from(
 		subscriber: &SubscriberId,
 		filters: &Keys,
 		listeners: &mut HashMap<StorageKey, FnvHashSet<SubscriberId>>,
@@ -318,37 +376,5 @@ impl Registry {
 					}
 				},
 		}
-	}
-
-	fn remove_subscriber(&mut self, subscriber: SubscriberId) -> Option<(Keys, ChildKeys)> {
-		let sink = self.sinks.remove(&subscriber)?;
-
-		Self::remove_subscriber_from(
-			&subscriber,
-			&sink.keys,
-			&mut self.listeners,
-			&mut self.wildcard_listeners,
-		);
-		if let Some(child_filters) = &sink.child_keys {
-			for (c_key, filters) in child_filters {
-				if let Some((listeners, wildcards)) = self.child_listeners.get_mut(&c_key) {
-					Self::remove_subscriber_from(
-						&subscriber,
-						&filters,
-						&mut *listeners,
-						&mut *wildcards,
-					);
-
-					if listeners.is_empty() && wildcards.is_empty() {
-						self.child_listeners.remove(&c_key);
-					}
-				}
-			}
-		}
-		if let Some(m) = self.metrics.as_ref() {
-			m.with_label_values(&[&"removed"]).inc();
-		}
-
-		Some((sink.keys.clone(), sink.child_keys.clone()))
 	}
 }

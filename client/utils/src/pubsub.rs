@@ -1,3 +1,24 @@
+// This file is part of Substrate.
+
+// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+//! Provides means to implement a typical Pub/Sub mechanism.
+//! 
+
 use std::{
 	collections::HashMap,
 	ops::DerefMut,
@@ -13,6 +34,29 @@ pub mod channels;
 
 pub type SubsID = crate::id_sequence::SeqID;
 
+/// Unsubscribe: unregisters a previously created subscription.
+pub trait Unsubscribe {
+	fn unsubscribe(&mut self, subs_id: &SubsID);
+}
+
+/// Subscribe using a key of type `K`
+/// 
+pub trait Subscribe<K> {
+	fn subscribe(&mut self, subs_key: K, subs_id: SubsID);
+}
+
+/// Dispatch a message of type `M`.
+/// 
+pub trait Dispatch<M> {
+	type Item;
+	fn dispatch<F>(&mut self, message: M, dispatch: F)
+	where
+		F: FnMut(&SubsID, Self::Item);
+}
+
+/// Channel routines.
+/// 
+/// Allows to create a pair of tx and rx, and to send a message over the tx.
 pub trait Channel {
 	type Tx;
 	type Rx;
@@ -22,21 +66,12 @@ pub trait Channel {
 	fn send(&self, tx: &mut Self::Tx, item: Self::Item);
 }
 
-pub trait Unsubscribe {
-	fn unsubscribe(&mut self, subs_id: &SubsID);
-}
 
-pub trait Subscribe<K> {
-	fn subscribe(&mut self, subs_key: K, subs_id: SubsID);
-}
-
-pub trait Dispatch<K> {
-	type Item;
-	fn dispatch<F>(&mut self, disp_key: K, dispatch: F)
-	where
-		F: FnMut(&SubsID, Self::Item);
-}
-
+/// A subscription hub.
+/// 
+/// Does the subscription and dispatch.
+/// The exact subscription and routing behaviour is to be implemented by the Registry (of type `R`).
+/// The Hub manages the underlying channels using the `Ch: Channel`.
 #[derive(Debug)]
 pub struct Hub<Ch, R>
 where
@@ -46,6 +81,10 @@ where
 	shared: Arc<Mutex<Shared<R, Ch::Tx>>>,
 }
 
+/// The receiving side of the subscription.
+/// 
+/// The messages are delivered as items of a `futures::Stream`.
+/// Upon drop this receiver unsubscribes itself from the `Hub`.
 #[derive(Debug)]
 pub struct Receiver<Ch, R>
 where
@@ -87,6 +126,7 @@ where
 	Ch: Channel,
 	R: Unsubscribe,
 {
+	/// Provide mutable access to the registry (for test purposes).
 	pub fn lock_registry<'a>(&'a self) -> impl DerefMut<Target = impl AsMut<R>> + 'a {
 		self.shared.lock()
 	}
@@ -107,6 +147,7 @@ impl<Ch, Tx, R> Hub<Ch, R>
 where
 	Ch: Channel<Tx = Tx>,
 {
+	/// Create a new instance of Hub (with default value for the Registry).
 	pub fn new(channel: Ch) -> Self
 	where
 		R: Default,
@@ -114,6 +155,7 @@ where
 		Self::new_with_registry(channel, Default::default())
 	}
 
+	/// Create a new instance of Hub over the initialized Registry.
 	pub fn new_with_registry(channel: Ch, registry: R) -> Self {
 		let shared =
 			Shared { registry, sinks: Default::default(), id_sequence: Default::default() };
@@ -121,6 +163,9 @@ where
 		Self { channel, shared }
 	}
 
+	/// Subscribe to this Hub using the `subs_key: K`.
+	/// 
+	/// A subscription with a key `K` is possible if the Registry implements `Subscribe<K>`.
 	pub fn subscribe<K>(&self, subs_key: K) -> Receiver<Ch, R>
 	where
 		R: Subscribe<K> + Unsubscribe,
@@ -136,24 +181,32 @@ where
 		Receiver { _unsubs_guard: unsubs_guard, rx }
 	}
 
-	pub fn dispatch<K>(&self, disp_key: K)
+	/// Dispatch the message of type `M`.
+	/// 
+	/// This is possible if the registry implements `Dispatch<M>`.
+	pub fn dispatch<M>(&self, message: M)
 	where
-		R: Dispatch<K, Item = Ch::Item>,
+		R: Dispatch<M, Item = Ch::Item>,
 	{
 		let mut shared = self.shared.lock();
 		let (registry, sinks) = shared.get_mut();
 
-		registry.dispatch(disp_key, |subs_id, item| {
+		registry.dispatch(message, |subs_id, item| {
 			if let Some(tx) = sinks.get_mut(&subs_id) {
 				self.channel.send(tx, item)
-			} else {
-				// log::warn!(
-				//     "{} as Dispatch<{}>::dispatch(...). No Sink for SubsID = {}",
-				//     std::any::type_name::<R>(),
-				//     std::any::type_name::<K>(),
-				//     subs_id
-				// );
 			}
+			// This create does not have `log` as a dependency.
+			// Not sure such dependency should be added.
+			// But if there was a possibility to log something, 
+			// the following warn-message would be appropriate:
+			/* else {
+				log::warn!(
+				    "{} as Dispatch<{}>::dispatch(...). No Sink for SubsID = {}",
+				    std::any::type_name::<R>(),
+				    std::any::type_name::<K>(),
+				    subs_id
+				);
+			}*/
 		});
 	}
 }
