@@ -32,7 +32,7 @@ impl crate::WeightInfo for () {
 		// No-op hook.
 		let hook_weight = 0;
 		// Use double the number of peaks to account for extra reads and writes during pruning
-		let peaks = peaks * 2;
+		let peaks = peaks.saturating_mul(2);
 
 		leaf_weight
 			.saturating_add(hash_weight)
