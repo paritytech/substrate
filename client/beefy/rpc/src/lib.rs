@@ -222,7 +222,6 @@ mod tests {
 	use codec::{Decode, Encode};
 	use sp_runtime::traits::{BlakeTwo256, Hash};
 	use substrate_test_runtime_client::runtime::Block;
-	use std::{time::Duration, thread::sleep};
 
 	fn setup_io_handler(
 	) -> (jsonrpc_core::MetaIoHandler<sc_rpc::Metadata>, BeefySignedCommitmentSender<Block>) {
@@ -409,55 +408,5 @@ mod tests {
 		assert_eq!(recv.method, "beefy_justifications");
 		assert_eq!(recv_sub_id, sub_id);
 		assert_eq!(recv_commitment, commitment);
-	}
-
-	#[test]
-	fn should_not_send_same_signed_commitment_multiple_times() {
-		let (sender, stream) = BeefyBestBlockStream::<Block>::channel();
-		let (io, commitment_sender) = setup_io_handler_with_best_block_stream(stream);
-		let (meta, receiver) = setup_session();
-
-		// Subscribe
-		let sub_request =
-			r#"{"jsonrpc":"2.0","method":"beefy_subscribeJustifications","params":[],"id":1}"#;
-		let resp = io.handle_request_sync(sub_request, meta.clone());
-		let resp: Output = serde_json::from_str(&resp.unwrap()).unwrap();
-
-		let sub_id = match resp {
-			Output::Success(success) => success.result,
-			_ => panic!(),
-		};
-
-		let sub_id: String = serde_json::from_value(sub_id).unwrap();
-
-		// Notify with commitment
-		let commitment = create_commitment(5);
-		let r: Result<(), ()> = commitment_sender.notify(|| Ok(commitment.clone()));
-		r.unwrap();
-		let hash = BlakeTwo256::hash(b"43");
-		let r: Result<(), ()> = sender.notify(|| Ok((hash, 5)));
-		r.unwrap();
-
-		sleep(Duration::from_millis(100));
-
-		let commitment_1 = create_commitment(6);
-
-		let r: Result<(), ()> = commitment_sender.notify(|| Ok(commitment_1.clone()));
-		r.unwrap();
-
-		// This commitment should be filtered out
-		let r: Result<(), ()> = commitment_sender.notify(|| Ok(commitment.clone()));
-		r.unwrap();
-
-		// Inspect what we received
-		// We should have received only two commitments
-		let recvs = futures::executor::block_on(receiver.take(2).collect::<Vec<_>>());
-		assert_eq!(
-			recvs,
-			vec![
-				format!("{{\"jsonrpc\":\"2.0\",\"method\":\"beefy_justifications\",\"params\":{{\"result\":\"0x046d68343048656c6c6f20576f726c64210500000000000000000000000000000004000000000000\",\"subscription\":\"{}\"}}}}", sub_id), 
-				format!("{{\"jsonrpc\":\"2.0\",\"method\":\"beefy_justifications\",\"params\":{{\"result\":\"0x046d68343048656c6c6f20576f726c64210600000000000000000000000000000004000000000000\",\"subscription\":\"{}\"}}}}", sub_id)
-			]
-		);
 	}
 }
