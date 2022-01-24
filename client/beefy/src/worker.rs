@@ -410,7 +410,7 @@ where
 
 		loop {
 			if self.sync_oracle.is_major_syncing() {
-				debug!(target: "beefy", "Skipping initialization due to sync.");
+				debug!(target: "beefy", "Waiting for major sync to complete.");
 				wait_for_major_syncing(self.sync_oracle.clone()).await;
 			}
 

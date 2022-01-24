@@ -107,14 +107,13 @@ where
 }
 
 /// BEEFY gadget initialization parameters.
-pub struct BeefyParams<B, BE, C, N, SO>
+pub struct BeefyParams<B, BE, C, N>
 where
 	B: Block,
 	BE: Backend<B>,
 	C: Client<B, BE>,
 	C::Api: BeefyApi<B>,
-	N: GossipNetwork<B> + Clone + Send + 'static,
-	SO: SyncOracle + Send + Sync + Clone + 'static,
+	N: GossipNetwork<B> + Clone + SyncOracle + Send + Sync + 'static,
 {
 	/// BEEFY client
 	pub client: Arc<C>,
@@ -134,21 +133,18 @@ where
 	pub prometheus_registry: Option<Registry>,
 	/// Chain specific GRANDPA protocol name. See [`beefy_protocol_name::standard_name`].
 	pub protocol_name: std::borrow::Cow<'static, str>,
-	/// A handle to the sync oracle
-	pub sync_oracle: SO,
 }
 
 /// Start the BEEFY gadget.
 ///
 /// This is a thin shim around running and awaiting a BEEFY worker.
-pub async fn start_beefy_gadget<B, BE, C, N, SO>(beefy_params: BeefyParams<B, BE, C, N, SO>)
+pub async fn start_beefy_gadget<B, BE, C, N>(beefy_params: BeefyParams<B, BE, C, N>)
 where
 	B: Block,
 	BE: Backend<B>,
 	C: Client<B, BE>,
 	C::Api: BeefyApi<B>,
-	N: GossipNetwork<B> + Clone + Send + 'static,
-	SO: SyncOracle + Send + Sync + Clone + 'static,
+	N: GossipNetwork<B> + Clone + SyncOracle + Send + Sync + 'static,
 {
 	let BeefyParams {
 		client,
@@ -160,9 +156,9 @@ where
 		min_block_delta,
 		prometheus_registry,
 		protocol_name,
-		sync_oracle,
 	} = beefy_params;
 
+	let sync_oracle = network.clone();
 	let gossip_validator = Arc::new(gossip::GossipValidator::new());
 	let gossip_engine = GossipEngine::new(network, protocol_name, gossip_validator.clone(), None);
 
