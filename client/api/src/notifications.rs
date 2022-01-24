@@ -37,10 +37,8 @@ mod registry;
 
 use registry::Registry;
 
-
 #[cfg(test)]
 mod tests;
-
 
 /// A type of a message delivered to the subscribers
 pub type StorageNotification<Hash> = (Hash, StorageChangeSet);

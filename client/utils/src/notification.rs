@@ -40,7 +40,6 @@ use registry::Registry;
 #[cfg(test)]
 mod tests;
 
-
 /// Trait used to define the "tracing key" string used to tag
 /// and identify the mpsc channels.
 pub trait TracingKeyStr {
@@ -139,4 +138,3 @@ impl<Payload> FusedStream for NotificationReceiver<Payload> {
 		self.receiver.is_terminated()
 	}
 }
-

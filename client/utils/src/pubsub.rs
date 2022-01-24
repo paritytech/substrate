@@ -17,7 +17,6 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Provides means to implement a typical Pub/Sub mechanism.
-//! 
 
 use std::{
 	collections::HashMap,
@@ -40,13 +39,11 @@ pub trait Unsubscribe {
 }
 
 /// Subscribe using a key of type `K`
-/// 
 pub trait Subscribe<K> {
 	fn subscribe(&mut self, subs_key: K, subs_id: SubsID);
 }
 
 /// Dispatch a message of type `M`.
-/// 
 pub trait Dispatch<M> {
 	type Item;
 	fn dispatch<F>(&mut self, message: M, dispatch: F)
@@ -55,7 +52,7 @@ pub trait Dispatch<M> {
 }
 
 /// Channel routines.
-/// 
+///
 /// Allows to create a pair of tx and rx, and to send a message over the tx.
 pub trait Channel {
 	type Tx;
@@ -66,9 +63,8 @@ pub trait Channel {
 	fn send(&self, tx: &mut Self::Tx, item: Self::Item);
 }
 
-
 /// A subscription hub.
-/// 
+///
 /// Does the subscription and dispatch.
 /// The exact subscription and routing behaviour is to be implemented by the Registry (of type `R`).
 /// The Hub manages the underlying channels using the `Ch: Channel`.
@@ -82,7 +78,7 @@ where
 }
 
 /// The receiving side of the subscription.
-/// 
+///
 /// The messages are delivered as items of a `futures::Stream`.
 /// Upon drop this receiver unsubscribes itself from the `Hub`.
 #[derive(Debug)]
@@ -164,7 +160,7 @@ where
 	}
 
 	/// Subscribe to this Hub using the `subs_key: K`.
-	/// 
+	///
 	/// A subscription with a key `K` is possible if the Registry implements `Subscribe<K>`.
 	pub fn subscribe<K>(&self, subs_key: K) -> Receiver<Ch, R>
 	where
@@ -182,7 +178,7 @@ where
 	}
 
 	/// Dispatch the message of type `M`.
-	/// 
+	///
 	/// This is possible if the registry implements `Dispatch<M>`.
 	pub fn dispatch<M>(&self, message: M)
 	where
@@ -197,14 +193,14 @@ where
 			}
 			// This create does not have `log` as a dependency.
 			// Not sure such dependency should be added.
-			// But if there was a possibility to log something, 
+			// But if there was a possibility to log something,
 			// the following warn-message would be appropriate:
 			/* else {
 				log::warn!(
-				    "{} as Dispatch<{}>::dispatch(...). No Sink for SubsID = {}",
-				    std::any::type_name::<R>(),
-				    std::any::type_name::<K>(),
-				    subs_id
+					"{} as Dispatch<{}>::dispatch(...). No Sink for SubsID = {}",
+					std::any::type_name::<R>(),
+					std::any::type_name::<K>(),
+					subs_id
 				);
 			}*/
 		});

@@ -340,10 +340,7 @@ mod helpers {
 				keys.as_ref()
 					.iter()
 					.map(|key| {
-						listeners
-							.entry(key.clone())
-							.or_default()
-							.insert(current_id);
+						listeners.entry(key.clone()).or_default().insert(current_id);
 						key.clone()
 					})
 					.collect(),
