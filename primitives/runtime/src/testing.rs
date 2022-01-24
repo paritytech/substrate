@@ -22,8 +22,9 @@ use crate::{
 	generic,
 	scale_info::TypeInfo,
 	traits::{
-		self, Applyable, BlakeTwo256, Checkable, DispatchInfoOf, Dispatchable, OpaqueKeys,
-		PostDispatchInfoOf, SignedExtension, ValidateUnsigned,
+		self, Applyable, BlakeTwo256, Checkable, DispatchInfoOf, Dispatchable,
+		IdentifyAccountWithLookup, OpaqueKeys, PostDispatchInfoOf, SignedExtension,
+		ValidateUnsigned,
 	},
 	transaction_validity::{TransactionSource, TransactionValidity, TransactionValidityError},
 	ApplyExtrinsicResultWithInfo, CryptoTypeId, KeyTypeId,
@@ -328,6 +329,15 @@ impl<Call, Extra> TestXt<Call, Extra> {
 	/// Create a new `TextXt`.
 	pub fn new(call: Call, signature: Option<(u64, Extra)>) -> Self {
 		Self { call, signature }
+	}
+}
+
+use crate::traits::LookupError;
+
+impl<T, Call, Extra> IdentifyAccountWithLookup<T> for TestXt<Call, Extra> {
+	type AccountId = u64;
+	fn get_account_id(&self, lookup: &T) -> Result<Option<u64>, LookupError> {
+		Ok(None)
 	}
 }
 
