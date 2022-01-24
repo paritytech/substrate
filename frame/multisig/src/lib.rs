@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -64,7 +64,7 @@ use frame_system::{self as system, RawOrigin};
 use scale_info::TypeInfo;
 use sp_io::hashing::blake2_256;
 use sp_runtime::{
-	traits::{Dispatchable, Zero},
+	traits::{Dispatchable, TrailingZeroInput, Zero},
 	DispatchError,
 };
 use sp_std::prelude::*;
@@ -153,6 +153,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
+	#[pallet::without_storage_info]
 	pub struct Pallet<T>(_);
 
 	/// The set of open multisig operations.
@@ -205,21 +206,30 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// A new multisig operation has begun. \[approving, multisig, call_hash\]
-		NewMultisig(T::AccountId, T::AccountId, CallHash),
+		/// A new multisig operation has begun.
+		NewMultisig { approving: T::AccountId, multisig: T::AccountId, call_hash: CallHash },
 		/// A multisig operation has been approved by someone.
-		/// \[approving, timepoint, multisig, call_hash\]
-		MultisigApproval(T::AccountId, Timepoint<T::BlockNumber>, T::AccountId, CallHash),
-		/// A multisig operation has been executed. \[approving, timepoint, multisig, call_hash\]
-		MultisigExecuted(
-			T::AccountId,
-			Timepoint<T::BlockNumber>,
-			T::AccountId,
-			CallHash,
-			DispatchResult,
-		),
-		/// A multisig operation has been cancelled. \[canceling, timepoint, multisig, call_hash\]
-		MultisigCancelled(T::AccountId, Timepoint<T::BlockNumber>, T::AccountId, CallHash),
+		MultisigApproval {
+			approving: T::AccountId,
+			timepoint: Timepoint<T::BlockNumber>,
+			multisig: T::AccountId,
+			call_hash: CallHash,
+		},
+		/// A multisig operation has been executed.
+		MultisigExecuted {
+			approving: T::AccountId,
+			timepoint: Timepoint<T::BlockNumber>,
+			multisig: T::AccountId,
+			call_hash: CallHash,
+			result: DispatchResult,
+		},
+		/// A multisig operation has been cancelled.
+		MultisigCancelled {
+			cancelling: T::AccountId,
+			timepoint: Timepoint<T::BlockNumber>,
+			multisig: T::AccountId,
+			call_hash: CallHash,
+		},
 	}
 
 	#[pallet::hooks]
@@ -481,7 +491,12 @@ pub mod pallet {
 			<Multisigs<T>>::remove(&id, &call_hash);
 			Self::clear_call(&call_hash);
 
-			Self::deposit_event(Event::MultisigCancelled(who, timepoint, id, call_hash));
+			Self::deposit_event(Event::MultisigCancelled {
+				cancelling: who,
+				timepoint,
+				multisig: id,
+				call_hash,
+			});
 			Ok(())
 		}
 	}
@@ -494,7 +509,8 @@ impl<T: Config> Pallet<T> {
 	/// NOTE: `who` must be sorted. If it is not, then you'll get the wrong answer.
 	pub fn multi_account_id(who: &[T::AccountId], threshold: u16) -> T::AccountId {
 		let entropy = (b"modlpy/utilisuba", who, threshold).using_encoded(blake2_256);
-		T::AccountId::decode(&mut &entropy[..]).unwrap_or_default()
+		Decode::decode(&mut TrailingZeroInput::new(entropy.as_ref()))
+			.expect("infinite length input; no invalid inputs for type; qed")
 	}
 
 	fn operate(
@@ -557,13 +573,13 @@ impl<T: Config> Pallet<T> {
 				T::Currency::unreserve(&m.depositor, m.deposit);
 
 				let result = call.dispatch(RawOrigin::Signed(id.clone()).into());
-				Self::deposit_event(Event::MultisigExecuted(
-					who,
+				Self::deposit_event(Event::MultisigExecuted {
+					approving: who,
 					timepoint,
-					id,
+					multisig: id,
 					call_hash,
-					result.map(|_| ()).map_err(|e| e.error),
-				));
+					result: result.map(|_| ()).map_err(|e| e.error),
+				});
 				Ok(get_result_weight(result)
 					.map(|actual_weight| {
 						T::WeightInfo::as_multi_complete(
@@ -594,7 +610,12 @@ impl<T: Config> Pallet<T> {
 					// Record approval.
 					m.approvals.insert(pos, who.clone());
 					<Multisigs<T>>::insert(&id, call_hash, m);
-					Self::deposit_event(Event::MultisigApproval(who, timepoint, id, call_hash));
+					Self::deposit_event(Event::MultisigApproval {
+						approving: who,
+						timepoint,
+						multisig: id,
+						call_hash,
+					});
 				} else {
 					// If we already approved and didn't store the Call, then this was useless and
 					// we report an error.
@@ -638,7 +659,7 @@ impl<T: Config> Pallet<T> {
 					approvals: vec![who.clone()],
 				},
 			);
-			Self::deposit_event(Event::NewMultisig(who, id, call_hash));
+			Self::deposit_event(Event::NewMultisig { approving: who, multisig: id, call_hash });
 
 			let final_weight = if stored {
 				T::WeightInfo::as_multi_create_store(other_signatories_len as u32, call_len as u32)

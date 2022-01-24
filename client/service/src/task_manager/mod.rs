@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -21,17 +21,16 @@
 use crate::{config::TaskType, Error};
 use exit_future::Signal;
 use futures::{
-	future::{join_all, pending, select, try_join_all, BoxFuture, Either},
+	future::{pending, select, try_join_all, BoxFuture, Either},
 	Future, FutureExt, StreamExt,
 };
-use log::debug;
 use prometheus_endpoint::{
 	exponential_buckets, register, CounterVec, HistogramOpts, HistogramVec, Opts, PrometheusError,
 	Registry, U64,
 };
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use std::{panic, pin::Pin, result::Result};
-use tokio::{runtime::Handle, task::JoinHandle};
+use tokio::runtime::Handle;
 use tracing_futures::Instrument;
 
 mod prometheus_future;
@@ -41,20 +40,45 @@ mod tests;
 /// Default task group name.
 pub const DEFAULT_GROUP_NAME: &'static str = "default";
 
+/// The name of a group a task belongs to.
+///
+/// This name is passed belong-side the task name to the prometheus metrics and can be used
+/// to group tasks.  
+pub enum GroupName {
+	/// Sets the group name to `default`.
+	Default,
+	/// Use the specifically given name as group name.
+	Specific(&'static str),
+}
+
+impl From<Option<&'static str>> for GroupName {
+	fn from(name: Option<&'static str>) -> Self {
+		match name {
+			Some(name) => Self::Specific(name),
+			None => Self::Default,
+		}
+	}
+}
+
+impl From<&'static str> for GroupName {
+	fn from(name: &'static str) -> Self {
+		Self::Specific(name)
+	}
+}
+
 /// An handle for spawning tasks in the service.
 #[derive(Clone)]
 pub struct SpawnTaskHandle {
 	on_exit: exit_future::Exit,
 	tokio_handle: Handle,
 	metrics: Option<Metrics>,
-	task_notifier: TracingUnboundedSender<JoinHandle<()>>,
 }
 
 impl SpawnTaskHandle {
-	/// Spawns the given task with the given name and an optional group name.
+	/// Spawns the given task with the given name and a group name.
 	/// If group is not specified `DEFAULT_GROUP_NAME` will be used.
 	///
-	/// Note that the `name`/`group` is a `&'static str`. The reason for this choice is that
+	/// Note that the `name` is a `&'static str`. The reason for this choice is that
 	/// statistics about this task are getting reported to the Prometheus endpoint (if enabled), and
 	/// that therefore the set of possible task names must be bounded.
 	///
@@ -63,7 +87,7 @@ impl SpawnTaskHandle {
 	pub fn spawn(
 		&self,
 		name: &'static str,
-		group: Option<&'static str>,
+		group: impl Into<GroupName>,
 		task: impl Future<Output = ()> + Send + 'static,
 	) {
 		self.spawn_inner(name, group, task, TaskType::Async)
@@ -73,7 +97,7 @@ impl SpawnTaskHandle {
 	pub fn spawn_blocking(
 		&self,
 		name: &'static str,
-		group: Option<&'static str>,
+		group: impl Into<GroupName>,
 		task: impl Future<Output = ()> + Send + 'static,
 	) {
 		self.spawn_inner(name, group, task, TaskType::Blocking)
@@ -83,19 +107,18 @@ impl SpawnTaskHandle {
 	fn spawn_inner(
 		&self,
 		name: &'static str,
-		group: Option<&'static str>,
+		group: impl Into<GroupName>,
 		task: impl Future<Output = ()> + Send + 'static,
 		task_type: TaskType,
 	) {
-		if self.task_notifier.is_closed() {
-			debug!("Attempt to spawn a new task has been prevented: {}", name);
-			return
-		}
-
 		let on_exit = self.on_exit.clone();
 		let metrics = self.metrics.clone();
-		// If no group is specified use default.
-		let group = group.unwrap_or(DEFAULT_GROUP_NAME);
+
+		let group = match group.into() {
+			GroupName::Specific(var) => var,
+			// If no group is specified use default.
+			GroupName::Default => DEFAULT_GROUP_NAME,
+		};
 
 		// Note that we increase the started counter here and not within the future. This way,
 		// we could properly visualize on Prometheus situations where the spawning doesn't work.
@@ -139,17 +162,17 @@ impl SpawnTaskHandle {
 		}
 		.in_current_span();
 
-		let join_handle = match task_type {
-			TaskType::Async => self.tokio_handle.spawn(future),
+		match task_type {
+			TaskType::Async => {
+				self.tokio_handle.spawn(future);
+			},
 			TaskType::Blocking => {
 				let handle = self.tokio_handle.clone();
 				self.tokio_handle.spawn_blocking(move || {
 					handle.block_on(future);
-				})
+				});
 			},
-		};
-
-		let _ = self.task_notifier.unbounded_send(join_handle);
+		}
 	}
 }
 
@@ -198,7 +221,7 @@ impl SpawnEssentialTaskHandle {
 	pub fn spawn(
 		&self,
 		name: &'static str,
-		group: Option<&'static str>,
+		group: impl Into<GroupName>,
 		task: impl Future<Output = ()> + Send + 'static,
 	) {
 		self.spawn_inner(name, group, task, TaskType::Async)
@@ -210,7 +233,7 @@ impl SpawnEssentialTaskHandle {
 	pub fn spawn_blocking(
 		&self,
 		name: &'static str,
-		group: Option<&'static str>,
+		group: impl Into<GroupName>,
 		task: impl Future<Output = ()> + Send + 'static,
 	) {
 		self.spawn_inner(name, group, task, TaskType::Blocking)
@@ -219,7 +242,7 @@ impl SpawnEssentialTaskHandle {
 	fn spawn_inner(
 		&self,
 		name: &'static str,
-		group: Option<&'static str>,
+		group: impl Into<GroupName>,
 		task: impl Future<Output = ()> + Send + 'static,
 		task_type: TaskType,
 	) {
@@ -258,8 +281,8 @@ pub struct TaskManager {
 	/// A future that resolves when the service has exited, this is useful to
 	/// make sure any internally spawned futures stop when the service does.
 	on_exit: exit_future::Exit,
-	/// A signal that makes the exit future above resolve, fired on service drop.
-	signal: Option<Signal>,
+	/// A signal that makes the exit future above resolve, fired on drop.
+	_signal: Signal,
 	/// Tokio runtime handle that is used to spawn futures.
 	tokio_handle: Handle,
 	/// Prometheus metric where to report the polling times.
@@ -271,10 +294,6 @@ pub struct TaskManager {
 	essential_failed_rx: TracingUnboundedReceiver<()>,
 	/// Things to keep alive until the task manager is dropped.
 	keep_alive: Box<dyn std::any::Any + Send>,
-	/// A sender to a stream of background tasks. This is used for the completion future.
-	task_notifier: TracingUnboundedSender<JoinHandle<()>>,
-	/// This future will complete when all the tasks are joined and the stream is closed.
-	completion_future: JoinHandle<()>,
 	/// A list of other `TaskManager`'s to terminate and gracefully shutdown when the parent
 	/// terminates and gracefully shutdown. Also ends the parent `future()` if a child's essential
 	/// task fails.
@@ -295,25 +314,14 @@ impl TaskManager {
 
 		let metrics = prometheus_registry.map(Metrics::register).transpose()?;
 
-		let (task_notifier, background_tasks) = tracing_unbounded("mpsc_background_tasks");
-		// NOTE: for_each_concurrent will await on all the JoinHandle futures at the same time. It
-		// is possible to limit this but it's actually better for the memory foot print to await
-		// them all to not accumulate anything on that stream.
-		let completion_future =
-			tokio_handle.spawn(background_tasks.for_each_concurrent(None, |x| async move {
-				let _ = x.await;
-			}));
-
 		Ok(Self {
 			on_exit,
-			signal: Some(signal),
+			_signal: signal,
 			tokio_handle,
 			metrics,
 			essential_failed_tx,
 			essential_failed_rx,
 			keep_alive: Box::new(()),
-			task_notifier,
-			completion_future,
 			children: Vec::new(),
 		})
 	}
@@ -324,7 +332,6 @@ impl TaskManager {
 			on_exit: self.on_exit.clone(),
 			tokio_handle: self.tokio_handle.clone(),
 			metrics: self.metrics.clone(),
-			task_notifier: self.task_notifier.clone(),
 		}
 	}
 
@@ -333,36 +340,12 @@ impl TaskManager {
 		SpawnEssentialTaskHandle::new(self.essential_failed_tx.clone(), self.spawn_handle())
 	}
 
-	/// Send the signal for termination, prevent new tasks to be created, await for all the existing
-	/// tasks to be finished and drop the object. You can consider this as an async drop.
-	///
-	/// It's always better to call and await this function before exiting the process as background
-	/// tasks may be running in the background. If the process exit and the background tasks are not
-	/// cancelled, this will lead to objects not getting dropped properly.
-	///
-	/// This is an issue in some cases as some of our dependencies do require that we drop all the
-	/// objects properly otherwise it triggers a SIGABRT on exit.
-	pub fn clean_shutdown(mut self) -> Pin<Box<dyn Future<Output = ()> + Send>> {
-		self.terminate();
-		let children_shutdowns = self.children.into_iter().map(|x| x.clean_shutdown());
-		let keep_alive = self.keep_alive;
-		let completion_future = self.completion_future;
-
-		Box::pin(async move {
-			join_all(children_shutdowns).await;
-			let _ = completion_future.await;
-
-			let _ = keep_alive;
-		})
-	}
-
 	/// Return a future that will end with success if the signal to terminate was sent
 	/// (`self.terminate()`) or with an error if an essential task fails.
 	///
 	/// # Warning
 	///
-	/// This function will not wait until the end of the remaining task. You must call and await
-	/// `clean_shutdown()` after this.
+	/// This function will not wait until the end of the remaining task.
 	pub fn future<'a>(
 		&'a mut self,
 	) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send + 'a>> {
@@ -385,18 +368,6 @@ impl TaskManager {
 				res = t3 => Err(res.map(|_| ()).expect_err("this future never ends; qed")),
 			}
 		})
-	}
-
-	/// Signal to terminate all the running tasks.
-	pub fn terminate(&mut self) {
-		if let Some(signal) = self.signal.take() {
-			let _ = signal.fire();
-			// NOTE: this will prevent new tasks to be spawned
-			self.task_notifier.close_channel();
-			for child in self.children.iter_mut() {
-				child.terminate();
-			}
-		}
 	}
 
 	/// Set what the task manager should keep alive, can be called multiple times.
@@ -430,7 +401,7 @@ impl Metrics {
 			poll_duration: register(HistogramVec::new(
 				HistogramOpts {
 					common_opts: Opts::new(
-						"tasks_polling_duration",
+						"substrate_tasks_polling_duration",
 						"Duration in seconds of each invocation of Future::poll"
 					),
 					buckets: exponential_buckets(0.001, 4.0, 9)
@@ -440,21 +411,21 @@ impl Metrics {
 			)?, registry)?,
 			poll_start: register(CounterVec::new(
 				Opts::new(
-					"tasks_polling_started_total",
+					"substrate_tasks_polling_started_total",
 					"Total number of times we started invoking Future::poll"
 				),
 				&["task_name", "task_group"]
 			)?, registry)?,
 			tasks_spawned: register(CounterVec::new(
 				Opts::new(
-					"tasks_spawned_total",
+					"substrate_tasks_spawned_total",
 					"Total number of tasks that have been spawned on the Service"
 				),
 				&["task_name", "task_group"]
 			)?, registry)?,
 			tasks_ended: register(CounterVec::new(
 				Opts::new(
-					"tasks_ended_total",
+					"substrate_tasks_ended_total",
 					"Total number of tasks for which Future::poll has returned Ready(()) or panicked"
 				),
 				&["task_name", "reason", "task_group"]

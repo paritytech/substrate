@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -125,7 +125,7 @@ pub fn constant_ratio(existential_weight: VoteWeight, n_bags: usize) -> f64 {
 /// The last element is always `VoteWeight::MAX`.
 ///
 /// All other elements are computed from the previous according to the formula
-/// `threshold[k + 1] = (threshold[k] * ratio).max(threshold[k] + 1);
+/// `threshold[k + 1] = (threshold[k] * ratio).max(threshold[k] + 1);`
 pub fn thresholds(
 	existential_weight: VoteWeight,
 	constant_ratio: f64,

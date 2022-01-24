@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,7 +17,7 @@
 
 use crate::{
 	build_executor, ensure_matching_spec, extract_code, full_extensions, hash_of, local_spec,
-	state_machine_call, SharedParams, State, LOG_TARGET,
+	state_machine_call_with_proof, SharedParams, State, LOG_TARGET,
 };
 use remote_externalities::rpc_api;
 use sc_service::{Configuration, NativeExecutionDispatch};
@@ -157,7 +157,7 @@ where
 	header.digest_mut().pop();
 	let block = Block::new(header, extrinsics);
 
-	let (expected_spec_name, expected_spec_version) =
+	let (expected_spec_name, expected_spec_version, _) =
 		local_spec::<Block, ExecDispatch>(&ext, &executor);
 	ensure_matching_spec::<Block>(
 		block_ws_uri.clone(),
@@ -167,7 +167,7 @@ where
 	)
 	.await;
 
-	let _ = state_machine_call::<Block, ExecDispatch>(
+	let _ = state_machine_call_with_proof::<Block, ExecDispatch>(
 		&ext,
 		&executor,
 		execution,

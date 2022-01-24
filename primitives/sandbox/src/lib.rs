@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -89,7 +89,7 @@ pub type HostFuncType<T> = fn(&mut T, &[Value]) -> Result<ReturnValue, HostError
 /// will be used by the guest module.
 ///
 /// The memory can't be directly accessed by supervisor, but only
-/// through designated functions [`get`](Memory::get) and [`set`](Memory::set).
+/// through designated functions [`get`](SandboxMemory::get) and [`set`](SandboxMemory::set).
 pub trait SandboxMemory: Sized + Clone {
 	/// Construct a new linear memory instance.
 	///

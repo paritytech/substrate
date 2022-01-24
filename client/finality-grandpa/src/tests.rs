@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -56,6 +56,7 @@ use substrate_test_runtime_client::runtime::BlockNumber;
 use tokio::runtime::{Handle, Runtime};
 
 use authorities::AuthoritySet;
+use communication::grandpa_protocol_name;
 use sc_block_builder::BlockBuilderProvider;
 use sc_consensus::LongestChain;
 use sc_keystore::LocalKeystore;
@@ -97,7 +98,7 @@ impl GrandpaTestNet {
 impl GrandpaTestNet {
 	fn add_authority_peer(&mut self) {
 		self.add_full_peer_with_config(FullPeerConfig {
-			notifications_protocols: vec![communication::GRANDPA_PROTOCOL_NAME.into()],
+			notifications_protocols: vec![grandpa_protocol_name::NAME.into()],
 			is_authority: true,
 			..Default::default()
 		})
@@ -121,7 +122,7 @@ impl TestNetFactory for GrandpaTestNet {
 
 	fn add_full_peer(&mut self) {
 		self.add_full_peer_with_config(FullPeerConfig {
-			notifications_protocols: vec![communication::GRANDPA_PROTOCOL_NAME.into()],
+			notifications_protocols: vec![grandpa_protocol_name::NAME.into()],
 			is_authority: false,
 			..Default::default()
 		})
@@ -274,6 +275,7 @@ fn initialize_grandpa(
 				local_role: Role::Authority,
 				observer_enabled: true,
 				telemetry: None,
+				protocol_name: grandpa_protocol_name::NAME.into(),
 			},
 			link,
 			network: net_service,
@@ -423,6 +425,7 @@ fn finalize_3_voters_1_full_observer() {
 				local_role: Role::Authority,
 				observer_enabled: true,
 				telemetry: None,
+				protocol_name: grandpa_protocol_name::NAME.into(),
 			},
 			link,
 			network: net_service,
@@ -513,6 +516,7 @@ fn transition_3_voters_twice_1_full_observer() {
 				local_role: Role::Authority,
 				observer_enabled: true,
 				telemetry: None,
+				protocol_name: grandpa_protocol_name::NAME.into(),
 			},
 			link,
 			network: net_service,
@@ -971,6 +975,7 @@ fn voter_persists_its_votes() {
 			local_role: Role::Authority,
 			observer_enabled: true,
 			telemetry: None,
+			protocol_name: grandpa_protocol_name::NAME.into(),
 		};
 
 		let set_state = {
@@ -1010,6 +1015,7 @@ fn voter_persists_its_votes() {
 				local_role: Role::Authority,
 				observer_enabled: true,
 				telemetry: None,
+				protocol_name: grandpa_protocol_name::NAME.into(),
 			},
 			link,
 			network: net_service,
@@ -1050,6 +1056,7 @@ fn voter_persists_its_votes() {
 				local_role: Role::Authority,
 				observer_enabled: true,
 				telemetry: None,
+				protocol_name: grandpa_protocol_name::NAME.into(),
 			},
 			link,
 			network: net_service,
@@ -1213,6 +1220,7 @@ fn finalize_3_voters_1_light_observer() {
 			local_role: Role::Full,
 			observer_enabled: true,
 			telemetry: None,
+			protocol_name: grandpa_protocol_name::NAME.into(),
 		},
 		net.peers[3].data.lock().take().expect("link initialized at startup; qed"),
 		net.peers[3].network_service().clone(),
@@ -1259,6 +1267,7 @@ fn voter_catches_up_to_latest_round_when_behind() {
 				local_role: Role::Authority,
 				observer_enabled: true,
 				telemetry: None,
+				protocol_name: grandpa_protocol_name::NAME.into(),
 			},
 			link,
 			network: net.lock().peer(peer_id).network_service().clone(),
@@ -1376,6 +1385,7 @@ where
 		local_role: Role::Authority,
 		observer_enabled: true,
 		telemetry: None,
+		protocol_name: grandpa_protocol_name::NAME.into(),
 	};
 
 	let network =
@@ -1671,7 +1681,7 @@ fn grandpa_environment_doesnt_send_equivocation_reports_for_itself() {
 
 	// if we set the equivocation offender to another id for which we don't have
 	// keys it should work
-	equivocation.identity = Default::default();
+	equivocation.identity = TryFrom::try_from(&[1; 32][..]).unwrap();
 	let equivocation_proof = sp_finality_grandpa::Equivocation::Prevote(equivocation);
 	assert!(environment.report_equivocation(equivocation_proof).is_ok());
 }

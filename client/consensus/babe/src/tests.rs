@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -297,7 +297,7 @@ impl TestNetFactory for BabeTestNet {
 	) {
 		let client = client.as_client();
 
-		let config = Config::get_or_compute(&*client).expect("config available");
+		let config = Config::get(&*client).expect("config available");
 		let (block_import, link) = crate::block_import(config, client.clone(), client.clone())
 			.expect("can initialize block-import");
 

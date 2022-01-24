@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -42,8 +42,9 @@ pub use sp_io::storage::root as storage_root;
 #[doc(hidden)]
 pub use sp_runtime::traits::Zero;
 #[doc(hidden)]
-pub use sp_std::{self, boxed::Box, prelude::Vec, str, vec};
+pub use sp_runtime::StateVersion;
 #[doc(hidden)]
+pub use sp_std::{self, boxed::Box, prelude::Vec, str, vec};
 pub use sp_storage::TrackedStorageKey;
 pub use utils::*;
 
@@ -1079,7 +1080,7 @@ macro_rules! impl_benchmark {
 
 					// Time the storage root recalculation.
 					let start_storage_root = $crate::benchmarking::current_time();
-					$crate::storage_root();
+					$crate::storage_root($crate::StateVersion::V1);
 					let finish_storage_root = $crate::benchmarking::current_time();
 					let elapsed_storage_root = finish_storage_root - start_storage_root;
 
@@ -1266,21 +1267,21 @@ macro_rules! impl_benchmark_test {
 /// 	fn bench_accumulate_dummy() {
 /// 		new_test_ext().execute_with(|| {
 /// 			assert_ok!(test_benchmark_accumulate_dummy::<Test>());
-/// 		}
+/// 		})
 /// 	}
 ///
 /// 	#[test]
 /// 	fn bench_set_dummy() {
 /// 		new_test_ext().execute_with(|| {
 /// 			assert_ok!(test_benchmark_set_dummy::<Test>());
-/// 		}
+/// 		})
 /// 	}
 ///
 /// 	#[test]
 /// 	fn bench_sort_vector() {
 /// 		new_test_ext().execute_with(|| {
 /// 			assert_ok!(test_benchmark_sort_vector::<Test>());
-/// 		}
+/// 		})
 /// 	}
 /// }
 /// ```
@@ -1700,7 +1701,6 @@ pub fn show_benchmark_debug_info(
 /// type Council2 = TechnicalCommittee;
 /// add_benchmark!(params, batches, pallet_collective, Council2); // pallet_collective_council_2.rs
 /// ```
-
 #[macro_export]
 macro_rules! add_benchmark {
 	( $params:ident, $batches:ident, $name:path, $( $location:tt )* ) => (
@@ -1769,6 +1769,20 @@ macro_rules! add_benchmark {
 	)
 }
 
+/// Callback for `define_benchmarks` to call `add_benchmark`.
+#[macro_export]
+macro_rules! cb_add_benchmarks {
+    // anchor
+	( $params:ident, $batches:ident, [ $name:path, $( $location:tt )* ] ) => {
+        add_benchmark!( $params, $batches, $name, $( $location )* );
+	};
+    // recursion tail
+	( $params:ident, $batches:ident, [ $name:path, $( $location:tt )* ] $([ $names:path, $( $locations:tt )* ])+ ) => {
+        cb_add_benchmarks!( $params, $batches, [ $name, $( $location )* ] );
+        cb_add_benchmarks!( $params, $batches, $([ $names, $( $locations )* ])+ );
+    }
+}
+
 /// This macro allows users to easily generate a list of benchmarks for the pallets configured
 /// in the runtime.
 ///
@@ -1788,7 +1802,6 @@ macro_rules! add_benchmark {
 /// ```
 ///
 /// This should match what exists with the `add_benchmark!` macro.
-
 #[macro_export]
 macro_rules! list_benchmark {
 	( $list:ident, $extra:ident, $name:path, $( $location:tt )* ) => (
@@ -1802,4 +1815,55 @@ macro_rules! list_benchmark {
 		};
 		$list.push(pallet_benchmarks)
 	)
+}
+
+/// Callback for `define_benchmarks` to call `list_benchmark`.
+#[macro_export]
+macro_rules! cb_list_benchmarks {
+    // anchor
+	( $list:ident, $extra:ident, [ $name:path, $( $location:tt )* ] ) => {
+        list_benchmark!( $list, $extra, $name, $( $location )* );
+	};
+    // recursion tail
+	( $list:ident, $extra:ident, [ $name:path, $( $location:tt )* ] $([ $names:path, $( $locations:tt )* ])+ ) => {
+        cb_list_benchmarks!( $list, $extra, [ $name, $( $location )* ] );
+        cb_list_benchmarks!( $list, $extra, $([ $names, $( $locations )* ])+ );
+    }
+}
+
+/// Defines pallet configs that `add_benchmarks` and `list_benchmarks` use.
+/// Should be preferred instead of having a repetitive list of configs
+/// in `add_benchmark` and `list_benchmark`.
+
+#[macro_export]
+macro_rules! define_benchmarks {
+    ( $([ $names:path, $( $locations:tt )* ])* ) => {
+		/// Calls `list_benchmark` with all configs from `define_benchmarks`
+		/// and passes the first two parameters on.
+		///
+		/// Use as:
+		/// ```ignore
+		/// list_benchmarks!(list, extra);
+		/// ```
+		#[macro_export]
+        macro_rules! list_benchmarks {
+            ( $list:ident, $extra:ident ) => {
+                cb_list_benchmarks!( $list, $extra, $([ $names, $( $locations )* ])+ );
+            }
+        }
+
+		/// Calls `add_benchmark` with all configs from `define_benchmarks`
+		/// and passes the first two parameters on.
+		///
+		/// Use as:
+		/// ```ignore
+		/// add_benchmarks!(params, batches);
+		/// ```
+		#[macro_export]
+        macro_rules! add_benchmarks {
+            ( $params:ident, $batches:ident ) => {
+                cb_add_benchmarks!( $params, $batches, $([ $names, $( $locations )* ])+ );
+            }
+        }
+    }
 }
