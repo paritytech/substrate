@@ -17,7 +17,7 @@ sp-application-crypto = { version = "4.0.0", default-features = false, path = ".
 codec = { package = "parity-scale-codec", version = "2.2.0", default-features = false, features = ["derive", "max-encoded-len"] }
 scale-info = { version = "1.0", default-features = false, features = ["derive"] }
 sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
-sp-runtime = { version = "4.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-runtime = { version = "4.1.0-dev", default-features = false, path = "../../primitives/runtime" }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 sp-consensus-aura = { version = "0.10.0-dev", path = "../../primitives/consensus/aura", default-features = false }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }

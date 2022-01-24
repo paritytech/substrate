@@ -24,7 +24,7 @@ sp-api = { version = "4.0.0-dev", default-features = false, path = "../api" }
 sp-application-crypto = { version = "4.0.0", default-features = false, path = "../application-crypto" }
 sp-core = { version = "4.1.0-dev", default-features = false, path = "../core" }
 sp-keystore = { version = "0.10.0", default-features = false, path = "../keystore", optional = true }
-sp-runtime = { version = "4.0.0", default-features = false, path = "../runtime" }
+sp-runtime = { version = "4.1.0-dev", default-features = false, path = "../runtime" }
 sp-std = { version = "4.0.0", default-features = false, path = "../std" }
 
 [features]
