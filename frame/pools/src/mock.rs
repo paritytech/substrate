@@ -4,7 +4,7 @@ use frame_support::{assert_ok, parameter_types};
 use frame_system::RawOrigin;
 
 pub type AccountId = u32;
-pub type Balance = u32;
+pub type Balance = u128;
 
 /// Pool 0's primary account id (i.e. its stash and controller account).
 pub const PRIMARY_ACCOUNT: u32 = 2536596763;
@@ -198,5 +198,27 @@ impl ExtBuilder {
 			test();
 			// post-checks can be added here
 		})
+	}
+}
+
+#[cfg(test)]
+mod test {
+	use super::*;
+	#[test]
+	fn u256_to_balance_convert_works() {
+		assert_eq!(U256ToBalance::convert(0u32.into()), Zero::zero());
+		assert_eq!(U256ToBalance::convert(Balance::max_value().into()), Balance::max_value())
+	}
+
+	#[test]
+	#[should_panic]
+	fn u256_to_balance_convert_panics_correctly() {
+		U256ToBalance::convert(U256::from(Balance::max_value()).saturating_add(1u32.into()));
+	}
+
+	#[test]
+	fn balance_to_u256_convert_works() {
+		assert_eq!(BalanceToU256::convert(0u32.into()), U256::zero());
+		assert_eq!(BalanceToU256::convert(Balance::max_value()), Balance::max_value().into())
 	}
 }

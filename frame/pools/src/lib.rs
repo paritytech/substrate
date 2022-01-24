@@ -69,6 +69,7 @@ type SubPoolsWithEra<T> = BoundedBTreeMap<EraIndex, UnbondPool<T>, <T as Config>
 type RewardPoints = U256;
 
 const POINTS_TO_BALANCE_INIT_RATIO: u32 = 1;
+const U256_CUBED_ROOT: u128 = 48740834812604000000000000u128;
 
 /// Calculate the number of points to issue from a pool as `(current_points / current_balance) *
 /// new_funds` except for some zero edge cases; see logic and tests for details.
@@ -127,7 +128,7 @@ pub struct Delegator<T: Config> {
 	/// The reward pools total earnings _ever_ the last time this delegator claimed a payout.
 	/// Assuming no massive burning events, we expect this value to always be below total issuance.
 	// TODO: ^ double check the above is an OK assumption
-	/// This value lines up with the `RewardPool.total_earnings` after a delegator claims a payout.
+	/// This value lines up with the `RewardPool::total_earnings` after a delegator claims a payout.
 	reward_pool_total_earnings: BalanceOf<T>,
 	/// The era this delegator started unbonding at.
 	unbonding_era: Option<EraIndex>,
@@ -409,7 +410,10 @@ pub mod pallet {
 		pub fn join(origin: OriginFor<T>, amount: BalanceOf<T>, target: PoolId) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			// If a delegator already exists that means they already belong to a pool
-			ensure!(!DelegatorStorage::<T>::contains_key(&who), Error::<T>::AccountBelongsToOtherPool);
+			ensure!(
+				!DelegatorStorage::<T>::contains_key(&who),
+				Error::<T>::AccountBelongsToOtherPool
+			);
 
 			let mut bonded_pool =
 				BondedPoolStorage::<T>::get(target).ok_or(Error::<T>::PoolNotFound)?;
@@ -487,7 +491,8 @@ pub mod pallet {
 		#[pallet::weight(666)]
 		pub fn claim_payout(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			let delegator = DelegatorStorage::<T>::get(&who).ok_or(Error::<T>::DelegatorNotFound)?;
+			let delegator =
+				DelegatorStorage::<T>::get(&who).ok_or(Error::<T>::DelegatorNotFound)?;
 			let bonded_pool = BondedPoolStorage::<T>::get(&delegator.pool).ok_or_else(|| {
 				log!(error, "A bonded pool could not be found, this is a system logic error.");
 				debug_assert!(
@@ -507,7 +512,8 @@ pub mod pallet {
 		#[pallet::weight(666)]
 		pub fn unbond(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			let delegator = DelegatorStorage::<T>::get(&who).ok_or(Error::<T>::DelegatorNotFound)?;
+			let delegator =
+				DelegatorStorage::<T>::get(&who).ok_or(Error::<T>::DelegatorNotFound)?;
 			let mut bonded_pool =
 				BondedPoolStorage::<T>::get(delegator.pool).ok_or(Error::<T>::PoolNotFound)?;
 
@@ -517,7 +523,8 @@ pub mod pallet {
 			Self::do_reward_payout(who.clone(), delegator, &bonded_pool)?;
 
 			// Re-fetch the delegator because they where updated by `do_reward_payout`.
-			let mut delegator = DelegatorStorage::<T>::get(&who).ok_or(Error::<T>::DelegatorNotFound)?;
+			let mut delegator =
+				DelegatorStorage::<T>::get(&who).ok_or(Error::<T>::DelegatorNotFound)?;
 			// Note that we lazily create the unbonding pools here if they don't already exist
 			let sub_pools = SubPoolsStorage::<T>::get(delegator.pool).unwrap_or_default();
 			let current_era = T::StakingInterface::current_era();
@@ -568,7 +575,8 @@ pub mod pallet {
 		#[pallet::weight(666)]
 		pub fn withdraw_unbonded(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			let delegator = DelegatorStorage::<T>::take(&who).ok_or(Error::<T>::DelegatorNotFound)?;
+			let delegator =
+				DelegatorStorage::<T>::take(&who).ok_or(Error::<T>::DelegatorNotFound)?;
 
 			let unbonding_era = delegator.unbonding_era.ok_or(Error::<T>::NotUnbonding)?;
 			let current_era = T::StakingInterface::current_era();
@@ -730,13 +738,12 @@ impl<T: Config> Pallet<T> {
 		// `bonded_pool.total_points`. In effect this allows each, single unit of balance (e.g.
 		// plank) to be divvied up pro-rata among delegators based on points.
 		//  TODO this needs to be some sort of BigUInt arithmetic
-		let new_points =
-			T::BalanceToU256::convert(bonded_pool.points).saturating_mul(new_earnings);
+		let new_points = T::BalanceToU256::convert(bonded_pool.points).saturating_mul(new_earnings);
 
 		// The points of the reward pool after taking into account the new earnings. Notice that
 		// this only stays even or increases over time except for when we subtract delegator virtual
 		// shares.
-		let current_points = reward_pool.points.saturating_add(new_points); // 39,800
+		let current_points = reward_pool.points.saturating_add(new_points);
 
 		// The rewards pool's earnings since the last time this delegator claimed a payout
 		let new_earnings_since_last_claim =
@@ -745,7 +752,10 @@ impl<T: Config> Pallet<T> {
 		let delegator_virtual_points = T::BalanceToU256::convert(delegator.points)
 			.saturating_mul(T::BalanceToU256::convert(new_earnings_since_last_claim));
 
-		let delegator_payout = if delegator_virtual_points.is_zero() || current_points.is_zero() {
+		let delegator_payout = if delegator_virtual_points.is_zero() ||
+			current_points.is_zero() ||
+			reward_pool.balance.is_zero()
+		{
 			Zero::zero()
 		} else {
 			// Equivalent to `(delegator_virtual_points / current_points) * reward_pool.balance`
@@ -820,7 +830,6 @@ impl<T: Config> Pallet<T> {
 		let pool_id = PoolIds::<T>::get(pool_account)?;
 		let mut sub_pools = SubPoolsStorage::<T>::get(pool_id).unwrap_or_default();
 
-		// TODO double check why we do slash_era + 1
 		let affected_range = (slash_era + 1)..=apply_era;
 
 		// TODO Can have this as an input because we are inside of staking ledger
@@ -892,6 +901,7 @@ impl<T: Config> PoolsInterface for Pallet<T> {
 }
 
 // TODO
+// -
 // - tests
 // - force pool creation
 // - rebond_rewards
