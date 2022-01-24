@@ -21,26 +21,26 @@ use crate::{
 	params::{BlockNumberOrHash, PruningParams, SharedParams},
 	CliConfiguration,
 };
+use clap::Parser;
 use log::info;
 use sc_client_api::{StorageProvider, UsageProvider};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use std::{fmt::Debug, io::Write, str::FromStr, sync::Arc};
-use structopt::StructOpt;
 
 /// The `export-state` command used to export the state of a given block into
 /// a chain spec.
-#[derive(Debug, StructOpt, Clone)]
+#[derive(Debug, Clone, Parser)]
 pub struct ExportStateCmd {
 	/// Block hash or number.
-	#[structopt(value_name = "HASH or NUMBER")]
+	#[clap(value_name = "HASH or NUMBER")]
 	pub input: Option<BlockNumberOrHash>,
 
 	#[allow(missing_docs)]
-	#[structopt(flatten)]
+	#[clap(flatten)]
 	pub shared_params: SharedParams,
 
 	#[allow(missing_docs)]
-	#[structopt(flatten)]
+	#[clap(flatten)]
 	pub pruning_params: PruningParams,
 }
 
