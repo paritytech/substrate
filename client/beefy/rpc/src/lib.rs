@@ -118,9 +118,8 @@ pub trait BeefyApi<Notification, Hash> {
 /// Implements the BeefyApi RPC trait for interacting with BEEFY.
 pub struct BeefyRpcHandler<Block: BlockT> {
 	signed_commitment_stream: BeefySignedCommitmentStream<Block>,
-	beefy_best_block: Arc<RwLock<Option<Block::Hash>>>,
+	beefy_best_block: Arc<RwLock<Option<(Block::Hash, NumberFor<Block>)>>>,
 	manager: SubscriptionManager,
-	beefy_best_block_num: Arc<RwLock<Option<NumberFor<Block>>>>,
 }
 
 impl<Block: BlockT> BeefyRpcHandler<Block> {
@@ -134,17 +133,13 @@ impl<Block: BlockT> BeefyRpcHandler<Block> {
 		E: futures::task::Spawn + Send + Sync + 'static,
 	{
 		let beefy_best_block = Arc::new(RwLock::new(None));
-		let beefy_best_block_num = Arc::new(RwLock::new(None));
 
 		let stream = best_block_stream.subscribe();
 		let closure_clone = beefy_best_block.clone();
-		let beefy_block_num_clone = beefy_best_block_num.clone();
 		let future = stream.for_each(move |best_beefy| {
 			let async_clone = closure_clone.clone();
-			let async_block_num_clone = beefy_block_num_clone.clone();
 			async move {
-				*async_clone.write() = Some(best_beefy.0);
-				*async_block_num_clone.write() = Some(best_beefy.1)
+				*async_clone.write() = Some((best_beefy.0, best_beefy.1));
 			}
 		});
 
@@ -156,7 +151,7 @@ impl<Block: BlockT> BeefyRpcHandler<Block> {
 			})?;
 
 		let manager = SubscriptionManager::new(Arc::new(executor));
-		Ok(Self { signed_commitment_stream, beefy_best_block, manager, beefy_best_block_num })
+		Ok(Self { signed_commitment_stream, beefy_best_block, manager })
 	}
 }
 
@@ -171,20 +166,23 @@ where
 		_metadata: Self::Metadata,
 		subscriber: Subscriber<notification::EncodedSignedCommitment>,
 	) {
-		let beefy_block_num = self.beefy_best_block_num.clone();
-		let stream = self
-			.signed_commitment_stream
-			.subscribe()
-			.filter(move |x| {
-				let best_block_clone = beefy_block_num.clone();
-				let best_block = best_block_clone.read();
-				if let Some(best_block) = *best_block {
-					future::ready(x.commitment.block_number > best_block)
-				} else {
-					future::ready(true)
-				}
-			})
-			.map(|x| Ok::<_, ()>(Ok(notification::EncodedSignedCommitment::new::<Block>(x))));
+		let beefy_block = self.beefy_best_block.clone();
+		let stream =
+			self.signed_commitment_stream
+				.subscribe()
+				.filter(move |x| {
+					let best_block_clone = beefy_block.clone();
+					let best_block = best_block_clone.read();
+					if let Some((.., best_block_num)) = *best_block {
+						if x.commitment.block_number <= best_block_num {
+							log::error!("Beefy rpc justification stream received a duplicate signed commitment");
+						}
+						future::ready(x.commitment.block_number > best_block_num)
+					} else {
+						future::ready(true)
+					}
+				})
+				.map(|x| Ok::<_, ()>(Ok(notification::EncodedSignedCommitment::new::<Block>(x))));
 
 		self.manager.add(subscriber, |sink| {
 			stream
@@ -207,6 +205,7 @@ where
 			.read()
 			.as_ref()
 			.cloned()
+			.map(|x| x.0)
 			.ok_or(Error::EndpointNotReady.into());
 		let future = async move { result }.boxed();
 		future.map_err(jsonrpc_core::Error::from).boxed()
@@ -223,6 +222,7 @@ mod tests {
 	use codec::{Decode, Encode};
 	use sp_runtime::traits::{BlakeTwo256, Hash};
 	use substrate_test_runtime_client::runtime::Block;
+	use std::{time::Duration, thread::sleep};
 
 	fn setup_io_handler(
 	) -> (jsonrpc_core::MetaIoHandler<sc_rpc::Metadata>, BeefySignedCommitmentSender<Block>) {
@@ -412,7 +412,7 @@ mod tests {
 	}
 
 	#[test]
-	fn should_not_send_signed_commitment_multiple_times() {
+	fn should_not_send_same_signed_commitment_multiple_times() {
 		let (sender, stream) = BeefyBestBlockStream::<Block>::channel();
 		let (io, commitment_sender) = setup_io_handler_with_best_block_stream(stream);
 		let (meta, receiver) = setup_session();
@@ -438,13 +438,15 @@ mod tests {
 		let r: Result<(), ()> = sender.notify(|| Ok((hash, 5)));
 		r.unwrap();
 
-		// This commitment should be filtered out
-		let r: Result<(), ()> = commitment_sender.notify(|| Ok(commitment.clone()));
-		r.unwrap();
+		sleep(Duration::from_millis(100));
 
 		let commitment_1 = create_commitment(6);
 
 		let r: Result<(), ()> = commitment_sender.notify(|| Ok(commitment_1.clone()));
+		r.unwrap();
+
+		// This commitment should be filtered out
+		let r: Result<(), ()> = commitment_sender.notify(|| Ok(commitment.clone()));
 		r.unwrap();
 
 		// Inspect what we received
