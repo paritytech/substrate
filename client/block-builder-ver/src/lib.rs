@@ -36,8 +36,7 @@ use sp_core::ExecutionContext;
 use sp_runtime::{
 	generic::BlockId,
 	traits::{
-		BlakeTwo256, Block as BlockT, DigestFor, Hash, HashFor,
-		Header as HeaderT, NumberFor, One,
+		BlakeTwo256, Block as BlockT, DigestFor, Hash, HashFor, Header as HeaderT, NumberFor, One,
 	},
 	SaturatedConversion,
 };
@@ -205,7 +204,7 @@ where
 		})
 	}
 
-    /// temporaily apply extrinsics and record them on the list
+	/// temporaily apply extrinsics and record them on the list
 	pub fn record_valid_extrinsics_and_revert_changes<
 		F: FnOnce(&'_ A::Api) -> Vec<Block::Extrinsic>,
 	>(

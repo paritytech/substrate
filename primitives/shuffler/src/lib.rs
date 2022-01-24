@@ -13,7 +13,7 @@ use sp_api::{ApiExt, ApiRef, ProvideRuntimeApi, TransactionOutcome};
 #[cfg(feature = "std")]
 use sp_core::crypto::Ss58Codec;
 #[cfg(feature = "std")]
-use sp_runtime::{AccountId32, generic::BlockId, traits::Block as BlockT};
+use sp_runtime::{generic::BlockId, traits::Block as BlockT, AccountId32};
 #[cfg(feature = "std")]
 use ver_api::VerApi;
 

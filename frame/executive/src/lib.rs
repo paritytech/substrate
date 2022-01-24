@@ -116,6 +116,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+use crate::traits::AtLeast32BitUnsigned;
 use codec::{Codec, Encode};
 use frame_support::{
 	dispatch::PostDispatchInfo,
@@ -127,16 +128,14 @@ use frame_support::{
 };
 use frame_system::{extrinsics_root, DigestOf};
 use schnorrkel::vrf::{VRFOutput, VRFProof};
-use crate::traits::AtLeast32BitUnsigned;
 use sp_runtime::{
 	generic::Digest,
 	traits::{
-		self, Applyable, CheckEqual, Checkable, Dispatchable, Extrinsic, Header, NumberFor, One, Saturating,
-		ValidateUnsigned, Zero, IdentifyAccountWithLookup
+		self, Applyable, CheckEqual, Checkable, Dispatchable, Extrinsic, Header,
+		IdentifyAccountWithLookup, NumberFor, One, Saturating, ValidateUnsigned, Zero,
 	},
-    SaturatedConversion,
 	transaction_validity::{TransactionSource, TransactionValidity},
-	ApplyExtrinsicResult,
+	ApplyExtrinsicResult, SaturatedConversion,
 };
 use sp_std::{marker::PhantomData, prelude::*};
 
@@ -172,7 +171,9 @@ impl<
 	> ExecuteBlock<Block>
 	for Executive<System, Block, Context, UnsignedValidator, AllPallets, COnRuntimeUpgrade>
 where
-	Block::Extrinsic: IdentifyAccountWithLookup<Context, AccountId = System::AccountId> + Checkable<Context> + Codec,
+	Block::Extrinsic: IdentifyAccountWithLookup<Context, AccountId = System::AccountId>
+		+ Checkable<Context>
+		+ Codec,
 	CheckedOf<Block::Extrinsic, Context>: Applyable + GetDispatchInfo,
 	CallOf<Block::Extrinsic, Context>:
 		Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
