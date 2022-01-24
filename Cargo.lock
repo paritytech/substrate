@@ -928,13 +928,13 @@ name = "chain-spec-builder"
 version = "2.0.0"
 dependencies = [
  "ansi_term",
+ "clap 3.0.7",
  "node-cli",
- "rand 0.7.3",
+ "rand 0.8.4",
  "sc-chain-spec",
  "sc-keystore",
  "sp-core",
  "sp-keystore",
- "structopt",
 ]
 
 [[package]]
@@ -996,13 +996,48 @@ version = "2.34.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a0610544180c38b88101fecf2dd634b174a62eef6946f84dfc6a7127512b381c"
 dependencies = [
- "ansi_term",
+ "bitflags",
+ "textwrap 0.11.0",
+ "unicode-width",
+]
+
+[[package]]
+name = "clap"
+version = "3.0.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "12e8611f9ae4e068fa3e56931fded356ff745e70987ff76924a6e0ab1c8ef2e3"
+dependencies = [
  "atty",
  "bitflags",
- "strsim 0.8.0",
- "textwrap",
- "unicode-width",
- "vec_map",
+ "clap_derive",
+ "indexmap",
+ "lazy_static",
+ "os_str_bytes",
+ "strsim",
+ "termcolor",
+ "textwrap 0.14.2",
+]
+
+[[package]]
+name = "clap_complete"
+version = "3.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a394f7ec0715b42a4e52b294984c27c9a61f77c8d82f7774c5198350be143f19"
+dependencies = [
+ "clap 3.0.7",
+]
+
+[[package]]
+name = "clap_derive"
+version = "3.0.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "41a0645a430ec9136d2d701e54a95d557de12649a9dd7109ced3187e648ac824"
+dependencies = [
+ "heck 0.4.0",
+ "proc-macro-error",
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]
@@ -1256,7 +1291,7 @@ checksum = "1604dafd25fba2fe2d5895a9da139f8dc9b319a5fe5354ca137cbbce4e178d10"
 dependencies = [
  "atty",
  "cast",
- "clap",
+ "clap 2.34.0",
  "criterion-plot",
  "csv",
  "futures 0.3.16",
@@ -1483,7 +1518,7 @@ dependencies = [
  "ident_case",
  "proc-macro2",
  "quote",
- "strsim 0.10.0",
+ "strsim",
  "syn",
 ]
 
@@ -1741,7 +1776,7 @@ version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7c5f0096a91d210159eceb2ff5e1c4da18388a170e1e3ce948aac9c8fdbbf595"
 dependencies = [
- "heck",
+ "heck 0.3.2",
  "proc-macro2",
  "quote",
  "syn",
@@ -2020,6 +2055,7 @@ version = "4.0.0-dev"
 dependencies = [
  "Inflector",
  "chrono",
+ "clap 3.0.7",
  "frame-benchmarking",
  "frame-support",
  "handlebars",
@@ -2036,7 +2072,6 @@ dependencies = [
  "sp-keystore",
  "sp-runtime",
  "sp-state-machine",
- "structopt",
 ]
 
 [[package]]
@@ -2450,7 +2485,6 @@ dependencies = [
  "num-format",
  "pallet-staking",
  "sp-io",
- "structopt",
 ]
 
 [[package]]
@@ -2652,6 +2686,12 @@ checksum = "87cbf45460356b7deeb5e3415b5563308c0a9b057c85e12b06ad551f98d0a6ac"
 dependencies = [
  "unicode-segmentation",
 ]
+
+[[package]]
+name = "heck"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2540771e65fc8cb83cd6e8a237f70c319bd5c29f78ed1084ba5d50eeac86f7f9"
 
 [[package]]
 name = "hermit-abi"
@@ -4516,6 +4556,7 @@ dependencies = [
 name = "node-bench"
 version = "0.9.0-dev"
 dependencies = [
+ "clap 3.0.7",
  "derive_more",
  "fs_extra",
  "futures 0.3.16",
@@ -4545,7 +4586,6 @@ dependencies = [
  "sp-timestamp",
  "sp-tracing",
  "sp-trie",
- "structopt",
  "tempfile",
 ]
 
@@ -4555,6 +4595,8 @@ version = "3.0.0-dev"
 dependencies = [
  "assert_cmd",
  "async-std",
+ "clap 3.0.7",
+ "clap_complete",
  "criterion",
  "frame-benchmarking-cli",
  "frame-system",
@@ -4576,7 +4618,7 @@ dependencies = [
  "pallet-transaction-payment",
  "parity-scale-codec",
  "platforms",
- "rand 0.7.3",
+ "rand 0.8.4",
  "regex",
  "remote-externalities",
  "sc-authority-discovery",
@@ -4622,7 +4664,6 @@ dependencies = [
  "sp-transaction-pool",
  "sp-transaction-storage-proof",
  "sp-trie",
- "structopt",
  "substrate-build-script-utils",
  "substrate-frame-cli",
  "tempfile",
@@ -4668,6 +4709,7 @@ dependencies = [
 name = "node-inspect"
 version = "0.9.0-dev"
 dependencies = [
+ "clap 3.0.7",
  "derive_more",
  "parity-scale-codec",
  "sc-cli",
@@ -4677,7 +4719,6 @@ dependencies = [
  "sp-blockchain",
  "sp-core",
  "sp-runtime",
- "structopt",
 ]
 
 [[package]]
@@ -4811,15 +4852,16 @@ dependencies = [
 name = "node-runtime-generate-bags"
 version = "3.0.0"
 dependencies = [
+ "clap 3.0.7",
  "generate-bags",
  "node-runtime",
- "structopt",
 ]
 
 [[package]]
 name = "node-template"
 version = "3.0.0"
 dependencies = [
+ "clap 3.0.7",
  "frame-benchmarking",
  "frame-benchmarking-cli",
  "jsonrpc-core",
@@ -4848,7 +4890,6 @@ dependencies = [
  "sp-finality-grandpa",
  "sp-runtime",
  "sp-timestamp",
- "structopt",
  "substrate-build-script-utils",
  "substrate-frame-rpc-system",
 ]
@@ -5141,6 +5182,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "os_str_bytes"
+version = "6.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8e22443d1643a904602595ba1cd8f7d896afe56d26712531c5ff73a15b2fbf64"
+dependencies = [
+ "memchr",
+]
+
+[[package]]
 name = "output_vt100"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5323,7 +5373,6 @@ dependencies = [
 name = "pallet-bags-list-remote-tests"
 version = "4.0.0-dev"
 dependencies = [
- "clap",
  "frame-election-provider-support",
  "frame-support",
  "frame-system",
@@ -5336,7 +5385,6 @@ dependencies = [
  "sp-std",
  "sp-storage",
  "sp-tracing",
- "structopt",
  "tokio",
 ]
 
@@ -6912,7 +6960,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "62941722fb675d463659e49c4f3fe1fe792ff24fe5bbaa9c08cd3b98a1c354f5"
 dependencies = [
  "bytes 1.1.0",
- "heck",
+ "heck 0.3.2",
  "itertools",
  "lazy_static",
  "log 0.4.14",
@@ -7695,6 +7743,7 @@ name = "sc-cli"
 version = "0.10.0-dev"
 dependencies = [
  "chrono",
+ "clap 3.0.7",
  "fdlimit",
  "futures 0.3.16",
  "hex",
@@ -7721,7 +7770,6 @@ dependencies = [
  "sp-panic-handler",
  "sp-runtime",
  "sp-version",
- "structopt",
  "tempfile",
  "thiserror",
  "tiny-bip39",
@@ -9624,13 +9672,13 @@ dependencies = [
 name = "sp-npos-elections-fuzzer"
 version = "2.0.0-alpha.5"
 dependencies = [
+ "clap 3.0.7",
  "honggfuzz",
  "parity-scale-codec",
- "rand 0.7.3",
+ "rand 0.8.4",
  "scale-info",
  "sp-npos-elections",
  "sp-runtime",
- "structopt",
 ]
 
 [[package]]
@@ -10001,9 +10049,9 @@ checksum = "6e63cff320ae2c57904679ba7cb63280a3dc4613885beafb148ee7bf9aa9042d"
 
 [[package]]
 name = "ss58-registry"
-version = "1.10.0"
+version = "1.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c83f0afe7e571565ef9aae7b0e4fb30fcaec4ebb9aea2f00489b772782aa03a4"
+checksum = "1230685dc82f8699110640244d361a7099c602f08bddc5c90765a5153b4881dc"
 dependencies = [
  "Inflector",
  "proc-macro2",
@@ -10040,39 +10088,9 @@ dependencies = [
 
 [[package]]
 name = "strsim"
-version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8ea5119cdb4c55b55d432abb513a0429384878c15dde60cc77b1c99de1a95a6a"
-
-[[package]]
-name = "strsim"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "73473c0e59e6d5812c5dfe2a064a6444949f089e20eec9a2e5506596494e4623"
-
-[[package]]
-name = "structopt"
-version = "0.3.25"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "40b9788f4202aa75c240ecc9c15c65185e6a39ccdeb0fd5d008b98825464c87c"
-dependencies = [
- "clap",
- "lazy_static",
- "structopt-derive",
-]
-
-[[package]]
-name = "structopt-derive"
-version = "0.4.18"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dcb5ae327f9cc13b68763b5749770cb9e048a99bd9dfdfa58d0cf05d5f64afe0"
-dependencies = [
- "heck",
- "proc-macro-error",
- "proc-macro2",
- "quote",
- "syn",
-]
 
 [[package]]
 name = "strum"
@@ -10089,7 +10107,7 @@ version = "0.22.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "339f799d8b549e3744c7ac7feb216383e4005d94bdb22561b3ab8f3b808ae9fb"
 dependencies = [
- "heck",
+ "heck 0.3.2",
  "proc-macro2",
  "quote",
  "syn",
@@ -10101,7 +10119,7 @@ version = "0.23.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5bb0dc7ee9c15cea6199cde9a127fa16a4c5819af85395457ad72d68edc85a38"
 dependencies = [
- "heck",
+ "heck 0.3.2",
  "proc-macro2",
  "quote",
  "rustversion",
@@ -10112,8 +10130,8 @@ dependencies = [
 name = "subkey"
 version = "2.0.1"
 dependencies = [
+ "clap 3.0.7",
  "sc-cli",
- "structopt",
 ]
 
 [[package]]
@@ -10140,12 +10158,12 @@ dependencies = [
 name = "substrate-frame-cli"
 version = "4.0.0-dev"
 dependencies = [
+ "clap 3.0.7",
  "frame-support",
  "frame-system",
  "sc-cli",
  "sp-core",
  "sp-runtime",
- "structopt",
 ]
 
 [[package]]
@@ -10427,6 +10445,12 @@ checksum = "d326610f408c7a4eb6f51c37c330e496b08506c9457c9d34287ecc38809fb060"
 dependencies = [
  "unicode-width",
 ]
+
+[[package]]
+name = "textwrap"
+version = "0.14.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0066c8d12af8b5acd21e00547c3797fde4e8677254a7ee429176ccebbe93dd80"
 
 [[package]]
 name = "thiserror"
@@ -10920,6 +10944,7 @@ checksum = "59547bce71d9c38b83d9c0e92b6066c4253371f15005def0c30d9657f50c7642"
 name = "try-runtime-cli"
 version = "0.10.0-dev"
 dependencies = [
+ "clap 3.0.7",
  "jsonrpsee",
  "log 0.4.14",
  "parity-scale-codec",
@@ -10936,7 +10961,6 @@ dependencies = [
  "sp-runtime",
  "sp-state-machine",
  "sp-version",
- "structopt",
  "zstd",
 ]
 
@@ -11145,12 +11169,6 @@ name = "vec-arena"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "eafc1b9b2dfc6f5529177b62cf806484db55b32dc7c9658a118e11bbeb33061d"
-
-[[package]]
-name = "vec_map"
-version = "0.8.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f1bddf1187be692e79c5ffeab891132dfb0f236ed36a43c7ed39f1165ee20191"
 
 [[package]]
 name = "version_check"

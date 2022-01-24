@@ -170,7 +170,7 @@ use frame_support::{
 	pallet_prelude::DispatchResult,
 	traits::{
 		tokens::{fungible, BalanceStatus as Status, DepositConsequence, WithdrawConsequence},
-		Currency, ExistenceRequirement,
+		Currency, DefensiveSaturating, ExistenceRequirement,
 		ExistenceRequirement::{AllowDeath, KeepAlive},
 		Get, Imbalance, LockIdentifier, LockableCurrency, NamedReservableCurrency, OnUnbalanced,
 		ReservableCurrency, SignedImbalance, StoredMap, TryDrop, WithdrawReasons,
@@ -1783,7 +1783,7 @@ where
 			account.reserved -= actual;
 			// defensive only: this can never fail since total issuance which is at least
 			// free+reserved fits into the same data type.
-			account.free = account.free.saturating_add(actual);
+			account.free = account.free.defensive_saturating_add(actual);
 			actual
 		}) {
 			Ok(x) => x,
@@ -1896,7 +1896,7 @@ where
 			match reserves.binary_search_by_key(id, |data| data.id) {
 				Ok(index) => {
 					// this add can't overflow but just to be defensive.
-					reserves[index].amount = reserves[index].amount.saturating_add(value);
+					reserves[index].amount = reserves[index].amount.defensive_saturating_add(value);
 				},
 				Err(index) => {
 					reserves
@@ -1929,8 +1929,8 @@ where
 
 						let remain = <Self as ReservableCurrency<_>>::unreserve(who, to_change);
 
-						// remain should always be zero but just to be defensive here
-						let actual = to_change.saturating_sub(remain);
+						// remain should always be zero but just to be defensive here.
+						let actual = to_change.defensive_saturating_sub(remain);
 
 						// `actual <= to_change` and `to_change <= amount`; qed;
 						reserves[index].amount -= actual;
@@ -1976,8 +1976,8 @@ where
 					let (imb, remain) =
 						<Self as ReservableCurrency<_>>::slash_reserved(who, to_change);
 
-					// remain should always be zero but just to be defensive here
-					let actual = to_change.saturating_sub(remain);
+					// remain should always be zero but just to be defensive here.
+					let actual = to_change.defensive_saturating_sub(remain);
 
 					// `actual <= to_change` and `to_change <= amount`; qed;
 					reserves[index].amount -= actual;
@@ -2036,12 +2036,12 @@ where
 											)?;
 
 										// remain should always be zero but just to be defensive
-										// here
-										let actual = to_change.saturating_sub(remain);
+										// here.
+										let actual = to_change.defensive_saturating_sub(remain);
 
 										// this add can't overflow but just to be defensive.
 										reserves[index].amount =
-											reserves[index].amount.saturating_add(actual);
+											reserves[index].amount.defensive_saturating_add(actual);
 
 										Ok(actual)
 									},
@@ -2056,7 +2056,7 @@ where
 
 										// remain should always be zero but just to be defensive
 										// here
-										let actual = to_change.saturating_sub(remain);
+										let actual = to_change.defensive_saturating_sub(remain);
 
 										reserves
 											.try_insert(
@@ -2079,7 +2079,7 @@ where
 						)?;
 
 						// remain should always be zero but just to be defensive here
-						to_change.saturating_sub(remain)
+						to_change.defensive_saturating_sub(remain)
 					};
 
 					// `actual <= to_change` and `to_change <= amount`; qed;
