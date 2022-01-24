@@ -1555,10 +1555,11 @@ fn lazy_batch_removal_works() {
 
 			tries.push(trie.clone())
 		}
+
 		// Run single lazy removal
 		Contracts::on_initialize(Weight::max_value());
 
-		// Value should be gone now
+		// The single lazy removal should have removed all queued tries
 		for trie in tries.iter() {
 			assert_matches!(child::get::<i32>(trie, &[99]), None);
 		}
