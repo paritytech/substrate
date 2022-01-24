@@ -69,7 +69,6 @@ type SubPoolsWithEra<T> = BoundedBTreeMap<EraIndex, UnbondPool<T>, <T as Config>
 type RewardPoints = U256;
 
 const POINTS_TO_BALANCE_INIT_RATIO: u32 = 1;
-const U256_CUBED_ROOT: u128 = 48740834812604000000000000u128;
 
 /// Calculate the number of points to issue from a pool as `(current_points / current_balance) *
 /// new_funds` except for some zero edge cases; see logic and tests for details.
@@ -117,7 +116,7 @@ fn balance_to_unbond<T: Config>(
 }
 
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, RuntimeDebugNoBound)]
-#[cfg_attr(feature = "std", derive(Clone, PartialEq))]
+#[cfg_attr(feature = "std", derive(Clone, PartialEq, DefaultNoBound))]
 #[codec(mel_bound(T: Config))]
 #[scale_info(skip_type_params(T))]
 pub struct Delegator<T: Config> {
@@ -128,7 +127,8 @@ pub struct Delegator<T: Config> {
 	/// The reward pools total earnings _ever_ the last time this delegator claimed a payout.
 	/// Assuming no massive burning events, we expect this value to always be below total issuance.
 	// TODO: ^ double check the above is an OK assumption
-	/// This value lines up with the `RewardPool::total_earnings` after a delegator claims a payout.
+	/// This value lines up with the `RewardPool::total_earnings` after a delegator claims a
+	/// payout.
 	reward_pool_total_earnings: BalanceOf<T>,
 	/// The era this delegator started unbonding at.
 	unbonding_era: Option<EraIndex>,
@@ -737,7 +737,6 @@ impl<T: Config> Pallet<T> {
 		// been earned by the reward pool, we inflate the reward pool points by
 		// `bonded_pool.total_points`. In effect this allows each, single unit of balance (e.g.
 		// plank) to be divvied up pro-rata among delegators based on points.
-		//  TODO this needs to be some sort of BigUInt arithmetic
 		let new_points = T::BalanceToU256::convert(bonded_pool.points).saturating_mul(new_earnings);
 
 		// The points of the reward pool after taking into account the new earnings. Notice that
@@ -795,7 +794,6 @@ impl<T: Config> Pallet<T> {
 	) -> DispatchResult {
 		let reward_pool = RewardPoolStorage::<T>::get(&delegator.pool).ok_or_else(|| {
 			log!(error, "A reward pool could not be found, this is a system logic error.");
-			debug_assert!(false, "A reward pool could not be found, this is a system logic error.");
 			Error::<T>::RewardPoolNotFound
 		})?;
 
@@ -817,6 +815,19 @@ impl<T: Config> Pallet<T> {
 		Ok(())
 	}
 
+	//The current approach here is to share `BTreeMap<EraIndex, BalanceOf<T>>` with the staking
+	// API. This is arguably a leaky, suboptimal API because both sides have to share this
+	// non-trivial data structure. With the current design we do this because we track the unbonding
+	// balance in both the pallet-staking `unlocking` chunks and in here with the pallet-pools
+	// `SubPools`. Because both pallets need to know about slashes to unbonding funds we either have
+	// to replicate the slashing logic between the pallets, or share some data. A ALTERNATIVE is
+	// having the pallet-pools read the unbonding balance per era directly from pallet-staking. The
+	// downside of this is that once a delegator calls `withdraw_unbonded`, the chunk is removed and
+	// we can't keep track of the balance for that `UnbondPool` anymore, thus we must merge the
+	// balance and points of that `UnbondPool` with the `no_era` pool immediately upon calling
+	// withdraw_unbonded. We choose not to do this because if there was a slash, it would negatively
+	// affect the points:balance ratio of the `no_era` pool for everyone, including those who may
+	// not have been unbonding in eras effected by the slash.
 	fn do_slash(
 		// This would be the nominator account
 		pool_account: &T::AccountId,
