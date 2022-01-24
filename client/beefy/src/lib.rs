@@ -24,7 +24,7 @@ use prometheus::Registry;
 use sc_client_api::{Backend, BlockchainEvents, Finalizer};
 use sc_network_gossip::{GossipEngine, Network as GossipNetwork};
 
-use sp_api::ProvideRuntimeApi;
+use sp_api::{NumberFor, ProvideRuntimeApi};
 use sp_blockchain::HeaderBackend;
 use sp_keystore::SyncCryptoStorePtr;
 use sp_runtime::traits::Block;
@@ -111,7 +111,7 @@ where
 	B: Block,
 	BE: Backend<B>,
 	C: Client<B, BE>,
-	C::Api: BeefyApi<B>,
+	C::Api: BeefyApi<B, NumberFor<B>>,
 	N: GossipNetwork<B> + Clone + Send + 'static,
 {
 	/// BEEFY client
@@ -126,8 +126,6 @@ where
 	pub signed_commitment_sender: BeefySignedCommitmentSender<B>,
 	/// BEEFY best block sender
 	pub beefy_best_block_sender: BeefyBestBlockSender<B>,
-	/// Minimal delta between blocks, BEEFY should vote for
-	pub min_block_delta: u32,
 	/// Prometheus metric registry
 	pub prometheus_registry: Option<Registry>,
 	/// Chain specific GRANDPA protocol name. See [`beefy_protocol_name::standard_name`].
@@ -142,7 +140,7 @@ where
 	B: Block,
 	BE: Backend<B>,
 	C: Client<B, BE>,
-	C::Api: BeefyApi<B>,
+	C::Api: BeefyApi<B, NumberFor<B>>,
 	N: GossipNetwork<B> + Clone + Send + 'static,
 {
 	let BeefyParams {
@@ -152,7 +150,6 @@ where
 		network,
 		signed_commitment_sender,
 		beefy_best_block_sender,
-		min_block_delta,
 		prometheus_registry,
 		protocol_name,
 	} = beefy_params;
@@ -182,7 +179,6 @@ where
 		beefy_best_block_sender,
 		gossip_engine,
 		gossip_validator,
-		min_block_delta,
 		metrics,
 	};
 

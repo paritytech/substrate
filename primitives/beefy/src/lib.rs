@@ -156,10 +156,12 @@ pub struct VoteMessage<Number, Id, Signature> {
 
 sp_api::decl_runtime_apis! {
 	/// API necessary for BEEFY voters.
-	pub trait BeefyApi
+	pub trait BeefyApi<BlockNumber: codec::Codec>
 	{
 		/// Return the current active BEEFY validator set
 		fn validator_set() -> Option<ValidatorSet<crypto::AuthorityId>>;
+		/// Returns the block number at which the current session began
+		fn get_session_boundary() -> BlockNumber;
 	}
 }
 
