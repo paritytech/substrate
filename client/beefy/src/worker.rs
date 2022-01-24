@@ -449,8 +449,9 @@ where
 fn wait_for_major_syncing<SO: SyncOracle + Send + Sync + Clone + 'static>(
 	mut sync_oracle: SO,
 ) -> impl future::Future<Output = ()> {
-	return future::poll_fn(move |_cx| {
+	return future::poll_fn(move |cx| {
 		if sync_oracle.is_major_syncing() {
+			cx.waker().wake_by_ref();
 			Poll::Pending
 		} else {
 			Poll::Ready(())
