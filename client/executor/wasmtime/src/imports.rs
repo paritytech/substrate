@@ -71,11 +71,7 @@ where
 						})
 						.expect("adding a missing import stub doesn't fail");
 				} else {
-					log::warn!(
-						"Missing import: '{}' {:?}",
-						name,
-						func_ty
-					);
+					log::warn!("Missing import: '{}' {:?}", name, func_ty);
 					linker
 						.func_new("env", &name, func_ty.clone(), move |_, _, _| {
 							Err(Trap::new(error.clone()))

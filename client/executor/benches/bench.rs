@@ -18,17 +18,13 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 
 use sc_executor_common::{runtime_blob::RuntimeBlob, wasm_runtime::WasmModule};
-use sc_runtime_test::wasm_binary_unwrap;
+use sc_runtime_test::wasm_binary_unwrap as test_runtime;
 use sp_wasm_interface::HostFunctions as _;
 use std::sync::Arc;
 
 enum Method {
 	Interpreted,
 	Compiled { fast_instance_reuse: bool },
-}
-
-fn test_runtime() -> &'static [u8] {
-	&wasm_binary_unwrap()[..]
 }
 
 // This is just a bog-standard Kusama runtime with the extra `test_empty_return`
