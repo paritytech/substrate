@@ -827,7 +827,7 @@ impl<B: BlockT> Protocol<B> {
 		}
 
 		if status.roles.is_light() &&
-			(self.peers.len() - self.sync.num_peers()) < self.default_peers_set_num_light
+			(self.peers.len() - self.sync.num_peers()) >= self.default_peers_set_num_light
 		{
 			// Make sure that not all slots are occupied by light clients.
 			debug!(target: "sync", "Too many light nodes, rejecting {}", who);
