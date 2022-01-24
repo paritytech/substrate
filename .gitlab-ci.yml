@@ -747,13 +747,7 @@ publish-rustdoc:
   image:                           node:16
   variables:
     GIT_DEPTH:                     100
-    # --- Following variables are for rustdocs deployment ---
-    # Space separated values of branches and tags to generate rustdocs
-    RUSTDOCS_DEPLOY_REFS:          "master monthly-2021-09+1 monthly-2021-08 v3.0.0"
-    # Location of the docs index template
-    INDEX_TPL:                     ".maintain/docs-index-tpl.ejs"
-    # Where the `/latest` symbolic link links to. One of the $RUSTDOCS_DEPLOY_REFS value.
-    LATEST:                        "monthly-2021-09+1"
+    RUSTDOCS_DEPLOY_REFS:          "master"
   rules:
     - if: $CI_PIPELINE_SOURCE == "pipeline"
       when: never
@@ -783,34 +777,18 @@ publish-rustdoc:
     - git config remote.origin.url "git@github.com:/paritytech/${CI_PROJECT_NAME}.git"
     - git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"
     - git fetch origin gh-pages
-    # Install `ejs` and generate index.html based on RUSTDOCS_DEPLOY_REFS
-    - yarn global add ejs
-    - 'ejs ${INDEX_TPL} -i "{\"deploy_refs\":\"${RUSTDOCS_DEPLOY_REFS}\",\"repo_name\":\"${CI_PROJECT_NAME}\",\"latest\":\"${LATEST}\"}" > /tmp/index.html'
     # Save README and docs
     - cp -r ./crate-docs/ /tmp/doc/
     - cp README.md /tmp/doc/
     - git checkout gh-pages
-    # Remove directories no longer necessary, as specified in $RUSTDOCS_DEPLOY_REFS.
-    # Also ensure $RUSTDOCS_DEPLOY_REFS is not just empty spaces.
-    # Even though this block spans multiple lines, they are concatenated to run as a single line
-    #   command, so note for the semi-colons in the inner-most code block.
-    - if [[ ! -z ${RUSTDOCS_DEPLOY_REFS// } ]]; then
-        for FILE in *; do
-          if [[ ! " $RUSTDOCS_DEPLOY_REFS " =~ " $FILE " ]]; then
-            echo "Removing ${FILE}...";
-            rm -rf $FILE;
-          fi
-        done
-      fi
-    # Move the index page & built back
-    - mv -f /tmp/index.html .
+    # Install `index-tpl-crud` and generate index.html based on RUSTDOCS_DEPLOY_REFS
+    - which index-tpl-crud &> /dev/null || yarn global add @jimmychu0807/index-tpl-crud
+    - index-tpl-crud upsert ./index.html ${CI_COMMIT_REF_NAME}
     # Ensure the destination dir doesn't exist.
     - rm -rf ${CI_COMMIT_REF_NAME}
     - mv -f /tmp/doc ${CI_COMMIT_REF_NAME}
-    # Add the symlink
-    - '[[ -e "$LATEST" ]] && ln -sf "${LATEST}" latest'
     # Upload files
-    - git add --all --force
+    - git add --all
     # `git commit` has an exit code of > 0 if there is nothing to commit.
     # This causes GitLab to exit immediately and marks this job failed.
     # We don't want to mark the entire job failed if there's nothing to
