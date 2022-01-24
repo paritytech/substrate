@@ -1,10 +1,8 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 use sp_api::{Encode, HashT};
 
-use sp_runtime::{
-	traits::{BlakeTwo256, Block as BlockT},
-	AccountId32,
-};
+use sp_runtime::traits::BlakeTwo256;
+
 use sp_std::{collections::btree_map::BTreeMap, convert::TryInto};
 
 use sp_core::H256;
@@ -15,7 +13,7 @@ use sp_api::{ApiExt, ApiRef, ProvideRuntimeApi, TransactionOutcome};
 #[cfg(feature = "std")]
 use sp_core::crypto::Ss58Codec;
 #[cfg(feature = "std")]
-use sp_runtime::generic::BlockId;
+use sp_runtime::{AccountId32, generic::BlockId, traits::Block as BlockT};
 #[cfg(feature = "std")]
 use ver_api::VerApi;
 

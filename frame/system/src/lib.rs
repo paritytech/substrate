@@ -71,7 +71,8 @@ use sp_runtime::{
 	traits::{
 		self, AtLeast32Bit, AtLeast32BitUnsigned, BadOrigin, BlockNumberProvider, Bounded,
 		CheckEqual, Dispatchable, Hash, Lookup, LookupError, MaybeDisplay, MaybeMallocSizeOf,
-		MaybeSerializeDeserialize, Member, One, Saturating, SimpleBitOps, StaticLookup, Zero,
+		MaybeSerializeDeserialize, Member, One, Saturating, SimpleBitOps, StaticLookup,
+		Zero,
 	},
 	DispatchError, Either, Perbill, RuntimeDebug,
 };
@@ -596,6 +597,11 @@ pub mod pallet {
 	pub type BlockHash<T: Config> =
 		StorageMap<_, Twox64Concat, T::BlockNumber, T::Hash, ValueQuery>;
 
+	/// Map of block numbers to block hashes.
+	#[pallet::storage]
+	#[pallet::getter(fn block_seed)]
+	pub type BlockSeed<T: Config> = StorageValue<_, sp_core::H256, ValueQuery>;
+
 	/// Extrinsics data for the current block (maps an extrinsic's index to its data).
 	#[pallet::storage]
 	#[pallet::getter(fn extrinsic_data)]
@@ -680,6 +686,7 @@ pub mod pallet {
 	impl<T: Config> GenesisBuild<T> for GenesisConfig {
 		fn build(&self) {
 			<BlockHash<T>>::insert::<_, T::Hash>(T::BlockNumber::zero(), hash69());
+			<BlockSeed<T>>::put::<sp_core::H256>(Default::default());
 			<ParentHash<T>>::put::<T::Hash>(hash69());
 			<LastRuntimeUpgrade<T>>::put(LastRuntimeUpgradeInfo::from(T::Version::get()));
 			<UpgradedToU32RefCount<T>>::put(true);
@@ -1363,6 +1370,10 @@ impl<T: Config> Pallet<T> {
 		});
 	}
 
+	pub fn set_block_seed(seed: &sp_core::H256) {
+		<BlockSeed<T>>::put(seed);
+	}
+
 	/// Start the execution of a particular block.
 	pub fn initialize(
 		number: &T::BlockNumber,
@@ -1370,12 +1381,6 @@ impl<T: Config> Pallet<T> {
 		digest: &DigestOf<T>,
 		kind: InitKind,
 	) {
-		let storage_root = T::Hash::decode(&mut &sp_io::storage::root()[..]).unwrap();
-        sp_runtime::print("INITIALIZE");
-        for i in storage_root.as_ref() {
-            sp_runtime::print(i);
-        }
-        // sp_runtime::print(&storage_root[..]);
 		// populate environment
 		ExecutionPhase::<T>::put(Phase::Initialization);
 		storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &0u32);
@@ -1442,7 +1447,6 @@ impl<T: Config> Pallet<T> {
 			);
 			digest.push(item);
 		}
-        sp_runtime::print("FINALIZE");
 
 		<T::Header as traits::Header>::new(
 			number,

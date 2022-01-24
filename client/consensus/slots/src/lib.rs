@@ -43,7 +43,7 @@ use sp_arithmetic::traits::BaseArithmetic;
 use sp_consensus::{CanAuthorWith, Proposer, SelectChain, SlotData, SyncOracle};
 use sp_consensus_slots::Slot;
 use sp_core::{
-	crypto::{key_types::AURA, Public},
+	crypto::key_types::AURA,
 	sr25519, ShufflingSeed,
 };
 use sp_inherents::{CreateInherentDataProviders, InherentDataProvider};

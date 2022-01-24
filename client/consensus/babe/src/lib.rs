@@ -893,13 +893,12 @@ where
 		)
 	}
 	fn keystore(&self) -> SyncCryptoStorePtr {
-        unimplemented!()
+		unimplemented!()
 		// self.keystore.clone()
 	}
 
-	fn get_key(&self, claim: &Self::Claim) -> sp_core::sr25519::Public {
-        unimplemented!()
-		// claim.as_slice().try_into().unwrap()
+	fn get_key(&self, _claim: &Self::Claim) -> sp_core::sr25519::Public {
+		unimplemented!()
 	}
 }
 

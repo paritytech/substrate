@@ -27,10 +27,12 @@ use hash_db::Prefix;
 use log::{info, trace, warn};
 use parking_lot::{Mutex, RwLock};
 use prometheus_endpoint::Registry;
-use ver_api::VerApi;
 use rand::Rng;
 use sc_block_builder::{BlockBuilderApi, BlockBuilderProvider, RecordProof};
-use sc_block_builder_ver::{BlockBuilderApi as BlockBuilderApiVer, BlockBuilderProvider as BlockBuilderProviderVer, RecordProof as RecordProofVer};
+use sc_block_builder_ver::{
+	BlockBuilderApi as BlockBuilderApiVer, BlockBuilderProvider as BlockBuilderProviderVer,
+	RecordProof as RecordProofVer,
+};
 use sc_client_api::{
 	backend::{
 		self, apply_aux, changes_tries_state_at_block, BlockImportOperation, ClientImportOperation,
@@ -62,6 +64,7 @@ use sp_blockchain::{
 	CachedHeaderMetadata, Error, HeaderBackend as ChainHeaderBackend, HeaderMetadata, ProvideCache,
 };
 use sp_consensus::{BlockOrigin, BlockStatus, Error as ConsensusError};
+use ver_api::VerApi;
 
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
 use sp_core::{
@@ -1455,8 +1458,9 @@ where
 	E: CallExecutor<Block> + Send + Sync + 'static,
 	Block: BlockT,
 	Self: ChainHeaderBackend<Block> + ProvideRuntimeApi<Block>,
-	<Self as ProvideRuntimeApi<Block>>::Api:
-		ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>> + BlockBuilderApiVer<Block> + VerApi<Block>,
+	<Self as ProvideRuntimeApi<Block>>::Api: ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>>
+		+ BlockBuilderApiVer<Block>
+		+ VerApi<Block>,
 {
 	fn new_block_at<R: Into<RecordProofVer>>(
 		&self,

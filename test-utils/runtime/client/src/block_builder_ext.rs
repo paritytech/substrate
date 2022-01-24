@@ -21,8 +21,8 @@ use sc_client_api::backend;
 use sp_api::{ApiExt, ProvideRuntimeApi};
 use sp_core::ChangesTrieConfiguration;
 
-use ver_api::VerApi;
 use sc_block_builder::BlockBuilderApi;
+use ver_api::VerApi;
 
 /// Extension trait for test block builder.
 pub trait BlockBuilderExt {

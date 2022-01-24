@@ -720,6 +720,9 @@ cfg_if! {
 				fn is_new_session(_: <<Block as BlockT>::Header as HeaderT>::Number) -> bool{
 					false
 				}
+
+				fn store_seed(_seed: sp_core::H256){
+				}
 			}
 
 			impl sp_api::Metadata<Block> for Runtime {

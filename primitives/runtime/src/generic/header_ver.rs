@@ -189,7 +189,15 @@ where
 		parent_hash: Self::Hash,
 		digest: Digest<Self::Hash>,
 	) -> Self {
-		Self { number, extrinsics_root, state_root, parent_hash, digest, seed: Default::default(), count: 0_u32.into() }
+		Self {
+			number,
+			extrinsics_root,
+			state_root,
+			parent_hash,
+			digest,
+			seed: Default::default(),
+			count: 0_u32.into(),
+		}
 	}
 }
 
@@ -264,7 +272,7 @@ mod tests {
 				],
 			},
 			seed: Default::default(),
-            count: 0
+			count: 0,
 		};
 
 		let header_encoded = header.encode();
