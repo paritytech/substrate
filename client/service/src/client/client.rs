@@ -194,7 +194,7 @@ pub struct ClientConfig<Block: BlockT> {
 	pub no_genesis: bool,
 	/// Map of WASM runtime substitute starting at the child of the given block until the runtime
 	/// version doesn't match anymore.
-	pub wasm_runtime_substitutes: HashMap<Block::Hash, Vec<u8>>,
+	pub wasm_runtime_substitutes: HashMap<NumberFor<Block>, Vec<u8>>,
 }
 
 impl<Block: BlockT> Default for ClientConfig<Block> {
@@ -1726,9 +1726,8 @@ where
 			.block_status(&BlockId::Hash(hash))
 			.map_err(|e| ConsensusError::ClientImport(e.to_string()))?
 		{
-			BlockStatus::InChainWithState | BlockStatus::Queued if !import_existing =>
+			BlockStatus::InChainWithState | BlockStatus::Queued =>
 				return Ok(ImportResult::AlreadyInChain),
-			BlockStatus::InChainWithState | BlockStatus::Queued => {},
 			BlockStatus::InChainPruned if !import_existing =>
 				return Ok(ImportResult::AlreadyInChain),
 			BlockStatus::InChainPruned => {},

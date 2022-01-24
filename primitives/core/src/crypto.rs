@@ -1121,8 +1121,6 @@ pub mod key_types {
 	pub const AUTHORITY_DISCOVERY: KeyTypeId = KeyTypeId(*b"audi");
 	/// Key type for staking, built-in. Identified as `stak`.
 	pub const STAKING: KeyTypeId = KeyTypeId(*b"stak");
-	/// Key type for equivocation reporting, built-in. Identified as `fish`.
-	pub const REPORTING: KeyTypeId = KeyTypeId(*b"fish");
 	/// A key type ID useful for tests.
 	pub const DUMMY: KeyTypeId = KeyTypeId(*b"dumy");
 }

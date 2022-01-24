@@ -20,7 +20,7 @@
 
 use lru::LruCache;
 use parking_lot::RwLock;
-use sp_runtime::traits::{Block as BlockT, Header, NumberFor};
+use sp_runtime::traits::{Block as BlockT, Header, NumberFor, One};
 
 /// Set to the expected max difference between `best` and `finalized` blocks at sync.
 const LRU_CACHE_SIZE: usize = 5_000;
@@ -37,7 +37,14 @@ pub fn lowest_common_ancestor<Block: BlockT, T: HeaderMetadata<Block> + ?Sized>(
 	id_two: Block::Hash,
 ) -> Result<HashAndNumber<Block>, T::Error> {
 	let mut header_one = backend.header_metadata(id_one)?;
+	if header_one.parent == id_two {
+		return Ok(HashAndNumber { hash: id_two, number: header_one.number - One::one() })
+	}
+
 	let mut header_two = backend.header_metadata(id_two)?;
+	if header_two.parent == id_one {
+		return Ok(HashAndNumber { hash: id_one, number: header_one.number })
+	}
 
 	let mut orig_header_one = header_one.clone();
 	let mut orig_header_two = header_two.clone();
