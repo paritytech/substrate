@@ -1406,7 +1406,7 @@ benchmarks! {
 				Regular(Instruction::I32Const(value_len as i32)), // value_len
 				Regular(Instruction::I32Const(0)), // input_data_ptr
 				Regular(Instruction::I32Const(0)), // input_data_len
-				Regular(Instruction::I32Const(u32::max_value() as i32)), // output_ptr
+				Regular(Instruction::I32Const(SENTINEL as i32)), // output_ptr
 				Regular(Instruction::I32Const(0)), // output_len_ptr
 				Regular(Instruction::Call(0)),
 				Regular(Instruction::Drop),
@@ -1583,7 +1583,7 @@ benchmarks! {
 				Regular(Instruction::I32Const(0)), // input_data_len
 				Regular(Instruction::I32Const(addr_offset as i32)), // address_ptr
 				Regular(Instruction::I32Const(addr_len_offset as i32)), // address_len_ptr
-				Regular(Instruction::I32Const(u32::max_value() as i32)), // output_ptr
+				Regular(Instruction::I32Const(SENTINEL as i32)), // output_ptr
 				Regular(Instruction::I32Const(0)), // output_len_ptr
 				Regular(Instruction::I32Const(0)), // salt_ptr
 				Regular(Instruction::I32Const(0)), // salt_ptr_len

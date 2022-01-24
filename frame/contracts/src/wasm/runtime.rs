@@ -22,7 +22,7 @@ use crate::{
 	gas::{ChargedAmount, Token},
 	schedule::HostFnWeights,
 	wasm::env_def::ConvertibleToWasm,
-	BalanceOf, CodeHash, Config, Error,
+	BalanceOf, CodeHash, Config, Error, SENTINEL,
 };
 use bitflags::bitflags;
 use codec::{Decode, DecodeAll, Encode, MaxEncodedLen};
@@ -534,7 +534,7 @@ where
 	/// length of the buffer located at `out_ptr`. If that buffer is large enough the actual
 	/// `buf.len()` is written to this location.
 	///
-	/// If `out_ptr` is set to the sentinel value of `u32::MAX` and `allow_skip` is true the
+	/// If `out_ptr` is set to the sentinel value of `SENTINEL` and `allow_skip` is true the
 	/// operation is skipped and `Ok` is returned. This is supposed to help callers to make copying
 	/// output optional. For example to skip copying back the output buffer of an `seal_call`
 	/// when the caller is not interested in the result.
@@ -553,7 +553,7 @@ where
 		allow_skip: bool,
 		create_token: impl FnOnce(u32) -> Option<RuntimeCosts>,
 	) -> Result<(), DispatchError> {
-		if allow_skip && out_ptr == u32::MAX {
+		if allow_skip && out_ptr == SENTINEL {
 			return Ok(())
 		}
 
@@ -815,7 +815,7 @@ define_env!(Env, <E: Ext>,
 	// # Return Value
 	//
 	// Returns the size of the pre-existing value at the specified key if any. Otherwise
-	// `u32::MAX` is returned as a sentinel value.
+	// `SENTINEL` is returned as a sentinel value.
 	[__unstable__] seal_set_storage(ctx, key_ptr: u32, value_ptr: u32, value_len: u32) -> u32 => {
 		ctx.set_storage(key_ptr, value_ptr, value_len)
 	},
@@ -837,7 +837,7 @@ define_env!(Env, <E: Ext>,
 	// # Return Value
 	//
 	// Returns the size of the pre-existing value at the specified key if any. Otherwise
-	// `u32::MAX` is returned as a sentinel value.
+	// `SENTINEL` is returned as a sentinel value.
 	[__unstable__] seal_clear_storage(ctx, key_ptr: u32) -> u32 => {
 		ctx.clear_storage(key_ptr).map_err(Into::into)
 	},
@@ -877,7 +877,7 @@ define_env!(Env, <E: Ext>,
 	// # Return Value
 	//
 	// Returns the size of the pre-existing value at the specified key if any. Otherwise
-	// `u32::MAX` is returned as a sentinel value.
+	// `SENTINEL` is returned as a sentinel value.
 	[__unstable__] seal_contains_storage(ctx, key_ptr: u32) -> u32 => {
 		let charged = ctx.charge_gas(RuntimeCosts::ContainsStorage(ctx.ext.max_value_size()))?;
 		let mut key: StorageKey = [0; 32];
@@ -887,7 +887,7 @@ define_env!(Env, <E: Ext>,
 			Ok(len)
 		} else {
 			ctx.adjust_gas(charged, RuntimeCosts::ContainsStorage(0));
-			Ok(u32::MAX)
+			Ok(SENTINEL)
 		}
 	},
 
@@ -994,7 +994,7 @@ define_env!(Env, <E: Ext>,
 	//
 	// The callees output buffer is copied to `output_ptr` and its length to `output_len_ptr`.
 	// The copy of the output buffer can be skipped by supplying the sentinel value
-	// of `u32::MAX` to `output_ptr`.
+	// of `SENTINEL` to `output_ptr`.
 	//
 	// # Parameters
 	//
@@ -1091,7 +1091,7 @@ define_env!(Env, <E: Ext>,
 	// by the code hash. The address of this new account is copied to `address_ptr` and its length
 	// to `address_len_ptr`. The constructors output buffer is copied to `output_ptr` and its
 	// length to `output_len_ptr`. The copy of the output buffer and address can be skipped by
-	// supplying the sentinel value of `u32::MAX` to `output_ptr` or `address_ptr`.
+	// supplying the sentinel value of `SENTINEL` to `output_ptr` or `address_ptr`.
 	//
 	// `value` must be at least the minimum balance. Otherwise the instantiation fails and the
 	// contract is not created.

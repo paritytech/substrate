@@ -22,7 +22,7 @@ pub mod meter;
 use crate::{
 	exec::{AccountIdOf, StorageKey},
 	weights::WeightInfo,
-	BalanceOf, CodeHash, Config, ContractInfoOf, DeletionQueue, Error, TrieId,
+	BalanceOf, CodeHash, Config, ContractInfoOf, DeletionQueue, Error, TrieId, SENTINEL,
 };
 use codec::{Decode, Encode};
 use frame_support::{
@@ -98,7 +98,7 @@ impl WriteOutcome {
 		}
 	}
 
-	/// Extracts the size of the overwritten value or `u32::MAX` if there
+	/// Extracts the size of the overwritten value or `SENTINEL` if there
 	/// was no value in storage.
 	///
 	/// # Note
@@ -107,7 +107,7 @@ impl WriteOutcome {
 	/// storage entry which is different from a non existing one.
 	pub fn old_len_with_sentinel(&self) -> u32 {
 		match self {
-			Self::New => u32::MAX,
+			Self::New => SENTINEL,
 			Self::Overwritten(len) => *len,
 			Self::Taken(value) => value.len() as u32,
 		}

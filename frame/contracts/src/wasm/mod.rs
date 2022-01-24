@@ -2023,7 +2023,7 @@ mod tests {
 		// value did not exist before -> sentinel returned
 		let input = ([1u8; 32], [42u8, 48]).encode();
 		let result = execute(CODE, input, &mut ext).unwrap();
-		assert_eq!(u32::from_le_bytes(result.data.0.try_into().unwrap()), u32::MAX);
+		assert_eq!(u32::from_le_bytes(result.data.0.try_into().unwrap()), crate::SENTINEL);
 		assert_eq!(ext.storage.get(&[1u8; 32]).unwrap(), &[42u8, 48]);
 
 		// value do exist -> length of old value returned
@@ -2083,7 +2083,7 @@ mod tests {
 
 		// value does not exist -> sentinel returned
 		let result = execute(CODE, [3u8; 32].encode(), &mut ext).unwrap();
-		assert_eq!(u32::from_le_bytes(result.data.0.try_into().unwrap()), u32::MAX);
+		assert_eq!(u32::from_le_bytes(result.data.0.try_into().unwrap()), crate::SENTINEL);
 		assert_eq!(ext.storage.get(&[3u8; 32]), None);
 
 		// value did exist -> length returned
@@ -2230,7 +2230,7 @@ mod tests {
 
 		// value does not exist -> sentinel value returned
 		let result = execute(CODE, [3u8; 32].encode(), &mut ext).unwrap();
-		assert_eq!(u32::from_le_bytes(result.data.0.try_into().unwrap()), u32::MAX,);
+		assert_eq!(u32::from_le_bytes(result.data.0.try_into().unwrap()), crate::SENTINEL);
 
 		// value did exist -> success
 		let result = execute(CODE, [1u8; 32].encode(), &mut ext).unwrap();
