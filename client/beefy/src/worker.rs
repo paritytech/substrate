@@ -61,6 +61,7 @@ where
 	pub beefy_best_block_sender: BeefyBestBlockSender<B>,
 	pub gossip_engine: GossipEngine<B>,
 	pub gossip_validator: Arc<GossipValidator<B>>,
+	pub min_block_delta: u32,
 	pub metrics: Option<Metrics>,
 }
 
@@ -77,6 +78,8 @@ where
 	signed_commitment_sender: BeefySignedCommitmentSender<B>,
 	gossip_engine: Arc<Mutex<GossipEngine<B>>>,
 	gossip_validator: Arc<GossipValidator<B>>,
+	/// Minimal delta between blocks, BEEFY should vote for
+	min_block_delta: u32,
 	metrics: Option<Metrics>,
 	rounds: Option<round::Rounds<Payload, NumberFor<B>>>,
 	finality_notifications: FinalityNotifications<B>,
@@ -114,6 +117,7 @@ where
 			beefy_best_block_sender,
 			gossip_engine,
 			gossip_validator,
+			min_block_delta,
 			metrics,
 		} = worker_params;
 
@@ -124,6 +128,7 @@ where
 			signed_commitment_sender,
 			gossip_engine: Arc::new(Mutex::new(gossip_engine)),
 			gossip_validator,
+			min_block_delta,
 			metrics,
 			rounds: None,
 			finality_notifications: client.finality_notification_stream(),
@@ -143,7 +148,7 @@ where
 	C: Client<B, BE>,
 	C::Api: BeefyApi<B, NumberFor<B>>,
 {
-	/// Return `true`, if we should vote on block `number`
+	/// Return `true`, if we should vote on block `header`
 	fn should_vote_on(&self, header: &B::Header) -> bool {
 		let number = *header.number();
 		let at = BlockId::hash(header.hash());
@@ -151,7 +156,7 @@ where
 		let session_start = if let Some(session_boundary) = session_boundary {
 			session_boundary
 		} else {
-			debug!(target: "beefy", "🥩 Could not retrieve session boundary- won't vote for: {:?}", number);
+			warn!(target: "beefy", "🥩 Could not retrieve session boundary- won't vote for: {:?}", number);
 			return false
 		};
 
@@ -162,7 +167,12 @@ where
 			return false
 		};
 
-		let target = vote_target(self.best_grandpa_block, best_beefy_block, session_start);
+		let target = vote_target(
+			self.best_grandpa_block,
+			best_beefy_block,
+			session_start,
+			self.min_block_delta,
+		);
 
 		trace!(target: "beefy", "🥩 should_vote_on: #{:?}, next_block_to_vote_on: #{:?}", number, target);
 
@@ -466,18 +476,18 @@ where
 }
 
 /// Calculate next block number to vote on
-fn vote_target<N>(best_grandpa: N, best_beefy: N, session_start: N) -> N
+fn vote_target<N>(best_grandpa: N, best_beefy: N, session_start: N, min_delta: u32) -> N
 where
 	N: AtLeast32Bit + Copy + Debug,
 {
-	// if the session_start as a mandatory block does not have a beefy justification yet, we vote on
-	// it
+	// if the session_start as a mandatory block does not have a beefy justification yet,
+	// we vote on it
 	let m: u32 = if session_start <= best_beefy { 1 } else { 0 };
 
 	let diff = best_grandpa.saturating_sub(best_beefy);
 	let diff = diff.saturated_into::<u32>() / 2;
 	let target = (session_start * (1u32 - m).into()) +
-		((best_beefy + diff.next_power_of_two().into()) * m.into());
+		((best_beefy + min_delta.max(diff.next_power_of_two().into()).into()) * m.into());
 
 	trace!(
 		target: "beefy",
@@ -496,68 +506,68 @@ mod tests {
 
 	#[test]
 	fn vote_on_mandatory_block() {
-		let t = vote_target(1008u32, 1000, 1001);
+		let t = vote_target(1008u32, 1000, 1001, 4);
 		assert_eq!(1001, t);
 
-		let t = vote_target(1016u32, 1000, 1008);
+		let t = vote_target(1016u32, 1000, 1008, 4);
 		assert_eq!(1008, t);
 
-		let t = vote_target(105u32, 100, 101);
+		let t = vote_target(105u32, 100, 101, 4);
 		assert_eq!(101, t);
 	}
 
 	#[test]
 	fn vote_on_power_of_two() {
-		let t = vote_target(1008u32, 1000, 999);
+		let t = vote_target(1008u32, 1000, 999, 4);
 		assert_eq!(1004, t);
 
-		let t = vote_target(1016u32, 1000, 999);
+		let t = vote_target(1016u32, 1000, 999, 4);
 		assert_eq!(1008, t);
 
-		let t = vote_target(1032u32, 1000, 999);
+		let t = vote_target(1032u32, 1000, 999, 4);
 		assert_eq!(1016, t);
 
-		let t = vote_target(1064u32, 1000, 999);
+		let t = vote_target(1064u32, 1000, 999, 4);
 		assert_eq!(1032, t);
 
-		let t = vote_target(1128u32, 1000, 999);
+		let t = vote_target(1128u32, 1000, 999, 4);
 		assert_eq!(1064, t);
 
-		let t = vote_target(1256u32, 1000, 999);
+		let t = vote_target(1256u32, 1000, 999, 4);
 		assert_eq!(1128, t);
 
-		let t = vote_target(1512u32, 1000, 999);
+		let t = vote_target(1512u32, 1000, 999, 4);
 		assert_eq!(1256, t);
 
-		let t = vote_target(1024u32, 0, 0);
+		let t = vote_target(1024u32, 0, 0, 4);
 		assert_eq!(512, t);
 	}
 
 	#[test]
 	fn vote_on_target_block() {
-		let t = vote_target(1008u32, 1002, 1001);
+		let t = vote_target(1008u32, 1002, 1001, 4);
 		assert_eq!(1006, t);
-		let t = vote_target(1010u32, 1002, 1001);
+		let t = vote_target(1010u32, 1002, 1001, 4);
 		assert_eq!(1006, t);
 
-		let t = vote_target(1016u32, 1006, 1004);
+		let t = vote_target(1016u32, 1006, 1004, 4);
 		assert_eq!(1014, t);
-		let t = vote_target(1022u32, 1006, 1004);
+		let t = vote_target(1022u32, 1006, 1004, 4);
 		assert_eq!(1014, t);
 
-		let t = vote_target(1032u32, 1012, 1010);
+		let t = vote_target(1032u32, 1012, 1010, 4);
 		assert_eq!(1028, t);
-		let t = vote_target(1044u32, 1012, 1010);
+		let t = vote_target(1044u32, 1012, 1010, 4);
 		assert_eq!(1028, t);
 
-		let t = vote_target(1064u32, 1014, 1012);
+		let t = vote_target(1064u32, 1014, 1012, 4);
 		assert_eq!(1046, t);
-		let t = vote_target(1078u32, 1014, 1012);
+		let t = vote_target(1078u32, 1014, 1012, 4);
 		assert_eq!(1046, t);
 
-		let t = vote_target(1128u32, 1008, 1004);
+		let t = vote_target(1128u32, 1008, 1004, 4);
 		assert_eq!(1072, t);
-		let t = vote_target(1136u32, 1008, 1004);
+		let t = vote_target(1136u32, 1008, 1004, 4);
 		assert_eq!(1072, t);
 	}
 }

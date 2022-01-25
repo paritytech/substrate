@@ -126,6 +126,8 @@ where
 	pub signed_commitment_sender: BeefySignedCommitmentSender<B>,
 	/// BEEFY best block sender
 	pub beefy_best_block_sender: BeefyBestBlockSender<B>,
+	/// Minimal delta between blocks, BEEFY should vote for
+	pub min_block_delta: u32,
 	/// Prometheus metric registry
 	pub prometheus_registry: Option<Registry>,
 	/// Chain specific GRANDPA protocol name. See [`beefy_protocol_name::standard_name`].
@@ -150,6 +152,7 @@ where
 		network,
 		signed_commitment_sender,
 		beefy_best_block_sender,
+		min_block_delta,
 		prometheus_registry,
 		protocol_name,
 	} = beefy_params;
@@ -179,6 +182,7 @@ where
 		beefy_best_block_sender,
 		gossip_engine,
 		gossip_validator,
+		min_block_delta,
 		metrics,
 	};
 
