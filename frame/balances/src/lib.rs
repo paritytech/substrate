@@ -505,8 +505,8 @@ pub mod pallet {
 	/// ```
 	/// But this comes with tradeoffs, storing account balances in the system pallet stores
 	/// frame_system data alongside the account data contrary to storing account balances in the
-	/// balances pallet, which uses a StorageMap to store balances data only. NOTE: This is only
-	/// used in the case that this pallet is used to store balances.
+	/// balances pallet, which uses a StorageMap to store balances data only.
+	/// NOTE: This is only used in the case that this pallet is used to store balances.
 	#[pallet::storage]
 	pub type Account<T: Config<I>, I: 'static = ()> = StorageMap<
 		_,
