@@ -13,10 +13,11 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
+clap = { version = "3.0", features = ["derive"] }
 log = "0.4.8"
 parity-scale-codec = { version = "2.3.1" }
 serde = "1.0.132"
-structopt = "0.3.25"
+zstd = "0.9.0"
 
 sc-service = { version = "0.10.0-dev", default-features = false, path = "../../../../client/service" }
 sc-cli = { version = "0.10.0-dev", path = "../../../../client/cli" }
@@ -31,6 +32,4 @@ sp-externalities = { version = "0.10.0", path = "../../../../primitives/external
 sp-version = { version = "4.0.0-dev", path = "../../../../primitives/version" }
 
 remote-externalities = { version = "0.10.0-dev", path = "../../remote-externalities" }
-jsonrpsee = { version = "0.4.1", default-features = false, features = ["ws-client"]}
-
-zstd = "0.9.0"
+jsonrpsee = { version = "0.4.1", default-features = false, features = ["ws-client"] }
