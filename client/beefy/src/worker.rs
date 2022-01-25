@@ -78,7 +78,7 @@ where
 	signed_commitment_sender: BeefySignedCommitmentSender<B>,
 	gossip_engine: Arc<Mutex<GossipEngine<B>>>,
 	gossip_validator: Arc<GossipValidator<B>>,
-	/// Minimal delta between blocks, BEEFY should vote for
+	/// Min delta in block numbers between two blocks, BEEFY should vote on
 	min_block_delta: u32,
 	metrics: Option<Metrics>,
 	rounds: Option<round::Rounds<Payload, NumberFor<B>>>,
