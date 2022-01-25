@@ -1,4 +1,4 @@
-use structopt::StructOpt;
+use clap::Parser;
 
 use std::{
 	collections::HashMap,
@@ -26,13 +26,13 @@ const SUBSTRATE_GIT_URL: &str = "https://github.com/paritytech/substrate.git";
 
 type CargoToml = HashMap<String, toml::Value>;
 
-#[derive(StructOpt)]
+#[derive(Parser)]
 struct Options {
 	/// The path to the `node-template` source.
-	#[structopt(parse(from_os_str))]
+	#[clap(parse(from_os_str))]
 	node_template: PathBuf,
 	/// The path where to output the generated `tar.gz` file.
-	#[structopt(parse(from_os_str))]
+	#[clap(parse(from_os_str))]
 	output: PathBuf,
 }
 
@@ -209,7 +209,7 @@ fn build_and_test(path: &Path, cargo_tomls: &[PathBuf]) {
 }
 
 fn main() {
-	let options = Options::from_args();
+	let options = Options::parse();
 
 	let build_dir = tempfile::tempdir().expect("Creates temp build dir");
 
@@ -261,8 +261,7 @@ fn main() {
 
 	// adding root rustfmt to node template build path
 	let node_template_rustfmt_toml_path = node_template_path.join("rustfmt.toml");
-	let root_rustfmt_toml =
-		&options.node_template.join("../../rustfmt.toml");
+	let root_rustfmt_toml = &options.node_template.join("../../rustfmt.toml");
 	if root_rustfmt_toml.exists() {
 		fs::copy(&root_rustfmt_toml, &node_template_rustfmt_toml_path)
 			.expect("Copying rustfmt.toml.");
