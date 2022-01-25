@@ -11,15 +11,10 @@ substrate:
 all:
 	cargo build --release
 
-ks:
-	cd ./extra/tcp-keystore && cargo build --bin server --features server
-
 bootnode: substrate
-	./target/release/substrate --chain zondaxSpecRaw.json --tmp --port 30333 --ws-port 9945 --validator --execution native --node-key 0000000000000000000000000000000000000000000000000000000000000001 --keystore-uri "localhost:10710"
+	./target/release/substrate --discover-local --chain chainspecs/francescoSpec.json --tmp --execution native --validator --keystore-uri "tcp://192.168.88.234:39946" --listen-addr /ip4/0.0.0.0/tcp/30333 --ws-port 9944
 
 othernode: substrate
-	./target/release/substrate --chain zondaxSpecRaw.json --tmp --port 30334 --ws-port 9946 --execution native --bootnodes /ip4/127.0.0.1/tcp/30333/p2p/12D3KooWEyoppNCUx8Yx66oV9fJnriXwCcXwDDUA2kj6vnc6iDEp
+	./target/release/substrate --discover-local --chain chainspecs/francescoSpec.json --tmp --execution native --listen-addr /ip4/0.0.0.0/tcp/30334 --ws-port 9945 --alice
 
-bootnode_ks: ks
-	cd ./extra/tcp-keystore && cargo run --bin server --features server
 # end

@@ -185,7 +185,7 @@ pub fn new_full_base(
 		backend,
 		mut task_manager,
 		import_queue,
-		mut keystore_container,
+		keystore_container,
 		select_chain,
 		transaction_pool,
 		inherent_data_providers,
