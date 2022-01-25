@@ -65,7 +65,6 @@ pub enum Error {
 	PortInUse(SocketAddr),
 }
 
-
 async fn request_metrics(req: Request<Body>, registry: Registry) -> Result<Response<Body>, Error> {
 	if req.uri().path() == "/metrics" {
 		let metric_families = registry.gather();
