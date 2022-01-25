@@ -22,10 +22,10 @@ sc-client-db = { version = "0.10.0-dev", path = "../../../client/db" }
 sc-executor = { version = "0.10.0-dev", path = "../../../client/executor" }
 sp-externalities = { version = "0.10.0", path = "../../../primitives/externalities" }
 sp-keystore = { version = "0.10.0", path = "../../../primitives/keystore" }
-sp-runtime = { version = "4.0.0", path = "../../../primitives/runtime" }
+sp-runtime = { version = "4.1.0-dev", path = "../../../primitives/runtime" }
 sp-state-machine = { version = "0.10.0", path = "../../../primitives/state-machine" }
 codec = { version = "2.0.0", package = "parity-scale-codec" }
-structopt = "0.3.25"
+clap = { version = "3.0", features = ["derive"] }
 chrono = "0.4"
 serde = "1.0.132"
 handlebars = "4.1.6"
