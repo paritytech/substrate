@@ -28,10 +28,10 @@ use crate::{
 };
 
 /// Configurations of the [`Command::OnRuntimeUpgrade`].
-#[derive(Debug, Clone, structopt::StructOpt)]
+#[derive(Debug, Clone, clap::Parser)]
 pub struct OnRuntimeUpgradeCmd {
 	/// The state type to use.
-	#[structopt(subcommand)]
+	#[clap(subcommand)]
 	pub state: State,
 }
 
