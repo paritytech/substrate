@@ -66,6 +66,7 @@ pub use sc_chain_spec::{
 	Properties, RuntimeGenesis,
 };
 
+pub use jsonrpsee::core::traits::IdProvider as RpcIdProvider;
 pub use sc_consensus::ImportQueue;
 pub use sc_executor::NativeExecutionDispatch;
 #[doc(hidden)]
@@ -314,6 +315,7 @@ mod waiting {
 fn start_rpc_servers<R>(
 	config: &Configuration,
 	gen_rpc_module: R,
+	rpc_id_provider: impl RpcIdProvider + 'static,
 ) -> Result<Box<dyn std::any::Any + Send + Sync>, error::Error>
 where
 	R: Fn(sc_rpc::DenyUnsafe) -> Result<RpcModule<()>, Error>,
@@ -360,6 +362,7 @@ where
 		metrics,
 		gen_rpc_module(deny_unsafe(http_addr, &config.rpc_methods))?,
 		config.tokio_handle.clone(),
+		rpc_id_provider,
 	)
 	.map_err(|e| Error::Application(e.into()))?;
 

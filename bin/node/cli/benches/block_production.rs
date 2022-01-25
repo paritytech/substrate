@@ -18,6 +18,7 @@
 
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion, Throughput};
 
+use jsonrpsee::ws_server::RandomStringIdProvider;
 use node_cli::service::{create_extrinsic, FullClient};
 use node_runtime::{constants::currency::*, BalancesCall};
 use sc_block_builder::{BlockBuilderProvider, BuiltBlock, RecordProof};
@@ -111,7 +112,8 @@ fn new_node(tokio_handle: Handle) -> node_cli::service::NewFullBase {
 		wasm_runtime_overrides: None,
 	};
 
-	node_cli::service::new_full_base(config, |_, _| ()).expect("creating a full node doesn't fail")
+	node_cli::service::new_full_base(config, RandomStringIdProvider::new(16), |_, _| ())
+		.expect("creating a full node doesn't fail")
 }
 
 fn extrinsic_set_time(now: u64) -> OpaqueExtrinsic {

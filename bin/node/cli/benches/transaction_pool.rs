@@ -18,6 +18,7 @@
 
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion, Throughput};
 use futures::{future, StreamExt};
+use jsonrpsee::ws_server::RandomStringIdProvider;
 use node_cli::service::{create_extrinsic, fetch_nonce, FullClient, TransactionPool};
 use node_primitives::AccountId;
 use node_runtime::{constants::currency::*, BalancesCall, SudoCall};
@@ -103,7 +104,8 @@ fn new_node(tokio_handle: Handle) -> node_cli::service::NewFullBase {
 		wasm_runtime_overrides: None,
 	};
 
-	node_cli::service::new_full_base(config, |_, _| ()).expect("Creates node")
+	node_cli::service::new_full_base(config, RandomStringIdProvider::new(16), |_, _| ())
+		.expect("Creates node")
 }
 
 fn create_accounts(num: usize) -> Vec<sr25519::Pair> {
