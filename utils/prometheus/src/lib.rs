@@ -65,16 +65,6 @@ pub enum Error {
 	PortInUse(SocketAddr),
 }
 
-// impl std::error::Error for Error {
-// 	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-// 		match self {
-// 			Error::Hyper(error) => Some(error),
-// 			Error::Http(error) => Some(error),
-// 			Error::Io(error) => Some(error),
-// 			Error::PortInUse(_) => None,
-// 		}
-// 	}
-// }
 
 async fn request_metrics(req: Request<Body>, registry: Registry) -> Result<Response<Body>, Error> {
 	if req.uri().path() == "/metrics" {
