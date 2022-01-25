@@ -324,6 +324,204 @@ mod join {
 mod claim_payout {
 	use super::*;
 
+	fn del(points: Balance, reward_pool_total_earnings: Balance) -> Delegator<Runtime> {
+		Delegator { pool: 0, points, reward_pool_total_earnings, unbonding_era: None }
+	}
+
+	fn rew(balance: Balance, points: u32, total_earnings: Balance) -> RewardPool<Runtime> {
+		RewardPool { balance, points: points.into(), total_earnings, account_id: REWARDS_ACCOUNT }
+	}
+
+	#[test]
+	fn claim_payout_works() {
+		ExtBuilder::default()
+			.add_delegators(vec![(40, 40), (50, 50)])
+			.build_and_execute(|| {
+				// Given each delegator currently has a free balance of
+				Balances::make_free_balance_be(&10, 0);
+				Balances::make_free_balance_be(&40, 0);
+				Balances::make_free_balance_be(&50, 0);
+				// and the reward pool has earned 100 in rewards
+				Balances::make_free_balance_be(&REWARDS_ACCOUNT, 100);
+
+				// When
+				assert_ok!(Pools::claim_payout(Origin::signed(10)));
+
+				// Then
+				// Expect a payout of 10: (10 del virtual points / 100 pool points) * 100 pool
+				// balance
+				assert_eq!(DelegatorStorage::<Runtime>::get(10).unwrap(), del(10, 100));
+				assert_eq!(
+					RewardPoolStorage::<Runtime>::get(0).unwrap(),
+					rew(90, 100 * 100 - 100 * 10, 100)
+				);
+				assert_eq!(Balances::free_balance(&10), 10);
+				assert_eq!(Balances::free_balance(&REWARDS_ACCOUNT), 90);
+
+				// When
+				assert_ok!(Pools::claim_payout(Origin::signed(40)));
+
+				// Then
+				// Expect payout 40: (400 del virtual points / 900 pool points) * 90 pool balance
+				assert_eq!(DelegatorStorage::<Runtime>::get(40).unwrap(), del(40, 100));
+				assert_eq!(
+					RewardPoolStorage::<Runtime>::get(0).unwrap(),
+					rew(50, 9_000 - 100 * 40, 100)
+				);
+				assert_eq!(Balances::free_balance(&40), 40);
+				assert_eq!(Balances::free_balance(&REWARDS_ACCOUNT), 50);
+
+				// When
+				assert_ok!(Pools::claim_payout(Origin::signed(50)));
+
+				// Then
+				// Expect payout 50: (50 del virtual points / 50 pool points) * 50 pool balance
+				assert_eq!(DelegatorStorage::<Runtime>::get(50).unwrap(), del(50, 100));
+				assert_eq!(RewardPoolStorage::<Runtime>::get(0).unwrap(), rew(0, 0, 100));
+				assert_eq!(Balances::free_balance(&50), 50);
+				assert_eq!(Balances::free_balance(&REWARDS_ACCOUNT), 0);
+
+				// Given the reward pool has some new rewards
+				Balances::make_free_balance_be(&REWARDS_ACCOUNT, 50);
+
+				// When
+				assert_ok!(Pools::claim_payout(Origin::signed(10)));
+
+				// Then
+				// Expect payout 5: (500  del virtual points / 5,000 pool points) * 50 pool balance
+				assert_eq!(DelegatorStorage::<Runtime>::get(10).unwrap(), del(10, 150));
+				assert_eq!(
+					RewardPoolStorage::<Runtime>::get(0).unwrap(),
+					rew(45, 5_000 - 50 * 10, 150)
+				);
+				assert_eq!(Balances::free_balance(&10), 10 + 5);
+				assert_eq!(Balances::free_balance(&REWARDS_ACCOUNT), 45);
+
+				// When
+				assert_ok!(Pools::claim_payout(Origin::signed(40)));
+
+				// Then
+				// Expect payout 20: (2,000 del virtual points / 4,500 pool points) * 45 pool
+				// balance
+				assert_eq!(DelegatorStorage::<Runtime>::get(40).unwrap(), del(40, 150));
+				assert_eq!(
+					RewardPoolStorage::<Runtime>::get(0).unwrap(),
+					rew(25, 4_500 - 50 * 40, 150)
+				);
+				assert_eq!(Balances::free_balance(&40), 40 + 20);
+				assert_eq!(Balances::free_balance(&REWARDS_ACCOUNT), 25);
+
+				// Given del 50 hasn't claimed and the reward pools has just earned 50
+				assert_ok!(Balances::mutate_account(&REWARDS_ACCOUNT, |a| a.free += 50));
+				assert_eq!(Balances::free_balance(&REWARDS_ACCOUNT), 75);
+
+				// When
+				assert_ok!(Pools::claim_payout(Origin::signed(50)));
+
+				// Then
+				// We expect a payout of 50: (5,000 del virtual points / 7,5000 pool points) * 75
+				// pool balance
+				assert_eq!(DelegatorStorage::<Runtime>::get(50).unwrap(), del(50, 200));
+				assert_eq!(
+					RewardPoolStorage::<Runtime>::get(0).unwrap(),
+					rew(
+						25,
+						// old pool points + points from new earnings - del points.
+						//
+						// points from new earnings = new earnings(50) * bonded_pool.points(100)
+						// del points = delegator.points(50) * new_earnings_since_last_claim (100)
+						(2_500 + 50 * 100) - 50 * 100,
+						200,
+					)
+				);
+				assert_eq!(Balances::free_balance(&50), 50 + 50);
+				assert_eq!(Balances::free_balance(&REWARDS_ACCOUNT), 25);
+
+				// When
+				assert_ok!(Pools::claim_payout(Origin::signed(10)));
+
+				// Then
+				// We expect a payout of 5
+				assert_eq!(DelegatorStorage::<Runtime>::get(10).unwrap(), del(10, 200));
+				assert_eq!(
+					RewardPoolStorage::<Runtime>::get(0).unwrap(),
+					rew(20, 2_500 - 10 * 50, 200)
+				);
+				assert_eq!(Balances::free_balance(&10), 15 + 5);
+				assert_eq!(Balances::free_balance(&REWARDS_ACCOUNT), 20);
+
+				// Given del 40 hasn't claimed and the reward pool has just earned 400
+				assert_ok!(Balances::mutate_account(&REWARDS_ACCOUNT, |a| a.free += 400));
+				assert_eq!(Balances::free_balance(&REWARDS_ACCOUNT), 420);
+
+				// When
+				assert_ok!(Pools::claim_payout(Origin::signed(10)));
+
+				// Then
+				// We expect a payout of 40
+				assert_eq!(DelegatorStorage::<Runtime>::get(10).unwrap(), del(10, 600));
+				assert_eq!(
+					RewardPoolStorage::<Runtime>::get(0).unwrap(),
+					rew(
+						380,
+						// old pool points + points from new earnings - del points
+						//
+						// points from new earnings = new earnings(400) * bonded_pool.points(100)
+						// del points = delegator.points(10) * new_earnings_since_last_claim(400)
+						(2_000 + 400 * 100) - 10 * 400,
+						600
+					)
+				);
+				assert_eq!(Balances::free_balance(&10), 20 + 40);
+				assert_eq!(Balances::free_balance(&REWARDS_ACCOUNT), 380);
+
+				// Given del 40 + del 50 haven't claimed and the reward pool has earned 20
+				assert_ok!(Balances::mutate_account(&REWARDS_ACCOUNT, |a| a.free += 20));
+				assert_eq!(Balances::free_balance(&REWARDS_ACCOUNT), 400);
+
+				// When
+				assert_ok!(Pools::claim_payout(Origin::signed(10)));
+
+				// Then
+				// Expect a payout of 2: (200 del virtual points / 38,000 pool points) * 400 pool
+				// balance
+				assert_eq!(DelegatorStorage::<Runtime>::get(10).unwrap(), del(10, 620));
+				assert_eq!(
+					RewardPoolStorage::<Runtime>::get(0).unwrap(),
+					rew(398, (38_000 + 20 * 100) - 10 * 20, 620)
+				);
+				assert_eq!(Balances::free_balance(&10), 60 + 2);
+				assert_eq!(Balances::free_balance(&REWARDS_ACCOUNT), 398);
+
+				// When
+				assert_ok!(Pools::claim_payout(Origin::signed(40)));
+
+				// Then
+				// Expect a payout of 188: (18,800 del virtual points /  39,800 pool points) * 399
+				// pool balance
+				assert_eq!(DelegatorStorage::<Runtime>::get(40).unwrap(), del(40, 620));
+				assert_eq!(
+					RewardPoolStorage::<Runtime>::get(0).unwrap(),
+					rew(210, 39_800 - 40 * 470, 620)
+				);
+				assert_eq!(Balances::free_balance(&40), 60 + 188);
+				assert_eq!(Balances::free_balance(&REWARDS_ACCOUNT), 210);
+
+				// When
+				assert_ok!(Pools::claim_payout(Origin::signed(50)));
+
+				// Then
+				// Expect payout of 210: (21,000 / 21,000) * 210
+				assert_eq!(DelegatorStorage::<Runtime>::get(50).unwrap(), del(50, 620));
+				assert_eq!(
+					RewardPoolStorage::<Runtime>::get(0).unwrap(),
+					rew(0, 21_000 - 50 * 420, 620)
+				);
+				assert_eq!(Balances::free_balance(&50), 100 + 210);
+				assert_eq!(Balances::free_balance(&REWARDS_ACCOUNT), 0);
+			});
+	}
+
 	#[test]
 	fn calculate_delegator_payout_errors_if_a_delegator_is_unbonding() {
 		ExtBuilder::default().build_and_execute(|| {
@@ -341,12 +539,6 @@ mod claim_payout {
 
 	#[test]
 	fn calculate_delegator_payout_works_with_a_pool_of_1() {
-		let rew = |balance, points: u32, total_earnings| RewardPool::<Runtime> {
-			balance,
-			points: points.into(),
-			total_earnings,
-			account_id: REWARDS_ACCOUNT,
-		};
 		let del = |reward_pool_total_earnings| Delegator::<Runtime> {
 			pool: 0,
 			points: 10,
@@ -408,19 +600,6 @@ mod claim_payout {
 
 	#[test]
 	fn calculate_delegator_payout_works_with_a_pool_of_3() {
-		let rew = |balance, points: u32, total_earnings| RewardPool::<Runtime> {
-			balance,
-			points: points.into(),
-			total_earnings,
-			account_id: REWARDS_ACCOUNT,
-		};
-		let del = |points, reward_pool_total_earnings| Delegator::<Runtime> {
-			pool: 0,
-			points,
-			reward_pool_total_earnings,
-			unbonding_era: None,
-		};
-
 		ExtBuilder::default()
 			.add_delegators(vec![(40, 40), (50, 50)])
 			.build_and_execute(|| {
@@ -606,19 +785,6 @@ mod claim_payout {
 
 	#[test]
 	fn do_reward_payout_works() {
-		let rew = |balance, points: u32, total_earnings| RewardPool::<Runtime> {
-			balance,
-			points: points.into(),
-			total_earnings,
-			account_id: REWARDS_ACCOUNT,
-		};
-		let del = |points, reward_pool_total_earnings| Delegator::<Runtime> {
-			pool: 0,
-			points,
-			reward_pool_total_earnings,
-			unbonding_era: None,
-		};
-
 		ExtBuilder::default()
 			.add_delegators(vec![(40, 40), (50, 50)])
 			.build_and_execute(|| {
@@ -853,6 +1019,30 @@ mod claim_payout {
 				assert_eq!(Balances::free_balance(&50), 100 + 210);
 				assert_eq!(Balances::free_balance(&REWARDS_ACCOUNT), 0);
 			});
+	}
+
+	#[test]
+	fn do_reward_payout_errors_correctly() {
+		ExtBuilder::default().build_and_execute(|| {
+			let bonded_pool = BondedPoolStorage::<Runtime>::get(0).unwrap();
+			let mut delegator = DelegatorStorage::<Runtime>::get(10).unwrap();
+
+			// The only place this can return an error is with the balance transfer from the
+			// reward  account to the delegator, and as far as this comment author can tell this
+			// can only if storage is in a bad state prior to `do_reward_payout` being called.
+
+			// Given
+			delegator.points = 15;
+			assert_eq!(bonded_pool.points, 10);
+			Balances::make_free_balance_be(&REWARDS_ACCOUNT, 10);
+
+			// Then
+			// Expect attempt payout of 15/10 * 10 when free balance is actually 10
+			assert_noop!(
+				Pools::do_reward_payout(10, delegator, &bonded_pool),
+				pallet_balances::Error::<Runtime>::InsufficientBalance
+			);
+		});
 	}
 }
 

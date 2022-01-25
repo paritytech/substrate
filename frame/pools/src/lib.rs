@@ -495,10 +495,6 @@ pub mod pallet {
 				DelegatorStorage::<T>::get(&who).ok_or(Error::<T>::DelegatorNotFound)?;
 			let bonded_pool = BondedPoolStorage::<T>::get(&delegator.pool).ok_or_else(|| {
 				log!(error, "A bonded pool could not be found, this is a system logic error.");
-				debug_assert!(
-					false,
-					"A bonded pool could not be found, this is a system logic error."
-				);
 				Error::<T>::PoolNotFound
 			})?;
 
