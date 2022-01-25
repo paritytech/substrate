@@ -58,7 +58,7 @@ type Block = RawBlock<ExtrinsicWrapper<Hash>>;
 #[test]
 fn triggering_change_should_notify_wildcard_listeners() {
 	// given
-	let mut notifications = StorageNotifications::<Block>::default();
+	let notifications = StorageNotifications::<Block>::default();
 	let child_filter = [(StorageKey(vec![4]), None)];
 	let mut recv =
 		futures::executor::block_on_stream(notifications.listen(None, Some(&child_filter[..])));
@@ -99,7 +99,7 @@ fn triggering_change_should_notify_wildcard_listeners() {
 #[test]
 fn should_only_notify_interested_listeners() {
 	// given
-	let mut notifications = StorageNotifications::<Block>::default();
+	let notifications = StorageNotifications::<Block>::default();
 	let child_filter = [(StorageKey(vec![4]), Some(vec![StorageKey(vec![5])]))];
 	let mut recv1 = futures::executor::block_on_stream(
 		notifications.listen(Some(&[StorageKey(vec![1])]), None),
@@ -152,7 +152,7 @@ fn should_only_notify_interested_listeners() {
 #[test]
 fn should_cleanup_subscribers_if_dropped() {
 	// given
-	let mut notifications = StorageNotifications::<Block>::default();
+	let notifications = StorageNotifications::<Block>::default();
 	{
 		let child_filter = [(StorageKey(vec![4]), Some(vec![StorageKey(vec![5])]))];
 		let _recv1 = futures::executor::block_on_stream(
@@ -182,7 +182,7 @@ fn should_cleanup_subscribers_if_dropped() {
 
 #[test]
 fn should_cleanup_subscriber_if_stream_is_dropped() {
-	let mut notifications = StorageNotifications::<Block>::default();
+	let notifications = StorageNotifications::<Block>::default();
 	let stream = notifications.listen(None, None);
 	assert_eq!(notifications.lock_registry().deref_mut().as_mut().sinks.len(), 1);
 	std::mem::drop(stream);
@@ -193,7 +193,7 @@ fn should_cleanup_subscriber_if_stream_is_dropped() {
 fn should_not_send_empty_notifications() {
 	// given
 	let mut recv = {
-		let mut notifications = StorageNotifications::<Block>::default();
+		let notifications = StorageNotifications::<Block>::default();
 		let recv = futures::executor::block_on_stream(notifications.listen(None, None));
 
 		// when
@@ -212,3 +212,5 @@ impl<B: BlockT> StorageNotifications<B> {
 		self.0.lock_registry()
 	}
 }
+
+

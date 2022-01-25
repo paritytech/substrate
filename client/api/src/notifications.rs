@@ -125,7 +125,7 @@ impl<Block: BlockT> StorageNotifications<Block> {
 	/// Note the changes are going to be filtered by listener's filter key.
 	/// In fact no event might be sent if clients are not interested in the changes.
 	pub fn trigger(
-		&mut self,
+		&self,
 		hash: &Block::Hash,
 		changeset: impl Iterator<Item = (Vec<u8>, Option<Vec<u8>>)>,
 		child_changeset: impl Iterator<
@@ -137,7 +137,7 @@ impl<Block: BlockT> StorageNotifications<Block> {
 
 	/// Start listening for particular storage keys.
 	pub fn listen(
-		&mut self,
+		&self,
 		filter_keys: Option<&[StorageKey]>,
 		filter_child_keys: Option<&[(StorageKey, Option<Vec<StorageKey>>)]>,
 	) -> StorageEventStream<Block::Hash> {
