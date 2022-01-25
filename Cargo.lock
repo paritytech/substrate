@@ -520,7 +520,6 @@ version = "4.0.0-dev"
 dependencies = [
  "beefy-gadget",
  "beefy-primitives",
- "derive_more",
  "futures 0.3.16",
  "jsonrpc-core",
  "jsonrpc-core-client",
@@ -4710,7 +4709,6 @@ name = "node-inspect"
 version = "0.9.0-dev"
 dependencies = [
  "clap 3.0.7",
- "derive_more",
  "parity-scale-codec",
  "sc-cli",
  "sc-client-api",
@@ -4719,6 +4717,7 @@ dependencies = [
  "sp-blockchain",
  "sp-core",
  "sp-runtime",
+ "thiserror",
 ]
 
 [[package]]
@@ -7647,7 +7646,6 @@ name = "sc-authority-discovery"
 version = "0.10.0-dev"
 dependencies = [
  "async-trait",
- "derive_more",
  "futures 0.3.16",
  "futures-timer",
  "ip_network",
@@ -7669,6 +7667,7 @@ dependencies = [
  "sp-tracing",
  "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
+ "thiserror",
 ]
 
 [[package]]
@@ -7863,7 +7862,6 @@ name = "sc-consensus-aura"
 version = "0.10.0-dev"
 dependencies = [
  "async-trait",
- "derive_more",
  "futures 0.3.16",
  "getrandom 0.2.3",
  "log 0.4.14",
@@ -7894,6 +7892,7 @@ dependencies = [
  "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
  "tempfile",
+ "thiserror",
 ]
 
 [[package]]
@@ -7901,7 +7900,6 @@ name = "sc-consensus-babe"
 version = "0.10.0-dev"
 dependencies = [
  "async-trait",
- "derive_more",
  "fork-tree",
  "futures 0.3.16",
  "log 0.4.14",
@@ -7944,13 +7942,13 @@ dependencies = [
  "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
  "tempfile",
+ "thiserror",
 ]
 
 [[package]]
 name = "sc-consensus-babe-rpc"
 version = "0.10.0-dev"
 dependencies = [
- "derive_more",
  "futures 0.3.16",
  "jsonrpc-core",
  "jsonrpc-core-client",
@@ -7973,6 +7971,7 @@ dependencies = [
  "sp-runtime",
  "substrate-test-runtime-client",
  "tempfile",
+ "thiserror",
 ]
 
 [[package]]
@@ -7993,7 +7992,6 @@ version = "0.10.0-dev"
 dependencies = [
  "assert_matches",
  "async-trait",
- "derive_more",
  "futures 0.3.16",
  "jsonrpc-core",
  "jsonrpc-core-client",
@@ -8023,6 +8021,7 @@ dependencies = [
  "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
  "substrate-test-runtime-transaction-pool",
+ "thiserror",
  "tokio",
 ]
 
@@ -8031,7 +8030,6 @@ name = "sc-consensus-pow"
 version = "0.10.0-dev"
 dependencies = [
  "async-trait",
- "derive_more",
  "futures 0.3.16",
  "futures-timer",
  "log 0.4.14",
@@ -8048,6 +8046,7 @@ dependencies = [
  "sp-inherents",
  "sp-runtime",
  "substrate-prometheus-endpoint",
+ "thiserror",
 ]
 
 [[package]]
@@ -8128,7 +8127,6 @@ dependencies = [
 name = "sc-executor-common"
 version = "0.10.0-dev"
 dependencies = [
- "derive_more",
  "environmental",
  "parity-scale-codec",
  "sc-allocator",
@@ -8184,7 +8182,6 @@ version = "0.10.0-dev"
 dependencies = [
  "assert_matches",
  "async-trait",
- "derive_more",
  "dyn-clone",
  "finality-grandpa",
  "fork-tree",
@@ -8219,6 +8216,7 @@ dependencies = [
  "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
  "tempfile",
+ "thiserror",
  "tokio",
 ]
 
@@ -8226,7 +8224,6 @@ dependencies = [
 name = "sc-finality-grandpa-rpc"
 version = "0.10.0-dev"
 dependencies = [
- "derive_more",
  "finality-grandpa",
  "futures 0.3.16",
  "jsonrpc-core",
@@ -8247,6 +8244,7 @@ dependencies = [
  "sp-keyring",
  "sp-runtime",
  "substrate-test-runtime-client",
+ "thiserror",
 ]
 
 [[package]]
@@ -8270,7 +8268,6 @@ name = "sc-keystore"
 version = "4.0.0-dev"
 dependencies = [
  "async-trait",
- "derive_more",
  "hex",
  "parking_lot 0.11.2",
  "serde_json",
@@ -8278,6 +8275,7 @@ dependencies = [
  "sp-core",
  "sp-keystore",
  "tempfile",
+ "thiserror",
 ]
 
 [[package]]
@@ -8291,7 +8289,6 @@ dependencies = [
  "bitflags",
  "bytes 1.1.0",
  "cid",
- "derive_more",
  "either",
  "fnv",
  "fork-tree",
@@ -8762,7 +8759,6 @@ dependencies = [
 name = "sc-transaction-pool-api"
 version = "4.0.0-dev"
 dependencies = [
- "derive_more",
  "futures 0.3.16",
  "log 0.4.14",
  "serde",
@@ -9632,7 +9628,6 @@ name = "sp-keystore"
 version = "0.10.0"
 dependencies = [
  "async-trait",
- "derive_more",
  "futures 0.3.16",
  "merlin",
  "parity-scale-codec",
@@ -9643,6 +9638,7 @@ dependencies = [
  "serde",
  "sp-core",
  "sp-externalities",
+ "thiserror",
 ]
 
 [[package]]
@@ -10211,11 +10207,11 @@ name = "substrate-prometheus-endpoint"
 version = "0.10.0-dev"
 dependencies = [
  "async-std",
- "derive_more",
  "futures-util",
  "hyper 0.14.16",
  "log 0.4.14",
  "prometheus",
+ "thiserror",
  "tokio",
 ]
 
@@ -10312,7 +10308,6 @@ dependencies = [
 name = "substrate-test-runtime-transaction-pool"
 version = "2.0.0"
 dependencies = [
- "derive_more",
  "futures 0.3.16",
  "parity-scale-codec",
  "parking_lot 0.11.2",
@@ -10321,6 +10316,7 @@ dependencies = [
  "sp-blockchain",
  "sp-runtime",
  "substrate-test-runtime-client",
+ "thiserror",
 ]
 
 [[package]]
