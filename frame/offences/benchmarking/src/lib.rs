@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -342,7 +342,7 @@ benchmarks! {
 					let mut reward_events = reporters.clone().into_iter()
 						.flat_map(|reporter| vec![
 							balance_deposit(reporter.clone(), reward.into()).into(),
-							frame_system::Event::<T>::NewAccount(reporter.clone()).into(),
+							frame_system::Event::<T>::NewAccount { account: reporter.clone() }.into(),
 							<T as BalancesConfig>::Event::from(
 								pallet_balances::Event::<T>::Endowed{account: reporter.clone(), free_balance: reward.into()}
 							).into(),

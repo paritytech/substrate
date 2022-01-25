@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -56,28 +56,28 @@ impl Metrics {
 		Ok(Self {
 			block_constructed: register(
 				Histogram::with_opts(HistogramOpts::new(
-					"proposer_block_constructed",
+					"substrate_proposer_block_constructed",
 					"Histogram of time taken to construct new block",
 				))?,
 				registry,
 			)?,
 			number_of_transactions: register(
 				Gauge::new(
-					"proposer_number_of_transactions",
+					"substrate_proposer_number_of_transactions",
 					"Number of transactions included in block",
 				)?,
 				registry,
 			)?,
 			create_inherents_time: register(
 				Histogram::with_opts(HistogramOpts::new(
-					"proposer_create_inherents_time",
+					"substrate_proposer_create_inherents_time",
 					"Histogram of time taken to execute create inherents",
 				))?,
 				registry,
 			)?,
 			create_block_proposal_time: register(
 				Histogram::with_opts(HistogramOpts::new(
-					"proposer_block_proposal_time",
+					"substrate_proposer_block_proposal_time",
 					"Histogram of time taken to construct a block and prepare it for proposal",
 				))?,
 				registry,

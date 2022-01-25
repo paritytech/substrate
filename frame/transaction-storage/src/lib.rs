@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -129,6 +129,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
+	#[pallet::without_storage_info]
 	pub struct Pallet<T>(_);
 
 	#[pallet::hooks]
@@ -188,7 +189,7 @@ pub mod pallet {
 			// Chunk data and compute storage root
 			let chunk_count = num_chunks(data.len() as u32);
 			let chunks = data.chunks(CHUNK_SIZE).map(|c| c.to_vec()).collect();
-			let root = sp_io::trie::blake2_256_ordered_root(chunks);
+			let root = sp_io::trie::blake2_256_ordered_root(chunks, sp_runtime::StateVersion::V1);
 
 			let content_hash = sp_io::hashing::blake2_256(&data);
 			let extrinsic_index = <frame_system::Pallet<T>>::extrinsic_index()
@@ -210,7 +211,7 @@ pub mod pallet {
 				});
 				Ok(())
 			})?;
-			Self::deposit_event(Event::Stored(index));
+			Self::deposit_event(Event::Stored { index });
 			Ok(())
 		}
 
@@ -251,7 +252,7 @@ pub mod pallet {
 				});
 				Ok(())
 			})?;
-			Self::deposit_event(Event::Renewed(index));
+			Self::deposit_event(Event::Renewed { index });
 			Ok(().into())
 		}
 
@@ -300,6 +301,7 @@ pub mod pallet {
 					&proof.proof,
 					&encode_index(chunk_index),
 					&proof.chunk,
+					sp_runtime::StateVersion::V1,
 				),
 				Error::<T>::InvalidProof
 			);
@@ -313,9 +315,9 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// Stored data under specified index.
-		Stored(u32),
+		Stored { index: u32 },
 		/// Renewed data under specified index.
-		Renewed(u32),
+		Renewed { index: u32 },
 		/// Storage proof was successfully checked.
 		ProofChecked,
 	}

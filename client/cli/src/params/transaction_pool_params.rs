@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -16,18 +16,18 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+use clap::Args;
 use sc_service::config::TransactionPoolOptions;
-use structopt::StructOpt;
 
 /// Parameters used to create the pool configuration.
-#[derive(Debug, StructOpt, Clone)]
+#[derive(Debug, Clone, Args)]
 pub struct TransactionPoolParams {
 	/// Maximum number of transactions in the transaction pool.
-	#[structopt(long = "pool-limit", value_name = "COUNT", default_value = "8192")]
+	#[clap(long, value_name = "COUNT", default_value = "8192")]
 	pub pool_limit: usize,
 
 	/// Maximum number of kilobytes of all transactions stored in the pool.
-	#[structopt(long = "pool-kbytes", value_name = "COUNT", default_value = "20480")]
+	#[clap(long, value_name = "COUNT", default_value = "20480")]
 	pub pool_kbytes: usize,
 }
 

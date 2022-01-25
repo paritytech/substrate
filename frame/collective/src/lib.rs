@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -172,6 +172,7 @@ pub mod pallet {
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
 	#[pallet::storage_version(STORAGE_VERSION)]
+	#[pallet::without_storage_info]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
 	#[pallet::config]
@@ -989,8 +990,8 @@ where
 pub struct EnsureMember<AccountId, I: 'static>(PhantomData<(AccountId, I)>);
 impl<
 		O: Into<Result<RawOrigin<AccountId, I>, O>> + From<RawOrigin<AccountId, I>>,
-		AccountId: Default,
 		I,
+		AccountId: Decode,
 	> EnsureOrigin<O> for EnsureMember<AccountId, I>
 {
 	type Success = AccountId;
@@ -1003,7 +1004,10 @@ impl<
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn successful_origin() -> O {
-		O::from(RawOrigin::Member(Default::default()))
+		let zero_account_id =
+			AccountId::decode(&mut sp_runtime::traits::TrailingZeroInput::zeroes())
+				.expect("infinite length input; no invalid inputs for type; qed");
+		O::from(RawOrigin::Member(zero_account_id))
 	}
 }
 

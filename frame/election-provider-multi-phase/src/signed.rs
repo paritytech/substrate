@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -25,7 +25,7 @@ use crate::{
 use codec::{Decode, Encode, HasCompact};
 use frame_support::{
 	storage::bounded_btree_map::BoundedBTreeMap,
-	traits::{Currency, Get, OnUnbalanced, ReservableCurrency},
+	traits::{defensive_prelude::*, Currency, Get, OnUnbalanced, ReservableCurrency},
 };
 use sp_arithmetic::traits::SaturatedConversion;
 use sp_npos_elections::{is_score_better, ElectionScore, NposSolution};
@@ -42,7 +42,7 @@ use sp_std::{
 /// A raw, unchecked signed submission.
 ///
 /// This is just a wrapper around [`RawSolution`] and some additional info.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default, scale_info::TypeInfo)]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, scale_info::TypeInfo)]
 pub struct SignedSubmission<AccountId, Balance: HasCompact, Solution> {
 	/// Who submitted this solution.
 	pub who: AccountId,
@@ -167,17 +167,17 @@ impl<T: Config> SignedSubmissions<T> {
 	}
 
 	/// Get the submission at a particular index.
-	fn get_submission(&self, idx: u32) -> Option<SignedSubmissionOf<T>> {
-		if self.deletion_overlay.contains(&idx) {
+	fn get_submission(&self, index: u32) -> Option<SignedSubmissionOf<T>> {
+		if self.deletion_overlay.contains(&index) {
 			// Note: can't actually remove the item from the insertion overlay (if present)
 			// because we don't want to use `&mut self` here. There may be some kind of
 			// `RefCell` optimization possible here in the future.
 			None
 		} else {
 			self.insertion_overlay
-				.get(&idx)
+				.get(&index)
 				.cloned()
-				.or_else(|| SignedSubmissionsMap::<T>::try_get(idx).ok())
+				.or_else(|| SignedSubmissionsMap::<T>::get(index))
 		}
 	}
 
@@ -200,18 +200,18 @@ impl<T: Config> SignedSubmissions<T> {
 		remove_score: ElectionScore,
 		insert: Option<(ElectionScore, u32)>,
 	) -> Option<SignedSubmissionOf<T>> {
-		let remove_idx = self.indices.remove(&remove_score)?;
+		let remove_index = self.indices.remove(&remove_score)?;
 		if let Some((insert_score, insert_idx)) = insert {
 			self.indices
 				.try_insert(insert_score, insert_idx)
 				.expect("just removed an item, we must be under capacity; qed");
 		}
 
-		self.insertion_overlay.remove(&remove_idx).or_else(|| {
-			(!self.deletion_overlay.contains(&remove_idx))
+		self.insertion_overlay.remove(&remove_index).or_else(|| {
+			(!self.deletion_overlay.contains(&remove_index))
 				.then(|| {
-					self.deletion_overlay.insert(remove_idx);
-					SignedSubmissionsMap::<T>::try_get(remove_idx).ok()
+					self.deletion_overlay.insert(remove_index);
+					SignedSubmissionsMap::<T>::get(remove_index)
 				})
 				.flatten()
 		})
@@ -365,7 +365,7 @@ impl<T: Config> Pallet<T> {
 			let active_voters = raw_solution.solution.voter_count() as u32;
 			let feasibility_weight = {
 				// defensive only: at the end of signed phase, snapshot will exits.
-				let desired_targets = Self::desired_targets().unwrap_or_default();
+				let desired_targets = Self::desired_targets().defensive_unwrap_or_default();
 				T::WeightInfo::feasibility_check(voters, targets, active_voters, desired_targets)
 			};
 			// the feasibility check itself has some weight

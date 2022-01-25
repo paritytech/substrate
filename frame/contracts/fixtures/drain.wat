@@ -33,7 +33,9 @@
 			)
 		)
 
-		;; Self-destruct by sending full balance to the 0 address.
+		;; Try to self-destruct by sending full balance to the 0 address.
+		;; All the *free* balance will be send away, which is a valid thing to do
+		;; because the storage deposits will keep the account alive.
 		(call $assert
 			(i32.eq
 				(call $seal_transfer
@@ -42,7 +44,7 @@
 					(i32.const 0)	;; Pointer to the buffer with value to transfer
 					(i32.const 8)	;; Length of the buffer with value to transfer
 				)
-				(i32.const 4) ;; ReturnCode::BelowSubsistenceThreshold
+				(i32.const 0) ;; ReturnCode::Success
 			)
 		)
 	)

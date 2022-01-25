@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -451,6 +451,8 @@ where
 	MaxValues: Get<Option<u32>>,
 {
 	fn build_metadata(docs: Vec<&'static str>, entries: &mut Vec<StorageEntryMetadata>) {
+		let docs = if cfg!(feature = "no-metadata-docs") { vec![] } else { docs };
+
 		let entry = StorageEntryMetadata {
 			name: Prefix::STORAGE_PREFIX,
 			modifier: QueryKind::METADATA,

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -170,7 +170,7 @@ use frame_support::{
 	pallet_prelude::DispatchResult,
 	traits::{
 		tokens::{fungible, BalanceStatus as Status, DepositConsequence, WithdrawConsequence},
-		Currency, ExistenceRequirement,
+		Currency, DefensiveSaturating, ExistenceRequirement,
 		ExistenceRequirement::{AllowDeath, KeepAlive},
 		Get, Imbalance, LockIdentifier, LockableCurrency, NamedReservableCurrency, OnUnbalanced,
 		ReservableCurrency, SignedImbalance, StoredMap, TryDrop, WithdrawReasons,
@@ -242,7 +242,6 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
-	#[pallet::generate_storage_info]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
 	#[pallet::call]
@@ -250,7 +249,6 @@ pub mod pallet {
 		/// Transfer some liquid free balance to another account.
 		///
 		/// `transfer` will set the `FreeBalance` of the sender and receiver.
-		/// It will decrease the total issuance of the system by the `TransferFee`.
 		/// If the sender's account is below the existential deposit as a result
 		/// of the transfer, the account will be reaped.
 		///
@@ -271,8 +269,6 @@ pub mod pallet {
 		///   - `transfer_keep_alive` works the same way as `transfer`, but has an additional check
 		///     that the transfer will not kill the origin account.
 		/// ---------------------------------
-		/// - Base Weight: 73.64 µs, worst case scenario (account created, account removed)
-		/// - DB Weight: 1 Read and 1 Write to destination account
 		/// - Origin account is already in memory, so no DB operations for them.
 		/// # </weight>
 		#[pallet::weight(T::WeightInfo::transfer())]
@@ -295,21 +291,11 @@ pub mod pallet {
 		/// Set the balances of a given account.
 		///
 		/// This will alter `FreeBalance` and `ReservedBalance` in storage. it will
-		/// also decrease the total issuance of the system (`TotalIssuance`).
+		/// also alter the total issuance of the system (`TotalIssuance`) appropriately.
 		/// If the new free or reserved balance is below the existential deposit,
 		/// it will reset the account nonce (`frame_system::AccountNonce`).
 		///
 		/// The dispatch origin for this call is `root`.
-		///
-		/// # <weight>
-		/// - Independent of the arguments.
-		/// - Contains a limited number of reads and writes.
-		/// ---------------------
-		/// - Base Weight:
-		///     - Creating: 27.56 µs
-		///     - Killing: 35.11 µs
-		/// - DB Weight: 1 Read, 1 Write to `who`
-		/// # </weight>
 		#[pallet::weight(
 			T::WeightInfo::set_balance_creating() // Creates a new account.
 				.max(T::WeightInfo::set_balance_killing()) // Kills an existing account.
@@ -381,11 +367,6 @@ pub mod pallet {
 		/// 99% of the time you want [`transfer`] instead.
 		///
 		/// [`transfer`]: struct.Pallet.html#method.transfer
-		/// # <weight>
-		/// - Cheaper than transfer because account cannot be killed.
-		/// - Base Weight: 51.4 µs
-		/// - DB Weight: 1 Read and 1 Write to dest (sender is in overlay already)
-		/// #</weight>
 		#[pallet::weight(T::WeightInfo::transfer_keep_alive())]
 		pub fn transfer_keep_alive(
 			origin: OriginFor<T>,
@@ -426,12 +407,7 @@ pub mod pallet {
 			let reducible_balance = Self::reducible_balance(&transactor, keep_alive);
 			let dest = T::Lookup::lookup(dest)?;
 			let keep_alive = if keep_alive { KeepAlive } else { AllowDeath };
-			<Self as Currency<_>>::transfer(
-				&transactor,
-				&dest,
-				reducible_balance,
-				keep_alive.into(),
-			)?;
+			<Self as Currency<_>>::transfer(&transactor, &dest, reducible_balance, keep_alive)?;
 			Ok(())
 		}
 
@@ -512,8 +488,29 @@ pub mod pallet {
 	#[pallet::getter(fn total_issuance)]
 	pub type TotalIssuance<T: Config<I>, I: 'static = ()> = StorageValue<_, T::Balance, ValueQuery>;
 
-	/// The balance of an account.
+	/// The Balances pallet example of storing the balance of an account.
 	///
+	/// # Example
+	///
+	/// ```nocompile
+	///  impl pallet_balances::Config for Runtime {
+	///    type AccountStore = StorageMapShim<Self::Account<Runtime>, frame_system::Provider<Runtime>, AccountId, Self::AccountData<Balance>>
+	///  }
+	/// ```
+	///
+	/// You can also store the balance of an account in the `System` pallet.
+	///
+	/// # Example
+	///
+	/// ```nocompile
+	///  impl pallet_balances::Config for Runtime {
+	///   type AccountStore = System
+	///  }
+	/// ```
+	///
+	/// But this comes with tradeoffs, storing account balances in the system pallet stores
+	/// `frame_system` data alongside the account data contrary to storing account balances in the
+	/// `Balances` pallet, which uses a `StorageMap` to store balances data only.
 	/// NOTE: This is only used in the case that this pallet is used to store balances.
 	#[pallet::storage]
 	pub type Account<T: Config<I>, I: 'static = ()> = StorageMap<
@@ -636,7 +633,7 @@ pub enum Reasons {
 
 impl From<WithdrawReasons> for Reasons {
 	fn from(r: WithdrawReasons) -> Reasons {
-		if r == WithdrawReasons::from(WithdrawReasons::TRANSACTION_PAYMENT) {
+		if r == WithdrawReasons::TRANSACTION_PAYMENT {
 			Reasons::Fee
 		} else if r.contains(WithdrawReasons::TRANSACTION_PAYMENT) {
 			Reasons::All
@@ -988,7 +985,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		} else {
 			Locks::<T, I>::insert(who, bounded_locks);
 			if !existed {
-				if system::Pallet::<T>::inc_consumers(who).is_err() {
+				if system::Pallet::<T>::inc_consumers_without_limit(who).is_err() {
 					// No providers for the locks. This is impossible under normal circumstances
 					// since the funds that are under the lock will themselves be stored in the
 					// account and therefore will need a reference.
@@ -1807,7 +1804,7 @@ where
 			account.reserved -= actual;
 			// defensive only: this can never fail since total issuance which is at least
 			// free+reserved fits into the same data type.
-			account.free = account.free.saturating_add(actual);
+			account.free = account.free.defensive_saturating_add(actual);
 			actual
 		}) {
 			Ok(x) => x,
@@ -1920,7 +1917,7 @@ where
 			match reserves.binary_search_by_key(id, |data| data.id) {
 				Ok(index) => {
 					// this add can't overflow but just to be defensive.
-					reserves[index].amount = reserves[index].amount.saturating_add(value);
+					reserves[index].amount = reserves[index].amount.defensive_saturating_add(value);
 				},
 				Err(index) => {
 					reserves
@@ -1953,8 +1950,8 @@ where
 
 						let remain = <Self as ReservableCurrency<_>>::unreserve(who, to_change);
 
-						// remain should always be zero but just to be defensive here
-						let actual = to_change.saturating_sub(remain);
+						// remain should always be zero but just to be defensive here.
+						let actual = to_change.defensive_saturating_sub(remain);
 
 						// `actual <= to_change` and `to_change <= amount`; qed;
 						reserves[index].amount -= actual;
@@ -2000,8 +1997,8 @@ where
 					let (imb, remain) =
 						<Self as ReservableCurrency<_>>::slash_reserved(who, to_change);
 
-					// remain should always be zero but just to be defensive here
-					let actual = to_change.saturating_sub(remain);
+					// remain should always be zero but just to be defensive here.
+					let actual = to_change.defensive_saturating_sub(remain);
 
 					// `actual <= to_change` and `to_change <= amount`; qed;
 					reserves[index].amount -= actual;
@@ -2060,12 +2057,12 @@ where
 											)?;
 
 										// remain should always be zero but just to be defensive
-										// here
-										let actual = to_change.saturating_sub(remain);
+										// here.
+										let actual = to_change.defensive_saturating_sub(remain);
 
 										// this add can't overflow but just to be defensive.
 										reserves[index].amount =
-											reserves[index].amount.saturating_add(actual);
+											reserves[index].amount.defensive_saturating_add(actual);
 
 										Ok(actual)
 									},
@@ -2080,7 +2077,7 @@ where
 
 										// remain should always be zero but just to be defensive
 										// here
-										let actual = to_change.saturating_sub(remain);
+										let actual = to_change.defensive_saturating_sub(remain);
 
 										reserves
 											.try_insert(
@@ -2103,7 +2100,7 @@ where
 						)?;
 
 						// remain should always be zero but just to be defensive here
-						to_change.saturating_sub(remain)
+						to_change.defensive_saturating_sub(remain)
 					};
 
 					// `actual <= to_change` and `to_change <= amount`; qed;

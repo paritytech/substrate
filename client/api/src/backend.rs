@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -29,7 +29,7 @@ use sp_core::offchain::OffchainStorage;
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, HashFor, NumberFor},
-	Justification, Justifications, Storage,
+	Justification, Justifications, StateVersion, Storage,
 };
 use sp_state_machine::{
 	ChildStorageCollection, IndexOperation, OffchainChangesCollection, StorageCollection,
@@ -166,10 +166,15 @@ pub trait BlockImportOperation<Block: BlockT> {
 		&mut self,
 		storage: Storage,
 		commit: bool,
+		state_version: StateVersion,
 	) -> sp_blockchain::Result<Block::Hash>;
 
 	/// Inject storage data into the database replacing any existing data.
-	fn reset_storage(&mut self, storage: Storage) -> sp_blockchain::Result<Block::Hash>;
+	fn reset_storage(
+		&mut self,
+		storage: Storage,
+		state_version: StateVersion,
+	) -> sp_blockchain::Result<Block::Hash>;
 
 	/// Set storage changes.
 	fn update_storage(
@@ -259,6 +264,10 @@ pub trait Finalizer<Block: BlockT, B: Backend<Block>> {
 }
 
 /// Provides access to an auxiliary database.
+///
+/// This is a simple global database not aware of forks. Can be used for storing auxiliary
+/// information like total block weight/difficulty for fork resolution purposes as a common use
+/// case.
 pub trait AuxStore {
 	/// Insert auxiliary data into key-value store.
 	///

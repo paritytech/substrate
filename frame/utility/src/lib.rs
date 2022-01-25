@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -65,7 +65,7 @@ use frame_support::{
 };
 use sp_core::TypeId;
 use sp_io::hashing::blake2_256;
-use sp_runtime::traits::Dispatchable;
+use sp_runtime::traits::{Dispatchable, TrailingZeroInput};
 use sp_std::prelude::*;
 pub use weights::WeightInfo;
 
@@ -115,8 +115,8 @@ pub mod pallet {
 		BatchCompleted,
 		/// A single item within a Batch of dispatches has completed with no error.
 		ItemCompleted,
-		/// A call was dispatched. \[result\]
-		DispatchedAs(DispatchResult),
+		/// A call was dispatched.
+		DispatchedAs { result: DispatchResult },
 	}
 
 	// Align the call size to 1KB. As we are currently compiling the runtime for native/wasm
@@ -380,7 +380,9 @@ pub mod pallet {
 
 			let res = call.dispatch_bypass_filter((*as_origin).into());
 
-			Self::deposit_event(Event::DispatchedAs(res.map(|_| ()).map_err(|e| e.error)));
+			Self::deposit_event(Event::DispatchedAs {
+				result: res.map(|_| ()).map_err(|e| e.error),
+			});
 			Ok(())
 		}
 	}
@@ -398,6 +400,7 @@ impl<T: Config> Pallet<T> {
 	/// Derive a derivative account ID from the owner account and the sub-account index.
 	pub fn derivative_account_id(who: T::AccountId, index: u16) -> T::AccountId {
 		let entropy = (b"modlpy/utilisuba", who, index).using_encoded(blake2_256);
-		T::AccountId::decode(&mut &entropy[..]).unwrap_or_default()
+		Decode::decode(&mut TrailingZeroInput::new(entropy.as_ref()))
+			.expect("infinite length input; no invalid inputs for type; qed")
 	}
 }

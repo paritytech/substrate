@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -79,6 +79,33 @@ pub trait ReservableCurrency<AccountId>: Currency<AccountId> {
 		value: Self::Balance,
 		status: BalanceStatus,
 	) -> Result<Self::Balance, DispatchError>;
+}
+
+#[cfg(feature = "std")]
+impl<AccountId> ReservableCurrency<AccountId> for () {
+	fn can_reserve(_: &AccountId, _: Self::Balance) -> bool {
+		true
+	}
+	fn slash_reserved(_: &AccountId, _: Self::Balance) -> (Self::NegativeImbalance, Self::Balance) {
+		((), 0)
+	}
+	fn reserved_balance(_: &AccountId) -> Self::Balance {
+		0
+	}
+	fn reserve(_: &AccountId, _: Self::Balance) -> DispatchResult {
+		Ok(())
+	}
+	fn unreserve(_: &AccountId, _: Self::Balance) -> Self::Balance {
+		0
+	}
+	fn repatriate_reserved(
+		_: &AccountId,
+		_: &AccountId,
+		_: Self::Balance,
+		_: BalanceStatus,
+	) -> Result<Self::Balance, DispatchError> {
+		Ok(0)
+	}
 }
 
 pub trait NamedReservableCurrency<AccountId>: ReservableCurrency<AccountId> {

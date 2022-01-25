@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -194,9 +194,10 @@ pub fn execute_transaction(utx: Extrinsic) -> ApplyExtrinsicResult {
 
 /// Finalize the block.
 pub fn finalize_block() -> Header {
+	use sp_core::storage::StateVersion;
 	let extrinsic_index: u32 = storage::unhashed::take(well_known_keys::EXTRINSIC_INDEX).unwrap();
 	let txs: Vec<_> = (0..extrinsic_index).map(ExtrinsicData::take).collect();
-	let extrinsics_root = trie::blake2_256_ordered_root(txs).into();
+	let extrinsics_root = trie::blake2_256_ordered_root(txs, StateVersion::V0);
 	let number = <Number>::take().expect("Number is set by `initialize_block`");
 	let parent_hash = <ParentHash>::take();
 	let mut digest = <StorageDigest>::take().expect("StorageDigest is set by `initialize_block`");
@@ -205,8 +206,8 @@ pub fn finalize_block() -> Header {
 
 	// This MUST come after all changes to storage are done. Otherwise we will fail the
 	// “Storage root does not match that calculated” assertion.
-	let storage_root =
-		Hash::decode(&mut &storage_root()[..]).expect("`storage_root` is a valid hash");
+	let storage_root = Hash::decode(&mut &storage_root(StateVersion::V1)[..])
+		.expect("`storage_root` is a valid hash");
 
 	if let Some(new_authorities) = o_new_authorities {
 		digest.push(generic::DigestItem::Consensus(*b"aura", new_authorities.encode()));
@@ -234,11 +235,11 @@ fn execute_transaction_backend(utx: &Extrinsic, extrinsic_index: u32) -> ApplyEx
 		Extrinsic::StorageChange(key, value) =>
 			execute_storage_change(key, value.as_ref().map(|v| &**v)),
 		Extrinsic::OffchainIndexSet(key, value) => {
-			sp_io::offchain_index::set(&key, &value);
+			sp_io::offchain_index::set(key, value);
 			Ok(Ok(()))
 		},
 		Extrinsic::OffchainIndexClear(key) => {
-			sp_io::offchain_index::clear(&key);
+			sp_io::offchain_index::clear(key);
 			Ok(Ok(()))
 		},
 		Extrinsic::Store(data) => execute_store(data.clone()),
@@ -249,7 +250,7 @@ fn execute_transfer_backend(tx: &Transfer) -> ApplyExtrinsicResult {
 	// check nonce
 	let nonce_key = tx.from.to_keyed_vec(NONCE_OF);
 	let expected_nonce: u64 = storage::hashed::get_or(&blake2_256, &nonce_key, 0);
-	if !(tx.nonce == expected_nonce) {
+	if tx.nonce != expected_nonce {
 		return Err(InvalidTransaction::Stale.into())
 	}
 
@@ -261,7 +262,7 @@ fn execute_transfer_backend(tx: &Transfer) -> ApplyExtrinsicResult {
 	let from_balance: u64 = storage::hashed::get_or(&blake2_256, &from_balance_key, 0);
 
 	// enact transfer
-	if !(tx.amount <= from_balance) {
+	if tx.amount > from_balance {
 		return Err(InvalidTransaction::Payment.into())
 	}
 	let to_balance_key = tx.to.to_keyed_vec(BALANCE_OF);
@@ -342,7 +343,7 @@ mod tests {
 	}
 
 	fn executor() -> NativeElseWasmExecutor<NativeDispatch> {
-		NativeElseWasmExecutor::new(WasmExecutionMethod::Interpreted, None, 8)
+		NativeElseWasmExecutor::new(WasmExecutionMethod::Interpreted, None, 8, 2)
 	}
 
 	fn new_test_ext() -> TestExternalities {
@@ -351,6 +352,7 @@ mod tests {
 			Sr25519Keyring::Bob.to_raw_public(),
 			Sr25519Keyring::Charlie.to_raw_public(),
 		];
+
 		TestExternalities::new_with_code(
 			wasm_binary_unwrap(),
 			sp_core::storage::Storage {
@@ -359,7 +361,7 @@ mod tests {
 					twox_128(b"sys:auth").to_vec() => authorities.encode(),
 					blake2_256(&AccountKeyring::Alice.to_raw_public().to_keyed_vec(b"balance:")).to_vec() => {
 						vec![111u8, 0, 0, 0, 0, 0, 0, 0]
-					}
+					},
 				],
 				children_default: map![],
 			},
