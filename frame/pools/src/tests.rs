@@ -5,6 +5,20 @@ use crate::mock::{
 };
 use frame_support::{assert_noop, assert_ok};
 
+// https://stackoverflow.com/questions/27582739/how-do-i-create-a-hashmap-literal
+macro_rules! collection {
+    // map-like
+    ($($k:expr => $v:expr),* $(,)?) => {{
+        use std::iter::{Iterator, IntoIterator};
+        Iterator::collect(IntoIterator::into_iter([$(($k, $v),)*]))
+    }};
+    // set-like
+    ($($v:expr),* $(,)?) => {{
+        use std::iter::{Iterator, IntoIterator};
+        Iterator::collect(IntoIterator::into_iter([$($v,)*]))
+    }};
+}
+
 #[test]
 fn test_setup_works() {
 	ExtBuilder::default().build_and_execute(|| {
@@ -1048,6 +1062,77 @@ mod claim_payout {
 
 mod unbond {
 	use super::*;
+
+	#[test]
+	fn unbond_pool_of_1_works() {
+		ExtBuilder::default().build_and_execute(|| {
+			assert_ok!(Pools::unbond(Origin::signed(10)));
+
+			assert_eq!(
+				SubPoolsStorage::<Runtime>::get(0).unwrap().with_era.into_inner(),
+				collection! { 0 => UnbondPool { points: 10, balance: 10 }}
+			);
+
+			assert_eq!(
+				BondedPoolStorage::<Runtime>::get(0).unwrap(),
+				BondedPool { account_id: PRIMARY_ACCOUNT, points: 0 }
+			);
+
+			assert_eq!(StakingMock::bonded_balance(&PRIMARY_ACCOUNT), 0);
+		});
+	}
+
+	#[test]
+	fn unbond_pool_of_3_works() {
+		ExtBuilder::default()
+			.add_delegators(vec![(40, 40), (550, 550)])
+			.build_and_execute(|| {
+				// Given a slash from 600 -> 100
+				StakingMock::set_bonded_balance(PRIMARY_ACCOUNT, 100);
+
+				// When
+				assert_ok!(Pools::unbond(Origin::signed(40)));
+
+				// Then
+				assert_eq!(
+					SubPoolsStorage::<Runtime>::get(0).unwrap().with_era.into_inner(),
+					collection! { 0 => UnbondPool { points: 6, balance: 6 }}
+				);
+				assert_eq!(
+					BondedPoolStorage::<Runtime>::get(0).unwrap(),
+					BondedPool { account_id: PRIMARY_ACCOUNT, points: 560 }
+				);
+				assert_eq!(StakingMock::bonded_balance(&PRIMARY_ACCOUNT), 94);
+
+				// When
+				assert_ok!(Pools::unbond(Origin::signed(10)));
+
+				// Then
+				assert_eq!(
+					SubPoolsStorage::<Runtime>::get(0).unwrap().with_era.into_inner(),
+					collection! { 0 => UnbondPool { points: 7, balance: 7 }}
+				);
+				assert_eq!(
+					BondedPoolStorage::<Runtime>::get(0).unwrap(),
+					BondedPool { account_id: PRIMARY_ACCOUNT, points: 550 }
+				);
+				assert_eq!(StakingMock::bonded_balance(&PRIMARY_ACCOUNT), 93);
+
+				// When
+				assert_ok!(Pools::unbond(Origin::signed(550)));
+
+				// Then
+				assert_eq!(
+					SubPoolsStorage::<Runtime>::get(0).unwrap().with_era.into_inner(),
+					collection! { 0 => UnbondPool { points: 100, balance: 100 }}
+				);
+				assert_eq!(
+					BondedPoolStorage::<Runtime>::get(0).unwrap(),
+					BondedPool { account_id: PRIMARY_ACCOUNT, points: 0 }
+				);
+				assert_eq!(StakingMock::bonded_balance(&PRIMARY_ACCOUNT), 0);
+			});
+	}
 
 	#[test]
 	fn unbond_errors_correctly() {
