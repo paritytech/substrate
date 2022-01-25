@@ -87,9 +87,8 @@ impl<T: Config> ElectionProvider for OnChainSequentialPhragmen<T> {
 		let stake_of =
 			|w: &T::AccountId| -> VoteWeight { stake_map.get(w).cloned().unwrap_or_default() };
 
-		let ElectionResult { winners: _, assignments } =
-			seq_phragmen::<_, T::Accuracy>(desired_targets as usize, targets, voters, None)
-				.map_err(Error::from)?;
+		let ElectionResult::<_, T::Accuracy> { winners: _, assignments } =
+			seq_phragmen(desired_targets as usize, targets, voters, None).map_err(Error::from)?;
 
 		let staked = assignment_ratio_to_staked_normalized(assignments, &stake_of)?;
 
@@ -161,18 +160,22 @@ mod tests {
 	type OnChainPhragmen = OnChainSequentialPhragmen<Runtime>;
 
 	mod mock_data_provider {
+		use frame_support::{bounded_vec, traits::ConstU32};
+
 		use super::*;
-		use crate::data_provider;
+		use crate::{data_provider, VoterOf};
 
 		pub struct DataProvider;
 		impl ElectionDataProvider for DataProvider {
 			type AccountId = AccountId;
 			type BlockNumber = BlockNumber;
-			const MAXIMUM_VOTES_PER_VOTER: u32 = 2;
-			fn voters(
-				_: Option<usize>,
-			) -> data_provider::Result<Vec<(AccountId, VoteWeight, Vec<AccountId>)>> {
-				Ok(vec![(1, 10, vec![10, 20]), (2, 20, vec![30, 20]), (3, 30, vec![10, 30])])
+			type MaxVotesPerVoter = ConstU32<2>;
+			fn voters(_: Option<usize>) -> data_provider::Result<Vec<VoterOf<Self>>> {
+				Ok(vec![
+					(1, 10, bounded_vec![10, 20]),
+					(2, 20, bounded_vec![30, 20]),
+					(3, 30, bounded_vec![10, 30]),
+				])
 			}
 
 			fn targets(_: Option<usize>) -> data_provider::Result<Vec<AccountId>> {

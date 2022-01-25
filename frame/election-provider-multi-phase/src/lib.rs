@@ -269,6 +269,7 @@ const LOG_TARGET: &'static str = "runtime::election-provider";
 pub mod signed;
 pub mod unsigned;
 pub mod weights;
+use unsigned::VoterOf;
 pub use weights::WeightInfo;
 
 pub use signed::{
@@ -448,11 +449,13 @@ pub struct ReadySolution<A> {
 ///
 /// These are stored together because they are often accessed together.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default, TypeInfo)]
-pub struct RoundSnapshot<A> {
+#[codec(mel_bound(T: Config))]
+#[scale_info(skip_type_params(T))]
+pub struct RoundSnapshot<T: Config> {
 	/// All of the voters.
-	pub voters: Vec<(A, VoteWeight, Vec<A>)>,
+	pub voters: Vec<VoterOf<T>>,
 	/// All of the targets.
-	pub targets: Vec<A>,
+	pub targets: Vec<T::AccountId>,
 }
 
 /// Encodes the length of a solution or a snapshot.
@@ -820,7 +823,7 @@ pub mod pallet {
 			// NOTE that this pallet does not really need to enforce this in runtime. The
 			// solution cannot represent any voters more than `LIMIT` anyhow.
 			assert_eq!(
-				<T::DataProvider as ElectionDataProvider>::MAXIMUM_VOTES_PER_VOTER,
+				<T::DataProvider as ElectionDataProvider>::MaxVotesPerVoter::get(),
 				<SolutionOf<T> as NposSolution>::LIMIT as u32,
 			);
 		}
@@ -1140,7 +1143,7 @@ pub mod pallet {
 	/// This is created at the beginning of the signed phase and cleared upon calling `elect`.
 	#[pallet::storage]
 	#[pallet::getter(fn snapshot)]
-	pub type Snapshot<T: Config> = StorageValue<_, RoundSnapshot<T::AccountId>>;
+	pub type Snapshot<T: Config> = StorageValue<_, RoundSnapshot<T>>;
 
 	/// Desired number of targets to elect for this round.
 	///
@@ -1257,7 +1260,7 @@ impl<T: Config> Pallet<T> {
 	/// Extracted for easier weight calculation.
 	fn create_snapshot_internal(
 		targets: Vec<T::AccountId>,
-		voters: Vec<crate::unsigned::Voter<T>>,
+		voters: Vec<VoterOf<T>>,
 		desired_targets: u32,
 	) {
 		let metadata =
@@ -1270,7 +1273,7 @@ impl<T: Config> Pallet<T> {
 		// instead of using storage APIs, we do a manual encoding into a fixed-size buffer.
 		// `encoded_size` encodes it without storing it anywhere, this should not cause any
 		// allocation.
-		let snapshot = RoundSnapshot { voters, targets };
+		let snapshot = RoundSnapshot::<T> { voters, targets };
 		let size = snapshot.encoded_size();
 		log!(debug, "snapshot pre-calculated size {:?}", size);
 		let mut buffer = Vec::with_capacity(size);
@@ -1288,7 +1291,7 @@ impl<T: Config> Pallet<T> {
 	///
 	/// Extracted for easier weight calculation.
 	fn create_snapshot_external(
-	) -> Result<(Vec<T::AccountId>, Vec<crate::unsigned::Voter<T>>, u32), ElectionError<T>> {
+	) -> Result<(Vec<T::AccountId>, Vec<VoterOf<T>>, u32), ElectionError<T>> {
 		let target_limit = <SolutionTargetIndexOf<T>>::max_value().saturated_into::<usize>();
 		// for now we have just a single block snapshot.
 		let voter_limit = T::VoterSnapshotPerBlock::get().saturated_into::<usize>();
