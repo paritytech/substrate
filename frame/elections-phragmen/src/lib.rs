@@ -102,9 +102,9 @@ use codec::{Decode, Encode};
 use frame_support::{
 	dispatch::WithPostDispatchInfo,
 	traits::{
-		ChangeMembers, Contains, ContainsLengthBound, Currency, CurrencyToVote, Get,
-		InitializeMembers, LockIdentifier, LockableCurrency, OnUnbalanced, ReservableCurrency,
-		SortedMembers, StorageVersion, WithdrawReasons,
+		defensive_prelude::*, ChangeMembers, Contains, ContainsLengthBound, Currency,
+		CurrencyToVote, Get, InitializeMembers, LockIdentifier, LockableCurrency, OnUnbalanced,
+		ReservableCurrency, SortedMembers, StorageVersion, WithdrawReasons,
 	},
 	weights::Weight,
 };
@@ -1028,7 +1028,7 @@ impl<T: Config> Pallet<T> {
 				candidates_and_deposit
 					.iter()
 					.find_map(|(c, d)| if c == x { Some(*d) } else { None })
-					.unwrap_or_default()
+					.defensive_unwrap_or_default()
 			};
 			// fetch deposits from the one recorded one. This will make sure that a candidate who
 			// submitted candidacy before a change to candidacy deposit will have the correct amount
