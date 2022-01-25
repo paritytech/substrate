@@ -43,7 +43,8 @@ use crate::{
 		sync::{Status as SyncStatus, SyncState},
 		NotificationsSink, NotifsHandlerError, PeerInfo, Protocol, Ready,
 	},
-	transactions, transport, DhtEvent, ExHashT, NetworkStateInfo, NetworkStatus, ReputationChange,
+	transactions, transport, utils, DhtEvent, ExHashT, NetworkStateInfo, NetworkStatus,
+	ReputationChange,
 };
 
 use codec::Encode as _;
@@ -85,6 +86,7 @@ use std::{
 	},
 	task::Poll,
 };
+use tokio::sync::watch;
 
 pub use behaviour::{
 	IfDisconnected, InboundFailure, OutboundFailure, RequestFailure, ResponseFailure,
@@ -113,6 +115,8 @@ pub struct NetworkService<B: BlockT + 'static, H: ExHashT> {
 	external_addresses: Arc<Mutex<Vec<Multiaddr>>>,
 	/// Are we actively catching up with the chain?
 	is_major_syncing: Arc<AtomicBool>,
+	/// A channel that receives notifications about the major sync state
+	major_sync_stream: utils::MajorSyncStream<Option<bool>>,
 	/// Local copy of the `PeerId` of the local node.
 	local_peer_id: PeerId,
 	/// The `KeyPair` that defines the `PeerId` of the local node.
@@ -249,6 +253,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 
 		let num_connected = Arc::new(AtomicUsize::new(0));
 		let is_major_syncing = Arc::new(AtomicBool::new(false));
+		let (major_sync_sender, major_sync_stream) = utils::MajorSyncStream::new(None);
 
 		// Build the swarm.
 		let client = params.chain.clone();
@@ -415,6 +420,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			external_addresses: external_addresses.clone(),
 			num_connected: num_connected.clone(),
 			is_major_syncing: is_major_syncing.clone(),
+			major_sync_stream,
 			peerset: peerset_handle,
 			local_peer_id,
 			local_identity,
@@ -438,6 +444,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			external_addresses,
 			num_connected,
 			is_major_syncing,
+			major_sync_sender,
 			network_service: swarm,
 			service,
 			import_queue: params.import_queue,
@@ -1277,6 +1284,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	}
 }
 
+#[async_trait::async_trait]
 impl<B: BlockT + 'static, H: ExHashT> sp_consensus::SyncOracle for NetworkService<B, H> {
 	fn is_major_syncing(&mut self) -> bool {
 		Self::is_major_syncing(self)
@@ -1285,8 +1293,25 @@ impl<B: BlockT + 'static, H: ExHashT> sp_consensus::SyncOracle for NetworkServic
 	fn is_offline(&mut self) -> bool {
 		self.num_connected.load(Ordering::Relaxed) == 0
 	}
-}
 
+	async fn wait_for_major_syncing(&mut self) -> () {
+		self.major_sync_stream
+			.clone()
+			.filter(|val| {
+				if let Some(val) = val {
+					future::ready(!val)
+				}
+				// if the stream yields None, we know it's still at the initial value so we discard
+				// it
+				else {
+					future::ready(false)
+				}
+			})
+			.next()
+			.await;
+	}
+}
+#[async_trait::async_trait]
 impl<'a, B: BlockT + 'static, H: ExHashT> sp_consensus::SyncOracle for &'a NetworkService<B, H> {
 	fn is_major_syncing(&mut self) -> bool {
 		NetworkService::is_major_syncing(self)
@@ -1294,6 +1319,23 @@ impl<'a, B: BlockT + 'static, H: ExHashT> sp_consensus::SyncOracle for &'a Netwo
 
 	fn is_offline(&mut self) -> bool {
 		self.num_connected.load(Ordering::Relaxed) == 0
+	}
+
+	async fn wait_for_major_syncing(&mut self) -> () {
+		self.major_sync_stream
+			.clone()
+			.filter(|val| {
+				if let Some(val) = val {
+					future::ready(!val)
+				}
+				// if the stream yields None, we know it's still at the initial value so we discard
+				// it
+				else {
+					future::ready(false)
+				}
+			})
+			.next()
+			.await;
 	}
 }
 
@@ -1455,6 +1497,8 @@ pub struct NetworkWorker<B: BlockT + 'static, H: ExHashT> {
 	num_connected: Arc<AtomicUsize>,
 	/// Updated by the `NetworkWorker` and loaded by the `NetworkService`.
 	is_major_syncing: Arc<AtomicBool>,
+	/// A channel that sends updates about the major sync state
+	major_sync_sender: watch::Sender<Option<bool>>,
 	/// The network service that can be extracted and shared through the codebase.
 	service: Arc<NetworkService<B, H>>,
 	/// The *actual* network.
@@ -2074,6 +2118,7 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 		this.tx_handler_controller.set_gossip_enabled(!is_major_syncing);
 
 		this.is_major_syncing.store(is_major_syncing, Ordering::Relaxed);
+		let _ = this.major_sync_sender.send(Some(is_major_syncing));
 
 		if let Some(metrics) = this.metrics.as_ref() {
 			for (proto, buckets) in this.network_service.behaviour_mut().num_entries_per_kbucket() {

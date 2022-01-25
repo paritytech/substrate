@@ -22,7 +22,6 @@ use codec::{Codec, Decode, Encode};
 use futures::{future, FutureExt, StreamExt};
 use log::{debug, error, info, log_enabled, trace, warn};
 use parking_lot::Mutex;
-use std::task::Poll;
 
 use sc_client_api::{Backend, FinalityNotification, FinalityNotifications};
 use sc_network_gossip::GossipEngine;
@@ -411,9 +410,8 @@ where
 		loop {
 			if self.sync_oracle.is_major_syncing() {
 				debug!(target: "beefy", "Waiting for major sync to complete.");
-				wait_for_major_syncing(self.sync_oracle.clone()).await;
+				self.sync_oracle.wait_for_major_syncing().await;
 			}
-
 			let engine = self.gossip_engine.clone();
 			let gossip_engine = future::poll_fn(|cx| engine.lock().poll_unpin(cx));
 
@@ -444,20 +442,6 @@ where
 	}
 }
 
-/// Returns a future that waits until major sync is done
-/// before completing
-fn wait_for_major_syncing<SO: SyncOracle + Send + Sync + Clone + 'static>(
-	mut sync_oracle: SO,
-) -> impl future::Future<Output = ()> {
-	return future::poll_fn(move |cx| {
-		if sync_oracle.is_major_syncing() {
-			cx.waker().wake_by_ref();
-			Poll::Pending
-		} else {
-			Poll::Ready(())
-		}
-	})
-}
 /// Extract the MMR root hash from a digest in the given header, if it exists.
 fn find_mmr_root_digest<B, Id>(header: &B::Header) -> Option<MmrRootHash>
 where

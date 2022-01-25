@@ -16,10 +16,12 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use futures::{stream::unfold, FutureExt, Stream, StreamExt};
+use futures::{ready, stream::unfold, FutureExt, Stream, StreamExt};
 use futures_timer::Delay;
 use linked_hash_set::LinkedHashSet;
-use std::{hash::Hash, num::NonZeroUsize, time::Duration};
+use std::{hash::Hash, num::NonZeroUsize, task::Poll, time::Duration};
+use tokio::sync::watch;
+use tokio_stream::wrappers::WatchStream;
 
 /// Creates a stream that returns a new value every `duration`.
 pub fn interval(duration: Duration) -> impl Stream<Item = ()> + Unpin {
@@ -54,6 +56,46 @@ impl<T: Hash + Eq> LruHashSet<T> {
 			return true
 		}
 		false
+	}
+}
+
+/// A clone-able stream that yields [`T`].
+/// Every instance of the stream will recieve the same data.
+/// The stream is implemented on top of a spmc channel
+/// see [`tokio::sync::watch::Receiver`]
+pub struct MajorSyncStream<T: Clone + Sync + Send + 'static> {
+	consumer: watch::Receiver<T>,
+	inner: WatchStream<T>,
+}
+
+impl<T: Clone + Sync + Send + 'static> Clone for MajorSyncStream<T> {
+	fn clone(&self) -> Self {
+		let consumer = self.consumer.clone();
+		let inner = WatchStream::new(consumer.clone());
+		Self { consumer, inner }
+	}
+}
+
+impl<T: Clone + Sync + Send + 'static> MajorSyncStream<T> {
+	pub fn new(init: T) -> (watch::Sender<T>, Self) {
+		let (tx, rx) = watch::channel(init);
+		let consumer = rx.clone();
+		let inner = WatchStream::new(consumer.clone());
+		(tx, Self { consumer, inner })
+	}
+}
+
+impl<T: Clone + Sync + Send + 'static> Stream for MajorSyncStream<T> {
+	type Item = T;
+
+	fn poll_next(
+		mut self: std::pin::Pin<&mut Self>,
+		cx: &mut std::task::Context<'_>,
+	) -> std::task::Poll<Option<Self::Item>> {
+		match ready!(self.inner.poll_next_unpin(cx)) {
+			Some(item) => Poll::Ready(Some(item)),
+			_ => Poll::Ready(None),
+		}
 	}
 }
 
