@@ -66,7 +66,7 @@ pub use sc_chain_spec::{
 	Properties, RuntimeGenesis,
 };
 
-pub use jsonrpsee::core::traits::IdProvider as RpcIdProvider;
+pub use jsonrpsee::core::{id_providers::*, traits::IdProvider as RpcIdProvider};
 pub use sc_consensus::ImportQueue;
 pub use sc_executor::NativeExecutionDispatch;
 #[doc(hidden)]

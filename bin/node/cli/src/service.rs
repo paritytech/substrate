@@ -23,7 +23,6 @@
 use codec::Encode;
 use frame_system_rpc_runtime_api::AccountNonceApi;
 use futures::prelude::*;
-use jsonrpsee::ws_server::RandomStringIdProvider;
 use node_executor::ExecutorDispatch;
 use node_primitives::Block;
 use node_runtime::RuntimeApi;
@@ -534,8 +533,11 @@ pub fn new_full_base(
 }
 
 /// Builds a new service for a full client.
-pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
-	new_full_base(config, RandomStringIdProvider::new(16), |_, _| ())
+pub fn new_full(
+	config: Configuration,
+	rpc_id_provider: impl RpcIdProvider + 'static,
+) -> Result<TaskManager, ServiceError> {
+	new_full_base(config, rpc_id_provider, |_, _| ())
 		.map(|NewFullBase { task_manager, .. }| task_manager)
 }
 
