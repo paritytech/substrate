@@ -421,6 +421,7 @@ pub fn local_testnet_config() -> ChainSpec {
 pub(crate) mod tests {
 	use super::*;
 	use crate::service::{new_full_base, NewFullBase};
+	use jsonrpsee::ws_server::RandomStringIdProvider;
 	use sc_service_test;
 	use sp_runtime::BuildStorage;
 
@@ -472,7 +473,7 @@ pub(crate) mod tests {
 
 		sc_service_test::connectivity(integration_test_config_with_two_authorities(), |config| {
 			let NewFullBase { task_manager, client, network, transaction_pool, .. } =
-				new_full_base(config, |_, _| ())?;
+				new_full_base(config, RandomStringIdProvider::new(16), |_, _| ())?;
 			Ok(sc_service_test::TestNetComponents::new(
 				task_manager,
 				client,
