@@ -444,7 +444,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			external_addresses,
 			num_connected,
 			is_major_syncing,
-			major_sync_sender,
+			major_sync_sender: Arc::new(major_sync_sender),
 			network_service: swarm,
 			service,
 			import_queue: params.import_queue,
@@ -1498,7 +1498,7 @@ pub struct NetworkWorker<B: BlockT + 'static, H: ExHashT> {
 	/// Updated by the `NetworkWorker` and loaded by the `NetworkService`.
 	is_major_syncing: Arc<AtomicBool>,
 	/// A channel that sends updates about the major sync state
-	major_sync_sender: watch::Sender<Option<bool>>,
+	major_sync_sender: Arc<watch::Sender<Option<bool>>>,
 	/// The network service that can be extracted and shared through the codebase.
 	service: Arc<NetworkService<B, H>>,
 	/// The *actual* network.
