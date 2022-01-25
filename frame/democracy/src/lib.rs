@@ -156,6 +156,7 @@ use codec::{Decode, Encode, Input};
 use frame_support::{
 	ensure,
 	traits::{
+		defensive_prelude::*,
 		schedule::{DispatchTime, Named as ScheduleNamed},
 		BalanceStatus, Currency, Get, LockIdentifier, LockableCurrency, OnUnbalanced,
 		ReservableCurrency, WithdrawReasons,
@@ -246,6 +247,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
+	#[pallet::without_storage_info]
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
@@ -1629,7 +1631,7 @@ impl<T: Config> Pallet<T> {
 		let mut public_props = Self::public_props();
 		if let Some((winner_index, _)) = public_props.iter().enumerate().max_by_key(
 			// defensive only: All current public proposals have an amount locked
-			|x| Self::backing_for((x.1).0).unwrap_or_else(Zero::zero),
+			|x| Self::backing_for((x.1).0).defensive_unwrap_or_else(Zero::zero),
 		) {
 			let (prop_index, proposal, _) = public_props.swap_remove(winner_index);
 			<PublicProps<T>>::put(public_props);
