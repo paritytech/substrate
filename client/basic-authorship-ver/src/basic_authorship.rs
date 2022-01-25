@@ -32,15 +32,12 @@ use sc_block_builder::{validate_transaction, BlockBuilderApi, BlockBuilderProvid
 use sc_client_api::backend;
 use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_INFO};
 use sc_transaction_pool_api::{InPoolTransaction, TransactionPool};
-use sp_api::{ApiExt, ProvideRuntimeApi, TransactionOutcome};
-use sp_blockchain::{
-	ApplyExtrinsicFailed as ApplyExtrinsicFailedOther, ApplyExtrinsicFailed::Validity,
-	Error::ApplyExtrinsicFailed, HeaderBackend,
-};
+use sp_api::{ApiExt, ProvideRuntimeApi};
+use sp_blockchain::{ApplyExtrinsicFailed::Validity, Error::ApplyExtrinsicFailed, HeaderBackend};
 use sp_consensus::{
 	evaluation, DisableProofRecording, EnableProofRecording, ProofRecording, Proposal,
 };
-use sp_core::{traits::SpawnNamed, ExecutionContext};
+use sp_core::traits::SpawnNamed;
 use sp_inherents::InherentData;
 use sp_runtime::{
 	generic::BlockId,

@@ -22,8 +22,9 @@ use crate::{
 	generic,
 	scale_info::TypeInfo,
 	traits::{
-		self, Applyable, BlakeTwo256, Checkable, DispatchInfoOf, Dispatchable, HasAddress,
-		OpaqueKeys, PostDispatchInfoOf, SignedExtension, ValidateUnsigned,
+		self, Applyable, BlakeTwo256, Checkable, DispatchInfoOf, Dispatchable,
+		IdentifyAccountWithLookup, OpaqueKeys, PostDispatchInfoOf, SignedExtension,
+		ValidateUnsigned,
 	},
 	transaction_validity::{TransactionSource, TransactionValidity, TransactionValidityError},
 	ApplyExtrinsicResultWithInfo, CryptoTypeId, KeyTypeId,
@@ -331,11 +332,12 @@ impl<Call, Extra> TestXt<Call, Extra> {
 	}
 }
 
-impl<Call, Extra> HasAddress for TestXt<Call, Extra> {
-	type AccountId = u64;
+use crate::traits::LookupError;
 
-	fn get_address(&self) -> Option<Self::AccountId> {
-		self.signature.as_ref().map(|(id, _)| *id)
+impl<T, Call, Extra> IdentifyAccountWithLookup<T> for TestXt<Call, Extra> {
+	type AccountId = u64;
+	fn get_account_id(&self, lookup: &T) -> Result<Option<u64>, LookupError> {
+		Ok(None)
 	}
 }
 

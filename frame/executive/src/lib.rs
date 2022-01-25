@@ -131,8 +131,8 @@ use schnorrkel::vrf::{VRFOutput, VRFProof};
 use sp_runtime::{
 	generic::Digest,
 	traits::{
-		self, Applyable, CheckEqual, Checkable, Dispatchable, Extrinsic, HasAddress, Header,
-		NumberFor, One, Saturating, ValidateUnsigned, Zero,
+		self, Applyable, CheckEqual, Checkable, Dispatchable, Extrinsic, Header,
+		IdentifyAccountWithLookup, NumberFor, One, Saturating, ValidateUnsigned, Zero,
 	},
 	transaction_validity::{TransactionSource, TransactionValidity},
 	ApplyExtrinsicResult, SaturatedConversion,
@@ -171,7 +171,9 @@ impl<
 	> ExecuteBlock<Block>
 	for Executive<System, Block, Context, UnsignedValidator, AllPallets, COnRuntimeUpgrade>
 where
-	Block::Extrinsic: HasAddress<AccountId = System::AccountId> + Checkable<Context> + Codec,
+	Block::Extrinsic: IdentifyAccountWithLookup<Context, AccountId = System::AccountId>
+		+ Checkable<Context>
+		+ Codec,
 	CheckedOf<Block::Extrinsic, Context>: Applyable + GetDispatchInfo,
 	CallOf<Block::Extrinsic, Context>:
 		Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
@@ -198,19 +200,9 @@ where
 			UnsignedValidator,
 			AllPallets,
 			COnRuntimeUpgrade,
-		>::execute_block_ver(block, public);
+		>::execute_block_ver_impl(block, public);
 	}
 }
-
-// fn create_shuffling_seed_input_data(prev_seed: &ShufflingSeed) -> vrf::VRFTranscriptData {
-// 	vrf::VRFTranscriptData {
-// 		label: b"shuffling_seed",
-// 		items: vec![(
-// 			"prev_seed",
-// 			vrf::VRFTranscriptValue::Bytes(prev_seed.seed.as_bytes().to_vec()),
-// 		)],
-// 	}
-// }
 
 impl<
 		System: frame_system::Config + EnsureInherentsAreFirst<Block>,
@@ -226,7 +218,9 @@ impl<
 	> Executive<System, Block, Context, UnsignedValidator, AllPallets, COnRuntimeUpgrade>
 where
 	<System as frame_system::Config>::BlockNumber: AtLeast32BitUnsigned,
-	Block::Extrinsic: HasAddress<AccountId = System::AccountId> + Checkable<Context> + Codec,
+	Block::Extrinsic: IdentifyAccountWithLookup<Context, AccountId = System::AccountId>
+		+ Checkable<Context>
+		+ Codec,
 	CheckedOf<Block::Extrinsic, Context>: Applyable + GetDispatchInfo,
 	CallOf<Block::Extrinsic, Context>:
 		Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
@@ -331,7 +325,6 @@ where
 			digest,
 			frame_system::InitKind::Full,
 		);
-
 		weight = weight.saturating_add(<frame_system::Pallet<System> as OnInitialize<
 			System::BlockNumber,
 		>>::on_initialize(*block_number));
@@ -368,7 +361,6 @@ where
 		// Check that `parent_hash` is correct.
 		sp_tracing::enter_span!(sp_tracing::Level::TRACE, "ver checks");
 		let header = block.header();
-		let n = header.number().clone();
 		// Check that shuffling seedght is generated properly
 		let new_seed = VRFOutput::from_bytes(&header.seed().seed.as_bytes())
 			.expect("cannot parse shuffling seed");
@@ -436,7 +428,7 @@ where
 	}
 
 	/// Actually execute all transitions for `block`.
-	pub fn execute_block_ver(block: Block, public: Vec<u8>) {
+	pub fn execute_block_ver_impl(block: Block, public: Vec<u8>) {
 		sp_io::init_tracing();
 		sp_tracing::within_span! {
 			sp_tracing::info_span!("execute_block", ?block);
@@ -466,11 +458,11 @@ where
 
 			let extrinsics_with_author: Vec<(_,_)> = tx_to_be_executed.into_iter().map(|e|
 					(
-						(e.get_address(), e)
+						// its safe to panic here
+						(e.get_account_id(&Default::default()).unwrap(), e)
 					)
 			).collect();
 			let shuffled_extrinsics = extrinsic_shuffler::shuffle_using_seed(extrinsics_with_author, &header.seed().seed);
-			// let shuffled_extrinsics = tx_to_be_executed;
 
 			Self::execute_extrinsics_with_book_keeping(shuffled_extrinsics, *header.number());
 

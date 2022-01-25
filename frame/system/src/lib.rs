@@ -71,10 +71,9 @@ use sp_runtime::{
 	traits::{
 		self, AtLeast32Bit, AtLeast32BitUnsigned, BadOrigin, BlockNumberProvider, Bounded,
 		CheckEqual, Dispatchable, Hash, Lookup, LookupError, MaybeDisplay, MaybeMallocSizeOf,
-		MaybeSerializeDeserialize, Member, One, Saturating, SimpleBitOps, StaticLookup,
-		UniqueSaturatedInto, Zero,
+		MaybeSerializeDeserialize, Member, One, Saturating, SimpleBitOps, StaticLookup, Zero,
 	},
-	DispatchError, Either, Perbill, RuntimeDebug, SaturatedConversion,
+	DispatchError, Either, Perbill, RuntimeDebug,
 };
 #[cfg(any(feature = "std", test))]
 use sp_std::map;
@@ -1371,12 +1370,6 @@ impl<T: Config> Pallet<T> {
 	}
 
 	pub fn set_block_seed(seed: &sp_core::H256) {
-		let number = <Number<T>>::get();
-		sp_runtime::print("SET SEED");
-		let number: u64 = number.unique_saturated_into();
-		for b in seed.as_bytes() {
-			sp_runtime::print(b);
-		}
 		<BlockSeed<T>>::put(seed);
 	}
 

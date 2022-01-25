@@ -800,12 +800,12 @@ pub trait Checkable<Context>: Sized {
 }
 
 /// Provides information about author
-pub trait HasAddress {
-	/// Returned if `check` succeeds.
+pub trait IdentifyAccountWithLookup<Lookup> {
+	/// type that identifis account
 	type AccountId;
 
-	/// Check self, given an instance of Context.
-	fn get_address(&self) -> Option<Self::AccountId>;
+	/// performs lookup and returns AccountId if available
+	fn get_account_id(&self, lookup: &Lookup) -> Result<Option<Self::AccountId>, LookupError>;
 }
 
 /// A "checkable" piece of information, used by the standard Substrate Executive in order to

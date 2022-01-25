@@ -36,8 +36,7 @@ use sp_core::ExecutionContext;
 use sp_runtime::{
 	generic::BlockId,
 	traits::{
-		BlakeTwo256, Block as BlockT, DigestFor, DigestItemFor, Extrinsic, Hash, HashFor,
-		Header as HeaderT, NumberFor, One,
+		BlakeTwo256, Block as BlockT, DigestFor, Hash, HashFor, Header as HeaderT, NumberFor, One,
 	},
 	SaturatedConversion,
 };
@@ -46,10 +45,9 @@ pub use sp_block_builder::BlockBuilder as BlockBuilderApi;
 use sp_blockchain::HeaderBackend;
 use ver_api::VerApi;
 
-use log::info;
 use sc_client_api::backend;
 use sp_core::ShufflingSeed;
-use sp_ver::{extract_inherent_data, CompatibleDigestItemVer, PreDigestVer};
+use sp_ver::extract_inherent_data;
 
 /// Used as parameter to [`BlockBuilderProvider`] to express if proof recording should be enabled.
 ///
@@ -206,6 +204,7 @@ where
 		})
 	}
 
+	/// temporaily apply extrinsics and record them on the list
 	pub fn record_valid_extrinsics_and_revert_changes<
 		F: FnOnce(&'_ A::Api) -> Vec<Block::Extrinsic>,
 	>(
@@ -251,7 +250,7 @@ where
 	pub fn apply_previous_block_extrinsics(&mut self, seed: ShufflingSeed) {
 		let parent_hash = self.parent_hash;
 		let block_id = &self.block_id;
-		self.api.store_seed(&block_id, seed.seed);
+		self.api.store_seed(&block_id, seed.seed).unwrap();
 
 		let previous_block_header =
 			self.backend.blockchain().header(BlockId::Hash(parent_hash)).unwrap().unwrap();
@@ -416,6 +415,7 @@ where
 	}
 }
 
+/// Verifies if trasaction can be executed
 pub fn validate_transaction<'a, Block, Api>(
 	at: &BlockId<Block>,
 	api: &'_ Api::Api,

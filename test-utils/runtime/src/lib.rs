@@ -717,11 +717,11 @@ cfg_if! {
 					None
 				}
 
-				fn is_new_session(number: <<Block as BlockT>::Header as HeaderT>::Number) -> bool{
+				fn is_new_session(_: <<Block as BlockT>::Header as HeaderT>::Number) -> bool{
 					false
 				}
 
-				fn store_seed(seed: sp_core::H256){
+				fn store_seed(_seed: sp_core::H256){
 				}
 			}
 
