@@ -34,11 +34,28 @@ pub trait PoolsInterface {
 	type AccountId;
 	type Balance;
 
+	// The current approach here is to share `BTreeMap<EraIndex, BalanceOf<T>>` with the staking
+	// API. This is arguably a leaky, suboptimal API because both sides have to share this
+	// non-trivial data structure. With the current design we do this because we track the unbonding
+	// balance in both the pallet-staking `unlocking` chunks and in here with the pallet-pools
+	// `SubPools`. Because both pallets need to know about slashes to unbonding funds we either have
+	// to replicate the slashing logic between the pallets, or share some data. A ALTERNATIVE is
+	// having the pallet-pools read the unbonding balance per era directly from pallet-staking. The
+	// downside of this is that once a delegator calls `withdraw_unbonded`, the chunk is removed and
+	// we can't keep track of the balance for that `UnbondPool` anymore, thus we must merge the
+	// balance and points of that `UnbondPool` with the `no_era` pool immediately upon calling
+	// withdraw_unbonded. We choose not to do this because if there was a slash, it would negatively
+	// affect the points:balance ratio of the `no_era` pool for everyone, including those who may
+	// not have been unbonding in eras effected by the slash.
+	/// Calculate the slashes for each unbonding chunk/unbonding pool and the actively bonded
+	/// balance. This should apply the updated balances to the pools and return the updated balances
+	/// to the caller (presumably pallet-staking) so they can do the corresponding updates.
 	fn slash_pool(
 		account_id: &Self::AccountId,
 		slash_amount: Self::Balance,
 		slash_era: EraIndex,
 		active_era: EraIndex,
+		active_bonded: Self::Balance,
 	) -> Option<(Self::Balance, BTreeMap<EraIndex, Self::Balance>)>;
 }
 

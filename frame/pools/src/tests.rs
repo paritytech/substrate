@@ -1,22 +1,23 @@
 use super::*;
 use crate::mock::{
-	Balance, Balances, CanBondExtra, ExtBuilder, Origin, Pools, Runtime, StakingMock,
+	Balance, Balances, CanBondExtra, CurrentEra, ExtBuilder, Origin, Pools, Runtime, StakingMock,
 	PRIMARY_ACCOUNT, REWARDS_ACCOUNT,
 };
 use frame_support::{assert_noop, assert_ok};
 
-// https://stackoverflow.com/questions/27582739/how-do-i-create-a-hashmap-literal
-macro_rules! collection {
-    // map-like
-    ($($k:expr => $v:expr),* $(,)?) => {{
-        use std::iter::{Iterator, IntoIterator};
-        Iterator::collect(IntoIterator::into_iter([$(($k, $v),)*]))
-    }};
-    // set-like
-    ($($v:expr),* $(,)?) => {{
-        use std::iter::{Iterator, IntoIterator};
-        Iterator::collect(IntoIterator::into_iter([$($v,)*]))
-    }};
+// TODO
+// - make sure any time we do a balance transfer and then some other operation
+//	we either use transactional storage or have sufficient can_* functions
+// - make sure that `unbond` transfers rewards prior to actually unbonding
+// - implement staking impl of the delegator pools interface
+// - test `do_slash`
+
+macro_rules! with_era_sub_pools {
+	($($k:expr => $v:expr),* $(,)?) => {{
+		use sp_std::iter::{Iterator, IntoIterator};
+		let not_bounded: BTreeMap<_, _> = Iterator::collect(IntoIterator::into_iter([$(($k, $v),)*]));
+		SubPoolsWithEra::try_from(not_bounded).unwrap()
+	}};
 }
 
 #[test]
@@ -50,6 +51,15 @@ fn test_setup_works() {
 			}
 		)
 	})
+}
+
+#[test]
+fn exercise_delegator_life_cycle() {
+	// create pool
+	// join pool
+	// claim rewards
+	// get more rewards
+	//
 }
 
 mod points_to_issue {
@@ -1069,8 +1079,8 @@ mod unbond {
 			assert_ok!(Pools::unbond(Origin::signed(10)));
 
 			assert_eq!(
-				SubPoolsStorage::<Runtime>::get(0).unwrap().with_era.into_inner(),
-				collection! { 0 => UnbondPool { points: 10, balance: 10 }}
+				SubPoolsStorage::<Runtime>::get(0).unwrap().with_era,
+				with_era_sub_pools! { 0 => UnbondPool::<Runtime> { points: 10, balance: 10 }}
 			);
 
 			assert_eq!(
@@ -1095,8 +1105,8 @@ mod unbond {
 
 				// Then
 				assert_eq!(
-					SubPoolsStorage::<Runtime>::get(0).unwrap().with_era.into_inner(),
-					collection! { 0 => UnbondPool { points: 6, balance: 6 }}
+					SubPoolsStorage::<Runtime>::get(0).unwrap().with_era,
+					with_era_sub_pools! { 0 => UnbondPool { points: 6, balance: 6 }}
 				);
 				assert_eq!(
 					BondedPoolStorage::<Runtime>::get(0).unwrap(),
@@ -1109,8 +1119,8 @@ mod unbond {
 
 				// Then
 				assert_eq!(
-					SubPoolsStorage::<Runtime>::get(0).unwrap().with_era.into_inner(),
-					collection! { 0 => UnbondPool { points: 7, balance: 7 }}
+					SubPoolsStorage::<Runtime>::get(0).unwrap().with_era,
+					with_era_sub_pools! { 0 => UnbondPool { points: 7, balance: 7 }}
 				);
 				assert_eq!(
 					BondedPoolStorage::<Runtime>::get(0).unwrap(),
@@ -1123,8 +1133,8 @@ mod unbond {
 
 				// Then
 				assert_eq!(
-					SubPoolsStorage::<Runtime>::get(0).unwrap().with_era.into_inner(),
-					collection! { 0 => UnbondPool { points: 100, balance: 100 }}
+					SubPoolsStorage::<Runtime>::get(0).unwrap().with_era,
+					with_era_sub_pools! { 0 => UnbondPool { points: 100, balance: 100 }}
 				);
 				assert_eq!(
 					BondedPoolStorage::<Runtime>::get(0).unwrap(),
@@ -1132,6 +1142,11 @@ mod unbond {
 				);
 				assert_eq!(StakingMock::bonded_balance(&PRIMARY_ACCOUNT), 0);
 			});
+	}
+
+	#[test]
+	fn unbond_pool_of_3_works_when_there_are_rewards_to_claims() {
+		todo!()
 	}
 
 	#[test]
@@ -1154,7 +1169,84 @@ mod unbond {
 	}
 }
 
-mod withdraw_unbonded {}
+mod withdraw_unbonded {
+	use super::*;
+
+	#[test]
+	fn withdraw_unbonded_works_against_no_era_sub_pool() {
+		ExtBuilder::default().build_and_execute(|| {
+
+			// storage is cleaned up  - delegator is removed
+		});
+	}
+
+	#[test]
+	fn withdraw_unbonded_works_against_with_era_sub_pools() {
+		ExtBuilder::default().build_and_execute(|| {
+
+			// storage is cleaned up  - delegator is removed
+		});
+	}
+
+	#[test]
+	fn withdraw_unbonded_errors_correctly() {
+		ExtBuilder::default().build_and_execute(|| {
+			assert_noop!(
+				Pools::withdraw_unbonded(Origin::signed(11)),
+				Error::<Runtime>::DelegatorNotFound
+			);
+
+			let mut delegator = Delegator {
+				pool: 1,
+				points: 10,
+				reward_pool_total_earnings: 0,
+				unbonding_era: None,
+			};
+			DelegatorStorage::<Runtime>::insert(11, delegator.clone());
+
+			assert_noop!(
+				Pools::withdraw_unbonded(Origin::signed(11)),
+				Error::<Runtime>::NotUnbonding
+			);
+
+			delegator.unbonding_era = Some(0);
+			DelegatorStorage::<Runtime>::insert(11, delegator.clone());
+
+			assert_noop!(
+				Pools::withdraw_unbonded(Origin::signed(11)),
+				Error::<Runtime>::NotUnbondedYet
+			);
+
+			CurrentEra::set(StakingMock::bonding_duration());
+
+			assert_noop!(
+				Pools::withdraw_unbonded(Origin::signed(11)),
+				Error::<Runtime>::SubPoolsNotFound
+			);
+
+			let sub_pools = SubPools {
+				no_era: Default::default(),
+				with_era: with_era_sub_pools! { 0 => UnbondPool { points: 10, balance: 10  }},
+			};
+			SubPoolsStorage::<Runtime>::insert(1, sub_pools);
+
+			assert_noop!(
+				Pools::withdraw_unbonded(Origin::signed(11)),
+				Error::<Runtime>::PoolNotFound
+			);
+			BondedPoolStorage::<Runtime>::insert(1, BondedPool { points: 0, account_id: 123 });
+			assert_eq!(Balances::free_balance(&123), 0);
+
+			assert_noop!(
+				Pools::withdraw_unbonded(Origin::signed(11)),
+				pallet_balances::Error::<Runtime>::InsufficientBalance
+			);
+
+			// The delegator does not get removed if we error
+			assert_eq!(DelegatorStorage::<Runtime>::get(&11), Some(delegator));
+		});
+	}
+}
 
 mod create {}
 

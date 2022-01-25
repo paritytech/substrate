@@ -12,7 +12,7 @@ pub const PRIMARY_ACCOUNT: u32 = 2536596763;
 pub const REWARDS_ACCOUNT: u32 = 736857005;
 
 parameter_types! {
-	static CurrentEra: EraIndex = 0;
+	pub static CurrentEra: EraIndex = 0;
 	static BondedBalanceMap: std::collections::HashMap<AccountId, Balance> = Default::default();
 	pub static CanBondExtra: bool = true;
 }

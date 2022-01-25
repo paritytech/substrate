@@ -34,7 +34,7 @@ use frame_support::{
 	pallet_prelude::*,
 	storage::bounded_btree_map::BoundedBTreeMap,
 	traits::{Currency, ExistenceRequirement, Get},
-	DefaultNoBound, RuntimeDebugNoBound,
+	transactional, DefaultNoBound, RuntimeDebugNoBound,
 };
 use scale_info::TypeInfo;
 use sp_core::U256;
@@ -78,8 +78,9 @@ fn points_to_issue<T: Config>(
 	new_funds: BalanceOf<T>,
 ) -> BalanceOf<T> {
 	match (current_balance.is_zero(), current_points.is_zero()) {
-		(true, true) | (false, true) =>
-			new_funds.saturating_mul(POINTS_TO_BALANCE_INIT_RATIO.into()),
+		(true, true) | (false, true) => {
+			new_funds.saturating_mul(POINTS_TO_BALANCE_INIT_RATIO.into())
+		},
 		(true, false) => {
 			// The pool was totally slashed.
 
@@ -105,7 +106,7 @@ fn balance_to_unbond<T: Config>(
 ) -> BalanceOf<T> {
 	if current_balance.is_zero() || current_points.is_zero() || delegator_points.is_zero() {
 		// There is nothing to unbond
-		return Zero::zero()
+		return Zero::zero();
 	}
 
 	// Equivalent of (current_balance / current_points) * delegator_points
@@ -176,8 +177,8 @@ impl<T: Config> BondedPool<T> {
 		ensure!(points_to_balance_ratio_floor < 10u32.into(), Error::<T>::OverflowRisk);
 		// while restricting the balance to 1/10th of max total issuance,
 		ensure!(
-			new_funds.saturating_add(bonded_balance) <
-				BalanceOf::<T>::max_value().div(10u32.into()),
+			new_funds.saturating_add(bonded_balance)
+				< BalanceOf::<T>::max_value().div(10u32.into()),
 			Error::<T>::OverflowRisk
 		);
 		// then we can be decently confident the bonding pool points will not overflow
@@ -266,7 +267,7 @@ impl<T: Config> SubPools<T> {
 			// For the first `0..MaxUnbonding` eras of the chain we don't need to do anything.
 			// I.E. if `MaxUnbonding` is 5 and we are in era 4 we can add a pool for this era and
 			// have exactly `MaxUnbonding` pools.
-			return self
+			return self;
 		}
 
 		//  I.E. if `MaxUnbonding` is 5 and current era is 10, we only want to retain pools 6..=10.
@@ -371,13 +372,15 @@ pub mod pallet {
 	#[pallet::error]
 	#[cfg_attr(test, derive(PartialEq))]
 	pub enum Error<T> {
-		/// The given (bonded) pool id does not exist.
+		/// A (bonded) pool id does not exist.
 		PoolNotFound,
-		/// The given account is not a delegator.
+		/// An account is not a delegator.
 		DelegatorNotFound,
-		// The given reward pool does not exist. In all cases this is a system logic error.
+		/// A reward pool does not exist. In all cases this is a system logic error.
 		RewardPoolNotFound,
-		/// The account is already delegating in another pool. An account may only belong to one
+		/// A sub pool does not exist.
+		SubPoolsNotFound,
+		/// An account is already delegating in another pool. An account may only belong to one
 		/// pool at a time.
 		AccountBelongsToOtherPool,
 		/// The pool has insufficient balance to bond as a nominator.
@@ -391,7 +394,7 @@ pub mod pallet {
 		/// The given pool id cannot be used to create a new pool because it is already in use.
 		IdInUse,
 		/// The amount does not meet the minimum bond to start nominating.
-		MinimiumBondNotMet,
+		MinimumBondNotMet,
 		/// The transaction could not be executed due to overflow risk for the pool.
 		OverflowRisk,
 		/// An error from the staking pallet.
@@ -423,7 +426,7 @@ pub mod pallet {
 			// the active balance is slashed below the minimum bonded or the account cannot be
 			// found, we exit early.
 			if !T::StakingInterface::can_bond_extra(&bonded_pool.account_id, amount) {
-				return Err(Error::<T>::StakingError.into())
+				return Err(Error::<T>::StakingError.into());
 			}
 
 			// We don't actually care about writing the reward pool, we just need its
@@ -565,24 +568,22 @@ pub mod pallet {
 			Ok(())
 		}
 
-		// TODO the first person that withdraws for a pool withdraws there funds and then remaining
-		// funds and points are merged into the `no_era` pool - then for unbond pools we can just
-		// read balance from the unlocking chunks in staking
 		#[pallet::weight(666)]
 		pub fn withdraw_unbonded(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let delegator =
-				DelegatorStorage::<T>::take(&who).ok_or(Error::<T>::DelegatorNotFound)?;
+				DelegatorStorage::<T>::get(&who).ok_or(Error::<T>::DelegatorNotFound)?;
 
 			let unbonding_era = delegator.unbonding_era.ok_or(Error::<T>::NotUnbonding)?;
 			let current_era = T::StakingInterface::current_era();
 			if current_era.saturating_sub(unbonding_era) < T::StakingInterface::bonding_duration() {
-				return Err(Error::<T>::NotUnbondedYet.into())
+				return Err(Error::<T>::NotUnbondedYet.into());
 			};
 
-			let mut sub_pools = SubPoolsStorage::<T>::get(delegator.pool).unwrap_or_default();
+			let mut sub_pools =
+				SubPoolsStorage::<T>::get(delegator.pool).ok_or(Error::<T>::SubPoolsNotFound)?;
 
-			let balance_to_unbond = if let Some(pool) = sub_pools.with_era.get_mut(&current_era) {
+			let balance_to_unbond = if let Some(pool) = sub_pools.with_era.get_mut(&unbonding_era) {
 				let balance_to_unbond = pool.balance_to_unbond(delegator.points);
 				pool.points = pool.points.saturating_sub(delegator.points);
 				pool.balance = pool.balance.saturating_sub(balance_to_unbond);
@@ -591,7 +592,6 @@ pub mod pallet {
 			} else {
 				// A pool does not belong to this era, so it must have been merged to the era-less
 				// pool.
-				// trailing_pool????
 				let balance_to_unbond = sub_pools.no_era.balance_to_unbond(delegator.points);
 				sub_pools.no_era.points = sub_pools.no_era.points.saturating_sub(delegator.points);
 				sub_pools.no_era.balance =
@@ -599,6 +599,8 @@ pub mod pallet {
 
 				balance_to_unbond
 			};
+
+			println!("balance_to_unbond {:?}", balance_to_unbond);
 
 			let bonded_pool =
 				BondedPoolStorage::<T>::get(delegator.pool).ok_or(Error::<T>::PoolNotFound)?;
@@ -610,6 +612,7 @@ pub mod pallet {
 			)?;
 
 			SubPoolsStorage::<T>::insert(delegator.pool, sub_pools);
+			DelegatorStorage::<T>::remove(&who);
 
 			Self::deposit_event(Event::<T>::Withdrawn {
 				delegator: who,
@@ -620,7 +623,10 @@ pub mod pallet {
 			Ok(())
 		}
 
+		// NOTE: This is transactional because we cannot totally predict if the underlying bond will
+		// work until we transfer the funds.
 		#[pallet::weight(666)]
+		#[transactional]
 		pub fn create(
 			origin: OriginFor<T>,
 			id: PoolId,
@@ -630,7 +636,7 @@ pub mod pallet {
 			let who = ensure_signed(origin)?;
 
 			ensure!(!BondedPoolStorage::<T>::contains_key(id), Error::<T>::IdInUse);
-			ensure!(amount >= T::StakingInterface::minimum_bond(), Error::<T>::MinimiumBondNotMet);
+			ensure!(amount >= T::StakingInterface::minimum_bond(), Error::<T>::MinimumBondNotMet);
 			// TODO create can_* fns so we can bail in the beggining if some pre-conditions are not
 			// met T::StakingInterface::can_bond()
 			// T::StakingInterface::can_nominate()
@@ -747,9 +753,9 @@ impl<T: Config> Pallet<T> {
 		let delegator_virtual_points = T::BalanceToU256::convert(delegator.points)
 			.saturating_mul(T::BalanceToU256::convert(new_earnings_since_last_claim));
 
-		let delegator_payout = if delegator_virtual_points.is_zero() ||
-			current_points.is_zero() ||
-			reward_pool.balance.is_zero()
+		let delegator_payout = if delegator_virtual_points.is_zero()
+			|| current_points.is_zero()
+			|| reward_pool.balance.is_zero()
 		{
 			Zero::zero()
 		} else {
@@ -811,19 +817,6 @@ impl<T: Config> Pallet<T> {
 		Ok(())
 	}
 
-	//The current approach here is to share `BTreeMap<EraIndex, BalanceOf<T>>` with the staking
-	// API. This is arguably a leaky, suboptimal API because both sides have to share this
-	// non-trivial data structure. With the current design we do this because we track the unbonding
-	// balance in both the pallet-staking `unlocking` chunks and in here with the pallet-pools
-	// `SubPools`. Because both pallets need to know about slashes to unbonding funds we either have
-	// to replicate the slashing logic between the pallets, or share some data. A ALTERNATIVE is
-	// having the pallet-pools read the unbonding balance per era directly from pallet-staking. The
-	// downside of this is that once a delegator calls `withdraw_unbonded`, the chunk is removed and
-	// we can't keep track of the balance for that `UnbondPool` anymore, thus we must merge the
-	// balance and points of that `UnbondPool` with the `no_era` pool immediately upon calling
-	// withdraw_unbonded. We choose not to do this because if there was a slash, it would negatively
-	// affect the points:balance ratio of the `no_era` pool for everyone, including those who may
-	// not have been unbonding in eras effected by the slash.
 	fn do_slash(
 		// This would be the nominator account
 		pool_account: &T::AccountId,
@@ -833,14 +826,13 @@ impl<T: Config> Pallet<T> {
 		slash_era: EraIndex,
 		// Era the slash is applied in
 		apply_era: EraIndex,
+		// The current active bonded of the account (i.e. `StakingLedger::active`)
+		active_bonded_balance: BalanceOf<T>,
 	) -> Option<(BalanceOf<T>, BTreeMap<EraIndex, BalanceOf<T>>)> {
 		let pool_id = PoolIds::<T>::get(pool_account)?;
 		let mut sub_pools = SubPoolsStorage::<T>::get(pool_id).unwrap_or_default();
 
 		let affected_range = (slash_era + 1)..=apply_era;
-
-		// TODO Can have this as an input because we are inside of staking ledger
-		let bonded_balance = T::StakingInterface::bonded_balance(pool_account);
 
 		// Note that this doesn't count the balance in the `no_era` pool
 		let unbonding_affected_balance: BalanceOf<T> =
@@ -851,10 +843,11 @@ impl<T: Config> Pallet<T> {
 					balance_sum
 				}
 			});
-		let total_affected_balance = bonded_balance.saturating_add(unbonding_affected_balance);
+		let total_affected_balance =
+			active_bonded_balance.saturating_add(unbonding_affected_balance);
 
 		if total_affected_balance.is_zero() {
-			return Some((Zero::zero(), Default::default()))
+			return Some((Zero::zero(), Default::default()));
 		}
 		if slash_amount > total_affected_balance {
 			// TODO this shouldn't happen as long as MaxBonding pools is greater thant the slash
@@ -883,9 +876,9 @@ impl<T: Config> Pallet<T> {
 
 		SubPoolsStorage::<T>::insert(pool_id, sub_pools);
 
-		// Equivalent to `(slash_amount / total_affected_balance) * bonded_balance`
+		// Equivalent to `(slash_amount / total_affected_balance) * active_bonded_balance`
 		let slashed_bonded_pool_balance = slash_amount
-			.saturating_mul(bonded_balance)
+			.saturating_mul(active_bonded_balance)
 			// We check for zero above
 			.div(total_affected_balance);
 
@@ -902,8 +895,9 @@ impl<T: Config> PoolsInterface for Pallet<T> {
 		slash_amount: Self::Balance,
 		slash_era: EraIndex,
 		apply_era: EraIndex,
+		active_bonded: BalanceOf<T>,
 	) -> Option<(Self::Balance, BTreeMap<EraIndex, Self::Balance>)> {
-		Self::do_slash(pool_account, slash_amount, slash_era, apply_era)
+		Self::do_slash(pool_account, slash_amount, slash_era, apply_era, active_bonded)
 	}
 }
 

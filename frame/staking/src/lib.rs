@@ -540,7 +540,7 @@ where
 		active_era: EraIndex,
 	) -> Balance {
 		if let Some((new_active, new_chunk_balances)) =
-			P::slash_pool(&self.stash, value, slash_era, active_era)
+			P::slash_pool(&self.stash, value, slash_era, active_era, self.active)
 		{
 			self.pool_slash(new_active, new_chunk_balances)
 		} else {
