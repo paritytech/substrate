@@ -1519,7 +1519,7 @@ fn lazy_batch_removal_works() {
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		let min_balance = <Test as Config>::Currency::minimum_balance();
 		let _ = Balances::deposit_creating(&ALICE, 1000 * min_balance);
-		let mut tries: Vec<ChildInfo> = vec![];
+		let mut tries: Vec<child::ChildInfo> = vec![];
 
 		for i in 0..3u8 {
 			assert_ok!(Contracts::instantiate_with_code(
