@@ -489,6 +489,7 @@ pub mod pallet {
 	pub type TotalIssuance<T: Config<I>, I: 'static = ()> = StorageValue<_, T::Balance, ValueQuery>;
 
 	/// The Balances pallet example of storing the balance of an account.
+	///
 	/// # Example
 	///
 	/// ```nocompile
@@ -496,13 +497,17 @@ pub mod pallet {
 	///    type AccountStore = StorageMapShim<Self::Account<Runtime>, frame_system::Provider<Runtime>, AccountId, Self::AccountData<Balance>>
 	///  }
 	/// ```
-	/// You can also store the balance of an account in the System pallet.
+	/// 
+	/// You can also store the balance of an account in the `System` pallet.
+	///
 	/// # Example
+	///
 	/// ```nocompile
 	///  impl pallet_balances::Config for Runtime {
-	///   type AccountStore = system
+	///   type AccountStore = System
 	///  }
 	/// ```
+	///
 	/// But this comes with tradeoffs, storing account balances in the system pallet stores
 	/// frame_system data alongside the account data contrary to storing account balances in the
 	/// balances pallet, which uses a StorageMap to store balances data only.
