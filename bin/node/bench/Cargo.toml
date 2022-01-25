@@ -9,6 +9,7 @@ license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+clap = { version = "3.0", features = ["derive"] }
 log = "0.4.8"
 node-primitives = { version = "2.0.0", path = "../primitives" }
 node-testing = { version = "3.0.0-dev", path = "../testing" }
@@ -18,7 +19,6 @@ sp-runtime = { version = "4.1.0-dev", path = "../../../primitives/runtime" }
 sp-state-machine = { version = "0.10.0", path = "../../../primitives/state-machine" }
 serde = "1.0.132"
 serde_json = "1.0.74"
-structopt = "0.3"
 derive_more = "0.99.16"
 kvdb = "0.10.0"
 kvdb-rocksdb = "0.14.0"
@@ -35,9 +35,7 @@ fs_extra = "1"
 hex = "0.4.0"
 rand = { version = "0.7.2", features = ["small_rng"] }
 lazy_static = "1.4.0"
-parity-util-mem = { version = "0.10.2", default-features = false, features = [
-    "primitive-types",
-] }
+parity-util-mem = { version = "0.10.2", default-features = false, features = ["primitive-types"] }
 parity-db = { version = "0.3" }
 sc-transaction-pool = { version = "4.0.0-dev", path = "../../../client/transaction-pool" }
 sc-transaction-pool-api = { version = "4.0.0-dev", path = "../../../client/transaction-pool/api" }

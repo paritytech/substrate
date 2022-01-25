@@ -14,13 +14,14 @@ publish = false
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
+clap = { version = "3.0", features = ["derive"] }
+honggfuzz = "0.5"
+rand = { version = "0.8", features = ["std", "small_rng"] }
+
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
 scale-info = { version = "1.0", default-features = false, features = ["derive"] }
-honggfuzz = "0.5"
-rand = { version = "0.7.3", features = ["std", "small_rng"] }
 sp-npos-elections = { version = "4.0.0-dev", path = ".." }
 sp-runtime = { version = "4.1.0-dev", path = "../../runtime" }
-structopt = "0.3.25"
 
 [[bin]]
 name = "reduce"
