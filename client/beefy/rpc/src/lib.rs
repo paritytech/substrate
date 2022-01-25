@@ -365,10 +365,14 @@ mod tests {
 		);
 	}
 
-	fn create_commitment(block_number: u64) -> BeefySignedCommitment<Block> {
+	fn create_commitment() -> BeefySignedCommitment<Block> {
 		let payload = Payload::new(known_payload_ids::MMR_ROOT_ID, "Hello World!".encode());
 		BeefySignedCommitment::<Block> {
-			commitment: beefy_primitives::Commitment { payload, block_number, validator_set_id: 0 },
+			commitment: beefy_primitives::Commitment {
+				payload,
+				block_number: 5,
+				validator_set_id: 0,
+			},
 			signatures: vec![],
 		}
 	}
@@ -387,7 +391,7 @@ mod tests {
 		let sub_id: String = serde_json::from_value(resp["result"].take()).unwrap();
 
 		// Notify with commitment
-		let commitment = create_commitment(5);
+		let commitment = create_commitment();
 		let r: Result<(), ()> = commitment_sender.notify(|| Ok(commitment.clone()));
 		r.unwrap();
 
