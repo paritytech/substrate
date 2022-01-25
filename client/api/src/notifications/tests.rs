@@ -212,5 +212,3 @@ impl<B: BlockT> StorageNotifications<B> {
 		self.0.lock_registry()
 	}
 }
-
-
