@@ -21,9 +21,8 @@ use crate::{
 	exec::{ExecError, ExecResult, Ext, StorageKey, TopicOf},
 	gas::{ChargedAmount, Token},
 	schedule::HostFnWeights,
-	storage::WriteOutcome,
 	wasm::env_def::ConvertibleToWasm,
-	BalanceOf, CodeHash, Config, Error,
+	BalanceOf, CodeHash, Config, Error, SENTINEL,
 };
 use bitflags::bitflags;
 use codec::{Decode, DecodeAll, Encode, MaxEncodedLen};
@@ -169,23 +168,18 @@ pub enum RuntimeCosts {
 	DepositEvent { num_topic: u32, len: u32 },
 	/// Weight of calling `seal_debug_message`.
 	DebugMessage,
-	/// Weight of calling `seal_set_storage` for the given storage item size.
-	SetStorage(u32),
-	/// Weight of calling `seal_clear_storage`.
-	ClearStorage,
-	/// Weight of calling `seal_contains_storage`.
+	/// Weight of calling `seal_set_storage` for the given storage item sizes.
+	SetStorage { old_bytes: u32, new_bytes: u32 },
+	/// Weight of calling `seal_clear_storage` per cleared byte.
+	ClearStorage(u32),
+	/// Weight of calling `seal_contains_storage` per byte of the checked item.
 	#[cfg(feature = "unstable-interface")]
-	ContainsStorage,
-	/// Weight of calling `seal_get_storage` without output weight.
-	GetStorageBase,
-	/// Weight of an item received via `seal_get_storage` for the given size.
-	GetStorageCopyOut(u32),
-	/// Weight of calling `seal_take_storage` without output weight.
+	ContainsStorage(u32),
+	/// Weight of calling `seal_get_storage` with the specified size in storage.
+	GetStorage(u32),
+	/// Weight of calling `seal_take_storage` for the given size.
 	#[cfg(feature = "unstable-interface")]
-	TakeStorageBase,
-	/// Weight of an item received via `seal_take_storage` for the given size.
-	#[cfg(feature = "unstable-interface")]
-	TakeStorageCopyOut(u32),
+	TakeStorage(u32),
 	/// Weight of calling `seal_transfer`.
 	Transfer,
 	/// Weight of calling `seal_call` for the given input size.
@@ -249,17 +243,23 @@ impl RuntimeCosts {
 				.saturating_add(s.deposit_event_per_topic.saturating_mul(num_topic.into()))
 				.saturating_add(s.deposit_event_per_byte.saturating_mul(len.into())),
 			DebugMessage => s.debug_message,
-			SetStorage(len) =>
-				s.set_storage.saturating_add(s.set_storage_per_byte.saturating_mul(len.into())),
-			ClearStorage => s.clear_storage,
+			SetStorage { new_bytes, old_bytes } => s
+				.set_storage
+				.saturating_add(s.set_storage_per_new_byte.saturating_mul(new_bytes.into()))
+				.saturating_add(s.set_storage_per_old_byte.saturating_mul(old_bytes.into())),
+			ClearStorage(len) => s
+				.clear_storage
+				.saturating_add(s.clear_storage_per_byte.saturating_mul(len.into())),
 			#[cfg(feature = "unstable-interface")]
-			ContainsStorage => s.contains_storage,
-			GetStorageBase => s.get_storage,
-			GetStorageCopyOut(len) => s.get_storage_per_byte.saturating_mul(len.into()),
+			ContainsStorage(len) => s
+				.contains_storage
+				.saturating_add(s.contains_storage_per_byte.saturating_mul(len.into())),
+			GetStorage(len) =>
+				s.get_storage.saturating_add(s.get_storage_per_byte.saturating_mul(len.into())),
 			#[cfg(feature = "unstable-interface")]
-			TakeStorageBase => s.take_storage,
-			#[cfg(feature = "unstable-interface")]
-			TakeStorageCopyOut(len) => s.take_storage_per_byte.saturating_mul(len.into()),
+			TakeStorage(len) => s
+				.take_storage
+				.saturating_add(s.take_storage_per_byte.saturating_mul(len.into())),
 			Transfer => s.transfer,
 			CallBase(len) =>
 				s.call.saturating_add(s.call_per_input_byte.saturating_mul(len.into())),
@@ -534,7 +534,7 @@ where
 	/// length of the buffer located at `out_ptr`. If that buffer is large enough the actual
 	/// `buf.len()` is written to this location.
 	///
-	/// If `out_ptr` is set to the sentinel value of `u32::MAX` and `allow_skip` is true the
+	/// If `out_ptr` is set to the sentinel value of `SENTINEL` and `allow_skip` is true the
 	/// operation is skipped and `Ok` is returned. This is supposed to help callers to make copying
 	/// output optional. For example to skip copying back the output buffer of an `seal_call`
 	/// when the caller is not interested in the result.
@@ -553,7 +553,7 @@ where
 		allow_skip: bool,
 		create_token: impl FnOnce(u32) -> Option<RuntimeCosts>,
 	) -> Result<(), DispatchError> {
-		if allow_skip && out_ptr == u32::MAX {
+		if allow_skip && out_ptr == SENTINEL {
 			return Ok(())
 		}
 
@@ -648,48 +648,36 @@ where
 		}
 	}
 
-	/// Extracts the size of the overwritten value or `u32::MAX` if there
-	/// was no value in storage.
-	///
-	/// # Note
-	///
-	/// We cannot use `0` as sentinel value because there could be a zero sized
-	/// storage entry which is different from a non existing one.
-	fn overwritten_len(outcome: WriteOutcome) -> u32 {
-		match outcome {
-			WriteOutcome::New => u32::MAX,
-			WriteOutcome::Overwritten(len) => len,
-			WriteOutcome::Taken(value) => value.len() as u32,
-		}
-	}
-
 	fn set_storage(
 		&mut self,
 		key_ptr: u32,
 		value_ptr: u32,
 		value_len: u32,
 	) -> Result<u32, TrapReason> {
-		self.charge_gas(RuntimeCosts::SetStorage(value_len))?;
-		if value_len > self.ext.max_value_size() {
+		let max_size = self.ext.max_value_size();
+		let charged = self
+			.charge_gas(RuntimeCosts::SetStorage { new_bytes: value_len, old_bytes: max_size })?;
+		if value_len > max_size {
 			Err(Error::<E::T>::ValueTooLarge)?;
 		}
 		let mut key: StorageKey = [0; 32];
 		self.read_sandbox_memory_into_buf(key_ptr, &mut key)?;
 		let value = Some(self.read_sandbox_memory(value_ptr, value_len)?);
-		self.ext
-			.set_storage(key, value, false)
-			.map(Self::overwritten_len)
-			.map_err(Into::into)
+		let write_outcome = self.ext.set_storage(key, value, false)?;
+		self.adjust_gas(
+			charged,
+			RuntimeCosts::SetStorage { new_bytes: value_len, old_bytes: write_outcome.old_len() },
+		);
+		Ok(write_outcome.old_len_with_sentinel())
 	}
 
 	fn clear_storage(&mut self, key_ptr: u32) -> Result<u32, TrapReason> {
-		self.charge_gas(RuntimeCosts::ClearStorage)?;
+		let charged = self.charge_gas(RuntimeCosts::ClearStorage(self.ext.max_value_size()))?;
 		let mut key: StorageKey = [0; 32];
 		self.read_sandbox_memory_into_buf(key_ptr, &mut key)?;
-		self.ext
-			.set_storage(key, None, false)
-			.map(Self::overwritten_len)
-			.map_err(Into::into)
+		let outcome = self.ext.set_storage(key, None, false)?;
+		self.adjust_gas(charged, RuntimeCosts::ClearStorage(outcome.old_len()));
+		Ok(outcome.old_len_with_sentinel())
 	}
 
 	fn call(
@@ -827,7 +815,7 @@ define_env!(Env, <E: Ext>,
 	// # Return Value
 	//
 	// Returns the size of the pre-existing value at the specified key if any. Otherwise
-	// `u32::MAX` is returned as a sentinel value.
+	// `SENTINEL` is returned as a sentinel value.
 	[__unstable__] seal_set_storage(ctx, key_ptr: u32, value_ptr: u32, value_len: u32) -> u32 => {
 		ctx.set_storage(key_ptr, value_ptr, value_len)
 	},
@@ -849,7 +837,7 @@ define_env!(Env, <E: Ext>,
 	// # Return Value
 	//
 	// Returns the size of the pre-existing value at the specified key if any. Otherwise
-	// `u32::MAX` is returned as a sentinel value.
+	// `SENTINEL` is returned as a sentinel value.
 	[__unstable__] seal_clear_storage(ctx, key_ptr: u32) -> u32 => {
 		ctx.clear_storage(key_ptr).map_err(Into::into)
 	},
@@ -867,39 +855,39 @@ define_env!(Env, <E: Ext>,
 	//
 	// `ReturnCode::KeyNotFound`
 	[seal0] seal_get_storage(ctx, key_ptr: u32, out_ptr: u32, out_len_ptr: u32) -> ReturnCode => {
-		ctx.charge_gas(RuntimeCosts::GetStorageBase)?;
+		let charged = ctx.charge_gas(RuntimeCosts::GetStorage(ctx.ext.max_value_size()))?;
 		let mut key: StorageKey = [0; 32];
 		ctx.read_sandbox_memory_into_buf(key_ptr, &mut key)?;
 		if let Some(value) = ctx.ext.get_storage(&key) {
-			ctx.write_sandbox_output(out_ptr, out_len_ptr, &value, false, |len| {
-				Some(RuntimeCosts::GetStorageCopyOut(len))
-			})?;
+			ctx.adjust_gas(charged, RuntimeCosts::GetStorage(value.len() as u32));
+			ctx.write_sandbox_output(out_ptr, out_len_ptr, &value, false, already_charged)?;
 			Ok(ReturnCode::Success)
 		} else {
+			ctx.adjust_gas(charged, RuntimeCosts::GetStorage(0));
 			Ok(ReturnCode::KeyNotFound)
 		}
 	},
 
 	// Checks whether there is a value stored under the given key.
 	//
-	// Returns `ReturnCode::Success` if there is a key in storage. Otherwise an error
-	// is returned.
-	//
 	// # Parameters
 	//
 	// - `key_ptr`: pointer into the linear memory where the key of the requested value is placed.
 	//
-	// # Errors
+	// # Return Value
 	//
-	// `ReturnCode::KeyNotFound`
-	[__unstable__] seal_contains_storage(ctx, key_ptr: u32) -> ReturnCode => {
-		ctx.charge_gas(RuntimeCosts::ContainsStorage)?;
+	// Returns the size of the pre-existing value at the specified key if any. Otherwise
+	// `SENTINEL` is returned as a sentinel value.
+	[__unstable__] seal_contains_storage(ctx, key_ptr: u32) -> u32 => {
+		let charged = ctx.charge_gas(RuntimeCosts::ContainsStorage(ctx.ext.max_value_size()))?;
 		let mut key: StorageKey = [0; 32];
 		ctx.read_sandbox_memory_into_buf(key_ptr, &mut key)?;
-		if ctx.ext.contains_storage(&key) {
-			Ok(ReturnCode::Success)
+		if let Some(len) = ctx.ext.get_storage_size(&key) {
+			ctx.adjust_gas(charged, RuntimeCosts::ContainsStorage(len));
+			Ok(len)
 		} else {
-			Ok(ReturnCode::KeyNotFound)
+			ctx.adjust_gas(charged, RuntimeCosts::ContainsStorage(0));
+			Ok(SENTINEL)
 		}
 	},
 
@@ -916,15 +904,15 @@ define_env!(Env, <E: Ext>,
 	//
 	// `ReturnCode::KeyNotFound`
 	[__unstable__] seal_take_storage(ctx, key_ptr: u32, out_ptr: u32, out_len_ptr: u32) -> ReturnCode => {
-		ctx.charge_gas(RuntimeCosts::TakeStorageBase)?;
+		let charged = ctx.charge_gas(RuntimeCosts::TakeStorage(ctx.ext.max_value_size()))?;
 		let mut key: StorageKey = [0; 32];
 		ctx.read_sandbox_memory_into_buf(key_ptr, &mut key)?;
-		if let WriteOutcome::Taken(value) = ctx.ext.set_storage(key, None, true)? {
-			ctx.write_sandbox_output(out_ptr, out_len_ptr, &value, false, |len| {
-				Some(RuntimeCosts::TakeStorageCopyOut(len))
-			})?;
+		if let crate::storage::WriteOutcome::Taken(value) = ctx.ext.set_storage(key, None, true)? {
+			ctx.adjust_gas(charged, RuntimeCosts::TakeStorage(value.len() as u32));
+			ctx.write_sandbox_output(out_ptr, out_len_ptr, &value, false, already_charged)?;
 			Ok(ReturnCode::Success)
 		} else {
+			ctx.adjust_gas(charged, RuntimeCosts::TakeStorage(0));
 			Ok(ReturnCode::KeyNotFound)
 		}
 	},
@@ -1006,7 +994,7 @@ define_env!(Env, <E: Ext>,
 	//
 	// The callees output buffer is copied to `output_ptr` and its length to `output_len_ptr`.
 	// The copy of the output buffer can be skipped by supplying the sentinel value
-	// of `u32::MAX` to `output_ptr`.
+	// of `SENTINEL` to `output_ptr`.
 	//
 	// # Parameters
 	//
@@ -1103,7 +1091,7 @@ define_env!(Env, <E: Ext>,
 	// by the code hash. The address of this new account is copied to `address_ptr` and its length
 	// to `address_len_ptr`. The constructors output buffer is copied to `output_ptr` and its
 	// length to `output_len_ptr`. The copy of the output buffer and address can be skipped by
-	// supplying the sentinel value of `u32::MAX` to `output_ptr` or `address_ptr`.
+	// supplying the sentinel value of `SENTINEL` to `output_ptr` or `address_ptr`.
 	//
 	// `value` must be at least the minimum balance. Otherwise the instantiation fails and the
 	// contract is not created.
