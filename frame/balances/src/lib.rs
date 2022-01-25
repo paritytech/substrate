@@ -497,7 +497,7 @@ pub mod pallet {
 	///    type AccountStore = StorageMapShim<Self::Account<Runtime>, frame_system::Provider<Runtime>, AccountId, Self::AccountData<Balance>>
 	///  }
 	/// ```
-	/// 
+	///
 	/// You can also store the balance of an account in the `System` pallet.
 	///
 	/// # Example
