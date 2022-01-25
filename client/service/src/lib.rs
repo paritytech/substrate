@@ -37,13 +37,12 @@ mod task_manager;
 use std::{collections::HashMap, net::SocketAddr, pin::Pin, task::Poll};
 
 use codec::{Decode, Encode};
-use futures::{stream, FutureExt, Stream, StreamExt};
-use jsonrpsee::RpcModule;
+use futures::{channel::mpsc, stream, FutureExt, Stream, StreamExt};
+use jsonrpsee::{core::Error as JsonRpseeError, RpcModule};
 use log::{debug, error, warn};
 use sc_client_api::{blockchain::HeaderBackend, BlockchainEvents};
 use sc_network::PeerId;
 use sc_utils::mpsc::TracingUnboundedReceiver;
-use serde::Serialize;
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, Header as HeaderT},
@@ -87,19 +86,18 @@ pub struct RpcHandlers(Arc<RpcModule<()>>);
 impl RpcHandlers {
 	/// Starts an RPC query.
 	///
-	/// The query is passed as a method name and params, the params must be serialized as array.
+	/// The query is passed as a string and must be valid JSON-RPC request object.
 	///
-	/// Returns a `Future` that contains the optional response and a stream.
+	/// Returns a response and a stream if the call successful, fails if the
+	/// query could not be decoded as a JSON-RPC request object.
 	///
 	/// If the request subscribes you to events, the `stream` can be used to
 	/// retrieve the events.
-	pub async fn rpc_query<T: Serialize>(
+	pub async fn rpc_query(
 		&self,
-		method: &str,
-		params: Vec<T>,
-		// ) -> Option<(String, mpsc::UnboundedReceiver<String>)> {
-	) -> Option<jsonrpsee::core::server::rpc_module::Subscription> {
-		self.0.subscribe(method, params).await.ok()
+		json_query: &str,
+	) -> Result<(String, mpsc::UnboundedReceiver<String>), JsonRpseeError> {
+		self.0.raw_json_request(json_query).await
 	}
 
 	/// Provides access to the underlying `RpcModule`
