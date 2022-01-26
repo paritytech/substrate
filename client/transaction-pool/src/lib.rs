@@ -47,8 +47,8 @@ use std::{
 
 use graph::{ExtrinsicHash, IsValidator};
 use sc_transaction_pool_api::{
-	ChainEvent, ImportNotificationStream, MaintainedTransactionPool, PoolFuture, PoolStatus,
-	ReadyTransactions, TransactionFor, TransactionPool, TransactionSource,
+	error::Error as TxPoolError, ChainEvent, ImportNotificationStream, MaintainedTransactionPool,
+	PoolFuture, PoolStatus, ReadyTransactions, TransactionFor, TransactionPool, TransactionSource,
 	TransactionStatusStreamFor, TxHash,
 };
 use sp_core::traits::SpawnEssentialNamed;
@@ -418,8 +418,8 @@ where
 			.validate_transaction_blocking(at, TransactionSource::Local, xt.clone())?
 			.map_err(|e| {
 				Self::Error::Pool(match e {
-					TransactionValidityError::Invalid(i) => i.into(),
-					TransactionValidityError::Unknown(u) => u.into(),
+					TransactionValidityError::Invalid(i) => TxPoolError::InvalidTransaction(i),
+					TransactionValidityError::Unknown(u) => TxPoolError::UnknownTransaction(u),
 				})
 			})?;
 

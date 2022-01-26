@@ -160,9 +160,9 @@ fn test_stack_depth_reaching() {
 
 	let err = instance.call_export("test-many-locals", &[]).unwrap_err();
 
-	assert!(
-		format!("{:?}", err).starts_with("Other(\"Wasm execution trapped: wasm trap: unreachable")
-	);
+	assert!(format!("{:?}", err).starts_with(
+		"Other(\"Wasm execution trapped: wasm trap: wasm `unreachable` instruction executed"
+	));
 }
 
 #[test]
