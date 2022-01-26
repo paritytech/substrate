@@ -853,7 +853,7 @@ where
 				.backend
 				.blockchain()
 				.number(last_finalized)?
-				.expect("Finalized block expected to be onchain. qed");
+				.expect("Finalized block expected to be onchain; qed");
 			let mut stale_heads = Vec::new();
 			for head in self.backend.blockchain().leaves()? {
 				let route_from_finalized =
