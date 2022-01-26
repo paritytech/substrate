@@ -82,6 +82,21 @@ pub fn is_disabled(controller: AccountId) -> bool {
 	Session::disabled_validators().contains(&validator_index)
 }
 
+pub struct PoolsInterfaceMock;
+impl sp_staking::PoolsInterface for PoolsInterfaceMock {
+	type AccountId = AccountId;
+	type Balance = Balance;
+	fn slash_pool(
+		_: &Self::AccountId,
+		_: Self::Balance,
+		_: EraIndex,
+		_: EraIndex,
+		_: Self::Balance,
+	) -> Option<(Self::Balance, BTreeMap<EraIndex, Self::Balance>)> {
+		None
+	}
+}
+
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
@@ -271,6 +286,7 @@ impl crate::pallet::pallet::Config for Test {
 	// NOTE: consider a macro and use `UseNominatorsMap<Self>` as well.
 	type SortedListProvider = BagsList;
 	type BenchmarkingConfig = TestBenchmarkingConfig;
+	type PoolsInterface = PoolsInterfaceMock;
 	type WeightInfo = ();
 }
 
@@ -293,7 +309,7 @@ pub struct ExtBuilder {
 	invulnerables: Vec<AccountId>,
 	has_stakers: bool,
 	initialize_first_session: bool,
-	min_nominator_bond: Balance,
+	pub min_nominator_bond: Balance,
 	min_validator_bond: Balance,
 	balance_factor: Balance,
 	status: BTreeMap<AccountId, StakerStatus<AccountId>>,
@@ -772,9 +788,9 @@ pub(crate) fn on_offence_in_era(
 	for &(bonded_era, start_session) in bonded_eras.iter() {
 		if bonded_era == era {
 			let _ = Staking::on_offence(offenders, slash_fraction, start_session, disable_strategy);
-			return
+			return;
 		} else if bonded_era > era {
-			break
+			break;
 		}
 	}
 
