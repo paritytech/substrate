@@ -693,10 +693,7 @@ where
 				};
 				summary.finalized.push(hash);
 				// Add to the stale list all heads that are branching from parent.
-				for head in self.backend.blockchain().leaves()? {
-					if head == parent_hash {
-						continue
-					}
+				for head in self.backend.blockchain().leaves()?.into_iter().filter(|h| h != parent_hash) {
 					let route_from_parent =
 						sp_blockchain::tree_route(self.backend.blockchain(), parent_hash, head)?;
 					if route_from_parent.retracted().is_empty() {
