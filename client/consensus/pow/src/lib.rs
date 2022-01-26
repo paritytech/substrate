@@ -72,45 +72,50 @@ use std::{
 	time::Duration,
 };
 
-#[derive(derive_more::Display, Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum Error<B: BlockT> {
-	#[display(fmt = "Header uses the wrong engine {:?}", _0)]
+	#[error("Header uses the wrong engine {0:?}")]
 	WrongEngine([u8; 4]),
-	#[display(fmt = "Header {:?} is unsealed", _0)]
+	#[error("Header {0:?} is unsealed")]
 	HeaderUnsealed(B::Hash),
-	#[display(fmt = "PoW validation error: invalid seal")]
+	#[error("PoW validation error: invalid seal")]
 	InvalidSeal,
-	#[display(fmt = "PoW validation error: preliminary verification failed")]
+	#[error("PoW validation error: preliminary verification failed")]
 	FailedPreliminaryVerify,
-	#[display(fmt = "Rejecting block too far in future")]
+	#[error("Rejecting block too far in future")]
 	TooFarInFuture,
-	#[display(fmt = "Fetching best header failed using select chain: {:?}", _0)]
+	#[error("Fetching best header failed using select chain: {0:?}")]
 	BestHeaderSelectChain(ConsensusError),
-	#[display(fmt = "Fetching best header failed: {:?}", _0)]
+	#[error("Fetching best header failed: {0:?}")]
 	BestHeader(sp_blockchain::Error),
-	#[display(fmt = "Best header does not exist")]
+	#[error("Best header does not exist")]
 	NoBestHeader,
-	#[display(fmt = "Block proposing error: {:?}", _0)]
+	#[error("Block proposing error: {0:?}")]
 	BlockProposingError(String),
-	#[display(fmt = "Fetch best hash failed via select chain: {:?}", _0)]
+	#[error("Fetch best hash failed via select chain: {0:?}")]
 	BestHashSelectChain(ConsensusError),
-	#[display(fmt = "Error with block built on {:?}: {:?}", _0, _1)]
+	#[error("Error with block built on {0:?}: {1:?}")]
 	BlockBuiltError(B::Hash, ConsensusError),
-	#[display(fmt = "Creating inherents failed: {}", _0)]
+	#[error("Creating inherents failed: {0}")]
 	CreateInherents(sp_inherents::Error),
-	#[display(fmt = "Checking inherents failed: {}", _0)]
+	#[error("Checking inherents failed: {0}")]
 	CheckInherents(sp_inherents::Error),
-	#[display(
-		fmt = "Checking inherents unknown error for identifier: {:?}",
-		"String::from_utf8_lossy(_0)"
+	#[error(
+		"Checking inherents unknown error for identifier: {:?}",
+		String::from_utf8_lossy(.0)
 	)]
 	CheckInherentsUnknownError(sp_inherents::InherentIdentifier),
-	#[display(fmt = "Multiple pre-runtime digests")]
+	#[error("Multiple pre-runtime digests")]
 	MultiplePreRuntimeDigests,
+	#[error(transparent)]
 	Client(sp_blockchain::Error),
+	#[error(transparent)]
 	Codec(codec::Error),
+	#[error("{0}")]
 	Environment(String),
+	#[error("{0}")]
 	Runtime(RuntimeString),
+	#[error("{0}")]
 	Other(String),
 }
 

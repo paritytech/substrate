@@ -26,7 +26,7 @@ use sp_runtime::transaction_validity::{
 pub type Result<T> = std::result::Result<T, Error>;
 
 /// Transaction pool error type.
-#[derive(Debug, thiserror::Error, derive_more::From)]
+#[derive(Debug, thiserror::Error)]
 #[allow(missing_docs)]
 pub enum Error {
 	#[error("Unknown transaction validity: {0:?}")]
@@ -64,7 +64,6 @@ pub enum Error {
 	#[error("Transaction cannot be propagated and the local node does not author blocks")]
 	Unactionable,
 
-	#[from(ignore)]
 	#[error("{0}")]
 	InvalidBlockId(String),
 
