@@ -378,12 +378,8 @@ fn own_blocks_are_announced() {
 	sp_tracing::try_init_simple();
 	let mut net = TestNet::new(3);
 	net.block_until_sync(); // connect'em
-	net.peer(0).generate_blocks(
-		1,
-		BlockOrigin::Own,
-		|builder| builder.build().unwrap().block,
-		ForkChoiceStrategy::LongestChain,
-	);
+	net.peer(0)
+		.generate_blocks(1, BlockOrigin::Own, |builder| builder.build().unwrap().block);
 
 	net.block_until_sync();
 
@@ -466,7 +462,7 @@ fn can_sync_forks_ahead_of_the_best_chain() {
 
 	net.block_until_connected();
 	// Peer 0 is on 2-block fork which is announced with is_best=false
-	let fork_hash = net.peer(0).generate_blocks(
+	let fork_hash = net.peer(0).generate_blocks_with_fork_choice(
 		2,
 		BlockOrigin::Own,
 		|builder| builder.build().unwrap().block,
@@ -725,7 +721,7 @@ fn sync_blocks_when_block_announce_validator_says_it_is_new_best() {
 	net.block_until_connected();
 
 	// Add blocks but don't set them as best
-	let block_hash = net.peer(0).generate_blocks(
+	let block_hash = net.peer(0).generate_blocks_with_fork_choice(
 		1,
 		BlockOrigin::Own,
 		|builder| builder.build().unwrap().block,
@@ -768,7 +764,7 @@ fn wait_until_deferred_block_announce_validation_is_ready() {
 	net.block_until_connected();
 
 	// Add blocks but don't set them as best
-	let block_hash = net.peer(0).generate_blocks(
+	let block_hash = net.peer(0).generate_blocks_with_fork_choice(
 		1,
 		BlockOrigin::Own,
 		|builder| builder.build().unwrap().block,
@@ -1225,29 +1221,19 @@ fn syncs_huge_blocks() {
 	let mut net = TestNet::new(2);
 
 	// Increase heap space for bigger blocks.
-	net.peer(0).generate_blocks(
-		1,
-		BlockOrigin::Own,
-		|mut builder| {
-			builder.push_storage_change(HEAP_PAGES.to_vec(), Some(256u64.encode())).unwrap();
-			builder.build().unwrap().block
-		},
-		ForkChoiceStrategy::LongestChain,
-	);
+	net.peer(0).generate_blocks(1, BlockOrigin::Own, |mut builder| {
+		builder.push_storage_change(HEAP_PAGES.to_vec(), Some(256u64.encode())).unwrap();
+		builder.build().unwrap().block
+	});
 
-	net.peer(0).generate_blocks(
-		32,
-		BlockOrigin::Own,
-		|mut builder| {
-			// Add 32 extrinsics 32k each = 1MiB total
-			for _ in 0..32 {
-				let ex = Extrinsic::IncludeData([42u8; 32 * 1024].to_vec());
-				builder.push(ex).unwrap();
-			}
-			builder.build().unwrap().block
-		},
-		ForkChoiceStrategy::LongestChain,
-	);
+	net.peer(0).generate_blocks(32, BlockOrigin::Own, |mut builder| {
+		// Add 32 extrinsics 32k each = 1MiB total
+		for _ in 0..32 {
+			let ex = Extrinsic::IncludeData([42u8; 32 * 1024].to_vec());
+			builder.push(ex).unwrap();
+		}
+		builder.build().unwrap().block
+	});
 
 	net.block_until_sync();
 	assert_eq!(net.peer(0).client.info().best_number, 33);
