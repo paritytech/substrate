@@ -850,7 +850,6 @@ where
 			let finalized =
 				route_from_finalized.enacted().iter().map(|elem| elem.hash).collect::<Vec<_>>();
 
-			// Prevent inclusion of stale heads that were already included in previous calls.
 			let last_finalized_number = self
 				.backend
 				.blockchain()
@@ -862,6 +861,16 @@ where
 					sp_blockchain::tree_route(self.backend.blockchain(), block, head)?;
 				let retracted = route_from_finalized.retracted();
 				let pivot = route_from_finalized.common_block();
+				// It is not guaranteed that `backend.blockchain().leaves()` doesn't return
+				// heads that were in a stale state before this finalization and thus already
+				// included in previous notifications. We want to skip such heads.
+				// Given the "route" from the currently finalized block to the head under
+				// analysis, the condition for it to be added to the new stale heads list is:
+				// `!retracted.is_empty() && !(last_finalized_number > pivot.number)`
+				// 1. "route" has some "retractions".
+				// 2. previously finalized block number is not greater than the "route" pivot:
+				//    - if `last_finalized_number <= pivot.number` then this is a new stale head;
+				//    - else the stale head was already included by some previous finalization.
 				if !(retracted.is_empty() || last_finalized_number > pivot.number) {
 					stale_heads.push(head);
 				}

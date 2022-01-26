@@ -1104,6 +1104,7 @@ fn finality_notifications_content() {
 		.build()
 		.unwrap()
 		.block;
+
 	// Postpone import to test behavior of import of finalized block.
 
 	ClientExt::finalize_block(&client, BlockId::Hash(a2.hash()), None).unwrap();
