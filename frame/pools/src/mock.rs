@@ -21,7 +21,7 @@ parameter_types! {
 pub struct StakingMock;
 impl StakingMock {
 	pub(crate) fn set_bonded_balance(who: AccountId, bonded: Balance) {
-		BONDED_BALANCE_MAP.with(|m| m.borrow_mut().insert(who.clone(), bonded));
+		BONDED_BALANCE_MAP.with(|m| m.borrow_mut().insert(who, bonded));
 	}
 }
 
