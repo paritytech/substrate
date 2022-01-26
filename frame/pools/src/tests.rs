@@ -1,7 +1,8 @@
 use super::*;
 use crate::mock::{
-	Balance, Balances, CanBond, CanBondExtra, CanNominate, CurrentEra, ExtBuilder, Origin, Pools,
-	Runtime, StakingMock, PRIMARY_ACCOUNT, REWARDS_ACCOUNT, UNBONDING_BALANCE_MAP,
+	Balance, Balances, CanBond, CanBondExtra, CanNominate, CurrentEra, ExistentialDeposit,
+	ExtBuilder, Origin, Pools, Runtime, StakingMock, PRIMARY_ACCOUNT, REWARDS_ACCOUNT,
+	UNBONDING_BALANCE_MAP,
 };
 use frame_support::{assert_noop, assert_ok};
 
@@ -354,13 +355,14 @@ mod join {
 	#[test]
 	fn join_works() {
 		ExtBuilder::default().build_and_execute(|| {
-			Balances::make_free_balance_be(&11, 5 + 2);
-
+			// Given
+			Balances::make_free_balance_be(&11, ExistentialDeposit::get() + 2);
 			assert!(!DelegatorStorage::<Runtime>::contains_key(&11));
 
+			// When
 			assert_ok!(Pools::join(Origin::signed(11), 2, 0));
 
-			// Storage is updated correctly
+			// then
 			assert_eq!(
 				DelegatorStorage::<Runtime>::get(&11).unwrap(),
 				Delegator::<Runtime> {
@@ -373,6 +375,31 @@ mod join {
 			assert_eq!(
 				BondedPoolStorage::<Runtime>::get(&0).unwrap(),
 				BondedPool::<Runtime> { points: 12, account_id: PRIMARY_ACCOUNT }
+			);
+
+			// Given
+			// The bonded balance is slashed in half
+			StakingMock::set_bonded_balance(PRIMARY_ACCOUNT, 6);
+			// And
+			Balances::make_free_balance_be(&12, ExistentialDeposit::get() + 12);
+			assert!(!DelegatorStorage::<Runtime>::contains_key(&12));
+
+			// When
+			assert_ok!(Pools::join(Origin::signed(12), 12, 0));
+
+			// Then
+			assert_eq!(
+				DelegatorStorage::<Runtime>::get(&12).unwrap(),
+				Delegator::<Runtime> {
+					pool: 0,
+					points: 24,
+					reward_pool_total_earnings: 0,
+					unbonding_era: None
+				}
+			);
+			assert_eq!(
+				BondedPoolStorage::<Runtime>::get(&0).unwrap(),
+				BondedPool::<Runtime> { points: 12 + 24, account_id: PRIMARY_ACCOUNT }
 			);
 		});
 	}
