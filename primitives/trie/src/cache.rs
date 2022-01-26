@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{TrieLayout, TrieHash, NodeCodec, Error};
+use crate::{Error, NodeCodec, TrieHash, TrieLayout};
 use hash_db::Hasher;
 use parking_lot::{
 	MappedRwLockWriteGuard, Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard,
@@ -34,10 +34,7 @@ pub struct SharedTrieNodeCache<H: Hasher> {
 
 impl<H: Hasher> Clone for SharedTrieNodeCache<H> {
 	fn clone(&self) -> Self {
-		Self {
-			node_cache: self.node_cache.clone(),
-			data_cache: self.data_cache.clone(),
-		}
+		Self { node_cache: self.node_cache.clone(), data_cache: self.data_cache.clone() }
 	}
 }
 
@@ -171,11 +168,7 @@ impl<'a, H: Hasher> trie_db::TrieCache<NodeCodec<H>> for TrieNodeCache<'a, H> {
 	fn get_or_insert_node(
 		&mut self,
 		hash: H::Out,
-		fetch_node: &mut dyn FnMut() -> trie_db::Result<
-			NodeOwned<H::Out>,
-			H::Out,
-			Error,
-		>,
+		fetch_node: &mut dyn FnMut() -> trie_db::Result<NodeOwned<H::Out>, H::Out, Error>,
 	) -> trie_db::Result<&NodeOwned<H::Out>, H::Out, Error> {
 		if let Some(res) = self.shared_cache.get(&hash) {
 			return Ok(res)
@@ -219,6 +212,7 @@ mod tests {
 	type MemoryDB = crate::MemoryDB<sp_core::Blake2Hasher>;
 	type Layout = crate::LayoutV1<sp_core::Blake2Hasher>;
 	type Cache = super::SharedTrieNodeCache<sp_core::Blake2Hasher>;
+	type Recorder = crate::recorder::Recorder<sp_core::Blake2Hasher>;
 
 	const TEST_DATA: &[(&[u8], &[u8])] =
 		&[(b"key1", b"val1"), (b"key2", &[2; 64]), (b"key3", b"val3"), (b"key4", &[4; 64])];
@@ -327,5 +321,38 @@ mod tests {
 			.unwrap()
 			.clone();
 		assert_eq!(Bytes::from(new_value), cached_data.unwrap());
+	}
+
+	#[test]
+	fn cache_and_recorder_work_together() {
+		let (db, root) = create_trie();
+
+		let shared_cache = Cache::new(true);
+		let local_cache = shared_cache.local_cache();
+		let recorder = Recorder::default();
+
+		{
+			let mut cache = local_cache.as_trie_db_cache(root);
+			let mut recorder = recorder.as_trie_recorder();
+			let trie = TrieDBBuilder::<Layout>::new_unchecked(&db, &root)
+				.with_cache(&mut cache)
+				.with_recorder(&mut *recorder)
+				.build();
+
+			for (key, value) in TEST_DATA {
+				assert_eq!(*value, trie.get(&key).unwrap().unwrap());
+			}
+		}
+
+		let storage_proof = recorder.into_storage_proof();
+		let memory_db: MemoryDB = storage_proof.into_memory_db();
+
+		{
+			let trie = TrieDBBuilder::<Layout>::new(&memory_db, &root).unwrap().build();
+
+			for (key, value) in TEST_DATA {
+				assert_eq!(*value, trie.get(&key).unwrap().unwrap());
+			}
+		}
 	}
 }

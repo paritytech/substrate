@@ -15,7 +15,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use parking_lot::{MappedMutexGuard, Mutex, MutexGuard};
+use crate::{NodeCodec, StorageProof};
+use hash_db::Hasher;
+use parking_lot::{Mutex, MutexGuard};
 use std::{
 	collections::{HashMap, HashSet},
 	hash::Hash,
@@ -24,25 +26,43 @@ use std::{
 };
 use trie_db::{node::NodeOwned, TrieAccess, TrieRecorder};
 
-use crate::StorageProof;
-
-#[derive(Default, Clone)]
-pub struct Recorder<H> {
-	inner: Arc<Mutex<RecorderInner<H>>>,
+pub struct Recorder<H: Hasher> {
+	inner: Arc<Mutex<RecorderInner<H::Out>>>,
 }
 
-impl<H> Recorder<H>
-where
-	H: Eq + Hash + Clone,
-{
-	pub fn as_trie_recorder(&self) -> MutexGuard<impl TrieRecorder<H>> {
+impl<H: Hasher> Default for Recorder<H> {
+	fn default() -> Self {
+		Self { inner: Default::default() }
+	}
+}
+
+impl<H: Hasher> Clone for Recorder<H> {
+	fn clone(&self) -> Self {
+		Self { inner: self.inner.clone() }
+	}
+}
+
+impl<H: Hasher> Recorder<H> {
+	pub fn as_trie_recorder(&self) -> MutexGuard<impl TrieRecorder<H::Out>> {
 		self.inner.lock()
 	}
 
 	pub fn into_storage_proof(self) -> StorageProof {
 		let mut recorder = mem::take(&mut *self.inner.lock());
 
-		StorageProof::new(recorder.accessed_encoded_nodes.drain().map(|(_, v)| v).collect())
+		StorageProof::new(
+			recorder
+				.accessed_encoded_nodes
+				.drain()
+				.map(|(_, v)| v)
+				.chain(
+					recorder
+						.accessed_owned_nodes
+						.drain()
+						.map(|(_, v)| v.to_encoded::<NodeCodec<H>>()),
+				)
+				.collect(),
+		)
 	}
 }
 
@@ -101,7 +121,7 @@ mod tests {
 
 	type MemoryDB = crate::MemoryDB<sp_core::Blake2Hasher>;
 	type Layout = crate::LayoutV1<sp_core::Blake2Hasher>;
-	type Recorder = super::Recorder<sp_core::hash::H256>;
+	type Recorder = super::Recorder<sp_core::Blake2Hasher>;
 
 	const TEST_DATA: &[(&[u8], &[u8])] =
 		&[(b"key1", b"val1"), (b"key2", b"val2"), (b"key3", b"val3"), (b"key4", b"val4")];
