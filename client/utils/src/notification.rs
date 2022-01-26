@@ -110,7 +110,6 @@ impl<Payload> NotificationSender<Payload> {
 		//
 		// So there's no need to clean up the subscribers set upon sending another message.
 
-		let payload = payload()?; // FIXME: Did it have to be lazily instantiated?
 		self.hub.dispatch(payload);
 
 		Ok(())

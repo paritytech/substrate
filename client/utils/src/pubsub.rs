@@ -66,6 +66,8 @@ pub trait Subscribe<K> {
 pub trait Dispatch<M> {
 	/// The type of the that shall be sent through the channel as a result of such dispatch.
 	type Item;
+	/// The type returned by the `dispatch`-method.
+	type Ret;
 
 	/// Dispatch the message of type `M`.
 	///
@@ -74,7 +76,7 @@ pub trait Dispatch<M> {
 	///
 	/// Note that this does not have to be of the same type with the item that will be sent through
 	/// to the subscribers. The subscribers will receive a message of type `Self::Item`.
-	fn dispatch<F>(&mut self, message: M, dispatch: F)
+	fn dispatch<F>(&mut self, message: M, dispatch: F) -> Self::Ret
 	where
 		F: FnMut(&SubsID, Self::Item);
 }

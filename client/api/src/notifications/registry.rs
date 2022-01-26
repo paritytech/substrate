@@ -184,8 +184,9 @@ where
 	CCSI: Iterator<Item = (Vec<u8>, Option<Vec<u8>>)>,
 {
 	type Item = StorageNotification<Hash>;
+	type Ret = ();
 
-	fn dispatch<F>(&mut self, message: (&'a Hash, CS, CCS), dispatch: F)
+	fn dispatch<F>(&mut self, message: (&'a Hash, CS, CCS), dispatch: F) -> Self::Ret
 	where
 		F: FnMut(&SubscriberId, Self::Item),
 	{

@@ -43,16 +43,24 @@ impl Unsubscribe for Registry {
 	}
 }
 
-impl<Payload> Dispatch<Payload> for Registry
+impl<MakePayload, Payload, Error> Dispatch<MakePayload> for Registry
 where
+	MakePayload: FnOnce() -> Result<Payload, Error>,
 	Payload: Clone,
 {
 	type Item = Payload;
+	type Ret = Result<(), Error>;
 
-	fn dispatch<F>(&mut self, payload: Payload, mut dispatch: F)
+	fn dispatch<F>(&mut self, make_payload: MakePayload, mut dispatch: F) -> Self::Ret
 	where
 		F: FnMut(&SubsID, Self::Item),
 	{
-		self.subscribers.iter().for_each(|subs_id| dispatch(subs_id, payload.clone()))
+		if !self.subscribers.is_empty() {
+			let payload = make_payload()?;
+			for subs_id in &self.subscribers {
+				dispatch(subs_id, payload.clone());
+			}
+		}
+		Ok(())
 	}
 }
