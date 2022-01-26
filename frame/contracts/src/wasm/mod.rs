@@ -385,8 +385,8 @@ mod tests {
 		fn get_storage(&mut self, key: &StorageKey) -> Option<Vec<u8>> {
 			self.storage.get(key).cloned()
 		}
-		fn contains_storage(&mut self, key: &StorageKey) -> bool {
-			self.storage.contains_key(key)
+		fn get_storage_size(&mut self, key: &StorageKey) -> Option<u32> {
+			self.storage.get(key).map(|val| val.len() as u32)
 		}
 		fn set_storage(
 			&mut self,
@@ -2023,7 +2023,7 @@ mod tests {
 		// value did not exist before -> sentinel returned
 		let input = ([1u8; 32], [42u8, 48]).encode();
 		let result = execute(CODE, input, &mut ext).unwrap();
-		assert_eq!(u32::from_le_bytes(result.data.0.try_into().unwrap()), u32::MAX);
+		assert_eq!(u32::from_le_bytes(result.data.0.try_into().unwrap()), crate::SENTINEL);
 		assert_eq!(ext.storage.get(&[1u8; 32]).unwrap(), &[42u8, 48]);
 
 		// value do exist -> length of old value returned
@@ -2083,7 +2083,7 @@ mod tests {
 
 		// value does not exist -> sentinel returned
 		let result = execute(CODE, [3u8; 32].encode(), &mut ext).unwrap();
-		assert_eq!(u32::from_le_bytes(result.data.0.try_into().unwrap()), u32::MAX);
+		assert_eq!(u32::from_le_bytes(result.data.0.try_into().unwrap()), crate::SENTINEL);
 		assert_eq!(ext.storage.get(&[3u8; 32]), None);
 
 		// value did exist -> length returned
@@ -2228,25 +2228,16 @@ mod tests {
 		ext.storage.insert([1u8; 32], vec![42u8]);
 		ext.storage.insert([2u8; 32], vec![]);
 
-		// value does not exist -> error returned
+		// value does not exist -> sentinel value returned
 		let result = execute(CODE, [3u8; 32].encode(), &mut ext).unwrap();
-		assert_eq!(
-			u32::from_le_bytes(result.data.0.try_into().unwrap()),
-			ReturnCode::KeyNotFound as u32
-		);
+		assert_eq!(u32::from_le_bytes(result.data.0.try_into().unwrap()), crate::SENTINEL);
 
 		// value did exist -> success
 		let result = execute(CODE, [1u8; 32].encode(), &mut ext).unwrap();
-		assert_eq!(
-			u32::from_le_bytes(result.data.0.try_into().unwrap()),
-			ReturnCode::Success as u32
-		);
+		assert_eq!(u32::from_le_bytes(result.data.0.try_into().unwrap()), 1,);
 
 		// value did exist -> success (zero sized type)
 		let result = execute(CODE, [2u8; 32].encode(), &mut ext).unwrap();
-		assert_eq!(
-			u32::from_le_bytes(result.data.0.try_into().unwrap()),
-			ReturnCode::Success as u32
-		);
+		assert_eq!(u32::from_le_bytes(result.data.0.try_into().unwrap()), 0,);
 	}
 }

@@ -31,7 +31,7 @@ use toml::value::Table;
 
 use build_helper::rerun_if_changed;
 
-use cargo_metadata::{Metadata, MetadataCommand};
+use cargo_metadata::{CargoOpt, Metadata, MetadataCommand};
 
 use walkdir::WalkDir;
 
@@ -88,6 +88,7 @@ fn crate_metadata(cargo_manifest: &Path) -> Metadata {
 
 	let crate_metadata = MetadataCommand::new()
 		.manifest_path(cargo_manifest)
+		.features(CargoOpt::AllFeatures)
 		.exec()
 		.expect("`cargo metadata` can not fail on project `Cargo.toml`; qed");
 

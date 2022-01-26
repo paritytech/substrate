@@ -22,7 +22,7 @@ pub mod meter;
 use crate::{
 	exec::{AccountIdOf, StorageKey},
 	weights::WeightInfo,
-	BalanceOf, CodeHash, Config, ContractInfoOf, DeletionQueue, Error, TrieId,
+	BalanceOf, CodeHash, Config, ContractInfoOf, DeletionQueue, Error, TrieId, SENTINEL,
 };
 use codec::{Decode, Encode};
 use frame_support::{
@@ -87,6 +87,33 @@ pub enum WriteOutcome {
 	Taken(Vec<u8>),
 }
 
+impl WriteOutcome {
+	/// Extracts the size of the overwritten value or `0` if there
+	/// was no value in storage.
+	pub fn old_len(&self) -> u32 {
+		match self {
+			Self::New => 0,
+			Self::Overwritten(len) => *len,
+			Self::Taken(value) => value.len() as u32,
+		}
+	}
+
+	/// Extracts the size of the overwritten value or `SENTINEL` if there
+	/// was no value in storage.
+	///
+	/// # Note
+	///
+	/// We cannot use `0` as sentinel value because there could be a zero sized
+	/// storage entry which is different from a non existing one.
+	pub fn old_len_with_sentinel(&self) -> u32 {
+		match self {
+			Self::New => SENTINEL,
+			Self::Overwritten(len) => *len,
+			Self::Taken(value) => value.len() as u32,
+		}
+	}
+}
+
 pub struct Storage<T>(PhantomData<T>);
 
 impl<T> Storage<T>
@@ -102,9 +129,12 @@ where
 		child::get_raw(&child_trie_info(trie_id), &blake2_256(key))
 	}
 
-	/// Returns `true` iff the `key` exists in storage.
-	pub fn contains(trie_id: &TrieId, key: &StorageKey) -> bool {
-		child::exists(&child_trie_info(trie_id), &blake2_256(key))
+	/// Returns `Some(len)` (in bytes) if a storage item exists at `key`.
+	///
+	/// Returns `None` if the `key` wasn't previously set by `set_storage` or
+	/// was deleted.
+	pub fn size(trie_id: &TrieId, key: &StorageKey) -> Option<u32> {
+		child::len(&child_trie_info(trie_id), &blake2_256(key))
 	}
 
 	/// Update a storage entry into a contract's kv storage.
