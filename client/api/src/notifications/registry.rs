@@ -163,10 +163,16 @@ impl<'a> Subscribe<SubscribeOp<'a>> for Registry {
 			m.with_label_values(&[&"added"]).inc();
 		}
 
-		assert!(self.sinks.insert(subs_id, SubscriberSink::new(subs_id, keys, child_keys)).is_none(), "
-			Each `subs_id` is taken from `self.id_sequence.next_id()`.
-			If we have a duplicate key here, it's either the implementation of `IDSequence` was broken, or we've overflowed `u64`.
-			We are not likely to overflow an `u64`.");
+		if self
+			.sinks
+			.insert(subs_id, SubscriberSink::new(subs_id, keys, child_keys))
+			.is_some()
+		{
+			log::warn!("The `subscribe`-method has been passed a non-unique subs_id (`impl Subscribe<{}> for {}`)",
+				std::any::type_name::<SubscribeOp<'a>>(),
+				std::any::type_name::<Self>(),
+			);
+		}
 	}
 }
 
