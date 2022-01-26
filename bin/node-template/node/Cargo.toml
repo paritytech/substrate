@@ -18,6 +18,8 @@ name = "node-template"
 
 [dependencies]
 clap = { version = "3.0", features = ["derive"] }
+log = "0.4.14"
+futures = "0.3.16"
 
 sc-cli = { version = "0.10.0-dev", path = "../../../client/cli", features = ["wasmtime"] }
 sp-core = { version = "4.1.0-dev", path = "../../../primitives/core" }
@@ -51,6 +53,12 @@ pallet-transaction-payment-rpc = { version = "4.0.0-dev", path = "../../../frame
 # These dependencies are used for runtime benchmarking
 frame-benchmarking = { version = "4.0.0-dev", path = "../../../frame/benchmarking" }
 frame-benchmarking-cli = { version = "4.0.0-dev", path = "../../../utils/frame/benchmarking-cli" }
+
+# for building transactions
+frame-system = { version = "4.0.0-dev", path = "../../../frame/system" }
+frame-system-rpc-runtime-api = { version = "4.0.0-dev", path = "../../../frame/system/rpc/runtime-api/" }
+pallet-transaction-payment = { version = "4.0.0-dev", path = "../../../frame/transaction-payment" }
+sp-keyring = { version = "4.1.0-dev", path = "../../../primitives/keyring" }
 
 node-template-runtime = { version = "3.0.0", path = "../runtime" }
 

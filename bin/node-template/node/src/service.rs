@@ -11,6 +11,7 @@ use sc_telemetry::{Telemetry, TelemetryWorker};
 use sp_consensus::SlotData;
 use sp_consensus_aura::sr25519::AuthorityPair as AuraPair;
 use std::{sync::Arc, time::Duration};
+use sp_runtime::generic;
 
 // Our native executor instance.
 pub struct ExecutorDispatch;
@@ -251,7 +252,7 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 		let proposer_factory = sc_basic_authorship::ProposerFactory::new(
 			task_manager.spawn_handle(),
 			client.clone(),
-			transaction_pool,
+			transaction_pool.clone(),
 			prometheus_registry.as_ref(),
 			telemetry.as_ref().map(|x| x.handle()),
 		);
@@ -342,6 +343,181 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 		);
 	}
 
+	log::info!("creating tx submission task");
+	let task = run_tx_submission(client.clone(), transaction_pool.clone());
+	task_manager.spawn_handle().spawn_blocking(
+		"tx_submission",
+		None,
+		task,
+	);
+
 	network_starter.start_network();
 	Ok(task_manager)
+}
+
+// transaction submission imports
+use sp_api::{BlockT, HeaderT, ProvideRuntimeApi};
+use sp_blockchain::HeaderMetadata;
+use sp_consensus::block_validation::Chain;
+use sp_core::Pair;
+
+use sc_client_api::{BlockchainEvents, HeaderBackend};
+use sc_transaction_pool_api::{TransactionPool, TransactionSource};
+
+use frame_system_rpc_runtime_api::AccountNonceApi;
+
+use node_template_runtime::Hash as RuntimeHash;
+use node_template_runtime::opaque::UncheckedExtrinsic as OpaqueRuntimeExtrinsic;
+
+async fn run_tx_submission<B, C, P>(
+	client: Arc<C>,
+	transaction_pool: Arc<P>,
+)
+where
+	B: BlockT<Extrinsic = OpaqueRuntimeExtrinsic, Hash = RuntimeHash>,
+	C: ProvideRuntimeApi<B>
+		+ HeaderMetadata<B, Error = sp_blockchain::Error>
+		+ Chain<B>
+		+ HeaderBackend<B>
+		+ BlockBackend<B>
+		+ BlockchainEvents<B>,
+	P: TransactionPool<Block = B>,
+	C::Api: AccountNonceApi<B, node_template_runtime::AccountId, node_template_runtime::Index>
+{
+	use futures::stream::StreamExt;
+	use futures::FutureExt;
+	use sp_api::BlockId;
+	use sp_runtime::traits::One;
+	use sp_keyring::Sr25519Keyring;
+
+	let block_limit: <<B as BlockT>::Header as HeaderT>::Number = 10u16.into();
+
+	client.finality_notification_stream()
+		.take_while(|b| futures::future::ready(b.header.number() < &block_limit))
+		.for_each(|block| {
+
+			let client = client.clone();
+			let n = block.header.number().clone();
+			log::info!("[{}] finalized block number {}", n, n);
+			let eve = Sr25519Keyring::Eve.pair();
+			let sender = Sr25519Keyring::Alice.pair();
+
+			let dest = sp_runtime::AccountId32::from(eve.public()).into();
+			let value = 3_333_000_000_000;
+			let call = node_template_runtime::BalancesCall::transfer {
+				dest, value
+			};
+			log::info!("[{}] creating extrinsic", n);
+			let xt = create_extrinsic(
+				&*client,
+				sender,
+				call,
+				None,
+			);
+			let next_block = client.info().best_number;
+			log::info!("[{}] submitting extrinsic", n);
+			transaction_pool
+				.submit_one(&BlockId::number(next_block), TransactionSource::External, xt.into())
+				.then(move |r| {
+					log::info!("[{}] submitted extrinsic. result: {:?}", n, r);
+					futures::future::ready(())
+				})
+		}).await
+}
+
+/// Fetch the nonce of the given `account` from the chain state.
+///
+/// Note: Should only be used for tests.
+pub fn fetch_nonce<B, C>(client: &C, account: sp_core::sr25519::Pair) -> u32
+where
+	B: BlockT<Extrinsic = OpaqueRuntimeExtrinsic, Hash = RuntimeHash>,
+	C: ProvideRuntimeApi<B>
+		+ HeaderMetadata<B, Error = sp_blockchain::Error>
+		+ Chain<B>
+		+ HeaderBackend<B>
+		+ BlockBackend<B>
+		+ BlockchainEvents<B>,
+	C::Api: AccountNonceApi<B, node_template_runtime::AccountId, node_template_runtime::Index>
+{
+	let best_hash = client.info().best_hash;
+	client
+		.runtime_api()
+		.account_nonce(&generic::BlockId::Hash(best_hash), account.public().into())
+		.expect("Fetching account nonce works; qed")
+}
+
+/// Create a transaction using the given `call`.
+///
+/// The transaction will be signed by `sender`. If `nonce` is `None` it will be fetched from the
+/// state of the best block.
+///
+/// Note: Should only be used for tests.
+pub fn create_extrinsic<B, C>(
+	client: &C,
+	sender: sp_core::sr25519::Pair,
+	function: impl Into<node_template_runtime::Call>,
+	nonce: Option<u32>,
+) -> node_template_runtime::UncheckedExtrinsic
+where
+	B: BlockT<Extrinsic = OpaqueRuntimeExtrinsic, Hash = RuntimeHash>,
+	C: ProvideRuntimeApi<B>
+		+ HeaderMetadata<B, Error = sp_blockchain::Error>
+		+ Chain<B>
+		+ HeaderBackend<B>
+		+ BlockBackend<B>
+		+ BlockchainEvents<B>,
+	C::Api: AccountNonceApi<B, node_template_runtime::AccountId, node_template_runtime::Index>
+{
+	use sp_runtime::SaturatedConversion;
+	use sp_core::Encode;
+	use node_template_runtime::Runtime;
+	use sp_runtime::traits::Zero;
+
+	let function = function.into();
+	let genesis_hash = client.block_hash(Zero::zero()).ok().flatten().expect("Genesis block exists; qed");
+	let best_hash = client.info().best_hash;
+	let best_block = client.info().best_number;
+	let nonce = nonce.unwrap_or_else(|| fetch_nonce(client, sender.clone()));
+
+	let period = node_template_runtime::BlockHashCount::get()
+		.checked_next_power_of_two()
+		.map(|c| c / 2)
+		.unwrap_or(2) as u64;
+	let tip = 0;
+	let extra: node_template_runtime::SignedExtra = (
+		frame_system::CheckNonZeroSender::<Runtime>::new(),
+		frame_system::CheckSpecVersion::<Runtime>::new(),
+		frame_system::CheckTxVersion::<Runtime>::new(),
+		frame_system::CheckGenesis::<Runtime>::new(),
+		frame_system::CheckEra::<Runtime>::from(generic::Era::mortal(
+			period,
+			best_block.saturated_into(),
+		)),
+		frame_system::CheckNonce::<Runtime>::from(nonce),
+		frame_system::CheckWeight::<Runtime>::new(),
+		pallet_transaction_payment::ChargeTransactionPayment::<Runtime>::from(tip),
+	);
+
+	let raw_payload = node_template_runtime::SignedPayload::from_raw(
+		function.clone(),
+		extra.clone(),
+		(
+			(),
+			node_template_runtime::VERSION.spec_version,
+			node_template_runtime::VERSION.transaction_version,
+			genesis_hash,
+			best_hash,
+			(),
+			(),
+			(),
+		),
+	);
+	let signature = raw_payload.using_encoded(|e| sender.sign(e));
+
+	node_template_runtime::UncheckedExtrinsic::new_signed(
+		function.clone(),
+		sp_runtime::AccountId32::from(sender.public()).into(),
+		node_template_runtime::Signature::Sr25519(signature.clone()),
+		extra.clone(),
+	)
 }
