@@ -226,19 +226,14 @@ where
 		registry.dispatch(message, |subs_id, item| {
 			if let Some(tx) = sinks.get_mut(&subs_id) {
 				self.channel.send(tx, item)
-			}
-			// This create does not have `log` as a dependency.
-			// Not sure such dependency should be added.
-			// But if there was a possibility to log something,
-			// the following warn-message would be appropriate:
-			/* else {
+			} else {
 				log::warn!(
-					"{} as Dispatch<{}>::dispatch(...). No Sink for SubsID = {}",
+					"No Sink for SubsID = {} ({} as Dispatch<{}>::dispatch(...))",
+					subs_id,
 					std::any::type_name::<R>(),
-					std::any::type_name::<K>(),
-					subs_id
+					std::any::type_name::<M>(),
 				);
-			}*/
+			}
 		});
 	}
 }
