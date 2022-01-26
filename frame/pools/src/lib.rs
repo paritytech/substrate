@@ -78,8 +78,9 @@ fn points_to_issue<T: Config>(
 	new_funds: BalanceOf<T>,
 ) -> BalanceOf<T> {
 	match (current_balance.is_zero(), current_points.is_zero()) {
-		(true, true) | (false, true) =>
-			new_funds.saturating_mul(POINTS_TO_BALANCE_INIT_RATIO.into()),
+		(true, true) | (false, true) => {
+			new_funds.saturating_mul(POINTS_TO_BALANCE_INIT_RATIO.into())
+		},
 		(true, false) => {
 			// The pool was totally slashed.
 
@@ -105,7 +106,7 @@ fn balance_to_unbond<T: Config>(
 ) -> BalanceOf<T> {
 	if current_balance.is_zero() || current_points.is_zero() || delegator_points.is_zero() {
 		// There is nothing to unbond
-		return Zero::zero()
+		return Zero::zero();
 	}
 
 	// Equivalent of (current_balance / current_points) * delegator_points
@@ -176,8 +177,8 @@ impl<T: Config> BondedPool<T> {
 		ensure!(points_to_balance_ratio_floor < 10u32.into(), Error::<T>::OverflowRisk);
 		// while restricting the balance to 1/10th of max total issuance,
 		ensure!(
-			new_funds.saturating_add(bonded_balance) <
-				BalanceOf::<T>::max_value().div(10u32.into()),
+			new_funds.saturating_add(bonded_balance)
+				< BalanceOf::<T>::max_value().div(10u32.into()),
 			Error::<T>::OverflowRisk
 		);
 		// then we can be decently confident the bonding pool points will not overflow
@@ -266,7 +267,7 @@ impl<T: Config> SubPools<T> {
 			// For the first `0..MaxUnbonding` eras of the chain we don't need to do anything.
 			// I.E. if `MaxUnbonding` is 5 and we are in era 4 we can add a pool for this era and
 			// have exactly `MaxUnbonding` pools.
-			return self
+			return self;
 		}
 
 		//  I.E. if `MaxUnbonding` is 5 and current era is 10, we only want to retain pools 6..=10.
@@ -423,7 +424,7 @@ pub mod pallet {
 			// the active balance is slashed below the minimum bonded or the account cannot be
 			// found, we exit early.
 			if !T::StakingInterface::can_bond_extra(&bonded_pool.account_id, amount) {
-				return Err(Error::<T>::StakingError.into())
+				return Err(Error::<T>::StakingError.into());
 			}
 
 			// We don't actually care about writing the reward pool, we just need its
@@ -574,7 +575,7 @@ pub mod pallet {
 			let unbonding_era = delegator.unbonding_era.ok_or(Error::<T>::NotUnbonding)?;
 			let current_era = T::StakingInterface::current_era();
 			if current_era.saturating_sub(unbonding_era) < T::StakingInterface::bonding_duration() {
-				return Err(Error::<T>::NotUnbondedYet.into())
+				return Err(Error::<T>::NotUnbondedYet.into());
 			};
 
 			let mut sub_pools =
@@ -642,12 +643,14 @@ pub mod pallet {
 			ensure!(!BondedPoolStorage::<T>::contains_key(id), Error::<T>::IdInUse);
 			ensure!(amount >= T::StakingInterface::minimum_bond(), Error::<T>::MinimumBondNotMet);
 			// TODO create can_* fns so we can bail in the beggining if some pre-conditions are not
-			// met T::StakingInterface::can_bond()
-			// T::StakingInterface::can_nominate()
 
 			let (stash, reward_dest) = Self::create_accounts(id);
 
-			T::Currency::transfer(&who, &stash, amount, ExistenceRequirement::AllowDeath)?;
+			ensure!(
+				T::StakingInterface::can_nominate(&stash, &targets)
+					&& T::StakingInterface::can_bond(&stash, &stash, &reward_dest),
+				Error::<T>::StakingError
+			);
 
 			let mut bonded_pool =
 				BondedPool::<T> { points: Zero::zero(), account_id: stash.clone() };
@@ -657,15 +660,24 @@ pub mod pallet {
 			let points_to_issue = bonded_pool.points_to_issue(amount);
 			bonded_pool.points = points_to_issue;
 
+			T::Currency::transfer(&who, &stash, amount, ExistenceRequirement::AllowDeath)?;
+
 			T::StakingInterface::bond(
 				stash.clone(),
 				// We make the stash and controller the same for simplicity
 				stash.clone(),
 				amount,
 				reward_dest.clone(),
-			)?;
+			)
+			.map_err(|e| {
+				log!(warn, "error trying to bond new pool after a users balance was transferred.");
+				e
+			})?;
 
-			T::StakingInterface::nominate(stash.clone(), targets)?;
+			T::StakingInterface::nominate(stash.clone(), targets).map_err(|e| {
+				log!(warn, "error trying to nominate with a new pool after a users balance was transferred.");
+				e
+			})?;
 
 			DelegatorStorage::<T>::insert(
 				who,
@@ -757,9 +769,9 @@ impl<T: Config> Pallet<T> {
 		let delegator_virtual_points = T::BalanceToU256::convert(delegator.points)
 			.saturating_mul(T::BalanceToU256::convert(new_earnings_since_last_claim));
 
-		let delegator_payout = if delegator_virtual_points.is_zero() ||
-			current_points.is_zero() ||
-			reward_pool.balance.is_zero()
+		let delegator_payout = if delegator_virtual_points.is_zero()
+			|| current_points.is_zero()
+			|| reward_pool.balance.is_zero()
 		{
 			Zero::zero()
 		} else {
@@ -851,7 +863,7 @@ impl<T: Config> Pallet<T> {
 			active_bonded_balance.saturating_add(unbonding_affected_balance);
 
 		if total_affected_balance.is_zero() {
-			return Some((Zero::zero(), Default::default()))
+			return Some((Zero::zero(), Default::default()));
 		}
 		if slash_amount > total_affected_balance {
 			// TODO this shouldn't happen as long as MaxBonding pools is greater thant the slash

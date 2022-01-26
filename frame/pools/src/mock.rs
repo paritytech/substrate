@@ -16,6 +16,8 @@ parameter_types! {
 	static BondedBalanceMap: std::collections::HashMap<AccountId, Balance> = Default::default();
 	static UnbondingBalanceMap: std::collections::HashMap<AccountId, Balance> = Default::default();
 	pub static CanBondExtra: bool = true;
+	pub static CanBond: bool = true;
+	pub static CanNominate: bool = true;
 }
 
 pub struct StakingMock;
@@ -70,6 +72,10 @@ impl sp_staking::StakingInterface for StakingMock {
 		Ok(())
 	}
 
+	fn can_bond(_: &Self::AccountId, _: &Self::AccountId, _: &Self::AccountId) -> bool {
+		CanBond::get()
+	}
+
 	fn bond(
 		stash: Self::AccountId,
 		_: Self::AccountId,
@@ -78,6 +84,10 @@ impl sp_staking::StakingInterface for StakingMock {
 	) -> DispatchResult {
 		StakingMock::set_bonded_balance(stash, amount);
 		Ok(())
+	}
+
+	fn can_nominate(_: &Self::AccountId, _: &Vec<Self::LookupSource>) -> bool {
+		CanNominate::get()
 	}
 
 	fn nominate(_: Self::AccountId, _: Vec<Self::LookupSource>) -> DispatchResult {

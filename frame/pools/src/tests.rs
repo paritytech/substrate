@@ -1,12 +1,16 @@
 use super::*;
 use crate::mock::{
-	Balance, Balances, CanBondExtra, CurrentEra, ExtBuilder, Origin, Pools, Runtime, StakingMock,
-	PRIMARY_ACCOUNT, REWARDS_ACCOUNT, UNBONDING_BALANCE_MAP,
+	Balance, Balances, CanBond, CanBondExtra, CanNominate, CurrentEra, ExtBuilder, Origin, Pools,
+	Runtime, StakingMock, PRIMARY_ACCOUNT, REWARDS_ACCOUNT, UNBONDING_BALANCE_MAP,
 };
 use frame_support::{assert_noop, assert_ok};
 
 // TODO
 // - make sure any time we do a balance transfer and then some other operation
+// 	- join - done
+// 	- unbond - not neccesary
+// 	- withdraw_unbonded - not neccesary
+// 	- create - can_bond & can_nominate
 //	we either use transactional storage or have sufficient can_* functions
 // - implement staking impl of the delegator pools interface
 // - test `slash_pool`
@@ -285,7 +289,7 @@ mod sub_pools {
 			assert_eq!(<Runtime as Config>::MaxUnbonding::get(), 5);
 
 			// Given
-			let mut sp0 = SubPools::<Runtime> {
+			let mut sub_pool_0 = SubPools::<Runtime> {
 				no_era: UnbondPool::<Runtime>::default(),
 				with_era: std::collections::BTreeMap::from([
 					(0, UnbondPool::<Runtime>::new(10, 10)),
@@ -299,47 +303,47 @@ mod sub_pools {
 			};
 
 			// When `current_era < MaxUnbonding`,
-			let sp1 = sp0.clone().maybe_merge_pools(3);
+			let sub_pool_1 = sub_pool_0.clone().maybe_merge_pools(3);
 
 			// Then it exits early without modifications
-			assert_eq!(sp1, sp0);
+			assert_eq!(sub_pool_1, sub_pool_0);
 
 			// When `current_era == MaxUnbonding`,
-			let mut sp1 = sp1.maybe_merge_pools(4);
+			let mut sub_pool_1 = sub_pool_1.maybe_merge_pools(4);
 
 			// Then it exits early without modifications
-			assert_eq!(sp1, sp0);
+			assert_eq!(sub_pool_1, sub_pool_0);
 
 			// Given we have entries for era 0..=5
-			sp1.with_era.insert(5, UnbondPool::<Runtime>::new(50, 50));
-			sp0.with_era.insert(5, UnbondPool::<Runtime>::new(50, 50));
+			sub_pool_1.with_era.insert(5, UnbondPool::<Runtime>::new(50, 50));
+			sub_pool_0.with_era.insert(5, UnbondPool::<Runtime>::new(50, 50));
 
 			// When  `current_era - MaxUnbonding == 0`,
-			let sp1 = sp1.maybe_merge_pools(5);
+			let sub_pool_1 = sub_pool_1.maybe_merge_pools(5);
 
 			// Then era 0 is merged into the `no_era` pool
-			sp0.no_era = sp0.with_era.remove(&0).unwrap();
-			assert_eq!(sp1, sp0);
+			sub_pool_0.no_era = sub_pool_0.with_era.remove(&0).unwrap();
+			assert_eq!(sub_pool_1, sub_pool_0);
 
 			// When `current_era - MaxUnbonding == 1`
-			let sp2 = sp1.maybe_merge_pools(6);
-			let era_1_pool = sp0.with_era.remove(&1).unwrap();
+			let sub_pool_2 = sub_pool_1.maybe_merge_pools(6);
+			let era_1_pool = sub_pool_0.with_era.remove(&1).unwrap();
 
 			// Then era 1 is merged into the `no_era` pool
-			sp0.no_era.points += era_1_pool.points;
-			sp0.no_era.balance += era_1_pool.balance;
-			assert_eq!(sp2, sp0);
+			sub_pool_0.no_era.points += era_1_pool.points;
+			sub_pool_0.no_era.balance += era_1_pool.balance;
+			assert_eq!(sub_pool_2, sub_pool_0);
 
 			// When `current_era - MaxUnbonding == 5`, so all pools with era <= 4 are removed
-			let sp3 = sp2.maybe_merge_pools(10);
+			let sub_pool_3 = sub_pool_2.maybe_merge_pools(10);
 
 			// Then all eras <= 5 are merged into the `no_era` pool
 			for era in 2..=5 {
-				let to_merge = sp0.with_era.remove(&era).unwrap();
-				sp0.no_era.points += to_merge.points;
-				sp0.no_era.balance += to_merge.balance;
+				let to_merge = sub_pool_0.with_era.remove(&era).unwrap();
+				sub_pool_0.no_era.points += to_merge.points;
+				sub_pool_0.no_era.balance += to_merge.balance;
 			}
-			assert_eq!(sp3, sp0);
+			assert_eq!(sub_pool_3, sub_pool_0);
 		});
 	}
 }
@@ -421,8 +425,6 @@ mod join {
 					account_id: 321,
 				},
 			);
-
-			// Skipping Currency::transfer & StakingInterface::bond_extra errors
 		});
 	}
 }
@@ -1501,7 +1503,78 @@ mod withdraw_unbonded {
 	}
 }
 
-mod create {}
+mod create {
+	use super::*;
+
+	#[test]
+	fn create_works() {
+		ExtBuilder::default().build_and_execute(|| {
+			let bonded_account = 290807105;
+
+			assert!(!BondedPoolStorage::<Runtime>::contains_key(1));
+			assert!(!RewardPoolStorage::<Runtime>::contains_key(1));
+			assert!(!DelegatorStorage::<Runtime>::contains_key(11));
+			assert_eq!(StakingMock::bonded_balance(&bonded_account), 0);
+
+			Balances::make_free_balance_be(&11, StakingMock::minimum_bond());
+			assert_ok!(Pools::create(Origin::signed(11), 1, vec![], StakingMock::minimum_bond()));
+
+			assert_eq!(Balances::free_balance(&11), 0);
+			assert_eq!(
+				DelegatorStorage::<Runtime>::get(11).unwrap(),
+				Delegator {
+					pool: 1,
+					points: StakingMock::minimum_bond(),
+					reward_pool_total_earnings: Zero::zero(),
+					unbonding_era: None
+				}
+			);
+			assert_eq!(
+				BondedPoolStorage::<Runtime>::get(1).unwrap(),
+				BondedPool { points: StakingMock::minimum_bond(), account_id: bonded_account }
+			);
+			assert_eq!(StakingMock::bonded_balance(&bonded_account), StakingMock::minimum_bond());
+			assert_eq!(
+				RewardPoolStorage::<Runtime>::get(1).unwrap(),
+				RewardPool {
+					balance: Zero::zero(),
+					points: U256::zero(),
+					total_earnings: Zero::zero(),
+					account_id: 3354943642
+				}
+			);
+		});
+	}
+
+	#[test]
+	fn create_errors_correctly() {
+		ExtBuilder::default().build_and_execute(|| {
+			assert_noop!(
+				Pools::create(Origin::signed(11), 0, vec![], 420),
+				Error::<Runtime>::IdInUse
+			);
+
+			assert_noop!(
+				Pools::create(Origin::signed(11), 1, vec![], 1),
+				Error::<Runtime>::MinimumBondNotMet
+			);
+
+			CanNominate::set(false);
+			assert_noop!(
+				Pools::create(Origin::signed(11), 1, vec![], 420),
+				Error::<Runtime>::StakingError
+			);
+			CanNominate::set(true);
+
+			CanBond::set(false);
+			assert_noop!(
+				Pools::create(Origin::signed(11), 1, vec![], 420),
+				Error::<Runtime>::StakingError
+			);
+			CanBond::set(true);
+		});
+	}
+}
 
 mod pools_interface {
 	#[test]

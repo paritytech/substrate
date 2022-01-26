@@ -93,12 +93,25 @@ pub trait StakingInterface {
 
 	fn withdraw_unbonded(controller: &Self::AccountId) -> DispatchResult;
 
+	/// Check if the given accounts can be bonded as stash <-> controller pair and with the given
+	/// reward destination. Does not check if the accounts have enough funds. It is assumed that the
+	/// necessary funds will only be transferred into the accounts after this check is completed.
+	fn can_bond(
+		stash: &Self::AccountId,
+		controller: &Self::AccountId,
+		payee: &Self::AccountId,
+	) -> bool;
+
 	fn bond(
 		stash: Self::AccountId,
 		controller: Self::AccountId,
 		amount: Self::Balance,
 		payee: Self::AccountId,
 	) -> DispatchResult;
+
+	/// Check if the given account can nominate. Assumes the account will be correctly bonded after
+	/// this call.
+	fn can_nominate(controller: &Self::AccountId, targets: &Vec<Self::LookupSource>) -> bool;
 
 	fn nominate(controller: Self::AccountId, targets: Vec<Self::LookupSource>) -> DispatchResult;
 }
