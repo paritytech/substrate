@@ -1540,7 +1540,7 @@ fn lazy_batch_removal_works() {
 			child::put(trie, &[99], &42);
 
 			// Terminate the contract. Contract info should be gone, but value should be still there
-			// as the lazy removal did not run, yet
+			// as the lazy removal did not run, yet.
 			assert_ok!(Contracts::call(
 				Origin::signed(ALICE),
 				addr.clone(),
