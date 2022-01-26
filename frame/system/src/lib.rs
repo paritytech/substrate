@@ -1134,6 +1134,21 @@ impl<T: Config> Pallet<T> {
 		a.providers + a.sufficients
 	}
 
+	/// Check if the reference counter on an account can be incremented.
+	pub fn can_inc_consumers(who: &T::AccountId) -> bool {
+		let account = Account::<T>::get(who);
+
+		if account.providers > 0 {
+			if account.consumers < T::MaxConsumers::max_consumers() {
+				true
+			} else {
+				false
+			}
+		} else {
+			false
+		}
+	}
+
 	/// Increment the reference counter on an account.
 	///
 	/// The account `who`'s `providers` must be non-zero and the current number of consumers must

@@ -19,7 +19,7 @@
 
 //! A crate which contains primitives that are useful for implementation that uses staking
 //! approaches in general. Definitions related to sessions, slashing, etc go here.
-use sp_runtime::DispatchResult;
+use sp_runtime::{DispatchError, DispatchResult};
 use sp_std::collections::btree_map::BTreeMap;
 
 pub mod offence;
@@ -78,20 +78,23 @@ pub trait StakingInterface {
 	fn bonding_duration() -> EraIndex;
 
 	/// The current era for the staking system.
-	fn current_era() -> EraIndex;
+	fn current_era() -> Option<EraIndex>;
 
 	/// Balance `controller` has bonded for nominating.
-	fn bonded_balance(controller: &Self::AccountId) -> Self::Balance;
+	fn bonded_balance(controller: &Self::AccountId) -> Option<Self::Balance>;
 
 	/// If the given staker can successfully call `bond_extra` with `extra`. Assumes the `extra`
 	/// balance will be transferred in the stash.
 	fn can_bond_extra(controller: &Self::AccountId, extra: Self::Balance) -> bool;
 
-	fn bond_extra(controller: &Self::AccountId, extra: Self::Balance) -> DispatchResult;
+	fn bond_extra(controller: Self::AccountId, extra: Self::Balance) -> DispatchResult;
 
-	fn unbond(controller: &Self::AccountId, value: Self::Balance) -> DispatchResult;
+	fn unbond(controller: Self::AccountId, value: Self::Balance) -> DispatchResult;
 
-	fn withdraw_unbonded(controller: &Self::AccountId) -> DispatchResult;
+	fn withdraw_unbonded(
+		controller: Self::AccountId,
+		stash: &Self::AccountId,
+	) -> Result<u64, DispatchError>;
 
 	/// Check if the given accounts can be bonded as stash <-> controller pair and with the given
 	/// reward destination. Does not check if the accounts have enough funds. It is assumed that the
@@ -99,13 +102,14 @@ pub trait StakingInterface {
 	fn can_bond(
 		stash: &Self::AccountId,
 		controller: &Self::AccountId,
+		value: Self::Balance,
 		payee: &Self::AccountId,
 	) -> bool;
 
 	fn bond(
 		stash: Self::AccountId,
 		controller: Self::AccountId,
-		amount: Self::Balance,
+		value: Self::Balance,
 		payee: Self::AccountId,
 	) -> DispatchResult;
 

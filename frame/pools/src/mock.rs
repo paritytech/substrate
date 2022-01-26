@@ -44,8 +44,8 @@ impl sp_staking::StakingInterface for StakingMock {
 		3
 	}
 
-	fn bonded_balance(who: &Self::AccountId) -> Self::Balance {
-		BondedBalanceMap::get().get(who).map(|v| *v).unwrap_or_default()
+	fn bonded_balance(who: &Self::AccountId) -> Option<Self::Balance> {
+		BondedBalanceMap::get().get(who).map(|v| *v)
 	}
 
 	fn can_bond_extra(_: &Self::AccountId, _: Self::Balance) -> bool {

@@ -6,13 +6,7 @@ use crate::mock::{
 };
 use frame_support::{assert_noop, assert_ok};
 
-// TODO
-// - make sure any time we do a balance transfer and then some other operation
-// 	- join - done
-// 	- unbond - not neccesary
-// 	- withdraw_unbonded - not neccesary
-// 	- create - can_bond & can_nominate
-//	we either use transactional storage or have sufficient can_* functions
+// 
 // - implement staking impl of the delegator pools interface
 // - test `slash_pool`
 

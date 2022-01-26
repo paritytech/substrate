@@ -29,15 +29,15 @@ use frame_support::{
 	},
 	weights::{Weight, WithPostDispatchInfo},
 };
-use frame_system::pallet_prelude::BlockNumberFor;
+use frame_system::{pallet_prelude::BlockNumberFor, RawOrigin};
 use pallet_session::historical;
 use sp_runtime::{
-	traits::{Bounded, Convert, SaturatedConversion, Saturating, Zero},
+	traits::{Bounded, Convert, SaturatedConversion, Saturating, StaticLookup, Zero},
 	Perbill,
 };
 use sp_staking::{
 	offence::{DisableStrategy, OffenceDetails, OnOffenceHandler},
-	EraIndex, SessionIndex,
+	EraIndex, SessionIndex, StakingInterface,
 };
 use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 
@@ -143,7 +143,7 @@ impl<T: Config> Pallet<T> {
 
 		// Nothing to do if they have no reward points.
 		if validator_reward_points.is_zero() {
-			return Ok(Some(T::WeightInfo::payout_stakers_alive_staked(0)).into())
+			return Ok(Some(T::WeightInfo::payout_stakers_alive_staked(0)).into());
 		}
 
 		// This is the fraction of the total reward that the validator and the
@@ -235,8 +235,9 @@ impl<T: Config> Pallet<T> {
 					Self::update_ledger(&controller, &l);
 					r
 				}),
-			RewardDestination::Account(dest_account) =>
-				Some(T::Currency::deposit_creating(&dest_account, amount)),
+			RewardDestination::Account(dest_account) => {
+				Some(T::Currency::deposit_creating(&dest_account, amount))
+			},
 			RewardDestination::None => None,
 		}
 	}
@@ -264,14 +265,14 @@ impl<T: Config> Pallet<T> {
 				_ => {
 					// Either `Forcing::ForceNone`,
 					// or `Forcing::NotForcing if era_length >= T::SessionsPerEra::get()`.
-					return None
+					return None;
 				},
 			}
 
 			// New era.
 			let maybe_new_era_validators = Self::try_trigger_new_era(session_index, is_genesis);
-			if maybe_new_era_validators.is_some() &&
-				matches!(ForceEra::<T>::get(), Forcing::ForceNew)
+			if maybe_new_era_validators.is_some()
+				&& matches!(ForceEra::<T>::get(), Forcing::ForceNew)
 			{
 				ForceEra::<T>::put(Forcing::NotForcing);
 			}
@@ -462,7 +463,7 @@ impl<T: Config> Pallet<T> {
 			}
 
 			Self::deposit_event(Event::StakingElectionFailed);
-			return None
+			return None;
 		}
 
 		Self::deposit_event(Event::StakersElected);
@@ -869,7 +870,7 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 
 		// We can't handle this case yet -- return an error.
 		if maybe_max_len.map_or(false, |max_len| target_count > max_len as u32) {
-			return Err("Target snapshot too big")
+			return Err("Target snapshot too big");
 		}
 
 		Ok(Self::get_npos_targets())
@@ -1138,7 +1139,7 @@ where
 			add_db_reads_writes(1, 0);
 			if active_era.is_none() {
 				// This offence need not be re-submitted.
-				return consumed_weight
+				return consumed_weight;
 			}
 			active_era.expect("value checked not to be `None`; qed").index
 		};
@@ -1184,7 +1185,7 @@ where
 
 			// Skip if the validator is invulnerable.
 			if invulnerables.contains(stash) {
-				continue
+				continue;
 			}
 
 			let unapplied = slashing::compute_slash::<T>(slashing::SlashParams {
@@ -1306,5 +1307,151 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsMap<T> {
 		// NOTE: Caller must ensure this doesn't lead to too many storage accesses. This is a
 		// condition of SortedListProvider::unsafe_clear.
 		Nominators::<T>::remove_all();
+	}
+}
+
+impl<T: Config> StakingInterface for Pallet<T> {
+	type AccountId = T::AccountId;
+	type Balance = BalanceOf<T>;
+	type LookupSource = <T::Lookup as StaticLookup>::Source;
+
+	fn minimum_bond() -> Self::Balance {
+		MinNominatorBond::<T>::get()
+	}
+
+	fn bonding_duration() -> EraIndex {
+		T::BondingDuration::get()
+	}
+
+	fn current_era() -> Option<EraIndex> {
+		Self::current_era()
+	}
+
+	fn bonded_balance(controller: &Self::AccountId) -> Option<Self::Balance> {
+		Self::ledger(controller).map(|l| l.active)
+	}
+
+	fn can_bond_extra(controller: &Self::AccountId, extra: Self::Balance) -> bool {
+		let ledger = match Self::ledger(&controller) {
+			Some(l) => l,
+			None => return false,
+		};
+
+		if ledger.active.saturating_add(extra) < T::Currency::minimum_balance() {
+			false
+		} else {
+			true
+		}
+	}
+
+	fn bond_extra(stash: Self::AccountId, extra: Self::Balance) -> DispatchResult {
+		Self::bond_extra(RawOrigin::Signed(stash).into(), extra)
+	}
+
+	fn unbond(controller: Self::AccountId, value: Self::Balance) -> DispatchResult {
+		Self::unbond(RawOrigin::Signed(controller).into(), value)
+	}
+
+	fn withdraw_unbonded(
+		controller: Self::AccountId,
+		stash: &Self::AccountId,
+	) -> Result<u64, DispatchError> {
+		// TODO should probably just make this an input param
+		let num_slashing_spans = match <Pallet<T> as Store>::SlashingSpans::get(stash) {
+			None => 0,
+			Some(s) => s.iter().count() as u32,
+		};
+
+		Self::withdraw_unbonded(RawOrigin::Signed(controller).into(), num_slashing_spans)
+			.map(|post_info| {
+				post_info
+					.actual_weight
+					.unwrap_or(T::WeightInfo::withdraw_unbonded_kill(num_slashing_spans))
+			})
+			.map_err(|err_with_post_info| err_with_post_info.error)
+	}
+
+	fn can_bond(
+		stash: &Self::AccountId,
+		controller: &Self::AccountId,
+		value: Self::Balance,
+		_: &Self::AccountId,
+	) -> bool {
+		if Bonded::<T>::contains_key(stash) {
+			return false;
+		}
+
+		if Ledger::<T>::contains_key(controller) {
+			return false;
+		}
+
+		if value < T::Currency::minimum_balance() {
+			return false;
+		}
+
+		if !frame_system::Pallet::<T>::can_inc_consumers(stash) {
+			return false;
+		}
+
+		true
+	}
+
+	fn bond(
+		stash: Self::AccountId,
+		controller: Self::AccountId,
+		value: Self::Balance,
+		payee: Self::AccountId,
+	) -> DispatchResult {
+		Self::bond(
+			RawOrigin::Signed(stash).into(),
+			T::Lookup::unlookup(controller),
+			value,
+			RewardDestination::Account(payee),
+		)
+	}
+
+	fn can_nominate(controller: &Self::AccountId, targets: &Vec<Self::LookupSource>) -> bool {
+		let ledger = match Self::ledger(&controller) {
+			Some(l) => l,
+			None => return false,
+		};
+		let stash = &ledger.stash;
+
+		if ledger.active < MinNominatorBond::<T>::get() {
+			return false;
+		}
+
+		if !Nominators::<T>::contains_key(stash) {
+			if let Some(max_nominators) = MaxNominatorsCount::<T>::get() {
+				if Nominators::<T>::count() < max_nominators {
+					return false;
+				};
+			}
+		}
+
+		if targets.is_empty() {
+			return false;
+		}
+
+		if targets.len() as u32 > T::MAX_NOMINATIONS {
+			return false;
+		}
+
+		let old = Nominators::<T>::get(stash).map_or_else(Vec::new, |x| x.targets);
+		for validator in targets {
+			if let Ok(validator) = T::Lookup::lookup(validator.clone()) {
+				if !(old.contains(&validator) || !Validators::<T>::get(&validator).blocked) {
+					return false;
+				}
+			} else {
+				return false;
+			}
+		}
+
+		true
+	}
+
+	fn nominate(controller: Self::AccountId, targets: Vec<Self::LookupSource>) -> DispatchResult {
+		Self::nominate(RawOrigin::Signed(controller).into(), targets)
 	}
 }

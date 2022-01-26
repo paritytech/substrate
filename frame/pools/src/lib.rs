@@ -147,19 +147,22 @@ pub struct BondedPool<T: Config> {
 impl<T: Config> BondedPool<T> {
 	/// Get the amount of points to issue for some new funds that will be bonded in the pool.
 	fn points_to_issue(&self, new_funds: BalanceOf<T>) -> BalanceOf<T> {
-		let bonded_balance = T::StakingInterface::bonded_balance(&self.account_id);
+		let bonded_balance =
+			T::StakingInterface::bonded_balance(&self.account_id).unwrap_or(Zero::zero());
 		points_to_issue::<T>(bonded_balance, self.points, new_funds)
 	}
 
 	// Get the amount of balance to unbond from the pool based on a delegator's points of the pool.
 	fn balance_to_unbond(&self, delegator_points: BalanceOf<T>) -> BalanceOf<T> {
-		let bonded_balance = T::StakingInterface::bonded_balance(&self.account_id);
+		let bonded_balance =
+			T::StakingInterface::bonded_balance(&self.account_id).unwrap_or(Zero::zero());
 		balance_to_unbond::<T>(bonded_balance, self.points, delegator_points)
 	}
 
 	// Check that the pool can accept a member with `new_funds`.
 	fn ok_to_join_with(&self, new_funds: BalanceOf<T>) -> Result<(), DispatchError> {
-		let bonded_balance = T::StakingInterface::bonded_balance(&self.account_id);
+		let bonded_balance =
+			T::StakingInterface::bonded_balance(&self.account_id).unwrap_or(Zero::zero());
 		ensure!(!bonded_balance.is_zero(), Error::<T>::OverflowRisk);
 
 		let points_to_balance_ratio_floor = self
@@ -531,6 +534,7 @@ pub mod pallet {
 			// to unbond so we have the correct points for the balance:share ratio.
 			bonded_pool.points = bonded_pool.points.saturating_sub(delegator.points);
 
+			// TODO: call withdraw unbonded to try and minimize unbonding chunks
 			// Unbond in the actual underlying pool
 			T::StakingInterface::unbond(&bonded_pool.account_id, balance_to_unbond)?;
 
