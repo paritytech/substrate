@@ -209,9 +209,6 @@ default:
     AWS_SECRET_ACCESS_KEY:
       vault:                       cicd/gitlab/$CI_PROJECT_PATH/AWS_SECRET_ACCESS_KEY@kv
       file:                        false
-    CRATES_TOKEN:
-      vault:                       cicd/gitlab/$CI_PROJECT_PATH/CRATES_TOKEN@kv
-      file:                        false
     GITHUB_EMAIL:
       vault:                       cicd/gitlab/$CI_PROJECT_PATH/GITHUB_EMAIL@kv
       file:                        false
