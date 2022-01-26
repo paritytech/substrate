@@ -139,6 +139,26 @@ impl Transport {
 			_ => None,
 		}
 	}
+
+	// Open a new WebSocket connection if it's not connected.
+	async fn map_uri(&mut self) -> Result<(), &'static str> {
+		if let Self::Uri(uri) = self {
+			log::debug!(target: LOG_TARGET, "initializing remote client to {:?}", uri);
+
+			let ws_client = WsClientBuilder::default()
+				.max_request_body_size(u32::MAX)
+				.build(&uri)
+				.await
+				.map_err(|e| {
+					log::error!(target: LOG_TARGET, "error: {:?}", e);
+					"failed to build ws client"
+				})?;
+
+			*self = Self::RemoteClient(Arc::new(ws_client))
+		}
+
+		Ok(())
+	}
 }
 
 impl From<String> for Transport {
@@ -640,28 +660,8 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 	}
 
 	pub(crate) async fn init_remote_client(&mut self) -> Result<(), &'static str> {
-		let mut online = self.as_online_mut();
-
-		let maybe_transport = if let Transport::Uri(uri) = &online.transport {
-			log::debug!(target: LOG_TARGET, "initializing remote client to {:?}", uri);
-
-			// First, initialize the ws client.
-			let ws_client = WsClientBuilder::default()
-				.max_request_body_size(u32::MAX)
-				.build(&uri)
-				.await
-				.map_err(|e| {
-					log::error!(target: LOG_TARGET, "error: {:?}", e);
-					"failed to build ws client"
-				})?;
-			Some(Transport::RemoteClient(Arc::new(ws_client)))
-		} else {
-			None
-		};
-
-		if let Some(transport) = maybe_transport {
-			online.transport = transport;
-		}
+		// First, initialize the ws client.
+		self.as_online_mut().transport.map_uri().await?;
 
 		// Then, if `at` is not set, set it.
 		if self.as_online().at.is_none() {
