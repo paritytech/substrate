@@ -6,7 +6,7 @@ use frame_system::RawOrigin;
 pub type AccountId = u32;
 pub type Balance = u128;
 
-/// Pool 0's primary account id (i.e. its stash and controller account).
+/// Pool 0's primary account id (i.e. its stash and controller account with bonded funds).
 pub const PRIMARY_ACCOUNT: u32 = 2536596763;
 /// Pool 0's reward destination.
 pub const REWARDS_ACCOUNT: u32 = 736857005;
@@ -14,6 +14,7 @@ pub const REWARDS_ACCOUNT: u32 = 736857005;
 parameter_types! {
 	pub static CurrentEra: EraIndex = 0;
 	static BondedBalanceMap: std::collections::HashMap<AccountId, Balance> = Default::default();
+	static UnbondingBalanceMap: std::collections::HashMap<AccountId, Balance> = Default::default();
 	pub static CanBondExtra: bool = true;
 }
 
@@ -50,13 +51,22 @@ impl sp_staking::StakingInterface for StakingMock {
 	}
 
 	fn bond_extra(who: &Self::AccountId, extra: Self::Balance) -> DispatchResult {
-		// Simulate bond extra in `join`
 		BONDED_BALANCE_MAP.with(|m| *m.borrow_mut().get_mut(who).unwrap() += extra);
 		Ok(())
 	}
 
 	fn unbond(who: &Self::AccountId, amount: Self::Balance) -> DispatchResult {
 		BONDED_BALANCE_MAP.with(|m| *m.borrow_mut().get_mut(who).unwrap() -= amount);
+		UNBONDING_BALANCE_MAP
+			.with(|m| *m.borrow_mut().entry(*who).or_insert(Self::Balance::zero()) += amount);
+		Ok(())
+	}
+
+	fn withdraw_unbonded(who: &Self::AccountId) -> DispatchResult {
+		let maybe_new_free = UNBONDING_BALANCE_MAP.with(|m| m.borrow_mut().remove(who));
+		if let Some(new_free) = maybe_new_free {
+			assert_ok!(Balances::mutate_account(who, |a| a.free += new_free));
+		}
 		Ok(())
 	}
 

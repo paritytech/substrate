@@ -600,16 +600,23 @@ pub mod pallet {
 				balance_to_unbond
 			};
 
-			println!("balance_to_unbond {:?}", balance_to_unbond);
-
 			let bonded_pool =
 				BondedPoolStorage::<T>::get(delegator.pool).ok_or(Error::<T>::PoolNotFound)?;
+
+			if T::Currency::free_balance(&bonded_pool.account_id) < balance_to_unbond {
+				T::StakingInterface::withdraw_unbonded(&bonded_pool.account_id)?;
+			}
+
 			T::Currency::transfer(
 				&bonded_pool.account_id,
 				&who,
 				balance_to_unbond,
 				ExistenceRequirement::AllowDeath,
-			)?;
+			)
+			.map_err(|e| {
+				log::warn!("system logic error: pool could not withdraw_unbonded due to lack of free balance");
+				e
+			})?;
 
 			SubPoolsStorage::<T>::insert(delegator.pool, sub_pools);
 			DelegatorStorage::<T>::remove(&who);

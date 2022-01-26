@@ -91,6 +91,8 @@ pub trait StakingInterface {
 
 	fn unbond(controller: &Self::AccountId, value: Self::Balance) -> DispatchResult;
 
+	fn withdraw_unbonded(controller: &Self::AccountId) -> DispatchResult;
+
 	fn bond(
 		stash: Self::AccountId,
 		controller: Self::AccountId,

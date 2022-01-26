@@ -12,7 +12,7 @@ use frame_support::{assert_noop, assert_ok};
 // - implement staking impl of the delegator pools interface
 // - test `do_slash`
 
-macro_rules! with_era_sub_pools {
+macro_rules! sub_pools_with_era {
 	($($k:expr => $v:expr),* $(,)?) => {{
 		use sp_std::iter::{Iterator, IntoIterator};
 		let not_bounded: BTreeMap<_, _> = Iterator::collect(IntoIterator::into_iter([$(($k, $v),)*]));
@@ -1080,7 +1080,7 @@ mod unbond {
 
 			assert_eq!(
 				SubPoolsStorage::<Runtime>::get(0).unwrap().with_era,
-				with_era_sub_pools! { 0 => UnbondPool::<Runtime> { points: 10, balance: 10 }}
+				sub_pools_with_era! { 0 => UnbondPool::<Runtime> { points: 10, balance: 10 }}
 			);
 
 			assert_eq!(
@@ -1106,13 +1106,14 @@ mod unbond {
 				// Then
 				assert_eq!(
 					SubPoolsStorage::<Runtime>::get(0).unwrap().with_era,
-					with_era_sub_pools! { 0 => UnbondPool { points: 6, balance: 6 }}
+					sub_pools_with_era! { 0 => UnbondPool { points: 6, balance: 6 }}
 				);
 				assert_eq!(
 					BondedPoolStorage::<Runtime>::get(0).unwrap(),
 					BondedPool { account_id: PRIMARY_ACCOUNT, points: 560 }
 				);
 				assert_eq!(StakingMock::bonded_balance(&PRIMARY_ACCOUNT), 94);
+				assert_eq!(DelegatorStorage::<Runtime>::get(40).unwrap().unbonding_era, Some(0));
 
 				// When
 				assert_ok!(Pools::unbond(Origin::signed(10)));
@@ -1120,13 +1121,14 @@ mod unbond {
 				// Then
 				assert_eq!(
 					SubPoolsStorage::<Runtime>::get(0).unwrap().with_era,
-					with_era_sub_pools! { 0 => UnbondPool { points: 7, balance: 7 }}
+					sub_pools_with_era! { 0 => UnbondPool { points: 7, balance: 7 }}
 				);
 				assert_eq!(
 					BondedPoolStorage::<Runtime>::get(0).unwrap(),
 					BondedPool { account_id: PRIMARY_ACCOUNT, points: 550 }
 				);
 				assert_eq!(StakingMock::bonded_balance(&PRIMARY_ACCOUNT), 93);
+				assert_eq!(DelegatorStorage::<Runtime>::get(10).unwrap().unbonding_era, Some(0));
 
 				// When
 				assert_ok!(Pools::unbond(Origin::signed(550)));
@@ -1134,14 +1136,20 @@ mod unbond {
 				// Then
 				assert_eq!(
 					SubPoolsStorage::<Runtime>::get(0).unwrap().with_era,
-					with_era_sub_pools! { 0 => UnbondPool { points: 100, balance: 100 }}
+					sub_pools_with_era! { 0 => UnbondPool { points: 100, balance: 100 }}
 				);
 				assert_eq!(
 					BondedPoolStorage::<Runtime>::get(0).unwrap(),
 					BondedPool { account_id: PRIMARY_ACCOUNT, points: 0 }
 				);
 				assert_eq!(StakingMock::bonded_balance(&PRIMARY_ACCOUNT), 0);
+				assert_eq!(DelegatorStorage::<Runtime>::get(550).unwrap().unbonding_era, Some(0));
 			});
+	}
+
+	#[test]
+	fn unbond_merges_older_pools() {
+		todo!()
 	}
 
 	#[test]
@@ -1181,11 +1189,61 @@ mod withdraw_unbonded {
 	}
 
 	#[test]
-	fn withdraw_unbonded_works_against_with_era_sub_pools() {
-		ExtBuilder::default().build_and_execute(|| {
+	fn withdraw_unbonded_works_against_slashed_with_era_sub_pools() {
+		ExtBuilder::default()
+			.add_delegators(vec![(40, 40), (550, 550)])
+			.build_and_execute(|| {
+				// Given
+				StakingMock::set_bonded_balance(PRIMARY_ACCOUNT, 100); // slash bonded balance
+				Balances::make_free_balance_be(&PRIMARY_ACCOUNT, 0);
+				assert_ok!(Pools::unbond(Origin::signed(10)));
+				assert_ok!(Pools::unbond(Origin::signed(40)));
+				assert_ok!(Pools::unbond(Origin::signed(550)));
+				SubPoolsStorage::<Runtime>::insert(
+					0,
+					SubPools {
+						no_era: Default::default(),
+						with_era: sub_pools_with_era! { 0 => UnbondPool { points: 600, balance: 100 }},
+					},
+				);
+				CurrentEra::set(StakingMock::bonding_duration());
 
-			// storage is cleaned up  - delegator is removed
-		});
+				// When
+				assert_ok!(Pools::withdraw_unbonded(Origin::signed(40)));
+
+				// Then
+				assert_eq!(
+					SubPoolsStorage::<Runtime>::get(0).unwrap().with_era,
+					sub_pools_with_era! { 0 => UnbondPool { points: 560, balance: 94 }}
+				);
+				assert_eq!(Balances::free_balance(&40), 40 + 6);
+				assert_eq!(Balances::free_balance(&PRIMARY_ACCOUNT), 94);
+				assert!(!DelegatorStorage::<Runtime>::contains_key(40));
+
+				// When
+				assert_ok!(Pools::withdraw_unbonded(Origin::signed(10)));
+
+				// Then
+				assert_eq!(
+					SubPoolsStorage::<Runtime>::get(0).unwrap().with_era,
+					sub_pools_with_era! { 0 => UnbondPool { points: 550, balance: 93 }}
+				);
+				assert_eq!(Balances::free_balance(&10), 10 + 1);
+				assert_eq!(Balances::free_balance(&PRIMARY_ACCOUNT), 93);
+				assert!(!DelegatorStorage::<Runtime>::contains_key(10));
+
+				// When
+				assert_ok!(Pools::withdraw_unbonded(Origin::signed(550)));
+
+				// Then
+				assert_eq!(
+					SubPoolsStorage::<Runtime>::get(0).unwrap().with_era,
+					sub_pools_with_era! { 0 => UnbondPool { points: 0, balance: 0 }}
+				);
+				assert_eq!(Balances::free_balance(&550), 550 + 93);
+				assert_eq!(Balances::free_balance(&PRIMARY_ACCOUNT), 0);
+				assert!(!DelegatorStorage::<Runtime>::contains_key(550));
+			});
 	}
 
 	#[test]
@@ -1226,9 +1284,9 @@ mod withdraw_unbonded {
 
 			let sub_pools = SubPools {
 				no_era: Default::default(),
-				with_era: with_era_sub_pools! { 0 => UnbondPool { points: 10, balance: 10  }},
+				with_era: sub_pools_with_era! { 0 => UnbondPool { points: 10, balance: 10  }},
 			};
-			SubPoolsStorage::<Runtime>::insert(1, sub_pools);
+			SubPoolsStorage::<Runtime>::insert(1, sub_pools.clone());
 
 			assert_noop!(
 				Pools::withdraw_unbonded(Origin::signed(11)),
@@ -1242,8 +1300,10 @@ mod withdraw_unbonded {
 				pallet_balances::Error::<Runtime>::InsufficientBalance
 			);
 
-			// The delegator does not get removed if we error
+			// If we error the delegator does not get removed
 			assert_eq!(DelegatorStorage::<Runtime>::get(&11), Some(delegator));
+			// and the subpools do not get updated.
+			assert_eq!(SubPoolsStorage::<Runtime>::get(1).unwrap(), sub_pools)
 		});
 	}
 }
