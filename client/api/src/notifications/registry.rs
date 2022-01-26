@@ -27,6 +27,8 @@ use sc_utils::pubsub::{Dispatch, SubsID as SubscriberId, Subscribe, Unsubscribe}
 
 type SubscribersGauge = CounterVec<U64>;
 
+/// A command to subscribe with the specified filters:
+/// the type `Op` argument for the `Subscribe<Op>` trait implemented by the `Registry.
 pub(super) struct SubscribeOp<'a> {
 	pub filter_keys: Option<&'a [StorageKey]>,
 	pub filter_child_keys: Option<&'a [(StorageKey, Option<Vec<StorageKey>>)]>,
