@@ -451,7 +451,8 @@ where
 /// The transaction will be signed by `sender`. If `nonce` is `None` it will be fetched from the
 /// state of the best block.
 ///
-/// Note: Should only be used for tests.
+/// Note: "Inspired by" (read "copied from") `create_extrinsic` in `bin/node/cli/service.rs`.
+/// Assumes the `node_template_runtime` included corresponds to the one on chain.
 pub fn create_extrinsic<B, C>(
 	client: &C,
 	sender: sp_core::sr25519::Pair,
