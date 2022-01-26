@@ -1099,6 +1099,8 @@ mod unbond {
 			.build_and_execute(|| {
 				// Given a slash from 600 -> 100
 				StakingMock::set_bonded_balance(PRIMARY_ACCOUNT, 100);
+				// and unclaimed rewards of 600.
+				Balances::make_free_balance_be(&REWARDS_ACCOUNT, 600);
 
 				// When
 				assert_ok!(Pools::unbond(Origin::signed(40)));
@@ -1114,6 +1116,7 @@ mod unbond {
 				);
 				assert_eq!(StakingMock::bonded_balance(&PRIMARY_ACCOUNT), 94);
 				assert_eq!(DelegatorStorage::<Runtime>::get(40).unwrap().unbonding_era, Some(0));
+				assert_eq!(Balances::free_balance(&40), 40 + 40); // We claim rewards when unbonding
 
 				// When
 				assert_ok!(Pools::unbond(Origin::signed(10)));
@@ -1129,6 +1132,7 @@ mod unbond {
 				);
 				assert_eq!(StakingMock::bonded_balance(&PRIMARY_ACCOUNT), 93);
 				assert_eq!(DelegatorStorage::<Runtime>::get(10).unwrap().unbonding_era, Some(0));
+				assert_eq!(Balances::free_balance(&10), 10 + 10);
 
 				// When
 				assert_ok!(Pools::unbond(Origin::signed(550)));
@@ -1144,17 +1148,44 @@ mod unbond {
 				);
 				assert_eq!(StakingMock::bonded_balance(&PRIMARY_ACCOUNT), 0);
 				assert_eq!(DelegatorStorage::<Runtime>::get(550).unwrap().unbonding_era, Some(0));
+				assert_eq!(Balances::free_balance(&550), 550 + 550);
 			});
 	}
 
 	#[test]
 	fn unbond_merges_older_pools() {
-		todo!()
-	}
+		ExtBuilder::default().build_and_execute(|| {
+			// Given
+			SubPoolsStorage::<Runtime>::insert(
+				0,
+				SubPools {
+					no_era: Default::default(),
+					with_era: sub_pools_with_era! {
+						0 => UnbondPool { balance: 10, points: 100 },
+						1 => UnbondPool { balance: 20, points: 20 },
+						2 => UnbondPool { balance: 101, points: 101}
+					},
+				},
+			);
 
-	#[test]
-	fn unbond_pool_of_3_works_when_there_are_rewards_to_claims() {
-		todo!()
+			// When
+			let current_era = 1 + <Runtime as Config>::MaxUnbonding::get();
+			CurrentEra::set(current_era);
+
+			assert_ok!(Pools::unbond(Origin::signed(10)));
+
+			// Then
+			assert_eq!(
+				SubPoolsStorage::<Runtime>::get(0).unwrap(),
+				SubPools {
+					no_era: UnbondPool { balance: 10 + 20, points: 100 + 20 },
+					with_era: sub_pools_with_era! {
+						2 => UnbondPool { balance: 101, points: 101},
+						current_era => UnbondPool { balance: 10, points: 10 },
+					},
+				},
+			)
+		});
 	}
 
 	#[test]
@@ -1212,11 +1243,13 @@ mod withdraw_unbonded {
 				UNBONDING_BALANCE_MAP
 					.with(|m| *m.borrow_mut().get_mut(&PRIMARY_ACCOUNT).unwrap() -= 275);
 
-				// Advance the current_era to ensure all `with_era` pools will be merged into `no_era` pool
+				// Advance the current_era to ensure all `with_era` pools will be merged into
+				// `no_era` pool
 				current_era += <Runtime as Config>::MaxUnbonding::get();
 				CurrentEra::set(current_era);
 
-				// Simulate some other call to unbond that would merge `with_era` pools into `no_era`
+				// Simulate some other call to unbond that would merge `with_era` pools into
+				// `no_era`
 				let sub_pools =
 					SubPoolsStorage::<Runtime>::get(0).unwrap().maybe_merge_pools(current_era);
 				assert_eq!(
