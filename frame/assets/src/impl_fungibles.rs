@@ -77,6 +77,13 @@ impl<T: Config<I>, I: 'static> fungibles::InspectMetadata<<T as SystemConfig>::A
 	fn decimals(asset: &Self::AssetId) -> u8 {
 		Metadata::<T, I>::get(asset).decimals
 	}
+
+	/// Return all assets id by name.
+	fn asset_ids(asset_name: Vec<u8>) -> Vec<Self::AssetId> {
+		Metadata::<T, I>::iter()
+			.filter_map(|v| if v.1.name == asset_name { Some(v.0) } else { None })
+			.collect::<Vec<Self::AssetId>>()
+	}
 }
 
 impl<T: Config<I>, I: 'static> fungibles::Mutate<<T as SystemConfig>::AccountId> for Pallet<T, I> {

@@ -78,6 +78,9 @@ pub trait InspectMetadata<AccountId>: Inspect<AccountId> {
 
 	/// Return the decimals of an asset.
 	fn decimals(asset: &Self::AssetId) -> u8;
+
+	/// Return all assets id by name.
+	fn asset_ids(asset_name: Vec<u8>) -> Vec<Self::AssetId>;
 }
 
 /// Trait for providing a set of named fungible assets which can be created and destroyed.
