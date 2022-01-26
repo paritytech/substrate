@@ -62,33 +62,6 @@ fn exercise_delegator_life_cycle() {
 	//
 }
 
-mod points_to_issue {
-	use super::*;
-	#[test]
-	fn points_to_issue_works() {
-		ExtBuilder::default().build_and_execute(|| {
-			let points_to_issue = points_to_issue::<Runtime>;
-			// 1 points : 1 balance ratio
-			assert_eq!(points_to_issue(100, 100, 10), 10);
-			assert_eq!(points_to_issue(100, 100, 0), 0);
-			// 2 points : 1 balance ratio
-			assert_eq!(points_to_issue(50, 100, 10), 20);
-			// 1 points: 2 balance ratio
-			assert_eq!(points_to_issue(100, 50, 10), 5);
-			// 100 points : 0 balance ratio
-			assert_eq!(points_to_issue(0, 100, 10), 100 * 10);
-			// 0 points : 100 balance ratio
-			assert_eq!(points_to_issue(100, 0, 10), 10);
-			// 10 points : 3 balance ratio
-			assert_eq!(points_to_issue(30, 100, 10), 33);
-			// 2 points : 3 balance ratio
-			assert_eq!(points_to_issue(300, 200, 10), 6);
-			// 4 points : 9 balance ratio
-			assert_eq!(points_to_issue(900, 400, 90), 40)
-		});
-	}
-}
-
 mod balance_to_unbond {
 	use super::*;
 	#[test]
@@ -119,7 +92,47 @@ mod balance_to_unbond {
 mod bonded_pool {
 	use super::*;
 	#[test]
-	fn points_to_issue_works() {}
+	fn points_to_issue_works() {
+		let mut bonded_pool = BondedPool::<Runtime> { points: 100, account_id: PRIMARY_ACCOUNT };
+
+		// 1 points : 1 balance ratio
+		StakingMock::set_bonded_balance(PRIMARY_ACCOUNT, 100);
+		assert_eq!(bonded_pool.points_to_issue(10), 10);
+		assert_eq!(bonded_pool.points_to_issue(0), 0);
+
+		// 2 points : 1 balance ratio
+		StakingMock::set_bonded_balance(PRIMARY_ACCOUNT, 50);
+		assert_eq!(bonded_pool.points_to_issue(10), 20);
+
+		// 1 points : 2 balance ratio
+		StakingMock::set_bonded_balance(PRIMARY_ACCOUNT, 100);
+		bonded_pool.points = 50;
+		assert_eq!(bonded_pool.points_to_issue(10), 5);
+
+		// 100 points : 0 balance ratio
+		StakingMock::set_bonded_balance(PRIMARY_ACCOUNT, 0);
+		bonded_pool.points = 100;
+		assert_eq!(bonded_pool.points_to_issue(10), 100 * 10);
+
+		// 0 points : 100 balance
+		StakingMock::set_bonded_balance(PRIMARY_ACCOUNT, 100);
+		bonded_pool.points = 100;
+		assert_eq!(bonded_pool.points_to_issue(10), 10);
+
+		// 10 points : 3 balance ratio
+		StakingMock::set_bonded_balance(PRIMARY_ACCOUNT, 30);
+		assert_eq!(bonded_pool.points_to_issue(10), 33);
+
+		// 2 points : 3 balance ratio
+		StakingMock::set_bonded_balance(PRIMARY_ACCOUNT, 300);
+		bonded_pool.points = 200;
+		assert_eq!(bonded_pool.points_to_issue(10), 6);
+
+		// 4 points : 9 balance ratio
+		StakingMock::set_bonded_balance(PRIMARY_ACCOUNT, 900);
+		bonded_pool.points = 400;
+		assert_eq!(bonded_pool.points_to_issue(90), 40);
+	}
 
 	#[test]
 	fn balance_to_unbond_works() {
@@ -184,9 +197,42 @@ mod reward_pool {
 }
 
 mod unbond_pool {
+	use super::*;
+
 	#[test]
 	fn points_to_issue_works() {
-		// zero case
+		// 1 points : 1 balance ratio
+		let unbond_pool = UnbondPool::<Runtime> { points: 100, balance: 100 };
+		assert_eq!(unbond_pool.points_to_issue(10), 10);
+		assert_eq!(unbond_pool.points_to_issue(0), 0);
+
+		// 2 points : 1 balance ratio
+		let unbond_pool = UnbondPool::<Runtime> { points: 100, balance: 50 };
+		assert_eq!(unbond_pool.points_to_issue(10), 20);
+
+		// 1 points : 2 balance ratio
+		let unbond_pool = UnbondPool::<Runtime> { points: 50, balance: 100 };
+		assert_eq!(unbond_pool.points_to_issue(10), 5);
+
+		// 100 points : 0 balance ratio
+		let unbond_pool = UnbondPool::<Runtime> { points: 100, balance: 0 };
+		assert_eq!(unbond_pool.points_to_issue(10), 100 * 10);
+
+		// 0 points : 100 balance
+		let unbond_pool = UnbondPool::<Runtime> { points: 0, balance: 100 };
+		assert_eq!(unbond_pool.points_to_issue(10), 10);
+
+		// 10 points : 3 balance ratio
+		let unbond_pool = UnbondPool::<Runtime> { points: 100, balance: 30 };
+		assert_eq!(unbond_pool.points_to_issue(10), 33);
+
+		// 2 points : 3 balance ratio
+		let unbond_pool = UnbondPool::<Runtime> { points: 200, balance: 300 };
+		assert_eq!(unbond_pool.points_to_issue(10), 6);
+
+		// 4 points : 9 balance ratio
+		let unbond_pool = UnbondPool::<Runtime> { points: 400, balance: 900 };
+		assert_eq!(unbond_pool.points_to_issue(90), 40);
 	}
 
 	#[test]
