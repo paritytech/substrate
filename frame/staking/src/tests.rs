@@ -20,10 +20,9 @@
 use super::{Event, MaxUnlockingChunks, *};
 use frame_election_provider_support::{ElectionProvider, SortedListProvider, Support};
 use frame_support::{
-	assert_noop, assert_ok,
+	assert_noop, assert_ok, bounded_vec,
 	dispatch::WithPostDispatchInfo,
 	pallet_prelude::*,
-	storage::bounded_vec::bounded_vec,
 	traits::{Currency, Get, ReservableCurrency},
 	weights::{extract_actual_weight, GetDispatchInfo},
 };
@@ -276,9 +275,9 @@ fn rewards_should_work() {
 		assert_eq_error_rate!(Balances::total_balance(&21), init_balance_21, 2);
 		assert_eq_error_rate!(
 			Balances::total_balance(&100),
-			init_balance_100
-				+ part_for_100_from_10 * total_payout_0 * 2 / 3
-				+ part_for_100_from_20 * total_payout_0 * 1 / 3,
+			init_balance_100 +
+				part_for_100_from_10 * total_payout_0 * 2 / 3 +
+				part_for_100_from_20 * total_payout_0 * 1 / 3,
 			2
 		);
 		assert_eq_error_rate!(Balances::total_balance(&101), init_balance_101, 2);
@@ -314,9 +313,9 @@ fn rewards_should_work() {
 		assert_eq_error_rate!(Balances::total_balance(&21), init_balance_21, 2);
 		assert_eq_error_rate!(
 			Balances::total_balance(&100),
-			init_balance_100
-				+ part_for_100_from_10 * (total_payout_0 * 2 / 3 + total_payout_1)
-				+ part_for_100_from_20 * total_payout_0 * 1 / 3,
+			init_balance_100 +
+				part_for_100_from_10 * (total_payout_0 * 2 / 3 + total_payout_1) +
+				part_for_100_from_20 * total_payout_0 * 1 / 3,
 			2
 		);
 		assert_eq_error_rate!(Balances::total_balance(&101), init_balance_101, 2);
@@ -1481,7 +1480,7 @@ fn rebond_is_fifo() {
 				active: 300,
 				unlocking: bounded_vec![
 					UnlockChunk { value: 400, era: 2 + 3 },
-					UnlockChunk { value: 300, era: 3 + 3 },
+					UnlockChunk { value: 300, era: 3 + 3 }
 				],
 				claimed_rewards: vec![],
 			})
@@ -1500,7 +1499,7 @@ fn rebond_is_fifo() {
 				unlocking: bounded_vec![
 					UnlockChunk { value: 400, era: 2 + 3 },
 					UnlockChunk { value: 300, era: 3 + 3 },
-					UnlockChunk { value: 200, era: 4 + 3 },
+					UnlockChunk { value: 200, era: 4 + 3 }
 				],
 				claimed_rewards: vec![],
 			})
@@ -1516,7 +1515,7 @@ fn rebond_is_fifo() {
 				active: 500,
 				unlocking: bounded_vec![
 					UnlockChunk { value: 400, era: 2 + 3 },
-					UnlockChunk { value: 100, era: 3 + 3 },
+					UnlockChunk { value: 100, era: 3 + 3 }
 				],
 				claimed_rewards: vec![],
 			})
@@ -3973,8 +3972,8 @@ mod election_data_provider {
 	#[test]
 	fn targets_2sec_block() {
 		let mut validators = 1000;
-		while <Test as Config>::WeightInfo::get_npos_targets(validators)
-			< 2 * frame_support::weights::constants::WEIGHT_PER_SECOND
+		while <Test as Config>::WeightInfo::get_npos_targets(validators) <
+			2 * frame_support::weights::constants::WEIGHT_PER_SECOND
 		{
 			validators += 1;
 		}
@@ -3991,8 +3990,8 @@ mod election_data_provider {
 		let slashing_spans = validators;
 		let mut nominators = 1000;
 
-		while <Test as Config>::WeightInfo::get_npos_voters(validators, nominators, slashing_spans)
-			< 2 * frame_support::weights::constants::WEIGHT_PER_SECOND
+		while <Test as Config>::WeightInfo::get_npos_voters(validators, nominators, slashing_spans) <
+			2 * frame_support::weights::constants::WEIGHT_PER_SECOND
 		{
 			nominators += 1;
 		}
@@ -4063,8 +4062,8 @@ mod election_data_provider {
 			.build_and_execute(|| {
 				// sum of all nominators who'd be voters (1), plus the self-votes (4).
 				assert_eq!(
-					<Test as Config>::SortedListProvider::count()
-						+ <Validators<Test>>::iter().count() as u32,
+					<Test as Config>::SortedListProvider::count() +
+						<Validators<Test>>::iter().count() as u32,
 					5
 				);
 
@@ -4103,8 +4102,8 @@ mod election_data_provider {
 
 				// and total voters
 				assert_eq!(
-					<Test as Config>::SortedListProvider::count()
-						+ <Validators<Test>>::iter().count() as u32,
+					<Test as Config>::SortedListProvider::count() +
+						<Validators<Test>>::iter().count() as u32,
 					7
 				);
 
@@ -4148,8 +4147,8 @@ mod election_data_provider {
 
 				// and total voters
 				assert_eq!(
-					<Test as Config>::SortedListProvider::count()
-						+ <Validators<Test>>::iter().count() as u32,
+					<Test as Config>::SortedListProvider::count() +
+						<Validators<Test>>::iter().count() as u32,
 					6
 				);
 
@@ -4254,7 +4253,11 @@ fn count_check_works() {
 		Validators::<Test>::insert(987654321, ValidatorPrefs::default());
 		Nominators::<Test>::insert(
 			987654321,
-			Nominations { targets: vec![], submitted_in: Default::default(), suppressed: false },
+			Nominations {
+				targets: Default::default(),
+				submitted_in: Default::default(),
+				suppressed: false,
+			},
 		);
 	})
 }
@@ -4593,6 +4596,100 @@ fn min_commission_works() {
 			ValidatorPrefs { commission: Perbill::from_percent(15), blocked: false }
 		));
 	})
+}
+
+#[test]
+fn change_of_max_nominations() {
+	use frame_election_provider_support::ElectionDataProvider;
+	ExtBuilder::default()
+		.add_staker(60, 61, 10, StakerStatus::Nominator(vec![1]))
+		.add_staker(70, 71, 10, StakerStatus::Nominator(vec![1, 2, 3]))
+		.balance_factor(10)
+		.build_and_execute(|| {
+			// pre-condition
+			assert_eq!(MaxNominations::get(), 16);
+
+			assert_eq!(
+				Nominators::<Test>::iter()
+					.map(|(k, n)| (k, n.targets.len()))
+					.collect::<Vec<_>>(),
+				vec![(70, 3), (101, 2), (60, 1)]
+			);
+			// 3 validators and 3 nominators
+			assert_eq!(Staking::voters(None).unwrap().len(), 3 + 3);
+
+			// abrupt change from 16 to 4, everyone should be fine.
+			MaxNominations::set(4);
+
+			assert_eq!(
+				Nominators::<Test>::iter()
+					.map(|(k, n)| (k, n.targets.len()))
+					.collect::<Vec<_>>(),
+				vec![(70, 3), (101, 2), (60, 1)]
+			);
+			assert_eq!(Staking::voters(None).unwrap().len(), 3 + 3);
+
+			// abrupt change from 4 to 3, everyone should be fine.
+			MaxNominations::set(3);
+
+			assert_eq!(
+				Nominators::<Test>::iter()
+					.map(|(k, n)| (k, n.targets.len()))
+					.collect::<Vec<_>>(),
+				vec![(70, 3), (101, 2), (60, 1)]
+			);
+			assert_eq!(Staking::voters(None).unwrap().len(), 3 + 3);
+
+			// abrupt change from 3 to 2, this should cause some nominators to be non-decodable, and
+			// thus non-existent unless if they update.
+			MaxNominations::set(2);
+
+			assert_eq!(
+				Nominators::<Test>::iter()
+					.map(|(k, n)| (k, n.targets.len()))
+					.collect::<Vec<_>>(),
+				vec![(101, 2), (60, 1)]
+			);
+			// 70 is still in storage..
+			assert!(Nominators::<Test>::contains_key(70));
+			// but its value cannot be decoded and default is returned.
+			assert!(Nominators::<Test>::get(70).is_none());
+
+			assert_eq!(Staking::voters(None).unwrap().len(), 3 + 2);
+			assert!(Nominators::<Test>::contains_key(101));
+
+			// abrupt change from 2 to 1, this should cause some nominators to be non-decodable, and
+			// thus non-existent unless if they update.
+			MaxNominations::set(1);
+
+			assert_eq!(
+				Nominators::<Test>::iter()
+					.map(|(k, n)| (k, n.targets.len()))
+					.collect::<Vec<_>>(),
+				vec![(60, 1)]
+			);
+			assert!(Nominators::<Test>::contains_key(70));
+			assert!(Nominators::<Test>::contains_key(60));
+			assert!(Nominators::<Test>::get(70).is_none());
+			assert!(Nominators::<Test>::get(60).is_some());
+			assert_eq!(Staking::voters(None).unwrap().len(), 3 + 1);
+
+			// now one of them can revive themselves by re-nominating to a proper value.
+			assert_ok!(Staking::nominate(Origin::signed(71), vec![1]));
+			assert_eq!(
+				Nominators::<Test>::iter()
+					.map(|(k, n)| (k, n.targets.len()))
+					.collect::<Vec<_>>(),
+				vec![(70, 1), (60, 1)]
+			);
+
+			// or they can be chilled by any account.
+			assert!(Nominators::<Test>::contains_key(101));
+			assert!(Nominators::<Test>::get(101).is_none());
+			assert_ok!(Staking::chill_other(Origin::signed(70), 100));
+			assert!(!Nominators::<Test>::contains_key(101));
+			assert!(Nominators::<Test>::get(101).is_none());
+		})
 }
 
 mod sorted_list_provider {
