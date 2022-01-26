@@ -8,9 +8,8 @@ use frame_support::{assert_noop, assert_ok};
 // TODO
 // - make sure any time we do a balance transfer and then some other operation
 //	we either use transactional storage or have sufficient can_* functions
-// - make sure that `unbond` transfers rewards prior to actually unbonding
 // - implement staking impl of the delegator pools interface
-// - test `do_slash`
+// - test `slash_pool`
 
 macro_rules! sub_pools_with_era {
 	($($k:expr => $v:expr),* $(,)?) => {{
@@ -62,81 +61,87 @@ fn exercise_delegator_life_cycle() {
 	//
 }
 
-mod balance_to_unbond {
-	use super::*;
-	#[test]
-	fn balance_to_unbond_works() {
-		ExtBuilder::default().build_and_execute(|| {
-			let balance_to_unbond = balance_to_unbond::<Runtime>;
-			// 1 balance : 1 points ratio
-			assert_eq!(balance_to_unbond(100, 100, 10), 10);
-			assert_eq!(balance_to_unbond(100, 100, 0), 0);
-			// 1 balance : 2 points ratio
-			assert_eq!(balance_to_unbond(50, 100, 10), 5);
-			// 2 balance : 1 points ratio
-			assert_eq!(balance_to_unbond(100, 50, 10), 20);
-			// 100 balance : 0 points ratio
-			assert_eq!(balance_to_unbond(100, 0, 10), 0);
-			// 0 balance : 100 points ratio
-			assert_eq!(balance_to_unbond(0, 100, 10), 0);
-			// 10 balance : 3 points ratio
-			assert_eq!(balance_to_unbond(100, 30, 10), 33);
-			// 2 balance : 3 points ratio
-			assert_eq!(balance_to_unbond(200, 300, 10), 6);
-			// 4 balance : 9 points ratio
-			assert_eq!(balance_to_unbond(400, 900, 90), 40)
-		});
-	}
-}
-
 mod bonded_pool {
 	use super::*;
 	#[test]
 	fn points_to_issue_works() {
-		let mut bonded_pool = BondedPool::<Runtime> { points: 100, account_id: PRIMARY_ACCOUNT };
+		let mut bonded_pool = BondedPool::<Runtime> { points: 100, account_id: 123 };
 
 		// 1 points : 1 balance ratio
-		StakingMock::set_bonded_balance(PRIMARY_ACCOUNT, 100);
+		StakingMock::set_bonded_balance(123, 100);
 		assert_eq!(bonded_pool.points_to_issue(10), 10);
 		assert_eq!(bonded_pool.points_to_issue(0), 0);
 
 		// 2 points : 1 balance ratio
-		StakingMock::set_bonded_balance(PRIMARY_ACCOUNT, 50);
+		StakingMock::set_bonded_balance(123, 50);
 		assert_eq!(bonded_pool.points_to_issue(10), 20);
 
 		// 1 points : 2 balance ratio
-		StakingMock::set_bonded_balance(PRIMARY_ACCOUNT, 100);
+		StakingMock::set_bonded_balance(123, 100);
 		bonded_pool.points = 50;
 		assert_eq!(bonded_pool.points_to_issue(10), 5);
 
 		// 100 points : 0 balance ratio
-		StakingMock::set_bonded_balance(PRIMARY_ACCOUNT, 0);
+		StakingMock::set_bonded_balance(123, 0);
 		bonded_pool.points = 100;
 		assert_eq!(bonded_pool.points_to_issue(10), 100 * 10);
 
 		// 0 points : 100 balance
-		StakingMock::set_bonded_balance(PRIMARY_ACCOUNT, 100);
+		StakingMock::set_bonded_balance(123, 100);
 		bonded_pool.points = 100;
 		assert_eq!(bonded_pool.points_to_issue(10), 10);
 
 		// 10 points : 3 balance ratio
-		StakingMock::set_bonded_balance(PRIMARY_ACCOUNT, 30);
+		StakingMock::set_bonded_balance(123, 30);
 		assert_eq!(bonded_pool.points_to_issue(10), 33);
 
 		// 2 points : 3 balance ratio
-		StakingMock::set_bonded_balance(PRIMARY_ACCOUNT, 300);
+		StakingMock::set_bonded_balance(123, 300);
 		bonded_pool.points = 200;
 		assert_eq!(bonded_pool.points_to_issue(10), 6);
 
 		// 4 points : 9 balance ratio
-		StakingMock::set_bonded_balance(PRIMARY_ACCOUNT, 900);
+		StakingMock::set_bonded_balance(123, 900);
 		bonded_pool.points = 400;
 		assert_eq!(bonded_pool.points_to_issue(90), 40);
 	}
 
 	#[test]
 	fn balance_to_unbond_works() {
-		// zero case
+		// 1 balance : 1 points ratio
+		let mut bonded_pool = BondedPool::<Runtime> { points: 100, account_id: 123 };
+		StakingMock::set_bonded_balance(123, 100);
+		assert_eq!(bonded_pool.balance_to_unbond(10), 10);
+		assert_eq!(bonded_pool.balance_to_unbond(0), 0);
+
+		// 2 balance : 1 points ratio
+		bonded_pool.points = 50;
+		assert_eq!(bonded_pool.balance_to_unbond(10), 20);
+
+		// 100 balance : 0 points ratio
+		StakingMock::set_bonded_balance(123, 0);
+		bonded_pool.points = 0;
+		assert_eq!(bonded_pool.balance_to_unbond(10), 0);
+
+		// 0 balance : 100 points ratio
+		StakingMock::set_bonded_balance(123, 0);
+		bonded_pool.points = 100;
+		assert_eq!(bonded_pool.balance_to_unbond(10), 0);
+
+		// 10 balance : 3 points ratio
+		StakingMock::set_bonded_balance(123, 100);
+		bonded_pool.points = 30;
+		assert_eq!(bonded_pool.balance_to_unbond(10), 33);
+
+		// 2 balance : 3 points ratio
+		StakingMock::set_bonded_balance(123, 200);
+		bonded_pool.points = 300;
+		assert_eq!(bonded_pool.balance_to_unbond(10), 6);
+
+		// 4 balance : 9 points ratio
+		StakingMock::set_bonded_balance(123, 400);
+		bonded_pool.points = 900;
+		assert_eq!(bonded_pool.balance_to_unbond(90), 40);
 	}
 
 	#[test]
@@ -237,7 +242,38 @@ mod unbond_pool {
 
 	#[test]
 	fn balance_to_unbond_works() {
-		// zero case
+		// 1 balance : 1 points ratio
+		let unbond_pool = UnbondPool::<Runtime> { points: 100, balance: 100 };
+		assert_eq!(unbond_pool.balance_to_unbond(10), 10);
+		assert_eq!(unbond_pool.balance_to_unbond(0), 0);
+
+		// 1 balance : 2 points ratio
+		let unbond_pool = UnbondPool::<Runtime> { points: 100, balance: 50 };
+		assert_eq!(unbond_pool.balance_to_unbond(10), 5);
+
+		// 2 balance : 1 points ratio
+		let unbond_pool = UnbondPool::<Runtime> { points: 50, balance: 100 };
+		assert_eq!(unbond_pool.balance_to_unbond(10), 20);
+
+		// 100 balance : 0 points ratio
+		let unbond_pool = UnbondPool::<Runtime> { points: 0, balance: 100 };
+		assert_eq!(unbond_pool.balance_to_unbond(10), 0);
+
+		// 0 balance : 100 points ratio
+		let unbond_pool = UnbondPool::<Runtime> { points: 100, balance: 0 };
+		assert_eq!(unbond_pool.balance_to_unbond(10), 0);
+
+		// 10 balance : 3 points ratio
+		let unbond_pool = UnbondPool::<Runtime> { points: 30, balance: 100 };
+		assert_eq!(unbond_pool.balance_to_unbond(10), 33);
+
+		// 2 balance : 3 points ratio
+		let unbond_pool = UnbondPool::<Runtime> { points: 300, balance: 200 };
+		assert_eq!(unbond_pool.balance_to_unbond(10), 6);
+
+		// 4 balance : 9 points ratio
+		let unbond_pool = UnbondPool::<Runtime> { points: 900, balance: 400 };
+		assert_eq!(unbond_pool.balance_to_unbond(90), 40);
 	}
 }
 mod sub_pools {
