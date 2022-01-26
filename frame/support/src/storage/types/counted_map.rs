@@ -401,6 +401,13 @@ where
 	) -> crate::storage::PrefixIterator<(Key, Value), OnRemovalCounterUpdate<Prefix>> {
 		<Self as MapWrapper>::Map::iter_from(starting_raw_key).convert_on_removal()
 	}
+
+	/// Enumerate all keys in the counted map.
+	///
+	/// If you alter the map while doing this, you'll get undefined results.
+	pub fn iter_keys() -> crate::storage::KeyPrefixIterator<Key> {
+		<Self as MapWrapper>::Map::iter_keys()
+	}
 }
 
 impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues> StorageEntryMetadataBuilder

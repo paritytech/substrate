@@ -24,7 +24,7 @@ mod mock;
 use sp_std::{prelude::*, vec};
 
 use frame_benchmarking::{account, benchmarks};
-use frame_support::traits::{Currency, ValidatorSet, ValidatorSetWithIdentification};
+use frame_support::traits::{Currency, Get, ValidatorSet, ValidatorSetWithIdentification};
 use frame_system::{Config as SystemConfig, Pallet as System, RawOrigin};
 
 use sp_runtime::{
@@ -275,7 +275,7 @@ benchmarks! {
 		let r in 1 .. MAX_REPORTERS;
 		// we skip 1 offender, because in such case there is no slashing
 		let o in 2 .. MAX_OFFENDERS;
-		let n in 0 .. MAX_NOMINATORS.min(<T as pallet_staking::Config>::MAX_NOMINATIONS);
+		let n in 0 .. MAX_NOMINATORS.min(<T as pallet_staking::Config>::MaxNominations::get());
 
 		// Make r reporters
 		let mut reporters = vec![];
@@ -381,7 +381,7 @@ benchmarks! {
 	}
 
 	report_offence_grandpa {
-		let n in 0 .. MAX_NOMINATORS.min(<T as pallet_staking::Config>::MAX_NOMINATIONS);
+		let n in 0 .. MAX_NOMINATORS.min(<T as pallet_staking::Config>::MaxNominations::get());
 
 		// for grandpa equivocation reports the number of reporters
 		// and offenders is always 1
@@ -416,7 +416,7 @@ benchmarks! {
 	}
 
 	report_offence_babe {
-		let n in 0 .. MAX_NOMINATORS.min(<T as pallet_staking::Config>::MAX_NOMINATIONS);
+		let n in 0 .. MAX_NOMINATORS.min(<T as pallet_staking::Config>::MaxNominations::get());
 
 		// for babe equivocation reports the number of reporters
 		// and offenders is always 1

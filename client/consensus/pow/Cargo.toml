@@ -28,6 +28,6 @@ log = "0.4.8"
 futures = "0.3.16"
 futures-timer = "3.0.1"
 parking_lot = "0.11.2"
-derive_more = "0.99.16"
+thiserror = "1.0"
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../../utils/prometheus", version = "0.10.0-dev"}
 async-trait = "0.1.50"

@@ -19,7 +19,8 @@
 //! Prometheus basic proposer metrics.
 
 use prometheus_endpoint::{
-	register, Gauge, Histogram, HistogramOpts, PrometheusError, Registry, U64,
+	prometheus::CounterVec, register, Gauge, Histogram, HistogramOpts, Opts, PrometheusError,
+	Registry, U64,
 };
 
 /// Optional shareable link to basic authorship metrics.
@@ -38,8 +39,16 @@ impl MetricsLink {
 	}
 
 	pub fn report<O>(&self, do_this: impl FnOnce(&Metrics) -> O) -> Option<O> {
-		Some(do_this(self.0.as_ref()?))
+		self.0.as_ref().map(do_this)
 	}
+}
+
+/// The reason why proposing a block ended.
+pub enum EndProposingReason {
+	NoMoreTransactions,
+	HitDeadline,
+	HitBlockSizeLimit,
+	HitBlockWeightLimit,
 }
 
 /// Authorship metrics.
@@ -47,6 +56,7 @@ impl MetricsLink {
 pub struct Metrics {
 	pub block_constructed: Histogram,
 	pub number_of_transactions: Gauge<U64>,
+	pub end_proposing_reason: CounterVec,
 	pub create_inherents_time: Histogram,
 	pub create_block_proposal_time: Histogram,
 }
@@ -82,6 +92,28 @@ impl Metrics {
 				))?,
 				registry,
 			)?,
+			end_proposing_reason: register(
+				CounterVec::new(
+					Opts::new(
+						"substrate_proposer_end_proposal_reason",
+						"The reason why the block proposing was ended. This doesn't include errors.",
+					),
+					&["reason"],
+				)?,
+				registry,
+			)?,
 		})
+	}
+
+	/// Report the reason why the proposing ended.
+	pub fn report_end_proposing_reason(&self, reason: EndProposingReason) {
+		let reason = match reason {
+			EndProposingReason::HitDeadline => "hit_deadline",
+			EndProposingReason::NoMoreTransactions => "no_more_transactions",
+			EndProposingReason::HitBlockSizeLimit => "hit_block_size_limit",
+			EndProposingReason::HitBlockWeightLimit => "hit_block_weight_limit",
+		};
+
+		self.end_proposing_reason.with_label_values(&[reason]).inc();
 	}
 }
