@@ -41,15 +41,15 @@ use beefy_gadget::notification::{BeefyBestBlockStream, BeefySignedCommitmentStre
 
 mod notification;
 
-#[derive(Debug, derive_more::Display, derive_more::From, thiserror::Error)]
+#[derive(Debug, thiserror::Error)]
 /// Top-level error type for the RPC handler
 pub enum Error {
 	/// The BEEFY RPC endpoint is not ready.
-	#[display(fmt = "BEEFY RPC endpoint not ready")]
+	#[error("BEEFY RPC endpoint not ready")]
 	EndpointNotReady,
 	/// The BEEFY RPC background task failed to spawn.
-	#[display(fmt = "BEEFY RPC background task failed to spawn")]
-	RpcTaskFailure(SpawnError),
+	#[error("BEEFY RPC background task failed to spawn")]
+	RpcTaskFailure(#[from] SpawnError),
 }
 
 /// Provides RPC methods for interacting with BEEFY.
