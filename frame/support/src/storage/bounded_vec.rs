@@ -665,6 +665,19 @@ pub mod test {
 	}
 
 	#[test]
+	fn constructor_macro_works() {
+		use frame_support::bounded_vec;
+
+		// With values. Use some brackets to make sure the macro doesn't expand.
+		let bv: BoundedVec<(u32, u32), ConstU32<3>> = bounded_vec![(1, 2), (1, 2), (1, 2)];
+		assert_eq!(bv, vec![(1, 2), (1, 2), (1, 2)]);
+
+		// With repetition.
+		let bv: BoundedVec<(u32, u32), ConstU32<3>> = bounded_vec![(1, 2); 3];
+		assert_eq!(bv, vec![(1, 2), (1, 2), (1, 2)]);
+	}
+
+	#[test]
 	#[should_panic(expected = "insertion index (is 9) should be <= len (is 3)")]
 	fn try_inert_panics_if_oob() {
 		let mut bounded: BoundedVec<u32, ConstU32<4>> = vec![1, 2, 3].try_into().unwrap();
