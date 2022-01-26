@@ -23,6 +23,7 @@ use frame_support::{
 	assert_noop, assert_ok,
 	dispatch::WithPostDispatchInfo,
 	pallet_prelude::*,
+	storage::bounded_vec::bounded_vec,
 	traits::{Currency, Get, ReservableCurrency},
 	weights::{extract_actual_weight, GetDispatchInfo},
 };
@@ -275,9 +276,9 @@ fn rewards_should_work() {
 		assert_eq_error_rate!(Balances::total_balance(&21), init_balance_21, 2);
 		assert_eq_error_rate!(
 			Balances::total_balance(&100),
-			init_balance_100 +
-				part_for_100_from_10 * total_payout_0 * 2 / 3 +
-				part_for_100_from_20 * total_payout_0 * 1 / 3,
+			init_balance_100
+				+ part_for_100_from_10 * total_payout_0 * 2 / 3
+				+ part_for_100_from_20 * total_payout_0 * 1 / 3,
 			2
 		);
 		assert_eq_error_rate!(Balances::total_balance(&101), init_balance_101, 2);
@@ -313,9 +314,9 @@ fn rewards_should_work() {
 		assert_eq_error_rate!(Balances::total_balance(&21), init_balance_21, 2);
 		assert_eq_error_rate!(
 			Balances::total_balance(&100),
-			init_balance_100 +
-				part_for_100_from_10 * (total_payout_0 * 2 / 3 + total_payout_1) +
-				part_for_100_from_20 * total_payout_0 * 1 / 3,
+			init_balance_100
+				+ part_for_100_from_10 * (total_payout_0 * 2 / 3 + total_payout_1)
+				+ part_for_100_from_20 * total_payout_0 * 1 / 3,
 			2
 		);
 		assert_eq_error_rate!(Balances::total_balance(&101), init_balance_101, 2);
@@ -1207,7 +1208,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 				stash: 11,
 				total: 1000 + 100,
 				active: 100,
-				unlocking: vec![UnlockChunk { value: 1000, era: 2 + 3 }].try_into().unwrap(),
+				unlocking: bounded_vec![UnlockChunk { value: 1000, era: 2 + 3 }],
 				claimed_rewards: vec![]
 			}),
 		);
@@ -1220,7 +1221,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 				stash: 11,
 				total: 1000 + 100,
 				active: 100,
-				unlocking: vec![UnlockChunk { value: 1000, era: 2 + 3 }].try_into().unwrap(),
+				unlocking: bounded_vec![UnlockChunk { value: 1000, era: 2 + 3 }],
 				claimed_rewards: vec![]
 			}),
 		);
@@ -1236,7 +1237,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 				stash: 11,
 				total: 1000 + 100,
 				active: 100,
-				unlocking: vec![UnlockChunk { value: 1000, era: 2 + 3 }].try_into().unwrap(),
+				unlocking: bounded_vec![UnlockChunk { value: 1000, era: 2 + 3 }],
 				claimed_rewards: vec![]
 			}),
 		);
@@ -1341,7 +1342,7 @@ fn rebond_works() {
 				stash: 11,
 				total: 1000,
 				active: 100,
-				unlocking: vec![UnlockChunk { value: 900, era: 2 + 3 }].try_into().unwrap(),
+				unlocking: bounded_vec![UnlockChunk { value: 900, era: 2 + 3 }],
 				claimed_rewards: vec![],
 			})
 		);
@@ -1367,7 +1368,7 @@ fn rebond_works() {
 				stash: 11,
 				total: 1000,
 				active: 100,
-				unlocking: vec![UnlockChunk { value: 900, era: 5 }].try_into().unwrap(),
+				unlocking: bounded_vec![UnlockChunk { value: 900, era: 5 }],
 				claimed_rewards: vec![],
 			})
 		);
@@ -1380,7 +1381,7 @@ fn rebond_works() {
 				stash: 11,
 				total: 1000,
 				active: 600,
-				unlocking: vec![UnlockChunk { value: 400, era: 5 }].try_into().unwrap(),
+				unlocking: bounded_vec![UnlockChunk { value: 400, era: 5 }],
 				claimed_rewards: vec![],
 			})
 		);
@@ -1408,7 +1409,7 @@ fn rebond_works() {
 				stash: 11,
 				total: 1000,
 				active: 100,
-				unlocking: vec![UnlockChunk { value: 900, era: 5 }].try_into().unwrap(),
+				unlocking: bounded_vec![UnlockChunk { value: 900, era: 5 }],
 				claimed_rewards: vec![],
 			})
 		);
@@ -1421,7 +1422,7 @@ fn rebond_works() {
 				stash: 11,
 				total: 1000,
 				active: 600,
-				unlocking: vec![UnlockChunk { value: 400, era: 5 }].try_into().unwrap(),
+				unlocking: bounded_vec![UnlockChunk { value: 400, era: 5 }],
 				claimed_rewards: vec![],
 			})
 		);
@@ -1463,7 +1464,7 @@ fn rebond_is_fifo() {
 				stash: 11,
 				total: 1000,
 				active: 600,
-				unlocking: vec![UnlockChunk { value: 400, era: 2 + 3 },].try_into().unwrap(),
+				unlocking: bounded_vec![UnlockChunk { value: 400, era: 2 + 3 }],
 				claimed_rewards: vec![],
 			})
 		);
@@ -1478,12 +1479,10 @@ fn rebond_is_fifo() {
 				stash: 11,
 				total: 1000,
 				active: 300,
-				unlocking: vec![
+				unlocking: bounded_vec![
 					UnlockChunk { value: 400, era: 2 + 3 },
 					UnlockChunk { value: 300, era: 3 + 3 },
-				]
-				.try_into()
-				.unwrap(),
+				],
 				claimed_rewards: vec![],
 			})
 		);
@@ -1498,13 +1497,11 @@ fn rebond_is_fifo() {
 				stash: 11,
 				total: 1000,
 				active: 100,
-				unlocking: vec![
+				unlocking: bounded_vec![
 					UnlockChunk { value: 400, era: 2 + 3 },
 					UnlockChunk { value: 300, era: 3 + 3 },
 					UnlockChunk { value: 200, era: 4 + 3 },
-				]
-				.try_into()
-				.unwrap(),
+				],
 				claimed_rewards: vec![],
 			})
 		);
@@ -1517,12 +1514,10 @@ fn rebond_is_fifo() {
 				stash: 11,
 				total: 1000,
 				active: 500,
-				unlocking: vec![
+				unlocking: bounded_vec![
 					UnlockChunk { value: 400, era: 2 + 3 },
 					UnlockChunk { value: 100, era: 3 + 3 },
-				]
-				.try_into()
-				.unwrap(),
+				],
 				claimed_rewards: vec![],
 			})
 		);
@@ -1551,7 +1546,7 @@ fn rebond_emits_right_value_in_event() {
 				stash: 11,
 				total: 1000,
 				active: 100,
-				unlocking: vec![UnlockChunk { value: 900, era: 1 + 3 }].try_into().unwrap(),
+				unlocking: bounded_vec![UnlockChunk { value: 900, era: 1 + 3 }],
 				claimed_rewards: vec![],
 			})
 		);
@@ -1564,7 +1559,7 @@ fn rebond_emits_right_value_in_event() {
 				stash: 11,
 				total: 1000,
 				active: 200,
-				unlocking: vec![UnlockChunk { value: 800, era: 1 + 3 }].try_into().unwrap(),
+				unlocking: bounded_vec![UnlockChunk { value: 800, era: 1 + 3 }],
 				claimed_rewards: vec![],
 			})
 		);
@@ -1795,7 +1790,7 @@ fn bond_with_no_staked_value() {
 					stash: 1,
 					active: 0,
 					total: 5,
-					unlocking: vec![UnlockChunk { value: 5, era: 3 }].try_into().unwrap(),
+					unlocking: bounded_vec![UnlockChunk { value: 5, era: 3 }],
 					claimed_rewards: vec![],
 				})
 			);
@@ -3875,7 +3870,7 @@ fn cannot_rebond_to_lower_than_ed() {
 					stash: 21,
 					total: 10 * 1000,
 					active: 0,
-					unlocking: vec![UnlockChunk { value: 10 * 1000, era: 3 }].try_into().unwrap(),
+					unlocking: bounded_vec![UnlockChunk { value: 10 * 1000, era: 3 }],
 					claimed_rewards: vec![]
 				}
 			);
@@ -3912,7 +3907,7 @@ fn cannot_bond_extra_to_lower_than_ed() {
 					stash: 21,
 					total: 10 * 1000,
 					active: 0,
-					unlocking: vec![UnlockChunk { value: 10 * 1000, era: 3 }].try_into().unwrap(),
+					unlocking: bounded_vec![UnlockChunk { value: 10 * 1000, era: 3 }],
 					claimed_rewards: vec![]
 				}
 			);
@@ -3978,8 +3973,8 @@ mod election_data_provider {
 	#[test]
 	fn targets_2sec_block() {
 		let mut validators = 1000;
-		while <Test as Config>::WeightInfo::get_npos_targets(validators) <
-			2 * frame_support::weights::constants::WEIGHT_PER_SECOND
+		while <Test as Config>::WeightInfo::get_npos_targets(validators)
+			< 2 * frame_support::weights::constants::WEIGHT_PER_SECOND
 		{
 			validators += 1;
 		}
@@ -3996,8 +3991,8 @@ mod election_data_provider {
 		let slashing_spans = validators;
 		let mut nominators = 1000;
 
-		while <Test as Config>::WeightInfo::get_npos_voters(validators, nominators, slashing_spans) <
-			2 * frame_support::weights::constants::WEIGHT_PER_SECOND
+		while <Test as Config>::WeightInfo::get_npos_voters(validators, nominators, slashing_spans)
+			< 2 * frame_support::weights::constants::WEIGHT_PER_SECOND
 		{
 			nominators += 1;
 		}
@@ -4068,8 +4063,8 @@ mod election_data_provider {
 			.build_and_execute(|| {
 				// sum of all nominators who'd be voters (1), plus the self-votes (4).
 				assert_eq!(
-					<Test as Config>::SortedListProvider::count() +
-						<Validators<Test>>::iter().count() as u32,
+					<Test as Config>::SortedListProvider::count()
+						+ <Validators<Test>>::iter().count() as u32,
 					5
 				);
 
@@ -4108,8 +4103,8 @@ mod election_data_provider {
 
 				// and total voters
 				assert_eq!(
-					<Test as Config>::SortedListProvider::count() +
-						<Validators<Test>>::iter().count() as u32,
+					<Test as Config>::SortedListProvider::count()
+						+ <Validators<Test>>::iter().count() as u32,
 					7
 				);
 
@@ -4153,8 +4148,8 @@ mod election_data_provider {
 
 				// and total voters
 				assert_eq!(
-					<Test as Config>::SortedListProvider::count() +
-						<Validators<Test>>::iter().count() as u32,
+					<Test as Config>::SortedListProvider::count()
+						+ <Validators<Test>>::iter().count() as u32,
 					6
 				);
 
