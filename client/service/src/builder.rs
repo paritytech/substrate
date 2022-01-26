@@ -808,8 +808,7 @@ where
 			let (handler, protocol_config) = StateRequestHandler::new(
 				&protocol_id,
 				client.clone(),
-				config.network.default_peers_set.in_peers as usize +
-					config.network.default_peers_set.out_peers as usize,
+				config.network.default_peers_set_num_full as usize,
 			);
 			spawn_handle.spawn("state-request-handler", Some("networking"), handler.run());
 			protocol_config

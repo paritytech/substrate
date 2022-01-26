@@ -19,7 +19,7 @@ sp-api = { version = "4.0.0-dev", default-features = false, path = "../api" }
 sp-core = { version = "4.1.0-dev", default-features = false, path = "../core" }
 sp-std = { version = "4.0.0", default-features = false, path = "../std" }
 sp-staking = { version = "4.0.0-dev", default-features = false, path = "../staking" }
-sp-runtime = { version = "4.0.0", optional = true, path = "../runtime" }
+sp-runtime = { version = "4.1.0-dev", optional = true, path = "../runtime" }
 
 [features]
 default = [ "std" ]

@@ -102,9 +102,9 @@ use codec::{Decode, Encode};
 use frame_support::{
 	dispatch::WithPostDispatchInfo,
 	traits::{
-		ChangeMembers, Contains, ContainsLengthBound, Currency, CurrencyToVote, Get,
-		InitializeMembers, LockIdentifier, LockableCurrency, OnUnbalanced, ReservableCurrency,
-		SortedMembers, StorageVersion, WithdrawReasons,
+		defensive_prelude::*, ChangeMembers, Contains, ContainsLengthBound, Currency,
+		CurrencyToVote, Get, InitializeMembers, LockIdentifier, LockableCurrency, OnUnbalanced,
+		ReservableCurrency, SortedMembers, StorageVersion, WithdrawReasons,
 	},
 	weights::Weight,
 };
@@ -250,6 +250,7 @@ pub mod pallet {
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
 	#[pallet::storage_version(STORAGE_VERSION)]
+	#[pallet::without_storage_info]
 	pub struct Pallet<T>(PhantomData<T>);
 
 	#[pallet::hooks]
@@ -925,13 +926,13 @@ impl<T: Config> Pallet<T> {
 		let weight_candidates = candidates_and_deposit.len() as u32;
 		let weight_voters = voters_and_votes.len() as u32;
 		let weight_edges = num_edges;
-		let _ = sp_npos_elections::seq_phragmen::<T::AccountId, Perbill>(
+		let _ = sp_npos_elections::seq_phragmen(
 			num_to_elect,
 			candidate_ids,
 			voters_and_votes.clone(),
 			None,
 		)
-		.map(|ElectionResult { winners, assignments: _ }| {
+		.map(|ElectionResult::<T::AccountId, Perbill> { winners, assignments: _ }| {
 			// this is already sorted by id.
 			let old_members_ids_sorted =
 				<Members<T>>::take().into_iter().map(|m| m.who).collect::<Vec<T::AccountId>>();
@@ -1027,7 +1028,7 @@ impl<T: Config> Pallet<T> {
 				candidates_and_deposit
 					.iter()
 					.find_map(|(c, d)| if c == x { Some(*d) } else { None })
-					.unwrap_or_default()
+					.defensive_unwrap_or_default()
 			};
 			// fetch deposits from the one recorded one. This will make sure that a candidate who
 			// submitted candidacy before a change to candidacy deposit will have the correct amount
