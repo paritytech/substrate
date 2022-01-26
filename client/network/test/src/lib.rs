@@ -287,7 +287,27 @@ where
 	}
 
 	/// Add blocks to the peer -- edit the block before adding
-	pub fn generate_blocks<F>(
+	pub fn generate_blocks<F>(&mut self, count: usize, origin: BlockOrigin, edit_block: F) -> H256
+	where
+		F: FnMut(
+			BlockBuilder<Block, PeersFullClient, substrate_test_runtime_client::Backend>,
+		) -> Block,
+	{
+		let best_hash = self.client.info().best_hash;
+		self.generate_blocks_at(
+			BlockId::Hash(best_hash),
+			count,
+			origin,
+			edit_block,
+			false,
+			true,
+			true,
+			ForkChoiceStrategy::LongestChain,
+		)
+	}
+
+	/// Add blocks to the peer -- edit the block before adding and use custom fork choice rule.
+	pub fn generate_blocks_with_fork_choice<F>(
 		&mut self,
 		count: usize,
 		origin: BlockOrigin,
@@ -461,15 +481,10 @@ where
 	}
 
 	pub fn push_authorities_change_block(&mut self, new_authorities: Vec<AuthorityId>) -> H256 {
-		self.generate_blocks(
-			1,
-			BlockOrigin::File,
-			|mut builder| {
-				builder.push(Extrinsic::AuthoritiesChange(new_authorities.clone())).unwrap();
-				builder.build().unwrap().block
-			},
-			ForkChoiceStrategy::LongestChain,
-		)
+		self.generate_blocks(1, BlockOrigin::File, |mut builder| {
+			builder.push(Extrinsic::AuthoritiesChange(new_authorities.clone())).unwrap();
+			builder.build().unwrap().block
+		})
 	}
 
 	/// Get a reference to the client.
