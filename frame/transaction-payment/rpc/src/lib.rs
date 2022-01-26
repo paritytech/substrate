@@ -52,24 +52,23 @@ pub trait TransactionPaymentApi<BlockHash, ResponseType> {
 }
 
 /// Provides RPC methods to query a dispatchable's class, weight and fee.
-pub struct TransactionPaymentRpc<C, Block, Balance> {
+pub struct TransactionPaymentRpc<C, P> {
 	/// Shared reference to the client.
 	client: Arc<C>,
-	_block_marker: std::marker::PhantomData<Block>,
-	_balance_marker: std::marker::PhantomData<Balance>,
+	_marker: std::marker::PhantomData<P>,
 }
 
-impl<C, Block, Balance> TransactionPaymentRpc<C, Block, Balance> {
+impl<C, P> TransactionPaymentRpc<C, P> {
 	/// Creates a new instance of the TransactionPaymentRpc helper.
 	pub fn new(client: Arc<C>) -> Self {
-		Self { client, _block_marker: Default::default(), _balance_marker: Default::default() }
+		Self { client, _marker: Default::default() }
 	}
 }
 
 #[async_trait]
 impl<C, Block, Balance>
 	TransactionPaymentApiServer<<Block as BlockT>::Hash, RuntimeDispatchInfo<Balance>>
-	for TransactionPaymentRpc<C, Block, Balance>
+	for TransactionPaymentRpc<C, Block>
 where
 	Block: BlockT,
 	C: ProvideRuntimeApi<Block> + HeaderBackend<Block> + Send + Sync + 'static,

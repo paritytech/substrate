@@ -24,7 +24,7 @@ use std::{marker::PhantomData, sync::Arc};
 use anyhow::anyhow;
 use codec::Codec;
 use jsonrpsee::{
-	core::{async_trait, Error as JsonRpseeError, RpcResult},
+	core::{async_trait, to_json_raw_value, Error as JsonRpseeError, RpcResult},
 	proc_macros::rpc,
 	types::error::CallError,
 };
@@ -32,7 +32,6 @@ use pallet_contracts_primitives::{
 	Code, CodeUploadResult, ContractExecResult, ContractInstantiateResult,
 };
 use serde::{Deserialize, Serialize};
-use serde_json::value::to_raw_value;
 use sp_api::ProvideRuntimeApi;
 use sp_blockchain::HeaderBackend;
 use sp_core::{Bytes, H256};
@@ -314,7 +313,7 @@ fn runtime_error_into_rpc_err(err: impl std::fmt::Debug) -> JsonRpseeError {
 	CallError::Custom {
 		code: RUNTIME_ERROR,
 		message: "Runtime error".into(),
-		data: to_raw_value(&format!("{:?}", err)).ok(),
+		data: to_json_raw_value(&format!("{:?}", err)).ok(),
 	}
 	.into()
 }
