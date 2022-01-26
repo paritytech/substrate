@@ -47,11 +47,7 @@ pub(crate) const OFFCHAIN_CACHED_CALL: &[u8] = b"parity/multi-phase-unsigned-ele
 
 /// A voter's fundamental data: their ID, their stake, and the list of candidates for whom they
 /// voted.
-pub type Voter<T> = (
-	<T as frame_system::Config>::AccountId,
-	sp_npos_elections::VoteWeight,
-	Vec<<T as frame_system::Config>::AccountId>,
-);
+pub type VoterOf<T> = frame_election_provider_support::VoterOf<<T as Config>::DataProvider>;
 
 /// The relative distribution of a voter's stake among the winning targets.
 pub type Assignment<T> =
@@ -749,7 +745,9 @@ mod tests {
 	};
 	use codec::Decode;
 	use frame_benchmarking::Zero;
-	use frame_support::{assert_noop, assert_ok, dispatch::Dispatchable, traits::OffchainWorker};
+	use frame_support::{
+		assert_noop, assert_ok, bounded_vec, dispatch::Dispatchable, traits::OffchainWorker,
+	};
 	use sp_npos_elections::IndexAssignment;
 	use sp_runtime::{
 		offchain::storage_lock::{BlockAndTime, StorageLock},
@@ -1048,8 +1046,8 @@ mod tests {
 	fn unsigned_per_dispatch_checks_can_only_submit_threshold_better() {
 		ExtBuilder::default()
 			.desired_targets(1)
-			.add_voter(7, 2, vec![10])
-			.add_voter(8, 5, vec![10])
+			.add_voter(7, 2, bounded_vec![10])
+			.add_voter(8, 5, bounded_vec![10])
 			.solution_improvement_threshold(Perbill::from_percent(50))
 			.build_and_execute(|| {
 				roll_to(25);
