@@ -194,7 +194,6 @@ pub fn execute_transaction(utx: Extrinsic) -> ApplyExtrinsicResult {
 
 /// Finalize the block.
 pub fn finalize_block() -> Header {
-	use sp_core::storage::StateVersion;
 	let extrinsic_index: u32 = storage::unhashed::take(well_known_keys::EXTRINSIC_INDEX).unwrap();
 	let txs: Vec<_> = (0..extrinsic_index).map(ExtrinsicData::take).collect();
 	let extrinsics_root = trie::blake2_256_ordered_root(txs);
