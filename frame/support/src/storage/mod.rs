@@ -44,45 +44,63 @@ pub mod types;
 pub mod unhashed;
 pub mod weak_bounded_vec;
 
-#[cfg(all(feature = "std", any(test, debug_assertions)))]
-mod debug_helper {
-	use std::cell::RefCell;
+mod transaction_level_tracker {
+	const TRANSACTION_LAYER_KEY: &'static [u8] = b":transactional_levels:";
+	type Level = u8;
 
-	thread_local! {
-		static TRANSACTION_LEVEL: RefCell<u32> = RefCell::new(0);
+	fn get_transaction_level() -> Level {
+		crate::storage::unhashed::get_or_default::<Level>(TRANSACTION_LAYER_KEY)
 	}
 
-	pub fn require_transaction() {
-		let level = TRANSACTION_LEVEL.with(|v| *v.borrow());
-		if level == 0 {
-			panic!("Require transaction not called within with_transaction");
+	fn set_transaction_level(level: &Level) {
+		crate::storage::unhashed::put::<Level>(TRANSACTION_LAYER_KEY, level);
+	}
+
+	fn kill_transaction_level() {
+		crate::storage::unhashed::kill(TRANSACTION_LAYER_KEY);
+	}
+
+	/// Increments the transaction level. Returns an error if levels go past the limit.
+	///
+	/// Returns a guard that when dropped decrements the transaction level automatically.
+	pub fn inc_transaction_level(limit: Level) -> Result<TransactionLevelGuard, ()> {
+		let existing_levels = get_transaction_level();
+		if existing_levels >= limit || existing_levels == Level::MAX {
+			return Err(())
 		}
+		// Cannot overflow because of check above.
+		set_transaction_level(&(existing_levels + 1));
+		Ok(TransactionLevelGuard)
+	}
+
+	fn dec_transaction_level() {
+		let existing_levels = get_transaction_level();
+		if existing_levels == 0 {
+			log::warn!(
+				"We are underflowing with calculating transactional levels. Not great, but let's not panic...",
+			);
+		} else if existing_levels == 1 {
+			kill_transaction_level();
+		} else {
+			// Cannot underflow because of checks above.
+			set_transaction_level(&(existing_levels - 1));
+		}
+	}
+
+	pub fn require_transaction() -> Result<(), ()> {
+		let level = get_transaction_level();
+		if level == 0 {
+			return Err(())
+		}
+		Ok(())
 	}
 
 	pub struct TransactionLevelGuard;
 
 	impl Drop for TransactionLevelGuard {
 		fn drop(&mut self) {
-			TRANSACTION_LEVEL.with(|v| *v.borrow_mut() -= 1);
+			dec_transaction_level()
 		}
-	}
-
-	/// Increments the transaction level.
-	///
-	/// Returns a guard that when dropped decrements the transaction level automatically.
-	pub fn inc_transaction_level() -> TransactionLevelGuard {
-		TRANSACTION_LEVEL.with(|v| {
-			let mut val = v.borrow_mut();
-			*val += 1;
-			if *val > 10 {
-				log::warn!(
-					"Detected with_transaction with nest level {}. Nested usage of with_transaction is not recommended.",
-					*val
-				);
-			}
-		});
-
-		TransactionLevelGuard
 	}
 }
 
@@ -90,9 +108,8 @@ mod debug_helper {
 /// This will **panic** if is not called within a storage transaction.
 ///
 /// This assertion is enabled for native execution and when `debug_assertions` are enabled.
-pub fn require_transaction() {
-	#[cfg(all(feature = "std", any(test, debug_assertions)))]
-	debug_helper::require_transaction();
+pub fn require_transaction() -> Result<(), ()> {
+	transaction_level_tracker::require_transaction()
 }
 
 /// Execute the supplied function in a new storage transaction.
@@ -107,8 +124,9 @@ pub fn with_transaction<R>(f: impl FnOnce() -> TransactionOutcome<R>) -> R {
 
 	start_transaction();
 
-	#[cfg(all(feature = "std", any(test, debug_assertions)))]
-	let _guard = debug_helper::inc_transaction_level();
+	// TODO PASS LIMIT
+	let _guard = transaction_level_tracker::inc_transaction_level(10)
+		.map_err(|()| "Could not create a level");
 
 	match f() {
 		Commit(res) => {
@@ -1532,10 +1550,9 @@ mod test {
 	}
 
 	#[test]
-	#[should_panic(expected = "Require transaction not called within with_transaction")]
 	fn require_transaction_should_panic() {
 		TestExternalities::default().execute_with(|| {
-			require_transaction();
+			crate::assert_noop!(require_transaction(), ());
 		});
 	}
 
@@ -1543,12 +1560,12 @@ mod test {
 	fn require_transaction_should_not_panic_in_with_transaction() {
 		TestExternalities::default().execute_with(|| {
 			with_transaction(|| {
-				require_transaction();
+				assert_ok!(require_transaction());
 				TransactionOutcome::Commit(())
 			});
 
 			with_transaction(|| {
-				require_transaction();
+				assert_ok!(require_transaction());
 				TransactionOutcome::Rollback(())
 			});
 		});
