@@ -35,14 +35,10 @@ const SUB: &'static str = "chain_subscribeFinalizedHeads";
 const UN_SUB: &'static str = "chain_unsubscribeFinalizedHeads";
 
 /// Configurations of the [`Command::FollowChain`].
-#[derive(Debug, Clone, structopt::StructOpt)]
+#[derive(Debug, Clone, clap::Parser)]
 pub struct FollowChainCmd {
 	/// The url to connect to.
-	#[structopt(
-			short,
-			long,
-			parse(try_from_str = parse::url),
-		)]
+	#[clap(short, long, parse(try_from_str = parse::url))]
 	uri: String,
 }
 

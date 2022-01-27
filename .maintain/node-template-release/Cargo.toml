@@ -9,7 +9,7 @@ license = "GPL-3.0"
 toml = "0.4"
 tar = "0.4"
 glob = "0.2"
-structopt = "0.3"
+clap = { version = "3.0", features = ["derive"] }
 tempfile = "3"
 fs_extra = "1"
 git2 = "0.8"

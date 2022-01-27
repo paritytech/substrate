@@ -19,7 +19,7 @@ codec = { package = "parity-scale-codec", version = "2.0.0", default-features = 
 scale-info = { version = "1.0", default-features = false, features = ["derive"] }
 sp-api = { version = "4.0.0-dev", path = "../../primitives/api", default-features = false }
 sp-runtime-interface = { version = "4.1.0-dev", path = "../../primitives/runtime-interface", default-features = false }
-sp-runtime = { version = "4.0.0", path = "../../primitives/runtime", default-features = false }
+sp-runtime = { version = "4.1.0-dev", path = "../../primitives/runtime", default-features = false }
 sp-std = { version = "4.0.0", path = "../../primitives/std", default-features = false }
 sp-io = { version = "4.0.0", path = "../../primitives/io", default-features = false }
 sp-application-crypto = { version = "4.0.0", path = "../../primitives/application-crypto", default-features = false }
