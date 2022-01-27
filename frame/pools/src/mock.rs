@@ -64,10 +64,7 @@ impl sp_staking::StakingInterface for StakingMock {
 		Ok(())
 	}
 
-	fn withdraw_unbonded(
-		who: Self::AccountId,
-		stash: &Self::AccountId,
-	) -> Result<u64, DispatchError> {
+	fn withdraw_unbonded(who: Self::AccountId, _: u32) -> Result<u64, DispatchError> {
 		let maybe_new_free = UNBONDING_BALANCE_MAP.with(|m| m.borrow_mut().remove(&who));
 		if let Some(new_free) = maybe_new_free {
 			assert_ok!(Balances::mutate_account(&who, |a| a.free += new_free));

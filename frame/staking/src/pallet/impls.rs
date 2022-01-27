@@ -1353,15 +1353,8 @@ impl<T: Config> StakingInterface for Pallet<T> {
 
 	fn withdraw_unbonded(
 		controller: Self::AccountId,
-		stash: &Self::AccountId,
-		// TODO: make this num slashing spans
+		num_slashing_spans: u32,
 	) -> Result<u64, DispatchError> {
-		// TODO should probably just make this an input param
-		let num_slashing_spans = match <Pallet<T> as Store>::SlashingSpans::get(stash) {
-			None => 0,
-			Some(s) => s.iter().count() as u32,
-		};
-
 		Self::withdraw_unbonded(RawOrigin::Signed(controller).into(), num_slashing_spans)
 			.map(|post_info| {
 				post_info

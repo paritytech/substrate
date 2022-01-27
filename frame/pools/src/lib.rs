@@ -581,7 +581,7 @@ pub mod pallet {
 		}
 
 		#[pallet::weight(666)]
-		pub fn withdraw_unbonded(origin: OriginFor<T>) -> DispatchResult {
+		pub fn withdraw_unbonded(origin: OriginFor<T>, num_slashing_spans: u32) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let delegator =
 				DelegatorStorage::<T>::get(&who).ok_or(Error::<T>::DelegatorNotFound)?;
@@ -618,7 +618,7 @@ pub mod pallet {
 			if T::Currency::free_balance(&bonded_pool.account_id) < balance_to_unbond {
 				T::StakingInterface::withdraw_unbonded(
 					bonded_pool.account_id.clone(),
-					&bonded_pool.account_id,
+					num_slashing_spans,
 				)?;
 			}
 

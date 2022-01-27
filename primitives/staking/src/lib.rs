@@ -95,7 +95,7 @@ pub trait StakingInterface {
 
 	fn withdraw_unbonded(
 		controller: Self::AccountId,
-		stash: &Self::AccountId,
+		num_slashing_spans: u32,
 	) -> Result<u64, DispatchError>;
 
 	/// Check if the given accounts can be bonded as stash <-> controller pair and with the given
