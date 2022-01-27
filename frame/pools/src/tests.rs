@@ -9,6 +9,7 @@ use frame_support::{assert_noop, assert_ok};
 //
 // - implement staking impl of the delegator pools interface
 // - test `slash_pool`
+// - incorporate returned weight from staking calls
 
 macro_rules! sub_pools_with_era {
 	($($k:expr => $v:expr),* $(,)?) => {{

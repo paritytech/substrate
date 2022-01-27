@@ -1423,7 +1423,7 @@ impl<T: Config> StakingInterface for Pallet<T> {
 
 		if !Nominators::<T>::contains_key(stash) {
 			if let Some(max_nominators) = MaxNominatorsCount::<T>::get() {
-				if Nominators::<T>::count() < max_nominators {
+				if Nominators::<T>::count() > max_nominators {
 					return false;
 				};
 			}

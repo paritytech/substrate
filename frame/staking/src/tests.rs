@@ -4621,21 +4621,78 @@ mod staking_interface {
 	#[test]
 	fn can_nominate_passes_valid_inputs() {
 		ExtBuilder::default().build_and_execute(|| {
-			assert_ok!(Staking::bond(
-				Origin::signed(80),
-				81,
-				1,
-				RewardDestination::Controller
-			));
+			assert_ok!(Staking::bond(Origin::signed(80), 81, 1, RewardDestination::Controller));
 
 			let targets = vec![11];
+			assert!(Staking::can_nominate(&81, &targets));
+
+			// 11 blocks
+			assert_ok!(Staking::validate(
+				Origin::signed(10),
+				ValidatorPrefs { blocked: true, ..Default::default() }
+			));
+			// but we can still nominate them since they are in the old nominations
+			assert!(Staking::can_nominate(&81, &targets));
+
+			// The nominator count limit is set to 0
+			MaxNominatorsCount::<Test>::set(Some(0));
+			// but we can still nominate because we have pre-existing nomination
+			assert!(Staking::can_nominate(&81, &targets));
+
+			// They can still nominate with exactly `MAX_NOMINATIONS
+			let targets: Vec<_> = (0..Test::MAX_NOMINATIONS).map(|i| i as u64).collect();
 			assert!(Staking::can_nominate(&81, &targets));
 		});
 	}
 
 	#[test]
 	fn can_nominate_fails_invalid_inputs() {
-		todo!()
+		ExtBuilder::default()
+			.existential_deposit(100)
+			.balance_factor(100)
+			.min_nominator_bond(1_000)
+			.build_and_execute(|| {
+				let targets = vec![11];
+
+				// Not bonded, so no ledger
+				assert_eq!(Staking::can_nominate(&80, &targets), false);
+
+				// Bonded, but below min bond to nominate
+				assert_ok!(Staking::bond(
+					Origin::signed(81),
+					80,
+					1_000 - 10,
+					RewardDestination::Controller
+				));
+				assert_eq!(Staking::can_nominate(&80, &targets), false);
+
+				// Meets min bond, but already at nominator limit
+				assert_ok!(Staking::bond(
+					Origin::signed(71),
+					70,
+					1_000 + 10,
+					RewardDestination::Controller
+				));
+				MaxNominatorsCount::<Test>::set(Some(0));
+				assert_eq!(Staking::can_nominate(&70, &targets), false);
+				MaxNominatorsCount::<Test>::set(None);
+
+				// Targets are empty
+				let targets = vec![];
+				assert_eq!(Staking::can_nominate(&70, &targets), false);
+
+				// Too many targets
+				let targets: Vec<_> = (0..=Test::MAX_NOMINATIONS).map(|i| i as u64).collect();
+				assert_eq!(Staking::can_nominate(&70, &targets), false);
+
+				// A target is blocking
+				assert_ok!(Staking::validate(
+					Origin::signed(10),
+					ValidatorPrefs { blocked: true, ..Default::default() }
+				));
+				let targets = vec![11];
+				assert_eq!(Staking::can_nominate(&70, &targets), false);
+			});
 	}
 
 	#[test]
