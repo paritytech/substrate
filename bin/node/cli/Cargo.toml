@@ -122,7 +122,7 @@ assert_cmd = "1.0"
 nix = "0.17"
 serde_json = "1.0"
 regex = "1"
-platforms = "0.2.1"
+platforms = "2.0.0"
 
 [build-dependencies]
 structopt = { version = "0.3.8", optional = true }
