@@ -4696,13 +4696,32 @@ mod staking_interface {
 	}
 
 	#[test]
-	fn can_bond_passes_valid_inputs() {
-		todo!()
-	}
+	fn can_bond_works() {
+		ExtBuilder::default()
+			.existential_deposit(100)
+			.balance_factor(100)
+			.nominate(false)
+			.build_and_execute(|| {
+				// Amount to bond does not meet ED
+				assert_eq!(Staking::can_bond(&61, &60, 99, &0), false);
 
-	#[test]
-	fn can_bond_fails_invalid_inputs() {
-		todo!()
+				// A ledger already exists for the given controller
+				Ledger::<Test>::insert(60, StakingLedger::default_from(61));
+				assert_eq!(Staking::can_bond(&61, &60, 100, &0), false);
+
+				// The stash is already bonded to a controller
+				Bonded::<Test>::insert(71, 70);
+				assert_eq!(Staking::can_bond(&71, &70, 100, &0), false);
+
+				// Cannot increment consumers for stash
+				frame_system::Account::<Test>::mutate(&81, |a| {
+					a.providers = 0;
+				});
+				assert_eq!(Staking::can_bond(&81, &80, 100, &0), false);
+
+				// Works with valid inputs
+				assert!(Staking::can_bond(&101, &100, 100, &0))
+			});
 	}
 
 	#[test]

@@ -1389,7 +1389,7 @@ impl<T: Config> StakingInterface for Pallet<T> {
 			return false;
 		}
 
-		if !frame_system::Pallet::<T>::can_inc_consumers(stash) {
+		if !frame_system::Pallet::<T>::can_inc_consumer(stash) {
 			return false;
 		}
 
