@@ -209,18 +209,6 @@ default:
     AWS_SECRET_ACCESS_KEY:
       vault:                       cicd/gitlab/$CI_PROJECT_PATH/AWS_SECRET_ACCESS_KEY@kv
       file:                        false
-    AWX_TOKEN:
-      vault:                       cicd/gitlab/$CI_PROJECT_PATH/AWX_TOKEN@kv
-      file:                        false
-    CRATES_TOKEN:
-      vault:                       cicd/gitlab/$CI_PROJECT_PATH/CRATES_TOKEN@kv
-      file:                        false
-    DOCKER_CHAOS_TOKEN:
-      vault:                       cicd/gitlab/$CI_PROJECT_PATH/DOCKER_CHAOS_TOKEN@kv
-      file:                        false
-    DOCKER_CHAOS_USER:
-      vault:                       cicd/gitlab/$CI_PROJECT_PATH/DOCKER_CHAOS_USER@kv
-      file:                        false
     GITHUB_EMAIL:
       vault:                       cicd/gitlab/$CI_PROJECT_PATH/GITHUB_EMAIL@kv
       file:                        false
@@ -239,22 +227,13 @@ default:
     MATRIX_ROOM_ID:
       vault:                       cicd/gitlab/$CI_PROJECT_PATH/MATRIX_ROOM_ID@kv
       file:                        false
-    PIPELINE_TOKEN:
-      vault:                       cicd/gitlab/$CI_PROJECT_PATH/PIPELINE_TOKEN@kv
-      file:                        false
-    VALIDATOR_KEYS:
-      vault:                       cicd/gitlab/$CI_PROJECT_PATH/VALIDATOR_KEYS@kv
-      file:                        false
-    VALIDATOR_KEYS_CHAOS:
-      vault:                       cicd/gitlab/$CI_PROJECT_PATH/VALIDATOR_KEYS_CHAOS@kv
-      file:                        false
+
 
 #### stage:                       .pre
 
 skip-if-draft:
   image:                           paritytech/tools:latest
   <<:                              *kubernetes-env
-  <<:                              *vault-secrets
   stage:                           .pre
   rules:
     - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
@@ -270,7 +249,6 @@ check-runtime:
   stage:                           check
   image:                           paritytech/tools:latest
   <<:                              *kubernetes-env
-  <<:                              *vault-secrets
   rules:
     - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
   variables:
@@ -285,7 +263,6 @@ check-signed-tag:
   stage:                           check
   image:                           paritytech/tools:latest
   <<:                              *kubernetes-env
-  <<:                              *vault-secrets
   rules:
     - if: $CI_COMMIT_REF_NAME =~ /^ci-release-.*$/
     - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
@@ -548,7 +525,6 @@ cargo-check-macos:
   stage:                           build
   <<:                              *docker-env
   <<:                              *test-refs-no-trigger-prs-only
-  <<:                              *vault-secrets
   script:
     - git clone
         --depth=1

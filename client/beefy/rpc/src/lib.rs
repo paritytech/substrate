@@ -36,15 +36,15 @@ mod notification;
 
 type FutureResult<T> = jsonrpc_core::BoxFuture<Result<T, jsonrpc_core::Error>>;
 
-#[derive(Debug, derive_more::Display, derive_more::From, thiserror::Error)]
+#[derive(Debug, thiserror::Error)]
 /// Top-level error type for the RPC handler
 pub enum Error {
 	/// The BEEFY RPC endpoint is not ready.
-	#[display(fmt = "BEEFY RPC endpoint not ready")]
+	#[error("BEEFY RPC endpoint not ready")]
 	EndpointNotReady,
 	/// The BEEFY RPC background task failed to spawn.
-	#[display(fmt = "BEEFY RPC background task failed to spawn")]
-	RpcTaskFailure(SpawnError),
+	#[error("BEEFY RPC background task failed to spawn")]
+	RpcTaskFailure(#[from] SpawnError),
 }
 
 /// The error codes returned by jsonrpc.
