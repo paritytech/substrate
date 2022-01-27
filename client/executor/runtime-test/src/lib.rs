@@ -341,6 +341,14 @@ sp_core::wasm_export_functions! {
 	fn test_take_i8(value: i8) {
 		assert_eq!(value, -66);
 	}
+
+	fn test_fatal_error() {
+		sp_io::fatal_error_handler::abort_on_fatal_error("test_fatal_error called");
+	}
+
+	fn test_unreachable_intrinsic() {
+		core::arch::wasm32::unreachable()
+	}
 }
 
 #[cfg(not(feature = "std"))]

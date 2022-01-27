@@ -220,7 +220,7 @@ where
 		allow_missing_host_functions: bool,
 		export_name: &str,
 		call_data: &[u8],
-	) -> std::result::Result<Vec<u8>, String> {
+	) -> std::result::Result<Vec<u8>, Error> {
 		let module = crate::wasm_runtime::create_wasm_runtime_with_code::<H>(
 			self.method,
 			self.default_heap_pages,
@@ -243,7 +243,6 @@ where
 			instance.call_export(export_name, call_data)
 		})
 		.and_then(|r| r)
-		.map_err(|e| e.to_string())
 	}
 }
 
@@ -281,6 +280,7 @@ where
 			"Core_version",
 			&[],
 		)
+		.map_err(|e| e.to_string())
 	}
 }
 

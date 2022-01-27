@@ -66,3 +66,5 @@ with-tracing = [
 disable_panic_handler = []
 disable_oom = []
 disable_allocator = []
+
+use_fatal_error_handler = []

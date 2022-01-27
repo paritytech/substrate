@@ -305,6 +305,10 @@ pub trait FunctionContext {
 	fn deallocate_memory(&mut self, ptr: Pointer<u8>) -> Result<()>;
 	/// Provides access to the sandbox.
 	fn sandbox(&mut self) -> &mut dyn Sandbox;
+	/// Registers a fatal error within the executor.
+	///
+	/// A WASM trap should be triggered immediately after calling this method.
+	fn register_fatal_error(&mut self, message: &str);
 }
 
 /// Sandbox memory identifier.

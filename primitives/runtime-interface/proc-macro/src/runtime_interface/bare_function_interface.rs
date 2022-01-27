@@ -32,11 +32,12 @@
 use crate::utils::{
 	create_exchangeable_host_function_ident, create_function_ident_with_version,
 	generate_crate_access, get_function_argument_names, get_function_arguments,
-	get_runtime_interface,
+	get_runtime_interface, RuntimeInterfaceFunction,
 };
 
 use syn::{
-	parse_quote, spanned::Spanned, FnArg, Ident, ItemTrait, Result, Signature, TraitItemMethod,
+	parse_quote, spanned::Spanned, FnArg, Ident, ItemTrait, Result, Signature, Token,
+	TraitItemMethod,
 };
 
 use proc_macro2::{Span, TokenStream};
@@ -74,7 +75,7 @@ pub fn generate(trait_def: &ItemTrait, is_wasm_only: bool, tracing: bool) -> Res
 
 /// Generates the bare function implementation for the given method for the host and wasm side.
 fn function_for_method(
-	method: &TraitItemMethod,
+	method: &RuntimeInterfaceFunction,
 	latest_version: u32,
 	is_wasm_only: bool,
 ) -> Result<TokenStream> {
@@ -91,12 +92,27 @@ fn function_for_method(
 }
 
 /// Generates the bare function implementation for `cfg(not(feature = "std"))`.
-fn function_no_std_impl(method: &TraitItemMethod) -> Result<TokenStream> {
+fn function_no_std_impl(method: &RuntimeInterfaceFunction) -> Result<TokenStream> {
 	let function_name = &method.sig.ident;
 	let host_function_name = create_exchangeable_host_function_ident(&method.sig.ident);
 	let args = get_function_arguments(&method.sig);
 	let arg_names = get_function_argument_names(&method.sig);
-	let return_value = &method.sig.output;
+	let return_value = if method.should_trap_on_return() {
+		syn::ReturnType::Type(
+			<Token![->]>::default(),
+			Box::new(syn::TypeNever { bang_token: <Token![!]>::default() }.into()),
+		)
+	} else {
+		method.sig.output.clone()
+	};
+	let maybe_unreachable = if method.should_trap_on_return() {
+		quote! {
+			; core::arch::wasm32::unreachable();
+		}
+	} else {
+		quote! {}
+	};
+
 	let attrs = method.attrs.iter().filter(|a| !a.path.is_ident("version"));
 
 	Ok(quote! {
@@ -105,6 +121,7 @@ fn function_no_std_impl(method: &TraitItemMethod) -> Result<TokenStream> {
 		pub fn #function_name( #( #args, )* ) #return_value {
 			// Call the host function
 			#host_function_name.get()( #( #arg_names, )* )
+			#maybe_unreachable
 		}
 	})
 }
