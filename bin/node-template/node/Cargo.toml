@@ -1,6 +1,6 @@
 [package]
 name = "node-template"
-version = "3.0.0"
+version = "4.0.0-dev"
 description = "A fresh FRAME-based Substrate node, ready for hacking."
 authors = ["Substrate DevHub <https://github.com/substrate-developer-hub>"]
 homepage = "https://substrate.io/"
@@ -52,7 +52,8 @@ pallet-transaction-payment-rpc = { version = "4.0.0-dev", path = "../../../frame
 frame-benchmarking = { version = "4.0.0-dev", path = "../../../frame/benchmarking" }
 frame-benchmarking-cli = { version = "4.0.0-dev", path = "../../../utils/frame/benchmarking-cli" }
 
-node-template-runtime = { version = "3.0.0", path = "../runtime" }
+# Local Dependencies
+node-template-runtime = { version = "4.0.0-dev", path = "../runtime" }
 
 [build-dependencies]
 substrate-build-script-utils = { version = "3.0.0", path = "../../../utils/build-script-utils" }

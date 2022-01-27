@@ -471,7 +471,7 @@ pub fn is_score_better<P: PerThing>(this: ElectionScore, that: ElectionScore, ep
 /// - It drops duplicate targets within a voter.
 pub fn setup_inputs<AccountId: IdentifierT>(
 	initial_candidates: Vec<AccountId>,
-	initial_voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
+	initial_voters: Vec<(AccountId, VoteWeight, impl IntoIterator<Item = AccountId>)>,
 ) -> (Vec<CandidatePtr<AccountId>>, Vec<Voter<AccountId>>) {
 	// used to cache and access candidates index.
 	let mut c_idx_cache = BTreeMap::<AccountId, usize>::new();
@@ -496,7 +496,7 @@ pub fn setup_inputs<AccountId: IdentifierT>(
 	let voters = initial_voters
 		.into_iter()
 		.filter_map(|(who, voter_stake, votes)| {
-			let mut edges: Vec<Edge<AccountId>> = Vec::with_capacity(votes.len());
+			let mut edges: Vec<Edge<AccountId>> = Vec::new();
 			for v in votes {
 				if edges.iter().any(|e| e.who == v) {
 					// duplicate edge.
