@@ -5,7 +5,7 @@
 //! * bonded pool: This pool represents the actively staked funds ...
 //! * rewards pool: The rewards earned by actively staked funds. Delegator can withdraw rewards once
 //! * sub pools: This a group of pools where we have a set of pools organized by era
-//!   (`SubPools.with_era`) and one pool that is not associated with an era (`SubPools.no_era`).
+//!   (`SubPools::with_era`) and one pool that is not associated with an era (`SubPools.no_era`).
 //!   Once a `with_era` pool is older then `current_era - MaxUnbonding`, its points and balance get
 //!   merged into the `no_era` pool.
 //!
@@ -64,7 +64,7 @@ macro_rules! log {
 type PoolId = u32;
 type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
-type SubPoolsWithEra<T> = BoundedBTreeMap<EraIndex, UnbondPool<T>, <T as Config>::MaxUnbonding>;
+type SubPoolsWithEra<T> = BoundedBTreeMap<EraIndex, UnbondPool<T>, MaxUnbonding<T>>;
 // NOTE: this assumes the balance type u128 or smaller.
 type RewardPoints = U256;
 
@@ -265,7 +265,7 @@ impl<T: Config> SubPools<T> {
 	/// Merge the oldest unbonding pool with an era into the general unbond pool with no associated
 	/// era.
 	fn maybe_merge_pools(mut self, current_era: EraIndex) -> Self {
-		if current_era < T::MaxUnbonding::get().into() {
+		if current_era < MaxUnbonding::<T>::get().into() {
 			// For the first `0..MaxUnbonding` eras of the chain we don't need to do anything.
 			// I.E. if `MaxUnbonding` is 5 and we are in era 4 we can add a pool for this era and
 			// have exactly `MaxUnbonding` pools.
@@ -273,7 +273,7 @@ impl<T: Config> SubPools<T> {
 		}
 
 		//  I.E. if `MaxUnbonding` is 5 and current era is 10, we only want to retain pools 6..=10.
-		let newest_era_to_remove = current_era.saturating_sub(T::MaxUnbonding::get());
+		let newest_era_to_remove = current_era.saturating_sub(MaxUnbonding::<T>::get());
 
 		let eras_to_remove: Vec<_> = self
 			.with_era
@@ -289,6 +289,16 @@ impl<T: Config> SubPools<T> {
 		}
 
 		self
+	}
+}
+
+/// The maximum amount of eras an unbonding pool can exist prior to being merged with the
+/// `no_era	 pool. This is guaranteed to at least be equal to the staking `UnbondingDuration`. For
+/// improved UX [`Config::WithEraWithdrawWindow`] should be configured to a non-zero value.
+struct MaxUnbonding<T: Config>(PhantomData<T>);
+impl<T: Config> Get<u32> for MaxUnbonding<T> {
+	fn get() -> u32 {
+		T::StakingInterface::bonding_duration() + T::WithEraWithdrawWindow::get()
 	}
 }
 
@@ -326,11 +336,12 @@ pub mod pallet {
 			LookupSource = <Self::Lookup as StaticLookup>::Source,
 		>;
 
-		/// The maximum amount of eras an unbonding pool can exist prior to being merged with the
-		/// `no_era	 pool. This should at least be greater then the `UnbondingDuration` for staking
-		/// so delegator have a chance to withdraw unbonded before their pool gets merged with the
-		/// `no_era` pool. This *must* at least be greater then the slash deffer duration.
-		type MaxUnbonding: Get<u32>;
+		/// The amount of eras a `SubPools::with_era` pool can exist before it gets merged into the
+		/// `SubPools::no_era` pool. In other words, this is the amount of eras a delegator will be
+		/// able to withdraw from an unbonding pool which is guaranteed to have the correct ratio of
+		/// points to balance; once the `with_era` pool is merged into the `no_era` pool, the ratio
+		/// can become skewed due to some slashed ratio getting merged in at some point.
+		type WithEraWithdrawWindow: Get<u32>;
 	}
 
 	/// Active delegators.
@@ -457,7 +468,7 @@ pub mod pallet {
 			let new_points = bonded_pool.points_to_issue(exact_amount_to_bond);
 			bonded_pool.points = bonded_pool.points.saturating_add(new_points);
 
-			T::StakingInterface::bond_extra(&bonded_pool.account_id, exact_amount_to_bond)?;
+			T::StakingInterface::bond_extra(bonded_pool.account_id.clone(), exact_amount_to_bond)?;
 
 			DelegatorStorage::insert(
 				who.clone(),
@@ -526,7 +537,7 @@ pub mod pallet {
 				DelegatorStorage::<T>::get(&who).ok_or(Error::<T>::DelegatorNotFound)?;
 			// Note that we lazily create the unbonding pools here if they don't already exist
 			let sub_pools = SubPoolsStorage::<T>::get(delegator.pool).unwrap_or_default();
-			let current_era = T::StakingInterface::current_era();
+			let current_era = T::StakingInterface::current_era().unwrap_or(Zero::zero());
 
 			let balance_to_unbond = bonded_pool.balance_to_unbond(delegator.points);
 
@@ -536,7 +547,7 @@ pub mod pallet {
 
 			// TODO: call withdraw unbonded to try and minimize unbonding chunks
 			// Unbond in the actual underlying pool
-			T::StakingInterface::unbond(&bonded_pool.account_id, balance_to_unbond)?;
+			T::StakingInterface::unbond(bonded_pool.account_id.clone(), balance_to_unbond)?;
 
 			// Merge any older pools into the general, era agnostic unbond pool. Note that we do
 			// this before inserting to ensure we don't go over the max unbonding pools.
@@ -576,7 +587,7 @@ pub mod pallet {
 				DelegatorStorage::<T>::get(&who).ok_or(Error::<T>::DelegatorNotFound)?;
 
 			let unbonding_era = delegator.unbonding_era.ok_or(Error::<T>::NotUnbonding)?;
-			let current_era = T::StakingInterface::current_era();
+			let current_era = T::StakingInterface::current_era().unwrap_or(Zero::zero());
 			if current_era.saturating_sub(unbonding_era) < T::StakingInterface::bonding_duration() {
 				return Err(Error::<T>::NotUnbondedYet.into())
 			};
@@ -605,7 +616,10 @@ pub mod pallet {
 				BondedPoolStorage::<T>::get(delegator.pool).ok_or(Error::<T>::PoolNotFound)?;
 
 			if T::Currency::free_balance(&bonded_pool.account_id) < balance_to_unbond {
-				T::StakingInterface::withdraw_unbonded(&bonded_pool.account_id)?;
+				T::StakingInterface::withdraw_unbonded(
+					bonded_pool.account_id.clone(),
+					&bonded_pool.account_id,
+				)?;
 			}
 
 			T::Currency::transfer(
@@ -645,13 +659,12 @@ pub mod pallet {
 
 			ensure!(!BondedPoolStorage::<T>::contains_key(id), Error::<T>::IdInUse);
 			ensure!(amount >= T::StakingInterface::minimum_bond(), Error::<T>::MinimumBondNotMet);
-			// TODO create can_* fns so we can bail in the beggining if some pre-conditions are not
 
 			let (stash, reward_dest) = Self::create_accounts(id);
 
 			ensure!(
 				T::StakingInterface::can_nominate(&stash, &targets) &&
-					T::StakingInterface::can_bond(&stash, &stash, &reward_dest),
+					T::StakingInterface::can_bond(&stash, &stash, amount, &reward_dest),
 				Error::<T>::StakingError
 			);
 
@@ -710,7 +723,7 @@ pub mod pallet {
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn integrity_test() {
 			assert!(
-				T::StakingInterface::bonding_duration() < T::MaxUnbonding::get(),
+				T::StakingInterface::bonding_duration() < MaxUnbonding::<T>::get(),
 				"There must be more unbonding pools then the bonding duration /
 				so a slash can be applied to relevant unboding pools. (We assume /
 				the bonding duration > slash deffer duration.",

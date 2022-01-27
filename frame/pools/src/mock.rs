@@ -36,8 +36,8 @@ impl sp_staking::StakingInterface for StakingMock {
 		10
 	}
 
-	fn current_era() -> EraIndex {
-		CurrentEra::get()
+	fn current_era() -> Option<EraIndex> {
+		Some(CurrentEra::get())
 	}
 
 	fn bonding_duration() -> EraIndex {
@@ -52,37 +52,45 @@ impl sp_staking::StakingInterface for StakingMock {
 		CanBondExtra::get()
 	}
 
-	fn bond_extra(who: &Self::AccountId, extra: Self::Balance) -> DispatchResult {
-		BONDED_BALANCE_MAP.with(|m| *m.borrow_mut().get_mut(who).unwrap() += extra);
+	fn bond_extra(who: Self::AccountId, extra: Self::Balance) -> DispatchResult {
+		BONDED_BALANCE_MAP.with(|m| *m.borrow_mut().get_mut(&who).unwrap() += extra);
 		Ok(())
 	}
 
-	fn unbond(who: &Self::AccountId, amount: Self::Balance) -> DispatchResult {
-		BONDED_BALANCE_MAP.with(|m| *m.borrow_mut().get_mut(who).unwrap() -= amount);
+	fn unbond(who: Self::AccountId, amount: Self::Balance) -> DispatchResult {
+		BONDED_BALANCE_MAP.with(|m| *m.borrow_mut().get_mut(&who).unwrap() -= amount);
 		UNBONDING_BALANCE_MAP
-			.with(|m| *m.borrow_mut().entry(*who).or_insert(Self::Balance::zero()) += amount);
+			.with(|m| *m.borrow_mut().entry(who).or_insert(Self::Balance::zero()) += amount);
 		Ok(())
 	}
 
-	fn withdraw_unbonded(who: &Self::AccountId) -> DispatchResult {
-		let maybe_new_free = UNBONDING_BALANCE_MAP.with(|m| m.borrow_mut().remove(who));
+	fn withdraw_unbonded(
+		who: Self::AccountId,
+		stash: &Self::AccountId,
+	) -> Result<u64, DispatchError> {
+		let maybe_new_free = UNBONDING_BALANCE_MAP.with(|m| m.borrow_mut().remove(&who));
 		if let Some(new_free) = maybe_new_free {
-			assert_ok!(Balances::mutate_account(who, |a| a.free += new_free));
+			assert_ok!(Balances::mutate_account(&who, |a| a.free += new_free));
 		}
-		Ok(())
+		Ok(100)
 	}
 
-	fn can_bond(_: &Self::AccountId, _: &Self::AccountId, _: &Self::AccountId) -> bool {
+	fn can_bond(
+		_: &Self::AccountId,
+		_: &Self::AccountId,
+		_: Self::Balance,
+		_: &Self::AccountId,
+	) -> bool {
 		CanBond::get()
 	}
 
 	fn bond(
 		stash: Self::AccountId,
 		_: Self::AccountId,
-		amount: Self::Balance,
+		value: Self::Balance,
 		_: Self::AccountId,
 	) -> DispatchResult {
-		StakingMock::set_bonded_balance(stash, amount);
+		StakingMock::set_bonded_balance(stash, value);
 		Ok(())
 	}
 
@@ -153,7 +161,7 @@ impl Convert<U256, Balance> for U256ToBalance {
 }
 
 parameter_types! {
-	pub static MaxUnbonding: u32 = 5;
+	pub static WithEraWithdrawWindow: u32 = 2;
 }
 
 impl pools::Config for Runtime {
@@ -162,7 +170,7 @@ impl pools::Config for Runtime {
 	type BalanceToU256 = BalanceToU256;
 	type U256ToBalance = U256ToBalance;
 	type StakingInterface = StakingMock;
-	type MaxUnbonding = MaxUnbonding;
+	type WithEraWithdrawWindow = WithEraWithdrawWindow;
 }
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Runtime>;

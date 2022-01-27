@@ -6,8 +6,10 @@ use crate::mock::{
 };
 use frame_support::{assert_noop, assert_ok};
 
-//
+// 
+// - get pallet-pools to compile and pass test
 // - implement staking impl of the delegator pools interface
+// 	- factor out can_* -> pre_execution_checks
 // - test `slash_pool`
 // - incorporate returned weight from staking calls
 
@@ -282,7 +284,7 @@ mod sub_pools {
 	#[test]
 	fn maybe_merge_pools_works() {
 		ExtBuilder::default().build_and_execute(|| {
-			assert_eq!(<Runtime as Config>::MaxUnbonding::get(), 5);
+			assert_eq!(MaxUnbonding::<Runtime>::get(), 5);
 
 			// Given
 			let mut sub_pool_0 = SubPools::<Runtime> {
@@ -1194,7 +1196,7 @@ mod unbond {
 				BondedPool { account_id: PRIMARY_ACCOUNT, points: 0 }
 			);
 
-			assert_eq!(StakingMock::bonded_balance(&PRIMARY_ACCOUNT), 0);
+			assert_eq!(StakingMock::bonded_balance(&PRIMARY_ACCOUNT).unwrap(), 0);
 		});
 	}
 
@@ -1220,7 +1222,7 @@ mod unbond {
 					BondedPoolStorage::<Runtime>::get(0).unwrap(),
 					BondedPool { account_id: PRIMARY_ACCOUNT, points: 560 }
 				);
-				assert_eq!(StakingMock::bonded_balance(&PRIMARY_ACCOUNT), 94);
+				assert_eq!(StakingMock::bonded_balance(&PRIMARY_ACCOUNT).unwrap(), 94);
 				assert_eq!(DelegatorStorage::<Runtime>::get(40).unwrap().unbonding_era, Some(0));
 				assert_eq!(Balances::free_balance(&40), 40 + 40); // We claim rewards when unbonding
 
@@ -1236,7 +1238,7 @@ mod unbond {
 					BondedPoolStorage::<Runtime>::get(0).unwrap(),
 					BondedPool { account_id: PRIMARY_ACCOUNT, points: 550 }
 				);
-				assert_eq!(StakingMock::bonded_balance(&PRIMARY_ACCOUNT), 93);
+				assert_eq!(StakingMock::bonded_balance(&PRIMARY_ACCOUNT).unwrap(), 93);
 				assert_eq!(DelegatorStorage::<Runtime>::get(10).unwrap().unbonding_era, Some(0));
 				assert_eq!(Balances::free_balance(&10), 10 + 10);
 
@@ -1252,7 +1254,7 @@ mod unbond {
 					BondedPoolStorage::<Runtime>::get(0).unwrap(),
 					BondedPool { account_id: PRIMARY_ACCOUNT, points: 0 }
 				);
-				assert_eq!(StakingMock::bonded_balance(&PRIMARY_ACCOUNT), 0);
+				assert_eq!(StakingMock::bonded_balance(&PRIMARY_ACCOUNT).unwrap(), 0);
 				assert_eq!(DelegatorStorage::<Runtime>::get(550).unwrap().unbonding_era, Some(0));
 				assert_eq!(Balances::free_balance(&550), 550 + 550);
 			});
@@ -1275,7 +1277,7 @@ mod unbond {
 			);
 
 			// When
-			let current_era = 1 + <Runtime as Config>::MaxUnbonding::get();
+			let current_era = 1 + MaxUnbonding::<Runtime>::get();
 			CurrentEra::set(current_era);
 
 			assert_ok!(Pools::unbond(Origin::signed(10)));
@@ -1351,7 +1353,7 @@ mod withdraw_unbonded {
 
 				// Advance the current_era to ensure all `with_era` pools will be merged into
 				// `no_era` pool
-				current_era += <Runtime as Config>::MaxUnbonding::get();
+				current_era += MaxUnbonding::<Runtime>::get();
 				CurrentEra::set(current_era);
 
 				// Simulate some other call to unbond that would merge `with_era` pools into
@@ -1536,7 +1538,7 @@ mod create {
 			assert!(!BondedPoolStorage::<Runtime>::contains_key(1));
 			assert!(!RewardPoolStorage::<Runtime>::contains_key(1));
 			assert!(!DelegatorStorage::<Runtime>::contains_key(11));
-			assert_eq!(StakingMock::bonded_balance(&bonded_account), 0);
+			assert_eq!(StakingMock::bonded_balance(&bonded_account), None);
 
 			Balances::make_free_balance_be(&11, StakingMock::minimum_bond());
 			assert_ok!(Pools::create(Origin::signed(11), 1, vec![], StakingMock::minimum_bond()));
@@ -1555,7 +1557,10 @@ mod create {
 				BondedPoolStorage::<Runtime>::get(1).unwrap(),
 				BondedPool { points: StakingMock::minimum_bond(), account_id: bonded_account }
 			);
-			assert_eq!(StakingMock::bonded_balance(&bonded_account), StakingMock::minimum_bond());
+			assert_eq!(
+				StakingMock::bonded_balance(&bonded_account).unwrap(),
+				StakingMock::minimum_bond()
+			);
 			assert_eq!(
 				RewardPoolStorage::<Runtime>::get(1).unwrap(),
 				RewardPool {

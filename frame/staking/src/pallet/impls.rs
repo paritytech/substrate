@@ -143,7 +143,7 @@ impl<T: Config> Pallet<T> {
 
 		// Nothing to do if they have no reward points.
 		if validator_reward_points.is_zero() {
-			return Ok(Some(T::WeightInfo::payout_stakers_alive_staked(0)).into());
+			return Ok(Some(T::WeightInfo::payout_stakers_alive_staked(0)).into())
 		}
 
 		// This is the fraction of the total reward that the validator and the
@@ -235,9 +235,8 @@ impl<T: Config> Pallet<T> {
 					Self::update_ledger(&controller, &l);
 					r
 				}),
-			RewardDestination::Account(dest_account) => {
-				Some(T::Currency::deposit_creating(&dest_account, amount))
-			},
+			RewardDestination::Account(dest_account) =>
+				Some(T::Currency::deposit_creating(&dest_account, amount)),
 			RewardDestination::None => None,
 		}
 	}
@@ -265,14 +264,14 @@ impl<T: Config> Pallet<T> {
 				_ => {
 					// Either `Forcing::ForceNone`,
 					// or `Forcing::NotForcing if era_length >= T::SessionsPerEra::get()`.
-					return None;
+					return None
 				},
 			}
 
 			// New era.
 			let maybe_new_era_validators = Self::try_trigger_new_era(session_index, is_genesis);
-			if maybe_new_era_validators.is_some()
-				&& matches!(ForceEra::<T>::get(), Forcing::ForceNew)
+			if maybe_new_era_validators.is_some() &&
+				matches!(ForceEra::<T>::get(), Forcing::ForceNew)
 			{
 				ForceEra::<T>::put(Forcing::NotForcing);
 			}
@@ -463,7 +462,7 @@ impl<T: Config> Pallet<T> {
 			}
 
 			Self::deposit_event(Event::StakingElectionFailed);
-			return None;
+			return None
 		}
 
 		Self::deposit_event(Event::StakersElected);
@@ -870,7 +869,7 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 
 		// We can't handle this case yet -- return an error.
 		if maybe_max_len.map_or(false, |max_len| target_count > max_len as u32) {
-			return Err("Target snapshot too big");
+			return Err("Target snapshot too big")
 		}
 
 		Ok(Self::get_npos_targets())
@@ -1139,7 +1138,7 @@ where
 			add_db_reads_writes(1, 0);
 			if active_era.is_none() {
 				// This offence need not be re-submitted.
-				return consumed_weight;
+				return consumed_weight
 			}
 			active_era.expect("value checked not to be `None`; qed").index
 		};
@@ -1185,7 +1184,7 @@ where
 
 			// Skip if the validator is invulnerable.
 			if invulnerables.contains(stash) {
-				continue;
+				continue
 			}
 
 			let unapplied = slashing::compute_slash::<T>(slashing::SlashParams {
@@ -1355,6 +1354,7 @@ impl<T: Config> StakingInterface for Pallet<T> {
 	fn withdraw_unbonded(
 		controller: Self::AccountId,
 		stash: &Self::AccountId,
+		// TODO: make this num slashing spans
 	) -> Result<u64, DispatchError> {
 		// TODO should probably just make this an input param
 		let num_slashing_spans = match <Pallet<T> as Store>::SlashingSpans::get(stash) {
@@ -1378,19 +1378,19 @@ impl<T: Config> StakingInterface for Pallet<T> {
 		_: &Self::AccountId,
 	) -> bool {
 		if Bonded::<T>::contains_key(stash) {
-			return false;
+			return false
 		}
 
 		if Ledger::<T>::contains_key(controller) {
-			return false;
+			return false
 		}
 
 		if value < T::Currency::minimum_balance() {
-			return false;
+			return false
 		}
 
 		if !frame_system::Pallet::<T>::can_inc_consumer(stash) {
-			return false;
+			return false
 		}
 
 		true
@@ -1418,33 +1418,33 @@ impl<T: Config> StakingInterface for Pallet<T> {
 		let stash = &ledger.stash;
 
 		if ledger.active < MinNominatorBond::<T>::get() {
-			return false;
+			return false
 		}
 
 		if !Nominators::<T>::contains_key(stash) {
 			if let Some(max_nominators) = MaxNominatorsCount::<T>::get() {
 				if Nominators::<T>::count() > max_nominators {
-					return false;
+					return false
 				};
 			}
 		}
 
 		if targets.is_empty() {
-			return false;
+			return false
 		}
 
 		if targets.len() as u32 > T::MAX_NOMINATIONS {
-			return false;
+			return false
 		}
 
 		let old = Nominators::<T>::get(stash).map_or_else(Vec::new, |x| x.targets);
 		for validator in targets {
 			if let Ok(validator) = T::Lookup::lookup(validator.clone()) {
 				if !(old.contains(&validator) || !Validators::<T>::get(&validator).blocked) {
-					return false;
+					return false
 				}
 			} else {
-				return false;
+				return false
 			}
 		}
 
