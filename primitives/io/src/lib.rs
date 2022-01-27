@@ -1599,14 +1599,14 @@ pub trait RuntimeTasks {
 }
 
 /// Allocator used by Substrate when executing the Wasm runtime.
-#[cfg(not(feature = "std"))]
+#[cfg(all(target_arch = "wasm32", not(feature = "std")))]
 struct WasmAllocator;
 
-#[cfg(all(not(feature = "disable_allocator"), not(feature = "std")))]
+#[cfg(all(target_arch = "wasm32", not(feature = "disable_allocator"), not(feature = "std")))]
 #[global_allocator]
 static ALLOCATOR: WasmAllocator = WasmAllocator;
 
-#[cfg(not(feature = "std"))]
+#[cfg(all(target_arch = "wasm32", not(feature = "std")))]
 mod allocator_impl {
 	use super::*;
 	use core::alloc::{GlobalAlloc, Layout};

@@ -82,7 +82,7 @@ fn function_for_method(
 	let std_impl =
 		if !is_wasm_only { function_std_latest_impl(method, latest_version)? } else { quote!() };
 
-	let no_std_impl = function_no_std_impl(method)?;
+	let no_std_impl = function_no_std_impl(method, is_wasm_only)?;
 
 	Ok(quote! {
 		#std_impl
@@ -92,7 +92,10 @@ fn function_for_method(
 }
 
 /// Generates the bare function implementation for `cfg(not(feature = "std"))`.
-fn function_no_std_impl(method: &RuntimeInterfaceFunction) -> Result<TokenStream> {
+fn function_no_std_impl(
+	method: &RuntimeInterfaceFunction,
+	is_wasm_only: bool,
+) -> Result<TokenStream> {
 	let function_name = &method.sig.ident;
 	let host_function_name = create_exchangeable_host_function_ident(&method.sig.ident);
 	let args = get_function_arguments(&method.sig);
@@ -115,7 +118,14 @@ fn function_no_std_impl(method: &RuntimeInterfaceFunction) -> Result<TokenStream
 
 	let attrs = method.attrs.iter().filter(|a| !a.path.is_ident("version"));
 
+	let cfg_wasm_only = if is_wasm_only {
+		quote! { #[cfg(target_arch = "wasm32")] }
+	} else {
+		quote! {}
+	};
+
 	Ok(quote! {
+		#cfg_wasm_only
 		#[cfg(not(feature = "std"))]
 		#( #attrs )*
 		pub fn #function_name( #( #args, )* ) #return_value {
