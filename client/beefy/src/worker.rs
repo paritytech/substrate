@@ -46,7 +46,7 @@ use crate::{
 	keystore::BeefyKeystore,
 	metric_inc, metric_set,
 	metrics::Metrics,
-	notification::{BeefyBestBlockSender, BeefySignedCommitmentSender, BeefyJustificationStream},
+	notification::{BeefyBestBlockSender, BeefyJustificationStream, BeefySignedCommitmentSender},
 	round, Client,
 };
 
