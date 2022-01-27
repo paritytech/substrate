@@ -41,7 +41,14 @@ use registry::Registry;
 mod tests;
 
 /// A type of a message delivered to the subscribers
-pub type StorageNotification<Hash> = (Hash, StorageChangeSet);
+#[derive(Debug)]
+pub struct StorageNotification<Hash> {
+	/// The hash of the block
+	pub block: Hash,
+
+	/// The set of changes
+	pub changes: StorageChangeSet,
+}
 
 /// Storage change set
 #[derive(Debug)]

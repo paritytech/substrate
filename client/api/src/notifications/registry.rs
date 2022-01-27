@@ -88,7 +88,7 @@ impl SubscriberSink {
 			child_filters: self.child_keys.clone(),
 		};
 
-		(hash, storage_change_set)
+		StorageNotification { block: hash, changes: storage_change_set }
 	}
 }
 

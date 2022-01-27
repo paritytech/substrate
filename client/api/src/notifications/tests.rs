@@ -75,7 +75,7 @@ fn triggering_change_should_notify_wildcard_listeners() {
 
 	// then
 	assert_eq!(
-		recv.next().unwrap(),
+		recv.next().map(StorageNotification::into_fields).unwrap(),
 		(
 			Hash::from_low_u64_be(1),
 			(
@@ -123,18 +123,18 @@ fn should_only_notify_interested_listeners() {
 
 	// then
 	assert_eq!(
-		recv1.next().unwrap(),
+		recv1.next().map(StorageNotification::into_fields).unwrap(),
 		(Hash::from_low_u64_be(1), (vec![(StorageKey(vec![1]), None),], vec![]).into())
 	);
 	assert_eq!(
-		recv2.next().unwrap(),
+		recv2.next().map(StorageNotification::into_fields).unwrap(),
 		(
 			Hash::from_low_u64_be(1),
 			(vec![(StorageKey(vec![2]), Some(StorageData(vec![3]))),], vec![]).into()
 		)
 	);
 	assert_eq!(
-		recv3.next().unwrap(),
+		recv3.next().map(StorageNotification::into_fields).unwrap(),
 		(
 			Hash::from_low_u64_be(1),
 			(
@@ -204,11 +204,18 @@ fn should_not_send_empty_notifications() {
 	};
 
 	// then
-	assert_eq!(recv.next(), None);
+	assert_eq!(recv.next().map(StorageNotification::into_fields), None);
 }
 
 impl<B: BlockT> StorageNotifications<B> {
 	fn lock_registry<'a>(&'a self) -> impl DerefMut<Target = impl AsMut<Registry>> + 'a {
 		self.0.lock_registry()
+	}
+}
+
+impl<H> StorageNotification<H> {
+	fn into_fields(self) -> (H, StorageChangeSet) {
+		let Self { block, changes } = self;
+		(block, changes)
 	}
 }
