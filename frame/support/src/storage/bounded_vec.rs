@@ -175,7 +175,7 @@ impl<T, S> BoundedVec<T, S> {
 		self.0.drain(range)
 	}
 
-	/// Exact same semantics as [`Vec::iter_mut`].
+	/// Exact same semantics as [`slice::iter_mut`].
 	///
 	/// Always a valid operation for a `BoundedVec` because the returned iterator cannot change the
 	/// length of the vec.
