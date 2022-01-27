@@ -235,7 +235,7 @@ pub trait Proposer<B: BlockT> {
 /// Generally, consensus authoring work isn't undertaken while well behind
 /// the head of the chain.
 #[async_trait::async_trait]
-pub trait SyncOracle {
+pub trait SyncOracle: Send {
 	/// Whether the synchronization service is undergoing major sync.
 	/// Returns true if so.
 	fn is_major_syncing(&mut self) -> bool;
@@ -265,7 +265,7 @@ impl SyncOracle for NoNetwork {
 #[async_trait::async_trait]
 impl<T> SyncOracle for Arc<T>
 where
-	T: ?Sized,
+	T: ?Sized + Sync + Send,
 	for<'r> &'r T: SyncOracle,
 {
 	fn is_major_syncing(&mut self) -> bool {
