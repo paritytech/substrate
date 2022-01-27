@@ -206,7 +206,7 @@ impl<Moment: AtLeast32BitUnsigned + Copy + Parameter> AtOrAfter<Moment> {
 }
 
 /// Info regarding an ongoing referendum.
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct ReferendumStatus<
 	TrackId: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
 	Origin: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
@@ -243,7 +243,7 @@ pub struct ReferendumStatus<
 }
 
 /// Info regarding a referendum, present or past.
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub enum ReferendumInfo<
 	TrackId: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
 	Origin: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
