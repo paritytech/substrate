@@ -52,7 +52,7 @@ impl Backend {
 	}
 }
 
-pub fn invoke_wasmer(
+pub fn invoke(
 	instance: &wasmer::Instance,
 
 	// function to call that is exported from the module
@@ -109,7 +109,7 @@ pub fn invoke_wasmer(
 		.transpose()
 }
 
-pub fn instantiate_wasmer(
+pub fn instantiate(
 	context: &Backend,
 	wasm: &[u8],
 	guest_env: GuestEnvironment,
@@ -170,7 +170,7 @@ pub fn instantiate_wasmer(
 					.ok_or(InstantiationError::ModuleDecoding)?;
 
 				let function =
-					wasmer_dispatch_function(supervisor_func_index, &context.store, func_ty, state);
+					dispatch_function(supervisor_func_index, &context.store, func_ty, state);
 
 				let exports = exports_map
 					.entry(import.module().to_string())
@@ -201,7 +201,7 @@ pub fn instantiate_wasmer(
 	}))
 }
 
-pub fn wasmer_dispatch_function(
+pub fn dispatch_function(
 	supervisor_func_index: SupervisorFuncIndex,
 	store: &wasmer::Store,
 	func_ty: &wasmer::FunctionType,
@@ -301,7 +301,7 @@ pub fn wasmer_dispatch_function(
 	})
 }
 
-pub fn wasmer_new_memory(
+pub fn new_memory(
 	context: &Backend,
 	initial: u32,
 	maximum: Option<u32>,

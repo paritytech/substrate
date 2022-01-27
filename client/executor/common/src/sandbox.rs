@@ -33,12 +33,13 @@ use std::{collections::HashMap, rc::Rc};
 
 #[cfg(feature = "wasmer-sandbox")]
 use wasmer_backend::{
-	instantiate_wasmer, invoke_wasmer, wasmer_new_memory, Backend as WasmerBackend,
-	MemoryWrapper as WasmerMemoryWrapper,
+	instantiate as wasmer_instantiate, invoke as wasmer_invoke, new_memory as wasmer_new_memory,
+	Backend as WasmerBackend, MemoryWrapper as WasmerMemoryWrapper,
 };
 
 use wasmi_backend::{
-	instantiate_wasmi, invoke_wasmi, wasmi_new_memory, MemoryWrapper as WasmiMemoryWrapper,
+	instantiate as wasmi_instantiate, invoke as wasmi_invoke, new_memory as wasmi_new_memory,
+	MemoryWrapper as WasmiMemoryWrapper,
 };
 
 /// Index of a function inside the supervisor.
@@ -203,11 +204,11 @@ impl SandboxInstance {
 	) -> std::result::Result<Option<sp_wasm_interface::Value>, wasmi::Error> {
 		match &self.backend_instance {
 			BackendInstance::Wasmi(wasmi_instance) =>
-				invoke_wasmi(self, wasmi_instance, export_name, args, state, sandbox_context),
+				wasmi_invoke(self, wasmi_instance, export_name, args, state, sandbox_context),
 
 			#[cfg(feature = "wasmer-sandbox")]
 			BackendInstance::Wasmer(wasmer_instance) =>
-				invoke_wasmer(wasmer_instance, export_name, args, state, sandbox_context),
+				wasmer_invoke(wasmer_instance, export_name, args, state, sandbox_context),
 		}
 	}
 
@@ -577,11 +578,11 @@ impl<DT: Clone> Store<DT> {
 		sandbox_context: &mut dyn SandboxContext,
 	) -> std::result::Result<UnregisteredInstance, InstantiationError> {
 		let sandbox_instance = match self.backend_context {
-			BackendContext::Wasmi => instantiate_wasmi(wasm, guest_env, state, sandbox_context)?,
+			BackendContext::Wasmi => wasmi_instantiate(wasm, guest_env, state, sandbox_context)?,
 
 			#[cfg(feature = "wasmer-sandbox")]
 			BackendContext::Wasmer(ref context) =>
-				instantiate_wasmer(&context, wasm, guest_env, state, sandbox_context)?,
+				wasmer_instantiate(&context, wasm, guest_env, state, sandbox_context)?,
 		};
 
 		Ok(UnregisteredInstance { sandbox_instance })

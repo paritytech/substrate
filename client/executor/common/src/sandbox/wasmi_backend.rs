@@ -101,7 +101,7 @@ impl ImportResolver for Imports {
 	}
 }
 
-pub fn wasmi_new_memory(initial: u32, maximum: Option<u32>) -> crate::error::Result<Memory> {
+pub fn new_memory(initial: u32, maximum: Option<u32>) -> crate::error::Result<Memory> {
 	let memory = Memory::Wasmi(MemoryWrapper::new(MemoryInstance::alloc(
 		Pages(initial as usize),
 		maximum.map(|m| Pages(m as usize)),
@@ -281,7 +281,7 @@ where
 	f(&mut GuestExternals { sandbox_instance, state })
 }
 
-pub fn instantiate_wasmi(
+pub fn instantiate(
 	wasm: &[u8],
 	guest_env: GuestEnvironment,
 	state: u32,
@@ -313,7 +313,7 @@ pub fn instantiate_wasmi(
 	Ok(sandbox_instance)
 }
 
-pub fn invoke_wasmi(
+pub fn invoke(
 	instance: &SandboxInstance,
 
 	module: &wasmi::ModuleRef,
