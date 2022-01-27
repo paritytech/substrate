@@ -27,7 +27,7 @@ use crate::{
 };
 use codec::{Decode, Encode, EncodeLike, FullCodec, FullEncode};
 use sp_core::storage::ChildInfo;
-use sp_runtime::generic::{Digest, DigestItem};
+use sp_runtime::{DispatchError, generic::{Digest, DigestItem}};
 pub use sp_runtime::TransactionOutcome;
 use sp_std::prelude::*;
 pub use types::Key;
@@ -117,16 +117,19 @@ pub fn require_transaction() -> Result<(), ()> {
 /// All changes to storage performed by the supplied function are discarded if the returned
 /// outcome is `TransactionOutcome::Rollback`.
 ///
-/// Transactions can be nested to any depth. Commits happen to the parent transaction.
-pub fn with_transaction<R>(f: impl FnOnce() -> TransactionOutcome<R>) -> R {
+/// Transactions can be nested to any depth up to `limit`. Commits happen to the parent transaction.
+pub fn with_transaction<A, B>(limit: u8, f: impl FnOnce() -> TransactionOutcome<Result<A, B>>) -> Result<A, B>
+	where
+		B: From<DispatchError>
+{
 	use sp_io::storage::{commit_transaction, rollback_transaction, start_transaction};
 	use TransactionOutcome::*;
 
 	start_transaction();
 
 	// TODO PASS LIMIT
-	let _guard = transaction_level_tracker::inc_transaction_level(10)
-		.map_err(|()| "Could not create a level");
+	let _guard = transaction_level_tracker::inc_transaction_level(limit)
+		.map_err(|()| DispatchError::TransactionLimitExceeded)?;
 
 	match f() {
 		Commit(res) => {
@@ -1440,6 +1443,7 @@ mod test {
 	use sp_core::hashing::twox_128;
 	use sp_io::TestExternalities;
 	use weak_bounded_vec::WeakBoundedVec;
+	use sp_runtime::DispatchResult;
 
 	#[test]
 	fn prefixed_map_works() {
@@ -1550,24 +1554,56 @@ mod test {
 	}
 
 	#[test]
-	fn require_transaction_should_panic() {
+	fn require_transaction_should_return_error() {
 		TestExternalities::default().execute_with(|| {
 			crate::assert_noop!(require_transaction(), ());
 		});
 	}
 
 	#[test]
-	fn require_transaction_should_not_panic_in_with_transaction() {
+	fn require_transaction_should_not_error_in_with_transaction() {
 		TestExternalities::default().execute_with(|| {
-			with_transaction(|| {
+			assert_ok!(with_transaction(u8::MAX, || -> TransactionOutcome<DispatchResult> {
 				assert_ok!(require_transaction());
-				TransactionOutcome::Commit(())
+				TransactionOutcome::Commit(Ok(()))
+			}));
+
+			assert_ok!(with_transaction(u8::MAX, || -> TransactionOutcome<DispatchResult> {
+				assert_ok!(require_transaction());
+				TransactionOutcome::Rollback(Ok(()))
+			}));
+		});
+	}
+
+	#[test]
+	fn transaction_limit_should_work() {
+		TestExternalities::default().execute_with(|| {
+			let res = with_transaction(2u8, || -> TransactionOutcome<DispatchResult> {
+				TransactionOutcome::Commit(Ok(()))
 			});
 
-			with_transaction(|| {
-				assert_ok!(require_transaction());
-				TransactionOutcome::Rollback(())
+			assert!(res.is_ok());
+
+			let res = with_transaction(2u8, || -> TransactionOutcome<DispatchResult> {
+				let res = with_transaction(2u8, || -> TransactionOutcome<DispatchResult> {
+					TransactionOutcome::Commit(Ok(()))
+				});
+				TransactionOutcome::Commit(res)
 			});
+
+			assert!(res.is_ok());
+
+			let res = with_transaction(2u8, || -> TransactionOutcome<DispatchResult> {
+				let res = with_transaction(2u8, || -> TransactionOutcome<DispatchResult> {
+					let res = with_transaction(2u8, || -> TransactionOutcome<DispatchResult> {
+						TransactionOutcome::Commit(Ok(()))
+					});
+					TransactionOutcome::Commit(res)
+				});
+				TransactionOutcome::Commit(res)
+			});
+
+			assert!(res.is_err());
 		});
 	}
 

@@ -28,7 +28,7 @@ pub fn transactional(_attr: TokenStream, input: TokenStream) -> Result<TokenStre
 		#(#attrs)*
 		#vis #sig {
 			use #crate_::storage::{with_transaction, TransactionOutcome};
-			with_transaction(|| {
+			with_transaction(u8::MAX, || {
 				let r = (|| { #block })();
 				if r.is_ok() {
 					TransactionOutcome::Commit(r)
