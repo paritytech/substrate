@@ -22,7 +22,6 @@ use futures::{
 	executor,
 	task::{FutureObj, Spawn, SpawnError},
 };
-use sp_core::traits::SpawnNamed;
 use std::future::Future;
 
 // Executor shared by all tests.
@@ -35,7 +34,6 @@ lazy_static::lazy_static! {
 }
 
 /// Executor for use in testing
-#[derive(Clone, Copy)]
 pub struct TaskExecutor;
 impl Spawn for TaskExecutor {
 	fn spawn_obj(&self, future: FutureObj<'static, ()>) -> Result<(), SpawnError> {
@@ -45,25 +43,6 @@ impl Spawn for TaskExecutor {
 
 	fn status(&self) -> Result<(), SpawnError> {
 		Ok(())
-	}
-}
-impl SpawnNamed for TaskExecutor {
-	fn spawn_blocking(
-		&self,
-		_name: &'static str,
-		_group: Option<&'static str>,
-		future: futures::future::BoxFuture<'static, ()>,
-	) {
-		EXECUTOR.spawn_ok(future);
-	}
-
-	fn spawn(
-		&self,
-		_name: &'static str,
-		_group: Option<&'static str>,
-		future: futures::future::BoxFuture<'static, ()>,
-	) {
-		EXECUTOR.spawn_ok(future);
 	}
 }
 
