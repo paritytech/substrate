@@ -23,6 +23,7 @@
 #![recursion_limit = "256"]
 
 use codec::{Decode, Encode, MaxEncodedLen};
+use frame_election_provider_support::onchain;
 use frame_support::{
 	construct_runtime, parameter_types,
 	traits::{
@@ -528,12 +529,6 @@ parameter_types! {
 	pub OffchainRepeat: BlockNumber = 5;
 }
 
-use frame_election_provider_support::onchain;
-impl onchain::Config for Runtime {
-	type Accuracy = Perbill;
-	type DataProvider = Staking;
-}
-
 pub struct StakingBenchmarkingConfig;
 impl pallet_staking::BenchmarkingConfig for StakingBenchmarkingConfig {
 	type MaxNominators = ConstU32<1000>;
@@ -649,6 +644,11 @@ impl frame_support::pallet_prelude::Get<Option<(usize, sp_npos_elections::Extend
 	}
 }
 
+impl onchain::Config for Runtime {
+	type Accuracy = Perbill;
+	type DataProvider = <Self as pallet_election_provider_multi_phase::Config>::DataProvider;
+}
+
 impl pallet_election_provider_multi_phase::Config for Runtime {
 	type Event = Event;
 	type Currency = Balances;
@@ -671,6 +671,8 @@ impl pallet_election_provider_multi_phase::Config for Runtime {
 	type DataProvider = Staking;
 	type Solution = NposSolution16;
 	type Fallback = pallet_election_provider_multi_phase::NoFallback<Self>;
+	type GovernanceFallback =
+		frame_election_provider_support::onchain::OnChainSequentialPhragmen<Self>;
 	type Solver = frame_election_provider_support::SequentialPhragmen<
 		AccountId,
 		pallet_election_provider_multi_phase::SolutionAccuracyOf<Self>,

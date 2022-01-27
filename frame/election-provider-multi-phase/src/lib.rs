@@ -230,7 +230,9 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use codec::{Decode, Encode};
-use frame_election_provider_support::{ElectionDataProvider, ElectionProvider};
+use frame_election_provider_support::{
+	ElectionDataProvider, ElectionProvider, InstantElectionProvider,
+};
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
 	ensure,
@@ -318,6 +320,15 @@ impl<T: Config> ElectionProvider for NoFallback<T> {
 
 	fn elect() -> Result<Supports<T::AccountId>, Self::Error> {
 		// Do nothing, this will enable the emergency phase.
+		Err("NoFallback.")
+	}
+}
+
+impl<T: Config> InstantElectionProvider for NoFallback<T> {
+	fn instant_elect(
+		_: Option<usize>,
+		_: Option<usize>,
+	) -> Result<Supports<T::AccountId>, Self::Error> {
 		Err("NoFallback.")
 	}
 }
@@ -555,7 +566,7 @@ pub use pallet::*;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_election_provider_support::NposSolver;
+	use frame_election_provider_support::{InstantElectionProvider, NposSolver};
 	use frame_support::{pallet_prelude::*, traits::EstimateCallFee};
 	use frame_system::pallet_prelude::*;
 
@@ -672,8 +683,18 @@ pub mod pallet {
 			+ NposSolution
 			+ TypeInfo;
 
-		/// Configuration for the fallback
+		/// Configuration for the fallback.
 		type Fallback: ElectionProvider<
+			AccountId = Self::AccountId,
+			BlockNumber = Self::BlockNumber,
+			DataProvider = Self::DataProvider,
+		>;
+
+		/// Configuration of the governance-only fallback.
+		///
+		/// As a side-note, it is recommend for test-nets to use `type ElectionProvider =
+		/// OnChainSeqPhragmen<_>` if the test-net is not expected to have thousands of nominators.
+		type GovernanceFallback: InstantElectionProvider<
 			AccountId = Self::AccountId,
 			BlockNumber = Self::BlockNumber,
 			DataProvider = Self::DataProvider,
@@ -1013,6 +1034,37 @@ pub mod pallet {
 			});
 			Ok(())
 		}
+
+		/// Trigger the governance fallback.
+		///
+		/// This can only be called when [`Phase::Emergency`] is enabled, as an alternative to
+		/// calling [`Call::set_emergency_election_result`].
+		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
+		pub fn governance_fallback(
+			origin: OriginFor<T>,
+			maybe_max_voters: Option<u32>,
+			maybe_max_targets: Option<u32>,
+		) -> DispatchResult {
+			T::ForceOrigin::ensure_origin(origin)?;
+			ensure!(Self::current_phase().is_emergency(), <Error<T>>::CallNotAllowed);
+
+			let maybe_max_voters = maybe_max_voters.map(|x| x as usize);
+			let maybe_max_targets = maybe_max_targets.map(|x| x as usize);
+
+			let supports =
+				T::GovernanceFallback::instant_elect(maybe_max_voters, maybe_max_targets).map_err(
+					|e| {
+						log!(error, "GovernanceFallback failed: {:?}", e);
+						Error::<T>::FallbackFailed
+					},
+				)?;
+
+			let solution =
+				ReadySolution { supports, score: [0, 0, 0], compute: ElectionCompute::Fallback };
+
+			<QueuedSolution<T>>::put(solution);
+			Ok(())
+		}
 	}
 
 	#[pallet::event]
@@ -1063,6 +1115,8 @@ pub mod pallet {
 		InvalidSubmissionIndex,
 		/// The call is not allowed at this point.
 		CallNotAllowed,
+		/// The fallback failed
+		FallbackFailed,
 	}
 
 	#[pallet::validate_unsigned]
