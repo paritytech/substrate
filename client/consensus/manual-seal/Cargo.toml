@@ -13,7 +13,7 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-derive_more = "0.99.16"
+thiserror = "1.0"
 futures = "0.3.9"
 jsonrpc-core = "18.0.0"
 jsonrpc-core-client = "18.0.0"
@@ -27,15 +27,17 @@ async-trait = "0.1.50"
 sc-client-api = { path = "../../api", version = "4.0.0-dev" }
 sc-consensus = { version = "0.10.0-dev", path = "../../consensus/common" }
 sc-consensus-babe = { path = "../../consensus/babe", version = "0.10.0-dev" }
+sc-consensus-aura = { path = "../../consensus/aura", version = "0.10.0-dev" }
 sc-consensus-epochs = { path = "../../consensus/epochs", version = "0.10.0-dev" }
 sp-consensus-babe = { path = "../../../primitives/consensus/babe", version = "0.10.0-dev" }
+sp-consensus-aura = { path = "../../../primitives/consensus/aura", version = "0.10.0-dev" }
 
 sc-transaction-pool = { path = "../../transaction-pool", version = "4.0.0-dev" }
 sp-blockchain = { path = "../../../primitives/blockchain", version = "4.0.0-dev" }
 sp-consensus = { path = "../../../primitives/consensus/common", version = "0.10.0-dev" }
 sp-consensus-slots = { path = "../../../primitives/consensus/slots", version = "0.10.0-dev" }
 sp-inherents = { path = "../../../primitives/inherents", version = "4.0.0-dev" }
-sp-runtime = { path = "../../../primitives/runtime", version = "4.0.0" }
+sp-runtime = { path = "../../../primitives/runtime", version = "4.1.0-dev" }
 sp-core = { path = "../../../primitives/core", version = "4.1.0-dev" }
 sp-keystore = { path = "../../../primitives/keystore", version = "0.10.0" }
 sp-api = { path = "../../../primitives/api", version = "4.0.0-dev" }

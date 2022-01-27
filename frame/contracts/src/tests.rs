@@ -294,7 +294,7 @@ pub const BOB: AccountId32 = AccountId32::new([2u8; 32]);
 pub const CHARLIE: AccountId32 = AccountId32::new([3u8; 32]);
 pub const DJANGO: AccountId32 = AccountId32::new([4u8; 32]);
 
-pub const GAS_LIMIT: Weight = 10_000_000_000;
+pub const GAS_LIMIT: Weight = 100_000_000_000;
 
 pub struct ExtBuilder {
 	existential_deposit: u64,
@@ -533,7 +533,8 @@ fn run_out_of_gas() {
 }
 
 fn initialize_block(number: u64) {
-	System::initialize(&number, &[0u8; 32].into(), &Default::default(), Default::default());
+	System::reset_events();
+	System::initialize(&number, &[0u8; 32].into(), &Default::default());
 }
 
 #[test]
@@ -1385,7 +1386,7 @@ fn disabled_chain_extension_wont_deploy() {
 				vec![],
 				vec![],
 			),
-			"module uses chain extensions but chain extensions are disabled",
+			<Error<Test>>::CodeRejected,
 		);
 	});
 }
@@ -2900,5 +2901,34 @@ fn contract_reverted() {
 			.unwrap();
 		assert_eq!(result.flags, flags);
 		assert_eq!(result.data.0, buffer);
+	});
+}
+
+#[test]
+fn code_rejected_error_works() {
+	let (wasm, _) = compile_module::<Test>("invalid_import").unwrap();
+	ExtBuilder::default().existential_deposit(200).build().execute_with(|| {
+		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+
+		assert_noop!(
+			Contracts::upload_code(Origin::signed(ALICE), wasm.clone(), None),
+			<Error<Test>>::CodeRejected,
+		);
+
+		let result = Contracts::bare_instantiate(
+			ALICE,
+			0,
+			GAS_LIMIT,
+			None,
+			Code::Upload(Bytes(wasm)),
+			vec![],
+			vec![],
+			true,
+		);
+		assert_err!(result.result, <Error<Test>>::CodeRejected);
+		assert_eq!(
+			std::str::from_utf8(&result.debug_message).unwrap(),
+			"module imports a non-existent function"
+		);
 	});
 }

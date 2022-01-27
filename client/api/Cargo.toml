@@ -31,7 +31,7 @@ sp-core = { version = "4.1.0-dev", default-features = false, path = "../../primi
 sp-keystore = { version = "0.10.0", default-features = false, path = "../../primitives/keystore" }
 sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
 sc-utils = { version = "4.0.0-dev", path = "../utils" }
-sp-runtime = { version = "4.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-runtime = { version = "4.1.0-dev", default-features = false, path = "../../primitives/runtime" }
 sp-state-machine = { version = "0.10.0", path = "../../primitives/state-machine" }
 sp-trie = { version = "4.0.0", path = "../../primitives/trie" }
 sp-storage = { version = "4.0.0", path = "../../primitives/storage" }

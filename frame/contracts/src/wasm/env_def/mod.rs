@@ -18,8 +18,8 @@
 use super::Runtime;
 use crate::exec::Ext;
 
-use pwasm_utils::parity_wasm::elements::{FunctionType, ValueType};
 use sp_sandbox::Value;
+use wasm_instrument::parity_wasm::elements::{FunctionType, ValueType};
 
 #[macro_use]
 pub mod macros;

@@ -401,6 +401,13 @@ where
 	) -> crate::storage::PrefixIterator<(Key, Value), OnRemovalCounterUpdate<Prefix>> {
 		<Self as MapWrapper>::Map::iter_from(starting_raw_key).convert_on_removal()
 	}
+
+	/// Enumerate all keys in the counted map.
+	///
+	/// If you alter the map while doing this, you'll get undefined results.
+	pub fn iter_keys() -> crate::storage::KeyPrefixIterator<Key> {
+		<Self as MapWrapper>::Map::iter_keys()
+	}
 }
 
 impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues> StorageEntryMetadataBuilder
@@ -417,7 +424,11 @@ where
 	fn build_metadata(docs: Vec<&'static str>, entries: &mut Vec<StorageEntryMetadata>) {
 		<Self as MapWrapper>::Map::build_metadata(docs, entries);
 		CounterFor::<Prefix>::build_metadata(
-			vec![&"Counter for the related counted storage map"],
+			if cfg!(feature = "no-metadata-docs") {
+				vec![]
+			} else {
+				vec![&"Counter for the related counted storage map"]
+			},
 			entries,
 		);
 	}
@@ -1055,7 +1066,11 @@ mod test {
 					modifier: StorageEntryModifier::Default,
 					ty: StorageEntryType::Plain(scale_info::meta_type::<u32>()),
 					default: vec![0, 0, 0, 0],
-					docs: vec!["Counter for the related counted storage map"],
+					docs: if cfg!(feature = "no-metadata-docs") {
+						vec![]
+					} else {
+						vec!["Counter for the related counted storage map"]
+					},
 				},
 			]
 		);
