@@ -1,6 +1,6 @@
 [package]
 name = "pallet-template"
-version = "3.0.0"
+version = "4.0.0-dev"
 description = "FRAME pallet template for defining custom runtime logic."
 authors = ["Substrate DevHub <https://github.com/substrate-developer-hub>"]
 homepage = "https://substrate.io/"
