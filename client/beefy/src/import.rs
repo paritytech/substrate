@@ -26,7 +26,7 @@ use crate::{
 
 /// Checks the given header for a consensus digest signalling a beefy authority set change
 /// and extracts it.
-pub fn find_beefy_authority_set_change<B: BlockT>(
+fn find_beefy_authority_set_change<B: BlockT>(
 	header: &B::Header,
 ) -> Option<ValidatorSet<AuthorityId>> {
 	let id = OpaqueDigestItemId::Consensus(&BEEFY_ENGINE_ID);
@@ -41,8 +41,10 @@ pub fn find_beefy_authority_set_change<B: BlockT>(
 	header.digest().convert_first(|l| l.try_to(id).and_then(filter_log))
 }
 
-/// BeefyBlockImport
-/// Wraps a type `inner` that implements [`BlockImport`]
+/// A block-import handler for BEEFY.
+///
+/// This scans each imported block for BEEFY justifications and verifies them.
+/// Wraps a type `inner` that implements [`BlockImport`] and ultimately defers to it.
 pub struct BeefyBlockImport<Backend, Block: BlockT, Client, I> {
 	client: Arc<Client>,
 	inner: I,

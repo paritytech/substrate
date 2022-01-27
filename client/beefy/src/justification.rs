@@ -17,9 +17,7 @@ pub(crate) fn decode_and_verify_justification<Block: BlockT>(
 		<VersionedFinalityProof<NumberFor<Block>, Signature>>::decode(&mut &*encoded)
 			.map_err(|_| ConsensusError::InvalidJustification)?;
 
-	let res = verify_with_validator_set::<Block>(number, validator_set, finality_proof.clone())?;
-
-	if res {
+	if verify_with_validator_set::<Block>(number, validator_set, finality_proof.clone())? {
 		return Ok(finality_proof)
 	}
 

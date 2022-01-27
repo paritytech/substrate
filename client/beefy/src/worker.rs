@@ -46,7 +46,7 @@ use crate::{
 	keystore::BeefyKeystore,
 	metric_inc, metric_set,
 	metrics::Metrics,
-	notification::{BeefyBestBlockSender, BeefySignedCommitmentSender},
+	notification::{BeefyBestBlockSender, BeefySignedCommitmentSender, BeefyJustificationStream},
 	round, Client,
 };
 
@@ -59,6 +59,8 @@ where
 	pub key_store: BeefyKeystore,
 	pub signed_commitment_sender: BeefySignedCommitmentSender<B>,
 	pub beefy_best_block_sender: BeefyBestBlockSender<B>,
+	/// BEEFY justification stream from block import worker
+	pub justification_stream: Option<BeefyJustificationStream<NumberFor<B>, Signature>>,
 	pub gossip_engine: GossipEngine<B>,
 	pub gossip_validator: Arc<GossipValidator<B>>,
 	pub min_block_delta: u32,
@@ -89,6 +91,8 @@ where
 	best_beefy_block: Option<NumberFor<B>>,
 	/// Used to keep RPC worker up to date on latest/best beefy
 	beefy_best_block_sender: BeefyBestBlockSender<B>,
+	/// BEEFY justification stream from block import worker
+	_justification_stream: Option<BeefyJustificationStream<NumberFor<B>, Signature>>,
 	/// Validator set id for the last signed commitment
 	last_signed_id: u64,
 	// keep rustc happy
@@ -115,6 +119,7 @@ where
 			key_store,
 			signed_commitment_sender,
 			beefy_best_block_sender,
+			justification_stream,
 			gossip_engine,
 			gossip_validator,
 			min_block_delta,
@@ -134,6 +139,7 @@ where
 			finality_notifications: client.finality_notification_stream(),
 			best_grandpa_block: client.info().finalized_number,
 			best_beefy_block: None,
+			_justification_stream: justification_stream,
 			last_signed_id: 0,
 			beefy_best_block_sender,
 			_backend: PhantomData,

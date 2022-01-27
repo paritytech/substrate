@@ -48,19 +48,6 @@ use import::BeefyBlockImport;
 pub mod notification;
 pub use beefy_protocol_name::standard_name as protocol_standard_name;
 
-/// Link between the block importer and the beefy client.
-/// It provides access to the justification stream
-pub struct LinkHalf<Block: BlockT> {
-	justification_stream: BeefyJustificationStream<NumberFor<Block>, Signature>,
-}
-
-impl<Block: BlockT> LinkHalf<Block> {
-	/// Get the receiving end of justification notifications.
-	pub fn justification_stream(&self) -> BeefyJustificationStream<NumberFor<Block>, Signature> {
-		self.justification_stream.clone()
-	}
-}
-
 pub(crate) mod beefy_protocol_name {
 	use sc_chain_spec::ChainSpec;
 
@@ -100,12 +87,12 @@ pub fn beefy_peers_set_config(
 pub fn block_import<BE, Client, Block: BlockT, I>(
 	wrapped_block_import: I,
 	client: Arc<Client>,
-) -> (BeefyBlockImport<BE, Block, Client, I>, LinkHalf<Block>) {
+) -> (BeefyBlockImport<BE, Block, Client, I>, BeefyJustificationStream<NumberFor<Block>, Signature>)
+{
 	let (justification_sender, justification_stream) = BeefyJustificationStream::channel();
-	let import =
-		BeefyBlockImport::new(client.clone(), wrapped_block_import, justification_sender.clone());
+	let import = BeefyBlockImport::new(client.clone(), wrapped_block_import, justification_sender);
 
-	(import, LinkHalf { justification_stream })
+	(import, justification_stream)
 }
 
 /// A convenience BEEFY client trait that defines all the type bounds a BEEFY client
@@ -154,6 +141,8 @@ where
 	pub network: N,
 	/// BEEFY signed commitment sender
 	pub signed_commitment_sender: BeefySignedCommitmentSender<B>,
+	/// BEEFY justification stream
+	pub justification_stream: Option<BeefyJustificationStream<NumberFor<B>, Signature>>,
 	/// BEEFY best block sender
 	pub beefy_best_block_sender: BeefyBestBlockSender<B>,
 	/// Minimal delta between blocks, BEEFY should vote for
@@ -182,6 +171,7 @@ where
 		network,
 		signed_commitment_sender,
 		beefy_best_block_sender,
+		justification_stream,
 		min_block_delta,
 		prometheus_registry,
 		protocol_name,
@@ -210,6 +200,7 @@ where
 		key_store: key_store.into(),
 		signed_commitment_sender,
 		beefy_best_block_sender,
+		justification_stream,
 		gossip_engine,
 		gossip_validator,
 		min_block_delta,
