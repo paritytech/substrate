@@ -101,12 +101,12 @@ pub trait StakingInterface {
 	/// Check if the given accounts can be bonded as stash <-> controller pair and with the given
 	/// reward destination. Does not check if the accounts have enough funds. It is assumed that the
 	/// necessary funds will only be transferred into the accounts after this check is completed.
-	fn can_bond(
+	fn bond_checks(
 		stash: &Self::AccountId,
 		controller: &Self::AccountId,
 		value: Self::Balance,
 		payee: &Self::AccountId,
-	) -> bool;
+	) -> Result<(), DispatchError>;
 
 	fn bond(
 		stash: Self::AccountId,
@@ -116,8 +116,11 @@ pub trait StakingInterface {
 	) -> DispatchResult;
 
 	/// Check if the given account can nominate. Assumes the account will be correctly bonded after
-	/// this call.
-	fn can_nominate(controller: &Self::AccountId, targets: Vec<Self::LookupSource>) -> bool;
+	/// this call. Returns stash and targets if the checks pass.
+	fn nominate_checks(
+		controller: &Self::AccountId,
+		targets: Vec<Self::LookupSource>,
+	) -> Result<(Self::AccountId, Vec<Self::AccountId>), DispatchError>;
 
-	fn nominate(controller: Self::AccountId, targets: Vec<Self::LookupSource>) -> DispatchResult;
+	fn unchecked_nominate(controller: Self::AccountId, targets: Vec<Self::AccountId>);
 }

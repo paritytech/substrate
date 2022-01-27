@@ -4625,7 +4625,10 @@ mod staking_interface {
 
 			let targets = vec![11];
 			// First time nominating
-			assert!(Staking::can_nominate(&80, targets.clone()));
+			assert_eq!(
+				Staking::nominate_checks(&80, targets.clone()).unwrap(),
+				(81, targets.clone())
+			);
 
 			// Now actually nominate
 			assert_ok!(Staking::nominate(Origin::signed(80), targets.clone()));
@@ -4636,21 +4639,30 @@ mod staking_interface {
 				ValidatorPrefs { blocked: true, ..Default::default() }
 			));
 			// but we can still re-nominate them since they are in the old nominations
-			assert!(Staking::can_nominate(&80, targets.clone()));
+			assert_eq!(
+				Staking::nominate_checks(&80, targets.clone()).unwrap(),
+				(81, targets.clone())
+			);
 
 			// The nominator count limit is set to 0
 			MaxNominatorsCount::<Test>::set(Some(0));
 			// but we can still nominate because we have pre-existing nomination
-			assert!(Staking::can_nominate(&80, targets.clone()));
+			assert_eq!(
+				Staking::nominate_checks(&80, targets.clone()).unwrap(),
+				(81, targets.clone())
+			);
 
 			// They can nominate with exactly `MAX_NOMINATIONS` targets
 			let targets: Vec<_> = (0..Test::MAX_NOMINATIONS).map(|i| i as u64).collect();
-			assert!(Staking::can_nominate(&80, targets.clone()));
+			assert_eq!(
+				Staking::nominate_checks(&80, targets.clone()).unwrap(),
+				(81, targets.clone())
+			);
 		});
 	}
 
 	#[test]
-	fn can_nominate_fails_invalid_inputs() {
+	fn nominate_checks_fails_invalid_inputs() {
 		ExtBuilder::default()
 			.existential_deposit(100)
 			.balance_factor(100)
@@ -4659,7 +4671,10 @@ mod staking_interface {
 				let targets = vec![11];
 
 				// Not bonded, so no ledger
-				assert_eq!(Staking::can_nominate(&80, targets.clone()), false);
+				assert_noop!(
+					Staking::nominate_checks(&80, targets.clone()),
+					Error::<Test>::AlreadyBonded
+				);
 
 				// Bonded, but below min bond to nominate
 				assert_ok!(Staking::bond(
@@ -4668,7 +4683,7 @@ mod staking_interface {
 					1_000 - 10,
 					RewardDestination::Controller
 				));
-				assert_eq!(Staking::can_nominate(&80, targets.clone()), false);
+				assert_noop!(Staking::nominate_checks(&80, targets.clone()), false);
 
 				// Meets min bond, but already at nominator limit
 				assert_ok!(Staking::bond(
@@ -4678,16 +4693,16 @@ mod staking_interface {
 					RewardDestination::Controller
 				));
 				MaxNominatorsCount::<Test>::set(Some(0));
-				assert_eq!(Staking::can_nominate(&70, targets.clone()), false);
+				assert_eq!(Staking::nominate_checks(&70, targets.clone()), false);
 				MaxNominatorsCount::<Test>::set(None);
 
 				// Targets are empty
 				let targets = vec![];
-				assert_eq!(Staking::can_nominate(&70, targets.clone()), false);
+				assert_eq!(Staking::nominate_checks(&70, targets.clone()), false);
 
 				// Too many targets
 				let targets: Vec<_> = (0..=Test::MAX_NOMINATIONS).map(|i| i as u64).collect();
-				assert_eq!(Staking::can_nominate(&70, targets.clone()), false);
+				assert_eq!(Staking::nominate_checks(&70, targets.clone()), false);
 
 				// A target is blocking
 				assert_ok!(Staking::validate(
@@ -4695,38 +4710,41 @@ mod staking_interface {
 					ValidatorPrefs { blocked: true, ..Default::default() }
 				));
 				let targets = vec![11];
-				assert_eq!(Staking::can_nominate(&70, targets.clone()), false);
+				assert_eq!(Staking::nominate_checks(&70, targets.clone()), false);
 			});
 	}
 
 	#[test]
-	fn can_bond_works() {
+	fn bond_checks_works() {
 		ExtBuilder::default()
 			.existential_deposit(100)
 			.balance_factor(100)
 			.nominate(false)
 			.build_and_execute(|| {
 				// Amount to bond does not meet ED
-				assert_eq!(Staking::can_bond(&61, &60, 99, &0), false);
+				assert_noop!(
+					Staking::bond_checks(&61, &60, 99, &0),
+					Error::<Test>::InsufficientBond
+				);
 
 				// A ledger already exists for the given controller
 				Ledger::<Test>::insert(60, StakingLedger::default_from(61));
-				assert_eq!(Staking::can_bond(&61, &60, 100, &0), false);
+				assert_noop!(Staking::bond_checks(&61, &60, 100, &0), Error::<Test>::AlreadyPaired);
 
 				// The stash is already bonded to a controller
 				Bonded::<Test>::insert(71, 70);
-				assert_eq!(Staking::can_bond(&71, &70, 100, &0), false);
+				assert_noop!(Staking::bond_checks(&71, &70, 100, &0), Error::<Test>::AlreadyBonded);
 
 				// Cannot increment consumers for stash
 				frame_system::Account::<Test>::mutate(&81, |a| {
 					a.providers = 0;
 				});
-				assert_eq!(Staking::can_bond(&81, &80, 100, &0), false);
+				assert_noop!(Staking::bond_checks(&81, &80, 100, &0), Error::<Test>::BadState);
 
 				// Works with valid inputs
-				assert!(Staking::can_bond(&101, &100, 100, &0));
+				assert_ok!(Staking::bond_checks(&101, &100, 100, &0));
 
-				// Clean up so post checks work
+				// Clean up so test harness post checks work
 				Ledger::<Test>::remove(60);
 				Bonded::<Test>::remove(71);
 			});

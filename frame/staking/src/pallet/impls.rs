@@ -845,7 +845,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	// Checks for [`Self::bond`] that can be completed at the beginning of the calls logic.
-	pub(crate) fn bond_checks(
+	pub(crate) fn do_bond_checks(
 		stash: &T::AccountId,
 		controller: &T::AccountId,
 		value: BalanceOf<T>,
@@ -866,7 +866,7 @@ impl<T: Config> Pallet<T> {
 		Ok(())
 	}
 
-	pub(crate) fn nominate_checks(
+	pub(crate) fn do_nominate_checks(
 		controller: &T::AccountId,
 		targets: Vec<<T::Lookup as StaticLookup>::Source>,
 	) -> Result<(T::AccountId, Vec<T::AccountId>), DispatchError> {
@@ -893,7 +893,6 @@ impl<T: Config> Pallet<T> {
 			.map(|t| T::Lookup::lookup(t).map_err(DispatchError::from))
 			.map(|n| {
 				n.and_then(|n| {
-					println!("old: {:?}, n: {:?}, old.contains(n): {:?}", old, n, old.contains(&n));
 					if old.contains(&n) || !Validators::<T>::get(&n).blocked {
 						Ok(n)
 					} else {
@@ -904,6 +903,18 @@ impl<T: Config> Pallet<T> {
 			.collect::<core::result::Result<Vec<T::AccountId>, _>>()?;
 
 		Ok((ledger.stash, targets))
+	}
+
+	pub(crate) fn do_unchecked_nominate_writes(stash: &T::AccountId, targets: Vec<T::AccountId>) {
+		let nominations = Nominations {
+			targets,
+			// Initial nominations are considered submitted at era 0. See `Nominations` doc
+			submitted_in: Self::current_era().unwrap_or(0),
+			suppressed: false,
+		};
+
+		Self::do_remove_validator(&stash);
+		Self::do_add_nominator(&stash, nominations);
 	}
 }
 
@@ -1427,14 +1438,18 @@ impl<T: Config> StakingInterface for Pallet<T> {
 			.map_err(|err_with_post_info| err_with_post_info.error)
 	}
 
-	fn can_bond(
+	fn bond_checks(
 		stash: &Self::AccountId,
 		controller: &Self::AccountId,
 		value: Self::Balance,
 		_: &Self::AccountId,
-	) -> bool {
-		Self::bond_checks(stash, controller, value).is_ok()
-			&& frame_system::Pallet::<T>::can_inc_consumer(stash)
+	) -> Result<(), DispatchError> {
+		Self::do_bond_checks(stash, controller, value)?;
+		if frame_system::Pallet::<T>::can_inc_consumer(stash) {
+			Ok(())
+		} else {
+			Err(Error::<T>::BadState.into())
+		}
 	}
 
 	fn bond(
@@ -1451,11 +1466,14 @@ impl<T: Config> StakingInterface for Pallet<T> {
 		)
 	}
 
-	fn can_nominate(controller: &Self::AccountId, targets: Vec<Self::LookupSource>) -> bool {
-		Self::nominate_checks(controller, targets).is_ok()
+	fn nominate_checks(
+		controller: &Self::AccountId,
+		targets: Vec<Self::LookupSource>,
+	) -> Result<(Self::AccountId, Vec<Self::AccountId>), DispatchError> {
+		Self::do_nominate_checks(controller, targets)
 	}
 
-	fn nominate(controller: Self::AccountId, targets: Vec<Self::LookupSource>) -> DispatchResult {
-		Self::nominate(RawOrigin::Signed(controller).into(), targets)
+	fn unchecked_nominate(stash: Self::AccountId, targets: Vec<Self::AccountId>) {
+		Self::do_unchecked_nominate_writes(&stash, targets);
 	}
 }

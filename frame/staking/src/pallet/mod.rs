@@ -741,7 +741,7 @@ pub mod pallet {
 			let stash = ensure_signed(origin)?;
 			let controller = T::Lookup::lookup(controller)?;
 
-			Self::bond_checks(&stash, &controller, value)?;
+			Self::do_bond_checks(&stash, &controller, value)?;
 
 			frame_system::Pallet::<T>::inc_consumers(&stash).map_err(|_| Error::<T>::BadState)?;
 
@@ -992,16 +992,8 @@ pub mod pallet {
 			targets: Vec<<T::Lookup as StaticLookup>::Source>,
 		) -> DispatchResult {
 			let controller = ensure_signed(origin)?;
-			let (stash, targets) = Self::nominate_checks(&controller, targets)?;
-			let nominations = Nominations {
-				targets,
-				// Initial nominations are considered submitted at era 0. See `Nominations` doc
-				submitted_in: Self::current_era().unwrap_or(0),
-				suppressed: false,
-			};
-
-			Self::do_remove_validator(&stash);
-			Self::do_add_nominator(&stash, nominations);
+			let (stash, targets) = Self::do_nominate_checks(&controller, targets)?;
+			Self::do_unchecked_nominate_writes(&stash, targets);
 			Ok(())
 		}
 
