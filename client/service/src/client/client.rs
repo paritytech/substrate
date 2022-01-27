@@ -693,7 +693,8 @@ where
 				};
 				summary.finalized.push(hash);
 				if parent_exists {
-					// Add to the stale list all heads that are branching from parent.
+					// Add to the stale list all heads that are branching from parent besides our
+					// current `head`.
 					for head in self
 						.backend
 						.blockchain()
