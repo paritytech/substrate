@@ -67,7 +67,14 @@
 #![warn(missing_docs)]
 
 use std::{
-	borrow::Cow, collections::HashMap, convert::TryInto, pin::Pin, sync::Arc, time::Duration, u64,
+	borrow::Cow,
+	collections::{HashMap, HashSet},
+	convert::TryInto,
+	future::Future,
+	pin::Pin,
+	sync::Arc,
+	task::{Context, Poll},
+	time::Duration,
 };
 
 use codec::{Decode, Encode};
@@ -84,7 +91,9 @@ use prometheus_endpoint::Registry;
 use retain_mut::RetainMut;
 use schnorrkel::SignatureError;
 
-use sc_client_api::{backend::AuxStore, BlockchainEvents, ProvideUncles, UsageProvider};
+use sc_client_api::{
+	backend::AuxStore, BlockchainEvents, FinalityNotifications, ProvideUncles, UsageProvider,
+};
 use sc_consensus::{
 	block_import::{
 		BlockCheckParams, BlockImport, BlockImportParams, ForkChoiceStrategy, ImportResult,
@@ -115,7 +124,7 @@ use sp_inherents::{CreateInherentDataProviders, InherentData, InherentDataProvid
 use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 use sp_runtime::{
 	generic::{BlockId, OpaqueDigestItemId},
-	traits::{Block as BlockT, Header, Zero},
+	traits::{Block as BlockT, Header, One, Saturating, Zero},
 	DigestItem,
 };
 
@@ -467,6 +476,7 @@ where
 		+ BlockchainEvents<B>
 		+ HeaderBackend<B>
 		+ HeaderMetadata<B, Error = ClientError>
+		+ AuxStore
 		+ Send
 		+ Sync
 		+ 'static,
@@ -521,12 +531,91 @@ where
 	let (worker_tx, worker_rx) = channel(HANDLE_BUFFER_SIZE);
 
 	let answer_requests =
-		answer_requests(worker_rx, config.0, client, babe_link.epoch_changes.clone());
+		answer_requests(worker_rx, config.0, client.clone(), babe_link.epoch_changes.clone());
+
+	let finality_notifications = client.finality_notification_stream();
+	let clean_weights = aux_storage_cleanup(client, finality_notifications);
+
+	// TODO: PROPOSAL
+	// The inner futures are "never-ending" tasks.
+	// Maybe we should replace `join` with `select` to exit from the worker as
+	// soon as one of its inner futures terminates.
+	// The `join` will keep polling the others even if one of them has finished.
 	Ok(BabeWorker {
-		inner: Box::pin(future::join(inner, answer_requests).map(|_| ())),
+		inner: Box::pin(future::join3(inner, answer_requests, clean_weights).map(|_| ())),
 		slot_notification_sinks,
 		handle: BabeWorkerHandle(worker_tx),
 	})
+}
+
+// Remove obsolete block's weight data by leveraging finality notifications.
+// This includes data for all finalized blocks (excluded the most recent one)
+// and all stale branches.
+async fn aux_storage_cleanup<B: BlockT, C>(
+	client: Arc<C>,
+	mut finality_notifications: FinalityNotifications<B>,
+) where
+	C: HeaderBackend<B> + AuxStore,
+{
+	while let Some(notification) = finality_notifications.next().await {
+		let mut aux_keys = HashSet::new();
+		let mut height_limit = Zero::zero();
+
+		// Cleans data for finalized block's ancestors down to, and including, the previously
+		// finalized one.
+
+		let first_new_finalized = notification.tree_route.get(0).unwrap_or(&notification.hash);
+		match client.header(BlockId::Hash(*first_new_finalized)) {
+			Ok(Some(header)) => {
+				aux_keys.insert(aux_schema::block_weight_key(header.parent_hash()));
+				height_limit = header.number().saturating_sub(One::one());
+			},
+			Ok(None) => {
+				warn!(target: "babe", "header lookup fail while cleaning data for block {}", first_new_finalized.to_string());
+			},
+			Err(err) => {
+				warn!(target: "babe", "header lookup fail while cleaning data for block {}: {}", first_new_finalized.to_string(), err.to_string());
+			},
+		}
+
+		for hash in notification.tree_route.iter() {
+			aux_keys.insert(aux_schema::block_weight_key(hash));
+		}
+
+		// Cleans data for stale branches.
+
+		for head in notification.stale_heads.iter() {
+			let mut hash = *head;
+			// Insert stale blocks hashes until canonical chain is not reached.
+			// Soon or late we should hit an element already present within the `aux_keys` set.
+			while aux_keys.insert(aux_schema::block_weight_key(hash)) {
+				match client.header(BlockId::Hash(hash)) {
+					Ok(Some(header)) => {
+						// A fallback in case of malformed notification.
+						// This should never happen and must be considered a bug.
+						if header.number().le(&height_limit) {
+							warn!(target: "babe", "unexpected canonical chain state or malformed finality notification");
+							break
+						}
+						hash = *header.parent_hash();
+					},
+					Ok(None) => {
+						warn!(target: "babe", "header lookup fail while cleaning data for block {}", hash.to_string());
+						break
+					},
+					Err(err) => {
+						warn!(target: "babe", "header lookup fail while cleaning data for block {}: {}", head.to_string(), err.to_string());
+						break
+					},
+				}
+			}
+		}
+
+		let aux_keys: Vec<_> = aux_keys.iter().map(|val| val.as_slice()).collect();
+		if let Err(err) = client.insert_aux(&[], aux_keys.iter()) {
+			warn!(target: "babe", " Error cleaning up blocks data: {}", err.to_string());
+		}
+	}
 }
 
 async fn answer_requests<B: BlockT, C>(
@@ -611,7 +700,7 @@ impl<B: BlockT> BabeWorkerHandle<B> {
 /// Worker for Babe which implements `Future<Output=()>`. This must be polled.
 #[must_use]
 pub struct BabeWorker<B: BlockT> {
-	inner: Pin<Box<dyn futures::Future<Output = ()> + Send + 'static>>,
+	inner: Pin<Box<dyn Future<Output = ()> + Send + 'static>>,
 	slot_notification_sinks: SlotNotificationSinks<B>,
 	handle: BabeWorkerHandle<B>,
 }
@@ -635,13 +724,10 @@ impl<B: BlockT> BabeWorker<B> {
 	}
 }
 
-impl<B: BlockT> futures::Future for BabeWorker<B> {
+impl<B: BlockT> Future for BabeWorker<B> {
 	type Output = ();
 
-	fn poll(
-		mut self: Pin<&mut Self>,
-		cx: &mut futures::task::Context,
-	) -> futures::task::Poll<Self::Output> {
+	fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
 		self.inner.as_mut().poll(cx)
 	}
 }
