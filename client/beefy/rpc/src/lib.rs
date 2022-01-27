@@ -365,14 +365,10 @@ mod tests {
 		);
 	}
 
-	fn create_commitment() -> BeefySignedCommitment<Block> {
+	fn create_commitment(block_number: u32) -> BeefySignedCommitment<Block> {
 		let payload = Payload::new(known_payload_ids::MMR_ROOT_ID, "Hello World!".encode());
 		BeefySignedCommitment::<Block> {
-			commitment: beefy_primitives::Commitment {
-				payload,
-				block_number: 5,
-				validator_set_id: 0,
-			},
+			commitment: beefy_primitives::Commitment { payload, block_number, validator_set_id: 0 },
 			signatures: vec![],
 		}
 	}
@@ -391,7 +387,7 @@ mod tests {
 		let sub_id: String = serde_json::from_value(resp["result"].take()).unwrap();
 
 		// Notify with commitment
-		let commitment = create_commitment();
+		let commitment = create_commitment(5);
 		let r: Result<(), ()> = commitment_sender.notify(|| Ok(commitment.clone()));
 		r.unwrap();
 
@@ -412,5 +408,50 @@ mod tests {
 		assert_eq!(recv.method, "beefy_justifications");
 		assert_eq!(recv_sub_id, sub_id);
 		assert_eq!(recv_commitment, commitment);
+	}
+
+	#[test]
+	fn subscribe_dedupe_justifications() {
+		let (sender, stream) = BeefyBestBlockStream::<Block>::channel();
+		let (io, commitment_sender) = setup_io_handler_with_best_block_stream(stream);
+		let (meta, receiver) = setup_session();
+
+		// Subscribe
+		let sub_request =
+			r#"{"jsonrpc":"2.0","method":"beefy_subscribeJustifications","params":[],"id":1}"#;
+
+		let resp = io.handle_request_sync(sub_request, meta.clone());
+		let mut resp: serde_json::Value = serde_json::from_str(&resp.unwrap()).unwrap();
+		let sub_id: String = serde_json::from_value(resp["result"].take()).unwrap();
+
+		// Notify with duplicate commitments
+		let commitment = create_commitment(5);
+		let r: Result<(), ()> = commitment_sender.notify(|| Ok(commitment.clone()));
+		r.unwrap();
+
+		std::thread::sleep(std::time::Duration::from_millis(100));
+
+		let hash = BlakeTwo256::hash(b"42");
+		let r: Result<(), ()> = sender.notify(|| Ok((hash, 5)));
+		r.unwrap();
+
+		let r: Result<(), ()> = commitment_sender.notify(|| Ok(commitment));
+		r.unwrap();
+
+		let commitment = create_commitment(6);
+
+		let r: Result<(), ()> = commitment_sender.notify(|| Ok(commitment));
+		r.unwrap();
+
+		// Inspect what we received
+		// We should have received only two commitments
+		let recvs = futures::executor::block_on(receiver.take(2).collect::<Vec<_>>());
+		assert_eq!(
+			recvs,
+			vec![
+				format!("{{\"jsonrpc\":\"2.0\",\"method\":\"beefy_justifications\",\"params\":{{\"result\":\"0x046d68343048656c6c6f20576f726c642105000000000000000000000004000000000000\",\"subscription\":\"{}\"}}}}", sub_id), 
+				format!("{{\"jsonrpc\":\"2.0\",\"method\":\"beefy_justifications\",\"params\":{{\"result\":\"0x046d68343048656c6c6f20576f726c642106000000000000000000000004000000000000\",\"subscription\":\"{}\"}}}}", sub_id)
+			]
+		);
 	}
 }
