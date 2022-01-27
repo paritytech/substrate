@@ -21,6 +21,7 @@ use crate::{
 	params::{NodeKeyParams, SharedParams},
 	CliConfiguration,
 };
+use clap::Parser;
 use log::info;
 use sc_network::config::build_multiaddr;
 use sc_service::{
@@ -28,28 +29,27 @@ use sc_service::{
 	ChainSpec,
 };
 use std::io::Write;
-use structopt::StructOpt;
 
 /// The `build-spec` command used to build a specification.
-#[derive(Debug, StructOpt, Clone)]
+#[derive(Debug, Clone, Parser)]
 pub struct BuildSpecCmd {
 	/// Force raw genesis storage output.
-	#[structopt(long = "raw")]
+	#[clap(long)]
 	pub raw: bool,
 
 	/// Disable adding the default bootnode to the specification.
 	///
 	/// By default the `/ip4/127.0.0.1/tcp/30333/p2p/NODE_PEER_ID` bootnode is added to the
 	/// specification when no bootnode exists.
-	#[structopt(long = "disable-default-bootnode")]
+	#[clap(long)]
 	pub disable_default_bootnode: bool,
 
 	#[allow(missing_docs)]
-	#[structopt(flatten)]
+	#[clap(flatten)]
 	pub shared_params: SharedParams,
 
 	#[allow(missing_docs)]
-	#[structopt(flatten)]
+	#[clap(flatten)]
 	pub node_key_params: NodeKeyParams,
 }
 

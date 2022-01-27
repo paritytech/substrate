@@ -1,7 +1,7 @@
 [package]
 name = "node-template-runtime"
-version = "3.0.0"
-description = "A fresh FRAME-based Substrate runtime, ready for hacking."
+version = "4.0.0-dev"
+description = "A fresh FRAME-based Substrate node, ready for hacking."
 authors = ["Substrate DevHub <https://github.com/substrate-developer-hub>"]
 homepage = "https://substrate.io/"
 edition = "2021"
@@ -27,10 +27,10 @@ pallet-timestamp = { version = "4.0.0-dev", default-features = false, path = "..
 pallet-transaction-payment = { version = "4.0.0-dev", default-features = false, path = "../../../frame/transaction-payment" }
 frame-executive = { version = "4.0.0-dev", default-features = false, path = "../../../frame/executive" }
 sp-api = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/api" }
-sp-block-builder = { path = "../../../primitives/block-builder", default-features = false, version = "4.0.0-dev"}
+sp-block-builder = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/block-builder"}
 sp-consensus-aura = { version = "0.10.0-dev", default-features = false, path = "../../../primitives/consensus/aura" }
 sp-core = { version = "4.1.0-dev", default-features = false, path = "../../../primitives/core" }
-sp-inherents = { path = "../../../primitives/inherents", default-features = false, version = "4.0.0-dev"}
+sp-inherents = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/inherents"}
 sp-offchain = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/offchain" }
 sp-runtime = { version = "4.1.0-dev", default-features = false, path = "../../../primitives/runtime" }
 sp-session = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/session" }
@@ -47,7 +47,8 @@ frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "
 frame-system-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../../../frame/system/benchmarking", optional = true }
 hex-literal = { version = "0.3.4", optional = true }
 
-pallet-template = { version = "3.0.0", default-features = false, path = "../pallets/template" }
+# Local Dependencies
+pallet-template = { version = "4.0.0-dev", default-features = false, path = "../pallets/template" }
 
 [build-dependencies]
 substrate-wasm-builder = { version = "5.0.0-dev", path = "../../../utils/wasm-builder" }

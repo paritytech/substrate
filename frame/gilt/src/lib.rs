@@ -79,7 +79,7 @@ pub mod pallet {
 	pub use crate::weights::WeightInfo;
 	use frame_support::{
 		pallet_prelude::*,
-		traits::{Currency, OnUnbalanced, ReservableCurrency},
+		traits::{Currency, DefensiveSaturating, OnUnbalanced, ReservableCurrency},
 	};
 	use frame_system::pallet_prelude::*;
 	use sp_arithmetic::{PerThing, Perquintill};
@@ -599,10 +599,12 @@ pub mod pallet {
 								remaining -= amount;
 								// Should never underflow since it should track the total of the
 								// bids exactly, but we'll be defensive.
-								qs[queue_index].1 = qs[queue_index].1.saturating_sub(bid.amount);
+								qs[queue_index].1 =
+									qs[queue_index].1.defensive_saturating_sub(bid.amount);
 
 								// Now to activate the bid...
-								let nongilt_issuance = total_issuance.saturating_sub(totals.frozen);
+								let nongilt_issuance =
+									total_issuance.defensive_saturating_sub(totals.frozen);
 								let effective_issuance = totals
 									.proportion
 									.left_from_one()
@@ -613,7 +615,8 @@ pub mod pallet {
 								let who = bid.who;
 								let index = totals.index;
 								totals.frozen += bid.amount;
-								totals.proportion = totals.proportion.saturating_add(proportion);
+								totals.proportion =
+									totals.proportion.defensive_saturating_add(proportion);
 								totals.index += 1;
 								let e =
 									Event::GiltIssued { index, expiry, who: who.clone(), amount };
