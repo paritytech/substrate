@@ -1472,7 +1472,7 @@ impl<T: Config> StakingInterface for Pallet<T> {
 		Self::do_nominate_checks(controller, targets)
 	}
 
-	fn unchecked_nominate(stash: Self::AccountId, targets: Vec<Self::AccountId>) {
-		Self::do_unchecked_nominate_writes(&stash, targets);
+	fn unchecked_nominate(stash: &Self::AccountId, targets: Vec<Self::AccountId>) {
+		Self::do_unchecked_nominate_writes(stash, targets);
 	}
 }

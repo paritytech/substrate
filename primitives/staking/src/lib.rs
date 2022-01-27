@@ -122,5 +122,5 @@ pub trait StakingInterface {
 		targets: Vec<Self::LookupSource>,
 	) -> Result<(Self::AccountId, Vec<Self::AccountId>), DispatchError>;
 
-	fn unchecked_nominate(controller: Self::AccountId, targets: Vec<Self::AccountId>);
+	fn unchecked_nominate(stash: &Self::AccountId, targets: Vec<Self::AccountId>);
 }

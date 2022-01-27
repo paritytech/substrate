@@ -662,11 +662,8 @@ pub mod pallet {
 
 			let (stash, reward_dest) = Self::create_accounts(id);
 
-			ensure!(
-				T::StakingInterface::can_nominate(&stash, &targets) &&
-					T::StakingInterface::can_bond(&stash, &stash, amount, &reward_dest),
-				Error::<T>::StakingError
-			);
+			T::StakingInterface::bond_checks(&stash, &stash, amount, &reward_dest)?;
+			let (stash, targets) = T::StakingInterface::nominate_checks(&stash, targets)?;
 
 			let mut bonded_pool =
 				BondedPool::<T> { points: Zero::zero(), account_id: stash.clone() };
@@ -690,10 +687,7 @@ pub mod pallet {
 				e
 			})?;
 
-			T::StakingInterface::nominate(stash.clone(), targets).map_err(|e| {
-				log!(warn, "error trying to nominate with a new pool after a users balance was transferred.");
-				e
-			})?;
+			T::StakingInterface::unchecked_nominate(&stash, targets);
 
 			DelegatorStorage::<T>::insert(
 				who,

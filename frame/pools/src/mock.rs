@@ -72,13 +72,17 @@ impl sp_staking::StakingInterface for StakingMock {
 		Ok(100)
 	}
 
-	fn can_bond(
+	fn bond_checks(
 		_: &Self::AccountId,
 		_: &Self::AccountId,
 		_: Self::Balance,
 		_: &Self::AccountId,
-	) -> bool {
-		CanBond::get()
+	) -> Result<(), DispatchError> {
+		if CanBond::get() {
+			Ok(())
+		} else {
+			Err(Error::<Runtime>::StakingError.into())
+		}
 	}
 
 	fn bond(
@@ -91,13 +95,15 @@ impl sp_staking::StakingInterface for StakingMock {
 		Ok(())
 	}
 
-	fn can_nominate(_: &Self::AccountId, _: &Vec<Self::LookupSource>) -> bool {
-		CanNominate::get()
+	fn nominate_checks(controller_and_stash: &Self::AccountId, targets: Vec<Self::LookupSource>) -> Result<(Self::AccountId, Vec<Self::AccountId>), DispatchError> {
+		if CanNominate::get() {
+			Ok((controller_and_stash.clone(), targets))
+		} else {
+			Err(Error::<Runtime>::StakingError.into())
+		}
 	}
 
-	fn nominate(_: Self::AccountId, _: Vec<Self::LookupSource>) -> DispatchResult {
-		Ok(())
-	}
+	fn unchecked_nominate(_: &Self::AccountId, _: Vec<Self::LookupSource>) {}
 }
 
 impl frame_system::Config for Runtime {
