@@ -24,7 +24,7 @@ use crate::{
 use frame_support::{
 	dispatch::{DispatchError, DispatchResult, DispatchResultWithPostInfo, Dispatchable},
 	storage::{with_transaction, TransactionOutcome},
-	traits::{Contains, Currency, ExistenceRequirement, Get, OriginTrait, Randomness, Time},
+	traits::{Contains, Currency, ExistenceRequirement, OriginTrait, Randomness, Time},
 	weights::Weight,
 };
 use frame_system::RawOrigin;
@@ -140,11 +140,11 @@ pub trait Ext: sealing::Sealed {
 	/// was deleted.
 	fn get_storage(&mut self, key: &StorageKey) -> Option<Vec<u8>>;
 
-	/// Returns true iff some storage entry exists under the supplied `key`
+	/// Returns `Some(len)` (in bytes) if a storage item exists at `key`.
 	///
-	/// Returns `false` if the `key` wasn't previously set by `set_storage` or
+	/// Returns `None` if the `key` wasn't previously set by `set_storage` or
 	/// was deleted.
-	fn contains_storage(&mut self, key: &StorageKey) -> bool;
+	fn get_storage_size(&mut self, key: &StorageKey) -> Option<u32>;
 
 	/// Sets the storage entry by the given key to the specified value. If `value` is `None` then
 	/// the storage entry is deleted.
@@ -996,8 +996,8 @@ where
 		Storage::<T>::read(&self.top_frame_mut().contract_info().trie_id, key)
 	}
 
-	fn contains_storage(&mut self, key: &StorageKey) -> bool {
-		Storage::<T>::contains(&self.top_frame_mut().contract_info().trie_id, key)
+	fn get_storage_size(&mut self, key: &StorageKey) -> Option<u32> {
+		Storage::<T>::size(&self.top_frame_mut().contract_info().trie_id, key)
 	}
 
 	fn set_storage(
@@ -1056,7 +1056,7 @@ where
 	}
 
 	fn max_value_size(&self) -> u32 {
-		T::Schedule::get().limits.payload_len
+		self.schedule.limits.payload_len
 	}
 
 	fn get_weight_price(&self, weight: Weight) -> BalanceOf<Self::T> {
@@ -2432,16 +2432,16 @@ mod tests {
 	}
 
 	#[test]
-	fn contains_storage_works() {
+	fn get_storage_size_works() {
 		let code_hash = MockLoader::insert(Call, |ctx, _| {
 			assert_eq!(
 				ctx.ext.set_storage([1; 32], Some(vec![1, 2, 3]), false),
 				Ok(WriteOutcome::New)
 			);
 			assert_eq!(ctx.ext.set_storage([2; 32], Some(vec![]), false), Ok(WriteOutcome::New));
-			assert_eq!(ctx.ext.contains_storage(&[1; 32]), true);
-			assert_eq!(ctx.ext.contains_storage(&[1; 32]), true);
-			assert_eq!(ctx.ext.contains_storage(&[3; 32]), false);
+			assert_eq!(ctx.ext.get_storage_size(&[1; 32]), Some(3));
+			assert_eq!(ctx.ext.get_storage_size(&[2; 32]), Some(0));
+			assert_eq!(ctx.ext.get_storage_size(&[3; 32]), None);
 
 			exec_success()
 		});

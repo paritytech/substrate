@@ -72,20 +72,20 @@ Start the development chain with detailed logging:
 ```bash
 RUST_BACKTRACE=1 ./target/release/node-template -ldebug --dev
 ```
+
 > Development chain means that the state of our chain will be in a tmp folder while the nodes are
-> running. Also, **alice** account will be authority and sudo account as declared in the [genesis
-> state](https://github.com/substrate-developer-hub/substrate-node-template/blob/main/node/src/chain_spec.rs#L49).
-> At the same time the following accounts will be prefunded:
+> running. Also, **alice** account will be authority and sudo account as declared in the
+> [genesis state](https://github.com/substrate-developer-hub/substrate-node-template/blob/main/node/src/chain_spec.rs#L49).
+> At the same time the following accounts will be pre-funded:
 > - Alice
 > - Bob 
 > - Alice//stash
 > - Bob//stash
 
-In case of being interested in maintaining the chain' state futher in time a base path other than 
-a temporary directory must be added so the db can be stored in the provided folder. We could use 
-this folder to store different chain databases, as a different folder will be created per different
- chain that is ran. The following commands shows how to use a newly created folder as our db base 
- path.
+In case of being interested in maintaining the chain' state between runs a base path must be added
+so the db can be stored in the provided folder instead of a temporal one. We could use this folder 
+to store different chain databases, as a different folder will be created per different chain that
+is ran. The following commands shows how to use a newly created folder as our db base path.
 
 ```bash
 // Create a folder to use as the db base path
@@ -102,6 +102,7 @@ dev
 $ ls ./my-chain-state/chains/dev
 db keystore network
 ```
+
 
 ### Connect with Polkadot-JS Apps Front-end
 
