@@ -29,10 +29,10 @@ use frame_support::{
 use frame_system::{ensure_root, ensure_signed, offchain::SendTransactionTypes, pallet_prelude::*};
 use sp_runtime::{
 	traits::{CheckedSub, SaturatedConversion, StaticLookup, Zero},
-	DispatchError, Perbill, Percent,
+	Perbill, Percent,
 };
 use sp_staking::{EraIndex, PoolsInterface, SessionIndex};
-use sp_std::{convert::From, prelude::*, result};
+use sp_std::{convert::From, prelude::*};
 
 mod impls;
 
@@ -911,24 +911,23 @@ pub mod pallet {
 				ledger = ledger.consolidate_unlocked(current_era)
 			}
 
-			let post_info_weight = if ledger.unlocking.is_empty() &&
-				ledger.active < T::Currency::minimum_balance()
-			{
-				// This account must have called `unbond()` with some value that caused the active
-				// portion to fall below existential deposit + will have no more unlocking chunks
-				// left. We can now safely remove all staking-related information.
-				Self::kill_stash(&stash, num_slashing_spans)?;
-				// Remove the lock.
-				T::Currency::remove_lock(STAKING_ID, &stash);
-				// This is worst case scenario, so we use the full weight and return None
-				None
-			} else {
-				// This was the consequence of a partial unbond. just update the ledger and move on.
-				Self::update_ledger(&controller, &ledger);
+			let post_info_weight =
+				if ledger.unlocking.is_empty() && ledger.active < T::Currency::minimum_balance() {
+					// This account must have called `unbond()` with some value that caused the active
+					// portion to fall below existential deposit + will have no more unlocking chunks
+					// left. We can now safely remove all staking-related information.
+					Self::kill_stash(&stash, num_slashing_spans)?;
+					// Remove the lock.
+					T::Currency::remove_lock(STAKING_ID, &stash);
+					// This is worst case scenario, so we use the full weight and return None
+					None
+				} else {
+					// This was the consequence of a partial unbond. just update the ledger and move on.
+					Self::update_ledger(&controller, &ledger);
 
-				// This is only an update, so we use less overall weight.
-				Some(T::WeightInfo::withdraw_unbonded_update(num_slashing_spans))
-			};
+					// This is only an update, so we use less overall weight.
+					Some(T::WeightInfo::withdraw_unbonded_update(num_slashing_spans))
+				};
 
 			// `old_total` should never be less than the new total because
 			// `consolidate_unlocked` strictly subtracts balance.
@@ -993,43 +992,7 @@ pub mod pallet {
 			targets: Vec<<T::Lookup as StaticLookup>::Source>,
 		) -> DispatchResult {
 			let controller = ensure_signed(origin)?;
-
-			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
-			ensure!(ledger.active >= MinNominatorBond::<T>::get(), Error::<T>::InsufficientBond);
-			let stash = &ledger.stash;
-
-			// Only check limits if they are not already a nominator.
-			if !Nominators::<T>::contains_key(stash) {
-				// If this error is reached, we need to adjust the `MinNominatorBond` and start
-				// calling `chill_other`. Until then, we explicitly block new nominators to protect
-				// the runtime.
-				if let Some(max_nominators) = MaxNominatorsCount::<T>::get() {
-					ensure!(
-						Nominators::<T>::count() < max_nominators,
-						Error::<T>::TooManyNominators
-					);
-				}
-			}
-
-			ensure!(!targets.is_empty(), Error::<T>::EmptyTargets);
-			ensure!(targets.len() <= T::MAX_NOMINATIONS as usize, Error::<T>::TooManyTargets);
-
-			let old = Nominators::<T>::get(stash).map_or_else(Vec::new, |x| x.targets);
-
-			let targets = targets
-				.into_iter()
-				.map(|t| T::Lookup::lookup(t).map_err(DispatchError::from))
-				.map(|n| {
-					n.and_then(|n| {
-						if old.contains(&n) || !Validators::<T>::get(&n).blocked {
-							Ok(n)
-						} else {
-							Err(Error::<T>::BadTarget.into())
-						}
-					})
-				})
-				.collect::<result::Result<Vec<T::AccountId>, _>>()?;
-
+			let (stash, targets) = Self::nominate_checks(&controller, targets)?;
 			let nominations = Nominations {
 				targets,
 				// Initial nominations are considered submitted at era 0. See `Nominations` doc
@@ -1037,8 +1000,8 @@ pub mod pallet {
 				suppressed: false,
 			};
 
-			Self::do_remove_validator(stash);
-			Self::do_add_nominator(stash, nominations);
+			Self::do_remove_validator(&stash);
+			Self::do_add_nominator(&stash, nominations);
 			Ok(())
 		}
 
@@ -1454,8 +1417,8 @@ pub mod pallet {
 			let _ = ensure_signed(origin)?;
 
 			let ed = T::Currency::minimum_balance();
-			let reapable = T::Currency::total_balance(&stash) < ed ||
-				Self::ledger(Self::bonded(stash.clone()).ok_or(Error::<T>::NotStash)?)
+			let reapable = T::Currency::total_balance(&stash) < ed
+				|| Self::ledger(Self::bonded(stash.clone()).ok_or(Error::<T>::NotStash)?)
 					.map(|l| l.total)
 					.unwrap_or_default() < ed;
 			ensure!(reapable, Error::<T>::FundedTarget);

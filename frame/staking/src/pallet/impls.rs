@@ -143,7 +143,7 @@ impl<T: Config> Pallet<T> {
 
 		// Nothing to do if they have no reward points.
 		if validator_reward_points.is_zero() {
-			return Ok(Some(T::WeightInfo::payout_stakers_alive_staked(0)).into())
+			return Ok(Some(T::WeightInfo::payout_stakers_alive_staked(0)).into());
 		}
 
 		// This is the fraction of the total reward that the validator and the
@@ -235,8 +235,9 @@ impl<T: Config> Pallet<T> {
 					Self::update_ledger(&controller, &l);
 					r
 				}),
-			RewardDestination::Account(dest_account) =>
-				Some(T::Currency::deposit_creating(&dest_account, amount)),
+			RewardDestination::Account(dest_account) => {
+				Some(T::Currency::deposit_creating(&dest_account, amount))
+			},
 			RewardDestination::None => None,
 		}
 	}
@@ -264,14 +265,14 @@ impl<T: Config> Pallet<T> {
 				_ => {
 					// Either `Forcing::ForceNone`,
 					// or `Forcing::NotForcing if era_length >= T::SessionsPerEra::get()`.
-					return None
+					return None;
 				},
 			}
 
 			// New era.
 			let maybe_new_era_validators = Self::try_trigger_new_era(session_index, is_genesis);
-			if maybe_new_era_validators.is_some() &&
-				matches!(ForceEra::<T>::get(), Forcing::ForceNew)
+			if maybe_new_era_validators.is_some()
+				&& matches!(ForceEra::<T>::get(), Forcing::ForceNew)
 			{
 				ForceEra::<T>::put(Forcing::NotForcing);
 			}
@@ -462,7 +463,7 @@ impl<T: Config> Pallet<T> {
 			}
 
 			Self::deposit_event(Event::StakingElectionFailed);
-			return None
+			return None;
 		}
 
 		Self::deposit_event(Event::StakersElected);
@@ -864,6 +865,46 @@ impl<T: Config> Pallet<T> {
 
 		Ok(())
 	}
+
+	pub(crate) fn nominate_checks(
+		controller: &T::AccountId,
+		targets: Vec<<T::Lookup as StaticLookup>::Source>,
+	) -> Result<(T::AccountId, Vec<T::AccountId>), DispatchError> {
+		let ledger = Self::ledger(controller).ok_or(Error::<T>::NotController)?;
+		ensure!(ledger.active >= MinNominatorBond::<T>::get(), Error::<T>::InsufficientBond);
+
+		// Only check limits if they are not already a nominator.
+		if !Nominators::<T>::contains_key(&ledger.stash) {
+			// If this error is reached, we need to adjust the `MinNominatorBond` and start
+			// calling `chill_other`. Until then, we explicitly block new nominators to protect
+			// the runtime.
+			if let Some(max_nominators) = MaxNominatorsCount::<T>::get() {
+				ensure!(Nominators::<T>::count() < max_nominators, Error::<T>::TooManyNominators);
+			}
+		}
+
+		ensure!(!targets.is_empty(), Error::<T>::EmptyTargets);
+		ensure!(targets.len() <= T::MAX_NOMINATIONS as usize, Error::<T>::TooManyTargets);
+
+		let old = Nominators::<T>::get(&ledger.stash).map_or_else(Vec::new, |x| x.targets);
+
+		let targets = targets
+			.into_iter()
+			.map(|t| T::Lookup::lookup(t).map_err(DispatchError::from))
+			.map(|n| {
+				n.and_then(|n| {
+					println!("old: {:?}, n: {:?}, old.contains(n): {:?}", old, n, old.contains(&n));
+					if old.contains(&n) || !Validators::<T>::get(&n).blocked {
+						Ok(n)
+					} else {
+						Err(Error::<T>::BadTarget.into())
+					}
+				})
+			})
+			.collect::<core::result::Result<Vec<T::AccountId>, _>>()?;
+
+		Ok((ledger.stash, targets))
+	}
 }
 
 impl<T: Config> ElectionDataProvider for Pallet<T> {
@@ -891,7 +932,7 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 
 		// We can't handle this case yet -- return an error.
 		if maybe_max_len.map_or(false, |max_len| target_count > max_len as u32) {
-			return Err("Target snapshot too big")
+			return Err("Target snapshot too big");
 		}
 
 		Ok(Self::get_npos_targets())
@@ -1160,7 +1201,7 @@ where
 			add_db_reads_writes(1, 0);
 			if active_era.is_none() {
 				// This offence need not be re-submitted.
-				return consumed_weight
+				return consumed_weight;
 			}
 			active_era.expect("value checked not to be `None`; qed").index
 		};
@@ -1206,7 +1247,7 @@ where
 
 			// Skip if the validator is invulnerable.
 			if invulnerables.contains(stash) {
-				continue
+				continue;
 			}
 
 			let unapplied = slashing::compute_slash::<T>(slashing::SlashParams {
@@ -1392,8 +1433,8 @@ impl<T: Config> StakingInterface for Pallet<T> {
 		value: Self::Balance,
 		_: &Self::AccountId,
 	) -> bool {
-		Self::bond_checks(stash, controller, value).is_ok() &&
-			frame_system::Pallet::<T>::can_inc_consumer(stash)
+		Self::bond_checks(stash, controller, value).is_ok()
+			&& frame_system::Pallet::<T>::can_inc_consumer(stash)
 	}
 
 	fn bond(
@@ -1410,45 +1451,8 @@ impl<T: Config> StakingInterface for Pallet<T> {
 		)
 	}
 
-	fn can_nominate(controller: &Self::AccountId, targets: &Vec<Self::LookupSource>) -> bool {
-		let ledger = match Self::ledger(&controller) {
-			Some(l) => l,
-			None => return false,
-		};
-		let stash = &ledger.stash;
-
-		if ledger.active < MinNominatorBond::<T>::get() {
-			return false
-		}
-
-		if !Nominators::<T>::contains_key(stash) {
-			if let Some(max_nominators) = MaxNominatorsCount::<T>::get() {
-				if Nominators::<T>::count() > max_nominators {
-					return false
-				};
-			}
-		}
-
-		if targets.is_empty() {
-			return false
-		}
-
-		if targets.len() as u32 > T::MAX_NOMINATIONS {
-			return false
-		}
-
-		let old = Nominators::<T>::get(stash).map_or_else(Vec::new, |x| x.targets);
-		for validator in targets {
-			if let Ok(validator) = T::Lookup::lookup(validator.clone()) {
-				if !(old.contains(&validator) || !Validators::<T>::get(&validator).blocked) {
-					return false
-				}
-			} else {
-				return false
-			}
-		}
-
-		true
+	fn can_nominate(controller: &Self::AccountId, targets: Vec<Self::LookupSource>) -> bool {
+		Self::nominate_checks(controller, targets).is_ok()
 	}
 
 	fn nominate(controller: Self::AccountId, targets: Vec<Self::LookupSource>) -> DispatchResult {

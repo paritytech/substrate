@@ -275,9 +275,9 @@ fn rewards_should_work() {
 		assert_eq_error_rate!(Balances::total_balance(&21), init_balance_21, 2);
 		assert_eq_error_rate!(
 			Balances::total_balance(&100),
-			init_balance_100 +
-				part_for_100_from_10 * total_payout_0 * 2 / 3 +
-				part_for_100_from_20 * total_payout_0 * 1 / 3,
+			init_balance_100
+				+ part_for_100_from_10 * total_payout_0 * 2 / 3
+				+ part_for_100_from_20 * total_payout_0 * 1 / 3,
 			2
 		);
 		assert_eq_error_rate!(Balances::total_balance(&101), init_balance_101, 2);
@@ -313,9 +313,9 @@ fn rewards_should_work() {
 		assert_eq_error_rate!(Balances::total_balance(&21), init_balance_21, 2);
 		assert_eq_error_rate!(
 			Balances::total_balance(&100),
-			init_balance_100 +
-				part_for_100_from_10 * (total_payout_0 * 2 / 3 + total_payout_1) +
-				part_for_100_from_20 * total_payout_0 * 1 / 3,
+			init_balance_100
+				+ part_for_100_from_10 * (total_payout_0 * 2 / 3 + total_payout_1)
+				+ part_for_100_from_20 * total_payout_0 * 1 / 3,
 			2
 		);
 		assert_eq_error_rate!(Balances::total_balance(&101), init_balance_101, 2);
@@ -3967,8 +3967,8 @@ mod election_data_provider {
 	#[test]
 	fn targets_2sec_block() {
 		let mut validators = 1000;
-		while <Test as Config>::WeightInfo::get_npos_targets(validators) <
-			2 * frame_support::weights::constants::WEIGHT_PER_SECOND
+		while <Test as Config>::WeightInfo::get_npos_targets(validators)
+			< 2 * frame_support::weights::constants::WEIGHT_PER_SECOND
 		{
 			validators += 1;
 		}
@@ -3985,8 +3985,8 @@ mod election_data_provider {
 		let slashing_spans = validators;
 		let mut nominators = 1000;
 
-		while <Test as Config>::WeightInfo::get_npos_voters(validators, nominators, slashing_spans) <
-			2 * frame_support::weights::constants::WEIGHT_PER_SECOND
+		while <Test as Config>::WeightInfo::get_npos_voters(validators, nominators, slashing_spans)
+			< 2 * frame_support::weights::constants::WEIGHT_PER_SECOND
 		{
 			nominators += 1;
 		}
@@ -4057,8 +4057,8 @@ mod election_data_provider {
 			.build_and_execute(|| {
 				// sum of all nominators who'd be voters (1), plus the self-votes (4).
 				assert_eq!(
-					<Test as Config>::SortedListProvider::count() +
-						<Validators<Test>>::iter().count() as u32,
+					<Test as Config>::SortedListProvider::count()
+						+ <Validators<Test>>::iter().count() as u32,
 					5
 				);
 
@@ -4097,8 +4097,8 @@ mod election_data_provider {
 
 				// and total voters
 				assert_eq!(
-					<Test as Config>::SortedListProvider::count() +
-						<Validators<Test>>::iter().count() as u32,
+					<Test as Config>::SortedListProvider::count()
+						+ <Validators<Test>>::iter().count() as u32,
 					7
 				);
 
@@ -4142,8 +4142,8 @@ mod election_data_provider {
 
 				// and total voters
 				assert_eq!(
-					<Test as Config>::SortedListProvider::count() +
-						<Validators<Test>>::iter().count() as u32,
+					<Test as Config>::SortedListProvider::count()
+						+ <Validators<Test>>::iter().count() as u32,
 					6
 				);
 
@@ -4621,27 +4621,31 @@ mod staking_interface {
 	#[test]
 	fn can_nominate_passes_valid_inputs() {
 		ExtBuilder::default().build_and_execute(|| {
-			assert_ok!(Staking::bond(Origin::signed(80), 81, 1, RewardDestination::Controller));
+			assert_ok!(Staking::bond(Origin::signed(81), 80, 1, RewardDestination::Controller));
 
 			let targets = vec![11];
-			assert!(Staking::can_nominate(&81, &targets));
+			// First time nominating
+			assert!(Staking::can_nominate(&80, targets.clone()));
+
+			// Now actually nominate
+			assert_ok!(Staking::nominate(Origin::signed(80), targets.clone()));
 
 			// 11 blocks
 			assert_ok!(Staking::validate(
 				Origin::signed(10),
 				ValidatorPrefs { blocked: true, ..Default::default() }
 			));
-			// but we can still nominate them since they are in the old nominations
-			assert!(Staking::can_nominate(&81, &targets));
+			// but we can still re-nominate them since they are in the old nominations
+			assert!(Staking::can_nominate(&80, targets.clone()));
 
 			// The nominator count limit is set to 0
 			MaxNominatorsCount::<Test>::set(Some(0));
 			// but we can still nominate because we have pre-existing nomination
-			assert!(Staking::can_nominate(&81, &targets));
+			assert!(Staking::can_nominate(&80, targets.clone()));
 
-			// They can still nominate with exactly `MAX_NOMINATIONS
+			// They can nominate with exactly `MAX_NOMINATIONS` targets
 			let targets: Vec<_> = (0..Test::MAX_NOMINATIONS).map(|i| i as u64).collect();
-			assert!(Staking::can_nominate(&81, &targets));
+			assert!(Staking::can_nominate(&80, targets.clone()));
 		});
 	}
 
@@ -4655,7 +4659,7 @@ mod staking_interface {
 				let targets = vec![11];
 
 				// Not bonded, so no ledger
-				assert_eq!(Staking::can_nominate(&80, &targets), false);
+				assert_eq!(Staking::can_nominate(&80, targets.clone()), false);
 
 				// Bonded, but below min bond to nominate
 				assert_ok!(Staking::bond(
@@ -4664,7 +4668,7 @@ mod staking_interface {
 					1_000 - 10,
 					RewardDestination::Controller
 				));
-				assert_eq!(Staking::can_nominate(&80, &targets), false);
+				assert_eq!(Staking::can_nominate(&80, targets.clone()), false);
 
 				// Meets min bond, but already at nominator limit
 				assert_ok!(Staking::bond(
@@ -4674,16 +4678,16 @@ mod staking_interface {
 					RewardDestination::Controller
 				));
 				MaxNominatorsCount::<Test>::set(Some(0));
-				assert_eq!(Staking::can_nominate(&70, &targets), false);
+				assert_eq!(Staking::can_nominate(&70, targets.clone()), false);
 				MaxNominatorsCount::<Test>::set(None);
 
 				// Targets are empty
 				let targets = vec![];
-				assert_eq!(Staking::can_nominate(&70, &targets), false);
+				assert_eq!(Staking::can_nominate(&70, targets.clone()), false);
 
 				// Too many targets
 				let targets: Vec<_> = (0..=Test::MAX_NOMINATIONS).map(|i| i as u64).collect();
-				assert_eq!(Staking::can_nominate(&70, &targets), false);
+				assert_eq!(Staking::can_nominate(&70, targets.clone()), false);
 
 				// A target is blocking
 				assert_ok!(Staking::validate(
@@ -4691,7 +4695,7 @@ mod staking_interface {
 					ValidatorPrefs { blocked: true, ..Default::default() }
 				));
 				let targets = vec![11];
-				assert_eq!(Staking::can_nominate(&70, &targets), false);
+				assert_eq!(Staking::can_nominate(&70, targets.clone()), false);
 			});
 	}
 

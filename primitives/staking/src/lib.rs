@@ -117,7 +117,7 @@ pub trait StakingInterface {
 
 	/// Check if the given account can nominate. Assumes the account will be correctly bonded after
 	/// this call.
-	fn can_nominate(controller: &Self::AccountId, targets: &Vec<Self::LookupSource>) -> bool;
+	fn can_nominate(controller: &Self::AccountId, targets: Vec<Self::LookupSource>) -> bool;
 
 	fn nominate(controller: Self::AccountId, targets: Vec<Self::LookupSource>) -> DispatchResult;
 }
