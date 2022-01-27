@@ -125,11 +125,10 @@ pub fn with_transaction<A, B>(limit: u8, f: impl FnOnce() -> TransactionOutcome<
 	use sp_io::storage::{commit_transaction, rollback_transaction, start_transaction};
 	use TransactionOutcome::*;
 
-	start_transaction();
-
-	// TODO PASS LIMIT
 	let _guard = transaction_level_tracker::inc_transaction_level(limit)
 		.map_err(|()| DispatchError::TransactionLimitExceeded)?;
+
+	start_transaction();
 
 	match f() {
 		Commit(res) => {
