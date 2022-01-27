@@ -842,6 +842,28 @@ impl<T: Config> Pallet<T> {
 			DispatchClass::Mandatory,
 		);
 	}
+
+	// Checks for [`Self::bond`] that can be completed at the beginning of the calls logic.
+	pub(crate) fn bond_checks(
+		stash: &T::AccountId,
+		controller: &T::AccountId,
+		value: BalanceOf<T>,
+	) -> Result<(), DispatchError> {
+		if Bonded::<T>::contains_key(&stash) {
+			Err(Error::<T>::AlreadyBonded)?
+		}
+
+		if Ledger::<T>::contains_key(&controller) {
+			Err(Error::<T>::AlreadyPaired)?
+		}
+
+		// Reject a bond which is considered to be _dust_.
+		if value < T::Currency::minimum_balance() {
+			Err(Error::<T>::InsufficientBond)?
+		}
+
+		Ok(())
+	}
 }
 
 impl<T: Config> ElectionDataProvider for Pallet<T> {
@@ -1370,23 +1392,8 @@ impl<T: Config> StakingInterface for Pallet<T> {
 		value: Self::Balance,
 		_: &Self::AccountId,
 	) -> bool {
-		if Bonded::<T>::contains_key(stash) {
-			return false
-		}
-
-		if Ledger::<T>::contains_key(controller) {
-			return false
-		}
-
-		if value < T::Currency::minimum_balance() {
-			return false
-		}
-
-		if !frame_system::Pallet::<T>::can_inc_consumer(stash) {
-			return false
-		}
-
-		true
+		Self::bond_checks(stash, controller, value).is_ok() &&
+			frame_system::Pallet::<T>::can_inc_consumer(stash)
 	}
 
 	fn bond(

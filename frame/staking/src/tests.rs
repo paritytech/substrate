@@ -4720,7 +4720,11 @@ mod staking_interface {
 				assert_eq!(Staking::can_bond(&81, &80, 100, &0), false);
 
 				// Works with valid inputs
-				assert!(Staking::can_bond(&101, &100, 100, &0))
+				assert!(Staking::can_bond(&101, &100, 100, &0));
+
+				// Clean up so post checks work
+				Ledger::<Test>::remove(60);
+				Bonded::<Test>::remove(71);
 			});
 	}
 

@@ -739,21 +739,9 @@ pub mod pallet {
 			payee: RewardDestination<T::AccountId>,
 		) -> DispatchResult {
 			let stash = ensure_signed(origin)?;
-
-			if <Bonded<T>>::contains_key(&stash) {
-				Err(Error::<T>::AlreadyBonded)?
-			}
-
 			let controller = T::Lookup::lookup(controller)?;
 
-			if <Ledger<T>>::contains_key(&controller) {
-				Err(Error::<T>::AlreadyPaired)?
-			}
-
-			// Reject a bond which is considered to be _dust_.
-			if value < T::Currency::minimum_balance() {
-				Err(Error::<T>::InsufficientBond)?
-			}
+			Self::bond_checks(&stash, &controller, value)?;
 
 			frame_system::Pallet::<T>::inc_consumers(&stash).map_err(|_| Error::<T>::BadState)?;
 
@@ -882,17 +870,7 @@ pub mod pallet {
 
 				// Note: in case there is no current era it is fine to bond one era more.
 				let era = Self::current_era().unwrap_or(0) + T::BondingDuration::get();
-				if let Some(mut chunk) = ledger.unlocking.last_mut() {
-					if chunk.era == era {
-						// To keep the chunk count down, we only keep one chunk per era. Since
-						// unlocking is a queue, if a chunk exists for the era we know that it would
-						// be the last one
-						use sp_runtime::traits::Saturating;
-						chunk.value = chunk.value.saturating_add(value)
-					}
-				} else {
-					ledger.unlocking.push(UnlockChunk { value, era });
-				};
+				ledger.unlocking.push(UnlockChunk { value, era });
 				// NOTE: ledger must be updated prior to calling `Self::weight_of`.
 				Self::update_ledger(&controller, &ledger);
 
