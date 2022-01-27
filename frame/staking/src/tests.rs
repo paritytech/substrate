@@ -4725,12 +4725,33 @@ mod staking_interface {
 	}
 
 	#[test]
-	fn can_bond_extra_passes_valid_inputs() {
-		todo!()
+	fn can_bond_extra_works() {
+		ExtBuilder::default()
+			.existential_deposit(100)
+			.balance_factor(100)
+			.build_and_execute(|| {
+				// The account is not bonded in the first place
+				assert_eq!(Staking::can_bond_extra(&60, 100), false);
+
+				// The account is bonded
+				assert_ok!(Staking::bond(
+					Origin::signed(61),
+					60,
+					100,
+					RewardDestination::Controller
+				));
+				// but the active balance of the account is too low
+				Ledger::<Test>::mutate(60, |l| l.as_mut().unwrap().active = 50);
+				assert_eq!(Staking::can_bond_extra(&60, 49), false);
+
+				// The account is bonded and will have an ok active balance
+				assert!(Staking::can_bond_extra(&60, 50));
+
+				// Clean up so post checks pass
+				Ledger::<Test>::mutate(60, |l| l.as_mut().unwrap().active = 100);
+			});
 	}
 
-	#[test]
-	fn can_bond_extra_fails_invalid_inputs() {
-		todo!()
-	}
+	// TODO: probably should test all other fns of the interface impl? Although benchmarks should
+	// at least make sure those work on the happy path
 }
