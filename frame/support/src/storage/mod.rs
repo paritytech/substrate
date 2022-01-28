@@ -45,10 +45,10 @@ pub mod unhashed;
 pub mod weak_bounded_vec;
 
 mod transaction_level_tracker {
-	const TRANSACTION_LAYER_KEY: &'static [u8] = b":transactional_levels:";
+	const TRANSACTION_LAYER_KEY: &'static [u8] = b":transaction_level:";
 	type Level = u8;
 
-	fn get_transaction_level() -> Level {
+	pub fn get_transaction_level() -> Level {
 		crate::storage::unhashed::get_or_default::<Level>(TRANSACTION_LAYER_KEY)
 	}
 
@@ -1577,14 +1577,19 @@ mod test {
 	#[test]
 	fn transaction_limit_should_work() {
 		TestExternalities::default().execute_with(|| {
+			assert_eq!(transaction_level_tracker::get_transaction_level(), 0);
+
 			let res = with_transaction(2u8, || -> TransactionOutcome<DispatchResult> {
+				assert_eq!(transaction_level_tracker::get_transaction_level(), 1);
 				TransactionOutcome::Commit(Ok(()))
 			});
 
 			assert!(res.is_ok());
 
 			let res = with_transaction(2u8, || -> TransactionOutcome<DispatchResult> {
+				assert_eq!(transaction_level_tracker::get_transaction_level(), 1);
 				let res = with_transaction(2u8, || -> TransactionOutcome<DispatchResult> {
+					assert_eq!(transaction_level_tracker::get_transaction_level(), 2);
 					TransactionOutcome::Commit(Ok(()))
 				});
 				TransactionOutcome::Commit(res)
@@ -1593,14 +1598,20 @@ mod test {
 			assert!(res.is_ok());
 
 			let res = with_transaction(2u8, || -> TransactionOutcome<DispatchResult> {
+				assert_eq!(transaction_level_tracker::get_transaction_level(), 1);
 				let res = with_transaction(2u8, || -> TransactionOutcome<DispatchResult> {
+					assert_eq!(transaction_level_tracker::get_transaction_level(), 2);
 					let res = with_transaction(2u8, || -> TransactionOutcome<DispatchResult> {
-						TransactionOutcome::Commit(Ok(()))
+						unreachable!("should never get this far due to the limit.");
 					});
+					assert_eq!(transaction_level_tracker::get_transaction_level(), 2);
 					TransactionOutcome::Commit(res)
 				});
+				assert_eq!(transaction_level_tracker::get_transaction_level(), 1);
 				TransactionOutcome::Commit(res)
 			});
+
+			assert_eq!(transaction_level_tracker::get_transaction_level(), 0);
 
 			assert!(res.is_err());
 		});
