@@ -15,8 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{NodeCodec, StorageProof};
-use hash_db::Hasher;
+use crate::{cache::TrieNodeCache, NodeCodec, StorageProof, TrieDBBuilder};
+use hash_db::{HashDBRef, Hasher};
 use parking_lot::{Mutex, MutexGuard};
 use std::{
 	collections::{HashMap, HashSet},
@@ -24,7 +24,7 @@ use std::{
 	mem,
 	sync::Arc,
 };
-use trie_db::{node::NodeOwned, TrieAccess, TrieRecorder};
+use trie_db::{node::NodeOwned, CError, DBValue, TrieAccess, TrieLayout, TrieRecorder};
 
 pub struct Recorder<H: Hasher> {
 	inner: Arc<Mutex<RecorderInner<H::Out>>>,
@@ -47,10 +47,26 @@ impl<H: Hasher> Recorder<H> {
 		self.inner.lock()
 	}
 
-	pub fn into_storage_proof(self) -> StorageProof {
+	pub fn into_storage_proof<L: TrieLayout<Hash = H, Codec = NodeCodec<H>>>(
+		self,
+		root: &H::Out,
+		hash_db: &dyn HashDBRef<H, DBValue>,
+		cache: Option<&mut TrieNodeCache<H>>,
+	) -> trie_db::Result<StorageProof, H::Out, CError<L>> {
 		let mut recorder = mem::take(&mut *self.inner.lock());
+		let accessed_keys = mem::take(&mut recorder.accessed_keys);
 
-		StorageProof::new(
+		let builder = TrieDBBuilder::<L>::new(hash_db, root)?.with_recorder(&mut recorder);
+
+		let trie = if let Some(cache) = cache {
+			builder.with_cache(cache).build()
+		} else {
+			builder.build()
+		};
+
+		accessed_keys.iter().try_for_each(|k| trie.traverse_to(&k))?;
+
+		Ok(StorageProof::new(
 			recorder
 				.accessed_encoded_nodes
 				.drain()
@@ -62,7 +78,7 @@ impl<H: Hasher> Recorder<H> {
 						.map(|(_, v)| v.to_encoded::<NodeCodec<H>>()),
 				)
 				.collect(),
-		)
+		))
 	}
 }
 
@@ -154,7 +170,7 @@ mod tests {
 			assert_eq!(TEST_DATA[0].1.to_vec(), trie.get(TEST_DATA[0].0).unwrap().unwrap());
 		}
 
-		let storage_proof = recorder.into_storage_proof();
+		let storage_proof = recorder.into_storage_proof::<Layout>(&root, &db, None).unwrap();
 		let memory_db: MemoryDB = storage_proof.into_memory_db();
 
 		// Check that we recorded the required data

@@ -15,17 +15,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{Error, NodeCodec, TrieHash, TrieLayout};
+use crate::{Error, NodeCodec};
 use hash_db::Hasher;
 use parking_lot::{
 	MappedRwLockWriteGuard, Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard,
 };
 use std::{
 	collections::{hash_map::Entry, HashMap},
-	marker::PhantomData,
 	sync::Arc,
 };
-use trie_db::{node::NodeOwned, Bytes, CError, Trie};
+use trie_db::{node::NodeOwned, Bytes};
 
 pub struct SharedTrieNodeCache<H: Hasher> {
 	node_cache: Arc<RwLock<HashMap<H::Out, NodeOwned<H::Out>>>>,
@@ -329,29 +328,39 @@ mod tests {
 
 		let shared_cache = Cache::new(true);
 		let local_cache = shared_cache.local_cache();
-		let recorder = Recorder::default();
 
-		{
-			let mut cache = local_cache.as_trie_db_cache(root);
-			let mut recorder = recorder.as_trie_recorder();
-			let trie = TrieDBBuilder::<Layout>::new_unchecked(&db, &root)
-				.with_cache(&mut cache)
-				.with_recorder(&mut *recorder)
-				.build();
+		// Run this twice so that we use the data cache in the second run.
+		for _ in 0..2 {
+			let recorder = Recorder::default();
 
-			for (key, value) in TEST_DATA {
-				assert_eq!(*value, trie.get(&key).unwrap().unwrap());
+			{
+				let mut cache = local_cache.as_trie_db_cache(root);
+				let mut recorder = recorder.as_trie_recorder();
+				let trie = TrieDBBuilder::<Layout>::new_unchecked(&db, &root)
+					.with_cache(&mut cache)
+					.with_recorder(&mut *recorder)
+					.build();
+
+				for (key, value) in TEST_DATA {
+					assert_eq!(*value, trie.get(&key).unwrap().unwrap());
+				}
 			}
-		}
 
-		let storage_proof = recorder.into_storage_proof();
-		let memory_db: MemoryDB = storage_proof.into_memory_db();
+			let storage_proof = recorder
+				.into_storage_proof::<Layout>(
+					&root,
+					&db,
+					Some(&mut local_cache.as_trie_db_cache(root)),
+				)
+				.unwrap();
+			let memory_db: MemoryDB = storage_proof.into_memory_db();
 
-		{
-			let trie = TrieDBBuilder::<Layout>::new(&memory_db, &root).unwrap().build();
+			{
+				let trie = TrieDBBuilder::<Layout>::new(&memory_db, &root).unwrap().build();
 
-			for (key, value) in TEST_DATA {
-				assert_eq!(*value, trie.get(&key).unwrap().unwrap());
+				for (key, value) in TEST_DATA {
+					assert_eq!(*value, trie.get(&key).unwrap().unwrap());
+				}
 			}
 		}
 	}
