@@ -32,7 +32,7 @@ use std::{
 	task::{Context, Poll},
 };
 
-use crate::pubsub::{channels::TracingUnbounded, Hub, Receiver};
+use crate::pubsub::{Hub, Receiver};
 
 mod registry;
 use registry::Registry;
@@ -54,28 +54,27 @@ pub trait TracingKeyStr {
 /// used to add more subscriptions.
 #[derive(Clone)]
 pub struct NotificationStream<Payload, TK: TracingKeyStr> {
-	hub: Hub<TracingUnbounded<Payload>, Registry>,
+	hub: Hub<Payload, Registry>,
 	_pd: std::marker::PhantomData<TK>,
 }
 
 /// The receiving half of the notifications channel(s).
 #[derive(Debug)]
 pub struct NotificationReceiver<Payload> {
-	receiver: Receiver<TracingUnbounded<Payload>, Registry>,
+	receiver: Receiver<Payload, Registry>,
 }
 
 /// The sending half of the notifications channel(s).
 ///
 /// Used to send notifications from the BEEFY gadget side.
 pub struct NotificationSender<Payload> {
-	hub: Hub<TracingUnbounded<Payload>, Registry>,
+	hub: Hub<Payload, Registry>,
 }
 
 impl<Payload, TK: TracingKeyStr> NotificationStream<Payload, TK> {
 	/// Creates a new pair of receiver and sender of `Payload` notifications.
 	pub fn channel() -> (NotificationSender<Payload>, Self) {
-		let channels = TracingUnbounded::new(TK::TRACING_KEY);
-		let hub = Hub::new(channels);
+		let hub = Hub::new(TK::TRACING_KEY);
 		let sender = NotificationSender { hub: hub.clone() };
 		let receiver = NotificationStream { hub, _pd: Default::default() };
 		(sender, receiver)

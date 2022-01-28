@@ -22,7 +22,7 @@
 //! and to send the broadcast messages.
 //!
 //! The `Hub` type is parametrized by two other types:
-//! - `Channel` — operates with the underlying channels;
+//! - `Message` — the type of a message that shall be delivered to the subscribers;
 //! - `Registry` — implementation of the subscription/dispatch logic.
 //!
 //! A Registry is implemented by defining the following traits:
@@ -30,9 +30,9 @@
 //! - `Dispatch<M>`;
 //! - `Unsubscribe`.
 //!
-//! As a result of subscription `Hub::subscribe` method returns an instance of `Receiver<Channel,
+//! As a result of subscription `Hub::subscribe` method returns an instance of `Receiver<Message,
 //! Registry>`. That can be used as a `futures::Stream` to receive the messages.
-//! Upon drop the `Receiver<Channel, Registry>` shall unregister itself from the `Hub`.
+//! Upon drop the `Receiver<Message, Registry>` shall unregister itself from the `Hub`.
 
 use std::{
 	collections::HashMap,
@@ -45,7 +45,9 @@ use std::{
 use ::futures::stream::{FusedStream, Stream};
 use ::parking_lot::Mutex;
 
-pub mod channels;
+use crate::mpsc::{TracingUnboundedReceiver, TracingUnboundedSender};
+
+// pub mod channels;
 
 /// The type to identify subscribers.
 pub type SubsID = crate::id_sequence::SeqID;
@@ -81,38 +83,15 @@ pub trait Dispatch<M> {
 		F: FnMut(&SubsID, Self::Item);
 }
 
-/// Channel routines.
-///
-/// Allows to create a pair of tx and rx, and to send a message over the tx.
-pub trait Channel {
-	/// The sending side of the channel.
-	type Tx;
-
-	/// The receiving side of the channel.
-	type Rx;
-
-	/// The type of an item that can be sent through this channel.
-	type Item;
-
-	/// Create a pair of connected `Tx` and `Rx`.
-	fn create(&self) -> (Self::Tx, Self::Rx);
-
-	/// Send an `Item` through the `Tx`.
-	fn send(&self, tx: &mut Self::Tx, item: Self::Item);
-}
-
 /// A subscription hub.
 ///
 /// Does the subscription and dispatch.
 /// The exact subscription and routing behaviour is to be implemented by the Registry (of type `R`).
-/// The Hub manages the underlying channels using the `Ch: Channel`.
+/// The Hub under the hood uses the channel defined in `crate::mpsc` module.
 #[derive(Debug)]
-pub struct Hub<Ch, R>
-where
-	Ch: Channel,
-{
-	channel: Ch,
-	shared: Arc<Mutex<Shared<R, Ch::Tx>>>,
+pub struct Hub<M, R> {
+	tracing_key: &'static str,
+	shared: Arc<Mutex<Shared<R, TracingUnboundedSender<M>>>>,
 }
 
 /// The receiving side of the subscription.
@@ -120,17 +99,16 @@ where
 /// The messages are delivered as items of a `futures::Stream`.
 /// Upon drop this receiver unsubscribes itself from the `Hub`.
 #[derive(Debug)]
-pub struct Receiver<Ch, R>
+pub struct Receiver<M, R>
 where
-	Ch: Channel,
 	R: Unsubscribe,
 {
 	// NB: this field should be defined before `rx`.
 	// (The fields of a struct are dropped in declaration order.)[https://doc.rust-lang.org/reference/destructors.html]
-	_unsubs_guard: UnsubscribeGuard<R, Ch::Tx>,
+	_unsubs_guard: UnsubscribeGuard<R, TracingUnboundedSender<M>>,
 
 	// NB: this field should be defined after `_unsubs_guard`.
-	rx: Ch::Rx,
+	rx: TracingUnboundedReceiver<M>,
 }
 
 #[derive(Debug)]
@@ -155,9 +133,8 @@ impl<R, Tx> AsMut<R> for Shared<R, Tx> {
 	}
 }
 
-impl<Ch, R> Hub<Ch, R>
+impl<M, R> Hub<M, R>
 where
-	Ch: Channel,
 	R: Unsubscribe,
 {
 	/// Provide mutable access to the registry (for test purposes).
@@ -177,37 +154,34 @@ where
 	}
 }
 
-impl<Ch, Tx, R> Hub<Ch, R>
-where
-	Ch: Channel<Tx = Tx>,
-{
+impl<M, R> Hub<M, R> {
 	/// Create a new instance of Hub (with default value for the Registry).
-	pub fn new(channel: Ch) -> Self
+	pub fn new(tracing_key: &'static str) -> Self
 	where
 		R: Default,
 	{
-		Self::new_with_registry(channel, Default::default())
+		Self::new_with_registry(tracing_key, Default::default())
 	}
 
 	/// Create a new instance of Hub over the initialized Registry.
-	pub fn new_with_registry(channel: Ch, registry: R) -> Self {
+	pub fn new_with_registry(tracing_key: &'static str, registry: R) -> Self {
 		let shared =
 			Shared { registry, sinks: Default::default(), id_sequence: Default::default() };
 		let shared = Arc::new(Mutex::new(shared));
-		Self { channel, shared }
+		Self { tracing_key, shared }
 	}
 
 	/// Subscribe to this Hub using the `subs_key: K`.
 	///
 	/// A subscription with a key `K` is possible if the Registry implements `Subscribe<K>`.
-	pub fn subscribe<K>(&self, subs_key: K) -> Receiver<Ch, R>
+	pub fn subscribe<K>(&self, subs_key: K) -> Receiver<M, R>
 	where
 		R: Subscribe<K> + Unsubscribe,
 	{
 		let mut shared = self.shared.lock();
 
 		let subs_id = shared.id_sequence.next_id();
-		let (tx, rx) = self.channel.create();
+		let (tx, rx) = crate::mpsc::tracing_unbounded(self.tracing_key);
 		assert!(shared.sinks.insert(subs_id, tx).is_none(), "Used IDSequence to create another ID. Should be unique until u64 is overflowed. Should be unique.");
 		shared.registry.subscribe(subs_key, subs_id);
 
@@ -215,24 +189,29 @@ where
 		Receiver { _unsubs_guard: unsubs_guard, rx }
 	}
 
-	/// Dispatch the message of type `M`.
+	/// Dispatch the message produced with `Trigger`.
 	///
-	/// This is possible if the registry implements `Dispatch<M>`.
-	pub fn dispatch<M>(&self, message: M)
+	/// This is possible if the registry implements `Dispatch<Trigger, Item = M>`.
+	pub fn dispatch<Trigger>(&self, trigger: Trigger)
 	where
-		R: Dispatch<M, Item = Ch::Item>,
+		R: Dispatch<Trigger, Item = M>,
 	{
 		let mut shared = self.shared.lock();
 		let (registry, sinks) = shared.get_mut();
 
-		registry.dispatch(message, |subs_id, item| {
+		registry.dispatch(trigger, |subs_id, item| {
 			if let Some(tx) = sinks.get_mut(&subs_id) {
-				self.channel.send(tx, item)
+				if let Err(send_err) = tx.unbounded_send(item) {
+					log::warn!("Sink with SubsID = {} failed to perform unbounded_send: {} ({} as Dispatch<{}, Item = {}>::dispatch(...))", subs_id, send_err, std::any::type_name::<R>(),
+					std::any::type_name::<Trigger>(),
+					std::any::type_name::<M>());
+				}
 			} else {
 				log::warn!(
-					"No Sink for SubsID = {} ({} as Dispatch<{}>::dispatch(...))",
+					"No Sink for SubsID = {} ({} as Dispatch<{}, Item = {}>::dispatch(...))",
 					subs_id,
 					std::any::type_name::<R>(),
+					std::any::type_name::<Trigger>(),
 					std::any::type_name::<M>(),
 				);
 			}
@@ -254,29 +233,19 @@ impl<R, Tx> Shared<R, Tx> {
 	}
 }
 
-impl<Ch, R> Clone for Hub<Ch, R>
-where
-	Ch: Channel + Clone,
-{
+impl<M, R> Clone for Hub<M, R> {
 	fn clone(&self) -> Self {
-		Self { channel: self.channel.clone(), shared: self.shared.clone() }
+		Self { tracing_key: self.tracing_key, shared: self.shared.clone() }
 	}
 }
 
-impl<Ch, R> Unpin for Receiver<Ch, R>
-where
-	Ch: Channel,
-	R: Unsubscribe,
-{
-}
+impl<M, R> Unpin for Receiver<M, R> where R: Unsubscribe {}
 
-impl<Ch, R> Stream for Receiver<Ch, R>
+impl<M, R> Stream for Receiver<M, R>
 where
-	Ch: Channel,
 	R: Unsubscribe,
-	Ch::Rx: Stream + Unpin,
 {
-	type Item = <Ch::Rx as Stream>::Item;
+	type Item = <TracingUnboundedReceiver<M> as Stream>::Item;
 
 	fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
 		Pin::new(&mut self.get_mut().rx).poll_next(cx)
@@ -285,9 +254,7 @@ where
 
 impl<Ch, R> FusedStream for Receiver<Ch, R>
 where
-	Ch: Channel,
 	R: Unsubscribe,
-	Ch::Rx: FusedStream + Unpin,
 {
 	fn is_terminated(&self) -> bool {
 		self.rx.is_terminated()
