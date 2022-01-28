@@ -365,7 +365,7 @@ mod tests {
 		);
 	}
 
-	fn create_commitment(block_number: u32) -> BeefySignedCommitment<Block> {
+	fn create_commitment(block_number: u64) -> BeefySignedCommitment<Block> {
 		let payload = Payload::new(known_payload_ids::MMR_ROOT_ID, "Hello World!".encode());
 		BeefySignedCommitment::<Block> {
 			commitment: beefy_primitives::Commitment { payload, block_number, validator_set_id: 0 },
