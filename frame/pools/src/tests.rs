@@ -1694,7 +1694,7 @@ mod pools_interface {
 				assert_eq!(new_unlocking, expected_new_unlocking);
 				assert_eq!(new_active_bonded, 400 / 2);
 			});
-		}
+	}
 
 	// Same as above, but the slash amount is greater than the slash-able balance of the pool.
 	#[test]

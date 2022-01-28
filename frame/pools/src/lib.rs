@@ -1,50 +1,226 @@
-//! Delegation pools for nominating in `pallet-staking`.
+//! # Delegation pools for nominating
 //!
-//! The delegation pool abstraction is concretely composed of:
+//! This pallet allows delegators to delegate their stake to nominating pools, each of which acts as
+//! a nominator and nominates validators on their behalf.
 //!
-//! * bonded pool: This pool represents the actively staked funds ...
-//! * rewards pool: The rewards earned by actively staked funds. Delegator can withdraw rewards once
-//! * sub pools: This a group of pools where we have a set of pools organized by era
-//!   (`SubPools::with_era`) and one pool that is not associated with an era (`SubPools.no_era`).
-//!   Once a `with_era` pool is older then `current_era - MaxUnbonding`, its points and balance get
-//!   merged into the `no_era` pool.
+//! ## Design
 //!
-//! # Design goals
-//! - Maintain integrity of slashing events in terms of penalizing those backing the validator that
-//!   equivocated.
-//! - Maximizing scalability
-//! 	- Lazy: no parts of the design require any hooks or intervalled upkeep by the chain. All
-//!    actions can be triggered for a delegator via an extrinsic.
+//! _Notes_: this section uses pseudo code to explain general design and does not neccesarily
+//! reflect the actual implementation. Additionally, a strong knowledge of `pallet-staking`'s api is
+//! assumed)
 //!
-//! # Joining
+//! The delegation pool abstraction is composed of:
 //!
-//! # Claiming rewards
+//!  bonded pool: Tracks the distribution of actively staked funds. See [`BondedPool`] and
+//! [`BondedPools`]
+//! * reward pool: Tracks rewards earned by actively staked funds. See [`RewardPool`] and
+//!   [`RewardPooks`].
+//! * unbonding sub pools: This a collection of pools at different phases of the unbonding
+//!   lifecycle. See [`SubPools`] and [`SubPoolsStorage`].
+//! * delegators: Accounts that are members of pools. See [`Delegator`] and [`Delegators`].
+//! In order to maintain scalability, all operations are independent of the number of delegators. To
+//! do this, we store delegation specific information local to the delegator while the pool data
+//! structures have bounded datum .
 //!
-//! # Unbonding and withdrawing
+//! ### Design goals
 //!
-//! # Slashing
+//! * Maintain integrity of slashing events, correctly penalizing delegators that where the pool
+//!   while it was backing a validator that got slashed.
+//! * Maximize scalability in terms of delegator count.
+//!
+//!
+//! ### Bonded pool
+//!
+//! A bonded pool nominates with its total balance, excluding that which has been withdrawn for
+//! unbonding. The total points of a bonded pool are always equal to the sum of points of the
+//! delegation members. A bonded pool tracks its points and reads its bonded balance.
+//!
+//! When a delegator joins a pool, `amount_transferred` is transferred from the delegators account
+//! to the bonded pools account. Then the pool calls `bond_extra(amount_transferred)` and issues new
+//! points which are tracked by the delegator and added to the bonded pools points.
+//!
+//! When the pool already has some balance, we want the value of a point before the transfer to equal
+//! the value of a point after the transfer. So, when a delegator joins a bonded pool with a given
+//! `amount_transferred`, we maintain the ratio of bonded balance to points such that:
+//!
+//! ```
+//! balance_after_transfer / total_points_after_transfer == balance_before_transfer / total_points_before_transfer;
+//! ```
+//!
+//! To achieve this, we issue points based on the following:
+//!
+//! ```
+//! new_points_issued = (total_points_before_transfer / balance_before_transfer) * amount_transferred;
+//! ```
+//!
+//! For new bonded pools we can set the points issued per balance arbitrarily. In this
+//! implementation we use a 1 points to 1 balance ratio for pool creation (see
+//! [`POINTS_TO_BALANCE_INIT_RATIO`]).
+//!
+//! **Relevant extrinsics:**
+//!
+//! * [`Call::create`]
+//! * [`Call::join`]
+//!
+//! ### Reward pool
+//!
+//! When a pool is first bonded it sets up an arbirtrary account as its reward destination. To track
+//! staking rewards we track how the balance of this reward account changes.
+//!
+//! The reward pool needs to store:
+//!
+//! * The pool balance at the time of the last payout: `reward_pool.balance`
+//! * The total earnings ever at the time of the last payout: `reward_pool.total_earnings`
+//! * The total points in the pool at the time of the last payout: `reward_pool.points`
+//!
+//! And the delegator needs to store:
+//!
+//! * The total payouts at the time of the last payout by that delegator:
+//!   `delegator.reward_pool_total_earnings`
+//!
+//! Before the first reward claim is initiated for a pool, all the above variables are set to zero.
+//!
+//! When a delegator initiates a claim, the following happens:
+//!
+//! 1) Compute the reward pool's total points and the delegator's virtual points in the reward pool
+//!     * We first compute `current_total_earnings` (`current_balance` is the free balance of the
+//!       reward pool at the beginning of these operations.) ``` current_total_earnings =
+//!       current_balance - reward_pool.balance + pool.total_earnings; ```
+//!     * Then we compute the `current_points`. Every balance unit that was added to the reward pool
+//!       since last time recorded means that we increase the `pool.points` by
+//!       `bonding_pool.total_points`. In other words, for every unit of balance that has been
+//!       earned by the reward pool, we inflate the reward pool points by `bonded_pool.points`. In
+//!       effect this allows each, single unit of balance (e.g. planck) to be divvied up pro-rata
+//!       among delegators based on points. ``` new_earnings = current_total_earnings -
+//!       reward_pool.total_earnings; current_points = reward_pool.points + bonding_pool.points *
+//!       new_earnings; ```
+//!     * Finally, we compute `delegator_virtual_points`: the product of the delegator's points in
+//!       the bonding pool and the total inflow of balance units since the last time the delegator
+//!       claimed rewards ``` new_earnings_since_last_claim = current_total_earnings -
+//!       delegator.reward_pool_total_earnings; delegator_virtual_points = delegator.points *
+//!       new_earnings_since_last_claim; ```
+//! 2) Compute the `delegator_payout`:
+//!     ```
+//!     delegator_pool_point_ratio = delegator_virtual_points / current_points;
+//!     delegator_payout = current_balance * delegator_pool_point_ratio;
+//!     ```
+//! 3) Transfer `delegator_payout` to the delegator
+//! 4) For the delegator set:
+//!     ```
+//!     delegator.reward_pool_total_earnings = current_total_earnings
+//!     ```
+//! 5) For the pool set:
+//!     ```
+//!     reward_pool.points = current_points - delegator_virtual_points;
+//!     reward_pool.balance = current_balance - delegator_payout;
+//!     reward_pool.total_earnings = current_total_earnings;
+//!     ```
+//! _Note_: One short coming of this design is that new joiners can claim rewards for the era after
+//! they join in even though their funds did not contribute to the pools vote weight. When a
+//! delegator joins, they set the field `reward_pool_total_earnings` equal to the `total_earnings`
+//! of the reward pool at that point in time. At best the reward pool has the rewards up through the
+//! previous era. If the delegator joins prior to the election snapshot they will benefit from the
+//! rewards for the current era despite not contributing to the pool's vote weight. If they join
+//! after the election snapshot is taken they will benefit from the rewards of the next _2_ eras
+//! because their vote weight will not be counted until the election snapshot in current era + 1.
+//!
+//! **Relevant extrinsics:**
+//!
+//! * [`Call::claim_payout`]
+//!
+//! ### Unbonding sub pools
+//!
+//! When a delegator unbonds, their balance is unbonded in the bonded pool's account and tracked in
+//! an unbonding pool associated with the active era. If no such pool exists, one is created. To
+//! track which unbonding sub pool a delegator belongs too, the delegator tracks their
+//! `unbonding_era`.
+//!
+//! When a delegator initiates unbonding we calculate their claim on the bonded pool
+//! (`balance_to_unbond`) as:
+//!
+//! ```
+//! balance_to_unbond = (bonded_pool.balance / bonded_pool.points) * delegator.points;
+//! ```
+//! If this is the first transfer into the unbonding pool we can issue an arbitrary amount of points
+//! per balance. In this implementation we initialize unbonding pools with a 1 point to 1 balance
+//! ratio (see [`POINTS_TO_BALANCE_INIT_RATIO`]). Otherwise, the unbonding pools hold the same
+//! points to balance ratio properties as the bonded pool, so we issue the delegator points in the
+//! unbonding pool based on
+//!
+//! ```
+//! new_points_issued = (points_before_transfer / balance_before_transfer) * balance_to_unbond;
+//! ```
+//!
+//! For scalability, we maintain a bound on the number of unbonding sub pools (see [`MaxUnboning`]).
+//! Once we reach this bound the oldest unbonding pool is merged into the new unbonded pool (see
+//! `no_era` field in [`SubPools`]). In other words, a unbonding pool is removed once its older than
+//! `current_era - MaxUnbonding`. We merge an unbonding pool into the unbonded pool with
+//!
+//! ```
+//! unbounded_pool.balance = unbounded_pool.balance + unbonding_pool.balance;
+//! unbounded_pool.points = unbounded_pool.points + unbonding_pool.points;
+//! ```
+//!
+//! This scheme "averages" out the points value in the unbonded pool.
+//!
+//! Once the delgators `unbonding_era` is older than `current_era -
+//! [sp_staking::StakingInterface::bonding_duration]`, they can can cash their points out of the
+//! corresponding unbonding pool. If their `unbonding_era` is older than the oldest unbonding pool
+//! they cash their points out of the unbonded pool.
+//!
+//! **Relevant extrinsics
+//!
+//! * [`Call::unbond`]
+//! * [`Call::with_unbonded`]
+//!
+//! ### Slashing
+//!
+//! We distribute slashes evenly across the bonded pool and the unbonding pools from slash era+1
+//! through the slash apply era.
+//!
+//! To compute and execute the slashes:
+//!
+//! 1) Sum up the balances of the bonded pool and the unbonding pools in range `slash_era +
+//! 1..=apply_era` and store that in `total_balance_affected`. 2) Compute `slash_ratio` as
+//! `slash_amount / total_balance_affected`. 3) Compute `bonded_pool_balance_after_slash` as `(1-
+//! slash_ratio) * bonded_pool_balance`. 4) For all `unbonding_pool` in range `slash_era +
+//! 1..=apply_era` set their balance to `(1 - slash_ratio) * unbonding_pool_balance`.
+//!
+//! We need to slash the relevant unbonding pools to ensure all nominators whom where in the pool
+//! while it was backing a validator that equivocated are punished. Without these measures a
+//! nominator could unbond right after a validator equivocated with no consequences.
+//!
+//! This strategy is unfair to delegators who joined after the slash, because they get slashed as
+//! well, but spares delegators who unbond. The latter is much more important for security: if a
+//! pool's validators are attacking the network, we want their delegators to unbond fast! Avoiding
+//! slashes gives them an incentive to do that if validators get repeatedly slashed.
+//!
+//! To be fair to joiners, we would also need joining pools, which are actively staking, in addition
+//! to the unbonding pools. For maintenance simplicity these are not implemented.
+//!
+//! ### Limitations
+//!
+//! * Delegators cannot vote with their staked funds because they are transferred into the pools
+//!   account. In the future this can be overcome by allowing the delegators to vote with their
+//!   bonded funds via vote splitting.
+//! * Delegators cannot quickly transfer to another pool if they do no like nominations, instead
+//!   they must wait for the unbonding duration.
 //!
 //! # Pool creation and upkeep
 //!
 //! TBD - possible options:
 //! * Pools can be created by anyone but nominations can never be updated
-//! * Pools can be created by anyone and the creator can update nominations
+//! * Pools can be created by anyone and the creator can update the targets
 //! * Pools are created by governance and governance can update the targets
 //! ... Other ideas
-//! * pools can have different roles assigned - admin, nominator, destroyer, etc
-//! For example: Governance can create a pool and be the admin, then they could
-//! assign a nominator like 1KV
+//! * pools can have different roles assigned: creator (puts deposit down, cannot remove deposit
+//!   until pool is empty), admin (can control who is nominator, destroyer and can do
+//!   nominate/destroy), nominator (can adjust targets), destroyer (can initiate destroy), etc
 //!
-//! # Negatives
-//! - no voting
-//! - ..
+//! # Runtime builder warnings
 //!
-//! # Future features
-//! - allow voting via vote splitting
-//!
-//! RUNTIME BUILDER WARNINGS
-//! - watch out for overflow of `RewardPoints` and `BalanceOf<T>` types. Consider the chains total
-//!   issuance, staking reward rate, and burn rate.
+//! * watch out for overflow of [`RewardPoints`] and [`BalanceOf`] types. Consider things like the
+//!   chains total issuance, staking reward rate, and burn rate.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -779,7 +955,7 @@ impl<T: Config> Pallet<T> {
 
 		// The new points that will be added to the pool. For every unit of balance that has
 		// been earned by the reward pool, we inflate the reward pool points by
-		// `bonded_pool.total_points`. In effect this allows each, single unit of balance (e.g.
+		// `bonded_pool.points`. In effect this allows each, single unit of balance (e.g.
 		// plank) to be divvied up pro-rata among delegators based on points.
 		let new_points = T::BalanceToU256::convert(bonded_pool.points).saturating_mul(new_earnings);
 
