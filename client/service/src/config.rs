@@ -18,6 +18,7 @@
 
 //! Service configuration.
 
+use jsonrpsee::ws_server::IdProvider;
 pub use sc_client_api::execution_extensions::{ExecutionStrategies, ExecutionStrategy};
 pub use sc_client_db::{Database, DatabaseSource, KeepBlocks, PruningMode, TransactionStorageMode};
 pub use sc_executor::WasmExecutionMethod;
@@ -43,7 +44,7 @@ use std::{
 use tempfile::TempDir;
 
 /// Service configuration.
-#[derive(Debug)]
+//#[derive(Debug)]
 pub struct Configuration {
 	/// Implementation name
 	pub impl_name: String,
@@ -97,6 +98,8 @@ pub struct Configuration {
 	pub rpc_methods: RpcMethods,
 	/// Maximum payload of rpc request/responses.
 	pub rpc_max_payload: Option<usize>,
+	/// JSON-RPC subscription ID generator.
+	pub rpc_id_provider: Option<Box<dyn IdProvider>>,
 	/// Maximum size of the output buffer capacity for websocket connections.
 	pub ws_max_out_buffer_capacity: Option<usize>,
 	/// Prometheus endpoint configuration. `None` if disabled.

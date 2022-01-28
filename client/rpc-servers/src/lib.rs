@@ -95,7 +95,7 @@ pub fn start_ws<M: Send + Sync + 'static>(
 	metrics: Option<RpcMetrics>,
 	rpc_api: RpcModule<M>,
 	rt: tokio::runtime::Handle,
-	id_provider: impl IdProvider + 'static,
+	_id_provider: Option<Box<dyn IdProvider>>,
 ) -> Result<WsServerHandle, anyhow::Error> {
 	let max_request_body_size = max_payload_mb
 		.map(|mb| mb.saturating_mul(MEGABYTE))
@@ -105,7 +105,7 @@ pub fn start_ws<M: Send + Sync + 'static>(
 	let mut builder = WsServerBuilder::new()
 		.max_request_body_size(max_request_body_size as u32)
 		.max_connections(max_connections as u64)
-		.set_id_provider(id_provider)
+		//.set_id_provider(id_provider.unwrap())
 		.custom_tokio_runtime(rt.clone());
 
 	if let Some(cors) = cors {

@@ -383,7 +383,6 @@ pub fn new_full_base(
 		task_manager: &mut task_manager,
 		system_rpc_tx,
 		telemetry: telemetry.as_mut(),
-		rpc_id_provider,
 	})?;
 
 	let (block_import, grandpa_link, babe_link) = import_setup;

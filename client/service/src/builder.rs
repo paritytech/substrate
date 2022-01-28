@@ -25,7 +25,7 @@ use crate::{
 	start_rpc_servers, RpcHandlers, SpawnTaskHandle, TaskManager, TransactionPoolAdapter,
 };
 use futures::{channel::oneshot, future::ready, FutureExt, StreamExt};
-use jsonrpsee::{core::traits::IdProvider, RpcModule};
+use jsonrpsee::RpcModule;
 use log::info;
 use prometheus_endpoint::Registry;
 use sc_chain_spec::get_extension;
@@ -322,7 +322,7 @@ where
 }
 
 /// Parameters to pass into `build`.
-pub struct SpawnTasksParams<'a, TBl: BlockT, TCl, TExPool, TRpc, Backend, TRpcId> {
+pub struct SpawnTasksParams<'a, TBl: BlockT, TCl, TExPool, TRpc, Backend> {
 	/// The service configuration.
 	pub config: Configuration,
 	/// A shared client returned by `new_full_parts`.
@@ -344,8 +344,6 @@ pub struct SpawnTasksParams<'a, TBl: BlockT, TCl, TExPool, TRpc, Backend, TRpcId
 	pub system_rpc_tx: TracingUnboundedSender<sc_rpc::system::Request<TBl>>,
 	/// Telemetry instance for this node.
 	pub telemetry: Option<&'a mut Telemetry>,
-	/// Custom subscription generator for JSON-RPC subscriptions.
-	pub rpc_id_provider: TRpcId,
 }
 
 /// Build a shared offchain workers instance.
@@ -381,8 +379,8 @@ where
 }
 
 /// Spawn the tasks that are required to run a node.
-pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl, TRpcId>(
-	params: SpawnTasksParams<TBl, TCl, TExPool, TRpc, TBackend, TRpcId>,
+pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
+	params: SpawnTasksParams<TBl, TCl, TExPool, TRpc, TBackend>,
 ) -> Result<RpcHandlers, Error>
 where
 	TCl: ProvideRuntimeApi<TBl>
@@ -411,7 +409,6 @@ where
 	TExPool: MaintainedTransactionPool<Block = TBl, Hash = <TBl as BlockT>::Hash>
 		+ parity_util_mem::MallocSizeOf
 		+ 'static,
-	TRpcId: IdProvider + 'static,
 {
 	let SpawnTasksParams {
 		mut config,
@@ -424,7 +421,6 @@ where
 		network,
 		system_rpc_tx,
 		telemetry,
-		rpc_id_provider,
 	} = params;
 
 	let chain_info = client.usage_info().chain;
@@ -479,6 +475,8 @@ where
 		None,
 		metrics_service.run(client.clone(), transaction_pool.clone(), network.clone()),
 	);
+
+	let rpc_id_provider = config.rpc_id_provider.take();
 
 	// jsonrpsee RPC
 	let gen_rpc_module = |deny_unsafe: DenyUnsafe| {

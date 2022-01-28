@@ -1,6 +1,5 @@
 //! Service and ServiceFactory implementation. Specialized wrapper over substrate service.
 
-use jsonrpsee::ws_server::RandomStringIdProvider;
 use node_template_runtime::{self, opaque::Block, RuntimeApi};
 use sc_client_api::{BlockBackend, ExecutorProvider};
 use sc_consensus_aura::{ImportQueueParams, SlotProportion, StartAuraParams};
@@ -245,7 +244,6 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 		system_rpc_tx,
 		config,
 		telemetry: telemetry.as_mut(),
-		rpc_id_provider: RandomStringIdProvider::new(16),
 	})?;
 
 	if role.is_authority() {

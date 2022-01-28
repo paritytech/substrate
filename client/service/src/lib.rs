@@ -315,7 +315,7 @@ mod waiting {
 fn start_rpc_servers<R>(
 	config: &Configuration,
 	gen_rpc_module: R,
-	rpc_id_provider: impl RpcIdProvider + 'static,
+	rpc_id_provider: Option<Box<dyn RpcIdProvider>>,
 ) -> Result<Box<dyn std::any::Any + Send + Sync>, error::Error>
 where
 	R: Fn(sc_rpc::DenyUnsafe) -> Result<RpcModule<()>, Error>,
