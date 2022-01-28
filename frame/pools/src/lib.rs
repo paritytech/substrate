@@ -368,7 +368,7 @@ pub mod pallet {
 
 	/// Active delegators.
 	#[pallet::storage]
-	pub(crate) type DelegatorStorage<T: Config> =
+	pub(crate) type Delegators<T: Config> =
 		CountedStorageMap<_, Twox64Concat, T::AccountId, Delegator<T>>;
 
 	/// `PoolId` lookup from the pool's `AccountId`. Useful for pool lookup from the slashing
@@ -378,14 +378,14 @@ pub mod pallet {
 
 	/// Bonded pools. Keyed by the pool's _Stash_/_Controller_.
 	#[pallet::storage]
-	pub(crate) type BondedPoolStorage<T: Config> =
+	pub(crate) type BondedPools<T: Config> =
 		CountedStorageMap<_, Twox64Concat, T::AccountId, BondedPool<T>>;
 
 	/// Reward pools. This is where there rewards for each pool accumulate. When a delegators payout
 	/// is claimed, the balance comes out fo the reward pool. Keyed by the bonded pools
 	/// _Stash_/_Controller_.
 	#[pallet::storage]
-	pub(crate) type RewardPoolStorage<T: Config> =
+	pub(crate) type RewardPools<T: Config> =
 		CountedStorageMap<_, Twox64Concat, T::AccountId, RewardPool<T>>;
 
 	/// Groups of unbonding pools. Each group of unbonding pools belongs to a bonded pool,
@@ -453,12 +453,12 @@ pub mod pallet {
 			let who = ensure_signed(origin)?;
 			// If a delegator already exists that means they already belong to a pool
 			ensure!(
-				!DelegatorStorage::<T>::contains_key(&who),
+				!Delegators::<T>::contains_key(&who),
 				Error::<T>::AccountBelongsToOtherPool
 			);
 
 			let mut bonded_pool =
-				BondedPoolStorage::<T>::get(&target).ok_or(Error::<T>::PoolNotFound)?;
+				BondedPools::<T>::get(&target).ok_or(Error::<T>::PoolNotFound)?;
 			bonded_pool.ok_to_join_with(&target, amount)?;
 
 			// The pool should always be created in such a way its in a state to bond extra, but if
@@ -470,7 +470,7 @@ pub mod pallet {
 
 			// We don't actually care about writing the reward pool, we just need its
 			// total earnings at this point in time.
-			let reward_pool = RewardPoolStorage::<T>::get(&target)
+			let reward_pool = RewardPools::<T>::get(&target)
 				.ok_or(Error::<T>::RewardPoolNotFound)?
 				// This is important because we want the most up-to-date total earnings.
 				.update_total_earnings_and_balance();
@@ -493,7 +493,7 @@ pub mod pallet {
 
 			T::StakingInterface::bond_extra(target.clone(), exact_amount_to_bond)?;
 
-			DelegatorStorage::insert(
+			Delegators::insert(
 				who.clone(),
 				Delegator::<T> {
 					pool: target.clone(),
@@ -509,7 +509,7 @@ pub mod pallet {
 					unbonding_era: None,
 				},
 			);
-			BondedPoolStorage::insert(&target, bonded_pool);
+			BondedPools::insert(&target, bonded_pool);
 
 			Self::deposit_event(Event::<T>::Joined {
 				delegator: who,
@@ -529,8 +529,8 @@ pub mod pallet {
 		pub fn claim_payout(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let delegator =
-				DelegatorStorage::<T>::get(&who).ok_or(Error::<T>::DelegatorNotFound)?;
-			let bonded_pool = BondedPoolStorage::<T>::get(&delegator.pool).ok_or_else(|| {
+				Delegators::<T>::get(&who).ok_or(Error::<T>::DelegatorNotFound)?;
+			let bonded_pool = BondedPools::<T>::get(&delegator.pool).ok_or_else(|| {
 				log!(error, "A bonded pool could not be found, this is a system logic error.");
 				Error::<T>::PoolNotFound
 			})?;
@@ -546,9 +546,9 @@ pub mod pallet {
 		pub fn unbond(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let delegator =
-				DelegatorStorage::<T>::get(&who).ok_or(Error::<T>::DelegatorNotFound)?;
+				Delegators::<T>::get(&who).ok_or(Error::<T>::DelegatorNotFound)?;
 			let mut bonded_pool =
-				BondedPoolStorage::<T>::get(&delegator.pool).ok_or(Error::<T>::PoolNotFound)?;
+				BondedPools::<T>::get(&delegator.pool).ok_or(Error::<T>::PoolNotFound)?;
 
 			// Claim the the payout prior to unbonding. Once the user is unbonding their points
 			// no longer exist in the bonded pool and thus they can no longer claim their payouts.
@@ -557,7 +557,7 @@ pub mod pallet {
 
 			// Re-fetch the delegator because they where updated by `do_reward_payout`.
 			let mut delegator =
-				DelegatorStorage::<T>::get(&who).ok_or(Error::<T>::DelegatorNotFound)?;
+				Delegators::<T>::get(&who).ok_or(Error::<T>::DelegatorNotFound)?;
 			// Note that we lazily create the unbonding pools here if they don't already exist
 			let sub_pools = SubPoolsStorage::<T>::get(&delegator.pool).unwrap_or_default();
 			let current_era = T::StakingInterface::current_era().unwrap_or(Zero::zero());
@@ -597,9 +597,9 @@ pub mod pallet {
 			});
 
 			// Now that we know everything has worked write the items to storage.
-			BondedPoolStorage::insert(&delegator.pool, bonded_pool);
+			BondedPools::insert(&delegator.pool, bonded_pool);
 			SubPoolsStorage::insert(&delegator.pool, sub_pools);
-			DelegatorStorage::insert(who, delegator);
+			Delegators::insert(who, delegator);
 
 			Ok(())
 		}
@@ -608,7 +608,7 @@ pub mod pallet {
 		pub fn withdraw_unbonded(origin: OriginFor<T>, num_slashing_spans: u32) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let delegator =
-				DelegatorStorage::<T>::get(&who).ok_or(Error::<T>::DelegatorNotFound)?;
+				Delegators::<T>::get(&who).ok_or(Error::<T>::DelegatorNotFound)?;
 
 			let unbonding_era = delegator.unbonding_era.ok_or(Error::<T>::NotUnbonding)?;
 			let current_era = T::StakingInterface::current_era().unwrap_or(Zero::zero());
@@ -652,7 +652,7 @@ pub mod pallet {
 			})?;
 
 			SubPoolsStorage::<T>::insert(&delegator.pool, sub_pools);
-			DelegatorStorage::<T>::remove(&who);
+			Delegators::<T>::remove(&who);
 
 			Self::deposit_event(Event::<T>::Withdrawn {
 				delegator: who,
@@ -682,8 +682,7 @@ pub mod pallet {
 
 			let (stash, reward_dest) = Self::create_accounts(index);
 
-			println!("stash {:?}, reward_dest {:?}", stash, reward_dest);
-			ensure!(!BondedPoolStorage::<T>::contains_key(&stash), Error::<T>::IdInUse);
+			ensure!(!BondedPools::<T>::contains_key(&stash), Error::<T>::IdInUse);
 
 			T::StakingInterface::bond_checks(&stash, &stash, amount, &reward_dest)?;
 			let (stash, targets) = T::StakingInterface::nominate_checks(&stash, targets)?;
@@ -711,7 +710,7 @@ pub mod pallet {
 
 			T::StakingInterface::unchecked_nominate(&stash, targets);
 
-			DelegatorStorage::<T>::insert(
+			Delegators::<T>::insert(
 				who,
 				Delegator::<T> {
 					pool: stash.clone(),
@@ -720,8 +719,8 @@ pub mod pallet {
 					unbonding_era: None,
 				},
 			);
-			BondedPoolStorage::<T>::insert(stash.clone(), bonded_pool);
-			RewardPoolStorage::<T>::insert(
+			BondedPools::<T>::insert(stash.clone(), bonded_pool);
+			RewardPools::<T>::insert(
 				stash,
 				RewardPool::<T> {
 					balance: Zero::zero(),
@@ -842,7 +841,7 @@ impl<T: Config> Pallet<T> {
 		delegator: Delegator<T>,
 		bonded_pool: &BondedPool<T>,
 	) -> DispatchResult {
-		let reward_pool = RewardPoolStorage::<T>::get(&delegator.pool).ok_or_else(|| {
+		let reward_pool = RewardPools::<T>::get(&delegator.pool).ok_or_else(|| {
 			log!(error, "A reward pool could not be found, this is a system logic error.");
 			Error::<T>::RewardPoolNotFound
 		})?;
@@ -859,8 +858,8 @@ impl<T: Config> Pallet<T> {
 		)?;
 
 		// Write the updated delegator and reward pool to storage
-		RewardPoolStorage::insert(&delegator.pool, reward_pool);
-		DelegatorStorage::insert(delegator_id, delegator);
+		RewardPools::insert(&delegator.pool, reward_pool);
+		Delegators::insert(delegator_id, delegator);
 
 		Ok(())
 	}
