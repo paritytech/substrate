@@ -30,9 +30,7 @@ use sc_client_api::{BlockBackend, ExecutorProvider};
 use sc_consensus_babe::{self, SlotProportion};
 use sc_executor::NativeElseWasmExecutor;
 use sc_network::{Event, NetworkService};
-use sc_service::{
-	config::Configuration, error::Error as ServiceError, RpcHandlers, RpcIdProvider, TaskManager,
-};
+use sc_service::{config::Configuration, error::Error as ServiceError, RpcHandlers, TaskManager};
 use sc_telemetry::{Telemetry, TelemetryWorker};
 use sp_api::ProvideRuntimeApi;
 use sp_core::crypto::Pair;
@@ -310,7 +308,6 @@ pub struct NewFullBase {
 /// Creates a full service from the configuration.
 pub fn new_full_base(
 	mut config: Configuration,
-	rpc_id_provider: impl RpcIdProvider + 'static,
 	with_startup_data: impl FnOnce(
 		&sc_consensus_babe::BabeBlockImport<Block, FullClient, FullGrandpaBlockImport>,
 		&sc_consensus_babe::BabeLink<Block>,
@@ -532,19 +529,14 @@ pub fn new_full_base(
 }
 
 /// Builds a new service for a full client.
-pub fn new_full(
-	config: Configuration,
-	rpc_id_provider: impl RpcIdProvider + 'static,
-) -> Result<TaskManager, ServiceError> {
-	new_full_base(config, rpc_id_provider, |_, _| ())
-		.map(|NewFullBase { task_manager, .. }| task_manager)
+pub fn new_full(config: Configuration) -> Result<TaskManager, ServiceError> {
+	new_full_base(config, |_, _| ()).map(|NewFullBase { task_manager, .. }| task_manager)
 }
 
 #[cfg(test)]
 mod tests {
 	use crate::service::{new_full_base, NewFullBase};
 	use codec::Encode;
-	use jsonrpsee::ws_server::RandomStringIdProvider;
 	use node_primitives::{Block, DigestItem, Signature};
 	use node_runtime::{
 		constants::{currency::CENTS, time::SLOT_DURATION},
@@ -605,7 +597,6 @@ mod tests {
 				let NewFullBase { task_manager, client, network, transaction_pool, .. } =
 					new_full_base(
 						config,
-						RandomStringIdProvider::new(16),
 						|block_import: &sc_consensus_babe::BabeBlockImport<Block, _, _>,
 						 babe_link: &sc_consensus_babe::BabeLink<Block>| {
 							setup_handles = Some((block_import.clone(), babe_link.clone()));
@@ -780,7 +771,7 @@ mod tests {
 			crate::chain_spec::tests::integration_test_config_with_two_authorities(),
 			|config| {
 				let NewFullBase { task_manager, client, network, transaction_pool, .. } =
-					new_full_base(config, RandomStringIdProvider::new(16), |_, _| ())?;
+					new_full_base(config, |_, _| ())?;
 				Ok(sc_service_test::TestNetComponents::new(
 					task_manager,
 					client,

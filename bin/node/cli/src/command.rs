@@ -20,7 +20,7 @@ use crate::{chain_spec, service, service::new_partial, Cli, Subcommand};
 use node_executor::ExecutorDispatch;
 use node_runtime::{Block, RuntimeApi};
 use sc_cli::{ChainSpec, Result, RuntimeVersion, SubstrateCli};
-use sc_service::{PartialComponents, RandomStringIdProvider};
+use sc_service::PartialComponents;
 
 impl SubstrateCli for Cli {
 	fn impl_name() -> String {
@@ -77,8 +77,7 @@ pub fn run() -> Result<()> {
 		None => {
 			let runner = cli.create_runner(&cli.run)?;
 			runner.run_node_until_exit(|config| async move {
-				service::new_full(config, RandomStringIdProvider::new(16))
-					.map_err(sc_cli::Error::Service)
+				service::new_full(config).map_err(sc_cli::Error::Service)
 			})
 		},
 		Some(Subcommand::Inspect(cmd)) => {
