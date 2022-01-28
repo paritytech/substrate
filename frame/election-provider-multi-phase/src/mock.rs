@@ -410,6 +410,7 @@ impl crate::Config for Runtime {
 	type WeightInfo = DualMockWeightInfo;
 	type BenchmarkingConfig = TestBenchmarkingConfig;
 	type Fallback = MockFallback;
+	type GovernanceFallback = NoFallback<Self>;
 	type ForceOrigin = frame_system::EnsureRoot<AccountId>;
 	type Solution = TestNposSolution;
 	type VoterSnapshotPerBlock = VoterSnapshotPerBlock;

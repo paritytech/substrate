@@ -976,14 +976,10 @@ where
 					peer.network.service().announce_block(notification.hash, None);
 				}
 
-				// We poll `finality_notification_stream`, but we only take the last event.
-				let mut last = None;
-				while let Poll::Ready(Some(item)) =
+				// We poll `finality_notification_stream`.
+				while let Poll::Ready(Some(notification)) =
 					peer.finality_notification_stream.as_mut().poll_next(cx)
 				{
-					last = Some(item);
-				}
-				if let Some(notification) = last {
 					peer.network.on_block_finalized(notification.hash, notification.header);
 				}
 			}
