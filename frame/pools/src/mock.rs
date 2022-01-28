@@ -6,10 +6,10 @@ use frame_system::RawOrigin;
 pub type AccountId = u32;
 pub type Balance = u128;
 
-/// Pool 0's primary account id (i.e. its stash and controller account with bonded funds).
-pub const PRIMARY_ACCOUNT: u32 = 2536596763;
-/// Pool 0's reward destination.
-pub const REWARDS_ACCOUNT: u32 = 736857005;
+/// _Stash_ of the pool that gets created by the ExtBuilder
+pub const PRIMARY_ACCOUNT: u32 = 1708226889;
+/// Reward destination of the pool that gets created by the ExtBuilder
+pub const REWARDS_ACCOUNT: u32 = 1842460259;
 
 parameter_types! {
 	pub static CurrentEra: EraIndex = 0;
@@ -95,7 +95,10 @@ impl sp_staking::StakingInterface for StakingMock {
 		Ok(())
 	}
 
-	fn nominate_checks(controller_and_stash: &Self::AccountId, targets: Vec<Self::LookupSource>) -> Result<(Self::AccountId, Vec<Self::AccountId>), DispatchError> {
+	fn nominate_checks(
+		controller_and_stash: &Self::AccountId,
+		targets: Vec<Self::LookupSource>,
+	) -> Result<(Self::AccountId, Vec<Self::AccountId>), DispatchError> {
 		if CanNominate::get() {
 			Ok((controller_and_stash.clone(), targets))
 		} else {
@@ -212,12 +215,16 @@ impl ExtBuilder {
 			// make a pool
 			let amount_to_bond = <Runtime as pools::Config>::StakingInterface::minimum_bond();
 			Balances::make_free_balance_be(&10, amount_to_bond * 2);
-			assert_ok!(Pools::create(RawOrigin::Signed(10).into(), 0, vec![100], amount_to_bond));
+			assert_ok!(Pools::create(RawOrigin::Signed(10).into(), vec![100], amount_to_bond, 0));
 
 			for (account_id, bonded) in self.delegators {
 				Balances::make_free_balance_be(&account_id, bonded * 2);
 
-				assert_ok!(Pools::join(RawOrigin::Signed(account_id).into(), bonded, 0));
+				assert_ok!(Pools::join(
+					RawOrigin::Signed(account_id).into(),
+					bonded,
+					PRIMARY_ACCOUNT
+				));
 			}
 		});
 
