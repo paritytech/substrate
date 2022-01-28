@@ -25,7 +25,9 @@ use std::sync::Arc;
 enum Method {
 	Interpreted,
 	#[cfg(feature = "wasmtime")]
-	Compiled { fast_instance_reuse: bool },
+	Compiled {
+		fast_instance_reuse: bool,
+	},
 }
 
 // This is just a bog-standard Kusama runtime with the extra `test_empty_return`
