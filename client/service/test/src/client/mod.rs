@@ -20,7 +20,9 @@ use futures::executor::block_on;
 use hex_literal::hex;
 use parity_scale_codec::{Decode, Encode, Joiner};
 use sc_block_builder::BlockBuilderProvider;
-use sc_client_api::{in_mem, BlockBackend, BlockchainEvents, StorageProvider};
+use sc_client_api::{
+	in_mem, BlockBackend, BlockchainEvents, FinalityNotifications, StorageProvider,
+};
 use sc_client_db::{
 	Backend, DatabaseSettings, DatabaseSource, KeepBlocks, PruningMode, TransactionStorageMode,
 };
@@ -163,6 +165,24 @@ fn block1(genesis_hash: Hash, backend: &InMemoryBackend<BlakeTwo256>) -> (Vec<u8
 			nonce: 0,
 		}],
 	)
+}
+
+fn finality_notification_check(
+	notifications: &mut FinalityNotifications<Block>,
+	finalized: &[Hash],
+	stale_heads: &[Hash],
+) {
+	match notifications.try_next() {
+		Ok(Some(notif)) => {
+			let stale_heads_expected: HashSet<_> = stale_heads.iter().collect();
+			let stale_heads: HashSet<_> = notif.stale_heads.iter().collect();
+			assert_eq!(notif.tree_route.as_ref(), &finalized[..finalized.len() - 1]);
+			assert_eq!(notif.hash, *finalized.last().unwrap());
+			assert_eq!(stale_heads, stale_heads_expected);
+		},
+		Ok(None) => panic!("unexpected notification result, client send channel was closed"),
+		Err(_) => assert!(finalized.is_empty()),
+	}
 }
 
 #[test]
@@ -822,7 +842,11 @@ fn best_containing_on_longest_chain_with_max_depth_higher_than_best() {
 
 #[test]
 fn import_with_justification() {
+	// block tree:
+	// G -> A1 -> A2 -> A3
 	let mut client = substrate_test_runtime_client::new();
+
+	let mut finality_notifications = client.finality_notification_stream();
 
 	// G -> A1
 	let a1 = client.new_block(Default::default()).unwrap().build().unwrap().block;
@@ -855,6 +879,10 @@ fn import_with_justification() {
 	assert_eq!(client.justifications(&BlockId::Hash(a1.hash())).unwrap(), None);
 
 	assert_eq!(client.justifications(&BlockId::Hash(a2.hash())).unwrap(), None);
+
+	finality_notification_check(&mut finality_notifications, &[a1.hash(), a2.hash()], &[]);
+	finality_notification_check(&mut finality_notifications, &[a3.hash()], &[]);
+	assert!(finality_notifications.try_next().is_err());
 }
 
 #[test]
@@ -864,6 +892,9 @@ fn importing_diverged_finalized_block_should_trigger_reorg() {
 	// G -> A1 -> A2
 	//   \
 	//    -> B1
+
+	let mut finality_notifications = client.finality_notification_stream();
+
 	let a1 = client
 		.new_block_at(&BlockId::Number(0), Default::default(), false)
 		.unwrap()
@@ -902,6 +933,9 @@ fn importing_diverged_finalized_block_should_trigger_reorg() {
 	assert_eq!(client.chain_info().best_hash, b1.hash());
 
 	assert_eq!(client.chain_info().finalized_hash, b1.hash());
+
+	finality_notification_check(&mut finality_notifications, &[b1.hash()], &[a2.hash()]);
+	assert!(finality_notifications.try_next().is_err());
 }
 
 #[test]
@@ -911,6 +945,9 @@ fn finalizing_diverged_block_should_trigger_reorg() {
 	// G -> A1 -> A2
 	//   \
 	//    -> B1 -> B2
+
+	let mut finality_notifications = client.finality_notification_stream();
+
 	let a1 = client
 		.new_block_at(&BlockId::Number(0), Default::default(), false)
 		.unwrap()
@@ -975,6 +1012,113 @@ fn finalizing_diverged_block_should_trigger_reorg() {
 	block_on(client.import(BlockOrigin::Own, b3.clone())).unwrap();
 
 	assert_eq!(client.chain_info().best_hash, b3.hash());
+
+	finality_notification_check(&mut finality_notifications, &[b1.hash()], &[a2.hash()]);
+	assert!(finality_notifications.try_next().is_err());
+}
+
+#[test]
+fn finality_notifications_content() {
+	let (mut client, _select_chain) = TestClientBuilder::new().build_with_longest_chain();
+
+	//               -> D3 -> D4
+	// G -> A1 -> A2 -> A3
+	//   -> B1 -> B2
+	//   -> C1
+
+	let mut finality_notifications = client.finality_notification_stream();
+
+	let a1 = client
+		.new_block_at(&BlockId::Number(0), Default::default(), false)
+		.unwrap()
+		.build()
+		.unwrap()
+		.block;
+	block_on(client.import(BlockOrigin::Own, a1.clone())).unwrap();
+
+	let a2 = client
+		.new_block_at(&BlockId::Hash(a1.hash()), Default::default(), false)
+		.unwrap()
+		.build()
+		.unwrap()
+		.block;
+	block_on(client.import(BlockOrigin::Own, a2.clone())).unwrap();
+
+	let a3 = client
+		.new_block_at(&BlockId::Hash(a2.hash()), Default::default(), false)
+		.unwrap()
+		.build()
+		.unwrap()
+		.block;
+	block_on(client.import(BlockOrigin::Own, a3.clone())).unwrap();
+
+	let mut b1 = client.new_block_at(&BlockId::Number(0), Default::default(), false).unwrap();
+	// needed to make sure B1 gets a different hash from A1
+	b1.push_transfer(Transfer {
+		from: AccountKeyring::Alice.into(),
+		to: AccountKeyring::Ferdie.into(),
+		amount: 1,
+		nonce: 0,
+	})
+	.unwrap();
+	let b1 = b1.build().unwrap().block;
+	block_on(client.import(BlockOrigin::Own, b1.clone())).unwrap();
+
+	let b2 = client
+		.new_block_at(&BlockId::Hash(b1.hash()), Default::default(), false)
+		.unwrap()
+		.build()
+		.unwrap()
+		.block;
+	block_on(client.import(BlockOrigin::Own, b2.clone())).unwrap();
+
+	let mut c1 = client.new_block_at(&BlockId::Number(0), Default::default(), false).unwrap();
+	// needed to make sure B1 gets a different hash from A1
+	c1.push_transfer(Transfer {
+		from: AccountKeyring::Alice.into(),
+		to: AccountKeyring::Ferdie.into(),
+		amount: 2,
+		nonce: 0,
+	})
+	.unwrap();
+	let c1 = c1.build().unwrap().block;
+	block_on(client.import(BlockOrigin::Own, c1.clone())).unwrap();
+
+	let mut d3 = client
+		.new_block_at(&BlockId::Hash(a2.hash()), Default::default(), false)
+		.unwrap();
+	// needed to make sure D3 gets a different hash from A3
+	d3.push_transfer(Transfer {
+		from: AccountKeyring::Alice.into(),
+		to: AccountKeyring::Ferdie.into(),
+		amount: 2,
+		nonce: 0,
+	})
+	.unwrap();
+	let d3 = d3.build().unwrap().block;
+	block_on(client.import(BlockOrigin::Own, d3.clone())).unwrap();
+
+	let d4 = client
+		.new_block_at(&BlockId::Hash(d3.hash()), Default::default(), false)
+		.unwrap()
+		.build()
+		.unwrap()
+		.block;
+
+	// Postpone import to test behavior of import of finalized block.
+
+	ClientExt::finalize_block(&client, BlockId::Hash(a2.hash()), None).unwrap();
+
+	// Import and finalize D4
+	block_on(client.import_as_final(BlockOrigin::Own, d4.clone())).unwrap();
+
+	finality_notification_check(
+		&mut finality_notifications,
+		&[a1.hash(), a2.hash()],
+		&[c1.hash(), b2.hash()],
+	);
+	finality_notification_check(&mut finality_notifications, &[d3.hash(), d4.hash()], &[a3.hash()]);
+	assert!(finality_notifications.try_next().is_err());
 }
 
 #[test]
@@ -1069,6 +1213,8 @@ fn doesnt_import_blocks_that_revert_finality() {
 
 	let mut client = TestClientBuilder::with_backend(backend).build();
 
+	let mut finality_notifications = client.finality_notification_stream();
+
 	//    -> C1
 	//   /
 	// G -> A1 -> A2
@@ -1150,6 +1296,9 @@ fn doesnt_import_blocks_that_revert_finality() {
 		ConsensusError::ClientImport(sp_blockchain::Error::NotInFinalizedChain.to_string());
 
 	assert_eq!(import_err.to_string(), expected_err.to_string());
+
+	finality_notification_check(&mut finality_notifications, &[a1.hash(), a2.hash()], &[b2.hash()]);
+	assert!(finality_notifications.try_next().is_err());
 }
 
 #[test]
