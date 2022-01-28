@@ -65,6 +65,7 @@ type VotingOf<T> = Voting<
 	<T as frame_system::Config>::AccountId,
 	<T as frame_system::Config>::BlockNumber,
 	PollIndexOf<T>,
+	<T as Config>::MaxVotes,
 >;
 #[allow(dead_code)]
 type DelegatingOf<T> = Delegating<
@@ -88,6 +89,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
+	#[pallet::without_storage_info]
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
@@ -377,11 +379,8 @@ impl<T: Config> Pallet<T> {
 							votes[i].1 = vote;
 						},
 						Err(i) => {
-							ensure!(
-								(votes.len() as u32) < T::MaxVotes::get(),
-								Error::<T>::MaxVotesReached
-							);
-							votes.insert(i, (poll_index, vote));
+							votes.try_insert(i, (poll_index, vote))
+								.map_err(|()| Error::<T>::MaxVotesReached)?;
 						},
 					}
 					// Shouldn't be possible to fail, but we handle it gracefully.

@@ -18,7 +18,7 @@
 //! Miscellaneous additional datatypes.
 
 use super::*;
-use codec::{Decode, Encode, EncodeLike};
+use codec::{Decode, Encode, EncodeLike, MaxEncodedLen};
 use frame_support::{traits::schedule::Anon, Parameter};
 use scale_info::TypeInfo;
 use sp_runtime::RuntimeDebug;
@@ -124,7 +124,7 @@ mod tests {
 	}
 }
 
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct DecidingStatus<BlockNumber> {
 	/// When this referendum began being "decided". If confirming, then the
 	/// end will actually be delayed until the end of the confirmation period.
@@ -134,7 +134,7 @@ pub struct DecidingStatus<BlockNumber> {
 	pub(crate) confirming: Option<BlockNumber>,
 }
 
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct Deposit<AccountId, Balance> {
 	pub(crate) who: AccountId,
 	pub(crate) amount: Balance,
@@ -142,7 +142,7 @@ pub struct Deposit<AccountId, Balance> {
 
 #[derive(Clone, Encode, TypeInfo)]
 pub struct TrackInfo<Balance, Moment> {
-	/// Name of this track.
+	/// Name of this track. TODO was &'static str
 	pub name: &'static str,
 	/// A limit for the number of referenda on this track that can be being decided at once.
 	/// For Root origin this should generally be just one.
@@ -186,7 +186,7 @@ pub trait TracksInfo<Balance, Moment> {
 }
 
 /// Indication of either a specific moment or a delay from a implicitly defined moment.
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub enum AtOrAfter<Moment: Parameter> {
 	/// Indiciates that the event should occur at the moment given.
 	At(Moment),
@@ -206,7 +206,7 @@ impl<Moment: AtLeast32BitUnsigned + Copy + Parameter> AtOrAfter<Moment> {
 }
 
 /// Info regarding an ongoing referendum.
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct ReferendumStatus<
 	TrackId: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
 	Origin: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
@@ -243,7 +243,7 @@ pub struct ReferendumStatus<
 }
 
 /// Info regarding a referendum, present or past.
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub enum ReferendumInfo<
 	TrackId: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
 	Origin: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
@@ -298,7 +298,7 @@ impl<
 
 /// Type for describing a curve over the 2-dimensional space of axes between 0-1, as represented
 /// by `(Perbill, Perbill)`.
-#[derive(Clone, Eq, PartialEq, Encode, Decode, TypeInfo)]
+#[derive(Clone, Eq, PartialEq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 #[cfg_attr(not(feature = "std"), derive(RuntimeDebug))]
 pub enum Curve {
 	/// Linear curve starting at `(0, begin)`, ending at `(period, begin - delta)`.

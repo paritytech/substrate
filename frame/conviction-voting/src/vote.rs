@@ -18,16 +18,17 @@
 //! The vote datatype.
 
 use crate::{Conviction, Delegations};
-use codec::{Decode, Encode, EncodeLike, Input, Output};
+use codec::{Decode, Encode, EncodeLike, Input, Output, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_runtime::{
 	traits::{Saturating, Zero},
 	RuntimeDebug,
 };
 use sp_std::{convert::TryFrom, prelude::*, result::Result};
+use frame_support::{BoundedVec, pallet_prelude::Get};
 
 /// A number of lock periods, plus a vote, one way or the other.
-#[derive(Copy, Clone, Eq, PartialEq, Default, RuntimeDebug)]
+#[derive(Copy, Clone, Eq, PartialEq, Default, RuntimeDebug, MaxEncodedLen)]
 pub struct Vote {
 	pub aye: bool,
 	pub conviction: Conviction,
@@ -66,7 +67,7 @@ impl TypeInfo for Vote {
 }
 
 /// A vote for a referendum of a particular account.
-#[derive(Encode, Decode, Copy, Clone, Eq, PartialEq, RuntimeDebug, TypeInfo)]
+#[derive(Encode, Decode, Copy, Clone, Eq, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub enum AccountVote<Balance> {
 	/// A standard vote, one-way (approve or reject) with a given amount of conviction.
 	Standard { vote: Vote, balance: Balance },
@@ -108,7 +109,7 @@ impl<Balance: Saturating> AccountVote<Balance> {
 
 /// A "prior" lock, i.e. a lock for some now-forgotten reason.
 #[derive(
-	Encode, Decode, Default, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, RuntimeDebug, TypeInfo,
+	Encode, Decode, Default, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, RuntimeDebug, TypeInfo, MaxEncodedLen,
 )]
 pub struct PriorLock<BlockNumber, Balance>(BlockNumber, Balance);
 
@@ -132,7 +133,7 @@ impl<BlockNumber: Ord + Copy + Zero, Balance: Ord + Copy + Zero> PriorLock<Block
 }
 
 /// Information concerning the delegation of some voting power.
-#[derive(Encode, Decode, Clone, Eq, PartialEq, RuntimeDebug, TypeInfo)]
+#[derive(Encode, Decode, Clone, Eq, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct Delegating<Balance, AccountId, BlockNumber> {
 	/// The amount of balance delegated.
 	pub balance: Balance,
@@ -148,10 +149,14 @@ pub struct Delegating<Balance, AccountId, BlockNumber> {
 }
 
 /// Information concerning the direct vote-casting of some voting power.
-#[derive(Encode, Decode, Clone, Eq, PartialEq, RuntimeDebug, TypeInfo)]
-pub struct Casting<Balance, BlockNumber, PollIndex> {
+#[derive(Encode, Decode, Clone, Eq, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+#[scale_info(skip_type_params(MaxVotes))]
+pub struct Casting<Balance, BlockNumber, PollIndex, MaxVotes>
+	where
+		MaxVotes: Get<u32>,
+{
 	/// The current votes of the account.
-	pub votes: Vec<(PollIndex, AccountVote<Balance>)>,
+	pub votes: BoundedVec<(PollIndex, AccountVote<Balance>), MaxVotes>,
 	/// The total amount of delegations that this account has received, post-conviction-weighting.
 	pub delegations: Delegations<Balance>,
 	/// Any pre-existing locks from past voting/delegating activity.
@@ -159,28 +164,36 @@ pub struct Casting<Balance, BlockNumber, PollIndex> {
 }
 
 /// An indicator for what an account is doing; it can either be delegating or voting.
-#[derive(Encode, Decode, Clone, Eq, PartialEq, RuntimeDebug, TypeInfo)]
-pub enum Voting<Balance, AccountId, BlockNumber, PollIndex> {
+#[derive(Encode, Decode, Clone, Eq, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+#[scale_info(skip_type_params(MaxVotes))]
+pub enum Voting<Balance, AccountId, BlockNumber, PollIndex, MaxVotes>
+	where
+		MaxVotes: Get<u32>,
+{
 	/// The account is voting directly.
-	Casting(Casting<Balance, BlockNumber, PollIndex>),
+	Casting(Casting<Balance, BlockNumber, PollIndex, MaxVotes>),
 	/// The account is delegating `balance` of its balance to a `target` account with `conviction`.
 	Delegating(Delegating<Balance, AccountId, BlockNumber>),
 }
 
-impl<Balance: Default, AccountId, BlockNumber: Zero, PollIndex> Default
-	for Voting<Balance, AccountId, BlockNumber, PollIndex>
+impl<Balance: Default, AccountId, BlockNumber: Zero, PollIndex, MaxVotes> Default
+	for Voting<Balance, AccountId, BlockNumber, PollIndex, MaxVotes>
+	where
+		MaxVotes: Get<u32>,
 {
 	fn default() -> Self {
 		Voting::Casting(Casting {
-			votes: Vec::new(),
+			votes: Default::default(),
 			delegations: Default::default(),
 			prior: PriorLock(Zero::zero(), Default::default()),
 		})
 	}
 }
 
-impl<Balance, AccountId, BlockNumber, PollIndex> AsMut<PriorLock<BlockNumber, Balance>>
-	for Voting<Balance, AccountId, BlockNumber, PollIndex>
+impl<Balance, AccountId, BlockNumber, PollIndex, MaxVotes> AsMut<PriorLock<BlockNumber, Balance>>
+	for Voting<Balance, AccountId, BlockNumber, PollIndex, MaxVotes>
+	where
+		MaxVotes: Get<u32>,
 {
 	fn as_mut(&mut self) -> &mut PriorLock<BlockNumber, Balance> {
 		match self {
@@ -195,7 +208,10 @@ impl<
 		BlockNumber: Ord + Copy + Zero,
 		AccountId,
 		PollIndex,
-	> Voting<Balance, AccountId, BlockNumber, PollIndex>
+		MaxVotes,
+	> Voting<Balance, AccountId, BlockNumber, PollIndex, MaxVotes>
+	where
+		MaxVotes: Get<u32>,
 {
 	pub fn rejig(&mut self, now: BlockNumber) {
 		AsMut::<PriorLock<BlockNumber, Balance>>::as_mut(self).rejig(now);
