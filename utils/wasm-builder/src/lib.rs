@@ -83,6 +83,10 @@
 //!   needs to be absolute.
 //! - `WASM_BUILD_TOOLCHAIN` - The toolchain that should be used to build the Wasm binaries. The
 //!   format needs to be the same as used by cargo, e.g. `nightly-2020-02-20`.
+//! - `WASM_BUILD_WORKSPACE_HINT` - Hint the workspace that is being built. This is normally not
+//!   required as we walk up from the target directory until we find a `Cargo.toml`. If the target
+//!   directory is changed for the build, this environment variable can be used to point to the
+//!   actual workspace.
 //!
 //! Each project can be skipped individually by using the environment variable
 //! `SKIP_PROJECT_NAME_WASM_BUILD`. Where `PROJECT_NAME` needs to be replaced by the name of the
@@ -137,6 +141,9 @@ const WASM_BUILD_TOOLCHAIN: &str = "WASM_BUILD_TOOLCHAIN";
 
 /// Environment variable that makes sure the WASM build is triggered.
 const FORCE_WASM_BUILD_ENV: &str = "FORCE_WASM_BUILD";
+
+/// Environment variable that hints the workspace we are building.
+const WASM_BUILD_WORKSPACE_HINT: &str = "WASM_BUILD_WORKSPACE_HINT";
 
 /// Write to the given `file` if the `content` is different.
 fn write_file_if_changed(file: impl AsRef<Path>, content: impl AsRef<str>) {

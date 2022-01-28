@@ -8,7 +8,6 @@ repository = "https://github.com/paritytech/substrate"
 description = "RPC for the BEEFY Client gadget for substrate"
 
 [dependencies]
-derive_more = "0.99"
 futures = "0.3.16"
 log = "0.4"
 parking_lot = "0.11"

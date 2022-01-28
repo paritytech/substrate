@@ -432,7 +432,7 @@ pub mod pallet {
 }
 
 // Test that a pallet with non generic event and generic genesis_config is correctly handled
-// and that a pallet without the attribute generate_storage_info is correctly handled.
+// and that a pallet with the attribute without_storage_info is correctly handled.
 #[frame_support::pallet]
 pub mod pallet2 {
 	use super::{SomeAssociation1, SomeType1};

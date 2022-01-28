@@ -1853,7 +1853,7 @@ mod election_provider {
 			// the snapshot is cleared,
 			assert_storage_noop!(Snapshot::<Runtime>::kill());
 			// and signed pallet is clean.
-			signed::Submissions::<Runtime>::ensure_killed();
+			assert_ok!(signed::Submissions::<Runtime>::ensure_killed());
 		});
 	}
 

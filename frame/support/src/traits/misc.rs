@@ -64,8 +64,10 @@ pub trait Defensive<T> {
 	where
 		T: Default;
 
-	/// Same as [`defensive_map`], but it does not alter the inner value, but it will log warnings
-	/// if the inner value is `None` or `Err`.
+	/// Does not alter the inner value at all, but it will log warnings if the inner value is `None`
+	/// or `Err`.
+	///
+	/// In some ways, this is like  `.defensive_map(|x| x)`.
 	///
 	/// This is useful as:
 	/// ```nocompile

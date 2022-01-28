@@ -846,7 +846,7 @@ impl<T: Config> Pallet<T> {
 			},
 		};
 
-		// TODO: register weight. (zeke)
+		// TODO: register weight.
 
 		round_voters
 	}

@@ -19,12 +19,12 @@ jsonrpc-core = "18.0.0"
 jsonrpc-core-client = "18.0.0"
 jsonrpc-derive = "18.0.0"
 sp-consensus-babe = { version = "0.10.0-dev", path = "../../../../primitives/consensus/babe" }
-serde = { version = "1.0.132", features=["derive"] }
+serde = { version = "1.0.132", features = ["derive"] }
 sp-blockchain = { version = "4.0.0-dev", path = "../../../../primitives/blockchain" }
 sp-runtime = { version = "4.1.0-dev", path = "../../../../primitives/runtime" }
 sc-consensus-epochs = { version = "0.10.0-dev", path = "../../epochs" }
 futures = "0.3.16"
-derive_more = "0.99.16"
+thiserror = "1.0"
 sp-api = { version = "4.0.0-dev", path = "../../../../primitives/api" }
 sp-consensus = { version = "0.10.0-dev", path = "../../../../primitives/consensus/common" }
 sp-core = { version = "4.1.0-dev", path = "../../../../primitives/core" }

@@ -532,7 +532,7 @@ parameter_types! {
 
 impl frame_election_provider_support::onchain::Config for Runtime {
 	type Accuracy = Perbill;
-	type DataProvider = Staking;
+	type DataProvider = <Self as pallet_election_provider_multi_phase::Config>::DataProvider;
 	type VoterPageSize = ();
 	type TargetPageSize = ();
 	type MaxBackersPerWinner = ConstU32<{ u32::MAX }>;
@@ -677,6 +677,8 @@ impl pallet_election_provider_multi_phase::Config for Runtime {
 	type DataProvider = Staking;
 	type Solution = NposSolution16;
 	type Fallback = pallet_election_provider_multi_phase::NoFallback<Self>;
+	type GovernanceFallback =
+		frame_election_provider_support::onchain::OnChainSequentialPhragmen<Self>;
 	type Solver = frame_election_provider_support::SequentialPhragmen<
 		AccountId,
 		pallet_election_provider_multi_phase::SolutionAccuracyOf<Self>,

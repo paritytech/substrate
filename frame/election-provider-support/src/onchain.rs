@@ -18,7 +18,7 @@
 //! An implementation of [`ElectionProvider`] that does an on-chain sequential phragmen.
 
 use crate::{
-	BoundedSupportsOf, ElectionDataProvider, ElectionProvider, PageIndex,
+	BoundedSupportsOf, ElectionDataProvider, ElectionProvider, InstantElectionProvider, PageIndex,
 	TruncateIntoBoundedSupports,
 };
 use frame_support::{
@@ -62,6 +62,15 @@ impl From<sp_npos_elections::Error> for Error {
 /// This can be very expensive to run frequently on-chain. Use with care. Moreover, this
 /// implementation ignores the additional data of the election data provider and gives no insight on
 /// how much weight was consumed.
+///
+/// Finally, the [`ElectionProvider`] implementation of this type does not impose any limits on the
+/// number of voters and targets that are fetched. This could potentially make this unsuitable for
+/// execution onchain. On the other hand, the [`InstantElectionProvider`] implementation does limit
+/// these inputs.
+///
+/// It is advisable to use the former ([`ElectionProvider::elect`]) only at genesis, or for testing,
+/// the latter [`InstantElectionProvider::instant_elect`] for onchain operations, with thoughtful
+/// bounds.
 pub struct OnChainSequentialPhragmen<T: Config>(PhantomData<T>);
 
 /// Configuration trait of [`OnChainSequentialPhragmen`].
@@ -99,26 +108,19 @@ pub trait Config: frame_system::Config {
 	type MaxWinnersPerPage: Get<u32>;
 }
 
-impl<T: Config> ElectionProvider for OnChainSequentialPhragmen<T> {
-	type Error = Error;
-	type Pages = ConstU32<1>;
-	type AccountId = T::AccountId;
-	type BlockNumber = T::BlockNumber;
-	type DataProvider = T::DataProvider;
-	type MaxBackersPerWinner = T::MaxBackersPerWinner;
-	type MaxWinnersPerPage = T::MaxWinnersPerPage;
-
-	fn elect(remaining: PageIndex) -> Result<BoundedSupportsOf<Self>, Self::Error> {
-		if remaining != 0 {
-			return Err(Error::NoMoreThenSinglePageExpected)
-		}
-
-		let voters =
-			Self::DataProvider::voters(T::VoterPageSize::get(), 0).map_err(Error::DataProvider)?;
-
-		let targets = Self::DataProvider::targets(T::TargetPageSize::get(), 0)
+impl<T: Config> OnChainSequentialPhragmen<T> {
+	fn elect_with(
+		maybe_max_voters: Option<usize>,
+		maybe_max_targets: Option<usize>,
+		remaining: PageIndex,
+	) -> Result<BoundedSupportsOf<Self>, Error> {
+		let voters = <Self as ElectionProvider>::DataProvider::voters(maybe_max_voters, remaining)
 			.map_err(Error::DataProvider)?;
-		let desired_targets = Self::DataProvider::desired_targets().map_err(Error::DataProvider)?;
+		let targets =
+			<Self as ElectionProvider>::DataProvider::targets(maybe_max_targets, remaining)
+				.map_err(Error::DataProvider)?;
+		let desired_targets = <Self as ElectionProvider>::DataProvider::desired_targets()
+			.map_err(Error::DataProvider)?;
 
 		let stake_map: BTreeMap<T::AccountId, VoteWeight> = voters
 			.iter()
@@ -142,6 +144,34 @@ impl<T: Config> ElectionProvider for OnChainSequentialPhragmen<T> {
 		let supports = to_supports(&staked);
 		let bounded_supports = supports.truncate_into_bounded_supports();
 		Ok(bounded_supports.into())
+	}
+}
+
+impl<T: Config> ElectionProvider for OnChainSequentialPhragmen<T> {
+	type Error = Error;
+	type AccountId = T::AccountId;
+	type BlockNumber = T::BlockNumber;
+	type Pages = ConstU32<1>;
+	type DataProvider = T::DataProvider;
+	type MaxBackersPerWinner = T::MaxBackersPerWinner;
+	type MaxWinnersPerPage = T::MaxWinnersPerPage;
+
+	fn elect(remaining: PageIndex) -> Result<BoundedSupportsOf<Self>, Self::Error> {
+		if remaining != 0 {
+			return Err(Error::NoMoreThenSinglePageExpected)
+		}
+
+		Self::elect_with(None, None, remaining)
+	}
+}
+
+impl<T: Config> InstantElectionProvider for OnChainSequentialPhragmen<T> {
+	fn instant_elect(
+		maybe_max_voters: Option<usize>,
+		maybe_max_targets: Option<usize>,
+		remaining: PageIndex,
+	) -> Result<BoundedSupportsOf<Self>, Self::Error> {
+		Self::elect_with(maybe_max_voters, maybe_max_targets, remaining)
 	}
 }
 

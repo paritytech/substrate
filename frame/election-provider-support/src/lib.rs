@@ -172,7 +172,7 @@ pub mod onchain;
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{traits::Get, BoundedVec, DefaultNoBound, RuntimeDebug};
 use scale_info::TypeInfo;
-use sp_npos_elections::EvaluateSupport;
+use sp_npos_elections::{EvaluateSupport, Supports};
 use sp_std::{fmt::Debug, prelude::*};
 
 /// Re-export some type as they are used in the interface.
@@ -289,16 +289,10 @@ impl<AccountId, BlockNumber> ElectionDataProvider for TestDataProvider<(AccountI
 	type BlockNumber = BlockNumber;
 	type MaxVotesPerVoter = ();
 
-	fn targets(
-		_maybe_max_len: Option<usize>,
-		_: PageIndex,
-	) -> data_provider::Result<Vec<AccountId>> {
+	fn targets(_: Option<usize>, _: PageIndex) -> data_provider::Result<Vec<AccountId>> {
 		Ok(Default::default())
 	}
-	fn voters(
-		_maybe_max_len: Option<usize>,
-		_: PageIndex,
-	) -> data_provider::Result<Vec<VoterOf<Self>>> {
+	fn voters(_: Option<usize>, _: PageIndex) -> data_provider::Result<Vec<VoterOf<Self>>> {
 		Ok(Default::default())
 	}
 
@@ -367,6 +361,27 @@ pub trait ElectionProvider {
 	fn lsp() -> PageIndex {
 		0
 	}
+}
+
+/// A sub-trait of the [`ElectionProvider`] for cases where we need to be sure an election needs to
+/// happen instantly, not asynchronously.
+///
+/// The same `DataProvider` as [`ElectionProvider`] implementation is assumed to be used.
+///
+/// While pagination is supported, it is reasonable to only use this with a single page, as results
+/// are expected to be computed on the fly. In a reasonable setting, that single page should be the
+/// most significant page of the data provider.
+///
+/// Consequently, allows for control over the amount of data that is being fetched from the
+/// [`ElectionProvider::DataProvider`].
+pub trait InstantElectionProvider: ElectionProvider {
+	/// Elect a new set of winners, instantly, with the given given limits set on the
+	/// `DataProvider`.
+	fn instant_elect(
+		maybe_max_voters: Option<usize>,
+		maybe_max_targets: Option<usize>,
+		remaining: PageIndex,
+	) -> Result<BoundedSupportsOf<Self>, Self::Error>;
 }
 
 /// An election provider to be used only for testing.
@@ -539,6 +554,13 @@ impl<
 	}
 }
 
+/// A voter, at the level of abstraction of this crate.
+pub type Voter<AccountId, Bound> = (AccountId, VoteWeight, BoundedVec<AccountId, Bound>);
+
+/// Same as [`Voter`], but parameterized by an [`ElectionDataProvider`].
+pub type VoterOf<D> =
+	Voter<<D as ElectionDataProvider>::AccountId, <D as ElectionDataProvider>::MaxVotesPerVoter>;
+
 /// A bounded equivalent to [`sp_npos_elections::Support`].
 #[derive(Default, RuntimeDebug, Encode, Decode, scale_info::TypeInfo, MaxEncodedLen)]
 #[codec(mel_bound(AccountId: MaxEncodedLen, Bound: Get<u32>))]
@@ -569,11 +591,9 @@ impl<AccountId: Clone, Bound: Get<u32>> Clone for BoundedSupport<AccountId, Boun
 	}
 }
 
-impl<AccountId, Bound: Get<u32>> Into<sp_npos_elections::Support<AccountId>>
-	for BoundedSupport<AccountId, Bound>
-{
-	fn into(self) -> sp_npos_elections::Support<AccountId> {
-		sp_npos_elections::Support { voters: self.voters.into_inner(), total: self.total }
+impl<AccountId, Bound: Get<u32>> From<BoundedSupport<AccountId, Bound>> for Support<AccountId> {
+	fn from(b: BoundedSupport<AccountId, Bound>) -> Self {
+		Support { total: b.total, voters: b.voters.into_inner() }
 	}
 }
 
@@ -616,6 +636,14 @@ impl<AccountId, BOuter: Get<u32>, BInner: Get<u32>>
 {
 	fn from(t: BoundedVec<(AccountId, BoundedSupport<AccountId, BInner>), BOuter>) -> Self {
 		Self(t)
+	}
+}
+
+impl<AccountId, BOuter: Get<u32>, BInner: Get<u32>> From<BoundedSupports<AccountId, BOuter, BInner>>
+	for Supports<AccountId>
+{
+	fn from(b: BoundedSupports<AccountId, BOuter, BInner>) -> Self {
+		b.into_iter().map(|(a, s)| (a, s.into())).collect::<Vec<_>>()
 	}
 }
 
@@ -739,10 +767,3 @@ impl<AccountId, BOuter: Get<u32>, BInner: Get<u32>>
 			.collect::<Result<Vec<_>, ()>>()
 	}
 }
-
-/// A voter, at the level of abstraction of this crate.
-pub type Voter<AccountId, Bound> = (AccountId, VoteWeight, BoundedVec<AccountId, Bound>);
-
-/// Same as [`Voter`], but parameterized by an [`ElectionDataProvider`].
-pub type VoterOf<D> =
-	Voter<<D as ElectionDataProvider>::AccountId, <D as ElectionDataProvider>::MaxVotesPerVoter>;
