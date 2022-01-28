@@ -344,7 +344,7 @@ pub struct SpawnTasksParams<'a, TBl: BlockT, TCl, TExPool, TRpc, Backend, TRpcId
 	pub system_rpc_tx: TracingUnboundedSender<sc_rpc::system::Request<TBl>>,
 	/// Telemetry instance for this node.
 	pub telemetry: Option<&'a mut Telemetry>,
-	/// Custom subscription generator for JSON-RPC subscriptions.
+	/// Custom subscription ID generator for JSON-RPC subscriptions.
 	pub rpc_id_provider: TRpcId,
 }
 
