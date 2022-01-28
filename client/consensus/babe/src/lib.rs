@@ -217,95 +217,94 @@ impl Epoch {
 }
 
 /// Errors encountered by the babe authorship task.
-#[derive(derive_more::Display, Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum Error<B: BlockT> {
 	/// Multiple BABE pre-runtime digests
-	#[display(fmt = "Multiple BABE pre-runtime digests, rejecting!")]
+	#[error("Multiple BABE pre-runtime digests, rejecting!")]
 	MultiplePreRuntimeDigests,
 	/// No BABE pre-runtime digest found
-	#[display(fmt = "No BABE pre-runtime digest found")]
+	#[error("No BABE pre-runtime digest found")]
 	NoPreRuntimeDigest,
 	/// Multiple BABE epoch change digests
-	#[display(fmt = "Multiple BABE epoch change digests, rejecting!")]
+	#[error("Multiple BABE epoch change digests, rejecting!")]
 	MultipleEpochChangeDigests,
 	/// Multiple BABE config change digests
-	#[display(fmt = "Multiple BABE config change digests, rejecting!")]
+	#[error("Multiple BABE config change digests, rejecting!")]
 	MultipleConfigChangeDigests,
 	/// Could not extract timestamp and slot
-	#[display(fmt = "Could not extract timestamp and slot: {:?}", _0)]
+	#[error("Could not extract timestamp and slot: {0:?}")]
 	Extraction(sp_consensus::Error),
 	/// Could not fetch epoch
-	#[display(fmt = "Could not fetch epoch at {:?}", _0)]
+	#[error("Could not fetch epoch at {0:?}")]
 	FetchEpoch(B::Hash),
 	/// Header rejected: too far in the future
-	#[display(fmt = "Header {:?} rejected: too far in the future", _0)]
+	#[error("Header {0:?} rejected: too far in the future")]
 	TooFarInFuture(B::Hash),
 	/// Parent unavailable. Cannot import
-	#[display(fmt = "Parent ({}) of {} unavailable. Cannot import", _0, _1)]
+	#[error("Parent ({0}) of {1} unavailable. Cannot import")]
 	ParentUnavailable(B::Hash, B::Hash),
 	/// Slot number must increase
-	#[display(fmt = "Slot number must increase: parent slot: {}, this slot: {}", _0, _1)]
+	#[error("Slot number must increase: parent slot: {0}, this slot: {1}")]
 	SlotMustIncrease(Slot, Slot),
 	/// Header has a bad seal
-	#[display(fmt = "Header {:?} has a bad seal", _0)]
+	#[error("Header {0:?} has a bad seal")]
 	HeaderBadSeal(B::Hash),
 	/// Header is unsealed
-	#[display(fmt = "Header {:?} is unsealed", _0)]
+	#[error("Header {0:?} is unsealed")]
 	HeaderUnsealed(B::Hash),
 	/// Slot author not found
-	#[display(fmt = "Slot author not found")]
+	#[error("Slot author not found")]
 	SlotAuthorNotFound,
 	/// Secondary slot assignments are disabled for the current epoch.
-	#[display(fmt = "Secondary slot assignments are disabled for the current epoch.")]
+	#[error("Secondary slot assignments are disabled for the current epoch.")]
 	SecondarySlotAssignmentsDisabled,
 	/// Bad signature
-	#[display(fmt = "Bad signature on {:?}", _0)]
+	#[error("Bad signature on {0:?}")]
 	BadSignature(B::Hash),
 	/// Invalid author: Expected secondary author
-	#[display(fmt = "Invalid author: Expected secondary author: {:?}, got: {:?}.", _0, _1)]
+	#[error("Invalid author: Expected secondary author: {0:?}, got: {1:?}.")]
 	InvalidAuthor(AuthorityId, AuthorityId),
 	/// No secondary author expected.
-	#[display(fmt = "No secondary author expected.")]
+	#[error("No secondary author expected.")]
 	NoSecondaryAuthorExpected,
 	/// VRF verification of block by author failed
-	#[display(
-		fmt = "VRF verification of block by author {:?} failed: threshold {} exceeded",
-		_0,
-		_1
-	)]
+	#[error("VRF verification of block by author {0:?} failed: threshold {1} exceeded")]
 	VRFVerificationOfBlockFailed(AuthorityId, u128),
 	/// VRF verification failed
-	#[display(fmt = "VRF verification failed: {:?}", _0)]
+	#[error("VRF verification failed: {0:?}")]
 	VRFVerificationFailed(SignatureError),
 	/// Could not fetch parent header
-	#[display(fmt = "Could not fetch parent header: {:?}", _0)]
+	#[error("Could not fetch parent header: {0:?}")]
 	FetchParentHeader(sp_blockchain::Error),
 	/// Expected epoch change to happen.
-	#[display(fmt = "Expected epoch change to happen at {:?}, s{}", _0, _1)]
+	#[error("Expected epoch change to happen at {0:?}, s{1}")]
 	ExpectedEpochChange(B::Hash, Slot),
 	/// Unexpected config change.
-	#[display(fmt = "Unexpected config change")]
+	#[error("Unexpected config change")]
 	UnexpectedConfigChange,
 	/// Unexpected epoch change
-	#[display(fmt = "Unexpected epoch change")]
+	#[error("Unexpected epoch change")]
 	UnexpectedEpochChange,
 	/// Parent block has no associated weight
-	#[display(fmt = "Parent block of {} has no associated weight", _0)]
+	#[error("Parent block of {0} has no associated weight")]
 	ParentBlockNoAssociatedWeight(B::Hash),
 	/// Check inherents error
-	#[display(fmt = "Checking inherents failed: {}", _0)]
+	#[error("Checking inherents failed: {0}")]
 	CheckInherents(sp_inherents::Error),
 	/// Unhandled check inherents error
-	#[display(fmt = "Checking inherents unhandled error: {}", "String::from_utf8_lossy(_0)")]
+	#[error("Checking inherents unhandled error: {}", String::from_utf8_lossy(.0))]
 	CheckInherentsUnhandled(sp_inherents::InherentIdentifier),
 	/// Create inherents error.
-	#[display(fmt = "Creating inherents failed: {}", _0)]
+	#[error("Creating inherents failed: {0}")]
 	CreateInherents(sp_inherents::Error),
 	/// Client error
+	#[error(transparent)]
 	Client(sp_blockchain::Error),
 	/// Runtime Api error.
+	#[error(transparent)]
 	RuntimeApi(sp_api::ApiError),
 	/// Fork tree error
+	#[error(transparent)]
 	ForkTree(Box<fork_tree::Error<sp_blockchain::Error>>),
 }
 
