@@ -449,8 +449,8 @@ mod tests {
 		assert_eq!(
 			recvs,
 			vec![
-				format!("{{\"jsonrpc\":\"2.0\",\"method\":\"beefy_justifications\",\"params\":{{\"result\":\"0x046d68343048656c6c6f20576f726c642105000000000000000000000004000000000000\",\"subscription\":\"{}\"}}}}", sub_id), 
-				format!("{{\"jsonrpc\":\"2.0\",\"method\":\"beefy_justifications\",\"params\":{{\"result\":\"0x046d68343048656c6c6f20576f726c642106000000000000000000000004000000000000\",\"subscription\":\"{}\"}}}}", sub_id)
+				format!("{{\"jsonrpc\":\"2.0\",\"method\":\"beefy_justifications\",\"params\":{{\"result\":\"0x046d68343048656c6c6f20576f726c64210500000000000000000000000000000004000000000000\",\"subscription\":\"{}\"}}}}", sub_id), 
+				format!("{{\"jsonrpc\":\"2.0\",\"method\":\"beefy_justifications\",\"params\":{{\"result\":\"0x046d68343048656c6c6f20576f726c64210600000000000000000000000000000004000000000000\",\"subscription\":\"{}\"}}}}", sub_id)
 			]
 		);
 	}
