@@ -32,7 +32,7 @@ use codec::{Decode, Encode, MaxEncodedLen};
 use frame_election_provider_support::PageIndex;
 use frame_support::{
 	traits::{Currency, Defensive, ReservableCurrency},
-	BoundedVec,
+	BoundedVec, RuntimeDebugNoBound,
 };
 use scale_info::TypeInfo;
 use sp_npos_elections::ElectionScore;
@@ -53,7 +53,7 @@ type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
 /// All of the (meta) data around a signed submission
-#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Default)]
+#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Default, RuntimeDebugNoBound)]
 #[codec(mel_bound(T: Config))]
 #[scale_info(skip_type_params(T))]
 pub struct SubmissionMetadata<T: Config> {
@@ -74,8 +74,10 @@ impl<T: Config> SolutionDataProvider for Pallet<T> {
 	fn get_page(page: PageIndex) -> Option<Self::Solution> {
 		// note: a non-existing page will still be treated as merely an empty page. This could be
 		// re-considered.
-		Submissions::<T>::leader()
-			.map(|(who, _score)| Submissions::<T>::get_page_of(&who, page).unwrap_or_default())
+		Submissions::<T>::leader().map(|(who, _score)| {
+			sublog!(info, "signed", "returning page {} of {:?}'s submission as leader.", page, who);
+			Submissions::<T>::get_page_of(&who, page).unwrap_or_default()
+		})
 	}
 
 	fn get_score() -> Option<ElectionScore> {
@@ -233,14 +235,17 @@ pub mod pallet {
 			result
 		}
 
-		/// *Fully* take the leader from storage, with all of its associated data.
+		/// *Fully* **TAKE** (i.e. get and remove) the leader from storage, with all of its
+		/// associated data.
 		///
 		/// This removes all associated data of the leader from storage, discarding the submission
-		/// data and returning the rest.
+		/// data and score, returning the rest.
 		pub(crate) fn fully_take_leader() -> Option<(T::AccountId, SubmissionMetadata<T>)> {
 			Self::mutate_checked(|| {
 				SortedScores::<T>::mutate(|sorted| sorted.pop()).and_then(|(submitter, _score)| {
-					Self::metadata(&submitter).map(|metadata| (submitter, metadata))
+					SubmissionStorage::<T>::remove_prefix(&submitter, None);
+					SubmissionMetadataStorage::<T>::take(&submitter)
+						.map(|metadata| (submitter, metadata))
 				})
 			})
 		}
@@ -389,9 +394,10 @@ pub mod pallet {
 						.filter(|(who, _score)| who == &submitter)
 						.collect::<Vec<_>>();
 
+					dbg!(&submitter, &meta, &matches);
 					ensure!(
 						matches.len() == 1,
-						"item existing in metadata but missing in sorted list."
+						"item existing in metadata but missing in sorted list.",
 					);
 
 					let (_, score) = matches.pop().expect("checked; qed");
