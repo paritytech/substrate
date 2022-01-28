@@ -19,6 +19,7 @@ parameter_types! {
 	pub static CanBond: bool = true;
 	pub static CanNominate: bool = true;
 	pub static BondingDuration: EraIndex = 3;
+	pub static DisableWithdrawUnbonded: bool = false;
 }
 
 pub struct StakingMock;
@@ -60,14 +61,23 @@ impl sp_staking::StakingInterface for StakingMock {
 
 	fn unbond(who: Self::AccountId, amount: Self::Balance) -> DispatchResult {
 		BONDED_BALANCE_MAP.with(|m| *m.borrow_mut().get_mut(&who).unwrap() -= amount);
+		println!("unbond amount: {:?}", amount);
 		UNBONDING_BALANCE_MAP
 			.with(|m| *m.borrow_mut().entry(who).or_insert(Self::Balance::zero()) += amount);
 		Ok(())
 	}
 
 	fn withdraw_unbonded(who: Self::AccountId, _: u32) -> Result<u64, DispatchError> {
+		if DisableWithdrawUnbonded::get() {
+			// We have a naive impl - it will always withdraw whatever is unbonding regardless of era
+			// So sometimes we may want to disable it to simulate calls in eras where there is nothing
+			// to completely unlock.
+			return Ok(1)
+		}
+
 		let maybe_new_free = UNBONDING_BALANCE_MAP.with(|m| m.borrow_mut().remove(&who));
 		if let Some(new_free) = maybe_new_free {
+			println!("new_free: {:?}", new_free);
 			assert_ok!(Balances::mutate_account(&who, |a| a.free += new_free));
 		}
 		Ok(100)

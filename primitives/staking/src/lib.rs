@@ -47,10 +47,10 @@ pub struct SlashPoolArgs<'a, AccountId, Balance> {
 /// Output for [`PoolsInterface::slash_pool`].
 pub struct SlashPoolOut<Balance> {
 	/// The new active bonded balance of the stash with the proportional slash amounted subtracted.
-	pub new_active_bonded: Balance,
+	pub slashed_bonded: Balance,
 	/// A map from era of unlocking chunks to their new balance with the proportional slash amount
 	/// subtracted.
-	pub new_unlocking: BTreeMap<EraIndex, Balance>,
+	pub slashed_unlocking: BTreeMap<EraIndex, Balance>,
 }
 
 pub trait PoolsInterface {

@@ -2,16 +2,9 @@ use super::*;
 use crate::mock::{
 	Balance, Balances, BondingDuration, CanBond, CanBondExtra, CanNominate, CurrentEra,
 	ExistentialDeposit, ExtBuilder, Origin, Pools, Runtime, StakingMock, PRIMARY_ACCOUNT,
-	REWARDS_ACCOUNT, UNBONDING_BALANCE_MAP,
+	REWARDS_ACCOUNT, UNBONDING_BALANCE_MAP, DisableWithdrawUnbonded
 };
 use frame_support::{assert_noop, assert_ok};
-
-//
-// - get pallet-pools to compile and pass test
-// - implement staking impl of the delegator pools interface
-// 	- factor out can_* -> pre_execution_checks
-// - test `slash_pool`
-// - incorporate returned weight from staking calls
 
 macro_rules! sub_pools_with_era {
 	($($k:expr => $v:expr),* $(,)?) => {{
@@ -1140,7 +1133,7 @@ mod unbond {
 	#[test]
 	fn unbond_pool_of_1_works() {
 		ExtBuilder::default().build_and_execute(|| {
-			assert_ok!(Pools::unbond(Origin::signed(10)));
+			assert_ok!(Pools::unbond(Origin::signed(10), 0));
 
 			assert_eq!(
 				SubPoolsStorage::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap().with_era,
@@ -1167,7 +1160,7 @@ mod unbond {
 				Balances::make_free_balance_be(&REWARDS_ACCOUNT, 600);
 
 				// When
-				assert_ok!(Pools::unbond(Origin::signed(40)));
+				assert_ok!(Pools::unbond(Origin::signed(40), 0));
 
 				// Then
 				assert_eq!(
@@ -1183,7 +1176,7 @@ mod unbond {
 				assert_eq!(Balances::free_balance(&40), 40 + 40); // We claim rewards when unbonding
 
 				// When
-				assert_ok!(Pools::unbond(Origin::signed(10)));
+				assert_ok!(Pools::unbond(Origin::signed(10), 0));
 
 				// Then
 				assert_eq!(
@@ -1199,7 +1192,7 @@ mod unbond {
 				assert_eq!(Balances::free_balance(&10), 10 + 10);
 
 				// When
-				assert_ok!(Pools::unbond(Origin::signed(550)));
+				assert_ok!(Pools::unbond(Origin::signed(550), 0));
 
 				// Then
 				assert_eq!(
@@ -1236,7 +1229,7 @@ mod unbond {
 			let current_era = 1 + MaxUnbonding::<Runtime>::get();
 			CurrentEra::set(current_era);
 
-			assert_ok!(Pools::unbond(Origin::signed(10)));
+			assert_ok!(Pools::unbond(Origin::signed(10), 0));
 
 			// Then
 			assert_eq!(
@@ -1255,7 +1248,7 @@ mod unbond {
 	#[test]
 	fn unbond_errors_correctly() {
 		ExtBuilder::default().build_and_execute(|| {
-			assert_noop!(Pools::unbond(Origin::signed(11)), Error::<Runtime>::DelegatorNotFound);
+			assert_noop!(Pools::unbond(Origin::signed(11), 0), Error::<Runtime>::DelegatorNotFound);
 
 			// Add the delegator
 			let delegator = Delegator {
@@ -1266,13 +1259,16 @@ mod unbond {
 			};
 			Delegators::<Runtime>::insert(11, delegator);
 
-			assert_noop!(Pools::unbond(Origin::signed(11)), Error::<Runtime>::PoolNotFound);
+			assert_noop!(Pools::unbond(Origin::signed(11), 0), Error::<Runtime>::PoolNotFound);
 
 			// Add bonded pool to go along with the delegator
 			let bonded_pool = BondedPool { points: 10 };
 			BondedPools::<Runtime>::insert(1, bonded_pool);
 
-			assert_noop!(Pools::unbond(Origin::signed(11)), Error::<Runtime>::RewardPoolNotFound);
+			assert_noop!(
+				Pools::unbond(Origin::signed(11), 0),
+				Error::<Runtime>::RewardPoolNotFound
+			);
 		});
 	}
 }
@@ -1288,14 +1284,14 @@ mod withdraw_unbonded {
 				// Given
 
 				Balances::make_free_balance_be(&PRIMARY_ACCOUNT, 0);
-				assert_ok!(Pools::unbond(Origin::signed(10)));
-				assert_ok!(Pools::unbond(Origin::signed(40)));
+				assert_ok!(Pools::unbond(Origin::signed(10), 0));
+				assert_ok!(Pools::unbond(Origin::signed(40), 0));
 
 				let mut current_era = 1;
 				CurrentEra::set(current_era);
 
 				// In a new era, unbond 550
-				assert_ok!(Pools::unbond(Origin::signed(550)));
+				assert_ok!(Pools::unbond(Origin::signed(550), 0));
 
 				// Simulate a slash to the pool with_era(current_era)
 				let mut sub_pools = SubPoolsStorage::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap();
@@ -1377,9 +1373,14 @@ mod withdraw_unbonded {
 				// Given
 				StakingMock::set_bonded_balance(PRIMARY_ACCOUNT, 100); // slash bonded balance
 				Balances::make_free_balance_be(&PRIMARY_ACCOUNT, 0);
-				assert_ok!(Pools::unbond(Origin::signed(10)));
-				assert_ok!(Pools::unbond(Origin::signed(40)));
-				assert_ok!(Pools::unbond(Origin::signed(550)));
+
+				// Disable withdraw unbonded so unbond calls do not withdraw funds unbonded immediately prior.
+				DisableWithdrawUnbonded::set(true);
+				assert_ok!(Pools::unbond(Origin::signed(10), 0));
+				assert_ok!(Pools::unbond(Origin::signed(40), 0));
+				assert_ok!(Pools::unbond(Origin::signed(550), 0));
+				DisableWithdrawUnbonded::set(false);
+
 				SubPoolsStorage::<Runtime>::insert(
 					PRIMARY_ACCOUNT,
 					SubPools {
@@ -1570,7 +1571,7 @@ mod pools_interface {
 		// Slash with no sub pools
 		ExtBuilder::default().build_and_execute(|| {
 			// When
-			let SlashPoolOut { new_active_bonded, new_unlocking } =
+			let SlashPoolOut { slashed_bonded, slashed_unlocking } =
 				Pools::slash_pool(SlashPoolArgs {
 					pool_stash: &PRIMARY_ACCOUNT,
 					slash_amount: 9,
@@ -1585,8 +1586,8 @@ mod pools_interface {
 				SubPoolsStorage::<Runtime>::get(PRIMARY_ACCOUNT).unwrap(),
 				Default::default()
 			);
-			assert_eq!(new_unlocking, Default::default());
-			assert_eq!(new_active_bonded, 1);
+			assert_eq!(slashed_unlocking, Default::default());
+			assert_eq!(slashed_bonded, 1);
 
 			// Slash, some sub pools are in range, some are out
 			// Same as above, but a slash amount greater than total slashable
@@ -1596,10 +1597,10 @@ mod pools_interface {
 		ExtBuilder::default().add_delegators(vec![(100, 100)]).build_and_execute(|| {
 			// Given
 			// Unbond in era 0
-			assert_ok!(Pools::unbond(Origin::signed(10)));
+			assert_ok!(Pools::unbond(Origin::signed(10), 0));
 
 			// When
-			let SlashPoolOut { new_active_bonded, new_unlocking } =
+			let SlashPoolOut { slashed_bonded, slashed_unlocking } =
 				Pools::slash_pool(SlashPoolArgs {
 					pool_stash: &PRIMARY_ACCOUNT,
 					slash_amount: 9,
@@ -1620,8 +1621,8 @@ mod pools_interface {
 					}
 				}
 			);
-			assert_eq!(new_unlocking, Default::default());
-			assert_eq!(new_active_bonded, 91);
+			assert_eq!(slashed_unlocking, Default::default());
+			assert_eq!(slashed_bonded, 91);
 		});
 	}
 
@@ -1635,19 +1636,19 @@ mod pools_interface {
 				BondingDuration::set(5);
 				assert_eq!(MaxUnbonding::<Runtime>::get(), 7);
 
-				assert_ok!(Pools::unbond(Origin::signed(10)));
+				assert_ok!(Pools::unbond(Origin::signed(10), 0));
 
 				CurrentEra::set(1);
-				assert_ok!(Pools::unbond(Origin::signed(40)));
+				assert_ok!(Pools::unbond(Origin::signed(40), 0));
 
 				CurrentEra::set(3);
-				assert_ok!(Pools::unbond(Origin::signed(100)));
+				assert_ok!(Pools::unbond(Origin::signed(100), 0));
 
 				CurrentEra::set(5);
-				assert_ok!(Pools::unbond(Origin::signed(200)));
+				assert_ok!(Pools::unbond(Origin::signed(200), 0));
 
 				CurrentEra::set(6);
-				assert_ok!(Pools::unbond(Origin::signed(300)));
+				assert_ok!(Pools::unbond(Origin::signed(300), 0));
 
 				// Given
 				assert_eq!(
@@ -1665,7 +1666,7 @@ mod pools_interface {
 				);
 
 				// When
-				let SlashPoolOut { new_active_bonded, new_unlocking } =
+				let SlashPoolOut { slashed_bonded, slashed_unlocking } =
 					Pools::slash_pool(SlashPoolArgs {
 						pool_stash: &PRIMARY_ACCOUNT,
 						slash_amount: (40 + 100 + 200 + 400) / 2,
@@ -1689,10 +1690,10 @@ mod pools_interface {
 						}
 					}
 				);
-				let expected_new_unlocking: BTreeMap<_, _> =
+				let expected_slashed_unlocking: BTreeMap<_, _> =
 					[(1, 40 / 2), (3, 100 / 2), (5, 200 / 2)].into_iter().collect();
-				assert_eq!(new_unlocking, expected_new_unlocking);
-				assert_eq!(new_active_bonded, 400 / 2);
+				assert_eq!(slashed_unlocking, expected_slashed_unlocking);
+				assert_eq!(slashed_bonded, 400 / 2);
 			});
 	}
 
@@ -1706,19 +1707,19 @@ mod pools_interface {
 				BondingDuration::set(5);
 				assert_eq!(MaxUnbonding::<Runtime>::get(), 7);
 
-				assert_ok!(Pools::unbond(Origin::signed(10)));
+				assert_ok!(Pools::unbond(Origin::signed(10), 0));
 
 				CurrentEra::set(1);
-				assert_ok!(Pools::unbond(Origin::signed(40)));
+				assert_ok!(Pools::unbond(Origin::signed(40), 0));
 
 				CurrentEra::set(3);
-				assert_ok!(Pools::unbond(Origin::signed(100)));
+				assert_ok!(Pools::unbond(Origin::signed(100), 0));
 
 				CurrentEra::set(5);
-				assert_ok!(Pools::unbond(Origin::signed(200)));
+				assert_ok!(Pools::unbond(Origin::signed(200), 0));
 
 				CurrentEra::set(6);
-				assert_ok!(Pools::unbond(Origin::signed(300)));
+				assert_ok!(Pools::unbond(Origin::signed(300), 0));
 
 				// Given
 				assert_eq!(
@@ -1736,7 +1737,7 @@ mod pools_interface {
 				);
 
 				// When
-				let SlashPoolOut { new_active_bonded, new_unlocking } =
+				let SlashPoolOut { slashed_bonded, slashed_unlocking } =
 					Pools::slash_pool(SlashPoolArgs {
 						pool_stash: &PRIMARY_ACCOUNT,
 						slash_amount: 40 + 100 + 200 + 400 + 10,
@@ -1760,10 +1761,10 @@ mod pools_interface {
 						}
 					}
 				);
-				let expected_new_unlocking: BTreeMap<_, _> =
+				let expected_slashed_unlocking: BTreeMap<_, _> =
 					[(1, 0), (3, 0), (5, 0)].into_iter().collect();
-				assert_eq!(new_unlocking, expected_new_unlocking);
-				assert_eq!(new_active_bonded, 0);
+				assert_eq!(slashed_unlocking, expected_slashed_unlocking);
+				assert_eq!(slashed_bonded, 0);
 			});
 	}
 }

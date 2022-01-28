@@ -5,9 +5,9 @@
 //!
 //! ## Design
 //!
-//! _Notes_: this section uses pseudo code to explain general design and does not neccesarily
-//! reflect the actual implementation. Additionally, a strong knowledge of `pallet-staking`'s api is
-//! assumed)
+//! _Notes_: this section uses pseudo code to explain general design and does not necessarily
+//! reflect the exact implementation. Additionally, a strong knowledge of `pallet-staking`'s api is
+//! assumed.
 //!
 //! The delegation pool abstraction is composed of:
 //!
@@ -24,10 +24,9 @@
 //!
 //! ### Design goals
 //!
-//! * Maintain integrity of slashing events, correctly penalizing delegators that where the pool
-//!   while it was backing a validator that got slashed.
+//! * Maintain integrity of slashing events, sufficiently penalizing delegators that where in the
+//!   pool while it was backing a validator that got slashed.
 //! * Maximize scalability in terms of delegator count.
-//!
 //!
 //! ### Bonded pool
 //!
@@ -39,18 +38,18 @@
 //! to the bonded pools account. Then the pool calls `bond_extra(amount_transferred)` and issues new
 //! points which are tracked by the delegator and added to the bonded pools points.
 //!
-//! When the pool already has some balance, we want the value of a point before the transfer to equal
-//! the value of a point after the transfer. So, when a delegator joins a bonded pool with a given
-//! `amount_transferred`, we maintain the ratio of bonded balance to points such that:
+//! When the pool already has some balance, we want the value of a point before the transfer to
+//! equal the value of a point after the transfer. So, when a delegator joins a bonded pool with a
+//! given `amount_transferred`, we maintain the ratio of bonded balance to points such that:
 //!
 //! ```
-//! balance_after_transfer / total_points_after_transfer == balance_before_transfer / total_points_before_transfer;
+//! balance_after_transfer / points_after_transfer == balance_before_transfer / points_before_transfer;
 //! ```
 //!
 //! To achieve this, we issue points based on the following:
 //!
 //! ```
-//! new_points_issued = (total_points_before_transfer / balance_before_transfer) * amount_transferred;
+//! points_issued = (points_before_transfer / balance_before_transfer) * amount_transferred;
 //! ```
 //!
 //! For new bonded pools we can set the points issued per balance arbitrarily. In this
@@ -64,7 +63,7 @@
 //!
 //! ### Reward pool
 //!
-//! When a pool is first bonded it sets up an arbirtrary account as its reward destination. To track
+//! When a pool is first bonded it sets up an arbitrary account as its reward destination. To track
 //! staking rewards we track how the balance of this reward account changes.
 //!
 //! The reward pool needs to store:
@@ -107,7 +106,7 @@
 //! 3) Transfer `delegator_payout` to the delegator
 //! 4) For the delegator set:
 //!     ```
-//!     delegator.reward_pool_total_earnings = current_total_earnings
+//!     delegator.reward_pool_total_earnings = current_total_earnings;
 //!     ```
 //! 5) For the pool set:
 //!     ```
@@ -115,6 +114,7 @@
 //!     reward_pool.balance = current_balance - delegator_payout;
 //!     reward_pool.total_earnings = current_total_earnings;
 //!     ```
+//!
 //! _Note_: One short coming of this design is that new joiners can claim rewards for the era after
 //! they join in even though their funds did not contribute to the pools vote weight. When a
 //! delegator joins, they set the field `reward_pool_total_earnings` equal to the `total_earnings`
@@ -321,7 +321,6 @@ pub struct Delegator<T: Config> {
 	points: BalanceOf<T>,
 	/// The reward pools total earnings _ever_ the last time this delegator claimed a payout.
 	/// Assuming no massive burning events, we expect this value to always be below total issuance.
-	// TODO: ^ double check the above is an OK assumption
 	/// This value lines up with the `RewardPool::total_earnings` after a delegator claims a
 	/// payout.
 	reward_pool_total_earnings: BalanceOf<T>,
@@ -673,13 +672,12 @@ pub mod pallet {
 				Delegator::<T> {
 					pool: target.clone(),
 					points: new_points,
-					// TODO double check that this is ok.
 					// At best the reward pool has the rewards up through the previous era. If the
 					// delegator joins prior to the snapshot they will benefit from the rewards of
-					// the current era despite not contributing to the pool's vote weight. If they
+					// the active era despite not contributing to the pool's vote weight. If they
 					// join after the snapshot is taken they will benefit from the rewards of the
-					// next *2* eras because their vote weight will not be counted until the
-					// snapshot in current era + 1.
+					// next 2 eras because their vote weight will not be counted until the
+					// snapshot in active era + 1.
 					reward_pool_total_earnings: reward_pool.total_earnings,
 					unbonding_era: None,
 				},
@@ -717,7 +715,7 @@ pub mod pallet {
 		/// A bonded delegator can use this to unbond _all_ funds from the pool.
 		/// In order to withdraw the funds, the delegator must wait
 		#[pallet::weight(666)]
-		pub fn unbond(origin: OriginFor<T>) -> DispatchResult {
+		pub fn unbond(origin: OriginFor<T>, num_slashing_spans: u32) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let delegator = Delegators::<T>::get(&who).ok_or(Error::<T>::DelegatorNotFound)?;
 			let mut bonded_pool =
@@ -741,7 +739,12 @@ pub mod pallet {
 			// to unbond so we have the correct points for the balance:share ratio.
 			bonded_pool.points = bonded_pool.points.saturating_sub(delegator.points);
 
-			// TODO: call withdraw unbonded to try and minimize unbonding chunks
+			// Call withdraw unbonded to minimize unlocking chunks. If this is not done then we
+			// would have to rely on delegators calling `withdraw_unbonded` in order to clear
+			// unlocking chunks. This is a catch 22 for delegators who have not yet unbonded
+			// because the pool needs to call `withdraw_unbonded` so they can `unbond`, but they
+			// must call `unbond` prior to being able to call `withdraw_unbonded`.
+			T::StakingInterface::withdraw_unbonded(delegator.pool.clone(), num_slashing_spans)?;
 			// Unbond in the actual underlying pool
 			T::StakingInterface::unbond(delegator.pool.clone(), balance_to_unbond)?;
 
@@ -807,9 +810,7 @@ pub mod pallet {
 				balance_to_unbond
 			};
 
-			if T::Currency::free_balance(&delegator.pool) < balance_to_unbond {
-				T::StakingInterface::withdraw_unbonded(delegator.pool.clone(), num_slashing_spans)?;
-			}
+			T::StakingInterface::withdraw_unbonded(delegator.pool.clone(), num_slashing_spans)?;
 
 			T::Currency::transfer(
 				&delegator.pool,
@@ -1064,12 +1065,12 @@ impl<T: Config> Pallet<T> {
 
 		if total_affected_balance.is_zero() {
 			return Some(SlashPoolOut {
-				new_active_bonded: Zero::zero(),
-				new_unlocking: Default::default(),
+				slashed_bonded: Zero::zero(),
+				slashed_unlocking: Default::default(),
 			})
 		}
 
-		let new_unlocking: BTreeMap<_, _> = affected_range
+		let slashed_unlocking: BTreeMap<_, _> = affected_range
 			.filter_map(|era| {
 				if let Some(mut unbond_pool) = sub_pools.with_era.get_mut(&era) {
 					let after_slash_balance = {
@@ -1095,7 +1096,7 @@ impl<T: Config> Pallet<T> {
 		SubPoolsStorage::<T>::insert(pool_stash, sub_pools);
 
 		// Equivalent to `(slash_amount / total_affected_balance) * active_bonded`
-		let new_active_bonded = {
+		let slashed_bonded = {
 			let bonded_pool_slash_amount = slash_amount
 				.saturating_mul(active_bonded)
 				// We check for zero above
@@ -1104,7 +1105,7 @@ impl<T: Config> Pallet<T> {
 			active_bonded.saturating_sub(bonded_pool_slash_amount)
 		};
 
-		Some(SlashPoolOut { new_active_bonded, new_unlocking })
+		Some(SlashPoolOut { slashed_bonded, slashed_unlocking })
 	}
 }
 
@@ -1118,14 +1119,3 @@ impl<T: Config> PoolsInterface for Pallet<T> {
 		Self::do_slash(args)
 	}
 }
-
-// TODO
-// -
-// - tests
-// - force pool creation
-// - rebond_rewards
-// - pool update targets
-// - pool block - don't allow new joiners (or bond_extra)
-// - pool begin destroy - unbond the entire pool balance
-// - pool end destroy - once all subpools are empty delete everything from storage
-// - force pool delete?
