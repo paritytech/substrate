@@ -30,6 +30,29 @@ pub type SessionIndex = u32;
 /// Counter for the number of eras that have passed.
 pub type EraIndex = u32;
 
+/// Arguments for [`PoolsInterface::slash_pool`].
+pub struct SlashPoolArgs<'a, AccountId, Balance> {
+	/// _Stash_ account of the pool
+	pub pool_stash: &'a AccountId,
+	/// The amount to slash
+	pub slash_amount: Balance,
+	/// Era the slash happened in
+	pub slash_era: EraIndex,
+	/// Era the slash is applied in
+	pub apply_era: EraIndex,
+	/// The current active bonded of the account (i.e. `StakingLedger::active`)
+	pub active_bonded: Balance,
+}
+
+/// Output for [`PoolsInterface::slash_pool`].
+pub struct SlashPoolOut<Balance> {
+	/// The new active bonded balance of the stash with the proportional slash amounted subtracted.
+	pub new_active_bonded: Balance,
+	/// A map from era of unlocking chunks to their new balance with the proportional slash amount
+	/// subtracted.
+	pub new_unlocking: BTreeMap<EraIndex, Balance>,
+}
+
 pub trait PoolsInterface {
 	type AccountId;
 	type Balance;
@@ -51,12 +74,8 @@ pub trait PoolsInterface {
 	/// balance. This should apply the updated balances to the pools and return the updated balances
 	/// to the caller (presumably pallet-staking) so they can do the corresponding updates.
 	fn slash_pool(
-		account_id: &Self::AccountId,
-		slash_amount: Self::Balance,
-		slash_era: EraIndex,
-		active_era: EraIndex,
-		active_bonded: Self::Balance,
-	) -> Option<(Self::Balance, BTreeMap<EraIndex, Self::Balance>)>;
+		args: SlashPoolArgs<Self::AccountId, Self::Balance>,
+	) -> Option<SlashPoolOut<Self::Balance>>;
 }
 
 /// Trait for communication with the staking pallet.
@@ -74,7 +93,8 @@ pub trait StakingInterface {
 	/// nominator (e.g. in the bags-list of polkadot)
 	fn minimum_bond() -> Self::Balance;
 
-	/// Number of eras that staked funds must remain bonded for.
+	/// Number of eras that staked funds must remain bonded for. NOTE: it is assumed that this is
+	/// always strictly greater than the slash deffer duration.
 	fn bonding_duration() -> EraIndex;
 
 	/// The current era for the staking system.

@@ -58,7 +58,7 @@ use frame_support::{
 use scale_info::TypeInfo;
 use sp_core::U256;
 use sp_runtime::traits::{Bounded, Convert, Saturating, StaticLookup, TrailingZeroInput, Zero};
-use sp_staking::{EraIndex, PoolsInterface, StakingInterface};
+use sp_staking::{EraIndex, PoolsInterface, SlashPoolArgs, SlashPoolOut, StakingInterface};
 use sp_std::{collections::btree_map::BTreeMap, ops::Div};
 
 #[cfg(test)]
@@ -320,6 +320,9 @@ impl<T: Config> SubPools<T> {
 struct MaxUnbonding<T: Config>(PhantomData<T>);
 impl<T: Config> Get<u32> for MaxUnbonding<T> {
 	fn get() -> u32 {
+		// TODO: This may be too dangerous in the scenario bonding_duration gets decreased because
+		// we would no longer be able to decode `SubPoolsWithEra`, which uses `MaxUnbonding` as the
+		// bound
 		T::StakingInterface::bonding_duration() + T::WithEraWithdrawWindow::get()
 	}
 }
@@ -452,13 +455,9 @@ pub mod pallet {
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			// If a delegator already exists that means they already belong to a pool
-			ensure!(
-				!Delegators::<T>::contains_key(&who),
-				Error::<T>::AccountBelongsToOtherPool
-			);
+			ensure!(!Delegators::<T>::contains_key(&who), Error::<T>::AccountBelongsToOtherPool);
 
-			let mut bonded_pool =
-				BondedPools::<T>::get(&target).ok_or(Error::<T>::PoolNotFound)?;
+			let mut bonded_pool = BondedPools::<T>::get(&target).ok_or(Error::<T>::PoolNotFound)?;
 			bonded_pool.ok_to_join_with(&target, amount)?;
 
 			// The pool should always be created in such a way its in a state to bond extra, but if
@@ -528,8 +527,7 @@ pub mod pallet {
 		#[pallet::weight(666)]
 		pub fn claim_payout(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			let delegator =
-				Delegators::<T>::get(&who).ok_or(Error::<T>::DelegatorNotFound)?;
+			let delegator = Delegators::<T>::get(&who).ok_or(Error::<T>::DelegatorNotFound)?;
 			let bonded_pool = BondedPools::<T>::get(&delegator.pool).ok_or_else(|| {
 				log!(error, "A bonded pool could not be found, this is a system logic error.");
 				Error::<T>::PoolNotFound
@@ -545,8 +543,7 @@ pub mod pallet {
 		#[pallet::weight(666)]
 		pub fn unbond(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			let delegator =
-				Delegators::<T>::get(&who).ok_or(Error::<T>::DelegatorNotFound)?;
+			let delegator = Delegators::<T>::get(&who).ok_or(Error::<T>::DelegatorNotFound)?;
 			let mut bonded_pool =
 				BondedPools::<T>::get(&delegator.pool).ok_or(Error::<T>::PoolNotFound)?;
 
@@ -556,8 +553,7 @@ pub mod pallet {
 			Self::do_reward_payout(who.clone(), delegator, &bonded_pool)?;
 
 			// Re-fetch the delegator because they where updated by `do_reward_payout`.
-			let mut delegator =
-				Delegators::<T>::get(&who).ok_or(Error::<T>::DelegatorNotFound)?;
+			let mut delegator = Delegators::<T>::get(&who).ok_or(Error::<T>::DelegatorNotFound)?;
 			// Note that we lazily create the unbonding pools here if they don't already exist
 			let sub_pools = SubPoolsStorage::<T>::get(&delegator.pool).unwrap_or_default();
 			let current_era = T::StakingInterface::current_era().unwrap_or(Zero::zero());
@@ -607,8 +603,7 @@ pub mod pallet {
 		#[pallet::weight(666)]
 		pub fn withdraw_unbonded(origin: OriginFor<T>, num_slashing_spans: u32) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			let delegator =
-				Delegators::<T>::get(&who).ok_or(Error::<T>::DelegatorNotFound)?;
+			let delegator = Delegators::<T>::get(&who).ok_or(Error::<T>::DelegatorNotFound)?;
 
 			let unbonding_era = delegator.unbonding_era.ok_or(Error::<T>::NotUnbonding)?;
 			let current_era = T::StakingInterface::current_era().unwrap_or(Zero::zero());
@@ -865,18 +860,15 @@ impl<T: Config> Pallet<T> {
 	}
 
 	fn do_slash(
-		// This would be the nominator account
-		pool_account: &T::AccountId,
-		// Value of slash
-		slash_amount: BalanceOf<T>,
-		// Era the slash was initially reported
-		slash_era: EraIndex,
-		// Era the slash is applied in
-		apply_era: EraIndex,
-		// The current active bonded of the account (i.e. `StakingLedger::active`)
-		active_bonded_balance: BalanceOf<T>,
-	) -> Option<(BalanceOf<T>, BTreeMap<EraIndex, BalanceOf<T>>)> {
-		let mut sub_pools = SubPoolsStorage::<T>::get(pool_account).unwrap_or_default();
+		SlashPoolArgs {
+			pool_stash,
+			slash_amount,
+			slash_era,
+			apply_era,
+			active_bonded,
+		}: SlashPoolArgs::<T::AccountId, BalanceOf<T>>,
+	) -> Option<SlashPoolOut<BalanceOf<T>>> {
+		let mut sub_pools = SubPoolsStorage::<T>::get(pool_stash).unwrap_or_default();
 
 		let affected_range = (slash_era + 1)..=apply_era;
 
@@ -889,27 +881,31 @@ impl<T: Config> Pallet<T> {
 					balance_sum
 				}
 			});
-		let total_affected_balance =
-			active_bonded_balance.saturating_add(unbonding_affected_balance);
+
+		// Note that the balances of the bonded pool and its affected sub-pools will saturated at
+		// zero if slash_amount > total_affected_balance
+		let total_affected_balance = active_bonded.saturating_add(unbonding_affected_balance);
 
 		if total_affected_balance.is_zero() {
-			return Some((Zero::zero(), Default::default()))
+			return Some(SlashPoolOut {
+				new_active_bonded: Zero::zero(),
+				new_unlocking: Default::default(),
+			})
 		}
-		if slash_amount > total_affected_balance {
-			// TODO this shouldn't happen as long as MaxBonding pools is greater thant the slash
-			// defer duration, which it should implicitly be because we expect it be longer then the
-			// UnbondindDuration. TODO clearly document these assumptions
-		};
 
-		let unlock_chunk_balances: BTreeMap<_, _> = affected_range
+		let new_unlocking: BTreeMap<_, _> = affected_range
 			.filter_map(|era| {
 				if let Some(mut unbond_pool) = sub_pools.with_era.get_mut(&era) {
-					// Equivalent to `(slash_amount / total_affected_balance) * unbond_pool.balance`
-					let pool_slash_amount = slash_amount
-						.saturating_mul(unbond_pool.balance)
-						// We check for zero above
-						.div(total_affected_balance);
-					let after_slash_balance = unbond_pool.balance.saturating_sub(pool_slash_amount);
+					let after_slash_balance = {
+						// Equivalent to `(slash_amount / total_affected_balance) *
+						// unbond_pool.balance`
+						let pool_slash_amount = slash_amount
+							.saturating_mul(unbond_pool.balance)
+							// We check for zero above
+							.div(total_affected_balance);
+
+						unbond_pool.balance.saturating_sub(pool_slash_amount)
+					};
 
 					unbond_pool.balance = after_slash_balance;
 
@@ -920,15 +916,19 @@ impl<T: Config> Pallet<T> {
 			})
 			.collect();
 
-		SubPoolsStorage::<T>::insert(pool_account, sub_pools);
+		SubPoolsStorage::<T>::insert(pool_stash, sub_pools);
 
-		// Equivalent to `(slash_amount / total_affected_balance) * active_bonded_balance`
-		let slashed_bonded_pool_balance = slash_amount
-			.saturating_mul(active_bonded_balance)
-			// We check for zero above
-			.div(total_affected_balance);
+		// Equivalent to `(slash_amount / total_affected_balance) * active_bonded`
+		let new_active_bonded = {
+			let bonded_pool_slash_amount = slash_amount
+				.saturating_mul(active_bonded)
+				// We check for zero above
+				.div(total_affected_balance);
 
-		Some((slashed_bonded_pool_balance, unlock_chunk_balances))
+			active_bonded.saturating_sub(bonded_pool_slash_amount)
+		};
+
+		Some(SlashPoolOut { new_active_bonded, new_unlocking })
 	}
 }
 
@@ -937,13 +937,9 @@ impl<T: Config> PoolsInterface for Pallet<T> {
 	type Balance = BalanceOf<T>;
 
 	fn slash_pool(
-		pool_account: &Self::AccountId,
-		slash_amount: Self::Balance,
-		slash_era: EraIndex,
-		apply_era: EraIndex,
-		active_bonded: BalanceOf<T>,
-	) -> Option<(Self::Balance, BTreeMap<EraIndex, Self::Balance>)> {
-		Self::do_slash(pool_account, slash_amount, slash_era, apply_era, active_bonded)
+		args: SlashPoolArgs<Self::AccountId, Self::Balance>,
+	) -> Option<SlashPoolOut<Self::Balance>> {
+		Self::do_slash(args)
 	}
 }
 

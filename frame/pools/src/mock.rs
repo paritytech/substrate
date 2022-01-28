@@ -18,6 +18,7 @@ parameter_types! {
 	pub static CanBondExtra: bool = true;
 	pub static CanBond: bool = true;
 	pub static CanNominate: bool = true;
+	pub static BondingDuration: EraIndex = 3;
 }
 
 pub struct StakingMock;
@@ -41,7 +42,7 @@ impl sp_staking::StakingInterface for StakingMock {
 	}
 
 	fn bonding_duration() -> EraIndex {
-		3
+		BondingDuration::get()
 	}
 
 	fn bonded_balance(who: &Self::AccountId) -> Option<Self::Balance> {

@@ -1,8 +1,8 @@
 use super::*;
 use crate::mock::{
-	Balance, Balances, CanBond, CanBondExtra, CanNominate, CurrentEra, ExistentialDeposit,
-	ExtBuilder, Origin, Pools, Runtime, StakingMock, PRIMARY_ACCOUNT, REWARDS_ACCOUNT,
-	UNBONDING_BALANCE_MAP,
+	Balance, Balances, BondingDuration, CanBond, CanBondExtra, CanNominate, CurrentEra,
+	ExistentialDeposit, ExtBuilder, Origin, Pools, Runtime, StakingMock, PRIMARY_ACCOUNT,
+	REWARDS_ACCOUNT, UNBONDING_BALANCE_MAP,
 };
 use frame_support::{assert_noop, assert_ok};
 
@@ -509,10 +509,7 @@ mod claim_payout {
 				// Then
 				// Expect payout 50: (50 del virtual points / 50 pool points) * 50 pool balance
 				assert_eq!(Delegators::<Runtime>::get(50).unwrap(), del(50, 100));
-				assert_eq!(
-					RewardPools::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap(),
-					rew(0, 0, 100)
-				);
+				assert_eq!(RewardPools::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap(), rew(0, 0, 100));
 				assert_eq!(Balances::free_balance(&50), 50);
 				assert_eq!(Balances::free_balance(&REWARDS_ACCOUNT), 0);
 
@@ -935,11 +932,7 @@ mod claim_payout {
 				Balances::make_free_balance_be(&REWARDS_ACCOUNT, 100);
 
 				// When
-				assert_ok!(Pools::do_reward_payout(
-					10,
-					Delegators::get(10).unwrap(),
-					&bonded_pool
-				));
+				assert_ok!(Pools::do_reward_payout(10, Delegators::get(10).unwrap(), &bonded_pool));
 
 				// Then
 				// Expect a payout of 10: (10 del virtual points / 100 pool points) * 100 pool
@@ -953,11 +946,7 @@ mod claim_payout {
 				assert_eq!(Balances::free_balance(&REWARDS_ACCOUNT), 90);
 
 				// When
-				assert_ok!(Pools::do_reward_payout(
-					40,
-					Delegators::get(40).unwrap(),
-					&bonded_pool
-				));
+				assert_ok!(Pools::do_reward_payout(40, Delegators::get(40).unwrap(), &bonded_pool));
 
 				// Then
 				// Expect payout 40: (400 del virtual points / 900 pool points) * 90 pool balance
@@ -970,19 +959,12 @@ mod claim_payout {
 				assert_eq!(Balances::free_balance(&REWARDS_ACCOUNT), 50);
 
 				// When
-				assert_ok!(Pools::do_reward_payout(
-					50,
-					Delegators::get(50).unwrap(),
-					&bonded_pool
-				));
+				assert_ok!(Pools::do_reward_payout(50, Delegators::get(50).unwrap(), &bonded_pool));
 
 				// Then
 				// Expect payout 50: (50 del virtual points / 50 pool points) * 50 pool balance
 				assert_eq!(Delegators::<Runtime>::get(50).unwrap(), del(50, 100));
-				assert_eq!(
-					RewardPools::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap(),
-					rew(0, 0, 100)
-				);
+				assert_eq!(RewardPools::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap(), rew(0, 0, 100));
 				assert_eq!(Balances::free_balance(&50), 50);
 				assert_eq!(Balances::free_balance(&REWARDS_ACCOUNT), 0);
 
@@ -990,11 +972,7 @@ mod claim_payout {
 				Balances::make_free_balance_be(&REWARDS_ACCOUNT, 50);
 
 				// When
-				assert_ok!(Pools::do_reward_payout(
-					10,
-					Delegators::get(10).unwrap(),
-					&bonded_pool
-				));
+				assert_ok!(Pools::do_reward_payout(10, Delegators::get(10).unwrap(), &bonded_pool));
 
 				// Then
 				// Expect payout 5: (500  del virtual points / 5,000 pool points) * 50 pool balance
@@ -1007,11 +985,7 @@ mod claim_payout {
 				assert_eq!(Balances::free_balance(&REWARDS_ACCOUNT), 45);
 
 				// When
-				assert_ok!(Pools::do_reward_payout(
-					40,
-					Delegators::get(40).unwrap(),
-					&bonded_pool
-				));
+				assert_ok!(Pools::do_reward_payout(40, Delegators::get(40).unwrap(), &bonded_pool));
 
 				// Then
 				// Expect payout 20: (2,000 del virtual points / 4,500 pool points) * 45 pool
@@ -1029,11 +1003,7 @@ mod claim_payout {
 				assert_eq!(Balances::free_balance(&REWARDS_ACCOUNT), 75);
 
 				// When
-				assert_ok!(Pools::do_reward_payout(
-					50,
-					Delegators::get(50).unwrap(),
-					&bonded_pool
-				));
+				assert_ok!(Pools::do_reward_payout(50, Delegators::get(50).unwrap(), &bonded_pool));
 
 				// Then
 				// We expect a payout of 50: (5,000 del virtual points / 7,5000 pool points) * 75
@@ -1055,11 +1025,7 @@ mod claim_payout {
 				assert_eq!(Balances::free_balance(&REWARDS_ACCOUNT), 25);
 
 				// When
-				assert_ok!(Pools::do_reward_payout(
-					10,
-					Delegators::get(10).unwrap(),
-					&bonded_pool
-				));
+				assert_ok!(Pools::do_reward_payout(10, Delegators::get(10).unwrap(), &bonded_pool));
 
 				// Then
 				// We expect a payout of 5
@@ -1076,11 +1042,7 @@ mod claim_payout {
 				assert_eq!(Balances::free_balance(&REWARDS_ACCOUNT), 420);
 
 				// When
-				assert_ok!(Pools::do_reward_payout(
-					10,
-					Delegators::get(10).unwrap(),
-					&bonded_pool
-				));
+				assert_ok!(Pools::do_reward_payout(10, Delegators::get(10).unwrap(), &bonded_pool));
 
 				// Then
 				// We expect a payout of 40
@@ -1105,11 +1067,7 @@ mod claim_payout {
 				assert_eq!(Balances::free_balance(&REWARDS_ACCOUNT), 400);
 
 				// When
-				assert_ok!(Pools::do_reward_payout(
-					10,
-					Delegators::get(10).unwrap(),
-					&bonded_pool
-				));
+				assert_ok!(Pools::do_reward_payout(10, Delegators::get(10).unwrap(), &bonded_pool));
 
 				// Then
 				// Expect a payout of 2: (200 del virtual points / 38,000 pool points) * 400 pool
@@ -1123,11 +1081,7 @@ mod claim_payout {
 				assert_eq!(Balances::free_balance(&REWARDS_ACCOUNT), 398);
 
 				// When
-				assert_ok!(Pools::do_reward_payout(
-					40,
-					Delegators::get(40).unwrap(),
-					&bonded_pool
-				));
+				assert_ok!(Pools::do_reward_payout(40, Delegators::get(40).unwrap(), &bonded_pool));
 
 				// Then
 				// Expect a payout of 188: (18,800 del virtual points /  39,800 pool points) * 399
@@ -1141,11 +1095,7 @@ mod claim_payout {
 				assert_eq!(Balances::free_balance(&REWARDS_ACCOUNT), 210);
 
 				// When
-				assert_ok!(Pools::do_reward_payout(
-					50,
-					Delegators::get(50).unwrap(),
-					&bonded_pool
-				));
+				assert_ok!(Pools::do_reward_payout(50, Delegators::get(50).unwrap(), &bonded_pool));
 
 				// Then
 				// Expect payout of 210: (21,000 / 21,000) * 210
@@ -1569,10 +1519,7 @@ mod create {
 				BondedPools::<Runtime>::get(stash).unwrap(),
 				BondedPool { points: StakingMock::minimum_bond() }
 			);
-			assert_eq!(
-				StakingMock::bonded_balance(&stash).unwrap(),
-				StakingMock::minimum_bond()
-			);
+			assert_eq!(StakingMock::bonded_balance(&stash).unwrap(), StakingMock::minimum_bond());
 			assert_eq!(
 				RewardPools::<Runtime>::get(stash).unwrap(),
 				RewardPool {
@@ -1619,7 +1566,204 @@ mod pools_interface {
 	use super::*;
 
 	#[test]
-	fn slash_pool_works() {
-		ExtBuilder::default().build_and_execute(|| {});
+	fn slash_pool_works_in_simple_cases() {
+		// Slash with no sub pools
+		ExtBuilder::default().build_and_execute(|| {
+			// When
+			let SlashPoolOut { new_active_bonded, new_unlocking } =
+				Pools::slash_pool(SlashPoolArgs {
+					pool_stash: &PRIMARY_ACCOUNT,
+					slash_amount: 9,
+					slash_era: 0,
+					apply_era: 3,
+					active_bonded: 10,
+				})
+				.unwrap();
+
+			// Then
+			assert_eq!(
+				SubPoolsStorage::<Runtime>::get(PRIMARY_ACCOUNT).unwrap(),
+				Default::default()
+			);
+			assert_eq!(new_unlocking, Default::default());
+			assert_eq!(new_active_bonded, 1);
+
+			// Slash, some sub pools are in range, some are out
+			// Same as above, but a slash amount greater than total slashable
+		});
+
+		// Slash, but all sub pools are out of range
+		ExtBuilder::default().add_delegators(vec![(100, 100)]).build_and_execute(|| {
+			// Given
+			// Unbond in era 0
+			assert_ok!(Pools::unbond(Origin::signed(10)));
+
+			// When
+			let SlashPoolOut { new_active_bonded, new_unlocking } =
+				Pools::slash_pool(SlashPoolArgs {
+					pool_stash: &PRIMARY_ACCOUNT,
+					slash_amount: 9,
+					// We start slashing unbonding pools in `slash_era + 1`
+					slash_era: 0,
+					apply_era: 3,
+					active_bonded: 100,
+				})
+				.unwrap();
+
+			// Then
+			assert_eq!(
+				SubPoolsStorage::<Runtime>::get(PRIMARY_ACCOUNT).unwrap(),
+				SubPools {
+					no_era: Default::default(),
+					with_era: sub_pools_with_era! {
+						0 => UnbondPool { points: 10, balance: 10 }
+					}
+				}
+			);
+			assert_eq!(new_unlocking, Default::default());
+			assert_eq!(new_active_bonded, 91);
+		});
+	}
+
+	// Some sub pools are in range of the slash while others are not.
+	#[test]
+	fn slash_pool_works_in_complex_cases() {
+		ExtBuilder::default()
+			.add_delegators(vec![(40, 40), (100, 100), (200, 200), (300, 300), (400, 400)])
+			.build_and_execute(|| {
+				// Make sure no pools get merged into `SubPools::no_era` until era 7.
+				BondingDuration::set(5);
+				assert_eq!(MaxUnbonding::<Runtime>::get(), 7);
+
+				assert_ok!(Pools::unbond(Origin::signed(10)));
+
+				CurrentEra::set(1);
+				assert_ok!(Pools::unbond(Origin::signed(40)));
+
+				CurrentEra::set(3);
+				assert_ok!(Pools::unbond(Origin::signed(100)));
+
+				CurrentEra::set(5);
+				assert_ok!(Pools::unbond(Origin::signed(200)));
+
+				CurrentEra::set(6);
+				assert_ok!(Pools::unbond(Origin::signed(300)));
+
+				// Given
+				assert_eq!(
+					SubPoolsStorage::<Runtime>::get(PRIMARY_ACCOUNT).unwrap(),
+					SubPools {
+						no_era: Default::default(),
+						with_era: sub_pools_with_era! {
+							0 => UnbondPool { points: 10, balance: 10 },
+							1 => UnbondPool { points: 40, balance: 40 },
+							3 => UnbondPool { points: 100, balance: 100 },
+							5 => UnbondPool { points: 200, balance: 200 },
+							6 => UnbondPool { points: 300, balance: 300 },
+						}
+					}
+				);
+
+				// When
+				let SlashPoolOut { new_active_bonded, new_unlocking } =
+					Pools::slash_pool(SlashPoolArgs {
+						pool_stash: &PRIMARY_ACCOUNT,
+						slash_amount: (40 + 100 + 200 + 400) / 2,
+						slash_era: 0,
+						apply_era: 5,
+						active_bonded: 400,
+					})
+					.unwrap();
+
+				// Then
+				assert_eq!(
+					SubPoolsStorage::<Runtime>::get(PRIMARY_ACCOUNT).unwrap(),
+					SubPools {
+						no_era: Default::default(),
+						with_era: sub_pools_with_era! {
+							0 => UnbondPool { points: 10, balance: 10 },
+							1 => UnbondPool { points: 40, balance: 40 / 2 },
+							3 => UnbondPool { points: 100, balance: 100 / 2},
+							5 => UnbondPool { points: 200, balance: 200 / 2},
+							6 => UnbondPool { points: 300, balance: 300 },
+						}
+					}
+				);
+				let expected_new_unlocking: BTreeMap<_, _> =
+					[(1, 40 / 2), (3, 100 / 2), (5, 200 / 2)].into_iter().collect();
+				assert_eq!(new_unlocking, expected_new_unlocking);
+				assert_eq!(new_active_bonded, 400 / 2);
+			});
+		}
+
+	// Same as above, but the slash amount is greater than the slash-able balance of the pool.
+	#[test]
+	fn pool_slash_works_with_slash_amount_greater_than_slashable() {
+		ExtBuilder::default()
+			.add_delegators(vec![(40, 40), (100, 100), (200, 200), (300, 300), (400, 400)])
+			.build_and_execute(|| {
+				// Make sure no pools get merged into `SubPools::no_era` until era 7.
+				BondingDuration::set(5);
+				assert_eq!(MaxUnbonding::<Runtime>::get(), 7);
+
+				assert_ok!(Pools::unbond(Origin::signed(10)));
+
+				CurrentEra::set(1);
+				assert_ok!(Pools::unbond(Origin::signed(40)));
+
+				CurrentEra::set(3);
+				assert_ok!(Pools::unbond(Origin::signed(100)));
+
+				CurrentEra::set(5);
+				assert_ok!(Pools::unbond(Origin::signed(200)));
+
+				CurrentEra::set(6);
+				assert_ok!(Pools::unbond(Origin::signed(300)));
+
+				// Given
+				assert_eq!(
+					SubPoolsStorage::<Runtime>::get(PRIMARY_ACCOUNT).unwrap(),
+					SubPools {
+						no_era: Default::default(),
+						with_era: sub_pools_with_era! {
+							0 => UnbondPool { points: 10, balance: 10 },
+							1 => UnbondPool { points: 40, balance: 40 },
+							3 => UnbondPool { points: 100, balance: 100 },
+							5 => UnbondPool { points: 200, balance: 200 },
+							6 => UnbondPool { points: 300, balance: 300 },
+						}
+					}
+				);
+
+				// When
+				let SlashPoolOut { new_active_bonded, new_unlocking } =
+					Pools::slash_pool(SlashPoolArgs {
+						pool_stash: &PRIMARY_ACCOUNT,
+						slash_amount: 40 + 100 + 200 + 400 + 10,
+						slash_era: 0,
+						apply_era: 5,
+						active_bonded: 400,
+					})
+					.unwrap();
+
+				// Then
+				assert_eq!(
+					SubPoolsStorage::<Runtime>::get(PRIMARY_ACCOUNT).unwrap(),
+					SubPools {
+						no_era: Default::default(),
+						with_era: sub_pools_with_era! {
+							0 => UnbondPool { points: 10, balance: 10 },
+							1 => UnbondPool { points: 40, balance: 0 },
+							3 => UnbondPool { points: 100, balance: 0 },
+							5 => UnbondPool { points: 200, balance: 0 },
+							6 => UnbondPool { points: 300, balance: 300 },
+						}
+					}
+				);
+				let expected_new_unlocking: BTreeMap<_, _> =
+					[(1, 0), (3, 0), (5, 0)].into_iter().collect();
+				assert_eq!(new_unlocking, expected_new_unlocking);
+				assert_eq!(new_active_bonded, 0);
+			});
 	}
 }
