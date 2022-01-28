@@ -449,28 +449,24 @@ impl Profile {
 		let name = if let Ok(name) = env::var(crate::WASM_BUILD_TYPE_ENV) {
 			name
 		} else {
-			// Determine the common ancestor path of the wasm build and the main build.
-			// The next component after this should be the overarching `target` directory.
-			let main_project = PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").unwrap());
-			let mut prefix = wasm_project
+			// First go backwards to the beginning of the target directory.
+			// Then go forwards to find the "wbuild" directory.
+			// We need to go backwards first because when starting from the root there
+			// might be a chance that someone has a "wbuild" directory somewhere in the path.
+			wasm_project
 				.components()
-				.zip(main_project.components())
-				.take_while(|(i, j)| i == j)
-				.map(|(i, _j)| i)
-				.collect::<PathBuf>();
-			prefix.push("target");
-
-			// In case of a cross compilation the next component isn't the profile
-			// but rather the target. This is why it is needed to be added to the prefix.
-			let target = env::var_os("TARGET").unwrap();
-			let host = env::var_os("HOST").unwrap();
-			if target != host {
-				prefix.push(target);
-			}
-
-			// After stripping the prefix the first component is the profile directory.
-			let name = wasm_project.strip_prefix(prefix).unwrap();
-			name.components().next().unwrap().as_os_str().to_str().unwrap().to_string()
+				.rev()
+				.take_while(|c| c.as_os_str() != "target")
+				.collect::<Vec<_>>()
+				.iter()
+				.rev()
+				.take_while(|c| c.as_os_str() != "wbuild")
+				.last()
+				.unwrap()
+				.as_os_str()
+				.to_str()
+				.unwrap()
+				.to_string()
 		};
 		for profile in Profile::iter() {
 			if profile.directory() == name {
