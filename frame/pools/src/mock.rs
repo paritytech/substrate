@@ -6,9 +6,9 @@ use frame_system::RawOrigin;
 pub type AccountId = u32;
 pub type Balance = u128;
 
-/// _Stash_ of the pool that gets created by the ExtBuilder
+/// _Stash_ of the pool that gets created by the [`ExtBuilder`].
 pub const PRIMARY_ACCOUNT: u32 = 1708226889;
-/// Reward destination of the pool that gets created by the ExtBuilder
+/// Reward destination of the pool that gets created by the [`ExtBuilder`].
 pub const REWARDS_ACCOUNT: u32 = 1842460259;
 
 parameter_types! {
@@ -61,7 +61,6 @@ impl sp_staking::StakingInterface for StakingMock {
 
 	fn unbond(who: Self::AccountId, amount: Self::Balance) -> DispatchResult {
 		BONDED_BALANCE_MAP.with(|m| *m.borrow_mut().get_mut(&who).unwrap() -= amount);
-		println!("unbond amount: {:?}", amount);
 		UNBONDING_BALANCE_MAP
 			.with(|m| *m.borrow_mut().entry(who).or_insert(Self::Balance::zero()) += amount);
 		Ok(())
@@ -77,7 +76,6 @@ impl sp_staking::StakingInterface for StakingMock {
 
 		let maybe_new_free = UNBONDING_BALANCE_MAP.with(|m| m.borrow_mut().remove(&who));
 		if let Some(new_free) = maybe_new_free {
-			println!("new_free: {:?}", new_free);
 			assert_ok!(Balances::mutate_account(&who, |a| a.free += new_free));
 		}
 		Ok(100)

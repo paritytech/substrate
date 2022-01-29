@@ -224,6 +224,19 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+// TODO:
+// - make withdraw unbonded permissions-less and remove withdraw unbonded call from unbond
+// - make claiming rewards permissionless
+// - creation
+//    - CreateOrigin: the type of origin that can create a pool - can be set with governance call
+//    - creator: account that cannont unbond until there are no other pool members (essentially deposit)
+//    - kicker: can kick (force unbond) delegators and block new delegators
+//    - nominator: can set targets
+//    - admin: can change kicker, nominator, and make another account admin.
+// - checks for number of pools when creating pools (param for max pools, pool creation origin)
+// - post checks that rewardpool::count == bondedpool::count. delegators >= bondedpool::count, subpools::count <= bondedpools
+
+
 use frame_support::{
 	ensure,
 	pallet_prelude::*,
@@ -639,7 +652,7 @@ pub mod pallet {
 			// the active balance is slashed below the minimum bonded or the account cannot be
 			// found, we exit early.
 			if !T::StakingInterface::can_bond_extra(&target, amount) {
-				return Err(Error::<T>::StakingError.into())
+				Err(Error::<T>::StakingError)?;
 			}
 
 			// We don't actually care about writing the reward pool, we just need its

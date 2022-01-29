@@ -49,6 +49,7 @@ fn test_setup_works() {
 
 #[test]
 fn exercise_delegator_life_cycle() {
+	todo!()
 	// create pool
 	// join pool
 	// claim rewards
@@ -170,30 +171,13 @@ mod bonded_pool {
 }
 
 mod reward_pool {
-	// use super::*;
+	use super::*;
 
-	// #[test]
-	// fn update_total_earnings_and_balance_works() {
-	// 	ExtBuilder::default().build_and_execute(|| {
-	// 		let pool = RewardPool {
-	// 			account_id: 123,
-	// 			balance: 0,
-	// 			total_earnings: 0,
-	// 			points: 0
-	// 		};
-
-	// 		Balances::make_free_balance_be(100);
-	// 		let pool = pool.update_total_earnings_and_balance();
-	// 		assert_eq!(
-	// 			pool.total_earnings, 100
-	// 		);
-	// 		assert_eq!(
-	// 			pool.balance, 100
-	// 		);
-
-	// 		let pool = pool.update_total_earnings_and_balance();
-	// 	});
-	// }
+	#[test]
+	fn update_total_earnings_and_balance_works() {
+		let reward_pool = RewardPool::<Runtime> 
+		todo!()
+	}
 }
 
 mod unbond_pool {
