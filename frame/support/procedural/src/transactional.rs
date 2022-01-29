@@ -18,9 +18,29 @@
 use frame_support_procedural_tools::generate_crate_access_2018;
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{ItemFn, Result};
+use syn::{ItemFn, Result, LitInt, parse::Parse};
 
-pub fn transactional(_attr: TokenStream, input: TokenStream) -> Result<TokenStream> {
+struct TransactionalLimit {
+	limit: u8,
+}
+
+impl Default for TransactionalLimit {
+	fn default() -> Self {
+		Self { limit: 1 }
+	}
+}
+
+impl Parse for TransactionalLimit {
+	fn parse(input: syn::parse::ParseStream) -> Result<Self> {
+		let limit: LitInt = input.parse()?;
+		Ok(Self { limit: limit.base10_parse()? })
+	}
+}
+
+pub fn transactional(attr: TokenStream, input: TokenStream) -> Result<TokenStream> {
+	let limit: TransactionalLimit = syn::parse(attr).unwrap_or_default();
+	let limit = limit.limit;
+
 	let ItemFn { attrs, vis, sig, block } = syn::parse(input)?;
 
 	let crate_ = generate_crate_access_2018("frame-support")?;
@@ -28,7 +48,7 @@ pub fn transactional(_attr: TokenStream, input: TokenStream) -> Result<TokenStre
 		#(#attrs)*
 		#vis #sig {
 			use #crate_::storage::{with_transaction, TransactionOutcome};
-			with_transaction(u8::MAX, || {
+			with_transaction(#limit, || {
 				let r = (|| { #block })();
 				if r.is_ok() {
 					TransactionOutcome::Commit(r)
