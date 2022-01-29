@@ -509,6 +509,7 @@ pub fn roll_to(n: BlockNumber) {
 	let now = System::block_number();
 	for i in now + 1..=n {
 		System::set_block_number(i);
+
 		MultiBlock::on_initialize(i);
 		VerifierPallet::on_initialize(i);
 		UnsignedPallet::on_initialize(i);
@@ -553,6 +554,11 @@ pub fn roll_next() {
 	roll_to(System::block_number() + 1);
 }
 
+/// Proceed one block, and execute offchain workers as well.
+pub fn roll_next_with_ocw(maybe_pool: Option<Arc<RwLock<PoolState>>>) {
+	roll_to_with_ocw(System::block_number() + 1, maybe_pool)
+}
+
 /// proceed block number to `n`, while running all offchain workers as well.
 pub fn roll_to_with_ocw(n: BlockNumber, maybe_pool: Option<Arc<RwLock<PoolState>>>) {
 	use sp_runtime::traits::Dispatchable;
@@ -570,14 +576,22 @@ pub fn roll_to_with_ocw(n: BlockNumber, maybe_pool: Option<Arc<RwLock<PoolState>
 				});
 			pool.try_write().unwrap().transactions.clear();
 		}
+
 		System::set_block_number(i);
+
 		MultiBlock::on_initialize(i);
 		VerifierPallet::on_initialize(i);
 		UnsignedPallet::on_initialize(i);
+		if matches!(SignedPhaseSwitch::get(), SignedSwitch::Real) {
+			SignedPallet::on_initialize(i);
+		}
 
 		MultiBlock::offchain_worker(i);
 		VerifierPallet::offchain_worker(i);
 		UnsignedPallet::offchain_worker(i);
+		if matches!(SignedPhaseSwitch::get(), SignedSwitch::Real) {
+			SignedPallet::offchain_worker(i);
+		}
 	}
 }
 

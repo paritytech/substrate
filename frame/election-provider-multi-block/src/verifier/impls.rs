@@ -33,10 +33,14 @@ use frame_support::{
 
 use pallet::*;
 
+/// The status of this pallet.
 #[derive(Encode, Decode, scale_info::TypeInfo, Clone, Copy, MaxEncodedLen, RuntimeDebug)]
 #[cfg_attr(any(test, debug_assertions), derive(PartialEq, Eq))]
 pub enum Status {
+	/// A verification is ongoing, and the next page that will be verified is indicated with the
+	/// inner value.
 	Ongoing(PageIndex),
+	/// Nothing is happening.
 	Nothing,
 }
 
@@ -46,6 +50,7 @@ impl Default for Status {
 	}
 }
 
+/// Enum to point to the valid variant of the [`QueuedSolution`].
 #[derive(Encode, Decode, scale_info::TypeInfo, Clone, Copy, MaxEncodedLen)]
 enum ValidSolution {
 	X,
@@ -67,6 +72,25 @@ impl ValidSolution {
 	}
 }
 
+/// A simple newtype that represents the partial backing of a winner. It only stores the total
+/// backing, and the sum of backings, as opposed to a [`sp_npos_elections::Support`] that also
+/// stores all of the backers' individual contribution.
+///
+/// This is mainly here to allow us to implement `Backings` for it.
+#[derive(Default, Encode, Decode, MaxEncodedLen, scale_info::TypeInfo)]
+pub struct PartialBackings {
+	/// The total backing of this particular winner.
+	pub total: ExtendedBalance,
+	/// The number of backers.
+	pub backers: u32,
+}
+
+impl sp_npos_elections::Backings for PartialBackings {
+	fn total(&self) -> ExtendedBalance {
+		self.total
+	}
+}
+
 #[frame_support::pallet]
 pub(crate) mod pallet {
 	use crate::{types::SupportsOf, verifier::Verifier};
@@ -74,25 +98,7 @@ pub(crate) mod pallet {
 	use super::*;
 	use frame_support::pallet_prelude::{ValueQuery, *};
 	use sp_npos_elections::evaluate_support_core;
-
-	/// A simple newtype that represents the partial backing of a winner. It only stores the total
-	/// backing, and the sum of backings, as opposed to a [`sp_npos_elections::Support`] that also
-	/// stores all of the backers' individual contribution.
-	///
-	/// This is mainly here to allow us to implement `Backings` for it.
-	#[derive(Default, Encode, Decode, MaxEncodedLen, TypeInfo)]
-	pub struct PartialBackings {
-		/// The total backing of this particular winner.
-		pub total: ExtendedBalance,
-		/// The number of backers.
-		pub backers: u32,
-	}
-
-	impl sp_npos_elections::Backings for PartialBackings {
-		fn total(&self) -> ExtendedBalance {
-			self.total
-		}
-	}
+	use sp_runtime::Perbill;
 
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
@@ -146,8 +152,168 @@ pub(crate) mod pallet {
 
 	// ---- All storage items about the verifying solution.
 	/// A wrapper interface for the storage items related to the queued solution.
+	///
+	/// It wraps the following:
+	///
+	/// - [`QueuedSolutionX`].
+	/// - [`QueuedSolutionY`].
+	/// - [`QueuedValidVariant`].
+	/// - [`QueuedSolutionScore`].
+	/// - [`QueuedSolutionBackings`].
+	///
+	/// As the name suggests, [`QueuedValidVariant`] points to the correct variant between
+	/// [`QueuedSolutionX`] and [`QueuedSolutionY`]. In the context of this pallet, by VALID and
+	/// INVALID variant we mean either of these two storage items, based on the value of
+	/// [`QueuedValidVariant`].
+	///
+	/// ### Invariants
+	///
+	/// The following conditions must be met at all times for this group of storage items to be
+	/// sane.
+	///
+	/// - [`QueuedSolutionScore`] must always be correct. In other words, it should correctly be the
+	///   score of [`QueuedValidVariant`].
+	/// - [`QueuedSolutionScore`] must always be [`Config::SolutionImprovementThreshold`] better
+	///   than [`MinimumScore`].
+	/// - The number of existing keys in [`QueuedSolutionBackings`] must always match that of the
+	///   INVALID variant.
+	///
+	/// Moreover, the following conditions must be met when this pallet is in [`Status::Nothing`],
+	/// meaning that no ongoing asynchronous verification is ongoing.
+	///
+	/// - No keys should exist in the INVALID variant variant.
+	/// 	- This implies that no data should exist in `QueuedSolutionBackings`.
+	///
+	/// > Note that some keys *might* exist in the queued variant, but since partial solutions
+	/// > (having less than `T::Pages` pages) are in principle correct, we cannot assert anything on
+	/// > the number of keys in the VALID variant. In fact, an empty solution with score of [0, 0,
+	/// > 0] can also be correct.
+	///
+	/// No additional conditions must be met when the pallet is in [`Status::Ongoing`]. The number
+	/// of pages in
 	pub struct QueuedSolution<T: Config>(sp_std::marker::PhantomData<T>);
 	impl<T: Config> QueuedSolution<T> {
+		/// Private helper for mutating the storage group.
+		fn mutate_checked<R>(mutate: impl FnOnce() -> R) -> R {
+			let r = mutate();
+			let _ = Self::sanity_check().defensive();
+			r
+		}
+
+		/// Finalize a correct solution.
+		///
+		/// Should be called at the end of a verification process, once we are sure that a certain
+		/// solution is 100% correct.
+		///
+		/// It stores its score, flips the pointer to it being the current best one, and clears all
+		/// the backings and the invalid variant. (note: in principle, we can skip clearing the
+		/// backings here)
+		pub(crate) fn finalize_correct(score: ElectionScore) {
+			sublog!(
+				info,
+				"verifier",
+				"finalizing verification a correct solution, replacing old score {:?} with {:?}",
+				QueuedSolutionScore::<T>::get(),
+				score
+			);
+
+			Self::mutate_checked(|| {
+				QueuedValidVariant::<T>::mutate(|v| *v = v.other());
+				QueuedSolutionScore::<T>::put(score);
+
+				// Clear what was previously the valid variant. Also clears the partial backings.
+				Self::clear_invalid_and_backings_unchecked();
+			});
+		}
+
+		/// Clear all relevant information of an invalid solution.
+		///
+		/// Should be called at any step, if we encounter an issue which makes the solution
+		/// infeasible.
+		pub(crate) fn clear_invalid_and_backings() {
+			Self::mutate_checked(Self::clear_invalid_and_backings_unchecked)
+		}
+
+		/// Same as [`clear_invalid_and_backings`], but without any checks for the integrity of the
+		/// storage item group.
+		pub(crate) fn clear_invalid_and_backings_unchecked() {
+			match Self::invalid() {
+				ValidSolution::X => QueuedSolutionX::<T>::remove_all(None),
+				ValidSolution::Y => QueuedSolutionY::<T>::remove_all(None),
+			};
+			QueuedSolutionBackings::<T>::remove_all(None);
+		}
+
+		/// Write a single page of a valid solution into the `invalid` variant of the storage.
+		///
+		/// This should only be called once we are sure that this particular page is 100% correct.
+		///
+		/// This is called after *a page* has been validated, but the entire solution is not yet
+		/// known to be valid. At this stage, we write to the invalid variant. Once all pages are
+		/// verified, a call to [`finalize_correct`] will seal the correct pages and flip the
+		/// invalid/valid variants.
+		pub(crate) fn set_invalid_page(page: PageIndex, supports: SupportsOf<Pallet<T>>) {
+			use frame_support::traits::TryCollect;
+			Self::mutate_checked(|| {
+				let backings: BoundedVec<_, _> = supports
+					.iter()
+					.map(|(x, s)| (x.clone(), PartialBackings { total: s.total, backers: s.voters.len() as u32 } ))
+					.try_collect()
+					.expect("`SupportsOf` is bounded by <Pallet<T> as Verifier>::MaxWinnersPerPage, which is assured to be the same as `T::MaxWinnersPerPage` in an integrity test");
+				QueuedSolutionBackings::<T>::insert(page, backings);
+
+				match Self::invalid() {
+					ValidSolution::X => QueuedSolutionX::<T>::insert(page, supports),
+					ValidSolution::Y => QueuedSolutionY::<T>::insert(page, supports),
+				}
+			})
+		}
+
+		/// Write a single page to the valid variant directly.
+		///
+		/// This is not the normal flow of writing, and the solution is not checked.
+		///
+		/// This is only useful to override the valid solution with a single (likely backup)
+		/// solution.
+		pub(crate) fn force_set_single_page_valid(
+			page: PageIndex,
+			supports: SupportsOf<Pallet<T>>,
+			score: ElectionScore,
+		) {
+			Self::mutate_checked(|| {
+				// clear everything about valid solutions.
+				match Self::valid() {
+					ValidSolution::X => QueuedSolutionX::<T>::remove_all(None),
+					ValidSolution::Y => QueuedSolutionY::<T>::remove_all(None),
+				};
+				QueuedSolutionScore::<T>::kill();
+
+				// write a single new page.
+				match Self::valid() {
+					ValidSolution::X => QueuedSolutionX::<T>::insert(page, supports),
+					ValidSolution::Y => QueuedSolutionY::<T>::insert(page, supports),
+				}
+
+				// write the score.
+				QueuedSolutionScore::<T>::put(score);
+			})
+		}
+
+		/// Clear all storage items.
+		///
+		/// Should only be called once everything is done.
+		pub(crate) fn kill() {
+			Self::mutate_checked(|| {
+				QueuedSolutionX::<T>::remove_all(None);
+				QueuedSolutionY::<T>::remove_all(None);
+				QueuedValidVariant::<T>::kill();
+				QueuedSolutionBackings::<T>::remove_all(None);
+				QueuedSolutionScore::<T>::kill();
+			})
+		}
+
+		// -- non-mutating methods.
+
 		/// Return the `score` and `winner_count` of verifying solution.
 		///
 		/// Assumes that all the corresponding pages of `QueuedSolutionBackings` exist, then it
@@ -157,17 +323,15 @@ pub(crate) mod pallet {
 		/// This solution corresponds to whatever is stored in the INVALID variant of
 		/// `QueuedSolution`. Recall that the score of this solution is not yet verified, so it
 		/// should never become `valid`.
-		pub(crate) fn final_score() -> Result<(ElectionScore, u32), FeasibilityError> {
+		pub(crate) fn compute_invalid_score() -> Result<(ElectionScore, u32), FeasibilityError> {
 			// ensure that this is only called when all pages are verified individually.
+			// TODO: this is a very EXPENSIVE, and perhaps unreasonable check. A partial solution
+			// could very well be valid.
 			if QueuedSolutionBackings::<T>::iter_keys().count() != T::Pages::get() as usize {
 				return Err(FeasibilityError::Incomplete)
 			}
 
 			let mut total_supports: BTreeMap<T::AccountId, PartialBackings> = Default::default();
-			// ASSUMPTION: in the staking level, we will eventually collect all exposures, which
-			// has the same length as the `total_supports`, but it even has more byte size to it.
-			// Thus, this code is 100% safe, but on the staking side there should be caution to
-			// make sure exposure collection cannot fail.
 			for (who, PartialBackings { backers, total }) in
 				QueuedSolutionBackings::<T>::iter().map(|(_, pb)| pb).flatten()
 			{
@@ -186,114 +350,8 @@ pub(crate) mod pallet {
 			Ok((score, winner_count))
 		}
 
-		/// Finalize a correct solution.
-		///
-		/// Should be called at the end of a verification process, once we are sure that a certain
-		/// solution is 100% correct. It stores its score, flips the pointer to it being the current
-		/// best one, and clears all the backings.
-		///
-		/// NOTE: we don't check if this is a better score, the call site must ensure that.
-		pub(crate) fn finalize_correct(score: ElectionScore) {
-			sublog!(
-				info,
-				"verifier",
-				"finalizing verification a correct solution, replacing old score {:?} with {:?}",
-				QueuedSolutionScore::<T>::get(),
-				score
-			);
-
-			QueuedValidVariant::<T>::mutate(|v| *v = v.other());
-			QueuedSolutionScore::<T>::put(score);
-
-			// Clear what was previously the valid variant. Also clears the partial backings.
-			Self::clear_invalid_and_backings();
-		}
-
-		/// Clear all relevant information of an invalid solution.
-		///
-		/// Should be called at any step, if we encounter an issue which makes the solution
-		/// infeasible.
-		pub(crate) fn clear_invalid_and_backings() {
-			match Self::invalid() {
-				ValidSolution::X => QueuedSolutionX::<T>::remove_all(None),
-				ValidSolution::Y => QueuedSolutionY::<T>::remove_all(None),
-			};
-			QueuedSolutionBackings::<T>::remove_all(None);
-			// NOTE: we don't flip the variant, this is still the empty slot.
-		}
-
-		/// Clear all relevant information of the valid solution.
-		///
-		/// This should only be used when we intend to replace the valid solution with something
-		/// else (either better, or when being forced).
-		pub(crate) fn clear_valid() {
-			match Self::valid() {
-				ValidSolution::X => QueuedSolutionX::<T>::remove_all(None),
-				ValidSolution::Y => QueuedSolutionY::<T>::remove_all(None),
-			};
-			QueuedSolutionScore::<T>::kill();
-		}
-
-		/// Write a single page of a valid solution into the `invalid` variant of the storage.
-		///
-		/// This should only be called once we are sure that this particular page is 100% correct.
-		///
-		/// This is called after *a page* has been validated, but the entire solution is not yet
-		/// known to be valid. At this stage, we write to the invalid variant. Once all pages are
-		/// verified, a call to [`finalize_correct`] will seal the correct pages and flip the
-		/// invalid/valid variants.
-		pub(crate) fn set_invalid_page(page: PageIndex, supports: SupportsOf<Pallet<T>>) {
-			use frame_support::traits::TryCollect;
-			let backings: BoundedVec<_, _> = supports
-				.iter()
-				.map(|(x, s)| (x.clone(), PartialBackings { total: s.total, backers: s.voters.len() as u32 } ))
-				.try_collect()
-				.expect("`SupportsOf` is bounded by <Pallet<T> as Verifier>::MaxWinnersPerPage, which is assured to be the same as `T::MaxWinnersPerPage` in an integrity test");
-			QueuedSolutionBackings::<T>::insert(page, backings);
-
-			match Self::invalid() {
-				ValidSolution::X => QueuedSolutionX::<T>::insert(page, supports),
-				ValidSolution::Y => QueuedSolutionY::<T>::insert(page, supports),
-			}
-		}
-
-		/// Write a single page to the valid variant directly.
-		///
-		/// This is not the normal flow of writing, and the solution is not checked.
-		///
-		/// This is only useful to override the valid solution with a single (likely backup)
-		/// solution.
-		pub(crate) fn force_set_single_page_valid(
-			page: PageIndex,
-			supports: SupportsOf<Pallet<T>>,
-			score: ElectionScore,
-		) {
-			// clear everything about valid solutions.
-			Self::clear_valid();
-
-			// write a single new page.
-			match Self::valid() {
-				ValidSolution::X => QueuedSolutionX::<T>::insert(page, supports),
-				ValidSolution::Y => QueuedSolutionY::<T>::insert(page, supports),
-			}
-
-			// write the score.
-			QueuedSolutionScore::<T>::put(score);
-		}
-
-		/// Clear all storage items.
-		///
-		/// Should only be called once everything is done.
-		pub(crate) fn kill() {
-			QueuedSolutionX::<T>::remove_all(None);
-			QueuedSolutionY::<T>::remove_all(None);
-			QueuedValidVariant::<T>::kill();
-			QueuedSolutionBackings::<T>::remove_all(None);
-			QueuedSolutionScore::<T>::kill();
-		}
-
 		/// The score of the current best solution, if any.
-		pub(crate) fn queued_solution() -> Option<ElectionScore> {
+		pub(crate) fn queued_score() -> Option<ElectionScore> {
 			QueuedSolutionScore::<T>::get()
 		}
 
@@ -310,10 +368,12 @@ pub(crate) mod pallet {
 		}
 
 		fn invalid() -> ValidSolution {
-			QueuedValidVariant::<T>::get().other()
+			Self::valid().other()
 		}
+	}
 
-		#[cfg(test)]
+	#[cfg(any(test, debug_assertions))]
+	impl<T: Config> QueuedSolution<T> {
 		pub(crate) fn valid_iter() -> impl Iterator<Item = (PageIndex, SupportsOf<Pallet<T>>)> {
 			match Self::valid() {
 				ValidSolution::X => QueuedSolutionX::<T>::iter(),
@@ -321,7 +381,6 @@ pub(crate) mod pallet {
 			}
 		}
 
-		#[cfg(any(test, debug_assertions))]
 		pub(crate) fn invalid_iter() -> impl Iterator<Item = (PageIndex, SupportsOf<Pallet<T>>)> {
 			match Self::invalid() {
 				ValidSolution::X => QueuedSolutionX::<T>::iter(),
@@ -329,15 +388,6 @@ pub(crate) mod pallet {
 			}
 		}
 
-		#[cfg(test)]
-		pub(crate) fn get_invalid_page(page: PageIndex) -> Option<SupportsOf<Pallet<T>>> {
-			match Self::invalid() {
-				ValidSolution::X => QueuedSolutionX::<T>::get(page),
-				ValidSolution::Y => QueuedSolutionY::<T>::get(page),
-			}
-		}
-
-		#[cfg(test)]
 		pub(crate) fn get_valid_page(page: PageIndex) -> Option<SupportsOf<Pallet<T>>> {
 			match Self::valid() {
 				ValidSolution::X => QueuedSolutionX::<T>::get(page),
@@ -345,14 +395,6 @@ pub(crate) mod pallet {
 			}
 		}
 
-		#[cfg(test)]
-		pub(crate) fn get_backing_page(
-			page: PageIndex,
-		) -> Option<BoundedVec<(T::AccountId, PartialBackings), T::MaxWinnersPerPage>> {
-			QueuedSolutionBackings::<T>::get(page)
-		}
-
-		#[cfg(test)]
 		pub(crate) fn backing_iter() -> impl Iterator<
 			Item = (PageIndex, BoundedVec<(T::AccountId, PartialBackings), T::MaxWinnersPerPage>),
 		> {
@@ -361,10 +403,51 @@ pub(crate) mod pallet {
 
 		/// Ensure that all the storage items managed by this struct are in `kill` state, meaning
 		/// that in the expect state after an election is OVER.
-		#[cfg(any(test, debug_assertions))]
 		pub(crate) fn ensure_killed() {
 			use frame_support::assert_storage_noop;
 			assert_storage_noop!(Self::kill());
+		}
+
+		/// Ensure this storage item group is in correct state.
+		pub(crate) fn sanity_check() -> Result<(), &'static str> {
+			// score is correct and better than min-score.
+			ensure!(
+				Pallet::<T>::minimum_score().zip(Self::queued_score()).map_or(
+					true,
+					|(min_score, score)| sp_npos_elections::is_score_better(
+						score,
+						min_score,
+						Perbill::zero(),
+					)
+				),
+				"queued solution has weak score (min-score)"
+			);
+
+			if let Some(queued_score) = Self::queued_score() {
+				let mut backing_map: BTreeMap<T::AccountId, PartialBackings> = BTreeMap::new();
+				Self::valid_iter().map(|(_, supports)| supports).flatten().for_each(
+					|(who, support)| {
+						let mut entry = backing_map.entry(who).or_default();
+						entry.total = entry.total.saturating_add(support.total);
+					},
+				);
+				let real_score =
+					evaluate_support_core(backing_map.into_iter().map(|(_who, pb)| pb));
+				ensure!(real_score == queued_score, "queued solution has wrong score");
+			}
+
+			// The number of existing keys in `QueuedSolutionBackings` must always match that of
+			// the INVALID variant.
+			ensure!(
+				QueuedSolutionBackings::<T>::iter().count() == Self::invalid_iter().count(),
+				"incorrect number of backings pages",
+			);
+
+			if let Status::Nothing = StatusStorage::<T>::get() {
+				ensure!(Self::invalid_iter().count() == 0, "dangling data in invalid variant");
+			}
+
+			Ok(())
 		}
 	}
 
@@ -453,11 +536,12 @@ impl<T: Config> Pallet<T> {
 					"T::SolutionDataProvider failed to deliver page {}. This is an expected error and should not happen.",
 					current_page,
 				);
+
 				QueuedSolution::<T>::clear_invalid_and_backings();
 				StatusStorage::<T>::put(Status::Nothing);
 				T::SolutionDataProvider::report_result(VerificationResult::DataUnavailable);
-				Self::deposit_event(Event::<T>::VerificationDataUnavailable);
 
+				Self::deposit_event(Event::<T>::VerificationDataUnavailable);
 				return 0
 			}
 
@@ -496,8 +580,13 @@ impl<T: Config> Pallet<T> {
 							Ok(_) => {
 								T::SolutionDataProvider::report_result(VerificationResult::Queued);
 							},
-							Err(err) =>
-								T::SolutionDataProvider::report_result(VerificationResult::Rejected),
+							Err(_) => {
+								T::SolutionDataProvider::report_result(
+									VerificationResult::Rejected,
+								);
+								// In case of any of the errors, kill the solution.
+								QueuedSolution::<T>::clear_invalid_and_backings();
+							},
 						}
 					}
 				},
@@ -540,13 +629,18 @@ impl<T: Config> Pallet<T> {
 
 		Ok(supports)
 	}
+
+	/// Finalize an asynchronous verification. Checks the final score for correctness, and ensures
+	/// that it matches all of the criteria.
+	///
 	/// This should only be called when all pages of an async verification are done.
 	///
-	/// Returns `Ok()` if everything is okay, at which point the valid variant of the queued
-	/// solution will be updated. Returns
-	/// `Err(Feasibility)` if any of the last verification steps fail.
+	/// Returns:
+	/// - `Ok()` if everything is okay, at which point the valid variant of the queued solution will
+	/// be updated. Returns
+	/// - `Err(Feasibility)` if any of the last verification steps fail.
 	fn finalize_async_verification(claimed_score: ElectionScore) -> Result<(), FeasibilityError> {
-		let outcome = QueuedSolution::<T>::final_score()
+		let outcome = QueuedSolution::<T>::compute_invalid_score()
 			.and_then(|(final_score, winner_count)| {
 				let desired_targets = crate::Snapshot::<T>::desired_targets().unwrap();
 				// claimed_score checked prior in seal_unverified_solution
@@ -556,7 +650,7 @@ impl<T: Config> Pallet<T> {
 						// NOTE: must be before the call to `finalize_correct`.
 						Self::deposit_event(Event::<T>::Queued(
 							final_score,
-							QueuedSolution::<T>::queued_solution(),
+							QueuedSolution::<T>::queued_score(),
 						));
 						QueuedSolution::<T>::finalize_correct(final_score);
 						Ok(())
@@ -568,8 +662,6 @@ impl<T: Config> Pallet<T> {
 			})
 			.map_err(|err| {
 				sublog!(warn, "verifier", "Finalizing solution was invalid due to {:?}.", err);
-				// In case of any of the errors, kill the solution.
-				QueuedSolution::<T>::clear_invalid_and_backings();
 				// and deposit an event about it.
 				Self::deposit_event(Event::<T>::VerificationFailed(0, err.clone()));
 				err
@@ -583,7 +675,7 @@ impl<T: Config> Pallet<T> {
 	/// - better than the queued solution, if one exists.
 	/// - greater than the minimum untrusted score.
 	pub(crate) fn ensure_score_quality(score: ElectionScore) -> Result<(), FeasibilityError> {
-		let is_improvement = <Self as Verifier>::queued_solution().map_or(true, |best_score| {
+		let is_improvement = <Self as Verifier>::queued_score().map_or(true, |best_score| {
 			sp_npos_elections::is_score_better::<sp_runtime::Perbill>(
 				score,
 				best_score,
@@ -709,8 +801,8 @@ impl<T: Config> Verifier for Pallet<T> {
 		Self::ensure_score_quality(claimed_score).is_ok()
 	}
 
-	fn queued_solution() -> Option<ElectionScore> {
-		QueuedSolution::<T>::queued_solution()
+	fn queued_score() -> Option<ElectionScore> {
+		QueuedSolution::<T>::queued_score()
 	}
 
 	fn kill() {
@@ -727,7 +819,7 @@ impl<T: Config> Verifier for Pallet<T> {
 		claimed_score: ElectionScore,
 		page: PageIndex,
 	) -> Result<SupportsOf<Self>, FeasibilityError> {
-		let maybe_current_score = Self::queued_solution();
+		let maybe_current_score = Self::queued_score();
 		match Self::do_verify_synchronous(partial_solution, claimed_score, page) {
 			Ok(supports) => {
 				sublog!(info, "verifier", "queued a sync solution with score {:?}.", claimed_score);
@@ -786,7 +878,7 @@ impl<T: Config> AsynchronousVerifier for Pallet<T> {
 				(matches!(StatusStorage::<T>::get(), Status::Ongoing(_)) &&
 					QueuedSolution::<T>::invalid_iter().count() > 0)
 		);
-		QueuedSolution::<T>::clear_invalid_and_backings();
+		QueuedSolution::<T>::clear_invalid_and_backings_unchecked();
 
 		// we also mutate the status back to doing nothing.
 		StatusStorage::<T>::mutate(|old| {

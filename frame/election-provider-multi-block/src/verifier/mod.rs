@@ -149,7 +149,7 @@ pub trait Verifier {
 	fn set_minimum_score(score: ElectionScore);
 
 	/// The score of the current best solution. `None` if there is none.
-	fn queued_solution() -> Option<ElectionScore>;
+	fn queued_score() -> Option<ElectionScore>;
 
 	/// Check if the claimed score is sufficient to challenge the current queued solution, if any.
 	fn ensure_claimed_score_improves(claimed_score: ElectionScore) -> bool;

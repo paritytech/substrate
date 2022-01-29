@@ -121,14 +121,20 @@ mod pallet {
 				.pop()
 				.expect("length of `solution_pages` is always `T::Pages`, `T::Pages` is always greater than 1, can be popped; qed.");
 			let claimed_score = paged_solution.score;
-			let supports = <T::Verifier as Verifier>::verify_synchronous(
+			let _supports = <T::Verifier as Verifier>::verify_synchronous(
 				only_page,
 				claimed_score,
 				crate::Pallet::<T>::msp(),
 			)
 			.expect(error_message);
 
-			sublog!(info, "unsigned", "queued an unsigned solution with score {:?}", claimed_score);
+			sublog!(
+				info,
+				"unsigned",
+				"queued an unsigned solution with score {:?} and {} winners",
+				claimed_score,
+				_supports.len()
+			);
 			Ok(None.into())
 		}
 	}
@@ -318,7 +324,7 @@ mod validate_unsigned {
 				roll_to_full_verification();
 
 				// Some good solution is queued now.
-				assert_eq!(<VerifierPallet as Verifier>::queued_solution(), Some([55, 130, 8650]));
+				assert_eq!(<VerifierPallet as Verifier>::queued_score(), Some([55, 130, 8650]));
 
 				roll_to_unsigned_open();
 
@@ -515,22 +521,35 @@ mod validate_unsigned {
 
 #[cfg(test)]
 mod call {
-	use crate::{mock::*, AssignmentOf};
-
-	type Assignment = AssignmentOf<Runtime>;
+	use crate::{mock::*, verifier::Verifier};
 
 	#[test]
 	fn unsigned_submission_e2e() {
-		todo!("")
+		let (mut ext, pool) = ExtBuilder::unsigned().build_offchainify();
+		ext.execute_with_sanity_checks(|| {
+			roll_to_snapshot_created();
+
+			// snapshot is created..
+			ensure_full_snapshot();
+			// ..txpool is empty..
+			assert_eq!(pool.read().transactions.len(), 0);
+			// ..but nothing queued.
+			assert_eq!(<VerifierPallet as Verifier>::queued_score(), None);
+
+			// now the OCW should submit something.
+			roll_next_with_ocw(Some(pool.clone()));
+			assert_eq!(pool.read().transactions.len(), 1);
+			assert_eq!(<VerifierPallet as Verifier>::queued_score(), None);
+
+			// and now it should be applied.
+			roll_next_with_ocw(Some(pool.clone()));
+			assert_eq!(pool.read().transactions.len(), 0);
+			assert!(matches!(<VerifierPallet as Verifier>::queued_score(), Some(_)));
+		})
 	}
 
 	#[test]
 	fn unfeasible_solution_panics() {
 		todo!("basic test to show that the unsigned call panics.");
-	}
-
-	#[test]
-	fn wrong_witness_panics() {
-		todo!("similarly, passing in bad witness must also be checked.")
 	}
 }

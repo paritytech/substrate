@@ -206,7 +206,7 @@ pub fn load_signed_for_verification_and_start_and_roll_to_verified(
 	assert_eq!(verifier_events(), vec![]);
 
 	// there is no queued solution prior to the last page of the solution getting verified
-	assert_eq!(<Runtime as crate::Config>::Verifier::queued_solution(), None);
+	assert_eq!(<Runtime as crate::Config>::Verifier::queued_score(), None);
 
 	// roll to the block it is finalized.
 	roll_next();
@@ -223,7 +223,7 @@ pub fn load_signed_for_verification_and_start_and_roll_to_verified(
 	);
 
 	// there is now a queued solution.
-	assert_eq!(<Runtime as crate::Config>::Verifier::queued_solution(), Some(paged.score));
+	assert_eq!(<Runtime as crate::Config>::Verifier::queued_score(), Some(paged.score));
 }
 
 /// Load a full raw paged solution for verification.

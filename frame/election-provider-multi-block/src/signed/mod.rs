@@ -340,11 +340,6 @@ pub mod pallet {
 		}
 
 		// -- getter functions
-
-		pub(crate) fn metadata(who: &T::AccountId) -> Option<SubmissionMetadata<T>> {
-			SubmissionMetadataStorage::<T>::get(who)
-		}
-
 		pub(crate) fn has_leader() -> bool {
 			!SortedScores::<T>::get().is_empty()
 		}

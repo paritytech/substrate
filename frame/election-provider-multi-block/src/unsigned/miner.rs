@@ -163,7 +163,7 @@ impl<T: Config, Solver: NposSolver<AccountId = T::AccountId, Error = OffchainSol
 
 		sublog!(
 			debug,
-			"unsigned::miner",
+			"unsigned::base-miner",
 			"mining a solution with {} pages, voter snapshot range will be: {:?}",
 			pages,
 			voter_pages_range.clone().collect::<Vec<_>>()
@@ -249,7 +249,7 @@ impl<T: Config, Solver: NposSolver<AccountId = T::AccountId, Error = OffchainSol
 
 			sublog!(
 				debug,
-				"unsigned::miner",
+				"unsigned::base-miner",
 				"initial score = {:?}, reduced {} edges, trimmed {} supports",
 				_pre_score,
 				reduced_count,
@@ -307,7 +307,7 @@ impl<T: Config, Solver: NposSolver<AccountId = T::AccountId, Error = OffchainSol
 			.expect("maybe_trim_weight_and_len cannot increase the length of its input; qed.");
 		sublog!(
 			debug,
-			"unsigned::miner",
+			"unsigned::base-miner",
 			"trimmed {} voters due to length/weight restriction.",
 			_trim_length_weight
 		);
@@ -324,7 +324,7 @@ impl<T: Config, Solver: NposSolver<AccountId = T::AccountId, Error = OffchainSol
 
 		sublog!(
 			info,
-			"unsigned::miner",
+			"unsigned::base-miner",
 			"mined a solution with score {:?}, {} winners, {} voters, {} edges, and {} bytes",
 			score,
 			paged.winner_count_single_page_target_snapshot(),
@@ -395,7 +395,7 @@ impl<T: Config, Solver: NposSolver<AccountId = T::AccountId, Error = OffchainSol
 			.map_err(|err| {
 				sublog!(
 					warn,
-					"unsigned::miner",
+					"unsigned::base-miner",
 					"feasibility check failed for {} solution at: {:?}",
 					solution_type,
 					err
@@ -514,7 +514,7 @@ impl<T: Config, Solver: NposSolver<AccountId = T::AccountId, Error = OffchainSol
 
 			let next_active_targets = winner_count_of(solution_pages);
 			if next_active_targets < desired_targets {
-				sublog!(warn, "unsigned::miner", "trimming has cause a solution to have less targets than desired, this might fail feasibility");
+				sublog!(warn, "unsigned::base-miner", "trimming has cause a solution to have less targets than desired, this might fail feasibility");
 			}
 
 			let weight = <T as Config>::WeightInfo::submit_unsigned(
@@ -576,7 +576,7 @@ impl<T: Config, Solver: NposSolver<AccountId = T::AccountId, Error = OffchainSol
 				}) {
 				sublog!(
 					trace,
-					"unsigned::miner",
+					"unsigned::base-miner",
 					"removed voter at index {:?} of (un-pagified) page {} as the weakest due to weight/length limits.",
 					removed_idx,
 					current_trimming_page
@@ -587,7 +587,7 @@ impl<T: Config, Solver: NposSolver<AccountId = T::AccountId, Error = OffchainSol
 				// this page cannot support remove anymore. Try and go to the next page.
 				sublog!(
 					debug,
-					"unsigned::miner",
+					"unsigned::base-miner",
 					"page {} seems to be fully empty now, moving to the next one",
 					current_trimming_page
 				);
@@ -598,7 +598,7 @@ impl<T: Config, Solver: NposSolver<AccountId = T::AccountId, Error = OffchainSol
 				} else {
 					sublog!(
 						warn,
-						"unsigned::miner",
+						"unsigned::base-miner",
 						"no more pages to trim from at page {}, already trimmed",
 						current_trimming_page
 					);
@@ -647,7 +647,7 @@ impl<T: Config> OffchainWorkerMiner<T> {
 	/// Mine a new checked solution, cache it, and submit it back to the chain as an unsigned
 	/// transaction.
 	pub fn mine_check_save_submit() -> Result<(), OffchainMinerError<T>> {
-		sublog!(debug, "unsigned::miner", "miner attempting to compute an unsigned solution.");
+		sublog!(debug, "unsigned::ocw-miner", "miner attempting to compute an unsigned solution.");
 		let call = Self::mine_checked_call()?;
 		Self::save_solution(&call, crate::Snapshot::<T>::fingerprint())?;
 		Self::submit_call(call)
@@ -681,7 +681,11 @@ impl<T: Config> OffchainWorkerMiner<T> {
 	}
 
 	fn submit_call(call: Call<T>) -> Result<(), OffchainMinerError<T>> {
-		sublog!(debug, "unsigned::miner", "miner submitting a solution as an unsigned transaction");
+		sublog!(
+			debug,
+			"unsigned::ocw-miner",
+			"miner submitting a solution as an unsigned transaction"
+		);
 		frame_system::offchain::SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(
 			call.into(),
 		)
@@ -693,7 +697,7 @@ impl<T: Config> OffchainWorkerMiner<T> {
 	pub fn restore_or_compute_then_maybe_submit() -> Result<(), OffchainMinerError<T>> {
 		sublog!(
 			debug,
-			"unsigned::miner",
+			"unsigned::ocw-miner",
 			"miner attempting to restore or compute an unsigned solution."
 		);
 
@@ -729,7 +733,7 @@ impl<T: Config> OffchainWorkerMiner<T> {
 					UnsignedChecks(ref e) => {
 						sublog!(
 							error,
-							"unsigned::miner",
+							"unsigned::ocw-miner",
 							"unsigned specific checks failed ({:?}) while restoring solution. This should never happen. clearing cache.",
 							e,
 						);
@@ -742,7 +746,7 @@ impl<T: Config> OffchainWorkerMiner<T> {
 					=> {
 						// note that failing `Feasibility` can only mean that the solution was
 						// computed over a snapshot that has changed due to a fork.
-						sublog!(warn, "unsigned::miner", "wiping infeasible solution ({:?}).", error);
+						sublog!(warn, "unsigned::ocw-miner", "wiping infeasible solution ({:?}).", error);
 						// kill the "bad" solution.
 						Self::clear_offchain_solution_cache();
 
@@ -750,7 +754,7 @@ impl<T: Config> OffchainWorkerMiner<T> {
 						Err(error)
 					},
 					_ => {
-						sublog!(debug, "unsigned::miner", "unhandled error in restoring offchain solution {:?}", error);
+						sublog!(debug, "unsigned::ocw-miner", "unhandled error in restoring offchain solution {:?}", error);
 						// nothing to do. Return the error as-is.
 						Err(error)
 					},
@@ -812,7 +816,7 @@ impl<T: Config> OffchainWorkerMiner<T> {
 		call: &Call<T>,
 		snapshot_fingerprint: T::Hash,
 	) -> Result<(), OffchainMinerError<T>> {
-		sublog!(debug, "unsigned::miner", "saving a call to the offchain storage.");
+		sublog!(debug, "unsigned::ocw-miner", "saving a call to the offchain storage.");
 		let storage = StorageValueRef::persistent(&Self::OFFCHAIN_CACHED_CALL);
 		match storage.mutate::<_, (), _>(|_| Ok((call.clone(), snapshot_fingerprint))) {
 			Ok(_) => Ok(()),
@@ -839,7 +843,7 @@ impl<T: Config> OffchainWorkerMiner<T> {
 
 	/// Clear a saved solution from OCW storage.
 	fn clear_offchain_solution_cache() {
-		sublog!(debug, "unsigned::miner", "clearing offchain call cache storage.");
+		sublog!(debug, "unsigned::ocw-miner", "clearing offchain call cache storage.");
 		let mut storage = StorageValueRef::persistent(&Self::OFFCHAIN_CACHED_CALL);
 		storage.clear();
 	}
@@ -928,7 +932,7 @@ mod trim_weight_length {
 			let supports = roll_to_full_verification();
 
 			// a solution is queued.
-			assert!(VerifierPallet::queued_solution().is_some());
+			assert!(VerifierPallet::queued_score().is_some());
 
 			assert_eq!(
 				supports,
@@ -967,7 +971,7 @@ mod trim_weight_length {
 			let supports = roll_to_full_verification();
 
 			// a solution is queued.
-			assert!(VerifierPallet::queued_solution().is_some());
+			assert!(VerifierPallet::queued_score().is_some());
 
 			assert_eq!(
 				supports,
@@ -1008,7 +1012,7 @@ mod trim_weight_length {
 			let supports = roll_to_full_verification();
 
 			// a solution is queued.
-			assert!(VerifierPallet::queued_solution().is_some());
+			assert!(VerifierPallet::queued_score().is_some());
 
 			assert_eq!(
 				supports,
@@ -1048,7 +1052,7 @@ mod trim_weight_length {
 			let supports = roll_to_full_verification();
 
 			// nothing is queued
-			assert!(VerifierPallet::queued_solution().is_none());
+			assert!(VerifierPallet::queued_score().is_none());
 			assert_eq!(
 				supports,
 				vec![vec![], vec![], vec![]].try_into_bounded_supports_vec().unwrap()
@@ -1081,7 +1085,7 @@ mod trim_weight_length {
 			let supports = roll_to_full_verification();
 
 			// a solution is queued.
-			assert!(VerifierPallet::queued_solution().is_some());
+			assert!(VerifierPallet::queued_score().is_some());
 
 			assert_eq!(
 				supports,
@@ -1123,7 +1127,7 @@ mod trim_weight_length {
 			let supports = roll_to_full_verification();
 
 			// a solution is queued.
-			assert!(VerifierPallet::queued_solution().is_some());
+			assert!(VerifierPallet::queued_score().is_some());
 
 			assert_eq!(
 				supports,
@@ -1148,7 +1152,6 @@ mod base_miner {
 	use super::*;
 	use crate::{mock::*, Snapshot};
 	use frame_election_provider_support::TryIntoBoundedSupportsVec;
-	use frame_support::bounded_vec;
 	use sp_npos_elections::Support;
 	use sp_runtime::PerU16;
 
@@ -1921,9 +1924,9 @@ mod offchain_worker_miner {
 	fn ocw_submission_e2e_works() {
 		let (mut ext, pool) = ExtBuilder::unsigned().build_offchainify();
 		ext.execute_with_sanity_checks(|| {
-			assert!(VerifierPallet::queued_solution().is_none());
+			assert!(VerifierPallet::queued_score().is_none());
 			roll_to_with_ocw(25 + 1, Some(pool.clone()));
-			assert!(VerifierPallet::queued_solution().is_some());
+			assert!(VerifierPallet::queued_score().is_some());
 
 			// call is cached.
 			let call_cache =

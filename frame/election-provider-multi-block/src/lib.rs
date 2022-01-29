@@ -1627,7 +1627,7 @@ mod election_provider {
 			assert_eq!(verifier_events(), vec![]);
 
 			// there is no queued solution prior to the last page of the solution getting verified
-			assert_eq!(<Runtime as crate::Config>::Verifier::queued_solution(), None);
+			assert_eq!(<Runtime as crate::Config>::Verifier::queued_score(), None);
 
 			// proceed until it is fully verified.
 			roll_next();
@@ -1651,7 +1651,7 @@ mod election_provider {
 			);
 
 			// there is now a queued solution.
-			assert_eq!(<Runtime as crate::Config>::Verifier::queued_solution(), Some(score));
+			assert_eq!(<Runtime as crate::Config>::Verifier::queued_score(), Some(score));
 
 			// now let's go to unsigned phase, but we don't expect anything to happen there since we
 			// don't run OCWs.
@@ -1702,7 +1702,7 @@ mod election_provider {
 			load_signed_for_verification_and_start(99, paged, 0);
 
 			// there is no queued solution prior to the last page of the solution getting verified
-			assert_eq!(<Runtime as crate::Config>::Verifier::queued_solution(), None);
+			assert_eq!(<Runtime as crate::Config>::Verifier::queued_score(), None);
 
 			// roll to the block it is finalized
 			roll_next();
@@ -1719,7 +1719,7 @@ mod election_provider {
 			);
 
 			// there is now a queued solution.
-			assert_eq!(<Runtime as crate::Config>::Verifier::queued_solution(), Some(score));
+			assert_eq!(<Runtime as crate::Config>::Verifier::queued_score(), Some(score));
 
 			// not much impact, just for the sane-ness of the test.
 			roll_to_unsigned_open();
@@ -1757,7 +1757,7 @@ mod election_provider {
 			load_signed_for_verification_and_start(99, paged, 0);
 
 			// there is no queued solution prior to the last page of the solution getting verified
-			assert_eq!(<Runtime as crate::Config>::Verifier::queued_solution(), None);
+			assert_eq!(<Runtime as crate::Config>::Verifier::queued_score(), None);
 
 			// roll to the block it is finalized
 			roll_next();
@@ -1774,7 +1774,7 @@ mod election_provider {
 			);
 
 			// there is now a queued solution
-			assert_eq!(<Runtime as crate::Config>::Verifier::queued_solution(), Some(score));
+			assert_eq!(<Runtime as crate::Config>::Verifier::queued_score(), Some(score));
 
 			// not much impact, just for the sane-ness of the test.
 			roll_to_unsigned_open();

@@ -295,7 +295,7 @@ mod async_verification {
 			// nothing is queued yet.
 			assert_eq!(MockSignedResults::get(), vec![]);
 			assert_eq!(QueuedSolution::<Runtime>::valid_iter().count(), 0);
-			assert!(QueuedSolution::<Runtime>::queued_solution().is_none());
+			assert!(QueuedSolution::<Runtime>::queued_score().is_none());
 
 			// last block.
 			roll_next();
@@ -313,7 +313,7 @@ mod async_verification {
 
 			// a solution has been queued
 			assert_eq!(QueuedSolution::<Runtime>::valid_iter().count(), 3);
-			assert!(QueuedSolution::<Runtime>::queued_solution().is_some());
+			assert!(QueuedSolution::<Runtime>::queued_score().is_some());
 		});
 	}
 
@@ -350,7 +350,7 @@ mod async_verification {
 			// nothing is queued yet.
 			assert_eq!(MockSignedResults::get(), vec![]);
 			assert_eq!(QueuedSolution::<Runtime>::valid_iter().count(), 0);
-			assert!(QueuedSolution::<Runtime>::queued_solution().is_none());
+			assert!(QueuedSolution::<Runtime>::queued_score().is_none());
 
 			roll_next();
 			assert_eq!(VerifierPallet::status(), Status::Nothing);
@@ -369,7 +369,7 @@ mod async_verification {
 			// a solution has been queued
 			assert_eq!(MockSignedResults::get(), vec![VerificationResult::Queued]);
 			assert_eq!(QueuedSolution::<Runtime>::valid_iter().count(), 3);
-			assert!(QueuedSolution::<Runtime>::queued_solution().is_some());
+			assert!(QueuedSolution::<Runtime>::queued_score().is_some());
 
 			// page 0 is empty..
 			assert_eq!(QueuedSolution::<Runtime>::get_valid_page(0).unwrap().len(), 0);
@@ -628,13 +628,13 @@ mod async_verification {
 
 			// just tweak score.
 			paged.score[0] += 1;
-			assert!(<VerifierPallet as Verifier>::queued_solution().is_none());
+			assert!(<VerifierPallet as Verifier>::queued_score().is_none());
 
 			load_mock_signed_and_start(paged);
 			roll_to_full_verification();
 
 			// nothing is verified.
-			assert!(<VerifierPallet as Verifier>::queued_solution().is_none());
+			assert!(<VerifierPallet as Verifier>::queued_score().is_none());
 			assert_eq!(
 				verifier_events(),
 				vec![
@@ -670,7 +670,7 @@ mod async_verification {
 			);
 
 			// nothing is verified..
-			assert!(<VerifierPallet as Verifier>::queued_solution().is_none());
+			assert!(<VerifierPallet as Verifier>::queued_score().is_none());
 
 			// result is reported back.
 			assert_eq!(MockSignedResults::get(), vec![VerificationResult::Rejected]);
@@ -702,7 +702,7 @@ mod async_verification {
 			);
 
 			// nothing is verified..
-			assert!(<VerifierPallet as Verifier>::queued_solution().is_none());
+			assert!(<VerifierPallet as Verifier>::queued_score().is_none());
 			// result is reported back.
 			assert_eq!(MockSignedResults::get(), vec![VerificationResult::Rejected]);
 		})
@@ -751,7 +751,7 @@ mod async_verification {
 				);
 
 				// nothing is verified..
-				assert!(<VerifierPallet as Verifier>::queued_solution().is_none());
+				assert!(<VerifierPallet as Verifier>::queued_score().is_none());
 				// result is reported back.
 				assert_eq!(MockSignedResults::get(), vec![VerificationResult::Rejected]);
 			})
@@ -764,12 +764,12 @@ mod async_verification {
 			let mut paged = mine_full_solution().unwrap();
 			let correct_score = paged.score;
 
-			assert!(<VerifierPallet as Verifier>::queued_solution().is_none());
+			assert!(<VerifierPallet as Verifier>::queued_score().is_none());
 
 			load_mock_signed_and_start(paged.clone());
 			roll_to_full_verification();
 
-			assert_eq!(<VerifierPallet as Verifier>::queued_solution(), Some(correct_score));
+			assert_eq!(<VerifierPallet as Verifier>::queued_score(), Some(correct_score));
 			assert!(QueuedSolution::<Runtime>::invalid_iter().count().is_zero());
 			assert!(QueuedSolution::<Runtime>::backing_iter().count().is_zero());
 
@@ -780,7 +780,7 @@ mod async_verification {
 			roll_to_full_verification();
 
 			// nothing is verified.
-			assert_eq!(<VerifierPallet as Verifier>::queued_solution(), Some(correct_score));
+			assert_eq!(<VerifierPallet as Verifier>::queued_score(), Some(correct_score));
 			assert_eq!(
 				verifier_events(),
 				vec![
@@ -802,7 +802,7 @@ mod async_verification {
 			);
 
 			// and the queue is still in good shape.
-			assert_eq!(<VerifierPallet as Verifier>::queued_solution(), Some(correct_score));
+			assert_eq!(<VerifierPallet as Verifier>::queued_score(), Some(correct_score));
 			assert!(QueuedSolution::<Runtime>::invalid_iter().count().is_zero());
 			assert!(QueuedSolution::<Runtime>::backing_iter().count().is_zero());
 		})
@@ -831,7 +831,7 @@ mod sync_verification {
 			let single_page = mine_solution(1).unwrap();
 
 			assert_eq!(verifier_events(), vec![]);
-			assert_eq!(<VerifierPallet as Verifier>::queued_solution(), None);
+			assert_eq!(<VerifierPallet as Verifier>::queued_score(), None);
 
 			let _ = <VerifierPallet as Verifier>::verify_synchronous(
 				single_page.solution_pages.first().cloned().unwrap(),
@@ -847,7 +847,7 @@ mod sync_verification {
 					Event::<Runtime>::Queued(single_page.score, None)
 				]
 			);
-			assert_eq!(<VerifierPallet as Verifier>::queued_solution(), Some(single_page.score));
+			assert_eq!(<VerifierPallet as Verifier>::queued_score(), Some(single_page.score));
 		})
 	}
 
@@ -862,7 +862,7 @@ mod sync_verification {
 			Snapshot::<Runtime>::set_desired_targets(1);
 
 			assert_eq!(verifier_events(), vec![]);
-			assert_eq!(<VerifierPallet as Verifier>::queued_solution(), None);
+			assert_eq!(<VerifierPallet as Verifier>::queued_score(), None);
 
 			// note: this is NOT a storage_noop! because we do emit events.
 			assert_eq!(
@@ -879,7 +879,7 @@ mod sync_verification {
 				verifier_events(),
 				vec![Event::<Runtime>::VerificationFailed(2, FeasibilityError::WrongWinnerCount)]
 			);
-			assert_eq!(<VerifierPallet as Verifier>::queued_solution(), None);
+			assert_eq!(<VerifierPallet as Verifier>::queued_score(), None);
 		})
 	}
 
@@ -890,7 +890,7 @@ mod sync_verification {
 			let single_page = mine_solution(1).unwrap();
 
 			assert_eq!(verifier_events(), vec![]);
-			assert_eq!(<VerifierPallet as Verifier>::queued_solution(), None);
+			assert_eq!(<VerifierPallet as Verifier>::queued_score(), None);
 
 			// Valid solution, but has now too few.
 			Snapshot::<Runtime>::set_desired_targets(3);
@@ -909,7 +909,7 @@ mod sync_verification {
 				verifier_events(),
 				vec![Event::<Runtime>::VerificationFailed(2, FeasibilityError::WrongWinnerCount)]
 			);
-			assert_eq!(<VerifierPallet as Verifier>::queued_solution(), None);
+			assert_eq!(<VerifierPallet as Verifier>::queued_score(), None);
 		})
 	}
 
@@ -1068,7 +1068,7 @@ mod sync_verification {
 				MultiBlock::msp(),
 			)
 			.unwrap();
-			assert_eq!(<VerifierPallet as Verifier>::queued_solution(), Some(single_page.score));
+			assert_eq!(<VerifierPallet as Verifier>::queued_score(), Some(single_page.score));
 
 			// now try and submit that's really weak. Doesn't even need to be valid, since the score
 			// is checked first.
@@ -1122,7 +1122,7 @@ mod sync_verification {
 				MultiBlock::msp(),
 			)
 			.unwrap();
-			assert_eq!(<VerifierPallet as Verifier>::queued_solution(), Some(weak_paged.score));
+			assert_eq!(<VerifierPallet as Verifier>::queued_score(), Some(weak_paged.score));
 
 			// now get a better solution.
 			let better = mine_solution(1).unwrap();
@@ -1134,7 +1134,7 @@ mod sync_verification {
 			)
 			.unwrap();
 
-			assert_eq!(<VerifierPallet as Verifier>::queued_solution(), Some(better.score));
+			assert_eq!(<VerifierPallet as Verifier>::queued_score(), Some(better.score));
 
 			assert_eq!(
 				verifier_events(),
@@ -1161,7 +1161,7 @@ mod sync_verification {
 				MultiBlock::msp(),
 			)
 			.unwrap();
-			assert_eq!(<VerifierPallet as Verifier>::queued_solution(), Some(better.score));
+			assert_eq!(<VerifierPallet as Verifier>::queued_score(), Some(better.score));
 
 			// then try with something weaker.
 			let weak_solution = solution_from_supports(
@@ -1188,7 +1188,7 @@ mod sync_verification {
 			);
 
 			// queued solution has not changed.
-			assert_eq!(<VerifierPallet as Verifier>::queued_solution(), Some(better.score));
+			assert_eq!(<VerifierPallet as Verifier>::queued_score(), Some(better.score));
 
 			assert_eq!(
 				verifier_events(),
