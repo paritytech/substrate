@@ -32,7 +32,7 @@ use frame_support::{
 use frame_system::pallet_prelude::BlockNumberFor;
 use pallet_session::historical;
 use sp_runtime::{
-	traits::{Bounded, Convert, SaturatedConversion, Saturating, Zero},
+	traits::{Bounded, Convert, SaturatedConversion, Saturating, StaticLookup, Zero},
 	Perbill,
 };
 use sp_staking::{
@@ -847,6 +847,89 @@ impl<T: Config> Pallet<T> {
 			weight,
 			DispatchClass::Mandatory,
 		);
+	}
+
+	/// Checks for [`Self::bond`] that can be completed at the beginning of the calls logic.
+	pub(crate) fn do_bond_checks(
+		stash: &T::AccountId,
+		controller: &T::AccountId,
+		value: BalanceOf<T>,
+	) -> Result<(), DispatchError> {
+		if Bonded::<T>::contains_key(&stash) {
+			Err(Error::<T>::AlreadyBonded)?
+		}
+
+		if Ledger::<T>::contains_key(&controller) {
+			Err(Error::<T>::AlreadyPaired)?
+		}
+
+		// Reject a bond which is considered to be _dust_.
+		if value < T::Currency::minimum_balance() {
+			Err(Error::<T>::InsufficientBond)?
+		}
+
+		Ok(())
+	}
+
+	/// Checks for [`Self::nominate`] that must be called prior to
+	/// [`Self::do_unchecked_nominate_writes`].
+	pub(crate) fn do_nominate_checks(
+		controller: &T::AccountId,
+		targets: Vec<<T::Lookup as StaticLookup>::Source>,
+	) -> Result<(T::AccountId, BoundedVec<T::AccountId, T::MaxNominations>), DispatchError> {
+		let ledger = Self::ledger(controller).ok_or(Error::<T>::NotController)?;
+		ensure!(ledger.active >= MinNominatorBond::<T>::get(), Error::<T>::InsufficientBond);
+
+		// Only check limits if they are not already a nominator.
+		if !Nominators::<T>::contains_key(&ledger.stash) {
+			// If this error is reached, we need to adjust the `MinNominatorBond` and start
+			// calling `chill_other`. Until then, we explicitly block new nominators to protect
+			// the runtime.
+			if let Some(max_nominators) = MaxNominatorsCount::<T>::get() {
+				ensure!(Nominators::<T>::count() < max_nominators, Error::<T>::TooManyNominators);
+			}
+		}
+
+		ensure!(!targets.is_empty(), Error::<T>::EmptyTargets);
+		ensure!(targets.len() <= T::MaxNominations::get() as usize, Error::<T>::TooManyTargets);
+
+		let old =
+			Nominators::<T>::get(&ledger.stash).map_or_else(Vec::new, |x| x.targets.into_inner());
+
+		let targets: BoundedVec<_, _> = targets
+			.into_iter()
+			.map(|t| T::Lookup::lookup(t).map_err(DispatchError::from))
+			.map(|n| {
+				n.and_then(|n| {
+					if old.contains(&n) || !Validators::<T>::get(&n).blocked {
+						Ok(n)
+					} else {
+						Err(Error::<T>::BadTarget.into())
+					}
+				})
+			})
+			.collect::<Result<Vec<_>, _>>()?
+			.try_into()
+			.map_err(|_| Error::<T>::TooManyNominators)?;
+
+		Ok((ledger.stash, targets))
+	}
+
+	/// Write the information for nominating. The caller must first call
+	/// [`Self::do_nominate_checks`].
+	pub(crate) fn do_unchecked_nominate_writes(
+		stash: &T::AccountId,
+		targets: BoundedVec<T::AccountId, T::MaxNominations>,
+	) {
+		let nominations = Nominations {
+			targets,
+			// Initial nominations are considered submitted at era 0. See `Nominations` doc.
+			submitted_in: Self::current_era().unwrap_or(0),
+			suppressed: false,
+		};
+
+		Self::do_remove_validator(&stash);
+		Self::do_add_nominator(&stash, nominations);
 	}
 }
 
