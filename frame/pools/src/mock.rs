@@ -68,9 +68,9 @@ impl sp_staking::StakingInterface for StakingMock {
 
 	fn withdraw_unbonded(who: Self::AccountId, _: u32) -> Result<u64, DispatchError> {
 		if DisableWithdrawUnbonded::get() {
-			// We have a naive impl - it will always withdraw whatever is unbonding regardless of era
-			// So sometimes we may want to disable it to simulate calls in eras where there is nothing
-			// to completely unlock.
+			// We have a naive impl - it will always withdraw whatever is unbonding regardless of
+			// era So sometimes we may want to disable it to simulate calls in eras where there is
+			// nothing to completely unlock.
 			return Ok(1)
 		}
 

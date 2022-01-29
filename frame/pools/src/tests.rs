@@ -1,8 +1,8 @@
 use super::*;
 use crate::mock::{
 	Balance, Balances, BondingDuration, CanBond, CanBondExtra, CanNominate, CurrentEra,
-	ExistentialDeposit, ExtBuilder, Origin, Pools, Runtime, StakingMock, PRIMARY_ACCOUNT,
-	REWARDS_ACCOUNT, UNBONDING_BALANCE_MAP, DisableWithdrawUnbonded
+	DisableWithdrawUnbonded, ExistentialDeposit, ExtBuilder, Origin, Pools, Runtime, StakingMock,
+	PRIMARY_ACCOUNT, REWARDS_ACCOUNT, UNBONDING_BALANCE_MAP,
 };
 use frame_support::{assert_noop, assert_ok};
 
@@ -175,7 +175,7 @@ mod reward_pool {
 
 	#[test]
 	fn update_total_earnings_and_balance_works() {
-		let reward_pool = RewardPool::<Runtime> 
+		// let reward_pool = RewardPool::<Runtime>
 		todo!()
 	}
 }
@@ -1358,7 +1358,8 @@ mod withdraw_unbonded {
 				StakingMock::set_bonded_balance(PRIMARY_ACCOUNT, 100); // slash bonded balance
 				Balances::make_free_balance_be(&PRIMARY_ACCOUNT, 0);
 
-				// Disable withdraw unbonded so unbond calls do not withdraw funds unbonded immediately prior.
+				// Disable withdraw unbonded so unbond calls do not withdraw funds unbonded
+				// immediately prior.
 				DisableWithdrawUnbonded::set(true);
 				assert_ok!(Pools::unbond(Origin::signed(10), 0));
 				assert_ok!(Pools::unbond(Origin::signed(40), 0));

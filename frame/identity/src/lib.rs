@@ -152,7 +152,6 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
-	#[pallet::generate_storage_info]
 	pub struct Pallet<T>(_);
 
 	/// Information that is pertinent to identify the entity behind an account.

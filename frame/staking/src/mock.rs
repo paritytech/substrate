@@ -87,12 +87,8 @@ impl sp_staking::PoolsInterface for PoolsInterfaceMock {
 	type AccountId = AccountId;
 	type Balance = Balance;
 	fn slash_pool(
-		_: &Self::AccountId,
-		_: Self::Balance,
-		_: EraIndex,
-		_: EraIndex,
-		_: Self::Balance,
-	) -> Option<(Self::Balance, BTreeMap<EraIndex, Self::Balance>)> {
+		_: sp_staking::SlashPoolArgs<Self::AccountId, Self::Balance>,
+	) -> Option<sp_staking::SlashPoolOut<Self::Balance>> {
 		None
 	}
 }
@@ -249,6 +245,7 @@ const THRESHOLDS: [sp_npos_elections::VoteWeight; 9] =
 
 parameter_types! {
 	pub static BagThresholds: &'static [sp_npos_elections::VoteWeight] = &THRESHOLDS;
+	pub static MaxNominations: u32 = 16;
 }
 
 impl pallet_bags_list::Config for Test {
@@ -264,7 +261,7 @@ impl onchain::Config for Test {
 }
 
 impl crate::pallet::pallet::Config for Test {
-	const MAX_NOMINATIONS: u32 = 16;
+	type MaxNominations = MaxNominations;
 	type Currency = Balances;
 	type UnixTime = Timestamp;
 	type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
@@ -549,7 +546,7 @@ fn post_conditions() {
 }
 
 fn check_count() {
-	let nominator_count = Nominators::<Test>::iter().count() as u32;
+	let nominator_count = Nominators::<Test>::iter_keys().count() as u32;
 	let validator_count = Validators::<Test>::iter().count() as u32;
 	assert_eq!(nominator_count, Nominators::<Test>::count());
 	assert_eq!(validator_count, Validators::<Test>::count());

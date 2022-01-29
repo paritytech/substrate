@@ -42,7 +42,7 @@
 use honggfuzz::fuzz;
 
 #[cfg(not(fuzzing))]
-use structopt::StructOpt;
+use clap::Parser;
 
 mod common;
 use common::{generate_random_npos_inputs, to_range};
@@ -67,24 +67,25 @@ fn main() {
 }
 
 #[cfg(not(fuzzing))]
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Parser)]
+#[clap(author, version, about)]
 struct Opt {
 	/// How many candidates participate in this election
-	#[structopt(short, long)]
+	#[clap(short, long)]
 	candidates: Option<usize>,
 
 	/// How many voters participate in this election
-	#[structopt(short, long)]
+	#[clap(short, long)]
 	voters: Option<usize>,
 
 	/// Random seed to use in this election
-	#[structopt(long)]
+	#[clap(long)]
 	seed: Option<u64>,
 }
 
 #[cfg(not(fuzzing))]
 fn main() {
-	let opt = Opt::from_args();
+	let opt = Opt::parse();
 	// candidates and voters by default use the maxima, which turn out to be one less than
 	// the constant.
 	iteration(

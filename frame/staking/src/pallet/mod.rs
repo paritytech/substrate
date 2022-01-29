@@ -39,9 +39,9 @@ mod impls;
 pub use impls::*;
 
 use crate::{
-	log, migrations, slashing, weights::WeightInfo, ActiveEraInfo, BalanceOf, EraPayout,
-	EraRewardPoints, Exposure, Forcing, NegativeImbalanceOf, Nominations, PositiveImbalanceOf,
-	Releases, RewardDestination, SessionInterface, StakingLedger, UnappliedSlash, UnlockChunk,
+	log, slashing, weights::WeightInfo, ActiveEraInfo, BalanceOf, EraPayout, EraRewardPoints,
+	Exposure, Forcing, NegativeImbalanceOf, Nominations, PositiveImbalanceOf, Releases,
+	RewardDestination, SessionInterface, StakingLedger, UnappliedSlash, UnlockChunk,
 	ValidatorPrefs,
 };
 
@@ -50,12 +50,15 @@ const STAKING_ID: LockIdentifier = *b"staking ";
 
 #[frame_support::pallet]
 pub mod pallet {
+	use frame_election_provider_support::ElectionDataProvider;
+
 	use crate::BenchmarkingConfig;
 
 	use super::*;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(crate) trait Store)]
+	#[pallet::without_storage_info]
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
@@ -93,7 +96,7 @@ pub mod pallet {
 		>;
 
 		/// Maximum number of nominations per nominator.
-		const MAX_NOMINATIONS: u32;
+		type MaxNominations: Get<u32>;
 
 		/// Tokens have been minted and are unused for validator-reward.
 		/// See [Era payout](./index.html#era-payout).
@@ -160,15 +163,6 @@ pub mod pallet {
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
-	}
-
-	#[pallet::extra_constants]
-	impl<T: Config> Pallet<T> {
-		// TODO: rename to snake case after https://github.com/paritytech/substrate/issues/8826 fixed.
-		#[allow(non_snake_case)]
-		fn MaxNominations() -> u32 {
-			T::MAX_NOMINATIONS
-		}
 	}
 
 	#[pallet::type_value]
@@ -247,11 +241,26 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type MaxValidatorsCount<T> = StorageValue<_, u32, OptionQuery>;
 
-	/// The map from nominator stash key to the set of stash keys of all validators to nominate.
+	/// The map from nominator stash key to their nomination preferences, namely the validators that
+	/// they wish to support.
+	///
+	/// Note that the keys of this storage map might become non-decodable in case the
+	/// [`Config::MaxNominations`] configuration is decreased. In this rare case, these nominators
+	/// are still existent in storage, their key is correct and retrievable (i.e. `contains_key`
+	/// indicates that they exist), but their value cannot be decoded. Therefore, the non-decodable
+	/// nominators will effectively not-exist, until they re-submit their preferences such that it
+	/// is within the bounds of the newly set `Config::MaxNominations`.
+	///
+	/// This implies that `::iter_keys().count()` and `::iter().count()` might return different
+	/// values for this map. Moreover, the main `::count()` is aligned with the former, namely the
+	/// number of keys that exist.
+	///
+	/// Lastly, if any of the nominators become non-decodable, they can be chilled immediately via
+	/// [`Call::chill_other`] dispatchable by anyone.
 	#[pallet::storage]
 	#[pallet::getter(fn nominators)]
 	pub type Nominators<T: Config> =
-		CountedStorageMap<_, Twox64Concat, T::AccountId, Nominations<T::AccountId>>;
+		CountedStorageMap<_, Twox64Concat, T::AccountId, Nominations<T>>;
 
 	/// The maximum nominator count before we stop allowing new validators to join.
 	///
@@ -662,23 +671,6 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		fn on_runtime_upgrade() -> Weight {
-			if StorageVersion::<T>::get() == Releases::V6_0_0 {
-				migrations::v7::migrate::<T>()
-			} else {
-				T::DbWeight::get().reads(1)
-			}
-		}
-
-		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<(), &'static str> {
-			if StorageVersion::<T>::get() == Releases::V6_0_0 {
-				migrations::v7::pre_migrate::<T>()
-			} else {
-				Ok(())
-			}
-		}
-
 		fn on_initialize(_now: BlockNumberFor<T>) -> Weight {
 			// just return the weight of the on_finalize.
 			T::DbWeight::get().reads(1)
@@ -699,6 +691,14 @@ pub mod pallet {
 		}
 
 		fn integrity_test() {
+			// ensure that we funnel the correct value to the `DataProvider::MaxVotesPerVoter`;
+			assert_eq!(
+				T::MaxNominations::get(),
+				<Self as ElectionDataProvider>::MaxVotesPerVoter::get()
+			);
+			// and that MaxNominations is always greater than 1, since we count on this.
+			assert!(!T::MaxNominations::get().is_zero());
+
 			sp_std::if_std! {
 				sp_io::TestExternalities::new_empty().execute_with(||
 					assert!(
@@ -984,7 +984,7 @@ pub mod pallet {
 		///
 		/// # <weight>
 		/// - The transaction's complexity is proportional to the size of `targets` (N)
-		/// which is capped at CompactAssignments::LIMIT (MAX_NOMINATIONS).
+		/// which is capped at CompactAssignments::LIMIT (T::MaxNominations).
 		/// - Both the reads and writes follow a similar pattern.
 		/// # </weight>
 		#[pallet::weight(T::WeightInfo::nominate(targets.len() as u32))]
@@ -1178,11 +1178,6 @@ pub mod pallet {
 		/// Set the validators who cannot be slashed (if any).
 		///
 		/// The dispatch origin must be Root.
-		///
-		/// # <weight>
-		/// - O(V)
-		/// - Write: Invulnerables
-		/// # </weight>
 		#[pallet::weight(T::WeightInfo::set_invulnerables(invulnerables.len() as u32))]
 		pub fn set_invulnerables(
 			origin: OriginFor<T>,
@@ -1196,13 +1191,6 @@ pub mod pallet {
 		/// Force a current staker to become completely unstaked, immediately.
 		///
 		/// The dispatch origin must be Root.
-		///
-		/// # <weight>
-		/// O(S) where S is the number of slashing spans to be removed
-		/// Reads: Bonded, Slashing Spans, Account, Locks
-		/// Writes: Bonded, Slashing Spans (if S > 0), Ledger, Payee, Validators, Nominators,
-		/// Account, Locks Writes Each: SpanSlash * S
-		/// # </weight>
 		#[pallet::weight(T::WeightInfo::force_unstake(*num_slashing_spans))]
 		pub fn force_unstake(
 			origin: OriginFor<T>,
@@ -1228,11 +1216,6 @@ pub mod pallet {
 		/// The election process starts multiple blocks before the end of the era.
 		/// If this is called just before a new era is triggered, the election process may not
 		/// have enough blocks to get a result.
-		///
-		/// # <weight>
-		/// - Weight: O(1)
-		/// - Write: ForceEra
-		/// # </weight>
 		#[pallet::weight(T::WeightInfo::force_new_era_always())]
 		pub fn force_new_era_always(origin: OriginFor<T>) -> DispatchResult {
 			ensure_root(origin)?;
@@ -1245,14 +1228,6 @@ pub mod pallet {
 		/// Can be called by the `T::SlashCancelOrigin`.
 		///
 		/// Parameters: era and indices of the slashes for that era to kill.
-		///
-		/// # <weight>
-		/// Complexity: O(U + S)
-		/// with U unapplied slashes weighted with U=1000
-		/// and S is the number of slash indices to be canceled.
-		/// - Read: Unapplied Slashes
-		/// - Write: Unapplied Slashes
-		/// # </weight>
 		#[pallet::weight(T::WeightInfo::cancel_deferred_slash(slash_indices.len() as u32))]
 		pub fn cancel_deferred_slash(
 			origin: OriginFor<T>,
@@ -1512,6 +1487,11 @@ pub mod pallet {
 		///
 		/// If the caller is different than the controller being targeted, the following conditions
 		/// must be met:
+		///
+		/// * `controller` must belong to a nominator who has become non-decodable,
+		///
+		/// Or:
+		///
 		/// * A `ChillThreshold` must be set and checked which defines how close to the max
 		///   nominators or validators we must reach before users can start chilling one-another.
 		/// * A `MaxNominatorCount` and `MaxValidatorCount` must be set which is used to determine
@@ -1530,6 +1510,11 @@ pub mod pallet {
 			let stash = ledger.stash;
 
 			// In order for one user to chill another user, the following conditions must be met:
+			//
+			// * `controller` belongs to a nominator who has become non-decodable,
+			//
+			// Or
+			//
 			// * A `ChillThreshold` is set which defines how close to the max nominators or
 			//   validators we must reach before users can start chilling one-another.
 			// * A `MaxNominatorCount` and `MaxValidatorCount` which is used to determine how close
@@ -1539,6 +1524,12 @@ pub mod pallet {
 			//   threshold bond required.
 			//
 			// Otherwise, if caller is the same as the controller, this is just like `chill`.
+
+			if Nominators::<T>::contains_key(&stash) && Nominators::<T>::get(&stash).is_none() {
+				Self::chill_stash(&stash);
+				return Ok(())
+			}
+
 			if caller != controller {
 				let threshold = ChillThreshold::<T>::get().ok_or(Error::<T>::CannotChillOther)?;
 				let min_active_bond = if Nominators::<T>::contains_key(&stash) {

@@ -278,7 +278,7 @@ impl<T> ReadyTransactions for std::iter::Empty<T> {
 
 /// Events that the transaction pool listens for.
 pub enum ChainEvent<B: BlockT> {
-	/// New best block have been added to the chain
+	/// New best block have been added to the chain.
 	NewBestBlock {
 		/// Hash of the block.
 		hash: B::Hash,
@@ -289,8 +289,10 @@ pub enum ChainEvent<B: BlockT> {
 	},
 	/// An existing block has been finalized.
 	Finalized {
-		/// Hash of just finalized block
+		/// Hash of just finalized block.
 		hash: B::Hash,
+		/// Path from old finalized to new finalized parent.
+		tree_route: Arc<Vec<B::Hash>>,
 	},
 }
 
