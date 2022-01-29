@@ -323,7 +323,7 @@ mod tests {
 	}
 
 	#[test]
-	fn cache_and_recorder_work_together() {
+	fn trie_db_cache_and_recorder_work_together() {
 		let (db, root) = create_trie();
 
 		let shared_cache = Cache::new(true);
@@ -362,6 +362,60 @@ mod tests {
 					assert_eq!(*value, trie.get(&key).unwrap().unwrap());
 				}
 			}
+		}
+	}
+
+	#[test]
+	fn trie_db_mut_cache_and_recorder_work_together() {
+		const DATA_TO_ADD: &[(&[u8], &[u8])] = &[(b"key11", &[45; 78]), (b"key33", &[78; 89])];
+
+		let (db, root) = create_trie();
+
+		let shared_cache = Cache::new(true);
+		let local_cache = shared_cache.local_cache();
+
+		// Run this twice so that we use the data cache in the second run.
+		for _ in 0..2 {
+			let recorder = Recorder::default();
+			let mut new_root = root;
+
+			{
+				let mut db = db.clone();
+				let mut cache = local_cache.as_trie_db_cache(root);
+				let mut recorder = recorder.as_trie_recorder();
+				let mut trie = TrieDBMutBuilder::<Layout>::from_existing(&mut db, &mut new_root)
+					.unwrap()
+					.with_cache(&mut cache)
+					.with_recorder(&mut *recorder)
+					.build();
+
+				for (key, value) in DATA_TO_ADD {
+					trie.insert(key, value).unwrap();
+				}
+			}
+
+			let storage_proof = recorder
+				.into_storage_proof::<Layout>(
+					&root,
+					&db,
+					Some(&mut local_cache.as_trie_db_cache(root)),
+				)
+				.unwrap();
+			let mut memory_db: MemoryDB = storage_proof.into_memory_db();
+			let mut proof_root = root.clone();
+
+			{
+				let mut trie =
+					TrieDBMutBuilder::<Layout>::from_existing(&mut memory_db, &mut proof_root)
+						.unwrap()
+						.build();
+
+				for (key, value) in DATA_TO_ADD {
+					trie.insert(key, value).unwrap();
+				}
+			}
+
+			assert_eq!(new_root, proof_root)
 		}
 	}
 }
