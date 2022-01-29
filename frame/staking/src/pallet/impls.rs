@@ -850,7 +850,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Checks for [`Self::bond`] that can be completed at the beginning of the calls logic.
-	pub(crate) fn do_bond_checks(
+	pub(crate) fn ensure_can_bond(
 		stash: &T::AccountId,
 		controller: &T::AccountId,
 		value: BalanceOf<T>,
@@ -873,7 +873,7 @@ impl<T: Config> Pallet<T> {
 
 	/// Checks for [`Self::nominate`] that must be called prior to
 	/// [`Self::do_unchecked_nominate_writes`].
-	pub(crate) fn do_nominate_checks(
+	pub(crate) fn ensure_can_nominate(
 		controller: &T::AccountId,
 		targets: Vec<<T::Lookup as StaticLookup>::Source>,
 	) -> Result<(T::AccountId, BoundedVec<T::AccountId, T::MaxNominations>), DispatchError> {
@@ -916,8 +916,8 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Write the information for nominating. The caller must first call
-	/// [`Self::do_nominate_checks`].
-	pub(crate) fn do_unchecked_nominate_writes(
+	/// [`Self::ensure_can_nominate`].
+	pub(crate) fn do_unchecked_nominate(
 		stash: &T::AccountId,
 		targets: BoundedVec<T::AccountId, T::MaxNominations>,
 	) {

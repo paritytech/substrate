@@ -739,7 +739,7 @@ pub mod pallet {
 			let stash = ensure_signed(origin)?;
 			let controller = T::Lookup::lookup(controller)?;
 
-			Self::do_bond_checks(&stash, &controller, value)?;
+			Self::ensure_can_bond(&stash, &controller, value)?;
 
 			frame_system::Pallet::<T>::inc_consumers(&stash).map_err(|_| Error::<T>::BadState)?;
 
@@ -991,8 +991,8 @@ pub mod pallet {
 			targets: Vec<<T::Lookup as StaticLookup>::Source>,
 		) -> DispatchResult {
 			let controller = ensure_signed(origin)?;
-			let (stash, targets) = Self::do_nominate_checks(&controller, targets)?;
-			Self::do_unchecked_nominate_writes(&stash, targets);
+			let (stash, targets) = Self::ensure_can_nominate(&controller, targets)?;
+			Self::do_unchecked_nominate(&stash, targets);
 			Ok(())
 		}
 
