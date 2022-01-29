@@ -1514,6 +1514,59 @@ fn lazy_removal_works() {
 }
 
 #[test]
+fn lazy_batch_removal_works() {
+	let (code, hash) = compile_module::<Test>("self_destruct").unwrap();
+	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
+		let min_balance = <Test as Config>::Currency::minimum_balance();
+		let _ = Balances::deposit_creating(&ALICE, 1000 * min_balance);
+		let mut tries: Vec<child::ChildInfo> = vec![];
+
+		for i in 0..3u8 {
+			assert_ok!(Contracts::instantiate_with_code(
+				Origin::signed(ALICE),
+				min_balance * 100,
+				GAS_LIMIT,
+				None,
+				code.clone(),
+				vec![],
+				vec![i],
+			),);
+
+			let addr = Contracts::contract_address(&ALICE, &hash, &[i]);
+			let info = <ContractInfoOf<Test>>::get(&addr).unwrap();
+			let trie = &info.child_trie_info();
+
+			// Put value into the contracts child trie
+			child::put(trie, &[99], &42);
+
+			// Terminate the contract. Contract info should be gone, but value should be still there
+			// as the lazy removal did not run, yet.
+			assert_ok!(Contracts::call(
+				Origin::signed(ALICE),
+				addr.clone(),
+				0,
+				GAS_LIMIT,
+				None,
+				vec![]
+			));
+
+			assert!(!<ContractInfoOf::<Test>>::contains_key(&addr));
+			assert_matches!(child::get(trie, &[99]), Some(42));
+
+			tries.push(trie.clone())
+		}
+
+		// Run single lazy removal
+		Contracts::on_initialize(Weight::max_value());
+
+		// The single lazy removal should have removed all queued tries
+		for trie in tries.iter() {
+			assert_matches!(child::get::<i32>(trie, &[99]), None);
+		}
+	});
+}
+
+#[test]
 fn lazy_removal_partial_remove_works() {
 	let (code, hash) = compile_module::<Test>("self_destruct").unwrap();
 

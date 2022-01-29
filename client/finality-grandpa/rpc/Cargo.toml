@@ -23,7 +23,7 @@ futures = "0.3.16"
 serde = { version = "1.0.105", features = ["derive"] }
 serde_json = "1.0.50"
 log = "0.4.8"
-derive_more = "0.99.2"
+thiserror = "1.0"
 parity-scale-codec = { version = "2.0.0", features = ["derive"] }
 sc-client-api = { version = "4.0.0-dev", path = "../../api" }
 

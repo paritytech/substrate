@@ -268,7 +268,9 @@ where
 
 		let mut queue = <DeletionQueue<T>>::get();
 
-		if let (Some(trie), true) = (queue.get(0), remaining_key_budget > 0) {
+		while !queue.is_empty() && remaining_key_budget > 0 {
+			// Cannot panic due to loop condition
+			let trie = &mut queue[0];
 			let outcome =
 				child::kill_storage(&child_trie_info(&trie.trie_id), Some(remaining_key_budget));
 			let keys_removed = match outcome {
@@ -276,7 +278,7 @@ where
 				KillStorageResult::SomeRemaining(count) => count,
 				KillStorageResult::AllRemoved(count) => {
 					// We do not care to preserve order. The contract is deleted already and
-					// noone waits for the trie to be deleted.
+					// no one waits for the trie to be deleted.
 					queue.swap_remove(0);
 					count
 				},
