@@ -209,7 +209,7 @@
 //! calculated using the era duration and the staking rate (the total amount of tokens staked by
 //! nominators and validators, divided by the total token supply). It aims to incentivize toward a
 //! defined staking rate. The full specification can be found
-//! [here](https://research.web3.foundation/en/latest/polkadot/Token%20Economics.html#inflation-model).
+//! [here](https://w3f-research.readthedocs.io/en/latest/polkadot/overview/2-token-economics.html#inflation-model).
 //!
 //! Total reward is split among validators and their nominators depending on the number of points
 //! they received during the era. Points are added to a validator using
@@ -254,7 +254,7 @@
 //!
 //! Note that there is a limitation to the number of fund-chunks that can be scheduled to be
 //! unlocked in the future via [`unbond`](Call::unbond). In case this maximum
-//! (`MAX_UNLOCKING_CHUNKS`) is reached, the bonded account _must_ first wait until a successful
+//! (`MaxUnlockingChunks`) is reached, the bonded account _must_ first wait until a successful
 //! call to `withdraw_unbonded` to remove some of the chunks.
 //!
 //! ### Election Algorithm
@@ -301,9 +301,10 @@ mod pallet;
 
 use codec::{Decode, Encode, HasCompact};
 use frame_support::{
-	traits::{ConstU32, Currency, Get},
+	pallet_prelude::ConstU32,
+	traits::{Currency, Get},
 	weights::Weight,
-	BoundedVec, EqNoBound, PartialEqNoBound, RuntimeDebugNoBound,
+	BoundedVec, CloneNoBound, EqNoBound, PartialEqNoBound, RuntimeDebugNoBound,
 };
 use scale_info::TypeInfo;
 use sp_runtime::{
@@ -434,8 +435,15 @@ pub struct UnlockChunk<Balance: HasCompact> {
 }
 
 /// The ledger of a (bonded) stash.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
-pub struct StakingLedger<AccountId, Balance: HasCompact> {
+/// `UnlockingLimit` is the size limit of the `WeakBoundedVec` representing `unlocking`.
+#[derive(PartialEqNoBound, EqNoBound, CloneNoBound, Encode, Decode, RuntimeDebug, TypeInfo)]
+#[scale_info(skip_type_params(UnlockingLimit))]
+pub struct StakingLedger<AccountId, Balance, UnlockingLimit>
+where
+	AccountId: Eq + Clone,
+	Balance: HasCompact + Eq + Clone,
+	UnlockingLimit: Get<u32>,
+{
 	/// The stash account whose balance is actually locked and at stake.
 	pub stash: AccountId,
 	/// The total amount of the stash's balance that we are currently accounting for.
@@ -448,14 +456,17 @@ pub struct StakingLedger<AccountId, Balance: HasCompact> {
 	pub active: Balance,
 	/// Any balance that is becoming free, which may eventually be transferred out
 	/// of the stash (assuming it doesn't get slashed first).
-	pub unlocking: Vec<UnlockChunk<Balance>>,
+	pub unlocking: BoundedVec<UnlockChunk<Balance>, UnlockingLimit>,
 	/// List of eras for which the stakers behind a validator have claimed rewards. Only updated
 	/// for validators.
 	pub claimed_rewards: Vec<EraIndex>,
 }
 
-impl<AccountId, Balance: HasCompact + Copy + Saturating + AtLeast32BitUnsigned + Zero>
-	StakingLedger<AccountId, Balance>
+impl<AccountId, Balance, UnlockingLimit> StakingLedger<AccountId, Balance, UnlockingLimit>
+where
+	AccountId: Eq + Clone,
+	Balance: HasCompact + Copy + Saturating + AtLeast32BitUnsigned + Zero + Eq + Clone,
+	UnlockingLimit: Get<u32>,
 {
 	/// Initializes the default object using the given `validator`.
 	pub fn default_from(stash: AccountId) -> Self {
@@ -463,7 +474,7 @@ impl<AccountId, Balance: HasCompact + Copy + Saturating + AtLeast32BitUnsigned +
 			stash,
 			total: Zero::zero(),
 			active: Zero::zero(),
-			unlocking: vec![],
+			unlocking: Default::default(),
 			claimed_rewards: vec![],
 		}
 	}
@@ -483,7 +494,9 @@ impl<AccountId, Balance: HasCompact + Copy + Saturating + AtLeast32BitUnsigned +
 					false
 				}
 			})
-			.collect();
+			.collect::<Vec<UnlockChunk<Balance>>>()
+			.try_into()
+			.expect("unlocking vector only reduced in size here.");
 
 		Self {
 			stash: self.stash,
@@ -522,9 +535,11 @@ impl<AccountId, Balance: HasCompact + Copy + Saturating + AtLeast32BitUnsigned +
 	}
 }
 
-impl<AccountId, Balance> StakingLedger<AccountId, Balance>
+impl<AccountId, Balance, UnlockingLimit> StakingLedger<AccountId, Balance, UnlockingLimit>
 where
-	Balance: AtLeast32BitUnsigned + Saturating + Copy,
+	AccountId: Eq + Clone,
+	Balance: AtLeast32BitUnsigned + Saturating + Copy + Eq + Clone,
+	UnlockingLimit: Get<u32>,
 {
 	/// Slash the validator for a given amount of balance. This can grow the value
 	/// of the slash in the case that the validator has less than `minimum_balance`

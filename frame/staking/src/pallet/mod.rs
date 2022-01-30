@@ -45,7 +45,6 @@ use crate::{
 	ValidatorPrefs,
 };
 
-pub const MAX_UNLOCKING_CHUNKS: usize = 32;
 const STAKING_ID: LockIdentifier = *b"staking ";
 
 #[frame_support::pallet]
@@ -147,6 +146,12 @@ pub mod pallet {
 		#[pallet::constant]
 		type MaxNominatorRewardedPerValidator: Get<u32>;
 
+		/// Note that there is a limitation to the number of fund-chunks that can be scheduled to be
+		/// unlocked in the future via [`unbond`](Call::unbond). In case this maximum
+		/// (`MaxUnlockingChunks`) is reached, the bonded account _must_ first wait until a
+		/// successful call to `withdraw_unbonded` to remove some of the chunks.
+		type MaxUnlockingChunks: Get<u32>;
+
 		/// The fraction of the validator set that is safe to be offending.
 		/// After the threshold is reached a new era will be forced.
 		type OffendingValidatorsThreshold: Get<Perbill>;
@@ -218,8 +223,12 @@ pub mod pallet {
 	/// Map from all (unlocked) "controller" accounts to the info regarding the staking.
 	#[pallet::storage]
 	#[pallet::getter(fn ledger)]
-	pub type Ledger<T: Config> =
-		StorageMap<_, Blake2_128Concat, T::AccountId, StakingLedger<T::AccountId, BalanceOf<T>>>;
+	pub type Ledger<T: Config> = StorageMap<
+		_,
+		Blake2_128Concat,
+		T::AccountId,
+		StakingLedger<T::AccountId, BalanceOf<T>, T::MaxUnlockingChunks>,
+	>;
 
 	/// Where the reward payment should be made. Keyed by stash.
 	#[pallet::storage]
@@ -771,7 +780,7 @@ pub mod pallet {
 				stash,
 				total: value,
 				active: value,
-				unlocking: vec![],
+				unlocking: Default::default(),
 				claimed_rewards: (last_reward_era..current_era).collect(),
 			};
 			Self::update_ledger(&controller, &item);
@@ -836,7 +845,7 @@ pub mod pallet {
 		/// Once the unlock period is done, you can call `withdraw_unbonded` to actually move
 		/// the funds out of management ready for transfer.
 		///
-		/// No more than a limited number of unlocking chunks (see `MAX_UNLOCKING_CHUNKS`)
+		/// No more than a limited number of unlocking chunks (see `MaxUnlockingChunks`)
 		/// can co-exists at the same time. In that case, [`Call::withdraw_unbonded`] need
 		/// to be called first to remove some of the chunks (if possible).
 		///
@@ -853,7 +862,6 @@ pub mod pallet {
 		) -> DispatchResult {
 			let controller = ensure_signed(origin)?;
 			let mut ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
-			ensure!(ledger.unlocking.len() < MAX_UNLOCKING_CHUNKS, Error::<T>::NoMoreChunks,);
 
 			let mut value = value.min(ledger.active);
 
@@ -880,7 +888,10 @@ pub mod pallet {
 
 				// Note: in case there is no current era it is fine to bond one era more.
 				let era = Self::current_era().unwrap_or(0) + T::BondingDuration::get();
-				ledger.unlocking.push(UnlockChunk { value, era });
+				ledger
+					.unlocking
+					.try_push(UnlockChunk { value, era })
+					.map_err(|_| Error::<T>::NoMoreChunks)?;
 				// NOTE: ledger must be updated prior to calling `Self::weight_of`.
 				Self::update_ledger(&controller, &ledger);
 
@@ -1347,10 +1358,10 @@ pub mod pallet {
 		///
 		/// # <weight>
 		/// - Time complexity: O(L), where L is unlocking chunks
-		/// - Bounded by `MAX_UNLOCKING_CHUNKS`.
+		/// - Bounded by `MaxUnlockingChunks`.
 		/// - Storage changes: Can't increase storage, only decrease it.
 		/// # </weight>
-		#[pallet::weight(T::WeightInfo::rebond(MAX_UNLOCKING_CHUNKS as u32))]
+		#[pallet::weight(T::WeightInfo::rebond(T::MaxUnlockingChunks::get()))]
 		pub fn rebond(
 			origin: OriginFor<T>,
 			#[pallet::compact] value: BalanceOf<T>,

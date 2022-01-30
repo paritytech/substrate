@@ -203,7 +203,7 @@ impl<T: Config> Pallet<T> {
 	/// This will also update the stash lock.
 	pub(crate) fn update_ledger(
 		controller: &T::AccountId,
-		ledger: &StakingLedger<T::AccountId, BalanceOf<T>>,
+		ledger: &StakingLedger<T::AccountId, BalanceOf<T>, T::MaxUnlockingChunks>,
 	) {
 		T::Currency::set_lock(STAKING_ID, &ledger.stash, ledger.total, WithdrawReasons::all());
 		<Ledger<T>>::insert(controller, ledger);
@@ -928,7 +928,7 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 				stash: voter.clone(),
 				active: stake,
 				total: stake,
-				unlocking: vec![],
+				unlocking: Default::default(),
 				claimed_rewards: vec![],
 			},
 		);
@@ -946,7 +946,7 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 				stash: target.clone(),
 				active: stake,
 				total: stake,
-				unlocking: vec![],
+				unlocking: Default::default(),
 				claimed_rewards: vec![],
 			},
 		);
@@ -983,7 +983,7 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 					stash: v.clone(),
 					active: stake,
 					total: stake,
-					unlocking: vec![],
+					unlocking: Default::default(),
 					claimed_rewards: vec![],
 				},
 			);
@@ -1004,7 +1004,7 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 					stash: v.clone(),
 					active: stake,
 					total: stake,
-					unlocking: vec![],
+					unlocking: Default::default(),
 					claimed_rewards: vec![],
 				},
 			);
