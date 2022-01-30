@@ -561,7 +561,7 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 
 		where_clause.predicates.push(parse_quote! {
 			RuntimeApiImplCall::StateBackend:
-				#crate_::StateBackend<#crate_::HashFor<__SR_API_BLOCK__>>
+				#crate_::StateBackend<#crate_::HashingFor<__SR_API_BLOCK__>>
 		});
 
 		// Require that all types used in the function signatures are unwind safe.

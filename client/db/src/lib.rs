@@ -79,7 +79,7 @@ use sp_database::Transaction;
 use sp_runtime::{
 	generic::BlockId,
 	traits::{
-		Block as BlockT, Hash, HashFor, Header as HeaderT, NumberFor, One, SaturatedConversion,
+		Block as BlockT, Hash, HashingFor, Header as HeaderT, NumberFor, One, SaturatedConversion,
 		Zero,
 	},
 	Justification, Justifications, StateVersion, Storage,
@@ -104,7 +104,7 @@ const DEFAULT_CHILD_RATIO: (usize, usize) = (1, 10);
 
 /// DB-backed patricia trie state, transaction type is an overlay of changes to commit.
 pub type DbState<B> =
-	sp_state_machine::TrieBackend<Arc<dyn sp_state_machine::Storage<HashFor<B>>>, HashFor<B>>;
+	sp_state_machine::TrieBackend<Arc<dyn sp_state_machine::Storage<HashingFor<B>>>, HashingFor<B>>;
 
 const DB_HASH_LEN: usize = 32;
 /// Hash type that this backend uses for the database.
@@ -149,10 +149,10 @@ impl<Block: BlockT> std::fmt::Debug for RefTrackingState<Block> {
 	}
 }
 
-impl<B: BlockT> StateBackend<HashFor<B>> for RefTrackingState<B> {
-	type Error = <DbState<B> as StateBackend<HashFor<B>>>::Error;
-	type Transaction = <DbState<B> as StateBackend<HashFor<B>>>::Transaction;
-	type TrieBackendStorage = <DbState<B> as StateBackend<HashFor<B>>>::TrieBackendStorage;
+impl<B: BlockT> StateBackend<HashingFor<B>> for RefTrackingState<B> {
+	type Error = <DbState<B> as StateBackend<HashingFor<B>>>::Error;
+	type Transaction = <DbState<B> as StateBackend<HashingFor<B>>>::Transaction;
+	type TrieBackendStorage = <DbState<B> as StateBackend<HashingFor<B>>>::TrieBackendStorage;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		self.state.storage(key)
@@ -269,7 +269,7 @@ impl<B: BlockT> StateBackend<HashFor<B>> for RefTrackingState<B> {
 
 	fn as_trie_backend(
 		&self,
-	) -> Option<&sp_state_machine::TrieBackend<Self::TrieBackendStorage, HashFor<B>>> {
+	) -> Option<&sp_state_machine::TrieBackend<Self::TrieBackendStorage, HashingFor<B>>> {
 		self.state.as_trie_backend()
 	}
 
@@ -722,7 +722,7 @@ impl<Block: BlockT> HeaderMetadata<Block> for BlockchainDb<Block> {
 /// Database transaction
 pub struct BlockImportOperation<Block: BlockT> {
 	old_state: SyncingCachingState<RefTrackingState<Block>, Block>,
-	db_updates: PrefixedMemoryDB<HashFor<Block>>,
+	db_updates: PrefixedMemoryDB<HashingFor<Block>>,
 	storage_updates: StorageCollection,
 	child_storage_updates: ChildStorageCollection,
 	offchain_storage_updates: OffchainChangesCollection,
@@ -815,7 +815,10 @@ impl<Block: BlockT> sc_client_api::backend::BlockImportOperation<Block>
 		// Currently cache isn't implemented on full nodes.
 	}
 
-	fn update_db_storage(&mut self, update: PrefixedMemoryDB<HashFor<Block>>) -> ClientResult<()> {
+	fn update_db_storage(
+		&mut self,
+		update: PrefixedMemoryDB<HashingFor<Block>>,
+	) -> ClientResult<()> {
 		self.db_updates = update;
 		Ok(())
 	}
@@ -894,10 +897,10 @@ struct StorageDb<Block: BlockT> {
 	prefix_keys: bool,
 }
 
-impl<Block: BlockT> sp_state_machine::Storage<HashFor<Block>> for StorageDb<Block> {
+impl<Block: BlockT> sp_state_machine::Storage<HashingFor<Block>> for StorageDb<Block> {
 	fn get(&self, key: &Block::Hash, prefix: Prefix) -> Result<Option<DBValue>, String> {
 		if self.prefix_keys {
-			let key = prefixed_key::<HashFor<Block>>(key, prefix);
+			let key = prefixed_key::<HashingFor<Block>>(key, prefix);
 			self.state_db.get(&key, self)
 		} else {
 			self.state_db.get(key.as_ref(), self)
@@ -917,16 +920,16 @@ impl<Block: BlockT> sc_state_db::NodeDb for StorageDb<Block> {
 
 struct DbGenesisStorage<Block: BlockT> {
 	root: Block::Hash,
-	storage: PrefixedMemoryDB<HashFor<Block>>,
+	storage: PrefixedMemoryDB<HashingFor<Block>>,
 }
 
 impl<Block: BlockT> DbGenesisStorage<Block> {
-	pub fn new(root: Block::Hash, storage: PrefixedMemoryDB<HashFor<Block>>) -> Self {
+	pub fn new(root: Block::Hash, storage: PrefixedMemoryDB<HashingFor<Block>>) -> Self {
 		DbGenesisStorage { root, storage }
 	}
 }
 
-impl<Block: BlockT> sp_state_machine::Storage<HashFor<Block>> for DbGenesisStorage<Block> {
+impl<Block: BlockT> sp_state_machine::Storage<HashingFor<Block>> for DbGenesisStorage<Block> {
 	fn get(&self, key: &Block::Hash, prefix: Prefix) -> Result<Option<DBValue>, String> {
 		use hash_db::HashDB;
 		Ok(self.storage.get(key, prefix))
@@ -938,14 +941,14 @@ struct EmptyStorage<Block: BlockT>(pub Block::Hash);
 impl<Block: BlockT> EmptyStorage<Block> {
 	pub fn new() -> Self {
 		let mut root = Block::Hash::default();
-		let mut mdb = MemoryDB::<HashFor<Block>>::default();
+		let mut mdb = MemoryDB::<HashingFor<Block>>::default();
 		// both triedbmut are the same on empty storage.
-		sp_state_machine::TrieDBMutV1::<HashFor<Block>>::new(&mut mdb, &mut root);
+		sp_state_machine::TrieDBMutV1::<HashingFor<Block>>::new(&mut mdb, &mut root);
 		EmptyStorage(root)
 	}
 }
 
-impl<Block: BlockT> sp_state_machine::Storage<HashFor<Block>> for EmptyStorage<Block> {
+impl<Block: BlockT> sp_state_machine::Storage<HashingFor<Block>> for EmptyStorage<Block> {
 	fn get(&self, _key: &Block::Hash, _prefix: Prefix) -> Result<Option<DBValue>, String> {
 		Ok(None)
 	}
@@ -3150,7 +3153,7 @@ pub(crate) mod tests {
 		let mut blocks = Vec::new();
 		let mut prev_hash = Default::default();
 		let x1 = ExtrinsicWrapper::from(0u64).encode();
-		let x1_hash = <HashFor<Block> as sp_core::Hasher>::hash(&x1[1..]);
+		let x1_hash = <HashingFor<Block> as sp_core::Hasher>::hash(&x1[1..]);
 		for i in 0..10 {
 			let mut index = Vec::new();
 			if i == 0 {

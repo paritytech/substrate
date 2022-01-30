@@ -28,7 +28,7 @@ use sp_consensus::BlockOrigin;
 use sp_core::offchain::OffchainStorage;
 use sp_runtime::{
 	generic::BlockId,
-	traits::{Block as BlockT, HashFor, NumberFor},
+	traits::{Block as BlockT, HashingFor, NumberFor},
 	Justification, Justifications, StateVersion, Storage,
 };
 use sp_state_machine::{
@@ -44,7 +44,7 @@ use std::marker::PhantomData;
 pub type StateBackendFor<B, Block> = <B as Backend<Block>>::State;
 
 /// Extracts the transaction for the given state backend.
-pub type TransactionForSB<B, Block> = <B as StateBackend<HashFor<Block>>>::Transaction;
+pub type TransactionForSB<B, Block> = <B as StateBackend<HashingFor<Block>>>::Transaction;
 
 /// Extracts the transaction for the given backend.
 pub type TransactionFor<B, Block> = TransactionForSB<StateBackendFor<B, Block>, Block>;
@@ -146,7 +146,7 @@ impl NewBlockState {
 /// Keeps hold if the inserted block state and data.
 pub trait BlockImportOperation<Block: BlockT> {
 	/// Associated state backend type.
-	type State: StateBackend<HashFor<Block>>;
+	type State: StateBackend<HashingFor<Block>>;
 
 	/// Returns pending state.
 	///
@@ -329,7 +329,7 @@ impl<'a, State, Block> KeyIterator<'a, State, Block> {
 impl<'a, State, Block> Iterator for KeyIterator<'a, State, Block>
 where
 	Block: BlockT,
-	State: StateBackend<HashFor<Block>>,
+	State: StateBackend<HashingFor<Block>>,
 {
 	type Item = StorageKey;
 
@@ -446,7 +446,7 @@ pub trait Backend<Block: BlockT>: AuxStore + Send + Sync {
 	/// Associated blockchain backend type.
 	type Blockchain: BlockchainBackend<Block>;
 	/// Associated state backend type.
-	type State: StateBackend<HashFor<Block>> + Send;
+	type State: StateBackend<HashingFor<Block>> + Send;
 	/// Offchain workers local storage.
 	type OffchainStorage: OffchainStorage;
 

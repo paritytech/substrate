@@ -25,7 +25,7 @@ use sp_core::{
 };
 use sp_runtime::{
 	generic::BlockId,
-	traits::{Block as BlockT, HashFor, Header as HeaderT, NumberFor, Zero},
+	traits::{Block as BlockT, HashingFor, Header as HeaderT, NumberFor, Zero},
 	Justification, Justifications, StateVersion, Storage,
 };
 use sp_state_machine::{
@@ -490,9 +490,10 @@ impl<Block: BlockT> backend::AuxStore for Blockchain<Block> {
 /// In-memory operation.
 pub struct BlockImportOperation<Block: BlockT> {
 	pending_block: Option<PendingBlock<Block>>,
-	old_state: InMemoryBackend<HashFor<Block>>,
-	new_state:
-		Option<<InMemoryBackend<HashFor<Block>> as StateBackend<HashFor<Block>>>::Transaction>,
+	old_state: InMemoryBackend<HashingFor<Block>>,
+	new_state: Option<
+		<InMemoryBackend<HashingFor<Block>> as StateBackend<HashingFor<Block>>>::Transaction,
+	>,
 	aux: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 	finalized_blocks: Vec<(BlockId<Block>, Option<Justification>)>,
 	set_head: Option<BlockId<Block>>,
@@ -534,7 +535,7 @@ impl<Block: BlockT> backend::BlockImportOperation<Block> for BlockImportOperatio
 where
 	Block::Hash: Ord,
 {
-	type State = InMemoryBackend<HashFor<Block>>;
+	type State = InMemoryBackend<HashingFor<Block>>;
 
 	fn state(&self) -> sp_blockchain::Result<Option<&Self::State>> {
 		Ok(Some(&self.old_state))
@@ -558,7 +559,7 @@ where
 
 	fn update_db_storage(
 		&mut self,
-		update: <InMemoryBackend<HashFor<Block>> as StateBackend<HashFor<Block>>>::Transaction,
+		update: <InMemoryBackend<HashingFor<Block>> as StateBackend<HashingFor<Block>>>::Transaction,
 	) -> sp_blockchain::Result<()> {
 		self.new_state = Some(update);
 		Ok(())
@@ -628,7 +629,7 @@ pub struct Backend<Block: BlockT>
 where
 	Block::Hash: Ord,
 {
-	states: RwLock<HashMap<Block::Hash, InMemoryBackend<HashFor<Block>>>>,
+	states: RwLock<HashMap<Block::Hash, InMemoryBackend<HashingFor<Block>>>>,
 	blockchain: Blockchain<Block>,
 	import_lock: RwLock<()>,
 }
@@ -676,7 +677,7 @@ where
 {
 	type BlockImportOperation = BlockImportOperation<Block>;
 	type Blockchain = Blockchain<Block>;
-	type State = InMemoryBackend<HashFor<Block>>;
+	type State = InMemoryBackend<HashingFor<Block>>;
 	type OffchainStorage = OffchainStorage;
 
 	fn begin_operation(&self) -> sp_blockchain::Result<Self::BlockImportOperation> {

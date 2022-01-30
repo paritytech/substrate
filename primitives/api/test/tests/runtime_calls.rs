@@ -18,7 +18,7 @@
 use sp_api::{Core, ProvideRuntimeApi};
 use sp_runtime::{
 	generic::BlockId,
-	traits::{HashFor, Header as HeaderT},
+	traits::{HashingFor, Header as HeaderT},
 };
 use sp_state_machine::{
 	create_proof_check_backend, execution_proof_check_on_trie_backend, ExecutionStrategy,
@@ -198,7 +198,7 @@ fn record_proof_works() {
 	builder.push(transaction.clone()).unwrap();
 	let (block, _, proof) = builder.build().expect("Bake block").into_inner();
 
-	let backend = create_proof_check_backend::<HashFor<Block>>(
+	let backend = create_proof_check_backend::<HashingFor<Block>>(
 		storage_root,
 		proof.expect("Proof was generated"),
 	)

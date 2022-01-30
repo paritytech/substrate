@@ -22,7 +22,7 @@ use libp2p::PeerId;
 use lru::LruCache;
 use prometheus_endpoint::{register, Counter, PrometheusError, Registry, U64};
 use sc_network::ObservedRole;
-use sp_runtime::traits::{Block as BlockT, Hash, HashFor};
+use sp_runtime::traits::{Block as BlockT, Hash, HashingFor};
 use std::{
 	borrow::Cow,
 	collections::{HashMap, HashSet},
@@ -233,7 +233,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 	/// message is already expired it should be dropped on the next garbage
 	/// collection.
 	pub fn register_message(&mut self, topic: B::Hash, message: Vec<u8>) {
-		let message_hash = HashFor::<B>::hash(&message[..]);
+		let message_hash = HashingFor::<B>::hash(&message[..]);
 		self.register_message_hashed(message_hash, topic, message, None);
 	}
 
@@ -351,7 +351,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 		}
 
 		for message in messages {
-			let message_hash = HashFor::<B>::hash(&message[..]);
+			let message_hash = HashingFor::<B>::hash(&message[..]);
 
 			if self.known_messages.contains(&message_hash) {
 				tracing::trace!(
@@ -462,7 +462,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 		message: Vec<u8>,
 		force: bool,
 	) {
-		let message_hash = HashFor::<B>::hash(&message);
+		let message_hash = HashingFor::<B>::hash(&message);
 		self.register_message_hashed(message_hash, topic, message.clone(), None);
 		let intent = if force { MessageIntent::ForcedBroadcast } else { MessageIntent::Broadcast };
 		propagate(
@@ -483,7 +483,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 			Some(peer) => peer,
 		};
 
-		let message_hash = HashFor::<B>::hash(&message);
+		let message_hash = HashingFor::<B>::hash(&message);
 
 		tracing::trace!(
 			target: "gossip",
@@ -666,7 +666,7 @@ mod tests {
 
 		// Register message.
 		let message = vec![4, 5, 6];
-		let topic = HashFor::<Block>::hash(&[1, 2, 3]);
+		let topic = HashingFor::<Block>::hash(&[1, 2, 3]);
 		consensus.register_message(topic, message.clone());
 
 		assert_eq!(
