@@ -37,8 +37,7 @@ rand = { version = "0.7.3", default-features = false, optional = true, features 
 	"alloc",
 	"small_rng",
 ] }
-strum = { optional = true, version = "0.22.0" }
-strum_macros = { optional = true, version = "0.23.1" }
+strum = { optional = true, default-features = false, version = "0.23.0", features = ["derive"] }
 
 [dev-dependencies]
 parking_lot = "0.11.2"
@@ -70,12 +69,15 @@ std = [
 	"sp-arithmetic/std",
 	"frame-election-provider-support/std",
 	"log/std",
+
+	"frame-benchmarking/std",
+	"rand/std",
+	"strum/std",
 ]
 runtime-benchmarks = [
 	"frame-benchmarking/runtime-benchmarks",
 	"frame-election-provider-support/runtime-benchmarks",
 	"rand",
 	"strum",
-	"strum_macros",
 ]
 try-runtime = ["frame-support/try-runtime"]
