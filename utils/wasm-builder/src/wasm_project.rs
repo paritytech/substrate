@@ -468,10 +468,8 @@ impl Profile {
 				.unwrap()
 				.to_string()
 		};
-		for profile in Profile::iter() {
-			if profile.directory() == name {
-				return profile
-			}
+		if let Some(profile) = Profile::iter().find(|p| p.directory() == name) {
+			return profile
 		}
 		panic!(
 			"Unexpected profile name: `{}`. One of the following is expected: {:?}",
@@ -504,10 +502,7 @@ impl Profile {
 
 	/// Whether the resulting binary should be compacted and compressed.
 	fn wants_compact(&self) -> bool {
-		match self {
-			Self::Debug => false,
-			_ => true,
-		}
+		!matches!(self, Self::Debug)
 	}
 }
 
