@@ -462,10 +462,10 @@ impl Profile {
 				.rev()
 				.take_while(|c| c.as_os_str() != "wbuild")
 				.last()
-				.unwrap()
+				.expect("We put the wasm project within a `target/.../wbuild` path; qed")
 				.as_os_str()
 				.to_str()
-				.unwrap()
+				.expect("All our profile directory names are ascii; qed")
 				.to_string();
 			(name, false)
 		};
