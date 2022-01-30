@@ -446,14 +446,14 @@ impl Profile {
 	///
 	/// Can be overriden by setting [`crate::WASM_BUILD_TYPE_ENV`].
 	fn detect(wasm_project: &Path) -> Profile {
-		let name = if let Ok(name) = env::var(crate::WASM_BUILD_TYPE_ENV) {
-			name
+		let (name, overriden) = if let Ok(name) = env::var(crate::WASM_BUILD_TYPE_ENV) {
+			(name, true)
 		} else {
 			// First go backwards to the beginning of the target directory.
 			// Then go forwards to find the "wbuild" directory.
 			// We need to go backwards first because when starting from the root there
 			// might be a chance that someone has a "wbuild" directory somewhere in the path.
-			wasm_project
+			let name = wasm_project
 				.components()
 				.rev()
 				.take_while(|c| c.as_os_str() != "target")
@@ -466,18 +466,27 @@ impl Profile {
 				.as_os_str()
 				.to_str()
 				.unwrap()
-				.to_string()
+				.to_string();
+			(name, false)
 		};
-		if let Some(profile) = Profile::iter().find(|p| p.directory() == name) {
-			return profile
+		match (Profile::iter().find(|p| p.directory() == name), overriden) {
+			// When not overriden by a env variable we default to using the `Release` profile
+			// for the wasm build even when the main build uses the debug build. This
+			// is because the `Debug` profile is too slow for normal development activities.
+			(Some(Profile::Debug), false) => Profile::Release,
+			// For any other profile or when overriden we take it at face value.
+			(Some(profile), _) => profile,
+			// Invalid profile specified.
+			(None, _) => {
+				// We use println! + exit instead of a panic in order to have a cleaner output.
+				println!(
+					"Unexpected profile name: `{}`. One of the following is expected: {:?}",
+					name,
+					Profile::iter().map(|p| p.directory()).collect::<Vec<_>>(),
+				);
+				process::exit(1);
+			},
 		}
-		// We use println! + exit instead of a panic in order to have a cleaner output.
-		println!(
-			"Unexpected profile name: `{}`. One of the following is expected: {:?}",
-			name,
-			Profile::iter().map(|p| p.directory()).collect::<Vec<_>>(),
-		);
-		process::exit(1);
 	}
 
 	/// The name of the profile as supplied to the cargo `--profile` cli option.
