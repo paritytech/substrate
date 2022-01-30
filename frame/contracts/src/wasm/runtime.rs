@@ -1094,9 +1094,9 @@ define_env!(Env, <E: Ext>,
 
 	// Execute code in the context of the current contract.
 	//
-	// The code is executed in the same storage transaction as the caller.
-	// Reentrancy protection is always disabled because you need to trust
-	// the callee anyways.
+	// Reentrancy protection is always disabled since the callee is allowed
+	// to modify the callers storage. This makes going through a reentrancy attack
+	// unnecessary for the callee when it wants to exploit the caller.
 	//
 	// # Parameters
 	//
@@ -1110,7 +1110,7 @@ define_env!(Env, <E: Ext>,
 	//
 	// # Errors
 	//
-	// An error means that the call wasn't successful output buffer is returned unless
+	// An error means that the call wasn't successful and no output buffer is returned unless
 	// stated otherwise.
 	//
 	// `ReturnCode::CalleeReverted`: Output buffer is returned.
