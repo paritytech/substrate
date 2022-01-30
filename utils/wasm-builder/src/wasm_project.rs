@@ -471,11 +471,13 @@ impl Profile {
 		if let Some(profile) = Profile::iter().find(|p| p.directory() == name) {
 			return profile
 		}
-		panic!(
+		// We use println! + exit instead of a panic in order to have a cleaner output.
+		println!(
 			"Unexpected profile name: `{}`. One of the following is expected: {:?}",
 			name,
 			Profile::iter().map(|p| p.directory()).collect::<Vec<_>>(),
 		);
+		process::exit(1);
 	}
 
 	/// The name of the profile as supplied to the cargo `--profile` cli option.
@@ -759,11 +761,13 @@ fn copy_wasm_to_target_directory(cargo_manifest: &Path, wasm_binary: &WasmBinary
 	};
 
 	if !target_dir.is_absolute() {
-		panic!(
+		// We use println! + exit instead of a panic in order to have a cleaner output.
+		println!(
 			"Environment variable `{}` with `{}` is not an absolute path!",
 			crate::WASM_TARGET_DIRECTORY,
 			target_dir.display(),
 		);
+		process::exit(1);
 	}
 
 	fs::create_dir_all(&target_dir).expect("Creates `WASM_TARGET_DIRECTORY`.");
