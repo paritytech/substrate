@@ -245,7 +245,7 @@ impl Registry {
 
 		let changes = Arc::<[_]>::from(changes);
 		let child_changes = Arc::<[_]>::from(child_changes);
-		
+
 		// Trigger the events
 		self.sinks.iter_mut().for_each(|(subs_id, sink)| {
 			if subscribers.contains(subs_id) {
@@ -258,8 +258,9 @@ impl Registry {
 					child_filters: sink.child_keys.clone(),
 				};
 
-				let notification = StorageNotification { block: hash.clone(), changes: storage_change_set };
-				
+				let notification =
+					StorageNotification { block: hash.clone(), changes: storage_change_set };
+
 				dispatch(subs_id, notification);
 			}
 		});
