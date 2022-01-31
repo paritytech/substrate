@@ -41,6 +41,10 @@ pub enum InvalidTransaction {
 	Call,
 	/// General error to do with the inability to pay some fees (e.g. account balance too low).
 	Payment,
+	/// General error to do with the inability to pay some fees in non native currencty
+	NonNativePayment,
+	/// General error to do with the inability calculate fee in non native currency
+	NonNativePaymentCalculation,
 	/// General error to do with the transaction not yet being valid (e.g. nonce too high).
 	Future,
 	/// General error to do with the transaction being outdated (e.g. nonce too low).
@@ -104,6 +108,10 @@ impl From<InvalidTransaction> for &'static str {
 			InvalidTransaction::ExhaustsResources => "Transaction would exhaust the block limits",
 			InvalidTransaction::Payment =>
 				"Inability to pay some fees (e.g. account balance too low)",
+			InvalidTransaction::NonNativePayment =>
+				"Inability to pay some fees in non native token (e.g. account balance too low)",
+			InvalidTransaction::NonNativePaymentCalculation =>
+				"Inability to calculate fees in non native token (e.g. non existing pool, math overflow). Check node rpc for more details.",
 			InvalidTransaction::BadMandatory =>
 				"A call was labelled as mandatory, but resulted in an Error.",
 			InvalidTransaction::MandatoryDispatch =>
