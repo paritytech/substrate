@@ -379,7 +379,8 @@ impl<T: Config> Pallet<T> {
 							votes[i].1 = vote;
 						},
 						Err(i) => {
-							votes.try_insert(i, (poll_index, vote))
+							votes
+								.try_insert(i, (poll_index, vote))
 								.map_err(|()| Error::<T>::MaxVotesReached)?;
 						},
 					}
@@ -433,7 +434,9 @@ impl<T: Config> Pallet<T> {
 					},
 					PollStatus::Completed(end, approved) => {
 						if let Some((lock_periods, balance)) = v.1.locked_if(approved) {
-							let unlock_at = end + T::VoteLockingPeriod::get() * lock_periods.into();
+							let unlock_at = end.saturating_add(
+								T::VoteLockingPeriod::get().saturating_mul(lock_periods.into()),
+							);
 							let now = frame_system::Pallet::<T>::block_number();
 							if now < unlock_at {
 								ensure!(
@@ -576,7 +579,12 @@ impl<T: Config> Pallet<T> {
 						);
 						let now = frame_system::Pallet::<T>::block_number();
 						let lock_periods = conviction.lock_periods().into();
-						prior.accumulate(now + T::VoteLockingPeriod::get() * lock_periods, balance);
+						prior.accumulate(
+							now.saturating_add(
+								T::VoteLockingPeriod::get().saturating_mul(lock_periods),
+							),
+							balance,
+						);
 						voting.set_common(delegations, prior);
 
 						Ok(votes)
