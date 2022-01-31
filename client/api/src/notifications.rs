@@ -34,7 +34,7 @@ use sp_core::{
 	hexdisplay::HexDisplay,
 	storage::{StorageData, StorageKey},
 };
-use sp_runtime::traits::Block as BlockT;
+use sp_runtime::traits::{Block as BlockT, HashFor};
 
 /// Storage change set
 #[derive(Debug)]
@@ -128,7 +128,9 @@ type SubscribersGauge = CounterVec<U64>;
 
 /// Manages storage listeners.
 #[derive(Debug)]
-pub struct StorageNotifications<Block: BlockT>(Arc<Mutex<StorageNotificationsImpl<Block::Hash>>>);
+pub struct StorageNotifications<Block: BlockT>(
+	Arc<Mutex<StorageNotificationsImpl<HashFor<Block>>>>,
+);
 
 type Keys = Option<HashSet<StorageKey>>;
 type ChildKeys = Option<HashMap<StorageKey, Option<HashSet<StorageKey>>>>;
@@ -207,7 +209,7 @@ impl<Block: BlockT> StorageNotifications<Block> {
 	/// In fact no event might be sent if clients are not interested in the changes.
 	pub fn trigger(
 		&mut self,
-		hash: &Block::Hash,
+		hash: &HashFor<Block>,
 		changeset: impl Iterator<Item = (Vec<u8>, Option<Vec<u8>>)>,
 		child_changeset: impl Iterator<
 			Item = (Vec<u8>, impl Iterator<Item = (Vec<u8>, Option<Vec<u8>>)>),
@@ -221,7 +223,7 @@ impl<Block: BlockT> StorageNotifications<Block> {
 		&mut self,
 		filter_keys: Option<&[StorageKey]>,
 		filter_child_keys: Option<&[(StorageKey, Option<Vec<StorageKey>>)]>,
-	) -> StorageEventStream<Block::Hash> {
+	) -> StorageEventStream<HashFor<Block>> {
 		let (id, rx) = self.0.lock().listen(filter_keys, filter_child_keys);
 		let storage_notifications = Arc::downgrade(&self.0);
 		StorageEventStream { rx, storage_notifications, was_triggered: false, id }

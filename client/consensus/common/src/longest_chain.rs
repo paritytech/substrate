@@ -23,7 +23,7 @@ use sp_blockchain::{Backend, HeaderBackend};
 use sp_consensus::{Error as ConsensusError, SelectChain};
 use sp_runtime::{
 	generic::BlockId,
-	traits::{Block as BlockT, NumberFor},
+	traits::{Block as BlockT, HashFor, NumberFor},
 };
 use std::{marker::PhantomData, sync::Arc};
 
@@ -89,9 +89,9 @@ where
 
 	async fn finality_target(
 		&self,
-		target_hash: Block::Hash,
+		target_hash: HashFor<Block>,
 		maybe_max_number: Option<NumberFor<Block>>,
-	) -> Result<Block::Hash, ConsensusError> {
+	) -> Result<HashFor<Block>, ConsensusError> {
 		let import_lock = self.backend.get_import_lock();
 		self.backend
 			.blockchain()

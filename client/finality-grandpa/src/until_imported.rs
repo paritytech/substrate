@@ -39,7 +39,7 @@ use prometheus_endpoint::{register, Gauge, PrometheusError, Registry, U64};
 use sc_client_api::{BlockImportNotification, ImportNotifications};
 use sc_utils::mpsc::TracingUnboundedReceiver;
 use sp_finality_grandpa::AuthorityId;
-use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
+use sp_runtime::traits::{Block as BlockT, HashFor, Header as HeaderT, NumberFor};
 
 use std::{
 	collections::{HashMap, VecDeque},
@@ -77,7 +77,7 @@ pub(crate) trait BlockUntilImported<Block: BlockT>: Sized {
 /// under a different number than specified in the message.
 pub(crate) enum DiscardWaitOrReady<Block: BlockT, W, R> {
 	Discard,
-	Wait(Vec<(Block::Hash, NumberFor<Block>, W)>),
+	Wait(Vec<(HashFor<Block>, NumberFor<Block>, W)>),
 	Ready(R),
 }
 
@@ -156,7 +156,7 @@ where
 	/// Mapping block hashes to their block number, the point in time it was
 	/// first encountered (Instant) and a list of GRANDPA messages referencing
 	/// the block hash.
-	pending: HashMap<Block::Hash, (NumberFor<Block>, Instant, Vec<M>)>,
+	pending: HashMap<HashFor<Block>, (NumberFor<Block>, Instant, Vec<M>)>,
 
 	/// Queue identifier for differentiation in logs.
 	identifier: &'static str,

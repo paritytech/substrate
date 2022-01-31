@@ -18,7 +18,10 @@
 
 //! Proof utilities
 use crate::{CompactProof, StorageProof};
-use sp_runtime::{generic::BlockId, traits::Block as BlockT};
+use sp_runtime::{
+	generic::BlockId,
+	traits::{Block as BlockT, HashFor},
+};
 use sp_state_machine::{KeyValueStates, KeyValueStorageLevel};
 use sp_storage::ChildInfo;
 
@@ -86,7 +89,7 @@ pub trait ProofProvider<Block: BlockT> {
 	/// depth of current iteration or 0 if completed.
 	fn verify_range_proof(
 		&self,
-		root: Block::Hash,
+		root: HashFor<Block>,
 		proof: CompactProof,
 		start_keys: &[Vec<u8>],
 	) -> sp_blockchain::Result<(KeyValueStates, usize)>;

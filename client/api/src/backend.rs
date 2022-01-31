@@ -28,7 +28,7 @@ use sp_consensus::BlockOrigin;
 use sp_core::offchain::OffchainStorage;
 use sp_runtime::{
 	generic::BlockId,
-	traits::{Block as BlockT, HashingFor, NumberFor},
+	traits::{Block as BlockT, HashFor, HashingFor, NumberFor},
 	Justification, Justifications, StateVersion, Storage,
 };
 use sp_state_machine::{
@@ -55,7 +55,7 @@ pub type TransactionFor<B, Block> = TransactionForSB<StateBackendFor<B, Block>, 
 /// including storage changes, reorged blocks, etc.
 pub struct ImportSummary<Block: BlockT> {
 	/// Block hash of the imported block.
-	pub hash: Block::Hash,
+	pub hash: HashFor<Block>,
 	/// Import origin.
 	pub origin: BlockOrigin,
 	/// Header of the imported block.
@@ -77,9 +77,9 @@ pub struct ImportSummary<Block: BlockT> {
 pub struct FinalizeSummary<Block: BlockT> {
 	/// Blocks that were finalized.
 	/// The last entry is the one that has been explicitly finalized.
-	pub finalized: Vec<Block::Hash>,
+	pub finalized: Vec<HashFor<Block>>,
 	/// Heads that became stale during this finalization operation.
-	pub stale_heads: Vec<Block::Hash>,
+	pub stale_heads: Vec<HashFor<Block>>,
 }
 
 /// Import operation wrapper.
@@ -179,14 +179,14 @@ pub trait BlockImportOperation<Block: BlockT> {
 		storage: Storage,
 		commit: bool,
 		state_version: StateVersion,
-	) -> sp_blockchain::Result<Block::Hash>;
+	) -> sp_blockchain::Result<HashFor<Block>>;
 
 	/// Inject storage data into the database replacing any existing data.
 	fn reset_storage(
 		&mut self,
 		storage: Storage,
 		state_version: StateVersion,
-	) -> sp_blockchain::Result<Block::Hash>;
+	) -> sp_blockchain::Result<HashFor<Block>>;
 
 	/// Set storage changes.
 	fn update_storage(
@@ -373,7 +373,7 @@ pub trait StorageProvider<Block: BlockT, B: Backend<Block>> {
 		&self,
 		id: &BlockId<Block>,
 		key: &StorageKey,
-	) -> sp_blockchain::Result<Option<Block::Hash>>;
+	) -> sp_blockchain::Result<Option<HashFor<Block>>>;
 
 	/// Given a `BlockId` and a key prefix, return the matching child storage keys and values in
 	/// that block.
@@ -427,7 +427,7 @@ pub trait StorageProvider<Block: BlockT, B: Backend<Block>> {
 		id: &BlockId<Block>,
 		child_info: &ChildInfo,
 		key: &StorageKey,
-	) -> sp_blockchain::Result<Option<Block::Hash>>;
+	) -> sp_blockchain::Result<Option<HashFor<Block>>>;
 }
 
 /// Client backend.
@@ -496,7 +496,7 @@ pub trait Backend<Block: BlockT>: AuxStore + Send + Sync {
 	fn offchain_storage(&self) -> Option<Self::OffchainStorage>;
 
 	/// Returns true if state for given block is available.
-	fn have_state_at(&self, hash: &Block::Hash, _number: NumberFor<Block>) -> bool {
+	fn have_state_at(&self, hash: &HashFor<Block>, _number: NumberFor<Block>) -> bool {
 		self.state_at(BlockId::Hash(hash.clone())).is_ok()
 	}
 
@@ -513,10 +513,10 @@ pub trait Backend<Block: BlockT>: AuxStore + Send + Sync {
 		&self,
 		n: NumberFor<Block>,
 		revert_finalized: bool,
-	) -> sp_blockchain::Result<(NumberFor<Block>, HashSet<Block::Hash>)>;
+	) -> sp_blockchain::Result<(NumberFor<Block>, HashSet<HashFor<Block>>)>;
 
 	/// Discard non-best, unfinalized leaf block.
-	fn remove_leaf_block(&self, hash: &Block::Hash) -> sp_blockchain::Result<()>;
+	fn remove_leaf_block(&self, hash: &HashFor<Block>) -> sp_blockchain::Result<()>;
 
 	/// Insert auxiliary data into key-value store.
 	fn insert_aux<

@@ -49,7 +49,7 @@ use sc_network::{NetworkService, ReputationChange};
 use sc_network_gossip::{GossipEngine, Network as GossipNetwork};
 use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG, CONSENSUS_INFO};
 use sp_keystore::SyncCryptoStorePtr;
-use sp_runtime::traits::{Block as BlockT, Hash as HashT, Header as HeaderT, NumberFor};
+use sp_runtime::traits::{Block as BlockT, Hash as HashT, HashFor, Header as HeaderT, NumberFor};
 
 use crate::{
 	environment::HasVoted, CatchUp, Commit, CommunicationIn, CommunicationOutH, CompactCommit,
@@ -166,7 +166,7 @@ pub trait Network<Block: BlockT>: GossipNetwork<Block> + Clone + Send + 'static 
 	fn set_sync_fork_request(
 		&self,
 		peers: Vec<sc_network::PeerId>,
-		hash: Block::Hash,
+		hash: HashFor<Block>,
 		number: NumberFor<Block>,
 	);
 }

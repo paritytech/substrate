@@ -25,11 +25,11 @@ use jsonrpsee::{
 };
 use sp_runtime::{
 	generic::SignedBlock,
-	traits::{Block as BlockT, Header as HeaderT},
+	traits::{Block as BlockT, HashFor, Header as HeaderT},
 };
 
 /// Get the header of the block identified by `at`
-pub async fn get_header<Block, S>(from: S, at: Block::Hash) -> Result<Block::Header, String>
+pub async fn get_header<Block, S>(from: S, at: HashFor<Block>) -> Result<Block::Header, String>
 where
 	Block: BlockT,
 	Block::Header: serde::de::DeserializeOwned,
@@ -44,7 +44,7 @@ where
 }
 
 /// Get the finalized head
-pub async fn get_finalized_head<Block, S>(from: S) -> Result<Block::Hash, String>
+pub async fn get_finalized_head<Block, S>(from: S) -> Result<HashFor<Block>, String>
 where
 	Block: BlockT,
 	S: AsRef<str>,
@@ -52,13 +52,13 @@ where
 	let client = build_client(from).await?;
 
 	client
-		.request::<Block::Hash>("chain_getFinalizedHead", None)
+		.request::<HashFor<Block>>("chain_getFinalizedHead", None)
 		.await
 		.map_err(|e| format!("chain_getFinalizedHead request failed: {:?}", e))
 }
 
 /// Get the signed block identified by `at`.
-pub async fn get_block<Block, S>(from: S, at: Block::Hash) -> Result<Block, String>
+pub async fn get_block<Block, S>(from: S, at: HashFor<Block>) -> Result<Block, String>
 where
 	S: AsRef<str>,
 	Block: BlockT + serde::de::DeserializeOwned,
@@ -85,7 +85,7 @@ async fn build_client<S: AsRef<str>>(from: S) -> Result<WsClient, String> {
 /// Get the runtime version of a given chain.
 pub async fn get_runtime_version<Block, S>(
 	from: S,
-	at: Option<Block::Hash>,
+	at: Option<HashFor<Block>>,
 ) -> Result<sp_version::RuntimeVersion, String>
 where
 	S: AsRef<str>,

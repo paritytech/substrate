@@ -18,10 +18,10 @@
 
 //! Tool for creating the genesis block.
 
-use sp_runtime::traits::{Block as BlockT, Hash as HashT, Header as HeaderT, Zero};
+use sp_runtime::traits::{Block as BlockT, Hash as HashT, HashFor, Header as HeaderT, Zero};
 
 /// Create a genesis block, given the initial storage.
-pub fn construct_genesis_block<Block: BlockT>(state_root: Block::Hash) -> Block {
+pub fn construct_genesis_block<Block: BlockT>(state_root: HashFor<Block>) -> Block {
 	let extrinsics_root = <<<Block as BlockT>::Header as HeaderT>::Hashing as HashT>::trie_root(
 		Vec::new(),
 		sp_runtime::StateVersion::V0,

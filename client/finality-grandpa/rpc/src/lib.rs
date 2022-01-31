@@ -31,7 +31,7 @@ mod notification;
 mod report;
 
 use sc_finality_grandpa::GrandpaJustificationStream;
-use sp_runtime::traits::{Block as BlockT, NumberFor};
+use sp_runtime::traits::{Block as BlockT, HashFor, NumberFor};
 
 use finality::{EncodedFinalityProof, RpcFinalityProofProvider};
 use notification::JustificationNotification;
@@ -110,7 +110,7 @@ impl<AuthoritySet, VoterState, Block: BlockT, ProofProvider>
 }
 
 impl<AuthoritySet, VoterState, Block, ProofProvider>
-	GrandpaApi<JustificationNotification, Block::Hash, NumberFor<Block>>
+	GrandpaApi<JustificationNotification, HashFor<Block>, NumberFor<Block>>
 	for GrandpaRpcHandler<AuthoritySet, VoterState, Block, ProofProvider>
 where
 	VoterState: ReportVoterState + Send + Sync + 'static,

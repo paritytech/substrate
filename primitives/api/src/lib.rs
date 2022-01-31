@@ -90,7 +90,7 @@ pub use sp_runtime::StateVersion;
 pub use sp_runtime::{
 	generic::BlockId,
 	traits::{
-		Block as BlockT, GetNodeBlockType, GetRuntimeBlockType, Hash as HashT, HashingFor,
+		Block as BlockT, GetNodeBlockType, GetRuntimeBlockType, Hash as HashT, HashFor, HashingFor,
 		Header as HeaderT, NumberFor,
 	},
 	transaction_validity::TransactionValidity,
@@ -515,7 +515,7 @@ pub trait ApiExt<Block: BlockT> {
 	fn into_storage_changes(
 		&self,
 		backend: &Self::StateBackend,
-		parent_hash: Block::Hash,
+		parent_hash: HashFor<Block>,
 	) -> Result<StorageChanges<Self::StateBackend, Block>, String>
 	where
 		Self: Sized;

@@ -20,7 +20,7 @@
 
 use lru::LruCache;
 use parking_lot::RwLock;
-use sp_runtime::traits::{Block as BlockT, Header, NumberFor, One};
+use sp_runtime::traits::{Block as BlockT, HashFor, Header, NumberFor, One};
 
 /// Set to the expected max difference between `best` and `finalized` blocks at sync.
 const LRU_CACHE_SIZE: usize = 5_000;
@@ -33,8 +33,8 @@ const LRU_CACHE_SIZE: usize = 5_000;
 /// The first call is O(h) but the others are O(1).
 pub fn lowest_common_ancestor<Block: BlockT, T: HeaderMetadata<Block> + ?Sized>(
 	backend: &T,
-	id_one: Block::Hash,
-	id_two: Block::Hash,
+	id_one: HashFor<Block>,
+	id_two: HashFor<Block>,
 ) -> Result<HashAndNumber<Block>, T::Error> {
 	let mut header_one = backend.header_metadata(id_one)?;
 	if header_one.parent == id_two {
@@ -99,8 +99,8 @@ pub fn lowest_common_ancestor<Block: BlockT, T: HeaderMetadata<Block> + ?Sized>(
 /// Compute a tree-route between two blocks. See tree-route docs for more details.
 pub fn tree_route<Block: BlockT, T: HeaderMetadata<Block>>(
 	backend: &T,
-	from: Block::Hash,
-	to: Block::Hash,
+	from: HashFor<Block>,
+	to: HashFor<Block>,
 ) -> Result<TreeRoute<Block>, T::Error> {
 	let mut from = backend.header_metadata(from)?;
 	let mut to = backend.header_metadata(to)?;
@@ -144,7 +144,7 @@ pub struct HashAndNumber<Block: BlockT> {
 	/// The number of the block.
 	pub number: NumberFor<Block>,
 	/// The hash of the block.
-	pub hash: Block::Hash,
+	pub hash: HashFor<Block>,
 }
 
 /// A tree-route from one block to another in the chain.
@@ -210,19 +210,19 @@ pub trait HeaderMetadata<Block: BlockT> {
 
 	fn header_metadata(
 		&self,
-		hash: Block::Hash,
+		hash: HashFor<Block>,
 	) -> Result<CachedHeaderMetadata<Block>, Self::Error>;
 	fn insert_header_metadata(
 		&self,
-		hash: Block::Hash,
+		hash: HashFor<Block>,
 		header_metadata: CachedHeaderMetadata<Block>,
 	);
-	fn remove_header_metadata(&self, hash: Block::Hash);
+	fn remove_header_metadata(&self, hash: HashFor<Block>);
 }
 
 /// Caches header metadata in an in-memory LRU cache.
 pub struct HeaderMetadataCache<Block: BlockT> {
-	cache: RwLock<LruCache<Block::Hash, CachedHeaderMetadata<Block>>>,
+	cache: RwLock<LruCache<HashFor<Block>, CachedHeaderMetadata<Block>>>,
 }
 
 impl<Block: BlockT> HeaderMetadataCache<Block> {
@@ -239,15 +239,19 @@ impl<Block: BlockT> Default for HeaderMetadataCache<Block> {
 }
 
 impl<Block: BlockT> HeaderMetadataCache<Block> {
-	pub fn header_metadata(&self, hash: Block::Hash) -> Option<CachedHeaderMetadata<Block>> {
+	pub fn header_metadata(&self, hash: HashFor<Block>) -> Option<CachedHeaderMetadata<Block>> {
 		self.cache.write().get(&hash).cloned()
 	}
 
-	pub fn insert_header_metadata(&self, hash: Block::Hash, metadata: CachedHeaderMetadata<Block>) {
+	pub fn insert_header_metadata(
+		&self,
+		hash: HashFor<Block>,
+		metadata: CachedHeaderMetadata<Block>,
+	) {
 		self.cache.write().put(hash, metadata);
 	}
 
-	pub fn remove_header_metadata(&self, hash: Block::Hash) {
+	pub fn remove_header_metadata(&self, hash: HashFor<Block>) {
 		self.cache.write().pop(&hash);
 	}
 }
@@ -256,15 +260,15 @@ impl<Block: BlockT> HeaderMetadataCache<Block> {
 #[derive(Debug, Clone)]
 pub struct CachedHeaderMetadata<Block: BlockT> {
 	/// Hash of the header.
-	pub hash: Block::Hash,
+	pub hash: HashFor<Block>,
 	/// Block number.
 	pub number: NumberFor<Block>,
 	/// Hash of parent header.
-	pub parent: Block::Hash,
+	pub parent: HashFor<Block>,
 	/// Block state root.
-	pub state_root: Block::Hash,
+	pub state_root: HashFor<Block>,
 	/// Hash of an ancestor header. Used to jump through the tree.
-	ancestor: Block::Hash,
+	ancestor: HashFor<Block>,
 }
 
 impl<Block: BlockT> From<&Block::Header> for CachedHeaderMetadata<Block> {

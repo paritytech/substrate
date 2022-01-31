@@ -18,7 +18,7 @@
 //! Tagged Transaction Queue Runtime API.
 
 use sp_runtime::{
-	traits::Block as BlockT,
+	traits::{Block as BlockT, HashFor},
 	transaction_validity::{TransactionSource, TransactionValidity},
 };
 
@@ -49,7 +49,7 @@ sp_api::decl_runtime_apis! {
 		fn validate_transaction(
 			source: TransactionSource,
 			tx: <Block as BlockT>::Extrinsic,
-			block_hash: Block::Hash,
+			block_hash: HashFor<Block>,
 		) -> TransactionValidity;
 	}
 }

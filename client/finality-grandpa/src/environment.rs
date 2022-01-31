@@ -48,7 +48,7 @@ use sp_finality_grandpa::{
 };
 use sp_runtime::{
 	generic::BlockId,
-	traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero},
+	traits::{Block as BlockT, HashFor, Header as HeaderT, NumberFor, Zero},
 };
 
 use crate::{
@@ -77,9 +77,9 @@ pub struct CompletedRound<Block: BlockT> {
 	/// The round number.
 	pub number: RoundNumber,
 	/// The round state (prevote ghost, estimate, finalized, etc.)
-	pub state: RoundState<Block::Hash, NumberFor<Block>>,
+	pub state: RoundState<HashFor<Block>, NumberFor<Block>>,
 	/// The target block base used for voting in the round.
-	pub base: (Block::Hash, NumberFor<Block>),
+	pub base: (HashFor<Block>, NumberFor<Block>),
 	/// All the votes observed in the round.
 	pub votes: Vec<SignedMessage<Block>>,
 }
@@ -122,7 +122,7 @@ impl<Block: BlockT> CompletedRounds<Block> {
 	pub(crate) fn new(
 		genesis: CompletedRound<Block>,
 		set_id: SetId,
-		voters: &AuthoritySet<Block::Hash, NumberFor<Block>>,
+		voters: &AuthoritySet<HashFor<Block>, NumberFor<Block>>,
 	) -> CompletedRounds<Block> {
 		let mut rounds = Vec::with_capacity(NUM_LAST_COMPLETED_ROUNDS);
 		rounds.push(genesis);
@@ -199,8 +199,8 @@ impl<Block: BlockT> VoterSetState<Block> {
 	/// current round (with state `HasVoted::No`).
 	pub(crate) fn live(
 		set_id: SetId,
-		authority_set: &AuthoritySet<Block::Hash, NumberFor<Block>>,
-		genesis_state: (Block::Hash, NumberFor<Block>),
+		authority_set: &AuthoritySet<HashFor<Block>, NumberFor<Block>>,
+		genesis_state: (HashFor<Block>, NumberFor<Block>),
 	) -> VoterSetState<Block> {
 		let state = RoundState::genesis((genesis_state.0, genesis_state.1));
 		let completed_rounds = CompletedRounds::new(
@@ -431,7 +431,7 @@ pub(crate) struct Environment<Backend, Block: BlockT, C, N: NetworkT<Block>, SC,
 	pub(crate) select_chain: SC,
 	pub(crate) voters: Arc<VoterSet<AuthorityId>>,
 	pub(crate) config: Config,
-	pub(crate) authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
+	pub(crate) authority_set: SharedAuthoritySet<HashFor<Block>, NumberFor<Block>>,
 	pub(crate) network: crate::communication::NetworkBridge<Block, N>,
 	pub(crate) set_id: SetId,
 	pub(crate) voter_set_state: SharedVoterSetState<Block>,
@@ -488,7 +488,7 @@ where
 	/// isn't necessarily the best block if there are pending authority set changes.
 	pub(crate) fn report_equivocation(
 		&self,
-		equivocation: Equivocation<Block::Hash, NumberFor<Block>>,
+		equivocation: Equivocation<HashFor<Block>, NumberFor<Block>>,
 	) -> Result<(), Error> {
 		if let Some(local_id) = self.voter_set_state.voting_on(equivocation.round_number()) {
 			if *equivocation.offender() == local_id {
@@ -572,7 +572,7 @@ where
 	}
 }
 
-impl<BE, Block, C, N, SC, VR> finality_grandpa::Chain<Block::Hash, NumberFor<Block>>
+impl<BE, Block, C, N, SC, VR> finality_grandpa::Chain<HashFor<Block>, NumberFor<Block>>
 	for Environment<BE, Block, C, N, SC, VR>
 where
 	Block: BlockT,
@@ -585,18 +585,18 @@ where
 {
 	fn ancestry(
 		&self,
-		base: Block::Hash,
-		block: Block::Hash,
-	) -> Result<Vec<Block::Hash>, GrandpaError> {
+		base: HashFor<Block>,
+		block: HashFor<Block>,
+	) -> Result<Vec<HashFor<Block>>, GrandpaError> {
 		ancestry(&self.client, base, block)
 	}
 }
 
 pub(crate) fn ancestry<Block: BlockT, Client>(
 	client: &Arc<Client>,
-	base: Block::Hash,
-	block: Block::Hash,
-) -> Result<Vec<Block::Hash>, GrandpaError>
+	base: HashFor<Block>,
+	block: HashFor<Block>,
+) -> Result<Vec<HashFor<Block>>, GrandpaError>
 where
 	Client: HeaderMetadata<Block, Error = sp_blockchain::Error>,
 {
@@ -625,7 +625,7 @@ where
 	Ok(tree_route.retracted().iter().skip(1).map(|e| e.hash).collect())
 }
 
-impl<B, Block, C, N, SC, VR> voter::Environment<Block::Hash, NumberFor<Block>>
+impl<B, Block, C, N, SC, VR> voter::Environment<HashFor<Block>, NumberFor<Block>>
 	for Environment<B, Block, C, N, SC, VR>
 where
 	Block: BlockT,
@@ -640,7 +640,7 @@ where
 	type Timer = Pin<Box<dyn Future<Output = Result<(), Self::Error>> + Send>>;
 	type BestChain = Pin<
 		Box<
-			dyn Future<Output = Result<Option<(Block::Hash, NumberFor<Block>)>, Self::Error>>
+			dyn Future<Output = Result<Option<(HashFor<Block>, NumberFor<Block>)>, Self::Error>>
 				+ Send,
 		>,
 	>;
@@ -654,7 +654,7 @@ where
 			dyn Stream<
 					Item = Result<
 						::finality_grandpa::SignedMessage<
-							Block::Hash,
+							HashFor<Block>,
 							NumberFor<Block>,
 							Self::Signature,
 							Self::Id,
@@ -667,15 +667,15 @@ where
 	type Out = Pin<
 		Box<
 			dyn Sink<
-					::finality_grandpa::Message<Block::Hash, NumberFor<Block>>,
+					::finality_grandpa::Message<HashFor<Block>, NumberFor<Block>>,
 					Error = Self::Error,
 				> + Send,
 		>,
 	>;
 
-	type Error = CommandOrError<Block::Hash, NumberFor<Block>>;
+	type Error = CommandOrError<HashFor<Block>, NumberFor<Block>>;
 
-	fn best_chain_containing(&self, block: Block::Hash) -> Self::BestChain {
+	fn best_chain_containing(&self, block: HashFor<Block>) -> Self::BestChain {
 		let client = self.client.clone();
 		let authority_set = self.authority_set.clone();
 		let select_chain = self.select_chain.clone();
@@ -946,8 +946,8 @@ where
 	fn completed(
 		&self,
 		round: RoundNumber,
-		state: RoundState<Block::Hash, NumberFor<Block>>,
-		base: (Block::Hash, NumberFor<Block>),
+		state: RoundState<HashFor<Block>, NumberFor<Block>>,
+		base: (HashFor<Block>, NumberFor<Block>),
 		historical_votes: &HistoricalVotes<Block>,
 	) -> Result<(), Self::Error> {
 		debug!(
@@ -1009,8 +1009,8 @@ where
 	fn concluded(
 		&self,
 		round: RoundNumber,
-		state: RoundState<Block::Hash, NumberFor<Block>>,
-		_base: (Block::Hash, NumberFor<Block>),
+		state: RoundState<HashFor<Block>, NumberFor<Block>>,
+		_base: (HashFor<Block>, NumberFor<Block>),
 		historical_votes: &HistoricalVotes<Block>,
 	) -> Result<(), Self::Error> {
 		debug!(
@@ -1064,7 +1064,7 @@ where
 
 	fn finalize_block(
 		&self,
-		hash: Block::Hash,
+		hash: HashFor<Block>,
 		number: NumberFor<Block>,
 		round: RoundNumber,
 		commit: Commit<Block>,
@@ -1132,12 +1132,12 @@ impl<Block: BlockT> From<GrandpaJustification<Block>> for JustificationOrCommit<
 }
 
 async fn best_chain_containing<Block, Backend, Client, SelectChain, VotingRule>(
-	block: Block::Hash,
+	block: HashFor<Block>,
 	client: Arc<Client>,
-	authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
+	authority_set: SharedAuthoritySet<HashFor<Block>, NumberFor<Block>>,
 	select_chain: SelectChain,
 	voting_rule: VotingRule,
-) -> Result<Option<(Block::Hash, NumberFor<Block>)>, Error>
+) -> Result<Option<(HashFor<Block>, NumberFor<Block>)>, Error>
 where
 	Backend: BackendT<Block>,
 	Block: BlockT,
@@ -1238,15 +1238,15 @@ where
 /// This method assumes that the block being finalized has already been imported.
 pub(crate) fn finalize_block<BE, Block, Client>(
 	client: Arc<Client>,
-	authority_set: &SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
+	authority_set: &SharedAuthoritySet<HashFor<Block>, NumberFor<Block>>,
 	justification_period: Option<NumberFor<Block>>,
-	hash: Block::Hash,
+	hash: HashFor<Block>,
 	number: NumberFor<Block>,
 	justification_or_commit: JustificationOrCommit<Block>,
 	initial_sync: bool,
 	justification_sender: Option<&GrandpaJustificationSender<Block>>,
 	telemetry: Option<TelemetryHandle>,
-) -> Result<(), CommandOrError<Block::Hash, NumberFor<Block>>>
+) -> Result<(), CommandOrError<HashFor<Block>, NumberFor<Block>>>
 where
 	Block: BlockT,
 	BE: BackendT<Block>,

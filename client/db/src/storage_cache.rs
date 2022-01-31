@@ -27,7 +27,7 @@ use log::trace;
 use parking_lot::{RwLock, RwLockUpgradableReadGuard};
 use sp_core::{hexdisplay::HexDisplay, storage::ChildInfo};
 use sp_runtime::{
-	traits::{Block as BlockT, HashingFor, Header, NumberFor},
+	traits::{Block as BlockT, HashFor, HashingFor, Header, NumberFor},
 	StateVersion,
 };
 use sp_state_machine::{
@@ -728,7 +728,7 @@ pub struct SyncingCachingState<S, Block: BlockT> {
 	/// The usage statistics of the backend. These will be updated on drop.
 	state_usage: Arc<StateUsageStats>,
 	/// Reference to the meta db.
-	meta: Arc<RwLock<Meta<NumberFor<Block>, Block::Hash>>>,
+	meta: Arc<RwLock<Meta<NumberFor<Block>, HashFor<Block>>>>,
 	/// Mutex to lock get exlusive access to the backend.
 	lock: Arc<RwLock<()>>,
 	/// The wrapped caching state.

@@ -20,7 +20,7 @@ use std::{fmt::Debug, str::FromStr};
 use parity_scale_codec::Decode;
 use sc_executor::NativeExecutionDispatch;
 use sc_service::Configuration;
-use sp_runtime::traits::{Block as BlockT, NumberFor};
+use sp_runtime::traits::{Block as BlockT, HashFor, NumberFor};
 
 use crate::{
 	build_executor, ensure_matching_spec, extract_code, local_spec, state_machine_call_with_proof,
@@ -42,8 +42,8 @@ pub(crate) async fn on_runtime_upgrade<Block, ExecDispatch>(
 ) -> sc_cli::Result<()>
 where
 	Block: BlockT + serde::de::DeserializeOwned,
-	Block::Hash: FromStr,
-	<Block::Hash as FromStr>::Err: Debug,
+	HashFor<Block>: FromStr,
+	<HashFor<Block> as FromStr>::Err: Debug,
 	NumberFor<Block>: FromStr,
 	<NumberFor<Block> as FromStr>::Err: Debug,
 	ExecDispatch: NativeExecutionDispatch + 'static,

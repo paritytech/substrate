@@ -128,8 +128,8 @@ use frame_support::{
 use sp_runtime::{
 	generic::Digest,
 	traits::{
-		self, Applyable, CheckEqual, Checkable, Dispatchable, Header, NumberFor, One, Saturating,
-		ValidateUnsigned, Zero,
+		self, Applyable, CheckEqual, Checkable, Dispatchable, HashFor, Header, NumberFor, One,
+		Saturating, ValidateUnsigned, Zero,
 	},
 	transaction_validity::{TransactionSource, TransactionValidity},
 	ApplyExtrinsicResult,
@@ -501,7 +501,7 @@ where
 	pub fn validate_transaction(
 		source: TransactionSource,
 		uxt: Block::Extrinsic,
-		block_hash: Block::Hash,
+		block_hash: HashFor<Block>,
 	) -> TransactionValidity {
 		sp_io::init_tracing();
 		use sp_tracing::{enter_span, within_span};

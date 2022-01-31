@@ -49,7 +49,7 @@ use sp_consensus::{
 use sp_runtime::{
 	generic::BlockId,
 	traits::{
-		Block as BlockT, CheckedSub, Hash, HashingFor, Header as HeaderT, NumberFor, One,
+		Block as BlockT, CheckedSub, Hash, HashFor, HashingFor, Header as HeaderT, NumberFor, One,
 		SaturatedConversion, Zero,
 	},
 	EncodedJustification, Justifications,
@@ -2446,8 +2446,8 @@ fn fork_sync_request<B: BlockT>(
 /// Returns `true` if the given `block` is a descendent of `base`.
 fn is_descendent_of<Block, T>(
 	client: &T,
-	base: &Block::Hash,
-	block: &Block::Hash,
+	base: &HashFor<Block>,
+	block: &HashFor<Block>,
 ) -> sp_blockchain::Result<bool>
 where
 	Block: BlockT,

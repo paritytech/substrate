@@ -48,7 +48,7 @@ pub trait UsageProvider<Block: sp_runtime::traits::Block> {
 /// Utility methods for the client.
 pub mod utils {
 	use sp_blockchain::{Error, HeaderBackend, HeaderMetadata};
-	use sp_runtime::traits::Block as BlockT;
+	use sp_runtime::traits::{Block as BlockT, HashFor};
 	use std::borrow::Borrow;
 
 	/// Returns a function for checking block ancestry, the returned function will
@@ -59,8 +59,8 @@ pub mod utils {
 	/// yet, and all searches in the DB will instead reference the parent.
 	pub fn is_descendent_of<'a, Block: BlockT, T>(
 		client: &'a T,
-		current: Option<(Block::Hash, Block::Hash)>,
-	) -> impl Fn(&Block::Hash, &Block::Hash) -> Result<bool, Error> + 'a
+		current: Option<(HashFor<Block>, HashFor<Block>)>,
+	) -> impl Fn(&HashFor<Block>, &HashFor<Block>) -> Result<bool, Error> + 'a
 	where
 		T: HeaderBackend<Block> + HeaderMetadata<Block, Error = Error>,
 	{

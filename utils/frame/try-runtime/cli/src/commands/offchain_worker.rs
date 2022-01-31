@@ -24,7 +24,7 @@ use remote_externalities::rpc_api;
 use sc_executor::NativeExecutionDispatch;
 use sc_service::Configuration;
 use sp_core::storage::well_known_keys;
-use sp_runtime::traits::{Block as BlockT, Header, NumberFor};
+use sp_runtime::traits::{Block as BlockT, HashFor, Header, NumberFor};
 use std::{fmt::Debug, str::FromStr};
 
 /// Configurations of the [`Command::OffchainWorker`].
@@ -62,10 +62,10 @@ pub struct OffchainWorkerCmd {
 }
 
 impl OffchainWorkerCmd {
-	fn header_at<Block: BlockT>(&self) -> sc_cli::Result<Block::Hash>
+	fn header_at<Block: BlockT>(&self) -> sc_cli::Result<HashFor<Block>>
 	where
-		Block::Hash: FromStr,
-		<Block::Hash as FromStr>::Err: Debug,
+		HashFor<Block>: FromStr,
+		<HashFor<Block> as FromStr>::Err: Debug,
 	{
 		match (&self.header_at, &self.state) {
 			(Some(header_at), State::Snap { .. }) => hash_of::<Block>(&header_at),
@@ -82,8 +82,8 @@ impl OffchainWorkerCmd {
 
 	fn header_ws_uri<Block: BlockT>(&self) -> String
 	where
-		Block::Hash: FromStr,
-		<Block::Hash as FromStr>::Err: Debug,
+		HashFor<Block>: FromStr,
+		<HashFor<Block> as FromStr>::Err: Debug,
 	{
 		match (&self.header_ws_uri, &self.state) {
 			(Some(header_ws_uri), State::Snap { .. }) => header_ws_uri.to_owned(),
@@ -106,9 +106,9 @@ pub(crate) async fn offchain_worker<Block, ExecDispatch>(
 ) -> sc_cli::Result<()>
 where
 	Block: BlockT + serde::de::DeserializeOwned,
-	Block::Hash: FromStr,
+	HashFor<Block>: FromStr,
 	Block::Header: serde::de::DeserializeOwned,
-	<Block::Hash as FromStr>::Err: Debug,
+	<HashFor<Block> as FromStr>::Err: Debug,
 	NumberFor<Block>: FromStr,
 	<NumberFor<Block> as FromStr>::Err: Debug,
 	ExecDispatch: NativeExecutionDispatch + 'static,

@@ -39,7 +39,10 @@ use sp_core::{
 	},
 	Bytes,
 };
-use sp_runtime::{generic::BlockId, traits::Block as BlockT};
+use sp_runtime::{
+	generic::BlockId,
+	traits::{Block as BlockT, HashFor},
+};
 use sp_version::RuntimeVersion;
 
 use sp_api::{CallApiAt, Metadata, ProvideRuntimeApi};
@@ -58,7 +61,7 @@ use std::marker::PhantomData;
 /// Ranges to query in state_queryStorage.
 struct QueryStorageRange<Block: BlockT> {
 	/// Hashes of all the blocks in the range.
-	pub hashes: Vec<Block::Hash>,
+	pub hashes: Vec<HashFor<Block>>,
 }
 
 /// State API backend for full nodes.
@@ -88,15 +91,15 @@ where
 	}
 
 	/// Returns given block hash or best block hash if None is passed.
-	fn block_or_best(&self, hash: Option<Block::Hash>) -> ClientResult<Block::Hash> {
+	fn block_or_best(&self, hash: Option<HashFor<Block>>) -> ClientResult<HashFor<Block>> {
 		Ok(hash.unwrap_or_else(|| self.client.info().best_hash))
 	}
 
 	/// Validates block range.
 	fn query_storage_range(
 		&self,
-		from: Block::Hash,
-		to: Option<Block::Hash>,
+		from: HashFor<Block>,
+		to: Option<HashFor<Block>>,
 	) -> Result<QueryStorageRange<Block>> {
 		let to = self
 			.block_or_best(to)
@@ -148,7 +151,7 @@ where
 		range: &QueryStorageRange<Block>,
 		keys: &[StorageKey],
 		last_values: &mut HashMap<StorageKey, Option<StorageData>>,
-		changes: &mut Vec<StorageChangeSet<Block::Hash>>,
+		changes: &mut Vec<StorageChangeSet<HashFor<Block>>>,
 	) -> Result<()> {
 		for block_hash in &range.hashes {
 			let block_hash = block_hash.clone();
@@ -179,7 +182,7 @@ where
 impl<BE, Block, Client> StateBackend<Block, Client> for FullState<BE, Block, Client>
 where
 	Block: BlockT + 'static,
-	Block::Hash: Unpin,
+	HashFor<Block>: Unpin,
 	BE: Backend<Block> + 'static,
 	Client: ExecutorProvider<Block>
 		+ StorageProvider<Block, BE>
@@ -197,7 +200,7 @@ where
 {
 	fn call(
 		&self,
-		block: Option<Block::Hash>,
+		block: Option<HashFor<Block>>,
 		method: String,
 		call_data: Bytes,
 	) -> FutureResult<Bytes> {
@@ -221,7 +224,7 @@ where
 
 	fn storage_keys(
 		&self,
-		block: Option<Block::Hash>,
+		block: Option<HashFor<Block>>,
 		prefix: StorageKey,
 	) -> FutureResult<Vec<StorageKey>> {
 		let r = self
@@ -233,7 +236,7 @@ where
 
 	fn storage_pairs(
 		&self,
-		block: Option<Block::Hash>,
+		block: Option<HashFor<Block>>,
 		prefix: StorageKey,
 	) -> FutureResult<Vec<(StorageKey, StorageData)>> {
 		let r = self
@@ -245,7 +248,7 @@ where
 
 	fn storage_keys_paged(
 		&self,
-		block: Option<Block::Hash>,
+		block: Option<HashFor<Block>>,
 		prefix: Option<StorageKey>,
 		count: u32,
 		start_key: Option<StorageKey>,
@@ -266,7 +269,7 @@ where
 
 	fn storage(
 		&self,
-		block: Option<Block::Hash>,
+		block: Option<HashFor<Block>>,
 		key: StorageKey,
 	) -> FutureResult<Option<StorageData>> {
 		let r = self
@@ -278,7 +281,7 @@ where
 
 	fn storage_size(
 		&self,
-		block: Option<Block::Hash>,
+		block: Option<HashFor<Block>>,
 		key: StorageKey,
 	) -> FutureResult<Option<u64>> {
 		let block = match self.block_or_best(block) {
@@ -309,9 +312,9 @@ where
 
 	fn storage_hash(
 		&self,
-		block: Option<Block::Hash>,
+		block: Option<HashFor<Block>>,
 		key: StorageKey,
-	) -> FutureResult<Option<Block::Hash>> {
+	) -> FutureResult<Option<HashFor<Block>>> {
 		let r = self
 			.block_or_best(block)
 			.and_then(|block| self.client.storage_hash(&BlockId::Hash(block), &key))
@@ -319,7 +322,7 @@ where
 		async move { r }.boxed()
 	}
 
-	fn metadata(&self, block: Option<Block::Hash>) -> FutureResult<Bytes> {
+	fn metadata(&self, block: Option<HashFor<Block>>) -> FutureResult<Bytes> {
 		let r = self.block_or_best(block).map_err(client_err).and_then(|block| {
 			self.client
 				.runtime_api()
@@ -330,7 +333,7 @@ where
 		async move { r }.boxed()
 	}
 
-	fn runtime_version(&self, block: Option<Block::Hash>) -> FutureResult<RuntimeVersion> {
+	fn runtime_version(&self, block: Option<HashFor<Block>>) -> FutureResult<RuntimeVersion> {
 		let r = self.block_or_best(block).map_err(client_err).and_then(|block| {
 			self.client
 				.runtime_version_at(&BlockId::Hash(block))
@@ -341,10 +344,10 @@ where
 
 	fn query_storage(
 		&self,
-		from: Block::Hash,
-		to: Option<Block::Hash>,
+		from: HashFor<Block>,
+		to: Option<HashFor<Block>>,
 		keys: Vec<StorageKey>,
-	) -> FutureResult<Vec<StorageChangeSet<Block::Hash>>> {
+	) -> FutureResult<Vec<StorageChangeSet<HashFor<Block>>>> {
 		let call_fn = move || {
 			let range = self.query_storage_range(from, to)?;
 			let mut changes = Vec::new();
@@ -360,17 +363,17 @@ where
 	fn query_storage_at(
 		&self,
 		keys: Vec<StorageKey>,
-		at: Option<Block::Hash>,
-	) -> FutureResult<Vec<StorageChangeSet<Block::Hash>>> {
+		at: Option<HashFor<Block>>,
+	) -> FutureResult<Vec<StorageChangeSet<HashFor<Block>>>> {
 		let at = at.unwrap_or_else(|| self.client.info().best_hash);
 		self.query_storage(at, Some(at), keys)
 	}
 
 	fn read_proof(
 		&self,
-		block: Option<Block::Hash>,
+		block: Option<HashFor<Block>>,
 		keys: Vec<StorageKey>,
-	) -> FutureResult<ReadProof<Block::Hash>> {
+	) -> FutureResult<ReadProof<HashFor<Block>>> {
 		let r = self
 			.block_or_best(block)
 			.and_then(|block| {
@@ -437,7 +440,7 @@ where
 	fn subscribe_storage(
 		&self,
 		_meta: crate::Metadata,
-		subscriber: Subscriber<StorageChangeSet<Block::Hash>>,
+		subscriber: Subscriber<StorageChangeSet<HashFor<Block>>>,
 		keys: Option<Vec<StorageKey>>,
 	) {
 		let keys = Into::<Option<Vec<_>>>::into(keys);
@@ -494,7 +497,7 @@ where
 
 	fn trace_block(
 		&self,
-		block: Block::Hash,
+		block: HashFor<Block>,
 		targets: Option<String>,
 		storage_keys: Option<String>,
 		methods: Option<String>,
@@ -534,10 +537,10 @@ where
 {
 	fn read_child_proof(
 		&self,
-		block: Option<Block::Hash>,
+		block: Option<HashFor<Block>>,
 		storage_key: PrefixedStorageKey,
 		keys: Vec<StorageKey>,
-	) -> FutureResult<ReadProof<Block::Hash>> {
+	) -> FutureResult<ReadProof<HashFor<Block>>> {
 		let r = self
 			.block_or_best(block)
 			.and_then(|block| {
@@ -562,7 +565,7 @@ where
 
 	fn storage_keys(
 		&self,
-		block: Option<Block::Hash>,
+		block: Option<HashFor<Block>>,
 		storage_key: PrefixedStorageKey,
 		prefix: StorageKey,
 	) -> FutureResult<Vec<StorageKey>> {
@@ -583,7 +586,7 @@ where
 
 	fn storage_keys_paged(
 		&self,
-		block: Option<Block::Hash>,
+		block: Option<HashFor<Block>>,
 		storage_key: PrefixedStorageKey,
 		prefix: Option<StorageKey>,
 		count: u32,
@@ -612,7 +615,7 @@ where
 
 	fn storage(
 		&self,
-		block: Option<Block::Hash>,
+		block: Option<HashFor<Block>>,
 		storage_key: PrefixedStorageKey,
 		key: StorageKey,
 	) -> FutureResult<Option<StorageData>> {
@@ -633,7 +636,7 @@ where
 
 	fn storage_entries(
 		&self,
-		block: Option<Block::Hash>,
+		block: Option<HashFor<Block>>,
 		storage_key: PrefixedStorageKey,
 		keys: Vec<StorageKey>,
 	) -> FutureResult<Vec<Option<StorageData>>> {
@@ -660,10 +663,10 @@ where
 
 	fn storage_hash(
 		&self,
-		block: Option<Block::Hash>,
+		block: Option<HashFor<Block>>,
 		storage_key: PrefixedStorageKey,
 		key: StorageKey,
-	) -> FutureResult<Option<Block::Hash>> {
+	) -> FutureResult<Option<HashFor<Block>>> {
 		let r = self
 			.block_or_best(block)
 			.and_then(|block| {

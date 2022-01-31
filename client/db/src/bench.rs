@@ -33,7 +33,7 @@ use sp_core::{
 	storage::{ChildInfo, TrackedStorageKey},
 };
 use sp_runtime::{
-	traits::{Block as BlockT, HashingFor},
+	traits::{Block as BlockT, HashFor, HashingFor},
 	StateVersion, Storage,
 };
 use sp_state_machine::{
@@ -49,12 +49,12 @@ type State<B> = CachingState<DbState<B>, B>;
 
 struct StorageDb<Block: BlockT> {
 	db: Arc<dyn KeyValueDB>,
-	proof_recorder: Option<ProofRecorder<Block::Hash>>,
+	proof_recorder: Option<ProofRecorder<HashFor<Block>>>,
 	_block: std::marker::PhantomData<Block>,
 }
 
 impl<Block: BlockT> sp_state_machine::Storage<HashingFor<Block>> for StorageDb<Block> {
-	fn get(&self, key: &Block::Hash, prefix: Prefix) -> Result<Option<DBValue>, String> {
+	fn get(&self, key: &HashFor<Block>, prefix: Prefix) -> Result<Option<DBValue>, String> {
 		let prefixed_key = prefixed_key::<HashingFor<Block>>(key, prefix);
 		if let Some(recorder) = &self.proof_recorder {
 			if let Some(v) = recorder.get(&key) {

@@ -29,7 +29,10 @@ use codec::{Codec, Decode, Encode, Input};
 use scale_info::TypeInfo;
 #[cfg(feature = "std")]
 use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
-use sp_runtime::{traits::NumberFor, ConsensusEngineId, RuntimeDebug};
+use sp_runtime::{
+	traits::{HashFor, NumberFor},
+	ConsensusEngineId, RuntimeDebug,
+};
 use sp_std::{borrow::Cow, vec::Vec};
 
 #[cfg(feature = "std")]
@@ -511,7 +514,7 @@ sp_api::decl_runtime_apis! {
 		/// reporting is disabled for the given runtime (i.e. this method is
 		/// hardcoded to return `None`). Only useful in an offchain context.
 		fn submit_report_equivocation_unsigned_extrinsic(
-			equivocation_proof: EquivocationProof<Block::Hash, NumberFor<Block>>,
+			equivocation_proof: EquivocationProof<HashFor<Block>, NumberFor<Block>>,
 			key_owner_proof: OpaqueKeyOwnershipProof,
 		) -> Option<()>;
 

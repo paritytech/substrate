@@ -35,7 +35,7 @@ use sp_blockchain::{ApplyExtrinsicFailed, Error};
 use sp_core::ExecutionContext;
 use sp_runtime::{
 	generic::BlockId,
-	traits::{Block as BlockT, Hash, HashingFor, Header as HeaderT, NumberFor, One},
+	traits::{Block as BlockT, Hash, HashFor, HashingFor, Header as HeaderT, NumberFor, One},
 	Digest,
 };
 
@@ -136,7 +136,7 @@ pub struct BlockBuilder<'a, Block: BlockT, A: ProvideRuntimeApi<Block>, B> {
 	extrinsics: Vec<Block::Extrinsic>,
 	api: ApiRef<'a, A::Api>,
 	block_id: BlockId<Block>,
-	parent_hash: Block::Hash,
+	parent_hash: HashFor<Block>,
 	backend: &'a B,
 	/// The estimated size of the block header.
 	estimated_header_size: usize,
@@ -157,7 +157,7 @@ where
 	/// output of this block builder without having access to the full storage.
 	pub fn new(
 		api: &'a A,
-		parent_hash: Block::Hash,
+		parent_hash: HashFor<Block>,
 		parent_number: NumberFor<Block>,
 		record_proof: RecordProof,
 		inherent_digests: Digest,

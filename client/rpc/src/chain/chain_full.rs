@@ -25,7 +25,7 @@ use sc_client_api::{BlockBackend, BlockchainEvents};
 use sp_blockchain::HeaderBackend;
 use sp_runtime::{
 	generic::{BlockId, SignedBlock},
-	traits::Block as BlockT,
+	traits::{Block as BlockT, HashFor},
 };
 use std::{marker::PhantomData, sync::Arc};
 
@@ -60,12 +60,12 @@ where
 		&self.subscriptions
 	}
 
-	fn header(&self, hash: Option<Block::Hash>) -> FutureResult<Option<Block::Header>> {
+	fn header(&self, hash: Option<HashFor<Block>>) -> FutureResult<Option<Block::Header>> {
 		let res = self.client.header(BlockId::Hash(self.unwrap_or_best(hash))).map_err(client_err);
 		async move { res }.boxed()
 	}
 
-	fn block(&self, hash: Option<Block::Hash>) -> FutureResult<Option<SignedBlock<Block>>> {
+	fn block(&self, hash: Option<HashFor<Block>>) -> FutureResult<Option<SignedBlock<Block>>> {
 		let res = self.client.block(&BlockId::Hash(self.unwrap_or_best(hash))).map_err(client_err);
 		async move { res }.boxed()
 	}
