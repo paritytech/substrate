@@ -72,24 +72,6 @@ impl SubscriberSink {
 	fn new(subs_id: SubscriberId, keys: Keys, child_keys: ChildKeys) -> Self {
 		Self { subs_id, keys, child_keys, was_triggered: false }
 	}
-
-	fn render_notification<Hash>(
-		&mut self,
-		hash: Hash,
-		changes: Arc<[(StorageKey, Option<StorageData>)]>,
-		child_changes: Arc<[(StorageKey, Vec<(StorageKey, Option<StorageData>)>)]>,
-	) -> StorageNotification<Hash> {
-		self.was_triggered = true;
-
-		let storage_change_set = StorageChangeSet {
-			changes,
-			child_changes,
-			filter: self.keys.clone(),
-			child_filters: self.child_keys.clone(),
-		};
-
-		StorageNotification { block: hash, changes: storage_change_set }
-	}
 }
 
 impl Registry {
@@ -263,12 +245,21 @@ impl Registry {
 
 		let changes = Arc::<[_]>::from(changes);
 		let child_changes = Arc::<[_]>::from(child_changes);
+		
 		// Trigger the events
-
 		self.sinks.iter_mut().for_each(|(subs_id, sink)| {
 			if subscribers.contains(subs_id) {
-				let notification =
-					sink.render_notification(hash.clone(), changes.clone(), child_changes.clone());
+				sink.was_triggered = true;
+
+				let storage_change_set = StorageChangeSet {
+					changes: changes.clone(),
+					child_changes: child_changes.clone(),
+					filter: sink.keys.clone(),
+					child_filters: sink.child_keys.clone(),
+				};
+
+				let notification = StorageNotification { block: hash.clone(), changes: storage_change_set };
+				
 				dispatch(subs_id, notification);
 			}
 		});
