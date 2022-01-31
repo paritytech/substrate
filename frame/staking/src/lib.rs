@@ -477,6 +477,7 @@ impl<AccountId, Balance: HasCompact + Copy + Saturating + AtLeast32BitUnsigned +
 	/// Remove entries from `unlocking` that are sufficiently old and reduce the
 	/// total by the sum of their balances.
 	fn consolidate_unlocked(self, current_era: EraIndex) -> Self {
+		use frame_support::traits::TryCollect;
 		let mut total = self.total;
 		let unlocking: BoundedVec<_, _> = self
 			.unlocking
@@ -489,7 +490,8 @@ impl<AccountId, Balance: HasCompact + Copy + Saturating + AtLeast32BitUnsigned +
 					false
 				}
 			})
-			.try_collect()
+			.collect::<Vec<_>>()
+			.try_into()
 			.expect(
 				"filtering items from a bounded vec always leaves length less than bounds. qed",
 			);

@@ -155,6 +155,10 @@ pub mod pallet {
 		/// the bags-list is not desired, [`impls::UseNominatorsMap`] is likely the desired option.
 		type SortedListProvider: SortedListProvider<Self::AccountId>;
 
+		/// The maximum number of `unlocking` chunks a [`StakingLedger`] can have. Effectively
+		/// determines how many unique eras a staker may be unbonding in.
+		type MaxUnlockingChunks: Get<u32>;
+
 		/// Some parameters of the benchmarking.
 		type BenchmarkingConfig: BenchmarkingConfig;
 
