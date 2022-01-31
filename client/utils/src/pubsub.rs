@@ -47,15 +47,13 @@ use ::parking_lot::Mutex;
 
 use crate::mpsc::{TracingUnboundedReceiver, TracingUnboundedSender};
 
-// pub mod channels;
-
 /// The type to identify subscribers.
 pub type SubsID = crate::id_sequence::SeqID;
 
 /// Unsubscribe: unregisters a previously created subscription.
 pub trait Unsubscribe {
 	/// Remove all registrations of the subscriber with ID `subs_id`.
-	fn unsubscribe(&mut self, subs_id: &SubsID);
+	fn unsubscribe(&mut self, subs_id: SubsID);
 }
 
 /// Subscribe using a key of type `K`
@@ -149,7 +147,7 @@ where
 {
 	fn drop(&mut self) {
 		if let Some(shared) = self.shared.upgrade() {
-			shared.lock().unsubscribe(&self.subs_id);
+			shared.lock().unsubscribe(self.subs_id);
 		}
 	}
 }
@@ -224,12 +222,12 @@ impl<R, Tx> Shared<R, Tx> {
 		(&mut self.registry, &mut self.sinks)
 	}
 
-	fn unsubscribe(&mut self, subs_id: &SubsID)
+	fn unsubscribe(&mut self, subs_id: SubsID)
 	where
 		R: Unsubscribe,
 	{
 		self.registry.unsubscribe(subs_id);
-		self.sinks.remove(subs_id);
+		self.sinks.remove(&subs_id);
 	}
 }
 

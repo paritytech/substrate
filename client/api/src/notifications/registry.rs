@@ -123,8 +123,8 @@ impl Default for Registry {
 }
 
 impl Unsubscribe for Registry {
-	fn unsubscribe(&mut self, subs_id: &SubscriberId) {
-		let _ = self.remove_subscriber(*subs_id);
+	fn unsubscribe(&mut self, subs_id: SubscriberId) {
+		let _ = self.remove_subscriber(subs_id);
 	}
 }
 
@@ -280,7 +280,7 @@ impl Registry {
 		let sink = self.sinks.remove(&subscriber)?;
 
 		Self::remove_subscriber_from(
-			&subscriber,
+			subscriber,
 			&sink.keys,
 			&mut self.listeners,
 			&mut self.wildcard_listeners,
@@ -289,7 +289,7 @@ impl Registry {
 			for (c_key, filters) in child_filters {
 				if let Some((listeners, wildcards)) = self.child_listeners.get_mut(&c_key) {
 					Self::remove_subscriber_from(
-						&subscriber,
+						subscriber,
 						&filters,
 						&mut *listeners,
 						&mut *wildcards,
@@ -309,20 +309,20 @@ impl Registry {
 	}
 
 	fn remove_subscriber_from(
-		subscriber: &SubscriberId,
+		subscriber: SubscriberId,
 		filters: &Keys,
 		listeners: &mut HashMap<StorageKey, FnvHashSet<SubscriberId>>,
 		wildcards: &mut FnvHashSet<SubscriberId>,
 	) {
 		match filters {
 			None => {
-				wildcards.remove(subscriber);
+				wildcards.remove(&subscriber);
 			},
 			Some(filters) =>
 				for key in filters.iter() {
 					let remove_key = match listeners.get_mut(key) {
 						Some(ref mut set) => {
-							set.remove(subscriber);
+							set.remove(&subscriber);
 							set.is_empty()
 						},
 						None => false,
