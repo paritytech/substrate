@@ -101,19 +101,8 @@ pub struct Receiver<M, R>
 where
 	R: Unsubscribe,
 {
-	// NB: this field should be defined before `rx`.
-	// (The fields of a struct are dropped in declaration order.)[https://doc.rust-lang.org/reference/destructors.html]
-	_unsubs_guard: UnsubscribeGuard<M, R>,
-
-	// NB: this field should be defined after `_unsubs_guard`.
 	rx: TracingUnboundedReceiver<M>,
-}
 
-#[derive(Debug)]
-struct UnsubscribeGuard<M, R>
-where
-	R: Unsubscribe,
-{
 	shared: Weak<Mutex<Shared<M, R>>>,
 	subs_id: SubsID,
 }
@@ -141,7 +130,7 @@ where
 	}
 }
 
-impl<M, R> Drop for UnsubscribeGuard<M, R>
+impl<M, R> Drop for Receiver<M, R>
 where
 	R: Unsubscribe,
 {
@@ -183,8 +172,7 @@ impl<M, R> Hub<M, R> {
 		assert!(shared.sinks.insert(subs_id, tx).is_none(), "Used IDSequence to create another ID. Should be unique until u64 is overflowed. Should be unique.");
 		shared.registry.subscribe(subs_key, subs_id);
 
-		let unsubs_guard = UnsubscribeGuard { shared: Arc::downgrade(&self.shared), subs_id };
-		Receiver { _unsubs_guard: unsubs_guard, rx }
+		Receiver { shared: Arc::downgrade(&self.shared), subs_id, rx }
 	}
 
 	/// Send the message produced with `Trigger`.
