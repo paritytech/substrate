@@ -619,6 +619,8 @@ impl<T: Config> Pallet<T> {
 
 	#[cfg(feature = "try-runtime")]
 	pub fn post_migrate_to_v3() -> Result<(), &'static str> {
+		use frame_support::dispatch::GetStorageVersion;
+
 		assert!(Self::current_storage_version() == 3);
 		for k in Agenda::<T>::iter_keys() {
 			let _ = Agenda::<T>::try_get(k).map_err(|()| "Invalid item in Agenda")?;
