@@ -89,7 +89,7 @@ pub trait Dispatch<M> {
 #[derive(Debug)]
 pub struct Hub<M, R> {
 	tracing_key: &'static str,
-	shared: Arc<Mutex<Shared<R, TracingUnboundedSender<M>>>>,
+	shared: Arc<Mutex<Shared<M, R>>>,
 }
 
 /// The receiving side of the subscription.
@@ -103,29 +103,29 @@ where
 {
 	// NB: this field should be defined before `rx`.
 	// (The fields of a struct are dropped in declaration order.)[https://doc.rust-lang.org/reference/destructors.html]
-	_unsubs_guard: UnsubscribeGuard<R, TracingUnboundedSender<M>>,
+	_unsubs_guard: UnsubscribeGuard<M, R>,
 
 	// NB: this field should be defined after `_unsubs_guard`.
 	rx: TracingUnboundedReceiver<M>,
 }
 
 #[derive(Debug)]
-struct UnsubscribeGuard<R, Tx>
+struct UnsubscribeGuard<M, R>
 where
 	R: Unsubscribe,
 {
-	shared: Weak<Mutex<Shared<R, Tx>>>,
+	shared: Weak<Mutex<Shared<M, R>>>,
 	subs_id: SubsID,
 }
 
 #[derive(Debug)]
-struct Shared<R, Tx> {
+struct Shared<M, R> {
 	id_sequence: crate::id_sequence::IDSequence,
 	registry: R,
-	sinks: HashMap<SubsID, Tx>,
+	sinks: HashMap<SubsID, TracingUnboundedSender<M>>,
 }
 
-impl<R, Tx> AsMut<R> for Shared<R, Tx> {
+impl<M, R> AsMut<R> for Shared<M, R> {
 	fn as_mut(&mut self) -> &mut R {
 		&mut self.registry
 	}
@@ -141,7 +141,7 @@ where
 	}
 }
 
-impl<R, Tx> Drop for UnsubscribeGuard<R, Tx>
+impl<M, R> Drop for UnsubscribeGuard<M, R>
 where
 	R: Unsubscribe,
 {
@@ -217,8 +217,8 @@ impl<M, R> Hub<M, R> {
 	}
 }
 
-impl<R, Tx> Shared<R, Tx> {
-	fn get_mut(&mut self) -> (&mut R, &mut HashMap<SubsID, Tx>) {
+impl<M, R> Shared<M, R> {
+	fn get_mut(&mut self) -> (&mut R, &mut HashMap<SubsID, TracingUnboundedSender<M>>) {
 		(&mut self.registry, &mut self.sinks)
 	}
 
