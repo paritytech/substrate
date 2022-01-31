@@ -387,7 +387,7 @@ fn should_push_watchers_during_maintenance() {
 	let header_hash = header.hash();
 	block_on(pool.maintain(block_event(header)));
 
-	let event = ChainEvent::Finalized { hash: header_hash.clone() };
+	let event = ChainEvent::Finalized { hash: header_hash.clone(), tree_route: Arc::new(vec![]) };
 	block_on(pool.maintain(event));
 
 	// then
@@ -445,7 +445,7 @@ fn finalization() {
 	let event = ChainEvent::NewBestBlock { hash: header.hash(), tree_route: None };
 	block_on(pool.maintain(event));
 
-	let event = ChainEvent::Finalized { hash: header.hash() };
+	let event = ChainEvent::Finalized { hash: header.hash(), tree_route: Arc::new(vec![]) };
 	block_on(pool.maintain(event));
 
 	let mut stream = futures::executor::block_on_stream(watcher);
@@ -493,7 +493,7 @@ fn fork_aware_finalization() {
 		b1 = header.hash();
 		block_on(pool.maintain(event));
 		assert_eq!(pool.status().ready, 0);
-		let event = ChainEvent::Finalized { hash: b1 };
+		let event = ChainEvent::Finalized { hash: b1, tree_route: Arc::new(vec![]) };
 		block_on(pool.maintain(event));
 	}
 
@@ -537,7 +537,7 @@ fn fork_aware_finalization() {
 		block_on(pool.maintain(event));
 		assert_eq!(pool.status().ready, 2);
 
-		let event = ChainEvent::Finalized { hash: header.hash() };
+		let event = ChainEvent::Finalized { hash: header.hash(), tree_route: Arc::new(vec![]) };
 		block_on(pool.maintain(event));
 	}
 
@@ -554,7 +554,7 @@ fn fork_aware_finalization() {
 		d1 = header.hash();
 		block_on(pool.maintain(event));
 		assert_eq!(pool.status().ready, 2);
-		let event = ChainEvent::Finalized { hash: d1 };
+		let event = ChainEvent::Finalized { hash: d1, tree_route: Arc::new(vec![]) };
 		block_on(pool.maintain(event));
 	}
 
@@ -567,7 +567,7 @@ fn fork_aware_finalization() {
 		let event = ChainEvent::NewBestBlock { hash: header.hash(), tree_route: None };
 		block_on(pool.maintain(event));
 		assert_eq!(pool.status().ready, 0);
-		block_on(pool.maintain(ChainEvent::Finalized { hash: e1 }));
+		block_on(pool.maintain(ChainEvent::Finalized { hash: e1, tree_route: Arc::new(vec![]) }));
 	}
 
 	for (canon_watcher, h) in canon_watchers {
@@ -637,7 +637,7 @@ fn prune_and_retract_tx_at_same_time() {
 		block_on(pool.maintain(event));
 		assert_eq!(pool.status().ready, 0);
 
-		let event = ChainEvent::Finalized { hash: header.hash() };
+		let event = ChainEvent::Finalized { hash: header.hash(), tree_route: Arc::new(vec![]) };
 		block_on(pool.maintain(event));
 
 		header.hash()
