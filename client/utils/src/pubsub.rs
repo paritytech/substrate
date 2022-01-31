@@ -187,10 +187,10 @@ impl<M, R> Hub<M, R> {
 		Receiver { _unsubs_guard: unsubs_guard, rx }
 	}
 
-	/// Dispatch the message produced with `Trigger`.
+	/// Send the message produced with `Trigger`.
 	///
 	/// This is possible if the registry implements `Dispatch<Trigger, Item = M>`.
-	pub fn dispatch<Trigger>(&self, trigger: Trigger)
+	pub fn send<Trigger>(&self, trigger: Trigger)
 	where
 		R: Dispatch<Trigger, Item = M>,
 	{

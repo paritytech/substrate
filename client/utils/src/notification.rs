@@ -109,7 +109,7 @@ impl<Payload> NotificationSender<Payload> {
 		//
 		// So there's no need to clean up the subscribers set upon sending another message.
 
-		self.hub.dispatch(payload);
+		self.hub.send(payload);
 
 		Ok(())
 	}
