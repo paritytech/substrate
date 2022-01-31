@@ -453,7 +453,7 @@ pub struct StakingLedger<AccountId, Balance: HasCompact> {
 	pub active: Balance,
 	/// Any balance that is becoming free, which may eventually be transferred out of the stash
 	/// (assuming it doesn't get slashed first). It is assumed that this will be treated as a first
-	/// in, first out queue where the new (higher value) eras get pushing on the back.
+	/// in, first out queue where the new (higher value) eras get pushed on the back.
 	pub unlocking: BoundedVec<UnlockChunk<Balance>, MaxUnlockingChunks>,
 	/// List of eras for which the stakers behind a validator have claimed rewards. Only updated
 	/// for validators.
@@ -489,8 +489,7 @@ impl<AccountId, Balance: HasCompact + Copy + Saturating + AtLeast32BitUnsigned +
 					false
 				}
 			})
-			.collect::<Vec<_>>()
-			.try_into()
+			.try_collect()
 			.expect(
 				"filtering items from a bounded vec always leaves length less than bounds. qed",
 			);
