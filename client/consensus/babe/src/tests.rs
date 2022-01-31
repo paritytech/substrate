@@ -608,8 +608,8 @@ fn propose_and_import_block<Transaction: Send + 'static>(
 	slot: Option<Slot>,
 	proposer_factory: &mut DummyFactory,
 	block_import: &mut BoxBlockImport<TestBlock, Transaction>,
-) -> sp_core::H256 {
-	let mut proposer = futures::executor::block_on(proposer_factory.init(parent)).unwrap();
+) -> Hash {
+	let mut proposer = block_on(proposer_factory.init(parent)).unwrap();
 
 	let slot = slot.unwrap_or_else(|| {
 		let parent_pre_digest = find_pre_digest::<TestBlock>(parent).unwrap();
@@ -625,7 +625,7 @@ fn propose_and_import_block<Transaction: Send + 'static>(
 
 	let parent_hash = parent.hash();
 
-	let mut block = futures::executor::block_on(proposer.propose_with(pre_digest)).unwrap().block;
+	let mut block = block_on(proposer.propose_with(pre_digest)).unwrap().block;
 
 	let epoch_descriptor = proposer_factory
 		.epoch_changes
@@ -915,9 +915,6 @@ fn obsolete_blocks_aux_data_cleanup() {
 
 	let mut block_import = data.block_import.lock().take().expect("import set up during init");
 
-	let genesis_header = client.header(&BlockId::Number(0)).unwrap().unwrap();
-	let genesis_hash = genesis_header.hash();
-
 	let mut propose_and_import_blocks_wrap = |parent_id, n| {
 		propose_and_import_blocks(&client, &mut proposer_factory, &mut block_import, parent_id, n)
 	};
@@ -937,12 +934,12 @@ fn obsolete_blocks_aux_data_cleanup() {
 	// G --- A1 --- A2 --- A3 --- A4           ( < fork1 )
 	//                      \-----C4 --- C5    ( < fork3 )
 
-	let fork1_hashes = propose_and_import_blocks_wrap(BlockId::Hash(genesis_hash), 4);
-	let fork2_hashes = propose_and_import_blocks_wrap(BlockId::Hash(fork1_hashes[1]), 2);
+	let fork1_hashes = propose_and_import_blocks_wrap(BlockId::Number(0), 4);
+	let fork2_hashes = propose_and_import_blocks_wrap(BlockId::Number(2), 2);
 	let fork3_hashes = propose_and_import_blocks_wrap(BlockId::Number(3), 2);
 
 	// Check that aux data is present for all but the genesis block.
-	block_weight_check(&[genesis_hash], false);
+	block_weight_check(&[client.chain_info().genesis_hash], false);
 	block_weight_check(&fork1_hashes, true);
 	block_weight_check(&fork2_hashes, true);
 	block_weight_check(&fork3_hashes, true);
