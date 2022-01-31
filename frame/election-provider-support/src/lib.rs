@@ -319,6 +319,22 @@ pub trait ElectionProvider {
 	fn elect() -> Result<Supports<Self::AccountId>, Self::Error>;
 }
 
+/// A sub-trait of the [`ElectionProvider`] for cases where we need to be sure an election needs to
+/// happen instantly, not asynchronously.
+///
+/// The same `DataProvider` is assumed to be used.
+///
+/// Consequently, allows for control over the amount of data that is being fetched from the
+/// [`ElectionProvider::DataProvider`].
+pub trait InstantElectionProvider: ElectionProvider {
+	/// Elect a new set of winners, instantly, with the given given limits set on the
+	/// `DataProvider`.
+	fn instant_elect(
+		maybe_max_voters: Option<usize>,
+		maybe_max_targets: Option<usize>,
+	) -> Result<Supports<Self::AccountId>, Self::Error>;
+}
+
 /// An election provider to be used only for testing.
 #[cfg(feature = "std")]
 pub struct NoElection<X>(sp_std::marker::PhantomData<X>);

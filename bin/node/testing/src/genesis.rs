@@ -91,7 +91,6 @@ pub fn config_endowed(code: Option<&[u8]>, extra_endowed: Vec<AccountId>) -> Gen
 		assets: Default::default(),
 		gilt: Default::default(),
 		transaction_storage: Default::default(),
-		scheduler: Default::default(),
 		transaction_payment: Default::default(),
 	}
 }
