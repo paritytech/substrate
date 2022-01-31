@@ -919,13 +919,12 @@ fn obsolete_blocks_aux_data_cleanup() {
 		propose_and_import_blocks(&client, &mut proposer_factory, &mut block_import, parent_id, n)
 	};
 
-	let block_weight_check = |hashes: &[Hash], expected: bool| {
-		for hash in hashes {
-			let has_weight = aux_schema::load_block_weight(&*peer.client().as_backend(), hash)
+	let aux_data_check = |hashes: &[Hash], expected: bool| {
+		hashes.iter().all(|hash| {
+			aux_schema::load_block_weight(&*peer.client().as_backend(), hash)
 				.unwrap()
-				.is_some();
-			assert_eq!(expected, has_weight);
-		}
+				.is_some() == expected
+		})
 	};
 
 	// Create the following test scenario:
@@ -939,10 +938,10 @@ fn obsolete_blocks_aux_data_cleanup() {
 	let fork3_hashes = propose_and_import_blocks_wrap(BlockId::Number(3), 2);
 
 	// Check that aux data is present for all but the genesis block.
-	block_weight_check(&[client.chain_info().genesis_hash], false);
-	block_weight_check(&fork1_hashes, true);
-	block_weight_check(&fork2_hashes, true);
-	block_weight_check(&fork3_hashes, true);
+	assert!(aux_data_check(&[client.chain_info().genesis_hash], false));
+	assert!(aux_data_check(&fork1_hashes, true));
+	assert!(aux_data_check(&fork2_hashes, true));
+	assert!(aux_data_check(&fork3_hashes, true));
 
 	// Trigger cleanup. Actions order is important:
 	// 1. Get the finality notification stream to create a sink entry within the client.
@@ -963,11 +962,11 @@ fn obsolete_blocks_aux_data_cleanup() {
 	});
 
 	// Wiped: A1, A2
-	block_weight_check(&fork1_hashes[..2], false);
+	assert!(aux_data_check(&fork1_hashes[..2], false));
 	// Present: A3, A4
-	block_weight_check(&fork1_hashes[2..], true);
+	assert!(aux_data_check(&fork1_hashes[2..], true));
 	// Wiped: B3, B4
-	block_weight_check(&fork2_hashes, false);
+	assert!(aux_data_check(&fork2_hashes, false));
 	// Present C4, C5
-	block_weight_check(&fork3_hashes, true);
+	assert!(aux_data_check(&fork3_hashes, true));
 }
