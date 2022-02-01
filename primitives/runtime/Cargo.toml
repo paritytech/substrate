@@ -1,6 +1,6 @@
 [package]
 name = "sp-runtime"
-version = "4.1.0-dev"
+version = "5.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2021"
 license = "Apache-2.0"
@@ -18,11 +18,11 @@ targets = ["x86_64-unknown-linux-gnu"]
 serde = { version = "1.0.132", optional = true, features = ["derive"] }
 codec = { package = "parity-scale-codec", version = "2.2.0", default-features = false, features = ["derive", "max-encoded-len"] }
 scale-info = { version = "1.0", default-features = false, features = ["derive"] }
-sp-core = { version = "4.1.0-dev", default-features = false, path = "../core" }
-sp-application-crypto = { version = "4.0.0", default-features = false, path = "../application-crypto" }
+sp-core = { version = "5.0.0", default-features = false, path = "../core" }
+sp-application-crypto = { version = "5.0.0", default-features = false, path = "../application-crypto" }
 sp-arithmetic = { version = "4.0.0", default-features = false, path = "../arithmetic" }
 sp-std = { version = "4.0.0", default-features = false, path = "../std" }
-sp-io = { version = "4.0.0", default-features = false, path = "../io" }
+sp-io = { version = "5.0.0", default-features = false, path = "../io" }
 log = { version = "0.4.14", default-features = false }
 paste = "1.0"
 rand = { version = "0.7.2", optional = true }
@@ -34,7 +34,7 @@ either = { version = "1.5", default-features = false }
 [dev-dependencies]
 serde_json = "1.0.74"
 rand = "0.7.2"
-sp-state-machine = { version = "0.10.0", path = "../state-machine" }
+sp-state-machine = { version = "0.11.0", path = "../state-machine" }
 sp-api = { version = "4.0.0-dev", path = "../api" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
 sp-tracing = { version = "4.0.0", path = "../../primitives/tracing" }

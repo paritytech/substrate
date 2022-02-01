@@ -19,8 +19,8 @@ serde = { version = "1.0.132", optional = true, features = ["derive"] }
 sp-std = { version = "4.0.0", default-features = false, path = "../std" }
 sp-npos-elections-solution-type = { version = "4.0.0-dev", path = "./solution-type" }
 sp-arithmetic = { version = "4.0.0", default-features = false, path = "../arithmetic" }
-sp-core = { version = "4.1.0-dev", default-features = false, path = "../core" }
-sp-runtime = { version = "4.1.0-dev", path = "../runtime", default-features = false }
+sp-core = { version = "5.0.0", default-features = false, path = "../core" }
+sp-runtime = { version = "5.0.0", path = "../runtime", default-features = false }
 
 [dev-dependencies]
 substrate-test-utils = { version = "4.0.0-dev", path = "../../test-utils" }

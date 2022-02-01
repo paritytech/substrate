@@ -24,8 +24,8 @@ codec = { version = "2.2.0", package = "parity-scale-codec", features = ["derive
 sc-rpc = { version = "4.0.0-dev", path = "../../rpc" }
 sc-utils = { version = "4.0.0-dev", path = "../../utils" }
 
-sp-core = { version = "4.1.0-dev", path = "../../../primitives/core" }
-sp-runtime = { version = "4.1.0-dev", path = "../../../primitives/runtime" }
+sp-core = { version = "5.0.0", path = "../../../primitives/core" }
+sp-runtime = { version = "5.0.0", path = "../../../primitives/runtime" }
 
 beefy-gadget = { version = "4.0.0-dev", path = "../." }
 beefy-primitives = { version = "4.0.0-dev", path = "../../../primitives/beefy" }

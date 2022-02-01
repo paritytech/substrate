@@ -47,13 +47,13 @@ sp-authority-discovery = { version = "4.0.0-dev", path = "../../../primitives/au
 sp-consensus-babe = { version = "0.10.0-dev", path = "../../../primitives/consensus/babe" }
 grandpa-primitives = { version = "4.0.0-dev", package = "sp-finality-grandpa", path = "../../../primitives/finality-grandpa" }
 sp-api = { version = "4.0.0-dev", path = "../../../primitives/api" }
-sp-core = { version = "4.1.0-dev", path = "../../../primitives/core" }
-sp-runtime = { version = "4.1.0-dev", path = "../../../primitives/runtime" }
+sp-core = { version = "5.0.0", path = "../../../primitives/core" }
+sp-runtime = { version = "5.0.0", path = "../../../primitives/runtime" }
 sp-timestamp = { version = "4.0.0-dev", path = "../../../primitives/timestamp" }
 sp-authorship = { version = "4.0.0-dev", path = "../../../primitives/authorship" }
 sp-inherents = { version = "4.0.0-dev", path = "../../../primitives/inherents" }
 sp-keyring = { version = "4.1.0-dev", path = "../../../primitives/keyring" }
-sp-keystore = { version = "0.10.0", path = "../../../primitives/keystore" }
+sp-keystore = { version = "0.11.0", path = "../../../primitives/keystore" }
 sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
 sp-transaction-pool = { version = "4.0.0-dev", path = "../../../primitives/transaction-pool" }
 sp-transaction-storage-proof = { version = "4.0.0-dev", path = "../../../primitives/transaction-storage-proof" }
@@ -102,7 +102,7 @@ sc-cli = { version = "0.10.0-dev", optional = true, path = "../../../client/cli"
 sc-service = { version = "0.10.0-dev", default-features = false, path = "../../../client/service", features = [
 	"wasmtime",
 ] }
-sp-trie = { version = "4.0.0", default-features = false, path = "../../../primitives/trie", features = [
+sp-trie = { version = "5.0.0", default-features = false, path = "../../../primitives/trie", features = [
 	"memory-tracker",
 ] }
 

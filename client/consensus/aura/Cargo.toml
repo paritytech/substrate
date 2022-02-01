@@ -13,7 +13,7 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-sp-application-crypto = { version = "4.0.0", path = "../../../primitives/application-crypto" }
+sp-application-crypto = { version = "5.0.0", path = "../../../primitives/application-crypto" }
 sp-consensus-aura = { version = "0.10.0-dev", path = "../../../primitives/consensus/aura" }
 sp-block-builder = { version = "4.0.0-dev", path = "../../../primitives/block-builder" }
 sc-block-builder = { version = "0.10.0-dev", path = "../../block-builder" }
@@ -26,12 +26,12 @@ thiserror = "1.0"
 futures = "0.3.9"
 sp-inherents = { version = "4.0.0-dev", path = "../../../primitives/inherents" }
 log = "0.4.8"
-sp-core = { version = "4.1.0-dev", path = "../../../primitives/core" }
+sp-core = { version = "5.0.0", path = "../../../primitives/core" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
 sc-consensus-slots = { version = "0.10.0-dev", path = "../slots" }
 sp-api = { version = "4.0.0-dev", path = "../../../primitives/api" }
-sp-runtime = { version = "4.1.0-dev", path = "../../../primitives/runtime" }
-sp-keystore = { version = "0.10.0", path = "../../../primitives/keystore" }
+sp-runtime = { version = "5.0.0", path = "../../../primitives/runtime" }
+sp-keystore = { version = "0.11.0", path = "../../../primitives/keystore" }
 sc-telemetry = { version = "4.0.0-dev", path = "../../telemetry" }
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../../utils/prometheus", version = "0.10.0-dev" }
 async-trait = "0.1.50"
