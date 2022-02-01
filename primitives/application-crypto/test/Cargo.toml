@@ -18,4 +18,4 @@ sp-keystore = { version = "0.11.0", path = "../../keystore", default-features = 
 substrate-test-runtime-client = { version = "2.0.0", path = "../../../test-utils/runtime/client" }
 sp-runtime = { version = "4.1.0-dev", path = "../../runtime" }
 sp-api = { version = "4.0.0-dev", path = "../../api" }
-sp-application-crypto = { version = "4.0.0", path = "../" }
+sp-application-crypto = { version = "5.0.0", path = "../" }
