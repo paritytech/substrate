@@ -20,7 +20,7 @@ parking_lot = { version = "0.11.2", optional = true }
 hash-db = { version = "0.15.2", default-features = false }
 trie-db = { version = "0.23.0", default-features = false }
 trie-root = { version = "0.17.0", default-features = false }
-sp-trie = { version = "4.0.0", path = "../trie", default-features = false }
+sp-trie = { version = "5.0.0", path = "../trie", default-features = false }
 sp-core = { version = "4.1.0-dev", path = "../core", default-features = false }
 sp-panic-handler = { version = "4.0.0", path = "../panic-handler", optional = true }
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false }

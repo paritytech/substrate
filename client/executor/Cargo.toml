@@ -18,7 +18,7 @@ codec = { package = "parity-scale-codec", version = "2.0.0" }
 sp-io = { version = "5.0.0", path = "../../primitives/io" }
 sp-core = { version = "4.1.0-dev", path = "../../primitives/core" }
 sp-tasks = { version = "4.0.0-dev", path = "../../primitives/tasks" }
-sp-trie = { version = "4.0.0", path = "../../primitives/trie" }
+sp-trie = { version = "5.0.0", path = "../../primitives/trie" }
 sp-version = { version = "4.0.0-dev", path = "../../primitives/version" }
 sp-panic-handler = { version = "4.0.0", path = "../../primitives/panic-handler" }
 wasmi = "0.9.1"
