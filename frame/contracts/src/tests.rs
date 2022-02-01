@@ -2980,7 +2980,7 @@ fn set_code_hash() {
 
 		// Checking for the last event only
 		assert_eq!(
-			System::events()[13],
+			System::events().pop().unwrap(),
 			EventRecord {
 				phase: Phase::Initialization,
 				event: Event::Contracts(crate::Event::ContractCodeUpdated {
