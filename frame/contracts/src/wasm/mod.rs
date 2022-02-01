@@ -409,6 +409,12 @@ mod tests {
 		fn caller(&self) -> &AccountIdOf<Self::T> {
 			&ALICE
 		}
+		fn is_contract(&self, _address: AccountIdOf<Self::T>) -> bool {
+			true
+		}
+		fn caller_is_origin(&self) -> bool {
+			false
+		}
 		fn address(&self) -> &AccountIdOf<Self::T> {
 			&BOB
 		}

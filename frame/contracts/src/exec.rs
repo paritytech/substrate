@@ -158,6 +158,16 @@ pub trait Ext: sealing::Sealed {
 	/// Returns a reference to the account id of the caller.
 	fn caller(&self) -> &AccountIdOf<Self::T>;
 
+	/// Check if a contract lives at a specific address
+	fn is_contract(&self, address: AccountIdOf<Self::T>) -> bool;
+
+	/// Check if the caller of the current contract is the origin of the whole call stack
+	///
+	/// This can be checked with `is_contract(self.caller())` as well.
+	/// However, this very function does not require any storage lookup and therefore uses much
+	/// less gas.
+	fn caller_is_origin(&self) -> bool;
+
 	/// Returns a reference to the account id of the current contract.
 	fn address(&self) -> &AccountIdOf<Self::T>;
 
@@ -483,7 +493,7 @@ where
 	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
 	E: Executable<T>,
 {
-	/// Create an run a new call stack by calling into `dest`.
+	/// Create and run a new call stack by calling into `dest`.
 	///
 	/// # Note
 	///
@@ -1022,6 +1032,14 @@ where
 
 	fn caller(&self) -> &T::AccountId {
 		self.frames().nth(1).map(|f| &f.account_id).unwrap_or(&self.origin)
+	}
+
+	fn is_contract(&self, address: T::AccountId) -> bool {
+		ContractInfoOf::<T>::get(&address).is_some()
+	}
+
+	fn caller_is_origin(&self) -> bool {
+		self.caller() == &self.origin
 	}
 
 	fn balance(&self) -> BalanceOf<T> {
