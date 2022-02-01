@@ -24,7 +24,7 @@ log = { version = "0.4.14", default-features = false }
 
 [dev-dependencies]
 sp-std = { version = "4.0.0", path = "../../primitives/std" }
-sp-core = { version = "4.1.0-dev", path = "../../primitives/core" }
+sp-core = { version = "5.0.0", path = "../../primitives/core" }
 sp-io = { version = "5.0.0", path = "../../primitives/io" }
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 
