@@ -55,6 +55,7 @@ pub trait WeightInfo {
 	fn upload_code(c: u32, ) -> Weight;
 	fn remove_code() -> Weight;
 	fn seal_caller(r: u32, ) -> Weight;
+	fn seal_is_contract(r: u32, ) -> Weight;
 	fn seal_address(r: u32, ) -> Weight;
 	fn seal_gas_left(r: u32, ) -> Weight;
 	fn seal_balance(r: u32, ) -> Weight;
@@ -262,6 +263,12 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add((49_878_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(T::DbWeight::get().reads(4 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+	}
+	// Storage: Contracts ContractInfoOf (r:1 w:0)
+	fn seal_is_contract(r: u32, ) -> Weight {
+		(168_803_000 as Weight) // TBD: replace with measured value?
+			.saturating_add((56_278_000 as Weight).saturating_mul(r as Weight))
+		        .saturating_add(T::DbWeight::get().reads(4 as Weight))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
@@ -1109,6 +1116,12 @@ impl WeightInfo for () {
 			.saturating_add((49_878_000 as Weight).saturating_mul(r as Weight))
 			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+	}
+	// Storage: Contracts ContractInfoOf (r:1 w:0)
+	fn seal_is_contract(r: u32, ) -> Weight {
+		(168_803_000 as Weight) // TBD: replace with measured value?
+		      	.saturating_add((56_278_000 as Weight).saturating_mul(r as Weight))
+		        .saturating_add(RocksDbWeight::get().reads(4 as Weight))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
