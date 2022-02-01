@@ -91,7 +91,7 @@ mod storage_layer_tracker {
 		}
 	}
 
-	pub fn is_transactional() -> bool {
+	pub fn has_storage_layer() -> bool {
 		get_storage_layer() > 0
 	}
 
@@ -108,8 +108,8 @@ mod storage_layer_tracker {
 /// This will **panic** if is not called within a storage transaction.
 ///
 /// This assertion is enabled for native execution and when `debug_assertions` are enabled.
-pub fn is_transactional() -> bool {
-	storage_layer_tracker::is_transactional()
+pub fn has_storage_layer() -> bool {
+	storage_layer_tracker::has_storage_layer()
 }
 
 /// Assert this method is called within a storage transaction.
@@ -126,14 +126,14 @@ pub fn get_storage_layer() -> u8 {
 /// outcome is `TransactionOutcome::Rollback`.
 ///
 /// Transactions can be nested to any depth up to `limit`. Commits happen to the parent transaction.
-pub fn with_storage_layer<T, E>(limit: u8, f: impl FnOnce() -> Result<T, E>) -> Result<T, E>
+pub fn execute_with_storage_layer<T, E>(limit: u8, f: impl FnOnce() -> Result<T, E>) -> Result<T, E>
 where
 	E: From<DispatchError>,
 {
 	use sp_io::storage::{commit_transaction, rollback_transaction, start_transaction};
 
 	let _guard = storage_layer_tracker::inc_storage_layer(limit)
-		.map_err(|()| DispatchError::TransactionLimitExceeded)?;
+		.map_err(|()| DispatchError::StorageLayersLimit)?;
 
 	start_transaction();
 
@@ -1564,21 +1564,21 @@ mod test {
 	#[test]
 	fn require_transaction_should_return_error() {
 		TestExternalities::default().execute_with(|| {
-			crate::assert!(!is_transactional());
+			crate::assert!(!has_storage_layer());
 		});
 	}
 
 	#[test]
-	fn require_transaction_should_not_error_in_with_storage_layer() {
+	fn require_transaction_should_not_error_in_execute_with_storage_layer() {
 		TestExternalities::default().execute_with(|| {
-			assert_ok!(with_storage_layer(u8::MAX, || -> DispatchResult {
-				assert!(is_transactional());
+			assert_ok!(execute_with_storage_layer(u8::MAX, || -> DispatchResult {
+				assert!(has_storage_layer());
 				Ok(())
 			}));
 
 			assert_noop!(
-				with_storage_layer(u8::MAX, || -> DispatchResult {
-					assert!(is_transactional());
+				execute_with_storage_layer(u8::MAX, || -> DispatchResult {
+					assert!(has_storage_layer());
 					Err("rolling back".into())
 				}),
 				"rolling back"
@@ -1591,25 +1591,25 @@ mod test {
 		TestExternalities::default().execute_with(|| {
 			assert_eq!(storage_layer_tracker::get_storage_layer(), 0);
 
-			assert_ok!(with_storage_layer(2u8, || -> DispatchResult {
+			assert_ok!(execute_with_storage_layer(2u8, || -> DispatchResult {
 				assert_eq!(storage_layer_tracker::get_storage_layer(), 1);
 				Ok(())
 			}));
 
-			assert_ok!(with_storage_layer(2u8, || -> DispatchResult {
+			assert_ok!(execute_with_storage_layer(2u8, || -> DispatchResult {
 				assert_eq!(storage_layer_tracker::get_storage_layer(), 1);
-				with_storage_layer(2u8, || -> DispatchResult {
+				execute_with_storage_layer(2u8, || -> DispatchResult {
 					assert_eq!(storage_layer_tracker::get_storage_layer(), 2);
 					Ok(())
 				})
 			}));
 
 			assert_noop!(
-				with_storage_layer(2u8, || -> DispatchResult {
+				execute_with_storage_layer(2u8, || -> DispatchResult {
 					assert_eq!(storage_layer_tracker::get_storage_layer(), 1);
-					with_storage_layer(2u8, || -> DispatchResult {
+					execute_with_storage_layer(2u8, || -> DispatchResult {
 						assert_eq!(storage_layer_tracker::get_storage_layer(), 2);
-						with_storage_layer(2u8, || -> DispatchResult {
+						execute_with_storage_layer(2u8, || -> DispatchResult {
 							unreachable!("should never get this far due to the limit.");
 						})?;
 						assert_eq!(storage_layer_tracker::get_storage_layer(), 2);
@@ -1618,7 +1618,7 @@ mod test {
 					assert_eq!(storage_layer_tracker::get_storage_layer(), 1);
 					Ok(())
 				}),
-				DispatchError::TransactionLimitExceeded
+				DispatchError::StorageLayersLimit
 			);
 
 			assert_eq!(storage_layer_tracker::get_storage_layer(), 0);

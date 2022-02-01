@@ -18,8 +18,8 @@
 use frame_support::{
 	assert_noop, assert_ok,
 	dispatch::{DispatchError, DispatchResult},
-	storage::with_storage_layer,
-	transactional, require_transactional, StorageMap, StorageValue,
+	storage::execute_with_storage_layer,
+	add_storage_layer, require_storage_layer, StorageMap, StorageValue,
 };
 use sp_io::TestExternalities;
 use sp_std::result;
@@ -29,13 +29,13 @@ pub trait Config: frame_support_test::Config {}
 frame_support::decl_module! {
 	pub struct Module<T: Config> for enum Call where origin: T::Origin, system=frame_support_test {
 		#[weight = 0]
-		#[transactional]
+		#[add_storage_layer]
 		fn value_commits(_origin, v: u32) {
 			Value::set(v);
 		}
 
 		#[weight = 0]
-		#[transactional]
+		#[add_storage_layer]
 		fn value_rollbacks(_origin, v: u32) -> DispatchResult {
 			Value::set(v);
 			Err(DispatchError::Other("nah"))
@@ -67,7 +67,7 @@ fn storage_transaction_basic_commit() {
 		assert_eq!(Value::get(), 0);
 		assert!(!Map::contains_key("val0"));
 
-		assert_ok!(with_storage_layer(u8::MAX, || -> DispatchResult {
+		assert_ok!(execute_with_storage_layer(u8::MAX, || -> DispatchResult {
 			Value::set(99);
 			Map::insert("val0", 99);
 			assert_eq!(Value::get(), 99);
@@ -87,7 +87,7 @@ fn storage_transaction_basic_rollback() {
 		assert_eq!(Map::get("val0"), 0);
 
 		assert_noop!(
-			with_storage_layer(u8::MAX, || -> DispatchResult {
+			execute_with_storage_layer(u8::MAX, || -> DispatchResult {
 				Value::set(99);
 				Map::insert("val0", 99);
 				assert_eq!(Value::get(), 99);
@@ -108,13 +108,13 @@ fn storage_transaction_rollback_then_commit() {
 		Value::set(1);
 		Map::insert("val1", 1);
 
-		assert_ok!(with_storage_layer(u8::MAX, || -> DispatchResult {
+		assert_ok!(execute_with_storage_layer(u8::MAX, || -> DispatchResult {
 			Value::set(2);
 			Map::insert("val1", 2);
 			Map::insert("val2", 2);
 
 			assert_noop!(
-				with_storage_layer(u8::MAX, || -> DispatchResult {
+				execute_with_storage_layer(u8::MAX, || -> DispatchResult {
 					Value::set(3);
 					Map::insert("val1", 3);
 					Map::insert("val2", 3);
@@ -152,12 +152,12 @@ fn storage_transaction_commit_then_rollback() {
 		Map::insert("val1", 1);
 
 		assert_noop!(
-			with_storage_layer(u8::MAX, || -> DispatchResult {
+			execute_with_storage_layer(u8::MAX, || -> DispatchResult {
 				Value::set(2);
 				Map::insert("val1", 2);
 				Map::insert("val2", 2);
 
-				assert_ok!(with_storage_layer(u8::MAX, || -> DispatchResult {
+				assert_ok!(execute_with_storage_layer(u8::MAX, || -> DispatchResult {
 					Value::set(3);
 					Map::insert("val1", 3);
 					Map::insert("val2", 3);
@@ -189,19 +189,19 @@ fn storage_transaction_commit_then_rollback() {
 }
 
 #[test]
-fn transactional_annotation() {
+fn storage_layer_annotation() {
 	fn set_value(v: u32) -> DispatchResult {
 		Value::set(v);
 		Ok(())
 	}
 
-	#[transactional]
+	#[add_storage_layer]
 	fn value_commits(v: u32) -> result::Result<u32, &'static str> {
 		set_value(v)?;
 		Ok(v)
 	}
 
-	#[transactional]
+	#[add_storage_layer]
 	fn value_rollbacks(v: u32) -> result::Result<u32, &'static str> {
 		set_value(v)?;
 		Err("nah")?;
@@ -217,14 +217,14 @@ fn transactional_annotation() {
 }
 
 #[test]
-fn require_transactional_annotation() {
-	#[require_transactional]
+fn require_storage_layer_annotation() {
+	#[require_storage_layer]
 	fn set_value(v: u32) -> DispatchResult {
 		Value::set(v);
 		Ok(())
 	}
 
-	#[transactional]
+	#[add_storage_layer]
 	fn works(v: u32) -> result::Result<u32, &'static str> {
 		set_value(v)?;
 		Ok(v)
@@ -238,12 +238,12 @@ fn require_transactional_annotation() {
 	TestExternalities::default().execute_with(|| {
 		assert_ok!(works(2), 2);
 		assert_eq!(Value::get(), 2);
-		assert_noop!(nope(3), DispatchError::TransactionLimitExceeded);
+		assert_noop!(nope(3), DispatchError::StorageLayersLimit);
 	});
 }
 
 #[test]
-fn transactional_annotation_in_decl_module() {
+fn storage_layer_annotation_in_decl_module() {
 	TestExternalities::default().execute_with(|| {
 		let origin = 0;
 		assert_ok!(<Module<Runtime>>::value_commits(origin, 2));

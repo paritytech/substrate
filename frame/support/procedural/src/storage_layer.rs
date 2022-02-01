@@ -20,25 +20,25 @@ use proc_macro::TokenStream;
 use quote::quote;
 use syn::{parse::Parse, ItemFn, LitInt, Result};
 
-struct TransactionalLimit {
+struct StorageLayerLimit {
 	limit: u8,
 }
 
-impl Default for TransactionalLimit {
+impl Default for StorageLayerLimit {
 	fn default() -> Self {
 		Self { limit: 1 }
 	}
 }
 
-impl Parse for TransactionalLimit {
+impl Parse for StorageLayerLimit {
 	fn parse(input: syn::parse::ParseStream) -> Result<Self> {
 		let limit: LitInt = input.parse()?;
 		Ok(Self { limit: limit.base10_parse()? })
 	}
 }
 
-pub fn transactional(attr: TokenStream, input: TokenStream) -> Result<TokenStream> {
-	let limit: TransactionalLimit = syn::parse(attr).unwrap_or_default();
+pub fn add_storage_layer(attr: TokenStream, input: TokenStream) -> Result<TokenStream> {
+	let limit: StorageLayerLimit = syn::parse(attr).unwrap_or_default();
 	let limit = limit.limit;
 
 	let ItemFn { attrs, vis, sig, block } = syn::parse(input)?;
@@ -47,9 +47,9 @@ pub fn transactional(attr: TokenStream, input: TokenStream) -> Result<TokenStrea
 	let output = quote! {
 		#(#attrs)*
 		#vis #sig {
-			use #crate_::storage::with_storage_layer;
+			use #crate_::storage::execute_with_storage_layer;
 			// Otherwise, spawn a transaction layer.
-			with_storage_layer(#limit, || {
+			execute_with_storage_layer(#limit, || {
 				(|| { #block })()
 			})
 		}
@@ -58,9 +58,9 @@ pub fn transactional(attr: TokenStream, input: TokenStream) -> Result<TokenStrea
 	Ok(output.into())
 }
 
-// Similar to `transactional` but only spawns at most 1 layer.
-pub fn flat_transactional(attr: TokenStream, input: TokenStream) -> Result<TokenStream> {
-	let limit: TransactionalLimit = syn::parse(attr).unwrap_or_default();
+// Similar to `add_storage_layer` but only spawns at most 1 layer.
+pub fn with_storage_layer(attr: TokenStream, input: TokenStream) -> Result<TokenStream> {
+	let limit: StorageLayerLimit = syn::parse(attr).unwrap_or_default();
 	let limit = limit.limit;
 
 	let ItemFn { attrs, vis, sig, block } = syn::parse(input)?;
@@ -69,13 +69,13 @@ pub fn flat_transactional(attr: TokenStream, input: TokenStream) -> Result<Token
 	let output = quote! {
 		#(#attrs)*
 		#vis #sig {
-			use #crate_::storage::{with_storage_layer, is_transactional};
-			if is_transactional() {
+			use #crate_::storage::{execute_with_storage_layer, has_storage_layer};
+			if has_storage_layer() {
 				// We are already in a transaction layer, just execute the block.
 				(|| { #block })()
 			} else {
 				// Otherwise, spawn a transaction layer.
-				with_storage_layer(#limit, || {
+				execute_with_storage_layer(#limit, || {
 					(|| { #block })()
 				})
 			}
@@ -85,15 +85,15 @@ pub fn flat_transactional(attr: TokenStream, input: TokenStream) -> Result<Token
 	Ok(output.into())
 }
 
-pub fn require_transactional(_attr: TokenStream, input: TokenStream) -> Result<TokenStream> {
+pub fn require_storage_layer(_attr: TokenStream, input: TokenStream) -> Result<TokenStream> {
 	let ItemFn { attrs, vis, sig, block } = syn::parse(input)?;
 
 	let crate_ = generate_crate_access_2018("frame-support")?;
 	let output = quote! {
 		#(#attrs)*
 		#vis #sig {
-			if !#crate_::storage::is_transactional(){
-				return Err(DispatchError::TransactionLimitExceeded.into())
+			if !#crate_::storage::has_storage_layer(){
+				return Err(DispatchError::StorageLayersLimit.into())
 			}
 			#block
 		}

@@ -185,7 +185,7 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug + 
 /// decl_module! {
 /// 	pub struct Module<T: Config> for enum Call where origin: T::Origin {
 /// 		#[weight = 0]
-/// 		#[transactional]
+/// 		#[add_storage_layer]
 /// 		fn my_short_function(origin) {
 /// 				// Your implementation
 /// 		}

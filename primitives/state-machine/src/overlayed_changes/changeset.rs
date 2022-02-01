@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License
 
-//! Houses the code that implements the transactional overlay storage.
+//! Houses the code that implements the overlay storage layers.
 
 use super::{Extrinsics, StorageKey, StorageValue};
 

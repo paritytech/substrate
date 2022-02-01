@@ -413,21 +413,21 @@ pub fn pallet(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// # Example
 ///
 /// ```nocompile
-/// #[transactional]
+/// #[add_storage_layer]
 /// fn value_commits(v: u32) -> result::Result<u32, &'static str> {
 /// 	Value::set(v);
 /// 	Ok(v)
 /// }
 ///
-/// #[transactional]
+/// #[add_storage_layer]
 /// fn value_rollbacks(v: u32) -> result::Result<u32, &'static str> {
 /// 	Value::set(v);
 /// 	Err("nah")
 /// }
 /// ```
 #[proc_macro_attribute]
-pub fn transactional(attr: TokenStream, input: TokenStream) -> TokenStream {
-	storage_layer::transactional(attr, input).unwrap_or_else(|e| e.to_compile_error().into())
+pub fn add_storage_layer(attr: TokenStream, input: TokenStream) -> TokenStream {
+	storage_layer::add_storage_layer(attr, input).unwrap_or_else(|e| e.to_compile_error().into())
 }
 
 /// Derive [`Clone`] but do not bound any generic. Docs are at `frame_support::CloneNoBound`.
@@ -508,8 +508,8 @@ pub fn derive_default_no_bound(input: TokenStream) -> TokenStream {
 }
 
 #[proc_macro_attribute]
-pub fn require_transactional(attr: TokenStream, input: TokenStream) -> TokenStream {
-	storage_layer::require_transactional(attr, input)
+pub fn require_storage_layer(attr: TokenStream, input: TokenStream) -> TokenStream {
+	storage_layer::require_storage_layer(attr, input)
 		.unwrap_or_else(|e| e.to_compile_error().into())
 }
 

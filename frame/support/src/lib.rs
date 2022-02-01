@@ -598,7 +598,7 @@ pub fn debug(data: &impl sp_std::fmt::Debug) {
 
 #[doc(inline)]
 pub use frame_support_procedural::{
-	construct_runtime, decl_storage, match_and_insert, transactional, RuntimeDebugNoBound,
+	construct_runtime, decl_storage, match_and_insert, add_storage_layer, RuntimeDebugNoBound,
 };
 
 #[doc(hidden)]
@@ -704,17 +704,17 @@ pub use frame_support_procedural::DefaultNoBound;
 ///
 /// ```
 /// # use frame_support::{
-/// # 	require_transactional, transactional, dispatch::DispatchResult
+/// # 	require_storage_layer, transactional, dispatch::DispatchResult
 /// # };
 ///
-/// #[require_transactional]
+/// #[require_storage_layer]
 /// fn update_all(value: u32) -> DispatchResult {
 /// 	// Update multiple storages.
 /// 	// Return `Err` to indicate should revert.
 /// 	Ok(())
 /// }
 ///
-/// #[transactional]
+/// #[add_storage_layer]
 /// fn safe_update(value: u32) -> DispatchResult {
 /// 	// This is safe
 /// 	update_all(value)
@@ -725,7 +725,7 @@ pub use frame_support_procedural::DefaultNoBound;
 /// 	update_all(value)
 /// }
 /// ```
-pub use frame_support_procedural::require_transactional;
+pub use frame_support_procedural::require_storage_layer;
 
 /// Convert the current crate version into a [`CrateVersion`](crate::traits::CrateVersion).
 ///

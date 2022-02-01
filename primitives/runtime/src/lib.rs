@@ -496,8 +496,8 @@ pub enum DispatchError {
 	Token(TokenError),
 	/// An arithmetic error.
 	Arithmetic(ArithmeticError),
-	/// Transactional layers limit has been reached, and we cannot spawn another one.
-	TransactionLimitExceeded,
+	/// Storage layers limit has been reached, and we cannot spawn another one.
+	StorageLayersLimit,
 }
 
 /// Result of a `Dispatchable` which contains the `DispatchResult` and additional information about
@@ -632,7 +632,7 @@ impl From<DispatchError> for &'static str {
 			DispatchError::TooManyConsumers => "Too many consumers",
 			DispatchError::Token(e) => e.into(),
 			DispatchError::Arithmetic(e) => e.into(),
-			DispatchError::TransactionLimitExceeded => "Too many transactional layers",
+			DispatchError::StorageLayersLimit => "Too many storage layers",
 		}
 	}
 }
@@ -671,7 +671,7 @@ impl traits::Printable for DispatchError {
 				"Arithmetic error: ".print();
 				<&'static str>::from(*e).print();
 			},
-			Self::TransactionLimitExceeded => "Too many transactional layers".print(),
+			Self::StorageLayersLimit => "Too many storage layers".print(),
 		}
 	}
 }
