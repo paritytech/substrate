@@ -47,10 +47,38 @@ pub fn transactional(attr: TokenStream, input: TokenStream) -> Result<TokenStrea
 	let output = quote! {
 		#(#attrs)*
 		#vis #sig {
-			use #crate_::storage::with_transaction;
-			with_transaction(#limit, || {
+			use #crate_::storage::with_storage_layer;
+			// Otherwise, spawn a transaction layer.
+			with_storage_layer(#limit, || {
 				(|| { #block })()
 			})
+		}
+	};
+
+	Ok(output.into())
+}
+
+// Similar to `transactional` but only spawns at most 1 layer.
+pub fn flat_transactional(attr: TokenStream, input: TokenStream) -> Result<TokenStream> {
+	let limit: TransactionalLimit = syn::parse(attr).unwrap_or_default();
+	let limit = limit.limit;
+
+	let ItemFn { attrs, vis, sig, block } = syn::parse(input)?;
+
+	let crate_ = generate_crate_access_2018("frame-support")?;
+	let output = quote! {
+		#(#attrs)*
+		#vis #sig {
+			use #crate_::storage::{with_storage_layer, is_transactional};
+			if is_transactional() {
+				// We are already in a transaction layer, just execute the block.
+				(|| { #block })()
+			} else {
+				// Otherwise, spawn a transaction layer.
+				with_storage_layer(#limit, || {
+					(|| { #block })()
+				})
+			}
 		}
 	};
 
@@ -64,7 +92,9 @@ pub fn require_transactional(_attr: TokenStream, input: TokenStream) -> Result<T
 	let output = quote! {
 		#(#attrs)*
 		#vis #sig {
-			#crate_::storage::require_transaction();
+			if !#crate_::storage::is_transactional(){
+				return Err(DispatchError::TransactionLimitExceeded.into())
+			}
 			#block
 		}
 	};

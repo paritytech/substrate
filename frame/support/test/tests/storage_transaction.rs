@@ -18,8 +18,8 @@
 use frame_support::{
 	assert_noop, assert_ok,
 	dispatch::{DispatchError, DispatchResult},
-	storage::with_transaction,
-	transactional, StorageMap, StorageValue,
+	storage::with_storage_layer,
+	transactional, require_transactional, StorageMap, StorageValue,
 };
 use sp_io::TestExternalities;
 use sp_std::result;
@@ -67,7 +67,7 @@ fn storage_transaction_basic_commit() {
 		assert_eq!(Value::get(), 0);
 		assert!(!Map::contains_key("val0"));
 
-		assert_ok!(with_transaction(u8::MAX, || -> DispatchResult {
+		assert_ok!(with_storage_layer(u8::MAX, || -> DispatchResult {
 			Value::set(99);
 			Map::insert("val0", 99);
 			assert_eq!(Value::get(), 99);
@@ -87,7 +87,7 @@ fn storage_transaction_basic_rollback() {
 		assert_eq!(Map::get("val0"), 0);
 
 		assert_noop!(
-			with_transaction(u8::MAX, || -> DispatchResult {
+			with_storage_layer(u8::MAX, || -> DispatchResult {
 				Value::set(99);
 				Map::insert("val0", 99);
 				assert_eq!(Value::get(), 99);
@@ -108,13 +108,13 @@ fn storage_transaction_rollback_then_commit() {
 		Value::set(1);
 		Map::insert("val1", 1);
 
-		assert_ok!(with_transaction(u8::MAX, || -> DispatchResult {
+		assert_ok!(with_storage_layer(u8::MAX, || -> DispatchResult {
 			Value::set(2);
 			Map::insert("val1", 2);
 			Map::insert("val2", 2);
 
 			assert_noop!(
-				with_transaction(u8::MAX, || -> DispatchResult {
+				with_storage_layer(u8::MAX, || -> DispatchResult {
 					Value::set(3);
 					Map::insert("val1", 3);
 					Map::insert("val2", 3);
@@ -152,12 +152,12 @@ fn storage_transaction_commit_then_rollback() {
 		Map::insert("val1", 1);
 
 		assert_noop!(
-			with_transaction(u8::MAX, || -> DispatchResult {
+			with_storage_layer(u8::MAX, || -> DispatchResult {
 				Value::set(2);
 				Map::insert("val1", 2);
 				Map::insert("val2", 2);
 
-				assert_ok!(with_transaction(u8::MAX, || -> DispatchResult {
+				assert_ok!(with_storage_layer(u8::MAX, || -> DispatchResult {
 					Value::set(3);
 					Map::insert("val1", 3);
 					Map::insert("val2", 3);
@@ -195,7 +195,7 @@ fn transactional_annotation() {
 		Ok(())
 	}
 
-	#[transactional(69)]
+	#[transactional]
 	fn value_commits(v: u32) -> result::Result<u32, &'static str> {
 		set_value(v)?;
 		Ok(v)
@@ -213,6 +213,32 @@ fn transactional_annotation() {
 		assert_eq!(Value::get(), 2);
 
 		assert_noop!(value_rollbacks(3), "nah");
+	});
+}
+
+#[test]
+fn require_transactional_annotation() {
+	#[require_transactional]
+	fn set_value(v: u32) -> DispatchResult {
+		Value::set(v);
+		Ok(())
+	}
+
+	#[transactional]
+	fn works(v: u32) -> result::Result<u32, &'static str> {
+		set_value(v)?;
+		Ok(v)
+	}
+
+	fn nope(v: u32) -> result::Result<u32, &'static str> {
+		set_value(v)?;
+		Ok(v)
+	}
+
+	TestExternalities::default().execute_with(|| {
+		assert_ok!(works(2), 2);
+		assert_eq!(Value::get(), 2);
+		assert_noop!(nope(3), DispatchError::TransactionLimitExceeded);
 	});
 }
 

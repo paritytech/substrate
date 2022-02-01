@@ -47,62 +47,59 @@ pub mod types;
 pub mod unhashed;
 pub mod weak_bounded_vec;
 
-mod transaction_level_tracker {
-	const TRANSACTION_LAYER_KEY: &'static [u8] = b":transaction_level:";
-	type Level = u8;
+mod storage_layer_tracker {
+	const STORAGE_LAYER_KEY: &'static [u8] = b":storage_layer:";
+	type Layer = u8;
 
-	pub fn get_transaction_level() -> Level {
-		crate::storage::unhashed::get_or_default::<Level>(TRANSACTION_LAYER_KEY)
+	pub fn get_storage_layer() -> Layer {
+		crate::storage::unhashed::get_or_default::<Layer>(STORAGE_LAYER_KEY)
 	}
 
-	fn set_transaction_level(level: &Level) {
-		crate::storage::unhashed::put::<Level>(TRANSACTION_LAYER_KEY, level);
+	fn set_storage_layer(level: &Layer) {
+		crate::storage::unhashed::put::<Layer>(STORAGE_LAYER_KEY, level);
 	}
 
-	fn kill_transaction_level() {
-		crate::storage::unhashed::kill(TRANSACTION_LAYER_KEY);
+	fn kill_storage_layer() {
+		crate::storage::unhashed::kill(STORAGE_LAYER_KEY);
 	}
 
 	/// Increments the transaction level. Returns an error if levels go past the limit.
 	///
 	/// Returns a guard that when dropped decrements the transaction level automatically.
-	pub fn inc_transaction_level(limit: Level) -> Result<TransactionLevelGuard, ()> {
-		let existing_levels = get_transaction_level();
-		if existing_levels >= limit || existing_levels == Level::MAX {
+	pub fn inc_storage_layer(limit: Layer) -> Result<StorageLayerGuard, ()> {
+		let existing_levels = get_storage_layer();
+		if existing_levels >= limit || existing_levels == Layer::MAX {
 			return Err(())
 		}
 		// Cannot overflow because of check above.
-		set_transaction_level(&(existing_levels + 1));
-		Ok(TransactionLevelGuard)
+		set_storage_layer(&(existing_levels + 1));
+		Ok(StorageLayerGuard)
 	}
 
-	fn dec_transaction_level() {
-		let existing_levels = get_transaction_level();
+	fn dec_storage_layer() {
+		let existing_levels = get_storage_layer();
 		if existing_levels == 0 {
 			log::warn!(
 				"We are underflowing with calculating transactional levels. Not great, but let's not panic...",
 			);
 		} else if existing_levels == 1 {
-			kill_transaction_level();
+			// Don't leave any trace of this storage item.
+			kill_storage_layer();
 		} else {
 			// Cannot underflow because of checks above.
-			set_transaction_level(&(existing_levels - 1));
+			set_storage_layer(&(existing_levels - 1));
 		}
 	}
 
-	pub fn require_transaction() -> Result<(), ()> {
-		let level = get_transaction_level();
-		if level == 0 {
-			return Err(())
-		}
-		Ok(())
+	pub fn is_transactional() -> bool {
+		get_storage_layer() > 0
 	}
 
-	pub struct TransactionLevelGuard;
+	pub struct StorageLayerGuard;
 
-	impl Drop for TransactionLevelGuard {
+	impl Drop for StorageLayerGuard {
 		fn drop(&mut self) {
-			dec_transaction_level()
+			dec_storage_layer()
 		}
 	}
 }
@@ -111,8 +108,16 @@ mod transaction_level_tracker {
 /// This will **panic** if is not called within a storage transaction.
 ///
 /// This assertion is enabled for native execution and when `debug_assertions` are enabled.
-pub fn require_transaction() -> Result<(), ()> {
-	transaction_level_tracker::require_transaction()
+pub fn is_transactional() -> bool {
+	storage_layer_tracker::is_transactional()
+}
+
+/// Assert this method is called within a storage transaction.
+/// This will **panic** if is not called within a storage transaction.
+///
+/// This assertion is enabled for native execution and when `debug_assertions` are enabled.
+pub fn get_storage_layer() -> u8 {
+	storage_layer_tracker::get_storage_layer()
 }
 
 /// Execute the supplied function in a new storage transaction.
@@ -121,13 +126,13 @@ pub fn require_transaction() -> Result<(), ()> {
 /// outcome is `TransactionOutcome::Rollback`.
 ///
 /// Transactions can be nested to any depth up to `limit`. Commits happen to the parent transaction.
-pub fn with_transaction<T, E>(limit: u8, f: impl FnOnce() -> Result<T, E>) -> Result<T, E>
+pub fn with_storage_layer<T, E>(limit: u8, f: impl FnOnce() -> Result<T, E>) -> Result<T, E>
 where
 	E: From<DispatchError>,
 {
 	use sp_io::storage::{commit_transaction, rollback_transaction, start_transaction};
 
-	let _guard = transaction_level_tracker::inc_transaction_level(limit)
+	let _guard = storage_layer_tracker::inc_storage_layer(limit)
 		.map_err(|()| DispatchError::TransactionLimitExceeded)?;
 
 	start_transaction();
@@ -1559,21 +1564,21 @@ mod test {
 	#[test]
 	fn require_transaction_should_return_error() {
 		TestExternalities::default().execute_with(|| {
-			crate::assert_noop!(require_transaction(), ());
+			crate::assert!(!is_transactional());
 		});
 	}
 
 	#[test]
-	fn require_transaction_should_not_error_in_with_transaction() {
+	fn require_transaction_should_not_error_in_with_storage_layer() {
 		TestExternalities::default().execute_with(|| {
-			assert_ok!(with_transaction(u8::MAX, || -> DispatchResult {
-				assert_ok!(require_transaction());
+			assert_ok!(with_storage_layer(u8::MAX, || -> DispatchResult {
+				assert!(is_transactional());
 				Ok(())
 			}));
 
 			assert_noop!(
-				with_transaction(u8::MAX, || -> DispatchResult {
-					assert_ok!(require_transaction());
+				with_storage_layer(u8::MAX, || -> DispatchResult {
+					assert!(is_transactional());
 					Err("rolling back".into())
 				}),
 				"rolling back"
@@ -1584,39 +1589,39 @@ mod test {
 	#[test]
 	fn transaction_limit_should_work() {
 		TestExternalities::default().execute_with(|| {
-			assert_eq!(transaction_level_tracker::get_transaction_level(), 0);
+			assert_eq!(storage_layer_tracker::get_storage_layer(), 0);
 
-			assert_ok!(with_transaction(2u8, || -> DispatchResult {
-				assert_eq!(transaction_level_tracker::get_transaction_level(), 1);
+			assert_ok!(with_storage_layer(2u8, || -> DispatchResult {
+				assert_eq!(storage_layer_tracker::get_storage_layer(), 1);
 				Ok(())
 			}));
 
-			assert_ok!(with_transaction(2u8, || -> DispatchResult {
-				assert_eq!(transaction_level_tracker::get_transaction_level(), 1);
-				with_transaction(2u8, || -> DispatchResult {
-					assert_eq!(transaction_level_tracker::get_transaction_level(), 2);
+			assert_ok!(with_storage_layer(2u8, || -> DispatchResult {
+				assert_eq!(storage_layer_tracker::get_storage_layer(), 1);
+				with_storage_layer(2u8, || -> DispatchResult {
+					assert_eq!(storage_layer_tracker::get_storage_layer(), 2);
 					Ok(())
 				})
 			}));
 
 			assert_noop!(
-				with_transaction(2u8, || -> DispatchResult {
-					assert_eq!(transaction_level_tracker::get_transaction_level(), 1);
-					with_transaction(2u8, || -> DispatchResult {
-						assert_eq!(transaction_level_tracker::get_transaction_level(), 2);
-						with_transaction(2u8, || -> DispatchResult {
+				with_storage_layer(2u8, || -> DispatchResult {
+					assert_eq!(storage_layer_tracker::get_storage_layer(), 1);
+					with_storage_layer(2u8, || -> DispatchResult {
+						assert_eq!(storage_layer_tracker::get_storage_layer(), 2);
+						with_storage_layer(2u8, || -> DispatchResult {
 							unreachable!("should never get this far due to the limit.");
 						})?;
-						assert_eq!(transaction_level_tracker::get_transaction_level(), 2);
+						assert_eq!(storage_layer_tracker::get_storage_layer(), 2);
 						Ok(())
 					})?;
-					assert_eq!(transaction_level_tracker::get_transaction_level(), 1);
+					assert_eq!(storage_layer_tracker::get_storage_layer(), 1);
 					Ok(())
 				}),
 				DispatchError::TransactionLimitExceeded
 			);
 
-			assert_eq!(transaction_level_tracker::get_transaction_level(), 0);
+			assert_eq!(storage_layer_tracker::get_storage_layer(), 0);
 		});
 	}
 

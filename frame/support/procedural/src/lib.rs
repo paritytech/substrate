@@ -30,7 +30,7 @@ mod match_and_insert;
 mod pallet;
 mod partial_eq_no_bound;
 mod storage;
-mod transactional;
+mod storage_layer;
 
 use proc_macro::TokenStream;
 use std::{cell::RefCell, str::FromStr};
@@ -427,7 +427,7 @@ pub fn pallet(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// ```
 #[proc_macro_attribute]
 pub fn transactional(attr: TokenStream, input: TokenStream) -> TokenStream {
-	transactional::transactional(attr, input).unwrap_or_else(|e| e.to_compile_error().into())
+	storage_layer::transactional(attr, input).unwrap_or_else(|e| e.to_compile_error().into())
 }
 
 /// Derive [`Clone`] but do not bound any generic. Docs are at `frame_support::CloneNoBound`.
@@ -509,7 +509,7 @@ pub fn derive_default_no_bound(input: TokenStream) -> TokenStream {
 
 #[proc_macro_attribute]
 pub fn require_transactional(attr: TokenStream, input: TokenStream) -> TokenStream {
-	transactional::require_transactional(attr, input)
+	storage_layer::require_transactional(attr, input)
 		.unwrap_or_else(|e| e.to_compile_error().into())
 }
 
