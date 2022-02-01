@@ -337,8 +337,6 @@ pub struct Stack<'a, T: Config, E> {
 /// This is an internal data structure. It is exposed to the public for the sole reason
 /// of specifying [`Config::CallStack`].
 pub struct Frame<T: Config> {
-	/// The caller of the currently executing frame which was spawned by `delegate_call`.
-	delegate_caller: Option<T::AccountId>,
 	/// The account id of the executing contract.
 	account_id: T::AccountId,
 	/// The cached in-storage data of the contract.
@@ -353,6 +351,8 @@ pub struct Frame<T: Config> {
 	nested_storage: storage::meter::NestedMeter<T>,
 	/// If `false` the contract enabled its defense against reentrance attacks.
 	allows_reentry: bool,
+	/// The caller of the currently executing frame which was spawned by `delegate_call`.
+	delegate_caller: Option<T::AccountId>,
 }
 
 /// Used in a delegate call frame arguments in order to override the executable and caller.
@@ -372,9 +372,9 @@ enum FrameArgs<'a, T: Config, E> {
 		dest: T::AccountId,
 		/// If `None` the contract info needs to be reloaded from storage.
 		cached_info: Option<ContractInfo<T>>,
-		/// This frame was created by `seal_delegate_call` and hence uses a different code than
-		/// what is stored at [`Self::dest`]. Its caller (`delegated_caller`) is a caller of the
-		/// caller contract
+		/// This frame was created by `seal_delegate_call` and hence uses different code than
+		/// what is stored at [`Self::dest`]. Its caller ([`Frame::delegated_caller`]) is the
+		/// account which called the caller contract
 		delegated_call: Option<DelegatedCall<T, E>>,
 	},
 	Instantiate {

@@ -359,6 +359,9 @@ bitflags! {
 		/// Without this flag any reentrancy into the current contract that originates from
 		/// the callee (or any of its callees) is denied. This includes the first callee:
 		/// You cannot call into yourself with this flag set.
+		///
+		/// # Note
+		///
 		/// For `seal_delegate_call` should be always unset, otherwise
 		/// [`Error::InvalidCallFlags`] is returned.
 		const ALLOW_REENTRY = 0b0000_1000;
@@ -367,10 +370,10 @@ bitflags! {
 
 /// The kind of call that should be performed.
 enum CallType {
-	/// Call is to call to another instantiated contract
+	/// Execute another instantiated contract
 	Call { callee_ptr: u32, value_ptr: u32, gas: u64 },
 	#[cfg(feature = "unstable-interface")]
-	/// DelegateCall is to execute deployed code in caller contract context
+	/// Execute deployed code in the context (storage, account ID, value) of the caller contract
 	DelegateCall { code_hash_ptr: u32 },
 }
 
@@ -738,14 +741,6 @@ where
 		};
 
 		let call_outcome = match call_type {
-			#[cfg(feature = "unstable-interface")]
-			CallType::DelegateCall { code_hash_ptr } => {
-				if flags.contains(CallFlags::ALLOW_REENTRY) {
-					return Err(Error::<E::T>::InvalidCallFlags.into())
-				}
-				let code_hash = self.read_sandbox_memory_as(code_hash_ptr)?;
-				self.ext.delegate_call(code_hash, input_data)
-			},
 			CallType::Call { callee_ptr, value_ptr, gas } => {
 				let callee: <<E as Ext>::T as frame_system::Config>::AccountId =
 					self.read_sandbox_memory_as(callee_ptr)?;
@@ -760,6 +755,14 @@ where
 					input_data,
 					flags.contains(CallFlags::ALLOW_REENTRY),
 				)
+			},
+			#[cfg(feature = "unstable-interface")]
+			CallType::DelegateCall { code_hash_ptr } => {
+				if flags.contains(CallFlags::ALLOW_REENTRY) {
+					return Err(Error::<E::T>::InvalidCallFlags.into())
+				}
+				let code_hash = self.read_sandbox_memory_as(code_hash_ptr)?;
+				self.ext.delegate_call(code_hash, input_data)
 			},
 		};
 
@@ -1092,7 +1095,7 @@ define_env!(Env, <E: Ext>,
 		)
 	},
 
-	// Execute code in the context of the current contract.
+	// Execute code in the context (storage, caller, value) of the current contract.
 	//
 	// Reentrancy protection is always disabled since the callee is allowed
 	// to modify the callers storage. This makes going through a reentrancy attack
