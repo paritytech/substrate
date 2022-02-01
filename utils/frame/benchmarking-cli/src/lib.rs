@@ -19,7 +19,7 @@ mod command;
 mod writer;
 
 use sc_cli::{ExecutionStrategy, WasmExecutionMethod};
-use std::fmt::Debug;
+use std::{fmt::Debug, path::PathBuf};
 
 // Add a more relaxed parsing for pallet names by allowing pallet directory names with `-` to be
 // used like crate names with `_`
@@ -60,9 +60,13 @@ pub struct BenchmarkCmd {
 	#[clap(long, default_value = "1")]
 	pub external_repeat: u32,
 
-	/// Print the raw results.
-	#[clap(long = "raw")]
-	pub raw_data: bool,
+	/// Print the raw results in JSON format.
+	#[structopt(long = "json")]
+	pub json_output: bool,
+
+	/// Print the raw results in JSON format. Implies `--json`.
+	#[structopt(long = "json-file", parse(from_os_str))]
+	pub json_file: Option<PathBuf>,
 
 	/// Don't print the median-slopes linear regression analysis.
 	#[clap(long)]
