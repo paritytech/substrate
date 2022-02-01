@@ -820,10 +820,10 @@ define_env!(Env, <E: Ext>,
 
 	// Replace contract code.
 	//
-	// NOTE: Avoid any operations after the `seal_set_code_hash` call, otherwise if contract
-	// calls into itself after changing its code, the new call would use the new code but when
-	// the original caller panics after returning from the sub call it would revert the changes
-	// made by `seal_set_code_hash` and the next caller would use the old code.
+	// NOTE: If contract calls into itself after changing its code, the new call would use
+	// the new code but when the original caller panics after returning from the sub call it
+	// would revert the changes made by `seal_set_code_hash` and the next caller would use
+	// the old code.
 	//
 	// # Parameters
 	//
