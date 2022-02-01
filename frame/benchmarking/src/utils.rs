@@ -22,11 +22,14 @@ use frame_support::{
 	pallet_prelude::*,
 	traits::StorageInfo,
 };
+#[cfg(feature = "std")]
+use serde::Serialize;
 use sp_io::hashing::blake2_256;
 use sp_runtime::traits::TrailingZeroInput;
 use sp_std::{prelude::Box, vec::Vec};
 use sp_storage::TrackedStorageKey;
 
+#[cfg_attr(feature = "std", derive(Serialize))]
 /// An alphabet of possible parameters to use for benchmarking.
 #[derive(Encode, Decode, Clone, Copy, PartialEq, Debug)]
 #[allow(missing_docs)]
@@ -67,28 +70,36 @@ impl std::fmt::Display for BenchmarkParameter {
 	}
 }
 
+#[cfg_attr(feature = "std", derive(Serialize))]
 /// The results of a single of benchmark.
 #[derive(Encode, Decode, Clone, PartialEq, Debug)]
 pub struct BenchmarkBatch {
 	/// The pallet containing this benchmark.
+	#[cfg_attr(feature = "std", serde(with = "serde_as_str"))]
 	pub pallet: Vec<u8>,
 	/// The instance of this pallet being benchmarked.
+	#[cfg_attr(feature = "std", serde(with = "serde_as_str"))]
 	pub instance: Vec<u8>,
 	/// The extrinsic (or benchmark name) of this benchmark.
+	#[cfg_attr(feature = "std", serde(with = "serde_as_str"))]
 	pub benchmark: Vec<u8>,
 	/// The results from this benchmark.
 	pub results: Vec<BenchmarkResult>,
 }
 
+#[cfg_attr(feature = "std", derive(Serialize))]
 // TODO: could probably make API cleaner here.
 /// The results of a single of benchmark, where time and db results are separated.
 #[derive(Encode, Decode, Clone, PartialEq, Debug)]
 pub struct BenchmarkBatchSplitResults {
 	/// The pallet containing this benchmark.
+	#[cfg_attr(feature = "std", serde(with = "serde_as_str"))]
 	pub pallet: Vec<u8>,
 	/// The instance of this pallet being benchmarked.
+	#[cfg_attr(feature = "std", serde(with = "serde_as_str"))]
 	pub instance: Vec<u8>,
 	/// The extrinsic (or benchmark name) of this benchmark.
+	#[cfg_attr(feature = "std", serde(with = "serde_as_str"))]
 	pub benchmark: Vec<u8>,
 	/// The extrinsic timing results from this benchmark.
 	pub time_results: Vec<BenchmarkResult>,
@@ -96,6 +107,7 @@ pub struct BenchmarkBatchSplitResults {
 	pub db_results: Vec<BenchmarkResult>,
 }
 
+#[cfg_attr(feature = "std", derive(Serialize))]
 /// Result from running benchmarks on a FRAME pallet.
 /// Contains duration of the function call in nanoseconds along with the benchmark parameters
 /// used for that benchmark result.
@@ -109,12 +121,24 @@ pub struct BenchmarkResult {
 	pub writes: u32,
 	pub repeat_writes: u32,
 	pub proof_size: u32,
+	#[cfg_attr(feature = "std", serde(skip_serializing))]
 	pub keys: Vec<(Vec<u8>, u32, u32, bool)>,
 }
 
 impl BenchmarkResult {
 	pub fn from_weight(w: Weight) -> Self {
 		Self { extrinsic_time: (w as u128) / 1_000, ..Default::default() }
+	}
+}
+
+/// Helper module to make serde serialize `Vec<u8>` as strings.
+#[cfg(feature = "std")]
+mod serde_as_str {
+	pub fn serialize<S>(value: &Vec<u8>, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: serde::Serializer,
+	{
+		serializer.collect_str(std::str::from_utf8(value).unwrap())
 	}
 }
 
