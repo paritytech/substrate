@@ -1564,7 +1564,7 @@ mod test {
 	#[test]
 	fn require_transaction_should_return_error() {
 		TestExternalities::default().execute_with(|| {
-			crate::assert!(!has_storage_layer());
+			assert!(!has_storage_layer());
 		});
 	}
 
