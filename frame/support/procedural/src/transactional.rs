@@ -18,7 +18,7 @@
 use frame_support_procedural_tools::generate_crate_access_2018;
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{ItemFn, Result, LitInt, parse::Parse};
+use syn::{parse::Parse, ItemFn, LitInt, Result};
 
 struct TransactionalLimit {
 	limit: u8,
@@ -47,14 +47,9 @@ pub fn transactional(attr: TokenStream, input: TokenStream) -> Result<TokenStrea
 	let output = quote! {
 		#(#attrs)*
 		#vis #sig {
-			use #crate_::storage::{with_transaction, TransactionOutcome};
+			use #crate_::storage::with_transaction;
 			with_transaction(#limit, || {
-				let r = (|| { #block })();
-				if r.is_ok() {
-					TransactionOutcome::Commit(r)
-				} else {
-					TransactionOutcome::Rollback(r)
-				}
+				(|| { #block })()
 			})
 		}
 	};

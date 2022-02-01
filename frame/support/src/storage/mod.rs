@@ -27,8 +27,11 @@ use crate::{
 };
 use codec::{Decode, Encode, EncodeLike, FullCodec, FullEncode};
 use sp_core::storage::ChildInfo;
-use sp_runtime::{DispatchError, generic::{Digest, DigestItem}};
 pub use sp_runtime::TransactionOutcome;
+use sp_runtime::{
+	generic::{Digest, DigestItem},
+	DispatchError,
+};
 use sp_std::prelude::*;
 pub use types::Key;
 
@@ -118,28 +121,29 @@ pub fn require_transaction() -> Result<(), ()> {
 /// outcome is `TransactionOutcome::Rollback`.
 ///
 /// Transactions can be nested to any depth up to `limit`. Commits happen to the parent transaction.
-pub fn with_transaction<A, B>(limit: u8, f: impl FnOnce() -> TransactionOutcome<Result<A, B>>) -> Result<A, B>
-	where
-		B: From<DispatchError>
+pub fn with_transaction<T, E>(limit: u8, f: impl FnOnce() -> Result<T, E>) -> Result<T, E>
+where
+	E: From<DispatchError>,
 {
 	use sp_io::storage::{commit_transaction, rollback_transaction, start_transaction};
-	use TransactionOutcome::*;
 
 	let _guard = transaction_level_tracker::inc_transaction_level(limit)
 		.map_err(|()| DispatchError::TransactionLimitExceeded)?;
 
 	start_transaction();
 
-	match f() {
-		Commit(res) => {
+	let res = f();
+
+	match res {
+		Ok(_) => {
 			commit_transaction();
-			res
 		},
-		Rollback(res) => {
+		Err(_) => {
 			rollback_transaction();
-			res
 		},
 	}
+
+	res
 }
 
 /// A trait for working with macro-generated storage values under the substrate storage API.
@@ -1435,14 +1439,14 @@ pub fn storage_prefix(pallet_name: &[u8], storage_name: &[u8]) -> [u8; 32] {
 #[cfg(test)]
 mod test {
 	use super::*;
-	use crate::{assert_ok, hash::Identity, Twox128};
+	use crate::{assert_noop, assert_ok, hash::Identity, Twox128};
 	use bounded_vec::BoundedVec;
 	use frame_support::traits::ConstU32;
 	use generator::StorageValue as _;
 	use sp_core::hashing::twox_128;
 	use sp_io::TestExternalities;
-	use weak_bounded_vec::WeakBoundedVec;
 	use sp_runtime::DispatchResult;
+	use weak_bounded_vec::WeakBoundedVec;
 
 	#[test]
 	fn prefixed_map_works() {
@@ -1562,15 +1566,18 @@ mod test {
 	#[test]
 	fn require_transaction_should_not_error_in_with_transaction() {
 		TestExternalities::default().execute_with(|| {
-			assert_ok!(with_transaction(u8::MAX, || -> TransactionOutcome<DispatchResult> {
+			assert_ok!(with_transaction(u8::MAX, || -> DispatchResult {
 				assert_ok!(require_transaction());
-				TransactionOutcome::Commit(Ok(()))
+				Ok(())
 			}));
 
-			assert_ok!(with_transaction(u8::MAX, || -> TransactionOutcome<DispatchResult> {
-				assert_ok!(require_transaction());
-				TransactionOutcome::Rollback(Ok(()))
-			}));
+			assert_noop!(
+				with_transaction(u8::MAX, || -> DispatchResult {
+					assert_ok!(require_transaction());
+					Err("rolling back".into())
+				}),
+				"rolling back"
+			);
 		});
 	}
 
@@ -1579,41 +1586,37 @@ mod test {
 		TestExternalities::default().execute_with(|| {
 			assert_eq!(transaction_level_tracker::get_transaction_level(), 0);
 
-			let res = with_transaction(2u8, || -> TransactionOutcome<DispatchResult> {
+			assert_ok!(with_transaction(2u8, || -> DispatchResult {
 				assert_eq!(transaction_level_tracker::get_transaction_level(), 1);
-				TransactionOutcome::Commit(Ok(()))
-			});
+				Ok(())
+			}));
 
-			assert!(res.is_ok());
-
-			let res = with_transaction(2u8, || -> TransactionOutcome<DispatchResult> {
+			assert_ok!(with_transaction(2u8, || -> DispatchResult {
 				assert_eq!(transaction_level_tracker::get_transaction_level(), 1);
-				let res = with_transaction(2u8, || -> TransactionOutcome<DispatchResult> {
+				with_transaction(2u8, || -> DispatchResult {
 					assert_eq!(transaction_level_tracker::get_transaction_level(), 2);
-					TransactionOutcome::Commit(Ok(()))
-				});
-				TransactionOutcome::Commit(res)
-			});
+					Ok(())
+				})
+			}));
 
-			assert!(res.is_ok());
-
-			let res = with_transaction(2u8, || -> TransactionOutcome<DispatchResult> {
-				assert_eq!(transaction_level_tracker::get_transaction_level(), 1);
-				let res = with_transaction(2u8, || -> TransactionOutcome<DispatchResult> {
-					assert_eq!(transaction_level_tracker::get_transaction_level(), 2);
-					let res = with_transaction(2u8, || -> TransactionOutcome<DispatchResult> {
-						unreachable!("should never get this far due to the limit.");
-					});
-					assert_eq!(transaction_level_tracker::get_transaction_level(), 2);
-					TransactionOutcome::Commit(res)
-				});
-				assert_eq!(transaction_level_tracker::get_transaction_level(), 1);
-				TransactionOutcome::Commit(res)
-			});
+			assert_noop!(
+				with_transaction(2u8, || -> DispatchResult {
+					assert_eq!(transaction_level_tracker::get_transaction_level(), 1);
+					with_transaction(2u8, || -> DispatchResult {
+						assert_eq!(transaction_level_tracker::get_transaction_level(), 2);
+						with_transaction(2u8, || -> DispatchResult {
+							unreachable!("should never get this far due to the limit.");
+						})?;
+						assert_eq!(transaction_level_tracker::get_transaction_level(), 2);
+						Ok(())
+					})?;
+					assert_eq!(transaction_level_tracker::get_transaction_level(), 1);
+					Ok(())
+				}),
+				DispatchError::TransactionLimitExceeded
+			);
 
 			assert_eq!(transaction_level_tracker::get_transaction_level(), 0);
-
-			assert!(res.is_err());
 		});
 	}
 
