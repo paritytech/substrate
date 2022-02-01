@@ -43,7 +43,7 @@ sp-core = { version = "5.0.0", path = "../../primitives/core" }
 sp-keyring = { version = "4.1.0-dev", path = "../../primitives/keyring" }
 sp-keystore = { version = "0.11.0", path = "../../primitives/keystore" }
 sp-panic-handler = { version = "4.0.0", path = "../../primitives/panic-handler" }
-sp-runtime = { version = "4.1.0-dev", path = "../../primitives/runtime" }
+sp-runtime = { version = "5.0.0", path = "../../primitives/runtime" }
 sp-version = { version = "4.0.0-dev", path = "../../primitives/version" }
 
 [dev-dependencies]
