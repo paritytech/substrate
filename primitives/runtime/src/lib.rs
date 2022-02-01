@@ -52,7 +52,7 @@ use sp_core::{
 };
 use sp_std::{convert::TryFrom, prelude::*};
 
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 
 pub mod curve;
@@ -224,7 +224,7 @@ pub type ConsensusEngineId = [u8; 4];
 
 /// Signature verify that can work with any known signature types..
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-#[derive(Eq, PartialEq, Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
+#[derive(Eq, PartialEq, Clone, Encode, Decode, MaxEncodedLen, RuntimeDebug, TypeInfo)]
 pub enum MultiSignature {
 	/// An Ed25519 signature.
 	Ed25519(ed25519::Signature),
