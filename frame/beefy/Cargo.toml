@@ -24,7 +24,7 @@ beefy-primitives = { version = "4.0.0-dev", path = "../../primitives/beefy", def
 
 [dev-dependencies]
 sp-core = { version = "4.1.0-dev", path = "../../primitives/core" }
-sp-io = { version = "4.0.0-dev", path = "../../primitives/io" }
+sp-io = { version = "5.0.0", path = "../../primitives/io" }
 sp-staking = { version = "4.0.0-dev", path = "../../primitives/staking" }
 
 [features]

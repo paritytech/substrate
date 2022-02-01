@@ -23,7 +23,7 @@ frame-support = { version = "4.0.0-dev", default-features = false, path = "../..
 sp-core = { version = "4.1.0-dev", default-features = false, path = "../../../primitives/core" }
 
 [dev-dependencies]
-sp-io = { version = "4.0.0", path = "../../../primitives/io" }
+sp-io = { version = "5.0.0", path = "../../../primitives/io" }
 
 [features]
 default = ["std"]

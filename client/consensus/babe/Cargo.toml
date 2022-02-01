@@ -27,7 +27,7 @@ num-rational = "0.2.2"
 num-traits = "0.2.8"
 serde = { version = "1.0.132", features = ["derive"] }
 sp-version = { version = "4.0.0-dev", path = "../../../primitives/version" }
-sp-io = { version = "4.0.0", path = "../../../primitives/io" }
+sp-io = { version = "5.0.0", path = "../../../primitives/io" }
 sp-inherents = { version = "4.0.0-dev", path = "../../../primitives/inherents" }
 sc-telemetry = { version = "4.0.0-dev", path = "../../telemetry" }
 sc-keystore = { version = "4.0.0-dev", path = "../../keystore" }
