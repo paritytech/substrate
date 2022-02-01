@@ -18,14 +18,14 @@
 //! The vote datatype.
 
 use crate::{Conviction, Delegations};
-use codec::{Decode, Encode, EncodeLike, Input, Output, MaxEncodedLen};
+use codec::{Decode, Encode, EncodeLike, Input, MaxEncodedLen, Output};
+use frame_support::{pallet_prelude::Get, BoundedVec};
 use scale_info::TypeInfo;
 use sp_runtime::{
 	traits::{Saturating, Zero},
 	RuntimeDebug,
 };
 use sp_std::{convert::TryFrom, prelude::*, result::Result};
-use frame_support::{BoundedVec, pallet_prelude::Get};
 
 /// A number of lock periods, plus a vote, one way or the other.
 #[derive(Copy, Clone, Eq, PartialEq, Default, RuntimeDebug, MaxEncodedLen)]
@@ -109,7 +109,18 @@ impl<Balance: Saturating> AccountVote<Balance> {
 
 /// A "prior" lock, i.e. a lock for some now-forgotten reason.
 #[derive(
-	Encode, Decode, Default, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, RuntimeDebug, TypeInfo, MaxEncodedLen,
+	Encode,
+	Decode,
+	Default,
+	Copy,
+	Clone,
+	Eq,
+	PartialEq,
+	Ord,
+	PartialOrd,
+	RuntimeDebug,
+	TypeInfo,
+	MaxEncodedLen,
 )]
 pub struct PriorLock<BlockNumber, Balance>(BlockNumber, Balance);
 
@@ -152,8 +163,8 @@ pub struct Delegating<Balance, AccountId, BlockNumber> {
 #[derive(Encode, Decode, Clone, Eq, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 #[scale_info(skip_type_params(MaxVotes))]
 pub struct Casting<Balance, BlockNumber, PollIndex, MaxVotes>
-	where
-		MaxVotes: Get<u32>,
+where
+	MaxVotes: Get<u32>,
 {
 	/// The current votes of the account.
 	pub votes: BoundedVec<(PollIndex, AccountVote<Balance>), MaxVotes>,
@@ -167,8 +178,8 @@ pub struct Casting<Balance, BlockNumber, PollIndex, MaxVotes>
 #[derive(Encode, Decode, Clone, Eq, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 #[scale_info(skip_type_params(MaxVotes))]
 pub enum Voting<Balance, AccountId, BlockNumber, PollIndex, MaxVotes>
-	where
-		MaxVotes: Get<u32>,
+where
+	MaxVotes: Get<u32>,
 {
 	/// The account is voting directly.
 	Casting(Casting<Balance, BlockNumber, PollIndex, MaxVotes>),
@@ -178,8 +189,8 @@ pub enum Voting<Balance, AccountId, BlockNumber, PollIndex, MaxVotes>
 
 impl<Balance: Default, AccountId, BlockNumber: Zero, PollIndex, MaxVotes> Default
 	for Voting<Balance, AccountId, BlockNumber, PollIndex, MaxVotes>
-	where
-		MaxVotes: Get<u32>,
+where
+	MaxVotes: Get<u32>,
 {
 	fn default() -> Self {
 		Voting::Casting(Casting {
@@ -192,8 +203,8 @@ impl<Balance: Default, AccountId, BlockNumber: Zero, PollIndex, MaxVotes> Defaul
 
 impl<Balance, AccountId, BlockNumber, PollIndex, MaxVotes> AsMut<PriorLock<BlockNumber, Balance>>
 	for Voting<Balance, AccountId, BlockNumber, PollIndex, MaxVotes>
-	where
-		MaxVotes: Get<u32>,
+where
+	MaxVotes: Get<u32>,
 {
 	fn as_mut(&mut self) -> &mut PriorLock<BlockNumber, Balance> {
 		match self {
@@ -210,8 +221,8 @@ impl<
 		PollIndex,
 		MaxVotes,
 	> Voting<Balance, AccountId, BlockNumber, PollIndex, MaxVotes>
-	where
-		MaxVotes: Get<u32>,
+where
+	MaxVotes: Get<u32>,
 {
 	pub fn rejig(&mut self, now: BlockNumber) {
 		AsMut::<PriorLock<BlockNumber, Balance>>::as_mut(self).rejig(now);

@@ -61,6 +61,8 @@ fn account_vote<T: Config>(b: BalanceOf<T>) -> AccountVote<BalanceOf<T>> {
 }
 
 benchmarks! {
+	where_clause {  where T::MaxVotes: core::fmt::Debug }
+
 	vote_new {
 		let caller = funded_account::<T>("caller", 0);
 		whitelist_account!(caller);

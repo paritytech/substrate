@@ -27,7 +27,19 @@ use sp_runtime::{
 use sp_std::{convert::TryFrom, result::Result};
 
 /// A value denoting the strength of conviction of a vote.
-#[derive(Encode, Decode, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+#[derive(
+	Encode,
+	Decode,
+	Copy,
+	Clone,
+	Eq,
+	PartialEq,
+	Ord,
+	PartialOrd,
+	RuntimeDebug,
+	TypeInfo,
+	MaxEncodedLen,
+)]
 pub enum Conviction {
 	/// 0.1x votes, unlocked.
 	None,
