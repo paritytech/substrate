@@ -43,7 +43,7 @@ sc-utils = { version = "4.0.0-dev", path = "../utils" }
 sp-version = { version = "4.0.0-dev", path = "../../primitives/version" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
 sp-core = { version = "4.1.0-dev", path = "../../primitives/core" }
-sp-keystore = { version = "0.10.0", path = "../../primitives/keystore" }
+sp-keystore = { version = "0.11.0", path = "../../primitives/keystore" }
 sp-session = { version = "4.0.0-dev", path = "../../primitives/session" }
 sp-state-machine = { version = "0.11.0", path = "../../primitives/state-machine" }
 sp-application-crypto = { version = "4.0.0", path = "../../primitives/application-crypto" }
