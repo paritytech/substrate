@@ -18,12 +18,15 @@
 
 use std::collections::HashSet;
 
-use crate::pubsub::{Dispatch, SubsID, Subscribe, Unsubscribe};
+use crate::{
+	id_sequence::SeqID,
+	pubsub::{Dispatch, Subscribe, Unsubscribe},
+};
 
 /// The shared structure to keep track on subscribers.
 #[derive(Debug)]
 pub(super) struct Registry {
-	pub(super) subscribers: HashSet<SubsID>,
+	pub(super) subscribers: HashSet<SeqID>,
 }
 
 impl Default for Registry {
@@ -33,12 +36,12 @@ impl Default for Registry {
 }
 
 impl Subscribe<()> for Registry {
-	fn subscribe(&mut self, _subs_key: (), subs_id: SubsID) {
+	fn subscribe(&mut self, _subs_key: (), subs_id: SeqID) {
 		self.subscribers.insert(subs_id);
 	}
 }
 impl Unsubscribe for Registry {
-	fn unsubscribe(&mut self, subs_id: SubsID) {
+	fn unsubscribe(&mut self, subs_id: SeqID) {
 		let _ = self.subscribers.remove(&subs_id);
 	}
 }
@@ -53,7 +56,7 @@ where
 
 	fn dispatch<F>(&mut self, make_payload: MakePayload, mut dispatch: F) -> Self::Ret
 	where
-		F: FnMut(&SubsID, Self::Item),
+		F: FnMut(&SeqID, Self::Item),
 	{
 		if !self.subscribers.is_empty() {
 			let payload = make_payload()?;

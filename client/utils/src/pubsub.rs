@@ -45,21 +45,21 @@ use std::{
 use ::futures::stream::{FusedStream, Stream};
 use ::parking_lot::Mutex;
 
-use crate::mpsc::{TracingUnboundedReceiver, TracingUnboundedSender};
-
-/// The type to identify subscribers.
-pub type SubsID = crate::id_sequence::SeqID;
+use crate::{
+	id_sequence::SeqID,
+	mpsc::{TracingUnboundedReceiver, TracingUnboundedSender},
+};
 
 /// Unsubscribe: unregisters a previously created subscription.
 pub trait Unsubscribe {
 	/// Remove all registrations of the subscriber with ID `subs_id`.
-	fn unsubscribe(&mut self, subs_id: SubsID);
+	fn unsubscribe(&mut self, subs_id: SeqID);
 }
 
 /// Subscribe using a key of type `K`
 pub trait Subscribe<K> {
 	/// Register subscriber with the ID `subs_id` as having interest to the key `K`.
-	fn subscribe(&mut self, subs_key: K, subs_id: SubsID);
+	fn subscribe(&mut self, subs_key: K, subs_id: SeqID);
 }
 
 /// Dispatch a message of type `M`.
@@ -78,7 +78,7 @@ pub trait Dispatch<M> {
 	/// to the subscribers. The subscribers will receive a message of type `Self::Item`.
 	fn dispatch<F>(&mut self, message: M, dispatch: F) -> Self::Ret
 	where
-		F: FnMut(&SubsID, Self::Item);
+		F: FnMut(&SeqID, Self::Item);
 }
 
 /// A subscription hub.
@@ -104,14 +104,14 @@ where
 	rx: TracingUnboundedReceiver<M>,
 
 	shared: Weak<Mutex<Shared<M, R>>>,
-	subs_id: SubsID,
+	subs_id: SeqID,
 }
 
 #[derive(Debug)]
 struct Shared<M, R> {
 	id_sequence: crate::id_sequence::IDSequence,
 	registry: R,
-	sinks: HashMap<SubsID, TracingUnboundedSender<M>>,
+	sinks: HashMap<SeqID, TracingUnboundedSender<M>>,
 }
 
 impl<M, R> AsMut<R> for Shared<M, R> {
@@ -206,11 +206,11 @@ impl<M, R> Hub<M, R> {
 }
 
 impl<M, R> Shared<M, R> {
-	fn get_mut(&mut self) -> (&mut R, &mut HashMap<SubsID, TracingUnboundedSender<M>>) {
+	fn get_mut(&mut self) -> (&mut R, &mut HashMap<SeqID, TracingUnboundedSender<M>>) {
 		(&mut self.registry, &mut self.sinks)
 	}
 
-	fn unsubscribe(&mut self, subs_id: SubsID)
+	fn unsubscribe(&mut self, subs_id: SeqID)
 	where
 		R: Unsubscribe,
 	{

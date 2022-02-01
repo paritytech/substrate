@@ -23,7 +23,10 @@ use sp_core::hexdisplay::HexDisplay;
 use fnv::{FnvHashMap, FnvHashSet};
 use prometheus_endpoint::{register, CounterVec, Opts, U64};
 
-use sc_utils::pubsub::{Dispatch, SubsID as SubscriberId, Subscribe, Unsubscribe};
+use sc_utils::{
+	id_sequence::SeqID as SubscriberId,
+	pubsub::{Dispatch, Subscribe, Unsubscribe},
+};
 
 type SubscribersGauge = CounterVec<U64>;
 
