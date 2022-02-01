@@ -28,7 +28,7 @@ sp-session = { version = "4.0.0-dev", path = "../../primitives/session" }
 sp-offchain = { version = "4.0.0-dev", path = "../../primitives/offchain" }
 sp-runtime = { version = "4.1.0-dev", path = "../../primitives/runtime" }
 sc-utils = { version = "4.0.0-dev", path = "../utils" }
-sp-rpc = { version = "4.0.0-dev", path = "../../primitives/rpc" }
+sp-rpc = { version = "5.0.0", path = "../../primitives/rpc" }
 sp-keystore = { version = "0.10.0", path = "../../primitives/keystore" }
 sc-chain-spec = { version = "4.0.0-dev", path = "../chain-spec" }
 sc-block-builder = { version = "0.10.0-dev", path = "../block-builder" }
