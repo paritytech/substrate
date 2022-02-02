@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.8.0]
 ### Changed
 - Enabled inflation
+- Enabled native transfer on erc20 frame
 
 ## [2.7.0]
 ### Changed
