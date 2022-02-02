@@ -1639,6 +1639,36 @@ mod tests {
 	}
 
 	#[test]
+	fn is_contract_returns_proper_values() {
+		let bob_ch = MockLoader::insert(Call, |ctx, _| {
+			// Verify that BOB is a contract
+			assert!(ctx.ext.is_contract(BOB));
+			// Verify that ALICE is not a contract
+			assert!(!ctx.ext.is_contract(ALICE));
+			exec_success()
+		});
+
+		ExtBuilder::default().build().execute_with(|| {
+			let schedule = <Test as Config>::Schedule::get();
+			place_contract(&BOB, bob_ch);
+
+			let mut storage_meter = storage::meter::Meter::new(&ALICE, Some(0), 0).unwrap();
+			let result = MockStack::run_call(
+				ALICE,
+				BOB,
+				&mut GasMeter::<Test>::new(GAS_LIMIT),
+				&mut storage_meter,
+				&schedule,
+				0,
+				vec![],
+				None,
+			);
+
+			assert_matches!(result, Ok(_));
+		});
+	}
+
+	#[test]
 	fn address_returns_proper_values() {
 		let bob_ch = MockLoader::insert(Call, |ctx, _| {
 			// Verify that address matches BOB.
