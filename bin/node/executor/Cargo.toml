@@ -17,11 +17,11 @@ scale-info = { version = "1.0", features = ["derive"] }
 node-primitives = { version = "2.0.0", path = "../primitives" }
 node-runtime = { version = "3.0.0-dev", path = "../runtime" }
 sc-executor = { version = "0.10.0-dev", path = "../../../client/executor" }
-sp-core = { version = "4.1.0-dev", path = "../../../primitives/core" }
-sp-keystore = { version = "0.10.0", path = "../../../primitives/keystore" }
-sp-state-machine = { version = "0.10.0", path = "../../../primitives/state-machine" }
+sp-core = { version = "5.0.0", path = "../../../primitives/core" }
+sp-keystore = { version = "0.11.0", path = "../../../primitives/keystore" }
+sp-state-machine = { version = "0.11.0", path = "../../../primitives/state-machine" }
 sp-tracing = { version = "4.0.0", path = "../../../primitives/tracing" }
-sp-trie = { version = "4.0.0", path = "../../../primitives/trie" }
+sp-trie = { version = "5.0.0", path = "../../../primitives/trie" }
 frame-benchmarking = { version = "4.0.0-dev", path = "../../../frame/benchmarking" }
 
 [dev-dependencies]
@@ -34,10 +34,10 @@ pallet-contracts = { version = "4.0.0-dev", path = "../../../frame/contracts" }
 pallet-im-online = { version = "4.0.0-dev", path = "../../../frame/im-online" }
 pallet-timestamp = { version = "4.0.0-dev", path = "../../../frame/timestamp" }
 pallet-treasury = { version = "4.0.0-dev", path = "../../../frame/treasury" }
-sp-application-crypto = { version = "4.0.0", path = "../../../primitives/application-crypto" }
+sp-application-crypto = { version = "5.0.0", path = "../../../primitives/application-crypto" }
 sp-consensus-babe = { version = "0.10.0-dev", path = "../../../primitives/consensus/babe" }
-sp-runtime = { version = "4.1.0-dev", path = "../../../primitives/runtime" }
-sp-externalities = { version = "0.10.0", path = "../../../primitives/externalities" }
+sp-runtime = { version = "5.0.0", path = "../../../primitives/runtime" }
+sp-externalities = { version = "0.11.0", path = "../../../primitives/externalities" }
 sp-keyring = { version = "4.1.0-dev", path = "../../../primitives/keyring" }
 wat = "1.0"
 futures = "0.3.9"

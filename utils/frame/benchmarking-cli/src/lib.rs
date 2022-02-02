@@ -28,124 +28,119 @@ fn parse_pallet_name(pallet: &str) -> String {
 }
 
 /// The `benchmark` command used to benchmark FRAME Pallets.
-#[derive(Debug, structopt::StructOpt)]
+#[derive(Debug, clap::Parser)]
 pub struct BenchmarkCmd {
 	/// Select a FRAME Pallet to benchmark, or `*` for all (in which case `extrinsic` must be `*`).
-	#[structopt(short, long, parse(from_str = parse_pallet_name), required_unless = "list")]
+	#[clap(short, long, parse(from_str = parse_pallet_name), required_unless_present = "list")]
 	pub pallet: Option<String>,
 
 	/// Select an extrinsic inside the pallet to benchmark, or `*` for all.
-	#[structopt(short, long, required_unless = "list")]
+	#[clap(short, long, required_unless_present = "list")]
 	pub extrinsic: Option<String>,
 
 	/// Select how many samples we should take across the variable components.
-	#[structopt(short, long, default_value = "1")]
+	#[clap(short, long, default_value = "1")]
 	pub steps: u32,
 
 	/// Indicates lowest values for each of the component ranges.
-	#[structopt(long = "low", use_delimiter = true)]
+	#[clap(long = "low", use_delimiter = true)]
 	pub lowest_range_values: Vec<u32>,
 
 	/// Indicates highest values for each of the component ranges.
-	#[structopt(long = "high", use_delimiter = true)]
+	#[clap(long = "high", use_delimiter = true)]
 	pub highest_range_values: Vec<u32>,
 
 	/// Select how many repetitions of this benchmark should run from within the wasm.
-	#[structopt(short, long, default_value = "1")]
+	#[clap(short, long, default_value = "1")]
 	pub repeat: u32,
 
 	/// Select how many repetitions of this benchmark should run from the client.
 	///
 	/// NOTE: Using this alone may give slower results, but will afford you maximum Wasm memory.
-	#[structopt(long, default_value = "1")]
+	#[clap(long, default_value = "1")]
 	pub external_repeat: u32,
 
 	/// Print the raw results.
-	#[structopt(long = "raw")]
+	#[clap(long = "raw")]
 	pub raw_data: bool,
 
 	/// Don't print the median-slopes linear regression analysis.
-	#[structopt(long)]
+	#[clap(long)]
 	pub no_median_slopes: bool,
 
 	/// Don't print the min-squares linear regression analysis.
-	#[structopt(long)]
+	#[clap(long)]
 	pub no_min_squares: bool,
 
 	/// Output the benchmarks to a Rust file at the given path.
-	#[structopt(long)]
+	#[clap(long)]
 	pub output: Option<std::path::PathBuf>,
 
 	/// Add a header file to your outputted benchmarks
-	#[structopt(long)]
+	#[clap(long)]
 	pub header: Option<std::path::PathBuf>,
 
 	/// Path to Handlebars template file used for outputting benchmark results. (Optional)
-	#[structopt(long)]
+	#[clap(long)]
 	pub template: Option<std::path::PathBuf>,
 
 	/// Which analysis function to use when outputting benchmarks:
 	/// * min-squares (default)
 	/// * median-slopes
 	/// * max (max of min squares and median slopes for each value)
-	#[structopt(long)]
+	#[clap(long)]
 	pub output_analysis: Option<String>,
 
 	/// Set the heap pages while running benchmarks. If not set, the default value from the client
 	/// is used.
-	#[structopt(long)]
+	#[clap(long)]
 	pub heap_pages: Option<u64>,
 
 	/// Disable verification logic when running benchmarks.
-	#[structopt(long)]
+	#[clap(long)]
 	pub no_verify: bool,
 
 	/// Display and run extra benchmarks that would otherwise not be needed for weight
 	/// construction.
-	#[structopt(long)]
+	#[clap(long)]
 	pub extra: bool,
 
 	/// Estimate PoV size.
-	#[structopt(long)]
+	#[clap(long)]
 	pub record_proof: bool,
 
 	#[allow(missing_docs)]
-	#[structopt(flatten)]
+	#[clap(flatten)]
 	pub shared_params: sc_cli::SharedParams,
 
 	/// The execution strategy that should be used for benchmarks
-	#[structopt(
-		long = "execution",
-		value_name = "STRATEGY",
-		possible_values = &ExecutionStrategy::variants(),
-		case_insensitive = true,
-	)]
+	#[clap(long, value_name = "STRATEGY", arg_enum, ignore_case = true)]
 	pub execution: Option<ExecutionStrategy>,
 
 	/// Method for executing Wasm runtime code.
-	#[structopt(
+	#[clap(
 		long = "wasm-execution",
 		value_name = "METHOD",
-		possible_values = &WasmExecutionMethod::variants(),
-		case_insensitive = true,
+		possible_values = WasmExecutionMethod::variants(),
+		ignore_case = true,
 		default_value = "compiled"
 	)]
 	pub wasm_method: WasmExecutionMethod,
 
 	/// Limit the memory the database cache can use.
-	#[structopt(long = "db-cache", value_name = "MiB", default_value = "1024")]
+	#[clap(long = "db-cache", value_name = "MiB", default_value = "1024")]
 	pub database_cache_size: u32,
 
 	/// List the benchmarks that match your query rather than running them.
 	///
 	/// When nothing is provided, we list all benchmarks.
-	#[structopt(long)]
+	#[clap(long)]
 	pub list: bool,
 
 	/// If enabled, the storage info is not displayed in the output next to the analysis.
 	///
 	/// This is independent of the storage info appearing in the *output file*. Use a Handlebar
 	/// template for that purpose.
-	#[structopt(long)]
+	#[clap(long)]
 	pub no_storage_info: bool,
 }
