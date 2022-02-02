@@ -752,7 +752,7 @@ mod tests {
 	use sp_runtime::{
 		offchain::storage_lock::{BlockAndTime, StorageLock},
 		traits::ValidateUnsigned,
-		PerU16, ModuleError,
+		ModuleError, PerU16,
 	};
 
 	type Assignment = crate::unsigned::Assignment<Runtime>;
