@@ -398,6 +398,42 @@ benchmarks! {
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
+	seal_is_contract {
+		let r in 0 .. API_BENCHMARK_BATCHES;
+		let accounts = (0 .. r * API_BENCHMARK_BATCH_SIZE)
+			.map(|n| account::<T::AccountId>("account", n, 0))
+			.collect::<Vec<_>>();
+		let accounts_bytes = accounts.iter().map(|a| a.encode()).flatten().collect::<Vec<_>>();
+		let code = WasmModule::<T>::from(ModuleDefinition {
+			memory: Some(ImportedMemory::max::<T>()),
+			imported_functions: vec![ImportedFunction {
+				module: "__unstable__",
+				name: "seal_is_contract",
+				params: vec![ValueType::I32],
+				return_type: Some(ValueType::I32),
+			}],
+			data_segments: vec![
+				DataSegment {
+					offset: 0,
+					value:  accounts_bytes
+				},
+			],
+			call_body: Some(body::repeated_dyn(r * API_BENCHMARK_BATCH_SIZE, vec![
+				Counter(0, 4), // address_ptr
+				Regular(Instruction::Call(0)),
+					Regular(Instruction::Drop),
+			])),
+			.. Default::default()
+		});
+		let instance = Contract::<T>::new(code, vec![])?;
+		let info = instance.info()?;
+		// every 2nd account would be a contract
+		for acc in accounts.iter().step_by(2) {
+			<ContractInfoOf<T>>::insert(acc, info.clone());
+		}
+		let origin = RawOrigin::Signed(instance.caller.clone());
+	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
+
 	seal_address {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let instance = Contract::<T>::new(WasmModule::getter(
