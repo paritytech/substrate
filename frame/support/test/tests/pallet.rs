@@ -29,7 +29,7 @@ use sp_io::{
 	hashing::{blake2_128, twox_128, twox_64},
 	TestExternalities,
 };
-use sp_runtime::DispatchError;
+use sp_runtime::{DispatchError, ModuleError};
 
 pub struct SomeType1;
 impl From<SomeType1> for u64 {

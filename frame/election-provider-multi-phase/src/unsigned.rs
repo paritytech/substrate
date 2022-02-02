@@ -33,7 +33,7 @@ use sp_npos_elections::{
 };
 use sp_runtime::{
 	offchain::storage::{MutateStorageError, StorageValueRef},
-	DispatchError, SaturatedConversion,
+	DispatchError, ModuleError, SaturatedConversion,
 };
 use sp_std::{cmp::Ordering, prelude::*};
 

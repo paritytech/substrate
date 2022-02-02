@@ -25,7 +25,7 @@ use sp_io::{
 	hashing::{blake2_128, twox_128, twox_64},
 	TestExternalities,
 };
-use sp_runtime::DispatchError;
+use sp_runtime::{DispatchError, ModuleError};
 
 #[frame_support::pallet]
 pub mod pallet {

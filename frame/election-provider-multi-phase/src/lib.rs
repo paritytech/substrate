@@ -255,7 +255,7 @@ use sp_runtime::{
 		InvalidTransaction, TransactionPriority, TransactionSource, TransactionValidity,
 		TransactionValidityError, ValidTransaction,
 	},
-	DispatchError, PerThing, Perbill, RuntimeDebug, SaturatedConversion,
+	DispatchError, ModuleError, PerThing, Perbill, RuntimeDebug, SaturatedConversion,
 };
 use sp_std::prelude::*;
 

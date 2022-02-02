@@ -112,7 +112,7 @@ use scale_info::TypeInfo;
 use sp_npos_elections::{ElectionResult, ExtendedBalance};
 use sp_runtime::{
 	traits::{Saturating, StaticLookup, Zero},
-	DispatchError, Perbill, RuntimeDebug,
+	DispatchError, ModuleError, Perbill, RuntimeDebug,
 };
 use sp_std::{cmp::Ordering, prelude::*};
 

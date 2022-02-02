@@ -27,7 +27,7 @@ use sp_core::{sr25519, H256};
 use sp_runtime::{
 	generic,
 	traits::{BlakeTwo256, Verify},
-	DispatchError,
+	DispatchError, ModuleError,
 };
 use sp_std::cell::RefCell;
 
