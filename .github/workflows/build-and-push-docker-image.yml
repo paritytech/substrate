@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - dev-cere
+      - feature/CBI-1827-enable-native-transfer-chainbridge
 env:
   ECR_REPOSITORY: pos-network-node
 jobs:
