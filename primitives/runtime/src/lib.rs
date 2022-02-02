@@ -688,21 +688,14 @@ impl PartialEq for DispatchError {
 		use DispatchError::*;
 
 		match (self, other) {
-			(CannotLookup, CannotLookup) |
-			(BadOrigin, BadOrigin) |
-			(ConsumerRemaining, ConsumerRemaining) |
-			(NoProviders, NoProviders) => true,
-
-			(Token(l), Token(r)) => l == r,
-			(Other(l), Other(r)) => l == r,
-			(Arithmetic(l), Arithmetic(r)) => l == r,
-
+			// In the case of a module error, we ignore the optional message string.
 			(
 				Module { index: index_l, error: error_l, .. },
 				Module { index: index_r, error: error_r, .. },
 			) => (index_l == index_r) && (error_l == error_r),
 
-			_ => false,
+			// For everything else, we simply check equality.
+			_ => self == other,
 		}
 	}
 }
