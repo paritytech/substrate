@@ -1033,7 +1033,7 @@ mod tests {
 
 			assert_eq!(
 				MultiPhase::mine_check_save_submit().unwrap_err(),
-				MinerError::PreDispatchChecksFailed(DispatchError::Module( ModuleError {
+				MinerError::PreDispatchChecksFailed(DispatchError::Module(ModuleError {
 					index: 2,
 					error: 1,
 					message: Some("PreDispatchWrongWinnerCount"),

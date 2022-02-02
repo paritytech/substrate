@@ -526,8 +526,8 @@ impl DispatchError {
 	/// Return the same error but without the attached message.
 	pub fn stripped(self) -> Self {
 		match self {
-			DispatchError::Module( ModuleError { index, error, message: Some(_) } ) =>
-				DispatchError::Module( ModuleError { index, error, message: None } ),
+			DispatchError::Module(ModuleError { index, error, message: Some(_) }) =>
+				DispatchError::Module(ModuleError { index, error, message: None }),
 			m => m,
 		}
 	}
@@ -635,7 +635,8 @@ impl From<DispatchError> for &'static str {
 			DispatchError::Other(msg) => msg,
 			DispatchError::CannotLookup => "Cannot lookup",
 			DispatchError::BadOrigin => "Bad origin",
-			DispatchError::Module( ModuleError { message, .. } ) => message.unwrap_or("Unknown module error"),
+			DispatchError::Module(ModuleError { message, .. }) =>
+				message.unwrap_or("Unknown module error"),
 			DispatchError::ConsumerRemaining => "Consumer remaining",
 			DispatchError::NoProviders => "No providers",
 			DispatchError::TooManyConsumers => "Too many consumers",
@@ -661,7 +662,7 @@ impl traits::Printable for DispatchError {
 			Self::Other(err) => err.print(),
 			Self::CannotLookup => "Cannot lookup".print(),
 			Self::BadOrigin => "Bad origin".print(),
-			Self::Module (ModuleError { index, error, message } )=> {
+			Self::Module(ModuleError { index, error, message }) => {
 				index.print();
 				error.print();
 				if let Some(msg) = message {
@@ -919,11 +920,18 @@ mod tests {
 
 	#[test]
 	fn dispatch_error_encoding() {
-		let error = DispatchError::Module( ModuleError { index: 1, error: 2, message: Some("error message") } );
+		let error = DispatchError::Module(ModuleError {
+			index: 1,
+			error: 2,
+			message: Some("error message"),
+		});
 		let encoded = error.encode();
 		let decoded = DispatchError::decode(&mut &encoded[..]).unwrap();
 		assert_eq!(encoded, vec![3, 1, 2]);
-		assert_eq!(decoded, DispatchError::Module( ModuleError { index: 1, error: 2, message: None }) );
+		assert_eq!(
+			decoded,
+			DispatchError::Module(ModuleError { index: 1, error: 2, message: None })
+		);
 	}
 
 	#[test]
@@ -935,9 +943,9 @@ mod tests {
 			Other("bar"),
 			CannotLookup,
 			BadOrigin,
-			Module( ModuleError { index: 1, error: 1, message: None } ),
-			Module( ModuleError { index: 1, error: 2, message: None } ),
-			Module( ModuleError { index: 2, error: 1, message: None } ),
+			Module(ModuleError { index: 1, error: 1, message: None }),
+			Module(ModuleError { index: 1, error: 2, message: None }),
+			Module(ModuleError { index: 2, error: 1, message: None }),
 			ConsumerRemaining,
 			NoProviders,
 			Token(TokenError::NoFunds),
@@ -962,8 +970,8 @@ mod tests {
 
 		// Ignores `message` field in `Module` variant.
 		assert_eq!(
-			Module( ModuleError { index: 1, error: 1, message: Some("foo") } ),
-			Module( ModuleError { index: 1, error: 1, message: None } ),
+			Module(ModuleError { index: 1, error: 1, message: Some("foo") }),
+			Module(ModuleError { index: 1, error: 1, message: None }),
 		);
 	}
 
