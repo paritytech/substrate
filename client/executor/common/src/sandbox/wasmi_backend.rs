@@ -101,6 +101,7 @@ impl ImportResolver for Imports {
 	}
 }
 
+/// Allocate a memory region
 pub fn new_memory(initial: u32, maximum: Option<u32>) -> crate::error::Result<Memory> {
 	let memory = Memory::Wasmi(MemoryWrapper::new(MemoryInstance::alloc(
 		Pages(initial as usize),
@@ -281,6 +282,7 @@ where
 	f(&mut GuestExternals { sandbox_instance, state })
 }
 
+/// Instantiate a module within a sandbox context
 pub fn instantiate(
 	wasm: &[u8],
 	guest_env: GuestEnvironment,
@@ -313,20 +315,13 @@ pub fn instantiate(
 	Ok(sandbox_instance)
 }
 
+/// Invoke a function within a sandboxed module
 pub fn invoke(
 	instance: &SandboxInstance,
-
 	module: &wasmi::ModuleRef,
-
-	// function to call that is exported from the module
 	export_name: &str,
-
-	// arguments passed to the function
 	args: &[Value],
-
-	// arbitraty context data of the call
 	state: u32,
-
 	sandbox_context: &mut dyn SandboxContext,
 ) -> std::result::Result<Option<Value>, wasmi::Error> {
 	with_guest_externals(instance, state, |guest_externals| {

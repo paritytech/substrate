@@ -52,18 +52,12 @@ impl Backend {
 	}
 }
 
+/// Invoke a function
 pub fn invoke(
 	instance: &wasmer::Instance,
-
-	// function to call that is exported from the module
 	export_name: &str,
-
-	// arguments passed to the function
 	args: &[Value],
-
-	// arbitraty context data of the call
 	_state: u32,
-
 	sandbox_context: &mut dyn SandboxContext,
 ) -> std::result::Result<Option<Value>, wasmi::Error> {
 	let function = instance
@@ -109,6 +103,7 @@ pub fn invoke(
 		.transpose()
 }
 
+/// Instantiate a module
 pub fn instantiate(
 	context: &Backend,
 	wasm: &[u8],
@@ -201,7 +196,7 @@ pub fn instantiate(
 	}))
 }
 
-pub fn dispatch_function(
+fn dispatch_function(
 	supervisor_func_index: SupervisorFuncIndex,
 	store: &wasmer::Store,
 	func_ty: &wasmer::FunctionType,
