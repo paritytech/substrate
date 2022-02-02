@@ -696,6 +696,7 @@ impl PartialEq for DispatchError {
 			(BadOrigin, BadOrigin) |
 			(ConsumerRemaining, ConsumerRemaining) |
 			(NoProviders, NoProviders) |
+			(TooManyConsumers, TooManyConsumers) |
 			(StorageLayersLimit, StorageLayersLimit) => true,
 
 			(Token(l), Token(r)) => l == r,
@@ -706,8 +707,6 @@ impl PartialEq for DispatchError {
 				Module { index: index_l, error: error_l, .. },
 				Module { index: index_r, error: error_r, .. },
 			) => (index_l == index_r) && (error_l == error_r),
-
-			_ => false,
 		}
 	}
 }
