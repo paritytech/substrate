@@ -379,7 +379,7 @@ impl BenchmarkCmd {
 				.map_err(|e| format!("Serializing into JSON: {:?}", e))?;
 
 			if let Some(path) = &self.json_file {
-				fs::write(path, &json.into_bytes())?;
+				fs::write(path, json)?;
 			} else {
 				println!("{}", json);
 				return Ok(true)
