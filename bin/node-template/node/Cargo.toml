@@ -20,6 +20,10 @@ name = "node-template"
 clap = { version = "3.0", features = ["derive"] }
 log = "0.4.14"
 futures = "0.3.16"
+tokio = { version = "1.15", features = ["time"] }
+tokio-stream = "0.1"
+reqwest = "0.11"
+lite-json = "0.1"
 
 sc-cli = { version = "0.10.0-dev", path = "../../../client/cli", features = ["wasmtime"] }
 sp-core = { version = "4.1.0-dev", path = "../../../primitives/core" }

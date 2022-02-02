@@ -344,7 +344,7 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 	}
 
 	log::info!("creating tx submission task");
-	let task = run_tx_submission(client.clone(), transaction_pool.clone());
+	let task = run_oracle_tx_submission(client.clone(), transaction_pool.clone());
 	task_manager.spawn_handle().spawn_blocking(
 		"tx_submission",
 		None,
@@ -369,7 +369,13 @@ use frame_system_rpc_runtime_api::AccountNonceApi;
 use node_template_runtime::Hash as RuntimeHash;
 use node_template_runtime::opaque::UncheckedExtrinsic as OpaqueRuntimeExtrinsic;
 
-async fn run_tx_submission<B, C, P>(
+use futures::stream::StreamExt;
+use futures::FutureExt;
+use sp_api::BlockId;
+use sp_runtime::traits::One;
+use sp_keyring::Sr25519Keyring;
+
+async fn run_oracle_tx_submission<B, C, P>(
 	client: Arc<C>,
 	transaction_pool: Arc<P>,
 )
@@ -384,12 +390,81 @@ where
 	P: TransactionPool<Block = B>,
 	C::Api: AccountNonceApi<B, node_template_runtime::AccountId, node_template_runtime::Index>
 {
-	use futures::stream::StreamExt;
-	use futures::FutureExt;
-	use sp_api::BlockId;
-	use sp_runtime::traits::One;
-	use sp_keyring::Sr25519Keyring;
+	let start = tokio::time::Instant::now();
+	let interval = tokio::time::interval(Duration::from_secs(10));
+	tokio_stream::wrappers::IntervalStream::new(interval)
+		.for_each(|now| {
+			let client = client.clone();
+			let transaction_pool = transaction_pool.clone();
+			let elapsed = now.duration_since(start).as_secs_f32();
+			log::info!("[{:?}] Tick interval stream", elapsed);
+			let sender = Sr25519Keyring::Alice.pair();
+			async move {
+				let price = fetch_price().await;
+				let something = price;
+				let call = node_template_runtime::TemplateCall::do_something {
+					something
+				};
+				log::info!("[{:?}] creating extrinsic", elapsed);
+				let xt = create_extrinsic(
+					&*client,
+					sender,
+					call,
+					None,
+				);
+				let next_block = client.info().best_number;
+				log::info!("[{:?}] submitting extrinsic", elapsed);
+				let r = transaction_pool
+					.submit_one(&BlockId::number(next_block), TransactionSource::External, xt.into())
+					.await;
+				log::info!("[{:?}] submitted extrinsic. result: {:?}", elapsed, r);
+			}
+		}).await
+}
 
+// parse the price out of the response string
+fn parse_price(price_str: &str) -> Option<u32> {
+	use lite_json::JsonValue;
+	let val = lite_json::parse_json(price_str);
+	let price = match val.ok()? {
+		JsonValue::Object(obj) => {
+			let (_, v) = obj.into_iter().find(|(k, _)| k.iter().copied().eq("USD".chars()))?;
+			match v {
+				JsonValue::Number(number) => number,
+				_ => return None,
+			}
+		},
+		_ => return None,
+	};
+
+	let exp = price.fraction_length.checked_sub(2).unwrap_or(0);
+	Some(price.integer as u32 * 100 + (price.fraction / 10_u64.pow(exp)) as u32)
+}
+
+// use reqwest to get the BTC price in USD
+async fn fetch_price() -> u32 {
+	let res = reqwest::get("https://min-api.cryptocompare.com/data/price?fsym=BTC&tsyms=USD")
+		.await.expect("network request failed :-(");
+	assert!(res.status().is_success());
+	let body = res.text().await.expect("should return a string as response");
+	parse_price(&body).expect("the price should parse correctly!")
+}
+
+async fn run_transfer_tx_submission<B, C, P>(
+	client: Arc<C>,
+	transaction_pool: Arc<P>,
+)
+where
+	B: BlockT<Extrinsic = OpaqueRuntimeExtrinsic, Hash = RuntimeHash>,
+	C: ProvideRuntimeApi<B>
+		+ HeaderMetadata<B, Error = sp_blockchain::Error>
+		+ Chain<B>
+		+ HeaderBackend<B>
+		+ BlockBackend<B>
+		+ BlockchainEvents<B>,
+	P: TransactionPool<Block = B>,
+	C::Api: AccountNonceApi<B, node_template_runtime::AccountId, node_template_runtime::Index>
+{
 	let block_limit: <<B as BlockT>::Header as HeaderT>::Number = 10u16.into();
 
 	client.finality_notification_stream()
