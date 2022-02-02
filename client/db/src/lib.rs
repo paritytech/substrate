@@ -449,9 +449,7 @@ pub struct BlockchainDb<Block: BlockT> {
 }
 
 impl<Block: BlockT> BlockchainDb<Block> {
-	fn new(
-		db: Arc<dyn Database<DbHash>>,
-	) -> ClientResult<Self> {
+	fn new(db: Arc<dyn Database<DbHash>>) -> ClientResult<Self> {
 		let meta = read_meta::<Block>(&*db, columns::HEADER)?;
 		let leaves = LeafSet::read_from_db(&*db, columns::META, meta_keys::LEAF_PREFIX)?;
 		Ok(BlockchainDb {
@@ -571,32 +569,35 @@ impl<Block: BlockT> sc_client_api::blockchain::Backend<Block> for BlockchainDb<B
 									Some(t) => {
 										let mut input =
 											utils::join_input(header.as_ref(), t.as_ref());
-										let ex = Block::Extrinsic::decode(&mut input).map_err(|err|
-											sp_blockchain::Error::Backend(format!(
-												"Error decoding indexed extrinsic: {}",
-												err
-											)))?;
+										let ex = Block::Extrinsic::decode(&mut input).map_err(
+											|err| {
+												sp_blockchain::Error::Backend(format!(
+													"Error decoding indexed extrinsic: {}",
+													err
+												))
+											},
+										)?;
 										body.push(ex);
 									},
 									None =>
 										return Err(sp_blockchain::Error::Backend(format!(
-													"Missing indexed transaction {:?}",
-													hash
-									))),
+											"Missing indexed transaction {:?}",
+											hash
+										))),
 								};
 							},
 							DbExtrinsic::Full(ex) => {
 								body.push(ex);
-							}
+							},
 						}
 					}
 					return Ok(Some(body))
 				},
 				Err(err) =>
 					return Err(sp_blockchain::Error::Backend(format!(
-								"Error decoding body list: {}",
-								err
-					)))
+						"Error decoding body list: {}",
+						err
+					))),
 			}
 		}
 		Ok(None)
@@ -1006,18 +1007,12 @@ impl<Block: BlockT> Backend<Block> {
 	/// Create new memory-backed client backend for tests.
 	#[cfg(any(test, feature = "test-helpers"))]
 	pub fn new_test(keep_blocks: u32, canonicalization_delay: u64) -> Self {
-		Self::new_test_with_tx_storage(
-			keep_blocks,
-			canonicalization_delay,
-		)
+		Self::new_test_with_tx_storage(keep_blocks, canonicalization_delay)
 	}
 
 	/// Create new memory-backed client backend for tests.
 	#[cfg(any(test, feature = "test-helpers"))]
-	pub fn new_test_with_tx_storage(
-		keep_blocks: u32,
-		canonicalization_delay: u64,
-	) -> Self {
+	pub fn new_test_with_tx_storage(keep_blocks: u32, canonicalization_delay: u64) -> Self {
 		let db = kvdb_memorydb::create(crate::utils::NUM_COLUMNS);
 		let db = sp_database::as_database(db);
 		let db_setting = DatabaseSettings {
@@ -1296,8 +1291,8 @@ impl<Block: BlockT> Backend<Block> {
 
 			transaction.set_from_vec(columns::HEADER, &lookup_key, pending_block.header.encode());
 			if let Some(body) = pending_block.body {
-				// If we have any index operations we save block in the new format with indexed extrinsic headers
-				// Otherwise we save the body as a single blob.
+				// If we have any index operations we save block in the new format with indexed
+				// extrinsic headers Otherwise we save the body as a single blob.
 				if operation.index_ops.is_empty() {
 					transaction.set_from_vec(columns::BODY, &lookup_key, body.encode());
 				} else {
@@ -1675,7 +1670,9 @@ impl<Block: BlockT> Backend<Block> {
 			columns::BODY,
 			id,
 		)?;
-		if let Some(index) = read_db(&*self.storage.db, columns::KEY_LOOKUP, columns::BODY_INDEX, id)? {
+		if let Some(index) =
+			read_db(&*self.storage.db, columns::KEY_LOOKUP, columns::BODY_INDEX, id)?
+		{
 			utils::remove_from_db(
 				transaction,
 				&*self.storage.db,
@@ -1684,13 +1681,12 @@ impl<Block: BlockT> Backend<Block> {
 				id,
 			)?;
 			match Vec::<DbExtrinsic<Block>>::decode(&mut &index[..]) {
-				Ok(index) => {
+				Ok(index) =>
 					for ex in index {
 						if let DbExtrinsic::Indexed { hash, .. } = ex {
 							transaction.release(columns::TRANSACTION, hash);
 						}
-					}
-				}
+					},
 				Err(err) =>
 					return Err(sp_blockchain::Error::Backend(format!(
 						"Error decoding body list: {}",
@@ -1775,8 +1771,10 @@ fn apply_index_ops<Block: BlockT>(
 					} else {
 						return Err(sp_blockchain::Error::Backend(format!(
 							"Error indexing extrinsic {}, invalid size. {} > {}",
-							DbHash::from_slice(hash.as_ref()), size, extrinsic.len(),
-						)));
+							DbHash::from_slice(hash.as_ref()),
+							size,
+							extrinsic.len(),
+						)))
 					}
 				},
 				_ => DbExtrinsic::Full(extrinsic),
@@ -3061,8 +3059,7 @@ pub(crate) mod tests {
 
 	#[test]
 	fn prune_blocks_on_finalize_with_fork() {
-		let backend =
-			Backend::<Block>::new_test_with_tx_storage(2, 10);
+		let backend = Backend::<Block>::new_test_with_tx_storage(2, 10);
 		let mut blocks = Vec::new();
 		let mut prev_hash = Default::default();
 		for i in 0..5 {
@@ -3123,8 +3120,7 @@ pub(crate) mod tests {
 
 	#[test]
 	fn indexed_data_block_body() {
-		let backend =
-			Backend::<Block>::new_test_with_tx_storage(1, 10);
+		let backend = Backend::<Block>::new_test_with_tx_storage(1, 10);
 
 		let x0 = ExtrinsicWrapper::from(0u64).encode();
 		let x1 = ExtrinsicWrapper::from(1u64).encode();
@@ -3166,8 +3162,7 @@ pub(crate) mod tests {
 
 	#[test]
 	fn renew_transaction_storage() {
-		let backend =
-			Backend::<Block>::new_test_with_tx_storage(2, 10);
+		let backend = Backend::<Block>::new_test_with_tx_storage(2, 10);
 		let mut blocks = Vec::new();
 		let mut prev_hash = Default::default();
 		let x1 = ExtrinsicWrapper::from(0u64).encode();
@@ -3214,8 +3209,7 @@ pub(crate) mod tests {
 
 	#[test]
 	fn remove_leaf_block_works() {
-		let backend =
-			Backend::<Block>::new_test_with_tx_storage(2, 10);
+		let backend = Backend::<Block>::new_test_with_tx_storage(2, 10);
 		let mut blocks = Vec::new();
 		let mut prev_hash = Default::default();
 		for i in 0..2 {

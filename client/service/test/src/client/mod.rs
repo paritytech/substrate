@@ -23,9 +23,7 @@ use sc_block_builder::BlockBuilderProvider;
 use sc_client_api::{
 	in_mem, BlockBackend, BlockchainEvents, FinalityNotifications, StorageProvider,
 };
-use sc_client_db::{
-	Backend, DatabaseSettings, DatabaseSource, KeepBlocks, PruningMode,
-};
+use sc_client_db::{Backend, DatabaseSettings, DatabaseSource, KeepBlocks, PruningMode};
 use sc_consensus::{
 	BlockCheckParams, BlockImport, BlockImportParams, ForkChoiceStrategy, ImportResult,
 };

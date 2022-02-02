@@ -277,10 +277,8 @@ fn open_parity_db<Block: BlockT>(path: &Path, db_type: DatabaseType, create: boo
 		Err(parity_db::Error::InvalidConfiguration(_)) => {
 			// Try to update the database with the new config
 			Ok(crate::parity_db::open(path, db_type, create, true)?)
-		}
-		Err(e) => {
-			Err(e.into())
 		},
+		Err(e) => Err(e.into()),
 	}
 }
 

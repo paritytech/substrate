@@ -102,7 +102,7 @@ pub fn upgrade_db<Block: BlockT>(db_path: &Path, db_type: DatabaseType) -> Upgra
 		},
 		3 => {
 			migrate_3_to_4::<Block>(db_path, db_type)?;
-		}
+		},
 		CURRENT_VERSION => (),
 		_ => return Err(UpgradeError::FutureDatabaseVersion(db_version)),
 	}
@@ -190,9 +190,7 @@ fn version_file_path(path: &Path) -> PathBuf {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{
-		tests::Block, DatabaseSettings, DatabaseSource, KeepBlocks,
-	};
+	use crate::{tests::Block, DatabaseSettings, DatabaseSource, KeepBlocks};
 	use sc_state_db::PruningMode;
 
 	fn create_db(db_path: &Path, version: Option<u32>) {
