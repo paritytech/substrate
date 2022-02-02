@@ -851,7 +851,7 @@ benchmarks! {
 				},
 			],
 			call_body: Some(body::repeated_dyn(r * API_BENCHMARK_BATCH_SIZE, vec![
-				Counter(0 as u32, code_hash_len as u32), // code_hash_ptr
+				Counter(0, code_hash_len as u32), // code_hash_ptr
 				Regular(Instruction::Call(0)),
 				Regular(Instruction::Drop),
 			])),
