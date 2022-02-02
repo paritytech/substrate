@@ -707,6 +707,8 @@ impl PartialEq for DispatchError {
 				Module { index: index_l, error: error_l, .. },
 				Module { index: index_r, error: error_r, .. },
 			) => (index_l == index_r) && (error_l == error_r),
+
+			_ => false,
 		}
 	}
 }
