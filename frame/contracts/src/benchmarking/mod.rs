@@ -846,7 +846,7 @@ benchmarks! {
 			}],
 			data_segments: vec![
 				DataSegment {
-					offset: 0 as u32,
+					offset: 0,
 					value: code_hashes_bytes,
 				},
 			],
