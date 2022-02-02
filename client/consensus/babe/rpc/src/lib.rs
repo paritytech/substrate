@@ -166,11 +166,13 @@ pub struct EpochAuthorship {
 }
 
 /// Errors encountered by the RPC
-#[derive(Debug, derive_more::Display, derive_more::From)]
+#[derive(Debug, thiserror::Error)]
 pub enum Error {
 	/// Consensus error
-	Consensus(ConsensusError),
+	#[error(transparent)]
+	Consensus(#[from] ConsensusError),
 	/// Errors that can be formatted as a String
+	#[error("{0}")]
 	StringError(String),
 }
 

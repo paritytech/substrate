@@ -47,8 +47,8 @@ use std::{
 
 use graph::{ExtrinsicHash, IsValidator};
 use sc_transaction_pool_api::{
-	ChainEvent, ImportNotificationStream, MaintainedTransactionPool, PoolFuture, PoolStatus,
-	ReadyTransactions, TransactionFor, TransactionPool, TransactionSource,
+	error::Error as TxPoolError, ChainEvent, ImportNotificationStream, MaintainedTransactionPool,
+	PoolFuture, PoolStatus, ReadyTransactions, TransactionFor, TransactionPool, TransactionSource,
 	TransactionStatusStreamFor, TxHash,
 };
 use sp_core::traits::SpawnEssentialNamed;
@@ -418,8 +418,8 @@ where
 			.validate_transaction_blocking(at, TransactionSource::Local, xt.clone())?
 			.map_err(|e| {
 				Self::Error::Pool(match e {
-					TransactionValidityError::Invalid(i) => i.into(),
-					TransactionValidityError::Unknown(u) => u.into(),
+					TransactionValidityError::Invalid(i) => TxPoolError::InvalidTransaction(i),
+					TransactionValidityError::Unknown(u) => TxPoolError::UnknownTransaction(u),
 				})
 			})?;
 
@@ -709,15 +709,17 @@ where
 				}
 				.boxed()
 			},
-			ChainEvent::Finalized { hash } => {
+			ChainEvent::Finalized { hash, tree_route } => {
 				let pool = self.pool.clone();
 				async move {
-					if let Err(e) = pool.validated_pool().on_block_finalized(hash).await {
-						log::warn!(
-							target: "txpool",
-							"Error [{}] occurred while attempting to notify watchers of finalization {}",
-							e, hash
-						)
+					for hash in tree_route.iter().chain(&[hash]) {
+						if let Err(e) = pool.validated_pool().on_block_finalized(*hash).await {
+							log::warn!(
+								target: "txpool",
+								"Error [{}] occurred while attempting to notify watchers of finalization {}",
+								e, hash
+							)
+						}
 					}
 				}
 				.boxed()

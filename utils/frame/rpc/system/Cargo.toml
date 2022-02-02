@@ -20,10 +20,10 @@ jsonrpc-core = "18.0.0"
 jsonrpc-core-client = "18.0.0"
 jsonrpc-derive = "18.0.0"
 log = "0.4.8"
-sp-runtime = { version = "4.1.0-dev", path = "../../../../primitives/runtime" }
+sp-runtime = { version = "5.0.0", path = "../../../../primitives/runtime" }
 sp-api = { version = "4.0.0-dev", path = "../../../../primitives/api" }
 frame-system-rpc-runtime-api = { version = "4.0.0-dev", path = "../../../../frame/system/rpc/runtime-api" }
-sp-core = { version = "4.1.0-dev", path = "../../../../primitives/core" }
+sp-core = { version = "5.0.0", path = "../../../../primitives/core" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../../../primitives/blockchain" }
 sc-transaction-pool-api = { version = "4.0.0-dev", path = "../../../../client/transaction-pool/api" }
 sp-block-builder = { version = "4.0.0-dev", path = "../../../../primitives/block-builder" }
