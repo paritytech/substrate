@@ -704,7 +704,7 @@ pub use frame_support_procedural::DefaultNoBound;
 ///
 /// ```
 /// # use frame_support::{
-/// # 	require_storage_layer, transactional, dispatch::DispatchResult
+/// # 	require_storage_layer, add_storage_layer, dispatch::DispatchResult
 /// # };
 ///
 /// #[require_storage_layer]

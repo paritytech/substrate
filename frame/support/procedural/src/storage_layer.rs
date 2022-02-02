@@ -93,7 +93,7 @@ pub fn require_storage_layer(_attr: TokenStream, input: TokenStream) -> Result<T
 		#(#attrs)*
 		#vis #sig {
 			if !#crate_::storage::has_storage_layer(){
-				return Err(DispatchError::StorageLayersLimit.into())
+				return Err(#crate_::pallet_prelude::DispatchError::StorageLayersLimit.into())
 			}
 			#block
 		}

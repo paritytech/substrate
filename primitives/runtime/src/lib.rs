@@ -695,7 +695,8 @@ impl PartialEq for DispatchError {
 			(CannotLookup, CannotLookup) |
 			(BadOrigin, BadOrigin) |
 			(ConsumerRemaining, ConsumerRemaining) |
-			(NoProviders, NoProviders) => true,
+			(NoProviders, NoProviders) |
+			(StorageLayersLimit, StorageLayersLimit) => true,
 
 			(Token(l), Token(r)) => l == r,
 			(Other(l), Other(r)) => l == r,

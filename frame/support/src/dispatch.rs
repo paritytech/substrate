@@ -180,7 +180,7 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug + 
 /// ```
 /// # #[macro_use]
 /// # extern crate frame_support;
-/// # use frame_support::transactional;
+/// # use frame_support::add_storage_layer;
 /// # use frame_system::Config;
 /// decl_module! {
 /// 	pub struct Module<T: Config> for enum Call where origin: T::Origin {

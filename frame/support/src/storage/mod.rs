@@ -1618,7 +1618,7 @@ mod test {
 					assert_eq!(storage_layer_tracker::get_storage_layer(), 1);
 					Ok(())
 				}),
-				DispatchError::StorageLayersLimit,
+				sp_runtime::DispatchError::StorageLayersLimit,
 			);
 
 			assert_eq!(storage_layer_tracker::get_storage_layer(), 0);
