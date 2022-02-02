@@ -292,6 +292,9 @@ pub mod pallet {
 		/// Convert a weight value into a deductible fee based on the currency type.
 		type WeightToFee: WeightToFeePolynomial<Balance = BalanceOf<Self>>;
 
+		/// Convert a length value into a deductible fee based on the currency type.
+		type LengthToFee: WeightToFeePolynomial<Balance = BalanceOf<Self>>;
+
 		/// Update the multiplier of the next block, based on the previous block's weight.
 		type FeeMultiplierUpdate: MultiplierUpdate;
 	}
@@ -303,6 +306,12 @@ pub mod pallet {
 		/// The polynomial that is applied in order to derive fee from weight.
 		fn WeightToFee() -> Vec<WeightToFeeCoefficient<BalanceOf<T>>> {
 			T::WeightToFee::polynomial().to_vec()
+		}
+
+		#[allow(non_snake_case)]
+		/// The polynomial that is a pplied in order to derive fee from length.
+		fn LengthToFee() -> Vec<WeightToFeeCoefficient<BalanceOf<T>>> {
+			T::LengthToFee::polynomial().to_vec()
 		}
 	}
 
@@ -512,11 +521,7 @@ where
 		class: DispatchClass,
 	) -> FeeDetails<BalanceOf<T>> {
 		if pays_fee == Pays::Yes {
-			let len = <BalanceOf<T>>::from(len);
 			let per_byte = T::TransactionByteFee::get();
-
-			// length fee. this is not adjusted.
-			let fixed_len_fee = per_byte.saturating_mul(len);
 
 			// the adjustable part of the fee.
 			let unadjusted_weight_fee = Self::weight_to_fee(weight);
@@ -524,11 +529,14 @@ where
 			// final adjusted weight fee.
 			let adjusted_weight_fee = multiplier.saturating_mul_int(unadjusted_weight_fee);
 
+			// length fee. this is adjusted via LengthToFee
+			let len_fee = Self::length_to_fee(len).saturating_mul(per_byte);
+
 			let base_fee = Self::weight_to_fee(T::BlockWeights::get().get(class).base_extrinsic);
 			FeeDetails {
 				inclusion_fee: Some(InclusionFee {
 					base_fee,
-					len_fee: fixed_len_fee,
+					len_fee,
 					adjusted_weight_fee,
 				}),
 				tip,
@@ -536,6 +544,10 @@ where
 		} else {
 			FeeDetails { inclusion_fee: None, tip }
 		}
+	}
+
+	fn length_to_fee(length: u32) -> BalanceOf<T> {
+		T::LengthToFee::calc(&(length as u64)) // TODO: saturating / upper bound
 	}
 
 	fn weight_to_fee(weight: Weight) -> BalanceOf<T> {
