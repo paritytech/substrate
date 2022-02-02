@@ -61,11 +61,11 @@ pub struct BenchmarkCmd {
 	pub external_repeat: u32,
 
 	/// Print the raw results in JSON format.
-	#[structopt(long = "json")]
+	#[clap(long = "json")]
 	pub json_output: bool,
 
-	/// Print the raw results in JSON format. Implies `--json`.
-	#[structopt(long = "json-file", parse(from_os_str))]
+	/// Write the raw results in JSON format into the give file.
+	#[clap(long, conflicts_with = "json-output")]
 	pub json_file: Option<PathBuf>,
 
 	/// Don't print the median-slopes linear regression analysis.
@@ -78,15 +78,15 @@ pub struct BenchmarkCmd {
 
 	/// Output the benchmarks to a Rust file at the given path.
 	#[clap(long)]
-	pub output: Option<std::path::PathBuf>,
+	pub output: Option<PathBuf>,
 
 	/// Add a header file to your outputted benchmarks
 	#[clap(long)]
-	pub header: Option<std::path::PathBuf>,
+	pub header: Option<PathBuf>,
 
 	/// Path to Handlebars template file used for outputting benchmark results. (Optional)
 	#[clap(long)]
-	pub template: Option<std::path::PathBuf>,
+	pub template: Option<PathBuf>,
 
 	/// Which analysis function to use when outputting benchmarks:
 	/// * min-squares (default)

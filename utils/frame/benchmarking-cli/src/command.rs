@@ -35,7 +35,7 @@ use sp_externalities::Extensions;
 use sp_keystore::{testing::KeyStore, KeystoreExt, SyncCryptoStorePtr};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use sp_state_machine::StateMachine;
-use std::{fmt::Debug, fs::File, io::prelude::*, sync::Arc, time};
+use std::{fmt::Debug, fs, sync::Arc, time};
 
 // This takes multiple benchmark batches and combines all the results where the pallet, instance,
 // and benchmark are the same.
@@ -379,8 +379,7 @@ impl BenchmarkCmd {
 				.map_err(|e| format!("Serializing into JSON: {:?}", e))?;
 
 			if let Some(path) = &self.json_file {
-				let mut fd = File::create(path)?;
-				fd.write_all(&json.into_bytes())?;
+				fs::write(path, &json.into_bytes())?;
 			} else {
 				println!("{}", json);
 				return Ok(true)

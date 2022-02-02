@@ -29,8 +29,8 @@ use sp_runtime::traits::TrailingZeroInput;
 use sp_std::{prelude::Box, vec::Vec};
 use sp_storage::TrackedStorageKey;
 
-#[cfg_attr(feature = "std", derive(Serialize))]
 /// An alphabet of possible parameters to use for benchmarking.
+#[cfg_attr(feature = "std", derive(Serialize))]
 #[derive(Encode, Decode, Clone, Copy, PartialEq, Debug)]
 #[allow(missing_docs)]
 #[allow(non_camel_case_types)]
@@ -70,8 +70,8 @@ impl std::fmt::Display for BenchmarkParameter {
 	}
 }
 
-#[cfg_attr(feature = "std", derive(Serialize))]
 /// The results of a single of benchmark.
+#[cfg_attr(feature = "std", derive(Serialize))]
 #[derive(Encode, Decode, Clone, PartialEq, Debug)]
 pub struct BenchmarkBatch {
 	/// The pallet containing this benchmark.
@@ -87,9 +87,9 @@ pub struct BenchmarkBatch {
 	pub results: Vec<BenchmarkResult>,
 }
 
-#[cfg_attr(feature = "std", derive(Serialize))]
 // TODO: could probably make API cleaner here.
 /// The results of a single of benchmark, where time and db results are separated.
+#[cfg_attr(feature = "std", derive(Serialize))]
 #[derive(Encode, Decode, Clone, PartialEq, Debug)]
 pub struct BenchmarkBatchSplitResults {
 	/// The pallet containing this benchmark.
@@ -107,10 +107,10 @@ pub struct BenchmarkBatchSplitResults {
 	pub db_results: Vec<BenchmarkResult>,
 }
 
-#[cfg_attr(feature = "std", derive(Serialize))]
 /// Result from running benchmarks on a FRAME pallet.
 /// Contains duration of the function call in nanoseconds along with the benchmark parameters
 /// used for that benchmark result.
+#[cfg_attr(feature = "std", derive(Serialize))]
 #[derive(Encode, Decode, Default, Clone, PartialEq, Debug)]
 pub struct BenchmarkResult {
 	pub components: Vec<(BenchmarkParameter, u32)>,
@@ -138,7 +138,8 @@ mod serde_as_str {
 	where
 		S: serde::Serializer,
 	{
-		serializer.collect_str(std::str::from_utf8(value).unwrap())
+		let s = std::str::from_utf8(value).map_err(serde::ser::Error::custom)?;
+		serializer.collect_str(s)
 	}
 }
 
