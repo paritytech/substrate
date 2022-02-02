@@ -112,7 +112,7 @@ use scale_info::TypeInfo;
 use sp_npos_elections::{ElectionResult, ExtendedBalance};
 use sp_runtime::{
 	traits::{Saturating, StaticLookup, Zero},
-	DispatchError, ModuleError, Perbill, RuntimeDebug,
+	DispatchError, Perbill, RuntimeDebug,
 };
 use sp_std::{cmp::Ordering, prelude::*};
 
@@ -1132,7 +1132,7 @@ mod tests {
 	use sp_runtime::{
 		testing::Header,
 		traits::{BlakeTwo256, IdentityLookup},
-		BuildStorage,
+		BuildStorage, ModuleError,
 	};
 	use substrate_test_utils::assert_eq_uvec;
 

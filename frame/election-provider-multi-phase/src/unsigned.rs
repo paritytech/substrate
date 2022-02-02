@@ -33,7 +33,7 @@ use sp_npos_elections::{
 };
 use sp_runtime::{
 	offchain::storage::{MutateStorageError, StorageValueRef},
-	DispatchError, ModuleError, SaturatedConversion,
+	DispatchError, SaturatedConversion,
 };
 use sp_std::{cmp::Ordering, prelude::*};
 
@@ -752,7 +752,7 @@ mod tests {
 	use sp_runtime::{
 		offchain::storage_lock::{BlockAndTime, StorageLock},
 		traits::ValidateUnsigned,
-		PerU16,
+		PerU16, ModuleError,
 	};
 
 	type Assignment = crate::unsigned::Assignment<Runtime>;
@@ -922,7 +922,7 @@ mod tests {
 	#[test]
 	#[should_panic(expected = "Invalid unsigned submission must produce invalid block and \
 	                           deprive validator from their authoring reward.: \
-	                           Module ModuleError ({ index: 2, error: 1, message: \
+	                           Module(ModuleError { index: 2, error: 1, message: \
 	                           Some(\"PreDispatchWrongWinnerCount\") })")]
 	fn unfeasible_solution_panics() {
 		ExtBuilder::default().build_and_execute(|| {
