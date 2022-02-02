@@ -32,9 +32,9 @@ sc-client-api = { version = "4.0.0-dev", path = "../api" }
 sc-network = { version = "0.10.0-dev", path = "../network" }
 sp-authority-discovery = { version = "4.0.0-dev", path = "../../primitives/authority-discovery" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
-sp-core = { version = "4.1.0-dev", path = "../../primitives/core" }
-sp-keystore = { version = "0.10.0", path = "../../primitives/keystore" }
-sp-runtime = { version = "4.1.0-dev", path = "../../primitives/runtime" }
+sp-core = { version = "5.0.0", path = "../../primitives/core" }
+sp-keystore = { version = "0.11.0", path = "../../primitives/keystore" }
+sp-runtime = { version = "5.0.0", path = "../../primitives/runtime" }
 sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
 
 [dev-dependencies]

@@ -120,9 +120,11 @@ pub use builder::{WasmBuilder, WasmBuilderSelectProject};
 const SKIP_BUILD_ENV: &str = "SKIP_WASM_BUILD";
 
 /// Environment variable to force a certain build type when building the wasm binary.
-/// Expects "debug" or "release" as value.
+/// Expects "debug", "release" or "production" as value.
 ///
-/// By default the WASM binary uses the same build type as the main cargo build.
+/// When unset the WASM binary uses the same build type as the main cargo build with
+/// the exception of a debug build: In this case the wasm build defaults to `release` in
+/// order to avoid a slowdown when not explicitly requested.
 const WASM_BUILD_TYPE_ENV: &str = "WASM_BUILD_TYPE";
 
 /// Environment variable to extend the `RUSTFLAGS` variable given to the wasm build.
