@@ -81,7 +81,7 @@ decl_module! {
         }
 
         /// Transfers some amount of the native token to some recipient on a (whitelisted) destination chain.
-        /*  #[weight = 195_000_000]
+        #[weight = 195_000_000]
         pub fn transfer_native(origin, amount: BalanceOf<T>, recipient: Vec<u8>, dest_id: bridge::ChainId) -> DispatchResult {
             let source = ensure_signed(origin)?;
             ensure!(<bridge::Module<T>>::chain_whitelisted(dest_id), Error::<T>::InvalidTransfer);
@@ -94,7 +94,7 @@ decl_module! {
 			// <bridge::Module<T>>::transfer_fungible(dest_id, resource_id, recipient, U256::from(amount.saturated_into()))
             <bridge::Module<T>>::transfer_fungible(dest_id, resource_id, recipient, U256::from(number_amount))
 			// <bridge::Module<T>>::transfer_fungible(dest_id, resource_id, recipient, U256::from(UniqueSaturatedInto::<u128>::unique_saturated_into(amount)))
-        } */
+        }
         
 
         /// Transfer a non-fungible token (erc721) to a (whitelisted) destination chain.
