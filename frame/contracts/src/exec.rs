@@ -161,7 +161,7 @@ pub trait Ext: sealing::Sealed {
 	/// Check if a contract lives at the specified `address`.
 	fn is_contract(&self, address: AccountIdOf<Self::T>) -> bool;
 
-	/// Check if the caller of the current contract is the origin of the whole call stack
+	/// Check if the caller of the current contract is the origin of the whole call stack.
 	///
 	/// This can be checked with `is_contract(self.caller())` as well.
 	/// However, this very function does not require any storage lookup and therefore uses much
