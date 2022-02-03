@@ -28,7 +28,7 @@ pub use sc_client_api::{
 };
 pub use sc_client_db::{self, Backend};
 pub use sc_executor::{self, NativeElseWasmExecutor, WasmExecutionMethod};
-pub use sc_service::client;
+pub use sc_service::{client, RpcHandlers};
 pub use sp_consensus;
 pub use sp_keyring::{
 	ed25519::Keyring as Ed25519Keyring, sr25519::Keyring as Sr25519Keyring, AccountKeyring,
@@ -40,8 +40,9 @@ pub use sp_state_machine::ExecutionStrategy;
 use futures::{future::Future, stream::StreamExt};
 use sc_client_api::BlockchainEvents;
 use sc_service::client::{ClientConfig, LocalCallExecutor};
+use serde::Deserialize;
 use sp_core::storage::ChildInfo;
-use sp_runtime::traits::Block as BlockT;
+use sp_runtime::{codec::Encode, traits::Block as BlockT, OpaqueExtrinsic};
 use std::{
 	collections::{HashMap, HashSet},
 	pin::Pin,
@@ -294,6 +295,85 @@ impl<Block: BlockT, D, Backend, G: GenesisInit>
 	}
 }
 
+/// The output of an RPC transaction.
+pub struct RpcTransactionOutput {
+	/// The output string of the transaction if any.
+	pub result: String,
+	/// An async receiver if data will be returned via a callback.
+	pub receiver: futures::channel::mpsc::UnboundedReceiver<String>,
+}
+
+impl std::fmt::Debug for RpcTransactionOutput {
+	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+		write!(f, "RpcTransactionOutput {{ result: {:?}, receiver }}", self.result)
+	}
+}
+
+/// An error for when the RPC call fails.
+#[derive(Deserialize, Debug)]
+pub struct RpcTransactionError {
+	/// A Number that indicates the error type that occurred.
+	pub code: i64,
+	/// A String providing a short description of the error.
+	pub message: String,
+	/// A Primitive or Structured value that contains additional information about the error.
+	pub data: Option<serde_json::Value>,
+}
+
+impl std::fmt::Display for RpcTransactionError {
+	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+		std::fmt::Debug::fmt(self, f)
+	}
+}
+
+/// An extension trait for `RpcHandlers`.
+#[async_trait::async_trait]
+pub trait RpcHandlersExt {
+	/// Send a transaction through the RpcHandlers.
+	async fn send_transaction(
+		&self,
+		extrinsic: OpaqueExtrinsic,
+	) -> Result<RpcTransactionOutput, RpcTransactionError>;
+}
+
+#[async_trait::async_trait]
+impl RpcHandlersExt for RpcHandlers {
+	async fn send_transaction(
+		&self,
+		extrinsic: OpaqueExtrinsic,
+	) -> Result<RpcTransactionOutput, RpcTransactionError> {
+		let (result, rx) = self
+			.rpc_query(&format!(
+				r#"{{
+						"jsonrpc": "2.0",
+						"method": "author_submitExtrinsic",
+						"params": ["0x{}"],
+						"id": 0
+					}}"#,
+				hex::encode(extrinsic.encode())
+			))
+			.await
+			.expect("valid JSON-RPC request object; qed");
+		parse_rpc_result(result, rx)
+	}
+}
+
+pub(crate) fn parse_rpc_result(
+	result: String,
+	receiver: futures::channel::mpsc::UnboundedReceiver<String>,
+) -> Result<RpcTransactionOutput, RpcTransactionError> {
+	let json: serde_json::Value =
+		serde_json::from_str(&result).expect("the result can only be a JSONRPC string; qed");
+	let error = json.as_object().expect("JSON result is always an object; qed").get("error");
+
+	if let Some(error) = error {
+		return Err(serde_json::from_value(error.clone())
+			.expect("the JSONRPC result's error is always valid; qed"))
+	}
+
+	Ok(RpcTransactionOutput { result, receiver })
+}
+
 /// An extension trait for `BlockchainEvents`.
 pub trait BlockchainEventsExt<C, B>
 where
@@ -327,5 +407,60 @@ where
 				}
 			}
 		})
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	#[test]
+	fn parses_error_properly() {
+		let (_, rx) = futures::channel::mpsc::unbounded();
+		assert!(super::parse_rpc_result(
+			r#"{
+				"jsonrpc": "2.0",
+				"result": 19,
+				"id": 1
+			}"#
+			.to_string(),
+			rx
+		)
+		.is_ok());
+
+		let (_, rx) = futures::channel::mpsc::unbounded();
+		let error = super::parse_rpc_result(
+			r#"{
+				"jsonrpc": "2.0",
+				"error": {
+					"code": -32601,
+					"message": "Method not found"
+				},
+				"id": 1
+			}"#
+			.to_string(),
+			rx,
+		)
+		.unwrap_err();
+		assert_eq!(error.code, -32601);
+		assert_eq!(error.message, "Method not found");
+		assert!(error.data.is_none());
+
+		let (_, rx) = futures::channel::mpsc::unbounded();
+		let error = super::parse_rpc_result(
+			r#"{
+				"jsonrpc": "2.0",
+				"error": {
+					"code": -32601,
+					"message": "Method not found",
+					"data": 42
+				},
+				"id": 1
+			}"#
+			.to_string(),
+			rx,
+		)
+		.unwrap_err();
+		assert_eq!(error.code, -32601);
+		assert_eq!(error.message, "Method not found");
+		assert!(error.data.is_some());
 	}
 }

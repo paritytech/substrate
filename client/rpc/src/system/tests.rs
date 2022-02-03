@@ -239,9 +239,7 @@ async fn system_local_listen_addresses_works() {
 		vec![
 			"/ip4/198.51.100.19/tcp/30333/p2p/QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV",
 			"/ip4/127.0.0.1/tcp/30334/ws/p2p/QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV"
-		] /* r#"{"jsonrpc":"2.0","result":["/ip4/198.51.100.19/tcp/30333/p2p/
-		   * QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV","/ip4/127.0.0.1/tcp/30334/ws/p2p/
-		   * QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV"],"id":0}"# 	.to_owned() */
+		]
 	);
 }
 

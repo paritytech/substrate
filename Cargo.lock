@@ -495,7 +495,6 @@ version = "4.0.0-dev"
 dependencies = [
  "beefy-gadget",
  "beefy-primitives",
- "derive_more",
  "futures",
  "jsonrpsee",
  "log",
@@ -959,13 +958,9 @@ version = "2.34.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a0610544180c38b88101fecf2dd634b174a62eef6946f84dfc6a7127512b381c"
 dependencies = [
- "ansi_term",
- "atty",
  "bitflags",
- "strsim 0.8.0",
  "textwrap 0.11.0",
  "unicode-width",
- "vec_map",
 ]
 
 [[package]]
@@ -980,7 +975,7 @@ dependencies = [
  "indexmap",
  "lazy_static",
  "os_str_bytes",
- "strsim 0.10.0",
+ "strsim",
  "termcolor",
  "textwrap 0.14.2",
 ]
@@ -1466,7 +1461,7 @@ dependencies = [
  "ident_case",
  "proc-macro2",
  "quote",
- "strsim 0.10.0",
+ "strsim",
  "syn",
 ]
 
@@ -1972,6 +1967,7 @@ dependencies = [
  "parity-scale-codec",
  "paste 1.0.6",
  "scale-info",
+ "serde",
  "sp-api",
  "sp-application-crypto",
  "sp-io",
@@ -2000,6 +1996,7 @@ dependencies = [
  "sc-executor",
  "sc-service",
  "serde",
+ "serde_json",
  "sp-core",
  "sp-externalities",
  "sp-keystore",
@@ -4265,12 +4262,9 @@ dependencies = [
  "node-runtime",
  "pallet-asset-tx-payment",
  "pallet-balances",
- "pallet-contracts-rpc",
  "pallet-im-online",
- "pallet-mmr-rpc",
  "pallet-timestamp",
  "pallet-transaction-payment",
- "pallet-transaction-payment-rpc",
  "parity-scale-codec",
  "platforms",
  "rand 0.8.4",
@@ -4285,13 +4279,11 @@ dependencies = [
  "sc-client-db",
  "sc-consensus",
  "sc-consensus-babe",
- "sc-consensus-babe-rpc",
  "sc-consensus-epochs",
  "sc-consensus-slots",
  "sc-consensus-uncles",
  "sc-executor",
  "sc-finality-grandpa",
- "sc-finality-grandpa-rpc",
  "sc-keystore",
  "sc-network",
  "sc-rpc",
@@ -4321,10 +4313,8 @@ dependencies = [
  "sp-transaction-pool",
  "sp-transaction-storage-proof",
  "sp-trie",
- "structopt",
  "substrate-build-script-utils",
  "substrate-frame-cli",
- "substrate-frame-rpc-system",
  "tempfile",
  "tokio",
  "try-runtime-cli",
@@ -4369,7 +4359,6 @@ name = "node-inspect"
 version = "0.9.0-dev"
 dependencies = [
  "clap 3.0.12",
- "derive_more",
  "parity-scale-codec",
  "sc-cli",
  "sc-client-api",
@@ -4378,6 +4367,7 @@ dependencies = [
  "sp-blockchain",
  "sp-core",
  "sp-runtime",
+ "thiserror",
 ]
 
 [[package]]
@@ -4518,7 +4508,7 @@ dependencies = [
 
 [[package]]
 name = "node-template"
-version = "3.0.0"
+version = "4.0.0-dev"
 dependencies = [
  "clap 3.0.12",
  "frame-benchmarking",
@@ -4555,7 +4545,7 @@ dependencies = [
 
 [[package]]
 name = "node-template-runtime"
-version = "3.0.0"
+version = "4.0.0-dev"
 dependencies = [
  "frame-benchmarking",
  "frame-executive",
@@ -5017,7 +5007,6 @@ dependencies = [
  "sp-std",
  "sp-storage",
  "sp-tracing",
- "tokio",
 ]
 
 [[package]]
@@ -5172,7 +5161,7 @@ dependencies = [
 
 [[package]]
 name = "pallet-contracts-primitives"
-version = "4.0.0-dev"
+version = "5.0.0"
 dependencies = [
  "bitflags",
  "parity-scale-codec",
@@ -5264,7 +5253,6 @@ dependencies = [
  "sp-tracing",
  "static_assertions",
  "strum",
- "strum_macros 0.23.1",
 ]
 
 [[package]]
@@ -5830,7 +5818,7 @@ dependencies = [
 
 [[package]]
 name = "pallet-template"
-version = "3.0.0"
+version = "4.0.0-dev"
 dependencies = [
  "frame-benchmarking",
  "frame-support",
@@ -7108,7 +7096,6 @@ name = "sc-authority-discovery"
 version = "0.10.0-dev"
 dependencies = [
  "async-trait",
- "derive_more",
  "futures",
  "futures-timer",
  "ip_network",
@@ -7130,6 +7117,7 @@ dependencies = [
  "sp-tracing",
  "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
+ "thiserror",
 ]
 
 [[package]]
@@ -7324,7 +7312,6 @@ name = "sc-consensus-aura"
 version = "0.10.0-dev"
 dependencies = [
  "async-trait",
- "derive_more",
  "futures",
  "getrandom 0.2.3",
  "log",
@@ -7355,6 +7342,7 @@ dependencies = [
  "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
  "tempfile",
+ "thiserror",
 ]
 
 [[package]]
@@ -7362,7 +7350,6 @@ name = "sc-consensus-babe"
 version = "0.10.0-dev"
 dependencies = [
  "async-trait",
- "derive_more",
  "fork-tree",
  "futures",
  "log",
@@ -7405,13 +7392,13 @@ dependencies = [
  "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
  "tempfile",
+ "thiserror",
 ]
 
 [[package]]
 name = "sc-consensus-babe-rpc"
 version = "0.10.0-dev"
 dependencies = [
- "derive_more",
  "futures",
  "jsonrpsee",
  "sc-consensus",
@@ -7432,6 +7419,7 @@ dependencies = [
  "sp-runtime",
  "substrate-test-runtime-client",
  "tempfile",
+ "thiserror",
  "tokio",
 ]
 
@@ -7453,7 +7441,6 @@ version = "0.10.0-dev"
 dependencies = [
  "assert_matches",
  "async-trait",
- "derive_more",
  "futures",
  "jsonrpsee",
  "log",
@@ -7481,6 +7468,7 @@ dependencies = [
  "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
  "substrate-test-runtime-transaction-pool",
+ "thiserror",
  "tokio",
 ]
 
@@ -7489,7 +7477,6 @@ name = "sc-consensus-pow"
 version = "0.10.0-dev"
 dependencies = [
  "async-trait",
- "derive_more",
  "futures",
  "futures-timer",
  "log",
@@ -7506,6 +7493,7 @@ dependencies = [
  "sp-inherents",
  "sp-runtime",
  "substrate-prometheus-endpoint",
+ "thiserror",
 ]
 
 [[package]]
@@ -7586,7 +7574,6 @@ dependencies = [
 name = "sc-executor-common"
 version = "0.10.0-dev"
 dependencies = [
- "derive_more",
  "environmental",
  "parity-scale-codec",
  "sc-allocator",
@@ -7642,7 +7629,6 @@ version = "0.10.0-dev"
 dependencies = [
  "assert_matches",
  "async-trait",
- "derive_more",
  "dyn-clone",
  "finality-grandpa",
  "fork-tree",
@@ -7677,6 +7663,7 @@ dependencies = [
  "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
  "tempfile",
+ "thiserror",
  "tokio",
 ]
 
@@ -7684,7 +7671,6 @@ dependencies = [
 name = "sc-finality-grandpa-rpc"
 version = "0.10.0-dev"
 dependencies = [
- "derive_more",
  "finality-grandpa",
  "futures",
  "jsonrpsee",
@@ -7702,6 +7688,7 @@ dependencies = [
  "sp-keyring",
  "sp-runtime",
  "substrate-test-runtime-client",
+ "thiserror",
  "tokio",
 ]
 
@@ -7726,7 +7713,6 @@ name = "sc-keystore"
 version = "4.0.0-dev"
 dependencies = [
  "async-trait",
- "derive_more",
  "hex",
  "parking_lot",
  "serde_json",
@@ -7734,6 +7720,7 @@ dependencies = [
  "sp-core",
  "sp-keystore",
  "tempfile",
+ "thiserror",
 ]
 
 [[package]]
@@ -7747,7 +7734,6 @@ dependencies = [
  "bitflags",
  "bytes 1.1.0",
  "cid",
- "derive_more",
  "either",
  "fnv",
  "fork-tree",
@@ -8213,7 +8199,6 @@ dependencies = [
 name = "sc-transaction-pool-api"
 version = "4.0.0-dev"
 dependencies = [
- "derive_more",
  "futures",
  "log",
  "serde",
@@ -8717,7 +8702,7 @@ dependencies = [
 
 [[package]]
 name = "sp-application-crypto"
-version = "4.0.0"
+version = "5.0.0"
 dependencies = [
  "parity-scale-codec",
  "scale-info",
@@ -8910,7 +8895,7 @@ dependencies = [
 
 [[package]]
 name = "sp-core"
-version = "4.1.0-dev"
+version = "5.0.0"
 dependencies = [
  "base58",
  "bitflags",
@@ -9001,7 +8986,7 @@ dependencies = [
 
 [[package]]
 name = "sp-externalities"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "environmental",
  "parity-scale-codec",
@@ -9042,7 +9027,7 @@ dependencies = [
 
 [[package]]
 name = "sp-io"
-version = "4.0.0"
+version = "5.0.0"
 dependencies = [
  "futures",
  "hash-db",
@@ -9075,10 +9060,9 @@ dependencies = [
 
 [[package]]
 name = "sp-keystore"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "async-trait",
- "derive_more",
  "futures",
  "merlin",
  "parity-scale-codec",
@@ -9089,6 +9073,7 @@ dependencies = [
  "serde",
  "sp-core",
  "sp-externalities",
+ "thiserror",
 ]
 
 [[package]]
@@ -9162,7 +9147,7 @@ dependencies = [
 
 [[package]]
 name = "sp-rpc"
-version = "4.0.0-dev"
+version = "5.0.0"
 dependencies = [
  "rustc-hash",
  "serde",
@@ -9172,7 +9157,7 @@ dependencies = [
 
 [[package]]
 name = "sp-runtime"
-version = "4.1.0-dev"
+version = "5.0.0"
 dependencies = [
  "either",
  "hash256-std-hasher",
@@ -9199,7 +9184,7 @@ dependencies = [
 
 [[package]]
 name = "sp-runtime-interface"
-version = "4.1.0-dev"
+version = "5.0.0"
 dependencies = [
  "impl-trait-for-tuples",
  "parity-scale-codec",
@@ -9316,7 +9301,7 @@ dependencies = [
 
 [[package]]
 name = "sp-state-machine"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "hash-db",
  "hex-literal",
@@ -9345,7 +9330,7 @@ version = "4.0.0"
 
 [[package]]
 name = "sp-storage"
-version = "4.0.0"
+version = "5.0.0"
 dependencies = [
  "impl-serde",
  "parity-scale-codec",
@@ -9431,7 +9416,7 @@ dependencies = [
 
 [[package]]
 name = "sp-trie"
-version = "4.0.0"
+version = "5.0.0"
 dependencies = [
  "criterion",
  "hash-db",
@@ -9477,7 +9462,7 @@ dependencies = [
 
 [[package]]
 name = "sp-wasm-interface"
-version = "4.1.0-dev"
+version = "5.0.0"
 dependencies = [
  "impl-trait-for-tuples",
  "log",
@@ -9534,59 +9519,17 @@ dependencies = [
 
 [[package]]
 name = "strsim"
-version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8ea5119cdb4c55b55d432abb513a0429384878c15dde60cc77b1c99de1a95a6a"
-
-[[package]]
-name = "strsim"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "73473c0e59e6d5812c5dfe2a064a6444949f089e20eec9a2e5506596494e4623"
 
 [[package]]
-name = "structopt"
-version = "0.3.25"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "40b9788f4202aa75c240ecc9c15c65185e6a39ccdeb0fd5d008b98825464c87c"
-dependencies = [
- "clap 2.34.0",
- "lazy_static",
- "structopt-derive",
-]
-
-[[package]]
-name = "structopt-derive"
-version = "0.4.18"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dcb5ae327f9cc13b68763b5749770cb9e048a99bd9dfdfa58d0cf05d5f64afe0"
-dependencies = [
- "heck 0.3.2",
- "proc-macro-error",
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
 name = "strum"
-version = "0.22.0"
+version = "0.23.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f7ac893c7d471c8a21f31cfe213ec4f6d9afeed25537c772e08ef3f005f8729e"
+checksum = "cae14b91c7d11c9a851d3fbc80a963198998c2a64eec840477fa92d8ce9b70bb"
 dependencies = [
- "strum_macros 0.22.0",
-]
-
-[[package]]
-name = "strum_macros"
-version = "0.22.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "339f799d8b549e3744c7ac7feb216383e4005d94bdb22561b3ab8f3b808ae9fb"
-dependencies = [
- "heck 0.3.2",
- "proc-macro2",
- "quote",
- "syn",
+ "strum_macros",
 ]
 
 [[package]]
@@ -9663,8 +9606,6 @@ name = "substrate-frame-rpc-system"
 version = "4.0.0-dev"
 dependencies = [
  "assert_matches",
- "async-trait",
- "derive_more",
  "frame-system-rpc-runtime-api",
  "futures",
  "jsonrpsee",
@@ -9690,11 +9631,11 @@ name = "substrate-prometheus-endpoint"
 version = "0.10.0-dev"
 dependencies = [
  "async-std",
- "derive_more",
  "futures-util",
  "hyper",
  "log",
  "prometheus",
+ "thiserror",
  "tokio",
 ]
 
@@ -9791,7 +9732,6 @@ dependencies = [
 name = "substrate-test-runtime-transaction-pool"
 version = "2.0.0"
 dependencies = [
- "derive_more",
  "futures",
  "parity-scale-codec",
  "parking_lot",
@@ -9800,6 +9740,7 @@ dependencies = [
  "sp-blockchain",
  "sp-runtime",
  "substrate-test-runtime-client",
+ "thiserror",
 ]
 
 [[package]]
@@ -9840,6 +9781,7 @@ dependencies = [
  "build-helper",
  "cargo_metadata",
  "sp-maybe-compressed-blob",
+ "strum",
  "tempfile",
  "toml",
  "walkdir",
@@ -10530,12 +10472,6 @@ name = "vec-arena"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "eafc1b9b2dfc6f5529177b62cf806484db55b32dc7c9658a118e11bbeb33061d"
-
-[[package]]
-name = "vec_map"
-version = "0.8.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f1bddf1187be692e79c5ffeab891132dfb0f236ed36a43c7ed39f1165ee20191"
 
 [[package]]
 name = "version_check"
