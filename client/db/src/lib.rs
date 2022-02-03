@@ -1297,7 +1297,7 @@ impl<Block: BlockT> Backend<Block> {
 					transaction.set_from_vec(columns::BODY, &lookup_key, body.encode());
 				} else {
 					let body =
-						apply_index_ops::<Block>(&mut transaction, body, operation.index_ops)?;
+						apply_index_ops::<Block>(&mut transaction, body, operation.index_ops);
 					transaction.set_from_vec(columns::BODY_INDEX, &lookup_key, body);
 				}
 			}
@@ -1733,7 +1733,7 @@ fn apply_index_ops<Block: BlockT>(
 	transaction: &mut Transaction<DbHash>,
 	body: Vec<Block::Extrinsic>,
 	ops: Vec<IndexOperation>,
-) -> ClientResult<Vec<u8>> {
+) -> Vec<u8> {
 	let mut extrinsic_index: Vec<DbExtrinsic<Block>> = Vec::with_capacity(body.len());
 	let mut index_map = HashMap::new();
 	let mut renewed_map = HashMap::new();
@@ -1785,7 +1785,7 @@ fn apply_index_ops<Block: BlockT>(
 		renewed_map.len(),
 		extrinsic_index.len() - index_map.len() - renewed_map.len(),
 	);
-	Ok(extrinsic_index.encode())
+	extrinsic_index.encode()
 }
 
 fn apply_indexed_body<Block: BlockT>(transaction: &mut Transaction<DbHash>, body: Vec<Vec<u8>>) {
