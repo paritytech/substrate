@@ -34,10 +34,10 @@ mod client;
 mod metrics;
 mod task_manager;
 
-use std::{collections::HashMap, io, net::SocketAddr, pin::Pin, task::Poll};
+use std::{collections::HashMap, io, net::SocketAddr, pin::Pin};
 
 use codec::{Decode, Encode};
-use futures::{stream, Future, FutureExt, Stream, StreamExt};
+use futures::{Future, FutureExt, StreamExt};
 use log::{debug, error, warn};
 use sc_network::PeerId;
 use sc_utils::mpsc::TracingUnboundedReceiver;
@@ -152,26 +152,7 @@ async fn build_network_future<
 	let starting_block = client.info().best_number;
 
 	// Stream of finalized blocks reported by the client.
-	let mut finality_notification_stream = {
-		let mut finality_notification_stream = client.finality_notification_stream().fuse();
-
-		// We tweak the `Stream` in order to merge together multiple items if they happen to be
-		// ready. This way, we only get the latest finalized block.
-		stream::poll_fn(move |cx| {
-			let mut last = None;
-			while let Poll::Ready(Some(item)) =
-				Pin::new(&mut finality_notification_stream).poll_next(cx)
-			{
-				last = Some(item);
-			}
-			if let Some(last) = last {
-				Poll::Ready(Some(last))
-			} else {
-				Poll::Pending
-			}
-		})
-		.fuse()
-	};
+	let mut finality_notification_stream = client.finality_notification_stream().fuse();
 
 	loop {
 		futures::select! {
