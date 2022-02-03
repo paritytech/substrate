@@ -18,6 +18,7 @@
 //! * unbonding sub pools: This a collection of pools at different phases of the unbonding
 //!   lifecycle. See [`SubPools`] and [`SubPoolsStorage`].
 //! * delegators: Accounts that are members of pools. See [`Delegator`] and [`Delegators`].
+//! 
 //! In order to maintain scalability, all operations are independent of the number of delegators. To
 //! do this, we store delegation specific information local to the delegator while the pool data
 //! structures have bounded datum .
