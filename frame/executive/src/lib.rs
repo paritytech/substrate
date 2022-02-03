@@ -126,7 +126,6 @@ use frame_support::{
 	},
 	weights::{DispatchClass, DispatchInfo, GetDispatchInfo},
 };
-use frame_system::DigestOf;
 use schnorrkel::vrf::{VRFOutput, VRFProof};
 use sp_runtime::{
 	generic::Digest,
@@ -213,7 +212,7 @@ where
 			Block,
 			Context,
 			UnsignedValidator,
-			AllPallets,
+			AllPalletsWithSystem,
 			COnRuntimeUpgrade,
 		>::execute_block_ver_impl(block, public);
 	}
@@ -392,7 +391,7 @@ where
 		}
 
 		// Check that transaction trie root represents the transactions.
-		let xts_root = extrinsics_root::<System::Hashing, _>(&block.extrinsics());
+		let xts_root = frame_system::extrinsics_root::<System::Hashing, _>(&block.extrinsics());
 		header.extrinsics_root().check_equal(&xts_root);
 		assert!(header.extrinsics_root() == &xts_root, "Transaction trie root must be valid.");
 	}
@@ -1008,8 +1007,7 @@ mod tests {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
-					state_root,
-						"1039e1a4bd0cf5deefe65f313577e70169c41c7773d6acf31ca8d671397559f5"
+					state_root: hex!("1039e1a4bd0cf5deefe65f313577e70169c41c7773d6acf31ca8d671397559f5").into(),
 					extrinsics_root: hex!(
 						"03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314"
 					)
