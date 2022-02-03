@@ -1267,7 +1267,7 @@ define_env!(Env, <E: Ext>,
 	// - account_ptr: a pointer to the address of the beneficiary account
 	//   Should be decodable as an `T::AccountId`. Traps otherwise.
 	//
-	// Returned value is an u32-encoded boolean: (0 = false, 1 = true)
+	// Returned value is a u32-encoded boolean: (0 = false, 1 = true).
 	[__unstable__] seal_is_contract(ctx, account_ptr: u32) -> u32 => {
 		ctx.charge_gas(RuntimeCosts::IsContract)?;
 		let address: <<E as Ext>::T as frame_system::Config>::AccountId =
