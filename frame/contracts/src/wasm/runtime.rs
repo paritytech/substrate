@@ -1280,7 +1280,7 @@ define_env!(Env, <E: Ext>,
 	//
 	// Does not perform any storage lookups.
 	//
-	// Returned value is an u32-encoded boolean: (0 = false, 1 = true)
+	// Returned value is a u32-encoded boolean: (0 = false, 1 = true).
 	[__unstable__] seal_caller_is_origin(ctx) -> u32 => {
 		ctx.charge_gas(RuntimeCosts::CallerIsOrigin)?;
 		Ok(ctx.ext.caller_is_origin() as u32)
