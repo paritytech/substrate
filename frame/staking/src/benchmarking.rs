@@ -900,6 +900,27 @@ benchmarks! {
 		assert!(!T::SortedListProvider::contains(&stash));
 	}
 
+	force_apply_min_commission {
+		let i in 1..MaxValidators::<T>::get();
+		// Clean up any existing state
+		clear_validators_and_nominators::<T>();
+
+		// Create `i` validators with a commission of 50%
+		frame_support::assert_ok!(create_validators::<T>(i, 1));
+
+		// Sanity check that all the generated validators have the expected commission
+		for (_, prefs) in Validators::<T>::iter() {
+			assert_eq!(prefs.commission, Perbill::from_percent(50));
+		}
+		// Set the min commission to 75%
+		MinCommission::<T>::set(Perbill::from_percent(75));
+	}: _(RawOrigin::Root, 0)
+	verify {
+		for (_, prefs) in Validators::<T>::iter() {
+			assert_eq!(prefs.commission, Perbill::from_percent(75));
+		}
+	}
+
 	impl_benchmark_test_suite!(
 		Staking,
 		crate::mock::ExtBuilder::default().has_stakers(true),

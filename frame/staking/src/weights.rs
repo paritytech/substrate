@@ -74,6 +74,7 @@ pub trait WeightInfo {
 	fn get_npos_targets(v: u32, ) -> Weight;
 	fn set_staking_configs() -> Weight;
 	fn chill_other() -> Weight;
+	fn force_apply_min_commission(n: u32) -> Weight;
 }
 
 /// Weights for pallet_staking using the Substrate node and recommended hardware.
@@ -445,6 +446,11 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(11 as Weight))
 			.saturating_add(T::DbWeight::get().writes(6 as Weight))
 	}
+	fn force_apply_min_commission(_n: u32) -> Weight {
+	(54_681_000 as Weight)
+			.saturating_add(T::DbWeight::get().reads(11 as Weight))
+			.saturating_add(T::DbWeight::get().writes(6 as Weight))
+	}
 }
 
 // For backwards compatibility and tests
@@ -811,6 +817,11 @@ impl WeightInfo for () {
 	// Storage: BagsList ListBags (r:1 w:1)
 	// Storage: BagsList CounterForListNodes (r:1 w:1)
 	fn chill_other() -> Weight {
+		(54_681_000 as Weight)
+			.saturating_add(RocksDbWeight::get().reads(11 as Weight))
+			.saturating_add(RocksDbWeight::get().writes(6 as Weight))
+	}
+	fn force_apply_min_commission(_n: u32) -> Weight {
 		(54_681_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(11 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(6 as Weight))

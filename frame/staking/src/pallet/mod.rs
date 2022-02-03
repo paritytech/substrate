@@ -1618,9 +1618,15 @@ pub mod pallet {
 		}
 
 		/// Force all validators to have at least the minimum commission. This will not affect
-		/// validators who already have a commission greater than or equal to the min.
-		#[pallet::weight(666)]
-		pub fn force_apply_min_commission(origin: OriginFor<T>) -> DispatchResult {
+		/// validators who already have a commission greater than or equal to the minimum.
+		///
+		/// Note that parameter `_validator_count` should be the upper bound of the number of
+		/// validators stored and is only used for weights.
+		#[pallet::weight(T::WeightInfo::force_apply_min_commission(*_validator_count))]
+		pub fn force_apply_min_commission(
+			origin: OriginFor<T>,
+			_validator_count: u32,
+		) -> DispatchResult {
 			ensure_root(origin)?;
 			let min_commission = MinCommission::<T>::get();
 			Validators::<T>::translate(|_, mut prefs: ValidatorPrefs| {
