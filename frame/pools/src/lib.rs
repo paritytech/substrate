@@ -292,7 +292,6 @@ fn points_to_issue<T: Config>(
 			new_funds.saturating_mul(POINTS_TO_BALANCE_INIT_RATIO.into()),
 		(true, false) => {
 			// The pool was totally slashed.
-
 			// This is the equivalent of `(current_points / 1) * new_funds`.
 			new_funds.saturating_mul(current_points)
 		},
