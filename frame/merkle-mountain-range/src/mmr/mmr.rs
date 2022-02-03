@@ -25,7 +25,7 @@ use crate::{
 	Config, HashingOf,
 };
 #[cfg(not(feature = "std"))]
-use sp_std::vec;
+use sp_std::{prelude::Vec, vec};
 
 /// Stateless verification of the leaf proof.
 pub fn verify_leaf_proof<H, L>(
@@ -45,6 +45,36 @@ where
 		proof.items.into_iter().map(Node::Hash).collect(),
 	);
 	p.verify(Node::Hash(root), vec![(leaf_position, leaf)])
+		.map_err(|e| Error::Verify.log_debug(e))
+}
+
+/// Stateless verification of the proof for a batch of leaves.
+/// Note, the leaves should be sorted such that corresponding leaves and leaf indices have the
+/// same position in both the `leaves` vector and the `leaf_indices` vector contained in the
+/// [primitives::BatchProof]
+pub fn verify_leaves_proof<H, L>(
+	root: H::Output,
+	leaves: Vec<Node<H, L>>,
+	proof: primitives::BatchProof<H::Output>,
+) -> Result<bool, Error>
+where
+	H: sp_runtime::traits::Hash,
+	L: primitives::FullLeaf,
+{
+	let size = NodesUtils::new(proof.leaf_count).size();
+
+	let leaves_and_position = proof
+		.leaf_indices
+		.into_iter()
+		.map(|index| mmr_lib::leaf_index_to_pos(index))
+		.zip(leaves.into_iter())
+		.collect();
+
+	let p = mmr_lib::MerkleProof::<Node<H, L>, Hasher<H, L>>::new(
+		size,
+		proof.items.into_iter().map(Node::Hash).collect(),
+	);
+	p.verify(Node::Hash(root), leaves_and_position)
 		.map_err(|e| Error::Verify.log_debug(e))
 }
 
@@ -90,6 +120,29 @@ where
 		let root = self.mmr.get_root().map_err(|e| Error::GetRoot.log_error(e))?;
 		p.verify(root, vec![(position, Node::Data(leaf))])
 			.map_err(|e| Error::Verify.log_debug(e))
+	}
+
+	/// Verify proof of a single leaf.
+	/// Note, the leaves should be sorted such that corresponding leaves and leaf indices have
+	/// the same position in both the `leaves` vector and the `leaf_indices` vector contained in the
+	/// [primitives::BatchProof]
+	pub fn verify_leaves_proof(
+		&self,
+		leaves: Vec<L>,
+		proof: primitives::BatchProof<<T as Config<I>>::Hash>,
+	) -> Result<bool, Error> {
+		let p = mmr_lib::MerkleProof::<NodeOf<T, I, L>, Hasher<HashingOf<T, I>, L>>::new(
+			self.mmr.mmr_size(),
+			proof.items.into_iter().map(Node::Hash).collect(),
+		);
+		let leaves_and_position = proof
+			.leaf_indices
+			.into_iter()
+			.map(|index| mmr_lib::leaf_index_to_pos(index))
+			.zip(leaves.into_iter().map(|leaf| Node::Data(leaf)))
+			.collect();
+		let root = self.mmr.get_root().map_err(|e| Error::GetRoot.log_error(e))?;
+		p.verify(root, leaves_and_position).map_err(|e| Error::Verify.log_debug(e))
 	}
 
 	/// Return the internal size of the MMR (number of nodes).
@@ -158,5 +211,41 @@ where
 				items: p.proof_items().iter().map(|x| x.hash()).collect(),
 			})
 			.map(|p| (leaf, p))
+	}
+
+	/// Generate a proof for given leaf indices.
+	///
+	/// Proof generation requires all the nodes (or their hashes) to be available in the storage.
+	/// (i.e. you can't run the function in the pruned storage).
+	pub fn generate_batch_proof(
+		&self,
+		leaf_indices: Vec<NodeIndex>,
+	) -> Result<(Vec<(L, NodeIndex)>, primitives::BatchProof<<T as Config<I>>::Hash>), Error> {
+		let positions = leaf_indices
+			.iter()
+			.map(|index| mmr_lib::leaf_index_to_pos(*index))
+			.collect::<Vec<_>>();
+		let store = <Storage<OffchainStorage, T, I, L>>::default();
+		let leaves = positions
+			.iter()
+			.map(|pos| match mmr_lib::MMRStore::get_elem(&store, *pos) {
+				Ok(Some(Node::Data(leaf))) => Ok(leaf),
+				e => Err(Error::LeafNotFound.log_debug(e)),
+			})
+			.collect::<Result<Vec<_>, Error>>()?
+			.into_iter()
+			.zip(leaf_indices.iter().cloned())
+			.collect::<Vec<_>>();
+
+		let leaf_count = self.leaves;
+		self.mmr
+			.gen_proof(positions)
+			.map_err(|e| Error::GenerateProof.log_error(e))
+			.map(|p| primitives::BatchProof {
+				leaf_indices,
+				leaf_count,
+				items: p.proof_items().iter().map(|x| x.hash()).collect(),
+			})
+			.map(|p| (leaves, p))
 	}
 }
