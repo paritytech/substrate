@@ -28,7 +28,6 @@ frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 pallet-balances = { version = "4.0.0-dev", default-features = false, path = "../balances" }
-orml-tokens = { git = 'https://github.com/mangata-finance/open-runtime-module-library', default-features = false, branch="mangata-dev-v4" }
 
 [dev-dependencies]
 sp-io = { version = "4.0.0-dev", path = "../../primitives/io" }
@@ -45,7 +44,6 @@ std = [
 	"frame-support/std",
 	"frame-system/std",
 	"pallet-balances/std",
-	"orml-tokens/std",
 ]
 runtime-benchmarks = [
 	"frame-benchmarking",
