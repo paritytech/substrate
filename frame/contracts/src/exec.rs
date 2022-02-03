@@ -158,7 +158,7 @@ pub trait Ext: sealing::Sealed {
 	/// Returns a reference to the account id of the caller.
 	fn caller(&self) -> &AccountIdOf<Self::T>;
 
-	/// Check if a contract lives at a specific address
+	/// Check if a contract lives at the specified `address`.
 	fn is_contract(&self, address: AccountIdOf<Self::T>) -> bool;
 
 	/// Check if the caller of the current contract is the origin of the whole call stack
