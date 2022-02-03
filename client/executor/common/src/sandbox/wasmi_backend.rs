@@ -75,9 +75,10 @@ impl ImportResolver for Imports {
 			))
 		})?;
 
-		// Here we use inner memory reference only to resolve
-		// the imports without accessing the memory contents.
-		let mem = unsafe { wrapper.clone_inner() };
+		// Here we use inner memory reference only to resolve the imports
+		// without accessing the memory contents. All subsequent memory accesses
+		// should happen through the wrapper, that enforces the memory access protocol.
+		let mem = wrapper.0.clone();
 
 		Ok(mem)
 	}
@@ -119,20 +120,8 @@ pub struct MemoryWrapper(wasmi::MemoryRef);
 
 impl MemoryWrapper {
 	/// Take ownership of the memory region and return a wrapper object
-	pub fn new(memory: wasmi::MemoryRef) -> Self {
+	fn new(memory: wasmi::MemoryRef) -> Self {
 		Self(memory)
-	}
-
-	/// Clone the underlying memory object
-	///
-	/// # Safety
-	///
-	/// The sole purpose of `MemoryRef` is to protect the memory from uncontrolled
-	/// access. By returning the memory object "as is" we bypass all of the checks.
-	///
-	/// Intended to use only during module initialization.
-	pub unsafe fn clone_inner(&self) -> wasmi::MemoryRef {
-		self.0.clone()
 	}
 }
 

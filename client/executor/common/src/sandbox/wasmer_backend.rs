@@ -143,7 +143,15 @@ pub fn instantiate(
 				// the export table, so no memory access can happen at this time.
 				// All subsequent memory accesses should happen through the wrapper,
 				// that enforces the memory access protocol.
-				let wasmer_memory = unsafe { wasmer_memory_ref.clone_inner() };
+				//
+				// We take exclusive lock to ensure that we're the only one here,
+				// since during instantiation phase the memory should only be created
+				// and not yet accessed.
+				let wasmer_memory = wasmer_memory_ref
+					.buffer
+					.try_borrow_mut()
+					.map_err(|_| InstantiationError::EnvironmentDefinitionCorrupted)?
+					.clone();
 
 				exports.insert(import.name(), wasmer::Extern::Memory(wasmer_memory));
 			},
@@ -366,23 +374,6 @@ impl MemoryWrapper {
 		} else {
 			core::slice::from_raw_parts_mut(ptr, len)
 		}
-	}
-
-	/// Clone the underlying memory object
-	///
-	/// # Safety
-	///
-	/// The sole purpose of `MemoryRef` is to protect the memory from uncontrolled
-	/// access. By returning the memory object "as is" we bypass all of the checks.
-	///
-	/// Intended to use only during module initialization.
-	///
-	/// # Panics
-	///
-	/// Will panic if `MemoryRef` is currently in use.
-	pub unsafe fn clone_inner(&mut self) -> wasmer::Memory {
-		// We take exclusive lock to ensure that we're the only one here
-		self.buffer.borrow_mut().clone()
 	}
 }
 
