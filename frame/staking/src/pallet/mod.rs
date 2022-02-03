@@ -1616,6 +1616,22 @@ pub mod pallet {
 			Self::chill_stash(&stash);
 			Ok(())
 		}
+
+		/// Force all validators to have at least the minimum commission. This will not affect
+		/// validators who already have a commission greater than or equal to the min.
+		#[pallet::weight(666)]
+		pub fn force_apply_min_commission(origin: OriginFor<T>) -> DispatchResult {
+			ensure_root(origin)?;
+			let min_commission = MinCommission::<T>::get();
+			Validators::<T>::translate(|_, mut prefs: ValidatorPrefs| {
+				if prefs.commission < min_commission {
+					prefs.commission = min_commission
+				}
+
+				Some(prefs)
+			});
+			Ok(())
+		}
 	}
 }
 

@@ -4711,3 +4711,40 @@ mod sorted_list_provider {
 		});
 	}
 }
+
+#[test]
+fn force_apply_min_commission_works() {
+	let prefs = |c| ValidatorPrefs { commission: Perbill::from_percent(c), blocked: false };
+	let validators = || Validators::<Test>::iter().collect::<Vec<_>>();
+	ExtBuilder::default().build_and_execute(|| {
+
+		// Given all validators have a commission of 0
+		assert_eq!(validators(), vec![(31, prefs(0)), (21, prefs(0)), (11, prefs(0))]);
+		// and the min commission is 0
+		assert_eq!(MinCommission::<Test>::get(), Perbill::from_percent(0));
+
+		// When
+		assert_ok!(Staking::force_apply_min_commission(Origin::root()));
+
+		// Then
+		assert_eq!(validators(), vec![(31, prefs(0)), (21, prefs(0)), (11, prefs(0))]);
+
+		// Given
+		assert_ok!(Staking::validate(Origin::signed(30), prefs(10)));
+
+		// When
+		assert_ok!(Staking::force_apply_min_commission(Origin::root()));
+
+		// Then
+		assert_eq!(validators(), vec![(31, prefs(10)), (21, prefs(0)), (11, prefs(0))]);
+
+		// Given
+		MinCommission::<Test>::set(Perbill::from_percent(5));
+
+		// When
+		assert_ok!(Staking::force_apply_min_commission(Origin::root()));
+
+		// Then
+		assert_eq!(validators(), vec![(31, prefs(10)), (21, prefs(5)), (11, prefs(5))]);
+	});
+}
