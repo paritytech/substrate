@@ -1035,7 +1035,7 @@ where
 	}
 
 	fn is_contract(&self, address: T::AccountId) -> bool {
-		ContractInfoOf::<T>::get(&address).is_some()
+		ContractInfoOf::<T>::contains_key(&address)
 	}
 
 	fn caller_is_origin(&self) -> bool {
