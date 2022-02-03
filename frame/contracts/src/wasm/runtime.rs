@@ -1286,7 +1286,6 @@ define_env!(Env, <E: Ext>,
 		Ok(ctx.ext.caller_is_origin() as u32)
 	},
 
-
 	// Stores the address of the current contract into the supplied buffer.
 	//
 	// The value is stored to linear memory at the address pointed to by `out_ptr`.

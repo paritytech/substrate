@@ -421,7 +421,7 @@ benchmarks! {
 			call_body: Some(body::repeated_dyn(r * API_BENCHMARK_BATCH_SIZE, vec![
 				Counter(0, 4), // address_ptr
 				Regular(Instruction::Call(0)),
-					Regular(Instruction::Drop),
+				Regular(Instruction::Drop),
 			])),
 			.. Default::default()
 		});
@@ -431,6 +431,26 @@ benchmarks! {
 		for acc in accounts.iter().step_by(2) {
 			<ContractInfoOf<T>>::insert(acc, info.clone());
 		}
+		let origin = RawOrigin::Signed(instance.caller.clone());
+	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
+
+	seal_caller_is_origin {
+		let r in 0 .. API_BENCHMARK_BATCHES;
+		let code = WasmModule::<T>::from(ModuleDefinition {
+			memory: Some(ImportedMemory::max::<T>()),
+			imported_functions: vec![ImportedFunction {
+				module: "__unstable__",
+				name: "seal_caller_is_origin",
+				params: vec![],
+				return_type: Some(ValueType::I32),
+			}],
+			call_body: Some(body::repeated(r * API_BENCHMARK_BATCH_SIZE, &[
+			Instruction::Call(0),
+			Instruction::Drop,
+			])),
+			.. Default::default()
+		});
+		let instance = Contract::<T>::new(code, vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
