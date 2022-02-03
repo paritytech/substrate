@@ -331,7 +331,12 @@ impl MemoryWrapper {
 	/// growing, we cannot guarantee the lifetime of the returned slice reference.
 	unsafe fn memory_as_slice(memory: &wasmer::Memory) -> &[u8] {
 		let ptr = memory.data_ptr() as *const _;
-		let len: usize = memory.data_size().try_into().expect("data size should fit into usize");
+
+		let len: usize = memory.data_size().try_into().expect(
+			"maximum memory object size never exceeds pointer size on any architecture; \
+			usize by design and definition is enough to store any memory object size \
+			possible on current achitecture; thus the conversion can not fail; qed",
+		);
 
 		if len == 0 {
 			&[]
@@ -349,7 +354,12 @@ impl MemoryWrapper {
 	/// exists at the same time.
 	unsafe fn memory_as_slice_mut(memory: &mut wasmer::Memory) -> &mut [u8] {
 		let ptr = memory.data_ptr();
-		let len: usize = memory.data_size().try_into().expect("data size should fit into usize");
+
+		let len: usize = memory.data_size().try_into().expect(
+			"maximum memory object size never exceeds pointer size on any architecture; \
+			usize by design and definition is enough to store any memory object size \
+			possible on current achitecture; thus the conversion can not fail; qed",
+		);
 
 		if len == 0 {
 			&mut []
@@ -380,7 +390,11 @@ impl MemoryTransfer for MemoryWrapper {
 	fn read(&self, source_addr: Pointer<u8>, size: usize) -> Result<Vec<u8>> {
 		let memory = self.buffer.borrow();
 
-		let data_size = memory.data_size().try_into().expect("data size does not fit");
+		let data_size: usize = memory.data_size().try_into().expect(
+			"maximum memory object size never exceeds pointer size on any architecture; \
+			usize by design and definition is enough to store any memory object size \
+			possible on current achitecture; thus the conversion can not fail; qed",
+		);
 
 		let range = checked_range(source_addr.into(), size, data_size)
 			.ok_or_else(|| Error::Other("memory read is out of bounds".into()))?;
