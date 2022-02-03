@@ -1679,7 +1679,7 @@ mod tests {
 			// ALICE is the origin of the call stack
 			assert!(ctx.ext.caller_is_origin());
 			// CHARLIE calls BOB
-			ctx.ext.call(0, BOB, 0, vec![1], true)
+			ctx.ext.call(0, BOB, 0, vec![], true)
 		});
 
 		ExtBuilder::default().build().execute_with(|| {
