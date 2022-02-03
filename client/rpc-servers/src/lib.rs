@@ -22,7 +22,7 @@
 
 use jsonrpsee::{
 	http_server::{AccessControlBuilder, HttpServerBuilder, HttpServerHandle},
-	ws_server::{IdProvider, WsServerBuilder, WsServerHandle},
+	ws_server::{IdProvider, RandomStringIdProvider, WsServerBuilder, WsServerHandle},
 	RpcModule,
 };
 use std::net::SocketAddr;
@@ -95,7 +95,7 @@ pub fn start_ws<M: Send + Sync + 'static>(
 	metrics: Option<RpcMetrics>,
 	rpc_api: RpcModule<M>,
 	rt: tokio::runtime::Handle,
-	_id_provider: Option<Box<dyn IdProvider>>,
+	id_provider: Option<Box<dyn IdProvider>>,
 ) -> Result<WsServerHandle, anyhow::Error> {
 	let max_request_body_size = max_payload_mb
 		.map(|mb| mb.saturating_mul(MEGABYTE))
@@ -105,8 +105,13 @@ pub fn start_ws<M: Send + Sync + 'static>(
 	let mut builder = WsServerBuilder::new()
 		.max_request_body_size(max_request_body_size as u32)
 		.max_connections(max_connections as u64)
-		//.set_id_provider(id_provider.unwrap())
 		.custom_tokio_runtime(rt.clone());
+
+	if let Some(provider) = id_provider {
+		builder = builder.set_id_provider(provider);
+	} else {
+		builder = builder.set_id_provider(RandomStringIdProvider::new(16));
+	};
 
 	if let Some(cors) = cors {
 		// Whitelist listening address.

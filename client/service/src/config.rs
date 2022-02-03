@@ -18,7 +18,7 @@
 
 //! Service configuration.
 
-use jsonrpsee::ws_server::IdProvider;
+pub use jsonrpsee::ws_server::IdProvider;
 pub use sc_client_api::execution_extensions::{ExecutionStrategies, ExecutionStrategy};
 pub use sc_client_db::{Database, DatabaseSource, KeepBlocks, PruningMode, TransactionStorageMode};
 pub use sc_executor::WasmExecutionMethod;
@@ -44,7 +44,7 @@ use std::{
 use tempfile::TempDir;
 
 /// Service configuration.
-//#[derive(Debug)]
+#[derive(Debug)]
 pub struct Configuration {
 	/// Implementation name
 	pub impl_name: String,

@@ -467,7 +467,7 @@ dependencies = [
  "futures",
  "log",
  "parity-scale-codec",
- "parking_lot",
+ "parking_lot 0.11.2",
  "sc-chain-spec",
  "sc-client-api",
  "sc-keystore",
@@ -499,7 +499,7 @@ dependencies = [
  "jsonrpsee",
  "log",
  "parity-scale-codec",
- "parking_lot",
+ "parking_lot 0.11.2",
  "sc-rpc",
  "sc-utils",
  "serde",
@@ -1896,7 +1896,7 @@ dependencies = [
  "log",
  "num-traits",
  "parity-scale-codec",
- "parking_lot",
+ "parking_lot 0.11.2",
  "rand 0.8.4",
  "scale-info",
 ]
@@ -2950,9 +2950,9 @@ dependencies = [
 
 [[package]]
 name = "jsonrpsee"
-version = "0.8.0"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "05fd8cd6c6b1bbd06881d2cf88f1fc83cc36c98f2219090f839115fb4a956cb9"
+checksum = "f0d0b8cc1959f8c05256ace093b2317482da9127f1d9227564f47e7e6bf9bda8"
 dependencies = [
  "jsonrpsee-core",
  "jsonrpsee-http-server",
@@ -2964,9 +2964,9 @@ dependencies = [
 
 [[package]]
 name = "jsonrpsee-client-transport"
-version = "0.8.0"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3303cdf246e6ab76e2866fb3d9acb6c76a068b1b28bd923a1b7a8122257ad7b5"
+checksum = "fa370c2c717d798c3c0a315ae3f0a707a388c6963c11f9da7dbbe1d3f7392f5f"
 dependencies = [
  "futures",
  "http",
@@ -2985,9 +2985,9 @@ dependencies = [
 
 [[package]]
 name = "jsonrpsee-core"
-version = "0.8.0"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f220b5a238dc7992b90f1144fbf6eaa585872c9376afe6fe6863ffead6191bf3"
+checksum = "22abc3274b265dcefe2e26c4beecf9fda4fffa48cf94930443a6c73678f020d5"
 dependencies = [
  "anyhow",
  "arrayvec 0.7.1",
@@ -2998,7 +2998,7 @@ dependencies = [
  "futures-util",
  "hyper",
  "jsonrpsee-types",
- "parking_lot",
+ "parking_lot 0.12.0",
  "rand 0.8.4",
  "rustc-hash",
  "serde",
@@ -3011,9 +3011,9 @@ dependencies = [
 
 [[package]]
 name = "jsonrpsee-http-server"
-version = "0.8.0"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c65c6447c4303d095d6d4abc04439d670057e451473be9f49ce00a12d0096139"
+checksum = "8dd99cccd549e3c3bb9dc6a490d7e5cf507f4d2b0177abd16f9c63b3ee1c2d67"
 dependencies = [
  "futures-channel",
  "futures-util",
@@ -3031,9 +3031,9 @@ dependencies = [
 
 [[package]]
 name = "jsonrpsee-proc-macros"
-version = "0.8.0"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4299ebf790ea9de1cb72e73ff2ae44c723ef264299e5e2d5ef46a371eb3ac3d8"
+checksum = "63e171d8071079c8ccdce1b4ab34411c5afa6158d57db7963311ad3c6d073cb1"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",
@@ -3043,9 +3043,9 @@ dependencies = [
 
 [[package]]
 name = "jsonrpsee-types"
-version = "0.8.0"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c1b3f601bbbe45cd63f5407b6f7d7950e08a7d4f82aa699ff41a4a5e9e54df58"
+checksum = "9f4c45d2e2aa1db4c7d7d7dbaabc10a5b5258d99cd9d42fbfd5260b76f80c324"
 dependencies = [
  "anyhow",
  "beef",
@@ -3057,9 +3057,9 @@ dependencies = [
 
 [[package]]
 name = "jsonrpsee-ws-client"
-version = "0.8.0"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aff425cee7c779e33920913bc695447416078ee6d119f443f3060feffa4e86b5"
+checksum = "31b58983485b2b626c276f1eb367d62dae82132451b281072a7bfa536a33ddf3"
 dependencies = [
  "jsonrpsee-client-transport",
  "jsonrpsee-core",
@@ -3068,9 +3068,9 @@ dependencies = [
 
 [[package]]
 name = "jsonrpsee-ws-server"
-version = "0.8.0"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "98405ef1d969071be9f9957ba443d1c29c1df3a138c44b01bbf368ff34a45833"
+checksum = "84fbcab8488704be093f682540b0b80c623e1683a1d832d67b63bf52de9dceac"
 dependencies = [
  "async-channel",
  "futures-channel",
@@ -3128,7 +3128,7 @@ checksum = "c3b6b85fc643f5acd0bffb2cc8a6d150209379267af0d41db72170021841f9f5"
 dependencies = [
  "kvdb",
  "parity-util-mem",
- "parking_lot",
+ "parking_lot 0.11.2",
 ]
 
 [[package]]
@@ -3143,7 +3143,7 @@ dependencies = [
  "num_cpus",
  "owning_ref",
  "parity-util-mem",
- "parking_lot",
+ "parking_lot 0.11.2",
  "regex",
  "rocksdb",
  "smallvec",
@@ -3256,7 +3256,7 @@ dependencies = [
  "libp2p-websocket",
  "libp2p-yamux",
  "multiaddr",
- "parking_lot",
+ "parking_lot 0.11.2",
  "pin-project 1.0.10",
  "smallvec",
  "wasm-timer",
@@ -3281,7 +3281,7 @@ dependencies = [
  "multiaddr",
  "multihash 0.14.0",
  "multistream-select",
- "parking_lot",
+ "parking_lot 0.11.2",
  "pin-project 1.0.10",
  "prost",
  "prost-build",
@@ -3455,7 +3455,7 @@ dependencies = [
  "libp2p-core",
  "log",
  "nohash-hasher",
- "parking_lot",
+ "parking_lot 0.11.2",
  "rand 0.7.3",
  "smallvec",
  "unsigned-varint 0.7.0",
@@ -3688,7 +3688,7 @@ checksum = "4e7362abb8867d7187e7e93df17f460d554c997fc5c8ac57dc1259057f6889af"
 dependencies = [
  "futures",
  "libp2p-core",
- "parking_lot",
+ "parking_lot 0.11.2",
  "thiserror",
  "yamux",
 ]
@@ -3816,9 +3816,9 @@ dependencies = [
 
 [[package]]
 name = "lock_api"
-version = "0.4.5"
+version = "0.4.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "712a4d093c9976e24e7dbca41db895dabcbac38eb5f4045393d17a95bdfb1109"
+checksum = "88943dd7ef4a2e5a4bfa2753aaab3013e34ce2533d1996fb18ef591e315e2b3b"
 dependencies = [
  "scopeguard",
 ]
@@ -5241,7 +5241,7 @@ dependencies = [
  "log",
  "pallet-balances",
  "parity-scale-codec",
- "parking_lot",
+ "parking_lot 0.11.2",
  "rand 0.7.3",
  "scale-info",
  "sp-arithmetic",
@@ -6013,7 +6013,7 @@ dependencies = [
  "log",
  "lz4",
  "memmap2 0.2.1",
- "parking_lot",
+ "parking_lot 0.11.2",
  "rand 0.8.4",
  "snap",
 ]
@@ -6060,7 +6060,7 @@ dependencies = [
  "hashbrown 0.11.2",
  "impl-trait-for-tuples",
  "parity-util-mem-derive",
- "parking_lot",
+ "parking_lot 0.11.2",
  "primitive-types",
  "smallvec",
  "winapi",
@@ -6106,7 +6106,17 @@ checksum = "7d17b78036a60663b797adeaee46f5c9dfebb86948d1255007a1d6be0271ff99"
 dependencies = [
  "instant",
  "lock_api",
- "parking_lot_core",
+ "parking_lot_core 0.8.5",
+]
+
+[[package]]
+name = "parking_lot"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "87f5ec2493a61ac0506c0f4199f99070cbe83857b0337006a30f3e6719b8ef58"
+dependencies = [
+ "lock_api",
+ "parking_lot_core 0.9.0",
 ]
 
 [[package]]
@@ -6121,6 +6131,19 @@ dependencies = [
  "redox_syscall",
  "smallvec",
  "winapi",
+]
+
+[[package]]
+name = "parking_lot_core"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b2f4f894f3865f6c0e02810fc597300f34dc2510f66400da262d8ae10e75767d"
+dependencies = [
+ "cfg-if 1.0.0",
+ "libc",
+ "redox_syscall",
+ "smallvec",
+ "windows-sys",
 ]
 
 [[package]]
@@ -6482,7 +6505,7 @@ dependencies = [
  "fnv",
  "lazy_static",
  "memchr",
- "parking_lot",
+ "parking_lot 0.11.2",
  "thiserror",
 ]
 
@@ -7128,7 +7151,7 @@ dependencies = [
  "futures-timer",
  "log",
  "parity-scale-codec",
- "parking_lot",
+ "parking_lot 0.11.2",
  "sc-block-builder",
  "sc-client-api",
  "sc-proposer-metrics",
@@ -7234,7 +7257,7 @@ dependencies = [
  "hash-db",
  "log",
  "parity-scale-codec",
- "parking_lot",
+ "parking_lot 0.11.2",
  "sc-executor",
  "sc-transaction-pool-api",
  "sc-utils",
@@ -7267,7 +7290,7 @@ dependencies = [
  "log",
  "parity-db",
  "parity-scale-codec",
- "parking_lot",
+ "parking_lot 0.11.2",
  "quickcheck",
  "sc-client-api",
  "sc-state-db",
@@ -7292,7 +7315,7 @@ dependencies = [
  "futures-timer",
  "libp2p",
  "log",
- "parking_lot",
+ "parking_lot 0.11.2",
  "sc-client-api",
  "sc-utils",
  "serde",
@@ -7316,7 +7339,7 @@ dependencies = [
  "getrandom 0.2.3",
  "log",
  "parity-scale-codec",
- "parking_lot",
+ "parking_lot 0.11.2",
  "sc-block-builder",
  "sc-client-api",
  "sc-consensus",
@@ -7358,7 +7381,7 @@ dependencies = [
  "num-rational 0.2.4",
  "num-traits",
  "parity-scale-codec",
- "parking_lot",
+ "parking_lot 0.11.2",
  "rand 0.7.3",
  "rand_chacha 0.2.2",
  "retain_mut",
@@ -7481,7 +7504,7 @@ dependencies = [
  "futures-timer",
  "log",
  "parity-scale-codec",
- "parking_lot",
+ "parking_lot 0.11.2",
  "sc-client-api",
  "sc-consensus",
  "sp-api",
@@ -7541,7 +7564,7 @@ dependencies = [
  "log",
  "lru 0.6.6",
  "parity-scale-codec",
- "parking_lot",
+ "parking_lot 0.11.2",
  "paste 1.0.6",
  "regex",
  "sc-executor-common",
@@ -7636,7 +7659,7 @@ dependencies = [
  "futures-timer",
  "log",
  "parity-scale-codec",
- "parking_lot",
+ "parking_lot 0.11.2",
  "rand 0.8.4",
  "sc-block-builder",
  "sc-chain-spec",
@@ -7714,7 +7737,7 @@ version = "4.0.0-dev"
 dependencies = [
  "async-trait",
  "hex",
- "parking_lot",
+ "parking_lot 0.11.2",
  "serde_json",
  "sp-application-crypto",
  "sp-core",
@@ -7747,7 +7770,7 @@ dependencies = [
  "log",
  "lru 0.7.0",
  "parity-scale-codec",
- "parking_lot",
+ "parking_lot 0.11.2",
  "pin-project 1.0.10",
  "prost",
  "prost-build",
@@ -7807,7 +7830,7 @@ dependencies = [
  "futures-timer",
  "libp2p",
  "log",
- "parking_lot",
+ "parking_lot 0.11.2",
  "rand 0.7.3",
  "sc-block-builder",
  "sc-client-api",
@@ -7839,7 +7862,7 @@ dependencies = [
  "num_cpus",
  "once_cell",
  "parity-scale-codec",
- "parking_lot",
+ "parking_lot 0.11.2",
  "rand 0.7.3",
  "sc-block-builder",
  "sc-client-api",
@@ -7895,7 +7918,7 @@ dependencies = [
  "lazy_static",
  "log",
  "parity-scale-codec",
- "parking_lot",
+ "parking_lot 0.11.2",
  "sc-block-builder",
  "sc-chain-spec",
  "sc-client-api",
@@ -7930,7 +7953,7 @@ dependencies = [
  "jsonrpsee",
  "log",
  "parity-scale-codec",
- "parking_lot",
+ "parking_lot 0.11.2",
  "sc-chain-spec",
  "sc-transaction-pool-api",
  "serde",
@@ -7984,7 +8007,7 @@ dependencies = [
  "log",
  "parity-scale-codec",
  "parity-util-mem",
- "parking_lot",
+ "parking_lot 0.11.2",
  "pin-project 1.0.10",
  "rand 0.7.3",
  "sc-block-builder",
@@ -8044,7 +8067,7 @@ dependencies = [
  "hex-literal",
  "log",
  "parity-scale-codec",
- "parking_lot",
+ "parking_lot 0.11.2",
  "sc-block-builder",
  "sc-client-api",
  "sc-client-db",
@@ -8078,7 +8101,7 @@ dependencies = [
  "parity-scale-codec",
  "parity-util-mem",
  "parity-util-mem-derive",
- "parking_lot",
+ "parking_lot 0.11.2",
  "sc-client-api",
  "sp-core",
 ]
@@ -8111,7 +8134,7 @@ dependencies = [
  "futures",
  "libp2p",
  "log",
- "parking_lot",
+ "parking_lot 0.11.2",
  "pin-project 1.0.10",
  "rand 0.7.3",
  "serde",
@@ -8132,7 +8155,7 @@ dependencies = [
  "libc",
  "log",
  "once_cell",
- "parking_lot",
+ "parking_lot 0.11.2",
  "regex",
  "rustc-hash",
  "sc-client-api",
@@ -8174,7 +8197,7 @@ dependencies = [
  "log",
  "parity-scale-codec",
  "parity-util-mem",
- "parking_lot",
+ "parking_lot 0.11.2",
  "retain_mut",
  "sc-block-builder",
  "sc-client-api",
@@ -8214,7 +8237,7 @@ dependencies = [
  "futures",
  "futures-timer",
  "lazy_static",
- "parking_lot",
+ "parking_lot 0.11.2",
  "prometheus",
  "tokio-test",
 ]
@@ -8793,7 +8816,7 @@ dependencies = [
  "log",
  "lru 0.7.0",
  "parity-scale-codec",
- "parking_lot",
+ "parking_lot 0.11.2",
  "sp-api",
  "sp-consensus",
  "sp-database",
@@ -8917,7 +8940,7 @@ dependencies = [
  "num-traits",
  "parity-scale-codec",
  "parity-util-mem",
- "parking_lot",
+ "parking_lot 0.11.2",
  "primitive-types",
  "rand 0.7.3",
  "regex",
@@ -8972,7 +8995,7 @@ name = "sp-database"
 version = "4.0.0-dev"
 dependencies = [
  "kvdb",
- "parking_lot",
+ "parking_lot 0.11.2",
 ]
 
 [[package]]
@@ -9034,7 +9057,7 @@ dependencies = [
  "libsecp256k1",
  "log",
  "parity-scale-codec",
- "parking_lot",
+ "parking_lot 0.11.2",
  "sp-core",
  "sp-externalities",
  "sp-keystore",
@@ -9066,7 +9089,7 @@ dependencies = [
  "futures",
  "merlin",
  "parity-scale-codec",
- "parking_lot",
+ "parking_lot 0.11.2",
  "rand 0.7.3",
  "rand_chacha 0.2.2",
  "schnorrkel",
@@ -9308,7 +9331,7 @@ dependencies = [
  "log",
  "num-traits",
  "parity-scale-codec",
- "parking_lot",
+ "parking_lot 0.11.2",
  "pretty_assertions",
  "rand 0.7.3",
  "smallvec",
@@ -9734,7 +9757,7 @@ version = "2.0.0"
 dependencies = [
  "futures",
  "parity-scale-codec",
- "parking_lot",
+ "parking_lot 0.11.2",
  "sc-transaction-pool",
  "sc-transaction-pool-api",
  "sp-blockchain",
@@ -10153,7 +10176,7 @@ dependencies = [
  "chrono",
  "lazy_static",
  "matchers",
- "parking_lot",
+ "parking_lot 0.11.2",
  "regex",
  "serde",
  "serde_json",
@@ -10256,7 +10279,7 @@ dependencies = [
  "lazy_static",
  "log",
  "lru-cache",
- "parking_lot",
+ "parking_lot 0.11.2",
  "resolv-conf",
  "smallvec",
  "thiserror",
@@ -10627,7 +10650,7 @@ checksum = "be0ecb0db480561e9a7642b5d3e4187c128914e58aa84330b9493e3eb68c5e7f"
 dependencies = [
  "futures",
  "js-sys",
- "parking_lot",
+ "parking_lot 0.11.2",
  "pin-utils",
  "wasm-bindgen",
  "wasm-bindgen-futures",
@@ -11141,6 +11164,49 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "712e227841d057c1ee1cd2fb22fa7e5a5461ae8e48fa2ca79ec42cfc1931183f"
 
 [[package]]
+name = "windows-sys"
+version = "0.29.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ceb069ac8b2117d36924190469735767f0990833935ab430155e71a44bafe148"
+dependencies = [
+ "windows_aarch64_msvc",
+ "windows_i686_gnu",
+ "windows_i686_msvc",
+ "windows_x86_64_gnu",
+ "windows_x86_64_msvc",
+]
+
+[[package]]
+name = "windows_aarch64_msvc"
+version = "0.29.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c3d027175d00b01e0cbeb97d6ab6ebe03b12330a35786cbaca5252b1c4bf5d9b"
+
+[[package]]
+name = "windows_i686_gnu"
+version = "0.29.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8793f59f7b8e8b01eda1a652b2697d87b93097198ae85f823b969ca5b89bba58"
+
+[[package]]
+name = "windows_i686_msvc"
+version = "0.29.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8602f6c418b67024be2996c512f5f995de3ba417f4c75af68401ab8756796ae4"
+
+[[package]]
+name = "windows_x86_64_gnu"
+version = "0.29.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f3d615f419543e0bd7d2b3323af0d86ff19cbc4f816e6453f36a2c2ce889c354"
+
+[[package]]
+name = "windows_x86_64_msvc"
+version = "0.29.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "11d95421d9ed3672c280884da53201a5c46b7b2765ca6faf34b0d71cf34a3561"
+
+[[package]]
 name = "winreg"
 version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11175,7 +11241,7 @@ dependencies = [
  "futures",
  "log",
  "nohash-hasher",
- "parking_lot",
+ "parking_lot 0.11.2",
  "rand 0.8.4",
  "static_assertions",
 ]
