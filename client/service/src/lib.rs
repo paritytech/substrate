@@ -70,6 +70,9 @@ pub use sc_consensus::ImportQueue;
 pub use sc_executor::NativeExecutionDispatch;
 #[doc(hidden)]
 pub use sc_network::config::{TransactionImport, TransactionImportFuture};
+pub use sc_rpc::{
+	RandomIntegerSubscriptionId, RandomStringSubscriptionId, RpcSubscriptionIdProvider,
+};
 pub use sc_tracing::TracingReceiver;
 pub use sc_transaction_pool::Options as TransactionPoolOptions;
 pub use sc_transaction_pool_api::{error::IntoPoolError, InPoolTransaction, TransactionPool};
@@ -295,6 +298,7 @@ mod waiting {
 fn start_rpc_servers<R>(
 	config: &Configuration,
 	gen_rpc_module: R,
+	rpc_id_provider: Option<Box<dyn RpcSubscriptionIdProvider>>,
 ) -> Result<Box<dyn std::any::Any + Send + Sync>, error::Error>
 where
 	R: Fn(sc_rpc::DenyUnsafe) -> Result<RpcModule<()>, Error>,
@@ -341,6 +345,7 @@ where
 		metrics,
 		gen_rpc_module(deny_unsafe(http_addr, &config.rpc_methods))?,
 		config.tokio_handle.clone(),
+		rpc_id_provider,
 	)
 	.map_err(|e| Error::Application(e.into()))?;
 

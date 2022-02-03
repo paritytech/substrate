@@ -476,6 +476,8 @@ where
 		metrics_service.run(client.clone(), transaction_pool.clone(), network.clone()),
 	);
 
+	let rpc_id_provider = config.rpc_id_provider.take();
+
 	// jsonrpsee RPC
 	let gen_rpc_module = |deny_unsafe: DenyUnsafe| {
 		gen_rpc_module(
@@ -491,7 +493,7 @@ where
 		)
 	};
 
-	let rpc = start_rpc_servers(&config, gen_rpc_module)?;
+	let rpc = start_rpc_servers(&config, gen_rpc_module, rpc_id_provider)?;
 	let rpc_handlers = RpcHandlers(Arc::new(gen_rpc_module(sc_rpc::DenyUnsafe::No)?.into()));
 
 	// Spawn informant task

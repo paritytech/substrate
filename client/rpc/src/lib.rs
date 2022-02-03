@@ -29,6 +29,13 @@ use futures::{
 use sp_core::{testing::TaskExecutor, traits::SpawnNamed};
 use std::sync::Arc;
 
+pub use jsonrpsee::core::{
+	id_providers::{
+		RandomIntegerIdProvider as RandomIntegerSubscriptionId,
+		RandomStringIdProvider as RandomStringSubscriptionId,
+	},
+	traits::IdProvider as RpcSubscriptionIdProvider,
+};
 pub use sc_rpc_api::DenyUnsafe;
 
 pub mod author;

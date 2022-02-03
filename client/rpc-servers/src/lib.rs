@@ -22,12 +22,16 @@
 
 use jsonrpsee::{
 	http_server::{AccessControlBuilder, HttpServerBuilder, HttpServerHandle},
-	ws_server::{RandomStringIdProvider, WsServerBuilder, WsServerHandle},
+	ws_server::{WsServerBuilder, WsServerHandle},
 	RpcModule,
 };
 use std::net::SocketAddr;
 
 pub use crate::middleware::{RpcMetrics, RpcMiddleware};
+pub use jsonrpsee::core::{
+	id_providers::{RandomIntegerIdProvider, RandomStringIdProvider},
+	traits::IdProvider,
+};
 
 const MEGABYTE: usize = 1024 * 1024;
 
@@ -95,6 +99,7 @@ pub fn start_ws<M: Send + Sync + 'static>(
 	metrics: Option<RpcMetrics>,
 	rpc_api: RpcModule<M>,
 	rt: tokio::runtime::Handle,
+	id_provider: Option<Box<dyn IdProvider>>,
 ) -> Result<WsServerHandle, anyhow::Error> {
 	let max_request_body_size = max_payload_mb
 		.map(|mb| mb.saturating_mul(MEGABYTE))
@@ -104,8 +109,13 @@ pub fn start_ws<M: Send + Sync + 'static>(
 	let mut builder = WsServerBuilder::new()
 		.max_request_body_size(max_request_body_size as u32)
 		.max_connections(max_connections as u64)
-		.set_id_provider(RandomStringIdProvider::new(16))
 		.custom_tokio_runtime(rt.clone());
+
+	if let Some(provider) = id_provider {
+		builder = builder.set_id_provider(provider);
+	} else {
+		builder = builder.set_id_provider(RandomStringIdProvider::new(16));
+	};
 
 	if let Some(cors) = cors {
 		// Whitelist listening address.

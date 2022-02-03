@@ -14,7 +14,7 @@ parking_lot = "0.11"
 thiserror = "1.0"
 serde = { version = "1.0.132", features = ["derive"] }
 
-jsonrpsee = { version = "0.8.0", features = ["server", "macros"] }
+jsonrpsee = { version = "0.9", features = ["server", "macros"] }
 
 codec = { version = "2.2.0", package = "parity-scale-codec", features = ["derive"] }
 
