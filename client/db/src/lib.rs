@@ -110,7 +110,7 @@ const DB_HASH_LEN: usize = 32;
 /// Hash type that this backend uses for the database.
 pub type DbHash = sp_core::H256;
 
-/// This is used as block body when storage-chain mode is enabled.
+/// An extrinsic entry in the database.
 #[derive(Debug, Encode, Decode)]
 enum DbExtrinsic<B: BlockT> {
 	/// Extrinsic that contains indexed data.
@@ -1756,25 +1756,21 @@ fn apply_index_ops<Block: BlockT>(
 		} else {
 			match index_map.get(&(index as u32)) {
 				Some((hash, size)) => {
-					let extrinsic = extrinsic.encode();
-					if *size as usize <= extrinsic.len() {
-						let offset = extrinsic.len() - *size as usize;
+					let encoded = extrinsic.encode();
+					if *size as usize <= encoded.len() {
+						let offset = encoded.len() - *size as usize;
 						transaction.store(
 							columns::TRANSACTION,
 							DbHash::from_slice(hash.as_ref()),
-							extrinsic[offset..].to_vec(),
+							encoded[offset..].to_vec(),
 						);
 						DbExtrinsic::Indexed {
 							hash: DbHash::from_slice(hash.as_ref()),
-							header: extrinsic[..offset].to_vec(),
+							header: encoded[..offset].to_vec(),
 						}
 					} else {
-						return Err(sp_blockchain::Error::Backend(format!(
-							"Error indexing extrinsic {}, invalid size. {} > {}",
-							DbHash::from_slice(hash.as_ref()),
-							size,
-							extrinsic.len(),
-						)))
+						// Invalid indexed slice. Just store full data and don't index anything.
+						DbExtrinsic::Full(extrinsic)
 					}
 				},
 				_ => DbExtrinsic::Full(extrinsic),
@@ -3157,6 +3153,41 @@ pub(crate) mod tests {
 		backend.finalize_block(BlockId::Number(1), None).unwrap();
 		assert_eq!(bc.body(BlockId::Number(0)).unwrap(), None);
 		assert_eq!(bc.indexed_transaction(&x0_hash).unwrap(), None);
+		assert_eq!(bc.indexed_transaction(&x1_hash).unwrap(), None);
+	}
+
+	#[test]
+	fn index_invalid_size() {
+		let backend = Backend::<Block>::new_test_with_tx_storage(1, 10);
+
+		let x0 = ExtrinsicWrapper::from(0u64).encode();
+		let x1 = ExtrinsicWrapper::from(1u64).encode();
+		let x0_hash = <HashFor<Block> as sp_core::Hasher>::hash(&x0[..]);
+		let x1_hash = <HashFor<Block> as sp_core::Hasher>::hash(&x1[..]);
+		let index = vec![
+			IndexOperation::Insert {
+				extrinsic: 0,
+				hash: x0_hash.as_ref().to_vec(),
+				size: (x0.len()) as u32,
+			},
+			IndexOperation::Insert {
+				extrinsic: 1,
+				hash: x1_hash.as_ref().to_vec(),
+				size: (x1.len() + 1) as u32,
+			},
+		];
+		insert_block(
+			&backend,
+			0,
+			Default::default(),
+			None,
+			Default::default(),
+			vec![0u64.into(), 1u64.into()],
+			Some(index),
+		)
+		.unwrap();
+		let bc = backend.blockchain();
+		assert_eq!(bc.indexed_transaction(&x0_hash).unwrap().unwrap(), &x0[..]);
 		assert_eq!(bc.indexed_transaction(&x1_hash).unwrap(), None);
 	}
 
