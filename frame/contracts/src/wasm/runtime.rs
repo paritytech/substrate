@@ -140,6 +140,8 @@ pub enum RuntimeCosts {
 	Caller,
 	/// Weight of calling `seal_is_contract`.
 	IsContract,
+	/// Weight of calling `seal_caller_is_origin`.
+	CallerIsOrigin,
 	/// Weight of calling `seal_address`.
 	Address,
 	/// Weight of calling `seal_gas_left`.
@@ -228,6 +230,7 @@ impl RuntimeCosts {
 			MeteringBlock(amount) => s.gas.saturating_add(amount.into()),
 			Caller => s.caller,
 			IsContract => s.is_contract,
+			CallerIsOrigin => s.caller_is_origin,
 			Address => s.address,
 			GasLeft => s.gas_left,
 			Balance => s.balance,
@@ -1264,14 +1267,25 @@ define_env!(Env, <E: Ext>,
 	// - account_ptr: a pointer to the address of the beneficiary account
 	//   Should be decodable as an `T::AccountId`. Traps otherwise.
 	//
-	// Returned value is u32-encoded boolean: (0 = false, 1 = true)
+	// Returned value is an u32-encoded boolean: (0 = false, 1 = true)
 	[__unstable__] seal_is_contract(ctx, account_ptr: u32) -> u32 => {
 		ctx.charge_gas(RuntimeCosts::IsContract)?;
-				let address: <<E as Ext>::T as frame_system::Config>::AccountId =
-		ctx.read_sandbox_memory_as(account_ptr)?;
+		let address: <<E as Ext>::T as frame_system::Config>::AccountId =
+			ctx.read_sandbox_memory_as(account_ptr)?;
 
 		Ok(ctx.ext.is_contract(address) as u32)
 	},
+
+	// Checks whether the caller of the current contract is the origin of the whole call stack
+	//
+	// Does not perform any storage lookups.
+	//
+	// Returned value is an u32-encoded boolean: (0 = false, 1 = true)
+	[__unstable__] seal_caller_is_origin(ctx) -> u32 => {
+		ctx.charge_gas(RuntimeCosts::CallerIsOrigin)?;
+		Ok(ctx.ext.caller_is_origin() as u32)
+	},
+
 
 	// Stores the address of the current contract into the supplied buffer.
 	//

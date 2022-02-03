@@ -259,6 +259,9 @@ pub struct HostFnWeights<T: Config> {
 	/// Weight of calling `seal_is_contract`.
 	pub is_contract: Weight,
 
+	/// Weight of calling `seal_caller_is_origin`.
+	pub caller_is_origin: Weight,
+
 	/// Weight of calling `seal_address`.
 	pub address: Weight,
 
@@ -575,6 +578,7 @@ impl<T: Config> Default for HostFnWeights<T> {
 		Self {
 			caller: cost_batched!(seal_caller),
 			is_contract: cost_batched!(seal_is_contract),
+			caller_is_origin: cost_batched!(seal_caller_is_origin),
 			address: cost_batched!(seal_address),
 			gas_left: cost_batched!(seal_gas_left),
 			balance: cost_batched!(seal_balance),

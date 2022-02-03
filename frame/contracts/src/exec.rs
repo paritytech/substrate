@@ -1663,7 +1663,41 @@ mod tests {
 				vec![],
 				None,
 			);
+			assert_matches!(result, Ok(_));
+		});
+	}
 
+	#[test]
+	fn caller_is_origin_returns_proper_values() {
+		let code_bob = MockLoader::insert(Call, |ctx, _| {
+			// CHARLIE is not the origin of the stack call
+			assert!(!ctx.ext.caller_is_origin());
+			exec_success()
+		});
+
+		let code_charlie = MockLoader::insert(Call, |ctx, _| {
+			// ALICE is the origin of the call stack
+			assert!(ctx.ext.caller_is_origin());
+			// CHARLIE calls BOB
+			ctx.ext.call(0, BOB, 0, vec![1], true)
+		});
+
+		ExtBuilder::default().build().execute_with(|| {
+			let schedule = <Test as Config>::Schedule::get();
+			place_contract(&BOB, code_bob);
+			place_contract(&CHARLIE, code_charlie);
+			let mut storage_meter = storage::meter::Meter::new(&ALICE, Some(0), 0).unwrap();
+			// ALICE -> CHARLIE (caller is origin) -> BOB (caller is not origin)
+			let result = MockStack::run_call(
+				ALICE,
+				CHARLIE,
+				&mut GasMeter::<Test>::new(GAS_LIMIT),
+				&mut storage_meter,
+				&schedule,
+				0,
+				vec![0],
+				None,
+			);
 			assert_matches!(result, Ok(_));
 		});
 	}
