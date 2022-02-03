@@ -403,6 +403,7 @@ benchmarks! {
 		let accounts = (0 .. r * API_BENCHMARK_BATCH_SIZE)
 			.map(|n| account::<T::AccountId>("account", n, 0))
 			.collect::<Vec<_>>();
+		let account_len = accounts.get(0).map(|i| i.encode().len()).unwrap_or(0);
 		let accounts_bytes = accounts.iter().map(|a| a.encode()).flatten().collect::<Vec<_>>();
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
@@ -415,11 +416,11 @@ benchmarks! {
 			data_segments: vec![
 				DataSegment {
 					offset: 0,
-					value:  accounts_bytes
+					value:	accounts_bytes
 				},
 			],
 			call_body: Some(body::repeated_dyn(r * API_BENCHMARK_BATCH_SIZE, vec![
-				Counter(0, 4), // address_ptr
+				Counter(0, account_len), // address_ptr
 				Regular(Instruction::Call(0)),
 				Regular(Instruction::Drop),
 			])),
@@ -427,8 +428,8 @@ benchmarks! {
 		});
 		let instance = Contract::<T>::new(code, vec![])?;
 		let info = instance.info()?;
-		// every 2nd account would be a contract
-		for acc in accounts.iter().step_by(2) {
+		// every account would be a contract (worst case)
+		for acc in accounts.iter() {
 			<ContractInfoOf<T>>::insert(acc, info.clone());
 		}
 		let origin = RawOrigin::Signed(instance.caller.clone());
@@ -445,8 +446,8 @@ benchmarks! {
 				return_type: Some(ValueType::I32),
 			}],
 			call_body: Some(body::repeated(r * API_BENCHMARK_BATCH_SIZE, &[
-			Instruction::Call(0),
-			Instruction::Drop,
+				Instruction::Call(0), //
+				Instruction::Drop,
 			])),
 			.. Default::default()
 		});
