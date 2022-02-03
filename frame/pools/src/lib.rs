@@ -11,7 +11,7 @@
 //!
 //! The delegation pool abstraction is composed of:
 //!
-//!  bonded pool: Tracks the distribution of actively staked funds. See [`BondedPool`] and
+//!  * bonded pool: Tracks the distribution of actively staked funds. See [`BondedPool`] and
 //! [`BondedPools`]
 //! * reward pool: Tracks rewards earned by actively staked funds. See [`RewardPool`] and
 //!   [`RewardPooks`].
