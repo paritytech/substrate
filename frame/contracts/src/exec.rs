@@ -159,7 +159,7 @@ pub trait Ext: sealing::Sealed {
 	fn caller(&self) -> &AccountIdOf<Self::T>;
 
 	/// Check if a contract lives at the specified `address`.
-	fn is_contract(&self, address: AccountIdOf<Self::T>) -> bool;
+	fn is_contract(&self, address: &AccountIdOf<Self::T>) -> bool;
 
 	/// Check if the caller of the current contract is the origin of the whole call stack.
 	///
@@ -1033,7 +1033,7 @@ where
 		self.frames().nth(1).map(|f| &f.account_id).unwrap_or(&self.origin)
 	}
 
-	fn is_contract(&self, address: T::AccountId) -> bool {
+	fn is_contract(&self, address: &T::AccountId) -> bool {
 		ContractInfoOf::<T>::contains_key(&address)
 	}
 
@@ -1641,9 +1641,9 @@ mod tests {
 	fn is_contract_returns_proper_values() {
 		let bob_ch = MockLoader::insert(Call, |ctx, _| {
 			// Verify that BOB is a contract
-			assert!(ctx.ext.is_contract(BOB));
+			assert!(ctx.ext.is_contract(&BOB));
 			// Verify that ALICE is not a contract
-			assert!(!ctx.ext.is_contract(ALICE));
+			assert!(!ctx.ext.is_contract(&ALICE));
 			exec_success()
 		});
 

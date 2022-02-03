@@ -1273,7 +1273,7 @@ define_env!(Env, <E: Ext>,
 		let address: <<E as Ext>::T as frame_system::Config>::AccountId =
 			ctx.read_sandbox_memory_as(account_ptr)?;
 
-		Ok(ctx.ext.is_contract(address) as u32)
+		Ok(ctx.ext.is_contract(&address) as u32)
 	},
 
 	// Checks whether the caller of the current contract is the origin of the whole call stack.
