@@ -191,7 +191,7 @@ mod private {
 /// Proposers are generic over bits of "consensus data" which are engine-specific.
 pub trait Proposer<B: BlockT> {
 	/// Error type which can occur when proposing or evaluating.
-	type Error: From<Error> + std::fmt::Debug + 'static;
+	type Error: From<Error> + std::error::Error + 'static;
 	/// The transaction type used by the backend.
 	type Transaction: Default + Send + 'static;
 	/// Future that resolves to a committed proposal with an optional proof.
