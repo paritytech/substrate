@@ -22,12 +22,16 @@
 
 use jsonrpsee::{
 	http_server::{AccessControlBuilder, HttpServerBuilder, HttpServerHandle},
-	ws_server::{IdProvider, RandomStringIdProvider, WsServerBuilder, WsServerHandle},
+	ws_server::{WsServerBuilder, WsServerHandle},
 	RpcModule,
 };
 use std::net::SocketAddr;
 
 pub use crate::middleware::{RpcMetrics, RpcMiddleware};
+pub use jsonrpsee::core::{
+	id_providers::{RandomIntegerIdProvider, RandomStringIdProvider},
+	traits::IdProvider,
+};
 
 const MEGABYTE: usize = 1024 * 1024;
 

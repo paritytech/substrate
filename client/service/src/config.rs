@@ -18,7 +18,6 @@
 
 //! Service configuration.
 
-pub use jsonrpsee::ws_server::IdProvider;
 pub use sc_client_api::execution_extensions::{ExecutionStrategies, ExecutionStrategy};
 pub use sc_client_db::{Database, DatabaseSource, KeepBlocks, PruningMode, TransactionStorageMode};
 pub use sc_executor::WasmExecutionMethod;
@@ -31,6 +30,7 @@ pub use sc_network::{
 	Multiaddr,
 };
 
+use crate::RpcSubscriptionIdProvider;
 use prometheus_endpoint::Registry;
 use sc_chain_spec::ChainSpec;
 pub use sc_telemetry::TelemetryEndpoints;
@@ -99,7 +99,7 @@ pub struct Configuration {
 	/// Maximum payload of rpc request/responses.
 	pub rpc_max_payload: Option<usize>,
 	/// JSON-RPC subscription ID generator.
-	pub rpc_id_provider: Option<Box<dyn IdProvider>>,
+	pub rpc_id_provider: Option<Box<dyn RpcSubscriptionIdProvider>>,
 	/// Maximum size of the output buffer capacity for websocket connections.
 	pub ws_max_out_buffer_capacity: Option<usize>,
 	/// Prometheus endpoint configuration. `None` if disabled.
