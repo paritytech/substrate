@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -70,7 +70,7 @@ impl<T> Contains<T> for Tuple {
 /// to `matches!`.
 #[macro_export]
 macro_rules! match_type {
-	( pub type $n:ident: impl Contains<$t:ty> = { $phead:pat $( | $ptail:pat )* } ; ) => {
+	( pub type $n:ident: impl Contains<$t:ty> = { $phead:pat_param $( | $ptail:pat )* } ; ) => {
 		pub struct $n;
 		impl $crate::traits::Contains<$t> for $n {
 			fn contains(l: &$t) -> bool {

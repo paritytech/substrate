@@ -1,10 +1,10 @@
 [package]
 name = "node-template-runtime"
 version = "3.0.0"
-description = 'A fresh FRAME-based Substrate runtime, ready for hacking.'
+description = "A fresh FRAME-based Substrate runtime, ready for hacking."
 authors = ["Substrate DevHub <https://github.com/substrate-developer-hub>"]
 homepage = "https://substrate.io/"
-edition = "2018"
+edition = "2021"
 license = "Unlicense"
 publish = false
 repository = "https://github.com/substrate-developer-hub/substrate-node-template/"
@@ -29,12 +29,12 @@ frame-executive = { version = "4.0.0-dev", default-features = false, path = "../
 sp-api = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/api" }
 sp-block-builder = { path = "../../../primitives/block-builder", default-features = false, version = "4.0.0-dev"}
 sp-consensus-aura = { version = "0.10.0-dev", default-features = false, path = "../../../primitives/consensus/aura" }
-sp-core = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/core" }
+sp-core = { version = "4.1.0-dev", default-features = false, path = "../../../primitives/core" }
 sp-inherents = { path = "../../../primitives/inherents", default-features = false, version = "4.0.0-dev"}
 sp-offchain = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/offchain" }
-sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/runtime" }
+sp-runtime = { version = "4.1.0-dev", default-features = false, path = "../../../primitives/runtime" }
 sp-session = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/session" }
-sp-std = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/std" }
+sp-std = { version = "4.0.0", default-features = false, path = "../../../primitives/std" }
 sp-transaction-pool = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/transaction-pool" }
 sp-version = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/version" }
 
@@ -45,7 +45,7 @@ pallet-transaction-payment-rpc-runtime-api = { version = "4.0.0-dev", default-fe
 # Used for runtime benchmarking
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../../../frame/benchmarking", optional = true }
 frame-system-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../../../frame/system/benchmarking", optional = true }
-hex-literal = { version = "0.3.3", optional = true }
+hex-literal = { version = "0.3.4", optional = true }
 
 pallet-template = { version = "3.0.0", default-features = false, path = "../pallets/template" }
 
@@ -83,7 +83,7 @@ std = [
 	"sp-version/std",
 ]
 runtime-benchmarks = [
-	"frame-benchmarking",
+	"frame-benchmarking/runtime-benchmarks",
 	"frame-support/runtime-benchmarks",
 	"frame-system-benchmarking",
 	"frame-system/runtime-benchmarks",

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -131,7 +131,7 @@ fn derive_totokens_enum(input: syn::ItemEnum) -> TokenStream {
 		};
 		let field = fields_idents(v.fields.iter().map(Clone::clone));
 		quote! {
-			#ident::#v_ident#fields_build => {
+			#ident::#v_ident #fields_build => {
 				#(
 					#field.to_tokens(tokens);
 				)*

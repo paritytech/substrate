@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,8 +18,11 @@
 //! Utils for parsing user input
 
 pub(crate) fn hash(block_hash: &str) -> Result<String, String> {
-	let (block_hash, offset) =
-		if block_hash.starts_with("0x") { (&block_hash[2..], 2) } else { (block_hash, 0) };
+	let (block_hash, offset) = if let Some(block_hash) = block_hash.strip_prefix("0x") {
+		(block_hash, 2)
+	} else {
+		(block_hash, 0)
+	};
 
 	if let Some(pos) = block_hash.chars().position(|c| !c.is_ascii_hexdigit()) {
 		Err(format!(

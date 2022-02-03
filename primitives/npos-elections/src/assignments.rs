@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -201,7 +201,7 @@ impl<VoterIndex, TargetIndex, P: PerThing> IndexAssignment<VoterIndex, TargetInd
 	}
 }
 
-/// A type alias for [`IndexAssignment`] made from [`crate::Solution`].
+/// A type alias for [`IndexAssignment`] made from [`crate::NposSolution`].
 pub type IndexAssignmentOf<C> = IndexAssignment<
 	<C as crate::NposSolution>::VoterIndex,
 	<C as crate::NposSolution>::TargetIndex,

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -29,17 +29,17 @@ use prometheus::{core::GenericCounterVec, Opts};
 
 lazy_static! {
 	pub static ref TOKIO_THREADS_TOTAL: GenericCounter<AtomicU64> =
-		GenericCounter::new("tokio_threads_total", "Total number of threads created")
+		GenericCounter::new("substrate_tokio_threads_total", "Total number of threads created")
 			.expect("Creating of statics doesn't fail. qed");
 	pub static ref TOKIO_THREADS_ALIVE: GenericGauge<AtomicU64> =
-		GenericGauge::new("tokio_threads_alive", "Number of threads alive right now")
+		GenericGauge::new("substrate_tokio_threads_alive", "Number of threads alive right now")
 			.expect("Creating of statics doesn't fail. qed");
 }
 
 #[cfg(feature = "metered")]
 lazy_static! {
 	pub static ref UNBOUNDED_CHANNELS_COUNTER : GenericCounterVec<AtomicU64> = GenericCounterVec::new(
-		Opts::new("unbounded_channel_len", "Items in each mpsc::unbounded instance"),
+		Opts::new("substrate_unbounded_channel_len", "Items in each mpsc::unbounded instance"),
 		&["entity", "action"] // 'name of channel, send|received|dropped
 	).expect("Creating of statics doesn't fail. qed");
 

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -35,7 +35,8 @@ use sp_blockchain::{ApplyExtrinsicFailed, Error};
 use sp_core::ExecutionContext;
 use sp_runtime::{
 	generic::BlockId,
-	traits::{Block as BlockT, DigestFor, Hash, HashFor, Header as HeaderT, NumberFor, One},
+	traits::{Block as BlockT, Hash, HashFor, Header as HeaderT, NumberFor, One},
+	Digest,
 };
 
 pub use sp_block_builder::BlockBuilder as BlockBuilderApi;
@@ -119,14 +120,14 @@ where
 	fn new_block_at<R: Into<RecordProof>>(
 		&self,
 		parent: &BlockId<Block>,
-		inherent_digests: DigestFor<Block>,
+		inherent_digests: Digest,
 		record_proof: R,
 	) -> sp_blockchain::Result<BlockBuilder<Block, RA, B>>;
 
 	/// Create a new block, built on the head of the chain.
 	fn new_block(
 		&self,
-		inherent_digests: DigestFor<Block>,
+		inherent_digests: Digest,
 	) -> sp_blockchain::Result<BlockBuilder<Block, RA, B>>;
 }
 
@@ -159,7 +160,7 @@ where
 		parent_hash: Block::Hash,
 		parent_number: NumberFor<Block>,
 		record_proof: RecordProof,
-		inherent_digests: DigestFor<Block>,
+		inherent_digests: Digest,
 		backend: &'a B,
 	) -> Result<Self, Error> {
 		let header = <<Block as BlockT>::Header as HeaderT>::new(
@@ -231,21 +232,18 @@ where
 			header.extrinsics_root().clone(),
 			HashFor::<Block>::ordered_trie_root(
 				self.extrinsics.iter().map(Encode::encode).collect(),
+				sp_runtime::StateVersion::V0,
 			),
 		);
 
 		let proof = self.api.extract_proof();
 
 		let state = self.backend.state_at(self.block_id)?;
-		let changes_trie_state = backend::changes_tries_state_at_block(
-			&self.block_id,
-			self.backend.changes_trie_storage(),
-		)?;
 		let parent_hash = self.parent_hash;
 
 		let storage_changes = self
 			.api
-			.into_storage_changes(&state, changes_trie_state.as_ref(), parent_hash)
+			.into_storage_changes(&state, parent_hash)
 			.map_err(|e| sp_blockchain::Error::StorageChanges(e))?;
 
 		Ok(BuiltBlock {

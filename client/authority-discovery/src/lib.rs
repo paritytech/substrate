@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -18,6 +18,7 @@
 
 #![warn(missing_docs)]
 #![recursion_limit = "1024"]
+
 //! Substrate authority discovery.
 //!
 //! This crate enables Substrate authorities to discover and directly connect to
@@ -31,7 +32,7 @@ pub use crate::{
 	worker::{NetworkProvider, Role, Worker},
 };
 
-use std::{sync::Arc, time::Duration};
+use std::{collections::HashSet, sync::Arc, time::Duration};
 
 use futures::{
 	channel::{mpsc, oneshot},
@@ -58,11 +59,13 @@ pub struct WorkerConfig {
 	///
 	/// By default this is set to 1 hour.
 	pub max_publish_interval: Duration,
+
 	/// Interval at which the keystore is queried. If the keys have changed, unconditionally
 	/// re-publish its addresses on the DHT.
 	///
 	/// By default this is set to 1 minute.
 	pub keystore_refresh_interval: Duration,
+
 	/// The maximum interval in which the node will query the DHT for new entries.
 	///
 	/// By default this is set to 10 minutes.
@@ -75,6 +78,11 @@ pub struct WorkerConfig {
 	///
 	/// Defaults to `true` to avoid the surprise factor.
 	pub publish_non_global_ips: bool,
+
+	/// Reject authority discovery records that are not signed by their network identity (PeerId)
+	///
+	/// Defaults to `false` to provide compatibility with old versions
+	pub strict_record_validation: bool,
 }
 
 impl Default for WorkerConfig {
@@ -95,6 +103,7 @@ impl Default for WorkerConfig {
 			// `authority_discovery_dht_event_received`.
 			max_query_interval: Duration::from_secs(10 * 60),
 			publish_non_global_ips: true,
+			strict_record_validation: false,
 		}
 	}
 }
@@ -156,7 +165,7 @@ where
 /// Message send from the [`Service`] to the [`Worker`].
 pub(crate) enum ServicetoWorkerMsg {
 	/// See [`Service::get_addresses_by_authority_id`].
-	GetAddressesByAuthorityId(AuthorityId, oneshot::Sender<Option<Vec<Multiaddr>>>),
-	/// See [`Service::get_authority_id_by_peer_id`].
-	GetAuthorityIdByPeerId(PeerId, oneshot::Sender<Option<AuthorityId>>),
+	GetAddressesByAuthorityId(AuthorityId, oneshot::Sender<Option<HashSet<Multiaddr>>>),
+	/// See [`Service::get_authority_ids_by_peer_id`].
+	GetAuthorityIdsByPeerId(PeerId, oneshot::Sender<Option<HashSet<AuthorityId>>>),
 }

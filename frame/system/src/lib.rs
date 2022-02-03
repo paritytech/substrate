@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -73,7 +73,7 @@ use sp_runtime::{
 		CheckEqual, Dispatchable, Hash, Lookup, LookupError, MaybeDisplay, MaybeMallocSizeOf,
 		MaybeSerializeDeserialize, Member, One, Saturating, SimpleBitOps, StaticLookup, Zero,
 	},
-	DispatchError, Either, Perbill, RuntimeDebug,
+	DispatchError, Perbill, RuntimeDebug,
 };
 #[cfg(any(feature = "std", test))]
 use sp_std::map;
@@ -85,8 +85,8 @@ use frame_support::{
 	dispatch::{DispatchResult, DispatchResultWithPostInfo},
 	storage,
 	traits::{
-		Contains, EnsureOrigin, Get, HandleLifetime, OnKilledAccount, OnNewAccount, OriginTrait,
-		PalletInfo, SortedMembers, StoredMap,
+		ConstU32, Contains, EnsureOrigin, Get, HandleLifetime, OnKilledAccount, OnNewAccount,
+		OriginTrait, PalletInfo, SortedMembers, StoredMap,
 	},
 	weights::{
 		extract_actual_weight, DispatchClass, DispatchInfo, PerDispatchClass, RuntimeDbWeight,
@@ -95,7 +95,7 @@ use frame_support::{
 	Parameter,
 };
 use scale_info::TypeInfo;
-use sp_core::{storage::well_known_keys, ChangesTrieConfiguration};
+use sp_core::storage::well_known_keys;
 
 #[cfg(feature = "std")]
 use frame_support::traits::GenesisBuild;
@@ -114,8 +114,11 @@ pub mod mocking;
 mod tests;
 pub mod weights;
 
+pub mod migrations;
+
 pub use extensions::{
-	check_genesis::CheckGenesis, check_mortality::CheckMortality, check_nonce::CheckNonce,
+	check_genesis::CheckGenesis, check_mortality::CheckMortality,
+	check_non_zero_sender::CheckNonZeroSender, check_nonce::CheckNonce,
 	check_spec_version::CheckSpecVersion, check_tx_version::CheckTxVersion,
 	check_weight::CheckWeight,
 };
@@ -124,13 +127,19 @@ pub use extensions::check_mortality::CheckMortality as CheckEra;
 pub use weights::WeightInfo;
 
 /// Compute the trie root of a list of extrinsics.
+///
+/// The merkle proof is using the same trie as runtime state with
+/// `state_version` 0.
 pub fn extrinsics_root<H: Hash, E: codec::Encode>(extrinsics: &[E]) -> H::Output {
 	extrinsics_data_root::<H>(extrinsics.iter().map(codec::Encode::encode).collect())
 }
 
 /// Compute the trie root of a list of extrinsics.
+///
+/// The merkle proof is using the same trie as runtime state with
+/// `state_version` 0.
 pub fn extrinsics_data_root<H: Hash>(xts: Vec<Vec<u8>>) -> H::Output {
-	H::ordered_trie_root(xts)
+	H::ordered_trie_root(xts, sp_core::storage::StateVersion::V0)
 }
 
 /// An object to track the currently used extrinsic weight in a block.
@@ -148,6 +157,36 @@ impl<T: Config> SetCode<T> for () {
 	fn set_code(code: Vec<u8>) -> DispatchResult {
 		<Pallet<T>>::update_code_in_storage(&code)?;
 		Ok(())
+	}
+}
+
+/// Numeric limits over the ability to add a consumer ref using `inc_consumers`.
+pub trait ConsumerLimits {
+	/// The number of consumers over which `inc_consumers` will cease to work.
+	fn max_consumers() -> RefCount;
+	/// The maximum number of additional consumers expected to be over be added at once using
+	/// `inc_consumers_without_limit`.
+	///
+	/// Note: This is not enforced and it's up to the chain's author to ensure this reflects the
+	/// actual situation.
+	fn max_overflow() -> RefCount;
+}
+
+impl<const Z: u32> ConsumerLimits for ConstU32<Z> {
+	fn max_consumers() -> RefCount {
+		Z
+	}
+	fn max_overflow() -> RefCount {
+		Z
+	}
+}
+
+impl<MaxNormal: Get<u32>, MaxOverflow: Get<u32>> ConsumerLimits for (MaxNormal, MaxOverflow) {
+	fn max_consumers() -> RefCount {
+		MaxNormal::get()
+	}
+	fn max_overflow() -> RefCount {
+		MaxOverflow::get()
 	}
 }
 
@@ -235,7 +274,6 @@ pub mod pallet {
 			+ Debug
 			+ MaybeDisplay
 			+ Ord
-			+ Default
 			+ MaxEncodedLen;
 
 		/// Converting trait to take a source type and convert to `AccountId`.
@@ -301,27 +339,23 @@ pub mod pallet {
 		/// What to do if the runtime wants to change the code to something new.
 		///
 		/// The default (`()`) implementation is responsible for setting the correct storage
-		/// entry and emitting corresponding event and log item. (see [`update_code_in_storage`]).
+		/// entry and emitting corresponding event and log item. (see
+		/// [`Pallet::update_code_in_storage`]).
 		/// It's unlikely that this needs to be customized, unless you are writing a parachain using
 		/// `Cumulus`, where the actual code change is deferred.
 		type OnSetCode: SetCode<Self>;
+
+		/// The maximum number of consumers allowed on a single account.
+		type MaxConsumers: ConsumerLimits;
 	}
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]
+	#[pallet::without_storage_info]
 	pub struct Pallet<T>(_);
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		fn on_runtime_upgrade() -> frame_support::weights::Weight {
-			if !UpgradedToTripleRefCount::<T>::get() {
-				UpgradedToTripleRefCount::<T>::put(true);
-				migrations::migrate_to_triple_ref_count::<T>()
-			} else {
-				0
-			}
-		}
-
 		fn integrity_test() {
 			T::BlockWeights::get().validate().expect("The weights are invalid.");
 		}
@@ -345,19 +379,11 @@ pub mod pallet {
 		/// # </weight>
 		#[pallet::weight(T::SystemWeightInfo::remark(_remark.len() as u32))]
 		pub fn remark(origin: OriginFor<T>, _remark: Vec<u8>) -> DispatchResultWithPostInfo {
-			ensure_signed(origin)?;
+			ensure_signed_or_root(origin)?;
 			Ok(().into())
 		}
 
 		/// Set the number of pages in the WebAssembly environment's heap.
-		///
-		/// # <weight>
-		/// - `O(1)`
-		/// - 1 storage write.
-		/// - Base Weight: 1.405 µs
-		/// - 1 write to HEAP_PAGES
-		/// - 1 digest item
-		/// # </weight>
 		#[pallet::weight((T::SystemWeightInfo::set_heap_pages(), DispatchClass::Operational))]
 		pub fn set_heap_pages(origin: OriginFor<T>, pages: u64) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
@@ -405,45 +431,7 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		/// Set the new changes trie configuration.
-		///
-		/// # <weight>
-		/// - `O(1)`
-		/// - 1 storage write or delete (codec `O(1)`).
-		/// - 1 call to `deposit_log`: Uses `append` API, so O(1)
-		/// - Base Weight: 7.218 µs
-		/// - DB Weight:
-		///     - Writes: Changes Trie, System Digest
-		/// # </weight>
-		#[pallet::weight((T::SystemWeightInfo::set_changes_trie_config(), DispatchClass::Operational))]
-		pub fn set_changes_trie_config(
-			origin: OriginFor<T>,
-			changes_trie_config: Option<ChangesTrieConfiguration>,
-		) -> DispatchResultWithPostInfo {
-			ensure_root(origin)?;
-			match changes_trie_config.clone() {
-				Some(changes_trie_config) => storage::unhashed::put_raw(
-					well_known_keys::CHANGES_TRIE_CONFIG,
-					&changes_trie_config.encode(),
-				),
-				None => storage::unhashed::kill(well_known_keys::CHANGES_TRIE_CONFIG),
-			}
-
-			let log = generic::DigestItem::ChangesTrieSignal(
-				generic::ChangesTrieSignal::NewConfiguration(changes_trie_config),
-			);
-			Self::deposit_log(log.into());
-			Ok(().into())
-		}
-
 		/// Set some items of storage.
-		///
-		/// # <weight>
-		/// - `O(I)` where `I` length of `items`
-		/// - `I` storage writes (`O(1)`).
-		/// - Base Weight: 0.568 * i µs
-		/// - Writes: Number of items
-		/// # </weight>
 		#[pallet::weight((
 			T::SystemWeightInfo::set_storage(items.len() as u32),
 			DispatchClass::Operational,
@@ -460,13 +448,6 @@ pub mod pallet {
 		}
 
 		/// Kill some items from storage.
-		///
-		/// # <weight>
-		/// - `O(IK)` where `I` length of `keys` and `K` length of one key
-		/// - `I` storage deletions.
-		/// - Base Weight: .378 * i µs
-		/// - Writes: Number of items
-		/// # </weight>
 		#[pallet::weight((
 			T::SystemWeightInfo::kill_storage(keys.len() as u32),
 			DispatchClass::Operational,
@@ -483,13 +464,6 @@ pub mod pallet {
 		///
 		/// **NOTE:** We rely on the Root origin to provide us the number of subkeys under
 		/// the prefix we are removing to accurately calculate the weight of this function.
-		///
-		/// # <weight>
-		/// - `O(P)` where `P` amount of keys with prefix `prefix`
-		/// - `P` storage deletions.
-		/// - Base Weight: 0.834 * P µs
-		/// - Writes: Number of subkeys + 1
-		/// # </weight>
 		#[pallet::weight((
 			T::SystemWeightInfo::kill_prefix(_subkeys.saturating_add(1)),
 			DispatchClass::Operational,
@@ -517,7 +491,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			let hash = T::Hashing::hash(&remark[..]);
-			Self::deposit_event(Event::Remarked(who, hash));
+			Self::deposit_event(Event::Remarked { sender: who, hash });
 			Ok(().into())
 		}
 	}
@@ -525,18 +499,18 @@ pub mod pallet {
 	/// Event for the System pallet.
 	#[pallet::event]
 	pub enum Event<T: Config> {
-		/// An extrinsic completed successfully. \[info\]
-		ExtrinsicSuccess(DispatchInfo),
-		/// An extrinsic failed. \[error, info\]
-		ExtrinsicFailed(DispatchError, DispatchInfo),
+		/// An extrinsic completed successfully.
+		ExtrinsicSuccess { dispatch_info: DispatchInfo },
+		/// An extrinsic failed.
+		ExtrinsicFailed { dispatch_error: DispatchError, dispatch_info: DispatchInfo },
 		/// `:code` was updated.
 		CodeUpdated,
-		/// A new \[account\] was created.
-		NewAccount(T::AccountId),
-		/// An \[account\] was reaped.
-		KilledAccount(T::AccountId),
-		/// On on-chain remark happened. \[origin, remark_hash\]
-		Remarked(T::AccountId, T::Hash),
+		/// A new account was created.
+		NewAccount { account: T::AccountId },
+		/// An account was reaped.
+		KilledAccount { account: T::AccountId },
+		/// On on-chain remark happened.
+		Remarked { sender: T::AccountId, hash: T::Hash },
 	}
 
 	/// Old name generated by `decl_event`.
@@ -560,6 +534,8 @@ pub mod pallet {
 		NonDefaultComposite,
 		/// There is a non-zero reference count preventing the account from being purged.
 		NonZeroRefCount,
+		/// The origin filter prevent the call to be dispatched.
+		CallFiltered,
 	}
 
 	/// Exposed trait-generic origin type.
@@ -620,7 +596,7 @@ pub mod pallet {
 	/// Digest of the current block, also part of the block header.
 	#[pallet::storage]
 	#[pallet::getter(fn digest)]
-	pub(super) type Digest<T: Config> = StorageValue<_, DigestOf<T>, ValueQuery>;
+	pub(super) type Digest<T: Config> = StorageValue<_, generic::Digest, ValueQuery>;
 
 	/// Events deposited for the current block.
 	///
@@ -667,18 +643,11 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(super) type ExecutionPhase<T: Config> = StorageValue<_, Phase>;
 
+	#[cfg_attr(feature = "std", derive(Default))]
 	#[pallet::genesis_config]
 	pub struct GenesisConfig {
-		pub changes_trie_config: Option<ChangesTrieConfiguration>,
 		#[serde(with = "sp_core::bytes")]
 		pub code: Vec<u8>,
-	}
-
-	#[cfg(feature = "std")]
-	impl Default for GenesisConfig {
-		fn default() -> Self {
-			Self { changes_trie_config: Default::default(), code: Default::default() }
-		}
 	}
 
 	#[pallet::genesis_build]
@@ -693,53 +662,7 @@ pub mod pallet {
 
 			sp_io::storage::set(well_known_keys::CODE, &self.code);
 			sp_io::storage::set(well_known_keys::EXTRINSIC_INDEX, &0u32.encode());
-			if let Some(ref changes_trie_config) = self.changes_trie_config {
-				sp_io::storage::set(
-					well_known_keys::CHANGES_TRIE_CONFIG,
-					&changes_trie_config.encode(),
-				);
-			}
 		}
-	}
-}
-
-pub mod migrations {
-	use super::*;
-
-	#[allow(dead_code)]
-	/// Migrate from unique `u8` reference counting to triple `u32` reference counting.
-	pub fn migrate_all<T: Config>() -> frame_support::weights::Weight {
-		Account::<T>::translate::<(T::Index, u8, T::AccountData), _>(|_key, (nonce, rc, data)| {
-			Some(AccountInfo {
-				nonce,
-				consumers: rc as RefCount,
-				providers: 1,
-				sufficients: 0,
-				data,
-			})
-		});
-		T::BlockWeights::get().max_block
-	}
-
-	#[allow(dead_code)]
-	/// Migrate from unique `u32` reference counting to triple `u32` reference counting.
-	pub fn migrate_to_dual_ref_count<T: Config>() -> frame_support::weights::Weight {
-		Account::<T>::translate::<(T::Index, RefCount, T::AccountData), _>(
-			|_key, (nonce, consumers, data)| {
-				Some(AccountInfo { nonce, consumers, providers: 1, sufficients: 0, data })
-			},
-		);
-		T::BlockWeights::get().max_block
-	}
-
-	/// Migrate from dual `u32` reference counting to triple `u32` reference counting.
-	pub fn migrate_to_triple_ref_count<T: Config>() -> frame_support::weights::Weight {
-		Account::<T>::translate::<(T::Index, RefCount, RefCount, T::AccountData), _>(
-			|_key, (nonce, consumers, providers, data)| {
-				Some(AccountInfo { nonce, consumers, providers, sufficients: 0, data })
-			},
-		);
-		T::BlockWeights::get().max_block
 	}
 }
 
@@ -762,9 +685,6 @@ impl GenesisConfig {
 		<Self as GenesisBuild<T>>::assimilate_storage(self, storage)
 	}
 }
-
-pub type DigestOf<T> = generic::Digest<<T as Config>::Hash>;
-pub type DigestItemOf<T> = generic::DigestItem<<T as Config>::Hash>;
 
 pub type Key = Vec<u8>;
 pub type KeyValue = (Vec<u8>, Vec<u8>);
@@ -901,7 +821,7 @@ impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>, Acco
 }
 
 pub struct EnsureSigned<AccountId>(sp_std::marker::PhantomData<AccountId>);
-impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>, AccountId: Default>
+impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>, AccountId: Decode>
 	EnsureOrigin<O> for EnsureSigned<AccountId>
 {
 	type Success = AccountId;
@@ -914,7 +834,10 @@ impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>, Acco
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn successful_origin() -> O {
-		O::from(RawOrigin::Signed(Default::default()))
+		let zero_account_id =
+			AccountId::decode(&mut sp_runtime::traits::TrailingZeroInput::zeroes())
+				.expect("infinite length input; no invalid inputs for type; qed");
+		O::from(RawOrigin::Signed(zero_account_id))
 	}
 }
 
@@ -922,7 +845,7 @@ pub struct EnsureSignedBy<Who, AccountId>(sp_std::marker::PhantomData<(Who, Acco
 impl<
 		O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>,
 		Who: SortedMembers<AccountId>,
-		AccountId: PartialEq + Clone + Ord + Default,
+		AccountId: PartialEq + Clone + Ord + Decode,
 	> EnsureOrigin<O> for EnsureSignedBy<Who, AccountId>
 {
 	type Success = AccountId;
@@ -935,10 +858,13 @@ impl<
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn successful_origin() -> O {
+		let zero_account_id =
+			AccountId::decode(&mut sp_runtime::traits::TrailingZeroInput::zeroes())
+				.expect("infinite length input; no invalid inputs for type; qed");
 		let members = Who::sorted_members();
 		let first_member = match members.get(0) {
 			Some(account) => account.clone(),
-			None => Default::default(),
+			None => zero_account_id,
 		};
 		O::from(RawOrigin::Signed(first_member.clone()))
 	}
@@ -975,29 +901,6 @@ impl<O, T> EnsureOrigin<O> for EnsureNever<T> {
 	}
 }
 
-/// The "OR gate" implementation of `EnsureOrigin`.
-///
-/// Origin check will pass if `L` or `R` origin check passes. `L` is tested first.
-pub struct EnsureOneOf<AccountId, L, R>(sp_std::marker::PhantomData<(AccountId, L, R)>);
-impl<
-		AccountId,
-		O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>,
-		L: EnsureOrigin<O>,
-		R: EnsureOrigin<O>,
-	> EnsureOrigin<O> for EnsureOneOf<AccountId, L, R>
-{
-	type Success = Either<L::Success, R::Success>;
-	fn try_origin(o: O) -> Result<Self::Success, O> {
-		L::try_origin(o)
-			.map_or_else(|o| R::try_origin(o).map(|o| Either::Right(o)), |o| Ok(Either::Left(o)))
-	}
-
-	#[cfg(feature = "runtime-benchmarks")]
-	fn successful_origin() -> O {
-		L::successful_origin()
-	}
-}
-
 /// Ensure that the origin `o` represents a signed extrinsic (i.e. transaction).
 /// Returns `Ok` with the account that signed the extrinsic or an `Err` otherwise.
 pub fn ensure_signed<OuterOrigin, AccountId>(o: OuterOrigin) -> Result<AccountId, BadOrigin>
@@ -1006,6 +909,22 @@ where
 {
 	match o.into() {
 		Ok(RawOrigin::Signed(t)) => Ok(t),
+		_ => Err(BadOrigin),
+	}
+}
+
+/// Ensure that the origin `o` represents either a signed extrinsic (i.e. transaction) or the root.
+/// Returns `Ok` with the account that signed the extrinsic, `None` if it was root,  or an `Err`
+/// otherwise.
+pub fn ensure_signed_or_root<OuterOrigin, AccountId>(
+	o: OuterOrigin,
+) -> Result<Option<AccountId>, BadOrigin>
+where
+	OuterOrigin: Into<Result<RawOrigin<AccountId>, OuterOrigin>>,
+{
+	match o.into() {
+		Ok(RawOrigin::Root) => Ok(None),
+		Ok(RawOrigin::Signed(t)) => Ok(Some(t)),
 		_ => Err(BadOrigin),
 	}
 }
@@ -1029,27 +948,6 @@ where
 	match o.into() {
 		Ok(RawOrigin::None) => Ok(()),
 		_ => Err(BadOrigin),
-	}
-}
-
-/// A type of block initialization to perform.
-pub enum InitKind {
-	/// Leave inspectable storage entries in state.
-	///
-	/// i.e. `Events` are not being reset.
-	/// Should only be used for off-chain calls,
-	/// regular block execution should clear those.
-	Inspection,
-
-	/// Reset also inspectable storage entries.
-	///
-	/// This should be used for regular block execution.
-	Full,
-}
-
-impl Default for InitKind {
-	fn default() -> Self {
-		InitKind::Full
 	}
 }
 
@@ -1245,8 +1143,27 @@ impl<T: Config> Pallet<T> {
 
 	/// Increment the reference counter on an account.
 	///
-	/// The account `who`'s `providers` must be non-zero or this will return an error.
+	/// The account `who`'s `providers` must be non-zero and the current number of consumers must
+	/// be less than `MaxConsumers::max_consumers()` or this will return an error.
 	pub fn inc_consumers(who: &T::AccountId) -> Result<(), DispatchError> {
+		Account::<T>::try_mutate(who, |a| {
+			if a.providers > 0 {
+				if a.consumers < T::MaxConsumers::max_consumers() {
+					a.consumers = a.consumers.saturating_add(1);
+					Ok(())
+				} else {
+					Err(DispatchError::TooManyConsumers)
+				}
+			} else {
+				Err(DispatchError::NoProviders)
+			}
+		})
+	}
+
+	/// Increment the reference counter on an account, ignoring the `MaxConsumers` limits.
+	///
+	/// The account `who`'s `providers` must be non-zero or this will return an error.
+	pub fn inc_consumers_without_limit(who: &T::AccountId) -> Result<(), DispatchError> {
 		Account::<T>::try_mutate(who, |a| {
 			if a.providers > 0 {
 				a.consumers = a.consumers.saturating_add(1);
@@ -1290,7 +1207,8 @@ impl<T: Config> Pallet<T> {
 
 	/// True if the account has at least one provider reference.
 	pub fn can_inc_consumer(who: &T::AccountId) -> bool {
-		Account::<T>::get(who).providers > 0
+		let a = Account::<T>::get(who);
+		a.providers > 0 && a.consumers < T::MaxConsumers::max_consumers()
 	}
 
 	/// Deposits an event into this block's event record.
@@ -1374,12 +1292,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Start the execution of a particular block.
-	pub fn initialize(
-		number: &T::BlockNumber,
-		parent_hash: &T::Hash,
-		digest: &DigestOf<T>,
-		kind: InitKind,
-	) {
+	pub fn initialize(number: &T::BlockNumber, parent_hash: &T::Hash, digest: &generic::Digest) {
 		// populate environment
 		ExecutionPhase::<T>::put(Phase::Initialization);
 		storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &0u32);
@@ -1390,13 +1303,6 @@ impl<T: Config> Pallet<T> {
 
 		// Remove previous block data from storage
 		BlockWeight::<T>::kill();
-
-		// Kill inspectable storage entries in state when `InitKind::Full`.
-		if let InitKind::Full = kind {
-			<Events<T>>::kill();
-			EventCount::<T>::kill();
-			<EventTopics<T>>::remove_all(None);
-		}
 	}
 
 	/// Remove temporary "environment" entries in storage, compute the storage root and return the
@@ -1417,7 +1323,7 @@ impl<T: Config> Pallet<T> {
 		// stay to be inspected by the client and will be cleared by `Self::initialize`.
 		let number = <Number<T>>::get();
 		let parent_hash = <ParentHash<T>>::get();
-		let mut digest = <Digest<T>>::get();
+		let digest = <Digest<T>>::get();
 
 		let extrinsics = (0..ExtrinsicCount::<T>::take().unwrap_or_default())
 			.map(ExtrinsicData::<T>::take)
@@ -1435,17 +1341,6 @@ impl<T: Config> Pallet<T> {
 
 		let storage_root = T::Hash::decode(&mut &sp_io::storage::root()[..])
 			.expect("Node is configured to use the same hash; qed");
-		let storage_changes_root = sp_io::storage::changes_root(&parent_hash.encode());
-
-		// we can't compute changes trie root earlier && put it to the Digest
-		// because it will include all currently existing temporaries.
-		if let Some(storage_changes_root) = storage_changes_root {
-			let item = generic::DigestItem::ChangesTrieRoot(
-				T::Hash::decode(&mut &storage_changes_root[..])
-					.expect("Node is configured to use the same hash; qed"),
-			);
-			digest.push(item);
-		}
 
 		<T::Header as traits::Header>::new(
 			number,
@@ -1462,7 +1357,7 @@ impl<T: Config> Pallet<T> {
 	/// - `O(1)`
 	/// - 1 storage write (codec `O(1)`)
 	/// # </weight>
-	pub fn deposit_log(item: DigestItemOf<T>) {
+	pub fn deposit_log(item: generic::DigestItem) {
 		<Digest<T>>::append(item);
 	}
 
@@ -1526,9 +1421,10 @@ impl<T: Config> Pallet<T> {
 		AllExtrinsicsLen::<T>::put(len as u32);
 	}
 
-	/// Reset events. Can be used as an alternative to
-	/// `initialize` for tests that don't need to bother with the other environment entries.
-	#[cfg(any(feature = "std", feature = "runtime-benchmarks", test))]
+	/// Reset events.
+	///
+	/// This needs to be used in prior calling [`initialize`](Self::initialize) for each new block
+	/// to clear events from previous block.
 	pub fn reset_events() {
 		<Events<T>>::kill();
 		EventCount::<T>::kill();
@@ -1574,7 +1470,7 @@ impl<T: Config> Pallet<T> {
 	pub fn note_applied_extrinsic(r: &DispatchResultWithPostInfo, mut info: DispatchInfo) {
 		info.weight = extract_actual_weight(r, &info);
 		Self::deposit_event(match r {
-			Ok(_) => Event::ExtrinsicSuccess(info),
+			Ok(_) => Event::ExtrinsicSuccess { dispatch_info: info },
 			Err(err) => {
 				log::trace!(
 					target: "runtime::system",
@@ -1582,7 +1478,7 @@ impl<T: Config> Pallet<T> {
 					Self::block_number(),
 					err,
 				);
-				Event::ExtrinsicFailed(err.error, info)
+				Event::ExtrinsicFailed { dispatch_error: err.error, dispatch_info: info }
 			},
 		});
 
@@ -1610,13 +1506,13 @@ impl<T: Config> Pallet<T> {
 	/// An account is being created.
 	pub fn on_created_account(who: T::AccountId, _a: &mut AccountInfo<T::Index, T::AccountData>) {
 		T::OnNewAccount::on_new_account(&who);
-		Self::deposit_event(Event::NewAccount(who));
+		Self::deposit_event(Event::NewAccount { account: who });
 	}
 
 	/// Do anything that needs to be done after an account has been killed.
 	fn on_killed_account(who: T::AccountId) {
 		T::OnKilledAccount::on_killed_account(&who);
-		Self::deposit_event(Event::KilledAccount(who));
+		Self::deposit_event(Event::KilledAccount { account: who });
 	}
 
 	/// Determine whether or not it is possible to update the code.

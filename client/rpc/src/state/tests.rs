@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -17,23 +17,22 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use self::error::Error;
-use super::{state_full::split_range, *};
+use super::*;
 use crate::testing::TaskExecutor;
 use assert_matches::assert_matches;
 use futures::{executor, StreamExt};
 use sc_block_builder::BlockBuilderProvider;
 use sc_rpc_api::DenyUnsafe;
 use sp_consensus::BlockOrigin;
-use sp_core::{hash::H256, storage::ChildInfo, ChangesTrieConfiguration};
+use sp_core::{hash::H256, storage::ChildInfo};
 use sp_io::hashing::blake2_256;
-use sp_runtime::generic::BlockId;
 use std::sync::Arc;
 use substrate_test_runtime_client::{prelude::*, runtime};
 
 const STORAGE_KEY: &[u8] = b"child";
 
 fn prefixed_storage_key() -> PrefixedStorageKey {
-	let child_info = ChildInfo::new_default(&STORAGE_KEY[..]);
+	let child_info = ChildInfo::new_default(STORAGE_KEY);
 	child_info.prefixed_storage_key()
 }
 
@@ -335,9 +334,8 @@ fn should_send_initial_storage_changes_and_notifications() {
 }
 
 #[test]
-#[ignore]
 fn should_query_storage() {
-	fn run_tests(mut client: Arc<TestClient>, has_changes_trie_config: bool) {
+	fn run_tests(mut client: Arc<TestClient>) {
 		let (api, _child) = new_full(
 			client.clone(),
 			SubscriptionManager::new(Arc::new(TaskExecutor)),
@@ -345,18 +343,8 @@ fn should_query_storage() {
 			None,
 		);
 
-		let mut c = client.clone();
-		let mut add_empty_block = || {
-			let builder = c.new_block(Default::default()).unwrap();
-			let block = builder.build().unwrap().block;
-			let hash = block.header.hash();
-			executor::block_on(c.import(BlockOrigin::Own, block)).unwrap();
-			hash
-		};
-
-		let mut c = client.clone();
 		let mut add_block = |nonce| {
-			let mut builder = c.new_block(Default::default()).unwrap();
+			let mut builder = client.new_block(Default::default()).unwrap();
 			// fake change: None -> None -> None
 			builder.push_storage_change(vec![1], None).unwrap();
 			// fake change: None -> Some(value) -> Some(value)
@@ -373,20 +361,12 @@ fn should_query_storage() {
 			builder.push_storage_change(vec![5], Some(vec![nonce as u8])).unwrap();
 			let block = builder.build().unwrap().block;
 			let hash = block.header.hash();
-			executor::block_on(c.import(BlockOrigin::Own, block)).unwrap();
+			executor::block_on(client.import(BlockOrigin::Own, block)).unwrap();
 			hash
 		};
 		let block1_hash = add_block(0);
 		let block2_hash = add_block(1);
-		let block3_hash = add_empty_block();
 		let genesis_hash = client.genesis_hash();
-
-		if has_changes_trie_config {
-			assert_eq!(
-				client.max_key_changes_range(1, BlockId::Hash(block2_hash)).unwrap(),
-				Some((0, BlockId::Hash(block2_hash))),
-			);
-		}
 
 		let mut expected = vec![
 			StorageChangeSet {
@@ -400,7 +380,7 @@ fn should_query_storage() {
 				],
 			},
 			StorageChangeSet {
-				block: block2_hash,
+				block: block1_hash,
 				changes: vec![
 					(StorageKey(vec![2]), Some(StorageData(vec![2]))),
 					(StorageKey(vec![3]), Some(StorageData(vec![3]))),
@@ -411,7 +391,7 @@ fn should_query_storage() {
 
 		// Query changes only up to block1
 		let keys = (1..6).map(|k| StorageKey(vec![k])).collect::<Vec<_>>();
-		let result = api.query_storage(keys.clone(), genesis_hash, Some(block2_hash).into());
+		let result = api.query_storage(keys.clone(), genesis_hash, Some(block1_hash).into());
 
 		assert_eq!(executor::block_on(result).unwrap(), expected);
 
@@ -419,7 +399,7 @@ fn should_query_storage() {
 		let result = api.query_storage(keys.clone(), genesis_hash, None.into());
 
 		expected.push(StorageChangeSet {
-			block: block3_hash,
+			block: block2_hash,
 			changes: vec![
 				(StorageKey(vec![3]), None),
 				(StorageKey(vec![4]), Some(StorageData(vec![4]))),
@@ -429,17 +409,17 @@ fn should_query_storage() {
 		assert_eq!(executor::block_on(result).unwrap(), expected);
 
 		// Query changes up to block2.
-		let result = api.query_storage(keys.clone(), genesis_hash, Some(block3_hash));
+		let result = api.query_storage(keys.clone(), genesis_hash, Some(block2_hash));
 
 		assert_eq!(executor::block_on(result).unwrap(), expected);
 
 		// Inverted range.
-		let result = api.query_storage(keys.clone(), block2_hash, Some(genesis_hash));
+		let result = api.query_storage(keys.clone(), block1_hash, Some(genesis_hash));
 
 		assert_eq!(
 			executor::block_on(result).map_err(|e| e.to_string()),
 			Err(Error::InvalidBlockRange {
-				from: format!("2 ({:?})", block2_hash),
+				from: format!("1 ({:?})", block1_hash),
 				to: format!("0 ({:?})", genesis_hash),
 				details: "from number > to number".to_owned(),
 			})
@@ -488,7 +468,7 @@ fn should_query_storage() {
 			executor::block_on(result).map_err(|e| e.to_string()),
 			Err(Error::InvalidBlockRange {
 				from: format!("{:?}", random_hash1),
-				to: format!("{:?}", Some(block3_hash)), // Best block hash.
+				to: format!("{:?}", Some(block2_hash)), // Best block hash.
 				details: format!(
 					"UnknownBlock: Header was not found in the database: {:?}",
 					random_hash1
@@ -514,12 +494,12 @@ fn should_query_storage() {
 		);
 
 		// single block range
-		let result = api.query_storage_at(keys.clone(), Some(block2_hash));
+		let result = api.query_storage_at(keys.clone(), Some(block1_hash));
 
 		assert_eq!(
 			executor::block_on(result).unwrap(),
 			vec![StorageChangeSet {
-				block: block2_hash,
+				block: block1_hash,
 				changes: vec![
 					(StorageKey(vec![1_u8]), None),
 					(StorageKey(vec![2_u8]), Some(StorageData(vec![2_u8]))),
@@ -531,24 +511,8 @@ fn should_query_storage() {
 		);
 	}
 
-	run_tests(Arc::new(substrate_test_runtime_client::new()), false);
-	run_tests(
-		Arc::new(
-			TestClientBuilder::new()
-				.changes_trie_config(Some(ChangesTrieConfiguration::new(4, 2)))
-				.build(),
-		),
-		true,
-	);
-}
-
-#[test]
-fn should_split_ranges() {
-	assert_eq!(split_range(1, None), (0..1, None));
-	assert_eq!(split_range(100, None), (0..100, None));
-	assert_eq!(split_range(1, Some(0)), (0..1, None));
-	assert_eq!(split_range(100, Some(50)), (0..50, Some(50..100)));
-	assert_eq!(split_range(100, Some(99)), (0..99, Some(99..100)));
+	run_tests(Arc::new(substrate_test_runtime_client::new()));
+	run_tests(Arc::new(TestClientBuilder::new().build()));
 }
 
 #[test]
@@ -562,11 +526,11 @@ fn should_return_runtime_version() {
 	);
 
 	let result = "{\"specName\":\"test\",\"implName\":\"parity-test\",\"authoringVersion\":1,\
-		\"specVersion\":2,\"implVersion\":2,\"apis\":[[\"0xdf6acb689907609b\",3],\
+		\"specVersion\":2,\"implVersion\":2,\"apis\":[[\"0xdf6acb689907609b\",4],\
 		[\"0x37e397fc7c91f5e4\",1],[\"0xd2bc9897eed08f15\",3],[\"0x40fe3ad401f8959a\",5],\
 		[\"0xc6e9a76309f39b09\",1],[\"0xdd718d5cc53262d4\",1],[\"0xcbca25e39f142387\",2],\
 		[\"0xf78b278be53f454c\",2],[\"0xab3c0572291feb8b\",1],[\"0xbc9d89904f5b923f\",1]],\
-		\"transactionVersion\":1}";
+		\"transactionVersion\":1,\"stateVersion\":1}";
 
 	let runtime_version = executor::block_on(api.runtime_version(None.into())).unwrap();
 	let serialized = serde_json::to_string(&runtime_version).unwrap();

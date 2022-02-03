@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,7 +21,11 @@ use frame_election_provider_support::{
 	data_provider, onchain, ElectionDataProvider, SequentialPhragmen,
 };
 pub use frame_support::{assert_noop, assert_ok};
-use frame_support::{parameter_types, traits::Hooks, weights::Weight};
+use frame_support::{
+	parameter_types,
+	traits::{ConstU32, Hooks},
+	weights::Weight,
+};
 use multi_phase::unsigned::{IndexAssignmentOf, Voter};
 use parking_lot::RwLock;
 use sp_core::{
@@ -40,7 +44,7 @@ use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup},
 	PerU16,
 };
-use std::{convert::TryFrom, sync::Arc};
+use std::sync::Arc;
 
 pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
 pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<AccountId, Call, (), ()>;
@@ -218,6 +222,7 @@ impl frame_system::Config for Runtime {
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
 	type OnSetCode = ();
+	type MaxConsumers = ConstU32<16>;
 }
 
 const NORMAL_DISPATCH_RATIO: Perbill = Perbill::from_percent(75);
@@ -280,7 +285,9 @@ impl onchain::Config for Runtime {
 }
 
 pub struct MockFallback;
-impl ElectionProvider<AccountId, u64> for MockFallback {
+impl ElectionProvider for MockFallback {
+	type AccountId = AccountId;
+	type BlockNumber = u64;
 	type Error = &'static str;
 	type DataProvider = StakingMock;
 
@@ -377,6 +384,19 @@ parameter_types! {
 	pub static Balancing: Option<(usize, ExtendedBalance)> = Some((0, 0));
 }
 
+pub struct TestBenchmarkingConfig;
+impl BenchmarkingConfig for TestBenchmarkingConfig {
+	const VOTERS: [u32; 2] = [400, 600];
+	const ACTIVE_VOTERS: [u32; 2] = [100, 300];
+	const TARGETS: [u32; 2] = [200, 400];
+	const DESIRED_TARGETS: [u32; 2] = [100, 180];
+
+	const SNAPSHOT_MAXIMUM_VOTERS: u32 = 1000;
+	const MINER_MAXIMUM_VOTERS: u32 = 1000;
+
+	const MAXIMUM_TARGETS: u32 = 200;
+}
+
 impl crate::Config for Runtime {
 	type Event = Event;
 	type Currency = Balances;
@@ -398,7 +418,7 @@ impl crate::Config for Runtime {
 	type RewardHandler = ();
 	type DataProvider = StakingMock;
 	type WeightInfo = DualMockWeightInfo;
-	type BenchmarkingConfig = ();
+	type BenchmarkingConfig = TestBenchmarkingConfig;
 	type Fallback = MockFallback;
 	type ForceOrigin = frame_system::EnsureRoot<AccountId>;
 	type Solution = TestNposSolution;
@@ -420,7 +440,9 @@ pub type Extrinsic = sp_runtime::testing::TestXt<Call, ()>;
 pub struct ExtBuilder {}
 
 pub struct StakingMock;
-impl ElectionDataProvider<AccountId, u64> for StakingMock {
+impl ElectionDataProvider for StakingMock {
+	type AccountId = AccountId;
+	type BlockNumber = u64;
 	const MAXIMUM_VOTES_PER_VOTER: u32 = <TestNposSolution as NposSolution>::LIMIT as u32;
 	fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<AccountId>> {
 		let targets = Targets::get();
