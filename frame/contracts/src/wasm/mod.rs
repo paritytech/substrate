@@ -2246,4 +2246,45 @@ mod tests {
 		let result = execute(CODE, [2u8; 32].encode(), &mut ext).unwrap();
 		assert_eq!(u32::from_le_bytes(result.data.0.try_into().unwrap()), 0,);
 	}
+
+	#[test]
+	#[cfg(feature = "unstable-interface")]
+	fn is_contract_works() {
+		const CODE_IS_CONTRACT: &str = r#"
+;; This runs is_contract check on zero account address
+(module
+	(import "__unstable__" "seal_is_contract" (func $seal_is_contract (param i32) (result i32)))
+	(import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
+	(import "env" "memory" (memory 1 1))
+
+	;; [0, 32) zero-adress
+	(data (i32.const 0)
+		"\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00"
+		"\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00"
+	)
+
+	;; [32, 36) here we store the return code of the `seal_is_contract`
+
+	(func (export "deploy"))
+
+	(func (export "call")
+		(i32.store
+			(i32.const 32)
+			(call $seal_is_contract
+				(i32.const 0) ;; ptr to destination address
+			)
+		)
+		;; exit with success and take `seal_is_contract` return code to the output buffer
+		(call $seal_return (i32.const 0) (i32.const 32) (i32.const 4))
+	)
+)
+"#;
+		let output = execute(CODE_IS_CONTRACT, vec![], MockExt::default()).unwrap();
+
+		// The mock ext just returns the same data that was passed as the subject.
+		assert_eq!(
+			output,
+			ExecReturnValue { flags: ReturnFlags::empty(), data: Bytes(1u32.encode()) },
+		);
+	}
 }
