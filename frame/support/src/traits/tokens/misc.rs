@@ -17,7 +17,7 @@
 
 //! Miscellaneous types.
 
-use codec::{Decode, Encode, FullCodec};
+use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use sp_arithmetic::traits::{AtLeast32BitUnsigned, Zero};
 use sp_core::RuntimeDebug;
 use sp_runtime::{ArithmeticError, DispatchError, TokenError};
@@ -161,16 +161,29 @@ impl WithdrawReasons {
 }
 
 /// Simple amalgamation trait to collect together properties for an AssetId under one roof.
-pub trait AssetId: FullCodec + Copy + Eq + PartialEq + Debug + scale_info::TypeInfo {}
-impl<T: FullCodec + Copy + Eq + PartialEq + Debug + scale_info::TypeInfo> AssetId for T {}
+pub trait AssetId:
+	FullCodec + MaxEncodedLen + Copy + Eq + PartialEq + Debug + scale_info::TypeInfo
+{
+}
+impl<T: FullCodec + MaxEncodedLen + Copy + Eq + PartialEq + Debug + scale_info::TypeInfo> AssetId
+	for T
+{
+}
 
 /// Simple amalgamation trait to collect together properties for a Balance under one roof.
 pub trait Balance:
-	AtLeast32BitUnsigned + FullCodec + Copy + Default + Debug + scale_info::TypeInfo
+	AtLeast32BitUnsigned + FullCodec + MaxEncodedLen + Copy + Default + Debug + scale_info::TypeInfo
 {
 }
-impl<T: AtLeast32BitUnsigned + FullCodec + Copy + Default + Debug + scale_info::TypeInfo> Balance
-	for T
+impl<
+		T: AtLeast32BitUnsigned
+			+ FullCodec
+			+ MaxEncodedLen
+			+ Copy
+			+ Default
+			+ Debug
+			+ scale_info::TypeInfo,
+	> Balance for T
 {
 }
 
