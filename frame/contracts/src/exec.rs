@@ -164,8 +164,7 @@ pub trait Ext: sealing::Sealed {
 	/// Check if the caller of the current contract is the origin of the whole call stack.
 	///
 	/// This can be checked with `is_contract(self.caller())` as well.
-	/// However, this very function does not require any storage lookup and therefore uses much
-	/// less gas.
+	/// However, this function does not require any storage lookup and therefore uses less weight.
 	fn caller_is_origin(&self) -> bool;
 
 	/// Returns a reference to the account id of the current contract.

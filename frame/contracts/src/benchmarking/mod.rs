@@ -416,7 +416,7 @@ benchmarks! {
 			data_segments: vec![
 				DataSegment {
 					offset: 0,
-					value:	accounts_bytes
+					value: accounts_bytes
 				},
 			],
 			call_body: Some(body::repeated_dyn(r * API_BENCHMARK_BATCH_SIZE, vec![
@@ -446,7 +446,7 @@ benchmarks! {
 				return_type: Some(ValueType::I32),
 			}],
 			call_body: Some(body::repeated(r * API_BENCHMARK_BATCH_SIZE, &[
-				Instruction::Call(0), //
+				Instruction::Call(0),
 				Instruction::Drop,
 			])),
 			.. Default::default()
