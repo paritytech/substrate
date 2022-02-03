@@ -914,7 +914,7 @@ benchmarks! {
 		}
 		// Set the min commission to 75%
 		MinCommission::<T>::set(Perbill::from_percent(75));
-	}: _(RawOrigin::Root, 0)
+	}: _(RawOrigin::Root, i)
 	verify {
 		for (_, prefs) in Validators::<T>::iter() {
 			assert_eq!(prefs.commission, Perbill::from_percent(75));

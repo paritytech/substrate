@@ -4723,7 +4723,7 @@ fn force_apply_min_commission_works() {
 		assert_eq!(MinCommission::<Test>::get(), Perbill::from_percent(0));
 
 		// When
-		assert_ok!(Staking::force_apply_min_commission(Origin::root(), 0));
+		assert_ok!(Staking::force_apply_min_commission(Origin::root(), 3));
 
 		// Then
 		assert_eq!(validators(), vec![(31, prefs(0)), (21, prefs(0)), (11, prefs(0))]);
@@ -4732,7 +4732,7 @@ fn force_apply_min_commission_works() {
 		assert_ok!(Staking::validate(Origin::signed(30), prefs(10)));
 
 		// When
-		assert_ok!(Staking::force_apply_min_commission(Origin::root(), 0));
+		assert_ok!(Staking::force_apply_min_commission(Origin::root(), 3));
 
 		// Then
 		assert_eq!(validators(), vec![(31, prefs(10)), (21, prefs(0)), (11, prefs(0))]);
@@ -4741,9 +4741,18 @@ fn force_apply_min_commission_works() {
 		MinCommission::<Test>::set(Perbill::from_percent(5));
 
 		// When
-		assert_ok!(Staking::force_apply_min_commission(Origin::root(), 0));
+		assert_ok!(Staking::force_apply_min_commission(Origin::root(), 3));
 
 		// Then
 		assert_eq!(validators(), vec![(31, prefs(10)), (21, prefs(5)), (11, prefs(5))]);
+
+		// Given
+		MinCommission::<Test>::set(Perbill::from_percent(6));
+
+		// When we call with a `max_validator_count` of 2
+		assert_ok!(Staking::force_apply_min_commission(Origin::root(), 2));
+
+		// Then only the first two validators are affected
+		assert_eq!(validators(), vec![(31, prefs(10)), (21, prefs(6)), (11, prefs(5))]);
 	});
 }
