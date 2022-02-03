@@ -30,7 +30,6 @@ pub use sc_network::{
 	Multiaddr,
 };
 
-use crate::RpcSubscriptionIdProvider;
 use prometheus_endpoint::Registry;
 use sc_chain_spec::ChainSpec;
 pub use sc_telemetry::TelemetryEndpoints;
@@ -98,8 +97,10 @@ pub struct Configuration {
 	pub rpc_methods: RpcMethods,
 	/// Maximum payload of rpc request/responses.
 	pub rpc_max_payload: Option<usize>,
-	/// JSON-RPC subscription ID generator.
-	pub rpc_id_provider: Option<Box<dyn RpcSubscriptionIdProvider>>,
+	/// Custom JSON-RPC subscription ID provider.
+	///
+	/// Default: [`crate::RandomStringSubscriptionId`].
+	pub rpc_id_provider: Option<Box<dyn crate::RpcSubscriptionIdProvider>>,
 	/// Maximum size of the output buffer capacity for websocket connections.
 	pub ws_max_out_buffer_capacity: Option<usize>,
 	/// Prometheus endpoint configuration. `None` if disabled.
