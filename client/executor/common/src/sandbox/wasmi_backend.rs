@@ -49,7 +49,7 @@ impl ImportResolver for Imports {
 		&self,
 		module_name: &str,
 		field_name: &str,
-		signature: &::wasmi::Signature,
+		signature: &wasmi::Signature,
 	) -> std::result::Result<wasmi::FuncRef, wasmi::Error> {
 		let idx = self.func_by_name(module_name, field_name).ok_or_else(|| {
 			wasmi::Error::Instantiation(format!("Export {}:{} not found", module_name, field_name))
@@ -62,7 +62,7 @@ impl ImportResolver for Imports {
 		&self,
 		module_name: &str,
 		field_name: &str,
-		_memory_type: &::wasmi::MemoryDescriptor,
+		_memory_type: &wasmi::MemoryDescriptor,
 	) -> std::result::Result<wasmi::MemoryRef, wasmi::Error> {
 		let mem = self.memory_by_name(module_name, field_name).ok_or_else(|| {
 			wasmi::Error::Instantiation(format!("Export {}:{} not found", module_name, field_name))
@@ -86,7 +86,7 @@ impl ImportResolver for Imports {
 		&self,
 		module_name: &str,
 		field_name: &str,
-		_global_type: &::wasmi::GlobalDescriptor,
+		_global_type: &wasmi::GlobalDescriptor,
 	) -> std::result::Result<wasmi::GlobalRef, wasmi::Error> {
 		Err(wasmi::Error::Instantiation(format!("Export {}:{} not found", module_name, field_name)))
 	}
@@ -95,7 +95,7 @@ impl ImportResolver for Imports {
 		&self,
 		module_name: &str,
 		field_name: &str,
-		_table_type: &::wasmi::TableDescriptor,
+		_table_type: &wasmi::TableDescriptor,
 	) -> std::result::Result<wasmi::TableRef, wasmi::Error> {
 		Err(wasmi::Error::Instantiation(format!("Export {}:{} not found", module_name, field_name)))
 	}
@@ -115,11 +115,11 @@ pub fn new_memory(initial: u32, maximum: Option<u32>) -> crate::error::Result<Me
 ///
 /// This wrapper limits the scope where the slice can be taken to
 #[derive(Debug, Clone)]
-pub struct MemoryWrapper(::wasmi::MemoryRef);
+pub struct MemoryWrapper(wasmi::MemoryRef);
 
 impl MemoryWrapper {
 	/// Take ownership of the memory region and return a wrapper object
-	pub fn new(memory: ::wasmi::MemoryRef) -> Self {
+	pub fn new(memory: wasmi::MemoryRef) -> Self {
 		Self(memory)
 	}
 
@@ -131,7 +131,7 @@ impl MemoryWrapper {
 	/// access. By returning the memory object "as is" we bypass all of the checks.
 	///
 	/// Intended to use only during module initialization.
-	pub unsafe fn clone_inner(&self) -> ::wasmi::MemoryRef {
+	pub unsafe fn clone_inner(&self) -> wasmi::MemoryRef {
 		self.0.clone()
 	}
 }
@@ -307,9 +307,6 @@ pub fn instantiate(
 				.run_start(guest_externals)
 				.map_err(|_| InstantiationError::StartTrapped)
 		})
-
-		// Note: no need to run start on wasmtime instance, since it's done
-		// automatically
 	})?;
 
 	Ok(sandbox_instance)
