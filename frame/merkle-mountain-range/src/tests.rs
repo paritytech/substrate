@@ -19,7 +19,7 @@ use crate::{mmr::utils, mock::*, *};
 
 use frame_support::traits::OnInitialize;
 use mmr_lib::helper;
-use pallet_mmr_primitives::{Compact, Proof};
+use pallet_mmr_primitives::{BatchProof, Compact, Proof};
 use sp_core::{
 	offchain::{testing::TestOffchainExt, OffchainDbExt, OffchainWorkerExt},
 	H256,
@@ -277,6 +277,37 @@ fn should_generate_proofs_correctly() {
 }
 
 #[test]
+fn should_generate_batch_proof_correctly() {
+	let _ = env_logger::try_init();
+	let mut ext = new_test_ext();
+	// given
+	ext.execute_with(|| init_chain(7));
+	ext.persist_offchain_overlay();
+
+	// Try to generate proofs now. This requires the offchain extensions to be present
+	// to retrieve full leaf data.
+	register_offchain_ext(&mut ext);
+	ext.execute_with(|| {
+		// when generate proofs for all leaves
+		let (.., proof) = crate::Pallet::<Test>::generate_batch_proof(vec![0, 4, 5]).unwrap();
+
+		// then
+		assert_eq!(
+			proof,
+			BatchProof {
+				leaf_indices: vec![0, 4, 5],
+				leaf_count: 7,
+				items: vec![
+					hex("ad4cbc033833612ccd4626d5f023b9dfc50a35e838514dd1f3c86f8506728705"),
+					hex("cb24f4614ad5b2a5430344c99545b421d9af83c46fd632d70a332200884b4d46"),
+					hex("611c2174c6164952a66d985cfe1ec1a623794393e3acff96b136d198f37a648c"),
+				],
+			}
+		);
+	});
+}
+
+#[test]
 fn should_verify() {
 	let _ = env_logger::try_init();
 
@@ -298,6 +329,37 @@ fn should_verify() {
 		init_chain(7);
 		// then
 		assert_eq!(crate::Pallet::<Test>::verify_leaf(leaf, proof5), Ok(()));
+	});
+}
+
+#[test]
+fn should_verify_batch_proof() {
+	let _ = env_logger::try_init();
+
+	// Start off with chain initialisation and storing indexing data off-chain
+	// (MMR Leafs)
+	let mut ext = new_test_ext();
+	ext.execute_with(|| init_chain(7));
+	ext.persist_offchain_overlay();
+
+	// Try to generate proof now. This requires the offchain extensions to be present
+	// to retrieve full leaf data.
+	register_offchain_ext(&mut ext);
+	let (leaves, proof) = ext.execute_with(|| {
+		// when
+		crate::Pallet::<Test>::generate_batch_proof(vec![0, 4, 5]).unwrap()
+	});
+
+	ext.execute_with(|| {
+		init_chain(7);
+		// then
+		assert_eq!(
+			crate::Pallet::<Test>::verify_leaves(
+				leaves.into_iter().map(|(leaf, ..)| leaf).collect(),
+				proof
+			),
+			Ok(())
+		);
 	});
 }
 
@@ -324,6 +386,39 @@ fn verification_should_be_stateless() {
 	let leaf = crate::primitives::DataOrHash::Data(leaf);
 	assert_eq!(
 		crate::verify_leaf_proof::<<Test as Config>::Hashing, _>(root, leaf, proof5),
+		Ok(())
+	);
+}
+
+#[test]
+fn should_verify_batch_proof_statelessly() {
+	let _ = env_logger::try_init();
+
+	// Start off with chain initialisation and storing indexing data off-chain
+	// (MMR Leafs)
+	let mut ext = new_test_ext();
+	ext.execute_with(|| init_chain(7));
+	ext.persist_offchain_overlay();
+
+	// Try to generate proof now. This requires the offchain extensions to be present
+	// to retrieve full leaf data.
+	register_offchain_ext(&mut ext);
+	let (leaves, proof) = ext.execute_with(|| {
+		// when
+		crate::Pallet::<Test>::generate_batch_proof(vec![0, 4, 5]).unwrap()
+	});
+	let root = ext.execute_with(|| crate::Pallet::<Test>::mmr_root_hash());
+
+	// Verify proof without relying on any on-chain data.
+	assert_eq!(
+		crate::verify_leaves_proof::<<Test as Config>::Hashing, _>(
+			root,
+			leaves
+				.into_iter()
+				.map(|(leaf, ..)| crate::primitives::DataOrHash::Data(leaf))
+				.collect(),
+			proof
+		),
 		Ok(())
 	);
 }

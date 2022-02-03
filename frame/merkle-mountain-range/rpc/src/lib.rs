@@ -26,7 +26,7 @@ use jsonrpc_core::{Error, ErrorCode, Result};
 use jsonrpc_derive::rpc;
 use serde::{Deserialize, Serialize};
 
-use pallet_mmr_primitives::{Error as MmrError, Proof};
+use pallet_mmr_primitives::{BatchProof, Error as MmrError, Proof};
 use sp_api::ProvideRuntimeApi;
 use sp_blockchain::HeaderBackend;
 use sp_core::Bytes;
@@ -57,6 +57,34 @@ impl<BlockHash> LeafProof<BlockHash> {
 	}
 }
 
+/// Retrieved MMR leaf and its proof.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct LeafBatchProof<BlockHash> {
+	/// Block hash the proof was generated for.
+	pub block_hash: BlockHash,
+	/// SCALE-encoded vector of leaf index and leaf data `(LeafData, LeafIndex)`.
+	pub leaves: Bytes,
+	/// SCALE-encoded proof data. See [pallet_mmr_primitives::BatchProof].
+	pub proof: Bytes,
+}
+
+impl<BlockHash> LeafBatchProof<BlockHash> {
+	/// Create new `LeafBatchProof` from a given vector of (`Leaf`,
+	/// [pallet_mmr_primitives::LeafIndex]) and a [pallet_mmr_primitives::BatchProof].
+	pub fn new<Leaf, MmrHash>(
+		block_hash: BlockHash,
+		leaves: Vec<(Leaf, LeafIndex)>,
+		proof: BatchProof<MmrHash>,
+	) -> Self
+	where
+		Leaf: Encode,
+		MmrHash: Encode,
+	{
+		Self { block_hash, leaves: Bytes(leaves.encode()), proof: Bytes(proof.encode()) }
+	}
+}
+
 /// MMR RPC methods.
 #[rpc]
 pub trait MmrApi<BlockHash> {
@@ -74,6 +102,21 @@ pub trait MmrApi<BlockHash> {
 		leaf_index: LeafIndex,
 		at: Option<BlockHash>,
 	) -> Result<LeafProof<BlockHash>>;
+
+	/// Generate MMR proof for the given leaf indices.
+	///
+	/// This method calls into a runtime with MMR pallet included and attempts to generate
+	/// MMR proof for a set of leaves at the given `leaf_indices`.
+	/// Optionally, a block hash at which the runtime should be queried can be specified.
+	///
+	/// Returns the leaves and a proof for these leaves (compact encoding, i.e. hash of
+	/// the leaves). Both parameters are SCALE-encoded.
+	#[rpc(name = "mmr_generateBatchProof")]
+	fn generate_batch_proof(
+		&self,
+		leaf_indices: Vec<LeafIndex>,
+		at: Option<BlockHash>,
+	) -> Result<LeafBatchProof<BlockHash>>;
 }
 
 /// An implementation of MMR specific RPC methods.
@@ -116,6 +159,28 @@ where
 			.map_err(mmr_error_into_rpc_error)?;
 
 		Ok(LeafProof::new(block_hash, leaf, proof))
+	}
+
+	fn generate_batch_proof(
+		&self,
+		leaf_indices: Vec<LeafIndex>,
+		at: Option<<Block as BlockT>::Hash>,
+	) -> Result<LeafBatchProof<<Block as BlockT>::Hash>> {
+		let api = self.client.runtime_api();
+		let block_hash = at.unwrap_or_else(||
+			// If the block hash is not supplied assume the best block.
+			self.client.info().best_hash);
+
+		let (leaves, proof) = api
+			.generate_batch_proof_with_context(
+				&BlockId::hash(block_hash),
+				sp_core::ExecutionContext::OffchainCall(None),
+				leaf_indices,
+			)
+			.map_err(runtime_error_into_rpc_error)?
+			.map_err(mmr_error_into_rpc_error)?;
+
+		Ok(LeafBatchProof::new(block_hash, leaves, proof))
 	}
 }
 
@@ -180,6 +245,27 @@ mod tests {
 	}
 
 	#[test]
+	fn should_serialize_leaf_batch_proof() {
+		// given
+		let leaf = vec![1_u8, 2, 3, 4];
+		let proof = BatchProof {
+			leaf_indices: vec![1],
+			leaf_count: 9,
+			items: vec![H256::repeat_byte(1), H256::repeat_byte(2)],
+		};
+
+		let leaf_proof = LeafBatchProof::new(H256::repeat_byte(0), vec![(leaf, 1)], proof);
+
+		// when
+		let actual = serde_json::to_string(&leaf_proof).unwrap();
+		// then
+		assert_eq!(
+			actual,
+			r#"{"blockHash":"0x0000000000000000000000000000000000000000000000000000000000000000","leaves":"0x0410010203040100000000000000","proof":"0x04010000000000000009000000000000000801010101010101010101010101010101010101010101010101010101010101010202020202020202020202020202020202020202020202020202020202020202"}"#
+		);
+	}
+
+	#[test]
 	fn should_deserialize_leaf_proof() {
 		// given
 		let expected = LeafProof {
@@ -200,6 +286,33 @@ mod tests {
 			"blockHash":"0x0000000000000000000000000000000000000000000000000000000000000000",
 			"leaf":"0x1001020304",
 			"proof":"0x010000000000000009000000000000000801010101010101010101010101010101010101010101010101010101010101010202020202020202020202020202020202020202020202020202020202020202"
+		}"#).unwrap();
+
+		// then
+		assert_eq!(actual, expected);
+	}
+
+	#[test]
+	fn should_deserialize_leaf_batch_proof() {
+		// given
+		let expected = LeafBatchProof {
+			block_hash: H256::repeat_byte(0),
+			leaves: Bytes(vec![(vec![1_u8, 2, 3, 4], 1)].encode()),
+			proof: Bytes(
+				BatchProof {
+					leaf_indices: vec![1],
+					leaf_count: 9,
+					items: vec![H256::repeat_byte(1), H256::repeat_byte(2)],
+				}
+				.encode(),
+			),
+		};
+
+		// when
+		let actual: LeafBatchProof<H256> = serde_json::from_str(r#"{
+			"blockHash":"0x0000000000000000000000000000000000000000000000000000000000000000",
+			"leaves":"0x04100102030401000000",
+			"proof":"0x04010000000000000009000000000000000801010101010101010101010101010101010101010101010101010101010101010202020202020202020202020202020202020202020202020202020202020202"
 		}"#).unwrap();
 
 		// then
