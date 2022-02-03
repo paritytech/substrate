@@ -98,7 +98,7 @@ pub trait Environment<B: BlockT> {
 		+ Unpin
 		+ 'static;
 	/// Error which can occur upon creation.
-	type Error: From<Error> + std::fmt::Debug + 'static;
+	type Error: From<Error> + std::error::Error + 'static;
 
 	/// Initialize the proposal logic on top of a specific header. Provide
 	/// the authorities at that header.
