@@ -16,7 +16,6 @@
 // limitations under the License.
 
 use frame_support_procedural_tools::generate_crate_access_2018;
-use std::convert::identity;
 
 // Derive `PalletError`
 pub fn derive_pallet_error(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
@@ -89,7 +88,7 @@ pub fn derive_pallet_error(input: proc_macro::TokenStream) -> proc_macro::TokenS
 				.collect::<Result<Vec<Option<Vec<&syn::Type>>>, syn::Error>>();
 
 			let field_tys = match field_tys {
-				Ok(tys) => tys.into_iter().filter_map(identity).collect::<Vec<_>>(),
+				Ok(tys) => tys.into_iter().flatten().collect::<Vec<_>>(),
 				Err(e) => return e.to_compile_error().into(),
 			};
 
