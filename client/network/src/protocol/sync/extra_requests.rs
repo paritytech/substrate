@@ -173,9 +173,7 @@ impl<B: BlockT> ExtraRequests<B> {
 		}
 
 		if best_finalized_number > self.best_seen_finalized_number {
-			// normally we'll receive finality notifications for every block => finalize would be
-			// enough but if many blocks are finalized at once, some notifications may be omitted
-			// => let's use finalize_with_ancestors here
+			// we receive finality notification only for the finalized branch head.
 			match self.tree.finalize_with_ancestors(
 				best_finalized_hash,
 				best_finalized_number,

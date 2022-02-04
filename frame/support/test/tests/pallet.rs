@@ -29,7 +29,7 @@ use sp_io::{
 	hashing::{blake2_128, twox_128, twox_64},
 	TestExternalities,
 };
-use sp_runtime::DispatchError;
+use sp_runtime::{DispatchError, ModuleError};
 
 pub struct SomeType1;
 impl From<SomeType1> for u64 {
@@ -156,7 +156,6 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(crate) trait Store)]
-	#[pallet::generate_storage_info]
 	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T>(_);
 
@@ -435,7 +434,7 @@ pub mod pallet {
 }
 
 // Test that a pallet with non generic event and generic genesis_config is correctly handled
-// and that a pallet without the attribute generate_storage_info is correctly handled.
+// and that a pallet with the attribute without_storage_info is correctly handled.
 #[frame_support::pallet]
 pub mod pallet2 {
 	use super::{SomeAssociation1, SomeType1};
@@ -452,6 +451,7 @@ pub mod pallet2 {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(crate) trait Store)]
+	#[pallet::without_storage_info]
 	pub struct Pallet<T>(_);
 
 	#[pallet::hooks]
@@ -657,15 +657,12 @@ fn error_expand() {
 	);
 	assert_eq!(
 		DispatchError::from(pallet::Error::<Runtime>::InsufficientProposersBalance),
-		DispatchError::Module {
+
+		DispatchError::Module(ModuleError {
 			index: 1,
 			error: [0, 0, 0, 0],
 			message: Some("InsufficientProposersBalance")
-		},
-	);
-	assert_eq!(
-		pallet::Error::<Runtime>::decode(&mut &[1, 4, 0, 0][..]),
-		Ok(pallet::Error::<Runtime>::Code(4)),
+		}),
 	);
 }
 
@@ -1111,6 +1108,14 @@ fn migrate_from_pallet_version_to_storage_version() {
 fn metadata() {
 	use frame_support::metadata::*;
 
+	fn maybe_docs(doc: Vec<&'static str>) -> Vec<&'static str> {
+		if cfg!(feature = "no-metadata-docs") {
+			vec![]
+		} else {
+			doc
+		}
+	}
+
 	let pallets = vec![
 		PalletMetadata {
 			index: 1,
@@ -1280,7 +1285,7 @@ fn metadata() {
 						modifier: StorageEntryModifier::Default,
 						ty: StorageEntryType::Plain(meta_type::<u32>()),
 						default: vec![0, 0, 0, 0],
-						docs: vec!["Counter for the related counted storage map"],
+						docs: maybe_docs(vec!["Counter for the related counted storage map"]),
 					},
 					StorageEntryMetadata {
 						name: "Unbounded",
@@ -1298,13 +1303,13 @@ fn metadata() {
 					name: "MyGetParam",
 					ty: meta_type::<u32>(),
 					value: vec![10, 0, 0, 0],
-					docs: vec![" Some comment", " Some comment"],
+					docs: maybe_docs(vec![" Some comment", " Some comment"]),
 				},
 				PalletConstantMetadata {
 					name: "MyGetParam2",
 					ty: meta_type::<u32>(),
 					value: vec![11, 0, 0, 0],
-					docs: vec![" Some comment", " Some comment"],
+					docs: maybe_docs(vec![" Some comment", " Some comment"]),
 				},
 				PalletConstantMetadata {
 					name: "MyGetParam3",
@@ -1316,19 +1321,19 @@ fn metadata() {
 					name: "some_extra",
 					ty: meta_type::<u64>(),
 					value: vec![100, 0, 0, 0, 0, 0, 0, 0],
-					docs: vec![" Some doc", " Some doc"],
+					docs: maybe_docs(vec![" Some doc", " Some doc"]),
 				},
 				PalletConstantMetadata {
 					name: "some_extra_extra",
 					ty: meta_type::<u64>(),
 					value: vec![0, 0, 0, 0, 0, 0, 0, 0],
-					docs: vec![" Some doc"],
+					docs: maybe_docs(vec![" Some doc"]),
 				},
 				PalletConstantMetadata {
 					name: "SomeExtraRename",
 					ty: meta_type::<u64>(),
 					value: vec![0, 0, 0, 0, 0, 0, 0, 0],
-					docs: vec![" Some doc"],
+					docs: maybe_docs(vec![" Some doc"]),
 				},
 			],
 			error: Some(PalletErrorMetadata { ty: meta_type::<pallet::Error<Runtime>>() }),
@@ -1362,7 +1367,7 @@ fn metadata() {
 						modifier: StorageEntryModifier::Default,
 						ty: StorageEntryType::Plain(meta_type::<u32>()),
 						default: vec![0, 0, 0, 0],
-						docs: vec!["Counter for the related counted storage map"],
+						docs: maybe_docs(vec!["Counter for the related counted storage map"]),
 					},
 				],
 			}),
@@ -1372,6 +1377,16 @@ fn metadata() {
 			error: None,
 		},
 	];
+
+	let empty_doc = pallets[0].event.as_ref().unwrap().ty.type_info().docs().is_empty() &&
+		pallets[0].error.as_ref().unwrap().ty.type_info().docs().is_empty() &&
+		pallets[0].calls.as_ref().unwrap().ty.type_info().docs().is_empty();
+
+	if cfg!(feature = "no-metadata-docs") {
+		assert!(empty_doc)
+	} else {
+		assert!(!empty_doc)
+	}
 
 	let extrinsic = ExtrinsicMetadata {
 		ty: meta_type::<UncheckedExtrinsic>(),

@@ -116,6 +116,29 @@ impl TypeId for PalletId {
 	const TYPE_ID: [u8; 4] = *b"modl";
 }
 
+/// Build a bounded vec from the given literals.
+///
+/// The type of the outcome must be known.
+///
+/// Will not handle any errors and just panic if the given literals cannot fit in the corresponding
+/// bounded vec type. Thus, this is only suitable for testing and non-consensus code.
+#[macro_export]
+#[cfg(feature = "std")]
+macro_rules! bounded_vec {
+	($ ($values:expr),* ) => {
+		{
+			use $crate::sp_std::convert::TryInto as _;
+			$crate::sp_std::vec![$($values),*].try_into().unwrap()
+		}
+	};
+	( $value:expr ; $repetition:expr ) => {
+		{
+			use $crate::sp_std::convert::TryInto as _;
+			$crate::sp_std::vec![$value ; $repetition].try_into().unwrap()
+		}
+	}
+}
+
 /// Generate a new type alias for [`storage::types::StorageValue`],
 /// [`storage::types::StorageMap`], [`storage::types::StorageDoubleMap`]
 /// and [`storage::types::StorageNMap`].
@@ -1998,7 +2021,7 @@ pub mod pallet_prelude {
 /// 	pub trait Config: frame_system::Config {
 /// 		#[pallet::constant] // put the constant in metadata
 /// 		type MyGetParam: Get<u32>;
-/// 		type Balance: Parameter + From<u8>;
+/// 		type Balance: Parameter + MaxEncodedLen + From<u8>;
 /// 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 /// 	}
 ///
@@ -2187,7 +2210,7 @@ pub mod pallet_prelude {
 /// 	pub trait Config<I: 'static = ()>: frame_system::Config {
 /// 		#[pallet::constant]
 /// 		type MyGetParam: Get<u32>;
-/// 		type Balance: Parameter + From<u8>;
+/// 		type Balance: Parameter + MaxEncodedLen + From<u8>;
 /// 		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
 /// 	}
 ///

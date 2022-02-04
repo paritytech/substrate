@@ -25,7 +25,6 @@ use frame_support::{
 	traits::{ConstU128, ConstU32, ConstU64, GenesisBuild, KeyOwnerProofSystem, OnInitialize},
 };
 use pallet_session::historical as pallet_session_historical;
-use pallet_staking::EraIndex;
 use sp_consensus_babe::{AuthorityId, AuthorityPair, Slot};
 use sp_consensus_vrf::schnorrkel::{VRFOutput, VRFProof};
 use sp_core::{
@@ -40,7 +39,7 @@ use sp_runtime::{
 	traits::{Header as _, IdentityLookup, OpaqueKeys},
 	Perbill,
 };
-use sp_staking::SessionIndex;
+use sp_staking::{EraIndex, SessionIndex};
 
 type DummyValidatorId = u64;
 
@@ -179,7 +178,7 @@ impl onchain::Config for Test {
 }
 
 impl pallet_staking::Config for Test {
-	const MAX_NOMINATIONS: u32 = 16;
+	type MaxNominations = ConstU32<16>;
 	type RewardRemainder = ();
 	type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
 	type Event = Event;

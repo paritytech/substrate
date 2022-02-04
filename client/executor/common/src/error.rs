@@ -125,28 +125,38 @@ impl From<String> for Error {
 }
 
 /// Type for errors occurring during Wasm runtime construction.
-#[derive(Debug, derive_more::Display)]
+#[derive(Debug, thiserror::Error)]
+#[allow(missing_docs)]
 pub enum WasmError {
-	/// Code could not be read from the state.
+	#[error("Code could not be read from the state.")]
 	CodeNotFound,
-	/// Failure to reinitialize runtime instance from snapshot.
+
+	#[error("Failure to reinitialize runtime instance from snapshot.")]
 	ApplySnapshotFailed,
+
 	/// Failure to erase the wasm memory.
 	///
 	/// Depending on the implementation might mean failure of allocating memory.
+	#[error("Failure to erase the wasm memory: {0}")]
 	ErasingFailed(String),
-	/// Wasm code failed validation.
+
+	#[error("Wasm code failed validation.")]
 	InvalidModule,
-	/// Wasm code could not be deserialized.
+
+	#[error("Wasm code could not be deserialized.")]
 	CantDeserializeWasm,
-	/// The module does not export a linear memory named `memory`.
+
+	#[error("The module does not export a linear memory named `memory`.")]
 	InvalidMemory,
-	/// The number of heap pages requested is disallowed by the module.
+
+	#[error("The number of heap pages requested is disallowed by the module.")]
 	InvalidHeapPages,
+
 	/// Instantiation error.
+	#[error("{0}")]
 	Instantiation(String),
+
 	/// Other error happenend.
+	#[error("{0}")]
 	Other(String),
 }
-
-impl std::error::Error for WasmError {}

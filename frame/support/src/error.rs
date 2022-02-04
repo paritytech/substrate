@@ -150,11 +150,11 @@ macro_rules! decl_error {
 				let mut error = err.encode();
 				error.resize($crate::MAX_PALLET_ERROR_ENCODED_SIZE, 0);
 
-				$crate::sp_runtime::DispatchError::Module {
+				$crate::sp_runtime::DispatchError::Module($crate::sp_runtime::ModuleError {
 					index,
 					error: error.try_into().expect("error has been resized to be 4 bytes; qed"),
 					message: Some(err.as_str()),
-				}
+				})
 			}
 		}
 	};

@@ -17,7 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::error::WasmError;
-use pwasm_utils::{
+use wasm_instrument::{
 	export_mutable_globals,
 	parity_wasm::elements::{deserialize_buffer, serialize, DataSegment, Internal, Module},
 };
@@ -84,7 +84,7 @@ impl RuntimeBlob {
 	/// depth of the wasm operand stack.
 	pub fn inject_stack_depth_metering(self, stack_depth_limit: u32) -> Result<Self, WasmError> {
 		let injected_module =
-			pwasm_utils::stack_height::inject_limiter(self.raw_module, stack_depth_limit).map_err(
+			wasm_instrument::inject_stack_limiter(self.raw_module, stack_depth_limit).map_err(
 				|e| WasmError::Other(format!("cannot inject the stack limiter: {:?}", e)),
 			)?;
 
