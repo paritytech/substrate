@@ -153,7 +153,6 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	pallet_scored_pool::GenesisConfig::<Test> {
 		pool: vec![(5, None), (10, Some(1)), (20, Some(2)), (31, Some(2)), (40, Some(3))],
 		member_count: 2,
-		..Default::default()
 	}
 	.assimilate_storage(&mut t)
 	.unwrap();

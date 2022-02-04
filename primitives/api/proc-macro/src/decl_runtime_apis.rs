@@ -235,9 +235,7 @@ fn generate_native_call_generators(decl: &ItemTrait) -> Result<TokenStream> {
 		// compatible. To ensure that we forward it by ref/value, we use the value given by the
 		// the user. Otherwise if it is not using the block, we don't need to add anything.
 		let input_borrows =
-			params
-				.iter()
-				.map(|v| if type_is_using_block(&v.1) { v.2.clone() } else { None });
+			params.iter().map(|v| if type_is_using_block(&v.1) { v.2 } else { None });
 
 		// Replace all `Block` with `NodeBlock`, add `'a` lifetime to references and collect
 		// all the function inputs.

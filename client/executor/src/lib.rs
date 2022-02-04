@@ -82,7 +82,7 @@ mod tests {
 		);
 		let res = executor
 			.uncached_call(
-				RuntimeBlob::uncompress_if_needed(&wasm_binary_unwrap()[..]).unwrap(),
+				RuntimeBlob::uncompress_if_needed(wasm_binary_unwrap()).unwrap(),
 				&mut ext,
 				true,
 				"test_empty_return",

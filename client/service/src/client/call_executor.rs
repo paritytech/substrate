@@ -246,8 +246,8 @@ where
 					&runtime_code,
 					self.spawn_handle.clone(),
 				)
+				.with_storage_transaction_cache(storage_transaction_cache.as_deref_mut())
 				.set_parent_hash(at_hash);
-				// TODO: https://github.com/paritytech/substrate/issues/4455
 				state_machine.execute_using_consensus_failure_handler(
 					execution_manager,
 					native_call.map(|n| || (n)().map_err(|e| Box::new(e) as Box<_>)),
@@ -264,9 +264,7 @@ where
 					&runtime_code,
 					self.spawn_handle.clone(),
 				)
-				.with_storage_transaction_cache(
-					storage_transaction_cache.as_mut().map(|c| &mut **c),
-				)
+				.with_storage_transaction_cache(storage_transaction_cache.as_deref_mut())
 				.set_parent_hash(at_hash);
 				state_machine.execute_using_consensus_failure_handler(
 					execution_manager,

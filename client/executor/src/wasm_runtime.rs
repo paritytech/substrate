@@ -77,7 +77,7 @@ struct VersionedRuntime {
 
 impl VersionedRuntime {
 	/// Run the given closure `f` with an instance of this runtime.
-	fn with_instance<'c, R, F>(&self, ext: &mut dyn Externalities, f: F) -> Result<R, Error>
+	fn with_instance<R, F>(&self, ext: &mut dyn Externalities, f: F) -> Result<R, Error>
 	where
 		F: FnOnce(
 			&Arc<dyn WasmModule>,

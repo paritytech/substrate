@@ -1,5 +1,5 @@
 groups:
-- name: polkadot.rules
+- name: substrate.rules
   rules:
 
   ##############################################################################
@@ -10,7 +10,7 @@ groups:
     annotations:
       message: 'Best block on instance {{ $labels.instance }} increases by
       less than 1 per minute for more than 3 minutes.'
-    expr: increase(polkadot_block_height{status="best"}[1m]) < 1
+    expr: increase(substrate_block_height{status="best"}[1m]) < 1
     for: 3m
     labels:
       severity: warning
@@ -18,7 +18,7 @@ groups:
     annotations:
       message: 'Best block on instance {{ $labels.instance }} increases by
       less than 1 per minute for more than 10 minutes.'
-    expr: increase(polkadot_block_height{status="best"}[1m]) < 1
+    expr: increase(substrate_block_height{status="best"}[1m]) < 1
     for: 10m
     labels:
       severity: critical
@@ -28,7 +28,7 @@ groups:
   ##############################################################################
 
   - alert: BlockFinalizationSlow
-    expr: increase(polkadot_block_height{status="finalized"}[1m]) < 1
+    expr: increase(substrate_block_height{status="finalized"}[1m]) < 1
     for: 3m
     labels:
       severity: warning
@@ -36,7 +36,7 @@ groups:
       message: 'Finalized block on instance {{ $labels.instance }} increases by
       less than 1 per minute for more than 3 minutes.'
   - alert: BlockFinalizationSlow
-    expr: increase(polkadot_block_height{status="finalized"}[1m]) < 1
+    expr: increase(substrate_block_height{status="finalized"}[1m]) < 1
     for: 10m
     labels:
       severity: critical
@@ -47,8 +47,8 @@ groups:
     # Under the assumption of an average block production of 6 seconds,
     # "best" and "finalized" being more than 10 blocks apart would imply
     # more than a 1 minute delay between block production and finalization.
-    expr: '(polkadot_block_height{status="best"} - ignoring(status)
-    polkadot_block_height{status="finalized"}) > 10'
+    expr: '(substrate_block_height{status="best"} - ignoring(status)
+    substrate_block_height{status="finalized"}) > 10'
     for: 8m
     labels:
       severity: critical
@@ -61,8 +61,8 @@ groups:
   ##############################################################################
 
   - alert: TransactionQueueSizeIncreasing
-    expr: 'increase(polkadot_sub_txpool_validations_scheduled[5m]) -
-    increase(polkadot_sub_txpool_validations_finished[5m]) > 0'
+    expr: 'increase(substrate_sub_txpool_validations_scheduled[5m]) -
+    increase(substrate_sub_txpool_validations_finished[5m]) > 0'
     for: 10m
     labels:
       severity: warning
@@ -70,8 +70,8 @@ groups:
       message: 'The transaction pool size on node {{ $labels.instance }} has
       been monotonically increasing for more than 10 minutes.'
   - alert: TransactionQueueSizeIncreasing
-    expr: 'increase(polkadot_sub_txpool_validations_scheduled[5m]) -
-    increase(polkadot_sub_txpool_validations_finished[5m]) > 0'
+    expr: 'increase(substrate_sub_txpool_validations_scheduled[5m]) -
+    increase(substrate_sub_txpool_validations_finished[5m]) > 0'
     for: 30m
     labels:
       severity: warning
@@ -79,8 +79,8 @@ groups:
       message: 'The transaction pool size on node {{ $labels.instance }} has
       been monotonically increasing for more than 30 minutes.'
   - alert: TransactionQueueSizeHigh
-    expr: 'polkadot_sub_txpool_validations_scheduled -
-    polkadot_sub_txpool_validations_finished > 10000'
+    expr: 'substrate_sub_txpool_validations_scheduled -
+    substrate_sub_txpool_validations_finished > 10000'
     for: 5m
     labels:
       severity: warning
@@ -93,7 +93,7 @@ groups:
   ##############################################################################
 
   - alert: NumberOfPeersLow
-    expr: polkadot_sub_libp2p_peers_count < 3
+    expr: substrate_sub_libp2p_peers_count < 3
     for: 3m
     labels:
       severity: warning
@@ -101,7 +101,7 @@ groups:
       message: 'The node {{ $labels.instance }} has less than 3 peers for more
       than 3 minutes'
   - alert: NumberOfPeersLow
-    expr: polkadot_sub_libp2p_peers_count < 3
+    expr: substrate_sub_libp2p_peers_count < 3
     for: 15m
     labels:
       severity: critical
@@ -109,7 +109,7 @@ groups:
       message: 'The node {{ $labels.instance }} has less than 3 peers for more
       than 15 minutes'
   - alert: NoIncomingConnection
-    expr: increase(polkadot_sub_libp2p_incoming_connections_total[20m]) == 0
+    expr: increase(substrate_sub_libp2p_incoming_connections_total[20m]) == 0
     labels:
       severity: warning
     annotations:
@@ -121,7 +121,7 @@ groups:
   ##############################################################################
 
   - alert: NumberOfFileDescriptorsHigh
-    expr: 'node_filefd_allocated{domain=~"kusama|polkadot"} > 10000'
+    expr: 'node_filefd_allocated{chain!=""} > 10000'
     for: 3m
     labels:
       severity: warning
@@ -134,9 +134,9 @@ groups:
   ##############################################################################
 
   - alert: AuthorityDiscoveryDiscoveryFailureHigh
-    expr: 'polkadot_authority_discovery_handle_value_found_event_failure /
+    expr: 'substrate_authority_discovery_handle_value_found_event_failure /
     ignoring(name)
-    polkadot_authority_discovery_dht_event_received{name="value_found"} > 0.5'
+    substrate_authority_discovery_dht_event_received{name="value_found"} > 0.5'
     for: 2h
     labels:
       severity: warning
@@ -147,9 +147,9 @@ groups:
 
   - alert: UnboundedChannelPersistentlyLarge
     expr: '(
-        (polkadot_unbounded_channel_len{action = "send"} -
-            ignoring(action) polkadot_unbounded_channel_len{action = "received"})
-        or on(instance) polkadot_unbounded_channel_len{action = "send"}
+        (substrate_unbounded_channel_len{action = "send"} -
+            ignoring(action) substrate_unbounded_channel_len{action = "received"})
+        or on(instance) substrate_unbounded_channel_len{action = "send"}
     ) >= 200'
     for: 5m
     labels:
@@ -160,9 +160,9 @@ groups:
 
   - alert: UnboundedChannelVeryLarge
     expr: '(
-        (polkadot_unbounded_channel_len{action = "send"} -
-            ignoring(action) polkadot_unbounded_channel_len{action = "received"})
-        or on(instance) polkadot_unbounded_channel_len{action = "send"}
+        (substrate_unbounded_channel_len{action = "send"} -
+            ignoring(action) substrate_unbounded_channel_len{action = "received"})
+        or on(instance) substrate_unbounded_channel_len{action = "send"}
     ) > 15000'
     labels:
       severity: warning

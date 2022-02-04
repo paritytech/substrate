@@ -802,6 +802,19 @@ pub struct PrefixIterator<T, OnRemoval = ()> {
 	phantom: core::marker::PhantomData<OnRemoval>,
 }
 
+impl<T, OnRemoval1> PrefixIterator<T, OnRemoval1> {
+	/// Converts to the same iterator but with the different 'OnRemoval' type
+	pub fn convert_on_removal<OnRemoval2>(self) -> PrefixIterator<T, OnRemoval2> {
+		PrefixIterator::<T, OnRemoval2> {
+			prefix: self.prefix,
+			previous_key: self.previous_key,
+			drain: self.drain,
+			closure: self.closure,
+			phantom: Default::default(),
+		}
+	}
+}
+
 /// Trait for specialising on removal logic of [`PrefixIterator`].
 pub trait PrefixIteratorOnRemoval {
 	/// This function is called whenever a key/value is removed.
@@ -1018,8 +1031,8 @@ impl<T: Decode + Sized> ChildTriePrefixIterator<(Vec<u8>, T)> {
 	pub fn with_prefix(child_info: &ChildInfo, prefix: &[u8]) -> Self {
 		let prefix = prefix.to_vec();
 		let previous_key = prefix.clone();
-		let closure = |raw_key_without_prefix: &[u8], raw_value: &[u8]| {
-			let value = T::decode(&mut &raw_value[..])?;
+		let closure = |raw_key_without_prefix: &[u8], mut raw_value: &[u8]| {
+			let value = T::decode(&mut raw_value)?;
 			Ok((raw_key_without_prefix.to_vec(), value))
 		};
 
@@ -1045,10 +1058,10 @@ impl<K: Decode + Sized, T: Decode + Sized> ChildTriePrefixIterator<(K, T)> {
 	) -> Self {
 		let prefix = prefix.to_vec();
 		let previous_key = prefix.clone();
-		let closure = |raw_key_without_prefix: &[u8], raw_value: &[u8]| {
+		let closure = |raw_key_without_prefix: &[u8], mut raw_value: &[u8]| {
 			let mut key_material = H::reverse(raw_key_without_prefix);
 			let key = K::decode(&mut key_material)?;
-			let value = T::decode(&mut &raw_value[..])?;
+			let value = T::decode(&mut raw_value)?;
 			Ok((key, value))
 		};
 

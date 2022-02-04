@@ -373,6 +373,7 @@ pub mod pallet {
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
 	#[pallet::storage_version(STORAGE_VERSION)]
+	#[pallet::without_storage_info]
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
@@ -480,11 +481,11 @@ pub mod pallet {
 			let queued_keys: Vec<_> = initial_validators_1
 				.iter()
 				.cloned()
-				.filter_map(|v| {
-					Some((
+				.map(|v| {
+					(
 						v.clone(),
 						Pallet::<T>::load_keys(&v).expect("Validator in session 1 missing keys!"),
-					))
+					)
 				})
 				.collect();
 

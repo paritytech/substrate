@@ -351,6 +351,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]
+	#[pallet::without_storage_info]
 	pub struct Pallet<T>(_);
 
 	#[pallet::hooks]
@@ -478,11 +479,6 @@ pub mod pallet {
 		}
 
 		/// Make some on-chain remark and emit event.
-		///
-		/// # <weight>
-		/// - `O(b)` where b is the length of the remark.
-		/// - 1 event.
-		/// # </weight>
 		#[pallet::weight(T::SystemWeightInfo::remark_with_event(remark.len() as u32))]
 		pub fn remark_with_event(
 			origin: OriginFor<T>,
@@ -637,17 +633,11 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(super) type ExecutionPhase<T: Config> = StorageValue<_, Phase>;
 
+	#[cfg_attr(feature = "std", derive(Default))]
 	#[pallet::genesis_config]
 	pub struct GenesisConfig {
 		#[serde(with = "sp_core::bytes")]
 		pub code: Vec<u8>,
-	}
-
-	#[cfg(feature = "std")]
-	impl Default for GenesisConfig {
-		fn default() -> Self {
-			Self { code: Default::default() }
-		}
 	}
 
 	#[pallet::genesis_build]
@@ -947,27 +937,6 @@ where
 	match o.into() {
 		Ok(RawOrigin::None) => Ok(()),
 		_ => Err(BadOrigin),
-	}
-}
-
-/// A type of block initialization to perform.
-pub enum InitKind {
-	/// Leave inspectable storage entries in state.
-	///
-	/// i.e. `Events` are not being reset.
-	/// Should only be used for off-chain calls,
-	/// regular block execution should clear those.
-	Inspection,
-
-	/// Reset also inspectable storage entries.
-	///
-	/// This should be used for regular block execution.
-	Full,
-}
-
-impl Default for InitKind {
-	fn default() -> Self {
-		InitKind::Full
 	}
 }
 
@@ -1308,12 +1277,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Start the execution of a particular block.
-	pub fn initialize(
-		number: &T::BlockNumber,
-		parent_hash: &T::Hash,
-		digest: &generic::Digest,
-		kind: InitKind,
-	) {
+	pub fn initialize(number: &T::BlockNumber, parent_hash: &T::Hash, digest: &generic::Digest) {
 		// populate environment
 		ExecutionPhase::<T>::put(Phase::Initialization);
 		storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &0u32);
@@ -1324,13 +1288,6 @@ impl<T: Config> Pallet<T> {
 
 		// Remove previous block data from storage
 		BlockWeight::<T>::kill();
-
-		// Kill inspectable storage entries in state when `InitKind::Full`.
-		if let InitKind::Full = kind {
-			<Events<T>>::kill();
-			EventCount::<T>::kill();
-			<EventTopics<T>>::remove_all(None);
-		}
 	}
 
 	/// Remove temporary "environment" entries in storage, compute the storage root and return the
@@ -1450,9 +1407,10 @@ impl<T: Config> Pallet<T> {
 		AllExtrinsicsLen::<T>::put(len as u32);
 	}
 
-	/// Reset events. Can be used as an alternative to
-	/// `initialize` for tests that don't need to bother with the other environment entries.
-	#[cfg(any(feature = "std", feature = "runtime-benchmarks", test))]
+	/// Reset events.
+	///
+	/// This needs to be used in prior calling [`initialize`](Self::initialize) for each new block
+	/// to clear events from previous block.
 	pub fn reset_events() {
 		<Events<T>>::kill();
 		EventCount::<T>::kill();

@@ -23,12 +23,12 @@ use crate::{weights::WeightInfo, Config};
 use codec::{Decode, Encode};
 use frame_support::{weights::Weight, DefaultNoBound};
 use pallet_contracts_proc_macro::{ScheduleDebug, WeightDebug};
-use pwasm_utils::{parity_wasm::elements, rules};
 use scale_info::TypeInfo;
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
 use sp_runtime::RuntimeDebug;
 use sp_std::{marker::PhantomData, vec::Vec};
+use wasm_instrument::{gas_metering, parity_wasm::elements};
 
 /// How many API calls are executed in a single batch. The reason for increasing the amount
 /// of API calls in batches (per benchmark component increase) is so that the linear regression
@@ -316,17 +316,35 @@ pub struct HostFnWeights<T: Config> {
 	/// Weight of calling `seal_set_storage`.
 	pub set_storage: Weight,
 
-	/// Weight per byte of an item stored with `seal_set_storage`.
-	pub set_storage_per_byte: Weight,
+	/// Weight per written byten of an item stored with `seal_set_storage`.
+	pub set_storage_per_new_byte: Weight,
+
+	/// Weight per overwritten byte of an item stored with `seal_set_storage`.
+	pub set_storage_per_old_byte: Weight,
 
 	/// Weight of calling `seal_clear_storage`.
 	pub clear_storage: Weight,
+
+	/// Weight of calling `seal_clear_storage` per byte of the stored item.
+	pub clear_storage_per_byte: Weight,
+
+	/// Weight of calling `seal_contains_storage`.
+	pub contains_storage: Weight,
+
+	/// Weight of calling `seal_contains_storage` per byte of the stored item.
+	pub contains_storage_per_byte: Weight,
 
 	/// Weight of calling `seal_get_storage`.
 	pub get_storage: Weight,
 
 	/// Weight per byte of an item received via `seal_get_storage`.
 	pub get_storage_per_byte: Weight,
+
+	/// Weight of calling `seal_take_storage`.
+	pub take_storage: Weight,
+
+	/// Weight per byte of an item received via `seal_take_storage`.
+	pub take_storage_per_byte: Weight,
 
 	/// Weight of calling `seal_transfer`.
 	pub transfer: Weight,
@@ -577,10 +595,16 @@ impl<T: Config> Default for HostFnWeights<T> {
 			),
 			debug_message: cost_batched!(seal_debug_message),
 			set_storage: cost_batched!(seal_set_storage),
-			set_storage_per_byte: cost_byte_batched!(seal_set_storage_per_kb),
+			set_storage_per_new_byte: cost_byte_batched!(seal_set_storage_per_new_kb),
+			set_storage_per_old_byte: cost_byte_batched!(seal_set_storage_per_old_kb),
 			clear_storage: cost_batched!(seal_clear_storage),
+			clear_storage_per_byte: cost_byte_batched!(seal_clear_storage_per_kb),
+			contains_storage: cost_batched!(seal_contains_storage),
+			contains_storage_per_byte: cost_byte_batched!(seal_contains_storage_per_kb),
 			get_storage: cost_batched!(seal_get_storage),
 			get_storage_per_byte: cost_byte_batched!(seal_get_storage_per_kb),
+			take_storage: cost_batched!(seal_take_storage),
+			take_storage_per_byte: cost_byte_batched!(seal_take_storage_per_kb),
 			transfer: cost_batched!(seal_transfer),
 			call: cost_batched!(seal_call),
 			call_transfer_surcharge: cost_batched_args!(
@@ -640,7 +664,7 @@ struct ScheduleRules<'a, T: Config> {
 }
 
 impl<T: Config> Schedule<T> {
-	pub(crate) fn rules(&self, module: &elements::Module) -> impl rules::Rules + '_ {
+	pub(crate) fn rules(&self, module: &elements::Module) -> impl gas_metering::Rules + '_ {
 		ScheduleRules {
 			schedule: &self,
 			params: module
@@ -656,7 +680,7 @@ impl<T: Config> Schedule<T> {
 	}
 }
 
-impl<'a, T: Config> rules::Rules for ScheduleRules<'a, T> {
+impl<'a, T: Config> gas_metering::Rules for ScheduleRules<'a, T> {
 	fn instruction_cost(&self, instruction: &elements::Instruction) -> Option<u32> {
 		use self::elements::Instruction::*;
 		let w = &self.schedule.instruction_weights;
@@ -740,10 +764,10 @@ impl<'a, T: Config> rules::Rules for ScheduleRules<'a, T> {
 		Some(weight)
 	}
 
-	fn memory_grow_cost(&self) -> Option<rules::MemoryGrowCost> {
+	fn memory_grow_cost(&self) -> gas_metering::MemoryGrowCost {
 		// We benchmarked the memory.grow instruction with the maximum allowed pages.
 		// The cost for growing is therefore already included in the instruction cost.
-		None
+		gas_metering::MemoryGrowCost::Free
 	}
 }
 

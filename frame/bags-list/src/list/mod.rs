@@ -742,7 +742,7 @@ impl<T: Config> Bag<T> {
 	/// Check if the bag contains a node with `id`.
 	#[cfg(feature = "std")]
 	fn contains(&self, id: &T::AccountId) -> bool {
-		self.iter().find(|n| n.id() == id).is_some()
+		self.iter().any(|n| n.id() == id)
 	}
 }
 
