@@ -215,7 +215,6 @@ pub mod pallet {
 
 	impl<T: Config> MigrationTask<T> {
 		/// Return true if the task is finished.
-		#[cfg(test)]
 		pub(crate) fn finished(&self) -> bool {
 			self.current_top.is_none() && self.current_child.is_none()
 		}
@@ -403,6 +402,8 @@ pub mod pallet {
 		Migrated { top: u32, child: u32, compute: MigrationCompute },
 		/// Some account got slashed by the given amount.
 		Slashed { who: T::AccountId, amount: BalanceOf<T> },
+		/// The auto migration task finished.
+		AutoMigrationFinished,
 	}
 
 	/// The outer Pallet struct.
@@ -680,11 +681,18 @@ pub mod pallet {
 					task.dyn_child_items,
 					task.dyn_size,
 				);
-				Self::deposit_event(Event::<T>::Migrated {
-					top: task.dyn_top_items,
-					child: task.dyn_child_items,
-					compute: MigrationCompute::Auto,
-				});
+
+				if task.finished() {
+					Self::deposit_event(Event::<T>::AutoMigrationFinished);
+					AutoLimits::<T>::kill();
+				} else {
+					Self::deposit_event(Event::<T>::Migrated {
+						top: task.dyn_top_items,
+						child: task.dyn_child_items,
+						compute: MigrationCompute::Auto,
+					});
+				}
+
 				MigrationProcess::<T>::put(task);
 
 				weight
