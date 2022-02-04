@@ -27,7 +27,7 @@ use sp_std::marker::PhantomData;
 /// [`frame_support::MAX_PALLET_ERROR_ENCODED_SIZE`]. If the pallet error type exceeds this size
 /// limit, a static assertion during compilation will fail. The compilation error will be in the
 /// format of `error[E0080]: evaluation of constant value failed` due to the usage of
-/// [`static_assertions::const_assert`].
+/// const assertions.
 pub trait PalletError: Encode + Decode {
 	/// The maximum encoded size for the implementing type.
 	///
