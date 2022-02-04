@@ -139,8 +139,10 @@ pub enum RuntimeCosts {
 	/// Weight of calling `seal_caller`.
 	Caller,
 	/// Weight of calling `seal_is_contract`.
+	#[cfg(feature = "unstable-interface")]
 	IsContract,
 	/// Weight of calling `seal_caller_is_origin`.
+	#[cfg(feature = "unstable-interface")]
 	CallerIsOrigin,
 	/// Weight of calling `seal_address`.
 	Address,
@@ -229,7 +231,9 @@ impl RuntimeCosts {
 		let weight = match *self {
 			MeteringBlock(amount) => s.gas.saturating_add(amount.into()),
 			Caller => s.caller,
+			#[cfg(feature = "unstable-interface")]
 			IsContract => s.is_contract,
+			#[cfg(feature = "unstable-interface")]
 			CallerIsOrigin => s.caller_is_origin,
 			Address => s.address,
 			GasLeft => s.gas_left,
