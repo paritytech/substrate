@@ -549,6 +549,19 @@ impl Pair {
 	}
 }
 
+// The `secp256k1` backend doesn't implement cleanup for their private keys.
+// Currently we should take care of wiping the secret from memory.
+impl Drop for Pair {
+	fn drop(&mut self) {
+		let ptr = self.secret.as_mut_ptr();
+		for off in 0..self.secret.len() {
+			unsafe {
+				core::ptr::write_volatile(ptr.add(off), 0);
+			}
+		}
+	}
+}
+
 impl CryptoType for Public {
 	#[cfg(feature = "full_crypto")]
 	type Pair = Pair;
