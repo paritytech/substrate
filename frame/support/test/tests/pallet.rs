@@ -656,7 +656,6 @@ fn error_expand() {
 	);
 	assert_eq!(
 		DispatchError::from(pallet::Error::<Runtime>::InsufficientProposersBalance),
-
 		DispatchError::Module(ModuleError {
 			index: 1,
 			error: [0, 0, 0, 0],
