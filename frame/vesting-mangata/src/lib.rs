@@ -239,7 +239,6 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
-			use sp_runtime::traits::Saturating;
 
 			// Genesis uses the latest storage version.
 			StorageVersion::<T>::put(Releases::V1);
@@ -248,12 +247,8 @@ pub mod pallet {
 			// * who - Account which we are generating vesting configuration for
 			// * begin - Block when the account will start to vest
 			// * length - Number of blocks from `begin` until fully vested
-			// * liquid - Number of units which can be spent before vesting begins
-			for &(ref who, begin, length, liquid) in self.vesting.iter() {
-				let balance = T::Currency::free_balance(who);
-				assert!(!balance.is_zero(), "Currencies must be init'd before vesting");
-				// Total genesis `balance` minus `liquid` equals funds locked for vesting
-				let locked = balance.saturating_sub(liquid);
+			// * locked - Number of units which are locked for vesting
+			for &(ref who, begin, length, locked) in self.vesting.iter() {
 				let length_as_balance = T::BlockNumberToBalance::convert(length);
 				let per_block = locked / length_as_balance.max(sp_runtime::traits::One::one());
 				let vesting_info = VestingInfo::new(locked, per_block, begin);
@@ -345,36 +340,6 @@ pub mod pallet {
 			ensure_signed(origin)?;
 			let who = T::Lookup::lookup(target)?;
 			Self::do_vest(who)
-		}
-
-		/// Create a vested transfer.
-		///
-		/// The dispatch origin for this call must be _Signed_.
-		///
-		/// - `target`: The account receiving the vested funds.
-		/// - `schedule`: The vesting schedule attached to the transfer.
-		///
-		/// Emits `VestingCreated`.
-		///
-		/// NOTE: This will unlock all schedules through the current block.
-		///
-		/// # <weight>
-		/// - `O(1)`.
-		/// - DbWeight: 3 Reads, 3 Writes
-		///     - Reads: Vesting Storage, Balances Locks, Target Account, [Sender Account]
-		///     - Writes: Vesting Storage, Balances Locks, Target Account, [Sender Account]
-		/// # </weight>
-		#[pallet::weight(
-			T::WeightInfo::vested_transfer(MaxLocksOf::<T>::get(), T::MAX_VESTING_SCHEDULES)
-		)]
-		pub fn vested_transfer(
-			origin: OriginFor<T>,
-			target: <T::Lookup as StaticLookup>::Source,
-			schedule: VestingInfo<BalanceOf<T>, T::BlockNumber>,
-		) -> DispatchResult {
-			let transactor = ensure_signed(origin)?;
-			let transactor = <T::Lookup as StaticLookup>::unlookup(transactor);
-			Self::do_vested_transfer(transactor, target, schedule)
 		}
 
 		/// Force a vested transfer.

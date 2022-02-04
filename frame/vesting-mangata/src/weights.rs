@@ -49,7 +49,6 @@ pub trait WeightInfo {
 	fn vest_unlocked(l: u32, s: u32, ) -> Weight;
 	fn vest_other_locked(l: u32, s: u32, ) -> Weight;
 	fn vest_other_unlocked(l: u32, s: u32, ) -> Weight;
-	fn vested_transfer(l: u32, s: u32, ) -> Weight;
 	fn force_vested_transfer(l: u32, s: u32, ) -> Weight;
 	fn not_unlocking_merge_schedules(l: u32, s: u32, ) -> Weight;
 	fn unlocking_merge_schedules(l: u32, s: u32, ) -> Weight;
@@ -101,18 +100,6 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add((123_000 as Weight).saturating_mul(l as Weight))
 			// Standard Error: 9_000
 			.saturating_add((118_000 as Weight).saturating_mul(s as Weight))
-			.saturating_add(T::DbWeight::get().reads(3 as Weight))
-			.saturating_add(T::DbWeight::get().writes(3 as Weight))
-	}
-	// Storage: Vesting Vesting (r:1 w:1)
-	// Storage: System Account (r:1 w:1)
-	// Storage: Balances Locks (r:1 w:1)
-	fn vested_transfer(l: u32, s: u32, ) -> Weight {
-		(89_517_000 as Weight)
-			// Standard Error: 5_000
-			.saturating_add((114_000 as Weight).saturating_mul(l as Weight))
-			// Standard Error: 10_000
-			.saturating_add((23_000 as Weight).saturating_mul(s as Weight))
 			.saturating_add(T::DbWeight::get().reads(3 as Weight))
 			.saturating_add(T::DbWeight::get().writes(3 as Weight))
 	}
@@ -199,18 +186,6 @@ impl WeightInfo for () {
 			.saturating_add((123_000 as Weight).saturating_mul(l as Weight))
 			// Standard Error: 9_000
 			.saturating_add((118_000 as Weight).saturating_mul(s as Weight))
-			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
-	}
-	// Storage: Vesting Vesting (r:1 w:1)
-	// Storage: System Account (r:1 w:1)
-	// Storage: Balances Locks (r:1 w:1)
-	fn vested_transfer(l: u32, s: u32, ) -> Weight {
-		(89_517_000 as Weight)
-			// Standard Error: 5_000
-			.saturating_add((114_000 as Weight).saturating_mul(l as Weight))
-			// Standard Error: 10_000
-			.saturating_add((23_000 as Weight).saturating_mul(s as Weight))
 			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
 	}
