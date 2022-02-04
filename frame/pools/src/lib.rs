@@ -501,6 +501,20 @@ impl<T: Config> SubPools<T> {
 
 		self
 	}
+
+	/// Get the unbond pool for `era`. If one does not exist a default entry will be inserted.
+	///
+	/// The caller must ensure that the `SubPools::with_era` has room for 1 more entry. Calling
+	/// [`SubPools::maybe_merge_pools`] with the current era should the sub pools are in an ok state
+	/// to call this method.
+	fn unchecked_with_era_get_or_make(&mut self, era: EraIndex) -> &mut UnbondPool<T> {
+		if !self.with_era.contains_key(&era) {
+			self.with_era.try_insert(era, UnbondPool::default())
+				.expect("caller has checked pre-conditions. qed.");
+		}
+
+		self.with_era.get_mut(&era).expect("entry inserted on the line above. qed.")
+	}
 }
 
 /// The maximum amount of eras an unbonding pool can exist prior to being merged with the
@@ -523,7 +537,6 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(crate) trait Store)]
-	#[pallet::generate_storage_info]
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
@@ -771,7 +784,7 @@ pub mod pallet {
 			// does not yet exist.
 			{
 				let mut unbond_pool =
-					sub_pools.with_era.entry(current_era).or_insert_with(|| UnbondPool::default());
+					sub_pools.unchecked_with_era_get_or_make(current_era);
 				let points_to_issue = unbond_pool.points_to_issue(balance_to_unbond);
 				unbond_pool.points = unbond_pool.points.saturating_add(points_to_issue);
 				unbond_pool.balance = unbond_pool.balance.saturating_add(balance_to_unbond);

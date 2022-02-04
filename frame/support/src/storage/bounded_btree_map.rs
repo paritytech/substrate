@@ -27,7 +27,7 @@ use sp_std::{
 	collections::btree_map::BTreeMap,
 	convert::TryFrom,
 	marker::PhantomData,
-	ops::{Deref, DerefMut},
+	ops::{Deref},
 };
 
 /// A bounded map based on a B-Tree.
@@ -271,15 +271,6 @@ where
 
 	fn deref(&self) -> &Self::Target {
 		&self.0
-	}
-}
-
-impl<K, V, S> DerefMut for BoundedBTreeMap<K, V, S>
-where
-	K: Ord,
-{
-	fn deref_mut(&mut self) -> &mut Self::Target {
-		&mut self.0
 	}
 }
 
