@@ -347,36 +347,6 @@ pub mod pallet {
 			Self::do_vest(who)
 		}
 
-		/// Create a vested transfer.
-		///
-		/// The dispatch origin for this call must be _Signed_.
-		///
-		/// - `target`: The account receiving the vested funds.
-		/// - `schedule`: The vesting schedule attached to the transfer.
-		///
-		/// Emits `VestingCreated`.
-		///
-		/// NOTE: This will unlock all schedules through the current block.
-		///
-		/// # <weight>
-		/// - `O(1)`.
-		/// - DbWeight: 3 Reads, 3 Writes
-		///     - Reads: Vesting Storage, Balances Locks, Target Account, [Sender Account]
-		///     - Writes: Vesting Storage, Balances Locks, Target Account, [Sender Account]
-		/// # </weight>
-		#[pallet::weight(
-			T::WeightInfo::vested_transfer(MaxLocksOf::<T>::get(), T::MAX_VESTING_SCHEDULES)
-		)]
-		pub fn vested_transfer(
-			origin: OriginFor<T>,
-			target: <T::Lookup as StaticLookup>::Source,
-			schedule: VestingInfo<BalanceOf<T>, T::BlockNumber>,
-		) -> DispatchResult {
-			let transactor = ensure_signed(origin)?;
-			let transactor = <T::Lookup as StaticLookup>::unlookup(transactor);
-			Self::do_vested_transfer(transactor, target, schedule)
-		}
-
 		/// Force a vested transfer.
 		///
 		/// The dispatch origin for this call must be _Root_.
