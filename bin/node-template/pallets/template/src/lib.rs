@@ -99,4 +99,63 @@ pub mod pallet {
 			}
 		}
 	}
+
+	#[pallet::validate_unsigned]
+	impl<T: Config> ValidateUnsigned for Pallet<T> {
+		type Call = Call<T>;
+
+		/// Validate unsigned call to this module.
+		fn validate_unsigned(_source: TransactionSource, call: &Self::Call) -> TransactionValidity {
+			// Firstly let's check that we call the right function.
+			if let Call::do_something { something } = call
+			{
+				ValidTransaction::with_tag_prefix("TemplateModule")
+					// We set base priority to 2**20 and hope it's included before any other
+					// transactions in the pool. Next we tweak the priority depending on how much
+					// it differs from the current average. (the more it differs the more priority it
+					// has).
+					.priority(1_000_000u64.saturating_add(*something as u64))
+					// The transaction is only valid for next 5 blocks. After that it's
+					// going to be revalidated by the pool.
+					.longevity(5)
+					// It's fine to propagate that transaction to other peers, which means it can be
+					// created even by nodes that don't produce blocks.
+					// Note that sometimes it's better to keep it for yourself (if you are the block
+					// producer), since for instance in some schemes others may copy your solution and
+					// claim a reward.
+					.propagate(true)
+					.build()
+			} else {
+				InvalidTransaction::Call.into()
+			}
+		}
+	}
+}
+
+impl<T> Pallet<T>
+where
+	// We use `offchain::SendTransactionTypes` for unsigned extrinsic creation and submission.
+	T: Config + frame_system::offchain::SendTransactionTypes<Call<T>>,
+{
+	pub fn submit_unsigned_do_something(something: u32) -> Result<(), ()> {
+		use frame_system::offchain::SubmitTransaction;
+
+		let call = Call::do_something { something };
+
+		match SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into()) {
+			Ok(()) => log::info!(
+				target: "runtime::template",
+				"Submitted something {}.",
+				something
+			),
+			Err(e) => log::error!(
+				target: "runtime::template",
+				"Error submitting something ({}): {:?}",
+				something,
+				e,
+			),
+		}
+
+		Ok(())
+	}
 }

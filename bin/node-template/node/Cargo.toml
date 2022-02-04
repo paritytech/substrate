@@ -63,6 +63,7 @@ frame-system = { version = "4.0.0-dev", path = "../../../frame/system" }
 frame-system-rpc-runtime-api = { version = "4.0.0-dev", path = "../../../frame/system/rpc/runtime-api/" }
 pallet-transaction-payment = { version = "4.0.0-dev", path = "../../../frame/transaction-payment" }
 sp-keyring = { version = "4.1.0-dev", path = "../../../primitives/keyring" }
+construct-extrinsic = { version = "0.1.0", path = "../primitives/construct-extrinsic" }
 
 node-template-runtime = { version = "3.0.0", path = "../runtime" }
 

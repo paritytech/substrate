@@ -337,6 +337,14 @@ mod benches {
 	);
 }
 
+impl<C> frame_system::offchain::SendTransactionTypes<C> for Runtime
+where
+	Call: From<C>,
+{
+	type Extrinsic = UncheckedExtrinsic;
+	type OverarchingCall = Call;
+}
+
 impl_runtime_apis! {
 	impl sp_api::Core<Block> for Runtime {
 		fn version() -> RuntimeVersion {
@@ -465,6 +473,12 @@ impl_runtime_apis! {
 			len: u32,
 		) -> pallet_transaction_payment::FeeDetails<Balance> {
 			TransactionPayment::query_fee_details(uxt, len)
+		}
+	}
+
+	impl construct_extrinsic::ConstructExtrinsicApi<Block> for Runtime {
+		fn submit_unsigned_do_something(something: u32) -> Result<(), ()> {
+			TemplateModule::submit_unsigned_do_something(something)
 		}
 	}
 

@@ -344,7 +344,7 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 	}
 
 	log::info!("creating tx submission task");
-	let task = run_oracle_tx_submission(client.clone(), transaction_pool.clone());
+	let task = run_oracle_unsigned_tx_submission(client.clone());
 	task_manager.spawn_handle().spawn_blocking(
 		"tx_submission",
 		None,
@@ -374,6 +374,41 @@ use futures::FutureExt;
 use sp_api::BlockId;
 use sp_runtime::traits::One;
 use sp_keyring::Sr25519Keyring;
+use construct_extrinsic::ConstructExtrinsicApi;
+
+async fn run_oracle_unsigned_tx_submission<B, C>(
+	client: Arc<C>,
+)
+where
+	B: BlockT<Extrinsic = OpaqueRuntimeExtrinsic, Hash = RuntimeHash>,
+	C: ProvideRuntimeApi<B>
+		+ HeaderMetadata<B, Error = sp_blockchain::Error>
+		+ Chain<B>
+		+ HeaderBackend<B>
+		+ BlockBackend<B>
+		+ BlockchainEvents<B>,
+	C::Api: ConstructExtrinsicApi<B>
+{
+	let start = tokio::time::Instant::now();
+	let interval = tokio::time::interval(Duration::from_secs(10));
+	tokio_stream::wrappers::IntervalStream::new(interval)
+		.for_each(|now| {
+			let client = client.clone();
+			let elapsed = now.duration_since(start).as_secs_f32();
+			log::info!("[{:?}] Tick interval stream", elapsed);
+			let sender = Sr25519Keyring::Alice.pair();
+			async move {
+				let something = fetch_price().await;
+				let best_hash = client.info().best_hash;
+
+				let r = client.runtime_api()
+					.submit_unsigned_do_something(&generic::BlockId::Hash(best_hash), something)
+					.expect("tx submission shouldn't fail");
+
+				log::info!("[{:?}] submitted unsigned tx. result: {:?}", elapsed, r);
+			}
+		}).await
+}
 
 async fn run_oracle_tx_submission<B, C, P>(
 	client: Arc<C>,

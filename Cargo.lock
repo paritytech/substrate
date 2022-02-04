@@ -1065,6 +1065,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "245097e9a4535ee1e3e3931fcfcd55a796a44c643e8596ff6566d68f09b87bbc"
 
 [[package]]
+name = "construct-extrinsic"
+version = "0.1.0"
+dependencies = [
+ "sp-api",
+ "sp-runtime",
+]
+
+[[package]]
 name = "convert_case"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4877,6 +4885,7 @@ name = "node-template"
 version = "3.0.0"
 dependencies = [
  "clap 3.0.7",
+ "construct-extrinsic",
  "frame-benchmarking",
  "frame-benchmarking-cli",
  "frame-system",
@@ -4923,6 +4932,7 @@ dependencies = [
 name = "node-template-runtime"
 version = "3.0.0"
 dependencies = [
+ "construct-extrinsic",
  "frame-benchmarking",
  "frame-executive",
  "frame-support",
@@ -6231,6 +6241,7 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
+ "log 0.4.14",
  "parity-scale-codec",
  "scale-info",
  "sp-core",
