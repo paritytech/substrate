@@ -46,6 +46,7 @@ pub mod pallet {
 		/// Event documentation should end with an array that provides descriptive names for event
 		/// parameters. [something, who]
 		SomethingStored(u32, T::AccountId),
+		SomethingStoredUnsigned(u32),
 	}
 
 	// Errors inform users that something went wrong.
@@ -80,6 +81,24 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// An example dispatchable that takes a singles value as a parameter, writes the value to
+		/// storage and emits an event. This function must be dispatched by a signed extrinsic.
+		#[pallet::weight(10_000 + T::DbWeight::get().writes(1))]
+		pub fn do_something_unsigned(origin: OriginFor<T>, something: u32) -> DispatchResult {
+			// Check that the extrinsic was signed and get the signer.
+			// This function will return an error if the extrinsic is not signed.
+			// https://docs.substrate.io/v3/runtime/origins
+			ensure_none(origin)?;
+
+			// Update storage.
+			<Something<T>>::put(something);
+
+			// Emit an event.
+			Self::deposit_event(Event::SomethingStoredUnsigned(something));
+			// Return a successful DispatchResultWithPostInfo
+			Ok(())
+		}
+
 		/// An example dispatchable that may throw a custom error.
 		#[pallet::weight(10_000 + T::DbWeight::get().reads_writes(1,1))]
 		pub fn cause_error(origin: OriginFor<T>) -> DispatchResult {
@@ -107,14 +126,14 @@ pub mod pallet {
 		/// Validate unsigned call to this module.
 		fn validate_unsigned(_source: TransactionSource, call: &Self::Call) -> TransactionValidity {
 			// Firstly let's check that we call the right function.
-			if let Call::do_something { something } = call
+			if let Call::do_something_unsigned { something } = call
 			{
 				ValidTransaction::with_tag_prefix("TemplateModule")
 					// We set base priority to 2**20 and hope it's included before any other
 					// transactions in the pool. Next we tweak the priority depending on how much
 					// it differs from the current average. (the more it differs the more priority it
 					// has).
-					.priority(1_000_000u64.saturating_add(*something as u64))
+					.priority(TransactionPriority::max_value())
 					// The transaction is only valid for next 5 blocks. After that it's
 					// going to be revalidated by the pool.
 					.longevity(5)
@@ -124,6 +143,7 @@ pub mod pallet {
 					// producer), since for instance in some schemes others may copy your solution and
 					// claim a reward.
 					.propagate(true)
+					.and_provides(*something)
 					.build()
 			} else {
 				InvalidTransaction::Call.into()
@@ -140,7 +160,7 @@ where
 	pub fn submit_unsigned_do_something(something: u32) -> Result<(), ()> {
 		use frame_system::offchain::SubmitTransaction;
 
-		let call = Call::do_something { something };
+		let call = Call::do_something_unsigned { something };
 
 		match SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into()) {
 			Ok(()) => log::info!(
