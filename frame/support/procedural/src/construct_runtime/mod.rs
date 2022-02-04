@@ -144,7 +144,6 @@
 mod expand;
 mod parse;
 
-use crate::COUNTER;
 use frame_support_procedural_tools::{
 	generate_crate_access, generate_crate_access_2018, generate_hidden_includes,
 };
@@ -154,7 +153,7 @@ use parse::{
 };
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
-use quote::{format_ident, quote};
+use quote::quote;
 use syn::{Ident, Result};
 
 /// The fixed name of the system pallet.
@@ -482,44 +481,23 @@ fn decl_static_assertions(
 	scrate: &TokenStream2,
 ) -> TokenStream2 {
 	let error_encoded_size_check = pallet_decls.iter().map(|decl| {
-		let count = COUNTER.with(|counter| counter.borrow_mut().inc());
 		let path = &decl.path;
-		// This weirdness is required because declarative macros gets hoisted up to the crate root,
-		// and thus doesn't appear in the same module namespace as the tt_call macro. We use a
-		// re-export hack to make the macro appear in the same module namespace.
-		let assert_macro_name = format_ident!("__assert_error_encoded_size_{}", count);
 		let assert_message = format!(
 			"The maximum encoded size of the error type in the `{}` pallet exceeds \
 			`MAX_PALLET_ERROR_ENCODED_SIZE`",
 			decl.name,
 		);
-		let macro_alias = format_ident!("assert_error_encoded_size_{}", count);
 
 		quote! {
 			#scrate::tt_call! {
 				macro = [{ #path::tt_error_token }]
 				frame_support = [{ #scrate }]
-				~~> #macro_alias
+				~~> #scrate::assert_error_encoded_size! {
+					path = [{ #path }]
+					runtime = [{ #runtime }]
+					assert_message = [{ #assert_message }]
+				}
 			}
-
-			#[macro_export]
-			#[doc(hidden)]
-			macro_rules! #assert_macro_name {
-				{
-					error = [{ $error:ident }]
-				} => {
-					const _: () = assert!(
-						<
-							#path::$error<#runtime> as #scrate::traits::PalletError
-						>::MAX_ENCODED_SIZE <= #scrate::MAX_PALLET_ERROR_ENCODED_SIZE,
-						#assert_message
-					);
-				};
-				{} => {};
-			}
-
-			#[doc(hidden)]
-			pub use #assert_macro_name as #macro_alias;
 		}
 	});
 
