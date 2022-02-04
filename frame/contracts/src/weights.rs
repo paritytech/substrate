@@ -89,7 +89,7 @@ pub trait WeightInfo {
 	fn seal_transfer(r: u32, ) -> Weight;
 	fn seal_call(r: u32, ) -> Weight;
 	fn seal_delegate_call(r: u32, ) -> Weight;
-	fn seal_call_per_transfer_input_output_kb(t: u32, i: u32, o: u32, ) -> Weight;
+	fn seal_call_per_transfer_clone_kb(t: u32, i: u32) -> Weight;
 	fn seal_instantiate(r: u32, ) -> Weight;
 	fn seal_instantiate_per_input_output_salt_kb(i: u32, o: u32, s: u32, ) -> Weight;
 	fn seal_hash_sha2_256(r: u32, ) -> Weight;
@@ -633,14 +633,13 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Contracts ContractInfoOf (r:101 w:101)
 	// Storage: Contracts CodeStorage (r:2 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
-	fn seal_call_per_transfer_input_output_kb(t: u32, i: u32, o: u32, ) -> Weight {
+	fn seal_call_per_transfer_clone_kb(t: u32, i: u32) -> Weight {
 		(20_190_331_000 as Weight)
 			// Standard Error: 75_647_000
 			.saturating_add((2_369_225_000 as Weight).saturating_mul(t as Weight))
 			// Standard Error: 27_000
 			.saturating_add((19_831_000 as Weight).saturating_mul(i as Weight))
 			// Standard Error: 28_000
-			.saturating_add((31_191_000 as Weight).saturating_mul(o as Weight))
 			.saturating_add(T::DbWeight::get().reads(105 as Weight))
 			.saturating_add(T::DbWeight::get().reads((101 as Weight).saturating_mul(t as Weight)))
 			.saturating_add(T::DbWeight::get().writes(101 as Weight))
@@ -1512,14 +1511,13 @@ impl WeightInfo for () {
 	// Storage: Contracts ContractInfoOf (r:101 w:101)
 	// Storage: Contracts CodeStorage (r:2 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
-	fn seal_call_per_transfer_input_output_kb(t: u32, i: u32, o: u32, ) -> Weight {
+	fn seal_call_per_transfer_clone_kb(t: u32, i: u32) -> Weight {
 		(20_190_331_000 as Weight)
 			// Standard Error: 75_647_000
 			.saturating_add((2_369_225_000 as Weight).saturating_mul(t as Weight))
 			// Standard Error: 27_000
 			.saturating_add((19_831_000 as Weight).saturating_mul(i as Weight))
 			// Standard Error: 28_000
-			.saturating_add((31_191_000 as Weight).saturating_mul(o as Weight))
 			.saturating_add(RocksDbWeight::get().reads(105 as Weight))
 			.saturating_add(RocksDbWeight::get().reads((101 as Weight).saturating_mul(t as Weight)))
 			.saturating_add(RocksDbWeight::get().writes(101 as Weight))

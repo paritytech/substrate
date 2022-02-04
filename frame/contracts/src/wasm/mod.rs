@@ -26,7 +26,7 @@ mod runtime;
 
 #[cfg(feature = "runtime-benchmarks")]
 pub use self::code_cache::reinstrument;
-pub use self::runtime::{ReturnCode, Runtime, RuntimeCosts};
+pub use self::runtime::{CallFlags, ReturnCode, Runtime, RuntimeCosts};
 use crate::{
 	exec::{ExecResult, Executable, ExportedFunction, Ext},
 	gas::GasMeter,
