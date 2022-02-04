@@ -1338,7 +1338,7 @@ where
 	fn new_block_at<R: Into<RecordProofVer>>(
 		&self,
 		parent: &BlockId<Block>,
-		inherent_digests: DigestFor<Block>,
+		inherent_digests: Digest,
 		record_proof: R,
 	) -> sp_blockchain::Result<sc_block_builder_ver::BlockBuilder<Block, Self, B>> {
 		sc_block_builder_ver::BlockBuilder::new(
@@ -1353,7 +1353,7 @@ where
 
 	fn new_block(
 		&self,
-		inherent_digests: DigestFor<Block>,
+		inherent_digests: Digest,
 	) -> sp_blockchain::Result<sc_block_builder_ver::BlockBuilder<Block, Self, B>> {
 		let info = self.chain_info();
 		sc_block_builder_ver::BlockBuilder::new(
