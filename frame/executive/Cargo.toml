@@ -31,7 +31,7 @@ sp-core = { version = "5.0.0", path = "../../primitives/core" }
 sp-io = { version = "5.0.0", path = "../../primitives/io" }
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 pallet-transaction-payment = { version = "4.0.0-dev", path = "../transaction-payment" }
-sp-version = { version = "4.0.0-dev", path = "../../primitives/version" }
+sp-version = { version = "5.0.0", path = "../../primitives/version" }
 sp-inherents = { version = "4.0.0-dev", path = "../../primitives/inherents" }
 
 [features]
