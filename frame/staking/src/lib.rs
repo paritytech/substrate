@@ -540,7 +540,7 @@ where
 		slash_era: EraIndex,
 		active_era: EraIndex,
 	) -> Balance {
-		use sp_staking::{SlashPoolOut, SlashPoolArgs};
+		use sp_staking::{SlashPoolArgs, SlashPoolOut};
 		if let Some(SlashPoolOut { slashed_bonded, slashed_unlocking }) =
 			P::slash_pool(SlashPoolArgs {
 				pool_stash: &self.stash,

@@ -18,7 +18,7 @@
 //! * unbonding sub pools: This a collection of pools at different phases of the unbonding
 //!   lifecycle. See [`SubPools`] and [`SubPoolsStorage`].
 //! * delegators: Accounts that are members of pools. See [`Delegator`] and [`Delegators`].
-//! 
+//!
 //! In order to maintain scalability, all operations are independent of the number of delegators. To
 //! do this, we store delegation specific information local to the delegator while the pool data
 //! structures have bounded datum .
@@ -849,12 +849,12 @@ pub mod pallet {
 			Ok(())
 		}
 
-		// Create a pool.
-		//
-		// * `targets`: _Stash_ addresses of the validators to nominate
-		// * `amount`: Balance to delegate to the pool. Must meet the minimum bond.
-		// * `index`: Disambiguation index for seeding account generation. Likely only useful when
-		//   creating multiple pools in the same extrinsic.
+		/// Create a pool.
+		///
+		/// * `targets`: _Stash_ addresses of the validators to nominate
+		/// * `amount`: Balance to delegate to the pool. Must meet the minimum bond.
+		/// * `index`: Disambiguation index for seeding account generation. Likely only useful when
+		///   creating multiple pools in the same extrinsic.
 		#[pallet::weight(666)]
 		pub fn create(
 			origin: OriginFor<T>,
