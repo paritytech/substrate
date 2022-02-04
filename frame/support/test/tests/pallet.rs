@@ -646,7 +646,6 @@ fn call_expand() {
 
 #[test]
 fn error_expand() {
-	use codec::Decode;
 	assert_eq!(
 		format!("{:?}", pallet::Error::<Runtime>::InsufficientProposersBalance),
 		String::from("InsufficientProposersBalance"),

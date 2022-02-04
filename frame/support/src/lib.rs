@@ -853,22 +853,27 @@ macro_rules! assert_ok {
 /// Assert that the maximum encoding size does not exceed the value defined in
 /// [`MAX_PALLET_ERROR_ENCODED_SIZE`] during compilation.
 ///
-/// This macro is intended to be used in conjuction with `tt_call!`.
+/// This macro is intended to be used in conjunction with `tt_call!`.
 #[macro_export]
 macro_rules! assert_error_encoded_size {
 	{
-		path = [{ $path:path }]
+		path = [{ $($path:ident)::+ }]
 		runtime = [{ $runtime:ident }]
 		assert_message = [{ $assert_message:literal }]
 		error = [{ $error:ident }]
 	} => {
 		const _: () = assert!(
 			<
-				<$path>::$error<$runtime> as $crate::traits::PalletError
+				$($path::)+$error<$runtime> as $crate::traits::PalletError
 			>::MAX_ENCODED_SIZE <= $crate::MAX_PALLET_ERROR_ENCODED_SIZE,
 			$assert_message
 		);
-	}
+	};
+	{
+		path = [{ $($path:ident)::+ }]
+		runtime = [{ $runtime:ident }]
+		assert_message = [{ $assert_message:literal }]
+	} => {};
 }
 
 #[cfg(feature = "std")]
