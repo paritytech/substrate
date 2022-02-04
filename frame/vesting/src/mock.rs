@@ -139,9 +139,9 @@ impl ExtBuilder {
 			vesting_config
 		} else {
 			vec![
-				(1, 0, 10, 5 * self.existential_deposit),
-				(2, 10, 20, 0),
-				(12, 10, 20, 5 * self.existential_deposit),
+				(1, 0, 10, (10 * self.existential_deposit) - (5 * self.existential_deposit)),
+				(2, 10, 20, 20 * self.existential_deposit),
+				(12, 10, 20, (10 * self.existential_deposit) - (5 * self.existential_deposit)),
 			]
 		};
 

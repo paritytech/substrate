@@ -1442,17 +1442,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "derivative"
-version = "2.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fcc3dd5e9e9c0b295d6e1e4d811fb6f157d5ffd784b8d202fc62eac8035a770b"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
 name = "derive_more"
 version = "0.99.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3935,11 +3924,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "mangata-primitives"
-version = "0.1.0"
-source = "git+https://github.com/mangata-finance/mangata-node?branch=mangata-dev-v4#7fa2c900c69b2f153a9b0e17990b5971c5d3e2ce"
-
-[[package]]
 name = "maplit"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4555,54 +4539,6 @@ dependencies = [
  "libc",
  "pkg-config",
  "vcpkg",
-]
-
-[[package]]
-name = "orml-tokens"
-version = "0.4.1-dev"
-source = "git+https://github.com/mangata-finance/open-runtime-module-library?branch=mangata-dev-v4#75bbee6a9596ca191ca0343d04ffd798730c49ca"
-dependencies = [
- "frame-support",
- "frame-system",
- "mangata-primitives",
- "orml-traits",
- "parity-scale-codec",
- "scale-info",
- "serde",
- "sp-runtime",
- "sp-std",
-]
-
-[[package]]
-name = "orml-traits"
-version = "0.4.1-dev"
-source = "git+https://github.com/mangata-finance/open-runtime-module-library?branch=mangata-dev-v4#75bbee6a9596ca191ca0343d04ffd798730c49ca"
-dependencies = [
- "frame-support",
- "impl-trait-for-tuples",
- "num-traits",
- "orml-utilities",
- "parity-scale-codec",
- "scale-info",
- "serde",
- "sp-io",
- "sp-runtime",
- "sp-std",
- "xcm",
-]
-
-[[package]]
-name = "orml-utilities"
-version = "0.4.1-dev"
-source = "git+https://github.com/mangata-finance/open-runtime-module-library?branch=mangata-dev-v4#75bbee6a9596ca191ca0343d04ffd798730c49ca"
-dependencies = [
- "frame-support",
- "parity-scale-codec",
- "scale-info",
- "serde",
- "sp-io",
- "sp-runtime",
- "sp-std",
 ]
 
 [[package]]
@@ -5638,7 +5574,6 @@ dependencies = [
  "frame-support",
  "frame-system",
  "impl-trait-for-tuples",
- "orml-tokens",
  "pallet-balances",
  "parity-scale-codec",
  "scale-info",
@@ -11220,29 +11155,6 @@ dependencies = [
  "curve25519-dalek 3.2.0",
  "rand_core 0.5.1",
  "zeroize",
-]
-
-[[package]]
-name = "xcm"
-version = "0.9.12"
-source = "git+https://github.com/mangata-finance/polkadot?branch=mangata-dev-v4#d4805336f1ff417e1f57f343594260da1a59660b"
-dependencies = [
- "derivative",
- "impl-trait-for-tuples",
- "log 0.4.14",
- "parity-scale-codec",
- "scale-info",
- "xcm-procedural",
-]
-
-[[package]]
-name = "xcm-procedural"
-version = "0.1.0"
-source = "git+https://github.com/mangata-finance/polkadot?branch=mangata-dev-v4#d4805336f1ff417e1f57f343594260da1a59660b"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
 ]
 
 [[package]]

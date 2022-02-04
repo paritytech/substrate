@@ -248,12 +248,8 @@ pub mod pallet {
 			// * who - Account which we are generating vesting configuration for
 			// * begin - Block when the account will start to vest
 			// * length - Number of blocks from `begin` until fully vested
-			// * liquid - Number of units which can be spent before vesting begins
-			for &(ref who, begin, length, liquid) in self.vesting.iter() {
-				let balance = T::Currency::free_balance(who);
-				assert!(!balance.is_zero(), "Currencies must be init'd before vesting");
-				// Total genesis `balance` minus `liquid` equals funds locked for vesting
-				let locked = balance.saturating_sub(liquid);
+			// * locked - Number of units which are locked for vesting
+			for &(ref who, begin, length, locked) in self.vesting.iter() {
 				let length_as_balance = T::BlockNumberToBalance::convert(length);
 				let per_block = locked / length_as_balance.max(sp_runtime::traits::One::one());
 				let vesting_info = VestingInfo::new(locked, per_block, begin);
