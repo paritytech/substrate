@@ -14,6 +14,7 @@ error: `Pallet` does not have #[pallet::genesis_config] defined, perhaps you sho
    | |_- in this macro invocation
    |
    = note: this error originates in the macro `pallet::__substrate_genesis_config_check::is_genesis_config_defined` (in Nightly builds, run with -Z macro-backtrace for more info)
+
 error[E0412]: cannot find type `GenesisConfig` in module `pallet`
   --> tests/construct_runtime_ui/undefined_genesis_config_part.rs:49:1
    |
@@ -31,6 +32,7 @@ help: consider importing this struct
    |
 1  | use frame_system::GenesisConfig;
    |
+
 error[E0283]: type annotations needed
    --> tests/construct_runtime_ui/undefined_genesis_config_part.rs:49:1
     |
