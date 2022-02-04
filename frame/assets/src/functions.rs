@@ -55,7 +55,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	/// Get the total supply of an asset `id`.
 	pub fn total_supply(id: T::AssetId) -> T::Balance {
-		Self::maybe_total_supply(id).unwrap_or_else(Zero::zero)
+		Self::maybe_total_supply(id).unwrap_or_default()
 	}
 
 	/// Get the total supply of an asset `id` if the asset exists.
