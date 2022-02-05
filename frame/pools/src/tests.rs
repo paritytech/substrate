@@ -380,7 +380,6 @@ mod join {
 	// TODO: test transactional storage aspect
 	#[test]
 	fn join_errors_correctly() {
-		use super::*;
 		ExtBuilder::default().build_and_execute(|| {
 			assert_noop!(
 				Pools::join(Origin::signed(10), 420, 420),
@@ -408,20 +407,16 @@ mod join {
 				Pools::join(Origin::signed(11), Balance::MAX / 10 - 100, 123),
 				Error::<Runtime>::OverflowRisk
 			);
+		});
+	}
 
-			assert_noop!(
-				Pools::join(Origin::signed(11), 420, 123),
-				Error::<Runtime>::RewardPoolNotFound
-			);
-			RewardPools::<Runtime>::insert(
-				1,
-				RewardPool::<Runtime> {
-					balance: Zero::zero(),
-					points: U256::zero(),
-					total_earnings: Zero::zero(),
-					account: 321,
-				},
-			);
+	#[test]
+	#[should_panic = "Defensive failure has been triggered!"]
+	fn join_panics_when_reward_pool_not_found() {
+		ExtBuilder::default().build_and_execute(|| {
+			StakingMock::set_bonded_balance(123, 100);
+			BondedPool::<Runtime>::insert(BondedPool::<Runtime> { points: 100, account: 123 });
+			Pools::join(Origin::signed(11), 420, 123);
 		});
 	}
 }
@@ -1222,6 +1217,7 @@ mod unbond {
 	}
 
 	#[test]
+	#[should_panic = "Defensive failure has been triggered!"]
 	fn unbond_errors_correctly() {
 		ExtBuilder::default().build_and_execute(|| {
 			assert_noop!(Pools::unbond(Origin::signed(11), 0), Error::<Runtime>::DelegatorNotFound);
@@ -1235,16 +1231,25 @@ mod unbond {
 			};
 			Delegators::<Runtime>::insert(11, delegator);
 
-			assert_noop!(Pools::unbond(Origin::signed(11), 0), Error::<Runtime>::PoolNotFound);
+			let _ = Pools::unbond(Origin::signed(11), 0);
+		});
+	}
 
-			// Add bonded pool to go along with the delegator
+	#[test]
+	#[should_panic = "Defensive failure has been triggered!"]
+	fn unbond_panics_when_reward_pool_not_found() {
+		ExtBuilder::default().build_and_execute(|| {
+			let delegator = Delegator {
+				pool: 1,
+				points: 10,
+				reward_pool_total_earnings: 0,
+				unbonding_era: None,
+			};
+			Delegators::<Runtime>::insert(11, delegator);
 			let bonded_pool = BondedPool { points: 10, account: 1 };
 			BondedPool::<Runtime>::insert(bonded_pool);
 
-			assert_noop!(
-				Pools::unbond(Origin::signed(11), 0),
-				Error::<Runtime>::RewardPoolNotFound
-			);
+			let _ = Pools::unbond(Origin::signed(11), 0);
 		});
 	}
 }

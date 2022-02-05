@@ -248,7 +248,7 @@ use frame_support::{
 	ensure,
 	pallet_prelude::*,
 	storage::bounded_btree_map::BoundedBTreeMap,
-	traits::{Currency, DefensiveResult, ExistenceRequirement, Get},
+	traits::{Currency, DefensiveResult, ExistenceRequirement, Get, DefensiveOption},
 	DefaultNoBound, RuntimeDebugNoBound,
 };
 use scale_info::TypeInfo;
@@ -684,7 +684,7 @@ pub mod pallet {
 			// We don't actually care about writing the reward pool, we just need its
 			// total earnings at this point in time.
 			let reward_pool = RewardPools::<T>::get(&pool_account)
-				.ok_or(Error::<T>::RewardPoolNotFound)?
+				.defensive_ok_or_else(|| Error::<T>::RewardPoolNotFound)?
 				// This is important because we want the most up-to-date total earnings.
 				.update_total_earnings_and_balance();
 
@@ -741,10 +741,8 @@ pub mod pallet {
 		pub fn claim_payout(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let delegator = Delegators::<T>::get(&who).ok_or(Error::<T>::DelegatorNotFound)?;
-			let bonded_pool = BondedPool::<T>::get(&delegator.pool).ok_or_else(|| {
-				log!(error, "A bonded pool could not be found, this is a system logic error.");
-				Error::<T>::PoolNotFound
-			})?;
+			let bonded_pool = BondedPool::<T>::get(&delegator.pool)
+				.defensive_ok_or_else(|| Error::<T>::PoolNotFound)?;
 
 			Self::do_reward_payout(who, delegator, &bonded_pool)?;
 
@@ -760,10 +758,8 @@ pub mod pallet {
 			// the pool and it needs to be destroyed with withdraw_unbonded
 
 			let delegator = Delegators::<T>::get(&who).ok_or(Error::<T>::DelegatorNotFound)?;
-			// let mut bonded_pool =
-			// 	BondedPools::<T>::get(&delegator.pool).ok_or(Error::<T>::PoolNotFound)?;
-			let mut bonded_pool =
-				BondedPool::<T>::get(&delegator.pool).ok_or(Error::<T>::PoolNotFound)?;
+			let mut bonded_pool = BondedPool::<T>::get(&delegator.pool)
+				.defensive_ok_or_else(|| Error::<T>::PoolNotFound)?;
 
 			// Claim the the payout prior to unbonding. Once the user is unbonding their points
 			// no longer exist in the bonded pool and thus they can no longer claim their payouts.
@@ -1042,10 +1038,8 @@ impl<T: Config> Pallet<T> {
 		delegator: Delegator<T>,
 		bonded_pool: &BondedPool<T>,
 	) -> DispatchResult {
-		let reward_pool = RewardPools::<T>::get(&delegator.pool).ok_or_else(|| {
-			log!(error, "A reward pool could not be found, this is a system logic error.");
-			Error::<T>::RewardPoolNotFound
-		})?;
+		let reward_pool = RewardPools::<T>::get(&delegator.pool)
+			.defensive_ok_or_else(|| Error::<T>::RewardPoolNotFound)?;
 
 		let (reward_pool, delegator, delegator_payout) =
 			Self::calculate_delegator_payout(bonded_pool, reward_pool, delegator)?;
