@@ -105,10 +105,6 @@ pub trait StakingInterface {
 	/// Balance `controller` has bonded for nominating.
 	fn bonded_balance(controller: &Self::AccountId) -> Option<Self::Balance>;
 
-	/// If the given staker can successfully call `bond_extra` with `extra`. Assumes the `extra`
-	/// balance will be transferred in the stash.
-	fn can_bond_extra(controller: &Self::AccountId, extra: Self::Balance) -> bool;
-
 	fn bond_extra(controller: Self::AccountId, extra: Self::Balance) -> DispatchResult;
 
 	fn unbond(controller: Self::AccountId, value: Self::Balance) -> DispatchResult;
@@ -118,16 +114,6 @@ pub trait StakingInterface {
 		num_slashing_spans: u32,
 	) -> Result<u64, DispatchError>;
 
-	/// Check if the given accounts can be bonded as stash <-> controller pair and with the given
-	/// reward destination. Does not check if the accounts have enough funds. It is assumed that the
-	/// necessary funds will only be transferred into the accounts after this check is completed.
-	fn bond_checks(
-		stash: &Self::AccountId,
-		controller: &Self::AccountId,
-		value: Self::Balance,
-		payee: &Self::AccountId,
-	) -> Result<(), DispatchError>;
-
 	fn bond(
 		stash: Self::AccountId,
 		controller: Self::AccountId,
@@ -135,12 +121,5 @@ pub trait StakingInterface {
 		payee: Self::AccountId,
 	) -> DispatchResult;
 
-	/// Check if the given account can nominate. Assumes the account will be correctly bonded after
-	/// this call. Returns stash and targets if the checks pass.
-	fn nominate_checks(
-		controller: &Self::AccountId,
-		targets: Vec<Self::LookupSource>,
-	) -> Result<(Self::AccountId, Vec<Self::AccountId>), DispatchError>;
-
-	fn unchecked_nominate(stash: &Self::AccountId, targets: Vec<Self::AccountId>);
+	fn nominate(stash: &Self::AccountId, targets: Vec<Self::LookupSource>);
 }

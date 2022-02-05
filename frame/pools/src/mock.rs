@@ -15,9 +15,6 @@ parameter_types! {
 	pub static CurrentEra: EraIndex = 0;
 	static BondedBalanceMap: std::collections::HashMap<AccountId, Balance> = Default::default();
 	static UnbondingBalanceMap: std::collections::HashMap<AccountId, Balance> = Default::default();
-	pub static CanBondExtra: bool = true;
-	pub static CanBond: bool = true;
-	pub static CanNominate: bool = true;
 	pub static BondingDuration: EraIndex = 3;
 	pub static DisableWithdrawUnbonded: bool = false;
 }
@@ -50,10 +47,6 @@ impl sp_staking::StakingInterface for StakingMock {
 		BondedBalanceMap::get().get(who).map(|v| *v)
 	}
 
-	fn can_bond_extra(_: &Self::AccountId, _: Self::Balance) -> bool {
-		CanBondExtra::get()
-	}
-
 	fn bond_extra(who: Self::AccountId, extra: Self::Balance) -> DispatchResult {
 		BONDED_BALANCE_MAP.with(|m| *m.borrow_mut().get_mut(&who).unwrap() += extra);
 		Ok(())
@@ -81,19 +74,6 @@ impl sp_staking::StakingInterface for StakingMock {
 		Ok(100)
 	}
 
-	fn bond_checks(
-		_: &Self::AccountId,
-		_: &Self::AccountId,
-		_: Self::Balance,
-		_: &Self::AccountId,
-	) -> Result<(), DispatchError> {
-		if CanBond::get() {
-			Ok(())
-		} else {
-			Err(Error::<Runtime>::StakingError.into())
-		}
-	}
-
 	fn bond(
 		stash: Self::AccountId,
 		_: Self::AccountId,
@@ -104,18 +84,7 @@ impl sp_staking::StakingInterface for StakingMock {
 		Ok(())
 	}
 
-	fn nominate_checks(
-		controller_and_stash: &Self::AccountId,
-		targets: Vec<Self::LookupSource>,
-	) -> Result<(Self::AccountId, Vec<Self::AccountId>), DispatchError> {
-		if CanNominate::get() {
-			Ok((controller_and_stash.clone(), targets))
-		} else {
-			Err(Error::<Runtime>::StakingError.into())
-		}
-	}
-
-	fn unchecked_nominate(_: &Self::AccountId, _: Vec<Self::LookupSource>) {}
+	fn nominate(_: &Self::AccountId, _: Vec<Self::LookupSource>) {}
 }
 
 impl frame_system::Config for Runtime {

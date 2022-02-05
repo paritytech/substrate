@@ -1,8 +1,8 @@
 use super::*;
 use crate::mock::{
-	Balance, Balances, BondingDuration, CanBond, CanBondExtra, CanNominate, CurrentEra,
-	DisableWithdrawUnbonded, ExistentialDeposit, ExtBuilder, Origin, Pools, Runtime, StakingMock,
-	PRIMARY_ACCOUNT, REWARDS_ACCOUNT, UNBONDING_BALANCE_MAP,
+	Balance, Balances, BondingDuration, CurrentEra, DisableWithdrawUnbonded, ExistentialDeposit,
+	ExtBuilder, Origin, Pools, Runtime, StakingMock, PRIMARY_ACCOUNT, REWARDS_ACCOUNT,
+	UNBONDING_BALANCE_MAP,
 };
 use frame_support::{assert_noop, assert_ok};
 
@@ -373,6 +373,7 @@ mod join {
 		});
 	}
 
+	// TODO: test transactional storage aspect
 	#[test]
 	fn join_errors_correctly() {
 		use super::*;
@@ -403,10 +404,6 @@ mod join {
 				Pools::join(Origin::signed(11), Balance::MAX / 10 - 100, 123),
 				Error::<Runtime>::OverflowRisk
 			);
-
-			CanBondExtra::set(false);
-			assert_noop!(Pools::join(Origin::signed(11), 420, 123), Error::<Runtime>::StakingError);
-			CanBondExtra::set(true);
 
 			assert_noop!(
 				Pools::join(Origin::signed(11), 420, 123),
@@ -1509,6 +1506,7 @@ mod create {
 		});
 	}
 
+	// TODO check transactional storage aspect
 	#[test]
 	fn create_errors_correctly() {
 		ExtBuilder::default().build_and_execute(|| {
@@ -1521,20 +1519,6 @@ mod create {
 				Pools::create(Origin::signed(11), vec![], 1, 42),
 				Error::<Runtime>::MinimumBondNotMet
 			);
-
-			CanNominate::set(false);
-			assert_noop!(
-				Pools::create(Origin::signed(11), vec![], 420, 42),
-				Error::<Runtime>::StakingError
-			);
-			CanNominate::set(true);
-
-			CanBond::set(false);
-			assert_noop!(
-				Pools::create(Origin::signed(11), vec![], 420, 42),
-				Error::<Runtime>::StakingError
-			);
-			CanBond::set(true);
 		});
 	}
 }
