@@ -261,35 +261,33 @@ mod sub_pools {
 	#[test]
 	fn maybe_merge_pools_works() {
 		ExtBuilder::default().build_and_execute(|| {
-			assert_eq!(MaxUnbonding::<Runtime>::get(), 5);
+			assert_eq!(TotalUnbondingPools::<Runtime>::get(), 5);
 
 			// Given
 			let mut sub_pool_0 = SubPools::<Runtime> {
 				no_era: UnbondPool::<Runtime>::default(),
-				with_era: std::collections::BTreeMap::from([
-					(0, UnbondPool::<Runtime>::new(10, 10)),
-					(1, UnbondPool::<Runtime>::new(10, 10)),
-					(2, UnbondPool::<Runtime>::new(20, 20)),
-					(3, UnbondPool::<Runtime>::new(30, 30)),
-					(4, UnbondPool::<Runtime>::new(40, 40)),
-				])
-				.try_into()
-				.unwrap(),
+				with_era: sub_pools_with_era! {
+					0 => UnbondPool::<Runtime> { points: 10, balance: 10 },
+					1 => UnbondPool::<Runtime> { points: 10, balance: 10 },
+					2 => UnbondPool::<Runtime> { points: 20, balance: 20 },
+					3 => UnbondPool::<Runtime> { points: 30, balance: 30 },
+					4 => UnbondPool::<Runtime> { points: 40, balance: 40 },
+				}
 			};
 
-			// When `current_era < MaxUnbonding`,
+			// When `current_era < TotalUnbondingPools`,
 			let sub_pool_1 = sub_pool_0.clone().maybe_merge_pools(3);
 
 			// Then it exits early without modifications
 			assert_eq!(sub_pool_1, sub_pool_0);
 
-			// When `current_era == MaxUnbonding`,
+			// When `current_era == TotalUnbondingPools`,
 			let sub_pool_1 = sub_pool_1.maybe_merge_pools(4);
 
 			// Then it exits early without modifications
 			assert_eq!(sub_pool_1, sub_pool_0);
 
-			// When  `current_era - MaxUnbonding == 0`,
+			// When  `current_era - TotalUnbondingPools == 0`,
 			let mut sub_pool_1 = sub_pool_1.maybe_merge_pools(5);
 
 			// Then era 0 is merged into the `no_era` pool
@@ -297,10 +295,10 @@ mod sub_pools {
 			assert_eq!(sub_pool_1, sub_pool_0);
 
 			// Given we have entries for era 1..=5
-			sub_pool_1.with_era.try_insert(5, UnbondPool::<Runtime>::new(50, 50)).unwrap();
-			sub_pool_0.with_era.try_insert(5, UnbondPool::<Runtime>::new(50, 50)).unwrap();
+			sub_pool_1.with_era.try_insert(5, UnbondPool::<Runtime> { points: 50, balance: 50 }).unwrap();
+			sub_pool_0.with_era.try_insert(5, UnbondPool::<Runtime> { points: 50, balance: 50 }).unwrap();
 
-			// When `current_era - MaxUnbonding == 1`
+			// When `current_era - TotalUnbondingPools == 1`
 			let sub_pool_2 = sub_pool_1.maybe_merge_pools(6);
 			let era_1_pool = sub_pool_0.with_era.remove(&1).unwrap();
 
@@ -309,7 +307,7 @@ mod sub_pools {
 			sub_pool_0.no_era.balance += era_1_pool.balance;
 			assert_eq!(sub_pool_2, sub_pool_0);
 
-			// When `current_era - MaxUnbonding == 5`, so all pools with era <= 4 are removed
+			// When `current_era - TotalUnbondingPools == 5`, so all pools with era <= 4 are removed
 			let sub_pool_3 = sub_pool_2.maybe_merge_pools(10);
 
 			// Then all eras <= 5 are merged into the `no_era` pool
@@ -1198,7 +1196,7 @@ mod unbond {
 			);
 
 			// When
-			let current_era = 1 + MaxUnbonding::<Runtime>::get();
+			let current_era = 1 + TotalUnbondingPools::<Runtime>::get();
 			CurrentEra::set(current_era);
 
 			assert_ok!(Pools::unbond(Origin::signed(10), 0));
@@ -1282,7 +1280,7 @@ mod withdraw_unbonded {
 
 				// Advance the current_era to ensure all `with_era` pools will be merged into
 				// `no_era` pool
-				current_era += MaxUnbonding::<Runtime>::get();
+				current_era += TotalUnbondingPools::<Runtime>::get();
 				CurrentEra::set(current_era);
 
 				// Simulate some other call to unbond that would merge `with_era` pools into
@@ -1617,7 +1615,7 @@ mod pools_interface {
 			.build_and_execute(|| {
 				// Make sure no pools get merged into `SubPools::no_era` until era 7.
 				BondingDuration::set(5);
-				assert_eq!(MaxUnbonding::<Runtime>::get(), 7);
+				assert_eq!(TotalUnbondingPools::<Runtime>::get(), 7);
 
 				assert_ok!(Pools::unbond(Origin::signed(10), 0));
 
@@ -1688,7 +1686,7 @@ mod pools_interface {
 			.build_and_execute(|| {
 				// Make sure no pools get merged into `SubPools::no_era` until era 7.
 				BondingDuration::set(5);
-				assert_eq!(MaxUnbonding::<Runtime>::get(), 7);
+				assert_eq!(TotalUnbondingPools::<Runtime>::get(), 7);
 
 				assert_ok!(Pools::unbond(Origin::signed(10), 0));
 

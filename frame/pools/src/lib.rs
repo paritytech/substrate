@@ -155,7 +155,7 @@
 //! For scalability, we maintain a bound on the number of unbonding sub pools (see [`MaxUnboning`]).
 //! Once we reach this bound the oldest unbonding pool is merged into the new unbonded pool (see
 //! `no_era` field in [`SubPools`]). In other words, a unbonding pool is removed once its older than
-//! `current_era - MaxUnbonding`. We merge an unbonding pool into the unbonded pool with
+//! `current_era - TotalUnbondingPools`. We merge an unbonding pool into the unbonded pool with
 //!
 //! ```
 //! unbounded_pool.balance = unbounded_pool.balance + unbonding_pool.balance;
@@ -278,7 +278,7 @@ macro_rules! log {
 
 type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
-type SubPoolsWithEra<T> = BoundedBTreeMap<EraIndex, UnbondPool<T>, MaxUnbonding<T>>;
+type SubPoolsWithEra<T> = BoundedBTreeMap<EraIndex, UnbondPool<T>, TotalUnbondingPools<T>>;
 // NOTE: this assumes the balance type u128 or smaller.
 type RewardPoints = U256;
 
@@ -463,13 +463,6 @@ struct UnbondPool<T: Config> {
 }
 
 impl<T: Config> UnbondPool<T> {
-	#[cfg(test)]
-	fn new(points: BalanceOf<T>, balance: BalanceOf<T>) -> Self {
-		Self { points, balance }
-	}
-}
-
-impl<T: Config> UnbondPool<T> {
 	fn points_to_issue(&self, new_funds: BalanceOf<T>) -> BalanceOf<T> {
 		points_to_issue::<T>(self.balance, self.points, new_funds)
 	}
@@ -492,7 +485,7 @@ impl<T: Config> UnbondPool<T> {
 struct SubPools<T: Config> {
 	/// A general, era agnostic pool of funds that have fully unbonded. The pools
 	/// of `self.with_era` will lazily be merged into into this pool if they are
-	/// older then `current_era - MaxUnbonding`.
+	/// older then `current_era - TotalUnbondingPools`.
 	no_era: UnbondPool<T>,
 	/// Map of era => unbond pools.
 	with_era: SubPoolsWithEra<T>,
@@ -502,15 +495,15 @@ impl<T: Config> SubPools<T> {
 	/// Merge the oldest unbonding pool with an era into the general unbond pool with no associated
 	/// era.
 	fn maybe_merge_pools(mut self, current_era: EraIndex) -> Self {
-		if current_era < MaxUnbonding::<T>::get().into() {
-			// For the first `0..MaxUnbonding` eras of the chain we don't need to do anything.
-			// I.E. if `MaxUnbonding` is 5 and we are in era 4 we can add a pool for this era and
-			// have exactly `MaxUnbonding` pools.
+		if current_era < TotalUnbondingPools::<T>::get().into() {
+			// For the first `0..TotalUnbondingPools` eras of the chain we don't need to do anything.
+			// I.E. if `TotalUnbondingPools` is 5 and we are in era 4 we can add a pool for this era and
+			// have exactly `TotalUnbondingPools` pools.
 			return self
 		}
 
-		//  I.E. if `MaxUnbonding` is 5 and current era is 10, we only want to retain pools 6..=10.
-		let newest_era_to_remove = current_era.saturating_sub(MaxUnbonding::<T>::get());
+		//  I.E. if `TotalUnbondingPools` is 5 and current era is 10, we only want to retain pools 6..=10.
+		let newest_era_to_remove = current_era.saturating_sub(TotalUnbondingPools::<T>::get());
 
 		let eras_to_remove: Vec<_> = self
 			.with_era
@@ -547,11 +540,11 @@ impl<T: Config> SubPools<T> {
 /// The maximum amount of eras an unbonding pool can exist prior to being merged with the
 /// `no_era	 pool. This is guaranteed to at least be equal to the staking `UnbondingDuration`. For
 /// improved UX [`Config::WithEraWithdrawWindow`] should be configured to a non-zero value.
-struct MaxUnbonding<T: Config>(PhantomData<T>);
-impl<T: Config> Get<u32> for MaxUnbonding<T> {
+struct TotalUnbondingPools<T: Config>(PhantomData<T>);
+impl<T: Config> Get<u32> for TotalUnbondingPools<T> {
 	fn get() -> u32 {
 		// TODO: This may be too dangerous in the scenario bonding_duration gets decreased because
-		// we would no longer be able to decode `SubPoolsWithEra`, which uses `MaxUnbonding` as the
+		// we would no longer be able to decode `SubPoolsWithEra`, which uses `TotalUnbondingPools` as the
 		// bound
 		T::StakingInterface::bonding_duration() + T::WithEraWithdrawWindow::get()
 	}
@@ -945,7 +938,7 @@ pub mod pallet {
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn integrity_test() {
 			assert!(
-				T::StakingInterface::bonding_duration() < MaxUnbonding::<T>::get(),
+				T::StakingInterface::bonding_duration() < TotalUnbondingPools::<T>::get(),
 				"There must be more unbonding pools then the bonding duration /
 				so a slash can be applied to relevant unboding pools. (We assume /
 				the bonding duration > slash deffer duration.",
