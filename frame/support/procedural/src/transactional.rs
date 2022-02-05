@@ -42,6 +42,34 @@ pub fn transactional(_attr: TokenStream, input: TokenStream) -> Result<TokenStre
 	Ok(output.into())
 }
 
+/// Similar to `transactional` but only instantiates a single transactional layer across all calls.
+/// It is expected that if the main function returns `Ok`, that some storage may be committed.
+pub fn single_transactional(_attr: TokenStream, input: TokenStream) -> Result<TokenStream> {
+	let ItemFn { attrs, vis, sig, block } = syn::parse(input)?;
+
+	let crate_ = generate_crate_access_2018("frame-support")?;
+	let output = quote! {
+		#(#attrs)*
+		#vis #sig {
+			use #crate_::storage::{with_transaction, is_transactional, TransactionOutcome};
+			if is_transactional() {
+				(|| { #block })()
+			} else {
+				with_transaction(|| {
+					let r = (|| { #block })();
+					if r.is_ok() {
+						TransactionOutcome::Commit(r)
+					} else {
+						TransactionOutcome::Rollback(r)
+					}
+				})
+			}
+		}
+	};
+
+	Ok(output.into())
+}
+
 pub fn require_transactional(_attr: TokenStream, input: TokenStream) -> Result<TokenStream> {
 	let ItemFn { attrs, vis, sig, block } = syn::parse(input)?;
 
