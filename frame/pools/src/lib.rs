@@ -225,6 +225,8 @@
 // Invariants
 // - A `delegator.pool` must always be a valid entry in `RewardPools`, and `BondedPoolPoints`.
 // - Every entry in `BondedPoolPoints` must have  a corresponding entry in `RewardPools`
+// - If a delegator unbonds, the sub pools should always correctly track slashses such that the
+//   calculated amount when withdrawing unbonded is a lower bound of the pools free balance.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -355,14 +357,14 @@ pub struct BondedPool<T: Config> {
 
 impl<T: Config> BondedPool<T> {
 	/// Get [`Self`] from storage. Returns `None` if no entry for `pool_account` exists.
-	pub fn get(pool_account: &T::AccountId) -> Option<Self> {
+	fn get(pool_account: &T::AccountId) -> Option<Self> {
 		BondedPoolPoints::<T>::try_get(pool_account)
 			.ok()
 			.map(|points| Self { points, account: pool_account.clone() })
 	}
 
 	/// Insert [`Self`] into storage.
-	pub fn insert(Self { account, points }: Self) {
+	fn insert(Self { account, points }: Self) {
 		BondedPoolPoints::<T>::insert(account, points);
 	}
 
@@ -373,14 +375,22 @@ impl<T: Config> BondedPool<T> {
 		points_to_issue::<T>(bonded_balance, self.points, new_funds)
 	}
 
-	// Get the amount of balance to unbond from the pool based on a delegator's points of the pool.
+	/// Get the amount of balance to unbond from the pool based on a delegator's points of the pool.
 	fn balance_to_unbond(&self, delegator_points: BalanceOf<T>) -> BalanceOf<T> {
 		let bonded_balance =
 			T::StakingInterface::bonded_balance(&self.account).unwrap_or(Zero::zero());
 		balance_to_unbond::<T>(bonded_balance, self.points, delegator_points)
 	}
 
-	// Check that the pool can accept a member with `new_funds`.
+	/// Issue points to [`Self`] for `new_funds`.
+	fn issue(&mut self, new_funds: BalanceOf<T>) -> BalanceOf<T> {
+		let points_to_issue = self.points_to_issue(new_funds);
+		self.points = self.points.saturating_add(points_to_issue);
+
+		points_to_issue
+	}
+
+	/// Check that the pool can accept a member with `new_funds`.
 	fn ok_to_join_with(&self, new_funds: BalanceOf<T>) -> Result<(), DispatchError> {
 		let bonded_balance =
 			T::StakingInterface::bonded_balance(&self.account).unwrap_or(Zero::zero());
@@ -466,6 +476,12 @@ impl<T: Config> UnbondPool<T> {
 
 	fn balance_to_unbond(&self, delegator_points: BalanceOf<T>) -> BalanceOf<T> {
 		balance_to_unbond::<T>(self.balance, self.points, delegator_points)
+	}
+
+	/// Issue points and update the balance given `new_balance`.
+	fn issue(&mut self, new_funds: BalanceOf<T>) {
+		self.points = self.points.saturating_add(self.points_to_issue(new_funds));
+		self.balance = self.balance.saturating_add(new_funds);
 	}
 }
 
@@ -683,16 +699,13 @@ pub mod pallet {
 			// go bond them.
 			T::Currency::transfer(&who, &pool_account, amount, ExistenceRequirement::KeepAlive)?;
 
-			// Try not to bail after the above transfer
-
 			// This should now include the transferred balance.
 			let new_free_balance = T::Currency::free_balance(&pool_account);
 			// Get the exact amount we can bond extra.
 			let exact_amount_to_bond = new_free_balance.saturating_sub(old_free_balance);
 			// We must calculate the points to issue *before* we bond `who`'s funds, else the
 			// points:balance ratio will be wrong.
-			let new_points = bonded_pool.points_to_issue(exact_amount_to_bond);
-			bonded_pool.points = bonded_pool.points.saturating_add(new_points);
+			let new_points = bonded_pool.issue(exact_amount_to_bond);
 
 			// The pool should always be created in such a way its in a state to bond extra, but if
 			// the active balance is slashed below the minimum bonded or the account cannot be
@@ -788,12 +801,7 @@ pub mod pallet {
 			// Update the unbond pool associated with the current era with the
 			// unbonded funds. Note that we lazily create the unbond pool if it
 			// does not yet exist.
-			{
-				let mut unbond_pool = sub_pools.unchecked_with_era_get_or_make(current_era);
-				let points_to_issue = unbond_pool.points_to_issue(balance_to_unbond);
-				unbond_pool.points = unbond_pool.points.saturating_add(points_to_issue);
-				unbond_pool.balance = unbond_pool.balance.saturating_add(balance_to_unbond);
-			}
+			sub_pools.unchecked_with_era_get_or_make(current_era).issue(balance_to_unbond);
 
 			delegator.unbonding_era = Some(current_era);
 
@@ -886,11 +894,9 @@ pub mod pallet {
 
 			let mut bonded_pool =
 				BondedPool::<T> { points: Zero::zero(), account: pool_account.clone() };
-			// We must calculate the points to issue *before* we bond who's funds, else
+			// We must calculate the points issued *before* we bond who's funds, else
 			// points:balance ratio will be wrong.
-			let points_to_issue = bonded_pool.points_to_issue(amount);
-			bonded_pool.points = points_to_issue;
-
+			let points_issued = bonded_pool.issue(amount);
 			T::Currency::transfer(&who, &pool_account, amount, ExistenceRequirement::AllowDeath)?;
 			T::StakingInterface::bond(
 				pool_account.clone(),
@@ -905,7 +911,7 @@ pub mod pallet {
 				who,
 				Delegator::<T> {
 					pool: pool_account.clone(),
-					points: points_to_issue,
+					points: points_issued,
 					reward_pool_total_earnings: Zero::zero(),
 					unbonding_era: None,
 				},

@@ -1462,7 +1462,7 @@ mod withdraw_unbonded {
 	fn withdraw_unbonded_test_panics_if_funds_cannot_be_transferred() {
 		ExtBuilder::default().build_and_execute(|| {
 			// Insert a delegator that starts unbonding in era 0
-			let mut delegator = Delegator {
+			let delegator = Delegator {
 				pool: 123,
 				points: 10,
 				reward_pool_total_earnings: 0,
@@ -1481,7 +1481,7 @@ mod withdraw_unbonded {
 			SubPoolsStorage::<Runtime>::insert(123, sub_pools.clone());
 
 			// Panics
-			Pools::withdraw_unbonded(Origin::signed(11), 0);
+			let _ = Pools::withdraw_unbonded(Origin::signed(11), 0);
 		});
 	}
 }
