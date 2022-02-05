@@ -138,6 +138,12 @@ pub enum RuntimeCosts {
 	MeteringBlock(u32),
 	/// Weight of calling `seal_caller`.
 	Caller,
+	/// Weight of calling `seal_is_contract`.
+	#[cfg(feature = "unstable-interface")]
+	IsContract,
+	/// Weight of calling `seal_caller_is_origin`.
+	#[cfg(feature = "unstable-interface")]
+	CallerIsOrigin,
 	/// Weight of calling `seal_address`.
 	Address,
 	/// Weight of calling `seal_gas_left`.
@@ -225,6 +231,10 @@ impl RuntimeCosts {
 		let weight = match *self {
 			MeteringBlock(amount) => s.gas.saturating_add(amount.into()),
 			Caller => s.caller,
+			#[cfg(feature = "unstable-interface")]
+			IsContract => s.is_contract,
+			#[cfg(feature = "unstable-interface")]
+			CallerIsOrigin => s.caller_is_origin,
 			Address => s.address,
 			GasLeft => s.gas_left,
 			Balance => s.balance,
@@ -1252,6 +1262,37 @@ define_env!(Env, <E: Ext>,
 		Ok(ctx.write_sandbox_output(
 			out_ptr, out_len_ptr, &ctx.ext.caller().encode(), false, already_charged
 		)?)
+	},
+
+	// Checks whether a specified address belongs to a contract.
+	//
+	// # Parameters
+	//
+	// - account_ptr: a pointer to the address of the beneficiary account
+	//   Should be decodable as an `T::AccountId`. Traps otherwise.
+	//
+	// Returned value is a u32-encoded boolean: (0 = false, 1 = true).
+	[__unstable__] seal_is_contract(ctx, account_ptr: u32) -> u32 => {
+		ctx.charge_gas(RuntimeCosts::IsContract)?;
+		let address: <<E as Ext>::T as frame_system::Config>::AccountId =
+			ctx.read_sandbox_memory_as(account_ptr)?;
+
+		Ok(ctx.ext.is_contract(&address) as u32)
+	},
+
+	// Checks whether the caller of the current contract is the origin of the whole call stack.
+	//
+	// Prefer this over `seal_is_contract` when checking whether your contract is being called by a contract
+	// or a plain account. The reason is that it performs better since it does not need to
+	// do any storage lookups.
+	//
+	// A return value of`true` indicates that this contract is being called by a plain account
+	// and `false` indicates that the caller is another contract.
+	//
+	// Returned value is a u32-encoded boolean: (0 = false, 1 = true).
+	[__unstable__] seal_caller_is_origin(ctx) -> u32 => {
+		ctx.charge_gas(RuntimeCosts::CallerIsOrigin)?;
+		Ok(ctx.ext.caller_is_origin() as u32)
 	},
 
 	// Stores the address of the current contract into the supplied buffer.

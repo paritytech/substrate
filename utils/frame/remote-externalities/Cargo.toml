@@ -22,9 +22,9 @@ codec = { package = "parity-scale-codec", version = "2.0.0" }
 serde_json = "1.0"
 serde = "1.0.132"
 
-sp-io = { version = "4.0.0-dev", path = "../../../primitives/io" }
-sp-core = { version = "4.1.0-dev", path = "../../../primitives/core" }
-sp-runtime = { version = "4.1.0-dev", path = "../../../primitives/runtime" }
+sp-io = { version = "5.0.0", path = "../../../primitives/io" }
+sp-core = { version = "5.0.0", path = "../../../primitives/core" }
+sp-runtime = { version = "5.0.0", path = "../../../primitives/runtime" }
 sp-version = { version = "4.0.0-dev", path = "../../../primitives/version" }
 
 [dev-dependencies]

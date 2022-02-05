@@ -752,7 +752,7 @@ mod tests {
 	use sp_runtime::{
 		offchain::storage_lock::{BlockAndTime, StorageLock},
 		traits::ValidateUnsigned,
-		PerU16,
+		ModuleError, PerU16,
 	};
 
 	type Assignment = crate::unsigned::Assignment<Runtime>;
@@ -922,8 +922,8 @@ mod tests {
 	#[test]
 	#[should_panic(expected = "Invalid unsigned submission must produce invalid block and \
 	                           deprive validator from their authoring reward.: \
-	                           Module { index: 2, error: 1, message: \
-	                           Some(\"PreDispatchWrongWinnerCount\") }")]
+	                           Module(ModuleError { index: 2, error: 1, message: \
+	                           Some(\"PreDispatchWrongWinnerCount\") })")]
 	fn unfeasible_solution_panics() {
 		ExtBuilder::default().build_and_execute(|| {
 			roll_to(25);
@@ -1033,11 +1033,11 @@ mod tests {
 
 			assert_eq!(
 				MultiPhase::mine_check_save_submit().unwrap_err(),
-				MinerError::PreDispatchChecksFailed(DispatchError::Module {
+				MinerError::PreDispatchChecksFailed(DispatchError::Module(ModuleError {
 					index: 2,
 					error: 1,
 					message: Some("PreDispatchWrongWinnerCount"),
-				}),
+				})),
 			);
 		})
 	}
