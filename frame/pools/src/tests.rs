@@ -284,21 +284,22 @@ mod sub_pools {
 			assert_eq!(sub_pool_1, sub_pool_0);
 
 			// When `current_era == MaxUnbonding`,
-			let mut sub_pool_1 = sub_pool_1.maybe_merge_pools(4);
+			let sub_pool_1 = sub_pool_1.maybe_merge_pools(4);
 
 			// Then it exits early without modifications
 			assert_eq!(sub_pool_1, sub_pool_0);
 
-			// Given we have entries for era 0..=5
-			sub_pool_1.with_era.insert(5, UnbondPool::<Runtime>::new(50, 50));
-			sub_pool_0.with_era.insert(5, UnbondPool::<Runtime>::new(50, 50));
-
 			// When  `current_era - MaxUnbonding == 0`,
-			let sub_pool_1 = sub_pool_1.maybe_merge_pools(5);
+			let mut sub_pool_1 = sub_pool_1.maybe_merge_pools(5);
 
 			// Then era 0 is merged into the `no_era` pool
 			sub_pool_0.no_era = sub_pool_0.with_era.remove(&0).unwrap();
 			assert_eq!(sub_pool_1, sub_pool_0);
+
+			// Given we have entries for era 1..=5
+			sub_pool_1.with_era.try_insert(5, UnbondPool::<Runtime>::new(50, 50)).unwrap();
+			sub_pool_0.with_era.try_insert(5, UnbondPool::<Runtime>::new(50, 50)).unwrap();
+
 
 			// When `current_era - MaxUnbonding == 1`
 			let sub_pool_2 = sub_pool_1.maybe_merge_pools(6);

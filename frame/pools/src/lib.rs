@@ -509,7 +509,8 @@ impl<T: Config> SubPools<T> {
 	/// to call this method.
 	fn unchecked_with_era_get_or_make(&mut self, era: EraIndex) -> &mut UnbondPool<T> {
 		if !self.with_era.contains_key(&era) {
-			self.with_era.try_insert(era, UnbondPool::default())
+			self.with_era
+				.try_insert(era, UnbondPool::default())
 				.expect("caller has checked pre-conditions. qed.");
 		}
 
@@ -783,8 +784,7 @@ pub mod pallet {
 			// unbonded funds. Note that we lazily create the unbond pool if it
 			// does not yet exist.
 			{
-				let mut unbond_pool =
-					sub_pools.unchecked_with_era_get_or_make(current_era);
+				let mut unbond_pool = sub_pools.unchecked_with_era_get_or_make(current_era);
 				let points_to_issue = unbond_pool.points_to_issue(balance_to_unbond);
 				unbond_pool.points = unbond_pool.points.saturating_add(points_to_issue);
 				unbond_pool.balance = unbond_pool.balance.saturating_add(balance_to_unbond);

@@ -23,11 +23,8 @@ use crate::{
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use sp_std::{
-	borrow::Borrow,
-	collections::btree_map::BTreeMap,
-	convert::TryFrom,
-	marker::PhantomData,
-	ops::{Deref},
+	borrow::Borrow, collections::btree_map::BTreeMap, convert::TryFrom, marker::PhantomData,
+	ops::Deref,
 };
 
 /// A bounded map based on a B-Tree.
