@@ -593,7 +593,7 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(crate) type PoolIds<T: Config> = CountedStorageMap<_, Twox64Concat, T::AccountId, PoolId>;
 
-	/// Points for the bonded pools. Keyed by the pool's account. To get or insert a pool see
+	/// Points for the bonded pools. Keyed by the pool's _Stash_/_Controller_. To get or insert a pool see
 	/// [`BondedPool::get`] and [`BondedPool::insert`]
 	#[pallet::storage]
 	pub(crate) type BondedPoolPoints<T: Config> =
@@ -893,38 +893,38 @@ pub mod pallet {
 			let who = ensure_signed(origin)?;
 			ensure!(amount >= T::StakingInterface::minimum_bond(), Error::<T>::MinimumBondNotMet);
 
-			let (stash, reward_dest) = Self::create_accounts(index);
-			ensure!(!BondedPoolPoints::<T>::contains_key(&stash), Error::<T>::IdInUse);
-			T::StakingInterface::bond_checks(&stash, &stash, amount, &reward_dest)?;
-			let (stash, targets) = T::StakingInterface::nominate_checks(&stash, targets)?;
+			let (pool_account, reward_account) = Self::create_accounts(index);
+			ensure!(!BondedPoolPoints::<T>::contains_key(&pool_account), Error::<T>::IdInUse);
+			T::StakingInterface::bond_checks(&pool_account, &pool_account, amount, &reward_account)?;
+			let (pool_account, targets) = T::StakingInterface::nominate_checks(&pool_account, targets)?;
 
-			let mut bonded_pool = BondedPool::<T> { points: Zero::zero(), account: stash.clone() };
+			let mut bonded_pool = BondedPool::<T> { points: Zero::zero(), account: pool_account.clone() };
 
 			// We must calculate the points to issue *before* we bond who's funds, else
 			// points:balance ratio will be wrong.
 			let points_to_issue = bonded_pool.points_to_issue(amount);
 			bonded_pool.points = points_to_issue;
 
-			T::Currency::transfer(&who, &stash, amount, ExistenceRequirement::AllowDeath)?;
+			T::Currency::transfer(&who, &pool_account, amount, ExistenceRequirement::AllowDeath)?;
 
 			T::StakingInterface::bond(
-				stash.clone(),
+				pool_account.clone(),
 				// We make the stash and controller the same for simplicity
-				stash.clone(),
+				pool_account.clone(),
 				amount,
-				reward_dest.clone(),
+				reward_account.clone(),
 			)
 			.map_err(|e| {
 				log!(warn, "error trying to bond new pool after a users balance was transferred.");
 				e
 			})?;
 
-			T::StakingInterface::unchecked_nominate(&stash, targets);
+			T::StakingInterface::unchecked_nominate(&pool_account, targets);
 
 			Delegators::<T>::insert(
 				who,
 				Delegator::<T> {
-					pool: stash.clone(),
+					pool: pool_account.clone(),
 					points: points_to_issue,
 					reward_pool_total_earnings: Zero::zero(),
 					unbonding_era: None,
@@ -932,12 +932,12 @@ pub mod pallet {
 			);
 			BondedPool::<T>::insert(bonded_pool);
 			RewardPools::<T>::insert(
-				stash,
+				pool_account,
 				RewardPool::<T> {
 					balance: Zero::zero(),
 					points: U256::zero(),
 					total_earnings: Zero::zero(),
-					account_id: reward_dest,
+					account_id: reward_account,
 				},
 			);
 
@@ -1084,6 +1084,8 @@ impl<T: Config> Pallet<T> {
 			active_bonded,
 		}: SlashPoolArgs::<T::AccountId, BalanceOf<T>>,
 	) -> Option<SlashPoolOut<BalanceOf<T>>> {
+		// Make sure this is a pool account
+		BondedPoolPoints::<T>::contains_key(&pool_stash).then(|| ())?;
 		let mut sub_pools = SubPoolsStorage::<T>::get(pool_stash).unwrap_or_default();
 
 		let affected_range = (slash_era + 1)..=apply_era;
@@ -1101,14 +1103,12 @@ impl<T: Config> Pallet<T> {
 		// Note that the balances of the bonded pool and its affected sub-pools will saturated at
 		// zero if slash_amount > total_affected_balance
 		let total_affected_balance = active_bonded.saturating_add(unbonding_affected_balance);
-
 		if total_affected_balance.is_zero() {
 			return Some(SlashPoolOut {
 				slashed_bonded: Zero::zero(),
 				slashed_unlocking: Default::default(),
 			})
 		}
-
 		let slashed_unlocking: BTreeMap<_, _> = affected_range
 			.filter_map(|era| {
 				if let Some(mut unbond_pool) = sub_pools.with_era.get_mut(&era) {
@@ -1131,7 +1131,6 @@ impl<T: Config> Pallet<T> {
 				}
 			})
 			.collect();
-
 		SubPoolsStorage::<T>::insert(pool_stash, sub_pools);
 
 		// Equivalent to `(slash_amount / total_affected_balance) * active_bonded`
@@ -1143,7 +1142,6 @@ impl<T: Config> Pallet<T> {
 
 			active_bonded.saturating_sub(bonded_pool_slash_amount)
 		};
-
 		Some(SlashPoolOut { slashed_bonded, slashed_unlocking })
 	}
 }
