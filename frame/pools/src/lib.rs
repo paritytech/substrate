@@ -342,7 +342,7 @@ pub struct Delegator<T: Config> {
 	unbonding_era: Option<EraIndex>,
 }
 
-// #[derive(Decode, MaxEncodedLen, TypeInfo, RuntimeDebugNoBound)]
+#[derive(RuntimeDebugNoBound)]
 #[cfg_attr(feature = "std", derive(Clone, PartialEq))]
 // #[codec(mel_bound(T: Config))]
 // #[scale_info(skip_type_params(T))]
@@ -365,28 +365,26 @@ impl<T: Config> BondedPool<T> {
 	}
 
 	/// Get the amount of points to issue for some new funds that will be bonded in the pool.
-	fn points_to_issue(&self, stash: &T::AccountId, new_funds: BalanceOf<T>) -> BalanceOf<T> {
-		let bonded_balance = T::StakingInterface::bonded_balance(stash).unwrap_or(Zero::zero());
+	fn points_to_issue(&self, new_funds: BalanceOf<T>) -> BalanceOf<T> {
+		let bonded_balance = T::StakingInterface::bonded_balance(&self.account).unwrap_or(Zero::zero());
 		points_to_issue::<T>(bonded_balance, self.points, new_funds)
 	}
 
 	// Get the amount of balance to unbond from the pool based on a delegator's points of the pool.
 	fn balance_to_unbond(
 		&self,
-		stash: &T::AccountId,
 		delegator_points: BalanceOf<T>,
 	) -> BalanceOf<T> {
-		let bonded_balance = T::StakingInterface::bonded_balance(stash).unwrap_or(Zero::zero());
+		let bonded_balance = T::StakingInterface::bonded_balance(&self.account).unwrap_or(Zero::zero());
 		balance_to_unbond::<T>(bonded_balance, self.points, delegator_points)
 	}
 
 	// Check that the pool can accept a member with `new_funds`.
 	fn ok_to_join_with(
 		&self,
-		stash: &T::AccountId,
 		new_funds: BalanceOf<T>,
 	) -> Result<(), DispatchError> {
-		let bonded_balance = T::StakingInterface::bonded_balance(stash).unwrap_or(Zero::zero());
+		let bonded_balance = T::StakingInterface::bonded_balance(&self.account).unwrap_or(Zero::zero());
 		ensure!(!bonded_balance.is_zero(), Error::<T>::OverflowRisk);
 
 		let points_to_balance_ratio_floor = self
@@ -677,7 +675,7 @@ pub mod pallet {
 			// let mut bonded_pool =
 			// BondedPools::<T>::get(&target).ok_or(Error::<T>::PoolNotFound)?;
 			let mut bonded_pool = BondedPool::<T>::get(&target).ok_or(Error::<T>::PoolNotFound)?;
-			bonded_pool.ok_to_join_with(&target, amount)?;
+			bonded_pool.ok_to_join_with(amount)?;
 
 			// The pool should always be created in such a way its in a state to bond extra, but if
 			// the active balance is slashed below the minimum bonded or the account cannot be
@@ -706,7 +704,7 @@ pub mod pallet {
 			let exact_amount_to_bond = new_free_balance.saturating_sub(old_free_balance);
 			// We must calculate the points to issue *before* we bond `who`'s funds, else the
 			// points:balance ratio will be wrong.
-			let new_points = bonded_pool.points_to_issue(&target, exact_amount_to_bond);
+			let new_points = bonded_pool.points_to_issue(exact_amount_to_bond);
 			bonded_pool.points = bonded_pool.points.saturating_add(new_points);
 
 			T::StakingInterface::bond_extra(target.clone(), exact_amount_to_bond)?;
@@ -779,7 +777,7 @@ pub mod pallet {
 			let current_era = T::StakingInterface::current_era().unwrap_or(Zero::zero());
 
 			let balance_to_unbond =
-				bonded_pool.balance_to_unbond(&delegator.pool, delegator.points);
+				bonded_pool.balance_to_unbond(delegator.points);
 
 			// Update the bonded pool. Note that we must do this *after* calculating the balance
 			// to unbond so we have the correct points for the balance:share ratio.
@@ -837,7 +835,6 @@ pub mod pallet {
 
 			let mut sub_pools =
 				SubPoolsStorage::<T>::get(&delegator.pool).ok_or(Error::<T>::SubPoolsNotFound)?;
-
 			let balance_to_unbond = if let Some(pool) = sub_pools.with_era.get_mut(&unbonding_era) {
 				let balance_to_unbond = pool.balance_to_unbond(delegator.points);
 				pool.points = pool.points.saturating_sub(delegator.points);
@@ -894,13 +891,10 @@ pub mod pallet {
 			index: u16,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-
 			ensure!(amount >= T::StakingInterface::minimum_bond(), Error::<T>::MinimumBondNotMet);
 
 			let (stash, reward_dest) = Self::create_accounts(index);
-
 			ensure!(!BondedPoolPoints::<T>::contains_key(&stash), Error::<T>::IdInUse);
-
 			T::StakingInterface::bond_checks(&stash, &stash, amount, &reward_dest)?;
 			let (stash, targets) = T::StakingInterface::nominate_checks(&stash, targets)?;
 
@@ -908,7 +902,7 @@ pub mod pallet {
 
 			// We must calculate the points to issue *before* we bond who's funds, else
 			// points:balance ratio will be wrong.
-			let points_to_issue = bonded_pool.points_to_issue(&stash, amount);
+			let points_to_issue = bonded_pool.points_to_issue(amount);
 			bonded_pool.points = points_to_issue;
 
 			T::Currency::transfer(&who, &stash, amount, ExistenceRequirement::AllowDeath)?;
