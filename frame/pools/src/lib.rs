@@ -762,6 +762,9 @@ pub mod pallet {
 		#[pallet::weight(666)]
 		pub fn unbond(origin: OriginFor<T>, num_slashing_spans: u32) -> DispatchResult {
 			let who = ensure_signed(origin)?;
+			// TODO check if this is owner, if its the owner then they must be the only person in
+			// the pool and it needs to be destroyed with withdraw_unbonded
+
 			let delegator = Delegators::<T>::get(&who).ok_or(Error::<T>::DelegatorNotFound)?;
 			// let mut bonded_pool =
 			// 	BondedPools::<T>::get(&delegator.pool).ok_or(Error::<T>::PoolNotFound)?;
@@ -822,6 +825,10 @@ pub mod pallet {
 		#[pallet::weight(666)]
 		pub fn withdraw_unbonded(origin: OriginFor<T>, num_slashing_spans: u32) -> DispatchResult {
 			let who = ensure_signed(origin)?;
+			// TODO: Check if this is the owner, and if its the owner then we delete this pool from
+			// storage at the end of the function. (And we assume that unbond ensured they are the
+			// last member of the pool)
+
 			let delegator = Delegators::<T>::get(&who).ok_or(Error::<T>::DelegatorNotFound)?;
 
 			let unbonding_era = delegator.unbonding_era.ok_or(Error::<T>::NotUnbonding)?;
@@ -873,6 +880,9 @@ pub mod pallet {
 		}
 
 		/// Create a pool.
+		///
+		/// Note that the pool creator will delegate `amount` to the pool and cannot unbond until
+		/// every
 		///
 		/// * `validators`: _Stash_ addresses of the validators to nominate.
 		/// * `amount`: Balance to delegate to the pool. Must meet the minimum bond.
