@@ -300,7 +300,6 @@ mod sub_pools {
 			sub_pool_1.with_era.try_insert(5, UnbondPool::<Runtime>::new(50, 50)).unwrap();
 			sub_pool_0.with_era.try_insert(5, UnbondPool::<Runtime>::new(50, 50)).unwrap();
 
-
 			// When `current_era - MaxUnbonding == 1`
 			let sub_pool_2 = sub_pool_1.maybe_merge_pools(6);
 			let era_1_pool = sub_pool_0.with_era.remove(&1).unwrap();
