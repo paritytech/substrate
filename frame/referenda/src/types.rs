@@ -331,7 +331,7 @@ impl Curve {
 					return *delta
 				} else {
 					return (*begin - y.min(*begin)).min(*delta) / *delta
-				}
+				},
 		}
 	}
 

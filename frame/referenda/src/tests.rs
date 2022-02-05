@@ -499,18 +499,12 @@ fn set_balance_proposal_is_correctly_filtered_out() {
 
 #[test]
 fn curve_handles_all_inputs() {
-	let test_curve = Curve::LinearDecreasing {
-		begin: Perbill::zero(),
-		delta: Perbill::zero(),
-	};
+	let test_curve = Curve::LinearDecreasing { begin: Perbill::zero(), delta: Perbill::zero() };
 
 	let delay = test_curve.delay(Perbill::zero());
 	assert_eq!(delay, Perbill::zero());
 
-	let test_curve = Curve::LinearDecreasing {
-		begin: Perbill::zero(),
-		delta: Perbill::one(),
-	};
+	let test_curve = Curve::LinearDecreasing { begin: Perbill::zero(), delta: Perbill::one() };
 
 	let threshold = test_curve.threshold(Perbill::one());
 	assert_eq!(threshold, Perbill::zero());
