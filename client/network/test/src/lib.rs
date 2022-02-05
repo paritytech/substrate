@@ -86,7 +86,6 @@ type AuthorityId = sp_consensus_babe::AuthorityId;
 #[derive(Clone)]
 pub struct PassThroughVerifier {
 	finalized: bool,
-	fork_choice: ForkChoiceStrategy,
 }
 
 impl PassThroughVerifier {
@@ -94,15 +93,7 @@ impl PassThroughVerifier {
 	///
 	/// Every verified block will use `finalized` for the `BlockImportParams`.
 	pub fn new(finalized: bool) -> Self {
-		Self { finalized, fork_choice: ForkChoiceStrategy::LongestChain }
-	}
-
-	/// Create a new instance.
-	///
-	/// Every verified block will use `finalized` for the `BlockImportParams` and
-	/// the given [`ForkChoiceStrategy`].
-	pub fn new_with_fork_choice(finalized: bool, fork_choice: ForkChoiceStrategy) -> Self {
-		Self { finalized, fork_choice }
+		Self { finalized }
 	}
 }
 
@@ -121,8 +112,10 @@ impl<B: BlockT> Verifier<B> for PassThroughVerifier {
 					.or_else(|| l.try_as_raw(OpaqueDigestItemId::Consensus(b"babe")))
 			})
 			.map(|blob| vec![(well_known_cache_keys::AUTHORITIES, blob.to_vec())]);
+		if block.fork_choice.is_none() {
+			block.fork_choice = Some(ForkChoiceStrategy::LongestChain);
+		};
 		block.finalized = self.finalized;
-		block.fork_choice = Some(self.fork_choice.clone());
 		Ok((block, maybe_keys))
 	}
 }
@@ -309,6 +302,33 @@ where
 			false,
 			true,
 			true,
+			ForkChoiceStrategy::LongestChain,
+		)
+	}
+
+	/// Add blocks to the peer -- edit the block before adding and use custom fork choice rule.
+	pub fn generate_blocks_with_fork_choice<F>(
+		&mut self,
+		count: usize,
+		origin: BlockOrigin,
+		edit_block: F,
+		fork_choice: ForkChoiceStrategy,
+	) -> H256
+	where
+		F: FnMut(
+			BlockBuilder<Block, PeersFullClient, substrate_test_runtime_client::Backend>,
+		) -> Block,
+	{
+		let best_hash = self.client.info().best_hash;
+		self.generate_blocks_at(
+			BlockId::Hash(best_hash),
+			count,
+			origin,
+			edit_block,
+			false,
+			true,
+			true,
+			fork_choice,
 		)
 	}
 
@@ -323,6 +343,7 @@ where
 		headers_only: bool,
 		inform_sync_about_new_best_block: bool,
 		announce_block: bool,
+		fork_choice: ForkChoiceStrategy,
 	) -> H256
 	where
 		F: FnMut(
@@ -346,6 +367,7 @@ where
 			let header = block.header.clone();
 			let mut import_block = BlockImportParams::new(origin, header.clone());
 			import_block.body = if headers_only { None } else { Some(block.extrinsics) };
+			import_block.fork_choice = Some(fork_choice);
 			let (import_block, cache) =
 				futures::executor::block_on(self.verifier.verify(import_block)).unwrap();
 			let cache = if let Some(cache) = cache {
@@ -442,6 +464,7 @@ where
 				headers_only,
 				inform_sync_about_new_best_block,
 				announce_block,
+				ForkChoiceStrategy::LongestChain,
 			)
 		} else {
 			self.generate_blocks_at(
@@ -452,6 +475,7 @@ where
 				headers_only,
 				inform_sync_about_new_best_block,
 				announce_block,
+				ForkChoiceStrategy::LongestChain,
 			)
 		}
 	}
@@ -989,14 +1013,6 @@ where
 
 pub struct TestNet {
 	peers: Vec<Peer<(), PeersClient>>,
-	fork_choice: ForkChoiceStrategy,
-}
-
-impl TestNet {
-	/// Create a `TestNet` that used the given fork choice rule.
-	pub fn with_fork_choice(fork_choice: ForkChoiceStrategy) -> Self {
-		Self { peers: Vec::new(), fork_choice }
-	}
 }
 
 impl TestNetFactory for TestNet {
@@ -1006,7 +1022,7 @@ impl TestNetFactory for TestNet {
 
 	/// Create new test network with peers and given config.
 	fn from_config(_config: &ProtocolConfig) -> Self {
-		TestNet { peers: Vec::new(), fork_choice: ForkChoiceStrategy::LongestChain }
+		TestNet { peers: Vec::new() }
 	}
 
 	fn make_verifier(
@@ -1015,7 +1031,7 @@ impl TestNetFactory for TestNet {
 		_config: &ProtocolConfig,
 		_peer_data: &(),
 	) -> Self::Verifier {
-		PassThroughVerifier::new_with_fork_choice(false, self.fork_choice.clone())
+		PassThroughVerifier::new(false)
 	}
 
 	fn make_block_import(

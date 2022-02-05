@@ -63,7 +63,7 @@ use frame_support::{
 	dispatch::{DispatchError, DispatchResult, Dispatchable, Parameter},
 	traits::{
 		schedule::{self, DispatchTime, MaybeHashed},
-		EnsureOrigin, Get, IsType, OriginTrait, PrivilegeCmp,
+		EnsureOrigin, Get, IsType, OriginTrait, PalletInfoAccess, PrivilegeCmp, StorageVersion,
 	},
 	weights::{GetDispatchInfo, Weight},
 };
@@ -132,22 +132,6 @@ pub type ScheduledOf<T> = ScheduledV3Of<T>;
 pub type Scheduled<Call, BlockNumber, PalletsOrigin, AccountId> =
 	ScheduledV2<Call, BlockNumber, PalletsOrigin, AccountId>;
 
-// A value placed in storage that represents the current version of the Scheduler storage.
-// This value is used by the `on_runtime_upgrade` logic to determine whether we run
-// storage migration logic.
-#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, RuntimeDebug, TypeInfo)]
-enum Releases {
-	V1,
-	V2,
-	V3,
-}
-
-impl Default for Releases {
-	fn default() -> Self {
-		Releases::V1
-	}
-}
-
 #[cfg(feature = "runtime-benchmarks")]
 mod preimage_provider {
 	use frame_support::traits::PreimageRecipient;
@@ -201,8 +185,12 @@ pub mod pallet {
 	};
 	use frame_system::pallet_prelude::*;
 
+	/// The current storage version.
+	const STORAGE_VERSION: StorageVersion = StorageVersion::new(3);
+
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
+	#[pallet::storage_version(STORAGE_VERSION)]
 	#[pallet::without_storage_info]
 	pub struct Pallet<T>(_);
 
@@ -268,12 +256,6 @@ pub mod pallet {
 	pub(crate) type Lookup<T: Config> =
 		StorageMap<_, Twox64Concat, Vec<u8>, TaskAddress<T::BlockNumber>>;
 
-	/// Storage version of the pallet.
-	///
-	/// New networks start with last version.
-	#[pallet::storage]
-	pub(crate) type StorageVersion<T> = StorageValue<_, Releases, ValueQuery>;
-
 	/// Events type.
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -306,23 +288,6 @@ pub mod pallet {
 		TargetBlockNumberInPast,
 		/// Reschedule failed because it does not change scheduled time.
 		RescheduleNoChange,
-	}
-
-	#[pallet::genesis_config]
-	pub struct GenesisConfig;
-
-	#[cfg(feature = "std")]
-	impl Default for GenesisConfig {
-		fn default() -> Self {
-			Self
-		}
-	}
-
-	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig {
-		fn build(&self) {
-			StorageVersion::<T>::put(Releases::V3);
-		}
 	}
 
 	#[pallet::hooks]
@@ -573,52 +538,19 @@ pub mod pallet {
 
 impl<T: Config> Pallet<T> {
 	/// Migrate storage format from V1 to V3.
-	/// Return true if migration is performed.
-	pub fn migrate_v1_to_v3() -> bool {
-		if StorageVersion::<T>::get() == Releases::V1 {
-			StorageVersion::<T>::put(Releases::V3);
+	///
+	/// Returns the weight consumed by this migration.
+	pub fn migrate_v1_to_v3() -> Weight {
+		let mut weight = T::DbWeight::get().reads_writes(1, 1);
 
-			Agenda::<T>::translate::<
-				Vec<Option<ScheduledV1<<T as Config>::Call, T::BlockNumber>>>,
-				_,
-			>(|_, agenda| {
-				Some(
-					agenda
-						.into_iter()
-						.map(|schedule| {
-							schedule.map(|schedule| ScheduledV3 {
-								maybe_id: schedule.maybe_id,
-								priority: schedule.priority,
-								call: schedule.call.into(),
-								maybe_periodic: schedule.maybe_periodic,
-								origin: system::RawOrigin::Root.into(),
-								_phantom: Default::default(),
-							})
-						})
-						.collect::<Vec<_>>(),
-				)
-			});
-
-			true
-		} else {
-			false
-		}
-	}
-
-	/// Migrate storage format from V2 to V3.
-	/// Return true if migration is performed.
-	pub fn migrate_v2_to_v3() -> Weight {
-		if StorageVersion::<T>::get() == Releases::V2 {
-			StorageVersion::<T>::put(Releases::V3);
-
-			let mut weight = T::DbWeight::get().reads_writes(1, 1);
-
-			Agenda::<T>::translate::<Vec<Option<ScheduledV2Of<T>>>, _>(|_, agenda| {
+		Agenda::<T>::translate::<Vec<Option<ScheduledV1<<T as Config>::Call, T::BlockNumber>>>, _>(
+			|_, agenda| {
 				Some(
 					agenda
 						.into_iter()
 						.map(|schedule| {
 							weight.saturating_accrue(T::DbWeight::get().reads_writes(1, 1));
+
 							schedule.map(|schedule| ScheduledV3 {
 								maybe_id: schedule.maybe_id,
 								priority: schedule.priority,
@@ -630,23 +562,66 @@ impl<T: Config> Pallet<T> {
 						})
 						.collect::<Vec<_>>(),
 				)
-			});
+			},
+		);
 
-			weight
-		} else {
-			0
-		}
+		frame_support::storage::migration::remove_storage_prefix(
+			Self::name().as_bytes(),
+			b"StorageVersion",
+			&[],
+		);
+
+		StorageVersion::new(3).put::<Self>();
+
+		weight + T::DbWeight::get().writes(2)
+	}
+
+	/// Migrate storage format from V2 to V3.
+	///
+	/// Returns the weight consumed by this migration.
+	pub fn migrate_v2_to_v3() -> Weight {
+		let mut weight = T::DbWeight::get().reads_writes(1, 1);
+
+		Agenda::<T>::translate::<Vec<Option<ScheduledV2Of<T>>>, _>(|_, agenda| {
+			Some(
+				agenda
+					.into_iter()
+					.map(|schedule| {
+						weight.saturating_accrue(T::DbWeight::get().reads_writes(1, 1));
+						schedule.map(|schedule| ScheduledV3 {
+							maybe_id: schedule.maybe_id,
+							priority: schedule.priority,
+							call: schedule.call.into(),
+							maybe_periodic: schedule.maybe_periodic,
+							origin: schedule.origin,
+							_phantom: Default::default(),
+						})
+					})
+					.collect::<Vec<_>>(),
+			)
+		});
+
+		frame_support::storage::migration::remove_storage_prefix(
+			Self::name().as_bytes(),
+			b"StorageVersion",
+			&[],
+		);
+
+		StorageVersion::new(3).put::<Self>();
+
+		weight + T::DbWeight::get().writes(2)
 	}
 
 	#[cfg(feature = "try-runtime")]
 	pub fn pre_migrate_to_v3() -> Result<(), &'static str> {
-		assert!(StorageVersion::<T>::get() < Releases::V3);
 		Ok(())
 	}
 
 	#[cfg(feature = "try-runtime")]
 	pub fn post_migrate_to_v3() -> Result<(), &'static str> {
-		assert!(StorageVersion::<T>::get() == Releases::V3);
+		use frame_support::dispatch::GetStorageVersion;
+
+		assert!(Self::current_storage_version() == 3);
 		for k in Agenda::<T>::iter_keys() {
 			let _ = Agenda::<T>::try_get(k).map_err(|()| "Invalid item in Agenda")?;
 		}
