@@ -211,12 +211,12 @@
 //!
 //! TBD - possible options:
 //! * Pools can be created by anyone but nominations can never be updated
-//! * Pools can be created by anyone and the creator can update the targets
-//! * Pools are created by governance and governance can update the targets
+//! * Pools can be created by anyone and the creator can update the validators
+//! * Pools are created by governance and governance can update the validators
 //! ... Other ideas
 //! * pools can have different roles assigned: creator (puts deposit down, cannot remove deposit
 //!   until pool is empty), admin (can control who is nominator, destroyer and can do
-//!   nominate/destroy), nominator (can adjust targets), destroyer (can initiate destroy), etc
+//!   nominate/destroy), nominator (can adjust nominators), destroyer (can initiate destroy), etc
 //!
 //! # Runtime builder warnings
 //!
@@ -233,7 +233,7 @@
 //    - creator: account that cannont unbond until there are no other pool members (essentially
 //      deposit)
 //    - kicker: can kick (force unbond) delegators and block new delegators
-//    - nominator: can set targets
+//    - nominator: can set nominations
 //    - admin: can change kicker, nominator, and make another account admin.
 // - checks for number of pools when creating pools (param for max pools, pool creation origin)
 // - post checks that rewardpool::count == bondedpool::count. delegators >= bondedpool::count,
@@ -366,25 +366,22 @@ impl<T: Config> BondedPool<T> {
 
 	/// Get the amount of points to issue for some new funds that will be bonded in the pool.
 	fn points_to_issue(&self, new_funds: BalanceOf<T>) -> BalanceOf<T> {
-		let bonded_balance = T::StakingInterface::bonded_balance(&self.account).unwrap_or(Zero::zero());
+		let bonded_balance =
+			T::StakingInterface::bonded_balance(&self.account).unwrap_or(Zero::zero());
 		points_to_issue::<T>(bonded_balance, self.points, new_funds)
 	}
 
 	// Get the amount of balance to unbond from the pool based on a delegator's points of the pool.
-	fn balance_to_unbond(
-		&self,
-		delegator_points: BalanceOf<T>,
-	) -> BalanceOf<T> {
-		let bonded_balance = T::StakingInterface::bonded_balance(&self.account).unwrap_or(Zero::zero());
+	fn balance_to_unbond(&self, delegator_points: BalanceOf<T>) -> BalanceOf<T> {
+		let bonded_balance =
+			T::StakingInterface::bonded_balance(&self.account).unwrap_or(Zero::zero());
 		balance_to_unbond::<T>(bonded_balance, self.points, delegator_points)
 	}
 
 	// Check that the pool can accept a member with `new_funds`.
-	fn ok_to_join_with(
-		&self,
-		new_funds: BalanceOf<T>,
-	) -> Result<(), DispatchError> {
-		let bonded_balance = T::StakingInterface::bonded_balance(&self.account).unwrap_or(Zero::zero());
+	fn ok_to_join_with(&self, new_funds: BalanceOf<T>) -> Result<(), DispatchError> {
+		let bonded_balance =
+			T::StakingInterface::bonded_balance(&self.account).unwrap_or(Zero::zero());
 		ensure!(!bonded_balance.is_zero(), Error::<T>::OverflowRisk);
 
 		let points_to_balance_ratio_floor = self
@@ -417,7 +414,7 @@ impl<T: Config> BondedPool<T> {
 #[scale_info(skip_type_params(T))]
 pub struct RewardPool<T: Config> {
 	/// The reward destination for the pool.
-	account_id: T::AccountId,
+	account: T::AccountId,
 	/// The balance of this reward pool after the last claimed payout.
 	balance: BalanceOf<T>,
 	/// The total earnings _ever_ of this reward pool after the last claimed payout. I.E. the sum
@@ -433,7 +430,7 @@ pub struct RewardPool<T: Config> {
 
 impl<T: Config> RewardPool<T> {
 	fn update_total_earnings_and_balance(mut self) -> Self {
-		let current_balance = T::Currency::free_balance(&self.account_id);
+		let current_balance = T::Currency::free_balance(&self.account);
 		// The earnings since the last time it was updated
 		let new_earnings = current_balance.saturating_sub(self.balance);
 		// The lifetime earnings of the of the reward pool
@@ -593,8 +590,8 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(crate) type PoolIds<T: Config> = CountedStorageMap<_, Twox64Concat, T::AccountId, PoolId>;
 
-	/// Points for the bonded pools. Keyed by the pool's _Stash_/_Controller_. To get or insert a pool see
-	/// [`BondedPool::get`] and [`BondedPool::insert`]
+	/// Points for the bonded pools. Keyed by the pool's _Stash_/_Controller_. To get or insert a
+	/// pool see [`BondedPool::get`] and [`BondedPool::insert`]
 	#[pallet::storage]
 	pub(crate) type BondedPoolPoints<T: Config> =
 		CountedStorageMap<_, Twox64Concat, T::AccountId, BalanceOf<T>>;
@@ -776,8 +773,7 @@ pub mod pallet {
 			let sub_pools = SubPoolsStorage::<T>::get(&delegator.pool).unwrap_or_default();
 			let current_era = T::StakingInterface::current_era().unwrap_or(Zero::zero());
 
-			let balance_to_unbond =
-				bonded_pool.balance_to_unbond(delegator.points);
+			let balance_to_unbond = bonded_pool.balance_to_unbond(delegator.points);
 
 			// Update the bonded pool. Note that we must do this *after* calculating the balance
 			// to unbond so we have the correct points for the balance:share ratio.
@@ -879,14 +875,14 @@ pub mod pallet {
 
 		/// Create a pool.
 		///
-		/// * `targets`: _Stash_ addresses of the validators to nominate
+		/// * `validators`: _Stash_ addresses of the validators to nominate.
 		/// * `amount`: Balance to delegate to the pool. Must meet the minimum bond.
 		/// * `index`: Disambiguation index for seeding account generation. Likely only useful when
 		///   creating multiple pools in the same extrinsic.
 		#[pallet::weight(666)]
 		pub fn create(
 			origin: OriginFor<T>,
-			targets: Vec<<T::Lookup as StaticLookup>::Source>,
+			validators: Vec<<T::Lookup as StaticLookup>::Source>,
 			amount: BalanceOf<T>,
 			index: u16,
 		) -> DispatchResult {
@@ -895,10 +891,17 @@ pub mod pallet {
 
 			let (pool_account, reward_account) = Self::create_accounts(index);
 			ensure!(!BondedPoolPoints::<T>::contains_key(&pool_account), Error::<T>::IdInUse);
-			T::StakingInterface::bond_checks(&pool_account, &pool_account, amount, &reward_account)?;
-			let (pool_account, targets) = T::StakingInterface::nominate_checks(&pool_account, targets)?;
+			T::StakingInterface::bond_checks(
+				&pool_account,
+				&pool_account,
+				amount,
+				&reward_account,
+			)?;
+			let (pool_account, validators) =
+				T::StakingInterface::nominate_checks(&pool_account, validators)?;
 
-			let mut bonded_pool = BondedPool::<T> { points: Zero::zero(), account: pool_account.clone() };
+			let mut bonded_pool =
+				BondedPool::<T> { points: Zero::zero(), account: pool_account.clone() };
 
 			// We must calculate the points to issue *before* we bond who's funds, else
 			// points:balance ratio will be wrong.
@@ -919,7 +922,7 @@ pub mod pallet {
 				e
 			})?;
 
-			T::StakingInterface::unchecked_nominate(&pool_account, targets);
+			T::StakingInterface::unchecked_nominate(&pool_account, validators);
 
 			Delegators::<T>::insert(
 				who,
@@ -937,7 +940,7 @@ pub mod pallet {
 					balance: Zero::zero(),
 					points: U256::zero(),
 					total_earnings: Zero::zero(),
-					account_id: reward_account,
+					account: reward_account,
 				},
 			);
 
@@ -1062,7 +1065,7 @@ impl<T: Config> Pallet<T> {
 
 		// Transfer payout to the delegator.
 		Self::transfer_reward(
-			&reward_pool.account_id,
+			&reward_pool.account,
 			delegator_id.clone(),
 			delegator.pool.clone(),
 			delegator_payout,

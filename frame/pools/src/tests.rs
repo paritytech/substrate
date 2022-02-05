@@ -32,7 +32,7 @@ fn test_setup_works() {
 				balance: 0,
 				points: 0.into(),
 				total_earnings: 0,
-				account_id: REWARDS_ACCOUNT
+				account: REWARDS_ACCOUNT
 			}
 		);
 		assert_eq!(
@@ -347,10 +347,7 @@ mod join {
 					unbonding_era: None
 				}
 			);
-			assert_eq!(
-				BondedPool::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap(),
-				bonded(12)
-			);
+			assert_eq!(BondedPool::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap(), bonded(12));
 
 			// Given
 			// The bonded balance is slashed in half
@@ -372,10 +369,7 @@ mod join {
 					unbonding_era: None
 				}
 			);
-			assert_eq!(
-				BondedPool::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap(),
-				bonded(12 + 24)
-			);
+			assert_eq!(BondedPool::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap(), bonded(12 + 24));
 		});
 	}
 
@@ -424,7 +418,7 @@ mod join {
 					balance: Zero::zero(),
 					points: U256::zero(),
 					total_earnings: Zero::zero(),
-					account_id: 321,
+					account: 321,
 				},
 			);
 		});
@@ -439,7 +433,7 @@ mod claim_payout {
 	}
 
 	fn rew(balance: Balance, points: u32, total_earnings: Balance) -> RewardPool<Runtime> {
-		RewardPool { balance, points: points.into(), total_earnings, account_id: REWARDS_ACCOUNT }
+		RewardPool { balance, points: points.into(), total_earnings, account: REWARDS_ACCOUNT }
 	}
 
 	#[test]
@@ -667,7 +661,7 @@ mod claim_payout {
 			assert_eq!(reward_pool, rew(0, 0, 0));
 
 			// Given the pool has earned some rewards for the first time
-			Balances::make_free_balance_be(&reward_pool.account_id, 5);
+			Balances::make_free_balance_be(&reward_pool.account, 5);
 
 			// When
 			let (reward_pool, delegator, payout) =
@@ -1166,7 +1160,7 @@ mod unbond {
 				);
 				assert_eq!(
 					BondedPool::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap(),
-					BondedPool { points: 550, account: PRIMARY_ACCOUNT  }
+					BondedPool { points: 550, account: PRIMARY_ACCOUNT }
 				);
 				assert_eq!(StakingMock::bonded_balance(&PRIMARY_ACCOUNT).unwrap(), 93);
 				assert_eq!(Delegators::<Runtime>::get(10).unwrap().unbonding_era, Some(0));
@@ -1509,7 +1503,7 @@ mod create {
 					balance: Zero::zero(),
 					points: U256::zero(),
 					total_earnings: Zero::zero(),
-					account_id: 2844952004
+					account: 2844952004
 				}
 			);
 		});
