@@ -309,7 +309,7 @@ impl Curve {
 	/// Determine the `y` value for the given `x` value.
 	pub(crate) fn threshold(&self, x: Perbill) -> Perbill {
 		match self {
-			Self::LinearDecreasing { begin, delta } => *begin - *delta * x,
+			Self::LinearDecreasing { begin, delta } => *begin - (*delta * x).min(*begin),
 		}
 	}
 
@@ -327,7 +327,11 @@ impl Curve {
 	pub fn delay(&self, y: Perbill) -> Perbill {
 		match self {
 			Self::LinearDecreasing { begin, delta } =>
-				(*begin - y.min(*begin)).min(*delta) / *delta,
+				if delta.is_zero() {
+					return *delta
+				} else {
+					return (*begin - y.min(*begin)).min(*delta) / *delta
+				}
 		}
 	}
 
