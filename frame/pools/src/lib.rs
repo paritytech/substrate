@@ -246,7 +246,7 @@ use frame_support::{
 	ensure,
 	pallet_prelude::*,
 	storage::bounded_btree_map::BoundedBTreeMap,
-	traits::{Currency, ExistenceRequirement, Get},
+	traits::{Currency, DefensiveResult, ExistenceRequirement, Get},
 	DefaultNoBound, RuntimeDebugNoBound,
 };
 use scale_info::TypeInfo;
@@ -818,6 +818,7 @@ pub mod pallet {
 
 			let unbonding_era = delegator.unbonding_era.ok_or(Error::<T>::NotUnbonding)?;
 			let current_era = T::StakingInterface::current_era().unwrap_or(Zero::zero());
+			// TODO: make this an ensure
 			if current_era.saturating_sub(unbonding_era) < T::StakingInterface::bonding_duration() {
 				return Err(Error::<T>::NotUnbondedYet.into())
 			};
@@ -849,10 +850,7 @@ pub mod pallet {
 				balance_to_unbond,
 				ExistenceRequirement::AllowDeath,
 			)
-			.map_err(|e| {
-				log::warn!("system logic error: pool could not withdraw_unbonded due to lack of free balance");
-				e
-			})?;
+			.defensive_map_err(|e| e)?;
 
 			SubPoolsStorage::<T>::insert(&delegator.pool, sub_pools);
 			Delegators::<T>::remove(&who);
@@ -900,11 +898,7 @@ pub mod pallet {
 				pool_account.clone(),
 				amount,
 				reward_account.clone(),
-			)
-			.map_err(|e| {
-				log!(warn, "error trying to bond new pool after a users balance was transferred.");
-				e
-			})?;
+			)?;
 			T::StakingInterface::nominate(&pool_account, validators);
 
 			Delegators::<T>::insert(

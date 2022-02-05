@@ -1450,15 +1450,38 @@ mod withdraw_unbonded {
 			};
 			SubPoolsStorage::<Runtime>::insert(123, sub_pools.clone());
 
-			assert_noop!(
-				Pools::withdraw_unbonded(Origin::signed(11), 0),
-				pallet_balances::Error::<Runtime>::InsufficientBalance
-			);
-
 			// If we error the delegator does not get removed
 			assert_eq!(Delegators::<Runtime>::get(&11), Some(delegator));
 			// and the subpools do not get updated.
 			assert_eq!(SubPoolsStorage::<Runtime>::get(123).unwrap(), sub_pools)
+		});
+	}
+
+	#[test]
+	#[should_panic = "Defensive failure has been triggered!: Module { index: 1, error: 2, message: Some(\"InsufficientBalance\") }"]
+	fn withdraw_unbonded_test_panics_if_funds_cannot_be_transferred() {
+		ExtBuilder::default().build_and_execute(|| {
+			// Insert a delegator that starts unbonding in era 0
+			let mut delegator = Delegator {
+				pool: 123,
+				points: 10,
+				reward_pool_total_earnings: 0,
+				unbonding_era: Some(0),
+			};
+			Delegators::<Runtime>::insert(11, delegator.clone());
+
+			// Skip ahead to the end of the bonding duration
+			CurrentEra::set(StakingMock::bonding_duration());
+
+			// Insert the sub-pool
+			let sub_pools = SubPools {
+				no_era: Default::default(),
+				with_era: sub_pools_with_era! { 0 => UnbondPool { points: 10, balance: 10  }},
+			};
+			SubPoolsStorage::<Runtime>::insert(123, sub_pools.clone());
+
+			// Panics
+			Pools::withdraw_unbonded(Origin::signed(11), 0);
 		});
 	}
 }
