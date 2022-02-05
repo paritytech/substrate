@@ -40,7 +40,8 @@ mod stats;
 mod storage_cache;
 #[cfg(any(feature = "with-kvdb-rocksdb", test))]
 mod upgrade;
-mod utils;
+// TODO make public only for runtime benchmarks
+pub mod utils;
 
 use linked_hash_map::LinkedHashMap;
 use log::{debug, trace, warn};
@@ -391,7 +392,7 @@ impl std::fmt::Display for DatabaseSource {
 	}
 }
 
-pub(crate) mod columns {
+pub mod columns {
 	pub const META: u32 = crate::utils::COLUMN_META;
 	pub const STATE: u32 = 1;
 	pub const STATE_META: u32 = 2;

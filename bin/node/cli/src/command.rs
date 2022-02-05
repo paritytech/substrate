@@ -95,6 +95,18 @@ pub fn run() -> Result<()> {
 				You can enable it with `--features runtime-benchmarks`."
 					.into())
 			},
+		// TODO this should be a sub-command of the bench-cli.
+		// Now for testing purposes it is part of the client commands.
+		Some(Subcommand::Bedrock(cmd)) =>
+			if cfg!(feature = "runtime-benchmarks") {
+				let runner = cli.create_runner(cmd)?;
+
+				runner.sync_run(|config| cmd.run::<Block, ExecutorDispatch>(config))
+			} else {
+				Err("Benchmarking wasn't enabled when building the node. \
+				You can enable it with `--features runtime-benchmarks`."
+					.into())
+			},
 		Some(Subcommand::Key(cmd)) => cmd.run(&cli),
 		Some(Subcommand::Sign(cmd)) => cmd.run(),
 		Some(Subcommand::Verify(cmd)) => cmd.run(),
