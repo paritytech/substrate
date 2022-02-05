@@ -496,13 +496,14 @@ impl<T: Config> SubPools<T> {
 	/// era.
 	fn maybe_merge_pools(mut self, current_era: EraIndex) -> Self {
 		if current_era < TotalUnbondingPools::<T>::get().into() {
-			// For the first `0..TotalUnbondingPools` eras of the chain we don't need to do anything.
-			// I.E. if `TotalUnbondingPools` is 5 and we are in era 4 we can add a pool for this era and
-			// have exactly `TotalUnbondingPools` pools.
+			// For the first `0..TotalUnbondingPools` eras of the chain we don't need to do
+			// anything. I.E. if `TotalUnbondingPools` is 5 and we are in era 4 we can add a pool
+			// for this era and have exactly `TotalUnbondingPools` pools.
 			return self
 		}
 
-		//  I.E. if `TotalUnbondingPools` is 5 and current era is 10, we only want to retain pools 6..=10.
+		//  I.E. if `TotalUnbondingPools` is 5 and current era is 10, we only want to retain pools
+		// 6..=10.
 		let newest_era_to_remove = current_era.saturating_sub(TotalUnbondingPools::<T>::get());
 
 		let eras_to_remove: Vec<_> = self
@@ -539,14 +540,14 @@ impl<T: Config> SubPools<T> {
 
 /// The maximum amount of eras an unbonding pool can exist prior to being merged with the
 /// `no_era	 pool. This is guaranteed to at least be equal to the staking `UnbondingDuration`. For
-/// improved UX [`Config::WithEraWithdrawWindow`] should be configured to a non-zero value.
+/// improved UX [`Config::PostUnbondingPoolsWindow`] should be configured to a non-zero value.
 struct TotalUnbondingPools<T: Config>(PhantomData<T>);
 impl<T: Config> Get<u32> for TotalUnbondingPools<T> {
 	fn get() -> u32 {
 		// TODO: This may be too dangerous in the scenario bonding_duration gets decreased because
-		// we would no longer be able to decode `SubPoolsWithEra`, which uses `TotalUnbondingPools` as the
-		// bound
-		T::StakingInterface::bonding_duration() + T::WithEraWithdrawWindow::get()
+		// we would no longer be able to decode `SubPoolsWithEra`, which uses `TotalUnbondingPools`
+		// as the bound
+		T::StakingInterface::bonding_duration() + T::PostUnbondingPoolsWindow::get()
 	}
 }
 
@@ -588,7 +589,7 @@ pub mod pallet {
 		/// able to withdraw from an unbonding pool which is guaranteed to have the correct ratio of
 		/// points to balance; once the `with_era` pool is merged into the `no_era` pool, the ratio
 		/// can become skewed due to some slashed ratio getting merged in at some point.
-		type WithEraWithdrawWindow: Get<u32>;
+		type PostUnbondingPoolsWindow: Get<u32>;
 	}
 
 	/// Active delegators.

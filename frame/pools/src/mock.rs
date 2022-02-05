@@ -145,7 +145,7 @@ impl Convert<U256, Balance> for U256ToBalance {
 }
 
 parameter_types! {
-	pub static WithEraWithdrawWindow: u32 = 2;
+	pub static PostUnbondingPoolsWindow: u32 = 2;
 }
 
 impl pools::Config for Runtime {
@@ -154,7 +154,7 @@ impl pools::Config for Runtime {
 	type BalanceToU256 = BalanceToU256;
 	type U256ToBalance = U256ToBalance;
 	type StakingInterface = StakingMock;
-	type WithEraWithdrawWindow = WithEraWithdrawWindow;
+	type PostUnbondingPoolsWindow = PostUnbondingPoolsWindow;
 }
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Runtime>;

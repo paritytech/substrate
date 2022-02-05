@@ -272,7 +272,7 @@ mod sub_pools {
 					2 => UnbondPool::<Runtime> { points: 20, balance: 20 },
 					3 => UnbondPool::<Runtime> { points: 30, balance: 30 },
 					4 => UnbondPool::<Runtime> { points: 40, balance: 40 },
-				}
+				},
 			};
 
 			// When `current_era < TotalUnbondingPools`,
@@ -295,8 +295,14 @@ mod sub_pools {
 			assert_eq!(sub_pool_1, sub_pool_0);
 
 			// Given we have entries for era 1..=5
-			sub_pool_1.with_era.try_insert(5, UnbondPool::<Runtime> { points: 50, balance: 50 }).unwrap();
-			sub_pool_0.with_era.try_insert(5, UnbondPool::<Runtime> { points: 50, balance: 50 }).unwrap();
+			sub_pool_1
+				.with_era
+				.try_insert(5, UnbondPool::<Runtime> { points: 50, balance: 50 })
+				.unwrap();
+			sub_pool_0
+				.with_era
+				.try_insert(5, UnbondPool::<Runtime> { points: 50, balance: 50 })
+				.unwrap();
 
 			// When `current_era - TotalUnbondingPools == 1`
 			let sub_pool_2 = sub_pool_1.maybe_merge_pools(6);
