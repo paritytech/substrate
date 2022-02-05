@@ -27,7 +27,7 @@ use crate::{
 };
 use codec::{Decode, Encode, EncodeLike, FullCodec, FullEncode};
 use sp_core::storage::ChildInfo;
-use sp_runtime::generic::{Digest, DigestItem};
+use sp_runtime::{DispatchError, generic::{Digest, DigestItem}};
 pub use sp_runtime::TransactionOutcome;
 use sp_std::prelude::*;
 pub use types::Key;
@@ -44,55 +44,67 @@ pub mod types;
 pub mod unhashed;
 pub mod weak_bounded_vec;
 
-#[cfg(all(feature = "std", any(test, debug_assertions)))]
-mod debug_helper {
-	use std::cell::RefCell;
+mod transaction_level_tracker {
+	const TRANSACTION_LEVEL_KEY: &'static [u8] = b":transaction_level:";
+	const TRANSACTIONAL_LIMIT: u8 = 255;
+	type Layer = u8;
 
-	thread_local! {
-		static TRANSACTION_LEVEL: RefCell<u32> = RefCell::new(0);
+	pub fn get_transaction_level() -> Layer {
+		crate::storage::unhashed::get_or_default::<Layer>(TRANSACTION_LEVEL_KEY)
 	}
 
-	pub fn require_transaction() {
-		let level = TRANSACTION_LEVEL.with(|v| *v.borrow());
-		if level == 0 {
-			panic!("Require transaction not called within with_transaction");
-		}
+	fn set_transaction_level(level: &Layer) {
+		crate::storage::unhashed::put::<Layer>(TRANSACTION_LEVEL_KEY, level);
 	}
 
-	pub struct TransactionLevelGuard;
-
-	impl Drop for TransactionLevelGuard {
-		fn drop(&mut self) {
-			TRANSACTION_LEVEL.with(|v| *v.borrow_mut() -= 1);
-		}
+	fn kill_transaction_level() {
+		crate::storage::unhashed::kill(TRANSACTION_LEVEL_KEY);
 	}
 
-	/// Increments the transaction level.
+	/// Increments the transaction level. Returns an error if levels go past the limit.
 	///
 	/// Returns a guard that when dropped decrements the transaction level automatically.
-	pub fn inc_transaction_level() -> TransactionLevelGuard {
-		TRANSACTION_LEVEL.with(|v| {
-			let mut val = v.borrow_mut();
-			*val += 1;
-			if *val > 10 {
-				log::warn!(
-					"Detected with_transaction with nest level {}. Nested usage of with_transaction is not recommended.",
-					*val
-				);
-			}
-		});
+	pub fn inc_transaction_level() -> Result<StorageLayerGuard, ()> {
+		let existing_levels = get_transaction_level();
+		if existing_levels >= TRANSACTIONAL_LIMIT || existing_levels == Layer::MAX {
+			return Err(())
+		}
+		// Cannot overflow because of check above.
+		set_transaction_level(&(existing_levels + 1));
+		Ok(StorageLayerGuard)
+	}
 
-		TransactionLevelGuard
+	fn dec_transaction_level() {
+		let existing_levels = get_transaction_level();
+		if existing_levels == 0 {
+			log::warn!(
+				"We are underflowing with calculating transactional levels. Not great, but let's not panic...",
+			);
+		} else if existing_levels == 1 {
+			// Don't leave any trace of this storage item.
+			kill_transaction_level();
+		} else {
+			// Cannot underflow because of checks above.
+			set_transaction_level(&(existing_levels - 1));
+		}
+	}
+
+	pub fn is_transactional() -> bool {
+		get_transaction_level() > 0
+	}
+
+	pub struct StorageLayerGuard;
+
+	impl Drop for StorageLayerGuard {
+		fn drop(&mut self) {
+			dec_transaction_level()
+		}
 	}
 }
 
-/// Assert this method is called within a storage transaction.
-/// This will **panic** if is not called within a storage transaction.
-///
-/// This assertion is enabled for native execution and when `debug_assertions` are enabled.
-pub fn require_transaction() {
-	#[cfg(all(feature = "std", any(test, debug_assertions)))]
-	debug_helper::require_transaction();
+/// Check if the current call is within a transactional layer.
+pub fn is_transactional() -> bool {
+	transaction_level_tracker::is_transactional()
 }
 
 /// Execute the supplied function in a new storage transaction.
@@ -101,14 +113,19 @@ pub fn require_transaction() {
 /// outcome is `TransactionOutcome::Rollback`.
 ///
 /// Transactions can be nested to any depth. Commits happen to the parent transaction.
-pub fn with_transaction<R>(f: impl FnOnce() -> TransactionOutcome<R>) -> R {
+pub fn with_transaction<T, E>(f: impl FnOnce() -> TransactionOutcome<Result<T, E>>) -> Result<T, E>
+where
+	E: From<DispatchError>,
+{
 	use sp_io::storage::{commit_transaction, rollback_transaction, start_transaction};
 	use TransactionOutcome::*;
 
-	start_transaction();
+	// TODO: Return a result here.
+	let _guard = transaction_level_tracker::inc_transaction_level().map_err(|()|
+		DispatchError::TransactionalLimit.into()
+	)?;
 
-	#[cfg(all(feature = "std", any(test, debug_assertions)))]
-	let _guard = debug_helper::inc_transaction_level();
+	start_transaction();
 
 	match f() {
 		Commit(res) => {
@@ -1415,13 +1432,14 @@ pub fn storage_prefix(pallet_name: &[u8], storage_name: &[u8]) -> [u8; 32] {
 #[cfg(test)]
 mod test {
 	use super::*;
-	use crate::{assert_ok, hash::Identity, Twox128};
+	use crate::{assert_ok, assert_noop, hash::Identity, Twox128};
 	use bounded_vec::BoundedVec;
 	use frame_support::traits::ConstU32;
 	use generator::StorageValue as _;
 	use sp_core::hashing::twox_128;
 	use sp_io::TestExternalities;
 	use weak_bounded_vec::WeakBoundedVec;
+	use sp_runtime::DispatchResult;
 
 	#[test]
 	fn prefixed_map_works() {
@@ -1532,25 +1550,24 @@ mod test {
 	}
 
 	#[test]
-	#[should_panic(expected = "Require transaction not called within with_transaction")]
-	fn require_transaction_should_panic() {
+	fn is_transaction_should_return_false() {
 		TestExternalities::default().execute_with(|| {
-			require_transaction();
+			assert!(!is_transactional())
 		});
 	}
 
 	#[test]
 	fn require_transaction_should_not_panic_in_with_transaction() {
 		TestExternalities::default().execute_with(|| {
-			with_transaction(|| {
-				require_transaction();
-				TransactionOutcome::Commit(())
-			});
+			assert_ok!(with_transaction(|| -> TransactionOutcome<DispatchResult> {
+				assert!(is_transactional());
+				TransactionOutcome::Commit(Ok(()))
+			}));
 
-			with_transaction(|| {
-				require_transaction();
-				TransactionOutcome::Rollback(())
-			});
+			assert_noop!(with_transaction(|| -> TransactionOutcome<DispatchResult> {
+				assert!(is_transactional());
+				TransactionOutcome::Rollback(Err("revert".into()))
+			}), "revert");
 		});
 	}
 

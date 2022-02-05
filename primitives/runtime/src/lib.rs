@@ -507,6 +507,8 @@ pub enum DispatchError {
 	Token(TokenError),
 	/// An arithmetic error.
 	Arithmetic(ArithmeticError),
+	/// The number of transactional layers has been reached, or we are not in a transactional layer.
+	TransactionalLimit,
 }
 
 /// Result of a `Dispatchable` which contains the `DispatchResult` and additional information about
@@ -642,6 +644,7 @@ impl From<DispatchError> for &'static str {
 			DispatchError::TooManyConsumers => "Too many consumers",
 			DispatchError::Token(e) => e.into(),
 			DispatchError::Arithmetic(e) => e.into(),
+			DispatchError::TransactionalLimit => "Too many transactional layers",
 		}
 	}
 }
@@ -680,6 +683,7 @@ impl traits::Printable for DispatchError {
 				"Arithmetic error: ".print();
 				<&'static str>::from(*e).print();
 			},
+			Self::TransactionalLimit => "Too many transactional layers".print(),
 		}
 	}
 }
