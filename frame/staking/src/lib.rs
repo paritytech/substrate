@@ -435,30 +435,29 @@ pub struct UnlockChunk<Balance: HasCompact> {
 
 /// The ledger of a (bonded) stash.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
-pub struct StakingLedger<AccountId, Balance: HasCompact> {
+#[scale_info(skip_type_params(T))]
+pub struct StakingLedger<T: Config> {
 	/// The stash account whose balance is actually locked and at stake.
-	pub stash: AccountId,
+	pub stash: T::AccountId,
 	/// The total amount of the stash's balance that we are currently accounting for.
 	/// It's just `active` plus all the `unlocking` balances.
 	#[codec(compact)]
-	pub total: Balance,
+	pub total: BalanceOf<T>,
 	/// The total amount of the stash's balance that will be at stake in any forthcoming
 	/// rounds.
 	#[codec(compact)]
-	pub active: Balance,
+	pub active: BalanceOf<T>,
 	/// Any balance that is becoming free, which may eventually be transferred out
 	/// of the stash (assuming it doesn't get slashed first).
-	pub unlocking: Vec<UnlockChunk<Balance>>,
+	pub unlocking: Vec<UnlockChunk<BalanceOf<T>>>,
 	/// List of eras for which the stakers behind a validator have claimed rewards. Only updated
 	/// for validators.
 	pub claimed_rewards: Vec<EraIndex>,
 }
 
-impl<AccountId, Balance: HasCompact + Copy + Saturating + AtLeast32BitUnsigned + Zero>
-	StakingLedger<AccountId, Balance>
-{
+impl<T: Config> StakingLedger<T> {
 	/// Initializes the default object using the given `validator`.
-	pub fn default_from(stash: AccountId) -> Self {
+	pub fn default_from(stash: T::AccountId) -> Self {
 		Self {
 			stash,
 			total: Zero::zero(),
@@ -497,8 +496,8 @@ impl<AccountId, Balance: HasCompact + Copy + Saturating + AtLeast32BitUnsigned +
 	/// Re-bond funds that were scheduled for unlocking.
 	///
 	/// Returns the updated ledger, and the amount actually rebonded.
-	fn rebond(mut self, value: Balance) -> (Self, Balance) {
-		let mut unlocking_balance: Balance = Zero::zero();
+	fn rebond(mut self, value: BalanceOf<T>) -> (Self, BalanceOf<T>) {
+		let mut unlocking_balance = BalanceOf::<T>::zero();
 
 		while let Some(last) = self.unlocking.last_mut() {
 			if unlocking_balance + last.value <= value {
@@ -520,29 +519,23 @@ impl<AccountId, Balance: HasCompact + Copy + Saturating + AtLeast32BitUnsigned +
 
 		(self, unlocking_balance)
 	}
-}
 
-impl<AccountId, Balance> StakingLedger<AccountId, Balance>
-where
-	Balance: AtLeast32BitUnsigned + Saturating + Copy,
-	AccountId: Clone,
-{
 	/// Slash the staker for a given amount of balance. This can grow the value
 	/// of the slash in the case that the staker has less than `minimum_balance`
 	/// active funds. Returns the amount of funds actually slashed.
 	///
 	/// Slashes from `active` funds first, and then `unlocking`, starting with the
 	/// chunks that are closest to unlocking.
-	fn slash<P: sp_staking::PoolsInterface<AccountId = AccountId, Balance = Balance>>(
+	fn slash(
 		&mut self,
-		value: Balance,
-		minimum_balance: Balance,
+		value: BalanceOf<T>,
+		minimum_balance: BalanceOf<T>,
 		slash_era: EraIndex,
 		active_era: EraIndex,
-	) -> Balance {
-		use sp_staking::{SlashPoolArgs, SlashPoolOut};
+	) -> BalanceOf<T> {
+		use sp_staking::{PoolsInterface as _, SlashPoolArgs, SlashPoolOut};
 		if let Some(SlashPoolOut { slashed_bonded, slashed_unlocking }) =
-			P::slash_pool(SlashPoolArgs {
+			T::PoolsInterface::slash_pool(SlashPoolArgs {
 				pool_stash: &self.stash,
 				slash_amount: value,
 				slash_era,
@@ -560,10 +553,10 @@ where
 	/// Slash a pool account
 	fn pool_slash(
 		&mut self,
-		new_active: Balance,
-		new_chunk_balances: BTreeMap<EraIndex, Balance>,
-	) -> Balance {
-		let mut total_slashed = Balance::zero();
+		new_active: BalanceOf<T>,
+		new_chunk_balances: BTreeMap<EraIndex, BalanceOf<T>>,
+	) -> BalanceOf<T> {
+		let mut total_slashed = BalanceOf::<T>::zero();
 
 		// Modify the unlocking chunks in place
 		for chunk in &mut self.unlocking {
@@ -585,28 +578,33 @@ where
 	}
 
 	// Slash a validator or nominator's stash
-	fn standard_slash(&mut self, mut value: Balance, minimum_balance: Balance) -> Balance {
+	fn standard_slash(
+		&mut self,
+		mut value: BalanceOf<T>,
+		minimum_balance: BalanceOf<T>,
+	) -> BalanceOf<T> {
 		let pre_total = self.total;
 		let total = &mut self.total;
 		let active = &mut self.active;
 
-		let slash_out_of =
-			|total_remaining: &mut Balance, target: &mut Balance, value: &mut Balance| {
-				let mut slash_from_target = (*value).min(*target);
+		let slash_out_of = |total_remaining: &mut BalanceOf<T>,
+		                    target: &mut BalanceOf<T>,
+		                    value: &mut BalanceOf<T>| {
+			let mut slash_from_target = (*value).min(*target);
 
-				if !slash_from_target.is_zero() {
-					*target -= slash_from_target;
+			if !slash_from_target.is_zero() {
+				*target -= slash_from_target;
 
-					// Don't leave a dust balance in the staking system.
-					if *target <= minimum_balance {
-						slash_from_target += *target;
-						*value += sp_std::mem::replace(target, Zero::zero());
-					}
-
-					*total_remaining = total_remaining.saturating_sub(slash_from_target);
-					*value -= slash_from_target;
+				// Don't leave a dust balance in the staking system.
+				if *target <= minimum_balance {
+					slash_from_target += *target;
+					*value += sp_std::mem::replace(target, Zero::zero());
 				}
-			};
+
+				*total_remaining = total_remaining.saturating_sub(slash_from_target);
+				*value -= slash_from_target;
+			}
+		};
 
 		slash_out_of(total, active, &mut value);
 

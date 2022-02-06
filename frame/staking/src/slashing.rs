@@ -611,12 +611,7 @@ pub fn do_slash<T: Config>(
 		None => return, // nothing to do.
 	};
 
-	let value = ledger.slash::<T::PoolsInterface>(
-		value,
-		T::Currency::minimum_balance(),
-		slash_era,
-		apply_era,
-	);
+	let value = ledger.slash(value, T::Currency::minimum_balance(), slash_era, apply_era);
 
 	if !value.is_zero() {
 		let (imbalance, missing) = T::Currency::slash(stash, value);
