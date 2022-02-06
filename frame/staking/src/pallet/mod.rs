@@ -739,9 +739,21 @@ pub mod pallet {
 			payee: RewardDestination<T::AccountId>,
 		) -> DispatchResult {
 			let stash = ensure_signed(origin)?;
+
+			if <Bonded<T>>::contains_key(&stash) {
+				Err(Error::<T>::AlreadyBonded)?
+			}
+
 			let controller = T::Lookup::lookup(controller)?;
 
-			Self::do_bond_checks(&stash, &controller, value)?;
+			if <Ledger<T>>::contains_key(&controller) {
+				Err(Error::<T>::AlreadyPaired)?
+			}
+
+			// Reject a bond which is considered to be _dust_.
+			if value < T::Currency::minimum_balance() {
+				Err(Error::<T>::InsufficientBond)?
+			}
 
 			frame_system::Pallet::<T>::inc_consumers(&stash).map_err(|_| Error::<T>::BadState)?;
 
@@ -993,8 +1005,54 @@ pub mod pallet {
 			targets: Vec<<T::Lookup as StaticLookup>::Source>,
 		) -> DispatchResult {
 			let controller = ensure_signed(origin)?;
-			let (stash, targets) = Self::do_nominate_checks(&controller, targets)?;
-			Self::do_unchecked_nominate_writes(&stash, targets);
+
+			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
+			ensure!(ledger.active >= MinNominatorBond::<T>::get(), Error::<T>::InsufficientBond);
+			let stash = &ledger.stash;
+
+			// Only check limits if they are not already a nominator.
+			if !Nominators::<T>::contains_key(stash) {
+				// If this error is reached, we need to adjust the `MinNominatorBond` and start
+				// calling `chill_other`. Until then, we explicitly block new nominators to protect
+				// the runtime.
+				if let Some(max_nominators) = MaxNominatorsCount::<T>::get() {
+					ensure!(
+						Nominators::<T>::count() < max_nominators,
+						Error::<T>::TooManyNominators
+					);
+				}
+			}
+
+			ensure!(!targets.is_empty(), Error::<T>::EmptyTargets);
+			ensure!(targets.len() <= T::MaxNominations::get() as usize, Error::<T>::TooManyTargets);
+
+			let old = Nominators::<T>::get(stash).map_or_else(Vec::new, |x| x.targets.into_inner());
+
+			let targets: BoundedVec<_, _> = targets
+				.into_iter()
+				.map(|t| T::Lookup::lookup(t).map_err(DispatchError::from))
+				.map(|n| {
+					n.and_then(|n| {
+						if old.contains(&n) || !Validators::<T>::get(&n).blocked {
+							Ok(n)
+						} else {
+							Err(Error::<T>::BadTarget.into())
+						}
+					})
+				})
+				.collect::<Result<Vec<_>, _>>()?
+				.try_into()
+				.map_err(|_| Error::<T>::TooManyNominators)?;
+
+			let nominations = Nominations {
+				targets,
+				// Initial nominations are considered submitted at era 0. See `Nominations` doc.
+				submitted_in: Self::current_era().unwrap_or(0),
+				suppressed: false,
+			};
+
+			Self::do_remove_validator(stash);
+			Self::do_add_nominator(stash, nominations);
 			Ok(())
 		}
 

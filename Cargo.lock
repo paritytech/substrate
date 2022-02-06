@@ -6061,7 +6061,7 @@ dependencies = [
 
 [[package]]
 name = "pallet-pools"
-version = "4.0.0-dev"
+version = "0.0.1"
 dependencies = [
  "frame-support",
  "frame-system",

@@ -905,7 +905,7 @@ pub mod pallet {
 				amount,
 				reward_account.clone(),
 			)?;
-			T::StakingInterface::nominate(&pool_account, validators);
+			T::StakingInterface::nominate(pool_account.clone(), validators);
 
 			Delegators::<T>::insert(
 				who,

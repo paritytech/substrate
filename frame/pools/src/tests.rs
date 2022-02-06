@@ -416,7 +416,7 @@ mod join {
 		ExtBuilder::default().build_and_execute(|| {
 			StakingMock::set_bonded_balance(123, 100);
 			BondedPool::<Runtime>::insert(BondedPool::<Runtime> { points: 100, account: 123 });
-			Pools::join(Origin::signed(11), 420, 123);
+			let _ = Pools::join(Origin::signed(11), 420, 123);
 		});
 	}
 }
@@ -1467,7 +1467,7 @@ mod withdraw_unbonded {
 	}
 
 	#[test]
-	#[should_panic = "Defensive failure has been triggered!: Module { index: 1, error: 2, message: Some(\"InsufficientBalance\") }"]
+	#[should_panic = "Defensive failure has been triggered!: Module(ModuleError { index: 1, error: 2, message: Some(\"InsufficientBalance\") })"]
 	fn withdraw_unbonded_test_panics_if_funds_cannot_be_transferred() {
 		ExtBuilder::default().build_and_execute(|| {
 			// Insert a delegator that starts unbonding in era 0

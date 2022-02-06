@@ -84,7 +84,9 @@ impl sp_staking::StakingInterface for StakingMock {
 		Ok(())
 	}
 
-	fn nominate(_: &Self::AccountId, _: Vec<Self::LookupSource>) {}
+	fn nominate(_: Self::AccountId, _: Vec<Self::LookupSource>) -> DispatchResult {
+		Ok(())
+	}
 }
 
 impl frame_system::Config for Runtime {

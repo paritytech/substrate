@@ -1,6 +1,6 @@
 [package]
 name = "pallet-pools"
-version = "4.0.0-dev"
+version = "0.0.1"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2021"
 license = "Apache-2.0"
@@ -20,17 +20,17 @@ scale-info = { version = "1.0", default-features = false, features = ["derive"] 
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 sp-arithmetic = { version = "4.0.0", default-features = false, path = "../../primitives/arithmetic" }
-sp-runtime = { version = "4.1.0-dev", default-features = false, path = "../../primitives/runtime" }
+sp-runtime = { version = "5.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
 sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../primitives/staking" }
-sp-core = { version = "4.1.0-dev", default-features = false, path = "../../primitives/core" }
+sp-core = { version = "5.0.0", default-features = false, path = "../../primitives/core" }
 
 # third party
 log = { version = "0.4.14", default-features = false }
 
 [dev-dependencies]
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
-sp-io = { version = "4.0.0-dev", path = "../../primitives/io"}
+sp-io = { version = "5.0.0", path = "../../primitives/io"}
 sp-tracing = { version = "4.0.0", path = "../../primitives/tracing" }
 
 [features]

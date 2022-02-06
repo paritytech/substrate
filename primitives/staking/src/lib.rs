@@ -121,5 +121,5 @@ pub trait StakingInterface {
 		payee: Self::AccountId,
 	) -> DispatchResult;
 
-	fn nominate(stash: &Self::AccountId, targets: Vec<Self::LookupSource>);
+	fn nominate(stash: Self::AccountId, targets: Vec<Self::LookupSource>) -> DispatchResult;
 }

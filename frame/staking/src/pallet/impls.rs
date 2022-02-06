@@ -848,85 +848,6 @@ impl<T: Config> Pallet<T> {
 			DispatchClass::Mandatory,
 		);
 	}
-
-	// Checks for [`Self::bond`] that can be completed at the beginning of the calls logic.
-	pub(crate) fn do_bond_checks(
-		stash: &T::AccountId,
-		controller: &T::AccountId,
-		value: BalanceOf<T>,
-	) -> Result<(), DispatchError> {
-		if Bonded::<T>::contains_key(&stash) {
-			Err(Error::<T>::AlreadyBonded)?
-		}
-
-		if Ledger::<T>::contains_key(&controller) {
-			Err(Error::<T>::AlreadyPaired)?
-		}
-
-		// Reject a bond which is considered to be _dust_.
-		if value < T::Currency::minimum_balance() {
-			Err(Error::<T>::InsufficientBond)?
-		}
-
-		Ok(())
-	}
-
-	pub(crate) fn do_nominate_checks(
-		controller: &T::AccountId,
-		targets: Vec<<T::Lookup as StaticLookup>::Source>,
-	) -> Result<(T::AccountId, BoundedVec<T::AccountId, T::MaxNominations>), DispatchError> {
-		let ledger = Self::ledger(controller).ok_or(Error::<T>::NotController)?;
-		ensure!(ledger.active >= MinNominatorBond::<T>::get(), Error::<T>::InsufficientBond);
-
-		// Only check limits if they are not already a nominator.
-		if !Nominators::<T>::contains_key(&ledger.stash) {
-			// If this error is reached, we need to adjust the `MinNominatorBond` and start
-			// calling `chill_other`. Until then, we explicitly block new nominators to protect
-			// the runtime.
-			if let Some(max_nominators) = MaxNominatorsCount::<T>::get() {
-				ensure!(Nominators::<T>::count() < max_nominators, Error::<T>::TooManyNominators);
-			}
-		}
-
-		ensure!(!targets.is_empty(), Error::<T>::EmptyTargets);
-		ensure!(targets.len() <= T::MaxNominations::get() as usize, Error::<T>::TooManyTargets);
-
-		let old =
-			Nominators::<T>::get(&ledger.stash).map_or_else(Vec::new, |x| x.targets.into_inner());
-
-		let targets: BoundedVec<_, _> = targets
-			.into_iter()
-			.map(|t| T::Lookup::lookup(t).map_err(DispatchError::from))
-			.map(|n| {
-				n.and_then(|n| {
-					if old.contains(&n) || !Validators::<T>::get(&n).blocked {
-						Ok(n)
-					} else {
-						Err(Error::<T>::BadTarget.into())
-					}
-				})
-			})
-			.collect::<Result<Vec<_>, _>>()?
-			.try_into()
-			.map_err(|_| Error::<T>::TooManyNominators)?;
-
-		Ok((ledger.stash, targets))
-	}
-
-	pub(crate) fn do_unchecked_nominate_writes(
-		stash: &T::AccountId,
-		targets: BoundedVec<T::AccountId, T::MaxNominations>,
-	) {
-		let nominations = Nominations {
-			targets,
-			// Initial nominations are considered submitted at era 0. See `Nominations` doc
-			submitted_in: Self::current_era().unwrap_or(0),
-			suppressed: false,
-		};
-
-		Self::do_remove_validator(&stash);
-		Self::do_add_nominator(&stash, nominations);
-	}
 }
 
 impl<T: Config> ElectionDataProvider for Pallet<T> {
@@ -1418,19 +1339,6 @@ impl<T: Config> StakingInterface for Pallet<T> {
 		Self::ledger(controller).map(|l| l.active)
 	}
 
-	fn can_bond_extra(controller: &Self::AccountId, extra: Self::Balance) -> bool {
-		let ledger = match Self::ledger(&controller) {
-			Some(l) => l,
-			None => return false,
-		};
-
-		if ledger.active.saturating_add(extra) < T::Currency::minimum_balance() {
-			false
-		} else {
-			true
-		}
-	}
-
 	fn bond_extra(stash: Self::AccountId, extra: Self::Balance) -> DispatchResult {
 		Self::bond_extra(RawOrigin::Signed(stash).into(), extra)
 	}
@@ -1452,20 +1360,6 @@ impl<T: Config> StakingInterface for Pallet<T> {
 			.map_err(|err_with_post_info| err_with_post_info.error)
 	}
 
-	fn bond_checks(
-		stash: &Self::AccountId,
-		controller: &Self::AccountId,
-		value: Self::Balance,
-		_: &Self::AccountId,
-	) -> Result<(), DispatchError> {
-		Self::do_bond_checks(stash, controller, value)?;
-		if frame_system::Pallet::<T>::can_inc_consumer(stash) {
-			Ok(())
-		} else {
-			Err(Error::<T>::BadState.into())
-		}
-	}
-
 	fn bond(
 		stash: Self::AccountId,
 		controller: Self::AccountId,
@@ -1480,18 +1374,10 @@ impl<T: Config> StakingInterface for Pallet<T> {
 		)
 	}
 
-	fn nominate_checks(
-		controller: &Self::AccountId,
+	fn nominate(
+		controller: Self::AccountId,
 		targets: Vec<Self::LookupSource>,
-	) -> Result<(Self::AccountId, Vec<Self::AccountId>), DispatchError> {
-		Self::do_nominate_checks(controller, targets)
-			.map(|(stash, targets)| (stash, targets.into_inner()))
-	}
-
-	fn unchecked_nominate(stash: &Self::AccountId, targets: Vec<Self::AccountId>) {
-		Self::do_unchecked_nominate_writes(
-			stash,
-			targets.try_into().expect("the caller only inputs valid inputs. qed."),
-		);
+	) -> DispatchResult {
+		Self::nominate(RawOrigin::Signed(controller).into(), targets)
 	}
 }
