@@ -687,23 +687,16 @@ pub mod pallet {
 			// This is important because we want the most up-to-date total earnings.
 			reward_pool.update_total_earnings_and_balance();
 
-			let old_free_balance = T::Currency::free_balance(&pool_account);
 			// Transfer the funds to be bonded from `who` to the pools account so the pool can then
 			// go bond them.
 			T::Currency::transfer(&who, &pool_account, amount, ExistenceRequirement::KeepAlive)?;
-
-			// This should now include the transferred balance.
-			let new_free_balance = T::Currency::free_balance(&pool_account);
-			// Get the exact amount we can bond extra.
-			let exact_amount_to_bond = new_free_balance.saturating_sub(old_free_balance);
 			// We must calculate the points to issue *before* we bond `who`'s funds, else the
 			// points:balance ratio will be wrong.
-			let new_points = bonded_pool.issue(exact_amount_to_bond);
-
+			let new_points = bonded_pool.issue(amount);
 			// The pool should always be created in such a way its in a state to bond extra, but if
 			// the active balance is slashed below the minimum bonded or the account cannot be
 			// found, we exit early.
-			T::StakingInterface::bond_extra(pool_account.clone(), exact_amount_to_bond)?;
+			T::StakingInterface::bond_extra(pool_account.clone(), amount)?;
 
 			Delegators::insert(
 				who.clone(),
@@ -725,7 +718,7 @@ pub mod pallet {
 			Self::deposit_event(Event::<T>::Joined {
 				delegator: who,
 				pool: pool_account,
-				bonded: exact_amount_to_bond,
+				bonded: amount,
 			});
 
 			Ok(())
