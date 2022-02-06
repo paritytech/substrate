@@ -441,15 +441,14 @@ pub struct RewardPool<T: Config> {
 }
 
 impl<T: Config> RewardPool<T> {
-	fn update_total_earnings_and_balance(mut self) -> Self {
+	/// Mutate the reward pool by updating the total earnings and current free balance.
+	fn update_total_earnings_and_balance(&mut self) {
 		let current_balance = T::Currency::free_balance(&self.account);
 		// The earnings since the last time it was updated
 		let new_earnings = current_balance.saturating_sub(self.balance);
 		// The lifetime earnings of the of the reward pool
 		self.total_earnings = new_earnings.saturating_add(self.total_earnings);
 		self.balance = current_balance;
-
-		self
 	}
 }
 
@@ -683,10 +682,10 @@ pub mod pallet {
 
 			// We don't actually care about writing the reward pool, we just need its
 			// total earnings at this point in time.
-			let reward_pool = RewardPools::<T>::get(&pool_account)
-				.defensive_ok_or_else(|| Error::<T>::RewardPoolNotFound)?
-				// This is important because we want the most up-to-date total earnings.
-				.update_total_earnings_and_balance();
+			let mut reward_pool = RewardPools::<T>::get(&pool_account)
+				.defensive_ok_or_else(|| Error::<T>::RewardPoolNotFound)?;
+			// This is important because we want the most up-to-date total earnings.
+			reward_pool.update_total_earnings_and_balance();
 
 			let old_free_balance = T::Currency::free_balance(&pool_account);
 			// Transfer the funds to be bonded from `who` to the pools account so the pool can then
@@ -965,7 +964,7 @@ impl<T: Config> Pallet<T> {
 	/// Calculate the rewards for `delegator`.
 	fn calculate_delegator_payout(
 		bonded_pool: &BondedPool<T>,
-		reward_pool: RewardPool<T>,
+		mut reward_pool: RewardPool<T>,
 		mut delegator: Delegator<T>,
 	) -> Result<(RewardPool<T>, Delegator<T>, BalanceOf<T>), DispatchError> {
 		// If the delegator is unbonding they cannot claim rewards. Note that when the delagator
@@ -973,7 +972,7 @@ impl<T: Config> Pallet<T> {
 		ensure!(delegator.unbonding_era.is_none(), Error::<T>::AlreadyUnbonding);
 
 		let last_total_earnings = reward_pool.total_earnings;
-		let mut reward_pool = reward_pool.update_total_earnings_and_balance();
+		reward_pool.update_total_earnings_and_balance();
 		// Notice there is an edge case where total_earnings have not increased and this is zero
 		let new_earnings = T::BalanceToU256::convert(
 			reward_pool.total_earnings.saturating_sub(last_total_earnings),
