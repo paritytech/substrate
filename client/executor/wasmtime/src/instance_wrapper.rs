@@ -368,7 +368,7 @@ impl InstanceWrapper {
 					let ptr = self.memory.data_ptr(&self.store);
 					let len = self.memory.data_size(&self.store);
 
-					// On MacOS we can simply simply overwrite memory mapping.
+					// On MacOS we can simply overwrite memory mapping.
 					if libc::mmap(
 						ptr as _,
 						len,
@@ -412,6 +412,7 @@ fn decommit_works() {
 	let module = Module::new(&engine, code).unwrap();
 	let mut wrapper = InstanceWrapper::new::<()>(&module, 2, true, None).unwrap();
 	unsafe { *wrapper.memory.data_ptr(&wrapper.store) = 42 };
+	assert_eq!(unsafe { *wrapper.memory.data_ptr(&wrapper.store) }, 42);
 	wrapper.decommit();
 	assert_eq!(unsafe { *wrapper.memory.data_ptr(&wrapper.store) }, 0);
 }
