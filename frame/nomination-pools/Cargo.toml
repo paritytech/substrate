@@ -1,5 +1,5 @@
 [package]
-name = "pallet-pools"
+name = "pallet-nomination-pools"
 version = "0.0.1"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2021"

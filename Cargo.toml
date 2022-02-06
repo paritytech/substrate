@@ -102,7 +102,7 @@ members = [
 	"frame/offences",
 	"frame/preimage",
 	"frame/proxy",
-	"frame/pools",
+	"frame/nomination-pools",
 	"frame/randomness-collective-flip",
 	"frame/recovery",
 	"frame/scheduler",

@@ -1374,10 +1374,7 @@ impl<T: Config> StakingInterface for Pallet<T> {
 		)
 	}
 
-	fn nominate(
-		controller: Self::AccountId,
-		targets: Vec<Self::LookupSource>,
-	) -> DispatchResult {
+	fn nominate(controller: Self::AccountId, targets: Vec<Self::LookupSource>) -> DispatchResult {
 		Self::nominate(RawOrigin::Signed(controller).into(), targets)
 	}
 }

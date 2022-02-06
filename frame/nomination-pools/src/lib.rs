@@ -1,4 +1,4 @@
-//! # Delegation pools for nominating
+//! # Nomination Pools for Staking Delegation
 //!
 //! This pallet allows delegators to delegate their stake to nominating pools, each of which acts as
 //! a nominator and nominates validators on their behalf.
@@ -248,7 +248,7 @@ use frame_support::{
 	ensure,
 	pallet_prelude::*,
 	storage::bounded_btree_map::BoundedBTreeMap,
-	traits::{Currency, DefensiveResult, ExistenceRequirement, Get, DefensiveOption},
+	traits::{Currency, DefensiveOption, DefensiveResult, ExistenceRequirement, Get},
 	DefaultNoBound, RuntimeDebugNoBound,
 };
 use scale_info::TypeInfo;
@@ -905,7 +905,7 @@ pub mod pallet {
 				amount,
 				reward_account.clone(),
 			)?;
-			T::StakingInterface::nominate(pool_account.clone(), validators);
+			T::StakingInterface::nominate(pool_account.clone(), validators)?;
 
 			Delegators::<T>::insert(
 				who,
