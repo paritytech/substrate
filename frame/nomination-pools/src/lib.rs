@@ -269,18 +269,6 @@ mod mock;
 mod tests;
 
 pub use pallet::*;
-pub(crate) const LOG_TARGET: &'static str = "runtime::pools";
-
-// Syntactic sugar for logging.
-#[macro_export]
-macro_rules! log {
-	($level:tt, $patter:expr $(, $values:expr)* $(,)?) => {
-		log::$level!(
-			target: LOG_TARGET,
-			concat!("[{:?}] 💰", $patter), <frame_system::Pallet<T>>::block_number() $(, $values)*
-		)
-	};
-}
 
 type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
@@ -748,9 +736,11 @@ pub mod pallet {
 		}
 
 		/// A bonded delegator can use this to unbond _all_ funds from the pool.
-		/// In order to withdraw the funds, the delegator must wait
+		///
+		/// If their are too many unlocking chunks to unbond with the pool account,
+		/// [`Self::withdraw_unbonded_pool`] can be called to try and minimize unlocking chunks.
 		#[pallet::weight(666)]
-		pub fn unbond(origin: OriginFor<T>, num_slashing_spans: u32) -> DispatchResult {
+		pub fn unbond(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			// TODO check if this is owner, if its the owner then they must be the only person in
 			// the pool and it needs to be destroyed with withdraw_unbonded
@@ -776,12 +766,7 @@ pub mod pallet {
 			// to unbond so we have the correct points for the balance:share ratio.
 			bonded_pool.points = bonded_pool.points.saturating_sub(delegator.points);
 
-			// Call withdraw unbonded to minimize unlocking chunks. If this is not done then we
-			// would have to rely on delegators calling `withdraw_unbonded` in order to clear
-			// unlocking chunks. This is a catch 22 for delegators who have not yet unbonded
-			// because the pool needs to call `withdraw_unbonded` so they can `unbond`, but they
-			// must call `unbond` prior to being able to call `withdraw_unbonded`.
-			T::StakingInterface::withdraw_unbonded(delegator.pool.clone(), num_slashing_spans)?;
+			// T::StakingInterface::withdraw_unbonded(delegator.pool.clone(), num_slashing_spans)?;
 			// Unbond in the actual underlying pool
 			T::StakingInterface::unbond(delegator.pool.clone(), balance_to_unbond)?;
 
@@ -807,6 +792,22 @@ pub mod pallet {
 			SubPoolsStorage::insert(&delegator.pool, sub_pools);
 			Delegators::insert(who, delegator);
 
+			Ok(())
+		}
+
+		/// A permissionless function that allows users to call `withdraw_unbonded` for the pools
+		/// account.
+		///
+		/// This is useful if their are too many unlocking chunks to unbond, and some can be cleared
+		/// by withdrawing.
+		#[pallet::weight(666)]
+		pub fn pool_withdraw_unbonded(
+			origin: OriginFor<T>,
+			pool_account: T::AccountId,
+			num_slashing_spans: u32,
+		) -> DispatchResult {
+			let _ = ensure_signed(origin)?;
+			T::StakingInterface::withdraw_unbonded(pool_account, num_slashing_spans)?;
 			Ok(())
 		}
 
