@@ -254,7 +254,8 @@ fn initiate_recovery_works() {
 		// Deposit is reserved
 		assert_eq!(Balances::reserved_balance(1), 10);
 		// Recovery status object is created correctly
-		let recovery_status = ActiveRecovery { created: 0, deposit: 10, friends: vec![] };
+		let recovery_status =
+			ActiveRecovery { created: 0, deposit: 10, friends: Default::default() };
 		assert_eq!(<ActiveRecoveries<Test>>::get(&5, &1), Some(recovery_status));
 		// Multiple users can attempt to recover the same account
 		assert_ok!(Recovery::initiate_recovery(Origin::signed(2), 5));
@@ -314,7 +315,8 @@ fn vouch_recovery_works() {
 		assert_ok!(Recovery::vouch_recovery(Origin::signed(4), 5, 1));
 		assert_ok!(Recovery::vouch_recovery(Origin::signed(3), 5, 1));
 		// Final recovery status object is updated correctly
-		let recovery_status = ActiveRecovery { created: 0, deposit: 10, friends: vec![2, 3, 4] };
+		let recovery_status =
+			ActiveRecovery { created: 0, deposit: 10, friends: vec![2, 3, 4].try_into().unwrap() };
 		assert_eq!(<ActiveRecoveries<Test>>::get(&5, &1), Some(recovery_status));
 	});
 }
