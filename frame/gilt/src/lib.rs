@@ -248,7 +248,7 @@ pub mod pallet {
 		_,
 		Blake2_128Concat,
 		u32,
-		BoundedVec<GiltBid<BalanceOf<T>, T::AccountId>, T::QueueCount>,
+		BoundedVec<GiltBid<BalanceOf<T>, T::AccountId>, T::MaxQueueLen>,
 		ValueQuery,
 	>;
 
