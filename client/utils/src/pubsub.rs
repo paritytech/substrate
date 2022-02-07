@@ -229,7 +229,7 @@ impl<M, R> Stream for Receiver<M, R>
 where
 	R: Unsubscribe,
 {
-	type Item = <TracingUnboundedReceiver<M> as Stream>::Item;
+	type Item = M;
 
 	fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
 		Pin::new(&mut self.get_mut().rx).poll_next(cx)
