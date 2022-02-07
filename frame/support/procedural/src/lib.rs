@@ -427,13 +427,7 @@ pub fn pallet(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// ```
 #[proc_macro_attribute]
 pub fn transactional(attr: TokenStream, input: TokenStream) -> TokenStream {
-	// TODO: I think we should do this, but not sure if breaking
-	transactional::single_transactional(attr, input).unwrap_or_else(|e| e.to_compile_error().into())
-}
-
-#[proc_macro_attribute]
-pub fn single_transactional(attr: TokenStream, input: TokenStream) -> TokenStream {
-	transactional::single_transactional(attr, input).unwrap_or_else(|e| e.to_compile_error().into())
+	transactional::transactional(attr, input).unwrap_or_else(|e| e.to_compile_error().into())
 }
 
 /// Derive [`Clone`] but do not bound any generic. Docs are at `frame_support::CloneNoBound`.
