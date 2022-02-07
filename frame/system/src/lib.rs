@@ -1410,14 +1410,14 @@ impl<T: Config> Pallet<T> {
 
 	#[cfg(any(feature = "std", feature = "runtime-benchmarks", test))]
 	#[frame_support::transactional]
-	pub fn spawn_transactional(limit: u8, write: bool) -> DispatchResult {
-		if limit < 255 {
-			Self::spawn_transactional(limit + 1, write)?;
-		} else if write{
+	pub fn spawn_transactional(cycle: u8, limit: u8, write: bool) -> DispatchResult {
+		if cycle < limit {
+			Self::spawn_transactional(cycle + 1, limit, write)?;
+		} else if write {
 			let max_weight = T::BlockWeights::get().max_block;
 			let write_cost = T::DbWeight::get().writes(1).max(1);
 			let max_keys = max_weight / write_cost;
-			for i in 0 .. max_keys.min(10_000) {
+			for i in 0..max_keys.min(1_000) {
 				let bytes = i.encode();
 				storage::unhashed::put_raw(&bytes, &bytes);
 			}

@@ -124,17 +124,21 @@ benchmarks! {
 		assert_eq!(storage::unhashed::get_raw(&last_key), None);
 	}
 
-	worst_case_transactional_no_write {
-		const LIMIT: u8 = 255;
+	#[skip_meta]
+	worst_case_write_no_transactional {
 	}: {
-		System::<T>::spawn_transactional(0, false)?;
+		System::<T>::spawn_transactional(0, 0, true)?;
+	} verify {}
+
+	worst_case_transactional_no_write {
+	}: {
+		System::<T>::spawn_transactional(0, 255, false)?;
 	} verify {}
 
 	#[skip_meta]
 	worst_case_transactional_write {
-		const LIMIT: u8 = 255;
 	}: {
-		System::<T>::spawn_transactional(0, true)?;
+		System::<T>::spawn_transactional(0, 255, true)?;
 	} verify {}
 
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test);
