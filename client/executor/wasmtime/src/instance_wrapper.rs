@@ -380,7 +380,7 @@ impl InstanceWrapper {
 						static LOGGED: Once = Once::new();
 						LOGGED.call_once(|| {
 							log::warn!(
-								"WASM instance memory mmap failed: {}",
+								"Failed to decommit WASM instance memory through mmap: {}",
 								std::io::Error::last_os_error(),
 							);
 						});
