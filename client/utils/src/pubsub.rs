@@ -94,8 +94,8 @@ pub struct Hub<M, R> {
 
 /// The receiving side of the subscription.
 ///
-/// The messages are delivered as items of a `futures::Stream`.
-/// Upon drop this receiver unsubscribes itself from the `Hub`.
+/// The messages are delivered as items of a [`Stream`].
+/// Upon drop this receiver unsubscribes itself from the [`Hub<M, R>`].
 #[derive(Debug)]
 pub struct Receiver<M, R>
 where
