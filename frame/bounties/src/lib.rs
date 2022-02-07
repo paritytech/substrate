@@ -299,7 +299,8 @@ pub mod pallet {
 	/// Bounty indices that have been approved but not yet funded.
 	#[pallet::storage]
 	#[pallet::getter(fn bounty_approvals)]
-	pub type BountyApprovals<T: Config> = StorageValue<_, BoundedVec<BountyIndex, T::MaxBountiesQueued>, ValueQuery>;
+	pub type BountyApprovals<T: Config> =
+		StorageValue<_, BoundedVec<BountyIndex, T::MaxBountiesQueued>, ValueQuery>;
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
@@ -347,7 +348,8 @@ pub mod pallet {
 
 				bounty.status = BountyStatus::Approved;
 
-				BountyApprovals::<T>::try_append(bounty_id).map_err(|()| Error::<T>::TooManyQueued)?;
+				BountyApprovals::<T>::try_append(bounty_id)
+					.map_err(|()| Error::<T>::TooManyQueued)?;
 
 				Ok(())
 			})?;
