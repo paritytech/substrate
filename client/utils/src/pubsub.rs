@@ -43,7 +43,7 @@ use std::{
 };
 
 use futures::stream::{FusedStream, Stream};
-use parking_lot::Mutex;
+use parking_lot::{Mutex, MutexGuard};
 
 use crate::{
 	id_sequence::SeqID,
@@ -114,19 +114,15 @@ struct Shared<M, R> {
 	sinks: HashMap<SeqID, TracingUnboundedSender<M>>,
 }
 
-impl<M, R> AsMut<R> for Shared<M, R> {
-	fn as_mut(&mut self) -> &mut R {
-		&mut self.registry
-	}
-}
-
 impl<M, R> Hub<M, R>
 where
 	R: Unsubscribe,
 {
 	/// Provide mutable access to the registry (for test purposes).
-	pub fn lock_registry<'a>(&'a self) -> impl DerefMut<Target = impl AsMut<R>> + 'a {
-		self.shared.lock()
+	pub fn lock_registry<'a>(&'a self) -> impl DerefMut<Target = R> + 'a {
+		let shared_locked = self.shared.lock();
+		let registry_locked = MutexGuard::map(shared_locked, |shared| &mut shared.registry);
+		registry_locked
 	}
 }
 
