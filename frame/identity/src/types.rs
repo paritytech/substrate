@@ -245,7 +245,7 @@ pub enum IdentityField {
 
 /// Wrapper type for `BitFlags<IdentityField>` that implements `Codec`.
 #[derive(Clone, Copy, PartialEq, Default, RuntimeDebug)]
-pub struct IdentityFields(pub(crate) BitFlags<IdentityField>);
+pub struct IdentityFields(pub BitFlags<IdentityField>);
 
 impl MaxEncodedLen for IdentityFields {
 	fn max_encoded_len() -> usize {
