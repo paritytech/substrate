@@ -26,7 +26,7 @@
 //!
 //! See [`sc-service::builder::RpcExtensionBuilder`] for more details.
 
-use ::futures::stream::{FusedStream, Stream};
+use futures::stream::{FusedStream, Stream};
 use std::{
 	pin::Pin,
 	task::{Context, Poll},
@@ -109,9 +109,7 @@ impl<Payload> NotificationSender<Payload> {
 		//
 		// So there's no need to clean up the subscribers set upon sending another message.
 
-		self.hub.send(payload);
-
-		Ok(())
+		self.hub.send(payload)
 	}
 }
 

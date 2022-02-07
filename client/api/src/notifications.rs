@@ -136,7 +136,7 @@ impl<Block: BlockT> StorageNotifications<Block> {
 			Item = (Vec<u8>, impl Iterator<Item = (Vec<u8>, Option<Vec<u8>>)>),
 		>,
 	) {
-		self.0.send((hash, changeset, child_changeset));
+		self.0.send((hash, changeset, child_changeset))
 	}
 
 	/// Start listening for particular storage keys.

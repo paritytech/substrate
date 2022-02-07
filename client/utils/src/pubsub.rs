@@ -42,8 +42,8 @@ use std::{
 	task::{Context, Poll},
 };
 
-use ::futures::stream::{FusedStream, Stream};
-use ::parking_lot::Mutex;
+use futures::stream::{FusedStream, Stream};
+use parking_lot::Mutex;
 
 use crate::{
 	id_sequence::SeqID,
@@ -178,14 +178,14 @@ impl<M, R> Hub<M, R> {
 	/// Send the message produced with `Trigger`.
 	///
 	/// This is possible if the registry implements `Dispatch<Trigger, Item = M>`.
-	pub fn send<Trigger>(&self, trigger: Trigger)
+	pub fn send<Trigger>(&self, trigger: Trigger) -> <R as Dispatch<Trigger>>::Ret
 	where
 		R: Dispatch<Trigger, Item = M>,
 	{
 		let mut shared = self.shared.lock();
 		let (registry, sinks) = shared.get_mut();
 
-		registry.dispatch(trigger, |subs_id, item| {
+		let dispatch_result = registry.dispatch(trigger, |subs_id, item| {
 			if let Some(tx) = sinks.get_mut(&subs_id) {
 				if let Err(send_err) = tx.unbounded_send(item) {
 					log::warn!("Sink with SubsID = {} failed to perform unbounded_send: {} ({} as Dispatch<{}, Item = {}>::dispatch(...))", subs_id, send_err, std::any::type_name::<R>(),
@@ -202,6 +202,8 @@ impl<M, R> Hub<M, R> {
 				);
 			}
 		});
+
+		dispatch_result
 	}
 }
 
