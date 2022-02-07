@@ -235,7 +235,7 @@ pub trait Storage {
 
 	/// Start a new nested transaction while enforcing a maximum nesting depth.
 	///
-	/// This function is equal to [`Self::start_transaction`] with the exception that it
+	/// This function is equal to `start_transaction` with the exception that it
 	/// will return an error then it would otherwise violate the supplied `max_depth`. The
 	/// parameter describes the maximum allowed nesting depth.
 	fn start_transaction_with_limit(&mut self, max_depth: u32) -> Result<(), ()> {
