@@ -464,7 +464,7 @@ pub mod pallet {
 			ensure!(threshold >= 1, Error::<T>::ZeroThreshold);
 			ensure!(!friends.is_empty(), Error::<T>::NotEnoughFriends);
 			ensure!(threshold as usize <= friends.len(), Error::<T>::NotEnoughFriends);
-			let bounded_friends: BoundedVec<_, _> =
+			let bounded_friends: FriendsOf<T> =
 				friends.try_into().map_err(|()| Error::<T>::MaxFriends)?;
 			ensure!(Self::is_sorted_and_unique(&bounded_friends), Error::<T>::NotSorted);
 			// Total deposit is base fee + number of friends * factor fee
