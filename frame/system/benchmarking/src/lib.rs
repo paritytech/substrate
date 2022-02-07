@@ -131,14 +131,16 @@ benchmarks! {
 	} verify {}
 
 	worst_case_transactional_no_write {
+		let l in 0 .. 255;
 	}: {
-		System::<T>::spawn_transactional(0, 255, false)?;
+		System::<T>::spawn_transactional(0, l, false)?;
 	} verify {}
 
 	#[skip_meta]
 	worst_case_transactional_write {
+		let l in 0 .. 255;
 	}: {
-		System::<T>::spawn_transactional(0, 255, true)?;
+		System::<T>::spawn_transactional(0, l, true)?;
 	} verify {}
 
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test);
