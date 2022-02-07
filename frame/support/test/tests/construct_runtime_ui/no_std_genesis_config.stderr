@@ -1,73 +1,27 @@
 error: `Pallet` does not have the std feature enabled, this will cause the `test_pallet::GenesisConfig` type to be undefined.
-  --> $DIR/no_std_genesis_config.rs:13:1
+  --> tests/construct_runtime_ui/no_std_genesis_config.rs:40:1
    |
-13 | / construct_runtime! {
-14 | |     pub enum Runtime where
-15 | |         Block = Block,
-16 | |         NodeBlock = Block,
+40 | / construct_runtime! {
+41 | |     pub enum Runtime where
+42 | |         Block = Block,
+43 | |         NodeBlock = Block,
 ...  |
-21 | |     }
-22 | | }
+48 | |     }
+49 | | }
    | |_^
    |
    = note: this error originates in the macro `test_pallet::__substrate_genesis_config_check::is_std_enabled_for_genesis` (in Nightly builds, run with -Z macro-backtrace for more info)
 
-error[E0433]: failed to resolve: use of undeclared crate or module `system`
-  --> $DIR/no_std_genesis_config.rs:19:11
-   |
-19 |         System: system::{Pallet, Call, Storage, Config, Event<T>},
-   |                 ^^^^^^ use of undeclared crate or module `system`
-
-error[E0433]: failed to resolve: use of undeclared crate or module `system`
-  --> $DIR/no_std_genesis_config.rs:13:1
-   |
-13 | / construct_runtime! {
-14 | |     pub enum Runtime where
-15 | |         Block = Block,
-16 | |         NodeBlock = Block,
-...  |
-21 | |     }
-22 | | }
-   | |_^ not found in `system`
-   |
-   = note: this error originates in the macro `construct_runtime` (in Nightly builds, run with -Z macro-backtrace for more info)
-help: consider importing this enum
-   |
-1  | use frame_system::RawOrigin;
-   |
-
-error[E0433]: failed to resolve: use of undeclared crate or module `system`
-  --> $DIR/no_std_genesis_config.rs:13:1
-   |
-13 | / construct_runtime! {
-14 | |     pub enum Runtime where
-15 | |         Block = Block,
-16 | |         NodeBlock = Block,
-...  |
-21 | |     }
-22 | | }
-   | |_^ not found in `system`
-   |
-   = note: this error originates in the macro `construct_runtime` (in Nightly builds, run with -Z macro-backtrace for more info)
-help: consider importing one of these items
-   |
-1  | use frame_support_test::Pallet;
-   |
-1  | use frame_system::Pallet;
-   |
-1  | use test_pallet::Pallet;
-   |
-
 error[E0412]: cannot find type `GenesisConfig` in crate `test_pallet`
-  --> $DIR/no_std_genesis_config.rs:13:1
+  --> tests/construct_runtime_ui/no_std_genesis_config.rs:40:1
    |
-13 | / construct_runtime! {
-14 | |     pub enum Runtime where
-15 | |         Block = Block,
-16 | |         NodeBlock = Block,
+40 | / construct_runtime! {
+41 | |     pub enum Runtime where
+42 | |         Block = Block,
+43 | |         NodeBlock = Block,
 ...  |
-21 | |     }
-22 | | }
+48 | |     }
+49 | | }
    | |_^ not found in `test_pallet`
    |
    = note: this error originates in the macro `construct_runtime` (in Nightly builds, run with -Z macro-backtrace for more info)
@@ -76,14 +30,22 @@ help: consider importing this struct
 1  | use frame_system::GenesisConfig;
    |
 
-error[E0277]: the trait bound `Runtime: frame_system::pallet::Config` is not satisfied
-  --> $DIR/no_std_genesis_config.rs:11:6
-   |
-11 | impl test_pallet::Config for Runtime {}
-   |      ^^^^^^^^^^^^^^^^^^^ the trait `frame_system::pallet::Config` is not implemented for `Runtime`
-   |
-note: required by a bound in `Config`
-  --> $DIR/lib.rs:30:20
-   |
-30 |     pub trait Config: frame_system::Config {}
-   |                       ^^^^^^^^^^^^^^^^^^^^ required by this bound in `Config`
+error[E0283]: type annotations needed
+   --> tests/construct_runtime_ui/no_std_genesis_config.rs:40:1
+    |
+40  | / construct_runtime! {
+41  | |     pub enum Runtime where
+42  | |         Block = Block,
+43  | |         NodeBlock = Block,
+...   |
+48  | |     }
+49  | | }
+    | |_^ cannot infer type
+    |
+    = note: cannot satisfy `_: std::default::Default`
+note: required by `std::default::Default::default`
+   --> $RUST/core/src/default.rs
+    |
+    |     fn default() -> Self;
+    |     ^^^^^^^^^^^^^^^^^^^^^
+    = note: this error originates in the derive macro `Default` (in Nightly builds, run with -Z macro-backtrace for more info)

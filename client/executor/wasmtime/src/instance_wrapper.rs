@@ -361,6 +361,33 @@ impl InstanceWrapper {
 						return;
 					}
 				}
+			} else if #[cfg(target_os = "macos")] {
+				use std::sync::Once;
+
+				unsafe {
+					let ptr = self.memory.data_ptr(&self.store);
+					let len = self.memory.data_size(&self.store);
+
+					// On MacOS we can simply overwrite memory mapping.
+					if libc::mmap(
+						ptr as _,
+						len,
+						libc::PROT_READ | libc::PROT_WRITE,
+						libc::MAP_FIXED | libc::MAP_PRIVATE | libc::MAP_ANONYMOUS,
+						-1,
+						0,
+					) == libc::MAP_FAILED {
+						static LOGGED: Once = Once::new();
+						LOGGED.call_once(|| {
+							log::warn!(
+								"Failed to decommit WASM instance memory through mmap: {}",
+								std::io::Error::last_os_error(),
+							);
+						});
+					} else {
+						return;
+					}
+				}
 			}
 		}
 
@@ -376,4 +403,16 @@ impl InstanceWrapper {
 	pub(crate) fn store_mut(&mut self) -> &mut Store {
 		&mut self.store
 	}
+}
+
+#[test]
+fn decommit_works() {
+	let engine = wasmtime::Engine::default();
+	let code = wat::parse_str("(module (memory (export \"memory\") 1 4))").unwrap();
+	let module = Module::new(&engine, code).unwrap();
+	let mut wrapper = InstanceWrapper::new::<()>(&module, 2, true, None).unwrap();
+	unsafe { *wrapper.memory.data_ptr(&wrapper.store) = 42 };
+	assert_eq!(unsafe { *wrapper.memory.data_ptr(&wrapper.store) }, 42);
+	wrapper.decommit();
+	assert_eq!(unsafe { *wrapper.memory.data_ptr(&wrapper.store) }, 0);
 }
