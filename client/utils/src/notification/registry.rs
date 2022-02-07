@@ -24,15 +24,9 @@ use crate::{
 };
 
 /// The shared structure to keep track on subscribers.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub(super) struct Registry {
 	pub(super) subscribers: HashSet<SeqID>,
-}
-
-impl Default for Registry {
-	fn default() -> Self {
-		Self { subscribers: Default::default() }
-	}
 }
 
 impl Subscribe<()> for Registry {
