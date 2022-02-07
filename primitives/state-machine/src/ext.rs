@@ -644,6 +644,10 @@ where
 		self.overlay.start_transaction()
 	}
 
+	fn storage_start_transaction_with_limit(&mut self, max_depth: u32) -> Result<(), ()> {
+		self.overlay.start_transaction_with_limit(max_depth).map_err(|_| ())
+	}
+
 	fn storage_rollback_transaction(&mut self) -> Result<(), ()> {
 		self.mark_dirty();
 		self.overlay.rollback_transaction().map_err(|_| ())
@@ -1120,5 +1124,50 @@ mod tests {
 		drop(append);
 
 		assert_eq!(Vec::<u32>::decode(&mut &data[..]).unwrap(), vec![1, 2]);
+	}
+
+	#[test]
+	fn transaction_limit_works() {
+		let mut cache = StorageTransactionCache::default();
+		let mut overlay = OverlayedChanges::default();
+		let backend = InMemoryBackend::default();
+		let mut ext = TestExt::new(&mut overlay, &mut cache, &backend, None);
+
+		// Zero will always error out
+		assert!(ext.storage_start_transaction_with_limit(0).is_err());
+
+		// No transaction created, yet
+		assert!(ext.storage_start_transaction_with_limit(1).is_ok());
+		assert!(ext.storage_start_transaction_with_limit(1).is_err());
+		assert!(ext.storage_start_transaction_with_limit(0).is_err());
+
+		// We only spawned one transaction until here
+		assert!(ext.storage_start_transaction_with_limit(2).is_ok());
+		assert!(ext.storage_start_transaction_with_limit(2).is_err());
+
+		// The unchecked version can always spawn more transactions
+		ext.storage_start_transaction();
+		assert!(ext.storage_start_transaction_with_limit(3).is_err());
+		assert!(ext.storage_start_transaction_with_limit(4).is_ok());
+		assert!(ext.storage_start_transaction_with_limit(4).is_err());
+
+		// Smaller numbers won't work either
+		assert!(ext.storage_start_transaction_with_limit(3).is_err());
+		assert!(ext.storage_start_transaction_with_limit(2).is_err());
+		assert!(ext.storage_start_transaction_with_limit(1).is_err());
+		assert!(ext.storage_start_transaction_with_limit(0).is_err());
+
+		// We are at 4 open transactions
+		assert!(ext.storage_start_transaction_with_limit(4).is_err());
+		assert!(ext.storage_commit_transaction().is_ok());
+		assert!(ext.storage_start_transaction_with_limit(4).is_ok());
+		assert!(ext.storage_start_transaction_with_limit(4).is_err());
+		assert!(ext.storage_rollback_transaction().is_ok());
+		assert!(ext.storage_start_transaction_with_limit(4).is_ok());
+		assert!(ext.storage_rollback_transaction().is_ok());
+		assert!(ext.storage_commit_transaction().is_ok());
+		assert!(ext.storage_rollback_transaction().is_ok());
+		assert!(ext.storage_commit_transaction().is_ok());
+		assert!(ext.storage_start_transaction_with_limit(1).is_ok());
 	}
 }

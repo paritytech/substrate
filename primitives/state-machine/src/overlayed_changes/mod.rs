@@ -44,6 +44,12 @@ use std::{
 
 pub use self::changeset::{AlreadyInRuntime, NoOpenTransaction, NotInRuntime, OverlayedValue};
 
+/// Error returned when spawning a new transaction would vialoate the amount of
+/// transactions that are allowed to exit.
+#[derive(Debug)]
+#[cfg_attr(test, derive(PartialEq))]
+pub struct TransactionLimitReached;
+
 /// Changes that are made outside of extrinsics are marked with this index;
 pub const NO_EXTRINSIC_INDEX: u32 = 0xffffffff;
 
@@ -357,6 +363,21 @@ impl OverlayedChanges {
 			changeset.start_transaction();
 		}
 		self.offchain.overlay_mut().start_transaction();
+	}
+
+	/// Same as `start_transaction` but with enforcing a maximum nesting depth.
+	///
+	/// Will return an `Err` when it would otherwise violate the supplied `max_depth`.
+	pub fn start_transaction_with_limit(
+		&mut self,
+		max_depth: u32,
+	) -> Result<(), TransactionLimitReached> {
+		let depth: u32 = self.top.depth().try_into().unwrap_or(u32::MAX);
+		if depth >= max_depth {
+			return Err(TransactionLimitReached)
+		}
+		self.start_transaction();
+		Ok(())
 	}
 
 	/// Rollback the last transaction started by `start_transaction`.

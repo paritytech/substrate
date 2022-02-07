@@ -188,6 +188,11 @@ pub trait Externalities: ExtensionStore {
 	/// Changes made without any open transaction are committed immediately.
 	fn storage_start_transaction(&mut self);
 
+	/// Same as `storage_start_transaction` but with enforcing a maximum nesting depth.
+	///
+	/// Will return an `Err` when it would otherwise violate the supplied `max_depth`.
+	fn storage_start_transaction_with_limit(&mut self, max_depth: u32) -> Result<(), ()>;
+
 	/// Rollback the last transaction started by `storage_start_transaction`.
 	///
 	/// Any changes made during that storage transaction are discarded. Returns an error when

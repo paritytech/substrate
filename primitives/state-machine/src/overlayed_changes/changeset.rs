@@ -214,6 +214,11 @@ impl<K: Ord + Hash + Clone, V> OverlayedMap<K, V> {
 		self.changes.is_empty()
 	}
 
+	/// Returns how many storage transactions are currently open.
+	pub fn depth(&self) -> usize {
+		self.dirty_keys.len()
+	}
+
 	/// Get an optional reference to the value stored for the specified key.
 	pub fn get<Q>(&self, key: &Q) -> Option<&OverlayedEntry<V>>
 	where

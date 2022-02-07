@@ -142,6 +142,10 @@ impl Externalities for AsyncExternalities {
 		unimplemented!("Transactions are not supported by AsyncExternalities");
 	}
 
+	fn storage_start_transaction_with_limit(&mut self, _: u32) -> Result<(), ()> {
+		unimplemented!("Transactions are not supported by AsyncExternalities");
+	}
+
 	fn storage_rollback_transaction(&mut self) -> Result<(), ()> {
 		unimplemented!("Transactions are not supported by AsyncExternalities");
 	}
