@@ -439,14 +439,6 @@ pub mod pallet {
 		ValueQuery,
 	>;
 
-	/// Accounts for which there are locks in action which may be removed at some point in the
-	/// future. The value is the block number at which the lock expires and may be removed.
-	///
-	/// TWOX-NOTE: OK ― `AccountId` is a secure hash.
-	#[pallet::storage]
-	#[pallet::getter(fn locks)]
-	pub type Locks<T: Config> = StorageMap<_, Twox64Concat, T::AccountId, T::BlockNumber>;
-
 	/// True if the last referendum tabled was submitted externally. False if it was a public
 	/// proposal.
 	// TODO: There should be any number of tabling origins, not just public and "external"

@@ -1517,7 +1517,7 @@ where
 						.map_err(|_| Error::<T, I>::LiquidityRestrictions)?;
 
 						// TODO: This is over-conservative. There may now be other providers, and
-						// this pallet   may not even be a provider.
+						// this pallet may not even be a provider.
 						let allow_death = existence_requirement == ExistenceRequirement::AllowDeath;
 						let allow_death =
 							allow_death && system::Pallet::<T>::can_dec_provider(transactor);
