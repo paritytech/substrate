@@ -1410,7 +1410,7 @@ impl<T: Config> Pallet<T> {
 
 	#[cfg(any(feature = "std", feature = "runtime-benchmarks", test))]
 	#[frame_support::transactional]
-	pub fn spawn_transactional(cycle: u8, limit: u8, write: bool) -> DispatchResult {
+	pub fn spawn_transactional(cycle: u32, limit: u32, write: bool) -> DispatchResult {
 		if cycle < limit {
 			Self::spawn_transactional(cycle + 1, limit, write)?;
 		} else if write {
