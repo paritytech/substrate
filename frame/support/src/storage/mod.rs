@@ -46,8 +46,8 @@ pub mod weak_bounded_vec;
 
 mod transaction_level_tracker {
 	const TRANSACTION_LEVEL_KEY: &'static [u8] = b":transaction_level:";
-	const TRANSACTIONAL_LIMIT: u8 = 255;
-	type Layer = u8;
+	const TRANSACTIONAL_LIMIT: u32 = 10;
+	type Layer = u32;
 
 	pub fn get_transaction_level() -> Layer {
 		crate::storage::unhashed::get_or_default::<Layer>(TRANSACTION_LEVEL_KEY)
@@ -112,7 +112,9 @@ pub fn is_transactional() -> bool {
 /// All changes to storage performed by the supplied function are discarded if the returned
 /// outcome is `TransactionOutcome::Rollback`.
 ///
-/// Transactions can be nested to any depth. Commits happen to the parent transaction.
+/// Transactions can be nested up to 10 times; more than that will result in an error.
+///
+/// Commits happen to the parent transaction.
 pub fn with_transaction<T, E>(f: impl FnOnce() -> TransactionOutcome<Result<T, E>>) -> Result<T, E>
 where
 	E: From<DispatchError>,
@@ -120,7 +122,6 @@ where
 	use sp_io::storage::{commit_transaction, rollback_transaction, start_transaction};
 	use TransactionOutcome::*;
 
-	// TODO: Return a result here.
 	let _guard = transaction_level_tracker::inc_transaction_level().map_err(|()|
 		DispatchError::TransactionalLimit.into()
 	)?;
