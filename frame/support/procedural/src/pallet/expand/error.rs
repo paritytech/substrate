@@ -150,6 +150,9 @@ pub fn expand_error(def: &mut Def) -> proc_macro2::TokenStream {
 			#config_where_clause
 		{
 			fn from(err: #error_ident<#type_use_gen>) -> Self {
+				// Ensure that we can still use `try_into` in earlier editions
+				#[cfg(not(feature = "prelude_2021"))]
+				use core::convert::TryInto;
 				use #frame_support::codec::Encode;
 				let index = <
 					<T as #frame_system::Config>::PalletInfo
