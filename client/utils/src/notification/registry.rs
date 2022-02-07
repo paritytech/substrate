@@ -42,7 +42,7 @@ impl Subscribe<()> for Registry {
 }
 impl Unsubscribe for Registry {
 	fn unsubscribe(&mut self, subs_id: SeqID) {
-		let _ = self.subscribers.remove(&subs_id);
+		self.subscribers.remove(&subs_id);
 	}
 }
 

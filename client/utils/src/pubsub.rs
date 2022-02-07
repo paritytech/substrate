@@ -21,18 +21,18 @@
 //! This module provides a type `Hub` which can be used both to subscribe,
 //! and to send the broadcast messages.
 //!
-//! The `Hub` type is parametrized by two other types:
+//! The [`Hub`] type is parametrized by two other types:
 //! - `Message` — the type of a message that shall be delivered to the subscribers;
 //! - `Registry` — implementation of the subscription/dispatch logic.
 //!
 //! A Registry is implemented by defining the following traits:
-//! - `Subscribe<K>`;
-//! - `Dispatch<M>`;
-//! - `Unsubscribe`.
+//! - [`Subscribe<K>`];
+//! - [`Dispatch<M>`];
+//! - [`Unsubscribe`].
 //!
-//! As a result of subscription `Hub::subscribe` method returns an instance of `Receiver<Message,
-//! Registry>`. That can be used as a `futures::Stream` to receive the messages.
-//! Upon drop the `Receiver<Message, Registry>` shall unregister itself from the `Hub`.
+//! As a result of subscription `Hub::subscribe` method returns an instance of
+//! [`Receiver<Message,Registry>`]. That can be used as a [`Stream`] to receive the messages.
+//! Upon drop the [`Receiver<Message, Registry>`] shall unregister itself from the `Hub`.
 
 use std::{
 	collections::HashMap,
