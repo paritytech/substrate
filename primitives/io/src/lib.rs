@@ -66,9 +66,10 @@ use sp_runtime_interface::{
 
 use codec::{Decode, Encode};
 
+#[cfg(feature = "std")]
 use secp256k1::{
 	ecdsa::{RecoverableSignature, RecoveryId},
-	Message, Secp256k1,
+	Message, SECP256K1,
 };
 
 #[cfg(feature = "std")]
@@ -927,14 +928,14 @@ pub trait Crypto {
 		sig: &[u8; 65],
 		msg: &[u8; 32],
 	) -> Result<[u8; 64], EcdsaVerifyError> {
-		let ctx = Secp256k1::new(); // TODO: this can be a static
-
 		let rid = RecoveryId::from_i32(if sig[64] > 26 { sig[64] - 27 } else { sig[64] } as i32)
 			.map_err(|_| EcdsaVerifyError::BadV)?;
 		let sig = RecoverableSignature::from_compact(&sig[..64], rid)
 			.map_err(|_| EcdsaVerifyError::BadRS)?;
 		let msg = Message::from_slice(msg).expect("Message is 32 bytes; qed");
-		let pubkey = ctx.recover_ecdsa(&msg, &sig).map_err(|_| EcdsaVerifyError::BadSignature)?;
+		let pubkey = SECP256K1
+			.recover_ecdsa(&msg, &sig)
+			.map_err(|_| EcdsaVerifyError::BadSignature)?;
 		let mut res = [0u8; 64];
 		res.copy_from_slice(&pubkey.serialize_uncompressed()[1..]);
 		Ok(res)
@@ -973,14 +974,14 @@ pub trait Crypto {
 		sig: &[u8; 65],
 		msg: &[u8; 32],
 	) -> Result<[u8; 33], EcdsaVerifyError> {
-		let ctx = Secp256k1::new(); // TODO: this can be static
-
 		let rid = RecoveryId::from_i32(if sig[64] > 26 { sig[64] - 27 } else { sig[64] } as i32)
 			.map_err(|_| EcdsaVerifyError::BadV)?;
 		let sig = RecoverableSignature::from_compact(&sig[..64], rid)
 			.map_err(|_| EcdsaVerifyError::BadRS)?;
 		let msg = Message::from_slice(msg).expect("Message is 32 bytes; qed");
-		let pubkey = ctx.recover_ecdsa(&msg, &sig).map_err(|_| EcdsaVerifyError::BadSignature)?;
+		let pubkey = SECP256K1
+			.recover_ecdsa(&msg, &sig)
+			.map_err(|_| EcdsaVerifyError::BadSignature)?;
 		Ok(pubkey.serialize())
 	}
 }

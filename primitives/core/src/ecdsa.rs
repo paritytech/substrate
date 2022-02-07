@@ -39,18 +39,12 @@ use core::convert::TryFrom;
 #[cfg(feature = "full_crypto")]
 use secp256k1::{
 	ecdsa::{RecoverableSignature, RecoveryId},
-	Message, PublicKey, SecretKey,
+	Message, PublicKey, SecretKey, SECP256K1,
 };
 #[cfg(feature = "std")]
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 #[cfg(feature = "full_crypto")]
 use sp_std::vec::Vec;
-
-// Secp256k1 context construction is heavy, better to do it once.
-#[cfg(feature = "full_crypto")]
-lazy_static::lazy_static! {
-	static ref SECP256K1: secp256k1::Secp256k1<secp256k1::All> = secp256k1::Secp256k1::new();
-}
 
 /// An identifier used to match public keys against ecdsa keys
 pub const CRYPTO_ID: CryptoTypeId = CryptoTypeId(*b"ecds");
@@ -435,7 +429,7 @@ impl TraitPair for Pair {
 	fn from_seed_slice(seed_slice: &[u8]) -> Result<Pair, SecretStringError> {
 		let secret =
 			SecretKey::from_slice(seed_slice).map_err(|_| SecretStringError::InvalidSeedLength)?;
-		let public = PublicKey::from_secret_key(&SECP256K1, &secret);
+		let public = PublicKey::from_secret_key(SECP256K1, &secret);
 		let public = Public(public.serialize());
 		Ok(Pair { public, secret })
 	}
