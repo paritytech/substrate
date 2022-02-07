@@ -27,8 +27,9 @@ use sp_trie::{empty_trie_root, LayoutV1, MemoryDB};
 use std::collections::{BTreeMap, HashMap};
 
 /// Create a new empty instance of in-memory backend.
-pub fn new_in_mem<H: Hasher>() -> TrieBackend<MemoryDB<H>, H>
+pub fn new_in_mem<H>() -> TrieBackend<'static, MemoryDB<H>, H>
 where
+	H: Hasher + 'static,
 	H::Out: Codec + Ord,
 {
 	let db = MemoryDB::default();
@@ -36,7 +37,7 @@ where
 	TrieBackend::new(db, empty_trie_root::<LayoutV1<H>>())
 }
 
-impl<H: Hasher> TrieBackend<MemoryDB<H>, H>
+impl<H: Hasher> TrieBackend<'static, MemoryDB<H>, H>
 where
 	H::Out: Codec + Ord,
 {
@@ -89,7 +90,7 @@ where
 	}
 }
 
-impl<H: Hasher> Clone for TrieBackend<MemoryDB<H>, H>
+impl<H: Hasher> Clone for TrieBackend<'static, MemoryDB<H>, H>
 where
 	H::Out: Codec + Ord,
 {
@@ -98,8 +99,9 @@ where
 	}
 }
 
-impl<H: Hasher> Default for TrieBackend<MemoryDB<H>, H>
+impl<'a, H> Default for TrieBackend<'a, MemoryDB<H>, H>
 where
+	H: Hasher + 'static,
 	H::Out: Codec + Ord,
 {
 	fn default() -> Self {
@@ -108,7 +110,7 @@ where
 }
 
 impl<H: Hasher> From<(HashMap<Option<ChildInfo>, BTreeMap<StorageKey, StorageValue>>, StateVersion)>
-	for TrieBackend<MemoryDB<H>, H>
+	for TrieBackend<'static, MemoryDB<H>, H>
 where
 	H::Out: Codec + Ord,
 {
@@ -129,7 +131,7 @@ where
 	}
 }
 
-impl<H: Hasher> From<(Storage, StateVersion)> for TrieBackend<MemoryDB<H>, H>
+impl<H: Hasher> From<(Storage, StateVersion)> for TrieBackend<'static, MemoryDB<H>, H>
 where
 	H::Out: Codec + Ord,
 {
@@ -145,7 +147,7 @@ where
 }
 
 impl<H: Hasher> From<(BTreeMap<StorageKey, StorageValue>, StateVersion)>
-	for TrieBackend<MemoryDB<H>, H>
+	for TrieBackend<'static, MemoryDB<H>, H>
 where
 	H::Out: Codec + Ord,
 {
@@ -157,7 +159,7 @@ where
 }
 
 impl<H: Hasher> From<(Vec<(Option<ChildInfo>, StorageCollection)>, StateVersion)>
-	for TrieBackend<MemoryDB<H>, H>
+	for TrieBackend<'static, MemoryDB<H>, H>
 where
 	H::Out: Codec + Ord,
 {

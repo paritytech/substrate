@@ -17,6 +17,8 @@
 
 //! Trie-based state machine backend.
 
+use std::ops::Deref;
+
 use crate::{
 	debug,
 	trie_backend_essence::{Ephemeral, TrieBackendEssence, TrieBackendStorage},
@@ -32,18 +34,34 @@ use sp_trie::{
 	LayoutV0, LayoutV1, Trie,
 };
 
-/// Patricia trie-based backend. Transaction type is an overlay of changes to commit.
-pub struct TrieBackend<S: TrieBackendStorage<H>, H: Hasher> {
-	pub(crate) essence: TrieBackendEssence<S, H>,
+enum RefOrOwned<'a, S: TrieBackendStorage<H>, H: Hasher> {
+	Ref(&'a TrieBackendEssence<S, H>),
+	Owned(TrieBackendEssence<S, H>),
 }
 
-impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackend<S, H>
+impl<'a, S: TrieBackendStorage<H>, H: Hasher> Deref for RefOrOwned<'a, S, H> {
+	type Target = TrieBackendEssence<S, H>;
+
+	fn deref(&self) -> &Self::Target {
+		match self {
+			Self::Ref(backend) => backend,
+			Self::Owned(backend) => &backend,
+		}
+	}
+}
+
+/// Patricia trie-based backend. Transaction type is an overlay of changes to commit.
+pub struct TrieBackend<'a, S: TrieBackendStorage<H>, H: Hasher> {
+	pub(crate) essence: RefOrOwned<'a, S, H>,
+}
+
+impl<'a, S: TrieBackendStorage<H>, H: Hasher> TrieBackend<'a, S, H>
 where
 	H::Out: Codec,
 {
 	/// Create new trie-based backend.
 	pub fn new(storage: S, root: H::Out) -> Self {
-		TrieBackend { essence: TrieBackendEssence::new(storage, root) }
+		TrieBackend { essence: RefOrOwned::Owned(TrieBackendEssence::new(storage, root)) }
 	}
 
 	/// Create new trie-based backend.
@@ -53,7 +71,9 @@ where
 		root: H::Out,
 		cache: sp_trie::cache::LocalTrieNodeCache<H>,
 	) -> Self {
-		TrieBackend { essence: TrieBackendEssence::new_with_cache(storage, root, cache) }
+		TrieBackend {
+			essence: RefOrOwned::Owned(TrieBackendEssence::new_with_cache(storage, root, cache)),
+		}
 	}
 
 	/// Get backend essence reference.
@@ -77,13 +97,13 @@ where
 	}
 }
 
-impl<S: TrieBackendStorage<H>, H: Hasher> sp_std::fmt::Debug for TrieBackend<S, H> {
+impl<'a, S: TrieBackendStorage<H>, H: Hasher> sp_std::fmt::Debug for TrieBackend<'a, S, H> {
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
 		write!(f, "TrieBackend")
 	}
 }
 
-impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H>
+impl<'b, S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<'b, S, H>
 where
 	H::Out: Ord + Codec,
 {

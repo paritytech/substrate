@@ -100,7 +100,7 @@ impl<Hash: std::hash::Hash + Eq> ProofRecorder<Hash> {
 /// Patricia trie-based backend which also tracks all touched storage trie values.
 /// These can be sent to remote node and used as a proof of execution.
 pub struct ProvingBackend<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher>(
-	TrieBackend<ProofRecorderBackend<'a, S, H>, H>,
+	TrieBackend<'a, ProofRecorderBackend<'a, S, H>, H>,
 );
 
 /// Trie backend storage with its proof recorder.
@@ -292,7 +292,7 @@ where
 pub fn create_proof_check_backend<H>(
 	root: H::Out,
 	proof: StorageProof,
-) -> Result<TrieBackend<MemoryDB<H>, H>, Box<dyn Error>>
+) -> Result<TrieBackend<'static, MemoryDB<H>, H>, Box<dyn Error>>
 where
 	H: Hasher,
 	H::Out: Codec,

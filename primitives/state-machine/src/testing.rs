@@ -41,8 +41,9 @@ use sp_externalities::{Extension, ExtensionStore, Extensions};
 use sp_trie::StorageProof;
 
 /// Simple HashMap-based Externalities impl.
-pub struct TestExternalities<H: Hasher>
+pub struct TestExternalities<H>
 where
+	H: Hasher + 'static,
 	H::Out: codec::Codec + Ord,
 {
 	/// The overlay changed storage.
@@ -58,8 +59,9 @@ where
 	pub state_version: StateVersion,
 }
 
-impl<H: Hasher> TestExternalities<H>
+impl<H> TestExternalities<H>
 where
+	H: Hasher + 'static,
 	H::Out: Ord + 'static + codec::Codec,
 {
 	/// Get externalities implementation.
