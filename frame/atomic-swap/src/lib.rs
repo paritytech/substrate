@@ -44,8 +44,8 @@ mod tests;
 
 use codec::{Decode, Encode};
 use frame_support::{
-	pallet_prelude::MaxEncodedLen,
 	dispatch::DispatchResult,
+	pallet_prelude::MaxEncodedLen,
 	traits::{BalanceStatus, Currency, Get, ReservableCurrency},
 	weights::Weight,
 	RuntimeDebugNoBound,
