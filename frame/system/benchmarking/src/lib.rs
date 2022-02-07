@@ -124,5 +124,18 @@ benchmarks! {
 		assert_eq!(storage::unhashed::get_raw(&last_key), None);
 	}
 
+	worst_case_transactional_no_write {
+		const LIMIT: u8 = 255;
+	}: {
+		System::<T>::spawn_transactional(0, false)?;
+	} verify {}
+
+	#[skip_meta]
+	worst_case_transactional_write {
+		const LIMIT: u8 = 255;
+	}: {
+		System::<T>::spawn_transactional(0, true)?;
+	} verify {}
+
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test);
 }

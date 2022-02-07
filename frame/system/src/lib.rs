@@ -1408,6 +1408,23 @@ impl<T: Config> Pallet<T> {
 		assert_eq!(Self::events().last().expect("events expected").event, event);
 	}
 
+	#[cfg(any(feature = "std", feature = "runtime-benchmarks", test))]
+	#[frame_support::transactional]
+	pub fn spawn_transactional(limit: u8, write: bool) -> DispatchResult {
+		if limit < 255 {
+			Self::spawn_transactional(limit + 1, write)?;
+		} else if write{
+			let max_weight = T::BlockWeights::get().max_block;
+			let write_cost = T::DbWeight::get().writes(1).max(1);
+			let max_keys = max_weight / write_cost;
+			for i in 0 .. max_keys.min(10_000) {
+				let bytes = i.encode();
+				storage::unhashed::put_raw(&bytes, &bytes);
+			}
+		}
+		Ok(())
+	}
+
 	/// Return the chain's current runtime version.
 	pub fn runtime_version() -> RuntimeVersion {
 		T::Version::get()
