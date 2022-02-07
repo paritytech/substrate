@@ -28,11 +28,16 @@ use codec::{Codec, Decode};
 use hash_db::Hasher;
 use sp_core::storage::{ChildInfo, ChildType, StateVersion};
 use sp_std::{boxed::Box, vec::Vec};
+#[cfg(feature = "std")]
+use sp_trie::recorder::Recorder;
 use sp_trie::{
 	child_delta_trie_root, delta_trie_root, empty_child_trie_root,
 	trie_types::{TrieDBBuilder, TrieError},
 	LayoutV0, LayoutV1, Trie,
 };
+
+#[cfg(not(feature = "std"))]
+type Recorder<H> = ();
 
 pub(crate) enum RefOrOwned<'a, S: TrieBackendStorage<H>, H: Hasher> {
 	Ref(&'a TrieBackendEssence<S, H>),
@@ -53,6 +58,7 @@ impl<'a, S: TrieBackendStorage<H>, H: Hasher> Deref for RefOrOwned<'a, S, H> {
 /// Patricia trie-based backend. Transaction type is an overlay of changes to commit.
 pub struct TrieBackend<'a, S: TrieBackendStorage<H>, H: Hasher> {
 	pub(crate) essence: RefOrOwned<'a, S, H>,
+	pub(crate) recorder: Option<Recorder<H>>,
 }
 
 impl<'a, S: TrieBackendStorage<H>, H: Hasher> TrieBackend<'a, S, H>
@@ -61,7 +67,20 @@ where
 {
 	/// Create new trie-based backend.
 	pub fn new(storage: S, root: H::Out) -> Self {
-		TrieBackend { essence: RefOrOwned::Owned(TrieBackendEssence::new(storage, root)) }
+		TrieBackend {
+			essence: RefOrOwned::Owned(TrieBackendEssence::new(storage, root)),
+			recorder: None,
+		}
+	}
+
+	/// Create new trie-based backend.
+	#[cfg(feature = "std")]
+	pub fn new_with_recorder(backend: &'a TrieBackendEssence<S, H>, recorder: Recorder<H>) -> Self {
+		TrieBackend {
+			essence: RefOrOwned::Ref(backend),
+			#[cfg(feature = "std")]
+			recorder: Some(recorder),
+		}
 	}
 
 	/// Create new trie-based backend.
@@ -73,6 +92,7 @@ where
 	) -> Self {
 		TrieBackend {
 			essence: RefOrOwned::Owned(TrieBackendEssence::new_with_cache(storage, root, cache)),
+			recorder: None,
 		}
 	}
 
@@ -107,7 +127,7 @@ where
 	type TrieBackendStorage = S;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<StorageValue>, Self::Error> {
-		self.essence.storage(key)
+		self.essence.storage(key, self.recorder.as_ref())
 	}
 
 	fn child_storage(
@@ -115,11 +135,11 @@ where
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<StorageValue>, Self::Error> {
-		self.essence.child_storage(child_info, key)
+		self.essence.child_storage(child_info, key, self.recorder.as_ref())
 	}
 
 	fn next_storage_key(&self, key: &[u8]) -> Result<Option<StorageKey>, Self::Error> {
-		self.essence.next_storage_key(key)
+		self.essence.next_storage_key(key, self.recorder.as_ref())
 	}
 
 	fn next_child_storage_key(
@@ -127,15 +147,15 @@ where
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<StorageKey>, Self::Error> {
-		self.essence.next_child_storage_key(child_info, key)
+		self.essence.next_child_storage_key(child_info, key, self.recorder.as_ref())
 	}
 
 	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F) {
-		self.essence.for_keys_with_prefix(prefix, f)
+		self.essence.for_keys_with_prefix(prefix, f, self.recorder.as_ref())
 	}
 
 	fn for_key_values_with_prefix<F: FnMut(&[u8], &[u8])>(&self, prefix: &[u8], f: F) {
-		self.essence.for_key_values_with_prefix(prefix, f)
+		self.essence.for_key_values_with_prefix(prefix, f, self.recorder.as_ref())
 	}
 
 	fn apply_to_key_values_while<F: FnMut(Vec<u8>, Vec<u8>) -> bool>(
@@ -146,8 +166,14 @@ where
 		f: F,
 		allow_missing: bool,
 	) -> Result<bool, Self::Error> {
-		self.essence
-			.apply_to_key_values_while(child_info, prefix, start_at, f, allow_missing)
+		self.essence.apply_to_key_values_while(
+			child_info,
+			prefix,
+			start_at,
+			f,
+			allow_missing,
+			self.recorder.as_ref(),
+		)
 	}
 
 	fn apply_to_keys_while<F: FnMut(&[u8]) -> bool>(
@@ -156,7 +182,7 @@ where
 		prefix: Option<&[u8]>,
 		f: F,
 	) {
-		self.essence.apply_to_keys_while(child_info, prefix, f)
+		self.essence.apply_to_keys_while(child_info, prefix, f, self.recorder.as_ref())
 	}
 
 	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(
@@ -165,7 +191,8 @@ where
 		prefix: &[u8],
 		f: F,
 	) {
-		self.essence.for_child_keys_with_prefix(child_info, prefix, f)
+		self.essence
+			.for_child_keys_with_prefix(child_info, prefix, f, self.recorder.as_ref())
 	}
 
 	fn pairs(&self) -> Vec<(StorageKey, StorageValue)> {

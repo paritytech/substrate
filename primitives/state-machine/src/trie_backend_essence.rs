@@ -25,18 +25,22 @@ use hash_db::{self, AsHashDB, HashDB, HashDBRef, Hasher, Prefix};
 use parking_lot::RwLock;
 use sp_core::storage::ChildInfo;
 use sp_std::{boxed::Box, vec::Vec};
+#[cfg(feature = "std")]
+use sp_trie::recorder::Recorder;
 use sp_trie::{
 	empty_child_trie_root, read_child_trie_value,
 	trie_types::{TrieDBBuilder, TrieError},
 	DBValue, KeySpacedDB, PrefixedMemoryDB, Trie, TrieDBIterator, TrieDBKeyIterator,
 };
 #[cfg(feature = "std")]
-use std::collections::HashMap;
-#[cfg(feature = "std")]
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
+
 // In this module, we only use layout for read operation and empty root,
 // where V1 and V0 are equivalent.
 use sp_trie::LayoutV1 as Layout;
+
+#[cfg(not(feature = "std"))]
+type Recorder<H> = ();
 
 #[cfg(not(feature = "std"))]
 macro_rules! format {
@@ -46,6 +50,23 @@ macro_rules! format {
 			crate::DefaultError
 		}
 	};
+}
+
+macro_rules! with_recorder {
+	( $builder:ident, $recorder:ident ) => {{
+		if let Some(ref mut recorder) = $recorder {
+			#[cfg(feature = "std")]
+			{
+				$builder.with_recorder(&mut **recorder)
+			}
+			#[cfg(not(feature = "std"))]
+			{
+				$builder
+			}
+		} else {
+			$builder
+		}
+	}};
 }
 
 type Result<V> = sp_std::result::Result<V, crate::DefaultError>;
@@ -156,12 +177,20 @@ where
 {
 	/// Return the next key in the trie i.e. the minimum key that is strictly superior to `key` in
 	/// lexicographic order.
-	pub fn next_storage_key(&self, key: &[u8]) -> Result<Option<StorageKey>> {
-		self.next_storage_key_from_root(&self.root, None, key)
+	pub fn next_storage_key(
+		&self,
+		key: &[u8],
+		recorder: Option<&Recorder<H>>,
+	) -> Result<Option<StorageKey>> {
+		self.next_storage_key_from_root(&self.root, None, key, recorder)
 	}
 
 	/// Access the root of the child storage in its parent trie
-	fn child_root(&self, child_info: &ChildInfo) -> Result<Option<StorageValue>> {
+	fn child_root(
+		&self,
+		child_info: &ChildInfo,
+		recorder: Option<&Recorder<H>>,
+	) -> Result<Option<StorageValue>> {
 		#[cfg(feature = "std")]
 		{
 			if let Some(result) = self.cache.read().child_root.get(child_info.storage_key()) {
@@ -169,7 +198,7 @@ where
 			}
 		}
 
-		let result = self.storage(child_info.prefixed_storage_key().as_slice())?;
+		let result = self.storage(child_info.prefixed_storage_key().as_slice(), recorder)?;
 
 		#[cfg(feature = "std")]
 		{
@@ -188,8 +217,9 @@ where
 		&self,
 		child_info: &ChildInfo,
 		key: &[u8],
+		recorder: Option<&Recorder<H>>,
 	) -> Result<Option<StorageKey>> {
-		let child_root = match self.child_root(child_info)? {
+		let child_root = match self.child_root(child_info, recorder)? {
 			Some(child_root) => child_root,
 			None => return Ok(None),
 		};
@@ -202,7 +232,7 @@ where
 		// note: child_root and hash must be same size, panics otherwise.
 		hash.as_mut().copy_from_slice(&child_root[..]);
 
-		self.next_storage_key_from_root(&hash, Some(child_info), key)
+		self.next_storage_key_from_root(&hash, Some(child_info), key, recorder)
 	}
 
 	/// Return next key from main trie or child trie by providing corresponding root.
@@ -211,6 +241,7 @@ where
 		root: &H::Out,
 		child_info: Option<&ChildInfo>,
 		key: &[u8],
+		recorder: Option<&Recorder<H>>,
 	) -> Result<Option<StorageKey>> {
 		let dyn_eph: &dyn HashDBRef<_, _>;
 		let keyspace_eph;
@@ -221,9 +252,13 @@ where
 			dyn_eph = self;
 		}
 
-		let trie = TrieDBBuilder::<H>::new(dyn_eph, root)
-			.map_err(|e| format!("TrieDB creation error: {}", e))?
-			.build();
+		let trie_builder = TrieDBBuilder::<H>::new(dyn_eph, root)
+			.map_err(|e| format!("TrieDB creation error: {}", e))?;
+
+		#[cfg(feature = "std")]
+		let mut recorder = recorder.as_ref().map(|r| r.as_trie_recorder());
+
+		let trie = with_recorder!(trie_builder, recorder).build();
 		let mut iter = trie.key_iter().map_err(|e| format!("TrieDB iteration error: {}", e))?;
 
 		// The key just after the one given in input, basically `key++0`.
@@ -251,19 +286,28 @@ where
 	}
 
 	/// Get the value of storage at given key.
-	pub fn storage(&self, key: &[u8]) -> Result<Option<StorageValue>> {
+	pub fn storage(
+		&self,
+		key: &[u8],
+		recorder: Option<&Recorder<H>>,
+	) -> Result<Option<StorageValue>> {
 		let map_e = |e| format!("Trie lookup error: {}", e);
 
-		let builder = TrieDBBuilder::<H>::new_unchecked(self, &self.root);
+		let trie_builder = TrieDBBuilder::<H>::new_unchecked(self, &self.root);
+
+		#[cfg(feature = "std")]
+		let mut recorder = recorder.as_ref().map(|r| r.as_trie_recorder());
+
+		let trie_builder = with_recorder!(trie_builder, recorder);
 
 		#[cfg(feature = "std")]
 		match self.trie_node_cache {
-			Some(ref cache) => builder
+			Some(ref cache) => trie_builder
 				.with_cache(&mut cache.as_trie_db_cache(self.root))
 				.build()
 				.get(key)
 				.map_err(map_e),
-			None => builder.build().get(key).map_err(map_e),
+			None => trie_builder.build().get(key).map_err(map_e),
 		}
 
 		#[cfg(not(feature = "std"))]
@@ -283,9 +327,10 @@ where
 		&self,
 		child_info: &ChildInfo,
 		key: &[u8],
+		recorder: Option<&Recorder<H>>,
 	) -> Result<Option<StorageValue>> {
 		let root = self
-			.child_root(child_info)?
+			.child_root(child_info, recorder)?
 			.unwrap_or_else(|| empty_child_trie_root::<Layout<H>>().encode());
 
 		let map_e = |e| format!("Trie lookup error: {}", e);
@@ -305,10 +350,11 @@ where
 		start_at: Option<&[u8]>,
 		f: impl FnMut(Vec<u8>, Vec<u8>) -> bool,
 		allow_missing_nodes: bool,
+		recorder: Option<&Recorder<H>>,
 	) -> Result<bool> {
 		let mut child_root;
 		let root = if let Some(child_info) = child_info.as_ref() {
-			if let Some(fetched_child_root) = self.child_root(child_info)? {
+			if let Some(fetched_child_root) = self.child_root(child_info, recorder)? {
 				child_root = H::Out::default();
 				// root is fetched from DB, not writable by runtime, so it's always valid.
 				child_root.as_mut().copy_from_slice(fetched_child_root.as_slice());
@@ -321,7 +367,7 @@ where
 			&self.root
 		};
 
-		self.trie_iter_inner(&root, prefix, f, child_info, start_at, allow_missing_nodes)
+		self.trie_iter_inner(&root, prefix, f, child_info, start_at, allow_missing_nodes, recorder)
 	}
 
 	/// Retrieve all entries keys of a storage and call `f` for each of those keys.
@@ -331,10 +377,11 @@ where
 		child_info: Option<&ChildInfo>,
 		prefix: Option<&[u8]>,
 		mut f: F,
+		recorder: Option<&Recorder<H>>,
 	) {
 		let mut child_root = H::Out::default();
 		let root = if let Some(child_info) = child_info.as_ref() {
-			let root_vec = match self.child_root(child_info) {
+			let root_vec = match self.child_root(child_info, recorder) {
 				Ok(v) => v.unwrap_or_else(|| empty_child_trie_root::<Layout<H>>().encode()),
 				Err(e) => {
 					debug!(target: "trie", "Error while iterating child storage: {}", e);
@@ -347,7 +394,7 @@ where
 			&self.root
 		};
 
-		self.trie_iter_key_inner(root, prefix, |k| f(k), child_info)
+		self.trie_iter_key_inner(root, prefix, |k| f(k), child_info, recorder)
 	}
 
 	/// Execute given closure for all keys starting with prefix.
@@ -356,8 +403,9 @@ where
 		child_info: &ChildInfo,
 		prefix: &[u8],
 		mut f: impl FnMut(&[u8]),
+		recorder: Option<&Recorder<H>>,
 	) {
-		let root_vec = match self.child_root(child_info) {
+		let root_vec = match self.child_root(child_info, recorder) {
 			Ok(v) => v.unwrap_or_else(|| empty_child_trie_root::<Layout<H>>().encode()),
 			Err(e) => {
 				debug!(target: "trie", "Error while iterating child storage: {}", e);
@@ -374,11 +422,17 @@ where
 				true
 			},
 			Some(child_info),
+			recorder,
 		)
 	}
 
 	/// Execute given closure for all keys starting with prefix.
-	pub fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], mut f: F) {
+	pub fn for_keys_with_prefix<F: FnMut(&[u8])>(
+		&self,
+		prefix: &[u8],
+		mut f: F,
+		recorder: Option<&Recorder<H>>,
+	) {
 		self.trie_iter_key_inner(
 			&self.root,
 			Some(prefix),
@@ -387,6 +441,7 @@ where
 				true
 			},
 			None,
+			recorder,
 		)
 	}
 
@@ -396,9 +451,16 @@ where
 		prefix: Option<&[u8]>,
 		mut f: F,
 		child_info: Option<&ChildInfo>,
+		recorder: Option<&Recorder<H>>,
 	) {
 		let mut iter = move |db| -> sp_std::result::Result<(), Box<TrieError<H::Out>>> {
-			let trie = TrieDBBuilder::<H>::new(db, root)?.build();
+			let trie_builder = TrieDBBuilder::<H>::new(db, root)?;
+
+			#[cfg(feature = "std")]
+			let mut recorder = recorder.as_ref().map(|r| r.as_trie_recorder());
+
+			let trie = with_recorder!(trie_builder, recorder).build();
+
 			let iter = if let Some(prefix) = prefix.as_ref() {
 				TrieDBKeyIterator::new_prefixed(&trie, prefix)?
 			} else {
@@ -440,9 +502,15 @@ where
 		child_info: Option<&ChildInfo>,
 		start_at: Option<&[u8]>,
 		allow_missing_nodes: bool,
+		recorder: Option<&Recorder<H>>,
 	) -> Result<bool> {
 		let mut iter = move |db| -> sp_std::result::Result<bool, Box<TrieError<H::Out>>> {
-			let trie = TrieDBBuilder::<H>::new(db, root)?.build();
+			let trie_builder = TrieDBBuilder::<H>::new(db, root)?;
+
+			#[cfg(feature = "std")]
+			let mut recorder = recorder.as_ref().map(|r| r.as_trie_recorder());
+
+			let trie = with_recorder!(trie_builder, recorder).build();
 
 			let prefix = prefix.unwrap_or(&[]);
 			let iterator = if let Some(start_at) = start_at {
@@ -478,7 +546,12 @@ where
 	}
 
 	/// Execute given closure for all key and values starting with prefix.
-	pub fn for_key_values_with_prefix<F: FnMut(&[u8], &[u8])>(&self, prefix: &[u8], mut f: F) {
+	pub fn for_key_values_with_prefix<F: FnMut(&[u8], &[u8])>(
+		&self,
+		prefix: &[u8],
+		mut f: F,
+		recorder: Option<&Recorder<H>>,
+	) {
 		let _ = self.trie_iter_inner(
 			&self.root,
 			Some(prefix),
@@ -489,6 +562,7 @@ where
 			None,
 			None,
 			false,
+			recorder,
 		);
 	}
 }
@@ -645,8 +719,8 @@ mod test {
 	use super::*;
 	use sp_core::{Blake2Hasher, H256};
 	use sp_trie::{
-		trie_types::{TrieDBMutBuilderV1 as TrieDBMutBuilder, TrieDBMutV1 as TrieDBMut},
-		KeySpacedDBMut, PrefixedMemoryDB, TrieMut,
+		trie_types::TrieDBMutBuilderV1 as TrieDBMutBuilder, KeySpacedDBMut, PrefixedMemoryDB,
+		TrieMut,
 	};
 
 	#[test]
@@ -682,19 +756,31 @@ mod test {
 
 		let essence_1 = TrieBackendEssence::new(mdb, root_1);
 
-		assert_eq!(essence_1.next_storage_key(b"2"), Ok(Some(b"3".to_vec())));
-		assert_eq!(essence_1.next_storage_key(b"3"), Ok(Some(b"4".to_vec())));
-		assert_eq!(essence_1.next_storage_key(b"4"), Ok(Some(b"6".to_vec())));
-		assert_eq!(essence_1.next_storage_key(b"5"), Ok(Some(b"6".to_vec())));
-		assert_eq!(essence_1.next_storage_key(b"6"), Ok(None));
+		assert_eq!(essence_1.next_storage_key(b"2", None), Ok(Some(b"3".to_vec())));
+		assert_eq!(essence_1.next_storage_key(b"3", None), Ok(Some(b"4".to_vec())));
+		assert_eq!(essence_1.next_storage_key(b"4", None), Ok(Some(b"6".to_vec())));
+		assert_eq!(essence_1.next_storage_key(b"5", None), Ok(Some(b"6".to_vec())));
+		assert_eq!(essence_1.next_storage_key(b"6", None), Ok(None));
 
 		let mdb = essence_1.backend_storage().clone();
 		let essence_2 = TrieBackendEssence::new(mdb, root_2);
 
-		assert_eq!(essence_2.next_child_storage_key(child_info, b"2"), Ok(Some(b"3".to_vec())));
-		assert_eq!(essence_2.next_child_storage_key(child_info, b"3"), Ok(Some(b"4".to_vec())));
-		assert_eq!(essence_2.next_child_storage_key(child_info, b"4"), Ok(Some(b"6".to_vec())));
-		assert_eq!(essence_2.next_child_storage_key(child_info, b"5"), Ok(Some(b"6".to_vec())));
-		assert_eq!(essence_2.next_child_storage_key(child_info, b"6"), Ok(None));
+		assert_eq!(
+			essence_2.next_child_storage_key(child_info, b"2", None),
+			Ok(Some(b"3".to_vec()))
+		);
+		assert_eq!(
+			essence_2.next_child_storage_key(child_info, b"3", None),
+			Ok(Some(b"4".to_vec()))
+		);
+		assert_eq!(
+			essence_2.next_child_storage_key(child_info, b"4", None),
+			Ok(Some(b"6".to_vec()))
+		);
+		assert_eq!(
+			essence_2.next_child_storage_key(child_info, b"5", None),
+			Ok(Some(b"6".to_vec()))
+		);
+		assert_eq!(essence_2.next_child_storage_key(child_info, b"6", None), Ok(None));
 	}
 }

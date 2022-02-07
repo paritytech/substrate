@@ -379,7 +379,7 @@ mod tests {
 		proof_recorded_and_checked_inner(StateVersion::V1);
 	}
 	fn proof_recorded_and_checked_inner(state_version: StateVersion) {
-		let size_content = 34; // above hashable value treshold.
+		let size_content = 34; // above hashable value threshold.
 		let value_range = 0..64;
 		let contents = value_range
 			.clone()
