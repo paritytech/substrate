@@ -201,8 +201,12 @@ fn create_recovery_works() {
 		// Base 10 + 1 per friends = 13 total reserved
 		assert_eq!(Balances::reserved_balance(5), 13);
 		// Recovery configuration is correctly stored
-		let recovery_config =
-			RecoveryConfig { delay_period, deposit: 13, friends: friends.clone(), threshold };
+		let recovery_config = RecoveryConfig {
+			delay_period,
+			deposit: 13,
+			friends: friends.try_into().unwrap(),
+			threshold,
+		};
 		assert_eq!(Recovery::recovery_config(5), Some(recovery_config));
 	});
 }

@@ -154,7 +154,7 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_runtime::traits::{CheckedAdd, CheckedMul, Dispatchable, SaturatedConversion};
 use sp_std::prelude::*;
@@ -179,7 +179,7 @@ type BalanceOf<T> =
 type FriendsOf<T> = BoundedVec<<T as frame_system::Config>::AccountId, <T as Config>::MaxFriends>;
 
 /// An active recovery process.
-#[derive(Clone, Eq, PartialEq, Encode, Decode, Default, RuntimeDebug, TypeInfo)]
+#[derive(Clone, Eq, PartialEq, Encode, Decode, Default, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct ActiveRecovery<BlockNumber, Balance, Friends> {
 	/// The block number when the recovery process started.
 	created: BlockNumber,
@@ -191,8 +191,8 @@ pub struct ActiveRecovery<BlockNumber, Balance, Friends> {
 }
 
 /// Configuration for recovering an account.
-#[derive(Clone, Eq, PartialEq, Encode, Decode, Default, RuntimeDebug, TypeInfo)]
-pub struct RecoveryConfig<BlockNumber, Balance, AccountId> {
+#[derive(Clone, Eq, PartialEq, Encode, Decode, Default, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+pub struct RecoveryConfig<BlockNumber, Balance, Friends> {
 	/// The minimum number of blocks since the start of the recovery process before the account
 	/// can be recovered.
 	delay_period: BlockNumber,
@@ -200,7 +200,7 @@ pub struct RecoveryConfig<BlockNumber, Balance, AccountId> {
 	/// to be returned once this configuration is removed.
 	deposit: Balance,
 	/// The list of friends which can help recover an account. Always sorted.
-	friends: Vec<AccountId>,
+	friends: Friends,
 	/// The number of approving friends needed to recover an account.
 	threshold: u16,
 }
@@ -214,7 +214,6 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
-	#[pallet::without_storage_info]
 	pub struct Pallet<T>(_);
 
 	/// Configuration trait.
@@ -331,7 +330,7 @@ pub mod pallet {
 		_,
 		Twox64Concat,
 		T::AccountId,
-		RecoveryConfig<T::BlockNumber, BalanceOf<T>, T::AccountId>,
+		RecoveryConfig<T::BlockNumber, BalanceOf<T>, FriendsOf<T>>,
 	>;
 
 	/// Active recovery attempts.
@@ -465,12 +464,12 @@ pub mod pallet {
 			ensure!(threshold >= 1, Error::<T>::ZeroThreshold);
 			ensure!(!friends.is_empty(), Error::<T>::NotEnoughFriends);
 			ensure!(threshold as usize <= friends.len(), Error::<T>::NotEnoughFriends);
-			let max_friends = T::MaxFriends::get() as usize;
-			ensure!(friends.len() <= max_friends, Error::<T>::MaxFriends);
-			ensure!(Self::is_sorted_and_unique(&friends), Error::<T>::NotSorted);
+			let bounded_friends: BoundedVec<_, _> =
+				friends.try_into().map_err(|()| Error::<T>::MaxFriends)?;
+			ensure!(Self::is_sorted_and_unique(&bounded_friends), Error::<T>::NotSorted);
 			// Total deposit is base fee + number of friends * factor fee
 			let friend_deposit = T::FriendDepositFactor::get()
-				.checked_mul(&friends.len().saturated_into())
+				.checked_mul(&bounded_friends.len().saturated_into())
 				.ok_or(ArithmeticError::Overflow)?;
 			let total_deposit = T::ConfigDepositBase::get()
 				.checked_add(&friend_deposit)
@@ -478,8 +477,12 @@ pub mod pallet {
 			// Reserve the deposit
 			T::Currency::reserve(&who, total_deposit)?;
 			// Create the recovery configuration
-			let recovery_config =
-				RecoveryConfig { delay_period, deposit: total_deposit, friends, threshold };
+			let recovery_config = RecoveryConfig {
+				delay_period,
+				deposit: total_deposit,
+				friends: bounded_friends,
+				threshold,
+			};
 			// Create the recovery configuration storage item
 			<Recoverable<T>>::insert(&who, recovery_config);
 
