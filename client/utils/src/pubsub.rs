@@ -18,7 +18,7 @@
 
 //! Provides means to implement a typical Pub/Sub mechanism.
 //!
-//! This module provides a type `Hub` which can be used both to subscribe,
+//! This module provides a type [`Hub`] which can be used both to subscribe,
 //! and to send the broadcast messages.
 //!
 //! The [`Hub`] type is parametrized by two other types:
