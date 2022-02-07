@@ -111,8 +111,6 @@ pub mod crypto {
 	}
 }
 
-const MAX_PRICES_LEN: u32 = 64;
-
 pub use pallet::*;
 
 #[frame_support::pallet]
@@ -156,11 +154,14 @@ pub mod pallet {
 		/// multiple pallets send unsigned transactions.
 		#[pallet::constant]
 		type UnsignedPriority: Get<TransactionPriority>;
+
+		/// Maximum number of prices.
+		#[pallet::constant]
+		type MaxPrices: Get<u32>;
 	}
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
-	#[pallet::without_storage_info]
 	pub struct Pallet<T>(_);
 
 	#[pallet::hooks]
@@ -333,7 +334,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn prices)]
 	pub(super) type Prices<T: Config> =
-		StorageValue<_, BoundedVec<u32, ConstU32<MAX_PRICES_LEN>>, ValueQuery>;
+		StorageValue<_, BoundedVec<u32, T::MaxPrices>, ValueQuery>;
 
 	/// Defines the block when next unsigned transaction will be accepted.
 	///
@@ -649,7 +650,7 @@ impl<T: Config> Pallet<T> {
 		log::info!("Adding to the average: {}", price);
 		<Prices<T>>::mutate(|prices| {
 			if prices.try_push(price).is_err() {
-				prices[(price % MAX_PRICES_LEN) as usize] = price;
+				prices[(price % T::MaxPrices::get()) as usize] = price;
 			}
 		});
 
