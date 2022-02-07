@@ -111,6 +111,8 @@ pub mod crypto {
 	}
 }
 
+const MAX_PRICES_LEN: u32 = 64;
+
 pub use pallet::*;
 
 #[frame_support::pallet]
@@ -330,7 +332,8 @@ pub mod pallet {
 	/// This is used to calculate average price, should have bounded size.
 	#[pallet::storage]
 	#[pallet::getter(fn prices)]
-	pub(super) type Prices<T: Config> = StorageValue<_, Vec<u32>, ValueQuery>;
+	pub(super) type Prices<T: Config> =
+		StorageValue<_, BoundedVec<u32, ConstU32<MAX_PRICES_LEN>>, ValueQuery>;
 
 	/// Defines the block when next unsigned transaction will be accepted.
 	///
@@ -645,12 +648,8 @@ impl<T: Config> Pallet<T> {
 	fn add_price(maybe_who: Option<T::AccountId>, price: u32) {
 		log::info!("Adding to the average: {}", price);
 		<Prices<T>>::mutate(|prices| {
-			const MAX_LEN: usize = 64;
-
-			if prices.len() < MAX_LEN {
-				prices.push(price);
-			} else {
-				prices[price as usize % MAX_LEN] = price;
+			if prices.try_push(price).is_err() {
+				prices[(price % MAX_PRICES_LEN) as usize] = price;
 			}
 		});
 
