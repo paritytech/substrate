@@ -50,6 +50,7 @@ pub trait WeightInfo {
 	fn set_storage(i: u32, ) -> Weight;
 	fn kill_storage(i: u32, ) -> Weight;
 	fn kill_prefix(p: u32, ) -> Weight;
+	fn worst_case_write_no_transactional() -> Weight;
 	fn worst_case_transactional_no_write() -> Weight;
 	fn worst_case_transactional_write() -> Weight;
 }
@@ -68,7 +69,7 @@ impl<T: crate::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: System Digest (r:1 w:1)
 	// Storage: unknown [0x3a686561707061676573] (r:0 w:1)
 	fn set_heap_pages() -> Weight {
-		(2_855_000 as Weight)
+		(3_158_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
@@ -76,30 +77,35 @@ impl<T: crate::Config> WeightInfo for SubstrateWeight<T> {
 	fn set_storage(i: u32, ) -> Weight {
 		(0 as Weight)
 			// Standard Error: 0
-			.saturating_add((390_000 as Weight).saturating_mul(i as Weight))
+			.saturating_add((391_000 as Weight).saturating_mul(i as Weight))
 			.saturating_add(T::DbWeight::get().writes((1 as Weight).saturating_mul(i as Weight)))
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	fn kill_storage(i: u32, ) -> Weight {
-		(0 as Weight)
+		(198_000 as Weight)
 			// Standard Error: 0
-			.saturating_add((292_000 as Weight).saturating_mul(i as Weight))
+			.saturating_add((283_000 as Weight).saturating_mul(i as Weight))
 			.saturating_add(T::DbWeight::get().writes((1 as Weight).saturating_mul(i as Weight)))
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	fn kill_prefix(p: u32, ) -> Weight {
-		(707_000 as Weight)
+		(1_502_000 as Weight)
 			// Standard Error: 0
-			.saturating_add((641_000 as Weight).saturating_mul(p as Weight))
+			.saturating_add((649_000 as Weight).saturating_mul(p as Weight))
 			.saturating_add(T::DbWeight::get().writes((1 as Weight).saturating_mul(p as Weight)))
 	}
+	// Storage: Skipped Metadata (r:0 w:0)
+	fn worst_case_write_no_transactional() -> Weight {
+		(495_187_000 as Weight)
+			.saturating_add(T::DbWeight::get().writes(1000 as Weight))
+	}
 	fn worst_case_transactional_no_write() -> Weight {
-		(12_580_000 as Weight)
+		(13_182_000 as Weight)
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	fn worst_case_transactional_write() -> Weight {
-		(518_303_983_000 as Weight)
-			.saturating_add(T::DbWeight::get().writes(10000 as Weight))
+		(37_287_822_000 as Weight)
+			.saturating_add(T::DbWeight::get().writes(1000 as Weight))
 	}
 }
 
@@ -116,7 +122,7 @@ impl WeightInfo for () {
 	// Storage: System Digest (r:1 w:1)
 	// Storage: unknown [0x3a686561707061676573] (r:0 w:1)
 	fn set_heap_pages() -> Weight {
-		(2_855_000 as Weight)
+		(3_158_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
 	}
@@ -124,29 +130,34 @@ impl WeightInfo for () {
 	fn set_storage(i: u32, ) -> Weight {
 		(0 as Weight)
 			// Standard Error: 0
-			.saturating_add((390_000 as Weight).saturating_mul(i as Weight))
+			.saturating_add((391_000 as Weight).saturating_mul(i as Weight))
 			.saturating_add(RocksDbWeight::get().writes((1 as Weight).saturating_mul(i as Weight)))
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	fn kill_storage(i: u32, ) -> Weight {
-		(0 as Weight)
+		(198_000 as Weight)
 			// Standard Error: 0
-			.saturating_add((292_000 as Weight).saturating_mul(i as Weight))
+			.saturating_add((283_000 as Weight).saturating_mul(i as Weight))
 			.saturating_add(RocksDbWeight::get().writes((1 as Weight).saturating_mul(i as Weight)))
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	fn kill_prefix(p: u32, ) -> Weight {
-		(707_000 as Weight)
+		(1_502_000 as Weight)
 			// Standard Error: 0
-			.saturating_add((641_000 as Weight).saturating_mul(p as Weight))
+			.saturating_add((649_000 as Weight).saturating_mul(p as Weight))
 			.saturating_add(RocksDbWeight::get().writes((1 as Weight).saturating_mul(p as Weight)))
 	}
+	// Storage: Skipped Metadata (r:0 w:0)
+	fn worst_case_write_no_transactional() -> Weight {
+		(495_187_000 as Weight)
+			.saturating_add(RocksDbWeight::get().writes(1000 as Weight))
+	}
 	fn worst_case_transactional_no_write() -> Weight {
-		(12_580_000 as Weight)
+		(13_182_000 as Weight)
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	fn worst_case_transactional_write() -> Weight {
-		(518_303_983_000 as Weight)
-			.saturating_add(RocksDbWeight::get().writes(10000 as Weight))
+		(37_287_822_000 as Weight)
+			.saturating_add(RocksDbWeight::get().writes(1000 as Weight))
 	}
 }
