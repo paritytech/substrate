@@ -319,10 +319,13 @@ impl Signature {
 	///
 	/// NOTE: No checking goes on to ensure this is a real signature. Only use it if
 	/// you are certain that the array actually is a signature. GIGO!
-	pub fn from_slice(data: &[u8]) -> Self {
+	pub fn from_slice(data: &[u8]) -> Option<Self> {
+		if data.len() != 65 {
+			return None
+		}
 		let mut r = [0u8; 65];
 		r.copy_from_slice(data);
-		Signature(r)
+		Some(Signature(r))
 	}
 
 	/// Recover the public key from this signature and a message.
@@ -476,13 +479,9 @@ impl TraitPair for Pair {
 	/// This doesn't use the type system to ensure that `sig` and `pubkey` are the correct
 	/// size. Use it only if you're coming from byte buffers and need the speed.
 	fn verify_weak<P: AsRef<[u8]>, M: AsRef<[u8]>>(sig: &[u8], message: M, pubkey: P) -> bool {
-		if sig.len() != 65 {
-			return false
-		}
-		let sig = Signature::from_slice(sig);
-		match sig.recover(message) {
+		match Signature::from_slice(sig).and_then(|sig| sig.recover(message)) {
 			Some(actual) => actual.as_ref() == pubkey.as_ref(),
-			_ => false,
+			None => false,
 		}
 	}
 
@@ -553,6 +552,7 @@ impl Pair {
 // Currently we should take care of wiping the secret from memory.
 // NOTE: this is not effective when `Pair` is moved. The very same problem
 // affects the other backends using `zeroize` for secret keys.
+#[cfg(feature = "full_crypto")]
 impl Drop for Pair {
 	fn drop(&mut self) {
 		let ptr = self.secret.as_mut_ptr();

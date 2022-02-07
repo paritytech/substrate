@@ -652,7 +652,7 @@ pub trait Crypto {
 		SyncCryptoStore::sign_with(keystore, id, &pub_key.into(), msg)
 			.ok()
 			.flatten()
-			.map(|sig| ed25519::Signature::from_slice(sig.as_slice()))
+			.and_then(|sig| ed25519::Signature::from_slice(&sig))
 	}
 
 	/// Verify `ed25519` signature.
@@ -776,7 +776,7 @@ pub trait Crypto {
 		SyncCryptoStore::sign_with(keystore, id, &pub_key.into(), msg)
 			.ok()
 			.flatten()
-			.map(|sig| sr25519::Signature::from_slice(sig.as_slice()))
+			.and_then(|sig| sr25519::Signature::from_slice(&sig))
 	}
 
 	/// Verify an `sr25519` signature.
@@ -825,7 +825,7 @@ pub trait Crypto {
 		SyncCryptoStore::sign_with(keystore, id, &pub_key.into(), msg)
 			.ok()
 			.flatten()
-			.map(|sig| ecdsa::Signature::from_slice(sig.as_slice()))
+			.and_then(|sig| ecdsa::Signature::from_slice(&sig))
 	}
 
 	/// Sign the given a pre-hashed `msg` with the `ecdsa` key that corresponds to the given public
