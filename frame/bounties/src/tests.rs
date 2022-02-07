@@ -139,7 +139,7 @@ impl Config for Test {
 	type MaximumReasonLength = ConstU32<16384>;
 	type WeightInfo = ();
 	type ChildBountyManager = ();
-	type MaxBountiesQueued = ConstU32<100>;
+	type MaxApprovals = ConstU32<100>;
 }
 
 type TreasuryError = pallet_treasury::Error<Test>;

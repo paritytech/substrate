@@ -223,10 +223,6 @@ pub mod pallet {
 
 		/// The child-bounty manager.
 		type ChildBountyManager: ChildBountyManager<BalanceOf<Self>>;
-
-		/// Maximum number of approved bounties queued.
-		#[pallet::constant]
-		type MaxBountiesQueued: Get<u32>;
 	}
 
 	#[pallet::error]
@@ -300,7 +296,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn bounty_approvals)]
 	pub type BountyApprovals<T: Config> =
-		StorageValue<_, BoundedVec<BountyIndex, T::MaxBountiesQueued>, ValueQuery>;
+		StorageValue<_, BoundedVec<BountyIndex, T::MaxApprovals>, ValueQuery>;
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
