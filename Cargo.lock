@@ -2038,6 +2038,7 @@ dependencies = [
  "parity-scale-codec",
  "paste 1.0.6",
  "scale-info",
+ "serde",
  "sp-api",
  "sp-application-crypto",
  "sp-io",
@@ -2066,6 +2067,7 @@ dependencies = [
  "sc-executor",
  "sc-service",
  "serde",
+ "serde_json",
  "sp-core",
  "sp-externalities",
  "sp-keystore",
@@ -4869,6 +4871,7 @@ dependencies = [
  "pallet-contracts",
  "pallet-contracts-primitives",
  "pallet-contracts-rpc-runtime-api",
+ "pallet-conviction-voting",
  "pallet-democracy",
  "pallet-election-provider-multi-phase",
  "pallet-elections-phragmen",
@@ -4887,6 +4890,7 @@ dependencies = [
  "pallet-proxy",
  "pallet-randomness-collective-flip",
  "pallet-recovery",
+ "pallet-referenda",
  "pallet-scheduler",
  "pallet-session",
  "pallet-session-benchmarking",
@@ -5618,7 +5622,7 @@ dependencies = [
 
 [[package]]
 name = "pallet-contracts-primitives"
-version = "4.0.0-dev"
+version = "5.0.0"
 dependencies = [
  "bitflags",
  "parity-scale-codec",
@@ -5666,6 +5670,25 @@ dependencies = [
  "parity-scale-codec",
  "scale-info",
  "sp-api",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
+name = "pallet-conviction-voting"
+version = "4.0.0-dev"
+dependencies = [
+ "assert_matches",
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "pallet-balances",
+ "pallet-scheduler",
+ "parity-scale-codec",
+ "scale-info",
+ "serde",
+ "sp-core",
+ "sp-io",
  "sp-runtime",
  "sp-std",
 ]
@@ -6114,6 +6137,26 @@ dependencies = [
  "pallet-balances",
  "parity-scale-codec",
  "scale-info",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
+name = "pallet-referenda"
+version = "4.0.0-dev"
+dependencies = [
+ "assert_matches",
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "pallet-balances",
+ "pallet-preimage",
+ "pallet-scheduler",
+ "parity-scale-codec",
+ "scale-info",
+ "serde",
  "sp-core",
  "sp-io",
  "sp-runtime",
@@ -9388,7 +9431,7 @@ dependencies = [
 
 [[package]]
 name = "sp-application-crypto"
-version = "4.0.0"
+version = "5.0.0"
 dependencies = [
  "parity-scale-codec",
  "scale-info",
@@ -9581,7 +9624,7 @@ dependencies = [
 
 [[package]]
 name = "sp-core"
-version = "4.1.0-dev"
+version = "5.0.0"
 dependencies = [
  "base58",
  "bitflags",
@@ -9672,7 +9715,7 @@ dependencies = [
 
 [[package]]
 name = "sp-externalities"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "environmental",
  "parity-scale-codec",
@@ -9713,7 +9756,7 @@ dependencies = [
 
 [[package]]
 name = "sp-io"
-version = "4.0.0"
+version = "5.0.0"
 dependencies = [
  "futures 0.3.16",
  "hash-db",
@@ -9736,7 +9779,7 @@ dependencies = [
 
 [[package]]
 name = "sp-keyring"
-version = "4.1.0-dev"
+version = "5.0.0"
 dependencies = [
  "lazy_static",
  "sp-core",
@@ -9746,7 +9789,7 @@ dependencies = [
 
 [[package]]
 name = "sp-keystore"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "async-trait",
  "futures 0.3.16",
@@ -9833,7 +9876,7 @@ dependencies = [
 
 [[package]]
 name = "sp-rpc"
-version = "4.0.0-dev"
+version = "5.0.0"
 dependencies = [
  "rustc-hash",
  "serde",
@@ -9843,7 +9886,7 @@ dependencies = [
 
 [[package]]
 name = "sp-runtime"
-version = "4.1.0-dev"
+version = "5.0.0"
 dependencies = [
  "either",
  "hash256-std-hasher",
@@ -9870,7 +9913,7 @@ dependencies = [
 
 [[package]]
 name = "sp-runtime-interface"
-version = "4.1.0-dev"
+version = "5.0.0"
 dependencies = [
  "impl-trait-for-tuples",
  "parity-scale-codec",
@@ -9987,7 +10030,7 @@ dependencies = [
 
 [[package]]
 name = "sp-state-machine"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "hash-db",
  "hex-literal",
@@ -10016,7 +10059,7 @@ version = "4.0.0"
 
 [[package]]
 name = "sp-storage"
-version = "4.0.0"
+version = "5.0.0"
 dependencies = [
  "impl-serde",
  "parity-scale-codec",
@@ -10102,7 +10145,7 @@ dependencies = [
 
 [[package]]
 name = "sp-trie"
-version = "4.0.0"
+version = "5.0.0"
 dependencies = [
  "criterion",
  "hash-db",
@@ -10148,7 +10191,7 @@ dependencies = [
 
 [[package]]
 name = "sp-wasm-interface"
-version = "4.1.0-dev"
+version = "5.0.0"
 dependencies = [
  "impl-trait-for-tuples",
  "log 0.4.14",

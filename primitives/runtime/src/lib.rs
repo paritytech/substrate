@@ -461,8 +461,28 @@ pub type DispatchResult = sp_std::result::Result<(), DispatchError>;
 /// about the `Dispatchable` that is only known post dispatch.
 pub type DispatchResultWithInfo<T> = sp_std::result::Result<T, DispatchErrorWithPostInfo<T>>;
 
-/// Reason why a dispatch call failed.
+/// Reason why a pallet call failed.
 #[derive(Eq, Clone, Copy, Encode, Decode, Debug, TypeInfo)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub struct ModuleError {
+	/// Module index, matching the metadata module index.
+	pub index: u8,
+	/// Module specific error value.
+	pub error: u8,
+	/// Optional error message.
+	#[codec(skip)]
+	#[cfg_attr(feature = "std", serde(skip_deserializing))]
+	pub message: Option<&'static str>,
+}
+
+impl PartialEq for ModuleError {
+	fn eq(&self, other: &Self) -> bool {
+		(self.index == other.index) && (self.error == other.error)
+	}
+}
+
+/// Reason why a dispatch call failed.
+#[derive(Eq, Clone, Copy, Encode, Decode, Debug, TypeInfo, PartialEq)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum DispatchError {
 	/// Some error occurred.
@@ -476,16 +496,7 @@ pub enum DispatchError {
 	/// A bad origin.
 	BadOrigin,
 	/// A custom error in a module.
-	Module {
-		/// Module index, matching the metadata module index.
-		index: u8,
-		/// Module specific error value.
-		error: u8,
-		/// Optional error message.
-		#[codec(skip)]
-		#[cfg_attr(feature = "std", serde(skip_deserializing))]
-		message: Option<&'static str>,
-	},
+	Module(ModuleError),
 	/// At least one consumer is remaining so the account cannot be destroyed.
 	ConsumerRemaining,
 	/// There are no providers so the account cannot be created.
@@ -515,8 +526,8 @@ impl DispatchError {
 	/// Return the same error but without the attached message.
 	pub fn stripped(self) -> Self {
 		match self {
-			DispatchError::Module { index, error, message: Some(_) } =>
-				DispatchError::Module { index, error, message: None },
+			DispatchError::Module(ModuleError { index, error, message: Some(_) }) =>
+				DispatchError::Module(ModuleError { index, error, message: None }),
 			m => m,
 		}
 	}
@@ -624,7 +635,8 @@ impl From<DispatchError> for &'static str {
 			DispatchError::Other(msg) => msg,
 			DispatchError::CannotLookup => "Cannot lookup",
 			DispatchError::BadOrigin => "Bad origin",
-			DispatchError::Module { message, .. } => message.unwrap_or("Unknown module error"),
+			DispatchError::Module(ModuleError { message, .. }) =>
+				message.unwrap_or("Unknown module error"),
 			DispatchError::ConsumerRemaining => "Consumer remaining",
 			DispatchError::NoProviders => "No providers",
 			DispatchError::TooManyConsumers => "Too many consumers",
@@ -650,7 +662,7 @@ impl traits::Printable for DispatchError {
 			Self::Other(err) => err.print(),
 			Self::CannotLookup => "Cannot lookup".print(),
 			Self::BadOrigin => "Bad origin".print(),
-			Self::Module { index, error, message } => {
+			Self::Module(ModuleError { index, error, message }) => {
 				index.print();
 				error.print();
 				if let Some(msg) = message {
@@ -680,30 +692,6 @@ where
 		self.error.print();
 		"PostInfo: ".print();
 		self.post_info.print();
-	}
-}
-
-impl PartialEq for DispatchError {
-	fn eq(&self, other: &Self) -> bool {
-		use DispatchError::*;
-
-		match (self, other) {
-			(CannotLookup, CannotLookup) |
-			(BadOrigin, BadOrigin) |
-			(ConsumerRemaining, ConsumerRemaining) |
-			(NoProviders, NoProviders) => true,
-
-			(Token(l), Token(r)) => l == r,
-			(Other(l), Other(r)) => l == r,
-			(Arithmetic(l), Arithmetic(r)) => l == r,
-
-			(
-				Module { index: index_l, error: error_l, .. },
-				Module { index: index_r, error: error_r, .. },
-			) => (index_l == index_r) && (error_l == error_r),
-
-			_ => false,
-		}
 	}
 }
 
@@ -932,11 +920,18 @@ mod tests {
 
 	#[test]
 	fn dispatch_error_encoding() {
-		let error = DispatchError::Module { index: 1, error: 2, message: Some("error message") };
+		let error = DispatchError::Module(ModuleError {
+			index: 1,
+			error: 2,
+			message: Some("error message"),
+		});
 		let encoded = error.encode();
 		let decoded = DispatchError::decode(&mut &encoded[..]).unwrap();
 		assert_eq!(encoded, vec![3, 1, 2]);
-		assert_eq!(decoded, DispatchError::Module { index: 1, error: 2, message: None });
+		assert_eq!(
+			decoded,
+			DispatchError::Module(ModuleError { index: 1, error: 2, message: None })
+		);
 	}
 
 	#[test]
@@ -948,9 +943,9 @@ mod tests {
 			Other("bar"),
 			CannotLookup,
 			BadOrigin,
-			Module { index: 1, error: 1, message: None },
-			Module { index: 1, error: 2, message: None },
-			Module { index: 2, error: 1, message: None },
+			Module(ModuleError { index: 1, error: 1, message: None }),
+			Module(ModuleError { index: 1, error: 2, message: None }),
+			Module(ModuleError { index: 2, error: 1, message: None }),
 			ConsumerRemaining,
 			NoProviders,
 			Token(TokenError::NoFunds),
@@ -975,8 +970,8 @@ mod tests {
 
 		// Ignores `message` field in `Module` variant.
 		assert_eq!(
-			Module { index: 1, error: 1, message: Some("foo") },
-			Module { index: 1, error: 1, message: None },
+			Module(ModuleError { index: 1, error: 1, message: Some("foo") }),
+			Module(ModuleError { index: 1, error: 1, message: None }),
 		);
 	}
 
