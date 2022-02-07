@@ -18,7 +18,7 @@
 //! Tests for the module.
 
 use super::*;
-use frame_support::{assert_noop, assert_ok, traits::Currency};
+use frame_support::{assert_noop, assert_ok, traits::Currency, bounded_vec};
 use mock::{
 	new_test_ext, run_to_block, Balances, BalancesCall, Call, Origin, Recovery, RecoveryCall, Test,
 };
@@ -320,7 +320,7 @@ fn vouch_recovery_works() {
 		assert_ok!(Recovery::vouch_recovery(Origin::signed(3), 5, 1));
 		// Final recovery status object is updated correctly
 		let recovery_status =
-			ActiveRecovery { created: 0, deposit: 10, friends: vec![2, 3, 4].try_into().unwrap() };
+			ActiveRecovery { created: 0, deposit: 10, friends: bounded_vec![2, 3, 4] };
 		assert_eq!(<ActiveRecoveries<Test>>::get(&5, &1), Some(recovery_status));
 	});
 }
