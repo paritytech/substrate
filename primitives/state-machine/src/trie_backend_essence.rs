@@ -119,6 +119,11 @@ where
 		&self.storage
 	}
 
+	/// Get backend storage mutable reference.
+	pub fn backend_storage_mut(&mut self) -> &mut S {
+		&mut self.storage
+	}
+
 	/// Get trie root.
 	pub fn root(&self) -> &H::Out {
 		&self.root
@@ -683,7 +688,7 @@ mod test {
 		assert_eq!(essence_1.next_storage_key(b"5"), Ok(Some(b"6".to_vec())));
 		assert_eq!(essence_1.next_storage_key(b"6"), Ok(None));
 
-		let mdb = essence_1.into_storage();
+		let mdb = essence_1.backend_storage().clone();
 		let essence_2 = TrieBackendEssence::new(mdb, root_2);
 
 		assert_eq!(essence_2.next_child_storage_key(child_info, b"2"), Ok(Some(b"3".to_vec())));

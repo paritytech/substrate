@@ -2150,7 +2150,7 @@ mod tests {
 			.into_iter(),
 			state_version,
 		);
-		let mut remote_storage = remote_backend.into_storage();
+		let mut remote_storage = remote_backend.backend_storage().clone();
 		remote_storage.consolidate(transaction);
 		let remote_backend = TrieBackend::new(remote_storage, remote_root);
 		let remote_proof = prove_child_read(remote_backend, &child_info1, &[b"key1"]).unwrap();

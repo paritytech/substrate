@@ -34,7 +34,7 @@ use sp_trie::{
 	LayoutV0, LayoutV1, Trie,
 };
 
-enum RefOrOwned<'a, S: TrieBackendStorage<H>, H: Hasher> {
+pub(crate) enum RefOrOwned<'a, S: TrieBackendStorage<H>, H: Hasher> {
 	Ref(&'a TrieBackendEssence<S, H>),
 	Owned(TrieBackendEssence<S, H>),
 }
@@ -89,11 +89,6 @@ where
 	/// Get trie root.
 	pub fn root(&self) -> &H::Out {
 		self.essence.root()
-	}
-
-	/// Consumes self and returns underlying storage.
-	pub fn into_storage(self) -> S {
-		self.essence.into_storage()
 	}
 }
 
@@ -377,7 +372,7 @@ pub mod tests {
 
 	pub(crate) fn test_trie(
 		hashed_value: StateVersion,
-	) -> TrieBackend<PrefixedMemoryDB<BlakeTwo256>, BlakeTwo256> {
+	) -> TrieBackend<'static, PrefixedMemoryDB<BlakeTwo256>, BlakeTwo256> {
 		let (mdb, root) = test_db(hashed_value);
 		TrieBackend::new(mdb, root)
 	}

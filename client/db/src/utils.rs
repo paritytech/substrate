@@ -690,6 +690,7 @@ mod tests {
 			source,
 			keep_blocks: KeepBlocks::All,
 			transaction_storage: TransactionStorageMode::BlockBody,
+			trie_node_cache_settings: Default::default(),
 		}
 	}
 

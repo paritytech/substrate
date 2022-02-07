@@ -18,13 +18,10 @@
 
 //! State backend that's useful for benchmarking
 
-use std::{
-	cell::{Cell, RefCell},
-	collections::HashMap,
-	sync::Arc,
+use crate::{
+	storage_cache::{new_shared_cache, CachingState, SharedCache},
+	DbState,
 };
-
-use crate::storage_cache::{new_shared_cache, CachingState, SharedCache};
 use hash_db::{Hasher, Prefix};
 use kvdb::{DBTransaction, KeyValueDB};
 use linked_hash_map::LinkedHashMap;
@@ -41,9 +38,11 @@ use sp_state_machine::{
 	StorageCollection,
 };
 use sp_trie::{prefixed_key, MemoryDB};
-
-type DbState<B> =
-	sp_state_machine::TrieBackend<Arc<dyn sp_state_machine::Storage<HashFor<B>>>, HashFor<B>>;
+use std::{
+	cell::{Cell, RefCell},
+	collections::HashMap,
+	sync::Arc,
+};
 
 type State<B> = CachingState<DbState<B>, B>;
 
@@ -109,7 +108,7 @@ impl<B: BlockT> BenchmarkingState<B> {
 		let state_version = sp_runtime::StateVersion::default();
 		let mut root = B::Hash::default();
 		let mut mdb = MemoryDB::<HashFor<B>>::default();
-		sp_state_machine::TrieDBMutV1::<HashFor<B>>::new(&mut mdb, &mut root);
+		sp_trie::trie_types::TrieDBMutBuilderV1::<HashFor<B>>::new(&mut mdb, &mut root).build();
 
 		let mut state = BenchmarkingState {
 			state: RefCell::new(None),

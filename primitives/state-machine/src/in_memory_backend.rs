@@ -18,7 +18,7 @@
 //! State machine in memory backend.
 
 use crate::{
-	backend::Backend, trie_backend::TrieBackend, StorageCollection, StorageKey, StorageValue,
+	backend::Backend, trie_backend::{TrieBackend, RefOrOwned}, StorageCollection, StorageKey, StorageValue,
 };
 use codec::Codec;
 use hash_db::Hasher;
@@ -79,7 +79,11 @@ where
 
 	/// Apply the given transaction to this backend and set the root to the given value.
 	pub fn apply_transaction(&mut self, root: H::Out, transaction: MemoryDB<H>) {
-		let mut storage = sp_std::mem::take(self).into_storage();
+		let mut storage = match self.essence {
+			RefOrOwned::Ref(essence) => essence.backend_storage().clone(),
+			RefOrOwned::Owned(ref mut essence) => sp_std::mem::take(essence.backend_storage_mut()),
+		};
+
 		storage.consolidate(transaction);
 		*self = TrieBackend::new(storage, root);
 	}

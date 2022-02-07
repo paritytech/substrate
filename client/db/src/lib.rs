@@ -103,8 +103,11 @@ const CACHE_HEADERS: usize = 8;
 const DEFAULT_CHILD_RATIO: (usize, usize) = (1, 10);
 
 /// DB-backed patricia trie state, transaction type is an overlay of changes to commit.
-pub type DbState<B> =
-	sp_state_machine::TrieBackend<Arc<dyn sp_state_machine::Storage<HashFor<B>>>, HashFor<B>>;
+pub type DbState<B> = sp_state_machine::TrieBackend<
+	'static,
+	Arc<dyn sp_state_machine::Storage<HashFor<B>>>,
+	HashFor<B>,
+>;
 
 const DB_HASH_LEN: usize = 32;
 /// Hash type that this backend uses for the database.
@@ -2414,6 +2417,7 @@ pub(crate) mod tests {
 				source: DatabaseSource::Custom(backing),
 				keep_blocks: KeepBlocks::All,
 				transaction_storage: TransactionStorageMode::BlockBody,
+				trie_node_cache_settings: Default::default(),
 			},
 			0,
 		)
