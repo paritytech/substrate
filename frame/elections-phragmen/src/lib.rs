@@ -1132,7 +1132,7 @@ mod tests {
 	use sp_runtime::{
 		testing::Header,
 		traits::{BlakeTwo256, IdentityLookup},
-		BuildStorage,
+		BuildStorage, ModuleError,
 	};
 	use substrate_test_utils::assert_eq_uvec;
 
@@ -2514,7 +2514,7 @@ mod tests {
 			let unwrapped_error = Elections::remove_member(Origin::root(), 4, true).unwrap_err();
 			assert!(matches!(
 				unwrapped_error.error,
-				DispatchError::Module { message: Some("InvalidReplacement"), .. }
+				DispatchError::Module(ModuleError { message: Some("InvalidReplacement"), .. })
 			));
 			assert!(unwrapped_error.post_info.actual_weight.is_some());
 		});
@@ -2537,7 +2537,7 @@ mod tests {
 			let unwrapped_error = Elections::remove_member(Origin::root(), 4, false).unwrap_err();
 			assert!(matches!(
 				unwrapped_error.error,
-				DispatchError::Module { message: Some("InvalidReplacement"), .. }
+				DispatchError::Module(ModuleError { message: Some("InvalidReplacement"), .. })
 			));
 			assert!(unwrapped_error.post_info.actual_weight.is_some());
 		});
