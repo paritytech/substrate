@@ -476,8 +476,21 @@ impl Profile {
 			(Some(Profile::Debug), false) => Profile::Release,
 			// For any other profile or when overriden we take it at face value.
 			(Some(profile), _) => profile,
+			// For non overriden unknown profiles we fall back to `Release`.
+			// This allows us to continue building when a custom profile is used for the
+			// main builds cargo. When explicitly passing a profile via env variable we are
+			// not doing a fallback.
+			(None, false) => {
+				let profile = Profile::Release;
+				build_helper::warning!(
+					"Unknown cargo profile `{}`. Defaulted to `{:?}` for the runtime build.",
+					name,
+					profile,
+				);
+				profile
+			},
 			// Invalid profile specified.
-			(None, _) => {
+			(None, true) => {
 				// We use println! + exit instead of a panic in order to have a cleaner output.
 				println!(
 					"Unexpected profile name: `{}`. One of the following is expected: {:?}",
@@ -627,8 +640,8 @@ fn compress_wasm(wasm_binary_path: &Path, compressed_binary_out_path: &Path) -> 
 
 		true
 	} else {
-		println!(
-			"cargo:warning=Writing uncompressed wasm. Exceeded maximum size {}",
+		build_helper::warning!(
+			"Writing uncompressed wasm. Exceeded maximum size {}",
 			CODE_BLOB_BOMB_LIMIT,
 		);
 

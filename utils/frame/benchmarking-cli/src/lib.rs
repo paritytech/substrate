@@ -19,7 +19,7 @@ mod command;
 mod writer;
 
 use sc_cli::{ExecutionStrategy, WasmExecutionMethod};
-use std::fmt::Debug;
+use std::{fmt::Debug, path::PathBuf};
 
 // Add a more relaxed parsing for pallet names by allowing pallet directory names with `-` to be
 // used like crate names with `_`
@@ -60,9 +60,13 @@ pub struct BenchmarkCmd {
 	#[clap(long, default_value = "1")]
 	pub external_repeat: u32,
 
-	/// Print the raw results.
-	#[clap(long = "raw")]
-	pub raw_data: bool,
+	/// Print the raw results in JSON format.
+	#[clap(long = "json")]
+	pub json_output: bool,
+
+	/// Write the raw results in JSON format into the give file.
+	#[clap(long, conflicts_with = "json-output")]
+	pub json_file: Option<PathBuf>,
 
 	/// Don't print the median-slopes linear regression analysis.
 	#[clap(long)]
@@ -74,15 +78,15 @@ pub struct BenchmarkCmd {
 
 	/// Output the benchmarks to a Rust file at the given path.
 	#[clap(long)]
-	pub output: Option<std::path::PathBuf>,
+	pub output: Option<PathBuf>,
 
 	/// Add a header file to your outputted benchmarks
 	#[clap(long)]
-	pub header: Option<std::path::PathBuf>,
+	pub header: Option<PathBuf>,
 
 	/// Path to Handlebars template file used for outputting benchmark results. (Optional)
 	#[clap(long)]
-	pub template: Option<std::path::PathBuf>,
+	pub template: Option<PathBuf>,
 
 	/// Which analysis function to use when outputting benchmarks:
 	/// * min-squares (default)
