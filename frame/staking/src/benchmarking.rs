@@ -901,24 +901,31 @@ benchmarks! {
 	}
 
 	force_apply_min_commission {
-		let i in 1..MaxValidators::<T>::get();
 		// Clean up any existing state
 		clear_validators_and_nominators::<T>();
 
-		// Create `i` validators with a commission of 50%
-		frame_support::assert_ok!(create_validators::<T>(i, 1));
+		// Create a validator with a commission of 50%
+		let (stash, controller) =
+			create_stash_controller::<T>(1, 1, RewardDestination::Staked)?;
+		let validator_prefs =
+			ValidatorPrefs { commission: Perbill::from_percent(50), ..Default::default() };
+		Staking::<T>::validate(RawOrigin::Signed(controller).into(), validator_prefs)?;
 
-		// Sanity check that all the generated validators have the expected commission
-		for (_, prefs) in Validators::<T>::iter() {
-			assert_eq!(prefs.commission, Perbill::from_percent(50));
-		}
+		// Sanity check
+		assert_eq!(
+			Validators::<T>::get(&stash),
+			ValidatorPrefs { commission: Perbill::from_percent(50), ..Default::default() }
+		);
+
 		// Set the min commission to 75%
 		MinCommission::<T>::set(Perbill::from_percent(75));
-	}: _(RawOrigin::Root, i)
+	}: _(RawOrigin::Root, stash.clone())
 	verify {
-		for (_, prefs) in Validators::<T>::iter() {
-			assert_eq!(prefs.commission, Perbill::from_percent(75));
-		}
+		// The validators commission has been bumped to 75%
+		assert_eq!(
+			Validators::<T>::get(&stash),
+			ValidatorPrefs { commission: Perbill::from_percent(75), ..Default::default() }
+		);
 	}
 
 	impl_benchmark_test_suite!(

@@ -1622,30 +1622,21 @@ pub mod pallet {
 		///
 		/// Note that parameter `_validator_count` should be the upper bound of the number of
 		/// validators stored and is only used for weights.
-		#[pallet::weight(T::WeightInfo::force_apply_min_commission(*max_validator_count))]
+		#[pallet::weight(T::WeightInfo::force_apply_min_commission())]
 		pub fn force_apply_min_commission(
 			origin: OriginFor<T>,
-			max_validator_count: u32,
+			validator_stash: T::AccountId,
 		) -> DispatchResult {
 			ensure_root(origin)?;
 			let min_commission = MinCommission::<T>::get();
-			let mut validators_to_update = Vec::with_capacity(max_validator_count as usize);
 
-			for (index, (validator_id, mut prefs)) in Validators::<T>::iter().enumerate() {
-				if index as u32 >= max_validator_count {
-					log!(trace, "max_validator_count is less than the number of validators");
-					break
-				}
-
-				if prefs.commission < min_commission {
-					prefs.commission = min_commission;
-					validators_to_update.push((validator_id, prefs));
-				}
-			}
-
-			for (validator_id, prefs) in validators_to_update {
-				Validators::<T>::insert(validator_id, prefs)
-			}
+			if Validators::<T>::contains_key(&validator_stash) {
+				let _ = Validators::<T>::try_mutate(validator_stash, |prefs| {
+					(prefs.commission < min_commission)
+						.then(|| prefs.commission = min_commission)
+						.ok_or(())
+				});
+			};
 
 			Ok(())
 		}

@@ -72,7 +72,7 @@ pub trait WeightInfo {
 	fn get_npos_targets(v: u32, ) -> Weight;
 	fn set_staking_configs() -> Weight;
 	fn chill_other() -> Weight;
-	fn force_apply_min_commission(i: u32, ) -> Weight;
+	fn force_apply_min_commission() -> Weight;
 }
 
 /// Weights for pallet_staking using the Substrate node and recommended hardware.
@@ -446,13 +446,10 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	}
 	// Storage: Staking MinCommission (r:1 w:0)
 	// Storage: Staking Validators (r:2 w:1)
-	fn force_apply_min_commission(i: u32, ) -> Weight {
+	fn force_apply_min_commission() -> Weight {
 		(0 as Weight)
 			// Standard Error: 13_000
-			.saturating_add((9_070_000 as Weight).saturating_mul(i as Weight))
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
-			.saturating_add(T::DbWeight::get().reads((1 as Weight).saturating_mul(i as Weight)))
-			.saturating_add(T::DbWeight::get().writes((1 as Weight).saturating_mul(i as Weight)))
 	}
 }
 
@@ -826,12 +823,9 @@ impl WeightInfo for () {
 	}
 	// Storage: Staking MinCommission (r:1 w:0)
 	// Storage: Staking Validators (r:2 w:1)
-	fn force_apply_min_commission(i: u32, ) -> Weight {
+	fn force_apply_min_commission() -> Weight {
 		(0 as Weight)
 			// Standard Error: 13_000
-			.saturating_add((9_070_000 as Weight).saturating_mul(i as Weight))
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
-			.saturating_add(RocksDbWeight::get().reads((1 as Weight).saturating_mul(i as Weight)))
-			.saturating_add(RocksDbWeight::get().writes((1 as Weight).saturating_mul(i as Weight)))
 	}
 }
