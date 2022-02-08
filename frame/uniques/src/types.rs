@@ -18,7 +18,10 @@
 //! Various basic types for use in the assets pallet.
 
 use super::*;
-use frame_support::{pallet_prelude::{BoundedVec, MaxEncodedLen}, traits::Get};
+use frame_support::{
+	pallet_prelude::{BoundedVec, MaxEncodedLen},
+	traits::Get,
+};
 use scale_info::TypeInfo;
 
 pub(super) type DepositBalanceOf<T, I = ()> =
