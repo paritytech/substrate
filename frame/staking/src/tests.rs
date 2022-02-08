@@ -4597,7 +4597,6 @@ fn min_commission_works() {
 fn commission_changed_event_works() {
 	ExtBuilder::default().build_and_execute(|| {
 		let controller = 10 as AccountId;
-		
 		assert_ok!(Staking::validate(
 			Origin::signed(10),
 			ValidatorPrefs { commission: Perbill::from_percent(5), blocked: false }
@@ -4619,10 +4618,10 @@ fn commission_changed_event_works() {
 		let stash = ledger.unwrap().stash;
 
 		// Event emitted should be correct
-		assert_eq!(*staking_events().last().unwrap(), Event::CommissionChanged(
-			stash,
-			Perbill::from_percent(5)
-		));
+		assert_eq!(
+			*staking_events().last().unwrap(),
+			Event::CommissionChanged(stash, Perbill::from_percent(5))
+		);
 	})
 }
 
