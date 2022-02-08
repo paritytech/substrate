@@ -237,7 +237,7 @@ use frame_election_provider_support::{
 };
 use frame_support::{
 	ensure,
-	traits::{ConstU32, Get},
+	traits::{ConstU32, Defensive, Get},
 	BoundedVec, CloneNoBound, EqNoBound, PartialEqNoBound, RuntimeDebugNoBound,
 };
 use scale_info::TypeInfo;
@@ -513,13 +513,7 @@ pub mod pallet {
 			let remaining_blocks = next_election - now;
 			let current_phase = Self::current_phase();
 
-			log!(
-				trace,
-				"current phase {:?}, next election {:?}, metadata: {:?}",
-				current_phase,
-				next_election,
-				Snapshot::<T>::metadata()
-			);
+			log!(trace, "current phase {:?}, next election {:?}", current_phase, next_election,);
 
 			match current_phase {
 				// start and continue snapshot.
@@ -529,8 +523,8 @@ pub mod pallet {
 				{
 					let remaining_pages = Self::msp();
 					log!(info, "starting snapshot creation, remaining block: {}", remaining_pages);
-					let _ = Self::create_targets_snapshot().unwrap();
-					let _ = Self::create_voters_snapshot_paged(remaining_pages).unwrap();
+					let count = Self::create_targets_snapshot().unwrap();
+					let count = Self::create_voters_snapshot_paged(remaining_pages).unwrap();
 					CurrentPhase::<T>::put(Phase::Snapshot(remaining_pages));
 					0
 				},
@@ -552,11 +546,6 @@ pub mod pallet {
 					// TODO: even though we have the integrity test, what if we open the signed
 					// phase, and there's not enough blocks to finalize it? that can happen under
 					// any circumstance and we should deal with it.
-
-					// snapshot must be fully created here.
-					if cfg!(debug_assertions) {
-						Snapshot::<T>::assert_snapshot(true, T::Pages::get());
-					}
 
 					<CurrentPhase<T>>::put(Phase::Signed);
 					Self::deposit_event(Event::SignedPhaseStarted(Self::round()));
@@ -703,11 +692,37 @@ pub mod pallet {
 	#[pallet::getter(fn current_phase)]
 	pub type CurrentPhase<T: Config> = StorageValue<_, Phase<T::BlockNumber>, ValueQuery>;
 
-	/// Wrapper struct for working with the snapshot.
+	/// Wrapper struct for working with snapshots.
+	///
+	/// It manages the following storage items:
+	///
+	/// - [`DesiredTargets`]: The number of targets that we wish to collect.
+	/// - [`PagedVoterSnapshot`]: Paginated map of voters.
+	/// - [`PagedVoterSnapshotHash`]: Hash of the aforementioned.
+	/// - [`PagedTargetSnapshot`]: Paginated map of targets.
+	/// - [`PagedTargetSnapshotHash`]: Hash of the aforementioned.
+	///
+	/// ### Invariants
+	///
+	/// The following invariants must be met at **all times** for this storage item to be "correct".
+	///
+	/// - [`PagedVoterSnapshotHash`] must always contain the correct the same number of keys, and
+	///   the corresponding hash of the [`PagedVoterSnapshot`].
+	/// - [`PagedTargetSnapshotHash`] must always contain the correct the same number of keys, and
+	///   the corresponding hash of the [`PagedTargetSnapshot`].
+	///
+	/// - If any page from the paged voters/targets exists, then the aforementioned (desired
+	///   targets) must also exist.
+	///
+	/// The following invariants might need to hold based on the current phase.
+	///
+	///   - If `Phase` IS `Snapshot(_)`, then partial voter/target pages must exist from `msp` to
+	///     `lsp` based on the inner value.
+	///   - If `Phase` IS `Off`, then, no snapshot must exist.
+	///   - In all other phases, the snapshot must FULLY exist.
 	pub(crate) struct Snapshot<T>(sp_std::marker::PhantomData<T>);
 	impl<T: Config> Snapshot<T> {
 		// ----------- mutable methods
-
 		pub(crate) fn set_desired_targets(d: u32) {
 			DesiredTargets::<T>::put(d);
 		}
@@ -728,32 +743,11 @@ pub mod pallet {
 			PagedVoterSnapshotHash::<T>::insert(page, hash);
 		}
 
-		pub(crate) fn update_metadata(
-			maybe_new_voters: Option<u32>,
-			maybe_new_targets: Option<u32>,
-		) {
-			if maybe_new_targets.is_none() && maybe_new_voters.is_none() {
-				return
-			}
-
-			SnapshotMetadata::<T>::mutate(|maybe_metadata| {
-				let mut metadata = maybe_metadata.unwrap_or_default();
-				if let Some(new_voters) = maybe_new_voters {
-					metadata.voters = metadata.voters.saturating_add(new_voters);
-				}
-				if let Some(new_targets) = maybe_new_targets {
-					metadata.targets = metadata.targets.saturating_add(new_targets);
-				}
-				*maybe_metadata = Some(metadata);
-			});
-		}
-
 		/// Destroy the entire snapshot.
 		///
 		/// Should be called only once we transition to [`Phase::Off`].
 		pub(crate) fn kill() {
 			DesiredTargets::<T>::kill();
-			SnapshotMetadata::<T>::kill();
 			PagedVoterSnapshot::<T>::remove_all(None);
 			PagedVoterSnapshotHash::<T>::remove_all(None);
 			PagedTargetSnapshot::<T>::remove_all(None);
@@ -790,10 +784,6 @@ pub mod pallet {
 			PagedTargetSnapshotHash::<T>::get(Pallet::<T>::lsp())
 		}
 
-		pub(crate) fn metadata() -> Option<SolutionOrSnapshotSize> {
-			SnapshotMetadata::<T>::get()
-		}
-
 		/// Get a fingerprint of the snapshot, from all the hashes that are stored for each page of
 		/// the snapshot.
 		///
@@ -801,17 +791,18 @@ pub mod pallet {
 		/// where `n` is `T::Pages - 1`. In other words, it is the concatenated hash of targets, and
 		/// voters, from `msp` to `lsp`.
 		pub fn fingerprint() -> T::Hash {
-			let mut targets = PagedTargetSnapshotHash::<T>::get(Pallet::<T>::lsp())
-				.unwrap_or_default()
-				.as_ref()
-				.to_vec();
-			let voters = (Pallet::<T>::msp()..=Pallet::<T>::lsp())
+			let mut hashed_target_and_voters =
+				PagedTargetSnapshotHash::<T>::get(Pallet::<T>::lsp())
+					.unwrap_or_default()
+					.as_ref()
+					.to_vec();
+			let hashed_voters = (Pallet::<T>::msp()..=Pallet::<T>::lsp())
 				.map(|i| PagedVoterSnapshotHash::<T>::get(i).unwrap_or_default())
 				.map(|hash| <T::Hash as AsRef<[u8]>>::as_ref(&hash).to_owned())
 				.flatten()
 				.collect::<Vec<u8>>();
-			targets.extend(voters);
-			T::Hashing::hash(&targets)
+			hashed_target_and_voters.extend(hashed_voters);
+			T::Hashing::hash(&hashed_target_and_voters)
 		}
 
 		fn write_storage_with_pre_allocate<E: Encode>(key: &[u8], data: E) -> T::Hash {
@@ -831,51 +822,95 @@ pub mod pallet {
 		}
 
 		#[cfg(any(test, debug_assertions))]
-		pub(crate) fn assert_snapshot(exists: bool, up_to_page: PageIndex) {
-			assert!(up_to_page > 0, "can't check snapshot up to page 0");
+		pub(crate) fn ensure_snapshot(
+			exists: bool,
+			mut up_to_page: PageIndex,
+		) -> Result<(), &'static str> {
+			up_to_page = up_to_page.min(T::Pages::get());
+			// NOTE: if someday we split the snapshot taking of voters(msp) and targets into two
+			// different blocks, then this assertion becomes obsolete.
+			ensure!(up_to_page > 0, "can't check snapshot up to page 0");
 
-			assert!(
-				exists ^ !Self::desired_targets().is_some(),
-				"desired target snapshot mismatch: phase: {:?}, exists: {}",
-				Pallet::<T>::current_phase(),
-				exists,
-			);
-			assert!(exists ^ !Self::metadata().is_some(), "metadata mismatch");
-			assert!(exists ^ !Self::targets().is_some(), "targets mismatch");
-			assert!(exists ^ !Self::targets_hash().is_some(), "targets hash mismatch");
+			// if any number of pages supposed to exist, these must also exist.
+			ensure!(exists ^ Self::desired_targets().is_none(), "desired target mismatch");
+			ensure!(exists ^ Self::targets().is_none(), "targets mismatch");
+			ensure!(exists ^ Self::targets_hash().is_none(), "targets hash mismatch");
 
-			(crate::Pallet::<T>::msp()..=crate::Pallet::<T>::lsp())
+			// and the hash is correct.
+			if let Some(targets) = Self::targets() {
+				let hash = Self::targets_hash().expect("must exist; qed");
+				ensure!(hash == T::Hashing::hash(&targets.encode()), "targets hash mismatch");
+			}
+
+			// ensure that pages that should exist, indeed to exist..
+			let mut sum_existing_voters = 0;
+			for p in (crate::Pallet::<T>::lsp()..=crate::Pallet::<T>::msp())
+				.rev()
 				.take(up_to_page as usize)
-				.for_each(|p| {
-					assert!(
-						(exists ^ !Self::voters(p).is_some()) &&
-							(exists ^ !Self::voters_hash(p).is_some()),
-						"voter page {} mismatch {}",
-						p,
-						exists
-					);
-				});
+			{
+				ensure!(
+					(exists ^ Self::voters(p).is_none()) &&
+						(exists ^ Self::voters_hash(p).is_none()),
+					"voter page existence mismatch"
+				);
+
+				if let Some(voters_page) = Self::voters(p) {
+					sum_existing_voters = sum_existing_voters.saturating_add(voters_page.len());
+					let hash = Self::voters_hash(p).expect("must exist; qed");
+					ensure!(hash == T::Hashing::hash(&voters_page.encode()), "voter hash mismatch");
+				}
+			}
+
+			// ..and those that should not exist, indeed DON'T.
+			for p in (crate::Pallet::<T>::lsp()..=crate::Pallet::<T>::msp())
+				.take((T::Pages::get() - up_to_page) as usize)
+			{
+				ensure!(
+					(exists ^ Self::voters(p).is_some()) &&
+						(exists ^ Self::voters_hash(p).is_some()),
+					"voter page non-existence mismatch"
+				);
+			}
+
+			Ok(())
+		}
+
+		#[cfg(any(test, debug_assertions))]
+		pub(crate) fn sanity_check() -> Result<(), &'static str> {
+			// check the snapshot existence based on the phase. This checks all of the needed
+			// conditions except for the metadata values.
+			let _ = match Pallet::<T>::current_phase() {
+				// no page should exist in this phase.
+				Phase::Off => Self::ensure_snapshot(false, T::Pages::get()),
+				// exact number of pages must exist in this phase.
+				Phase::Snapshot(p) => Self::ensure_snapshot(true, T::Pages::get() - p),
+				// full snapshot must exist in these phases.
+				Phase::Emergency |
+				Phase::Signed |
+				Phase::SignedValidation(_) |
+				Phase::Export |
+				Phase::Unsigned(_) => Self::ensure_snapshot(true, T::Pages::get()),
+				// cannot assume anything. We might halt at any point.
+				Phase::Halted => Ok(()),
+			}?;
+
+			Ok(())
 		}
 	}
 
 	#[cfg(test)]
 	impl<T: Config> Snapshot<T> {
-		pub fn voter_pages() -> PageIndex {
+		pub(crate) fn voter_pages() -> PageIndex {
 			use sp_runtime::SaturatedConversion;
 			PagedVoterSnapshot::<T>::iter().count().saturated_into::<PageIndex>()
 		}
 
-		pub fn target_pages() -> PageIndex {
+		pub(crate) fn target_pages() -> PageIndex {
 			use sp_runtime::SaturatedConversion;
 			PagedTargetSnapshot::<T>::iter().count().saturated_into::<PageIndex>()
 		}
 
-		pub fn voters_iter(
-		) -> impl Iterator<Item = (PageIndex, BoundedVec<VoterOf<T>, T::VoterSnapshotPerBlock>)> {
-			PagedVoterSnapshot::<T>::iter()
-		}
-
-		pub fn voters_iter_flattened() -> impl Iterator<Item = VoterOf<T>> {
+		pub(crate) fn voters_iter_flattened() -> impl Iterator<Item = VoterOf<T>> {
 			let key_range =
 				(crate::Pallet::<T>::lsp()..=crate::Pallet::<T>::msp()).collect::<Vec<_>>();
 			key_range
@@ -884,19 +919,19 @@ pub mod pallet {
 				.flatten()
 		}
 
-		pub fn remove_voter_page(page: PageIndex) {
+		pub(crate) fn remove_voter_page(page: PageIndex) {
 			PagedVoterSnapshot::<T>::remove(page);
 		}
 
-		pub fn kill_desired_targets() {
+		pub(crate) fn kill_desired_targets() {
 			DesiredTargets::<T>::kill();
 		}
 
-		pub fn remove_target_page(page: PageIndex) {
+		pub(crate) fn remove_target_page(page: PageIndex) {
 			PagedTargetSnapshot::<T>::remove(page);
 		}
 
-		pub fn remove_target(at: usize) {
+		pub(crate) fn remove_target(at: usize) {
 			PagedTargetSnapshot::<T>::mutate(crate::Pallet::<T>::lsp(), |maybe_targets| {
 				if let Some(targets) = maybe_targets {
 					targets.remove(at);
@@ -910,31 +945,23 @@ pub mod pallet {
 		}
 	}
 
-	/// The metadata of the [`RoundSnapshot`]
-	#[pallet::storage]
-	type SnapshotMetadata<T: Config> = StorageValue<_, SolutionOrSnapshotSize>;
-
 	/// Desired number of targets to elect for this round.
 	#[pallet::storage]
 	type DesiredTargets<T> = StorageValue<_, u32>;
-
 	/// Paginated voter snapshot. At most [`T::Pages`] keys will exist.
 	#[pallet::storage]
 	type PagedVoterSnapshot<T: Config> = StorageMap<_, Twox64Concat, PageIndex, VoterPageOf<T>>;
-
 	/// Same as [`PagedVoterSnapshot`], but it will store the hash of the snapshot.
 	///
 	/// The hash is generated using [`frame_system::Config::Hashing`].
 	#[pallet::storage]
 	type PagedVoterSnapshotHash<T: Config> = StorageMap<_, Twox64Concat, PageIndex, T::Hash>;
-
 	/// Paginated target snapshot.
 	///
 	/// For the time being, since we assume one pages of targets, at most ONE key will exist.
 	#[pallet::storage]
 	type PagedTargetSnapshot<T: Config> =
 		StorageMap<_, Twox64Concat, PageIndex, BoundedVec<T::AccountId, T::TargetSnapshotPerBlock>>;
-
 	/// Same as [`PagedTargetSnapshot`], but it will store the hash of the snapshot.
 	///
 	/// The hash is generated using [`frame_system::Config::Hashing`].
@@ -950,12 +977,7 @@ impl<T: Config> Pallet<T> {
 	///
 	/// Based on the contract of `ElectionDataProvider`, this is the first page that is filled.
 	fn msp() -> PageIndex {
-		T::Pages::get().checked_sub(1).unwrap_or_else(|| {
-			// TODO: Defensive Trait.
-			debug_assert!(false, "Integrity check must ensure that T::Pages is greater than 1");
-			log!(warn, "Integrity check must ensure that T::Pages is greater than 1");
-			Default::default()
-		})
+		T::Pages::get().checked_sub(1).defensive_unwrap_or_default()
 	}
 
 	/// Returns the least significant page of the snapshot.
@@ -1034,9 +1056,8 @@ impl<T: Config> Pallet<T> {
 			.map_err(ElectionError::DataProvider)?;
 
 		let count = targets.len() as u32;
-		Snapshot::<T>::set_targets(targets);
-		Snapshot::<T>::update_metadata(None, Some(count));
 		log!(debug, "created target snapshot with {} targets.", count);
+		Snapshot::<T>::set_targets(targets);
 
 		Ok(count)
 	}
@@ -1053,7 +1074,6 @@ impl<T: Config> Pallet<T> {
 
 		let count = voters.len() as u32;
 		Snapshot::<T>::set_voters(remaining, voters);
-		Snapshot::<T>::update_metadata(Some(count), None);
 		log!(debug, "created voter snapshot with {} voters, {} remaining.", count, remaining);
 
 		Ok(count)
@@ -1078,16 +1098,9 @@ impl<T: Config> Pallet<T> {
 		Snapshot::<T>::kill();
 	}
 
-	#[cfg(test)]
+	#[cfg(any(test, debug_assertions))]
 	pub(crate) fn sanity_check() -> Result<(), &'static str> {
-		match Self::current_phase() {
-			Phase::Off => Snapshot::<T>::assert_snapshot(false, T::Pages::get()),
-			Phase::Signed | Phase::Unsigned(_) =>
-				Snapshot::<T>::assert_snapshot(true, T::Pages::get()),
-			_ => (),
-		};
-
-		Ok(())
+		Snapshot::<T>::sanity_check()
 	}
 }
 
@@ -1159,7 +1172,7 @@ mod phase_rotation {
 
 			assert_eq!(System::block_number(), 0);
 			assert_eq!(MultiBlock::current_phase(), Phase::Off);
-			Snapshot::<Runtime>::assert_snapshot(false, 1);
+			assert_ok!(Snapshot::<Runtime>::ensure_snapshot(false, 1));
 			assert_eq!(MultiBlock::round(), 0);
 
 			roll_to(4);
@@ -1175,12 +1188,12 @@ mod phase_rotation {
 			roll_to(15);
 			assert_eq!(MultiBlock::current_phase(), Phase::Signed);
 			assert_eq!(multi_block_events(), vec![Event::SignedPhaseStarted(0)]);
-			Snapshot::<Runtime>::assert_snapshot(true, 1);
+			assert_ok!(Snapshot::<Runtime>::ensure_snapshot(true, 1));
 			assert_eq!(MultiBlock::round(), 0);
 
 			roll_to(19);
 			assert_eq!(MultiBlock::current_phase(), Phase::Signed);
-			Snapshot::<Runtime>::assert_snapshot(true, 1);
+			assert_ok!(Snapshot::<Runtime>::ensure_snapshot(true, 1));
 			assert_eq!(MultiBlock::round(), 0);
 
 			roll_to(20);
@@ -1189,11 +1202,11 @@ mod phase_rotation {
 				multi_block_events(),
 				vec![Event::SignedPhaseStarted(0), Event::SignedValidationPhaseStarted(0)],
 			);
-			Snapshot::<Runtime>::assert_snapshot(true, 1);
+			assert_ok!(Snapshot::<Runtime>::ensure_snapshot(true, 1));
 
 			roll_to(24);
 			assert_eq!(MultiBlock::current_phase(), Phase::SignedValidation(20));
-			Snapshot::<Runtime>::assert_snapshot(true, 1);
+			assert_ok!(Snapshot::<Runtime>::ensure_snapshot(true, 1));
 			assert_eq!(MultiBlock::round(), 0);
 
 			roll_to(25);
@@ -1206,21 +1219,21 @@ mod phase_rotation {
 					Event::UnsignedPhaseStarted(0)
 				],
 			);
-			Snapshot::<Runtime>::assert_snapshot(true, 1);
+			assert_ok!(Snapshot::<Runtime>::ensure_snapshot(true, 1));
 
 			roll_to(30);
 			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, 25)));
-			Snapshot::<Runtime>::assert_snapshot(true, 1);
+			assert_ok!(Snapshot::<Runtime>::ensure_snapshot(true, 1));
 
 			// We close when upstream tells us to elect.
 			roll_to(32);
 			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, 25)));
-			Snapshot::<Runtime>::assert_snapshot(true, 1);
+			assert_ok!(Snapshot::<Runtime>::ensure_snapshot(true, 1));
 
 			MultiBlock::elect(0).unwrap();
 
 			assert!(MultiBlock::current_phase().is_off());
-			Snapshot::<Runtime>::assert_snapshot(false, 1);
+			assert_ok!(Snapshot::<Runtime>::ensure_snapshot(false, 1));
 			assert_eq!(MultiBlock::round(), 1);
 
 			roll_to(43);
@@ -1249,7 +1262,7 @@ mod phase_rotation {
 
 			assert_eq!(System::block_number(), 0);
 			assert_eq!(MultiBlock::current_phase(), Phase::Off);
-			Snapshot::<Runtime>::assert_snapshot(false, 2);
+			assert_ok!(Snapshot::<Runtime>::ensure_snapshot(false, 2));
 			assert_eq!(MultiBlock::round(), 0);
 
 			roll_to(4);
@@ -1261,21 +1274,21 @@ mod phase_rotation {
 
 			roll_to(13);
 			assert_eq!(MultiBlock::current_phase(), Phase::Snapshot(1));
-			Snapshot::<Runtime>::assert_snapshot(true, 1);
+			assert_ok!(Snapshot::<Runtime>::ensure_snapshot(true, 1));
 
 			roll_to(14);
 			assert_eq!(MultiBlock::current_phase(), Phase::Snapshot(0));
-			Snapshot::<Runtime>::assert_snapshot(true, 2);
+			assert_ok!(Snapshot::<Runtime>::ensure_snapshot(true, 2));
 
 			roll_to(15);
 			assert_eq!(MultiBlock::current_phase(), Phase::Signed);
 			assert_eq!(multi_block_events(), vec![Event::SignedPhaseStarted(0)]);
-			Snapshot::<Runtime>::assert_snapshot(true, 2);
+			assert_ok!(Snapshot::<Runtime>::ensure_snapshot(true, 2));
 			assert_eq!(MultiBlock::round(), 0);
 
 			roll_to(19);
 			assert_eq!(MultiBlock::current_phase(), Phase::Signed);
-			Snapshot::<Runtime>::assert_snapshot(true, 2);
+			assert_ok!(Snapshot::<Runtime>::ensure_snapshot(true, 2));
 			assert_eq!(MultiBlock::round(), 0);
 
 			roll_to(20);
@@ -1284,11 +1297,11 @@ mod phase_rotation {
 				multi_block_events(),
 				vec![Event::SignedPhaseStarted(0), Event::SignedValidationPhaseStarted(0)],
 			);
-			Snapshot::<Runtime>::assert_snapshot(true, 2);
+			assert_ok!(Snapshot::<Runtime>::ensure_snapshot(true, 2));
 
 			roll_to(24);
 			assert_eq!(MultiBlock::current_phase(), Phase::SignedValidation(20));
-			Snapshot::<Runtime>::assert_snapshot(true, 2);
+			assert_ok!(Snapshot::<Runtime>::ensure_snapshot(true, 2));
 			assert_eq!(MultiBlock::round(), 0);
 
 			roll_to(25);
@@ -1301,15 +1314,15 @@ mod phase_rotation {
 					Event::UnsignedPhaseStarted(0)
 				],
 			);
-			Snapshot::<Runtime>::assert_snapshot(true, 2);
+			assert_ok!(Snapshot::<Runtime>::ensure_snapshot(true, 2));
 
 			roll_to(29);
 			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, 25)));
-			Snapshot::<Runtime>::assert_snapshot(true, 2);
+			assert_ok!(Snapshot::<Runtime>::ensure_snapshot(true, 2));
 
 			roll_to(30);
 			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, 25)));
-			Snapshot::<Runtime>::assert_snapshot(true, 2);
+			assert_ok!(Snapshot::<Runtime>::ensure_snapshot(true, 2));
 
 			// We close when upstream tells us to elect.
 			roll_to(32);
@@ -1319,7 +1332,7 @@ mod phase_rotation {
 			assert!(MultiBlock::current_phase().is_off());
 
 			// all snapshots are gone.
-			Snapshot::<Runtime>::assert_snapshot(false, 2);
+			assert_ok!(Snapshot::<Runtime>::ensure_snapshot(false, 2));
 			assert_eq!(MultiBlock::round(), 1);
 
 			roll_to(42);
@@ -1351,7 +1364,7 @@ mod phase_rotation {
 
 			assert_eq!(System::block_number(), 0);
 			assert_eq!(MultiBlock::current_phase(), Phase::Off);
-			Snapshot::<Runtime>::assert_snapshot(false, 2);
+			assert_ok!(Snapshot::<Runtime>::ensure_snapshot(false, 3));
 			assert_eq!(MultiBlock::round(), 0);
 
 			roll_to(4);
@@ -1363,25 +1376,23 @@ mod phase_rotation {
 
 			roll_to(12);
 			assert_eq!(MultiBlock::current_phase(), Phase::Snapshot(2));
-			Snapshot::<Runtime>::assert_snapshot(true, 1);
+			assert_ok!(Snapshot::<Runtime>::ensure_snapshot(true, 1));
 
 			roll_to(13);
 			assert_eq!(MultiBlock::current_phase(), Phase::Snapshot(1));
-			Snapshot::<Runtime>::assert_snapshot(true, 2);
+			assert_ok!(Snapshot::<Runtime>::ensure_snapshot(true, 2));
 
 			roll_to(14);
 			assert_eq!(MultiBlock::current_phase(), Phase::Snapshot(0));
-			Snapshot::<Runtime>::assert_snapshot(true, 3);
+			assert_ok!(Snapshot::<Runtime>::ensure_snapshot(true, 3));
 
 			roll_to(15);
 			assert_eq!(MultiBlock::current_phase(), Phase::Signed);
 			assert_eq!(multi_block_events(), vec![Event::SignedPhaseStarted(0)]);
-			Snapshot::<Runtime>::assert_snapshot(true, 3);
 			assert_eq!(MultiBlock::round(), 0);
 
 			roll_to(19);
 			assert_eq!(MultiBlock::current_phase(), Phase::Signed);
-			Snapshot::<Runtime>::assert_snapshot(true, 2);
 			assert_eq!(MultiBlock::round(), 0);
 
 			roll_to(20);
@@ -1390,11 +1401,9 @@ mod phase_rotation {
 				multi_block_events(),
 				vec![Event::SignedPhaseStarted(0), Event::SignedValidationPhaseStarted(0)],
 			);
-			Snapshot::<Runtime>::assert_snapshot(true, 2);
 
 			roll_to(24);
 			assert_eq!(MultiBlock::current_phase(), Phase::SignedValidation(20));
-			Snapshot::<Runtime>::assert_snapshot(true, 2);
 			assert_eq!(MultiBlock::round(), 0);
 
 			roll_to(25);
@@ -1407,15 +1416,12 @@ mod phase_rotation {
 					Event::UnsignedPhaseStarted(0)
 				],
 			);
-			Snapshot::<Runtime>::assert_snapshot(true, 3);
 
 			roll_to(29);
 			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, 25)));
-			Snapshot::<Runtime>::assert_snapshot(true, 3);
 
 			roll_to(30);
 			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, 25)));
-			Snapshot::<Runtime>::assert_snapshot(true, 3);
 
 			// We close when upstream tells us to elect.
 			roll_to(32);
@@ -1425,7 +1431,7 @@ mod phase_rotation {
 			assert!(MultiBlock::current_phase().is_off());
 
 			// all snapshots are gone.
-			Snapshot::<Runtime>::assert_snapshot(false, 3);
+			assert_none_snapshot();
 			assert_eq!(MultiBlock::round(), 1);
 
 			roll_to(41);
@@ -1464,7 +1470,7 @@ mod phase_rotation {
 
 				assert_eq!(System::block_number(), 0);
 				assert_eq!(MultiBlock::current_phase(), Phase::Off);
-				Snapshot::<Runtime>::assert_snapshot(false, 2);
+				assert_none_snapshot();
 				assert_eq!(MultiBlock::round(), 0);
 
 				roll_to(4);
@@ -1476,25 +1482,24 @@ mod phase_rotation {
 
 				roll_to(10);
 				assert_eq!(MultiBlock::current_phase(), Phase::Snapshot(2));
-				Snapshot::<Runtime>::assert_snapshot(true, 1);
+				assert_ok!(Snapshot::<Runtime>::ensure_snapshot(true, 1));
 
 				roll_to(11);
 				assert_eq!(MultiBlock::current_phase(), Phase::Snapshot(1));
-				Snapshot::<Runtime>::assert_snapshot(true, 2);
+				assert_ok!(Snapshot::<Runtime>::ensure_snapshot(true, 2));
 
 				roll_to(12);
 				assert_eq!(MultiBlock::current_phase(), Phase::Snapshot(0));
-				Snapshot::<Runtime>::assert_snapshot(true, 3);
+				assert_ok!(Snapshot::<Runtime>::ensure_snapshot(true, 3));
 
 				roll_to(13);
 				assert_eq!(MultiBlock::current_phase(), Phase::Signed);
 				assert_eq!(multi_block_events(), vec![Event::SignedPhaseStarted(0)]);
-				Snapshot::<Runtime>::assert_snapshot(true, 3);
 				assert_eq!(MultiBlock::round(), 0);
 
 				roll_to(17);
 				assert_eq!(MultiBlock::current_phase(), Phase::Signed);
-				Snapshot::<Runtime>::assert_snapshot(true, 2);
+				assert_full_snapshot();
 				assert_eq!(MultiBlock::round(), 0);
 
 				roll_to(18);
@@ -1503,11 +1508,10 @@ mod phase_rotation {
 					multi_block_events(),
 					vec![Event::SignedPhaseStarted(0), Event::SignedValidationPhaseStarted(0)],
 				);
-				Snapshot::<Runtime>::assert_snapshot(true, 2);
 
 				roll_to(22);
 				assert_eq!(MultiBlock::current_phase(), Phase::SignedValidation(18));
-				Snapshot::<Runtime>::assert_snapshot(true, 2);
+				assert_full_snapshot();
 				assert_eq!(MultiBlock::round(), 0);
 
 				roll_to(23);
@@ -1520,15 +1524,12 @@ mod phase_rotation {
 						Event::UnsignedPhaseStarted(0)
 					],
 				);
-				Snapshot::<Runtime>::assert_snapshot(true, 3);
 
 				roll_to(27);
 				assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, 23)));
-				Snapshot::<Runtime>::assert_snapshot(true, 3);
 
 				roll_to(28);
 				assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, 23)));
-				Snapshot::<Runtime>::assert_snapshot(true, 3);
 
 				// We close when upstream tells us to elect.
 				roll_to(30);
@@ -1538,7 +1539,7 @@ mod phase_rotation {
 				assert!(MultiBlock::current_phase().is_off());
 
 				// all snapshots are gone.
-				Snapshot::<Runtime>::assert_snapshot(false, 3);
+				assert_ok!(Snapshot::<Runtime>::ensure_snapshot(false, 3));
 				assert_eq!(MultiBlock::round(), 1);
 
 				roll_to(41 - 2);
@@ -1660,7 +1661,7 @@ mod election_provider {
 			// pre-elect state
 			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, 25)));
 			assert_eq!(Round::<Runtime>::get(), 0);
-			ensure_full_snapshot();
+			assert_full_snapshot();
 
 			// call elect for each page
 			let _paged_solution = (MultiBlock::lsp()..MultiBlock::msp())
@@ -1727,7 +1728,7 @@ mod election_provider {
 			// pre-elect state:
 			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, 25)));
 			assert_eq!(Round::<Runtime>::get(), 0);
-			ensure_full_snapshot();
+			assert_full_snapshot();
 
 			// there are 3 pages (indexes 2..=0), but we short circuit by just calling 0.
 			let _solution = crate::Pallet::<Runtime>::elect(0).unwrap();
@@ -1782,7 +1783,7 @@ mod election_provider {
 			// pre-elect state:
 			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, 25)));
 			assert_eq!(Round::<Runtime>::get(), 0);
-			ensure_full_snapshot();
+			assert_full_snapshot();
 
 			// call elect for page 2 and 1, but NOT 0
 			let solutions = (1..=MultiBlock::msp())
@@ -1797,7 +1798,7 @@ mod election_provider {
 			// nothing changes from the prelect state, except phase is now export.
 			assert!(MultiBlock::current_phase().is_export());
 			assert_eq!(Round::<Runtime>::get(), 0);
-			ensure_full_snapshot();
+			assert_full_snapshot();
 		});
 	}
 
@@ -1829,7 +1830,7 @@ mod election_provider {
 			// Everything should work fine.
 			assert_eq!(MultiBlock::current_phase(), Phase::SignedValidation(20));
 			assert_eq!(Round::<Runtime>::get(), 0);
-			ensure_full_snapshot();
+			assert_full_snapshot();
 
 			// fetch all pages.
 			let _paged_solution = (MultiBlock::lsp()..MultiBlock::msp())

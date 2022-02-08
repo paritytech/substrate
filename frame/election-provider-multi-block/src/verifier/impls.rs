@@ -150,7 +150,6 @@ pub(crate) mod pallet {
 		Queued(ElectionScore, Option<ElectionScore>),
 	}
 
-	// ---- All storage items about the verifying solution.
 	/// A wrapper interface for the storage items related to the queued solution.
 	///
 	/// It wraps the following:
@@ -482,7 +481,6 @@ pub(crate) mod pallet {
 		PageIndex,
 		BoundedVec<(T::AccountId, PartialBackings), T::MaxWinnersPerPage>,
 	>;
-
 	/// The score of the valid variant of [`QueuedSolution`].
 	///
 	/// This only ever lives for the `valid` variant.
@@ -494,6 +492,7 @@ pub(crate) mod pallet {
 	#[pallet::getter(fn minimum_score)]
 	pub(crate) type MinimumScore<T: Config> = StorageValue<_, ElectionScore>;
 
+	/// Storage item for [`Status`].
 	#[pallet::storage]
 	#[pallet::getter(fn status_storage)]
 	pub(crate) type StatusStorage<T: Config> = StorageValue<_, Status, ValueQuery>;
@@ -781,9 +780,9 @@ impl<T: Config> Pallet<T> {
 		Ok(bounded_supports)
 	}
 
-	#[cfg(test)]
+	#[cfg(any(test, debug_assertions))]
 	pub(crate) fn sanity_check() -> Result<(), &'static str> {
-		Ok(())
+		QueuedSolution::<T>::sanity_check()
 	}
 }
 

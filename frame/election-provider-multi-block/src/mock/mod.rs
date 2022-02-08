@@ -372,26 +372,16 @@ pub trait ExecuteWithSanityChecks {
 impl ExecuteWithSanityChecks for sp_io::TestExternalities {
 	fn execute_with_sanity_checks(&mut self, test: impl FnOnce() -> ()) {
 		self.execute_with(test);
-		self.execute_with(sanity_checks)
+		self.execute_with(all_pallets_sanity_checks)
 	}
 }
 
-fn sanity_checks() {
+fn all_pallets_sanity_checks() {
 	let _ = VerifierPallet::sanity_check()
 		.and(UnsignedPallet::sanity_check())
 		.and(MultiBlock::sanity_check())
 		.and(SignedPallet::sanity_check())
 		.unwrap();
-}
-
-pub fn balances(who: &u64) -> (u64, u64) {
-	(Balances::free_balance(who), Balances::reserved_balance(who))
-}
-
-pub fn witness() -> SolutionOrSnapshotSize {
-	let voters = Snapshot::<Runtime>::voters_iter_flattened().count() as u32;
-	let targets = Snapshot::<Runtime>::targets().map(|t| t.len() as u32).unwrap_or_default();
-	SolutionOrSnapshotSize { voters, targets }
 }
 
 /// Fully verify a solution.
@@ -457,8 +447,19 @@ pub fn raw_paged_from_supports(
 }
 
 /// ensure that the snapshot fully exists.
-pub fn ensure_full_snapshot() {
-	Snapshot::<Runtime>::assert_snapshot(true, Pages::get())
+///
+/// NOTE: this should not be used that often, because we check snapshot in sanity checks, which are
+/// called ALL THE TIME.
+pub fn assert_full_snapshot() {
+	assert_ok!(Snapshot::<Runtime>::ensure_snapshot(true, Pages::get()));
+}
+
+/// ensure that the no snapshot exists.
+///
+/// NOTE: this should not be used that often, because we check snapshot in sanity checks, which are
+/// called ALL THE TIME.
+pub fn assert_none_snapshot() {
+	assert_ok!(Snapshot::<Runtime>::ensure_snapshot(false, Pages::get()));
 }
 
 /// Simple wrapper for mining a new solution. Just more handy in case the interface of mine solution
@@ -513,9 +514,13 @@ pub fn roll_to(n: BlockNumber) {
 		MultiBlock::on_initialize(i);
 		VerifierPallet::on_initialize(i);
 		UnsignedPallet::on_initialize(i);
+
 		if matches!(SignedPhaseSwitch::get(), SignedSwitch::Real) {
 			SignedPallet::on_initialize(i);
 		}
+
+		// invariants must hold at the end of each block.
+		all_pallets_sanity_checks()
 	}
 }
 
@@ -524,7 +529,7 @@ pub fn roll_to_snapshot_created() {
 	while !matches!(MultiBlock::current_phase(), Phase::Snapshot(0)) {
 		roll_next()
 	}
-	ensure_full_snapshot();
+	assert_full_snapshot();
 }
 
 /// proceed block number to whenever the unsigned phase is open (`Phase::Unsigned(_)`).
@@ -592,6 +597,9 @@ pub fn roll_to_with_ocw(n: BlockNumber, maybe_pool: Option<Arc<RwLock<PoolState>
 		if matches!(SignedPhaseSwitch::get(), SignedSwitch::Real) {
 			SignedPallet::offchain_worker(i);
 		}
+
+		// invariants must hold at the end of each block.
+		all_pallets_sanity_checks()
 	}
 }
 

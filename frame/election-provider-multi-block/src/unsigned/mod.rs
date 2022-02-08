@@ -521,7 +521,7 @@ mod validate_unsigned {
 
 #[cfg(test)]
 mod call {
-	use crate::{mock::*, verifier::Verifier};
+	use crate::{mock::*, verifier::Verifier, Snapshot};
 
 	#[test]
 	fn unsigned_submission_e2e() {
@@ -530,7 +530,7 @@ mod call {
 			roll_to_snapshot_created();
 
 			// snapshot is created..
-			ensure_full_snapshot();
+			assert_full_snapshot();
 			// ..txpool is empty..
 			assert_eq!(pool.read().transactions.len(), 0);
 			// ..but nothing queued.
@@ -549,7 +549,34 @@ mod call {
 	}
 
 	#[test]
+	#[should_panic(
+		expected = "Invalid unsigned submission must produce invalid block and deprive validator from their authoring reward."
+	)]
 	fn unfeasible_solution_panics() {
-		todo!("basic test to show that the unsigned call panics.");
+		let (mut ext, pool) = ExtBuilder::unsigned().build_offchainify();
+		ext.execute_with_sanity_checks(|| {
+			roll_to_snapshot_created();
+
+			// snapshot is created..
+			assert_full_snapshot();
+			// ..txpool is empty..
+			assert_eq!(pool.read().transactions.len(), 0);
+			// ..but nothing queued.
+			assert_eq!(<VerifierPallet as Verifier>::queued_score(), None);
+
+			// now the OCW should submit something.
+			roll_next_with_ocw(Some(pool.clone()));
+			assert_eq!(pool.read().transactions.len(), 1);
+			assert_eq!(<VerifierPallet as Verifier>::queued_score(), None);
+
+			// now we change the snapshot -- this should ensure that the solution becomes invalid.
+			// Note that we don't change the known fingerprint of the solution.
+			Snapshot::<Runtime>::remove_target(2);
+
+			// and now it should be applied.
+			roll_next_with_ocw(Some(pool.clone()));
+			assert_eq!(pool.read().transactions.len(), 0);
+			assert!(matches!(<VerifierPallet as Verifier>::queued_score(), Some(_)));
+		})
 	}
 }

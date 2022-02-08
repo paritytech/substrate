@@ -209,7 +209,7 @@ mod feasibility_check {
 	fn heuristic_desired_target_check_per_page() {
 		ExtBuilder::verifier().desired_targets(2).build_and_execute(|| {
 			roll_to(25);
-			ensure_full_snapshot();
+			assert_full_snapshot();
 
 			// all of these votes are valid, but this solution is already presenting 3 winners,
 			// while we just one 2.

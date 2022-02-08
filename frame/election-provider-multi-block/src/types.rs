@@ -298,8 +298,11 @@ pub enum Phase<Bn> {
 	/// passive, the offchain workers will not bother running.
 	Unsigned((bool, Bn)), // TODO: remove the bool
 	/// Snapshot is being created. No other operation is allowed. This can be one or more blocks.
-	/// Inner value is `0` if the snapshot is complete and we are ready to move on. Otherwise, it
-	/// indicates hte remaining pages for each of which we need 1 block.
+	/// The inner value should be read as "`remaining` number of pages are left to be fetched".
+	/// Thus, if inner value is `0` if the snapshot is complete and we are ready to move on.
+	///
+	/// This value should be interpreted after `on_initialize` of this pallet has already been
+	/// called.
 	Snapshot(PageIndex),
 	/// Exporting has begun.
 	///

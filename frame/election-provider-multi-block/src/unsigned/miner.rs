@@ -706,8 +706,6 @@ impl<T: Config> OffchainWorkerMiner<T> {
 				// ensure the cached call is still current before submitting
 				if let Call::submit_unsigned { paged_solution, .. } = &call {
 					// we check the snapshot fingerprint instead of doing a full feasibility.
-					// TODO: this might not be worth the risk. After all, we are still in the
-					// offchain worker context. Who cares of we re-do feasibility?
 					OffchainWorkerMiner::<T>::check_solution(
 						paged_solution,
 						Some(snapshot_fingerprint),
