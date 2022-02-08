@@ -97,7 +97,7 @@ pub trait SwapAction<AccountId, T: Config> {
 /// A swap action that only allows transferring balances.
 #[derive(Clone, RuntimeDebug, Eq, PartialEq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 #[scale_info(skip_type_params(C))]
-#[codec(mel_bound(C: ReservableCurrency<AccountId>))]
+#[codec(mel_bound(AccountId: MaxEncodedLen, C: ReservableCurrency<AccountId>))]
 pub struct BalanceSwapAction<AccountId, C: ReservableCurrency<AccountId>> {
 	value: <C as Currency<AccountId>>::Balance,
 	_marker: PhantomData<C>,
