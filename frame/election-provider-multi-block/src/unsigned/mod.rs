@@ -40,8 +40,9 @@ mod pallet {
 	/// convert a DispatchError to a custom InvalidTransaction with the inner code being the error
 	/// number.
 	fn dispatch_error_to_invalid(error: sp_runtime::DispatchError) -> InvalidTransaction {
+		use sp_runtime::ModuleError;
 		let error_number = match error {
-			DispatchError::Module { error, .. } => error,
+			DispatchError::Module(ModuleError { error, .. }) => error,
 			_ => 0,
 		};
 		InvalidTransaction::Custom(error_number)
