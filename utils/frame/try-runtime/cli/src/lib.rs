@@ -141,7 +141,9 @@
 //!
 //! These hooks allow you to execute some code, only within the `on-runtime-upgrade` command, before
 //! and after the migration. If any data needs to be temporarily stored between the pre/post
-//! migration hooks, `OnRuntimeUpgradeHelpersExt` can help with that.
+//! migration hooks, `OnRuntimeUpgradeHelpersExt` can help with that. Note that you should be
+//! mindful with any mutable storage ops in the pre/post migration checks, as you almost certainly
+//! will not want to mutate any of the storage that is to be migrated.
 //!
 //! #### Logging
 //!
