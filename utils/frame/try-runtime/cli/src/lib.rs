@@ -113,6 +113,8 @@
 //! well with try-runtime's expensive RPC queries:
 //!
 //! - set `--rpc-max-payload 1000` to ensure large RPC queries can work.
+//! - set `--ws-max-out-buffer-capacity 1000` to ensure the websocket connection can handle large
+//!   RPC queries.
 //! - set `--rpc-cors all` to ensure ws connections can come through.
 //!
 //! Note that *none* of the try-runtime operations need unsafe RPCs.
@@ -141,7 +143,9 @@
 //!
 //! These hooks allow you to execute some code, only within the `on-runtime-upgrade` command, before
 //! and after the migration. If any data needs to be temporarily stored between the pre/post
-//! migration hooks, `OnRuntimeUpgradeHelpersExt` can help with that.
+//! migration hooks, `OnRuntimeUpgradeHelpersExt` can help with that. Note that you should be
+//! mindful with any mutable storage ops in the pre/post migration checks, as you almost certainly
+//! will not want to mutate any of the storage that is to be migrated.
 //!
 //! #### Logging
 //!
