@@ -17,6 +17,41 @@
 //! Storage migrations for the Staking pallet.
 
 use super::*;
+use frame_election_provider_support::{SortedListProvider, VoteWeightProvider};
+use frame_support::traits::OnRuntimeUpgrade;
+
+/// Migration implementation that injects all validators into sorted list.
+///
+/// This is only useful for chains that started their `SortedListProvider` just based on nominators.
+pub struct InjectValidatorsIntoSortedListProvider<T>(sp_std::marker::PhantomData<T>);
+impl<T: Config> OnRuntimeUpgrade for InjectValidatorsIntoSortedListProvider<T> {
+	fn on_runtime_upgrade() -> Weight {
+		for (v, _) in Validators::<T>::iter() {
+			let weight = Pallet::<T>::vote_weight(&v);
+			let _ = T::SortedListProvider::on_insert(v.clone(), weight).map_err(|err| {
+				log!(warn, "failed to insert {:?} into SortedListProvider: {:?}", v, err)
+			});
+		}
+
+		T::BlockWeights::get().max_block
+	}
+
+	#[cfg(feature = "try-runtime")]
+	fn pre_upgrade() -> Result<(), &'static str> {
+		use frame_support::traits::OnRuntimeUpgradeHelpersExt;
+		let prev_count = T::SortedListProvider::count();
+		Self::set_temp_storage(prev_count, "prev");
+	}
+
+	#[cfg(feature = "try-runtime")]
+	fn post_upgrade() -> Result<(), &'static str> {
+		use frame_support::traits::OnRuntimeUpgradeHelpersExt;
+		let post_count = T::SortedListProvider::count();
+		let prev_count = Self::get_temp_storage::<u32>("prev");
+		let validators = Validators::<T>::count();
+		assert!(post_count == prev_count + validators);
+	}
+}
 
 pub mod v8 {
 	use frame_election_provider_support::SortedListProvider;

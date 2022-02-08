@@ -541,7 +541,7 @@ fn check_count() {
 
 	// the voters that the `SortedListProvider` list is storing for us.
 	let external_voters = <Test as Config>::SortedListProvider::count();
-	assert_eq!(external_voters, nominator_count);
+	assert_eq!(external_voters, nominator_count + validator_count);
 }
 
 fn check_ledgers() {

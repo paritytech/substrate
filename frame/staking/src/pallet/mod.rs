@@ -567,7 +567,7 @@ pub mod pallet {
 			// all voters are reported to the `SortedListProvider`.
 			assert_eq!(
 				T::SortedListProvider::count(),
-				Nominators::<T>::count(),
+				Nominators::<T>::count() + Validators::<T>::count(),
 				"not all genesis stakers were inserted into sorted list provider, something is wrong."
 			);
 		}
