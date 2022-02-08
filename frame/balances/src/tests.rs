@@ -1239,5 +1239,17 @@ macro_rules! decl_tests {
 				assert_eq!(Balances::free_balance(&3), 25);
 			});
 		}
+
+		#[test]
+		fn set_balance_handles_killing_account() {
+			<$ext_builder>::default().build().execute_with(|| {
+					let _ = Balances::deposit_creating(&1, 111);
+					assert_ok!(frame_system::Pallet::<Test>::inc_consumers(&1));
+					assert_noop!(
+						Balances::set_balance(Origin::root(), 1, 0, 0),
+						DispatchError::ConsumerRemaining,
+					);
+			});
+		}
 	}
 }
