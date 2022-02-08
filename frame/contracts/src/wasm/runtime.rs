@@ -199,10 +199,10 @@ pub enum RuntimeCosts {
 	CallSurchargeTransfer,
 	/// Weight per byte that is cloned by supplying the `CLONE_INPUT` flag.
 	CallInputCloned(u32),
-	/// Weight of calling `seal_instantiate` for the given input and salt without output weight.
-	/// This includes the transfer as an instantiate without a value will always be below
-	/// the existential deposit and is disregarded as corner case.
+	/// Weight of calling `seal_instantiate` for the given input length and salt.
 	InstantiateBase { input_data_len: u32, salt_len: u32 },
+	/// Weight of the transfer performed during an instantiate.
+	InstantiateSurchargeTransfer,
 	/// Weight of calling `seal_hash_sha_256` for the given input size.
 	HashSha256(u32),
 	/// Weight of calling `seal_hash_keccak_256` for the given input size.
@@ -279,8 +279,9 @@ impl RuntimeCosts {
 			CallInputCloned(len) => s.call_per_cloned_byte.saturating_mul(len.into()),
 			InstantiateBase { input_data_len, salt_len } => s
 				.instantiate
-				.saturating_add(s.instantiate_per_input_byte.saturating_mul(input_data_len.into()))
+				.saturating_add(s.return_per_byte.saturating_mul(input_data_len.into()))
 				.saturating_add(s.instantiate_per_salt_byte.saturating_mul(salt_len.into())),
+			InstantiateSurchargeTransfer => s.instantiate_transfer_surcharge,
 			HashSha256(len) => s
 				.hash_sha2_256
 				.saturating_add(s.hash_sha2_256_per_byte.saturating_mul(len.into())),
@@ -805,8 +806,11 @@ where
 		salt_len: u32,
 	) -> Result<ReturnCode, TrapReason> {
 		self.charge_gas(RuntimeCosts::InstantiateBase { input_data_len, salt_len })?;
-		let code_hash: CodeHash<<E as Ext>::T> = self.read_sandbox_memory_as(code_hash_ptr)?;
 		let value: BalanceOf<<E as Ext>::T> = self.read_sandbox_memory_as(value_ptr)?;
+		if value > 0u32.into() {
+			self.charge_gas(RuntimeCosts::InstantiateSurchargeTransfer)?;
+		}
+		let code_hash: CodeHash<<E as Ext>::T> = self.read_sandbox_memory_as(code_hash_ptr)?;
 		let input_data = self.read_sandbox_memory(input_data_ptr, input_data_len)?;
 		let salt = self.read_sandbox_memory(salt_ptr, salt_len)?;
 		let instantiate_outcome = self.ext.instantiate(gas, code_hash, value, input_data, &salt);

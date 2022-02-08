@@ -370,11 +370,8 @@ pub struct HostFnWeights<T: Config> {
 	/// Weight of calling `seal_instantiate`.
 	pub instantiate: Weight,
 
-	/// Weight per input byte supplied to `seal_instantiate`.
-	pub instantiate_per_input_byte: Weight,
-
-	/// Weight per output byte received through `seal_instantiate`.
-	pub instantiate_per_output_byte: Weight,
+	/// Weight surcharge that is claimed if `seal_instantiate` does a balance transfer.
+	pub instantiate_transfer_surcharge: Weight,
 
 	/// Weight per salt byte supplied to `seal_instantiate`.
 	pub instantiate_per_salt_byte: Weight,
@@ -619,21 +616,13 @@ impl<T: Config> Default for HostFnWeights<T> {
 			call_transfer_surcharge: cost_batched_args!(seal_call_per_transfer_clone_kb, 1, 0),
 			call_per_cloned_byte: cost_batched_args!(seal_call_per_transfer_clone_kb, 0, 1),
 			instantiate: cost_batched!(seal_instantiate),
-			instantiate_per_input_byte: cost_byte_batched_args!(
-				seal_instantiate_per_input_output_salt_kb,
-				1,
-				0,
-				0
-			),
-			instantiate_per_output_byte: cost_byte_batched_args!(
-				seal_instantiate_per_input_output_salt_kb,
-				0,
+			instantiate_transfer_surcharge: cost_byte_batched_args!(
+				seal_instantiate_per_transfer_salt_kb,
 				1,
 				0
 			),
 			instantiate_per_salt_byte: cost_byte_batched_args!(
-				seal_instantiate_per_input_output_salt_kb,
-				0,
+				seal_instantiate_per_transfer_salt_kb,
 				0,
 				1
 			),
