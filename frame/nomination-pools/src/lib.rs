@@ -357,9 +357,9 @@ impl<T: Config> BondedPool<T> {
 			.map(|points| Self { points, account: pool_account.clone() })
 	}
 
-	/// Insert [`Self`] into storage.
-	fn insert(Self { account, points }: Self) {
-		BondedPoolPoints::<T>::insert(account, points);
+	/// Consume and put [`Self`] into storage.
+	fn put(self) {
+		BondedPoolPoints::<T>::insert(self.account, self.points);
 	}
 
 	/// Get the amount of points to issue for some new funds that will be bonded in the pool.
