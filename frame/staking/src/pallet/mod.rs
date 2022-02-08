@@ -1617,11 +1617,8 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Force all validators to have at least the minimum commission. This will not affect
-		/// validators who already have a commission greater than or equal to the minimum.
-		///
-		/// Note that parameter `_validator_count` should be the upper bound of the number of
-		/// validators stored and is only used for weights.
+		/// Force a validator to have at least the minimum commission. This will not affect a
+		/// validator who already has a commission greater than or equal to the minimum.
 		#[pallet::weight(T::WeightInfo::force_apply_min_commission())]
 		pub fn force_apply_min_commission(
 			origin: OriginFor<T>,
