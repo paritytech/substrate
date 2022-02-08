@@ -110,11 +110,10 @@ pub mod pallet {
 	/// The lookup table for names.
 	#[pallet::storage]
 	pub(super) type NameOf<T: Config> =
-		StorageMap<_, Twox64Concat, T::AccountId, (Vec<u8>, BalanceOf<T>)>;
+		StorageMap<_, Twox64Concat, T::AccountId, (BoundedVec<u8, T::MaxLength>, BalanceOf<T>)>;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
-	#[pallet::without_storage_info]
 	pub struct Pallet<T>(_);
 
 	#[pallet::call]
@@ -139,8 +138,9 @@ pub mod pallet {
 		pub fn set_name(origin: OriginFor<T>, name: Vec<u8>) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 
-			ensure!(name.len() >= T::MinLength::get() as usize, Error::<T>::TooShort);
-			ensure!(name.len() <= T::MaxLength::get() as usize, Error::<T>::TooLong);
+			let bounded_name: BoundedVec<_, _> =
+				name.try_into().map_err(|()| Error::<T>::TooLong)?;
+			ensure!(bounded_name.len() >= T::MinLength::get() as usize, Error::<T>::TooShort);
 
 			let deposit = if let Some((_, deposit)) = <NameOf<T>>::get(&sender) {
 				Self::deposit_event(Event::<T>::NameChanged { who: sender.clone() });
@@ -152,7 +152,7 @@ pub mod pallet {
 				deposit
 			};
 
-			<NameOf<T>>::insert(&sender, (name, deposit));
+			<NameOf<T>>::insert(&sender, (bounded_name, deposit));
 			Ok(())
 		}
 
@@ -230,9 +230,11 @@ pub mod pallet {
 		) -> DispatchResult {
 			T::ForceOrigin::ensure_origin(origin)?;
 
+			let bounded_name: BoundedVec<_, _> =
+				name.try_into().map_err(|()| Error::<T>::TooLong)?;
 			let target = T::Lookup::lookup(target)?;
 			let deposit = <NameOf<T>>::get(&target).map(|x| x.1).unwrap_or_else(Zero::zero);
-			<NameOf<T>>::insert(&target, (name, deposit));
+			<NameOf<T>>::insert(&target, (bounded_name, deposit));
 
 			Self::deposit_event(Event::<T>::NameForced { target });
 			Ok(())
@@ -356,9 +358,15 @@ mod tests {
 
 			assert_ok!(Nicks::set_name(Origin::signed(2), b"Dave".to_vec()));
 			assert_eq!(Balances::reserved_balance(2), 2);
-			assert_ok!(Nicks::force_name(Origin::signed(1), 2, b"Dr. David Brubeck, III".to_vec()));
+			assert_noop!(
+				Nicks::force_name(Origin::signed(1), 2, b"Dr. David Brubeck, III".to_vec()),
+				Error::<Test>::TooLong,
+			);
+			assert_ok!(Nicks::force_name(Origin::signed(1), 2, b"Dr. Brubeck, III".to_vec()));
 			assert_eq!(Balances::reserved_balance(2), 2);
-			assert_eq!(<NameOf<Test>>::get(2).unwrap(), (b"Dr. David Brubeck, III".to_vec(), 2));
+			let (name, amount) = <NameOf<Test>>::get(2).unwrap();
+			assert_eq!(name, b"Dr. Brubeck, III".to_vec());
+			assert_eq!(amount, 2);
 		});
 	}
 

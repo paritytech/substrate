@@ -87,7 +87,7 @@ pub struct PrefabWasmModule<T: Config> {
 ///
 /// It is stored in a separate storage entry to avoid loading the code when not necessary.
 #[derive(Clone, Encode, Decode, scale_info::TypeInfo, MaxEncodedLen)]
-#[codec(mel_bound(T: Config))]
+#[codec(mel_bound())]
 #[scale_info(skip_type_params(T))]
 pub struct OwnerInfo<T: Config> {
 	/// The account that has deployed the contract and hence is allowed to remove it.
