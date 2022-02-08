@@ -544,8 +544,9 @@ impl Pair {
 
 // The `secp256k1` backend doesn't implement cleanup for their private keys.
 // Currently we should take care of wiping the secret from memory.
-// NOTE: this is not effective when `Pair` is moved. The very same problem
-// affects the other backends using `zeroize` for secret keys.
+// NOTE: this solution is not effective when `Pair` is moved around memory.
+// The very same problem affects other cryptographic backends that are just using
+// `zeroize`for their secrets.
 #[cfg(feature = "full_crypto")]
 impl Drop for Pair {
 	fn drop(&mut self) {
