@@ -1270,7 +1270,7 @@ mod pool_withdraw_unbonded {
 
 			// Then there unbonding balance becomes free
 			assert_eq!(Balances::free_balance(PRIMARY_ACCOUNT), 15);
-		})
+		});
 	}
 }
 
@@ -1779,4 +1779,5 @@ mod pools_interface {
 				assert_eq!(slashed_bonded, 0);
 			});
 	}
+	// TODO: returns none when account is not a pool
 }

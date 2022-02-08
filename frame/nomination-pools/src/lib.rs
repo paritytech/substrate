@@ -340,26 +340,81 @@ pub struct Delegator<T: Config> {
 	unbonding_era: Option<EraIndex>,
 }
 
+/// All of a pool's possible states.
+#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, RuntimeDebugNoBound)]
+#[cfg_attr(feature = "std", derive(Clone, PartialEq))]
+pub enum PoolState {
+	Open = 0,
+	Blocked = 1,
+	Destroying = 2,
+}
+
+/// Pool permissions and state
+#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, RuntimeDebugNoBound)]
+#[cfg_attr(feature = "std", derive(Clone, PartialEq))]
+#[codec(mel_bound(T: Config))]
+#[scale_info(skip_type_params(T))]
+struct BondedPoolStorage<T: Config> {
+	points: BalanceOf<T>,
+	/// See [`BondedPool::depositor`].
+	depositor: T::AccountId,
+	/// See [`BondedPool::admin`].
+	root: T::AccountId,
+	/// See [`BondedPool::nominator`].
+	nominator: T::AccountId,
+	/// See [`BondedPool::state_toggler`].
+	state_toggler: T::AccountId,
+	/// See [`BondedPool::state_toggler`].
+	state: PoolState,
+}
+
 #[derive(RuntimeDebugNoBound)]
 #[cfg_attr(feature = "std", derive(Clone, PartialEq))]
-// #[codec(mel_bound(T: Config))]
-// #[scale_info(skip_type_params(T))]
 pub struct BondedPool<T: Config> {
+	/// Points of the pool.
 	points: BalanceOf<T>,
+	/// Account that puts down a deposit to create the pool. This account acts a delegator, but can
+	/// only unbond if no other delegators belong to the pool.
+	depositor: T::AccountId,
+	/// Can perform the same actions as [`Self::nominator`] and [`Self::state_toggler`].
+	/// Additionally, this account can set the `nominator` and `state_toggler` at any time.
+	root: T::AccountId,
+	/// Can set the pool's nominations at any time.
+	nominator: T::AccountId,
+	/// Can toggle the pools state, including setting the pool as blocked or putting the pool into
+	/// destruction mode. The state toggle can also "kick" delegators by unbonding them. TODO:
+	/// there should be an unbond_other where the state_toggle can unbond pool members, and a
+	/// destroying pool can have anyone unbond other on the members
+	state_toggler: T::AccountId,
+	/// State of the pool.
+	state: PoolState,
+	/// AccountId of the pool.
 	account: T::AccountId,
 }
 
 impl<T: Config> BondedPool<T> {
 	/// Get [`Self`] from storage. Returns `None` if no entry for `pool_account` exists.
 	fn get(pool_account: &T::AccountId) -> Option<Self> {
-		BondedPoolPoints::<T>::try_get(pool_account)
-			.ok()
-			.map(|points| Self { points, account: pool_account.clone() })
+		BondedPools::<T>::try_get(pool_account).ok().map(
+			|BondedPoolStorage { points, depositor, root, nominator, state_toggler, state }| Self {
+				points,
+				depositor,
+				root,
+				nominator,
+				state_toggler,
+				state,
+				account: pool_account.clone(),
+			},
+		)
 	}
 
-	/// Insert [`Self`] into storage.
-	fn insert(Self { account, points }: Self) {
-		BondedPoolPoints::<T>::insert(account, points);
+	/// Consume and put [`Self`] into storage.
+	fn put(self) {
+		let Self { account, points, depositor, root, nominator, state_toggler, state } = self;
+		BondedPools::<T>::insert(
+			account,
+			BondedPoolStorage { points, depositor, root, nominator, state_toggler, state },
+		);
 	}
 
 	/// Get the amount of points to issue for some new funds that will be bonded in the pool.
@@ -410,6 +465,46 @@ impl<T: Config> BondedPool<T> {
 		);
 		// then we can be decently confident the bonding pool points will not overflow
 		// `BalanceOf<T>`.
+		Ok(())
+	}
+
+	fn can_nominate(&self, who: &T::AccountId) -> bool {
+		*who == self.root || *who == self.nominator
+	}
+
+	fn ok_to_unbond_other_with(
+		&self,
+		who: &T::AccountId,
+		target_account: &T::AccountId,
+		target_delegator: &Delegator<T>,
+	) -> Result<(), DispatchError> {
+		let is_destroying = self.state == PoolState::Destroying;
+		let is_permissioned = who == target_account;
+		let is_depositor = *target_account == self.depositor;
+		match (is_permissioned, is_depositor) {
+			// anyone can unbond a delegator if it is not the depositor and the pool is getting
+			// destroyed
+			(false, false) => ensure!(is_destroying, Error::<T>::NotDestroying),
+			// any delegator who is not the depositor can always unbond themselves
+			(true, false) => (),
+			// depositor can only start unbonding if the pool is already being destroyed and the are
+			// the delegator in the pool
+			(false, true) | (true, true) => {
+				ensure!(target_delegator.points == self.points, Error::<T>::NotOnlyDelegator);
+				ensure!(is_destroying, Error::<T>::NotDestroying);
+			},
+		}
+		Ok(())
+	}
+
+	fn ok_to_withdraw_unbonded_other_with(
+		&self,
+		caller: &T::AccountId,
+		target: &T::AccountId,
+	) -> Result<(), DispatchError> {
+		let is_permissioned = caller == target;
+		let is_destroying = self.state == PoolState::Destroying;
+		ensure!(is_permissioned || is_destroying, Error::<T>::NotDestroying);
 		Ok(())
 	}
 }
@@ -590,11 +685,10 @@ pub mod pallet {
 	pub(crate) type Delegators<T: Config> =
 		CountedStorageMap<_, Twox64Concat, T::AccountId, Delegator<T>>;
 
-	/// Points for the bonded pools. Keyed by the pool's _Stash_/_Controller_. To get or insert a
-	/// pool see [`BondedPool::get`] and [`BondedPool::insert`]
+	/// To get or insert a pool see [`BondedPool::get`] and [`BondedPool::put`]
 	#[pallet::storage]
-	pub(crate) type BondedPoolPoints<T: Config> =
-		CountedStorageMap<_, Twox64Concat, T::AccountId, BalanceOf<T>>;
+	pub(crate) type BondedPools<T: Config> =
+		CountedStorageMap<_, Twox64Concat, T::AccountId, BondedPoolStorage<T>>;
 
 	/// Reward pools. This is where there rewards for each pool accumulate. When a delegators payout
 	/// is claimed, the balance comes out fo the reward pool. Keyed by the bonded pools
@@ -649,6 +743,13 @@ pub mod pallet {
 		// Likely only an error ever encountered in poorly built tests.
 		/// A pool with the generated account id already exists.
 		IdInUse,
+		/// A pool must be in [`PoolState::Destroying`] in order for the depositor to unbond or for
+		/// other delegators to be permissionlessly unbonded.
+		NotDestroying,
+		/// The depositor must be the only delegator in the pool in order to unbond.
+		NotOnlyDelegator,
+		/// The caller does not have nominating permissions for the pool.
+		NotNominator
 	}
 
 	#[pallet::call]
@@ -707,8 +808,7 @@ pub mod pallet {
 					unbonding_era: None,
 				},
 			);
-			BondedPool::insert(bonded_pool);
-
+			bonded_pool.put();
 			Self::deposit_event(Event::<T>::Joined {
 				delegator: who,
 				pool: pool_account,
@@ -740,22 +840,24 @@ pub mod pallet {
 		/// If their are too many unlocking chunks to unbond with the pool account,
 		/// [`Self::withdraw_unbonded_pool`] can be called to try and minimize unlocking chunks.
 		#[pallet::weight(666)]
-		pub fn unbond(origin: OriginFor<T>) -> DispatchResult {
+		pub fn unbond_other(origin: OriginFor<T>, target: T::AccountId) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			// TODO check if this is owner, if its the owner then they must be the only person in
 			// the pool and it needs to be destroyed with withdraw_unbonded
 
-			let delegator = Delegators::<T>::get(&who).ok_or(Error::<T>::DelegatorNotFound)?;
+			let delegator = Delegators::<T>::get(&target).ok_or(Error::<T>::DelegatorNotFound)?;
 			let mut bonded_pool = BondedPool::<T>::get(&delegator.pool)
 				.defensive_ok_or_else(|| Error::<T>::PoolNotFound)?;
+			bonded_pool.ok_to_unbond_other_with(&who, &target, &delegator)?;
 
 			// Claim the the payout prior to unbonding. Once the user is unbonding their points
 			// no longer exist in the bonded pool and thus they can no longer claim their payouts.
 			// It is not strictly necessary to claim the rewards, but we do it here for UX.
-			Self::do_reward_payout(who.clone(), delegator, &bonded_pool)?;
+			Self::do_reward_payout(target.clone(), delegator, &bonded_pool)?;
 
 			// Re-fetch the delegator because they where updated by `do_reward_payout`.
-			let mut delegator = Delegators::<T>::get(&who).ok_or(Error::<T>::DelegatorNotFound)?;
+			let mut delegator =
+				Delegators::<T>::get(&target).ok_or(Error::<T>::DelegatorNotFound)?;
 			// Note that we lazily create the unbonding pools here if they don't already exist
 			let sub_pools = SubPoolsStorage::<T>::get(&delegator.pool).unwrap_or_default();
 			let current_era = T::StakingInterface::current_era().unwrap_or(Zero::zero());
@@ -782,15 +884,15 @@ pub mod pallet {
 			delegator.unbonding_era = Some(current_era);
 
 			Self::deposit_event(Event::<T>::Unbonded {
-				delegator: who.clone(),
+				delegator: target.clone(),
 				pool: delegator.pool.clone(),
 				amount: balance_to_unbond,
 			});
-
 			// Now that we know everything has worked write the items to storage.
-			BondedPool::insert(bonded_pool);
+			bonded_pool.put();
 			SubPoolsStorage::insert(&delegator.pool, sub_pools);
 			Delegators::insert(who, delegator);
+
 
 			Ok(())
 		}
@@ -811,14 +913,21 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// Withdraw unbonded funds for the `target` delegator. If the pool is not in
+		/// [`PoolState::Destroying`] mode, this can only be called by the delegator themselves;
+		/// otherwise this can be called by any account.
 		#[pallet::weight(666)]
-		pub fn withdraw_unbonded(origin: OriginFor<T>, num_slashing_spans: u32) -> DispatchResult {
+		pub fn withdraw_unbonded_other(
+			origin: OriginFor<T>,
+			target: T::AccountId,
+			num_slashing_spans: u32,
+		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			// TODO: Check if this is the owner, and if its the owner then we delete this pool from
 			// storage at the end of the function. (And we assume that unbond ensured they are the
 			// last member of the pool)
 
-			let delegator = Delegators::<T>::get(&who).ok_or(Error::<T>::DelegatorNotFound)?;
+			let delegator = Delegators::<T>::get(&target).ok_or(Error::<T>::DelegatorNotFound)?;
 
 			let unbonding_era = delegator.unbonding_era.ok_or(Error::<T>::NotUnbonding)?;
 			let current_era = T::StakingInterface::current_era().unwrap_or(Zero::zero());
@@ -826,6 +935,9 @@ pub mod pallet {
 			if current_era.saturating_sub(unbonding_era) < T::StakingInterface::bonding_duration() {
 				return Err(Error::<T>::NotUnbondedYet.into())
 			};
+			BondedPool::<T>::get(&delegator.pool)
+				.defensive_ok_or_else(|| Error::<T>::RewardPoolNotFound)?
+				.ok_to_withdraw_unbonded_other_with(&who, &target)?;
 
 			let mut sub_pools =
 				SubPoolsStorage::<T>::get(&delegator.pool).ok_or(Error::<T>::SubPoolsNotFound)?;
@@ -847,20 +959,18 @@ pub mod pallet {
 			};
 
 			T::StakingInterface::withdraw_unbonded(delegator.pool.clone(), num_slashing_spans)?;
-
 			T::Currency::transfer(
 				&delegator.pool,
-				&who,
+				&target,
 				balance_to_unbond,
 				ExistenceRequirement::AllowDeath,
 			)
 			.defensive_map_err(|e| e)?;
 
 			SubPoolsStorage::<T>::insert(&delegator.pool, sub_pools);
-			Delegators::<T>::remove(&who);
-
+			Delegators::<T>::remove(&target);
 			Self::deposit_event(Event::<T>::Withdrawn {
-				delegator: who,
+				delegator: target,
 				pool: delegator.pool,
 				amount: balance_to_unbond,
 			});
@@ -872,8 +982,8 @@ pub mod pallet {
 		///
 		/// Note that the pool creator will delegate `amount` to the pool and cannot unbond until
 		/// every
+		/// NOTE: This does not nominate, a pool admin needs to call [`Call::nominate`]
 		///
-		/// * `validators`: _Stash_ addresses of the validators to nominate.
 		/// * `amount`: Balance to delegate to the pool. Must meet the minimum bond.
 		/// * `index`: Disambiguation index for seeding account generation. Likely only useful when
 		///   creating multiple pools in the same extrinsic.
@@ -881,18 +991,31 @@ pub mod pallet {
 		#[frame_support::transactional]
 		pub fn create(
 			origin: OriginFor<T>,
-			validators: Vec<<T::Lookup as StaticLookup>::Source>,
 			amount: BalanceOf<T>,
 			index: u16,
+			root: T::AccountId,
+			nominator: T::AccountId,
+			state_toggler: T::AccountId,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
+			// TODO: this should be min some deposit
+			// TODO: have an integrity test that min deposit is at least min bond (make min deposit
+			// storage item so it can be increased)
 			ensure!(amount >= T::StakingInterface::minimum_bond(), Error::<T>::MinimumBondNotMet);
+			ensure!(!Delegators::<T>::contains_key(&who), Error::<T>::AccountBelongsToOtherPool);
 
 			let (pool_account, reward_account) = Self::create_accounts(index);
-			ensure!(!BondedPoolPoints::<T>::contains_key(&pool_account), Error::<T>::IdInUse);
+			ensure!(!BondedPools::<T>::contains_key(&pool_account), Error::<T>::IdInUse);
 
-			let mut bonded_pool =
-				BondedPool::<T> { points: Zero::zero(), account: pool_account.clone() };
+			let mut bonded_pool = BondedPool::<T> {
+				account: pool_account.clone(),
+				points: Zero::zero(),
+				depositor: who.clone(),
+				root,
+				nominator,
+				state_toggler,
+				state: PoolState::Open,
+			};
 			// We must calculate the points issued *before* we bond who's funds, else
 			// points:balance ratio will be wrong.
 			let points_issued = bonded_pool.issue(amount);
@@ -904,7 +1027,6 @@ pub mod pallet {
 				amount,
 				reward_account.clone(),
 			)?;
-			T::StakingInterface::nominate(pool_account.clone(), validators)?;
 
 			Delegators::<T>::insert(
 				who,
@@ -915,7 +1037,7 @@ pub mod pallet {
 					unbonding_era: None,
 				},
 			);
-			BondedPool::<T>::insert(bonded_pool);
+			bonded_pool.put();
 			RewardPools::<T>::insert(
 				pool_account,
 				RewardPool::<T> {
@@ -926,6 +1048,20 @@ pub mod pallet {
 				},
 			);
 
+			Ok(())
+		}
+
+		#[pallet::weight(666)]
+		pub fn nominate(
+			origin: OriginFor<T>,
+			pool_account: T::AccountId,
+			validators: Vec<<T::Lookup as StaticLookup>::Source>,
+		) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+			let bonded_pool =
+				BondedPool::<T>::get(&pool_account).ok_or(Error::<T>::PoolNotFound)?;
+			ensure!(bonded_pool.can_nominate(&who), Error::<T>::NotNominator);
+			T::StakingInterface::nominate(pool_account.clone(), validators)?;
 			Ok(())
 		}
 	}
@@ -1068,7 +1204,7 @@ impl<T: Config> Pallet<T> {
 		}: SlashPoolArgs::<T::AccountId, BalanceOf<T>>,
 	) -> Option<SlashPoolOut<BalanceOf<T>>> {
 		// Make sure this is a pool account
-		BondedPoolPoints::<T>::contains_key(&pool_stash).then(|| ())?;
+		BondedPools::<T>::contains_key(&pool_stash).then(|| ())?;
 		let mut sub_pools = SubPoolsStorage::<T>::get(pool_stash).unwrap_or_default();
 
 		let affected_range = (slash_era + 1)..=apply_era;
