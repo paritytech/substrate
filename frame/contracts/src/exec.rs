@@ -158,6 +158,15 @@ pub trait Ext: sealing::Sealed {
 	/// Returns a reference to the account id of the caller.
 	fn caller(&self) -> &AccountIdOf<Self::T>;
 
+	/// Check if a contract lives at the specified `address`.
+	fn is_contract(&self, address: &AccountIdOf<Self::T>) -> bool;
+
+	/// Check if the caller of the current contract is the origin of the whole call stack.
+	///
+	/// This can be checked with `is_contract(self.caller())` as well.
+	/// However, this function does not require any storage lookup and therefore uses less weight.
+	fn caller_is_origin(&self) -> bool;
+
 	/// Returns a reference to the account id of the current contract.
 	fn address(&self) -> &AccountIdOf<Self::T>;
 
@@ -483,7 +492,7 @@ where
 	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
 	E: Executable<T>,
 {
-	/// Create an run a new call stack by calling into `dest`.
+	/// Create and run a new call stack by calling into `dest`.
 	///
 	/// # Note
 	///
@@ -1022,6 +1031,14 @@ where
 
 	fn caller(&self) -> &T::AccountId {
 		self.frames().nth(1).map(|f| &f.account_id).unwrap_or(&self.origin)
+	}
+
+	fn is_contract(&self, address: &T::AccountId) -> bool {
+		ContractInfoOf::<T>::contains_key(&address)
+	}
+
+	fn caller_is_origin(&self) -> bool {
+		self.caller() == &self.origin
 	}
 
 	fn balance(&self) -> BalanceOf<T> {
@@ -1618,6 +1635,70 @@ mod tests {
 
 		WITNESSED_CALLER_BOB.with(|caller| assert_eq!(*caller.borrow(), Some(origin)));
 		WITNESSED_CALLER_CHARLIE.with(|caller| assert_eq!(*caller.borrow(), Some(dest)));
+	}
+
+	#[test]
+	fn is_contract_returns_proper_values() {
+		let bob_ch = MockLoader::insert(Call, |ctx, _| {
+			// Verify that BOB is a contract
+			assert!(ctx.ext.is_contract(&BOB));
+			// Verify that ALICE is not a contract
+			assert!(!ctx.ext.is_contract(&ALICE));
+			exec_success()
+		});
+
+		ExtBuilder::default().build().execute_with(|| {
+			let schedule = <Test as Config>::Schedule::get();
+			place_contract(&BOB, bob_ch);
+
+			let mut storage_meter = storage::meter::Meter::new(&ALICE, Some(0), 0).unwrap();
+			let result = MockStack::run_call(
+				ALICE,
+				BOB,
+				&mut GasMeter::<Test>::new(GAS_LIMIT),
+				&mut storage_meter,
+				&schedule,
+				0,
+				vec![],
+				None,
+			);
+			assert_matches!(result, Ok(_));
+		});
+	}
+
+	#[test]
+	fn caller_is_origin_returns_proper_values() {
+		let code_charlie = MockLoader::insert(Call, |ctx, _| {
+			// BOB is not the origin of the stack call
+			assert!(!ctx.ext.caller_is_origin());
+			exec_success()
+		});
+
+		let code_bob = MockLoader::insert(Call, |ctx, _| {
+			// ALICE is the origin of the call stack
+			assert!(ctx.ext.caller_is_origin());
+			// BOB calls CHARLIE
+			ctx.ext.call(0, CHARLIE, 0, vec![], true)
+		});
+
+		ExtBuilder::default().build().execute_with(|| {
+			let schedule = <Test as Config>::Schedule::get();
+			place_contract(&BOB, code_bob);
+			place_contract(&CHARLIE, code_charlie);
+			let mut storage_meter = storage::meter::Meter::new(&ALICE, Some(0), 0).unwrap();
+			// ALICE -> BOB (caller is origin) -> CHARLIE (caller is not origin)
+			let result = MockStack::run_call(
+				ALICE,
+				BOB,
+				&mut GasMeter::<Test>::new(GAS_LIMIT),
+				&mut storage_meter,
+				&schedule,
+				0,
+				vec![0],
+				None,
+			);
+			assert_matches!(result, Ok(_));
+		});
 	}
 
 	#[test]

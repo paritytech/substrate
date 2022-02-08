@@ -408,6 +408,7 @@ benchmarks! {
 	}
 	verify {
 		// make sure that all slashes have been applied
+		#[cfg(test)]
 		assert_eq!(
 			System::<T>::event_count(), 0
 			+ 1 // offence
@@ -443,6 +444,7 @@ benchmarks! {
 	}
 	verify {
 		// make sure that all slashes have been applied
+		#[cfg(test)]
 		assert_eq!(
 			System::<T>::event_count(), 0
 			+ 1 // offence

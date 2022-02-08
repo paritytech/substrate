@@ -256,7 +256,7 @@ use sp_runtime::{
 		InvalidTransaction, TransactionPriority, TransactionSource, TransactionValidity,
 		TransactionValidityError, ValidTransaction,
 	},
-	DispatchError, PerThing, Perbill, RuntimeDebug, SaturatedConversion,
+	DispatchError, ModuleError, PerThing, Perbill, RuntimeDebug, SaturatedConversion,
 };
 use sp_std::prelude::*;
 
@@ -493,7 +493,7 @@ pub struct SolutionOrSnapshotSize {
 ///
 /// Note that this is different from [`pallet::Error`].
 #[derive(frame_support::DebugNoBound)]
-#[cfg_attr(feature = "runtime-benchmarks", derive(strum_macros::IntoStaticStr))]
+#[cfg_attr(feature = "runtime-benchmarks", derive(strum::IntoStaticStr))]
 pub enum ElectionError<T: Config> {
 	/// An error happened in the feasibility check sub-system.
 	Feasibility(FeasibilityError),
@@ -538,7 +538,7 @@ impl<T: Config> From<unsigned::MinerError<T>> for ElectionError<T> {
 
 /// Errors that can happen in the feasibility check.
 #[derive(Debug, Eq, PartialEq)]
-#[cfg_attr(feature = "runtime-benchmarks", derive(strum_macros::IntoStaticStr))]
+#[cfg_attr(feature = "runtime-benchmarks", derive(strum::IntoStaticStr))]
 pub enum FeasibilityError {
 	/// Wrong number of winners presented.
 	WrongWinnerCount,
@@ -1601,7 +1601,7 @@ impl<T: Config> ElectionProvider for Pallet<T> {
 /// number.
 pub fn dispatch_error_to_invalid(error: DispatchError) -> InvalidTransaction {
 	let error_number = match error {
-		DispatchError::Module { error, .. } => error,
+		DispatchError::Module(ModuleError { error, .. }) => error,
 		_ => 0,
 	};
 	InvalidTransaction::Custom(error_number)
