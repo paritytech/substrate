@@ -37,7 +37,7 @@ pub(super) struct SubscribeOp<'a> {
 	pub filter_child_keys: Option<&'a [(StorageKey, Option<Vec<StorageKey>>)]>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub(super) struct Registry {
 	pub(super) metrics: Option<SubscribersGauge>,
 	pub(super) wildcard_listeners: FnvHashSet<SubscriberId>,
@@ -95,21 +95,9 @@ impl Registry {
 	}
 }
 
-impl Default for Registry {
-	fn default() -> Self {
-		Self {
-			metrics: Default::default(),
-			wildcard_listeners: Default::default(),
-			listeners: Default::default(),
-			child_listeners: Default::default(),
-			sinks: Default::default(),
-		}
-	}
-}
-
 impl Unsubscribe for Registry {
 	fn unsubscribe(&mut self, subs_id: SubscriberId) {
-		let _ = self.remove_subscriber(subs_id);
+		self.remove_subscriber(subs_id);
 	}
 }
 
