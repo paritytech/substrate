@@ -315,16 +315,15 @@ pub mod pallet {
 			let new_reserved = if wipeout { Zero::zero() } else { new_reserved };
 
 			// First we try to modify the account's balance to the forced balance.
-			let (old_free, old_reserved, new_free, new_reserved) =
-				Self::mutate_account(&who, |account| {
-					let old_free = account.free;
-					let old_reserved = account.reserved;
+			let (old_free, old_reserved) = Self::mutate_account(&who, |account| {
+				let old_free = account.free;
+				let old_reserved = account.reserved;
 
-					account.free = new_free;
-					account.reserved = new_reserved;
+				account.free = new_free;
+				account.reserved = new_reserved;
 
-					(old_free, old_reserved, new_free, new_reserved)
-				})?;
+				(old_free, old_reserved)
+			})?;
 
 			// This will adjust the total issuance, which was not done by the `mutate_account`
 			// above.
