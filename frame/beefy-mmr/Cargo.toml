@@ -10,9 +10,9 @@ repository = "https://github.com/paritytech/substrate"
 [dependencies]
 hex = { version = "0.4", optional = true }
 codec = { version = "2.2.0", package = "parity-scale-codec", default-features = false, features = ["derive"] }
-libsecp256k1 = { version = "0.7.0", default-features = false }
 log = { version = "0.4.13", default-features = false }
 scale-info = { version = "1.0", default-features = false, features = ["derive"] }
+secp256k1 = { version = "0.21.2", default-features = false }
 serde = { version = "1.0.132", optional = true }
 
 frame-support = { version = "4.0.0-dev", path = "../support", default-features = false }
@@ -43,13 +43,13 @@ std = [
     "frame-support/std",
     "frame-system/std",
     "hex",
-    "libsecp256k1/std",
     "log/std",
     "pallet-beefy/std",
     "pallet-mmr-primitives/std",
     "pallet-mmr/std",
     "pallet-session/std",
     "serde",
+    "secp256k1/std",
     "sp-core/std",
     "sp-io/std",
     "sp-runtime/std",
