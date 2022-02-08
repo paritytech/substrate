@@ -17,7 +17,7 @@ sc-chain-spec-derive = { version = "4.0.0-dev", path = "./derive" }
 impl-trait-for-tuples = "0.2.1"
 sc-network = { version = "0.10.0-dev", path = "../network" }
 sp-core = { version = "5.0.0", path = "../../primitives/core" }
-serde = { version = "1.0.132", features = ["derive"] }
+serde = { version = "1.0.136", features = ["derive"] }
 serde_json = "1.0.74"
 sp-runtime = { version = "5.0.0", path = "../../primitives/runtime" }
 sc-telemetry = { version = "4.0.0-dev", path = "../telemetry" }
