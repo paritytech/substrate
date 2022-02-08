@@ -1186,11 +1186,12 @@ where
 		increment_refcount::<Self::T>(hash)?;
 		let top_frame = self.top_frame_mut();
 		let prev_hash = top_frame.contract_info().code_hash.clone();
+		decrement_refcount::<Self::T>(prev_hash.clone())?;
 		top_frame.contract_info().code_hash = hash;
-		decrement_refcount::<Self::T>(prev_hash)?;
 		Contracts::<Self::T>::deposit_event(Event::ContractCodeUpdated {
 			contract: top_frame.account_id.clone(),
-			code_hash: hash,
+			new_code_hash: hash,
+			old_code_hash: prev_hash,
 		});
 		Ok(())
 	}

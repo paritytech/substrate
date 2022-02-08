@@ -312,7 +312,6 @@ mod tests {
 	}
 
 	pub struct MockExt {
-		code_hashes: Vec<CodeHash<Test>>,
 		storage: HashMap<StorageKey, Vec<u8>>,
 		instantiates: Vec<InstantiateEntry>,
 		terminations: Vec<TerminationEntry>,
@@ -326,6 +325,7 @@ mod tests {
 		gas_meter: GasMeter<Test>,
 		debug_buffer: Vec<u8>,
 		ecdsa_recover: RefCell<Vec<([u8; 65], [u8; 32])>>,
+		code_hashes: Vec<CodeHash<Test>>,
 	}
 
 	/// The call is mocked and just returns this hardcoded value.

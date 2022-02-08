@@ -121,7 +121,7 @@ pub fn decrement_refcount<T: Config>(code_hash: CodeHash<T>) -> Result<(), Dispa
 ///
 /// # Errors
 ///
-/// `Error::CodeNotFound` is returned if the specified `code_hash` does not exist.
+/// [`Error::CodeNotFound`] is returned if the specified `code_hash` does not exist.
 pub fn increment_refcount<T: Config>(code_hash: CodeHash<T>) -> Result<(), DispatchError> {
 	<OwnerInfoOf<T>>::mutate(code_hash, |existing| -> Result<(), DispatchError> {
 		if let Some(info) = existing {

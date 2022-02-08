@@ -570,7 +570,9 @@ pub mod pallet {
 			/// The contract that has been updated.
 			contract: T::AccountId,
 			/// New code hash that was set for the contract.
-			code_hash: T::Hash,
+			new_code_hash: T::Hash,
+			/// Previous code hash of the contract.
+			old_code_hash: T::Hash,
 		},
 	}
 

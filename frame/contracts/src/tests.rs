@@ -3076,7 +3076,8 @@ fn set_code_hash() {
 				phase: Phase::Initialization,
 				event: Event::Contracts(crate::Event::ContractCodeUpdated {
 					contract: contract_addr.clone(),
-					code_hash: new_code_hash.clone(),
+					new_code_hash: new_code_hash.clone(),
+					old_code_hash: code_hash.clone(),
 				}),
 				topics: vec![],
 			},
