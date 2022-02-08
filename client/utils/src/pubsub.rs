@@ -117,12 +117,13 @@ impl<M, R> Hub<M, R>
 where
 	R: Unsubscribe,
 {
-	/// Provide mutable access to the registry (for test purposes).
-	pub fn lock_registry_for_tests<'a>(&'a self) -> impl std::ops::DerefMut<Target = R> + 'a {
+	/// Provide access to the registry (for test purposes).
+	pub fn map_registry_for_tests<MapF, Ret>(&self, map: MapF) -> Ret
+	where
+		MapF: FnOnce(&R) -> Ret,
+	{
 		let shared_locked = self.shared.lock();
-		let registry_locked =
-			parking_lot::MutexGuard::map(shared_locked, |shared| &mut shared.registry);
-		registry_locked
+		map(&shared_locked.registry)
 	}
 }
 
