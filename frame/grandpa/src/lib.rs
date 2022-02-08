@@ -364,12 +364,9 @@ pub type BoundedAuthorityList<Limit> = WeakBoundedVec<(AuthorityId, AuthorityWei
 /// A stored pending change.
 /// `Limit` is the bound for `next_authorities`
 #[derive(Encode, Decode, TypeInfo, MaxEncodedLen)]
-#[codec(mel_bound(Limit: Get<u32>))]
+#[codec(mel_bound(N: MaxEncodedLen, Limit: Get<u32>))]
 #[scale_info(skip_type_params(Limit))]
 pub struct StoredPendingChange<N, Limit>
-where
-	Limit: Get<u32>,
-	N: MaxEncodedLen,
 {
 	/// The block number this was scheduled at.
 	pub scheduled_at: N,
