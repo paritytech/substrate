@@ -58,12 +58,15 @@ pub fn expand_error(def: &mut Def) -> proc_macro2::TokenStream {
 	};
 
 	error_item.variants.insert(0, phantom_variant);
+
+	let capture_docs = if cfg!(feature = "no-metadata-docs") { "never" } else { "always" };
+
 	// derive TypeInfo for error metadata
 	error_item
 		.attrs
 		.push(syn::parse_quote!( #[derive(#frame_support::scale_info::TypeInfo)] ));
 	error_item.attrs.push(syn::parse_quote!(
-		#[scale_info(skip_type_params(#type_use_gen), capture_docs = "always")]
+		#[scale_info(skip_type_params(#type_use_gen), capture_docs = #capture_docs)]
 	));
 
 	if get_doc_literals(&error_item.attrs).is_empty() {
@@ -121,11 +124,11 @@ pub fn expand_error(def: &mut Def) -> proc_macro2::TokenStream {
 				>::index::<Pallet<#type_use_gen>>()
 					.expect("Every active module has an index in the runtime; qed") as u8;
 
-				#frame_support::sp_runtime::DispatchError::Module {
+				#frame_support::sp_runtime::DispatchError::Module(#frame_support::sp_runtime::ModuleError {
 					index,
 					error: err.as_u8(),
 					message: Some(err.as_str()),
-				}
+				})
 			}
 		}
 	)

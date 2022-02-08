@@ -35,7 +35,7 @@ use sp_externalities::Extensions;
 use sp_keystore::{testing::KeyStore, KeystoreExt, SyncCryptoStorePtr};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use sp_state_machine::StateMachine;
-use std::{fmt::Debug, sync::Arc, time};
+use std::{fmt::Debug, fs, sync::Arc, time};
 
 // This takes multiple benchmark batches and combines all the results where the pallet, instance,
 // and benchmark are the same.
@@ -120,7 +120,8 @@ impl BenchmarkCmd {
 		let pallet = self.pallet.clone().unwrap_or_else(|| String::new());
 		let pallet = pallet.as_bytes();
 		let extrinsic = self.extrinsic.clone().unwrap_or_else(|| String::new());
-		let extrinsic = extrinsic.as_bytes();
+		let extrinsic_split: Vec<&str> = extrinsic.split(',').collect();
+		let extrinsics: Vec<_> = extrinsic_split.iter().map(|x| x.trim().as_bytes()).collect();
 
 		let genesis_storage = spec.build_storage()?;
 		let mut changes = Default::default();
@@ -176,7 +177,10 @@ impl BenchmarkCmd {
 			.filter(|item| pallet.is_empty() || pallet == &b"*"[..] || pallet == &item.pallet[..])
 			.for_each(|item| {
 				for benchmark in &item.benchmarks {
-					if extrinsic.is_empty() || extrinsic == &b"*"[..] || extrinsic == benchmark.name
+					let benchmark_name = &benchmark.name;
+					if extrinsic.is_empty() ||
+						extrinsic.as_bytes() == &b"*"[..] ||
+						extrinsics.contains(&&benchmark_name[..])
 					{
 						benchmarks_to_run.push((
 							item.pallet.clone(),
@@ -353,53 +357,59 @@ impl BenchmarkCmd {
 		// are together.
 		let batches: Vec<BenchmarkBatchSplitResults> = combine_batches(batches, batches_db);
 
+		// Create the weights.rs file.
 		if let Some(output_path) = &self.output {
 			crate::writer::write_results(&batches, &storage_info, output_path, self)?;
 		}
 
+		// Jsonify the result and write it to a file or stdout if desired.
+		if !self.jsonify(&batches)? {
+			// Print the summary only if `jsonify` did not write to stdout.
+			self.print_summary(&batches, &storage_info)
+		}
+		Ok(())
+	}
+
+	/// Jsonifies the passed batches and writes them to stdout or into a file.
+	/// Can be configured via `--json` and `--json-file`.
+	/// Returns whether it wrote to stdout.
+	fn jsonify(&self, batches: &Vec<BenchmarkBatchSplitResults>) -> Result<bool> {
+		if self.json_output || self.json_file.is_some() {
+			let json = serde_json::to_string_pretty(&batches)
+				.map_err(|e| format!("Serializing into JSON: {:?}", e))?;
+
+			if let Some(path) = &self.json_file {
+				fs::write(path, json)?;
+			} else {
+				println!("{}", json);
+				return Ok(true)
+			}
+		}
+
+		Ok(false)
+	}
+
+	/// Prints the results as human-readable summary without raw timing data.
+	fn print_summary(
+		&self,
+		batches: &Vec<BenchmarkBatchSplitResults>,
+		storage_info: &Vec<StorageInfo>,
+	) {
 		for batch in batches.into_iter() {
 			// Print benchmark metadata
 			println!(
-				"Pallet: {:?}, Extrinsic: {:?}, Lowest values: {:?}, Highest values: {:?}, Steps: {:?}, Repeat: {:?}",
-				String::from_utf8(batch.pallet).expect("Encoded from String; qed"),
-				String::from_utf8(batch.benchmark).expect("Encoded from String; qed"),
-				self.lowest_range_values,
-				self.highest_range_values,
-				self.steps,
-				self.repeat,
-			);
+					"Pallet: {:?}, Extrinsic: {:?}, Lowest values: {:?}, Highest values: {:?}, Steps: {:?}, Repeat: {:?}",
+					String::from_utf8(batch.pallet.clone()).expect("Encoded from String; qed"),
+					String::from_utf8(batch.benchmark.clone()).expect("Encoded from String; qed"),
+					self.lowest_range_values,
+					self.highest_range_values,
+					self.steps,
+					self.repeat,
+				);
 
 			// Skip raw data + analysis if there are no results
 			if batch.time_results.is_empty() {
 				continue
-			}
-
-			if self.raw_data {
-				// Print the table header
-				batch.time_results[0]
-					.components
-					.iter()
-					.for_each(|param| print!("{:?},", param.0));
-
-				print!("extrinsic_time_ns,storage_root_time_ns,reads,repeat_reads,writes,repeat_writes,proof_size_bytes\n");
-				// Print the values
-				batch.time_results.iter().for_each(|result| {
-					let parameters = &result.components;
-					parameters.iter().for_each(|param| print!("{:?},", param.1));
-					// Print extrinsic time and storage root time
-					print!(
-						"{:?},{:?},{:?},{:?},{:?},{:?},{:?}\n",
-						result.extrinsic_time,
-						result.storage_root_time,
-						result.reads,
-						result.repeat_reads,
-						result.writes,
-						result.repeat_writes,
-						result.proof_size,
-					);
-				});
-
-				println!();
 			}
 
 			if !self.no_storage_info {
@@ -456,8 +466,6 @@ impl BenchmarkCmd {
 				println!("");
 			}
 		}
-
-		Ok(())
 	}
 }
 
