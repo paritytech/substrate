@@ -302,11 +302,18 @@ mod tests {
 		allows_reentry: bool,
 	}
 
+	#[derive(Debug, PartialEq, Eq)]
+	struct CallCodeEntry {
+		code_hash: H256,
+		data: Vec<u8>,
+	}
+
 	pub struct MockExt {
 		storage: HashMap<StorageKey, Vec<u8>>,
 		instantiates: Vec<InstantiateEntry>,
 		terminations: Vec<TerminationEntry>,
 		calls: Vec<CallEntry>,
+		code_calls: Vec<CallCodeEntry>,
 		transfers: Vec<TransferEntry>,
 		// (topics, data)
 		events: Vec<(Vec<H256>, Vec<u8>)>,
@@ -329,6 +336,7 @@ mod tests {
 				instantiates: Default::default(),
 				terminations: Default::default(),
 				calls: Default::default(),
+				code_calls: Default::default(),
 				transfers: Default::default(),
 				events: Default::default(),
 				runtime_calls: Default::default(),
@@ -352,6 +360,14 @@ mod tests {
 			allows_reentry: bool,
 		) -> Result<ExecReturnValue, ExecError> {
 			self.calls.push(CallEntry { to, value, data, allows_reentry });
+			Ok(ExecReturnValue { flags: ReturnFlags::empty(), data: call_return_data() })
+		}
+		fn delegate_call(
+			&mut self,
+			code_hash: CodeHash<Self::T>,
+			data: Vec<u8>,
+		) -> Result<ExecReturnValue, ExecError> {
+			self.code_calls.push(CallCodeEntry { code_hash, data });
 			Ok(ExecReturnValue { flags: ReturnFlags::empty(), data: call_return_data() })
 		}
 		fn instantiate(
@@ -576,6 +592,53 @@ mod tests {
 		assert_eq!(
 			&mock_ext.calls,
 			&[CallEntry { to: ALICE, value: 6, data: vec![1, 2, 3, 4], allows_reentry: true }]
+		);
+	}
+
+	#[test]
+	#[cfg(feature = "unstable-interface")]
+	fn contract_delegate_call() {
+		const CODE: &str = r#"
+(module
+	;; seal_delegate_call(
+	;;    flags: u32,
+	;;    code_hash_ptr: u32,
+	;;    input_data_ptr: u32,
+	;;    input_data_len: u32,
+	;;    output_ptr: u32,
+	;;    output_len_ptr: u32
+	;;) -> u32
+	(import "__unstable__" "seal_delegate_call" (func $seal_delegate_call (param i32 i32 i32 i32 i32 i32) (result i32)))
+	(import "env" "memory" (memory 1 1))
+	(func (export "call")
+		(drop
+			(call $seal_delegate_call
+				(i32.const 0) ;; No flags are set
+				(i32.const 4)  ;; Pointer to "callee" code_hash.
+				(i32.const 36) ;; Pointer to input data buffer address
+				(i32.const 4)  ;; Length of input data buffer
+				(i32.const 4294967295) ;; u32 max value is the sentinel value: do not copy output
+				(i32.const 0) ;; Length is ignored in this case
+			)
+		)
+	)
+	(func (export "deploy"))
+
+	;; Callee code_hash
+	(data (i32.const 4)
+		"\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11"
+		"\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11"
+	)
+
+	(data (i32.const 36) "\01\02\03\04")
+)
+"#;
+		let mut mock_ext = MockExt::default();
+		assert_ok!(execute(CODE, vec![], &mut mock_ext));
+
+		assert_eq!(
+			&mock_ext.code_calls,
+			&[CallCodeEntry { code_hash: [0x11; 32].into(), data: vec![1, 2, 3, 4] }]
 		);
 	}
 
