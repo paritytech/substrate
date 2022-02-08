@@ -18,7 +18,7 @@
 //! Various basic types for use in the assets pallet.
 
 use super::*;
-use frame_support::pallet_prelude::MaxEncodedLen;
+use frame_support::{pallet_prelude::{BoundedVec, MaxEncodedLen}, traits::Get};
 use scale_info::TypeInfo;
 
 pub(super) type DepositBalanceOf<T, I = ()> =
@@ -93,7 +93,8 @@ pub struct InstanceDetails<AccountId, DepositBalance> {
 
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, Default, TypeInfo, MaxEncodedLen)]
 #[scale_info(skip_type_params(StringLimit))]
-pub struct ClassMetadata<DepositBalance, BoundedString> {
+#[codec(mel_bound(DepositBalance: MaxEncodedLen))]
+pub struct ClassMetadata<DepositBalance, StringLimit: Get<u32>> {
 	/// The balance deposited for this metadata.
 	///
 	/// This pays for the data stored in this struct.
@@ -101,14 +102,15 @@ pub struct ClassMetadata<DepositBalance, BoundedString> {
 	/// General information concerning this asset. Limited in length by `StringLimit`. This will
 	/// generally be either a JSON dump or the hash of some JSON which can be found on a
 	/// hash-addressable global publication system such as IPFS.
-	pub(super) data: BoundedString,
+	pub(super) data: BoundedVec<u8, StringLimit>,
 	/// Whether the asset metadata may be changed by a non Force origin.
 	pub(super) is_frozen: bool,
 }
 
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, Default, TypeInfo, MaxEncodedLen)]
 #[scale_info(skip_type_params(StringLimit))]
-pub struct InstanceMetadata<DepositBalance, BoundedString> {
+#[codec(mel_bound(DepositBalance: MaxEncodedLen))]
+pub struct InstanceMetadata<DepositBalance, StringLimit: Get<u32>> {
 	/// The balance deposited for this metadata.
 	///
 	/// This pays for the data stored in this struct.
@@ -116,7 +118,7 @@ pub struct InstanceMetadata<DepositBalance, BoundedString> {
 	/// General information concerning this asset. Limited in length by `StringLimit`. This will
 	/// generally be either a JSON dump or the hash of some JSON which can be found on a
 	/// hash-addressable global publication system such as IPFS.
-	pub(super) data: BoundedString,
+	pub(super) data: BoundedVec<u8, StringLimit>,
 	/// Whether the asset metadata may be changed by a non Force origin.
 	pub(super) is_frozen: bool,
 }

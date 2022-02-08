@@ -180,7 +180,7 @@ pub mod pallet {
 		_,
 		Blake2_128Concat,
 		T::ClassId,
-		ClassMetadata<DepositBalanceOf<T, I>, BoundedVec<u8, T::StringLimit>>,
+		ClassMetadata<DepositBalanceOf<T, I>, T::StringLimit>,
 		OptionQuery,
 	>;
 
@@ -192,7 +192,7 @@ pub mod pallet {
 		T::ClassId,
 		Blake2_128Concat,
 		T::InstanceId,
-		InstanceMetadata<DepositBalanceOf<T, I>, BoundedVec<u8, T::StringLimit>>,
+		InstanceMetadata<DepositBalanceOf<T, I>, T::StringLimit>,
 		OptionQuery,
 	>;
 
