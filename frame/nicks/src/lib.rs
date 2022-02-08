@@ -181,7 +181,7 @@ pub mod pallet {
 
 		/// Remove an account's name and take charge of the deposit.
 		///
-		/// Fails if `who` has not been named. The deposit is dealt with through `T::Slashed`
+		/// Fails if `target` has not been named. The deposit is dealt with through `T::Slashed`
 		/// imbalance handler.
 		///
 		/// The dispatch origin for this call must match `T::ForceOrigin`.
