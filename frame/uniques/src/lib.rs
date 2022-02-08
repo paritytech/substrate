@@ -1003,21 +1003,18 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Set an attribute for an asset class or instance.
+		/// Clear an attribute for an asset class or instance.
 		///
 		/// Origin must be either `ForceOrigin` or Signed and the sender should be the Owner of the
 		/// asset `class`.
 		///
-		/// If the origin is Signed, then funds of signer are reserved according to the formula:
-		/// `MetadataDepositBase + DepositPerByte * (key.len + value.len)` taking into
-		/// account any already reserved funds.
+		/// Any deposit is freed for the asset class owner.
 		///
-		/// - `class`: The identifier of the asset class whose instance's metadata to set.
-		/// - `instance`: The identifier of the asset instance whose metadata to set.
+		/// - `class`: The identifier of the asset class whose instance's metadata to clear.
+		/// - `maybe_instance`: The identifier of the asset instance whose metadata to clear.
 		/// - `key`: The key of the attribute.
-		/// - `value`: The value to which to set the attribute.
 		///
-		/// Emits `AttributeSet`.
+		/// Emits `AttributeCleared`.
 		///
 		/// Weight: `O(1)`
 		#[pallet::weight(T::WeightInfo::clear_attribute())]

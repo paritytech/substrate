@@ -255,7 +255,7 @@ use sp_runtime::{
 		InvalidTransaction, TransactionPriority, TransactionSource, TransactionValidity,
 		TransactionValidityError, ValidTransaction,
 	},
-	DispatchError, PerThing, Perbill, RuntimeDebug, SaturatedConversion,
+	DispatchError, ModuleError, PerThing, Perbill, RuntimeDebug, SaturatedConversion,
 };
 use sp_std::prelude::*;
 
@@ -1579,7 +1579,7 @@ impl<T: Config> ElectionProvider for Pallet<T> {
 /// number.
 pub fn dispatch_error_to_invalid(error: DispatchError) -> InvalidTransaction {
 	let error_number = match error {
-		DispatchError::Module { error, .. } => error,
+		DispatchError::Module(ModuleError { error, .. }) => error,
 		_ => 0,
 	};
 	InvalidTransaction::Custom(error_number)

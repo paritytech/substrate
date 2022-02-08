@@ -694,13 +694,6 @@ impl<T: Config> Pallet<T> {
 		});
 		Agenda::<T>::append(when, s);
 		let index = Agenda::<T>::decode_len(when).unwrap_or(1) as u32 - 1;
-		if index > T::MaxScheduledPerBlock::get() {
-			log::warn!(
-				target: "runtime::scheduler",
-				"Warning: There are more items queued in the Scheduler than \
-				expected from the runtime configuration. An update might be needed.",
-			);
-		}
 		Self::deposit_event(Event::Scheduled { when, index });
 
 		Ok((when, index))
@@ -795,13 +788,6 @@ impl<T: Config> Pallet<T> {
 		};
 		Agenda::<T>::append(when, Some(s));
 		let index = Agenda::<T>::decode_len(when).unwrap_or(1) as u32 - 1;
-		if index > T::MaxScheduledPerBlock::get() {
-			log::warn!(
-				target: "runtime::scheduler",
-				"Warning: There are more items queued in the Scheduler than \
-				expected from the runtime configuration. An update might be needed.",
-			);
-		}
 		let address = (when, index);
 		Lookup::<T>::insert(&id, &address);
 		Self::deposit_event(Event::Scheduled { when, index });

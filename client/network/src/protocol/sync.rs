@@ -2418,7 +2418,11 @@ fn fork_sync_request<B: BlockT>(
 		if !r.peers.contains(id) {
 			continue
 		}
-		if r.number <= best_num {
+		// Download the fork only if it is behind or not too far ahead our tip of the chain
+		// Otherwise it should be downloaded in full sync mode.
+		if r.number <= best_num ||
+			(r.number - best_num).saturated_into::<u32>() < MAX_BLOCKS_TO_REQUEST as u32
+		{
 			let parent_status = r.parent_hash.as_ref().map_or(BlockStatus::Unknown, check_block);
 			let count = if parent_status == BlockStatus::Unknown {
 				(r.number - finalized).saturated_into::<u32>() // up to the last finalized block
@@ -2438,6 +2442,8 @@ fn fork_sync_request<B: BlockT>(
 					max: Some(count),
 				},
 			))
+		} else {
+			trace!(target: "sync", "Fork too far in the future: {:?} (#{})", hash, r.number);
 		}
 	}
 	None
