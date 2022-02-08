@@ -29,7 +29,7 @@ use sp_io::{
 	hashing::{blake2_128, twox_128, twox_64},
 	TestExternalities,
 };
-use sp_runtime::DispatchError;
+use sp_runtime::{DispatchError, ModuleError};
 
 pub struct SomeType1;
 impl From<SomeType1> for u64 {
@@ -654,7 +654,11 @@ fn error_expand() {
 	);
 	assert_eq!(
 		DispatchError::from(pallet::Error::<Runtime>::InsufficientProposersBalance),
-		DispatchError::Module { index: 1, error: 0, message: Some("InsufficientProposersBalance") },
+		DispatchError::Module(ModuleError {
+			index: 1,
+			error: 0,
+			message: Some("InsufficientProposersBalance")
+		}),
 	);
 }
 
