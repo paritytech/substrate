@@ -141,10 +141,7 @@ impl<'a> Subscribe<SubscribeOp<'a>> for Registry {
 			.insert(subs_id, SubscriberSink::new(subs_id, keys, child_keys))
 			.is_some()
 		{
-			log::warn!("The `subscribe`-method has been passed a non-unique subs_id (`impl Subscribe<{}> for {}`)",
-				std::any::type_name::<SubscribeOp<'a>>(),
-				std::any::type_name::<Self>(),
-			);
+			log::warn!("The `subscribe`-method has been passed a non-unique subs_id (in `sc-client-api::notifications`)");
 		}
 	}
 }
