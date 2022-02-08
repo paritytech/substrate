@@ -36,14 +36,13 @@
 
 use std::{
 	collections::HashMap,
-	ops::DerefMut,
 	pin::Pin,
 	sync::{Arc, Weak},
 	task::{Context, Poll},
 };
 
 use futures::stream::{FusedStream, Stream};
-use parking_lot::{Mutex, MutexGuard};
+use parking_lot::Mutex;
 
 use crate::{
 	id_sequence::SeqID,
@@ -119,9 +118,10 @@ where
 	R: Unsubscribe,
 {
 	/// Provide mutable access to the registry (for test purposes).
-	pub fn lock_registry<'a>(&'a self) -> impl DerefMut<Target = R> + 'a {
+	pub fn lock_registry_for_tests<'a>(&'a self) -> impl std::ops::DerefMut<Target = R> + 'a {
 		let shared_locked = self.shared.lock();
-		let registry_locked = MutexGuard::map(shared_locked, |shared| &mut shared.registry);
+		let registry_locked =
+			parking_lot::MutexGuard::map(shared_locked, |shared| &mut shared.registry);
 		registry_locked
 	}
 }
@@ -164,9 +164,14 @@ impl<M, R> Hub<M, R> {
 		let mut shared = self.shared.lock();
 
 		let subs_id = shared.id_sequence.next_id();
+
+		// The order (registry.subscribe then sinks.insert) is important here:
+		// assuming that `Subscribe<K>::subscribe` can panic, it is better to at least
+		// have the sink disposed.
+		shared.registry.subscribe(subs_key, subs_id);
+
 		let (tx, rx) = crate::mpsc::tracing_unbounded(self.tracing_key);
 		assert!(shared.sinks.insert(subs_id, tx).is_none(), "Used IDSequence to create another ID. Should be unique until u64 is overflowed. Should be unique.");
-		shared.registry.subscribe(subs_key, subs_id);
 
 		Receiver { shared: Arc::downgrade(&self.shared), subs_id, rx }
 	}
@@ -212,8 +217,11 @@ impl<M, R> Shared<M, R> {
 	where
 		R: Unsubscribe,
 	{
-		self.registry.unsubscribe(subs_id);
+		// The order (sinks.remove then registry.unsubscribe) is important here:
+		// assuming that `Unsubscribe::unsubscribe` can panic, it is better to at least
+		// have the sink disposed.
 		self.sinks.remove(&subs_id);
+		self.registry.unsubscribe(subs_id);
 	}
 }
 

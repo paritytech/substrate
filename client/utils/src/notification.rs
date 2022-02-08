@@ -50,7 +50,7 @@ pub trait TracingKeyStr {
 
 /// The receiving half of the notifications channel.
 ///
-/// The `NotificationStream` entity stores the `SharedSenders` so it can be
+/// The [`NotificationStream`] entity stores the [`Hub`] so it can be
 /// used to add more subscriptions.
 #[derive(Clone)]
 pub struct NotificationStream<Payload, TK: TracingKeyStr> {
@@ -65,8 +65,6 @@ pub struct NotificationReceiver<Payload> {
 }
 
 /// The sending half of the notifications channel(s).
-///
-/// Used to send notifications from the BEEFY gadget side.
 pub struct NotificationSender<Payload> {
 	hub: Hub<Payload, Registry>,
 }
@@ -97,18 +95,6 @@ impl<Payload> NotificationSender<Payload> {
 	where
 		Payload: Clone,
 	{
-		// The subscribers collection used to be cleaned upon send previously.
-		// The set used to be cleaned up twice:
-		// - once before sending: filter on `!tx.is_closed()`;
-		// - once while sending: filter on `!tx.unbounded_send().is_err()`.
-		//
-		// Since there is no `close` or `disconnect` operation defined on the
-		// `NotificationReceiver<Payload>`, the only way to close the `rx` is to drop it.
-		// Upon being dropped the `NotificationReceiver<Payload>` unregisters its `rx`
-		// from the registry using its `_subs_guard`.
-		//
-		// So there's no need to clean up the subscribers set upon sending another message.
-
 		self.hub.send(payload)
 	}
 }

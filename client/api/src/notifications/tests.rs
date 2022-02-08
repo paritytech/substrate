@@ -209,7 +209,7 @@ fn should_not_send_empty_notifications() {
 
 impl<B: BlockT> StorageNotifications<B> {
 	fn lock_registry<'a>(&'a self) -> impl DerefMut<Target = Registry> + 'a {
-		self.0.lock_registry()
+		self.0.lock_registry_for_tests()
 	}
 }
 

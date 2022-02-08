@@ -30,8 +30,9 @@ use sc_utils::{
 
 type SubscribersGauge = CounterVec<U64>;
 
-/// A command to subscribe with the specified filters:
-/// the type `Op` argument for the `Subscribe<Op>` trait implemented by the `Registry.
+/// A command to subscribe with the specified filters.
+///
+/// Used by the implementation of [`Subscribe<Op>`] trait for [`Registry].
 pub(super) struct SubscribeOp<'a> {
 	pub filter_keys: Option<&'a [StorageKey]>,
 	pub filter_child_keys: Option<&'a [(StorageKey, Option<Vec<StorageKey>>)]>,
