@@ -113,6 +113,8 @@
 //! well with try-runtime's expensive RPC queries:
 //!
 //! - set `--rpc-max-payload 1000` to ensure large RPC queries can work.
+//! - set `--ws-max-out-buffer-capacity 1000` to ensure the websocket connection can handle large
+//!   RPC queries.
 //! - set `--rpc-cors all` to ensure ws connections can come through.
 //!
 //! Note that *none* of the try-runtime operations need unsafe RPCs.
