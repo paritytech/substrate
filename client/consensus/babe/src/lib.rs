@@ -555,7 +555,7 @@ async fn aux_storage_cleanup<B: BlockT, C>(
 	client: Arc<C>,
 	mut finality_notifications: FinalityNotifications<B>,
 ) where
-	C: HeaderBackend<B> + AuxStore,
+	C: HeaderMetadata<B> + AuxStore,
 {
 	while let Some(notification) = finality_notifications.next().await {
 		let mut aux_keys = HashSet::new();
@@ -565,13 +565,11 @@ async fn aux_storage_cleanup<B: BlockT, C>(
 		// finalized one.
 
 		let first_new_finalized = notification.tree_route.get(0).unwrap_or(&notification.hash);
-		match client.header(BlockId::Hash(*first_new_finalized)) {
-			Ok(Some(header)) => {
-				aux_keys.insert(aux_schema::block_weight_key(header.parent_hash()));
-				height_limit = header.number().saturating_sub(One::one());
-			},
-			Ok(None) => {
-				warn!(target: "babe", "header lookup fail while cleaning data for block {}", first_new_finalized.to_string());
+
+		match client.header_metadata(*first_new_finalized) {
+			Ok(meta) => {
+				aux_keys.insert(aux_schema::block_weight_key(meta.parent));
+				height_limit = meta.number.saturating_sub(One::one());
 			},
 			Err(err) => {
 				warn!(target: "babe", "header lookup fail while cleaning data for block {}: {}", first_new_finalized.to_string(), err.to_string());
@@ -589,19 +587,15 @@ async fn aux_storage_cleanup<B: BlockT, C>(
 			// Insert stale blocks hashes until canonical chain is not reached.
 			// Soon or late we should hit an element already present within the `aux_keys` set.
 			while aux_keys.insert(aux_schema::block_weight_key(hash)) {
-				match client.header(BlockId::Hash(hash)) {
-					Ok(Some(header)) => {
+				match client.header_metadata(hash) {
+					Ok(meta) => {
 						// A fallback in case of malformed notification.
 						// This should never happen and must be considered a bug.
-						if header.number().le(&height_limit) {
+						if meta.number.le(&height_limit) {
 							warn!(target: "babe", "unexpected canonical chain state or malformed finality notification");
 							break
 						}
-						hash = *header.parent_hash();
-					},
-					Ok(None) => {
-						warn!(target: "babe", "header lookup fail while cleaning data for block {}", hash.to_string());
-						break
+						hash = meta.parent;
 					},
 					Err(err) => {
 						warn!(target: "babe", "header lookup fail while cleaning data for block {}: {}", head.to_string(), err.to_string());
