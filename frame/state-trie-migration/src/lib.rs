@@ -435,6 +435,7 @@ pub mod pallet {
 		type SignedDepositBase: Get<BalanceOf<Self>>;
 
 		/// The maximum limits that the signed migration could use.
+		#[pallet::constant]
 		type SignedMigrationMaxLimits: Get<MigrationLimits>;
 
 		/// The weight information of this pallet.
@@ -455,6 +456,18 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn auto_limits)]
 	pub type AutoLimits<T> = StorageValue<_, Option<MigrationLimits>, ValueQuery>;
+
+	#[pallet::error]
+	pub enum Error<T> {
+		/// max signed limits not respected.
+		MaxSignedLimits,
+		/// submitter does not have enough funds.
+		NotEnoughFunds,
+		/// bad witness data provided.
+		BadWitness,
+		/// upper bound of size is exceeded,
+		SizeUpperBoundExceeded,
+	}
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
@@ -509,18 +522,18 @@ pub mod pallet {
 			let max_limits = T::SignedMigrationMaxLimits::get();
 			ensure!(
 				limits.size <= max_limits.size && limits.item <= max_limits.item,
-				"max signed limits not respected"
+				Error::<T>::MaxSignedLimits,
 			);
 
 			// ensure they can pay more than the fee.
 			let deposit = T::SignedDepositPerItem::get().saturating_mul(limits.item.into());
-			ensure!(T::Currency::can_slash(&who, deposit), "not enough funds");
+			ensure!(T::Currency::can_slash(&who, deposit), Error::<T>::NotEnoughFunds);
 
 			let mut task = Self::migration_process();
 			ensure!(
 				task == witness_task,
 				DispatchErrorWithPostInfo {
-					error: "wrong witness".into(),
+					error: Error::<T>::BadWitness.into(),
 					post_info: PostDispatchInfo {
 						actual_weight: Some(T::WeightInfo::continue_migrate_wrong_witness()),
 						pays_fee: Pays::Yes
@@ -534,7 +547,7 @@ pub mod pallet {
 				// let the imbalance burn.
 				let (_imbalance, _remainder) = T::Currency::slash(&who, deposit);
 				debug_assert!(_remainder.is_zero());
-				return Err("wrong witness data".into())
+				return Err(Error::<T>::SizeUpperBoundExceeded.into())
 			}
 
 			Self::deposit_event(Event::<T>::Migrated {
@@ -543,14 +556,14 @@ pub mod pallet {
 				compute: MigrationCompute::Signed,
 			});
 
+			// refund and correct the weight.
 			let actual_weight = Some(
-				Pallet::<T>::dynamic_weight(limits.item, task.dyn_size) +
-					T::WeightInfo::continue_migrate(),
+				Pallet::<T>::dynamic_weight(limits.item, task.dyn_size)
+					.saturating_add(T::WeightInfo::continue_migrate()),
 			);
-			MigrationProcess::<T>::put(task);
-			let pays = Pays::No;
 
-			Ok((actual_weight, pays).into())
+			MigrationProcess::<T>::put(task);
+			Ok((actual_weight, Pays::No).into())
 		}
 
 		/// Migrate the list of top keys by iterating each of them one by one.

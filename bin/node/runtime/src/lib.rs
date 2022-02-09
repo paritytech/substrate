@@ -1363,7 +1363,7 @@ impl pallet_transaction_storage::Config for Runtime {
 
 parameter_types! {
 	pub const SignedMigrationMaxLimits: pallet_state_trie_migration::MigrationLimits =
-		pallet_state_trie_migration::MigrationLimits { size: 1024 * 512, item: 512 };
+		pallet_state_trie_migration::MigrationLimits { size: 2 * 1024 * 1024, item: 512 };
 	pub const MigrationSignedDepositPerItem: Balance = 1 * CENTS;
 	pub const MigrationSignedDepositBase: Balance = 20 * DOLLARS;
 }
