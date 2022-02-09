@@ -48,7 +48,7 @@ struct FunctionExecutor {
 	host_functions: Arc<Vec<&'static dyn Function>>,
 	allow_missing_func_imports: bool,
 	missing_functions: Arc<Vec<String>>,
-	fatal_error_message: Option<String>,
+	panic_message: Option<String>,
 }
 
 impl FunctionExecutor {
@@ -70,7 +70,7 @@ impl FunctionExecutor {
 			host_functions,
 			allow_missing_func_imports,
 			missing_functions,
-			fatal_error_message: None,
+			panic_message: None,
 		})
 	}
 }
@@ -139,8 +139,8 @@ impl FunctionContext for FunctionExecutor {
 		self
 	}
 
-	fn register_fatal_error(&mut self, message: &str) {
-		self.fatal_error_message = Some(message.to_owned());
+	fn register_panic_error_message(&mut self, message: &str) {
+		self.panic_message = Some(message.to_owned());
 	}
 }
 
@@ -512,8 +512,8 @@ fn call_in_wasm_module(
 	function_executor.write_memory(offset, data)?;
 
 	fn convert_trap(executor: &mut FunctionExecutor, trap: wasmi::Trap) -> Error {
-		if let Some(message) = executor.fatal_error_message.take() {
-			Error::AbortedDueToFatalError(MessageWithBacktrace { message, backtrace: None })
+		if let Some(message) = executor.panic_message.take() {
+			Error::AbortedDueToPanic(MessageWithBacktrace { message, backtrace: None })
 		} else {
 			Error::AbortedDueToTrap(MessageWithBacktrace {
 				message: trap.to_string(),

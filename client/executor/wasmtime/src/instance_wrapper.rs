@@ -80,12 +80,14 @@ impl EntryPoint {
 			let mut backtrace_string = trap.to_string();
 			let suffix = "\nwasm backtrace:";
 			if let Some(index) = backtrace_string.find(suffix) {
+				// Get rid of the error message and just grab the backtrace,
+				// since we're storing the error message ourselves separately.
 				backtrace_string.replace_range(0..index + suffix.len(), "");
 			}
 
 			let backtrace = Backtrace { backtrace_string };
-			if let Some(error) = host_state.take_fatal_error_message() {
-				Error::AbortedDueToFatalError(MessageWithBacktrace {
+			if let Some(error) = host_state.take_panic_message() {
+				Error::AbortedDueToPanic(MessageWithBacktrace {
 					message: error,
 					backtrace: Some(backtrace),
 				})

@@ -1293,11 +1293,11 @@ pub trait Allocator {
 /// WASM-only interface which allows for aborting the execution in case
 /// of an unrecoverable error.
 #[runtime_interface(wasm_only)]
-pub trait FatalErrorHandler {
+pub trait PanicHandler {
 	/// Aborts the current execution with the given error message.
 	#[trap_on_return]
-	fn abort_on_fatal_error(&mut self, message: &str) {
-		self.register_fatal_error(message);
+	fn abort_on_panic(&mut self, message: &str) {
+		self.register_panic_error_message(message);
 	}
 }
 
@@ -1628,11 +1628,11 @@ mod allocator_impl {
 #[no_mangle]
 pub fn panic(info: &core::panic::PanicInfo) -> ! {
 	let message = sp_std::alloc::format!("{}", info);
-	#[cfg(feature = "use_fatal_error_handler")]
+	#[cfg(feature = "improved_panic_error_reporting")]
 	{
-		fatal_error_handler::abort_on_fatal_error(&message);
+		panic_handler::abort_on_panic(&message);
 	}
-	#[cfg(not(feature = "use_fatal_error_handler"))]
+	#[cfg(not(feature = "improved_panic_error_reporting"))]
 	{
 		logging::log(LogLevel::Error, "runtime", message.as_bytes());
 		core::arch::wasm32::unreachable();
@@ -1643,11 +1643,11 @@ pub fn panic(info: &core::panic::PanicInfo) -> ! {
 #[cfg(all(not(feature = "disable_oom"), not(feature = "std")))]
 #[alloc_error_handler]
 pub fn oom(_: core::alloc::Layout) -> ! {
-	#[cfg(feature = "use_fatal_error_handler")]
+	#[cfg(feature = "improved_panic_error_reporting")]
 	{
-		fatal_error_handler::abort_on_fatal_error("Runtime memory exhausted.");
+		panic_handler::abort_on_panic("Runtime memory exhausted.");
 	}
-	#[cfg(not(feature = "use_fatal_error_handler"))]
+	#[cfg(not(feature = "improved_panic_error_reporting"))]
 	{
 		logging::log(LogLevel::Error, "runtime", b"Runtime memory exhausted. Aborting");
 		core::arch::wasm32::unreachable();
@@ -1671,7 +1671,7 @@ pub type SubstrateHostFunctions = (
 	crypto::HostFunctions,
 	hashing::HostFunctions,
 	allocator::HostFunctions,
-	fatal_error_handler::HostFunctions,
+	panic_handler::HostFunctions,
 	logging::HostFunctions,
 	sandbox::HostFunctions,
 	crate::trie::HostFunctions,

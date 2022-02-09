@@ -342,8 +342,8 @@ sp_core::wasm_export_functions! {
 		assert_eq!(value, -66);
 	}
 
-	fn test_fatal_error() {
-		sp_io::fatal_error_handler::abort_on_fatal_error("test_fatal_error called");
+	fn test_abort_on_panic() {
+		sp_io::panic_handler::abort_on_panic("test_abort_on_panic called");
 	}
 
 	fn test_unreachable_intrinsic() {

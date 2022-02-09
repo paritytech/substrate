@@ -106,8 +106,8 @@ pub enum Error {
 	#[error("Invalid initializer expression provided {0}")]
 	InvalidInitializerExpression(String),
 
-	#[error("Execution aborted due to fatal error: {0}")]
-	AbortedDueToFatalError(MessageWithBacktrace),
+	#[error("Execution aborted due to panic: {0}")]
+	AbortedDueToPanic(MessageWithBacktrace),
 
 	#[error("Execution aborted due to trap: {0}")]
 	AbortedDueToTrap(MessageWithBacktrace),
@@ -179,7 +179,7 @@ impl std::fmt::Display for MessageWithBacktrace {
 		fmt.write_str(&self.message)?;
 		if let Some(ref backtrace) = self.backtrace {
 			fmt.write_str("\nWASM backtrace:\n")?;
-			fmt.write_str(&backtrace.backtrace_string)?;
+			backtrace.backtrace_string.fmt(fmt)?;
 		}
 
 		Ok(())

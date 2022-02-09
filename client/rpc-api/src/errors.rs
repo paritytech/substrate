@@ -18,7 +18,7 @@
 
 use log::warn;
 
-pub fn internal<E: ::std::fmt::Display>(e: E) -> jsonrpc_core::Error {
+pub fn internal<E: std::fmt::Display>(e: E) -> jsonrpc_core::Error {
 	warn!("Unknown error: {}", e);
 	jsonrpc_core::Error {
 		code: jsonrpc_core::ErrorCode::InternalError,

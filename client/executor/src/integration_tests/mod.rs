@@ -775,14 +775,13 @@ fn take_i8(wasm_method: WasmExecutionMethod) {
 	call_in_wasm("test_take_i8", &(-66_i8).encode(), wasm_method, &mut ext).unwrap();
 }
 
-test_wasm_execution!(fatal_error);
-fn fatal_error(wasm_method: WasmExecutionMethod) {
+test_wasm_execution!(abort_on_panic);
+fn abort_on_panic(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
 
-	match call_in_wasm("test_fatal_error", &[], wasm_method, &mut ext).unwrap_err() {
-		Error::AbortedDueToFatalError(error) =>
-			assert_eq!(error.message, "test_fatal_error called"),
+	match call_in_wasm("test_abort_on_panic", &[], wasm_method, &mut ext).unwrap_err() {
+		Error::AbortedDueToPanic(error) => assert_eq!(error.message, "test_abort_on_panic called"),
 		error => panic!("unexpected error: {:?}", error),
 	}
 }
