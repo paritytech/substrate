@@ -1618,13 +1618,14 @@ pub mod pallet {
 		}
 
 		/// Force a validator to have at least the minimum commission. This will not affect a
-		/// validator who already has a commission greater than or equal to the minimum.
+		/// validator who already has a commission greater than or equal to the minimum. Any account
+		/// can call this.
 		#[pallet::weight(T::WeightInfo::force_apply_min_commission())]
 		pub fn force_apply_min_commission(
 			origin: OriginFor<T>,
 			validator_stash: T::AccountId,
 		) -> DispatchResult {
-			ensure_root(origin)?;
+			ensure_signed(origin)?;
 			let min_commission = MinCommission::<T>::get();
 
 			if Validators::<T>::contains_key(&validator_stash) {

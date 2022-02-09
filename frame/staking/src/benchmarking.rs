@@ -919,7 +919,8 @@ benchmarks! {
 
 		// Set the min commission to 75%
 		MinCommission::<T>::set(Perbill::from_percent(75));
-	}: _(RawOrigin::Root, stash.clone())
+		let caller = whitelisted_caller();
+	}: _(RawOrigin::Signed(caller), stash.clone())
 	verify {
 		// The validators commission has been bumped to 75%
 		assert_eq!(

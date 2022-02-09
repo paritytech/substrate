@@ -4725,17 +4725,17 @@ fn force_apply_min_commission_works() {
 		MinCommission::<Test>::set(Perbill::from_percent(5));
 
 		// When applying to a commission greater than min
-		assert_ok!(Staking::force_apply_min_commission(Origin::root(), 30));
+		assert_ok!(Staking::force_apply_min_commission(Origin::signed(1), 30));
 		// Then the commission is not changed
 		assert_eq!(validators(), vec![(31, prefs(10)), (21, prefs(5)), (11, prefs(0))]);
 
 		// When applying to a commission that is equal to min
-		assert_ok!(Staking::force_apply_min_commission(Origin::root(), 21));
+		assert_ok!(Staking::force_apply_min_commission(Origin::signed(1), 21));
 		// Then the commission is not changed
 		assert_eq!(validators(), vec![(31, prefs(10)), (21, prefs(5)), (11, prefs(0))]);
 
 		// When applying to a commission that is less than the min
-		assert_ok!(Staking::force_apply_min_commission(Origin::root(), 11));
+		assert_ok!(Staking::force_apply_min_commission(Origin::signed(1), 11));
 		// Then the commission is bumped to the min
 		assert_eq!(validators(), vec![(31, prefs(10)), (21, prefs(5)), (11, prefs(5))]);
 	});
