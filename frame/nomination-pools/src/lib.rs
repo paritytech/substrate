@@ -27,6 +27,7 @@
 // * Maintain integrity of slashing events, sufficiently penalizing delegators that where in the
 //   pool while it was backing a validator that got slashed.
 // * Maximize scalability in terms of delegator count.
+//!
 //! ### Bonded pool
 //!
 //! A bonded pool nominates with its total balance, excluding that which has been withdrawn for
@@ -174,10 +175,10 @@
 //! corresponding unbonding pool. If it's `unbonding_era` is older than `current_era -
 //! TotalUnbondingPools`, it can cash it's points from the unbonded pool.
 //!
-//! **Relevant extrinsics
+//! **Relevant extrinsics:**
 //!
-//! * [`Call::unbond`]
-//! * [`Call::withdraw_unbonded`]
+//! * [`Call::unbond_other`]
+//! * [`Call::withdraw_unbonded_other`]
 //!
 //! ### Slashing
 //!
@@ -204,6 +205,34 @@
 //
 // To be fair to joiners, this implementation also need joining pools, which are actively staking,
 // in addition to the unbonding pools. For maintenance simplicity these are not implemented.
+//!
+//! ### Pool administration
+//!
+//! To help facilitate pool adminstration the pool has one of three states (see [`PoolState`]):
+//!
+//! * Open: Anyone can join the pool and no delegators can be permissionlessly removed.
+//! * Blocked: No delegators can join and some admin roles can kick delegators.
+//! * Destroying: No delegators can join and all delegators can be permissionlessly removed.
+//!
+//! A pool has 3 administrative positions (see [`BondedPool`]):
+//!
+//! * Depositor: creates the pool and is the initial delegator. The can only leave pool once all
+//!   other delegators have left. Once they fully leave the pool is destroyed.
+//! * Nominator: can select which validators the pool nominates.
+//! * State-Toggler: can change the pools state and kick delegators if the pool is blocked.
+//! * Root: can change the nominator, state-toggler, or itself and can perform any of the actions
+//!   the nominator or state-toggler can.
+//!
+//! Note: if it is desired that any of the admin roles are not accessible, they can be set to an
+//! anonymous proxy account that has no proxies (and is thus provably keyless).
+//!
+//! **Relevant extrinsics:**
+//!
+//! * [`Call::create`]
+//! * [`Call::nominate`]
+//! * [`Call::unbond_other`]
+//! * [`Call::withdraw_unbonded_other`]
+//!
 //! ### Limitations
 //!
 //! * Delegators cannot vote with their staked funds because they are transferred into the pools
@@ -216,7 +245,7 @@
 //!
 //! * watch out for overflow of [`RewardPoints`] and [`BalanceOf`] types. Consider things like the
 //!   chains total issuance, staking reward rate, and burn rate.
-//! # Pool creation and upkeep
+
 //
 // TBD - possible options:
 // * Pools can be created by anyone but nominations can never be updated
