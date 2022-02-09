@@ -40,7 +40,7 @@ use std::{collections::HashMap, sync::Arc};
 use sp_trie::LayoutV1 as Layout;
 
 #[cfg(not(feature = "std"))]
-type Recorder<H> = ();
+type Recorder<H> = sp_std::marker::PhantomData<H>;
 
 #[cfg(not(feature = "std"))]
 macro_rules! format {
@@ -54,16 +54,16 @@ macro_rules! format {
 
 macro_rules! with_recorder {
 	( $builder:ident, $recorder:ident ) => {{
-		if let Some(ref mut recorder) = $recorder {
-			#[cfg(feature = "std")]
-			{
+		#[cfg(feature = "std")]
+		{
+			if let Some(ref mut recorder) = $recorder {
 				$builder.with_recorder(&mut **recorder)
-			}
-			#[cfg(not(feature = "std"))]
-			{
+			} else {
 				$builder
 			}
-		} else {
+		}
+		#[cfg(not(feature = "std"))]
+		{
 			$builder
 		}
 	}};
@@ -311,7 +311,7 @@ where
 		}
 
 		#[cfg(not(feature = "std"))]
-		builder.build().get(key).map_err(map_e)
+		trie_builder.build().get(key).map_err(map_e)
 
 		// match &self.trie_node_cache {
 		// 	Some(cache) =>

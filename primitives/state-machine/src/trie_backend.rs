@@ -17,8 +17,6 @@
 
 //! Trie-based state machine backend.
 
-use std::ops::Deref;
-
 use crate::{
 	debug,
 	trie_backend_essence::{Ephemeral, TrieBackendEssence, TrieBackendStorage},
@@ -27,7 +25,7 @@ use crate::{
 use codec::{Codec, Decode};
 use hash_db::Hasher;
 use sp_core::storage::{ChildInfo, ChildType, StateVersion};
-use sp_std::{boxed::Box, vec::Vec};
+use sp_std::{boxed::Box, ops::Deref, vec::Vec};
 #[cfg(feature = "std")]
 use sp_trie::recorder::Recorder;
 use sp_trie::{
@@ -37,7 +35,7 @@ use sp_trie::{
 };
 
 #[cfg(not(feature = "std"))]
-type Recorder<H> = ();
+type Recorder<H> = sp_std::marker::PhantomData<H>;
 
 pub(crate) enum RefOrOwned<'a, S: TrieBackendStorage<H>, H: Hasher> {
 	Ref(&'a TrieBackendEssence<S, H>),

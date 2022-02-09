@@ -30,7 +30,7 @@ use sp_std::{marker::PhantomData, prelude::*};
 use sp_application_crypto::{ecdsa, ed25519, sr25519, RuntimeAppPublic};
 use sp_core::{offchain::KeyTypeId, OpaqueMetadata, RuntimeDebug};
 use sp_trie::{
-	trie_types::{TrieDB, TrieDBBuilder, TrieDBMutV1, TrieDBMutBuilderV1},
+	trie_types::{TrieDB, TrieDBBuilder, TrieDBMutBuilderV1, TrieDBMutV1},
 	PrefixedMemoryDB, StorageProof,
 };
 use trie_db::{Trie, TrieMut};
@@ -62,8 +62,6 @@ use sp_runtime::{
 #[cfg(any(feature = "std", test))]
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
-// bench on latest state.
-use sp_trie::trie_types::TrieDBMutV1 as TrieDBMut;
 
 // Ensure Babe and Aura use the same crypto to simplify things a bit.
 pub use sp_consensus_babe::{AllowedSlots, AuthorityId, Slot};
@@ -1326,7 +1324,8 @@ mod tests {
 		let mut root = crate::Hash::default();
 		let mut mdb = sp_trie::MemoryDB::<crate::Hashing>::default();
 		{
-			let mut trie = sp_trie::trie_types::TrieDBMutV1::new(&mut mdb, &mut root);
+			let mut trie =
+				sp_trie::trie_types::TrieDBMutBuilderV1::new(&mut mdb, &mut root).build();
 			trie.insert(b"value3", &[142]).expect("insert failed");
 			trie.insert(b"value4", &[124]).expect("insert failed");
 		};

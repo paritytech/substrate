@@ -1205,6 +1205,7 @@ fn doesnt_import_blocks_that_revert_finality() {
 				keep_blocks: KeepBlocks::All,
 				transaction_storage: TransactionStorageMode::BlockBody,
 				source: DatabaseSource::RocksDb { path: tmp.path().into(), cache_size: 1024 },
+				trie_node_cache_settings: Default::default(),
 			},
 			u64::MAX,
 		)
@@ -1421,6 +1422,7 @@ fn returns_status_for_pruned_blocks() {
 				keep_blocks: KeepBlocks::All,
 				transaction_storage: TransactionStorageMode::BlockBody,
 				source: DatabaseSource::RocksDb { path: tmp.path().into(), cache_size: 1024 },
+				trie_node_cache_settings: Default::default(),
 			},
 			u64::MAX,
 		)
