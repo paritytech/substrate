@@ -42,7 +42,9 @@ use std::{
 };
 
 use futures::stream::{FusedStream, Stream};
-use parking_lot::Mutex;
+// use parking_lot::Mutex;
+use parking_lot::ReentrantMutex;
+use std::cell::RefCell;
 
 use crate::{
 	id_sequence::SeqID,
@@ -88,7 +90,7 @@ pub trait Dispatch<M> {
 #[derive(Debug)]
 pub struct Hub<M, R> {
 	tracing_key: &'static str,
-	shared: Arc<Mutex<Shared<M, R>>>,
+	shared: Arc<ReentrantMutex<RefCell<Shared<M, R>>>>,
 }
 
 /// The receiving side of the subscription.
@@ -102,7 +104,7 @@ where
 {
 	rx: TracingUnboundedReceiver<M>,
 
-	shared: Weak<Mutex<Shared<M, R>>>,
+	shared: Weak<ReentrantMutex<RefCell<Shared<M, R>>>>,
 	subs_id: SeqID,
 }
 
@@ -123,7 +125,8 @@ where
 		MapF: FnOnce(&R) -> Ret,
 	{
 		let shared_locked = self.shared.lock();
-		map(&shared_locked.registry)
+		let shared_borrowed = shared_locked.borrow();
+		map(&shared_borrowed.registry)
 	}
 }
 
@@ -133,7 +136,7 @@ where
 {
 	fn drop(&mut self) {
 		if let Some(shared) = self.shared.upgrade() {
-			shared.lock().unsubscribe(self.subs_id);
+			shared.lock().borrow_mut().unsubscribe(self.subs_id);
 		}
 	}
 }
@@ -151,7 +154,7 @@ impl<M, R> Hub<M, R> {
 	pub fn new_with_registry(tracing_key: &'static str, registry: R) -> Self {
 		let shared =
 			Shared { registry, sinks: Default::default(), id_sequence: Default::default() };
-		let shared = Arc::new(Mutex::new(shared));
+		let shared = Arc::new(ReentrantMutex::new(RefCell::new(shared)));
 		Self { tracing_key, shared }
 	}
 
@@ -162,17 +165,18 @@ impl<M, R> Hub<M, R> {
 	where
 		R: Subscribe<K> + Unsubscribe,
 	{
-		let mut shared = self.shared.lock();
+		let shared_locked = self.shared.lock();
+		let mut shared_borrowed = shared_locked.borrow_mut();
 
-		let subs_id = shared.id_sequence.next_id();
+		let subs_id = shared_borrowed.id_sequence.next_id();
 
 		// The order (registry.subscribe then sinks.insert) is important here:
 		// assuming that `Subscribe<K>::subscribe` can panic, it is better to at least
 		// have the sink disposed.
-		shared.registry.subscribe(subs_key, subs_id);
+		shared_borrowed.registry.subscribe(subs_key, subs_id);
 
 		let (tx, rx) = crate::mpsc::tracing_unbounded(self.tracing_key);
-		assert!(shared.sinks.insert(subs_id, tx).is_none(), "Used IDSequence to create another ID. Should be unique until u64 is overflowed. Should be unique.");
+		assert!(shared_borrowed.sinks.insert(subs_id, tx).is_none(), "Used IDSequence to create another ID. Should be unique until u64 is overflowed. Should be unique.");
 
 		Receiver { shared: Arc::downgrade(&self.shared), subs_id, rx }
 	}
@@ -184,8 +188,9 @@ impl<M, R> Hub<M, R> {
 	where
 		R: Dispatch<Trigger, Item = M>,
 	{
-		let mut shared = self.shared.lock();
-		let (registry, sinks) = shared.get_mut();
+		let shared_locked = self.shared.lock();
+		let mut shared_borrowed = shared_locked.borrow_mut();
+		let (registry, sinks) = shared_borrowed.get_mut();
 
 		let dispatch_result = registry.dispatch(trigger, |subs_id, item| {
 			if let Some(tx) = sinks.get_mut(&subs_id) {
