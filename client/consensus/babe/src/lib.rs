@@ -576,9 +576,7 @@ async fn aux_storage_cleanup<B: BlockT, C>(
 			},
 		}
 
-		for hash in notification.tree_route.iter() {
-			aux_keys.insert(aux_schema::block_weight_key(hash));
-		}
+		aux_keys.extend(notification.tree_route.iter().map(|h| aux_schema::block_weight_key(h)));
 
 		// Cleans data for stale branches.
 
@@ -591,7 +589,7 @@ async fn aux_storage_cleanup<B: BlockT, C>(
 					Ok(meta) => {
 						// A fallback in case of malformed notification.
 						// This should never happen and must be considered a bug.
-						if meta.number.le(&height_limit) {
+						if meta.number <= height_limit {
 							warn!(target: "babe", "unexpected canonical chain state or malformed finality notification");
 							break
 						}

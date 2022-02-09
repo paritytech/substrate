@@ -955,6 +955,7 @@ fn obsolete_blocks_aux_data_cleanup() {
 
 	block_on(async {
 		for mut sink in client.finality_notification_sinks().lock().iter() {
+			// Close the sinks so that `aux_storage_cleanup` will end after is has processed all notifications.
 			let _ = sink.close().await;
 		}
 		// Consume the finalization messages left in the stream.
