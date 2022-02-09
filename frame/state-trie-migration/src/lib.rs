@@ -418,6 +418,10 @@ pub mod pallet {
 		/// Origin that can control the configurations of this pallet.
 		type ControlOrigin: frame_support::traits::EnsureOrigin<Self::Origin>;
 
+		/// Filter on which signed origin that trigger the manual migrations. All origins are
+		/// allowed if set to `None`.
+		type SignedOriginFilter: Get<Option<Self::AccountId>>;
+
 		/// The overarching event type.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
@@ -518,6 +522,10 @@ pub mod pallet {
 			witness_task: MigrationTask<T>,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
+			ensure!(
+				T::SignedOriginFilter::get().map_or(true, |o| o == who),
+				DispatchError::BadOrigin
+			);
 
 			let max_limits = T::SignedMigrationMaxLimits::get();
 			ensure!(
@@ -583,6 +591,10 @@ pub mod pallet {
 			witness_size: u32,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
+			ensure!(
+				T::SignedOriginFilter::get().map_or(true, |o| o == who),
+				DispatchError::BadOrigin
+			);
 
 			// ensure they can pay more than the fee.
 			let deposit = T::SignedDepositBase::get().saturating_add(
@@ -632,6 +644,10 @@ pub mod pallet {
 			total_size: u32,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
+			ensure!(
+				T::SignedOriginFilter::get().map_or(true, |o| o == who),
+				DispatchError::BadOrigin
+			);
 
 			// ensure they can pay more than the fee.
 			let deposit = T::SignedDepositBase::get().saturating_add(
@@ -932,6 +948,7 @@ mod mock {
 		type SignedDepositPerItem = SignedDepositPerItem;
 		type SignedDepositBase = SignedDepositBase;
 		type SignedMigrationMaxLimits = SignedMigrationMaxLimits;
+		type SignedOriginFilter = ();
 		type WeightInfo = ();
 	}
 
@@ -1268,7 +1285,7 @@ mod test {
 }
 
 /// Exported set of tests to be called against different runtimes.
-#[cfg(feature = "remote-tests")]
+#[cfg(feature = "remote-test")]
 pub mod remote_tests {
 	use crate::{AutoLimits, MigrationLimits, Pallet as StateTrieMigration, LOG_TARGET};
 	use codec::Encode;
