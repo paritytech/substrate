@@ -4738,5 +4738,10 @@ fn force_apply_min_commission_works() {
 		assert_ok!(Staking::force_apply_min_commission(Origin::signed(1), 11));
 		// Then the commission is bumped to the min
 		assert_eq!(validators(), vec![(31, prefs(10)), (21, prefs(5)), (11, prefs(5))]);
+
+		// When applying commission to a validator that doesn't exist
+		assert_ok!(Staking::force_apply_min_commission(Origin::signed(1), 420));
+		// Then the validator map is not altered
+		assert_eq!(validators(), vec![(31, prefs(10)), (21, prefs(5)), (11, prefs(5))]);
 	});
 }

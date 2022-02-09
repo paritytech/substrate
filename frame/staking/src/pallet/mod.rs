@@ -1628,13 +1628,15 @@ pub mod pallet {
 			ensure_signed(origin)?;
 			let min_commission = MinCommission::<T>::get();
 
-			if Validators::<T>::contains_key(&validator_stash) {
-				let _ = Validators::<T>::try_mutate(validator_stash, |prefs| {
-					(prefs.commission < min_commission)
-						.then(|| prefs.commission = min_commission)
-						.ok_or(())
-				});
-			};
+			let _ = Validators::<T>::try_mutate_exists(validator_stash, |maybe_prefs| {
+				maybe_prefs
+					.as_mut()
+					.map(|prefs| {
+						(prefs.commission < min_commission)
+							.then(|| prefs.commission = min_commission)
+					})
+					.ok_or(())
+			});
 
 			Ok(())
 		}
