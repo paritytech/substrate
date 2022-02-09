@@ -1251,5 +1251,17 @@ macro_rules! decl_tests {
 					);
 			});
 		}
+
+		#[test]
+		fn set_balance_handles_total_issuance() {
+			<$ext_builder>::default().build().execute_with(|| {
+					let old_total_issuance = Balances::total_issuance();
+					assert_ok!(Balances::set_balance(Origin::root(), 1337, 69, 42));
+					assert_eq!(Balances::total_issuance(), old_total_issuance + 69 + 42);
+					assert_eq!(Balances::total_balance(&1337), 69 + 42);
+					assert_eq!(Balances::free_balance(&1337), 69);
+					assert_eq!(Balances::reserved_balance(&1337), 42);
+			});
+		}
 	}
 }
