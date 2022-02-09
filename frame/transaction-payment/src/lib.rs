@@ -47,7 +47,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 
 use sp_runtime::{
@@ -226,7 +226,7 @@ where
 }
 
 /// Storage releases of the pallet.
-#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug, TypeInfo)]
+#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 enum Releases {
 	/// Original version of the pallet.
 	V1Ancient,
@@ -248,7 +248,6 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
-	#[pallet::without_storage_info]
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
