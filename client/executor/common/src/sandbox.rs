@@ -193,16 +193,9 @@ impl SandboxInstance {
 	/// these syscall implementations.
 	pub fn invoke(
 		&self,
-
-		// function to call that is exported from the module
 		export_name: &str,
-
-		// arguments passed to the function
 		args: &[sp_wasm_interface::Value],
-
-		// arbitraty context data of the call
 		state: u32,
-
 		sandbox_context: &mut dyn SandboxContext,
 	) -> std::result::Result<Option<sp_wasm_interface::Value>, error::Error> {
 		match &self.backend_instance {

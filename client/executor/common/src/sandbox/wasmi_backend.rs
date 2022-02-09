@@ -102,7 +102,7 @@ impl ImportResolver for Imports {
 	}
 }
 
-/// Allocate a memory region
+/// Allocate new memory region
 pub fn new_memory(initial: u32, maximum: Option<u32>) -> crate::error::Result<Memory> {
 	let memory = Memory::Wasmi(MemoryWrapper::new(
 		MemoryInstance::alloc(Pages(initial as usize), maximum.map(|m| Pages(m as usize)))

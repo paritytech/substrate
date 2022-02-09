@@ -49,7 +49,7 @@ impl Backend {
 	}
 }
 
-/// Invoke a function
+/// Invoke a function within a sandboxed module
 pub fn invoke(
 	instance: &wasmer::Instance,
 	export_name: &str,
@@ -100,7 +100,7 @@ pub fn invoke(
 		.transpose()
 }
 
-/// Instantiate a module
+/// Instantiate a module within a sandbox context
 pub fn instantiate(
 	context: &Backend,
 	wasm: &[u8],
@@ -301,6 +301,7 @@ fn dispatch_function(
 	})
 }
 
+/// Allocate new memory region
 pub fn new_memory(
 	context: &Backend,
 	initial: u32,
