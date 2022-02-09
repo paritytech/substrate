@@ -861,14 +861,20 @@ define_env!(Env, <E: Ext>,
 		ctx.set_storage(key_ptr, value_ptr, value_len).map(|_| ())
 	},
 
-	// Replace contract code.
+	// Replace the contract code at the specified address with new code.
 	//
-	// Contracts using this API can't be assumed as having deterministic (you can know the
-	// address before the contract is actually deployed) addresses.
+	// # Note
+	//  
+	// There are a couple of important considerations which must be taken into account when
+	// using this API: 
+	// 
+	// 1. The storage at the code address will remain untouched. This means that contract developers
+	// must ensure that the storage layout of the new code is compatible with that of the old code.
 	//
-	// # NOTE
+	// 2. Contracts using this API can't be assumed as having deterministic addresses. Said another way,
+	// when using this API you lose the guarantee that an address always identifies a specific code hash.
 	//
-	// If a contract calls into itself after changing its code the new call would use
+	// 3. If a contract calls into itself after changing its code the new call would use
 	// the new code. However, if the original caller panics after returning from the sub call it
 	// would revert the changes made by `seal_set_code_hash` and the next caller would use
 	// the old code.
