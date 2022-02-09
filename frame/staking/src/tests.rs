@@ -4556,10 +4556,17 @@ fn capped_stakers_works() {
 #[test]
 fn min_commission_works() {
 	ExtBuilder::default().build_and_execute(|| {
+		// account 10 controls the stash from account 11
 		assert_ok!(Staking::validate(
 			Origin::signed(10),
 			ValidatorPrefs { commission: Perbill::from_percent(5), blocked: false }
 		));
+
+		// event emitted should be correct
+		assert_eq!(
+			*staking_events().last().unwrap(),
+			Event::ValidatorPrefsUpdated(11, Perbill::from_percent(5), false)
+		);
 
 		assert_ok!(Staking::set_staking_configs(
 			Origin::root(),
@@ -4590,38 +4597,6 @@ fn min_commission_works() {
 			Origin::signed(10),
 			ValidatorPrefs { commission: Perbill::from_percent(15), blocked: false }
 		));
-	})
-}
-
-#[test]
-fn commission_changed_event_works() {
-	ExtBuilder::default().build_and_execute(|| {
-		let controller = 10 as AccountId;
-		assert_ok!(Staking::validate(
-			Origin::signed(10),
-			ValidatorPrefs { commission: Perbill::from_percent(5), blocked: false }
-		));
-
-		// Account 10 controls the stash from account 11, which is 100 * balance_factor units
-		let ledger = Staking::ledger(&controller);
-		assert_eq!(
-			ledger,
-			Some(StakingLedger {
-				stash: 11,
-				total: 1000,
-				active: 1000,
-				unlocking: vec![],
-				claimed_rewards: vec![]
-			})
-		);
-
-		let stash = ledger.unwrap().stash;
-
-		// Event emitted should be correct
-		assert_eq!(
-			*staking_events().last().unwrap(),
-			Event::CommissionChanged(stash, Perbill::from_percent(5))
-		);
 	})
 }
 
