@@ -1124,7 +1124,7 @@ mod test {
 					Bounded::max_value(),
 					MigrationProcess::<Test>::get()
 				),
-				"max signed limits not respected"
+				Error::<Test>::MaxSignedLimits,
 			);
 
 			// can't submit if poor.
@@ -1135,7 +1135,7 @@ mod test {
 					100,
 					MigrationProcess::<Test>::get()
 				),
-				"not enough funds"
+				Error::<Test>::NotEnoughFunds,
 			);
 
 			// can't submit with bad witness.
@@ -1146,7 +1146,7 @@ mod test {
 					100,
 					MigrationTask { current_top: Some(vec![1u8]), ..Default::default() }
 				),
-				"wrong witness"
+				Error::<Test>::BadWitness
 			);
 
 			// migrate all keys in a series of submissions
