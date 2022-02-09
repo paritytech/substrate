@@ -610,7 +610,7 @@ pub mod pallet {
 		/// The stakers' rewards are getting paid. \[era_index, validator_stash\]
 		PayoutStarted(EraIndex, T::AccountId),
 		/// A validator has updated their commission
-		ValidatorPrefsUpdated(T::AccountId, Perbill, bool),
+		ValidatorPrefsUpdated(T::AccountId, ValidatorPrefs),
 	}
 
 	#[pallet::error]
@@ -985,7 +985,7 @@ pub mod pallet {
 
 			Self::do_remove_nominator(stash);
 			Self::do_add_validator(stash, prefs.clone());
-			Self::deposit_event(Event::<T>::ValidatorPrefsUpdated(ledger.stash, prefs.commission, prefs.blocked));
+			Self::deposit_event(Event::<T>::ValidatorPrefsUpdated(ledger.stash, prefs));
 
 			Ok(())
 		}
