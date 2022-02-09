@@ -1970,14 +1970,19 @@ benchmarks! {
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
+	#[skip_meta]
 	seal_set_code_hash {
-		let caller = whitelisted_caller();
-		T::Currency::make_free_balance_be(&caller, caller_funding::<T>());
-		let WasmModule { code, hash, .. } = WasmModule::<T>::dummy();
-		let uploaded = <Contracts<T>>::bare_upload_code(caller.clone(), code, None)?;
-		assert_eq!(uploaded.code_hash, hash);
-		assert!(<Contract<T>>::code_exists(&hash));
-		let hash_bytes = hash.encode();
+		let r in 0 .. API_BENCHMARK_BATCHES;
+		let code_hashes = (0..r * API_BENCHMARK_BATCH_SIZE)
+			.map(|i| {
+				let new_code = WasmModule::<T>::dummy_with_bytes(i);
+				Contracts::<T>::store_code_raw(new_code.code, whitelisted_caller())?;
+				Ok(new_code.hash)
+			})
+			.collect::<Result<Vec<_>, &'static str>>()?;
+		let code_hash_len = code_hashes.get(0).map(|x| x.encode().len()).unwrap_or(0);
+		let code_hashes_bytes = code_hashes.iter().flat_map(|x| x.encode()).collect::<Vec<_>>();
+		let code_hashes_len = code_hashes_bytes.len();
 
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
@@ -1992,23 +1997,19 @@ benchmarks! {
 			data_segments: vec![
 				DataSegment {
 					offset: 0,
-					value: hash_bytes,
+					value: code_hashes_bytes,
 				},
 			],
-			call_body: Some(body::plain(vec![
-				Instruction::I32Const(0 as i32), // code_hash_ptr
-				Instruction::Call(0),
-				Instruction::Drop,
-				Instruction::End,
+			call_body: Some(body::repeated_dyn(r * API_BENCHMARK_BATCH_SIZE, vec![
+				Counter(0, code_hash_len as u32), // code_hash_ptr
+				Regular(Instruction::Call(0)),
+				Regular(Instruction::Drop),
 			])),
 			.. Default::default()
 		});
 		let instance = Contract::<T>::new(code, vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr.clone(), 0u32.into(), Weight::MAX, None, vec![])
-	verify {
-		assert_eq!(instance.info()?.code_hash, hash);
-	}
+	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
 	// We make the assumption that pushing a constant and dropping a value takes roughly
 	// the same amount of time. We follow that `t.load` and `drop` both have the weight
