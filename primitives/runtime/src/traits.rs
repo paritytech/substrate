@@ -1585,7 +1585,7 @@ impl Printable for Tuple {
 #[cfg(feature = "std")]
 pub trait BlockIdTo<Block: self::Block> {
 	/// The error type that will be returned by the functions.
-	type Error: std::fmt::Debug;
+	type Error: std::error::Error;
 
 	/// Convert the given `block_id` to the corresponding block hash.
 	fn to_hash(

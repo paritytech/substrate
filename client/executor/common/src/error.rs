@@ -32,9 +32,6 @@ pub enum Error {
 	InvalidData(#[from] sp_serializer::Error),
 
 	#[error(transparent)]
-	Trap(#[from] wasmi::Trap),
-
-	#[error(transparent)]
 	Wasmi(#[from] wasmi::Error),
 
 	#[error("Error calling api function: {0}")]
@@ -108,6 +105,12 @@ pub enum Error {
 
 	#[error("Invalid initializer expression provided {0}")]
 	InvalidInitializerExpression(String),
+
+	#[error("Execution aborted due to panic: {0}")]
+	AbortedDueToPanic(MessageWithBacktrace),
+
+	#[error("Execution aborted due to trap: {0}")]
+	AbortedDueToTrap(MessageWithBacktrace),
 }
 
 impl wasmi::HostError for Error {}
@@ -159,4 +162,39 @@ pub enum WasmError {
 	/// Other error happenend.
 	#[error("{0}")]
 	Other(String),
+}
+
+/// An error message with an attached backtrace.
+#[derive(Debug)]
+pub struct MessageWithBacktrace {
+	/// The error message.
+	pub message: String,
+
+	/// The backtrace associated with the error message.
+	pub backtrace: Option<Backtrace>,
+}
+
+impl std::fmt::Display for MessageWithBacktrace {
+	fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
+		fmt.write_str(&self.message)?;
+		if let Some(ref backtrace) = self.backtrace {
+			fmt.write_str("\nWASM backtrace:\n")?;
+			backtrace.backtrace_string.fmt(fmt)?;
+		}
+
+		Ok(())
+	}
+}
+
+/// A WASM backtrace.
+#[derive(Debug)]
+pub struct Backtrace {
+	/// The string containing the backtrace.
+	pub backtrace_string: String,
+}
+
+impl std::fmt::Display for Backtrace {
+	fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
+		fmt.write_str(&self.backtrace_string)
+	}
 }
