@@ -174,9 +174,6 @@ pub enum RuntimeCosts {
 	DepositEvent { num_topic: u32, len: u32 },
 	/// Weight of calling `seal_debug_message`.
 	DebugMessage,
-	/// Weight of calling `seal_set_code_hash`
-	#[cfg(feature = "unstable-interface")]
-	SetCodeHash,
 	/// Weight of calling `seal_set_storage` for the given storage item sizes.
 	SetStorage { old_bytes: u32, new_bytes: u32 },
 	/// Weight of calling `seal_clear_storage` per cleared byte.
@@ -196,6 +193,9 @@ pub enum RuntimeCosts {
 	/// Weight of calling `seal_delegate_call` for the given input size.
 	#[cfg(feature = "unstable-interface")]
 	DelegateCallBase(u32),
+	/// Weight of calling `seal_set_code_hash`
+	#[cfg(feature = "unstable-interface")]
+	SetCodeHash,
 	/// Weight of the transfer performed during a call.
 	CallSurchargeTransfer,
 	/// Weight of output received through `seal_call` for the given size.
@@ -259,8 +259,6 @@ impl RuntimeCosts {
 				.saturating_add(s.deposit_event_per_topic.saturating_mul(num_topic.into()))
 				.saturating_add(s.deposit_event_per_byte.saturating_mul(len.into())),
 			DebugMessage => s.debug_message,
-			#[cfg(feature = "unstable-interface")]
-			SetCodeHash => s.set_code_hash,
 			SetStorage { new_bytes, old_bytes } => s
 				.set_storage
 				.saturating_add(s.set_storage_per_new_byte.saturating_mul(new_bytes.into()))
@@ -286,6 +284,8 @@ impl RuntimeCosts {
 			#[cfg(feature = "unstable-interface")]
 			DelegateCallBase(len) =>
 				s.delegate_call.saturating_add(s.call_per_input_byte.saturating_mul(len.into())),
+			#[cfg(feature = "unstable-interface")]
+			SetCodeHash => s.set_code_hash,
 			InstantiateBase { input_data_len, salt_len } => s
 				.instantiate
 				.saturating_add(s.instantiate_per_input_byte.saturating_mul(input_data_len.into()))
@@ -861,43 +861,6 @@ define_env!(Env, <E: Ext>,
 		ctx.set_storage(key_ptr, value_ptr, value_len).map(|_| ())
 	},
 
-	// Replace the contract code at the specified address with new code.
-	//
-	// # Note
-	//  
-	// There are a couple of important considerations which must be taken into account when
-	// using this API: 
-	// 
-	// 1. The storage at the code address will remain untouched. This means that contract developers
-	// must ensure that the storage layout of the new code is compatible with that of the old code.
-	//
-	// 2. Contracts using this API can't be assumed as having deterministic addresses. Said another way,
-	// when using this API you lose the guarantee that an address always identifies a specific code hash.
-	//
-	// 3. If a contract calls into itself after changing its code the new call would use
-	// the new code. However, if the original caller panics after returning from the sub call it
-	// would revert the changes made by `seal_set_code_hash` and the next caller would use
-	// the old code.
-	//
-	// # Parameters
-	//
-	// - code_hash_ptr: A pointer to the buffer that contains the new code hash.
-	//
-	// # Errors
-	//
-	// `ReturnCode::CodeNotFound`
-	[__unstable__] seal_set_code_hash(ctx, code_hash_ptr: u32) -> ReturnCode => {
-		ctx.charge_gas(RuntimeCosts::SetCodeHash)?;
-		let code_hash: CodeHash<<E as Ext>::T> = ctx.read_sandbox_memory_as(code_hash_ptr)?;
-		match ctx.ext.set_code_hash(code_hash) {
-			Err(err) =>	{
-				let code = Runtime::<E>::err_into_return_code(err)?;
-				Ok(code)
-			},
-			Ok(()) => Ok(ReturnCode::Success)
-		}
-	},
-
 	// Set the value at the given key in the contract storage.
 	//
 	// The value length must not exceed the maximum defined by the contracts module parameters.
@@ -1176,6 +1139,43 @@ define_env!(Env, <E: Ext>,
 			output_ptr,
 			output_len_ptr,
 		)
+	},
+
+	// Replace the contract code at the specified address with new code.
+	//
+	// # Note
+	//
+	// There are a couple of important considerations which must be taken into account when
+	// using this API:
+	//
+	// 1. The storage at the code address will remain untouched. This means that contract developers
+	// must ensure that the storage layout of the new code is compatible with that of the old code.
+	//
+	// 2. Contracts using this API can't be assumed as having deterministic addresses. Said another way,
+	// when using this API you lose the guarantee that an address always identifies a specific code hash.
+	//
+	// 3. If a contract calls into itself after changing its code the new call would use
+	// the new code. However, if the original caller panics after returning from the sub call it
+	// would revert the changes made by `seal_set_code_hash` and the next caller would use
+	// the old code.
+	//
+	// # Parameters
+	//
+	// - code_hash_ptr: A pointer to the buffer that contains the new code hash.
+	//
+	// # Errors
+	//
+	// `ReturnCode::CodeNotFound`
+	[__unstable__] seal_set_code_hash(ctx, code_hash_ptr: u32) -> ReturnCode => {
+		ctx.charge_gas(RuntimeCosts::SetCodeHash)?;
+		let code_hash: CodeHash<<E as Ext>::T> = ctx.read_sandbox_memory_as(code_hash_ptr)?;
+		match ctx.ext.set_code_hash(code_hash) {
+			Err(err) =>	{
+				let code = Runtime::<E>::err_into_return_code(err)?;
+				Ok(code)
+			},
+			Ok(()) => Ok(ReturnCode::Success)
+		}
 	},
 
 	// Instantiate a contract with the specified code hash.

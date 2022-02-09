@@ -1019,6 +1019,20 @@ where
 		self.run(executable, input_data)
 	}
 
+	fn set_code_hash(&mut self, hash: CodeHash<Self::T>) -> Result<(), DispatchError> {
+		increment_refcount::<Self::T>(hash)?;
+		let top_frame = self.top_frame_mut();
+		let prev_hash = top_frame.contract_info().code_hash.clone();
+		decrement_refcount::<Self::T>(prev_hash.clone())?;
+		top_frame.contract_info().code_hash = hash;
+		Contracts::<Self::T>::deposit_event(Event::ContractCodeUpdated {
+			contract: top_frame.account_id.clone(),
+			new_code_hash: hash,
+			old_code_hash: prev_hash,
+		});
+		Ok(())
+	}
+
 	fn instantiate(
 		&mut self,
 		gas_limit: Weight,
@@ -1180,20 +1194,6 @@ where
 
 	fn ecdsa_recover(&self, signature: &[u8; 65], message_hash: &[u8; 32]) -> Result<[u8; 33], ()> {
 		secp256k1_ecdsa_recover_compressed(&signature, &message_hash).map_err(|_| ())
-	}
-
-	fn set_code_hash(&mut self, hash: CodeHash<Self::T>) -> Result<(), DispatchError> {
-		increment_refcount::<Self::T>(hash)?;
-		let top_frame = self.top_frame_mut();
-		let prev_hash = top_frame.contract_info().code_hash.clone();
-		decrement_refcount::<Self::T>(prev_hash.clone())?;
-		top_frame.contract_info().code_hash = hash;
-		Contracts::<Self::T>::deposit_event(Event::ContractCodeUpdated {
-			contract: top_frame.account_id.clone(),
-			new_code_hash: hash,
-			old_code_hash: prev_hash,
-		});
-		Ok(())
 	}
 
 	#[cfg(test)]
