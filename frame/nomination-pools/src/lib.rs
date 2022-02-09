@@ -382,9 +382,7 @@ pub struct BondedPool<T: Config> {
 	/// Can set the pool's nominations at any time.
 	nominator: T::AccountId,
 	/// Can toggle the pools state, including setting the pool as blocked or putting the pool into
-	/// destruction mode. The state toggle can also "kick" delegators by unbonding them. TODO:
-	/// there should be an unbond_other where the state_toggle can unbond pool members, and a
-	/// destroying pool can have anyone unbond other on the members
+	/// destruction mode. The state toggle can also "kick" delegators by unbonding them.
 	state_toggler: T::AccountId,
 	/// State of the pool.
 	state: PoolState,
@@ -415,6 +413,11 @@ impl<T: Config> BondedPool<T> {
 			account,
 			BondedPoolStorage { points, depositor, root, nominator, state_toggler, state },
 		);
+	}
+
+	/// Consume and remove [`Self`] from storage.
+	fn remove(self) {
+		BondedPools::<T>::remove(self.account);
 	}
 
 	/// Get the amount of points to issue for some new funds that will be bonded in the pool.
@@ -472,40 +475,85 @@ impl<T: Config> BondedPool<T> {
 		*who == self.root || *who == self.nominator
 	}
 
+	fn can_kick(&self, who: &T::AccountId) -> bool {
+		(*who == self.root || *who == self.state_toggler) && self.state == PoolState::Blocked
+	}
+
+	fn is_destroying(&self) -> bool {
+		self.state == PoolState::Destroying
+	}
+
 	fn ok_to_unbond_other_with(
 		&self,
-		who: &T::AccountId,
+		caller: &T::AccountId,
 		target_account: &T::AccountId,
 		target_delegator: &Delegator<T>,
 	) -> Result<(), DispatchError> {
-		let is_destroying = self.state == PoolState::Destroying;
-		let is_permissioned = who == target_account;
+		let is_permissioned = caller == target_account;
 		let is_depositor = *target_account == self.depositor;
 		match (is_permissioned, is_depositor) {
-			// anyone can unbond a delegator if it is not the depositor and the pool is getting
-			// destroyed
-			(false, false) => ensure!(is_destroying, Error::<T>::NotDestroying),
-			// any delegator who is not the depositor can always unbond themselves
+			// If the pool is blocked, then an admin with kicking permissions can remove a
+			// delegator. If the pool is being destroyed, anyone can remove a delegator
+			(false, false) => {
+				ensure!(
+					self.can_kick(caller) || self.is_destroying(),
+					Error::<T>::NotKickerOrDestroying
+				)
+			},
+			// Any delegator who is not the depositor can always unbond themselves
 			(true, false) => (),
-			// depositor can only start unbonding if the pool is already being destroyed and the are
-			// the delegator in the pool
+			// The depositor can only start unbonding if the pool is already being destroyed and
+			// they are the delegator in the pool
 			(false, true) | (true, true) => {
 				ensure!(target_delegator.points == self.points, Error::<T>::NotOnlyDelegator);
-				ensure!(is_destroying, Error::<T>::NotDestroying);
+				ensure!(self.is_destroying(), Error::<T>::NotDestroying);
 			},
 		}
 		Ok(())
 	}
 
+	/// Returns a result indicating if `Call::withdraw_unbonded_other`. If the result is ok, the
+	/// returned value is a bool indicating wether or not to remove the pool from storage.
 	fn ok_to_withdraw_unbonded_other_with(
 		&self,
 		caller: &T::AccountId,
-		target: &T::AccountId,
-	) -> Result<(), DispatchError> {
-		let is_permissioned = caller == target;
-		let is_destroying = self.state == PoolState::Destroying;
-		ensure!(is_permissioned || is_destroying, Error::<T>::NotDestroying);
-		Ok(())
+		target_account: &T::AccountId,
+		target_delegator: &Delegator<T>,
+		sub_pools: &SubPools<T>,
+	) -> Result<bool, DispatchError> {
+		if *target_account == self.depositor {
+			// This is a depositor
+			if !sub_pools.no_era.points.is_zero() {
+				// Unbonded pool has some points, so if they are the last delegator they must be
+				// here
+				ensure!(sub_pools.with_era.len().is_zero(), Error::<T>::NotOnlyDelegator);
+				ensure!(
+					sub_pools.no_era.points == target_delegator.points,
+					Error::<T>::NotOnlyDelegator
+				);
+			} else {
+				// No points in unbonded pool, so they must be in an unbonding pool
+				ensure!(sub_pools.with_era.len() == 1, Error::<T>::NotOnlyDelegator);
+				let only_unbonding_pool = sub_pools
+					.with_era
+					.values()
+					.next()
+					.expect("ensured at least 1 entry exists on line above. qed.");
+				ensure!(
+					only_unbonding_pool.points == target_delegator.points,
+					Error::<T>::NotOnlyDelegator
+				);
+			}
+			Ok(true)
+		} else {
+			// This isn't a depositor
+			let is_permissioned = caller == target_account;
+			ensure!(
+				is_permissioned || self.can_kick(caller) || self.is_destroying(),
+				Error::<T>::NotKickerOrDestroying
+			);
+			Ok(false)
+		}
 	}
 }
 
@@ -746,10 +794,13 @@ pub mod pallet {
 		/// A pool must be in [`PoolState::Destroying`] in order for the depositor to unbond or for
 		/// other delegators to be permissionlessly unbonded.
 		NotDestroying,
-		/// The depositor must be the only delegator in the pool in order to unbond.
+		/// The depositor must be the only delegator in the bonded pool in order to unbond. And the
+		/// depositor must be the only delegator in the sub pools in order to withdraw unbonded.
 		NotOnlyDelegator,
 		/// The caller does not have nominating permissions for the pool.
-		NotNominator
+		NotNominator,
+		/// Either a) the caller cannot make a valid kick or b) the pool is not destroying
+		NotKickerOrDestroying,
 	}
 
 	#[pallet::call]
@@ -835,20 +886,32 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// A bonded delegator can use this to unbond _all_ funds from the pool.
+		/// Unbond _all_ of the `target` delegators funds from the pool. Under certain conditions,
+		/// this call can be dispatched permissionlessly (i.e. by any account).
 		///
-		/// If their are too many unlocking chunks to unbond with the pool account,
+		/// Conditions for a permissionless dispatch:
+		///
+		/// - The pool is blocked and the caller is either the root or state-toggler. This is
+		///   refereed to as a kick.
+		/// - The pool is destroying and the delegator is not the depositor.
+		/// - The pool is destroying, the delegator is the depositor and no other delegators are in
+		///   the pool.
+		///
+		/// Conditions for permissioned dispatch (i.e. the caller is also the target):
+		///
+		/// - The caller is not the depositor
+		/// - The caller is the depositor, the pool is destroying and not other delegators are in
+		///   the pool.
+		///
+		/// Note: If their are too many unlocking chunks to unbond with the pool account,
 		/// [`Self::withdraw_unbonded_pool`] can be called to try and minimize unlocking chunks.
 		#[pallet::weight(666)]
 		pub fn unbond_other(origin: OriginFor<T>, target: T::AccountId) -> DispatchResult {
-			let who = ensure_signed(origin)?;
-			// TODO check if this is owner, if its the owner then they must be the only person in
-			// the pool and it needs to be destroyed with withdraw_unbonded
-
+			let caller = ensure_signed(origin)?;
 			let delegator = Delegators::<T>::get(&target).ok_or(Error::<T>::DelegatorNotFound)?;
 			let mut bonded_pool = BondedPool::<T>::get(&delegator.pool)
 				.defensive_ok_or_else(|| Error::<T>::PoolNotFound)?;
-			bonded_pool.ok_to_unbond_other_with(&who, &target, &delegator)?;
+			bonded_pool.ok_to_unbond_other_with(&caller, &target, &delegator)?;
 
 			// Claim the the payout prior to unbonding. Once the user is unbonding their points
 			// no longer exist in the bonded pool and thus they can no longer claim their payouts.
@@ -891,14 +954,12 @@ pub mod pallet {
 			// Now that we know everything has worked write the items to storage.
 			bonded_pool.put();
 			SubPoolsStorage::insert(&delegator.pool, sub_pools);
-			Delegators::insert(who, delegator);
-
+			Delegators::insert(target, delegator);
 
 			Ok(())
 		}
 
-		/// A permissionless function that allows users to call `withdraw_unbonded` for the pools
-		/// account.
+		/// Call `withdraw_unbonded` for the pools account. This call can be made by any account.
 		///
 		/// This is useful if their are too many unlocking chunks to unbond, and some can be cleared
 		/// by withdrawing.
@@ -913,34 +974,43 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Withdraw unbonded funds for the `target` delegator. If the pool is not in
-		/// [`PoolState::Destroying`] mode, this can only be called by the delegator themselves;
-		/// otherwise this can be called by any account.
+		/// Withdraw unbonded funds for the `target` delegator. Under certain conditions,
+		/// this call can be dispatched permissionlessly (i.e. by any account).
+		///
+		/// Conditions for a permissionless dispatch:
+		///
+		/// - The pool is in destroy mode and the target is not the depositor.
+		/// - The target is the depositor and they are the only delegator in the sub pools.
+		/// - The pool is blocked and the caller is either the root or state-toggler.
+		///
+		/// Conditions for permissioned dispatch:
+		///
+		/// - The caller is the target and they are not the depositor.
+		///
+		/// Note: If the target is the depositor, the pool will be destroyed.
 		#[pallet::weight(666)]
 		pub fn withdraw_unbonded_other(
 			origin: OriginFor<T>,
 			target: T::AccountId,
 			num_slashing_spans: u32,
 		) -> DispatchResult {
-			let who = ensure_signed(origin)?;
-			// TODO: Check if this is the owner, and if its the owner then we delete this pool from
-			// storage at the end of the function. (And we assume that unbond ensured they are the
-			// last member of the pool)
-
+			let caller = ensure_signed(origin)?;
 			let delegator = Delegators::<T>::get(&target).ok_or(Error::<T>::DelegatorNotFound)?;
-
 			let unbonding_era = delegator.unbonding_era.ok_or(Error::<T>::NotUnbonding)?;
 			let current_era = T::StakingInterface::current_era().unwrap_or(Zero::zero());
-			// TODO: make this an ensure
-			if current_era.saturating_sub(unbonding_era) < T::StakingInterface::bonding_duration() {
-				return Err(Error::<T>::NotUnbondedYet.into())
-			};
-			BondedPool::<T>::get(&delegator.pool)
-				.defensive_ok_or_else(|| Error::<T>::RewardPoolNotFound)?
-				.ok_to_withdraw_unbonded_other_with(&who, &target)?;
+			ensure!(
+				current_era.saturating_sub(unbonding_era) >=
+					T::StakingInterface::bonding_duration(),
+				Error::<T>::NotUnbondedYet
+			);
 
 			let mut sub_pools =
 				SubPoolsStorage::<T>::get(&delegator.pool).ok_or(Error::<T>::SubPoolsNotFound)?;
+			let bonded_pool = BondedPool::<T>::get(&delegator.pool)
+				.defensive_ok_or_else(|| Error::<T>::PoolNotFound)?;
+			let should_remove_pool = bonded_pool
+				.ok_to_withdraw_unbonded_other_with(&caller, &target, &delegator, &sub_pools)?;
+
 			let balance_to_unbond = if let Some(pool) = sub_pools.with_era.get_mut(&unbonding_era) {
 				let balance_to_unbond = pool.balance_to_unbond(delegator.points);
 				pool.points = pool.points.saturating_sub(delegator.points);
@@ -967,7 +1037,19 @@ pub mod pallet {
 			)
 			.defensive_map_err(|e| e)?;
 
-			SubPoolsStorage::<T>::insert(&delegator.pool, sub_pools);
+			if should_remove_pool {
+				let reward_pool = RewardPools::<T>::take(&delegator.pool)
+					.defensive_ok_or_else(|| Error::<T>::PoolNotFound)?;
+				SubPoolsStorage::<T>::remove(&delegator.pool);
+				// Kill accounts from storage by making their balance go below ED. We assume that
+				// the accounts have no references that would prevent destruction once we get to
+				// this point.
+				T::Currency::make_free_balance_be(&reward_pool.account, Zero::zero());
+				T::Currency::make_free_balance_be(&bonded_pool.account, Zero::zero());
+				bonded_pool.remove();
+			} else {
+				SubPoolsStorage::<T>::insert(&delegator.pool, sub_pools);
+			}
 			Delegators::<T>::remove(&target);
 			Self::deposit_event(Event::<T>::Withdrawn {
 				delegator: target,
