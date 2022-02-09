@@ -665,6 +665,8 @@ pub mod pallet {
 		TooManyValidators,
 		/// Commission is too low. Must be at least `MinCommission`.
 		CommissionTooLow,
+		/// Not a validator stash.
+		NotValidatorStash,
 	}
 
 	#[pallet::hooks]
@@ -1627,17 +1629,15 @@ pub mod pallet {
 		) -> DispatchResult {
 			ensure_signed(origin)?;
 			let min_commission = MinCommission::<T>::get();
-
-			let _ = Validators::<T>::try_mutate_exists(validator_stash, |maybe_prefs| {
+			Validators::<T>::try_mutate_exists(validator_stash, |maybe_prefs| {
 				maybe_prefs
 					.as_mut()
 					.map(|prefs| {
 						(prefs.commission < min_commission)
 							.then(|| prefs.commission = min_commission)
 					})
-					.ok_or(())
-			});
-
+					.ok_or(Error::<T>::NotValidatorStash)
+			})?;
 			Ok(())
 		}
 	}

@@ -4725,7 +4725,7 @@ fn force_apply_min_commission_works() {
 		MinCommission::<Test>::set(Perbill::from_percent(5));
 
 		// When applying to a commission greater than min
-		assert_ok!(Staking::force_apply_min_commission(Origin::signed(1), 30));
+		assert_ok!(Staking::force_apply_min_commission(Origin::signed(1), 31));
 		// Then the commission is not changed
 		assert_eq!(validators(), vec![(31, prefs(10)), (21, prefs(5)), (11, prefs(0))]);
 
@@ -4739,9 +4739,10 @@ fn force_apply_min_commission_works() {
 		// Then the commission is bumped to the min
 		assert_eq!(validators(), vec![(31, prefs(10)), (21, prefs(5)), (11, prefs(5))]);
 
-		// When applying commission to a validator that doesn't exist
-		assert_ok!(Staking::force_apply_min_commission(Origin::signed(1), 420));
-		// Then the validator map is not altered
-		assert_eq!(validators(), vec![(31, prefs(10)), (21, prefs(5)), (11, prefs(5))]);
+		// When applying commission to a validator that doesn't exist then storage is not altered
+		assert_noop!(
+			Staking::force_apply_min_commission(Origin::signed(1), 420),
+			Error::<Test>::NotValidatorStash
+		);
 	});
 }
