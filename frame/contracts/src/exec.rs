@@ -254,11 +254,7 @@ pub trait Executable<T: Config>: Sized {
 	) -> Result<Self, DispatchError>;
 
 	/// Decrement the refcount by one if the code exists.
-	///
-	/// # Note
-	///
-	/// Charges weight proportional to the code size from the gas meter.
-	fn remove_user(code_hash: CodeHash<T>) -> Result<(), DispatchError>;
+	fn remove_user(code_hash: CodeHash<T>);
 
 	/// Execute the specified exported function and return the result.
 	///
@@ -1042,7 +1038,7 @@ where
 			T::Currency::free_balance(&frame.account_id),
 		)?;
 		ContractInfoOf::<T>::remove(&frame.account_id);
-		E::remove_user(info.code_hash)?;
+		E::remove_user(info.code_hash);
 		Contracts::<T>::deposit_event(Event::Terminated {
 			contract: frame.account_id.clone(),
 			beneficiary: beneficiary.clone(),
@@ -1325,9 +1321,8 @@ mod tests {
 			})
 		}
 
-		fn remove_user(code_hash: CodeHash<Test>) -> Result<(), DispatchError> {
+		fn remove_user(code_hash: CodeHash<Test>) {
 			MockLoader::decrement_refcount(code_hash);
-			Ok(())
 		}
 
 		fn execute<E: Ext<T = Test>>(

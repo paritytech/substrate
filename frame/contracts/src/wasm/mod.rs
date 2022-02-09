@@ -198,7 +198,7 @@ where
 		code_cache::load(code_hash, schedule, gas_meter)
 	}
 
-	fn remove_user(code_hash: CodeHash<T>) -> Result<(), DispatchError> {
+	fn remove_user(code_hash: CodeHash<T>) {
 		code_cache::decrement_refcount::<T>(code_hash)
 	}
 
