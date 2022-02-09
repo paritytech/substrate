@@ -665,8 +665,6 @@ pub mod pallet {
 		TooManyValidators,
 		/// Commission is too low. Must be at least `MinCommission`.
 		CommissionTooLow,
-		/// Not a validator stash.
-		NotValidatorStash,
 	}
 
 	#[pallet::hooks]
