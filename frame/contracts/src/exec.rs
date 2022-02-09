@@ -237,12 +237,12 @@ pub trait Ext: sealing::Sealed {
 	/// Recovers ECDSA compressed public key based on signature and message hash.
 	fn ecdsa_recover(&self, signature: &[u8; 65], message_hash: &[u8; 32]) -> Result<[u8; 33], ()>;
 
-	/// Sets new code hash for existing contract.
-	fn set_code_hash(&mut self, hash: CodeHash<Self::T>) -> Result<(), DispatchError>;
-
 	/// Tests sometimes need to modify and inspect the contract info directly.
 	#[cfg(test)]
 	fn contract_info(&mut self) -> &mut ContractInfo<Self::T>;
+
+	/// Sets new code hash for existing contract.
+	fn set_code_hash(&mut self, hash: CodeHash<Self::T>) -> Result<(), DispatchError>;
 }
 
 /// Describes the different functions that can be exported by an [`Executable`].
@@ -1019,20 +1019,6 @@ where
 		self.run(executable, input_data)
 	}
 
-	fn set_code_hash(&mut self, hash: CodeHash<Self::T>) -> Result<(), DispatchError> {
-		increment_refcount::<Self::T>(hash)?;
-		let top_frame = self.top_frame_mut();
-		let prev_hash = top_frame.contract_info().code_hash.clone();
-		decrement_refcount::<Self::T>(prev_hash.clone())?;
-		top_frame.contract_info().code_hash = hash;
-		Contracts::<Self::T>::deposit_event(Event::ContractCodeUpdated {
-			contract: top_frame.account_id.clone(),
-			new_code_hash: hash,
-			old_code_hash: prev_hash,
-		});
-		Ok(())
-	}
-
 	fn instantiate(
 		&mut self,
 		gas_limit: Weight,
@@ -1199,6 +1185,20 @@ where
 	#[cfg(test)]
 	fn contract_info(&mut self) -> &mut ContractInfo<Self::T> {
 		self.top_frame_mut().contract_info()
+	}
+
+	fn set_code_hash(&mut self, hash: CodeHash<Self::T>) -> Result<(), DispatchError> {
+		increment_refcount::<Self::T>(hash)?;
+		let top_frame = self.top_frame_mut();
+		let prev_hash = top_frame.contract_info().code_hash.clone();
+		decrement_refcount::<Self::T>(prev_hash.clone())?;
+		top_frame.contract_info().code_hash = hash;
+		Contracts::<Self::T>::deposit_event(Event::ContractCodeUpdated {
+			contract: top_frame.account_id.clone(),
+			new_code_hash: hash,
+			old_code_hash: prev_hash,
+		});
+		Ok(())
 	}
 }
 

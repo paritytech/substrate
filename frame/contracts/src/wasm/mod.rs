@@ -809,47 +809,6 @@ mod tests {
 
 	#[test]
 	#[cfg(feature = "unstable-interface")]
-	fn set_code_hash() {
-		const CODE: &str = r#"
-(module
-	(import "__unstable__" "seal_set_code_hash" (func $seal_set_code_hash (param i32) (result i32)))
-	(import "env" "memory" (memory 1 1))
-	(func $assert (param i32)
-		(block $ok
-			(br_if $ok
-				(get_local 0)
-			)
-			(unreachable)
-		)
-	)
-	(func (export "call")
-		(local $exit_code i32)
-		(set_local $exit_code
-			(call $seal_set_code_hash (i32.const 0))
-		)
-		(call $assert
-			(i32.eq (get_local $exit_code) (i32.const 0)) ;; ReturnCode::Success
-		)
-	)
-
-	(func (export "deploy"))
-
-	;; Hash of code.
-	(data (i32.const 0)
-		"\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11"
-		"\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11"
-	)
-)
-"#;
-
-		let mut mock_ext = MockExt::default();
-		execute(CODE, [0u8; 32].encode(), &mut mock_ext).unwrap();
-
-		assert_eq!(mock_ext.code_hashes.pop().unwrap(), H256::from_slice(&[17u8; 32]));
-	}
-
-	#[test]
-	#[cfg(feature = "unstable-interface")]
 	fn contains_storage_works() {
 		const CODE: &str = r#"
 (module
@@ -2434,5 +2393,46 @@ mod tests {
 			output,
 			ExecReturnValue { flags: ReturnFlags::empty(), data: Bytes(0u32.encode()) },
 		);
+	}
+
+	#[test]
+	#[cfg(feature = "unstable-interface")]
+	fn set_code_hash() {
+		const CODE: &str = r#"
+(module
+	(import "__unstable__" "seal_set_code_hash" (func $seal_set_code_hash (param i32) (result i32)))
+	(import "env" "memory" (memory 1 1))
+	(func $assert (param i32)
+		(block $ok
+			(br_if $ok
+				(get_local 0)
+			)
+			(unreachable)
+		)
+	)
+	(func (export "call")
+		(local $exit_code i32)
+		(set_local $exit_code
+			(call $seal_set_code_hash (i32.const 0))
+		)
+		(call $assert
+			(i32.eq (get_local $exit_code) (i32.const 0)) ;; ReturnCode::Success
+		)
+	)
+
+	(func (export "deploy"))
+
+	;; Hash of code.
+	(data (i32.const 0)
+		"\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11"
+		"\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11"
+	)
+)
+"#;
+
+		let mut mock_ext = MockExt::default();
+		execute(CODE, [0u8; 32].encode(), &mut mock_ext).unwrap();
+
+		assert_eq!(mock_ext.code_hashes.pop().unwrap(), H256::from_slice(&[17u8; 32]));
 	}
 }
