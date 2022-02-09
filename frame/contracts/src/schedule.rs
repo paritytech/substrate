@@ -358,6 +358,9 @@ pub struct HostFnWeights<T: Config> {
 	/// Weight of calling `seal_call`.
 	pub call: Weight,
 
+	/// Weight of calling `seal_delegate_call`.
+	pub delegate_call: Weight,
+
 	/// Weight surcharge that is claimed if `seal_call` does a balance transfer.
 	pub call_transfer_surcharge: Weight,
 
@@ -615,6 +618,7 @@ impl<T: Config> Default for HostFnWeights<T> {
 			take_storage_per_byte: cost_byte_batched!(seal_take_storage_per_kb),
 			transfer: cost_batched!(seal_transfer),
 			call: cost_batched!(seal_call),
+			delegate_call: cost_batched!(seal_delegate_call),
 			call_transfer_surcharge: cost_batched_args!(
 				seal_call_per_transfer_input_output_kb,
 				1,
