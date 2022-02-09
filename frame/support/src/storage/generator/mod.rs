@@ -69,6 +69,7 @@ mod tests {
 			Value get(fn value) config(): (u64, u64);
 			NumberMap: map hasher(identity) u32 => u64;
 			DoubleMap: double_map hasher(identity) u32, hasher(identity) u32 => u64;
+			NMap: nmap hasher(blake2_128_concat) u16, hasher(twox_64_concat) u32 => u64;
 		}
 	}
 
@@ -177,6 +178,94 @@ mod tests {
 			assert_eq!(Value::get(), (2, 2));
 			assert_eq!(NumberMap::get(0), 4);
 			assert_eq!(DoubleMap::get(0, 0), 6);
+		});
+	}
+
+	#[test]
+	fn try_mutate_exists_works() {
+		let t = GenesisConfig::default().build_storage().unwrap();
+		TestExternalities::new(t).execute_with(|| {
+			NumberMap::insert(0, 22);
+			DoubleMap::insert(0, 0, 22);
+			NMap::insert((0, 0), 22);
+
+			// Storage is not changed if an error is returned
+			assert_noop!(
+				NumberMap::try_mutate_exists(0, |maybe_value| -> Result<(), &'static str> {
+					maybe_value.as_mut().map(|value| *value = 4);
+					Err("don't change value")
+				}),
+				"don't change value"
+			);
+
+			assert_noop!(
+				DoubleMap::try_mutate_exists(0, 0, |maybe_value| -> Result<(), &'static str> {
+					maybe_value.as_mut().map(|value| *value = 6);
+					Err("don't change value")
+				}),
+				"don't change value"
+			);
+
+			assert_noop!(
+				NMap::try_mutate_exists((0, 0), |maybe_value| -> Result<(), &'static str> {
+					maybe_value.as_mut().map(|value| *value = 8);
+					Err("don't change value")
+				}),
+				"don't change value"
+			);
+
+
+			// Values that exist can be mutated
+			assert_ok!(NumberMap::try_mutate_exists(0, |maybe_value| -> Result<(), &'static str> {
+				maybe_value.as_mut().map(|value| *value = 4);
+				Ok(())
+			}));
+
+			assert_ok!(DoubleMap::try_mutate_exists(0, 0, |maybe_value| -> Result<(), &'static str> {
+				maybe_value.as_mut().map(|value| *value = 6);
+				Ok(())
+			}));
+
+			assert_ok!(NMap::try_mutate_exists((0, 0), |maybe_value| -> Result<(), &'static str> {
+				maybe_value.as_mut().map(|value| *value = 8);
+				Ok(())
+			}));
+
+			// Mutation was successful
+			assert_eq!(NumberMap::get(0), 4);
+			assert_eq!(DoubleMap::get(0, 0), 6);
+			assert_eq!(NMap::get((0, 0)), 8);
+
+			// Keys that don't exist will lead to the callback getting called with `None`
+
+			// The following keys don't exist,
+			assert!(!NumberMap::contains_key(1));
+			assert!(!DoubleMap::contains_key(1, 1));
+			assert!(!NMap::contains_key((1, 1)));
+			// but a normal `get` returns a default value since the map apis here use value query
+			assert_eq!(NumberMap::get(1), 0);
+			assert_eq!(DoubleMap::get(1, 1), 0);
+			assert_eq!(NMap::get((1, 1)), 0);
+
+			assert_ok!(NumberMap::try_mutate_exists(1, |maybe_value| -> Result<(), &'static str> {
+				assert!(maybe_value.is_none());
+				Ok(())
+			}));
+
+			assert_ok!(DoubleMap::try_mutate_exists(1, 1, |maybe_value| -> Result<(), &'static str> {
+				assert!(maybe_value.is_none());
+				Ok(())
+			}));
+
+			assert_ok!(NMap::try_mutate_exists((1, 1), |maybe_value| -> Result<(), &'static str> {
+				assert!(maybe_value.is_none());
+				Ok(())
+			}));
+
+			// The previously non-existent keys are still non-existent
+			assert!(!NumberMap::contains_key(1));
+			assert!(!DoubleMap::contains_key(1, 1));
+			assert!(!NMap::contains_key((1, 1)));
 		});
 	}
 }
