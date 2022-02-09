@@ -32,10 +32,10 @@ pub enum Error {
 	InvalidData(#[from] sp_serializer::Error),
 
 	#[error(transparent)]
-	Trap(#[from] wasmi::Trap),
-
-	#[error(transparent)]
 	Wasmi(#[from] wasmi::Error),
+
+	#[error("Sandbox backend error: {0}")]
+	SandboxBackend(String),
 
 	#[error("Error calling api function: {0}")]
 	ApiError(Box<dyn std::error::Error + Send + Sync>),

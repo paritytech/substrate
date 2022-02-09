@@ -25,7 +25,10 @@ mod wasmer_backend;
 
 mod wasmi_backend;
 
-use crate::{error::Result, util};
+use crate::{
+	error::{self, Result},
+	util,
+};
 use codec::Decode;
 use sp_core::sandbox as sandbox_primitives;
 use sp_wasm_interface::{FunctionContext, Pointer, WordSize};
@@ -201,7 +204,7 @@ impl SandboxInstance {
 		state: u32,
 
 		sandbox_context: &mut dyn SandboxContext,
-	) -> std::result::Result<Option<sp_wasm_interface::Value>, wasmi::Error> {
+	) -> std::result::Result<Option<sp_wasm_interface::Value>, error::Error> {
 		match &self.backend_instance {
 			BackendInstance::Wasmi(wasmi_instance) =>
 				wasmi_invoke(self, wasmi_instance, export_name, args, state, sandbox_context),

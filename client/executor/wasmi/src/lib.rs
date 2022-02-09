@@ -100,7 +100,7 @@ impl<'a> sandbox::SandboxContext for SandboxContext<'a> {
 		match result {
 			Ok(Some(RuntimeValue::I64(val))) => Ok(val),
 			Ok(_) => return Err("Supervisor function returned unexpected result!".into()),
-			Err(err) => Err(Error::Trap(err)),
+			Err(err) => Err(Error::SandboxBackend(err.to_string())),
 		}
 	}
 

@@ -104,10 +104,10 @@ impl ImportResolver for Imports {
 
 /// Allocate a memory region
 pub fn new_memory(initial: u32, maximum: Option<u32>) -> crate::error::Result<Memory> {
-	let memory = Memory::Wasmi(MemoryWrapper::new(MemoryInstance::alloc(
-		Pages(initial as usize),
-		maximum.map(|m| Pages(m as usize)),
-	)?));
+	let memory = Memory::Wasmi(MemoryWrapper::new(
+		MemoryInstance::alloc(Pages(initial as usize), maximum.map(|m| Pages(m as usize)))
+			.map_err(|error| Error::SandboxBackend(error.to_string()))?,
+	));
 
 	Ok(memory)
 }
@@ -309,7 +309,7 @@ pub fn invoke(
 	args: &[Value],
 	state: u32,
 	sandbox_context: &mut dyn SandboxContext,
-) -> std::result::Result<Option<Value>, wasmi::Error> {
+) -> std::result::Result<Option<Value>, error::Error> {
 	with_guest_externals(instance, state, |guest_externals| {
 		SandboxContextStore::using(sandbox_context, || {
 			let args = args.iter().cloned().map(Into::into).collect::<Vec<_>>();
@@ -317,6 +317,7 @@ pub fn invoke(
 			module
 				.invoke_export(export_name, &args, guest_externals)
 				.map(|result| result.map(Into::into))
+				.map_err(|error| error::Error::SandboxBackend(error.to_string()))
 		})
 	})
 }

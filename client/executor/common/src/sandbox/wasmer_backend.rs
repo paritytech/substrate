@@ -19,7 +19,7 @@
 //! Wasmer specific impls for sandbox
 
 use crate::{
-	error::Result,
+	error::{Error, Result},
 	sandbox::Memory,
 	util::{checked_range, MemoryTransfer},
 };
@@ -29,12 +29,9 @@ use sp_wasm_interface::{FunctionContext, Pointer, ReturnValue, Value, WordSize};
 use std::{cell::RefCell, collections::HashMap, convert::TryInto, rc::Rc};
 use wasmer::RuntimeError;
 
-use crate::{
-	error::Error,
-	sandbox::{
-		BackendInstance, GuestEnvironment, InstantiationError, SandboxContext, SandboxInstance,
-		SupervisorFuncIndex,
-	},
+use crate::sandbox::{
+	BackendInstance, GuestEnvironment, InstantiationError, SandboxContext, SandboxInstance,
+	SupervisorFuncIndex,
 };
 
 environmental::environmental!(SandboxContextStore: trait SandboxContext);
@@ -59,11 +56,11 @@ pub fn invoke(
 	args: &[Value],
 	_state: u32,
 	sandbox_context: &mut dyn SandboxContext,
-) -> std::result::Result<Option<Value>, wasmi::Error> {
+) -> std::result::Result<Option<Value>, Error> {
 	let function = instance
 		.exports
 		.get_function(export_name)
-		.map_err(|error| wasmi::Error::Function(error.to_string()))?;
+		.map_err(|error| Error::SandboxBackend(error.to_string()))?;
 
 	let args: Vec<wasmer::Val> = args
 		.iter()
@@ -76,11 +73,11 @@ pub fn invoke(
 		.collect();
 
 	let wasmer_result = SandboxContextStore::using(sandbox_context, || {
-		function.call(&args).map_err(|error| wasmi::Error::Function(error.to_string()))
+		function.call(&args).map_err(|error| Error::SandboxBackend(error.to_string()))
 	})?;
 
 	if wasmer_result.len() > 1 {
-		return Err(wasmi::Error::Function("multiple return types are not supported yet".into()))
+		return Err(Error::SandboxBackend("multiple return types are not supported yet".into()))
 	}
 
 	wasmer_result
@@ -92,7 +89,7 @@ pub fn invoke(
 				wasmer::Val::F32(val) => Value::F32(f32::to_bits(val)),
 				wasmer::Val::F64(val) => Value::F64(f64::to_bits(val)),
 				_ =>
-					return Err(wasmi::Error::Function(format!(
+					return Err(Error::SandboxBackend(format!(
 						"Unsupported return value: {:?}",
 						wasm_value,
 					))),
@@ -132,7 +129,7 @@ pub fn instantiate(
 					.memory_by_name(import.module(), import.name())
 					.ok_or(InstantiationError::ModuleDecoding)?;
 
-				let mut wasmer_memory_ref = memory.as_wasmer().expect(
+				let wasmer_memory_ref = memory.as_wasmer().expect(
 					"memory is created by wasmer; \
 					exported by the same module and backend; \
 					thus the operation can't fail; \
