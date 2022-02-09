@@ -91,10 +91,6 @@ pub trait Ext: sealing::Sealed {
 	/// Call (possibly transferring some amount of funds) into the specified account.
 	///
 	/// Returns the original code size of the called contract.
-	///
-	/// # Return Value
-	///
-	/// Result<(ExecReturnValue, CodeSize), (ExecError, CodeSize)>
 	fn call(
 		&mut self,
 		gas_limit: Weight,
@@ -107,10 +103,6 @@ pub trait Ext: sealing::Sealed {
 	/// Execute code in the current frame.
 	///
 	/// Returns the original code size of the called contract.
-	///
-	/// # Return Value
-	///
-	/// Result<ExecReturnValue, ExecError>
 	fn delegate_call(
 		&mut self,
 		code: CodeHash<Self::T>,
@@ -122,10 +114,6 @@ pub trait Ext: sealing::Sealed {
 	/// Returns the original code size of the called contract.
 	/// The newly created account will be associated with `code`. `value` specifies the amount of
 	/// value transferred from this to the newly created account.
-	///
-	/// # Return Value
-	///
-	/// Result<(AccountId, ExecReturnValue, CodeSize), (ExecError, CodeSize)>
 	fn instantiate(
 		&mut self,
 		gas_limit: Weight,
