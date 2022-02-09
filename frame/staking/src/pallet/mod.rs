@@ -1634,7 +1634,7 @@ pub mod pallet {
 						(prefs.commission < min_commission)
 							.then(|| prefs.commission = min_commission)
 					})
-					.ok_or(Error::<T>::NotValidatorStash)
+					.ok_or(Error::<T>::NotStash)
 			})?;
 			Ok(())
 		}

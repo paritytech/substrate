@@ -4742,7 +4742,7 @@ fn force_apply_min_commission_works() {
 		// When applying commission to a validator that doesn't exist then storage is not altered
 		assert_noop!(
 			Staking::force_apply_min_commission(Origin::signed(1), 420),
-			Error::<Test>::NotValidatorStash
+			Error::<Test>::NotStash
 		);
 	});
 }
