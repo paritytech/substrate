@@ -69,7 +69,6 @@ mod tests {
 			Value get(fn value) config(): (u64, u64);
 			NumberMap: map hasher(identity) u32 => u64;
 			DoubleMap: double_map hasher(identity) u32, hasher(identity) u32 => u64;
-			NMap: nmap hasher(blake2_128_concat) u16, hasher(twox_64_concat) u32 => u64;
 		}
 	}
 
