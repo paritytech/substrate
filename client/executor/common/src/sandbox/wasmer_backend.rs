@@ -60,7 +60,7 @@ pub fn invoke(
 	let function = instance
 		.exports
 		.get_function(export_name)
-		.map_err(|error| Error::SandboxBackend(error.to_string()))?;
+		.map_err(|error| Error::Sandbox(error.to_string()))?;
 
 	let args: Vec<wasmer::Val> = args
 		.iter()
@@ -73,11 +73,11 @@ pub fn invoke(
 		.collect();
 
 	let wasmer_result = SandboxContextStore::using(sandbox_context, || {
-		function.call(&args).map_err(|error| Error::SandboxBackend(error.to_string()))
+		function.call(&args).map_err(|error| Error::Sandbox(error.to_string()))
 	})?;
 
 	if wasmer_result.len() > 1 {
-		return Err(Error::SandboxBackend("multiple return types are not supported yet".into()))
+		return Err(Error::Sandbox("multiple return types are not supported yet".into()))
 	}
 
 	wasmer_result
@@ -89,7 +89,7 @@ pub fn invoke(
 				wasmer::Val::F32(val) => Value::F32(f32::to_bits(val)),
 				wasmer::Val::F64(val) => Value::F64(f64::to_bits(val)),
 				_ =>
-					return Err(Error::SandboxBackend(format!(
+					return Err(Error::Sandbox(format!(
 						"Unsupported return value: {:?}",
 						wasm_value,
 					))),

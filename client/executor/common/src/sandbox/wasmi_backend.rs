@@ -106,7 +106,7 @@ impl ImportResolver for Imports {
 pub fn new_memory(initial: u32, maximum: Option<u32>) -> crate::error::Result<Memory> {
 	let memory = Memory::Wasmi(MemoryWrapper::new(
 		MemoryInstance::alloc(Pages(initial as usize), maximum.map(|m| Pages(m as usize)))
-			.map_err(|error| Error::SandboxBackend(error.to_string()))?,
+			.map_err(|error| Error::Sandbox(error.to_string()))?,
 	));
 
 	Ok(memory)
@@ -317,7 +317,7 @@ pub fn invoke(
 			module
 				.invoke_export(export_name, &args, guest_externals)
 				.map(|result| result.map(Into::into))
-				.map_err(|error| error::Error::SandboxBackend(error.to_string()))
+				.map_err(|error| error::Error::Sandbox(error.to_string()))
 		})
 	})
 }
