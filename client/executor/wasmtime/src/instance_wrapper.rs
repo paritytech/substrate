@@ -21,7 +21,7 @@
 
 use crate::runtime::{Store, StoreData};
 use sc_executor_common::{
-	error::{Error, Result},
+	error::{Backtrace, Error, MessageWithBacktrace, Result},
 	wasm_runtime::InvokeMethod,
 };
 use sp_wasm_interface::{HostFunctions, Pointer, Value, WordSize};
@@ -53,25 +53,51 @@ pub struct EntryPoint {
 
 impl EntryPoint {
 	/// Call this entry point.
-	pub fn call(
+	pub(crate) fn call(
 		&self,
-		ctx: impl AsContextMut,
+		store: &mut Store,
 		data_ptr: Pointer<u8>,
 		data_len: WordSize,
 	) -> Result<u64> {
 		let data_ptr = u32::from(data_ptr);
 		let data_len = u32::from(data_len);
 
-		fn handle_trap(err: wasmtime::Trap) -> Error {
-			Error::from(format!("Wasm execution trapped: {}", err))
-		}
-
 		match self.call_type {
 			EntryPointType::Direct { ref entrypoint } =>
-				entrypoint.call(ctx, (data_ptr, data_len)).map_err(handle_trap),
+				entrypoint.call(&mut *store, (data_ptr, data_len)),
 			EntryPointType::Wrapped { func, ref dispatcher } =>
-				dispatcher.call(ctx, (func, data_ptr, data_len)).map_err(handle_trap),
+				dispatcher.call(&mut *store, (func, data_ptr, data_len)),
 		}
+		.map_err(|trap| {
+			let host_state = store
+				.data_mut()
+				.host_state
+				.as_mut()
+				.expect("host state cannot be empty while a function is being called; qed");
+
+			// The logic to print out a backtrace is somewhat complicated,
+			// so let's get wasmtime to print it out for us.
+			let mut backtrace_string = trap.to_string();
+			let suffix = "\nwasm backtrace:";
+			if let Some(index) = backtrace_string.find(suffix) {
+				// Get rid of the error message and just grab the backtrace,
+				// since we're storing the error message ourselves separately.
+				backtrace_string.replace_range(0..index + suffix.len(), "");
+			}
+
+			let backtrace = Backtrace { backtrace_string };
+			if let Some(error) = host_state.take_panic_message() {
+				Error::AbortedDueToPanic(MessageWithBacktrace {
+					message: error,
+					backtrace: Some(backtrace),
+				})
+			} else {
+				Error::AbortedDueToTrap(MessageWithBacktrace {
+					message: trap.display_reason().to_string(),
+					backtrace: Some(backtrace),
+				})
+			}
+		})
 	}
 
 	pub fn direct(
