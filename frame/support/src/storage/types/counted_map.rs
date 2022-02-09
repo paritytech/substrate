@@ -190,6 +190,7 @@ where
 	}
 
 	/// Mutate the item, only if an `Ok` value is returned. Deletes the item if mutated to a `None`.
+	/// Only calls `f` with `Some` if the key exists in storage.
 	pub fn try_mutate_exists<KeyArg, R, E, F>(key: KeyArg, f: F) -> Result<R, E>
 	where
 		KeyArg: EncodeLike<Key> + Clone,

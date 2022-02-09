@@ -214,22 +214,31 @@ mod tests {
 				"don't change value"
 			);
 
-
 			// Values that exist can be mutated
-			assert_ok!(NumberMap::try_mutate_exists(0, |maybe_value| -> Result<(), &'static str> {
-				maybe_value.as_mut().map(|value| *value = 4);
-				Ok(())
-			}));
+			assert_ok!(NumberMap::try_mutate_exists(
+				0,
+				|maybe_value| -> Result<(), &'static str> {
+					maybe_value.as_mut().map(|value| *value = 4);
+					Ok(())
+				}
+			));
 
-			assert_ok!(DoubleMap::try_mutate_exists(0, 0, |maybe_value| -> Result<(), &'static str> {
-				maybe_value.as_mut().map(|value| *value = 6);
-				Ok(())
-			}));
+			assert_ok!(DoubleMap::try_mutate_exists(
+				0,
+				0,
+				|maybe_value| -> Result<(), &'static str> {
+					maybe_value.as_mut().map(|value| *value = 6);
+					Ok(())
+				}
+			));
 
-			assert_ok!(NMap::try_mutate_exists((0, 0), |maybe_value| -> Result<(), &'static str> {
-				maybe_value.as_mut().map(|value| *value = 8);
-				Ok(())
-			}));
+			assert_ok!(NMap::try_mutate_exists(
+				(0, 0),
+				|maybe_value| -> Result<(), &'static str> {
+					maybe_value.as_mut().map(|value| *value = 8);
+					Ok(())
+				}
+			));
 
 			// Mutation was successful
 			assert_eq!(NumberMap::get(0), 4);
@@ -247,20 +256,30 @@ mod tests {
 			assert_eq!(DoubleMap::get(1, 1), 0);
 			assert_eq!(NMap::get((1, 1)), 0);
 
-			assert_ok!(NumberMap::try_mutate_exists(1, |maybe_value| -> Result<(), &'static str> {
-				assert!(maybe_value.is_none());
-				Ok(())
-			}));
+			assert_ok!(NumberMap::try_mutate_exists(
+				1,
+				|maybe_value| -> Result<(), &'static str> {
+					assert!(maybe_value.is_none());
+					Ok(())
+				}
+			));
 
-			assert_ok!(DoubleMap::try_mutate_exists(1, 1, |maybe_value| -> Result<(), &'static str> {
-				assert!(maybe_value.is_none());
-				Ok(())
-			}));
+			assert_ok!(DoubleMap::try_mutate_exists(
+				1,
+				1,
+				|maybe_value| -> Result<(), &'static str> {
+					assert!(maybe_value.is_none());
+					Ok(())
+				}
+			));
 
-			assert_ok!(NMap::try_mutate_exists((1, 1), |maybe_value| -> Result<(), &'static str> {
-				assert!(maybe_value.is_none());
-				Ok(())
-			}));
+			assert_ok!(NMap::try_mutate_exists(
+				(1, 1),
+				|maybe_value| -> Result<(), &'static str> {
+					assert!(maybe_value.is_none());
+					Ok(())
+				}
+			));
 
 			// The previously non-existent keys are still non-existent
 			assert!(!NumberMap::contains_key(1));

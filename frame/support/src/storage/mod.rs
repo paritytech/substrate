@@ -266,6 +266,7 @@ pub trait StorageMap<K: FullEncode, V: FullCodec> {
 	) -> R;
 
 	/// Mutate the item, only if an `Ok` value is returned. Deletes the item if mutated to a `None`.
+	/// Only calls `f` with `Some` if the key exists in storage.
 	fn try_mutate_exists<KeyArg: EncodeLike<K>, R, E, F: FnOnce(&mut Option<V>) -> Result<R, E>>(
 		key: KeyArg,
 		f: F,

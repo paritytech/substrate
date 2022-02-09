@@ -217,6 +217,7 @@ where
 	}
 
 	/// Mutate the item, only if an `Ok` value is returned. Deletes the item if mutated to a `None`.
+	/// Only calls `f` with `Some` if the key exists in storage.
 	pub fn try_mutate_exists<KArg, R, E, F>(key: KArg, f: F) -> Result<R, E>
 	where
 		KArg: EncodeLikeTuple<Key::KArg> + TupleToEncodedIter,

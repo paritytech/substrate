@@ -29,7 +29,8 @@ pub trait StoredMap<K, T: Default> {
 	fn get(k: &K) -> T;
 
 	/// Maybe mutate the item only if an `Ok` value is returned from `f`. Do nothing if an `Err` is
-	/// returned. It is removed or reset to default value if it has been mutated to `None`
+	/// returned. It is removed or reset to default value if it has been mutated to `None`. Only
+	/// calls `f` with `Some` if the key exists in storage.
 	fn try_mutate_exists<R, E: From<DispatchError>>(
 		k: &K,
 		f: impl FnOnce(&mut Option<T>) -> Result<R, E>,
