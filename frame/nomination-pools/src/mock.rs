@@ -16,6 +16,7 @@ parameter_types! {
 	static BondedBalanceMap: std::collections::HashMap<AccountId, Balance> = Default::default();
 	static UnbondingBalanceMap: std::collections::HashMap<AccountId, Balance> = Default::default();
 	pub static BondingDuration: EraIndex = 3;
+	pub static Nominations: Vec<AccountId> = vec![];
 }
 
 pub struct StakingMock;
@@ -76,7 +77,8 @@ impl sp_staking::StakingInterface for StakingMock {
 		Ok(())
 	}
 
-	fn nominate(_: Self::AccountId, _: Vec<Self::LookupSource>) -> DispatchResult {
+	fn nominate(_: Self::AccountId, nominations: Vec<Self::LookupSource>) -> DispatchResult {
+		Nominations::set(nominations);
 		Ok(())
 	}
 }

@@ -257,9 +257,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-// TODO:
-// - test permissionless use cases of unbond and withdraw unbonded
-// - test depositor unbond and unbond withdraws
+// TODO
 // - test nominate
 // - checks for number of pools when creating pools (param for max pools, pool creation origin)
 // - post checks that rewardpool::count == bondedpool::count. delegators >= bondedpool::count,

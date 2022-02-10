@@ -1,7 +1,7 @@
 use super::*;
 use crate::mock::{
 	unsafe_set_state, Balance, Balances, BondingDuration, CurrentEra, ExistentialDeposit,
-	ExtBuilder, Origin, Pools, Runtime, StakingMock, PRIMARY_ACCOUNT, REWARDS_ACCOUNT,
+	ExtBuilder, Nominations, Origin, Pools, Runtime, StakingMock, PRIMARY_ACCOUNT, REWARDS_ACCOUNT,
 	UNBONDING_BALANCE_MAP,
 };
 use frame_support::{assert_noop, assert_ok};
@@ -2194,4 +2194,39 @@ mod pools_interface {
 			});
 	}
 	// TODO: returns none when account is not a pool
+}
+
+mod nominate {
+	use super::*;
+
+	#[test]
+	fn nominate_works() {
+		ExtBuilder::default().build_and_execute(|| {
+			// Depositor can't nominate
+			assert_noop!(
+				Pools::nominate(Origin::signed(10), PRIMARY_ACCOUNT, vec![21]),
+				Error::<Runtime>::NotNominator
+			);
+
+			// State toggler can't nominate
+			assert_noop!(
+				Pools::nominate(Origin::signed(902), PRIMARY_ACCOUNT, vec![21]),
+				Error::<Runtime>::NotNominator
+			);
+
+			// Root can nominate
+			assert_ok!(Pools::nominate(Origin::signed(900), PRIMARY_ACCOUNT, vec![21]));
+			assert_eq!(Nominations::get(), vec![21]);
+
+			// Nominator can nominate
+			assert_ok!(Pools::nominate(Origin::signed(901), PRIMARY_ACCOUNT, vec![31]));
+			assert_eq!(Nominations::get(), vec![31]);
+
+			// Can't nominate for a pool that doesn't exist
+			assert_noop!(
+				Pools::nominate(Origin::signed(902), 123, vec![21]),
+				Error::<Runtime>::PoolNotFound
+			);
+		});
+	}
 }
