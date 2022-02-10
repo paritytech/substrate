@@ -239,9 +239,8 @@ where
 {
 	fn decode<I: Input>(input: &mut I) -> Result<Self, Error> {
 		// This is a little more complicated than usual since the binary format must be compatible
-		// with substrate's generic `Vec<u8>` type. Basically this just means accepting that there
-		// will be a prefix of vector length (we don't need
-		// to use this).
+		// with SCALE's generic `Vec<u8>` type. Basically this just means accepting that there
+		// will be a prefix of vector length.
 		let expected_length: Compact<u32> = Decode::decode(input)?;
 		let before_length = input.remaining_len()?;
 
