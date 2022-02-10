@@ -207,9 +207,9 @@ impl sp_std::cmp::PartialOrd for ElectionScore {
 
 impl sp_std::cmp::Ord for ElectionScore {
 	fn cmp(&self, other: &Self) -> Ordering {
-		// we delegate this to the lexicographic cpm of vectors, and to incorporate that we want the
+		// we delegate this to the lexicographic cpm of slices, and to incorporate that we want the
 		// third element to be minimized, we swap them.
-		vec![self.minimal_stake, self.sum_stake, other.sum_stake_squared].cmp(&vec![
+		[self.minimal_stake, self.sum_stake, other.sum_stake_squared].cmp(&[
 			other.minimal_stake,
 			other.sum_stake,
 			self.sum_stake_squared,
