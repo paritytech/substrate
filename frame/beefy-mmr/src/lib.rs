@@ -87,16 +87,6 @@ impl Convert<beefy_primitives::crypto::AuthorityId, Vec<u8>> for BeefyEcdsaToEth
 			log::error!(target: "runtime::beefy", "Invalid BEEFY PublicKey format!");
 		})
 		.unwrap_or_default()
-
-		// secp256k1::PublicKey::from_slice(a.as_slice())
-		// 	// uncompress the key
-		// 	.map(|pub_key| pub_key.serialize_uncompressed().to_vec())
-		// 	// now convert to ETH address
-		// 	.map(|uncompressed| sp_io::hashing::keccak_256(&uncompressed[1..])[12..].to_vec())
-		// 	.map_err(|_| {
-		// 		log::error!(target: "runtime::beefy", "Invalid BEEFY PublicKey format!");
-		// 	})
-		// 	.unwrap_or_default()
 	}
 }
 

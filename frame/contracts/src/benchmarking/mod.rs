@@ -1921,29 +1921,19 @@ benchmarks! {
 	// It generates different private keys and signatures for the message "Hello world".
 	seal_ecdsa_recover {
 		let r in 0 .. API_BENCHMARK_BATCHES;
-		use rand::{SeedableRng, RngCore};
-		use secp256k1::{SecretKey, SECP256K1, Message};
+		use rand::SeedableRng;
+		use libsecp256k1::{SecretKey, Message, sign};
 
 		let mut rng = rand_pcg::Pcg32::seed_from_u64(123456);
-
 		let message_hash = sp_io::hashing::blake2_256("Hello world".as_bytes());
-		let message = Message::from_slice(&message_hash).unwrap();
 
 		let signatures = (0..r * API_BENCHMARK_BATCH_SIZE)
 			.map(|i| {
-				let mut random_bytes = [0; 32];
-				let private_key = loop {
-					// It is required that the order of the key is less than the curve group order.
-					rng.fill_bytes(&mut random_bytes);
-					if let Ok(key) = SecretKey::from_slice(&random_bytes) { break key }
-				};
-
-				let sig = SECP256K1.sign_ecdsa_recoverable(&message, &private_key);
-				let (rid, raw) = sig.serialize_compact();
-
+				let private_key = SecretKey::random(&mut rng);
+				let (signature, recovery_id) = sign(&Message::parse(&message_hash), &private_key);
 				let mut full_signature = [0; 65];
-				full_signature[..64].copy_from_slice(&raw);
-				full_signature[64] = rid.to_i32() as u8;
+				full_signature[..64].copy_from_slice(&signature.serialize());
+				full_signature[64] = recovery_id.serialize();
 				full_signature
 			})
 			.collect::<Vec<_>>();

@@ -28,9 +28,9 @@ smallvec = { version = "1", default-features = false, features = [
 wasmi-validation = { version = "0.4", default-features = false }
 
 # Only used in benchmarking to generate random contract code
+libsecp256k1 = { version = "0.7", optional = true, default-features = false, features = ["hmac", "static-context"] }
 rand = { version = "0.8", optional = true, default-features = false }
 rand_pcg = { version = "0.3", optional = true }
-secp256k1 = { version = "0.21.2", default-features = false, optional = true, features = ["global-context"] }
 
 # Substrate Dependencies
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
@@ -77,13 +77,14 @@ std = [
 	"pallet-contracts-proc-macro/full",
 	"log/std",
 	"rand/std",
+	"libsecp256k1/std",
 ]
 runtime-benchmarks = [
 	"frame-benchmarking/runtime-benchmarks",
+	"libsecp256k1",
 	"rand",
 	"rand_pcg",
 	"unstable-interface",
-	"secp256k1",
 ]
 try-runtime = ["frame-support/try-runtime"]
 # Make contract callable functions marked as __unstable__ available. Do not enable
