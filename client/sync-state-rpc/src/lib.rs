@@ -185,10 +185,6 @@ where
 	Backend: HeaderBackend<Block> + sc_client_api::AuxStore + 'static,
 {
 	fn system_gen_sync_spec(&self, raw: bool) -> jsonrpc_core::Result<jsonrpc_core::Value> {
-		if let Err(err) = self.deny_unsafe.check_if_safe() {
-			return Err(err.into())
-		}
-
 		let mut chain_spec = self.chain_spec.cloned_box();
 
 		let sync_state = self.build_sync_state().map_err(map_error::<Block, Error<Block>>)?;
