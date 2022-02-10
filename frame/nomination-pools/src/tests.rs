@@ -1151,7 +1151,7 @@ mod unbond {
 	use super::*;
 
 	#[test]
-	fn unbond_pool_of_1_works() {
+	fn unbond_other_of_1_works() {
 		ExtBuilder::default().build_and_execute(|| {
 			Pools::set_state(&PRIMARY_ACCOUNT, PoolState::Destroying).unwrap();
 			assert_ok!(Pools::unbond_other(Origin::signed(10), 10));
@@ -1179,7 +1179,7 @@ mod unbond {
 	}
 
 	#[test]
-	fn unbond_pool_of_3_works() {
+	fn unbond_other_of_3_works() {
 		ExtBuilder::default()
 			.add_delegators(vec![(40, 40), (550, 550)])
 			.build_and_execute(|| {
@@ -1297,6 +1297,118 @@ mod unbond {
 					},
 				},
 			)
+		});
+	}
+
+	#[test]
+	fn unbond_other_kick_works() {
+		// Kick: the pool is blocked and the caller is either the root or state-toggler.
+		ExtBuilder::default()
+			.add_delegators(vec![(100, 100), (200, 200)])
+			.build_and_execute(|| {
+				// Given
+				Pools::set_state(&PRIMARY_ACCOUNT, PoolState::Blocked).unwrap();
+				let bonded_pool = BondedPool::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap();
+				assert_eq!(bonded_pool.root, 900);
+				assert_eq!(bonded_pool.nominator, 901);
+				assert_eq!(bonded_pool.state_toggler, 902);
+
+				// When the nominator trys to kick, then its a noop
+				assert_noop!(
+					Pools::unbond_other(Origin::signed(901), 100),
+					Error::<Runtime>::NotKickerOrDestroying
+				);
+
+				// When the root kicks then its ok
+				assert_ok!(Pools::unbond_other(Origin::signed(900), 100));
+
+				// When the state toggler kicks then its ok
+				assert_ok!(Pools::unbond_other(Origin::signed(902), 200));
+
+				assert_eq!(
+					BondedPool::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap(),
+					BondedPool {
+						root: 900,
+						nominator: 901,
+						state_toggler: 902,
+						account: PRIMARY_ACCOUNT,
+						depositor: 10,
+						state: PoolState::Blocked,
+						points: 10 // Only 10 points because 200 + 100 was unbonded
+					}
+				);
+				assert_eq!(StakingMock::bonded_balance(&PRIMARY_ACCOUNT).unwrap(), 10);
+				assert_eq!(
+					SubPoolsStorage::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap(),
+					SubPools {
+						no_era: Default::default(),
+						with_era: sub_pools_with_era! {
+							0 => UnbondPool { points: 100 + 200, balance: 100 + 200 }
+						},
+					}
+				);
+				assert_eq!(
+					UNBONDING_BALANCE_MAP.with(|m| *m.borrow_mut().get(&PRIMARY_ACCOUNT).unwrap()),
+					100 + 200
+				);
+			});
+	}
+
+	#[test]
+	fn unbond_other_with_non_admins_works() {
+		// Scenarios where non-admin accounts can unbond others
+		ExtBuilder::default().add_delegators(vec![(100, 100)]).build_and_execute(|| {
+			// Given the pool is blocked
+			Pools::set_state(&PRIMARY_ACCOUNT, PoolState::Blocked).unwrap();
+
+			// A permissionless unbond attempt errors
+			assert_noop!(
+				Pools::unbond_other(Origin::signed(420), 100),
+				Error::<Runtime>::NotKickerOrDestroying
+			);
+
+			// Given the pool is destroying
+			Pools::set_state(&PRIMARY_ACCOUNT, PoolState::Destroying).unwrap();
+
+			// The depositor cannot be unbonded until they are the last delegator
+			assert_noop!(
+				Pools::unbond_other(Origin::signed(420), 10),
+				Error::<Runtime>::NotOnlyDelegator
+			);
+
+			// Any account can unbond a delegator that is not the depositor
+			assert_ok!(Pools::unbond_other(Origin::signed(420), 100));
+
+			// Given the pool is blocked
+			Pools::set_state(&PRIMARY_ACCOUNT, PoolState::Blocked).unwrap();
+
+			// The depositor cannot be unbonded
+			assert_noop!(
+				Pools::unbond_other(Origin::signed(420), 10),
+				Error::<Runtime>::NotDestroying
+			);
+
+			// Given the pools is destroying
+			Pools::set_state(&PRIMARY_ACCOUNT, PoolState::Destroying).unwrap();
+
+			// The depositor can be unbonded
+			assert_ok!(Pools::unbond_other(Origin::signed(420), 10));
+
+			assert_eq!(BondedPools::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap().points, 0);
+			assert_eq!(
+				SubPoolsStorage::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap(),
+				SubPools {
+					no_era: Default::default(),
+					with_era: sub_pools_with_era! {
+						0 => UnbondPool { points: 110, balance: 110 }
+					}
+				}
+			);
+			assert_eq!(StakingMock::bonded_balance(&PRIMARY_ACCOUNT).unwrap(), 0);
+			assert_eq!(
+				UNBONDING_BALANCE_MAP.with(|m| *m.borrow_mut().get(&PRIMARY_ACCOUNT).unwrap()),
+				110
+			);
 		});
 	}
 
