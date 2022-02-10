@@ -877,6 +877,7 @@ benchmarks! {
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
+	#[skip_meta]
 	seal_set_storage_per_new_kb {
 		let n in 0 .. T::Schedule::get().limits.payload_len / 1024;
 		let keys = (0 .. API_BENCHMARK_BATCH_SIZE)
