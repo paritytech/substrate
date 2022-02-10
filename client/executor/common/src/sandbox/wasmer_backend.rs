@@ -76,13 +76,10 @@ pub fn invoke(
 		function.call(&args).map_err(|error| Error::Sandbox(error.to_string()))
 	})?;
 
-	if wasmer_result.len() > 1 {
-		return Err(Error::Sandbox("multiple return types are not supported yet".into()))
-	}
+	match wasmer_result.as_ref() {
+		[] => Ok(None),
 
-	wasmer_result
-		.first()
-		.map(|wasm_value| {
+		[wasm_value] => {
 			let wasmer_value = match *wasm_value {
 				wasmer::Val::I32(val) => Value::I32(val),
 				wasmer::Val::I64(val) => Value::I64(val),
@@ -95,9 +92,11 @@ pub fn invoke(
 					))),
 			};
 
-			Ok(wasmer_value)
-		})
-		.transpose()
+			Ok(Some(wasmer_value))
+		},
+
+		_ => Err(Error::Sandbox("multiple return types are not supported yet".into())),
+	}
 }
 
 /// Instantiate a module within a sandbox context
