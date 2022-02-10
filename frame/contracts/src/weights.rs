@@ -88,6 +88,7 @@ pub trait WeightInfo {
 	fn seal_take_storage_per_kb(n: u32, ) -> Weight;
 	fn seal_transfer(r: u32, ) -> Weight;
 	fn seal_call(r: u32, ) -> Weight;
+	fn seal_delegate_call(r: u32, ) -> Weight;
 	fn seal_call_per_transfer_input_output_kb(t: u32, i: u32, o: u32, ) -> Weight;
 	fn seal_instantiate(r: u32, ) -> Weight;
 	fn seal_instantiate_per_input_output_salt_kb(i: u32, o: u32, s: u32, ) -> Weight;
@@ -616,6 +617,17 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads((100 as Weight).saturating_mul(r as Weight)))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes((100 as Weight).saturating_mul(r as Weight)))
+	}
+	// Storage: System Account (r:1 w:0)
+	// Storage: Contracts ContractInfoOf (r:1 w:1)
+	// Storage: Contracts CodeStorage (r:1 w:0)
+	// Storage: Timestamp Now (r:1 w:0)
+	fn seal_delegate_call(r: u32, ) -> Weight {
+		(0 as Weight)
+			// Standard Error: 11_788_000
+			.saturating_add((19_855_594_000 as Weight).saturating_mul(r as Weight))
+			.saturating_add(T::DbWeight::get().reads((99 as Weight).saturating_mul(r as Weight)))
+			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:101 w:101)
@@ -1484,6 +1496,17 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads((100 as Weight).saturating_mul(r as Weight)))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes((100 as Weight).saturating_mul(r as Weight)))
+	}
+	// Storage: System Account (r:1 w:0)
+	// Storage: Contracts ContractInfoOf (r:1 w:1)
+	// Storage: Contracts CodeStorage (r:1 w:0)
+	// Storage: Timestamp Now (r:1 w:0)
+	fn seal_delegate_call(r: u32, ) -> Weight {
+		(0 as Weight)
+			// Standard Error: 11_788_000
+			.saturating_add((19_855_594_000 as Weight).saturating_mul(r as Weight))
+			.saturating_add(RocksDbWeight::get().reads((99 as Weight).saturating_mul(r as Weight)))
+			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:101 w:101)
