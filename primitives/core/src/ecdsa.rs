@@ -348,9 +348,7 @@ impl<'a> TryFrom<&'a Signature> for (libsecp256k1::Signature, libsecp256k1::Reco
 /// Derive a single hard junction.
 #[cfg(feature = "full_crypto")]
 fn derive_hard_junction(secret_seed: &Seed, cc: &[u8; 32]) -> Seed {
-	("Secp256k1HDKD", secret_seed, cc).using_encoded(|data| {
-		sp_core_hashing::blake2_256(data)
-	})
+	("Secp256k1HDKD", secret_seed, cc).using_encoded(|data| sp_core_hashing::blake2_256(data))
 }
 
 /// An error when deriving a key.
