@@ -9420,7 +9420,7 @@ dependencies = [
 name = "sp-api-proc-macro"
 version = "4.0.0-dev"
 dependencies = [
- "blake2-rfc",
+ "blake2 0.10.2",
  "proc-macro-crate 1.1.0",
  "proc-macro2",
  "quote",
