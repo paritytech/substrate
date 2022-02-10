@@ -75,15 +75,30 @@ impl Convert<beefy_primitives::crypto::AuthorityId, Vec<u8>> for BeefyEcdsaToEth
 	fn convert(a: beefy_primitives::crypto::AuthorityId) -> Vec<u8> {
 		use sp_core::crypto::ByteArray;
 
-		secp256k1::PublicKey::from_slice(a.as_slice())
-			// uncompress the key
-			.map(|pub_key| pub_key.serialize_uncompressed().to_vec())
-			// now convert to ETH address
-			.map(|uncompressed| sp_io::hashing::keccak_256(&uncompressed[1..])[12..].to_vec())
-			.map_err(|_| {
-				log::error!(target: "runtime::beefy", "Invalid BEEFY PublicKey format!");
-			})
-			.unwrap_or_default()
+		libsecp256k1::PublicKey::parse_slice(
+			a.as_slice(),
+			Some(libsecp256k1::PublicKeyFormat::Compressed),
+		)
+		// uncompress the key
+		.map(|pub_key| pub_key.serialize().to_vec())
+		// now convert to ETH address
+		.map(|uncompressed| sp_io::hashing::keccak_256(&uncompressed[1..])[12..].to_vec())
+		.map_err(|_| {
+			log::error!(target: "runtime::beefy", "Invalid BEEFY PublicKey format!");
+		})
+		.unwrap_or_default()
+
+		// secp256k1::PublicKey::from_slice(a.as_slice())
+		// 	// uncompress the key
+		// 	.map(|pub_key| pub_key.serialize_uncompressed().to_vec())
+		// 	// now convert to ETH address
+		// 	.map(|uncompressed| sp_io::hashing::keccak_256(&uncompressed[1..])[12..].to_vec())
+		// 	.map_err(|_| {
+		// 		log::error!(target: "runtime::beefy", "Invalid BEEFY PublicKey format!");
+		// 	})
+		// 	.unwrap_or_default()
+
+
 	}
 }
 
