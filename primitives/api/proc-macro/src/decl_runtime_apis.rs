@@ -749,10 +749,9 @@ fn parse_runtime_api_version(version: &Attribute) -> Result<u64> {
 /// by hashing the `trait_name`.
 fn generate_runtime_api_id(trait_name: &str) -> TokenStream {
 	use blake2::digest::{consts::U8, Digest};
-	type Blake2b64 = blake2::Blake2b<U8>;
 
 	let mut res = [0; 8];
-	res.copy_from_slice(Blake2b64::digest(trait_name).as_slice());
+	res.copy_from_slice(blake2::Blake2b::<U8>::digest(trait_name).as_slice());
 
 	quote!( const ID: [u8; 8] = [ #( #res ),* ]; )
 }
