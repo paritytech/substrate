@@ -18,9 +18,9 @@
 //! Tests for npos-elections.
 
 use crate::{
-	balancing, helpers::*, is_score_better, mock::*, seq_phragmen, seq_phragmen_core, setup_inputs,
-	to_support_map, Assignment, ElectionResult, ExtendedBalance, IndexAssignment, NposSolution,
-	StakedAssignment, Support, Voter,
+	balancing, helpers::*, mock::*, seq_phragmen, seq_phragmen_core, setup_inputs, to_support_map,
+	Assignment, ElectionResult, ExtendedBalance, IndexAssignment, NposSolution, StakedAssignment,
+	Support, Voter,
 };
 use rand::{self, SeedableRng};
 use sp_arithmetic::{PerU16, Perbill, Percent, Permill};
@@ -792,6 +792,13 @@ mod assignment_convert_normalize {
 
 mod score {
 	use super::*;
+	use crate::ElectionScore;
+	use sp_arithmetic::PerThing;
+
+	fn is_score_better(this: [u128; 3], that: [u128; 3], p: impl PerThing) -> bool {
+		ElectionScore::from(this).strict_threshold_better(&ElectionScore::from(that), p)
+	}
+
 	#[test]
 	fn score_comparison_is_lexicographical_no_epsilon() {
 		let epsilon = Perbill::zero();

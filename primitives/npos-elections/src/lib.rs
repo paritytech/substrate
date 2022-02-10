@@ -74,11 +74,12 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+use scale_info::TypeInfo;
 use sp_arithmetic::{traits::Zero, Normalizable, PerThing, Rational128, ThresholdOrd};
 use sp_core::RuntimeDebug;
 use sp_std::{cell::RefCell, cmp::Ordering, collections::btree_map::BTreeMap, prelude::*, rc::Rc};
 
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, MaxEncodedLen};
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
 
@@ -144,9 +145,84 @@ pub type VoteWeight = u64;
 /// A type in which performing operations on vote weights are safe.
 pub type ExtendedBalance = u128;
 
-/// The score of an assignment. This can be computed from the support map via
-/// [`EvaluateSupport::evaluate`].
-pub type ElectionScore = [ExtendedBalance; 3];
+/// The score of an election. This is the main measure of an election's quality.
+#[derive(Clone, Copy, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo, Debug, Default)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub struct ElectionScore {
+	/// The minimal winner, in terms of total backing stake.
+	///
+	/// This parameter should be maximized.
+	pub minimal_stake: ExtendedBalance,
+	/// The sum of the total backing of all winners.
+	///
+	/// This parameter should maximized
+	pub sum_stake: ExtendedBalance,
+	/// The sum squared of the total backing of all winners, aka. the variance.
+	///
+	/// Ths parameter should be minimized.
+	pub sum_stake_squared: ExtendedBalance,
+}
+
+impl ElectionScore {
+	fn iter(&self) -> impl Iterator<Item = ExtendedBalance> {
+		vec![self.minimal_stake, self.sum_stake, self.sum_stake_squared].into_iter()
+	}
+
+	/// Compares two sets of election scores based on desirability, returning true if `self` is
+	/// strictly `threshold` better than `other`.
+	///
+	/// Evaluation is done in a lexicographic manner, and if each element of `self` is `self *
+	/// epsilon` greater or less than `other`.
+	pub fn strict_threshold_better(&self, other: &Self, threshold: impl PerThing) -> bool {
+		match self
+			.iter()
+			.zip(other.iter())
+			.map(|(this, that)| (this.ge(&that), this.tcmp(&that, threshold.mul_ceil(that))))
+			.collect::<Vec<(bool, Ordering)>>()
+			.as_slice()
+		{
+			// epsilon better in the score[0], accept.
+			[(x, Ordering::Greater), _, _] => {
+				debug_assert!(x);
+				true
+			},
+
+			// less than epsilon better in score[0], but more than epsilon better in the second.
+			[(true, Ordering::Equal), (_, Ordering::Greater), _] => true,
+
+			// less than epsilon better in score[0, 1], but more than epsilon better in the third
+			[(true, Ordering::Equal), (true, Ordering::Equal), (_, Ordering::Less)] => true,
+
+			// anything else is not a good score.
+			_ => false,
+		}
+	}
+}
+
+impl sp_std::cmp::PartialOrd for ElectionScore {
+	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+		Some(self.cmp(other))
+	}
+}
+
+impl sp_std::cmp::Ord for ElectionScore {
+	fn cmp(&self, other: &Self) -> Ordering {
+		// we delegate this to the lexicographic cpm of vectors, and to incorporate that we want the
+		// third element to be minimized, we swap them.
+		vec![self.minimal_stake, self.sum_stake, other.sum_stake_squared].cmp(&vec![
+			other.minimal_stake,
+			other.sum_stake,
+			self.sum_stake_squared,
+		])
+	}
+}
+
+#[cfg(feature = "std")]
+impl From<[ExtendedBalance; 3]> for ElectionScore {
+	fn from(t: [ExtendedBalance; 3]) -> Self {
+		Self { minimal_stake: t[0], sum_stake: t[1], sum_stake_squared: t[2] }
+	}
+}
 
 /// A pointer to a candidate struct with interior mutability.
 pub type CandidatePtr<A> = Rc<RefCell<Candidate<A>>>;
@@ -353,7 +429,7 @@ pub struct ElectionResult<AccountId, P: PerThing> {
 ///
 /// This, at the current version, resembles the `Exposure` defined in the Staking pallet, yet they
 /// do not necessarily have to be the same.
-#[derive(RuntimeDebug, Encode, Decode, Clone, Eq, PartialEq, scale_info::TypeInfo)]
+#[derive(RuntimeDebug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct Support<AccountId> {
 	/// Total support.
@@ -418,49 +494,22 @@ pub trait EvaluateSupport {
 
 impl<AccountId: IdentifierT> EvaluateSupport for Supports<AccountId> {
 	fn evaluate(&self) -> ElectionScore {
-		let mut min_support = ExtendedBalance::max_value();
-		let mut sum: ExtendedBalance = Zero::zero();
+		let mut minimal_stake = ExtendedBalance::max_value();
+		let mut sum_stake: ExtendedBalance = Zero::zero();
 		// NOTE: The third element might saturate but fine for now since this will run on-chain and
 		// need to be fast.
-		let mut sum_squared: ExtendedBalance = Zero::zero();
+		let mut sum_stake_squared: ExtendedBalance = Zero::zero();
+
 		for (_, support) in self {
-			sum = sum.saturating_add(support.total);
+			sum_stake = sum_stake.saturating_add(support.total);
 			let squared = support.total.saturating_mul(support.total);
-			sum_squared = sum_squared.saturating_add(squared);
-			if support.total < min_support {
-				min_support = support.total;
+			sum_stake_squared = sum_stake_squared.saturating_add(squared);
+			if support.total < minimal_stake {
+				minimal_stake = support.total;
 			}
 		}
-		[min_support, sum, sum_squared]
-	}
-}
 
-/// Compares two sets of election scores based on desirability and returns true if `this` is better
-/// than `that`.
-///
-/// Evaluation is done in a lexicographic manner, and if each element of `this` is `that * epsilon`
-/// greater or less than `that`.
-///
-/// Note that the third component should be minimized.
-pub fn is_score_better<P: PerThing>(this: ElectionScore, that: ElectionScore, epsilon: P) -> bool {
-	match this
-		.iter()
-		.zip(that.iter())
-		.map(|(thi, tha)| (thi.ge(&tha), thi.tcmp(&tha, epsilon.mul_ceil(*tha))))
-		.collect::<Vec<(bool, Ordering)>>()
-		.as_slice()
-	{
-		// epsilon better in the score[0], accept.
-		[(_, Ordering::Greater), _, _] => true,
-
-		// less than epsilon better in score[0], but more than epsilon better in the second.
-		[(true, Ordering::Equal), (_, Ordering::Greater), _] => true,
-
-		// less than epsilon better in score[0, 1], but more than epsilon better in the third
-		[(true, Ordering::Equal), (true, Ordering::Equal), (_, Ordering::Less)] => true,
-
-		// anything else is not a good score.
-		_ => false,
+		ElectionScore { minimal_stake, sum_stake, sum_stake_squared }
 	}
 }
 
