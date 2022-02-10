@@ -219,6 +219,15 @@ impl ExtBuilder {
 }
 
 #[cfg(test)]
+pub(crate) fn unsafe_set_state(pool_account: &AccountId, state: PoolState) -> Result<(), ()> {
+	BondedPools::<Runtime>::try_mutate(pool_account, |maybe_bonded_pool| {
+		maybe_bonded_pool.as_mut().ok_or(()).map(|bonded_pool| {
+			bonded_pool.state = state;
+		})
+	})
+}
+
+#[cfg(test)]
 mod test {
 	use super::*;
 	#[test]

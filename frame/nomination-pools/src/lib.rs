@@ -1402,15 +1402,6 @@ impl<T: Config> Pallet<T> {
 		};
 		Some(SlashPoolOut { slashed_bonded, slashed_unlocking })
 	}
-
-	#[cfg(test)]
-	fn unsafe_set_state(pool_account: &T::AccountId, state: PoolState) -> Result<(), ()> {
-		BondedPools::<T>::try_mutate(pool_account, |maybe_bonded_pool| {
-			maybe_bonded_pool.as_mut().ok_or(()).map(|bonded_pool| {
-				bonded_pool.state = state;
-			})
-		})
-	}
 }
 
 impl<T: Config> PoolsInterface for Pallet<T> {
