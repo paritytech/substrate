@@ -1673,19 +1673,233 @@ mod withdraw_unbonded_other {
 				Error::<Runtime>::NotUnbondedYet
 			);
 
-			// Skip ahead to the end of the bonding duration
-			CurrentEra::set(StakingMock::bonding_duration());
-
-			// TODO
-			// assert_noop!(
-			// 	Pools::withdraw_unbonded_other(Origin::signed(10), 10, 0),
-			// 	Error::<Runtime>::NotOnlyDelegator
-			// );
-
 			// If we error the delegator does not get removed
 			assert_eq!(Delegators::<Runtime>::get(&11), Some(delegator));
 			// and the sub pools do not get updated.
 			assert_eq!(SubPoolsStorage::<Runtime>::get(123).unwrap(), sub_pools)
+		});
+	}
+
+	#[test]
+	fn withdraw_unbonded_other_kick() {
+		ExtBuilder::default()
+			.add_delegators(vec![(100, 100), (200, 200)])
+			.build_and_execute(|| {
+				// Given
+				assert_ok!(Pools::unbond_other(Origin::signed(100), 100));
+				assert_ok!(Pools::unbond_other(Origin::signed(200), 200));
+				assert_eq!(
+					BondedPool::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap(),
+					BondedPool {
+						points: 10,
+						state: PoolState::Open,
+						depositor: 10,
+						account: PRIMARY_ACCOUNT,
+						root: 900,
+						nominator: 901,
+						state_toggler: 902,
+					}
+				);
+				CurrentEra::set(StakingMock::bonding_duration());
+
+				// Cannot kick when pool is open
+				assert_noop!(
+					Pools::withdraw_unbonded_other(Origin::signed(902), 100, 0),
+					Error::<Runtime>::NotKickerOrDestroying
+				);
+
+				// Given
+				Pools::set_state(&PRIMARY_ACCOUNT, PoolState::Blocked).unwrap();
+
+				// Cannot kick as a nominator
+				assert_noop!(
+					Pools::withdraw_unbonded_other(Origin::signed(901), 100, 0),
+					Error::<Runtime>::NotKickerOrDestroying
+				);
+
+				// Can kick as root
+				assert_ok!(Pools::withdraw_unbonded_other(Origin::signed(900), 100, 0));
+
+				// Can kick as state toggler
+				assert_ok!(Pools::withdraw_unbonded_other(Origin::signed(900), 200, 0));
+
+				assert_eq!(Balances::free_balance(100), 100 + 100);
+				assert_eq!(Balances::free_balance(200), 200 + 200);
+				assert!(!Delegators::<Runtime>::contains_key(100));
+				assert!(!Delegators::<Runtime>::contains_key(200));
+				assert_eq!(
+					SubPoolsStorage::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap(),
+					Default::default()
+				);
+			});
+	}
+
+	#[test]
+	fn withdraw_unbonded_other_destroying_permissionless() {
+		ExtBuilder::default().add_delegators(vec![(100, 100)]).build_and_execute(|| {
+			// Given
+			assert_ok!(Pools::unbond_other(Origin::signed(100), 100));
+			assert_eq!(
+				BondedPool::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap(),
+				BondedPool {
+					points: 10,
+					state: PoolState::Open,
+					depositor: 10,
+					account: PRIMARY_ACCOUNT,
+					root: 900,
+					nominator: 901,
+					state_toggler: 902,
+				}
+			);
+			CurrentEra::set(StakingMock::bonding_duration());
+
+			// Cannot permissionlessly withdraw
+			assert_noop!(
+				Pools::unbond_other(Origin::signed(420), 100),
+				Error::<Runtime>::NotKickerOrDestroying
+			);
+
+			// Given
+			Pools::set_state(&PRIMARY_ACCOUNT, PoolState::Destroying).unwrap();
+
+			// Can permissionlesly withdraw a delegator that is not the depositor
+			assert_ok!(Pools::withdraw_unbonded_other(Origin::signed(420), 100, 0));
+
+			assert_eq!(
+				SubPoolsStorage::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap(),
+				Default::default(),
+			);
+			assert_eq!(Balances::free_balance(100), 100 + 100);
+			assert!(!Delegators::<Runtime>::contains_key(100));
+		});
+	}
+
+	#[test]
+	fn withdraw_unbonded_other_depositor_with_era_pool() {
+		ExtBuilder::default()
+			.add_delegators(vec![(100, 100), (200, 200)])
+			.build_and_execute(|| {
+				// Given
+				assert_ok!(Pools::unbond_other(Origin::signed(100), 100));
+
+				let mut current_era = 1;
+				CurrentEra::set(current_era);
+
+				assert_ok!(Pools::unbond_other(Origin::signed(200), 200));
+				Pools::set_state(&PRIMARY_ACCOUNT, PoolState::Destroying).unwrap();
+				assert_ok!(Pools::unbond_other(Origin::signed(10), 10));
+
+				assert_eq!(
+					SubPoolsStorage::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap(),
+					SubPools {
+						no_era: Default::default(),
+						with_era: sub_pools_with_era! {
+							0 => UnbondPool { points: 100, balance: 100},
+							1 => UnbondPool { points: 200 + 10, balance: 200 + 10 }
+						}
+					}
+				);
+				// Skip ahead eras to where its valid for the delegators to withdraw
+				current_era += StakingMock::bonding_duration();
+				CurrentEra::set(current_era);
+
+				// Cannot withdraw the depositor if their is a delegator in another `with_era` pool.
+				assert_noop!(
+					Pools::withdraw_unbonded_other(Origin::signed(420), 10, 0),
+					Error::<Runtime>::NotOnlyDelegator
+				);
+
+				// Given
+				assert_ok!(Pools::withdraw_unbonded_other(Origin::signed(420), 100, 0));
+				assert_eq!(
+					SubPoolsStorage::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap(),
+					SubPools {
+						no_era: Default::default(),
+						with_era: sub_pools_with_era! {
+							// Note that era 0 unbond pool is destroyed because points went to 0
+							1 => UnbondPool { points: 200 + 10, balance: 200 + 10 }
+						}
+					}
+				);
+
+				// Cannot withdraw if their is another delegator in the depositors `with_era` pool
+				assert_noop!(
+					Pools::unbond_other(Origin::signed(420), 10),
+					Error::<Runtime>::NotOnlyDelegator
+				);
+
+				// Given
+				assert_ok!(Pools::withdraw_unbonded_other(Origin::signed(420), 200, 0));
+				assert_eq!(
+					SubPoolsStorage::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap(),
+					SubPools {
+						no_era: Default::default(),
+						with_era: sub_pools_with_era! {
+							1 => UnbondPool { points: 10, balance: 10 }
+						}
+					}
+				);
+
+				// The depositor can withdraw
+				assert_ok!(Pools::withdraw_unbonded_other(Origin::signed(420), 10, 0));
+				assert!(!Delegators::<Runtime>::contains_key(10));
+				assert_eq!(Balances::free_balance(10), 10 + 10);
+				// Pools are removed from storage because the depositor left
+				assert!(!SubPoolsStorage::<Runtime>::contains_key(&PRIMARY_ACCOUNT),);
+				assert!(!RewardPools::<Runtime>::contains_key(&PRIMARY_ACCOUNT),);
+				assert!(!BondedPools::<Runtime>::contains_key(&PRIMARY_ACCOUNT),);
+			});
+	}
+
+	#[test]
+	fn withdraw_unbonded_other_depositor_no_era_pool() {
+		ExtBuilder::default().add_delegators(vec![(100, 100)]).build_and_execute(|| {
+			// Given
+			assert_ok!(Pools::unbond_other(Origin::signed(100), 100));
+			Pools::set_state(&PRIMARY_ACCOUNT, PoolState::Destroying).unwrap();
+			assert_ok!(Pools::unbond_other(Origin::signed(10), 10));
+			// Skip ahead to an era where the `with_era` pools can get merged into the `no_era`
+			// pool.
+			let current_era = TotalUnbondingPools::<Runtime>::get();
+			CurrentEra::set(current_era);
+
+			// Simulate some other withdraw that caused the pool to merge
+			let sub_pools = SubPoolsStorage::<Runtime>::get(&PRIMARY_ACCOUNT)
+				.unwrap()
+				.maybe_merge_pools(current_era);
+			SubPoolsStorage::<Runtime>::insert(&PRIMARY_ACCOUNT, sub_pools);
+			assert_eq!(
+				SubPoolsStorage::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap(),
+				SubPools {
+					no_era: UnbondPool { points: 100 + 10, balance: 100 + 10 },
+					with_era: Default::default(),
+				}
+			);
+
+			// Cannot withdraw depositor with another delegator in the `no_era` pool
+			assert_noop!(
+				Pools::withdraw_unbonded_other(Origin::signed(420), 10, 0),
+				Error::<Runtime>::NotOnlyDelegator
+			);
+
+			// Given
+			assert_ok!(Pools::withdraw_unbonded_other(Origin::signed(420), 100, 0));
+			assert_eq!(
+				SubPoolsStorage::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap(),
+				SubPools {
+					no_era: UnbondPool { points: 10, balance: 10 },
+					with_era: Default::default(),
+				}
+			);
+
+			// The depositor can withdraw
+			assert_ok!(Pools::withdraw_unbonded_other(Origin::signed(420), 10, 0));
+			assert!(!Delegators::<Runtime>::contains_key(10));
+			assert_eq!(Balances::free_balance(10), 10 + 10);
+			// Pools are removed from storage because the depositor left
+			assert!(!SubPoolsStorage::<Runtime>::contains_key(&PRIMARY_ACCOUNT));
+			assert!(!RewardPools::<Runtime>::contains_key(&PRIMARY_ACCOUNT));
+			assert!(!BondedPools::<Runtime>::contains_key(&PRIMARY_ACCOUNT));
 		});
 	}
 }

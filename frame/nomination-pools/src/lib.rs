@@ -212,7 +212,8 @@
 //!
 //! * Open: Anyone can join the pool and no delegators can be permissionlessly removed.
 //! * Blocked: No delegators can join and some admin roles can kick delegators.
-//! * Destroying: No delegators can join and all delegators can be permissionlessly removed.
+//! * Destroying: No delegators can join and all delegators can be permissionlessly removed. Once a
+//!   pool is destroying state, it cannot be reverted to another state.
 //!
 //! A pool has 3 administrative positions (see [`BondedPool`]):
 //!
@@ -251,7 +252,8 @@
 // * Every entry in `BondedPoolPoints` must have  a corresponding entry in `RewardPools`
 // * If a delegator unbonds, the sub pools should always correctly track slashses such that the
 //   calculated amount when withdrawing unbonded is a lower bound of the pools free balance.
-// * If the depositor is actively unbonding, the pool is in destroying state
+// * If the depositor is actively unbonding, the pool is in destroying state. To achieve this, once
+//   a pool is flipped to a destroying state it cannot change its state.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -457,6 +459,7 @@ impl<T: Config> BondedPool<T> {
 
 	/// Check that the pool can accept a member with `new_funds`.
 	fn ok_to_join_with(&self, new_funds: BalanceOf<T>) -> Result<(), DispatchError> {
+		ensure!(self.state == PoolState::Open, Error::<T>::NotOpen);
 		let bonded_balance =
 			T::StakingInterface::bonded_balance(&self.account).unwrap_or(Zero::zero());
 		ensure!(!bonded_balance.is_zero(), Error::<T>::OverflowRisk);
@@ -516,7 +519,9 @@ impl<T: Config> BondedPool<T> {
 			// Any delegator who is not the depositor can always unbond themselves
 			(true, false) => (),
 			// The depositor can only start unbonding if the pool is already being destroyed and
-			// they are the delegator in the pool
+			// they are the delegator in the pool. Note that an invariant is once the pool is
+			// destroying it cannot switch states, so by being in destroying we are guaranteed no
+			// other delegators can possibly join.
 			(false, true) | (true, true) => {
 				ensure!(target_delegator.points == self.points, Error::<T>::NotOnlyDelegator);
 				ensure!(self.is_destroying(), Error::<T>::NotDestroying);
@@ -525,8 +530,7 @@ impl<T: Config> BondedPool<T> {
 		Ok(())
 	}
 
-	/// Returns a result indicating if `Call::withdraw_unbonded_other`. If the result is ok, the
-	/// returned value is a bool indicating wether or not to remove the pool from storage.
+	/// Returns a result indicating if `Call::withdraw_unbonded_other` can be executed.
 	fn ok_to_withdraw_unbonded_other_with(
 		&self,
 		caller: &T::AccountId,
@@ -539,23 +543,26 @@ impl<T: Config> BondedPool<T> {
 			if !sub_pools.no_era.points.is_zero() {
 				// Unbonded pool has some points, so if they are the last delegator they must be
 				// here
+				// Since the depositor is the last to unbond, this should never be possible
 				ensure!(sub_pools.with_era.len().is_zero(), Error::<T>::NotOnlyDelegator);
 				ensure!(
 					sub_pools.no_era.points == target_delegator.points,
 					Error::<T>::NotOnlyDelegator
 				);
 			} else {
-				// No points in unbonded pool, so they must be in an unbonding pool
+				// No points in the `no_era` pool, so they must be in a `with_era` pool
+				// If there are no other delegators, this can be the only `with_era` pool since the
+				// depositor was the last to withdraw. This assumes with_era sub pools are destroyed
+				// whenever their points go to zero.
 				ensure!(sub_pools.with_era.len() == 1, Error::<T>::NotOnlyDelegator);
-				let only_unbonding_pool = sub_pools
+				sub_pools
 					.with_era
 					.values()
 					.next()
-					.expect("ensured at least 1 entry exists on line above. qed.");
-				ensure!(
-					only_unbonding_pool.points == target_delegator.points,
-					Error::<T>::NotOnlyDelegator
-				);
+					.filter(|only_unbonding_pool| {
+						only_unbonding_pool.points == target_delegator.points
+					})
+					.ok_or(Error::<T>::NotOnlyDelegator)?;
 			}
 			Ok(true)
 		} else {
@@ -633,7 +640,7 @@ impl<T: Config> UnbondPool<T> {
 #[scale_info(skip_type_params(T))]
 struct SubPools<T: Config> {
 	/// A general, era agnostic pool of funds that have fully unbonded. The pools
-	/// of `self.with_era` will lazily be merged into into this pool if they are
+	/// of `Self::with_era` will lazily be merged into into this pool if they are
 	/// older then `current_era - TotalUnbondingPools`.
 	no_era: UnbondPool<T>,
 	/// Map of era => unbond pools.
@@ -800,8 +807,8 @@ pub mod pallet {
 		MinimumBondNotMet,
 		/// The transaction could not be executed due to overflow risk for the pool.
 		OverflowRisk,
-		/// An error from the staking pallet.
-		StakingError,
+		/// TODO: remove this
+		Err,
 		// Likely only an error ever encountered in poorly built tests.
 		/// A pool with the generated account id already exists.
 		IdInUse,
@@ -815,6 +822,8 @@ pub mod pallet {
 		NotNominator,
 		/// Either a) the caller cannot make a valid kick or b) the pool is not destroying
 		NotKickerOrDestroying,
+		/// The pool is not open to join
+		NotOpen,
 	}
 
 	#[pallet::call]
@@ -825,6 +834,7 @@ pub mod pallet {
 		/// * an account can only be a member of a single pool.
 		/// * this will *not* dust the delegator account, so the delegator must have at least
 		///   `existential deposit + amount` in their account.
+		/// * Only a pool with [`PoolState::Open`] can be joined
 		#[pallet::weight(666)]
 		#[frame_support::transactional]
 		pub fn join(
@@ -1029,6 +1039,10 @@ pub mod pallet {
 				let balance_to_unbond = pool.balance_to_unbond(delegator.points);
 				pool.points = pool.points.saturating_sub(delegator.points);
 				pool.balance = pool.balance.saturating_sub(balance_to_unbond);
+				if pool.points.is_zero() {
+					// Clean up pool that is no longer used
+					sub_pools.with_era.remove(&unbonding_era);
+				}
 
 				balance_to_unbond
 			} else {
@@ -1170,6 +1184,25 @@ pub mod pallet {
 			T::StakingInterface::nominate(pool_account.clone(), validators)?;
 			Ok(())
 		}
+
+		// pub fn set_state_other(origin: OriginFor<T>, pool_account: T::AccountId, state:
+		// PoolState) -> DispatchError { 	let who = ensure_signed!(origin);
+		// 	BondedPool::<Runtime>::try_mutate(pool_account, |maybe_bonded_pool| {
+		// 		maybe_bonded_pool.ok_or(Error::<T>::PoolNotFound).map(|bonded_pool|
+		// 			if bonded_pool.is_destroying() {
+		// 				// invariant, a destroying pool cannot become non-destroying
+		// 				// this is because
+		// 				Err(Error::<T>::Err)?
+		// 			}
+
+		// 			if bonded_pool.is_spoiled() && state == PoolState::Destroying {
+		// 				bonded_pool.state = PoolState::Destroying
+		// 			} else if bonded_pool.root == who || bonded_pool.state_toggler == who {
+		// 				bonded_pool.state = who
+		// 			}
+		// 		)
+		// 	})
+		// }
 	}
 
 	#[pallet::hooks]
