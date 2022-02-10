@@ -462,13 +462,14 @@ impl_inherent_data_provider_ext_tuple!(T, S, A, B, C, D, E, F, G, H, I, J);
 ///
 /// Every time a new slot is triggered, `worker.on_slot` is called and the future it returns is
 /// polled until completion, unless we are major syncing.
-pub async fn start_slot_worker<B, C, W, T, SO, CIDP, CAW, Proof>(
+pub async fn start_slot_worker<B, C, W, T, SO, CIDP, CAW, Proof, H>(
 	slot_duration: SlotDuration<T>,
 	client: C,
 	mut worker: W,
 	mut sync_oracle: SO,
 	create_inherent_data_providers: CIDP,
 	can_author_with: CAW,
+	slot_result_handler: H,
 ) where
 	B: BlockT,
 	C: SelectChain<B>,
@@ -478,6 +479,7 @@ pub async fn start_slot_worker<B, C, W, T, SO, CIDP, CAW, Proof>(
 	CIDP: CreateInherentDataProviders<B, ()> + Send,
 	CIDP::InherentDataProviders: InherentDataProviderExt + Send,
 	CAW: CanAuthorWith<B> + Send,
+	H: Fn(Option<SlotResult<B, Proof>>) + 'static,
 {
 	let SlotDuration(slot_duration) = slot_duration;
 
@@ -509,7 +511,8 @@ pub async fn start_slot_worker<B, C, W, T, SO, CIDP, CAW, Proof>(
 				err,
 			);
 		} else {
-			let _ = worker.on_slot(slot_info).await;
+			let opt_res = worker.on_slot(slot_info).await;
+			slot_result_handler(opt_res);
 		}
 	}
 }

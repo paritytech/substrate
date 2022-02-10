@@ -516,6 +516,7 @@ where
 		sync_oracle,
 		create_inherent_data_providers,
 		can_author_with,
+		|_slot| {},
 	);
 
 	let (worker_tx, worker_rx) = channel(HANDLE_BUFFER_SIZE);

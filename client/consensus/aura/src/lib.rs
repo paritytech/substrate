@@ -217,6 +217,7 @@ where
 		sync_oracle,
 		create_inherent_data_providers,
 		can_author_with,
+		|_slot| {}
 	))
 }
 
