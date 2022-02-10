@@ -23,11 +23,14 @@
 use core::hash::Hasher;
 
 use byteorder::{ByteOrder, LittleEndian};
-use digest::Digest;
+use digest::{
+	consts::{U16, U32, U8},
+	Digest,
+};
 
 /// Do a Blake2 512-bit hash and place result in `dest`.
 pub fn blake2_512_into(data: &[u8], dest: &mut [u8; 64]) {
-	dest.copy_from_slice(blake2_rfc::blake2b::blake2b(64, &[], data).as_bytes());
+	dest.copy_from_slice(blake2::Blake2b512::digest(data).as_slice());
 }
 
 /// Do a Blake2 512-bit hash and return result.
@@ -39,7 +42,8 @@ pub fn blake2_512(data: &[u8]) -> [u8; 64] {
 
 /// Do a Blake2 256-bit hash and place result in `dest`.
 pub fn blake2_256_into(data: &[u8], dest: &mut [u8; 32]) {
-	dest.copy_from_slice(blake2_rfc::blake2b::blake2b(32, &[], data).as_bytes());
+	type Blake2b256 = blake2::Blake2b<U32>;
+	dest.copy_from_slice(Blake2b256::digest(data).as_slice());
 }
 
 /// Do a Blake2 256-bit hash and return result.
@@ -51,7 +55,8 @@ pub fn blake2_256(data: &[u8]) -> [u8; 32] {
 
 /// Do a Blake2 128-bit hash and place result in `dest`.
 pub fn blake2_128_into(data: &[u8], dest: &mut [u8; 16]) {
-	dest.copy_from_slice(blake2_rfc::blake2b::blake2b(16, &[], data).as_bytes());
+	type Blake2b128 = blake2::Blake2b<U16>;
+	dest.copy_from_slice(Blake2b128::digest(data).as_slice());
 }
 
 /// Do a Blake2 128-bit hash and return result.
@@ -63,7 +68,8 @@ pub fn blake2_128(data: &[u8]) -> [u8; 16] {
 
 /// Do a Blake2 64-bit hash and place result in `dest`.
 pub fn blake2_64_into(data: &[u8], dest: &mut [u8; 8]) {
-	dest.copy_from_slice(blake2_rfc::blake2b::blake2b(8, &[], data).as_bytes());
+	type Blake2b64 = blake2::Blake2b<U8>;
+	dest.copy_from_slice(Blake2b64::digest(data).as_slice());
 }
 
 /// Do a Blake2 64-bit hash and return result.
