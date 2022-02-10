@@ -149,11 +149,11 @@ impl RuntimeBlob {
 				// just in case to cover all of our bases.
 				self.raw_module
 					.insert_section(Section::Export(Default::default()))
-					.expect("an export section can be always inserted if it doesn't exist");
+					.expect("an export section can be always inserted if it doesn't exist; qed");
 			}
 			self.raw_module
 				.export_section_mut()
-				.expect("export section always exists")
+				.expect("export section already existed or we just added it above, so it always exists; qed")
 				.entries_mut()
 				.push(ExportEntry::new(memory_name, Internal::Memory(0)));
 

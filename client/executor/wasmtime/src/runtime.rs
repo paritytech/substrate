@@ -537,7 +537,7 @@ where
 			let mut blob = instrument(blob, &config.semantics)?;
 
 			// We don't actually need the memory to be imported so we can just convert any memory
-			// import into an export with imputiny. This simplifies our code since `wasmtime` will
+			// import into an export with impunity. This simplifies our code since `wasmtime` will
 			// now automatically take care of creating the memory for us, and it also allows us
 			// to potentially enable `wasmtime`'s instance pooling at a later date. (Imported
 			// memories are ineligible for pooling.)
@@ -545,7 +545,7 @@ where
 				config
 					.heap_pages
 					.try_into()
-					.expect("a reasonable 'heap_pages' will never exceed 2^32"),
+					.map_err(|e| WasmError::Other(format!("invalid `heap_pages`: {}", e)))?,
 			)?;
 
 			let serialized_blob = blob.clone().serialize();

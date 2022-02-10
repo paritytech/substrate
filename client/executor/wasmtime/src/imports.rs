@@ -64,20 +64,12 @@ where
 		if allow_missing_func_imports {
 			for (name, (import_ty, func_ty)) in registry.pending_func_imports {
 				let error = format!("call to a missing function {}:{}", import_ty.module(), name);
-				if func_ty.params().len() == 0 && func_ty.results().len() == 0 {
-					linker
-						.func_wrap("env", &name, move || -> Result<(), Trap> {
-							Err(Trap::new(error.clone()))
-						})
-						.expect("adding a missing import stub doesn't fail");
-				} else {
-					log::warn!("Missing import: '{}' {:?}", name, func_ty);
-					linker
-						.func_new("env", &name, func_ty.clone(), move |_, _, _| {
-							Err(Trap::new(error.clone()))
-						})
-						.expect("adding a missing import stub doesn't fail");
-				}
+				log::debug!("Missing import: '{}' {:?}", name, func_ty);
+				linker
+					.func_new("env", &name, func_ty.clone(), move |_, _, _| {
+						Err(Trap::new(error.clone()))
+					})
+					.expect("adding a missing import stub can only fail when the item already exists, and it is missing here; qed");
 			}
 		} else {
 			let mut names = Vec::new();
@@ -117,7 +109,7 @@ impl<'a, 'b> sp_wasm_interface::HostFunctionRegistry for Registry<'a, 'b> {
 		fn_name: &str,
 		func: impl wasmtime::IntoFunc<Self::State, Params, Results>,
 	) -> Result<(), Self::Error> {
-		if let Some((_, _)) = self.pending_func_imports.remove(fn_name) {
+		if self.pending_func_imports.remove(fn_name).is_some() {
 			self.linker.func_wrap("env", fn_name, func).map_err(|error| {
 				WasmError::Other(format!(
 					"failed to register host function '{}' with the WASM linker: {}",
