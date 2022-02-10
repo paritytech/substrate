@@ -293,7 +293,7 @@ impl<T: Config> SignedSubmissions<T> {
 				let threshold = T::SolutionImprovementThreshold::get();
 
 				// if we haven't improved on the weakest score, don't change anything.
-				if !insert_score.strict_threshold_better(&weakest_score, threshold) {
+				if !insert_score.strict_threshold_better(weakest_score, threshold) {
 					return InsertResult::NotInserted
 				}
 

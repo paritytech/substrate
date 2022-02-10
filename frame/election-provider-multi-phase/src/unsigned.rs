@@ -625,7 +625,7 @@ impl<T: Config> Pallet<T> {
 		ensure!(
 			Self::queued_solution().map_or(true, |q: ReadySolution<_>| raw_solution
 				.score
-				.strict_threshold_better(&q.score, T::SolutionImprovementThreshold::get())),
+				.strict_threshold_better(q.score, T::SolutionImprovementThreshold::get())),
 			Error::<T>::PreDispatchWeakSubmission,
 		);
 

@@ -1436,7 +1436,7 @@ impl<T: Config> Pallet<T> {
 		let submitted_score = raw_solution.score.clone();
 		ensure!(
 			Self::minimum_untrusted_score().map_or(true, |min_score| {
-				submitted_score.strict_threshold_better(&min_score, Perbill::zero())
+				submitted_score.strict_threshold_better(min_score, Perbill::zero())
 			}),
 			FeasibilityError::UntrustedScoreTooLow
 		);

@@ -173,7 +173,7 @@ impl ElectionScore {
 	///
 	/// Evaluation is done in a lexicographic manner, and if each element of `self` is `self *
 	/// epsilon` greater or less than `other`.
-	pub fn strict_threshold_better(&self, other: &Self, threshold: impl PerThing) -> bool {
+	pub fn strict_threshold_better(&self, other: Self, threshold: impl PerThing) -> bool {
 		match self
 			.iter()
 			.zip(other.iter())

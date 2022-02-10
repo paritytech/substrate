@@ -81,7 +81,7 @@ fn main() {
 				};
 
 				let enhance =
-					balanced_score.strict_threshold_better(&unbalanced_score, Perbill::zero());
+					balanced_score.strict_threshold_better(unbalanced_score, Perbill::zero());
 
 				println!(
 					"iter = {} // {:?} -> {:?} [{}]",

@@ -796,7 +796,7 @@ mod score {
 	use sp_arithmetic::PerThing;
 
 	fn is_score_better(this: [u128; 3], that: [u128; 3], p: impl PerThing) -> bool {
-		ElectionScore::from(this).strict_threshold_better(&ElectionScore::from(that), p)
+		ElectionScore::from(this).strict_threshold_better(ElectionScore::from(that), p)
 	}
 
 	#[test]

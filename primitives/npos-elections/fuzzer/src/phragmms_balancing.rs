@@ -77,8 +77,7 @@ fn main() {
 				to_supports(staked.as_ref()).evaluate()
 			};
 
-			let enhance =
-				balanced_score.strict_threshold_better(&unbalanced_score, Perbill::zero());
+			let enhance = balanced_score.strict_threshold_better(unbalanced_score, Perbill::zero());
 
 			println!(
 				"iter = {} // {:?} -> {:?} [{}]",
