@@ -97,8 +97,6 @@ impl Convert<beefy_primitives::crypto::AuthorityId, Vec<u8>> for BeefyEcdsaToEth
 		// 		log::error!(target: "runtime::beefy", "Invalid BEEFY PublicKey format!");
 		// 	})
 		// 	.unwrap_or_default()
-
-
 	}
 }
 
