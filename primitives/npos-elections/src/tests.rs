@@ -890,6 +890,26 @@ mod score {
 			false,
 		);
 	}
+
+	#[test]
+	fn ord_works() {
+		// equal only when all elements are equal
+		assert!(ElectionScore::from([10, 5, 15]) == ElectionScore::from([10, 5, 15]));
+		assert!(ElectionScore::from([10, 5, 15]) != ElectionScore::from([9, 5, 15]));
+		assert!(ElectionScore::from([10, 5, 15]) != ElectionScore::from([10, 5, 14]));
+
+		// first element greater, rest don't matter
+		assert!(ElectionScore::from([10, 5, 15]) > ElectionScore::from([8, 5, 25]));
+		assert!(ElectionScore::from([10, 5, 15]) > ElectionScore::from([9, 20, 5]));
+
+		// second element greater, rest don't matter
+		assert!(ElectionScore::from([10, 5, 15]) > ElectionScore::from([10, 4, 25]));
+		assert!(ElectionScore::from([10, 5, 15]) > ElectionScore::from([10, 4, 5]));
+
+		// second element is less, rest don't matter. Note that this is swapped.
+		assert!(ElectionScore::from([10, 5, 15]) > ElectionScore::from([10, 5, 16]));
+		assert!(ElectionScore::from([10, 5, 15]) > ElectionScore::from([10, 5, 25]));
+	}
 }
 
 mod solution_type {
