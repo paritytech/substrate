@@ -16,7 +16,6 @@ parameter_types! {
 	static BondedBalanceMap: std::collections::HashMap<AccountId, Balance> = Default::default();
 	static UnbondingBalanceMap: std::collections::HashMap<AccountId, Balance> = Default::default();
 	pub static BondingDuration: EraIndex = 3;
-	pub static DisableWithdrawUnbonded: bool = false;
 }
 
 pub struct StakingMock;
@@ -60,13 +59,6 @@ impl sp_staking::StakingInterface for StakingMock {
 	}
 
 	fn withdraw_unbonded(who: Self::AccountId, _: u32) -> Result<u64, DispatchError> {
-		if DisableWithdrawUnbonded::get() {
-			// We have a naive impl - it will always withdraw whatever is unbonding regardless of
-			// era So sometimes we may want to disable it to simulate calls in eras where there is
-			// nothing to completely unlock.
-			return Ok(1)
-		}
-
 		let maybe_new_free = UNBONDING_BALANCE_MAP.with(|m| m.borrow_mut().remove(&who));
 		if let Some(new_free) = maybe_new_free {
 			assert_ok!(Balances::mutate_account(&who, |a| a.free += new_free));
@@ -195,7 +187,14 @@ impl ExtBuilder {
 			// make a pool
 			let amount_to_bond = <Runtime as pools::Config>::StakingInterface::minimum_bond();
 			Balances::make_free_balance_be(&10, amount_to_bond * 2);
-			assert_ok!(Pools::create(RawOrigin::Signed(10).into(), vec![100], amount_to_bond, 0));
+			assert_ok!(Pools::create(
+				RawOrigin::Signed(10).into(),
+				amount_to_bond,
+				0,
+				900,
+				901,
+				902
+			));
 
 			for (account_id, bonded) in self.delegators {
 				Balances::make_free_balance_be(&account_id, bonded * 2);

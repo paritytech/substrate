@@ -42,13 +42,13 @@
 //! equal the value of a point after the transfer. So, when a delegator joins a bonded pool with a
 //! given `amount_transferred`, we maintain the ratio of bonded balance to points such that:
 //!
-//! ```
+//! ```text
 //! balance_after_transfer / points_after_transfer == balance_before_transfer / points_before_transfer;
 //! ```
 //!
 //! To achieve this, we issue points based on the following:
 //!
-//! ```
+//! ```text
 //! points_issued = (points_before_transfer / balance_before_transfer) * amount_transferred;
 //! ```
 //!
@@ -84,7 +84,7 @@
 //! 1) Compute the reward pool's total points and the delegator's virtual points in the reward pool
 //!     * First `current_total_earnings` is computed (`current_balance` is the free balance of the
 //!       reward pool at the beginning of these operations.)
-//!			```
+//!			```text
 //!			current_total_earnings =
 //!       		current_balance - reward_pool.balance + pool.total_earnings;
 //!			```
@@ -94,29 +94,29 @@
 //!       earned by the reward pool, the reward pool points are inflated by `bonded_pool.points`. In
 //!       effect this allows each, single unit of balance (e.g. planck) to be divvied up pro-rata
 //!       among delegators based on points.
-//!			```
+//!			```text
 //!			new_earnings = current_total_earnings - reward_pool.total_earnings;
 //!       	current_points = reward_pool.points + bonding_pool.points * new_earnings;
 //!			```
 //!     * Finally, the`delegator_virtual_points` are computed: the product of the delegator's points
 //!       in the bonding pool and the total inflow of balance units since the last time the
 //!       delegator claimed rewards
-//!			```
+//!			```text
 //!			new_earnings_since_last_claim = current_total_earnings - delegator.reward_pool_total_earnings;
 //!        	delegator_virtual_points = delegator.points * new_earnings_since_last_claim;
 //!       	```
 //! 2) Compute the `delegator_payout`:
-//!     ```
+//!     ```text
 //!     delegator_pool_point_ratio = delegator_virtual_points / current_points;
 //!     delegator_payout = current_balance * delegator_pool_point_ratio;
 //!     ```
 //! 3) Transfer `delegator_payout` to the delegator
 //! 4) For the delegator set:
-//!     ```
+//!     ```text
 //!     delegator.reward_pool_total_earnings = current_total_earnings;
 //!     ```
 //! 5) For the pool set:
-//!     ```
+//!     ```text
 //!     reward_pool.points = current_points - delegator_virtual_points;
 //!     reward_pool.balance = current_balance - delegator_payout;
 //!     reward_pool.total_earnings = current_total_earnings;
@@ -145,7 +145,7 @@
 //! When a delegator initiates unbonding it's claim on the bonded pool
 //! (`balance_to_unbond`) is computed as:
 //!
-//! ```
+//! ```text
 //! balance_to_unbond = (bonded_pool.balance / bonded_pool.points) * delegator.points;
 //! ```
 //!
@@ -155,7 +155,7 @@
 //! points to balance ratio properties as the bonded pool, so delegator points in the
 //! unbonding pool are issued based on
 //!
-//! ```
+//! ```text
 //! new_points_issued = (points_before_transfer / balance_before_transfer) * balance_to_unbond;
 //! ```
 //!
@@ -163,7 +163,7 @@
 //! [`TotalUnbondingPools`]). An unbonding pool is removed once its older than `current_era -
 //! TotalUnbondingPools`. An unbonding pool is merged into the unbonded pool with
 //!
-//! ```
+//! ```text
 //! unbounded_pool.balance = unbounded_pool.balance + unbonding_pool.balance;
 //! unbounded_pool.points = unbounded_pool.points + unbonding_pool.points;
 //! ```
@@ -245,36 +245,20 @@
 //!
 //! * watch out for overflow of [`RewardPoints`] and [`BalanceOf`] types. Consider things like the
 //!   chains total issuance, staking reward rate, and burn rate.
-
 //
-// TBD - possible options:
-// * Pools can be created by anyone but nominations can never be updated
-// * Pools can be created by anyone and the creator can update the validators
-// * Pools are created by governance and governance can update the validators
-// ... Other ideas
-// * pools can have different roles assigned: creator (puts deposit down, cannot remove deposit
-//   until pool is empty), admin (can control who is nominator, destroyer and can do
-//   nominate/destroy), nominator (can adjust nominators), destroyer (can initiate destroy), etc
-//
-
 // Invariants
-// - A `delegator.pool` must always be a valid entry in `RewardPools`, and `BondedPoolPoints`.
-// - Every entry in `BondedPoolPoints` must have  a corresponding entry in `RewardPools`
-// - If a delegator unbonds, the sub pools should always correctly track slashses such that the
+// * A `delegator.pool` must always be a valid entry in `RewardPools`, and `BondedPoolPoints`.
+// * Every entry in `BondedPoolPoints` must have  a corresponding entry in `RewardPools`
+// * If a delegator unbonds, the sub pools should always correctly track slashses such that the
 //   calculated amount when withdrawing unbonded is a lower bound of the pools free balance.
+// * If the depositor is actively unbonding, the pool is in destroying state
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
 // TODO:
-// - make withdraw unbonded pool that just calls withdraw unbonded for the underlying pool account -
-//   and remove withdraw unbonded call from unbond
-// - creation
-//    - CreateOrigin: the type of origin that can create a pool - can be set with governance call
-//    - creator: account that cannont unbond until there are no other pool members (essentially
-//      deposit)
-//    - kicker: can kick (force unbond) delegators and block new delegators
-//    - nominator: can set nominations
-//    - admin: can change kicker, nominator, and make another account admin.
+// - test permissionless use cases of unbond and withdraw unbonded
+// - test depositor unbond and unbond withdraws
+// - test nominate
 // - checks for number of pools when creating pools (param for max pools, pool creation origin)
 // - post checks that rewardpool::count == bondedpool::count. delegators >= bondedpool::count,
 //   subpools::count <= bondedpools
@@ -787,6 +771,7 @@ pub mod pallet {
 		PaidOut { delegator: T::AccountId, pool: T::AccountId, payout: BalanceOf<T> },
 		Unbonded { delegator: T::AccountId, pool: T::AccountId, amount: BalanceOf<T> },
 		Withdrawn { delegator: T::AccountId, pool: T::AccountId, amount: BalanceOf<T> },
+		DustWithdrawn { delegator: T::AccountId, pool: T::AccountId },
 	}
 
 	#[pallet::error]
@@ -1033,8 +1018,8 @@ pub mod pallet {
 				Error::<T>::NotUnbondedYet
 			);
 
-			let mut sub_pools =
-				SubPoolsStorage::<T>::get(&delegator.pool).ok_or(Error::<T>::SubPoolsNotFound)?;
+			let mut sub_pools = SubPoolsStorage::<T>::get(&delegator.pool)
+				.defensive_ok_or_else(|| Error::<T>::SubPoolsNotFound)?;
 			let bonded_pool = BondedPool::<T>::get(&delegator.pool)
 				.defensive_ok_or_else(|| Error::<T>::PoolNotFound)?;
 			let should_remove_pool = bonded_pool
@@ -1058,13 +1043,28 @@ pub mod pallet {
 			};
 
 			T::StakingInterface::withdraw_unbonded(delegator.pool.clone(), num_slashing_spans)?;
-			T::Currency::transfer(
-				&delegator.pool,
-				&target,
-				balance_to_unbond,
-				ExistenceRequirement::AllowDeath,
-			)
-			.defensive_map_err(|e| e)?;
+			if T::Currency::free_balance(&delegator.pool) >= balance_to_unbond {
+				T::Currency::transfer(
+					&delegator.pool,
+					&target,
+					balance_to_unbond,
+					ExistenceRequirement::AllowDeath,
+				)
+				.defensive_map_err(|e| e)?;
+				Self::deposit_event(Event::<T>::Withdrawn {
+					delegator: target.clone(),
+					pool: delegator.pool.clone(),
+					amount: balance_to_unbond,
+				});
+			} else {
+				// This should only happen in the case a previous withdraw put the pools balance
+				// below ED and it was dusted. We gracefully carry primarily to ensure the pool can
+				// eventually be destroyed
+				Self::deposit_event(Event::<T>::DustWithdrawn {
+					delegator: target.clone(),
+					pool: delegator.pool.clone(),
+				});
+			}
 
 			if should_remove_pool {
 				let reward_pool = RewardPools::<T>::take(&delegator.pool)
@@ -1080,11 +1080,6 @@ pub mod pallet {
 				SubPoolsStorage::<T>::insert(&delegator.pool, sub_pools);
 			}
 			Delegators::<T>::remove(&target);
-			Self::deposit_event(Event::<T>::Withdrawn {
-				delegator: target,
-				pool: delegator.pool,
-				amount: balance_to_unbond,
-			});
 
 			Ok(())
 		}
@@ -1373,6 +1368,15 @@ impl<T: Config> Pallet<T> {
 			active_bonded.saturating_sub(bonded_pool_slash_amount)
 		};
 		Some(SlashPoolOut { slashed_bonded, slashed_unlocking })
+	}
+
+	#[cfg(test)]
+	fn set_state(pool_account: &T::AccountId, state: PoolState) -> Result<(), ()> {
+		BondedPools::<T>::try_mutate(pool_account, |maybe_bonded_pool| {
+			maybe_bonded_pool.as_mut().ok_or(()).map(|bonded_pool| {
+				bonded_pool.state = state;
+			})
+		})
 	}
 }
 
