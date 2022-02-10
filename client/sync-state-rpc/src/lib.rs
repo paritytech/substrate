@@ -155,7 +155,7 @@ where
 		if sc_chain_spec::get_extension::<LightSyncStateExtension>(chain_spec.extensions())
 			.is_some()
 		{
-			Ok(Self { chain_spec, client, shared_authority_set, shared_epoch_changes, deny_unsafe })
+			Ok(Self { chain_spec, client, shared_authority_set, shared_epoch_changes })
 		} else {
 			Err(Error::<Block>::LightSyncStateExtensionNotFound)
 		}
