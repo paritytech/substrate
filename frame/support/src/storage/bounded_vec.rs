@@ -222,16 +222,17 @@ impl<T, S: Get<u32>> BoundedVec<T, S> {
 	/// Returns `true` if the item was inserted.
 	pub fn force_insert_keep_left(&mut self, index: usize, element: T) -> bool {
 		// Check against panics.
-		if Self::bound() < index || self.len() < index {
+		if Self::bound() < index || self.len() < index || Self::bound() == 0 {
 			return false
 		}
 		// Noop condition.
 		if Self::bound() == index && self.len() <= Self::bound() {
 			return false
 		}
-		// Cannot panic since self.len() >= index;
+		// Cannot panic since `Self.bound() > 0`
+		self.0.truncate(Self::bound() - 1);
+		// Cannot panic since `self.len() >= index`;
 		self.0.insert(index, element);
-		self.0.truncate(Self::bound());
 		true
 	}
 
@@ -661,6 +662,19 @@ pub mod test {
 
 		assert!(bounded.try_insert(0, 9).is_err());
 		assert_eq!(*bounded, vec![1, 0, 2, 3]);
+	}
+
+	#[test]
+	fn constructor_macro_works() {
+		use frame_support::bounded_vec;
+
+		// With values. Use some brackets to make sure the macro doesn't expand.
+		let bv: BoundedVec<(u32, u32), ConstU32<3>> = bounded_vec![(1, 2), (1, 2), (1, 2)];
+		assert_eq!(bv, vec![(1, 2), (1, 2), (1, 2)]);
+
+		// With repetition.
+		let bv: BoundedVec<(u32, u32), ConstU32<3>> = bounded_vec![(1, 2); 3];
+		assert_eq!(bv, vec![(1, 2), (1, 2), (1, 2)]);
 	}
 
 	#[test]

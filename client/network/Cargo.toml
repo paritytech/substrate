@@ -25,7 +25,6 @@ bytes = "1"
 codec = { package = "parity-scale-codec", version = "2.0.0", features = [
     "derive",
 ] }
-derive_more = "0.99.16"
 either = "1.5.3"
 fnv = "1.0.6"
 fork-tree = { version = "3.0.0", path = "../../utils/fork-tree" }
@@ -46,18 +45,18 @@ rand = "0.7.2"
 sc-block-builder = { version = "0.10.0-dev", path = "../block-builder" }
 sc-client-api = { version = "4.0.0-dev", path = "../api" }
 sc-peerset = { version = "4.0.0-dev", path = "../peerset" }
-serde = { version = "1.0.132", features = ["derive"] }
+serde = { version = "1.0.136", features = ["derive"] }
 serde_json = "1.0.74"
 smallvec = "1.7.0"
 sp-arithmetic = { version = "4.0.0", path = "../../primitives/arithmetic" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
 sp-consensus = { version = "0.10.0-dev", path = "../../primitives/consensus/common" }
 sc-consensus = { version = "0.10.0-dev", path = "../consensus/common" }
-sp-core = { version = "4.1.0-dev", path = "../../primitives/core" }
-sp-runtime = { version = "4.1.0-dev", path = "../../primitives/runtime" }
+sp-core = { version = "5.0.0", path = "../../primitives/core" }
+sp-runtime = { version = "5.0.0", path = "../../primitives/runtime" }
 sc-utils = { version = "4.0.0-dev", path = "../utils" }
 sp-finality-grandpa = { version = "4.0.0-dev", path = "../../primitives/finality-grandpa" }
-thiserror = "1"
+thiserror = "1.0"
 unsigned-varint = { version = "0.6.0", features = [
     "futures",
     "asynchronous_codec",
