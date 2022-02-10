@@ -26,7 +26,7 @@ First, complete the [basic Rust setup instructions](./docs/rust-setup.md).
 Use Rust's native `cargo` command to build and launch the template node:
 
 ```sh
-cargo run --release -- --dev --tmp
+cargo run --release -- --dev
 ```
 
 ### Build
@@ -78,12 +78,12 @@ RUST_BACKTRACE=1 ./target/release/node-template -ldebug --dev
 > [genesis state](https://github.com/substrate-developer-hub/substrate-node-template/blob/main/node/src/chain_spec.rs#L49).
 > At the same time the following accounts will be pre-funded:
 > - Alice
-> - Bob 
+> - Bob
 > - Alice//stash
 > - Bob//stash
 
 In case of being interested in maintaining the chain' state between runs a base path must be added
-so the db can be stored in the provided folder instead of a temporal one. We could use this folder 
+so the db can be stored in the provided folder instead of a temporal one. We could use this folder
 to store different chain databases, as a different folder will be created per different chain that
 is ran. The following commands shows how to use a newly created folder as our db base path.
 

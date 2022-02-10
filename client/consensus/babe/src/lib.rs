@@ -232,7 +232,7 @@ pub enum Error<B: BlockT> {
 	#[error("Multiple BABE config change digests, rejecting!")]
 	MultipleConfigChangeDigests,
 	/// Could not extract timestamp and slot
-	#[error("Could not extract timestamp and slot: {0:?}")]
+	#[error("Could not extract timestamp and slot: {0}")]
 	Extraction(sp_consensus::Error),
 	/// Could not fetch epoch
 	#[error("Could not fetch epoch at {0:?}")]
@@ -274,7 +274,7 @@ pub enum Error<B: BlockT> {
 	#[error("VRF verification failed: {0:?}")]
 	VRFVerificationFailed(SignatureError),
 	/// Could not fetch parent header
-	#[error("Could not fetch parent header: {0:?}")]
+	#[error("Could not fetch parent header: {0}")]
 	FetchParentHeader(sp_blockchain::Error),
 	/// Expected epoch change to happen.
 	#[error("Expected epoch change to happen at {0:?}, s{1}")]
@@ -713,7 +713,7 @@ where
 				parent.number().clone(),
 				slot,
 			)
-			.map_err(|e| ConsensusError::ChainLookup(format!("{:?}", e)))?
+			.map_err(|e| ConsensusError::ChainLookup(e.to_string()))?
 			.ok_or(sp_consensus::Error::InvalidAuthoritiesSet)
 	}
 
@@ -1201,7 +1201,7 @@ where
 					)
 					.await
 				{
-					warn!(target: "babe", "Error checking/reporting BABE equivocation: {:?}", err);
+					warn!(target: "babe", "Error checking/reporting BABE equivocation: {}", err);
 				}
 
 				// if the body is passed through, we need to use the runtime
@@ -1551,7 +1551,7 @@ where
 						)
 						.map_err(|e| {
 							ConsensusError::ClientImport(format!(
-								"Error importing epoch changes: {:?}",
+								"Error importing epoch changes: {}",
 								e
 							))
 						})?;
@@ -1559,7 +1559,7 @@ where
 				};
 
 				if let Err(e) = prune_and_import() {
-					debug!(target: "babe", "Failed to launch next epoch: {:?}", e);
+					debug!(target: "babe", "Failed to launch next epoch: {}", e);
 					*epoch_changes =
 						old_epoch_changes.expect("set `Some` above and not taken; qed");
 					return Err(e)
@@ -1590,7 +1590,7 @@ where
 					parent_weight
 				} else {
 					aux_schema::load_block_weight(&*self.client, last_best)
-						.map_err(|e| ConsensusError::ChainLookup(format!("{:?}", e)))?
+						.map_err(|e| ConsensusError::ChainLookup(e.to_string()))?
 						.ok_or_else(|| {
 							ConsensusError::ChainLookup(
 								"No block weight for parent header.".to_string(),
@@ -1649,7 +1649,7 @@ where
 	let finalized_slot = {
 		let finalized_header = client
 			.header(BlockId::Hash(info.finalized_hash))
-			.map_err(|e| ConsensusError::ClientImport(format!("{:?}", e)))?
+			.map_err(|e| ConsensusError::ClientImport(e.to_string()))?
 			.expect(
 				"best finalized hash was given by client; finalized headers must exist in db; qed",
 			);
@@ -1666,7 +1666,7 @@ where
 			info.finalized_number,
 			finalized_slot,
 		)
-		.map_err(|e| ConsensusError::ClientImport(format!("{:?}", e)))?;
+		.map_err(|e| ConsensusError::ClientImport(e.to_string()))?;
 
 	Ok(())
 }

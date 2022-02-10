@@ -341,6 +341,14 @@ sp_core::wasm_export_functions! {
 	fn test_take_i8(value: i8) {
 		assert_eq!(value, -66);
 	}
+
+	fn test_abort_on_panic() {
+		sp_io::panic_handler::abort_on_panic("test_abort_on_panic called");
+	}
+
+	fn test_unreachable_intrinsic() {
+		core::arch::wasm32::unreachable()
+	}
 }
 
 #[cfg(not(feature = "std"))]

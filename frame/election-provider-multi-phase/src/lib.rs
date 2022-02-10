@@ -255,7 +255,7 @@ use sp_runtime::{
 		InvalidTransaction, TransactionPriority, TransactionSource, TransactionValidity,
 		TransactionValidityError, ValidTransaction,
 	},
-	DispatchError, PerThing, Perbill, RuntimeDebug, SaturatedConversion,
+	DispatchError, ModuleError, PerThing, Perbill, RuntimeDebug, SaturatedConversion,
 };
 use sp_std::prelude::*;
 
@@ -460,7 +460,7 @@ pub struct ReadySolution<A> {
 ///
 /// These are stored together because they are often accessed together.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default, TypeInfo)]
-#[codec(mel_bound(T: Config))]
+#[codec(mel_bound())]
 #[scale_info(skip_type_params(T))]
 pub struct RoundSnapshot<T: Config> {
 	/// All of the voters.
@@ -1579,7 +1579,7 @@ impl<T: Config> ElectionProvider for Pallet<T> {
 /// number.
 pub fn dispatch_error_to_invalid(error: DispatchError) -> InvalidTransaction {
 	let error_number = match error {
-		DispatchError::Module { error, .. } => error,
+		DispatchError::Module(ModuleError { error, .. }) => error,
 		_ => 0,
 	};
 	InvalidTransaction::Custom(error_number)
