@@ -23,7 +23,7 @@ use crate::{
 	sandbox::Memory,
 	util::{checked_range, MemoryTransfer},
 };
-use codec::Encode;
+use codec::{Decode, Encode};
 use sp_core::sandbox::HostError;
 use sp_wasm_interface::{FunctionContext, Pointer, ReturnValue, Value, WordSize};
 use std::{cell::RefCell, collections::HashMap, convert::TryInto, rc::Rc};
@@ -251,7 +251,15 @@ fn dispatch_function(
 			// Perform the actuall call
 			let serialized_result = sandbox_context
 				.invoke(invoke_args_ptr, invoke_args_len, state, supervisor_func_index)
-				.map_err(|e| RuntimeError::new(e.to_string()))?;
+				.map_err(|e| RuntimeError::new(e.to_string()));
+
+			deallocate(
+				sandbox_context.supervisor_context(),
+				invoke_args_ptr,
+				"Failed dealloction after invoke",
+			)?;
+
+			let serialized_result = serialized_result?;
 
 			// dispatch_thunk returns pointer to serialized arguments.
 			// Unpack pointer and len of the serialized result data.
@@ -270,20 +278,19 @@ fn dispatch_function(
 					RuntimeError::new("Can't read the serialized result from dispatch thunk")
 				});
 
-			let deserialized_result = deallocate(
+			deallocate(
 				sandbox_context.supervisor_context(),
 				serialized_result_val_ptr,
 				"Can't deallocate memory for dispatch thunk's result",
+			)?;
+
+			let serialized_result_val = serialized_result_val?;
+
+			let deserialized_result = std::result::Result::<ReturnValue, HostError>::decode(
+				&mut serialized_result_val.as_slice(),
 			)
-			.and_then(|_| serialized_result_val)
-			.and_then(|serialized_result_val| {
-				use codec::Decode;
-				std::result::Result::<ReturnValue, HostError>::decode(
-					&mut serialized_result_val.as_slice(),
-				)
-				.map_err(|_| RuntimeError::new("Decoding Result<ReturnValue, HostError> failed!"))?
-				.map_err(|_| RuntimeError::new("Supervisor function returned sandbox::HostError"))
-			})?;
+			.map_err(|_| RuntimeError::new("Decoding Result<ReturnValue, HostError> failed!"))?
+			.map_err(|_| RuntimeError::new("Supervisor function returned sandbox::HostError"))?;
 
 			let result = match deserialized_result {
 				ReturnValue::Value(Value::I32(val)) => vec![wasmer::Val::I32(val)],
