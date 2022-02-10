@@ -112,10 +112,7 @@ impl RuntimeBlob {
 	/// Does nothing if there's no memory import.
 	///
 	/// May return an error in case the WASM module is invalid.
-	pub fn convert_memory_import_into_export(
-		&mut self,
-		extra_heap_pages: u32,
-	) -> Result<(), WasmError> {
+	pub fn convert_memory_import_into_export(&mut self) -> Result<(), WasmError> {
 		let import_section = match self.raw_module.import_section_mut() {
 			Some(import_section) => import_section,
 			None => return Ok(()),
@@ -124,19 +121,16 @@ impl RuntimeBlob {
 		let import_entries = import_section.entries_mut();
 		for index in 0..import_entries.len() {
 			let entry = &import_entries[index];
-			let old_memory_ty = match entry.external() {
-				External::Memory(memory_ty) => memory_ty,
+			let memory_ty = match entry.external() {
+				External::Memory(memory_ty) => *memory_ty,
 				_ => continue,
 			};
 
 			let memory_name = entry.field().to_owned();
-			let min = old_memory_ty.limits().initial().saturating_add(extra_heap_pages);
-			let max = old_memory_ty.limits().maximum().map(|max| std::cmp::max(min, max));
 			import_entries.remove(index);
 
-			let new_memory_ty = MemoryType::new(min, max);
 			self.raw_module
-				.insert_section(Section::Memory(MemorySection::with_entries(vec![new_memory_ty])))
+				.insert_section(Section::Memory(MemorySection::with_entries(vec![memory_ty])))
 				.map_err(|error| {
 					WasmError::Other(format!(
 					"can't convert a memory import into an export: failed to insert a new memory section: {}",
@@ -160,6 +154,35 @@ impl RuntimeBlob {
 			break
 		}
 
+		Ok(())
+	}
+
+	/// Increases the number of memory pages requested by the WASM blob by
+	/// the given amount of `extra_heap_pages`.
+	///
+	/// Will return an error in case there is no memory section present,
+	/// or if the memory section is empty.
+	///
+	/// Only modifies the initial size of the memory; the maximum is unmodified
+	/// unless it's smaller than the initial size, in which case it will be increased
+	/// so that it's at least as big as the initial size.
+	pub fn add_extra_heap_pages_to_memory_section(
+		&mut self,
+		extra_heap_pages: u32,
+	) -> Result<(), WasmError> {
+		let memory_section = self
+			.raw_module
+			.memory_section_mut()
+			.ok_or_else(|| WasmError::Other("no memory section found".into()))?;
+
+		if memory_section.entries().is_empty() {
+			return Err(WasmError::Other("memory section is empty".into()))
+		}
+		for memory_ty in memory_section.entries_mut() {
+			let min = memory_ty.limits().initial().saturating_add(extra_heap_pages);
+			let max = memory_ty.limits().maximum().map(|max| std::cmp::max(min, max));
+			*memory_ty = MemoryType::new(min, max);
+		}
 		Ok(())
 	}
 

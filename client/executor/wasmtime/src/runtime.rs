@@ -541,7 +541,8 @@ where
 			// now automatically take care of creating the memory for us, and it also allows us
 			// to potentially enable `wasmtime`'s instance pooling at a later date. (Imported
 			// memories are ineligible for pooling.)
-			blob.convert_memory_import_into_export(
+			blob.convert_memory_import_into_export()?;
+			blob.add_extra_heap_pages_to_memory_section(
 				config
 					.heap_pages
 					.try_into()
