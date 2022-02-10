@@ -1404,7 +1404,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	#[cfg(test)]
-	fn set_state(pool_account: &T::AccountId, state: PoolState) -> Result<(), ()> {
+	fn unsafe_set_state(pool_account: &T::AccountId, state: PoolState) -> Result<(), ()> {
 		BondedPools::<T>::try_mutate(pool_account, |maybe_bonded_pool| {
 			maybe_bonded_pool.as_mut().ok_or(()).map(|bonded_pool| {
 				bonded_pool.state = state;
