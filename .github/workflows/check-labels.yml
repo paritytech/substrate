@@ -11,7 +11,7 @@ jobs:
       - uses: actions/checkout@v2
         with:
           # Fetch the history up to the latest master.
-          fetch-depth: ${{ git rev-list --count origin/master..$HEAD_SHA }}
+          fetch-depth: $( git rev-list --count origin/master..$HEAD_SHA )
           ref: ${{ github.event.pull_request.head.ref }}
           repository: ${{ github.event.pull_request.head.repo.full_name }}
         env:
