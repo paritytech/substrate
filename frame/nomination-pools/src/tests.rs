@@ -409,7 +409,6 @@ mod join {
 		});
 	}
 
-	// TODO: test transactional storage aspect
 	#[test]
 	fn join_errors_correctly() {
 		ExtBuilder::default().build_and_execute_no_checks(|| {
@@ -1984,7 +1983,6 @@ mod create {
 		});
 	}
 
-	// TODO check transactional storage aspect
 	#[test]
 	fn create_errors_correctly() {
 		ExtBuilder::default().build_and_execute_no_checks(|| {
@@ -2234,7 +2232,6 @@ mod pools_interface {
 				assert_eq!(slashed_bonded, 0);
 			});
 	}
-	// TODO: returns none when account is not a pool
 }
 
 mod nominate {
