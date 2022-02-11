@@ -1212,7 +1212,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::weight(666)]
+		#[pallet::weight(T::WeightInfo::nominate())]
 		pub fn nominate(
 			origin: OriginFor<T>,
 			pool_account: T::AccountId,

@@ -1376,7 +1376,7 @@ impl<T: Config> StakingInterface for Pallet<T> {
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn setup_nominate_scenario() -> Vec<Self::LookupSource> {
-
+	fn max_nominations() -> u32 {
+		T::MaxNominations::get()
 	}
 }

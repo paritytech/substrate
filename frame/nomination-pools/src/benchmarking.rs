@@ -96,7 +96,52 @@ frame_benchmarking::benchmarks! {
 		);
 	}
 
-	nominate {}: {}
+	nominate {
+		let min_create_bond = MinCreateBond::<T>::get().max(T::StakingInterface::minimum_bond());
+		let depositor = account("depositor", USER_SEED, 0);
+
+		// Create a pool
+		T::Currency::make_free_balance_be(&depositor, min_create_bond * 2u32.into());
+		assert_ok!(
+			Pools::<T>::create(
+				Origin::Signed(depositor.clone()).into(),
+				min_create_bond,
+				0,
+				depositor.clone(),
+				depositor.clone(),
+				depositor.clone()
+			)
+		);
+		// index 0 of the tuple is the key, the pool account
+		let pool_account = 	BondedPools::<T>::iter().next().unwrap().0;
+
+		// Create some accounts to nominate. For the sake of benchmarking they don't need to be actual validators
+		let validators: Vec<_> = (0..T::StakingInterface::max_nominations())
+			.map(|i|
+				T::Lookup::unlookup(account("stash", USER_SEED, i))
+			)
+			.collect();
+	}:_(Origin::Signed(depositor.clone()), pool_account, validators)
+	verify {
+		assert_eq!(RewardPools::<T>::count(), 1);
+		assert_eq!(BondedPools::<T>::count(), 1);
+		let (pool_account, new_pool) = BondedPools::<T>::iter().next().unwrap();
+		assert_eq!(
+			new_pool,
+			BondedPoolStorage {
+				points: min_create_bond,
+				depositor: depositor.clone(),
+				root: depositor.clone(),
+				nominator: depositor.clone(),
+				state_toggler: depositor.clone(),
+				state: PoolState::Open,
+			}
+		);
+		assert_eq!(
+			T::StakingInterface::bonded_balance(&pool_account),
+			Some(min_create_bond)
+		);
+	}
 }
 
 frame_benchmarking::impl_benchmark_test_suite!(

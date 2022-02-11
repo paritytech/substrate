@@ -125,5 +125,7 @@ pub trait StakingInterface {
 
 	// Benchmarking helpers
 
+	fn max_nominations() -> u32;
+
 	// fn setup_nominate_scenario() -> (Self::AccountId, Self::AccountId, Vec<Self::LookupSource>);
 }

@@ -82,9 +82,9 @@ impl sp_staking::StakingInterface for StakingMock {
 		Ok(())
 	}
 
-	// fn setup_nominate_scenario() -> Vec<Self::AccountId> {
-	// 	vec![1]
-	// }
+	fn max_nominations() -> u32 {
+		3
+	}
 }
 
 impl frame_system::Config for Runtime {
