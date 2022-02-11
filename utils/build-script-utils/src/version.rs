@@ -20,7 +20,7 @@ use std::{borrow::Cow, process::Command};
 
 /// Generate the `cargo:` key output
 pub fn generate_cargo_keys() {
-	let commit = if let Ok(hash) = std::env::var("GIT_COMMIT_HASH") {
+	let commit = if let Ok(hash) = std::env::var("SUBSTRATE_CLI_GIT_COMMIT_HASH") {
 		Cow::from(hash.trim().to_owned())
 	} else {
 		match Command::new("git").args(&["rev-parse", "--short", "HEAD"]).output() {
