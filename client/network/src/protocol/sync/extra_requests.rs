@@ -547,8 +547,37 @@ mod tests {
 
 	// Some Arbitrary instances to allow easy construction of random peer sets:
 
-	#[derive(Debug, Clone)]
+	#[derive(Debug)]
 	struct ArbitraryPeerSyncState(PeerSyncState<Block>);
+
+	fn clone_peer_sync_state(state: &PeerSyncState<Block>) -> PeerSyncState<Block> {
+		match state {
+			PeerSyncState::Available => PeerSyncState::Available,
+			PeerSyncState::DownloadingNew(ref block_number) =>
+				PeerSyncState::DownloadingNew(block_number.clone()),
+			PeerSyncState::DownloadingStale(ref hash) =>
+				PeerSyncState::DownloadingStale(hash.clone()),
+			PeerSyncState::DownloadingJustification(ref hash) =>
+				PeerSyncState::DownloadingJustification(hash.clone()),
+			state => unimplemented!("unsupported peer sync state: {:?}", state),
+		}
+	}
+
+	fn clone_peer_sync(peer_sync: &PeerSync<Block>) -> PeerSync<Block> {
+		PeerSync {
+			peer_id: peer_sync.peer_id.clone(),
+			common_number: peer_sync.common_number.clone(),
+			best_hash: peer_sync.best_hash.clone(),
+			best_number: peer_sync.best_number.clone(),
+			state: clone_peer_sync_state(&peer_sync.state),
+		}
+	}
+
+	impl Clone for ArbitraryPeerSyncState {
+		fn clone(&self) -> Self {
+			Self(clone_peer_sync_state(&self.0))
+		}
+	}
 
 	impl Arbitrary for ArbitraryPeerSyncState {
 		fn arbitrary(g: &mut Gen) -> Self {
@@ -563,8 +592,14 @@ mod tests {
 		}
 	}
 
-	#[derive(Debug, Clone)]
+	#[derive(Debug)]
 	struct ArbitraryPeerSync(PeerSync<Block>);
+
+	impl Clone for ArbitraryPeerSync {
+		fn clone(&self) -> Self {
+			ArbitraryPeerSync(clone_peer_sync(&self.0))
+		}
+	}
 
 	impl Arbitrary for ArbitraryPeerSync {
 		fn arbitrary(g: &mut Gen) -> Self {
@@ -579,8 +614,16 @@ mod tests {
 		}
 	}
 
-	#[derive(Debug, Clone)]
+	#[derive(Debug)]
 	struct ArbitraryPeers(HashMap<PeerId, PeerSync<Block>>);
+
+	impl Clone for ArbitraryPeers {
+		fn clone(&self) -> Self {
+			ArbitraryPeers(
+				self.0.iter().map(|(id, sync)| (id.clone(), clone_peer_sync(sync))).collect(),
+			)
+		}
+	}
 
 	impl Arbitrary for ArbitraryPeers {
 		fn arbitrary(g: &mut Gen) -> Self {
