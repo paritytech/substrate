@@ -707,7 +707,7 @@ pub(crate) fn state_machine_call<Block: BlockT, D: NativeExecutionDispatch + 'st
 		sp_core::testing::TaskExecutor::new(),
 	)
 	.execute(execution.into())
-	.map_err(|e| format!("failed to execute 'TryRuntime_on_runtime_upgrade': {:?}", e))
+	.map_err(|e| format!("failed to execute 'TryRuntime_on_runtime_upgrade': {}", e))
 	.map_err::<sc_cli::Error, _>(Into::into)?;
 
 	Ok((changes, encoded_results))
@@ -748,7 +748,7 @@ pub(crate) fn state_machine_call_with_proof<Block: BlockT, D: NativeExecutionDis
 		sp_core::testing::TaskExecutor::new(),
 	)
 	.execute(execution.into())
-	.map_err(|e| format!("failed to execute {}: {:?}", method, e))
+	.map_err(|e| format!("failed to execute {}: {}", method, e))
 	.map_err::<sc_cli::Error, _>(Into::into)?;
 
 	let proof = proving_backend.extract_proof();

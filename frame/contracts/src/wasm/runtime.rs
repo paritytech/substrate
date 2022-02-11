@@ -222,6 +222,9 @@ pub enum RuntimeCosts {
 	/// Weight charged for calling into the runtime.
 	#[cfg(feature = "unstable-interface")]
 	CallRuntime(Weight),
+	/// Weight of calling `seal_set_code_hash`
+	#[cfg(feature = "unstable-interface")]
+	SetCodeHash,
 }
 
 impl RuntimeCosts {
@@ -305,6 +308,8 @@ impl RuntimeCosts {
 			CopyIn(len) => s.return_per_byte.saturating_mul(len.into()),
 			#[cfg(feature = "unstable-interface")]
 			CallRuntime(weight) => weight,
+			#[cfg(feature = "unstable-interface")]
+			SetCodeHash => s.set_code_hash,
 		};
 		RuntimeToken {
 			#[cfg(test)]
@@ -1958,6 +1963,43 @@ define_env!(Env, <E: Ext>,
 				Ok(ReturnCode::Success)
 			},
 			Err(_) => Ok(ReturnCode::EcdsaRecoverFailed),
+		}
+	},
+
+	// Replace the contract code at the specified address with new code.
+	//
+	// # Note
+	//
+	// There are a couple of important considerations which must be taken into account when
+	// using this API:
+	//
+	// 1. The storage at the code address will remain untouched. This means that contract developers
+	// must ensure that the storage layout of the new code is compatible with that of the old code.
+	//
+	// 2. Contracts using this API can't be assumed as having deterministic addresses. Said another way,
+	// when using this API you lose the guarantee that an address always identifies a specific code hash.
+	//
+	// 3. If a contract calls into itself after changing its code the new call would use
+	// the new code. However, if the original caller panics after returning from the sub call it
+	// would revert the changes made by `seal_set_code_hash` and the next caller would use
+	// the old code.
+	//
+	// # Parameters
+	//
+	// - code_hash_ptr: A pointer to the buffer that contains the new code hash.
+	//
+	// # Errors
+	//
+	// `ReturnCode::CodeNotFound`
+	[__unstable__] seal_set_code_hash(ctx, code_hash_ptr: u32) -> ReturnCode => {
+		ctx.charge_gas(RuntimeCosts::SetCodeHash)?;
+		let code_hash: CodeHash<<E as Ext>::T> = ctx.read_sandbox_memory_as(code_hash_ptr)?;
+		match ctx.ext.set_code_hash(code_hash) {
+			Err(err) =>	{
+				let code = Runtime::<E>::err_into_return_code(err)?;
+				Ok(code)
+			},
+			Ok(()) => Ok(ReturnCode::Success)
 		}
 	},
 );
