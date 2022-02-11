@@ -216,13 +216,9 @@ where
 	fn pairs(&self) -> Vec<(StorageKey, StorageValue)> {
 		let collect_all = || -> Result<_, Box<TrieError<H::Out>>> {
 			self.with_recorder(|recorder| {
-				let trie_builder = TrieDBBuilder::<H>::new(self.essence(), self.essence.root())?;
-
-				let trie = if let Some(recorder) = recorder {
-					trie_builder.with_recorder(recorder).build()
-				} else {
-					trie_builder.build()
-				};
+				let trie = TrieDBBuilder::<H>::new(self.essence(), self.essence.root())?
+					.with_optional_recorder(recorder)
+					.build();
 
 				let mut v = Vec::new();
 				for x in trie.iter()? {
@@ -246,13 +242,9 @@ where
 	fn keys(&self, prefix: &[u8]) -> Vec<StorageKey> {
 		let collect_all = || -> Result<_, Box<TrieError<H::Out>>> {
 			self.with_recorder(|recorder| {
-				let trie_builder = TrieDBBuilder::<H>::new(self.essence(), self.essence.root())?;
-
-				let trie = if let Some(recorder) = recorder {
-					trie_builder.with_recorder(recorder).build()
-				} else {
-					trie_builder.build()
-				};
+				let trie = TrieDBBuilder::<H>::new(self.essence(), self.essence.root())?
+					.with_optional_recorder(recorder)
+					.build();
 
 				let mut v = Vec::new();
 				for x in trie.iter()? {

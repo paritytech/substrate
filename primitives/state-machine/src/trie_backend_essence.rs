@@ -56,11 +56,7 @@ macro_rules! with_recorder {
 	( $builder:ident, $recorder:ident ) => {{
 		#[cfg(feature = "std")]
 		{
-			if let Some(ref mut recorder) = $recorder {
-				$builder.with_recorder(&mut **recorder)
-			} else {
-				$builder
-			}
+			$builder.with_optional_recorder($recorder.as_deref_mut().map(|r| r as _))
 		}
 		#[cfg(not(feature = "std"))]
 		{

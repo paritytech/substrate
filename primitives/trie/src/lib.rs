@@ -256,11 +256,11 @@ where
 }
 
 /// Determine a trie root given a hash DB and delta values.
-pub fn delta_trie_root<L: TrieConfiguration, I, A, B, DB, V>(
+pub fn delta_trie_root<'a, L: TrieConfiguration, I, A, B, DB, V>(
 	db: &mut DB,
 	mut root: TrieHash<L>,
 	delta: I,
-	mut recorder: Option<&mut dyn trie_db::TrieRecorder<TrieHash<L>>>,
+	recorder: Option<&mut dyn trie_db::TrieRecorder<TrieHash<L>>>,
 ) -> Result<TrieHash<L>, Box<TrieError<L>>>
 where
 	I: IntoIterator<Item = (A, B)>,
@@ -270,13 +270,9 @@ where
 	DB: hash_db::HashDB<L::Hash, trie_db::DBValue>,
 {
 	{
-		let trie_builder = TrieDBMutBuilder::<L>::from_existing(db, &mut root)?;
-
-		let mut trie = if let Some(ref mut recorder) = recorder {
-			trie_builder.with_recorder(*recorder).build()
-		} else {
-			trie_builder.build()
-		};
+		let mut trie = TrieDBMutBuilder::<L>::from_existing(db, &mut root)?
+			.with_optional_recorder(recorder)
+			.build();
 
 		let mut delta = delta.into_iter().collect::<Vec<_>>();
 		delta.sort_by(|l, r| l.0.borrow().cmp(r.0.borrow()));
