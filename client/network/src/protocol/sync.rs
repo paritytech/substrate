@@ -1319,6 +1319,7 @@ impl<B: BlockT> ChainSync<B> {
 		if let Some(peer) = self.peers.get_mut(&who) {
 			if let PeerSyncState::DownloadingState = peer.state {
 				peer.state = PeerSyncState::Available;
+				self.allowed_requests.set_all();
 			}
 		}
 		let import_result = if let Some(sync) = &mut self.state_sync {
@@ -1381,6 +1382,7 @@ impl<B: BlockT> ChainSync<B> {
 		if let Some(peer) = self.peers.get_mut(&who) {
 			if let PeerSyncState::DownloadingWarpProof = peer.state {
 				peer.state = PeerSyncState::Available;
+				self.allowed_requests.set_all();
 			}
 		}
 		let import_result = if let Some(sync) = &mut self.warp_sync {
@@ -1688,6 +1690,7 @@ impl<B: BlockT> ChainSync<B> {
 						);
 						self.state_sync =
 							Some(StateSync::new(self.client.clone(), header, *skip_proofs));
+						self.allowed_requests.set_all();
 					}
 				}
 			}
