@@ -223,9 +223,21 @@ impl ExtBuilder {
 	pub fn build_and_execute(self, test: impl FnOnce() -> ()) {
 		self.build().execute_with(|| {
 			test();
-			// post-checks can be added here
+			post_checks();
 		})
 	}
+
+	pub fn build_and_execute_no_checks(self, test: impl FnOnce() -> ()) {
+		self.build().execute_with(|| {
+			test();
+		})
+	}
+}
+
+fn post_checks() {
+	assert_eq!(RewardPools::<Runtime>::count(), BondedPools::<Runtime>::count());
+	assert!(SubPoolsStorage::<Runtime>::count() <= BondedPools::<Runtime>::count());
+	assert!(Delegators::<Runtime>::count() >= BondedPools::<Runtime>::count());
 }
 
 #[cfg(test)]

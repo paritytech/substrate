@@ -257,11 +257,6 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-// TODO
-// - checks for number of pools when creating pools (param for max pools, pool creation origin)
-// - post checks that rewardpool::count == bondedpool::count. delegators >= bondedpool::count,
-//   subpools::count <= bondedpools
-
 use frame_support::{
 	ensure,
 	pallet_prelude::*,
@@ -836,8 +831,6 @@ pub mod pallet {
 		MinimumBondNotMet,
 		/// The transaction could not be executed due to overflow risk for the pool.
 		OverflowRisk,
-		/// TODO: remove this
-		Err,
 		// Likely only an error ever encountered in poorly built tests.
 		/// A pool with the generated account id already exists.
 		IdInUse,

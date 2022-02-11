@@ -412,7 +412,7 @@ mod join {
 	// TODO: test transactional storage aspect
 	#[test]
 	fn join_errors_correctly() {
-		ExtBuilder::default().build_and_execute(|| {
+		ExtBuilder::default().build_and_execute_no_checks(|| {
 			assert_noop!(
 				Pools::join(Origin::signed(10), 420, 420),
 				Error::<Runtime>::AccountBelongsToOtherPool
@@ -1987,7 +1987,7 @@ mod create {
 	// TODO check transactional storage aspect
 	#[test]
 	fn create_errors_correctly() {
-		ExtBuilder::default().build_and_execute(|| {
+		ExtBuilder::default().build_and_execute_no_checks(|| {
 			assert_noop!(
 				Pools::create(Origin::signed(11), 420, 0, 123, 456, 789),
 				Error::<Runtime>::IdInUse
