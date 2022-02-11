@@ -10,9 +10,12 @@ jobs:
     steps:
       - uses: actions/checkout@v2
         with:
-          fetch-depth: 1
+          # Fetch the history up to the latest master.
+          fetch-depth: ${{ git rev-list --count origin/master..$HEAD_SHA }}
           ref: ${{ github.event.pull_request.head.ref }}
           repository: ${{ github.event.pull_request.head.repo.full_name }}
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
       - name: Check labels
         run: bash ${{ github.workspace }}/.maintain/github/check_labels.sh
         env:
