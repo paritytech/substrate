@@ -245,13 +245,19 @@ fn post_checks() {
 	assert!(Delegators::<Runtime>::count() >= BondedPools::<Runtime>::count());
 }
 
-#[cfg(test)]
 pub(crate) fn unsafe_set_state(pool_account: &AccountId, state: PoolState) -> Result<(), ()> {
 	BondedPools::<Runtime>::try_mutate(pool_account, |maybe_bonded_pool| {
 		maybe_bonded_pool.as_mut().ok_or(()).map(|bonded_pool| {
 			bonded_pool.state = state;
 		})
 	})
+}
+
+pub(crate) fn clear_storage<T: Config>() {
+	BondedPools::<T>::remove_all();
+	RewardPools::<T>::remove_all();
+	SubPoolsStorage::<T>::remove_all();
+	Delegators::<T>::remove_all();
 }
 
 #[cfg(test)]
