@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,6 +16,7 @@
 // limitations under the License.
 
 //! Implementation of the `create_tt_return_macro` macro
+
 use crate::COUNTER;
 use frame_support_procedural_tools::generate_crate_access_2018;
 use proc_macro2::{Ident, TokenStream};

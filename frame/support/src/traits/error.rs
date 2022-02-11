@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -23,6 +23,7 @@ use sp_std::marker::PhantomData;
 /// the `#[pallet::error]` enum type.
 ///
 /// ## Notes
+///
 /// The pallet error enum has a maximum encoded size as defined by
 /// [`frame_support::MAX_PALLET_ERROR_ENCODED_SIZE`]. If the pallet error type exceeds this size
 /// limit, a static assertion during compilation will fail. The compilation error will be in the

@@ -152,7 +152,7 @@ macro_rules! decl_error {
 
 				$crate::sp_runtime::DispatchError::Module($crate::sp_runtime::ModuleError {
 					index,
-					error: error.try_into().expect("error has been resized to be 4 bytes; qed"),
+					error: core::convert::TryInto::try_into(error).expect("encoded error is resized to be equal to the maximum encoded error size; qed"),
 					message: Some(err.as_str()),
 				})
 			}

@@ -68,7 +68,7 @@ pub fn expand_error(def: &mut Def) -> proc_macro2::TokenStream {
 	);
 
 	let as_str_matches = error.variants.iter().map(|(variant, field_ty, _)| {
-		let variant_str = format!("{}", variant);
+		let variant_str = variant.to_string();
 		match field_ty {
 			Some(VariantField { is_named: true }) => {
 				quote::quote_spanned!(error.attr_span => Self::#variant { .. } => #variant_str,)
@@ -150,9 +150,6 @@ pub fn expand_error(def: &mut Def) -> proc_macro2::TokenStream {
 			#config_where_clause
 		{
 			fn from(err: #error_ident<#type_use_gen>) -> Self {
-				// Ensure that we can still use `try_into` in earlier editions
-				#[cfg(not(feature = "prelude_2021"))]
-				use core::convert::TryInto;
 				use #frame_support::codec::Encode;
 				let index = <
 					<T as #frame_system::Config>::PalletInfo
@@ -164,7 +161,7 @@ pub fn expand_error(def: &mut Def) -> proc_macro2::TokenStream {
 
 				#frame_support::sp_runtime::DispatchError::Module(#frame_support::sp_runtime::ModuleError {
 					index,
-					error: encoded.try_into().expect("encoded error is resized to be equal to 4 bytes; qed"),
+					error: core::convert::TryInto::try_into(encoded).expect("encoded error is resized to be equal to the maximum encoded error size; qed"),
 					message: Some(err.as_str()),
 				})
 			}

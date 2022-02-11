@@ -92,6 +92,7 @@ pub fn derive_pallet_error(input: proc_macro::TokenStream) -> proc_macro::TokenS
 				Err(e) => return e.to_compile_error().into(),
 			};
 
+			// We start with `1`, because the discriminant of an enum is stored as u8
 			if field_tys.is_empty() {
 				quote::quote!(1)
 			} else {
