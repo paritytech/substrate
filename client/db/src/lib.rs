@@ -3348,5 +3348,4 @@ pub(crate) mod tests {
 		insert_header_no_head(&backend, 1, block0, [1; 32].into());
 		assert_eq!(backend.blockchain().leaves().unwrap(), vec![block2_a]);
 	}
-
 }
