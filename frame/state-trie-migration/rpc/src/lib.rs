@@ -39,7 +39,7 @@ pub trait StateMigrationApi<BlockHash> {
 	/// This call is performed locally without submitting any transactions. Thus executing this
 	/// won't change any state. Nonetheless it is a VERY costy call that should be
 	/// only exposed to trusted peers.
-	#[rpc(name = "state-trie-migration-status")]
+	#[rpc(name = "state_trieMigrationStatus")]
 	fn call(&self, at: Option<BlockHash>) -> Result<MigrationStatusResult>;
 }
 
