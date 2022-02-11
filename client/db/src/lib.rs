@@ -1472,7 +1472,8 @@ impl<Block: BlockT> Backend<Block> {
 			}
 
 			if !existing_header {
-				{
+				// Add a new leaf if the block is outside the block gap.
+				if block_gap.map_or(true, |(start, _)| number != start) {
 					let mut leaves = self.blockchain.leaves.write();
 					leaves.import(hash, number, parent_hash);
 					leaves.prepare_transaction(
