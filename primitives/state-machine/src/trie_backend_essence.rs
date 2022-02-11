@@ -34,6 +34,7 @@ use sp_trie::{
 };
 #[cfg(feature = "std")]
 use std::{collections::HashMap, sync::Arc};
+use trie_db::TrieRecorder;
 
 // In this module, we only use layout for read operation and empty root,
 // where V1 and V0 are equivalent.
@@ -50,19 +51,6 @@ macro_rules! format {
 			crate::DefaultError
 		}
 	};
-}
-
-macro_rules! with_recorder {
-	( $builder:ident, $recorder:ident ) => {{
-		#[cfg(feature = "std")]
-		{
-			$builder.with_optional_recorder($recorder.as_deref_mut().map(|r| r as _))
-		}
-		#[cfg(not(feature = "std"))]
-		{
-			$builder
-		}
-	}};
 }
 
 type Result<V> = sp_std::result::Result<V, crate::DefaultError>;
@@ -165,6 +153,27 @@ where
 	pub fn into_storage(self) -> S {
 		self.storage
 	}
+
+	#[cfg(feature = "std")]
+	fn with_recorder<R>(
+		&self,
+		recorder: Option<&Recorder<H>>,
+		callback: impl FnOnce(Option<&mut dyn TrieRecorder<H::Out>>) -> R,
+	) -> R {
+		let mut recorder = recorder.as_ref().map(|r| r.as_trie_recorder());
+		let recorder = recorder.as_deref_mut().map(|r| r as _);
+
+		callback(recorder)
+	}
+
+	#[cfg(not(feature = "std"))]
+	fn with_recorder<R>(
+		&self,
+		_: Option<&Recorder<H>>,
+		callback: impl FnOnce(Option<&mut dyn TrieRecorder<H::Out>>) -> R,
+	) -> R {
+		callback(None)
+	}
 }
 
 impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H>
@@ -248,37 +257,37 @@ where
 			dyn_eph = self;
 		}
 
-		let trie_builder = TrieDBBuilder::<H>::new(dyn_eph, root)
-			.map_err(|e| format!("TrieDB creation error: {}", e))?;
+		self.with_recorder(recorder, |recorder| {
+			let trie = TrieDBBuilder::<H>::new(dyn_eph, root)
+				.map_err(|e| format!("TrieDB creation error: {}", e))?
+				.with_optional_recorder(recorder)
+				.build();
 
-		#[cfg(feature = "std")]
-		let mut recorder = recorder.as_ref().map(|r| r.as_trie_recorder());
+			let mut iter = trie.key_iter().map_err(|e| format!("TrieDB iteration error: {}", e))?;
 
-		let trie = with_recorder!(trie_builder, recorder).build();
-		let mut iter = trie.key_iter().map_err(|e| format!("TrieDB iteration error: {}", e))?;
+			// The key just after the one given in input, basically `key++0`.
+			// Note: We are sure this is the next key if:
+			// * size of key has no limit (i.e. we can always add 0 to the path),
+			// * and no keys can be inserted between `key` and `key++0` (this is ensured by sp-io).
+			let mut potential_next_key = Vec::with_capacity(key.len() + 1);
+			potential_next_key.extend_from_slice(key);
+			potential_next_key.push(0);
 
-		// The key just after the one given in input, basically `key++0`.
-		// Note: We are sure this is the next key if:
-		// * size of key has no limit (i.e. we can always add 0 to the path),
-		// * and no keys can be inserted between `key` and `key++0` (this is ensured by sp-io).
-		let mut potential_next_key = Vec::with_capacity(key.len() + 1);
-		potential_next_key.extend_from_slice(key);
-		potential_next_key.push(0);
+			iter.seek(&potential_next_key)
+				.map_err(|e| format!("TrieDB iterator seek error: {}", e))?;
 
-		iter.seek(&potential_next_key)
-			.map_err(|e| format!("TrieDB iterator seek error: {}", e))?;
+			let next_element = iter.next();
 
-		let next_element = iter.next();
+			let next_key = if let Some(next_element) = next_element {
+				let next_key =
+					next_element.map_err(|e| format!("TrieDB iterator next error: {}", e))?;
+				Some(next_key)
+			} else {
+				None
+			};
 
-		let next_key = if let Some(next_element) = next_element {
-			let next_key =
-				next_element.map_err(|e| format!("TrieDB iterator next error: {}", e))?;
-			Some(next_key)
-		} else {
-			None
-		};
-
-		Ok(next_key)
+			Ok(next_key)
+		})
 	}
 
 	/// Get the value of storage at given key.
@@ -289,33 +298,31 @@ where
 	) -> Result<Option<StorageValue>> {
 		let map_e = |e| format!("Trie lookup error: {}", e);
 
-		let trie_builder = TrieDBBuilder::<H>::new_unchecked(self, &self.root);
+		self.with_recorder(recorder, |recorder| {
+			let trie_builder = TrieDBBuilder::<H>::new_unchecked(self, &self.root)
+				.with_optional_recorder(recorder);
 
-		#[cfg(feature = "std")]
-		let mut recorder = recorder.as_ref().map(|r| r.as_trie_recorder());
+			#[cfg(feature = "std")]
+			match self.trie_node_cache {
+				Some(ref cache) => trie_builder
+					.with_cache(&mut cache.as_trie_db_cache(self.root))
+					.build()
+					.get(key)
+					.map_err(map_e),
+				None => trie_builder.build().get(key).map_err(map_e),
+			}
 
-		let trie_builder = with_recorder!(trie_builder, recorder);
+			#[cfg(not(feature = "std"))]
+			trie_builder.build().get(key).map_err(map_e)
 
-		#[cfg(feature = "std")]
-		match self.trie_node_cache {
-			Some(ref cache) => trie_builder
-				.with_cache(&mut cache.as_trie_db_cache(self.root))
-				.build()
-				.get(key)
-				.map_err(map_e),
-			None => trie_builder.build().get(key).map_err(map_e),
-		}
-
-		#[cfg(not(feature = "std"))]
-		trie_builder.build().get(key).map_err(map_e)
-
-		// match &self.trie_node_cache {
-		// 	Some(cache) =>
-		// 		TrieDB::<H>::new_with_cache_unchecked(self, &self.root, &mut cache.as_cache())
-		// 			.get(key)
-		// 			.map_err(map_e),
-		// 	None => TrieDB::<H>::new(self, &self.root).map_err(map_e)?.get(key).map_err(map_e),
-		// }
+			// match &self.trie_node_cache {
+			// 	Some(cache) =>
+			// 		TrieDB::<H>::new_with_cache_unchecked(self, &self.root, &mut cache.as_cache())
+			// 			.get(key)
+			// 			.map_err(map_e),
+			// 	None => TrieDB::<H>::new(self, &self.root).map_err(map_e)?.get(key).map_err(map_e),
+			// }
+		})
 	}
 
 	/// Get the value of child storage at given key.
@@ -450,33 +457,31 @@ where
 		recorder: Option<&Recorder<H>>,
 	) {
 		let mut iter = move |db| -> sp_std::result::Result<(), Box<TrieError<H::Out>>> {
-			let trie_builder = TrieDBBuilder::<H>::new(db, root)?;
+			self.with_recorder(recorder, |recorder| {
+				let trie =
+					TrieDBBuilder::<H>::new(db, root)?.with_optional_recorder(recorder).build();
 
-			#[cfg(feature = "std")]
-			let mut recorder = recorder.as_ref().map(|r| r.as_trie_recorder());
+				let iter = if let Some(prefix) = prefix.as_ref() {
+					TrieDBKeyIterator::new_prefixed(&trie, prefix)?
+				} else {
+					TrieDBKeyIterator::new(&trie)?
+				};
 
-			let trie = with_recorder!(trie_builder, recorder).build();
+				for x in iter {
+					let key = x?;
 
-			let iter = if let Some(prefix) = prefix.as_ref() {
-				TrieDBKeyIterator::new_prefixed(&trie, prefix)?
-			} else {
-				TrieDBKeyIterator::new(&trie)?
-			};
+					debug_assert!(prefix
+						.as_ref()
+						.map(|prefix| key.starts_with(prefix))
+						.unwrap_or(true));
 
-			for x in iter {
-				let key = x?;
-
-				debug_assert!(prefix
-					.as_ref()
-					.map(|prefix| key.starts_with(prefix))
-					.unwrap_or(true));
-
-				if !f(&key) {
-					break
+					if !f(&key) {
+						break
+					}
 				}
-			}
 
-			Ok(())
+				Ok(())
+			})
 		};
 
 		let result = if let Some(child_info) = child_info {
@@ -501,30 +506,28 @@ where
 		recorder: Option<&Recorder<H>>,
 	) -> Result<bool> {
 		let mut iter = move |db| -> sp_std::result::Result<bool, Box<TrieError<H::Out>>> {
-			let trie_builder = TrieDBBuilder::<H>::new(db, root)?;
+			self.with_recorder(recorder, |recorder| {
+				let trie =
+					TrieDBBuilder::<H>::new(db, root)?.with_optional_recorder(recorder).build();
 
-			#[cfg(feature = "std")]
-			let mut recorder = recorder.as_ref().map(|r| r.as_trie_recorder());
+				let prefix = prefix.unwrap_or(&[]);
+				let iterator = if let Some(start_at) = start_at {
+					TrieDBIterator::new_prefixed_then_seek(&trie, prefix, start_at)?
+				} else {
+					TrieDBIterator::new_prefixed(&trie, prefix)?
+				};
+				for x in iterator {
+					let (key, value) = x?;
 
-			let trie = with_recorder!(trie_builder, recorder).build();
+					debug_assert!(key.starts_with(prefix));
 
-			let prefix = prefix.unwrap_or(&[]);
-			let iterator = if let Some(start_at) = start_at {
-				TrieDBIterator::new_prefixed_then_seek(&trie, prefix, start_at)?
-			} else {
-				TrieDBIterator::new_prefixed(&trie, prefix)?
-			};
-			for x in iterator {
-				let (key, value) = x?;
-
-				debug_assert!(key.starts_with(prefix));
-
-				if !f(key, value) {
-					return Ok(false)
+					if !f(key, value) {
+						return Ok(false)
+					}
 				}
-			}
 
-			Ok(true)
+				Ok(true)
+			})
 		};
 
 		let result = if let Some(child_info) = child_info {
