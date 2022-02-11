@@ -46,13 +46,16 @@ pub use storage_proof::{CompactProof, StorageProof};
 /// for trie compact proof.
 pub use trie_codec::{decode_compact, encode_compact, Error as CompactProofError};
 pub use trie_db::proof::VerifyError;
-use trie_db::proof::{generate_proof, verify_proof};
 /// Various re-exports from the `trie-db` crate.
 pub use trie_db::{
 	nibble_ops,
 	node::{NodePlan, ValuePlan},
 	CError, DBValue, Query, Recorder, Trie, TrieConfiguration, TrieDBIterator, TrieDBKeyIterator,
 	TrieLayout, TrieMut,
+};
+use trie_db::{
+	proof::{generate_proof, verify_proof},
+	TrieRecorder,
 };
 /// The Substrate format implementation of `TrieStream`.
 pub use trie_stream::TrieStream;
@@ -257,6 +260,7 @@ pub fn delta_trie_root<L: TrieConfiguration, I, A, B, DB, V>(
 	db: &mut DB,
 	mut root: TrieHash<L>,
 	delta: I,
+	mut recorder: Option<&mut dyn trie_db::TrieRecorder<TrieHash<L>>>,
 ) -> Result<TrieHash<L>, Box<TrieError<L>>>
 where
 	I: IntoIterator<Item = (A, B)>,
@@ -266,7 +270,13 @@ where
 	DB: hash_db::HashDB<L::Hash, trie_db::DBValue>,
 {
 	{
-		let mut trie = TrieDBMutBuilder::<L>::from_existing(db, &mut root)?.build();
+		let trie_builder = TrieDBMutBuilder::<L>::from_existing(db, &mut root)?;
+
+		let mut trie = if let Some(ref mut recorder) = recorder {
+			trie_builder.with_recorder(*recorder).build()
+		} else {
+			trie_builder.build()
+		};
 
 		let mut delta = delta.into_iter().collect::<Vec<_>>();
 		delta.sort_by(|l, r| l.0.borrow().cmp(r.0.borrow()));
@@ -333,6 +343,7 @@ pub fn child_delta_trie_root<L: TrieConfiguration, I, A, B, DB, RD, V>(
 	db: &mut DB,
 	root_data: RD,
 	delta: I,
+	recorder: Option<&mut dyn TrieRecorder<TrieHash<L>>>,
 ) -> Result<<L::Hash as Hasher>::Out, Box<TrieError<L>>>
 where
 	I: IntoIterator<Item = (A, B)>,
@@ -347,7 +358,7 @@ where
 	root.as_mut().copy_from_slice(root_data.as_ref());
 
 	let mut db = KeySpacedDBMut::new(&mut *db, keyspace);
-	delta_trie_root::<L, _, _, _, _, _>(&mut db, root, delta)
+	delta_trie_root::<L, _, _, _, _, _>(&mut db, root, delta, recorder)
 }
 
 /// Read a value from the child trie.

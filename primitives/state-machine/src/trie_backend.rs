@@ -33,6 +33,7 @@ use sp_trie::{
 	trie_types::{TrieDBBuilder, TrieError},
 	LayoutV0, LayoutV1, Trie,
 };
+use trie_db::TrieRecorder;
 
 #[cfg(not(feature = "std"))]
 type Recorder<H> = sp_std::marker::PhantomData<H>;
@@ -107,6 +108,25 @@ where
 	/// Get trie root.
 	pub fn root(&self) -> &H::Out {
 		self.essence.root()
+	}
+
+	#[cfg(feature = "std")]
+	fn with_recorder<R>(
+		&self,
+		callback: impl FnOnce(Option<&mut dyn TrieRecorder<H::Out>>) -> R,
+	) -> R {
+		let mut recorder = self.recorder.as_ref().map(|r| r.as_trie_recorder());
+		let recorder = recorder.as_deref_mut().map(|v| v as _);
+
+		callback(recorder)
+	}
+
+	#[cfg(not(feature = "std"))]
+	fn with_recorder<R>(
+		&self,
+		callback: impl FnOnce(Option<&mut dyn TrieRecorder<H::Out>>) -> R,
+	) -> R {
+		callback(None)
 	}
 }
 
@@ -195,14 +215,23 @@ where
 
 	fn pairs(&self) -> Vec<(StorageKey, StorageValue)> {
 		let collect_all = || -> Result<_, Box<TrieError<H::Out>>> {
-			let trie = TrieDBBuilder::<H>::new(self.essence(), self.essence.root())?.build();
-			let mut v = Vec::new();
-			for x in trie.iter()? {
-				let (key, value) = x?;
-				v.push((key.to_vec(), value.to_vec()));
-			}
+			self.with_recorder(|recorder| {
+				let trie_builder = TrieDBBuilder::<H>::new(self.essence(), self.essence.root())?;
 
-			Ok(v)
+				let trie = if let Some(recorder) = recorder {
+					trie_builder.with_recorder(recorder).build()
+				} else {
+					trie_builder.build()
+				};
+
+				let mut v = Vec::new();
+				for x in trie.iter()? {
+					let (key, value) = x?;
+					v.push((key.to_vec(), value.to_vec()));
+				}
+
+				Ok(v)
+			})
 		};
 
 		match collect_all() {
@@ -216,16 +245,25 @@ where
 
 	fn keys(&self, prefix: &[u8]) -> Vec<StorageKey> {
 		let collect_all = || -> Result<_, Box<TrieError<H::Out>>> {
-			let trie = TrieDBBuilder::<H>::new(self.essence(), self.essence.root())?.build();
-			let mut v = Vec::new();
-			for x in trie.iter()? {
-				let (key, _) = x?;
-				if key.starts_with(prefix) {
-					v.push(key.to_vec());
-				}
-			}
+			self.with_recorder(|recorder| {
+				let trie_builder = TrieDBBuilder::<H>::new(self.essence(), self.essence.root())?;
 
-			Ok(v)
+				let trie = if let Some(recorder) = recorder {
+					trie_builder.with_recorder(recorder).build()
+				} else {
+					trie_builder.build()
+				};
+
+				let mut v = Vec::new();
+				for x in trie.iter()? {
+					let (key, _) = x?;
+					if key.starts_with(prefix) {
+						v.push(key.to_vec());
+					}
+				}
+
+				Ok(v)
+			})
 		};
 
 		collect_all()
@@ -244,20 +282,20 @@ where
 		let mut write_overlay = S::Overlay::default();
 		let mut root = *self.essence.root();
 
-		{
+		self.with_recorder(|recorder| {
 			let mut eph = Ephemeral::new(self.essence.backend_storage(), &mut write_overlay);
 			let res = match state_version {
 				StateVersion::V0 =>
-					delta_trie_root::<LayoutV0<H>, _, _, _, _, _>(&mut eph, root, delta),
+					delta_trie_root::<LayoutV0<H>, _, _, _, _, _>(&mut eph, root, delta, recorder),
 				StateVersion::V1 =>
-					delta_trie_root::<LayoutV1<H>, _, _, _, _, _>(&mut eph, root, delta),
+					delta_trie_root::<LayoutV1<H>, _, _, _, _, _>(&mut eph, root, delta, recorder),
 			};
 
 			match res {
 				Ok(ret) => root = ret,
 				Err(e) => warn!(target: "trie", "Failed to write to trie: {}", e),
 			}
-		}
+		});
 
 		(root, write_overlay)
 	}
@@ -287,6 +325,13 @@ where
 		};
 
 		{
+			#[cfg(feature = "std")]
+			let mut recorder = self.recorder.as_ref().map(|r| r.as_trie_recorder());
+			#[cfg(feature = "std")]
+			let recorder = recorder.as_deref_mut().map(|v| v as _);
+			#[cfg(not(feature = "std"))]
+			let recorder = None;
+
 			let mut eph = Ephemeral::new(self.essence.backend_storage(), &mut write_overlay);
 			match match state_version {
 				StateVersion::V0 => child_delta_trie_root::<LayoutV0<H>, _, _, _, _, _, _>(
@@ -294,12 +339,14 @@ where
 					&mut eph,
 					root,
 					delta,
+					recorder,
 				),
 				StateVersion::V1 => child_delta_trie_root::<LayoutV1<H>, _, _, _, _, _, _>(
 					child_info.keyspace(),
 					&mut eph,
 					root,
 					delta,
+					recorder,
 				),
 			} {
 				Ok(ret) => root = ret,
