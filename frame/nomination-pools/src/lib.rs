@@ -258,7 +258,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 // TODO
-// - test nominate
 // - checks for number of pools when creating pools (param for max pools, pool creation origin)
 // - post checks that rewardpool::count == bondedpool::count. delegators >= bondedpool::count,
 //   subpools::count <= bondedpools
@@ -746,6 +745,19 @@ pub mod pallet {
 		type PostUnbondingPoolsWindow: Get<u32>;
 	}
 
+	/// Minimum amount to bond to join a pool.
+	#[pallet::storage]
+	pub(crate) type MinJoinBond<T: Config> = StorageValue<_, BalanceOf<T>, ValueQuery>;
+
+	/// Minimum bond required to create a pool.
+	#[pallet::storage]
+	pub(crate) type MinCreateBond<T: Config> = StorageValue<_, BalanceOf<T>, ValueQuery>;
+
+	/// Maximum number of nomination pools that can exist. If `None`, then an unbounded number of
+	/// pools can exist.
+	#[pallet::storage]
+	pub(crate) type MaxPools<T: Config> = StorageValue<_, u32, OptionQuery>;
+
 	/// Active delegators.
 	#[pallet::storage]
 	pub(crate) type Delegators<T: Config> =
@@ -768,6 +780,25 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(crate) type SubPoolsStorage<T: Config> =
 		CountedStorageMap<_, Twox64Concat, T::AccountId, SubPools<T>>;
+
+	#[pallet::genesis_config]
+	#[cfg_attr(feature = "std", derive(DefaultNoBound))]
+	pub struct GenesisConfig<T: Config> {
+		pub min_join_bond: BalanceOf<T>,
+		pub min_create_bond: BalanceOf<T>,
+		pub max_pools: Option<u32>,
+	}
+
+	#[pallet::genesis_build]
+	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
+		fn build(&self) {
+			MinJoinBond::<T>::put(self.min_join_bond);
+			MinCreateBond::<T>::put(self.min_create_bond);
+			if let Some(max_pools) = self.max_pools {
+				MaxPools::<T>::put(max_pools);
+			}
+		}
+	}
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(crate) fn deposit_event)]
@@ -801,7 +832,7 @@ pub mod pallet {
 		NotUnbonding,
 		/// Unbonded funds cannot be withdrawn yet because the bond duration has not passed.
 		NotUnbondedYet,
-		/// The amount does not meet the minimum bond to start nominating.
+		/// The amount does not meet the minimum bond to either join or create a pool.
 		MinimumBondNotMet,
 		/// The transaction could not be executed due to overflow risk for the pool.
 		OverflowRisk,
@@ -822,6 +853,8 @@ pub mod pallet {
 		NotKickerOrDestroying,
 		/// The pool is not open to join
 		NotOpen,
+		/// The system is maxed out on pools.
+		MaxPools,
 	}
 
 	#[pallet::call]
@@ -841,6 +874,7 @@ pub mod pallet {
 			pool_account: T::AccountId,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
+			ensure!(amount >= MinJoinBond::<T>::get(), Error::<T>::MinimumBondNotMet);
 			// If a delegator already exists that means they already belong to a pool
 			ensure!(!Delegators::<T>::contains_key(&who), Error::<T>::AccountBelongsToOtherPool);
 
@@ -1116,10 +1150,14 @@ pub mod pallet {
 			state_toggler: T::AccountId,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			// TODO: this should be min some deposit
-			// TODO: have an integrity test that min deposit is at least min bond (make min deposit
-			// storage item so it can be increased)
-			ensure!(amount >= T::StakingInterface::minimum_bond(), Error::<T>::MinimumBondNotMet);
+			ensure!(
+				amount >= T::StakingInterface::minimum_bond() &&
+					amount >= MinCreateBond::<T>::get(),
+				Error::<T>::MinimumBondNotMet
+			);
+			if let Some(max_pools) = MaxPools::<T>::get() {
+				ensure!(BondedPools::<T>::count() as u32 <= max_pools, Error::<T>::MaxPools);
+			}
 			ensure!(!Delegators::<T>::contains_key(&who), Error::<T>::AccountBelongsToOtherPool);
 
 			let (pool_account, reward_account) = Self::create_accounts(index);

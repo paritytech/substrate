@@ -17,6 +17,7 @@ parameter_types! {
 	static UnbondingBalanceMap: std::collections::HashMap<AccountId, Balance> = Default::default();
 	pub static BondingDuration: EraIndex = 3;
 	pub static Nominations: Vec<AccountId> = vec![];
+	pub static MaxPools: u32 = 3;
 }
 
 pub struct StakingMock;
@@ -181,7 +182,15 @@ impl ExtBuilder {
 
 	pub(crate) fn build(self) -> sp_io::TestExternalities {
 		sp_tracing::try_init_simple();
-		let storage = frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
+		let mut storage =
+			frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
+
+		let _ = crate::GenesisConfig::<Runtime> {
+			min_join_bond: 2,
+			min_create_bond: 2,
+			max_pools: Some(2),
+		}
+		.assimilate_storage(&mut storage);
 
 		let mut ext = sp_io::TestExternalities::from(storage);
 
