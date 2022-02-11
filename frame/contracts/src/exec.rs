@@ -18,6 +18,7 @@
 use crate::{
 	gas::GasMeter,
 	storage::{self, Storage, WriteOutcome},
+	wasm::{decrement_refcount, increment_refcount},
 	AccountCounter, BalanceOf, CodeHash, Config, ContractInfo, ContractInfoOf, Error, Event,
 	Pallet as Contracts, Schedule,
 };
@@ -239,6 +240,9 @@ pub trait Ext: sealing::Sealed {
 	/// Tests sometimes need to modify and inspect the contract info directly.
 	#[cfg(test)]
 	fn contract_info(&mut self) -> &mut ContractInfo<Self::T>;
+
+	/// Sets new code hash for existing contract.
+	fn set_code_hash(&mut self, hash: CodeHash<Self::T>) -> Result<(), DispatchError>;
 }
 
 /// Describes the different functions that can be exported by an [`Executable`].
@@ -1181,6 +1185,20 @@ where
 	#[cfg(test)]
 	fn contract_info(&mut self) -> &mut ContractInfo<Self::T> {
 		self.top_frame_mut().contract_info()
+	}
+
+	fn set_code_hash(&mut self, hash: CodeHash<Self::T>) -> Result<(), DispatchError> {
+		increment_refcount::<Self::T>(hash)?;
+		let top_frame = self.top_frame_mut();
+		let prev_hash = top_frame.contract_info().code_hash.clone();
+		decrement_refcount::<Self::T>(prev_hash.clone())?;
+		top_frame.contract_info().code_hash = hash;
+		Contracts::<Self::T>::deposit_event(Event::ContractCodeUpdated {
+			contract: top_frame.account_id.clone(),
+			new_code_hash: hash,
+			old_code_hash: prev_hash,
+		});
+		Ok(())
 	}
 }
 
