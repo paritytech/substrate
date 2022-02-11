@@ -1501,11 +1501,9 @@ where
 			.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))
 	}
 
-	fn state_migration_status(
-		&self,
-		id: &BlockId<Block>,
-	) -> sp_blockchain::Result<(u64, u64)> {
-		self.state_at(id)?.migration_status()
+	fn state_migration_status(&self, id: &BlockId<Block>) -> sp_blockchain::Result<(u64, u64)> {
+		self.state_at(id)?
+			.migration_status()
 			.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))
 	}
 }

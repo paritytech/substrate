@@ -432,10 +432,7 @@ pub trait StorageProvider<Block: BlockT, B: Backend<Block>> {
 	/// Given a `BlockId` check trie state of all key.
 	/// Return number on unmigrated key for the top state and number
 	/// of unmigrated keys for all child states.
-	fn state_migration_status(
-		&self,
-		id: &BlockId<Block>,
-	) -> sp_blockchain::Result<(u64, u64)>;
+	fn state_migration_status(&self, id: &BlockId<Block>) -> sp_blockchain::Result<(u64, u64)>;
 }
 
 /// Client backend.
