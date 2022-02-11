@@ -460,6 +460,15 @@ mod join {
 				Pools::join(Origin::signed(11), 10, PRIMARY_ACCOUNT),
 				Error::<Runtime>::NotOpen
 			);
+
+			// Given
+			MinJoinBond::<Runtime>::put(100);
+
+			// Then
+			assert_noop!(
+				Pools::join(Origin::signed(11), 99, 123),
+				Error::<Runtime>::MinimumBondNotMet
+			);
 		});
 	}
 
@@ -1984,9 +1993,41 @@ mod create {
 				Error::<Runtime>::IdInUse
 			);
 
+			// Given
+			assert_eq!(MinCreateBond::<Runtime>::get(), 2);
+			assert_eq!(StakingMock::minimum_bond(), 10);
+
+			// Then
 			assert_noop!(
-				Pools::create(Origin::signed(11), 1, 42, 123, 456, 789),
+				Pools::create(Origin::signed(11), 9, 42, 123, 456, 789),
 				Error::<Runtime>::MinimumBondNotMet
+			);
+
+			// Given
+			MinCreateBond::<Runtime>::put(20);
+
+			// Then
+			assert_noop!(
+				Pools::create(Origin::signed(11), 19, 42, 123, 456, 789),
+				Error::<Runtime>::MinimumBondNotMet
+			);
+
+			BondedPool::<Runtime> {
+				depositor: 10,
+				state: PoolState::Open,
+				points: 10,
+				account: 123,
+				root: 900,
+				nominator: 901,
+				state_toggler: 902,
+			}
+			.put();
+			assert_eq!(MaxPools::<Runtime>::get(), Some(2));
+			assert_eq!(BondedPools::<Runtime>::count(), 2);
+
+			assert_noop!(
+				Pools::create(Origin::signed(11), 20, 42, 123, 456, 789),
+				Error::<Runtime>::MaxPools
 			);
 		});
 	}

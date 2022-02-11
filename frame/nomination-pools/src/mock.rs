@@ -17,7 +17,6 @@ parameter_types! {
 	static UnbondingBalanceMap: std::collections::HashMap<AccountId, Balance> = Default::default();
 	pub static BondingDuration: EraIndex = 3;
 	pub static Nominations: Vec<AccountId> = vec![];
-	pub static MaxPools: u32 = 3;
 }
 
 pub struct StakingMock;

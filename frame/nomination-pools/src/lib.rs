@@ -1156,7 +1156,7 @@ pub mod pallet {
 				Error::<T>::MinimumBondNotMet
 			);
 			if let Some(max_pools) = MaxPools::<T>::get() {
-				ensure!(BondedPools::<T>::count() as u32 <= max_pools, Error::<T>::MaxPools);
+				ensure!((BondedPools::<T>::count() as u32) < max_pools, Error::<T>::MaxPools);
 			}
 			ensure!(!Delegators::<T>::contains_key(&who), Error::<T>::AccountBelongsToOtherPool);
 
