@@ -25,11 +25,8 @@ mod prepare;
 mod runtime;
 
 #[cfg(feature = "runtime-benchmarks")]
-pub use self::code_cache::reinstrument;
-pub use self::{
-	code_cache::{decrement_refcount, increment_refcount},
-	runtime::{CallFlags, ReturnCode, Runtime, RuntimeCosts},
-};
+pub use crate::wasm::code_cache::reinstrument;
+pub use crate::wasm::runtime::{CallFlags, ReturnCode, Runtime, RuntimeCosts};
 use crate::{
 	exec::{ExecResult, Executable, ExportedFunction, Ext},
 	gas::GasMeter,
@@ -199,6 +196,10 @@ where
 		gas_meter: &mut GasMeter<T>,
 	) -> Result<Self, DispatchError> {
 		code_cache::load(code_hash, schedule, gas_meter)
+	}
+
+	fn add_user(code_hash: CodeHash<T>) -> Result<(), DispatchError> {
+		code_cache::increment_refcount::<T>(code_hash)
 	}
 
 	fn remove_user(code_hash: CodeHash<T>) {

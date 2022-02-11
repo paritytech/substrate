@@ -18,7 +18,6 @@
 use crate::{
 	gas::GasMeter,
 	storage::{self, Storage, WriteOutcome},
-	wasm::{decrement_refcount, increment_refcount},
 	AccountCounter, BalanceOf, CodeHash, Config, ContractInfo, ContractInfoOf, Error, Event,
 	Pallet as Contracts, Schedule,
 };
@@ -256,6 +255,15 @@ pub trait Executable<T: Config>: Sized {
 		schedule: &Schedule<T>,
 		gas_meter: &mut GasMeter<T>,
 	) -> Result<Self, DispatchError>;
+
+	/// Increment the refcount of a code in-storage by one.
+	///
+	/// This is needed when the code is not set via instantiate but `seal_set_code_hash`.
+	///
+	/// # Errors
+	///
+	/// [`Error::CodeNotFound`] is returned if the specified `code_hash` does not exist.
+	fn add_user(code_hash: CodeHash<T>) -> Result<(), DispatchError>;
 
 	/// Decrement the refcount by one if the code exists.
 	fn remove_user(code_hash: CodeHash<T>);
@@ -1172,10 +1180,10 @@ where
 	}
 
 	fn set_code_hash(&mut self, hash: CodeHash<Self::T>) -> Result<(), DispatchError> {
-		increment_refcount::<Self::T>(hash)?;
+		E::add_user(hash)?;
 		let top_frame = self.top_frame_mut();
 		let prev_hash = top_frame.contract_info().code_hash.clone();
-		decrement_refcount::<Self::T>(prev_hash.clone());
+		E::remove_user(prev_hash.clone());
 		top_frame.contract_info().code_hash = hash;
 		Contracts::<Self::T>::deposit_event(Event::ContractCodeUpdated {
 			contract: top_frame.account_id.clone(),
@@ -1233,7 +1241,11 @@ mod tests {
 	use pretty_assertions::assert_eq;
 	use sp_core::Bytes;
 	use sp_runtime::{traits::Hash, DispatchError};
-	use std::{cell::RefCell, collections::HashMap, rc::Rc};
+	use std::{
+		cell::RefCell,
+		collections::hash_map::{Entry, HashMap},
+		rc::Rc,
+	};
 
 	type System = frame_system::Pallet<Test>;
 
@@ -1295,15 +1307,15 @@ mod tests {
 			})
 		}
 
-		fn increment_refcount(code_hash: CodeHash<Test>) {
+		fn increment_refcount(code_hash: CodeHash<Test>) -> Result<(), DispatchError> {
 			LOADER.with(|loader| {
 				let mut loader = loader.borrow_mut();
-				loader
-					.map
-					.entry(code_hash)
-					.and_modify(|executable| executable.refcount += 1)
-					.or_insert_with(|| panic!("code_hash does not exist"));
-			});
+				match loader.map.entry(code_hash) {
+					Entry::Vacant(_) => Err(<Error<Test>>::CodeNotFound)?,
+					Entry::Occupied(mut entry) => entry.get_mut().refcount += 1,
+				}
+				Ok(())
+			})
 		}
 
 		fn decrement_refcount(code_hash: CodeHash<Test>) {
@@ -1337,6 +1349,10 @@ mod tests {
 					.cloned()
 					.ok_or(Error::<Test>::CodeNotFound.into())
 			})
+		}
+
+		fn add_user(code_hash: CodeHash<Test>) -> Result<(), DispatchError> {
+			MockLoader::increment_refcount(code_hash)
 		}
 
 		fn remove_user(code_hash: CodeHash<Test>) {
