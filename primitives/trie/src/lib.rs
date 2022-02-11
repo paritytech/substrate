@@ -363,6 +363,7 @@ pub fn read_child_trie_value<L: TrieConfiguration, DB>(
 	db: &DB,
 	root_slice: &[u8],
 	key: &[u8],
+	recorder: Option<&mut dyn TrieRecorder<TrieHash<L>>>,
 ) -> Result<Option<Vec<u8>>, Box<TrieError<L>>>
 where
 	DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue>,
@@ -373,6 +374,7 @@ where
 
 	let db = KeySpacedDB::new(&*db, keyspace);
 	TrieDBBuilder::<L>::new(&db, &root)?
+		.with_optional_recorder(recorder)
 		.build()
 		.get(key)
 		.map(|x| x.map(|val| val.to_vec()))

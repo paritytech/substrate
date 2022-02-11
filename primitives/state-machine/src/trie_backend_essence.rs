@@ -333,13 +333,15 @@ where
 		recorder: Option<&Recorder<H>>,
 	) -> Result<Option<StorageValue>> {
 		let root = self
-			.child_root(child_info, recorder)?
+			.child_root(child_info, recorder.clone())?
 			.unwrap_or_else(|| empty_child_trie_root::<Layout<H>>().encode());
 
 		let map_e = |e| format!("Trie lookup error: {}", e);
 
-		read_child_trie_value::<Layout<H>, _>(child_info.keyspace(), self, &root, key)
-			.map_err(map_e)
+		self.with_recorder(recorder, |recorder| {
+			read_child_trie_value::<Layout<H>, _>(child_info.keyspace(), self, &root, key, recorder)
+				.map_err(map_e)
+		})
 	}
 
 	/// Retrieve all entries keys of storage and call `f` for each of those keys.
@@ -639,6 +641,14 @@ pub trait TrieBackendStorage<H: Hasher>: Send + Sync {
 
 	/// Get the value stored at key.
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>>;
+}
+
+impl<T: TrieBackendStorage<H>, H: Hasher> TrieBackendStorage<H> for &T {
+	type Overlay = T::Overlay;
+
+	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>> {
+		(*self).get(key, prefix)
+	}
 }
 
 // This implementation is used by normal storage trie clients.

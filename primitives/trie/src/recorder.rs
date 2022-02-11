@@ -56,13 +56,10 @@ impl<H: Hasher> Recorder<H> {
 		let mut recorder = mem::take(&mut *self.inner.lock());
 		let accessed_keys = mem::take(&mut recorder.accessed_keys);
 
-		let builder = TrieDBBuilder::<L>::new(hash_db, root)?.with_recorder(&mut recorder);
-
-		let trie = if let Some(cache) = cache {
-			builder.with_cache(cache).build()
-		} else {
-			builder.build()
-		};
+		let trie = TrieDBBuilder::<L>::new(hash_db, root)?
+			.with_recorder(&mut recorder)
+			.with_optional_cache(cache.map(|c| c as _))
+			.build();
 
 		accessed_keys.iter().try_for_each(|k| trie.traverse_to(&k))?;
 
