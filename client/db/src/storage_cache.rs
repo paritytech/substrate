@@ -721,6 +721,10 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Cachin
 		info.include_state_machine_states(&self.overlay_stats);
 		info
 	}
+
+	fn migration_status(&self) -> Result<(u64, u64), Self::Error> {
+		self.state.migration_status()
+	}
 }
 
 /// Extended [`CachingState`] that will sync the caches on drop.
@@ -921,6 +925,10 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>>
 
 	fn usage_info(&self) -> sp_state_machine::UsageInfo {
 		self.caching_state().usage_info()
+	}
+
+	fn migration_status(&self) -> Result<(u64, u64), Self::Error> {
+		self.caching_state().migration_status()
 	}
 }
 

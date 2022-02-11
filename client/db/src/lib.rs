@@ -280,6 +280,10 @@ impl<B: BlockT> StateBackend<HashFor<B>> for RefTrackingState<B> {
 	fn usage_info(&self) -> StateUsageInfo {
 		self.state.usage_info()
 	}
+
+	fn migration_status(&self) -> Result<(u64, u64), Self::Error> {
+		self.state.migration_status()
+	}
 }
 
 /// Database settings.

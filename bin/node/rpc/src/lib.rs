@@ -102,6 +102,7 @@ pub fn create_full<C, P, SC, B>(
 ) -> Result<jsonrpc_core::IoHandler<sc_rpc_api::Metadata>, Box<dyn std::error::Error + Send + Sync>>
 where
 	C: ProvideRuntimeApi<Block>
+		+ sc_client_api::StorageProvider<Block, B>
 		+ HeaderBackend<Block>
 		+ AuxStore
 		+ HeaderMetadata<Block, Error = BlockChainError>
@@ -112,6 +113,7 @@ where
 	C::Api: pallet_contracts_rpc::ContractsRuntimeApi<Block, AccountId, Balance, BlockNumber, Hash>,
 	C::Api: pallet_mmr_rpc::MmrRuntimeApi<Block, <Block as sp_runtime::traits::Block>::Hash>,
 	C::Api: pallet_transaction_payment_rpc::TransactionPaymentRuntimeApi<Block, Balance>,
+	C::Api: pallet_state_trie_migration_rpc::StateMigrationApi<<Block as sp_runtime::traits::Block>::Hash>,
 	C::Api: BabeApi<Block>,
 	C::Api: BlockBuilder<Block>,
 	P: TransactionPool + 'static,
@@ -158,6 +160,10 @@ where
 		subscription_executor,
 		finality_provider,
 	)));
+
+	io.extend_with(pallet_state_trie_migration_rpc::StateMigrationApi::to_delegate(
+		pallet_state_trie_migration_rpc::MigrationRpc::new(client.clone())
+	));
 
 	io.extend_with(sc_sync_state_rpc::SyncStateRpcApi::to_delegate(
 		sc_sync_state_rpc::SyncStateRpcHandler::new(

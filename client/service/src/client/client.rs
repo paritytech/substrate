@@ -1500,6 +1500,14 @@ where
 			.child_storage_hash(child_info, &key.0)
 			.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))
 	}
+
+	fn state_migration_status(
+		&self,
+		id: &BlockId<Block>,
+	) -> sp_blockchain::Result<(u64, u64)> {
+		self.state_at(id)?.migration_status()
+			.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))
+	}
 }
 
 impl<B, E, Block, RA> HeaderMetadata<Block> for Client<B, E, Block, RA>

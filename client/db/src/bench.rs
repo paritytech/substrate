@@ -627,6 +627,10 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 			}
 		})
 	}
+
+	fn migration_status(&self) -> Result<(u64, u64), Self::Error> {
+		unimplemented!()
+	}
 }
 
 impl<Block: BlockT> std::fmt::Debug for BenchmarkingState<Block> {

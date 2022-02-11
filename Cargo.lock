@@ -4821,6 +4821,7 @@ dependencies = [
  "node-primitives",
  "pallet-contracts-rpc",
  "pallet-mmr-rpc",
+ "pallet-state-trie-migration-rpc",
  "pallet-transaction-payment-rpc",
  "sc-chain-spec",
  "sc-client-api",
@@ -6328,6 +6329,20 @@ dependencies = [
  "thousands",
  "tokio",
  "zstd",
+]
+
+[[package]]
+name = "pallet-state-trie-migration-rpc"
+version = "4.0.0-dev"
+dependencies = [
+ "jsonrpc-core",
+ "jsonrpc-core-client",
+ "jsonrpc-derive",
+ "parity-scale-codec",
+ "sc-client-api",
+ "serde",
+ "serde_json",
+ "sp-runtime",
 ]
 
 [[package]]

@@ -117,6 +117,8 @@ members = [
 	"frame/staking",
 	"frame/staking/reward-curve",
 	"frame/staking/reward-fn",
+	"frame/state-trie-migration",
+	"frame/state-trie-migration/rpc",
 	"frame/sudo",
 	"frame/support",
 	"frame/support/procedural",
