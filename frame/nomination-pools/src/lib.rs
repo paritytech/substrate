@@ -271,7 +271,7 @@ use sp_staking::{EraIndex, PoolsInterface, SlashPoolArgs, SlashPoolOut, StakingI
 use sp_std::{collections::btree_map::BTreeMap, ops::Div};
 
 #[cfg(feature = "runtime-benchmarks")]
-mod benchmarks;
+pub mod benchmarking;
 
 #[cfg(test)]
 mod mock;

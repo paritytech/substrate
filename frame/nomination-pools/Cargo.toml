@@ -46,6 +46,9 @@ std = [
 	"sp-arithmetic/std",
 ]
 runtime-benchmarks = [
-	"frame-benchmarking/runtime-benchmarks",
+	"frame-benchmarking",
+	"frame-support/runtime-benchmarks",
+	"frame-system/runtime-benchmarks",
+	"sp-runtime/runtime-benchmarks",
 	"pallet-balances",
 ]
