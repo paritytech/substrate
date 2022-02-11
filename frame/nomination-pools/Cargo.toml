@@ -28,6 +28,10 @@ sp-core = { version = "5.0.0", default-features = false, path = "../../primitive
 # third party
 log = { version = "0.4.14", default-features = false }
 
+# Optional imports for benchmarking
+frame-benchmarking = { version = "4.0.0-dev", path = "../benchmarking", optional = true, default-features = false }
+pallet-balances = { version = "4.0.0-dev", path = "../balances", optional = true, default-features = false }
+
 [dev-dependencies]
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 sp-io = { version = "5.0.0", path = "../../primitives/io"}
@@ -40,4 +44,8 @@ std = [
 	"frame-support/std",
 	"frame-system/std",
 	"sp-arithmetic/std",
+]
+runtime-benchmarks = [
+	"frame-benchmarking/runtime-benchmarks",
+	"pallet-balances",
 ]

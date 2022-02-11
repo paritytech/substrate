@@ -146,6 +146,7 @@ parameter_types! {
 
 impl pools::Config for Runtime {
 	type Event = Event;
+	type WeightInfo = ();
 	type Currency = Balances;
 	type BalanceToU256 = BalanceToU256;
 	type U256ToBalance = U256ToBalance;

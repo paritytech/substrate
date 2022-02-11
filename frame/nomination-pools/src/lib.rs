@@ -270,12 +270,17 @@ use sp_runtime::traits::{Bounded, Convert, Saturating, StaticLookup, TrailingZer
 use sp_staking::{EraIndex, PoolsInterface, SlashPoolArgs, SlashPoolOut, StakingInterface};
 use sp_std::{collections::btree_map::BTreeMap, ops::Div};
 
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarks;
+
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
 mod tests;
+pub mod weights;
 
 pub use pallet::*;
+pub use weights::WeightInfo;
 
 type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
@@ -714,7 +719,7 @@ pub mod pallet {
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
 		/// Weight information for extrinsics in this pallet.
-		// type WeightInfo: weights::WeightInfo;
+		type WeightInfo: weights::WeightInfo;
 
 		/// The nominating balance.
 		type Currency: Currency<Self::AccountId>;
@@ -923,7 +928,7 @@ pub mod pallet {
 		/// time claiming rewards).
 		///
 		/// Note that the payout will go to the delegator's account.
-		#[pallet::weight(666)]
+		#[pallet::weight(T::WeightInfo::claim_payout())]
 		pub fn claim_payout(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let delegator = Delegators::<T>::get(&who).ok_or(Error::<T>::DelegatorNotFound)?;

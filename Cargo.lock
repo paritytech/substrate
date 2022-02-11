@@ -6040,6 +6040,7 @@ dependencies = [
 name = "pallet-nomination-pools"
 version = "0.0.1"
 dependencies = [
+ "frame-benchmarking",
  "frame-support",
  "frame-system",
  "log 0.4.14",
