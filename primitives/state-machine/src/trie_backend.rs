@@ -25,7 +25,7 @@ use crate::{
 use codec::{Codec, Decode};
 use hash_db::{HashDBRef, Hasher, EMPTY_PREFIX};
 use sp_core::storage::{ChildInfo, ChildType, StateVersion};
-use sp_std::{boxed::Box, ops::Deref, vec::Vec};
+use sp_std::{boxed::Box, vec::Vec};
 #[cfg(feature = "std")]
 use sp_trie::recorder::Recorder;
 use sp_trie::{
@@ -38,51 +38,29 @@ use trie_db::TrieRecorder;
 #[cfg(not(feature = "std"))]
 type Recorder<H> = sp_std::marker::PhantomData<H>;
 
-pub(crate) enum RefOrOwned<'a, S: TrieBackendStorage<H>, H: Hasher> {
-	Ref(&'a TrieBackendEssence<S, H>),
-	Owned(TrieBackendEssence<S, H>),
-}
-
-impl<'a, S: TrieBackendStorage<H>, H: Hasher> Deref for RefOrOwned<'a, S, H> {
-	type Target = TrieBackendEssence<S, H>;
-
-	fn deref(&self) -> &Self::Target {
-		match self {
-			Self::Ref(backend) => backend,
-			Self::Owned(backend) => &backend,
-		}
-	}
-}
-
 /// Patricia trie-based backend. Transaction type is an overlay of changes to commit.
-pub struct TrieBackend<'a, S: TrieBackendStorage<H>, H: Hasher> {
-	pub(crate) essence: RefOrOwned<'a, S, H>,
+pub struct TrieBackend<S: TrieBackendStorage<H>, H: Hasher> {
+	pub(crate) essence: TrieBackendEssence<S, H>,
 	pub(crate) recorder: Option<Recorder<H>>,
 }
 
-impl<'a, S: TrieBackendStorage<H>, H: Hasher> TrieBackend<'a, S, H>
+impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackend<S, H>
 where
 	H::Out: Codec,
 {
 	/// Create new trie-based backend.
 	pub fn new(storage: S, root: H::Out) -> Self {
-		TrieBackend {
-			essence: RefOrOwned::Owned(TrieBackendEssence::new(storage, root)),
-			recorder: None,
-		}
+		TrieBackend { essence: TrieBackendEssence::new(storage, root), recorder: None }
 	}
 
 	/// Create new trie-based backend.
 	#[cfg(feature = "std")]
-	pub fn new_with_recorder(
+	pub fn new_with_recorder<'a>(
 		backend: &'a Self,
 		recorder: Recorder<H>,
-	) -> TrieBackend<'a, impl TrieBackendStorage<H> + 'a, H> {
+	) -> TrieBackend<&'a S, H> {
 		TrieBackend {
-			essence: RefOrOwned::Owned(TrieBackendEssence::new(
-				backend.backend_storage(),
-				*backend.root(),
-			)),
+			essence: TrieBackendEssence::new(backend.backend_storage(), *backend.root()),
 			recorder: Some(recorder),
 		}
 	}
@@ -95,15 +73,18 @@ where
 		cache: sp_trie::cache::LocalTrieNodeCache<H>,
 	) -> Self {
 		TrieBackend {
-			essence: RefOrOwned::Owned(TrieBackendEssence::new_with_cache(storage, root, cache)),
+			essence: TrieBackendEssence::new_with_cache(storage, root, cache),
 			recorder: None,
 		}
 	}
 
 	/// Create new trie-based backend.
 	#[cfg(feature = "std")]
-	pub fn wrap_with_recorder(other: &'a Self, recorder: Recorder<H>) -> Self {
-		TrieBackend { essence: RefOrOwned::Ref(other.essence()), recorder: Some(recorder) }
+	pub fn wrap_with_recorder<'a>(other: &'a Self, recorder: Recorder<H>) -> TrieBackend<&'a S, H> {
+		TrieBackend {
+			essence: TrieBackendEssence::new(other.backend_storage(), *other.root()),
+			recorder: Some(recorder),
+		}
 	}
 
 	/// Get backend essence reference.
@@ -119,6 +100,11 @@ where
 	/// Get trie root.
 	pub fn root(&self) -> &H::Out {
 		self.essence.root()
+	}
+
+	/// Consumes self and returns underlying storage.
+	pub fn into_storage(self) -> S {
+		self.essence.into_storage()
 	}
 
 	pub fn extract_proof(mut self) -> Result<Option<StorageProof>, crate::DefaultError> {
@@ -152,13 +138,13 @@ where
 	}
 }
 
-impl<'a, S: TrieBackendStorage<H>, H: Hasher> sp_std::fmt::Debug for TrieBackend<'a, S, H> {
+impl<S: TrieBackendStorage<H>, H: Hasher> sp_std::fmt::Debug for TrieBackend<S, H> {
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
 		write!(f, "TrieBackend")
 	}
 }
 
-impl<'b, S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<'b, S, H>
+impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H>
 where
 	H::Out: Ord + Codec,
 {
@@ -387,7 +373,7 @@ where
 pub fn create_proof_check_backend<H>(
 	root: H::Out,
 	proof: StorageProof,
-) -> Result<TrieBackend<'static, MemoryDB<H>, H>, Box<dyn crate::Error>>
+) -> Result<TrieBackend<MemoryDB<H>, H>, Box<dyn crate::Error>>
 where
 	H: Hasher,
 	H::Out: Codec,
@@ -475,7 +461,7 @@ pub mod tests {
 
 	pub(crate) fn test_trie(
 		hashed_value: StateVersion,
-	) -> TrieBackend<'static, PrefixedMemoryDB<BlakeTwo256>, BlakeTwo256> {
+	) -> TrieBackend<PrefixedMemoryDB<BlakeTwo256>, BlakeTwo256> {
 		let (mdb, root) = test_db(hashed_value);
 		TrieBackend::new(mdb, root)
 	}

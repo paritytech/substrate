@@ -18,7 +18,7 @@
 //! State machine in memory backend.
 
 use crate::{
-	backend::Backend, trie_backend::{TrieBackend, RefOrOwned}, StorageCollection, StorageKey, StorageValue,
+	backend::Backend, trie_backend::TrieBackend, StorageCollection, StorageKey, StorageValue,
 };
 use codec::Codec;
 use hash_db::Hasher;
@@ -27,9 +27,9 @@ use sp_trie::{empty_trie_root, LayoutV1, MemoryDB};
 use std::collections::{BTreeMap, HashMap};
 
 /// Create a new empty instance of in-memory backend.
-pub fn new_in_mem<H>() -> TrieBackend<'static, MemoryDB<H>, H>
+pub fn new_in_mem<H>() -> TrieBackend<MemoryDB<H>, H>
 where
-	H: Hasher + 'static,
+	H: Hasher,
 	H::Out: Codec + Ord,
 {
 	let db = MemoryDB::default();
@@ -37,7 +37,7 @@ where
 	TrieBackend::new(db, empty_trie_root::<LayoutV1<H>>())
 }
 
-impl<H: Hasher> TrieBackend<'static, MemoryDB<H>, H>
+impl<H: Hasher> TrieBackend<MemoryDB<H>, H>
 where
 	H::Out: Codec + Ord,
 {
@@ -79,11 +79,7 @@ where
 
 	/// Apply the given transaction to this backend and set the root to the given value.
 	pub fn apply_transaction(&mut self, root: H::Out, transaction: MemoryDB<H>) {
-		let mut storage = match self.essence {
-			RefOrOwned::Ref(essence) => essence.backend_storage().clone(),
-			RefOrOwned::Owned(ref mut essence) => sp_std::mem::take(essence.backend_storage_mut()),
-		};
-
+		let mut storage = sp_std::mem::take(self).into_storage();
 		storage.consolidate(transaction);
 		*self = TrieBackend::new(storage, root);
 	}
@@ -94,7 +90,7 @@ where
 	}
 }
 
-impl<H: Hasher> Clone for TrieBackend<'static, MemoryDB<H>, H>
+impl<H: Hasher> Clone for TrieBackend<MemoryDB<H>, H>
 where
 	H::Out: Codec + Ord,
 {
@@ -103,9 +99,9 @@ where
 	}
 }
 
-impl<'a, H> Default for TrieBackend<'a, MemoryDB<H>, H>
+impl<H> Default for TrieBackend<MemoryDB<H>, H>
 where
-	H: Hasher + 'static,
+	H: Hasher,
 	H::Out: Codec + Ord,
 {
 	fn default() -> Self {
@@ -114,7 +110,7 @@ where
 }
 
 impl<H: Hasher> From<(HashMap<Option<ChildInfo>, BTreeMap<StorageKey, StorageValue>>, StateVersion)>
-	for TrieBackend<'static, MemoryDB<H>, H>
+	for TrieBackend<MemoryDB<H>, H>
 where
 	H::Out: Codec + Ord,
 {
@@ -135,7 +131,7 @@ where
 	}
 }
 
-impl<H: Hasher> From<(Storage, StateVersion)> for TrieBackend<'static, MemoryDB<H>, H>
+impl<H: Hasher> From<(Storage, StateVersion)> for TrieBackend<MemoryDB<H>, H>
 where
 	H::Out: Codec + Ord,
 {
@@ -151,7 +147,7 @@ where
 }
 
 impl<H: Hasher> From<(BTreeMap<StorageKey, StorageValue>, StateVersion)>
-	for TrieBackend<'static, MemoryDB<H>, H>
+	for TrieBackend<MemoryDB<H>, H>
 where
 	H::Out: Codec + Ord,
 {
@@ -163,7 +159,7 @@ where
 }
 
 impl<H: Hasher> From<(Vec<(Option<ChildInfo>, StorageCollection)>, StateVersion)>
-	for TrieBackend<'static, MemoryDB<H>, H>
+	for TrieBackend<MemoryDB<H>, H>
 where
 	H::Out: Codec + Ord,
 {

@@ -184,7 +184,7 @@ mod execution {
 	pub type DefaultHandler<R, E> = fn(CallResult<R, E>, CallResult<R, E>) -> CallResult<R, E>;
 
 	/// Trie backend with in-memory storage.
-	pub type InMemoryBackend<H> = TrieBackend<'static, MemoryDB<H>, H>;
+	pub type InMemoryBackend<H> = TrieBackend<MemoryDB<H>, H>;
 
 	/// Proving Trie backend with in-memory storage.
 	pub type InMemoryProvingBackend<'a, H> = ProvingBackend<'a, MemoryDB<H>, H>;
