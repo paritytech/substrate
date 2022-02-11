@@ -22,6 +22,7 @@ use jsonrpc_derive::rpc;
 use serde::{Deserialize, Serialize};
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 use std::sync::Arc;
+use sc_rpc_api::DenyUnsafe;
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -46,13 +47,14 @@ pub trait StateMigrationApi<BlockHash> {
 /// An implementation of state migration specific RPC methods.
 pub struct MigrationRpc<C, B, BA> {
 	client: Arc<C>,
+	deny_unsafe: DenyUnsafe,
 	_marker: std::marker::PhantomData<(B, BA)>,
 }
 
 impl<C, B, BA> MigrationRpc<C, B, BA> {
 	/// Create new state migration rpc for the given reference to the client.
-	pub fn new(client: Arc<C>) -> Self {
-		MigrationRpc { client, _marker: Default::default() }
+	pub fn new(client: Arc<C>, deny_unsafe: DenyUnsafe) -> Self {
+		MigrationRpc { client, deny_unsafe, _marker: Default::default() }
 	}
 }
 
@@ -67,6 +69,10 @@ where
 	BA: 'static + sc_client_api::backend::Backend<B>,
 {
 	fn call(&self, at: Option<<B as BlockT>::Hash>) -> Result<MigrationStatusResult> {
+		if let Err(err) = self.deny_unsafe.check_if_safe() {
+			return Err(err.into());
+		}
+
 		let block_id = BlockId::hash(at.unwrap_or_else(|| self.client.info().best_hash));
 		let (top, child) =
 			self.client.state_migration_status(&block_id).map_err(error_into_rpc_err)?;

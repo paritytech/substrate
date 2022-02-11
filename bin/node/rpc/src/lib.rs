@@ -161,7 +161,7 @@ where
 	)));
 
 	io.extend_with(pallet_state_trie_migration_rpc::StateMigrationApi::to_delegate(
-		pallet_state_trie_migration_rpc::MigrationRpc::new(client.clone()),
+		pallet_state_trie_migration_rpc::MigrationRpc::new(client.clone(), deny_unsafe),
 	));
 
 	io.extend_with(sc_sync_state_rpc::SyncStateRpcApi::to_delegate(
