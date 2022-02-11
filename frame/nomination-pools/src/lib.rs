@@ -255,6 +255,13 @@
 // * If the depositor is actively unbonding, the pool is in destroying state. To achieve this, once
 //   a pool is flipped to a destroying state it cannot change its state.
 
+// TODO
+// - Write user top level docs and make the design docs internal
+// - Refactor staking slashing to always slash unlocking chunks (then back port)
+// - backport making ledger generic over ^^ IDEA: maybe staking can slash unlocking chunks, and then
+//   pools is passed the updated unlocking chunks and makes updates based on that
+// - benchmarks
+
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use frame_support::{

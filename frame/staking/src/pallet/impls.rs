@@ -1374,4 +1374,9 @@ impl<T: Config> StakingInterface for Pallet<T> {
 	fn nominate(controller: Self::AccountId, targets: Vec<Self::LookupSource>) -> DispatchResult {
 		Self::nominate(RawOrigin::Signed(controller).into(), targets)
 	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn setup_nominate_scenario() -> Vec<Self::LookupSource> {
+
+	}
 }

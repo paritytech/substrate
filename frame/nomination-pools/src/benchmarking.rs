@@ -1,8 +1,8 @@
 use super::*;
 use crate::Pallet as Pools;
 use frame_benchmarking::account;
+use frame_support::assert_ok;
 use frame_system::RawOrigin as Origin;
-use frame_support::{assert_ok};
 
 const USER_SEED: u32 = 0;
 
@@ -24,9 +24,11 @@ frame_benchmarking::benchmarks! {
 				depositor.clone()
 			)
 		);
+		// index 0 of the tuple is the key, the pool account
+		let pool_account = 	BondedPools::<T>::iter().next().unwrap().0;
 
 		let reward_account = RewardPools::<T>::get(
-			BondedPools::<T>::iter().next().unwrap().0
+			pool_account
 		)
 		.unwrap()
 		.account;
@@ -54,7 +56,46 @@ frame_benchmarking::benchmarks! {
 	unbond_other {}: {}
 	pool_withdraw_unbonded {}: {}
 	withdraw_unbonded_other {}: {}
-	create {}: {}
+
+	create {
+		let min_create_bond = MinCreateBond::<T>::get().max(T::StakingInterface::minimum_bond());
+		let depositor: T::AccountId = account("depositor", USER_SEED, 0);
+
+		// Give the depositor some balance to bond
+		T::Currency::make_free_balance_be(&depositor, min_create_bond * 2u32.into());
+
+		// Make sure no pools exist as a pre-condition for our verify checks
+		assert_eq!(RewardPools::<T>::count(), 0);
+		assert_eq!(BondedPools::<T>::count(), 0);
+	}: _(
+			Origin::Signed(depositor.clone()),
+			min_create_bond,
+			0,
+			depositor.clone(),
+			depositor.clone(),
+			depositor.clone()
+		)
+	verify {
+		assert_eq!(RewardPools::<T>::count(), 1);
+		assert_eq!(BondedPools::<T>::count(), 1);
+		let (pool_account, new_pool) = BondedPools::<T>::iter().next().unwrap();
+		assert_eq!(
+			new_pool,
+			BondedPoolStorage {
+				points: min_create_bond,
+				depositor: depositor.clone(),
+				root: depositor.clone(),
+				nominator: depositor.clone(),
+				state_toggler: depositor.clone(),
+				state: PoolState::Open,
+			}
+		);
+		assert_eq!(
+			T::StakingInterface::bonded_balance(&pool_account),
+			Some(min_create_bond)
+		);
+	}
+
 	nominate {}: {}
 }
 

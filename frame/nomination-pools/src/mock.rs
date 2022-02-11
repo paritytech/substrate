@@ -81,6 +81,10 @@ impl sp_staking::StakingInterface for StakingMock {
 		Nominations::set(nominations);
 		Ok(())
 	}
+
+	// fn setup_nominate_scenario() -> Vec<Self::AccountId> {
+	// 	vec![1]
+	// }
 }
 
 impl frame_system::Config for Runtime {

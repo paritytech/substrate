@@ -122,4 +122,8 @@ pub trait StakingInterface {
 	) -> DispatchResult;
 
 	fn nominate(stash: Self::AccountId, targets: Vec<Self::LookupSource>) -> DispatchResult;
+
+	// Benchmarking helpers
+
+	// fn setup_nominate_scenario() -> (Self::AccountId, Self::AccountId, Vec<Self::LookupSource>);
 }
