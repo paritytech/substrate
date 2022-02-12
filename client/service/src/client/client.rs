@@ -993,7 +993,9 @@ where
 			);
 		}
 
-		self.import_notification_sinks.lock().retain(|sink| sink.unbounded_send(notification.clone()).is_ok());
+		self.import_notification_sinks
+			.lock()
+			.retain(|sink| sink.unbounded_send(notification.clone()).is_ok());
 
 		Ok(())
 	}
