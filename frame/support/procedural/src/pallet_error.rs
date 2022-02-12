@@ -56,14 +56,12 @@ pub fn derive_pallet_error(input: proc_macro::TokenStream) -> proc_macro::TokenS
 		syn::Data::Enum(syn::DataEnum { variants, .. }) => {
 			let field_tys = variants
 				.iter()
-				.map(|variant| {
-					match &variant.fields {
-						syn::Fields::Named(f) =>
-							Ok(Some(f.named.iter().map(|field| &field.ty).collect::<Vec<_>>())),
-						syn::Fields::Unnamed(f) =>
-							Ok(Some(f.unnamed.iter().map(|field| &field.ty).collect::<Vec<_>>())),
-						syn::Fields::Unit => Ok(None),
-					}
+				.map(|variant| match &variant.fields {
+					syn::Fields::Named(f) =>
+						Ok(Some(f.named.iter().map(|field| &field.ty).collect::<Vec<_>>())),
+					syn::Fields::Unnamed(f) =>
+						Ok(Some(f.unnamed.iter().map(|field| &field.ty).collect::<Vec<_>>())),
+					syn::Fields::Unit => Ok(None),
 				})
 				.collect::<Result<Vec<Option<Vec<&syn::Type>>>, syn::Error>>();
 
