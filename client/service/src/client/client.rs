@@ -970,8 +970,6 @@ where
 		notification: Option<BlockImportNotification<Block>>,
 		storage_changes: Option<(StorageCollection, ChildStorageCollection)>,
 	) -> sp_blockchain::Result<()> {
-		let mut sinks = self.import_notification_sinks.lock();
-
 		let notification = match notification {
 			Some(notify_import) => notify_import,
 			None => {
@@ -981,7 +979,7 @@ where
 				// won't send any import notifications which could lead to a
 				// temporary leak of closed/discarded notification sinks (e.g.
 				// from consensus code).
-				sinks.retain(|sink| !sink.is_closed());
+				self.import_notification_sinks.lock().retain(|sink| !sink.is_closed());
 				return Ok(())
 			},
 		};
@@ -995,7 +993,7 @@ where
 			);
 		}
 
-		sinks.retain(|sink| sink.unbounded_send(notification.clone()).is_ok());
+		self.import_notification_sinks.lock().retain(|sink| sink.unbounded_send(notification.clone()).is_ok());
 
 		Ok(())
 	}
