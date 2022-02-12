@@ -48,7 +48,7 @@ macro_rules! impl_for_types {
 	};
 }
 
-impl_for_types!(size: 0, ());
+impl_for_types!(size: 0, (), crate::Never);
 impl_for_types!(size: 1, u8, i8, bool);
 impl_for_types!(size: 2, u16, i16);
 impl_for_types!(size: 4, u32, i32);

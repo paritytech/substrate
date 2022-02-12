@@ -58,26 +58,6 @@ pub fn derive_pallet_error(input: proc_macro::TokenStream) -> proc_macro::TokenS
 				.iter()
 				.map(|variant| {
 					match &variant.fields {
-						syn::Fields::Unnamed(f) if f.unnamed.len() == 2 => {
-							let first = &f.unnamed.first().unwrap().ty;
-							let second = &f.unnamed.last().unwrap().ty;
-
-							match (first, second) {
-								// Check whether we have (PhantomData, Never), if so we skip it.
-								(syn::Type::Path(p1), syn::Type::Path(p2))
-									if p1
-										.path
-										.segments
-										.last()
-										.map_or(false, |seg| seg.ident == "PhantomData") &&
-										p2.path
-											.segments
-											.last()
-											.map_or(false, |seg| seg.ident == "Never") =>
-									Ok(None),
-								_ => Ok(Some(vec![first, second])),
-							}
-						},
 						syn::Fields::Named(f) =>
 							Ok(Some(f.named.iter().map(|field| &field.ty).collect::<Vec<_>>())),
 						syn::Fields::Unnamed(f) =>
