@@ -1929,7 +1929,6 @@ where
 
 impl<B, E, Block, RA> BlockchainEvents<Block> for Client<B, E, Block, RA>
 where
-	B: backend::Backend<Block>,
 	E: CallExecutor<Block>,
 	Block: BlockT,
 {
