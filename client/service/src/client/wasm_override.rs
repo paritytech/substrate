@@ -243,7 +243,7 @@ impl WasmOverride {
 					hash: code_hash.into(),
 				},
 			)
-			.map_err(|e| WasmOverrideError::VersionInvalid(format!("{:?}", e)).into())
+			.map_err(|e| WasmOverrideError::VersionInvalid(e.to_string()).into())
 	}
 }
 

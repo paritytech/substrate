@@ -26,7 +26,7 @@ use crate::utils::{
 	create_host_function_ident, generate_crate_access, get_function_argument_names,
 	get_function_argument_names_and_types_without_ref, get_function_argument_types,
 	get_function_argument_types_ref_and_mut, get_function_argument_types_without_ref,
-	get_function_arguments, get_runtime_interface,
+	get_function_arguments, get_runtime_interface, RuntimeInterfaceFunction,
 };
 
 use syn::{
@@ -205,7 +205,7 @@ fn generate_host_functions_struct(
 /// implementation of the function.
 fn generate_host_function_implementation(
 	trait_name: &Ident,
-	method: &TraitItemMethod,
+	method: &RuntimeInterfaceFunction,
 	version: u32,
 	is_wasm_only: bool,
 ) -> Result<(TokenStream, Ident, TokenStream)> {

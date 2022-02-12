@@ -355,7 +355,7 @@ impl<TPool: LocalTransactionPool> OffchainSubmitTransaction<TPool::Block> for TP
 		result.map(|_| ()).map_err(|e| {
 			log::warn!(
 				target: "txpool",
-				"(offchain call) Error submitting a transaction to the pool: {:?}",
+				"(offchain call) Error submitting a transaction to the pool: {}",
 				e
 			)
 		})

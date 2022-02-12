@@ -100,7 +100,7 @@ where
 				// previously we only supported at most one pending change per fork
 				&|_, _| Ok(false),
 			) {
-				warn!(target: "afg", "Error migrating pending authority set change: {:?}.", err);
+				warn!(target: "afg", "Error migrating pending authority set change: {}", err);
 				warn!(target: "afg", "Node is in a potentially inconsistent state.");
 			}
 		}
