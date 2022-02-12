@@ -148,7 +148,7 @@ macro_rules! decl_error {
 					::index::<$module<$generic $(, $inst_generic)?>>()
 					.expect("Every active module has an index in the runtime; qed") as u8;
 				let mut error = err.encode();
-				error.resize($crate::MAX_PALLET_ERROR_ENCODED_SIZE, 0);
+				error.resize($crate::MAX_MODULE_ERROR_ENCODED_SIZE, 0);
 
 				$crate::sp_runtime::DispatchError::Module($crate::sp_runtime::ModuleError {
 					index,

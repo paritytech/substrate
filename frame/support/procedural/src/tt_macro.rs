@@ -52,6 +52,28 @@ impl syn::parse::Parse for CreateTtReturnMacroDef {
 /// declarative macro that follows tt-call conventions and simply calls [`tt_call::tt_return`],
 /// accepting an optional `frame-support` argument and returning the key-value pairs that were
 /// supplied to the proc macro.
+///
+/// # Example
+/// ```rust,nocompile
+/// __create_tt_macro! {
+///     my_tt_macro,
+///     foo = [{ bar }]
+/// }
+///
+/// // Creates the following declarative macro:
+///
+/// macro_rules! my_tt_macro {
+///     {
+///         $caller:tt
+///         $(frame_support = [{ $($frame_support:ident)::* }])?
+///     } => {
+///         frame_support::tt_return! {
+///             $caller
+///             foo = [{ bar }]
+///         }
+///     }
+/// }
+/// ```
 pub fn create_tt_return_macro(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 	let CreateTtReturnMacroDef { name, args } =
 		syn::parse_macro_input!(input as CreateTtReturnMacroDef);

@@ -97,8 +97,9 @@ pub use sp_arithmetic::{
 
 pub use either::Either;
 
-/// The maximum depth for a nested pallet error enum.
-pub const MAX_PALLET_ERROR_ENCODED_SIZE: usize = 4;
+/// The number of bytes of the module-specific `error` field defined in `ModuleError`.
+/// In FRAME, this is the maximum encoded size of a pallet error type.
+pub const MAX_MODULE_ERROR_ENCODED_SIZE: usize = 4;
 
 /// An abstraction over justification for a block's validity under a consensus algorithm.
 ///
@@ -471,7 +472,7 @@ pub struct ModuleError {
 	/// Module index, matching the metadata module index.
 	pub index: u8,
 	/// Module specific error value.
-	pub error: [u8; MAX_PALLET_ERROR_ENCODED_SIZE],
+	pub error: [u8; MAX_MODULE_ERROR_ENCODED_SIZE],
 	/// Optional error message.
 	#[codec(skip)]
 	#[cfg_attr(feature = "std", serde(skip_deserializing))]

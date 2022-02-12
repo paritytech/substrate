@@ -484,7 +484,7 @@ fn decl_static_assertions(
 		let path = &decl.path;
 		let assert_message = format!(
 			"The maximum encoded size of the error type in the `{}` pallet exceeds \
-			`MAX_PALLET_ERROR_ENCODED_SIZE`",
+			`MAX_MODULE_ERROR_ENCODED_SIZE`",
 			decl.name,
 		);
 

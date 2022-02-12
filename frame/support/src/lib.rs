@@ -94,7 +94,7 @@ pub use self::{
 	},
 };
 pub use sp_runtime::{
-	self, print, traits::Printable, ConsensusEngineId, MAX_PALLET_ERROR_ENCODED_SIZE,
+	self, print, traits::Printable, ConsensusEngineId, MAX_MODULE_ERROR_ENCODED_SIZE,
 };
 
 use codec::{Decode, Encode};
@@ -851,7 +851,7 @@ macro_rules! assert_ok {
 }
 
 /// Assert that the maximum encoding size does not exceed the value defined in
-/// [`MAX_PALLET_ERROR_ENCODED_SIZE`] during compilation.
+/// [`MAX_MODULE_ERROR_ENCODED_SIZE`] during compilation.
 ///
 /// This macro is intended to be used in conjunction with `tt_call!`.
 #[macro_export]
@@ -865,7 +865,7 @@ macro_rules! assert_error_encoded_size {
 		const _: () = assert!(
 			<
 				$($path::)+$error<$runtime> as $crate::traits::PalletError
-			>::MAX_ENCODED_SIZE <= $crate::MAX_PALLET_ERROR_ENCODED_SIZE,
+			>::MAX_ENCODED_SIZE <= $crate::MAX_MODULE_ERROR_ENCODED_SIZE,
 			$assert_message
 		);
 	};
@@ -1390,7 +1390,7 @@ pub mod pallet_prelude {
 			TransactionTag, TransactionValidity, TransactionValidityError, UnknownTransaction,
 			ValidTransaction,
 		},
-		MAX_PALLET_ERROR_ENCODED_SIZE,
+		MAX_MODULE_ERROR_ENCODED_SIZE,
 	};
 	pub use sp_std::marker::PhantomData;
 }
@@ -1669,15 +1669,23 @@ pub mod pallet_prelude {
 /// 	/// $some_optional_doc
 /// 	$SomeFieldLessVariant,
 /// 	/// $some_more_optional_doc
-/// 	$SomeSingleFieldVariant(FieldType),
+/// 	$SomeVariantWithOneField(FieldType),
 /// 	...
 /// }
 /// ```
-/// I.e. a regular rust enum named `Error`, with generic `T` and fieldless or single-field
+/// I.e. a regular rust enum named `Error`, with generic `T` and fieldless or multiple-field
 /// variants.
-/// Any field in the enum variants must implement `scale_info::TypeInfo` in order to be
+///
+/// Any field type in the enum variants must implement `scale_info::TypeInfo` in order to be
 /// properly used in the metadata, and its encoded size should be as small as possible,
-/// preferably 1 byte in size.
+/// preferably 1 byte in size in order to reduce storage size. The error enum itself has an
+/// absolute maximum encoded size specified by [`MAX_MODULE_ERROR_ENCODED_SIZE`].
+///
+/// Field types in enum variants must also implement `PalletError`, otherwise the pallet will fail
+/// to compile. Rust primitive types have already implemented the `PalletError` trait along with
+/// some commonly used stdlib types such as `Option` and `PhantomData`, and hence in most use cases,
+/// a manual implementation is not necessary and is discouraged.
+///
 /// The generic `T` mustn't bound anything and where clause is not allowed. But bounds and
 /// where clause shouldn't be needed for any usecase.
 ///
