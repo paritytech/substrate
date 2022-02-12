@@ -71,7 +71,7 @@ pub trait CallExecutor<B: BlockT>: RuntimeVersionOf {
 			Result<NativeOrEncoded<R>, Self::Error>,
 			Result<NativeOrEncoded<R>, Self::Error>,
 		) -> Result<NativeOrEncoded<R>, Self::Error>,
-		R: Encode + Decode + PartialEq,
+		R: Encode + Decode,
 		NC: FnOnce() -> result::Result<R, sp_api::ApiError> + UnwindSafe,
 	>(
 		&self,

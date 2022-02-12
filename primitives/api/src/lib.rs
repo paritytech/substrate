@@ -408,7 +408,7 @@ pub type StorageChanges<SBackend, Block> = sp_state_machine::StorageChanges<
 /// Extract the state backend type for a type that implements `ProvideRuntimeApi`.
 #[cfg(feature = "std")]
 pub type StateBackendFor<P, Block> =
-	<<P as ProvideRuntimeApi<Block>>::Api as ApiExt<Block>>::StateBackend;
+	<P as CallApiAt<Block>>::StateBackend;
 
 /// Extract the state backend transaction type for a type that implements `ProvideRuntimeApi`.
 #[cfg(feature = "std")]
@@ -521,6 +521,168 @@ pub trait ApiExt<Block: BlockT> {
 		Self: Sized;
 }
 
+/// Data required to handle a single API call.
+#[cfg(any(feature = "std", test))]
+pub struct RuntimeApi<'a, Block: BlockT, C: CallApiAt<Block>> {
+	pub call: &'a C,
+	pub commit_on_success: std::cell::RefCell<bool>,
+	pub changes: std::cell::RefCell<OverlayedChanges>,
+	pub storage_transaction_cache: std::cell::RefCell<StorageTransactionCache<Block, C::StateBackend>>,
+	pub recorder: Option<ProofRecorder<Block>>,
+}
+
+/*
+#[cfg(any(feature = "std", test))]
+unsafe impl<Block: #crate_::BlockT, C: #crate_::CallApiAt<Block>> Send
+	for RuntimeApiImpl<Block, C>
+{}
+
+#[cfg(any(feature = "std", test))]
+unsafe impl<Block: #crate_::BlockT, C: #crate_::CallApiAt<Block>> Sync
+	for RuntimeApiImpl<Block, C>
+{}
+*/
+
+#[cfg(any(feature = "std", test))]
+impl<'a, Block: BlockT, C: CallApiAt<Block>> ApiExt<Block> for RuntimeApi<'a, Block, C> {
+	type StateBackend = C::StateBackend;
+
+	fn execute_in_transaction<F: FnOnce(&Self) -> TransactionOutcome<R>, R>(
+		&self,
+		call: F,
+	) -> R where Self: Sized {
+		self.changes.borrow_mut().start_transaction();
+		*self.commit_on_success.borrow_mut() = false;
+		let res = call(self);
+		*self.commit_on_success.borrow_mut() = true;
+
+		self.commit_or_rollback(matches!(res, TransactionOutcome::Commit(_)));
+
+		res.into_inner()
+	}
+
+	fn has_api<A: RuntimeApiInfo + ?Sized>(
+		&self,
+		at: &BlockId<Block>,
+	) -> std::result::Result<bool, ApiError> where Self: Sized {
+		self.call
+			.runtime_version_at(at)
+			.map(|v| v.has_api_with(&A::ID, |v| v == A::VERSION))
+	}
+
+	fn has_api_with<A: RuntimeApiInfo + ?Sized, P: Fn(u32) -> bool>(
+		&self,
+		at: &BlockId<Block>,
+		pred: P,
+	) -> std::result::Result<bool, ApiError> where Self: Sized {
+		self.call
+			.runtime_version_at(at)
+			.map(|v| v.has_api_with(&A::ID, pred))
+	}
+
+	fn api_version<A: RuntimeApiInfo + ?Sized>(
+		&self,
+		at: &BlockId<Block>,
+	) -> std::result::Result<Option<u32>, ApiError> where Self: Sized {
+		self.call
+			.runtime_version_at(at)
+			.map(|v| v.api_version(&A::ID))
+	}
+
+	fn record_proof(&mut self) {
+		self.recorder = Some(Default::default());
+	}
+
+	fn proof_recorder(&self) -> Option<ProofRecorder<Block>> {
+		self.recorder.clone()
+	}
+
+	fn extract_proof(&mut self) -> Option<StorageProof> {
+		self.recorder
+			.take()
+			.map(|recorder| recorder.to_storage_proof())
+	}
+
+	fn into_storage_changes(
+		&self,
+		backend: &Self::StateBackend,
+		parent_hash: Block::Hash,
+	) -> std::result::Result<
+		StorageChanges<C::StateBackend, Block>,
+		String
+	> where Self: Sized {
+		let at = BlockId::Hash(parent_hash.clone());
+		let state_version = self.call
+			.runtime_version_at(&at)
+			.map(|v| v.state_version())
+			.map_err(|e| format!("Failed to get state version: {}", e))?;
+
+		self.changes.replace(Default::default()).into_storage_changes(
+			backend,
+			parent_hash,
+			self.storage_transaction_cache.replace(Default::default()),
+			state_version,
+		)
+	}
+}
+
+#[cfg(any(feature = "std", test))]
+impl<'a, Block: BlockT, C: CallApiAt<Block>> RuntimeApi<'a, Block, C> {
+	pub fn new(
+		call: &'a C,
+	) -> Self {
+		RuntimeApi {
+			call,
+			commit_on_success: true.into(),
+			changes: Default::default(),
+			recorder: Default::default(),
+			storage_transaction_cache: Default::default(),
+		}
+	}
+
+	pub fn call_api_at<
+		R: Encode + Decode,
+		F: FnOnce(
+			&C,
+			&std::cell::RefCell<OverlayedChanges>,
+			&std::cell::RefCell<StorageTransactionCache<Block, C::StateBackend>>,
+			&Option<ProofRecorder<Block>>,
+		) -> std::result::Result<NativeOrEncoded<R>, E>,
+		E,
+	>(
+		&self,
+		call_api_at: F,
+	) -> std::result::Result<NativeOrEncoded<R>, E> {
+		if *self.commit_on_success.borrow() {
+			self.changes.borrow_mut().start_transaction();
+		}
+		let res = call_api_at(
+			&self.call,
+			&self.changes,
+			&self.storage_transaction_cache,
+			&self.recorder,
+		);
+
+		self.commit_or_rollback(res.is_ok());
+		res
+	}
+
+	fn commit_or_rollback(&self, commit: bool) {
+		let proof = "\
+			We only close a transaction when we opened one ourself.
+			Other parts of the runtime that make use of transactions (state-machine)
+			also balance their transactions. The runtime cannot close client initiated
+			transactions. qed";
+		if *self.commit_on_success.borrow() {
+			if commit {
+				self.changes.borrow_mut().commit_transaction().expect(proof);
+			} else {
+				self.changes.borrow_mut().rollback_transaction().expect(proof);
+			}
+		}
+	}
+}
+
 /// Parameters for [`CallApiAt::call_api_at`].
 #[cfg(feature = "std")]
 pub struct CallApiAtParams<'a, Block: BlockT, NC, Backend: StateBackend<HashFor<Block>>> {
@@ -555,7 +717,7 @@ pub trait CallApiAt<Block: BlockT> {
 	/// the encoded result.
 	fn call_api_at<
 		'a,
-		R: Encode + Decode + PartialEq,
+		R: Encode + Decode,
 		NC: FnOnce() -> result::Result<R, ApiError> + UnwindSafe,
 	>(
 		&self,
@@ -595,16 +757,13 @@ impl<'a, T> std::ops::DerefMut for ApiRef<'a, T> {
 
 /// Something that provides a runtime api.
 #[cfg(feature = "std")]
-pub trait ProvideRuntimeApi<Block: BlockT> {
-	/// The concrete type that provides the api.
-	type Api: ApiExt<Block>;
-
+pub trait ProvideRuntimeApi<Block: BlockT>: CallApiAt<Block> + Sized {
 	/// Returns the runtime api.
 	/// The returned instance will keep track of modifications to the storage. Any successful
 	/// call to an api function, will `commit` its changes to an internal buffer. Otherwise,
 	/// the modifications will be `discarded`. The modifications will not be applied to the
 	/// storage, even on a `commit`.
-	fn runtime_api<'a>(&'a self) -> ApiRef<'a, Self::Api>;
+	fn runtime_api<'a>(&'a self) -> RuntimeApi<'a, Block, Self>;
 }
 
 /// Something that provides information about a runtime api.

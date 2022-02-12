@@ -77,18 +77,10 @@ sc-executor = { version = "0.10.0-dev", path = "../../../client/executor" }
 sc-authority-discovery = { version = "0.10.0-dev", path = "../../../client/authority-discovery" }
 sc-sync-state-rpc = { version = "0.10.0-dev", path = "../../../client/sync-state-rpc" }
 
-# frame dependencies
-frame-system = { version = "4.0.0-dev", path = "../../../frame/system" }
-frame-system-rpc-runtime-api = { version = "4.0.0-dev", path = "../../../frame/system/rpc/runtime-api" }
-pallet-transaction-payment = { version = "4.0.0-dev", path = "../../../frame/transaction-payment" }
-pallet-asset-tx-payment = { version = "4.0.0-dev", path = "../../../frame/transaction-payment/asset-tx-payment/" }
-pallet-im-online = { version = "4.0.0-dev", default-features = false, path = "../../../frame/im-online" }
-
 # node-specific dependencies
-node-runtime = { version = "3.0.0-dev", path = "../runtime" }
+# node-runtime = { version = "3.0.0-dev", path = "../runtime" }
 node-rpc = { version = "3.0.0-dev", path = "../rpc" }
 node-primitives = { version = "2.0.0", path = "../primitives" }
-node-executor = { version = "3.0.0-dev", path = "../executor" }
 
 # CLI-specific dependencies
 sc-cli = { version = "0.10.0-dev", optional = true, path = "../../../client/cli" }
@@ -97,7 +89,6 @@ node-inspect = { version = "0.9.0-dev", optional = true, path = "../inspect" }
 try-runtime-cli = { version = "0.10.0-dev", optional = true, path = "../../../utils/frame/try-runtime/cli" }
 
 [target.'cfg(any(target_arch="x86_64", target_arch="aarch64"))'.dependencies]
-node-executor = { version = "3.0.0-dev", path = "../executor", features = ["wasmtime"] }
 sc-cli = { version = "0.10.0-dev", optional = true, path = "../../../client/cli", features = ["wasmtime"] }
 sc-service = { version = "0.10.0-dev", default-features = false, path = "../../../client/service", features = [
 	"wasmtime",
@@ -146,7 +137,6 @@ pallet-balances = { version = "4.0.0-dev", path = "../../../frame/balances" }
 [features]
 default = ["cli"]
 cli = [
-	"node-executor/wasmi-errno",
 	"node-inspect",
 	"sc-cli",
 	"frame-benchmarking-cli",
@@ -157,10 +147,10 @@ cli = [
 	"substrate-build-script-utils",
 	"try-runtime-cli",
 ]
-runtime-benchmarks = ["node-runtime/runtime-benchmarks", "frame-benchmarking-cli"]
+runtime-benchmarks = ["frame-benchmarking-cli"]
 # Enable features that allow the runtime to be tried and debugged. Name might be subject to change
 # in the near future.
-try-runtime = ["node-runtime/try-runtime", "try-runtime-cli"]
+try-runtime = ["try-runtime-cli"]
 
 [[bench]]
 name = "transaction_pool"

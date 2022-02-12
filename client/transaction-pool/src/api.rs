@@ -114,7 +114,6 @@ where
 	Client:
 		ProvideRuntimeApi<Block> + BlockBackend<Block> + BlockIdTo<Block> + HeaderBackend<Block>,
 	Client: Send + Sync + 'static,
-	Client::Api: TaggedTransactionQueue<Block>,
 {
 	type Block = Block;
 	type Error = error::Error;
@@ -205,7 +204,6 @@ where
 	Client:
 		ProvideRuntimeApi<Block> + BlockBackend<Block> + BlockIdTo<Block> + HeaderBackend<Block>,
 	Client: Send + Sync + 'static,
-	Client::Api: TaggedTransactionQueue<Block>,
 {
 	sp_tracing::within_span!(sp_tracing::Level::TRACE, "validate_transaction";
 	{
@@ -267,7 +265,6 @@ where
 	Client:
 		ProvideRuntimeApi<Block> + BlockBackend<Block> + BlockIdTo<Block> + HeaderBackend<Block>,
 	Client: Send + Sync + 'static,
-	Client::Api: TaggedTransactionQueue<Block>,
 {
 	/// Validates a transaction by calling into the runtime, same as
 	/// `validate_transaction` but blocks the current thread when performing

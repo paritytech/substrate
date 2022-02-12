@@ -32,7 +32,7 @@
 
 use std::sync::Arc;
 
-use node_primitives::{AccountId, Balance, Block, BlockNumber, Hash, Index};
+use node_primitives::{Block, BlockNumber, Hash, Index, AccountId, Balance};
 use sc_client_api::AuxStore;
 use sc_consensus_babe::{Config, Epoch};
 use sc_consensus_babe_rpc::BabeRpcHandler;
@@ -44,11 +44,9 @@ use sc_finality_grandpa_rpc::GrandpaRpcHandler;
 use sc_rpc::SubscriptionTaskExecutor;
 pub use sc_rpc_api::DenyUnsafe;
 use sc_transaction_pool_api::TransactionPool;
-use sp_api::ProvideRuntimeApi;
-use sp_block_builder::BlockBuilder;
+use sp_api::{NumberFor, ProvideRuntimeApi};
 use sp_blockchain::{Error as BlockChainError, HeaderBackend, HeaderMetadata};
 use sp_consensus::SelectChain;
-use sp_consensus_babe::BabeApi;
 use sp_keystore::SyncCryptoStorePtr;
 
 /// Extra dependencies for BABE.
@@ -108,12 +106,6 @@ where
 		+ Sync
 		+ Send
 		+ 'static,
-	C::Api: substrate_frame_rpc_system::AccountNonceApi<Block, AccountId, Index>,
-	C::Api: pallet_contracts_rpc::ContractsRuntimeApi<Block, AccountId, Balance, BlockNumber, Hash>,
-	C::Api: pallet_mmr_rpc::MmrRuntimeApi<Block, <Block as sp_runtime::traits::Block>::Hash>,
-	C::Api: pallet_transaction_payment_rpc::TransactionPaymentRuntimeApi<Block, Balance>,
-	C::Api: BabeApi<Block>,
-	C::Api: BlockBuilder<Block>,
 	P: TransactionPool + 'static,
 	SC: SelectChain<Block> + 'static,
 	B: sc_client_api::Backend<Block> + Send + Sync + 'static,
@@ -121,7 +113,7 @@ where
 {
 	use pallet_contracts_rpc::{Contracts, ContractsApi};
 	use pallet_mmr_rpc::{Mmr, MmrApi};
-	use pallet_transaction_payment_rpc::{TransactionPayment, TransactionPaymentApi};
+	use pallet_transaction_payment_rpc::{TransactionPayment, TransactionPaymentApi, TransactionPaymentRuntimeDispatchInfo};
 	use substrate_frame_rpc_system::{FullSystem, SystemApi};
 
 	let mut io = jsonrpc_core::IoHandler::default();
@@ -136,13 +128,13 @@ where
 		finality_provider,
 	} = grandpa;
 
-	io.extend_with(SystemApi::to_delegate(FullSystem::new(client.clone(), pool, deny_unsafe)));
+	io.extend_with(SystemApi::<Hash, AccountId, Index>::to_delegate(FullSystem::new(client.clone(), pool, deny_unsafe)));
 	// Making synchronous calls in light client freezes the browser currently,
 	// more context: https://github.com/paritytech/substrate/pull/3480
 	// These RPCs should use an asynchronous caller instead.
-	io.extend_with(ContractsApi::to_delegate(Contracts::new(client.clone())));
-	io.extend_with(MmrApi::to_delegate(Mmr::new(client.clone())));
-	io.extend_with(TransactionPaymentApi::to_delegate(TransactionPayment::new(client.clone())));
+	io.extend_with(ContractsApi::<Hash, NumberFor<Block>, AccountId, Balance, Hash>::to_delegate(Contracts::new(client.clone())));
+	io.extend_with(MmrApi::<Hash>::to_delegate(Mmr::new(client.clone()) as Mmr<_, (_, Hash)>));
+	io.extend_with(TransactionPaymentApi::<_, TransactionPaymentRuntimeDispatchInfo<Balance>>::to_delegate(TransactionPayment::new(client.clone())));
 	io.extend_with(sc_consensus_babe_rpc::BabeApi::to_delegate(BabeRpcHandler::new(
 		client.clone(),
 		shared_epoch_changes.clone(),

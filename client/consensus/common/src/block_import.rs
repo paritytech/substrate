@@ -323,7 +323,7 @@ pub trait BlockImport<B: BlockT> {
 	/// The error type.
 	type Error: std::error::Error + Send + 'static;
 	/// The transaction type used by the backend.
-	type Transaction: Send + 'static;
+	type Transaction;
 
 	/// Check block preconditions.
 	async fn check_block(

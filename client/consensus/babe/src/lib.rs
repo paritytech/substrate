@@ -342,7 +342,6 @@ impl Config {
 	pub fn get<B: BlockT, C>(client: &C) -> ClientResult<Self>
 	where
 		C: AuxStore + ProvideRuntimeApi<B> + UsageProvider<B>,
-		C::Api: BabeApi<B>,
 	{
 		trace!(target: "babe", "Getting slot duration");
 
@@ -470,7 +469,6 @@ where
 		+ Send
 		+ Sync
 		+ 'static,
-	C::Api: BabeApi<B>,
 	SC: SelectChain<B> + 'static,
 	E: Environment<B, Error = Error> + Send + Sync + 'static,
 	E::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
@@ -674,7 +672,6 @@ impl<B, C, E, I, Error, SO, L, BS> sc_consensus_slots::SimpleSlotWorker<B>
 where
 	B: BlockT,
 	C: ProvideRuntimeApi<B> + HeaderBackend<B> + HeaderMetadata<B, Error = ClientError>,
-	C::Api: BabeApi<B>,
 	E: Environment<B, Error = Error> + Sync,
 	E::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
 	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync + 'static,
@@ -753,7 +750,7 @@ where
 		slot: Slot,
 		epoch_descriptor: &ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>,
 	) {
-		self.slot_notification_sinks.lock().retain_mut(|sink| {
+		RetainMut::retain_mut(&mut *self.slot_notification_sinks.lock(), |sink| {
 			match sink.try_send((slot, epoch_descriptor.clone())) {
 				Ok(()) => true,
 				Err(e) =>
@@ -970,7 +967,6 @@ impl<Block, Client, SelectChain, CAW, CIDP> BabeVerifier<Block, Client, SelectCh
 where
 	Block: BlockT,
 	Client: AuxStore + HeaderBackend<Block> + HeaderMetadata<Block> + ProvideRuntimeApi<Block>,
-	Client::Api: BlockBuilderApi<Block> + BabeApi<Block>,
 	SelectChain: sp_consensus::SelectChain<Block>,
 	CAW: CanAuthorWith<Block>,
 	CIDP: CreateInherentDataProviders<Block, ()>,
@@ -1107,7 +1103,6 @@ where
 		+ Send
 		+ Sync
 		+ AuxStore,
-	Client::Api: BlockBuilderApi<Block> + BabeApi<Block>,
 	SelectChain: sp_consensus::SelectChain<Block>,
 	CAW: CanAuthorWith<Block> + Send + Sync,
 	CIDP: CreateInherentDataProviders<Block, ()> + Send + Sync,
@@ -1307,7 +1302,6 @@ where
 		+ ProvideRuntimeApi<Block>
 		+ Send
 		+ Sync,
-	Client::Api: BabeApi<Block> + ApiExt<Block>,
 {
 	/// Import whole state after warp sync.
 	// This function makes multiple transactions to the DB. If one of them fails we may
@@ -1373,7 +1367,6 @@ where
 		+ ProvideRuntimeApi<Block>
 		+ Send
 		+ Sync,
-	Client::Api: BabeApi<Block> + ApiExt<Block>,
 {
 	type Error = ConsensusError;
 	type Transaction = sp_api::TransactionFor<Client, Block>;
@@ -1733,7 +1726,6 @@ where
 		+ Send
 		+ Sync
 		+ 'static,
-	Client::Api: BlockBuilderApi<Block> + BabeApi<Block> + ApiExt<Block>,
 	SelectChain: sp_consensus::SelectChain<Block> + 'static,
 	CAW: CanAuthorWith<Block> + Send + Sync + 'static,
 	CIDP: CreateInherentDataProviders<Block, ()> + Send + Sync + 'static,

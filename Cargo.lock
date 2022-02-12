@@ -4679,23 +4679,16 @@ dependencies = [
  "clap_complete",
  "criterion",
  "frame-benchmarking-cli",
- "frame-system",
- "frame-system-rpc-runtime-api",
  "futures 0.3.16",
  "hex-literal",
  "jsonrpsee-ws-client 0.4.1",
  "log 0.4.14",
  "nix",
- "node-executor",
  "node-inspect",
  "node-primitives",
  "node-rpc",
- "node-runtime",
- "pallet-asset-tx-payment",
  "pallet-balances",
- "pallet-im-online",
  "pallet-timestamp",
- "pallet-transaction-payment",
  "parity-scale-codec",
  "platforms",
  "rand 0.8.4",
@@ -4947,7 +4940,6 @@ dependencies = [
  "frame-benchmarking",
  "frame-benchmarking-cli",
  "jsonrpc-core",
- "node-template-runtime",
  "pallet-transaction-payment-rpc",
  "sc-basic-authorship",
  "sc-cli",
@@ -7582,9 +7574,9 @@ dependencies = [
 
 [[package]]
 name = "retain_mut"
-version = "0.1.4"
+version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "448296241d034b96c11173591deaa1302f2c17b56092106c1f92c1bc0183a8c9"
+checksum = "51dd4445360338dab5116712bee1388dc727991d51969558a8882ab552e6db30"
 
 [[package]]
 name = "ring"

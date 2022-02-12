@@ -202,5 +202,4 @@ pub fn print_node_infos<C: SubstrateCli>(config: &Configuration) {
 			.path()
 			.map_or_else(|| "<unknown>".to_owned(), |p| p.display().to_string())
 	);
-	info!("⛓  Native runtime: {}", C::native_runtime_version(&config.chain_spec));
 }

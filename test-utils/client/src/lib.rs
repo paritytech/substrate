@@ -27,7 +27,7 @@ pub use sc_client_api::{
 	BadBlocks, ForkBlocks,
 };
 pub use sc_client_db::{self, Backend};
-pub use sc_executor::{self, NativeElseWasmExecutor, WasmExecutionMethod};
+pub use sc_executor::{self, NativeElseWasmExecutor, WasmExecutionMethod, DefaultExecutor};
 pub use sc_service::{client, RpcHandlers, RpcSession};
 pub use sp_consensus;
 pub use sp_keyring::{
@@ -65,14 +65,13 @@ impl GenesisInit for () {
 }
 
 /// A builder for creating a test client instance.
-pub struct TestClientBuilder<Block: BlockT, ExecutorDispatch, Backend, G: GenesisInit> {
+pub struct TestClientBuilder<Block: BlockT, Backend, G: GenesisInit> {
 	execution_strategies: ExecutionStrategies,
 	genesis_init: G,
 	/// The key is an unprefixed storage key, this only contains
 	/// default child trie content.
 	child_storage_extension: HashMap<Vec<u8>, StorageChild>,
 	backend: Arc<Backend>,
-	_executor: std::marker::PhantomData<ExecutorDispatch>,
 	keystore: Option<SyncCryptoStorePtr>,
 	fork_blocks: ForkBlocks<Block>,
 	bad_blocks: BadBlocks<Block>,
@@ -80,16 +79,16 @@ pub struct TestClientBuilder<Block: BlockT, ExecutorDispatch, Backend, G: Genesi
 	no_genesis: bool,
 }
 
-impl<Block: BlockT, ExecutorDispatch, G: GenesisInit> Default
-	for TestClientBuilder<Block, ExecutorDispatch, Backend<Block>, G>
+impl<Block: BlockT, G: GenesisInit> Default
+	for TestClientBuilder<Block, Backend<Block>, G>
 {
 	fn default() -> Self {
 		Self::with_default_backend()
 	}
 }
 
-impl<Block: BlockT, ExecutorDispatch, G: GenesisInit>
-	TestClientBuilder<Block, ExecutorDispatch, Backend<Block>, G>
+impl<Block: BlockT, G: GenesisInit>
+	TestClientBuilder<Block, Backend<Block>, G>
 {
 	/// Create new `TestClientBuilder` with default backend.
 	pub fn with_default_backend() -> Self {
@@ -114,8 +113,8 @@ impl<Block: BlockT, ExecutorDispatch, G: GenesisInit>
 	}
 }
 
-impl<Block: BlockT, ExecutorDispatch, Backend, G: GenesisInit>
-	TestClientBuilder<Block, ExecutorDispatch, Backend, G>
+impl<Block: BlockT, Backend, G: GenesisInit>
+	TestClientBuilder<Block, Backend, G>
 {
 	/// Create a new instance of the test client builder.
 	pub fn with_backend(backend: Arc<Backend>) -> Self {
@@ -124,7 +123,6 @@ impl<Block: BlockT, ExecutorDispatch, Backend, G: GenesisInit>
 			execution_strategies: ExecutionStrategies::default(),
 			child_storage_extension: Default::default(),
 			genesis_init: Default::default(),
-			_executor: Default::default(),
 			keystore: None,
 			fork_blocks: None,
 			bad_blocks: None,
@@ -200,16 +198,14 @@ impl<Block: BlockT, ExecutorDispatch, Backend, G: GenesisInit>
 	}
 
 	/// Build the test client with the given native executor.
-	pub fn build_with_executor<RuntimeApi>(
+	pub fn build_with_executor(
 		self,
-		executor: ExecutorDispatch,
+		executor: LocalCallExecutor<Block, Backend>,
 	) -> (
-		client::Client<Backend, ExecutorDispatch, Block, RuntimeApi>,
+		client::Client<Backend, Block>,
 		sc_consensus::LongestChain<Backend, Block>,
 	)
 	where
-		ExecutorDispatch:
-			sc_client_api::CallExecutor<Block> + sc_executor::RuntimeVersionOf + 'static,
 		Backend: sc_client_api::backend::Backend<Block>,
 		<Backend as sc_client_api::backend::Backend<Block>>::OffchainStorage: 'static,
 	{
@@ -256,35 +252,30 @@ impl<Block: BlockT, ExecutorDispatch, Backend, G: GenesisInit>
 	}
 }
 
-impl<Block: BlockT, D, Backend, G: GenesisInit>
+impl<Block: BlockT, Backend, G: GenesisInit>
 	TestClientBuilder<
 		Block,
-		client::LocalCallExecutor<Block, Backend, NativeElseWasmExecutor<D>>,
 		Backend,
 		G,
 	> where
-	D: sc_executor::NativeExecutionDispatch,
 {
 	/// Build the test client with the given native executor.
-	pub fn build_with_native_executor<RuntimeApi, I>(
+	pub fn build_with_wasm_executor<I>(
 		self,
 		executor: I,
 	) -> (
 		client::Client<
 			Backend,
-			client::LocalCallExecutor<Block, Backend, NativeElseWasmExecutor<D>>,
 			Block,
-			RuntimeApi,
 		>,
 		sc_consensus::LongestChain<Backend, Block>,
 	)
 	where
-		I: Into<Option<NativeElseWasmExecutor<D>>>,
-		D: sc_executor::NativeExecutionDispatch + 'static,
+		I: Into<Option<DefaultExecutor>>,
 		Backend: sc_client_api::backend::Backend<Block> + 'static,
 	{
 		let executor = executor.into().unwrap_or_else(|| {
-			NativeElseWasmExecutor::new(WasmExecutionMethod::Interpreted, None, 8, 2)
+			DefaultExecutor::new(WasmExecutionMethod::Interpreted, None, 8, None, 2)
 		});
 		let executor = LocalCallExecutor::new(
 			self.backend.clone(),

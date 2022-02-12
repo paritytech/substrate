@@ -25,8 +25,8 @@ use frame_support::traits::StorageInfo;
 use linked_hash_map::LinkedHashMap;
 use sc_cli::{CliConfiguration, ExecutionStrategy, Result, SharedParams};
 use sc_client_db::BenchmarkingState;
-use sc_executor::NativeElseWasmExecutor;
-use sc_service::{Configuration, NativeExecutionDispatch};
+use sc_executor::DefaultExecutor;
+use sc_service::{Configuration};
 use sp_core::offchain::{
 	testing::{TestOffchainExt, TestTransactionPoolExt},
 	OffchainDbExt, OffchainWorkerExt, TransactionPoolExt,
@@ -89,12 +89,11 @@ fn combine_batches(
 
 impl BenchmarkCmd {
 	/// Runs the command and benchmarks the chain.
-	pub fn run<BB, ExecDispatch>(&self, config: Configuration) -> Result<()>
+	pub fn run<BB>(&self, config: Configuration) -> Result<()>
 	where
 		BB: BlockT + Debug,
 		<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
 		<BB as BlockT>::Hash: std::str::FromStr,
-		ExecDispatch: NativeExecutionDispatch + 'static,
 	{
 		if let Some(output_path) = &self.output {
 			if !output_path.is_dir() && output_path.file_name().is_none() {
@@ -134,10 +133,11 @@ impl BenchmarkCmd {
 		)?;
 		let state_without_tracking =
 			BenchmarkingState::<BB>::new(genesis_storage, cache_size, self.record_proof, false)?;
-		let executor = NativeElseWasmExecutor::<ExecDispatch>::new(
+		let executor = DefaultExecutor::new(
 			wasm_method,
 			self.heap_pages,
 			2, // The runtime instances cache size.
+			None,
 			2, // The runtime cache size
 		);
 

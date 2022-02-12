@@ -31,10 +31,9 @@ use sp_std::vec::Vec;
 
 sp_api::decl_runtime_apis! {
 	/// The API to interact with contracts without using executive.
-	pub trait ContractsApi<AccountId, Balance, BlockNumber, Hash> where
+	pub trait ContractsApi<AccountId, Balance, Hash> where
 		AccountId: Codec,
 		Balance: Codec,
-		BlockNumber: Codec,
 		Hash: Codec,
 	{
 		/// Perform a call from a specified account to a given contract.

@@ -193,7 +193,6 @@ where
 		+ Send
 		+ Sync
 		+ 'static,
-	Client::Api: Metadata<Block>,
 {
 	fn call(
 		&self,
@@ -530,7 +529,6 @@ where
 		+ Send
 		+ Sync
 		+ 'static,
-	Client::Api: Metadata<Block>,
 {
 	fn read_child_proof(
 		&self,

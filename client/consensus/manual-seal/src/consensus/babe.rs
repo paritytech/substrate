@@ -40,7 +40,7 @@ use sp_consensus::CacheKeyId;
 use sp_consensus_babe::{
 	digests::{NextEpochDescriptor, PreDigest, SecondaryPlainPreDigest},
 	inherents::BabeInherentData,
-	AuthorityId, BabeApi, BabeAuthorityWeight, ConsensusLog, BABE_ENGINE_ID,
+	AuthorityId, BabeAuthorityWeight, ConsensusLog, BABE_ENGINE_ID,
 };
 use sp_consensus_slots::Slot;
 use sp_inherents::InherentData;
@@ -139,7 +139,6 @@ where
 		+ ProvideRuntimeApi<B>
 		+ HeaderMetadata<B, Error = sp_blockchain::Error>
 		+ UsageProvider<B>,
-	C::Api: BabeApi<B>,
 {
 	pub fn new(
 		client: Arc<C>,
@@ -187,7 +186,6 @@ where
 		+ HeaderMetadata<B, Error = sp_blockchain::Error>
 		+ UsageProvider<B>
 		+ ProvideRuntimeApi<B>,
-	C::Api: BabeApi<B>,
 {
 	type Transaction = TransactionFor<C, B>;
 

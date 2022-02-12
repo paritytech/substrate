@@ -19,7 +19,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use codec::Decode;
+use codec::Codec;
 use sp_runtime::ConsensusEngineId;
 use sp_std::vec::Vec;
 
@@ -50,7 +50,7 @@ impl TotalDifficulty for u128 {
 
 sp_api::decl_runtime_apis! {
 	/// API necessary for timestamp-based difficulty adjustment algorithms.
-	pub trait TimestampApi<Moment: Decode> {
+	pub trait TimestampApi<Moment: Codec> {
 		/// Return the timestamp in the current block.
 		fn timestamp() -> Moment;
 	}
@@ -58,7 +58,7 @@ sp_api::decl_runtime_apis! {
 	/// API for those chains that put their difficulty adjustment algorithm directly
 	/// onto runtime. Note that while putting difficulty adjustment algorithm to
 	/// runtime is safe, putting the PoW algorithm on runtime is not.
-	pub trait DifficultyApi<Difficulty: Decode> {
+	pub trait DifficultyApi<Difficulty: Codec> {
 		/// Return the target difficulty of the next block.
 		fn difficulty() -> Difficulty;
 	}

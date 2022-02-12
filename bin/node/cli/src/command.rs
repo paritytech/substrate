@@ -17,9 +17,8 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::{chain_spec, service, service::new_partial, Cli, Subcommand};
-use node_executor::ExecutorDispatch;
-use node_runtime::{Block, RuntimeApi};
-use sc_cli::{ChainSpec, Result, RuntimeVersion, SubstrateCli};
+use node_primitives::Block;
+use sc_cli::{Result, SubstrateCli};
 use sc_service::PartialComponents;
 
 impl SubstrateCli for Cli {
@@ -54,18 +53,14 @@ impl SubstrateCli for Cli {
 					"Please specify which chain you want to run, e.g. --dev or --chain=local"
 						.into(),
 				),
-			"dev" => Box::new(chain_spec::development_config()),
-			"local" => Box::new(chain_spec::local_testnet_config()),
+			"dev" => Box::new(chain_spec::development_config()?),
+			"local" => Box::new(chain_spec::local_testnet_config()?),
 			"fir" | "flaming-fir" => Box::new(chain_spec::flaming_fir_config()?),
-			"staging" => Box::new(chain_spec::staging_testnet_config()),
+			"staging" => Box::new(chain_spec::staging_testnet_config()?),
 			path =>
 				Box::new(chain_spec::ChainSpec::from_json_file(std::path::PathBuf::from(path))?),
 		};
 		Ok(spec)
-	}
-
-	fn native_runtime_version(_: &Box<dyn ChainSpec>) -> &'static RuntimeVersion {
-		&node_runtime::VERSION
 	}
 }
 
@@ -83,13 +78,13 @@ pub fn run() -> Result<()> {
 		Some(Subcommand::Inspect(cmd)) => {
 			let runner = cli.create_runner(cmd)?;
 
-			runner.sync_run(|config| cmd.run::<Block, RuntimeApi, ExecutorDispatch>(config))
+			runner.sync_run(|config| cmd.run::<Block>(config))
 		},
 		Some(Subcommand::Benchmark(cmd)) =>
 			if cfg!(feature = "runtime-benchmarks") {
 				let runner = cli.create_runner(cmd)?;
 
-				runner.sync_run(|config| cmd.run::<Block, ExecutorDispatch>(config))
+				runner.sync_run(|config| cmd.run::<Block>(config))
 			} else {
 				Err("Benchmarking wasn't enabled when building the node. \
 				You can enable it with `--features runtime-benchmarks`."
@@ -155,7 +150,7 @@ pub fn run() -> Result<()> {
 					sc_service::TaskManager::new(config.tokio_handle.clone(), registry)
 						.map_err(|e| sc_cli::Error::Service(sc_service::Error::Prometheus(e)))?;
 
-				Ok((cmd.run::<Block, ExecutorDispatch>(config), task_manager))
+				Ok((cmd.run::<Block>(config), task_manager))
 			})
 		},
 		#[cfg(not(feature = "try-runtime"))]

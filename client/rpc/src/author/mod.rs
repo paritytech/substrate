@@ -84,7 +84,6 @@ impl<P, Client> AuthorApi<TxHash<P>, BlockHash<P>> for Author<P, Client>
 where
 	P: TransactionPool + Sync + Send + 'static,
 	Client: HeaderBackend<P::Block> + ProvideRuntimeApi<P::Block> + Send + Sync + 'static,
-	Client::Api: SessionKeys<P::Block>,
 	P::Hash: Unpin,
 	<P::Block as BlockT>::Hash: Unpin,
 {

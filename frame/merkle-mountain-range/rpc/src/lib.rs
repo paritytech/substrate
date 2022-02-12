@@ -93,7 +93,6 @@ impl<C, Block, MmrHash> MmrApi<<Block as BlockT>::Hash> for Mmr<C, (Block, MmrHa
 where
 	Block: BlockT,
 	C: Send + Sync + 'static + ProvideRuntimeApi<Block> + HeaderBackend<Block>,
-	C::Api: MmrRuntimeApi<Block, MmrHash>,
 	MmrHash: Codec + Send + Sync + 'static,
 {
 	fn generate_proof(
@@ -106,8 +105,8 @@ where
 			// If the block hash is not supplied assume the best block.
 			self.client.info().best_hash);
 
-		let (leaf, proof) = api
-			.generate_proof_with_context(
+		let (leaf, proof) = MmrRuntimeApi::<Block, MmrHash>::generate_proof_with_context(
+				&api,
 				&BlockId::hash(block_hash),
 				sp_core::ExecutionContext::OffchainCall(None),
 				leaf_index,

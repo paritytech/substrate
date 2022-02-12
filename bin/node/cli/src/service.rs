@@ -20,26 +20,19 @@
 
 //! Service implementation. Specialized wrapper over substrate service.
 
-use codec::Encode;
-use frame_system_rpc_runtime_api::AccountNonceApi;
 use futures::prelude::*;
-use node_executor::ExecutorDispatch;
 use node_primitives::Block;
-use node_runtime::RuntimeApi;
 use sc_client_api::{BlockBackend, ExecutorProvider};
 use sc_consensus_babe::{self, SlotProportion};
-use sc_executor::NativeElseWasmExecutor;
+use sc_executor::DefaultExecutor;
 use sc_network::{Event, NetworkService};
 use sc_service::{config::Configuration, error::Error as ServiceError, RpcHandlers, TaskManager};
 use sc_telemetry::{Telemetry, TelemetryWorker};
-use sp_api::ProvideRuntimeApi;
-use sp_core::crypto::Pair;
-use sp_runtime::{generic, traits::Block as BlockT, SaturatedConversion};
+use sp_runtime::{traits::Block as BlockT};
 use std::sync::Arc;
 
 /// The full client type definition.
-pub type FullClient =
-	sc_service::TFullClient<Block, RuntimeApi, NativeElseWasmExecutor<ExecutorDispatch>>;
+pub type FullClient = sc_service::TFullClient<Block>;
 type FullBackend = sc_service::TFullBackend<Block>;
 type FullSelectChain = sc_consensus::LongestChain<FullBackend, Block>;
 type FullGrandpaBlockImport =
@@ -47,78 +40,6 @@ type FullGrandpaBlockImport =
 
 /// The transaction pool type defintion.
 pub type TransactionPool = sc_transaction_pool::FullPool<Block, FullClient>;
-
-/// Fetch the nonce of the given `account` from the chain state.
-///
-/// Note: Should only be used for tests.
-pub fn fetch_nonce(client: &FullClient, account: sp_core::sr25519::Pair) -> u32 {
-	let best_hash = client.chain_info().best_hash;
-	client
-		.runtime_api()
-		.account_nonce(&generic::BlockId::Hash(best_hash), account.public().into())
-		.expect("Fetching account nonce works; qed")
-}
-
-/// Create a transaction using the given `call`.
-///
-/// The transaction will be signed by `sender`. If `nonce` is `None` it will be fetched from the
-/// state of the best block.
-///
-/// Note: Should only be used for tests.
-pub fn create_extrinsic(
-	client: &FullClient,
-	sender: sp_core::sr25519::Pair,
-	function: impl Into<node_runtime::Call>,
-	nonce: Option<u32>,
-) -> node_runtime::UncheckedExtrinsic {
-	let function = function.into();
-	let genesis_hash = client.block_hash(0).ok().flatten().expect("Genesis block exists; qed");
-	let best_hash = client.chain_info().best_hash;
-	let best_block = client.chain_info().best_number;
-	let nonce = nonce.unwrap_or_else(|| fetch_nonce(client, sender.clone()));
-
-	let period = node_runtime::BlockHashCount::get()
-		.checked_next_power_of_two()
-		.map(|c| c / 2)
-		.unwrap_or(2) as u64;
-	let tip = 0;
-	let extra: node_runtime::SignedExtra = (
-		frame_system::CheckNonZeroSender::<node_runtime::Runtime>::new(),
-		frame_system::CheckSpecVersion::<node_runtime::Runtime>::new(),
-		frame_system::CheckTxVersion::<node_runtime::Runtime>::new(),
-		frame_system::CheckGenesis::<node_runtime::Runtime>::new(),
-		frame_system::CheckEra::<node_runtime::Runtime>::from(generic::Era::mortal(
-			period,
-			best_block.saturated_into(),
-		)),
-		frame_system::CheckNonce::<node_runtime::Runtime>::from(nonce),
-		frame_system::CheckWeight::<node_runtime::Runtime>::new(),
-		pallet_asset_tx_payment::ChargeAssetTxPayment::<node_runtime::Runtime>::from(tip, None),
-	);
-
-	let raw_payload = node_runtime::SignedPayload::from_raw(
-		function.clone(),
-		extra.clone(),
-		(
-			(),
-			node_runtime::VERSION.spec_version,
-			node_runtime::VERSION.transaction_version,
-			genesis_hash,
-			best_hash,
-			(),
-			(),
-			(),
-		),
-	);
-	let signature = raw_payload.using_encoded(|e| sender.sign(e));
-
-	node_runtime::UncheckedExtrinsic::new_signed(
-		function.clone(),
-		sp_runtime::AccountId32::from(sender.public()).into(),
-		node_runtime::Signature::Sr25519(signature.clone()),
-		extra.clone(),
-	)
-}
 
 /// Creates a new partial node.
 pub fn new_partial(
@@ -157,15 +78,16 @@ pub fn new_partial(
 		})
 		.transpose()?;
 
-	let executor = NativeElseWasmExecutor::<ExecutorDispatch>::new(
+	let executor = DefaultExecutor::new(
 		config.wasm_method,
 		config.default_heap_pages,
 		config.max_runtime_instances,
+		None,
 		config.runtime_cache_size,
 	);
 
 	let (client, backend, keystore_container, task_manager) =
-		sc_service::new_full_parts::<Block, RuntimeApi, _>(
+		sc_service::new_full_parts::<Block>(
 			config,
 			telemetry.as_ref().map(|(_, telemetry)| telemetry.handle()),
 			executor,
@@ -224,7 +146,7 @@ pub fn new_partial(
 		},
 		&task_manager.spawn_essential_handle(),
 		config.prometheus_registry(),
-		sp_consensus::CanAuthorWithNativeVersion::new(client.executor().clone()),
+		sp_consensus::CanAuthorWithVersion::new(client.executor().clone()),
 		telemetry.as_ref().map(|x| x.handle()),
 	)?;
 
@@ -396,7 +318,7 @@ pub fn new_full_base(
 		);
 
 		let can_author_with =
-			sp_consensus::CanAuthorWithNativeVersion::new(client.executor().clone());
+			sp_consensus::CanAuthorWithVersion::new(client.executor().clone());
 
 		let client_clone = client.clone();
 		let slot_duration = babe_link.config().slot_duration();

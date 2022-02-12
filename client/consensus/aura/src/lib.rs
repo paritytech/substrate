@@ -86,15 +86,13 @@ type AuthorityId<P> = <P as Pair>::Public;
 pub type SlotDuration = sc_consensus_slots::SlotDuration<sp_consensus_aura::SlotDuration>;
 
 /// Get the slot duration for Aura.
-pub fn slot_duration<A, B, C>(client: &C) -> CResult<SlotDuration>
+pub fn slot_duration<B, C>(client: &C) -> CResult<SlotDuration>
 where
-	A: Codec,
 	B: BlockT,
 	C: AuxStore + ProvideRuntimeApi<B> + UsageProvider<B>,
-	C::Api: AuraApi<B, A>,
 {
 	let best_block_id = BlockId::Hash(client.usage_info().chain.best_hash);
-	let slot_duration = client.runtime_api().slot_duration(&best_block_id)?;
+	let slot_duration = AuraApi::<B, ()>::slot_duration(&client.runtime_api(), &best_block_id)?;
 
 	Ok(SlotDuration::new(slot_duration))
 }
@@ -183,7 +181,6 @@ where
 	P::Signature: TryFrom<Vec<u8>> + Hash + Member + Encode + Decode,
 	B: BlockT,
 	C: ProvideRuntimeApi<B> + BlockOf + AuxStore + HeaderBackend<B> + Send + Sync,
-	C::Api: AuraApi<B, AuthorityId<P>>,
 	SC: SelectChain<B>,
 	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync + 'static,
 	PF: Environment<B, Error = Error> + Send + Sync + 'static,
@@ -272,7 +269,6 @@ pub fn build_aura_worker<P, B, C, PF, I, SO, L, BS, Error>(
 where
 	B: BlockT,
 	C: ProvideRuntimeApi<B> + BlockOf + AuxStore + HeaderBackend<B> + Send + Sync,
-	C::Api: AuraApi<B, AuthorityId<P>>,
 	PF: Environment<B, Error = Error> + Send + Sync + 'static,
 	PF::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
 	P: Pair + Send + Sync,
@@ -321,7 +317,6 @@ impl<B, C, E, I, P, Error, SO, L, BS> sc_consensus_slots::SimpleSlotWorker<B>
 where
 	B: BlockT,
 	C: ProvideRuntimeApi<B> + BlockOf + HeaderBackend<B> + Sync,
-	C::Api: AuraApi<B, AuthorityId<P>>,
 	E: Environment<B, Error = Error> + Send + Sync,
 	E::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
 	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync + 'static,
@@ -551,7 +546,6 @@ where
 	A: Codec + Debug,
 	B: BlockT,
 	C: ProvideRuntimeApi<B> + BlockOf,
-	C::Api: AuraApi<B, A>,
 {
 	client
 		.runtime_api()

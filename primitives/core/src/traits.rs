@@ -33,7 +33,7 @@ pub trait CodeExecutor: Sized + Send + Sync + ReadRuntimeVersion + Clone + 'stat
 	/// Call a given method in the runtime. Returns a tuple of the result (either the output data
 	/// or an execution error) together with a `bool`, which is true if native execution was used.
 	fn call<
-		R: codec::Codec + PartialEq,
+		R: codec::Codec,
 		NC: FnOnce() -> Result<R, Box<dyn std::error::Error + Send + Sync>> + UnwindSafe,
 	>(
 		&self,

@@ -83,7 +83,6 @@ where
 		+ HeaderBackend<B>
 		+ HeaderMetadata<B, Error = BlockChainError>
 		+ 'static,
-	C::Api: BabeRuntimeApi<B>,
 	SC: SelectChain<B> + Clone + 'static,
 {
 	fn epoch_authorship(&self) -> FutureResult<HashMap<AuthorityId, EpochAuthorship>> {

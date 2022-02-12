@@ -90,8 +90,6 @@ where
 	C: sp_api::ProvideRuntimeApi<Block>,
 	C: HeaderBackend<Block>,
 	C: Send + Sync + 'static,
-	C::Api: AccountNonceApi<Block, AccountId, Index>,
-	C::Api: BlockBuilder<Block>,
 	P: TransactionPool + 'static,
 	Block: traits::Block,
 	AccountId: Clone + std::fmt::Display + Codec,

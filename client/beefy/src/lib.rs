@@ -29,8 +29,6 @@ use sp_blockchain::HeaderBackend;
 use sp_keystore::SyncCryptoStorePtr;
 use sp_runtime::traits::Block;
 
-use beefy_primitives::BeefyApi;
-
 use crate::notification::{BeefyBestBlockSender, BeefySignedCommitmentSender};
 
 mod error;
@@ -111,7 +109,6 @@ where
 	B: Block,
 	BE: Backend<B>,
 	C: Client<B, BE>,
-	C::Api: BeefyApi<B>,
 	N: GossipNetwork<B> + Clone + Send + 'static,
 {
 	/// BEEFY client
@@ -142,7 +139,6 @@ where
 	B: Block,
 	BE: Backend<B>,
 	C: Client<B, BE>,
-	C::Api: BeefyApi<B>,
 	N: GossipNetwork<B> + Clone + Send + 'static,
 {
 	let BeefyParams {

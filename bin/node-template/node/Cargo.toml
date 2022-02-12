@@ -53,11 +53,12 @@ frame-benchmarking = { version = "4.0.0-dev", path = "../../../frame/benchmarkin
 frame-benchmarking-cli = { version = "4.0.0-dev", path = "../../../utils/frame/benchmarking-cli" }
 
 # Local Dependencies
-node-template-runtime = { version = "4.0.0-dev", path = "../runtime" }
+#node-template-runtime = { version = "4.0.0-dev", path = "../runtime" }
 
 [build-dependencies]
 substrate-build-script-utils = { version = "3.0.0", path = "../../../utils/build-script-utils" }
 
 [features]
 default = []
-runtime-benchmarks = ["node-template-runtime/runtime-benchmarks"]
+runtime-benchmarks = []
+#runtime-benchmarks = ["node-template-runtime/runtime-benchmarks"]

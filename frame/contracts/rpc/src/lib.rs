@@ -188,13 +188,6 @@ impl<C, Block, AccountId, Balance, Hash>
 where
 	Block: BlockT,
 	C: Send + Sync + 'static + ProvideRuntimeApi<Block> + HeaderBackend<Block>,
-	C::Api: ContractsRuntimeApi<
-		Block,
-		AccountId,
-		Balance,
-		<<Block as BlockT>::Header as HeaderT>::Number,
-		Hash,
-	>,
 	AccountId: Codec,
 	Balance: Codec + Copy + TryFrom<NumberOrHex> + Into<NumberOrHex>,
 	Hash: Codec,
@@ -218,7 +211,8 @@ where
 			storage_deposit_limit.map(|l| decode_hex(l, "balance")).transpose()?;
 		limit_gas(gas_limit)?;
 
-		api.call(&at, origin, dest, value, gas_limit, storage_deposit_limit, input_data.to_vec())
+		ContractsRuntimeApi::<Block, AccountId, Balance, Hash>::call(
+		 &api, &at, origin, dest, value, gas_limit, storage_deposit_limit, input_data.to_vec())
 			.map_err(runtime_error_into_rpc_err)
 	}
 
@@ -291,8 +285,7 @@ where
 			// If the block hash is not supplied assume the best block.
 			self.client.info().best_hash));
 
-		let result = api
-			.get_storage(&at, address, key.into())
+		let result = ContractsRuntimeApi::<Block, AccountId, Balance, Hash>::get_storage(&api, &at, address, key.into())
 			.map_err(runtime_error_into_rpc_err)?
 			.map_err(ContractAccessError)?
 			.map(Bytes);

@@ -23,28 +23,27 @@ use crate::{
 	Inspector,
 };
 use sc_cli::{CliConfiguration, ImportParams, Result, SharedParams};
-use sc_executor::NativeElseWasmExecutor;
-use sc_service::{new_full_client, Configuration, NativeExecutionDispatch};
+use sc_executor::{DefaultExecutor};
+use sc_service::{new_full_client, Configuration};
 use sp_runtime::traits::Block;
 use std::str::FromStr;
 
 impl InspectCmd {
 	/// Run the inspect command, passing the inspector.
-	pub fn run<B, RA, EX>(&self, config: Configuration) -> Result<()>
+	pub fn run<B>(&self, config: Configuration) -> Result<()>
 	where
 		B: Block,
 		B::Hash: FromStr,
-		RA: Send + Sync + 'static,
-		EX: NativeExecutionDispatch + 'static,
 	{
-		let executor = NativeElseWasmExecutor::<EX>::new(
+		let executor = DefaultExecutor::new(
 			config.wasm_method,
 			config.default_heap_pages,
 			config.max_runtime_instances,
+			None,
 			config.runtime_cache_size,
 		);
 
-		let client = new_full_client::<B, RA, _>(&config, None, executor)?;
+		let client = new_full_client::<B>(&config, None, executor)?;
 		let inspect = Inspector::<B>::new(client);
 
 		match &self.command {

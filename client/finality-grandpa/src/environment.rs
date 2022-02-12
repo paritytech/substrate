@@ -477,7 +477,6 @@ where
 	Block: BlockT,
 	BE: BackendT<Block>,
 	C: ClientForGrandpa<Block, BE>,
-	C::Api: GrandpaApi<Block>,
 	N: NetworkT<Block>,
 	SC: SelectChainT<Block>,
 {
@@ -631,7 +630,6 @@ where
 	Block: BlockT,
 	B: BackendT<Block>,
 	C: ClientForGrandpa<Block, B> + 'static,
-	C::Api: GrandpaApi<Block>,
 	N: NetworkT<Block>,
 	SC: SelectChainT<Block> + 'static,
 	VR: VotingRuleT<Block, C> + Clone + 'static,

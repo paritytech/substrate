@@ -360,7 +360,6 @@ where
 		+ Send
 		+ Sync
 		+ 'static,
-	Client::Api: sp_transaction_pool::runtime_api::TaggedTransactionQueue<Block>,
 {
 	/// Create new basic transaction pool for a full node with the provided api.
 	pub fn new_full(
@@ -397,7 +396,6 @@ where
 		+ sc_client_api::blockchain::HeaderBackend<Block>
 		+ sp_runtime::traits::BlockIdTo<Block>,
 	Client: Send + Sync + 'static,
-	Client::Api: sp_transaction_pool::runtime_api::TaggedTransactionQueue<Block>,
 {
 	type Block = Block;
 	type Hash = graph::ExtrinsicHash<FullChainApi<Client, Block>>;

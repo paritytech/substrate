@@ -27,7 +27,7 @@ use sp_api::{ProvideRuntimeApi, TransactionFor};
 use sp_blockchain::{HeaderBackend, HeaderMetadata};
 use sp_consensus_aura::{
 	digests::CompatibleDigestItem,
-	sr25519::{AuthorityId, AuthoritySignature},
+	sr25519::{AuthoritySignature},
 	AuraApi,
 };
 use sp_inherents::InherentData;
@@ -47,7 +47,6 @@ impl<B, C> AuraConsensusDataProvider<B, C>
 where
 	B: BlockT,
 	C: AuxStore + ProvideRuntimeApi<B> + UsageProvider<B>,
-	C::Api: AuraApi<B, AuthorityId>,
 {
 	/// Creates a new instance of the [`AuraConsensusDataProvider`], requires that `client`
 	/// implements [`sp_consensus_aura::AuraApi`]
@@ -67,7 +66,6 @@ where
 		+ HeaderMetadata<B, Error = sp_blockchain::Error>
 		+ UsageProvider<B>
 		+ ProvideRuntimeApi<B>,
-	C::Api: AuraApi<B, AuthorityId>,
 {
 	type Transaction = TransactionFor<C, B>;
 

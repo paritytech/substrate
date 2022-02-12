@@ -397,7 +397,7 @@ mod execution {
 			native_call: Option<NC>,
 		) -> (CallResult<R, Exec::Error>, bool)
 		where
-			R: Decode + Encode + PartialEq,
+			R: Decode + Encode,
 			NC: FnOnce() -> result::Result<R, Box<dyn std::error::Error + Send + Sync>>
 				+ UnwindSafe,
 		{
@@ -455,7 +455,7 @@ mod execution {
 			on_consensus_failure: Handler,
 		) -> CallResult<R, Exec::Error>
 		where
-			R: Decode + Encode + PartialEq,
+			R: Decode + Encode,
 			NC: FnOnce() -> result::Result<R, Box<dyn std::error::Error + Send + Sync>>
 				+ UnwindSafe,
 			Handler: FnOnce(
@@ -471,7 +471,7 @@ mod execution {
 				let (wasm_result, _) = self.execute_aux(false, native_call);
 
 				if (result.is_ok() &&
-					wasm_result.is_ok() && result.as_ref().ok() == wasm_result.as_ref().ok()) ||
+					wasm_result.is_ok() && result.as_ref().unwrap().as_encoded() == wasm_result.as_ref().unwrap().as_encoded()) ||
 					result.is_err() && wasm_result.is_err()
 				{
 					result
@@ -489,7 +489,7 @@ mod execution {
 			mut native_call: Option<NC>,
 		) -> CallResult<R, Exec::Error>
 		where
-			R: Decode + Encode + PartialEq,
+			R: Decode + Encode,
 			NC: FnOnce() -> result::Result<R, Box<dyn std::error::Error + Send + Sync>>
 				+ UnwindSafe,
 		{
@@ -521,7 +521,7 @@ mod execution {
 			mut native_call: Option<NC>,
 		) -> Result<NativeOrEncoded<R>, Box<dyn Error>>
 		where
-			R: Decode + Encode + PartialEq,
+			R: Decode + Encode,
 			NC: FnOnce() -> result::Result<R, Box<dyn std::error::Error + Send + Sync>>
 				+ UnwindSafe,
 			Handler: FnOnce(
@@ -1376,7 +1376,7 @@ mod tests {
 		type Error = u8;
 
 		fn call<
-			R: Encode + Decode + PartialEq,
+			R: Encode + Decode,
 			NC: FnOnce() -> result::Result<R, Box<dyn std::error::Error + Send + Sync>> + UnwindSafe,
 		>(
 			&self,

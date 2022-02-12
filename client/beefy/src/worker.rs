@@ -100,7 +100,6 @@ where
 	B: Block + Codec,
 	BE: Backend<B>,
 	C: Client<B, BE>,
-	C::Api: BeefyApi<B>,
 {
 	/// Return a new BEEFY worker instance.
 	///
@@ -146,7 +145,6 @@ where
 	B: Block,
 	BE: Backend<B>,
 	C: Client<B, BE>,
-	C::Api: BeefyApi<B>,
 {
 	/// Return `true`, if we should vote on block `number`
 	fn should_vote_on(&self, number: NumberFor<B>) -> bool {

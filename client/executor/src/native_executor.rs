@@ -290,7 +290,7 @@ where
 	type Error = Error;
 
 	fn call<
-		R: Decode + Encode + PartialEq,
+		R: Decode + Encode,
 		NC: FnOnce() -> result::Result<R, Box<dyn std::error::Error + Send + Sync>> + UnwindSafe,
 	>(
 		&self,
@@ -532,7 +532,7 @@ impl<D: NativeExecutionDispatch + 'static> CodeExecutor for NativeElseWasmExecut
 	type Error = Error;
 
 	fn call<
-		R: Decode + Encode + PartialEq,
+		R: Decode + Encode,
 		NC: FnOnce() -> result::Result<R, Box<dyn std::error::Error + Send + Sync>> + UnwindSafe,
 	>(
 		&self,

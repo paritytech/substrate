@@ -37,7 +37,7 @@ use sp_blockchain::{
 };
 use sp_consensus::{CanAuthorWith, Error as ConsensusError};
 use sp_consensus_aura::{
-	digests::CompatibleDigestItem, inherents::AuraInherentData, AuraApi, ConsensusLog,
+	digests::CompatibleDigestItem, inherents::AuraInherentData, ConsensusLog,
 	AURA_ENGINE_ID,
 };
 use sp_consensus_slots::Slot;
@@ -153,7 +153,6 @@ where
 	) -> Result<(), Error<B>>
 	where
 		C: ProvideRuntimeApi<B>,
-		C::Api: BlockBuilderApi<B>,
 		CAW: CanAuthorWith<B>,
 		CIDP: CreateInherentDataProviders<B, ()>,
 	{
@@ -190,7 +189,6 @@ where
 impl<B: BlockT, C, P, CAW, CIDP> Verifier<B> for AuraVerifier<C, P, CAW, CIDP>
 where
 	C: ProvideRuntimeApi<B> + Send + Sync + sc_client_api::backend::AuxStore + BlockOf,
-	C::Api: BlockBuilderApi<B> + AuraApi<B, AuthorityId<P>> + ApiExt<B>,
 	P: Pair + Send + Sync + 'static,
 	P::Public: Send + Sync + Hash + Eq + Clone + Decode + Encode + Debug + 'static,
 	P::Signature: Encode + Decode,
@@ -375,7 +373,6 @@ pub fn import_queue<'a, P, Block, I, C, S, CAW, CIDP>(
 ) -> Result<DefaultImportQueue<Block, C>, sp_consensus::Error>
 where
 	Block: BlockT,
-	C::Api: BlockBuilderApi<Block> + AuraApi<Block, AuthorityId<P>> + ApiExt<Block>,
 	C: 'static
 		+ ProvideRuntimeApi<Block>
 		+ BlockOf

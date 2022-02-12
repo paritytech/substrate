@@ -26,10 +26,8 @@ use sc_consensus_babe::Config;
 use sp_api::ProvideRuntimeApi;
 use sp_blockchain::HeaderBackend;
 use sp_consensus_aura::{
-	sr25519::{AuthorityId, AuthoritySignature},
-	AuraApi,
+	sr25519::{AuthoritySignature},
 };
-use sp_consensus_babe::BabeApi;
 use sp_inherents::{InherentData, InherentDataProvider, InherentIdentifier};
 use sp_runtime::{
 	generic::BlockId,
@@ -62,7 +60,6 @@ impl SlotTimestampProvider {
 	where
 		B: BlockT,
 		C: AuxStore + HeaderBackend<B> + ProvideRuntimeApi<B> + UsageProvider<B>,
-		C::Api: BabeApi<B>,
 	{
 		let slot_duration = Config::get(&*client)?.slot_duration;
 
@@ -81,7 +78,6 @@ impl SlotTimestampProvider {
 	where
 		B: BlockT,
 		C: AuxStore + HeaderBackend<B> + ProvideRuntimeApi<B> + UsageProvider<B>,
-		C::Api: AuraApi<B, AuthorityId>,
 	{
 		let slot_duration = (*slot_duration(&*client)?).get();
 

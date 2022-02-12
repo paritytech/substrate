@@ -230,7 +230,6 @@ where
 	NumberFor<Block>: finality_grandpa::BlockNumberOps,
 	BE: Backend<Block>,
 	Client: ClientForGrandpa<Block, BE>,
-	Client::Api: GrandpaApi<Block>,
 	for<'a> &'a Client:
 		BlockImport<Block, Error = ConsensusError, Transaction = TransactionFor<Client, Block>>,
 	TransactionFor<Client, Block>: 'static,
@@ -515,7 +514,6 @@ where
 	NumberFor<Block>: finality_grandpa::BlockNumberOps,
 	BE: Backend<Block>,
 	Client: ClientForGrandpa<Block, BE>,
-	Client::Api: GrandpaApi<Block>,
 	for<'a> &'a Client:
 		BlockImport<Block, Error = ConsensusError, Transaction = TransactionFor<Client, Block>>,
 	TransactionFor<Client, Block>: 'static,

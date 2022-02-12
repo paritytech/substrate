@@ -22,7 +22,7 @@ use sc_client_api::{backend, call_executor::CallExecutor, HeaderBackend};
 use sc_executor::{RuntimeVersion, RuntimeVersionOf};
 use sp_api::{ProofRecorder, StorageTransactionCache};
 use sp_core::{
-	traits::{CodeExecutor, RuntimeCode, SpawnNamed},
+	traits::{RuntimeCode, SpawnNamed},
 	NativeOrEncoded, NeverNativeValue,
 };
 use sp_externalities::Extensions;
@@ -35,24 +35,23 @@ use std::{cell::RefCell, panic::UnwindSafe, result, sync::Arc};
 
 /// Call executor that executes methods locally, querying all required
 /// data from local backend.
-pub struct LocalCallExecutor<Block: BlockT, B, E> {
+pub struct LocalCallExecutor<Block: BlockT, B> {
 	backend: Arc<B>,
-	executor: E,
+	executor: sc_executor::DefaultExecutor,
 	wasm_override: Arc<Option<WasmOverride>>,
-	wasm_substitutes: WasmSubstitutes<Block, E, B>,
+	wasm_substitutes: WasmSubstitutes<Block, sc_executor::DefaultExecutor, B>,
 	spawn_handle: Box<dyn SpawnNamed>,
 	client_config: ClientConfig<Block>,
 }
 
-impl<Block: BlockT, B, E> LocalCallExecutor<Block, B, E>
+impl<Block: BlockT, B> LocalCallExecutor<Block, B>
 where
-	E: CodeExecutor + RuntimeVersionOf + Clone + 'static,
 	B: backend::Backend<Block>,
 {
 	/// Creates new instance of local call executor.
 	pub fn new(
 		backend: Arc<B>,
-		executor: E,
+		executor: sc_executor::DefaultExecutor,
 		spawn_handle: Box<dyn SpawnNamed>,
 		client_config: ClientConfig<Block>,
 	) -> sp_blockchain::Result<Self> {
@@ -118,10 +117,7 @@ where
 	}
 }
 
-impl<Block: BlockT, B, E> Clone for LocalCallExecutor<Block, B, E>
-where
-	E: Clone,
-{
+impl<Block: BlockT, B> Clone for LocalCallExecutor<Block, B> {
 	fn clone(&self) -> Self {
 		LocalCallExecutor {
 			backend: self.backend.clone(),
@@ -134,13 +130,12 @@ where
 	}
 }
 
-impl<B, E, Block> CallExecutor<Block> for LocalCallExecutor<Block, B, E>
+impl<B, Block> CallExecutor<Block> for LocalCallExecutor<Block, B>
 where
 	B: backend::Backend<Block>,
-	E: CodeExecutor + RuntimeVersionOf + Clone + 'static,
 	Block: BlockT,
 {
-	type Error = E::Error;
+	type Error = <sc_executor::DefaultExecutor as sp_core::traits::CodeExecutor>::Error;
 
 	type Backend = B;
 
@@ -188,7 +183,7 @@ where
 			Result<NativeOrEncoded<R>, Self::Error>,
 			Result<NativeOrEncoded<R>, Self::Error>,
 		) -> Result<NativeOrEncoded<R>, Self::Error>,
-		R: Encode + Decode + PartialEq,
+		R: Encode + Decode,
 		NC: FnOnce() -> result::Result<R, sp_api::ApiError> + UnwindSafe,
 	>(
 		&self,
@@ -319,9 +314,8 @@ where
 	}
 }
 
-impl<B, E, Block> RuntimeVersionOf for LocalCallExecutor<Block, B, E>
+impl<B, Block> RuntimeVersionOf for LocalCallExecutor<Block, B>
 where
-	E: RuntimeVersionOf,
 	Block: BlockT,
 {
 	fn runtime_version(
@@ -333,25 +327,13 @@ where
 	}
 }
 
-impl<Block, B, E> sp_version::GetRuntimeVersionAt<Block> for LocalCallExecutor<Block, B, E>
+impl<Block, B> sp_version::GetRuntimeVersionAt<Block> for LocalCallExecutor<Block, B>
 where
 	B: backend::Backend<Block>,
-	E: CodeExecutor + RuntimeVersionOf + Clone + 'static,
 	Block: BlockT,
 {
 	fn runtime_version(&self, at: &BlockId<Block>) -> Result<sp_version::RuntimeVersion, String> {
 		CallExecutor::runtime_version(self, at).map_err(|e| e.to_string())
-	}
-}
-
-impl<Block, B, E> sp_version::GetNativeVersion for LocalCallExecutor<Block, B, E>
-where
-	B: backend::Backend<Block>,
-	E: CodeExecutor + sp_version::GetNativeVersion + Clone + 'static,
-	Block: BlockT,
-{
-	fn native_version(&self) -> &sp_version::NativeVersion {
-		self.executor.native_version()
 	}
 }
 

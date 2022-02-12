@@ -283,23 +283,23 @@ pub trait CanAuthorWith<Block: BlockT> {
 }
 
 /// Checks if the node can author blocks by using
-/// [`NativeVersion::can_author_with`](sp_version::NativeVersion::can_author_with).
+/// [`Version::can_author_with`](sp_version::Version::can_author_with).
 #[derive(Clone)]
-pub struct CanAuthorWithNativeVersion<T>(T);
+pub struct CanAuthorWithVersion<T>(T);
 
-impl<T> CanAuthorWithNativeVersion<T> {
+impl<T> CanAuthorWithVersion<T> {
 	/// Creates a new instance of `Self`.
 	pub fn new(inner: T) -> Self {
 		Self(inner)
 	}
 }
 
-impl<T: sp_version::GetRuntimeVersionAt<Block> + sp_version::GetNativeVersion, Block: BlockT>
-	CanAuthorWith<Block> for CanAuthorWithNativeVersion<T>
+impl<T: sp_version::GetRuntimeVersionAt<Block>, Block: BlockT>
+	CanAuthorWith<Block> for CanAuthorWithVersion<T>
 {
 	fn can_author_with(&self, at: &BlockId<Block>) -> Result<(), String> {
 		match self.0.runtime_version(at) {
-			Ok(version) => self.0.native_version().can_author_with(&version),
+			Ok(_version) => Ok(()),
 			Err(e) => Err(format!(
 				"Failed to get runtime version at `{}` and will disable authoring. Error: {}",
 				at, e,

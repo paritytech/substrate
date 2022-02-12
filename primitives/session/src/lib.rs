@@ -116,7 +116,6 @@ pub fn generate_initial_session_keys<Block, T>(
 where
 	Block: BlockT,
 	T: ProvideRuntimeApi<Block>,
-	T::Api: SessionKeys<Block>,
 {
 	let runtime_api = client.runtime_api();
 

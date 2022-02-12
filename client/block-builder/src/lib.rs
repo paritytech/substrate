@@ -29,7 +29,7 @@
 use codec::Encode;
 
 use sp_api::{
-	ApiExt, ApiRef, Core, ProvideRuntimeApi, StorageChanges, StorageProof, TransactionOutcome,
+	ApiExt, RuntimeApi, Core, StorageChanges, StorageProof, TransactionOutcome, CallApiAt,
 };
 use sp_blockchain::{ApplyExtrinsicFailed, Error};
 use sp_core::ExecutionContext;
@@ -105,12 +105,12 @@ impl<Block: BlockT, StateBackend: backend::StateBackend<HashFor<Block>>>
 }
 
 /// Block builder provider
-pub trait BlockBuilderProvider<B, Block, RA>
+pub trait BlockBuilderProvider<B, Block, A>
 where
 	Block: BlockT,
 	B: backend::Backend<Block>,
+	A: CallApiAt<Block>,
 	Self: Sized,
-	RA: ProvideRuntimeApi<Block>,
 {
 	/// Create a new block, built on top of `parent`.
 	///
@@ -122,19 +122,19 @@ where
 		parent: &BlockId<Block>,
 		inherent_digests: Digest,
 		record_proof: R,
-	) -> sp_blockchain::Result<BlockBuilder<Block, RA, B>>;
+	) -> sp_blockchain::Result<BlockBuilder<Block, A, B>>;
 
 	/// Create a new block, built on the head of the chain.
 	fn new_block(
 		&self,
 		inherent_digests: Digest,
-	) -> sp_blockchain::Result<BlockBuilder<Block, RA, B>>;
+	) -> sp_blockchain::Result<BlockBuilder<Block, A, B>>;
 }
 
 /// Utility for building new (valid) blocks from a stream of extrinsics.
-pub struct BlockBuilder<'a, Block: BlockT, A: ProvideRuntimeApi<Block>, B> {
+pub struct BlockBuilder<'a, Block: BlockT, A: 'a + CallApiAt<Block>, B> {
 	extrinsics: Vec<Block::Extrinsic>,
-	api: ApiRef<'a, A::Api>,
+	api: RuntimeApi<'a, Block, A>,
 	block_id: BlockId<Block>,
 	parent_hash: Block::Hash,
 	backend: &'a B,
@@ -145,9 +145,7 @@ pub struct BlockBuilder<'a, Block: BlockT, A: ProvideRuntimeApi<Block>, B> {
 impl<'a, Block, A, B> BlockBuilder<'a, Block, A, B>
 where
 	Block: BlockT,
-	A: ProvideRuntimeApi<Block> + 'a,
-	A::Api:
-		BlockBuilderApi<Block> + ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>>,
+	A: CallApiAt<Block, StateBackend=B::State> + 'a,
 	B: backend::Backend<Block>,
 {
 	/// Create a new instance of builder based on the given `parent_hash` and `parent_number`.
@@ -173,7 +171,7 @@ where
 
 		let estimated_header_size = header.encoded_size();
 
-		let mut api = api.runtime_api();
+		let mut api = RuntimeApi::new(api);
 
 		if record_proof.yes() {
 			api.record_proof();

@@ -130,7 +130,6 @@ impl<Client, Block> OffchainWorkers<Client, Block>
 where
 	Block: traits::Block,
 	Client: ProvideRuntimeApi<Block> + Send + Sync + 'static,
-	Client::Api: OffchainWorkerApi<Block>,
 {
 	/// Start the offchain workers after given block.
 	#[must_use]
@@ -233,7 +232,6 @@ pub async fn notification_future<Client, Block, Spawner>(
 	Block: traits::Block,
 	Client:
 		ProvideRuntimeApi<Block> + sc_client_api::BlockchainEvents<Block> + Send + Sync + 'static,
-	Client::Api: OffchainWorkerApi<Block>,
 	Spawner: SpawnNamed,
 {
 	client

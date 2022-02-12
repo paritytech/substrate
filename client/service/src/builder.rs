@@ -35,7 +35,6 @@ use sc_client_api::{
 };
 use sc_client_db::{Backend, DatabaseSettings};
 use sc_consensus::import_queue::ImportQueue;
-use sc_executor::RuntimeVersionOf;
 use sc_keystore::LocalKeystore;
 use sc_network::{
 	block_request_handler::{self, BlockRequestHandler},
@@ -53,7 +52,7 @@ use sp_blockchain::{HeaderBackend, HeaderMetadata};
 use sp_consensus::block_validation::{
 	BlockAnnounceValidator, Chain, DefaultBlockAnnounceValidator,
 };
-use sp_core::traits::{CodeExecutor, SpawnNamed};
+use sp_core::traits::{SpawnNamed};
 use sp_keystore::{CryptoStore, SyncCryptoStore, SyncCryptoStorePtr};
 use sp_runtime::{
 	generic::BlockId,
@@ -126,18 +125,16 @@ where
 }
 
 /// Full client type.
-pub type TFullClient<TBl, TRtApi, TExec> =
-	Client<TFullBackend<TBl>, TFullCallExecutor<TBl, TExec>, TBl, TRtApi>;
+pub type TFullClient<TBl> = Client<TFullBackend<TBl>, TBl>;
 
 /// Full client backend type.
 pub type TFullBackend<TBl> = sc_client_db::Backend<TBl>;
 
 /// Full client call executor type.
-pub type TFullCallExecutor<TBl, TExec> =
-	crate::client::LocalCallExecutor<TBl, sc_client_db::Backend<TBl>, TExec>;
+//pub type TFullCallExecutor<TBl, TExec> =
+//	crate::client::LocalCallExecutor<TBl, sc_client_db::Backend<TBl>, TExec>;
 
-type TFullParts<TBl, TRtApi, TExec> =
-	(TFullClient<TBl, TRtApi, TExec>, Arc<TFullBackend<TBl>>, KeystoreContainer, TaskManager);
+type TFullParts<TBl> = (TFullClient<TBl>, Arc<TFullBackend<TBl>>, KeystoreContainer, TaskManager);
 
 trait AsCryptoStoreRef {
 	fn keystore_ref(&self) -> Arc<dyn CryptoStore>;
@@ -219,27 +216,25 @@ impl KeystoreContainer {
 }
 
 /// Creates a new full client for the given config.
-pub fn new_full_client<TBl, TRtApi, TExec>(
+pub fn new_full_client<TBl>(
 	config: &Configuration,
 	telemetry: Option<TelemetryHandle>,
-	executor: TExec,
-) -> Result<TFullClient<TBl, TRtApi, TExec>, Error>
+	executor: sc_executor::DefaultExecutor,
+) -> Result<TFullClient<TBl>, Error>
 where
 	TBl: BlockT,
-	TExec: CodeExecutor + RuntimeVersionOf + Clone,
 {
 	new_full_parts(config, telemetry, executor).map(|parts| parts.0)
 }
 
 /// Create the initial parts of a full node.
-pub fn new_full_parts<TBl, TRtApi, TExec>(
+pub fn new_full_parts<TBl>(
 	config: &Configuration,
 	telemetry: Option<TelemetryHandle>,
-	executor: TExec,
-) -> Result<TFullParts<TBl, TRtApi, TExec>, Error>
+	executor: sc_executor::DefaultExecutor,
+) -> Result<TFullParts<TBl>, Error>
 where
 	TBl: BlockT,
-	TExec: CodeExecutor + RuntimeVersionOf + Clone,
 {
 	let keystore_container = KeystoreContainer::new(&config.keystore)?;
 
@@ -333,9 +328,9 @@ where
 }
 
 /// Create an instance of client backed by given backend.
-pub fn new_client<E, Block, RA>(
+pub fn new_client<Block>(
 	backend: Arc<Backend<Block>>,
-	executor: E,
+	executor: sc_executor::DefaultExecutor,
 	genesis_storage: &dyn BuildStorage,
 	fork_blocks: ForkBlocks<Block>,
 	bad_blocks: BadBlocks<Block>,
@@ -347,15 +342,12 @@ pub fn new_client<E, Block, RA>(
 ) -> Result<
 	crate::client::Client<
 		Backend<Block>,
-		crate::client::LocalCallExecutor<Block, Backend<Block>, E>,
 		Block,
-		RA,
 	>,
 	sp_blockchain::Error,
 >
 where
 	Block: BlockT,
-	E: CodeExecutor + RuntimeVersionOf,
 {
 	let executor = crate::client::LocalCallExecutor::new(
 		backend.clone(),
@@ -411,7 +403,6 @@ pub fn build_offchain_workers<TBl, TCl>(
 where
 	TBl: BlockT,
 	TCl: Send + Sync + ProvideRuntimeApi<TBl> + BlockchainEvents<TBl> + 'static,
-	<TCl as ProvideRuntimeApi<TBl>>::Api: sc_offchain::OffchainWorkerApi<TBl>,
 {
 	let offchain_workers = Some(Arc::new(sc_offchain::OffchainWorkers::new(client.clone())));
 
@@ -452,11 +443,6 @@ where
 		+ CallApiAt<TBl>
 		+ Send
 		+ 'static,
-	<TCl as ProvideRuntimeApi<TBl>>::Api: sp_api::Metadata<TBl>
-		+ sc_offchain::OffchainWorkerApi<TBl>
-		+ sp_transaction_pool::runtime_api::TaggedTransactionQueue<TBl>
-		+ sp_session::SessionKeys<TBl>
-		+ sp_api::ApiExt<TBl, StateBackend = TBackend::State>,
 	TBl: BlockT,
 	TBl::Hash: Unpin,
 	TBl::Header: Unpin,
@@ -662,7 +648,6 @@ where
 	TExPool: MaintainedTransactionPool<Block = TBl, Hash = <TBl as BlockT>::Hash> + 'static,
 	TBackend: sc_client_api::backend::Backend<TBl> + 'static,
 	TRpc: sc_rpc::RpcExtension<sc_rpc::Metadata>,
-	<TCl as ProvideRuntimeApi<TBl>>::Api: sp_session::SessionKeys<TBl> + sp_api::Metadata<TBl>,
 	TBl::Hash: Unpin,
 	TBl::Header: Unpin,
 {

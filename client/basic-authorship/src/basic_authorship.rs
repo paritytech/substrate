@@ -28,11 +28,11 @@ use futures::{
 	select,
 };
 use log::{debug, error, info, trace, warn};
-use sc_block_builder::{BlockBuilderApi, BlockBuilderProvider};
+use sc_block_builder::{BlockBuilderProvider};
 use sc_client_api::backend;
 use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_INFO};
 use sc_transaction_pool_api::{InPoolTransaction, TransactionPool};
-use sp_api::{ApiExt, ProvideRuntimeApi};
+use sp_api::{CallApiAt};
 use sp_blockchain::{ApplyExtrinsicFailed::Validity, Error::ApplyExtrinsicFailed, HeaderBackend};
 use sp_consensus::{
 	evaluation, DisableProofRecording, EnableProofRecording, ProofRecording, Proposal,
@@ -184,12 +184,10 @@ where
 	Block: BlockT,
 	C: BlockBuilderProvider<B, Block, C>
 		+ HeaderBackend<Block>
-		+ ProvideRuntimeApi<Block>
+		+ CallApiAt<Block, StateBackend=B::State>
 		+ Send
 		+ Sync
 		+ 'static,
-	C::Api:
-		ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>> + BlockBuilderApi<Block>,
 {
 	fn init_with_now(
 		&mut self,
@@ -229,12 +227,10 @@ where
 	Block: BlockT,
 	C: BlockBuilderProvider<B, Block, C>
 		+ HeaderBackend<Block>
-		+ ProvideRuntimeApi<Block>
+		+ CallApiAt<Block, StateBackend=B::State>
 		+ Send
 		+ Sync
 		+ 'static,
-	C::Api:
-		ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>> + BlockBuilderApi<Block>,
 	PR: ProofRecording,
 {
 	type CreateProposer = future::Ready<Result<Self::Proposer, Self::Error>>;
@@ -270,12 +266,10 @@ where
 	Block: BlockT,
 	C: BlockBuilderProvider<B, Block, C>
 		+ HeaderBackend<Block>
-		+ ProvideRuntimeApi<Block>
+		+ CallApiAt<Block, StateBackend=B::State>
 		+ Send
 		+ Sync
 		+ 'static,
-	C::Api:
-		ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>> + BlockBuilderApi<Block>,
 	PR: ProofRecording,
 {
 	type Transaction = backend::TransactionFor<B, Block>;
@@ -330,12 +324,10 @@ where
 	Block: BlockT,
 	C: BlockBuilderProvider<B, Block, C>
 		+ HeaderBackend<Block>
-		+ ProvideRuntimeApi<Block>
+		+ CallApiAt<Block, StateBackend=B::State>
 		+ Send
 		+ Sync
 		+ 'static,
-	C::Api:
-		ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>> + BlockBuilderApi<Block>,
 	PR: ProofRecording,
 {
 	async fn propose_with(

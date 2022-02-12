@@ -1673,7 +1673,7 @@ impl_runtime_apis! {
 	}
 
 	impl pallet_contracts_rpc_runtime_api::ContractsApi<
-		Block, AccountId, Balance, BlockNumber, Hash,
+		Block, AccountId, Balance, Hash,
 	>
 		for Runtime
 	{

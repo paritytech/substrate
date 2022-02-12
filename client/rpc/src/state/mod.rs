@@ -36,7 +36,7 @@ use sp_core::{
 use sp_runtime::traits::Block as BlockT;
 use sp_version::RuntimeVersion;
 
-use sp_api::{CallApiAt, Metadata, ProvideRuntimeApi};
+use sp_api::{CallApiAt, ProvideRuntimeApi};
 
 use self::error::{Error, FutureResult};
 
@@ -203,7 +203,6 @@ where
 		+ Send
 		+ Sync
 		+ 'static,
-	Client::Api: Metadata<Block>,
 {
 	let child_backend = Box::new(self::state_full::FullState::new(
 		client.clone(),

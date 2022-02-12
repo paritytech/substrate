@@ -153,7 +153,6 @@ where
 	Block: BlockT + Unpin + 'static,
 	Network: NetworkProvider,
 	Client: ProvideRuntimeApi<Block> + Send + Sync + 'static + HeaderBackend<Block>,
-	<Client as ProvideRuntimeApi<Block>>::Api: AuthorityDiscoveryApi<Block>,
 	DhtEventStream: Stream<Item = DhtEvent> + Unpin,
 {
 	/// Construct a [`Worker`].

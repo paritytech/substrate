@@ -22,6 +22,7 @@ use codec::{Codec, Decode};
 use jsonrpc_core::{Error as RpcError, ErrorCode, Result};
 use jsonrpc_derive::rpc;
 pub use pallet_transaction_payment_rpc_runtime_api::TransactionPaymentApi as TransactionPaymentRuntimeApi;
+pub use pallet_transaction_payment_rpc_runtime_api::RuntimeDispatchInfo as TransactionPaymentRuntimeDispatchInfo;
 use pallet_transaction_payment_rpc_runtime_api::{FeeDetails, InclusionFee, RuntimeDispatchInfo};
 use sp_api::ProvideRuntimeApi;
 use sp_blockchain::HeaderBackend;
@@ -80,7 +81,6 @@ impl<C, Block, Balance> TransactionPaymentApi<<Block as BlockT>::Hash, RuntimeDi
 where
 	Block: BlockT,
 	C: 'static + ProvideRuntimeApi<Block> + HeaderBackend<Block>,
-	C::Api: TransactionPaymentRuntimeApi<Block, Balance>,
 	Balance: Codec + MaybeDisplay + Copy + TryInto<NumberOrHex>,
 {
 	fn query_info(
