@@ -54,7 +54,7 @@ impl syn::parse::Parse for CreateTtReturnMacroDef {
 /// supplied to the proc macro.
 ///
 /// # Example
-/// ```rust,nocompile
+/// ```ignore
 /// __create_tt_macro! {
 ///     my_tt_macro,
 ///     foo = [{ bar }]
