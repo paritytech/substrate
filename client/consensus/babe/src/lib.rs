@@ -92,7 +92,8 @@ use retain_mut::RetainMut;
 use schnorrkel::SignatureError;
 
 use sc_client_api::{
-	backend::AuxStore, BlockchainEvents, FinalityNotifications, ProvideUncles, UsageProvider,
+	backend::AuxStore, AuxDataOperations, BlockchainEvents, FinalityNotification, PreCommitActions,
+	ProvideUncles, UsageProvider,
 };
 use sc_consensus::{
 	block_import::{
@@ -474,9 +475,9 @@ where
 	C: ProvideRuntimeApi<B>
 		+ ProvideUncles<B>
 		+ BlockchainEvents<B>
+		+ PreCommitActions<B>
 		+ HeaderBackend<B>
 		+ HeaderMetadata<B, Error = ClientError>
-		+ AuxStore
 		+ Send
 		+ Sync
 		+ 'static,
@@ -501,6 +502,12 @@ where
 	let config = babe_link.config;
 	let slot_notification_sinks = Arc::new(Mutex::new(Vec::new()));
 
+	let client_clone = client.clone();
+	let on_finality = move |summary: &FinalityNotification<B>| {
+		aux_storage_cleanup(client_clone.as_ref(), summary)
+	};
+	client.finality_action_register(Box::new(on_finality));
+
 	let worker = BabeSlotWorker {
 		client: client.clone(),
 		block_import,
@@ -519,7 +526,7 @@ where
 	};
 
 	info!(target: "babe", "👶 Starting BABE Authorship worker");
-	let inner = sc_consensus_slots::start_slot_worker(
+	let slot_worker = sc_consensus_slots::start_slot_worker(
 		config.0.clone(),
 		select_chain,
 		worker,
@@ -531,18 +538,11 @@ where
 	let (worker_tx, worker_rx) = channel(HANDLE_BUFFER_SIZE);
 
 	let answer_requests =
-		answer_requests(worker_rx, config.0, client.clone(), babe_link.epoch_changes.clone());
+		answer_requests(worker_rx, config.0, client, babe_link.epoch_changes.clone());
 
-	let finality_notifications = client.finality_notification_stream();
-	let clean_weights = aux_storage_cleanup(client, finality_notifications);
-
-	// TODO: PROPOSAL
-	// The inner futures are "never-ending" tasks.
-	// Maybe we should replace `join` with `select` to exit from the worker as
-	// soon as one of its inner futures terminates.
-	// The `join` will keep polling the others even if one of them has finished.
+	let inner = future::select(Box::pin(slot_worker), Box::pin(answer_requests));
 	Ok(BabeWorker {
-		inner: Box::pin(future::join3(inner, answer_requests, clean_weights).map(|_| ())),
+		inner: Box::pin(inner.map(|_| ())),
 		slot_notification_sinks,
 		handle: BabeWorkerHandle(worker_tx),
 	})
@@ -551,63 +551,55 @@ where
 // Remove obsolete block's weight data by leveraging finality notifications.
 // This includes data for all finalized blocks (excluded the most recent one)
 // and all stale branches.
-async fn aux_storage_cleanup<B: BlockT, C>(
-	client: Arc<C>,
-	mut finality_notifications: FinalityNotifications<B>,
-) where
-	C: HeaderMetadata<B> + AuxStore,
-{
-	while let Some(notification) = finality_notifications.next().await {
-		let mut aux_keys = HashSet::new();
-		let mut height_limit = Zero::zero();
+fn aux_storage_cleanup<C: HeaderMetadata<Block>, Block: BlockT>(
+	client: &C,
+	notification: &FinalityNotification<Block>,
+) -> AuxDataOperations {
+	let mut aux_keys = HashSet::new();
+	let mut height_limit = Zero::zero();
 
-		// Cleans data for finalized block's ancestors down to, and including, the previously
-		// finalized one.
+	// Cleans data for finalized block's ancestors down to, and including, the previously
+	// finalized one.
 
-		let first_new_finalized = notification.tree_route.get(0).unwrap_or(&notification.hash);
+	let first_new_finalized = notification.tree_route.get(0).unwrap_or(&notification.hash);
+	match client.header_metadata(*first_new_finalized) {
+		Ok(meta) => {
+			aux_keys.insert(aux_schema::block_weight_key(meta.parent));
+			height_limit = meta.number.saturating_sub(One::one());
+		},
+		Err(err) => {
+			warn!(target: "babe", "header lookup fail while cleaning data for block {}: {}", first_new_finalized.to_string(), err.to_string());
+		},
+	}
 
-		match client.header_metadata(*first_new_finalized) {
-			Ok(meta) => {
-				aux_keys.insert(aux_schema::block_weight_key(meta.parent));
-				height_limit = meta.number.saturating_sub(One::one());
-			},
-			Err(err) => {
-				warn!(target: "babe", "header lookup fail while cleaning data for block {}: {}", first_new_finalized.to_string(), err.to_string());
-			},
-		}
+	aux_keys.extend(notification.tree_route.iter().map(|h| aux_schema::block_weight_key(h)));
 
-		aux_keys.extend(notification.tree_route.iter().map(|h| aux_schema::block_weight_key(h)));
+	// Cleans data for stale branches.
 
-		// Cleans data for stale branches.
-
-		for head in notification.stale_heads.iter() {
-			let mut hash = *head;
-			// Insert stale blocks hashes until canonical chain is not reached.
-			// Soon or late we should hit an element already present within the `aux_keys` set.
-			while aux_keys.insert(aux_schema::block_weight_key(hash)) {
-				match client.header_metadata(hash) {
-					Ok(meta) => {
-						// A fallback in case of malformed notification.
-						// This should never happen and must be considered a bug.
-						if meta.number <= height_limit {
-							warn!(target: "babe", "unexpected canonical chain state or malformed finality notification");
-							break
-						}
-						hash = meta.parent;
-					},
-					Err(err) => {
-						warn!(target: "babe", "header lookup fail while cleaning data for block {}: {}", head.to_string(), err.to_string());
+	for head in notification.stale_heads.iter() {
+		let mut hash = *head;
+		// Insert stale blocks hashes until canonical chain is not reached.
+		// Soon or late we should hit an element already present within the `aux_keys` set.
+		while aux_keys.insert(aux_schema::block_weight_key(hash)) {
+			match client.header_metadata(hash) {
+				Ok(meta) => {
+					// A fallback in case of malformed notification.
+					// This should never happen and must be considered a bug.
+					if meta.number <= height_limit {
+						warn!(target: "babe", "unexpected canonical chain state or malformed finality notification");
 						break
-					},
-				}
+					}
+					hash = meta.parent;
+				},
+				Err(err) => {
+					warn!(target: "babe", "header lookup fail while cleaning data for block {}: {}", head.to_string(), err.to_string());
+					break
+				},
 			}
 		}
-
-		let aux_keys: Vec<_> = aux_keys.iter().map(|val| val.as_slice()).collect();
-		if let Err(err) = client.insert_aux(&[], aux_keys.iter()) {
-			warn!(target: "babe", " Error cleaning up blocks data: {}", err.to_string());
-		}
 	}
+
+	aux_keys.into_iter().map(|val| (val, None)).collect::<Vec<_>>()
 }
 
 async fn answer_requests<B: BlockT, C>(

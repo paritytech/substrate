@@ -906,6 +906,13 @@ fn obsolete_blocks_aux_data_cleanup() {
 	let data = peer.data.as_ref().expect("babe link set up during initialization");
 	let client = peer.client().as_client();
 
+	// Register the handler (as done by `babe_start`)
+	let client_clone = client.clone();
+	let on_finality = move |summary: &FinalityNotification<TestBlock>| {
+		aux_storage_cleanup(client_clone.as_ref(), summary)
+	};
+	client.finality_action_register(Box::new(on_finality));
+
 	let mut proposer_factory = DummyFactory {
 		client: client.clone(),
 		config: data.link.config.clone(),
@@ -943,25 +950,8 @@ fn obsolete_blocks_aux_data_cleanup() {
 	assert!(aux_data_check(&fork2_hashes, true));
 	assert!(aux_data_check(&fork3_hashes, true));
 
-	// Trigger cleanup. Actions order is important:
-	// 1. Get the finality notification stream to create a sink entry within the client.
-	// 2. Finalize a block (A2). This will send finality notifications to subscribers.
-	// 3. Corcively close the finality notification sinks to allow `aux_storage_cleanup` future to
-	//    exit as soon as the outstanding finality messages are consumed.
-
-	let finality_notifications = client.finality_notification_stream();
-
+	// Finalize A3
 	client.finalize_block(BlockId::Number(3), None, true).unwrap();
-
-	block_on(async {
-		for mut sink in client.finality_notification_sinks().lock().iter() {
-			// Close the sinks so that `aux_storage_cleanup` will end after is has processed all
-			// notifications.
-			let _ = sink.close().await;
-		}
-		// Consume the finalization messages left in the stream.
-		aux_storage_cleanup(client.clone(), finality_notifications).await;
-	});
 
 	// Wiped: A1, A2
 	assert!(aux_data_check(&fork1_hashes[..2], false));
