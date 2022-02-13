@@ -196,6 +196,7 @@ fn provide_dummy_wasm_binary_if_not_exist(file_path: &Path) {
 		crate::write_file_if_changed(
 			file_path,
 			"pub const WASM_BINARY: Option<&[u8]> = None;\
+			 #[allow(dead_code)] \
 			 pub const WASM_BINARY_BLOATY: Option<&[u8]> = None;",
 		);
 	}
@@ -260,6 +261,7 @@ fn build_project(
 		format!(
 			r#"
 				pub const WASM_BINARY: Option<&[u8]> = Some(include_bytes!("{wasm_binary}"));
+				#[allow(dead_code)]
 				pub const WASM_BINARY_BLOATY: Option<&[u8]> = Some(include_bytes!("{wasm_binary_bloaty}"));
 			"#,
 			wasm_binary = wasm_binary,

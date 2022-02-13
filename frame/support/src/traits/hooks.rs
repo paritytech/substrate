@@ -320,6 +320,13 @@ pub trait GenesisBuild<T, I = ()>: Default + sp_runtime::traits::MaybeSerializeD
 	}
 }
 
+#[cfg(not(feature = "std"))]
+pub trait GenesisBuild<T, I = ()>: Default {
+	/// The build function is called within an externalities allowing storage APIs.
+	/// Thus one can write to storage using regular pallet storages.
+	fn build(&self);
+}
+
 /// A trait which is called when the timestamp is set in the runtime.
 #[impl_for_tuples(30)]
 pub trait OnTimestampSet<Moment> {

@@ -78,7 +78,6 @@ sc-authority-discovery = { version = "0.10.0-dev", path = "../../../client/autho
 sc-sync-state-rpc = { version = "0.10.0-dev", path = "../../../client/sync-state-rpc" }
 
 # node-specific dependencies
-# node-runtime = { version = "3.0.0-dev", path = "../runtime" }
 node-rpc = { version = "3.0.0-dev", path = "../rpc" }
 node-primitives = { version = "2.0.0", path = "../primitives" }
 
@@ -133,6 +132,7 @@ substrate-frame-cli = { version = "4.0.0-dev", optional = true, path = "../../..
 try-runtime-cli = { version = "0.10.0-dev", optional = true, path = "../../../utils/frame/try-runtime/cli" }
 sc-cli = { version = "0.10.0-dev", path = "../../../client/cli", optional = true }
 pallet-balances = { version = "4.0.0-dev", path = "../../../frame/balances" }
+substrate-wasm-builder = { version = "5.0.0-dev", path = "../../../utils/wasm-builder" }
 
 [features]
 default = ["cli"]

@@ -72,7 +72,7 @@ fn decl_genesis_config_and_impl_default(
 		#[derive(#scrate::Serialize, #scrate::Deserialize)]
 		#[cfg(feature = "std")]
 		#[serde(rename_all = "camelCase")]
-		#[serde(deny_unknown_fields)]
+		#[serde(deny_unknown_field)]
 		#[serde(crate = #serde_crate)]
 		#serde_bug_bound
 		pub struct GenesisConfig #genesis_struct_decl #genesis_where_clause {

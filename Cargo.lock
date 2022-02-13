@@ -4739,6 +4739,7 @@ dependencies = [
  "sp-trie",
  "substrate-build-script-utils",
  "substrate-frame-cli",
+ "substrate-wasm-builder",
  "tempfile",
  "tokio",
  "try-runtime-cli",
@@ -7865,12 +7866,14 @@ dependencies = [
  "memmap2 0.5.0",
  "parity-scale-codec",
  "sc-chain-spec-derive",
+ "sc-executor",
  "sc-network",
  "sc-telemetry",
  "serde",
  "serde_json",
  "sp-core",
  "sp-runtime",
+ "sp-state-machine",
 ]
 
 [[package]]

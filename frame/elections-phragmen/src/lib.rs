@@ -104,7 +104,7 @@ use frame_support::{
 	traits::{
 		defensive_prelude::*, ChangeMembers, Contains, ContainsLengthBound, Currency,
 		CurrencyToVote, Get, InitializeMembers, LockIdentifier, LockableCurrency, OnUnbalanced,
-		ReservableCurrency, SortedMembers, StorageVersion, WithdrawReasons,
+		ReservableCurrency, SortedMembers, StorageVersion, WithdrawReasons, GenesisBuild,
 	},
 	weights::Weight,
 };
@@ -655,7 +655,6 @@ pub mod pallet {
 		pub members: Vec<(T::AccountId, BalanceOf<T>)>,
 	}
 
-	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
 			Self { members: Default::default() }
@@ -686,7 +685,7 @@ pub mod pallet {
 					Members::<T>::mutate(|members| {
 						match members.binary_search_by(|m| m.who.cmp(member)) {
 							Ok(_) => {
-								panic!("Duplicate member in elections-phragmen genesis: {}", member)
+								panic!("Duplicate member in elections-phragmen genesis: {:?}", member)
 							},
 							Err(pos) => members.insert(
 								pos,

@@ -95,7 +95,7 @@
 use sp_runtime::{traits::StaticLookup, DispatchResult};
 use sp_std::prelude::*;
 
-use frame_support::{traits::UnfilteredDispatchable, weights::GetDispatchInfo};
+use frame_support::{traits::{UnfilteredDispatchable, GenesisBuild}, weights::GetDispatchInfo};
 
 #[cfg(test)]
 mod mock;
@@ -276,7 +276,6 @@ pub mod pallet {
 		pub key: Option<T::AccountId>,
 	}
 
-	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
 			Self { key: None }

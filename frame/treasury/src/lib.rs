@@ -75,7 +75,7 @@ use frame_support::{
 	print,
 	traits::{
 		Currency, ExistenceRequirement::KeepAlive, Get, Imbalance, OnUnbalanced,
-		ReservableCurrency, WithdrawReasons,
+		ReservableCurrency, WithdrawReasons, GenesisBuild,
 	},
 	weights::Weight,
 	PalletId,
@@ -224,7 +224,6 @@ pub mod pallet {
 	#[pallet::genesis_config]
 	pub struct GenesisConfig;
 
-	#[cfg(feature = "std")]
 	impl Default for GenesisConfig {
 		fn default() -> Self {
 			Self

@@ -22,7 +22,7 @@ use frame_support::{
 	pallet_prelude::*,
 	traits::{
 		Currency, CurrencyToVote, EnsureOrigin, EstimateNextNewSession, Get, LockIdentifier,
-		LockableCurrency, OnUnbalanced, UnixTime,
+		LockableCurrency, OnUnbalanced, UnixTime, GenesisBuild,
 	},
 	weights::Weight,
 };
@@ -493,7 +493,6 @@ pub mod pallet {
 		pub max_nominator_count: Option<u32>,
 	}
 
-	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
 			GenesisConfig {

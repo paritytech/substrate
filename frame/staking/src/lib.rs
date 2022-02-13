@@ -301,10 +301,12 @@ mod pallet;
 
 use codec::{Decode, Encode, HasCompact};
 use frame_support::{
-	traits::{ConstU32, Currency, Get},
+	traits::{Currency, Get},
 	weights::Weight,
 	BoundedVec, EqNoBound, PartialEqNoBound, RuntimeDebugNoBound,
 };
+#[cfg(feature = "std")]
+use frame_support::traits::ConstU32;
 use scale_info::TypeInfo;
 use sp_runtime::{
 	curve::PiecewiseLinear,

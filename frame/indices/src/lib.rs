@@ -26,7 +26,7 @@ mod tests;
 pub mod weights;
 
 use codec::Codec;
-use frame_support::traits::{BalanceStatus::Reserved, Currency, ReservableCurrency};
+use frame_support::traits::{BalanceStatus::Reserved, Currency, ReservableCurrency, GenesisBuild};
 use sp_runtime::{
 	traits::{AtLeast32Bit, LookupError, Saturating, StaticLookup, Zero},
 	MultiAddress,
@@ -298,7 +298,6 @@ pub mod pallet {
 		pub indices: Vec<(T::AccountIndex, T::AccountId)>,
 	}
 
-	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
 			Self { indices: Default::default() }

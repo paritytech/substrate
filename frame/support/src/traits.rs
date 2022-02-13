@@ -72,7 +72,6 @@ pub use metadata::{
 };
 
 mod hooks;
-#[cfg(feature = "std")]
 pub use hooks::GenesisBuild;
 pub use hooks::{
 	Hooks, OnFinalize, OnGenesis, OnIdle, OnInitialize, OnRuntimeUpgrade, OnTimestampSet,

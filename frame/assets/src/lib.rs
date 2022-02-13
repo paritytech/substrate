@@ -155,7 +155,7 @@ use frame_support::{
 	pallet_prelude::DispatchResultWithPostInfo,
 	traits::{
 		tokens::{fungibles, DepositConsequence, WithdrawConsequence},
-		BalanceStatus::Reserved,
+		BalanceStatus::Reserved, GenesisBuild,
 		Currency, ReservableCurrency, StoredMap,
 	},
 };
@@ -306,7 +306,6 @@ pub mod pallet {
 		pub accounts: Vec<(T::AssetId, T::AccountId, T::Balance)>,
 	}
 
-	#[cfg(feature = "std")]
 	impl<T: Config<I>, I: 'static> Default for GenesisConfig<T, I> {
 		fn default() -> Self {
 			Self {

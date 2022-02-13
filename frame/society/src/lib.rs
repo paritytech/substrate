@@ -255,7 +255,7 @@ use frame_support::{
 	pallet_prelude::*,
 	traits::{
 		BalanceStatus, ChangeMembers, Currency, EnsureOrigin, ExistenceRequirement::AllowDeath,
-		Imbalance, OnUnbalanced, Randomness, ReservableCurrency,
+		Imbalance, OnUnbalanced, Randomness, ReservableCurrency, GenesisBuild,
 	},
 	PalletId,
 };
@@ -650,7 +650,6 @@ pub mod pallet {
 		pub max_members: u32,
 	}
 
-	#[cfg(feature = "std")]
 	impl<T: Config<I>, I: 'static> Default for GenesisConfig<T, I> {
 		fn default() -> Self {
 			Self {

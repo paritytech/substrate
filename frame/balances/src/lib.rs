@@ -163,8 +163,6 @@ pub mod weights;
 
 pub use self::imbalances::{NegativeImbalance, PositiveImbalance};
 use codec::{Codec, Decode, Encode, MaxEncodedLen};
-#[cfg(feature = "std")]
-use frame_support::traits::GenesisBuild;
 use frame_support::{
 	ensure,
 	pallet_prelude::DispatchResult,
@@ -173,7 +171,7 @@ use frame_support::{
 		Currency, DefensiveSaturating, ExistenceRequirement,
 		ExistenceRequirement::{AllowDeath, KeepAlive},
 		Get, Imbalance, LockIdentifier, LockableCurrency, NamedReservableCurrency, OnUnbalanced,
-		ReservableCurrency, SignedImbalance, StoredMap, TryDrop, WithdrawReasons,
+		ReservableCurrency, SignedImbalance, StoredMap, TryDrop, WithdrawReasons, GenesisBuild,
 	},
 	WeakBoundedVec,
 };
@@ -560,7 +558,6 @@ pub mod pallet {
 		pub balances: Vec<(T::AccountId, T::Balance)>,
 	}
 
-	#[cfg(feature = "std")]
 	impl<T: Config<I>, I: 'static> Default for GenesisConfig<T, I> {
 		fn default() -> Self {
 			Self { balances: Default::default() }
@@ -582,13 +579,12 @@ pub mod pallet {
 				)
 			}
 
-			// ensure no duplicates exist.
 			let endowed_accounts = self
 				.balances
 				.iter()
 				.map(|(x, _)| x)
 				.cloned()
-				.collect::<std::collections::BTreeSet<_>>();
+				.collect::<Vec<_>>();
 
 			assert!(
 				endowed_accounts.len() == self.balances.len(),

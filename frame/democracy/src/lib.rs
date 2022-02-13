@@ -159,7 +159,7 @@ use frame_support::{
 		defensive_prelude::*,
 		schedule::{DispatchTime, Named as ScheduleNamed},
 		BalanceStatus, Currency, Get, LockIdentifier, LockableCurrency, OnUnbalanced,
-		ReservableCurrency, WithdrawReasons,
+		ReservableCurrency, WithdrawReasons, GenesisBuild,
 	},
 	weights::Weight,
 };
@@ -474,7 +474,6 @@ pub mod pallet {
 		_phantom: sp_std::marker::PhantomData<T>,
 	}
 
-	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
 			GenesisConfig { _phantom: Default::default() }

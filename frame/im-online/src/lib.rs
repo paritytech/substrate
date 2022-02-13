@@ -86,7 +86,7 @@ use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	traits::{
 		EstimateNextSessionRotation, Get, OneSessionHandler, ValidatorSet,
-		ValidatorSetWithIdentification, WrapperOpaque,
+		ValidatorSetWithIdentification, WrapperOpaque, GenesisBuild,
 	},
 	BoundedSlice, WeakBoundedVec,
 };
@@ -447,7 +447,6 @@ pub mod pallet {
 		pub keys: Vec<T::AuthorityId>,
 	}
 
-	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
 			GenesisConfig { keys: Default::default() }

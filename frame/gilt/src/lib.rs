@@ -79,7 +79,7 @@ pub mod pallet {
 	pub use crate::weights::WeightInfo;
 	use frame_support::{
 		pallet_prelude::*,
-		traits::{Currency, DefensiveSaturating, OnUnbalanced, ReservableCurrency},
+		traits::{Currency, DefensiveSaturating, OnUnbalanced, ReservableCurrency, GenesisBuild},
 	};
 	use frame_system::pallet_prelude::*;
 	use sp_arithmetic::{PerThing, Perquintill};

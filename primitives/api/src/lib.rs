@@ -835,4 +835,14 @@ decl_runtime_apis! {
 		/// Returns the metadata of a runtime.
 		fn metadata() -> OpaqueMetadata;
 	}
+
+	/// The `Dev` api trait that returns metadata for the runtime.
+	pub trait Genesis {
+		/// Build genesis data for the "development" version of this runtime.
+		fn build_dev();
+		/// Build genesis data for the "local testnet" version of this runtime.
+		fn build_local();
+		/// Build genesis data for the empty or "staging" genesis.
+		fn build_genesis();
+	}
 }

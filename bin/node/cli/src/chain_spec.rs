@@ -19,8 +19,25 @@
 //! Substrate chain configurations.
 
 use sc_chain_spec::ChainSpecExtension;
+use sc_service::ChainType;
+use sc_telemetry::TelemetryEndpoints;
 use serde::{Deserialize, Serialize};
 pub use node_primitives::{AccountId, Balance, Signature, Block};
+
+const STAGING_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io/submit/";
+
+mod runtime {
+	include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
+	/// Wasm binary unwrapped. If built with `SKIP_WASM_BUILD`, the function panics.
+	pub fn wasm_binary_unwrap() -> &'static [u8] {
+		WASM_BINARY.expect(
+			"Development wasm binary is not available. This means the client is built with \
+			 `SKIP_WASM_BUILD` flag and it is only usable for production chains. Please rebuild with \
+			 the flag disabled.",
+		)
+	}
+}
+
 
 /// Node `ChainSpec` extensions.
 ///
@@ -45,19 +62,60 @@ pub fn flaming_fir_config() -> Result<ChainSpec, String> {
 }
 
 /// Development config (single validator Alice)
-pub fn development_config() -> Result<ChainSpec, String> {
-	ChainSpec::from_json_bytes(&include_bytes!("../res/flaming-fir.json")[..])
+pub fn development_config() -> ChainSpec {
+	ChainSpec::from_runtime(
+		"Development",
+		"dev",
+		ChainType::Development,
+		runtime::wasm_binary_unwrap(),
+		"Genesis_build_dev",
+		vec![],
+		None,
+		None,
+		None,
+		None,
+		Default::default(),
+	)
 }
 
 /// Staging testnet config.
-pub fn staging_testnet_config() -> Result<ChainSpec, String> {
-	ChainSpec::from_json_bytes(&include_bytes!("../res/flaming-fir.json")[..])
+pub fn staging_testnet_config() -> ChainSpec {
+	let boot_nodes = vec![];
+	ChainSpec::from_runtime(
+		"Staging Testnet",
+		"staging_testnet",
+		ChainType::Live,
+		runtime::wasm_binary_unwrap(),
+		"Genesis_build_genesis",
+		boot_nodes,
+		Some(
+			TelemetryEndpoints::new(vec![(STAGING_TELEMETRY_URL.to_string(), 0)])
+				.expect("Staging telemetry url is valid; qed"),
+		),
+		None,
+		None,
+		None,
+		Default::default(),
+	)
 }
 
 /// Local testnet config (multivalidator Alice + Bob)
-pub fn local_testnet_config() -> Result<ChainSpec, String> {
-	ChainSpec::from_json_bytes(&include_bytes!("../res/flaming-fir.json")[..])
+pub fn local_testnet_config() -> ChainSpec {
+	ChainSpec::from_runtime(
+		"Local Testnet",
+		"local_testnet",
+		ChainType::Local,
+		runtime::wasm_binary_unwrap(),
+		"Genesis_build_genesis",
+		vec![],
+		None,
+		None,
+		None,
+		None,
+		Default::default(),
+	)
 }
+
 
 #[cfg(test)]
 pub(crate) mod tests {

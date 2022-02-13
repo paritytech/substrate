@@ -22,6 +22,7 @@
 // `construct_runtime!` does a lot of recursion and requires us to increase the limit to 256.
 #![recursion_limit = "256"]
 
+use hex_literal::hex;
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_election_provider_support::onchain;
 use frame_support::{
@@ -29,7 +30,7 @@ use frame_support::{
 	traits::{
 		ConstU128, ConstU16, ConstU32, Currency, EnsureOneOf, EqualPrivilegeOnly, Everything,
 		Imbalance, InstanceFilter, KeyOwnerProofSystem, LockIdentifier, Nothing, OnUnbalanced,
-		U128CurrencyToVote,
+		U128CurrencyToVote, GenesisBuild,
 	},
 	weights::{
 		constants::{BlockExecutionWeight, ExtrinsicBaseWeight, RocksDbWeight, WEIGHT_PER_SECOND},
@@ -47,6 +48,7 @@ use pallet_contracts::weights::WeightInfo;
 use pallet_grandpa::{
 	fg_primitives, AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList,
 };
+use pallet_babe::{AuthorityId as BabeId};
 use pallet_im_online::sr25519::AuthorityId as ImOnlineId;
 use pallet_session::historical as pallet_session_historical;
 pub use pallet_transaction_payment::{CurrencyAdapter, Multiplier, TargetedFeeAdjustment};
@@ -54,10 +56,11 @@ use pallet_transaction_payment::{FeeDetails, RuntimeDispatchInfo};
 use sp_api::impl_runtime_apis;
 use sp_authority_discovery::AuthorityId as AuthorityDiscoveryId;
 use sp_core::{
-	crypto::KeyTypeId,
+	crypto::{UncheckedInto, KeyTypeId},
 	u32_trait::{_1, _2, _3, _4, _5},
 	OpaqueMetadata,
 };
+use sp_core::{sr25519, ed25519};
 use sp_inherents::{CheckInherentsResult, InherentData};
 use sp_runtime::{
 	create_runtime_str,
@@ -1855,7 +1858,303 @@ impl_runtime_apis! {
 			Ok(batches)
 		}
 	}
+
+	impl sp_api::Genesis<Block> for Runtime {
+		fn build_dev() {
+			testnet_genesis(
+				&[authority_keys(ALICE_SR25519, ALICE_STASH, ALICE_ED25519)],
+				&[],
+				ALICE_SR25519.into(),
+				None,
+			).execute()
+		}
+
+		fn build_local() {
+				testnet_genesis(
+					&[
+						authority_keys(ALICE_SR25519, ALICE_STASH, ALICE_ED25519),
+						authority_keys(BOB_SR25519, BOB_STASH, BOB_ED25519),
+					],
+					&[],
+					ALICE_SR25519.into(),
+					None,
+				).execute()
+		}
+
+		fn build_genesis() {
+			// stash, controller, session-key
+			// generated with secret:
+			// for i in 1 2 3 4 ; do for j in stash controller; do subkey inspect "$secret"/fir/$j/$i; done; done
+			//
+			// and
+			//
+			// for i in 1 2 3 4 ; do for j in session; do subkey --ed25519 inspect "$secret"//fir//$j//$i; done; done
+
+			let initial_authorities: &[(
+				AccountId,
+				AccountId,
+				GrandpaId,
+				BabeId,
+				ImOnlineId,
+				AuthorityDiscoveryId,
+			)] = &[
+			(
+				// 5Fbsd6WXDGiLTxunqeK5BATNiocfCqu9bS1yArVjCgeBLkVy
+				hex!["9c7a2ee14e565db0c69f78c7b4cd839fbf52b607d867e9e9c5a79042898a0d12"].into(),
+				// 5EnCiV7wSHeNhjW3FSUwiJNkcc2SBkPLn5Nj93FmbLtBjQUq
+				hex!["781ead1e2fa9ccb74b44c19d29cb2a7a4b5be3972927ae98cd3877523976a276"].into(),
+				// 5Fb9ayurnxnaXj56CjmyQLBiadfRCqUbL2VWNbbe1nZU6wiC
+				hex!["9becad03e6dcac03cee07edebca5475314861492cdfc96a2144a67bbe9699332"]
+					.unchecked_into(),
+				// 5EZaeQ8djPcq9pheJUhgerXQZt9YaHnMJpiHMRhwQeinqUW8
+				hex!["6e7e4eb42cbd2e0ab4cae8708ce5509580b8c04d11f6758dbf686d50fe9f9106"]
+					.unchecked_into(),
+				// 5EZaeQ8djPcq9pheJUhgerXQZt9YaHnMJpiHMRhwQeinqUW8
+				hex!["6e7e4eb42cbd2e0ab4cae8708ce5509580b8c04d11f6758dbf686d50fe9f9106"]
+					.unchecked_into(),
+				// 5EZaeQ8djPcq9pheJUhgerXQZt9YaHnMJpiHMRhwQeinqUW8
+				hex!["6e7e4eb42cbd2e0ab4cae8708ce5509580b8c04d11f6758dbf686d50fe9f9106"]
+					.unchecked_into(),
+			),
+			(
+				// 5ERawXCzCWkjVq3xz1W5KGNtVx2VdefvZ62Bw1FEuZW4Vny2
+				hex!["68655684472b743e456907b398d3a44c113f189e56d1bbfd55e889e295dfde78"].into(),
+				// 5Gc4vr42hH1uDZc93Nayk5G7i687bAQdHHc9unLuyeawHipF
+				hex!["c8dc79e36b29395413399edaec3e20fcca7205fb19776ed8ddb25d6f427ec40e"].into(),
+				// 5EockCXN6YkiNCDjpqqnbcqd4ad35nU4RmA1ikM4YeRN4WcE
+				hex!["7932cff431e748892fa48e10c63c17d30f80ca42e4de3921e641249cd7fa3c2f"]
+					.unchecked_into(),
+				// 5DhLtiaQd1L1LU9jaNeeu9HJkP6eyg3BwXA7iNMzKm7qqruQ
+				hex!["482dbd7297a39fa145c570552249c2ca9dd47e281f0c500c971b59c9dcdcd82e"]
+					.unchecked_into(),
+				// 5DhLtiaQd1L1LU9jaNeeu9HJkP6eyg3BwXA7iNMzKm7qqruQ
+				hex!["482dbd7297a39fa145c570552249c2ca9dd47e281f0c500c971b59c9dcdcd82e"]
+					.unchecked_into(),
+				// 5DhLtiaQd1L1LU9jaNeeu9HJkP6eyg3BwXA7iNMzKm7qqruQ
+				hex!["482dbd7297a39fa145c570552249c2ca9dd47e281f0c500c971b59c9dcdcd82e"]
+					.unchecked_into(),
+			),
+			(
+				// 5DyVtKWPidondEu8iHZgi6Ffv9yrJJ1NDNLom3X9cTDi98qp
+				hex!["547ff0ab649283a7ae01dbc2eb73932eba2fb09075e9485ff369082a2ff38d65"].into(),
+				// 5FeD54vGVNpFX3PndHPXJ2MDakc462vBCD5mgtWRnWYCpZU9
+				hex!["9e42241d7cd91d001773b0b616d523dd80e13c6c2cab860b1234ef1b9ffc1526"].into(),
+				// 5E1jLYfLdUQKrFrtqoKgFrRvxM3oQPMbf6DfcsrugZZ5Bn8d
+				hex!["5633b70b80a6c8bb16270f82cca6d56b27ed7b76c8fd5af2986a25a4788ce440"]
+					.unchecked_into(),
+				// 5DhKqkHRkndJu8vq7pi2Q5S3DfftWJHGxbEUNH43b46qNspH
+				hex!["482a3389a6cf42d8ed83888cfd920fec738ea30f97e44699ada7323f08c3380a"]
+					.unchecked_into(),
+				// 5DhKqkHRkndJu8vq7pi2Q5S3DfftWJHGxbEUNH43b46qNspH
+				hex!["482a3389a6cf42d8ed83888cfd920fec738ea30f97e44699ada7323f08c3380a"]
+					.unchecked_into(),
+				// 5DhKqkHRkndJu8vq7pi2Q5S3DfftWJHGxbEUNH43b46qNspH
+				hex!["482a3389a6cf42d8ed83888cfd920fec738ea30f97e44699ada7323f08c3380a"]
+					.unchecked_into(),
+			),
+			(
+				// 5HYZnKWe5FVZQ33ZRJK1rG3WaLMztxWrrNDb1JRwaHHVWyP9
+				hex!["f26cdb14b5aec7b2789fd5ca80f979cef3761897ae1f37ffb3e154cbcc1c2663"].into(),
+				// 5EPQdAQ39WQNLCRjWsCk5jErsCitHiY5ZmjfWzzbXDoAoYbn
+				hex!["66bc1e5d275da50b72b15de072a2468a5ad414919ca9054d2695767cf650012f"].into(),
+				// 5DMa31Hd5u1dwoRKgC4uvqyrdK45RHv3CpwvpUC1EzuwDit4
+				hex!["3919132b851ef0fd2dae42a7e734fe547af5a6b809006100f48944d7fae8e8ef"]
+					.unchecked_into(),
+				// 5C4vDQxA8LTck2xJEy4Yg1hM9qjDt4LvTQaMo4Y8ne43aU6x
+				hex!["00299981a2b92f878baaf5dbeba5c18d4e70f2a1fcd9c61b32ea18daf38f4378"]
+					.unchecked_into(),
+				// 5C4vDQxA8LTck2xJEy4Yg1hM9qjDt4LvTQaMo4Y8ne43aU6x
+				hex!["00299981a2b92f878baaf5dbeba5c18d4e70f2a1fcd9c61b32ea18daf38f4378"]
+					.unchecked_into(),
+				// 5C4vDQxA8LTck2xJEy4Yg1hM9qjDt4LvTQaMo4Y8ne43aU6x
+				hex!["00299981a2b92f878baaf5dbeba5c18d4e70f2a1fcd9c61b32ea18daf38f4378"]
+					.unchecked_into(),
+			),
+			];
+
+			// generated with secret: subkey inspect "$secret"/fir
+			let root_key: AccountId = hex![
+				// 5Ff3iXP75ruzroPWRP2FYBHWnmGGBSb63857BgnzCoXNxfPo
+				"9ee5e5bdc0ec239eb164f865ecc345ce4c88e76ee002e0f7e318097347471809"
+			]
+			.into();
+
+			let endowed_accounts: Vec<AccountId> = vec![root_key.clone()];
+			testnet_genesis(initial_authorities, &[], root_key, Some(endowed_accounts)).execute()
+		}
+	}
 }
+
+const ALICE_SR25519: sr25519::Public = sr25519::Public(hex!["d43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d"]);
+const ALICE_ED25519: ed25519::Public = ed25519::Public(hex!["88dc3417d5058ec4b4503e0c12ea1a0a89be200fe98922423d4334014fa6b0ee"]);
+const BOB_SR25519: sr25519::Public = sr25519::Public(hex!["8eaf04151687736326c9fea17e25fc5287613693c912909cb226aa4794f26a48"]);
+const BOB_ED25519: ed25519::Public = ed25519::Public(hex!["d17c2d7823ebf260fd138f2d7e27d114c0145d968b5ff5006125f2414fadae69"]);
+
+const CHARLIE_SR25519: sr25519::Public = sr25519::Public(hex!["90b5ab205c6974c9ea841be688864633dc9ca8a357843eeacf2314649965fe22"]);
+const DAVE_SR25519: sr25519::Public = sr25519::Public(hex!["306721211d5404bd9da88e0204360a1a9ab8b87c66c1bc2fcdd37f3c2222cc20"]);
+const EVE_SR25519: sr25519::Public = sr25519::Public(hex!["e659a7a1628cdd93febc04a4e0646ea20e9f5f0ce097d9a05290d4a9e054df4e"]);
+const FERDIE_SR25519: sr25519::Public = sr25519::Public(hex!["1cbd2d43530a44705ad088af313e18f80b53ef16b36177cd4b77b846f2a5f07c"]);
+
+const ALICE_STASH: sr25519::Public = sr25519::Public(hex!["be5ddb1579b72e84524fc29e78609e3caf42e85aa118ebfe0b0ad404b5bdd25f"]);
+const BOB_STASH: sr25519::Public = sr25519::Public(hex!["fe65717dad0447d715f660a0a58411de509b42e6efb8375f562f58a554d5860e"]);
+const CHARLIE_STASH: sr25519::Public = sr25519::Public(hex!["1e07379407fecc4b89eb7dbd287c2c781cfb1907a96947a3eb18e4f8e7198625"]);
+const DAVE_STASH: sr25519::Public = sr25519::Public(hex!["e860f1b1c7227f7c22602f53f15af80747814dffd839719731ee3bba6edc126c"]);
+const EVE_STASH: sr25519::Public = sr25519::Public(hex!["8ac59e11963af19174d0b94d5d78041c233f55d2e19324665bafdfb62925af2d"]);
+const FERDIE_STASH: sr25519::Public = sr25519::Public(hex!["101191192fc877c24d725b337120fa3edc63d227bbc92705db1e2cb65f56981a"]);
+
+
+/// Helper function to generate stash, controller and session keys
+pub fn authority_keys(sr25519_key: sr25519::Public, stash_key: sr25519::Public, ed25519_key: ed25519::Public)
+	-> (AccountId, AccountId, GrandpaId, BabeId, ImOnlineId, AuthorityDiscoveryId) {
+	(
+		sr25519_key.into(),
+		stash_key.into(),
+		ed25519_key.into(),
+		sr25519_key.into(),
+		sr25519_key.into(),
+		sr25519_key.into(),
+	)
+}
+
+fn session_keys(
+	grandpa: GrandpaId,
+	babe: BabeId,
+	im_online: ImOnlineId,
+	authority_discovery: AuthorityDiscoveryId,
+) -> SessionKeys {
+	SessionKeys { grandpa, babe, im_online, authority_discovery }
+}
+
+/// Helper function to create GenesisConfig for testing
+pub fn testnet_genesis(
+	initial_authorities: &[(
+		AccountId,
+		AccountId,
+		GrandpaId,
+		BabeId,
+		ImOnlineId,
+		AuthorityDiscoveryId,
+	)],
+	initial_nominators: &[AccountId],
+	root_key: AccountId,
+	endowed_accounts: Option<Vec<AccountId>>,
+) -> GenesisConfig {
+	let mut endowed_accounts: Vec<AccountId> = endowed_accounts.unwrap_or_else(|| {
+		vec![
+			ALICE_SR25519.into(),
+			BOB_SR25519.into(),
+			CHARLIE_SR25519.into(),
+			DAVE_SR25519.into(),
+			EVE_SR25519.into(),
+			FERDIE_SR25519.into(),
+			ALICE_STASH.into(),
+			BOB_STASH.into(),
+			CHARLIE_STASH.into(),
+			DAVE_STASH.into(),
+			EVE_STASH.into(),
+			FERDIE_STASH.into(),
+		]
+	});
+	// endow all authorities and nominators.
+	initial_authorities
+		.iter()
+		.map(|x| &x.0)
+		.chain(initial_nominators.iter())
+		.for_each(|x| {
+			if !endowed_accounts.contains(x) {
+				endowed_accounts.push(x.clone())
+			}
+		});
+
+	// stakers: all validators and nominators.
+	let stakers = initial_authorities
+		.iter()
+		.map(|x| (x.0.clone(), x.1.clone(), STASH, pallet_staking::StakerStatus::Validator))
+		.chain(initial_nominators.iter().map(|x| {
+			let nominations = initial_authorities
+				.iter()
+				.map(|choice| choice.0.clone())
+				.collect::<Vec<_>>();
+			(x.clone(), x.clone(), STASH, pallet_staking::StakerStatus::Nominator(nominations))
+		}))
+		.collect::<Vec<_>>();
+
+	let num_endowed_accounts = endowed_accounts.len();
+
+	const ENDOWMENT: Balance = 10_000_000 * DOLLARS;
+	const STASH: Balance = ENDOWMENT / 1000;
+
+	GenesisConfig {
+		system: SystemConfig { code: vec![] },
+		balances: BalancesConfig {
+			balances: endowed_accounts.iter().cloned().map(|x| (x, ENDOWMENT)).collect(),
+		},
+		indices: IndicesConfig { indices: vec![] },
+		session: SessionConfig {
+			keys: initial_authorities
+				.iter()
+				.map(|x| {
+					(
+						x.0.clone(),
+						x.0.clone(),
+						session_keys(x.2.clone(), x.3.clone(), x.4.clone(), x.5.clone()),
+					)
+				})
+				.collect::<Vec<_>>(),
+		},
+		staking: StakingConfig {
+			validator_count: initial_authorities.len() as u32,
+			minimum_validator_count: initial_authorities.len() as u32,
+			invulnerables: initial_authorities.iter().map(|x| x.0.clone()).collect(),
+			slash_reward_fraction: Perbill::from_percent(10),
+			stakers,
+			..Default::default()
+		},
+		democracy: DemocracyConfig::default(),
+		elections: ElectionsConfig {
+			members: endowed_accounts
+				.iter()
+				.take((num_endowed_accounts + 1) / 2)
+				.cloned()
+				.map(|member| (member, STASH))
+				.collect(),
+		},
+		council: CouncilConfig::default(),
+		technical_committee: TechnicalCommitteeConfig {
+			members: endowed_accounts
+				.iter()
+				.take((num_endowed_accounts + 1) / 2)
+				.cloned()
+				.collect(),
+			phantom: Default::default(),
+		},
+		sudo: SudoConfig { key: Some(root_key) },
+		babe: BabeConfig {
+			authorities: vec![],
+			epoch_config: Some(BABE_GENESIS_EPOCH_CONFIG),
+		},
+		im_online: ImOnlineConfig { keys: vec![] },
+		authority_discovery: AuthorityDiscoveryConfig { keys: vec![] },
+		grandpa: GrandpaConfig { authorities: vec![] },
+		technical_membership: Default::default(),
+		treasury: Default::default(),
+		society: SocietyConfig {
+			members: endowed_accounts
+				.iter()
+				.take((num_endowed_accounts + 1) / 2)
+				.cloned()
+				.collect(),
+			pot: 0,
+			max_members: 999,
+		},
+		vesting: Default::default(),
+		assets: Default::default(),
+		gilt: Default::default(),
+		transaction_storage: Default::default(),
+		transaction_payment: Default::default(),
+	}
+}
+
 
 #[cfg(test)]
 mod tests {

@@ -43,7 +43,7 @@ use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
 	pallet_prelude::Get,
 	storage,
-	traits::{KeyOwnerProofSystem, OneSessionHandler, StorageVersion},
+	traits::{KeyOwnerProofSystem, OneSessionHandler, StorageVersion, GenesisBuild},
 	weights::{Pays, Weight},
 	WeakBoundedVec,
 };
@@ -326,7 +326,7 @@ pub mod pallet {
 	#[pallet::getter(fn session_for_set)]
 	pub(super) type SetIdSession<T: Config> = StorageMap<_, Twox64Concat, SetId, SessionIndex>;
 
-	#[cfg_attr(feature = "std", derive(Default))]
+	#[derive(Default)]
 	#[pallet::genesis_config]
 	pub struct GenesisConfig {
 		pub authorities: AuthorityList,

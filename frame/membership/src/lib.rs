@@ -24,7 +24,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use frame_support::traits::{
-	ChangeMembers, Contains, Get, InitializeMembers, SortedMembers, StorageVersion,
+	ChangeMembers, Contains, Get, InitializeMembers, SortedMembers, StorageVersion, GenesisBuild,
 };
 use sp_std::prelude::*;
 
@@ -105,7 +105,6 @@ pub mod pallet {
 		pub phantom: PhantomData<I>,
 	}
 
-	#[cfg(feature = "std")]
 	impl<T: Config<I>, I: 'static> Default for GenesisConfig<T, I> {
 		fn default() -> Self {
 			Self { members: Vec::new(), phantom: Default::default() }

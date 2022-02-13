@@ -29,6 +29,7 @@ pub fn expand_outer_config(
 	let mut types = TokenStream::new();
 	let mut fields = TokenStream::new();
 	let mut build_storage_calls = TokenStream::new();
+	let mut build_execute_calls = TokenStream::new();
 	let mut query_genesis_config_part_macros = Vec::new();
 
 	for decl in pallet_decls {
@@ -49,6 +50,7 @@ pub fn expand_outer_config(
 				decl,
 				&field_name,
 			));
+			build_execute_calls.extend(quote!(#scrate::traits::GenesisBuild::<#runtime, _>::build(&self.#field_name);));
 			query_genesis_config_part_macros.push(quote! {
 				#path::__substrate_genesis_config_check::is_genesis_config_defined!(#pallet_name);
 				#[cfg(feature = "std")]
@@ -64,26 +66,31 @@ pub fn expand_outer_config(
 
 		#[cfg(any(feature = "std", test))]
 		use #scrate::serde as __genesis_config_serde_import__;
-		#[cfg(any(feature = "std", test))]
-		#[derive(#scrate::serde::Serialize, #scrate::serde::Deserialize, Default)]
-		#[serde(rename_all = "camelCase")]
-		#[serde(deny_unknown_fields)]
-		#[serde(crate = "__genesis_config_serde_import__")]
+		#[derive(Default)]
+		#[cfg_attr(feature = "std", derive(#scrate::serde::Serialize, #scrate::serde::Deserialize))]
+		#[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
+		#[cfg_attr(feature = "std", serde(deny_unknown_fields))]
+		#[cfg_attr(feature = "std", serde(crate = "__genesis_config_serde_import__"))]
 		pub struct GenesisConfig {
 			#fields
 		}
 
+		impl GenesisConfig {
+			pub fn execute(&self) {
+				#build_execute_calls
+				<AllPalletsWithSystem as #scrate::traits::OnGenesis>::on_genesis();
+			}
+		}
+
 		#[cfg(any(feature = "std", test))]
-		impl #scrate::sp_runtime::BuildStorage for GenesisConfig {
+		impl GenesisConfig {
 			fn assimilate_storage(
 				&self,
 				storage: &mut #scrate::sp_runtime::Storage,
 			) -> std::result::Result<(), String> {
 				#build_storage_calls
 
-				#scrate::BasicExternalities::execute_with_storage(storage, || {
-					<AllPalletsWithSystem as #scrate::traits::OnGenesis>::on_genesis();
-				});
+				<AllPalletsWithSystem as #scrate::traits::OnGenesis>::on_genesis();
 
 				Ok(())
 			}
@@ -101,15 +108,12 @@ fn expand_config_types(
 
 	match (decl.instance.as_ref(), part_is_generic) {
 		(Some(inst), true) => quote! {
-			#[cfg(any(feature = "std", test))]
 			pub type #config = #path::GenesisConfig<#runtime, #path::#inst>;
 		},
 		(None, true) => quote! {
-			#[cfg(any(feature = "std", test))]
 			pub type #config = #path::GenesisConfig<#runtime>;
 		},
 		(_, false) => quote! {
-			#[cfg(any(feature = "std", test))]
 			pub type #config = #path::GenesisConfig;
 		},
 	}

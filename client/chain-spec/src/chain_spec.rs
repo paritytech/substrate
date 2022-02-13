@@ -22,10 +22,12 @@
 use crate::{extension::GetExtension, ChainType, Properties, RuntimeGenesis};
 use sc_network::config::MultiaddrWithPeerId;
 use sc_telemetry::TelemetryEndpoints;
+use sc_executor::Externalities;
 use serde::{Deserialize, Serialize};
 use serde_json as json;
 use sp_core::{
-	storage::{ChildInfo, Storage, StorageChild, StorageData, StorageKey},
+	traits::CodeExecutor,
+	storage::{ChildInfo, Storage, StorageChild, StorageData, StorageKey, well_known_keys},
 	Bytes,
 };
 use sp_runtime::BuildStorage;
@@ -36,6 +38,10 @@ enum GenesisSource<G> {
 	Binary(Cow<'static, [u8]>),
 	Factory(Arc<dyn Fn() -> G + Send + Sync>),
 	Storage(Storage),
+	Runtime {
+		code: &'static [u8],
+		method: &'static str
+	},
 }
 
 impl<G> Clone for GenesisSource<G> {
@@ -45,11 +51,38 @@ impl<G> Clone for GenesisSource<G> {
 			Self::Binary(ref d) => Self::Binary(d.clone()),
 			Self::Factory(ref f) => Self::Factory(f.clone()),
 			Self::Storage(ref s) => Self::Storage(s.clone()),
+			Self::Runtime { code, method } => Self::Runtime { code, method },
 		}
 	}
 }
 
 impl<G: RuntimeGenesis> GenesisSource<G> {
+
+	fn from_storage(storage: &Storage) -> Genesis<G> {
+		let top = storage
+			.top
+			.iter()
+			.map(|(k, v)| (StorageKey(k.clone()), StorageData(v.clone())))
+			.collect();
+
+		let children_default = storage
+			.children_default
+			.iter()
+			.map(|(k, child)| {
+				(
+					StorageKey(k.clone()),
+					child
+						.data
+						.iter()
+						.map(|(k, v)| (StorageKey(k.clone()), StorageData(v.clone())))
+						.collect(),
+				)
+			})
+			.collect();
+
+		Genesis::Raw(RawGenesis { top, children_default })
+	}
+
 	fn resolve(&self) -> Result<Genesis<G>, String> {
 		#[derive(Serialize, Deserialize)]
 		struct GenesisContainer<G> {
@@ -71,30 +104,28 @@ impl<G: RuntimeGenesis> GenesisSource<G> {
 				Ok(genesis.genesis)
 			},
 			Self::Factory(f) => Ok(Genesis::Runtime(f())),
-			Self::Storage(storage) => {
-				let top = storage
-					.top
-					.iter()
-					.map(|(k, v)| (StorageKey(k.clone()), StorageData(v.clone())))
-					.collect();
+			Self::Storage(storage) => Ok(Self::from_storage(storage)),
+			Self::Runtime { code, method } => {
+				let mut ext = sp_state_machine::BasicExternalities::default();
+				let code_fetcher = sp_core::traits::WrappedRuntimeCode((*code).into());
+				let runtime_code = sp_core::traits::RuntimeCode {
+					code_fetcher: &code_fetcher,
+					heap_pages: None,
+					hash: Default::default(),
+				};
+				let executor = sc_executor::DefaultExecutor::new(
+					sc_executor::WasmExecutionMethod::Interpreted, None, 1, None, 1
+				);
 
-				let children_default = storage
-					.children_default
-					.iter()
-					.map(|(k, child)| {
-						(
-							StorageKey(k.clone()),
-							child
-								.data
-								.iter()
-								.map(|(k, v)| (StorageKey(k.clone()), StorageData(v.clone())))
-								.collect(),
-						)
-					})
-					.collect();
+				let (r, _) = executor.call::<(), fn() -> Result<(), _>>(&mut ext, &runtime_code, method, &[], false, None);
+				if let Err(e) = r {
+					return Err(format!("Error building genesis with {}: {}", method, e));
+				}
 
-				Ok(Genesis::Raw(RawGenesis { top, children_default }))
-			},
+				ext.set_storage(well_known_keys::CODE.to_vec(), code.to_vec());
+				let storage = ext.into_storages();
+				Ok(Self::from_storage(&storage))
+			}
 		}
 	}
 }
@@ -259,11 +290,12 @@ impl<G, E> ChainSpec<G, E> {
 	}
 
 	/// Create hardcoded spec.
-	pub fn from_genesis<F: Fn() -> G + 'static + Send + Sync>(
+	pub fn from_runtime(
 		name: &str,
 		id: &str,
 		chain_type: ChainType,
-		constructor: F,
+		code: &'static [u8],
+		method: &'static str,
 		boot_nodes: Vec<MultiaddrWithPeerId>,
 		telemetry_endpoints: Option<TelemetryEndpoints>,
 		protocol_id: Option<&str>,
@@ -286,7 +318,7 @@ impl<G, E> ChainSpec<G, E> {
 			code_substitutes: BTreeMap::new(),
 		};
 
-		ChainSpec { client_spec, genesis: GenesisSource::Factory(Arc::new(constructor)) }
+		ChainSpec { client_spec, genesis: GenesisSource::Runtime { code, method } }
 	}
 
 	/// Type of the chain.

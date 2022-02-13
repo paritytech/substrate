@@ -31,7 +31,7 @@ mod tests;
 use codec::{Decode, Encode};
 use frame_support::{
 	dispatch::{Dispatchable, GetDispatchInfo},
-	traits::{Currency, OnUnbalanced, ReservableCurrency},
+	traits::{Currency, OnUnbalanced, ReservableCurrency, GenesisBuild},
 };
 use sp_runtime::traits::{BlakeTwo256, Hash, One, Saturating, Zero};
 use sp_std::{prelude::*, result};
@@ -376,7 +376,6 @@ pub mod pallet {
 		pub max_transaction_size: u32,
 	}
 
-	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
 			Self {

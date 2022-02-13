@@ -28,7 +28,6 @@ use sp_blockchain::{HeaderBackend, HeaderMetadata};
 use sp_consensus_aura::{
 	digests::CompatibleDigestItem,
 	sr25519::{AuthoritySignature},
-	AuraApi,
 };
 use sp_inherents::InherentData;
 use sp_runtime::{traits::Block as BlockT, Digest, DigestItem};

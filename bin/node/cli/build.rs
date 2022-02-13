@@ -16,9 +16,24 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+use substrate_wasm_builder::WasmBuilder;
+
 fn main() {
+	build_runtime();
+
 	#[cfg(feature = "cli")]
 	cli::main();
+}
+
+fn build_runtime() {
+	let mut path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+	path.push("../runtime/Cargo.toml");
+	eprintln!("CAN: {:?}", path.canonicalize().unwrap());
+	WasmBuilder::new()
+		.with_project(path.canonicalize().unwrap()).unwrap()
+		.export_heap_base()
+		.import_memory()
+		.build()
 }
 
 #[cfg(feature = "cli")]

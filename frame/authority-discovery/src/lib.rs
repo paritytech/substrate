@@ -24,7 +24,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use frame_support::{
-	traits::{Get, OneSessionHandler},
+	traits::{Get, OneSessionHandler, GenesisBuild},
 	WeakBoundedVec,
 };
 use sp_authority_discovery::AuthorityId;
@@ -60,7 +60,7 @@ pub mod pallet {
 	pub(super) type NextKeys<T: Config> =
 		StorageValue<_, WeakBoundedVec<AuthorityId, T::MaxAuthorities>, ValueQuery>;
 
-	#[cfg_attr(feature = "std", derive(Default))]
+	#[derive(Default)]
 	#[pallet::genesis_config]
 	pub struct GenesisConfig {
 		pub keys: Vec<AuthorityId>,

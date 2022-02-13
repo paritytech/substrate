@@ -97,7 +97,6 @@ use frame_support::{
 use scale_info::TypeInfo;
 use sp_core::storage::well_known_keys;
 
-#[cfg(feature = "std")]
 use frame_support::traits::GenesisBuild;
 #[cfg(any(feature = "std", test))]
 use sp_io::TestExternalities;
@@ -634,10 +633,9 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(super) type ExecutionPhase<T: Config> = StorageValue<_, Phase>;
 
-	#[cfg_attr(feature = "std", derive(Default))]
+	#[derive(Default)]
 	#[pallet::genesis_config]
 	pub struct GenesisConfig {
-		#[serde(with = "sp_core::bytes")]
 		pub code: Vec<u8>,
 	}
 
@@ -711,7 +709,6 @@ pub struct EventRecord<E: Parameter + Member, T> {
 
 // Create a Hash with 69 for each byte,
 // only used to build genesis config.
-#[cfg(feature = "std")]
 fn hash69<T: AsMut<[u8]> + Default>() -> T {
 	let mut h = T::default();
 	h.as_mut().iter_mut().for_each(|byte| *byte = 69);

@@ -64,7 +64,7 @@ use sp_std::prelude::*;
 
 use frame_support::{
 	dispatch::DispatchResult,
-	traits::{EstimateCallFee, Get},
+	traits::{EstimateCallFee, Get, GenesisBuild},
 	weights::{
 		DispatchClass, DispatchInfo, GetDispatchInfo, Pays, PostDispatchInfo, Weight,
 		WeightToFeeCoefficient, WeightToFeePolynomial,
@@ -321,7 +321,6 @@ pub mod pallet {
 	#[pallet::genesis_config]
 	pub struct GenesisConfig;
 
-	#[cfg(feature = "std")]
 	impl Default for GenesisConfig {
 		fn default() -> Self {
 			Self

@@ -26,7 +26,7 @@ use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
 	traits::{
 		ConstU32, DisabledValidators, FindAuthor, Get, KeyOwnerProofSystem, OnTimestampSet,
-		OneSessionHandler,
+		OneSessionHandler, GenesisBuild,
 	},
 	weights::{Pays, Weight},
 	BoundedVec, WeakBoundedVec,
@@ -309,7 +309,7 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(super) type NextEpochConfig<T> = StorageValue<_, BabeEpochConfiguration>;
 
-	#[cfg_attr(feature = "std", derive(Default))]
+	#[derive(Default)]
 	#[pallet::genesis_config]
 	pub struct GenesisConfig {
 		pub authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
