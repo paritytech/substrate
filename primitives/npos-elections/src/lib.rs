@@ -146,6 +146,12 @@ pub type VoteWeight = u64;
 pub type ExtendedBalance = u128;
 
 /// The score of an election. This is the main measure of an election's quality.
+///
+/// By definition, the order of significance in [`ElectionScore`] is:
+///
+/// 1. `minimal_stake`.
+/// 2. `sum_stake`.
+/// 3. `sum_stake_squared`.
 #[derive(Clone, Copy, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo, Debug, Default)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct ElectionScore {
@@ -165,13 +171,7 @@ pub struct ElectionScore {
 
 impl ElectionScore {
 	/// Iterate over the inner items, first visiting the most significant one.
-	///
-	/// By definition, the order of significance in [`ElectionScore`] is:
-	///
-	/// 1. `minimal_stake`.
-	/// 2. `sum_stake`.
-	/// 3. `sum_stake_squared`.
-	pub fn iter_by_significance(self) -> impl Iterator<Item = ExtendedBalance> {
+	fn iter_by_significance(self) -> impl Iterator<Item = ExtendedBalance> {
 		vec![self.minimal_stake, self.sum_stake, self.sum_stake_squared].into_iter()
 	}
 
@@ -179,8 +179,7 @@ impl ElectionScore {
 	/// strictly `threshold` better than `other`. In other words, each element of `self` must be
 	/// `self * threshold` better than `other`.
 	///
-	/// Evaluation is done based on the order of significance of the fields of [`ElectionScore`], as
-	/// per described in [`iter_by_significance`].
+	/// Evaluation is done based on the order of significance of the fields of [`ElectionScore`].
 	pub fn strict_threshold_better(self, other: Self, threshold: impl PerThing) -> bool {
 		match self
 			.iter_by_significance()
