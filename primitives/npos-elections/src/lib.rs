@@ -171,15 +171,16 @@ impl ElectionScore {
 	/// 1. `minimal_stake`.
 	/// 2. `sum_stake`.
 	/// 3. `sum_stake_squared`.
-	fn iter_by_significance(&self) -> impl Iterator<Item = ExtendedBalance> {
+	pub fn iter_by_significance(&self) -> impl Iterator<Item = ExtendedBalance> {
 		vec![self.minimal_stake, self.sum_stake, self.sum_stake_squared].into_iter()
 	}
 
 	/// Compares two sets of election scores based on desirability, returning true if `self` is
-	/// strictly `threshold` better than `other`.
+	/// strictly `threshold` better than `other`. In other words, each element of `self` must be
+	/// `self * threshold` better than `other`.
 	///
-	/// Evaluation is done in a lexicographic manner, and if each element of `self` is `self *
-	/// epsilon` greater or less than `other`.
+	/// Evaluation is done based on the order of significance of the fields of [`ElectionScore`], as
+	/// per described in [`iter_by_significance`].
 	pub fn strict_threshold_better(&self, other: Self, threshold: impl PerThing) -> bool {
 		match self
 			.iter_by_significance()
