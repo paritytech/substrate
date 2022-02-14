@@ -795,6 +795,14 @@ mod score {
 	use crate::ElectionScore;
 	use sp_arithmetic::PerThing;
 
+	/// NOTE: in tests, we still use the legacy [u128; 3] since it is more compact. Each `u128`
+	/// corresponds to element at the respective field index of `ElectionScore`.
+	impl From<[ExtendedBalance; 3]> for ElectionScore {
+		fn from(t: [ExtendedBalance; 3]) -> Self {
+			Self { minimal_stake: t[0], sum_stake: t[1], sum_stake_squared: t[2] }
+		}
+	}
+
 	fn is_score_better(this: [u128; 3], that: [u128; 3], p: impl PerThing) -> bool {
 		ElectionScore::from(this).strict_threshold_better(ElectionScore::from(that), p)
 	}

@@ -227,15 +227,6 @@ impl sp_std::cmp::PartialOrd for ElectionScore {
 	}
 }
 
-/// NOTE: in tests, we still use the legacy [u128; 3] since it is more compact. Each `u128`
-/// corresponds to element at the respective field index of `ElectionScore`.
-#[cfg(feature = "std")]
-impl From<[ExtendedBalance; 3]> for ElectionScore {
-	fn from(t: [ExtendedBalance; 3]) -> Self {
-		Self { minimal_stake: t[0], sum_stake: t[1], sum_stake_squared: t[2] }
-	}
-}
-
 /// A pointer to a candidate struct with interior mutability.
 pub type CandidatePtr<A> = Rc<RefCell<Candidate<A>>>;
 

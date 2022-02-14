@@ -641,13 +641,18 @@ mod tests {
 
 			for s in 0..SignedMaxSubmissions::get() {
 				// score is always getting better
-				let solution =
-					RawSolution { score: [(5 + s).into(), 0, 0].into(), ..Default::default() };
+				let solution = RawSolution {
+					score: ElectionScore { minimal_stake: (5 + s).into(), ..Default::default() },
+					..Default::default()
+				};
 				assert_ok!(submit_with_witness(Origin::signed(99), solution));
 			}
 
 			// weaker.
-			let solution = RawSolution { score: [4, 0, 0].into(), ..Default::default() };
+			let solution = RawSolution {
+				score: ElectionScore { minimal_stake: 4, ..Default::default() },
+				..Default::default()
+			};
 
 			assert_noop!(
 				submit_with_witness(Origin::signed(99), solution),
@@ -664,8 +669,10 @@ mod tests {
 
 			for s in 0..SignedMaxSubmissions::get() {
 				// score is always getting better
-				let solution =
-					RawSolution { score: [(5 + s).into(), 0, 0].into(), ..Default::default() };
+				let solution = RawSolution {
+					score: ElectionScore { minimal_stake: (5 + s).into(), ..Default::default() },
+					..Default::default()
+				};
 				assert_ok!(submit_with_witness(Origin::signed(99), solution));
 			}
 
@@ -678,7 +685,10 @@ mod tests {
 			);
 
 			// better.
-			let solution = RawSolution { score: [20, 0, 0].into(), ..Default::default() };
+			let solution = RawSolution {
+				score: ElectionScore { minimal_stake: 20, ..Default::default() },
+				..Default::default()
+			};
 			assert_ok!(submit_with_witness(Origin::signed(99), solution));
 
 			// the one with score 5 was rejected, the new one inserted.
@@ -700,12 +710,17 @@ mod tests {
 
 			for s in 1..SignedMaxSubmissions::get() {
 				// score is always getting better
-				let solution =
-					RawSolution { score: [(5 + s).into(), 0, 0].into(), ..Default::default() };
+				let solution = RawSolution {
+					score: ElectionScore { minimal_stake: (5 + s).into(), ..Default::default() },
+					..Default::default()
+				};
 				assert_ok!(submit_with_witness(Origin::signed(99), solution));
 			}
 
-			let solution = RawSolution { score: [4, 0, 0].into(), ..Default::default() };
+			let solution = RawSolution {
+				score: ElectionScore { minimal_stake: 4, ..Default::default() },
+				..Default::default()
+			};
 			assert_ok!(submit_with_witness(Origin::signed(99), solution));
 
 			assert_eq!(
@@ -717,7 +732,10 @@ mod tests {
 			);
 
 			// better.
-			let solution = RawSolution { score: [5, 0, 0].into(), ..Default::default() };
+			let solution = RawSolution {
+				score: ElectionScore { minimal_stake: 5, ..Default::default() },
+				..Default::default()
+			};
 			assert_ok!(submit_with_witness(Origin::signed(99), solution));
 
 			// the one with score 5 was rejected, the new one inserted.
@@ -739,8 +757,10 @@ mod tests {
 
 			for s in 0..SignedMaxSubmissions::get() {
 				// score is always getting better
-				let solution =
-					RawSolution { score: [(5 + s).into(), 0, 0].into(), ..Default::default() };
+				let solution = RawSolution {
+					score: ElectionScore { minimal_stake: (5 + s).into(), ..Default::default() },
+					..Default::default()
+				};
 				assert_ok!(submit_with_witness(Origin::signed(99), solution));
 			}
 
@@ -748,7 +768,10 @@ mod tests {
 			assert_eq!(balances(&999).1, 0);
 
 			// better.
-			let solution = RawSolution { score: [20, 0, 0].into(), ..Default::default() };
+			let solution = RawSolution {
+				score: ElectionScore { minimal_stake: 20, ..Default::default() },
+				..Default::default()
+			};
 			assert_ok!(submit_with_witness(Origin::signed(999), solution));
 
 			// got one bond back.
@@ -764,8 +787,10 @@ mod tests {
 			assert!(MultiPhase::current_phase().is_signed());
 
 			for i in 0..SignedMaxSubmissions::get() {
-				let solution =
-					RawSolution { score: [(5 + i).into(), 0, 0].into(), ..Default::default() };
+				let solution = RawSolution {
+					score: ElectionScore { minimal_stake: (5 + i).into(), ..Default::default() },
+					..Default::default()
+				};
 				assert_ok!(submit_with_witness(Origin::signed(99), solution));
 			}
 			assert_eq!(
@@ -777,7 +802,10 @@ mod tests {
 			);
 
 			// 5 is not accepted. This will only cause processing with no benefit.
-			let solution = RawSolution { score: [5, 0, 0].into(), ..Default::default() };
+			let solution = RawSolution {
+				score: ElectionScore { minimal_stake: 5, ..Default::default() },
+				..Default::default()
+			};
 			assert_noop!(
 				submit_with_witness(Origin::signed(99), solution),
 				Error::<Runtime>::SignedQueueFull,
@@ -894,14 +922,19 @@ mod tests {
 
 			for s in 0..SignedMaxSubmissions::get() {
 				// score is always getting better
-				let solution =
-					RawSolution { score: [(5 + s).into(), 0, 0].into(), ..Default::default() };
+				let solution = RawSolution {
+					score: ElectionScore { minimal_stake: (5 + s).into(), ..Default::default() },
+					..Default::default()
+				};
 				assert_ok!(submit_with_witness(Origin::signed(99), solution));
 			}
 
 			// this solution has a higher score than any in the queue
 			let solution = RawSolution {
-				score: [(5 + SignedMaxSubmissions::get()).into(), 0, 0].into(),
+				score: ElectionScore {
+					minimal_stake: (5 + SignedMaxSubmissions::get()).into(),
+					..Default::default()
+				},
 				..Default::default()
 			};
 

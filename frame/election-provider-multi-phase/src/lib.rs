@@ -2096,13 +2096,22 @@ mod tests {
 			crate::mock::Balancing::set(Some((2, 0)));
 
 			let (solution, _) = MultiPhase::mine_solution::<<Runtime as Config>::Solver>().unwrap();
-			// Default solution has a score of [50, 100, 5000].
-			assert_eq!(solution.score, [50u128, 100, 5000].into());
+			// Default solution's score.
+			assert_eq!(
+				solution.score,
+				ElectionScore { minimal_stake: 50, sum_stake: 100, sum_stake_squared: 50_000 }
+			);
 
-			<MinimumUntrustedScore<Runtime>>::put(ElectionScore::from([49u128, 0, 0]));
+			<MinimumUntrustedScore<Runtime>>::put(ElectionScore {
+				minimal_stake: 49,
+				..Default::default()
+			});
 			assert_ok!(MultiPhase::feasibility_check(solution.clone(), ElectionCompute::Signed));
 
-			<MinimumUntrustedScore<Runtime>>::put(ElectionScore::from([51u128, 0, 0]));
+			<MinimumUntrustedScore<Runtime>>::put(ElectionScore {
+				minimal_stake: 51,
+				..Default::default()
+			});
 			assert_noop!(
 				MultiPhase::feasibility_check(solution, ElectionCompute::Signed),
 				FeasibilityError::UntrustedScoreTooLow,
