@@ -1366,7 +1366,7 @@ mod tests {
 			input_data: Vec<u8>,
 		) -> ExecResult {
 			if let &Constructor = function {
-				MockLoader::increment_refcount(self.code_hash);
+				Self::add_user(self.code_hash).unwrap();
 			}
 			if function == &self.func_type {
 				(self.func)(MockCtx { ext, input_data }, &self)
