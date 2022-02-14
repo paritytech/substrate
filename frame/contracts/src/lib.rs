@@ -564,6 +564,16 @@ pub mod pallet {
 
 		/// A code with the specified hash was removed.
 		CodeRemoved { code_hash: T::Hash },
+
+		/// A contract's code was updated.
+		ContractCodeUpdated {
+			/// The contract that has been updated.
+			contract: T::AccountId,
+			/// New code hash that was set for the contract.
+			new_code_hash: T::Hash,
+			/// Previous code hash of the contract.
+			old_code_hash: T::Hash,
+		},
 	}
 
 	#[pallet::error]
