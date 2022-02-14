@@ -137,9 +137,9 @@ pub enum RuntimeCosts {
 	/// the supplied cost of the block plus the overhead of the metering itself.
 	MeteringBlock(u32),
 	/// Weight charged for copying data from the sandbox.
-	CopyIn(u32),
+	CopyFromContract(u32),
 	/// Weight charged for copying data to the sandbox.
-	CopyOut(u32),
+	CopyToContract(u32),
 	/// Weight of calling `seal_caller`.
 	Caller,
 	/// Weight of calling `seal_is_contract`.
@@ -233,8 +233,8 @@ impl RuntimeCosts {
 		use self::RuntimeCosts::*;
 		let weight = match *self {
 			MeteringBlock(amount) => s.gas.saturating_add(amount.into()),
-			CopyIn(len) => s.return_per_byte.saturating_mul(len.into()),
-			CopyOut(len) => s.input_per_byte.saturating_mul(len.into()),
+			CopyFromContract(len) => s.return_per_byte.saturating_mul(len.into()),
+			CopyToContract(len) => s.input_per_byte.saturating_mul(len.into()),
 			Caller => s.caller,
 			#[cfg(feature = "unstable-interface")]
 			IsContract => s.is_contract,
@@ -747,7 +747,7 @@ where
 		} else if flags.contains(CallFlags::FORWARD_INPUT) {
 			self.input_data.take().ok_or_else(|| Error::<E::T>::InputForwarded)?
 		} else {
-			self.charge_gas(RuntimeCosts::CopyIn(input_data_len))?;
+			self.charge_gas(RuntimeCosts::CopyFromContract(input_data_len))?;
 			self.read_sandbox_memory(input_data_ptr, input_data_len)?
 		};
 
@@ -790,7 +790,7 @@ where
 
 		if let Ok(output) = &call_outcome {
 			self.write_sandbox_output(output_ptr, output_len_ptr, &output.data, true, |len| {
-				Some(RuntimeCosts::CopyOut(len))
+				Some(RuntimeCosts::CopyToContract(len))
 			})?;
 		}
 		Ok(Runtime::<E>::exec_into_return_code(call_outcome)?)
@@ -830,7 +830,7 @@ where
 				)?;
 			}
 			self.write_sandbox_output(output_ptr, output_len_ptr, &output.data, true, |len| {
-				Some(RuntimeCosts::CopyOut(len))
+				Some(RuntimeCosts::CopyToContract(len))
 			})?;
 		}
 		Ok(Runtime::<E>::exec_into_return_code(instantiate_outcome.map(|(_, retval)| retval))?)
@@ -1313,7 +1313,7 @@ define_env!(Env, <E: Ext>,
 		ctx.charge_gas(RuntimeCosts::InputBase)?;
 		if let Some(input) = ctx.input_data.take() {
 			ctx.write_sandbox_output(out_ptr, out_len_ptr, &input, false, |len| {
-				Some(RuntimeCosts::CopyOut(len))
+				Some(RuntimeCosts::CopyToContract(len))
 			})?;
 			ctx.input_data = Some(input);
 			Ok(())
@@ -1922,7 +1922,7 @@ define_env!(Env, <E: Ext>,
 	// deploy a contract using it to a production chain.
 	[__unstable__] seal_call_runtime(ctx, call_ptr: u32, call_len: u32) -> ReturnCode => {
 		use frame_support::{dispatch::GetDispatchInfo, weights::extract_actual_weight};
-		ctx.charge_gas(RuntimeCosts::CopyIn(call_len))?;
+		ctx.charge_gas(RuntimeCosts::CopyFromContract(call_len))?;
 		let call: <E::T as Config>::Call = ctx.read_sandbox_memory_as_unbounded(
 			call_ptr, call_len
 		)?;
