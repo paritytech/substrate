@@ -171,7 +171,7 @@ impl ElectionScore {
 	/// 1. `minimal_stake`.
 	/// 2. `sum_stake`.
 	/// 3. `sum_stake_squared`.
-	pub fn iter_by_significance(&self) -> impl Iterator<Item = ExtendedBalance> {
+	pub fn iter_by_significance(self) -> impl Iterator<Item = ExtendedBalance> {
 		vec![self.minimal_stake, self.sum_stake, self.sum_stake_squared].into_iter()
 	}
 
@@ -181,7 +181,7 @@ impl ElectionScore {
 	///
 	/// Evaluation is done based on the order of significance of the fields of [`ElectionScore`], as
 	/// per described in [`iter_by_significance`].
-	pub fn strict_threshold_better(&self, other: Self, threshold: impl PerThing) -> bool {
+	pub fn strict_threshold_better(self, other: Self, threshold: impl PerThing) -> bool {
 		match self
 			.iter_by_significance()
 			.zip(other.iter_by_significance())
@@ -189,17 +189,18 @@ impl ElectionScore {
 			.collect::<Vec<(bool, Ordering)>>()
 			.as_slice()
 		{
-			// epsilon better in the `score.minimal_stake`, accept.
+			// threshold better in the `score.minimal_stake`, accept.
 			[(x, Ordering::Greater), _, _] => {
 				debug_assert!(x);
 				true
 			},
 
-			// less than epsilon better in `score.minimal_stake`, but more than epsilon better in
-			// `score.sum_stake`.
+			// less than threshold better in `score.minimal_stake`, but more than threshold better
+			// in `score.sum_stake`.
 			[(true, Ordering::Equal), (_, Ordering::Greater), _] => true,
 
-			// less than epsilon better in score[0, 1], but more than epsilon better in the third
+			// less than threshold better in `score.minimal_stake` and `score.sum_stake`, but more
+			// than threshold better in `score.sum_stake_squared`.
 			[(true, Ordering::Equal), (true, Ordering::Equal), (_, Ordering::Less)] => true,
 
 			// anything else is not a good score.
