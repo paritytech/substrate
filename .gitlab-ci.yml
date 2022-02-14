@@ -588,11 +588,10 @@ build-linux-subkey:                &build-subkey
     - SKIP_WASM_BUILD=1 time cargo build --release --verbose
     - cd -
     - mv ./target/release/subkey ./artifacts/subkey/
-    - ./artifacts/subkey/subkey --help
-    - echo "Subkey version = $(./artifacts/subkey/subkey -V)"
-    - ./artifacts/subkey/subkey -V |
-        awk '{print $2}' |
-          tee ./artifacts/subkey/VERSION;
+    # TODO: return 'subkey --version' after https://github.com/paritytech/substrate/issues/10852
+    - export SUBKEY_VERSION=$(cat ./bin/utils/subkey/Cargo.toml | sed -n "/package]/,/^$/p" | grep version | awk '{print $3}' | tr -d '"')
+    - echo "Subkey version = $SUBKEY_VERSION"
+    - echo $SUBKEY_VERSION > ./artifacts/subkey/VERSION;
     - sha256sum ./artifacts/subkey/subkey | tee ./artifacts/subkey/subkey.sha256
     - cp -r .maintain/docker/subkey.Dockerfile ./artifacts/subkey/
     - sccache -s
