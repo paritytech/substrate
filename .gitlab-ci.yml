@@ -588,8 +588,9 @@ build-linux-subkey:                &build-subkey
     - SKIP_WASM_BUILD=1 time cargo build --release --verbose
     - cd -
     - mv ./target/release/subkey ./artifacts/subkey/
-    - echo "Subkey version = $(./artifacts/subkey/subkey --version)"
-    - ./artifacts/subkey/subkey --version |
+    - ./artifacts/subkey/subkey --help
+    - echo "Subkey version = $(./artifacts/subkey/subkey -V)"
+    - ./artifacts/subkey/subkey -V |
         awk '{print $2}' |
           tee ./artifacts/subkey/VERSION;
     - sha256sum ./artifacts/subkey/subkey | tee ./artifacts/subkey/subkey.sha256
