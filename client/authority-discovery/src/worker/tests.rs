@@ -46,8 +46,6 @@ pub(crate) struct TestApi {
 }
 
 impl ProvideRuntimeApi<Block> for TestApi {
-	type Api = RuntimeApi;
-
 	fn runtime_api<'a>(&'a self) -> ApiRef<'a, Self::Api> {
 		RuntimeApi { authorities: self.authorities.clone() }.into()
 	}

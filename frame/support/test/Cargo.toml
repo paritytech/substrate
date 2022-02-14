@@ -45,6 +45,7 @@ std = [
 	"sp-state-machine",
 	"sp-arithmetic/std",
 	"sp-version/std",
+	"test-pallet/std",
 ]
 try-runtime = ["frame-support/try-runtime"]
 # WARNING: CI only execute pallet test with this feature,

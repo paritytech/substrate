@@ -57,6 +57,7 @@ frame-benchmarking-cli = { version = "4.0.0-dev", path = "../../../utils/frame/b
 
 [build-dependencies]
 substrate-build-script-utils = { version = "3.0.0", path = "../../../utils/build-script-utils" }
+substrate-wasm-builder = { version = "5.0.0-dev", path = "../../../utils/wasm-builder" }
 
 [features]
 default = []

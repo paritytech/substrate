@@ -47,7 +47,7 @@ pub mod prelude {
 	};
 	// Client structs
 	pub use super::{
-		Backend, ExecutorDispatch, LocalExecutorDispatch, NativeElseWasmExecutor, TestClient,
+		Backend, LocalExecutorDispatch, NativeElseWasmExecutor, TestClient,
 		TestClientBuilder, WasmExecutionMethod,
 	};
 	// Keyring
@@ -73,12 +73,6 @@ impl sc_executor::NativeExecutionDispatch for LocalExecutorDispatch {
 /// Test client database backend.
 pub type Backend = substrate_test_client::Backend<substrate_test_runtime::Block>;
 
-/// Test client executor.
-pub type ExecutorDispatch = client::LocalCallExecutor<
-	substrate_test_runtime::Block,
-	Backend,
-	NativeElseWasmExecutor<LocalExecutorDispatch>,
->;
 
 /// Parameters of test-client builder with test-runtime.
 #[derive(Default)]
@@ -156,9 +150,8 @@ impl substrate_test_client::GenesisInit for GenesisParameters {
 }
 
 /// A `TestClient` with `test-runtime` builder.
-pub type TestClientBuilder<E, B> = substrate_test_client::TestClientBuilder<
+pub type TestClientBuilder<B> = substrate_test_client::TestClientBuilder<
 	substrate_test_runtime::Block,
-	E,
 	B,
 	GenesisParameters,
 >;
@@ -166,13 +159,7 @@ pub type TestClientBuilder<E, B> = substrate_test_client::TestClientBuilder<
 /// Test client type with `LocalExecutorDispatch` and generic Backend.
 pub type Client<B> = client::Client<
 	B,
-	client::LocalCallExecutor<
-		substrate_test_runtime::Block,
-		B,
-		sc_executor::NativeElseWasmExecutor<LocalExecutorDispatch>,
-	>,
 	substrate_test_runtime::Block,
-	substrate_test_runtime::RuntimeApi,
 >;
 
 /// A test client with default backend.
@@ -184,7 +171,7 @@ pub trait DefaultTestClientBuilderExt: Sized {
 	fn new() -> Self;
 }
 
-impl DefaultTestClientBuilderExt for TestClientBuilder<ExecutorDispatch, Backend> {
+impl DefaultTestClientBuilderExt for TestClientBuilder<Backend> {
 	fn new() -> Self {
 		Self::with_default_backend()
 	}
@@ -256,14 +243,7 @@ pub trait TestClientBuilderExt<B>: Sized {
 }
 
 impl<B> TestClientBuilderExt<B>
-	for TestClientBuilder<
-		client::LocalCallExecutor<
-			substrate_test_runtime::Block,
-			B,
-			sc_executor::NativeElseWasmExecutor<LocalExecutorDispatch>,
-		>,
-		B,
-	> where
+	for TestClientBuilder<B> where
 	B: sc_client_api::backend::Backend<substrate_test_runtime::Block> + 'static,
 {
 	fn genesis_init_mut(&mut self) -> &mut GenesisParameters {
@@ -273,12 +253,12 @@ impl<B> TestClientBuilderExt<B>
 	fn build_with_longest_chain(
 		self,
 	) -> (Client<B>, sc_consensus::LongestChain<B, substrate_test_runtime::Block>) {
-		self.build_with_native_executor(None)
+		self.build_with_wasm_executor(None)
 	}
 
 	fn build_with_backend(self) -> (Client<B>, Arc<B>) {
 		let backend = self.backend();
-		(self.build_with_native_executor(None).0, backend)
+		(self.build_with_wasm_executor(None).0, backend)
 	}
 }
 
@@ -288,11 +268,12 @@ pub fn new() -> Client<Backend> {
 }
 
 /// Create a new native executor.
-pub fn new_native_executor() -> sc_executor::NativeElseWasmExecutor<LocalExecutorDispatch> {
-	sc_executor::NativeElseWasmExecutor::new(
+pub fn new_executor() -> sc_executor::DefaultExecutor {
+	sc_executor::DefaultExecutor::new(
 		sc_executor::WasmExecutionMethod::Interpreted,
 		None,
 		8,
+		None,
 		2,
 	)
 }

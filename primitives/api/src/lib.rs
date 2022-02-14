@@ -531,18 +531,6 @@ pub struct RuntimeApi<'a, Block: BlockT, C: CallApiAt<Block>> {
 	pub recorder: Option<ProofRecorder<Block>>,
 }
 
-/*
-#[cfg(any(feature = "std", test))]
-unsafe impl<Block: #crate_::BlockT, C: #crate_::CallApiAt<Block>> Send
-	for RuntimeApiImpl<Block, C>
-{}
-
-#[cfg(any(feature = "std", test))]
-unsafe impl<Block: #crate_::BlockT, C: #crate_::CallApiAt<Block>> Sync
-	for RuntimeApiImpl<Block, C>
-{}
-*/
-
 #[cfg(any(feature = "std", test))]
 impl<'a, Block: BlockT, C: CallApiAt<Block>> ApiExt<Block> for RuntimeApi<'a, Block, C> {
 	type StateBackend = C::StateBackend;

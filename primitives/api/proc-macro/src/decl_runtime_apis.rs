@@ -920,10 +920,7 @@ fn generate_call_impl(decls: &[ItemTrait]) -> Result<TokenStream> {
 	for decl in decls {
 		let mut decl = decl.clone();
 		extend_generics_with_block(&mut decl.generics);
-		//let mod_name = generate_runtime_mod_name_for_trait(&decl.ident);
 		let ident = &decl.ident;
-		//let found_attributes = remove_supported_attributes(&mut decl.attrs);
-		//let call_at_impl = _generate_call_api_impls(&decl)?;
 		let runtime_api_call_impl = generate_runtime_api_call_impl(&decl)?;
 
 		let impl_generics = decl.generics.type_params().map(|t| {
@@ -947,14 +944,6 @@ fn generate_call_impl(decls: &[ItemTrait]) -> Result<TokenStream> {
 		let ty_generics: Vec<_> = ty_generics.collect();
 
 		result.push(quote!(
-				/*
-			#[doc(hidden)]
-			#[cfg(any(feature = "std", test))]
-			impl<T, #( #impl_generics, )* > #ident< #( #ty_generics, )* > for T
-			where Block: #crate_::BlockT, T: #crate_::CallApiAt<Block> + Send + Sync + 'static, #where_clause {
-				#call_at_impl
-			}
-*/
 			#[doc(hidden)]
 			#[cfg(any(feature = "std", test))]
 			impl<'a, C, #( #impl_generics, )* > #ident< #( #ty_generics, )* > for #crate_::RuntimeApi<'a, Block, C>

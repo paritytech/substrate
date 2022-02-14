@@ -11,7 +11,7 @@ use pallet_grandpa::{
 };
 use sp_api::impl_runtime_apis;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
-use sp_core::{crypto::KeyTypeId, OpaqueMetadata};
+use sp_core::{crypto::{KeyTypeId, dev_keys::*}, OpaqueMetadata};
 use sp_runtime::{
 	create_runtime_str, generic, impl_opaque_keys,
 	traits::{AccountIdLookup, BlakeTwo256, Block as BlockT, IdentifyAccount, NumberFor, Verify},
@@ -514,5 +514,83 @@ impl_runtime_apis! {
 
 			Ok(batches)
 		}
+	}
+
+	impl sp_api::Genesis<Block> for Runtime {
+		fn build_dev() {
+			let endowed_accounts = [
+				ALICE_SR25519.into(),
+				BOB_SR25519.into(),
+				CHARLIE_SR25519.into(),
+				DAVE_SR25519.into(),
+				EVE_SR25519.into(),
+				FERDIE_SR25519.into(),
+				ALICE_STASH.into(),
+				BOB_STASH.into(),
+				CHARLIE_STASH.into(),
+				DAVE_STASH.into(),
+				EVE_STASH.into(),
+				FERDIE_STASH.into(),
+			];
+			testnet_genesis(
+				&[(ALICE_SR25519.into(), ALICE_ED25519.into())],
+				ALICE_SR25519.into(),
+				&endowed_accounts,
+			).execute()
+		}
+
+		fn build_local() {
+			let endowed_accounts = [
+				ALICE_SR25519.into(),
+				BOB_SR25519.into(),
+				CHARLIE_SR25519.into(),
+				DAVE_SR25519.into(),
+				EVE_SR25519.into(),
+				FERDIE_SR25519.into(),
+				ALICE_STASH.into(),
+				BOB_STASH.into(),
+				CHARLIE_STASH.into(),
+				DAVE_STASH.into(),
+				EVE_STASH.into(),
+				FERDIE_STASH.into(),
+			];
+			testnet_genesis(
+				&[(ALICE_SR25519.into(), ALICE_ED25519.into()), (BOB_SR25519.into(), BOB_ED25519.into())],
+				ALICE_SR25519.into(),
+				&endowed_accounts,
+			).execute()
+		}
+
+		fn build_genesis() {
+			GenesisConfig::default().execute()
+		}
+	}
+}
+
+/// Configure initial storage state for FRAME modules.
+fn testnet_genesis(
+	initial_authorities: &[(AuraId, GrandpaId)],
+	root_key: AccountId,
+	endowed_accounts: &[AccountId],
+) -> GenesisConfig {
+	GenesisConfig {
+		system: SystemConfig {
+			code: vec![],
+		},
+		balances: BalancesConfig {
+			// Configure endowed accounts with initial balance of 1 << 60.
+			balances: endowed_accounts.iter().cloned().map(|k| (k, 1 << 60)).collect(),
+		},
+		aura: AuraConfig {
+			authorities: initial_authorities.iter().map(|x| (x.0.clone())).collect(),
+		},
+		grandpa: GrandpaConfig {
+			authorities: initial_authorities.iter().map(|x| (x.1.clone(), 1)).collect(),
+		},
+		sudo: SudoConfig {
+			// Assign network admin rights.
+			key: Some(root_key),
+		},
+		transaction_payment: Default::default(),
 	}
 }

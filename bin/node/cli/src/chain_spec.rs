@@ -38,7 +38,6 @@ mod runtime {
 	}
 }
 
-
 /// Node `ChainSpec` extensions.
 ///
 /// Additional parameters for some Substrate core modules,

@@ -27,6 +27,7 @@ use clap::Parser;
 use rand::{distributions::Alphanumeric, rngs::OsRng, Rng};
 
 use node_cli::chain_spec::{self, AccountId};
+use node_runtime::GenesisConfig;
 use sc_keystore::LocalKeystore;
 use sp_core::{
 	crypto::{ByteArray, Ss58Codec},

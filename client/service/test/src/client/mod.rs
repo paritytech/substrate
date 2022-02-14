@@ -29,7 +29,7 @@ use sc_client_db::{
 use sc_consensus::{
 	BlockCheckParams, BlockImport, BlockImportParams, ForkChoiceStrategy, ImportResult,
 };
-use sc_service::client::{new_in_mem, Client, LocalCallExecutor};
+use sc_service::client::{new_in_mem, Client};
 use sp_api::ProvideRuntimeApi;
 use sp_consensus::{BlockOrigin, BlockStatus, Error as ConsensusError, SelectChain};
 use sp_core::{testing::TaskExecutor, H256};
@@ -46,10 +46,9 @@ use sp_trie::{LayoutV0, TrieConfiguration};
 use std::{collections::HashSet, sync::Arc};
 use substrate_test_runtime::TestAPI;
 use substrate_test_runtime_client::{
-	prelude::*,
 	runtime::{
 		genesismap::{insert_genesis_block, GenesisConfig},
-		Block, BlockNumber, Digest, Hash, Header, RuntimeApi, Transfer,
+		Block, BlockNumber, Digest, Hash, Header, Transfer,
 	},
 	AccountKeyring, BlockBuilderExt, ClientBlockImportExt, ClientExt, DefaultTestClientBuilderExt,
 	Sr25519Keyring, TestClientBuilder, TestClientBuilderExt,
@@ -1723,8 +1722,8 @@ fn cleans_up_closed_notification_sinks_on_block_import() {
 	// NOTE: we need to build the client here instead of using the client
 	// provided by test_runtime_client otherwise we can't access the private
 	// `import_notification_sinks` and `finality_notification_sinks` fields.
-	let mut client = new_in_mem::<_, Block, _, RuntimeApi>(
-		substrate_test_runtime_client::new_native_executor(),
+	let mut client = new_in_mem::<Block, _>(
+		substrate_test_runtime_client::new_executor(),
 		&substrate_test_runtime_client::GenesisParameters::default().genesis_storage(),
 		None,
 		None,
@@ -1736,13 +1735,7 @@ fn cleans_up_closed_notification_sinks_on_block_import() {
 
 	type TestClient = Client<
 		in_mem::Backend<Block>,
-		LocalCallExecutor<
-			Block,
-			in_mem::Backend<Block>,
-			sc_executor::NativeElseWasmExecutor<LocalExecutorDispatch>,
-		>,
 		Block,
-		RuntimeApi,
 	>;
 
 	let import_notif1 = client.import_notification_stream();

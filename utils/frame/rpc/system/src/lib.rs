@@ -197,7 +197,7 @@ mod tests {
 		transaction_validity::{InvalidTransaction, TransactionValidityError},
 		ApplyExtrinsicResult,
 	};
-	use substrate_test_runtime_client::{runtime::Transfer, AccountKeyring};
+	use substrate_test_runtime_client::{runtime::{AccountId, Transfer, Index}, AccountKeyring};
 
 	#[test]
 	fn should_return_next_nonce_for_some_account() {
@@ -228,10 +228,10 @@ mod tests {
 		let accounts = FullSystem::new(client, pool, DenyUnsafe::Yes);
 
 		// when
-		let nonce = accounts.nonce(AccountKeyring::Alice.into());
+		let nonce = SystemApi::<_, AccountId, Index>::nonce(&accounts, AccountKeyring::Alice.into());
 
 		// then
-		assert_eq!(block_on(nonce).unwrap(), 2);
+		assert_eq!(block_on(nonce).unwrap() as Index, 2);
 	}
 
 	#[test]
@@ -247,7 +247,7 @@ mod tests {
 		let accounts = FullSystem::new(client, pool, DenyUnsafe::Yes);
 
 		// when
-		let res = accounts.dry_run(vec![].into(), None);
+		let res = SystemApi::<_, AccountId, Index>::dry_run(&accounts, vec![].into(), None);
 
 		// then
 		assert_eq!(block_on(res), Err(RpcError::method_not_found()));
@@ -274,7 +274,7 @@ mod tests {
 		.into_signed_tx();
 
 		// when
-		let res = accounts.dry_run(tx.encode().into(), None);
+		let res = SystemApi::<_, AccountId, Index>::dry_run(&accounts, tx.encode().into(), None);
 
 		// then
 		let bytes = block_on(res).unwrap().0;
@@ -303,7 +303,7 @@ mod tests {
 		.into_signed_tx();
 
 		// when
-		let res = accounts.dry_run(tx.encode().into(), None);
+		let res = SystemApi::<_, AccountId, Index>::dry_run(&accounts, tx.encode().into(), None);
 
 		// then
 		let bytes = block_on(res).unwrap().0;

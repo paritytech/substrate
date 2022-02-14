@@ -32,9 +32,7 @@ pub type Backend = sc_client_db::Backend<node_primitives::Block>;
 /// Test client type.
 pub type Client = client::Client<
 	Backend,
-	client::LocalCallExecutor<node_primitives::Block, Backend, ExecutorDispatch>,
 	node_primitives::Block,
-	node_runtime::RuntimeApi,
 >;
 
 /// Transaction for node-runtime.
@@ -62,7 +60,6 @@ pub trait TestClientBuilderExt: Sized {
 impl TestClientBuilderExt
 	for substrate_test_client::TestClientBuilder<
 		node_primitives::Block,
-		client::LocalCallExecutor<node_primitives::Block, Backend, ExecutorDispatch>,
 		Backend,
 		GenesisParameters,
 	>
@@ -72,6 +69,6 @@ impl TestClientBuilderExt
 	}
 
 	fn build(self) -> Client {
-		self.build_with_native_executor(None).0
+		self.build_with_wasm_executor(None).0
 	}
 }

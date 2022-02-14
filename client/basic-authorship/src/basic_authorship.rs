@@ -561,7 +561,7 @@ mod tests {
 	use sc_client_api::Backend;
 	use sc_transaction_pool::BasicPool;
 	use sc_transaction_pool_api::{ChainEvent, MaintainedTransactionPool, TransactionSource};
-	use sp_api::Core;
+	use sp_api::{Core, ProvideRuntimeApi};
 	use sp_blockchain::HeaderBackend;
 	use sp_consensus::{BlockOrigin, Environment, Proposer};
 	use sp_core::Pair;

@@ -18,9 +18,7 @@
 //! Block Builder extensions for tests.
 
 use sc_client_api::backend;
-use sp_api::{ApiExt, ProvideRuntimeApi};
-
-use sc_block_builder::BlockBuilderApi;
+use sp_api::CallApiAt;
 
 /// Extension trait for test block builder.
 pub trait BlockBuilderExt {
@@ -40,12 +38,7 @@ pub trait BlockBuilderExt {
 impl<'a, A, B> BlockBuilderExt
 	for sc_block_builder::BlockBuilder<'a, substrate_test_runtime::Block, A, B>
 where
-	A: ProvideRuntimeApi<substrate_test_runtime::Block> + 'a,
-	A::Api: BlockBuilderApi<substrate_test_runtime::Block>
-		+ ApiExt<
-			substrate_test_runtime::Block,
-			StateBackend = backend::StateBackendFor<B, substrate_test_runtime::Block>,
-		>,
+	A: CallApiAt<substrate_test_runtime::Block, StateBackend=B::State> + 'a,
 	B: backend::Backend<substrate_test_runtime::Block>,
 {
 	fn push_transfer(

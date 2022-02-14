@@ -67,10 +67,10 @@ pub fn expand_outer_config(
 		#[cfg(any(feature = "std", test))]
 		use #scrate::serde as __genesis_config_serde_import__;
 		#[derive(Default)]
-		#[cfg_attr(feature = "std", derive(#scrate::serde::Serialize, #scrate::serde::Deserialize))]
-		#[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
-		#[cfg_attr(feature = "std", serde(deny_unknown_fields))]
-		#[cfg_attr(feature = "std", serde(crate = "__genesis_config_serde_import__"))]
+		#[cfg_attr(any(feature = "std", test), derive(#scrate::serde::Serialize, #scrate::serde::Deserialize))]
+		#[cfg_attr(any(feature = "std", test), serde(rename_all = "camelCase"))]
+		#[cfg_attr(any(feature = "std", test), serde(deny_unknown_fields))]
+		#[cfg_attr(any(feature = "std", test), serde(crate = "__genesis_config_serde_import__"))]
 		pub struct GenesisConfig {
 			#fields
 		}
@@ -83,14 +83,16 @@ pub fn expand_outer_config(
 		}
 
 		#[cfg(any(feature = "std", test))]
-		impl GenesisConfig {
+		impl #scrate::sp_runtime::BuildStorage for GenesisConfig {
 			fn assimilate_storage(
 				&self,
 				storage: &mut #scrate::sp_runtime::Storage,
 			) -> std::result::Result<(), String> {
 				#build_storage_calls
 
-				<AllPalletsWithSystem as #scrate::traits::OnGenesis>::on_genesis();
+				#scrate::BasicExternalities::execute_with_storage(storage, || {
+					<AllPalletsWithSystem as #scrate::traits::OnGenesis>::on_genesis();
+				});
 
 				Ok(())
 			}

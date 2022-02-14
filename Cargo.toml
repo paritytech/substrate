@@ -12,7 +12,7 @@ members = [
 	"bin/node/rpc",
 	"bin/node/runtime",
 	"bin/node/testing",
-	"bin/utils/chain-spec-builder",
+	#"bin/utils/chain-spec-builder",
 	"bin/utils/subkey",
 	"client/api",
 	"client/authority-discovery",
