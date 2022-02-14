@@ -142,15 +142,11 @@ where
 	Backend: HeaderBackend<Block> + sc_client_api::AuxStore + 'static,
 {
 	/// Create a new handler.
-	///
-	/// The `deny_unsafe` parameter is deprecated and unused. It is there only to maintain
-	/// API backwards compatibility.
 	pub fn new(
 		chain_spec: Box<dyn sc_chain_spec::ChainSpec>,
 		client: Arc<Backend>,
 		shared_authority_set: SharedAuthoritySet<Block>,
 		shared_epoch_changes: SharedEpochChanges<Block>,
-		_deny_unsafe: sc_rpc_api::DenyUnsafe,
 	) -> Result<Self, Error<Block>> {
 		if sc_chain_spec::get_extension::<LightSyncStateExtension>(chain_spec.extensions())
 			.is_some()
