@@ -172,7 +172,7 @@ pub struct ElectionScore {
 impl ElectionScore {
 	/// Iterate over the inner items, first visiting the most significant one.
 	fn iter_by_significance(self) -> impl Iterator<Item = ExtendedBalance> {
-		vec![self.minimal_stake, self.sum_stake, self.sum_stake_squared].into_iter()
+		[self.minimal_stake, self.sum_stake, self.sum_stake_squared].into_iter()
 	}
 
 	/// Compares two sets of election scores based on desirability, returning true if `self` is
