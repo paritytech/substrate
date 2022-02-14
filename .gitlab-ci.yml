@@ -574,13 +574,10 @@ build-linux-subkey:                &build-subkey
   stage:                           build
   <<:                              *collect-artifacts
   <<:                              *docker-env
-  <<:                              *test-refs
+  <<:                              *build-refs
   needs:
-    - skip-if-draft
-  # <<:                              *build-refs
-  # needs:
-  #   - job:                         cargo-check-subkey
-  #     artifacts:                   false
+    - job:                         cargo-check-subkey
+      artifacts:                   false
   before_script:
     - mkdir -p ./artifacts/subkey
   script:
