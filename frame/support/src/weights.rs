@@ -128,7 +128,7 @@
 //! - rustc 1.42.0 (b8cedc004 2020-03-09)
 
 use crate::dispatch::{DispatchError, DispatchErrorWithPostInfo, DispatchResultWithPostInfo};
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
@@ -146,25 +146,45 @@ use sp_runtime::{
 /// Re-export priority as type
 pub use sp_runtime::transaction_validity::TransactionPriority;
 
-/// Numeric range of a transaction weight.
-pub type Weight = u64;
+pub type Weight = TimeWeight;
+
+/// Numeric range of a transaction time weight.
+pub type TimeWeight = u64;
+
+/// Numeric range of a transaction storage weight.
+pub type StorageWeight = u64;
+
+#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Eq, PartialEq, Copy, Clone)]
+pub struct WeightV2 {
+	pub time: TimeWeight,
+	pub storage: StorageWeight,
+}
+
+impl From<TimeWeight> for WeightV2 {
+	fn from(t: TimeWeight) -> Self {
+		Self {
+			time: t,
+			storage: 0,
+		}
+	}
+}
 
 /// These constants are specific to FRAME, and the current implementation of its various components.
 /// For example: FRAME System, FRAME Executive, our FRAME support libraries, etc...
 pub mod constants {
-	use super::{RuntimeDbWeight, Weight};
+	use super::{RuntimeDbWeight, TimeWeight};
 	use crate::parameter_types;
 
-	pub const WEIGHT_PER_SECOND: Weight = 1_000_000_000_000;
-	pub const WEIGHT_PER_MILLIS: Weight = WEIGHT_PER_SECOND / 1000; // 1_000_000_000
-	pub const WEIGHT_PER_MICROS: Weight = WEIGHT_PER_MILLIS / 1000; // 1_000_000
-	pub const WEIGHT_PER_NANOS: Weight = WEIGHT_PER_MICROS / 1000; // 1_000
+	pub const WEIGHT_PER_SECOND: TimeWeight = 1_000_000_000_000;
+	pub const WEIGHT_PER_MILLIS: TimeWeight = WEIGHT_PER_SECOND / 1000; // 1_000_000_000
+	pub const WEIGHT_PER_MICROS: TimeWeight = WEIGHT_PER_MILLIS / 1000; // 1_000_000
+	pub const WEIGHT_PER_NANOS: TimeWeight = WEIGHT_PER_MICROS / 1000; // 1_000
 
 	parameter_types! {
 		/// Importing a block with 0 txs takes ~5 ms
-		pub const BlockExecutionWeight: Weight = 5 * WEIGHT_PER_MILLIS;
+		pub const BlockExecutionWeight: TimeWeight = 5 * WEIGHT_PER_MILLIS;
 		/// Executing 10,000 System remarks (no-op) txs takes ~1.26 seconds -> ~125 µs per tx
-		pub const ExtrinsicBaseWeight: Weight = 125 * WEIGHT_PER_MICROS;
+		pub const ExtrinsicBaseWeight: TimeWeight = 125 * WEIGHT_PER_MICROS;
 		/// By default, Substrate uses RocksDB, so this will be the weight used throughout
 		/// the runtime.
 		pub const RocksDbWeight: RuntimeDbWeight = RuntimeDbWeight {
