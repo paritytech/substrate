@@ -1066,3 +1066,9 @@ impl<T: Config<I>, I: 'static> GetMembers<T::AccountId> for Pallet<T, I> {
 		Pallet::<T, I>::members()
 	}
 }
+
+impl<A> GetMembers<A> for () {
+	fn get_members() -> Vec<A> {
+		Vec::<A>::default()
+	}
+}
