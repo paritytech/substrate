@@ -209,12 +209,6 @@ impl ElectionScore {
 	}
 }
 
-impl sp_std::cmp::PartialOrd for ElectionScore {
-	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-		Some(self.cmp(other))
-	}
-}
-
 impl sp_std::cmp::Ord for ElectionScore {
 	fn cmp(&self, other: &Self) -> Ordering {
 		// we delegate this to the lexicographic cmp of slices`, and to incorporate that we want the
@@ -224,6 +218,12 @@ impl sp_std::cmp::Ord for ElectionScore {
 			other.sum_stake,
 			self.sum_stake_squared,
 		])
+	}
+}
+
+impl sp_std::cmp::PartialOrd for ElectionScore {
+	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+		Some(self.cmp(other))
 	}
 }
 
