@@ -574,20 +574,21 @@ build-linux-subkey:                &build-subkey
   stage:                           build
   <<:                              *collect-artifacts
   <<:                              *docker-env
-  <<:                              *build-refs
-  needs:
-    - job:                         cargo-check-subkey
-      artifacts:                   false
+  <<:                              *test-refs
+  # <<:                              *build-refs
+  # needs:
+  #   - job:                         cargo-check-subkey
+  #     artifacts:                   false
   before_script:
     - mkdir -p ./artifacts/subkey
   script:
     - cd ./bin/utils/subkey
     - SKIP_WASM_BUILD=1 time cargo build --release --verbose
     - cd -
-    - mv ./target/release/subkey ./artifacts/subkey/.
-    - echo -n "Subkey version = "
+    - mv ./target/release/subkey ./artifacts/subkey/
+    - echo "Subkey version = $(./artifacts/subkey/subkey --version)"
     - ./artifacts/subkey/subkey --version |
-        sed -n -E 's/^subkey ([0-9.]+.*)/\1/p' |
+        awk '{print $2}' |
           tee ./artifacts/subkey/VERSION;
     - sha256sum ./artifacts/subkey/subkey | tee ./artifacts/subkey/subkey.sha256
     - cp -r .maintain/docker/subkey.Dockerfile ./artifacts/subkey/
