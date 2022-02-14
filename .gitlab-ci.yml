@@ -576,7 +576,7 @@ build-linux-subkey:                &build-subkey
   <<:                              *docker-env
   <<:                              *test-refs
   needs:
-    - skif-if-draft
+    - skip-if-draft
   # <<:                              *build-refs
   # needs:
   #   - job:                         cargo-check-subkey
