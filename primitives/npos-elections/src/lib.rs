@@ -226,6 +226,8 @@ impl sp_std::cmp::Ord for ElectionScore {
 	}
 }
 
+/// NOTE: in tests, we still use the legacy [u128; 3] since it is more compact. Each `u128`
+/// corresponds to element at the respective field index of `ElectionScore`.
 #[cfg(feature = "std")]
 impl From<[ExtendedBalance; 3]> for ElectionScore {
 	fn from(t: [ExtendedBalance; 3]) -> Self {
