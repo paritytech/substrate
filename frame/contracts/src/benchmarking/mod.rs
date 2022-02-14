@@ -1922,13 +1922,13 @@ benchmarks! {
 	seal_ecdsa_recover {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		use rand::SeedableRng;
-		use libsecp256k1::{SecretKey, Message, sign};
-
 		let mut rng = rand_pcg::Pcg32::seed_from_u64(123456);
-		let message_hash = sp_io::hashing::blake2_256("Hello world".as_bytes());
 
+		let message_hash = sp_io::hashing::blake2_256("Hello world".as_bytes());
 		let signatures = (0..r * API_BENCHMARK_BATCH_SIZE)
 			.map(|i| {
+				use libsecp256k1::{SecretKey, Message, sign};
+
 				let private_key = SecretKey::random(&mut rng);
 				let (signature, recovery_id) = sign(&Message::parse(&message_hash), &private_key);
 				let mut full_signature = [0; 65];
