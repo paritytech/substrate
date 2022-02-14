@@ -164,7 +164,14 @@ pub struct ElectionScore {
 }
 
 impl ElectionScore {
-	fn iter(&self) -> impl Iterator<Item = ExtendedBalance> {
+	/// Iterate over the inner items, first visiting the most significant one.
+	///
+	/// By definition, the order of significance in [`ElectionScore`] is:
+	///
+	/// 1. `minimal_stake`.
+	/// 2. `sum_stake`.
+	/// 3. `sum_stake_squared`.
+	fn iter_by_significance(&self) -> impl Iterator<Item = ExtendedBalance> {
 		vec![self.minimal_stake, self.sum_stake, self.sum_stake_squared].into_iter()
 	}
 
@@ -175,19 +182,20 @@ impl ElectionScore {
 	/// epsilon` greater or less than `other`.
 	pub fn strict_threshold_better(&self, other: Self, threshold: impl PerThing) -> bool {
 		match self
-			.iter()
-			.zip(other.iter())
+			.iter_by_significance()
+			.zip(other.iter_by_significance())
 			.map(|(this, that)| (this.ge(&that), this.tcmp(&that, threshold.mul_ceil(that))))
 			.collect::<Vec<(bool, Ordering)>>()
 			.as_slice()
 		{
-			// epsilon better in the score[0], accept.
+			// epsilon better in the `score.minimal_stake`, accept.
 			[(x, Ordering::Greater), _, _] => {
 				debug_assert!(x);
 				true
 			},
 
-			// less than epsilon better in score[0], but more than epsilon better in the second.
+			// less than epsilon better in `score.minimal_stake`, but more than epsilon better in
+			// `score.sum_stake`.
 			[(true, Ordering::Equal), (_, Ordering::Greater), _] => true,
 
 			// less than epsilon better in score[0, 1], but more than epsilon better in the third
@@ -207,7 +215,7 @@ impl sp_std::cmp::PartialOrd for ElectionScore {
 
 impl sp_std::cmp::Ord for ElectionScore {
 	fn cmp(&self, other: &Self) -> Ordering {
-		// we delegate this to the lexicographic cpm of slices, and to incorporate that we want the
+		// we delegate this to the lexicographic cpm of slices`, and to incorporate that we want the
 		// third element to be minimized, we swap them.
 		[self.minimal_stake, self.sum_stake, other.sum_stake_squared].cmp(&[
 			other.minimal_stake,

@@ -1144,7 +1144,7 @@ pub mod pallet {
 					.map_err(dispatch_error_to_invalid)?;
 
 				ValidTransaction::with_tag_prefix("OffchainElection")
-					// The higher the score[0], the better a solution is.
+					// The higher the score.minimal_stake, the better a solution is.
 					.priority(
 						T::MinerTxPriority::get()
 							.saturating_add(raw_solution.score.minimal_stake.saturated_into()),
