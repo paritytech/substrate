@@ -389,11 +389,11 @@ pub mod pallet {
 	/// Those who have promoted a particular public proposal.
     #[pallet::storage]
     #[pallet::getter(fn promoted)]
-    pub type Promoted<T: Config> = 
+    pub type Promoted<T: Config> =
         StorageMap<
         _,
-        Twox64Concat, 
-        T::Hash, 
+        Twox64Concat,
+        T::Hash,
         Vec<T::AccountId>
     >;
 
@@ -519,7 +519,7 @@ pub mod pallet {
 		/// A motion has been proposed by a public account.
 		Proposed { proposal_index: PropIndex, deposit: BalanceOf<T> },
         /// A public proposal has been promoted.
-        PromotedBy { proposal_hash: T::Hash, who: T::AccountId }, 
+        PromotedBy { proposal_hash: T::Hash, who: T::AccountId },
 		/// A public proposal has been tabled for referendum vote.
 		Tabled { proposal_index: PropIndex, deposit: BalanceOf<T>, depositors: Vec<T::AccountId> },
 		/// An external proposal has been tabled.
@@ -583,6 +583,8 @@ pub mod pallet {
 		NoProposal,
         /// Cannot may not promote a proposal twice
         AlreadyPromoted,
+		/// Has not been promoted
+		NotPromoted,
 		/// Identity may not veto a proposal twice
 		AlreadyVetoed,
 		/// Preimage already noted
@@ -696,6 +698,34 @@ pub mod pallet {
 
             Ok(())
         }
+
+		#[pallet::weight(100)]
+		pub fn public_to_external(
+			origin: OriginFor<T>,
+		) -> DispatchResult {
+			T::PromotionOrigin::ensure_origin(origin)?;
+			ensure!(!<NextExternal<T>>::exists(), Error::<T>::DuplicateProposal);
+
+			let public_props = PublicProps::<T>::get();
+			let mut hashes = public_props.iter().filter_map(|s| Some(s.1));
+
+			let mut current: (T::Hash, usize) = Default::default();
+
+			for _ in public_props.iter() {
+				if let Some(i) = hashes.next() {
+					let number = <Promoted<T>>::get(i).ok_or(Error::<T>::NotPromoted)?;
+					let count = number.len();
+					// TODO: Create custom error to replace `ProposalMissing` here.
+					ensure!(count >= current.1, Error::<T>::ProposalMissing);
+					current = (i, count);
+				}
+			}
+			<NextExternal<T>>::put((current.0, VoteThreshold::SimpleMajority));
+
+			<Promoted<T>>::remove(current.0);
+
+			Ok(())
+		}
 
 		/// Signals agreement with a particular proposal.
 		///
