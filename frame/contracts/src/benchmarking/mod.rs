@@ -33,6 +33,7 @@ use crate::{
 	exec::{AccountIdOf, StorageKey},
 	schedule::{API_BENCHMARK_BATCH_SIZE, INSTR_BENCHMARK_BATCH_SIZE},
 	storage::Storage,
+	wasm::CallFlags,
 	Pallet as Contracts, *,
 };
 use codec::{Encode, MaxEncodedLen};
@@ -1526,50 +1527,26 @@ benchmarks! {
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, callee, 0u32.into(), Weight::MAX, None, vec![])
 
-	seal_call_per_transfer_input_output_kb {
+	seal_call_per_transfer_clone_kb {
 		let t in 0 .. 1;
-		let i in 0 .. code::max_pages::<T>() * 64;
-		let o in 0 .. (code::max_pages::<T>() - 1) * 64;
-		let callee_code = WasmModule::<T>::from(ModuleDefinition {
-			memory: Some(ImportedMemory::max::<T>()),
-			imported_functions: vec![ImportedFunction {
-				module: "seal0",
-				name: "seal_return",
-				params: vec![
-					ValueType::I32,
-					ValueType::I32,
-					ValueType::I32,
-				],
-				return_type: None,
-			}],
-			call_body: Some(body::plain(vec![
-				Instruction::I32Const(0), // flags
-				Instruction::I32Const(0), // data_ptr
-				Instruction::I32Const((o * 1024) as i32), // data_len
-				Instruction::Call(0),
-				Instruction::End,
-			])),
-			.. Default::default()
-		});
+		let c in 0 .. code::max_pages::<T>() * 64;
 		let callees = (0..API_BENCHMARK_BATCH_SIZE)
-			.map(|i| Contract::with_index(i + 1, callee_code.clone(), vec![]))
+			.map(|i| Contract::with_index(i + 1, <WasmModule<T>>::dummy(), vec![]))
 			.collect::<Result<Vec<_>, _>>()?;
 		let callee_len = callees.get(0).map(|i| i.account_id.encode().len()).unwrap_or(0);
 		let callee_bytes = callees.iter().flat_map(|x| x.account_id.encode()).collect::<Vec<_>>();
-		let callees_len = callee_bytes.len();
 		let value: BalanceOf<T> = t.into();
 		let value_bytes = value.encode();
 		let value_len = value_bytes.len();
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
-				module: "seal0",
+				module: "seal1",
 				name: "seal_call",
 				params: vec![
 					ValueType::I32,
 					ValueType::I32,
 					ValueType::I64,
-					ValueType::I32,
 					ValueType::I32,
 					ValueType::I32,
 					ValueType::I32,
@@ -1587,21 +1564,16 @@ benchmarks! {
 					offset: value_len as u32,
 					value: callee_bytes,
 				},
-				DataSegment {
-					offset: (value_len + callees_len) as u32,
-					value: (o * 1024).to_le_bytes().into(),
-				},
 			],
 			call_body: Some(body::repeated_dyn(API_BENCHMARK_BATCH_SIZE, vec![
+				Regular(Instruction::I32Const(CallFlags::CLONE_INPUT.bits() as i32)), // flags
 				Counter(value_len as u32, callee_len as u32), // callee_ptr
-				Regular(Instruction::I32Const(callee_len as i32)), // callee_len
 				Regular(Instruction::I64Const(0)), // gas
 				Regular(Instruction::I32Const(0)), // value_ptr
-				Regular(Instruction::I32Const(value_len as i32)), // value_len
 				Regular(Instruction::I32Const(0)), // input_data_ptr
-				Regular(Instruction::I32Const((i * 1024) as i32)), // input_data_len
-				Regular(Instruction::I32Const((value_len + callees_len + 4) as i32)), // output_ptr
-				Regular(Instruction::I32Const((value_len + callees_len) as i32)), // output_len_ptr
+				Regular(Instruction::I32Const(0)), // input_data_len
+				Regular(Instruction::I32Const(SENTINEL as i32)), // output_ptr
+				Regular(Instruction::I32Const(0)), // output_len_ptr
 				Regular(Instruction::Call(0)),
 				Regular(Instruction::Drop),
 			])),
@@ -1609,7 +1581,8 @@ benchmarks! {
 		});
 		let instance = Contract::<T>::new(code, vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
+		let bytes = vec![42; (c * 1024) as usize];
+	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, bytes)
 
 	// We assume that every instantiate sends at least the minimum balance.
 	seal_instantiate {
@@ -1725,52 +1698,28 @@ benchmarks! {
 		}
 	}
 
-	seal_instantiate_per_input_output_salt_kb {
-		let i in 0 .. (code::max_pages::<T>() - 1) * 64;
-		let o in 0 .. (code::max_pages::<T>() - 1) * 64;
+	seal_instantiate_per_transfer_salt_kb {
+		let t in 0 .. 1;
 		let s in 0 .. (code::max_pages::<T>() - 1) * 64;
-		let callee_code = WasmModule::<T>::from(ModuleDefinition {
-			memory: Some(ImportedMemory::max::<T>()),
-			imported_functions: vec![ImportedFunction {
-				module: "seal0",
-				name: "seal_return",
-				params: vec![
-					ValueType::I32,
-					ValueType::I32,
-					ValueType::I32,
-				],
-				return_type: None,
-			}],
-			deploy_body: Some(body::plain(vec![
-				Instruction::I32Const(0), // flags
-				Instruction::I32Const(0), // data_ptr
-				Instruction::I32Const((o * 1024) as i32), // data_len
-				Instruction::Call(0),
-				Instruction::End,
-			])),
-			.. Default::default()
-		});
+		let callee_code = WasmModule::<T>::dummy();
 		let hash = callee_code.hash.clone();
 		let hash_bytes = callee_code.hash.encode();
 		let hash_len = hash_bytes.len();
 		Contracts::<T>::store_code_raw(callee_code.code, whitelisted_caller())?;
-		let inputs = (0..API_BENCHMARK_BATCH_SIZE).map(|x| x.encode()).collect::<Vec<_>>();
-		let input_len = inputs.get(0).map(|x| x.len()).unwrap_or(0);
-		let input_bytes = inputs.iter().cloned().flatten().collect::<Vec<_>>();
-		let inputs_len = input_bytes.len();
-		let value = T::Currency::minimum_balance();
-		assert!(value > 0u32.into());
+		let salts = (0..API_BENCHMARK_BATCH_SIZE).map(|x| x.encode()).collect::<Vec<_>>();
+		let salt_len = salts.get(0).map(|x| x.len()).unwrap_or(0);
+		let salt_bytes = salts.iter().cloned().flatten().collect::<Vec<_>>();
+		let salts_len = salt_bytes.len();
+		let value: BalanceOf<T> = t.into();
 		let value_bytes = value.encode();
 		let value_len = value_bytes.len();
 		let addr_len = T::AccountId::max_encoded_len();
 
 		// offsets where to place static data in contract memory
-		let input_offset = 0;
-		let value_offset = inputs_len;
+		let salt_offset = 0;
+		let value_offset = salts_len;
 		let hash_offset = value_offset + value_len;
 		let addr_len_offset = hash_offset + hash_len;
-		let output_len_offset = addr_len_offset + 4;
-		let output_offset = output_len_offset + 4;
 
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
@@ -1796,8 +1745,8 @@ benchmarks! {
 			}],
 			data_segments: vec![
 				DataSegment {
-					offset: input_offset as u32,
-					value: input_bytes,
+					offset: salt_offset as u32,
+					value: salt_bytes,
 				},
 				DataSegment {
 					offset: value_offset as u32,
@@ -1811,10 +1760,6 @@ benchmarks! {
 					offset: addr_len_offset as u32,
 					value: (addr_len as u32).to_le_bytes().into(),
 				},
-				DataSegment {
-					offset: output_len_offset as u32,
-					value: (o * 1024).to_le_bytes().into(),
-				},
 			],
 			call_body: Some(body::repeated_dyn(API_BENCHMARK_BATCH_SIZE, vec![
 				Regular(Instruction::I32Const(hash_offset as i32)), // code_hash_ptr
@@ -1822,14 +1767,14 @@ benchmarks! {
 				Regular(Instruction::I64Const(0)), // gas
 				Regular(Instruction::I32Const(value_offset as i32)), // value_ptr
 				Regular(Instruction::I32Const(value_len as i32)), // value_len
-				Counter(input_offset as u32, input_len as u32), // input_data_ptr
-				Regular(Instruction::I32Const((i * 1024).max(input_len as u32) as i32)), // input_data_len
+				Regular(Instruction::I32Const(0)), // input_data_ptr
+				Regular(Instruction::I32Const(0)), // input_data_len
 				Regular(Instruction::I32Const((addr_len_offset + addr_len) as i32)), // address_ptr
 				Regular(Instruction::I32Const(addr_len_offset as i32)), // address_len_ptr
-				Regular(Instruction::I32Const(output_offset as i32)), // output_ptr
-				Regular(Instruction::I32Const(output_len_offset as i32)), // output_len_ptr
-				Counter(input_offset as u32, input_len as u32), // salt_ptr
-				Regular(Instruction::I32Const((s * 1024).max(input_len as u32) as i32)), // salt_len
+				Regular(Instruction::I32Const(SENTINEL as i32)), // output_ptr
+				Regular(Instruction::I32Const(0)), // output_len_ptr
+				Counter(salt_offset as u32, salt_len as u32), // salt_ptr
+				Regular(Instruction::I32Const((s * 1024).max(salt_len as u32) as i32)), // salt_len
 				Regular(Instruction::Call(0)),
 				Regular(Instruction::I32Eqz),
 				Regular(Instruction::If(BlockType::NoResult)),
