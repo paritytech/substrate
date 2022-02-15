@@ -326,7 +326,7 @@ frame_benchmarking::benchmarks! {
 		let mut signed_submissions = SignedSubmissions::<T>::get();
 		for i in 0..c {
 			let raw_solution = RawSolution {
-				score: ElectionScore { minimal_stake: 10_000_000u128 - (i as u128), ..Default::default() },
+				score: ElectionScore { minimal_stake: 10_000_000u128 + (i as u128), ..Default::default() },
 				..Default::default()
 			};
 			let signed_submission = SignedSubmission {

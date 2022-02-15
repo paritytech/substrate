@@ -2097,10 +2097,7 @@ mod tests {
 
 			let (solution, _) = MultiPhase::mine_solution::<<Runtime as Config>::Solver>().unwrap();
 			// Default solution's score.
-			assert_eq!(
-				solution.score,
-				ElectionScore { minimal_stake: 50, sum_stake: 100, sum_stake_squared: 50_000 }
-			);
+			assert!(matches!(solution.score, ElectionScore { minimal_stake: 50, .. }));
 
 			<MinimumUntrustedScore<Runtime>>::put(ElectionScore {
 				minimal_stake: 49,
