@@ -4080,7 +4080,7 @@ mod election_data_provider {
 	// `maybe_max_len` voters, and if some of them end up being skipped, we iterate at most `2 *
 	// maybe_max_len`.
 	#[test]
-	fn only_iterates_max_2_times_nominators_quota() {
+	fn only_iterates_max_2_times_max_allowed_len() {
 		ExtBuilder::default()
 			.nominate(false)
 			// the other nominators only nominate 21
@@ -4712,7 +4712,7 @@ mod sorted_list_provider {
 				vec![11, 21, 31]
 			);
 
-			// when account 101 re-validates
+			// when account 11 re-validates
 			assert_ok!(Staking::validate(Origin::signed(10), Default::default()));
 
 			// then counts don't change
