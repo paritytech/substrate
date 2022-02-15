@@ -19,6 +19,7 @@ use codec::{Decode, Encode, Error, Input};
 use sp_std::{cmp, prelude::*};
 
 use crate::{crypto::Signature, ValidatorSetId};
+use crate::{bls_crypto::Signature as BLSSignature}
 
 /// Id of different payloads in the [`Commitment`] data
 pub type BeefyPayloadId = [u8; 2];
@@ -147,6 +148,7 @@ pub struct SignedCommitment<TBlockNumber> {
 	/// The length of this `Vec` must match number of validators in the current set (see
 	/// [Commitment::validator_set_id]).
 	pub signatures: Vec<Option<Signature>>,
+    pub bls_signature: BLSSignature;
 }
 
 impl<TBlockNumber> SignedCommitment<TBlockNumber> {
