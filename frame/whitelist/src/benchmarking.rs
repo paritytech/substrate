@@ -67,9 +67,8 @@ benchmarks! {
 	dispatch_whitelisted_call {
 		let origin = T::DispatchWhitelistedOrigin::successful_origin();
 		// NOTE: we remove `10` because we need some bytes to encode the variants and vec length
-		let remark = (0 .. <T::PreimageProvider as PreimageRecipient<_>>::MaxSize::get() - 10)
-			.map(|_| 1u8)
-			.collect();
+		let remark_len = <T::PreimageProvider as PreimageRecipient<_>>::MaxSize::get() - 10;
+		let remark = sp_std::vec![1_8; remark_len as usize];
 
 		let call: <T as Config>::Call = frame_system::Call::remark { remark }.into();
 		let call_weight = call.get_dispatch_info().weight;
@@ -83,6 +82,29 @@ benchmarks! {
 		T::PreimageProvider::note_preimage(encoded_call);
 
 	}: _<T::Origin>(origin, call_hash, call_weight)
+	verify {
+		ensure!(
+			!WhitelistedCall::<T>::contains_key(call_hash),
+			"whitelist not removed"
+		);
+		ensure!(
+			!T::PreimageProvider::preimage_requested(&call_hash),
+			"preimage still requested"
+		);
+	}
+
+	dispatch_whitelisted_call_with_preimage {
+		let n in 1 .. 10_000;
+
+		let origin = T::DispatchWhitelistedOrigin::successful_origin();
+		let remark = sp_std::vec![1u8; n as usize];
+
+		let call: <T as Config>::Call = frame_system::Call::remark { remark }.into();
+		let call_hash = T::Hashing::hash_of(&call);
+
+		Pallet::<T>::whitelist_call(origin.clone(), call_hash)
+			.expect("whitelisting call must be successful");
+	}: _<T::Origin>(origin, Box::new(call))
 	verify {
 		ensure!(
 			!WhitelistedCall::<T>::contains_key(call_hash),

@@ -50,6 +50,7 @@ use frame_support::{
 };
 use scale_info::TypeInfo;
 use weights::WeightInfo;
+use sp_api::HashT;
 
 use frame_support::pallet_prelude::*;
 use frame_system::pallet_prelude::*;
@@ -76,7 +77,8 @@ pub mod pallet {
 			+ Dispatchable<Origin = Self::Origin, PostInfo = PostDispatchInfo>
 			+ GetDispatchInfo
 			+ FullCodec
-			+ From<frame_system::Call<Self>>;
+			+ From<frame_system::Call<Self>>
+			+ Parameter;
 
 		/// Required origin for whitelisting a call.
 		type WhitelistOrigin: EnsureOrigin<Self::Origin>;
@@ -177,24 +179,61 @@ pub mod pallet {
 				Error::<T>::InvalidCallWeightWitness
 			);
 
-			WhitelistedCall::<T>::remove(call_hash);
-
-			T::PreimageProvider::unrequest_preimage(&call_hash);
-
-			let result = call.dispatch(frame_system::Origin::<T>::Root.into());
-
-			let actual_weight = {
-				let call_actual_weight = match result {
-					Ok(call_post_info) => call_post_info.actual_weight,
-					Err(call_err) => call_err.post_info.actual_weight,
-				};
-				call_actual_weight
-					.map(|w| w.saturating_add(T::WeightInfo::dispatch_whitelisted_call()))
-			};
-
-			Self::deposit_event(Event::<T>::WhitelistedCallDispatched { call_hash, result });
+			let actual_weight = Self::dispatch_checked_call(call_hash, call)
+				.map(|w| w.saturating_add(T::WeightInfo::dispatch_whitelisted_call()));
 
 			Ok(actual_weight.into())
 		}
+
+		#[pallet::weight({
+			let call_weight = call.get_dispatch_info().weight;
+			let call_len = call.encoded_size() as u32;
+
+			T::WeightInfo::dispatch_whitelisted_call_with_preimage(call_len)
+				.saturating_add(call_weight)
+		})]
+		pub fn dispatch_whitelisted_call_with_preimage(
+			origin: OriginFor<T>,
+			call: Box<<T as Config>::Call>,
+		) -> DispatchResultWithPostInfo {
+			T::DispatchWhitelistedOrigin::ensure_origin(origin)?;
+
+			let call_hash = <T as frame_system::Config>::Hashing::hash_of(&call);
+
+			ensure!(
+				WhitelistedCall::<T>::contains_key(call_hash),
+				Error::<T>::CallIsNotWhitelisted,
+			);
+
+			let call_len = call.encoded_size() as u32;
+			let actual_weight = Self::dispatch_checked_call(call_hash, *call)
+				.map(|w| w.saturating_add(T::WeightInfo::dispatch_whitelisted_call_with_preimage(call_len)));
+
+			Ok(actual_weight.into())
+		}
+	}
+}
+
+impl<T: Config> Pallet<T> {
+	/// * remove call from whitelisted call
+	/// * unrequest preimage
+	/// * dispatch call
+	/// * put event
+	/// * return the call actual weight of the dispatched call if there is some
+	fn dispatch_checked_call(call_hash: T::Hash, call: <T as Config>::Call) -> Option<Weight> {
+		WhitelistedCall::<T>::remove(call_hash);
+
+		T::PreimageProvider::unrequest_preimage(&call_hash);
+
+		let result = call.dispatch(frame_system::Origin::<T>::Root.into());
+
+		let call_actual_weight = match result {
+			Ok(call_post_info) => call_post_info.actual_weight,
+			Err(call_err) => call_err.post_info.actual_weight,
+		};
+
+		Self::deposit_event(Event::<T>::WhitelistedCallDispatched { call_hash, result });
+
+		call_actual_weight
 	}
 }

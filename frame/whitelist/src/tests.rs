@@ -69,7 +69,6 @@ fn test_whitelist_call_and_execute() {
 	new_test_ext().execute_with(|| {
 		let call = Call::System(frame_system::Call::remark_with_event { remark: vec![1] });
 		let call_weight = call.get_dispatch_info().weight;
-		dbg!(call_weight);
 		let encoded_call = call.encode();
 		let call_hash = <Test as frame_system::Config>::Hashing::hash(&encoded_call[..]);
 
@@ -126,5 +125,25 @@ fn test_whitelist_call_and_execute_failing_call() {
 		assert!(Preimage::preimage_requested(&call_hash));
 		assert_ok!(Whitelist::dispatch_whitelisted_call(Origin::root(), call_hash, call_weight));
 		assert!(!Preimage::preimage_requested(&call_hash));
+	});
+}
+
+#[test]
+fn test_whitelist_call_and_execute_without_note_preimage() {
+	new_test_ext().execute_with(|| {
+		let call = Box::new(Call::System(frame_system::Call::remark_with_event { remark: vec![1] }));
+		let call_hash = <Test as frame_system::Config>::Hashing::hash_of(&call);
+
+		assert_ok!(Whitelist::whitelist_call(Origin::root(), call_hash));
+		assert!(Preimage::preimage_requested(&call_hash));
+
+		assert_ok!(Whitelist::dispatch_whitelisted_call_with_preimage(Origin::root(), call.clone()));
+
+		assert!(!Preimage::preimage_requested(&call_hash));
+
+		assert_noop!(
+			Whitelist::dispatch_whitelisted_call_with_preimage(Origin::root(), call),
+			crate::Error::<Test>::CallIsNotWhitelisted,
+		);
 	});
 }
