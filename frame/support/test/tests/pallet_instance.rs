@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,14 +18,14 @@
 use frame_support::{
 	dispatch::UnfilteredDispatchable,
 	storage::unhashed,
-	traits::{GetCallName, OnFinalize, OnGenesis, OnInitialize, OnRuntimeUpgrade},
+	traits::{ConstU32, GetCallName, OnFinalize, OnGenesis, OnInitialize, OnRuntimeUpgrade},
 	weights::{DispatchClass, DispatchInfo, GetDispatchInfo, Pays},
 };
 use sp_io::{
 	hashing::{blake2_128, twox_128, twox_64},
 	TestExternalities,
 };
-use sp_runtime::DispatchError;
+use sp_runtime::{DispatchError, ModuleError};
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -245,11 +245,6 @@ pub mod pallet2 {
 	}
 }
 
-frame_support::parameter_types!(
-	pub const MyGetParam: u32 = 10;
-	pub const BlockHashCount: u32 = 250;
-);
-
 impl frame_system::Config for Runtime {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type Origin = Origin;
@@ -262,7 +257,7 @@ impl frame_system::Config for Runtime {
 	type Lookup = sp_runtime::traits::IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = Event;
-	type BlockHashCount = BlockHashCount;
+	type BlockHashCount = ConstU32<250>;
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
@@ -274,15 +269,16 @@ impl frame_system::Config for Runtime {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
+	type MaxConsumers = ConstU32<16>;
 }
 impl pallet::Config for Runtime {
 	type Event = Event;
-	type MyGetParam = MyGetParam;
+	type MyGetParam = ConstU32<10>;
 	type Balance = u64;
 }
 impl pallet::Config<pallet::Instance1> for Runtime {
 	type Event = Event;
-	type MyGetParam = MyGetParam;
+	type MyGetParam = ConstU32<10>;
 	type Balance = u64;
 }
 impl pallet2::Config for Runtime {
@@ -345,7 +341,11 @@ fn error_expand() {
 	);
 	assert_eq!(
 		DispatchError::from(pallet::Error::<Runtime>::InsufficientProposersBalance),
-		DispatchError::Module { index: 1, error: 0, message: Some("InsufficientProposersBalance") },
+		DispatchError::Module(ModuleError {
+			index: 1,
+			error: 0,
+			message: Some("InsufficientProposersBalance")
+		}),
 	);
 
 	assert_eq!(
@@ -362,7 +362,11 @@ fn error_expand() {
 		DispatchError::from(
 			pallet::Error::<Runtime, pallet::Instance1>::InsufficientProposersBalance
 		),
-		DispatchError::Module { index: 2, error: 0, message: Some("InsufficientProposersBalance") },
+		DispatchError::Module(ModuleError {
+			index: 2,
+			error: 0,
+			message: Some("InsufficientProposersBalance")
+		}),
 	);
 }
 

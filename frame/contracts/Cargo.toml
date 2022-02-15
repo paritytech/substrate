@@ -20,7 +20,7 @@ codec = { package = "parity-scale-codec", version = "2.2.0", default-features = 
 ] }
 scale-info = { version = "1.0", default-features = false, features = ["derive"] }
 log = { version = "0.4", default-features = false }
-pwasm-utils = { version = "0.18.2", default-features = false }
+wasm-instrument = { version = "0.1", default-features = false }
 serde = { version = "1", optional = true, features = ["derive"] }
 smallvec = { version = "1", default-features = false, features = [
 	"const_generics",
@@ -36,13 +36,13 @@ rand_pcg = { version = "0.3", optional = true }
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
-pallet-contracts-primitives = { version = "4.0.0-dev", default-features = false, path = "common" }
+pallet-contracts-primitives = { version = "5.0.0", default-features = false, path = "common" }
 pallet-contracts-proc-macro = { version = "4.0.0-dev", path = "proc-macro" }
-sp-core = { version = "4.0.0-dev", default-features = false, path = "../../primitives/core" }
-sp-io = { version = "4.0.0-dev", default-features = false, path = "../../primitives/io" }
-sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
+sp-core = { version = "5.0.0", default-features = false, path = "../../primitives/core" }
+sp-io = { version = "5.0.0", default-features = false, path = "../../primitives/io" }
+sp-runtime = { version = "5.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-sandbox = { version = "0.10.0-dev", default-features = false, path = "../../primitives/sandbox" }
-sp-std = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
+sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
 
 [dev-dependencies]
 assert_matches = "1"
@@ -71,7 +71,7 @@ std = [
 	"frame-benchmarking/std",
 	"frame-support/std",
 	"frame-system/std",
-	"pwasm-utils/std",
+	"wasm-instrument/std",
 	"wasmi-validation/std",
 	"pallet-contracts-primitives/std",
 	"pallet-contracts-proc-macro/full",

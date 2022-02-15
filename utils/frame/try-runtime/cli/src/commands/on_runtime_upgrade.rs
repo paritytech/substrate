@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -28,10 +28,10 @@ use crate::{
 };
 
 /// Configurations of the [`Command::OnRuntimeUpgrade`].
-#[derive(Debug, Clone, structopt::StructOpt)]
+#[derive(Debug, Clone, clap::Parser)]
 pub struct OnRuntimeUpgradeCmd {
 	/// The state type to use.
-	#[structopt(subcommand)]
+	#[clap(subcommand)]
 	pub state: State,
 }
 
@@ -58,7 +58,7 @@ where
 	};
 
 	if let Some(uri) = command.state.live_uri() {
-		let (expected_spec_name, expected_spec_version) =
+		let (expected_spec_name, expected_spec_version, _) =
 			local_spec::<Block, ExecDispatch>(&ext, &executor);
 		ensure_matching_spec::<Block>(
 			uri,

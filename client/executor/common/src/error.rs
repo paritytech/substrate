@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -32,10 +32,10 @@ pub enum Error {
 	InvalidData(#[from] sp_serializer::Error),
 
 	#[error(transparent)]
-	Trap(#[from] wasmi::Trap),
-
-	#[error(transparent)]
 	Wasmi(#[from] wasmi::Error),
+
+	#[error("Sandbox error: {0}")]
+	Sandbox(String),
 
 	#[error("Error calling api function: {0}")]
 	ApiError(Box<dyn std::error::Error + Send + Sync>),
@@ -108,6 +108,12 @@ pub enum Error {
 
 	#[error("Invalid initializer expression provided {0}")]
 	InvalidInitializerExpression(String),
+
+	#[error("Execution aborted due to panic: {0}")]
+	AbortedDueToPanic(MessageWithBacktrace),
+
+	#[error("Execution aborted due to trap: {0}")]
+	AbortedDueToTrap(MessageWithBacktrace),
 }
 
 impl wasmi::HostError for Error {}
@@ -125,28 +131,73 @@ impl From<String> for Error {
 }
 
 /// Type for errors occurring during Wasm runtime construction.
-#[derive(Debug, derive_more::Display)]
+#[derive(Debug, thiserror::Error)]
+#[allow(missing_docs)]
 pub enum WasmError {
-	/// Code could not be read from the state.
+	#[error("Code could not be read from the state.")]
 	CodeNotFound,
-	/// Failure to reinitialize runtime instance from snapshot.
+
+	#[error("Failure to reinitialize runtime instance from snapshot.")]
 	ApplySnapshotFailed,
+
 	/// Failure to erase the wasm memory.
 	///
 	/// Depending on the implementation might mean failure of allocating memory.
+	#[error("Failure to erase the wasm memory: {0}")]
 	ErasingFailed(String),
-	/// Wasm code failed validation.
+
+	#[error("Wasm code failed validation.")]
 	InvalidModule,
-	/// Wasm code could not be deserialized.
+
+	#[error("Wasm code could not be deserialized.")]
 	CantDeserializeWasm,
-	/// The module does not export a linear memory named `memory`.
+
+	#[error("The module does not export a linear memory named `memory`.")]
 	InvalidMemory,
-	/// The number of heap pages requested is disallowed by the module.
+
+	#[error("The number of heap pages requested is disallowed by the module.")]
 	InvalidHeapPages,
+
 	/// Instantiation error.
+	#[error("{0}")]
 	Instantiation(String),
+
 	/// Other error happenend.
+	#[error("{0}")]
 	Other(String),
 }
 
-impl std::error::Error for WasmError {}
+/// An error message with an attached backtrace.
+#[derive(Debug)]
+pub struct MessageWithBacktrace {
+	/// The error message.
+	pub message: String,
+
+	/// The backtrace associated with the error message.
+	pub backtrace: Option<Backtrace>,
+}
+
+impl std::fmt::Display for MessageWithBacktrace {
+	fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
+		fmt.write_str(&self.message)?;
+		if let Some(ref backtrace) = self.backtrace {
+			fmt.write_str("\nWASM backtrace:\n")?;
+			backtrace.backtrace_string.fmt(fmt)?;
+		}
+
+		Ok(())
+	}
+}
+
+/// A WASM backtrace.
+#[derive(Debug)]
+pub struct Backtrace {
+	/// The string containing the backtrace.
+	pub backtrace_string: String,
+}
+
+impl std::fmt::Display for Backtrace {
+	fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
+		fmt.write_str(&self.backtrace_string)
+	}
+}

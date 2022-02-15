@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -32,11 +32,12 @@
 use crate::utils::{
 	create_exchangeable_host_function_ident, create_function_ident_with_version,
 	generate_crate_access, get_function_argument_names, get_function_arguments,
-	get_runtime_interface,
+	get_runtime_interface, RuntimeInterfaceFunction,
 };
 
 use syn::{
-	parse_quote, spanned::Spanned, FnArg, Ident, ItemTrait, Result, Signature, TraitItemMethod,
+	parse_quote, spanned::Spanned, FnArg, Ident, ItemTrait, Result, Signature, Token,
+	TraitItemMethod,
 };
 
 use proc_macro2::{Span, TokenStream};
@@ -52,7 +53,7 @@ pub fn generate(trait_def: &ItemTrait, is_wasm_only: bool, tracing: bool) -> Res
 	let runtime_interface = get_runtime_interface(trait_def)?;
 
 	// latest version dispatch
-	let token_stream: Result<TokenStream> = runtime_interface.latest_versions().try_fold(
+	let token_stream: Result<TokenStream> = runtime_interface.latest_versions_to_call().try_fold(
 		TokenStream::new(),
 		|mut t, (latest_version, method)| {
 			t.extend(function_for_method(method, latest_version, is_wasm_only)?);
@@ -74,14 +75,14 @@ pub fn generate(trait_def: &ItemTrait, is_wasm_only: bool, tracing: bool) -> Res
 
 /// Generates the bare function implementation for the given method for the host and wasm side.
 fn function_for_method(
-	method: &TraitItemMethod,
+	method: &RuntimeInterfaceFunction,
 	latest_version: u32,
 	is_wasm_only: bool,
 ) -> Result<TokenStream> {
 	let std_impl =
 		if !is_wasm_only { function_std_latest_impl(method, latest_version)? } else { quote!() };
 
-	let no_std_impl = function_no_std_impl(method)?;
+	let no_std_impl = function_no_std_impl(method, is_wasm_only)?;
 
 	Ok(quote! {
 		#std_impl
@@ -91,20 +92,46 @@ fn function_for_method(
 }
 
 /// Generates the bare function implementation for `cfg(not(feature = "std"))`.
-fn function_no_std_impl(method: &TraitItemMethod) -> Result<TokenStream> {
+fn function_no_std_impl(
+	method: &RuntimeInterfaceFunction,
+	is_wasm_only: bool,
+) -> Result<TokenStream> {
 	let function_name = &method.sig.ident;
 	let host_function_name = create_exchangeable_host_function_ident(&method.sig.ident);
 	let args = get_function_arguments(&method.sig);
 	let arg_names = get_function_argument_names(&method.sig);
-	let return_value = &method.sig.output;
+	let return_value = if method.should_trap_on_return() {
+		syn::ReturnType::Type(
+			<Token![->]>::default(),
+			Box::new(syn::TypeNever { bang_token: <Token![!]>::default() }.into()),
+		)
+	} else {
+		method.sig.output.clone()
+	};
+	let maybe_unreachable = if method.should_trap_on_return() {
+		quote! {
+			; core::arch::wasm32::unreachable();
+		}
+	} else {
+		quote! {}
+	};
+
 	let attrs = method.attrs.iter().filter(|a| !a.path.is_ident("version"));
 
+	let cfg_wasm_only = if is_wasm_only {
+		quote! { #[cfg(target_arch = "wasm32")] }
+	} else {
+		quote! {}
+	};
+
 	Ok(quote! {
+		#cfg_wasm_only
 		#[cfg(not(feature = "std"))]
 		#( #attrs )*
 		pub fn #function_name( #( #args, )* ) #return_value {
 			// Call the host function
 			#host_function_name.get()( #( #arg_names, )* )
+			#maybe_unreachable
 		}
 	})
 }

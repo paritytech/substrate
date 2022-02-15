@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -28,19 +28,19 @@ use sp_runtime::traits::{Block as BlockT, Header, NumberFor};
 use std::{fmt::Debug, str::FromStr};
 
 /// Configurations of the [`Command::OffchainWorker`].
-#[derive(Debug, Clone, structopt::StructOpt)]
+#[derive(Debug, Clone, clap::Parser)]
 pub struct OffchainWorkerCmd {
 	/// Overwrite the wasm code in state or not.
-	#[structopt(long)]
+	#[clap(long)]
 	overwrite_wasm_code: bool,
 
 	/// The block hash at which to fetch the header.
 	///
 	/// If the `live` state type is being used, then this can be omitted, and is equal to whatever
 	/// the `state::at` is. Only use this (with care) when combined with a snapshot.
-	#[structopt(
+	#[clap(
 		long,
-		multiple = false,
+		multiple_values = false,
 		parse(try_from_str = parse::hash)
 	)]
 	header_at: Option<String>,
@@ -49,15 +49,15 @@ pub struct OffchainWorkerCmd {
 	///
 	/// If the `live` state type is being used, then this can be omitted, and is equal to whatever
 	/// the `state::uri` is. Only use this (with care) when combined with a snapshot.
-	#[structopt(
+	#[clap(
 		long,
-		multiple = false,
+		multiple_values = false,
 		parse(try_from_str = parse::url)
 	)]
 	header_ws_uri: Option<String>,
 
 	/// The state type to use.
-	#[structopt(subcommand)]
+	#[clap(subcommand)]
 	pub state: State,
 }
 
@@ -140,7 +140,7 @@ where
 		builder.build().await?
 	};
 
-	let (expected_spec_name, expected_spec_version) =
+	let (expected_spec_name, expected_spec_version, _) =
 		local_spec::<Block, ExecDispatch>(&ext, &executor);
 	ensure_matching_spec::<Block>(
 		header_ws_uri,

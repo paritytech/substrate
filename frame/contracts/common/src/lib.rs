@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -131,9 +131,9 @@ pub struct ExecReturnValue {
 }
 
 impl ExecReturnValue {
-	/// We understand the absense of a revert flag as success.
-	pub fn is_success(&self) -> bool {
-		!self.flags.contains(ReturnFlags::REVERT)
+	/// The contract did revert all storage changes.
+	pub fn did_revert(&self) -> bool {
+		self.flags.contains(ReturnFlags::REVERT)
 	}
 }
 
@@ -151,11 +151,19 @@ pub struct InstantiateReturnValue<AccountId> {
 /// The result of succesfully uploading a contract.
 #[derive(PartialEq, Eq, Encode, Decode, RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
+#[cfg_attr(
+	feature = "std",
+	serde(
+		rename_all = "camelCase",
+		bound(serialize = "CodeHash: Serialize, Balance: Copy + Into<NumberOrHex>"),
+		bound(deserialize = "CodeHash: Deserialize<'de>, Balance: TryFrom<NumberOrHex>")
+	)
+)]
 pub struct CodeUploadReturnValue<CodeHash, Balance> {
 	/// The key under which the new code is stored.
 	pub code_hash: CodeHash,
 	/// The deposit that was reserved at the caller. Is zero when the code already existed.
+	#[cfg_attr(feature = "std", serde(with = "as_hex"))]
 	pub deposit: Balance,
 }
 
@@ -168,6 +176,12 @@ pub enum Code<Hash> {
 	Upload(Bytes),
 	/// The code hash of an on-chain wasm blob.
 	Existing(Hash),
+}
+
+impl<T: Into<Vec<u8>>, Hash> From<T> for Code<Hash> {
+	fn from(from: T) -> Self {
+		Code::Upload(Bytes(from.into()))
+	}
 }
 
 /// The amount of balance that was either charged or refunded in order to pay for storage.

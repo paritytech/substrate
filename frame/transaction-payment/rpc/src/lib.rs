@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -103,7 +103,7 @@ where
 		api.query_info(&at, uxt, encoded_len).map_err(|e| RpcError {
 			code: ErrorCode::ServerError(Error::RuntimeError.into()),
 			message: "Unable to query dispatch info.".into(),
-			data: Some(format!("{:?}", e).into()),
+			data: Some(e.to_string().into()),
 		})
 	}
 
@@ -127,7 +127,7 @@ where
 		let fee_details = api.query_fee_details(&at, uxt, encoded_len).map_err(|e| RpcError {
 			code: ErrorCode::ServerError(Error::RuntimeError.into()),
 			message: "Unable to query fee details.".into(),
-			data: Some(format!("{:?}", e).into()),
+			data: Some(e.to_string().into()),
 		})?;
 
 		let try_into_rpc_balance = |value: Balance| {

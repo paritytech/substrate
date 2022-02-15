@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,7 +15,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use frame_support::parameter_types;
+use frame_support::{
+	parameter_types,
+	traits::{ConstU32, ConstU64},
+};
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
@@ -41,7 +44,6 @@ frame_support::construct_runtime!(
 );
 
 parameter_types! {
-	pub const BlockHashCount: u64 = 250;
 	pub BlockWeights: frame_system::limits::BlockWeights =
 		frame_system::limits::BlockWeights::simple_max(1024);
 }
@@ -49,7 +51,7 @@ impl frame_system::Config for Test {
 	type AccountData = pallet_balances::AccountData<u64>;
 	type AccountId = u64;
 	type BaseCallFilter = frame_support::traits::Everything;
-	type BlockHashCount = BlockHashCount;
+	type BlockHashCount = ConstU64<250>;
 	type BlockLength = ();
 	type BlockNumber = u64;
 	type BlockWeights = ();
@@ -64,22 +66,21 @@ impl frame_system::Config for Test {
 	type OnKilledAccount = ();
 	type OnNewAccount = ();
 	type OnSetCode = ();
+	type MaxConsumers = frame_support::traits::ConstU32<16>;
 	type Origin = Origin;
 	type PalletInfo = PalletInfo;
 	type SS58Prefix = ();
 	type SystemWeightInfo = ();
 	type Version = ();
 }
-parameter_types! {
-	pub const MaxLocks: u32 = 10;
-}
+
 impl pallet_balances::Config for Test {
 	type AccountStore = System;
 	type Balance = u64;
 	type DustRemoval = ();
 	type Event = Event;
 	type ExistentialDeposit = ExistentialDeposit;
-	type MaxLocks = MaxLocks;
+	type MaxLocks = ConstU32<10>;
 	type MaxReserves = ();
 	type ReserveIdentifier = [u8; 8];
 	type WeightInfo = ();

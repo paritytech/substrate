@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -190,7 +190,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 		let local_peer_id = local_public.clone().to_peer_id();
 		info!(
 			target: "sub-libp2p",
-			"🏷 Local node identity is: {}",
+			"🏷  Local node identity is: {}",
 			local_peer_id.to_base58(),
 		);
 
@@ -1391,7 +1391,7 @@ impl<'a> NotificationSenderReady<'a> {
 }
 
 /// Error returned by [`NetworkService::send_notification`].
-#[derive(Debug, derive_more::Display, derive_more::Error)]
+#[derive(Debug, thiserror::Error)]
 pub enum NotificationSenderError {
 	/// The notification receiver has been closed, usually because the underlying connection
 	/// closed.
@@ -1399,8 +1399,10 @@ pub enum NotificationSenderError {
 	/// Some of the notifications most recently sent may not have been received. However,
 	/// the peer may still be connected and a new `NotificationSender` for the same
 	/// protocol obtained from [`NetworkService::notification_sender`].
+	#[error("The notification receiver has been closed")]
 	Closed,
 	/// Protocol name hasn't been registered.
+	#[error("Protocol name hasn't been registered")]
 	BadProtocol,
 }
 

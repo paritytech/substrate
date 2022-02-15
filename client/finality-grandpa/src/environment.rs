@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -404,19 +404,19 @@ impl Metrics {
 	) -> Result<Self, PrometheusError> {
 		Ok(Self {
 			finality_grandpa_round: register(
-				Gauge::new("finality_grandpa_round", "Highest completed GRANDPA round.")?,
+				Gauge::new("substrate_finality_grandpa_round", "Highest completed GRANDPA round.")?,
 				registry,
 			)?,
 			finality_grandpa_prevotes: register(
 				Counter::new(
-					"finality_grandpa_prevotes_total",
+					"substrate_finality_grandpa_prevotes_total",
 					"Total number of GRANDPA prevotes cast locally.",
 				)?,
 				registry,
 			)?,
 			finality_grandpa_precommits: register(
 				Counter::new(
-					"finality_grandpa_precommits_total",
+					"substrate_finality_grandpa_precommits_total",
 					"Total number of GRANDPA precommits cast locally.",
 				)?,
 				registry,
@@ -609,7 +609,7 @@ where
 	let tree_route = match tree_route_res {
 		Ok(tree_route) => tree_route,
 		Err(e) => {
-			debug!(target: "afg", "Encountered error computing ancestry between block {:?} and base {:?}: {:?}",
+			debug!(target: "afg", "Encountered error computing ancestry between block {:?} and base {:?}: {}",
 				   block, base, e);
 
 			return Err(GrandpaError::NotDescendent)
@@ -1098,7 +1098,7 @@ where
 	) {
 		warn!(target: "afg", "Detected prevote equivocation in the finality worker: {:?}", equivocation);
 		if let Err(err) = self.report_equivocation(equivocation.into()) {
-			warn!(target: "afg", "Error reporting prevote equivocation: {:?}", err);
+			warn!(target: "afg", "Error reporting prevote equivocation: {}", err);
 		}
 	}
 
@@ -1109,7 +1109,7 @@ where
 	) {
 		warn!(target: "afg", "Detected precommit equivocation in the finality worker: {:?}", equivocation);
 		if let Err(err) = self.report_equivocation(equivocation.into()) {
-			warn!(target: "afg", "Error reporting precommit equivocation: {:?}", err);
+			warn!(target: "afg", "Error reporting precommit equivocation: {}", err);
 		}
 	}
 }
@@ -1224,7 +1224,7 @@ where
 				.or_else(|| Some((target_header.hash(), *target_header.number())))
 		},
 		Err(e) => {
-			debug!(target: "afg", "Encountered error finding best chain containing {:?}: {:?}", block, e);
+			warn!(target: "afg", "Encountered error finding best chain containing {:?}: {}", block, e);
 			None
 		},
 	};
@@ -1293,7 +1293,7 @@ where
 		) {
 			if let Some(sender) = justification_sender {
 				if let Err(err) = sender.notify(justification) {
-					warn!(target: "afg", "Error creating justification for subscriber: {:?}", err);
+					warn!(target: "afg", "Error creating justification for subscriber: {}", err);
 				}
 			}
 		}
@@ -1344,7 +1344,7 @@ where
 		client
 			.apply_finality(import_op, BlockId::Hash(hash), persisted_justification, true)
 			.map_err(|e| {
-				warn!(target: "afg", "Error applying finality to block {:?}: {:?}", (hash, number), e);
+				warn!(target: "afg", "Error applying finality to block {:?}: {}", (hash, number), e);
 				e
 			})?;
 

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -369,6 +369,7 @@ macro_rules! implement_fixed {
 			Default,
 			Copy,
 			Clone,
+			codec::MaxEncodedLen,
 			PartialEq,
 			Eq,
 			PartialOrd,
@@ -665,6 +666,15 @@ macro_rules! implement_fixed {
 			#[test]
 			fn macro_preconditions() {
 				assert!($name::DIV > 0);
+			}
+
+			#[test]
+			fn has_max_encoded_len() {
+				struct AsMaxEncodedLen<T: codec::MaxEncodedLen> {
+					_data: T,
+				}
+
+				let _ = AsMaxEncodedLen { _data: $name::min_value() };
 			}
 
 			#[test]

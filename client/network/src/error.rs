@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -27,18 +27,18 @@ use std::{borrow::Cow, fmt};
 pub type Result<T> = std::result::Result<T, Error>;
 
 /// Error type for the network.
-#[derive(derive_more::Display, derive_more::From)]
+#[derive(thiserror::Error)]
 pub enum Error {
 	/// Io error
-	Io(std::io::Error),
+	#[error(transparent)]
+	Io(#[from] std::io::Error),
+
 	/// Client error
-	Client(Box<sp_blockchain::Error>),
+	#[error(transparent)]
+	Client(#[from] Box<sp_blockchain::Error>),
 	/// The same bootnode (based on address) is registered with two different peer ids.
-	#[display(
-		fmt = "The same bootnode (`{}`) is registered with two different peer ids: `{}` and `{}`",
-		address,
-		first_id,
-		second_id
+	#[error(
+		"The same bootnode (`{address}`) is registered with two different peer ids: `{first_id}` and `{second_id}`"
 	)]
 	DuplicateBootnode {
 		/// The address of the bootnode.
@@ -49,11 +49,11 @@ pub enum Error {
 		second_id: PeerId,
 	},
 	/// Prometheus metrics error.
-	Prometheus(prometheus_endpoint::PrometheusError),
+	#[error(transparent)]
+	Prometheus(#[from] prometheus_endpoint::PrometheusError),
 	/// The network addresses are invalid because they don't match the transport.
-	#[display(
-		fmt = "The following addresses are invalid because they don't match the transport: {:?}",
-		addresses
+	#[error(
+		"The following addresses are invalid because they don't match the transport: {addresses:?}"
 	)]
 	AddressesForAnotherTransport {
 		/// Transport used.
@@ -62,7 +62,7 @@ pub enum Error {
 		addresses: Vec<Multiaddr>,
 	},
 	/// The same request-response protocol has been registered multiple times.
-	#[display(fmt = "Request-response protocol registered multiple times: {}", protocol)]
+	#[error("Request-response protocol registered multiple times: {protocol}")]
 	DuplicateRequestResponseProtocol {
 		/// Name of the protocol registered multiple times.
 		protocol: Cow<'static, str>,
@@ -73,18 +73,5 @@ pub enum Error {
 impl fmt::Debug for Error {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		fmt::Display::fmt(self, f)
-	}
-}
-
-impl std::error::Error for Error {
-	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-		match self {
-			Self::Io(ref err) => Some(err),
-			Self::Client(ref err) => Some(err),
-			Self::Prometheus(ref err) => Some(err),
-			Self::DuplicateBootnode { .. } |
-			Self::AddressesForAnotherTransport { .. } |
-			Self::DuplicateRequestResponseProtocol { .. } => None,
-		}
 	}
 }

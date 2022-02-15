@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -56,7 +56,7 @@ use syn::{Error, Expr, Ident, ItemFn};
 /// 2020-10-16 08:03:14  ✌️  version 2.0.0-47f7d3f2e-x86_64-linux-gnu
 /// 2020-10-16 08:03:14  ❤️  by Anonymous, 2017-2020
 /// 2020-10-16 08:03:14  📋 Chain specification: Local Testnet
-/// 2020-10-16 08:03:14  🏷 Node name: nice-glove-1401
+/// 2020-10-16 08:03:14  🏷  Node name: nice-glove-1401
 /// 2020-10-16 08:03:14  👤 Role: LIGHT
 /// 2020-10-16 08:03:14  💾 Database: RocksDb at /tmp/substrate95w2Dk/chains/local_testnet/db
 /// 2020-10-16 08:03:14  ⛓  Native runtime: node-template-1 (node-template-1.tx1.au1)
@@ -64,7 +64,7 @@ use syn::{Error, Expr, Ident, ItemFn};
 /// 2020-10-16 08:03:14  [light] Loading GRANDPA authorities from genesis on what appears to be first startup.
 /// 2020-10-16 08:03:15  [light] ⏱  Loaded block-time = 6000 milliseconds from genesis on first-launch
 /// 2020-10-16 08:03:15  [light] Using default protocol ID "sup" because none is configured in the chain specs
-/// 2020-10-16 08:03:15  [light] 🏷 Local node identity is: 12D3KooWHX4rkWT6a6N55Km7ZnvenGdShSKPkzJ3yj9DU5nqDtWR
+/// 2020-10-16 08:03:15  [light] 🏷  Local node identity is: 12D3KooWHX4rkWT6a6N55Km7ZnvenGdShSKPkzJ3yj9DU5nqDtWR
 /// 2020-10-16 08:03:15  [light] 📦 Highest known block at #0
 /// 2020-10-16 08:03:15  [light] 〽️ Prometheus server started at 127.0.0.1:9615
 /// 2020-10-16 08:03:15  [light] Listening for new connections on 127.0.0.1:9944.
@@ -90,7 +90,7 @@ use syn::{Error, Expr, Ident, ItemFn};
 /// 2020-10-16 08:12:57  ✌️  version 2.0.0-efb9b822a-x86_64-linux-gnu
 /// 2020-10-16 08:12:57  ❤️  by Anonymous, 2017-2020
 /// 2020-10-16 08:12:57  📋 Chain specification: Local Testnet
-/// 2020-10-16 08:12:57  🏷 Node name: open-harbor-1619
+/// 2020-10-16 08:12:57  🏷  Node name: open-harbor-1619
 /// 2020-10-16 08:12:57  👤 Role: LIGHT
 /// 2020-10-16 08:12:57  💾 Database: RocksDb at /tmp/substrate9T9Mtb/chains/local_testnet/db
 /// 2020-10-16 08:12:57  ⛓  Native runtime: node-template-1 (node-template-1.tx1.au1)
@@ -98,7 +98,7 @@ use syn::{Error, Expr, Ident, ItemFn};
 /// 2020-10-16 08:12:58  [open-harbor-1619] Loading GRANDPA authorities from genesis on what appears to be first startup.
 /// 2020-10-16 08:12:58  [open-harbor-1619] ⏱  Loaded block-time = 6000 milliseconds from genesis on first-launch
 /// 2020-10-16 08:12:58  [open-harbor-1619] Using default protocol ID "sup" because none is configured in the chain specs
-/// 2020-10-16 08:12:58  [open-harbor-1619] 🏷 Local node identity is: 12D3KooWRzmYC8QTK1Pm8Cfvid3skTS4Hn54jc4AUtje8Rqbfgtp
+/// 2020-10-16 08:12:58  [open-harbor-1619] 🏷  Local node identity is: 12D3KooWRzmYC8QTK1Pm8Cfvid3skTS4Hn54jc4AUtje8Rqbfgtp
 /// 2020-10-16 08:12:58  [open-harbor-1619] 📦 Highest known block at #0
 /// 2020-10-16 08:12:58  [open-harbor-1619] 〽️ Prometheus server started at 127.0.0.1:9615
 /// 2020-10-16 08:12:58  [open-harbor-1619] Listening for new connections on 127.0.0.1:9944.
@@ -119,7 +119,7 @@ pub fn prefix_logs_with(arg: TokenStream, item: TokenStream) -> TokenStream {
 	let name = syn::parse_macro_input!(arg as Expr);
 
 	let crate_name = match crate_name("sc-tracing") {
-		Ok(FoundCrate::Itself) => Ident::from(Ident::new("sc_tracing", Span::call_site())),
+		Ok(FoundCrate::Itself) => Ident::new("sc_tracing", Span::call_site()),
 		Ok(FoundCrate::Name(crate_name)) => Ident::new(&crate_name, Span::call_site()),
 		Err(e) => return Error::new(Span::call_site(), e).to_compile_error().into(),
 	};

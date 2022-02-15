@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -25,6 +25,7 @@ use frame_support::{
 };
 use sp_std::{marker::PhantomData, prelude::*};
 
+/// Wrapper for all migrations of this pallet, based on `StorageVersion`.
 pub fn migrate<T: Config>() -> Weight {
 	use frame_support::traits::StorageVersion;
 
@@ -224,13 +225,16 @@ mod v6 {
 			})
 		});
 
+		let nobody = T::AccountId::decode(&mut sp_runtime::traits::TrailingZeroInput::zeroes())
+			.expect("Infinite input; no dead input space; qed");
+
 		<CodeStorage<T>>::translate(|key, old: OldPrefabWasmModule| {
 			weight = weight.saturating_add(T::DbWeight::get().reads_writes(1, 2));
 			<OwnerInfoOf<T>>::insert(
 				key,
 				OwnerInfo {
 					refcount: old.refcount,
-					owner: Default::default(),
+					owner: nobody.clone(),
 					deposit: Default::default(),
 				},
 			);

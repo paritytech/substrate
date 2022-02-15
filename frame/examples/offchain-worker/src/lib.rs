@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -154,6 +154,10 @@ pub mod pallet {
 		/// multiple pallets send unsigned transactions.
 		#[pallet::constant]
 		type UnsignedPriority: Get<TransactionPriority>;
+
+		/// Maximum number of prices.
+		#[pallet::constant]
+		type MaxPrices: Get<u32>;
 	}
 
 	#[pallet::pallet]
@@ -233,7 +237,7 @@ pub mod pallet {
 			// Retrieve sender of the transaction.
 			let who = ensure_signed(origin)?;
 			// Add the price to the on-chain list.
-			Self::add_price(who, price);
+			Self::add_price(Some(who), price);
 			Ok(().into())
 		}
 
@@ -262,7 +266,7 @@ pub mod pallet {
 			// This ensures that the function can only be called via unsigned transaction.
 			ensure_none(origin)?;
 			// Add the price to the on-chain list, but mark it as coming from an empty address.
-			Self::add_price(Default::default(), price);
+			Self::add_price(None, price);
 			// now increment the block number at which we expect next unsigned transaction.
 			let current_block = <system::Pallet<T>>::block_number();
 			<NextUnsignedAt<T>>::put(current_block + T::UnsignedInterval::get());
@@ -278,7 +282,7 @@ pub mod pallet {
 			// This ensures that the function can only be called via unsigned transaction.
 			ensure_none(origin)?;
 			// Add the price to the on-chain list, but mark it as coming from an empty address.
-			Self::add_price(Default::default(), price_payload.price);
+			Self::add_price(None, price_payload.price);
 			// now increment the block number at which we expect next unsigned transaction.
 			let current_block = <system::Pallet<T>>::block_number();
 			<NextUnsignedAt<T>>::put(current_block + T::UnsignedInterval::get());
@@ -291,7 +295,7 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// Event generated when new price is accepted to contribute to the average.
-		NewPrice { price: u32, who: T::AccountId },
+		NewPrice { price: u32, maybe_who: Option<T::AccountId> },
 	}
 
 	#[pallet::validate_unsigned]
@@ -329,7 +333,7 @@ pub mod pallet {
 	/// This is used to calculate average price, should have bounded size.
 	#[pallet::storage]
 	#[pallet::getter(fn prices)]
-	pub(super) type Prices<T: Config> = StorageValue<_, Vec<u32>, ValueQuery>;
+	pub(super) type Prices<T: Config> = StorageValue<_, BoundedVec<u32, T::MaxPrices>, ValueQuery>;
 
 	/// Defines the block when next unsigned transaction will be accepted.
 	///
@@ -641,15 +645,11 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Add new price to the list.
-	fn add_price(who: T::AccountId, price: u32) {
+	fn add_price(maybe_who: Option<T::AccountId>, price: u32) {
 		log::info!("Adding to the average: {}", price);
 		<Prices<T>>::mutate(|prices| {
-			const MAX_LEN: usize = 64;
-
-			if prices.len() < MAX_LEN {
-				prices.push(price);
-			} else {
-				prices[price as usize % MAX_LEN] = price;
+			if prices.try_push(price).is_err() {
+				prices[(price % T::MaxPrices::get()) as usize] = price;
 			}
 		});
 
@@ -657,7 +657,7 @@ impl<T: Config> Pallet<T> {
 			.expect("The average is not empty, because it was just mutated; qed");
 		log::info!("Current average price is: {}", average);
 		// here we are raising the NewPrice event
-		Self::deposit_event(Event::NewPrice { price, who });
+		Self::deposit_event(Event::NewPrice { price, maybe_who });
 	}
 
 	/// Calculate current average price.

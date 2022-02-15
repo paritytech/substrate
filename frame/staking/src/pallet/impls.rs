@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,13 +19,13 @@
 
 use frame_election_provider_support::{
 	data_provider, ElectionDataProvider, ElectionProvider, SortedListProvider, Supports,
-	VoteWeight, VoteWeightProvider,
+	VoteWeight, VoteWeightProvider, VoterOf,
 };
 use frame_support::{
 	pallet_prelude::*,
 	traits::{
-		Currency, CurrencyToVote, EstimateNextNewSession, Get, Imbalance, LockableCurrency,
-		OnUnbalanced, UnixTime, WithdrawReasons,
+		Currency, CurrencyToVote, Defensive, EstimateNextNewSession, Get, Imbalance,
+		LockableCurrency, OnUnbalanced, UnixTime, WithdrawReasons,
 	},
 	weights::{Weight, WithPostDispatchInfo},
 };
@@ -37,13 +37,13 @@ use sp_runtime::{
 };
 use sp_staking::{
 	offence::{DisableStrategy, OffenceDetails, OnOffenceHandler},
-	SessionIndex,
+	EraIndex, SessionIndex,
 };
 use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 
 use crate::{
-	log, slashing, weights::WeightInfo, ActiveEraInfo, BalanceOf, EraIndex, EraPayout, Exposure,
-	ExposureOf, Forcing, IndividualExposure, Nominations, PositiveImbalanceOf, RewardDestination,
+	log, slashing, weights::WeightInfo, ActiveEraInfo, BalanceOf, EraPayout, Exposure, ExposureOf,
+	Forcing, IndividualExposure, Nominations, PositiveImbalanceOf, RewardDestination,
 	SessionInterface, StakingLedger, ValidatorPrefs,
 };
 
@@ -224,7 +224,7 @@ impl<T: Config> Pallet<T> {
 		let dest = Self::payee(stash);
 		match dest {
 			RewardDestination::Controller => Self::bonded(stash)
-				.and_then(|controller| Some(T::Currency::deposit_creating(&controller, amount))),
+				.map(|controller| T::Currency::deposit_creating(&controller, amount)),
 			RewardDestination::Stash => T::Currency::deposit_into_existing(stash, amount).ok(),
 			RewardDestination::Staked => Self::bonded(stash)
 				.and_then(|c| Self::ledger(&c).map(|l| (c, l)))
@@ -661,9 +661,7 @@ impl<T: Config> Pallet<T> {
 	///
 	/// All nominations that have been submitted before the last non-zero slash of the validator are
 	/// auto-chilled, but still count towards the limit imposed by `maybe_max_len`.
-	pub fn get_npos_voters(
-		maybe_max_len: Option<usize>,
-	) -> Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)> {
+	pub fn get_npos_voters(maybe_max_len: Option<usize>) -> Vec<VoterOf<Self>> {
 		let max_allowed_len = {
 			let nominator_count = Nominators::<T>::count() as usize;
 			let validator_count = Validators::<T>::count() as usize;
@@ -677,8 +675,13 @@ impl<T: Config> Pallet<T> {
 		let mut validators_taken = 0u32;
 		for (validator, _) in <Validators<T>>::iter().take(max_allowed_len) {
 			// Append self vote.
-			let self_vote =
-				(validator.clone(), Self::weight_of(&validator), vec![validator.clone()]);
+			let self_vote = (
+				validator.clone(),
+				Self::weight_of(&validator),
+				vec![validator.clone()]
+					.try_into()
+					.expect("`MaxVotesPerVoter` must be greater than or equal to 1"),
+			);
 			all_voters.push(self_vote);
 			validators_taken.saturating_inc();
 		}
@@ -724,7 +727,12 @@ impl<T: Config> Pallet<T> {
 					nominators_taken.saturating_inc();
 				}
 			} else {
-				log!(error, "DEFENSIVE: invalid item in `SortedListProvider`: {:?}", nominator)
+				// this can only happen if: 1. there a pretty bad bug in the bags-list (or whatever
+				// is the sorted list) logic and the state of the two pallets is no longer
+				// compatible, or because the nominators is not decodable since they have more
+				// nomination than `T::MaxNominations`. This can rarely happen, and is not really an
+				// emergency or bug if it does.
+				log!(warn, "DEFENSIVE: invalid item in `SortedListProvider`: {:?}, this nominator probably has too many nominations now", nominator)
 			}
 		}
 
@@ -772,13 +780,11 @@ impl<T: Config> Pallet<T> {
 	/// NOTE: you must ALWAYS use this function to add nominator or update their targets. Any access
 	/// to `Nominators` or `VoterList` outside of this function is almost certainly
 	/// wrong.
-	pub fn do_add_nominator(who: &T::AccountId, nominations: Nominations<T::AccountId>) {
+	pub fn do_add_nominator(who: &T::AccountId, nominations: Nominations<T>) {
 		if !Nominators::<T>::contains_key(who) {
 			// maybe update sorted list. Error checking is defensive-only - this should never fail.
-			if T::SortedListProvider::on_insert(who.clone(), Self::weight_of(who)).is_err() {
-				log!(warn, "attempt to insert duplicate nominator ({:#?})", who);
-				debug_assert!(false, "attempt to insert duplicate nominator");
-			};
+			let _ = T::SortedListProvider::on_insert(who.clone(), Self::weight_of(who))
+				.defensive_unwrap_or_default();
 
 			debug_assert_eq!(T::SortedListProvider::sanity_check(), Ok(()));
 		}
@@ -844,17 +850,17 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
-impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>> for Pallet<T> {
-	const MAXIMUM_VOTES_PER_VOTER: u32 = T::MAX_NOMINATIONS;
+impl<T: Config> ElectionDataProvider for Pallet<T> {
+	type AccountId = T::AccountId;
+	type BlockNumber = BlockNumberFor<T>;
+	type MaxVotesPerVoter = T::MaxNominations;
 
 	fn desired_targets() -> data_provider::Result<u32> {
 		Self::register_weight(T::DbWeight::get().reads(1));
 		Ok(Self::validator_count())
 	}
 
-	fn voters(
-		maybe_max_len: Option<usize>,
-	) -> data_provider::Result<Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>> {
+	fn voters(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<VoterOf<Self>>> {
 		// This can never fail -- if `maybe_max_len` is `Some(_)` we handle it.
 		let voters = Self::get_npos_voters(maybe_max_len);
 		debug_assert!(maybe_max_len.map_or(true, |max| voters.len() <= max));
@@ -907,7 +913,11 @@ impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>> for Pallet
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn add_voter(voter: T::AccountId, weight: VoteWeight, targets: Vec<T::AccountId>) {
+	fn add_voter(
+		voter: T::AccountId,
+		weight: VoteWeight,
+		targets: BoundedVec<T::AccountId, Self::MaxVotesPerVoter>,
+	) {
 		let stake = <BalanceOf<T>>::try_from(weight).unwrap_or_else(|_| {
 			panic!("cannot convert a VoteWeight into BalanceOf, benchmark needs reconfiguring.")
 		});
@@ -922,6 +932,7 @@ impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>> for Pallet
 				claimed_rewards: vec![],
 			},
 		);
+
 		Self::do_add_nominator(&voter, Nominations { targets, submitted_in: 0, suppressed: false });
 	}
 
@@ -957,7 +968,7 @@ impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>> for Pallet
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn put_snapshot(
-		voters: Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>,
+		voters: Vec<VoterOf<Self>>,
 		targets: Vec<T::AccountId>,
 		target_stake: Option<VoteWeight>,
 	) {
@@ -999,7 +1010,7 @@ impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>> for Pallet
 			);
 			Self::do_add_nominator(
 				&v,
-				Nominations { targets: t, submitted_in: 0, suppressed: false },
+				Nominations { targets: t.try_into().unwrap(), submitted_in: 0, suppressed: false },
 			);
 		});
 	}
@@ -1089,8 +1100,13 @@ where
 	fn note_author(author: T::AccountId) {
 		Self::reward_by_ids(vec![(author, 20)])
 	}
-	fn note_uncle(author: T::AccountId, _age: T::BlockNumber) {
-		Self::reward_by_ids(vec![(<pallet_authorship::Pallet<T>>::author(), 2), (author, 1)])
+	fn note_uncle(uncle_author: T::AccountId, _age: T::BlockNumber) {
+		// defensive-only: block author must exist.
+		if let Some(block_author) = <pallet_authorship::Pallet<T>>::author() {
+			Self::reward_by_ids(vec![(block_author, 2), (uncle_author, 1)])
+		} else {
+			crate::log!(warn, "block author not set, this should never happen");
+		}
 	}
 }
 
@@ -1153,7 +1169,7 @@ where
 			add_db_reads_writes(1, 0);
 
 			// Reverse because it's more likely to find reports from recent eras.
-			match eras.iter().rev().filter(|&&(_, ref sesh)| sesh <= &slash_session).next() {
+			match eras.iter().rev().find(|&&(_, ref sesh)| sesh <= &slash_session) {
 				Some(&(ref slash_era, _)) => *slash_era,
 				// Before bonding period. defensive - should be filtered out.
 				None => return consumed_weight,
@@ -1238,8 +1254,12 @@ impl<T: Config> VoteWeightProvider<T::AccountId> for Pallet<T> {
 		// this will clearly results in an inconsistent state, but it should not matter for a
 		// benchmark.
 		let active: BalanceOf<T> = weight.try_into().map_err(|_| ()).unwrap();
-		let mut ledger = Self::ledger(who).unwrap_or_default();
+		let mut ledger = match Self::ledger(who) {
+			None => StakingLedger::default_from(who.clone()),
+			Some(l) => l,
+		};
 		ledger.active = active;
+
 		<Ledger<T>>::insert(who, ledger);
 		<Bonded<T>>::insert(who, who);
 

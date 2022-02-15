@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -96,7 +96,7 @@ pub fn from_block_number(n: u32) -> Header {
 }
 
 pub fn executor() -> NativeElseWasmExecutor<ExecutorDispatch> {
-	NativeElseWasmExecutor::new(WasmExecutionMethod::Interpreted, None, 8)
+	NativeElseWasmExecutor::new(WasmExecutionMethod::Interpreted, None, 8, 2)
 }
 
 pub fn executor_call<
@@ -142,7 +142,7 @@ pub fn construct_block(
 	extrinsics: Vec<CheckedExtrinsic>,
 	babe_slot: Slot,
 ) -> (Vec<u8>, Hash) {
-	use sp_trie::{trie_types::Layout, TrieConfiguration};
+	use sp_trie::{LayoutV1 as Layout, TrieConfiguration};
 
 	// sign extrinsics.
 	let extrinsics = extrinsics.into_iter().map(sign).collect::<Vec<_>>();

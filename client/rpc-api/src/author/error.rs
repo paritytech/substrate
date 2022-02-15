@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -103,7 +103,7 @@ impl From<Error> for rpc::Error {
 			Error::Verification(e) => rpc::Error {
 				code: rpc::ErrorCode::ServerError(VERIFICATION_ERROR),
 				message: format!("Verification Error: {}", e).into(),
-				data: Some(format!("{:?}", e).into()),
+				data: Some(e.to_string().into()),
 			},
 			Error::Pool(PoolError::InvalidTransaction(InvalidTransaction::Custom(e))) => rpc::Error {
 				code: rpc::ErrorCode::ServerError(POOL_INVALID_TX),

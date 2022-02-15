@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -30,6 +30,8 @@ mod params;
 mod runner;
 
 pub use arg_enums::*;
+pub use clap;
+use clap::{AppSettings, FromArgMatches, IntoApp, Parser};
 pub use commands::*;
 pub use config::*;
 pub use error::*;
@@ -39,12 +41,6 @@ use sc_service::Configuration;
 pub use sc_service::{ChainSpec, Role};
 pub use sc_tracing::logging::LoggerBuilder;
 pub use sp_version::RuntimeVersion;
-use std::io::Write;
-pub use structopt;
-use structopt::{
-	clap::{self, AppSettings},
-	StructOpt,
-};
 
 /// Substrate client CLI
 ///
@@ -103,7 +99,7 @@ pub trait SubstrateCli: Sized {
 	/// error message and quit the program in case of failure.
 	fn from_args() -> Self
 	where
-		Self: StructOpt + Sized,
+		Self: Parser + Sized,
 	{
 		<Self as SubstrateCli>::from_iter(&mut std::env::args_os())
 	}
@@ -120,11 +116,11 @@ pub trait SubstrateCli: Sized {
 	/// Print the error message and quit the program in case of failure.
 	fn from_iter<I>(iter: I) -> Self
 	where
-		Self: StructOpt + Sized,
+		Self: Parser + Sized,
 		I: IntoIterator,
 		I::Item: Into<std::ffi::OsString> + Clone,
 	{
-		let app = <Self as StructOpt>::clap();
+		let app = <Self as IntoApp>::into_app();
 
 		let mut full_version = Self::impl_version();
 		full_version.push_str("\n");
@@ -137,34 +133,15 @@ pub trait SubstrateCli: Sized {
 			.author(author.as_str())
 			.about(about.as_str())
 			.version(full_version.as_str())
-			.settings(&[
-				AppSettings::GlobalVersion,
-				AppSettings::ArgsNegateSubcommands,
-				AppSettings::SubcommandsNegateReqs,
-				AppSettings::ColoredHelp,
-			]);
+			.setting(
+				AppSettings::PropagateVersion |
+					AppSettings::ArgsNegateSubcommands |
+					AppSettings::SubcommandsNegateReqs,
+			);
 
-		let matches = match app.get_matches_from_safe(iter) {
-			Ok(matches) => matches,
-			Err(mut e) => {
-				// To support pipes, we can not use `writeln!` as any error
-				// results in a "broken pipe" error.
-				//
-				// Instead we write directly to `stdout` and ignore any error
-				// as we exit afterwards anyway.
-				e.message.extend("\n".chars());
+		let matches = app.try_get_matches_from(iter).unwrap_or_else(|e| e.exit());
 
-				if e.use_stderr() {
-					let _ = std::io::stderr().write_all(e.message.as_bytes());
-					std::process::exit(1);
-				} else {
-					let _ = std::io::stdout().write_all(e.message.as_bytes());
-					std::process::exit(0);
-				}
-			},
-		};
-
-		<Self as StructOpt>::from_clap(&matches)
+		<Self as FromArgMatches>::from_arg_matches(&matches).unwrap_or_else(|e| e.exit())
 	}
 
 	/// Helper function used to parse the command line arguments. This is the equivalent of
@@ -180,15 +157,15 @@ pub trait SubstrateCli: Sized {
 	///
 	/// **NOTE:** This method WILL NOT exit when `--help` or `--version` (or short versions) are
 	/// used. It will return a [`clap::Error`], where the [`clap::Error::kind`] is a
-	/// [`clap::ErrorKind::HelpDisplayed`] or [`clap::ErrorKind::VersionDisplayed`] respectively.
+	/// [`clap::ErrorKind::DisplayHelp`] or [`clap::ErrorKind::DisplayVersion`] respectively.
 	/// You must call [`clap::Error::exit`] or perform a [`std::process::exit`].
 	fn try_from_iter<I>(iter: I) -> clap::Result<Self>
 	where
-		Self: StructOpt + Sized,
+		Self: Parser + Sized,
 		I: IntoIterator,
 		I::Item: Into<std::ffi::OsString> + Clone,
 	{
-		let app = <Self as StructOpt>::clap();
+		let app = <Self as IntoApp>::into_app();
 
 		let mut full_version = Self::impl_version();
 		full_version.push_str("\n");
@@ -202,9 +179,9 @@ pub trait SubstrateCli: Sized {
 			.about(about.as_str())
 			.version(full_version.as_str());
 
-		let matches = app.get_matches_from_safe(iter)?;
+		let matches = app.try_get_matches_from(iter)?;
 
-		Ok(<Self as StructOpt>::from_clap(&matches))
+		<Self as FromArgMatches>::from_arg_matches(&matches)
 	}
 
 	/// Returns the client ID: `{impl_name}/v{impl_version}`
@@ -224,10 +201,46 @@ pub trait SubstrateCli: Sized {
 	/// Create a runner for the command provided in argument. This will create a Configuration and
 	/// a tokio runtime
 	fn create_runner<T: CliConfiguration>(&self, command: &T) -> error::Result<Runner<Self>> {
-		command.init::<Self>()?;
-		Runner::new(self, command)
+		let tokio_runtime = build_runtime()?;
+		let config = command.create_configuration(self, tokio_runtime.handle().clone())?;
+
+		command.init(&Self::support_url(), &Self::impl_version(), |_, _| {}, &config)?;
+		Runner::new(config, tokio_runtime)
 	}
 
+	/// Create a runner for the command provided in argument. The `logger_hook` can be used to setup
+	/// a custom profiler or update the logger configuration before it is initialized.
+	///
+	/// Example:
+	/// ```
+	/// use sc_tracing::{SpanDatum, TraceEvent};
+	/// struct TestProfiler;
+	///
+	/// impl sc_tracing::TraceHandler for TestProfiler {
+	///  	fn handle_span(&self, sd: &SpanDatum) {}
+	/// 		fn handle_event(&self, _event: &TraceEvent) {}
+	/// };
+	///
+	/// fn logger_hook() -> impl FnOnce(&mut sc_cli::LoggerBuilder, &sc_service::Configuration) -> () {
+	/// 	|logger_builder, config| {
+	/// 			logger_builder.with_custom_profiling(Box::new(TestProfiler{}));
+	/// 	}
+	/// }
+	/// ```
+	fn create_runner_with_logger_hook<T: CliConfiguration, F>(
+		&self,
+		command: &T,
+		logger_hook: F,
+	) -> error::Result<Runner<Self>>
+	where
+		F: FnOnce(&mut LoggerBuilder, &Configuration),
+	{
+		let tokio_runtime = build_runtime()?;
+		let config = command.create_configuration(self, tokio_runtime.handle().clone())?;
+
+		command.init(&Self::support_url(), &Self::impl_version(), logger_hook, &config)?;
+		Runner::new(config, tokio_runtime)
+	}
 	/// Native runtime version.
 	fn native_runtime_version(chain_spec: &Box<dyn ChainSpec>) -> &'static RuntimeVersion;
 }

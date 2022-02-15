@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -33,12 +33,13 @@ mod benchmarking;
 pub mod mock;
 #[cfg(test)]
 mod tests;
-pub mod weights;
 
 mod functions;
 mod impl_nonfungibles;
 mod types;
-pub use types::*;
+
+pub mod migration;
+pub mod weights;
 
 use codec::{Decode, Encode, HasCompact};
 use frame_support::traits::{BalanceStatus::Reserved, Currency, ReservableCurrency};
@@ -50,6 +51,7 @@ use sp_runtime::{
 use sp_std::prelude::*;
 
 pub use pallet::*;
+pub use types::*;
 pub use weights::WeightInfo;
 
 #[frame_support::pallet]
@@ -69,10 +71,16 @@ pub mod pallet {
 		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
 
 		/// Identifier for the class of asset.
-		type ClassId: Member + Parameter + Default + Copy + HasCompact;
+		type ClassId: Member + Parameter + Default + Copy + HasCompact + MaxEncodedLen;
 
 		/// The type used to identify a unique asset within an asset class.
-		type InstanceId: Member + Parameter + Default + Copy + HasCompact + From<u16>;
+		type InstanceId: Member
+			+ Parameter
+			+ Default
+			+ Copy
+			+ HasCompact
+			+ From<u16>
+			+ MaxEncodedLen;
 
 		/// The currency mechanism, used for paying for reserves.
 		type Currency: ReservableCurrency<Self::AccountId>;
@@ -137,6 +145,19 @@ pub mod pallet {
 			NMapKey<Blake2_128Concat, T::ClassId>,
 			NMapKey<Blake2_128Concat, T::InstanceId>,
 		),
+		(),
+		OptionQuery,
+	>;
+
+	#[pallet::storage]
+	/// The classes owned by any given account; set out this way so that classes owned by a single
+	/// account can be enumerated.
+	pub(super) type ClassAccount<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
+		_,
+		Blake2_128Concat,
+		T::AccountId,
+		Blake2_128Concat,
+		T::ClassId,
 		(),
 		OptionQuery,
 	>;
@@ -300,9 +321,6 @@ pub mod pallet {
 		/// No approval exists that would allow the transfer.
 		Unapproved,
 	}
-
-	#[pallet::hooks]
-	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {}
 
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		/// Get the owner of the asset instance, if the asset exists.
@@ -731,6 +749,8 @@ pub mod pallet {
 					details.total_deposit,
 					Reserved,
 				)?;
+				ClassAccount::<T, I>::remove(&details.owner, &class);
+				ClassAccount::<T, I>::insert(&owner, &class, ());
 				details.owner = owner.clone();
 
 				Self::deposit_event(Event::OwnerChanged { class, new_owner: owner });
@@ -906,13 +926,17 @@ pub mod pallet {
 
 			Class::<T, I>::try_mutate(class, |maybe_asset| {
 				let mut asset = maybe_asset.take().ok_or(Error::<T, I>::Unknown)?;
-				asset.owner = T::Lookup::lookup(owner)?;
+				let old_owner = asset.owner;
+				let new_owner = T::Lookup::lookup(owner)?;
+				asset.owner = new_owner.clone();
 				asset.issuer = T::Lookup::lookup(issuer)?;
 				asset.admin = T::Lookup::lookup(admin)?;
 				asset.freezer = T::Lookup::lookup(freezer)?;
 				asset.free_holding = free_holding;
 				asset.is_frozen = is_frozen;
 				*maybe_asset = Some(asset);
+				ClassAccount::<T, I>::remove(&old_owner, &class);
+				ClassAccount::<T, I>::insert(&new_owner, &class, ());
 
 				Self::deposit_event(Event::AssetStatusChanged { class });
 				Ok(())
@@ -984,21 +1008,18 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Set an attribute for an asset class or instance.
+		/// Clear an attribute for an asset class or instance.
 		///
 		/// Origin must be either `ForceOrigin` or Signed and the sender should be the Owner of the
 		/// asset `class`.
 		///
-		/// If the origin is Signed, then funds of signer are reserved according to the formula:
-		/// `MetadataDepositBase + DepositPerByte * (key.len + value.len)` taking into
-		/// account any already reserved funds.
+		/// Any deposit is freed for the asset class owner.
 		///
-		/// - `class`: The identifier of the asset class whose instance's metadata to set.
-		/// - `instance`: The identifier of the asset instance whose metadata to set.
+		/// - `class`: The identifier of the asset class whose instance's metadata to clear.
+		/// - `maybe_instance`: The identifier of the asset instance whose metadata to clear.
 		/// - `key`: The key of the attribute.
-		/// - `value`: The value to which to set the attribute.
 		///
-		/// Emits `AttributeSet`.
+		/// Emits `AttributeCleared`.
 		///
 		/// Weight: `O(1)`
 		#[pallet::weight(T::WeightInfo::clear_attribute())]

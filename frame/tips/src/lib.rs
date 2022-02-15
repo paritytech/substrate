@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -61,7 +61,7 @@ pub mod migrations;
 pub mod weights;
 
 use sp_runtime::{
-	traits::{AccountIdConversion, BadOrigin, Hash, Zero},
+	traits::{AccountIdConversion, BadOrigin, Hash, TrailingZeroInput, Zero},
 	Percent, RuntimeDebug,
 };
 use sp_std::prelude::*;
@@ -120,6 +120,7 @@ pub mod pallet {
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
 	#[pallet::storage_version(STORAGE_VERSION)]
+	#[pallet::without_storage_info]
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
@@ -580,6 +581,9 @@ impl<T: Config> Pallet<T> {
 
 		use frame_support::{migration::storage_key_iter, Twox64Concat};
 
+		let zero_account = T::AccountId::decode(&mut TrailingZeroInput::new(&[][..]))
+			.expect("infinite input; qed");
+
 		for (hash, old_tip) in storage_key_iter::<
 			T::Hash,
 			OldOpenTip<T::AccountId, BalanceOf<T>, T::BlockNumber, T::Hash>,
@@ -589,7 +593,7 @@ impl<T: Config> Pallet<T> {
 		{
 			let (finder, deposit, finders_fee) = match old_tip.finder {
 				Some((finder, deposit)) => (finder, deposit, true),
-				None => (T::AccountId::default(), Zero::zero(), false),
+				None => (zero_account.clone(), Zero::zero(), false),
 			};
 			let new_tip = OpenTip {
 				reason: old_tip.reason,
