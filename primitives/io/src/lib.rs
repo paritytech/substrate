@@ -848,6 +848,7 @@ pub trait Crypto {
 	/// Verify `ecdsa` signature.
 	///
 	/// Returns `true` when the verification was successful.
+	/// This version is able to handle, non-standard, overflowing signatures.
 	fn ecdsa_verify(sig: &ecdsa::Signature, msg: &[u8], pub_key: &ecdsa::Public) -> bool {
 		#[allow(deprecated)]
 		ecdsa::Pair::verify_deprecated(sig, msg, pub_key)
@@ -898,6 +899,7 @@ pub trait Crypto {
 	///
 	/// Returns `Err` if the signature is bad, otherwise the 64-byte pubkey
 	/// (doesn't include the 0x04 prefix).
+	/// This version is able to handle, non-standard, overflowing signatures.
 	fn secp256k1_ecdsa_recover(
 		sig: &[u8; 65],
 		msg: &[u8; 32],
