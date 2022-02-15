@@ -33,7 +33,7 @@ use sc_network_test::{
 	Block, BlockImportAdapter, FullPeerConfig, Hash, PassThroughVerifier, Peer, PeersClient,
 	PeersFullClient, TestClient, TestNetFactory,
 };
-use sp_api::{ApiRef, ProvideRuntimeApi};
+use sp_api::ProvideRuntimeApi;
 use sp_blockchain::Result;
 use sp_consensus::BlockOrigin;
 use sp_core::H256;
@@ -177,22 +177,16 @@ impl TestApi {
 	}
 }
 
-pub(crate) struct RuntimeApi {
-	inner: TestApi,
-}
-
 impl ProvideRuntimeApi<Block> for TestApi {
-	type Api = RuntimeApi;
-
-	fn runtime_api<'a>(&'a self) -> ApiRef<'a, Self::Api> {
-		RuntimeApi { inner: self.clone() }.into()
+	fn runtime_api<'a>(&'a self) -> sp_api::RuntimeApi<'a, Block, Self> {
+		sp_api::RuntimeApi::new(self)
 	}
 }
 
 sp_api::mock_impl_runtime_apis! {
-	impl GrandpaApi<Block> for RuntimeApi {
+	impl GrandpaApi<Block> for TestApi {
 		fn grandpa_authorities(&self) -> AuthorityList {
-			self.inner.genesis_authorities.clone()
+			self.genesis_authorities.clone()
 		}
 
 		fn current_set_id(&self) -> SetId {

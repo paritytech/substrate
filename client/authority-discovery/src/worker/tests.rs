@@ -33,7 +33,7 @@ use futures::{
 use libp2p::{core::multiaddr, PeerId};
 use prometheus_endpoint::prometheus::default_registry;
 
-use sp_api::{ApiRef, ProvideRuntimeApi};
+use sp_api::{ProvideRuntimeApi};
 use sp_keystore::{testing::KeyStore, CryptoStore};
 use sp_runtime::traits::{Block as BlockT, NumberFor, Zero};
 use substrate_test_runtime_client::runtime::Block;
@@ -46,8 +46,8 @@ pub(crate) struct TestApi {
 }
 
 impl ProvideRuntimeApi<Block> for TestApi {
-	fn runtime_api<'a>(&'a self) -> ApiRef<'a, Self::Api> {
-		RuntimeApi { authorities: self.authorities.clone() }.into()
+	fn runtime_api<'a>(&'a self) -> sp_api::RuntimeApi<'a, Block, Self> {
+		sp_api::RuntimeApi::new(self)
 	}
 }
 
@@ -95,12 +95,8 @@ impl<Block: BlockT> HeaderBackend<Block> for TestApi {
 	}
 }
 
-pub(crate) struct RuntimeApi {
-	authorities: Vec<AuthorityId>,
-}
-
 sp_api::mock_impl_runtime_apis! {
-	impl AuthorityDiscoveryApi<Block> for RuntimeApi {
+	impl AuthorityDiscoveryApi<Block> for TestApi {
 		fn authorities(&self) -> Vec<AuthorityId> {
 			self.authorities.clone()
 		}

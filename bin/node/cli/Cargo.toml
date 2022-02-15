@@ -122,6 +122,14 @@ wait-timeout = "0.2"
 remote-externalities = { path = "../../../utils/frame/remote-externalities" }
 pallet-timestamp = { version = "4.0.0-dev", path = "../../../frame/timestamp" }
 
+# native runtime dependencies used in integration tests
+frame-system = { version = "4.0.0-dev", path = "../../../frame/system" }
+frame-system-rpc-runtime-api = { version = "4.0.0-dev", path = "../../../frame/system/rpc/runtime-api" }
+pallet-transaction-payment = { version = "4.0.0-dev", path = "../../../frame/transaction-payment" }
+pallet-asset-tx-payment = { version = "4.0.0-dev", path = "../../../frame/transaction-payment/asset-tx-payment/" }
+pallet-im-online = { version = "4.0.0-dev", default-features = false, path = "../../../frame/im-online" }
+node-runtime = { version = "3.0.0-dev", path = "../runtime" }
+
 [build-dependencies]
 clap = { version = "3.0", optional = true }
 clap_complete = { version = "3.0", optional = true }

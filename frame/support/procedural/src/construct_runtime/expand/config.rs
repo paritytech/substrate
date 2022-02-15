@@ -76,9 +76,13 @@ pub fn expand_outer_config(
 		}
 
 		impl GenesisConfig {
+			#[cfg(not(feature = "std"))]
 			pub fn execute(&self) {
 				#build_execute_calls
 				<AllPalletsWithSystem as #scrate::traits::OnGenesis>::on_genesis();
+			}
+			#[cfg(feature = "std")]
+			pub fn execute(&self) {
 			}
 		}
 

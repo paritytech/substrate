@@ -18,8 +18,8 @@
 use crate::utils::{
 	extract_block_type_from_trait_path, extract_impl_trait,
 	extract_parameter_names_types_and_borrows, generate_crate_access, generate_hidden_includes,
-	generate_method_runtime_api_impl_name, return_type_extract_type, AllowSelfRefInParameters,
-	RequireQualifiedTraitPath,
+	generate_method_runtime_api_impl_name, return_type_extract_type, prefix_function_with_trait,
+	AllowSelfRefInParameters, RequireQualifiedTraitPath,
 };
 
 use proc_macro2::{Span, TokenStream};
@@ -224,6 +224,8 @@ struct FoldRuntimeApiImpl<'a> {
 	block_type: &'a TypePath,
 	/// The identifier of the trait being implemented.
 	impl_trait: &'a Ident,
+	/// Match arms for mock implementation of `CallApiAt`
+	call_arms: Vec<TokenStream>,
 }
 
 impl<'a> Fold for FoldRuntimeApiImpl<'a> {
@@ -272,7 +274,7 @@ impl<'a> Fold for FoldRuntimeApiImpl<'a> {
 				},
 			};
 
-			let param_types = param_types_and_borrows.iter().map(|v| &v.0);
+			let param_types: Vec<_> = param_types_and_borrows.iter().map(|v| &v.0).collect();
 			// Rewrite the input parameters.
 			input.sig.inputs = parse_quote! {
 				&self,
@@ -282,14 +284,15 @@ impl<'a> Fold for FoldRuntimeApiImpl<'a> {
 				_: Vec<u8>,
 			};
 
+			let call_name = prefix_function_with_trait(&self.impl_trait, &input.sig.ident);
+
 			input.sig.ident =
 				generate_method_runtime_api_impl_name(&self.impl_trait, &input.sig.ident);
 
 			// When using advanced, the user needs to declare the correct return type on its own,
 			// otherwise do it for the user.
+			let ret_type = return_type_extract_type(&input.sig.output);
 			if !is_advanced {
-				let ret_type = return_type_extract_type(&input.sig.output);
-
 				// Generate the correct return type.
 				input.sig.output = parse_quote!(
 					-> std::result::Result<#crate_::NativeOrEncoded<#ret_type>, #crate_::ApiError>
@@ -307,6 +310,27 @@ impl<'a> Fold for FoldRuntimeApiImpl<'a> {
 					Ok(#crate_::NativeOrEncoded::Native(__fn_implementation__()))
 				}
 			};
+
+			let call_name_str = call_name.to_string();
+
+			let call_arm = quote!(
+				#call_name_str => {
+					let (#( #param_names ),*) : ( #( #param_types ),* ) =
+						match #crate_::DecodeLimit::decode_all_with_depth_limit(
+							#crate_::MAX_EXTRINSIC_DEPTH,
+							&params.arguments,
+						) {
+							Ok(res) => res,
+							Err(e) => panic!("Bad input data provided to {}: {}", #call_name_str, e),
+						};
+					let at = &params.at;
+					let r = { #orig_block } as #ret_type;
+					let encoded = #crate_::Encode::encode(&r);
+					Ok(#crate_::NativeOrEncoded::Encoded(encoded))
+				},
+			);
+
+			self.call_arms.push(call_arm);
 
 			// Generate the new method implementation that calls into the runtime.
 			parse_quote!(
@@ -338,6 +362,8 @@ struct GeneratedRuntimeApiImpls {
 	block_type: TypePath,
 	/// The type the traits are implemented for.
 	self_ty: Type,
+	/// Match arms for mock implementation of `CallApiAt`
+	call_arms: Vec<TokenStream>,
 }
 
 /// Generate the runtime api implementations from the given trait implementations.
@@ -349,6 +375,7 @@ fn generate_runtime_api_impls(impls: &[ItemImpl]) -> Result<GeneratedRuntimeApiI
 	let mut global_block_type: Option<TypePath> = None;
 	let mut self_ty: Option<Box<Type>> = None;
 
+	let mut call_arms = Vec::new();
 	for impl_ in impls {
 		let impl_trait_path = extract_impl_trait(&impl_, RequireQualifiedTraitPath::No)?;
 		let impl_trait = &impl_trait_path
@@ -395,13 +422,19 @@ fn generate_runtime_api_impls(impls: &[ItemImpl]) -> Result<GeneratedRuntimeApiI
 			None => Some(block_type.clone()),
 		};
 
-		let mut visitor = FoldRuntimeApiImpl { block_type, impl_trait: &impl_trait.ident };
+		let mut visitor = FoldRuntimeApiImpl {
+			block_type,
+			impl_trait: &impl_trait.ident,
+			call_arms: Default::default(),
+		};
 
 		result.push(visitor.fold_item_impl(impl_.clone()));
+		call_arms.extend(visitor.call_arms);
 	}
 
 	Ok(GeneratedRuntimeApiImpls {
 		impls: quote!( #( #result )* ),
+		call_arms,
 		block_type: global_block_type.expect("There is a least one runtime api; qed"),
 		self_ty: *self_ty.expect("There is at least one runtime api; qed"),
 	})
@@ -419,9 +452,10 @@ pub fn mock_impl_runtime_apis_impl(input: proc_macro::TokenStream) -> proc_macro
 
 fn mock_impl_runtime_apis_impl_inner(api_impls: &[ItemImpl]) -> Result<TokenStream> {
 	let hidden_includes = generate_hidden_includes(HIDDEN_INCLUDES_ID);
-	let GeneratedRuntimeApiImpls { impls, block_type, self_ty } =
+	let crate_ = generate_crate_access(HIDDEN_INCLUDES_ID);
+	let GeneratedRuntimeApiImpls { impls, call_arms, block_type, self_ty } =
 		generate_runtime_api_impls(api_impls)?;
-	let api_traits = implement_common_api_traits(block_type, self_ty)?;
+	let api_traits = implement_common_api_traits(block_type.clone(), self_ty.clone())?;
 
 	Ok(quote!(
 		#hidden_includes
@@ -429,5 +463,37 @@ fn mock_impl_runtime_apis_impl_inner(api_impls: &[ItemImpl]) -> Result<TokenStre
 		#impls
 
 		#api_traits
+
+		impl sp_api::CallApiAt<#block_type> for #self_ty {
+			type StateBackend = #crate_::InMemoryBackend<#crate_::HashFor<#block_type>>;
+
+			fn call_api_at<'a, R: #crate_::Encode + #crate_::Decode, NC: FnOnce()
+				-> std::result::Result<R, #crate_::ApiError> + std::panic::UnwindSafe>(
+				&self,
+				params: sp_api::CallApiAtParams<'a, #block_type, NC, Self::StateBackend>,
+			) -> std::result::Result<#crate_::NativeOrEncoded<R>, #crate_::ApiError> {
+				match params.function {
+					#( #call_arms )*
+					f @ _ => {
+						unimplemented!("Called unexpected mock method {}", f)
+					}
+				}
+			}
+
+			fn runtime_version_at(&self, _at: &#crate_::BlockId<#block_type>)
+				-> std::result::Result<#crate_::RuntimeVersion, #crate_::ApiError>
+			{
+				Ok(#crate_::RuntimeVersion {
+					spec_name: #crate_::RuntimeString::Borrowed("mock_spec"),
+					impl_name: #crate_::RuntimeString::Borrowed("mock_impl"),
+					authoring_version: 0,
+					spec_version: 0,
+					impl_version: 0,
+					apis: std::borrow::Cow::Borrowed(&[]),
+					transaction_version: 0,
+					state_version: 0,
+				})
+			}
+		}
 	))
 }

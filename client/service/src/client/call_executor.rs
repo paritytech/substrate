@@ -341,19 +341,20 @@ where
 mod tests {
 	use super::*;
 	use sc_client_api::in_mem;
-	use sc_executor::{NativeElseWasmExecutor, WasmExecutionMethod};
+	use sc_executor::WasmExecutionMethod;
 	use sp_core::{
 		testing::TaskExecutor,
 		traits::{FetchRuntimeCode, WrappedRuntimeCode},
 	};
-	use substrate_test_runtime_client::{runtime, GenesisInit, LocalExecutorDispatch};
+	use substrate_test_runtime_client::{runtime, GenesisInit};
 
 	#[test]
 	fn should_get_override_if_exists() {
-		let executor = NativeElseWasmExecutor::<LocalExecutorDispatch>::new(
+		let executor = sc_executor::DefaultExecutor::new(
 			WasmExecutionMethod::Interpreted,
 			Some(128),
 			1,
+			None,
 			2,
 		);
 
