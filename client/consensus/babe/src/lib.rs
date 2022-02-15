@@ -572,7 +572,7 @@ fn aux_storage_cleanup<C: HeaderMetadata<Block>, Block: BlockT>(
 		},
 	}
 
-	aux_keys.extend(notification.tree_route.iter().map(|h| aux_schema::block_weight_key(h)));
+	aux_keys.extend(notification.tree_route.iter().map(aux_schema::block_weight_key));
 
 	// Cleans data for stale branches.
 
@@ -599,7 +599,7 @@ fn aux_storage_cleanup<C: HeaderMetadata<Block>, Block: BlockT>(
 		}
 	}
 
-	aux_keys.into_iter().map(|val| (val, None)).collect::<Vec<_>>()
+	aux_keys.into_iter().map(|val| (val, None)).collect()
 }
 
 async fn answer_requests<B: BlockT, C>(

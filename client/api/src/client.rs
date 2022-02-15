@@ -84,13 +84,13 @@ pub trait BlockchainEvents<Block: BlockT> {
 pub type AuxDataOperations = Vec<(Vec<u8>, Option<Vec<u8>>)>;
 
 /// Callback invoked before commit the operations internally created on block import.
-/// This gives the opportunity to perform auxiliary pre-commit actions and optionaly
+/// This gives the opportunity to perform auxiliary pre-commit actions and optionally
 /// enqueue further storage write operations to be atomically performed on commit.
 pub type OnImportAction<Block> =
 	Box<dyn (FnMut(&BlockImportNotification<Block>) -> AuxDataOperations) + Send>;
 
 /// Callback invoked before commit the operations internally created on block finalization.
-/// This gives the opportunity to perform auxiliary pre-commit actions and optionaly
+/// This gives the opportunity to perform auxiliary pre-commit actions and optionally
 /// enqueue further storage write operations to be atomically performed on commit.
 pub type OnFinalityAction<Block> =
 	Box<dyn (FnMut(&FinalityNotification<Block>) -> AuxDataOperations) + Send>;
