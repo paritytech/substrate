@@ -36,13 +36,14 @@ use std::{collections::HashMap, rc::Rc};
 
 #[cfg(feature = "wasmer-sandbox")]
 use wasmer_backend::{
-	instantiate as wasmer_instantiate, invoke as wasmer_invoke, new_memory as wasmer_new_memory,
-	Backend as WasmerBackend, MemoryWrapper as WasmerMemoryWrapper,
+	get_global as wasmer_get_global, instantiate as wasmer_instantiate, invoke as wasmer_invoke,
+	new_memory as wasmer_new_memory, Backend as WasmerBackend,
+	MemoryWrapper as WasmerMemoryWrapper,
 };
 
 use wasmi_backend::{
-	instantiate as wasmi_instantiate, invoke as wasmi_invoke, new_memory as wasmi_new_memory,
-	MemoryWrapper as WasmiMemoryWrapper,
+	get_global as wasmi_get_global, instantiate as wasmi_instantiate, invoke as wasmi_invoke,
+	new_memory as wasmi_new_memory, MemoryWrapper as WasmiMemoryWrapper,
 };
 
 /// Index of a function inside the supervisor.
@@ -213,27 +214,10 @@ impl SandboxInstance {
 	/// Returns `Some(_)` if the global could be found.
 	pub fn get_global_val(&self, name: &str) -> Option<sp_wasm_interface::Value> {
 		match &self.backend_instance {
-			BackendInstance::Wasmi(wasmi_instance) => {
-				let wasmi_global = wasmi_instance.export_by_name(name)?.as_global()?.get();
-
-				Some(wasmi_global.into())
-			},
+			BackendInstance::Wasmi(wasmi_instance) => wasmi_get_global(wasmi_instance, name),
 
 			#[cfg(feature = "wasmer-sandbox")]
-			BackendInstance::Wasmer(wasmer_instance) => {
-				use sp_wasm_interface::Value;
-
-				let global = wasmer_instance.exports.get_global(name).ok()?;
-				let wasmtime_value = match global.get() {
-					wasmer::Val::I32(val) => Value::I32(val),
-					wasmer::Val::I64(val) => Value::I64(val),
-					wasmer::Val::F32(val) => Value::F32(f32::to_bits(val)),
-					wasmer::Val::F64(val) => Value::F64(f64::to_bits(val)),
-					_ => None?,
-				};
-
-				Some(wasmtime_value)
-			},
+			BackendInstance::Wasmer(wasmer_instance) => wasmer_get_global(wasmer_instance, name),
 		}
 	}
 }
