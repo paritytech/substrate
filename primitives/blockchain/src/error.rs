@@ -69,7 +69,7 @@ pub enum Error {
 	ExtrinsicRootInvalid { received: String, expected: String },
 
 	// `inner` cannot be made member, since it lacks `std::error::Error` trait bounds.
-	#[error("Execution failed: {0:?}")]
+	#[error("Execution failed: {0}")]
 	Execution(Box<dyn sp_state_machine::Error>),
 
 	#[error("Blockchain")]

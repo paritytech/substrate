@@ -648,6 +648,11 @@ impl<B: BlockT> ChainSync<B> {
 		self.downloaded_blocks
 	}
 
+	/// Returns the current number of peers stored within this state machine.
+	pub fn num_peers(&self) -> usize {
+		self.peers.len()
+	}
+
 	/// Handle a new connected peer.
 	///
 	/// Call this method whenever we connect to a new peer.
@@ -660,7 +665,7 @@ impl<B: BlockT> ChainSync<B> {
 		// There is nothing sync can get from the node that has no blockchain data.
 		match self.block_status(&best_hash) {
 			Err(e) => {
-				debug!(target:"sync", "Error reading blockchain: {:?}", e);
+				debug!(target:"sync", "Error reading blockchain: {}", e);
 				Err(BadPeer(who, rep::BLOCKCHAIN_READ_ERROR))
 			},
 			Ok(BlockStatus::KnownBad) => {
@@ -1187,7 +1192,7 @@ impl<B: BlockT> ChainSync<B> {
 							(_, Err(e)) => {
 								info!(
 									target: "sync",
-									"❌ Error answering legitimate blockchain query: {:?}",
+									"❌ Error answering legitimate blockchain query: {}",
 									e,
 								);
 								return Err(BadPeer(*who, rep::BLOCKCHAIN_READ_ERROR))
@@ -1624,7 +1629,7 @@ impl<B: BlockT> ChainSync<B> {
 					trace!(target: "sync", "Obsolete block {:?}", hash);
 				},
 				e @ Err(BlockImportError::UnknownParent) | e @ Err(BlockImportError::Other(_)) => {
-					warn!(target: "sync", "💔 Error importing block {:?}: {:?}", hash, e);
+					warn!(target: "sync", "💔 Error importing block {:?}: {}", hash, e.unwrap_err());
 					self.state_sync = None;
 					self.warp_sync = None;
 					output.extend(self.restart());
@@ -1678,7 +1683,7 @@ impl<B: BlockT> ChainSync<B> {
 		if let Err(err) = r {
 			warn!(
 				target: "sync",
-				"💔 Error cleaning up pending extra justification data requests: {:?}",
+				"💔 Error cleaning up pending extra justification data requests: {}",
 				err,
 			);
 		}
@@ -2076,7 +2081,7 @@ impl<B: BlockT> ChainSync<B> {
 	) -> impl Iterator<Item = Result<(PeerId, BlockRequest<B>), BadPeer>> + 'a {
 		self.blocks.clear();
 		if let Err(e) = self.reset_sync_start_point() {
-			warn!(target: "sync", "💔  Unable to restart sync. :{:?}", e);
+			warn!(target: "sync", "💔  Unable to restart sync: {}", e);
 		}
 		self.pending_requests.set_all();
 		debug!(target:"sync", "Restarted with {} ({})", self.best_queued_number, self.best_queued_hash);
@@ -2413,7 +2418,11 @@ fn fork_sync_request<B: BlockT>(
 		if !r.peers.contains(id) {
 			continue
 		}
-		if r.number <= best_num {
+		// Download the fork only if it is behind or not too far ahead our tip of the chain
+		// Otherwise it should be downloaded in full sync mode.
+		if r.number <= best_num ||
+			(r.number - best_num).saturated_into::<u32>() < MAX_BLOCKS_TO_REQUEST as u32
+		{
 			let parent_status = r.parent_hash.as_ref().map_or(BlockStatus::Unknown, check_block);
 			let count = if parent_status == BlockStatus::Unknown {
 				(r.number - finalized).saturated_into::<u32>() // up to the last finalized block
@@ -2433,6 +2442,8 @@ fn fork_sync_request<B: BlockT>(
 					max: Some(count),
 				},
 			))
+		} else {
+			trace!(target: "sync", "Fork too far in the future: {:?} (#{})", hash, r.number);
 		}
 	}
 	None

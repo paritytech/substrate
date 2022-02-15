@@ -67,8 +67,9 @@ fn test_whitelist_call_and_remove() {
 #[test]
 fn test_whitelist_call_and_execute() {
 	new_test_ext().execute_with(|| {
-		let call = Call::System(frame_system::Call::remark { remark: vec![] });
+		let call = Call::System(frame_system::Call::remark_with_event { remark: vec![1] });
 		let call_weight = call.get_dispatch_info().weight;
+		dbg!(call_weight);
 		let encoded_call = call.encode();
 		let call_hash = <Test as frame_system::Config>::Hashing::hash(&encoded_call[..]);
 
