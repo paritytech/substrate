@@ -23,8 +23,6 @@
 #![warn(missing_docs)]
 #![deny(warnings)]
 
-mod pallet_with_name_trait_is_valid;
-
 /// The configuration trait
 pub trait Config: 'static {
 	/// The runtime origin type.
