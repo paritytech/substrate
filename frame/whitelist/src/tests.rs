@@ -19,7 +19,7 @@
 
 use crate::mock::*;
 use codec::Encode;
-use frame_support::{assert_err, assert_ok, dispatch::GetDispatchInfo, traits::PreimageProvider};
+use frame_support::{assert_noop, assert_ok, dispatch::GetDispatchInfo, traits::PreimageProvider};
 use sp_runtime::{traits::Hash, DispatchError};
 
 #[test]
@@ -29,48 +29,38 @@ fn test_whitelist_call_and_remove() {
 		let encoded_call = call.encode();
 		let call_hash = <Test as frame_system::Config>::Hashing::hash(&encoded_call[..]);
 
-		assert_err!(
+		assert_noop!(
 			Whitelist::remove_whitelisted_call(Origin::root(), call_hash),
 			crate::Error::<Test>::CallIsNotWhitelisted,
 		);
 
-		assert!(!Preimage::preimage_requested(&call_hash));
-
-		assert_err!(
+		assert_noop!(
 			Whitelist::whitelist_call(Origin::signed(1), call_hash),
 			DispatchError::BadOrigin,
 		);
-
-		assert!(!Preimage::preimage_requested(&call_hash));
 
 		assert_ok!(Whitelist::whitelist_call(Origin::root(), call_hash));
 
 		assert!(Preimage::preimage_requested(&call_hash));
 
-		assert_err!(
+		assert_noop!(
 			Whitelist::whitelist_call(Origin::root(), call_hash),
 			crate::Error::<Test>::CallAlreadyWhitelisted,
 		);
 
-		assert!(Preimage::preimage_requested(&call_hash));
-
-		assert_err!(
+		assert_noop!(
 			Whitelist::remove_whitelisted_call(Origin::signed(1), call_hash),
 			DispatchError::BadOrigin,
 		);
-
-		assert!(Preimage::preimage_requested(&call_hash));
 
 		assert_ok!(Whitelist::remove_whitelisted_call(Origin::root(), call_hash));
 
 		assert!(!Preimage::preimage_requested(&call_hash));
 
-		assert_err!(
+		assert_noop!(
 			Whitelist::remove_whitelisted_call(Origin::root(), call_hash),
 			crate::Error::<Test>::CallIsNotWhitelisted,
 		);
-
-		assert!(!Preimage::preimage_requested(&call_hash));
 	});
 }
 
@@ -82,37 +72,37 @@ fn test_whitelist_call_and_execute() {
 		let encoded_call = call.encode();
 		let call_hash = <Test as frame_system::Config>::Hashing::hash(&encoded_call[..]);
 
-		assert_err!(
+		assert_noop!(
 			Whitelist::dispatch_whitelisted_call(Origin::root(), call_hash, call_weight),
 			crate::Error::<Test>::CallIsNotWhitelisted,
 		);
 
 		assert_ok!(Whitelist::whitelist_call(Origin::root(), call_hash));
 
-		assert_err!(
+		assert_noop!(
 			Whitelist::dispatch_whitelisted_call(Origin::signed(1), call_hash, call_weight),
 			DispatchError::BadOrigin,
 		);
 
-		assert_err!(
+		assert_noop!(
 			Whitelist::dispatch_whitelisted_call(Origin::root(), call_hash, call_weight),
 			crate::Error::<Test>::UnavailablePreImage,
 		);
 
 		assert_ok!(Preimage::note_preimage(Origin::root(), encoded_call));
 
-		assert_err!(
+		assert!(Preimage::preimage_requested(&call_hash));
+
+		assert_noop!(
 			Whitelist::dispatch_whitelisted_call(Origin::root(), call_hash, call_weight - 1),
 			crate::Error::<Test>::InvalidCallWeightWitness,
 		);
-
-		assert!(Preimage::preimage_requested(&call_hash));
 
 		assert_ok!(Whitelist::dispatch_whitelisted_call(Origin::root(), call_hash, call_weight));
 
 		assert!(!Preimage::preimage_requested(&call_hash));
 
-		assert_err!(
+		assert_noop!(
 			Whitelist::dispatch_whitelisted_call(Origin::root(), call_hash, call_weight),
 			crate::Error::<Test>::CallIsNotWhitelisted,
 		);
