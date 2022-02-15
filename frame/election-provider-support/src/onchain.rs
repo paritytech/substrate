@@ -17,7 +17,7 @@
 
 //! An implementation of [`ElectionProvider`] that does an on-chain sequential phragmen.
 
-use crate::{ElectionDataProvider, ElectionProvider};
+use crate::{ElectionDataProvider, ElectionProvider, InstantElectionProvider};
 use frame_support::{traits::Get, weights::DispatchClass};
 use sp_npos_elections::*;
 use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData, prelude::*};
@@ -47,8 +47,14 @@ impl From<sp_npos_elections::Error> for Error {
 /// implementation ignores the additional data of the election data provider and gives no insight on
 /// how much weight was consumed.
 ///
-/// Finally, this implementation does not impose any limits on the number of voters and targets that
-/// are provided.
+/// Finally, the [`ElectionProvider`] implementation of this type does not impose any limits on the
+/// number of voters and targets that are fetched. This could potentially make this unsuitable for
+/// execution onchain. On the other hand, the [`InstantElectionProvider`] implementation does limit
+/// these inputs.
+///
+/// It is advisable to use the former ([`ElectionProvider::elect`]) only at genesis, or for testing,
+/// the latter [`InstantElectionProvider::instant_elect`] for onchain operations, with thoughtful
+/// bounds.
 pub struct OnChainSequentialPhragmen<T: Config>(PhantomData<T>);
 
 /// Configuration trait of [`OnChainSequentialPhragmen`].
@@ -68,16 +74,17 @@ pub trait Config: frame_system::Config {
 	>;
 }
 
-impl<T: Config> ElectionProvider for OnChainSequentialPhragmen<T> {
-	type AccountId = T::AccountId;
-	type BlockNumber = T::BlockNumber;
-	type Error = Error;
-	type DataProvider = T::DataProvider;
-
-	fn elect() -> Result<Supports<T::AccountId>, Self::Error> {
-		let voters = Self::DataProvider::voters(None).map_err(Error::DataProvider)?;
-		let targets = Self::DataProvider::targets(None).map_err(Error::DataProvider)?;
-		let desired_targets = Self::DataProvider::desired_targets().map_err(Error::DataProvider)?;
+impl<T: Config> OnChainSequentialPhragmen<T> {
+	fn elect_with(
+		maybe_max_voters: Option<usize>,
+		maybe_max_targets: Option<usize>,
+	) -> Result<Supports<T::AccountId>, Error> {
+		let voters = <Self as ElectionProvider>::DataProvider::voters(maybe_max_voters)
+			.map_err(Error::DataProvider)?;
+		let targets = <Self as ElectionProvider>::DataProvider::targets(maybe_max_targets)
+			.map_err(Error::DataProvider)?;
+		let desired_targets = <Self as ElectionProvider>::DataProvider::desired_targets()
+			.map_err(Error::DataProvider)?;
 
 		let stake_map: BTreeMap<T::AccountId, VoteWeight> = voters
 			.iter()
@@ -99,6 +106,26 @@ impl<T: Config> ElectionProvider for OnChainSequentialPhragmen<T> {
 		);
 
 		Ok(to_supports(&staked))
+	}
+}
+
+impl<T: Config> ElectionProvider for OnChainSequentialPhragmen<T> {
+	type AccountId = T::AccountId;
+	type BlockNumber = T::BlockNumber;
+	type Error = Error;
+	type DataProvider = T::DataProvider;
+
+	fn elect() -> Result<Supports<T::AccountId>, Self::Error> {
+		Self::elect_with(None, None)
+	}
+}
+
+impl<T: Config> InstantElectionProvider for OnChainSequentialPhragmen<T> {
+	fn instant_elect(
+		maybe_max_voters: Option<usize>,
+		maybe_max_targets: Option<usize>,
+	) -> Result<Supports<Self::AccountId>, Self::Error> {
+		Self::elect_with(maybe_max_voters, maybe_max_targets)
 	}
 }
 

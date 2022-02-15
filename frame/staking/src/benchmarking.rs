@@ -900,6 +900,35 @@ benchmarks! {
 		assert!(!T::SortedListProvider::contains(&stash));
 	}
 
+	force_apply_min_commission {
+		// Clean up any existing state
+		clear_validators_and_nominators::<T>();
+
+		// Create a validator with a commission of 50%
+		let (stash, controller) =
+			create_stash_controller::<T>(1, 1, RewardDestination::Staked)?;
+		let validator_prefs =
+			ValidatorPrefs { commission: Perbill::from_percent(50), ..Default::default() };
+		Staking::<T>::validate(RawOrigin::Signed(controller).into(), validator_prefs)?;
+
+		// Sanity check
+		assert_eq!(
+			Validators::<T>::get(&stash),
+			ValidatorPrefs { commission: Perbill::from_percent(50), ..Default::default() }
+		);
+
+		// Set the min commission to 75%
+		MinCommission::<T>::set(Perbill::from_percent(75));
+		let caller = whitelisted_caller();
+	}: _(RawOrigin::Signed(caller), stash.clone())
+	verify {
+		// The validators commission has been bumped to 75%
+		assert_eq!(
+			Validators::<T>::get(&stash),
+			ValidatorPrefs { commission: Perbill::from_percent(75), ..Default::default() }
+		);
+	}
+
 	impl_benchmark_test_suite!(
 		Staking,
 		crate::mock::ExtBuilder::default().has_stakers(true),

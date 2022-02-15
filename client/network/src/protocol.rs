@@ -886,7 +886,7 @@ impl<B: BlockT> Protocol<B> {
 				return
 			},
 			Err(e) => {
-				warn!("Error reading block header {}: {:?}", hash, e);
+				warn!("Error reading block header {}: {}", hash, e);
 				return
 			},
 		};
