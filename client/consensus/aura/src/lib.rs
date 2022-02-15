@@ -300,7 +300,7 @@ where
 	}
 }
 
-struct AuraWorker<C, E, I, P, SO, L, BS> {
+pub struct AuraWorker<C, E, I, P, SO, L, BS> {
 	client: Arc<C>,
 	block_import: I,
 	env: E,

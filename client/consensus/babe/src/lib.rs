@@ -651,7 +651,7 @@ type SlotNotificationSinks<B> = Arc<
 	Mutex<Vec<Sender<(Slot, ViableEpochDescriptor<<B as BlockT>::Hash, NumberFor<B>, Epoch>)>>>,
 >;
 
-struct BabeSlotWorker<B: BlockT, C, E, I, SO, L, BS> {
+pub struct BabeSlotWorker<B: BlockT, C, E, I, SO, L, BS> {
 	client: Arc<C>,
 	block_import: I,
 	env: E,
