@@ -321,3 +321,7 @@ pub fn invoke(
 		})
 	})
 }
+
+pub fn get_global(instance: &wasmi::ModuleRef, name: &str) -> Option<Value> {
+	Some(instance.export_by_name(name)?.as_global()?.get().into())
+}
