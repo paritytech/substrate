@@ -131,13 +131,17 @@ fn test_whitelist_call_and_execute_failing_call() {
 #[test]
 fn test_whitelist_call_and_execute_without_note_preimage() {
 	new_test_ext().execute_with(|| {
-		let call = Box::new(Call::System(frame_system::Call::remark_with_event { remark: vec![1] }));
+		let call =
+			Box::new(Call::System(frame_system::Call::remark_with_event { remark: vec![1] }));
 		let call_hash = <Test as frame_system::Config>::Hashing::hash_of(&call);
 
 		assert_ok!(Whitelist::whitelist_call(Origin::root(), call_hash));
 		assert!(Preimage::preimage_requested(&call_hash));
 
-		assert_ok!(Whitelist::dispatch_whitelisted_call_with_preimage(Origin::root(), call.clone()));
+		assert_ok!(Whitelist::dispatch_whitelisted_call_with_preimage(
+			Origin::root(),
+			call.clone()
+		));
 
 		assert!(!Preimage::preimage_requested(&call_hash));
 

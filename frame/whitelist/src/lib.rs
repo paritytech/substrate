@@ -49,8 +49,8 @@ use frame_support::{
 	weights::{GetDispatchInfo, PostDispatchInfo},
 };
 use scale_info::TypeInfo;
-use weights::WeightInfo;
 use sp_api::HashT;
+use weights::WeightInfo;
 
 use frame_support::pallet_prelude::*;
 use frame_system::pallet_prelude::*;
@@ -206,8 +206,9 @@ pub mod pallet {
 			);
 
 			let call_len = call.encoded_size() as u32;
-			let actual_weight = Self::dispatch_checked_call(call_hash, *call)
-				.map(|w| w.saturating_add(T::WeightInfo::dispatch_whitelisted_call_with_preimage(call_len)));
+			let actual_weight = Self::dispatch_checked_call(call_hash, *call).map(|w| {
+				w.saturating_add(T::WeightInfo::dispatch_whitelisted_call_with_preimage(call_len))
+			});
 
 			Ok(actual_weight.into())
 		}
@@ -215,11 +216,9 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
-	/// * remove call from whitelisted call
-	/// * unrequest preimage
-	/// * dispatch call
-	/// * put event
-	/// * return the call actual weight of the dispatched call if there is some
+	/// Clean whitelisting/preimage and dispatch call.
+	///
+	/// Return the call actual weight of the dispatched call if there is some.
 	fn dispatch_checked_call(call_hash: T::Hash, call: <T as Config>::Call) -> Option<Weight> {
 		WhitelistedCall::<T>::remove(call_hash);
 
