@@ -104,7 +104,7 @@ where
 			let epoch_start = client
 				.runtime_api()
 				.current_epoch_start(&BlockId::Hash(header.hash()))
-				.map_err(|err| Error::StringError(format!("{:?}", err)))?;
+				.map_err(|err| Error::StringError(err.to_string()))?;
 			let epoch =
 				epoch_data(&shared_epoch, &client, &babe_config, *epoch_start, &select_chain)
 					.await?;
@@ -209,7 +209,7 @@ where
 			slot.into(),
 			|slot| Epoch::genesis(&babe_config, slot),
 		)
-		.map_err(|e| Error::Consensus(ConsensusError::ChainLookup(format!("{:?}", e))))?
+		.map_err(|e| Error::Consensus(ConsensusError::ChainLookup(e.to_string())))?
 		.ok_or(Error::Consensus(ConsensusError::InvalidAuthoritiesSet))
 }
 

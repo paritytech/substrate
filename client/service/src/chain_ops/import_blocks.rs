@@ -322,7 +322,7 @@ where
 
 			for result in results {
 				if let (Err(err), hash) = result {
-					warn!("There was an error importing block with hash {:?}: {:?}", hash, err);
+					warn!("There was an error importing block with hash {:?}: {}", hash, err);
 					self.has_error = true;
 					break
 				}

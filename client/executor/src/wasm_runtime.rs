@@ -105,13 +105,13 @@ impl VersionedRuntime {
 					if new_inst {
 						log::warn!(
 							target: "wasm-runtime",
-							"Fresh runtime instance failed with {:?}",
+							"Fresh runtime instance failed with {}",
 							e,
 						)
 					} else {
 						log::warn!(
 							target: "wasm-runtime",
-							"Evicting failed runtime instance: {:?}",
+							"Evicting failed runtime instance: {}",
 							e,
 						);
 					}

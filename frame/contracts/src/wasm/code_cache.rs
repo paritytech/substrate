@@ -108,13 +108,28 @@ where
 ///
 /// A contract whose refcount dropped to zero isn't automatically removed. A `remove_code`
 /// transaction must be submitted by the original uploader to do so.
-pub fn decrement_refcount<T: Config>(code_hash: CodeHash<T>) -> Result<(), DispatchError> {
+pub fn decrement_refcount<T: Config>(code_hash: CodeHash<T>) {
 	<OwnerInfoOf<T>>::mutate(code_hash, |existing| {
 		if let Some(info) = existing {
 			info.refcount = info.refcount.saturating_sub(1);
 		}
 	});
-	Ok(())
+}
+
+/// Increment the refcount of a code in-storage by one.
+///
+/// # Errors
+///
+/// [`Error::CodeNotFound`] is returned if the specified `code_hash` does not exist.
+pub fn increment_refcount<T: Config>(code_hash: CodeHash<T>) -> Result<(), DispatchError> {
+	<OwnerInfoOf<T>>::mutate(code_hash, |existing| -> Result<(), DispatchError> {
+		if let Some(info) = existing {
+			info.refcount = info.refcount.saturating_add(1);
+			Ok(())
+		} else {
+			Err(Error::<T>::CodeNotFound.into())
+		}
+	})
 }
 
 /// Try to remove code together with all associated information.
