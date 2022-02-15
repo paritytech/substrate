@@ -153,7 +153,8 @@ pub mod pallet {
 
 		/// Something that can provide a sorted list of voters in a somewhat sorted way. The
 		/// original use case for this was designed with `pallet_bags_list::Pallet` in mind. If
-		/// the bags-list is not desired, [`impls::UseNominatorsMap`] is likely the desired option.
+		/// the bags-list is not desired, [`impls::UseNominatorsAndValidatorsMap`] is likely the
+		/// desired option.
 		type SortedListProvider: SortedListProvider<Self::AccountId>;
 
 		/// Some parameters of the benchmarking.

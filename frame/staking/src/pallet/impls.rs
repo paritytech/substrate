@@ -669,13 +669,11 @@ impl<T: Config> Pallet<T> {
 		let weight_of = Self::weight_of_fn();
 		let slashing_spans = <SlashingSpans<T>>::iter().collect::<BTreeMap<_, _>>();
 
-		let mut voters_taken = 0u32;
 		let mut voters_seen = 0u32;
 		let mut validators_taken = 0u32;
 		let mut nominators_taken = 0u32;
 
-		while voters_taken < (max_allowed_len as u32) && voters_seen < (2 * max_allowed_len as u32)
-		{
+		while all_voters.len() < max_allowed_len && voters_seen < (2 * max_allowed_len as u32) {
 			let voter = match T::SortedListProvider::iter().next() {
 				Some(voter) => {
 					voters_seen.saturating_inc();
@@ -695,7 +693,6 @@ impl<T: Config> Pallet<T> {
 				});
 				if !targets.len().is_zero() {
 					all_voters.push((voter.clone(), weight_of(&voter), targets));
-					voters_taken.saturating_inc();
 					nominators_taken.saturating_inc();
 				}
 			} else if Validators::<T>::contains_key(&voter) {
@@ -708,7 +705,6 @@ impl<T: Config> Pallet<T> {
 						.expect("`MaxVotesPerVoter` must be greater than or equal to 1"),
 				);
 				all_voters.push(self_vote);
-				voters_taken.saturating_inc();
 				validators_taken.saturating_inc();
 			} else {
 				// this can only happen if: 1. there a bug in the bags-list (or whatever is the
