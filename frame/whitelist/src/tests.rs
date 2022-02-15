@@ -108,3 +108,22 @@ fn test_whitelist_call_and_execute() {
 		);
 	});
 }
+
+#[test]
+fn test_whitelist_call_and_execute_failing_call() {
+	new_test_ext().execute_with(|| {
+		let call = Call::Whitelist(crate::Call::dispatch_whitelisted_call {
+			call_hash: Default::default(),
+			call_weight_witness: 0,
+		});
+		let call_weight = call.get_dispatch_info().weight;
+		let encoded_call = call.encode();
+		let call_hash = <Test as frame_system::Config>::Hashing::hash(&encoded_call[..]);
+
+		assert_ok!(Whitelist::whitelist_call(Origin::root(), call_hash));
+		assert_ok!(Preimage::note_preimage(Origin::root(), encoded_call));
+		assert!(Preimage::preimage_requested(&call_hash));
+		assert_ok!(Whitelist::dispatch_whitelisted_call(Origin::root(), call_hash, call_weight));
+		assert!(!Preimage::preimage_requested(&call_hash));
+	});
+}

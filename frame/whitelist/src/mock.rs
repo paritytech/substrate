@@ -93,7 +93,7 @@ impl pallet_preimage::Config for Test {
 	type Event = Event;
 	type Currency = Balances;
 	type ManagerOrigin = EnsureRoot<Self::AccountId>;
-	type MaxSize = ConstU32<32>;
+	type MaxSize = ConstU32<64>;
 	type BaseDeposit = ConstU64<1>;
 	type ByteDeposit = ConstU64<1>;
 	type WeightInfo = ();
