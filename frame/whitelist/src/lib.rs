@@ -179,7 +179,7 @@ pub mod pallet {
 				Error::<T>::InvalidCallWeightWitness
 			);
 
-			let actual_weight = Self::dispatch_checked_call(call_hash, call)
+			let actual_weight = Self::clean_and_dispatch(call_hash, call)
 				.map(|w| w.saturating_add(T::WeightInfo::dispatch_whitelisted_call()));
 
 			Ok(actual_weight.into())
@@ -206,7 +206,7 @@ pub mod pallet {
 			);
 
 			let call_len = call.encoded_size() as u32;
-			let actual_weight = Self::dispatch_checked_call(call_hash, *call).map(|w| {
+			let actual_weight = Self::clean_and_dispatch(call_hash, *call).map(|w| {
 				w.saturating_add(T::WeightInfo::dispatch_whitelisted_call_with_preimage(call_len))
 			});
 
@@ -219,7 +219,7 @@ impl<T: Config> Pallet<T> {
 	/// Clean whitelisting/preimage and dispatch call.
 	///
 	/// Return the call actual weight of the dispatched call if there is some.
-	fn dispatch_checked_call(call_hash: T::Hash, call: <T as Config>::Call) -> Option<Weight> {
+	fn clean_and_dispatch(call_hash: T::Hash, call: <T as Config>::Call) -> Option<Weight> {
 		WhitelistedCall::<T>::remove(call_hash);
 
 		T::PreimageProvider::unrequest_preimage(&call_hash);
