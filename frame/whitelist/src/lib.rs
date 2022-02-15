@@ -102,7 +102,7 @@ pub mod pallet {
 	pub enum Event<T: Config> {
 		CallWhitelisted { call_hash: T::Hash },
 		WhitelistedCallRemoved { call_hash: T::Hash },
-		WhitelistedCallDispatched { call_hash: T::Hash },
+		WhitelistedCallDispatched { call_hash: T::Hash, result: DispatchResultWithPostInfo },
 	}
 
 	#[pallet::error]
@@ -184,9 +184,18 @@ pub mod pallet {
 
 			let result = call.dispatch(frame_system::Origin::<T>::Root.into());
 
-			Self::deposit_event(Event::<T>::WhitelistedCallDispatched { call_hash });
+			let actual_weight = {
+				let call_actual_weight = match result {
+					Ok(call_post_info) => call_post_info.actual_weight,
+					Err(call_err) => call_err.post_info.actual_weight,
+				};
+				call_actual_weight
+					.map(|w| w.saturating_add(T::WeightInfo::dispatch_whitelisted_call()))
+			};
 
-			result
+			Self::deposit_event(Event::<T>::WhitelistedCallDispatched { call_hash, result });
+
+			Ok(actual_weight.into())
 		}
 	}
 }
