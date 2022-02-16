@@ -87,12 +87,12 @@
 mod gas;
 mod benchmarking;
 mod exec;
-mod migration;
 mod schedule;
 mod storage;
 mod wasm;
 
 pub mod chain_extension;
+pub mod migration;
 pub mod weights;
 
 #[cfg(test)]
@@ -135,6 +135,14 @@ type BalanceOf<T> =
 
 /// The current storage version.
 const STORAGE_VERSION: StorageVersion = StorageVersion::new(6);
+
+/// Used as a sentinel value when reading and writing contract memory.
+///
+/// It is usually used to signal `None` to a contract when only a primitive is allowed
+/// and we don't want to go through encoding a full Rust type. Using `u32::Max` is a safe
+/// sentinel because contracts are never allowed to use such a large amount of resources
+/// that this value makes sense for a memory location or length.
+const SENTINEL: u32 = u32::MAX;
 
 /// Provides the contract address generation method.
 ///
@@ -303,6 +311,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::storage_version(STORAGE_VERSION)]
+	#[pallet::without_storage_info]
 	pub struct Pallet<T>(PhantomData<T>);
 
 	#[pallet::hooks]
@@ -320,10 +329,6 @@ pub mod pallet {
 				.min(T::DeletionWeightLimit::get());
 			Storage::<T>::process_deletion_queue_batch(weight_limit)
 				.saturating_add(T::WeightInfo::on_initialize())
-		}
-
-		fn on_runtime_upgrade() -> Weight {
-			migration::migrate::<T>()
 		}
 	}
 
@@ -405,10 +410,7 @@ pub mod pallet {
 		/// - The `value` is transferred to the new account.
 		/// - The `deploy` function is executed in the context of the newly-created account.
 		#[pallet::weight(
-			T::WeightInfo::instantiate_with_code(
-				code.len() as u32 / 1024,
-				salt.len() as u32 / 1024,
-			)
+			T::WeightInfo::instantiate_with_code(code.len() as u32, salt.len() as u32)
 			.saturating_add(*gas_limit)
 		)]
 		pub fn instantiate_with_code(
@@ -440,7 +442,7 @@ pub mod pallet {
 			}
 			output.gas_meter.into_dispatch_result(
 				output.result.map(|(_address, result)| result),
-				T::WeightInfo::instantiate_with_code(code_len / 1024, salt_len / 1024),
+				T::WeightInfo::instantiate_with_code(code_len, salt_len),
 			)
 		}
 
@@ -450,7 +452,7 @@ pub mod pallet {
 		/// code deployment step. Instead, the `code_hash` of an on-chain deployed wasm binary
 		/// must be supplied.
 		#[pallet::weight(
-			T::WeightInfo::instantiate(salt.len() as u32 / 1024).saturating_add(*gas_limit)
+			T::WeightInfo::instantiate(salt.len() as u32).saturating_add(*gas_limit)
 		)]
 		pub fn instantiate(
 			origin: OriginFor<T>,
@@ -480,7 +482,7 @@ pub mod pallet {
 			}
 			output.gas_meter.into_dispatch_result(
 				output.result.map(|(_address, output)| output),
-				T::WeightInfo::instantiate(salt_len / 1024),
+				T::WeightInfo::instantiate(salt_len),
 			)
 		}
 
@@ -500,7 +502,7 @@ pub mod pallet {
 		/// To avoid this situation a constructor could employ access control so that it can
 		/// only be instantiated by permissioned entities. The same is true when uploading
 		/// through [`Self::instantiate_with_code`].
-		#[pallet::weight(T::WeightInfo::upload_code(code.len() as u32 / 1024))]
+		#[pallet::weight(T::WeightInfo::upload_code(code.len() as u32))]
 		pub fn upload_code(
 			origin: OriginFor<T>,
 			code: Vec<u8>,
@@ -559,12 +561,24 @@ pub mod pallet {
 
 		/// A code with the specified hash was removed.
 		CodeRemoved { code_hash: T::Hash },
+
+		/// A contract's code was updated.
+		ContractCodeUpdated {
+			/// The contract that has been updated.
+			contract: T::AccountId,
+			/// New code hash that was set for the contract.
+			new_code_hash: T::Hash,
+			/// Previous code hash of the contract.
+			old_code_hash: T::Hash,
+		},
 	}
 
 	#[pallet::error]
 	pub enum Error<T> {
 		/// A new schedule must have a greater version than the current one.
 		InvalidScheduleVersion,
+		/// Invalid combination of flags supplied to `seal_call` or `seal_delegate_call`.
+		InvalidCallFlags,
 		/// The executed contract exhausted its gas limit.
 		OutOfGas,
 		/// The output buffer supplied to a contract API call was too small.
@@ -632,6 +646,10 @@ pub mod pallet {
 		/// or via RPC an `Ok` will be returned. In this case the caller needs to inspect the flags
 		/// to determine whether a reversion has taken place.
 		ContractReverted,
+		/// The contract's code was found to be invalid during validation or instrumentation.
+		/// A more detailed error can be found on the node console if debug messages are enabled
+		/// or in the debug buffer which is returned to RPC clients.
+		CodeRejected,
 	}
 
 	/// A mapping from an original code hash to the original code, untouched by instrumentation.
@@ -781,7 +799,8 @@ where
 		storage_deposit_limit: Option<BalanceOf<T>>,
 	) -> CodeUploadResult<CodeHash<T>, BalanceOf<T>> {
 		let schedule = T::Schedule::get();
-		let module = PrefabWasmModule::from_code(code, &schedule, origin)?;
+		let module = PrefabWasmModule::from_code(code, &schedule, origin)
+			.map_err(|_| <Error<T>>::CodeRejected)?;
 		let deposit = module.open_deposit();
 		if let Some(storage_deposit_limit) = storage_deposit_limit {
 			ensure!(storage_deposit_limit >= deposit, <Error<T>>::StorageDepositLimitExhausted);
@@ -829,7 +848,7 @@ where
 		module: &mut PrefabWasmModule<T>,
 		schedule: &Schedule<T>,
 	) -> frame_support::dispatch::DispatchResult {
-		self::wasm::reinstrument(module, schedule)
+		self::wasm::reinstrument(module, schedule).map(|_| ())
 	}
 
 	/// Internal function that does the actual call.
@@ -879,7 +898,7 @@ where
 		code: Code<CodeHash<T>>,
 		data: Vec<u8>,
 		salt: Vec<u8>,
-		debug_message: Option<&mut Vec<u8>>,
+		mut debug_message: Option<&mut Vec<u8>>,
 	) -> InternalInstantiateOutput<T> {
 		let mut storage_deposit = Default::default();
 		let mut gas_meter = GasMeter::new(gas_limit);
@@ -891,8 +910,11 @@ where
 						binary.len() as u32 <= schedule.limits.code_len,
 						<Error<T>>::CodeTooLarge
 					);
-					let executable =
-						PrefabWasmModule::from_code(binary, &schedule, origin.clone())?;
+					let executable = PrefabWasmModule::from_code(binary, &schedule, origin.clone())
+						.map_err(|msg| {
+							debug_message.as_mut().map(|buffer| buffer.extend(msg.as_bytes()));
+							<Error<T>>::CodeRejected
+						})?;
 					ensure!(
 						executable.code_len() <= schedule.limits.code_len,
 						<Error<T>>::CodeTooLarge

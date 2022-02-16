@@ -545,7 +545,7 @@ impl<T: Config> List<T> {
 /// iteration so that there's no incentive to churn ids positioning to improve the chances of
 /// appearing within the ids set.
 #[derive(DefaultNoBound, Encode, Decode, MaxEncodedLen, TypeInfo)]
-#[codec(mel_bound(T: Config))]
+#[codec(mel_bound())]
 #[scale_info(skip_type_params(T))]
 #[cfg_attr(feature = "std", derive(frame_support::DebugNoBound, Clone, PartialEq))]
 pub struct Bag<T: Config> {
@@ -748,7 +748,7 @@ impl<T: Config> Bag<T> {
 
 /// A Node is the fundamental element comprising the doubly-linked list described by `Bag`.
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo)]
-#[codec(mel_bound(T: Config))]
+#[codec(mel_bound())]
 #[scale_info(skip_type_params(T))]
 #[cfg_attr(feature = "std", derive(frame_support::DebugNoBound, Clone, PartialEq))]
 pub struct Node<T: Config> {

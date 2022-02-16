@@ -266,6 +266,8 @@ pub trait StorageMap<K: FullEncode, V: FullCodec> {
 	) -> R;
 
 	/// Mutate the item, only if an `Ok` value is returned. Deletes the item if mutated to a `None`.
+	/// `f` will always be called with an option representing if the storage item exists (`Some<V>`)
+	/// or if the storage item does not exist (`None`), independent of the `QueryType`.
 	fn try_mutate_exists<KeyArg: EncodeLike<K>, R, E, F: FnOnce(&mut Option<V>) -> Result<R, E>>(
 		key: KeyArg,
 		f: F,
@@ -608,6 +610,8 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 		F: FnOnce(&mut Option<V>) -> R;
 
 	/// Mutate the item, only if an `Ok` value is returned. Deletes the item if mutated to a `None`.
+	/// `f` will always be called with an option representing if the storage item exists (`Some<V>`)
+	/// or if the storage item does not exist (`None`), independent of the `QueryType`.
 	fn try_mutate_exists<KArg1, KArg2, R, E, F>(k1: KArg1, k2: KArg2, f: F) -> Result<R, E>
 	where
 		KArg1: EncodeLike<K1>,
@@ -735,6 +739,8 @@ pub trait StorageNMap<K: KeyGenerator, V: FullCodec> {
 		F: FnOnce(&mut Option<V>) -> R;
 
 	/// Mutate the item, only if an `Ok` value is returned. Deletes the item if mutated to a `None`.
+	/// `f` will always be called with an option representing if the storage item exists (`Some<V>`)
+	/// or if the storage item does not exist (`None`), independent of the `QueryType`.
 	fn try_mutate_exists<KArg, R, E, F>(key: KArg, f: F) -> Result<R, E>
 	where
 		KArg: EncodeLikeTuple<K::KArg> + TupleToEncodedIter,
@@ -800,6 +806,19 @@ pub struct PrefixIterator<T, OnRemoval = ()> {
 	/// `raw_key_without_prefix` is the raw storage key without the prefix iterated on.
 	closure: fn(&[u8], &[u8]) -> Result<T, codec::Error>,
 	phantom: core::marker::PhantomData<OnRemoval>,
+}
+
+impl<T, OnRemoval1> PrefixIterator<T, OnRemoval1> {
+	/// Converts to the same iterator but with the different 'OnRemoval' type
+	pub fn convert_on_removal<OnRemoval2>(self) -> PrefixIterator<T, OnRemoval2> {
+		PrefixIterator::<T, OnRemoval2> {
+			prefix: self.prefix,
+			previous_key: self.previous_key,
+			drain: self.drain,
+			closure: self.closure,
+			phantom: Default::default(),
+		}
+	}
 }
 
 /// Trait for specialising on removal logic of [`PrefixIterator`].

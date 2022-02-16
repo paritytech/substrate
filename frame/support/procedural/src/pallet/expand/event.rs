@@ -117,9 +117,11 @@ pub fn expand_event(def: &mut Def) -> proc_macro2::TokenStream {
 		)]
 	));
 
-	// skip requirement for type params to implement `TypeInfo`, and require docs capture
+	let capture_docs = if cfg!(feature = "no-metadata-docs") { "never" } else { "always" };
+
+	// skip requirement for type params to implement `TypeInfo`, and set docs capture
 	event_item.attrs.push(syn::parse_quote!(
-		#[scale_info(skip_type_params(#event_use_gen), capture_docs = "always")]
+		#[scale_info(skip_type_params(#event_use_gen), capture_docs = #capture_docs)]
 	));
 
 	let deposit_event = if let Some(deposit_event) = &event.deposit_event {

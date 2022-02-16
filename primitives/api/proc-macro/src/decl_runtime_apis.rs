@@ -39,8 +39,6 @@ use syn::{
 
 use std::collections::HashMap;
 
-use blake2_rfc;
-
 /// The ident used for the block generic parameter.
 const BLOCK_GENERIC_IDENT: &str = "Block";
 
@@ -378,6 +376,7 @@ fn generate_call_api_at_calls(decl: &ItemTrait) -> Result<TokenStream> {
 		// Generate the generator function
 		result.push(quote!(
 			#[cfg(any(feature = "std", test))]
+			#[allow(clippy::too_many_arguments)]
 			pub fn #fn_name<
 				R: #crate_::Encode + #crate_::Decode + PartialEq,
 				NC: FnOnce() -> std::result::Result<R, #crate_::ApiError> + std::panic::UnwindSafe,
@@ -749,8 +748,10 @@ fn parse_runtime_api_version(version: &Attribute) -> Result<u64> {
 /// Generates the identifier as const variable for the given `trait_name`
 /// by hashing the `trait_name`.
 fn generate_runtime_api_id(trait_name: &str) -> TokenStream {
+	use blake2::digest::{consts::U8, Digest};
+
 	let mut res = [0; 8];
-	res.copy_from_slice(blake2_rfc::blake2b::blake2b(8, &[], trait_name.as_bytes()).as_bytes());
+	res.copy_from_slice(blake2::Blake2b::<U8>::digest(trait_name).as_slice());
 
 	quote!( const ID: [u8; 8] = [ #( #res ),* ]; )
 }
