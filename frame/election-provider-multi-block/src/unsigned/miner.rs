@@ -481,8 +481,6 @@ impl<T: Config, Solver: NposSolver<AccountId = T::AccountId, Error = OffchainSol
 		let size_limit = T::MinerMaxLength::get();
 		let weight_limit = T::MinerMaxWeight::get();
 
-		// TODO: we could alter the snapshot metadata to contain a BoundedVec<u32, T::Pages> to
-		// support this as well.
 		let all_voters_count = crate::Snapshot::<T>::voters_decode_len(crate::Pallet::<T>::msp())
 			.ok_or(MinerError::SnapshotUnAvailable(SnapshotType::Voters(
 				crate::Pallet::<T>::msp(),

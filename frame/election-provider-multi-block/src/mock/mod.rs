@@ -82,7 +82,8 @@ sp_npos_elections::generate_solution_type!(
 
 impl codec::MaxEncodedLen for TestNposSolution {
 	fn max_encoded_len() -> usize {
-		todo!("need to move solution type macro and trait to frame, properly derive or implement MaxEncodedLen for it, ")
+		// TODO: https://github.com/paritytech/substrate/issues/10866
+		unimplemented!();
 	}
 }
 
@@ -139,7 +140,6 @@ parameter_types! {
 	pub static SignedValidationPhase: BlockNumber = 5;
 
 	pub static OnChianFallback: bool = false;
-	pub static MinerMaxIterations: u32 = 5;
 	pub static MinerTxPriority: u64 = 100;
 	pub static SolutionImprovementThreshold: Perbill = Perbill::zero();
 	pub static OffchainRepeat: BlockNumber = 5;
@@ -180,7 +180,6 @@ impl crate::unsigned::WeightInfo for MockUnsignedWeightInfo {
 
 impl crate::unsigned::Config for Runtime {
 	type OffchainRepeat = OffchainRepeat;
-	type MinerMaxIterations = MinerMaxIterations;
 	type MinerMaxWeight = MinerMaxWeight;
 	type MinerMaxLength = MinerMaxLength;
 	type MinerTxPriority = MinerTxPriority;
@@ -195,7 +194,6 @@ impl crate::Config for Runtime {
 	type SignedValidationPhase = SignedValidationPhase;
 	type UnsignedPhase = UnsignedPhase;
 	type DataProvider = staking::MockStaking;
-	type BenchmarkingConfig = ();
 	type Fallback = MockFallback;
 	type TargetSnapshotPerBlock = TargetSnapshotPerBlock;
 	type VoterSnapshotPerBlock = VoterSnapshotPerBlock;
@@ -205,14 +203,6 @@ impl crate::Config for Runtime {
 	type Verifier = VerifierPallet;
 	type AdminOrigin = EnsureRoot<AccountId>;
 	type Pages = Pages;
-}
-
-impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Runtime
-where
-	Call: From<LocalCall>,
-{
-	type OverarchingCall = Call;
-	type Extrinsic = Extrinsic;
 }
 
 impl onchain::Config for Runtime {
@@ -245,6 +235,14 @@ impl ElectionProvider for MockFallback {
 			Err(err)
 		}
 	}
+}
+
+impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Runtime
+where
+	Call: From<LocalCall>,
+{
+	type OverarchingCall = Call;
+	type Extrinsic = Extrinsic;
 }
 
 pub struct ExtBuilder {}

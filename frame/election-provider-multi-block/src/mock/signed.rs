@@ -240,5 +240,5 @@ pub fn load_mock_signed_and_start(raw_paged: PagedRawSolution<Runtime>) {
 	MockSignedNextScore::set(Some(raw_paged.score));
 
 	// Let's gooooo!
-	<VerifierPallet as AsynchronousVerifier>::start();
+	assert_ok!(<VerifierPallet as AsynchronousVerifier>::start());
 }

@@ -76,10 +76,13 @@ use crate::SupportsOf;
 use frame_election_provider_support::PageIndex;
 use frame_support::RuntimeDebug;
 use sp_npos_elections::ElectionScore;
-use std::fmt::Debug;
+use sp_std::{fmt::Debug, prelude::*};
 
 pub use impls::{
-	pallet::{Call, Config, Event, Pallet, QueuedSolution, __substrate_event_check},
+	pallet::{
+		Call, Config, Event, Pallet, QueuedSolution, __substrate_call_check,
+		__substrate_event_check,
+	},
 	Status,
 };
 
@@ -238,6 +241,9 @@ pub trait AsynchronousVerifier: Verifier {
 
 	/// Start a verification process.
 	///
+	/// Returns `Ok(())` if verification started successfully, and `Err(..)` if a verification is
+	/// already ongoing and therefore a new one cannot be started.
+	///
 	/// From the coming block onwards, the verifier will start and fetch the relevant information
 	/// and solution pages from [`SolutionDataProvider`]. It is expected that the
 	/// [`SolutionDataProvider`] is ready before calling [`start`].
@@ -258,7 +264,7 @@ pub trait AsynchronousVerifier: Verifier {
 	/// again if the verification has failed, and nothing otherwise. Indeed, the
 	/// [`SolutionDataProvider`] must adjust its internal state such that it returns a new candidate
 	/// solution after each failure.
-	fn start();
+	fn start() -> Result<(), &'static str>;
 
 	/// Stop the verification.
 	///

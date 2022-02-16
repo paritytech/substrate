@@ -539,6 +539,62 @@ impl frame_election_provider_support::onchain::Config for Runtime {
 	type MaxWinnersPerPage = ConstU32<{ u32::MAX }>;
 }
 
+// Multi-block election provider pallet group.
+use pallet_election_provider_multi_block as election_multi_block;
+use pallet_election_provider_multi_block::{
+	signed as election_signed, unsigned as election_unsigned, verifier as election_verifier,
+};
+
+impl election_multi_block::Config for Runtime {
+	type Event = Event;
+	type Pages = ConstU32<3>;
+	type SignedPhase = ConstU32<10>;
+	type SignedValidationPhase = ConstU32<10>;
+	type UnsignedPhase = ConstU32<10>;
+	type DataProvider = Staking;
+	type Fallback = election_multi_block::InitiateEmergencyPhase<Self>;
+	type TargetSnapshotPerBlock = ConstU32<1000>;
+	type VoterSnapshotPerBlock = ConstU32<20_000>;
+	type Lookahead = ConstU32<5>;
+	type Solution = NposSolution16;
+	type Verifier = ElectionVerifier;
+	type AdminOrigin = EnsureRoot<Self::AccountId>;
+	type WeightInfo = ();
+}
+
+impl election_verifier::Config for Runtime {
+	type Event = Event;
+	type SolutionImprovementThreshold = SolutionImprovementThreshold;
+	type ForceOrigin = EnsureRoot<Self::AccountId>;
+	// Note: This value is quite important: why should we not trim these from the get go? yeah, we
+	// should.
+	type MaxBackersPerWinner = MaxNominatorRewardedPerValidator;
+	type MaxWinnersPerPage = ConstU32<1000>;
+	type SolutionDataProvider = ElectionSigned;
+	type WeightInfo = ();
+}
+
+impl election_unsigned::Config for Runtime {
+	type OffchainRepeat = ConstU32<5>;
+	type MinerMaxWeight = MinerMaxWeight;
+	type MinerMaxLength = MinerMaxLength;
+	type MinerTxPriority = MultiPhaseUnsignedPriority;
+	type OffchainSolver =
+		frame_election_provider_support::SequentialPhragmen<Self::AccountId, Perbill, ()>;
+	type WeightInfo = ();
+}
+
+impl election_signed::Config for Runtime {
+	type Event = Event;
+	type Currency = Balances;
+	type DepositBase = ConstU128<{ DOLLARS * 10 }>;
+	type DepositPerPage = ConstU128<{ DOLLARS }>;
+	type EstimateCallFee = TransactionPayment;
+	type MaxSubmissions = ConstU32<5>;
+	type RewardBase = ConstU128<{ DOLLARS }>;
+	type WeightInfo = ();
+}
+
 pub struct StakingBenchmarkingConfig;
 impl pallet_staking::BenchmarkingConfig for StakingBenchmarkingConfig {
 	type MaxNominators = ConstU32<1000>;
@@ -610,6 +666,13 @@ sp_npos_elections::generate_solution_type!(
 		Accuracy = sp_runtime::PerU16,
 	>(16)
 );
+
+impl MaxEncodedLen for NposSolution16 {
+	fn max_encoded_len() -> usize {
+		// TODO: https://github.com/paritytech/substrate/issues/10866
+		unimplemented!();
+	}
+}
 
 parameter_types! {
 	pub MaxNominations: u32 = <NposSolution16 as sp_npos_elections::NposSolution>::LIMIT as u32;
@@ -1421,6 +1484,11 @@ construct_runtime!(
 		ChildBounties: pallet_child_bounties,
 		Referenda: pallet_referenda,
 		ConvictionVoting: pallet_conviction_voting,
+		// Election pallet group. Order is important.
+		ElectionMultiBlock: election_multi_block,
+		ElectionVerifier: election_verifier::{Pallet, Call, Storage, Event<T>},
+		ElectionUnsigned: election_unsigned::{Pallet, Call, Storage, ValidateUnsigned},
+		ElectionSigned: election_signed::{Pallet, Call, Storage, Event<T>},
 	}
 );
 

@@ -4835,6 +4835,7 @@ dependencies = [
  "pallet-contracts-rpc-runtime-api",
  "pallet-conviction-voting",
  "pallet-democracy",
+ "pallet-election-provider-multi-block",
  "pallet-election-provider-multi-phase",
  "pallet-elections-phragmen",
  "pallet-gilt",

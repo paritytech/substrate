@@ -15,12 +15,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::convert::TryInto;
-
 use frame_support::{
 	BoundedVec, CloneNoBound, DefaultNoBound, EqNoBound, PartialEqNoBound, RuntimeDebugNoBound,
 };
-use sp_std::{collections::btree_set::BTreeSet, fmt::Debug};
+use sp_std::{collections::btree_set::BTreeSet, fmt::Debug, prelude::*};
 
 use crate::Verifier;
 use codec::{Decode, Encode, MaxEncodedLen};

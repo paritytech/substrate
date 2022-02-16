@@ -37,6 +37,7 @@ use frame_support::{
 use scale_info::TypeInfo;
 use sp_npos_elections::ElectionScore;
 use sp_runtime::traits::{Saturating, Zero};
+use sp_std::prelude::*;
 
 /// Exports of this pallet
 pub use pallet::*;
@@ -86,7 +87,7 @@ impl<T: Config> SolutionDataProvider for Pallet<T> {
 
 	fn report_result(result: crate::verifier::VerificationResult) {
 		// assumption of the trait.
-		debug_assert_eq!(<T::Verifier as AsynchronousVerifier>::status(), Status::Nothing);
+		debug_assert!(matches!(<T::Verifier as AsynchronousVerifier>::status(), Status::Nothing));
 
 		match result {
 			VerificationResult::Queued => {
@@ -105,7 +106,7 @@ impl<T: Config> SolutionDataProvider for Pallet<T> {
 
 					// For now, I will wipe everything on the spot, but in ideal case, we would do
 					// it over time.
-					// TODO: what we need a generic "StateGarbageCollector", to which you give a
+					// NOTE: what we need a generic "StateGarbageCollector", to which you give a
 					// bunch of storage keys, and it will clean them for you on_idle. It should just
 					// be able to accept one job at a time, and report back to you if it is done
 					// doing what it was doing, or not.
@@ -116,7 +117,8 @@ impl<T: Config> SolutionDataProvider for Pallet<T> {
 					}
 
 					// everything should have been clean.
-					debug_assert!(Submissions::<T>::ensure_killed().is_ok());
+					#[cfg(debug_assertions)]
+					assert!(Submissions::<T>::ensure_killed().is_ok());
 				}
 			},
 			VerificationResult::Rejected => {
@@ -134,7 +136,9 @@ impl<T: Config> SolutionDataProvider for Pallet<T> {
 					if crate::Pallet::<T>::current_phase().is_signed_validation() &&
 						Submissions::<T>::has_leader()
 					{
-						<T::Verifier as AsynchronousVerifier>::start();
+						// defensive: verifier just reported back a result, it must be in clear
+						// state.
+						let _ = <T::Verifier as AsynchronousVerifier>::start().defensive();
 					}
 				}
 			},
@@ -153,6 +157,7 @@ pub mod pallet {
 		dispatch::DispatchResultWithPostInfo,
 		pallet_prelude::{StorageDoubleMap, ValueQuery, *},
 		traits::{Defensive, EstimateCallFee, TryCollect},
+		transactional,
 	};
 	use frame_system::{ensure_signed, pallet_prelude::*};
 	use sp_runtime::traits::Zero;
@@ -188,10 +193,11 @@ pub mod pallet {
 	/// 2. [`SubmissionStorage`]: Paginated map of of all submissions, keyed by submitter and page.
 	/// 3. [`SubmissionMetadataStorage`]: Map from submitter to the metadata of their submission.
 	///
-	/// ### Consistency:
+	/// ### Invariants:
 	///
 	/// This storage group is sane, clean, and consistent if the following invariants are held:
 	///
+	/// - `SortedScores` should never contain duplicate account ids.
 	/// - For any key in `SubmissionMetadataStorage`, a corresponding value should exist in
 	/// `SortedScores` vector.
 	///       - And the value of `metadata.score` must be equal to the score stored in
@@ -231,7 +237,10 @@ pub mod pallet {
 		/// All mutating functions must be fulled through this bad boy.
 		fn mutate_checked<R, F: FnOnce() -> R>(mutate: F) -> R {
 			let result = mutate();
-			let _ = Self::sanity_check().defensive();
+
+			#[cfg(debug_assertions)]
+			assert!(Self::sanity_check().is_ok());
+
 			result
 		}
 
@@ -250,8 +259,18 @@ pub mod pallet {
 			})
 		}
 
-		// TODO: there's too much logic here, consider re-organizing it a bit better.
-		pub(crate) fn try_insert(
+		/// Try and register a new solution.
+		///
+		/// If a solution from `who` already exists, then it is updated to the new metadata, else it
+		/// is inserted. In the later case, submission might fail if there are already
+		fn try_register(
+			who: &T::AccountId,
+			metadata: SubmissionMetadata<T>,
+		) -> DispatchResultWithPostInfo {
+			Self::mutate_checked(|| Self::try_register_inner(who, metadata))
+		}
+
+		fn try_register_inner(
 			who: &T::AccountId,
 			metadata: SubmissionMetadata<T>,
 		) -> DispatchResultWithPostInfo {
@@ -266,6 +285,7 @@ pub mod pallet {
 			} else {
 				// must be new.
 				debug_assert!(!SubmissionMetadataStorage::<T>::contains_key(who));
+				// TODO: this is all flawed, we need a better ElectionScore here.
 				let pos = match sorted_scores
 					.binary_search_by_key(&metadata.claimed_score, |(_, y)| *y)
 				{
@@ -275,22 +295,10 @@ pub mod pallet {
 					// new score, should be inserted in this pos.
 					Err(pos) => pos,
 				};
-				// NOTE: we can check this a bit earlier.
 				sorted_scores
 					.try_insert(pos, (who.clone(), metadata.claimed_score))
 					.map_err::<DispatchError, _>(|_| "too many submissions".into())?;
 			}
-
-			// must contain no dupe account keys.
-			debug_assert_eq!(
-				sorted_scores
-					.clone()
-					.into_iter()
-					.map(|(x, _)| x)
-					.collect::<sp_std::collections::btree_set::BTreeSet<_>>()
-					.len(),
-				sorted_scores.len()
-			);
 
 			SortedScores::<T>::put(sorted_scores);
 			SubmissionMetadataStorage::<T>::insert(who, metadata);
@@ -355,22 +363,20 @@ pub mod pallet {
 		pub(crate) fn get_page_of(who: &T::AccountId, page: PageIndex) -> Option<T::Solution> {
 			SubmissionStorage::<T>::get(who, &page)
 		}
+	}
 
-		#[cfg(any(test, debug_assertions))]
-		pub(crate) fn submissions_iter(
-		) -> impl Iterator<Item = (T::AccountId, PageIndex, T::Solution)> {
+	#[cfg(debug_assertions)]
+	impl<T: Config> Submissions<T> {
+		pub fn submissions_iter() -> impl Iterator<Item = (T::AccountId, PageIndex, T::Solution)> {
 			SubmissionStorage::<T>::iter()
 		}
 
-		#[cfg(any(test, debug_assertions))]
-		pub(crate) fn metadata_iter() -> impl Iterator<Item = (T::AccountId, SubmissionMetadata<T>)>
-		{
+		pub fn metadata_iter() -> impl Iterator<Item = (T::AccountId, SubmissionMetadata<T>)> {
 			SubmissionMetadataStorage::<T>::iter()
 		}
 
 		/// Ensure that all the storage items managed by this struct are in `killed` state, meaning
 		/// that in the expect state after an election is OVER.
-		#[cfg(any(test, debug_assertions))]
 		pub(crate) fn ensure_killed() -> Result<(), &'static str> {
 			ensure!(Self::metadata_iter().count() == 0, "metadata_iter not cleared.");
 			ensure!(Self::submissions_iter().count() == 0, "submissions_iter not cleared.");
@@ -380,8 +386,18 @@ pub mod pallet {
 		}
 
 		/// Perform all the sanity checks of this storage item group.
-		#[cfg(any(test, debug_assertions))]
 		pub(crate) fn sanity_check() -> Result<(), &'static str> {
+			let sorted_scores = SortedScores::<T>::get();
+			assert_eq!(
+				sorted_scores
+					.clone()
+					.into_iter()
+					.map(|(x, _)| x)
+					.collect::<sp_std::collections::btree_set::BTreeSet<_>>()
+					.len(),
+				sorted_scores.len()
+			);
+
 			let _ = SubmissionMetadataStorage::<T>::iter()
 				.map(|(submitter, meta)| {
 					let mut matches = SortedScores::<T>::get()
@@ -389,7 +405,6 @@ pub mod pallet {
 						.filter(|(who, _score)| who == &submitter)
 						.collect::<Vec<_>>();
 
-					dbg!(&submitter, &meta, &matches);
 					ensure!(
 						matches.len() == 1,
 						"item existing in metadata but missing in sorted list.",
@@ -442,6 +457,7 @@ pub mod pallet {
 		/// If `who` already registered, it updates it. Else, a new a entry is added, if the bound
 		/// (`T::MaxSubmissions`) is not met yet.
 		#[pallet::weight(0)]
+		#[transactional]
 		pub fn register(
 			origin: OriginFor<T>,
 			claimed_score: ElectionScore,
@@ -458,8 +474,7 @@ pub mod pallet {
 			let new_metadata = SubmissionMetadata { claimed_score, deposit, reward, fee, pages };
 
 			T::Currency::reserve(&who, deposit).map_err(|_| "insufficient funds")?;
-
-			let _ = Submissions::<T>::try_insert(&who, new_metadata)?;
+			let _ = Submissions::<T>::try_register(&who, new_metadata)?;
 			Self::deposit_event(Event::<T>::Registered(who, claimed_score));
 			Ok(().into())
 		}
@@ -512,7 +527,9 @@ pub mod pallet {
 				);
 				// start an attempt to verify our best thing.
 				if Submissions::<T>::leader().is_some() {
-					<T::Verifier as AsynchronousVerifier>::start();
+					// defensive: signed phase has just began, verifier should be in a clear state
+					// and ready to accept a solution.
+					<T::Verifier as AsynchronousVerifier>::start().defensive();
 				}
 			}
 

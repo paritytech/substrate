@@ -265,34 +265,6 @@ pub use pallet::*;
 pub use types::*;
 pub use weights::WeightInfo;
 
-/// Configuration for the benchmarks of the pallet.
-pub trait BenchmarkingConfig {
-	/// Range of voters.
-	const VOTERS: [u32; 2];
-	/// Range of targets.
-	const TARGETS: [u32; 2];
-	/// Range of active voters.
-	const ACTIVE_VOTERS: [u32; 2];
-	/// Range of desired targets.
-	const DESIRED_TARGETS: [u32; 2];
-	/// Maximum number of voters expected. This is used only for memory-benchmarking of snapshot.
-	const SNAPSHOT_MAXIMUM_VOTERS: u32;
-	/// Maximum number of voters expected. This is used only for memory-benchmarking of miner.
-	const MINER_MAXIMUM_VOTERS: u32;
-	/// Maximum number of targets expected. This is used only for memory-benchmarking.
-	const MAXIMUM_TARGETS: u32;
-}
-
-impl BenchmarkingConfig for () {
-	const VOTERS: [u32; 2] = [4000, 6000];
-	const TARGETS: [u32; 2] = [1000, 1600];
-	const ACTIVE_VOTERS: [u32; 2] = [1000, 3000];
-	const DESIRED_TARGETS: [u32; 2] = [400, 800];
-	const SNAPSHOT_MAXIMUM_VOTERS: u32 = 10_000;
-	const MINER_MAXIMUM_VOTERS: u32 = 10_000;
-	const MAXIMUM_TARGETS: u32 = 2_000;
-}
-
 /// A fallback implementation that transitions the pallet to the emergency phase.
 pub struct InitiateEmergencyPhase<T>(sp_std::marker::PhantomData<T>);
 impl<T: Config> ElectionProvider for InitiateEmergencyPhase<T> {
@@ -396,7 +368,7 @@ pub mod pallet {
 	use crate::{
 		types::*,
 		verifier::{self},
-		AdminOperation, BenchmarkingConfig, WeightInfo,
+		AdminOperation, WeightInfo,
 	};
 	use frame_election_provider_support::{
 		ElectionDataProvider, ElectionProvider, NposSolution, PageIndex,
@@ -405,7 +377,7 @@ pub mod pallet {
 	use frame_system::pallet_prelude::*;
 	use sp_arithmetic::{traits::CheckedAdd, PerThing, UpperOf};
 	use sp_runtime::traits::{Hash, Saturating, Zero};
-	use sp_std::convert::TryInto;
+	use sp_std::{borrow::ToOwned, prelude::*};
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
@@ -481,9 +453,6 @@ pub mod pallet {
 
 		/// The origin that can perform administration operations on this pallet.
 		type AdminOrigin: EnsureOrigin<Self::Origin>;
-
-		/// The configuration of benchmarking.
-		type BenchmarkingConfig: BenchmarkingConfig;
 
 		/// The weight of the pallet.
 		type WeightInfo: WeightInfo;

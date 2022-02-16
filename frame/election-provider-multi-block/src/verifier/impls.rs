@@ -131,6 +131,9 @@ pub(crate) mod pallet {
 		///
 		/// In reality, this will be fulfilled by the signed phase.
 		type SolutionDataProvider: crate::verifier::SolutionDataProvider<Solution = Self::Solution>;
+
+		/// The weight information of this pallet.
+		type WeightInfo;
 	}
 
 	#[pallet::event]
@@ -195,7 +198,8 @@ pub(crate) mod pallet {
 		/// Private helper for mutating the storage group.
 		fn mutate_checked<R>(mutate: impl FnOnce() -> R) -> R {
 			let r = mutate();
-			let _ = Self::sanity_check().defensive();
+			#[cfg(debug_assertions)]
+			Self::sanity_check().is_ok();
 			r
 		}
 
@@ -780,7 +784,7 @@ impl<T: Config> Pallet<T> {
 		Ok(bounded_supports)
 	}
 
-	#[cfg(any(test, debug_assertions))]
+	#[cfg(debug_assertions)]
 	pub(crate) fn sanity_check() -> Result<(), &'static str> {
 		QueuedSolution::<T>::sanity_check()
 	}
@@ -849,7 +853,7 @@ impl<T: Config> AsynchronousVerifier for Pallet<T> {
 		Pallet::<T>::status_storage()
 	}
 
-	fn start() {
+	fn start() -> Result<(), &'static str> {
 		if let Status::Nothing = Self::status() {
 			let claimed_score = Self::SolutionDataProvider::get_score().unwrap_or_default();
 			if Self::ensure_score_quality(claimed_score).is_err() {
@@ -858,12 +862,16 @@ impl<T: Config> AsynchronousVerifier for Pallet<T> {
 					crate::Pallet::<T>::msp(),
 					FeasibilityError::ScoreTooLow,
 				));
-				T::SolutionDataProvider::report_result(VerificationResult::Rejected)
+				T::SolutionDataProvider::report_result(VerificationResult::Rejected);
+				// Despite being an instant-reject, this was a successful `start` operation.
+				Ok(())
 			} else {
 				StatusStorage::<T>::put(Status::Ongoing(crate::Pallet::<T>::msp()));
+				Ok(())
 			}
 		} else {
 			sublog!(warn, "verifier", "start signal received while busy. This will be ignored.");
+			Err("verification ongoing")
 		}
 	}
 
@@ -872,7 +880,8 @@ impl<T: Config> AsynchronousVerifier for Pallet<T> {
 
 		// we clear any ongoing solution's no been verified in any case, although this should only
 		// exist if we were doing something.
-		debug_assert!(
+		#[cfg(debug_assertions)]
+		assert!(
 			!matches!(StatusStorage::<T>::get(), Status::Ongoing(_)) ||
 				(matches!(StatusStorage::<T>::get(), Status::Ongoing(_)) &&
 					QueuedSolution::<T>::invalid_iter().count() > 0)

@@ -36,6 +36,7 @@ mod pallet {
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 	use sp_runtime::traits::SaturatedConversion;
+	use sp_std::prelude::*;
 
 	/// convert a DispatchError to a custom InvalidTransaction with the inner code being the error
 	/// number.
@@ -76,9 +77,6 @@ mod pallet {
 
 		/// The priority of the unsigned transaction submitted in the unsigned-phase
 		type MinerTxPriority: Get<TransactionPriority>;
-		/// Maximum number of iteration of balancing that will be executed in the embedded miner of
-		/// the pallet.
-		type MinerMaxIterations: Get<u32>;
 		/// Maximum weight that the miner should consume.
 		///
 		/// The miner will ensure that the total weight of the unsigned solution will not exceed

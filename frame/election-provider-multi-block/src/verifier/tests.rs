@@ -391,7 +391,7 @@ mod async_verification {
 
 			// nothing happens..
 			assert_eq!(VerifierPallet::status(), Status::Nothing);
-			<VerifierPallet as AsynchronousVerifier>::start();
+			assert_ok!(<VerifierPallet as AsynchronousVerifier>::start());
 			assert_eq!(VerifierPallet::status(), Status::Ongoing(2));
 
 			roll_next();
@@ -462,9 +462,8 @@ mod async_verification {
 
 			assert_eq!(VerifierPallet::status(), Status::Ongoing(2));
 
-			// TODO: this could return an error instead of just warning?
 			// nada
-			assert_storage_noop!(<VerifierPallet as AsynchronousVerifier>::start());
+			assert_noop!(<VerifierPallet as AsynchronousVerifier>::start(), "verification ongoing");
 
 			// now let it verify. first one goes fine.
 			roll_next();
@@ -473,7 +472,7 @@ mod async_verification {
 			assert_eq!(MockSignedResults::get(), vec![]);
 
 			// retry, still nada.
-			assert_storage_noop!(<VerifierPallet as AsynchronousVerifier>::start());
+			assert_noop!(<VerifierPallet as AsynchronousVerifier>::start(), "verification ongoing");
 		})
 	}
 
