@@ -4150,7 +4150,7 @@ mod election_data_provider {
 				// roll to session 5
 				run_to_block(25);
 
-				// slash 21, the only validator nominated by 61 and 21.
+				// slash 21, the only validator nominated by 61.
 				add_slash(&21);
 
 				// we take 4 voters; 71 and 81 are replacing the ejected ones.

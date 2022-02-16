@@ -655,8 +655,8 @@ impl<T: Config> Pallet<T> {
 	///
 	/// ### Slashing
 	///
-	/// All votes that have been submitted before the last non-zero slash of the corresponding target are
-	/// *auto-chilled*, but still count towards the limit imposed by `maybe_max_len`.
+	/// All votes that have been submitted before the last non-zero slash of the corresponding
+	/// target are *auto-chilled*, but still count towards the limit imposed by `maybe_max_len`.
 	pub fn get_npos_voters(maybe_max_len: Option<usize>) -> Vec<VoterOf<Self>> {
 		let max_allowed_len = {
 			let all_voter_count = T::SortedListProvider::count() as usize;
@@ -710,8 +710,8 @@ impl<T: Config> Pallet<T> {
 				// this can only happen if: 1. there a bug in the bags-list (or whatever is the
 				// sorted list) logic and the state of the two pallets is no longer compatible, or
 				// because the nominators is not decodable since they have more nomination than
-				// `T::MaxNominations`. The latter can rarely happen, and is not really an emergency or
-				// bug if it does.
+				// `T::MaxNominations`. The latter can rarely happen, and is not really an emergency
+				// or bug if it does.
 				log!(
 					warn,
 					"DEFENSIVE: invalid item in `SortedListProvider`: {:?}, this nominator probably has too many nominations now",
@@ -732,7 +732,7 @@ impl<T: Config> Pallet<T> {
 		log!(
 			info,
 			"generated {} npos voters, {} from validators and {} nominators",
-			voters_taken,
+			all_voters.len(),
 			validators_taken,
 			nominators_taken
 		);
