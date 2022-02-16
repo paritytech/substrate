@@ -1,6 +1,6 @@
 use super::*;
 use crate::Pallet as Pools;
-use frame_benchmarking::{account, whitelist_account};
+use frame_benchmarking::{account, whitelist_account, vec};
 use frame_system::RawOrigin as Origin;
 
 const USER_SEED: u32 = 0;

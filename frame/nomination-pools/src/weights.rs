@@ -14,24 +14,24 @@ pub trait WeightInfo {
 // For backwards compatibility and tests
 impl WeightInfo for () {
 	fn join() -> Weight {
-		Weight::MAX
+		0
 	}
 	fn claim_payout() -> Weight {
-		Weight::MAX
+		0
 	}
 	fn unbond_other() -> Weight {
-		Weight::MAX
+		0
 	}
 	fn pool_withdraw_unbonded() -> Weight {
-		Weight::MAX
+		0
 	}
 	fn withdraw_unbonded_other() -> Weight {
-		Weight::MAX
+		0
 	}
 	fn create() -> Weight {
-		Weight::MAX
+		0
 	}
 	fn nominate() -> Weight {
-		Weight::MAX
+		0
 	}
 }

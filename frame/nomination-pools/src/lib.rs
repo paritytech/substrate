@@ -373,8 +373,8 @@ pub enum PoolState {
 }
 
 /// Pool permissions and state
-#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, RuntimeDebugNoBound)]
-#[cfg_attr(feature = "std", derive(Clone, PartialEq))]
+#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, RuntimeDebugNoBound, PartialEq)]
+#[cfg_attr(feature = "std", derive(Clone))]
 #[codec(mel_bound(T: Config))]
 #[scale_info(skip_type_params(T))]
 struct BondedPoolStorage<T: Config> {
@@ -793,11 +793,21 @@ pub mod pallet {
 		CountedStorageMap<_, Twox64Concat, T::AccountId, SubPools<T>>;
 
 	#[pallet::genesis_config]
-	#[cfg_attr(feature = "std", derive(DefaultNoBound))]
 	pub struct GenesisConfig<T: Config> {
 		pub min_join_bond: BalanceOf<T>,
 		pub min_create_bond: BalanceOf<T>,
 		pub max_pools: Option<u32>,
+	}
+
+	#[cfg(feature = "std")]
+	impl<T: Config> Default for GenesisConfig<T> {
+		fn default() -> Self {
+			Self {
+				min_join_bond: Zero::zero(),
+				min_create_bond: Zero::zero(),
+				max_pools: Some(10),
+			}
+		}
 	}
 
 	#[pallet::genesis_build]
