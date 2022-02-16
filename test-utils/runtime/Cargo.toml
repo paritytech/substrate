@@ -48,7 +48,7 @@ sp-externalities = { version = "0.11.0", default-features = false, path = "../..
 # 3rd party
 cfg-if = "1.0"
 log = { version = "0.4.14", default-features = false }
-serde = { version = "1.0.132", optional = true, features = ["derive"] }
+serde = { version = "1.0.136", optional = true, features = ["derive"] }
 
 [dev-dependencies]
 sc-block-builder = { version = "0.10.0-dev", path = "../../client/block-builder" }

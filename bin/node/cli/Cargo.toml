@@ -36,7 +36,7 @@ crate-type = ["cdylib", "rlib"]
 # third-party dependencies
 clap = { version = "3.0", features = ["derive"], optional = true }
 codec = { package = "parity-scale-codec", version = "2.0.0" }
-serde = { version = "1.0.132", features = ["derive"] }
+serde = { version = "1.0.136", features = ["derive"] }
 futures = "0.3.16"
 hex-literal = "0.3.4"
 log = "0.4.8"
@@ -126,7 +126,7 @@ platforms = "2.0"
 async-std = { version = "1.10.0", features = ["attributes"] }
 soketto = "0.4.2"
 criterion = { version = "0.3.5", features = ["async_tokio"] }
-tokio = { version = "1.15", features = ["macros", "time"] }
+tokio = { version = "1.15", features = ["macros", "time", "parking_lot"] }
 jsonrpsee-ws-client = "0.4.1"
 wait-timeout = "0.2"
 remote-externalities = { path = "../../../utils/frame/remote-externalities" }

@@ -190,7 +190,7 @@ You will also need to install the following packages:
 
  - Linux:
 [source, shell]
-sudo apt install cmake pkg-config libssl-dev git clang libclang-dev
+sudo apt install cmake pkg-config libssl-dev git clang libclang-dev llvm
 
 - Linux on ARM:
 `rust-lld` is required for linking wasm, but is missing on non Tier 1 platforms.
