@@ -180,22 +180,7 @@ frame_benchmarking::benchmarks! {
 		clear_storage::<T>();
 
 		let min_create_bond = MinCreateBond::<T>::get().max(T::StakingInterface::minimum_bond());
-		let depositor = account("depositor", USER_SEED, 0);
-
-		// Create a pool
-		T::Currency::make_free_balance_be(&depositor, min_create_bond * 2u32.into());
-		assert_ok!(
-			Pools::<T>::create(
-				Origin::Signed(depositor.clone()).into(),
-				min_create_bond,
-				0,
-				depositor.clone(),
-				depositor.clone(),
-				depositor.clone()
-			)
-		);
-		// index 0 of the tuple is the key, the pool account
-		let pool_account = 	BondedPools::<T>::iter().next().unwrap().0;
+		let (depositor, pool_account) = create_pool_account::<T>(0, min_create_bond);
 
 		let reward_account = RewardPools::<T>::get(
 			pool_account
