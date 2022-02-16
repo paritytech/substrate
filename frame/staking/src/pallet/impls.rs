@@ -673,8 +673,9 @@ impl<T: Config> Pallet<T> {
 		let mut validators_taken = 0u32;
 		let mut nominators_taken = 0u32;
 
+		let mut sorted_voters = T::SortedListProvider::iter();
 		while all_voters.len() < max_allowed_len && voters_seen < (2 * max_allowed_len as u32) {
-			let voter = match T::SortedListProvider::iter().next() {
+			let voter = match sorted_voters.next() {
 				Some(voter) => {
 					voters_seen.saturating_inc();
 					voter
