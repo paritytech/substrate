@@ -51,15 +51,17 @@ impl<T: Config> OnRuntimeUpgrade for InjectValidatorsIntoSortedListProvider<T> {
 
 		let prev_count = T::SortedListProvider::count();
 		Self::set_temp_storage(prev_count, "prev");
+		Ok(())
 	}
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade() -> Result<(), &'static str> {
 		use frame_support::traits::OnRuntimeUpgradeHelpersExt;
 		let post_count = T::SortedListProvider::count();
-		let prev_count = Self::get_temp_storage::<u32>("prev");
+		let prev_count = Self::get_temp_storage::<u32>("prev").unwrap();
 		let validators = Validators::<T>::count();
 		assert!(post_count == prev_count + validators);
+		Ok(())
 	}
 }
 
