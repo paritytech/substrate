@@ -57,6 +57,7 @@ use scale_info::TypeInfo;
 
 pub mod curve;
 pub mod generic;
+pub mod legacy;
 mod multiaddress;
 pub mod offchain;
 pub mod runtime_logger;
