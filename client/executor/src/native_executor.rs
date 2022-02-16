@@ -560,9 +560,11 @@ impl<D: NativeExecutionDispatch + 'static> CodeExecutor for NativeElseWasmExecut
 						if !can_call_with {
 							trace!(
 								target: "executor",
-								"Request for native execution failed (native: {}, chain: {})",
+								"Request for native execution failed (native: {}, chain: {}) \
+								(method: {})",
 								self.native_version.runtime_version,
 								onchain_version,
+								method,
 							);
 						}
 
@@ -575,9 +577,10 @@ impl<D: NativeExecutionDispatch + 'static> CodeExecutor for NativeElseWasmExecut
 						trace!(
 							target: "executor",
 							"Request for native execution with native call succeeded \
-							(native: {}, chain: {}).",
+							(native: {}, chain: {}) (method: {}).",
 							self.native_version.runtime_version,
 							onchain_version,
+							method,
 						);
 
 						used_native = true;
@@ -589,9 +592,11 @@ impl<D: NativeExecutionDispatch + 'static> CodeExecutor for NativeElseWasmExecut
 					_ => {
 						trace!(
 							target: "executor",
-							"Request for native execution succeeded (native: {}, chain: {})",
+							"Request for native execution succeeded (native: {}, chain: {}) \
+							(method: {})",
 							self.native_version.runtime_version,
-							onchain_version
+							onchain_version,
+							method,
 						);
 
 						used_native = true;
