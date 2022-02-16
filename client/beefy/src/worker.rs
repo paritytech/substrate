@@ -19,7 +19,7 @@
 use std::{collections::BTreeSet, fmt::Debug, marker::PhantomData, sync::Arc};
 
 use codec::{Codec, Decode, Encode};
-use futures::{future, FutureExt, StreamExt};
+use futures::{channel::mpsc, future, FutureExt, StreamExt};
 use log::{debug, error, info, log_enabled, trace, warn};
 use parking_lot::Mutex;
 
@@ -91,6 +91,8 @@ where
 	beefy_best_block_sender: BeefyBestBlockSender<B>,
 	/// Validator set id for the last signed commitment
 	last_signed_id: u64,
+	waker_rx: mpsc::Receiver<()>,
+	waker_tx: mpsc::Sender<()>,
 	// keep rustc happy
 	_backend: PhantomData<BE>,
 }
@@ -121,6 +123,7 @@ where
 			metrics,
 		} = worker_params;
 
+		let (waker_tx, waker_rx) = mpsc::channel(10);
 		BeefyWorker {
 			client: client.clone(),
 			backend,
@@ -136,6 +139,8 @@ where
 			best_beefy_block: None,
 			last_signed_id: 0,
 			beefy_best_block_sender,
+			waker_rx,
+			waker_tx,
 			_backend: PhantomData,
 		}
 	}
@@ -246,6 +251,9 @@ where
 				self.rounds = Some(round::Rounds::new(active));
 
 				debug!(target: "beefy", "🥩 New Rounds for id: {:?}", id);
+
+				warn!(target: "beefy", "🥩 new session, waking up ticker");
+				let _ = self.waker_tx.try_send(());
 
 				self.set_best_beefy_block(
 					*notification.header.number(),
@@ -366,10 +374,16 @@ where
 					.notify(|| Ok::<_, ()>(signed_commitment))
 					.expect("forwards closure result; the closure always returns Ok; qed.");
 
+				warn!(target: "beefy", "🥩 round concluded, waking up ticker");
+				let _ = self.waker_tx.try_send(());
 
 				self.set_best_beefy_block(block_num, None);
 			}
 		}
+	}
+
+	fn tick(&mut self) {
+		warn!(target: "beefy", "🥩 TICK...");
 	}
 
 	fn set_best_beefy_block(
@@ -434,6 +448,9 @@ where
 						return;
 					}
 				},
+				_ = self.waker_rx.next().fuse() => {
+					self.tick();
+				},
 				_ = gossip_engine.fuse() => {
 					error!(target: "beefy", "🥩 Gossip engine has terminated.");
 					return;
@@ -442,6 +459,19 @@ where
 		}
 	}
 }
+
+// impl<B, C, BE> Stream for BeefyWorker<B, C, BE>
+// where
+// 	B: Block + Codec,
+// 	BE: Backend<B>,
+// 	C: Client<B, BE>,
+// 	C::Api: BeefyApi<B>,
+// {
+//     type Item = ();
+//     fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<()>> {
+//         unimplemented!()
+//     }
+// }
 
 /// Extract the MMR root hash from a digest in the given header, if it exists.
 fn find_mmr_root_digest<B, Id>(header: &B::Header) -> Option<MmrRootHash>
