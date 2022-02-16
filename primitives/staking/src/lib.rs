@@ -127,5 +127,5 @@ pub trait StakingInterface {
 
 	fn max_nominations() -> u32;
 
-	// fn setup_nominate_scenario() -> (Self::AccountId, Self::AccountId, Vec<Self::LookupSource>);
+	fn weight_update_worst_case(who: &Self::AccountId, is_increase: bool) -> u64;
 }

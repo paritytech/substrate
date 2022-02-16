@@ -85,6 +85,15 @@ impl sp_staking::StakingInterface for StakingMock {
 	fn max_nominations() -> u32 {
 		3
 	}
+
+	fn weight_update_worst_case(who: &Self::AccountId, is_increase: bool) -> u64 {
+		if is_increase {
+			u64::MAX / 2
+		} else {
+			MinCreateBond::<Runtime>::get()
+				.max(StakingMock::minimum_bond()).try_into().unwrap()
+		}
+	}
 }
 
 impl frame_system::Config for Runtime {
@@ -185,7 +194,7 @@ impl ExtBuilder {
 	}
 
 	pub(crate) fn build(self) -> sp_io::TestExternalities {
-		sp_tracing::try_init_simple();
+		// sp_tracing::try_init_simple();
 		let mut storage =
 			frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
 
@@ -251,13 +260,6 @@ pub(crate) fn unsafe_set_state(pool_account: &AccountId, state: PoolState) -> Re
 			bonded_pool.state = state;
 		})
 	})
-}
-
-pub(crate) fn clear_storage<T: Config>() {
-	BondedPools::<T>::remove_all();
-	RewardPools::<T>::remove_all();
-	SubPoolsStorage::<T>::remove_all();
-	Delegators::<T>::remove_all();
 }
 
 #[cfg(test)]

@@ -1379,4 +1379,9 @@ impl<T: Config> StakingInterface for Pallet<T> {
 	fn max_nominations() -> u32 {
 		T::MaxNominations::get()
 	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn weight_update_worst_case(who: &Self::AccountId, is_increase: bool) -> u64 {
+		T::SortedListProvider::weight_update_worst_case(who, is_increase)
+	}
 }
