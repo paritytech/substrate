@@ -231,8 +231,8 @@ benchmarks! {
 	// first time after a new schedule was deployed: For every new schedule a contract needs
 	// to re-run the instrumentation once.
 	reinstrument {
-		let c in 0 .. T::Schedule::get().limits.code_len / 1024;
-		let WasmModule { code, hash, .. } = WasmModule::<T>::sized(c * 1024, Location::Call);
+		let c in 0 .. T::Schedule::get().limits.code_len;
+		let WasmModule { code, hash, .. } = WasmModule::<T>::sized(c, Location::Call);
 		Contracts::<T>::store_code_raw(code, whitelisted_caller())?;
 		let schedule = T::Schedule::get();
 		let mut gas_meter = GasMeter::new(Weight::MAX);
@@ -241,15 +241,15 @@ benchmarks! {
 		Contracts::<T>::reinstrument_module(&mut module, &schedule)?;
 	}
 
-	// This benchmarks the overhead of loading a code of size `c` kb from storage and into
+	// This benchmarks the overhead of loading a code of size `c` byte from storage and into
 	// the sandbox. This does **not** include the actual execution for which the gas meter
 	// is responsible. This is achieved by generating all code to the `deploy` function
 	// which is in the wasm module but not executed on `call`.
 	// The results are supposed to be used as `call_with_code_kb(c) - call_with_code_kb(0)`.
-	call_with_code_kb {
-		let c in 0 .. T::Schedule::get().limits.code_len / 1024;
+	call_with_code_per_byte {
+		let c in 0 .. T::Schedule::get().limits.code_len;
 		let instance = Contract::<T>::with_caller(
-			whitelisted_caller(), WasmModule::sized(c * 1024, Location::Deploy), vec![],
+			whitelisted_caller(), WasmModule::sized(c, Location::Deploy), vec![],
 		)?;
 		let value = T::Currency::minimum_balance();
 		let origin = RawOrigin::Signed(instance.caller.clone());
@@ -271,13 +271,13 @@ benchmarks! {
 	// We cannot let `c` grow to the maximum code size because the code is not allowed
 	// to be larger than the maximum size **after instrumentation**.
 	instantiate_with_code {
-		let c in 0 .. Perbill::from_percent(49).mul_ceil(T::Schedule::get().limits.code_len) / 1024;
-		let s in 0 .. code::max_pages::<T>() * 64;
-		let salt = vec![42u8; (s * 1024) as usize];
+		let c in 0 .. Perbill::from_percent(49).mul_ceil(T::Schedule::get().limits.code_len);
+		let s in 0 .. code::max_pages::<T>() * 64 * 1024;
+		let salt = vec![42u8; s as usize];
 		let value = T::Currency::minimum_balance();
 		let caller = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, caller_funding::<T>());
-		let WasmModule { code, hash, .. } = WasmModule::<T>::sized(c * 1024, Location::Call);
+		let WasmModule { code, hash, .. } = WasmModule::<T>::sized(c, Location::Call);
 		let origin = RawOrigin::Signed(caller.clone());
 		let addr = Contracts::<T>::contract_address(&caller, &hash, &salt);
 	}: _(origin, value, Weight::MAX, None, code, vec![], salt)
@@ -299,8 +299,8 @@ benchmarks! {
 	// Instantiate uses a dummy contract constructor to measure the overhead of the instantiate.
 	// `s`: Size of the salt in kilobytes.
 	instantiate {
-		let s in 0 .. code::max_pages::<T>() * 64;
-		let salt = vec![42u8; (s * 1024) as usize];
+		let s in 0 .. code::max_pages::<T>() * 64 * 1024;
+		let salt = vec![42u8; s as usize];
 		let value = T::Currency::minimum_balance();
 		let caller = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, caller_funding::<T>());
@@ -360,10 +360,10 @@ benchmarks! {
 	// We cannot let `c` grow to the maximum code size because the code is not allowed
 	// to be larger than the maximum size **after instrumentation**.
 	upload_code {
-		let c in 0 .. Perbill::from_percent(50).mul_ceil(T::Schedule::get().limits.code_len / 1024);
+		let c in 0 .. Perbill::from_percent(50).mul_ceil(T::Schedule::get().limits.code_len);
 		let caller = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, caller_funding::<T>());
-		let WasmModule { code, hash, .. } = WasmModule::<T>::sized(c * 1024, Location::Call);
+		let WasmModule { code, hash, .. } = WasmModule::<T>::sized(c, Location::Call);
 		let origin = RawOrigin::Signed(caller.clone());
 	}: _(origin, code, None)
 	verify {
