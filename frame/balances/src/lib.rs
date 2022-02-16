@@ -579,12 +579,14 @@ pub mod pallet {
 				)
 			}
 
-			let endowed_accounts = self
+			let mut endowed_accounts = self
 				.balances
 				.iter()
 				.map(|(x, _)| x)
 				.cloned()
 				.collect::<Vec<_>>();
+			endowed_accounts.sort();
+			endowed_accounts.dedup();
 
 			assert!(
 				endowed_accounts.len() == self.balances.len(),

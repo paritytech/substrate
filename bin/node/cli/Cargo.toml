@@ -30,7 +30,7 @@ path = "bin/main.rs"
 required-features = ["cli"]
 
 [lib]
-crate-type = ["cdylib", "rlib"]
+#crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 # third-party dependencies

@@ -1096,6 +1096,33 @@ cfg_if! {
 				}
 			}
 
+			impl sp_finality_grandpa::GrandpaApi<Block> for Runtime {
+				fn grandpa_authorities() -> sp_finality_grandpa::AuthorityList {
+					Vec::new()
+				}
+
+				fn current_set_id() -> sp_finality_grandpa::SetId {
+					0
+				}
+
+				fn submit_report_equivocation_unsigned_extrinsic(
+					_equivocation_proof: sp_finality_grandpa::EquivocationProof<
+						<Block as BlockT>::Hash,
+						BlockNumber,
+					>,
+					_key_owner_proof: sp_finality_grandpa::OpaqueKeyOwnershipProof,
+				) -> Option<()> {
+					None
+				}
+
+				fn generate_key_ownership_proof(
+					_set_id: sp_finality_grandpa::SetId,
+					_authority_id: sp_finality_grandpa::AuthorityId,
+				) -> Option<sp_finality_grandpa::OpaqueKeyOwnershipProof> {
+					None
+				}
+			}
+
 			impl sp_consensus_babe::BabeApi<Block> for Runtime {
 				fn configuration() -> sp_consensus_babe::BabeGenesisConfiguration {
 					sp_consensus_babe::BabeGenesisConfiguration {
