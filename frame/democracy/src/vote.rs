@@ -128,10 +128,6 @@ impl<BlockNumber: Ord + Copy + Zero, Balance: Ord + Copy + Zero> PriorLock<Block
 			self.1 = Zero::zero();
 		}
 	}
-
-	pub fn new() -> Self {
-		Self(Zero::zero(), Zero::zero())
-	}
 }
 
 /// An indicator for what an account is doing; it can either be delegating or voting.

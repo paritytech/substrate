@@ -189,7 +189,7 @@ fn redelegation_keeps_lock() {
 		// Delegated vote is huge.
 		assert_eq!(tally(r), Tally { ayes: 121, nays: 0, turnout: 30 });
 
-		let mut prior_lock = vote::PriorLock::new();
+		let mut prior_lock = vote::PriorLock::default();
 
 		// Locked balance of delegator exists
 		assert_eq!(VotingOf::<Test>::get(2).locked_balance(), 20);
@@ -212,7 +212,7 @@ fn redelegation_keeps_lock() {
 		// Now unlock can remove the prior lock and reduce the locked amount.
 		assert_eq!(VotingOf::<Test>::get(2).prior(), &prior_lock);
 		assert_ok!(Democracy::unlock(Origin::signed(2), 2));
-		assert_eq!(VotingOf::<Test>::get(2).prior(), &vote::PriorLock::new());
+		assert_eq!(VotingOf::<Test>::get(2).prior(), &vote::PriorLock::default());
 		assert_eq!(VotingOf::<Test>::get(2).locked_balance(), 10);
 	});
 }
