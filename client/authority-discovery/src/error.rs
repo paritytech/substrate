@@ -38,7 +38,7 @@ pub enum Error {
 	#[error("Failed to hash the authority id to be used as a dht key.")]
 	HashingAuthorityId(#[from] libp2p::core::multiaddr::multihash::Error),
 
-	#[error("Failed calling into the Substrate runtime.")]
+	#[error("Failed calling into the Substrate runtime: {0}")]
 	CallingRuntime(#[from] sp_blockchain::Error),
 
 	#[error("Received a dht record with a key that does not match any in-flight awaited keys.")]

@@ -328,6 +328,9 @@ pub struct HostFnWeights<T: Config> {
 	/// Weight per overwritten byte of an item stored with `seal_set_storage`.
 	pub set_storage_per_old_byte: Weight,
 
+	/// Weight of calling `seal_set_code_hash`.
+	pub set_code_hash: Weight,
+
 	/// Weight of calling `seal_clear_storage`.
 	pub clear_storage: Weight,
 
@@ -358,23 +361,20 @@ pub struct HostFnWeights<T: Config> {
 	/// Weight of calling `seal_call`.
 	pub call: Weight,
 
+	/// Weight of calling `seal_delegate_call`.
+	pub delegate_call: Weight,
+
 	/// Weight surcharge that is claimed if `seal_call` does a balance transfer.
 	pub call_transfer_surcharge: Weight,
 
-	/// Weight per input byte supplied to `seal_call`.
-	pub call_per_input_byte: Weight,
-
-	/// Weight per output byte received through `seal_call`.
-	pub call_per_output_byte: Weight,
+	/// Weight per byte that is cloned by supplying the `CLONE_INPUT` flag.
+	pub call_per_cloned_byte: Weight,
 
 	/// Weight of calling `seal_instantiate`.
 	pub instantiate: Weight,
 
-	/// Weight per input byte supplied to `seal_instantiate`.
-	pub instantiate_per_input_byte: Weight,
-
-	/// Weight per output byte received through `seal_instantiate`.
-	pub instantiate_per_output_byte: Weight,
+	/// Weight surcharge that is claimed if `seal_instantiate` does a balance transfer.
+	pub instantiate_transfer_surcharge: Weight,
 
 	/// Weight per salt byte supplied to `seal_instantiate`.
 	pub instantiate_per_salt_byte: Weight,
@@ -603,6 +603,7 @@ impl<T: Config> Default for HostFnWeights<T> {
 			),
 			debug_message: cost_batched!(seal_debug_message),
 			set_storage: cost_batched!(seal_set_storage),
+			set_code_hash: cost_batched!(seal_set_code_hash),
 			set_storage_per_new_byte: cost_byte_batched!(seal_set_storage_per_new_kb),
 			set_storage_per_old_byte: cost_byte_batched!(seal_set_storage_per_old_kb),
 			clear_storage: cost_batched!(seal_clear_storage),
@@ -615,40 +616,17 @@ impl<T: Config> Default for HostFnWeights<T> {
 			take_storage_per_byte: cost_byte_batched!(seal_take_storage_per_kb),
 			transfer: cost_batched!(seal_transfer),
 			call: cost_batched!(seal_call),
-			call_transfer_surcharge: cost_batched_args!(
-				seal_call_per_transfer_input_output_kb,
-				1,
-				0,
-				0
-			),
-			call_per_input_byte: cost_byte_batched_args!(
-				seal_call_per_transfer_input_output_kb,
-				0,
-				1,
-				0
-			),
-			call_per_output_byte: cost_byte_batched_args!(
-				seal_call_per_transfer_input_output_kb,
-				0,
-				0,
-				1
-			),
+			delegate_call: cost_batched!(seal_delegate_call),
+			call_transfer_surcharge: cost_batched_args!(seal_call_per_transfer_clone_kb, 1, 0),
+			call_per_cloned_byte: cost_batched_args!(seal_call_per_transfer_clone_kb, 0, 1),
 			instantiate: cost_batched!(seal_instantiate),
-			instantiate_per_input_byte: cost_byte_batched_args!(
-				seal_instantiate_per_input_output_salt_kb,
-				1,
-				0,
-				0
-			),
-			instantiate_per_output_byte: cost_byte_batched_args!(
-				seal_instantiate_per_input_output_salt_kb,
-				0,
+			instantiate_transfer_surcharge: cost_byte_batched_args!(
+				seal_instantiate_per_transfer_salt_kb,
 				1,
 				0
 			),
 			instantiate_per_salt_byte: cost_byte_batched_args!(
-				seal_instantiate_per_input_output_salt_kb,
-				0,
+				seal_instantiate_per_transfer_salt_kb,
 				0,
 				1
 			),

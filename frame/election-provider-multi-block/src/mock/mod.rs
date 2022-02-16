@@ -169,6 +169,7 @@ impl crate::verifier::Config for Runtime {
 	type MaxBackersPerWinner = MaxBackersPerWinner;
 	type MaxWinnersPerPage = MaxWinnersPerPage;
 	type SolutionDataProvider = signed::DualSignedPhase;
+	type WeightInfo = ();
 }
 
 pub struct MockUnsignedWeightInfo;
@@ -624,10 +625,6 @@ pub fn raw_paged_solution_low_score() -> PagedRawSolution<Runtime> {
 		.try_into()
 		.unwrap(),
 		round: 0,
-		score: [
-			10,  // lowest staked
-			20,  // total staked
-			200, // sum of stakes squared
-		],
+		score: ElectionScore { minimal_stake: 10, sum_stake: 20, sum_stake_squared: 200 },
 	}
 }

@@ -18,27 +18,26 @@
 //! Means for splitting an imbalance into two and hanlding them differently.
 
 use super::super::imbalance::{Imbalance, OnUnbalanced};
-use sp_core::u32_trait::Value as U32;
 use sp_runtime::traits::Saturating;
 use sp_std::{marker::PhantomData, ops::Div};
 
 /// Split an unbalanced amount two ways between a common divisor.
-pub struct SplitTwoWays<Balance, Imbalance, Part1, Target1, Part2, Target2>(
-	PhantomData<(Balance, Imbalance, Part1, Target1, Part2, Target2)>,
+pub struct SplitTwoWays<Balance, Imbalance, Target1, Target2, const PART1: u32, const PART2: u32>(
+	PhantomData<(Balance, Imbalance, Target1, Target2)>,
 );
 
 impl<
 		Balance: From<u32> + Saturating + Div<Output = Balance>,
 		I: Imbalance<Balance>,
-		Part1: U32,
 		Target1: OnUnbalanced<I>,
-		Part2: U32,
 		Target2: OnUnbalanced<I>,
-	> OnUnbalanced<I> for SplitTwoWays<Balance, I, Part1, Target1, Part2, Target2>
+		const PART1: u32,
+		const PART2: u32,
+	> OnUnbalanced<I> for SplitTwoWays<Balance, I, Target1, Target2, PART1, PART2>
 {
 	fn on_nonzero_unbalanced(amount: I) {
-		let total: u32 = Part1::VALUE + Part2::VALUE;
-		let amount1 = amount.peek().saturating_mul(Part1::VALUE.into()) / total.into();
+		let total: u32 = PART1 + PART2;
+		let amount1 = amount.peek().saturating_mul(PART1.into()) / total.into();
 		let (imb1, imb2) = amount.split(amount1);
 		Target1::on_unbalanced(imb1);
 		Target2::on_unbalanced(imb2);

@@ -693,6 +693,44 @@ fn deploy_and_call_other_contract() {
 }
 
 #[test]
+#[cfg(feature = "unstable-interface")]
+fn delegate_call() {
+	let (caller_wasm, caller_code_hash) = compile_module::<Test>("delegate_call").unwrap();
+	let (callee_wasm, callee_code_hash) = compile_module::<Test>("delegate_call_lib").unwrap();
+	let caller_addr = Contracts::contract_address(&ALICE, &caller_code_hash, &[]);
+
+	ExtBuilder::default().existential_deposit(500).build().execute_with(|| {
+		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+
+		// Instantiate the 'caller'
+		assert_ok!(Contracts::instantiate_with_code(
+			Origin::signed(ALICE),
+			300_000,
+			GAS_LIMIT,
+			None,
+			caller_wasm,
+			vec![],
+			vec![],
+		));
+		// Only upload 'callee' code
+		assert_ok!(Contracts::upload_code(
+			Origin::signed(ALICE),
+			callee_wasm,
+			Some(codec::Compact(100_000)),
+		));
+
+		assert_ok!(Contracts::call(
+			Origin::signed(ALICE),
+			caller_addr.clone(),
+			1337,
+			GAS_LIMIT,
+			None,
+			callee_code_hash.as_ref().to_vec(),
+		));
+	});
+}
+
+#[test]
 fn cannot_self_destruct_through_draning() {
 	let (wasm, code_hash) = compile_module::<Test>("drain").unwrap();
 	ExtBuilder::default().existential_deposit(200).build().execute_with(|| {
@@ -1960,7 +1998,7 @@ fn reinstrument_does_charge() {
 		assert!(result2.gas_consumed > result1.gas_consumed);
 		assert_eq!(
 			result2.gas_consumed,
-			result1.gas_consumed + <Test as Config>::WeightInfo::reinstrument(code_len / 1024),
+			result1.gas_consumed + <Test as Config>::WeightInfo::reinstrument(code_len),
 		);
 	});
 }
@@ -2982,6 +3020,67 @@ fn code_rejected_error_works() {
 		assert_eq!(
 			std::str::from_utf8(&result.debug_message).unwrap(),
 			"module imports a non-existent function"
+		);
+	});
+}
+
+#[test]
+#[cfg(feature = "unstable-interface")]
+fn set_code_hash() {
+	let (wasm, code_hash) = compile_module::<Test>("set_code_hash").unwrap();
+	let (new_wasm, new_code_hash) = compile_module::<Test>("new_set_code_hash_contract").unwrap();
+
+	let contract_addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
+
+	ExtBuilder::default().existential_deposit(100).build().execute_with(|| {
+		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+
+		// Instantiate the 'caller'
+		assert_ok!(Contracts::instantiate_with_code(
+			Origin::signed(ALICE),
+			300_000,
+			GAS_LIMIT,
+			None,
+			wasm,
+			vec![],
+			vec![],
+		));
+		// upload new code
+		assert_ok!(Contracts::upload_code(Origin::signed(ALICE), new_wasm.clone(), None));
+
+		// First call sets new code_hash and returns 1
+		let result = Contracts::bare_call(
+			ALICE,
+			contract_addr.clone(),
+			0,
+			GAS_LIMIT,
+			None,
+			new_code_hash.as_ref().to_vec(),
+			true,
+		)
+		.result
+		.unwrap();
+		assert_return_code!(result, 1);
+
+		// Second calls new contract code that returns 2
+		let result =
+			Contracts::bare_call(ALICE, contract_addr.clone(), 0, GAS_LIMIT, None, vec![], true)
+				.result
+				.unwrap();
+		assert_return_code!(result, 2);
+
+		// Checking for the last event only
+		assert_eq!(
+			System::events().pop().unwrap(),
+			EventRecord {
+				phase: Phase::Initialization,
+				event: Event::Contracts(crate::Event::ContractCodeUpdated {
+					contract: contract_addr.clone(),
+					new_code_hash: new_code_hash.clone(),
+					old_code_hash: code_hash.clone(),
+				}),
+				topics: vec![],
+			},
 		);
 	});
 }

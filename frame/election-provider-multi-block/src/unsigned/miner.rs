@@ -1227,7 +1227,10 @@ mod base_miner {
 
 			// NOTE: this is the same as the score of any other test that contains the first 8
 			// voters, we already test for this in `pagination_does_not_affect_score`.
-			assert_eq!(paged.score, [30, 70, 2500]);
+			assert_eq!(
+				paged.score,
+				ElectionScore { minimal_stake: 30, sum_stake: 70, sum_stake_squared: 2500 }
+			);
 		})
 	}
 
@@ -1310,7 +1313,10 @@ mod base_miner {
 				.unwrap()
 			);
 
-			assert_eq!(paged.score, [30, 70, 2500]);
+			assert_eq!(
+				paged.score,
+				ElectionScore { minimal_stake: 30, sum_stake: 70, sum_stake_squared: 2500 }
+			);
 		})
 	}
 
@@ -1398,7 +1404,10 @@ mod base_miner {
 				.unwrap()
 			);
 
-			assert_eq!(paged.score, [55, 130, 8650]);
+			assert_eq!(
+				paged.score,
+				ElectionScore { minimal_stake: 55, sum_stake: 130, sum_stake_squared: 8650 }
+			);
 		})
 	}
 
@@ -1466,7 +1475,10 @@ mod base_miner {
 				.unwrap()
 			);
 
-			assert_eq!(paged.score, [15, 40, 850]);
+			assert_eq!(
+				paged.score,
+				ElectionScore { minimal_stake: 15, sum_stake: 40, sum_stake_squared: 850 }
+			);
 		})
 	}
 
@@ -1562,7 +1574,10 @@ mod base_miner {
 				.unwrap()
 			);
 
-			assert_eq!(paged.score, [30, 70, 2500]);
+			assert_eq!(
+				paged.score,
+				ElectionScore { minimal_stake: 30, sum_stake: 70, sum_stake_squared: 2500 }
+			);
 		})
 	}
 

@@ -21,6 +21,7 @@ use crate::{helpers, SolutionOf, SupportsOf};
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_election_provider_support::{ExtendedBalance, PageIndex, TryIntoBoundedSupports};
 use sp_npos_elections::{ElectionScore, EvaluateSupport, NposSolution};
+use sp_runtime::Perbill;
 use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 
 use super::*;
@@ -415,14 +416,10 @@ pub(crate) mod pallet {
 		pub(crate) fn sanity_check() -> Result<(), &'static str> {
 			// score is correct and better than min-score.
 			ensure!(
-				Pallet::<T>::minimum_score().zip(Self::queued_score()).map_or(
-					true,
-					|(min_score, score)| sp_npos_elections::is_score_better(
-						score,
-						min_score,
-						Perbill::zero(),
-					)
-				),
+				Pallet::<T>::minimum_score()
+					.zip(Self::queued_score())
+					.map_or(true, |(min_score, score)| score
+						.strict_threshold_better(min_score, Perbill::zero())),
 				"queued solution has weak score (min-score)"
 			);
 
@@ -679,17 +676,12 @@ impl<T: Config> Pallet<T> {
 	/// - greater than the minimum untrusted score.
 	pub(crate) fn ensure_score_quality(score: ElectionScore) -> Result<(), FeasibilityError> {
 		let is_improvement = <Self as Verifier>::queued_score().map_or(true, |best_score| {
-			sp_npos_elections::is_score_better::<sp_runtime::Perbill>(
-				score,
-				best_score,
-				T::SolutionImprovementThreshold::get(),
-			)
+			score.strict_threshold_better(best_score, T::SolutionImprovementThreshold::get())
 		});
 		ensure!(is_improvement, FeasibilityError::ScoreTooLow);
 
-		let is_greater_than_min_trusted = Self::minimum_score().map_or(true, |min_score| {
-			sp_npos_elections::is_score_better(score, min_score, sp_runtime::Perbill::zero())
-		});
+		let is_greater_than_min_trusted = Self::minimum_score()
+			.map_or(true, |min_score| score.strict_threshold_better(min_score, Perbill::zero()));
 		ensure!(is_greater_than_min_trusted, FeasibilityError::ScoreTooLow);
 
 		Ok(())

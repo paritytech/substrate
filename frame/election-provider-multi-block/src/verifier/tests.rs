@@ -537,7 +537,7 @@ mod async_verification {
 				solution_from_supports(vec![(10, Support { total: 10, voters: vec![(1, 10)] })], 2);
 			let weak_paged = PagedRawSolution::<Runtime> {
 				solution_pages: bounded_vec![weak_page_partial],
-				score: [10, 10, 100],
+				score: ElectionScore { minimal_stake: 10, sum_stake: 10, sum_stake_squared: 100 },
 				..Default::default()
 			};
 
@@ -577,7 +577,7 @@ mod async_verification {
 			);
 			let weak_paged = PagedRawSolution::<Runtime> {
 				solution_pages: bounded_vec![weak_page_partial],
-				score: [10, 20, 200],
+				score: ElectionScore { minimal_stake: 10, sum_stake: 20, sum_stake_squared: 200 },
 				..Default::default()
 			};
 
@@ -626,7 +626,7 @@ mod async_verification {
 			let mut paged = mine_full_solution().unwrap();
 
 			// just tweak score.
-			paged.score[0] += 1;
+			paged.score.minimal_stake += 1;
 			assert!(<VerifierPallet as Verifier>::queued_score().is_none());
 
 			load_mock_signed_and_start(paged);
@@ -656,7 +656,7 @@ mod async_verification {
 
 			// our minimum score is our score, just a bit better.
 			let mut better_score = paged.score.clone();
-			better_score[0] += 1;
+			better_score.minimal_stake += 1;
 			<VerifierPallet as Verifier>::set_minimum_score(better_score);
 
 			load_mock_signed_and_start(paged);
@@ -731,7 +731,11 @@ mod async_verification {
 				);
 				let paged = PagedRawSolution {
 					solution_pages: bounded_vec![page0, page1, page2],
-					score: [30, 30, 900],
+					score: ElectionScore {
+						minimal_stake: 30,
+						sum_stake: 30,
+						sum_stake_squared: 900,
+					},
 					..Default::default()
 				};
 
@@ -774,7 +778,7 @@ mod async_verification {
 
 			// just tweak score. Note that we tweak for a higher score, so the verifier will accept
 			// it.
-			paged.score[0] += 1;
+			paged.score.minimal_stake += 1;
 			load_mock_signed_and_start(paged.clone());
 			roll_to_full_verification();
 
@@ -811,6 +815,7 @@ mod async_verification {
 mod sync_verification {
 	use frame_election_provider_support::Support;
 	use frame_support::bounded_vec;
+	use sp_npos_elections::ElectionScore;
 	use sp_runtime::Perbill;
 
 	use crate::{
@@ -919,7 +924,7 @@ mod sync_verification {
 
 			let single_page = mine_solution(1).unwrap();
 			let mut score_incorrect = single_page.score;
-			score_incorrect[0] += 1;
+			score_incorrect.minimal_stake += 1;
 
 			assert_eq!(
 				<VerifierPallet as Verifier>::verify_synchronous(
@@ -947,7 +952,7 @@ mod sync_verification {
 
 			// raise the bar such that we don't meet it.
 			let mut unattainable_score = single_page.score;
-			unattainable_score[0] += 1;
+			unattainable_score.minimal_stake += 1;
 
 			<VerifierPallet as Verifier>::set_minimum_score(unattainable_score);
 
@@ -1038,8 +1043,8 @@ mod sync_verification {
 				// the slightly better solution need not even be correct. We improve it by 5%, but
 				// we need 10%.
 				let mut better_score = single_page.score;
-				let improvement = Perbill::from_percent(5) * better_score[0];
-				better_score[0] += improvement;
+				let improvement = Perbill::from_percent(5) * better_score.minimal_stake;
+				better_score.minimal_stake += improvement;
 				let slightly_better = fake_solution(better_score);
 
 				assert_eq!(
@@ -1072,7 +1077,7 @@ mod sync_verification {
 			// now try and submit that's really weak. Doesn't even need to be valid, since the score
 			// is checked first.
 			let mut bad_score = single_page.score;
-			bad_score[0] -= 1;
+			bad_score.minimal_stake -= 1;
 			let weak = fake_solution(bad_score);
 
 			assert_eq!(
@@ -1111,7 +1116,7 @@ mod sync_verification {
 
 			let weak_paged = PagedRawSolution::<Runtime> {
 				solution_pages: bounded_vec![weak_solution],
-				score: [10, 20, 200],
+				score: ElectionScore { minimal_stake: 10, sum_stake: 20, sum_stake_squared: 200 },
 				..Default::default()
 			};
 
@@ -1172,7 +1177,7 @@ mod sync_verification {
 			);
 			let weak_paged = PagedRawSolution::<Runtime> {
 				solution_pages: bounded_vec![weak_solution],
-				score: [10, 20, 200],
+				score: ElectionScore { minimal_stake: 10, sum_stake: 20, sum_stake_squared: 200 },
 				..Default::default()
 			};
 
