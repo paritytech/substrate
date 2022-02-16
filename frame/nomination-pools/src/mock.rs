@@ -86,7 +86,7 @@ impl sp_staking::StakingInterface for StakingMock {
 		3
 	}
 
-	fn weight_update_worst_case(who: &Self::AccountId, is_increase: bool) -> u64 {
+	fn weight_update_worst_case(_: &Self::AccountId, is_increase: bool) -> u64 {
 		if is_increase {
 			u64::MAX / 2
 		} else {

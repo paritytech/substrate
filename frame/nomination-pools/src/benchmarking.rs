@@ -29,8 +29,6 @@ fn create_pool_account<T: Config>(n: u32, balance: BalanceOf<T>) -> (T::AccountI
 	let pool_creator: T::AccountId =
 		create_funded_user_with_balance::<T>("pool_creator", n, balance * 2u32.into());
 
-	println!("ZZZZ min_create_bond {:?}", MinCreateBond::<T>::get());
-	println!("ZZZZ origin weight balance {:?}", balance);
 	Pools::<T>::create(
 		Origin::Signed(pool_creator.clone()).into(),
 		balance,
@@ -42,7 +40,7 @@ fn create_pool_account<T: Config>(n: u32, balance: BalanceOf<T>) -> (T::AccountI
 	.unwrap();
 
 	let (pool_account, _) = BondedPools::<T>::iter()
-		.find(|(pool_account, bonded_pool)| bonded_pool.depositor == pool_creator)
+		.find(|(_, bonded_pool)| bonded_pool.depositor == pool_creator)
 		.expect("pool_creator created a pool above");
 
 	(pool_creator, pool_account)
@@ -86,10 +84,6 @@ impl<T: Config> ListScenario<T> {
 		let i = T::Currency::burn(T::Currency::total_issuance());
 		sp_std::mem::forget(i);
 
-		let min_create_bond = MinCreateBond::<T>::get();
-		println!("min_create_bond {:?}", min_create_bond);
-		println!("origin weight {:?}", origin_weight);
-
 		// create accounts with the origin weight
 		let (_, pool_origin1) = create_pool_account::<T>(USER_SEED + 2, origin_weight);
 		T::StakingInterface::nominate(
@@ -107,9 +101,6 @@ impl<T: Config> ListScenario<T> {
 		// find a destination weight that will trigger the worst case scenario
 		let dest_weight_as_vote =
 			T::StakingInterface::weight_update_worst_case(&pool_origin1, is_increase);
-
-		println!("is_increase {:?}", is_increase);
-		println!("dest_weight_as_vote {:?}", dest_weight_as_vote);
 
 		let dest_weight: BalanceOf<T> =
 			dest_weight_as_vote.try_into().map_err(|_| "could not convert u64 to Balance")?;
@@ -236,35 +227,35 @@ frame_benchmarking::benchmarks! {
 		);
 	}
 
-	// unbond_other {
-	// 	clear_storage::<T>();
-	// 	// let depositor = account("depositor", USER_SEED, 0);
+	unbond_other {
+		clear_storage::<T>();
+		// let depositor = account("depositor", USER_SEED, 0);
 
-	// 	// the weight the nominator will start at. The value used here is expected to be
-	// 	// significantly higher than the first position in a list (e.g. the first bag threshold).
-	// 	let origin_weight = BalanceOf::<T>::try_from(952_994_955_240_703u128)
-	// 		.map_err(|_| "balance expected to be a u128")
-	// 		.unwrap();
-	// 	let scenario = ListScenario::<T>::new(origin_weight, false)?;
+		// the weight the nominator will start at. The value used here is expected to be
+		// significantly higher than the first position in a list (e.g. the first bag threshold).
+		let origin_weight = BalanceOf::<T>::try_from(952_994_955_240_703u128)
+			.map_err(|_| "balance expected to be a u128")
+			.unwrap();
+		let scenario = ListScenario::<T>::new(origin_weight, false)?;
 
-	// 	let amount = origin_weight - scenario.dest_weight.clone();
+		let amount = origin_weight - scenario.dest_weight.clone();
 
-	// 	let scenario = scenario.add_joiner(amount);
+		let scenario = scenario.add_joiner(amount);
 
-	// 	let delegator = scenario.origin1_delegator.unwrap().clone();
-	// }: _(Origin::Signed(delegator.clone()), delegator.clone())
-	// verify {
-	// 	assert!(
-	// 		T::StakingInterface::bonded_balance(&scenario.origin1).unwrap()
-	// 		<= scenario.dest_weight.clone()
-	// 	);
-	// }
+		let delegator = scenario.origin1_delegator.unwrap().clone();
+	}: _(Origin::Signed(delegator.clone()), delegator.clone())
+	verify {
+		assert!(
+			T::StakingInterface::bonded_balance(&scenario.origin1).unwrap()
+			<= scenario.dest_weight.clone()
+		);
+	}
 
-	// pool_withdraw_unbonded {
+	pool_withdraw_unbonded {
 
-	// }: {
+	}: {
 
-	// }
+	}
 
 	withdraw_unbonded_other {}: {}
 
