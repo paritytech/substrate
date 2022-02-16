@@ -28,6 +28,9 @@ fn create_funded_user_with_balance<T: Config>(
 fn create_pool_account<T: Config>(n: u32, balance: BalanceOf<T>) -> (T::AccountId, T::AccountId) {
 	let pool_creator: T::AccountId =
 		create_funded_user_with_balance::<T>("pool_creator", n, balance * 2u32.into());
+
+	println!("ZZZZ min_create_bond {:?}", MinCreateBond::<T>::get());
+	println!("ZZZZ origin weight balance {:?}", balance);
 	Pools::<T>::create(
 		Origin::Signed(pool_creator.clone()).into(),
 		balance,
@@ -105,6 +108,9 @@ impl<T: Config> ListScenario<T> {
 		let dest_weight_as_vote =
 			T::StakingInterface::weight_update_worst_case(&pool_origin1, is_increase);
 
+		println!("is_increase {:?}", is_increase);
+		println!("dest_weight_as_vote {:?}", dest_weight_as_vote);
+
 		let dest_weight: BalanceOf<T> =
 			dest_weight_as_vote.try_into().map_err(|_| "could not convert u64 to Balance")?;
 
@@ -137,20 +143,14 @@ impl<T: Config> ListScenario<T> {
 		T::StakingInterface::unbond(self.origin1.clone(), amount).unwrap();
 
 		// Account pool points for the unbonded balance
-		BondedPools::<T>::mutate(&self.origin1, |maybe_pool|
+		BondedPools::<T>::mutate(&self.origin1, |maybe_pool| {
 			maybe_pool.as_mut().map(|pool| pool.points -= amount)
-		);
+		});
 
-		Pools::<T>::join(
-			Origin::Signed(joiner.clone()).into(),
-			amount,
-			self.origin1.clone()
-		)
-		.unwrap();
+		Pools::<T>::join(Origin::Signed(joiner.clone()).into(), amount, self.origin1.clone())
+			.unwrap();
 
-		assert_eq!(
-			T::StakingInterface::bonded_balance(&self.origin1).unwrap(), current_bonded
-		);
+		assert_eq!(T::StakingInterface::bonded_balance(&self.origin1).unwrap(), current_bonded);
 
 		self
 	}
@@ -161,46 +161,29 @@ frame_benchmarking::benchmarks! {
 		// TODO this needs to be bond_extra worst case
 		clear_storage::<T>();
 
-		let min_create_bond = MinCreateBond::<T>::get().max(T::StakingInterface::minimum_bond());
-		let depositor = account("depositor", USER_SEED, 0);
+		let origin_weight = MinCreateBond::<T>::get().max(T::Currency::minimum_balance()) * 2u32.into();
 
-		// Create a pool
-		T::Currency::make_free_balance_be(&depositor, min_create_bond * 2u32.into());
-		assert_ok!(
-			Pools::<T>::create(
-				Origin::Signed(depositor.clone()).into(),
-				min_create_bond,
-				0,
-				depositor.clone(),
-				depositor.clone(),
-				depositor.clone()
-			)
+		// setup the worst case list scenario.
+
+		// the weight the nominator will start at.
+		let scenario = ListScenario::<T>::new(origin_weight, true)?;
+		assert_eq!(
+			T::StakingInterface::bonded_balance(&scenario.origin1).unwrap(),
+			origin_weight
 		);
-		// index 0 of the tuple is the key, the pool account
-		let pool_account = 	BondedPools::<T>::iter().next().unwrap().0;
 
-		// Create the account that will join the pool
-		let joiner = account("joiner", USER_SEED, 0);
-		let min_join_bond = MinJoinBond::<T>::get().max(T::Currency::minimum_balance());
-		// and give it some funds.
-		T::Currency::make_free_balance_be(&joiner, min_join_bond * 2u32.into());
+		let max_additional = scenario.dest_weight.clone() - origin_weight;
+
+		let joiner: T::AccountId
+			= create_funded_user_with_balance::<T>("joiner", 0, max_additional * 2u32.into());
 
 		whitelist_account!(joiner);
-	}: _(Origin::Signed(joiner.clone()), min_join_bond, pool_account.clone())
+	}: _(Origin::Signed(joiner.clone()), max_additional, scenario.origin1.clone())
 	verify {
-		assert_eq!(T::Currency::free_balance(&joiner), min_join_bond);
-		assert_eq!(T::StakingInterface::bonded_balance(&pool_account), Some(min_join_bond + min_create_bond));
+		assert_eq!(T::Currency::free_balance(&joiner), max_additional);
 		assert_eq!(
-			BondedPool::<T>::get(&pool_account).unwrap(),
-			BondedPool {
-				account: pool_account,
-				points: min_join_bond + min_create_bond,
-				depositor: depositor.clone(),
-				root: depositor.clone(),
-				nominator: depositor.clone(),
-				state_toggler: depositor.clone(),
-				state: PoolState::Open,
-			}
+			T::StakingInterface::bonded_balance(&scenario.origin1).unwrap(),
+			scenario.dest_weight
 		);
 	}
 
@@ -253,36 +236,36 @@ frame_benchmarking::benchmarks! {
 		);
 	}
 
-	unbond_other {
-		clear_storage::<T>();
-		// let depositor = account("depositor", USER_SEED, 0);
+	// unbond_other {
+	// 	clear_storage::<T>();
+	// 	// let depositor = account("depositor", USER_SEED, 0);
 
-		// the weight the nominator will start at. The value used here is expected to be
-		// significantly higher than the first position in a list (e.g. the first bag threshold).
-		let origin_weight = BalanceOf::<T>::try_from(952_994_955_240_703u128)
-			.map_err(|_| "balance expected to be a u128")
-			.unwrap();
-		let scenario = ListScenario::<T>::new(origin_weight, false)?;
+	// 	// the weight the nominator will start at. The value used here is expected to be
+	// 	// significantly higher than the first position in a list (e.g. the first bag threshold).
+	// 	let origin_weight = BalanceOf::<T>::try_from(952_994_955_240_703u128)
+	// 		.map_err(|_| "balance expected to be a u128")
+	// 		.unwrap();
+	// 	let scenario = ListScenario::<T>::new(origin_weight, false)?;
 
-		let amount = origin_weight - scenario.dest_weight.clone();
+	// 	let amount = origin_weight - scenario.dest_weight.clone();
 
-		let scenario = scenario.add_joiner(amount);
+	// 	let scenario = scenario.add_joiner(amount);
 
-		let delegator = scenario.origin1_delegator.unwrap().clone();
-	}: _(Origin::Signed(delegator.clone()), delegator.clone())
-	verify {
-		assert!(
-			T::StakingInterface::bonded_balance(&scenario.origin1).unwrap()
-			<= scenario.dest_weight.clone()
-		);
-	}
+	// 	let delegator = scenario.origin1_delegator.unwrap().clone();
+	// }: _(Origin::Signed(delegator.clone()), delegator.clone())
+	// verify {
+	// 	assert!(
+	// 		T::StakingInterface::bonded_balance(&scenario.origin1).unwrap()
+	// 		<= scenario.dest_weight.clone()
+	// 	);
+	// }
 
-	pool_withdraw_unbonded {
+	// pool_withdraw_unbonded {
 
-	}: {
+	// }: {
 
-	}
-	
+	// }
+
 	withdraw_unbonded_other {}: {}
 
 	create {

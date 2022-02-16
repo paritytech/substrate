@@ -91,7 +91,9 @@ impl sp_staking::StakingInterface for StakingMock {
 			u64::MAX / 2
 		} else {
 			MinCreateBond::<Runtime>::get()
-				.max(StakingMock::minimum_bond()).try_into().unwrap()
+				.max(StakingMock::minimum_bond())
+				.try_into()
+				.unwrap()
 		}
 	}
 }
