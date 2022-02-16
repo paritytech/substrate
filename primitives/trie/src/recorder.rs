@@ -109,7 +109,7 @@ where
 {
 	fn record<'a>(&mut self, access: TrieAccess<'a, H>) {
 		match access {
-			TrieAccess::Key(key) => {
+			TrieAccess::Key { key, value } => {
 				self.accessed_keys.insert(key.into());
 			},
 			TrieAccess::NodeOwned { hash, node_owned } => {
@@ -120,7 +120,7 @@ where
 					.entry(hash)
 					.or_insert_with(|| encoded_node.into_owned());
 			},
-			TrieAccess::Value { hash, value } => {
+			TrieAccess::Value { hash, value, full_key } => {
 				// We can just record this as encoded node, because we store just raw bytes anyway.
 				self.accessed_encoded_nodes.entry(hash).or_insert_with(|| value.into_owned());
 			},
