@@ -248,17 +248,27 @@ where
 				}
 
 				let id = active.id();
-				self.rounds = Some(round::Rounds::new(active));
+				// FIXME: Temporary here, remove this block
+				let payload = {
+					let mmr_root = if let Some(hash) =
+						find_mmr_root_digest::<B, Public>(&notification.header)
+					{
+						hash
+					} else {
+						warn!(target: "beefy", "🥩 No MMR root digest found for: {:?}", notification.header.hash());
+						return
+					};
+					Payload::new(known_payload_ids::MMR_ROOT_ID, mmr_root.encode())
+				};
+				let block_num = *notification.header.number();
+				self.rounds = Some(round::Rounds::new(payload, block_num, active));
 
 				debug!(target: "beefy", "🥩 New Rounds for id: {:?}", id);
 
 				warn!(target: "beefy", "🥩 new session, waking up ticker");
 				let _ = self.waker_tx.try_send(());
 
-				self.set_best_beefy_block(
-					*notification.header.number(),
-					Some(notification.hash.clone()),
-				);
+				self.set_best_beefy_block(block_num, Some(notification.hash.clone()));
 			}
 		}
 
@@ -337,7 +347,7 @@ where
 
 		let vote_added = rounds.add_vote(&round, vote);
 
-		if vote_added && rounds.is_done(&round) {
+		if vote_added && rounds.is_done() {
 			if let Some(signatures) = rounds.drop(&round) {
 				// id is stored for skipped session metric calculation
 				self.last_signed_id = rounds.validator_set_id();
