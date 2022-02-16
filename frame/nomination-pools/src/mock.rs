@@ -96,6 +96,10 @@ impl sp_staking::StakingInterface for StakingMock {
 				.unwrap()
 		}
 	}
+
+	fn set_current_era(era: EraIndex) {
+		CurrentEra::set(era);
+	}
 }
 
 impl frame_system::Config for Runtime {

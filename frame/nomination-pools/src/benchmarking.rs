@@ -115,7 +115,6 @@ impl<T: Config> ListScenario<T> {
 		Ok(ListScenario { origin1: pool_origin1, dest_weight, origin1_delegator: None })
 	}
 
-	// TODO ADD AMOUNT TO JOIN
 	fn add_joiner(mut self, amount: BalanceOf<T>) -> Self {
 		let amount = MinJoinBond::<T>::get()
 			.max(T::Currency::minimum_balance())
@@ -149,7 +148,6 @@ impl<T: Config> ListScenario<T> {
 
 frame_benchmarking::benchmarks! {
 	join {
-		// TODO this needs to be bond_extra worst case
 		clear_storage::<T>();
 
 		let origin_weight = MinCreateBond::<T>::get().max(T::Currency::minimum_balance()) * 2u32.into();
@@ -251,13 +249,92 @@ frame_benchmarking::benchmarks! {
 		);
 	}
 
+	// TODO: setup a withdraw unbonded kill scenario
 	pool_withdraw_unbonded {
+		clear_storage::<T>();
 
-	}: {
+		let min_create_bond = MinCreateBond::<T>::get().max(T::StakingInterface::minimum_bond());
+		let (depositor, pool_account) = create_pool_account::<T>(0, min_create_bond);
 
+		// Add a new delegator
+		let min_join_bond = MinJoinBond::<T>::get().max(T::Currency::minimum_balance());
+		let joiner = create_funded_user_with_balance::<T>("joiner", 0, min_join_bond * 2u32.into());
+		Pools::<T>::join(Origin::Signed(joiner.clone()).into(), min_join_bond, pool_account.clone())
+			.unwrap();
+
+		// Sanity check join worked
+		assert_eq!(
+			T::StakingInterface::bonded_balance(&pool_account).unwrap(
+
+			),
+			min_create_bond + min_join_bond
+		);
+		assert_eq!(T::Currency::free_balance(&joiner), min_join_bond);
+
+		// Unbond the new delegator
+		Pools::<T>::unbond_other(Origin::Signed(joiner.clone()).into(), joiner.clone()).unwrap();
+
+		// Sanity check that unbond worked
+		assert_eq!(
+			T::StakingInterface::bonded_balance(&pool_account).unwrap(),
+			min_create_bond
+		);
+		// Set the current era
+		T::StakingInterface::set_current_era(EraIndex::max_value());
+
+		whitelist_account!(pool_account);
+	}: _(Origin::Signed(pool_account.clone()), pool_account.clone(), 0)
+	verify {
+		// The joiners funds didn't change
+		assert_eq!(T::Currency::free_balance(&joiner), min_join_bond);
+
+		// TODO: figure out if we can check anything else. Its tricky because the free balance hasn't
+		// changed and I don't we don't have an api from here to the unlocking chunks, or staking balance lock
 	}
 
-	withdraw_unbonded_other {}: {}
+	// TODO: setup a withdraw unbonded kill scenario, make variable over slashing spans
+	withdraw_unbonded_other {
+		clear_storage::<T>();
+
+		let min_create_bond = MinCreateBond::<T>::get().max(T::StakingInterface::minimum_bond());
+		let (depositor, pool_account) = create_pool_account::<T>(0, min_create_bond);
+
+		// Add a new delegator
+		let min_join_bond = MinJoinBond::<T>::get().max(T::Currency::minimum_balance());
+		let joiner = create_funded_user_with_balance::<T>("joiner", 0, min_join_bond * 2u32.into());
+		Pools::<T>::join(Origin::Signed(joiner.clone()).into(), min_join_bond, pool_account.clone())
+			.unwrap();
+
+		// Sanity check join worked
+		assert_eq!(
+			T::StakingInterface::bonded_balance(&pool_account).unwrap(
+
+			),
+			min_create_bond + min_join_bond
+		);
+		assert_eq!(T::Currency::free_balance(&joiner), min_join_bond);
+
+		// Unbond the new delegator
+		T::StakingInterface::set_current_era(0);
+		Pools::<T>::unbond_other(Origin::Signed(joiner.clone()).into(), joiner.clone()).unwrap();
+
+		// Sanity check that unbond worked
+		assert_eq!(
+			T::StakingInterface::bonded_balance(&pool_account).unwrap(),
+			min_create_bond
+		);
+
+		// Set the current era to ensure we can withdraw unbonded funds
+		T::StakingInterface::set_current_era(EraIndex::max_value());
+
+		whitelist_account!(joiner);
+	}: _(Origin::Signed(joiner.clone()), joiner.clone(), 0)
+	verify {
+		assert_eq!(
+			T::Currency::free_balance(&joiner),
+			min_join_bond * 2u32.into()
+		);
+	}
 
 	create {
 		clear_storage::<T>();

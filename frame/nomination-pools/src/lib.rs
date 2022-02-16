@@ -261,6 +261,7 @@
 // - backport making ledger generic over ^^ IDEA: maybe staking can slash unlocking chunks, and then
 //   pools is passed the updated unlocking chunks and makes updates based on that
 // - benchmarks
+// - make staking interface current era
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
