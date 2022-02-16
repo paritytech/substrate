@@ -8253,7 +8253,6 @@ dependencies = [
  "hex-literal",
  "lazy_static",
  "libsecp256k1",
- "log 0.4.14",
  "lru 0.6.6",
  "parity-scale-codec",
  "parking_lot 0.11.2",
