@@ -22,7 +22,7 @@ use super::*;
 use crate as recovery;
 use frame_support::{
 	parameter_types,
-	traits::{ConstU16, ConstU32, ConstU64, OnFinalize, OnInitialize},
+	traits::{ConstU32, ConstU64, OnFinalize, OnInitialize},
 };
 use sp_core::H256;
 use sp_runtime::{
@@ -105,7 +105,7 @@ impl Config for Test {
 	type Currency = Balances;
 	type ConfigDepositBase = ConfigDepositBase;
 	type FriendDepositFactor = FriendDepositFactor;
-	type MaxFriends = ConstU16<3>;
+	type MaxFriends = ConstU32<3>;
 	type RecoveryDeposit = RecoveryDeposit;
 }
 

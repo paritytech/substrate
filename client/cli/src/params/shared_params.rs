@@ -17,36 +17,36 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::arg_enums::TracingReceiver;
+use clap::Args;
 use sc_service::config::BasePath;
 use std::path::PathBuf;
-use structopt::StructOpt;
 
 /// Shared parameters used by all `CoreParams`.
-#[derive(Debug, StructOpt, Clone)]
+#[derive(Debug, Clone, Args)]
 pub struct SharedParams {
 	/// Specify the chain specification.
 	///
 	/// It can be one of the predefined ones (dev, local, or staging) or it can be a path to a file
 	/// with the chainspec (such as one exported by the `build-spec` subcommand).
-	#[structopt(long, value_name = "CHAIN_SPEC")]
+	#[clap(long, value_name = "CHAIN_SPEC")]
 	pub chain: Option<String>,
 
 	/// Specify the development chain.
 	///
 	/// This flag sets `--chain=dev`, `--force-authoring`, `--rpc-cors=all`,
 	/// `--alice`, and `--tmp` flags, unless explicitly overridden.
-	#[structopt(long, conflicts_with_all = &["chain"])]
+	#[clap(long, conflicts_with_all = &["chain"])]
 	pub dev: bool,
 
 	/// Specify custom base path.
-	#[structopt(long, short = "d", value_name = "PATH", parse(from_os_str))]
+	#[clap(long, short = 'd', value_name = "PATH", parse(from_os_str))]
 	pub base_path: Option<PathBuf>,
 
 	/// Sets a custom logging filter. Syntax is <target>=<level>, e.g. -lsync=debug.
 	///
 	/// Log levels (least to most verbose) are error, warn, info, debug, and trace.
 	/// By default, all targets log `info`. The global log level can be set with -l<level>.
-	#[structopt(short = "l", long, value_name = "LOG_PATTERN")]
+	#[clap(short = 'l', long, value_name = "LOG_PATTERN")]
 	pub log: Vec<String>,
 
 	/// Enable detailed log output.
@@ -54,11 +54,11 @@ pub struct SharedParams {
 	/// This includes displaying the log target, log level and thread name.
 	///
 	/// This is automatically enabled when something is logged with any higher level than `info`.
-	#[structopt(long)]
+	#[clap(long)]
 	pub detailed_log_output: bool,
 
 	/// Disable log color output.
-	#[structopt(long)]
+	#[clap(long)]
 	pub disable_log_color: bool,
 
 	/// Enable feature to dynamically update and reload the log filter.
@@ -68,21 +68,15 @@ pub struct SharedParams {
 	///
 	/// The `system_addLogFilter` and `system_resetLogFilter` RPCs will have no effect with this
 	/// option not being set.
-	#[structopt(long)]
+	#[clap(long)]
 	pub enable_log_reloading: bool,
 
 	/// Sets a custom profiling filter. Syntax is the same as for logging: <target>=<level>
-	#[structopt(long = "tracing-targets", value_name = "TARGETS")]
+	#[clap(long, value_name = "TARGETS")]
 	pub tracing_targets: Option<String>,
 
 	/// Receiver to process tracing messages.
-	#[structopt(
-		long = "tracing-receiver",
-		value_name = "RECEIVER",
-		possible_values = &TracingReceiver::variants(),
-		case_insensitive = true,
-		default_value = "Log"
-	)]
+	#[clap(long, value_name = "RECEIVER", arg_enum, ignore_case = true, default_value = "Log")]
 	pub tracing_receiver: TracingReceiver,
 }
 

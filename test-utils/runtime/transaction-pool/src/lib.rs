@@ -40,18 +40,13 @@ use substrate_test_runtime_client::{
 };
 
 /// Error type used by [`TestApi`].
-#[derive(Debug, derive_more::From, derive_more::Display)]
-pub struct Error(sc_transaction_pool_api::error::Error);
+#[derive(Debug, thiserror::Error)]
+#[error(transparent)]
+pub struct Error(#[from] sc_transaction_pool_api::error::Error);
 
 impl sc_transaction_pool_api::error::IntoPoolError for Error {
 	fn into_pool_error(self) -> Result<sc_transaction_pool_api::error::Error, Self> {
 		Ok(self.0)
-	}
-}
-
-impl std::error::Error for Error {
-	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-		Some(&self.0)
 	}
 }
 
@@ -179,13 +174,13 @@ impl TestApi {
 	/// Add a block to the internal state.
 	pub fn add_block(&self, block: Block, is_best_block: bool) {
 		let hash = block.header.hash();
-		let block_number = block.header.number().clone();
+		let block_number = block.header.number();
 
 		let mut chain = self.chain.write();
 		chain.block_by_hash.insert(hash, block.clone());
 		chain
 			.block_by_number
-			.entry(block_number)
+			.entry(*block_number)
 			.or_default()
 			.push((block, is_best_block.into()));
 	}
@@ -259,15 +254,13 @@ impl sc_transaction_pool::ChainApi for TestApi {
 				if !found_best {
 					return ready(Ok(Err(TransactionValidityError::Invalid(
 						InvalidTransaction::Custom(1),
-					)
-					.into())))
+					))))
 				}
 			},
 			Ok(None) =>
 				return ready(Ok(Err(TransactionValidityError::Invalid(
 					InvalidTransaction::Custom(2),
-				)
-				.into()))),
+				)))),
 			Err(e) => return ready(Err(e)),
 		}
 
@@ -283,9 +276,7 @@ impl sc_transaction_pool::ChainApi for TestApi {
 		};
 
 		if self.chain.read().invalid_hashes.contains(&self.hash_and_length(&uxt).0) {
-			return ready(Ok(Err(
-				TransactionValidityError::Invalid(InvalidTransaction::Custom(0)).into()
-			)))
+			return ready(Ok(Err(TransactionValidityError::Invalid(InvalidTransaction::Custom(0)))))
 		}
 
 		let mut validity =
@@ -312,7 +303,7 @@ impl sc_transaction_pool::ChainApi for TestApi {
 		at: &BlockId<Self::Block>,
 	) -> Result<Option<<Self::Block as BlockT>::Hash>, Error> {
 		Ok(match at {
-			generic::BlockId::Hash(x) => Some(x.clone()),
+			generic::BlockId::Hash(x) => Some(*x),
 			generic::BlockId::Number(num) =>
 				self.chain.read().block_by_number.get(num).and_then(|blocks| {
 					blocks.iter().find(|b| b.1.is_best()).map(|b| b.0.header().hash())
@@ -371,6 +362,6 @@ impl sp_blockchain::HeaderMetadata<Block> for TestApi {
 pub fn uxt(who: AccountKeyring, nonce: Index) -> Extrinsic {
 	let dummy = codec::Decode::decode(&mut TrailingZeroInput::zeroes()).unwrap();
 	let transfer = Transfer { from: who.into(), to: dummy, nonce, amount: 1 };
-	let signature = transfer.using_encoded(|e| who.sign(e)).into();
+	let signature = transfer.using_encoded(|e| who.sign(e));
 	Extrinsic::Transfer { transfer, signature, exhaust_resources_when_not_first: false }
 }

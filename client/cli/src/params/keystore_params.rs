@@ -17,50 +17,47 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::{error, error::Result};
+use clap::Args;
 use sc_service::config::KeystoreConfig;
 use sp_core::crypto::SecretString;
 use std::{
 	fs,
 	path::{Path, PathBuf},
 };
-use structopt::StructOpt;
 
 /// default sub directory for the key store
 const DEFAULT_KEYSTORE_CONFIG_PATH: &'static str = "keystore";
 
 /// Parameters of the keystore
-#[derive(Debug, StructOpt, Clone)]
+#[derive(Debug, Clone, Args)]
 pub struct KeystoreParams {
 	/// Specify custom URIs to connect to for keystore-services
-	#[structopt(long = "keystore-uri")]
+	#[clap(long)]
 	pub keystore_uri: Option<String>,
 
 	/// Specify custom keystore path.
-	#[structopt(long = "keystore-path", value_name = "PATH", parse(from_os_str))]
+	#[clap(long, value_name = "PATH", parse(from_os_str))]
 	pub keystore_path: Option<PathBuf>,
 
 	/// Use interactive shell for entering the password used by the keystore.
-	#[structopt(
-		long = "password-interactive",
-		conflicts_with_all = &[ "password", "password-filename" ]
-	)]
+	#[clap(long, conflicts_with_all = &["password", "password-filename"])]
 	pub password_interactive: bool,
 
 	/// Password used by the keystore. This allows appending an extra user-defined secret to the
 	/// seed.
-	#[structopt(
-		long = "password",
+	#[clap(
+		long,
 		parse(try_from_str = secret_string_from_str),
-		conflicts_with_all = &[ "password-interactive", "password-filename" ]
+		conflicts_with_all = &["password-interactive", "password-filename"]
 	)]
 	pub password: Option<SecretString>,
 
 	/// File that contains the password used by the keystore.
-	#[structopt(
-		long = "password-filename",
+	#[clap(
+		long,
 		value_name = "PATH",
 		parse(from_os_str),
-		conflicts_with_all = &[ "password-interactive", "password" ]
+		conflicts_with_all = &["password-interactive", "password"]
 	)]
 	pub password_filename: Option<PathBuf>,
 }

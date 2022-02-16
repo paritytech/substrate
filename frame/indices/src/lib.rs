@@ -56,7 +56,8 @@ pub mod pallet {
 			+ Codec
 			+ Default
 			+ AtLeast32Bit
-			+ Copy;
+			+ Copy
+			+ MaxEncodedLen;
 
 		/// The currency trait.
 		type Currency: ReservableCurrency<Self::AccountId>;

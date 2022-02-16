@@ -164,6 +164,10 @@ struct ClientSpec<E> {
 	boot_nodes: Vec<MultiaddrWithPeerId>,
 	telemetry_endpoints: Option<TelemetryEndpoints>,
 	protocol_id: Option<String>,
+	/// Arbitrary string. Nodes will only synchronize with other nodes that have the same value
+	/// in their `fork_id`. This can be used in order to segregate nodes in cases when multiple
+	/// chains have the same genesis hash.
+	#[serde(default = "Default::default", skip_serializing_if = "Option::is_none")]
 	fork_id: Option<String>,
 	properties: Option<Properties>,
 	#[serde(flatten)]
@@ -176,10 +180,10 @@ struct ClientSpec<E> {
 	#[serde(skip_serializing)]
 	#[allow(unused)]
 	genesis: serde::de::IgnoredAny,
-	/// Mapping from `block_hash` to `wasm_code`.
+	/// Mapping from `block_number` to `wasm_code`.
 	///
-	/// The given `wasm_code` will be used to substitute the on-chain wasm code from the given
-	/// block hash onwards.
+	/// The given `wasm_code` will be used to substitute the on-chain wasm code starting with the
+	/// given block number until the `spec_version` on chain changes.
 	#[serde(default)]
 	code_substitutes: BTreeMap<String, Bytes>,
 }

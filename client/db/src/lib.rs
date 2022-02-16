@@ -477,7 +477,6 @@ impl<Block: BlockT> BlockchainDb<Block> {
 		let mut meta = self.meta.write();
 		if number.is_zero() {
 			meta.genesis_hash = hash;
-			meta.finalized_hash = hash;
 		}
 
 		if is_best {
@@ -1347,11 +1346,6 @@ impl<Block: BlockT> Backend<Block> {
 			}
 
 			if number.is_zero() {
-				transaction.set_from_vec(
-					columns::META,
-					meta_keys::FINALIZED_BLOCK,
-					lookup_key.clone(),
-				);
 				transaction.set(columns::META, meta_keys::GENESIS_HASH, hash.as_ref());
 
 				if operation.commit_state {
@@ -1447,14 +1441,15 @@ impl<Block: BlockT> Backend<Block> {
 				let finalized = number_u64 == 0 || pending_block.leaf_state.is_final();
 				finalized
 			} else {
-				number.is_zero() || pending_block.leaf_state.is_final()
+				(number.is_zero() && last_finalized_num.is_zero()) ||
+					pending_block.leaf_state.is_final()
 			};
 
 			let header = &pending_block.header;
 			let is_best = pending_block.leaf_state.is_best();
 			debug!(target: "db",
-				"DB Commit {:?} ({}), best={}, state={}, existing={}",
-				hash, number, is_best, operation.commit_state, existing_header,
+				"DB Commit {:?} ({}), best={}, state={}, existing={}, finalized={}",
+				hash, number, is_best, operation.commit_state, existing_header, finalized,
 			);
 
 			self.state_usage.merge_sm(operation.old_state.usage_info());
@@ -1477,7 +1472,8 @@ impl<Block: BlockT> Backend<Block> {
 			}
 
 			if !existing_header {
-				{
+				// Add a new leaf if the block has the potential to be finalized.
+				if number > last_finalized_num || last_finalized_num.is_zero() {
 					let mut leaves = self.blockchain.leaves.write();
 					leaves.import(hash, number, parent_hash);
 					leaves.prepare_transaction(
@@ -2295,6 +2291,7 @@ pub(crate) mod tests {
 		extrinsics_root: H256,
 	) -> H256 {
 		insert_block(backend, number, parent_hash, changes, extrinsics_root, Vec::new(), None)
+			.unwrap()
 	}
 
 	pub fn insert_block(
@@ -2305,7 +2302,7 @@ pub(crate) mod tests {
 		extrinsics_root: H256,
 		body: Vec<ExtrinsicWrapper<u64>>,
 		transaction_index: Option<Vec<IndexOperation>>,
-	) -> H256 {
+	) -> Result<H256, sp_blockchain::Error> {
 		use sp_runtime::testing::Digest;
 
 		let digest = Digest::default();
@@ -2329,8 +2326,31 @@ pub(crate) mod tests {
 		if let Some(index) = transaction_index {
 			op.update_transaction_index(index).unwrap();
 		}
-		backend.commit_operation(op).unwrap();
+		backend.commit_operation(op)?;
 
+		Ok(header_hash)
+	}
+
+	pub fn insert_header_no_head(
+		backend: &Backend<Block>,
+		number: u64,
+		parent_hash: H256,
+		extrinsics_root: H256,
+	) -> H256 {
+		use sp_runtime::testing::Digest;
+
+		let digest = Digest::default();
+		let header = Header {
+			number,
+			parent_hash,
+			state_root: BlakeTwo256::trie_root(Vec::new(), StateVersion::V1),
+			digest,
+			extrinsics_root,
+		};
+		let header_hash = header.hash();
+		let mut op = backend.begin_operation().unwrap();
+		op.set_block_data(header, None, None, None, NewBlockState::Normal).unwrap();
+		backend.commit_operation(op).unwrap();
 		header_hash
 	}
 
@@ -3019,7 +3039,6 @@ pub(crate) mod tests {
 		{
 			let header = backend.blockchain().header(BlockId::Hash(hash1)).unwrap().unwrap();
 			let mut op = backend.begin_operation().unwrap();
-			backend.begin_state_operation(&mut op, BlockId::Hash(hash0)).unwrap();
 			op.set_block_data(header, None, None, None, NewBlockState::Best).unwrap();
 			backend.commit_operation(op).unwrap();
 		}
@@ -3063,7 +3082,8 @@ pub(crate) mod tests {
 					Default::default(),
 					vec![i.into()],
 					None,
-				);
+				)
+				.unwrap();
 				blocks.push(hash);
 				prev_hash = hash;
 			}
@@ -3100,7 +3120,8 @@ pub(crate) mod tests {
 				Default::default(),
 				vec![i.into()],
 				None,
-			);
+			)
+			.unwrap();
 			blocks.push(hash);
 			prev_hash = hash;
 		}
@@ -3114,7 +3135,8 @@ pub(crate) mod tests {
 			sp_core::H256::random(),
 			vec![2.into()],
 			None,
-		);
+		)
+		.unwrap();
 		insert_block(
 			&backend,
 			3,
@@ -3123,7 +3145,8 @@ pub(crate) mod tests {
 			H256::random(),
 			vec![3.into(), 11.into()],
 			None,
-		);
+		)
+		.unwrap();
 		let mut op = backend.begin_operation().unwrap();
 		backend.begin_state_operation(&mut op, BlockId::Hash(blocks[4])).unwrap();
 		op.mark_head(BlockId::Hash(blocks[4])).unwrap();
@@ -3172,7 +3195,8 @@ pub(crate) mod tests {
 				Default::default(),
 				vec![i.into()],
 				Some(index),
-			);
+			)
+			.unwrap();
 			blocks.push(hash);
 			prev_hash = hash;
 		}
@@ -3206,7 +3230,8 @@ pub(crate) mod tests {
 				Default::default(),
 				vec![i.into()],
 				None,
-			);
+			)
+			.unwrap();
 			blocks.push(hash);
 			prev_hash = hash;
 		}
@@ -3220,7 +3245,8 @@ pub(crate) mod tests {
 			sp_core::H256::random(),
 			vec![42.into()],
 			None,
-		);
+		)
+		.unwrap();
 		assert!(backend.remove_leaf_block(&best_hash).is_err());
 		assert!(backend.have_state_at(&prev_hash, 1));
 		backend.remove_leaf_block(&prev_hash).unwrap();
@@ -3289,5 +3315,37 @@ pub(crate) mod tests {
 		backend.commit_operation(op).unwrap();
 
 		assert_eq!(backend.blockchain().info().finalized_hash, block1);
+	}
+
+	#[test]
+	fn test_import_existing_state_fails() {
+		let backend: Backend<Block> = Backend::new_test(10, 10);
+		let genesis =
+			insert_block(&backend, 0, Default::default(), None, Default::default(), vec![], None)
+				.unwrap();
+
+		insert_block(&backend, 1, genesis, None, Default::default(), vec![], None).unwrap();
+		let err = insert_block(&backend, 1, genesis, None, Default::default(), vec![], None)
+			.err()
+			.unwrap();
+		match err {
+			sp_blockchain::Error::StateDatabase(m) if m == "Block already exists" => (),
+			e @ _ => panic!("Unexpected error {:?}", e),
+		}
+	}
+
+	#[test]
+	fn test_leaves_not_created_for_ancient_blocks() {
+		let backend: Backend<Block> = Backend::new_test(10, 10);
+		let block0 = insert_header(&backend, 0, Default::default(), None, Default::default());
+
+		let block1_a = insert_header(&backend, 1, block0, None, Default::default());
+		let block2_a = insert_header(&backend, 2, block1_a, None, Default::default());
+		backend.finalize_block(BlockId::hash(block1_a), None).unwrap();
+		assert_eq!(backend.blockchain().leaves().unwrap(), vec![block2_a]);
+
+		// Insert a fork prior to finalization point. Leave should not be created.
+		insert_header_no_head(&backend, 1, block0, [1; 32].into());
+		assert_eq!(backend.blockchain().leaves().unwrap(), vec![block2_a]);
 	}
 }

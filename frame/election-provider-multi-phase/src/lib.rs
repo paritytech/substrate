@@ -230,7 +230,9 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use codec::{Decode, Encode};
-use frame_election_provider_support::{ElectionDataProvider, ElectionProvider};
+use frame_election_provider_support::{
+	ElectionDataProvider, ElectionProvider, InstantElectionProvider,
+};
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
 	ensure,
@@ -253,7 +255,7 @@ use sp_runtime::{
 		InvalidTransaction, TransactionPriority, TransactionSource, TransactionValidity,
 		TransactionValidityError, ValidTransaction,
 	},
-	DispatchError, PerThing, Perbill, RuntimeDebug, SaturatedConversion,
+	DispatchError, ModuleError, PerThing, Perbill, RuntimeDebug, SaturatedConversion,
 };
 use sp_std::prelude::*;
 
@@ -269,6 +271,7 @@ const LOG_TARGET: &'static str = "runtime::election-provider";
 pub mod signed;
 pub mod unsigned;
 pub mod weights;
+use unsigned::VoterOf;
 pub use weights::WeightInfo;
 
 pub use signed::{
@@ -317,6 +320,15 @@ impl<T: Config> ElectionProvider for NoFallback<T> {
 
 	fn elect() -> Result<Supports<T::AccountId>, Self::Error> {
 		// Do nothing, this will enable the emergency phase.
+		Err("NoFallback.")
+	}
+}
+
+impl<T: Config> InstantElectionProvider for NoFallback<T> {
+	fn instant_elect(
+		_: Option<usize>,
+		_: Option<usize>,
+	) -> Result<Supports<T::AccountId>, Self::Error> {
 		Err("NoFallback.")
 	}
 }
@@ -448,11 +460,13 @@ pub struct ReadySolution<A> {
 ///
 /// These are stored together because they are often accessed together.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default, TypeInfo)]
-pub struct RoundSnapshot<A> {
+#[codec(mel_bound())]
+#[scale_info(skip_type_params(T))]
+pub struct RoundSnapshot<T: Config> {
 	/// All of the voters.
-	pub voters: Vec<(A, VoteWeight, Vec<A>)>,
+	pub voters: Vec<VoterOf<T>>,
 	/// All of the targets.
-	pub targets: Vec<A>,
+	pub targets: Vec<T::AccountId>,
 }
 
 /// Encodes the length of a solution or a snapshot.
@@ -474,7 +488,7 @@ pub struct SolutionOrSnapshotSize {
 ///
 /// Note that this is different from [`pallet::Error`].
 #[derive(frame_support::DebugNoBound)]
-#[cfg_attr(feature = "runtime-benchmarks", derive(strum_macros::IntoStaticStr))]
+#[cfg_attr(feature = "runtime-benchmarks", derive(strum::IntoStaticStr))]
 pub enum ElectionError<T: Config> {
 	/// An error happened in the feasibility check sub-system.
 	Feasibility(FeasibilityError),
@@ -519,7 +533,7 @@ impl<T: Config> From<unsigned::MinerError<T>> for ElectionError<T> {
 
 /// Errors that can happen in the feasibility check.
 #[derive(Debug, Eq, PartialEq)]
-#[cfg_attr(feature = "runtime-benchmarks", derive(strum_macros::IntoStaticStr))]
+#[cfg_attr(feature = "runtime-benchmarks", derive(strum::IntoStaticStr))]
 pub enum FeasibilityError {
 	/// Wrong number of winners presented.
 	WrongWinnerCount,
@@ -552,7 +566,7 @@ pub use pallet::*;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_election_provider_support::NposSolver;
+	use frame_election_provider_support::{InstantElectionProvider, NposSolver};
 	use frame_support::{pallet_prelude::*, traits::EstimateCallFee};
 	use frame_system::pallet_prelude::*;
 
@@ -669,8 +683,18 @@ pub mod pallet {
 			+ NposSolution
 			+ TypeInfo;
 
-		/// Configuration for the fallback
+		/// Configuration for the fallback.
 		type Fallback: ElectionProvider<
+			AccountId = Self::AccountId,
+			BlockNumber = Self::BlockNumber,
+			DataProvider = Self::DataProvider,
+		>;
+
+		/// Configuration of the governance-only fallback.
+		///
+		/// As a side-note, it is recommend for test-nets to use `type ElectionProvider =
+		/// OnChainSeqPhragmen<_>` if the test-net is not expected to have thousands of nominators.
+		type GovernanceFallback: InstantElectionProvider<
 			AccountId = Self::AccountId,
 			BlockNumber = Self::BlockNumber,
 			DataProvider = Self::DataProvider,
@@ -820,7 +844,7 @@ pub mod pallet {
 			// NOTE that this pallet does not really need to enforce this in runtime. The
 			// solution cannot represent any voters more than `LIMIT` anyhow.
 			assert_eq!(
-				<T::DataProvider as ElectionDataProvider>::MAXIMUM_VOTES_PER_VOTER,
+				<T::DataProvider as ElectionDataProvider>::MaxVotesPerVoter::get(),
 				<SolutionOf<T> as NposSolution>::LIMIT as u32,
 			);
 		}
@@ -920,8 +944,11 @@ pub mod pallet {
 			// Note: we don't `rotate_round` at this point; the next call to
 			// `ElectionProvider::elect` will succeed and take care of that.
 
-			let solution =
-				ReadySolution { supports, score: [0, 0, 0], compute: ElectionCompute::Emergency };
+			let solution = ReadySolution {
+				supports,
+				score: Default::default(),
+				compute: ElectionCompute::Emergency,
+			};
 
 			<QueuedSolution<T>>::put(solution);
 			Ok(())
@@ -1010,6 +1037,40 @@ pub mod pallet {
 			});
 			Ok(())
 		}
+
+		/// Trigger the governance fallback.
+		///
+		/// This can only be called when [`Phase::Emergency`] is enabled, as an alternative to
+		/// calling [`Call::set_emergency_election_result`].
+		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
+		pub fn governance_fallback(
+			origin: OriginFor<T>,
+			maybe_max_voters: Option<u32>,
+			maybe_max_targets: Option<u32>,
+		) -> DispatchResult {
+			T::ForceOrigin::ensure_origin(origin)?;
+			ensure!(Self::current_phase().is_emergency(), <Error<T>>::CallNotAllowed);
+
+			let maybe_max_voters = maybe_max_voters.map(|x| x as usize);
+			let maybe_max_targets = maybe_max_targets.map(|x| x as usize);
+
+			let supports =
+				T::GovernanceFallback::instant_elect(maybe_max_voters, maybe_max_targets).map_err(
+					|e| {
+						log!(error, "GovernanceFallback failed: {:?}", e);
+						Error::<T>::FallbackFailed
+					},
+				)?;
+
+			let solution = ReadySolution {
+				supports,
+				score: Default::default(),
+				compute: ElectionCompute::Fallback,
+			};
+
+			<QueuedSolution<T>>::put(solution);
+			Ok(())
+		}
 	}
 
 	#[pallet::event]
@@ -1060,6 +1121,8 @@ pub mod pallet {
 		InvalidSubmissionIndex,
 		/// The call is not allowed at this point.
 		CallNotAllowed,
+		/// The fallback failed
+		FallbackFailed,
 	}
 
 	#[pallet::validate_unsigned]
@@ -1081,10 +1144,10 @@ pub mod pallet {
 					.map_err(dispatch_error_to_invalid)?;
 
 				ValidTransaction::with_tag_prefix("OffchainElection")
-					// The higher the score[0], the better a solution is.
+					// The higher the score.minimal_stake, the better a solution is.
 					.priority(
 						T::MinerTxPriority::get()
-							.saturating_add(raw_solution.score[0].saturated_into()),
+							.saturating_add(raw_solution.score.minimal_stake.saturated_into()),
 					)
 					// Used to deduplicate unsigned solutions: each validator should produce one
 					// solution per round at most, and solutions are not propagate.
@@ -1140,7 +1203,7 @@ pub mod pallet {
 	/// This is created at the beginning of the signed phase and cleared upon calling `elect`.
 	#[pallet::storage]
 	#[pallet::getter(fn snapshot)]
-	pub type Snapshot<T: Config> = StorageValue<_, RoundSnapshot<T::AccountId>>;
+	pub type Snapshot<T: Config> = StorageValue<_, RoundSnapshot<T>>;
 
 	/// Desired number of targets to elect for this round.
 	///
@@ -1205,6 +1268,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
+	#[pallet::without_storage_info]
 	pub struct Pallet<T>(PhantomData<T>);
 }
 
@@ -1256,7 +1320,7 @@ impl<T: Config> Pallet<T> {
 	/// Extracted for easier weight calculation.
 	fn create_snapshot_internal(
 		targets: Vec<T::AccountId>,
-		voters: Vec<crate::unsigned::Voter<T>>,
+		voters: Vec<VoterOf<T>>,
 		desired_targets: u32,
 	) {
 		let metadata =
@@ -1269,7 +1333,7 @@ impl<T: Config> Pallet<T> {
 		// instead of using storage APIs, we do a manual encoding into a fixed-size buffer.
 		// `encoded_size` encodes it without storing it anywhere, this should not cause any
 		// allocation.
-		let snapshot = RoundSnapshot { voters, targets };
+		let snapshot = RoundSnapshot::<T> { voters, targets };
 		let size = snapshot.encoded_size();
 		log!(debug, "snapshot pre-calculated size {:?}", size);
 		let mut buffer = Vec::with_capacity(size);
@@ -1287,7 +1351,7 @@ impl<T: Config> Pallet<T> {
 	///
 	/// Extracted for easier weight calculation.
 	fn create_snapshot_external(
-	) -> Result<(Vec<T::AccountId>, Vec<crate::unsigned::Voter<T>>, u32), ElectionError<T>> {
+	) -> Result<(Vec<T::AccountId>, Vec<VoterOf<T>>, u32), ElectionError<T>> {
 		let target_limit = <SolutionTargetIndexOf<T>>::max_value().saturated_into::<usize>();
 		// for now we have just a single block snapshot.
 		let voter_limit = T::VoterSnapshotPerBlock::get().saturated_into::<usize>();
@@ -1372,7 +1436,7 @@ impl<T: Config> Pallet<T> {
 		let submitted_score = raw_solution.score.clone();
 		ensure!(
 			Self::minimum_untrusted_score().map_or(true, |min_score| {
-				sp_npos_elections::is_score_better(submitted_score, min_score, Perbill::zero())
+				submitted_score.strict_threshold_better(min_score, Perbill::zero())
 			}),
 			FeasibilityError::UntrustedScoreTooLow
 		);
@@ -1521,7 +1585,7 @@ impl<T: Config> ElectionProvider for Pallet<T> {
 /// number.
 pub fn dispatch_error_to_invalid(error: DispatchError) -> InvalidTransaction {
 	let error_number = match error {
-		DispatchError::Module { error, .. } => error,
+		DispatchError::Module(ModuleError { error, .. }) => error,
 		_ => 0,
 	};
 	InvalidTransaction::Custom(error_number)
@@ -1692,7 +1756,7 @@ mod feasibility_check {
 			assert_eq!(MultiPhase::snapshot().unwrap().voters.len(), 8);
 
 			// Simply faff with the score.
-			solution.score[0] += 1;
+			solution.score.minimal_stake += 1;
 
 			assert_noop!(
 				MultiPhase::feasibility_check(solution, COMPUTE),
@@ -1902,7 +1966,10 @@ mod tests {
 
 			// fill the queue with signed submissions
 			for s in 0..SignedMaxSubmissions::get() {
-				let solution = RawSolution { score: [(5 + s).into(), 0, 0], ..Default::default() };
+				let solution = RawSolution {
+					score: ElectionScore { minimal_stake: (5 + s).into(), ..Default::default() },
+					..Default::default()
+				};
 				assert_ok!(MultiPhase::submit(
 					crate::mock::Origin::signed(99),
 					Box::new(solution),
@@ -2029,13 +2096,19 @@ mod tests {
 			crate::mock::Balancing::set(Some((2, 0)));
 
 			let (solution, _) = MultiPhase::mine_solution::<<Runtime as Config>::Solver>().unwrap();
-			// Default solution has a score of [50, 100, 5000].
-			assert_eq!(solution.score, [50, 100, 5000]);
+			// Default solution's score.
+			assert!(matches!(solution.score, ElectionScore { minimal_stake: 50, .. }));
 
-			<MinimumUntrustedScore<Runtime>>::put([49, 0, 0]);
+			<MinimumUntrustedScore<Runtime>>::put(ElectionScore {
+				minimal_stake: 49,
+				..Default::default()
+			});
 			assert_ok!(MultiPhase::feasibility_check(solution.clone(), ElectionCompute::Signed));
 
-			<MinimumUntrustedScore<Runtime>>::put([51, 0, 0]);
+			<MinimumUntrustedScore<Runtime>>::put(ElectionScore {
+				minimal_stake: 51,
+				..Default::default()
+			});
 			assert_noop!(
 				MultiPhase::feasibility_check(solution, ElectionCompute::Signed),
 				FeasibilityError::UntrustedScoreTooLow,

@@ -609,7 +609,7 @@ where
 	let tree_route = match tree_route_res {
 		Ok(tree_route) => tree_route,
 		Err(e) => {
-			debug!(target: "afg", "Encountered error computing ancestry between block {:?} and base {:?}: {:?}",
+			debug!(target: "afg", "Encountered error computing ancestry between block {:?} and base {:?}: {}",
 				   block, base, e);
 
 			return Err(GrandpaError::NotDescendent)
@@ -1098,7 +1098,7 @@ where
 	) {
 		warn!(target: "afg", "Detected prevote equivocation in the finality worker: {:?}", equivocation);
 		if let Err(err) = self.report_equivocation(equivocation.into()) {
-			warn!(target: "afg", "Error reporting prevote equivocation: {:?}", err);
+			warn!(target: "afg", "Error reporting prevote equivocation: {}", err);
 		}
 	}
 
@@ -1109,7 +1109,7 @@ where
 	) {
 		warn!(target: "afg", "Detected precommit equivocation in the finality worker: {:?}", equivocation);
 		if let Err(err) = self.report_equivocation(equivocation.into()) {
-			warn!(target: "afg", "Error reporting precommit equivocation: {:?}", err);
+			warn!(target: "afg", "Error reporting precommit equivocation: {}", err);
 		}
 	}
 }
@@ -1224,7 +1224,7 @@ where
 				.or_else(|| Some((target_header.hash(), *target_header.number())))
 		},
 		Err(e) => {
-			warn!(target: "afg", "Encountered error finding best chain containing {:?}: {:?}", block, e);
+			warn!(target: "afg", "Encountered error finding best chain containing {:?}: {}", block, e);
 			None
 		},
 	};
@@ -1293,7 +1293,7 @@ where
 		) {
 			if let Some(sender) = justification_sender {
 				if let Err(err) = sender.notify(justification) {
-					warn!(target: "afg", "Error creating justification for subscriber: {:?}", err);
+					warn!(target: "afg", "Error creating justification for subscriber: {}", err);
 				}
 			}
 		}
@@ -1344,7 +1344,7 @@ where
 		client
 			.apply_finality(import_op, BlockId::Hash(hash), persisted_justification, true)
 			.map_err(|e| {
-				warn!(target: "afg", "Error applying finality to block {:?}: {:?}", (hash, number), e);
+				warn!(target: "afg", "Error applying finality to block {:?}: {}", (hash, number), e);
 				e
 			})?;
 

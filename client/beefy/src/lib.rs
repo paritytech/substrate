@@ -31,6 +31,8 @@ use sp_runtime::traits::Block;
 
 use beefy_primitives::BeefyApi;
 
+use crate::notification::{BeefyBestBlockSender, BeefySignedCommitmentSender};
+
 mod error;
 mod gossip;
 mod keystore;
@@ -121,7 +123,9 @@ where
 	/// Gossip network
 	pub network: N,
 	/// BEEFY signed commitment sender
-	pub signed_commitment_sender: notification::BeefySignedCommitmentSender<B>,
+	pub signed_commitment_sender: BeefySignedCommitmentSender<B>,
+	/// BEEFY best block sender
+	pub beefy_best_block_sender: BeefyBestBlockSender<B>,
 	/// Minimal delta between blocks, BEEFY should vote for
 	pub min_block_delta: u32,
 	/// Prometheus metric registry
@@ -147,6 +151,7 @@ where
 		key_store,
 		network,
 		signed_commitment_sender,
+		beefy_best_block_sender,
 		min_block_delta,
 		prometheus_registry,
 		protocol_name,
@@ -174,6 +179,7 @@ where
 		backend,
 		key_store: key_store.into(),
 		signed_commitment_sender,
+		beefy_best_block_sender,
 		gossip_engine,
 		gossip_validator,
 		min_block_delta,

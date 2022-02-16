@@ -18,9 +18,9 @@
 //! Tests for npos-elections.
 
 use crate::{
-	balancing, helpers::*, is_score_better, mock::*, seq_phragmen, seq_phragmen_core, setup_inputs,
-	to_support_map, Assignment, ElectionResult, ExtendedBalance, IndexAssignment, NposSolution,
-	StakedAssignment, Support, Voter,
+	balancing, helpers::*, mock::*, seq_phragmen, seq_phragmen_core, setup_inputs, to_support_map,
+	Assignment, ElectionResult, ExtendedBalance, IndexAssignment, NposSolution, StakedAssignment,
+	Support, Voter,
 };
 use rand::{self, SeedableRng};
 use sp_arithmetic::{PerU16, Perbill, Percent, Permill};
@@ -230,7 +230,7 @@ fn phragmen_poc_works() {
 	let voters = vec![(10, vec![1, 2]), (20, vec![1, 3]), (30, vec![2, 3])];
 
 	let stake_of = create_stake_of(&[(10, 10), (20, 20), (30, 30)]);
-	let ElectionResult { winners, assignments } = seq_phragmen::<_, Perbill>(
+	let ElectionResult::<_, Perbill> { winners, assignments } = seq_phragmen(
 		2,
 		candidates,
 		voters
@@ -285,7 +285,7 @@ fn phragmen_poc_works_with_balancing() {
 	let voters = vec![(10, vec![1, 2]), (20, vec![1, 3]), (30, vec![2, 3])];
 
 	let stake_of = create_stake_of(&[(10, 10), (20, 20), (30, 30)]);
-	let ElectionResult { winners, assignments } = seq_phragmen::<_, Perbill>(
+	let ElectionResult::<_, Perbill> { winners, assignments } = seq_phragmen(
 		2,
 		candidates,
 		voters
@@ -372,7 +372,7 @@ fn phragmen_accuracy_on_large_scale_only_candidates() {
 		(5, (u64::MAX - 2).into()),
 	]);
 
-	let ElectionResult { winners, assignments } = seq_phragmen::<_, Perbill>(
+	let ElectionResult::<_, Perbill> { winners, assignments } = seq_phragmen(
 		2,
 		candidates.clone(),
 		auto_generate_self_voters(&candidates)
@@ -403,7 +403,7 @@ fn phragmen_accuracy_on_large_scale_voters_and_candidates() {
 		(14, u64::MAX.into()),
 	]);
 
-	let ElectionResult { winners, assignments } = seq_phragmen::<_, Perbill>(
+	let ElectionResult::<_, Perbill> { winners, assignments } = seq_phragmen(
 		2,
 		candidates,
 		voters
@@ -435,7 +435,7 @@ fn phragmen_accuracy_on_small_scale_self_vote() {
 	let voters = auto_generate_self_voters(&candidates);
 	let stake_of = create_stake_of(&[(40, 0), (10, 1), (20, 2), (30, 1)]);
 
-	let ElectionResult { winners, assignments } = seq_phragmen::<_, Perbill>(
+	let ElectionResult::<_, Perbill> { winners, assignments } = seq_phragmen(
 		3,
 		candidates,
 		voters
@@ -465,7 +465,7 @@ fn phragmen_accuracy_on_small_scale_no_self_vote() {
 		(3, 1),
 	]);
 
-	let ElectionResult { winners, assignments } = seq_phragmen::<_, Perbill>(
+	let ElectionResult::<_, Perbill> { winners, assignments } = seq_phragmen(
 		3,
 		candidates,
 		voters
@@ -501,7 +501,7 @@ fn phragmen_large_scale_test() {
 		(50, 990000000000000000),
 	]);
 
-	let ElectionResult { winners, assignments } = seq_phragmen::<_, Perbill>(
+	let ElectionResult::<_, Perbill> { winners, assignments } = seq_phragmen(
 		2,
 		candidates,
 		voters
@@ -528,7 +528,7 @@ fn phragmen_large_scale_test_2() {
 	let stake_of =
 		create_stake_of(&[(2, c_budget.into()), (4, c_budget.into()), (50, nom_budget.into())]);
 
-	let ElectionResult { winners, assignments } = seq_phragmen::<_, Perbill>(
+	let ElectionResult::<_, Perbill> { winners, assignments } = seq_phragmen(
 		2,
 		candidates,
 		voters
@@ -597,7 +597,7 @@ fn elect_has_no_entry_barrier() {
 	let voters = vec![(1, vec![10]), (2, vec![20])];
 	let stake_of = create_stake_of(&[(1, 10), (2, 10)]);
 
-	let ElectionResult { winners, assignments: _ } = seq_phragmen::<_, Perbill>(
+	let ElectionResult::<_, Perbill> { winners, assignments: _ } = seq_phragmen(
 		3,
 		candidates,
 		voters
@@ -618,7 +618,7 @@ fn phragmen_self_votes_should_be_kept() {
 	let voters = vec![(5, vec![5]), (10, vec![10]), (20, vec![20]), (1, vec![10, 20])];
 	let stake_of = create_stake_of(&[(5, 5), (10, 10), (20, 20), (1, 8)]);
 
-	let result = seq_phragmen::<_, Perbill>(
+	let result: ElectionResult<_, Perbill> = seq_phragmen(
 		2,
 		candidates,
 		voters
@@ -664,8 +664,8 @@ fn duplicate_target_is_ignored() {
 	let candidates = vec![1, 2, 3];
 	let voters = vec![(10, 100, vec![1, 1, 2, 3]), (20, 100, vec![2, 3]), (30, 50, vec![1, 1, 2])];
 
-	let ElectionResult { winners, assignments } =
-		seq_phragmen::<_, Perbill>(2, candidates, voters, None).unwrap();
+	let ElectionResult::<_, Perbill> { winners, assignments } =
+		seq_phragmen(2, candidates, voters, None).unwrap();
 
 	assert_eq!(winners, vec![(2, 140), (3, 110)]);
 	assert_eq!(
@@ -682,8 +682,8 @@ fn duplicate_target_is_ignored_when_winner() {
 	let candidates = vec![1, 2, 3];
 	let voters = vec![(10, 100, vec![1, 1, 2, 3]), (20, 100, vec![1, 2])];
 
-	let ElectionResult { winners, assignments } =
-		seq_phragmen::<_, Perbill>(2, candidates, voters, None).unwrap();
+	let ElectionResult::<_, Perbill> { winners, assignments } =
+		seq_phragmen(2, candidates, voters, None).unwrap();
 
 	assert_eq!(winners, vec![(1, 100), (2, 100)]);
 	assert_eq!(
@@ -792,6 +792,21 @@ mod assignment_convert_normalize {
 
 mod score {
 	use super::*;
+	use crate::ElectionScore;
+	use sp_arithmetic::PerThing;
+
+	/// NOTE: in tests, we still use the legacy [u128; 3] since it is more compact. Each `u128`
+	/// corresponds to element at the respective field index of `ElectionScore`.
+	impl From<[ExtendedBalance; 3]> for ElectionScore {
+		fn from(t: [ExtendedBalance; 3]) -> Self {
+			Self { minimal_stake: t[0], sum_stake: t[1], sum_stake_squared: t[2] }
+		}
+	}
+
+	fn is_score_better(this: [u128; 3], that: [u128; 3], p: impl PerThing) -> bool {
+		ElectionScore::from(this).strict_threshold_better(ElectionScore::from(that), p)
+	}
+
 	#[test]
 	fn score_comparison_is_lexicographical_no_epsilon() {
 		let epsilon = Perbill::zero();
@@ -882,6 +897,26 @@ mod score {
 			is_score_better(claim.clone(), initial.clone(), Perbill::from_rational(5u32, 10_000),),
 			false,
 		);
+	}
+
+	#[test]
+	fn ord_works() {
+		// equal only when all elements are equal
+		assert!(ElectionScore::from([10, 5, 15]) == ElectionScore::from([10, 5, 15]));
+		assert!(ElectionScore::from([10, 5, 15]) != ElectionScore::from([9, 5, 15]));
+		assert!(ElectionScore::from([10, 5, 15]) != ElectionScore::from([10, 5, 14]));
+
+		// first element greater, rest don't matter
+		assert!(ElectionScore::from([10, 5, 15]) > ElectionScore::from([8, 5, 25]));
+		assert!(ElectionScore::from([10, 5, 15]) > ElectionScore::from([9, 20, 5]));
+
+		// second element greater, rest don't matter
+		assert!(ElectionScore::from([10, 5, 15]) > ElectionScore::from([10, 4, 25]));
+		assert!(ElectionScore::from([10, 5, 15]) > ElectionScore::from([10, 4, 5]));
+
+		// second element is less, rest don't matter. Note that this is swapped.
+		assert!(ElectionScore::from([10, 5, 15]) > ElectionScore::from([10, 5, 16]));
+		assert!(ElectionScore::from([10, 5, 15]) > ElectionScore::from([10, 5, 25]));
 	}
 }
 

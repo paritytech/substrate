@@ -26,13 +26,6 @@
 
 use crate::Config;
 use frame_support::traits::Get;
-use pwasm_utils::parity_wasm::{
-	builder,
-	elements::{
-		self, BlockType, CustomSection, External, FuncBody, Instruction, Instructions, Module,
-		Section, ValueType,
-	},
-};
 use sp_core::crypto::UncheckedFrom;
 use sp_runtime::traits::Hash;
 use sp_sandbox::{
@@ -40,6 +33,13 @@ use sp_sandbox::{
 	SandboxEnvironmentBuilder, SandboxMemory,
 };
 use sp_std::{borrow::ToOwned, prelude::*};
+use wasm_instrument::parity_wasm::{
+	builder,
+	elements::{
+		self, BlockType, CustomSection, External, FuncBody, Instruction, Instructions, Module,
+		Section, ValueType,
+	},
+};
 
 /// The location where to put the genrated code.
 pub enum Location {
@@ -562,10 +562,10 @@ where
 fn inject_gas_metering<T: Config>(module: Module) -> Module {
 	let schedule = T::Schedule::get();
 	let gas_rules = schedule.rules(&module);
-	pwasm_utils::inject_gas_counter(module, &gas_rules, "seal0").unwrap()
+	wasm_instrument::gas_metering::inject(module, &gas_rules, "seal0").unwrap()
 }
 
 fn inject_stack_metering<T: Config>(module: Module) -> Module {
 	let height = T::Schedule::get().limits.stack_height;
-	pwasm_utils::stack_height::inject_limiter(module, height).unwrap()
+	wasm_instrument::inject_stack_limiter(module, height).unwrap()
 }
