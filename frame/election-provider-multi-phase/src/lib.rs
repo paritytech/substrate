@@ -944,8 +944,11 @@ pub mod pallet {
 			// Note: we don't `rotate_round` at this point; the next call to
 			// `ElectionProvider::elect` will succeed and take care of that.
 
-			let solution =
-				ReadySolution { supports, score: [0, 0, 0], compute: ElectionCompute::Emergency };
+			let solution = ReadySolution {
+				supports,
+				score: Default::default(),
+				compute: ElectionCompute::Emergency,
+			};
 
 			<QueuedSolution<T>>::put(solution);
 			Ok(())
@@ -1059,8 +1062,11 @@ pub mod pallet {
 					},
 				)?;
 
-			let solution =
-				ReadySolution { supports, score: [0, 0, 0], compute: ElectionCompute::Fallback };
+			let solution = ReadySolution {
+				supports,
+				score: Default::default(),
+				compute: ElectionCompute::Fallback,
+			};
 
 			<QueuedSolution<T>>::put(solution);
 			Ok(())
@@ -1138,10 +1144,10 @@ pub mod pallet {
 					.map_err(dispatch_error_to_invalid)?;
 
 				ValidTransaction::with_tag_prefix("OffchainElection")
-					// The higher the score[0], the better a solution is.
+					// The higher the score.minimal_stake, the better a solution is.
 					.priority(
 						T::MinerTxPriority::get()
-							.saturating_add(raw_solution.score[0].saturated_into()),
+							.saturating_add(raw_solution.score.minimal_stake.saturated_into()),
 					)
 					// Used to deduplicate unsigned solutions: each validator should produce one
 					// solution per round at most, and solutions are not propagate.
@@ -1430,7 +1436,7 @@ impl<T: Config> Pallet<T> {
 		let submitted_score = raw_solution.score.clone();
 		ensure!(
 			Self::minimum_untrusted_score().map_or(true, |min_score| {
-				sp_npos_elections::is_score_better(submitted_score, min_score, Perbill::zero())
+				submitted_score.strict_threshold_better(min_score, Perbill::zero())
 			}),
 			FeasibilityError::UntrustedScoreTooLow
 		);
@@ -1750,7 +1756,7 @@ mod feasibility_check {
 			assert_eq!(MultiPhase::snapshot().unwrap().voters.len(), 8);
 
 			// Simply faff with the score.
-			solution.score[0] += 1;
+			solution.score.minimal_stake += 1;
 
 			assert_noop!(
 				MultiPhase::feasibility_check(solution, COMPUTE),
@@ -1960,7 +1966,10 @@ mod tests {
 
 			// fill the queue with signed submissions
 			for s in 0..SignedMaxSubmissions::get() {
-				let solution = RawSolution { score: [(5 + s).into(), 0, 0], ..Default::default() };
+				let solution = RawSolution {
+					score: ElectionScore { minimal_stake: (5 + s).into(), ..Default::default() },
+					..Default::default()
+				};
 				assert_ok!(MultiPhase::submit(
 					crate::mock::Origin::signed(99),
 					Box::new(solution),
@@ -2087,13 +2096,19 @@ mod tests {
 			crate::mock::Balancing::set(Some((2, 0)));
 
 			let (solution, _) = MultiPhase::mine_solution::<<Runtime as Config>::Solver>().unwrap();
-			// Default solution has a score of [50, 100, 5000].
-			assert_eq!(solution.score, [50, 100, 5000]);
+			// Default solution's score.
+			assert!(matches!(solution.score, ElectionScore { minimal_stake: 50, .. }));
 
-			<MinimumUntrustedScore<Runtime>>::put([49, 0, 0]);
+			<MinimumUntrustedScore<Runtime>>::put(ElectionScore {
+				minimal_stake: 49,
+				..Default::default()
+			});
 			assert_ok!(MultiPhase::feasibility_check(solution.clone(), ElectionCompute::Signed));
 
-			<MinimumUntrustedScore<Runtime>>::put([51, 0, 0]);
+			<MinimumUntrustedScore<Runtime>>::put(ElectionScore {
+				minimal_stake: 51,
+				..Default::default()
+			});
 			assert_noop!(
 				MultiPhase::feasibility_check(solution, ElectionCompute::Signed),
 				FeasibilityError::UntrustedScoreTooLow,

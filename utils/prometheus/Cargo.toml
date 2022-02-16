@@ -18,7 +18,7 @@ prometheus = { version = "0.13.0", default-features = false }
 futures-util = { version = "0.3.19", default-features = false, features = ["io"] }
 thiserror = "1.0"
 async-std = { version = "1.10.0", features = ["unstable"] }
-tokio = "1.15"
+tokio = { version = "1.15", features = ["parking_lot"] }
 hyper = { version = "0.14.16", default-features = false, features = ["http1", "server", "tcp"] }
 
 [dev-dependencies]
