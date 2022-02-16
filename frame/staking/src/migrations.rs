@@ -26,19 +26,29 @@ use frame_support::traits::OnRuntimeUpgrade;
 pub struct InjectValidatorsIntoSortedListProvider<T>(sp_std::marker::PhantomData<T>);
 impl<T: Config> OnRuntimeUpgrade for InjectValidatorsIntoSortedListProvider<T> {
 	fn on_runtime_upgrade() -> Weight {
-		for (v, _) in Validators::<T>::iter() {
-			let weight = Pallet::<T>::vote_weight(&v);
-			let _ = T::SortedListProvider::on_insert(v.clone(), weight).map_err(|err| {
-				log!(warn, "failed to insert {:?} into SortedListProvider: {:?}", v, err)
-			});
-		}
+		if StorageVersion::<T>::get() == Releases::V8_0_0 {
+			for (v, _) in Validators::<T>::iter() {
+				let weight = Pallet::<T>::vote_weight(&v);
+				let _ = T::SortedListProvider::on_insert(v.clone(), weight).map_err(|err| {
+					log!(warn, "failed to insert {:?} into SortedListProvider: {:?}", v, err)
+				});
+			}
 
-		T::BlockWeights::get().max_block
+			T::BlockWeights::get().max_block
+		} else {
+			log!(warn, "InjectValidatorsIntoSortedListProvider being executed on the wrong storage version, expected Releases::V8_0_0");
+			T::DbWeight::get().reads(1)
+		}
 	}
 
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<(), &'static str> {
 		use frame_support::traits::OnRuntimeUpgradeHelpersExt;
+		frame_support::ensure!(
+			StorageVersion::<T>::get() == crate::Releases::V8_0_0,
+			"must upgrade linearly"
+		);
+
 		let prev_count = T::SortedListProvider::count();
 		Self::set_temp_storage(prev_count, "prev");
 	}
