@@ -4884,6 +4884,7 @@ dependencies = [
  "pallet-membership",
  "pallet-mmr",
  "pallet-multisig",
+ "pallet-nomination-pools",
  "pallet-offences",
  "pallet-offences-benchmarking",
  "pallet-preimage",

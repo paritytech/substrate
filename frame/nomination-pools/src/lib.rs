@@ -276,9 +276,10 @@ use frame_support::{
 };
 use scale_info::TypeInfo;
 use sp_core::U256;
+use sp_io::hashing::blake2_256;
 use sp_runtime::traits::{Bounded, Convert, Saturating, StaticLookup, TrailingZeroInput, Zero};
 use sp_staking::{EraIndex, PoolsInterface, SlashPoolArgs, SlashPoolOut, StakingInterface};
-use sp_std::{collections::btree_map::BTreeMap, ops::Div};
+use sp_std::{collections::btree_map::BTreeMap, ops::Div, vec::Vec};
 
 #[cfg(feature = "runtime-benchmarks")]
 pub mod benchmarking;
@@ -363,8 +364,8 @@ pub struct Delegator<T: Config> {
 }
 
 /// All of a pool's possible states.
-#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, RuntimeDebugNoBound)]
-#[cfg_attr(feature = "std", derive(Clone, PartialEq))]
+#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, PartialEq, RuntimeDebugNoBound)]
+#[cfg_attr(feature = "std", derive(Clone))]
 pub enum PoolState {
 	Open = 0,
 	Blocked = 1,
@@ -1268,9 +1269,9 @@ impl<T: Config> Pallet<T> {
 		let ext_index = frame_system::Pallet::<T>::extrinsic_index().unwrap_or_default();
 
 		let stash_entropy =
-			(b"pools/stash", index, parent_hash, ext_index).using_encoded(sp_core::blake2_256);
+			(b"pools/stash", index, parent_hash, ext_index).using_encoded(blake2_256);
 		let reward_entropy =
-			(b"pools/rewards", index, parent_hash, ext_index).using_encoded(sp_core::blake2_256);
+			(b"pools/rewards", index, parent_hash, ext_index).using_encoded(blake2_256);
 
 		(
 			Decode::decode(&mut TrailingZeroInput::new(stash_entropy.as_ref()))
