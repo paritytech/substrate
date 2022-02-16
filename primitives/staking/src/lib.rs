@@ -125,9 +125,12 @@ pub trait StakingInterface {
 
 	// Benchmarking helpers
 
+	#[cfg(feature = "runtime-benchmarks")]
 	fn max_nominations() -> u32;
 
+	#[cfg(feature = "runtime-benchmarks")]
 	fn weight_update_worst_case(who: &Self::AccountId, is_increase: bool) -> u64;
 
+	#[cfg(feature = "runtime-benchmarks")]
 	fn set_current_era(era: EraIndex);
 }

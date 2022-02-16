@@ -1384,4 +1384,9 @@ impl<T: Config> StakingInterface for Pallet<T> {
 	fn weight_update_worst_case(who: &Self::AccountId, is_increase: bool) -> u64 {
 		T::SortedListProvider::weight_update_worst_case(who, is_increase)
 	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn set_current_era(era: EraIndex) {
+		CurrentEra::<T>::put(era)
+	}
 }

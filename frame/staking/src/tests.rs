@@ -4713,8 +4713,8 @@ mod sorted_list_provider {
 }
 
 mod staking_interface {
-	use super::*;
-	use sp_staking::StakingInterface as _;
+	// use super::*;
+	// use sp_staking::StakingInterface as _;
 
 	// TODO: probably should test all other fns of the interface impl? Although benchmarks should
 	// at least make sure those work on the happy path

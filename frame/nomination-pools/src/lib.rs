@@ -262,6 +262,8 @@
 //   pools is passed the updated unlocking chunks and makes updates based on that
 // - benchmarks
 // - make staking interface current era
+// - staking provider current era should not return option, just era index
+// - write detailed docs for StakingInterface
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
