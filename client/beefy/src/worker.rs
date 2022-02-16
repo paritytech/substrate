@@ -414,6 +414,13 @@ where
 		metric_set!(self, beefy_best_block, block_num);
 	}
 
+	fn initialize_best_beefy(&mut self) -> NumberFor<B> {
+		// FIXME: currently hardcoded to genesis/block #0.
+		let best_beefy = NumberFor::<B>::from(0u32);
+		self.set_best_beefy_block(best_beefy, None);
+		best_beefy
+	}
+
 	pub(crate) async fn run(mut self) {
 		let mut votes = Box::pin(self.gossip_engine.lock().messages_for(topic::<B>()).filter_map(
 			|notification| async move {
