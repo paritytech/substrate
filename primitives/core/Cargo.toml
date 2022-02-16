@@ -49,14 +49,11 @@ bitflags = "1.3"
 # full crypto
 ed25519-dalek = { version = "1.0.1", default-features = false, features = ["u64_backend", "alloc"], optional = true }
 blake2-rfc = { version = "0.2.18", default-features = false, optional = true }
-tiny-keccak = { version = "2.0.1", features = ["keccak"], optional = true }
 schnorrkel = { version = "0.9.1", features = [
 	"preaudit_deprecated",
 	"u64_backend",
 ], default-features = false, optional = true }
-sha2 = { version = "0.10.0", default-features = false, optional = true }
 hex = { version = "0.4", default-features = false, optional = true }
-twox-hash = { version = "1.6.2", default-features = false, optional = true }
 libsecp256k1 = { version = "0.7", default-features = false, features = ["hmac", "static-context"], optional = true }
 merlin = { version = "2.0", default-features = false, optional = true }
 ss58-registry = { version = "1.11.0", default-features = false }
@@ -98,7 +95,6 @@ std = [
 	"hash-db/std",
 	"sp-std/std",
 	"serde",
-	"twox-hash/std",
 	"blake2-rfc/std",
 	"ed25519-dalek/std",
 	"hex/std",
@@ -107,11 +103,9 @@ std = [
 	"tiny-bip39",
 	"byteorder/std",
 	"rand",
-	"sha2/std",
 	"schnorrkel/std",
 	"regex",
 	"num-traits/std",
-	"tiny-keccak",
 	"sp-core-hashing/std",
 	"sp-debug-derive/std",
 	"sp-externalities",
@@ -132,11 +126,8 @@ std = [
 full_crypto = [
 	"ed25519-dalek",
 	"blake2-rfc",
-	"tiny-keccak",
 	"schnorrkel",
 	"hex",
-	"sha2",
-	"twox-hash",
 	"libsecp256k1",
 	"sp-core-hashing",
 	"sp-runtime-interface/disable_target_static_assertions",
