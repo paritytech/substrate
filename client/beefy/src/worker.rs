@@ -247,14 +247,10 @@ where
 
 				debug!(target: "beefy", "🥩 New Rounds for id: {:?}", id);
 
-				self.best_beefy_block = Some(*notification.header.number());
-				self.beefy_best_block_sender
-					.notify(|| Ok::<_, ()>(notification.hash.clone()))
-					.expect("forwards closure result; the closure always returns Ok; qed.");
-
-				// this metric is kind of 'fake'. Best BEEFY block should only be updated once we
-				// have a signed commitment for the block. Remove once the above TODO is done.
-				metric_set!(self, beefy_best_block, *notification.header.number());
+				self.set_best_beefy_block(
+					*notification.header.number(),
+					Some(notification.hash.clone()),
+				);
 			}
 		}
 
@@ -370,21 +366,38 @@ where
 					.notify(|| Ok::<_, ()>(signed_commitment))
 					.expect("forwards closure result; the closure always returns Ok; qed.");
 
-				self.best_beefy_block = Some(block_num);
-				if let Err(err) = self.client.hash(block_num).map(|h| {
-					if let Some(hash) = h {
-						self.beefy_best_block_sender
-							.notify(|| Ok::<_, ()>(hash))
-							.expect("forwards closure result; the closure always returns Ok; qed.");
-					}
-				}) {
-					error!(target: "beefy", "🥩 Failed to get hash for block number {}: {}",
-						block_num, err);
-				}
 
-				metric_set!(self, beefy_best_block, block_num);
+				self.set_best_beefy_block(block_num, None);
 			}
 		}
+	}
+
+	fn set_best_beefy_block(
+		&mut self,
+		block_num: NumberFor<B>,
+		mut opt_block_hash: Option<<<B as Block>::Header as Header>::Hash>,
+	) {
+		if opt_block_hash.is_none() {
+			// Try to get block hash ourselves.
+			opt_block_hash = match self.client.hash(block_num) {
+				Ok(h) => h,
+				Err(e) => {
+					error!(target: "beefy", "🥩 Failed to get hash for block number {}: {}",
+						block_num, e);
+					None
+				},
+			}
+		};
+		opt_block_hash.map(|hash| {
+			self.beefy_best_block_sender
+				.notify(|| Ok::<_, ()>(hash))
+				.expect("forwards closure result; the closure always returns Ok; qed.")
+		});
+		self.best_beefy_block = Some(block_num);
+
+		// FIXME: this metric is kind of 'fake'. Best BEEFY block should only be updated once we
+		// have a signed commitment for the block.
+		metric_set!(self, beefy_best_block, block_num);
 	}
 
 	pub(crate) async fn run(mut self) {
