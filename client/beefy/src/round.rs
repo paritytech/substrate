@@ -85,6 +85,10 @@ where
 		&self.votes.votes
 	}
 
+	pub(crate) fn number(&self) -> &N {
+		&self.number
+	}
+
 	pub(crate) fn add_vote(&mut self, round: &(H, N), vote: (Public, Signature)) -> bool {
 		if self.payload == round.0 &&
 			self.number == round.1 &&

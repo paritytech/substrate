@@ -84,7 +84,7 @@ where
 	rounds: Option<round::Rounds<Payload, NumberFor<B>>>,
 	finality_notifications: FinalityNotifications<B>,
 	/// Best block we received a GRANDPA notification for
-	best_grandpa_block: NumberFor<B>,
+	best_grandpa_block_header: <B as Block>::Header,
 	/// Best block a BEEFY voting round has been concluded for
 	best_beefy_block: Option<NumberFor<B>>,
 	/// Used to keep RPC worker up to date on latest/best beefy
@@ -123,6 +123,12 @@ where
 			metrics,
 		} = worker_params;
 
+		let last_finalized_header = client
+			.header(BlockId::number(client.info().finalized_number))
+			// TODO: is this proof correct in all cases?
+			.expect("latest block always has header available; qed.")
+			.expect("latest block always has header available; qed.");
+
 		let (waker_tx, waker_rx) = mpsc::channel(10);
 		BeefyWorker {
 			client: client.clone(),
@@ -135,7 +141,7 @@ where
 			metrics,
 			rounds: None,
 			finality_notifications: client.finality_notification_stream(),
-			best_grandpa_block: client.info().finalized_number,
+			best_grandpa_block_header: last_finalized_header,
 			best_beefy_block: None,
 			last_signed_id: 0,
 			beefy_best_block_sender,
@@ -162,7 +168,11 @@ where
 			return false
 		};
 
-		let target = vote_target(self.best_grandpa_block, best_beefy_block, self.min_block_delta);
+		let target = vote_target(
+			*self.best_grandpa_block_header.number(),
+			best_beefy_block,
+			self.min_block_delta,
+		);
 
 		trace!(target: "beefy", "🥩 should_vote_on: #{:?}, next_block_to_vote_on: #{:?}", number, target);
 
@@ -221,118 +231,10 @@ where
 		trace!(target: "beefy", "🥩 Finality notification: {:?}", notification);
 
 		// update best GRANDPA finalized block we have seen
-		self.best_grandpa_block = *notification.header.number();
+		self.best_grandpa_block_header = notification.header;
 
-		if let Some(active) = self.validator_set(&notification.header) {
-			// Authority set change or genesis set id triggers new voting rounds
-			//
-			// TODO: (grandpa-bridge-gadget#366) Enacting a new authority set will also
-			// implicitly 'conclude' the currently active BEEFY voting round by starting a
-			// new one. This should be replaced by proper round life-cycle handling.
-			if self.rounds.is_none() ||
-				active.id() != self.rounds.as_ref().unwrap().validator_set_id() ||
-				(active.id() == GENESIS_AUTHORITY_SET_ID && self.best_beefy_block.is_none())
-			{
-				debug!(target: "beefy", "🥩 New active validator set id: {:?}", active);
-				metric_set!(self, beefy_validator_set_id, active.id());
-
-				// BEEFY should produce a signed commitment for each session
-				if active.id() != self.last_signed_id + 1 && active.id() != GENESIS_AUTHORITY_SET_ID
-				{
-					metric_inc!(self, beefy_skipped_sessions);
-				}
-
-				if log_enabled!(target: "beefy", log::Level::Debug) {
-					// verify the new validator set - only do it if we're also logging the warning
-					let _ = self.verify_validator_set(notification.header.number(), &active);
-				}
-
-				let id = active.id();
-				// FIXME: Temporary here, remove this block
-				let payload = {
-					let mmr_root = if let Some(hash) =
-						find_mmr_root_digest::<B, Public>(&notification.header)
-					{
-						hash
-					} else {
-						warn!(target: "beefy", "🥩 No MMR root digest found for: {:?}", notification.header.hash());
-						return
-					};
-					Payload::new(known_payload_ids::MMR_ROOT_ID, mmr_root.encode())
-				};
-				let block_num = *notification.header.number();
-				self.rounds = Some(round::Rounds::new(payload, block_num, active));
-
-				debug!(target: "beefy", "🥩 New Rounds for id: {:?}", id);
-
-				warn!(target: "beefy", "🥩 new session, waking up ticker");
-				let _ = self.waker_tx.try_send(());
-
-				self.set_best_beefy_block(block_num, Some(notification.hash.clone()));
-			}
-		}
-
-		if self.should_vote_on(*notification.header.number()) {
-			let (validators, validator_set_id) = if let Some(rounds) = &self.rounds {
-				(rounds.validators(), rounds.validator_set_id())
-			} else {
-				debug!(target: "beefy", "🥩 Missing validator set - can't vote for: {:?}", notification.header.hash());
-				return
-			};
-			let authority_id = if let Some(id) = self.key_store.authority_id(validators) {
-				debug!(target: "beefy", "🥩 Local authority id: {:?}", id);
-				id
-			} else {
-				debug!(target: "beefy", "🥩 Missing validator id - can't vote for: {:?}", notification.header.hash());
-				return
-			};
-
-			let mmr_root =
-				if let Some(hash) = find_mmr_root_digest::<B, Public>(&notification.header) {
-					hash
-				} else {
-					warn!(target: "beefy", "🥩 No MMR root digest found for: {:?}", notification.header.hash());
-					return
-				};
-
-			let payload = Payload::new(known_payload_ids::MMR_ROOT_ID, mmr_root.encode());
-			let commitment = Commitment {
-				payload,
-				block_number: notification.header.number(),
-				validator_set_id,
-			};
-			let encoded_commitment = commitment.encode();
-
-			let signature = match self.key_store.sign(&authority_id, &*encoded_commitment) {
-				Ok(sig) => sig,
-				Err(err) => {
-					warn!(target: "beefy", "🥩 Error signing commitment: {:?}", err);
-					return
-				},
-			};
-
-			trace!(
-				target: "beefy",
-				"🥩 Produced signature using {:?}, is_valid: {:?}",
-				authority_id,
-				BeefyKeystore::verify(&authority_id, &signature, &*encoded_commitment)
-			);
-
-			let message = VoteMessage { commitment, id: authority_id, signature };
-
-			let encoded_message = message.encode();
-
-			metric_inc!(self, beefy_votes_sent);
-
-			debug!(target: "beefy", "🥩 Sent vote message: {:?}", message);
-
-			self.handle_vote(
-				(message.commitment.payload, *message.commitment.block_number),
-				(message.id, message.signature),
-			);
-
-			self.gossip_engine.lock().gossip_message(topic::<B>(), encoded_message, false);
-		}
+		warn!(target: "beefy", "🥩 new session, waking up ticker");
+		let _ = self.waker_tx.try_send(());
 	}
 
 	fn handle_vote(&mut self, round: (Payload, NumberFor<B>), vote: (Public, Signature)) {
@@ -392,10 +294,6 @@ where
 		}
 	}
 
-	fn tick(&mut self) {
-		warn!(target: "beefy", "🥩 TICK...");
-	}
-
 	fn set_best_beefy_block(
 		&mut self,
 		block_num: NumberFor<B>,
@@ -429,6 +327,122 @@ where
 		let best_beefy = NumberFor::<B>::from(0u32);
 		self.set_best_beefy_block(best_beefy, None);
 		best_beefy
+	}
+
+	fn tick(&mut self) {
+		warn!(target: "beefy", "🥩 TICK...");
+
+		// TODO: avoid multiple ticks for same block
+
+		if let Some(active) = self.validator_set(&self.best_grandpa_block_header) {
+			// Authority set change or genesis set id triggers new voting rounds
+			//
+			// TODO: (grandpa-bridge-gadget#366) Enacting a new authority set will also
+			// implicitly 'conclude' the currently active BEEFY voting round by starting a
+			// new one. This should be replaced by proper round life-cycle handling.
+			if self.rounds.is_none() ||
+				active.id() != self.rounds.as_ref().unwrap().validator_set_id() ||
+				(active.id() == GENESIS_AUTHORITY_SET_ID && self.best_beefy_block.is_none())
+			{
+				debug!(target: "beefy", "🥩 New active validator set id: {:?}", active);
+				metric_set!(self, beefy_validator_set_id, active.id());
+
+				// BEEFY should produce a signed commitment for each session
+				if active.id() != self.last_signed_id + 1 && active.id() != GENESIS_AUTHORITY_SET_ID
+				{
+					metric_inc!(self, beefy_skipped_sessions);
+				}
+
+				if log_enabled!(target: "beefy", log::Level::Debug) {
+					// verify the new validator set - only do it if we're also logging the warning
+					let _ =
+						self.verify_validator_set(self.best_grandpa_block_header.number(), &active);
+				}
+
+				let id = active.id();
+				// FIXME: Temporary here, remove this block
+				let payload = {
+					let mmr_root = if let Some(hash) =
+						find_mmr_root_digest::<B, Public>(&self.best_grandpa_block_header)
+					{
+						hash
+					} else {
+						warn!(target: "beefy", "🥩 No MMR root digest found for: {:?}", self.best_grandpa_block_header.hash());
+						return
+					};
+					Payload::new(known_payload_ids::MMR_ROOT_ID, mmr_root.encode())
+				};
+				let block_num = *self.best_grandpa_block_header.number();
+				self.rounds = Some(round::Rounds::new(payload, block_num, active));
+
+				debug!(target: "beefy", "🥩 New Rounds for id: {:?}", id);
+
+				self.set_best_beefy_block(block_num, Some(self.best_grandpa_block_header.hash()));
+			}
+		}
+
+		if self.should_vote_on(*self.best_grandpa_block_header.number()) {
+			let (validators, validator_set_id) = if let Some(rounds) = &self.rounds {
+				(rounds.validators(), rounds.validator_set_id())
+			} else {
+				debug!(target: "beefy", "🥩 Missing validator set - can't vote for: {:?}", self.best_grandpa_block_header.hash());
+				return
+			};
+			let authority_id = if let Some(id) = self.key_store.authority_id(validators) {
+				debug!(target: "beefy", "🥩 Local authority id: {:?}", id);
+				id
+			} else {
+				debug!(target: "beefy", "🥩 Missing validator id - can't vote for: {:?}", self.best_grandpa_block_header.hash());
+				return
+			};
+
+			let mmr_root = if let Some(hash) =
+				find_mmr_root_digest::<B, Public>(&self.best_grandpa_block_header)
+			{
+				hash
+			} else {
+				warn!(target: "beefy", "🥩 No MMR root digest found for: {:?}", self.best_grandpa_block_header.hash());
+				return
+			};
+
+			let payload = Payload::new(known_payload_ids::MMR_ROOT_ID, mmr_root.encode());
+			let commitment = Commitment {
+				payload,
+				block_number: *self.best_grandpa_block_header.number(),
+				validator_set_id,
+			};
+			let encoded_commitment = commitment.encode();
+
+			let signature = match self.key_store.sign(&authority_id, &*encoded_commitment) {
+				Ok(sig) => sig,
+				Err(err) => {
+					warn!(target: "beefy", "🥩 Error signing commitment: {:?}", err);
+					return
+				},
+			};
+
+			trace!(
+				target: "beefy",
+				"🥩 Produced signature using {:?}, is_valid: {:?}",
+				authority_id,
+				BeefyKeystore::verify(&authority_id, &signature, &*encoded_commitment)
+			);
+
+			let message = VoteMessage { commitment, id: authority_id, signature };
+
+			let encoded_message = message.encode();
+
+			metric_inc!(self, beefy_votes_sent);
+
+			debug!(target: "beefy", "🥩 Sent vote message: {:?}", message);
+
+			self.handle_vote(
+				(message.commitment.payload, message.commitment.block_number),
+				(message.id, message.signature),
+			);
+
+			self.gossip_engine.lock().gossip_message(topic::<B>(), encoded_message, false);
+		}
 	}
 
 	pub(crate) async fn run(mut self) {
