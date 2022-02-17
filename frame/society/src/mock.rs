@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,41 +18,39 @@
 //! Test utilities
 
 use super::*;
+use crate as pallet_society;
 
 use frame_support::{
-	impl_outer_origin, parameter_types, ord_parameter_types,
-	traits::{OnInitialize, OnFinalize, TestRandomness},
+	ord_parameter_types, parameter_types,
+	traits::{ConstU32, ConstU64},
 };
+use frame_support_test::TestRandomness;
+use frame_system::EnsureSignedBy;
 use sp_core::H256;
 use sp_runtime::{
-	Perbill,
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 };
-use frame_system::EnsureSignedBy;
 
-impl_outer_origin! {
-	pub enum Origin for Test {}
-}
+type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+type Block = frame_system::mocking::MockBlock<Test>;
 
-#[derive(Clone, Eq, PartialEq)]
-pub struct Test;
+frame_support::construct_runtime!(
+	pub enum Test where
+		Block = Block,
+		NodeBlock = Block,
+		UncheckedExtrinsic = UncheckedExtrinsic,
+	{
+		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
+		Society: pallet_society::{Pallet, Call, Storage, Event<T>, Config<T>},
+	}
+);
+
 parameter_types! {
-	pub const CandidateDeposit: u64 = 25;
-	pub const WrongSideDeduction: u64 = 2;
-	pub const MaxStrikes: u32 = 2;
-	pub const RotationPeriod: u64 = 4;
-	pub const PeriodSpend: u64 = 1000;
-	pub const MaxLockDuration: u64 = 100;
-	pub const ChallengePeriod: u64 = 8;
-
-	pub const BlockHashCount: u64 = 250;
-	pub const MaximumBlockWeight: u32 = 1024;
-	pub const MaximumBlockLength: u32 = 2 * 1024;
-	pub const AvailableBlockRatio: Perbill = Perbill::one();
-
-	pub const ExistentialDeposit: u64 = 1;
-	pub const SocietyModuleId: ModuleId = ModuleId(*b"py/socie");
+	pub const SocietyPalletId: PalletId = PalletId(*b"py/socie");
+	pub BlockWeights: frame_system::limits::BlockWeights =
+		frame_system::limits::BlockWeights::simple_max(1024);
 }
 
 ord_parameter_types! {
@@ -60,64 +58,62 @@ ord_parameter_types! {
 	pub const SuspensionJudgementSetAccount: u128 = 2;
 }
 
-impl frame_system::Trait for Test {
-	type BaseCallFilter = ();
+impl frame_system::Config for Test {
+	type BaseCallFilter = frame_support::traits::Everything;
+	type BlockWeights = ();
+	type BlockLength = ();
+	type DbWeight = ();
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
-	type Call = ();
+	type Call = Call;
 	type Hashing = BlakeTwo256;
 	type AccountId = u128;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = ();
-	type BlockHashCount = BlockHashCount;
-	type MaximumBlockWeight = MaximumBlockWeight;
-	type DbWeight = ();
-	type BlockExecutionWeight = ();
-	type ExtrinsicBaseWeight = ();
-	type MaximumExtrinsicWeight = MaximumBlockWeight;
-	type MaximumBlockLength = MaximumBlockLength;
-	type AvailableBlockRatio = AvailableBlockRatio;
+	type Event = Event;
+	type BlockHashCount = ConstU64<250>;
 	type Version = ();
-	type PalletInfo = ();
+	type PalletInfo = PalletInfo;
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
 	type AccountData = pallet_balances::AccountData<u64>;
 	type SystemWeightInfo = ();
+	type SS58Prefix = ();
+	type OnSetCode = ();
+	type MaxConsumers = ConstU32<16>;
 }
 
-impl pallet_balances::Trait for Test {
+impl pallet_balances::Config for Test {
 	type MaxLocks = ();
+	type MaxReserves = ();
+	type ReserveIdentifier = [u8; 8];
 	type Balance = u64;
-	type Event = ();
+	type Event = Event;
 	type DustRemoval = ();
-	type ExistentialDeposit = ExistentialDeposit;
+	type ExistentialDeposit = ConstU64<1>;
 	type AccountStore = System;
 	type WeightInfo = ();
 }
 
-impl Trait for Test {
-	type Event = ();
-	type Currency = pallet_balances::Module<Self>;
-	type Randomness = TestRandomness;
-	type CandidateDeposit = CandidateDeposit;
-	type WrongSideDeduction = WrongSideDeduction;
-	type MaxStrikes = MaxStrikes;
-	type PeriodSpend = PeriodSpend;
+impl Config for Test {
+	type Event = Event;
+	type Currency = pallet_balances::Pallet<Self>;
+	type Randomness = TestRandomness<Self>;
+	type CandidateDeposit = ConstU64<25>;
+	type WrongSideDeduction = ConstU64<2>;
+	type MaxStrikes = ConstU32<2>;
+	type PeriodSpend = ConstU64<1000>;
 	type MembershipChanged = ();
-	type RotationPeriod = RotationPeriod;
-	type MaxLockDuration = MaxLockDuration;
+	type RotationPeriod = ConstU64<4>;
+	type MaxLockDuration = ConstU64<100>;
 	type FounderSetOrigin = EnsureSignedBy<FounderSetAccount, u128>;
 	type SuspensionJudgementOrigin = EnsureSignedBy<SuspensionJudgementSetAccount, u128>;
-	type ChallengePeriod = ChallengePeriod;
-	type ModuleId = SocietyModuleId;
+	type ChallengePeriod = ConstU64<8>;
+	type MaxCandidateIntake = ConstU32<10>;
+	type PalletId = SocietyPalletId;
 }
-
-pub type Society = Module<Test>;
-pub type System = frame_system::Module<Test>;
-pub type Balances = pallet_balances::Module<Test>;
 
 pub struct EnvBuilder {
 	members: Vec<u128>,
@@ -151,14 +147,16 @@ impl EnvBuilder {
 	pub fn execute<R, F: FnOnce() -> R>(mut self, f: F) -> R {
 		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		self.balances.push((Society::account_id(), self.balance.max(self.pot)));
-		pallet_balances::GenesisConfig::<Test> {
-			balances: self.balances,
-		}.assimilate_storage(&mut t).unwrap();
-		GenesisConfig::<Test>{
+		pallet_balances::GenesisConfig::<Test> { balances: self.balances }
+			.assimilate_storage(&mut t)
+			.unwrap();
+		pallet_society::GenesisConfig::<Test> {
 			members: self.members,
 			pot: self.pot,
 			max_members: self.max_members,
-		}.assimilate_storage(&mut t).unwrap();
+		}
+		.assimilate_storage(&mut t)
+		.unwrap();
 		let mut ext: sp_io::TestExternalities = t.into();
 		ext.execute_with(f)
 	}
@@ -205,12 +203,7 @@ pub fn run_to_block(n: u64) {
 pub fn create_bid<AccountId, Balance>(
 	value: Balance,
 	who: AccountId,
-	kind: BidKind<AccountId, Balance>
-) -> Bid<AccountId, Balance>
-{
-	Bid {
-		who,
-		kind,
-		value
-	}
+	kind: BidKind<AccountId, Balance>,
+) -> Bid<AccountId, Balance> {
+	Bid { who, kind, value }
 }

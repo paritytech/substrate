@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,24 +18,34 @@
 //! Trie-based state machine backend essence used to read values
 //! from storage.
 
+use crate::{backend::Consolidate, debug, warn, StorageKey, StorageValue};
+use codec::Encode;
+use hash_db::{self, AsHashDB, HashDB, HashDBRef, Hasher, Prefix};
+#[cfg(feature = "std")]
+use parking_lot::RwLock;
+use sp_core::storage::ChildInfo;
+use sp_std::{boxed::Box, vec::Vec};
+use sp_trie::{
+	empty_child_trie_root, read_child_trie_value, read_trie_value,
+	trie_types::{TrieDB, TrieError},
+	DBValue, KeySpacedDB, PrefixedMemoryDB, Trie, TrieDBIterator, TrieDBKeyIterator,
+};
+#[cfg(feature = "std")]
+use std::collections::HashMap;
 #[cfg(feature = "std")]
 use std::sync::Arc;
-use sp_std::{ops::Deref, boxed::Box, vec::Vec};
-use crate::{warn, debug};
-use hash_db::{self, Hasher, Prefix};
-use sp_trie::{Trie, MemoryDB, PrefixedMemoryDB, DBValue,
-	empty_child_trie_root, read_trie_value, read_child_trie_value,
-	for_keys_in_child_trie, KeySpacedDB, TrieDBIterator};
-use sp_trie::trie_types::{TrieDB, TrieError, Layout};
-use crate::{backend::Consolidate, StorageKey, StorageValue};
-use sp_core::storage::ChildInfo;
-use codec::Encode;
+// In this module, we only use layout for read operation and empty root,
+// where V1 and V0 are equivalent.
+use sp_trie::LayoutV1 as Layout;
 
 #[cfg(not(feature = "std"))]
 macro_rules! format {
-	($($arg:tt)+) => (
-		crate::DefaultError
-	);
+	( $message:expr, $( $arg:expr )* ) => {
+		{
+			$( let _ = &$arg; )*
+			crate::DefaultError
+		}
+	};
 }
 
 type Result<V> = sp_std::result::Result<V, crate::DefaultError>;
@@ -46,31 +56,46 @@ pub trait Storage<H: Hasher>: Send + Sync {
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>>;
 }
 
+/// Local cache for child root.
+#[cfg(feature = "std")]
+pub(crate) struct Cache {
+	pub child_root: HashMap<Vec<u8>, Option<Vec<u8>>>,
+}
+
+#[cfg(feature = "std")]
+impl Cache {
+	fn new() -> Self {
+		Cache { child_root: HashMap::new() }
+	}
+}
+
 /// Patricia trie-based pairs storage essence.
 pub struct TrieBackendEssence<S: TrieBackendStorage<H>, H: Hasher> {
 	storage: S,
 	root: H::Out,
 	empty: H::Out,
+	#[cfg(feature = "std")]
+	pub(crate) cache: Arc<RwLock<Cache>>,
 }
 
-impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out: Encode {
+impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H>
+where
+	H::Out: Encode,
+{
 	/// Create new trie-based backend.
 	pub fn new(storage: S, root: H::Out) -> Self {
 		TrieBackendEssence {
 			storage,
 			root,
 			empty: H::hash(&[0u8]),
+			#[cfg(feature = "std")]
+			cache: Arc::new(RwLock::new(Cache::new())),
 		}
 	}
 
 	/// Get backend storage reference.
 	pub fn backend_storage(&self) -> &S {
 		&self.storage
-	}
-
-	/// Get backend storage reference.
-	pub fn backend_storage_mut(&mut self) -> &mut S {
-		&mut self.storage
 	}
 
 	/// Get trie root.
@@ -80,8 +105,18 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 
 	/// Set trie root. This is useful for testing.
 	pub fn set_root(&mut self, root: H::Out) {
+		// If root did change so can have cached content.
+		self.reset_cache();
 		self.root = root;
 	}
+
+	#[cfg(feature = "std")]
+	fn reset_cache(&mut self) {
+		self.cache = Arc::new(RwLock::new(Cache::new()));
+	}
+
+	#[cfg(not(feature = "std"))]
+	fn reset_cache(&mut self) {}
 
 	/// Consumes self and returns underlying storage.
 	pub fn into_storage(self) -> S {
@@ -96,7 +131,24 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 
 	/// Access the root of the child storage in its parent trie
 	fn child_root(&self, child_info: &ChildInfo) -> Result<Option<StorageValue>> {
-		self.storage(child_info.prefixed_storage_key().as_slice())
+		#[cfg(feature = "std")]
+		{
+			if let Some(result) = self.cache.read().child_root.get(child_info.storage_key()) {
+				return Ok(result.clone())
+			}
+		}
+
+		let result = self.storage(child_info.prefixed_storage_key().as_slice())?;
+
+		#[cfg(feature = "std")]
+		{
+			self.cache
+				.write()
+				.child_root
+				.insert(child_info.storage_key().to_vec(), result.clone());
+		}
+
+		Ok(result)
 	}
 
 	/// Return the next key in the child trie i.e. the minimum key that is strictly superior to
@@ -114,7 +166,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 		let mut hash = H::Out::default();
 
 		if child_root.len() != hash.as_ref().len() {
-			return Err(format!("Invalid child storage hash at {:?}", child_info.storage_key()));
+			return Err(format!("Invalid child storage hash at {:?}", child_info.storage_key()))
 		}
 		// note: child_root and hash must be same size, panics otherwise.
 		hash.as_mut().copy_from_slice(&child_root[..]);
@@ -129,7 +181,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 		child_info: Option<&ChildInfo>,
 		key: &[u8],
 	) -> Result<Option<StorageKey>> {
-		let dyn_eph: &dyn hash_db::HashDBRef<_, _>;
+		let dyn_eph: &dyn HashDBRef<_, _>;
 		let keyspace_eph;
 		if let Some(child_info) = child_info.as_ref() {
 			keyspace_eph = KeySpacedDB::new(self, child_info.keyspace());
@@ -138,10 +190,9 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 			dyn_eph = self;
 		}
 
-		let trie = TrieDB::<H>::new(dyn_eph, root)
-			.map_err(|e| format!("TrieDB creation error: {}", e))?;
-		let mut iter = trie.iter()
-			.map_err(|e| format!("TrieDB iteration error: {}", e))?;
+		let trie =
+			TrieDB::<H>::new(dyn_eph, root).map_err(|e| format!("TrieDB creation error: {}", e))?;
+		let mut iter = trie.key_iter().map_err(|e| format!("TrieDB iteration error: {}", e))?;
 
 		// The key just after the one given in input, basically `key++0`.
 		// Note: We are sure this is the next key if:
@@ -157,8 +208,8 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 		let next_element = iter.next();
 
 		let next_key = if let Some(next_element) = next_element {
-			let (next_key, _) = next_element
-				.map_err(|e| format!("TrieDB iterator next error: {}", e))?;
+			let next_key =
+				next_element.map_err(|e| format!("TrieDB iterator next error: {}", e))?;
 			Some(next_key)
 		} else {
 			None
@@ -180,7 +231,8 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<StorageValue>> {
-		let root = self.child_root(child_info)?
+		let root = self
+			.child_root(child_info)?
 			.unwrap_or_else(|| empty_child_trie_root::<Layout<H>>().encode());
 
 		let map_e = |e| format!("Trie lookup error: {}", e);
@@ -189,70 +241,128 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 			.map_err(map_e)
 	}
 
-	/// Retrieve all entries keys of child storage and call `f` for each of those keys.
-	pub fn for_keys_in_child_storage<F: FnMut(&[u8])>(
+	/// Retrieve all entries keys of storage and call `f` for each of those keys.
+	/// Aborts as soon as `f` returns false.
+	///
+	/// Returns `true` when all keys were iterated.
+	pub fn apply_to_key_values_while(
 		&self,
-		child_info: &ChildInfo,
-		f: F,
-	) {
-		let root = match self.child_root(child_info) {
-			Ok(v) => v.unwrap_or_else(|| empty_child_trie_root::<Layout<H>>().encode()),
-			Err(e) => {
-				debug!(target: "trie", "Error while iterating child storage: {}", e);
-				return;
+		child_info: Option<&ChildInfo>,
+		prefix: Option<&[u8]>,
+		start_at: Option<&[u8]>,
+		f: impl FnMut(Vec<u8>, Vec<u8>) -> bool,
+		allow_missing_nodes: bool,
+	) -> Result<bool> {
+		let mut child_root;
+		let root = if let Some(child_info) = child_info.as_ref() {
+			if let Some(fetched_child_root) = self.child_root(child_info)? {
+				child_root = H::Out::default();
+				// root is fetched from DB, not writable by runtime, so it's always valid.
+				child_root.as_mut().copy_from_slice(fetched_child_root.as_slice());
+
+				&child_root
+			} else {
+				return Ok(true)
 			}
+		} else {
+			&self.root
 		};
 
-		if let Err(e) = for_keys_in_child_trie::<Layout<H>, _, _>(
-			child_info.keyspace(),
-			self,
-			&root,
-			f,
-		) {
-			debug!(target: "trie", "Error while iterating child storage: {}", e);
-		}
+		self.trie_iter_inner(&root, prefix, f, child_info, start_at, allow_missing_nodes)
+	}
+
+	/// Retrieve all entries keys of a storage and call `f` for each of those keys.
+	/// Aborts as soon as `f` returns false.
+	pub fn apply_to_keys_while<F: FnMut(&[u8]) -> bool>(
+		&self,
+		child_info: Option<&ChildInfo>,
+		prefix: Option<&[u8]>,
+		mut f: F,
+	) {
+		let mut child_root = H::Out::default();
+		let root = if let Some(child_info) = child_info.as_ref() {
+			let root_vec = match self.child_root(child_info) {
+				Ok(v) => v.unwrap_or_else(|| empty_child_trie_root::<Layout<H>>().encode()),
+				Err(e) => {
+					debug!(target: "trie", "Error while iterating child storage: {}", e);
+					return
+				},
+			};
+			child_root.as_mut().copy_from_slice(&root_vec);
+			&child_root
+		} else {
+			&self.root
+		};
+
+		self.trie_iter_key_inner(root, prefix, |k| f(k), child_info)
 	}
 
 	/// Execute given closure for all keys starting with prefix.
-	pub fn for_child_keys_with_prefix<F: FnMut(&[u8])>(
+	pub fn for_child_keys_with_prefix(
 		&self,
 		child_info: &ChildInfo,
 		prefix: &[u8],
-		mut f: F,
+		mut f: impl FnMut(&[u8]),
 	) {
 		let root_vec = match self.child_root(child_info) {
 			Ok(v) => v.unwrap_or_else(|| empty_child_trie_root::<Layout<H>>().encode()),
 			Err(e) => {
 				debug!(target: "trie", "Error while iterating child storage: {}", e);
-				return;
-			}
+				return
+			},
 		};
 		let mut root = H::Out::default();
 		root.as_mut().copy_from_slice(&root_vec);
-		self.keys_values_with_prefix_inner(&root, prefix, |k, _v| f(k), Some(child_info))
+		self.trie_iter_key_inner(
+			&root,
+			Some(prefix),
+			|k| {
+				f(k);
+				true
+			},
+			Some(child_info),
+		)
 	}
 
 	/// Execute given closure for all keys starting with prefix.
 	pub fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], mut f: F) {
-		self.keys_values_with_prefix_inner(&self.root, prefix, |k, _v| f(k), None)
+		self.trie_iter_key_inner(
+			&self.root,
+			Some(prefix),
+			|k| {
+				f(k);
+				true
+			},
+			None,
+		)
 	}
 
-	fn keys_values_with_prefix_inner<F: FnMut(&[u8], &[u8])>(
+	fn trie_iter_key_inner<F: FnMut(&[u8]) -> bool>(
 		&self,
 		root: &H::Out,
-		prefix: &[u8],
+		prefix: Option<&[u8]>,
 		mut f: F,
 		child_info: Option<&ChildInfo>,
 	) {
 		let mut iter = move |db| -> sp_std::result::Result<(), Box<TrieError<H::Out>>> {
 			let trie = TrieDB::<H>::new(db, root)?;
+			let iter = if let Some(prefix) = prefix.as_ref() {
+				TrieDBKeyIterator::new_prefixed(&trie, prefix)?
+			} else {
+				TrieDBKeyIterator::new(&trie)?
+			};
 
-			for x in TrieDBIterator::new_prefixed(&trie, prefix)? {
-				let (key, value) = x?;
+			for x in iter {
+				let key = x?;
 
-				debug_assert!(key.starts_with(prefix));
+				debug_assert!(prefix
+					.as_ref()
+					.map(|prefix| key.starts_with(prefix))
+					.unwrap_or(true));
 
-				f(&key, &value);
+				if !f(&key) {
+					break
+				}
 			}
 
 			Ok(())
@@ -269,9 +379,64 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 		}
 	}
 
+	fn trie_iter_inner<F: FnMut(Vec<u8>, Vec<u8>) -> bool>(
+		&self,
+		root: &H::Out,
+		prefix: Option<&[u8]>,
+		mut f: F,
+		child_info: Option<&ChildInfo>,
+		start_at: Option<&[u8]>,
+		allow_missing_nodes: bool,
+	) -> Result<bool> {
+		let mut iter = move |db| -> sp_std::result::Result<bool, Box<TrieError<H::Out>>> {
+			let trie = TrieDB::<H>::new(db, root)?;
+
+			let prefix = prefix.unwrap_or(&[]);
+			let iterator = if let Some(start_at) = start_at {
+				TrieDBIterator::new_prefixed_then_seek(&trie, prefix, start_at)?
+			} else {
+				TrieDBIterator::new_prefixed(&trie, prefix)?
+			};
+			for x in iterator {
+				let (key, value) = x?;
+
+				debug_assert!(key.starts_with(prefix));
+
+				if !f(key, value) {
+					return Ok(false)
+				}
+			}
+
+			Ok(true)
+		};
+
+		let result = if let Some(child_info) = child_info {
+			let db = KeySpacedDB::new(self, child_info.keyspace());
+			iter(&db)
+		} else {
+			iter(self)
+		};
+		match result {
+			Ok(completed) => Ok(completed),
+			Err(e) if matches!(*e, TrieError::IncompleteDatabase(_)) && allow_missing_nodes =>
+				Ok(false),
+			Err(e) => Err(format!("TrieDB iteration error: {}", e)),
+		}
+	}
+
 	/// Execute given closure for all key and values starting with prefix.
-	pub fn for_key_values_with_prefix<F: FnMut(&[u8], &[u8])>(&self, prefix: &[u8], f: F) {
-		self.keys_values_with_prefix_inner(&self.root, prefix, f, None)
+	pub fn for_key_values_with_prefix<F: FnMut(&[u8], &[u8])>(&self, prefix: &[u8], mut f: F) {
+		let _ = self.trie_iter_inner(
+			&self.root,
+			Some(prefix),
+			|k, v| {
+				f(&k, &v);
+				true
+			},
+			None,
+			None,
+			false,
+		);
 	}
 }
 
@@ -280,19 +445,20 @@ pub(crate) struct Ephemeral<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> {
 	overlay: &'a mut S::Overlay,
 }
 
-impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> hash_db::AsHashDB<H, DBValue>
+impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> AsHashDB<H, DBValue>
 	for Ephemeral<'a, S, H>
 {
-	fn as_hash_db<'b>(&'b self) -> &'b (dyn hash_db::HashDB<H, DBValue> + 'b) { self }
-	fn as_hash_db_mut<'b>(&'b mut self) -> &'b mut (dyn hash_db::HashDB<H, DBValue> + 'b) { self }
+	fn as_hash_db<'b>(&'b self) -> &'b (dyn HashDB<H, DBValue> + 'b) {
+		self
+	}
+	fn as_hash_db_mut<'b>(&'b mut self) -> &'b mut (dyn HashDB<H, DBValue> + 'b) {
+		self
+	}
 }
 
 impl<'a, S: TrieBackendStorage<H>, H: Hasher> Ephemeral<'a, S, H> {
 	pub fn new(storage: &'a S, overlay: &'a mut S::Overlay) -> Self {
-		Ephemeral {
-			storage,
-			overlay,
-		}
+		Ephemeral { storage, overlay }
 	}
 }
 
@@ -300,7 +466,7 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: Hasher> hash_db::HashDB<H, DBValue>
 	for Ephemeral<'a, S, H>
 {
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Option<DBValue> {
-		if let Some(val) = hash_db::HashDB::get(self.overlay, key, prefix) {
+		if let Some(val) = HashDB::get(self.overlay, key, prefix) {
 			Some(val)
 		} else {
 			match self.storage.get(&key, prefix) {
@@ -314,38 +480,37 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: Hasher> hash_db::HashDB<H, DBValue>
 	}
 
 	fn contains(&self, key: &H::Out, prefix: Prefix) -> bool {
-		hash_db::HashDB::get(self, key, prefix).is_some()
+		HashDB::get(self, key, prefix).is_some()
 	}
 
 	fn insert(&mut self, prefix: Prefix, value: &[u8]) -> H::Out {
-		hash_db::HashDB::insert(self.overlay, prefix, value)
+		HashDB::insert(self.overlay, prefix, value)
 	}
 
 	fn emplace(&mut self, key: H::Out, prefix: Prefix, value: DBValue) {
-		hash_db::HashDB::emplace(self.overlay, key, prefix, value)
+		HashDB::emplace(self.overlay, key, prefix, value)
 	}
 
 	fn remove(&mut self, key: &H::Out, prefix: Prefix) {
-		hash_db::HashDB::remove(self.overlay, key, prefix)
+		HashDB::remove(self.overlay, key, prefix)
 	}
 }
 
-impl<'a, S: 'a + TrieBackendStorage<H>, H: Hasher> hash_db::HashDBRef<H, DBValue>
-	for Ephemeral<'a, S, H>
-{
+impl<'a, S: 'a + TrieBackendStorage<H>, H: Hasher> HashDBRef<H, DBValue> for Ephemeral<'a, S, H> {
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Option<DBValue> {
-		hash_db::HashDB::get(self, key, prefix)
+		HashDB::get(self, key, prefix)
 	}
 
 	fn contains(&self, key: &H::Out, prefix: Prefix) -> bool {
-		hash_db::HashDB::contains(self, key, prefix)
+		HashDB::contains(self, key, prefix)
 	}
 }
 
 /// Key-value pairs storage that is used by trie backend essence.
 pub trait TrieBackendStorage<H: Hasher>: Send + Sync {
 	/// Type of in-memory overlay.
-	type Overlay: hash_db::HashDB<H, DBValue> + Default + Consolidate;
+	type Overlay: HashDB<H, DBValue> + Default + Consolidate;
+
 	/// Get the value stored at key.
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>>;
 }
@@ -356,37 +521,32 @@ impl<H: Hasher> TrieBackendStorage<H> for Arc<dyn Storage<H>> {
 	type Overlay = PrefixedMemoryDB<H>;
 
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>> {
-		Storage::<H>::get(self.deref(), key, prefix)
+		Storage::<H>::get(std::ops::Deref::deref(self), key, prefix)
 	}
 }
 
-// This implementation is used by test storage trie clients.
-impl<H: Hasher> TrieBackendStorage<H> for PrefixedMemoryDB<H> {
-	type Overlay = PrefixedMemoryDB<H>;
+impl<H, KF> TrieBackendStorage<H> for sp_trie::GenericMemoryDB<H, KF>
+where
+	H: Hasher,
+	KF: sp_trie::KeyFunction<H> + Send + Sync,
+{
+	type Overlay = Self;
 
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>> {
 		Ok(hash_db::HashDB::get(self, key, prefix))
 	}
 }
 
-impl<H: Hasher> TrieBackendStorage<H> for MemoryDB<H> {
-	type Overlay = MemoryDB<H>;
-
-	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>> {
-		Ok(hash_db::HashDB::get(self, key, prefix))
+impl<S: TrieBackendStorage<H>, H: Hasher> AsHashDB<H, DBValue> for TrieBackendEssence<S, H> {
+	fn as_hash_db<'b>(&'b self) -> &'b (dyn HashDB<H, DBValue> + 'b) {
+		self
+	}
+	fn as_hash_db_mut<'b>(&'b mut self) -> &'b mut (dyn HashDB<H, DBValue> + 'b) {
+		self
 	}
 }
 
-impl<S: TrieBackendStorage<H>, H: Hasher> hash_db::AsHashDB<H, DBValue>
-	for TrieBackendEssence<S, H>
-{
-	fn as_hash_db<'b>(&'b self) -> &'b (dyn hash_db::HashDB<H, DBValue> + 'b) { self }
-	fn as_hash_db_mut<'b>(&'b mut self) -> &'b mut (dyn hash_db::HashDB<H, DBValue> + 'b) { self }
-}
-
-impl<S: TrieBackendStorage<H>, H: Hasher> hash_db::HashDB<H, DBValue>
-	for TrieBackendEssence<S, H>
-{
+impl<S: TrieBackendStorage<H>, H: Hasher> HashDB<H, DBValue> for TrieBackendEssence<S, H> {
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Option<DBValue> {
 		if *key == self.empty {
 			return Some([0u8].to_vec())
@@ -401,7 +561,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> hash_db::HashDB<H, DBValue>
 	}
 
 	fn contains(&self, key: &H::Out, prefix: Prefix) -> bool {
-		hash_db::HashDB::get(self, key, prefix).is_some()
+		HashDB::get(self, key, prefix).is_some()
 	}
 
 	fn insert(&mut self, _prefix: Prefix, _value: &[u8]) -> H::Out {
@@ -417,24 +577,23 @@ impl<S: TrieBackendStorage<H>, H: Hasher> hash_db::HashDB<H, DBValue>
 	}
 }
 
-impl<S: TrieBackendStorage<H>, H: Hasher> hash_db::HashDBRef<H, DBValue>
-	for TrieBackendEssence<S, H>
-{
+impl<S: TrieBackendStorage<H>, H: Hasher> HashDBRef<H, DBValue> for TrieBackendEssence<S, H> {
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Option<DBValue> {
-		hash_db::HashDB::get(self, key, prefix)
+		HashDB::get(self, key, prefix)
 	}
 
 	fn contains(&self, key: &H::Out, prefix: Prefix) -> bool {
-		hash_db::HashDB::contains(self, key, prefix)
+		HashDB::contains(self, key, prefix)
 	}
 }
 
-
 #[cfg(test)]
 mod test {
-	use sp_core::{Blake2Hasher, H256};
-	use sp_trie::{TrieMut, PrefixedMemoryDB, trie_types::TrieDBMut, KeySpacedDBMut};
 	use super::*;
+	use sp_core::{Blake2Hasher, H256};
+	use sp_trie::{
+		trie_types::TrieDBMutV1 as TrieDBMut, KeySpacedDBMut, PrefixedMemoryDB, TrieMut,
+	};
 
 	#[test]
 	fn next_storage_key_and_next_child_storage_key_work() {
@@ -478,20 +637,10 @@ mod test {
 		let mdb = essence_1.into_storage();
 		let essence_2 = TrieBackendEssence::new(mdb, root_2);
 
-		assert_eq!(
-			essence_2.next_child_storage_key(child_info, b"2"), Ok(Some(b"3".to_vec()))
-		);
-		assert_eq!(
-			essence_2.next_child_storage_key(child_info, b"3"), Ok(Some(b"4".to_vec()))
-		);
-		assert_eq!(
-			essence_2.next_child_storage_key(child_info, b"4"), Ok(Some(b"6".to_vec()))
-		);
-		assert_eq!(
-			essence_2.next_child_storage_key(child_info, b"5"), Ok(Some(b"6".to_vec()))
-		);
-		assert_eq!(
-			essence_2.next_child_storage_key(child_info, b"6"), Ok(None)
-		);
+		assert_eq!(essence_2.next_child_storage_key(child_info, b"2"), Ok(Some(b"3".to_vec())));
+		assert_eq!(essence_2.next_child_storage_key(child_info, b"3"), Ok(Some(b"4".to_vec())));
+		assert_eq!(essence_2.next_child_storage_key(child_info, b"4"), Ok(Some(b"6".to_vec())));
+		assert_eq!(essence_2.next_child_storage_key(child_info, b"5"), Ok(Some(b"6".to_vec())));
+		assert_eq!(essence_2.next_child_storage_key(child_info, b"6"), Ok(None));
 	}
 }

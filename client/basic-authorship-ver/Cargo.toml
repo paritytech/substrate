@@ -1,0 +1,39 @@
+[package]
+name = "sc-basic-authorship-ver"
+version = "0.10.0-dev"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2021"
+license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
+homepage = "https://substrate.io"
+repository = "https://github.com/paritytech/substrate/"
+description = "Basic implementation of block-authoring logic."
+readme = "README.md"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[dependencies]
+codec = { package = "parity-scale-codec", version = "2.0.0" }
+futures = "0.3.9"
+futures-timer = "3.0.1"
+log = "0.4.8"
+prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../utils/prometheus", version = "0.10.0-dev"}
+sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
+sp-runtime = { version = "4.1.0-dev", path = "../../primitives/runtime" }
+sp-core = { version = "4.1.0-dev", path = "../../primitives/core" }
+sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
+sc-client-api = { version = "4.0.0-dev", path = "../api" }
+sp-consensus = { version = "0.10.0-dev", path = "../../primitives/consensus/common" }
+sp-inherents = { version = "4.0.0-dev", path = "../../primitives/inherents" }
+sc-telemetry = { version = "4.0.0-dev", path = "../telemetry" }
+sc-transaction-pool-api = { version = "4.0.0-dev", path = "../../client/transaction-pool/api" }
+sc-block-builder = { package = "sc-block-builder-ver", version = "0.10.0-dev", path = "../block-builder-ver" }
+sc-proposer-metrics = { version = "0.10.0-dev", path = "../proposer-metrics" }
+ver-api = { path='../../primitives/ver-api', version='4.0.0-dev' }
+sp-ver = { path='../../primitives/ver', version='4.0.0-dev' }
+
+[dev-dependencies]
+sc-transaction-pool = { version = "4.0.0-dev", path = "../transaction-pool" }
+substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
+parking_lot = "0.11.2"
+env_logger = "0.9.0"

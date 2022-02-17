@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,19 +18,18 @@
 //! I/O host interface for substrate runtime.
 
 #![warn(missing_docs)]
-
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(not(feature = "std"), feature(alloc_error_handler))]
-
-#![cfg_attr(feature = "std",
-   doc = "Substrate runtime standard library as compiled when linked with Rust's standard library.")]
-#![cfg_attr(not(feature = "std"),
-   doc = "Substrate's runtime standard library as compiled without Rust's standard library.")]
+#![cfg_attr(
+	feature = "std",
+	doc = "Substrate runtime standard library as compiled when linked with Rust's standard library."
+)]
+#![cfg_attr(
+	not(feature = "std"),
+	doc = "Substrate's runtime standard library as compiled without Rust's standard library."
+)]
 
 use sp_std::vec::Vec;
-
-#[cfg(feature = "std")]
-use sp_std::ops::Deref;
 
 #[cfg(feature = "std")]
 use tracing;
@@ -38,35 +37,46 @@ use tracing;
 #[cfg(feature = "std")]
 use sp_core::{
 	crypto::Pair,
-	traits::{KeystoreExt, CallInWasmExt, TaskExecutorExt},
-	offchain::{OffchainExt, TransactionPoolExt},
 	hexdisplay::HexDisplay,
+	offchain::{OffchainDbExt, OffchainWorkerExt, TransactionPoolExt},
 	storage::ChildInfo,
+	traits::{RuntimeSpawnExt, TaskExecutorExt},
 };
+#[cfg(feature = "std")]
+use sp_keystore::{KeystoreExt, SyncCryptoStore};
 
 use sp_core::{
-	OpaquePeerId, crypto::KeyTypeId, ed25519, sr25519, ecdsa, H256, LogLevel,
+	crypto::KeyTypeId,
+	ecdsa, ed25519,
 	offchain::{
-		Timestamp, HttpRequestId, HttpRequestStatus, HttpError, StorageKind, OpaqueNetworkState,
+		HttpError, HttpRequestId, HttpRequestStatus, OpaqueNetworkState, StorageKind, Timestamp,
 	},
+	sr25519,
+	storage::StateVersion,
+	LogLevel, LogLevelFilter, OpaquePeerId, H256,
 };
 
 #[cfg(feature = "std")]
-use sp_trie::{TrieConfiguration, trie_types::Layout};
+use sp_trie::{LayoutV0, LayoutV1, TrieConfiguration};
 
-use sp_runtime_interface::{runtime_interface, Pointer};
-use sp_runtime_interface::pass_by::PassBy;
+use sp_runtime_interface::{
+	pass_by::{PassBy, PassByCodec},
+	runtime_interface, Pointer,
+};
 
-use codec::{Encode, Decode};
+use codec::{Decode, Encode};
 
 #[cfg(feature = "std")]
-use sp_externalities::{ExternalitiesExt, Externalities};
+use sp_externalities::{Externalities, ExternalitiesExt};
 
 #[cfg(feature = "std")]
 mod batch_verifier;
 
 #[cfg(feature = "std")]
 use batch_verifier::BatchVerifier;
+
+#[cfg(feature = "std")]
+const LOG_TARGET: &str = "runtime::io";
 
 /// Error verifying ECDSA signature
 #[derive(Encode, Decode)]
@@ -77,6 +87,16 @@ pub enum EcdsaVerifyError {
 	BadV,
 	/// Invalid signature
 	BadSignature,
+}
+
+/// The outcome of calling `storage_kill`. Returned value is the number of storage items
+/// removed from the backend from making the `storage_kill` call.
+#[derive(PassByCodec, Encode, Decode)]
+pub enum KillStorageResult {
+	/// All key to remove were removed, return number of key removed from backend.
+	AllRemoved(u32),
+	/// Not all key to remove were removed, return number of key removed from backend.
+	SomeRemaining(u32),
 }
 
 /// Interface for accessing the storage from within the runtime.
@@ -119,7 +139,41 @@ pub trait Storage {
 
 	/// Clear the storage of each key-value pair where the key starts with the given `prefix`.
 	fn clear_prefix(&mut self, prefix: &[u8]) {
-		Externalities::clear_prefix(*self, prefix)
+		let _ = Externalities::clear_prefix(*self, prefix, None);
+	}
+
+	/// Clear the storage of each key-value pair where the key starts with the given `prefix`.
+	///
+	/// # Limit
+	///
+	/// Deletes all keys from the overlay and up to `limit` keys from the backend if
+	/// it is set to `Some`. No limit is applied when `limit` is set to `None`.
+	///
+	/// The limit can be used to partially delete a prefix storage in case it is too large
+	/// to delete in one go (block).
+	///
+	/// It returns a boolean false iff some keys are remaining in
+	/// the prefix after the functions returns. Also returns a `u32` with
+	/// the number of keys removed from the process.
+	///
+	/// # Note
+	///
+	/// Please note that keys that are residing in the overlay for that prefix when
+	/// issuing this call are all deleted without counting towards the `limit`. Only keys
+	/// written during the current block are part of the overlay. Deleting with a `limit`
+	/// mostly makes sense with an empty overlay for that prefix.
+	///
+	/// Calling this function multiple times per block for the same `prefix` does
+	/// not make much sense because it is not cumulative when called inside the same block.
+	/// Use this function to distribute the deletion of a single child trie across multiple
+	/// blocks.
+	#[version(2)]
+	fn clear_prefix(&mut self, prefix: &[u8], limit: Option<u32>) -> KillStorageResult {
+		let (all_removed, num_removed) = Externalities::clear_prefix(*self, prefix, limit);
+		match all_removed {
+			true => KillStorageResult::AllRemoved(num_removed),
+			false => KillStorageResult::SomeRemaining(num_removed),
+		}
 	}
 
 	/// Append the encoded `value` to the storage item at `key`.
@@ -140,19 +194,22 @@ pub trait Storage {
 	///
 	/// Returns a `Vec<u8>` that holds the SCALE encoded hash.
 	fn root(&mut self) -> Vec<u8> {
-		self.storage_root()
+		self.storage_root(StateVersion::V0)
 	}
 
-	/// "Commit" all existing operations and get the resulting storage change root.
-	/// `parent_hash` is a SCALE encoded hash.
+	/// "Commit" all existing operations and compute the resulting storage root.
 	///
 	/// The hashing algorithm is defined by the `Block`.
 	///
-	/// Returns `Some(Vec<u8>)` which holds the SCALE encoded hash or `None` when
-	/// changes trie is disabled.
-	fn changes_root(&mut self, parent_hash: &[u8]) -> Option<Vec<u8>> {
-		self.storage_changes_root(parent_hash)
-			.expect("Invalid `parent_hash` given to `changes_root`.")
+	/// Returns a `Vec<u8>` that holds the SCALE encoded hash.
+	#[version(2, register_only)]
+	fn root(&mut self, version: StateVersion) -> Vec<u8> {
+		self.storage_root(version)
+	}
+
+	/// Always returns `None`. This function exists for compatibility reasons.
+	fn changes_root(&mut self, _parent_hash: &[u8]) -> Option<Vec<u8>> {
+		None
 	}
 
 	/// Get the next key in storage after the given one in lexicographic order.
@@ -207,13 +264,9 @@ pub trait Storage {
 pub trait DefaultChildStorage {
 	/// Get a default child storage value for a given key.
 	///
-	/// Parameter `storage_key` is the unprefixed location of the root of the child trie in the parent trie.
-	/// Result is `None` if the value for `key` in the child storage can not be found.
-	fn get(
-		&self,
-		storage_key: &[u8],
-		key: &[u8],
-	) -> Option<Vec<u8>> {
+	/// Parameter `storage_key` is the unprefixed location of the root of the child trie in the
+	/// parent trie. Result is `None` if the value for `key` in the child storage can not be found.
+	fn get(&self, storage_key: &[u8], key: &[u8]) -> Option<Vec<u8>> {
 		let child_info = ChildInfo::new_default(storage_key);
 		self.child_storage(&child_info, key).map(|s| s.to_vec())
 	}
@@ -233,25 +286,19 @@ pub trait DefaultChildStorage {
 		value_offset: u32,
 	) -> Option<u32> {
 		let child_info = ChildInfo::new_default(storage_key);
-		self.child_storage(&child_info, key)
-			.map(|value| {
-				let value_offset = value_offset as usize;
-				let data = &value[value_offset.min(value.len())..];
-				let written = std::cmp::min(data.len(), value_out.len());
-				value_out[..written].copy_from_slice(&data[..written]);
-				data.len() as u32
-			})
+		self.child_storage(&child_info, key).map(|value| {
+			let value_offset = value_offset as usize;
+			let data = &value[value_offset.min(value.len())..];
+			let written = std::cmp::min(data.len(), value_out.len());
+			value_out[..written].copy_from_slice(&data[..written]);
+			data.len() as u32
+		})
 	}
 
 	/// Set a child storage value.
 	///
 	/// Set `key` to `value` in the child storage denoted by `storage_key`.
-	fn set(
-		&mut self,
-		storage_key: &[u8],
-		key: &[u8],
-		value: &[u8],
-	) {
+	fn set(&mut self, storage_key: &[u8], key: &[u8], value: &[u8]) {
 		let child_info = ChildInfo::new_default(storage_key);
 		self.set_child_storage(&child_info, key.to_vec(), value.to_vec());
 	}
@@ -259,11 +306,7 @@ pub trait DefaultChildStorage {
 	/// Clear a child storage key.
 	///
 	/// For the default child storage at `storage_key`, clear value at `key`.
-	fn clear(
-		&mut self,
-		storage_key: &[u8],
-		key: &[u8],
-	) {
+	fn clear(&mut self, storage_key: &[u8], key: &[u8]) {
 		let child_info = ChildInfo::new_default(storage_key);
 		self.clear_child_storage(&child_info, key);
 	}
@@ -272,22 +315,38 @@ pub trait DefaultChildStorage {
 	///
 	/// If it exists, the child storage for `storage_key`
 	/// is removed.
-	fn storage_kill(
-		&mut self,
-		storage_key: &[u8],
-	) {
+	fn storage_kill(&mut self, storage_key: &[u8]) {
 		let child_info = ChildInfo::new_default(storage_key);
-		self.kill_child_storage(&child_info);
+		self.kill_child_storage(&child_info, None);
+	}
+
+	/// Clear a child storage key.
+	///
+	/// See `Storage` module `clear_prefix` documentation for `limit` usage.
+	#[version(2)]
+	fn storage_kill(&mut self, storage_key: &[u8], limit: Option<u32>) -> bool {
+		let child_info = ChildInfo::new_default(storage_key);
+		let (all_removed, _num_removed) = self.kill_child_storage(&child_info, limit);
+		all_removed
+	}
+
+	/// Clear a child storage key.
+	///
+	/// See `Storage` module `clear_prefix` documentation for `limit` usage.
+	#[version(3)]
+	fn storage_kill(&mut self, storage_key: &[u8], limit: Option<u32>) -> KillStorageResult {
+		let child_info = ChildInfo::new_default(storage_key);
+		let (all_removed, num_removed) = self.kill_child_storage(&child_info, limit);
+		match all_removed {
+			true => KillStorageResult::AllRemoved(num_removed),
+			false => KillStorageResult::SomeRemaining(num_removed),
+		}
 	}
 
 	/// Check a child storage key.
 	///
 	/// Check whether the given `key` exists in default child defined at `storage_key`.
-	fn exists(
-		&self,
-		storage_key: &[u8],
-		key: &[u8],
-	) -> bool {
+	fn exists(&self, storage_key: &[u8], key: &[u8]) -> bool {
 		let child_info = ChildInfo::new_default(storage_key);
 		self.exists_child_storage(&child_info, key)
 	}
@@ -295,13 +354,27 @@ pub trait DefaultChildStorage {
 	/// Clear child default key by prefix.
 	///
 	/// Clear the child storage of each key-value pair where the key starts with the given `prefix`.
+	fn clear_prefix(&mut self, storage_key: &[u8], prefix: &[u8]) {
+		let child_info = ChildInfo::new_default(storage_key);
+		let _ = self.clear_child_prefix(&child_info, prefix, None);
+	}
+
+	/// Clear the child storage of each key-value pair where the key starts with the given `prefix`.
+	///
+	/// See `Storage` module `clear_prefix` documentation for `limit` usage.
+	#[version(2)]
 	fn clear_prefix(
 		&mut self,
 		storage_key: &[u8],
 		prefix: &[u8],
-	) {
+		limit: Option<u32>,
+	) -> KillStorageResult {
 		let child_info = ChildInfo::new_default(storage_key);
-		self.clear_child_prefix(&child_info, prefix);
+		let (all_removed, num_removed) = self.clear_child_prefix(&child_info, prefix, limit);
+		match all_removed {
+			true => KillStorageResult::AllRemoved(num_removed),
+			false => KillStorageResult::SomeRemaining(num_removed),
+		}
 	}
 
 	/// Default child root calculation.
@@ -310,22 +383,27 @@ pub trait DefaultChildStorage {
 	/// The hashing algorithm is defined by the `Block`.
 	///
 	/// Returns a `Vec<u8>` that holds the SCALE encoded hash.
-	fn root(
-		&mut self,
-		storage_key: &[u8],
-	) -> Vec<u8> {
+	fn root(&mut self, storage_key: &[u8]) -> Vec<u8> {
 		let child_info = ChildInfo::new_default(storage_key);
-		self.child_storage_root(&child_info)
+		self.child_storage_root(&child_info, StateVersion::V0)
+	}
+
+	/// Default child root calculation.
+	///
+	/// "Commit" all existing operations and compute the resulting child storage root.
+	/// The hashing algorithm is defined by the `Block`.
+	///
+	/// Returns a `Vec<u8>` that holds the SCALE encoded hash.
+	#[version(2, register_only)]
+	fn root(&mut self, storage_key: &[u8], version: StateVersion) -> Vec<u8> {
+		let child_info = ChildInfo::new_default(storage_key);
+		self.child_storage_root(&child_info, version)
 	}
 
 	/// Child storage key iteration.
 	///
 	/// Get the next key in storage after the given one in lexicographic order in child storage.
-	fn next_key(
-		&mut self,
-		storage_key: &[u8],
-		key: &[u8],
-	) -> Option<Vec<u8>> {
+	fn next_key(&mut self, storage_key: &[u8], key: &[u8]) -> Option<Vec<u8>> {
 		let child_info = ChildInfo::new_default(storage_key);
 		self.next_child_storage_key(&child_info, key)
 	}
@@ -336,32 +414,141 @@ pub trait DefaultChildStorage {
 pub trait Trie {
 	/// A trie root formed from the iterated items.
 	fn blake2_256_root(input: Vec<(Vec<u8>, Vec<u8>)>) -> H256 {
-		Layout::<sp_core::Blake2Hasher>::trie_root(input)
+		LayoutV0::<sp_core::Blake2Hasher>::trie_root(input)
+	}
+
+	/// A trie root formed from the iterated items.
+	#[version(2, register_only)]
+	fn blake2_256_root(input: Vec<(Vec<u8>, Vec<u8>)>, version: StateVersion) -> H256 {
+		match version {
+			StateVersion::V0 => LayoutV0::<sp_core::Blake2Hasher>::trie_root(input),
+			StateVersion::V1 => LayoutV1::<sp_core::Blake2Hasher>::trie_root(input),
+		}
 	}
 
 	/// A trie root formed from the enumerated items.
 	fn blake2_256_ordered_root(input: Vec<Vec<u8>>) -> H256 {
-		Layout::<sp_core::Blake2Hasher>::ordered_trie_root(input)
+		LayoutV0::<sp_core::Blake2Hasher>::ordered_trie_root(input)
+	}
+
+	/// A trie root formed from the enumerated items.
+	#[version(2, register_only)]
+	fn blake2_256_ordered_root(input: Vec<Vec<u8>>, version: StateVersion) -> H256 {
+		match version {
+			StateVersion::V0 => LayoutV0::<sp_core::Blake2Hasher>::ordered_trie_root(input),
+			StateVersion::V1 => LayoutV1::<sp_core::Blake2Hasher>::ordered_trie_root(input),
+		}
 	}
 
 	/// A trie root formed from the iterated items.
 	fn keccak_256_root(input: Vec<(Vec<u8>, Vec<u8>)>) -> H256 {
-		Layout::<sp_core::KeccakHasher>::trie_root(input)
+		LayoutV0::<sp_core::KeccakHasher>::trie_root(input)
+	}
+
+	/// A trie root formed from the iterated items.
+	#[version(2, register_only)]
+	fn keccak_256_root(input: Vec<(Vec<u8>, Vec<u8>)>, version: StateVersion) -> H256 {
+		match version {
+			StateVersion::V0 => LayoutV0::<sp_core::KeccakHasher>::trie_root(input),
+			StateVersion::V1 => LayoutV1::<sp_core::KeccakHasher>::trie_root(input),
+		}
 	}
 
 	/// A trie root formed from the enumerated items.
 	fn keccak_256_ordered_root(input: Vec<Vec<u8>>) -> H256 {
-		Layout::<sp_core::KeccakHasher>::ordered_trie_root(input)
+		LayoutV0::<sp_core::KeccakHasher>::ordered_trie_root(input)
+	}
+
+	/// A trie root formed from the enumerated items.
+	#[version(2, register_only)]
+	fn keccak_256_ordered_root(input: Vec<Vec<u8>>, version: StateVersion) -> H256 {
+		match version {
+			StateVersion::V0 => LayoutV0::<sp_core::KeccakHasher>::ordered_trie_root(input),
+			StateVersion::V1 => LayoutV1::<sp_core::KeccakHasher>::ordered_trie_root(input),
+		}
+	}
+
+	/// Verify trie proof
+	fn blake2_256_verify_proof(root: H256, proof: &[Vec<u8>], key: &[u8], value: &[u8]) -> bool {
+		sp_trie::verify_trie_proof::<LayoutV0<sp_core::Blake2Hasher>, _, _, _>(
+			&root,
+			proof,
+			&[(key, Some(value))],
+		)
+		.is_ok()
+	}
+
+	/// Verify trie proof
+	#[version(2, register_only)]
+	fn blake2_256_verify_proof(
+		root: H256,
+		proof: &[Vec<u8>],
+		key: &[u8],
+		value: &[u8],
+		version: StateVersion,
+	) -> bool {
+		match version {
+			StateVersion::V0 => sp_trie::verify_trie_proof::<
+				LayoutV0<sp_core::Blake2Hasher>,
+				_,
+				_,
+				_,
+			>(&root, proof, &[(key, Some(value))])
+			.is_ok(),
+			StateVersion::V1 => sp_trie::verify_trie_proof::<
+				LayoutV1<sp_core::Blake2Hasher>,
+				_,
+				_,
+				_,
+			>(&root, proof, &[(key, Some(value))])
+			.is_ok(),
+		}
+	}
+
+	/// Verify trie proof
+	fn keccak_256_verify_proof(root: H256, proof: &[Vec<u8>], key: &[u8], value: &[u8]) -> bool {
+		sp_trie::verify_trie_proof::<LayoutV0<sp_core::KeccakHasher>, _, _, _>(
+			&root,
+			proof,
+			&[(key, Some(value))],
+		)
+		.is_ok()
+	}
+
+	/// Verify trie proof
+	#[version(2, register_only)]
+	fn keccak_256_verify_proof(
+		root: H256,
+		proof: &[Vec<u8>],
+		key: &[u8],
+		value: &[u8],
+		version: StateVersion,
+	) -> bool {
+		match version {
+			StateVersion::V0 => sp_trie::verify_trie_proof::<
+				LayoutV0<sp_core::KeccakHasher>,
+				_,
+				_,
+				_,
+			>(&root, proof, &[(key, Some(value))])
+			.is_ok(),
+			StateVersion::V1 => sp_trie::verify_trie_proof::<
+				LayoutV1<sp_core::KeccakHasher>,
+				_,
+				_,
+				_,
+			>(&root, proof, &[(key, Some(value))])
+			.is_ok(),
+		}
 	}
 }
 
-/// Interface that provides miscellaneous functions for communicating between the runtime and the node.
+/// Interface that provides miscellaneous functions for communicating between the runtime and the
+/// node.
 #[runtime_interface]
 pub trait Misc {
-	/// The current relay chain identifier.
-	fn chain_id(&self) -> u64 {
-		sp_externalities::Externalities::chain_id(*self)
-	}
+	// NOTE: We use the target 'runtime' for messages produced by general printing functions,
+	// instead of LOG_TARGET.
 
 	/// Print a number.
 	fn print_num(val: u64) {
@@ -387,28 +574,34 @@ pub trait Misc {
 	///
 	/// # Performance
 	///
-	/// Calling this function is very expensive and should only be done very occasionally.
-	/// For getting the runtime version, it requires instantiating the wasm blob and calling a
-	/// function in this blob.
+	/// This function may be very expensive to call depending on the wasm binary. It may be
+	/// relatively cheap if the wasm binary contains version information. In that case,
+	/// uncompression of the wasm blob is the dominating factor.
+	///
+	/// If the wasm binary does not have the version information attached, then a legacy mechanism
+	/// may be involved. This means that a runtime call will be performed to query the version.
+	///
+	/// Calling into the runtime may be incredible expensive and should be approached with care.
 	fn runtime_version(&mut self, wasm: &[u8]) -> Option<Vec<u8>> {
-		// Create some dummy externalities, `Core_version` should not write data anyway.
+		use sp_core::traits::ReadRuntimeVersionExt;
+
 		let mut ext = sp_state_machine::BasicExternalities::default();
 
-		self.extension::<CallInWasmExt>()
-			.expect("No `CallInWasmExt` associated for the current context!")
-			.call_in_wasm(
-				wasm,
-				None,
-				"Core_version",
-				&[],
-				&mut ext,
-				// If a runtime upgrade introduces new host functions that are not provided by
-				// the node, we should not fail at instantiation. Otherwise nodes that are
-				// updated could run this successfully and it could lead to a storage root
-				// mismatch when importing this block.
-				sp_core::traits::MissingHostFunctions::Allow,
-			)
-			.ok()
+		match self
+			.extension::<ReadRuntimeVersionExt>()
+			.expect("No `ReadRuntimeVersionExt` associated for the current context!")
+			.read_runtime_version(wasm, &mut ext)
+		{
+			Ok(v) => Some(v),
+			Err(err) => {
+				log::debug!(
+					target: LOG_TARGET,
+					"cannot read version from the given runtime: {}",
+					err,
+				);
+				None
+			},
+		}
 	}
 }
 
@@ -417,10 +610,10 @@ pub trait Misc {
 pub trait Crypto {
 	/// Returns all `ed25519` public keys for the given key id from the keystore.
 	fn ed25519_public_keys(&mut self, id: KeyTypeId) -> Vec<ed25519::Public> {
-		self.extension::<KeystoreExt>()
-			.expect("No `keystore` associated for the current context!")
-			.read()
-			.ed25519_public_keys(id)
+		let keystore = &***self
+			.extension::<KeystoreExt>()
+			.expect("No `keystore` associated for the current context!");
+		SyncCryptoStore::ed25519_public_keys(keystore, id)
 	}
 
 	/// Generate an `ed22519` key for the given key type using an optional `seed` and
@@ -431,10 +624,10 @@ pub trait Crypto {
 	/// Returns the public key.
 	fn ed25519_generate(&mut self, id: KeyTypeId, seed: Option<Vec<u8>>) -> ed25519::Public {
 		let seed = seed.as_ref().map(|s| std::str::from_utf8(&s).expect("Seed is valid utf8!"));
-		self.extension::<KeystoreExt>()
-			.expect("No `keystore` associated for the current context!")
-			.write()
-			.ed25519_generate_new(id, seed)
+		let keystore = &***self
+			.extension::<KeystoreExt>()
+			.expect("No `keystore` associated for the current context!");
+		SyncCryptoStore::ed25519_generate_new(keystore, id, seed)
 			.expect("`ed25519_generate` failed")
 	}
 
@@ -448,22 +641,19 @@ pub trait Crypto {
 		pub_key: &ed25519::Public,
 		msg: &[u8],
 	) -> Option<ed25519::Signature> {
-		self.extension::<KeystoreExt>()
-			.expect("No `keystore` associated for the current context!")
-			.read()
-			.sign_with(id, &pub_key.into(), msg)
-			.map(|sig| ed25519::Signature::from_slice(sig.as_slice()))
+		let keystore = &***self
+			.extension::<KeystoreExt>()
+			.expect("No `keystore` associated for the current context!");
+		SyncCryptoStore::sign_with(keystore, id, &pub_key.into(), msg)
 			.ok()
+			.flatten()
+			.map(|sig| ed25519::Signature::from_slice(sig.as_slice()))
 	}
 
 	/// Verify `ed25519` signature.
 	///
 	/// Returns `true` when the verification was successful.
-	fn ed25519_verify(
-		sig: &ed25519::Signature,
-		msg: &[u8],
-		pub_key: &ed25519::Public,
-	) -> bool {
+	fn ed25519_verify(sig: &ed25519::Signature, msg: &[u8], pub_key: &ed25519::Public) -> bool {
 		ed25519::Pair::verify(sig, msg, pub_key)
 	}
 
@@ -481,20 +671,16 @@ pub trait Crypto {
 		msg: &[u8],
 		pub_key: &ed25519::Public,
 	) -> bool {
-		self.extension::<VerificationExt>().map(
-			|extension| extension.push_ed25519(sig.clone(), pub_key.clone(), msg.to_vec())
-		).unwrap_or_else(|| ed25519_verify(sig, msg, pub_key))
+		self.extension::<VerificationExt>()
+			.map(|extension| extension.push_ed25519(sig.clone(), pub_key.clone(), msg.to_vec()))
+			.unwrap_or_else(|| ed25519_verify(sig, msg, pub_key))
 	}
 
 	/// Verify `sr25519` signature.
 	///
 	/// Returns `true` when the verification was successful.
 	#[version(2)]
-	fn sr25519_verify(
-		sig: &sr25519::Signature,
-		msg: &[u8],
-		pub_key: &sr25519::Public,
-	) -> bool {
+	fn sr25519_verify(sig: &sr25519::Signature, msg: &[u8], pub_key: &sr25519::Public) -> bool {
 		sr25519::Pair::verify(sig, msg, pub_key)
 	}
 
@@ -512,16 +698,16 @@ pub trait Crypto {
 		msg: &[u8],
 		pub_key: &sr25519::Public,
 	) -> bool {
-		self.extension::<VerificationExt>().map(
-			|extension| extension.push_sr25519(sig.clone(), pub_key.clone(), msg.to_vec())
-		).unwrap_or_else(|| sr25519_verify(sig, msg, pub_key))
+		self.extension::<VerificationExt>()
+			.map(|extension| extension.push_sr25519(sig.clone(), pub_key.clone(), msg.to_vec()))
+			.unwrap_or_else(|| sr25519_verify(sig, msg, pub_key))
 	}
 
 	/// Start verification extension.
 	fn start_batch_verify(&mut self) {
-		let scheduler = self.extension::<TaskExecutorExt>()
+		let scheduler = self
+			.extension::<TaskExecutorExt>()
 			.expect("No task executor associated with the current context!")
-			.0
 			.clone();
 
 		self.register_extension(VerificationExt(BatchVerifier::new(scheduler)))
@@ -535,7 +721,8 @@ pub trait Crypto {
 	///
 	/// Will panic if no `VerificationExt` is registered (`start_batch_verify` was not called).
 	fn finish_batch_verify(&mut self) -> bool {
-		let result = self.extension::<VerificationExt>()
+		let result = self
+			.extension::<VerificationExt>()
 			.expect("`finish_batch_verify` should only be called after `start_batch_verify`")
 			.verify_and_clear();
 
@@ -547,10 +734,10 @@ pub trait Crypto {
 
 	/// Returns all `sr25519` public keys for the given key id from the keystore.
 	fn sr25519_public_keys(&mut self, id: KeyTypeId) -> Vec<sr25519::Public> {
-		self.extension::<KeystoreExt>()
-			.expect("No `keystore` associated for the current context!")
-			.read()
-			.sr25519_public_keys(id)
+		let keystore = &***self
+			.extension::<KeystoreExt>()
+			.expect("No `keystore` associated for the current context!");
+		SyncCryptoStore::sr25519_public_keys(keystore, id)
 	}
 
 	/// Generate an `sr22519` key for the given key type using an optional seed and
@@ -561,10 +748,10 @@ pub trait Crypto {
 	/// Returns the public key.
 	fn sr25519_generate(&mut self, id: KeyTypeId, seed: Option<Vec<u8>>) -> sr25519::Public {
 		let seed = seed.as_ref().map(|s| std::str::from_utf8(&s).expect("Seed is valid utf8!"));
-		self.extension::<KeystoreExt>()
-			.expect("No `keystore` associated for the current context!")
-			.write()
-			.sr25519_generate_new(id, seed)
+		let keystore = &***self
+			.extension::<KeystoreExt>()
+			.expect("No `keystore` associated for the current context!");
+		SyncCryptoStore::sr25519_generate_new(keystore, id, seed)
 			.expect("`sr25519_generate` failed")
 	}
 
@@ -578,12 +765,13 @@ pub trait Crypto {
 		pub_key: &sr25519::Public,
 		msg: &[u8],
 	) -> Option<sr25519::Signature> {
-		self.extension::<KeystoreExt>()
-			.expect("No `keystore` associated for the current context!")
-			.read()
-			.sign_with(id, &pub_key.into(), msg)
-			.map(|sig| sr25519::Signature::from_slice(sig.as_slice()))
+		let keystore = &***self
+			.extension::<KeystoreExt>()
+			.expect("No `keystore` associated for the current context!");
+		SyncCryptoStore::sign_with(keystore, id, &pub_key.into(), msg)
 			.ok()
+			.flatten()
+			.map(|sig| sr25519::Signature::from_slice(sig.as_slice()))
 	}
 
 	/// Verify an `sr25519` signature.
@@ -596,10 +784,10 @@ pub trait Crypto {
 
 	/// Returns all `ecdsa` public keys for the given key id from the keystore.
 	fn ecdsa_public_keys(&mut self, id: KeyTypeId) -> Vec<ecdsa::Public> {
-		self.extension::<KeystoreExt>()
-			.expect("No `keystore` associated for the current context!")
-			.read()
-			.ecdsa_public_keys(id)
+		let keystore = &***self
+			.extension::<KeystoreExt>()
+			.expect("No `keystore` associated for the current context!");
+		SyncCryptoStore::ecdsa_public_keys(keystore, id)
 	}
 
 	/// Generate an `ecdsa` key for the given key type using an optional `seed` and
@@ -610,11 +798,10 @@ pub trait Crypto {
 	/// Returns the public key.
 	fn ecdsa_generate(&mut self, id: KeyTypeId, seed: Option<Vec<u8>>) -> ecdsa::Public {
 		let seed = seed.as_ref().map(|s| std::str::from_utf8(&s).expect("Seed is valid utf8!"));
-		self.extension::<KeystoreExt>()
-			.expect("No `keystore` associated for the current context!")
-			.write()
-			.ecdsa_generate_new(id, seed)
-			.expect("`ecdsa_generate` failed")
+		let keystore = &***self
+			.extension::<KeystoreExt>()
+			.expect("No `keystore` associated for the current context!");
+		SyncCryptoStore::ecdsa_generate_new(keystore, id, seed).expect("`ecdsa_generate` failed")
 	}
 
 	/// Sign the given `msg` with the `ecdsa` key that corresponds to the given public key and
@@ -627,23 +814,55 @@ pub trait Crypto {
 		pub_key: &ecdsa::Public,
 		msg: &[u8],
 	) -> Option<ecdsa::Signature> {
-		self.extension::<KeystoreExt>()
-			.expect("No `keystore` associated for the current context!")
-			.read()
-			.sign_with(id, &pub_key.into(), msg)
-			.map(|sig| ecdsa::Signature::from_slice(sig.as_slice()))
+		let keystore = &***self
+			.extension::<KeystoreExt>()
+			.expect("No `keystore` associated for the current context!");
+		SyncCryptoStore::sign_with(keystore, id, &pub_key.into(), msg)
 			.ok()
+			.flatten()
+			.map(|sig| ecdsa::Signature::from_slice(sig.as_slice()))
+	}
+
+	/// Sign the given a pre-hashed `msg` with the `ecdsa` key that corresponds to the given public
+	/// key and key type in the keystore.
+	///
+	/// Returns the signature.
+	fn ecdsa_sign_prehashed(
+		&mut self,
+		id: KeyTypeId,
+		pub_key: &ecdsa::Public,
+		msg: &[u8; 32],
+	) -> Option<ecdsa::Signature> {
+		let keystore = &***self
+			.extension::<KeystoreExt>()
+			.expect("No `keystore` associated for the current context!");
+		SyncCryptoStore::ecdsa_sign_prehashed(keystore, id, pub_key, msg).ok().flatten()
 	}
 
 	/// Verify `ecdsa` signature.
 	///
 	/// Returns `true` when the verification was successful.
-	fn ecdsa_verify(
+	fn ecdsa_verify(sig: &ecdsa::Signature, msg: &[u8], pub_key: &ecdsa::Public) -> bool {
+		ecdsa::Pair::verify_deprecated(sig, msg, pub_key)
+	}
+
+	/// Verify `ecdsa` signature.
+	///
+	/// Returns `true` when the verification was successful.
+	#[version(2)]
+	fn ecdsa_verify(sig: &ecdsa::Signature, msg: &[u8], pub_key: &ecdsa::Public) -> bool {
+		ecdsa::Pair::verify(sig, msg, pub_key)
+	}
+
+	/// Verify `ecdsa` signature with pre-hashed `msg`.
+	///
+	/// Returns `true` when the verification was successful.
+	fn ecdsa_verify_prehashed(
 		sig: &ecdsa::Signature,
-		msg: &[u8],
+		msg: &[u8; 32],
 		pub_key: &ecdsa::Public,
 	) -> bool {
-		ecdsa::Pair::verify(sig, msg, pub_key)
+		ecdsa::Pair::verify_prehashed(sig, msg, pub_key)
 	}
 
 	/// Register a `ecdsa` signature for batch verification.
@@ -660,9 +879,9 @@ pub trait Crypto {
 		msg: &[u8],
 		pub_key: &ecdsa::Public,
 	) -> bool {
-		self.extension::<VerificationExt>().map(
-			|extension| extension.push_ecdsa(sig.clone(), pub_key.clone(), msg.to_vec())
-		).unwrap_or_else(|| ecdsa_verify(sig, msg, pub_key))
+		self.extension::<VerificationExt>()
+			.map(|extension| extension.push_ecdsa(sig.clone(), pub_key.clone(), msg.to_vec()))
+			.unwrap_or_else(|| ecdsa_verify(sig, msg, pub_key))
 	}
 
 	/// Verify and recover a SECP256k1 ECDSA signature.
@@ -676,11 +895,38 @@ pub trait Crypto {
 		sig: &[u8; 65],
 		msg: &[u8; 32],
 	) -> Result<[u8; 64], EcdsaVerifyError> {
-		let rs = secp256k1::Signature::parse_slice(&sig[0..64])
+		let rs = libsecp256k1::Signature::parse_overflowing_slice(&sig[0..64])
 			.map_err(|_| EcdsaVerifyError::BadRS)?;
-		let v = secp256k1::RecoveryId::parse(if sig[64] > 26 { sig[64] - 27 } else { sig[64] } as u8)
-			.map_err(|_| EcdsaVerifyError::BadV)?;
-		let pubkey = secp256k1::recover(&secp256k1::Message::parse(msg), &rs, &v)
+		let v = libsecp256k1::RecoveryId::parse(
+			if sig[64] > 26 { sig[64] - 27 } else { sig[64] } as u8
+		)
+		.map_err(|_| EcdsaVerifyError::BadV)?;
+		let pubkey = libsecp256k1::recover(&libsecp256k1::Message::parse(msg), &rs, &v)
+			.map_err(|_| EcdsaVerifyError::BadSignature)?;
+		let mut res = [0u8; 64];
+		res.copy_from_slice(&pubkey.serialize()[1..65]);
+		Ok(res)
+	}
+
+	/// Verify and recover a SECP256k1 ECDSA signature.
+	///
+	/// - `sig` is passed in RSV format. V should be either `0/1` or `27/28`.
+	/// - `msg` is the blake2-256 hash of the message.
+	///
+	/// Returns `Err` if the signature is bad, otherwise the 64-byte pubkey
+	/// (doesn't include the 0x04 prefix).
+	#[version(2)]
+	fn secp256k1_ecdsa_recover(
+		sig: &[u8; 65],
+		msg: &[u8; 32],
+	) -> Result<[u8; 64], EcdsaVerifyError> {
+		let rs = libsecp256k1::Signature::parse_standard_slice(&sig[0..64])
+			.map_err(|_| EcdsaVerifyError::BadRS)?;
+		let v = libsecp256k1::RecoveryId::parse(
+			if sig[64] > 26 { sig[64] - 27 } else { sig[64] } as u8
+		)
+		.map_err(|_| EcdsaVerifyError::BadV)?;
+		let pubkey = libsecp256k1::recover(&libsecp256k1::Message::parse(msg), &rs, &v)
 			.map_err(|_| EcdsaVerifyError::BadSignature)?;
 		let mut res = [0u8; 64];
 		res.copy_from_slice(&pubkey.serialize()[1..65]);
@@ -697,11 +943,35 @@ pub trait Crypto {
 		sig: &[u8; 65],
 		msg: &[u8; 32],
 	) -> Result<[u8; 33], EcdsaVerifyError> {
-		let rs = secp256k1::Signature::parse_slice(&sig[0..64])
+		let rs = libsecp256k1::Signature::parse_overflowing_slice(&sig[0..64])
 			.map_err(|_| EcdsaVerifyError::BadRS)?;
-		let v = secp256k1::RecoveryId::parse(if sig[64] > 26 { sig[64] - 27 } else { sig[64] } as u8)
-			.map_err(|_| EcdsaVerifyError::BadV)?;
-		let pubkey = secp256k1::recover(&secp256k1::Message::parse(msg), &rs, &v)
+		let v = libsecp256k1::RecoveryId::parse(
+			if sig[64] > 26 { sig[64] - 27 } else { sig[64] } as u8
+		)
+		.map_err(|_| EcdsaVerifyError::BadV)?;
+		let pubkey = libsecp256k1::recover(&libsecp256k1::Message::parse(msg), &rs, &v)
+			.map_err(|_| EcdsaVerifyError::BadSignature)?;
+		Ok(pubkey.serialize_compressed())
+	}
+
+	/// Verify and recover a SECP256k1 ECDSA signature.
+	///
+	/// - `sig` is passed in RSV format. V should be either `0/1` or `27/28`.
+	/// - `msg` is the blake2-256 hash of the message.
+	///
+	/// Returns `Err` if the signature is bad, otherwise the 33-byte compressed pubkey.
+	#[version(2)]
+	fn secp256k1_ecdsa_recover_compressed(
+		sig: &[u8; 65],
+		msg: &[u8; 32],
+	) -> Result<[u8; 33], EcdsaVerifyError> {
+		let rs = libsecp256k1::Signature::parse_standard_slice(&sig[0..64])
+			.map_err(|_| EcdsaVerifyError::BadRS)?;
+		let v = libsecp256k1::RecoveryId::parse(
+			if sig[64] > 26 { sig[64] - 27 } else { sig[64] } as u8
+		)
+		.map_err(|_| EcdsaVerifyError::BadV)?;
+		let pubkey = libsecp256k1::recover(&libsecp256k1::Message::parse(msg), &rs, &v)
 			.map_err(|_| EcdsaVerifyError::BadSignature)?;
 		Ok(pubkey.serialize_compressed())
 	}
@@ -713,6 +983,11 @@ pub trait Hashing {
 	/// Conduct a 256-bit Keccak hash.
 	fn keccak_256(data: &[u8]) -> [u8; 32] {
 		sp_core::hashing::keccak_256(data)
+	}
+
+	/// Conduct a 512-bit Keccak hash.
+	fn keccak_512(data: &[u8]) -> [u8; 64] {
+		sp_core::hashing::keccak_512(data)
 	}
 
 	/// Conduct a 256-bit Sha2 hash.
@@ -746,6 +1021,20 @@ pub trait Hashing {
 	}
 }
 
+/// Interface that provides transaction indexing API.
+#[runtime_interface]
+pub trait TransactionIndex {
+	/// Add transaction index. Returns indexed content hash.
+	fn index(&mut self, extrinsic: u32, size: u32, context_hash: [u8; 32]) {
+		self.storage_index_transaction(extrinsic, &context_hash, size);
+	}
+
+	/// Conduct a 512-bit Keccak hash.
+	fn renew(&mut self, extrinsic: u32, context_hash: [u8; 32]) {
+		self.storage_renew_transaction_index(extrinsic, &context_hash);
+	}
+}
+
 /// Interface that provides functions to access the Offchain DB.
 #[runtime_interface]
 pub trait OffchainIndex {
@@ -762,7 +1051,7 @@ pub trait OffchainIndex {
 
 #[cfg(feature = "std")]
 sp_externalities::decl_extension! {
-	/// The keystore extension to register/retrieve from the externalities.
+	/// Batch verification extension to register/retrieve from the externalities.
 	pub struct VerificationExt(BatchVerifier);
 }
 
@@ -776,7 +1065,7 @@ pub trait Offchain {
 	/// Even if this function returns `true`, it does not mean that any keys are configured
 	/// and that the validator is registered in the chain.
 	fn is_validator(&mut self) -> bool {
-		self.extension::<OffchainExt>()
+		self.extension::<OffchainWorkerExt>()
 			.expect("is_validator can be called only in the offchain worker context")
 			.is_validator()
 	}
@@ -786,28 +1075,30 @@ pub trait Offchain {
 	/// The transaction will end up in the pool.
 	fn submit_transaction(&mut self, data: Vec<u8>) -> Result<(), ()> {
 		self.extension::<TransactionPoolExt>()
-			.expect("submit_transaction can be called only in the offchain call context with
-				TransactionPool capabilities enabled")
+			.expect(
+				"submit_transaction can be called only in the offchain call context with
+				TransactionPool capabilities enabled",
+			)
 			.submit_transaction(data)
 	}
 
 	/// Returns information about the local node's network state.
 	fn network_state(&mut self) -> Result<OpaqueNetworkState, ()> {
-		self.extension::<OffchainExt>()
+		self.extension::<OffchainWorkerExt>()
 			.expect("network_state can be called only in the offchain worker context")
 			.network_state()
 	}
 
 	/// Returns current UNIX timestamp (in millis)
 	fn timestamp(&mut self) -> Timestamp {
-		self.extension::<OffchainExt>()
+		self.extension::<OffchainWorkerExt>()
 			.expect("timestamp can be called only in the offchain worker context")
 			.timestamp()
 	}
 
 	/// Pause the execution until `deadline` is reached.
 	fn sleep_until(&mut self, deadline: Timestamp) {
-		self.extension::<OffchainExt>()
+		self.extension::<OffchainWorkerExt>()
 			.expect("sleep_until can be called only in the offchain worker context")
 			.sleep_until(deadline)
 	}
@@ -817,7 +1108,7 @@ pub trait Offchain {
 	/// This is a truly random, non-deterministic seed generated by host environment.
 	/// Obviously fine in the off-chain worker context.
 	fn random_seed(&mut self) -> [u8; 32] {
-		self.extension::<OffchainExt>()
+		self.extension::<OffchainWorkerExt>()
 			.expect("random_seed can be called only in the offchain worker context")
 			.random_seed()
 	}
@@ -827,8 +1118,11 @@ pub trait Offchain {
 	/// Note this storage is not part of the consensus, it's only accessible by
 	/// offchain worker tasks running on the same machine. It IS persisted between runs.
 	fn local_storage_set(&mut self, kind: StorageKind, key: &[u8], value: &[u8]) {
-		self.extension::<OffchainExt>()
-			.expect("local_storage_set can be called only in the offchain worker context")
+		self.extension::<OffchainDbExt>()
+			.expect(
+				"local_storage_set can be called only in the offchain call context with
+				OffchainDb extension",
+			)
 			.local_storage_set(kind, key, value)
 	}
 
@@ -837,8 +1131,11 @@ pub trait Offchain {
 	/// Note this storage is not part of the consensus, it's only accessible by
 	/// offchain worker tasks running on the same machine. It IS persisted between runs.
 	fn local_storage_clear(&mut self, kind: StorageKind, key: &[u8]) {
-		self.extension::<OffchainExt>()
-			.expect("local_storage_clear can be called only in the offchain worker context")
+		self.extension::<OffchainDbExt>()
+			.expect(
+				"local_storage_clear can be called only in the offchain call context with
+				OffchainDb extension",
+			)
 			.local_storage_clear(kind, key)
 	}
 
@@ -858,9 +1155,12 @@ pub trait Offchain {
 		old_value: Option<Vec<u8>>,
 		new_value: &[u8],
 	) -> bool {
-		self.extension::<OffchainExt>()
-			.expect("local_storage_compare_and_set can be called only in the offchain worker context")
-			.local_storage_compare_and_set(kind, key, old_value.as_ref().map(|v| v.deref()), new_value)
+		self.extension::<OffchainDbExt>()
+			.expect(
+				"local_storage_compare_and_set can be called only in the offchain call context
+				with OffchainDb extension",
+			)
+			.local_storage_compare_and_set(kind, key, old_value.as_deref(), new_value)
 	}
 
 	/// Gets a value from the local storage.
@@ -869,22 +1169,25 @@ pub trait Offchain {
 	/// Note this storage is not part of the consensus, it's only accessible by
 	/// offchain worker tasks running on the same machine. It IS persisted between runs.
 	fn local_storage_get(&mut self, kind: StorageKind, key: &[u8]) -> Option<Vec<u8>> {
-		self.extension::<OffchainExt>()
-			.expect("local_storage_get can be called only in the offchain worker context")
+		self.extension::<OffchainDbExt>()
+			.expect(
+				"local_storage_get can be called only in the offchain call context with
+				OffchainDb extension",
+			)
 			.local_storage_get(kind, key)
 	}
 
 	/// Initiates a http request given HTTP verb and the URL.
 	///
-	/// Meta is a future-reserved field containing additional, parity-scale-codec encoded parameters.
-	/// Returns the id of newly started request.
+	/// Meta is a future-reserved field containing additional, parity-scale-codec encoded
+	/// parameters. Returns the id of newly started request.
 	fn http_request_start(
 		&mut self,
 		method: &str,
 		uri: &str,
 		meta: &[u8],
 	) -> Result<HttpRequestId, ()> {
-		self.extension::<OffchainExt>()
+		self.extension::<OffchainWorkerExt>()
 			.expect("http_request_start can be called only in the offchain worker context")
 			.http_request_start(method, uri, meta)
 	}
@@ -896,7 +1199,7 @@ pub trait Offchain {
 		name: &str,
 		value: &str,
 	) -> Result<(), ()> {
-		self.extension::<OffchainExt>()
+		self.extension::<OffchainWorkerExt>()
 			.expect("http_request_add_header can be called only in the offchain worker context")
 			.http_request_add_header(request_id, name, value)
 	}
@@ -913,7 +1216,7 @@ pub trait Offchain {
 		chunk: &[u8],
 		deadline: Option<Timestamp>,
 	) -> Result<(), HttpError> {
-		self.extension::<OffchainExt>()
+		self.extension::<OffchainWorkerExt>()
 			.expect("http_request_write_body can be called only in the offchain worker context")
 			.http_request_write_body(request_id, chunk, deadline)
 	}
@@ -930,7 +1233,7 @@ pub trait Offchain {
 		ids: &[HttpRequestId],
 		deadline: Option<Timestamp>,
 	) -> Vec<HttpRequestStatus> {
-		self.extension::<OffchainExt>()
+		self.extension::<OffchainWorkerExt>()
 			.expect("http_response_wait can be called only in the offchain worker context")
 			.http_response_wait(ids, deadline)
 	}
@@ -940,7 +1243,7 @@ pub trait Offchain {
 	/// Returns a vector of pairs `(HeaderKey, HeaderValue)`.
 	/// NOTE response headers have to be read before response body.
 	fn http_response_headers(&mut self, request_id: HttpRequestId) -> Vec<(Vec<u8>, Vec<u8>)> {
-		self.extension::<OffchainExt>()
+		self.extension::<OffchainWorkerExt>()
 			.expect("http_response_headers can be called only in the offchain worker context")
 			.http_response_headers(request_id)
 	}
@@ -959,7 +1262,7 @@ pub trait Offchain {
 		buffer: &mut [u8],
 		deadline: Option<Timestamp>,
 	) -> Result<u32, HttpError> {
-		self.extension::<OffchainExt>()
+		self.extension::<OffchainWorkerExt>()
 			.expect("http_response_read_body can be called only in the offchain worker context")
 			.http_response_read_body(request_id, buffer, deadline)
 			.map(|r| r as u32)
@@ -967,7 +1270,7 @@ pub trait Offchain {
 
 	/// Set the authorized nodes and authorized_only flag.
 	fn set_authorized_nodes(&mut self, nodes: Vec<OpaquePeerId>, authorized_only: bool) {
-		self.extension::<OffchainExt>()
+		self.extension::<OffchainWorkerExt>()
 			.expect("set_authorized_nodes can be called only in the offchain worker context")
 			.set_authorized_nodes(nodes, authorized_only)
 	}
@@ -975,7 +1278,7 @@ pub trait Offchain {
 
 /// Wasm only interface that provides functions for calling into the allocator.
 #[runtime_interface(wasm_only)]
-trait Allocator {
+pub trait Allocator {
 	/// Malloc the given number of bytes and return the pointer to the allocated memory location.
 	fn malloc(&mut self, size: u32) -> Pointer<u8> {
 		self.allocate_memory(size).expect("Failed to allocate memory")
@@ -998,13 +1301,13 @@ pub trait Logging {
 	/// Instead of using directly, prefer setting up `RuntimeLogger` and using `log` macros.
 	fn log(level: LogLevel, target: &str, message: &[u8]) {
 		if let Ok(message) = std::str::from_utf8(message) {
-			log::log!(
-				target: target,
-				log::Level::from(level),
-				"{}",
-				message,
-			)
+			log::log!(target: target, log::Level::from(level), "{}", message)
 		}
+	}
+
+	/// Returns the max log level used by the host.
+	fn max_level() -> LogLevelFilter {
+		log::max_level().into()
 	}
 }
 
@@ -1018,7 +1321,6 @@ impl<T: Encode + Decode> PassBy for Crossing<T> {
 }
 
 impl<T: Encode + Decode> Crossing<T> {
-
 	/// Convert into the inner type
 	pub fn into_inner(self) -> T {
 		self.0
@@ -1027,12 +1329,12 @@ impl<T: Encode + Decode> Crossing<T> {
 
 // useful for testing
 impl<T> core::default::Default for Crossing<T>
-	where T: core::default::Default + Encode + Decode
+where
+	T: core::default::Default + Encode + Decode,
 {
 	fn default() -> Self {
 		Self(Default::default())
 	}
-
 }
 
 /// Interface to provide tracing facilities for wasm. Modelled after tokios `tracing`-crate
@@ -1040,18 +1342,17 @@ impl<T> core::default::Default for Crossing<T>
 #[runtime_interface(wasm_only, no_tracing)]
 pub trait WasmTracing {
 	/// Whether the span described in `WasmMetadata` should be traced wasm-side
-	/// On the host converts into a static Metadata and checks against the global `tracing` dispatcher.
+	/// On the host converts into a static Metadata and checks against the global `tracing`
+	/// dispatcher.
 	///
 	/// When returning false the calling code should skip any tracing-related execution. In general
 	/// within the same block execution this is not expected to change and it doesn't have to be
 	/// checked more than once per metadata. This exists for optimisation purposes but is still not
-	/// cheap as it will jump the wasm-native-barrier every time it is called. So an implementation might
-	/// chose to cache the result for the execution of the entire block.
+	/// cheap as it will jump the wasm-native-barrier every time it is called. So an implementation
+	/// might chose to cache the result for the execution of the entire block.
 	fn enabled(&mut self, metadata: Crossing<sp_tracing::WasmMetadata>) -> bool {
 		let metadata: &tracing_core::metadata::Metadata<'static> = (&metadata.into_inner()).into();
-		tracing::dispatcher::get_default(|d| {
-			d.enabled(metadata)
-		})
+		tracing::dispatcher::get_default(|d| d.enabled(metadata))
 	}
 
 	/// Open a new span with the given attributes. Return the u64 Id of the span.
@@ -1070,9 +1371,7 @@ pub trait WasmTracing {
 				d.enter(&final_id);
 				final_id.into_u64()
 			}),
-			_ => {
-				0
-			}
+			_ => 0,
 		}
 	}
 
@@ -1091,18 +1390,17 @@ pub trait WasmTracing {
 	}
 }
 
-#[cfg(all(not(feature="std"), feature="with-tracing"))]
+#[cfg(all(not(feature = "std"), feature = "with-tracing"))]
 mod tracing_setup {
+	use super::{wasm_tracing, Crossing};
 	use core::sync::atomic::{AtomicBool, Ordering};
 	use tracing_core::{
-		dispatcher::{Dispatch, set_global_default},
-		span::{Id, Record, Attributes},
-		Metadata, Event,
+		dispatcher::{set_global_default, Dispatch},
+		span::{Attributes, Id, Record},
+		Event, Metadata,
 	};
-	use super::{wasm_tracing, Crossing};
 
-	const TRACING_SET : AtomicBool = AtomicBool::new(false);
-
+	static TRACING_SET: AtomicBool = AtomicBool::new(false);
 
 	/// The PassingTracingSubscriber implements `tracing_core::Subscriber`
 	/// and pushes the information across the runtime interface to the host
@@ -1121,12 +1419,12 @@ mod tracing_setup {
 		/// Not implemented! We do not support recording values later
 		/// Will panic when used.
 		fn record(&self, span: &Id, values: &Record<'_>) {
-			unimplemented!{} // this usage is not supported
+			unimplemented! {} // this usage is not supported
 		}
 		/// Not implemented! We do not support recording values later
 		/// Will panic when used.
 		fn record_follows_from(&self, span: &Id, follows: &Id) {
-			unimplemented!{ } // this usage is not supported
+			unimplemented! {} // this usage is not supported
 		}
 		fn event(&self, event: &Event<'_>) {
 			wasm_tracing::event(Crossing(event.into()))
@@ -1135,7 +1433,6 @@ mod tracing_setup {
 			wasm_tracing::exit(span.into_u64())
 		}
 	}
-
 
 	/// Initialize tracing of sp_tracing on wasm with `with-tracing` enabled.
 	/// Can be called multiple times from within the same process and will only
@@ -1149,11 +1446,11 @@ mod tracing_setup {
 	}
 }
 
-#[cfg(not(all(not(feature="std"), feature="with-tracing")))]
+#[cfg(not(all(not(feature = "std"), feature = "with-tracing")))]
 mod tracing_setup {
 	/// Initialize tracing of sp_tracing not necessary – noop. To enable build
 	/// without std and with the `with-tracing`-feature.
-	pub fn init_tracing() { }
+	pub fn init_tracing() {}
 }
 
 pub use tracing_setup::init_tracing;
@@ -1184,14 +1481,16 @@ pub trait Sandbox {
 		return_val_len: u32,
 		state_ptr: Pointer<u8>,
 	) -> u32 {
-		self.sandbox().invoke(
-			instance_idx,
-			&function,
-			&args,
-			return_val_ptr,
-			return_val_len,
-			state_ptr.into(),
-		).expect("Failed to invoke function with sandbox")
+		self.sandbox()
+			.invoke(
+				instance_idx,
+				&function,
+				&args,
+				return_val_ptr,
+				return_val_len,
+				state_ptr.into(),
+			)
+			.expect("Failed to invoke function with sandbox")
 	}
 
 	/// Create a new memory instance with the given `initial` and `maximum` size.
@@ -1229,20 +1528,62 @@ pub trait Sandbox {
 
 	/// Teardown the memory instance with the given `memory_idx`.
 	fn memory_teardown(&mut self, memory_idx: u32) {
-		self.sandbox().memory_teardown(memory_idx).expect("Failed to teardown memory with sandbox")
+		self.sandbox()
+			.memory_teardown(memory_idx)
+			.expect("Failed to teardown memory with sandbox")
 	}
 
 	/// Teardown the sandbox instance with the given `instance_idx`.
 	fn instance_teardown(&mut self, instance_idx: u32) {
-		self.sandbox().instance_teardown(instance_idx).expect("Failed to teardown sandbox instance")
+		self.sandbox()
+			.instance_teardown(instance_idx)
+			.expect("Failed to teardown sandbox instance")
 	}
 
 	/// Get the value from a global with the given `name`. The sandbox is determined by the given
 	/// `instance_idx`.
 	///
 	/// Returns `Some(_)` when the requested global variable could be found.
-	fn get_global_val(&mut self, instance_idx: u32, name: &str) -> Option<sp_wasm_interface::Value> {
-		self.sandbox().get_global_val(instance_idx, name).expect("Failed to get global from sandbox")
+	fn get_global_val(
+		&mut self,
+		instance_idx: u32,
+		name: &str,
+	) -> Option<sp_wasm_interface::Value> {
+		self.sandbox()
+			.get_global_val(instance_idx, name)
+			.expect("Failed to get global from sandbox")
+	}
+}
+
+/// Wasm host functions for managing tasks.
+///
+/// This should not be used directly. Use `sp_tasks` for running parallel tasks instead.
+#[runtime_interface(wasm_only)]
+pub trait RuntimeTasks {
+	/// Wasm host function for spawning task.
+	///
+	/// This should not be used directly. Use `sp_tasks::spawn` instead.
+	fn spawn(dispatcher_ref: u32, entry: u32, payload: Vec<u8>) -> u64 {
+		sp_externalities::with_externalities(|mut ext| {
+			let runtime_spawn = ext
+				.extension::<RuntimeSpawnExt>()
+				.expect("Cannot spawn without dynamic runtime dispatcher (RuntimeSpawnExt)");
+			runtime_spawn.spawn_call(dispatcher_ref, entry, payload)
+		})
+		.expect("`RuntimeTasks::spawn`: called outside of externalities context")
+	}
+
+	/// Wasm host function for joining a task.
+	///
+	/// This should not be used directly. Use `join` of `sp_tasks::spawn` result instead.
+	fn join(handle: u64) -> Vec<u8> {
+		sp_externalities::with_externalities(|mut ext| {
+			let runtime_spawn = ext
+				.extension::<RuntimeSpawnExt>()
+				.expect("Cannot join without dynamic runtime dispatcher (RuntimeSpawnExt)");
+			runtime_spawn.join(handle)
+		})
+		.expect("`RuntimeTasks::join`: called outside of externalities context")
 	}
 }
 
@@ -1275,26 +1616,22 @@ mod allocator_impl {
 #[panic_handler]
 #[no_mangle]
 pub fn panic(info: &core::panic::PanicInfo) -> ! {
-	unsafe {
-		let message = sp_std::alloc::format!("{}", info);
-		logging::log(LogLevel::Error, "runtime", message.as_bytes());
-		core::arch::wasm32::unreachable();
-	}
+	let message = sp_std::alloc::format!("{}", info);
+	logging::log(LogLevel::Error, "runtime", message.as_bytes());
+	unsafe { core::arch::wasm32::unreachable() };
 }
 
 /// A default OOM handler for WASM environment.
 #[cfg(all(not(feature = "disable_oom"), not(feature = "std")))]
 #[alloc_error_handler]
 pub fn oom(_: core::alloc::Layout) -> ! {
-	unsafe {
-		logging::log(LogLevel::Error, "runtime", b"Runtime memory exhausted. Aborting");
-		core::arch::wasm32::unreachable();
-	}
+	logging::log(LogLevel::Error, "runtime", b"Runtime memory exhausted. Aborting");
+	unsafe { core::arch::wasm32::unreachable() };
 }
 
 /// Type alias for Externalities implementation used in tests.
 #[cfg(feature = "std")]
-pub type TestExternalities = sp_state_machine::TestExternalities<sp_core::Blake2Hasher, u64>;
+pub type TestExternalities = sp_state_machine::TestExternalities<sp_core::Blake2Hasher>;
 
 /// The host functions Substrate provides for the Wasm runtime environment.
 ///
@@ -1313,15 +1650,18 @@ pub type SubstrateHostFunctions = (
 	sandbox::HostFunctions,
 	crate::trie::HostFunctions,
 	offchain_index::HostFunctions,
+	runtime_tasks::HostFunctions,
+	transaction_index::HostFunctions,
 );
 
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sp_state_machine::BasicExternalities;
 	use sp_core::{
-		storage::Storage, map, traits::TaskExecutorExt, testing::TaskExecutor,
+		crypto::UncheckedInto, map, storage::Storage, testing::TaskExecutor,
+		traits::TaskExecutorExt,
 	};
+	use sp_state_machine::BasicExternalities;
 	use std::any::TypeId;
 
 	#[test]
@@ -1343,6 +1683,16 @@ mod tests {
 		t.execute_with(|| {
 			assert_eq!(storage::get(b"hello"), None);
 			assert_eq!(storage::get(b"foo"), Some(b"bar".to_vec()));
+		});
+
+		let value = vec![7u8; 35];
+		let storage =
+			Storage { top: map![b"foo00".to_vec() => value.clone()], children_default: map![] };
+		t = BasicExternalities::new(storage);
+
+		t.execute_with(|| {
+			assert_eq!(storage::get(b"hello"), None);
+			assert_eq!(storage::get(b"foo00"), Some(value.clone()));
 		});
 	}
 
@@ -1377,7 +1727,10 @@ mod tests {
 		});
 
 		t.execute_with(|| {
-			storage::clear_prefix(b":abc");
+			assert!(matches!(
+				storage::clear_prefix(b":abc", None),
+				KillStorageResult::AllRemoved(2)
+			));
 
 			assert!(storage::get(b":a").is_some());
 			assert!(storage::get(b":abdd").is_some());
@@ -1418,11 +1771,7 @@ mod tests {
 			}
 
 			// push invlaid
-			crypto::sr25519_batch_verify(
-				&Default::default(),
-				&Vec::new(),
-				&Default::default(),
-			);
+			crypto::sr25519_batch_verify(&zero_sr_sig(), &Vec::new(), &zero_sr_pub());
 			assert!(!crypto::finish_batch_verify());
 
 			crypto::start_batch_verify();
@@ -1435,18 +1784,31 @@ mod tests {
 		});
 	}
 
+	fn zero_ed_pub() -> ed25519::Public {
+		[0u8; 32].unchecked_into()
+	}
+
+	fn zero_ed_sig() -> ed25519::Signature {
+		ed25519::Signature::from_raw([0u8; 64])
+	}
+
+	fn zero_sr_pub() -> sr25519::Public {
+		[0u8; 32].unchecked_into()
+	}
+
+	fn zero_sr_sig() -> sr25519::Signature {
+		sr25519::Signature::from_raw([0u8; 64])
+	}
+
 	#[test]
 	fn batching_works() {
 		let mut ext = BasicExternalities::default();
 		ext.register_extension(TaskExecutorExt::new(TaskExecutor::new()));
+
 		ext.execute_with(|| {
 			// invalid ed25519 signature
 			crypto::start_batch_verify();
-			crypto::ed25519_batch_verify(
-				&Default::default(),
-				&Vec::new(),
-				&Default::default(),
-			);
+			crypto::ed25519_batch_verify(&zero_ed_sig(), &Vec::new(), &zero_ed_pub());
 			assert!(!crypto::finish_batch_verify());
 
 			// 2 valid ed25519 signatures
@@ -1472,11 +1834,7 @@ mod tests {
 			let signature = pair.sign(msg);
 			crypto::ed25519_batch_verify(&signature, msg, &pair.public());
 
-			crypto::ed25519_batch_verify(
-				&Default::default(),
-				&Vec::new(),
-				&Default::default(),
-			);
+			crypto::ed25519_batch_verify(&zero_ed_sig(), &Vec::new(), &zero_ed_pub());
 
 			assert!(!crypto::finish_batch_verify());
 
@@ -1508,11 +1866,7 @@ mod tests {
 			let signature = pair.sign(msg);
 			crypto::sr25519_batch_verify(&signature, msg, &pair.public());
 
-			crypto::sr25519_batch_verify(
-				&Default::default(),
-				&Vec::new(),
-				&Default::default(),
-			);
+			crypto::sr25519_batch_verify(&zero_sr_sig(), &Vec::new(), &zero_sr_pub());
 
 			assert!(!crypto::finish_batch_verify());
 		});

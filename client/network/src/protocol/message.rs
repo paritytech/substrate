@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -16,19 +16,20 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! Network packet message types. These get serialized and put into the lower level protocol payload.
+//! Network packet message types. These get serialized and put into the lower level protocol
+//! payload.
 
-use bitflags::bitflags;
-use sp_runtime::{ConsensusEngineId, traits::{Block as BlockT, Header as HeaderT}};
-use codec::{Encode, Decode, Input, Output, Error};
 pub use self::generic::{
-	BlockAnnounce, RemoteCallRequest, RemoteReadRequest,
-	RemoteHeaderRequest, RemoteHeaderResponse,
-	RemoteChangesRequest, RemoteChangesResponse,
-	FinalityProofRequest, FinalityProofResponse,
-	FromBlock, RemoteReadChildRequest, Roles,
+	BlockAnnounce, FromBlock, RemoteCallRequest, RemoteChangesRequest, RemoteChangesResponse,
+	RemoteHeaderRequest, RemoteHeaderResponse, RemoteReadChildRequest, RemoteReadRequest, Roles,
 };
+use bitflags::bitflags;
+use codec::{Decode, Encode, Error, Input, Output};
 use sc_client_api::StorageProof;
+use sp_runtime::{
+	traits::{Block as BlockT, Header as HeaderT},
+	ConsensusEngineId,
+};
 
 /// A unique ID of a request.
 pub type RequestId = u64;
@@ -42,24 +43,16 @@ pub type Message<B> = generic::Message<
 >;
 
 /// Type alias for using the block request type using block type parameters.
-pub type BlockRequest<B> = generic::BlockRequest<
-	<B as BlockT>::Hash,
-	<<B as BlockT>::Header as HeaderT>::Number,
->;
+pub type BlockRequest<B> =
+	generic::BlockRequest<<B as BlockT>::Hash, <<B as BlockT>::Header as HeaderT>::Number>;
 
 /// Type alias for using the BlockData type using block type parameters.
-pub type BlockData<B> = generic::BlockData<
-	<B as BlockT>::Header,
-	<B as BlockT>::Hash,
-	<B as BlockT>::Extrinsic,
->;
+pub type BlockData<B> =
+	generic::BlockData<<B as BlockT>::Header, <B as BlockT>::Hash, <B as BlockT>::Extrinsic>;
 
 /// Type alias for using the BlockResponse type using block type parameters.
-pub type BlockResponse<B> = generic::BlockResponse<
-	<B as BlockT>::Header,
-	<B as BlockT>::Hash,
-	<B as BlockT>::Extrinsic,
->;
+pub type BlockResponse<B> =
+	generic::BlockResponse<<B as BlockT>::Header, <B as BlockT>::Hash, <B as BlockT>::Extrinsic>;
 
 /// A set of transactions.
 pub type Transactions<E> = Vec<E>;
@@ -78,6 +71,8 @@ bitflags! {
 		const MESSAGE_QUEUE = 0b00001000;
 		/// Include a justification for the block.
 		const JUSTIFICATION = 0b00010000;
+		/// Include indexed transactions for a block.
+		const INDEXED_BODY = 0b00100000;
 	}
 }
 
@@ -90,13 +85,13 @@ impl BlockAttributes {
 
 	/// Decodes attributes, encoded with the `encode_to_be_u32()` call.
 	pub fn from_be_u32(encoded: u32) -> Result<Self, Error> {
-		BlockAttributes::from_bits(encoded.to_be_bytes()[0])
+		Self::from_bits(encoded.to_be_bytes()[0])
 			.ok_or_else(|| Error::from("Invalid BlockAttributes"))
 	}
 }
 
 impl Encode for BlockAttributes {
-	fn encode_to<T: Output>(&self, dest: &mut T) {
+	fn encode_to<T: Output + ?Sized>(&self, dest: &mut T) {
 		dest.push_byte(self.bits())
 	}
 }
@@ -145,16 +140,35 @@ pub struct RemoteReadResponse {
 	pub proof: StorageProof,
 }
 
+/// Announcement summary used for debug logging.
+#[derive(Debug)]
+pub struct AnnouncementSummary<H: HeaderT> {
+	pub block_hash: H::Hash,
+	pub number: H::Number,
+	pub parent_hash: H::Hash,
+	pub state: Option<BlockState>,
+}
+
+impl<H: HeaderT> generic::BlockAnnounce<H> {
+	pub fn summary(&self) -> AnnouncementSummary<H> {
+		AnnouncementSummary {
+			block_hash: self.header.hash(),
+			number: *self.header.number(),
+			parent_hash: self.header.parent_hash().clone(),
+			state: self.state,
+		}
+	}
+}
+
 /// Generic types.
 pub mod generic {
-	use bitflags::bitflags;
-	use codec::{Encode, Decode, Input, Output};
-	use sp_runtime::Justification;
 	use super::{
-		RemoteReadResponse, Transactions, Direction,
-		RequestId, BlockAttributes, RemoteCallResponse, ConsensusEngineId,
-		BlockState, StorageProof,
+		BlockAttributes, BlockState, ConsensusEngineId, Direction, RemoteCallResponse,
+		RemoteReadResponse, RequestId, StorageProof, Transactions,
 	};
+	use bitflags::bitflags;
+	use codec::{Decode, Encode, Input, Output};
+	use sp_runtime::{EncodedJustification, Justifications};
 
 	bitflags! {
 		/// Bitmask of the roles that a node fulfills.
@@ -173,12 +187,12 @@ pub mod generic {
 	impl Roles {
 		/// Does this role represents a client that holds full chain data locally?
 		pub fn is_full(&self) -> bool {
-			self.intersects(Roles::FULL | Roles::AUTHORITY)
+			self.intersects(Self::FULL | Self::AUTHORITY)
 		}
 
 		/// Does this role represents a client that does not participates in the consensus?
 		pub fn is_authority(&self) -> bool {
-			*self == Roles::AUTHORITY
+			*self == Self::AUTHORITY
 		}
 
 		/// Does this role represents a client that does not hold full chain data locally?
@@ -190,16 +204,15 @@ pub mod generic {
 	impl<'a> From<&'a crate::config::Role> for Roles {
 		fn from(roles: &'a crate::config::Role) -> Self {
 			match roles {
-				crate::config::Role::Full => Roles::FULL,
-				crate::config::Role::Light => Roles::LIGHT,
-				crate::config::Role::Sentry { .. } => Roles::AUTHORITY,
-				crate::config::Role::Authority { .. } => Roles::AUTHORITY,
+				crate::config::Role::Full => Self::FULL,
+				crate::config::Role::Light => Self::LIGHT,
+				crate::config::Role::Authority { .. } => Self::AUTHORITY,
 			}
 		}
 	}
 
 	impl codec::Encode for Roles {
-		fn encode_to<T: codec::Output>(&self, dest: &mut T) {
+		fn encode_to<T: codec::Output + ?Sized>(&self, dest: &mut T) {
 			dest.push_byte(self.bits())
 		}
 	}
@@ -216,7 +229,7 @@ pub mod generic {
 	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
 	pub struct ConsensusMessage {
 		/// Identifies consensus engine.
-		pub engine_id: ConsensusEngineId,
+		pub protocol: ConsensusEngineId,
 		/// Message payload.
 		pub data: Vec<u8>,
 	}
@@ -230,12 +243,16 @@ pub mod generic {
 		pub header: Option<Header>,
 		/// Block body if requested.
 		pub body: Option<Vec<Extrinsic>>,
+		/// Block body indexed transactions if requested.
+		pub indexed_body: Option<Vec<Vec<u8>>>,
 		/// Block receipt if requested.
 		pub receipt: Option<Vec<u8>>,
 		/// Block message queue if requested.
 		pub message_queue: Option<Vec<u8>>,
 		/// Justification if requested.
-		pub justification: Option<Justification>,
+		pub justification: Option<EncodedJustification>,
+		/// Justifications if requested.
+		pub justifications: Option<Justifications>,
 	}
 
 	/// Identifies starting point of a block sequence.
@@ -280,38 +297,11 @@ pub mod generic {
 		RemoteChangesResponse(RemoteChangesResponse<Number, Hash>),
 		/// Remote child storage read request.
 		RemoteReadChildRequest(RemoteReadChildRequest<Hash>),
-		/// Finality proof request.
-		FinalityProofRequest(FinalityProofRequest<Hash>),
-		/// Finality proof response.
-		FinalityProofResponse(FinalityProofResponse<Hash>),
 		/// Batch of consensus protocol messages.
+		// NOTE: index is incremented by 2 due to finality proof related
+		// messages that were removed.
+		#[codec(index = 17)]
 		ConsensusBatch(Vec<ConsensusMessage>),
-	}
-
-	impl<Header, Hash, Number, Extrinsic> Message<Header, Hash, Number, Extrinsic> {
-		/// Message id useful for logging.
-		pub fn id(&self) -> &'static str {
-			match self {
-				Message::Status(_) => "Status",
-				Message::BlockRequest(_) => "BlockRequest",
-				Message::BlockResponse(_) => "BlockResponse",
-				Message::BlockAnnounce(_) => "BlockAnnounce",
-				Message::Transactions(_) => "Transactions",
-				Message::Consensus(_) => "Consensus",
-				Message::RemoteCallRequest(_) => "RemoteCallRequest",
-				Message::RemoteCallResponse(_) => "RemoteCallResponse",
-				Message::RemoteReadRequest(_) => "RemoteReadRequest",
-				Message::RemoteReadResponse(_) => "RemoteReadResponse",
-				Message::RemoteHeaderRequest(_) => "RemoteHeaderRequest",
-				Message::RemoteHeaderResponse(_) => "RemoteHeaderResponse",
-				Message::RemoteChangesRequest(_) => "RemoteChangesRequest",
-				Message::RemoteChangesResponse(_) => "RemoteChangesResponse",
-				Message::RemoteReadChildRequest(_) => "RemoteReadChildRequest",
-				Message::FinalityProofRequest(_) => "FinalityProofRequest",
-				Message::FinalityProofResponse(_) => "FinalityProofResponse",
-				Message::ConsensusBatch(_) => "ConsensusBatch",
-			}
-		}
 	}
 
 	/// Status sent on connection.
@@ -361,11 +351,12 @@ pub mod generic {
 			let compact = CompactStatus::decode(value)?;
 			let chain_status = match <Vec<u8>>::decode(value) {
 				Ok(v) => v,
-				Err(e) => if compact.version <= LAST_CHAIN_STATUS_VERSION {
-					return Err(e)
-				} else {
-					Vec::new()
-				}
+				Err(e) =>
+					if compact.version <= LAST_CHAIN_STATUS_VERSION {
+						return Err(e)
+					} else {
+						Vec::new()
+					},
 			};
 
 			let CompactStatus {
@@ -377,7 +368,7 @@ pub mod generic {
 				genesis_hash,
 			} = compact;
 
-			Ok(Status {
+			Ok(Self {
 				version,
 				min_supported_version,
 				roles,
@@ -402,7 +393,8 @@ pub mod generic {
 		pub to: Option<Hash>,
 		/// Sequence direction.
 		pub direction: Direction,
-		/// Maximum number of blocks to return. An implementation defined maximum is used when unspecified.
+		/// Maximum number of blocks to return. An implementation defined maximum is used when
+		/// unspecified.
 		pub max: Option<u32>,
 	}
 
@@ -430,7 +422,7 @@ pub mod generic {
 	// This assumes that the packet contains nothing but the announcement message.
 	// TODO: Get rid of it once protocol v4 is common.
 	impl<H: Encode> Encode for BlockAnnounce<H> {
-		fn encode_to<T: Output>(&self, dest: &mut T) {
+		fn encode_to<T: Output + ?Sized>(&self, dest: &mut T) {
 			self.header.encode_to(dest);
 			if let Some(state) = &self.state {
 				state.encode_to(dest);
@@ -446,11 +438,7 @@ pub mod generic {
 			let header = H::decode(input)?;
 			let state = BlockState::decode(input).ok();
 			let data = Vec::decode(input).ok();
-			Ok(BlockAnnounce {
-				header,
-				state,
-				data,
-			})
+			Ok(Self { header, state, data })
 		}
 	}
 
@@ -545,27 +533,5 @@ pub mod generic {
 		pub roots: Vec<(N, H)>,
 		/// Missing changes tries roots proof.
 		pub roots_proof: StorageProof,
-	}
-
-	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
-	/// Finality proof request.
-	pub struct FinalityProofRequest<H> {
-		/// Unique request id.
-		pub id: RequestId,
-		/// Hash of the block to request proof for.
-		pub block: H,
-		/// Additional data blob (that both requester and provider understood) required for proving finality.
-		pub request: Vec<u8>,
-	}
-
-	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
-	/// Finality proof response.
-	pub struct FinalityProofResponse<H> {
-		/// Id of a request this response was made for.
-		pub id: RequestId,
-		/// Hash of the block (the same as in the FinalityProofRequest).
-		pub block: H,
-		/// Finality proof (if available).
-		pub proof: Option<Vec<u8>>,
 	}
 }

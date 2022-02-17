@@ -2,9 +2,9 @@
 
 The Timestamp module provides functionality to get and set the on-chain time.
 
-- [`timestamp::Trait`](https://docs.rs/pallet-timestamppallet-timestamp/latest/pallet_timestamp/trait.Trait.html)
-- [`Call`](https://docs.rs/pallet-timestamppallet-timestamp/latest/pallet_timestamp/enum.Call.html)
-- [`Module`](https://docs.rs/pallet-timestamppallet-timestamp/latest/pallet_timestamp/struct.Module.html)
+- [`timestamp::Config`](https://docs.rs/pallet-timestamp/latest/pallet_timestamp/pallet/trait.Config.html)
+- [`Call`](https://docs.rs/pallet-timestamp/latest/pallet_timestamp/pallet/enum.Call.html)
+- [`Pallet`](https://docs.rs/pallet-timestamp/latest/pallet_timestamp/pallet/struct.Pallet.html)
 
 ## Overview
 
@@ -29,7 +29,7 @@ because of cumulative calculation errors and hence should be avoided.
 * `get` - Gets the current time for the current block. If this function is called prior to
 setting the timestamp, it will return the timestamp of the previous block.
 
-### Trait Getters
+### Config Getters
 
 * `MinimumPeriod` - Gets the minimum (and advised) period between blocks for the chain.
 
@@ -45,20 +45,29 @@ trait from the timestamp trait.
 ### Get current timestamp
 
 ```rust
-use frame_support::{decl_module, dispatch};
-use frame_system::ensure_signed;
+use pallet_timestamp::{self as timestamp};
 
-pub trait Trait: timestamp::Trait {}
+#[frame_support::pallet]
+pub mod pallet {
+    use super::*;
+    use frame_support::pallet_prelude::*;
+    use frame_system::pallet_prelude::*;
 
-decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		#[weight = 0]
-		pub fn get_time(origin) -> dispatch::DispatchResult {
-			let _sender = ensure_signed(origin)?;
-			let _now = <timestamp::Module<T>>::get();
-			Ok(())
-		}
-	}
+    #[pallet::pallet]
+    pub struct Pallet<T>(_);
+
+    #[pallet::config]
+    pub trait Config: frame_system::Config + timestamp::Config {}
+
+    #[pallet::call]
+    impl<T: Config> Pallet<T> {
+        #[pallet::weight(0)]
+        pub fn get_time(origin: OriginFor<T>) -> DispatchResult {
+            let _sender = ensure_signed(origin)?;
+            let _now = <timestamp::Pallet<T>>::get();
+            Ok(())
+        }
+    }
 }
 ```
 
@@ -69,6 +78,6 @@ the Timestamp module for session management.
 
 ## Related Modules
 
-* [Session](https://docs.rs/pallet-timestamppallet-session/latest/pallet_session/)
+* [Session](https://docs.rs/pallet-session/latest/pallet_session/)
 
 License: Apache-2.0

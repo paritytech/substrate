@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -22,14 +22,14 @@
 // reexport proc macros
 pub use frame_support_procedural_tools_derive::*;
 
-use proc_macro_crate::crate_name;
-use syn::parse::Error;
+use proc_macro_crate::{crate_name, FoundCrate};
 use quote::quote;
+use syn::parse::Error;
 
 pub mod syn_ext;
 
 // FIXME #1569, remove the following functions, which are copied from sp-api-macros
-use proc_macro2::{TokenStream, Span};
+use proc_macro2::{Span, TokenStream};
 use syn::Ident;
 
 fn generate_hidden_includes_mod_name(unique_id: &str) -> Ident {
@@ -39,55 +39,46 @@ fn generate_hidden_includes_mod_name(unique_id: &str) -> Ident {
 /// Generates the access to the `frame-support` crate.
 pub fn generate_crate_access(unique_id: &str, def_crate: &str) -> TokenStream {
 	if std::env::var("CARGO_PKG_NAME").unwrap() == def_crate {
-		quote::quote!( frame_support )
+		quote::quote!(frame_support)
 	} else {
 		let mod_name = generate_hidden_includes_mod_name(unique_id);
 		quote::quote!( self::#mod_name::hidden_include )
 	}
 }
 
-/// Generate the crate access for the `frame-support` crate using 2018 syntax.
+/// Generate the crate access for the crate using 2018 syntax.
 ///
-/// Output will for example be `frame_support`.
-pub fn generate_crate_access_2018() -> Result<TokenStream, Error> {
-	if std::env::var("CARGO_PKG_NAME").unwrap() == "frame-support" {
-		Ok(quote::quote!( frame_support ))
-	} else {
-		match crate_name("frame-support") {
-			Ok(name) => {
-				let name = Ident::new(&name, Span::call_site());
-				Ok(quote!( #name ))
-			},
-			Err(e) => {
-				Err(Error::new(Span::call_site(), &e))
-			}
-		}
+/// for `frame-support` output will for example be `frame_support`.
+pub fn generate_crate_access_2018(def_crate: &str) -> Result<syn::Ident, Error> {
+	match crate_name(def_crate) {
+		Ok(FoundCrate::Itself) => {
+			let name = def_crate.to_string().replace("-", "_");
+			Ok(syn::Ident::new(&name, Span::call_site()))
+		},
+		Ok(FoundCrate::Name(name)) => Ok(Ident::new(&name, Span::call_site())),
+		Err(e) => Err(Error::new(Span::call_site(), e)),
 	}
 }
 
 /// Generates the hidden includes that are required to make the macro independent from its scope.
 pub fn generate_hidden_includes(unique_id: &str, def_crate: &str) -> TokenStream {
-	if std::env::var("CARGO_PKG_NAME").unwrap() == def_crate {
-		TokenStream::new()
-	} else {
-		let mod_name = generate_hidden_includes_mod_name(unique_id);
+	let mod_name = generate_hidden_includes_mod_name(unique_id);
 
-		match crate_name(def_crate) {
-			Ok(name) => {
-				let name = Ident::new(&name, Span::call_site());
-				quote::quote!(
-					#[doc(hidden)]
-					mod #mod_name {
-						pub extern crate #name as hidden_include;
-					}
-				)
-			},
-			Err(e) => {
-				let err = Error::new(Span::call_site(), &e).to_compile_error();
-				quote!( #err )
-			}
-		}
-
+	match crate_name(def_crate) {
+		Ok(FoundCrate::Itself) => quote!(),
+		Ok(FoundCrate::Name(name)) => {
+			let name = Ident::new(&name, Span::call_site());
+			quote::quote!(
+				#[doc(hidden)]
+				mod #mod_name {
+					pub extern crate #name as hidden_include;
+				}
+			)
+		},
+		Err(e) => {
+			let err = Error::new(Span::call_site(), e).to_compile_error();
+			quote!( #err )
+		},
 	}
 }
 
@@ -108,4 +99,22 @@ pub fn clean_type_string(input: &str) -> String {
 		.replace(" <", "<")
 		.replace("< ", "<")
 		.replace(" >", ">")
+}
+
+/// Return all doc attributes literals found.
+pub fn get_doc_literals(attrs: &[syn::Attribute]) -> Vec<syn::Lit> {
+	attrs
+		.iter()
+		.filter_map(|attr| {
+			if let Ok(syn::Meta::NameValue(meta)) = attr.parse_meta() {
+				if meta.path.get_ident().map_or(false, |ident| ident == "doc") {
+					Some(meta.lit)
+				} else {
+					None
+				}
+			} else {
+				None
+			}
+		})
+		.collect()
 }

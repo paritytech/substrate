@@ -1,6 +1,6 @@
 # Identity Module
 
-- [`identity::Trait`](https://docs.rs/pallet-identity/latest/pallet_identity/trait.Trait.html)
+- [`identity::Config`](https://docs.rs/pallet-identity/latest/pallet_identity/trait.Config.html)
 - [`Call`](https://docs.rs/pallet-identity/latest/pallet_identity/enum.Call.html)
 
 ## Overview
@@ -51,6 +51,6 @@ no state-bloat attack is viable.
 * `kill_identity` - Forcibly remove the associated identity; the deposit is lost.
 
 [`Call`]: ./enum.Call.html
-[`Trait`]: ./trait.Trait.html
+[`Config`]: ./trait.Config.html
 
 License: Apache-2.0

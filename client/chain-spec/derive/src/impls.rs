@@ -1,23 +1,25 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use proc_macro2::{Span, TokenStream};
+use proc_macro_crate::{crate_name, FoundCrate};
 use quote::quote;
-use syn::{DeriveInput, Ident, Error};
-use proc_macro_crate::crate_name;
+use syn::{DeriveInput, Error, Ident};
 
 const CRATE_NAME: &str = "sc-chain-spec";
 const ATTRIBUTE_NAME: &str = "forks";
@@ -29,14 +31,18 @@ const ATTRIBUTE_NAME: &str = "forks";
 pub fn extension_derive(ast: &DeriveInput) -> proc_macro::TokenStream {
 	derive(ast, |crate_name, name, generics: &syn::Generics, field_names, field_types, fields| {
 		let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
-		let forks = fields.named.iter().find_map(|f| {
-			if f.attrs.iter().any(|attr| attr.path.is_ident(ATTRIBUTE_NAME)) {
-				let typ = &f.ty;
-				Some(quote! { #typ })
-			} else {
-				None
-			}
-		}).unwrap_or_else(|| quote! { #crate_name::NoExtension });
+		let forks = fields
+			.named
+			.iter()
+			.find_map(|f| {
+				if f.attrs.iter().any(|attr| attr.path.is_ident(ATTRIBUTE_NAME)) {
+					let typ = &f.ty;
+					Some(quote! { #typ })
+				} else {
+					None
+				}
+			})
+			.unwrap_or_else(|| quote! { #crate_name::NoExtension });
 
 		quote! {
 			impl #impl_generics #crate_name::Extension for #name #ty_generics #where_clause {
@@ -46,7 +52,7 @@ pub fn extension_derive(ast: &DeriveInput) -> proc_macro::TokenStream {
 					use std::any::{Any, TypeId};
 
 					match TypeId::of::<T>() {
-						#( x if x == TypeId::of::<#field_types>() => Any::downcast_ref(&self.#field_names) ),*,
+						#( x if x == TypeId::of::<#field_types>() => <dyn Any>::downcast_ref(&self.#field_names) ),*,
 						_ => None,
 					}
 				}
@@ -56,6 +62,15 @@ pub fn extension_derive(ast: &DeriveInput) -> proc_macro::TokenStream {
 
 					match t {
 						#( x if x == TypeId::of::<#field_types>() => &self.#field_names ),*,
+						_ => self,
+					}
+				}
+
+				fn get_any_mut(&mut self, t: std::any::TypeId) -> &mut dyn std::any::Any {
+					use std::any::{Any, TypeId};
+
+					match t {
+						#( x if x == TypeId::of::<#field_types>() => &mut self.#field_names ),*,
 						_ => self,
 					}
 				}
@@ -70,20 +85,20 @@ pub fn group_derive(ast: &DeriveInput) -> proc_macro::TokenStream {
 		let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 		let fork_name = Ident::new(&format!("{}Fork", name), Span::call_site());
 
-		let fork_fields = generate_fork_fields(&crate_name, &field_names, &field_types);
+		let fork_fields = generate_fork_fields(crate_name, &field_names, &field_types);
 		let to_fork = generate_base_to_fork(&fork_name, &field_names);
 		let combine_with = generate_combine_with(&field_names);
 		let to_base = generate_fork_to_base(name, &field_names);
 		let serde_crate_name = match proc_macro_crate::crate_name("serde") {
-			Ok(name) => Ident::new(&name.replace("-", "_"), Span::call_site()),
+			Ok(FoundCrate::Itself) => Ident::new("serde", Span::call_site()),
+			Ok(FoundCrate::Name(name)) => Ident::new(&name, Span::call_site()),
 			Err(e) => {
-				let err = Error::new(
-					Span::call_site(),
-					&format!("Could not find `serde` crate: {}", e),
-				).to_compile_error();
+				let err =
+					Error::new(Span::call_site(), &format!("Could not find `serde` crate: {}", e))
+						.to_compile_error();
 
-				return quote!( #err ).into();
-			}
+				return quote!( #err )
+			},
 		};
 
 		quote! {
@@ -128,14 +143,20 @@ pub fn group_derive(ast: &DeriveInput) -> proc_macro::TokenStream {
 pub fn derive(
 	ast: &DeriveInput,
 	derive: impl Fn(
-		&Ident, &Ident, &syn::Generics, Vec<&Ident>, Vec<&syn::Type>, &syn::FieldsNamed,
+		&Ident,
+		&Ident,
+		&syn::Generics,
+		Vec<&Ident>,
+		Vec<&syn::Type>,
+		&syn::FieldsNamed,
 	) -> TokenStream,
 ) -> proc_macro::TokenStream {
 	let err = || {
 		let err = Error::new(
 			Span::call_site(),
-			"ChainSpecGroup is only available for structs with named fields."
-		).to_compile_error();
+			"ChainSpecGroup is only available for structs with named fields.",
+		)
+		.to_compile_error();
 		quote!( #err ).into()
 	};
 
@@ -149,14 +170,11 @@ pub fn derive(
 		_ => return err(),
 	};
 
-	const PROOF: &str = "CARGO_PKG_NAME always defined when compiling; qed";
 	let name = &ast.ident;
 	let crate_name = match crate_name(CRATE_NAME) {
-		Ok(chain_spec_name) => chain_spec_name,
-		Err(e) => if std::env::var("CARGO_PKG_NAME").expect(PROOF) == CRATE_NAME {
-			// we return the name of the crate here instead of `crate` to support doc tests.
-			CRATE_NAME.replace("-", "_")
-		} else {
+		Ok(FoundCrate::Itself) => CRATE_NAME.replace("-", "_"),
+		Ok(FoundCrate::Name(chain_spec_name)) => chain_spec_name,
+		Err(e) => {
 			let err = Error::new(Span::call_site(), &e).to_compile_error();
 			return quote!( #err ).into()
 		},
@@ -168,47 +186,35 @@ pub fn derive(
 	derive(&crate_name, name, &ast.generics, field_names, field_types, fields).into()
 }
 
-fn generate_fork_fields(
-	crate_name: &Ident,
-	names: &[&Ident],
-	types: &[&syn::Type],
-) -> TokenStream {
+fn generate_fork_fields(crate_name: &Ident, names: &[&Ident], types: &[&syn::Type]) -> TokenStream {
 	let crate_name = std::iter::repeat(crate_name);
 	quote! {
 		#( pub #names: Option<<#types as #crate_name::Group>::Fork>, )*
 	}
 }
 
-fn generate_base_to_fork(
-	fork_name: &Ident,
-	names: &[&Ident],
-) -> TokenStream {
+fn generate_base_to_fork(fork_name: &Ident, names: &[&Ident]) -> TokenStream {
 	let names2 = names.to_vec();
 
-	quote!{
+	quote! {
 		#fork_name {
 			#( #names: Some(self.#names2.to_fork()), )*
 		}
 	}
 }
 
-fn generate_combine_with(
-	names: &[&Ident],
-) -> TokenStream {
+fn generate_combine_with(names: &[&Ident]) -> TokenStream {
 	let names2 = names.to_vec();
 
-	quote!{
+	quote! {
 		#( self.#names.combine_with(other.#names2); )*
 	}
 }
 
-fn generate_fork_to_base(
-	fork: &Ident,
-	names: &[&Ident],
-) -> TokenStream {
+fn generate_fork_to_base(fork: &Ident, names: &[&Ident]) -> TokenStream {
 	let names2 = names.to_vec();
 
-	quote!{
+	quote! {
 		Some(#fork {
 			#( #names: self.#names2?.to_base()?, )*
 		})

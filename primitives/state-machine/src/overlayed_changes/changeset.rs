@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,23 +17,26 @@
 
 //! Houses the code that implements the transactional overlay storage.
 
-use super::{StorageKey, StorageValue, Extrinsics};
+use super::{Extrinsics, StorageKey, StorageValue};
 
-#[cfg(feature = "std")]
-use std::collections::HashSet as Set;
 #[cfg(not(feature = "std"))]
 use sp_std::collections::btree_set::BTreeSet as Set;
+#[cfg(feature = "std")]
+use std::collections::HashSet as Set;
 
-use sp_std::collections::{btree_map::BTreeMap, btree_set::BTreeSet};
-use smallvec::SmallVec;
 use crate::warn;
+use smallvec::SmallVec;
+use sp_std::{
+	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
+	hash::Hash,
+};
 
 const PROOF_OVERLAY_NON_EMPTY: &str = "\
 	An OverlayValue is always created with at least one transaction and dropped as soon
 	as the last transaction is removed; qed";
 
-type DirtyKeysSets = SmallVec<[Set<StorageKey>; 5]>;
-type Transactions = SmallVec<[InnerValue; 5]>;
+type DirtyKeysSets<K> = SmallVec<[Set<K>; 5]>;
+type Transactions<V> = SmallVec<[InnerValue<V>; 5]>;
 
 /// Error returned when trying to commit or rollback while no transaction is open or
 /// when the runtime is trying to close a transaction started by the client.
@@ -62,32 +65,43 @@ pub enum ExecutionMode {
 
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(test, derive(PartialEq))]
-struct InnerValue {
+struct InnerValue<V> {
 	/// Current value. None if value has been deleted.
-	value: Option<StorageValue>,
+	value: V,
 	/// The set of extrinsic indices where the values has been changed.
-	/// Is filled only if runtime has announced changes trie support.
 	extrinsics: Extrinsics,
 }
 
 /// An overlay that contains all versions of a value for a specific key.
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Clone)]
 #[cfg_attr(test, derive(PartialEq))]
-pub struct OverlayedValue {
+pub struct OverlayedEntry<V> {
 	/// The individual versions of that value.
 	/// One entry per transactions during that the value was actually written.
-	transactions: Transactions,
+	transactions: Transactions<V>,
 }
 
+impl<V> Default for OverlayedEntry<V> {
+	fn default() -> Self {
+		Self { transactions: SmallVec::new() }
+	}
+}
+
+/// History of value, with removal support.
+pub type OverlayedValue = OverlayedEntry<Option<StorageValue>>;
+
+/// Change set for basic key value with extrinsics index recording and removal support.
+pub type OverlayedChangeSet = OverlayedMap<StorageKey, Option<StorageValue>>;
+
 /// Holds a set of changes with the ability modify them using nested transactions.
-#[derive(Debug, Default, Clone)]
-pub struct OverlayedChangeSet {
+#[derive(Debug, Clone)]
+pub struct OverlayedMap<K: Ord + Hash, V> {
 	/// Stores the changes that this overlay constitutes.
-	changes: BTreeMap<StorageKey, OverlayedValue>,
+	changes: BTreeMap<K, OverlayedEntry<V>>,
 	/// Stores which keys are dirty per transaction. Needed in order to determine which
 	/// values to merge into the parent transaction on commit. The length of this vector
 	/// therefore determines how many nested transactions are currently open (depth).
-	dirty_keys: DirtyKeysSets,
+	dirty_keys: DirtyKeysSets<K>,
 	/// The number of how many transactions beginning from the first transactions are started
 	/// by the client. Those transactions are protected against close (commit, rollback)
 	/// when in runtime mode.
@@ -96,32 +110,50 @@ pub struct OverlayedChangeSet {
 	execution_mode: ExecutionMode,
 }
 
+impl<K: Ord + Hash, V> Default for OverlayedMap<K, V> {
+	fn default() -> Self {
+		Self {
+			changes: BTreeMap::new(),
+			dirty_keys: SmallVec::new(),
+			num_client_transactions: Default::default(),
+			execution_mode: Default::default(),
+		}
+	}
+}
+
 impl Default for ExecutionMode {
 	fn default() -> Self {
 		Self::Client
 	}
 }
 
-impl OverlayedValue {
+impl<V> OverlayedEntry<V> {
 	/// The value as seen by the current transaction.
-	pub fn value(&self) -> Option<&StorageValue> {
-		self.transactions.last().expect(PROOF_OVERLAY_NON_EMPTY).value.as_ref()
+	pub fn value_ref(&self) -> &V {
+		&self.transactions.last().expect(PROOF_OVERLAY_NON_EMPTY).value
+	}
+
+	/// The value as seen by the current transaction.
+	pub fn into_value(mut self) -> V {
+		self.transactions.pop().expect(PROOF_OVERLAY_NON_EMPTY).value
 	}
 
 	/// Unique list of extrinsic indices which modified the value.
 	pub fn extrinsics(&self) -> BTreeSet<u32> {
 		let mut set = BTreeSet::new();
-		self.transactions.iter().for_each(|t| t.extrinsics.copy_extrinsics_into(&mut set));
+		self.transactions
+			.iter()
+			.for_each(|t| t.extrinsics.copy_extrinsics_into(&mut set));
 		set
 	}
 
 	/// Mutable reference to the most recent version.
-	fn value_mut(&mut self) -> &mut Option<StorageValue> {
+	fn value_mut(&mut self) -> &mut V {
 		&mut self.transactions.last_mut().expect(PROOF_OVERLAY_NON_EMPTY).value
 	}
 
 	/// Remove the last version and return it.
-	fn pop_transaction(&mut self) -> InnerValue {
+	fn pop_transaction(&mut self) -> InnerValue<V> {
 		self.transactions.pop().expect(PROOF_OVERLAY_NON_EMPTY)
 	}
 
@@ -134,17 +166,9 @@ impl OverlayedValue {
 	///
 	/// This makes sure that the old version is not overwritten and can be properly
 	/// rolled back when required.
-	fn set(
-		&mut self,
-		value: Option<StorageValue>,
-		first_write_in_tx: bool,
-		at_extrinsic: Option<u32>,
-	) {
+	fn set(&mut self, value: V, first_write_in_tx: bool, at_extrinsic: Option<u32>) {
 		if first_write_in_tx || self.transactions.is_empty() {
-			self.transactions.push(InnerValue {
-				value,
-				.. Default::default()
-			});
+			self.transactions.push(InnerValue { value, extrinsics: Default::default() });
 		} else {
 			*self.value_mut() = value;
 		}
@@ -155,15 +179,22 @@ impl OverlayedValue {
 	}
 }
 
+impl OverlayedEntry<Option<StorageValue>> {
+	/// The value as seen by the current transaction.
+	pub fn value(&self) -> Option<&StorageValue> {
+		self.value_ref().as_ref()
+	}
+}
+
 /// Inserts a key into the dirty set.
 ///
 /// Returns true iff we are currently have at least one open transaction and if this
 /// is the first write to the given key that transaction.
-fn insert_dirty(set: &mut DirtyKeysSets, key: StorageKey) -> bool {
+fn insert_dirty<K: Ord + Hash>(set: &mut DirtyKeysSets<K>, key: K) -> bool {
 	set.last_mut().map(|dk| dk.insert(key)).unwrap_or_default()
 }
 
-impl OverlayedChangeSet {
+impl<K: Ord + Hash + Clone, V> OverlayedMap<K, V> {
 	/// Create a new changeset at the same transaction state but without any contents.
 	///
 	/// This changeset might be created when there are already open transactions.
@@ -171,10 +202,10 @@ impl OverlayedChangeSet {
 	pub fn spawn_child(&self) -> Self {
 		use sp_std::iter::repeat;
 		Self {
+			changes: Default::default(),
 			dirty_keys: repeat(Set::new()).take(self.transaction_depth()).collect(),
 			num_client_transactions: self.num_client_transactions,
 			execution_mode: self.execution_mode,
-			.. Default::default()
 		}
 	}
 
@@ -184,81 +215,38 @@ impl OverlayedChangeSet {
 	}
 
 	/// Get an optional reference to the value stored for the specified key.
-	pub fn get(&self, key: &[u8]) -> Option<&OverlayedValue> {
+	pub fn get<Q>(&self, key: &Q) -> Option<&OverlayedEntry<V>>
+	where
+		K: sp_std::borrow::Borrow<Q>,
+		Q: Ord + ?Sized,
+	{
 		self.changes.get(key)
 	}
 
 	/// Set a new value for the specified key.
 	///
 	/// Can be rolled back or committed when called inside a transaction.
-	pub fn set(
-		&mut self,
-		key: StorageKey,
-		value: Option<StorageValue>,
-		at_extrinsic: Option<u32>,
-	) {
+	pub fn set(&mut self, key: K, value: V, at_extrinsic: Option<u32>) {
 		let overlayed = self.changes.entry(key.clone()).or_default();
 		overlayed.set(value, insert_dirty(&mut self.dirty_keys, key), at_extrinsic);
 	}
 
-	/// Get a mutable reference for a value.
-	///
-	/// Can be rolled back or committed when called inside a transaction.
-	#[must_use = "A change was registered, so this value MUST be modified."]
-	pub fn modify(
-		&mut self,
-		key: StorageKey,
-		init: impl Fn() -> StorageValue,
-		at_extrinsic: Option<u32>,
-	) -> &mut Option<StorageValue> {
-		let overlayed = self.changes.entry(key.clone()).or_default();
-		let first_write_in_tx = insert_dirty(&mut self.dirty_keys, key);
-		let clone_into_new_tx = if let Some(tx) = overlayed.transactions.last() {
-			if first_write_in_tx {
-				Some(tx.value.clone())
-			} else {
-				None
-			}
-		} else {
-			Some(Some(init()))
-		};
-
-		if let Some(cloned) = clone_into_new_tx {
-			overlayed.set(cloned, first_write_in_tx, at_extrinsic);
-		}
-		overlayed.value_mut()
-	}
-
-	/// Set all values to deleted which are matched by the predicate.
-	///
-	/// Can be rolled back or committed when called inside a transaction.
-	pub fn clear_where(
-		&mut self,
-		predicate: impl Fn(&[u8], &OverlayedValue) -> bool,
-		at_extrinsic: Option<u32>,
-	) {
-		for (key, val) in self.changes.iter_mut().filter(|(k, v)| predicate(k, v)) {
-			val.set(None, insert_dirty(&mut self.dirty_keys, key.clone()), at_extrinsic);
-		}
-	}
-
 	/// Get a list of all changes as seen by current transaction.
-	pub fn changes(&self) -> impl Iterator<Item=(&StorageKey, &OverlayedValue)> {
+	pub fn changes(&self) -> impl Iterator<Item = (&K, &OverlayedEntry<V>)> {
 		self.changes.iter()
 	}
 
-	/// Get the change that is next to the supplied key.
-	pub fn next_change(&self, key: &[u8]) -> Option<(&[u8], &OverlayedValue)> {
-		use sp_std::ops::Bound;
-		let range = (Bound::Excluded(key), Bound::Unbounded);
-		self.changes.range::<[u8], _>(range).next().map(|(k, v)| (&k[..], v))
+	/// Get a list of all changes as seen by current transaction, consumes
+	/// the overlay.
+	pub fn into_changes(self) -> impl Iterator<Item = (K, OverlayedEntry<V>)> {
+		self.changes.into_iter()
 	}
 
 	/// Consume this changeset and return all committed changes.
 	///
 	/// Panics:
 	/// Panics if there are open transactions: `transaction_depth() > 0`
-	pub fn drain_commited(self) -> impl Iterator<Item=(StorageKey, Option<StorageValue>)> {
+	pub fn drain_commited(self) -> impl Iterator<Item = (K, V)> {
 		assert!(self.transaction_depth() == 0, "Drain is not allowed with open transactions.");
 		self.changes.into_iter().map(|(k, mut v)| (k, v.pop_transaction().value))
 	}
@@ -276,7 +264,7 @@ impl OverlayedChangeSet {
 	/// Calling this while already inside the runtime will return an error.
 	pub fn enter_runtime(&mut self) -> Result<(), AlreadyInRuntime> {
 		if let ExecutionMode::Runtime = self.execution_mode {
-			return Err(AlreadyInRuntime);
+			return Err(AlreadyInRuntime)
 		}
 		self.execution_mode = ExecutionMode::Runtime;
 		self.num_client_transactions = self.transaction_depth();
@@ -289,7 +277,7 @@ impl OverlayedChangeSet {
 	/// Calling this while already outside the runtime will return an error.
 	pub fn exit_runtime(&mut self) -> Result<(), NotInRuntime> {
 		if let ExecutionMode::Client = self.execution_mode {
-			return Err(NotInRuntime);
+			return Err(NotInRuntime)
 		}
 		self.execution_mode = ExecutionMode::Client;
 		if self.has_open_runtime_transactions() {
@@ -341,11 +329,13 @@ impl OverlayedChangeSet {
 		}
 
 		for key in self.dirty_keys.pop().ok_or(NoOpenTransaction)? {
-			let overlayed = self.changes.get_mut(&key).expect("\
+			let overlayed = self.changes.get_mut(&key).expect(
+				"\
 				A write to an OverlayedValue is recorded in the dirty key set. Before an
 				OverlayedValue is removed, its containing dirty set is removed. This
 				function is only called for keys that are in the dirty set. qed\
-			");
+			",
+			);
 
 			if rollback {
 				overlayed.pop_transaction();
@@ -384,6 +374,56 @@ impl OverlayedChangeSet {
 	}
 }
 
+impl OverlayedChangeSet {
+	/// Get a mutable reference for a value.
+	///
+	/// Can be rolled back or committed when called inside a transaction.
+	#[must_use = "A change was registered, so this value MUST be modified."]
+	pub fn modify(
+		&mut self,
+		key: StorageKey,
+		init: impl Fn() -> StorageValue,
+		at_extrinsic: Option<u32>,
+	) -> &mut Option<StorageValue> {
+		let overlayed = self.changes.entry(key.clone()).or_default();
+		let first_write_in_tx = insert_dirty(&mut self.dirty_keys, key);
+		let clone_into_new_tx = if let Some(tx) = overlayed.transactions.last() {
+			if first_write_in_tx {
+				Some(tx.value.clone())
+			} else {
+				None
+			}
+		} else {
+			Some(Some(init()))
+		};
+
+		if let Some(cloned) = clone_into_new_tx {
+			overlayed.set(cloned, first_write_in_tx, at_extrinsic);
+		}
+		overlayed.value_mut()
+	}
+
+	/// Set all values to deleted which are matched by the predicate.
+	///
+	/// Can be rolled back or committed when called inside a transaction.
+	pub fn clear_where(
+		&mut self,
+		predicate: impl Fn(&[u8], &OverlayedValue) -> bool,
+		at_extrinsic: Option<u32>,
+	) {
+		for (key, val) in self.changes.iter_mut().filter(|(k, v)| predicate(k, v)) {
+			val.set(None, insert_dirty(&mut self.dirty_keys, key.clone()), at_extrinsic);
+		}
+	}
+
+	/// Get the iterator over all changes that follow the supplied `key`.
+	pub fn changes_after(&self, key: &[u8]) -> impl Iterator<Item = (&[u8], &OverlayedValue)> {
+		use sp_std::ops::Bound;
+		let range = (Bound::Excluded(key), Bound::Unbounded);
+		self.changes.range::<[u8], _>(range).map(|(k, v)| (k.as_slice(), v))
+	}
+}
+
 #[cfg(test)]
 mod test {
 	use super::*;
@@ -393,9 +433,12 @@ mod test {
 	type Drained<'a> = Vec<(&'a [u8], Option<&'a [u8]>)>;
 
 	fn assert_changes(is: &OverlayedChangeSet, expected: &Changes) {
-		let is: Changes = is.changes().map(|(k, v)| {
-			(k.as_ref(), (v.value().map(AsRef::as_ref), v.extrinsics().into_iter().collect()))
-		}).collect();
+		let is: Changes = is
+			.changes()
+			.map(|(k, v)| {
+				(k.as_ref(), (v.value().map(AsRef::as_ref), v.extrinsics().into_iter().collect()))
+			})
+			.collect();
 		assert_eq!(&is, expected);
 	}
 
@@ -403,7 +446,8 @@ mod test {
 		let is = is.drain_commited().collect::<Vec<_>>();
 		let expected = expected
 			.iter()
-			.map(|(k, v)| (k.to_vec(), v.0.map(From::from))).collect::<Vec<_>>();
+			.map(|(k, v)| (k.to_vec(), v.0.map(From::from)))
+			.collect::<Vec<_>>();
 		assert_eq!(is, expected);
 	}
 
@@ -411,7 +455,8 @@ mod test {
 		let is = is.drain_commited().collect::<Vec<_>>();
 		let expected = expected
 			.iter()
-			.map(|(k, v)| (k.to_vec(), v.map(From::from))).collect::<Vec<_>>();
+			.map(|(k, v)| (k.to_vec(), v.map(From::from)))
+			.collect::<Vec<_>>();
 		assert_eq!(is, expected);
 	}
 
@@ -424,10 +469,7 @@ mod test {
 		changeset.set(b"key1".to_vec(), Some(b"val1".to_vec()), Some(2));
 		changeset.set(b"key0".to_vec(), Some(b"val0-1".to_vec()), Some(9));
 
-		assert_drained(changeset, vec![
-			(b"key0", Some(b"val0-1")),
-			(b"key1", Some(b"val1")),
-		]);
+		assert_drained(changeset, vec![(b"key0", Some(b"val0-1")), (b"key1", Some(b"val1"))]);
 	}
 
 	#[test]
@@ -549,10 +591,8 @@ mod test {
 		changeset.rollback_transaction().unwrap();
 		assert_eq!(changeset.transaction_depth(), 0);
 
-		let rolled_back: Changes = vec![
-			(b"key0", (Some(b"val0-1"), vec![1, 10])),
-			(b"key1", (Some(b"val1"), vec![1])),
-		];
+		let rolled_back: Changes =
+			vec![(b"key0", (Some(b"val0-1"), vec![1, 10])), (b"key1", (Some(b"val1"), vec![1]))];
 		assert_changes(&changeset, &rolled_back);
 
 		assert_drained_changes(changeset, rolled_back);
@@ -626,21 +666,27 @@ mod test {
 
 		changeset.clear_where(|k, _| k.starts_with(b"del"), Some(5));
 
-		assert_changes(&changeset, &vec![
-			(b"del1", (None, vec![3, 5])),
-			(b"del2", (None, vec![4, 5])),
-			(b"key0", (Some(b"val0"), vec![1])),
-			(b"key1", (Some(b"val1"), vec![2])),
-		]);
+		assert_changes(
+			&changeset,
+			&vec![
+				(b"del1", (None, vec![3, 5])),
+				(b"del2", (None, vec![4, 5])),
+				(b"key0", (Some(b"val0"), vec![1])),
+				(b"key1", (Some(b"val1"), vec![2])),
+			],
+		);
 
 		changeset.rollback_transaction().unwrap();
 
-		assert_changes(&changeset, &vec![
-			(b"del1", (Some(b"delval1"), vec![3])),
-			(b"del2", (Some(b"delval2"), vec![4])),
-			(b"key0", (Some(b"val0"), vec![1])),
-			(b"key1", (Some(b"val1"), vec![2])),
-		]);
+		assert_changes(
+			&changeset,
+			&vec![
+				(b"del1", (Some(b"delval1"), vec![3])),
+				(b"del2", (Some(b"delval2"), vec![4])),
+				(b"key0", (Some(b"val0"), vec![1])),
+				(b"key1", (Some(b"val1"), vec![2])),
+			],
+		);
 	}
 
 	#[test]
@@ -657,30 +703,53 @@ mod test {
 		changeset.set(b"key4".to_vec(), Some(b"val4".to_vec()), Some(4));
 		changeset.set(b"key11".to_vec(), Some(b"val11".to_vec()), Some(11));
 
-		assert_eq!(changeset.next_change(b"key0").unwrap().0, b"key1");
-		assert_eq!(changeset.next_change(b"key0").unwrap().1.value(), Some(&b"val1".to_vec()));
-		assert_eq!(changeset.next_change(b"key1").unwrap().0, b"key11");
-		assert_eq!(changeset.next_change(b"key1").unwrap().1.value(), Some(&b"val11".to_vec()));
-		assert_eq!(changeset.next_change(b"key11").unwrap().0, b"key2");
-		assert_eq!(changeset.next_change(b"key11").unwrap().1.value(), Some(&b"val2".to_vec()));
-		assert_eq!(changeset.next_change(b"key2").unwrap().0, b"key3");
-		assert_eq!(changeset.next_change(b"key2").unwrap().1.value(), Some(&b"val3".to_vec()));
-		assert_eq!(changeset.next_change(b"key3").unwrap().0, b"key4");
-		assert_eq!(changeset.next_change(b"key3").unwrap().1.value(), Some(&b"val4".to_vec()));
-		assert_eq!(changeset.next_change(b"key4"), None);
+		assert_eq!(changeset.changes_after(b"key0").next().unwrap().0, b"key1");
+		assert_eq!(
+			changeset.changes_after(b"key0").next().unwrap().1.value(),
+			Some(&b"val1".to_vec())
+		);
+		assert_eq!(changeset.changes_after(b"key1").next().unwrap().0, b"key11");
+		assert_eq!(
+			changeset.changes_after(b"key1").next().unwrap().1.value(),
+			Some(&b"val11".to_vec())
+		);
+		assert_eq!(changeset.changes_after(b"key11").next().unwrap().0, b"key2");
+		assert_eq!(
+			changeset.changes_after(b"key11").next().unwrap().1.value(),
+			Some(&b"val2".to_vec())
+		);
+		assert_eq!(changeset.changes_after(b"key2").next().unwrap().0, b"key3");
+		assert_eq!(
+			changeset.changes_after(b"key2").next().unwrap().1.value(),
+			Some(&b"val3".to_vec())
+		);
+		assert_eq!(changeset.changes_after(b"key3").next().unwrap().0, b"key4");
+		assert_eq!(
+			changeset.changes_after(b"key3").next().unwrap().1.value(),
+			Some(&b"val4".to_vec())
+		);
+		assert_eq!(changeset.changes_after(b"key4").next(), None);
 
 		changeset.rollback_transaction().unwrap();
 
-		assert_eq!(changeset.next_change(b"key0").unwrap().0, b"key1");
-		assert_eq!(changeset.next_change(b"key0").unwrap().1.value(), Some(&b"val1".to_vec()));
-		assert_eq!(changeset.next_change(b"key1").unwrap().0, b"key2");
-		assert_eq!(changeset.next_change(b"key1").unwrap().1.value(), Some(&b"val2".to_vec()));
-		assert_eq!(changeset.next_change(b"key11").unwrap().0, b"key2");
-		assert_eq!(changeset.next_change(b"key11").unwrap().1.value(), Some(&b"val2".to_vec()));
-		assert_eq!(changeset.next_change(b"key2"), None);
-		assert_eq!(changeset.next_change(b"key3"), None);
-		assert_eq!(changeset.next_change(b"key4"), None);
-
+		assert_eq!(changeset.changes_after(b"key0").next().unwrap().0, b"key1");
+		assert_eq!(
+			changeset.changes_after(b"key0").next().unwrap().1.value(),
+			Some(&b"val1".to_vec())
+		);
+		assert_eq!(changeset.changes_after(b"key1").next().unwrap().0, b"key2");
+		assert_eq!(
+			changeset.changes_after(b"key1").next().unwrap().1.value(),
+			Some(&b"val2".to_vec())
+		);
+		assert_eq!(changeset.changes_after(b"key11").next().unwrap().0, b"key2");
+		assert_eq!(
+			changeset.changes_after(b"key11").next().unwrap().1.value(),
+			Some(&b"val2".to_vec())
+		);
+		assert_eq!(changeset.changes_after(b"key2").next(), None);
+		assert_eq!(changeset.changes_after(b"key3").next(), None);
+		assert_eq!(changeset.changes_after(b"key4").next(), None);
 	}
 
 	#[test]
@@ -740,9 +809,7 @@ mod test {
 		changeset.commit_transaction().unwrap();
 		assert_eq!(changeset.transaction_depth(), 0);
 
-		assert_drained(changeset, vec![
-			(b"key0", Some(b"val0")),
-		]);
+		assert_drained(changeset, vec![(b"key0", Some(b"val0"))]);
 	}
 
 	#[test]

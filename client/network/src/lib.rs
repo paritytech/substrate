@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -121,10 +121,10 @@
 //!
 //! - **`/substrate/<protocol-id>/<version>`** (where `<protocol-id>` must be replaced with the
 //! protocol ID of the targeted chain, and `<version>` is a number between 2 and 6). For each
-//! connection we optionally keep an additional substream for all Substrate-based communications alive.
-//! This protocol is considered legacy, and is progressively being replaced with alternatives.
-//! This is designated as "The legacy Substrate substream" in this documentation. See below for
-//! more details.
+//! connection we optionally keep an additional substream for all Substrate-based communications
+//! alive. This protocol is considered legacy, and is progressively being replaced with
+//! alternatives. This is designated as "The legacy Substrate substream" in this documentation. See
+//! below for more details.
 //! - **`/<protocol-id>/sync/2`** is a request-response protocol (see below) that lets one perform
 //! requests for information about blocks. Each request is the encoding of a `BlockRequest` and
 //! each response is the encoding of a `BlockResponse`, as defined in the `api.v1.proto` file in
@@ -141,8 +141,9 @@
 //! block announces are pushed to other nodes. The handshake is empty on both sides. The message
 //! format is a SCALE-encoded tuple containing a block header followed with an opaque list of
 //! bytes containing some data associated with this block announcement, e.g. a candidate message.
-//! - Notifications protocols that are registered using the `register_notifications_protocol`
-//! method. For example: `/paritytech/grandpa/1`. See below for more information.
+//! - Notifications protocols that are registered using
+//! `NetworkConfiguration::notifications_protocols`. For example: `/paritytech/grandpa/1`. See
+//! below for more information.
 //!
 //! ## The legacy Substrate substream
 //!
@@ -242,16 +243,11 @@
 //! - Calling `trigger_repropagate` when a transaction is added to the pool.
 //!
 //! More precise usage details are still being worked on and will likely change in the future.
-//!
 
 mod behaviour;
-mod block_requests;
 mod chain;
-mod peer_info;
 mod discovery;
-mod finality_requests;
-mod light_client_handler;
-mod on_demand_layer;
+mod peer_info;
 mod protocol;
 mod request_responses;
 mod schema;
@@ -259,17 +255,27 @@ mod service;
 mod transport;
 mod utils;
 
+pub mod bitswap;
+pub mod block_request_handler;
 pub mod config;
 pub mod error;
-pub mod gossip;
+pub mod light_client_requests;
 pub mod network_state;
+pub mod state_request_handler;
+pub mod transactions;
+pub mod warp_request_handler;
 
 #[doc(inline)]
 pub use libp2p::{multiaddr, Multiaddr, PeerId};
-pub use protocol::{event::{DhtEvent, Event, ObservedRole}, sync::SyncState, PeerInfo};
+pub use protocol::{
+	event::{DhtEvent, Event, ObservedRole},
+	sync::{StateDownloadProgress, SyncState, WarpSyncPhase, WarpSyncProgress},
+	PeerInfo,
+};
 pub use service::{
-	NetworkService, NetworkWorker, RequestFailure, OutboundFailure, NotificationSender,
-	NotificationSenderReady,
+	DecodingError, IfDisconnected, KademliaKey, Keypair, NetworkService, NetworkWorker,
+	NotificationSender, NotificationSenderReady, OutboundFailure, PublicKey, RequestFailure,
+	Signature, SigningError,
 };
 
 pub use sc_peerset::ReputationChange;
@@ -283,6 +289,9 @@ use sp_runtime::traits::{Block as BlockT, NumberFor};
 /// case of (possibly repeated) simultaneous dialing attempts between
 /// two peers, the per-peer connection limit is not set to 1 but 2.
 const MAX_CONNECTIONS_PER_PEER: usize = 2;
+
+/// The maximum number of concurrent established connections that were incoming.
+const MAX_CONNECTIONS_ESTABLISHED_INCOMING: u32 = 10_000;
 
 /// Minimum Requirements for a Hash within Networking
 pub trait ExHashT: std::hash::Hash + Eq + std::fmt::Debug + Clone + Send + Sync + 'static {}
@@ -316,4 +325,8 @@ pub struct NetworkStatus<B: BlockT> {
 	pub total_bytes_inbound: u64,
 	/// The total number of bytes sent.
 	pub total_bytes_outbound: u64,
+	/// State sync in progress.
+	pub state_sync: Option<protocol::sync::StateDownloadProgress>,
+	/// Warp sync in progress.
+	pub warp_sync: Option<protocol::sync::WarpSyncProgress<B>>,
 }

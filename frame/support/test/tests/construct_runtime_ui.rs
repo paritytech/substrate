@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,10 +18,11 @@
 use std::env;
 
 #[rustversion::attr(not(stable), ignore)]
+#[cfg(not(feature = "disable-ui-tests"))]
 #[test]
 fn ui() {
 	// As trybuild is using `cargo check`, we don't need the real WASM binaries.
-	env::set_var("BUILD_DUMMY_WASM_BINARY", "1");
+	env::set_var("SKIP_WASM_BUILD", "1");
 
 	let t = trybuild::TestCases::new();
 	t.compile_fail("tests/construct_runtime_ui/*.rs");

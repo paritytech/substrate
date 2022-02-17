@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,9 +17,11 @@
 
 //! Transaction validity interface.
 
+use crate::{
+	codec::{Decode, Encode},
+	RuntimeDebug,
+};
 use sp_std::prelude::*;
-use crate::codec::{Encode, Decode};
-use crate::RuntimeDebug;
 
 /// Priority for a transaction. Additive. Higher is better.
 pub type TransactionPriority = u64;
@@ -33,12 +35,16 @@ pub type TransactionTag = Vec<u8>;
 
 /// An invalid transaction validity.
 #[derive(Clone, PartialEq, Eq, Encode, Decode, Copy, RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(serde::Serialize))]
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub enum InvalidTransaction {
 	/// The call of the transaction is not expected.
 	Call,
 	/// General error to do with the inability to pay some fees (e.g. account balance too low).
 	Payment,
+	/// General error to do with the inability to pay some fees in non native currencty
+	NonNativePayment,
+	/// General error to do with the inability calculate fee in non native currency
+	NonNativePaymentCalculation,
 	/// General error to do with the transaction not yet being valid (e.g. nonce too high).
 	Future,
 	/// General error to do with the transaction being outdated (e.g. nonce too low).
@@ -54,6 +60,14 @@ pub enum InvalidTransaction {
 	/// it will only be able to assume a bad signature and cannot express a more meaningful error.
 	BadProof,
 	/// The transaction birth block is ancient.
+	///
+	/// # Possible causes
+	///
+	/// For `FRAME`-based runtimes this would be caused by `current block number
+	/// - Era::birth block number > BlockHashCount`. (e.g. in Polkadot `BlockHashCount` = 2400, so
+	///   a
+	/// transaction with birth block number 1337 would be valid up until block number 1337 + 2400,
+	/// after which point the transaction would be considered to have an ancient birth block.)
 	AncientBirthBlock,
 	/// The transaction would exhaust the resources of current block.
 	///
@@ -63,29 +77,25 @@ pub enum InvalidTransaction {
 	/// Any other custom invalid validity that is not covered by this enum.
 	Custom(u8),
 	/// An extrinsic with a Mandatory dispatch resulted in Error. This is indicative of either a
-	/// malicious validator or a buggy `provide_inherent`. In any case, it can result in dangerously
-	/// overweight blocks and therefore if found, invalidates the block.
+	/// malicious validator or a buggy `provide_inherent`. In any case, it can result in
+	/// dangerously overweight blocks and therefore if found, invalidates the block.
 	BadMandatory,
 	/// A transaction with a mandatory dispatch. This is invalid; only inherent extrinsics are
 	/// allowed to have mandatory dispatches.
 	MandatoryDispatch,
+	/// The sending address is disabled or known to be invalid.
+	BadSigner,
 }
 
 impl InvalidTransaction {
 	/// Returns if the reason for the invalidity was block resource exhaustion.
 	pub fn exhausted_resources(&self) -> bool {
-		match self {
-			Self::ExhaustsResources => true,
-			_ => false,
-		}
+		matches!(self, Self::ExhaustsResources)
 	}
 
 	/// Returns if the reason for the invalidity was a mandatory call failing.
 	pub fn was_mandatory(&self) -> bool {
-		match self {
-			Self::BadMandatory => true,
-			_ => false,
-		}
+		matches!(self, Self::BadMandatory)
 	}
 }
 
@@ -97,22 +107,26 @@ impl From<InvalidTransaction> for &'static str {
 			InvalidTransaction::Stale => "Transaction is outdated",
 			InvalidTransaction::BadProof => "Transaction has a bad signature",
 			InvalidTransaction::AncientBirthBlock => "Transaction has an ancient birth block",
-			InvalidTransaction::ExhaustsResources =>
-				"Transaction would exhaust the block limits",
+			InvalidTransaction::ExhaustsResources => "Transaction would exhaust the block limits",
 			InvalidTransaction::Payment =>
 				"Inability to pay some fees (e.g. account balance too low)",
+			InvalidTransaction::NonNativePayment =>
+				"Inability to pay some fees in non native token (e.g. account balance too low)",
+			InvalidTransaction::NonNativePaymentCalculation =>
+				"Inability to calculate fees in non native token (e.g. non existing pool, math overflow). Check node rpc for more details.",
 			InvalidTransaction::BadMandatory =>
 				"A call was labelled as mandatory, but resulted in an Error.",
 			InvalidTransaction::MandatoryDispatch =>
 				"Transaction dispatch is mandatory; transactions may not have mandatory dispatches.",
 			InvalidTransaction::Custom(_) => "InvalidTransaction custom error",
+			InvalidTransaction::BadSigner => "Invalid signing address",
 		}
 	}
 }
 
 /// An unknown transaction validity.
 #[derive(Clone, PartialEq, Eq, Encode, Decode, Copy, RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(serde::Serialize))]
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub enum UnknownTransaction {
 	/// Could not lookup some information that is required to validate the transaction.
 	CannotLookup,
@@ -136,7 +150,7 @@ impl From<UnknownTransaction> for &'static str {
 
 /// Errors that can occur while checking the validity of a transaction.
 #[derive(Clone, PartialEq, Eq, Encode, Decode, Copy, RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(serde::Serialize))]
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub enum TransactionValidityError {
 	/// The transaction is invalid.
 	Invalid(InvalidTransaction),
@@ -184,18 +198,33 @@ impl From<UnknownTransaction> for TransactionValidityError {
 	}
 }
 
-/// Information on a transaction's validity and, if valid, on how it relates to other transactions.
-pub type TransactionValidity = Result<ValidTransaction, TransactionValidityError>;
-
-impl Into<TransactionValidity> for InvalidTransaction {
-	fn into(self) -> TransactionValidity {
-		Err(self.into())
+#[cfg(feature = "std")]
+impl std::error::Error for TransactionValidityError {
+	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+		None
 	}
 }
 
-impl Into<TransactionValidity> for UnknownTransaction {
-	fn into(self) -> TransactionValidity {
-		Err(self.into())
+#[cfg(feature = "std")]
+impl std::fmt::Display for TransactionValidityError {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		let s: &'static str = (*self).into();
+		write!(f, "{}", s)
+	}
+}
+
+/// Information on a transaction's validity and, if valid, on how it relates to other transactions.
+pub type TransactionValidity = Result<ValidTransaction, TransactionValidityError>;
+
+impl From<InvalidTransaction> for TransactionValidity {
+	fn from(invalid_transaction: InvalidTransaction) -> Self {
+		Err(TransactionValidityError::Invalid(invalid_transaction))
+	}
+}
+
+impl From<UnknownTransaction> for TransactionValidity {
+	fn from(unknown_transaction: UnknownTransaction) -> Self {
+		Err(TransactionValidityError::Unknown(unknown_transaction))
 	}
 }
 
@@ -204,7 +233,9 @@ impl Into<TransactionValidity> for UnknownTransaction {
 /// Depending on the source we might apply different validation schemes.
 /// For instance we can disallow specific kinds of transactions if they were not produced
 /// by our local node (for instance off-chain workers).
-#[derive(Copy, Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug, parity_util_mem::MallocSizeOf)]
+#[derive(
+	Copy, Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug, parity_util_mem::MallocSizeOf,
+)]
 pub enum TransactionSource {
 	/// Transaction is already included in block.
 	///
@@ -263,7 +294,7 @@ pub struct ValidTransaction {
 
 impl Default for ValidTransaction {
 	fn default() -> Self {
-		ValidTransaction {
+		Self {
 			priority: 0,
 			requires: vec![],
 			provides: vec![],
@@ -279,20 +310,23 @@ impl ValidTransaction {
 	/// To avoid conflicts between different parts in runtime it's recommended to build `requires`
 	/// and `provides` tags with a unique prefix.
 	pub fn with_tag_prefix(prefix: &'static str) -> ValidTransactionBuilder {
-		ValidTransactionBuilder {
-			prefix: Some(prefix),
-			validity: Default::default(),
-		}
+		ValidTransactionBuilder { prefix: Some(prefix), validity: Default::default() }
 	}
 
 	/// Combine two instances into one, as a best effort. This will take the superset of each of the
 	/// `provides` and `requires` tags, it will sum the priorities, take the minimum longevity and
 	/// the logic *And* of the propagate flags.
 	pub fn combine_with(mut self, mut other: ValidTransaction) -> Self {
-		ValidTransaction {
+		Self {
 			priority: self.priority.saturating_add(other.priority),
-			requires: { self.requires.append(&mut other.requires); self.requires },
-			provides: { self.provides.append(&mut other.provides); self.provides },
+			requires: {
+				self.requires.append(&mut other.requires);
+				self.requires
+			},
+			provides: {
+				self.provides.append(&mut other.provides);
+				self.provides
+			},
 			longevity: self.longevity.min(other.longevity),
 			propagate: self.propagate && other.propagate,
 		}
@@ -396,7 +430,6 @@ impl From<ValidTransactionBuilder> for ValidTransaction {
 	}
 }
 
-
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -414,7 +447,10 @@ mod tests {
 		let encoded = v.encode();
 		assert_eq!(
 			encoded,
-			vec![0, 5, 0, 0, 0, 0, 0, 0, 0, 4, 16, 1, 2, 3, 4, 4, 12, 4, 5, 6, 42, 0, 0, 0, 0, 0, 0, 0, 0]
+			vec![
+				0, 5, 0, 0, 0, 0, 0, 0, 0, 4, 16, 1, 2, 3, 4, 4, 12, 4, 5, 6, 42, 0, 0, 0, 0, 0, 0,
+				0, 0
+			]
 		);
 
 		// decode back
@@ -434,12 +470,15 @@ mod tests {
 			.priority(3)
 			.priority(6)
 			.into();
-		assert_eq!(a, ValidTransaction {
-			propagate: false,
-			longevity: 5,
-			priority: 6,
-			requires: vec![(PREFIX, 1).encode(), (PREFIX, 2).encode()],
-			provides: vec![(PREFIX, 3).encode(), (PREFIX, 4).encode()],
-		});
+		assert_eq!(
+			a,
+			ValidTransaction {
+				propagate: false,
+				longevity: 5,
+				priority: 6,
+				requires: vec![(PREFIX, 1).encode(), (PREFIX, 2).encode()],
+				provides: vec![(PREFIX, 3).encode(), (PREFIX, 4).encode()],
+			}
+		);
 	}
 }

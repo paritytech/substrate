@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -16,19 +16,17 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use structopt::StructOpt;
 use sc_cli::{
-	Error, VanityCmd, SignCmd, VerifyCmd, InsertCmd,
-	GenerateNodeKeyCmd, GenerateCmd, InspectKeyCmd, InspectNodeKeyCmd
+	Error, GenerateCmd, GenerateNodeKeyCmd, InspectKeyCmd, InspectNodeKeyCmd, SignCmd, VanityCmd,
+	VerifyCmd,
 };
-use substrate_frame_cli::ModuleIdCmd;
-use sp_core::crypto::Ss58Codec;
+use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
 #[structopt(
 	name = "subkey",
 	author = "Parity Team <admin@parity.io>",
-	about = "Utility for generating and restoring with Substrate keys",
+	about = "Utility for generating and restoring with Substrate keys"
 )]
 pub enum Subkey {
 	/// Generate a random node libp2p key, save it to file or print it to stdout
@@ -44,12 +42,6 @@ pub enum Subkey {
 	/// Print the peer ID corresponding to the node key in the given file
 	InspectNodeKey(InspectNodeKeyCmd),
 
-	/// Insert a key to the keystore of a node.
-	Insert(InsertCmd),
-
-	/// Inspect a module ID address
-	ModuleId(ModuleIdCmd),
-
 	/// Sign a message, with a given (secret) key.
 	Sign(SignCmd),
 
@@ -60,23 +52,15 @@ pub enum Subkey {
 	Verify(VerifyCmd),
 }
 
-/// Run the subkey command, given the apropriate runtime.
-pub fn run<R>() -> Result<(), Error>
-	where
-		R: frame_system::Trait,
-		R::AccountId: Ss58Codec
-{
+/// Run the subkey command, given the appropriate runtime.
+pub fn run() -> Result<(), Error> {
 	match Subkey::from_args() {
-		Subkey::GenerateNodeKey(cmd) => cmd.run()?,
-		Subkey::Generate(cmd) => cmd.run()?,
-		Subkey::Inspect(cmd) => cmd.run()?,
-		Subkey::InspectNodeKey(cmd) => cmd.run()?,
-		Subkey::Insert(cmd) => cmd.run()?,
-		Subkey::ModuleId(cmd) => cmd.run::<R>()?,
-		Subkey::Vanity(cmd) => cmd.run()?,
-		Subkey::Verify(cmd) => cmd.run()?,
-		Subkey::Sign(cmd) => cmd.run()?,
-	};
-
-	Ok(())
+		Subkey::GenerateNodeKey(cmd) => cmd.run(),
+		Subkey::Generate(cmd) => cmd.run(),
+		Subkey::Inspect(cmd) => cmd.run(),
+		Subkey::InspectNodeKey(cmd) => cmd.run(),
+		Subkey::Vanity(cmd) => cmd.run(),
+		Subkey::Verify(cmd) => cmd.run(),
+		Subkey::Sign(cmd) => cmd.run(),
+	}
 }

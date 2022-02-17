@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use sc_cli::{RunCmd, KeySubcommand, SignCmd, VanityCmd, VerifyCmd};
+use sc_cli::{KeySubcommand, RunCmd, SignCmd, VanityCmd, VerifyCmd};
 use structopt::StructOpt;
 
 /// An overarching CLI command definition.
@@ -47,6 +47,14 @@ pub enum Subcommand {
 	#[structopt(name = "benchmark", about = "Benchmark runtime pallets.")]
 	Benchmark(frame_benchmarking_cli::BenchmarkCmd),
 
+	/// Try some command against runtime state.
+	#[cfg(feature = "try-runtime")]
+	TryRuntime(try_runtime_cli::TryRuntimeCmd),
+
+	/// Try some command against runtime state. Note: `try-runtime` feature must be enabled.
+	#[cfg(not(feature = "try-runtime"))]
+	TryRuntime,
+
 	/// Verify a signature for a message, provided on STDIN, with a given (public or secret) key.
 	Verify(VerifyCmd),
 
@@ -58,9 +66,6 @@ pub enum Subcommand {
 
 	/// Build a chain specification.
 	BuildSpec(sc_cli::BuildSpecCmd),
-
-	/// Build a chain specification with a light client sync state.
-	BuildSyncSpec(sc_cli::BuildSyncSpecCmd),
 
 	/// Validate blocks.
 	CheckBlock(sc_cli::CheckBlockCmd),

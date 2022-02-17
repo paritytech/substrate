@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -25,12 +25,12 @@ extern crate alloc;
 #[cfg(feature = "std")]
 use serde::Serialize;
 
-use codec::{Encode, Decode, Input, Codec};
-use sp_runtime::{ConsensusEngineId, RuntimeDebug, traits::NumberFor};
-use sp_std::borrow::Cow;
-use sp_std::vec::Vec;
+use codec::{Codec, Decode, Encode, Input};
+use scale_info::TypeInfo;
 #[cfg(feature = "std")]
-use sp_core::traits::BareCryptoStorePtr;
+use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
+use sp_runtime::{traits::NumberFor, ConsensusEngineId, RuntimeDebug};
+use sp_std::{borrow::Cow, vec::Vec};
 
 #[cfg(feature = "std")]
 use log::debug;
@@ -39,7 +39,7 @@ use log::debug;
 pub const KEY_TYPE: sp_core::crypto::KeyTypeId = sp_application_crypto::key_types::GRANDPA;
 
 mod app {
-	use sp_application_crypto::{app_crypto, key_types::GRANDPA, ed25519};
+	use sp_application_crypto::{app_crypto, ed25519, key_types::GRANDPA};
 	app_crypto!(ed25519, GRANDPA);
 }
 
@@ -102,7 +102,7 @@ pub enum ConsensusLog<N: Codec> {
 	/// This should be a pure function: i.e. as long as the runtime can interpret
 	/// the digest type it should return the same result regardless of the current
 	/// state.
-	#[codec(index = "1")]
+	#[codec(index = 1)]
 	ScheduledChange(ScheduledChange<N>),
 	/// Force an authority set change.
 	///
@@ -118,18 +118,18 @@ pub enum ConsensusLog<N: Codec> {
 	/// This should be a pure function: i.e. as long as the runtime can interpret
 	/// the digest type it should return the same result regardless of the current
 	/// state.
-	#[codec(index = "2")]
+	#[codec(index = 2)]
 	ForcedChange(N, ScheduledChange<N>),
 	/// Note that the authority with given index is disabled until the next change.
-	#[codec(index = "3")]
+	#[codec(index = 3)]
 	OnDisabled(AuthorityIndex),
 	/// A signal to pause the current authority set after the given delay.
 	/// After finalizing the block at _delay_ the authorities should stop voting.
-	#[codec(index = "4")]
+	#[codec(index = 4)]
 	Pause(N),
 	/// A signal to resume the current authority set after the given delay.
 	/// After authoring the block at _delay_ the authorities should resume voting.
-	#[codec(index = "5")]
+	#[codec(index = 5)]
 	Resume(N),
 }
 
@@ -171,7 +171,7 @@ impl<N: Codec> ConsensusLog<N> {
 /// GRANDPA happens when a voter votes on the same round (either at prevote or
 /// precommit stage) for different blocks. Proving is achieved by collecting the
 /// signed messages of conflicting votes.
-#[derive(Clone, Debug, Decode, Encode, PartialEq)]
+#[derive(Clone, Debug, Decode, Encode, PartialEq, TypeInfo)]
 pub struct EquivocationProof<H, N> {
 	set_id: SetId,
 	equivocation: Equivocation<H, N>,
@@ -181,10 +181,7 @@ impl<H, N> EquivocationProof<H, N> {
 	/// Create a new `EquivocationProof` for the given set id and using the
 	/// given equivocation as proof.
 	pub fn new(set_id: SetId, equivocation: Equivocation<H, N>) -> Self {
-		EquivocationProof {
-			set_id,
-			equivocation,
-		}
+		EquivocationProof { set_id, equivocation }
 	}
 
 	/// Returns the set id at which the equivocation occurred.
@@ -208,7 +205,7 @@ impl<H, N> EquivocationProof<H, N> {
 
 /// Wrapper object for GRANDPA equivocation proofs, useful for unifying prevote
 /// and precommit equivocations under a common type.
-#[derive(Clone, Debug, Decode, Encode, PartialEq)]
+#[derive(Clone, Debug, Decode, Encode, PartialEq, TypeInfo)]
 pub enum Equivocation<H, N> {
 	/// Proof of equivocation at prevote stage.
 	Prevote(grandpa::Equivocation<AuthorityId, grandpa::Prevote<H, N>, AuthoritySignature>),
@@ -252,6 +249,14 @@ impl<H, N> Equivocation<H, N> {
 			Equivocation::Precommit(ref equivocation) => &equivocation.identity,
 		}
 	}
+
+	/// Returns the round number when the equivocation happened.
+	pub fn round_number(&self) -> RoundNumber {
+		match self {
+			Equivocation::Prevote(ref equivocation) => equivocation.round_number,
+			Equivocation::Precommit(ref equivocation) => equivocation.round_number,
+		}
+	}
 }
 
 /// Verifies the equivocation proof by making sure that both votes target
@@ -269,7 +274,7 @@ where
 			if $equivocation.first.0.target_hash == $equivocation.second.0.target_hash &&
 				$equivocation.first.0.target_number == $equivocation.second.0.target_number
 			{
-				return false;
+				return false
 			}
 
 			// check signatures on both votes are valid
@@ -289,17 +294,17 @@ where
 				report.set_id,
 			);
 
-			return valid_first && valid_second;
+			return valid_first && valid_second
 		};
 	}
 
 	match report.equivocation {
 		Equivocation::Prevote(equivocation) => {
 			check!(equivocation, grandpa::Message::Prevote);
-		}
+		},
 		Equivocation::Precommit(equivocation) => {
 			check!(equivocation, grandpa::Message::Precommit);
-		}
+		},
 	}
 }
 
@@ -372,7 +377,7 @@ where
 /// Localizes the message to the given set and round and signs the payload.
 #[cfg(feature = "std")]
 pub fn sign_message<H, N>(
-	keystore: &BareCryptoStorePtr,
+	keystore: SyncCryptoStorePtr,
 	message: grandpa::Message<H, N>,
 	public: AuthorityId,
 	round: RoundNumber,
@@ -382,22 +387,22 @@ where
 	H: Encode,
 	N: Encode,
 {
-	use sp_core::crypto::Public;
 	use sp_application_crypto::AppKey;
-	use sp_std::convert::TryInto;
+	use sp_core::crypto::Public;
 
 	let encoded = localized_payload(round, set_id, &message);
-	let signature = keystore.read()
-		.sign_with(AuthorityId::ID, &public.to_public_crypto_pair(), &encoded[..])
-		.ok()?
-		.try_into()
-		.ok()?;
+	let signature = SyncCryptoStore::sign_with(
+		&*keystore,
+		AuthorityId::ID,
+		&public.to_public_crypto_pair(),
+		&encoded[..],
+	)
+	.ok()
+	.flatten()?
+	.try_into()
+	.ok()?;
 
-	Some(grandpa::SignedMessage {
-		message,
-		signature,
-		id: public,
-	})
+	Some(grandpa::SignedMessage { message, signature, id: public })
 }
 
 /// WASM function call to check for pending changes.
@@ -448,7 +453,7 @@ impl<'a> Decode for VersionedAuthorityList<'a> {
 	fn decode<I: Input>(value: &mut I) -> Result<Self, codec::Error> {
 		let (version, authorities): (u8, AuthorityList) = Decode::decode(value)?;
 		if version != AUTHORITIES_VERSION {
-			return Err("unknown Grandpa authorities version".into());
+			return Err("unknown Grandpa authorities version".into())
 		}
 		Ok(authorities.into())
 	}
@@ -487,7 +492,7 @@ sp_api::decl_runtime_apis! {
 	/// applied in the runtime after those N blocks have passed.
 	///
 	/// The consensus protocol will coordinate the handoff externally.
-	#[api_version(2)]
+	#[api_version(3)]
 	pub trait GrandpaApi {
 		/// Get the current GRANDPA authorities and weights. This should not change except
 		/// for when changes are scheduled and the corresponding delay has passed.
@@ -525,5 +530,8 @@ sp_api::decl_runtime_apis! {
 			set_id: SetId,
 			authority_id: AuthorityId,
 		) -> Option<OpaqueKeyOwnershipProof>;
+
+		/// Get current GRANDPA authority set id.
+		fn current_set_id() -> SetId;
 	}
 }

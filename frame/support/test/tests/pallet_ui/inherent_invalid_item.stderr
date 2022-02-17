@@ -1,0 +1,5 @@
+error: Invalid pallet::inherent, expected impl<..> ProvideInherent for Pallet<..>
+  --> $DIR/inherent_invalid_item.rs:19:2
+   |
+19 |     impl Foo {}
+   |     ^^^^

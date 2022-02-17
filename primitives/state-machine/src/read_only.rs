@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,17 +17,18 @@
 
 //! Read-only version of Externalities.
 
-use std::{
-	any::{TypeId, Any},
-	marker::PhantomData,
-};
 use crate::{Backend, StorageKey, StorageValue};
+use codec::Encode;
 use hash_db::Hasher;
 use sp_core::{
-	storage::{ChildInfo, TrackedStorageKey},
-	traits::Externalities, Blake2Hasher,
+	storage::{ChildInfo, StateVersion, TrackedStorageKey},
+	traits::Externalities,
+	Blake2Hasher,
 };
-use codec::Encode;
+use std::{
+	any::{Any, TypeId},
+	marker::PhantomData,
+};
 
 /// Trait for inspecting state in any backend.
 ///
@@ -37,11 +38,13 @@ pub trait InspectState<H: Hasher, B: Backend<H>> {
 	///
 	/// Self will be set as read-only externalities and inspection
 	/// closure will be run against it.
-	fn inspect_with<F: FnOnce()>(&self, f: F);
+	///
+	/// Returns the result of the closure.
+	fn inspect_state<F: FnOnce() -> R, R>(&self, f: F) -> R;
 }
 
 impl<H: Hasher, B: Backend<H>> InspectState<H, B> for B {
-	fn inspect_with<F: FnOnce()>(&self, f: F) {
+	fn inspect_state<F: FnOnce() -> R, R>(&self, f: F) -> R {
 		ReadOnlyExternalities::from(self).execute_with(f)
 	}
 }
@@ -77,39 +80,34 @@ impl<'a, H: Hasher, B: 'a + Backend<H>> Externalities for ReadOnlyExternalities<
 	}
 
 	fn storage(&self, key: &[u8]) -> Option<StorageValue> {
-		self.backend.storage(key).expect("Backed failed for storage in ReadOnlyExternalities")
+		self.backend
+			.storage(key)
+			.expect("Backed failed for storage in ReadOnlyExternalities")
 	}
 
 	fn storage_hash(&self, key: &[u8]) -> Option<Vec<u8>> {
 		self.storage(key).map(|v| Blake2Hasher::hash(&v).encode())
 	}
 
-	fn child_storage(
-		&self,
-		child_info: &ChildInfo,
-		key: &[u8],
-	) -> Option<StorageValue> {
-		self.backend.child_storage(child_info, key).expect("Backed failed for child_storage in ReadOnlyExternalities")
+	fn child_storage(&self, child_info: &ChildInfo, key: &[u8]) -> Option<StorageValue> {
+		self.backend
+			.child_storage(child_info, key)
+			.expect("Backed failed for child_storage in ReadOnlyExternalities")
 	}
 
-	fn child_storage_hash(
-		&self,
-		child_info: &ChildInfo,
-		key: &[u8],
-	) -> Option<Vec<u8>> {
+	fn child_storage_hash(&self, child_info: &ChildInfo, key: &[u8]) -> Option<Vec<u8>> {
 		self.child_storage(child_info, key).map(|v| Blake2Hasher::hash(&v).encode())
 	}
 
 	fn next_storage_key(&self, key: &[u8]) -> Option<StorageKey> {
-		self.backend.next_storage_key(key).expect("Backed failed for next_storage_key in ReadOnlyExternalities")
+		self.backend
+			.next_storage_key(key)
+			.expect("Backed failed for next_storage_key in ReadOnlyExternalities")
 	}
 
-	fn next_child_storage_key(
-		&self,
-		child_info: &ChildInfo,
-		key: &[u8],
-	) -> Option<StorageKey> {
-		self.backend.next_child_storage_key(child_info, key)
+	fn next_child_storage_key(&self, child_info: &ChildInfo, key: &[u8]) -> Option<StorageKey> {
+		self.backend
+			.next_child_storage_key(child_info, key)
 			.expect("Backed failed for next_child_storage_key in ReadOnlyExternalities")
 	}
 
@@ -126,14 +124,11 @@ impl<'a, H: Hasher, B: 'a + Backend<H>> Externalities for ReadOnlyExternalities<
 		unimplemented!("place_child_storage not supported in ReadOnlyExternalities")
 	}
 
-	fn kill_child_storage(
-		&mut self,
-		_child_info: &ChildInfo,
-	) {
+	fn kill_child_storage(&mut self, _child_info: &ChildInfo, _limit: Option<u32>) -> (bool, u32) {
 		unimplemented!("kill_child_storage is not supported in ReadOnlyExternalities")
 	}
 
-	fn clear_prefix(&mut self, _prefix: &[u8]) {
+	fn clear_prefix(&mut self, _prefix: &[u8], _limit: Option<u32>) -> (bool, u32) {
 		unimplemented!("clear_prefix is not supported in ReadOnlyExternalities")
 	}
 
@@ -141,33 +136,25 @@ impl<'a, H: Hasher, B: 'a + Backend<H>> Externalities for ReadOnlyExternalities<
 		&mut self,
 		_child_info: &ChildInfo,
 		_prefix: &[u8],
-	) {
+		_limit: Option<u32>,
+	) -> (bool, u32) {
 		unimplemented!("clear_child_prefix is not supported in ReadOnlyExternalities")
 	}
 
-	fn storage_append(
-		&mut self,
-		_key: Vec<u8>,
-		_value: Vec<u8>,
-	) {
+	fn storage_append(&mut self, _key: Vec<u8>, _value: Vec<u8>) {
 		unimplemented!("storage_append is not supported in ReadOnlyExternalities")
 	}
 
-	fn chain_id(&self) -> u64 { 42 }
-
-	fn storage_root(&mut self) -> Vec<u8> {
+	fn storage_root(&mut self, _state_version: StateVersion) -> Vec<u8> {
 		unimplemented!("storage_root is not supported in ReadOnlyExternalities")
 	}
 
 	fn child_storage_root(
 		&mut self,
 		_child_info: &ChildInfo,
+		_state_version: StateVersion,
 	) -> Vec<u8> {
 		unimplemented!("child_storage_root is not supported in ReadOnlyExternalities")
-	}
-
-	fn storage_changes_root(&mut self, _parent: &[u8]) -> Result<Option<Vec<u8>>, ()> {
-		unimplemented!("storage_changes_root is not supported in ReadOnlyExternalities")
 	}
 
 	fn storage_start_transaction(&mut self) {
@@ -201,9 +188,15 @@ impl<'a, H: Hasher, B: 'a + Backend<H>> Externalities for ReadOnlyExternalities<
 	fn set_whitelist(&mut self, _: Vec<TrackedStorageKey>) {
 		unimplemented!("set_whitelist is not supported in ReadOnlyExternalities")
 	}
+
+	fn get_read_and_written_keys(&self) -> Vec<(Vec<u8>, u32, u32, bool)> {
+		unimplemented!("get_read_and_written_keys is not supported in ReadOnlyExternalities")
+	}
 }
 
-impl<'a, H: Hasher, B: 'a + Backend<H>> sp_externalities::ExtensionStore for ReadOnlyExternalities<'a, H, B> {
+impl<'a, H: Hasher, B: 'a + Backend<H>> sp_externalities::ExtensionStore
+	for ReadOnlyExternalities<'a, H, B>
+{
 	fn extension_by_type_id(&mut self, _type_id: TypeId) -> Option<&mut dyn Any> {
 		unimplemented!("extension_by_type_id is not supported in ReadOnlyExternalities")
 	}
@@ -216,7 +209,10 @@ impl<'a, H: Hasher, B: 'a + Backend<H>> sp_externalities::ExtensionStore for Rea
 		unimplemented!("register_extension_with_type_id is not supported in ReadOnlyExternalities")
 	}
 
-	fn deregister_extension_by_type_id(&mut self, _type_id: TypeId) -> Result<(), sp_externalities::Error> {
+	fn deregister_extension_by_type_id(
+		&mut self,
+		_type_id: TypeId,
+	) -> Result<(), sp_externalities::Error> {
 		unimplemented!("deregister_extension_by_type_id is not supported in ReadOnlyExternalities")
 	}
 }

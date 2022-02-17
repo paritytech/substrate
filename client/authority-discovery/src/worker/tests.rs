@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -16,84 +16,29 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::worker::schema;
+use std::{
+	collections::HashSet,
+	sync::{Arc, Mutex},
+	task::Poll,
+};
 
-use std::{iter::FromIterator, sync::{Arc, Mutex}};
+use async_trait::async_trait;
+use futures::{
+	channel::mpsc::{self, channel},
+	executor::{block_on, LocalPool},
+	future::FutureExt,
+	sink::SinkExt,
+	task::LocalSpawn,
+};
+use libp2p::{core::multiaddr, PeerId};
+use prometheus_endpoint::prometheus::default_registry;
 
-use futures::channel::mpsc::channel;
-use futures::executor::{block_on, LocalPool};
-use futures::future::{poll_fn, FutureExt};
-use futures::sink::SinkExt;
-use futures::task::LocalSpawn;
-use futures::poll;
-use libp2p::{kad, core::multiaddr, PeerId};
-
-use sp_api::{ProvideRuntimeApi, ApiRef};
-use sp_core::{crypto::Public, testing::KeyStore};
-use sp_runtime::traits::{Zero, Block as BlockT, NumberFor};
+use sp_api::{ApiRef, ProvideRuntimeApi};
+use sp_keystore::{testing::KeyStore, CryptoStore};
+use sp_runtime::traits::{Block as BlockT, NumberFor, Zero};
 use substrate_test_runtime_client::runtime::Block;
 
 use super::*;
-
-#[test]
-fn interval_at_with_start_now() {
-	let start = Instant::now();
-
-	let mut interval = interval_at(
-		std::time::Instant::now(),
-		std::time::Duration::from_secs(10),
-	);
-
-	futures::executor::block_on(async {
-		interval.next().await;
-	});
-
-	assert!(
-		Instant::now().saturating_duration_since(start) < Duration::from_secs(1),
-		"Expected low resolution instant interval to fire within less than a second.",
-	);
-}
-
-#[test]
-fn interval_at_is_queuing_ticks() {
-	let start = Instant::now();
-
-	let interval = interval_at(start, std::time::Duration::from_millis(100));
-
-	// Let's wait for 200ms, thus 3 elements should be queued up (1st at 0ms, 2nd at 100ms, 3rd
-	// at 200ms).
-	std::thread::sleep(Duration::from_millis(200));
-
-	futures::executor::block_on(async {
-		interval.take(3).collect::<Vec<()>>().await;
-	});
-
-	// Make sure we did not wait for more than 300 ms, which would imply that `at_interval` is
-	// not queuing ticks.
-	assert!(
-		Instant::now().saturating_duration_since(start) < Duration::from_millis(300),
-		"Expect interval to /queue/ events when not polled for a while.",
-	);
-}
-
-#[test]
-fn interval_at_with_initial_delay() {
-	let start = Instant::now();
-
-	let mut interval = interval_at(
-		std::time::Instant::now() + Duration::from_millis(100),
-		std::time::Duration::from_secs(10),
-	);
-
-	futures::executor::block_on(async {
-		interval.next().await;
-	});
-
-	assert!(
-		Instant::now().saturating_duration_since(start) > Duration::from_millis(100),
-		"Expected interval with initial delay not to fire right away.",
-	);
-}
 
 #[derive(Clone)]
 pub(crate) struct TestApi {
@@ -104,9 +49,7 @@ impl ProvideRuntimeApi<Block> for TestApi {
 	type Api = RuntimeApi;
 
 	fn runtime_api<'a>(&'a self) -> ApiRef<'a, Self::Api> {
-		RuntimeApi {
-			authorities: self.authorities.clone(),
-		}.into()
+		RuntimeApi { authorities: self.authorities.clone() }.into()
 	}
 }
 
@@ -127,6 +70,8 @@ impl<Block: BlockT> HeaderBackend<Block> for TestApi {
 			finalized_number: Zero::zero(),
 			genesis_hash: Default::default(),
 			number_leaves: Default::default(),
+			finalized_state: None,
+			block_gap: None,
 		}
 	}
 
@@ -158,62 +103,82 @@ pub(crate) struct RuntimeApi {
 
 sp_api::mock_impl_runtime_apis! {
 	impl AuthorityDiscoveryApi<Block> for RuntimeApi {
-		type Error = sp_blockchain::Error;
-
 		fn authorities(&self) -> Vec<AuthorityId> {
 			self.authorities.clone()
 		}
 	}
 }
 
+#[derive(Debug)]
+pub enum TestNetworkEvent {
+	GetCalled(sc_network::KademliaKey),
+	PutCalled(sc_network::KademliaKey, Vec<u8>),
+}
+
 pub struct TestNetwork {
 	peer_id: PeerId,
+	identity: sc_network::Keypair,
 	external_addresses: Vec<Multiaddr>,
 	// Whenever functions on `TestNetwork` are called, the function arguments are added to the
 	// vectors below.
-	pub put_value_call: Arc<Mutex<Vec<(kad::record::Key, Vec<u8>)>>>,
-	pub get_value_call: Arc<Mutex<Vec<kad::record::Key>>>,
-	pub set_priority_group_call: Arc<Mutex<Vec<(String, HashSet<Multiaddr>)>>>,
+	pub put_value_call: Arc<Mutex<Vec<(sc_network::KademliaKey, Vec<u8>)>>>,
+	pub get_value_call: Arc<Mutex<Vec<sc_network::KademliaKey>>>,
+	event_sender: mpsc::UnboundedSender<TestNetworkEvent>,
+	event_receiver: Option<mpsc::UnboundedReceiver<TestNetworkEvent>>,
+}
+
+impl TestNetwork {
+	fn get_event_receiver(&mut self) -> Option<mpsc::UnboundedReceiver<TestNetworkEvent>> {
+		self.event_receiver.take()
+	}
 }
 
 impl Default for TestNetwork {
 	fn default() -> Self {
+		let (tx, rx) = mpsc::unbounded();
+		let identity = sc_network::Keypair::generate_ed25519();
 		TestNetwork {
-			peer_id: PeerId::random(),
-			external_addresses: vec![
-				"/ip6/2001:db8::/tcp/30333"
-					.parse().unwrap(),
-			],
+			peer_id: identity.public().to_peer_id(),
+			identity,
+			external_addresses: vec!["/ip6/2001:db8::/tcp/30333".parse().unwrap()],
 			put_value_call: Default::default(),
 			get_value_call: Default::default(),
-			set_priority_group_call: Default::default(),
+			event_sender: tx,
+			event_receiver: Some(rx),
 		}
 	}
 }
 
-impl NetworkProvider for TestNetwork {
-	fn set_priority_group(
+impl NetworkSigner for TestNetwork {
+	fn sign_with_local_identity(
 		&self,
-		group_id: String,
-		peers: HashSet<Multiaddr>,
-	) -> std::result::Result<(), String> {
-		self.set_priority_group_call
-			.lock()
-			.unwrap()
-			.push((group_id, peers));
-		Ok(())
+		msg: impl AsRef<[u8]>,
+	) -> std::result::Result<sc_network::Signature, sc_network::SigningError> {
+		sc_network::Signature::sign_message(msg, &self.identity)
 	}
-	fn put_value(&self, key: kad::record::Key, value: Vec<u8>) {
-		self.put_value_call.lock().unwrap().push((key, value));
+}
+
+#[async_trait]
+impl NetworkProvider for TestNetwork {
+	fn put_value(&self, key: sc_network::KademliaKey, value: Vec<u8>) {
+		self.put_value_call.lock().unwrap().push((key.clone(), value.clone()));
+		self.event_sender
+			.clone()
+			.unbounded_send(TestNetworkEvent::PutCalled(key, value))
+			.unwrap();
 	}
-	fn get_value(&self, key: &kad::record::Key) {
+	fn get_value(&self, key: &sc_network::KademliaKey) {
 		self.get_value_call.lock().unwrap().push(key.clone());
+		self.event_sender
+			.clone()
+			.unbounded_send(TestNetworkEvent::GetCalled(key.clone()))
+			.unwrap();
 	}
 }
 
 impl NetworkStateInfo for TestNetwork {
 	fn local_peer_id(&self) -> PeerId {
-		self.peer_id.clone()
+		self.peer_id
 	}
 
 	fn external_addresses(&self) -> Vec<Multiaddr> {
@@ -221,49 +186,43 @@ impl NetworkStateInfo for TestNetwork {
 	}
 }
 
-fn build_dht_event(
+impl NetworkSigner for sc_network::Keypair {
+	fn sign_with_local_identity(
+		&self,
+		msg: impl AsRef<[u8]>,
+	) -> std::result::Result<sc_network::Signature, sc_network::SigningError> {
+		sc_network::Signature::sign_message(msg, self)
+	}
+}
+
+async fn build_dht_event<Signer: NetworkSigner>(
 	addresses: Vec<Multiaddr>,
 	public_key: AuthorityId,
-	key_store: &BareCryptoStorePtr,
-) -> (libp2p::kad::record::Key, Vec<u8>) {
-	let mut serialized_addresses = vec![];
-	schema::AuthorityAddresses {
-		addresses: addresses.into_iter().map(|a| a.to_vec()).collect()
-	}.encode(&mut serialized_addresses)
-		.map_err(Error::EncodingProto)
-		.unwrap();
+	key_store: &dyn CryptoStore,
+	network: Option<&Signer>,
+) -> Vec<(sc_network::KademliaKey, Vec<u8>)> {
+	let serialized_record =
+		serialize_authority_record(serialize_addresses(addresses.into_iter())).unwrap();
 
-	let signature = key_store.read()
-		.sign_with(
-			key_types::AUTHORITY_DISCOVERY,
-			&public_key.clone().into(),
-			serialized_addresses.as_slice(),
-		)
-		.map_err(|_| Error::Signing)
-		.unwrap();
-
-	let mut signed_addresses = vec![];
-	schema::SignedAuthorityAddresses {
-		addresses: serialized_addresses.clone(),
-		signature,
-	}
-	.encode(&mut signed_addresses)
-		.map_err(Error::EncodingProto)
-		.unwrap();
-
-	let key = hash_authority_id(&public_key.to_raw_vec());
-	let value = signed_addresses;
-	(key, value)
+	let peer_signature = network.map(|n| sign_record_with_peer_id(&serialized_record, n).unwrap());
+	let kv_pairs = sign_record_with_authority_ids(
+		serialized_record,
+		peer_signature,
+		key_store,
+		vec![public_key.into()],
+	)
+	.await
+	.unwrap();
+	// There is always a single item in it, because we signed it with a single key
+	kv_pairs
 }
 
 #[test]
 fn new_registers_metrics() {
-	let (_dht_event_tx, dht_event_rx) = channel(1000);
+	let (_dht_event_tx, dht_event_rx) = mpsc::channel(1000);
 	let network: Arc<TestNetwork> = Arc::new(Default::default());
 	let key_store = KeyStore::new();
-	let test_api = Arc::new(TestApi {
-		authorities: vec![],
-	});
+	let test_api = Arc::new(TestApi { authorities: vec![] });
 
 	let registry = prometheus_endpoint::Registry::new();
 
@@ -272,10 +231,10 @@ fn new_registers_metrics() {
 		from_service,
 		test_api,
 		network.clone(),
-		vec![],
-		dht_event_rx.boxed(),
-		Role::Authority(key_store),
+		Box::pin(dht_event_rx),
+		Role::PublishAndDiscover(key_store.into()),
 		Some(registry.clone()),
+		Default::default(),
 	);
 
 	assert!(registry.gather().len() > 0);
@@ -289,12 +248,11 @@ fn triggers_dht_get_query() {
 	// Generate authority keys
 	let authority_1_key_pair = AuthorityPair::from_seed_slice(&[1; 32]).unwrap();
 	let authority_2_key_pair = AuthorityPair::from_seed_slice(&[2; 32]).unwrap();
+	let authorities = vec![authority_1_key_pair.public(), authority_2_key_pair.public()];
 
-	let test_api = Arc::new(TestApi {
-		authorities: vec![authority_1_key_pair.public(), authority_2_key_pair.public()],
-	});
+	let test_api = Arc::new(TestApi { authorities: authorities.clone() });
 
-	let network: Arc<TestNetwork> = Arc::new(Default::default());
+	let network = Arc::new(TestNetwork::default());
 	let key_store = KeyStore::new();
 
 	let (_to_worker, from_service) = mpsc::channel(0);
@@ -302,435 +260,415 @@ fn triggers_dht_get_query() {
 		from_service,
 		test_api,
 		network.clone(),
-		vec![],
-		dht_event_rx.boxed(),
-		Role::Authority(key_store),
+		Box::pin(dht_event_rx),
+		Role::PublishAndDiscover(key_store.into()),
 		None,
+		Default::default(),
 	);
 
-	worker.refill_pending_lookups_queue().unwrap();
-
-	futures::executor::block_on(futures::future::poll_fn(|cx| {
-		assert_eq!(Poll::Pending, worker.poll_unpin(cx));
-		Poll::Ready(())
-	}));
-
-	// Expect authority discovery to request new records from the dht.
-	assert_eq!(network.get_value_call.lock().unwrap().len(), 2);
+	futures::executor::block_on(async {
+		worker.refill_pending_lookups_queue().await.unwrap();
+		worker.start_new_lookups();
+		assert_eq!(network.get_value_call.lock().unwrap().len(), authorities.len());
+	})
 }
 
 #[test]
 fn publish_discover_cycle() {
 	sp_tracing::try_init_simple();
 
+	let mut pool = LocalPool::new();
+
 	// Node A publishing its address.
 
 	let (_dht_event_tx, dht_event_rx) = channel(1000);
 
 	let network: Arc<TestNetwork> = Arc::new(Default::default());
-	let node_a_multiaddr = {
-		let peer_id = network.local_peer_id();
-		let address = network.external_addresses().pop().unwrap();
-
-		address.with(multiaddr::Protocol::P2p(
-			peer_id.into(),
-		))
-	};
 
 	let key_store = KeyStore::new();
-	let node_a_public = key_store
-		.write()
-		.sr25519_generate_new(key_types::AUTHORITY_DISCOVERY, None)
-		.unwrap();
-	let test_api = Arc::new(TestApi {
-		authorities: vec![node_a_public.into()],
-	});
 
-	let (_to_worker, from_service) = mpsc::channel(0);
-	let mut worker = Worker::new(
-		from_service,
-		test_api,
-		network.clone(),
-		vec![],
-		dht_event_rx.boxed(),
-		Role::Authority(key_store),
-		None,
-	);
+	let _ = pool.spawner().spawn_local_obj(
+		async move {
+			let node_a_public = key_store
+				.sr25519_generate_new(key_types::AUTHORITY_DISCOVERY, None)
+				.await
+				.unwrap();
+			let test_api = Arc::new(TestApi { authorities: vec![node_a_public.into()] });
 
-	worker.publish_ext_addresses().unwrap();
+			let (_to_worker, from_service) = mpsc::channel(0);
+			let mut worker = Worker::new(
+				from_service,
+				test_api,
+				network.clone(),
+				Box::pin(dht_event_rx),
+				Role::PublishAndDiscover(key_store.into()),
+				None,
+				Default::default(),
+			);
 
-	// Expect authority discovery to put a new record onto the dht.
-	assert_eq!(network.put_value_call.lock().unwrap().len(), 1);
+			worker.publish_ext_addresses(false).await.unwrap();
 
-	let dht_event = {
-		let (key, value) = network.put_value_call.lock().unwrap().pop().unwrap();
-		sc_network::DhtEvent::ValueFound(vec![(key, value)])
-	};
+			// Expect authority discovery to put a new record onto the dht.
+			assert_eq!(network.put_value_call.lock().unwrap().len(), 1);
 
-	// Node B discovering node A's address.
+			let dht_event = {
+				let (key, value) = network.put_value_call.lock().unwrap().pop().unwrap();
+				sc_network::DhtEvent::ValueFound(vec![(key, value)])
+			};
 
-	let (mut dht_event_tx, dht_event_rx) = channel(1000);
-	let test_api = Arc::new(TestApi {
-		// Make sure node B identifies node A as an authority.
-		authorities: vec![node_a_public.into()],
-	});
-	let network: Arc<TestNetwork> = Arc::new(Default::default());
-	let key_store = KeyStore::new();
+			// Node B discovering node A's address.
 
-	let (_to_worker, from_service) = mpsc::channel(0);
-	let mut worker = Worker::new(
-		from_service,
-		test_api,
-		network.clone(),
-		vec![],
-		dht_event_rx.boxed(),
-		Role::Authority(key_store),
-		None,
-	);
+			let (mut dht_event_tx, dht_event_rx) = channel(1000);
+			let test_api = Arc::new(TestApi {
+				// Make sure node B identifies node A as an authority.
+				authorities: vec![node_a_public.into()],
+			});
+			let network: Arc<TestNetwork> = Arc::new(Default::default());
+			let key_store = KeyStore::new();
 
-	dht_event_tx.try_send(dht_event).unwrap();
+			let (_to_worker, from_service) = mpsc::channel(0);
+			let mut worker = Worker::new(
+				from_service,
+				test_api,
+				network.clone(),
+				Box::pin(dht_event_rx),
+				Role::PublishAndDiscover(key_store.into()),
+				None,
+				Default::default(),
+			);
 
-	let f = |cx: &mut Context<'_>| -> Poll<()> {
-		worker.refill_pending_lookups_queue().unwrap();
-		worker.start_new_lookups();
+			dht_event_tx.try_send(dht_event.clone()).unwrap();
 
-		// Make authority discovery handle the event.
-		if let Poll::Ready(e) = worker.handle_dht_events(cx) {
-			panic!("Unexpected error: {:?}", e);
+			worker.refill_pending_lookups_queue().await.unwrap();
+			worker.start_new_lookups();
+
+			// Make authority discovery handle the event.
+			worker.handle_dht_event(dht_event).await;
 		}
-		worker.set_priority_group().unwrap();
+		.boxed_local()
+		.into(),
+	);
 
-		// Expect authority discovery to set the priority set.
-		assert_eq!(network.set_priority_group_call.lock().unwrap().len(), 1);
-
-		assert_eq!(
-			network.set_priority_group_call.lock().unwrap()[0],
-			(
-				"authorities".to_string(),
-				HashSet::from_iter(vec![node_a_multiaddr.clone()].into_iter())
-			)
-		);
-
-		Poll::Ready(())
-	};
-
-	let _ = block_on(poll_fn(f));
+	pool.run();
 }
 
+/// Don't terminate when sender side of service channel is dropped. Terminate when network event
+/// stream terminates.
 #[test]
 fn terminate_when_event_stream_terminates() {
 	let (dht_event_tx, dht_event_rx) = channel(1000);
 	let network: Arc<TestNetwork> = Arc::new(Default::default());
 	let key_store = KeyStore::new();
-	let test_api = Arc::new(TestApi {
-		authorities: vec![],
-	});
+	let test_api = Arc::new(TestApi { authorities: vec![] });
 
-	let (_to_worker, from_service) = mpsc::channel(0);
-	let mut worker = Worker::new(
+	let (to_worker, from_service) = mpsc::channel(0);
+	let worker = Worker::new(
 		from_service,
 		test_api,
 		network.clone(),
-		vec![],
-		dht_event_rx.boxed(),
-		Role::Authority(key_store),
+		Box::pin(dht_event_rx),
+		Role::PublishAndDiscover(key_store.into()),
 		None,
-	);
+		Default::default(),
+	)
+	.run();
+	futures::pin_mut!(worker);
 
 	block_on(async {
-		assert_eq!(Poll::Pending, poll!(&mut worker));
+		assert_eq!(Poll::Pending, futures::poll!(&mut worker));
 
-		// Simulate termination of the network through dropping the sender side of the dht event
-		// channel.
+		// Drop sender side of service channel.
+		drop(to_worker);
+		assert_eq!(
+			Poll::Pending,
+			futures::poll!(&mut worker),
+			"Expect the authority discovery module not to terminate once the \
+			sender side of the service channel is closed.",
+		);
+
+		// Simulate termination of the network through dropping the sender side
+		// of the dht event channel.
 		drop(dht_event_tx);
 
 		assert_eq!(
-			Poll::Ready(()), poll!(&mut worker),
-			"Expect the authority discovery module to terminate once the sending side of the dht \
-			event channel is terminated.",
+			Poll::Ready(()),
+			futures::poll!(&mut worker),
+			"Expect the authority discovery module to terminate once the \
+			 sending side of the dht event channel is closed.",
 		);
 	});
 }
 
 #[test]
-fn continue_operating_when_service_channel_is_dropped() {
-	let (_dht_event_tx, dht_event_rx) = channel(0);
-	let network: Arc<TestNetwork> = Arc::new(Default::default());
-	let key_store = KeyStore::new();
-	let test_api = Arc::new(TestApi {
-		authorities: vec![],
-	});
+fn dont_stop_polling_dht_event_stream_after_bogus_event() {
+	let remote_multiaddr = {
+		let peer_id = PeerId::random();
+		let address: Multiaddr = "/ip6/2001:db8:0:0:0:0:0:1/tcp/30333".parse().unwrap();
 
-	let (to_worker, from_service) = mpsc::channel(0);
-	let mut worker = Worker::new(
-		from_service,
-		test_api,
-		network.clone(),
-		vec![],
-		dht_event_rx.boxed(),
-		Role::Authority(key_store),
-		None,
-	);
+		address.with(multiaddr::Protocol::P2p(peer_id.into()))
+	};
+	let remote_key_store = KeyStore::new();
+	let remote_public_key: AuthorityId =
+		block_on(remote_key_store.sr25519_generate_new(key_types::AUTHORITY_DISCOVERY, None))
+			.unwrap()
+			.into();
 
-	block_on(async {
-		assert_eq!(Poll::Pending, poll!(&mut worker));
-
-		drop(to_worker);
-
-		for _ in 0..100 {
-			assert_eq!(
-				Poll::Pending, poll!(&mut worker),
-				"Expect authority discovery `Worker` not to panic when service channel is dropped.",
-			);
-		}
-	});
-}
-
-#[test]
-fn dont_stop_polling_when_error_is_returned() {
-	#[derive(PartialEq, Debug)]
-	enum Event {
-		Processed,
-		End,
+	let (mut dht_event_tx, dht_event_rx) = channel(1);
+	let (network, mut network_events) = {
+		let mut n = TestNetwork::default();
+		let r = n.get_event_receiver().unwrap();
+		(Arc::new(n), r)
 	};
 
-	let (mut dht_event_tx, dht_event_rx) = channel(1000);
-	let (mut discovery_update_tx, mut discovery_update_rx) = channel(1000);
-	let network: Arc<TestNetwork> = Arc::new(Default::default());
 	let key_store = KeyStore::new();
-	let test_api = Arc::new(TestApi {
-		authorities: vec![],
-	});
+	let test_api = Arc::new(TestApi { authorities: vec![remote_public_key.clone()] });
 	let mut pool = LocalPool::new();
 
-	let (_to_worker, from_service) = mpsc::channel(0);
+	let (mut to_worker, from_service) = mpsc::channel(1);
 	let mut worker = Worker::new(
 		from_service,
 		test_api,
 		network.clone(),
-		vec![],
-		dht_event_rx.boxed(),
-		Role::Authority(key_store),
+		Box::pin(dht_event_rx),
+		Role::PublishAndDiscover(Arc::new(key_store)),
 		None,
+		Default::default(),
 	);
 
 	// Spawn the authority discovery to make sure it is polled independently.
 	//
 	// As this is a local pool, only one future at a time will have the CPU and
 	// can make progress until the future returns `Pending`.
-	pool.spawner().spawn_local_obj(
-		futures::future::poll_fn(move |ctx| {
-			match std::pin::Pin::new(&mut worker).poll(ctx) {
-				Poll::Ready(()) => {},
-				Poll::Pending => {
-					discovery_update_tx.send(Event::Processed).now_or_never();
-					return Poll::Pending;
-				},
-			}
-			let _ = discovery_update_tx.send(Event::End).now_or_never().unwrap();
-			Poll::Ready(())
-		}).boxed_local().into(),
-	).expect("Spawns authority discovery");
-
-	pool.run_until(
-		// The future that drives the event stream
-		async {
-			// Send an event that should generate an error
-			let _ = dht_event_tx.send(DhtEvent::ValueFound(Default::default())).now_or_never();
-			// Send the same event again to make sure that the event stream needs to be polled twice
-			// to be woken up again.
-			let _ = dht_event_tx.send(DhtEvent::ValueFound(Default::default())).now_or_never();
-
-			// Now we call `await` and give the control to the authority discovery future.
-			assert_eq!(Some(Event::Processed), discovery_update_rx.next().await);
-
-			// Drop the event rx to stop the authority discovery. If it was polled correctly, it
-			// should end properly.
-			drop(dht_event_tx);
-
-			assert!(
-				discovery_update_rx.collect::<Vec<Event>>()
-					.await
-					.into_iter()
-					.any(|evt| evt == Event::End),
-				"The authority discovery should have ended",
-			);
+	let _ = pool.spawner().spawn_local_obj(
+		async move {
+			// Refilling `pending_lookups` only happens every X minutes. Fast
+			// forward by calling `refill_pending_lookups_queue` directly.
+			worker.refill_pending_lookups_queue().await.unwrap();
+			worker.run().await
 		}
+		.boxed_local()
+		.into(),
 	);
+
+	pool.run_until(async {
+		// Assert worker to trigger a lookup for the one and only authority.
+		assert!(matches!(network_events.next().await, Some(TestNetworkEvent::GetCalled(_))));
+
+		// Send an event that should generate an error
+		dht_event_tx
+			.send(DhtEvent::ValueFound(Default::default()))
+			.await
+			.expect("Channel has capacity of 1.");
+
+		// Make previously triggered lookup succeed.
+		let dht_event = {
+			let kv_pairs = build_dht_event::<TestNetwork>(
+				vec![remote_multiaddr.clone()],
+				remote_public_key.clone(),
+				&remote_key_store,
+				None,
+			)
+			.await;
+			sc_network::DhtEvent::ValueFound(kv_pairs)
+		};
+		dht_event_tx.send(dht_event).await.expect("Channel has capacity of 1.");
+
+		// Expect authority discovery to function normally, now knowing the
+		// address for the remote node.
+		let (sender, addresses) = futures::channel::oneshot::channel();
+		to_worker
+			.send(ServicetoWorkerMsg::GetAddressesByAuthorityId(remote_public_key, sender))
+			.await
+			.expect("Channel has capacity of 1.");
+		assert_eq!(Some(HashSet::from([remote_multiaddr])), addresses.await.unwrap());
+	});
 }
 
-/// In the scenario of a validator publishing the address of its sentry node to
-/// the DHT, said sentry node should not add its own Multiaddr to the
-/// peerset "authority" priority group.
-#[test]
-fn never_add_own_address_to_priority_group() {
-	let validator_key_store = KeyStore::new();
-	let validator_public = validator_key_store
-		.write()
-		.sr25519_generate_new(key_types::AUTHORITY_DISCOVERY, None)
-		.unwrap();
+struct DhtValueFoundTester {
+	pub remote_key_store: KeyStore,
+	pub remote_authority_public: sp_core::sr25519::Public,
+	pub remote_node_key: sc_network::Keypair,
+	pub local_worker: Option<
+		Worker<
+			TestApi,
+			TestNetwork,
+			sp_runtime::generic::Block<
+				sp_runtime::generic::Header<u64, sp_runtime::traits::BlakeTwo256>,
+				substrate_test_runtime_client::runtime::Extrinsic,
+			>,
+			std::pin::Pin<Box<futures::channel::mpsc::Receiver<sc_network::DhtEvent>>>,
+		>,
+	>,
+}
 
-	let sentry_network: Arc<TestNetwork> = Arc::new(Default::default());
+impl DhtValueFoundTester {
+	fn new() -> Self {
+		let remote_key_store = KeyStore::new();
+		let remote_authority_public =
+			block_on(remote_key_store.sr25519_generate_new(key_types::AUTHORITY_DISCOVERY, None))
+				.unwrap();
 
-	let sentry_multiaddr = {
-		let peer_id = sentry_network.local_peer_id();
-		let address: Multiaddr = "/ip6/2001:db8:0:0:0:0:0:2/tcp/30333".parse().unwrap();
+		let remote_node_key = sc_network::Keypair::generate_ed25519();
+		Self { remote_key_store, remote_authority_public, remote_node_key, local_worker: None }
+	}
+
+	fn multiaddr_with_peer_id(&self, idx: u16) -> Multiaddr {
+		let peer_id = self.remote_node_key.public().to_peer_id();
+		let address: Multiaddr =
+			format!("/ip6/2001:db8:0:0:0:0:0:{:x}/tcp/30333", idx).parse().unwrap();
 
 		address.with(multiaddr::Protocol::P2p(peer_id.into()))
-	};
+	}
 
-	// Address of some other sentry node of `validator`.
-	let random_multiaddr = {
-		let peer_id = PeerId::random();
-		let address: Multiaddr = "/ip6/2001:db8:0:0:0:0:0:1/tcp/30333".parse().unwrap();
+	fn process_value_found(
+		&mut self,
+		strict_record_validation: bool,
+		values: Vec<(sc_network::KademliaKey, Vec<u8>)>,
+	) -> Option<&HashSet<Multiaddr>> {
+		let (_dht_event_tx, dht_event_rx) = channel(1);
+		let local_test_api =
+			Arc::new(TestApi { authorities: vec![self.remote_authority_public.clone().into()] });
+		let local_network: Arc<TestNetwork> = Arc::new(Default::default());
+		let local_key_store = KeyStore::new();
 
-		address.with(multiaddr::Protocol::P2p(
-			peer_id.into(),
-		))
-	};
+		let (_to_worker, from_service) = mpsc::channel(0);
+		let mut local_worker = Worker::new(
+			from_service,
+			local_test_api,
+			local_network.clone(),
+			Box::pin(dht_event_rx),
+			Role::PublishAndDiscover(Arc::new(local_key_store)),
+			None,
+			WorkerConfig { strict_record_validation, ..Default::default() },
+		);
 
-	let dht_event = build_dht_event(
-		vec![sentry_multiaddr, random_multiaddr.clone()],
-		validator_public.into(),
-		&validator_key_store,
-	);
+		block_on(local_worker.refill_pending_lookups_queue()).unwrap();
+		local_worker.start_new_lookups();
 
-	let (_dht_event_tx, dht_event_rx) = channel(1);
-	let sentry_test_api = Arc::new(TestApi {
-		// Make sure the sentry node identifies its validator as an authority.
-		authorities: vec![validator_public.into()],
-	});
+		drop(local_worker.handle_dht_value_found_event(values));
 
-	let (_to_worker, from_service) = mpsc::channel(0);
-	let mut sentry_worker = Worker::new(
-		from_service,
-		sentry_test_api,
-		sentry_network.clone(),
-		vec![],
-		dht_event_rx.boxed(),
-		Role::Sentry,
-		None,
-	);
+		self.local_worker = Some(local_worker);
 
-	sentry_worker.refill_pending_lookups_queue().unwrap();
-	sentry_worker.start_new_lookups();
-
-	sentry_worker.handle_dht_value_found_event(vec![dht_event]).unwrap();
-	sentry_worker.set_priority_group().unwrap();
-
-	assert_eq!(
-		sentry_network.set_priority_group_call.lock().unwrap().len(), 1,
-		"Expect authority discovery to set the priority set.",
-	);
-
-	assert_eq!(
-		sentry_network.set_priority_group_call.lock().unwrap()[0],
-		(
-			"authorities".to_string(),
-			HashSet::from_iter(vec![random_multiaddr.clone()].into_iter(),)
-		),
-		"Expect authority discovery to only add `random_multiaddr`."
-	);
+		self.local_worker
+			.as_ref()
+			.map(|w| {
+				w.addr_cache
+					.get_addresses_by_authority_id(&self.remote_authority_public.clone().into())
+			})
+			.unwrap()
+	}
 }
 
 #[test]
 fn limit_number_of_addresses_added_to_cache_per_authority() {
-	let remote_key_store = KeyStore::new();
-	let remote_public = remote_key_store
-		.write()
-		.sr25519_generate_new(key_types::AUTHORITY_DISCOVERY, None)
-		.unwrap();
-
-	let addresses = (0..100).map(|_| {
-		let peer_id = PeerId::random();
-		let address: Multiaddr = "/ip6/2001:db8:0:0:0:0:0:1/tcp/30333".parse().unwrap();
-		address.with(multiaddr::Protocol::P2p(
-			peer_id.into(),
-		))
-	}).collect();
-
-	let dht_event = build_dht_event(
+	let mut tester = DhtValueFoundTester::new();
+	assert!(MAX_ADDRESSES_PER_AUTHORITY < 100);
+	let addresses = (1..100).map(|i| tester.multiaddr_with_peer_id(i)).collect();
+	let kv_pairs = block_on(build_dht_event::<TestNetwork>(
 		addresses,
-		remote_public.into(),
-		&remote_key_store,
-	);
-
-	let (_dht_event_tx, dht_event_rx) = channel(1);
-
-	let (_to_worker, from_service) = mpsc::channel(0);
-	let mut worker = Worker::new(
-		from_service,
-		Arc::new(TestApi { authorities: vec![remote_public.into()] }),
-		Arc::new(TestNetwork::default()),
-		vec![],
-		dht_event_rx.boxed(),
-		Role::Sentry,
+		tester.remote_authority_public.clone().into(),
+		&tester.remote_key_store,
 		None,
-	);
+	));
 
-	worker.refill_pending_lookups_queue().unwrap();
-	worker.start_new_lookups();
+	let cached_remote_addresses = tester.process_value_found(false, kv_pairs);
+	assert_eq!(MAX_ADDRESSES_PER_AUTHORITY, cached_remote_addresses.unwrap().len());
+}
 
-	worker.handle_dht_value_found_event(vec![dht_event]).unwrap();
+#[test]
+fn strict_accept_address_with_peer_signature() {
+	let mut tester = DhtValueFoundTester::new();
+	let addr = tester.multiaddr_with_peer_id(1);
+	let kv_pairs = block_on(build_dht_event(
+		vec![addr.clone()],
+		tester.remote_authority_public.clone().into(),
+		&tester.remote_key_store,
+		Some(&tester.remote_node_key),
+	));
+
+	let cached_remote_addresses = tester.process_value_found(true, kv_pairs);
+
 	assert_eq!(
-		MAX_ADDRESSES_PER_AUTHORITY,
-		worker.addr_cache.get_addresses_by_authority_id(&remote_public.into()).unwrap().len(),
+		Some(&HashSet::from([addr])),
+		cached_remote_addresses,
+		"Expect worker to only cache `Multiaddr`s with `PeerId`s.",
 	);
 }
 
 #[test]
-fn do_not_cache_addresses_without_peer_id() {
-	let remote_key_store = KeyStore::new();
-	let remote_public = remote_key_store
-		.write()
-		.sr25519_generate_new(key_types::AUTHORITY_DISCOVERY, None)
-		.unwrap();
+fn reject_address_with_rogue_peer_signature() {
+	let mut tester = DhtValueFoundTester::new();
+	let rogue_remote_node_key = sc_network::Keypair::generate_ed25519();
+	let kv_pairs = block_on(build_dht_event(
+		vec![tester.multiaddr_with_peer_id(1)],
+		tester.remote_authority_public.clone().into(),
+		&tester.remote_key_store,
+		Some(&rogue_remote_node_key),
+	));
 
-	let multiaddr_with_peer_id = {
-		let peer_id = PeerId::random();
-		let address: Multiaddr = "/ip6/2001:db8:0:0:0:0:0:2/tcp/30333".parse().unwrap();
+	let cached_remote_addresses = tester.process_value_found(false, kv_pairs);
 
-		address.with(multiaddr::Protocol::P2p(peer_id.into()))
-	};
-
-	let multiaddr_without_peer_id: Multiaddr = "/ip6/2001:db8:0:0:0:0:0:1/tcp/30333".parse().unwrap();
-
-	let dht_event = build_dht_event(
-		vec![
-			multiaddr_with_peer_id.clone(),
-			multiaddr_without_peer_id,
-		],
-		remote_public.into(),
-		&remote_key_store,
+	assert!(
+		cached_remote_addresses.is_none(),
+		"Expected worker to ignore record signed by a different key.",
 	);
+}
 
-	let (_dht_event_tx, dht_event_rx) = channel(1);
-	let local_test_api = Arc::new(TestApi {
-		// Make sure the sentry node identifies its validator as an authority.
-		authorities: vec![remote_public.into()],
-	});
-	let local_network: Arc<TestNetwork> = Arc::new(Default::default());
-	let local_key_store = KeyStore::new();
+#[test]
+fn reject_address_with_invalid_peer_signature() {
+	let mut tester = DhtValueFoundTester::new();
+	let mut kv_pairs = block_on(build_dht_event(
+		vec![tester.multiaddr_with_peer_id(1)],
+		tester.remote_authority_public.clone().into(),
+		&tester.remote_key_store,
+		Some(&tester.remote_node_key),
+	));
+	// tamper with the signature
+	let mut record = schema::SignedAuthorityRecord::decode(kv_pairs[0].1.as_slice()).unwrap();
+	record.peer_signature.as_mut().map(|p| p.signature[1] += 1);
+	record.encode(&mut kv_pairs[0].1).unwrap();
 
-	let (_to_worker, from_service) = mpsc::channel(0);
-	let mut local_worker = Worker::new(
-		from_service,
-		local_test_api,
-		local_network.clone(),
-		vec![],
-		dht_event_rx.boxed(),
-		Role::Authority(local_key_store),
+	let cached_remote_addresses = tester.process_value_found(false, kv_pairs);
+
+	assert!(
+		cached_remote_addresses.is_none(),
+		"Expected worker to ignore record with tampered signature.",
+	);
+}
+
+#[test]
+fn reject_address_without_peer_signature() {
+	let mut tester = DhtValueFoundTester::new();
+	let kv_pairs = block_on(build_dht_event::<TestNetwork>(
+		vec![tester.multiaddr_with_peer_id(1)],
+		tester.remote_authority_public.clone().into(),
+		&tester.remote_key_store,
 		None,
-	);
+	));
 
-	local_worker.refill_pending_lookups_queue().unwrap();
-	local_worker.start_new_lookups();
+	let cached_remote_addresses = tester.process_value_found(true, kv_pairs);
 
-	local_worker.handle_dht_value_found_event(vec![dht_event]).unwrap();
+	assert!(cached_remote_addresses.is_none(), "Expected worker to ignore unsigned record.",);
+}
+
+#[test]
+fn do_not_cache_addresses_without_peer_id() {
+	let mut tester = DhtValueFoundTester::new();
+	let multiaddr_with_peer_id = tester.multiaddr_with_peer_id(1);
+	let multiaddr_without_peer_id: Multiaddr =
+		"/ip6/2001:db8:0:0:0:0:0:2/tcp/30333".parse().unwrap();
+	let kv_pairs = block_on(build_dht_event::<TestNetwork>(
+		vec![multiaddr_with_peer_id.clone(), multiaddr_without_peer_id],
+		tester.remote_authority_public.clone().into(),
+		&tester.remote_key_store,
+		None,
+	));
+
+	let cached_remote_addresses = tester.process_value_found(false, kv_pairs);
 
 	assert_eq!(
-		Some(&vec![multiaddr_with_peer_id]),
-		local_worker.addr_cache.get_addresses_by_authority_id(&remote_public.into()),
+		Some(&HashSet::from([multiaddr_with_peer_id])),
+		cached_remote_addresses,
 		"Expect worker to only cache `Multiaddr`s with `PeerId`s.",
 	);
 }
@@ -748,14 +686,12 @@ fn addresses_to_publish_adds_p2p() {
 	let (_to_worker, from_service) = mpsc::channel(0);
 	let worker = Worker::new(
 		from_service,
-		Arc::new(TestApi {
-			authorities: vec![],
-		}),
+		Arc::new(TestApi { authorities: vec![] }),
 		network.clone(),
-		vec![],
-		dht_event_rx.boxed(),
-		Role::Authority(KeyStore::new()),
+		Box::pin(dht_event_rx),
+		Role::PublishAndDiscover(Arc::new(KeyStore::new())),
 		Some(prometheus_endpoint::Registry::new()),
+		Default::default(),
 	);
 
 	assert!(
@@ -775,26 +711,26 @@ fn addresses_to_publish_respects_existing_p2p_protocol() {
 	let network: Arc<TestNetwork> = Arc::new(TestNetwork {
 		external_addresses: vec![
 			"/ip6/2001:db8::/tcp/30333/p2p/QmcgpsyWgH8Y8ajJz1Cu72KnS5uo2Aa2LpzU7kinSupNKC"
-				.parse().unwrap(),
+				.parse()
+				.unwrap(),
 		],
-		.. Default::default()
+		..Default::default()
 	});
 
 	let (_to_worker, from_service) = mpsc::channel(0);
 	let worker = Worker::new(
 		from_service,
-		Arc::new(TestApi {
-			authorities: vec![],
-		}),
+		Arc::new(TestApi { authorities: vec![] }),
 		network.clone(),
-		vec![],
-		dht_event_rx.boxed(),
-		Role::Authority(KeyStore::new()),
+		Box::pin(dht_event_rx),
+		Role::PublishAndDiscover(Arc::new(KeyStore::new())),
 		Some(prometheus_endpoint::Registry::new()),
+		Default::default(),
 	);
 
 	assert_eq!(
-		network.external_addresses, worker.addresses_to_publish().collect::<Vec<_>>(),
+		network.external_addresses,
+		worker.addresses_to_publish().collect::<Vec<_>>(),
 		"Expected Multiaddr from `TestNetwork` to not be altered.",
 	);
 }
@@ -805,76 +741,98 @@ fn lookup_throttling() {
 		let peer_id = PeerId::random();
 		let address: Multiaddr = "/ip6/2001:db8:0:0:0:0:0:1/tcp/30333".parse().unwrap();
 
-		address.with(multiaddr::Protocol::P2p(
-			peer_id.into(),
-		))
+		address.with(multiaddr::Protocol::P2p(peer_id.into()))
 	};
 	let remote_key_store = KeyStore::new();
-	let remote_public_keys: Vec<AuthorityId> = (0..20).map(|_| {
-		remote_key_store
-			.write()
-			.sr25519_generate_new(key_types::AUTHORITY_DISCOVERY, None)
-			.unwrap().into()
-	}).collect();
-	let remote_hash_to_key = remote_public_keys.iter()
+	let remote_public_keys: Vec<AuthorityId> = (0..20)
+		.map(|_| {
+			block_on(remote_key_store.sr25519_generate_new(key_types::AUTHORITY_DISCOVERY, None))
+				.unwrap()
+				.into()
+		})
+		.collect();
+	let remote_hash_to_key = remote_public_keys
+		.iter()
 		.map(|k| (hash_authority_id(k.as_ref()), k.clone()))
 		.collect::<HashMap<_, _>>();
 
-
 	let (mut dht_event_tx, dht_event_rx) = channel(1);
 	let (_to_worker, from_service) = mpsc::channel(0);
-	let network = Arc::new(TestNetwork::default());
+	let mut network = TestNetwork::default();
+	let mut receiver = network.get_event_receiver().unwrap();
+	let network = Arc::new(network);
 	let mut worker = Worker::new(
 		from_service,
 		Arc::new(TestApi { authorities: remote_public_keys.clone() }),
 		network.clone(),
-		vec![],
 		dht_event_rx.boxed(),
-		Role::Sentry,
-		None,
+		Role::Discover,
+		Some(default_registry().clone()),
+		Default::default(),
 	);
 
-	futures::executor::block_on(futures::future::poll_fn(|cx| {
-		worker.refill_pending_lookups_queue().unwrap();
+	let mut pool = LocalPool::new();
+	let metrics = worker.metrics.clone().unwrap();
 
-		// Assert worker to trigger MAX_IN_FLIGHT_LOOKUPS lookups.
-		assert_eq!(Poll::Pending, worker.poll_unpin(cx));
-		assert_eq!(worker.pending_lookups.len(), remote_public_keys.len() - MAX_IN_FLIGHT_LOOKUPS);
-		assert_eq!(worker.in_flight_lookups.len(), MAX_IN_FLIGHT_LOOKUPS);
-		assert_eq!(network.get_value_call.lock().unwrap().len(), MAX_IN_FLIGHT_LOOKUPS);
+	let _ = pool.spawner().spawn_local_obj(
+		async move {
+			// Refilling `pending_lookups` only happens every X minutes. Fast
+			// forward by calling `refill_pending_lookups_queue` directly.
+			worker.refill_pending_lookups_queue().await.unwrap();
+			worker.run().await
+		}
+		.boxed_local()
+		.into(),
+	);
 
-		// Make first lookup succeed.
-		let remote_hash = network.get_value_call.lock().unwrap().pop().unwrap();
-		let remote_key: AuthorityId = remote_hash_to_key.get(&remote_hash).unwrap().clone();
-		let dht_event = {
-			let (key, value) = build_dht_event(vec![remote_multiaddr.clone()], remote_key, &remote_key_store);
-			sc_network::DhtEvent::ValueFound(vec![(key, value)])
-		};
-		dht_event_tx.try_send(dht_event).expect("Channel has capacity of 1.");
+	pool.run_until(
+		async {
+			// Assert worker to trigger MAX_IN_FLIGHT_LOOKUPS lookups.
+			for _ in 0..MAX_IN_FLIGHT_LOOKUPS {
+				assert!(matches!(receiver.next().await, Some(TestNetworkEvent::GetCalled(_))));
+			}
+			assert_eq!(
+				metrics.requests_pending.get(),
+				(remote_public_keys.len() - MAX_IN_FLIGHT_LOOKUPS) as u64
+			);
+			assert_eq!(network.get_value_call.lock().unwrap().len(), MAX_IN_FLIGHT_LOOKUPS);
 
-		// Assert worker to trigger another lookup.
-		assert_eq!(Poll::Pending, worker.poll_unpin(cx));
-		assert_eq!(worker.pending_lookups.len(), remote_public_keys.len() - MAX_IN_FLIGHT_LOOKUPS - 1);
-		assert_eq!(worker.in_flight_lookups.len(), MAX_IN_FLIGHT_LOOKUPS);
-		assert_eq!(network.get_value_call.lock().unwrap().len(), MAX_IN_FLIGHT_LOOKUPS);
+			// Make first lookup succeed.
+			let remote_hash = network.get_value_call.lock().unwrap().pop().unwrap();
+			let remote_key: AuthorityId = remote_hash_to_key.get(&remote_hash).unwrap().clone();
+			let dht_event = {
+				let kv_pairs = build_dht_event::<TestNetwork>(
+					vec![remote_multiaddr.clone()],
+					remote_key,
+					&remote_key_store,
+					None,
+				)
+				.await;
+				sc_network::DhtEvent::ValueFound(kv_pairs)
+			};
+			dht_event_tx.send(dht_event).await.expect("Channel has capacity of 1.");
 
-		// Make second one fail.
-		let remote_hash = network.get_value_call.lock().unwrap().pop().unwrap();
-		let dht_event = sc_network::DhtEvent::ValueNotFound(remote_hash);
-		dht_event_tx.try_send(dht_event).expect("Channel has capacity of 1.");
+			// Assert worker to trigger another lookup.
+			assert!(matches!(receiver.next().await, Some(TestNetworkEvent::GetCalled(_))));
+			assert_eq!(
+				metrics.requests_pending.get(),
+				(remote_public_keys.len() - MAX_IN_FLIGHT_LOOKUPS - 1) as u64
+			);
+			assert_eq!(network.get_value_call.lock().unwrap().len(), MAX_IN_FLIGHT_LOOKUPS);
 
-		// Assert worker to trigger another lookup.
-		assert_eq!(Poll::Pending, worker.poll_unpin(cx));
-		assert_eq!(worker.pending_lookups.len(), remote_public_keys.len() - MAX_IN_FLIGHT_LOOKUPS - 2);
-		assert_eq!(worker.in_flight_lookups.len(), MAX_IN_FLIGHT_LOOKUPS);
-		assert_eq!(network.get_value_call.lock().unwrap().len(), MAX_IN_FLIGHT_LOOKUPS);
+			// Make second one fail.
+			let remote_hash = network.get_value_call.lock().unwrap().pop().unwrap();
+			let dht_event = sc_network::DhtEvent::ValueNotFound(remote_hash);
+			dht_event_tx.send(dht_event).await.expect("Channel has capacity of 1.");
 
-		worker.refill_pending_lookups_queue().unwrap();
-
-		// Assert worker to restock pending lookups and forget about in-flight lookups.
-		assert_eq!(worker.pending_lookups.len(), remote_public_keys.len());
-		assert_eq!(worker.in_flight_lookups.len(), 0);
-
-		Poll::Ready(())
-	}));
+			// Assert worker to trigger another lookup.
+			assert!(matches!(receiver.next().await, Some(TestNetworkEvent::GetCalled(_))));
+			assert_eq!(
+				metrics.requests_pending.get(),
+				(remote_public_keys.len() - MAX_IN_FLIGHT_LOOKUPS - 2) as u64
+			);
+			assert_eq!(network.get_value_call.lock().unwrap().len(), MAX_IN_FLIGHT_LOOKUPS);
+		}
+		.boxed_local(),
+	);
 }

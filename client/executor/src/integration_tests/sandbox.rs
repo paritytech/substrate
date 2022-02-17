@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -16,18 +16,18 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use super::{TestExternalities, call_in_wasm};
-use crate::WasmExecutionMethod;
-use crate::test_wasm_execution;
+use super::{call_in_wasm, TestExternalities};
+use crate::{test_wasm_execution_sandbox, WasmExecutionMethod};
 
 use codec::Encode;
 
-test_wasm_execution!(sandbox_should_work);
-fn sandbox_should_work(wasm_method: WasmExecutionMethod) {
+test_wasm_execution_sandbox!(sandbox_should_work);
+fn sandbox_should_work(wasm_method: WasmExecutionMethod, fn_suffix: &str) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
 
-	let code = wat::parse_str(r#"
+	let code = wat::parse_str(
+		r#"
 		(module
 			(import "env" "assert" (func $assert (param i32)))
 			(import "env" "inc_counter" (func $inc_counter (param i32) (result i32)))
@@ -46,25 +46,24 @@ fn sandbox_should_work(wasm_method: WasmExecutionMethod) {
 				call $assert
 			)
 		)
-		"#).unwrap().encode();
+		"#,
+	)
+	.unwrap()
+	.encode();
 
 	assert_eq!(
-		call_in_wasm(
-			"test_sandbox",
-			&code,
-			wasm_method,
-			&mut ext,
-		).unwrap(),
-		true.encode(),
+		call_in_wasm(&format!("test_sandbox{}", fn_suffix), &code, wasm_method, &mut ext).unwrap(),
+		true.encode()
 	);
 }
 
-test_wasm_execution!(sandbox_trap);
-fn sandbox_trap(wasm_method: WasmExecutionMethod) {
+test_wasm_execution_sandbox!(sandbox_trap);
+fn sandbox_trap(wasm_method: WasmExecutionMethod, fn_suffix: &str) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
 
-	let code = wat::parse_str(r#"
+	let code = wat::parse_str(
+		r#"
 		(module
 			(import "env" "assert" (func $assert (param i32)))
 			(func (export "call")
@@ -72,25 +71,23 @@ fn sandbox_trap(wasm_method: WasmExecutionMethod) {
 				call $assert
 			)
 		)
-		"#).unwrap();
+		"#,
+	)
+	.unwrap();
 
 	assert_eq!(
-		call_in_wasm(
-			"test_sandbox",
-			&code,
-			wasm_method,
-			&mut ext,
-		).unwrap(),
-		vec![0],
+		call_in_wasm(&format!("test_sandbox{}", fn_suffix), &code, wasm_method, &mut ext).unwrap(),
+		vec![0]
 	);
 }
 
-test_wasm_execution!(start_called);
-fn start_called(wasm_method: WasmExecutionMethod) {
+test_wasm_execution_sandbox!(start_called);
+fn start_called(wasm_method: WasmExecutionMethod, fn_suffix: &str) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
 
-	let code = wat::parse_str(r#"
+	let code = wat::parse_str(
+		r#"
 		(module
 			(import "env" "assert" (func $assert (param i32)))
 			(import "env" "inc_counter" (func $inc_counter (param i32) (result i32)))
@@ -115,25 +112,24 @@ fn start_called(wasm_method: WasmExecutionMethod) {
 				call $assert
 			)
 		)
-		"#).unwrap().encode();
+		"#,
+	)
+	.unwrap()
+	.encode();
 
 	assert_eq!(
-		call_in_wasm(
-			"test_sandbox",
-			&code,
-			wasm_method,
-			&mut ext,
-		).unwrap(),
-		true.encode(),
+		call_in_wasm(&format!("test_sandbox{}", fn_suffix), &code, wasm_method, &mut ext).unwrap(),
+		true.encode()
 	);
 }
 
-test_wasm_execution!(invoke_args);
-fn invoke_args(wasm_method: WasmExecutionMethod) {
+test_wasm_execution_sandbox!(invoke_args);
+fn invoke_args(wasm_method: WasmExecutionMethod, fn_suffix: &str) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
 
-	let code = wat::parse_str(r#"
+	let code = wat::parse_str(
+		r#"
 		(module
 			(import "env" "assert" (func $assert (param i32)))
 
@@ -154,25 +150,25 @@ fn invoke_args(wasm_method: WasmExecutionMethod) {
 				)
 			)
 		)
-		"#).unwrap().encode();
+		"#,
+	)
+	.unwrap()
+	.encode();
 
 	assert_eq!(
-		call_in_wasm(
-			"test_sandbox_args",
-			&code,
-			wasm_method,
-			&mut ext,
-		).unwrap(),
+		call_in_wasm(&format!("test_sandbox_args{}", fn_suffix), &code, wasm_method, &mut ext,)
+			.unwrap(),
 		true.encode(),
 	);
 }
 
-test_wasm_execution!(return_val);
-fn return_val(wasm_method: WasmExecutionMethod) {
+test_wasm_execution_sandbox!(return_val);
+fn return_val(wasm_method: WasmExecutionMethod, fn_suffix: &str) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
 
-	let code = wat::parse_str(r#"
+	let code = wat::parse_str(
+		r#"
 		(module
 			(func (export "call") (param $x i32) (result i32)
 				(i32.add
@@ -181,46 +177,55 @@ fn return_val(wasm_method: WasmExecutionMethod) {
 				)
 			)
 		)
-		"#).unwrap().encode();
+		"#,
+	)
+	.unwrap()
+	.encode();
 
 	assert_eq!(
 		call_in_wasm(
-			"test_sandbox_return_val",
+			&format!("test_sandbox_return_val{}", fn_suffix),
 			&code,
 			wasm_method,
 			&mut ext,
-		).unwrap(),
+		)
+		.unwrap(),
 		true.encode(),
 	);
 }
 
-test_wasm_execution!(unlinkable_module);
-fn unlinkable_module(wasm_method: WasmExecutionMethod) {
+test_wasm_execution_sandbox!(unlinkable_module);
+fn unlinkable_module(wasm_method: WasmExecutionMethod, fn_suffix: &str) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
 
-	let code = wat::parse_str(r#"
+	let code = wat::parse_str(
+		r#"
 		(module
 			(import "env" "non-existent" (func))
 
 			(func (export "call")
 			)
 		)
-		"#).unwrap().encode();
+		"#,
+	)
+	.unwrap()
+	.encode();
 
 	assert_eq!(
 		call_in_wasm(
-			"test_sandbox_instantiate",
+			&format!("test_sandbox_instantiate{}", fn_suffix),
 			&code,
 			wasm_method,
 			&mut ext,
-		).unwrap(),
+		)
+		.unwrap(),
 		1u8.encode(),
 	);
 }
 
-test_wasm_execution!(corrupted_module);
-fn corrupted_module(wasm_method: WasmExecutionMethod) {
+test_wasm_execution_sandbox!(corrupted_module);
+fn corrupted_module(wasm_method: WasmExecutionMethod, fn_suffix: &str) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
 
@@ -229,21 +234,23 @@ fn corrupted_module(wasm_method: WasmExecutionMethod) {
 
 	assert_eq!(
 		call_in_wasm(
-			"test_sandbox_instantiate",
+			&format!("test_sandbox_instantiate{}", fn_suffix),
 			&code,
 			wasm_method,
 			&mut ext,
-		).unwrap(),
+		)
+		.unwrap(),
 		1u8.encode(),
 	);
 }
 
-test_wasm_execution!(start_fn_ok);
-fn start_fn_ok(wasm_method: WasmExecutionMethod) {
+test_wasm_execution_sandbox!(start_fn_ok);
+fn start_fn_ok(wasm_method: WasmExecutionMethod, fn_suffix: &str) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
 
-	let code = wat::parse_str(r#"
+	let code = wat::parse_str(
+		r#"
 		(module
 			(func (export "call")
 			)
@@ -253,25 +260,30 @@ fn start_fn_ok(wasm_method: WasmExecutionMethod) {
 
 			(start $start)
 		)
-		"#).unwrap().encode();
+		"#,
+	)
+	.unwrap()
+	.encode();
 
 	assert_eq!(
 		call_in_wasm(
-			"test_sandbox_instantiate",
+			&format!("test_sandbox_instantiate{}", fn_suffix),
 			&code,
 			wasm_method,
 			&mut ext,
-		).unwrap(),
+		)
+		.unwrap(),
 		0u8.encode(),
 	);
 }
 
-test_wasm_execution!(start_fn_traps);
-fn start_fn_traps(wasm_method: WasmExecutionMethod) {
+test_wasm_execution_sandbox!(start_fn_traps);
+fn start_fn_traps(wasm_method: WasmExecutionMethod, fn_suffix: &str) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
 
-	let code = wat::parse_str(r#"
+	let code = wat::parse_str(
+		r#"
 		(module
 			(func (export "call")
 			)
@@ -282,37 +294,46 @@ fn start_fn_traps(wasm_method: WasmExecutionMethod) {
 
 			(start $start)
 		)
-		"#).unwrap().encode();
+		"#,
+	)
+	.unwrap()
+	.encode();
 
 	assert_eq!(
 		call_in_wasm(
-			"test_sandbox_instantiate",
+			&format!("test_sandbox_instantiate{}", fn_suffix),
 			&code,
 			wasm_method,
 			&mut ext,
-		).unwrap(),
+		)
+		.unwrap(),
 		2u8.encode(),
 	);
 }
 
-test_wasm_execution!(get_global_val_works);
-fn get_global_val_works(wasm_method: WasmExecutionMethod) {
+test_wasm_execution_sandbox!(get_global_val_works);
+fn get_global_val_works(wasm_method: WasmExecutionMethod, fn_suffix: &str) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
 
-	let code = wat::parse_str(r#"
+	let code = wat::parse_str(
+		r#"
 		(module
 			(global (export "test_global") i64 (i64.const 500))
 		)
-		"#).unwrap().encode();
+		"#,
+	)
+	.unwrap()
+	.encode();
 
 	assert_eq!(
 		call_in_wasm(
-			"test_sandbox_get_global_val",
+			&format!("test_sandbox_get_global_val{}", fn_suffix),
 			&code,
 			wasm_method,
 			&mut ext,
-		).unwrap(),
+		)
+		.unwrap(),
 		500i64.encode(),
 	);
 }

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,8 +18,8 @@
 //! Operation on runtime storage using hashed keys.
 
 use super::unhashed;
+use codec::{Decode, Encode};
 use sp_std::prelude::*;
-use codec::{Encode, Decode};
 
 /// Return the value of the item in storage under `key`, or `None` if there is no explicit entry.
 pub fn get<T, HashFn, R>(hash: &HashFn, key: &[u8]) -> Option<T>

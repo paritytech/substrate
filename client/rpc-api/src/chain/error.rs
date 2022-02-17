@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -25,25 +25,17 @@ use jsonrpc_core as rpc;
 pub type Result<T> = std::result::Result<T, Error>;
 
 /// Chain RPC future Result type.
-pub type FutureResult<T> = Box<dyn rpc::futures::Future<Item = T, Error = Error> + Send>;
+pub type FutureResult<T> = jsonrpc_core::BoxFuture<Result<T>>;
 
 /// Chain RPC errors.
-#[derive(Debug, derive_more::Display, derive_more::From)]
+#[derive(Debug, thiserror::Error)]
 pub enum Error {
 	/// Client error.
-	#[display(fmt="Client error: {}", _0)]
-	Client(Box<dyn std::error::Error + Send>),
+	#[error("Client error: {}", .0)]
+	Client(#[from] Box<dyn std::error::Error + Send>),
 	/// Other error type.
+	#[error("{0}")]
 	Other(String),
-}
-
-impl std::error::Error for Error {
-	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-		match self {
-			Error::Client(ref err) => Some(&**err),
-			_ => None,
-		}
-	}
 }
 
 /// Base error code for all chain errors.

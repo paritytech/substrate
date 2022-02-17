@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,7 +18,6 @@
 //! Shareable Substrate types.
 
 #![warn(missing_docs)]
-
 #![cfg_attr(not(feature = "std"), no_std)]
 
 /// Initialize a key-value collection from array.
@@ -32,17 +31,17 @@ macro_rules! map {
 	);
 }
 
-use sp_runtime_interface::pass_by::{PassByEnum, PassByInner};
-use sp_std::prelude::*;
-use sp_std::ops::Deref;
-#[cfg(feature = "std")]
-use std::borrow::Cow;
-#[cfg(feature = "std")]
-use serde::{Serialize, Deserialize};
+#[doc(hidden)]
+pub use codec::{Decode, Encode};
+use scale_info::TypeInfo;
 #[cfg(feature = "std")]
 pub use serde;
-#[doc(hidden)]
-pub use codec::{Encode, Decode};
+#[cfg(feature = "std")]
+use serde::{Deserialize, Serialize};
+use sp_runtime_interface::pass_by::{PassByEnum, PassByInner};
+use sp_std::{ops::Deref, prelude::*};
+#[cfg(feature = "std")]
+use std::borrow::Cow;
 
 pub use sp_debug_derive::RuntimeDebug;
 
@@ -53,42 +52,39 @@ pub use impl_serde::serialize as bytes;
 pub mod hashing;
 
 #[cfg(feature = "full_crypto")]
-pub use hashing::{blake2_128, blake2_256, twox_64, twox_128, twox_256, keccak_256};
-pub mod hexdisplay;
+pub use hashing::{blake2_128, blake2_256, keccak_256, twox_128, twox_256, twox_64};
 pub mod crypto;
+pub mod hexdisplay;
 
 pub mod u32_trait;
 
-pub mod ed25519;
-pub mod sr25519;
 pub mod ecdsa;
+pub mod ed25519;
 pub mod hash;
 #[cfg(feature = "std")]
 mod hasher;
 pub mod offchain;
 pub mod sandbox;
-pub mod seed;
-pub mod uint;
-mod changes_trie;
-#[cfg(feature = "std")]
-pub mod traits;
+mod seed;
+pub use seed::ShufflingSeed;
+pub mod sr25519;
 pub mod testing;
 #[cfg(feature = "std")]
-pub mod vrf;
+pub mod traits;
+pub mod uint;
 
-pub use self::hash::{H160, H256, H512, convert_hash};
-pub use self::uint::{U256, U512};
-pub use changes_trie::{ChangesTrieConfiguration, ChangesTrieConfigurationRange};
+pub use self::{
+	hash::{convert_hash, H160, H256, H512},
+	uint::{U256, U512},
+};
 #[cfg(feature = "full_crypto")]
-pub use crypto::{DeriveJunction, Pair, Public};
+pub use crypto::{ByteArray, DeriveJunction, Pair, Public};
 
-pub use seed::ShufflingSeed;
-
-pub use hash_db::Hasher;
 #[cfg(feature = "std")]
 pub use self::hasher::blake2::Blake2Hasher;
 #[cfg(feature = "std")]
 pub use self::hasher::keccak::KeccakHasher;
+pub use hash_db::Hasher;
 
 pub use sp_storage as storage;
 
@@ -122,13 +118,13 @@ impl ExecutionContext {
 		use ExecutionContext::*;
 
 		match self {
-			Importing | Syncing | BlockConstruction =>
-				offchain::Capabilities::none(),
-			// Enable keystore and transaction pool by default for offchain calls.
-			OffchainCall(None) => [
-				offchain::Capability::Keystore,
-				offchain::Capability::TransactionPool,
-			][..].into(),
+			Importing | Syncing | BlockConstruction => offchain::Capabilities::empty(),
+			// Enable keystore, transaction pool and Offchain DB reads by default for offchain
+			// calls.
+			OffchainCall(None) =>
+				offchain::Capabilities::KEYSTORE |
+					offchain::Capabilities::OFFCHAIN_DB_READ |
+					offchain::Capabilities::TRANSACTION_POOL,
 			OffchainCall(Some((_, capabilities))) => *capabilities,
 		}
 	}
@@ -137,19 +133,31 @@ impl ExecutionContext {
 /// Hex-serialized shim for `Vec<u8>`.
 #[derive(PartialEq, Eq, Clone, RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Hash, PartialOrd, Ord))]
-pub struct Bytes(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
+pub struct Bytes(#[cfg_attr(feature = "std", serde(with = "bytes"))] pub Vec<u8>);
 
 impl From<Vec<u8>> for Bytes {
-	fn from(s: Vec<u8>) -> Self { Bytes(s) }
+	fn from(s: Vec<u8>) -> Self {
+		Bytes(s)
+	}
 }
 
 impl From<OpaqueMetadata> for Bytes {
-	fn from(s: OpaqueMetadata) -> Self { Bytes(s.0) }
+	fn from(s: OpaqueMetadata) -> Self {
+		Bytes(s.0)
+	}
 }
 
 impl Deref for Bytes {
 	type Target = [u8];
-	fn deref(&self) -> &[u8] { &self.0[..] }
+	fn deref(&self) -> &[u8] {
+		&self.0[..]
+	}
+}
+
+impl codec::WrapperTypeEncode for Bytes {}
+
+impl codec::WrapperTypeDecode for Bytes {
+	type Wrapped = Vec<u8>;
 }
 
 #[cfg(feature = "std")]
@@ -181,7 +189,19 @@ impl sp_std::ops::Deref for OpaqueMetadata {
 }
 
 /// Simple blob to hold a `PeerId` without committing to its format.
-#[derive(Default, Clone, Eq, PartialEq, Ord, PartialOrd, Encode, Decode, RuntimeDebug, PassByInner)]
+#[derive(
+	Default,
+	Clone,
+	Eq,
+	PartialEq,
+	Ord,
+	PartialOrd,
+	Encode,
+	Decode,
+	RuntimeDebug,
+	PassByInner,
+	TypeInfo,
+)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct OpaquePeerId(pub Vec<u8>);
 
@@ -198,7 +218,14 @@ pub enum NativeOrEncoded<R> {
 	/// The native representation.
 	Native(R),
 	/// The encoded representation.
-	Encoded(Vec<u8>)
+	Encoded(Vec<u8>),
+}
+
+#[cfg(feature = "std")]
+impl<R> From<R> for NativeOrEncoded<R> {
+	fn from(val: R) -> Self {
+		Self::Native(val)
+	}
 }
 
 #[cfg(feature = "std")]
@@ -272,19 +299,19 @@ pub trait TypeId {
 
 /// A log level matching the one from `log` crate.
 ///
-/// Used internally by `sp_io::log` method.
+/// Used internally by `sp_io::logging::log` method.
 #[derive(Encode, Decode, PassByEnum, Copy, Clone)]
 pub enum LogLevel {
 	/// `Error` log level.
-	Error = 1,
+	Error = 1_isize,
 	/// `Warn` log level.
-	Warn = 2,
+	Warn = 2_isize,
 	/// `Info` log level.
-	Info = 3,
+	Info = 3_isize,
 	/// `Debug` log level.
-	Debug = 4,
+	Debug = 4_isize,
 	/// `Trace` log level.
-	Trace = 5,
+	Trace = 5_isize,
 }
 
 impl From<u32> for LogLevel {
@@ -325,6 +352,53 @@ impl From<LogLevel> for log::Level {
 	}
 }
 
+/// Log level filter that expresses which log levels should be filtered.
+///
+/// This enum matches the [`log::LevelFilter`] enum.
+#[derive(Encode, Decode, PassByEnum, Copy, Clone)]
+pub enum LogLevelFilter {
+	/// `Off` log level filter.
+	Off = 0_isize,
+	/// `Error` log level filter.
+	Error = 1_isize,
+	/// `Warn` log level filter.
+	Warn = 2_isize,
+	/// `Info` log level filter.
+	Info = 3_isize,
+	/// `Debug` log level filter.
+	Debug = 4_isize,
+	/// `Trace` log level filter.
+	Trace = 5_isize,
+}
+
+impl From<LogLevelFilter> for log::LevelFilter {
+	fn from(l: LogLevelFilter) -> Self {
+		use self::LogLevelFilter::*;
+		match l {
+			Off => Self::Off,
+			Error => Self::Error,
+			Warn => Self::Warn,
+			Info => Self::Info,
+			Debug => Self::Debug,
+			Trace => Self::Trace,
+		}
+	}
+}
+
+impl From<log::LevelFilter> for LogLevelFilter {
+	fn from(l: log::LevelFilter) -> Self {
+		use log::LevelFilter::*;
+		match l {
+			Off => Self::Off,
+			Error => Self::Error,
+			Warn => Self::Warn,
+			Info => Self::Info,
+			Debug => Self::Debug,
+			Trace => Self::Trace,
+		}
+	}
+}
+
 /// Encodes the given value into a buffer and returns the pointer and the length as a single `u64`.
 ///
 /// When Substrate calls into Wasm it expects a fixed signature for functions exported
@@ -349,7 +423,7 @@ pub fn to_substrate_wasm_fn_return_value(value: &impl Encode) -> u64 {
 
 /// The void type - it cannot exist.
 // Oh rust, you crack me up...
-#[derive(Clone, Decode, Encode, Eq, PartialEq, RuntimeDebug)]
+#[derive(Clone, Decode, Encode, Eq, PartialEq, RuntimeDebug, TypeInfo)]
 pub enum Void {}
 
 /// Macro for creating `Maybe*` marker traits.
@@ -391,3 +465,8 @@ macro_rules! impl_maybe_marker {
 		)+
 	}
 }
+
+/// The maximum number of bytes that can be allocated at one time.
+// The maximum possible allocation size was chosen rather arbitrary, 32 MiB should be enough for
+// everybody.
+pub const MAX_POSSIBLE_ALLOCATION: u32 = 33554432; // 2^25 bytes, 32 MiB

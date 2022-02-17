@@ -18,20 +18,14 @@
 #   are more recognizable on GitHub, you can use them for mentioning unlike an email.
 # - The latest matching rule, if multiple, takes precedence.
 
-# Block production
-/client/basic-authorship/ @NikVolf
+# CI
+/.maintain/ @paritytech/ci
+/.github/ @paritytech/ci
+/.gitlab-ci.yml @paritytech/ci
 
 # Sandboxing capability of Substrate Runtime
 /primitives/sr-sandbox/ @pepyakin
 /primitives/core/src/sandbox.rs @pepyakin
-
-# Transaction pool
-/client/transaction-pool/ @NikVolf
-/primitives/transaction-pool/ @NikVolf
-
-# Offchain
-/client/offchain/ @tomusdrw
-/primitives/offchain/ @tomusdrw
 
 # GRANDPA, BABE, consensus stuff
 /frame/babe/ @andresilva
@@ -42,11 +36,14 @@
 /client/consensus/pow/ @sorpaas
 /primitives/consensus/pow/ @sorpaas
 
-# Contracts
-/frame/contracts/ @pepyakin
+# BEEFY
+/client/beefy/ @acatangiu
+/frame/beefy/ @acatangiu
+/frame/beefy-mmr/ @acatangiu
+/primitives/beefy/ @acatangiu
 
-# EVM
-/frame/evm/ @sorpaas
+# Contracts
+/frame/contracts/ @athei
 
 # NPoS and election
 /frame/staking/ @kianenigma
@@ -59,10 +56,3 @@
 
 # Transaction weight stuff
 /frame/support/src/weights.rs @shawntabrizi
-
-# Authority discovery
-/client/authority-discovery/ @mxinden
-/frame/authority-discovery/ @mxinden
-
-# Prometheus endpoint
-/utils/prometheus/ @mxinden

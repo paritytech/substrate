@@ -2,34 +2,35 @@
 name = "sc-runtime-test"
 version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2018"
+edition = "2021"
 build = "build.rs"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
 publish = false
-homepage = "https://substrate.dev"
+homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-sp-std = { version = "2.0.0", default-features = false, path = "../../../primitives/std" }
-sp-io = { version = "2.0.0", default-features = false, path = "../../../primitives/io" }
-sp-sandbox = { version = "0.8.0", default-features = false, path = "../../../primitives/sandbox" }
-sp-core = { version = "2.0.0", default-features = false, path = "../../../primitives/core" }
-sp-runtime = { version = "2.0.0", default-features = false, path = "../../../primitives/runtime" }
-sp-allocator = { version = "2.0.0", default-features = false, path = "../../../primitives/allocator" }
+sp-core = { version = "4.1.0-dev", default-features = false, path = "../../../primitives/core" }
+sp-io = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/io" }
+sp-runtime = { version = "4.1.0-dev", default-features = false, path = "../../../primitives/runtime" }
+sp-sandbox = { version = "0.10.0-dev", default-features = false, path = "../../../primitives/sandbox" }
+sp-std = { version = "4.0.0", default-features = false, path = "../../../primitives/std" }
+sp-tasks = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/tasks" }
+paste = "1.0.6"
 
 [build-dependencies]
-wasm-builder-runner = { version = "1.0.5", package = "substrate-wasm-builder-runner", path = "../../../utils/wasm-builder-runner" }
+substrate-wasm-builder = { version = "5.0.0-dev", path = "../../../utils/wasm-builder" }
 
 [features]
 default = [ "std" ]
 std = [
+	"sp-core/std",
 	"sp-io/std",
+	"sp-runtime/std",
 	"sp-sandbox/std",
 	"sp-std/std",
-	"sp-core/std",
-	"sp-runtime/std",
-	"sp-allocator/std",
+ 	"sp-tasks/std",
 ]

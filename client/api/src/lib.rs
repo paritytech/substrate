@@ -1,18 +1,20 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Substrate client interfaces.
 #![warn(missing_docs)]
@@ -20,27 +22,24 @@
 pub mod backend;
 pub mod call_executor;
 pub mod client;
-pub mod cht;
 pub mod execution_extensions;
 pub mod in_mem;
-pub mod light;
 pub mod leaves;
 pub mod notifications;
 pub mod proof_provider;
 
-pub use sp_blockchain as blockchain;
 pub use backend::*;
-pub use notifications::*;
 pub use call_executor::*;
 pub use client::*;
-pub use light::*;
 pub use notifications::*;
 pub use proof_provider::*;
+pub use sp_blockchain as blockchain;
+pub use sp_blockchain::HeaderBackend;
 
-pub use sp_state_machine::{StorageProof, ExecutionStrategy};
+pub use sp_state_machine::{CompactProof, ExecutionStrategy, StorageProof};
+pub use sp_storage::{ChildInfo, PrefixedStorageKey, StorageData, StorageKey};
 
 /// Usage Information Provider interface
-///
 pub trait UsageProvider<Block: sp_runtime::traits::Block> {
 	/// Get usage info about current client.
 	fn usage_info(&self) -> ClientInfo<Block>;
@@ -48,7 +47,7 @@ pub trait UsageProvider<Block: sp_runtime::traits::Block> {
 
 /// Utility methods for the client.
 pub mod utils {
-	use sp_blockchain::{HeaderBackend, HeaderMetadata, Error};
+	use sp_blockchain::{Error, HeaderBackend, HeaderMetadata};
 	use sp_runtime::traits::Block as BlockT;
 	use std::borrow::Borrow;
 
@@ -62,19 +61,24 @@ pub mod utils {
 		client: &'a T,
 		current: Option<(Block::Hash, Block::Hash)>,
 	) -> impl Fn(&Block::Hash, &Block::Hash) -> Result<bool, Error> + 'a
-		where T: HeaderBackend<Block> + HeaderMetadata<Block, Error = Error>,
+	where
+		T: HeaderBackend<Block> + HeaderMetadata<Block, Error = Error>,
 	{
 		move |base, hash| {
-			if base == hash { return Ok(false); }
+			if base == hash {
+				return Ok(false)
+			}
 
 			let current = current.as_ref().map(|(c, p)| (c.borrow(), p.borrow()));
 
 			let mut hash = hash;
 			if let Some((current_hash, current_parent_hash)) = current {
-				if base == current_hash { return Ok(false); }
+				if base == current_hash {
+					return Ok(false)
+				}
 				if hash == current_hash {
 					if base == current_parent_hash {
-						return Ok(true);
+						return Ok(true)
 					} else {
 						hash = current_parent_hash;
 					}

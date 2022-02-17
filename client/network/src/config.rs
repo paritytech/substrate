@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -21,10 +21,14 @@
 //! The [`Params`] struct is the struct that must be passed in order to initialize the networking.
 //! See the documentation of [`Params`].
 
-pub use crate::chain::{Client, FinalityProofProvider};
-pub use crate::on_demand_layer::{AlwaysBadChecker, OnDemand};
-pub use crate::request_responses::{IncomingRequest, ProtocolConfig as RequestResponseConfig};
-pub use libp2p::{identity, core::PublicKey, wasm_ext::ExtTransport, build_multiaddr};
+pub use crate::{
+	chain::Client,
+	request_responses::{
+		IncomingRequest, OutgoingResponse, ProtocolConfig as RequestResponseConfig,
+	},
+	warp_request_handler::WarpSyncProvider,
+};
+pub use libp2p::{build_multiaddr, core::PublicKey, identity};
 
 // Note: this re-export shouldn't be part of the public API of the crate and will be removed in
 // the future.
@@ -37,20 +41,25 @@ use core::{fmt, iter};
 use futures::future;
 use libp2p::{
 	identity::{ed25519, Keypair},
-	multiaddr, wasm_ext, Multiaddr, PeerId,
+	multiaddr, Multiaddr, PeerId,
 };
 use prometheus_endpoint::Registry;
-use sp_consensus::{block_validation::BlockAnnounceValidator, import_queue::ImportQueue};
-use sp_runtime::{traits::Block as BlockT, ConsensusEngineId};
-use std::{borrow::Cow, convert::TryFrom, future::Future, pin::Pin, str::FromStr};
+use sc_consensus::ImportQueue;
+use sp_consensus::block_validation::BlockAnnounceValidator;
+use sp_runtime::traits::Block as BlockT;
 use std::{
+	borrow::Cow,
 	collections::HashMap,
+	convert::TryFrom,
 	error::Error,
 	fs,
+	future::Future,
 	io::{self, Write},
 	net::Ipv4Addr,
 	path::{Path, PathBuf},
+	pin::Pin,
 	str,
+	str::FromStr,
 	sync::Arc,
 };
 use zeroize::Zeroize;
@@ -64,27 +73,14 @@ pub struct Params<B: BlockT, H: ExHashT> {
 	/// default.
 	pub executor: Option<Box<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send>>,
 
+	/// How to spawn the background task dedicated to the transactions handler.
+	pub transactions_handler_executor: Box<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send>,
+
 	/// Network layer configuration.
 	pub network_config: NetworkConfiguration,
 
 	/// Client that contains the blockchain.
 	pub chain: Arc<dyn Client<B>>,
-
-	/// Finality proof provider.
-	///
-	/// This object, if `Some`, is used when a node on the network requests a proof of finality
-	/// from us.
-	pub finality_proof_provider: Option<Arc<dyn FinalityProofProvider<B>>>,
-
-	/// How to build requests for proofs of finality.
-	///
-	/// This object, if `Some`, is used when we need a proof of finality from another node.
-	pub finality_proof_request_builder: Option<BoxFinalityProofRequestBuilder<B>>,
-
-	/// The `OnDemand` object acts as a "receiver" for block data requests from the client.
-	/// If `Some`, the network worker will process these requests and answer them.
-	/// Normally used only for light clients.
-	pub on_demand: Option<Arc<OnDemand<B>>>,
 
 	/// Pool of transactions.
 	///
@@ -106,6 +102,39 @@ pub struct Params<B: BlockT, H: ExHashT> {
 
 	/// Registry for recording prometheus metrics to.
 	pub metrics_registry: Option<Registry>,
+
+	/// Request response configuration for the block request protocol.
+	///
+	/// [`RequestResponseConfig::name`] is used to tag outgoing block requests with the correct
+	/// protocol name. In addition all of [`RequestResponseConfig`] is used to handle incoming
+	/// block requests, if enabled.
+	///
+	/// Can be constructed either via [`crate::block_request_handler::generate_protocol_config`]
+	/// allowing outgoing but not incoming requests, or constructed via
+	/// [`crate::block_request_handler::BlockRequestHandler::new`] allowing both outgoing and
+	/// incoming requests.
+	pub block_request_protocol_config: RequestResponseConfig,
+
+	/// Request response configuration for the light client request protocol.
+	///
+	/// Can be constructed either via
+	/// [`crate::light_client_requests::generate_protocol_config`] allowing outgoing but not
+	/// incoming requests, or constructed via
+	/// [`crate::light_client_requests::handler::LightClientRequestHandler::new`] allowing
+	/// both outgoing and incoming requests.
+	pub light_client_request_protocol_config: RequestResponseConfig,
+
+	/// Request response configuration for the state request protocol.
+	///
+	/// Can be constructed either via
+	/// [`crate::block_request_handler::generate_protocol_config`] allowing outgoing but not
+	/// incoming requests, or constructed via
+	/// [`crate::state_request_handler::StateRequestHandler::new`] allowing
+	/// both outgoing and incoming requests.
+	pub state_request_protocol_config: RequestResponseConfig,
+
+	/// Optional warp sync protocol support. Include protocol config and sync provider.
+	pub warp_sync: Option<(Arc<dyn WarpSyncProvider<B>>, RequestResponseConfig)>,
 }
 
 /// Role of the local node.
@@ -115,62 +144,31 @@ pub enum Role {
 	Full,
 	/// Regular light node.
 	Light,
-	/// Sentry node that guards an authority. Will be reported as "authority" on the wire protocol.
-	Sentry {
-		/// Address and identity of the validator nodes that we're guarding.
-		///
-		/// The nodes will be granted some priviledged status.
-		validators: Vec<MultiaddrWithPeerId>,
-	},
 	/// Actual authority.
-	Authority {
-		/// List of public addresses and identities of our sentry nodes.
-		sentry_nodes: Vec<MultiaddrWithPeerId>,
-	}
+	Authority,
 }
 
 impl Role {
-	/// True for `Role::Authority`
+	/// True for [`Role::Authority`].
 	pub fn is_authority(&self) -> bool {
-		matches!(self, Role::Authority { .. })
+		matches!(self, Self::Authority { .. })
 	}
 
-	/// True for `Role::Authority` and `Role::Sentry` since they're both
-	/// announced as having the authority role to the network.
-	pub fn is_network_authority(&self) -> bool {
-		matches!(self, Role::Authority { .. } | Role::Sentry { .. })
+	/// True for [`Role::Light`].
+	pub fn is_light(&self) -> bool {
+		matches!(self, Self::Light { .. })
 	}
 }
 
 impl fmt::Display for Role {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		match self {
-			Role::Full => write!(f, "FULL"),
-			Role::Light => write!(f, "LIGHT"),
-			Role::Sentry { .. } => write!(f, "SENTRY"),
-			Role::Authority { .. } => write!(f, "AUTHORITY"),
+			Self::Full => write!(f, "FULL"),
+			Self::Light => write!(f, "LIGHT"),
+			Self::Authority { .. } => write!(f, "AUTHORITY"),
 		}
 	}
 }
-
-/// Finality proof request builder.
-pub trait FinalityProofRequestBuilder<B: BlockT>: Send {
-	/// Build data blob, associated with the request.
-	fn build_request_data(&mut self, hash: &B::Hash) -> Vec<u8>;
-}
-
-/// Implementation of `FinalityProofRequestBuilder` that builds a dummy empty request.
-#[derive(Debug, Default)]
-pub struct DummyFinalityProofRequestBuilder;
-
-impl<B: BlockT> FinalityProofRequestBuilder<B> for DummyFinalityProofRequestBuilder {
-	fn build_request_data(&mut self, _: &B::Hash) -> Vec<u8> {
-		Vec::new()
-	}
-}
-
-/// Shared finality proof request builder struct used by the queue.
-pub type BoxFinalityProofRequestBuilder<B> = Box<dyn FinalityProofRequestBuilder<B> + Send + Sync>;
 
 /// Result of the transaction import.
 #[derive(Clone, Copy, Debug)]
@@ -185,8 +183,8 @@ pub enum TransactionImport {
 	None,
 }
 
-/// Fuure resolving to transaction import result.
-pub type TransactionImportFuture = Pin<Box<dyn Future<Output=TransactionImport> + Send>>;
+/// Future resolving to transaction import result.
+pub type TransactionImportFuture = Pin<Box<dyn Future<Output = TransactionImport> + Send>>;
 
 /// Transaction pool interface
 pub trait TransactionPool<H: ExHashT, B: BlockT>: Send + Sync {
@@ -197,10 +195,7 @@ pub trait TransactionPool<H: ExHashT, B: BlockT>: Send + Sync {
 	/// Import a transaction into the pool.
 	///
 	/// This will return future.
-	fn import(
-		&self,
-		transaction: B::Extrinsic,
-	) -> TransactionImportFuture;
+	fn import(&self, transaction: B::Extrinsic) -> TransactionImportFuture;
 	/// Notify the pool about transactions broadcast.
 	fn on_broadcasted(&self, propagations: HashMap<H, Vec<String>>);
 	/// Get transaction by hash.
@@ -224,16 +219,15 @@ impl<H: ExHashT + Default, B: BlockT> TransactionPool<H, B> for EmptyTransaction
 		Default::default()
 	}
 
-	fn import(
-		&self,
-		_transaction: B::Extrinsic
-	) -> TransactionImportFuture {
+	fn import(&self, _transaction: B::Extrinsic) -> TransactionImportFuture {
 		Box::pin(future::ready(TransactionImport::KnownGood))
 	}
 
 	fn on_broadcasted(&self, _: HashMap<H, Vec<String>>) {}
 
-	fn transaction(&self, _h: &H) -> Option<B::Extrinsic> { None }
+	fn transaction(&self, _h: &H) -> Option<B::Extrinsic> {
+		None
+	}
 }
 
 /// Name of a protocol, transmitted on the wire. Should be unique for each chain. Always UTF-8.
@@ -242,7 +236,7 @@ pub struct ProtocolId(smallvec::SmallVec<[u8; 6]>);
 
 impl<'a> From<&'a str> for ProtocolId {
 	fn from(bytes: &'a str) -> ProtocolId {
-		ProtocolId(bytes.as_bytes().into())
+		Self(bytes.as_bytes().into())
 	}
 }
 
@@ -272,17 +266,16 @@ impl fmt::Debug for ProtocolId {
 /// assert_eq!(peer_id, "QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV".parse::<PeerId>().unwrap());
 /// assert_eq!(addr, "/ip4/198.51.100.19/tcp/30333".parse::<Multiaddr>().unwrap());
 /// ```
-///
 pub fn parse_str_addr(addr_str: &str) -> Result<(PeerId, Multiaddr), ParseErr> {
 	let addr: Multiaddr = addr_str.parse()?;
 	parse_addr(addr)
 }
 
 /// Splits a Multiaddress into a Multiaddress and PeerId.
-pub fn parse_addr(mut addr: Multiaddr)-> Result<(PeerId, Multiaddr), ParseErr> {
+pub fn parse_addr(mut addr: Multiaddr) -> Result<(PeerId, Multiaddr), ParseErr> {
 	let who = match addr.pop() {
-		Some(multiaddr::Protocol::P2p(key)) => PeerId::from_multihash(key)
-			.map_err(|_| ParseErr::InvalidPeerId)?,
+		Some(multiaddr::Protocol::P2p(key)) =>
+			PeerId::from_multihash(key).map_err(|_| ParseErr::InvalidPeerId)?,
 		_ => return Err(ParseErr::PeerIdMissing),
 	};
 
@@ -314,7 +307,7 @@ pub struct MultiaddrWithPeerId {
 impl MultiaddrWithPeerId {
 	/// Concatenates the multiaddress and peer ID into one multiaddress containing both.
 	pub fn concat(&self) -> Multiaddr {
-		let proto = multiaddr::Protocol::P2p(From::from(self.peer_id.clone()));
+		let proto = multiaddr::Protocol::P2p(From::from(self.peer_id));
 		self.multiaddr.clone().with(proto)
 	}
 }
@@ -330,10 +323,7 @@ impl FromStr for MultiaddrWithPeerId {
 
 	fn from_str(s: &str) -> Result<Self, Self::Err> {
 		let (peer_id, multiaddr) = parse_str_addr(s)?;
-		Ok(MultiaddrWithPeerId {
-			peer_id,
-			multiaddr,
-		})
+		Ok(Self { peer_id, multiaddr })
 	}
 }
 
@@ -364,9 +354,9 @@ pub enum ParseErr {
 impl fmt::Display for ParseErr {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		match self {
-			ParseErr::MultiaddrParse(err) => write!(f, "{}", err),
-			ParseErr::InvalidPeerId => write!(f, "Peer id at the end of the address is invalid"),
-			ParseErr::PeerIdMissing => write!(f, "Peer id is missing from the address"),
+			Self::MultiaddrParse(err) => write!(f, "{}", err),
+			Self::InvalidPeerId => write!(f, "Peer id at the end of the address is invalid"),
+			Self::PeerIdMissing => write!(f, "Peer id is missing from the address"),
 		}
 	}
 }
@@ -374,16 +364,38 @@ impl fmt::Display for ParseErr {
 impl std::error::Error for ParseErr {
 	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
 		match self {
-			ParseErr::MultiaddrParse(err) => Some(err),
-			ParseErr::InvalidPeerId => None,
-			ParseErr::PeerIdMissing => None,
+			Self::MultiaddrParse(err) => Some(err),
+			Self::InvalidPeerId => None,
+			Self::PeerIdMissing => None,
 		}
 	}
 }
 
 impl From<multiaddr::Error> for ParseErr {
 	fn from(err: multiaddr::Error) -> ParseErr {
-		ParseErr::MultiaddrParse(err)
+		Self::MultiaddrParse(err)
+	}
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+/// Sync operation mode.
+pub enum SyncMode {
+	/// Full block download and verification.
+	Full,
+	/// Download blocks and the latest state.
+	Fast {
+		/// Skip state proof download and verification.
+		skip_proofs: bool,
+		/// Download indexed transactions for recent blocks.
+		storage_chain_mode: bool,
+	},
+	/// Warp sync - verify authority set transitions and the latest state.
+	Warp,
+}
+
+impl Default for SyncMode {
+	fn default() -> Self {
+		Self::Full
 	}
 }
 
@@ -400,19 +412,17 @@ pub struct NetworkConfiguration {
 	pub boot_nodes: Vec<MultiaddrWithPeerId>,
 	/// The node key configuration, which determines the node's network identity keypair.
 	pub node_key: NodeKeyConfig,
-	/// List of notifications protocols that the node supports. Must also include a
-	/// `ConsensusEngineId` for backwards-compatibility.
-	pub notifications_protocols: Vec<(ConsensusEngineId, Cow<'static, str>)>,
 	/// List of request-response protocols that the node supports.
 	pub request_response_protocols: Vec<RequestResponseConfig>,
-	/// Maximum allowed number of incoming connections.
-	pub in_peers: u32,
-	/// Number of outgoing connections we're trying to maintain.
-	pub out_peers: u32,
-	/// List of reserved node addresses.
-	pub reserved_nodes: Vec<MultiaddrWithPeerId>,
-	/// The non-reserved peer mode.
-	pub non_reserved_mode: NonReservedPeerMode,
+	/// Configuration for the default set of nodes used for block syncing and transactions.
+	pub default_peers_set: SetConfig,
+	/// Number of substreams to reserve for full nodes for block syncing and transactions.
+	/// Any other slot will be dedicated to light nodes.
+	///
+	/// This value is implicitly capped to `default_set.out_peers + default_set.in_peers`.
+	pub default_peers_set_num_full: u32,
+	/// Configuration for extra sets of nodes.
+	pub extra_sets: Vec<NonDefaultSetConfig>,
 	/// Client identifier. Sent over the wire for debugging purposes.
 	pub client_version: String,
 	/// Name of the node. Sent over the wire for debugging purposes.
@@ -421,8 +431,43 @@ pub struct NetworkConfiguration {
 	pub transport: TransportConfig,
 	/// Maximum number of peers to ask the same blocks in parallel.
 	pub max_parallel_downloads: u32,
+	/// Initial syncing mode.
+	pub sync_mode: SyncMode,
+
+	/// True if Kademlia random discovery should be enabled.
+	///
+	/// If true, the node will automatically randomly walk the DHT in order to find new peers.
+	pub enable_dht_random_walk: bool,
+
 	/// Should we insert non-global addresses into the DHT?
 	pub allow_non_globals_in_dht: bool,
+
+	/// Require iterative Kademlia DHT queries to use disjoint paths for increased resiliency in
+	/// the presence of potentially adversarial nodes.
+	pub kademlia_disjoint_query_paths: bool,
+	/// Enable serving block data over IPFS bitswap.
+	pub ipfs_server: bool,
+
+	/// Size of Yamux receive window of all substreams. `None` for the default (256kiB).
+	/// Any value less than 256kiB is invalid.
+	///
+	/// # Context
+	///
+	/// By design, notifications substreams on top of Yamux connections only allow up to `N` bytes
+	/// to be transferred at a time, where `N` is the Yamux receive window size configurable here.
+	/// This means, in practice, that every `N` bytes must be acknowledged by the receiver before
+	/// the sender can send more data. The maximum bandwidth of each notifications substream is
+	/// therefore `N / round_trip_time`.
+	///
+	/// It is recommended to leave this to `None`, and use a request-response protocol instead if
+	/// a large amount of data must be transferred. The reason why the value is configurable is
+	/// that some Substrate users mis-use notification protocols to send large amounts of data.
+	/// As such, this option isn't designed to stay and will likely get removed in the future.
+	///
+	/// Note that configuring a value here isn't a modification of the Yamux protocol, but rather
+	/// a modification of the way the implementation works. Different nodes with different
+	/// configured values remain compatible with each other.
+	pub yamux_window_size: Option<u32>,
 }
 
 impl NetworkConfiguration {
@@ -433,67 +478,144 @@ impl NetworkConfiguration {
 		node_key: NodeKeyConfig,
 		net_config_path: Option<PathBuf>,
 	) -> Self {
-		NetworkConfiguration {
+		let default_peers_set = SetConfig::default();
+		Self {
 			net_config_path,
 			listen_addresses: Vec::new(),
 			public_addresses: Vec::new(),
 			boot_nodes: Vec::new(),
 			node_key,
-			notifications_protocols: Vec::new(),
 			request_response_protocols: Vec::new(),
+			default_peers_set_num_full: default_peers_set.in_peers + default_peers_set.out_peers,
+			default_peers_set,
+			extra_sets: Vec::new(),
+			client_version: client_version.into(),
+			node_name: node_name.into(),
+			transport: TransportConfig::Normal { enable_mdns: false, allow_private_ipv4: true },
+			max_parallel_downloads: 5,
+			sync_mode: SyncMode::Full,
+			enable_dht_random_walk: true,
+			allow_non_globals_in_dht: false,
+			kademlia_disjoint_query_paths: false,
+			yamux_window_size: None,
+			ipfs_server: false,
+		}
+	}
+
+	/// Create new default configuration for localhost-only connection with random port (useful for
+	/// testing)
+	pub fn new_local() -> NetworkConfiguration {
+		let mut config =
+			NetworkConfiguration::new("test-node", "test-client", Default::default(), None);
+
+		config.listen_addresses =
+			vec![iter::once(multiaddr::Protocol::Ip4(Ipv4Addr::new(127, 0, 0, 1)))
+				.chain(iter::once(multiaddr::Protocol::Tcp(0)))
+				.collect()];
+
+		config.allow_non_globals_in_dht = true;
+		config
+	}
+
+	/// Create new default configuration for localhost-only connection with random port (useful for
+	/// testing)
+	pub fn new_memory() -> NetworkConfiguration {
+		let mut config =
+			NetworkConfiguration::new("test-node", "test-client", Default::default(), None);
+
+		config.listen_addresses =
+			vec![iter::once(multiaddr::Protocol::Ip4(Ipv4Addr::new(127, 0, 0, 1)))
+				.chain(iter::once(multiaddr::Protocol::Tcp(0)))
+				.collect()];
+
+		config.allow_non_globals_in_dht = true;
+		config
+	}
+}
+
+/// Configuration for a set of nodes.
+#[derive(Clone, Debug)]
+pub struct SetConfig {
+	/// Maximum allowed number of incoming substreams related to this set.
+	pub in_peers: u32,
+	/// Number of outgoing substreams related to this set that we're trying to maintain.
+	pub out_peers: u32,
+	/// List of reserved node addresses.
+	pub reserved_nodes: Vec<MultiaddrWithPeerId>,
+	/// Whether nodes that aren't in [`SetConfig::reserved_nodes`] are accepted or automatically
+	/// refused.
+	pub non_reserved_mode: NonReservedPeerMode,
+}
+
+impl Default for SetConfig {
+	fn default() -> Self {
+		Self {
 			in_peers: 25,
 			out_peers: 75,
 			reserved_nodes: Vec::new(),
 			non_reserved_mode: NonReservedPeerMode::Accept,
-			client_version: client_version.into(),
-			node_name: node_name.into(),
-			transport: TransportConfig::Normal {
-				enable_mdns: false,
-				allow_private_ipv4: true,
-				wasm_external_transport: None,
-				use_yamux_flow_control: false,
+		}
+	}
+}
+
+/// Extension to [`SetConfig`] for sets that aren't the default set.
+///
+/// > **Note**: As new fields might be added in the future, please consider using the `new` method
+/// >			and modifiers instead of creating this struct manually.
+#[derive(Clone, Debug)]
+pub struct NonDefaultSetConfig {
+	/// Name of the notifications protocols of this set. A substream on this set will be
+	/// considered established once this protocol is open.
+	///
+	/// > **Note**: This field isn't present for the default set, as this is handled internally
+	/// >           by the networking code.
+	pub notifications_protocol: Cow<'static, str>,
+	/// If the remote reports that it doesn't support the protocol indicated in the
+	/// `notifications_protocol` field, then each of these fallback names will be tried one by
+	/// one.
+	///
+	/// If a fallback is used, it will be reported in
+	/// [`crate::Event::NotificationStreamOpened::negotiated_fallback`].
+	pub fallback_names: Vec<Cow<'static, str>>,
+	/// Maximum allowed size of single notifications.
+	pub max_notification_size: u64,
+	/// Base configuration.
+	pub set_config: SetConfig,
+}
+
+impl NonDefaultSetConfig {
+	/// Creates a new [`NonDefaultSetConfig`]. Zero slots and accepts only reserved nodes.
+	pub fn new(notifications_protocol: Cow<'static, str>, max_notification_size: u64) -> Self {
+		Self {
+			notifications_protocol,
+			max_notification_size,
+			fallback_names: Vec::new(),
+			set_config: SetConfig {
+				in_peers: 0,
+				out_peers: 0,
+				reserved_nodes: Vec::new(),
+				non_reserved_mode: NonReservedPeerMode::Deny,
 			},
-			max_parallel_downloads: 5,
-			allow_non_globals_in_dht: false,
 		}
 	}
 
-	/// Create new default configuration for localhost-only connection with random port (useful for testing)
-	pub fn new_local() -> NetworkConfiguration {
-		let mut config = NetworkConfiguration::new(
-			"test-node",
-			"test-client",
-			Default::default(),
-			None,
-		);
-
-		config.listen_addresses = vec![
-			iter::once(multiaddr::Protocol::Ip4(Ipv4Addr::new(127, 0, 0, 1)))
-				.chain(iter::once(multiaddr::Protocol::Tcp(0)))
-				.collect()
-		];
-
-		config.allow_non_globals_in_dht = true;
-		config
+	/// Modifies the configuration to allow non-reserved nodes.
+	pub fn allow_non_reserved(&mut self, in_peers: u32, out_peers: u32) {
+		self.set_config.in_peers = in_peers;
+		self.set_config.out_peers = out_peers;
+		self.set_config.non_reserved_mode = NonReservedPeerMode::Accept;
 	}
 
-	/// Create new default configuration for localhost-only connection with random port (useful for testing)
-	pub fn new_memory() -> NetworkConfiguration {
-		let mut config = NetworkConfiguration::new(
-			"test-node",
-			"test-client",
-			Default::default(),
-			None,
-		);
+	/// Add a node to the list of reserved nodes.
+	pub fn add_reserved(&mut self, peer: MultiaddrWithPeerId) {
+		self.set_config.reserved_nodes.push(peer);
+	}
 
-		config.listen_addresses = vec![
-			iter::once(multiaddr::Protocol::Ip4(Ipv4Addr::new(127, 0, 0, 1)))
-				.chain(iter::once(multiaddr::Protocol::Tcp(0)))
-				.collect()
-		];
-
-		config.allow_non_globals_in_dht = true;
-		config
+	/// Add a list of protocol names used for backward compatibility.
+	///
+	/// See the explanations in [`NonDefaultSetConfig::fallback_names`].
+	pub fn add_fallback_names(&mut self, fallback_names: Vec<Cow<'static, str>>) {
+		self.fallback_names.extend(fallback_names);
 	}
 }
 
@@ -508,19 +630,8 @@ pub enum TransportConfig {
 
 		/// If true, allow connecting to private IPv4 addresses (as defined in
 		/// [RFC1918](https://tools.ietf.org/html/rfc1918)). Irrelevant for addresses that have
-		/// been passed in [`NetworkConfiguration::reserved_nodes`] or
-		/// [`NetworkConfiguration::boot_nodes`].
+		/// been passed in [`NetworkConfiguration::boot_nodes`].
 		allow_private_ipv4: bool,
-
-		/// Optional external implementation of a libp2p transport. Used in WASM contexts where we
-		/// need some binding between the networking provided by the operating system or environment
-		/// and libp2p.
-		///
-		/// This parameter exists whatever the target platform is, but it is expected to be set to
-		/// `Some` only when compiling for WASM.
-		wasm_external_transport: Option<wasm_ext::ExtTransport>,
-		/// Use flow control for yamux streams if set to true.
-		use_yamux_flow_control: bool,
 	},
 
 	/// Only allow connections within the same process.
@@ -541,8 +652,8 @@ impl NonReservedPeerMode {
 	/// Attempt to parse the peer mode from a string.
 	pub fn parse(s: &str) -> Option<Self> {
 		match s {
-			"accept" => Some(NonReservedPeerMode::Accept),
-			"deny" => Some(NonReservedPeerMode::Deny),
+			"accept" => Some(Self::Accept),
+			"deny" => Some(Self::Deny),
 			_ => None,
 		}
 	}
@@ -554,12 +665,12 @@ impl NonReservedPeerMode {
 #[derive(Clone, Debug)]
 pub enum NodeKeyConfig {
 	/// A Ed25519 secret key configuration.
-	Ed25519(Secret<ed25519::SecretKey>)
+	Ed25519(Secret<ed25519::SecretKey>),
 }
 
 impl Default for NodeKeyConfig {
 	fn default() -> NodeKeyConfig {
-		NodeKeyConfig::Ed25519(Secret::New)
+		Self::Ed25519(Secret::New)
 	}
 }
 
@@ -578,15 +689,15 @@ pub enum Secret<K> {
 	///   * `ed25519::SecretKey`: An unencoded 32 bytes Ed25519 secret key.
 	File(PathBuf),
 	/// Always generate a new secret key `K`.
-	New
+	New,
 }
 
 impl<K> fmt::Debug for Secret<K> {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		match self {
-			Secret::Input(_) => f.debug_tuple("Secret::Input").finish(),
-			Secret::File(path) => f.debug_tuple("Secret::File").field(path).finish(),
-			Secret::New => f.debug_tuple("Secret::New").finish(),
+			Self::Input(_) => f.debug_tuple("Secret::Input").finish(),
+			Self::File(path) => f.debug_tuple("Secret::File").field(path).finish(),
+			Self::New => f.debug_tuple("Secret::New").finish(),
 		}
 	}
 }
@@ -596,44 +707,36 @@ impl NodeKeyConfig {
 	///
 	///  * If the secret is configured as input, the corresponding keypair is returned.
 	///
-	///  * If the secret is configured as a file, it is read from that file, if it exists.
-	///    Otherwise a new secret is generated and stored. In either case, the
-	///    keypair obtained from the secret is returned.
+	///  * If the secret is configured as a file, it is read from that file, if it exists. Otherwise
+	///    a new secret is generated and stored. In either case, the keypair obtained from the
+	///    secret is returned.
 	///
-	///  * If the secret is configured to be new, it is generated and the corresponding
-	///    keypair is returned.
+	///  * If the secret is configured to be new, it is generated and the corresponding keypair is
+	///    returned.
 	pub fn into_keypair(self) -> io::Result<Keypair> {
 		use NodeKeyConfig::*;
 		match self {
-			Ed25519(Secret::New) =>
-				Ok(Keypair::generate_ed25519()),
+			Ed25519(Secret::New) => Ok(Keypair::generate_ed25519()),
 
-			Ed25519(Secret::Input(k)) =>
-				Ok(Keypair::Ed25519(k.into())),
+			Ed25519(Secret::Input(k)) => Ok(Keypair::Ed25519(k.into())),
 
-			Ed25519(Secret::File(f)) =>
-				get_secret(
-					f,
-					|mut b| {
-						match String::from_utf8(b.to_vec())
-							.ok()
-							.and_then(|s|{
-								if s.len() == 64 {
-									hex::decode(&s).ok()
-								} else {
-									None
-								}}
-							)
-						{
-							Some(s) => ed25519::SecretKey::from_bytes(s),
-							_ => ed25519::SecretKey::from_bytes(&mut b),
-						}
-					},
-					ed25519::SecretKey::generate,
-					|b| b.as_ref().to_vec()
-				)
-				.map(ed25519::Keypair::from)
-				.map(Keypair::Ed25519),
+			Ed25519(Secret::File(f)) => get_secret(
+				f,
+				|mut b| match String::from_utf8(b.to_vec()).ok().and_then(|s| {
+					if s.len() == 64 {
+						hex::decode(&s).ok()
+					} else {
+						None
+					}
+				}) {
+					Some(s) => ed25519::SecretKey::from_bytes(s),
+					_ => ed25519::SecretKey::from_bytes(&mut b),
+				},
+				ed25519::SecretKey::generate,
+				|b| b.as_ref().to_vec(),
+			)
+			.map(ed25519::Keypair::from)
+			.map(Keypair::Ed25519),
 		}
 	}
 }
@@ -650,9 +753,9 @@ where
 	W: Fn(&K) -> Vec<u8>,
 {
 	std::fs::read(&file)
-		.and_then(|mut sk_bytes|
-			parse(&mut sk_bytes)
-				.map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e)))
+		.and_then(|mut sk_bytes| {
+			parse(&mut sk_bytes).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
+		})
 		.or_else(|e| {
 			if e.kind() == io::ErrorKind::NotFound {
 				file.as_ref().parent().map_or(Ok(()), fs::create_dir_all)?;
@@ -670,7 +773,7 @@ where
 /// Write secret bytes to a file.
 fn write_secret_file<P>(path: P, sk_bytes: &[u8]) -> io::Result<()>
 where
-	P: AsRef<Path>
+	P: AsRef<Path>,
 {
 	let mut file = open_secret_file(&path)?;
 	file.write_all(sk_bytes)
@@ -680,26 +783,19 @@ where
 #[cfg(unix)]
 fn open_secret_file<P>(path: P) -> io::Result<fs::File>
 where
-	P: AsRef<Path>
+	P: AsRef<Path>,
 {
 	use std::os::unix::fs::OpenOptionsExt;
-	fs::OpenOptions::new()
-		.write(true)
-		.create_new(true)
-		.mode(0o600)
-		.open(path)
+	fs::OpenOptions::new().write(true).create_new(true).mode(0o600).open(path)
 }
 
 /// Opens a file containing a secret key in write mode.
 #[cfg(not(unix))]
 fn open_secret_file<P>(path: P) -> Result<fs::File, io::Error>
 where
-	P: AsRef<Path>
+	P: AsRef<Path>,
 {
-	fs::OpenOptions::new()
-		.write(true)
-		.create_new(true)
-		.open(path)
+	fs::OpenOptions::new().write(true).create_new(true).open(path)
 }
 
 #[cfg(test)]
@@ -715,7 +811,7 @@ mod tests {
 		match kp {
 			Keypair::Ed25519(p) => p.secret().as_ref().iter().cloned().collect(),
 			Keypair::Secp256k1(p) => p.secret().to_bytes().to_vec(),
-			_ => panic!("Unexpected keypair.")
+			_ => panic!("Unexpected keypair."),
 		}
 	}
 

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -24,7 +24,10 @@ fn fast_track_referendum_works() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(0);
 		let h = set_balance_proposal_hash_and_note(2);
-		assert_noop!(Democracy::fast_track(Origin::signed(5), h, 3, 2), Error::<Test>::ProposalMissing);
+		assert_noop!(
+			Democracy::fast_track(Origin::signed(5), h, 3, 2),
+			Error::<Test>::ProposalMissing
+		);
 		assert_ok!(Democracy::external_propose_majority(
 			Origin::signed(3),
 			set_balance_proposal_hash_and_note(2)
@@ -49,14 +52,20 @@ fn instant_referendum_works() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(0);
 		let h = set_balance_proposal_hash_and_note(2);
-		assert_noop!(Democracy::fast_track(Origin::signed(5), h, 3, 2), Error::<Test>::ProposalMissing);
+		assert_noop!(
+			Democracy::fast_track(Origin::signed(5), h, 3, 2),
+			Error::<Test>::ProposalMissing
+		);
 		assert_ok!(Democracy::external_propose_majority(
 			Origin::signed(3),
 			set_balance_proposal_hash_and_note(2)
 		));
 		assert_noop!(Democracy::fast_track(Origin::signed(1), h, 3, 2), BadOrigin);
 		assert_noop!(Democracy::fast_track(Origin::signed(5), h, 1, 0), BadOrigin);
-		assert_noop!(Democracy::fast_track(Origin::signed(6), h, 1, 0), Error::<Test>::InstantNotAllowed);
+		assert_noop!(
+			Democracy::fast_track(Origin::signed(6), h, 1, 0),
+			Error::<Test>::InstantNotAllowed
+		);
 		INSTANT_ALLOWED.with(|v| *v.borrow_mut() = true);
 		assert_ok!(Democracy::fast_track(Origin::signed(6), h, 1, 0));
 		assert_eq!(

@@ -1,6 +1,6 @@
 # Society Module
 
-- [`society::Trait`](https://docs.rs/pallet-society/latest/pallet_society/trait.Trait.html)
+- [`society::Config`](https://docs.rs/pallet-society/latest/pallet_society/trait.Config.html)
 - [`Call`](https://docs.rs/pallet-society/latest/pallet_society/enum.Call.html)
 
 ## Overview
@@ -24,7 +24,7 @@ Of the non-suspended members, there is always a:
 
 Of the non-suspended members of the society, a random set of them are chosen as
 "skeptics". The mechanics of skeptics is explained in the
-[member phase](#member-phase) below.
+[member phase](https://docs.rs/pallet-society/latest/pallet_society/#member-phase) below.
 
 ### Mechanics
 

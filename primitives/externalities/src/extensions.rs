@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -22,12 +22,16 @@
 //!
 //! It is required that each extension implements the [`Extension`] trait.
 
-use sp_std::{
-	collections::btree_map::{BTreeMap, Entry}, any::{Any, TypeId}, ops::DerefMut, boxed::Box,
-};
 use crate::Error;
+use sp_std::{
+	any::{Any, TypeId},
+	boxed::Box,
+	collections::btree_map::{BTreeMap, Entry},
+	ops::DerefMut,
+};
 
-/// Marker trait for types that should be registered as [`Externalities`](crate::Externalities) extension.
+/// Marker trait for types that should be registered as [`Externalities`](crate::Externalities)
+/// extension.
 ///
 /// As extensions are stored as `Box<Any>`, this trait should give more confidence that the correct
 /// type is registered and requested.
@@ -79,6 +83,12 @@ macro_rules! decl_extension {
 				&mut self.0
 			}
 		}
+
+		impl From<$inner> for $ext_name {
+			fn from(inner: $inner) -> Self {
+				Self(inner)
+			}
+ 		}
 	}
 }
 
@@ -86,16 +96,21 @@ macro_rules! decl_extension {
 ///
 /// This is a super trait of the [`Externalities`](crate::Externalities).
 pub trait ExtensionStore {
-	/// Tries to find a registered extension by the given `type_id` and returns it as a `&mut dyn Any`.
+	/// Tries to find a registered extension by the given `type_id` and returns it as a `&mut dyn
+	/// Any`.
 	///
 	/// It is advised to use [`ExternalitiesExt::extension`](crate::ExternalitiesExt::extension)
 	/// instead of this function to get type system support and automatic type downcasting.
 	fn extension_by_type_id(&mut self, type_id: TypeId) -> Option<&mut dyn Any>;
 
-	/// Register extension `extension` with speciifed `type_id`.
+	/// Register extension `extension` with specified `type_id`.
 	///
 	/// It should return error if extension is already registered.
-	fn register_extension_with_type_id(&mut self, type_id: TypeId, extension: Box<dyn Extension>) -> Result<(), Error>;
+	fn register_extension_with_type_id(
+		&mut self,
+		type_id: TypeId,
+		extension: Box<dyn Extension>,
+	) -> Result<(), Error>;
 
 	/// Deregister extension with speicifed 'type_id' and drop it.
 	///
@@ -124,25 +139,45 @@ impl Extensions {
 
 	/// Register the given extension.
 	pub fn register<E: Extension>(&mut self, ext: E) {
-		self.extensions.insert(ext.type_id(), Box::new(ext));
+		let type_id = ext.type_id();
+		self.extensions.insert(type_id, Box::new(ext));
 	}
 
-	/// Register extension `ext`.
-	pub fn register_with_type_id(&mut self, type_id: TypeId, extension: Box<dyn Extension>) -> Result<(), Error> {
+	/// Register extension `extension` using the given `type_id`.
+	pub fn register_with_type_id(
+		&mut self,
+		type_id: TypeId,
+		extension: Box<dyn Extension>,
+	) -> Result<(), Error> {
 		match self.extensions.entry(type_id) {
-			Entry::Vacant(vacant) => { vacant.insert(extension); Ok(()) },
+			Entry::Vacant(vacant) => {
+				vacant.insert(extension);
+				Ok(())
+			},
 			Entry::Occupied(_) => Err(Error::ExtensionAlreadyRegistered),
 		}
 	}
 
 	/// Return a mutable reference to the requested extension.
 	pub fn get_mut(&mut self, ext_type_id: TypeId) -> Option<&mut dyn Any> {
-		self.extensions.get_mut(&ext_type_id).map(DerefMut::deref_mut).map(Extension::as_mut_any)
+		self.extensions
+			.get_mut(&ext_type_id)
+			.map(DerefMut::deref_mut)
+			.map(Extension::as_mut_any)
 	}
 
-	/// Deregister extension of type `E`.
-	pub fn deregister(&mut self, type_id: TypeId) -> Option<Box<dyn Extension>> {
-		self.extensions.remove(&type_id)
+	/// Deregister extension for the given `type_id`.
+	///
+	/// Returns `true` when the extension was registered.
+	pub fn deregister(&mut self, type_id: TypeId) -> bool {
+		self.extensions.remove(&type_id).is_some()
+	}
+
+	/// Returns a mutable iterator over all extensions.
+	pub fn iter_mut<'a>(
+		&'a mut self,
+	) -> impl Iterator<Item = (&'a TypeId, &'a mut Box<dyn Extension>)> {
+		self.extensions.iter_mut()
 	}
 }
 

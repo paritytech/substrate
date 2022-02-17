@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -16,125 +16,226 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! A set of utilities for resetting a wasm instance to its initial state.
+//! Utilities used by all backends
 
-use crate::error::{self, Error};
-use std::mem;
-use parity_wasm::elements::{deserialize_buffer, DataSegment, Instruction, Module as RawModule};
+use crate::error::{Error, Result};
+use sp_wasm_interface::Pointer;
+use std::ops::Range;
 
-/// A bunch of information collected from a WebAssembly module.
-pub struct WasmModuleInfo {
-	raw_module: RawModule,
-}
-
-impl WasmModuleInfo {
-	/// Create `WasmModuleInfo` from the given wasm code.
-	///
-	/// Returns `None` if the wasm code cannot be deserialized.
-	pub fn new(wasm_code: &[u8]) -> Option<Self> {
-		let raw_module: RawModule = deserialize_buffer(wasm_code).ok()?;
-		Some(Self { raw_module })
-	}
-
-	/// Extract the data segments from the given wasm code.
-	///
-	/// Returns `Err` if the given wasm code cannot be deserialized.
-	fn data_segments(&self) -> Vec<DataSegment> {
-		self.raw_module
-			.data_section()
-			.map(|ds| ds.entries())
-			.unwrap_or(&[])
-			.to_vec()
-	}
-
-	/// The number of globals defined in locally in this module.
-	pub fn declared_globals_count(&self) -> u32 {
-		self.raw_module
-			.global_section()
-			.map(|gs| gs.entries().len() as u32)
-			.unwrap_or(0)
-	}
-
-	/// The number of imports of globals.
-	pub fn imported_globals_count(&self) -> u32 {
-		self.raw_module
-			.import_section()
-			.map(|is| is.globals() as u32)
-			.unwrap_or(0)
+/// Construct a range from an offset to a data length after the offset.
+/// Returns None if the end of the range would exceed some maximum offset.
+pub fn checked_range(offset: usize, len: usize, max: usize) -> Option<Range<usize>> {
+	let end = offset.checked_add(len)?;
+	if end <= max {
+		Some(offset..end)
+	} else {
+		None
 	}
 }
 
-/// This is a snapshot of data segments specialzied for a particular instantiation.
-///
-/// Note that this assumes that no mutable globals are used.
-#[derive(Clone)]
-pub struct DataSegmentsSnapshot {
-	/// The list of data segments represented by (offset, contents).
-	data_segments: Vec<(u32, Vec<u8>)>,
+/// Provides safe memory access interface using an external buffer
+pub trait MemoryTransfer {
+	/// Read data from a slice of memory into a newly allocated buffer.
+	///
+	/// Returns an error if the read would go out of the memory bounds.
+	fn read(&self, source_addr: Pointer<u8>, size: usize) -> Result<Vec<u8>>;
+
+	/// Read data from a slice of memory into a destination buffer.
+	///
+	/// Returns an error if the read would go out of the memory bounds.
+	fn read_into(&self, source_addr: Pointer<u8>, destination: &mut [u8]) -> Result<()>;
+
+	/// Write data to a slice of memory.
+	///
+	/// Returns an error if the write would go out of the memory bounds.
+	fn write_from(&self, dest_addr: Pointer<u8>, source: &[u8]) -> Result<()>;
 }
 
-impl DataSegmentsSnapshot {
-	/// Create a snapshot from the data segments from the module.
-	pub fn take(module: &WasmModuleInfo) -> error::Result<Self> {
-		let data_segments = module
-			.data_segments()
-			.into_iter()
-			.map(|mut segment| {
-				// Just replace contents of the segment since the segments will be discarded later
-				// anyway.
-				let contents = mem::replace(segment.value_mut(), vec![]);
+/// Safe wrapper over wasmi memory reference
+pub mod wasmi {
+	use super::*;
 
-				let init_expr = match segment.offset() {
-					Some(offset) => offset.code(),
-					// Return if the segment is passive
-					None => return Err(Error::from("Shared memory is not supported".to_string())),
-				};
-
-				// [op, End]
-				if init_expr.len() != 2 {
-					return Err(Error::from(
-						"initializer expression can have only up to 2 expressions in wasm 1.0"
-							.to_string(),
-					));
-				}
-				let offset = match &init_expr[0] {
-					Instruction::I32Const(v) => *v as u32,
-					Instruction::GetGlobal(_) => {
-						// In a valid wasm file, initializer expressions can only refer imported
-						// globals.
-						//
-						// At the moment of writing the Substrate Runtime Interface does not provide
-						// any globals. There is nothing that prevents us from supporting this
-						// if/when we gain those.
-						return Err(Error::from(
-							"Imported globals are not supported yet".to_string(),
-						));
-					}
-					insn => {
-						return Err(Error::from(format!(
-							"{:?} is not supported as initializer expression in wasm 1.0",
-							insn
-						)))
-					}
-				};
-
-				Ok((offset, contents))
-			})
-			.collect::<error::Result<Vec<_>>>()?;
-
-		Ok(Self { data_segments })
-	}
-
-	/// Apply the given snapshot to a linear memory.
+	/// Wasmi provides direct access to its memory using slices.
 	///
-	/// Linear memory interface is represented by a closure `memory_set`.
-	pub fn apply<E>(
-		&self,
-		mut memory_set: impl FnMut(u32, &[u8]) -> Result<(), E>,
-	) -> Result<(), E> {
-		for (offset, contents) in &self.data_segments {
-			memory_set(*offset, contents)?;
+	/// This wrapper limits the scope where the slice can be taken to
+	#[derive(Debug, Clone)]
+	pub struct MemoryWrapper(::wasmi::MemoryRef);
+
+	impl MemoryWrapper {
+		/// Take ownership of the memory region and return a wrapper object
+		pub fn new(memory: ::wasmi::MemoryRef) -> Self {
+			Self(memory)
 		}
-		Ok(())
+
+		/// Clone the underlying memory object
+		///
+		/// # Safety
+		///
+		/// The sole purpose of `MemoryRef` is to protect the memory from uncontrolled
+		/// access. By returning the memory object "as is" we bypass all of the checks.
+		///
+		/// Intended to use only during module initialization.
+		pub unsafe fn clone_inner(&self) -> ::wasmi::MemoryRef {
+			self.0.clone()
+		}
+	}
+
+	impl super::MemoryTransfer for MemoryWrapper {
+		fn read(&self, source_addr: Pointer<u8>, size: usize) -> Result<Vec<u8>> {
+			self.0.with_direct_access(|source| {
+				let range = checked_range(source_addr.into(), size, source.len())
+					.ok_or_else(|| Error::Other("memory read is out of bounds".into()))?;
+
+				Ok(Vec::from(&source[range]))
+			})
+		}
+
+		fn read_into(&self, source_addr: Pointer<u8>, destination: &mut [u8]) -> Result<()> {
+			self.0.with_direct_access(|source| {
+				let range = checked_range(source_addr.into(), destination.len(), source.len())
+					.ok_or_else(|| Error::Other("memory read is out of bounds".into()))?;
+
+				destination.copy_from_slice(&source[range]);
+				Ok(())
+			})
+		}
+
+		fn write_from(&self, dest_addr: Pointer<u8>, source: &[u8]) -> Result<()> {
+			self.0.with_direct_access_mut(|destination| {
+				let range = checked_range(dest_addr.into(), source.len(), destination.len())
+					.ok_or_else(|| Error::Other("memory write is out of bounds".into()))?;
+
+				destination[range].copy_from_slice(source);
+				Ok(())
+			})
+		}
+	}
+}
+
+// Routines specific to Wasmer runtime. Since sandbox can be invoked from both
+/// wasmi and wasmtime runtime executors, we need to have a way to deal with sanbox
+/// backends right from the start.
+#[cfg(feature = "wasmer-sandbox")]
+pub mod wasmer {
+	use super::checked_range;
+	use crate::error::{Error, Result};
+	use sp_wasm_interface::Pointer;
+	use std::{cell::RefCell, convert::TryInto, rc::Rc};
+
+	/// In order to enforce memory access protocol to the backend memory
+	/// we wrap it with `RefCell` and encapsulate all memory operations.
+	#[derive(Debug, Clone)]
+	pub struct MemoryWrapper {
+		buffer: Rc<RefCell<wasmer::Memory>>,
+	}
+
+	impl MemoryWrapper {
+		/// Take ownership of the memory region and return a wrapper object
+		pub fn new(memory: wasmer::Memory) -> Self {
+			Self { buffer: Rc::new(RefCell::new(memory)) }
+		}
+
+		/// Returns linear memory of the wasm instance as a slice.
+		///
+		/// # Safety
+		///
+		/// Wasmer doesn't provide comprehensive documentation about the exact behavior of the data
+		/// pointer. If a dynamic style heap is used the base pointer of the heap can change. Since
+		/// growing, we cannot guarantee the lifetime of the returned slice reference.
+		unsafe fn memory_as_slice(memory: &wasmer::Memory) -> &[u8] {
+			let ptr = memory.data_ptr() as *const _;
+			let len: usize =
+				memory.data_size().try_into().expect("data size should fit into usize");
+
+			if len == 0 {
+				&[]
+			} else {
+				core::slice::from_raw_parts(ptr, len)
+			}
+		}
+
+		/// Returns linear memory of the wasm instance as a slice.
+		///
+		/// # Safety
+		///
+		/// See `[memory_as_slice]`. In addition to those requirements, since a mutable reference is
+		/// returned it must be ensured that only one mutable and no shared references to memory
+		/// exists at the same time.
+		unsafe fn memory_as_slice_mut(memory: &wasmer::Memory) -> &mut [u8] {
+			let ptr = memory.data_ptr();
+			let len: usize =
+				memory.data_size().try_into().expect("data size should fit into usize");
+
+			if len == 0 {
+				&mut []
+			} else {
+				core::slice::from_raw_parts_mut(ptr, len)
+			}
+		}
+
+		/// Clone the underlying memory object
+		///
+		/// # Safety
+		///
+		/// The sole purpose of `MemoryRef` is to protect the memory from uncontrolled
+		/// access. By returning the memory object "as is" we bypass all of the checks.
+		///
+		/// Intended to use only during module initialization.
+		///
+		/// # Panics
+		///
+		/// Will panic if `MemoryRef` is currently in use.
+		pub unsafe fn clone_inner(&mut self) -> wasmer::Memory {
+			// We take exclusive lock to ensure that we're the only one here
+			self.buffer.borrow_mut().clone()
+		}
+	}
+
+	impl super::MemoryTransfer for MemoryWrapper {
+		fn read(&self, source_addr: Pointer<u8>, size: usize) -> Result<Vec<u8>> {
+			let memory = self.buffer.borrow();
+
+			let data_size = memory.data_size().try_into().expect("data size does not fit");
+
+			let range = checked_range(source_addr.into(), size, data_size)
+				.ok_or_else(|| Error::Other("memory read is out of bounds".into()))?;
+
+			let mut buffer = vec![0; range.len()];
+			self.read_into(source_addr, &mut buffer)?;
+
+			Ok(buffer)
+		}
+
+		fn read_into(&self, source_addr: Pointer<u8>, destination: &mut [u8]) -> Result<()> {
+			unsafe {
+				let memory = self.buffer.borrow();
+
+				// This should be safe since we don't grow up memory while caching this reference
+				// and we give up the reference before returning from this function.
+				let source = Self::memory_as_slice(&memory);
+
+				let range = checked_range(source_addr.into(), destination.len(), source.len())
+					.ok_or_else(|| Error::Other("memory read is out of bounds".into()))?;
+
+				destination.copy_from_slice(&source[range]);
+				Ok(())
+			}
+		}
+
+		fn write_from(&self, dest_addr: Pointer<u8>, source: &[u8]) -> Result<()> {
+			unsafe {
+				let memory = self.buffer.borrow_mut();
+
+				// This should be safe since we don't grow up memory while caching this reference
+				// and we give up the reference before returning from this function.
+				let destination = Self::memory_as_slice_mut(&memory);
+
+				let range = checked_range(dest_addr.into(), source.len(), destination.len())
+					.ok_or_else(|| Error::Other("memory write is out of bounds".into()))?;
+
+				destination[range].copy_from_slice(source);
+				Ok(())
+			}
+		}
 	}
 }

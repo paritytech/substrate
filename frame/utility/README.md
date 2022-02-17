@@ -1,7 +1,7 @@
 # Utility Module
 A stateless module with helpers for dispatch management which does no re-authentication.
 
-- [`utility::Trait`](https://docs.rs/pallet-utility/latest/pallet_utility/trait.Trait.html)
+- [`utility::Config`](https://docs.rs/pallet-utility/latest/pallet_utility/trait.Config.html)
 - [`Call`](https://docs.rs/pallet-utility/latest/pallet_utility/enum.Call.html)
 
 ## Overview
@@ -33,6 +33,6 @@ filtered by any proxy.
 * `as_derivative` - Dispatch a call from a derivative signed origin.
 
 [`Call`]: ./enum.Call.html
-[`Trait`]: ./trait.Trait.html
+[`Config`]: ./trait.Config.html
 
 License: Apache-2.0

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -16,94 +16,194 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! A consensus proposer for "basic" chains which use the primitive
-//! inherent-data.
+//! A consensus proposer for "basic" chains which use the primitive inherent-data.
 
 // FIXME #1021 move this into sp-consensus
 
-use codec::Decode;
-use extrinsic_info_runtime_api::runtime_api::ExtrinsicInfoRuntimeApi;
-use sp_encrypted_tx::EncryptedTxApi;
-use futures::{executor, future, future::Either};
+use codec::{Decode, Encode};
+use futures::{
+	channel::oneshot,
+	future,
+	future::{Future, FutureExt},
+	select,
+};
 use log::{debug, error, info, trace, warn};
 use sc_block_builder::{BlockBuilderApi, BlockBuilderProvider};
 use sc_client_api::backend;
-use sc_telemetry::{telemetry, CONSENSUS_INFO};
-use sp_api::{ApiExt, ProvideRuntimeApi, TransactionOutcome};
+use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_INFO};
+use sc_transaction_pool_api::{InPoolTransaction, TransactionPool};
+use sp_api::{ApiExt, ProvideRuntimeApi};
 use sp_blockchain::{ApplyExtrinsicFailed::Validity, Error::ApplyExtrinsicFailed, HeaderBackend};
-use sp_consensus::{evaluation, Proposal, RecordProof};
-use sp_core::ExecutionContext;
+use sp_consensus::{
+	evaluation, DisableProofRecording, EnableProofRecording, ProofRecording, Proposal,
+};
+use sp_core::traits::SpawnNamed;
 use sp_inherents::InherentData;
 use sp_runtime::{
-    AccountId32,
 	generic::BlockId,
-	traits::{BlakeTwo256, Block as BlockT, DigestFor, Hash as HashT, Header as HeaderT},
+	traits::{BlakeTwo256, Block as BlockT, Hash as HashT, Header as HeaderT},
+	Digest, Percent, SaturatedConversion,
 };
-use sp_transaction_pool::{InPoolTransaction, TransactionPool};
-use std::marker::PhantomData;
-use std::{sync::Arc, time};
-use sc_keystore::KeyStorePtr;
-use ecies::{utils::{aes_decrypt, decapsulate}, SecretKey, PublicKey};
-use sp_core::crypto::KeyTypeId;
+use std::{marker::PhantomData, pin::Pin, sync::Arc, time};
 
 use prometheus_endpoint::Registry as PrometheusRegistry;
 use sc_proposer_metrics::MetricsLink as PrometheusMetrics;
-use std::cell::RefCell;
-use std::rc::Rc;
 
-/// Proposer factory.
-pub struct ProposerFactory<A, B, C> {
+/// Default block size limit in bytes used by [`Proposer`].
+///
+/// Can be overwritten by [`ProposerFactory::set_default_block_size_limit`].
+///
+/// Be aware that there is also an upper packet size on what the networking code
+/// will accept. If the block doesn't fit in such a package, it can not be
+/// transferred to other nodes.
+pub const DEFAULT_BLOCK_SIZE_LIMIT: usize = 4 * 1024 * 1024 + 512;
+
+const DEFAULT_SOFT_DEADLINE_PERCENT: Percent = Percent::from_percent(50);
+
+/// [`Proposer`] factory.
+pub struct ProposerFactory<A, B, C, PR> {
+	spawn_handle: Box<dyn SpawnNamed>,
 	/// The client instance.
 	client: Arc<C>,
 	/// The transaction pool.
 	transaction_pool: Arc<A>,
 	/// Prometheus Link,
 	metrics: PrometheusMetrics,
-	/// keystore for encrypted transactions
-	keystore: KeyStorePtr,
-	/// phantom member to pin the `Backend` type.
-	_phantom: PhantomData<B>,
+	/// The default block size limit.
+	///
+	/// If no `block_size_limit` is passed to [`sp_consensus::Proposer::propose`], this block size
+	/// limit will be used.
+	default_block_size_limit: usize,
+	/// Soft deadline percentage of hard deadline.
+	///
+	/// The value is used to compute soft deadline during block production.
+	/// The soft deadline indicates where we should stop attempting to add transactions
+	/// to the block, which exhaust resources. After soft deadline is reached,
+	/// we switch to a fixed-amount mode, in which after we see `MAX_SKIPPED_TRANSACTIONS`
+	/// transactions which exhaust resrouces, we will conclude that the block is full.
+	soft_deadline_percent: Percent,
+	telemetry: Option<TelemetryHandle>,
+	/// When estimating the block size, should the proof be included?
+	include_proof_in_block_size_estimation: bool,
+	/// phantom member to pin the `Backend`/`ProofRecording` type.
+	_phantom: PhantomData<(B, PR)>,
 }
 
-impl<A, B, C> ProposerFactory<A, B, C> {
+impl<A, B, C> ProposerFactory<A, B, C, DisableProofRecording> {
+	/// Create a new proposer factory.
+	///
+	/// Proof recording will be disabled when using proposers built by this instance to build
+	/// blocks.
 	pub fn new(
+		spawn_handle: impl SpawnNamed + 'static,
 		client: Arc<C>,
 		transaction_pool: Arc<A>,
 		prometheus: Option<&PrometheusRegistry>,
-		keystore: KeyStorePtr,
+		telemetry: Option<TelemetryHandle>,
 	) -> Self {
 		ProposerFactory {
-			client,
+			spawn_handle: Box::new(spawn_handle),
 			transaction_pool,
 			metrics: PrometheusMetrics::new(prometheus),
-			keystore,
+			default_block_size_limit: DEFAULT_BLOCK_SIZE_LIMIT,
+			soft_deadline_percent: DEFAULT_SOFT_DEADLINE_PERCENT,
+			telemetry,
+			client,
+			include_proof_in_block_size_estimation: false,
 			_phantom: PhantomData,
 		}
 	}
 }
 
-impl<B, Block, C, A> ProposerFactory<A, B, C>
-	where
-		A: TransactionPool<Block = Block> + 'static,
-		B: backend::Backend<Block> + Send + Sync + 'static,
-		Block: BlockT,
-		C: BlockBuilderProvider<B, Block, C> + HeaderBackend<Block> + ProvideRuntimeApi<Block>
-			+ Send + Sync + 'static,
-		C::Api: ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>>
-			+ BlockBuilderApi<Block, Error = sp_blockchain::Error>,
+impl<A, B, C> ProposerFactory<A, B, C, EnableProofRecording> {
+	/// Create a new proposer factory with proof recording enabled.
+	///
+	/// Each proposer created by this instance will record a proof while building a block.
+	///
+	/// This will also include the proof into the estimation of the block size. This can be disabled
+	/// by calling [`ProposerFactory::disable_proof_in_block_size_estimation`].
+	pub fn with_proof_recording(
+		spawn_handle: impl SpawnNamed + 'static,
+		client: Arc<C>,
+		transaction_pool: Arc<A>,
+		prometheus: Option<&PrometheusRegistry>,
+		telemetry: Option<TelemetryHandle>,
+	) -> Self {
+		ProposerFactory {
+			client,
+			spawn_handle: Box::new(spawn_handle),
+			transaction_pool,
+			metrics: PrometheusMetrics::new(prometheus),
+			default_block_size_limit: DEFAULT_BLOCK_SIZE_LIMIT,
+			soft_deadline_percent: DEFAULT_SOFT_DEADLINE_PERCENT,
+			telemetry,
+			include_proof_in_block_size_estimation: true,
+			_phantom: PhantomData,
+		}
+	}
+
+	/// Disable the proof inclusion when estimating the block size.
+	pub fn disable_proof_in_block_size_estimation(&mut self) {
+		self.include_proof_in_block_size_estimation = false;
+	}
+}
+
+impl<A, B, C, PR> ProposerFactory<A, B, C, PR> {
+	/// Set the default block size limit in bytes.
+	///
+	/// The default value for the block size limit is:
+	/// [`DEFAULT_BLOCK_SIZE_LIMIT`].
+	///
+	/// If there is no block size limit passed to [`sp_consensus::Proposer::propose`], this value
+	/// will be used.
+	pub fn set_default_block_size_limit(&mut self, limit: usize) {
+		self.default_block_size_limit = limit;
+	}
+
+	/// Set soft deadline percentage.
+	///
+	/// The value is used to compute soft deadline during block production.
+	/// The soft deadline indicates where we should stop attempting to add transactions
+	/// to the block, which exhaust resources. After soft deadline is reached,
+	/// we switch to a fixed-amount mode, in which after we see `MAX_SKIPPED_TRANSACTIONS`
+	/// transactions which exhaust resrouces, we will conclude that the block is full.
+	///
+	/// Setting the value too low will significantly limit the amount of transactions
+	/// we try in case they exhaust resources. Setting the value too high can
+	/// potentially open a DoS vector, where many "exhaust resources" transactions
+	/// are being tried with no success, hence block producer ends up creating an empty block.
+	pub fn set_soft_deadline(&mut self, percent: Percent) {
+		self.soft_deadline_percent = percent;
+	}
+}
+
+impl<B, Block, C, A, PR> ProposerFactory<A, B, C, PR>
+where
+	A: TransactionPool<Block = Block> + 'static,
+	B: backend::Backend<Block> + Send + Sync + 'static,
+	Block: BlockT,
+	C: BlockBuilderProvider<B, Block, C>
+		+ HeaderBackend<Block>
+		+ ProvideRuntimeApi<Block>
+		+ Send
+		+ Sync
+		+ 'static,
+	C::Api:
+		ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>> + BlockBuilderApi<Block>,
 {
-	pub fn init_with_now(
+	fn init_with_now(
 		&mut self,
 		parent_header: &<Block as BlockT>::Header,
 		now: Box<dyn Fn() -> time::Instant + Send + Sync>,
-	) -> Proposer<B, Block, C, A> {
+	) -> Proposer<B, Block, C, A, PR> {
 		let parent_hash = parent_header.hash();
 
 		let id = BlockId::hash(parent_hash);
 
 		info!("🙌 Starting consensus session on top of parent {:?}", parent_hash);
 
-		let proposer = Proposer {
+		let proposer = Proposer::<_, _, _, _, PR> {
+			spawn_handle: self.spawn_handle.clone(),
 			client: self.client.clone(),
 			parent_hash,
 			parent_id: id,
@@ -111,40 +211,44 @@ impl<B, Block, C, A> ProposerFactory<A, B, C>
 			transaction_pool: self.transaction_pool.clone(),
 			now,
 			metrics: self.metrics.clone(),
-			keystore: self.keystore.clone(),
+			default_block_size_limit: self.default_block_size_limit,
+			soft_deadline_percent: self.soft_deadline_percent,
+			telemetry: self.telemetry.clone(),
 			_phantom: PhantomData,
+			include_proof_in_block_size_estimation: self.include_proof_in_block_size_estimation,
 		};
 
 		proposer
 	}
 }
 
-impl<A, B, Block, C> sp_consensus::Environment<Block> for
-	ProposerFactory<A, B, C>
-		where
-			A: TransactionPool<Block = Block> + 'static,
-			B: backend::Backend<Block> + Send + Sync + 'static,
-			Block: BlockT,
-			C: BlockBuilderProvider<B, Block, C> + HeaderBackend<Block> + ProvideRuntimeApi<Block>
-				+ Send + Sync + 'static,
-			C::Api: ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>>
-				+ BlockBuilderApi<Block, Error = sp_blockchain::Error>
-				+ ExtrinsicInfoRuntimeApi<Block> + EncryptedTxApi<Block> ,
+impl<A, B, Block, C, PR> sp_consensus::Environment<Block> for ProposerFactory<A, B, C, PR>
+where
+	A: TransactionPool<Block = Block> + 'static,
+	B: backend::Backend<Block> + Send + Sync + 'static,
+	Block: BlockT,
+	C: BlockBuilderProvider<B, Block, C>
+		+ HeaderBackend<Block>
+		+ ProvideRuntimeApi<Block>
+		+ Send
+		+ Sync
+		+ 'static,
+	C::Api:
+		ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>> + BlockBuilderApi<Block>,
+	PR: ProofRecording,
 {
 	type CreateProposer = future::Ready<Result<Self::Proposer, Self::Error>>;
-	type Proposer = Proposer<B, Block, C, A>;
+	type Proposer = Proposer<B, Block, C, A, PR>;
 	type Error = sp_blockchain::Error;
 
-	fn init(
-		&mut self,
-		parent_header: &<Block as BlockT>::Header,
-	) -> Self::CreateProposer {
+	fn init(&mut self, parent_header: &<Block as BlockT>::Header) -> Self::CreateProposer {
 		future::ready(Ok(self.init_with_now(parent_header, Box::new(time::Instant::now))))
 	}
 }
 
 /// The proposer logic.
-pub struct Proposer<B, Block: BlockT, C, A: TransactionPool> {
+pub struct Proposer<B, Block: BlockT, C, A: TransactionPool, PR> {
+	spawn_handle: Box<dyn SpawnNamed>,
 	client: Arc<C>,
 	parent_hash: <Block as BlockT>::Hash,
 	parent_id: BlockId<Block>,
@@ -152,245 +256,263 @@ pub struct Proposer<B, Block: BlockT, C, A: TransactionPool> {
 	transaction_pool: Arc<A>,
 	now: Box<dyn Fn() -> time::Instant + Send + Sync>,
 	metrics: PrometheusMetrics,
-	keystore: KeyStorePtr,
-	_phantom: PhantomData<B>,
+	default_block_size_limit: usize,
+	include_proof_in_block_size_estimation: bool,
+	soft_deadline_percent: Percent,
+	telemetry: Option<TelemetryHandle>,
+	_phantom: PhantomData<(B, PR)>,
 }
 
-impl<A, B, Block, C> sp_consensus::Proposer<Block> for
-	Proposer<B, Block, C, A>
-		where
-			A: TransactionPool<Block = Block> + 'static,
-			B: backend::Backend<Block> + Send + Sync + 'static,
-			Block: BlockT,
-			C: BlockBuilderProvider<B, Block, C> + HeaderBackend<Block> + ProvideRuntimeApi<Block>
-				+ Send + Sync + 'static,
-			C::Api: ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>>
-				+ BlockBuilderApi<Block, Error = sp_blockchain::Error>
-				+ ExtrinsicInfoRuntimeApi<Block>+ EncryptedTxApi<Block> ,
+impl<A, B, Block, C, PR> sp_consensus::Proposer<Block> for Proposer<B, Block, C, A, PR>
+where
+	A: TransactionPool<Block = Block> + 'static,
+	B: backend::Backend<Block> + Send + Sync + 'static,
+	Block: BlockT,
+	C: BlockBuilderProvider<B, Block, C>
+		+ HeaderBackend<Block>
+		+ ProvideRuntimeApi<Block>
+		+ Send
+		+ Sync
+		+ 'static,
+	C::Api:
+		ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>> + BlockBuilderApi<Block>,
+	PR: ProofRecording,
 {
 	type Transaction = backend::TransactionFor<B, Block>;
-	type Proposal = tokio_executor::blocking::Blocking<
-		Result<Proposal<Block, Self::Transaction>, Self::Error>
+	type Proposal = Pin<
+		Box<
+			dyn Future<Output = Result<Proposal<Block, Self::Transaction, PR::Proof>, Self::Error>>
+				+ Send,
+		>,
 	>;
 	type Error = sp_blockchain::Error;
+	type ProofRecording = PR;
+	type Proof = PR::Proof;
 
 	fn propose(
 		self,
 		inherent_data: InherentData,
-		inherent_digests: DigestFor<Block>,
+		inherent_digests: Digest,
 		max_duration: time::Duration,
-		record_proof: RecordProof,
+		block_size_limit: Option<usize>,
 	) -> Self::Proposal {
-		tokio_executor::blocking::run(move || {
-			// leave some time for evaluation and block finalization (33%)
-			let deadline = (self.now)() + max_duration - max_duration / 3;
-			self.propose_with(inherent_data, inherent_digests, deadline, record_proof)
-		})
+		let (tx, rx) = oneshot::channel();
+		let spawn_handle = self.spawn_handle.clone();
+
+		spawn_handle.spawn_blocking(
+			"basic-authorship-proposer",
+			None,
+			Box::pin(async move {
+				// leave some time for evaluation and block finalization (33%)
+				let deadline = (self.now)() + max_duration - max_duration / 3;
+				let res = self
+					.propose_with(inherent_data, inherent_digests, deadline, block_size_limit)
+					.await;
+				if tx.send(res).is_err() {
+					trace!("Could not send block production result to proposer!");
+				}
+			}),
+		);
+
+		async move { rx.await? }.boxed()
 	}
 }
 
-impl<A, B, Block, C> Proposer<B, Block, C, A>
-	where
-		A: TransactionPool<Block = Block> + 'static,
-		B: backend::Backend<Block> + Send + Sync + 'static,
-		Block: BlockT,
-		C: BlockBuilderProvider<B, Block, C> + HeaderBackend<Block> + ProvideRuntimeApi<Block>
-			+ Send + Sync + 'static,
-		C::Api: ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>>
-			+ BlockBuilderApi<Block, Error = sp_blockchain::Error>
-			+ ExtrinsicInfoRuntimeApi<Block>+ EncryptedTxApi<Block> ,
+/// If the block is full we will attempt to push at most
+/// this number of transactions before quitting for real.
+/// It allows us to increase block utilization.
+const MAX_SKIPPED_TRANSACTIONS: usize = 8;
+
+impl<A, B, Block, C, PR> Proposer<B, Block, C, A, PR>
+where
+	A: TransactionPool<Block = Block>,
+	B: backend::Backend<Block> + Send + Sync + 'static,
+	Block: BlockT,
+	C: BlockBuilderProvider<B, Block, C>
+		+ HeaderBackend<Block>
+		+ ProvideRuntimeApi<Block>
+		+ Send
+		+ Sync
+		+ 'static,
+	C::Api:
+		ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>> + BlockBuilderApi<Block>,
+	PR: ProofRecording,
 {
-    fn get_decryption_key(&self, account_id: &AccountId32) -> sp_blockchain::Result<[u8;32]>{
-
-		let keystore = self.keystore.clone();
-
-        let api = self.client.runtime_api();
-		let public_key = api.get_authority_public_key(&self.parent_id, account_id)?
-            .ok_or(sp_blockchain::Error::MissingPublicKey(account_id.clone()))?;
-
-		debug!(target:"basic_authorship","public_key id:  {:?}", public_key);
-
-		let key_pair = keystore.clone().read().key_pair_by_type::<sp_core::ecdsa::Pair>(&public_key, KeyTypeId(*b"xxtx"))
-            .map_err(|_| sp_blockchain::Error::CannotFindDecryptionKey(public_key))?;
-
-		let seed: [u8; 32] = key_pair.seed();
-		let priv_key: SecretKey = SecretKey::parse_slice(&seed).unwrap();
-
-		let dummy_secret_key: SecretKey = SecretKey::default();
-		let pub_key: PublicKey = PublicKey::from_secret_key(&dummy_secret_key);
-
-		decapsulate(&pub_key, &priv_key)
-            .map_err(|_| sp_blockchain::Error::Backend(String::from("cannot decapsulate aes key for decryption")))
-    }
-
-	fn propose_with(
+	async fn propose_with(
 		self,
 		inherent_data: InherentData,
-		inherent_digests: DigestFor<Block>,
+		inherent_digests: Digest,
 		deadline: time::Instant,
-		record_proof: RecordProof,
-	) -> Result<Proposal<Block, backend::TransactionFor<B, Block>>, sp_blockchain::Error> {
-		/// If the block is full we will attempt to push at most
-		/// this number of transactions before quitting for real.
-		/// It allows us to increase block utilization.
-		const MAX_SKIPPED_TRANSACTIONS: usize = 8;
+		block_size_limit: Option<usize>,
+	) -> Result<Proposal<Block, backend::TransactionFor<B, Block>, PR::Proof>, sp_blockchain::Error>
+	{
+		let propose_with_start = time::Instant::now();
+		let mut block_builder =
+			self.client.new_block_at(&self.parent_id, inherent_digests, PR::ENABLED)?;
 
-        let api = self.client.runtime_api();
+		let create_inherents_start = time::Instant::now();
+		let inherents = block_builder.create_inherents(inherent_data)?;
+		let create_inherents_end = time::Instant::now();
 
-		// TODO: solve problem of missing pre_digest in testing framework
-		// https://trello.com/c/YPt5RKOj/325-newsolve-problem-of-missing-blockbuilderid-information-in-substrate-tests
-		let block_builder_id = sc_consensus_babe::extract_pre_digest::<Block>(&inherent_digests)
-			.map(|pre_digest| pre_digest.authority_index())
-			.map_err(|_| sp_blockchain::Error::UnknownBlockBuilder)?;
+		self.metrics.report(|metrics| {
+			metrics.create_inherents_time.observe(
+				create_inherents_end
+					.saturating_duration_since(create_inherents_start)
+					.as_secs_f64(),
+			);
+		});
 
-		let account_id = api.get_account_id(&self.parent_id, block_builder_id)?
-            .ok_or(sp_blockchain::Error::UnknownCollatorId(block_builder_id))?;
-		debug!(target:"basic_authorship", "account id:  {:?}", account_id); 
-
-		let mut block_builder = self.client.new_block_at(
-			&self.parent_id,
-			inherent_digests,
-			record_proof,
-		)?;
-
-
-		let doubly_encrypted_txs = api.get_double_encrypted_transactions(&self.parent_id, &account_id).unwrap();
-		let singly_encrypted_txs = api.get_singly_encrypted_transactions(&self.parent_id, &account_id).unwrap();
-
-		debug!(target:"basic_authorship", "found {} double encrypted transactions", doubly_encrypted_txs.len()); 
-		debug!(target:"basic_authorship", "found {} singly encrypted transactions", singly_encrypted_txs.len()); 
-
-		let decrypted_inherents = if !singly_encrypted_txs.is_empty() || !doubly_encrypted_txs.is_empty() {
-			let aes_key = self.get_decryption_key(&account_id)?;
-			debug!(target:"basic_authorship", "aes_key {:?}", aes_key); 
-			let decrypted_inherents = singly_encrypted_txs.into_iter().map(|tx| {
-				log::trace!(target:"basic_authorship", "decrypting singly encrypted call INPUT : {:?}", tx.data);
-                println!("DECRYPTION KEY {:?}", aes_key);
-				let decrypted_msg = aes_decrypt(&aes_key, &tx.data).unwrap();
-				log::trace!(target:"basic_authorship", "decrypting singly encrypted call OUTPUT: {:?}", decrypted_msg);
-				api.create_submit_decrypted_transaction(&self.parent_id, tx.tx_id, decrypted_msg, 500000000).unwrap()
-			});
-
-			let singly_encrypted_inherents = doubly_encrypted_txs.into_iter().map(|tx| {
-				log::trace!(target:"basic_authorship", "decrypting doubly encrypted call INPUT : {:?}", tx.data);
-				let decrypted_msg = aes_decrypt(&aes_key, &tx.data).unwrap();
-				log::trace!(target:"basic_authorship", "decrypting doubly encrypted call OUTPUT: {:?}", decrypted_msg);
-				api.create_submit_singly_encrypted_transaction(&self.parent_id, tx.tx_id, decrypted_msg).unwrap()
-			});
-			decrypted_inherents.chain(singly_encrypted_inherents).collect()
-		}else{
-			vec![]
-		};
-
-
-		let (seed, inherents) = block_builder.create_inherents(inherent_data.clone())?;
-		for inherent in inherents.into_iter().chain(decrypted_inherents.into_iter()){
+		for inherent in inherents {
 			match block_builder.push(inherent) {
 				Err(ApplyExtrinsicFailed(Validity(e))) if e.exhausted_resources() => {
 					warn!("⚠️  Dropping non-mandatory inherent from overweight block.")
-				}
+				},
 				Err(ApplyExtrinsicFailed(Validity(e))) if e.was_mandatory() => {
-					error!("❌️ Mandatory inherent extrinsic returned error. Block cannot be produced.");
+					error!(
+						"❌️ Mandatory inherent extrinsic returned error. Block cannot be produced."
+					);
 					Err(ApplyExtrinsicFailed(Validity(e)))?
-				}
+				},
 				Err(e) => {
 					warn!("❗️ Inherent extrinsic returned unexpected error: {}. Dropping.", e);
-				}
-				Ok(_) => {}
+				},
+				Ok(_) => {},
 			}
 		}
 
 		// proceed with transactions
+		// We calculate soft deadline used only in case we start skipping transactions.
+		let now = (self.now)();
+		let left = deadline.saturating_duration_since(now);
+		let left_micros: u64 = left.as_micros().saturated_into();
+		let soft_deadline =
+			now + time::Duration::from_micros(self.soft_deadline_percent.mul_floor(left_micros));
 		let block_timer = time::Instant::now();
 		let mut skipped = 0;
-		let unqueue_invalid = Rc::new(RefCell::new(Vec::new()));
-		let invalid = unqueue_invalid.clone();
-		let parent_number = self.parent_number;
-		let transaction_pool = self.transaction_pool.clone();
-		let now = self.now;
+		let mut unqueue_invalid = Vec::new();
+
+		let mut t1 = self.transaction_pool.ready_at(self.parent_number).fuse();
+		let mut t2 =
+			futures_timer::Delay::new(deadline.saturating_duration_since((self.now)()) / 8).fuse();
+
+		let mut pending_iterator = select! {
+			res = t1 => res,
+			_ = t2 => {
+				log::warn!(
+					"Timeout fired waiting for transaction pool at block #{}. \
+					Proceeding with production.",
+					self.parent_number,
+				);
+				self.transaction_pool.ready()
+			},
+		};
+
+		let block_size_limit = block_size_limit.unwrap_or(self.default_block_size_limit);
+
 		debug!("Attempting to push transactions from the pool.");
 		debug!("Pool status: {:?}", self.transaction_pool.status());
-		block_builder.consume_valid_transactions(
-			Box::new(move |at, api| {
-				let pending_iterator = match executor::block_on(future::select(
-					transaction_pool.ready_at(parent_number),
-					futures_timer::Delay::new(deadline.saturating_duration_since((now)()) / 8),
-				)) {
-					Either::Left((iterator, _)) => iterator,
-					Either::Right(_) => {
-						log::warn!(
-							"Timeout fired waiting for transaction pool at block #{}. Proceeding with production.",
-							parent_number,
-						);
-						transaction_pool.ready()
-					}
-				};
+		let mut transaction_pushed = false;
+		let mut hit_block_size_limit = false;
 
-				let mut extrinsics: Vec<_> = Vec::new();
-				for p in pending_iterator {
-					let pending_tx_data = p.data().clone();
-					let pending_tx_hash = p.hash().clone();
-					let execution_status = api.execute_in_transaction(|_| {
-						match api.apply_extrinsic_with_context(
-							at,
-							ExecutionContext::BlockConstruction,
-							pending_tx_data.clone(),
-						) {
-							Ok(Ok(_)) => TransactionOutcome::Commit(Ok(())),
-							Ok(Err(tx_validity)) => TransactionOutcome::Rollback(Err(Validity(tx_validity).into())),
-							Err(e) => TransactionOutcome::Rollback(Err(e)),
-						}
-					});
-
-					match execution_status {
-						Ok(()) => {
-							extrinsics.push(pending_tx_data);
-							debug!("[{:?}] Pushed to the block.", pending_tx_hash);
-						}
-						Err(ApplyExtrinsicFailed(Validity(e))) if e.exhausted_resources() => {
-							if skipped < MAX_SKIPPED_TRANSACTIONS {
-								skipped += 1;
-								debug!(
-									"Block seems full, but will try {} more transactions before quitting.",
-									MAX_SKIPPED_TRANSACTIONS - skipped,
-								);
-							} else {
-								debug!("Block is full, proceed with proposing.");
-								break;
-							}
-						}
-						Err(e) if skipped > 0 => {
-							trace!(
-								"[{:?}] Ignoring invalid transaction when skipping: {}",
-								pending_tx_hash,
-								e
-							);
-						}
-						Err(e) => {
-							debug!("[{:?}] Invalid transaction: {}", pending_tx_hash, e);
-							invalid.borrow_mut().push(pending_tx_hash);
-						}
-					};
-				}
-				extrinsics
-			}),
-			inherent_data,
-		)?;
-
-		self.transaction_pool
-			.remove_invalid(unqueue_invalid.borrow().as_slice());
-
-		let (block, storage_changes, proof) = block_builder.build(seed)?.into_inner();
-
-		self.metrics.report(
-			|metrics| {
-				metrics.number_of_transactions.set(block.extrinsics().len() as u64);
-				metrics.block_constructed.observe(block_timer.elapsed().as_secs_f64());
+		while let Some(pending_tx) = pending_iterator.next() {
+			let now = (self.now)();
+			if now > deadline {
+				debug!(
+					"Consensus deadline reached when pushing block transactions, \
+					proceeding with proposing."
+				);
+				break
 			}
-		);
 
-		info!("🎁 Prepared block for proposing at {} [hash: {:?}; parent_hash: {}; extrinsics ({}): [{}]]",
+			let pending_tx_data = pending_tx.data().clone();
+			let pending_tx_hash = pending_tx.hash().clone();
+
+			let block_size =
+				block_builder.estimate_block_size(self.include_proof_in_block_size_estimation);
+			if block_size + pending_tx_data.encoded_size() > block_size_limit {
+				pending_iterator.report_invalid(&pending_tx);
+				if skipped < MAX_SKIPPED_TRANSACTIONS {
+					skipped += 1;
+					debug!(
+						"Transaction would overflow the block size limit, \
+						 but will try {} more transactions before quitting.",
+						MAX_SKIPPED_TRANSACTIONS - skipped,
+					);
+					continue
+				} else if now < soft_deadline {
+					debug!(
+						"Transaction would overflow the block size limit, \
+						 but we still have time before the soft deadline, so \
+						 we will try a bit more."
+					);
+					continue
+				} else {
+					debug!("Reached block size limit, proceeding with proposing.");
+					hit_block_size_limit = true;
+					break
+				}
+			}
+
+			trace!("[{:?}] Pushing to the block.", pending_tx_hash);
+			match sc_block_builder::BlockBuilder::push(&mut block_builder, pending_tx_data) {
+				Ok(()) => {
+					transaction_pushed = true;
+					debug!("[{:?}] Pushed to the block.", pending_tx_hash);
+				},
+				Err(ApplyExtrinsicFailed(Validity(e))) if e.exhausted_resources() => {
+					pending_iterator.report_invalid(&pending_tx);
+					if skipped < MAX_SKIPPED_TRANSACTIONS {
+						skipped += 1;
+						debug!(
+							"Block seems full, but will try {} more transactions before quitting.",
+							MAX_SKIPPED_TRANSACTIONS - skipped,
+						);
+					} else if (self.now)() < soft_deadline {
+						debug!(
+							"Block seems full, but we still have time before the soft deadline, \
+							 so we will try a bit more before quitting."
+						);
+					} else {
+						debug!("Block is full, proceed with proposing.");
+						break
+					}
+				},
+				Err(e) if skipped > 0 => {
+					pending_iterator.report_invalid(&pending_tx);
+					trace!(
+						"[{:?}] Ignoring invalid transaction when skipping: {}",
+						pending_tx_hash,
+						e
+					);
+				},
+				Err(e) => {
+					pending_iterator.report_invalid(&pending_tx);
+					debug!("[{:?}] Invalid transaction: {}", pending_tx_hash, e);
+					unqueue_invalid.push(pending_tx_hash);
+				},
+			}
+		}
+
+		if hit_block_size_limit && !transaction_pushed {
+			warn!(
+				"Hit block size limit of `{}` without including any transaction!",
+				block_size_limit,
+			);
+		}
+
+		self.transaction_pool.remove_invalid(&unqueue_invalid);
+
+		let (block, storage_changes, proof) = block_builder.build()?.into_inner();
+
+		self.metrics.report(|metrics| {
+			metrics.number_of_transactions.set(block.extrinsics().len() as u64);
+			metrics.block_constructed.observe(block_timer.elapsed().as_secs_f64());
+		});
+
+		info!(
+			"🎁 Prepared block for proposing at {} ({} ms) [hash: {:?}; parent_hash: {}; extrinsics ({}): [{}]]",
 			block.header().number(),
+			block_timer.elapsed().as_millis(),
 			<Block as BlockT>::Hash::from(block.header().hash()),
 			block.header().parent_hash(),
 			block.extrinsics().len(),
@@ -400,7 +522,10 @@ impl<A, B, Block, C> Proposer<B, Block, C, A>
 				.collect::<Vec<_>>()
 				.join(", ")
 		);
-		telemetry!(CONSENSUS_INFO; "prepared_block_for_proposing";
+		telemetry!(
+			self.telemetry;
+			CONSENSUS_INFO;
+			"prepared_block_for_proposing";
 			"number" => ?block.header().number(),
 			"hash" => ?<Block as BlockT>::Hash::from(block.header().hash()),
 		);
@@ -409,9 +534,21 @@ impl<A, B, Block, C> Proposer<B, Block, C, A>
 			error!("Failed to verify block encoding/decoding");
 		}
 
-		if let Err(err) = evaluation::evaluate_initial(&block, &self.parent_hash, self.parent_number) {
+		if let Err(err) =
+			evaluation::evaluate_initial(&block, &self.parent_hash, self.parent_number)
+		{
 			error!("Failed to evaluate authored block: {:?}", err);
 		}
+
+		let proof =
+			PR::into_proof(proof).map_err(|e| sp_blockchain::Error::Application(Box::new(e)))?;
+
+		let propose_with_end = time::Instant::now();
+		self.metrics.report(|metrics| {
+			metrics.create_block_proposal_time.observe(
+				propose_with_end.saturating_duration_since(propose_with_start).as_secs_f64(),
+			);
+		});
 
 		Ok(Proposal { block, proof, storage_changes })
 	}
@@ -421,85 +558,53 @@ impl<A, B, Block, C> Proposer<B, Block, C, A>
 mod tests {
 	use super::*;
 
-	use pallet_random_seed::RandomSeedInherentDataProvider;
+	use futures::executor::block_on;
 	use parking_lot::Mutex;
 	use sc_client_api::Backend;
 	use sc_transaction_pool::BasicPool;
+	use sc_transaction_pool_api::{ChainEvent, MaintainedTransactionPool, TransactionSource};
 	use sp_api::Core;
 	use sp_blockchain::HeaderBackend;
-	use sp_consensus::{BlockOrigin, Proposer};
-	use sp_inherents::{InherentData, ProvideInherentData};
-	use sp_runtime::{DigestItem, traits::NumberFor};
-	use sp_transaction_pool::{ChainEvent, MaintainedTransactionPool, TransactionSource};
-    use sc_transaction_pool::FullChainApi;
-    use ecies::utils::{aes_encrypt, encapsulate};
-    use sp_encrypted_tx::ExtrinsicType;
-    use std::collections::HashSet;
-    use sc_consensus_babe::{PreDigest, CompatibleDigestItem, SecondaryPlainPreDigest};
-	use sc_keystore::Store;
-
+	use sp_consensus::{BlockOrigin, Environment, Proposer};
+	use sp_core::Pair;
+	use sp_runtime::traits::NumberFor;
 	use substrate_test_runtime_client::{
 		prelude::*,
-		runtime::{Extrinsic, Transfer, Block},
+		runtime::{Extrinsic, Transfer},
 		TestClientBuilder, TestClientBuilderExt,
 	};
-	use sp_runtime::traits::Block as BlockT;
 
 	const SOURCE: TransactionSource = TransactionSource::External;
-
-	/// inject shuffling seed that is mandatory in mangata
-	fn create_inherents() -> InherentData {
-		let mut data: InherentData = Default::default();
-		RandomSeedInherentDataProvider(Default::default())
-			.provide_inherent_data(&mut data)
-			.unwrap();
-
-		sp_ignore_tx::IgnoreTXInherentDataProvider(false)
-			.provide_inherent_data(&mut data)
-			.unwrap();
-		data
-	}
-
-    fn create_digest() -> DigestFor<Block>{
-        let mut digests : DigestFor<Block> = Default::default();
-        let babe_pre = sc_consensus_babe::PreDigest::SecondaryPlain(sc_consensus_babe::SecondaryPlainPreDigest{
-            authority_index: substrate_test_runtime::ALICE_COLLATOR_ID,
-            slot_number: Default::default(),
-        });
-        digests.push(DigestItem::babe_pre_digest(babe_pre));
-        digests
-    }
 
 	fn extrinsic(nonce: u64) -> Extrinsic {
 		Transfer {
 			amount: Default::default(),
 			nonce,
 			from: AccountKeyring::Alice.into(),
-			to: Default::default(),
-		}.into_signed_tx()
+			to: AccountKeyring::Bob.into(),
+		}
+		.into_signed_tx()
+	}
+
+	fn exhausts_resources_extrinsic_from(who: usize) -> Extrinsic {
+		let pair = AccountKeyring::numeric(who);
+		let transfer = Transfer {
+			// increase the amount to bump priority
+			amount: 1,
+			nonce: 0,
+			from: pair.public(),
+			to: AccountKeyring::Bob.into(),
+		};
+		let signature = pair.sign(&transfer.encode()).into();
+		Extrinsic::Transfer { transfer, signature, exhaust_resources_when_not_first: true }
 	}
 
 	fn chain_event<B: BlockT>(header: B::Header) -> ChainEvent<B>
-		where NumberFor<B>: From<u64>
+	where
+		NumberFor<B>: From<u64>,
 	{
-		ChainEvent::NewBestBlock {
-			hash: header.hash(),
-			tree_route: None,
-		}
+		ChainEvent::NewBestBlock { hash: header.hash(), tree_route: None }
 	}
-
-	fn create_key_store() -> KeyStorePtr{
-		let store = Store::new_in_memory();
-
-		let secret_uri = "//Alice";
-		store.write().insert_ephemeral_from_seed_by_type::<sp_core::ecdsa::Pair>(
-			secret_uri,
-			KeyTypeId(*b"xxtx"),
-		).expect("Inserts unknown key");
-        store
-	}
-
-
 
 	#[test]
 	fn should_cease_building_block_when_deadline_is_reached() {
@@ -508,109 +613,16 @@ mod tests {
 		let spawner = sp_core::testing::TaskExecutor::new();
 		let txpool = BasicPool::new_full(
 			Default::default(),
+			true.into(),
 			None,
-			spawner,
+			spawner.clone(),
 			client.clone(),
 		);
 
-		futures::executor::block_on(
-			txpool.submit_at(&BlockId::number(0), SOURCE, vec![extrinsic(0), extrinsic(1)])
-		).unwrap();
+		block_on(txpool.submit_at(&BlockId::number(0), SOURCE, vec![extrinsic(0), extrinsic(1)]))
+			.unwrap();
 
-		futures::executor::block_on(
-			txpool.maintain(chain_event(
-				client.header(&BlockId::Number(0u64))
-					.expect("header get error")
-					.expect("there should be header")
-			))
-		);
-
-		let mut proposer_factory = ProposerFactory::new(client.clone(), txpool.clone(), None, create_key_store());
-
-		let cell = Mutex::new((false, time::Instant::now()));
-		let proposer = proposer_factory.init_with_now(
-			&client.header(&BlockId::number(0)).unwrap().unwrap(),
-			Box::new(move || {
-				let mut value = cell.lock();
-				if !value.0 {
-					value.0 = true;
-					return value.1;
-				}
-				let old = value.1;
-				let new = old + time::Duration::from_secs(2);
-				*value = (true, new);
-				old
-			}),
-		);
-
-		// when
-		let deadline = time::Duration::from_secs(3);
-		let block = futures::executor::block_on(proposer.propose(
-			create_inherents(),
-			create_digest(),
-			deadline,
-			RecordProof::No,
-		))
-		.map(|r| r.block)
-		.unwrap();
-
-		// then
-		// block should have some extrinsics although we have some more in the pool.
-		assert_eq!(block.extrinsics().len(), 2); // inherents only [set_timestamp, shuffling_seed]
-		assert_eq!(txpool.ready().count(), 2);
-	}
-
-	#[test]
-	fn should_not_panic_when_deadline_is_reached() {
-		let client = Arc::new(substrate_test_runtime_client::new());
-		let spawner = sp_core::testing::TaskExecutor::new();
-		let txpool = BasicPool::new_full(Default::default(), None, spawner, client.clone());
-
-		let mut proposer_factory = ProposerFactory::new(client.clone(), txpool.clone(), None, create_key_store());
-
-		let cell = Mutex::new((false, time::Instant::now()));
-		let proposer = proposer_factory.init_with_now(
-			&client.header(&BlockId::number(0)).unwrap().unwrap(),
-			Box::new(move || {
-				let mut value = cell.lock();
-				if !value.0 {
-					value.0 = true;
-					return value.1;
-				}
-				let new = value.1 + time::Duration::from_secs(160);
-				*value = (true, new);
-				new
-			}),
-		);
-
-		let deadline = time::Duration::from_secs(1);
-		futures::executor::block_on(proposer.propose(
-			create_inherents(),
-			create_digest(),
-			deadline,
-			RecordProof::No,
-		))
-		.map(|r| r.block)
-		.unwrap();
-	}
-
-	#[test]
-	// that test should be enabled when extended header will be implemented
-	// the main problem is when block is executed to verify storage changes
-	// it actully tries to execute extrinsics stored 
-	fn proposed_storage_changes_should_match_execute_block_storage_changes() {
-		let (client, backend) = TestClientBuilder::new().build_with_backend();
-		let _ = backend.blockchain();
-		let client = Arc::new(client);
-		let spawner = sp_core::testing::TaskExecutor::new();
-		let txpool = BasicPool::new_full(Default::default(), None, spawner, client.clone());
-
-		let genesis_hash = client.info().best_hash;
-		let block_id = BlockId::Hash(genesis_hash);
-
-		futures::executor::block_on(txpool.submit_at(&BlockId::number(0), SOURCE, vec![extrinsic(0)])).unwrap();
-
-		futures::executor::block_on(
+		block_on(
 			txpool.maintain(chain_event(
 				client
 					.header(&BlockId::Number(0u64))
@@ -619,7 +631,103 @@ mod tests {
 			)),
 		);
 
-		let mut proposer_factory = ProposerFactory::new(client.clone(), txpool.clone(), None, create_key_store());
+		let mut proposer_factory =
+			ProposerFactory::new(spawner.clone(), client.clone(), txpool.clone(), None, None);
+
+		let cell = Mutex::new((false, time::Instant::now()));
+		let proposer = proposer_factory.init_with_now(
+			&client.header(&BlockId::number(0)).unwrap().unwrap(),
+			Box::new(move || {
+				let mut value = cell.lock();
+				if !value.0 {
+					value.0 = true;
+					return value.1
+				}
+				let old = value.1;
+				let new = old + time::Duration::from_secs(1);
+				*value = (true, new);
+				old
+			}),
+		);
+
+		// when
+		let deadline = time::Duration::from_secs(3);
+		let block =
+			block_on(proposer.propose(Default::default(), Default::default(), deadline, None))
+				.map(|r| r.block)
+				.unwrap();
+
+		// then
+		// block should have some extrinsics although we have some more in the pool.
+		assert_eq!(block.extrinsics().len(), 1);
+		assert_eq!(txpool.ready().count(), 2);
+	}
+
+	#[test]
+	fn should_not_panic_when_deadline_is_reached() {
+		let client = Arc::new(substrate_test_runtime_client::new());
+		let spawner = sp_core::testing::TaskExecutor::new();
+		let txpool = BasicPool::new_full(
+			Default::default(),
+			true.into(),
+			None,
+			spawner.clone(),
+			client.clone(),
+		);
+
+		let mut proposer_factory =
+			ProposerFactory::new(spawner.clone(), client.clone(), txpool.clone(), None, None);
+
+		let cell = Mutex::new((false, time::Instant::now()));
+		let proposer = proposer_factory.init_with_now(
+			&client.header(&BlockId::number(0)).unwrap().unwrap(),
+			Box::new(move || {
+				let mut value = cell.lock();
+				if !value.0 {
+					value.0 = true;
+					return value.1
+				}
+				let new = value.1 + time::Duration::from_secs(160);
+				*value = (true, new);
+				new
+			}),
+		);
+
+		let deadline = time::Duration::from_secs(1);
+		block_on(proposer.propose(Default::default(), Default::default(), deadline, None))
+			.map(|r| r.block)
+			.unwrap();
+	}
+
+	#[test]
+	fn proposed_storage_changes_should_match_execute_block_storage_changes() {
+		let (client, backend) = TestClientBuilder::new().build_with_backend();
+		let client = Arc::new(client);
+		let spawner = sp_core::testing::TaskExecutor::new();
+		let txpool = BasicPool::new_full(
+			Default::default(),
+			true.into(),
+			None,
+			spawner.clone(),
+			client.clone(),
+		);
+
+		let genesis_hash = client.info().best_hash;
+		let block_id = BlockId::Hash(genesis_hash);
+
+		block_on(txpool.submit_at(&BlockId::number(0), SOURCE, vec![extrinsic(0)])).unwrap();
+
+		block_on(
+			txpool.maintain(chain_event(
+				client
+					.header(&BlockId::Number(0u64))
+					.expect("header get error")
+					.expect("there should be header"),
+			)),
+		);
+
+		let mut proposer_factory =
+			ProposerFactory::new(spawner.clone(), client.clone(), txpool.clone(), None, None);
 
 		let proposer = proposer_factory.init_with_now(
 			&client.header(&block_id).unwrap().unwrap(),
@@ -627,31 +735,18 @@ mod tests {
 		);
 
 		let deadline = time::Duration::from_secs(9);
-		let proposal = futures::executor::block_on(proposer.propose(
-			create_inherents(),
-			create_digest(),
-			deadline,
-			RecordProof::No,
-		))
-		.unwrap();
+		let proposal =
+			block_on(proposer.propose(Default::default(), Default::default(), deadline, None))
+				.unwrap();
 
 		assert_eq!(proposal.block.extrinsics().len(), 1);
 
-		// TODO perform full validation when all required information will be stored inside
-		// header
 		let api = client.runtime_api();
-		let mut header = proposal.block.header.clone();
-		let prev_header = backend.blockchain().header(BlockId::Hash(genesis_hash)).unwrap().unwrap();
-		header.set_extrinsics_root(*prev_header.extrinsics_root());
-		api.execute_block(&block_id, <Block as BlockT>::new(header, vec![])).unwrap();
+		api.execute_block(&block_id, proposal.block).unwrap();
 
 		let state = backend.state_at(block_id).unwrap();
-		let changes_trie_state =
-			backend::changes_tries_state_at_block(&block_id, backend.changes_trie_storage()).unwrap();
 
-		let storage_changes = api
-			.into_storage_changes(&state, changes_trie_state.as_ref(), genesis_hash)
-			.unwrap();
+		let storage_changes = api.into_storage_changes(&state, genesis_hash).unwrap();
 
 		assert_eq!(
 			proposal.storage_changes.transaction_storage_root,
@@ -661,565 +756,319 @@ mod tests {
 
 	#[test]
 	fn should_not_remove_invalid_transactions_when_skipping() {
-        let _ = env_logger::try_init();
+		// given
 		let mut client = Arc::new(substrate_test_runtime_client::new());
 		let spawner = sp_core::testing::TaskExecutor::new();
 		let txpool = BasicPool::new_full(
 			Default::default(),
+			true.into(),
 			None,
-			spawner,
+			spawner.clone(),
 			client.clone(),
 		);
 
-		futures::executor::block_on(
-			txpool.submit_at(&BlockId::number(0), SOURCE, vec![
+		block_on(txpool.submit_at(
+			&BlockId::number(0),
+			SOURCE,
+			vec![
 				extrinsic(0),
 				extrinsic(1),
 				Transfer {
 					amount: Default::default(),
 					nonce: 2,
 					from: AccountKeyring::Alice.into(),
-					to: Default::default(),
+					to: AccountKeyring::Bob.into(),
 				}.into_resources_exhausting_tx(),
 				extrinsic(3),
 				Transfer {
 					amount: Default::default(),
 					nonce: 4,
 					from: AccountKeyring::Alice.into(),
-					to: Default::default(),
+					to: AccountKeyring::Bob.into(),
 				}.into_resources_exhausting_tx(),
 				extrinsic(5),
 				extrinsic(6),
-			])
-		).unwrap();
+			],
+		))
+		.unwrap();
 
-		let mut proposer_factory = ProposerFactory::new(client.clone(), txpool.clone(), None, create_key_store());
-		let mut propose_block = |
-			client: &TestClient,
-			number,
-			expected_block_extrinsics,
-			expected_pool_transactions,
-		| {
+		let mut proposer_factory =
+			ProposerFactory::new(spawner.clone(), client.clone(), txpool.clone(), None, None);
+		let mut propose_block = |client: &TestClient,
+		                         number,
+		                         expected_block_extrinsics,
+		                         expected_pool_transactions| {
 			let proposer = proposer_factory.init_with_now(
 				&client.header(&BlockId::number(number)).unwrap().unwrap(),
 				Box::new(move || time::Instant::now()),
 			);
 
 			// when
-			let deadline = time::Duration::from_secs(9);
-			let block = futures::executor::block_on(
-				proposer.propose(create_inherents(), create_digest(), deadline, RecordProof::No)
-			).map(|r| r.block).unwrap();
+			let deadline = time::Duration::from_secs(900);
+			let block =
+				block_on(proposer.propose(Default::default(), Default::default(), deadline, None))
+					.map(|r| r.block)
+					.unwrap();
 
 			// then
 			// block should have some extrinsics although we have some more in the pool.
-			assert_eq!(block.extrinsics().len(), expected_block_extrinsics);
 			assert_eq!(txpool.ready().count(), expected_pool_transactions);
+			assert_eq!(block.extrinsics().len(), expected_block_extrinsics);
 
-				block
-			};
+			block
+		};
 
-		futures::executor::block_on(
+		block_on(
 			txpool.maintain(chain_event(
-				client.header(&BlockId::Number(0u64))
+				client
+					.header(&BlockId::Number(0u64))
 					.expect("header get error")
-					.expect("there should be header")
-			))
+					.expect("there should be header"),
+			)),
 		);
+		assert_eq!(txpool.ready().count(), 7);
 
 		// let's create one block and import it
 		let block = propose_block(&client, 0, 2, 7);
-        println!("{:?}", block.extrinsics());
-		let block_hash = block.header().hash();
-		client.import(BlockOrigin::Own, block).unwrap();
+		block_on(client.import(BlockOrigin::Own, block)).unwrap();
 
-		// push one extra block - extrinsics in the pool makred as 'exhausted_resources'
-		// to succeed needs to be executed as first in the processed block. Due to
-		// modifications in block_builder all extrinsics from previous block are applied
-		// beofre trying to validate extrinsics from the tx pool. Once we include empty
-		// block in between 'exhausted_resources' extrinsic from the pool is exeucted as
-		// the first one and the origin test logic is maintained
-		let block = client.new_block_at(&BlockId::Hash(block_hash), create_digest(), false)
-			.unwrap()
-			.build(Default::default())
-			.unwrap();
-		client.import(BlockOrigin::Own, block.block).unwrap();
-
-		futures::executor::block_on(
+		block_on(
 			txpool.maintain(chain_event(
-				client.header(&BlockId::Number(1))
+				client
+					.header(&BlockId::Number(1))
 					.expect("header get error")
-					.expect("there should be header")
-			))
+					.expect("there should be header"),
+			)),
 		);
+		assert_eq!(txpool.ready().count(), 5);
+
 		// now let's make sure that we can still make some progress
-		let block = propose_block(&client, 2, 2, 5);
-        println!("{:?}", block.extrinsics());
-		client.import(BlockOrigin::Own, block).unwrap();
-	}
-
-
-	use substrate_test_runtime_client::Client;
-	use substrate_test_runtime_client::sc_client_db;
-	type TxPoolImpl = BasicPool< FullChainApi<Client<sc_client_db::Backend<Block>>, Block> , Block>;
-	type ClientImpl = Client<sc_client_db::Backend<Block>>;
-
-	struct BlockBuilderHelper{
-		pool: Arc<TxPoolImpl>,
-		client: Arc<ClientImpl>,
-		keystore: KeyStorePtr,
-		block_number: u64,
-	}
-
-
-	impl BlockBuilderHelper{
-
-		fn new(pool: Arc<TxPoolImpl>,
-			client: Arc<ClientImpl>,
-			keystore: KeyStorePtr,
-		) -> Self{
-			BlockBuilderHelper{
-				pool,
-				client,
-				keystore,
-				block_number: 0,
-			}
-		}
-
-		fn produce_block(&self, inherent_data: InherentData, digests: DigestFor<Block>) -> sp_blockchain::Result<Block>{
-			let client = self.client.clone();
-			let mut proposer_factory = ProposerFactory::new(client.clone(), self.pool.clone(), None, self.keystore.clone());
-			let proposer = proposer_factory.init_with_now(
-				&self.client.header(&BlockId::number(self.block_number)).unwrap().unwrap(),
-				Box::new(move || time::Instant::now()),
-			);
-
-			futures::executor::block_on(
-				self.pool.maintain(chain_event(
-						client.header(&BlockId::Number(self.block_number))
-						.expect("header get error")
-						.expect("there should be header")
-				))
-			);
-
-			let deadline = time::Duration::from_secs(9);
-			futures::executor::block_on(
-				proposer.propose(inherent_data, digests, deadline, RecordProof::No)
-			).map(|r| r.block)
-		}
-
-		fn import_block(& mut self, block: Block){
-			let mut client = self.client.clone();
-			client.import(BlockOrigin::Own, block.clone()).unwrap();
-			self.block_number += 1;
-		}
-
-		fn produce_and_import_block(& mut self) -> Block {
-			let block = self.produce_block(create_inherents(), create_digest()).unwrap();
-			let mut client = self.client.clone();
-			client.import(BlockOrigin::Own, block.clone()).unwrap();
-			self.block_number += 1;
-			block
-		}
-
-		fn encrypt_payload_using_pub_key(&self, pub_key: &sp_core::ecdsa::Public, payload: &[u8]) -> Vec<u8>{
-			let dummy_secret_key: SecretKey = SecretKey::default();
-			let pub_key = PublicKey::parse_slice(pub_key.as_ref(), None).unwrap();
-			let encryption_key = encapsulate(&dummy_secret_key, &pub_key).unwrap();
-			aes_encrypt(&encryption_key, &payload).unwrap()
-		}
-
+		let block = propose_block(&client, 1, 2, 5);
+		block_on(client.import(BlockOrigin::Own, block)).unwrap();
 	}
 
 	#[test]
-	fn inject_doubly_encrypted_tx_and_expect_singly_ecrypted_extrinsic() {
-		let _ = env_logger::try_init();
+	fn should_cease_building_block_when_block_limit_is_reached() {
 		let client = Arc::new(substrate_test_runtime_client::new());
 		let spawner = sp_core::testing::TaskExecutor::new();
-		let txpool = BasicPool::new_full( Default::default(), None, spawner, client.clone());
+		let txpool = BasicPool::new_full(
+			Default::default(),
+			true.into(),
+			None,
+			spawner.clone(),
+			client.clone(),
+		);
+		let genesis_header = client
+			.header(&BlockId::Number(0u64))
+			.expect("header get error")
+			.expect("there should be header");
 
-		let mut bb = BlockBuilderHelper::new(txpool.clone(), client.clone(), create_key_store());
-		let payload = b"hello world".iter().cloned().collect::<Vec<_>>();
-		let collator_public_key = client.runtime_api().get_authority_public_key(&BlockId::Number(0), &substrate_test_runtime::ALICE_ACCOUNT_ID.into()).unwrap().unwrap();
+		let extrinsics_num = 4;
+		let extrinsics = (0..extrinsics_num)
+			.map(|v| Extrinsic::IncludeData(vec![v as u8; 10]))
+			.collect::<Vec<_>>();
 
-		let encrypted_message = bb.encrypt_payload_using_pub_key(&collator_public_key, &payload);
+		let block_limit = genesis_header.encoded_size() +
+			extrinsics
+				.iter()
+				.take(extrinsics_num - 1)
+				.map(Encode::encoded_size)
+				.sum::<usize>() +
+			Vec::<Extrinsic>::new().encoded_size();
 
-		futures::executor::block_on(
-			txpool.submit_at(&BlockId::number(0), SOURCE, vec![
-				Extrinsic::SubmitEncryptedTransaction{
-					singly_encrypted: false,
-					data:encrypted_message
-				}
-			])
-		).unwrap();
+		block_on(txpool.submit_at(&BlockId::number(0), SOURCE, extrinsics)).unwrap();
 
-		let block = bb.produce_and_import_block();
-		assert_eq!(block.extrinsics().len(), 1);
+		block_on(txpool.maintain(chain_event(genesis_header.clone())));
 
-		let block = bb.produce_and_import_block();
-		assert_eq!(block.extrinsics().len(), 0);
+		let mut proposer_factory =
+			ProposerFactory::new(spawner.clone(), client.clone(), txpool.clone(), None, None);
 
-		let block = bb.produce_and_import_block();
-		assert_eq!(block.extrinsics().len(), 1);
-		let extrinsic = &block.extrinsics()[0];
-		assert!(
-			matches!(extrinsic,
-				Extrinsic::EncryptedTX(
-					ExtrinsicType::<<Block as BlockT>::Hash>::SinglyEncryptedTx{
-						singly_encrypted_call, ..
-					}
-				) if singly_encrypted_call == &payload
-			)
+		let proposer = block_on(proposer_factory.init(&genesis_header)).unwrap();
+
+		// Give it enough time
+		let deadline = time::Duration::from_secs(300);
+		let block = block_on(proposer.propose(
+			Default::default(),
+			Default::default(),
+			deadline,
+			Some(block_limit),
+		))
+		.map(|r| r.block)
+		.unwrap();
+
+		// Based on the block limit, one transaction shouldn't be included.
+		assert_eq!(block.extrinsics().len(), extrinsics_num - 1);
+
+		let proposer = block_on(proposer_factory.init(&genesis_header)).unwrap();
+
+		let block =
+			block_on(proposer.propose(Default::default(), Default::default(), deadline, None))
+				.map(|r| r.block)
+				.unwrap();
+
+		// Without a block limit we should include all of them
+		assert_eq!(block.extrinsics().len(), extrinsics_num);
+
+		let mut proposer_factory = ProposerFactory::with_proof_recording(
+			spawner.clone(),
+			client.clone(),
+			txpool.clone(),
+			None,
+			None,
 		);
 
+		let proposer = block_on(proposer_factory.init(&genesis_header)).unwrap();
+
+		// Give it enough time
+		let block = block_on(proposer.propose(
+			Default::default(),
+			Default::default(),
+			deadline,
+			Some(block_limit),
+		))
+		.map(|r| r.block)
+		.unwrap();
+
+		// The block limit didn't changed, but we now include the proof in the estimation of the
+		// block size and thus, one less transaction should fit into the limit.
+		assert_eq!(block.extrinsics().len(), extrinsics_num - 2);
 	}
 
 	#[test]
-	fn inject_multiple_doubly_encrypted_txs_and_expect_singly_ecrypted_extrinsic() {
-		// env_logger::init();
-		let client = Arc::new(substrate_test_runtime_client::new());
-		let spawner = sp_core::testing::TaskExecutor::new();
-		let txpool = BasicPool::new_full( Default::default(), None, spawner, client.clone());
-		let collator_public_key = client.runtime_api().get_authority_public_key(&BlockId::Number(0), &substrate_test_runtime::ALICE_ACCOUNT_ID.into()).unwrap().unwrap();
-		let payload1 = b"hello world1".iter().cloned().collect::<Vec<_>>();
-		let payload2 = b"hello world2".iter().cloned().collect::<Vec<_>>();
-
-		let mut bb = BlockBuilderHelper::new(txpool.clone(), client.clone(), create_key_store());
-
-		futures::executor::block_on(
-			txpool.submit_at(&BlockId::number(0), SOURCE, vec![
-				Extrinsic::SubmitEncryptedTransaction{
-					singly_encrypted: false,
-					data: bb.encrypt_payload_using_pub_key(&collator_public_key, &payload1)
-				},
-				Extrinsic::SubmitEncryptedTransaction{
-					singly_encrypted: false,
-					data: bb.encrypt_payload_using_pub_key(&collator_public_key, &payload2)
-				},
-			])
-		).unwrap();
-
-		let block = bb.produce_and_import_block();
-		assert_eq!(block.extrinsics().len(), 2);
-
-		let block = bb.produce_and_import_block();
-		assert_eq!(block.extrinsics().len(), 0);
-
-		let block = bb.produce_block(create_inherents(), create_digest()).unwrap();
-		assert_eq!(block.extrinsics().len(), 2);
-
-		let decrypted_payloads : HashSet<_> = block.extrinsics().iter()
-			.map(|xt| match xt {
-				Extrinsic::EncryptedTX(
-					ExtrinsicType::<<Block as BlockT>::Hash>::SinglyEncryptedTx{
-						singly_encrypted_call, ..
-					}
-				) => { singly_encrypted_call },
-				_ => { panic!("wrong extrinsic type") }
-			}).collect();
-
-		assert_eq!([payload1, payload2].iter().collect::<HashSet<_>>(), decrypted_payloads);
-	}
-
-	#[test]
-	fn inject_singly_encrypted_tx_and_expect_decrytped_transaction() {
-		let _ = env_logger::try_init();
+	fn should_keep_adding_transactions_after_exhausts_resources_before_soft_deadline() {
 		// given
 		let client = Arc::new(substrate_test_runtime_client::new());
 		let spawner = sp_core::testing::TaskExecutor::new();
-		let txpool = BasicPool::new_full( Default::default(), None, spawner, client.clone());
-
-		let mut bb = BlockBuilderHelper::new(txpool.clone(), client.clone(), create_key_store());
-		let payload = b"hello world".iter().cloned().collect::<Vec<_>>();
-		let collator_public_key = client.runtime_api().get_authority_public_key(&BlockId::Number(0), &substrate_test_runtime::ALICE_ACCOUNT_ID.into()).unwrap().unwrap();
-
-		futures::executor::block_on(
-			txpool.submit_at(&BlockId::number(0), SOURCE, vec![
-				Extrinsic::SubmitEncryptedTransaction{
-					singly_encrypted: true,
-					data: bb.encrypt_payload_using_pub_key(&collator_public_key, &payload),
-				}
-			])
-		).unwrap();
-
-		let block = bb.produce_and_import_block();
-		assert_eq!(block.extrinsics().len(), 1);
-
-		let block = bb.produce_and_import_block();
-		assert_eq!(block.extrinsics().len(), 0);
-
-		let block = bb.produce_and_import_block();
-		assert_eq!(block.extrinsics().len(), 1);
-		let extrinsic = &block.extrinsics()[0];
-		assert!(
-			matches!(extrinsic,
-				Extrinsic::EncryptedTX(
-					ExtrinsicType::<<Block as BlockT>::Hash>::DecryptedTx{
-						decrypted_call, ..
-					}
-				) if decrypted_call == &payload
-			)
+		let txpool = BasicPool::new_full(
+			Default::default(),
+			true.into(),
+			None,
+			spawner.clone(),
+			client.clone(),
 		);
 
-	}
+		block_on(
+			txpool.submit_at(
+				&BlockId::number(0),
+				SOURCE,
+				// add 2 * MAX_SKIPPED_TRANSACTIONS that exhaust resources
+				(0..MAX_SKIPPED_TRANSACTIONS * 2)
+					.into_iter()
+					.map(|i| exhausts_resources_extrinsic_from(i))
+					// and some transactions that are okay.
+					.chain((0..MAX_SKIPPED_TRANSACTIONS).into_iter().map(|i| extrinsic(i as _)))
+					.collect(),
+			),
+		)
+		.unwrap();
 
-	#[test]
-	fn dont_panic_on_wrongly_encrypted_doubly_encrypted_tx(){
-		let _ = env_logger::try_init();
-		// given
-		let client = Arc::new(substrate_test_runtime_client::new());
-		let spawner = sp_core::testing::TaskExecutor::new();
-		let txpool = BasicPool::new_full( Default::default(), None, spawner, client.clone());
+		block_on(
+			txpool.maintain(chain_event(
+				client
+					.header(&BlockId::Number(0u64))
+					.expect("header get error")
+					.expect("there should be header"),
+			)),
+		);
+		assert_eq!(txpool.ready().count(), MAX_SKIPPED_TRANSACTIONS * 3);
 
-		let mut bb = BlockBuilderHelper::new(txpool.clone(), client.clone(), create_key_store());
+		let mut proposer_factory =
+			ProposerFactory::new(spawner.clone(), client.clone(), txpool.clone(), None, None);
 
-		futures::executor::block_on(
-			txpool.submit_at(&BlockId::number(0), SOURCE, vec![
-				Extrinsic::SubmitEncryptedTransaction{
-					singly_encrypted: false,
-					data: vec![1,2,3,4,5,6,7,8,9],
-				}
-			])
-		).unwrap();
-
-		let block = bb.produce_and_import_block();
-		assert_eq!(block.extrinsics().len(), 1);
-	}
-
-	#[test]
-	fn dont_panic_on_wrongly_encrypted_singly_encrypted_tx(){
-		let _ = env_logger::try_init();
-		// given
-		let client = Arc::new(substrate_test_runtime_client::new());
-		let spawner = sp_core::testing::TaskExecutor::new();
-		let txpool = BasicPool::new_full( Default::default(), None, spawner, client.clone());
-
-		let mut bb = BlockBuilderHelper::new(txpool.clone(), client.clone(), create_key_store());
-
-		futures::executor::block_on(
-			txpool.submit_at(&BlockId::number(0), SOURCE, vec![
-				Extrinsic::SubmitEncryptedTransaction{
-					singly_encrypted: true,
-					data: vec![1,2,3,4,5,6,7,8,9],
-				}
-			])
-		).unwrap();
-
-		let block = bb.produce_and_import_block();
-		assert_eq!(block.extrinsics().len(), 1);
-	}
-
-	#[test]
-	fn dont_panic_on_empty_payload_in_doubly_encrypted_tx(){
-		let _ = env_logger::try_init();
-		// given
-		let client = Arc::new(substrate_test_runtime_client::new());
-		let spawner = sp_core::testing::TaskExecutor::new();
-		let txpool = BasicPool::new_full( Default::default(), None, spawner, client.clone());
-
-		let mut bb = BlockBuilderHelper::new(txpool.clone(), client.clone(), create_key_store());
-
-		futures::executor::block_on(
-			txpool.submit_at(&BlockId::number(0), SOURCE, vec![
-				Extrinsic::SubmitEncryptedTransaction{
-					singly_encrypted: false,
-					data: vec![],
-				}
-			])
-		).unwrap();
-		let block = bb.produce_and_import_block();
-		assert_eq!(block.extrinsics().len(), 1);
-	}
-
-	#[test]
-	fn dont_panic_when_public_key_was_not_found(){
-		let _ = env_logger::try_init();
-		// given
-		let client = Arc::new(substrate_test_runtime_client::new());
-		let spawner = sp_core::testing::TaskExecutor::new();
-		let txpool = BasicPool::new_full( Default::default(), None, spawner, client.clone());
-
-		let mut bb = BlockBuilderHelper::new(txpool.clone(), client.clone(), create_key_store());
-
-		futures::executor::block_on(
-			txpool.submit_at(&BlockId::number(0), SOURCE, vec![
-				Extrinsic::SubmitEncryptedTransaction{
-					singly_encrypted: true,
-					data: vec![],
-				}
-			])
-		).unwrap();
-		let block = bb.produce_and_import_block();
-		assert_eq!(block.extrinsics().len(), 1);
-	}
-
-	#[test]
-	fn fail_to_create_block_on_missing_pre_digest(){
-		let _ = env_logger::try_init();
-		// given
-		let client = Arc::new(substrate_test_runtime_client::new());
-		let spawner = sp_core::testing::TaskExecutor::new();
-		let txpool = BasicPool::new_full( Default::default(), None, spawner, client.clone());
-
-		let mut proposer_factory = ProposerFactory::new(client.clone(), txpool.clone(), None, create_key_store());
+		let cell = Mutex::new(time::Instant::now());
 		let proposer = proposer_factory.init_with_now(
 			&client.header(&BlockId::number(0)).unwrap().unwrap(),
-			Box::new(move || time::Instant::now()),
+			Box::new(move || {
+				let mut value = cell.lock();
+				let old = *value;
+				*value = old + time::Duration::from_secs(1);
+				old
+			}),
 		);
 
-		futures::executor::block_on(
-			txpool.submit_at(&BlockId::number(0), SOURCE, vec![
-				Extrinsic::SubmitEncryptedTransaction{
-					singly_encrypted: true,
-					data: vec![],
-				}
-			])
-		).unwrap();
+		// when
+		// give it enough time so that deadline is never triggered.
+		let deadline = time::Duration::from_secs(900);
+		let block =
+			block_on(proposer.propose(Default::default(), Default::default(), deadline, None))
+				.map(|r| r.block)
+				.unwrap();
 
-		assert!(
-			matches!(
-				futures::executor::block_on(proposer.propose(
-						create_inherents(),
-						Default::default(),
-						time::Duration::from_secs(9),
-						RecordProof::No,)
-				),
-				Err(sp_blockchain::Error::UnknownBlockBuilder)
-			)
-		);
+		// then block should have all non-exhaust resources extrinsics (+ the first one).
+		assert_eq!(block.extrinsics().len(), MAX_SKIPPED_TRANSACTIONS + 1);
 	}
 
 	#[test]
-	fn fail_to_create_block_on_uknown_collator_id(){
-		let _ = env_logger::try_init();
-		let mut digests : DigestFor<Block> = Default::default();
-		let unknown_autohrity_index = 10;
-		digests.push(DigestItem::babe_pre_digest(
-				PreDigest::SecondaryPlain(SecondaryPlainPreDigest{
-					authority_index: unknown_autohrity_index,
-					slot_number: Default::default(),
-				})));
-
+	fn should_only_skip_up_to_some_limit_after_soft_deadline() {
 		// given
 		let client = Arc::new(substrate_test_runtime_client::new());
 		let spawner = sp_core::testing::TaskExecutor::new();
-		let txpool = BasicPool::new_full( Default::default(), None, spawner, client.clone());
+		let txpool = BasicPool::new_full(
+			Default::default(),
+			true.into(),
+			None,
+			spawner.clone(),
+			client.clone(),
+		);
 
-		let mut proposer_factory = ProposerFactory::new(client.clone(), txpool.clone(), None, create_key_store());
+		block_on(
+			txpool.submit_at(
+				&BlockId::number(0),
+				SOURCE,
+				(0..MAX_SKIPPED_TRANSACTIONS + 2)
+					.into_iter()
+					.map(|i| exhausts_resources_extrinsic_from(i))
+					// and some transactions that are okay.
+					.chain((0..MAX_SKIPPED_TRANSACTIONS).into_iter().map(|i| extrinsic(i as _)))
+					.collect(),
+			),
+		)
+		.unwrap();
+
+		block_on(
+			txpool.maintain(chain_event(
+				client
+					.header(&BlockId::Number(0u64))
+					.expect("header get error")
+					.expect("there should be header"),
+			)),
+		);
+		assert_eq!(txpool.ready().count(), MAX_SKIPPED_TRANSACTIONS * 2 + 2);
+
+		let mut proposer_factory =
+			ProposerFactory::new(spawner.clone(), client.clone(), txpool.clone(), None, None);
+
+		let deadline = time::Duration::from_secs(600);
+		let cell = Arc::new(Mutex::new((0, time::Instant::now())));
+		let cell2 = cell.clone();
 		let proposer = proposer_factory.init_with_now(
 			&client.header(&BlockId::number(0)).unwrap().unwrap(),
-			Box::new(move || time::Instant::now()),
+			Box::new(move || {
+				let mut value = cell.lock();
+				let (called, old) = *value;
+				// add time after deadline is calculated internally (hence 1)
+				let increase = if called == 1 {
+					// we start after the soft_deadline should have already been reached.
+					deadline / 2
+				} else {
+					// but we make sure to never reach the actual deadline
+					time::Duration::from_millis(0)
+				};
+				*value = (called + 1, old + increase);
+				old
+			}),
 		);
 
-		futures::executor::block_on(
-			txpool.submit_at(&BlockId::number(0), SOURCE, vec![
-				Extrinsic::SubmitEncryptedTransaction{
-					singly_encrypted: true,
-					data: vec![],
-				}
-			])
-		).unwrap();
+		let block =
+			block_on(proposer.propose(Default::default(), Default::default(), deadline, None))
+				.map(|r| r.block)
+				.unwrap();
 
+		// then the block should have no transactions despite some in the pool
+		assert_eq!(block.extrinsics().len(), 1);
 		assert!(
-			matches!(
-				futures::executor::block_on(proposer.propose(
-						create_inherents(),
-						digests,
-						time::Duration::from_secs(9),
-						RecordProof::No,)
-				),
-				Err(sp_blockchain::Error::UnknownCollatorId(index)) if index == unknown_autohrity_index
-			)
-		);
-	}
-
-
-	#[test]
-	fn fail_to_create_block_on_uknown_collator_public_key(){
-		let _ = env_logger::try_init();
-        let create_digest_with_missing_pub_key = || {
-            let mut digests : DigestFor<Block> = Default::default();
-            digests.push(DigestItem::babe_pre_digest(
-                    PreDigest::SecondaryPlain(SecondaryPlainPreDigest{
-                        authority_index: substrate_test_runtime::DUMMY_COLLATOR_ID,
-                        slot_number: Default::default(),
-                    })));
-            digests
-        };
-
-		let client = Arc::new(substrate_test_runtime_client::new());
-		let spawner = sp_core::testing::TaskExecutor::new();
-		let txpool = BasicPool::new_full( Default::default(), None, spawner, client.clone());
-
-		let mut bb = BlockBuilderHelper::new(txpool.clone(), client.clone(), create_key_store());
-		futures::executor::block_on(
-			txpool.submit_at(&BlockId::number(0), SOURCE, vec![
-				Extrinsic::SubmitEncryptedTransaction{
-					singly_encrypted: true,
-					data: vec![],
-				}
-			])
-		).unwrap();
-
-		// include encrypted tx into the block
-		let block = bb.produce_block(create_inherents(), create_digest()).unwrap();
-		bb.import_block(block);
-
-		// executed tx and insert encrypted tx into FIFO
-		let block = bb.produce_block(create_inherents(), create_digest()).unwrap();
-		bb.import_block(block);
-
-		// executed tx and insert encrypted tx into FIFO
-		let block = bb.produce_block(create_inherents(), create_digest_with_missing_pub_key());
-
-		assert!(
-			matches!(
-				block,
-				Err(sp_blockchain::Error::MissingPublicKey(_))
-			)
-		);
-	}
-
-	#[test]
-	fn fail_to_create_block_on_missing_key_in_keystore(){
-		let _ = env_logger::try_init();
-		let mut digests : DigestFor<Block> = Default::default();
-		digests.push(DigestItem::babe_pre_digest(
-				PreDigest::SecondaryPlain(SecondaryPlainPreDigest{
-					authority_index: substrate_test_runtime::ALICE_COLLATOR_ID,
-					slot_number: Default::default(),
-				})));
-
-		let client = Arc::new(substrate_test_runtime_client::new());
-		let spawner = sp_core::testing::TaskExecutor::new();
-		let txpool = BasicPool::new_full( Default::default(), None, spawner, client.clone());
-
-		let mut bb = BlockBuilderHelper::new(txpool.clone(), client.clone(), Store::new_in_memory());
-		futures::executor::block_on(
-			txpool.submit_at(&BlockId::number(0), SOURCE, vec![
-				Extrinsic::SubmitEncryptedTransaction{
-					singly_encrypted: true,
-					data: vec![],
-				}
-			])
-		).unwrap();
-
-		// include encrypted tx into the block
-		let block = bb.produce_block(create_inherents(), digests.clone()).unwrap();
-		bb.import_block(block);
-
-		// executed tx and insert encrypted tx into FIFO
-		let block = bb.produce_block(create_inherents(), digests.clone()).unwrap();
-		bb.import_block(block);
-
-		// executed tx and insert encrypted tx into FIFO
-		let block = bb.produce_block(create_inherents(), digests.clone());
-
-		assert!(
-			matches!(
-				block,
-				Err(sp_blockchain::Error::CannotFindDecryptionKey(_))
-			)
+			cell2.lock().0 > MAX_SKIPPED_TRANSACTIONS,
+			"Not enough calls to current time, which indicates the test might have ended because of deadline, not soft deadline"
 		);
 	}
 }

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -25,22 +25,22 @@
 //! This is used in conjunction with [`ProvingTrie`](super::ProvingTrie) and
 //! the off-chain indexing API.
 
-use sp_runtime::{offchain::storage::StorageValueRef, KeyTypeId};
+use sp_runtime::{
+	offchain::storage::{MutateStorageError, StorageRetrievalError, StorageValueRef},
+	KeyTypeId,
+};
 use sp_session::MembershipProof;
-
-use super::super::{Module as SessionModule, SessionIndex};
-use super::{IdentificationTuple, ProvingTrie, Trait};
-
-use super::shared;
 use sp_std::prelude::*;
 
+use super::{shared, Config, IdentificationTuple, ProvingTrie};
+use crate::{Pallet as SessionModule, SessionIndex};
 
 /// A set of validators, which was used for a fixed session index.
-struct ValidatorSet<T: Trait> {
+struct ValidatorSet<T: Config> {
 	validator_set: Vec<IdentificationTuple<T>>,
 }
 
-impl<T: Trait> ValidatorSet<T> {
+impl<T: Config> ValidatorSet<T> {
 	/// Load the set of validators for a particular session index from the off-chain storage.
 	///
 	/// If none is found or decodable given `prefix` and `session`, it will return `None`.
@@ -49,6 +49,7 @@ impl<T: Trait> ValidatorSet<T> {
 		let derived_key = shared::derive_key(shared::PREFIX, session_index);
 		StorageValueRef::persistent(derived_key.as_ref())
 			.get::<Vec<(T::ValidatorId, T::FullIdentification)>>()
+			.ok()
 			.flatten()
 			.map(|validator_set| Self { validator_set })
 	}
@@ -61,7 +62,7 @@ impl<T: Trait> ValidatorSet<T> {
 
 /// Implement conversion into iterator for usage
 /// with [ProvingTrie](super::ProvingTrie::generate_for).
-impl<T: Trait> sp_std::iter::IntoIterator for ValidatorSet<T> {
+impl<T: Config> sp_std::iter::IntoIterator for ValidatorSet<T> {
 	type Item = (T::ValidatorId, T::FullIdentification);
 	type IntoIter = sp_std::vec::IntoIter<Self::Item>;
 	fn into_iter(self) -> Self::IntoIter {
@@ -74,7 +75,7 @@ impl<T: Trait> sp_std::iter::IntoIterator for ValidatorSet<T> {
 /// Based on the yielded `MembershipProof` the implementer may decide what
 /// to do, i.e. in case of a failed proof, enqueue a transaction back on
 /// chain reflecting that, with all its consequences such as i.e. slashing.
-pub fn prove_session_membership<T: Trait, D: AsRef<[u8]>>(
+pub fn prove_session_membership<T: Config, D: AsRef<[u8]>>(
 	session_index: SessionIndex,
 	session_key: (KeyTypeId, D),
 ) -> Option<MembershipProof> {
@@ -83,36 +84,36 @@ pub fn prove_session_membership<T: Trait, D: AsRef<[u8]>>(
 	let trie = ProvingTrie::<T>::generate_for(validators.into_iter()).ok()?;
 
 	let (id, data) = session_key;
-	trie.prove(id, data.as_ref())
-		.map(|trie_nodes| MembershipProof {
-			session: session_index,
-			trie_nodes,
-			validator_count: count,
-		})
+	trie.prove(id, data.as_ref()).map(|trie_nodes| MembershipProof {
+		session: session_index,
+		trie_nodes,
+		validator_count: count,
+	})
 }
-
 
 /// Attempt to prune anything that is older than `first_to_keep` session index.
 ///
 /// Due to re-organisation it could be that the `first_to_keep` might be less
 /// than the stored one, in which case the conservative choice is made to keep records
 /// up to the one that is the lesser.
-pub fn prune_older_than<T: Trait>(first_to_keep: SessionIndex) {
+pub fn prune_older_than<T: Config>(first_to_keep: SessionIndex) {
 	let derived_key = shared::LAST_PRUNE.to_vec();
 	let entry = StorageValueRef::persistent(derived_key.as_ref());
-	match entry.mutate(|current: Option<Option<SessionIndex>>| -> Result<_, ()> {
-		match current {
-			Some(Some(current)) if current < first_to_keep => Ok(first_to_keep),
-			// do not move the cursor, if the new one would be behind ours
-			Some(Some(current)) => Ok(current),
-			None => Ok(first_to_keep),
-			// if the storage contains undecodable data, overwrite with current anyways
-			// which might leak some entries being never purged, but that is acceptable
-			// in this context
-			Some(None) => Ok(first_to_keep),
-		}
-	}) {
-		Ok(Ok(new_value)) => {
+	match entry.mutate(
+		|current: Result<Option<SessionIndex>, StorageRetrievalError>| -> Result<_, ()> {
+			match current {
+				Ok(Some(current)) if current < first_to_keep => Ok(first_to_keep),
+				// do not move the cursor, if the new one would be behind ours
+				Ok(Some(current)) => Ok(current),
+				Ok(None) => Ok(first_to_keep),
+				// if the storage contains undecodable data, overwrite with current anyways
+				// which might leak some entries being never purged, but that is acceptable
+				// in this context
+				Err(_) => Ok(first_to_keep),
+			}
+		},
+	) {
+		Ok(new_value) => {
 			// on a re-org this is not necessarily true, with the above they might be equal
 			if new_value < first_to_keep {
 				for session_index in new_value..first_to_keep {
@@ -120,14 +121,14 @@ pub fn prune_older_than<T: Trait>(first_to_keep: SessionIndex) {
 					let _ = StorageValueRef::persistent(derived_key.as_ref()).clear();
 				}
 			}
-		}
-		Ok(Err(_)) => {} // failed to store the value calculated with the given closure
-		Err(_) => {}     // failed to calculate the value to store with the given closure
+		},
+		Err(MutateStorageError::ConcurrentModification(_)) => {},
+		Err(MutateStorageError::ValueFunctionFailed(_)) => {},
 	}
 }
 
 /// Keep the newest `n` items, and prune all items older than that.
-pub fn keep_newest<T: Trait>(n_to_keep: usize) {
+pub fn keep_newest<T: Config>(n_to_keep: usize) {
 	let session_index = <SessionModule<T>>::current_index();
 	let n_to_keep = n_to_keep as SessionIndex;
 	if n_to_keep < session_index {
@@ -137,43 +138,43 @@ pub fn keep_newest<T: Trait>(n_to_keep: usize) {
 
 #[cfg(test)]
 mod tests {
-	use super::super::{onchain, Module};
 	use super::*;
-	use crate::mock::{
-		force_new_session, set_next_validators, Session, System, Test, NEXT_VALIDATORS,
-	};
-	use codec::Encode;
-	use frame_support::traits::{KeyOwnerProofSystem, OnInitialize};
-	use sp_core::crypto::key_types::DUMMY;
-	use sp_core::offchain::{
-		testing::TestOffchainExt,
-		OffchainExt,
-		StorageKind,
+	use crate::{
+		historical::{onchain, Pallet},
+		mock::{force_new_session, set_next_validators, Session, System, Test, NEXT_VALIDATORS},
 	};
 
+	use codec::Encode;
+	use sp_core::{
+		crypto::key_types::DUMMY,
+		offchain::{testing::TestOffchainExt, OffchainDbExt, OffchainWorkerExt, StorageKind},
+	};
 	use sp_runtime::testing::UintAuthorityId;
 
-	type Historical = Module<Test>;
+	use frame_support::{
+		traits::{GenesisBuild, KeyOwnerProofSystem, OnInitialize},
+		BasicExternalities,
+	};
+
+	type Historical = Pallet<Test>;
 
 	pub fn new_test_ext() -> sp_io::TestExternalities {
-		let mut ext = frame_system::GenesisConfig::default()
+		let mut t = frame_system::GenesisConfig::default()
 			.build_storage::<Test>()
 			.expect("Failed to create test externalities.");
 
-		crate::GenesisConfig::<Test> {
-			keys: NEXT_VALIDATORS.with(|l| {
-				l.borrow()
-					.iter()
-					.cloned()
-					.map(|i| (i, i, UintAuthorityId(i).into()))
-					.collect()
-			}),
-		}
-		.assimilate_storage(&mut ext)
-		.unwrap();
+		let keys: Vec<_> = NEXT_VALIDATORS.with(|l| {
+			l.borrow().iter().cloned().map(|i| (i, i, UintAuthorityId(i).into())).collect()
+		});
+		BasicExternalities::execute_with_storage(&mut t, || {
+			for (ref k, ..) in &keys {
+				frame_system::Pallet::<Test>::inc_providers(k);
+			}
+		});
 
+		crate::GenesisConfig::<Test> { keys }.assimilate_storage(&mut t).unwrap();
 
-		let mut ext = sp_io::TestExternalities::new(ext);
+		let mut ext = sp_io::TestExternalities::new(t);
 
 		let (offchain, offchain_state) = TestOffchainExt::with_offchain_db(ext.offchain_db());
 
@@ -182,19 +183,20 @@ mod tests {
 		seed[0..4].copy_from_slice(&ITERATIONS.to_le_bytes());
 		offchain_state.write().seed = seed;
 
-		ext.register_extension(OffchainExt::new(offchain));
+		ext.register_extension(OffchainDbExt::new(offchain.clone()));
+		ext.register_extension(OffchainWorkerExt::new(offchain));
 		ext
 	}
 
 	#[test]
 	fn encode_decode_roundtrip() {
+		use super::super::{super::Config as SessionConfig, Config as HistoricalConfig};
 		use codec::{Decode, Encode};
-		use super::super::super::Trait as SessionTrait;
-		use super::super::Trait as HistoricalTrait;
 
 		let sample = (
-				22u32 as <Test as SessionTrait>::ValidatorId,
-				7_777_777 as <Test as HistoricalTrait>::FullIdentification);
+			22u32 as <Test as SessionConfig>::ValidatorId,
+			7_777_777 as <Test as HistoricalConfig>::FullIdentification,
+		);
 
 		let encoded = sample.encode();
 		let decoded = Decode::decode(&mut encoded.as_slice()).expect("Must decode");
@@ -205,7 +207,7 @@ mod tests {
 	fn onchain_to_offchain() {
 		let mut ext = new_test_ext();
 
-		const DATA: &[u8] = &[7,8,9,10,11];
+		const DATA: &[u8] = &[7, 8, 9, 10, 11];
 		ext.execute_with(|| {
 			b"alphaomega"[..].using_encoded(|key| sp_io::offchain_index::set(key, DATA));
 		});
@@ -213,14 +215,12 @@ mod tests {
 		ext.persist_offchain_overlay();
 
 		ext.execute_with(|| {
-			let data =
-			b"alphaomega"[..].using_encoded(|key| {
+			let data = b"alphaomega"[..].using_encoded(|key| {
 				sp_io::offchain::local_storage_get(StorageKind::PERSISTENT, key)
 			});
 			assert_eq!(data, Some(DATA.to_vec()));
 		});
 	}
-
 
 	#[test]
 	fn historical_proof_offchain() {
@@ -246,8 +246,6 @@ mod tests {
 		ext.persist_offchain_overlay();
 
 		ext.execute_with(|| {
-
-
 			System::set_block_number(2);
 			Session::on_initialize(2);
 			assert_eq!(<SessionModule<Test>>::current_index(), 2);

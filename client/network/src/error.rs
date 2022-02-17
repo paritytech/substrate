@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -19,7 +19,7 @@
 //! Substrate network possible errors.
 
 use crate::config::TransportConfig;
-use libp2p::{PeerId, Multiaddr};
+use libp2p::{Multiaddr, PeerId};
 
 use std::{borrow::Cow, fmt};
 
@@ -38,7 +38,7 @@ pub enum Error {
 		fmt = "The same bootnode (`{}`) is registered with two different peer ids: `{}` and `{}`",
 		address,
 		first_id,
-		second_id,
+		second_id
 	)]
 	DuplicateBootnode {
 		/// The address of the bootnode.
@@ -53,7 +53,7 @@ pub enum Error {
 	/// The network addresses are invalid because they don't match the transport.
 	#[display(
 		fmt = "The following addresses are invalid because they don't match the transport: {:?}",
-		addresses,
+		addresses
 	)]
 	AddressesForAnotherTransport {
 		/// Transport used.
@@ -79,12 +79,12 @@ impl fmt::Debug for Error {
 impl std::error::Error for Error {
 	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
 		match self {
-			Error::Io(ref err) => Some(err),
-			Error::Client(ref err) => Some(err),
-			Error::DuplicateBootnode { .. } => None,
-			Error::Prometheus(ref err) => Some(err),
-			Error::AddressesForAnotherTransport { .. } => None,
-			Error::DuplicateRequestResponseProtocol { .. } => None,
+			Self::Io(ref err) => Some(err),
+			Self::Client(ref err) => Some(err),
+			Self::Prometheus(ref err) => Some(err),
+			Self::DuplicateBootnode { .. } |
+			Self::AddressesForAnotherTransport { .. } |
+			Self::DuplicateRequestResponseProtocol { .. } => None,
 		}
 	}
 }

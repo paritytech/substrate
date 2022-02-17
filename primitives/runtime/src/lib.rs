@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,13 +19,15 @@
 
 #![warn(missing_docs)]
 #![cfg_attr(not(feature = "std"), no_std)]
-
 // to allow benchmarking
 #![cfg_attr(feature = "bench", feature(test))]
-#[cfg(feature = "bench")] extern crate test;
+#[cfg(feature = "bench")]
+extern crate test;
 
 #[doc(hidden)]
 pub use codec;
+#[doc(hidden)]
+pub use scale_info;
 #[cfg(feature = "std")]
 #[doc(hidden)]
 pub use serde;
@@ -38,48 +40,60 @@ pub use paste;
 #[doc(hidden)]
 pub use sp_application_crypto as app_crypto;
 
+pub use sp_core::storage::StateVersion;
 #[cfg(feature = "std")]
 pub use sp_core::storage::{Storage, StorageChild};
 
-use sp_std::prelude::*;
-use sp_std::convert::TryFrom;
-use sp_core::{crypto::{self, Public}, ed25519, sr25519, ecdsa, hash::{H256, H512}};
+use sp_core::{
+	crypto::{self, ByteArray},
+	ecdsa, ed25519,
+	hash::{H256, H512},
+	sr25519,
+};
+use sp_std::{convert::TryFrom, prelude::*};
 
-use codec::{Encode, Decode};
+use codec::{Decode, Encode};
+use scale_info::TypeInfo;
 
 pub mod curve;
 pub mod generic;
+mod multiaddress;
 pub mod offchain;
+pub mod runtime_logger;
+mod runtime_string;
 #[cfg(feature = "std")]
 pub mod testing;
 pub mod traits;
 pub mod transaction_validity;
-pub mod random_number_generator;
-mod runtime_string;
 
 pub use crate::runtime_string::*;
 
-/// Re-export these since they're only "kind of" generic.
-pub use generic::{DigestItem, Digest};
+// Re-export Multiaddress
+pub use multiaddress::MultiAddress;
 
+/// Re-export these since they're only "kind of" generic.
+pub use generic::{Digest, DigestItem};
+
+pub use sp_application_crypto::{BoundToRuntimeAppPublic, RuntimeAppPublic};
 /// Re-export this since it's part of the API of this crate.
-pub use sp_core::{TypeId, crypto::{key_types, KeyTypeId, CryptoType, CryptoTypeId, AccountId32}};
-pub use sp_application_crypto::{RuntimeAppPublic, BoundToRuntimeAppPublic};
+pub use sp_core::{
+	crypto::{key_types, AccountId32, CryptoType, CryptoTypeId, KeyTypeId},
+	TypeId,
+};
 
 /// Re-export `RuntimeDebug`, to avoid dependency clutter.
 pub use sp_core::RuntimeDebug;
 
-/// Re-export top-level arithmetic stuff.
-pub use sp_arithmetic::{
-	PerThing, traits::SaturatedConversion, Perquintill, Perbill, Permill, Percent, PerU16, InnerOf,
-	Rational128, FixedI64, FixedI128, FixedU128, FixedPointNumber, FixedPointOperand,
-};
-/// Re-export 128 bit helpers.
-pub use sp_arithmetic::helpers_128bit;
 /// Re-export big_uint stuff.
 pub use sp_arithmetic::biguint;
-
-pub use random_number_generator::RandomNumberGenerator;
+/// Re-export 128 bit helpers.
+pub use sp_arithmetic::helpers_128bit;
+/// Re-export top-level arithmetic stuff.
+pub use sp_arithmetic::{
+	traits::SaturatedConversion, FixedI128, FixedI64, FixedPointNumber, FixedPointOperand,
+	FixedU128, InnerOf, PerThing, PerU16, Perbill, Percent, Permill, Perquintill, Rational128,
+	UpperOf,
+};
 
 pub use either::Either;
 
@@ -90,21 +104,71 @@ pub use either::Either;
 /// the block itself would allow swapping justifications to change the block's hash
 /// (and thus fork the chain). Sending a `Justification` alongside a block instead
 /// bypasses this problem.
-pub type Justification = Vec<u8>;
+///
+/// Each justification is provided as an encoded blob, and is tagged with an ID
+/// to identify the consensus engine that generated the proof (we might have
+/// multiple justifications from different engines for the same block).
+pub type Justification = (ConsensusEngineId, EncodedJustification);
 
-use traits::{Verify, Lazy};
+/// The encoded justification specific to a consensus engine.
+pub type EncodedJustification = Vec<u8>;
 
-/// A module identifier. These are per module and should be stored in a registry somewhere.
-#[derive(Clone, Copy, Eq, PartialEq, Encode, Decode)]
-pub struct ModuleId(pub [u8; 8]);
+/// Collection of justifications for a given block, multiple justifications may
+/// be provided by different consensus engines for the same block.
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+pub struct Justifications(Vec<Justification>);
 
-impl TypeId for ModuleId {
-	const TYPE_ID: [u8; 4] = *b"modl";
+impl Justifications {
+	/// Return an iterator over the justifications.
+	pub fn iter(&self) -> impl Iterator<Item = &Justification> {
+		self.0.iter()
+	}
+
+	/// Append a justification. Returns false if a justification with the same
+	/// `ConsensusEngineId` already exists, in which case the justification is
+	/// not inserted.
+	pub fn append(&mut self, justification: Justification) -> bool {
+		if self.get(justification.0).is_some() {
+			return false
+		}
+		self.0.push(justification);
+		true
+	}
+
+	/// Return the encoded justification for the given consensus engine, if it
+	/// exists.
+	pub fn get(&self, engine_id: ConsensusEngineId) -> Option<&EncodedJustification> {
+		self.iter().find(|j| j.0 == engine_id).map(|j| &j.1)
+	}
+
+	/// Return a copy of the encoded justification for the given consensus
+	/// engine, if it exists.
+	pub fn into_justification(self, engine_id: ConsensusEngineId) -> Option<EncodedJustification> {
+		self.into_iter().find(|j| j.0 == engine_id).map(|j| j.1)
+	}
 }
 
-#[cfg(feature = "std")]
-pub use serde::{Serialize, Deserialize, de::DeserializeOwned};
+impl IntoIterator for Justifications {
+	type Item = Justification;
+	type IntoIter = sp_std::vec::IntoIter<Self::Item>;
+
+	fn into_iter(self) -> Self::IntoIter {
+		self.0.into_iter()
+	}
+}
+
+impl From<Justification> for Justifications {
+	fn from(justification: Justification) -> Self {
+		Self(vec![justification])
+	}
+}
+
+use traits::{Lazy, Verify};
+
 use crate::traits::IdentifyAccount;
+#[cfg(feature = "std")]
+pub use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 /// Complex storage builder stuff.
 #[cfg(feature = "std")]
@@ -116,10 +180,7 @@ pub trait BuildStorage {
 		Ok(storage)
 	}
 	/// Assimilate the storage for this module into pre-existing overlays.
-	fn assimilate_storage(
-		&self,
-		storage: &mut sp_core::storage::Storage,
-	) -> Result<(), String>;
+	fn assimilate_storage(&self, storage: &mut sp_core::storage::Storage) -> Result<(), String>;
 }
 
 /// Something that can build the genesis storage of a module.
@@ -134,17 +195,14 @@ pub trait BuildModuleGenesisStorage<T, I>: Sized {
 
 #[cfg(feature = "std")]
 impl BuildStorage for sp_core::storage::Storage {
-	fn assimilate_storage(
-		&self,
-		storage: &mut sp_core::storage::Storage,
-	)-> Result<(), String> {
+	fn assimilate_storage(&self, storage: &mut sp_core::storage::Storage) -> Result<(), String> {
 		storage.top.extend(self.top.iter().map(|(k, v)| (k.clone(), v.clone())));
 		for (k, other_map) in self.children_default.iter() {
 			let k = k.clone();
 			if let Some(map) = storage.children_default.get_mut(&k) {
 				map.data.extend(other_map.data.iter().map(|(k, v)| (k.clone(), v.clone())));
 				if !map.child_info.try_update(&other_map.child_info) {
-					return Err("Incompatible child info update".to_string());
+					return Err("Incompatible child info update".to_string())
 				}
 			} else {
 				storage.children_default.insert(k, other_map.clone());
@@ -156,10 +214,7 @@ impl BuildStorage for sp_core::storage::Storage {
 
 #[cfg(feature = "std")]
 impl BuildStorage for () {
-	fn assimilate_storage(
-		&self,
-		_: &mut sp_core::storage::Storage,
-	) -> Result<(), String> {
+	fn assimilate_storage(&self, _: &mut sp_core::storage::Storage) -> Result<(), String> {
 		Err("`assimilate_storage` not implemented for `()`".into())
 	}
 }
@@ -169,7 +224,7 @@ pub type ConsensusEngineId = [u8; 4];
 
 /// Signature verify that can work with any known signature types..
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-#[derive(Eq, PartialEq, Clone, Encode, Decode, RuntimeDebug)]
+#[derive(Eq, PartialEq, Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
 pub enum MultiSignature {
 	/// An Ed25519 signature.
 	Ed25519(ed25519::Signature),
@@ -181,51 +236,57 @@ pub enum MultiSignature {
 
 impl From<ed25519::Signature> for MultiSignature {
 	fn from(x: ed25519::Signature) -> Self {
-		MultiSignature::Ed25519(x)
+		Self::Ed25519(x)
 	}
 }
 
 impl TryFrom<MultiSignature> for ed25519::Signature {
 	type Error = ();
 	fn try_from(m: MultiSignature) -> Result<Self, Self::Error> {
-		if let MultiSignature::Ed25519(x) = m { Ok(x) } else { Err(()) }
+		if let MultiSignature::Ed25519(x) = m {
+			Ok(x)
+		} else {
+			Err(())
+		}
 	}
 }
 
 impl From<sr25519::Signature> for MultiSignature {
 	fn from(x: sr25519::Signature) -> Self {
-		MultiSignature::Sr25519(x)
+		Self::Sr25519(x)
 	}
 }
 
 impl TryFrom<MultiSignature> for sr25519::Signature {
 	type Error = ();
 	fn try_from(m: MultiSignature) -> Result<Self, Self::Error> {
-		if let MultiSignature::Sr25519(x) = m { Ok(x) } else { Err(()) }
+		if let MultiSignature::Sr25519(x) = m {
+			Ok(x)
+		} else {
+			Err(())
+		}
 	}
 }
 
 impl From<ecdsa::Signature> for MultiSignature {
 	fn from(x: ecdsa::Signature) -> Self {
-		MultiSignature::Ecdsa(x)
+		Self::Ecdsa(x)
 	}
 }
 
 impl TryFrom<MultiSignature> for ecdsa::Signature {
 	type Error = ();
 	fn try_from(m: MultiSignature) -> Result<Self, Self::Error> {
-		if let MultiSignature::Ecdsa(x) = m { Ok(x) } else { Err(()) }
-	}
-}
-
-impl Default for MultiSignature {
-	fn default() -> Self {
-		MultiSignature::Ed25519(Default::default())
+		if let MultiSignature::Ecdsa(x) = m {
+			Ok(x)
+		} else {
+			Err(())
+		}
 	}
 }
 
 /// Public key for any known crypto algorithm.
-#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Encode, Decode, RuntimeDebug)]
+#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum MultiSigner {
 	/// An Ed25519 identity.
@@ -234,12 +295,6 @@ pub enum MultiSigner {
 	Sr25519(sr25519::Public),
 	/// An SECP256k1/ECDSA identity (actually, the Blake2 hash of the compressed pub key).
 	Ecdsa(ecdsa::Public),
-}
-
-impl Default for MultiSigner {
-	fn default() -> Self {
-		MultiSigner::Ed25519(Default::default())
-	}
 }
 
 /// NOTE: This implementations is required by `SimpleAddressDeterminer`,
@@ -253,9 +308,9 @@ impl<T: Into<H256>> crypto::UncheckedFrom<T> for MultiSigner {
 impl AsRef<[u8]> for MultiSigner {
 	fn as_ref(&self) -> &[u8] {
 		match *self {
-			MultiSigner::Ed25519(ref who) => who.as_ref(),
-			MultiSigner::Sr25519(ref who) => who.as_ref(),
-			MultiSigner::Ecdsa(ref who) => who.as_ref(),
+			Self::Ed25519(ref who) => who.as_ref(),
+			Self::Sr25519(ref who) => who.as_ref(),
+			Self::Ecdsa(ref who) => who.as_ref(),
 		}
 	}
 }
@@ -264,49 +319,61 @@ impl traits::IdentifyAccount for MultiSigner {
 	type AccountId = AccountId32;
 	fn into_account(self) -> AccountId32 {
 		match self {
-			MultiSigner::Ed25519(who) => <[u8; 32]>::from(who).into(),
-			MultiSigner::Sr25519(who) => <[u8; 32]>::from(who).into(),
-			MultiSigner::Ecdsa(who) => sp_io::hashing::blake2_256(&who.as_ref()[..]).into(),
+			Self::Ed25519(who) => <[u8; 32]>::from(who).into(),
+			Self::Sr25519(who) => <[u8; 32]>::from(who).into(),
+			Self::Ecdsa(who) => sp_io::hashing::blake2_256(who.as_ref()).into(),
 		}
 	}
 }
 
 impl From<ed25519::Public> for MultiSigner {
 	fn from(x: ed25519::Public) -> Self {
-		MultiSigner::Ed25519(x)
+		Self::Ed25519(x)
 	}
 }
 
 impl TryFrom<MultiSigner> for ed25519::Public {
 	type Error = ();
 	fn try_from(m: MultiSigner) -> Result<Self, Self::Error> {
-		if let MultiSigner::Ed25519(x) = m { Ok(x) } else { Err(()) }
+		if let MultiSigner::Ed25519(x) = m {
+			Ok(x)
+		} else {
+			Err(())
+		}
 	}
 }
 
 impl From<sr25519::Public> for MultiSigner {
 	fn from(x: sr25519::Public) -> Self {
-		MultiSigner::Sr25519(x)
+		Self::Sr25519(x)
 	}
 }
 
 impl TryFrom<MultiSigner> for sr25519::Public {
 	type Error = ();
 	fn try_from(m: MultiSigner) -> Result<Self, Self::Error> {
-		if let MultiSigner::Sr25519(x) = m { Ok(x) } else { Err(()) }
+		if let MultiSigner::Sr25519(x) = m {
+			Ok(x)
+		} else {
+			Err(())
+		}
 	}
 }
 
 impl From<ecdsa::Public> for MultiSigner {
 	fn from(x: ecdsa::Public) -> Self {
-		MultiSigner::Ecdsa(x)
+		Self::Ecdsa(x)
 	}
 }
 
 impl TryFrom<MultiSigner> for ecdsa::Public {
 	type Error = ();
 	fn try_from(m: MultiSigner) -> Result<Self, Self::Error> {
-		if let MultiSigner::Ecdsa(x) = m { Ok(x) } else { Err(()) }
+		if let MultiSigner::Ecdsa(x) = m {
+			Ok(x)
+		} else {
+			Err(())
+		}
 	}
 }
 
@@ -314,9 +381,9 @@ impl TryFrom<MultiSigner> for ecdsa::Public {
 impl std::fmt::Display for MultiSigner {
 	fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
 		match *self {
-			MultiSigner::Ed25519(ref who) => write!(fmt, "ed25519: {}", who),
-			MultiSigner::Sr25519(ref who) => write!(fmt, "sr25519: {}", who),
-			MultiSigner::Ecdsa(ref who) => write!(fmt, "ecdsa: {}", who),
+			Self::Ed25519(ref who) => write!(fmt, "ed25519: {}", who),
+			Self::Sr25519(ref who) => write!(fmt, "sr25519: {}", who),
+			Self::Ecdsa(ref who) => write!(fmt, "ecdsa: {}", who),
 		}
 	}
 }
@@ -325,17 +392,23 @@ impl Verify for MultiSignature {
 	type Signer = MultiSigner;
 	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &AccountId32) -> bool {
 		match (self, signer) {
-			(MultiSignature::Ed25519(ref sig), who) => sig.verify(msg, &ed25519::Public::from_slice(who.as_ref())),
-			(MultiSignature::Sr25519(ref sig), who) => sig.verify(msg, &sr25519::Public::from_slice(who.as_ref())),
-			(MultiSignature::Ecdsa(ref sig), who) => {
+			(Self::Ed25519(ref sig), who) => match ed25519::Public::from_slice(who.as_ref()) {
+				Ok(signer) => sig.verify(msg, &signer),
+				Err(()) => false,
+			},
+			(Self::Sr25519(ref sig), who) => match sr25519::Public::from_slice(who.as_ref()) {
+				Ok(signer) => sig.verify(msg, &signer),
+				Err(()) => false,
+			},
+			(Self::Ecdsa(ref sig), who) => {
 				let m = sp_io::hashing::blake2_256(msg.get());
 				match sp_io::crypto::secp256k1_ecdsa_recover_compressed(sig.as_ref(), &m) {
 					Ok(pubkey) =>
-						&sp_io::hashing::blake2_256(pubkey.as_ref())
-							== <dyn AsRef<[u8; 32]>>::as_ref(who),
+						&sp_io::hashing::blake2_256(pubkey.as_ref()) ==
+							<dyn AsRef<[u8; 32]>>::as_ref(who),
 					_ => false,
 				}
-			}
+			},
 		}
 	}
 }
@@ -351,22 +424,25 @@ impl Verify for AnySignature {
 		let msg = msg.get();
 		sr25519::Signature::try_from(self.0.as_fixed_bytes().as_ref())
 			.map(|s| s.verify(msg, signer))
-			.unwrap_or(false)
-		|| ed25519::Signature::try_from(self.0.as_fixed_bytes().as_ref())
-			.map(|s| s.verify(msg, &ed25519::Public::from_slice(signer.as_ref())))
-			.unwrap_or(false)
+			.unwrap_or(false) ||
+			ed25519::Signature::try_from(self.0.as_fixed_bytes().as_ref())
+				.map(|s| match ed25519::Public::from_slice(signer.as_ref()) {
+					Err(()) => false,
+					Ok(signer) => s.verify(msg, &signer),
+				})
+				.unwrap_or(false)
 	}
 }
 
 impl From<sr25519::Signature> for AnySignature {
 	fn from(s: sr25519::Signature) -> Self {
-		AnySignature(s.into())
+		Self(s.into())
 	}
 }
 
 impl From<ed25519::Signature> for AnySignature {
 	fn from(s: ed25519::Signature) -> Self {
-		AnySignature(s.into())
+		Self(s.into())
 	}
 }
 
@@ -386,11 +462,15 @@ pub type DispatchResult = sp_std::result::Result<(), DispatchError>;
 pub type DispatchResultWithInfo<T> = sp_std::result::Result<T, DispatchErrorWithPostInfo<T>>;
 
 /// Reason why a dispatch call failed.
-#[derive(Eq, PartialEq, Clone, Copy, Encode, Decode, RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(Serialize))]
+#[derive(Eq, Clone, Copy, Encode, Decode, Debug, TypeInfo)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum DispatchError {
 	/// Some error occurred.
-	Other(#[codec(skip)] &'static str),
+	Other(
+		#[codec(skip)]
+		#[cfg_attr(feature = "std", serde(skip_deserializing))]
+		&'static str,
+	),
 	/// Failed to lookup some data.
 	CannotLookup,
 	/// A bad origin.
@@ -403,15 +483,27 @@ pub enum DispatchError {
 		error: u8,
 		/// Optional error message.
 		#[codec(skip)]
+		#[cfg_attr(feature = "std", serde(skip_deserializing))]
 		message: Option<&'static str>,
 	},
+	/// At least one consumer is remaining so the account cannot be destroyed.
+	ConsumerRemaining,
+	/// There are no providers so the account cannot be created.
+	NoProviders,
+	/// There are too many consumers so the account cannot be created.
+	TooManyConsumers,
+	/// An error to do with tokens.
+	Token(TokenError),
+	/// An arithmetic error.
+	Arithmetic(ArithmeticError),
 }
 
 /// Result of a `Dispatchable` which contains the `DispatchResult` and additional information about
 /// the `Dispatchable` that is only known post dispatch.
 #[derive(Eq, PartialEq, Clone, Copy, Encode, Decode, RuntimeDebug)]
-pub struct DispatchErrorWithPostInfo<Info> where
-	Info: Eq + PartialEq + Clone + Copy + Encode + Decode + traits::Printable
+pub struct DispatchErrorWithPostInfo<Info>
+where
+	Info: Eq + PartialEq + Clone + Copy + Encode + Decode + traits::Printable,
 {
 	/// Additional information about the `Dispatchable` which is only known post dispatch.
 	pub post_info: Info,
@@ -423,22 +515,20 @@ impl DispatchError {
 	/// Return the same error but without the attached message.
 	pub fn stripped(self) -> Self {
 		match self {
-			DispatchError::Module { index, error, message: Some(_) }
-				=> DispatchError::Module { index, error, message: None },
+			DispatchError::Module { index, error, message: Some(_) } =>
+				DispatchError::Module { index, error, message: None },
 			m => m,
 		}
 	}
 }
 
-impl<T, E> From<E> for DispatchErrorWithPostInfo<T> where
+impl<T, E> From<E> for DispatchErrorWithPostInfo<T>
+where
 	T: Eq + PartialEq + Clone + Copy + Encode + Decode + traits::Printable + Default,
-	E: Into<DispatchError>
+	E: Into<DispatchError>,
 {
 	fn from(error: E) -> Self {
-		Self {
-			post_info: Default::default(),
-			error: error.into(),
-		}
+		Self { post_info: Default::default(), error: error.into() }
 	}
 }
 
@@ -454,9 +544,77 @@ impl From<crate::traits::BadOrigin> for DispatchError {
 	}
 }
 
+/// Description of what went wrong when trying to complete an operation on a token.
+#[derive(Eq, PartialEq, Clone, Copy, Encode, Decode, Debug, TypeInfo)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub enum TokenError {
+	/// Funds are unavailable.
+	NoFunds,
+	/// Account that must exist would die.
+	WouldDie,
+	/// Account cannot exist with the funds that would be given.
+	BelowMinimum,
+	/// Account cannot be created.
+	CannotCreate,
+	/// The asset in question is unknown.
+	UnknownAsset,
+	/// Funds exist but are frozen.
+	Frozen,
+	/// Operation is not supported by the asset.
+	Unsupported,
+}
+
+impl From<TokenError> for &'static str {
+	fn from(e: TokenError) -> &'static str {
+		match e {
+			TokenError::NoFunds => "Funds are unavailable",
+			TokenError::WouldDie => "Account that must exist would die",
+			TokenError::BelowMinimum => "Account cannot exist with the funds that would be given",
+			TokenError::CannotCreate => "Account cannot be created",
+			TokenError::UnknownAsset => "The asset in question is unknown",
+			TokenError::Frozen => "Funds exist but are frozen",
+			TokenError::Unsupported => "Operation is not supported by the asset",
+		}
+	}
+}
+
+impl From<TokenError> for DispatchError {
+	fn from(e: TokenError) -> DispatchError {
+		Self::Token(e)
+	}
+}
+
+/// Arithmetic errors.
+#[derive(Eq, PartialEq, Clone, Copy, Encode, Decode, Debug, TypeInfo)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub enum ArithmeticError {
+	/// Underflow.
+	Underflow,
+	/// Overflow.
+	Overflow,
+	/// Division by zero.
+	DivisionByZero,
+}
+
+impl From<ArithmeticError> for &'static str {
+	fn from(e: ArithmeticError) -> &'static str {
+		match e {
+			ArithmeticError::Underflow => "An underflow would occur",
+			ArithmeticError::Overflow => "An overflow would occur",
+			ArithmeticError::DivisionByZero => "Division by zero",
+		}
+	}
+}
+
+impl From<ArithmeticError> for DispatchError {
+	fn from(e: ArithmeticError) -> DispatchError {
+		Self::Arithmetic(e)
+	}
+}
+
 impl From<&'static str> for DispatchError {
 	fn from(err: &'static str) -> DispatchError {
-		DispatchError::Other(err)
+		Self::Other(err)
 	}
 }
 
@@ -464,15 +622,21 @@ impl From<DispatchError> for &'static str {
 	fn from(err: DispatchError) -> &'static str {
 		match err {
 			DispatchError::Other(msg) => msg,
-			DispatchError::CannotLookup => "Can not lookup",
+			DispatchError::CannotLookup => "Cannot lookup",
 			DispatchError::BadOrigin => "Bad origin",
 			DispatchError::Module { message, .. } => message.unwrap_or("Unknown module error"),
+			DispatchError::ConsumerRemaining => "Consumer remaining",
+			DispatchError::NoProviders => "No providers",
+			DispatchError::TooManyConsumers => "Too many consumers",
+			DispatchError::Token(e) => e.into(),
+			DispatchError::Arithmetic(e) => e.into(),
 		}
 	}
 }
 
-impl<T> From<DispatchErrorWithPostInfo<T>> for &'static str where
-	T: Eq + PartialEq + Clone + Copy + Encode + Decode + traits::Printable
+impl<T> From<DispatchErrorWithPostInfo<T>> for &'static str
+where
+	T: Eq + PartialEq + Clone + Copy + Encode + Decode + traits::Printable,
 {
 	fn from(err: DispatchErrorWithPostInfo<T>) -> &'static str {
 		err.error.into()
@@ -484,7 +648,7 @@ impl traits::Printable for DispatchError {
 		"DispatchError".print();
 		match self {
 			Self::Other(err) => err.print(),
-			Self::CannotLookup => "Can not lookup".print(),
+			Self::CannotLookup => "Cannot lookup".print(),
 			Self::BadOrigin => "Bad origin".print(),
 			Self::Module { index, error, message } => {
 				index.print();
@@ -492,18 +656,54 @@ impl traits::Printable for DispatchError {
 				if let Some(msg) = message {
 					msg.print();
 				}
-			}
+			},
+			Self::ConsumerRemaining => "Consumer remaining".print(),
+			Self::NoProviders => "No providers".print(),
+			Self::TooManyConsumers => "Too many consumers".print(),
+			Self::Token(e) => {
+				"Token error: ".print();
+				<&'static str>::from(*e).print();
+			},
+			Self::Arithmetic(e) => {
+				"Arithmetic error: ".print();
+				<&'static str>::from(*e).print();
+			},
 		}
 	}
 }
 
-impl<T> traits::Printable for DispatchErrorWithPostInfo<T> where
-	T: Eq + PartialEq + Clone + Copy + Encode + Decode + traits::Printable
+impl<T> traits::Printable for DispatchErrorWithPostInfo<T>
+where
+	T: Eq + PartialEq + Clone + Copy + Encode + Decode + traits::Printable,
 {
 	fn print(&self) {
 		self.error.print();
 		"PostInfo: ".print();
 		self.post_info.print();
+	}
+}
+
+impl PartialEq for DispatchError {
+	fn eq(&self, other: &Self) -> bool {
+		use DispatchError::*;
+
+		match (self, other) {
+			(CannotLookup, CannotLookup) |
+			(BadOrigin, BadOrigin) |
+			(ConsumerRemaining, ConsumerRemaining) |
+			(NoProviders, NoProviders) => true,
+
+			(Token(l), Token(r)) => l == r,
+			(Other(l), Other(r)) => l == r,
+			(Arithmetic(l), Arithmetic(r)) => l == r,
+
+			(
+				Module { index: index_l, error: error_l, .. },
+				Module { index: index_r, error: error_r, .. },
+			) => (index_l == index_r) && (error_l == error_r),
+
+			_ => false,
+		}
 	}
 }
 
@@ -531,12 +731,13 @@ pub type DispatchOutcome = Result<(), DispatchError>;
 ///
 /// Examples of reasons preventing inclusion in a block:
 /// - More block weight is required to process the extrinsic than is left in the block being built.
-///   This doesn't necessarily mean that the extrinsic is invalid, since it can still be
-///   included in the next block if it has enough spare weight available.
-/// - The sender doesn't have enough funds to pay the transaction inclusion fee. Including such
-///   a transaction in the block doesn't make sense.
+///   This doesn't necessarily mean that the extrinsic is invalid, since it can still be included in
+///   the next block if it has enough spare weight available.
+/// - The sender doesn't have enough funds to pay the transaction inclusion fee. Including such a
+///   transaction in the block doesn't make sense.
 /// - The extrinsic supplied a bad signature. This transaction won't become valid ever.
-pub type ApplyExtrinsicResult = Result<DispatchOutcome, transaction_validity::TransactionValidityError>;
+pub type ApplyExtrinsicResult =
+	Result<DispatchOutcome, transaction_validity::TransactionValidityError>;
 
 /// Same as `ApplyExtrinsicResult` but augmented with `PostDispatchInfo` on success.
 pub type ApplyExtrinsicResultWithInfo<T> =
@@ -547,7 +748,7 @@ pub type ApplyExtrinsicResultWithInfo<T> =
 pub fn verify_encoded_lazy<V: Verify, T: codec::Encode>(
 	sig: &V,
 	item: &T,
-	signer: &<V::Signer as IdentifyAccount>::AccountId
+	signer: &<V::Signer as IdentifyAccount>::AccountId,
 ) -> bool {
 	// The `Lazy<T>` trait expresses something like `X: FnMut<Output = for<'a> &'a T>`.
 	// unfortunately this is a lifetime relationship that can't
@@ -564,120 +765,7 @@ pub fn verify_encoded_lazy<V: Verify, T: codec::Encode>(
 		}
 	}
 
-	sig.verify(
-		LazyEncode { inner: || item.encode(), encoded: None },
-		signer,
-	)
-}
-
-/// Helper macro for `impl_outer_config`
-#[macro_export]
-macro_rules! __impl_outer_config_types {
-	// Generic + Instance
-	(
-		$concrete:ident $config:ident $snake:ident { $instance:ident } < $ignore:ident >;
-		$( $rest:tt )*
-	) => {
-		#[cfg(any(feature = "std", test))]
-		pub type $config = $snake::GenesisConfig<$concrete, $snake::$instance>;
-		$crate::__impl_outer_config_types! { $concrete $( $rest )* }
-	};
-	// Generic
-	(
-		$concrete:ident $config:ident $snake:ident < $ignore:ident >;
-		$( $rest:tt )*
-	) => {
-		#[cfg(any(feature = "std", test))]
-		pub type $config = $snake::GenesisConfig<$concrete>;
-		$crate::__impl_outer_config_types! { $concrete $( $rest )* }
-	};
-	// No Generic and maybe Instance
-	(
-		$concrete:ident $config:ident $snake:ident $( { $instance:ident } )?;
-		$( $rest:tt )*
-	) => {
-		#[cfg(any(feature = "std", test))]
-		pub type $config = $snake::GenesisConfig;
-		$crate::__impl_outer_config_types! { $concrete $( $rest )* }
-	};
-	($concrete:ident) => ()
-}
-
-/// Implement the output "meta" module configuration struct,
-/// which is basically:
-/// pub struct GenesisConfig {
-/// 	rust_module_one: Option<ModuleOneConfig>,
-/// 	...
-/// }
-#[macro_export]
-macro_rules! impl_outer_config {
-	(
-		pub struct $main:ident for $concrete:ident {
-			$( $config:ident =>
-				$snake:ident $( $instance:ident )? $( <$generic:ident> )*, )*
-		}
-	) => {
-		$crate::__impl_outer_config_types! {
-			$concrete $( $config $snake $( { $instance } )? $( <$generic> )*; )*
-		}
-
-		$crate::paste::item! {
-			#[cfg(any(feature = "std", test))]
-			#[derive($crate::serde::Serialize, $crate::serde::Deserialize)]
-			#[serde(rename_all = "camelCase")]
-			#[serde(deny_unknown_fields)]
-			pub struct $main {
-				$(
-					pub [< $snake $(_ $instance )? >]: Option<$config>,
-				)*
-			}
-			#[cfg(any(feature = "std", test))]
-			impl $crate::BuildStorage for $main {
-				fn assimilate_storage(
-					&self,
-					storage: &mut $crate::Storage,
-				) -> std::result::Result<(), String> {
-					$(
-						if let Some(ref extra) = self.[< $snake $(_ $instance )? >] {
-							$crate::impl_outer_config! {
-								@CALL_FN
-								$concrete;
-								$snake;
-								$( $instance )?;
-								extra;
-								storage;
-							}
-						}
-					)*
-					Ok(())
-				}
-			}
-		}
-	};
-	(@CALL_FN
-		$runtime:ident;
-		$module:ident;
-		$instance:ident;
-		$extra:ident;
-		$storage:ident;
-	) => {
-		$crate::BuildModuleGenesisStorage::<$runtime, $module::$instance>::build_module_genesis_storage(
-			$extra,
-			$storage,
-		)?;
-	};
-	(@CALL_FN
-		$runtime:ident;
-		$module:ident;
-		;
-		$extra:ident;
-		$storage:ident;
-	) => {
-		$crate::BuildModuleGenesisStorage::<$runtime, $module::__InherentHiddenInstance>::build_module_genesis_storage(
-			$extra,
-			$storage,
-		)?;
-	}
+	sig.verify(LazyEncode { inner: || item.encode(), encoded: None }, signer)
 }
 
 /// Checks that `$x` is equal to `$y` with an error rate of `$error`.
@@ -713,13 +801,13 @@ macro_rules! assert_eq_error_rate {
 
 /// Simple blob to hold an extrinsic without committing to its format and ensure it is serialized
 /// correctly.
-#[derive(PartialEq, Eq, Clone, Default, Encode, Decode)]
+#[derive(PartialEq, Eq, Clone, Default, Encode, Decode, TypeInfo)]
 pub struct OpaqueExtrinsic(Vec<u8>);
 
 impl OpaqueExtrinsic {
 	/// Convert an encoded extrinsic to an `OpaqueExtrinsic`.
 	pub fn from_bytes(mut bytes: &[u8]) -> Result<Self, codec::Error> {
-		OpaqueExtrinsic::decode(&mut bytes)
+		Self::decode(&mut bytes)
 	}
 }
 
@@ -742,17 +830,22 @@ impl sp_std::fmt::Debug for OpaqueExtrinsic {
 	}
 }
 
-
 #[cfg(feature = "std")]
 impl ::serde::Serialize for OpaqueExtrinsic {
-	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error> where S: ::serde::Serializer {
+	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error>
+	where
+		S: ::serde::Serializer,
+	{
 		codec::Encode::using_encoded(&self.0, |bytes| ::sp_core::bytes::serialize(bytes, seq))
 	}
 }
 
 #[cfg(feature = "std")]
 impl<'a> ::serde::Deserialize<'a> for OpaqueExtrinsic {
-	fn deserialize<D>(de: D) -> Result<Self, D::Error> where D: ::serde::Deserializer<'a> {
+	fn deserialize<D>(de: D) -> Result<Self, D::Error>
+	where
+		D: ::serde::Deserializer<'a>,
+	{
 		let r = ::sp_core::bytes::deserialize(de)?;
 		Decode::decode(&mut &r[..])
 			.map_err(|e| ::serde::de::Error::custom(format!("Decode error: {}", e)))
@@ -768,7 +861,6 @@ impl traits::Extrinsic for OpaqueExtrinsic {
 pub fn print(print: impl traits::Printable) {
 	print.print();
 }
-
 
 /// Batching session.
 ///
@@ -824,9 +916,13 @@ impl<R> TransactionOutcome<R> {
 
 #[cfg(test)]
 mod tests {
+	use crate::traits::BlakeTwo256;
+
 	use super::*;
-	use codec::{Encode, Decode};
-	use sp_core::crypto::Pair;
+	use codec::{Decode, Encode};
+	use sp_core::crypto::{Pair, UncheckedFrom};
+	use sp_io::TestExternalities;
+	use sp_state_machine::create_proof_check_backend;
 
 	#[test]
 	fn opaque_extrinsic_serialization() {
@@ -836,21 +932,51 @@ mod tests {
 
 	#[test]
 	fn dispatch_error_encoding() {
-		let error = DispatchError::Module {
-			index: 1,
-			error: 2,
-			message: Some("error message"),
-		};
+		let error = DispatchError::Module { index: 1, error: 2, message: Some("error message") };
 		let encoded = error.encode();
 		let decoded = DispatchError::decode(&mut &encoded[..]).unwrap();
 		assert_eq!(encoded, vec![3, 1, 2]);
+		assert_eq!(decoded, DispatchError::Module { index: 1, error: 2, message: None });
+	}
+
+	#[test]
+	fn dispatch_error_equality() {
+		use DispatchError::*;
+
+		let variants = vec![
+			Other("foo"),
+			Other("bar"),
+			CannotLookup,
+			BadOrigin,
+			Module { index: 1, error: 1, message: None },
+			Module { index: 1, error: 2, message: None },
+			Module { index: 2, error: 1, message: None },
+			ConsumerRemaining,
+			NoProviders,
+			Token(TokenError::NoFunds),
+			Token(TokenError::WouldDie),
+			Token(TokenError::BelowMinimum),
+			Token(TokenError::CannotCreate),
+			Token(TokenError::UnknownAsset),
+			Token(TokenError::Frozen),
+			Arithmetic(ArithmeticError::Overflow),
+			Arithmetic(ArithmeticError::Underflow),
+			Arithmetic(ArithmeticError::DivisionByZero),
+		];
+		for (i, variant) in variants.iter().enumerate() {
+			for (j, other_variant) in variants.iter().enumerate() {
+				if i == j {
+					assert_eq!(variant, other_variant);
+				} else {
+					assert_ne!(variant, other_variant);
+				}
+			}
+		}
+
+		// Ignores `message` field in `Module` variant.
 		assert_eq!(
-			decoded,
-			DispatchError::Module {
-				index: 1,
-				error: 2,
-				message: None,
-			},
+			Module { index: 1, error: 1, message: Some("foo") },
+			Module { index: 1, error: 1, message: None },
 		);
 	}
 
@@ -870,22 +996,19 @@ mod tests {
 		assert!(multi_sig.verify(msg, &multi_signer.into_account()));
 	}
 
-
 	#[test]
 	#[should_panic(expected = "Signature verification has not been called")]
 	fn batching_still_finishes_when_not_called_directly() {
 		let mut ext = sp_state_machine::BasicExternalities::default();
-		ext.register_extension(
-			sp_core::traits::TaskExecutorExt::new(sp_core::testing::TaskExecutor::new()),
-		);
+		ext.register_extension(sp_core::traits::TaskExecutorExt::new(
+			sp_core::testing::TaskExecutor::new(),
+		));
 
 		ext.execute_with(|| {
 			let _batching = SignatureBatching::start();
-			sp_io::crypto::sr25519_verify(
-				&Default::default(),
-				&Vec::new(),
-				&Default::default(),
-			);
+			let dummy = UncheckedFrom::unchecked_from([1; 32]);
+			let dummy_sig = UncheckedFrom::unchecked_from([1; 64]);
+			sp_io::crypto::sr25519_verify(&dummy_sig, &Vec::new(), &dummy);
 		});
 	}
 
@@ -893,13 +1016,56 @@ mod tests {
 	#[should_panic(expected = "Hey, I'm an error")]
 	fn batching_does_not_panic_while_thread_is_already_panicking() {
 		let mut ext = sp_state_machine::BasicExternalities::default();
-		ext.register_extension(
-			sp_core::traits::TaskExecutorExt::new(sp_core::testing::TaskExecutor::new()),
-		);
+		ext.register_extension(sp_core::traits::TaskExecutorExt::new(
+			sp_core::testing::TaskExecutor::new(),
+		));
 
 		ext.execute_with(|| {
 			let _batching = SignatureBatching::start();
 			panic!("Hey, I'm an error");
+		});
+	}
+
+	#[test]
+	fn execute_and_generate_proof_works() {
+		use codec::Encode;
+		use sp_state_machine::Backend;
+		let mut ext = TestExternalities::default();
+
+		ext.insert(b"a".to_vec(), vec![1u8; 33]);
+		ext.insert(b"b".to_vec(), vec![2u8; 33]);
+		ext.insert(b"c".to_vec(), vec![3u8; 33]);
+		ext.insert(b"d".to_vec(), vec![4u8; 33]);
+
+		let pre_root = ext.backend.root().clone();
+		let (_, proof) = ext.execute_and_prove(|| {
+			sp_io::storage::get(b"a");
+			sp_io::storage::get(b"b");
+			sp_io::storage::get(b"v");
+			sp_io::storage::get(b"d");
+		});
+
+		let compact_proof = proof.clone().into_compact_proof::<BlakeTwo256>(pre_root).unwrap();
+		let compressed_proof = zstd::stream::encode_all(&compact_proof.encode()[..], 0).unwrap();
+
+		// just an example of how you'd inspect the size of the proof.
+		println!("proof size: {:?}", proof.encoded_size());
+		println!("compact proof size: {:?}", compact_proof.encoded_size());
+		println!("zstd-compressed compact proof size: {:?}", &compressed_proof.len());
+
+		// create a new trie-backed from the proof and make sure it contains everything
+		let proof_check = create_proof_check_backend::<BlakeTwo256>(pre_root, proof).unwrap();
+		assert_eq!(proof_check.storage(b"a",).unwrap().unwrap(), vec![1u8; 33]);
+
+		let _ = ext.execute_and_prove(|| {
+			sp_io::storage::set(b"a", &vec![1u8; 44]);
+		});
+
+		// ensure that these changes are propagated to the backend.
+
+		ext.execute_with(|| {
+			assert_eq!(sp_io::storage::get(b"a").unwrap(), vec![1u8; 44]);
+			assert_eq!(sp_io::storage::get(b"b").unwrap(), vec![2u8; 33]);
 		});
 	}
 }

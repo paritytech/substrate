@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,27 +17,29 @@
 
 //! Generic implementation of an unchecked (pre-verification) extrinsic.
 
-use sp_std::{fmt, prelude::*};
-use sp_io::hashing::blake2_256;
-use codec::{Decode, Encode, EncodeLike, Input, Error};
 use crate::{
-	traits::{
-		self, Member, MaybeDisplay, SignedExtension, Checkable, Extrinsic, ExtrinsicMetadata,
-		IdentifyAccount,
-	},
 	generic::CheckedExtrinsic,
-	transaction_validity::{TransactionValidityError, InvalidTransaction},
-	OpaqueExtrinsic,
+	traits::{
+		self, Checkable, Extrinsic, ExtrinsicMetadata, IdentifyAccount, IdentifyAccountWithLookup,
+		LookupError, MaybeDisplay, Member, SignedExtension,
+	},
+	transaction_validity::{InvalidTransaction, TransactionValidityError},
+	AccountId32, OpaqueExtrinsic,
 };
+use codec::{Compact, Decode, Encode, EncodeLike, Error, Input};
+use scale_info::{build::Fields, meta_type, Path, StaticTypeInfo, Type, TypeInfo, TypeParameter};
+use sp_io::hashing::blake2_256;
+use sp_std::{fmt, prelude::*};
 
-const TRANSACTION_VERSION: u8 = 4;
+/// Current version of the [`UncheckedExtrinsic`] format.
+const EXTRINSIC_VERSION: u8 = 4;
 
 /// A extrinsic right from the external world. This is unchecked and so
 /// can contain a signature.
 #[derive(PartialEq, Eq, Clone)]
 pub struct UncheckedExtrinsic<Address, Call, Signature, Extra>
 where
-	Extra: SignedExtension
+	Extra: SignedExtension,
 {
 	/// The signature, address, number of extrinsics have come before from
 	/// the same signer and an era describing the longevity of this transaction,
@@ -47,11 +49,45 @@ where
 	pub function: Call,
 }
 
+/// Manual [`TypeInfo`] implementation because of custom encoding. The data is a valid encoded
+/// `Vec<u8>`, but requires some logic to extract the signature and payload.
+///
+/// See [`UncheckedExtrinsic::encode`] and [`UncheckedExtrinsic::decode`].
+impl<Address, Call, Signature, Extra> TypeInfo
+	for UncheckedExtrinsic<Address, Call, Signature, Extra>
+where
+	Address: StaticTypeInfo,
+	Call: StaticTypeInfo,
+	Signature: StaticTypeInfo,
+	Extra: SignedExtension + StaticTypeInfo,
+{
+	type Identity = UncheckedExtrinsic<Address, Call, Signature, Extra>;
+
+	fn type_info() -> Type {
+		Type::builder()
+			.path(Path::new("UncheckedExtrinsic", module_path!()))
+			// Include the type parameter types, even though they are not used directly in any of
+			// the described fields. These type definitions can be used by downstream consumers
+			// to help construct the custom decoding from the opaque bytes (see below).
+			.type_params(vec![
+				TypeParameter::new("Address", Some(meta_type::<Address>())),
+				TypeParameter::new("Call", Some(meta_type::<Call>())),
+				TypeParameter::new("Signature", Some(meta_type::<Signature>())),
+				TypeParameter::new("Extra", Some(meta_type::<Extra>())),
+			])
+			.docs(&["UncheckedExtrinsic raw bytes, requires custom decoding routine"])
+			// Because of the custom encoding, we can only accurately describe the encoding as an
+			// opaque `Vec<u8>`. Downstream consumers will need to manually implement the codec to
+			// encode/decode the `signature` and `function` fields.
+			.composite(Fields::unnamed().field(|f| f.ty::<Vec<u8>>()))
+	}
+}
+
 #[cfg(feature = "std")]
 impl<Address, Call, Signature, Extra> parity_util_mem::MallocSizeOf
 	for UncheckedExtrinsic<Address, Call, Signature, Extra>
 where
-	Extra: SignedExtension
+	Extra: SignedExtension,
 {
 	fn size_of(&self, _ops: &mut parity_util_mem::MallocSizeOfOps) -> usize {
 		// Instantiated only in runtime.
@@ -63,24 +99,13 @@ impl<Address, Call, Signature, Extra: SignedExtension>
 	UncheckedExtrinsic<Address, Call, Signature, Extra>
 {
 	/// New instance of a signed extrinsic aka "transaction".
-	pub fn new_signed(
-		function: Call,
-		signed: Address,
-		signature: Signature,
-		extra: Extra
-	) -> Self {
-		UncheckedExtrinsic {
-			signature: Some((signed, signature, extra)),
-			function,
-		}
+	pub fn new_signed(function: Call, signed: Address, signature: Signature, extra: Extra) -> Self {
+		Self { signature: Some((signed, signature, extra)), function }
 	}
 
 	/// New instance of an unsigned extrinsic aka "inherent".
 	pub fn new_unsigned(function: Call) -> Self {
-		UncheckedExtrinsic {
-			signature: None,
-			function,
-		}
+		Self { signature: None, function }
 	}
 }
 
@@ -89,11 +114,7 @@ impl<Address, Call, Signature, Extra: SignedExtension> Extrinsic
 {
 	type Call = Call;
 
-	type SignaturePayload = (
-		Address,
-		Signature,
-		Extra,
-	);
+	type SignaturePayload = (Address, Signature, Extra);
 
 	fn is_signed(&self) -> Option<bool> {
 		Some(self.signature.is_some())
@@ -101,25 +122,23 @@ impl<Address, Call, Signature, Extra: SignedExtension> Extrinsic
 
 	fn new(function: Call, signed_data: Option<Self::SignaturePayload>) -> Option<Self> {
 		Some(if let Some((address, signature, extra)) = signed_data {
-			UncheckedExtrinsic::new_signed(function, address, signature, extra)
+			Self::new_signed(function, address, signature, extra)
 		} else {
-			UncheckedExtrinsic::new_unsigned(function)
+			Self::new_unsigned(function)
 		})
 	}
 }
 
-impl<Address, AccountId, Call, Signature, Extra, Lookup>
-	Checkable<Lookup>
-for
-	UncheckedExtrinsic<Address, Call, Signature, Extra>
+impl<Address, AccountId, Call, Signature, Extra, Lookup> Checkable<Lookup>
+	for UncheckedExtrinsic<Address, Call, Signature, Extra>
 where
 	Address: Member + MaybeDisplay,
 	Call: Encode + Member,
 	Signature: Member + traits::Verify,
-	<Signature as traits::Verify>::Signer: IdentifyAccount<AccountId=AccountId>,
-	Extra: SignedExtension<AccountId=AccountId>,
+	<Signature as traits::Verify>::Signer: IdentifyAccount<AccountId = AccountId>,
+	Extra: SignedExtension<AccountId = AccountId>,
 	AccountId: Member + MaybeDisplay,
-	Lookup: traits::Lookup<Source=Address, Target=AccountId>,
+	Lookup: traits::Lookup<Source = Address, Target = AccountId>,
 {
 	type Checked = CheckedExtrinsic<AccountId, Call, Extra>;
 
@@ -133,25 +152,37 @@ where
 				}
 
 				let (function, extra, _) = raw_payload.deconstruct();
-				CheckedExtrinsic {
-					signed: Some((signed, extra)),
-					function,
-				}
-			}
-			None => CheckedExtrinsic {
-				signed: None,
-				function: self.function,
+				CheckedExtrinsic { signed: Some((signed, extra)), function }
 			},
+			None => CheckedExtrinsic { signed: None, function: self.function },
 		})
+	}
+}
+
+impl<Lookup, Address, Call, Signature, Extra> IdentifyAccountWithLookup<Lookup>
+	for UncheckedExtrinsic<Address, Call, Signature, Extra>
+where
+	Address: Member + MaybeDisplay + Clone,
+	Signature: Member + traits::Verify + Clone,
+	<Signature as traits::Verify>::Signer: IdentifyAccount<AccountId = AccountId32>,
+	Extra: SignedExtension<AccountId = AccountId32>,
+	Lookup: traits::Lookup<Source = Address, Target = AccountId32>,
+{
+	type AccountId = AccountId32;
+	fn get_account_id(&self, lookup: &Lookup) -> Result<Option<AccountId32>, LookupError> {
+		match self.signature {
+			Some((ref signed, _, _)) => lookup.lookup(signed.clone()).map(|addr| Some(addr)),
+			None => Ok(None),
+		}
 	}
 }
 
 impl<Address, Call, Signature, Extra> ExtrinsicMetadata
 	for UncheckedExtrinsic<Address, Call, Signature, Extra>
-		where
-			Extra: SignedExtension,
+where
+	Extra: SignedExtension,
 {
-	const VERSION: u8 = TRANSACTION_VERSION;
+	const VERSION: u8 = EXTRINSIC_VERSION;
 	type SignedExtensions = Extra;
 }
 
@@ -160,13 +191,10 @@ impl<Address, Call, Signature, Extra> ExtrinsicMetadata
 /// Note that the payload that we sign to produce unchecked extrinsic signature
 /// is going to be different than the `SignaturePayload` - so the thing the extrinsic
 /// actually contains.
-pub struct SignedPayload<Call, Extra: SignedExtension>((
-	Call,
-	Extra,
-	Extra::AdditionalSigned,
-));
+pub struct SignedPayload<Call, Extra: SignedExtension>((Call, Extra, Extra::AdditionalSigned));
 
-impl<Call, Extra> SignedPayload<Call, Extra> where
+impl<Call, Extra> SignedPayload<Call, Extra>
+where
 	Call: Encode,
 	Extra: SignedExtension,
 {
@@ -190,7 +218,8 @@ impl<Call, Extra> SignedPayload<Call, Extra> where
 	}
 }
 
-impl<Call, Extra> Encode for SignedPayload<Call, Extra> where
+impl<Call, Extra> Encode for SignedPayload<Call, Extra>
+where
 	Call: Encode,
 	Extra: SignedExtension,
 {
@@ -212,10 +241,10 @@ impl<Call, Extra> EncodeLike for SignedPayload<Call, Extra>
 where
 	Call: Encode,
 	Extra: SignedExtension,
-{}
+{
+}
 
-impl<Address, Call, Signature, Extra> Decode
-	for UncheckedExtrinsic<Address, Call, Signature, Extra>
+impl<Address, Call, Signature, Extra> Decode for UncheckedExtrinsic<Address, Call, Signature, Extra>
 where
 	Address: Decode,
 	Signature: Decode,
@@ -227,25 +256,24 @@ where
 		// with substrate's generic `Vec<u8>` type. Basically this just means accepting that there
 		// will be a prefix of vector length (we don't need
 		// to use this).
-		let _length_do_not_remove_me_see_above: Vec<()> = Decode::decode(input)?;
+		let _length_do_not_remove_me_see_above: Compact<u32> = Decode::decode(input)?;
 
 		let version = input.read_byte()?;
 
 		let is_signed = version & 0b1000_0000 != 0;
 		let version = version & 0b0111_1111;
-		if version != TRANSACTION_VERSION {
-			return Err("Invalid transaction version".into());
+		if version != EXTRINSIC_VERSION {
+			return Err("Invalid transaction version".into())
 		}
 
-		Ok(UncheckedExtrinsic {
+		Ok(Self {
 			signature: if is_signed { Some(Decode::decode(input)?) } else { None },
 			function: Decode::decode(input)?,
 		})
 	}
 }
 
-impl<Address, Call, Signature, Extra> Encode
-	for UncheckedExtrinsic<Address, Call, Signature, Extra>
+impl<Address, Call, Signature, Extra> Encode for UncheckedExtrinsic<Address, Call, Signature, Extra>
 where
 	Address: Encode,
 	Signature: Encode,
@@ -253,19 +281,29 @@ where
 	Extra: SignedExtension,
 {
 	fn encode(&self) -> Vec<u8> {
-		super::encode_with_vec_prefix::<Self, _>(|v| {
-			// 1 byte version id.
-			match self.signature.as_ref() {
-				Some(s) => {
-					v.push(TRANSACTION_VERSION | 0b1000_0000);
-					s.encode_to(v);
-				}
-				None => {
-					v.push(TRANSACTION_VERSION & 0b0111_1111);
-				}
-			}
-			self.function.encode_to(v);
-		})
+		let mut tmp = Vec::with_capacity(sp_std::mem::size_of::<Self>());
+
+		// 1 byte version id.
+		match self.signature.as_ref() {
+			Some(s) => {
+				tmp.push(EXTRINSIC_VERSION | 0b1000_0000);
+				s.encode_to(&mut tmp);
+			},
+			None => {
+				tmp.push(EXTRINSIC_VERSION & 0b0111_1111);
+			},
+		}
+		self.function.encode_to(&mut tmp);
+
+		let compact_len = codec::Compact::<u32>(tmp.len() as u32);
+
+		// Allocate the output buffer with the correct length
+		let mut output = Vec::with_capacity(compact_len.size_hint() + tmp.len());
+
+		compact_len.encode_to(&mut output);
+		output.extend(tmp);
+
+		output
 	}
 }
 
@@ -276,22 +314,27 @@ where
 	Signature: Encode,
 	Call: Encode,
 	Extra: SignedExtension,
-{}
+{
+}
 
 #[cfg(feature = "std")]
 impl<Address: Encode, Signature: Encode, Call: Encode, Extra: SignedExtension> serde::Serialize
 	for UncheckedExtrinsic<Address, Call, Signature, Extra>
 {
-	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error> where S: ::serde::Serializer {
+	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error>
+	where
+		S: ::serde::Serializer,
+	{
 		self.using_encoded(|bytes| seq.serialize_bytes(bytes))
 	}
 }
 
 #[cfg(feature = "std")]
-impl<'a, Address: Decode, Signature: Decode, Call: Decode, Extra: SignedExtension> serde::Deserialize<'a>
-	for UncheckedExtrinsic<Address, Call, Signature, Extra>
+impl<'a, Address: Decode, Signature: Decode, Call: Decode, Extra: SignedExtension>
+	serde::Deserialize<'a> for UncheckedExtrinsic<Address, Call, Signature, Extra>
 {
-	fn deserialize<D>(de: D) -> Result<Self, D::Error> where
+	fn deserialize<D>(de: D) -> Result<Self, D::Error>
+	where
 		D: serde::Deserializer<'a>,
 	{
 		let r = sp_core::bytes::deserialize(de)?;
@@ -326,21 +369,22 @@ where
 	Extra: SignedExtension,
 {
 	fn from(extrinsic: UncheckedExtrinsic<Address, Call, Signature, Extra>) -> Self {
-		OpaqueExtrinsic::from_bytes(extrinsic.encode().as_slice())
-			.expect(
-				"both OpaqueExtrinsic and UncheckedExtrinsic have encoding that is compatible with \
-				raw Vec<u8> encoding; qed"
-			)
+		Self::from_bytes(extrinsic.encode().as_slice()).expect(
+			"both OpaqueExtrinsic and UncheckedExtrinsic have encoding that is compatible with \
+				raw Vec<u8> encoding; qed",
+		)
 	}
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate::{
+		codec::{Decode, Encode},
+		testing::TestSignature as TestSig,
+		traits::{DispatchInfoOf, IdentityLookup, SignedExtension},
+	};
 	use sp_io::hashing::blake2_256;
-	use crate::codec::{Encode, Decode};
-	use crate::traits::{SignedExtension, IdentityLookup};
-	use crate::testing::TestSignature as TestSig;
 
 	type TestContext = IdentityLookup<u64>;
 	type TestAccountId = u64;
@@ -349,7 +393,7 @@ mod tests {
 	const TEST_ACCOUNT: TestAccountId = 0;
 
 	// NOTE: this is demonstration. One can simply use `()` for testing.
-	#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, Ord, PartialOrd)]
+	#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, Ord, PartialOrd, TypeInfo)]
 	struct TestExtra;
 	impl SignedExtension for TestExtra {
 		const IDENTIFIER: &'static str = "TestExtra";
@@ -358,7 +402,19 @@ mod tests {
 		type AdditionalSigned = ();
 		type Pre = ();
 
-		fn additional_signed(&self) -> sp_std::result::Result<(), TransactionValidityError> { Ok(()) }
+		fn additional_signed(&self) -> sp_std::result::Result<(), TransactionValidityError> {
+			Ok(())
+		}
+
+		fn pre_dispatch(
+			self,
+			who: &Self::AccountId,
+			call: &Self::Call,
+			info: &DispatchInfoOf<Self::Call>,
+			len: usize,
+		) -> Result<Self::Pre, TransactionValidityError> {
+			self.validate(who, call, info, len).map(|_| ())
+		}
 	}
 
 	type Ex = UncheckedExtrinsic<TestAccountId, TestCall, TestSig, TestExtra>;
@@ -377,7 +433,7 @@ mod tests {
 			vec![0u8; 0],
 			TEST_ACCOUNT,
 			TestSig(TEST_ACCOUNT, (vec![0u8; 0], TestExtra).encode()),
-			TestExtra
+			TestExtra,
 		);
 		let encoded = ux.encode();
 		assert_eq!(Ex::decode(&mut &encoded[..]), Ok(ux));
@@ -388,9 +444,11 @@ mod tests {
 		let ux = Ex::new_signed(
 			vec![0u8; 0],
 			TEST_ACCOUNT,
-			TestSig(TEST_ACCOUNT, (vec![0u8; 257], TestExtra)
-				.using_encoded(blake2_256)[..].to_owned()),
-			TestExtra
+			TestSig(
+				TEST_ACCOUNT,
+				(vec![0u8; 257], TestExtra).using_encoded(blake2_256)[..].to_owned(),
+			),
+			TestExtra,
 		);
 		let encoded = ux.encode();
 		assert_eq!(Ex::decode(&mut &encoded[..]), Ok(ux));
@@ -450,5 +508,14 @@ mod tests {
 		let opaque: OpaqueExtrinsic = ux.into();
 		let opaque_encoded = opaque.encode();
 		assert_eq!(opaque_encoded, encoded);
+	}
+
+	#[test]
+	fn large_bad_prefix_should_work() {
+		let encoded = Compact::<u32>::from(u32::MAX).encode();
+		assert_eq!(
+			Ex::decode(&mut &encoded[..]),
+			Err(Error::from("Not enough data to fill buffer"))
+		);
 	}
 }

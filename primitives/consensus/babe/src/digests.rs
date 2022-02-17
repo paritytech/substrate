@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,11 +19,11 @@
 
 use super::{
 	AllowedSlots, AuthorityId, AuthorityIndex, AuthoritySignature, BabeAuthorityWeight,
-	BabeEpochConfiguration, SlotNumber, BABE_ENGINE_ID,
+	BabeEpochConfiguration, Slot, BABE_ENGINE_ID,
 };
-use codec::{Codec, Decode, Encode};
+use codec::{Decode, Encode, MaxEncodedLen};
+use sp_runtime::{DigestItem, RuntimeDebug};
 use sp_std::vec::Vec;
-use sp_runtime::{generic::OpaqueDigestItemId, DigestItem, RuntimeDebug};
 
 use sp_consensus_vrf::schnorrkel::{Randomness, VRFOutput, VRFProof};
 
@@ -32,8 +32,8 @@ use sp_consensus_vrf::schnorrkel::{Randomness, VRFOutput, VRFProof};
 pub struct PrimaryPreDigest {
 	/// Authority index
 	pub authority_index: super::AuthorityIndex,
-	/// Slot number
-	pub slot_number: SlotNumber,
+	/// Slot
+	pub slot: Slot,
 	/// VRF output
 	pub vrf_output: VRFOutput,
 	/// VRF proof
@@ -50,8 +50,8 @@ pub struct SecondaryPlainPreDigest {
 	/// it makes things easier for higher-level users of the chain data to
 	/// be aware of the author of a secondary-slot block.
 	pub authority_index: super::AuthorityIndex,
-	/// Slot number
-	pub slot_number: SlotNumber,
+	/// Slot
+	pub slot: Slot,
 }
 
 /// BABE secondary deterministic slot assignment with VRF outputs.
@@ -59,8 +59,8 @@ pub struct SecondaryPlainPreDigest {
 pub struct SecondaryVRFPreDigest {
 	/// Authority index
 	pub authority_index: super::AuthorityIndex,
-	/// Slot number
-	pub slot_number: SlotNumber,
+	/// Slot
+	pub slot: Slot,
 	/// VRF output
 	pub vrf_output: VRFOutput,
 	/// VRF proof
@@ -73,13 +73,13 @@ pub struct SecondaryVRFPreDigest {
 #[derive(Clone, RuntimeDebug, Encode, Decode)]
 pub enum PreDigest {
 	/// A primary VRF-based slot assignment.
-	#[codec(index = "1")]
+	#[codec(index = 1)]
 	Primary(PrimaryPreDigest),
 	/// A secondary deterministic slot assignment.
-	#[codec(index = "2")]
+	#[codec(index = 2)]
 	SecondaryPlain(SecondaryPlainPreDigest),
 	/// A secondary deterministic slot assignment with VRF outputs.
-	#[codec(index = "3")]
+	#[codec(index = 3)]
 	SecondaryVRF(SecondaryVRFPreDigest),
 }
 
@@ -93,12 +93,12 @@ impl PreDigest {
 		}
 	}
 
-	/// Returns the slot number of the pre digest.
-	pub fn slot_number(&self) -> SlotNumber {
+	/// Returns the slot of the pre digest.
+	pub fn slot(&self) -> Slot {
 		match self {
-			PreDigest::Primary(primary) => primary.slot_number,
-			PreDigest::SecondaryPlain(secondary) => secondary.slot_number,
-			PreDigest::SecondaryVRF(secondary) => secondary.slot_number,
+			PreDigest::Primary(primary) => primary.slot,
+			PreDigest::SecondaryPlain(secondary) => secondary.slot,
+			PreDigest::SecondaryVRF(secondary) => secondary.slot,
 		}
 	}
 
@@ -108,6 +108,15 @@ impl PreDigest {
 		match self {
 			PreDigest::Primary(_) => 1,
 			PreDigest::SecondaryPlain(_) | PreDigest::SecondaryVRF(_) => 0,
+		}
+	}
+
+	/// Returns the VRF output, if it exists.
+	pub fn vrf_output(&self) -> Option<&VRFOutput> {
+		match self {
+			PreDigest::Primary(primary) => Some(&primary.vrf_output),
+			PreDigest::SecondaryVRF(secondary) => Some(&secondary.vrf_output),
+			PreDigest::SecondaryPlain(_) => None,
 		}
 	}
 }
@@ -125,23 +134,24 @@ pub struct NextEpochDescriptor {
 
 /// Information about the next epoch config, if changed. This is broadcast in the first
 /// block of the epoch, and applies using the same rules as `NextEpochDescriptor`.
-#[derive(Decode, Encode, PartialEq, Eq, Clone, RuntimeDebug)]
+#[derive(
+	Decode, Encode, PartialEq, Eq, Clone, RuntimeDebug, MaxEncodedLen, scale_info::TypeInfo,
+)]
 pub enum NextConfigDescriptor {
 	/// Version 1.
-	#[codec(index = "1")]
+	#[codec(index = 1)]
 	V1 {
 		/// Value of `c` in `BabeEpochConfiguration`.
 		c: (u64, u64),
 		/// Value of `allowed_slots` in `BabeEpochConfiguration`.
 		allowed_slots: AllowedSlots,
-	}
+	},
 }
 
 impl From<NextConfigDescriptor> for BabeEpochConfiguration {
 	fn from(desc: NextConfigDescriptor) -> Self {
 		match desc {
-			NextConfigDescriptor::V1 { c, allowed_slots } =>
-				Self { c, allowed_slots },
+			NextConfigDescriptor::V1 { c, allowed_slots } => Self { c, allowed_slots },
 		}
 	}
 }
@@ -167,15 +177,13 @@ pub trait CompatibleDigestItem: Sized {
 	fn as_next_config_descriptor(&self) -> Option<NextConfigDescriptor>;
 }
 
-impl<Hash> CompatibleDigestItem for DigestItem<Hash> where
-	Hash: Send + Sync + Eq + Clone + Codec + 'static
-{
+impl CompatibleDigestItem for DigestItem {
 	fn babe_pre_digest(digest: PreDigest) -> Self {
 		DigestItem::PreRuntime(BABE_ENGINE_ID, digest.encode())
 	}
 
 	fn as_babe_pre_digest(&self) -> Option<PreDigest> {
-		self.try_to(OpaqueDigestItemId::PreRuntime(&BABE_ENGINE_ID))
+		self.pre_runtime_try_to(&BABE_ENGINE_ID)
 	}
 
 	fn babe_seal(signature: AuthoritySignature) -> Self {
@@ -183,11 +191,11 @@ impl<Hash> CompatibleDigestItem for DigestItem<Hash> where
 	}
 
 	fn as_babe_seal(&self) -> Option<AuthoritySignature> {
-		self.try_to(OpaqueDigestItemId::Seal(&BABE_ENGINE_ID))
+		self.seal_try_to(&BABE_ENGINE_ID)
 	}
 
 	fn as_next_epoch_descriptor(&self) -> Option<NextEpochDescriptor> {
-		self.try_to(OpaqueDigestItemId::Consensus(&BABE_ENGINE_ID))
+		self.consensus_try_to(&BABE_ENGINE_ID)
 			.and_then(|x: super::ConsensusLog| match x {
 				super::ConsensusLog::NextEpochData(n) => Some(n),
 				_ => None,
@@ -195,7 +203,7 @@ impl<Hash> CompatibleDigestItem for DigestItem<Hash> where
 	}
 
 	fn as_next_config_descriptor(&self) -> Option<NextConfigDescriptor> {
-		self.try_to(OpaqueDigestItemId::Consensus(&BABE_ENGINE_ID))
+		self.consensus_try_to(&BABE_ENGINE_ID)
 			.and_then(|x: super::ConsensusLog| match x {
 				super::ConsensusLog::NextConfigData(n) => Some(n),
 				_ => None,

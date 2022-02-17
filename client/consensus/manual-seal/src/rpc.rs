@@ -1,36 +1,36 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! RPC interface for the `ManualSeal` Engine.
 
-use sp_consensus::ImportedAux;
-use jsonrpc_core::Error;
-use jsonrpc_derive::rpc;
+pub use self::gen_client::Client as ManualSealClient;
 use futures::{
 	channel::{mpsc, oneshot},
-	TryFutureExt,
-	FutureExt,
-	SinkExt
+	FutureExt, SinkExt, TryFutureExt,
 };
+use jsonrpc_core::Error;
+use jsonrpc_derive::rpc;
+use sc_consensus::ImportedAux;
 use serde::{Deserialize, Serialize};
-use sp_runtime::Justification;
-pub use self::gen_client::Client as ManualSealClient;
+use sp_runtime::EncodedJustification;
 
 /// Future's type for jsonrpc
-type FutureResult<T> = Box<dyn jsonrpc_core::futures::Future<Item = T, Error = Error> + Send>;
+type FutureResult<T> = jsonrpc_core::BoxFuture<Result<T, Error>>;
 /// sender passed to the authorship task to report errors or successes.
 pub type Sender<T> = Option<oneshot::Sender<std::result::Result<T, crate::Error>>>;
 
@@ -60,8 +60,8 @@ pub enum EngineCommand<Hash> {
 		/// sender to report errors/success to the rpc.
 		sender: Sender<()>,
 		/// finalization justification
-		justification: Option<Justification>,
-	}
+		justification: Option<EncodedJustification>,
+	},
 }
 
 /// RPC trait that provides methods for interacting with the manual-seal authorship task over rpc.
@@ -73,7 +73,7 @@ pub trait ManualSealApi<Hash> {
 		&self,
 		create_empty: bool,
 		finalize: bool,
-		parent_hash: Option<Hash>
+		parent_hash: Option<Hash>,
 	) -> FutureResult<CreatedBlock<Hash>>;
 
 	/// Instructs the manual-seal authorship task to finalize a block
@@ -81,7 +81,7 @@ pub trait ManualSealApi<Hash> {
 	fn finalize_block(
 		&self,
 		hash: Hash,
-		justification: Option<Justification>
+		justification: Option<EncodedJustification>,
 	) -> FutureResult<bool>;
 }
 
@@ -96,7 +96,7 @@ pub struct CreatedBlock<Hash> {
 	/// hash of the created block.
 	pub hash: Hash,
 	/// some extra details about the import operation
-	pub aux: ImportedAux
+	pub aux: ImportedAux,
 }
 
 impl<Hash> ManualSeal<Hash> {
@@ -111,10 +111,10 @@ impl<Hash: Send + 'static> ManualSealApi<Hash> for ManualSeal<Hash> {
 		&self,
 		create_empty: bool,
 		finalize: bool,
-		parent_hash: Option<Hash>
+		parent_hash: Option<Hash>,
 	) -> FutureResult<CreatedBlock<Hash>> {
 		let mut sink = self.import_block_channel.clone();
-		let future = async move {
+		async move {
 			let (sender, receiver) = oneshot::channel();
 			let command = EngineCommand::SealNewBlock {
 				create_empty,
@@ -124,23 +124,26 @@ impl<Hash: Send + 'static> ManualSealApi<Hash> for ManualSeal<Hash> {
 			};
 			sink.send(command).await?;
 			receiver.await?
-		}.boxed();
-
-		Box::new(future.map_err(Error::from).compat())
+		}
+		.map_err(Error::from)
+		.boxed()
 	}
 
-	fn finalize_block(&self, hash: Hash, justification: Option<Justification>) -> FutureResult<bool> {
+	fn finalize_block(
+		&self,
+		hash: Hash,
+		justification: Option<EncodedJustification>,
+	) -> FutureResult<bool> {
 		let mut sink = self.import_block_channel.clone();
-		let future = async move {
+		async move {
 			let (sender, receiver) = oneshot::channel();
-			sink.send(
-				EngineCommand::FinalizeBlock { hash, sender: Some(sender), justification }
-			).await?;
+			sink.send(EngineCommand::FinalizeBlock { hash, sender: Some(sender), justification })
+				.await?;
 
 			receiver.await?.map(|_| true)
-		};
-
-		Box::new(future.boxed().map_err(Error::from).compat())
+		}
+		.map_err(Error::from)
+		.boxed()
 	}
 }
 
@@ -148,7 +151,7 @@ impl<Hash: Send + 'static> ManualSealApi<Hash> for ManualSeal<Hash> {
 /// to the rpc
 pub fn send_result<T: std::fmt::Debug>(
 	sender: &mut Sender<T>,
-	result: std::result::Result<T, crate::Error>
+	result: std::result::Result<T, crate::Error>,
 ) {
 	if let Some(sender) = sender.take() {
 		if let Err(err) = sender.send(result) {
@@ -158,7 +161,7 @@ pub fn send_result<T: std::fmt::Debug>(
 		// instant seal doesn't report errors over rpc, simply log them.
 		match result {
 			Ok(r) => log::info!("Instant Seal success: {:?}", r),
-			Err(e) => log::error!("Instant Seal encountered an error: {}", e)
+			Err(e) => log::error!("Instant Seal encountered an error: {}", e),
 		}
 	}
 }

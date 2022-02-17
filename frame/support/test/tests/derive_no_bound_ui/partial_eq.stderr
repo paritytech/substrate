@@ -1,0 +1,7 @@
+error[E0369]: binary operation `==` cannot be applied to type `<T as Config>::C`
+ --> $DIR/partial_eq.rs:7:2
+  |
+7 |     c: T::C,
+  |     ^
+  |
+  = note: the trait `std::cmp::PartialEq` is not implemented for `<T as Config>::C`

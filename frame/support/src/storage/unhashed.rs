@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,15 +17,19 @@
 
 //! Operation on unhashed runtime storage.
 
+use codec::{Decode, Encode};
 use sp_std::prelude::*;
-use codec::{Encode, Decode};
 
 /// Return the value of the item in storage under `key`, or `None` if there is no explicit entry.
 pub fn get<T: Decode + Sized>(key: &[u8]) -> Option<T> {
 	sp_io::storage::get(key).and_then(|val| {
 		Decode::decode(&mut &val[..]).map(Some).unwrap_or_else(|_| {
 			// TODO #3700: error should be handleable.
-			runtime_print!("ERROR: Corrupted state at {:?}", key);
+			log::error!(
+				target: "runtime::storage",
+				"Corrupted state at {:?}",
+				key,
+			);
 			None
 		})
 	})
@@ -83,7 +87,7 @@ pub fn take_or_else<T: Decode + Sized, F: FnOnce() -> T>(key: &[u8], default_val
 
 /// Check to see if `key` has an explicit entry in storage.
 pub fn exists(key: &[u8]) -> bool {
-	sp_io::storage::read(key, &mut [0;0][..], 0).is_some()
+	sp_io::storage::exists(key)
 }
 
 /// Ensure `key` has no explicit entry in storage.
@@ -92,8 +96,8 @@ pub fn kill(key: &[u8]) {
 }
 
 /// Ensure keys with the given `prefix` have no entries in storage.
-pub fn kill_prefix(prefix: &[u8]) {
-	sp_io::storage::clear_prefix(prefix);
+pub fn kill_prefix(prefix: &[u8], limit: Option<u32>) -> sp_io::KillStorageResult {
+	sp_io::storage::clear_prefix(prefix, limit)
 }
 
 /// Get a Vec of bytes from storage.

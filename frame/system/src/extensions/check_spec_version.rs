@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,18 +15,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{Trait, Module};
-use codec::{Encode, Decode};
+use crate::{Config, Pallet};
+use codec::{Decode, Encode};
+use scale_info::TypeInfo;
 use sp_runtime::{
-	traits::SignedExtension,
+	traits::{DispatchInfoOf, SignedExtension},
 	transaction_validity::TransactionValidityError,
 };
 
 /// Ensure the runtime version registered in the transaction is the same as at present.
-#[derive(Encode, Decode, Clone, Eq, PartialEq)]
-pub struct CheckSpecVersion<T: Trait + Send + Sync>(sp_std::marker::PhantomData<T>);
+///
+/// # Transaction Validity
+///
+/// The transaction with incorrect `spec_version` are considered invalid. The validity
+/// is not affected in any other way.
+#[derive(Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+#[scale_info(skip_type_params(T))]
+pub struct CheckSpecVersion<T: Config + Send + Sync>(sp_std::marker::PhantomData<T>);
 
-impl<T: Trait + Send + Sync> sp_std::fmt::Debug for CheckSpecVersion<T> {
+impl<T: Config + Send + Sync> sp_std::fmt::Debug for CheckSpecVersion<T> {
 	#[cfg(feature = "std")]
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		write!(f, "CheckSpecVersion")
@@ -38,21 +45,31 @@ impl<T: Trait + Send + Sync> sp_std::fmt::Debug for CheckSpecVersion<T> {
 	}
 }
 
-impl<T: Trait + Send + Sync> CheckSpecVersion<T> {
+impl<T: Config + Send + Sync> CheckSpecVersion<T> {
 	/// Create new `SignedExtension` to check runtime version.
 	pub fn new() -> Self {
 		Self(sp_std::marker::PhantomData)
 	}
 }
 
-impl<T: Trait + Send + Sync> SignedExtension for CheckSpecVersion<T> {
+impl<T: Config + Send + Sync> SignedExtension for CheckSpecVersion<T> {
 	type AccountId = T::AccountId;
-	type Call = <T as Trait>::Call;
+	type Call = <T as Config>::Call;
 	type AdditionalSigned = u32;
 	type Pre = ();
 	const IDENTIFIER: &'static str = "CheckSpecVersion";
 
 	fn additional_signed(&self) -> Result<Self::AdditionalSigned, TransactionValidityError> {
-		Ok(<Module<T>>::runtime_version().spec_version)
+		Ok(<Pallet<T>>::runtime_version().spec_version)
+	}
+
+	fn pre_dispatch(
+		self,
+		who: &Self::AccountId,
+		call: &Self::Call,
+		info: &DispatchInfoOf<Self::Call>,
+		len: usize,
+	) -> Result<Self::Pre, TransactionValidityError> {
+		self.validate(who, call, info, len).map(|_| ())
 	}
 }

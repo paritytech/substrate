@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -18,14 +18,11 @@
 
 //! RocksDB-based offchain workers local storage.
 
-use std::{
-	collections::HashMap,
-	sync::Arc,
-};
+use std::{collections::HashMap, sync::Arc};
 
 use crate::{columns, Database, DbHash, Transaction};
-use parking_lot::Mutex;
 use log::error;
+use parking_lot::Mutex;
 
 /// Offchain local storage
 #[derive(Clone)]
@@ -36,14 +33,13 @@ pub struct LocalStorage {
 
 impl std::fmt::Debug for LocalStorage {
 	fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
-		fmt.debug_struct("LocalStorage")
-			.finish()
+		fmt.debug_struct("LocalStorage").finish()
 	}
 }
 
 impl LocalStorage {
 	/// Create new offchain storage for tests (backed by memorydb)
-	#[cfg(any(test, feature = "test-helpers"))]
+	#[cfg(any(feature = "test-helpers", test))]
 	pub fn new_test() -> Self {
 		let db = kvdb_memorydb::create(crate::utils::NUM_COLUMNS);
 		let db = sp_database::as_database(db);
@@ -52,18 +48,14 @@ impl LocalStorage {
 
 	/// Create offchain local storage with given `KeyValueDB` backend.
 	pub fn new(db: Arc<dyn Database<DbHash>>) -> Self {
-		Self {
-			db,
-			locks: Default::default(),
-		}
+		Self { db, locks: Default::default() }
 	}
 }
 
 impl sp_core::offchain::OffchainStorage for LocalStorage {
 	fn set(&mut self, prefix: &[u8], key: &[u8], value: &[u8]) {
-		let key: Vec<u8> = prefix.iter().chain(key).cloned().collect();
 		let mut tx = Transaction::new();
-		tx.set(columns::OFFCHAIN, &key, value);
+		tx.set(columns::OFFCHAIN, &concatenate_prefix_and_key(prefix, key), value);
 
 		if let Err(err) = self.db.commit(tx) {
 			error!("Error setting on local storage: {}", err)
@@ -71,9 +63,8 @@ impl sp_core::offchain::OffchainStorage for LocalStorage {
 	}
 
 	fn remove(&mut self, prefix: &[u8], key: &[u8]) {
-		let key: Vec<u8> = prefix.iter().chain(key).cloned().collect();
 		let mut tx = Transaction::new();
-		tx.remove(columns::OFFCHAIN, &key);
+		tx.remove(columns::OFFCHAIN, &concatenate_prefix_and_key(prefix, key));
 
 		if let Err(err) = self.db.commit(tx) {
 			error!("Error removing on local storage: {}", err)
@@ -81,8 +72,7 @@ impl sp_core::offchain::OffchainStorage for LocalStorage {
 	}
 
 	fn get(&self, prefix: &[u8], key: &[u8]) -> Option<Vec<u8>> {
-		let key: Vec<u8> = prefix.iter().chain(key).cloned().collect();
-		self.db.get(columns::OFFCHAIN, &key)
+		self.db.get(columns::OFFCHAIN, &concatenate_prefix_and_key(prefix, key))
 	}
 
 	fn compare_and_set(
@@ -92,7 +82,7 @@ impl sp_core::offchain::OffchainStorage for LocalStorage {
 		old_value: Option<&[u8]>,
 		new_value: &[u8],
 	) -> bool {
-		let key: Vec<u8> = prefix.iter().chain(item_key).cloned().collect();
+		let key = concatenate_prefix_and_key(prefix, item_key);
 		let key_lock = {
 			let mut locks = self.locks.lock();
 			locks.entry(key.clone()).or_default().clone()
@@ -102,7 +92,7 @@ impl sp_core::offchain::OffchainStorage for LocalStorage {
 		{
 			let _key_guard = key_lock.lock();
 			let val = self.db.get(columns::OFFCHAIN, &key);
-			is_set = val.as_ref().map(|x| &**x) == old_value;
+			is_set = val.as_deref() == old_value;
 
 			if is_set {
 				self.set(prefix, item_key, new_value)
@@ -120,6 +110,11 @@ impl sp_core::offchain::OffchainStorage for LocalStorage {
 		}
 		is_set
 	}
+}
+
+/// Concatenate the prefix and key to create an offchain key in the db.
+pub(crate) fn concatenate_prefix_and_key(prefix: &[u8], key: &[u8]) -> Vec<u8> {
+	prefix.iter().chain(key.into_iter()).cloned().collect()
 }
 
 #[cfg(test)]
@@ -152,5 +147,4 @@ mod tests {
 		assert_eq!(storage.get(prefix, key), Some(b"asd".to_vec()));
 		assert!(storage.locks.lock().is_empty(), "Locks map should be empty!");
 	}
-
 }

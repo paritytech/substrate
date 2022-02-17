@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,22 +18,26 @@
 //! The crate's tests.
 
 use super::*;
-use std::cell::RefCell;
+use crate as pallet_democracy;
 use codec::Encode;
 use frame_support::{
-	impl_outer_origin, impl_outer_dispatch, assert_noop, assert_ok, parameter_types,
-	impl_outer_event, ord_parameter_types, traits::{Contains, OnInitialize, Filter},
+	assert_noop, assert_ok, ord_parameter_types, parameter_types,
+	traits::{
+		ConstU32, ConstU64, Contains, EqualPrivilegeOnly, GenesisBuild, OnInitialize, SortedMembers,
+	},
 	weights::Weight,
 };
+use frame_system::{EnsureRoot, EnsureSignedBy};
+use pallet_balances::{BalanceLock, Error as BalancesError};
 use sp_core::H256;
 use sp_runtime::{
-	traits::{BlakeTwo256, IdentityLookup, BadOrigin},
-	testing::Header, Perbill,
+	testing::Header,
+	traits::{BadOrigin, BlakeTwo256, IdentityLookup},
+	Perbill,
 };
-use pallet_balances::{BalanceLock, Error as BalancesError};
-use frame_system::{EnsureSignedBy, EnsureRoot};
 
 mod cancellation;
+mod decoders;
 mod delegation;
 mod external_proposing;
 mod fast_tracking;
@@ -42,57 +46,45 @@ mod preimage;
 mod public_proposals;
 mod scheduling;
 mod voting;
-mod decoders;
 
 const AYE: Vote = Vote { aye: true, conviction: Conviction::None };
 const NAY: Vote = Vote { aye: false, conviction: Conviction::None };
 const BIG_AYE: Vote = Vote { aye: true, conviction: Conviction::Locked1x };
 const BIG_NAY: Vote = Vote { aye: false, conviction: Conviction::Locked1x };
 
-impl_outer_origin! {
-	pub enum Origin for Test where system = frame_system {}
-}
+type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+type Block = frame_system::mocking::MockBlock<Test>;
 
-impl_outer_dispatch! {
-	pub enum Call for Test where origin: Origin {
-		frame_system::System,
-		pallet_balances::Balances,
-		democracy::Democracy,
+frame_support::construct_runtime!(
+	pub enum Test where
+		Block = Block,
+		NodeBlock = Block,
+		UncheckedExtrinsic = UncheckedExtrinsic,
+	{
+		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
+		Scheduler: pallet_scheduler::{Pallet, Call, Storage, Event<T>},
+		Democracy: pallet_democracy::{Pallet, Call, Storage, Config<T>, Event<T>},
 	}
-}
-
-mod democracy {
-	pub use crate::Event;
-}
-
-impl_outer_event! {
-	pub enum Event for Test {
-		system<T>,
-		pallet_balances<T>,
-		pallet_scheduler<T>,
-		democracy<T>,
-	}
-}
+);
 
 // Test that a fitlered call can be dispatched.
 pub struct BaseFilter;
-impl Filter<Call> for BaseFilter {
-	fn filter(call: &Call) -> bool {
-		!matches!(call, &Call::Balances(pallet_balances::Call::set_balance(..)))
+impl Contains<Call> for BaseFilter {
+	fn contains(call: &Call) -> bool {
+		!matches!(call, &Call::Balances(pallet_balances::Call::set_balance { .. }))
 	}
 }
 
-// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
-#[derive(Clone, Eq, PartialEq, Debug)]
-pub struct Test;
 parameter_types! {
-	pub const BlockHashCount: u64 = 250;
-	pub const MaximumBlockWeight: Weight = 1_000_000;
-	pub const MaximumBlockLength: u32 = 2 * 1024;
-	pub const AvailableBlockRatio: Perbill = Perbill::one();
+	pub BlockWeights: frame_system::limits::BlockWeights =
+		frame_system::limits::BlockWeights::simple_max(1_000_000);
 }
-impl frame_system::Trait for Test {
+impl frame_system::Config for Test {
 	type BaseCallFilter = BaseFilter;
+	type BlockWeights = ();
+	type BlockLength = ();
+	type DbWeight = ();
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
@@ -103,25 +95,21 @@ impl frame_system::Trait for Test {
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = Event;
-	type BlockHashCount = BlockHashCount;
-	type MaximumBlockWeight = MaximumBlockWeight;
-	type DbWeight = ();
-	type BlockExecutionWeight = ();
-	type ExtrinsicBaseWeight = ();
-	type MaximumExtrinsicWeight = MaximumBlockWeight;
-	type MaximumBlockLength = MaximumBlockLength;
-	type AvailableBlockRatio = AvailableBlockRatio;
+	type BlockHashCount = ConstU64<250>;
 	type Version = ();
-	type PalletInfo = ();
+	type PalletInfo = PalletInfo;
 	type AccountData = pallet_balances::AccountData<u64>;
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
+	type SS58Prefix = ();
+	type OnSetCode = ();
+	type MaxConsumers = frame_support::traits::ConstU32<16>;
 }
 parameter_types! {
-	pub MaximumSchedulerWeight: Weight = Perbill::from_percent(80) * MaximumBlockWeight::get();
+	pub MaximumSchedulerWeight: Weight = Perbill::from_percent(80) * BlockWeights::get().max_block;
 }
-impl pallet_scheduler::Trait for Test {
+impl pallet_scheduler::Config for Test {
 	type Event = Event;
 	type Origin = Origin;
 	type PalletsOrigin = OriginCaller;
@@ -130,27 +118,25 @@ impl pallet_scheduler::Trait for Test {
 	type ScheduleOrigin = EnsureRoot<u64>;
 	type MaxScheduledPerBlock = ();
 	type WeightInfo = ();
+	type OriginPrivilegeCmp = EqualPrivilegeOnly;
+	type PreimageProvider = ();
+	type NoPreimagePostponement = ();
 }
-parameter_types! {
-	pub const ExistentialDeposit: u64 = 1;
-}
-impl pallet_balances::Trait for Test {
-	type MaxLocks = ();
+
+impl pallet_balances::Config for Test {
+	type MaxReserves = ();
+	type ReserveIdentifier = [u8; 8];
+	type MaxLocks = ConstU32<10>;
 	type Balance = u64;
 	type Event = Event;
 	type DustRemoval = ();
-	type ExistentialDeposit = ExistentialDeposit;
+	type ExistentialDeposit = ConstU64<1>;
 	type AccountStore = System;
 	type WeightInfo = ();
 }
 parameter_types! {
-	pub const LaunchPeriod: u64 = 2;
-	pub const VotingPeriod: u64 = 2;
-	pub const FastTrackVotingPeriod: u64 = 2;
-	pub const MinimumDeposit: u64 = 1;
-	pub const EnactmentPeriod: u64 = 2;
-	pub const CooloffPeriod: u64 = 2;
-	pub const MaxVotes: u32 = 100;
+	pub static PreimageByteDeposit: u64 = 0;
+	pub static InstantAllowed: bool = false;
 }
 ord_parameter_types! {
 	pub const One: u64 = 1;
@@ -161,58 +147,55 @@ ord_parameter_types! {
 	pub const Six: u64 = 6;
 }
 pub struct OneToFive;
-impl Contains<u64> for OneToFive {
+impl SortedMembers<u64> for OneToFive {
 	fn sorted_members() -> Vec<u64> {
 		vec![1, 2, 3, 4, 5]
 	}
 	#[cfg(feature = "runtime-benchmarks")]
 	fn add(_m: &u64) {}
 }
-thread_local! {
-	static PREIMAGE_BYTE_DEPOSIT: RefCell<u64> = RefCell::new(0);
-	static INSTANT_ALLOWED: RefCell<bool> = RefCell::new(false);
-}
-pub struct PreimageByteDeposit;
-impl Get<u64> for PreimageByteDeposit {
-	fn get() -> u64 { PREIMAGE_BYTE_DEPOSIT.with(|v| *v.borrow()) }
-}
-pub struct InstantAllowed;
-impl Get<bool> for InstantAllowed {
-	fn get() -> bool { INSTANT_ALLOWED.with(|v| *v.borrow()) }
-}
-impl super::Trait for Test {
+
+impl Config for Test {
 	type Proposal = Call;
 	type Event = Event;
-	type Currency = pallet_balances::Module<Self>;
-	type EnactmentPeriod = EnactmentPeriod;
-	type LaunchPeriod = LaunchPeriod;
-	type VotingPeriod = VotingPeriod;
-	type FastTrackVotingPeriod = FastTrackVotingPeriod;
-	type MinimumDeposit = MinimumDeposit;
+	type Currency = pallet_balances::Pallet<Self>;
+	type EnactmentPeriod = ConstU64<2>;
+	type LaunchPeriod = ConstU64<2>;
+	type VotingPeriod = ConstU64<2>;
+	type VoteLockingPeriod = ConstU64<3>;
+	type FastTrackVotingPeriod = ConstU64<2>;
+	type MinimumDeposit = ConstU64<1>;
 	type ExternalOrigin = EnsureSignedBy<Two, u64>;
 	type ExternalMajorityOrigin = EnsureSignedBy<Three, u64>;
 	type ExternalDefaultOrigin = EnsureSignedBy<One, u64>;
 	type FastTrackOrigin = EnsureSignedBy<Five, u64>;
 	type CancellationOrigin = EnsureSignedBy<Four, u64>;
+	type BlacklistOrigin = EnsureRoot<u64>;
+	type CancelProposalOrigin = EnsureRoot<u64>;
 	type VetoOrigin = EnsureSignedBy<OneToFive, u64>;
-	type CooloffPeriod = CooloffPeriod;
+	type CooloffPeriod = ConstU64<2>;
 	type PreimageByteDeposit = PreimageByteDeposit;
 	type Slash = ();
 	type InstantOrigin = EnsureSignedBy<Six, u64>;
 	type InstantAllowed = InstantAllowed;
 	type Scheduler = Scheduler;
-	type MaxVotes = MaxVotes;
+	type MaxVotes = ConstU32<100>;
 	type OperationalPreimageOrigin = EnsureSignedBy<Six, u64>;
 	type PalletsOrigin = OriginCaller;
 	type WeightInfo = ();
+	type MaxProposals = ConstU32<100>;
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-	pallet_balances::GenesisConfig::<Test>{
+	pallet_balances::GenesisConfig::<Test> {
 		balances: vec![(1, 10), (2, 20), (3, 30), (4, 40), (5, 50), (6, 60)],
-	}.assimilate_storage(&mut t).unwrap();
-	GenesisConfig::default().assimilate_storage(&mut t).unwrap();
+	}
+	.assimilate_storage(&mut t)
+	.unwrap();
+	pallet_democracy::GenesisConfig::<Test>::default()
+		.assimilate_storage(&mut t)
+		.unwrap();
 	let mut ext = sp_io::TestExternalities::new(t);
 	ext.execute_with(|| System::set_block_number(1));
 	ext
@@ -224,11 +207,6 @@ pub fn new_test_ext_execute_with_cond(execute: impl FnOnce(bool) -> () + Clone) 
 	new_test_ext().execute_with(|| execute(true));
 }
 
-type System = frame_system::Module<Test>;
-type Balances = pallet_balances::Module<Test>;
-type Scheduler = pallet_scheduler::Module<Test>;
-type Democracy = Module<Test>;
-
 #[test]
 fn params_should_work() {
 	new_test_ext().execute_with(|| {
@@ -239,14 +217,15 @@ fn params_should_work() {
 }
 
 fn set_balance_proposal(value: u64) -> Vec<u8> {
-	Call::Balances(pallet_balances::Call::set_balance(42, value, 0)).encode()
+	Call::Balances(pallet_balances::Call::set_balance { who: 42, new_free: value, new_reserved: 0 })
+		.encode()
 }
 
 #[test]
 fn set_balance_proposal_is_correctly_filtered_out() {
 	for i in 0..10 {
 		let call = Call::decode(&mut &set_balance_proposal(i)[..]).unwrap();
-		assert!(!<Test as frame_system::Trait>::BaseCallFilter::filter(&call));
+		assert!(!<Test as frame_system::Config>::BaseCallFilter::contains(&call));
 	}
 }
 
@@ -260,31 +239,23 @@ fn set_balance_proposal_hash_and_note(value: u64) -> H256 {
 	match Democracy::note_preimage(Origin::signed(6), p) {
 		Ok(_) => (),
 		Err(x) if x == Error::<Test>::DuplicatePreimage.into() => (),
-		Err(x) => panic!(x),
+		Err(x) => panic!("{:?}", x),
 	}
 	h
 }
 
 fn propose_set_balance(who: u64, value: u64, delay: u64) -> DispatchResult {
-	Democracy::propose(
-		Origin::signed(who),
-		set_balance_proposal_hash(value),
-		delay,
-	)
+	Democracy::propose(Origin::signed(who), set_balance_proposal_hash(value), delay)
 }
 
 fn propose_set_balance_and_note(who: u64, value: u64, delay: u64) -> DispatchResult {
-	Democracy::propose(
-		Origin::signed(who),
-		set_balance_proposal_hash_and_note(value),
-		delay,
-	)
+	Democracy::propose(Origin::signed(who), set_balance_proposal_hash_and_note(value), delay)
 }
 
 fn next_block() {
 	System::set_block_number(System::block_number() + 1);
 	Scheduler::on_initialize(System::block_number());
-	assert!(Democracy::begin_block(System::block_number()).is_ok());
+	Democracy::begin_block(System::block_number());
 }
 
 fn fast_forward_to(n: u64) {

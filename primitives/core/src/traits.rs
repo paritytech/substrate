@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,202 +17,24 @@
 
 //! Shareable Substrate traits.
 
-use crate::{
-	crypto::{KeyTypeId, CryptoTypePublicPair},
-	vrf::{VRFTranscriptData, VRFSignature},
-	ed25519, sr25519, ecdsa,
-};
 use std::{
 	borrow::Cow,
 	fmt::{Debug, Display},
 	panic::UnwindSafe,
-	sync::Arc,
 };
 
 pub use sp_externalities::{Externalities, ExternalitiesExt};
 
-/// BareCryptoStore error
-#[derive(Debug, derive_more::Display)]
-pub enum Error {
-	/// Public key type is not supported
-	#[display(fmt="Key not supported: {:?}", _0)]
-	KeyNotSupported(KeyTypeId),
-	/// Pair not found for public key and KeyTypeId
-	#[display(fmt="Pair was not found: {}", _0)]
-	PairNotFound(String),
-	/// Validation error
-	#[display(fmt="Validation error: {}", _0)]
-	ValidationError(String),
-	/// Keystore unavailable
-	#[display(fmt="Keystore unavailable")]
-	Unavailable,
-	/// Programming errors
-	#[display(fmt="An unknown keystore error occurred: {}", _0)]
-	Other(String)
-}
-
-/// Something that generates, stores and provides access to keys.
-pub trait BareCryptoStore: Send + Sync {
-	/// Returns all sr25519 public keys for the given key type.
-	fn sr25519_public_keys(&self, id: KeyTypeId) -> Vec<sr25519::Public>;
-	/// Generate a new sr25519 key pair for the given key type and an optional seed.
-	///
-	/// If the given seed is `Some(_)`, the key pair will only be stored in memory.
-	///
-	/// Returns the public key of the generated key pair.
-	fn sr25519_generate_new(
-		&mut self,
-		id: KeyTypeId,
-		seed: Option<&str>,
-	) -> Result<sr25519::Public, Error>;
-	/// Returns all ed25519 public keys for the given key type.
-	fn ed25519_public_keys(&self, id: KeyTypeId) -> Vec<ed25519::Public>;
-	/// Generate a new ed25519 key pair for the given key type and an optional seed.
-	///
-	/// If the given seed is `Some(_)`, the key pair will only be stored in memory.
-	///
-	/// Returns the public key of the generated key pair.
-	fn ed25519_generate_new(
-		&mut self,
-		id: KeyTypeId,
-		seed: Option<&str>,
-	) -> Result<ed25519::Public, Error>;
-	/// Returns all ecdsa public keys for the given key type.
-	fn ecdsa_public_keys(&self, id: KeyTypeId) -> Vec<ecdsa::Public>;
-	/// Generate a new ecdsa key pair for the given key type and an optional seed.
-	///
-	/// If the given seed is `Some(_)`, the key pair will only be stored in memory.
-	///
-	/// Returns the public key of the generated key pair.
-	fn ecdsa_generate_new(
-		&mut self,
-		id: KeyTypeId,
-		seed: Option<&str>,
-	) -> Result<ecdsa::Public, Error>;
-
-	/// Insert a new key. This doesn't require any known of the crypto; but a public key must be
-	/// manually provided.
-	///
-	/// Places it into the file system store.
-	///
-	/// `Err` if there's some sort of weird filesystem error, but should generally be `Ok`.
-	fn insert_unknown(&mut self, _key_type: KeyTypeId, _suri: &str, _public: &[u8]) -> Result<(), ()>;
-
-	/// Get the password for this store.
-	fn password(&self) -> Option<&str>;
-	/// Find intersection between provided keys and supported keys
-	///
-	/// Provided a list of (CryptoTypeId,[u8]) pairs, this would return
-	/// a filtered set of public keys which are supported by the keystore.
-	fn supported_keys(
-		&self,
-		id: KeyTypeId,
-		keys: Vec<CryptoTypePublicPair>
-	) -> Result<Vec<CryptoTypePublicPair>, Error>;
-	/// List all supported keys
-	///
-	/// Returns a set of public keys the signer supports.
-	fn keys(&self, id: KeyTypeId) -> Result<Vec<CryptoTypePublicPair>, Error>;
-
-	/// Checks if the private keys for the given public key and key type combinations exist.
-	///
-	/// Returns `true` iff all private keys could be found.
-	fn has_keys(&self, public_keys: &[(Vec<u8>, KeyTypeId)]) -> bool;
-
-	/// Sign with key
-	///
-	/// Signs a message with the private key that matches
-	/// the public key passed.
-	///
-	/// Returns the SCALE encoded signature if key is found & supported,
-	/// an error otherwise.
-	fn sign_with(
-		&self,
-		id: KeyTypeId,
-		key: &CryptoTypePublicPair,
-		msg: &[u8],
-	) -> Result<Vec<u8>, Error>;
-
-	/// Sign with any key
-	///
-	/// Given a list of public keys, find the first supported key and
-	/// sign the provided message with that key.
-	///
-	/// Returns a tuple of the used key and the SCALE encoded signature.
-	fn sign_with_any(
-		&self,
-		id: KeyTypeId,
-		keys: Vec<CryptoTypePublicPair>,
-		msg: &[u8]
-	) -> Result<(CryptoTypePublicPair, Vec<u8>), Error> {
-		if keys.len() == 1 {
-			return self.sign_with(id, &keys[0], msg).map(|s| (keys[0].clone(), s));
-		} else {
-			for k in self.supported_keys(id, keys)? {
-				if let Ok(sign) = self.sign_with(id, &k, msg) {
-					return Ok((k, sign));
-				}
-			}
-		}
-		Err(Error::KeyNotSupported(id))
-	}
-
-	/// Sign with all keys
-	///
-	/// Provided a list of public keys, sign a message with
-	/// each key given that the key is supported.
-	///
-	/// Returns a list of `Result`s each representing the SCALE encoded
-	/// signature of each key or a Error for non-supported keys.
-	fn sign_with_all(
-		&self,
-		id: KeyTypeId,
-		keys: Vec<CryptoTypePublicPair>,
-		msg: &[u8],
-	) -> Result<Vec<Result<Vec<u8>, Error>>, ()>{
-		Ok(keys.iter().map(|k| self.sign_with(id, k, msg)).collect())
-	}
-
-	/// Generate VRF signature for given transcript data.
-	///
-	/// Receives KeyTypeId and Public key to be able to map
-	/// them to a private key that exists in the keystore which
-	/// is, in turn, used for signing the provided transcript.
-	///
-	/// Returns a result containing the signature data.
-	/// Namely, VRFOutput and VRFProof which are returned
-	/// inside the `VRFSignature` container struct.
-	///
-	/// This function will return an error in the cases where
-	/// the public key and key type provided do not match a private
-	/// key in the keystore. Or, in the context of remote signing
-	/// an error could be a network one.
-	fn sr25519_vrf_sign(
-		&self,
-		key_type: KeyTypeId,
-		public: &sr25519::Public,
-		transcript_data: VRFTranscriptData,
-	) -> Result<VRFSignature, Error>;
-}
-
-/// A pointer to the key store.
-pub type BareCryptoStorePtr = Arc<parking_lot::RwLock<dyn BareCryptoStore>>;
-
-sp_externalities::decl_extension! {
-	/// The keystore extension to register/retrieve from the externalities.
-	pub struct KeystoreExt(BareCryptoStorePtr);
-}
-
 /// Code execution engine.
-pub trait CodeExecutor: Sized + Send + Sync + CallInWasm + Clone + 'static {
+pub trait CodeExecutor: Sized + Send + Sync + ReadRuntimeVersion + Clone + 'static {
 	/// Externalities error type.
-	type Error: Display + Debug + Send + 'static;
+	type Error: Display + Debug + Send + Sync + 'static;
 
 	/// Call a given method in the runtime. Returns a tuple of the result (either the output data
 	/// or an execution error) together with a `bool`, which is true if native execution was used.
 	fn call<
 		R: codec::Codec + PartialEq,
-		NC: FnOnce() -> Result<R, String> + UnwindSafe,
+		NC: FnOnce() -> Result<R, Box<dyn std::error::Error + Send + Sync>> + UnwindSafe,
 	>(
 		&self,
 		ext: &mut dyn Externalities,
@@ -229,14 +51,14 @@ pub trait FetchRuntimeCode {
 	/// Fetch the runtime `:code`.
 	///
 	/// If the `:code` could not be found/not available, `None` should be returned.
-	fn fetch_runtime_code<'a>(&'a self) -> Option<Cow<'a, [u8]>>;
+	fn fetch_runtime_code(&self) -> Option<Cow<[u8]>>;
 }
 
 /// Wrapper to use a `u8` slice or `Vec` as [`FetchRuntimeCode`].
 pub struct WrappedRuntimeCode<'a>(pub std::borrow::Cow<'a, [u8]>);
 
 impl<'a> FetchRuntimeCode for WrappedRuntimeCode<'a> {
-	fn fetch_runtime_code<'b>(&'b self) -> Option<Cow<'b, [u8]>> {
+	fn fetch_runtime_code(&self) -> Option<Cow<[u8]>> {
 		Some(self.0.as_ref().into())
 	}
 }
@@ -245,7 +67,7 @@ impl<'a> FetchRuntimeCode for WrappedRuntimeCode<'a> {
 pub struct NoneFetchRuntimeCode;
 
 impl FetchRuntimeCode for NoneFetchRuntimeCode {
-	fn fetch_runtime_code<'a>(&'a self) -> Option<Cow<'a, [u8]>> {
+	fn fetch_runtime_code(&self) -> Option<Cow<[u8]>> {
 		None
 	}
 }
@@ -277,16 +99,12 @@ impl<'a> RuntimeCode<'a> {
 	///
 	/// This is only useful for tests that don't want to execute any code.
 	pub fn empty() -> Self {
-		Self {
-			code_fetcher: &NoneFetchRuntimeCode,
-			hash: Vec::new(),
-			heap_pages: None,
-		}
+		Self { code_fetcher: &NoneFetchRuntimeCode, hash: Vec::new(), heap_pages: None }
 	}
 }
 
 impl<'a> FetchRuntimeCode for RuntimeCode<'a> {
-	fn fetch_runtime_code<'b>(&'b self) -> Option<Cow<'b, [u8]>> {
+	fn fetch_runtime_code(&self) -> Option<Cow<[u8]>> {
 		self.code_fetcher.fetch_runtime_code()
 	}
 }
@@ -301,53 +119,42 @@ impl std::fmt::Display for CodeNotFound {
 	}
 }
 
-/// `Allow` or `Disallow` missing host functions when instantiating a WASM blob.
-#[derive(Clone, Copy, Debug)]
-pub enum MissingHostFunctions {
-	/// Any missing host function will be replaced by a stub that returns an error when
-	/// being called.
-	Allow,
-	/// Any missing host function will result in an error while instantiating the WASM blob,
-	Disallow,
-}
-
-impl MissingHostFunctions {
-	/// Are missing host functions allowed?
-	pub fn allowed(self) -> bool {
-		matches!(self, Self::Allow)
-	}
-}
-
-/// Something that can call a method in a WASM blob.
-pub trait CallInWasm: Send + Sync {
-	/// Call the given `method` in the given `wasm_blob` using `call_data` (SCALE encoded arguments)
-	/// to decode the arguments for the method.
+/// A trait that allows reading version information from the binary.
+pub trait ReadRuntimeVersion: Send + Sync {
+	/// Reads the runtime version information from the given wasm code.
 	///
-	/// Returns the SCALE encoded return value of the method.
+	/// The version information may be embedded into the wasm binary itself. If it is not present,
+	/// then this function may fallback to the legacy way of reading the version.
 	///
-	/// # Note
+	/// The legacy mechanism involves instantiating the passed wasm runtime and calling
+	/// `Core_version` on it. This is a very expensive operation.
 	///
-	/// If `code_hash` is `Some(_)` the `wasm_code` module and instance will be cached internally,
-	/// otherwise it is thrown away after the call.
-	fn call_in_wasm(
+	/// `ext` is only needed in case the calling into runtime happens. Otherwise it is ignored.
+	///
+	/// Compressed wasm blobs are supported and will be decompressed if needed. If uncompression
+	/// fails, the error is returned.
+	///
+	/// # Errors
+	///
+	/// If the version information present in binary, but is corrupted - returns an error.
+	///
+	/// Otherwise, if there is no version information present, and calling into the runtime takes
+	/// place, then an error would be returned if `Core_version` is not provided.
+	fn read_runtime_version(
 		&self,
 		wasm_code: &[u8],
-		code_hash: Option<Vec<u8>>,
-		method: &str,
-		call_data: &[u8],
 		ext: &mut dyn Externalities,
-		missing_host_functions: MissingHostFunctions,
 	) -> Result<Vec<u8>, String>;
 }
 
 sp_externalities::decl_extension! {
-	/// The call-in-wasm extension to register/retrieve from the externalities.
-	pub struct CallInWasmExt(Box<dyn CallInWasm>);
+	/// An extension that provides functionality to read version information from a given wasm blob.
+	pub struct ReadRuntimeVersionExt(Box<dyn ReadRuntimeVersion>);
 }
 
-impl CallInWasmExt {
-	/// Creates a new instance of `Self`.
-	pub fn new<T: CallInWasm + 'static>(inner: T) -> Self {
+impl ReadRuntimeVersionExt {
+	/// Creates a new instance of the extension given a version determinator instance.
+	pub fn new<T: ReadRuntimeVersion + 'static>(inner: T) -> Self {
 		Self(Box::new(inner))
 	}
 }
@@ -364,25 +171,110 @@ impl TaskExecutorExt {
 	}
 }
 
-/// Something that can spawn futures (blocking and non-blocking) with an assigned name.
+/// Runtime spawn extension.
+pub trait RuntimeSpawn: Send {
+	/// Create new runtime instance and use dynamic dispatch to invoke with specified payload.
+	///
+	/// Returns handle of the spawned task.
+	///
+	/// Function pointers (`dispatcher_ref`, `func`) are WASM pointer types.
+	fn spawn_call(&self, dispatcher_ref: u32, func: u32, payload: Vec<u8>) -> u64;
+
+	/// Join the result of previously created runtime instance invocation.
+	fn join(&self, handle: u64) -> Vec<u8>;
+}
+
+#[cfg(feature = "std")]
+sp_externalities::decl_extension! {
+	/// Extension that supports spawning extra runtime instances in externalities.
+	pub struct RuntimeSpawnExt(Box<dyn RuntimeSpawn>);
+}
+
+/// Something that can spawn tasks (blocking and non-blocking) with an assigned name
+/// and optional group.
 #[dyn_clonable::clonable]
 pub trait SpawnNamed: Clone + Send + Sync {
 	/// Spawn the given blocking future.
 	///
-	/// The given `name` is used to identify the future in tracing.
-	fn spawn_blocking(&self, name: &'static str, future: futures::future::BoxFuture<'static, ()>);
+	/// The given `group` and `name` is used to identify the future in tracing.
+	fn spawn_blocking(
+		&self,
+		name: &'static str,
+		group: Option<&'static str>,
+		future: futures::future::BoxFuture<'static, ()>,
+	);
 	/// Spawn the given non-blocking future.
 	///
-	/// The given `name` is used to identify the future in tracing.
-	fn spawn(&self, name: &'static str, future: futures::future::BoxFuture<'static, ()>);
+	/// The given `group` and `name` is used to identify the future in tracing.
+	fn spawn(
+		&self,
+		name: &'static str,
+		group: Option<&'static str>,
+		future: futures::future::BoxFuture<'static, ()>,
+	);
 }
 
 impl SpawnNamed for Box<dyn SpawnNamed> {
-	fn spawn_blocking(&self, name: &'static str, future: futures::future::BoxFuture<'static, ()>) {
-		(**self).spawn_blocking(name, future)
+	fn spawn_blocking(
+		&self,
+		name: &'static str,
+		group: Option<&'static str>,
+		future: futures::future::BoxFuture<'static, ()>,
+	) {
+		(**self).spawn_blocking(name, group, future)
+	}
+	fn spawn(
+		&self,
+		name: &'static str,
+		group: Option<&'static str>,
+		future: futures::future::BoxFuture<'static, ()>,
+	) {
+		(**self).spawn(name, group, future)
+	}
+}
+
+/// Something that can spawn essential tasks (blocking and non-blocking) with an assigned name
+/// and optional group.
+///
+/// Essential tasks are special tasks that should take down the node when they end.
+#[dyn_clonable::clonable]
+pub trait SpawnEssentialNamed: Clone + Send + Sync {
+	/// Spawn the given blocking future.
+	///
+	/// The given `group` and `name` is used to identify the future in tracing.
+	fn spawn_essential_blocking(
+		&self,
+		name: &'static str,
+		group: Option<&'static str>,
+		future: futures::future::BoxFuture<'static, ()>,
+	);
+	/// Spawn the given non-blocking future.
+	///
+	/// The given `group` and `name` is used to identify the future in tracing.
+	fn spawn_essential(
+		&self,
+		name: &'static str,
+		group: Option<&'static str>,
+		future: futures::future::BoxFuture<'static, ()>,
+	);
+}
+
+impl SpawnEssentialNamed for Box<dyn SpawnEssentialNamed> {
+	fn spawn_essential_blocking(
+		&self,
+		name: &'static str,
+		group: Option<&'static str>,
+		future: futures::future::BoxFuture<'static, ()>,
+	) {
+		(**self).spawn_essential_blocking(name, group, future)
 	}
 
-	fn spawn(&self, name: &'static str, future: futures::future::BoxFuture<'static, ()>) {
-		(**self).spawn(name, future)
+	fn spawn_essential(
+		&self,
+		name: &'static str,
+		group: Option<&'static str>,
+		future: futures::future::BoxFuture<'static, ()>,
+	) {
+		(**self).spawn_essential(name, group, future)
 	}
 }

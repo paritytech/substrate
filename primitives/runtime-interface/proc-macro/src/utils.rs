@@ -1,61 +1,99 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Util function used by this crate.
 
-use proc_macro2::{TokenStream, Span};
+use proc_macro2::{Span, TokenStream};
 
 use syn::{
-	Ident, Error, Signature, Pat, PatType, FnArg, Type, token, TraitItemMethod, ItemTrait,
-	TraitItem, parse_quote, spanned::Spanned, Result, Meta, NestedMeta, Lit, Attribute,
+	parse::Parse, parse_quote, spanned::Spanned, token, Error, FnArg, Ident, ItemTrait, LitInt,
+	Pat, PatType, Result, Signature, TraitItem, TraitItemMethod, Type,
 };
 
-use proc_macro_crate::crate_name;
+use proc_macro_crate::{crate_name, FoundCrate};
 
-use std::env;
-use std::collections::{BTreeMap, btree_map::Entry};
+use std::{
+	collections::{btree_map::Entry, BTreeMap},
+	env,
+};
 
 use quote::quote;
 
 use inflector::Inflector;
 
+mod attributes {
+	syn::custom_keyword!(register_only);
+}
+
 /// Runtime interface function with all associated versions of this function.
 pub struct RuntimeInterfaceFunction<'a> {
-	latest_version: u32,
+	latest_version_to_call: Option<u32>,
 	versions: BTreeMap<u32, &'a TraitItemMethod>,
 }
 
 impl<'a> RuntimeInterfaceFunction<'a> {
-	fn new(version: u32, trait_item: &'a TraitItemMethod) -> Self {
+	fn new(version: VersionAttribute, trait_item: &'a TraitItemMethod) -> Self {
 		Self {
-			latest_version: version,
-			versions: {
-				let mut res = BTreeMap::new();
-				res.insert(version, trait_item);
-				res
-			},
+			latest_version_to_call: version.is_callable().then(|| version.version),
+			versions: BTreeMap::from([(version.version, trait_item)]),
 		}
 	}
 
-	pub fn latest_version(&self) -> (u32, &TraitItemMethod) {
-		(
-			self.latest_version,
-			self.versions.get(&self.latest_version)
-				.expect("If latest_version has a value, the key with this value is in the versions; qed")
+	/// Returns the latest version of this runtime interface function plus the actual function
+	/// implementation.
+	///
+	/// This isn't required to be the latest version, because a runtime interface function can be
+	/// annotated with `register_only` to ensure that the host exposes the host function but it
+	/// isn't used when compiling the runtime.
+	pub fn latest_version_to_call(&self) -> Option<(u32, &TraitItemMethod)> {
+		self.latest_version_to_call.map(|v| {
+			(
+			v,
+			*self.versions.get(&v).expect(
+				"If latest_version_to_call has a value, the key with this value is in the versions; qed",
+			),
 		)
+		})
+	}
+
+	/// Add a different version of the function.
+	fn add_version(
+		&mut self,
+		version: VersionAttribute,
+		trait_item: &'a TraitItemMethod,
+	) -> Result<()> {
+		if let Some(existing_item) = self.versions.get(&version.version) {
+			let mut err = Error::new(trait_item.span(), "Duplicated version attribute");
+			err.combine(Error::new(
+				existing_item.span(),
+				"Previous version with the same number defined here",
+			));
+
+			return Err(err)
+		}
+
+		self.versions.insert(version.version, trait_item);
+		if self.latest_version_to_call.map_or(true, |v| v < version.version) &&
+			version.is_callable()
+		{
+			self.latest_version_to_call = Some(version.version);
+		}
+
+		Ok(())
 	}
 }
 
@@ -65,42 +103,44 @@ pub struct RuntimeInterface<'a> {
 }
 
 impl<'a> RuntimeInterface<'a> {
-	pub fn latest_versions(&self) -> impl Iterator<Item = (u32, &TraitItemMethod)> {
-		self.items.iter().map(|(_, item)| item.latest_version())
+	/// Returns an iterator over all runtime interface function
+	/// [`latest_version_to_call`](RuntimeInterfaceFunction::latest_version).
+	pub fn latest_versions_to_call(&self) -> impl Iterator<Item = (u32, &TraitItemMethod)> {
+		self.items.iter().filter_map(|(_, item)| item.latest_version_to_call())
 	}
 
 	pub fn all_versions(&self) -> impl Iterator<Item = (u32, &TraitItemMethod)> {
-		self.items.iter().flat_map(|(_, item)| item.versions.iter()).map(|(v, i)| (*v, *i))
+		self.items
+			.iter()
+			.flat_map(|(_, item)| item.versions.iter())
+			.map(|(v, i)| (*v, *i))
 	}
- }
+}
 
 /// Generates the include for the runtime-interface crate.
 pub fn generate_runtime_interface_include() -> TokenStream {
-	if env::var("CARGO_PKG_NAME").unwrap() == "sp-runtime-interface" {
-		TokenStream::new()
-	} else {
-		match crate_name("sp-runtime-interface") {
-			Ok(crate_name) => {
-				let crate_name = Ident::new(&crate_name, Span::call_site());
-				quote!(
-					#[doc(hidden)]
-					extern crate #crate_name as proc_macro_runtime_interface;
-				)
-			},
-			Err(e) => {
-				let err = Error::new(Span::call_site(), &e).to_compile_error();
-				quote!( #err )
-			}
-		}
+	match crate_name("sp-runtime-interface") {
+		Ok(FoundCrate::Itself) => quote!(),
+		Ok(FoundCrate::Name(crate_name)) => {
+			let crate_name = Ident::new(&crate_name, Span::call_site());
+			quote!(
+				#[doc(hidden)]
+				extern crate #crate_name as proc_macro_runtime_interface;
+			)
+		},
+		Err(e) => {
+			let err = Error::new(Span::call_site(), e).to_compile_error();
+			quote!( #err )
+		},
 	}
 }
 
 /// Generates the access to the `sp-runtime-interface` crate.
 pub fn generate_crate_access() -> TokenStream {
 	if env::var("CARGO_PKG_NAME").unwrap() == "sp-runtime-interface" {
-		quote!( sp_runtime_interface )
+		quote!(sp_runtime_interface)
 	} else {
-		quote!( proc_macro_runtime_interface )
+		quote!(proc_macro_runtime_interface)
 	}
 }
 
@@ -112,26 +152,14 @@ pub fn create_exchangeable_host_function_ident(name: &Ident) -> Ident {
 /// Create the host function identifier for the given function name.
 pub fn create_host_function_ident(name: &Ident, version: u32, trait_name: &Ident) -> Ident {
 	Ident::new(
-		&format!(
-			"ext_{}_{}_version_{}",
-			trait_name.to_string().to_snake_case(),
-			name,
-			version,
-		),
+		&format!("ext_{}_{}_version_{}", trait_name.to_string().to_snake_case(), name, version),
 		Span::call_site(),
 	)
 }
 
 /// Create the host function identifier for the given function name.
 pub fn create_function_ident_with_version(name: &Ident, version: u32) -> Ident {
-	Ident::new(
-		&format!(
-			"{}_version_{}",
-			name,
-			version,
-		),
-		Span::call_site(),
-	)
+	Ident::new(&format!("{}_version_{}", name, version), Span::call_site())
 }
 
 /// Returns the function arguments of the given `Signature`, minus any `self` arguments.
@@ -146,10 +174,8 @@ pub fn get_function_arguments<'a>(sig: &'a Signature) -> impl Iterator<Item = Pa
 		.map(|(i, arg)| {
 			let mut res = arg.clone();
 			if let Pat::Wild(wild) = &*arg.pat {
-				let ident = Ident::new(
-					&format!("__runtime_interface_generated_{}_", i),
-					wild.span(),
-				);
+				let ident =
+					Ident::new(&format!("__runtime_interface_generated_{}_", i), wild.span());
 
 				res.pat = Box::new(parse_quote!( #ident ))
 			}
@@ -173,12 +199,10 @@ pub fn get_function_argument_types<'a>(sig: &'a Signature) -> impl Iterator<Item
 pub fn get_function_argument_types_without_ref<'a>(
 	sig: &'a Signature,
 ) -> impl Iterator<Item = Box<Type>> + 'a {
-	get_function_arguments(sig)
-		.map(|pt| pt.ty)
-		.map(|ty| match *ty {
-			Type::Reference(type_ref) => type_ref.elem,
-			_ => ty,
-		})
+	get_function_arguments(sig).map(|pt| pt.ty).map(|ty| match *ty {
+		Type::Reference(type_ref) => type_ref.elem,
+		_ => ty,
+	})
 }
 
 /// Returns the function argument names and types, minus any `self`. If any of the arguments
@@ -186,11 +210,10 @@ pub fn get_function_argument_types_without_ref<'a>(
 pub fn get_function_argument_names_and_types_without_ref<'a>(
 	sig: &'a Signature,
 ) -> impl Iterator<Item = (Box<Pat>, Box<Type>)> + 'a {
-	get_function_arguments(sig)
-		.map(|pt| match *pt.ty {
-			Type::Reference(type_ref) => (pt.pat, type_ref.elem),
-			_ => (pt.pat, pt.ty),
-		})
+	get_function_arguments(sig).map(|pt| match *pt.ty {
+		Type::Reference(type_ref) => (pt.pat, type_ref.elem),
+		_ => (pt.pat, pt.ty),
+	})
 }
 
 /// Returns the `&`/`&mut` for all function argument types, minus the `self` arg. If a function
@@ -198,88 +221,91 @@ pub fn get_function_argument_names_and_types_without_ref<'a>(
 pub fn get_function_argument_types_ref_and_mut<'a>(
 	sig: &'a Signature,
 ) -> impl Iterator<Item = Option<(token::And, Option<token::Mut>)>> + 'a {
-	get_function_arguments(sig)
-		.map(|pt| pt.ty)
-		.map(|ty| match *ty {
-			Type::Reference(type_ref) => Some((type_ref.and_token, type_ref.mutability)),
-			_ => None,
-		})
+	get_function_arguments(sig).map(|pt| pt.ty).map(|ty| match *ty {
+		Type::Reference(type_ref) => Some((type_ref.and_token, type_ref.mutability)),
+		_ => None,
+	})
 }
 
 /// Returns an iterator over all trait methods for the given trait definition.
 fn get_trait_methods<'a>(trait_def: &'a ItemTrait) -> impl Iterator<Item = &'a TraitItemMethod> {
-	trait_def
-		.items
-		.iter()
-		.filter_map(|i| match i {
-			TraitItem::Method(ref method) => Some(method),
-			_ => None,
-		})
+	trait_def.items.iter().filter_map(|i| match i {
+		TraitItem::Method(ref method) => Some(method),
+		_ => None,
+	})
 }
 
-/// Parse version attribute.
+/// The version attribute that can be found above a runtime interface function.
 ///
-/// Returns error if it is in incorrent format. Correct format is only `#[version(X)]`.
-fn parse_version_attribute(version: &Attribute) -> Result<u32> {
-	let meta = version.parse_meta()?;
+/// Supports the following formats:
+/// - `#[version(1)]`
+/// - `#[version(1, register_only)]`
+///
+/// While this struct is only for parsing the inner parts inside the `()`.
+struct VersionAttribute {
+	version: u32,
+	register_only: Option<attributes::register_only>,
+}
 
-	let err = Err(Error::new(
-			meta.span(),
-			"Unexpected `version` attribute. The supported format is `#[version(1)]`",
-		)
-	);
-
-	match meta {
-		Meta::List(list) => {
-			if list.nested.len() != 1 {
-				err
-			} else if let Some(NestedMeta::Lit(Lit::Int(i))) = list.nested.first() {
-				i.base10_parse()
-			} else {
-				err
-			}
-		},
-		_ => err,
+impl VersionAttribute {
+	/// Is this function version callable?
+	fn is_callable(&self) -> bool {
+		self.register_only.is_none()
 	}
 }
 
-/// Return item version (`#[version(X)]`) attribute, if present.
-fn get_item_version(item: &TraitItemMethod) -> Result<Option<u32>> {
-	item.attrs.iter().find(|attr| attr.path.is_ident("version"))
-		.map(|attr| parse_version_attribute(attr))
+impl Default for VersionAttribute {
+	fn default() -> Self {
+		Self { version: 1, register_only: None }
+	}
+}
+
+impl Parse for VersionAttribute {
+	fn parse(input: syn::parse::ParseStream) -> Result<Self> {
+		let version: LitInt = input.parse()?;
+		let register_only = if input.peek(token::Comma) {
+			let _ = input.parse::<token::Comma>();
+			Some(input.parse()?)
+		} else {
+			if !input.is_empty() {
+				return Err(Error::new(input.span(), "Unexpected token, expected `,`."))
+			}
+
+			None
+		};
+
+		Ok(Self { version: version.base10_parse()?, register_only })
+	}
+}
+
+/// Return [`VersionAttribute`], if present.
+fn get_item_version(item: &TraitItemMethod) -> Result<Option<VersionAttribute>> {
+	item.attrs
+		.iter()
+		.find(|attr| attr.path.is_ident("version"))
+		.map(|attr| attr.parse_args())
 		.transpose()
 }
 
 /// Returns all runtime interface members, with versions.
-pub fn get_runtime_interface<'a>(trait_def: &'a ItemTrait)
-	-> Result<RuntimeInterface<'a>>
-{
+pub fn get_runtime_interface<'a>(trait_def: &'a ItemTrait) -> Result<RuntimeInterface<'a>> {
 	let mut functions: BTreeMap<syn::Ident, RuntimeInterfaceFunction<'a>> = BTreeMap::new();
 
 	for item in get_trait_methods(trait_def) {
 		let name = item.sig.ident.clone();
-		let version = get_item_version(item)?.unwrap_or(1);
+		let version = get_item_version(item)?.unwrap_or_default();
+
+		if version.version < 1 {
+			return Err(Error::new(item.span(), "Version needs to be at least `1`."))
+		}
 
 		match functions.entry(name.clone()) {
-			Entry::Vacant(entry) => { entry.insert(RuntimeInterfaceFunction::new(version, item)); },
+			Entry::Vacant(entry) => {
+				entry.insert(RuntimeInterfaceFunction::new(version, item));
+			},
 			Entry::Occupied(mut entry) => {
-				if let Some(existing_item) = entry.get().versions.get(&version) {
-					let mut err = Error::new(
-						item.span(),
-						"Duplicated version attribute",
-					);
-					err.combine(Error::new(
-						existing_item.span(),
-						"Previous version with the same number defined here",
-					));
-
-					return Err(err);
-				}
-
-				let interface_item = entry.get_mut();
-				if interface_item.latest_version < version { interface_item.latest_version = version; }
-				interface_item.versions.insert(version, item);
-			}
+				entry.get_mut().add_version(version, item)?;
+			},
 		}
 	}
 
@@ -289,8 +315,11 @@ pub fn get_runtime_interface<'a>(trait_def: &'a ItemTrait)
 			if next_expected != *version {
 				return Err(Error::new(
 					item.span(),
-					format!("Unexpected version attribute: missing version '{}' for this function", next_expected),
-				));
+					format!(
+						"Unexpected version attribute: missing version '{}' for this function",
+						next_expected
+					),
+				))
 			}
 			next_expected += 1;
 		}

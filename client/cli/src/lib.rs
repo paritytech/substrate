@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -20,6 +20,7 @@
 
 #![warn(missing_docs)]
 #![warn(unused_extern_crates)]
+#![warn(unused_imports)]
 
 pub mod arg_enums;
 mod commands;
@@ -34,8 +35,9 @@ pub use config::*;
 pub use error::*;
 pub use params::*;
 pub use runner::*;
-use sc_service::{Configuration, TaskExecutor};
+use sc_service::Configuration;
 pub use sc_service::{ChainSpec, Role};
+pub use sc_tracing::logging::LoggerBuilder;
 pub use sp_version::RuntimeVersion;
 use std::io::Write;
 pub use structopt;
@@ -43,7 +45,6 @@ use structopt::{
 	clap::{self, AppSettings},
 	StructOpt,
 };
-use tracing_subscriber::layer::SubscriberExt;
 
 /// Substrate client CLI
 ///
@@ -68,7 +69,8 @@ pub trait SubstrateCli: Sized {
 	/// Extracts the file name from `std::env::current_exe()`.
 	/// Resorts to the env var `CARGO_PKG_NAME` in case of Error.
 	fn executable_name() -> String {
-		std::env::current_exe().ok()
+		std::env::current_exe()
+			.ok()
 			.and_then(|e| e.file_name().map(|s| s.to_os_string()))
 			.and_then(|w| w.into_string().ok())
 			.unwrap_or_else(|| env!("CARGO_PKG_NAME").into())
@@ -90,8 +92,9 @@ pub trait SubstrateCli: Sized {
 	fn load_spec(&self, id: &str) -> std::result::Result<Box<dyn ChainSpec>, String>;
 
 	/// Helper function used to parse the command line arguments. This is the equivalent of
-	/// `structopt`'s `from_iter()` except that it takes a `VersionInfo` argument to provide the name of
-	/// the application, author, "about" and version. It will also set `AppSettings::GlobalVersion`.
+	/// `structopt`'s `from_iter()` except that it takes a `VersionInfo` argument to provide the
+	/// name of the application, author, "about" and version. It will also set
+	/// `AppSettings::GlobalVersion`.
 	///
 	/// To allow running the node without subcommand, tt also sets a few more settings:
 	/// `AppSettings::ArgsNegateSubcommands` and `AppSettings::SubcommandsNegateReqs`.
@@ -106,8 +109,9 @@ pub trait SubstrateCli: Sized {
 	}
 
 	/// Helper function used to parse the command line arguments. This is the equivalent of
-	/// `structopt`'s `from_iter()` except that it takes a `VersionInfo` argument to provide the name of
-	/// the application, author, "about" and version. It will also set `AppSettings::GlobalVersion`.
+	/// `structopt`'s `from_iter()` except that it takes a `VersionInfo` argument to provide the
+	/// name of the application, author, "about" and version. It will also set
+	/// `AppSettings::GlobalVersion`.
 	///
 	/// To allow running the node without subcommand, it also sets a few more settings:
 	/// `AppSettings::ArgsNegateSubcommands` and `AppSettings::SubcommandsNegateReqs`.
@@ -137,6 +141,7 @@ pub trait SubstrateCli: Sized {
 				AppSettings::GlobalVersion,
 				AppSettings::ArgsNegateSubcommands,
 				AppSettings::SubcommandsNegateReqs,
+				AppSettings::ColoredHelp,
 			]);
 
 		let matches = match app.get_matches_from_safe(iter) {
@@ -163,8 +168,9 @@ pub trait SubstrateCli: Sized {
 	}
 
 	/// Helper function used to parse the command line arguments. This is the equivalent of
-	/// `structopt`'s `from_iter()` except that it takes a `VersionInfo` argument to provide the name of
-	/// the application, author, "about" and version. It will also set `AppSettings::GlobalVersion`.
+	/// `structopt`'s `from_iter()` except that it takes a `VersionInfo` argument to provide the
+	/// name of the application, author, "about" and version. It will also set
+	/// `AppSettings::GlobalVersion`.
 	///
 	/// To allow running the node without subcommand, it also sets a few more settings:
 	/// `AppSettings::ArgsNegateSubcommands` and `AppSettings::SubcommandsNegateReqs`.
@@ -210,92 +216,54 @@ pub trait SubstrateCli: Sized {
 	fn create_configuration<T: CliConfiguration<DVC>, DVC: DefaultConfigurationValues>(
 		&self,
 		command: &T,
-		task_executor: TaskExecutor,
+		tokio_handle: tokio::runtime::Handle,
 	) -> error::Result<Configuration> {
-		command.create_configuration(self, task_executor)
+		command.create_configuration(self, tokio_handle)
 	}
 
 	/// Create a runner for the command provided in argument. This will create a Configuration and
 	/// a tokio runtime
 	fn create_runner<T: CliConfiguration>(&self, command: &T) -> error::Result<Runner<Self>> {
-		command.init::<Self>()?;
-		Runner::new(self, command)
+		let tokio_runtime = build_runtime()?;
+		let config = command.create_configuration(self, tokio_runtime.handle().clone())?;
+
+		command.init(&Self::support_url(), &Self::impl_version(), |_, _| {}, &config)?;
+		Runner::new(config, tokio_runtime)
 	}
 
+	/// Create a runner for the command provided in argument. The `logger_hook` can be used to setup
+	/// a custom profiler or update the logger configuration before it is initialized.
+	///
+	/// Example:
+	/// ```
+	/// use sc_tracing::{SpanDatum, TraceEvent};
+	/// struct TestProfiler;
+	///
+	/// impl sc_tracing::TraceHandler for TestProfiler {
+	///  	fn handle_span(&self, sd: &SpanDatum) {}
+	/// 		fn handle_event(&self, _event: &TraceEvent) {}
+	/// };
+	///
+	/// fn logger_hook() -> impl FnOnce(&mut sc_cli::LoggerBuilder, &sc_service::Configuration) -> () {
+	/// 	|logger_builder, config| {
+	/// 			logger_builder.with_custom_profiling(Box::new(TestProfiler{}));
+	/// 	}
+	/// }
+	/// ```
+	fn create_runner_with_logger_hook<T: CliConfiguration, F>(
+		&self,
+		command: &T,
+		logger_hook: F,
+	) -> error::Result<Runner<Self>>
+	where
+		F: FnOnce(&mut LoggerBuilder, &Configuration),
+	{
+		let tokio_runtime = build_runtime()?;
+		let config = command.create_configuration(self, tokio_runtime.handle().clone())?;
+
+		command.init(&Self::support_url(), &Self::impl_version(), logger_hook, &config)?;
+		Runner::new(config, tokio_runtime)
+	}
 	/// Native runtime version.
 	fn native_runtime_version(chain_spec: &Box<dyn ChainSpec>) -> &'static RuntimeVersion;
-}
-
-/// Initialize the global logger
-///
-/// This sets various global logging and tracing instances and thus may only be called once.
-pub fn init_logger(
-	pattern: &str,
-	tracing_receiver: sc_tracing::TracingReceiver,
-	tracing_targets: Option<String>,
-) -> std::result::Result<(), String> {
-	if let Err(e) = tracing_log::LogTracer::init() {
-		return Err(format!(
-			"Registering Substrate logger failed: {:}!", e
-		))
-	}
-
-	let mut env_filter = tracing_subscriber::EnvFilter::default()
-		// Disable info logging by default for some modules.
-		.add_directive("ws=off".parse().expect("provided directive is valid"))
-		.add_directive("yamux=off".parse().expect("provided directive is valid"))
-		.add_directive("cranelift_codegen=off".parse().expect("provided directive is valid"))
-		// Set warn logging by default for some modules.
-		.add_directive("cranelife_wasm=warn".parse().expect("provided directive is valid"))
-		.add_directive("hyper=warn".parse().expect("provided directive is valid"))
-		// Always log the special target `sc_tracing`, overrides global level.
-		.add_directive("sc_tracing=trace".parse().expect("provided directive is valid"))
-		// Enable info for others.
-		.add_directive(tracing_subscriber::filter::LevelFilter::INFO.into());
-
-	if let Ok(lvl) = std::env::var("RUST_LOG") {
-		if lvl != "" {
-			// We're not sure if log or tracing is available at this moment, so silently ignore the
-			// parse error.
-			if let Ok(directive) = lvl.parse() {
-				env_filter = env_filter.add_directive(directive);
-			}
-		}
-	}
-
-	if pattern != "" {
-		// We're not sure if log or tracing is available at this moment, so silently ignore the
-		// parse error.
-		if let Ok(directive) = pattern.parse() {
-			env_filter = env_filter.add_directive(directive);
-		}
-	}
-
-	let isatty = atty::is(atty::Stream::Stderr);
-	let enable_color = isatty;
-
-	let subscriber = tracing_subscriber::FmtSubscriber::builder()
-		.with_env_filter(env_filter)
-		.with_target(false)
-		.with_ansi(enable_color)
-		.with_writer(std::io::stderr)
-		.compact()
-		.finish();
-
-	if let Some(tracing_targets) = tracing_targets {
-		let profiling = sc_tracing::ProfilingLayer::new(tracing_receiver, &tracing_targets);
-
-		if let Err(e) = tracing::subscriber::set_global_default(subscriber.with(profiling)) {
-			return Err(format!(
-				"Registering Substrate tracing subscriber failed: {:}!", e
-			))
-		}
-	} else {
-		if let Err(e) = tracing::subscriber::set_global_default(subscriber) {
-			return Err(format!(
-				"Registering Substrate tracing subscriber  failed: {:}!", e
-			))
-		}
-	}
-	Ok(())
 }

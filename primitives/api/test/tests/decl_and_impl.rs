@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,14 +16,14 @@
 // limitations under the License.
 
 use sp_api::{
-	RuntimeApiInfo, decl_runtime_apis, impl_runtime_apis, mock_impl_runtime_apis,
-	ApiExt,
+	decl_runtime_apis, impl_runtime_apis, mock_impl_runtime_apis, ApiError, ApiExt, RuntimeApiInfo,
 };
-
-use sp_runtime::{traits::{GetNodeBlockType, Block as BlockT}, generic::BlockId};
-
+use sp_core::NativeOrEncoded;
+use sp_runtime::{
+	generic::BlockId,
+	traits::{Block as BlockT, GetNodeBlockType},
+};
 use substrate_test_runtime_client::runtime::Block;
-use sp_blockchain::Result;
 
 /// The declaration of the `Runtime` type and the implementation of the `GetNodeBlockType`
 /// trait are done by the `construct_runtime!` macro in a real runtime.
@@ -103,9 +103,30 @@ mock_impl_runtime_apis! {
 			unimplemented!()
 		}
 
-		fn same_name() {}
+		#[advanced]
+		fn same_name(_: &BlockId<Block>) ->
+			Result<
+				NativeOrEncoded<()>,
+				ApiError
+			>
+		{
+			Ok(().into())
+		}
 
-		fn wild_card(_: u32) {}
+		#[advanced]
+		fn wild_card(at: &BlockId<Block>, _: u32) ->
+			Result<
+				NativeOrEncoded<()>,
+				ApiError
+			>
+		{
+			if let BlockId::Number(1337) = at {
+				// yeah
+				Ok(().into())
+			} else {
+				Err((Box::from("Test error") as Box<dyn std::error::Error + Send + Sync>).into())
+			}
+		}
 	}
 
 	impl ApiWithCustomVersion<Block> for MockApi {
@@ -115,40 +136,46 @@ mock_impl_runtime_apis! {
 
 type TestClient = substrate_test_runtime_client::client::Client<
 	substrate_test_runtime_client::Backend,
-	substrate_test_runtime_client::Executor,
+	substrate_test_runtime_client::ExecutorDispatch,
 	Block,
 	RuntimeApi,
 >;
 
 #[test]
 fn test_client_side_function_signature() {
-	let _test: fn(&RuntimeApiImpl<Block, TestClient>, &BlockId<Block>, u64) -> Result<()> =
-		RuntimeApiImpl::<Block, TestClient>::test;
-	let _something_with_block:
-		fn(&RuntimeApiImpl<Block, TestClient>, &BlockId<Block>, Block) -> Result<Block> =
-			RuntimeApiImpl::<Block, TestClient>::something_with_block;
+	let _test: fn(
+		&RuntimeApiImpl<Block, TestClient>,
+		&BlockId<Block>,
+		u64,
+	) -> Result<(), ApiError> = RuntimeApiImpl::<Block, TestClient>::test;
+	let _something_with_block: fn(
+		&RuntimeApiImpl<Block, TestClient>,
+		&BlockId<Block>,
+		Block,
+	) -> Result<Block, ApiError> = RuntimeApiImpl::<Block, TestClient>::something_with_block;
 
 	#[allow(deprecated)]
-	let _same_name_before_version_2:
-		fn(&RuntimeApiImpl<Block, TestClient>, &BlockId<Block>) -> Result<String> =
-			RuntimeApiImpl::<Block, TestClient>::same_name_before_version_2;
+	let _same_name_before_version_2: fn(
+		&RuntimeApiImpl<Block, TestClient>,
+		&BlockId<Block>,
+	) -> Result<String, ApiError> = RuntimeApiImpl::<Block, TestClient>::same_name_before_version_2;
 }
 
 #[test]
 fn check_runtime_api_info() {
-	assert_eq!(&Api::<Block, Error = ()>::ID, &runtime_decl_for_Api::ID);
-	assert_eq!(Api::<Block, Error = ()>::VERSION, runtime_decl_for_Api::VERSION);
-	assert_eq!(Api::<Block, Error = ()>::VERSION, 1);
+	assert_eq!(&<dyn Api::<Block>>::ID, &runtime_decl_for_Api::ID);
+	assert_eq!(<dyn Api::<Block>>::VERSION, runtime_decl_for_Api::VERSION);
+	assert_eq!(<dyn Api::<Block>>::VERSION, 1);
 
 	assert_eq!(
-		ApiWithCustomVersion::<Block, Error = ()>::VERSION,
+		<dyn ApiWithCustomVersion::<Block>>::VERSION,
 		runtime_decl_for_ApiWithCustomVersion::VERSION,
 	);
 	assert_eq!(
-		&ApiWithCustomVersion::<Block, Error = ()>::ID,
+		&<dyn ApiWithCustomVersion::<Block>>::ID,
 		&runtime_decl_for_ApiWithCustomVersion::ID,
 	);
-	assert_eq!(ApiWithCustomVersion::<Block, Error = ()>::VERSION, 2);
+	assert_eq!(<dyn ApiWithCustomVersion::<Block>>::VERSION, 2);
 }
 
 fn check_runtime_api_versions_contains<T: RuntimeApiInfo + ?Sized>() {
@@ -157,19 +184,17 @@ fn check_runtime_api_versions_contains<T: RuntimeApiInfo + ?Sized>() {
 
 #[test]
 fn check_runtime_api_versions() {
-	check_runtime_api_versions_contains::<dyn Api<Block, Error = ()>>();
-	check_runtime_api_versions_contains::<dyn ApiWithCustomVersion<Block, Error = ()>>();
-	check_runtime_api_versions_contains::<dyn sp_api::Core<Block, Error = ()>>();
+	check_runtime_api_versions_contains::<dyn Api<Block>>();
+	check_runtime_api_versions_contains::<dyn ApiWithCustomVersion<Block>>();
+	check_runtime_api_versions_contains::<dyn sp_api::Core<Block>>();
 }
 
 #[test]
 fn mock_runtime_api_has_api() {
 	let mock = MockApi { block: None };
 
-	assert!(
-		mock.has_api::<dyn ApiWithCustomVersion<Block, Error = ()>>(&BlockId::Number(0)).unwrap(),
-	);
-	assert!(mock.has_api::<dyn Api<Block, Error = ()>>(&BlockId::Number(0)).unwrap());
+	assert!(mock.has_api::<dyn ApiWithCustomVersion<Block>>(&BlockId::Number(0)).unwrap());
+	assert!(mock.has_api::<dyn Api<Block>>(&BlockId::Number(0)).unwrap());
 }
 
 #[test]
@@ -179,4 +204,16 @@ fn mock_runtime_api_panics_on_calling_old_version() {
 
 	#[allow(deprecated)]
 	let _ = mock.same_name_before_version_2(&BlockId::Number(0));
+}
+
+#[test]
+fn mock_runtime_api_works_with_advanced() {
+	let mock = MockApi { block: None };
+
+	Api::<Block>::same_name(&mock, &BlockId::Number(0)).unwrap();
+	mock.wild_card(&BlockId::Number(1337), 1).unwrap();
+	assert_eq!(
+		"Test error".to_string(),
+		mock.wild_card(&BlockId::Number(1336), 1).unwrap_err().to_string(),
+	);
 }

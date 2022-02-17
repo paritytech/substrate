@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -23,9 +23,9 @@
 //! and without the performance penalty of full wasm emulation inside wasm.
 //!
 //! This is achieved by using bindings to the wasm VM, which are published by the host API.
-//! This API is thin and consists of only a handful functions. It contains functions for instantiating
-//! modules and executing them, but doesn't contain functions for inspecting the module
-//! structure. The user of this library is supposed to read the wasm module.
+//! This API is thin and consists of only a handful functions. It contains functions for
+//! instantiating modules and executing them, but doesn't contain functions for inspecting the
+//! module structure. The user of this library is supposed to read the wasm module.
 //!
 //! When this crate is used in the `std` environment all these functions are implemented by directly
 //! calling the wasm VM.
@@ -38,18 +38,25 @@
 #![warn(missing_docs)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
+extern crate alloc;
+
 use sp_std::prelude::*;
 
 pub use sp_core::sandbox::HostError;
-pub use sp_wasm_interface::{Value, ReturnValue};
+pub use sp_wasm_interface::{ReturnValue, Value};
 
-mod imp {
-	#[cfg(feature = "std")]
-	include!("../with_std.rs");
+/// The target used for logging.
+const TARGET: &str = "runtime::sandbox";
 
-	#[cfg(not(feature = "std"))]
-	include!("../without_std.rs");
-}
+pub mod embedded_executor;
+#[cfg(not(feature = "std"))]
+pub mod host_executor;
+
+#[cfg(all(feature = "wasmer-sandbox", not(feature = "std")))]
+pub use host_executor as default_executor;
+
+#[cfg(not(all(feature = "wasmer-sandbox", not(feature = "std"))))]
+pub use embedded_executor as default_executor;
 
 /// Error that can occur while using this crate.
 #[derive(sp_core::RuntimeDebug)]
@@ -82,13 +89,8 @@ pub type HostFuncType<T> = fn(&mut T, &[Value]) -> Result<ReturnValue, HostError
 /// will be used by the guest module.
 ///
 /// The memory can't be directly accessed by supervisor, but only
-/// through designated functions [`get`](Memory::get) and [`set`](Memory::set).
-#[derive(Clone)]
-pub struct Memory {
-	inner: imp::Memory,
-}
-
-impl Memory {
+/// through designated functions [`get`](SandboxMemory::get) and [`set`](SandboxMemory::set).
+pub trait SandboxMemory: Sized + Clone {
 	/// Construct a new linear memory instance.
 	///
 	/// The memory allocated with initial number of pages specified by `initial`.
@@ -99,42 +101,26 @@ impl Memory {
 	/// `maximum`. If not specified, this memory instance would be able to allocate up to 4GiB.
 	///
 	/// Allocated memory is always zeroed.
-	pub fn new(initial: u32, maximum: Option<u32>) -> Result<Memory, Error> {
-		Ok(Memory {
-			inner: imp::Memory::new(initial, maximum)?,
-		})
-	}
+	fn new(initial: u32, maximum: Option<u32>) -> Result<Self, Error>;
 
 	/// Read a memory area at the address `ptr` with the size of the provided slice `buf`.
 	///
 	/// Returns `Err` if the range is out-of-bounds.
-	pub fn get(&self, ptr: u32, buf: &mut [u8]) -> Result<(), Error> {
-		self.inner.get(ptr, buf)
-	}
+	fn get(&self, ptr: u32, buf: &mut [u8]) -> Result<(), Error>;
 
 	/// Write a memory area at the address `ptr` with contents of the provided slice `buf`.
 	///
 	/// Returns `Err` if the range is out-of-bounds.
-	pub fn set(&self, ptr: u32, value: &[u8]) -> Result<(), Error> {
-		self.inner.set(ptr, value)
-	}
+	fn set(&self, ptr: u32, value: &[u8]) -> Result<(), Error>;
 }
 
 /// Struct that can be used for defining an environment for a sandboxed module.
 ///
 /// The sandboxed module can access only the entities which were defined and passed
 /// to the module at the instantiation time.
-pub struct EnvironmentDefinitionBuilder<T> {
-	inner: imp::EnvironmentDefinitionBuilder<T>,
-}
-
-impl<T> EnvironmentDefinitionBuilder<T> {
+pub trait SandboxEnvironmentBuilder<State, Memory>: Sized {
 	/// Construct a new `EnvironmentDefinitionBuilder`.
-	pub fn new() -> EnvironmentDefinitionBuilder<T> {
-		EnvironmentDefinitionBuilder {
-			inner: imp::EnvironmentDefinitionBuilder::new(),
-		}
-	}
+	fn new() -> Self;
 
 	/// Register a host function in this environment definition.
 	///
@@ -142,47 +128,41 @@ impl<T> EnvironmentDefinitionBuilder<T> {
 	/// can import function passed here with any signature it wants. It can even import
 	/// the same function (i.e. with same `module` and `field`) several times. It's up to
 	/// the user code to check or constrain the types of signatures.
-	pub fn add_host_func<N1, N2>(&mut self, module: N1, field: N2, f: HostFuncType<T>)
+	fn add_host_func<N1, N2>(&mut self, module: N1, field: N2, f: HostFuncType<State>)
 	where
 		N1: Into<Vec<u8>>,
-		N2: Into<Vec<u8>>,
-	{
-		self.inner.add_host_func(module, field, f);
-	}
+		N2: Into<Vec<u8>>;
 
 	/// Register a memory in this environment definition.
-	pub fn add_memory<N1, N2>(&mut self, module: N1, field: N2, mem: Memory)
+	fn add_memory<N1, N2>(&mut self, module: N1, field: N2, mem: Memory)
 	where
 		N1: Into<Vec<u8>>,
-		N2: Into<Vec<u8>>,
-	{
-		self.inner.add_memory(module, field, mem.inner);
-	}
+		N2: Into<Vec<u8>>;
 }
 
 /// Sandboxed instance of a wasm module.
 ///
 /// This instance can be used for invoking exported functions.
-pub struct Instance<T> {
-	inner: imp::Instance<T>,
-}
+pub trait SandboxInstance<State>: Sized {
+	/// The memory type used for this sandbox.
+	type Memory: SandboxMemory;
 
-impl<T> Instance<T> {
+	/// The environment builder used to construct this sandbox.
+	type EnvironmentBuilder: SandboxEnvironmentBuilder<State, Self::Memory>;
+
 	/// Instantiate a module with the given [`EnvironmentDefinitionBuilder`]. It will
 	/// run the `start` function (if it is present in the module) with the given `state`.
 	///
 	/// Returns `Err(Error::Module)` if this module can't be instantiated with the given
-	/// environment. If execution of `start` function generated a trap, then `Err(Error::Execution)` will
-	/// be returned.
+	/// environment. If execution of `start` function generated a trap, then `Err(Error::Execution)`
+	/// will be returned.
 	///
 	/// [`EnvironmentDefinitionBuilder`]: struct.EnvironmentDefinitionBuilder.html
-	pub fn new(code: &[u8], env_def_builder: &EnvironmentDefinitionBuilder<T>, state: &mut T)
-		-> Result<Instance<T>, Error>
-	{
-		Ok(Instance {
-			inner: imp::Instance::new(code, &env_def_builder.inner, state)?,
-		})
-	}
+	fn new(
+		code: &[u8],
+		env_def_builder: &Self::EnvironmentBuilder,
+		state: &mut State,
+	) -> Result<Self, Error>;
 
 	/// Invoke an exported function with the given name.
 	///
@@ -192,22 +172,18 @@ impl<T> Instance<T> {
 	///
 	/// - An export function name isn't a proper utf8 byte sequence,
 	/// - This module doesn't have an exported function with the given name,
-	/// - If types of the arguments passed to the function doesn't match function signature
-	///   then trap occurs (as if the exported function was called via call_indirect),
+	/// - If types of the arguments passed to the function doesn't match function signature then
+	///   trap occurs (as if the exported function was called via call_indirect),
 	/// - Trap occurred at the execution time.
-	pub fn invoke(
+	fn invoke(
 		&mut self,
 		name: &str,
 		args: &[Value],
-		state: &mut T,
-	) -> Result<ReturnValue, Error> {
-		self.inner.invoke(name, args, state)
-	}
+		state: &mut State,
+	) -> Result<ReturnValue, Error>;
 
 	/// Get the value from a global with the given `name`.
 	///
 	/// Returns `Some(_)` if the global could be found.
-	pub fn get_global_val(&self, name: &str) -> Option<Value> {
-		self.inner.get_global_val(name)
-	}
+	fn get_global_val(&self, name: &str) -> Option<Value>;
 }

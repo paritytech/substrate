@@ -1,0 +1,20 @@
+[package]
+name = "sc-allocator"
+version = "4.1.0-dev"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2021"
+license = "Apache-2.0"
+homepage = "https://substrate.io"
+repository = "https://github.com/paritytech/substrate/"
+description = "Collection of allocator implementations."
+documentation = "https://docs.rs/sc-allocator"
+readme = "README.md"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[dependencies]
+sp-core = { version = "4.1.0-dev", path = "../../primitives/core" }
+sp-wasm-interface = { version = "4.1.0-dev", path = "../../primitives/wasm-interface" }
+log = "0.4.11"
+thiserror = "1.0.30"

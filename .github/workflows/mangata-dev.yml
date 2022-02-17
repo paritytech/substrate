@@ -2,6 +2,7 @@ on:
   pull_request:
     branches:
       - mangata-dev
+      - mangata-dev-v4
   push:
     branches: [ mangata-dev ]
 
@@ -18,10 +19,10 @@ jobs:
         with:
           toolchain: nightly
           default: true
-      - name: Install nightly-2020-10-01 with wasm
+      - name: Install nightly-2021-10-19 with wasm
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2020-10-01
+          toolchain: nightly-2021-10-19
           target: wasm32-unknown-unknown
       - name: Check Cargo version
         run: |
@@ -29,11 +30,12 @@ jobs:
       - name: Build UT
         uses: actions-rs/cargo@v1
         with:
-          toolchain: nightly-2020-10-01
+          toolchain: nightly-2021-10-19
           command: test
-          args: -j1 --no-run
+          args: --release -j2 --no-run
       - name: Run UT
         uses: actions-rs/cargo@v1
         with:
-          toolchain: nightly-2020-10-01
+          toolchain: nightly-2021-10-19
           command: test
+          args: --release

@@ -1,50 +1,40 @@
 [package]
-authors = ['Anonymous']
-edition = '2018'
-name = 'pallet-template'
-version = "2.0.0"
-license = "Unlicense"
-homepage = "https://substrate.dev"
-repository = "https://github.com/paritytech/substrate/"
+name = "pallet-template"
+version = "3.0.0"
 description = "FRAME pallet template for defining custom runtime logic."
-readme = "README.md"
+authors = ["Substrate DevHub <https://github.com/substrate-developer-hub>"]
+homepage = "https://substrate.io/"
+edition = "2021"
+license = "Unlicense"
+publish = false
+repository = "https://github.com/substrate-developer-hub/substrate-node-template/"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "1.3.4", default-features = false, features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = [
+	"derive",
+] }
+scale-info = { version = "1.0", default-features = false, features = ["derive"] }
+frame-support = { default-features = false, version = "4.0.0-dev", path = "../../../../frame/support" }
+frame-system = { default-features = false, version = "4.0.0-dev", path = "../../../../frame/system" }
+frame-benchmarking = { default-features = false, version = "4.0.0-dev", path = "../../../../frame/benchmarking", optional = true }
 
-[dependencies.frame-support]
-default-features = false
-version = "2.0.0"
-path = "../../../../frame/support"
-
-[dependencies.frame-system]
-default-features = false
-version = "2.0.0"
-path = "../../../../frame/system"
-
-[dev-dependencies.sp-core]
-default-features = false
-version = "2.0.0"
-path = "../../../../primitives/core"
-
-[dev-dependencies.sp-io]
-default-features = false
-version = "2.0.0"
-path = "../../../../primitives/io"
-
-[dev-dependencies.sp-runtime]
-default-features = false
-version = "2.0.0"
-path = "../../../../primitives/runtime"
-
+[dev-dependencies]
+sp-core = { default-features = false, version = "4.1.0-dev", path = "../../../../primitives/core" }
+sp-io = { default-features = false, version = "4.0.0-dev", path = "../../../../primitives/io" }
+sp-runtime = { default-features = false, version = "4.1.0-dev", path = "../../../../primitives/runtime" }
 
 [features]
-default = ['std']
+default = ["std"]
 std = [
-	'codec/std',
-	'frame-support/std',
-	'frame-system/std'
+	"codec/std",
+	"scale-info/std",
+	"frame-support/std",
+	"frame-system/std",
+	"frame-benchmarking/std",
 ]
+
+runtime-benchmarks = ["frame-benchmarking/runtime-benchmarks"]
+try-runtime = ["frame-support/try-runtime"]

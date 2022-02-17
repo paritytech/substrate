@@ -2,7 +2,7 @@
 
 The Staking module is used to manage funds at stake by network maintainers.
 
-- [`staking::Trait`](https://docs.rs/pallet-staking/latest/pallet_staking/trait.Trait.html)
+- [`staking::Config`](https://docs.rs/pallet-staking/latest/pallet_staking/trait.Config.html)
 - [`Call`](https://docs.rs/pallet-staking/latest/pallet_staking/enum.Call.html)
 - [`Module`](https://docs.rs/pallet-staking/latest/pallet_staking/struct.Module.html)
 
@@ -57,7 +57,7 @@ There are three possible roles that any staked account pair can be in: `Validato
 and `Idle` (defined in [`StakerStatus`](https://docs.rs/pallet-staking/latest/pallet_staking/enum.StakerStatus.html)). There are three
 corresponding instructions to change between roles, namely:
 [`validate`](https://docs.rs/pallet-staking/latest/pallet_staking/enum.Call.html#variant.validate),
-[`nominate`](./enum.Call.html#variant.nominate), and [`chill`](https://docs.rs/pallet-staking/latest/pallet_staking/enum.Call.html#variant.chill).
+[`nominate`](https://docs.rs/pallet-staking/latest/pallet_staking/enum.Call.html#variant.nominate), and [`chill`](https://docs.rs/pallet-staking/latest/pallet_staking/enum.Call.html#variant.chill).
 
 #### Validating
 
@@ -81,7 +81,7 @@ between the validator and its nominators. This rule incentivizes the nominators 
 the misbehaving/offline validators as much as possible, simply because the nominators will also
 lose funds if they vote poorly.
 
-An account can become a nominator via the [`nominate`](enum.Call.html#variant.nominate) call.
+An account can become a nominator via the [`nominate`](https://docs.rs/pallet-staking/latest/pallet_staking/enum.Call.html#variant.nominate) call.
 
 #### Rewards and Slash
 
@@ -90,7 +90,7 @@ valid behavior_ while _punishing any misbehavior or lack of availability_.
 
 Rewards must be claimed for each era before it gets too old by `$HISTORY_DEPTH` using the
 `payout_stakers` call. Any account can call `payout_stakers`, which pays the reward to the
-validator as well as its nominators. Only the [`Trait::MaxNominatorRewardedPerValidator`]
+validator as well as its nominators. Only the [`Config::MaxNominatorRewardedPerValidator`]
 biggest stakers can claim their reward. This is to limit the i/o cost to mutate storage for each
 nominator's account.
 
@@ -102,7 +102,7 @@ Slashing logic is further described in the documentation of the `slashing` modul
 
 Similar to slashing, rewards are also shared among a validator and its associated nominators.
 Yet, the reward funds are not always transferred to the stash account and can be configured. See
-[Reward Calculation](#reward-calculation) for more details.
+[Reward Calculation](https://docs.rs/pallet-staking/latest/pallet_staking/#reward-calculation) for more details.
 
 #### Chilling
 
@@ -110,7 +110,7 @@ Finally, any of the roles above can choose to step back temporarily and just chi
 This means that if they are a nominator, they will not be considered as voters anymore and if
 they are validators, they will no longer be a candidate for the next election.
 
-An account can step back via the [`chill`](enum.Call.html#variant.chill) call.
+An account can step back via the [`chill`](https://docs.rs/pallet-staking/latest/pallet_staking/enum.Call.html#variant.chill) call.
 
 ### Session managing
 
@@ -133,19 +133,27 @@ The Staking module contains many public storage items and (im)mutable functions.
 ### Example: Rewarding a validator by id.
 
 ```rust
-use frame_support::{decl_module, dispatch};
-use frame_system::ensure_signed;
 use pallet_staking::{self as staking};
 
-pub trait Trait: staking::Trait {}
+#[frame_support::pallet]
+pub mod pallet {
+    use super::*;
+    use frame_support::pallet_prelude::*;
+    use frame_system::pallet_prelude::*;
 
-decl_module! {
-    pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+    #[pallet::pallet]
+    pub struct Pallet<T>(_);
+
+    #[pallet::config]
+    pub trait Config: frame_system::Config + staking::Config {}
+
+    #[pallet::call]
+    impl<T: Config> Pallet<T> {
         /// Reward a validator.
-        #[weight = 0]
-        pub fn reward_myself(origin) -> dispatch::DispatchResult {
+        #[pallet::weight(0)]
+        pub fn reward_myself(origin: OriginFor<T>) -> DispatchResult {
             let reported = ensure_signed(origin)?;
-            <staking::Module<T>>::reward_by_ids(vec![(reported, 10)]);
+            <staking::Pallet<T>>::reward_by_ids(vec![(reported, 10)]);
             Ok(())
         }
     }
@@ -157,7 +165,7 @@ decl_module! {
 ### Era payout
 
 The era payout is computed using yearly inflation curve defined at
-[`T::RewardCurve`](https://docs.rs/pallet-staking/latest/pallet_staking/trait.Trait.html#associatedtype.RewardCurve) as such:
+[`T::RewardCurve`](https://docs.rs/pallet-staking/latest/pallet_staking/trait.Config.html#associatedtype.RewardCurve) as such:
 
 ```nocompile
 staker_payout = yearly_inflation(npos_token_staked / total_tokens) * total_tokens / era_per_year
@@ -168,7 +176,7 @@ This payout is used to reward stakers as defined in next section
 remaining_payout = max_yearly_inflation * total_tokens / era_per_year - staker_payout
 ```
 The remaining reward is send to the configurable end-point
-[`T::RewardRemainder`](https://docs.rs/pallet-staking/latest/pallet_staking/trait.Trait.html#associatedtype.RewardRemainder).
+[`T::RewardRemainder`](https://docs.rs/pallet-staking/latest/pallet_staking/trait.Config.html#associatedtype.RewardRemainder).
 
 ### Reward Calculation
 
@@ -176,14 +184,14 @@ Validators and nominators are rewarded at the end of each era. The total reward 
 calculated using the era duration and the staking rate (the total amount of tokens staked by
 nominators and validators, divided by the total token supply). It aims to incentivize toward a
 defined staking rate. The full specification can be found
-[here](https://research.web3.foundation/en/latest/polkadot/Token%20Economics.html#inflation-model).
+[here](https://research.web3.foundation/en/latest/polkadot/economics/1-token-economics.html#inflation-model).
 
 Total reward is split among validators and their nominators depending on the number of points
 they received during the era. Points are added to a validator using
 [`reward_by_ids`](https://docs.rs/pallet-staking/latest/pallet_staking/enum.Call.html#variant.reward_by_ids) or
 [`reward_by_indices`](https://docs.rs/pallet-staking/latest/pallet_staking/enum.Call.html#variant.reward_by_indices).
 
-[`Module`](./struct.Module.html) implements
+[`Module`](https://docs.rs/pallet-staking/latest/pallet_staking/struct.Module.html) implements
 [`pallet_authorship::EventHandler`](https://docs.rs/pallet-authorship/latest/pallet_authorship/trait.EventHandler.html) to add reward
 points to block producer and block producer of referenced uncles.
 
@@ -198,11 +206,11 @@ validator and all of the nominators that nominated the validator, proportional t
 staked behind this validator (_i.e._ dividing the
 [`own`](https://docs.rs/pallet-staking/latest/pallet_staking/struct.Exposure.html#structfield.own) or
 [`others`](https://docs.rs/pallet-staking/latest/pallet_staking/struct.Exposure.html#structfield.others) by
-[`total`](./struct.Exposure.html#structfield.total) in [`Exposure`](https://docs.rs/pallet-staking/latest/pallet_staking/struct.Exposure.html)).
+[`total`](https://docs.rs/pallet-staking/latest/pallet_staking/struct.Exposure.html#structfield.total) in [`Exposure`](https://docs.rs/pallet-staking/latest/pallet_staking/struct.Exposure.html)).
 
 All entities who receive a reward have the option to choose their reward destination through the
 [`Payee`](https://docs.rs/pallet-staking/latest/pallet_staking/struct.Payee.html) storage item (see
-[`set_payee`](enum.Call.html#variant.set_payee)), to be one of the following:
+[`set_payee`](https://docs.rs/pallet-staking/latest/pallet_staking/enum.Call.html#variant.set_payee)), to be one of the following:
 
 - Controller account, (obviously) not increasing the staked value.
 - Stash account, not increasing the staked value.
@@ -213,14 +221,14 @@ All entities who receive a reward have the option to choose their reward destina
 Any funds already placed into stash can be the target of the following operations:
 
 The controller account can free a portion (or all) of the funds using the
-[`unbond`](enum.Call.html#variant.unbond) call. Note that the funds are not immediately
-accessible. Instead, a duration denoted by [`BondingDuration`](https://docs.rs/pallet-staking/latest/pallet_staking/struct.BondingDuration.html)
+[`unbond`](https://docs.rs/pallet-staking/latest/pallet_staking/enum.Call.html#variant.unbond) call. Note that the funds are not immediately
+accessible. Instead, a duration denoted by [`BondingDuration`](https://docs.rs/pallet-staking/latest/pallet_staking/trait.Config.html#associatedtype.BondingDuration)
 (in number of eras) must pass until the funds can actually be removed. Once the
 `BondingDuration` is over, the [`withdraw_unbonded`](https://docs.rs/pallet-staking/latest/pallet_staking/enum.Call.html#variant.withdraw_unbonded)
 call can be used to actually withdraw the funds.
 
 Note that there is a limitation to the number of fund-chunks that can be scheduled to be
-unlocked in the future via [`unbond`](enum.Call.html#variant.unbond). In case this maximum
+unlocked in the future via [`unbond`](https://docs.rs/pallet-staking/latest/pallet_staking/enum.Call.html#variant.unbond). In case this maximum
 (`MAX_UNLOCKING_CHUNKS`) is reached, the bonded account _must_ first wait until a successful
 call to `withdraw_unbonded` to remove some of the chunks.
 

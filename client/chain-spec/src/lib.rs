@@ -1,18 +1,20 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Substrate chain configurations.
 //!
@@ -20,7 +22,7 @@
 //! a runtime-specific configuration file (a.k.a chain spec).
 //!
 //! Basic chain spec type containing all required parameters is
-//! [`ChainSpec`](./struct.ChainSpec.html). It can be extended with
+//! [`GenericChainSpec`]. It can be extended with
 //! additional options that contain configuration specific to your chain.
 //! Usually the extension is going to be an amalgamate of types exposed
 //! by Substrate core modules. To allow the core modules to retrieve
@@ -33,7 +35,7 @@
 //!
 //! #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, ChainSpecExtension)]
 //! pub struct MyExtension {
-//!		pub known_blocks: HashMap<u64, String>,
+//! 		pub known_blocks: HashMap<u64, String>,
 //! }
 //!
 //! pub type MyChainSpec<G> = GenericChainSpec<G, MyExtension>;
@@ -51,19 +53,19 @@
 //!
 //! #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, ChainSpecGroup)]
 //! pub struct ClientParams {
-//!		max_block_size: usize,
-//!		max_extrinsic_size: usize,
+//! 		max_block_size: usize,
+//! 		max_extrinsic_size: usize,
 //! }
 //!
 //! #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, ChainSpecGroup)]
 //! pub struct PoolParams {
-//!		max_transaction_size: usize,
+//! 		max_transaction_size: usize,
 //! }
 //!
 //! #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, ChainSpecGroup, ChainSpecExtension)]
 //! pub struct Extension {
-//!		pub client: ClientParams,
-//!		pub pool: PoolParams,
+//! 		pub client: ClientParams,
+//! 		pub pool: PoolParams,
 //! }
 //!
 //! pub type BlockNumber = u64;
@@ -86,20 +88,20 @@
 //!
 //! #[derive(Clone, Debug, Serialize, Deserialize, ChainSpecGroup)]
 //! pub struct ClientParams {
-//!		max_block_size: usize,
-//!		max_extrinsic_size: usize,
+//! 		max_block_size: usize,
+//! 		max_extrinsic_size: usize,
 //! }
 //!
 //! #[derive(Clone, Debug, Serialize, Deserialize, ChainSpecGroup)]
 //! pub struct PoolParams {
-//!		max_transaction_size: usize,
+//! 		max_transaction_size: usize,
 //! }
 //!
 //! #[derive(Clone, Debug, Serialize, Deserialize, ChainSpecExtension)]
 //! pub struct Extension {
-//!		pub client: ClientParams,
-//!		#[forks]
-//!		pub pool: Forks<u64, PoolParams>,
+//! 		pub client: ClientParams,
+//! 		#[forks]
+//! 		pub pool: Forks<u64, PoolParams>,
 //! }
 //!
 //! pub type MyChainSpec<G> = GenericChainSpec<G, Extension>;
@@ -108,25 +110,49 @@
 mod chain_spec;
 mod extension;
 
-pub use chain_spec::{
-	ChainSpec as GenericChainSpec, NoExtension, LightSyncState, SerializableLightSyncState,
+pub use chain_spec::{ChainSpec as GenericChainSpec, NoExtension};
+pub use extension::{
+	get_extension, get_extension_mut, Extension, Fork, Forks, GetExtension, Group,
 };
-pub use extension::{Group, Fork, Forks, Extension, GetExtension, get_extension};
 pub use sc_chain_spec_derive::{ChainSpecExtension, ChainSpecGroup};
-pub use sp_chain_spec::{Properties, ChainType};
 
-use serde::{Serialize, de::DeserializeOwned};
-use sp_runtime::BuildStorage;
 use sc_network::config::MultiaddrWithPeerId;
 use sc_telemetry::TelemetryEndpoints;
+use serde::{de::DeserializeOwned, Serialize};
 use sp_core::storage::Storage;
+use sp_runtime::BuildStorage;
+
+/// The type of a chain.
+///
+/// This can be used by tools to determine the type of a chain for displaying
+/// additional information or enabling additional features.
+#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Clone)]
+pub enum ChainType {
+	/// A development chain that runs mainly on one node.
+	Development,
+	/// A local chain that runs locally on multiple nodes for testing purposes.
+	Local,
+	/// A live chain.
+	Live,
+	/// Some custom chain type.
+	Custom(String),
+}
+
+impl Default for ChainType {
+	fn default() -> Self {
+		Self::Live
+	}
+}
+
+/// Arbitrary properties defined in chain spec as a JSON object
+pub type Properties = serde_json::map::Map<String, serde_json::Value>;
 
 /// A set of traits for the runtime genesis config.
 pub trait RuntimeGenesis: Serialize + DeserializeOwned + BuildStorage {}
 impl<T: Serialize + DeserializeOwned + BuildStorage> RuntimeGenesis for T {}
 
 /// Common interface of a chain specification.
-pub trait ChainSpec: BuildStorage + Send {
+pub trait ChainSpec: BuildStorage + Send + Sync {
 	/// Spec name.
 	fn name(&self) -> &str;
 	/// Spec id.
@@ -139,12 +165,16 @@ pub trait ChainSpec: BuildStorage + Send {
 	fn telemetry_endpoints(&self) -> &Option<TelemetryEndpoints>;
 	/// Network protocol id.
 	fn protocol_id(&self) -> Option<&str>;
+	/// Optional network fork identifier. `None` by default.
+	fn fork_id(&self) -> Option<&str>;
 	/// Additional loosly-typed properties of the chain.
 	///
 	/// Returns an empty JSON object if 'properties' not defined in config
 	fn properties(&self) -> Properties;
-	/// Returns a reference to defined chain spec extensions.
+	/// Returns a reference to the defined chain spec extensions.
 	fn extensions(&self) -> &dyn GetExtension;
+	/// Returns a mutable reference to the defined chain spec extensions.
+	fn extensions_mut(&mut self) -> &mut dyn GetExtension;
 	/// Add a bootnode to the list.
 	fn add_boot_node(&mut self, addr: MultiaddrWithPeerId);
 	/// Return spec as JSON.
@@ -157,8 +187,8 @@ pub trait ChainSpec: BuildStorage + Send {
 	///
 	/// This will be used as storage at genesis.
 	fn set_storage(&mut self, storage: Storage);
-	/// Hardcode infomation to allow light clients to sync quickly into the chain spec.
-	fn set_light_sync_state(&mut self, light_sync_state: SerializableLightSyncState);
+	/// Returns code substitutes that should be used for the on chain wasm.
+	fn code_substitutes(&self) -> std::collections::BTreeMap<String, Vec<u8>>;
 }
 
 impl std::fmt::Debug for dyn ChainSpec {

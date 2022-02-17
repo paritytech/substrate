@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,19 +17,16 @@
 
 //! State machine backends. These manage the code and storage of contracts.
 
-use hash_db::Hasher;
-use codec::{Decode, Encode};
-use sp_core::{
-	storage::{ChildInfo, well_known_keys, TrackedStorageKey}
-};
 use crate::{
-	trie_backend::TrieBackend,
-	trie_backend_essence::TrieBackendStorage,
-	UsageInfo, StorageKey, StorageValue, StorageCollection, ChildStorageCollection,
+	trie_backend::TrieBackend, trie_backend_essence::TrieBackendStorage, ChildStorageCollection,
+	StorageCollection, StorageKey, StorageValue, UsageInfo,
 };
-use sp_std::vec::Vec;
+use codec::Encode;
+use hash_db::Hasher;
+use sp_core::storage::{ChildInfo, StateVersion, TrackedStorageKey};
 #[cfg(feature = "std")]
 use sp_core::traits::RuntimeCode;
+use sp_std::vec::Vec;
 
 /// A state backend is used to read state data and can have changes committed
 /// to it.
@@ -43,7 +40,7 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 	type Transaction: Consolidate + Default + Send;
 
 	/// Type of trie backend storage.
-	type TrieBackendStorage: TrieBackendStorage<H>;
+	type TrieBackendStorage: TrieBackendStorage<H, Overlay = Self::Transaction>;
 
 	/// Get keyed storage or None if there is nothing associated.
 	fn storage(&self, key: &[u8]) -> Result<Option<StorageValue>, Self::Error>;
@@ -90,13 +87,31 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 	fn next_child_storage_key(
 		&self,
 		child_info: &ChildInfo,
-		key: &[u8]
+		key: &[u8],
 	) -> Result<Option<StorageKey>, Self::Error>;
 
-	/// Retrieve all entries keys of child storage and call `f` for each of those keys.
-	fn for_keys_in_child_storage<F: FnMut(&[u8])>(
+	/// Iterate over storage starting at key, for a given prefix and child trie.
+	/// Aborts as soon as `f` returns false.
+	/// Warning, this fails at first error when usual iteration skips errors.
+	/// If `allow_missing` is true, iteration stops when it reaches a missing trie node.
+	/// Otherwise an error is produced.
+	///
+	/// Returns `true` if trie end is reached.
+	fn apply_to_key_values_while<F: FnMut(Vec<u8>, Vec<u8>) -> bool>(
 		&self,
-		child_info: &ChildInfo,
+		child_info: Option<&ChildInfo>,
+		prefix: Option<&[u8]>,
+		start_at: Option<&[u8]>,
+		f: F,
+		allow_missing: bool,
+	) -> Result<bool, Self::Error>;
+
+	/// Retrieve all entries keys of storage and call `f` for each of those keys.
+	/// Aborts as soon as `f` returns false.
+	fn apply_to_keys_while<F: FnMut(&[u8]) -> bool>(
+		&self,
+		child_info: Option<&ChildInfo>,
+		prefix: Option<&[u8]>,
 		f: F,
 	);
 
@@ -109,7 +124,6 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 	/// Retrieve all entries keys and values of which start with the given prefix and
 	/// call `f` for each of those keys.
 	fn for_key_values_with_prefix<F: FnMut(&[u8], &[u8])>(&self, prefix: &[u8], f: F);
-
 
 	/// Retrieve all child entries keys which start with the given prefix and
 	/// call `f` for each of those keys.
@@ -125,8 +139,11 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 	/// Does not include child storage updates.
 	fn storage_root<'a>(
 		&self,
-		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
-	) -> (H::Out, Self::Transaction) where H::Out: Ord;
+		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
+		state_version: StateVersion,
+	) -> (H::Out, Self::Transaction)
+	where
+		H::Out: Ord;
 
 	/// Calculate the child storage root, with given delta over what is already stored in
 	/// the backend, and produce a "transaction" that can be used to commit. The second argument
@@ -134,8 +151,11 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 	fn child_storage_root<'a>(
 		&self,
 		child_info: &ChildInfo,
-		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
-	) -> (H::Out, bool, Self::Transaction) where H::Out: Ord;
+		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
+		state_version: StateVersion,
+	) -> (H::Out, bool, Self::Transaction)
+	where
+		H::Out: Ord;
 
 	/// Get all key/value pairs into a Vec.
 	fn pairs(&self) -> Vec<(StorageKey, StorageValue)>;
@@ -148,38 +168,36 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 	}
 
 	/// Get all keys of child storage with given prefix
-	fn child_keys(
-		&self,
-		child_info: &ChildInfo,
-		prefix: &[u8],
-	) -> Vec<StorageKey> {
+	fn child_keys(&self, child_info: &ChildInfo, prefix: &[u8]) -> Vec<StorageKey> {
 		let mut all = Vec::new();
 		self.for_child_keys_with_prefix(child_info, prefix, |k| all.push(k.to_vec()));
 		all
 	}
 
 	/// Try convert into trie backend.
-	fn as_trie_backend(&mut self) -> Option<&TrieBackend<Self::TrieBackendStorage, H>> {
+	fn as_trie_backend(&self) -> Option<&TrieBackend<Self::TrieBackendStorage, H>> {
 		None
 	}
-
 	/// Calculate the storage root, with given delta over what is already stored
 	/// in the backend, and produce a "transaction" that can be used to commit.
 	/// Does include child storage updates.
 	fn full_storage_root<'a>(
 		&self,
-		delta: impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
-		child_deltas: impl Iterator<Item = (
-			&'a ChildInfo,
-			impl Iterator<Item=(&'a [u8], Option<&'a [u8]>)>,
-		)>,
-	) -> (H::Out, Self::Transaction) where H::Out: Ord + Encode {
+		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
+		child_deltas: impl Iterator<
+			Item = (&'a ChildInfo, impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>),
+		>,
+		state_version: StateVersion,
+	) -> (H::Out, Self::Transaction)
+	where
+		H::Out: Ord + Encode,
+	{
 		let mut txs: Self::Transaction = Default::default();
 		let mut child_roots: Vec<_> = Default::default();
 		// child first
 		for (child_info, child_delta) in child_deltas {
 			let (child_root, empty, child_txs) =
-				self.child_storage_root(&child_info, child_delta);
+				self.child_storage_root(&child_info, child_delta, state_version);
 			let prefixed_storage_key = child_info.prefixed_storage_key();
 			txs.consolidate(child_txs);
 			if empty {
@@ -188,13 +206,11 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 				child_roots.push((prefixed_storage_key.into_inner(), Some(child_root.encode())));
 			}
 		}
-		let (root, parent_txs) = self.storage_root(delta
-			.map(|(k, v)| (&k[..], v.as_ref().map(|v| &v[..])))
-			.chain(
-				child_roots
-					.iter()
-					.map(|(k, v)| (&k[..], v.as_ref().map(|v| &v[..])))
-			)
+		let (root, parent_txs) = self.storage_root(
+			delta
+				.map(|(k, v)| (k, v.as_ref().map(|v| &v[..])))
+				.chain(child_roots.iter().map(|(k, v)| (&k[..], v.as_ref().map(|v| &v[..])))),
+			state_version,
 		);
 		txs.consolidate(parent_txs);
 		(root, txs)
@@ -203,7 +219,7 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 	/// Register stats from overlay of state machine.
 	///
 	/// By default nothing is registered.
-	fn register_overlay_stats(&mut self, _stats: &crate::stats::StateMachineStats);
+	fn register_overlay_stats(&self, _stats: &crate::stats::StateMachineStats);
 
 	/// Query backend usage statistics (i/o, memory)
 	///
@@ -244,85 +260,15 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 
 	/// Update the whitelist for tracking db reads/writes
 	fn set_whitelist(&self, _: Vec<TrackedStorageKey>) {}
-}
 
-impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {
-	type Error = T::Error;
-	type Transaction = T::Transaction;
-	type TrieBackendStorage = T::TrieBackendStorage;
-
-	fn storage(&self, key: &[u8]) -> Result<Option<StorageKey>, Self::Error> {
-		(*self).storage(key)
+	/// Estimate proof size
+	fn proof_size(&self) -> Option<u32> {
+		unimplemented!()
 	}
 
-	fn child_storage(
-		&self,
-		child_info: &ChildInfo,
-		key: &[u8],
-	) -> Result<Option<StorageKey>, Self::Error> {
-		(*self).child_storage(child_info, key)
-	}
-
-	fn for_keys_in_child_storage<F: FnMut(&[u8])>(
-		&self,
-		child_info: &ChildInfo,
-		f: F,
-	) {
-		(*self).for_keys_in_child_storage(child_info, f)
-	}
-
-	fn next_storage_key(&self, key: &[u8]) -> Result<Option<StorageKey>, Self::Error> {
-		(*self).next_storage_key(key)
-	}
-
-	fn next_child_storage_key(
-		&self,
-		child_info: &ChildInfo,
-		key: &[u8],
-	) -> Result<Option<StorageKey>, Self::Error> {
-		(*self).next_child_storage_key(child_info, key)
-	}
-
-	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F) {
-		(*self).for_keys_with_prefix(prefix, f)
-	}
-
-	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(
-		&self,
-		child_info: &ChildInfo,
-		prefix: &[u8],
-		f: F,
-	) {
-		(*self).for_child_keys_with_prefix(child_info, prefix, f)
-	}
-
-	fn storage_root<'b>(
-		&self,
-		delta: impl Iterator<Item=(&'b [u8], Option<&'b [u8]>)>,
-	) -> (H::Out, Self::Transaction) where H::Out: Ord {
-		(*self).storage_root(delta)
-	}
-
-	fn child_storage_root<'b>(
-		&self,
-		child_info: &ChildInfo,
-		delta: impl Iterator<Item=(&'b [u8], Option<&'b [u8]>)>,
-	) -> (H::Out, bool, Self::Transaction) where H::Out: Ord {
-		(*self).child_storage_root(child_info, delta)
-	}
-
-	fn pairs(&self) -> Vec<(StorageKey, StorageValue)> {
-		(*self).pairs()
-	}
-
-	fn for_key_values_with_prefix<F: FnMut(&[u8], &[u8])>(&self, prefix: &[u8], f: F) {
-		(*self).for_key_values_with_prefix(prefix, f);
-	}
-
-	fn register_overlay_stats(&mut self, _stats: &crate::stats::StateMachineStats) {	}
-
-	fn usage_info(&self) -> UsageInfo {
-		(*self).usage_info()
+	/// Extend storage info for benchmarking db
+	fn get_read_and_written_keys(&self) -> Vec<(Vec<u8>, u32, u32, bool)> {
+		unimplemented!()
 	}
 }
 
@@ -338,42 +284,20 @@ impl Consolidate for () {
 	}
 }
 
-impl Consolidate for Vec<(
-		Option<ChildInfo>,
-		StorageCollection,
-	)> {
+impl Consolidate for Vec<(Option<ChildInfo>, StorageCollection)> {
 	fn consolidate(&mut self, mut other: Self) {
 		self.append(&mut other);
 	}
 }
 
-impl<H: Hasher, KF: sp_trie::KeyFunction<H>> Consolidate for sp_trie::GenericMemoryDB<H, KF> {
+impl<H, KF> Consolidate for sp_trie::GenericMemoryDB<H, KF>
+where
+	H: Hasher,
+	KF: sp_trie::KeyFunction<H>,
+{
 	fn consolidate(&mut self, other: Self) {
 		sp_trie::GenericMemoryDB::consolidate(self, other)
 	}
-}
-
-/// Insert input pairs into memory db.
-#[cfg(test)]
-pub(crate) fn insert_into_memory_db<H, I>(mdb: &mut sp_trie::MemoryDB<H>, input: I) -> Option<H::Out>
-	where
-		H: Hasher,
-		I: IntoIterator<Item=(StorageKey, StorageValue)>,
-{
-	use sp_trie::{TrieMut, trie_types::TrieDBMut};
-
-	let mut root = <H as Hasher>::Out::default();
-	{
-		let mut trie = TrieDBMut::<H>::new(mdb, &mut root);
-		for (key, value) in input {
-			if let Err(e) = trie.insert(&key, &value) {
-				log::warn!(target: "trie", "Failed to write to trie: {}", e);
-				return None;
-			}
-		}
-	}
-
-	Some(root)
 }
 
 /// Wrapper to create a [`RuntimeCode`] from a type that implements [`Backend`].
@@ -384,35 +308,43 @@ pub struct BackendRuntimeCode<'a, B, H> {
 }
 
 #[cfg(feature = "std")]
-impl<'a, B: Backend<H>, H: Hasher> sp_core::traits::FetchRuntimeCode for
-	BackendRuntimeCode<'a, B, H>
+impl<'a, B: Backend<H>, H: Hasher> sp_core::traits::FetchRuntimeCode
+	for BackendRuntimeCode<'a, B, H>
 {
 	fn fetch_runtime_code<'b>(&'b self) -> Option<std::borrow::Cow<'b, [u8]>> {
-		self.backend.storage(well_known_keys::CODE).ok().flatten().map(Into::into)
+		self.backend
+			.storage(sp_core::storage::well_known_keys::CODE)
+			.ok()
+			.flatten()
+			.map(Into::into)
 	}
 }
 
 #[cfg(feature = "std")]
-impl<'a, B: Backend<H>, H: Hasher> BackendRuntimeCode<'a, B, H> where H::Out: Encode {
+impl<'a, B: Backend<H>, H: Hasher> BackendRuntimeCode<'a, B, H>
+where
+	H::Out: Encode,
+{
 	/// Create a new instance.
 	pub fn new(backend: &'a B) -> Self {
-		Self {
-			backend,
-			_marker: std::marker::PhantomData,
-		}
+		Self { backend, _marker: std::marker::PhantomData }
 	}
 
 	/// Return the [`RuntimeCode`] build from the wrapped `backend`.
 	pub fn runtime_code(&self) -> Result<RuntimeCode, &'static str> {
-		let hash = self.backend.storage_hash(well_known_keys::CODE)
+		let hash = self
+			.backend
+			.storage_hash(sp_core::storage::well_known_keys::CODE)
 			.ok()
 			.flatten()
 			.ok_or("`:code` hash not found")?
 			.encode();
-		let heap_pages = self.backend.storage(well_known_keys::HEAP_PAGES)
+		let heap_pages = self
+			.backend
+			.storage(sp_core::storage::well_known_keys::HEAP_PAGES)
 			.ok()
 			.flatten()
-			.and_then(|d| Decode::decode(&mut &d[..]).ok());
+			.and_then(|d| codec::Decode::decode(&mut &d[..]).ok());
 
 		Ok(RuntimeCode { code_fetcher: self, hash, heap_pages })
 	}

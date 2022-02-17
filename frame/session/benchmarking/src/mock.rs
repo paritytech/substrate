@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,46 +19,39 @@
 
 #![cfg(test)]
 
-use sp_runtime::traits::{Convert, SaturatedConversion, IdentityLookup};
-use frame_support::{impl_outer_origin, impl_outer_dispatch, parameter_types};
+use frame_election_provider_support::onchain;
+use frame_support::{
+	parameter_types,
+	traits::{ConstU32, ConstU64},
+};
+use sp_runtime::traits::IdentityLookup;
 
 type AccountId = u64;
 type AccountIndex = u32;
 type BlockNumber = u64;
 type Balance = u64;
 
-type System = frame_system::Module<Test>;
-type Balances = pallet_balances::Module<Test>;
-type Staking = pallet_staking::Module<Test>;
-type Session = pallet_session::Module<Test>;
+type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+type Block = frame_system::mocking::MockBlock<Test>;
 
-impl_outer_origin! {
-	pub enum Origin for Test where system = frame_system {}
-}
-
-impl_outer_dispatch! {
-	pub enum Call for Test where origin: Origin {
-		pallet_staking::Staking,
+frame_support::construct_runtime!(
+	pub enum Test where
+		Block = Block,
+		NodeBlock = Block,
+		UncheckedExtrinsic = UncheckedExtrinsic,
+	{
+		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
+		Staking: pallet_staking::{Pallet, Call, Config<T>, Storage, Event<T>},
+		Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},
 	}
-}
+);
 
-pub struct CurrencyToVoteHandler;
-impl Convert<u64, u64> for CurrencyToVoteHandler {
-	fn convert(x: u64) -> u64 {
-		x
-	}
-}
-impl Convert<u128, u64> for CurrencyToVoteHandler {
-	fn convert(x: u128) -> u64 {
-		x.saturated_into()
-	}
-}
-
-#[derive(Clone, Eq, PartialEq, Debug)]
-pub struct Test;
-
-impl frame_system::Trait for Test {
-	type BaseCallFilter = ();
+impl frame_system::Config for Test {
+	type BaseCallFilter = frame_support::traits::Everything;
+	type BlockWeights = ();
+	type BlockLength = ();
+	type DbWeight = ();
 	type Origin = Origin;
 	type Index = AccountIndex;
 	type BlockNumber = BlockNumber;
@@ -68,45 +61,40 @@ impl frame_system::Trait for Test {
 	type AccountId = AccountId;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = sp_runtime::testing::Header;
-	type Event = ();
+	type Event = Event;
 	type BlockHashCount = ();
-	type MaximumBlockWeight = ();
-	type DbWeight = ();
-	type BlockExecutionWeight = ();
-	type ExtrinsicBaseWeight = ();
-	type MaximumExtrinsicWeight = ();
-	type AvailableBlockRatio = ();
-	type MaximumBlockLength = ();
 	type Version = ();
-	type PalletInfo = ();
+	type PalletInfo = PalletInfo;
 	type AccountData = pallet_balances::AccountData<u64>;
 	type OnNewAccount = ();
-	type OnKilledAccount = Balances;
+	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
+	type SS58Prefix = ();
+	type OnSetCode = ();
+	type MaxConsumers = ConstU32<16>;
 }
 parameter_types! {
 	pub const ExistentialDeposit: Balance = 10;
 }
-impl pallet_balances::Trait for Test {
+impl pallet_balances::Config for Test {
 	type MaxLocks = ();
+	type MaxReserves = ();
+	type ReserveIdentifier = [u8; 8];
 	type Balance = Balance;
-	type Event = ();
+	type Event = Event;
 	type DustRemoval = ();
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
 	type WeightInfo = ();
 }
 
-parameter_types! {
-	pub const MinimumPeriod: u64 = 5;
-}
-impl pallet_timestamp::Trait for Test {
+impl pallet_timestamp::Config for Test {
 	type Moment = u64;
 	type OnTimestampSet = ();
-	type MinimumPeriod = MinimumPeriod;
+	type MinimumPeriod = ConstU64<5>;
 	type WeightInfo = ();
 }
-impl pallet_session::historical::Trait for Test {
+impl pallet_session::historical::Config for Test {
 	type FullIdentification = pallet_staking::Exposure<AccountId, Balance>;
 	type FullIdentificationOf = pallet_staking::ExposureOf<Test>;
 }
@@ -127,21 +115,21 @@ impl pallet_session::SessionHandler<AccountId> for TestSessionHandler {
 		_: bool,
 		_: &[(AccountId, Ks)],
 		_: &[(AccountId, Ks)],
-	) {}
+	) {
+	}
 
-	fn on_disabled(_: usize) {}
+	fn on_disabled(_: u32) {}
 }
 
-impl pallet_session::Trait for Test {
+impl pallet_session::Config for Test {
 	type SessionManager = pallet_session::historical::NoteHistoricalRoot<Test, Staking>;
 	type Keys = SessionKeys;
 	type ShouldEndSession = pallet_session::PeriodicSessions<(), ()>;
 	type NextSessionRotation = pallet_session::PeriodicSessions<(), ()>;
 	type SessionHandler = TestSessionHandler;
-	type Event = ();
+	type Event = Event;
 	type ValidatorId = AccountId;
 	type ValidatorIdOf = pallet_staking::StashOf<Test>;
-	type DisabledValidatorsThreshold = ();
 	type WeightInfo = ();
 }
 pallet_staking_reward_curve::build! {
@@ -156,25 +144,30 @@ pallet_staking_reward_curve::build! {
 }
 parameter_types! {
 	pub const RewardCurve: &'static sp_runtime::curve::PiecewiseLinear<'static> = &I_NPOS;
-	pub const MaxNominatorRewardedPerValidator: u32 = 64;
-	pub const UnsignedPriority: u64 = 1 << 20;
 }
 
 pub type Extrinsic = sp_runtime::testing::TestXt<Call, ()>;
 
-impl<C> frame_system::offchain::SendTransactionTypes<C> for Test where
+impl<C> frame_system::offchain::SendTransactionTypes<C> for Test
+where
 	Call: From<C>,
 {
 	type OverarchingCall = Call;
 	type Extrinsic = Extrinsic;
 }
 
-impl pallet_staking::Trait for Test {
+impl onchain::Config for Test {
+	type Accuracy = sp_runtime::Perbill;
+	type DataProvider = Staking;
+}
+
+impl pallet_staking::Config for Test {
+	const MAX_NOMINATIONS: u32 = 16;
 	type Currency = Balances;
-	type UnixTime = pallet_timestamp::Module<Self>;
-	type CurrencyToVote = CurrencyToVoteHandler;
+	type UnixTime = pallet_timestamp::Pallet<Self>;
+	type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
 	type RewardRemainder = ();
-	type Event = ();
+	type Event = Event;
 	type Slash = ();
 	type Reward = ();
 	type SessionsPerEra = ();
@@ -182,18 +175,18 @@ impl pallet_staking::Trait for Test {
 	type SlashCancelOrigin = frame_system::EnsureRoot<Self::AccountId>;
 	type BondingDuration = ();
 	type SessionInterface = Self;
-	type RewardCurve = RewardCurve;
+	type EraPayout = pallet_staking::ConvertCurve<RewardCurve>;
 	type NextNewSession = Session;
-	type ElectionLookahead = ();
-	type Call = Call;
-	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
-	type UnsignedPriority = UnsignedPriority;
-	type MaxIterations = ();
-	type MinSolutionScoreBump = ();
+	type MaxNominatorRewardedPerValidator = ConstU32<64>;
+	type OffendingValidatorsThreshold = ();
+	type ElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
+	type GenesisElectionProvider = Self::ElectionProvider;
+	type SortedListProvider = pallet_staking::UseNominatorsMap<Self>;
+	type BenchmarkingConfig = pallet_staking::TestBenchmarkingConfig;
 	type WeightInfo = ();
 }
 
-impl crate::Trait for Test {}
+impl crate::Config for Test {}
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();

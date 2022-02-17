@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,31 +15,36 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::*;
-use sp_std::cell::RefCell;
+use crate::{self as frame_system, *};
+use frame_support::{
+	parameter_types,
+	traits::{ConstU32, ConstU64},
+};
 use sp_core::H256;
 use sp_runtime::{
-	traits::{BlakeTwo256, IdentityLookup},
 	testing::Header,
+	traits::{BlakeTwo256, IdentityLookup},
+	BuildStorage,
 };
-use frame_support::{
-	impl_outer_origin, parameter_types,
-	weights::PostDispatchInfo,
-};
+use sp_std::cell::RefCell;
 
-impl_outer_origin! {
-	pub enum Origin for Test where system = super {}
-}
+type UncheckedExtrinsic = mocking::MockUncheckedExtrinsic<Test>;
+type Block = mocking::MockBlock<Test>;
 
-#[derive(Clone, Eq, PartialEq, Debug, Default)]
-pub struct Test;
+frame_support::construct_runtime!(
+	pub enum Test where
+		Block = Block,
+		NodeBlock = Block,
+		UncheckedExtrinsic = UncheckedExtrinsic,
+	{
+		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+	}
+);
+
+const NORMAL_DISPATCH_RATIO: Perbill = Perbill::from_percent(75);
+const MAX_BLOCK_WEIGHT: Weight = 1024;
 
 parameter_types! {
-	pub const BlockHashCount: u64 = 10;
-	pub const MaximumBlockWeight: Weight = 1024;
-	pub const MaximumExtrinsicWeight: Weight = 768;
-	pub const AvailableBlockRatio: Perbill = Perbill::from_percent(75);
-	pub const MaximumBlockLength: u32 = 1024;
 	pub Version: RuntimeVersion = RuntimeVersion {
 		spec_name: sp_version::create_runtime_str!("test"),
 		impl_name: sp_version::create_runtime_str!("system-test"),
@@ -48,40 +53,47 @@ parameter_types! {
 		impl_version: 1,
 		apis: sp_version::create_apis_vec!([]),
 		transaction_version: 1,
+		state_version: 1,
 	};
-	pub const BlockExecutionWeight: Weight = 10;
-	pub const ExtrinsicBaseWeight: Weight = 5;
 	pub const DbWeight: RuntimeDbWeight = RuntimeDbWeight {
 		read: 10,
 		write: 100,
 	};
+	pub RuntimeBlockWeights: limits::BlockWeights = limits::BlockWeights::builder()
+		.base_block(10)
+		.for_class(DispatchClass::all(), |weights| {
+			weights.base_extrinsic = 5;
+		})
+		.for_class(DispatchClass::Normal, |weights| {
+			weights.max_total = Some(NORMAL_DISPATCH_RATIO * MAX_BLOCK_WEIGHT);
+		})
+		.for_class(DispatchClass::Operational, |weights| {
+			weights.max_total = Some(MAX_BLOCK_WEIGHT);
+			weights.reserved = Some(
+				MAX_BLOCK_WEIGHT - NORMAL_DISPATCH_RATIO * MAX_BLOCK_WEIGHT
+			);
+		})
+		.avg_block_initialization(Perbill::from_percent(0))
+		.build_or_panic();
+	pub RuntimeBlockLength: limits::BlockLength =
+		limits::BlockLength::max_with_normal_ratio(1024, NORMAL_DISPATCH_RATIO);
 }
 
-thread_local!{
+thread_local! {
 	pub static KILLED: RefCell<Vec<u64>> = RefCell::new(vec![]);
 }
 
 pub struct RecordKilled;
 impl OnKilledAccount<u64> for RecordKilled {
-	fn on_killed_account(who: &u64) { KILLED.with(|r| r.borrow_mut().push(*who)) }
-}
-
-#[derive(Debug, codec::Encode, codec::Decode)]
-pub struct Call;
-
-impl Dispatchable for Call {
-	type Origin = Origin;
-	type Trait = ();
-	type Info = DispatchInfo;
-	type PostInfo = PostDispatchInfo;
-	fn dispatch(self, _origin: Self::Origin)
-		-> sp_runtime::DispatchResultWithInfo<Self::PostInfo> {
-			panic!("Do not use dummy implementation for dispatch.");
+	fn on_killed_account(who: &u64) {
+		KILLED.with(|r| r.borrow_mut().push(*who))
 	}
 }
 
-impl Trait for Test {
-	type BaseCallFilter = ();
+impl Config for Test {
+	type BaseCallFilter = frame_support::traits::Everything;
+	type BlockWeights = RuntimeBlockWeights;
+	type BlockLength = RuntimeBlockLength;
 	type Origin = Origin;
 	type Call = Call;
 	type Index = u64;
@@ -91,35 +103,36 @@ impl Trait for Test {
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = Event<Self>;
-	type BlockHashCount = BlockHashCount;
-	type MaximumBlockWeight = MaximumBlockWeight;
+	type Event = Event;
+	type BlockHashCount = ConstU64<10>;
 	type DbWeight = DbWeight;
-	type BlockExecutionWeight = BlockExecutionWeight;
-	type ExtrinsicBaseWeight = ExtrinsicBaseWeight;
-	type MaximumExtrinsicWeight = MaximumExtrinsicWeight;
-	type AvailableBlockRatio = AvailableBlockRatio;
-	type MaximumBlockLength = MaximumBlockLength;
 	type Version = Version;
-	type PalletInfo = ();
+	type PalletInfo = PalletInfo;
 	type AccountData = u32;
 	type OnNewAccount = ();
 	type OnKilledAccount = RecordKilled;
 	type SystemWeightInfo = ();
+	type SS58Prefix = ();
+	type OnSetCode = ();
+	type MaxConsumers = ConstU32<16>;
 }
 
-pub type System = Module<Test>;
-pub type SysEvent = <Test as Trait>::Event;
+pub type SysEvent = frame_system::Event<Test>;
 
-pub const CALL: &<Test as Trait>::Call = &Call;
+/// A simple call, which one doesn't matter.
+pub const CALL: &<Test as Config>::Call =
+	&Call::System(frame_system::Call::set_heap_pages { pages: 0u64 });
 
 /// Create new externalities for `System` module tests.
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let mut ext: sp_io::TestExternalities = GenesisConfig::default().build_storage::<Test>().unwrap().into();
+	let mut ext: sp_io::TestExternalities =
+		GenesisConfig::default().build_storage().unwrap().into();
 	// Add to each test the initial weight of a block
-	ext.execute_with(|| System::register_extra_weight_unchecked(
-		<Test as Trait>::BlockExecutionWeight::get(),
-		DispatchClass::Mandatory
-	));
+	ext.execute_with(|| {
+		System::register_extra_weight_unchecked(
+			<Test as crate::Config>::BlockWeights::get().base_block,
+			DispatchClass::Mandatory,
+		)
+	});
 	ext
 }
