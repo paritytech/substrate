@@ -239,7 +239,13 @@ parameter_types! {
 	pub const MaxValueSize: u32 = 16_384;
 	pub const DeletionWeightLimit: Weight = 500_000_000_000;
 	pub const MaxCodeSize: u32 = 2 * 1024;
-	pub MySchedule: Schedule<Test> = <Schedule<Test>>::default();
+	pub MySchedule: Schedule<Test> = {
+		let mut schedule = <Schedule<Test>>::default();
+		// We want stack height to be always enabled for tests so that this
+		// instrumentation path is always tested implicitly.
+		schedule.limits.stack_height = Some(512);
+		schedule
+	};
 	pub const TransactionByteFee: u64 = 0;
 	pub static DepositPerByte: BalanceOf<Test> = 1;
 	pub const DepositPerItem: BalanceOf<Test> = 2;
