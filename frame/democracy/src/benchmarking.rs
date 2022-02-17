@@ -127,7 +127,8 @@ benchmarks! {
 		let hash = T::Hashing::hash_of(&0);
 
 		PublicProps::<T>::append((0 as PropIndex,hash.clone(),caller.clone()));
-		Promoted::<T>::insert(hash.clone(), vec!(caller.clone()));
+		assert_ok!(Democracy::<T>::promote(origin.clone(), hash.clone()));
+		// Promoted::<T>::insert(hash.clone(), BoundedVec(caller.clone()));
 
 	}: _<T::Origin>(origin.clone())
 	verify {

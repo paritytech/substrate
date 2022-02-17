@@ -779,6 +779,7 @@ parameter_types! {
 	pub const EnactmentPeriod: BlockNumber = 30 * 24 * 60 * MINUTES;
 	pub const CooloffPeriod: BlockNumber = 28 * 24 * 60 * MINUTES;
 	pub const MaxProposals: u32 = 100;
+	pub const MaxPromoter: u32 = 20;
 }
 
 impl pallet_democracy::Config for Runtime {
@@ -832,6 +833,7 @@ impl pallet_democracy::Config for Runtime {
 	type MaxVotes = frame_support::traits::ConstU32<100>;
 	type WeightInfo = pallet_democracy::weights::SubstrateWeight<Runtime>;
 	type MaxProposals = MaxProposals;
+	type MaxPromoter = MaxPromoter;
 }
 
 parameter_types! {

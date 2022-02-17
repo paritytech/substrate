@@ -371,6 +371,9 @@ pub mod pallet {
 		/// The maximum number of public proposals that can exist at any time.
 		#[pallet::constant]
 		type MaxProposals: Get<u32>;
+
+		#[pallet::constant]
+		type MaxPromoter: Get<u32>;
 	}
 
 	// TODO: Refactor public proposal queue into its own pallet.
@@ -389,7 +392,7 @@ pub mod pallet {
 	/// Those who have promoted a particular public proposal.
 	#[pallet::storage]
 	#[pallet::getter(fn promoted)]
-	pub type Promoted<T: Config> = StorageMap<_, Twox64Concat, T::Hash, Vec<T::AccountId>>;
+	pub type Promoted<T: Config> = StorageMap<_, Twox64Concat, T::Hash, BoundedVec<T::AccountId, T::MaxPromoter>>;
 
 	/// Those who have locked a deposit.
 	///
@@ -663,53 +666,6 @@ pub mod pallet {
 			<PublicProps<T>>::append((index, proposal_hash, who));
 
 			Self::deposit_event(Event::<T>::Proposed { proposal_index: index, deposit: value });
-			Ok(())
-		}
-
-		#[pallet::weight(100)]
-		pub fn promote(origin: OriginFor<T>, proposal_hash: T::Hash) -> DispatchResult {
-			let who = T::PromotionOrigin::ensure_origin(origin)?;
-
-			let public_props = PublicProps::<T>::get();
-			public_props
-				.iter()
-				.position(|p| p.1 == proposal_hash)
-				.ok_or_else(|| Error::<T>::ProposalMissing)?;
-
-			let mut promoted_by = <Promoted<T>>::get(&proposal_hash).unwrap_or_else(Vec::new);
-			let insert_positions =
-				promoted_by.binary_search(&who).err().ok_or(Error::<T>::AlreadyPromoted)?;
-			promoted_by.insert(insert_positions, who.clone());
-			<Promoted<T>>::insert(&proposal_hash, promoted_by);
-			Self::deposit_event(Event::<T>::PromotedBy { proposal_hash, who });
-
-			Ok(())
-		}
-
-		#[pallet::weight(100)]
-		pub fn public_to_external(origin: OriginFor<T>) -> DispatchResult {
-			T::PromotionOrigin::ensure_origin(origin)?;
-			ensure!(!<NextExternal<T>>::exists(), Error::<T>::DuplicateProposal);
-
-			let public_props = PublicProps::<T>::get();
-			let mut hashes = public_props.iter().filter_map(|s| Some(s.1));
-
-			let mut current: (T::Hash, usize) = Default::default();
-
-			for _ in public_props.iter() {
-				if let Some(i) = hashes.next() {
-					let number = <Promoted<T>>::get(i).ok_or(Error::<T>::NotPromoted)?;
-					let count = number.len();
-					// TODO: Create custom error to replace `ProposalMissing` here.
-					ensure!(count >= current.1, Error::<T>::ProposalMissing);
-					current = (i, count);
-				}
-			}
-
-			<NextExternal<T>>::put((current.0, VoteThreshold::SimpleMajority));
-
-			<Promoted<T>>::remove(current.0);
-
 			Ok(())
 		}
 
@@ -1331,6 +1287,64 @@ pub mod pallet {
 					T::Slash::on_unbalanced(T::Currency::slash_reserved(&who, amount).0);
 				}
 			}
+
+			Ok(())
+		}
+
+		#[pallet::weight(100)]
+		pub fn promote(origin: OriginFor<T>, proposal_hash: T::Hash) -> DispatchResult {
+			let who = T::PromotionOrigin::ensure_origin(origin)?;
+
+			let public_props = PublicProps::<T>::get();
+			public_props
+				.iter()
+				.position(|p| p.1 == proposal_hash)
+				.ok_or_else(|| Error::<T>::ProposalMissing)?;
+			/*
+			let promoted_by = <Promoted<T>>::get(&proposal_hash).unwrap_or_else(BoundedVec::default);
+			let insert_positions =
+				promoted_by.binary_search(&who).err().ok_or(Error::<T>::AlreadyPromoted)?;
+			promoted_by.insert(insert_positions, who.clone());
+			<Promoted<T>>::insert(&proposal_hash, promoted_by);
+			Self::deposit_event(Event::<T>::PromotedBy { proposal_hash, who });
+*/
+
+
+			let mut promoted_by = Promoted::<T>::get(&proposal_hash).unwrap_or_else(BoundedVec::default);
+			promoted_by.binary_search(&who).err().ok_or(Error::<T>::AlreadyPromoted)?;
+			if promoted_by.try_push(who.clone()).is_ok() {
+				<Promoted<T>>::insert(&proposal_hash, promoted_by);
+			} else {
+				return Err(Error::<T>::ProposalMissing.into());
+			}
+			Self::deposit_event(Event::<T>::PromotedBy { proposal_hash, who });
+
+			Ok(())
+		}
+
+		#[pallet::weight(100)]
+		pub fn public_to_external(origin: OriginFor<T>) -> DispatchResult {
+			T::PromotionOrigin::ensure_origin(origin)?;
+			ensure!(!<NextExternal<T>>::exists(), Error::<T>::DuplicateProposal);
+
+			let public_props = PublicProps::<T>::get();
+			let mut hashes = public_props.iter().filter_map(|s| Some(s.1));
+
+			let mut current: (T::Hash, usize) = Default::default();
+
+			for _ in public_props.iter() {
+				if let Some(i) = hashes.next() {
+					let number = <Promoted<T>>::get(i).ok_or(Error::<T>::NotPromoted)?;
+					let count = number.len();
+					// TODO: Create custom error to replace `ProposalMissing` here.
+					ensure!(count >= current.1, Error::<T>::ProposalMissing);
+					current = (i, count);
+				}
+			}
+
+			<NextExternal<T>>::put((current.0, VoteThreshold::SimpleMajority));
+
+			<Promoted<T>>::remove(current.0);
 
 			Ok(())
 		}
