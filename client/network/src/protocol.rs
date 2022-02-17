@@ -496,7 +496,7 @@ impl<B: BlockT> Protocol<B> {
 
 	/// Returns the number of peers we're connected to.
 	pub fn num_connected_peers(&self) -> usize {
-		self.peers.values().count()
+		self.peers.len()
 	}
 
 	/// Returns the number of peers we're connected to and that are being queried.
