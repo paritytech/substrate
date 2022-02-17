@@ -1045,10 +1045,11 @@ impl<B: BlockT> ChainSync<B> {
 	/// Get a warp sync request, if any.
 	pub fn warp_sync_request(&mut self) -> Option<(PeerId, WarpProofRequest<B>)> {
 		if let Some(sync) = &self.warp_sync {
-			if self.allowed_requests.is_empty() || sync.is_complete() || self
-				.peers
-				.iter()
-				.any(|(_, peer)| peer.state == PeerSyncState::DownloadingWarpProof)
+			if self.allowed_requests.is_empty() ||
+				sync.is_complete() ||
+				self.peers
+					.iter()
+					.any(|(_, peer)| peer.state == PeerSyncState::DownloadingWarpProof)
 			{
 				// Only one pending state request is allowed.
 				return None
