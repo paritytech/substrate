@@ -259,7 +259,7 @@ where
 
 		let vote_added = rounds.add_vote(&round, vote);
 
-		if vote_added && rounds.is_done() {
+		if vote_added && rounds.is_done(&round) {
 			if let Some(signatures) = rounds.drop(&round) {
 				// id is stored for skipped session metric calculation
 				self.last_signed_id = rounds.validator_set_id();
