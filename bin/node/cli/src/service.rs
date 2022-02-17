@@ -650,7 +650,10 @@ mod tests {
 						.epoch_changes()
 						.shared_data()
 						.epoch_data(&epoch_descriptor, |slot| {
-							sc_consensus_babe::Epoch::genesis(&babe_link.config(), slot)
+							sc_consensus_babe::Epoch::genesis(
+								babe_link.config().genesis_config(),
+								slot,
+							)
 						})
 						.unwrap();
 

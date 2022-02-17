@@ -667,14 +667,14 @@ mod tests {
 			let client = client.as_client();
 			let slot_duration = slot_duration(&*client).expect("slot duration available");
 
-			assert_eq!(slot_duration.slot_duration().as_millis() as u64, SLOT_DURATION);
+			assert_eq!(slot_duration.as_millis() as u64, SLOT_DURATION);
 			import_queue::AuraVerifier::new(
 				client,
 				Box::new(|_, _| async {
 					let timestamp = TimestampInherentDataProvider::from_system_time();
-					let slot = InherentDataProvider::from_timestamp_and_duration(
+					let slot = InherentDataProvider::from_timestamp_and_slot_duration(
 						*timestamp,
-						Duration::from_secs(6),
+						SlotDuration::from_millis(6000),
 					);
 
 					Ok((timestamp, slot))
@@ -757,9 +757,9 @@ mod tests {
 					justification_sync_link: (),
 					create_inherent_data_providers: |_, _| async {
 						let timestamp = TimestampInherentDataProvider::from_system_time();
-						let slot = InherentDataProvider::from_timestamp_and_duration(
+						let slot = InherentDataProvider::from_timestamp_and_slot_duration(
 							*timestamp,
-							Duration::from_secs(6),
+							SlotDuration::from_millis(6000),
 						);
 
 						Ok((timestamp, slot))
