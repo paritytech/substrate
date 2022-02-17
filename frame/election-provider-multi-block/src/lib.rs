@@ -1629,7 +1629,7 @@ mod election_provider {
 
 			// pre-elect state
 			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, 25)));
-			assert_eq!(Round::<Runtime>::get(), 0);
+			assert_eq!(MultiBlock::round(), 0);
 			assert_full_snapshot();
 
 			// call elect for each page
@@ -1656,7 +1656,7 @@ mod election_provider {
 			// signed pallet is clean.
 			// NOTE: in the future, if and when we add lazy cleanup to the signed pallet, this
 			// assertion might break.
-			assert_ok!(signed::Submissions::<Runtime>::ensure_killed());
+			assert_ok!(signed::Submissions::<Runtime>::ensure_killed(0));
 		});
 	}
 
@@ -1664,6 +1664,7 @@ mod election_provider {
 	fn multi_page_elect_fast_track() {
 		ExtBuilder::full().build_and_execute(|| {
 			roll_to_signed_open();
+			let round = MultiBlock::round();
 			assert_eq!(MultiBlock::current_phase(), Phase::Signed);
 
 			// load a solution into the verifier
@@ -1702,6 +1703,8 @@ mod election_provider {
 			// there are 3 pages (indexes 2..=0), but we short circuit by just calling 0.
 			let _solution = crate::Pallet::<Runtime>::elect(0).unwrap();
 
+			// round is incremented.
+			assert_eq!(MultiBlock::round(), round + 1);
 			// after elect(0) is called, verifier is cleared,
 			verifier::QueuedSolution::<Runtime>::ensure_killed();
 			// the phase is off,
@@ -1711,7 +1714,7 @@ mod election_provider {
 			// the snapshot is cleared,
 			assert_storage_noop!(Snapshot::<Runtime>::kill());
 			// and signed pallet is clean.
-			assert_ok!(signed::Submissions::<Runtime>::ensure_killed());
+			assert_ok!(signed::Submissions::<Runtime>::ensure_killed(round));
 		});
 	}
 
@@ -1789,6 +1792,7 @@ mod election_provider {
 		ExtBuilder::full().build_and_execute(|| {
 			roll_to_signed_open();
 			assert_eq!(MultiBlock::current_phase(), Phase::Signed);
+			let round = MultiBlock::round();
 
 			// load a solution into the verifier
 			let paged = BaseMiner::<Runtime>::mine_solution(Pages::get(), false).unwrap();
@@ -1814,6 +1818,8 @@ mod election_provider {
 				})
 				.collect::<Vec<_>>();
 
+			// round is incremented.
+			assert_eq!(MultiBlock::round(), round + 1);
 			// after elect(0) is called, verifier is cleared,
 			verifier::QueuedSolution::<Runtime>::ensure_killed();
 			// the phase is off,
@@ -1823,7 +1829,7 @@ mod election_provider {
 			// the snapshot is cleared,
 			assert_storage_noop!(Snapshot::<Runtime>::kill());
 			// and signed pallet is clean.
-			assert_ok!(signed::Submissions::<Runtime>::ensure_killed());
+			assert_ok!(signed::Submissions::<Runtime>::ensure_killed(round));
 		});
 	}
 

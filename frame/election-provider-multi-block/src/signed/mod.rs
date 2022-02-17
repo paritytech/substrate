@@ -84,25 +84,28 @@ impl<T: Config> SolutionDataProvider for Pallet<T> {
 	fn get_page(page: PageIndex) -> Option<Self::Solution> {
 		// note: a non-existing page will still be treated as merely an empty page. This could be
 		// re-considered.
-		Submissions::<T>::leader().map(|(who, _score)| {
+		let current_round = Self::current_round();
+		Submissions::<T>::leader(current_round).map(|(who, _score)| {
 			sublog!(info, "signed", "returning page {} of {:?}'s submission as leader.", page, who);
-			Submissions::<T>::get_page_of(&who, page).unwrap_or_default()
+			Submissions::<T>::get_page_of(current_round, &who, page).unwrap_or_default()
 		})
 	}
 
 	fn get_score() -> Option<ElectionScore> {
-		Submissions::<T>::leader().map(|(_who, score)| score)
+		Submissions::<T>::leader(Self::current_round()).map(|(_who, score)| score)
 	}
 
 	fn report_result(result: crate::verifier::VerificationResult) {
 		// assumption of the trait.
 		debug_assert!(matches!(<T::Verifier as AsynchronousVerifier>::status(), Status::Nothing));
+		let current_round = Self::current_round();
 
 		match result {
 			VerificationResult::Queued => {
 				// defensive: if there is a result to be reported, then we must have had some
 				// leader.
-				if let Some((winner, metadata)) = Submissions::<T>::fully_take_leader().defensive()
+				if let Some((winner, metadata)) =
+					Submissions::<T>::fully_take_leader(Self::current_round()).defensive()
 				{
 					// first, let's give them their reward.
 					let reward = metadata.reward.saturating_add(metadata.fee);
@@ -118,8 +121,11 @@ impl<T: Config> SolutionDataProvider for Pallet<T> {
 					// NOTE: what we need a generic "StateGarbageCollector", to which you give a
 					// bunch of storage keys, and it will clean them for you on_idle. It should just
 					// be able to accept one job at a time, and report back to you if it is done
-					// doing what it was doing, or not.
-					while let Some((discarded, metadata)) = Submissions::<T>::fully_take_leader() {
+					// doing what it was doing, or not. UPDATE: no, we do them via a bit and
+					// transactions.
+					while let Some((discarded, metadata)) =
+						Submissions::<T>::fully_take_leader(Self::current_round())
+					{
 						let _remaining = T::Currency::unreserve(&discarded, metadata.deposit);
 						debug_assert!(_remaining.is_zero());
 						Self::deposit_event(Event::<T>::Discarded(discarded));
@@ -127,13 +133,15 @@ impl<T: Config> SolutionDataProvider for Pallet<T> {
 
 					// everything should have been clean.
 					#[cfg(debug_assertions)]
-					assert!(Submissions::<T>::ensure_killed().is_ok());
+					assert!(Submissions::<T>::ensure_killed(current_round).is_ok());
 				}
 			},
 			VerificationResult::Rejected => {
 				// defensive: if there is a result to be reported, then we must have had some
 				// leader.
-				if let Some((loser, metadata)) = Submissions::<T>::fully_take_leader().defensive() {
+				if let Some((loser, metadata)) =
+					Submissions::<T>::fully_take_leader(Self::current_round()).defensive()
+				{
 					// first, let's slash their deposit.
 					let slash = metadata.deposit;
 					let (imbalance, _remainder) = T::Currency::slash_reserved(&loser, slash);
@@ -143,7 +151,7 @@ impl<T: Config> SolutionDataProvider for Pallet<T> {
 					// inform the verifier that they can now try again, if we're still in the signed
 					// validation phase.
 					if crate::Pallet::<T>::current_phase().is_signed_validation() &&
-						Submissions::<T>::has_leader()
+						Submissions::<T>::has_leader(current_round)
 					{
 						// defensive: verifier just reported back a result, it must be in clear
 						// state.
@@ -202,10 +210,14 @@ pub mod pallet {
 	/// 2. [`SubmissionStorage`]: Paginated map of of all submissions, keyed by submitter and page.
 	/// 3. [`SubmissionMetadataStorage`]: Map from submitter to the metadata of their submission.
 	///
+	/// All storage items in this group are mapped, and their first key is the `round` to which they
+	/// belong to. In essence, we are storing multiple versions of each group.
+	///
 	/// ### Invariants:
 	///
 	/// This storage group is sane, clean, and consistent if the following invariants are held:
 	///
+	/// Among the submissions of each round:
 	/// - `SortedScores` should never contain duplicate account ids.
 	/// - For any key in `SubmissionMetadataStorage`, a corresponding value should exist in
 	/// `SortedScores` vector.
@@ -219,16 +231,32 @@ pub mod pallet {
 	///
 	/// All mutating functions are only allowed to transition into states where all of the above
 	/// conditions are met.
+	///
+	/// No particular invariant exists between data that related to different rounds. They are
+	/// purely independent.
 	pub(crate) struct Submissions<T: Config>(sp_std::marker::PhantomData<T>);
 
 	#[pallet::storage]
-	type SortedScores<T: Config> =
-		StorageValue<_, BoundedVec<(T::AccountId, ElectionScore), T::MaxSubmissions>, ValueQuery>;
+	type SortedScores<T: Config> = StorageMap<
+		_,
+		Twox64Concat,
+		u32,
+		BoundedVec<(T::AccountId, ElectionScore), T::MaxSubmissions>,
+		ValueQuery,
+	>;
 
-	/// Double map from (account, page) to a solution page.
+	/// Triple map from (round, account, page) to a solution page.
 	#[pallet::storage]
-	type SubmissionStorage<T: Config> =
-		StorageDoubleMap<_, Twox64Concat, T::AccountId, Twox64Concat, PageIndex, T::Solution>;
+	type SubmissionStorage<T: Config> = StorageNMap<
+		_,
+		(
+			NMapKey<Twox64Concat, u32>,
+			NMapKey<Twox64Concat, T::AccountId>,
+			NMapKey<Twox64Concat, PageIndex>,
+		),
+		T::Solution,
+		OptionQuery,
+	>;
 
 	/// Map from account to the metadata of their submission.
 	///
@@ -236,19 +264,24 @@ pub mod pallet {
 	/// value.
 	#[pallet::storage]
 	type SubmissionMetadataStorage<T: Config> =
-		StorageMap<_, Twox64Concat, T::AccountId, SubmissionMetadata<T>>;
+		StorageDoubleMap<_, Twox64Concat, u32, Twox64Concat, T::AccountId, SubmissionMetadata<T>>;
 
 	impl<T: Config> Submissions<T> {
 		// -- mutating functions
 
 		/// Generic checked mutation helper.
 		///
-		/// All mutating functions must be fulled through this bad boy.
-		fn mutate_checked<R, F: FnOnce() -> R>(mutate: F) -> R {
+		/// All mutating functions must be fulled through this bad boy. The round at which the
+		/// mutation happens must be provided
+		fn mutate_checked<R, F: FnOnce() -> R>(round: u32, mutate: F) -> R {
 			let result = mutate();
 
 			#[cfg(debug_assertions)]
-			assert!(Self::sanity_check().is_ok());
+			{
+				assert!(Self::sanity_check_round(round).is_ok());
+				assert!(Self::sanity_check_round(round + 1).is_ok());
+				assert!(Self::sanity_check_round(round.saturating_sub(1)).is_ok());
+			}
 
 			result
 		}
@@ -258,41 +291,49 @@ pub mod pallet {
 		///
 		/// This removes all associated data of the leader from storage, discarding the submission
 		/// data and score, returning the rest.
-		pub(crate) fn fully_take_leader() -> Option<(T::AccountId, SubmissionMetadata<T>)> {
-			Self::mutate_checked(|| {
-				SortedScores::<T>::mutate(|sorted| sorted.pop()).and_then(|(submitter, _score)| {
-					SubmissionStorage::<T>::remove_prefix(&submitter, None);
-					SubmissionMetadataStorage::<T>::take(&submitter)
-						.map(|metadata| (submitter, metadata))
-				})
+		pub(crate) fn fully_take_leader(
+			round: u32,
+		) -> Option<(T::AccountId, SubmissionMetadata<T>)> {
+			Self::mutate_checked(round, || {
+				SortedScores::<T>::mutate(round, |sorted| sorted.pop()).and_then(
+					|(submitter, _score)| {
+						SubmissionStorage::<T>::remove_prefix((round, &submitter), None);
+						SubmissionMetadataStorage::<T>::take(round, &submitter)
+							.map(|metadata| (submitter, metadata))
+					},
+				)
 			})
 		}
 
 		/// Try and register a new solution.
 		///
+		/// Registration can only happen for the current round.
+		///
 		/// If a solution from `who` already exists, then it is updated to the new metadata, else it
 		/// is potentially inserted. In the later case, submission might fail if the queue is
 		/// already full, and the solution is not good enough to eject the weakest.
 		fn try_register(
+			round: u32,
 			who: &T::AccountId,
 			metadata: SubmissionMetadata<T>,
 		) -> DispatchResultWithPostInfo {
-			Self::mutate_checked(|| Self::try_register_inner(who, metadata))
+			Self::mutate_checked(round, || Self::try_register_inner(round, who, metadata))
 		}
 
 		fn try_register_inner(
+			round: u32,
 			who: &T::AccountId,
 			metadata: SubmissionMetadata<T>,
 		) -> DispatchResultWithPostInfo {
-			let mut sorted_scores = SortedScores::<T>::get();
+			let mut sorted_scores = SortedScores::<T>::get(round);
 			if let Some(pos) = sorted_scores.iter().position(|(x, _)| x == who) {
 				// must have already existed, just update their claim.
-				debug_assert!(SubmissionMetadataStorage::<T>::contains_key(who));
+				debug_assert!(SubmissionMetadataStorage::<T>::contains_key(round, who));
 				// Note: due to the limited API of BoundedVec, using IndexMut is our only way.
 				sorted_scores[pos].1 = metadata.claimed_score;
 			} else {
 				// must be new.
-				debug_assert!(!SubmissionMetadataStorage::<T>::contains_key(who));
+				debug_assert!(!SubmissionMetadataStorage::<T>::contains_key(round, who));
 
 				let pos = match sorted_scores
 					.binary_search_by_key(&metadata.claimed_score, |(_, y)| *y)
@@ -308,8 +349,8 @@ pub mod pallet {
 				match sorted_scores.force_insert_keep_right(pos, record) {
 					(true, None) => {},
 					(true, Some((discarded, _score))) => {
-						let metadata = SubmissionMetadataStorage::<T>::take(&discarded);
-						SubmissionStorage::<T>::remove_prefix(&discarded, None);
+						let metadata = SubmissionMetadataStorage::<T>::take(round, &discarded);
+						SubmissionStorage::<T>::remove_prefix((round, &discarded), None);
 						let _remaining = T::Currency::unreserve(
 							&discarded,
 							metadata.map(|m| m.deposit).defensive_unwrap_or_default(),
@@ -326,8 +367,8 @@ pub mod pallet {
 				}
 			}
 
-			SortedScores::<T>::put(sorted_scores);
-			SubmissionMetadataStorage::<T>::insert(who, metadata);
+			SortedScores::<T>::insert(round, sorted_scores);
+			SubmissionMetadataStorage::<T>::insert(round, who, metadata);
 			Ok(().into())
 		}
 
@@ -339,11 +380,24 @@ pub mod pallet {
 		/// - `who` must have already registered their submission.
 		/// - If the page is duplicate, it will replaced.
 		pub(crate) fn try_mutate_page(
+			round: u32,
 			who: &T::AccountId,
 			page: PageIndex,
 			maybe_solution: Option<T::Solution>,
 		) -> DispatchResultWithPostInfo {
-			let mut metadata = SubmissionMetadataStorage::<T>::get(who).ok_or("not registered")?;
+			Self::mutate_checked(round, || {
+				Self::try_mutate_page_inner(round, who, page, maybe_solution)
+			})
+		}
+
+		fn try_mutate_page_inner(
+			round: u32,
+			who: &T::AccountId,
+			page: PageIndex,
+			maybe_solution: Option<T::Solution>,
+		) -> DispatchResultWithPostInfo {
+			let mut metadata =
+				SubmissionMetadataStorage::<T>::get(round, who).ok_or("not registered")?;
 			ensure!(page < T::Pages::get(), "bad page index");
 
 			// defensive only: we resize `meta.pages` once to be `T::Pages` elements once, and never
@@ -366,54 +420,69 @@ pub mod pallet {
 			};
 			metadata.deposit = new_deposit;
 
-			SubmissionStorage::<T>::mutate_exists(who, page, |maybe_old_solution| {
+			SubmissionStorage::<T>::mutate_exists((round, who, page), |maybe_old_solution| {
 				*maybe_old_solution = maybe_solution
 			});
-			SubmissionMetadataStorage::<T>::insert(who, metadata);
+			SubmissionMetadataStorage::<T>::insert(round, who, metadata);
 			Ok(().into())
 		}
 
 		// -- getter functions
-		pub(crate) fn has_leader() -> bool {
-			!SortedScores::<T>::get().is_empty()
+		pub(crate) fn has_leader(round: u32) -> bool {
+			!SortedScores::<T>::get(round).is_empty()
 		}
 
-		pub(crate) fn leader() -> Option<(T::AccountId, ElectionScore)> {
-			SortedScores::<T>::get().last().cloned()
+		pub(crate) fn leader(round: u32) -> Option<(T::AccountId, ElectionScore)> {
+			SortedScores::<T>::get(round).last().cloned()
 		}
 
-		pub(crate) fn sorted_submitters() -> BoundedVec<T::AccountId, T::MaxSubmissions> {
-			SortedScores::<T>::get().into_iter().map(|(x, _)| x).try_collect().unwrap()
+		pub(crate) fn sorted_submitters(round: u32) -> BoundedVec<T::AccountId, T::MaxSubmissions> {
+			SortedScores::<T>::get(round).into_iter().map(|(x, _)| x).try_collect().unwrap()
 		}
 
-		pub(crate) fn get_page_of(who: &T::AccountId, page: PageIndex) -> Option<T::Solution> {
-			SubmissionStorage::<T>::get(who, &page)
+		pub(crate) fn get_page_of(
+			round: u32,
+			who: &T::AccountId,
+			page: PageIndex,
+		) -> Option<T::Solution> {
+			SubmissionStorage::<T>::get((round, who, &page))
 		}
 	}
 
 	#[cfg(debug_assertions)]
 	impl<T: Config> Submissions<T> {
-		pub fn submissions_iter() -> impl Iterator<Item = (T::AccountId, PageIndex, T::Solution)> {
-			SubmissionStorage::<T>::iter()
+		pub fn submissions_iter(
+			round: u32,
+		) -> impl Iterator<Item = (T::AccountId, PageIndex, T::Solution)> {
+			// TODO: ask keith if there a better way, there should be.
+			SubmissionStorage::<T>::iter().filter_map(move |((r, x, y), z)| {
+				if r == round {
+					Some((x, y, z))
+				} else {
+					None
+				}
+			})
 		}
 
-		pub fn metadata_iter() -> impl Iterator<Item = (T::AccountId, SubmissionMetadata<T>)> {
-			SubmissionMetadataStorage::<T>::iter()
+		pub fn metadata_iter(
+			round: u32,
+		) -> impl Iterator<Item = (T::AccountId, SubmissionMetadata<T>)> {
+			SubmissionMetadataStorage::<T>::iter_prefix(round)
 		}
 
-		/// Ensure that all the storage items managed by this struct are in `killed` state, meaning
-		/// that in the expect state after an election is OVER.
-		pub(crate) fn ensure_killed() -> Result<(), &'static str> {
-			ensure!(Self::metadata_iter().count() == 0, "metadata_iter not cleared.");
-			ensure!(Self::submissions_iter().count() == 0, "submissions_iter not cleared.");
-			ensure!(Self::sorted_submitters().len() == 0, "sorted_submitters not cleared.");
+		/// Ensure that all the storage items associated with the given round are in `killed` state,
+		/// meaning that in the expect state after an election is OVER.
+		pub(crate) fn ensure_killed(round: u32) -> Result<(), &'static str> {
+			ensure!(Self::metadata_iter(round).count() == 0, "metadata_iter not cleared.");
+			ensure!(Self::submissions_iter(round).count() == 0, "submissions_iter not cleared.");
+			ensure!(Self::sorted_submitters(round).len() == 0, "sorted_submitters not cleared.");
 
 			Ok(())
 		}
 
-		/// Perform all the sanity checks of this storage item group.
-		pub(crate) fn sanity_check() -> Result<(), &'static str> {
-			let sorted_scores = SortedScores::<T>::get();
+		/// Perform all the sanity checks of this storage item group at the given round.
+		pub(crate) fn sanity_check_round(round: u32) -> Result<(), &'static str> {
+			let sorted_scores = SortedScores::<T>::get(round);
 			assert_eq!(
 				sorted_scores
 					.clone()
@@ -424,9 +493,9 @@ pub mod pallet {
 				sorted_scores.len()
 			);
 
-			let _ = SubmissionMetadataStorage::<T>::iter()
+			let _ = SubmissionMetadataStorage::<T>::iter_prefix(round)
 				.map(|(submitter, meta)| {
-					let mut matches = SortedScores::<T>::get()
+					let mut matches = SortedScores::<T>::get(round)
 						.into_iter()
 						.filter(|(who, _score)| who == &submitter)
 						.collect::<Vec<_>>();
@@ -444,14 +513,21 @@ pub mod pallet {
 
 			ensure!(
 				SubmissionStorage::<T>::iter_keys()
+					.filter_map(|(k0, k1, k2)| if k0 == round { Some((k1, k2)) } else { None })
 					.map(|(k1, _k2)| k1)
-					.all(|submitter| SubmissionMetadataStorage::<T>::contains_key(submitter)),
+					.all(|submitter| SubmissionMetadataStorage::<T>::contains_key(
+						round, submitter
+					)),
 				"missing metadata of submitter"
 			);
 
-			for submitter in SubmissionStorage::<T>::iter_keys().map(|(k1, _k2)| k1) {
-				let pages_count = SubmissionStorage::<T>::iter_key_prefix(&submitter).count();
-				let metadata = SubmissionMetadataStorage::<T>::get(submitter)
+			for submitter in SubmissionStorage::<T>::iter_keys()
+				.filter_map(|(k0, k1, k2)| if k0 == round { Some((k1, k2)) } else { None })
+				.map(|(k1, _k2)| k1)
+			{
+				let pages_count =
+					SubmissionStorage::<T>::iter_key_prefix((round, &submitter)).count();
+				let metadata = SubmissionMetadataStorage::<T>::get(round, submitter)
 					.expect("metadata checked to exist for all keys; qed");
 				let assumed_pages_count = metadata.pages.iter().filter(|x| **x).count();
 				ensure!(pages_count == assumed_pages_count, "wrong page count");
@@ -500,7 +576,7 @@ pub mod pallet {
 			let new_metadata = SubmissionMetadata { claimed_score, deposit, reward, fee, pages };
 
 			T::Currency::reserve(&who, deposit).map_err(|_| "insufficient funds")?;
-			let _ = Submissions::<T>::try_register(&who, new_metadata)?;
+			let _ = Submissions::<T>::try_register(Self::current_round(), &who, new_metadata)?;
 			Self::deposit_event(Event::<T>::Registered(who, claimed_score));
 			Ok(().into())
 		}
@@ -533,7 +609,7 @@ pub mod pallet {
 			let who = ensure_signed(origin)?;
 			ensure!(crate::Pallet::<T>::current_phase().is_signed(), "phase not signed");
 
-			Submissions::<T>::try_mutate_page(&who, page, maybe_solution)?;
+			Submissions::<T>::try_mutate_page(Self::current_round(), &who, page, maybe_solution)?;
 			Self::deposit_event(Event::<T>::Stored(who, page));
 
 			Ok(().into())
@@ -545,14 +621,15 @@ pub mod pallet {
 		fn on_initialize(now: T::BlockNumber) -> Weight {
 			// TODO: we could rely on an explicit notification system instead of this.. but anyways.
 			if crate::Pallet::<T>::current_phase().is_signed_validation_open_at(now) {
+				let maybe_leader = Submissions::<T>::leader(Self::current_round());
 				sublog!(
 					info,
 					"signed",
 					"signed validation started, sending validation start signal? {:?}",
-					Submissions::<T>::leader().is_some()
+					maybe_leader.is_some()
 				);
 				// start an attempt to verify our best thing.
-				if Submissions::<T>::leader().is_some() {
+				if maybe_leader.is_some() {
 					// defensive: signed phase has just began, verifier should be in a clear state
 					// and ready to accept a solution.
 					<T::Verifier as AsynchronousVerifier>::start().defensive();
@@ -571,8 +648,12 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
-	#[cfg(any(debug_assertions, test, feature = "try-runtime"))]
+	#[cfg(any(debug_assertions, test))]
 	pub(crate) fn sanity_check() -> Result<(), &'static str> {
-		Submissions::<T>::sanity_check()
+		Submissions::<T>::sanity_check_round(Self::current_round())
+	}
+
+	fn current_round() -> u32 {
+		crate::Pallet::<T>::round()
 	}
 }
