@@ -27,6 +27,15 @@
 //!    evaluating from the best claim), they are rewarded.
 //! 2. Any solution after the first correct solution is refunded in an unbiased way.
 //! 3. Any invalid solution that wasted valuable blockchain time gets slashed for their deposit.
+//!
+//! # Future Plans:
+//!
+//! Overall, this pallet can avoid the need to delete any storage item, by:
+//! 1. outsource the storage of solution data to some other pallet.
+//! 2. keep it here, but make everything be also a map of the round number, so that we can keep old
+//!    storage, and it is ONLY EVER removed, when after that round number is over. This can happen
+//!    for more or less free by the submitter itself, and by anyone else as well, in which case they
+//!    get a share of the the sum deposit. The share increases as times goes on.
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_election_provider_support::PageIndex;
@@ -156,8 +165,8 @@ pub mod pallet {
 	use frame_support::{
 		dispatch::DispatchResultWithPostInfo,
 		pallet_prelude::{StorageDoubleMap, ValueQuery, *},
-		traits::{Defensive, EstimateCallFee, TryCollect},
-		transactional,
+		traits::{defensive_path, Defensive, EstimateCallFee, TryCollect},
+		transactional, Twox64Concat,
 	};
 	use frame_system::{ensure_signed, pallet_prelude::*};
 	use sp_runtime::traits::Zero;
@@ -262,7 +271,8 @@ pub mod pallet {
 		/// Try and register a new solution.
 		///
 		/// If a solution from `who` already exists, then it is updated to the new metadata, else it
-		/// is inserted. In the later case, submission might fail if there are already
+		/// is potentially inserted. In the later case, submission might fail if the queue is
+		/// already full, and the solution is not good enough to eject the weakest.
 		fn try_register(
 			who: &T::AccountId,
 			metadata: SubmissionMetadata<T>,
@@ -274,8 +284,6 @@ pub mod pallet {
 			who: &T::AccountId,
 			metadata: SubmissionMetadata<T>,
 		) -> DispatchResultWithPostInfo {
-			// update our ranking, if suitable. This is sorted based on score, but we want to first
-			// check by account-id.
 			let mut sorted_scores = SortedScores::<T>::get();
 			if let Some(pos) = sorted_scores.iter().position(|(x, _)| x == who) {
 				// must have already existed, just update their claim.
@@ -285,7 +293,7 @@ pub mod pallet {
 			} else {
 				// must be new.
 				debug_assert!(!SubmissionMetadataStorage::<T>::contains_key(who));
-				// TODO: this is all flawed, we need a better ElectionScore here.
+
 				let pos = match sorted_scores
 					.binary_search_by_key(&metadata.claimed_score, |(_, y)| *y)
 				{
@@ -295,9 +303,27 @@ pub mod pallet {
 					// new score, should be inserted in this pos.
 					Err(pos) => pos,
 				};
-				sorted_scores
-					.try_insert(pos, (who.clone(), metadata.claimed_score))
-					.map_err::<DispatchError, _>(|_| "too many submissions".into())?;
+
+				let record = (who.clone(), metadata.claimed_score);
+				match sorted_scores.force_insert_keep_right(pos, record) {
+					(true, None) => {},
+					(true, Some((discarded, _score))) => {
+						let metadata = SubmissionMetadataStorage::<T>::take(&discarded);
+						SubmissionStorage::<T>::remove_prefix(&discarded, None);
+						let _remaining = T::Currency::unreserve(
+							&discarded,
+							metadata.map(|m| m.deposit).defensive_unwrap_or_default(),
+						);
+						debug_assert!(_remaining.is_zero());
+						Pallet::<T>::deposit_event(Event::<T>::Discarded(discarded));
+					},
+					(false, Some(_)) => {
+						defensive_path(
+							"force_insert_keep_right cannot NOT insert someone, but eject one; qed",
+						);
+					},
+					(false, None) => return Err("too many submissions".into()),
+				}
 			}
 
 			SortedScores::<T>::put(sorted_scores);

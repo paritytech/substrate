@@ -29,30 +29,35 @@ const DEFENSIVE_OP_INTERNAL_ERROR: &'static str = "Defensive failure has been tr
 
 macro_rules! defensive_without_err {
 	() => {
-		debug_assert!(false, "{}", DEFENSIVE_OP_INTERNAL_ERROR);
 		frame_support::log::error!(
 			target: "runtime",
 			"{}",
 			DEFENSIVE_OP_PUBLIC_ERROR
 		);
+		debug_assert!(false, "{}", DEFENSIVE_OP_INTERNAL_ERROR);
 	}
 }
 
 macro_rules! defensive_with_err {
 	($err:expr) => {
-		debug_assert!(false, "{}: {:?}", DEFENSIVE_OP_INTERNAL_ERROR, $err);
 		frame_support::log::error!(
 			target: "runtime",
 			"{}: {:?}",
 			DEFENSIVE_OP_PUBLIC_ERROR,
 			$err
 		);
+		debug_assert!(false, "{}: {:?}", DEFENSIVE_OP_INTERNAL_ERROR, $err);
 	}
+}
+
+/// Generic function to mark an execution path as ONLY defensive.
+pub fn defensive_path(proof: &'static str) {
+	defensive_with_err!(proof);
 }
 
 /// Prelude module for all defensive traits to be imported at once.
 pub mod defensive_prelude {
-	pub use super::{Defensive, DefensiveOption, DefensiveResult};
+	pub use super::{Defensive, DefensiveOption, DefensiveResult, defensive_path};
 }
 
 /// A trait to handle errors and options when you are really sure that a condition must hold, but

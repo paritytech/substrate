@@ -200,54 +200,67 @@ impl<T, S: Get<u32>> BoundedVec<T, S> {
 		S::get() as usize
 	}
 
-	/// Forces the insertion of `s` into `self` retaining all items with index at least `index`.
+	/// Forces the insertion of `element` into `self` retaining all items with index at least
+	/// `index`.
 	///
 	/// If `index == 0` and `self.len() == Self::bound()`, then this is a no-op.
 	///
 	/// If `Self::bound() < index` or `self.len() < index`, then this is also a no-op.
 	///
-	/// Returns `true` if the item was inserted.
-	pub fn force_insert_keep_right(&mut self, index: usize, element: T) -> bool {
+	/// Returns `true` if the item was inserted, and `Some(removed)` if an item was removed. By
+	/// definition, this can never return `(false, Some(_))`.
+	pub fn force_insert_keep_right(&mut self, index: usize, element: T) -> (bool, Option<T>)
+	where
+		T: Clone,
+	{
 		// Check against panics.
 		if Self::bound() < index || self.len() < index {
-			return false
-		}
-		if self.len() < Self::bound() {
+			(false, None)
+		} else if self.len() < Self::bound() {
 			// Cannot panic since self.len() >= index;
 			self.0.insert(index, element);
+			(true, None)
 		} else {
 			if index == 0 {
-				return false
+				return (false, None)
 			}
+			let removed = self[0].clone();
 			self[0] = element;
 			// `[0..index] cannot panic since self.len() >= index.
 			// `rotate_left(1)` cannot panic because there is at least 1 element.
 			self[0..index].rotate_left(1);
+			(true, Some(removed))
 		}
-		true
 	}
 
-	/// Forces the insertion of `s` into `self` retaining all items with index at most `index`.
+	/// Forces the insertion of `element` into `self` retaining all items with index at most
+	/// `index`.
 	///
 	/// If `index == Self::bound()` and `self.len() == Self::bound()`, then this is a no-op.
 	///
 	/// If `Self::bound() < index` or `self.len() < index`, then this is also a no-op.
 	///
-	/// Returns `true` if the item was inserted.
-	pub fn force_insert_keep_left(&mut self, index: usize, element: T) -> bool {
+	/// Returns `true` if the item was inserted, and `Some(removed)` if an item was been removed. By
+	/// definition, this can never return `(false, Some(_))`.
+	pub fn force_insert_keep_left(&mut self, index: usize, element: T) -> (bool, Option<T>)
+	where
+		T: Clone,
+	{
 		// Check against panics.
 		if Self::bound() < index || self.len() < index || Self::bound() == 0 {
-			return false
+			return (false, None)
 		}
 		// Noop condition.
 		if Self::bound() == index && self.len() <= Self::bound() {
-			return false
+			return (false, None)
 		}
+		// if we truncate anything, it will be this one.
+		let maybe_removed = self.0.get(Self::bound() - 1).cloned();
 		// Cannot panic since `Self.bound() > 0`
 		self.0.truncate(Self::bound() - 1);
 		// Cannot panic since `self.len() >= index`;
 		self.0.insert(index, element);
-		true
+		(true, maybe_removed)
 	}
 
 	/// Move the position of an item from one location to another in the slice.
@@ -545,7 +558,7 @@ where
 #[cfg(test)]
 pub mod test {
 	use super::*;
-	use crate::{traits::ConstU32, Twox128};
+	use crate::{bounded_vec, traits::ConstU32, Twox128};
 	use sp_io::TestExternalities;
 
 	crate::generate_storage_alias! { Prefix, Foo => Value<BoundedVec<u32, ConstU32<7>>> }
@@ -596,58 +609,59 @@ pub mod test {
 
 	#[test]
 	fn force_insert_keep_left_works() {
-		let mut b: BoundedVec<u32, ConstU32<4>> = vec![].try_into().unwrap();
-		assert!(!b.force_insert_keep_left(1, 10));
+		let mut b: BoundedVec<u32, ConstU32<4>> = bounded_vec![];
+		assert_eq!(b.force_insert_keep_left(1, 10), (false, None));
 		assert!(b.is_empty());
 
-		assert!(b.force_insert_keep_left(0, 30));
-		assert!(b.force_insert_keep_left(0, 10));
-		assert!(b.force_insert_keep_left(1, 20));
-		assert!(b.force_insert_keep_left(3, 40));
+		assert_eq!(b.force_insert_keep_left(0, 30), (true, None));
+		assert_eq!(b.force_insert_keep_left(0, 10), (true, None));
+		assert_eq!(b.force_insert_keep_left(1, 20), (true, None));
+		assert_eq!(b.force_insert_keep_left(3, 40), (true, None));
 		assert_eq!(*b, vec![10, 20, 30, 40]);
 		// at capacity.
-		assert!(!b.force_insert_keep_left(4, 41));
+		assert_eq!(b.force_insert_keep_left(4, 41), (false, None));
 		assert_eq!(*b, vec![10, 20, 30, 40]);
-		assert!(b.force_insert_keep_left(3, 31));
+		assert_eq!(b.force_insert_keep_left(3, 31), (true, Some(40)));
 		assert_eq!(*b, vec![10, 20, 30, 31]);
-		assert!(b.force_insert_keep_left(1, 11));
+		assert_eq!(b.force_insert_keep_left(1, 11), (true, Some(31)));
 		assert_eq!(*b, vec![10, 11, 20, 30]);
-		assert!(b.force_insert_keep_left(0, 1));
+		assert_eq!(b.force_insert_keep_left(0, 1), (true, Some(30)));
 		assert_eq!(*b, vec![1, 10, 11, 20]);
 
 		let mut z: BoundedVec<u32, ConstU32<0>> = vec![].try_into().unwrap();
 		assert!(z.is_empty());
-		assert!(!z.force_insert_keep_left(0, 10));
+		assert_eq!(z.force_insert_keep_left(0, 10), (false, None));
 		assert!(z.is_empty());
 	}
 
 	#[test]
 	fn force_insert_keep_right_works() {
 		let mut b: BoundedVec<u32, ConstU32<4>> = vec![].try_into().unwrap();
-		assert!(!b.force_insert_keep_right(1, 10));
+		assert_eq!(b.force_insert_keep_right(1, 10), (false, None));
 		assert!(b.is_empty());
 
-		assert!(b.force_insert_keep_right(0, 30));
-		assert!(b.force_insert_keep_right(0, 10));
-		assert!(b.force_insert_keep_right(1, 20));
-		assert!(b.force_insert_keep_right(3, 40));
+		assert_eq!(b.force_insert_keep_right(0, 30), (true, None));
+		assert_eq!(b.force_insert_keep_right(0, 10), (true, None));
+		assert_eq!(b.force_insert_keep_right(1, 20), (true, None));
+		assert_eq!(b.force_insert_keep_right(3, 40), (true, None));
 		assert_eq!(*b, vec![10, 20, 30, 40]);
+
 		// at capacity.
-		assert!(!b.force_insert_keep_right(0, 0));
+		assert_eq!(b.force_insert_keep_right(0, 0), (false, None));
 		assert_eq!(*b, vec![10, 20, 30, 40]);
-		assert!(b.force_insert_keep_right(1, 11));
+		assert_eq!(b.force_insert_keep_right(1, 11), (true, Some(10)));
 		assert_eq!(*b, vec![11, 20, 30, 40]);
-		assert!(b.force_insert_keep_right(3, 31));
+		assert_eq!(b.force_insert_keep_right(3, 31), (true, Some(11)));
 		assert_eq!(*b, vec![20, 30, 31, 40]);
-		assert!(b.force_insert_keep_right(4, 41));
+		assert_eq!(b.force_insert_keep_right(4, 41), (true, Some(20)));
 		assert_eq!(*b, vec![30, 31, 40, 41]);
 
-		assert!(!b.force_insert_keep_right(5, 69));
+		assert_eq!(b.force_insert_keep_right(5, 69), (false, None));
 		assert_eq!(*b, vec![30, 31, 40, 41]);
 
 		let mut z: BoundedVec<u32, ConstU32<0>> = vec![].try_into().unwrap();
 		assert!(z.is_empty());
-		assert!(!z.force_insert_keep_right(0, 10));
+		assert_eq!(z.force_insert_keep_right(0, 10), (false, None));
 		assert!(z.is_empty());
 	}
 
