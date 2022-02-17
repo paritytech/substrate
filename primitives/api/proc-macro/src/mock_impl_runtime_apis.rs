@@ -313,6 +313,23 @@ impl<'a> Fold for FoldRuntimeApiImpl<'a> {
 
 			let call_name_str = call_name.to_string();
 
+			let call_return_value = if !is_advanced {
+				quote!( Ok(#crate_::NativeOrEncoded::Encoded(
+					<#ret_type as #crate_::Encode>::encode(&((move || #orig_block)()))
+				)) )
+			} else {
+				quote! {
+					let f = move || #orig_block;
+					match f() {
+						Err(e) => Err(e),
+						Ok(#crate_::NativeOrEncoded::Encoded(e)) => Ok(#crate_::NativeOrEncoded::Encoded(e)),
+						Ok(#crate_::NativeOrEncoded::Native(r)) => {
+							Ok(#crate_::NativeOrEncoded::Encoded(#crate_::Encode::encode(&r)))
+						}
+					}
+				}
+			};
+
 			let call_arm = quote!(
 				#call_name_str => {
 					let (#( #param_names ),*) : ( #( #param_types ),* ) =
@@ -324,9 +341,7 @@ impl<'a> Fold for FoldRuntimeApiImpl<'a> {
 							Err(e) => panic!("Bad input data provided to {}: {}", #call_name_str, e),
 						};
 					let at = &params.at;
-					let r = { #orig_block } as #ret_type;
-					let encoded = #crate_::Encode::encode(&r);
-					Ok(#crate_::NativeOrEncoded::Encoded(encoded))
+					#call_return_value
 				},
 			);
 

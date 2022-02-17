@@ -750,7 +750,7 @@ impl<'a> ToClientSideDecl<'a> {
 						#crate_::NativeOrEncoded::Encoded(r) => {
 							<#ret_type as #crate_::Decode>::decode(&mut &r[..])
 								.map_err(|err|
-									#crate_::ApiError::FailedToDecodeReturnValue {
+									#crate_::ApiError::FailedToConvertReturnValue {
 										function: #function_name,
 										error: err,
 									}

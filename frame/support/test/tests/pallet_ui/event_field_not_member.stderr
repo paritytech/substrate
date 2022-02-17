@@ -1,14 +1,8 @@
 error[E0277]: the trait bound `<T as pallet::Config>::Bar: Clone` is not satisfied
-   --> tests/pallet_ui/event_field_not_member.rs:23:7
-    |
-23  |         B { b: T::Bar },
-    |             ^ the trait `Clone` is not implemented for `<T as pallet::Config>::Bar`
-    |
-note: required by `clone`
-   --> $RUST/core/src/clone.rs
-    |
-    |     fn clone(&self) -> Self;
-    |     ^^^^^^^^^^^^^^^^^^^^^^^^
+  --> tests/pallet_ui/event_field_not_member.rs:23:7
+   |
+23 |         B { b: T::Bar },
+   |             ^ the trait `Clone` is not implemented for `<T as pallet::Config>::Bar`
 
 error[E0369]: binary operation `==` cannot be applied to type `&<T as pallet::Config>::Bar`
   --> tests/pallet_ui/event_field_not_member.rs:23:7

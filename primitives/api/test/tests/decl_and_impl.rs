@@ -16,7 +16,7 @@
 // limitations under the License.
 
 use sp_api::{
-	decl_runtime_apis, impl_runtime_apis, mock_impl_runtime_apis, ApiError, RuntimeApiInfo,
+	decl_runtime_apis, impl_runtime_apis, mock_impl_runtime_apis, ApiError, RuntimeApiInfo, ApiExt,
 };
 use sp_core::NativeOrEncoded;
 use sp_runtime::{
@@ -89,7 +89,6 @@ struct MockApi {
 	block: Option<Block>,
 }
 
-/*
 mock_impl_runtime_apis! {
 	impl Api<Block> for MockApi {
 		fn test(_: u64) {
@@ -111,7 +110,8 @@ mock_impl_runtime_apis! {
 				ApiError
 			>
 		{
-			Ok(().into())
+			let x: NativeOrEncoded<()> = ().into();
+			Ok(x)
 		}
 
 		#[advanced]
@@ -133,7 +133,7 @@ mock_impl_runtime_apis! {
 	impl ApiWithCustomVersion<Block> for MockApi {
 		fn same_name() {}
 	}
-}*/
+}
 
 type TestClient = substrate_test_runtime_client::client::Client<
 	substrate_test_runtime_client::Backend,
@@ -188,7 +188,6 @@ fn check_runtime_api_versions() {
 	check_runtime_api_versions_contains::<dyn sp_api::Core<Block>>();
 }
 
-/*
 #[test]
 fn mock_runtime_api_has_api() {
 	let mock = MockApi { block: None };
@@ -217,4 +216,3 @@ fn mock_runtime_api_works_with_advanced() {
 		mock.wild_card(&BlockId::Number(1336), 1).unwrap_err().to_string(),
 	);
 }
-*/

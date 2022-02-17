@@ -364,6 +364,7 @@ cfg_if! {
 		}
 	} else {
 		decl_runtime_apis! {
+			#[api_version(2)]
 			pub trait TestAPI {
 				/// Return the balance of the given account id.
 				fn balance_of(id: AccountId) -> u64;
@@ -376,8 +377,10 @@ cfg_if! {
 				fn fail_convert_parameter(param: DecodeFails<Block>);
 				/// A function that always fails to convert its return value between runtime and node.
 				fn fail_convert_return_value() -> DecodeFails<Block>;
-				/// In wasm we just emulate the old behavior.
+				#[changed_in(2)]
 				fn function_signature_changed() -> Vec<u64>;
+				/// The new signature.
+				fn function_signature_changed() -> u64;
 				fn fail_on_native() -> u64;
 				fn fail_on_wasm() -> u64;
 				/// trie no_std testing
@@ -1013,11 +1016,8 @@ cfg_if! {
 					DecodeFails::default()
 				}
 
-				fn function_signature_changed() -> Vec<u64> {
-					let mut vec = Vec::new();
-					vec.push(1);
-					vec.push(2);
-					vec
+				fn function_signature_changed() -> u64 {
+					1
 				}
 
 				fn fail_on_native() -> u64 {

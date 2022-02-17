@@ -29,9 +29,6 @@ name = "substrate"
 path = "bin/main.rs"
 required-features = ["cli"]
 
-[lib]
-#crate-type = ["cdylib", "rlib"]
-
 [dependencies]
 # third-party dependencies
 clap = { version = "3.0", features = ["derive"], optional = true }
