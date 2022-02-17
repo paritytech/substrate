@@ -77,25 +77,25 @@ pub trait BlockchainEvents<Block: BlockT> {
 	) -> sp_blockchain::Result<StorageEventStream<Block::Hash>>;
 }
 
-/// List of operations be performed on storage aux data.
+/// List of operations to be performed on storage aux data.
 /// First tuple element is the encoded data key.
 /// Second tuple element is the encoded optional data to write.
 /// If `None`, the key and the associated data are deleted from storage.
 pub type AuxDataOperations = Vec<(Vec<u8>, Option<Vec<u8>>)>;
 
-/// Callback invoked before commit the operations internally created on block import.
+/// Callback invoked before committing the operations created during block import.
 /// This gives the opportunity to perform auxiliary pre-commit actions and optionally
 /// enqueue further storage write operations to be atomically performed on commit.
 pub type OnImportAction<Block> =
 	Box<dyn (FnMut(&BlockImportNotification<Block>) -> AuxDataOperations) + Send>;
 
-/// Callback invoked before commit the operations internally created on block finalization.
+/// Callback invoked before committing the operations created during block finalization.
 /// This gives the opportunity to perform auxiliary pre-commit actions and optionally
 /// enqueue further storage write operations to be atomically performed on commit.
 pub type OnFinalityAction<Block> =
 	Box<dyn (FnMut(&FinalityNotification<Block>) -> AuxDataOperations) + Send>;
 
-/// Interface to perform auxiliary actions before commit of an import or
+/// Interface to perform auxiliary actions before committing a block import or
 /// finality operation.
 pub trait PreCommitActions<Block: BlockT> {
 	/// Actions to be performed on block import.

@@ -549,7 +549,7 @@ where
 }
 
 // Remove obsolete block's weight data by leveraging finality notifications.
-// This includes data for all finalized blocks (excluded the most recent one)
+// This includes data for all finalized blocks (excluding the most recent one)
 // and all stale branches.
 fn aux_storage_cleanup<C: HeaderMetadata<Block>, Block: BlockT>(
 	client: &C,
