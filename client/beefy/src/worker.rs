@@ -91,6 +91,8 @@ where
 	beefy_best_block_sender: BeefyBestBlockSender<B>,
 	/// Validator set id for the last signed commitment
 	last_signed_id: u64,
+	/// Block number last voted on.
+	last_voted_on: Option<NumberFor<B>>,
 	waker_rx: mpsc::Receiver<()>,
 	waker_tx: mpsc::Sender<()>,
 	// keep rustc happy
@@ -144,6 +146,7 @@ where
 			best_grandpa_block_header: last_finalized_header,
 			best_beefy_block: None,
 			last_signed_id: 0,
+			last_voted_on: None,
 			beefy_best_block_sender,
 			waker_rx,
 			waker_tx,
@@ -159,28 +162,33 @@ where
 	C: Client<B, BE>,
 	C::Api: BeefyApi<B>,
 {
-	/// Return `true`, if we should vote on block `number`
-	fn should_vote_on(&self, number: NumberFor<B>) -> bool {
-		let best_beefy_block = if let Some(block) = self.best_beefy_block {
-			block
-		} else {
-			debug!(target: "beefy", "🥩 Missing best BEEFY block - won't vote for: {:?}", number);
-			return false
-		};
-
-		// FIXME: use correct session_start
+	/// Return `Some(number)` if we should be voting on block `number` now,
+	/// return `None` if there is no block we should vote on now.
+	fn current_vote_target(&self, session_start: NumberFor<B>) -> Option<NumberFor<B>> {
+		let best_finalized = *self.best_grandpa_block_header.number();
 		let target = vote_target(
-			*self.best_grandpa_block_header.number(),
-			best_beefy_block,
-			best_beefy_block,
+			best_finalized,
+			self.best_beefy_block.unwrap_or(0u32.into()),
+			session_start,
 			self.min_block_delta,
 		);
-
-		trace!(target: "beefy", "🥩 should_vote_on: #{:?}, next_block_to_vote_on: #{:?}", number, target);
-
 		metric_set!(self, beefy_should_vote_on, target);
 
-		number == target
+		trace!(target: "beefy", "🥩 best finalized: #{:?}, next_block_to_vote_on: #{:?}", best_finalized, target);
+
+		// Don't vote multiple times or for older targets.
+		if let Some(last) = self.last_voted_on {
+			if target <= last {
+				return None
+			}
+		}
+		// Don't vote for targets until they've been finalized.
+		if target > best_finalized {
+			return None
+		}
+
+		// Vote for `target`.
+		Some(target)
 	}
 
 	/// Return the current active validator set at header `header`.
@@ -388,24 +396,6 @@ where
 						self.verify_validator_set(self.best_grandpa_block_header.number(), &active);
 				}
 
-				// // FIXME: Temporary here, remove this block
-				// let payload = {
-				// 	let mmr_root = if let Some(hash) =
-				// 		find_mmr_root_digest::<B, Public>(&self.best_grandpa_block_header)
-				// 	{
-				// 		hash
-				// 	} else {
-				// 		warn!(target: "beefy", "🥩 No MMR root digest found for: {:?}",
-				// self.best_grandpa_block_header.hash()); 		return
-				// 	};
-				// 	Payload::new(known_payload_ids::MMR_ROOT_ID, mmr_root.encode())
-				// };
-				// let block_num = *self.best_grandpa_block_header.number();
-				// self.rounds = Some(round::Rounds::new(payload, block_num, active));
-				//
-				// self.set_best_beefy_block(block_num,
-				// Some(self.best_grandpa_block_header.hash()));
-
 				let id = active.id();
 				self.rounds = Some(round::Rounds::new(session_start, active));
 				debug!(target: "beefy", "🥩 New Rounds for validator set id: {:?} with session_start {:?}", id, session_start);
@@ -424,48 +414,40 @@ where
 	fn tick(&mut self) {
 		warn!(target: "beefy", "🥩 TICK...");
 
-		// TODO: check session changed - if true, find new session boundary (mandatory block)
-		let _session_start = self.handle_session_change();
+		// TODO: provide best grandpa as
+		let session_start = self.handle_session_change();
 
-		let _target = vote_target(
-			*self.best_grandpa_block_header.number(),
-			self.best_beefy_block.unwrap_or(0u32.into()),
-			self.best_beefy_block.unwrap_or(0u32.into()),
-			self.min_block_delta,
-		);
+		if let Some(target_number) = self.current_vote_target(session_start) {
+			// Do vote.
 
-		// TODO: avoid multiple ticks for same block
+			// TODO: it's not always best grandpa - get it from `Client` when it isn't.
+			// let target_header = get_from_num(target_number);
+			let target_header = self.best_grandpa_block_header.clone();
+			let target_hash = target_header.hash();
 
-		if self.should_vote_on(*self.best_grandpa_block_header.number()) {
 			let (validators, validator_set_id) = if let Some(rounds) = &self.rounds {
 				(rounds.validators(), rounds.validator_set_id())
 			} else {
-				debug!(target: "beefy", "🥩 Missing validator set - can't vote for: {:?}", self.best_grandpa_block_header.hash());
+				debug!(target: "beefy", "🥩 Missing validator set - can't vote for: {:?}", target_hash);
 				return
 			};
 			let authority_id = if let Some(id) = self.key_store.authority_id(validators) {
 				debug!(target: "beefy", "🥩 Local authority id: {:?}", id);
 				id
 			} else {
-				debug!(target: "beefy", "🥩 Missing validator id - can't vote for: {:?}", self.best_grandpa_block_header.hash());
+				debug!(target: "beefy", "🥩 Missing validator id - can't vote for: {:?}", target_hash);
 				return
 			};
 
-			let mmr_root = if let Some(hash) =
-				find_mmr_root_digest::<B, Public>(&self.best_grandpa_block_header)
-			{
+			let mmr_root = if let Some(hash) = find_mmr_root_digest::<B, Public>(&target_header) {
 				hash
 			} else {
-				warn!(target: "beefy", "🥩 No MMR root digest found for: {:?}", self.best_grandpa_block_header.hash());
+				warn!(target: "beefy", "🥩 No MMR root digest found for: {:?}", target_hash);
 				return
 			};
 
 			let payload = Payload::new(known_payload_ids::MMR_ROOT_ID, mmr_root.encode());
-			let commitment = Commitment {
-				payload,
-				block_number: *self.best_grandpa_block_header.number(),
-				validator_set_id,
-			};
+			let commitment = Commitment { payload, block_number: target_number, validator_set_id };
 			let encoded_commitment = commitment.encode();
 
 			let signature = match self.key_store.sign(&authority_id, &*encoded_commitment) {
@@ -490,6 +472,14 @@ where
 			metric_inc!(self, beefy_votes_sent);
 
 			debug!(target: "beefy", "🥩 Sent vote message: {:?}", message);
+			self.last_voted_on = Some(target_number);
+
+			// TODO: remove this when handling multiple votes:
+			// if let Some(rounds) = self.rounds.as_mut() {
+			// 	if let Some(r) = rounds.active_round.as_mut() {
+
+			// 	}
+			// }
 
 			self.handle_vote(
 				(message.commitment.payload, message.commitment.block_number),
