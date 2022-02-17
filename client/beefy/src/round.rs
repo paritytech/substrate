@@ -46,15 +46,22 @@ impl RoundTracker {
 	}
 }
 
+// This will eventually be some standard collection of multiple rounds with current session.
+// Right now it's only a wrapper struct over a single active round.
+struct ActiveRound<Payload, Number> {
+	payload: Payload,
+	number: Number,
+	votes: RoundTracker,
+}
+
 fn threshold(authorities: usize) -> usize {
 	let faulty = authorities.saturating_sub(1) / 3;
 	authorities - faulty
 }
 
 pub(crate) struct Rounds<Payload, Number> {
-	payload: Payload,
-	number: Number,
-	votes: RoundTracker,
+	active_round: Option<ActiveRound<Payload, Number>>,
+	session_start: Number,
 	validator_set: ValidatorSet<Public>,
 }
 
@@ -63,8 +70,8 @@ where
 	P: Ord,
 	N: Ord + AtLeast32BitUnsigned + MaybeDisplay,
 {
-	pub(crate) fn new(payload: P, number: N, validator_set: ValidatorSet<Public>) -> Self {
-		Rounds { payload, number, votes: Default::default(), validator_set }
+	pub(crate) fn new(session_start: N, validator_set: ValidatorSet<Public>) -> Self {
+		Rounds { active_round: None, session_start, validator_set }
 	}
 }
 
@@ -81,56 +88,67 @@ where
 		self.validator_set.validators()
 	}
 
-	pub(crate) fn votes(&self) -> &Vec<(Public, Signature)> {
-		&self.votes.votes
-	}
+	// pub(crate) fn active_round_votes(&self) -> Option<&Vec<(Public, Signature)>> {
+	// 	self.active_round.as_ref().map(|r| &r.votes.votes)
+	// }
 
-	pub(crate) fn number(&self) -> &N {
-		&self.number
+	// pub(crate) fn active_round_number(&self) -> Option<&N> {
+	// 	self.active_round.as_ref().map(|r| &r.number)
+	// }
+
+	pub(crate) fn session_start(&self) -> &N {
+		&self.session_start
 	}
 
 	pub(crate) fn add_vote(&mut self, round: &(H, N), vote: (Public, Signature)) -> bool {
-		if self.payload == round.0 &&
-			self.number == round.1 &&
-			self.validator_set.validators().iter().any(|id| vote.0 == *id)
-		{
-			self.votes.add_vote(vote)
+		if let Some(r) = self.active_round.as_mut() {
+			if r.payload == round.0 &&
+				r.number == round.1 &&
+				self.validator_set.validators().iter().any(|id| vote.0 == *id)
+			{
+				return r.votes.add_vote(vote)
+			}
+		}
+		false
+	}
+
+	pub(crate) fn is_done(&self) -> bool {
+		if let Some(r) = &self.active_round {
+			let done = r.votes.is_done(threshold(self.validator_set.len()));
+			debug!(target: "beefy", "🥩 Round #{} done: {}", r.number, done);
+			done
 		} else {
 			false
 		}
 	}
 
-	pub(crate) fn is_done(&self) -> bool {
-		let done = self.votes.is_done(threshold(self.validator_set.len()));
-
-		debug!(target: "beefy", "🥩 Round #{} done: {}", self.number, done);
-
-		done
-	}
-
 	pub(crate) fn drop(&mut self, round: &(H, N)) -> Option<Vec<Option<Signature>>> {
-		if self.payload != round.0 || self.number != round.1 {
-			trace!(target: "beefy", "🥩 Cannot drop inactive round #{}", round.1);
-			return None
-		}
+		if let Some(r) = &self.active_round {
+			if r.payload != round.0 || r.number != round.1 {
+				trace!(target: "beefy", "🥩 Cannot drop inactive round #{}", round.1);
+				return None
+			}
 
-		trace!(target: "beefy", "🥩 About to drop round #{}", round.1);
+			trace!(target: "beefy", "🥩 About to drop round #{}", round.1);
 
-		Some(
-			self.validator_set
-				.validators()
-				.iter()
-				.map(|authority_id| {
-					self.votes().iter().find_map(|(id, sig)| {
-						if id == authority_id {
-							Some(sig.clone())
-						} else {
-							None
-						}
+			Some(
+				self.validator_set
+					.validators()
+					.iter()
+					.map(|authority_id| {
+						r.votes.votes.iter().find_map(|(id, sig)| {
+							if id == authority_id {
+								Some(sig.clone())
+							} else {
+								None
+							}
+						})
 					})
-				})
-				.collect(),
-		)
+					.collect(),
+			)
+		} else {
+			None
+		}
 	}
 }
 

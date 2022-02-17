@@ -168,8 +168,10 @@ where
 			return false
 		};
 
+		// FIXME: use correct session_start
 		let target = vote_target(
 			*self.best_grandpa_block_header.number(),
+			best_beefy_block,
 			best_beefy_block,
 			self.min_block_delta,
 		);
@@ -286,14 +288,19 @@ where
 					.notify(|| Ok::<_, ()>(signed_commitment))
 					.expect("forwards closure result; the closure always returns Ok; qed.");
 
+				self.set_best_beefy_block(block_num, None);
+
 				warn!(target: "beefy", "🥩 round concluded, waking up ticker");
 				let _ = self.waker_tx.try_send(());
-
-				self.set_best_beefy_block(block_num, None);
 			}
 		}
 	}
 
+	/// Set best BEEFY block to `block_num`.
+	///
+	/// Also sends/updates the best BEEFY block hash to the RPC worker.
+	/// If the hash is not explicitly provided in `opt_block_hash`,
+	/// this function just gets it from the `Client`.
 	fn set_best_beefy_block(
 		&mut self,
 		block_num: NumberFor<B>,
@@ -310,11 +317,13 @@ where
 				},
 			}
 		};
+		// Update RPC worker with new best BEEFY block hash.
 		opt_block_hash.map(|hash| {
 			self.beefy_best_block_sender
 				.notify(|| Ok::<_, ()>(hash))
 				.expect("forwards closure result; the closure always returns Ok; qed.")
 		});
+		// Set new best BEEFY block number.
 		self.best_beefy_block = Some(block_num);
 
 		// FIXME: this metric is kind of 'fake'. Best BEEFY block should only be updated once we
@@ -322,33 +331,53 @@ where
 		metric_set!(self, beefy_best_block, block_num);
 	}
 
-	fn initialize_best_beefy(&mut self) -> NumberFor<B> {
-		// FIXME: currently hardcoded to genesis/block #0.
-		let best_beefy = NumberFor::<B>::from(0u32);
-		self.set_best_beefy_block(best_beefy, None);
-		best_beefy
+	// fn initialize_best_beefy(&mut self) -> NumberFor<B> {
+	// 	// FIXME: currently hardcoded to genesis/block #0.
+	// 	let best_beefy = NumberFor::<B>::from(0u32);
+	// 	self.set_best_beefy_block(best_beefy, None);
+	// 	best_beefy
+	// }
+
+	/// Return first block number pertaining to same session as `header`.
+	fn session_start_for_header(&self, header: &B::Header) -> NumberFor<B> {
+		// Current header is also the session start.
+		if let Some(_) = find_authorities_change::<B>(header) {
+			return *header.number()
+		}
+
+		// Walk up the chain looking for the session change digest.
+		let mut parent_hash = *header.parent_hash();
+		while parent_hash != Default::default() {
+			let header = self
+				.client
+				.expect_header(BlockId::Hash(parent_hash))
+				// TODO: is this proof correct?
+				.expect("header always available when following parent hash; qed.");
+			if let Some(_) = find_authorities_change::<B>(&header) {
+				// Found it! This header is the first of the session.
+				break
+			}
+			parent_hash = *header.parent_hash();
+		}
+		*header.number()
 	}
 
-	fn tick(&mut self) {
-		warn!(target: "beefy", "🥩 TICK...");
-
-		// TODO: avoid multiple ticks for same block
-
+	/// Handle potential session changes by starting new voting round for mandatory blocks.
+	///
+	/// Return current session start.
+	fn handle_session_change(&mut self) -> NumberFor<B> {
 		if let Some(active) = self.validator_set(&self.best_grandpa_block_header) {
-			// Authority set change or genesis set id triggers new voting rounds
-			//
-			// TODO: (grandpa-bridge-gadget#366) Enacting a new authority set will also
-			// implicitly 'conclude' the currently active BEEFY voting round by starting a
-			// new one. This should be replaced by proper round life-cycle handling.
+			// If validator set has changed compared to the one in our active round,
 			if self.rounds.is_none() ||
-				active.id() != self.rounds.as_ref().unwrap().validator_set_id() ||
-				(active.id() == GENESIS_AUTHORITY_SET_ID && self.best_beefy_block.is_none())
+				active.id() != self.rounds.as_ref().unwrap().validator_set_id()
 			{
-				debug!(target: "beefy", "🥩 New active validator set id: {:?}", active);
-				metric_set!(self, beefy_validator_set_id, active.id());
+				// Find new session_start and start new round for mandatory block.
+				let session_start = self.session_start_for_header(&self.best_grandpa_block_header);
 
+				debug!(target: "beefy", "🥩 New active validator set: {:?}", active);
+				metric_set!(self, beefy_validator_set_id, active.id());
 				// BEEFY should produce a signed commitment for each session
-				if active.id() != self.last_signed_id + 1 && active.id() != GENESIS_AUTHORITY_SET_ID
+				if active.id() != GENESIS_AUTHORITY_SET_ID && active.id() != self.last_signed_id + 1
 				{
 					metric_inc!(self, beefy_skipped_sessions);
 				}
@@ -359,27 +388,53 @@ where
 						self.verify_validator_set(self.best_grandpa_block_header.number(), &active);
 				}
 
+				// // FIXME: Temporary here, remove this block
+				// let payload = {
+				// 	let mmr_root = if let Some(hash) =
+				// 		find_mmr_root_digest::<B, Public>(&self.best_grandpa_block_header)
+				// 	{
+				// 		hash
+				// 	} else {
+				// 		warn!(target: "beefy", "🥩 No MMR root digest found for: {:?}",
+				// self.best_grandpa_block_header.hash()); 		return
+				// 	};
+				// 	Payload::new(known_payload_ids::MMR_ROOT_ID, mmr_root.encode())
+				// };
+				// let block_num = *self.best_grandpa_block_header.number();
+				// self.rounds = Some(round::Rounds::new(payload, block_num, active));
+				//
+				// self.set_best_beefy_block(block_num,
+				// Some(self.best_grandpa_block_header.hash()));
+
 				let id = active.id();
-				// FIXME: Temporary here, remove this block
-				let payload = {
-					let mmr_root = if let Some(hash) =
-						find_mmr_root_digest::<B, Public>(&self.best_grandpa_block_header)
-					{
-						hash
-					} else {
-						warn!(target: "beefy", "🥩 No MMR root digest found for: {:?}", self.best_grandpa_block_header.hash());
-						return
-					};
-					Payload::new(known_payload_ids::MMR_ROOT_ID, mmr_root.encode())
-				};
-				let block_num = *self.best_grandpa_block_header.number();
-				self.rounds = Some(round::Rounds::new(payload, block_num, active));
+				self.rounds = Some(round::Rounds::new(session_start, active));
+				debug!(target: "beefy", "🥩 New Rounds for validator set id: {:?} with session_start {:?}", id, session_start);
 
-				debug!(target: "beefy", "🥩 New Rounds for id: {:?}", id);
-
-				self.set_best_beefy_block(block_num, Some(self.best_grandpa_block_header.hash()));
+				session_start
+			} else {
+				// Otherwise, use same session_start.
+				*self.rounds.as_ref().unwrap().session_start()
 			}
+		} else {
+			// TODO: BEEFY pallet not available, stop beefy worker
+			NumberFor::<B>::from(0u32)
 		}
+	}
+
+	fn tick(&mut self) {
+		warn!(target: "beefy", "🥩 TICK...");
+
+		// TODO: check session changed - if true, find new session boundary (mandatory block)
+		let _session_start = self.handle_session_change();
+
+		let _target = vote_target(
+			*self.best_grandpa_block_header.number(),
+			self.best_beefy_block.unwrap_or(0u32.into()),
+			self.best_beefy_block.unwrap_or(0u32.into()),
+			self.min_block_delta,
+		);
+
+		// TODO: avoid multiple ticks for same block
 
 		if self.should_vote_on(*self.best_grandpa_block_header.number()) {
 			let (validators, validator_set_id) = if let Some(rounds) = &self.rounds {
@@ -535,23 +590,35 @@ where
 }
 
 /// Calculate next block number to vote on
-fn vote_target<N>(best_grandpa: N, best_beefy: N, min_delta: u32) -> N
+fn vote_target<N>(best_grandpa: N, best_beefy: N, session_start: N, min_delta: u32) -> N
 where
 	N: AtLeast32Bit + Copy + Debug,
 {
-	let diff = best_grandpa.saturating_sub(best_beefy);
-	let diff = diff.saturated_into::<u32>();
-	let target = best_beefy + min_delta.max(diff.next_power_of_two()).into();
+	// if the mandatory block (session_start) does not have a beefy justification yet,
+	// we vote on it
+	if best_beefy < session_start {
+		trace!(
+			target: "beefy",
+			"🥩 vote target - mandatory block: #{:?}",
+			session_start,
+		);
 
-	trace!(
-		target: "beefy",
-		"🥩 vote target - diff: {:?}, next_power_of_two: {:?}, target block: #{:?}",
-		diff,
-		diff.next_power_of_two(),
-		target,
-	);
+		session_start
+	} else {
+		let diff = best_grandpa.saturating_sub(best_beefy) + 1u32.into();
+		let diff = diff.saturated_into::<u32>() / 2;
+		let target = best_beefy + min_delta.max(diff.next_power_of_two()).into();
 
-	target
+		trace!(
+			target: "beefy",
+			"🥩 vote target - diff: {:?}, next_power_of_two: {:?}, target block: #{:?}",
+			diff,
+			diff.next_power_of_two(),
+			target,
+		);
+
+		target
+	}
 }
 
 #[cfg(test)]
