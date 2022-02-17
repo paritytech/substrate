@@ -122,12 +122,13 @@ benchmarks! {
 
 	public_to_external {
 		let p = T::MaxProposals::get();
+		let caller = funded_account::<T>("caller", 0);
 		let origin = T::PromotionOrigin::successful_origin();
 		let hash = T::Hashing::hash_of(&0);
 
-		for i in 0 .. (p - 1) {
-			add_proposal::<T>(i)?;
-		}
+		PublicProps::<T>::append((0 as PropIndex,hash.clone(),caller.clone()));
+		Promoted::<T>::insert(hash.clone(), vec!(caller.clone()));
+
 	}: _<T::Origin>(origin.clone())
 	verify {
 		assert_noop!(
