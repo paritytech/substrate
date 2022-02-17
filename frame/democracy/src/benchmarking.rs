@@ -107,7 +107,7 @@ benchmarks! {
         let p = T::MaxProposals::get();
         let origin = T::PromotionOrigin::successful_origin();
         let hash = T::Hashing::hash_of(&0);
-        
+
         for i in 0 .. (p - 1) {
             add_proposal::<T>(i)?;
         }
@@ -119,6 +119,21 @@ benchmarks! {
             Democracy::<T>::promote(origin.clone(), hash.clone()), Error::<T>::AlreadyPromoted
         );
     }
+
+	public_to_external {
+		let p = T::MaxProposals::get();
+		let origin = T::PromotionOrigin::successful_origin();
+		let hash = T::Hashing::hash_of(&0);
+
+		for i in 0 .. (p - 1) {
+			add_proposal::<T>(i)?;
+		}
+	}: _<T::Origin>(origin.clone())
+	verify {
+		assert_noop!(
+			Democracy::<T>::public_to_external(origin.clone()), Error::<T>::DuplicateProposal
+		);
+	}
 
 	second {
 		let s in 0 .. MAX_SECONDERS;

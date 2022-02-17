@@ -97,7 +97,7 @@ fn public_to_external_works() {
 }
 
 #[test]
-fn public_to_external_should_fail() {
+fn public_to_external_should_not_work() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Democracy::external_propose_majority(Origin::signed(3), set_balance_proposal_hash_and_note(2)));
 		assert_noop!(Democracy::public_to_external(Origin::signed(2)), Error::<Test>::DuplicateProposal);

@@ -672,7 +672,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-        #[pallet::weight(T::WeightInfo::promote())]
+        #[pallet::weight(100)]
         pub fn promote(
             origin: OriginFor<T>,
             proposal_hash: T::Hash,
