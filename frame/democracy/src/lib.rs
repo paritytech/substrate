@@ -698,7 +698,6 @@ pub mod pallet {
 
 			for _ in public_props.iter() {
 				if let Some(i) = hashes.next() {
-
 					let number = <Promoted<T>>::get(i).ok_or(Error::<T>::NotPromoted)?;
 					let count = number.len();
 					// TODO: Create custom error to replace `ProposalMissing` here.
