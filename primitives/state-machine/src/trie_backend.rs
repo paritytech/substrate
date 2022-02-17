@@ -636,7 +636,6 @@ pub mod tests {
 		assert_eq!(proof_check.child_storage(child_info_1, &[64]).unwrap().unwrap(), vec![64]);
 	}
 
-	/*
 	#[test]
 	fn storage_proof_encoded_size_estimation_works() {
 		storage_proof_encoded_size_estimation_works_inner(StateVersion::V0);
@@ -644,31 +643,36 @@ pub mod tests {
 	}
 	fn storage_proof_encoded_size_estimation_works_inner(state_version: StateVersion) {
 		let trie_backend = test_trie(state_version);
-		let backend = TrieBackend::wrap_with_recorder(&trie_backend, Recorder::default());
+		let keys = &[
+			&b"key"[..],
+			&b"value1"[..],
+			&b"value2"[..],
+			&b"doesnotexist"[..],
+			&b"doesnotexist2"[..],
+		];
 
-		let check_estimation =
-			|backend: &TrieBackend<'_, PrefixedMemoryDB<BlakeTwo256>, BlakeTwo256>| {
-				let storage_proof = backend.extract_proof();
-				let estimation =
-					backend.recorder.as_ref().unwrap().estimate_encoded_size();
+		fn check_estimation(
+			backend: TrieBackend<impl TrieBackendStorage<BlakeTwo256>, BlakeTwo256>,
+		) {
+			let estimation = backend.recorder.as_ref().unwrap().estimate_encoded_size();
+			let storage_proof = backend.extract_proof().unwrap().unwrap();
 
-				assert_eq!(storage_proof.encoded_size(), estimation);
-			};
+			assert_eq!(
+				storage_proof.into_nodes().into_iter().map(|n| n.encoded_size()).sum::<usize>(),
+				estimation
+			);
+		}
 
-		assert_eq!(backend.storage(b"key").unwrap(), Some(b"value".to_vec()));
-		check_estimation(&backend);
+		for n in 0..keys.len() {
+			let backend = TrieBackend::wrap_with_recorder(&trie_backend, Recorder::default());
 
-		assert_eq!(backend.storage(b"value1").unwrap(), Some(vec![42]));
-		check_estimation(&backend);
+			// Read n keys
+			(0..n).for_each(|i| {
+				backend.storage(keys[i]).unwrap();
+			});
 
-		assert_eq!(backend.storage(b"value2").unwrap(), Some(vec![24]));
-		check_estimation(&backend);
-
-		assert!(backend.storage(b"doesnotexist").unwrap().is_none());
-		check_estimation(&backend);
-
-		assert!(backend.storage(b"doesnotexist2").unwrap().is_none());
-		check_estimation(&backend);
+			// Check the estimation
+			check_estimation(backend);
+		}
 	}
-	*/
 }
