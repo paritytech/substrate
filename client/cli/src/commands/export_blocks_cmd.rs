@@ -76,7 +76,7 @@ impl ExportBlocksCmd {
 		C: BlockBackend<B> + UsageProvider<B> + 'static,
 		<<B::Header as HeaderT>::Number as FromStr>::Err: Debug,
 	{
-		if let DatabaseSource::RocksDb { ref path, .. } = database_config {
+		if let Some(path) = database_config.path() {
 			info!("DB path: {}", path.display());
 		}
 

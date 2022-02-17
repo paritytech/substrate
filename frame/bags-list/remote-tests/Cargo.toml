@@ -21,10 +21,10 @@ frame-system = { path = "../../system", version = "4.0.0-dev" }
 frame-support = { path = "../../support", version = "4.0.0-dev" }
 
 # core
-sp-storage = { path = "../../../primitives/storage", version = "4.0.0" }
-sp-core = { path = "../../../primitives/core", version = "4.1.0-dev" }
+sp-storage = { path = "../../../primitives/storage", version = "5.0.0"}
+sp-core = { path = "../../../primitives/core", version = "5.0.0"}
 sp-tracing = { path = "../../../primitives/tracing", version = "4.0.0" }
-sp-runtime = { path = "../../../primitives/runtime", version = "4.1.0-dev" }
+sp-runtime = { path = "../../../primitives/runtime", version = "5.0.0"}
 sp-std = { path = "../../../primitives/std", version = "4.0.0" }
 
 # utils

@@ -53,11 +53,7 @@ pub use pallet_transaction_payment::{CurrencyAdapter, Multiplier, TargetedFeeAdj
 use pallet_transaction_payment::{FeeDetails, RuntimeDispatchInfo};
 use sp_api::impl_runtime_apis;
 use sp_authority_discovery::AuthorityId as AuthorityDiscoveryId;
-use sp_core::{
-	crypto::KeyTypeId,
-	u32_trait::{_1, _2, _3, _4, _5},
-	OpaqueMetadata,
-};
+use sp_core::{crypto::KeyTypeId, OpaqueMetadata};
 use sp_inherents::{CheckInherentsResult, InherentData};
 use sp_runtime::{
 	create_runtime_str,
@@ -550,7 +546,7 @@ impl pallet_staking::Config for Runtime {
 	/// A super-majority of the council can cancel the slash.
 	type SlashCancelOrigin = EnsureOneOf<
 		EnsureRoot<AccountId>,
-		pallet_collective::EnsureProportionAtLeast<_3, _4, AccountId, CouncilCollective>,
+		pallet_collective::EnsureProportionAtLeast<AccountId, CouncilCollective, 3, 4>,
 	>;
 	type SessionInterface = Self;
 	type EraPayout = pallet_staking::ConvertCurve<RewardCurve>;
@@ -699,6 +695,83 @@ impl pallet_bags_list::Config for Runtime {
 }
 
 parameter_types! {
+	pub const VoteLockingPeriod: BlockNumber = 30 * DAYS;
+}
+
+impl pallet_conviction_voting::Config for Runtime {
+	type WeightInfo = pallet_conviction_voting::weights::SubstrateWeight<Self>;
+	type Event = Event;
+	type Currency = Balances;
+	type VoteLockingPeriod = VoteLockingPeriod;
+	type MaxVotes = ConstU32<512>;
+	type MaxTurnout = frame_support::traits::TotalIssuanceOf<Balances, Self::AccountId>;
+	type Polls = Referenda;
+}
+
+parameter_types! {
+	pub const AlarmInterval: BlockNumber = 1;
+	pub const SubmissionDeposit: Balance = 100 * DOLLARS;
+	pub const UndecidingTimeout: BlockNumber = 28 * DAYS;
+}
+
+pub struct TracksInfo;
+impl pallet_referenda::TracksInfo<Balance, BlockNumber> for TracksInfo {
+	type Id = u8;
+	type Origin = <Origin as frame_support::traits::OriginTrait>::PalletsOrigin;
+	fn tracks() -> &'static [(Self::Id, pallet_referenda::TrackInfo<Balance, BlockNumber>)] {
+		static DATA: [(u8, pallet_referenda::TrackInfo<Balance, BlockNumber>); 1] = [(
+			0u8,
+			pallet_referenda::TrackInfo {
+				name: "root",
+				max_deciding: 1,
+				decision_deposit: 10,
+				prepare_period: 4,
+				decision_period: 4,
+				confirm_period: 2,
+				min_enactment_period: 4,
+				min_approval: pallet_referenda::Curve::LinearDecreasing {
+					begin: Perbill::from_percent(100),
+					delta: Perbill::from_percent(50),
+				},
+				min_turnout: pallet_referenda::Curve::LinearDecreasing {
+					begin: Perbill::from_percent(100),
+					delta: Perbill::from_percent(100),
+				},
+			},
+		)];
+		&DATA[..]
+	}
+	fn track_for(id: &Self::Origin) -> Result<Self::Id, ()> {
+		if let Ok(system_origin) = frame_system::RawOrigin::try_from(id.clone()) {
+			match system_origin {
+				frame_system::RawOrigin::Root => Ok(0),
+				_ => Err(()),
+			}
+		} else {
+			Err(())
+		}
+	}
+}
+
+impl pallet_referenda::Config for Runtime {
+	type WeightInfo = pallet_referenda::weights::SubstrateWeight<Self>;
+	type Call = Call;
+	type Event = Event;
+	type Scheduler = Scheduler;
+	type Currency = pallet_balances::Pallet<Self>;
+	type CancelOrigin = EnsureRoot<AccountId>;
+	type KillOrigin = EnsureRoot<AccountId>;
+	type Slash = ();
+	type Votes = pallet_conviction_voting::VotesOf<Runtime>;
+	type Tally = pallet_conviction_voting::TallyOf<Runtime>;
+	type SubmissionDeposit = SubmissionDeposit;
+	type MaxQueued = ConstU32<100>;
+	type UndecidingTimeout = UndecidingTimeout;
+	type AlarmInterval = AlarmInterval;
+	type Tracks = TracksInfo;
+}
+
+parameter_types! {
 	pub const LaunchPeriod: BlockNumber = 28 * 24 * 60 * MINUTES;
 	pub const VotingPeriod: BlockNumber = 28 * 24 * 60 * MINUTES;
 	pub const FastTrackVotingPeriod: BlockNumber = 3 * 24 * 60 * MINUTES;
@@ -719,30 +792,30 @@ impl pallet_democracy::Config for Runtime {
 	type MinimumDeposit = MinimumDeposit;
 	/// A straight majority of the council can decide what their next motion is.
 	type ExternalOrigin =
-		pallet_collective::EnsureProportionAtLeast<_1, _2, AccountId, CouncilCollective>;
+		pallet_collective::EnsureProportionAtLeast<AccountId, CouncilCollective, 1, 2>;
 	/// A super-majority can have the next scheduled referendum be a straight majority-carries vote.
 	type ExternalMajorityOrigin =
-		pallet_collective::EnsureProportionAtLeast<_3, _4, AccountId, CouncilCollective>;
+		pallet_collective::EnsureProportionAtLeast<AccountId, CouncilCollective, 3, 4>;
 	/// A unanimous council can have the next scheduled referendum be a straight default-carries
 	/// (NTB) vote.
 	type ExternalDefaultOrigin =
-		pallet_collective::EnsureProportionAtLeast<_1, _1, AccountId, CouncilCollective>;
+		pallet_collective::EnsureProportionAtLeast<AccountId, CouncilCollective, 1, 1>;
 	/// Two thirds of the technical committee can have an ExternalMajority/ExternalDefault vote
 	/// be tabled immediately and with a shorter voting/enactment period.
 	type FastTrackOrigin =
-		pallet_collective::EnsureProportionAtLeast<_2, _3, AccountId, TechnicalCollective>;
+		pallet_collective::EnsureProportionAtLeast<AccountId, TechnicalCollective, 2, 3>;
 	type InstantOrigin =
-		pallet_collective::EnsureProportionAtLeast<_1, _1, AccountId, TechnicalCollective>;
+		pallet_collective::EnsureProportionAtLeast<AccountId, TechnicalCollective, 1, 1>;
 	type InstantAllowed = frame_support::traits::ConstBool<true>;
 	type FastTrackVotingPeriod = FastTrackVotingPeriod;
 	// To cancel a proposal which has been passed, 2/3 of the council must agree to it.
 	type CancellationOrigin =
-		pallet_collective::EnsureProportionAtLeast<_2, _3, AccountId, CouncilCollective>;
+		pallet_collective::EnsureProportionAtLeast<AccountId, CouncilCollective, 2, 3>;
 	// To cancel a proposal before it has been passed, the technical committee must be unanimous or
 	// Root must agree.
 	type CancelProposalOrigin = EnsureOneOf<
 		EnsureRoot<AccountId>,
-		pallet_collective::EnsureProportionAtLeast<_1, _1, AccountId, TechnicalCollective>,
+		pallet_collective::EnsureProportionAtLeast<AccountId, TechnicalCollective, 1, 1>,
 	>;
 	type BlacklistOrigin = EnsureRoot<AccountId>;
 	// Any single technical committee member may veto a coming council proposal, however they can
@@ -832,7 +905,7 @@ impl pallet_collective::Config<TechnicalCollective> for Runtime {
 
 type EnsureRootOrHalfCouncil = EnsureOneOf<
 	EnsureRoot<AccountId>,
-	pallet_collective::EnsureProportionMoreThan<_1, _2, AccountId, CouncilCollective>,
+	pallet_collective::EnsureProportionMoreThan<AccountId, CouncilCollective, 1, 2>,
 >;
 impl pallet_membership::Config<pallet_membership::Instance1> for Runtime {
 	type Event = Event;
@@ -874,11 +947,11 @@ impl pallet_treasury::Config for Runtime {
 	type Currency = Balances;
 	type ApproveOrigin = EnsureOneOf<
 		EnsureRoot<AccountId>,
-		pallet_collective::EnsureProportionAtLeast<_3, _5, AccountId, CouncilCollective>,
+		pallet_collective::EnsureProportionAtLeast<AccountId, CouncilCollective, 3, 5>,
 	>;
 	type RejectOrigin = EnsureOneOf<
 		EnsureRoot<AccountId>,
-		pallet_collective::EnsureProportionMoreThan<_1, _2, AccountId, CouncilCollective>,
+		pallet_collective::EnsureProportionMoreThan<AccountId, CouncilCollective, 1, 2>,
 	>;
 	type Event = Event;
 	type OnSlash = ();
@@ -1149,7 +1222,7 @@ impl pallet_society::Config for Runtime {
 	type RotationPeriod = RotationPeriod;
 	type MaxLockDuration = MaxLockDuration;
 	type FounderSetOrigin =
-		pallet_collective::EnsureProportionMoreThan<_1, _2, AccountId, CouncilCollective>;
+		pallet_collective::EnsureProportionMoreThan<AccountId, CouncilCollective, 1, 2>;
 	type SuspensionJudgementOrigin = pallet_society::EnsureFounder<Runtime>;
 	type MaxCandidateIntake = MaxCandidateIntake;
 	type ChallengePeriod = ChallengePeriod;
@@ -1336,6 +1409,8 @@ construct_runtime!(
 		TransactionStorage: pallet_transaction_storage,
 		BagsList: pallet_bags_list,
 		ChildBounties: pallet_child_bounties,
+		Referenda: pallet_referenda,
+		ConvictionVoting: pallet_conviction_voting,
 	}
 );
 
@@ -1405,6 +1480,7 @@ mod benches {
 		[pallet_bounties, Bounties]
 		[pallet_child_bounties, ChildBounties]
 		[pallet_collective, Council]
+		[pallet_conviction_voting, ConvictionVoting]
 		[pallet_contracts, Contracts]
 		[pallet_democracy, Democracy]
 		[pallet_election_provider_multi_phase, ElectionProviderMultiPhase]
@@ -1421,6 +1497,7 @@ mod benches {
 		[pallet_offences, OffencesBench::<Runtime>]
 		[pallet_preimage, Preimage]
 		[pallet_proxy, Proxy]
+		[pallet_referenda, Referenda]
 		[pallet_scheduler, Scheduler]
 		[pallet_session, SessionBench::<Runtime>]
 		[pallet_staking, Staking]
