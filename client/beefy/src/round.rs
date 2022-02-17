@@ -29,18 +29,23 @@ use sp_runtime::traits::MaybeDisplay;
 
 #[derive(Default)]
 struct RoundTracker {
+	self_vote: bool,
 	votes: Vec<(Public, Signature)>,
 }
 
 impl RoundTracker {
-	fn add_vote(&mut self, vote: (Public, Signature)) -> bool {
-		// this needs to handle equivocations in the future
+	fn add_vote(&mut self, vote: (Public, Signature), self_vote: bool) -> bool {
 		if self.votes.contains(&vote) {
 			return false
 		}
 
+		self.self_vote = self.self_vote || self_vote;
 		self.votes.push(vote);
 		true
+	}
+
+	fn has_self_vote(&self) -> bool {
+		self.self_vote
 	}
 
 	fn is_done(&self, threshold: usize) -> bool {
@@ -86,9 +91,18 @@ where
 		&self.session_start
 	}
 
-	pub(crate) fn add_vote(&mut self, round: &(H, N), vote: (Public, Signature)) -> bool {
+	pub(crate) fn should_vote(&self, round: &(H, N)) -> bool {
+		self.rounds.get(round).map(|tracker| !tracker.has_self_vote()).unwrap_or(true)
+	}
+
+	pub(crate) fn add_vote(
+		&mut self,
+		round: &(H, N),
+		vote: (Public, Signature),
+		self_vote: bool,
+	) -> bool {
 		if self.validator_set.validators().iter().any(|id| vote.0 == *id) {
-			self.rounds.entry(round.clone()).or_default().add_vote(vote)
+			self.rounds.entry(round.clone()).or_default().add_vote(vote, self_vote)
 		} else {
 			false
 		}

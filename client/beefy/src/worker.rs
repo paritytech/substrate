@@ -91,8 +91,6 @@ where
 	beefy_best_block_sender: BeefyBestBlockSender<B>,
 	/// Validator set id for the last signed commitment
 	last_signed_id: u64,
-	/// Block number last voted on.
-	last_voted_on: Option<NumberFor<B>>,
 	waker_rx: mpsc::Receiver<()>,
 	waker_tx: mpsc::Sender<()>,
 	// keep rustc happy
@@ -146,7 +144,6 @@ where
 			best_grandpa_block_header: last_finalized_header,
 			best_beefy_block: None,
 			last_signed_id: 0,
-			last_voted_on: None,
 			beefy_best_block_sender,
 			waker_rx,
 			waker_tx,
@@ -164,31 +161,31 @@ where
 {
 	/// Return `Some(number)` if we should be voting on block `number` now,
 	/// return `None` if there is no block we should vote on now.
-	fn current_vote_target(&self, session_start: NumberFor<B>) -> Option<NumberFor<B>> {
+	fn current_vote_target(&self) -> Option<NumberFor<B>> {
+		let rounds = if let Some(r) = &self.rounds {
+			r
+		} else {
+			error!(target: "beefy", "🥩 No voting round started");
+			return None
+		};
+
 		let best_finalized = *self.best_grandpa_block_header.number();
 		let target = vote_target(
 			best_finalized,
 			self.best_beefy_block.unwrap_or(0u32.into()),
-			session_start,
+			*rounds.session_start(),
 			self.min_block_delta,
 		);
 		metric_set!(self, beefy_should_vote_on, target);
 
 		trace!(target: "beefy", "🥩 best finalized: #{:?}, next_block_to_vote_on: #{:?}", best_finalized, target);
 
-		// Don't vote multiple times or for older targets.
-		if let Some(last) = self.last_voted_on {
-			if target <= last {
-				return None
-			}
-		}
 		// Don't vote for targets until they've been finalized.
 		if target > best_finalized {
-			return None
+			None
+		} else {
+			Some(target)
 		}
-
-		// Vote for `target`.
-		Some(target)
 	}
 
 	/// Return the current active validator set at header `header`.
@@ -247,7 +244,12 @@ where
 		let _ = self.waker_tx.try_send(());
 	}
 
-	fn handle_vote(&mut self, round: (Payload, NumberFor<B>), vote: (Public, Signature)) {
+	fn handle_vote(
+		&mut self,
+		round: (Payload, NumberFor<B>),
+		vote: (Public, Signature),
+		self_vote: bool,
+	) {
 		self.gossip_validator.note_round(round.1);
 
 		let rounds = if let Some(rounds) = self.rounds.as_mut() {
@@ -257,7 +259,7 @@ where
 			return
 		};
 
-		let vote_added = rounds.add_vote(&round, vote);
+		let vote_added = rounds.add_vote(&round, vote, self_vote);
 
 		if vote_added && rounds.is_done(&round) {
 			if let Some(signatures) = rounds.drop(&round) {
@@ -415,15 +417,32 @@ where
 		warn!(target: "beefy", "🥩 TICK...");
 
 		// TODO: provide best grandpa as
-		let session_start = self.handle_session_change();
+		let _session_start = self.handle_session_change();
 
-		if let Some(target_number) = self.current_vote_target(session_start) {
+		if let Some(target_number) = self.current_vote_target() {
 			// Do vote.
 
 			// TODO: it's not always best grandpa - get it from `Client` when it isn't.
 			// let target_header = get_from_num(target_number);
 			let target_header = self.best_grandpa_block_header.clone();
 			let target_hash = target_header.hash();
+
+			let mmr_root = if let Some(hash) = find_mmr_root_digest::<B, Public>(&target_header) {
+				hash
+			} else {
+				warn!(target: "beefy", "🥩 No MMR root digest found for: {:?}", target_hash);
+				return
+			};
+			let payload = Payload::new(known_payload_ids::MMR_ROOT_ID, mmr_root.encode());
+
+			// Don't double vote (same payload and number).
+			// NOTE: we could shortcircuit much earlier if we'd only check for block number (not
+			// also payload)...
+			if let Some(rounds) = &self.rounds {
+				if !rounds.should_vote(&(payload.clone(), target_number)) {
+					return
+				}
+			};
 
 			let (validators, validator_set_id) = if let Some(rounds) = &self.rounds {
 				(rounds.validators(), rounds.validator_set_id())
@@ -439,14 +458,6 @@ where
 				return
 			};
 
-			let mmr_root = if let Some(hash) = find_mmr_root_digest::<B, Public>(&target_header) {
-				hash
-			} else {
-				warn!(target: "beefy", "🥩 No MMR root digest found for: {:?}", target_hash);
-				return
-			};
-
-			let payload = Payload::new(known_payload_ids::MMR_ROOT_ID, mmr_root.encode());
 			let commitment = Commitment { payload, block_number: target_number, validator_set_id };
 			let encoded_commitment = commitment.encode();
 
@@ -472,18 +483,11 @@ where
 			metric_inc!(self, beefy_votes_sent);
 
 			debug!(target: "beefy", "🥩 Sent vote message: {:?}", message);
-			self.last_voted_on = Some(target_number);
-
-			// TODO: remove this when handling multiple votes:
-			// if let Some(rounds) = self.rounds.as_mut() {
-			// 	if let Some(r) = rounds.active_round.as_mut() {
-
-			// 	}
-			// }
 
 			self.handle_vote(
 				(message.commitment.payload, message.commitment.block_number),
 				(message.id, message.signature),
+				true,
 			);
 
 			self.gossip_engine.lock().gossip_message(topic::<B>(), encoded_message, false);
@@ -519,6 +523,7 @@ where
 						self.handle_vote(
 							(vote.commitment.payload, vote.commitment.block_number),
 							(vote.id, vote.signature),
+							false
 						);
 					} else {
 						return;
@@ -579,7 +584,7 @@ where
 	header.digest().convert_first(|l| l.try_to(id).and_then(filter))
 }
 
-/// Calculate next block number to vote on
+/// Calculate next block number to vote on.
 fn vote_target<N>(best_grandpa: N, best_beefy: N, session_start: N, min_delta: u32) -> N
 where
 	N: AtLeast32Bit + Copy + Debug,
