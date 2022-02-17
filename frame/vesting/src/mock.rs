@@ -93,7 +93,7 @@ impl Config for Test {
 	type BlockNumberToBalance = Identity;
 	type Currency = Balances;
 	type Event = Event;
-	const MAX_VESTING_SCHEDULES: u32 = 3;
+	type MaxVestingSchedules = ConstU32<3>;
 	type MinVestedTransfer = MinVestedTransfer;
 	type WeightInfo = ();
 }

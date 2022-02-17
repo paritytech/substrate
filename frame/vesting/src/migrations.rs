@@ -44,10 +44,7 @@ pub mod v1 {
 			|_key, vesting_info| {
 				reads_writes += 1;
 				let v: Option<
-					BoundedVec<
-						VestingInfo<BalanceOf<T>, T::BlockNumber>,
-						MaxVestingSchedulesGet<T>,
-					>,
+					BoundedVec<VestingInfo<BalanceOf<T>, T::BlockNumber>, T::MaxVestingSchedules>,
 				> = vec![vesting_info].try_into().ok();
 
 				if v.is_none() {
