@@ -12,7 +12,6 @@ members = [
 	"bin/node/rpc",
 	"bin/node/runtime",
 	"bin/node/testing",
-	#"bin/utils/chain-spec-builder",
 	"bin/utils/subkey",
 	"client/api",
 	"client/authority-discovery",
@@ -277,7 +276,6 @@ zeroize = { opt-level = 3 }
 
 [profile.release]
 panic = "abort"
-#lto= "off"
 incremental = true
 
 [profile.production]

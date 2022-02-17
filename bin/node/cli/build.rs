@@ -32,7 +32,6 @@ fn build_runtime() {
 		.with_project(path.canonicalize().unwrap()).unwrap()
 		.export_heap_base()
 		.import_memory()
-		.enable_feature("runtime-benchmarks")
 		.build()
 }
 
