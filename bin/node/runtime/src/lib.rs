@@ -790,8 +790,8 @@ impl pallet_democracy::Config for Runtime {
 	type VotingPeriod = VotingPeriod;
 	type VoteLockingPeriod = EnactmentPeriod; // Same as EnactmentPeriod
 	type MinimumDeposit = MinimumDeposit;
-    /// A member of council may promote any public proposal once.
-    type PromotionOrigin = pallet_collective::EnsureMember<AccountId, CouncilCollective>;
+	/// A member of council may promote any public proposal once.
+	type PromotionOrigin = pallet_collective::EnsureMember<AccountId, CouncilCollective>;
 	/// A straight majority of the council can decide what their next motion is.
 	type ExternalOrigin =
 		pallet_collective::EnsureProportionAtLeast<AccountId, CouncilCollective, 1, 2>;

@@ -76,14 +76,20 @@ fn poor_proposer_should_not_work() {
 
 #[test]
 fn promote_public_proposal_should_work() {
-    new_test_ext().execute_with(|| {
-        System::set_block_number(0);
-        let hash = set_balance_proposal_hash(2);
-        assert_ok!(propose_set_balance_and_note(1, 2, 4));
-        assert_ok!(Democracy::promote(Origin::signed(2), hash));
-        assert_noop!(Democracy::promote(Origin::signed(2), set_balance_proposal_hash(10)), Error::<Test>::ProposalMissing);
-        assert_noop!(Democracy::promote(Origin::signed(2), set_balance_proposal_hash(2)), Error::<Test>::AlreadyPromoted);
-    });
+	new_test_ext().execute_with(|| {
+		System::set_block_number(0);
+		let hash = set_balance_proposal_hash(2);
+		assert_ok!(propose_set_balance_and_note(1, 2, 4));
+		assert_ok!(Democracy::promote(Origin::signed(2), hash));
+		assert_noop!(
+			Democracy::promote(Origin::signed(2), set_balance_proposal_hash(10)),
+			Error::<Test>::ProposalMissing
+		);
+		assert_noop!(
+			Democracy::promote(Origin::signed(2), set_balance_proposal_hash(2)),
+			Error::<Test>::AlreadyPromoted
+		);
+	});
 }
 
 #[test]
@@ -99,8 +105,14 @@ fn public_to_external_works() {
 #[test]
 fn public_to_external_should_not_work() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Democracy::external_propose_majority(Origin::signed(3), set_balance_proposal_hash_and_note(2)));
-		assert_noop!(Democracy::public_to_external(Origin::signed(2)), Error::<Test>::DuplicateProposal);
+		assert_ok!(Democracy::external_propose_majority(
+			Origin::signed(3),
+			set_balance_proposal_hash_and_note(2)
+		));
+		assert_noop!(
+			Democracy::public_to_external(Origin::signed(2)),
+			Error::<Test>::DuplicateProposal
+		);
 	})
 }
 

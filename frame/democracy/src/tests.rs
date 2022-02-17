@@ -165,7 +165,7 @@ impl Config for Test {
 	type VoteLockingPeriod = ConstU64<3>;
 	type FastTrackVotingPeriod = ConstU64<2>;
 	type MinimumDeposit = ConstU64<1>;
-    type PromotionOrigin = EnsureSignedBy<Two, u64>;
+	type PromotionOrigin = EnsureSignedBy<Two, u64>;
 	type ExternalOrigin = EnsureSignedBy<Two, u64>;
 	type ExternalMajorityOrigin = EnsureSignedBy<Three, u64>;
 	type ExternalDefaultOrigin = EnsureSignedBy<One, u64>;
