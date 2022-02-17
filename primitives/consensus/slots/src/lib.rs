@@ -94,6 +94,30 @@ impl From<Slot> for u64 {
 	}
 }
 
+/// A slot duration defined in milliseconds.
+#[derive(Clone, Copy, Debug, Encode, Decode, Hash, PartialOrd, Ord, PartialEq, Eq, TypeInfo)]
+pub struct SlotDuration(u64);
+
+impl SlotDuration {
+	/// Initialize from the given milliseconds.
+	pub fn from_millis(millis: u64) -> Self {
+		SlotDuration(millis)
+	}
+}
+
+#[cfg(feature = "std")]
+impl SlotDuration {
+	/// Returns `self` as [`std::time::Duration`].
+	pub fn as_duration(&self) -> std::time::Duration {
+		std::time::Duration::from_millis(self.0)
+	}
+
+	/// Returns `self` as a `u128` representing the duration in milliseconds.
+	pub fn as_millis(&self) -> u128 {
+		self.0 as u128
+	}
+}
+
 /// Represents an equivocation proof. An equivocation happens when a validator
 /// produces more than one block on the same slot. The proof of equivocation
 /// are the given distinct headers that were signed by the validator and which

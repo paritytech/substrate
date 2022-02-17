@@ -77,13 +77,10 @@ pub use sp_consensus::SyncOracle;
 pub use sp_consensus_aura::{
 	digests::CompatibleDigestItem,
 	inherents::{InherentDataProvider, InherentType as AuraInherent, INHERENT_IDENTIFIER},
-	AuraApi, ConsensusLog, AURA_ENGINE_ID,
+	AuraApi, ConsensusLog, SlotDuration, AURA_ENGINE_ID,
 };
 
 type AuthorityId<P> = <P as Pair>::Public;
-
-/// Slot duration type for Aura.
-pub type SlotDuration = sc_consensus_slots::SlotDuration<sp_consensus_aura::SlotDuration>;
 
 /// Get the slot duration for Aura.
 pub fn slot_duration<A, B, C>(client: &C) -> CResult<SlotDuration>
@@ -94,9 +91,7 @@ where
 	C::Api: AuraApi<B, A>,
 {
 	let best_block_id = BlockId::Hash(client.usage_info().chain.best_hash);
-	let slot_duration = client.runtime_api().slot_duration(&best_block_id)?;
-
-	Ok(SlotDuration::new(slot_duration))
+	client.runtime_api().slot_duration(&best_block_id).map_err(|err| err.into())
 }
 
 /// Get slot author for given block along with authorities.
@@ -574,7 +569,7 @@ mod tests {
 	use sc_network_test::{Block as TestBlock, *};
 	use sp_application_crypto::key_types::AURA;
 	use sp_consensus::{
-		AlwaysCanAuthor, DisableProofRecording, NoNetwork as DummyOracle, Proposal, SlotData,
+		AlwaysCanAuthor, DisableProofRecording, NoNetwork as DummyOracle, Proposal,
 	};
 	use sp_consensus_aura::sr25519::AuthorityPair;
 	use sp_inherents::InherentData;
