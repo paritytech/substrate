@@ -26,7 +26,6 @@ use sc_executor::Externalities;
 use serde::{Deserialize, Serialize};
 use serde_json as json;
 use sp_core::{
-	traits::CodeExecutor,
 	storage::{ChildInfo, Storage, StorageChild, StorageData, StorageKey, well_known_keys},
 	Bytes,
 };
@@ -107,20 +106,14 @@ impl<G: RuntimeGenesis> GenesisSource<G> {
 			Self::Storage(storage) => Ok(Self::from_storage(storage)),
 			Self::Runtime { code, method } => {
 				let mut ext = sp_state_machine::BasicExternalities::default();
-				let code_fetcher = sp_core::traits::WrappedRuntimeCode((*code).into());
-				let runtime_code = sp_core::traits::RuntimeCode {
-					code_fetcher: &code_fetcher,
-					heap_pages: None,
-					hash: Default::default(),
-				};
+				let runtime_code = sc_executor::RuntimeBlob::uncompress_if_needed(code)
+					.map_err(|e| format!("Error loading runtime code: {}", e))?;
 				let executor = sc_executor::DefaultExecutor::new(
 					sc_executor::WasmExecutionMethod::Interpreted, None, 1, None, 1
 				);
 
-				let (r, _) = executor.call::<(), fn() -> Result<(), _>>(&mut ext, &runtime_code, method, &[], false, None);
-				if let Err(e) = r {
-					return Err(format!("Error building genesis with {}: {}", method, e));
-				}
+				executor.uncached_call(runtime_code, &mut ext, true, method, &[])
+					.map_err(|e| format!("Error building genesis with {}: {}", method, e))?;
 
 				ext.set_storage(well_known_keys::CODE.to_vec(), code.to_vec());
 				let storage = ext.into_storages();

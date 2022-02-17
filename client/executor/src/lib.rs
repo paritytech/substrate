@@ -49,7 +49,7 @@ pub use sp_wasm_interface;
 pub use wasm_runtime::{read_embedded_version, WasmExecutionMethod};
 pub use wasmi;
 
-pub use sc_executor_common::{error, sandbox};
+pub use sc_executor_common::{error, sandbox, runtime_blob::RuntimeBlob};
 
 /// Default WASM executor with substrate host function set.
 pub type DefaultExecutor = WasmExecutor<sp_wasm_interface::ExtendedHostFunctions<sp_io::SubstrateHostFunctions, ()>>;
