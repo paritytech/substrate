@@ -616,6 +616,8 @@ pub mod pallet {
 		MaxVotesReached,
 		/// Maximum number of proposals reached.
 		TooManyProposals,
+		/// Maximum number of promoters reached
+		PromoterMax,
 	}
 
 	#[pallet::hooks]
@@ -1301,14 +1303,6 @@ pub mod pallet {
 				.iter()
 				.position(|p| p.1 == proposal_hash)
 				.ok_or_else(|| Error::<T>::ProposalMissing)?;
-			/*
-						let promoted_by = <Promoted<T>>::get(&proposal_hash).unwrap_or_else(BoundedVec::default);
-						let insert_positions =
-							promoted_by.binary_search(&who).err().ok_or(Error::<T>::AlreadyPromoted)?;
-						promoted_by.insert(insert_positions, who.clone());
-						<Promoted<T>>::insert(&proposal_hash, promoted_by);
-						Self::deposit_event(Event::<T>::PromotedBy { proposal_hash, who });
-			*/
 
 			let mut promoted_by =
 				Promoted::<T>::get(&proposal_hash).unwrap_or_else(BoundedVec::default);
@@ -1316,7 +1310,7 @@ pub mod pallet {
 			if promoted_by.try_push(who.clone()).is_ok() {
 				<Promoted<T>>::insert(&proposal_hash, promoted_by);
 			} else {
-				return Err(Error::<T>::ProposalMissing.into())
+				return Err(Error::<T>::PromoterMax.into())
 			}
 			Self::deposit_event(Event::<T>::PromotedBy { proposal_hash, who });
 
