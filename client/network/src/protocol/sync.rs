@@ -176,7 +176,7 @@ impl AllowedRequests {
 	}
 
 	fn clear(&mut self) {
-		*self = Self::Some(Default::default())
+		std::mem::take(self);
 	}
 }
 
@@ -1045,10 +1045,7 @@ impl<B: BlockT> ChainSync<B> {
 	/// Get a warp sync request, if any.
 	pub fn warp_sync_request(&mut self) -> Option<(PeerId, WarpProofRequest<B>)> {
 		if let Some(sync) = &self.warp_sync {
-			if self.allowed_requests.is_empty() || sync.is_complete() {
-				return None
-			}
-			if self
+			if self.allowed_requests.is_empty() || sync.is_complete() || self
 				.peers
 				.iter()
 				.any(|(_, peer)| peer.state == PeerSyncState::DownloadingWarpProof)
