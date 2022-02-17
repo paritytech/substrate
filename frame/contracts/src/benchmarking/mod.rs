@@ -195,6 +195,47 @@ macro_rules! load_benchmark {
 	}};
 }
 
+// For security reasons `k256` authors decided to not directly expose the low-level
+// api for pre-hashed messages signature.
+// This is a convenience function to wrap the verbose procedure.
+// Refer to [this](https://github.com/RustCrypto/elliptic-curves/issues/525) issue
+// for some details.
+fn sign_prehashed(hash: [u8; 32]) -> [u8; 65] {
+	use ecdsa::{
+		elliptic_curve::{
+			generic_array::{typenum::U32, GenericArray},
+			ops::Reduce,
+		},
+		hazmat::{rfc6979_generate_k, SignPrimitive},
+		signature::PrehashSignature,
+	};
+	use k256::{
+		ecdsa::{Signature, SigningKey},
+		NonZeroScalar, Scalar, U256,
+	};
+
+	let signing_key = SigningKey::random(&mut rand::rngs::OsRng);
+
+	let hash_array: GenericArray<u8, U32> = GenericArray::from_slice(&hash).clone();
+	let hash_scalar = <Scalar as Reduce<U256>>::from_be_bytes_reduced(hash_array);
+
+	let priv_bytes = signing_key.to_bytes();
+	let priv_scalar = <NonZeroScalar as Reduce<U256>>::from_be_bytes_reduced(priv_bytes);
+
+	let k = rfc6979_generate_k::<_, <Signature as PrehashSignature>::Digest>(
+		&priv_scalar,
+		&hash_scalar,
+		&[],
+	);
+
+	let (sig, recid) = priv_scalar.try_sign_prehashed(**k, hash_scalar).unwrap();
+
+	let mut full_signature = [0; 65];
+	full_signature[..64].copy_from_slice(sig.as_ref());
+	full_signature[64] = recid.unwrap().to_byte();
+	full_signature
+}
+
 benchmarks! {
 	where_clause { where
 		T::AccountId: UncheckedFrom<T::Hash>,
@@ -1866,21 +1907,10 @@ benchmarks! {
 	// It generates different private keys and signatures for the message "Hello world".
 	seal_ecdsa_recover {
 		let r in 0 .. API_BENCHMARK_BATCHES;
-		use rand::SeedableRng;
-		let mut rng = rand_pcg::Pcg32::seed_from_u64(123456);
 
 		let message_hash = sp_io::hashing::blake2_256("Hello world".as_bytes());
 		let signatures = (0..r * API_BENCHMARK_BATCH_SIZE)
-			.map(|i| {
-				use libsecp256k1::{SecretKey, Message, sign};
-
-				let private_key = SecretKey::random(&mut rng);
-				let (signature, recovery_id) = sign(&Message::parse(&message_hash), &private_key);
-				let mut full_signature = [0; 65];
-				full_signature[..64].copy_from_slice(&signature.serialize());
-				full_signature[64] = recovery_id.serialize();
-				full_signature
-			})
+			.map(|i| sign_prehashed(message_hash))
 			.collect::<Vec<_>>();
 		let signatures = signatures.iter().flatten().cloned().collect::<Vec<_>>();
 		let signatures_bytes_len = signatures.len() as i32;
