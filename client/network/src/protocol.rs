@@ -465,10 +465,10 @@ impl<B: BlockT> Protocol<B> {
 		self.behaviour.open_peers()
 	}
 
-	/// Returns the list of all the peers that the peerset currently requests us to be connected
+	/// Returns the number of all the peers that the peerset currently requests us to be connected
 	/// to on the default set.
-	pub fn requested_peers(&self) -> impl Iterator<Item = &PeerId> {
-		self.behaviour.requested_peers(HARDCODED_PEERSETS_SYNC)
+	pub fn requested_peers_count(&self) -> usize {
+		self.behaviour.requested_peers_count(HARDCODED_PEERSETS_SYNC)
 	}
 
 	/// Returns the number of discovered nodes that we keep in memory.
