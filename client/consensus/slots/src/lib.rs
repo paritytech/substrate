@@ -789,7 +789,9 @@ where
 			return false
 		}
 
-		let unfinalized_block_length = chain_head_number - finalized_number;
+		// There can be race between getting the finalized number and getting the best number.
+		// So, better be safe than sorry.
+		let unfinalized_block_length = chain_head_number.saturating_sub(finalized_number);
 		let interval =
 			unfinalized_block_length.saturating_sub(self.unfinalized_slack) / self.authoring_bias;
 		let interval = interval.min(self.max_interval);
