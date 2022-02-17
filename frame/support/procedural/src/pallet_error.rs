@@ -16,6 +16,8 @@
 // limitations under the License.
 
 use frame_support_procedural_tools::generate_crate_access_2018;
+use quote::ToTokens;
+use std::str::FromStr;
 
 // Derive `PalletError`
 pub fn derive_pallet_error(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
@@ -24,6 +26,10 @@ pub fn derive_pallet_error(input: proc_macro::TokenStream) -> proc_macro::TokenS
 		Err(e) => return e.to_compile_error().into(),
 	};
 
+	let codec = match generate_crate_access_2018("parity-scale-codec") {
+		Ok(c) => c,
+		Err(e) => return e.into_compile_error().into(),
+	};
 	let frame_support = match generate_crate_access_2018("frame-support") {
 		Ok(c) => c,
 		Err(e) => return e.into_compile_error().into(),
@@ -33,22 +39,23 @@ pub fn derive_pallet_error(input: proc_macro::TokenStream) -> proc_macro::TokenS
 
 	let max_encoded_size = match data {
 		syn::Data::Struct(syn::DataStruct { fields, .. }) => match fields {
-			syn::Fields::Named(f) => {
-				let field_tys = f.named.iter().map(|field| &field.ty);
+			syn::Fields::Named(syn::FieldsNamed { named: fields, .. }) |
+			syn::Fields::Unnamed(syn::FieldsUnnamed { unnamed: fields, .. }) => {
+				let maybe_field_tys = fields
+					.iter()
+					.map(|f| generate_field_types(f, &codec))
+					.collect::<syn::Result<Vec<_>>>();
+				let field_tys = match maybe_field_tys {
+					Ok(tys) => tys.into_iter().flatten(),
+					Err(e) => return e.into_compile_error().into(),
+				};
 				quote::quote! {
 					0_usize
-					#(.saturating_add(<
-						#field_tys as #frame_support::traits::PalletError
-					>::MAX_ENCODED_SIZE))*
-				}
-			},
-			syn::Fields::Unnamed(f) => {
-				let field_tys = f.unnamed.iter().map(|field| &field.ty);
-				quote::quote! {
-					0_usize
-					#(.saturating_add(<
-						#field_tys as #frame_support::traits::PalletError
-					>::MAX_ENCODED_SIZE))*
+					#(
+						.saturating_add(<
+							#field_tys as #frame_support::traits::PalletError
+						>::MAX_ENCODED_SIZE)
+					)*
 				}
 			},
 			syn::Fields::Unit => quote::quote!(0),
@@ -56,14 +63,8 @@ pub fn derive_pallet_error(input: proc_macro::TokenStream) -> proc_macro::TokenS
 		syn::Data::Enum(syn::DataEnum { variants, .. }) => {
 			let field_tys = variants
 				.iter()
-				.map(|variant| match &variant.fields {
-					syn::Fields::Named(f) =>
-						Ok(Some(f.named.iter().map(|field| &field.ty).collect::<Vec<_>>())),
-					syn::Fields::Unnamed(f) =>
-						Ok(Some(f.unnamed.iter().map(|field| &field.ty).collect::<Vec<_>>())),
-					syn::Fields::Unit => Ok(None),
-				})
-				.collect::<Result<Vec<Option<Vec<&syn::Type>>>, syn::Error>>();
+				.map(|variant| generate_variant_field_types(variant, &codec))
+				.collect::<Result<Vec<Option<Vec<proc_macro2::TokenStream>>>, syn::Error>>();
 
 			let field_tys = match field_tys {
 				Ok(tys) => tys.into_iter().flatten().collect::<Vec<_>>(),
@@ -111,4 +112,90 @@ pub fn derive_pallet_error(input: proc_macro::TokenStream) -> proc_macro::TokenS
 		};
 	)
 	.into()
+}
+
+fn generate_field_types(
+	field: &syn::Field,
+	ccrate: &syn::Ident,
+) -> syn::Result<Option<proc_macro2::TokenStream>> {
+	let attrs = &field.attrs;
+
+	for attr in attrs {
+		if attr.path.is_ident("codec") {
+			match attr.parse_meta()? {
+				syn::Meta::List(ref meta_list) if meta_list.nested.len() == 1 => {
+					match meta_list
+						.nested
+						.first()
+						.expect("Just checked that there is one item; qed")
+					{
+						syn::NestedMeta::Meta(syn::Meta::Path(path))
+							if path.get_ident().map_or(false, |i| i == "skip") =>
+							return Ok(None),
+
+						syn::NestedMeta::Meta(syn::Meta::Path(path))
+							if path.get_ident().map_or(false, |i| i == "compact") =>
+						{
+							let field_ty = &field.ty;
+							return Ok(Some(quote::quote!(#ccrate::Compact<#field_ty>)))
+						},
+
+						syn::NestedMeta::Meta(syn::Meta::NameValue(syn::MetaNameValue {
+							path,
+							lit: syn::Lit::Str(lit_str),
+							..
+						})) if path.get_ident().map_or(false, |i| i == "encoded_as") => {
+							let ty = proc_macro2::TokenStream::from_str(&lit_str.value())?;
+							return Ok(Some(ty))
+						},
+
+						_ => (),
+					}
+				},
+				_ => (),
+			}
+		}
+	}
+
+	Ok(Some(field.ty.to_token_stream()))
+}
+
+fn generate_variant_field_types(
+	variant: &syn::Variant,
+	ccrate: &syn::Ident,
+) -> syn::Result<Option<Vec<proc_macro2::TokenStream>>> {
+	let attrs = &variant.attrs;
+
+	for attr in attrs {
+		if attr.path.is_ident("codec") {
+			match attr.parse_meta()? {
+				syn::Meta::List(ref meta_list) if meta_list.nested.len() == 1 => {
+					match meta_list
+						.nested
+						.first()
+						.expect("Just checked that there is one item; qed")
+					{
+						syn::NestedMeta::Meta(syn::Meta::Path(path))
+							if path.get_ident().map_or(false, |i| i == "skip") =>
+							return Ok(None),
+
+						_ => (),
+					}
+				},
+				_ => (),
+			}
+		}
+	}
+
+	match &variant.fields {
+		syn::Fields::Named(syn::FieldsNamed { named: fields, .. }) |
+		syn::Fields::Unnamed(syn::FieldsUnnamed { unnamed: fields, .. }) => {
+			let field_tys = fields
+				.iter()
+				.map(|field| generate_field_types(field, ccrate))
+				.collect::<syn::Result<Vec<_>>>()?;
+			Ok(Some(field_tys.into_iter().flatten().collect()))
+		},
+		syn::Fields::Unit => Ok(None),
+	}
 }

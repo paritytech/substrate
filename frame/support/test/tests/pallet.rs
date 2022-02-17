@@ -20,7 +20,7 @@ use frame_support::{
 	storage::unhashed,
 	traits::{
 		ConstU32, GetCallName, GetStorageVersion, OnFinalize, OnGenesis, OnInitialize,
-		OnRuntimeUpgrade, PalletInfoAccess, StorageVersion,
+		OnRuntimeUpgrade, PalletError, PalletInfoAccess, StorageVersion,
 	},
 	weights::{DispatchClass, DispatchInfo, GetDispatchInfo, Pays, RuntimeDbWeight},
 };
@@ -234,6 +234,9 @@ pub mod pallet {
 		/// doc comment put into metadata
 		InsufficientProposersBalance,
 		Code(u8),
+		#[codec(skip)]
+		Skipped(u128),
+		CompactU8(#[codec(compact)] u8),
 	}
 
 	#[pallet::event]
@@ -662,6 +665,7 @@ fn error_expand() {
 			message: Some("InsufficientProposersBalance")
 		}),
 	);
+	assert_eq!(<pallet::Error::<Runtime> as PalletError>::MAX_ENCODED_SIZE, 3);
 }
 
 #[test]

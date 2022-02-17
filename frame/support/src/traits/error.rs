@@ -16,7 +16,7 @@
 // limitations under the License.
 
 //! Traits for describing and constraining pallet error types.
-use codec::{Decode, Encode};
+use codec::{Compact, Decode, Encode};
 use sp_std::marker::PhantomData;
 
 /// Trait indicating that the implementing type is going to be included as a field in a variant of
@@ -50,12 +50,15 @@ macro_rules! impl_for_types {
 
 impl_for_types!(size: 0, (), crate::Never);
 impl_for_types!(size: 1, u8, i8, bool);
-impl_for_types!(size: 2, u16, i16);
-impl_for_types!(size: 4, u32, i32);
+impl_for_types!(size: 2, u16, i16, Compact<u8>);
+impl_for_types!(size: 4, u32, i32, Compact<u16>);
+impl_for_types!(size: 5, Compact<u32>);
 impl_for_types!(size: 8, u64, i64);
+impl_for_types!(size: 9, Compact<u64>);
 // Contains a u64 for secs and u32 for nanos, hence 12 bytes
 impl_for_types!(size: 12, core::time::Duration);
 impl_for_types!(size: 16, u128, i128);
+impl_for_types!(size: 17, Compact<u128>);
 
 impl<T> PalletError for PhantomData<T> {
 	const MAX_ENCODED_SIZE: usize = 0;
