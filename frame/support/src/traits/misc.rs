@@ -27,9 +27,39 @@ use sp_std::{cmp::Ordering, prelude::*};
 const DEFENSIVE_OP_PUBLIC_ERROR: &'static str = "a defensive failure has been triggered; please report the block number at https://github.com/paritytech/substrate/issues";
 const DEFENSIVE_OP_INTERNAL_ERROR: &'static str = "Defensive failure has been triggered!";
 
+macro_rules! defensive_without_err {
+	() => {
+		frame_support::log::error!(
+			target: "runtime",
+			"{}",
+			DEFENSIVE_OP_PUBLIC_ERROR
+		);
+		debug_assert!(false, "{}", DEFENSIVE_OP_INTERNAL_ERROR);
+	}
+}
+
+macro_rules! defensive_with_err {
+	($err:expr) => {
+		frame_support::log::error!(
+			target: "runtime",
+			"{}: {:?}",
+			DEFENSIVE_OP_PUBLIC_ERROR,
+			$err
+		);
+		debug_assert!(false, "{}: {:?}", DEFENSIVE_OP_INTERNAL_ERROR, $err);
+	}
+}
+
+/// Generic function to mark an execution path as ONLY defensive.
+///
+/// Similar to mark a match arm or `if/else` branch as `unreachable!`.
+pub fn defensive_path(proof: &'static str) {
+	defensive_with_err!(proof);
+}
+
 /// Prelude module for all defensive traits to be imported at once.
 pub mod defensive_prelude {
-	pub use super::{Defensive, DefensiveOption, DefensiveResult};
+	pub use super::{defensive_path, Defensive, DefensiveOption, DefensiveResult};
 }
 
 /// A trait to handle errors and options when you are really sure that a condition must hold, but
@@ -116,12 +146,7 @@ impl<T> Defensive<T> for Option<T> {
 		match self {
 			Some(inner) => inner,
 			None => {
-				debug_assert!(false, "{}", DEFENSIVE_OP_INTERNAL_ERROR);
-				frame_support::log::error!(
-					target: "runtime",
-					"{}",
-					DEFENSIVE_OP_PUBLIC_ERROR
-				);
+				defensive_without_err!();
 				or
 			},
 		}
@@ -131,12 +156,7 @@ impl<T> Defensive<T> for Option<T> {
 		match self {
 			Some(inner) => inner,
 			None => {
-				debug_assert!(false, "{}", DEFENSIVE_OP_INTERNAL_ERROR);
-				frame_support::log::error!(
-					target: "runtime",
-					"{}",
-					DEFENSIVE_OP_PUBLIC_ERROR
-				);
+				defensive_without_err!();
 				f()
 			},
 		}
@@ -149,12 +169,7 @@ impl<T> Defensive<T> for Option<T> {
 		match self {
 			Some(inner) => inner,
 			None => {
-				debug_assert!(false, "{}", DEFENSIVE_OP_INTERNAL_ERROR);
-				frame_support::log::error!(
-					target: "runtime",
-					"{}",
-					DEFENSIVE_OP_PUBLIC_ERROR
-				);
+				defensive_without_err!();
 				Default::default()
 			},
 		}
@@ -164,12 +179,7 @@ impl<T> Defensive<T> for Option<T> {
 		match self {
 			Some(inner) => Some(inner),
 			None => {
-				debug_assert!(false, "{}", DEFENSIVE_OP_INTERNAL_ERROR);
-				frame_support::log::error!(
-					target: "runtime",
-					"{}",
-					DEFENSIVE_OP_PUBLIC_ERROR
-				);
+				defensive_without_err!();
 				None
 			},
 		}
@@ -181,13 +191,7 @@ impl<T, E: sp_std::fmt::Debug> Defensive<T> for Result<T, E> {
 		match self {
 			Ok(inner) => inner,
 			Err(e) => {
-				debug_assert!(false, "{}: {:?}", DEFENSIVE_OP_INTERNAL_ERROR, e);
-				frame_support::log::error!(
-					target: "runtime",
-					"{}: {:?}",
-					DEFENSIVE_OP_PUBLIC_ERROR,
-					e
-				);
+				defensive_with_err!(e);
 				or
 			},
 		}
@@ -197,13 +201,7 @@ impl<T, E: sp_std::fmt::Debug> Defensive<T> for Result<T, E> {
 		match self {
 			Ok(inner) => inner,
 			Err(e) => {
-				debug_assert!(false, "{}: {:?}", DEFENSIVE_OP_INTERNAL_ERROR, e);
-				frame_support::log::error!(
-					target: "runtime",
-					"{}: {:?}",
-					DEFENSIVE_OP_PUBLIC_ERROR,
-					e
-				);
+				defensive_with_err!(e);
 				f()
 			},
 		}
@@ -216,13 +214,7 @@ impl<T, E: sp_std::fmt::Debug> Defensive<T> for Result<T, E> {
 		match self {
 			Ok(inner) => inner,
 			Err(e) => {
-				debug_assert!(false, "{}: {:?}", DEFENSIVE_OP_INTERNAL_ERROR, e);
-				frame_support::log::error!(
-					target: "runtime",
-					"{}: {:?}",
-					DEFENSIVE_OP_PUBLIC_ERROR,
-					e
-				);
+				defensive_with_err!(e);
 				Default::default()
 			},
 		}
@@ -232,13 +224,7 @@ impl<T, E: sp_std::fmt::Debug> Defensive<T> for Result<T, E> {
 		match self {
 			Ok(inner) => Ok(inner),
 			Err(e) => {
-				debug_assert!(false, "{}: {:?}", DEFENSIVE_OP_INTERNAL_ERROR, e);
-				frame_support::log::error!(
-					target: "runtime",
-					"{}: {:?}",
-					DEFENSIVE_OP_PUBLIC_ERROR,
-					e
-				);
+				defensive_with_err!(e);
 				Err(e)
 			},
 		}
@@ -248,13 +234,7 @@ impl<T, E: sp_std::fmt::Debug> Defensive<T> for Result<T, E> {
 impl<T, E: sp_std::fmt::Debug> DefensiveResult<T, E> for Result<T, E> {
 	fn defensive_map_err<F, O: FnOnce(E) -> F>(self, o: O) -> Result<T, F> {
 		self.map_err(|e| {
-			debug_assert!(false, "{}: {:?}", DEFENSIVE_OP_INTERNAL_ERROR, e);
-			frame_support::log::error!(
-				target: "runtime",
-				"{}: {:?}",
-				DEFENSIVE_OP_PUBLIC_ERROR,
-				e
-			);
+			defensive_with_err!(e);
 			o(e)
 		})
 	}
@@ -262,13 +242,7 @@ impl<T, E: sp_std::fmt::Debug> DefensiveResult<T, E> for Result<T, E> {
 	fn defensive_map_or_else<U, D: FnOnce(E) -> U, F: FnOnce(T) -> U>(self, default: D, f: F) -> U {
 		self.map_or_else(
 			|e| {
-				debug_assert!(false, "{}: {:?}", DEFENSIVE_OP_INTERNAL_ERROR, e);
-				frame_support::log::error!(
-					target: "runtime",
-					"{}: {:?}",
-					DEFENSIVE_OP_PUBLIC_ERROR,
-					e
-				);
+				defensive_with_err!(e);
 				default(e)
 			},
 			f,
@@ -279,13 +253,7 @@ impl<T, E: sp_std::fmt::Debug> DefensiveResult<T, E> for Result<T, E> {
 		match self {
 			Ok(inner) => Some(inner),
 			Err(e) => {
-				debug_assert!(false, "{}: {:?}", DEFENSIVE_OP_INTERNAL_ERROR, e);
-				frame_support::log::error!(
-					target: "runtime",
-					"{}: {:?}",
-					DEFENSIVE_OP_PUBLIC_ERROR,
-					e
-				);
+				defensive_with_err!(e);
 				None
 			},
 		}
@@ -295,13 +263,7 @@ impl<T, E: sp_std::fmt::Debug> DefensiveResult<T, E> for Result<T, E> {
 		match self {
 			Ok(inner) => Ok(f(inner)),
 			Err(e) => {
-				debug_assert!(false, "{}: {:?}", DEFENSIVE_OP_INTERNAL_ERROR, e);
-				frame_support::log::error!(
-					target: "runtime",
-					"{}: {:?}",
-					DEFENSIVE_OP_PUBLIC_ERROR,
-					e
-				);
+				defensive_with_err!(e);
 				Err(e)
 			},
 		}
@@ -312,12 +274,7 @@ impl<T> DefensiveOption<T> for Option<T> {
 	fn defensive_map_or_else<U, D: FnOnce() -> U, F: FnOnce(T) -> U>(self, default: D, f: F) -> U {
 		self.map_or_else(
 			|| {
-				debug_assert!(false, "{}", DEFENSIVE_OP_INTERNAL_ERROR);
-				frame_support::log::error!(
-					target: "runtime",
-					"{}",
-					DEFENSIVE_OP_PUBLIC_ERROR,
-				);
+				defensive_without_err!();
 				default()
 			},
 			f,
@@ -326,12 +283,7 @@ impl<T> DefensiveOption<T> for Option<T> {
 
 	fn defensive_ok_or_else<E, F: FnOnce() -> E>(self, err: F) -> Result<T, E> {
 		self.ok_or_else(|| {
-			debug_assert!(false, "{}", DEFENSIVE_OP_INTERNAL_ERROR);
-			frame_support::log::error!(
-				target: "runtime",
-				"{}",
-				DEFENSIVE_OP_PUBLIC_ERROR,
-			);
+			defensive_without_err!();
 			err()
 		})
 	}
@@ -340,12 +292,7 @@ impl<T> DefensiveOption<T> for Option<T> {
 		match self {
 			Some(inner) => Some(f(inner)),
 			None => {
-				debug_assert!(false, "{}", DEFENSIVE_OP_INTERNAL_ERROR);
-				frame_support::log::error!(
-					target: "runtime",
-					"{}",
-					DEFENSIVE_OP_PUBLIC_ERROR,
-				);
+				defensive_without_err!();
 				None
 			},
 		}
