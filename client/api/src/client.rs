@@ -99,10 +99,10 @@ pub type OnFinalityAction<Block> =
 /// finality operation.
 pub trait PreCommitActions<Block: BlockT> {
 	/// Actions to be performed on block import.
-	fn import_action_register(&self, op: OnImportAction<Block>);
+	fn register_import_action(&self, op: OnImportAction<Block>);
 
-	/// Actions be performed on block finalization.
-	fn finality_action_register(&self, op: OnFinalityAction<Block>);
+	/// Actions to be performed on block finalization.
+	fn register_finality_action(&self, op: OnFinalityAction<Block>);
 }
 
 /// Interface for fetching block data.

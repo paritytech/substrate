@@ -506,7 +506,7 @@ where
 	let on_finality = move |summary: &FinalityNotification<B>| {
 		aux_storage_cleanup(client_clone.as_ref(), summary)
 	};
-	client.finality_action_register(Box::new(on_finality));
+	client.register_finality_action(Box::new(on_finality));
 
 	let worker = BabeSlotWorker {
 		client: client.clone(),

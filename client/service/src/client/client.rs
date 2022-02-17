@@ -1918,11 +1918,11 @@ impl<B, E, Block, RA> PreCommitActions<Block> for Client<B, E, Block, RA>
 where
 	Block: BlockT,
 {
-	fn import_action_register(&self, action: OnImportAction<Block>) {
+	fn register_import_action(&self, action: OnImportAction<Block>) {
 		self.import_actions.lock().push(action);
 	}
 
-	fn finality_action_register(&self, action: OnFinalityAction<Block>) {
+	fn register_finality_action(&self, action: OnFinalityAction<Block>) {
 		self.finality_actions.lock().push(action);
 	}
 }

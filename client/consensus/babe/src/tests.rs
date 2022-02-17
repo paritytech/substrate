@@ -911,7 +911,7 @@ fn obsolete_blocks_aux_data_cleanup() {
 	let on_finality = move |summary: &FinalityNotification<TestBlock>| {
 		aux_storage_cleanup(client_clone.as_ref(), summary)
 	};
-	client.finality_action_register(Box::new(on_finality));
+	client.register_finality_action(Box::new(on_finality));
 
 	let mut proposer_factory = DummyFactory {
 		client: client.clone(),
