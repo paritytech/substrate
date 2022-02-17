@@ -21,7 +21,7 @@
 
 use sp_inherents::{CheckInherentsResult, InherentData};
 use sp_runtime::{
-	legacy::before_v6::ApplyExtrinsicResult as ApplyExtrinsicResultBeforeV6,
+	legacy::byte_sized_error::ApplyExtrinsicResult as ApplyExtrinsicResultBeforeV6,
 	traits::Block as BlockT, ApplyExtrinsicResult,
 };
 

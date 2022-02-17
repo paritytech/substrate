@@ -17,4 +17,4 @@
 
 //! Runtime types that existed in old API versions.
 
-pub mod before_v6;
+pub mod byte_sized_error;
