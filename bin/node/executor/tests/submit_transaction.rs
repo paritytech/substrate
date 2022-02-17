@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,6 +20,7 @@ use frame_system::offchain::{SendSignedTransaction, Signer, SubmitTransaction};
 use node_runtime::{Executive, Indices, Runtime, UncheckedExtrinsic};
 use sp_application_crypto::AppKey;
 use sp_core::offchain::{testing::TestTransactionPoolExt, TransactionPoolExt};
+use sp_keyring::sr25519::Keyring::Alice;
 use sp_keystore::{testing::KeyStore, KeystoreExt, SyncCryptoStore};
 use std::sync::Arc;
 
@@ -28,12 +29,13 @@ use self::common::*;
 
 #[test]
 fn should_submit_unsigned_transaction() {
-	let mut t = new_test_ext(compact_code_unwrap(), false);
+	let mut t = new_test_ext(compact_code_unwrap());
 	let (pool, state) = TestTransactionPoolExt::new();
 	t.register_extension(TransactionPoolExt::new(pool));
 
 	t.execute_with(|| {
-		let signature = Default::default();
+		let signature =
+			pallet_im_online::sr25519::AuthoritySignature::try_from(vec![0; 64]).unwrap();
 		let heartbeat_data = pallet_im_online::Heartbeat {
 			block_number: 1,
 			network_state: Default::default(),
@@ -56,7 +58,7 @@ const PHRASE: &str = "news slush supreme milk chapter athlete soap sausage put c
 
 #[test]
 fn should_submit_signed_transaction() {
-	let mut t = new_test_ext(compact_code_unwrap(), false);
+	let mut t = new_test_ext(compact_code_unwrap());
 	let (pool, state) = TestTransactionPoolExt::new();
 	t.register_extension(TransactionPoolExt::new(pool));
 
@@ -85,7 +87,7 @@ fn should_submit_signed_transaction() {
 		let results =
 			Signer::<Runtime, TestAuthorityId>::all_accounts().send_signed_transaction(|_| {
 				pallet_balances::Call::transfer {
-					dest: Default::default(),
+					dest: Alice.to_account_id().into(),
 					value: Default::default(),
 				}
 			});
@@ -99,7 +101,7 @@ fn should_submit_signed_transaction() {
 
 #[test]
 fn should_submit_signed_twice_from_the_same_account() {
-	let mut t = new_test_ext(compact_code_unwrap(), false);
+	let mut t = new_test_ext(compact_code_unwrap());
 	let (pool, state) = TestTransactionPoolExt::new();
 	t.register_extension(TransactionPoolExt::new(pool));
 
@@ -122,7 +124,7 @@ fn should_submit_signed_twice_from_the_same_account() {
 		let result =
 			Signer::<Runtime, TestAuthorityId>::any_account().send_signed_transaction(|_| {
 				pallet_balances::Call::transfer {
-					dest: Default::default(),
+					dest: Alice.to_account_id().into(),
 					value: Default::default(),
 				}
 			});
@@ -134,7 +136,7 @@ fn should_submit_signed_twice_from_the_same_account() {
 		let result =
 			Signer::<Runtime, TestAuthorityId>::any_account().send_signed_transaction(|_| {
 				pallet_balances::Call::transfer {
-					dest: Default::default(),
+					dest: Alice.to_account_id().into(),
 					value: Default::default(),
 				}
 			});
@@ -146,7 +148,7 @@ fn should_submit_signed_twice_from_the_same_account() {
 		let s = state.read();
 		fn nonce(tx: UncheckedExtrinsic) -> frame_system::CheckNonce<Runtime> {
 			let extra = tx.signature.unwrap().2;
-			extra.4
+			extra.5
 		}
 		let nonce1 = nonce(UncheckedExtrinsic::decode(&mut &*s.transactions[0]).unwrap());
 		let nonce2 = nonce(UncheckedExtrinsic::decode(&mut &*s.transactions[1]).unwrap());
@@ -156,7 +158,7 @@ fn should_submit_signed_twice_from_the_same_account() {
 
 #[test]
 fn should_submit_signed_twice_from_all_accounts() {
-	let mut t = new_test_ext(compact_code_unwrap(), false);
+	let mut t = new_test_ext(compact_code_unwrap());
 	let (pool, state) = TestTransactionPoolExt::new();
 	t.register_extension(TransactionPoolExt::new(pool));
 
@@ -172,7 +174,7 @@ fn should_submit_signed_twice_from_all_accounts() {
 	t.execute_with(|| {
 		let results = Signer::<Runtime, TestAuthorityId>::all_accounts()
 			.send_signed_transaction(|_| {
-				pallet_balances::Call::transfer { dest: Default::default(), value: Default::default() }
+				pallet_balances::Call::transfer { dest: Alice.to_account_id().into(), value: Default::default() }
 			});
 
 		let len = results.len();
@@ -183,7 +185,7 @@ fn should_submit_signed_twice_from_all_accounts() {
 		// submit another one from the same account. The nonce should be incremented.
 		let results = Signer::<Runtime, TestAuthorityId>::all_accounts()
 			.send_signed_transaction(|_| {
-				pallet_balances::Call::transfer { dest: Default::default(), value: Default::default() }
+				pallet_balances::Call::transfer { dest: Alice.to_account_id().into(), value: Default::default() }
 			});
 
 		let len = results.len();
@@ -195,7 +197,7 @@ fn should_submit_signed_twice_from_all_accounts() {
 		let s = state.read();
 		fn nonce(tx: UncheckedExtrinsic) -> frame_system::CheckNonce<Runtime> {
 			let extra = tx.signature.unwrap().2;
-			extra.4
+			extra.5
 		}
 		let nonce1 = nonce(UncheckedExtrinsic::decode(&mut &*s.transactions[0]).unwrap());
 		let nonce2 = nonce(UncheckedExtrinsic::decode(&mut &*s.transactions[1]).unwrap());
@@ -220,7 +222,7 @@ fn submitted_transaction_should_be_valid() {
 		transaction_validity::{TransactionSource, TransactionTag},
 	};
 
-	let mut t = new_test_ext(compact_code_unwrap(), false);
+	let mut t = new_test_ext(compact_code_unwrap());
 	let (pool, state) = TestTransactionPoolExt::new();
 	t.register_extension(TransactionPoolExt::new(pool));
 
@@ -237,7 +239,7 @@ fn submitted_transaction_should_be_valid() {
 		let results =
 			Signer::<Runtime, TestAuthorityId>::all_accounts().send_signed_transaction(|_| {
 				pallet_balances::Call::transfer {
-					dest: Default::default(),
+					dest: Alice.to_account_id().into(),
 					value: Default::default(),
 				}
 			});
@@ -249,7 +251,7 @@ fn submitted_transaction_should_be_valid() {
 	// check that transaction is valid, but reset environment storage,
 	// since CreateTransaction increments the nonce
 	let tx0 = state.read().transactions[0].clone();
-	let mut t = new_test_ext(compact_code_unwrap(), false);
+	let mut t = new_test_ext(compact_code_unwrap());
 	t.execute_with(|| {
 		let source = TransactionSource::External;
 		let extrinsic = UncheckedExtrinsic::decode(&mut &*tx0).unwrap();

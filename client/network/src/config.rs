@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -23,7 +23,6 @@
 
 pub use crate::{
 	chain::Client,
-	on_demand_layer::{AlwaysBadChecker, OnDemand},
 	request_responses::{
 		IncomingRequest, OutgoingResponse, ProtocolConfig as RequestResponseConfig,
 	},
@@ -82,11 +81,6 @@ pub struct Params<B: BlockT, H: ExHashT> {
 
 	/// Client that contains the blockchain.
 	pub chain: Arc<dyn Client<B>>,
-
-	/// The `OnDemand` object acts as a "receiver" for block data requests from the client.
-	/// If `Some`, the network worker will process these requests and answer them.
-	/// Normally used only for light clients.
-	pub on_demand: Option<Arc<OnDemand<B>>>,
 
 	/// Pool of transactions.
 	///
@@ -422,6 +416,11 @@ pub struct NetworkConfiguration {
 	pub request_response_protocols: Vec<RequestResponseConfig>,
 	/// Configuration for the default set of nodes used for block syncing and transactions.
 	pub default_peers_set: SetConfig,
+	/// Number of substreams to reserve for full nodes for block syncing and transactions.
+	/// Any other slot will be dedicated to light nodes.
+	///
+	/// This value is implicitly capped to `default_set.out_peers + default_set.in_peers`.
+	pub default_peers_set_num_full: u32,
 	/// Configuration for extra sets of nodes.
 	pub extra_sets: Vec<NonDefaultSetConfig>,
 	/// Client identifier. Sent over the wire for debugging purposes.
@@ -479,6 +478,7 @@ impl NetworkConfiguration {
 		node_key: NodeKeyConfig,
 		net_config_path: Option<PathBuf>,
 	) -> Self {
+		let default_peers_set = SetConfig::default();
 		Self {
 			net_config_path,
 			listen_addresses: Vec::new(),
@@ -486,7 +486,8 @@ impl NetworkConfiguration {
 			boot_nodes: Vec::new(),
 			node_key,
 			request_response_protocols: Vec::new(),
-			default_peers_set: Default::default(),
+			default_peers_set_num_full: default_peers_set.in_peers + default_peers_set.out_peers,
+			default_peers_set,
 			extra_sets: Vec::new(),
 			client_version: client_version.into(),
 			node_name: node_name.into(),
@@ -608,6 +609,13 @@ impl NonDefaultSetConfig {
 	/// Add a node to the list of reserved nodes.
 	pub fn add_reserved(&mut self, peer: MultiaddrWithPeerId) {
 		self.set_config.reserved_nodes.push(peer);
+	}
+
+	/// Add a list of protocol names used for backward compatibility.
+	///
+	/// See the explanations in [`NonDefaultSetConfig::fallback_names`].
+	pub fn add_fallback_names(&mut self, fallback_names: Vec<Cow<'static, str>>) {
+		self.fallback_names.extend(fallback_names);
 	}
 }
 

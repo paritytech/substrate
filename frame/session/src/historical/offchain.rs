@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -140,7 +140,7 @@ pub fn keep_newest<T: Config>(n_to_keep: usize) {
 mod tests {
 	use super::*;
 	use crate::{
-		historical::{onchain, Module},
+		historical::{onchain, Pallet},
 		mock::{force_new_session, set_next_validators, Session, System, Test, NEXT_VALIDATORS},
 	};
 
@@ -156,7 +156,7 @@ mod tests {
 		BasicExternalities,
 	};
 
-	type Historical = Module<Test>;
+	type Historical = Pallet<Test>;
 
 	pub fn new_test_ext() -> sp_io::TestExternalities {
 		let mut t = frame_system::GenesisConfig::default()

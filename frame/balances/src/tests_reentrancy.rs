@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,7 +20,11 @@
 #![cfg(test)]
 
 use crate::{self as pallet_balances, Config, Pallet};
-use frame_support::{parameter_types, traits::StorageMapShim, weights::IdentityFee};
+use frame_support::{
+	parameter_types,
+	traits::{ConstU32, ConstU64, ConstU8, StorageMapShim},
+	weights::IdentityFee,
+};
 use pallet_transaction_payment::CurrencyAdapter;
 use sp_core::H256;
 use sp_io;
@@ -48,7 +52,6 @@ frame_support::construct_runtime!(
 );
 
 parameter_types! {
-	pub const BlockHashCount: u64 = 250;
 	pub BlockWeights: frame_system::limits::BlockWeights =
 		frame_system::limits::BlockWeights::simple_max(1024);
 	pub static ExistentialDeposit: u64 = 0;
@@ -68,7 +71,7 @@ impl frame_system::Config for Test {
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = Event;
-	type BlockHashCount = BlockHashCount;
+	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
 	type AccountData = ();
@@ -77,15 +80,13 @@ impl frame_system::Config for Test {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
+	type MaxConsumers = frame_support::traits::ConstU32<16>;
 }
-parameter_types! {
-	pub const TransactionByteFee: u64 = 1;
-	pub const OperationalFeeMultiplier: u8 = 5;
-}
+
 impl pallet_transaction_payment::Config for Test {
 	type OnChargeTransaction = CurrencyAdapter<Pallet<Test>, ()>;
-	type TransactionByteFee = TransactionByteFee;
-	type OperationalFeeMultiplier = OperationalFeeMultiplier;
+	type TransactionByteFee = ConstU64<1>;
+	type OperationalFeeMultiplier = ConstU8<5>;
 	type WeightToFee = IdentityFee<u64>;
 	type FeeMultiplierUpdate = ();
 }
@@ -96,10 +97,7 @@ impl OnUnbalanced<NegativeImbalance<Test>> for OnDustRemoval {
 		assert_ok!(Balances::resolve_into_existing(&1, amount));
 	}
 }
-parameter_types! {
-	pub const MaxLocks: u32 = 50;
-	pub const MaxReserves: u32 = 2;
-}
+
 impl Config for Test {
 	type Balance = u64;
 	type DustRemoval = OnDustRemoval;
@@ -107,8 +105,8 @@ impl Config for Test {
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore =
 		StorageMapShim<super::Account<Test>, system::Provider<Test>, u64, super::AccountData<u64>>;
-	type MaxLocks = MaxLocks;
-	type MaxReserves = MaxReserves;
+	type MaxLocks = ConstU32<50>;
+	type MaxReserves = ConstU32<2>;
 	type ReserveIdentifier = [u8; 8];
 	type WeightInfo = ();
 }
@@ -169,9 +167,16 @@ fn transfer_dust_removal_tst1_should_work() {
 		// Verify the events
 		assert_eq!(System::events().len(), 12);
 
-		System::assert_has_event(Event::Balances(crate::Event::Transfer(2, 3, 450)));
-		System::assert_has_event(Event::Balances(crate::Event::DustLost(2, 50)));
-		System::assert_has_event(Event::Balances(crate::Event::Deposit(1, 50)));
+		System::assert_has_event(Event::Balances(crate::Event::Transfer {
+			from: 2,
+			to: 3,
+			amount: 450,
+		}));
+		System::assert_has_event(Event::Balances(crate::Event::DustLost {
+			account: 2,
+			amount: 50,
+		}));
+		System::assert_has_event(Event::Balances(crate::Event::Deposit { who: 1, amount: 50 }));
 	});
 }
 
@@ -197,9 +202,16 @@ fn transfer_dust_removal_tst2_should_work() {
 		// Verify the events
 		assert_eq!(System::events().len(), 10);
 
-		System::assert_has_event(Event::Balances(crate::Event::Transfer(2, 1, 450)));
-		System::assert_has_event(Event::Balances(crate::Event::DustLost(2, 50)));
-		System::assert_has_event(Event::Balances(crate::Event::Deposit(1, 50)));
+		System::assert_has_event(Event::Balances(crate::Event::Transfer {
+			from: 2,
+			to: 1,
+			amount: 450,
+		}));
+		System::assert_has_event(Event::Balances(crate::Event::DustLost {
+			account: 2,
+			amount: 50,
+		}));
+		System::assert_has_event(Event::Balances(crate::Event::Deposit { who: 1, amount: 50 }));
 	});
 }
 
@@ -234,13 +246,18 @@ fn repatriating_reserved_balance_dust_removal_should_work() {
 		// Verify the events
 		assert_eq!(System::events().len(), 11);
 
-		System::assert_has_event(Event::Balances(crate::Event::ReserveRepatriated(
-			2,
-			1,
-			450,
-			Status::Free,
-		)));
-		System::assert_has_event(Event::Balances(crate::Event::DustLost(2, 50)));
-		System::assert_last_event(Event::Balances(crate::Event::Deposit(1, 50)));
+		System::assert_has_event(Event::Balances(crate::Event::ReserveRepatriated {
+			from: 2,
+			to: 1,
+			amount: 450,
+			destination_status: Status::Free,
+		}));
+
+		System::assert_has_event(Event::Balances(crate::Event::DustLost {
+			account: 2,
+			amount: 50,
+		}));
+
+		System::assert_last_event(Event::Balances(crate::Event::Deposit { who: 1, amount: 50 }));
 	});
 }

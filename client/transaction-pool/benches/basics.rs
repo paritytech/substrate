@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -18,16 +18,16 @@
 
 use criterion::{criterion_group, criterion_main, Criterion};
 
-use codec::Encode;
+use codec::{Decode, Encode};
 use futures::{
 	executor::block_on,
 	future::{ready, Ready},
 };
-use sc_transaction_pool::{test_helpers::*, *};
+use sc_transaction_pool::*;
 use sp_core::blake2_256;
 use sp_runtime::{
 	generic::BlockId,
-	traits::Block as BlockT,
+	traits::{Block as BlockT, NumberFor},
 	transaction_validity::{
 		InvalidTransaction, TransactionSource, TransactionTag as Tag, TransactionValidity,
 		ValidTransaction,
@@ -63,7 +63,7 @@ impl ChainApi for TestApi {
 		&self,
 		at: &BlockId<Self::Block>,
 		_source: TransactionSource,
-		uxt: test_helpers::ExtrinsicFor<Self>,
+		uxt: <Self::Block as BlockT>::Extrinsic,
 	) -> Self::ValidationFuture {
 		let nonce = uxt.transfer().nonce;
 		let from = uxt.transfer().from.clone();
@@ -89,7 +89,7 @@ impl ChainApi for TestApi {
 	fn block_id_to_number(
 		&self,
 		at: &BlockId<Self::Block>,
-	) -> Result<Option<test_helpers::NumberFor<Self>>, Self::Error> {
+	) -> Result<Option<NumberFor<Self::Block>>, Self::Error> {
 		Ok(match at {
 			BlockId::Number(num) => Some(*num),
 			BlockId::Hash(_) => None,
@@ -99,14 +99,14 @@ impl ChainApi for TestApi {
 	fn block_id_to_hash(
 		&self,
 		at: &BlockId<Self::Block>,
-	) -> Result<Option<test_helpers::BlockHash<Self>>, Self::Error> {
+	) -> Result<Option<<Self::Block as BlockT>::Hash>, Self::Error> {
 		Ok(match at {
 			BlockId::Number(num) => Some(H256::from_low_u64_be(*num)).into(),
 			BlockId::Hash(_) => None,
 		})
 	}
 
-	fn hash_and_length(&self, uxt: &test_helpers::ExtrinsicFor<Self>) -> (H256, usize) {
+	fn hash_and_length(&self, uxt: &<Self::Block as BlockT>::Extrinsic) -> (H256, usize) {
 		let encoded = uxt.encode();
 		(blake2_256(&encoded).into(), encoded.len())
 	}
@@ -126,7 +126,8 @@ impl ChainApi for TestApi {
 fn uxt(transfer: Transfer) -> Extrinsic {
 	Extrinsic::Transfer {
 		transfer,
-		signature: Default::default(),
+		signature: Decode::decode(&mut sp_runtime::traits::TrailingZeroInput::zeroes())
+			.expect("infinite input; no dead input space; qed"),
 		exhaust_resources_when_not_first: false,
 	}
 }

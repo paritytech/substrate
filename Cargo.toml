@@ -45,7 +45,6 @@ members = [
 	"client/finality-grandpa",
 	"client/informant",
 	"client/keystore",
-	"client/light",
 	"client/network",
 	"client/network-gossip",
 	"client/network/test",
@@ -78,18 +77,18 @@ members = [
 	"frame/beefy-mmr/primitives",
 	"frame/benchmarking",
 	"frame/bounties",
+	"frame/child-bounties",
 	"frame/collective",
 	"frame/contracts",
 	"frame/contracts/rpc",
 	"frame/contracts/rpc/runtime-api",
 	"frame/democracy",
 	"frame/try-runtime",
-	"frame/elections",
 	"frame/election-provider-multi-phase",
 	"frame/election-provider-support",
-	"frame/example",
-	"frame/example-offchain-worker",
-	"frame/example-parallel",
+	"frame/examples/basic",
+	"frame/examples/offchain-worker",
+	"frame/examples/parallel",
 	"frame/executive",
 	"frame/gilt",
 	"frame/grandpa",
@@ -105,6 +104,7 @@ members = [
 	"frame/nicks",
 	"frame/node-authorization",
 	"frame/offences",
+	"frame/preimage",
 	"frame/proxy",
 	"frame/randomness-collective-flip",
 	"frame/recovery",
@@ -122,11 +122,13 @@ members = [
 	"frame/support/procedural/tools",
 	"frame/support/procedural/tools/derive",
 	"frame/support/test",
+	"frame/support/test/compile_pass",
 	"frame/system",
 	"frame/system/benchmarking",
 	"frame/system/rpc/runtime-api",
 	"frame/timestamp",
 	"frame/transaction-payment",
+	"frame/transaction-payment/asset-tx-payment",
 	"frame/transaction-payment/rpc",
 	"frame/transaction-payment/rpc/runtime-api",
 	"frame/transaction-storage",
@@ -136,6 +138,8 @@ members = [
 	"frame/utility",
 	"frame/vesting",
 	"frame/bags-list",
+	"frame/bags-list/remote-tests",
+	"frame/bags-list/fuzzer",
 	"primitives/api",
 	"primitives/api/proc-macro",
 	"primitives/api/test",
@@ -154,6 +158,8 @@ members = [
 	"primitives/consensus/pow",
 	"primitives/consensus/vrf",
 	"primitives/core",
+	"primitives/core/hashing",
+	"primitives/core/hashing/proc-macro",
 	"primitives/database",
 	"primitives/debug-derive",
 	"primitives/externalities",
@@ -200,7 +206,6 @@ members = [
 	"test-utils/runtime",
 	"test-utils/runtime/client",
 	"test-utils/runtime/transaction-pool",
-	# "test-utils/test-runner",
 	"test-utils/test-crate",
 	"utils/build-script-utils",
 	"utils/fork-tree",
@@ -277,154 +282,3 @@ zeroize = { opt-level = 3 }
 [profile.release]
 # Substrate runtime requires unwinding.
 panic = "unwind"
-
-[patch."https://github.com/mangata-finance/substrate"]
-sp-debug-derive = { path = "../substrate/primitives/debug-derive" }
-sp-tasks = { path = "../substrate/primitives/tasks" }
-sp-authorship = { path = "../substrate/primitives/authorship" }
-sp-storage = { path = "../substrate/primitives/storage" }
-sp-timestamp = { path = "../substrate/primitives/timestamp" }
-sp-trie = { path = "../substrate/primitives/trie" }
-sp-block-builder = { path = "../substrate/primitives/block-builder" }
-sp-keystore = { path = "../substrate/primitives/keystore" }
-sp-panic-handler = { path = "../substrate/primitives/panic-handler" }
-sp-database = { path = "../substrate/primitives/database" }
-sp-transaction-storage-proof = { path = "../substrate/primitives/transaction-storage-proof" }
-sp-npos-elections-solution-type = { path = "../substrate/primitives/npos-elections/solution-type" }
-sp-npos-elections = { path = "../substrate/primitives/npos-elections" }
-sp-serializer = { path = "../substrate/primitives/serializer" }
-sp-version-proc-macro = { path = "../substrate/primitives/version/proc-macro" }
-sp-version = { path = "../substrate/primitives/version" }
-sp-application-crypto = { path = "../substrate/primitives/application-crypto" }
-sp-wasm-interface = { path = "../substrate/primitives/wasm-interface" }
-sp-maybe-compressed-blob = { path = "../substrate/primitives/maybe-compressed-blob" }
-sp-tracing = { path = "../substrate/primitives/tracing" }
-sp-std = { path = "../substrate/primitives/std" }
-sp-offchain = { path = "../substrate/primitives/offchain" }
-sp-state-machine = { path = "../substrate/primitives/state-machine" }
-sp-keyring = { path = "../substrate/primitives/keyring" }
-sp-externalities = { path = "../substrate/primitives/externalities" }
-beefy-primitives = { path = "../substrate/primitives/beefy" }
-sp-session = { path = "../substrate/primitives/session" }
-sp-runtime-interface-proc-macro = { path = "../substrate/primitives/runtime-interface/proc-macro" }
-sp-runtime-interface = { path = "../substrate/primitives/runtime-interface" }
-sp-core = { path = "../substrate/primitives/core" }
-sp-arithmetic = { path = "../substrate/primitives/arithmetic" }
-sp-inherents = { path = "../substrate/primitives/inherents" }
-sp-runtime = { path = "../substrate/primitives/runtime" }
-sp-consensus-slots = { path = "../substrate/primitives/consensus/slots" }
-sp-consensus-babe = { path = "../substrate/primitives/consensus/babe" }
-sp-consensus-aura = { path = "../substrate/primitives/consensus/aura" }
-sp-consensus-vrf = { path = "../substrate/primitives/consensus/vrf" }
-sp-consensus = { path = "../substrate/primitives/consensus/common" }
-sp-rpc = { path = "../substrate/primitives/rpc" }
-sp-authority-discovery = { path = "../substrate/primitives/authority-discovery" }
-sp-transaction-pool = { path = "../substrate/primitives/transaction-pool" }
-sp-io = { path = "../substrate/primitives/io" }
-sp-staking = { path = "../substrate/primitives/staking" }
-sp-finality-grandpa = { path = "../substrate/primitives/finality-grandpa" }
-sp-api-proc-macro = { path = "../substrate/primitives/api/proc-macro" }
-sp-api = { path = "../substrate/primitives/api" }
-sp-blockchain = { path = "../substrate/primitives/blockchain" }
-sc-allocator = { path = "../substrate/client/allocator" }
-sc-cli = { path = "../substrate/client/cli" }
-sc-executor-wasmtime = { path = "../substrate/client/executor/wasmtime" }
-sc-executor-wasmi = { path = "../substrate/client/executor/wasmi" }
-sc-executor = { path = "../substrate/client/executor" }
-sc-executor-common = { path = "../substrate/client/executor/common" }
-sc-block-builder = { path = "../substrate/client/block-builder" }
-sc-rpc-server = { path = "../substrate/client/rpc-servers" }
-sc-keystore = { path = "../substrate/client/keystore" }
-sc-telemetry = { path = "../substrate/client/telemetry" }
-sc-network-gossip = { path = "../substrate/client/network-gossip" }
-sc-state-db = { path = "../substrate/client/state-db" }
-sc-service = { path = "../substrate/client/service" }
-sc-client-db = { path = "../substrate/client/db" }
-sc-rpc-api = { path = "../substrate/client/rpc-api" }
-sc-basic-authorship = { path = "../substrate/client/basic-authorship" }
-sc-sync-state-rpc = { path = "../substrate/client/sync-state-rpc" }
-sc-tracing-proc-macro = { path = "../substrate/client/tracing/proc-macro" }
-sc-tracing = { path = "../substrate/client/tracing" }
-sc-chain-spec = { path = "../substrate/client/chain-spec" }
-sc-chain-spec-derive = { path = "../substrate/client/chain-spec/derive" }
-sc-light = { path = "../substrate/client/light" }
-sc-offchain = { path = "../substrate/client/offchain" }
-sc-utils = { path = "../substrate/client/utils" }
-beefy-gadget = { path = "../substrate/client/beefy" }
-beefy-gadget-rpc = { path = "../substrate/client/beefy/rpc" }
-sc-proposer-metrics = { path = "../substrate/client/proposer-metrics" }
-sc-consensus-slots = { path = "../substrate/client/consensus/slots" }
-sc-consensus-babe = { path = "../substrate/client/consensus/babe" }
-sc-consensus-babe-rpc = { path = "../substrate/client/consensus/babe/rpc" }
-sc-consensus-epochs = { path = "../substrate/client/consensus/epochs" }
-sc-consensus-uncles = { path = "../substrate/client/consensus/uncles" }
-sc-consensus-aura = { path = "../substrate/client/consensus/aura" }
-sc-consensus = { path = "../substrate/client/consensus/common" }
-sc-rpc = { path = "../substrate/client/rpc" }
-sc-authority-discovery = { path = "../substrate/client/authority-discovery" }
-sc-informant = { path = "../substrate/client/informant" }
-sc-transaction-pool = { path = "../substrate/client/transaction-pool" }
-sc-transaction-pool-api = { path = "../substrate/client/transaction-pool/api" }
-sc-finality-grandpa = { path = "../substrate/client/finality-grandpa" }
-sc-finality-grandpa-rpc = { path = "../substrate/client/finality-grandpa/rpc" }
-sc-client-api = { path = "../substrate/client/api" }
-sc-peerset = { path = "../substrate/client/peerset" }
-sc-network = { path = "../substrate/client/network" }
-substrate-test-client = { path = "../substrate/test-utils/client" }
-substrate-wasm-builder = { path = "../substrate/utils/wasm-builder" }
-substrate-prometheus-endpoint = { path = "../substrate/utils/prometheus" }
-substrate-build-script-utils = { path = "../substrate/utils/build-script-utils" }
-fork-tree = { path = "../substrate/utils/fork-tree" }
-frame-benchmarking-cli = { path = "../substrate/utils/frame/benchmarking-cli" }
-remote-externalities = { path = "../substrate/utils/frame/remote-externalities" }
-try-runtime-cli = { path = "../substrate/utils/frame/try-runtime/cli" }
-substrate-frame-rpc-system = { path = "../substrate/utils/frame/rpc/system" }
-pallet-mmr-primitives = { path = "../substrate/frame/merkle-mountain-range/primitives" }
-pallet-mmr = { path = "../substrate/frame/merkle-mountain-range" }
-pallet-mmr-rpc = { path = "../substrate/frame/merkle-mountain-range/rpc" }
-pallet-transaction-payment = { path = "../substrate/frame/transaction-payment" }
-pallet-transaction-payment-rpc = { path = "../substrate/frame/transaction-payment/rpc" }
-pallet-transaction-payment-rpc-runtime-api = { path = "../substrate/frame/transaction-payment/rpc/runtime-api" }
-pallet-authorship = { path = "../substrate/frame/authorship" }
-pallet-identity = { path = "../substrate/frame/identity" }
-pallet-timestamp = { path = "../substrate/frame/timestamp" }
-pallet-membership = { path = "../substrate/frame/membership" }
-pallet-babe = { path = "../substrate/frame/babe" }
-pallet-offences = { path = "../substrate/frame/offences" }
-pallet-nicks = { path = "../substrate/frame/nicks" }
-pallet-im-online = { path = "../substrate/frame/im-online" }
-pallet-utility = { path = "../substrate/frame/utility" }
-pallet-sudo = { path = "../substrate/frame/sudo" }
-pallet-bags-list = { path = "../substrate/frame/bags-list" }
-frame-system = { path = "../substrate/frame/system" }
-frame-system-rpc-runtime-api = { path = "../substrate/frame/system/rpc/runtime-api" }
-frame-support-procedural = { path = "../substrate/frame/support/procedural" }
-frame-support-procedural-tools = { path = "../substrate/frame/support/procedural/tools" }
-frame-support-procedural-tools-derive = { path = "../substrate/frame/support/procedural/tools/derive" }
-frame-support = { path = "../substrate/frame/support" }
-pallet-aura = { path = "../substrate/frame/aura" }
-beefy-merkle-tree = { path = "../substrate/frame/beefy-mmr/primitives" }
-pallet-beefy-mmr = { path = "../substrate/frame/beefy-mmr" }
-pallet-vesting = { path = "../substrate/frame/vesting" }
-frame-benchmarking = { path = "../substrate/frame/benchmarking" }
-pallet-democracy = { path = "../substrate/frame/democracy" }
-frame-executive = { path = "../substrate/frame/executive" }
-pallet-treasury = { path = "../substrate/frame/treasury" }
-pallet-indices = { path = "../substrate/frame/indices" }
-pallet-election-provider-multi-phase = { path = "../substrate/frame/election-provider-multi-phase" }
-pallet-tips = { path = "../substrate/frame/tips" }
-frame-try-runtime = { path = "../substrate/frame/try-runtime" }
-pallet-beefy = { path = "../substrate/frame/beefy" }
-pallet-collective = { path = "../substrate/frame/collective" }
-pallet-session = { path = "../substrate/frame/session" }
-pallet-bounties = { path = "../substrate/frame/bounties" }
-pallet-elections-phragmen = { path = "../substrate/frame/elections-phragmen" }
-pallet-scheduler = { path = "../substrate/frame/scheduler" }
-pallet-authority-discovery = { path = "../substrate/frame/authority-discovery" }
-frame-election-provider-support = { path = "../substrate/frame/election-provider-support" }
-pallet-staking-reward-curve = { path = "../substrate/frame/staking/reward-curve" }
-pallet-staking = { path = "../substrate/frame/staking" }
-pallet-grandpa = { path = "../substrate/frame/grandpa" }
-pallet-proxy = { path = "../substrate/frame/proxy" }
-pallet-balances = { path = "../substrate/frame/balances" }
-pallet-multisig = { path = "../substrate/frame/multisig" }

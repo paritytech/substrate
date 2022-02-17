@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,7 +20,6 @@ use std::vec;
 use beefy_primitives::ValidatorSet;
 use codec::Encode;
 
-use sp_core::H256;
 use sp_runtime::DigestItem;
 
 use frame_support::traits::OnInitialize;
@@ -32,7 +31,7 @@ fn init_block(block: u64) {
 	Session::on_initialize(block);
 }
 
-pub fn beefy_log(log: ConsensusLog<BeefyId>) -> DigestItem<H256> {
+pub fn beefy_log(log: ConsensusLog<BeefyId>) -> DigestItem {
 	DigestItem::Consensus(BEEFY_ENGINE_ID, log.encode())
 }
 
@@ -71,10 +70,9 @@ fn session_change_updates_authorities() {
 
 		assert!(1 == Beefy::validator_set_id());
 
-		let want = beefy_log(ConsensusLog::AuthoritiesChange(ValidatorSet {
-			validators: vec![mock_beefy_id(3), mock_beefy_id(4)],
-			id: 1,
-		}));
+		let want = beefy_log(ConsensusLog::AuthoritiesChange(
+			ValidatorSet::new(vec![mock_beefy_id(3), mock_beefy_id(4)], 1).unwrap(),
+		));
 
 		let log = System::digest().logs[0].clone();
 
@@ -110,11 +108,11 @@ fn validator_set_at_genesis() {
 	let want = vec![mock_beefy_id(1), mock_beefy_id(2)];
 
 	new_test_ext(vec![1, 2, 3, 4]).execute_with(|| {
-		let vs = Beefy::validator_set();
+		let vs = Beefy::validator_set().unwrap();
 
-		assert_eq!(vs.id, 0u64);
-		assert_eq!(vs.validators[0], want[0]);
-		assert_eq!(vs.validators[1], want[1]);
+		assert_eq!(vs.id(), 0u64);
+		assert_eq!(vs.validators()[0], want[0]);
+		assert_eq!(vs.validators()[1], want[1]);
 	});
 }
 
@@ -125,18 +123,18 @@ fn validator_set_updates_work() {
 	new_test_ext(vec![1, 2, 3, 4]).execute_with(|| {
 		init_block(1);
 
-		let vs = Beefy::validator_set();
+		let vs = Beefy::validator_set().unwrap();
 
-		assert_eq!(vs.id, 0u64);
-		assert_eq!(want[0], vs.validators[0]);
-		assert_eq!(want[1], vs.validators[1]);
+		assert_eq!(vs.id(), 0u64);
+		assert_eq!(want[0], vs.validators()[0]);
+		assert_eq!(want[1], vs.validators()[1]);
 
 		init_block(2);
 
-		let vs = Beefy::validator_set();
+		let vs = Beefy::validator_set().unwrap();
 
-		assert_eq!(vs.id, 1u64);
-		assert_eq!(want[2], vs.validators[0]);
-		assert_eq!(want[3], vs.validators[1]);
+		assert_eq!(vs.id(), 1u64);
+		assert_eq!(want[2], vs.validators()[0]);
+		assert_eq!(want[3], vs.validators()[1]);
 	});
 }

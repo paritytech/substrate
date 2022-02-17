@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -1546,7 +1546,7 @@ macro_rules! decl_module {
 					<Self as $crate::traits::GetStorageVersion>::current_storage_version(),
 				);
 
-				(|| { $( $impl )* })()
+				{ $( $impl )* }
 			}
 
 			#[cfg(feature = "try-runtime")]
@@ -2162,6 +2162,22 @@ macro_rules! decl_module {
 
 			fn crate_version() -> $crate::traits::CrateVersion {
 				$crate::crate_to_crate_version!()
+			}
+		}
+
+		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::traits::PalletsInfoAccess
+			for $mod_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
+		{
+			fn count() -> usize { 1 }
+			fn accumulate(acc: &mut $crate::sp_std::vec::Vec<$crate::traits::PalletInfoData>) {
+				use $crate::traits::PalletInfoAccess;
+				let item = $crate::traits::PalletInfoData {
+					index: Self::index(),
+					name: Self::name(),
+					module_name: Self::module_name(),
+					crate_version: Self::crate_version(),
+				};
+				acc.push(item);
 			}
 		}
 

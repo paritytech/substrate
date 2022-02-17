@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -48,6 +48,14 @@ pub struct SharedParams {
 	/// By default, all targets log `info`. The global log level can be set with -l<level>.
 	#[structopt(short = "l", long, value_name = "LOG_PATTERN")]
 	pub log: Vec<String>,
+
+	/// Enable detailed log output.
+	///
+	/// This includes displaying the log target, log level and thread name.
+	///
+	/// This is automatically enabled when something is logged with any higher level than `info`.
+	#[structopt(long)]
+	pub detailed_log_output: bool,
 
 	/// Disable log color output.
 	#[structopt(long)]
@@ -105,6 +113,11 @@ impl SharedParams {
 	/// Get the filters for the logging
 	pub fn log_filters(&self) -> &[String] {
 		&self.log
+	}
+
+	/// Should the detailed log output be enabled.
+	pub fn detailed_log_output(&self) -> bool {
+		self.detailed_log_output
 	}
 
 	/// Should the log color output be disabled?

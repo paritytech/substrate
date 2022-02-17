@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -287,7 +287,15 @@ fn prepare_pjr_input<AccountId: IdentifierT>(
 			let elected = maybe_support.is_some();
 			let backed_stake = maybe_support.map(|support| support.total).unwrap_or_default();
 
-			Candidate { who, elected, backed_stake, ..Default::default() }.to_ptr()
+			Candidate {
+				who,
+				elected,
+				backed_stake,
+				score: Default::default(),
+				approval_stake: Default::default(),
+				round: Default::default(),
+			}
+			.to_ptr()
 		})
 		.collect::<Vec<_>>();
 
@@ -315,14 +323,14 @@ fn prepare_pjr_input<AccountId: IdentifierT>(
 						who: t,
 						candidate: Rc::clone(&candidates[*idx]),
 						weight,
-						..Default::default()
+						load: Default::default(),
 					});
 				}
 			}
 
 			let who = v;
 			let budget: ExtendedBalance = w.into();
-			Voter { who, budget, edges, ..Default::default() }
+			Voter { who, budget, edges, load: Default::default() }
 		})
 		.collect::<Vec<_>>();
 
@@ -387,7 +395,14 @@ mod tests {
 			.into_iter()
 			.map(|(t, w, e)| {
 				budget += w;
-				Candidate { who: t, elected: e, backed_stake: w, ..Default::default() }
+				Candidate {
+					who: t,
+					elected: e,
+					backed_stake: w,
+					score: Default::default(),
+					approval_stake: Default::default(),
+					round: Default::default(),
+				}
 			})
 			.collect::<Vec<_>>();
 		let edges = candidates
@@ -396,7 +411,7 @@ mod tests {
 				who: c.who,
 				weight: c.backed_stake,
 				candidate: c.to_ptr(),
-				..Default::default()
+				load: Default::default(),
 			})
 			.collect::<Vec<_>>();
 		voter.edges = edges;
@@ -432,7 +447,15 @@ mod tests {
 		// will give 10 slack.
 		let v3 = setup_voter(30, vec![(1, 20, true), (2, 20, true), (3, 0, false)]);
 
-		let unelected = Candidate { who: 3u32, elected: false, ..Default::default() }.to_ptr();
+		let unelected = Candidate {
+			who: 3u32,
+			elected: false,
+			score: Default::default(),
+			approval_stake: Default::default(),
+			backed_stake: Default::default(),
+			round: Default::default(),
+		}
+		.to_ptr();
 		let score = pre_score(unelected, &vec![v1, v2, v3], 15);
 
 		assert_eq!(score, 15);

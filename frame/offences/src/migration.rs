@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,7 +19,7 @@ use super::{Config, OffenceDetails, Perbill, SessionIndex};
 use frame_support::{
 	generate_storage_alias, pallet_prelude::ValueQuery, traits::Get, weights::Weight,
 };
-use sp_staking::offence::OnOffenceHandler;
+use sp_staking::offence::{DisableStrategy, OnOffenceHandler};
 use sp_std::vec::Vec;
 
 /// Type of data stored as a deferred offence
@@ -41,7 +41,12 @@ pub fn remove_deferred_storage<T: Config>() -> Weight {
 	let deferred = <DeferredOffences<T>>::take();
 	log::info!(target: "runtime::offences", "have {} deferred offences, applying.", deferred.len());
 	for (offences, perbill, session) in deferred.iter() {
-		let consumed = T::OnOffenceHandler::on_offence(&offences, &perbill, *session);
+		let consumed = T::OnOffenceHandler::on_offence(
+			&offences,
+			&perbill,
+			*session,
+			DisableStrategy::WhenSlashed,
+		);
 		weight = weight.saturating_add(consumed);
 	}
 
@@ -51,8 +56,7 @@ pub fn remove_deferred_storage<T: Config>() -> Weight {
 #[cfg(test)]
 mod test {
 	use super::*;
-	use crate::mock::{new_test_ext, with_on_offence_fractions, Offences, Runtime as T};
-	use frame_support::traits::OnRuntimeUpgrade;
+	use crate::mock::{new_test_ext, with_on_offence_fractions, Runtime as T};
 	use sp_runtime::Perbill;
 	use sp_staking::offence::OffenceDetails;
 
@@ -82,7 +86,7 @@ mod test {
 
 			// when
 			assert_eq!(
-				Offences::on_runtime_upgrade(),
+				remove_deferred_storage::<T>(),
 				<T as frame_system::Config>::DbWeight::get().reads_writes(1, 1),
 			);
 

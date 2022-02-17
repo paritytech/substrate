@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -89,7 +89,11 @@ impl<B: BlockT, Transaction: Send + 'static> BasicQueue<B, Transaction> {
 			metrics,
 		);
 
-		spawner.spawn_essential_blocking("basic-block-import-worker", future.boxed());
+		spawner.spawn_essential_blocking(
+			"basic-block-import-worker",
+			Some("block-import"),
+			future.boxed(),
+		);
 
 		Self { justification_sender, block_import_sender, result_port, _phantom: PhantomData }
 	}

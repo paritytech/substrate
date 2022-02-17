@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -25,7 +25,7 @@ benchmarks_instance_pallet! {
 	on_initialize {
 		let x in 1 .. 1_000;
 
-		let leaves = x as u64;
+		let leaves = x as NodeIndex;
 	}: {
 		for b in 0..leaves {
 			Pallet::<T, I>::on_initialize((b as u32).into());
