@@ -392,7 +392,8 @@ pub mod pallet {
 	/// Those who have promoted a particular public proposal.
 	#[pallet::storage]
 	#[pallet::getter(fn promoted)]
-	pub type Promoted<T: Config> = StorageMap<_, Twox64Concat, T::Hash, BoundedVec<T::AccountId, T::MaxPromoter>>;
+	pub type Promoted<T: Config> =
+		StorageMap<_, Twox64Concat, T::Hash, BoundedVec<T::AccountId, T::MaxPromoter>>;
 
 	/// Those who have locked a deposit.
 	///
@@ -1301,21 +1302,21 @@ pub mod pallet {
 				.position(|p| p.1 == proposal_hash)
 				.ok_or_else(|| Error::<T>::ProposalMissing)?;
 			/*
-			let promoted_by = <Promoted<T>>::get(&proposal_hash).unwrap_or_else(BoundedVec::default);
-			let insert_positions =
-				promoted_by.binary_search(&who).err().ok_or(Error::<T>::AlreadyPromoted)?;
-			promoted_by.insert(insert_positions, who.clone());
-			<Promoted<T>>::insert(&proposal_hash, promoted_by);
-			Self::deposit_event(Event::<T>::PromotedBy { proposal_hash, who });
-*/
+						let promoted_by = <Promoted<T>>::get(&proposal_hash).unwrap_or_else(BoundedVec::default);
+						let insert_positions =
+							promoted_by.binary_search(&who).err().ok_or(Error::<T>::AlreadyPromoted)?;
+						promoted_by.insert(insert_positions, who.clone());
+						<Promoted<T>>::insert(&proposal_hash, promoted_by);
+						Self::deposit_event(Event::<T>::PromotedBy { proposal_hash, who });
+			*/
 
-
-			let mut promoted_by = Promoted::<T>::get(&proposal_hash).unwrap_or_else(BoundedVec::default);
+			let mut promoted_by =
+				Promoted::<T>::get(&proposal_hash).unwrap_or_else(BoundedVec::default);
 			promoted_by.binary_search(&who).err().ok_or(Error::<T>::AlreadyPromoted)?;
 			if promoted_by.try_push(who.clone()).is_ok() {
 				<Promoted<T>>::insert(&proposal_hash, promoted_by);
 			} else {
-				return Err(Error::<T>::ProposalMissing.into());
+				return Err(Error::<T>::ProposalMissing.into())
 			}
 			Self::deposit_event(Event::<T>::PromotedBy { proposal_hash, who });
 
