@@ -213,8 +213,32 @@ fn sign_prehashed(hash: [u8; 32]) -> [u8; 65] {
 		ecdsa::{Signature, SigningKey},
 		NonZeroScalar, Scalar, U256,
 	};
+	use rand::{CryptoRng, RngCore, SeedableRng};
 
-	let signing_key = SigningKey::random(&mut rand::rngs::OsRng);
+	// The PCG algorithms are not suitable for cryptographic uses, but
+	// perform well in statistical tests, use little memory and are fairly fast.
+	// For this reason they doesn't implement the `CryptoRng` trait required
+	// by `k256` to generate a new random signing key.
+	// This newtype implements `CryptoRng` only for the scope of the tests.
+	struct Pcg32Wrap(rand_pcg::Pcg32);
+	impl CryptoRng for Pcg32Wrap {}
+	impl RngCore for Pcg32Wrap {
+		fn next_u32(&mut self) -> u32 {
+			self.0.next_u32()
+		}
+		fn next_u64(&mut self) -> u64 {
+			self.0.next_u64()
+		}
+		fn fill_bytes(&mut self, dest: &mut [u8]) {
+			self.0.fill_bytes(dest)
+		}
+		fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), rand::Error> {
+			self.0.try_fill_bytes(dest)
+		}
+	}
+
+	let mut rng = Pcg32Wrap(rand_pcg::Pcg32::seed_from_u64(123456));
+	let signing_key = SigningKey::random(&mut rng);
 
 	let hash_array: GenericArray<u8, U32> = GenericArray::from_slice(&hash).clone();
 	let hash_scalar = <Scalar as Reduce<U256>>::from_be_bytes_reduced(hash_array);
