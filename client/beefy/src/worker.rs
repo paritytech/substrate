@@ -91,6 +91,8 @@ where
 	beefy_best_block_sender: BeefyBestBlockSender<B>,
 	/// Validator set id for the last signed commitment
 	last_signed_id: u64,
+	// Used to wake the main task from the other event stream tasks.
+	// TODO: Replace channel-hack with a custom simple object implementing `Stream`.
 	waker_rx: mpsc::Receiver<()>,
 	waker_tx: mpsc::Sender<()>,
 	// keep rustc happy
@@ -539,19 +541,6 @@ where
 		}
 	}
 }
-
-// impl<B, C, BE> Stream for BeefyWorker<B, C, BE>
-// where
-// 	B: Block + Codec,
-// 	BE: Backend<B>,
-// 	C: Client<B, BE>,
-// 	C::Api: BeefyApi<B>,
-// {
-//     type Item = ();
-//     fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<()>> {
-//         unimplemented!()
-//     }
-// }
 
 /// Extract the MMR root hash from a digest in the given header, if it exists.
 fn find_mmr_root_digest<B, Id>(header: &B::Header) -> Option<MmrRootHash>
