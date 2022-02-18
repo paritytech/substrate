@@ -52,7 +52,16 @@ where
 /// A type that represents hash of the message.
 pub type MessageHash = [u8; 8];
 
-type KnownVotes<B> = BTreeMap<NumberFor<B>, fnv::FnvHashSet<MessageHash>>;
+struct KnownVotes<B: Block> {
+	last_done: Option<NumberFor<B>>,
+	live: BTreeMap<NumberFor<B>, fnv::FnvHashSet<MessageHash>>,
+}
+
+impl<B: Block> KnownVotes<B> {
+	pub fn new() -> Self {
+		Self { last_done: None, live: BTreeMap::new() }
+	}
+}
 
 /// BEEFY gossip validator
 ///
@@ -78,7 +87,7 @@ where
 	pub fn new() -> GossipValidator<B> {
 		GossipValidator {
 			topic: topic::<B>(),
-			known_votes: RwLock::new(BTreeMap::new()),
+			known_votes: RwLock::new(KnownVotes::new()),
 			next_rebroadcast: Mutex::new(Instant::now() + REBROADCAST_AFTER),
 		}
 	}
@@ -90,24 +99,44 @@ where
 	/// We retain the [`MAX_LIVE_GOSSIP_ROUNDS`] most **recent** voting rounds as live.
 	/// As long as a voting round is live, it will be gossiped to peer nodes.
 	pub(crate) fn note_round(&self, round: NumberFor<B>) {
-		debug!(target: "beefy", "🥩 About to note round #{}", round);
+		debug!(target: "beefy", "🥩 About to note gossip round #{}", round);
 
-		let mut live = self.known_votes.write();
+		let mut to_drop = None;
+		{
+			let mut known_votes = self.known_votes.write();
+			let live = &mut known_votes.live;
 
-		if !live.contains_key(&round) {
-			live.insert(round, Default::default());
-		}
-
-		if live.len() > MAX_LIVE_GOSSIP_ROUNDS {
-			let to_remove = live.iter().next().map(|x| x.0).copied();
-			if let Some(first) = to_remove {
-				live.remove(&first);
+			if !live.contains_key(&round) {
+				live.insert(round, Default::default());
 			}
+
+			if live.len() > MAX_LIVE_GOSSIP_ROUNDS {
+				let to_remove = live.iter().next().map(|x| x.0).copied();
+				if let Some(first) = to_remove {
+					to_drop = Some(first);
+				}
+			}
+		}
+		if let Some(to_drop) = to_drop {
+			self.drop_round(to_drop);
 		}
 	}
 
+	/// Drop a voting round.
+	///
+	/// This can be called once round is complete so we stop gossiping for it.
+	pub(crate) fn drop_round(&self, round: NumberFor<B>) {
+		debug!(target: "beefy", "🥩 About to drop gossip round #{}", round);
+		let mut known_votes = self.known_votes.write();
+		known_votes.live.remove(&round);
+		known_votes.last_done = match known_votes.last_done {
+			Some(n) => Some(n.max(round)),
+			None => Some(round),
+		};
+	}
+
 	fn add_known(known_votes: &mut KnownVotes<B>, round: &NumberFor<B>, hash: MessageHash) {
-		known_votes.get_mut(round).map(|known| known.insert(hash));
+		known_votes.live.get_mut(round).map(|known| known.insert(hash));
 	}
 
 	// Note that we will always keep the most recent unseen round alive.
@@ -118,17 +147,17 @@ where
 	// https://github.com/paritytech/grandpa-bridge-gadget/issues/237
 	//
 	fn is_live(known_votes: &KnownVotes<B>, round: &NumberFor<B>) -> bool {
-		let unseen_round = if let Some(max_known_round) = known_votes.keys().last() {
+		let unseen_round = if let Some(max_known_round) = known_votes.live.keys().last() {
 			round > max_known_round
 		} else {
-			known_votes.is_empty()
+			known_votes.last_done.map(|last| *round > last).unwrap_or(true)
 		};
 
-		known_votes.contains_key(round) || unseen_round
+		unseen_round || known_votes.live.contains_key(round)
 	}
 
 	fn is_known(known_votes: &KnownVotes<B>, round: &NumberFor<B>, hash: &MessageHash) -> bool {
-		known_votes.get(round).map(|known| known.contains(hash)).unwrap_or(false)
+		known_votes.live.get(round).map(|known| known.contains(hash)).unwrap_or(false)
 	}
 }
 
@@ -193,7 +222,7 @@ where
 	fn message_allowed<'a>(
 		&'a self,
 	) -> Box<dyn FnMut(&PeerId, MessageIntent, &B::Hash, &[u8]) -> bool + 'a> {
-		let do_rebroadcast = {
+		let do_rebroadcast = || {
 			let now = Instant::now();
 			let mut next_rebroadcast = self.next_rebroadcast.lock();
 			if now >= *next_rebroadcast {
@@ -207,7 +236,7 @@ where
 		let known_votes = self.known_votes.read();
 		Box::new(move |_who, intent, _topic, mut data| {
 			if let MessageIntent::PeriodicRebroadcast = intent {
-				return do_rebroadcast
+				return do_rebroadcast()
 			}
 
 			let msg = match VoteMessage::<NumberFor<B>, Public, Signature>::decode(&mut data) {
