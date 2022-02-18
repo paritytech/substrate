@@ -160,19 +160,9 @@ impl<T, S> BoundedVec<T, S> {
 		self.0.pop()
 	}
 
-	/// Exactly the same semantics as [`Vec::iter`].
-	pub fn iter(&self) -> core::slice::Iter<'_, T> {
-		self.0.iter()
-	}
-
 	/// Exactly the same semantics as [`Vec::iter_mut`].
 	pub fn iter_mut(&mut self) -> core::slice::IterMut<'_, T> {
 		self.0.iter_mut()
-	}
-
-	/// Exactly the same semantics as [`Vec::into_iter`].
-	pub fn into_iter(self) -> sp_std::vec::IntoIter<T> {
-		self.0.into_iter()
 	}
 }
 
