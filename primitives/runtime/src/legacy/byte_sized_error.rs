@@ -77,3 +77,24 @@ pub type DispatchOutcome = Result<(), DispatchError>;
 /// [`ApplyExtrinsicResult`] type definition before BlockBuilder API version 6.
 pub type ApplyExtrinsicResult =
 	Result<DispatchOutcome, crate::transaction_validity::TransactionValidityError>;
+
+/// Convert the legacy `ApplyExtrinsicResult` type to the latest version.
+pub fn convert_to_latest(old: ApplyExtrinsicResult) -> crate::ApplyExtrinsicResult {
+	old.map(|outcome| {
+		outcome.map_err(|e| match e {
+			DispatchError::Other(s) => crate::DispatchError::Other(s),
+			DispatchError::CannotLookup => crate::DispatchError::CannotLookup,
+			DispatchError::BadOrigin => crate::DispatchError::BadOrigin,
+			DispatchError::Module(err) => crate::DispatchError::Module(crate::ModuleError {
+				index: err.index,
+				error: [err.error, 0, 0, 0],
+				message: err.message,
+			}),
+			DispatchError::ConsumerRemaining => crate::DispatchError::ConsumerRemaining,
+			DispatchError::NoProviders => crate::DispatchError::NoProviders,
+			DispatchError::TooManyConsumers => crate::DispatchError::TooManyConsumers,
+			DispatchError::Token(err) => crate::DispatchError::Token(err),
+			DispatchError::Arithmetic(err) => crate::DispatchError::Arithmetic(err),
+		})
+	})
+}
