@@ -337,9 +337,9 @@ impl<T, S: Get<u32>> BoundedVec<T, S> {
 
 	/// Exactly the same semantics as [`Vec::extend`], but returns an error and does nothing if the
 	/// length of the outcome is larger than the bound.
-	pub fn try_extend<I: IntoIterator<Item = T> + ExactSizeIterator>(
+	pub fn try_extend(
 		&mut self,
-		with: I,
+		with: impl IntoIterator<Item = T> + ExactSizeIterator,
 	) -> Result<(), ()> {
 		if with.len().saturating_add(self.len()) <= Self::bound() {
 			self.0.extend(with);
