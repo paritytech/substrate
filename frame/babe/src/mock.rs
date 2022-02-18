@@ -184,7 +184,6 @@ impl pallet_staking::Config for Test {
 	type Event = Event;
 	type Currency = Balances;
 	type Slash = ();
-	type Reward = ();
 	type SessionsPerEra = SessionsPerEra;
 	type BondingDuration = BondingDuration;
 	type SlashDeferDuration = SlashDeferDuration;

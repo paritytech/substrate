@@ -40,7 +40,7 @@ pub use impls::*;
 
 use crate::{
 	log, slashing, weights::WeightInfo, ActiveEraInfo, BalanceOf, EraPayout, EraRewardPoints,
-	Exposure, Forcing, NegativeImbalanceOf, Nominations, PositiveImbalanceOf, Releases,
+	Exposure, Forcing, NegativeImbalanceOf, Nominations, Releases,
 	RewardDestination, SessionInterface, StakingLedger, UnappliedSlash, UnlockChunk,
 	ValidatorPrefs,
 };
@@ -107,9 +107,6 @@ pub mod pallet {
 
 		/// Handler for the unbalanced reduction when slashing a staker.
 		type Slash: OnUnbalanced<NegativeImbalanceOf<Self>>;
-
-		/// Handler for the unbalanced increment when rewarding a staker.
-		type Reward: OnUnbalanced<PositiveImbalanceOf<Self>>;
 
 		/// Number of sessions per era.
 		#[pallet::constant]

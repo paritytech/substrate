@@ -163,7 +163,6 @@ impl pallet_staking::Config for Test {
 	type RewardRemainder = ();
 	type Event = Event;
 	type Slash = ();
-	type Reward = ();
 	type SessionsPerEra = ();
 	type SlashDeferDuration = ();
 	type SlashCancelOrigin = frame_system::EnsureRoot<Self::AccountId>;
