@@ -18,7 +18,7 @@ fn create_funded_user_with_balance<T: Config>(
 	balance: BalanceOf<T>,
 ) -> T::AccountId {
 	let user = account(string, n, USER_SEED);
-	let _ = T::Currency::make_free_balance_be(&user, balance);
+	T::Currency::make_free_balance_be(&user, balance);
 	user
 }
 
@@ -152,23 +152,23 @@ frame_benchmarking::benchmarks! {
 		let origin_weight = MinCreateBond::<T>::get().max(T::Currency::minimum_balance()) * 2u32.into();
 
 		// setup the worst case list scenario.
-
-		// the weight the nominator will start at.
 		let scenario = ListScenario::<T>::new(origin_weight, true)?;
 		assert_eq!(
 			T::StakingInterface::bonded_balance(&scenario.origin1).unwrap(),
 			origin_weight
 		);
 
+
 		let max_additional = scenario.dest_weight.clone() - origin_weight;
+		let joiner_free = T::Currency::minimum_balance() + max_additional;
 
 		let joiner: T::AccountId
-			= create_funded_user_with_balance::<T>("joiner", 0, max_additional * 2u32.into());
+			= create_funded_user_with_balance::<T>("joiner", 0, joiner_free);
 
 		whitelist_account!(joiner);
 	}: _(Origin::Signed(joiner.clone()), max_additional, scenario.origin1.clone())
 	verify {
-		assert_eq!(T::Currency::free_balance(&joiner), max_additional);
+		assert_eq!(T::Currency::free_balance(&joiner), joiner_free - max_additional);
 		assert_eq!(
 			T::StakingInterface::bonded_balance(&scenario.origin1).unwrap(),
 			scenario.dest_weight
@@ -178,8 +178,8 @@ frame_benchmarking::benchmarks! {
 	claim_payout {
 		clear_storage::<T>();
 
-		let min_create_bond = MinCreateBond::<T>::get().max(T::StakingInterface::minimum_bond());
-		let (depositor, pool_account) = create_pool_account::<T>(0, min_create_bond);
+		let origin_weight = MinCreateBond::<T>::get().max(T::Currency::minimum_balance()) * 2u32.into();
+		let (depositor, pool_account) = create_pool_account::<T>(0, origin_weight);
 
 		let reward_account = RewardPools::<T>::get(
 			pool_account
@@ -188,12 +188,12 @@ frame_benchmarking::benchmarks! {
 		.account;
 
 		// Send funds to the reward account of the pool
-		T::Currency::make_free_balance_be(&reward_account, min_create_bond);
+		T::Currency::make_free_balance_be(&reward_account, origin_weight);
 
 		// Sanity check
 		assert_eq!(
 			T::Currency::free_balance(&depositor),
-			min_create_bond
+			origin_weight
 		);
 
 		whitelist_account!(depositor);
@@ -201,7 +201,7 @@ frame_benchmarking::benchmarks! {
 	verify {
 		assert_eq!(
 			T::Currency::free_balance(&depositor),
-			min_create_bond * 2u32.into()
+			origin_weight * 2u32.into()
 		);
 		assert_eq!(
 			T::Currency::free_balance(&reward_account),
@@ -210,6 +210,7 @@ frame_benchmarking::benchmarks! {
 	}
 
 	unbond_other {
+		log::info!("unbond_other bench");
 		clear_storage::<T>();
 		// let depositor = account("depositor", USER_SEED, 0);
 
@@ -235,6 +236,7 @@ frame_benchmarking::benchmarks! {
 
 	// TODO: setup a withdraw unbonded kill scenario
 	pool_withdraw_unbonded {
+		log::info!("pool_withdraw_unbonded bench");
 		clear_storage::<T>();
 
 		let min_create_bond = MinCreateBond::<T>::get().max(T::StakingInterface::minimum_bond());
@@ -278,6 +280,7 @@ frame_benchmarking::benchmarks! {
 
 	// TODO: setup a withdraw unbonded kill scenario, make variable over slashing spans
 	withdraw_unbonded_other {
+		log::info!("withdraw_unbonded_other bench");
 		clear_storage::<T>();
 
 		let min_create_bond = MinCreateBond::<T>::get().max(T::StakingInterface::minimum_bond());
@@ -321,6 +324,7 @@ frame_benchmarking::benchmarks! {
 	}
 
 	create {
+		log::info!("create bench");
 		clear_storage::<T>();
 
 		let min_create_bond = MinCreateBond::<T>::get().max(T::StakingInterface::minimum_bond());
@@ -364,6 +368,7 @@ frame_benchmarking::benchmarks! {
 	}
 
 	nominate {
+		log::info!("nominate bench");
 		clear_storage::<T>();
 
 		// Create a pool
