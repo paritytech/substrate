@@ -87,13 +87,13 @@ pub type AuxDataOperations = Vec<(Vec<u8>, Option<Vec<u8>>)>;
 /// This gives the opportunity to perform auxiliary pre-commit actions and optionally
 /// enqueue further storage write operations to be atomically performed on commit.
 pub type OnImportAction<Block> =
-	Box<dyn (FnMut(&BlockImportNotification<Block>) -> AuxDataOperations) + Send>;
+	Box<dyn (Fn(&BlockImportNotification<Block>) -> AuxDataOperations) + Send>;
 
 /// Callback invoked before committing the operations created during block finalization.
 /// This gives the opportunity to perform auxiliary pre-commit actions and optionally
 /// enqueue further storage write operations to be atomically performed on commit.
 pub type OnFinalityAction<Block> =
-	Box<dyn (FnMut(&FinalityNotification<Block>) -> AuxDataOperations) + Send>;
+	Box<dyn (Fn(&FinalityNotification<Block>) -> AuxDataOperations) + Send>;
 
 /// Interface to perform auxiliary actions before committing a block import or
 /// finality operation.
