@@ -73,6 +73,7 @@ pub fn print_from_uri<Pair>(
 	Pair::Public: Into<MultiSigner>,
 {
 	let password = password.as_ref().map(|s| s.expose_secret().as_str());
+	let network_id = String::from(unwrap_or_default_ss58_version(network_override));
 	if let Ok((pair, seed)) = Pair::from_phrase(uri, password.clone()) {
 		let public_key = pair.public();
 		let network_override = unwrap_or_default_ss58_version(network_override);
@@ -81,6 +82,7 @@ pub fn print_from_uri<Pair>(
 			OutputType::Json => {
 				let json = json!({
 					"secretPhrase": uri,
+					"networkId": network_id,
 					"secretSeed": format_seed::<Pair>(seed),
 					"publicKey": format_public_key::<Pair>(public_key.clone()),
 					"ss58PublicKey": public_key.to_ss58check_with_version(network_override),
@@ -95,12 +97,14 @@ pub fn print_from_uri<Pair>(
 			OutputType::Text => {
 				println!(
 					"Secret phrase:       {}\n  \
+					Network ID:        {}\n  \
 					Secret seed:       {}\n  \
 					Public key (hex):  {}\n  \
 					Account ID:        {}\n  \
 					Public key (SS58): {}\n  \
 					SS58 Address:      {}",
 					uri,
+					network_id,
 					format_seed::<Pair>(seed),
 					format_public_key::<Pair>(public_key.clone()),
 					format_account_id::<Pair>(public_key.clone()),
@@ -117,6 +121,7 @@ pub fn print_from_uri<Pair>(
 			OutputType::Json => {
 				let json = json!({
 					"secretKeyUri": uri,
+					"networkId": network_id,
 					"secretSeed": if let Some(seed) = seed { format_seed::<Pair>(seed) } else { "n/a".into() },
 					"publicKey": format_public_key::<Pair>(public_key.clone()),
 					"ss58PublicKey": public_key.to_ss58check_with_version(network_override),
@@ -131,12 +136,14 @@ pub fn print_from_uri<Pair>(
 			OutputType::Text => {
 				println!(
 					"Secret Key URI `{}` is account:\n  \
+					Network ID:        {} \n \
 					Secret seed:       {}\n  \
 					Public key (hex):  {}\n  \
 					Account ID:        {}\n  \
 					Public key (SS58): {}\n  \
 					SS58 Address:      {}",
 					uri,
+					network_id,
 					if let Some(seed) = seed { format_seed::<Pair>(seed) } else { "n/a".into() },
 					format_public_key::<Pair>(public_key.clone()),
 					format_account_id::<Pair>(public_key.clone()),
@@ -167,7 +174,7 @@ pub fn print_from_uri<Pair>(
 			OutputType::Text => {
 				println!(
 					"Public Key URI `{}` is account:\n  \
-					 Network ID/version: {}\n  \
+					 Network ID/Version: {}\n  \
 					 Public key (hex):   {}\n  \
 					 Account ID:         {}\n  \
 					 Public key (SS58):  {}\n  \
@@ -217,7 +224,7 @@ where
 		},
 		OutputType::Text => {
 			println!(
-				"Network ID/version: {}\n  \
+				"Network ID/Version: {}\n  \
 				 Public key (hex):   {}\n  \
 				 Account ID:         {}\n  \
 				 Public key (SS58):  {}\n  \

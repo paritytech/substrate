@@ -31,10 +31,10 @@ sc-executor-common = { version = "0.10.0-dev", path = "common" }
 sc-executor-wasmi = { version = "0.10.0-dev", path = "wasmi" }
 sc-executor-wasmtime = { version = "0.10.0-dev", path = "wasmtime", optional = true }
 parking_lot = "0.11.2"
-log = "0.4.8"
 libsecp256k1 = "0.7"
 sp-core-hashing-proc-macro = { version = "4.0.0-dev", path = "../../primitives/core/hashing/proc-macro" }
 lru = "0.6.6"
+tracing = "0.1.29"
 
 [dev-dependencies]
 wat = "1.0"
@@ -45,7 +45,6 @@ sp-state-machine = { version = "0.11.0", path = "../../primitives/state-machine"
 sp-runtime = { version = "5.0.0", path = "../../primitives/runtime" }
 sp-maybe-compressed-blob = { version = "4.1.0-dev", path = "../../primitives/maybe-compressed-blob" }
 sc-tracing = { version = "4.0.0-dev", path = "../tracing" }
-tracing = "0.1.29"
 tracing-subscriber = "0.2.19"
 paste = "1.0"
 regex = "1"
