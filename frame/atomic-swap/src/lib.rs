@@ -45,6 +45,7 @@ mod tests;
 use codec::{Decode, Encode};
 use frame_support::{
 	dispatch::DispatchResult,
+	pallet_prelude::MaxEncodedLen,
 	traits::{BalanceStatus, Currency, Get, ReservableCurrency},
 	weights::Weight,
 	RuntimeDebugNoBound,
@@ -59,8 +60,9 @@ use sp_std::{
 };
 
 /// Pending atomic swap operation.
-#[derive(Clone, Eq, PartialEq, RuntimeDebugNoBound, Encode, Decode, TypeInfo)]
+#[derive(Clone, Eq, PartialEq, RuntimeDebugNoBound, Encode, Decode, TypeInfo, MaxEncodedLen)]
 #[scale_info(skip_type_params(T))]
+#[codec(mel_bound())]
 pub struct PendingSwap<T: Config> {
 	/// Source of the swap.
 	pub source: T::AccountId,
@@ -93,8 +95,9 @@ pub trait SwapAction<AccountId, T: Config> {
 }
 
 /// A swap action that only allows transferring balances.
-#[derive(Clone, RuntimeDebug, Eq, PartialEq, Encode, Decode, TypeInfo)]
+#[derive(Clone, RuntimeDebug, Eq, PartialEq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 #[scale_info(skip_type_params(C))]
+#[codec(mel_bound())]
 pub struct BalanceSwapAction<AccountId, C: ReservableCurrency<AccountId>> {
 	value: <C as Currency<AccountId>>::Balance,
 	_marker: PhantomData<C>,
@@ -165,7 +168,7 @@ pub mod pallet {
 		/// The overarching event type.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 		/// Swap action.
-		type SwapAction: SwapAction<Self::AccountId, Self> + Parameter;
+		type SwapAction: SwapAction<Self::AccountId, Self> + Parameter + MaxEncodedLen;
 		/// Limit of proof size.
 		///
 		/// Atomic swap is only atomic if once the proof is revealed, both parties can submit the
@@ -182,7 +185,6 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
-	#[pallet::without_storage_info]
 	pub struct Pallet<T>(PhantomData<T>);
 
 	#[pallet::storage]
@@ -193,6 +195,9 @@ pub mod pallet {
 		Blake2_128Concat,
 		HashedProof,
 		PendingSwap<T>,
+		OptionQuery,
+		GetDefault,
+		ConstU32<300_000>,
 	>;
 
 	#[pallet::error]

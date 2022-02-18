@@ -426,7 +426,7 @@ impl GetRuntimeBlockType for Runtime {
 	type RuntimeBlock = Block;
 }
 
-#[derive(Clone, RuntimeDebug)]
+#[derive(Clone, RuntimeDebug, Encode, Decode, PartialEq, Eq, TypeInfo)]
 pub struct Origin;
 
 impl From<frame_system::Origin<Runtime>> for Origin {

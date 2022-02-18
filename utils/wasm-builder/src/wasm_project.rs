@@ -341,12 +341,29 @@ fn project_enabled_features(
 ) -> Vec<String> {
 	let package = find_package_by_manifest_path(cargo_manifest, crate_metadata);
 
+	let std_enabled = package.features.get("std");
+
 	let mut enabled_features = package
 		.features
-		.keys()
-		.filter(|f| {
+		.iter()
+		.filter(|(f, v)| {
 			let mut feature_env = f.replace("-", "_");
 			feature_env.make_ascii_uppercase();
+
+			// If this is a feature that corresponds only to an optional dependency
+			// and this feature is enabled by the `std` feature, we assume that this
+			// is only done through the `std` feature. This is a bad heuristic and should
+			// be removed after namespaced features are landed:
+			// https://doc.rust-lang.org/cargo/reference/unstable.html#namespaced-features
+			// Then we can just express this directly in the `Cargo.toml` and do not require
+			// this heuristic anymore. However, for the transition phase between now and namespaced
+			// features already being present in nightly, we need this code to make
+			// runtimes compile with all the possible rustc versions.
+			if v.len() == 1 && v.get(0).map_or(false, |v| *v == format!("dep:{}", f)) {
+				if std_enabled.as_ref().map(|e| e.iter().any(|ef| ef == *f)).unwrap_or(false) {
+					return false
+				}
+			}
 
 			// We don't want to enable the `std`/`default` feature for the wasm build and
 			// we need to check if the feature is enabled by checking the env variable.
@@ -355,7 +372,7 @@ fn project_enabled_features(
 				.map(|v| v == "1")
 				.unwrap_or_default()
 		})
-		.cloned()
+		.map(|d| d.0.clone())
 		.collect::<Vec<_>>();
 
 	enabled_features.sort();

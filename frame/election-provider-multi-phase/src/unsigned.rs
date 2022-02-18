@@ -26,10 +26,9 @@ use codec::Encode;
 use frame_election_provider_support::{NposSolver, PerThing128};
 use frame_support::{dispatch::DispatchResult, ensure, traits::Get};
 use frame_system::offchain::SubmitTransaction;
-use sp_arithmetic::Perbill;
 use sp_npos_elections::{
-	assignment_ratio_to_staked_normalized, assignment_staked_to_ratio_normalized, is_score_better,
-	ElectionResult, NposSolution,
+	assignment_ratio_to_staked_normalized, assignment_staked_to_ratio_normalized, ElectionResult,
+	NposSolution,
 };
 use sp_runtime::{
 	offchain::storage::{MutateStorageError, StorageValueRef},
@@ -624,11 +623,9 @@ impl<T: Config> Pallet<T> {
 
 		// ensure score is being improved. Panic henceforth.
 		ensure!(
-			Self::queued_solution().map_or(true, |q: ReadySolution<_>| is_score_better::<Perbill>(
-				raw_solution.score,
-				q.score,
-				T::SolutionImprovementThreshold::get()
-			)),
+			Self::queued_solution().map_or(true, |q: ReadySolution<_>| raw_solution
+				.score
+				.strict_threshold_better(q.score, T::SolutionImprovementThreshold::get())),
 			Error::<T>::PreDispatchWeakSubmission,
 		);
 
@@ -748,11 +745,11 @@ mod tests {
 	use frame_support::{
 		assert_noop, assert_ok, bounded_vec, dispatch::Dispatchable, traits::OffchainWorker,
 	};
-	use sp_npos_elections::IndexAssignment;
+	use sp_npos_elections::{ElectionScore, IndexAssignment};
 	use sp_runtime::{
 		offchain::storage_lock::{BlockAndTime, StorageLock},
 		traits::ValidateUnsigned,
-		ModuleError, PerU16,
+		ModuleError, PerU16, Perbill,
 	};
 
 	type Assignment = crate::unsigned::Assignment<Runtime>;
@@ -760,8 +757,10 @@ mod tests {
 	#[test]
 	fn validate_unsigned_retracts_wrong_phase() {
 		ExtBuilder::default().desired_targets(0).build_and_execute(|| {
-			let solution =
-				RawSolution::<TestNposSolution> { score: [5, 0, 0], ..Default::default() };
+			let solution = RawSolution::<TestNposSolution> {
+				score: ElectionScore { minimal_stake: 5, ..Default::default() },
+				..Default::default()
+			};
 			let call = Call::submit_unsigned {
 				raw_solution: Box::new(solution.clone()),
 				witness: witness(),
@@ -833,8 +832,10 @@ mod tests {
 			roll_to(25);
 			assert!(MultiPhase::current_phase().is_unsigned());
 
-			let solution =
-				RawSolution::<TestNposSolution> { score: [5, 0, 0], ..Default::default() };
+			let solution = RawSolution::<TestNposSolution> {
+				score: ElectionScore { minimal_stake: 5, ..Default::default() },
+				..Default::default()
+			};
 			let call = Call::submit_unsigned {
 				raw_solution: Box::new(solution.clone()),
 				witness: witness(),
@@ -849,7 +850,10 @@ mod tests {
 			assert!(<MultiPhase as ValidateUnsigned>::pre_dispatch(&call).is_ok());
 
 			// set a better score
-			let ready = ReadySolution { score: [10, 0, 0], ..Default::default() };
+			let ready = ReadySolution {
+				score: ElectionScore { minimal_stake: 10, ..Default::default() },
+				..Default::default()
+			};
 			<QueuedSolution<Runtime>>::put(ready);
 
 			// won't work anymore.
@@ -874,7 +878,10 @@ mod tests {
 			roll_to(25);
 			assert!(MultiPhase::current_phase().is_unsigned());
 
-			let raw = RawSolution::<TestNposSolution> { score: [5, 0, 0], ..Default::default() };
+			let raw = RawSolution::<TestNposSolution> {
+				score: ElectionScore { minimal_stake: 5, ..Default::default() },
+				..Default::default()
+			};
 			let call =
 				Call::submit_unsigned { raw_solution: Box::new(raw.clone()), witness: witness() };
 			assert_eq!(raw.solution.unique_targets().len(), 0);
@@ -900,8 +907,10 @@ mod tests {
 				roll_to(25);
 				assert!(MultiPhase::current_phase().is_unsigned());
 
-				let solution =
-					RawSolution::<TestNposSolution> { score: [5, 0, 0], ..Default::default() };
+				let solution = RawSolution::<TestNposSolution> {
+					score: ElectionScore { minimal_stake: 5, ..Default::default() },
+					..Default::default()
+				};
 				let call = Call::submit_unsigned {
 					raw_solution: Box::new(solution.clone()),
 					witness: witness(),
@@ -930,8 +939,10 @@ mod tests {
 			assert!(MultiPhase::current_phase().is_unsigned());
 
 			// This is in itself an invalid BS solution.
-			let solution =
-				RawSolution::<TestNposSolution> { score: [5, 0, 0], ..Default::default() };
+			let solution = RawSolution::<TestNposSolution> {
+				score: ElectionScore { minimal_stake: 5, ..Default::default() },
+				..Default::default()
+			};
 			let call = Call::submit_unsigned {
 				raw_solution: Box::new(solution.clone()),
 				witness: witness(),
@@ -950,8 +961,10 @@ mod tests {
 			assert!(MultiPhase::current_phase().is_unsigned());
 
 			// This solution is unfeasible as well, but we won't even get there.
-			let solution =
-				RawSolution::<TestNposSolution> { score: [5, 0, 0], ..Default::default() };
+			let solution = RawSolution::<TestNposSolution> {
+				score: ElectionScore { minimal_stake: 5, ..Default::default() },
+				..Default::default()
+			};
 
 			let mut correct_witness = witness();
 			correct_witness.voters += 1;
@@ -1070,7 +1083,7 @@ mod tests {
 					Box::new(solution),
 					witness
 				));
-				assert_eq!(MultiPhase::queued_solution().unwrap().score[0], 10);
+				assert_eq!(MultiPhase::queued_solution().unwrap().score.minimal_stake, 10);
 
 				// trial 1: a solution who's score is only 2, i.e. 20% better in the first element.
 				let result = ElectionResult {
@@ -1086,7 +1099,7 @@ mod tests {
 				};
 				let (solution, _) = MultiPhase::prepare_election_result(result).unwrap();
 				// 12 is not 50% more than 10
-				assert_eq!(solution.score[0], 12);
+				assert_eq!(solution.score.minimal_stake, 12);
 				assert_noop!(
 					MultiPhase::unsigned_pre_dispatch_checks(&solution),
 					Error::<Runtime>::PreDispatchWeakSubmission,
@@ -1107,7 +1120,7 @@ mod tests {
 					],
 				};
 				let (solution, witness) = MultiPhase::prepare_election_result(result).unwrap();
-				assert_eq!(solution.score[0], 17);
+				assert_eq!(solution.score.minimal_stake, 17);
 
 				// and it is fine
 				assert_ok!(MultiPhase::unsigned_pre_dispatch_checks(&solution));
