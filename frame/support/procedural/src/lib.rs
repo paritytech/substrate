@@ -565,7 +565,7 @@ pub fn match_and_insert(input: TokenStream) -> TokenStream {
 	match_and_insert::match_and_insert(input)
 }
 
-#[proc_macro_derive(PalletError)]
+#[proc_macro_derive(PalletError, attributes(codec))]
 pub fn derive_pallet_error(input: TokenStream) -> TokenStream {
 	pallet_error::derive_pallet_error(input)
 }
