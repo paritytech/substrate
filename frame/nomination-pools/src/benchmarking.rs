@@ -369,11 +369,12 @@ frame_benchmarking::benchmarks! {
 	}
 
 	nominate {
-		log::info!("nominate bench");
 		clear_storage::<T>();
 
 		// Create a pool
-		let min_create_bond = MinCreateBond::<T>::get().max(T::StakingInterface::minimum_bond());
+		let min_create_bond = MinCreateBond::<T>::get()
+			.max(T::StakingInterface::minimum_bond())
+			.max(T::Currency::minimum_balance());
 		let (depositor, pool_account) = create_pool_account::<T>(0, min_create_bond);
 
 		// Create some accounts to nominate. For the sake of benchmarking they don't need to be actual validators
