@@ -90,7 +90,7 @@ impl FisherYates {
 	}
 }
 
-pub fn shuffle_using_seed<A: sp_std::cmp::Ord + Encode + Clone, E: Encode>(
+pub fn shuffle_using_seed<A: sp_std::cmp::Ord + Encode + Clone, E: Encode + Clone>(
 	extrinsics: Vec<(Option<A>, E)>,
 	seed: &H256,
 ) -> Vec<E> {
@@ -107,10 +107,14 @@ pub fn shuffle_using_seed<A: sp_std::cmp::Ord + Encode + Clone, E: Encode>(
 	// [ Alice, Alice, Alice, ... , Bob, Bob, Bob, ... ]
 	// let mut slots: Vec<Option<_>> =
 	// 	extrinsics.iter().map(|(who, _)| who).cloned().collect();
-	let mut slots = Vec::with_capacity(extrinsics.len());
+	// let mut slots = Vec::with_capacity(extrinsics.len());
+
+	// initial slots - just inherents
+	let mut slots = extrinsics.iter().filter(|tx| tx.0.is_none()).map(|(who,tx)| tx).cloned().collect::<Vec<_>>();
+	let only_extrinsics = extrinsics.into_iter().filter(|tx| tx.0.is_some()).collect::<Vec<(_,_)>>();
 
 	let mut grouped_extrinsics: BTreeMap<Option<_>, VecDeque<_>> =
-		extrinsics.into_iter().fold(BTreeMap::new(), |mut groups, (who, tx)| {
+		only_extrinsics.into_iter().fold(BTreeMap::new(), |mut groups, (who, tx)| {
 			groups.entry(who).or_insert_with(VecDeque::new).push_back(tx);
 			groups
 		});
