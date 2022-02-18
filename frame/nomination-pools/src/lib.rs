@@ -802,11 +802,7 @@ pub mod pallet {
 	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
-			Self {
-				min_join_bond: Zero::zero(),
-				min_create_bond: Zero::zero(),
-				max_pools: Some(10),
-			}
+			Self { min_join_bond: Zero::zero(), min_create_bond: Zero::zero(), max_pools: Some(10) }
 		}
 	}
 

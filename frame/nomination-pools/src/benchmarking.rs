@@ -1,6 +1,6 @@
 use super::*;
 use crate::Pallet as Pools;
-use frame_benchmarking::{account, whitelist_account, vec};
+use frame_benchmarking::{account, vec, whitelist_account};
 use frame_system::RawOrigin as Origin;
 
 const USER_SEED: u32 = 0;
@@ -210,9 +210,7 @@ frame_benchmarking::benchmarks! {
 	}
 
 	unbond_other {
-		log::info!("unbond_other bench");
 		clear_storage::<T>();
-		// let depositor = account("depositor", USER_SEED, 0);
 
 		// the weight the nominator will start at. The value used here is expected to be
 		// significantly higher than the first position in a list (e.g. the first bag threshold).
@@ -236,10 +234,11 @@ frame_benchmarking::benchmarks! {
 
 	// TODO: setup a withdraw unbonded kill scenario
 	pool_withdraw_unbonded {
-		log::info!("pool_withdraw_unbonded bench");
 		clear_storage::<T>();
 
-		let min_create_bond = MinCreateBond::<T>::get().max(T::StakingInterface::minimum_bond());
+		let min_create_bond = MinCreateBond::<T>::get()
+			.max(T::StakingInterface::minimum_bond())
+			.max(T::Currency::minimum_balance());
 		let (depositor, pool_account) = create_pool_account::<T>(0, min_create_bond);
 
 		// Add a new delegator
