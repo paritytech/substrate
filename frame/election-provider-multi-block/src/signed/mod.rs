@@ -175,7 +175,7 @@ pub mod pallet {
 	use frame_support::{
 		dispatch::DispatchResultWithPostInfo,
 		pallet_prelude::{StorageDoubleMap, ValueQuery, *},
-		traits::{defensive_path, Defensive, DefensiveSaturating, EstimateCallFee, TryCollect},
+		traits::{Defensive, DefensiveSaturating, EstimateCallFee, TryCollect},
 		transactional, Twox64Concat,
 	};
 	use frame_system::{ensure_signed, pallet_prelude::*};
@@ -370,8 +370,8 @@ pub mod pallet {
 
 				let record = (who.clone(), metadata.claimed_score);
 				match sorted_scores.force_insert_keep_right(pos, record) {
-					(true, None) => {},
-					(true, Some((discarded, _score))) => {
+					Ok(None) => {},
+					Ok(Some((discarded, _score))) => {
 						let metadata = SubmissionMetadataStorage::<T>::take(round, &discarded);
 						SubmissionStorage::<T>::remove_prefix((round, &discarded), None);
 						let _remaining = T::Currency::unreserve(
@@ -381,12 +381,7 @@ pub mod pallet {
 						debug_assert!(_remaining.is_zero());
 						Pallet::<T>::deposit_event(Event::<T>::Discarded(round, discarded));
 					},
-					(false, Some(_)) => {
-						defensive_path(
-							"force_insert_keep_right cannot NOT insert someone, but eject one; qed",
-						);
-					},
-					(false, None) => return Err("QueueFull".into()),
+					Err(()) => return Err("QueueFull".into()),
 				}
 			}
 

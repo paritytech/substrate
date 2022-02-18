@@ -1069,7 +1069,8 @@ pub mod pallet {
 					})?;
 
 			let solution = ReadySolution {
-				supports,
+				// TODO
+				supports: supports.into_iter().map(|(x, y)| (x, y.into())).collect::<Vec<_>>(),
 				score: Default::default(),
 				compute: ElectionCompute::Fallback,
 			};
@@ -1538,7 +1539,7 @@ impl<T: Config> Pallet<T> {
 						.map(|supports| (supports, ElectionCompute::Fallback))
 				},
 				|ReadySolution { supports, compute, .. }| {
-					let supports = supports.try_into_bounded_supports().expect("..");
+					let supports = supports.try_into_bounded_supports().expect("TODO");
 					Ok((supports, compute))
 				},
 			)

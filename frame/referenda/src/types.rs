@@ -79,14 +79,14 @@ pub trait InsertSorted<T> {
 		f: F,
 	) -> bool;
 }
-impl<T: Ord, S: Get<u32>> InsertSorted<T> for BoundedVec<T, S> {
+impl<T: Ord + Clone, S: Get<u32>> InsertSorted<T> for BoundedVec<T, S> {
 	fn insert_sorted_by_key<F: FnMut(&T) -> K, K: PartialOrd<K> + Ord>(
 		&mut self,
 		t: T,
 		mut f: F,
 	) -> bool {
 		let index = self.binary_search_by_key::<K, F>(&f(&t), f).unwrap_or_else(|x| x);
-		self.force_insert_keep_right(index, t)
+		self.force_insert_keep_right(index, t).is_ok()
 	}
 }
 

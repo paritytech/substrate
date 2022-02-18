@@ -51,6 +51,8 @@ macro_rules! defensive_with_err {
 }
 
 /// Generic function to mark an execution path as ONLY defensive.
+///
+/// Similar to mark a match arm or `if/else` branch as `unreachable!`.
 pub fn defensive_path(proof: &'static str) {
 	defensive_with_err!(proof);
 }
@@ -60,7 +62,6 @@ pub mod defensive_prelude {
 	pub use super::{Defensive, DefensiveOption, DefensiveResult, defensive_path};
 }
 
-/// A trait to handle errors and options when you are really sure that a condition must hold, but
 /// not brave enough to `expect` on it, or a default fallback value makes more sense.
 ///
 /// This trait mostly focuses on methods that eventually unwrap the inner value. See

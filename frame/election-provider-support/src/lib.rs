@@ -170,7 +170,7 @@
 pub mod onchain;
 
 use codec::{Decode, Encode, MaxEncodedLen};
-use frame_support::{traits::Get, BoundedVec, DebugNoBound, DefaultNoBound, RuntimeDebug};
+use frame_support::{traits::Get, BoundedVec, DefaultNoBound, RuntimeDebug};
 use scale_info::TypeInfo;
 use sp_npos_elections::{EvaluateSupport, Supports};
 use sp_std::{fmt::Debug, prelude::*};

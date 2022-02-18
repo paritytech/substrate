@@ -588,6 +588,7 @@ impl election_signed::Config for Runtime {
 	type EstimateCallFee = TransactionPayment;
 	type MaxSubmissions = ConstU32<5>;
 	type RewardBase = ConstU128<{ DOLLARS }>;
+	type BailoutGraceRatio = ();
 	type WeightInfo = ();
 }
 
