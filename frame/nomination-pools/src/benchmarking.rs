@@ -279,10 +279,11 @@ frame_benchmarking::benchmarks! {
 
 	// TODO: setup a withdraw unbonded kill scenario, make variable over slashing spans
 	withdraw_unbonded_other {
-		log::info!("withdraw_unbonded_other bench");
 		clear_storage::<T>();
 
-		let min_create_bond = MinCreateBond::<T>::get().max(T::StakingInterface::minimum_bond());
+		let min_create_bond = MinCreateBond::<T>::get()
+			.max(T::StakingInterface::minimum_bond())
+			.max(T::Currency::minimum_balance());
 		let (depositor, pool_account) = create_pool_account::<T>(0, min_create_bond);
 
 		// Add a new delegator
