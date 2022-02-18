@@ -502,12 +502,6 @@ where
 	let config = babe_link.config;
 	let slot_notification_sinks = Arc::new(Mutex::new(Vec::new()));
 
-	let client_clone = client.clone();
-	let on_finality = move |summary: &FinalityNotification<B>| {
-		aux_storage_cleanup(client_clone.as_ref(), summary)
-	};
-	client.register_finality_action(Box::new(on_finality));
-
 	let worker = BabeSlotWorker {
 		client: client.clone(),
 		block_import,
@@ -1752,7 +1746,11 @@ pub fn block_import<Client, Block: BlockT, I>(
 	client: Arc<Client>,
 ) -> ClientResult<(BabeBlockImport<Block, Client, I>, BabeLink<Block>)>
 where
-	Client: AuxStore + HeaderBackend<Block> + HeaderMetadata<Block, Error = sp_blockchain::Error>,
+	Client: AuxStore
+		+ HeaderBackend<Block>
+		+ HeaderMetadata<Block, Error = sp_blockchain::Error>
+		+ PreCommitActions<Block>
+		+ 'static,
 {
 	let epoch_changes = aux_schema::load_epoch_changes::<Block, _>(&*client, &config)?;
 	let link = BabeLink { epoch_changes: epoch_changes.clone(), config: config.clone() };
@@ -1761,6 +1759,12 @@ where
 	// epoch tree it is useful as a migration, so that nodes prune long trees on
 	// startup rather than waiting until importing the next epoch change block.
 	prune_finalized(client.clone(), &mut epoch_changes.shared_data())?;
+
+	let client_clone = client.clone();
+	let on_finality = move |summary: &FinalityNotification<Block>| {
+		aux_storage_cleanup(client_clone.as_ref(), summary)
+	};
+	client.register_finality_action(Box::new(on_finality));
 
 	let import = BabeBlockImport::new(client, epoch_changes, wrapped_block_import, config);
 
