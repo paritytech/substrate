@@ -324,10 +324,11 @@ frame_benchmarking::benchmarks! {
 	}
 
 	create {
-		log::info!("create bench");
 		clear_storage::<T>();
 
-		let min_create_bond = MinCreateBond::<T>::get().max(T::StakingInterface::minimum_bond());
+		let min_create_bond = MinCreateBond::<T>::get()
+			.max(T::StakingInterface::minimum_bond())
+			.max(T::Currency::minimum_balance());
 		let depositor: T::AccountId = account("depositor", USER_SEED, 0);
 
 		// Give the depositor some balance to bond
