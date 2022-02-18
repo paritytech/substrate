@@ -407,7 +407,7 @@ pub(crate) mod pallet {
 
 		/// Ensure that all the storage items managed by this struct are in `kill` state, meaning
 		/// that in the expect state after an election is OVER.
-		pub(crate) fn ensure_killed() {
+		pub(crate) fn assert_killed() {
 			use frame_support::assert_storage_noop;
 			assert_storage_noop!(Self::kill());
 		}

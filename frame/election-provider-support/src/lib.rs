@@ -170,7 +170,7 @@
 pub mod onchain;
 
 use codec::{Decode, Encode, MaxEncodedLen};
-use frame_support::{traits::Get, BoundedVec, DefaultNoBound, RuntimeDebug};
+use frame_support::{traits::Get, BoundedVec, DebugNoBound, DefaultNoBound, RuntimeDebug};
 use scale_info::TypeInfo;
 use sp_npos_elections::{EvaluateSupport, Supports};
 use sp_std::{fmt::Debug, prelude::*};
@@ -614,21 +614,12 @@ impl<AccountId, Bound: Get<u32>> TryFrom<sp_npos_elections::Support<AccountId>>
 ///
 /// Note the order of generic bounds, first comes the outer bound and then the inner. When possible,
 /// use [`BoundedSupportsOf`] to avoid mistakes.
-#[derive(Debug, Encode, Decode, TypeInfo, DefaultNoBound)]
+#[derive(Debug, Encode, Decode, TypeInfo, DefaultNoBound, MaxEncodedLen)]
+#[codec(mel_bound(AccountId: MaxEncodedLen, BOuter: Get<u32>, BInner: Get<u32>))]
 #[scale_info(skip_type_params(BOuter, BInner))]
 pub struct BoundedSupports<AccountId, BOuter: Get<u32>, BInner: Get<u32>>(
 	pub BoundedVec<(AccountId, BoundedSupport<AccountId, BInner>), BOuter>,
 );
-
-// TODO: would be better to derive, ask gui
-// should've work: #[codec(mel_bound(AccountId: MaxEncodedLen, BOuter: Get<u32>, BInner: Get<u32>))]
-impl<AccountId: MaxEncodedLen, BOuter: Get<u32>, BInner: Get<u32>> codec::MaxEncodedLen
-	for BoundedSupports<AccountId, BOuter, BInner>
-{
-	fn max_encoded_len() -> usize {
-		<BoundedVec<(AccountId, BoundedSupport<AccountId, BInner>), BOuter> as MaxEncodedLen>::max_encoded_len()
-	}
-}
 
 impl<AccountId, BOuter: Get<u32>, BInner: Get<u32>>
 	From<BoundedVec<(AccountId, BoundedSupport<AccountId, BInner>), BOuter>>

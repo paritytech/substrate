@@ -310,8 +310,13 @@ impl ExtBuilder {
 		staking::DesiredTargets::set(t);
 		self
 	}
-	pub(crate) fn signed_phase(self, d: BlockNumber) -> Self {
+	pub(crate) fn signed_phase(self, d: BlockNumber, v: BlockNumber) -> Self {
 		SignedPhase::set(d);
+		SignedValidationPhase::set(v);
+		self
+	}
+	pub(crate) fn unsigned_phase(self, d: BlockNumber) -> Self {
+		UnsignedPhase::set(d);
 		self
 	}
 	pub(crate) fn signed_validation_phase(self, d: BlockNumber) -> Self {
@@ -334,6 +339,13 @@ impl ExtBuilder {
 		let _ = pallet_balances::GenesisConfig::<Runtime> {
 			balances: vec![
 				// bunch of account for submitting stuff only.
+				(91, 100),
+				(92, 100),
+				(93, 100),
+				(94, 100),
+				(95, 100),
+				(96, 100),
+				(97, 100),
 				(99, 100),
 				(999, 100),
 				(9999, 100),
@@ -347,7 +359,7 @@ impl ExtBuilder {
 	/// Warning: this does not execute the post-sanity-checks.
 	pub(crate) fn build_offchainify(self) -> (sp_io::TestExternalities, Arc<RwLock<PoolState>>) {
 		let mut ext = self.build_unchecked();
-		let (offchain, offchain_state) = TestOffchainExt::new();
+		let (offchain, _offchain_state) = TestOffchainExt::new();
 		let (pool, pool_state) = TestTransactionPoolExt::new();
 
 		ext.register_extension(OffchainDbExt::new(offchain.clone()));
@@ -615,6 +627,7 @@ pub fn fake_solution(score: ElectionScore) -> PagedRawSolution<Runtime> {
 ///
 /// This is different from `solution_from_supports` in that it does not require the snapshot to
 /// exist.
+// TODO: probably deprecate this.
 pub fn raw_paged_solution_low_score() -> PagedRawSolution<Runtime> {
 	PagedRawSolution {
 		solution_pages: vec![TestNposSolution {
@@ -627,4 +640,9 @@ pub fn raw_paged_solution_low_score() -> PagedRawSolution<Runtime> {
 		round: 0,
 		score: ElectionScore { minimal_stake: 10, sum_stake: 20, sum_stake_squared: 200 },
 	}
+}
+
+/// Get the free and reserved balance of `who`.
+pub fn balances(who: AccountId) -> (Balance, Balance) {
+	(Balances::free_balance(who), Balances::reserved_balance(who))
 }

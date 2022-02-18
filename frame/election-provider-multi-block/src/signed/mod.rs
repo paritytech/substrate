@@ -30,12 +30,15 @@
 //!
 //! # Future Plans:
 //!
+//! **Lazy deletion**:
 //! Overall, this pallet can avoid the need to delete any storage item, by:
 //! 1. outsource the storage of solution data to some other pallet.
 //! 2. keep it here, but make everything be also a map of the round number, so that we can keep old
 //!    storage, and it is ONLY EVER removed, when after that round number is over. This can happen
 //!    for more or less free by the submitter itself, and by anyone else as well, in which case they
 //!    get a share of the the sum deposit. The share increases as times goes on.
+//!
+//! **Metadata update**: imagine you mis-computed your score.
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_election_provider_support::PageIndex;
@@ -64,6 +67,7 @@ type BalanceOf<T> =
 
 /// All of the (meta) data around a signed submission
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Default, RuntimeDebugNoBound)]
+#[cfg_attr(test, derive(frame_support::PartialEqNoBound, frame_support::EqNoBound))]
 #[codec(mel_bound(T: Config))]
 #[scale_info(skip_type_params(T))]
 pub struct SubmissionMetadata<T: Config> {
@@ -105,30 +109,28 @@ impl<T: Config> SolutionDataProvider for Pallet<T> {
 				// defensive: if there is a result to be reported, then we must have had some
 				// leader.
 				if let Some((winner, metadata)) =
-					Submissions::<T>::fully_take_leader(Self::current_round()).defensive()
+					Submissions::<T>::take_leader_with_data(Self::current_round()).defensive()
 				{
 					// first, let's give them their reward.
 					let reward = metadata.reward.saturating_add(metadata.fee);
 					let imbalance = T::Currency::deposit_creating(&winner, reward);
-					Self::deposit_event(Event::<T>::Rewarded(winner.clone(), reward));
+					Self::deposit_event(Event::<T>::Rewarded(
+						current_round,
+						winner.clone(),
+						reward,
+					));
 
 					// then, unreserve their deposit
 					let _remaining = T::Currency::unreserve(&winner, metadata.deposit);
 					debug_assert!(_remaining.is_zero());
 
-					// For now, I will wipe everything on the spot, but in ideal case, we would do
-					// it over time.
-					// NOTE: what we need a generic "StateGarbageCollector", to which you give a
-					// bunch of storage keys, and it will clean them for you on_idle. It should just
-					// be able to accept one job at a time, and report back to you if it is done
-					// doing what it was doing, or not. UPDATE: no, we do them via a bit and
-					// transactions.
+					// note: we could wipe this data either over time, or via transactions.
 					while let Some((discarded, metadata)) =
-						Submissions::<T>::fully_take_leader(Self::current_round())
+						Submissions::<T>::take_leader_with_data(Self::current_round())
 					{
 						let _remaining = T::Currency::unreserve(&discarded, metadata.deposit);
 						debug_assert!(_remaining.is_zero());
-						Self::deposit_event(Event::<T>::Discarded(discarded));
+						Self::deposit_event(Event::<T>::Discarded(current_round, discarded));
 					}
 
 					// everything should have been clean.
@@ -140,13 +142,13 @@ impl<T: Config> SolutionDataProvider for Pallet<T> {
 				// defensive: if there is a result to be reported, then we must have had some
 				// leader.
 				if let Some((loser, metadata)) =
-					Submissions::<T>::fully_take_leader(Self::current_round()).defensive()
+					Submissions::<T>::take_leader_with_data(Self::current_round()).defensive()
 				{
 					// first, let's slash their deposit.
 					let slash = metadata.deposit;
 					let (imbalance, _remainder) = T::Currency::slash_reserved(&loser, slash);
 					debug_assert!(_remainder.is_zero());
-					Self::deposit_event(Event::<T>::Slashed(loser.clone(), slash));
+					Self::deposit_event(Event::<T>::Slashed(current_round, loser.clone(), slash));
 
 					// inform the verifier that they can now try again, if we're still in the signed
 					// validation phase.
@@ -173,11 +175,12 @@ pub mod pallet {
 	use frame_support::{
 		dispatch::DispatchResultWithPostInfo,
 		pallet_prelude::{StorageDoubleMap, ValueQuery, *},
-		traits::{defensive_path, Defensive, EstimateCallFee, TryCollect},
+		traits::{defensive_path, Defensive, DefensiveSaturating, EstimateCallFee, TryCollect},
 		transactional, Twox64Concat,
 	};
 	use frame_system::{ensure_signed, pallet_prelude::*};
-	use sp_runtime::traits::Zero;
+	use sp_runtime::{traits::Zero, DispatchError, Perbill};
+	use sp_std::collections::btree_set::BTreeSet;
 
 	pub trait WeightInfo {}
 	impl WeightInfo for () {}
@@ -196,6 +199,7 @@ pub mod pallet {
 		type RewardBase: Get<BalanceOf<Self>>;
 
 		type MaxSubmissions: Get<u32>;
+		type BailoutGraceRatio: Get<Perbill>;
 
 		type EstimateCallFee: EstimateCallFee<Call<Self>, BalanceOf<Self>>;
 
@@ -219,10 +223,12 @@ pub mod pallet {
 	///
 	/// Among the submissions of each round:
 	/// - `SortedScores` should never contain duplicate account ids.
-	/// - For any key in `SubmissionMetadataStorage`, a corresponding value should exist in
-	/// `SortedScores` vector.
+	/// - For any account id in `SortedScores`, a corresponding value should exist in
+	/// `SubmissionMetadataStorage` under that account id's key.
 	///       - And the value of `metadata.score` must be equal to the score stored in
 	///         `SortedScores`.
+	/// - And visa versa: for any key existing in `SubmissionMetadataStorage`, an item must exist in
+	///   `SortedScores`. TODO:
 	/// - For any first key existing in `SubmissionStorage`, a key must exist in
 	///   `SubmissionMetadataStorage`.
 	/// - For any first key in `SubmissionStorage`, the number of second keys existing should be the
@@ -291,7 +297,7 @@ pub mod pallet {
 		///
 		/// This removes all associated data of the leader from storage, discarding the submission
 		/// data and score, returning the rest.
-		pub(crate) fn fully_take_leader(
+		pub(crate) fn take_leader_with_data(
 			round: u32,
 		) -> Option<(T::AccountId, SubmissionMetadata<T>)> {
 			Self::mutate_checked(round, || {
@@ -305,13 +311,32 @@ pub mod pallet {
 			})
 		}
 
+		/// *Fully* **TAKE** (i.e. get and remove) a submission from storage, with all of its
+		/// associated data.
+		///
+		/// This removes all associated data of the submitter from storage, discarding the
+		/// submission data and score, returning the metadata.
+		pub(crate) fn take_submission_with_data(
+			round: u32,
+			who: &T::AccountId,
+		) -> Option<SubmissionMetadata<T>> {
+			Self::mutate_checked(round, || {
+				SortedScores::<T>::mutate(round, |sorted_scores| {
+					if let Some(index) = sorted_scores.iter().position(|(x, _)| x == who) {
+						sorted_scores.remove(index);
+					}
+				});
+				SubmissionStorage::<T>::remove_prefix((round, who), None);
+				SubmissionMetadataStorage::<T>::take(round, who)
+			})
+		}
+
 		/// Try and register a new solution.
 		///
 		/// Registration can only happen for the current round.
 		///
-		/// If a solution from `who` already exists, then it is updated to the new metadata, else it
-		/// is potentially inserted. In the later case, submission might fail if the queue is
-		/// already full, and the solution is not good enough to eject the weakest.
+		/// registration might fail if the queue is already full, and the solution is not good
+		/// enough to eject the weakest.
 		fn try_register(
 			round: u32,
 			who: &T::AccountId,
@@ -326,11 +351,9 @@ pub mod pallet {
 			metadata: SubmissionMetadata<T>,
 		) -> DispatchResultWithPostInfo {
 			let mut sorted_scores = SortedScores::<T>::get(round);
-			if let Some(pos) = sorted_scores.iter().position(|(x, _)| x == who) {
-				// must have already existed, just update their claim.
-				debug_assert!(SubmissionMetadataStorage::<T>::contains_key(round, who));
-				// Note: due to the limited API of BoundedVec, using IndexMut is our only way.
-				sorted_scores[pos].1 = metadata.claimed_score;
+
+			if let Some(_) = sorted_scores.iter().position(|(x, _)| x == who) {
+				return Err("Duplicate".into())
 			} else {
 				// must be new.
 				debug_assert!(!SubmissionMetadataStorage::<T>::contains_key(round, who));
@@ -356,14 +379,14 @@ pub mod pallet {
 							metadata.map(|m| m.deposit).defensive_unwrap_or_default(),
 						);
 						debug_assert!(_remaining.is_zero());
-						Pallet::<T>::deposit_event(Event::<T>::Discarded(discarded));
+						Pallet::<T>::deposit_event(Event::<T>::Discarded(round, discarded));
 					},
 					(false, Some(_)) => {
 						defensive_path(
 							"force_insert_keep_right cannot NOT insert someone, but eject one; qed",
 						);
 					},
-					(false, None) => return Err("too many submissions".into()),
+					(false, None) => return Err("QueueFull".into()),
 				}
 			}
 
@@ -397,8 +420,8 @@ pub mod pallet {
 			maybe_solution: Option<T::Solution>,
 		) -> DispatchResultWithPostInfo {
 			let mut metadata =
-				SubmissionMetadataStorage::<T>::get(round, who).ok_or("not registered")?;
-			ensure!(page < T::Pages::get(), "bad page index");
+				SubmissionMetadataStorage::<T>::get(round, who).ok_or("NotRegistered")?;
+			ensure!(page < T::Pages::get(), "BadPageIndex");
 
 			// defensive only: we resize `meta.pages` once to be `T::Pages` elements once, and never
 			// resize it again; `page` is checked here to be in bound; element must exist; qed.
@@ -449,25 +472,35 @@ pub mod pallet {
 		}
 	}
 
-	#[cfg(debug_assertions)]
+	#[cfg(any(test, debug_assertions))]
 	impl<T: Config> Submissions<T> {
 		pub fn submissions_iter(
 			round: u32,
 		) -> impl Iterator<Item = (T::AccountId, PageIndex, T::Solution)> {
-			// TODO: ask keith if there a better way, there should be.
-			SubmissionStorage::<T>::iter().filter_map(move |((r, x, y), z)| {
-				if r == round {
-					Some((x, y, z))
-				} else {
-					None
-				}
-			})
+			SubmissionStorage::<T>::iter_prefix((round,)).map(|((x, y), z)| (x, y, z))
 		}
 
 		pub fn metadata_iter(
 			round: u32,
 		) -> impl Iterator<Item = (T::AccountId, SubmissionMetadata<T>)> {
 			SubmissionMetadataStorage::<T>::iter_prefix(round)
+		}
+
+		pub fn metadata_of(round: u32, who: T::AccountId) -> Option<SubmissionMetadata<T>> {
+			SubmissionMetadataStorage::<T>::get(round, who)
+		}
+
+		pub fn pages_of(
+			round: u32,
+			who: T::AccountId,
+		) -> impl Iterator<Item = (PageIndex, T::Solution)> {
+			SubmissionStorage::<T>::iter_prefix((round, who))
+		}
+
+		pub fn leaderboard(
+			round: u32,
+		) -> BoundedVec<(T::AccountId, ElectionScore), T::MaxSubmissions> {
+			SortedScores::<T>::get(round)
 		}
 
 		/// Ensure that all the storage items associated with the given round are in `killed` state,
@@ -484,12 +517,7 @@ pub mod pallet {
 		pub(crate) fn sanity_check_round(round: u32) -> Result<(), &'static str> {
 			let sorted_scores = SortedScores::<T>::get(round);
 			assert_eq!(
-				sorted_scores
-					.clone()
-					.into_iter()
-					.map(|(x, _)| x)
-					.collect::<sp_std::collections::btree_set::BTreeSet<_>>()
-					.len(),
+				sorted_scores.clone().into_iter().map(|(x, _)| x).collect::<BTreeSet<_>>().len(),
 				sorted_scores.len()
 			);
 
@@ -512,19 +540,13 @@ pub mod pallet {
 				.collect::<Result<Vec<_>, &'static str>>()?;
 
 			ensure!(
-				SubmissionStorage::<T>::iter_keys()
-					.filter_map(|(k0, k1, k2)| if k0 == round { Some((k1, k2)) } else { None })
-					.map(|(k1, _k2)| k1)
-					.all(|submitter| SubmissionMetadataStorage::<T>::contains_key(
-						round, submitter
-					)),
+				SubmissionStorage::<T>::iter_key_prefix((round,)).map(|(k1, _k2)| k1).all(
+					|submitter| SubmissionMetadataStorage::<T>::contains_key(round, submitter)
+				),
 				"missing metadata of submitter"
 			);
 
-			for submitter in SubmissionStorage::<T>::iter_keys()
-				.filter_map(|(k0, k1, k2)| if k0 == round { Some((k1, k2)) } else { None })
-				.map(|(k1, _k2)| k1)
-			{
+			for submitter in SubmissionStorage::<T>::iter_key_prefix((round,)).map(|(k1, _k2)| k1) {
 				let pages_count =
 					SubmissionStorage::<T>::iter_key_prefix((round, &submitter)).count();
 				let metadata = SubmissionMetadataStorage::<T>::get(round, submitter)
@@ -544,20 +566,21 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// Upcoming submission has been registered for the given account, with the given score.
-		Registered(T::AccountId, ElectionScore),
+		Registered(u32, T::AccountId, ElectionScore),
 		/// A page of solution solution with the given index has been stored for the given account.
-		Stored(T::AccountId, PageIndex),
-		Rewarded(T::AccountId, BalanceOf<T>),
-		Slashed(T::AccountId, BalanceOf<T>),
-		Discarded(T::AccountId),
+		Stored(u32, T::AccountId, PageIndex),
+		Rewarded(u32, T::AccountId, BalanceOf<T>),
+		Slashed(u32, T::AccountId, BalanceOf<T>),
+		Discarded(u32, T::AccountId),
+		Bailed(u32, T::AccountId),
 	}
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		/// Submit an upcoming solution for registration.
 		///
-		/// If `who` already registered, it updates it. Else, a new a entry is added, if the bound
-		/// (`T::MaxSubmissions`) is not met yet.
+		/// - no updating
+		/// - kept based on sorted scores.
 		#[pallet::weight(0)]
 		#[transactional]
 		pub fn register(
@@ -567,37 +590,26 @@ pub mod pallet {
 			let who = ensure_signed(origin)?;
 			ensure!(crate::Pallet::<T>::current_phase().is_signed(), "phase not signed");
 
+			// note: we could already check if this is a duplicate here, but prefer keeping the code
+			// simple for now.
+
 			let deposit = T::DepositBase::get();
 			let reward = T::RewardBase::get();
-			let fee = Zero::zero();
+			let fee = T::EstimateCallFee::estimate_call_fee(
+				&Call::register { claimed_score },
+				None.into(),
+			);
 			let mut pages = BoundedVec::<_, _>::with_bounded_capacity(T::Pages::get() as usize);
 			pages.bounded_resize(T::Pages::get() as usize, false);
 
 			let new_metadata = SubmissionMetadata { claimed_score, deposit, reward, fee, pages };
 
 			T::Currency::reserve(&who, deposit).map_err(|_| "insufficient funds")?;
-			let _ = Submissions::<T>::try_register(Self::current_round(), &who, new_metadata)?;
-			Self::deposit_event(Event::<T>::Registered(who, claimed_score));
-			Ok(().into())
-		}
+			let round = Self::current_round();
+			let _ = Submissions::<T>::try_register(round, &who, new_metadata)?;
 
-		/// Retract a submission.
-		///
-		/// Needs to pay for the removal of all associated storage items, but no string attached
-		/// henceforth.
-		///
-		/// This should lessen the grief, but it should still be fairly expensive, because we don't
-		/// want users to register empty slots and all retract at the very end.
-		///
-		/// Useful for when a submitted realized they have made a mistake.
-		#[pallet::weight(0)]
-		pub fn retract(
-			origin: OriginFor<T>,
-			claimed_score: ElectionScore,
-		) -> DispatchResultWithPostInfo {
-			let who = ensure_signed(origin)?;
-			ensure!(crate::Pallet::<T>::current_phase().is_signed(), "phase not signed");
-			todo!()
+			Self::deposit_event(Event::<T>::Registered(round, who, claimed_score));
+			Ok(().into())
 		}
 
 		#[pallet::weight(0)]
@@ -609,10 +621,38 @@ pub mod pallet {
 			let who = ensure_signed(origin)?;
 			ensure!(crate::Pallet::<T>::current_phase().is_signed(), "phase not signed");
 
-			Submissions::<T>::try_mutate_page(Self::current_round(), &who, page, maybe_solution)?;
-			Self::deposit_event(Event::<T>::Stored(who, page));
+			let round = Self::current_round();
+			Submissions::<T>::try_mutate_page(round, &who, page, maybe_solution)?;
+			Self::deposit_event(Event::<T>::Stored(round, who, page));
 
 			Ok(().into())
+		}
+
+		/// Retract a submission.
+		///
+		/// This will fully remove the solution from storage.
+		#[pallet::weight(0)]
+		#[transactional]
+		pub fn bail(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
+			let who = ensure_signed(origin)?;
+			ensure!(crate::Pallet::<T>::current_phase().is_signed(), "phase not signed");
+			let round = Self::current_round();
+			let metadata = Submissions::<T>::take_submission_with_data(round, &who)
+				.ok_or::<DispatchError>("NoSubmission".into())?;
+
+			let deposit = metadata.deposit;
+			let to_refund = T::BailoutGraceRatio::get() * deposit;
+			let to_slash = deposit.defensive_saturating_sub(to_refund);
+
+			// TODO: a nice defensive op for this.
+			let _remainder = T::Currency::unreserve(&who, to_refund);
+			debug_assert!(_remainder.is_zero());
+			let (imbalance, _remainder) = T::Currency::slash_reserved(&who, to_slash);
+			debug_assert!(_remainder.is_zero());
+
+			Self::deposit_event(Event::<T>::Bailed(round, who));
+
+			Ok(None.into())
 		}
 	}
 

@@ -25,15 +25,17 @@ use super::{AccountId, MaxVotesPerVoter, Runtime};
 frame_support::parameter_types! {
 	pub static Targets: Vec<AccountId> = vec![10, 20, 30, 40];
 	pub static Voters: Vec<VoterOf<Runtime>> = vec![
+		// page 2:
 		(1, 10, bounded_vec![10, 20]),
 		(2, 10, bounded_vec![30, 40]),
 		(3, 10, bounded_vec![40]),
 		(4, 10, bounded_vec![10, 20, 40]),
+		// page 1:
 		(5, 10, bounded_vec![10, 30, 40]),
 		(6, 10, bounded_vec![20, 30, 40]),
 		(7, 10, bounded_vec![20, 30]),
 		(8, 10, bounded_vec![10]),
-		// self votes.
+		// page 0: (self-votes)
 		(10, 10, bounded_vec![10]),
 		(20, 20, bounded_vec![20]),
 		(30, 30, bounded_vec![30]),

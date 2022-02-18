@@ -234,7 +234,7 @@ mod pallet {
 				current_phase
 			);
 			match current_phase {
-				Phase::Unsigned((true, opened)) if opened == now => {
+				Phase::Unsigned(opened) if opened == now => {
 					// Mine a new solution, cache it, and attempt to submit it
 					let initial_output =
 						OffchainWorkerMiner::<T>::ensure_offchain_repeat_frequency(now)
@@ -246,7 +246,7 @@ mod pallet {
 						initial_output
 					);
 				},
-				Phase::Unsigned((true, opened)) if opened < now => {
+				Phase::Unsigned(opened) if opened < now => {
 					// Try and resubmit the cached solution, and recompute ONLY if it is not
 					// feasible.
 					let resubmit_output =
@@ -284,7 +284,7 @@ mod pallet {
 			paged_solution: &PagedRawSolution<T>,
 		) -> Result<(), crate::Error<T>> {
 			ensure!(
-				crate::Pallet::<T>::current_phase().is_unsigned_open(),
+				crate::Pallet::<T>::current_phase().is_unsigned(),
 				crate::Error::<T>::EarlySubmission
 			);
 
@@ -442,7 +442,7 @@ mod validate_unsigned {
 
 	#[test]
 	fn retracts_wrong_phase() {
-		ExtBuilder::unsigned().signed_phase(5).build_and_execute(|| {
+		ExtBuilder::unsigned().signed_phase(5, 0).build_and_execute(|| {
 			let solution = raw_paged_solution_low_score();
 			let call = Call::submit_unsigned { paged_solution: Box::new(solution.clone()) };
 
@@ -487,22 +487,6 @@ mod validate_unsigned {
 				&call
 			));
 			assert_ok!(<UnsignedPallet as ValidateUnsigned>::pre_dispatch(&call));
-
-			// unsigned -- but not enabled.
-			<crate::CurrentPhase<Runtime>>::put(Phase::Unsigned((false, 20)));
-			assert!(MultiBlock::current_phase().is_unsigned());
-			assert!(matches!(
-				<UnsignedPallet as ValidateUnsigned>::validate_unsigned(
-					TransactionSource::Local,
-					&call
-				)
-				.unwrap_err(),
-				TransactionValidityError::Invalid(InvalidTransaction::Custom(0))
-			));
-			assert!(matches!(
-				<UnsignedPallet as ValidateUnsigned>::pre_dispatch(&call).unwrap_err(),
-				TransactionValidityError::Invalid(InvalidTransaction::Custom(0))
-			));
 		})
 	}
 

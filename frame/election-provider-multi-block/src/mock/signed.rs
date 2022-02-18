@@ -18,13 +18,14 @@
 use frame_election_provider_support::PageIndex;
 use frame_support::{assert_ok, parameter_types, traits::EstimateCallFee, BoundedVec};
 use sp_npos_elections::ElectionScore;
+use sp_runtime::{traits::Zero, Perbill};
 
 use crate::{
 	mock::{
-		multi_block_events, roll_next, roll_to_signed_validation_open, verifier_events, AccountId,
-		Origin, VerifierPallet,
+		balances, multi_block_events, roll_next, roll_to_signed_validation_open, verifier_events,
+		AccountId, Origin, VerifierPallet,
 	},
-	signed::{self as signed_pallet, Event as SignedEvent},
+	signed::{self as signed_pallet, Event as SignedEvent, Submissions},
 	verifier::{self, AsynchronousVerifier, SolutionDataProvider, VerificationResult, Verifier},
 	PadSolutionPages, PagedRawSolution, Pagify, SolutionOf,
 };
@@ -73,6 +74,7 @@ parameter_types! {
 	pub static SignedMaxSubmissions: u32 = 3;
 	pub static SignedRewardBase: Balance = 3;
 	pub static SignedPhaseSwitch: SignedSwitch = SignedSwitch::Real;
+	pub static BailoutGraceRatio: Perbill = Perbill::from_percent(20);
 }
 
 impl crate::signed::Config for Runtime {
@@ -83,6 +85,7 @@ impl crate::signed::Config for Runtime {
 	type EstimateCallFee = FixedCallFee;
 	type MaxSubmissions = SignedMaxSubmissions;
 	type RewardBase = SignedRewardBase;
+	type BailoutGraceRatio = BailoutGraceRatio;
 	type WeightInfo = ();
 }
 
@@ -131,12 +134,14 @@ pub fn signed_events() -> Vec<crate::signed::Event<Runtime>> {
 /// Load a signed solution into its pallet.
 pub fn load_signed_for_verification(who: AccountId, paged: PagedRawSolution<Runtime>) {
 	let initial_balance = Balances::free_balance(&who);
-	assert_eq!(Balances::reserved_balance(&who), 0);
+	assert_eq!(balances(who), (initial_balance, 0));
 
 	assert_ok!(SignedPallet::register(Origin::signed(who), paged.score.clone()));
 
-	assert_eq!(Balances::free_balance(&who), initial_balance - SignedDepositBase::get());
-	assert_eq!(Balances::reserved_balance(&who), SignedDepositBase::get());
+	assert_eq!(
+		balances(who),
+		(initial_balance - SignedDepositBase::get(), SignedDepositBase::get())
+	);
 
 	for (page_index, solution_page) in paged.solution_pages.pagify(Pages::get()) {
 		assert_ok!(SignedPallet::submit_page(
@@ -146,20 +151,16 @@ pub fn load_signed_for_verification(who: AccountId, paged: PagedRawSolution<Runt
 		));
 	}
 
-	assert_eq!(
-		signed_events(),
-		vec![
-			SignedEvent::Registered(who, paged.score),
-			SignedEvent::Stored(who, 0),
-			SignedEvent::Stored(who, 1),
-			SignedEvent::Stored(who, 2)
-		]
-	);
+	let mut events = signed_events();
+	for _ in 0..Pages::get() {
+		let event = events.pop().unwrap();
+		assert!(matches!(event, SignedEvent::Stored(_, x, _) if x == who))
+	}
+	assert!(matches!(events.pop().unwrap(), SignedEvent::Registered(_, x, _) if x == who));
 
 	let full_deposit =
 		SignedDepositBase::get() + (Pages::get() as Balance) * SignedDepositPerPage::get();
-	assert_eq!(Balances::free_balance(&who), initial_balance - full_deposit);
-	assert_eq!(Balances::reserved_balance(&who), full_deposit);
+	assert_eq!(balances(who), (initial_balance - full_deposit, full_deposit));
 }
 
 /// Same as [`load_signed_for_verification`], but also goes forward to the beginning of the signed
@@ -209,12 +210,14 @@ pub fn load_signed_for_verification_and_start_and_roll_to_verified(
 	assert_eq!(<Runtime as crate::Config>::Verifier::queued_score(), None);
 
 	// roll to the block it is finalized.
-	roll_next();
-	roll_next();
-	roll_next();
+	for _ in 0..Pages::get() {
+		roll_next();
+	}
+
 	assert_eq!(
 		verifier_events(),
 		vec![
+			// TODO: these are hardcoded for 3 page.
 			verifier::Event::Verified(2, 2),
 			verifier::Event::Verified(1, 2),
 			verifier::Event::Verified(0, 2),
@@ -241,4 +244,14 @@ pub fn load_mock_signed_and_start(raw_paged: PagedRawSolution<Runtime>) {
 
 	// Let's gooooo!
 	assert_ok!(<VerifierPallet as AsynchronousVerifier>::start());
+}
+
+/// Ensure that no submission data exists in `round` for `who`.
+pub fn assert_no_data_for(round: u32, who: AccountId) {
+	assert!(Submissions::<Runtime>::leaderboard(round)
+		.into_iter()
+		.find(|(x, _)| x == &who)
+		.is_none());
+	assert!(Submissions::<Runtime>::metadata_of(round, who).is_none());
+	assert!(Submissions::<Runtime>::pages_of(round, who).count().is_zero());
 }

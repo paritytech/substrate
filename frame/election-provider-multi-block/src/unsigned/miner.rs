@@ -1757,7 +1757,7 @@ mod offchain_worker_miner {
 		let (mut ext, pool) = ExtBuilder::unsigned().build_offchainify();
 		ext.execute_with_sanity_checks(|| {
 			roll_to(25);
-			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, 25)));
+			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned(25));
 
 			let last_block =
 				StorageValueRef::persistent(&OffchainWorkerMiner::<Runtime>::OFFCHAIN_LAST_BLOCK);
@@ -1781,7 +1781,7 @@ mod offchain_worker_miner {
 		let (mut ext, pool) = ExtBuilder::unsigned().build_offchainify();
 		ext.execute_with_sanity_checks(|| {
 			roll_to_with_ocw(25, None);
-			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, 25)));
+			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned(25));
 			// OCW must have submitted now
 
 			let encoded = pool.read().transactions[0].clone();
@@ -1800,7 +1800,7 @@ mod offchain_worker_miner {
 		ext.execute_with_sanity_checks(|| {
 			let offchain_repeat = <Runtime as crate::unsigned::Config>::OffchainRepeat::get();
 			roll_to(25);
-			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, 25)));
+			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned(25));
 
 			assert!(OffchainWorkerMiner::<Runtime>::cached_solution().is_none());
 			// creates, caches, submits without expecting previous cache value

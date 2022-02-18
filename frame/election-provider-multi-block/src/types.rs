@@ -294,7 +294,7 @@ pub enum Phase<Bn> {
 	/// As validator nodes are free to edit their OCW code, they could simply ignore this advisory
 	/// and always compute their own solution. However, by default, when the unsigned phase is
 	/// passive, the offchain workers will not bother running.
-	Unsigned((bool, Bn)), // TODO: remove the bool
+	Unsigned(Bn),
 	/// Snapshot is being created. No other operation is allowed. This can be one or more blocks.
 	/// The inner value should be read as "`remaining` number of pages are left to be fetched".
 	/// Thus, if inner value is `0` if the snapshot is complete and we are ready to move on.
@@ -336,12 +336,7 @@ impl<Bn: PartialEq + Eq> Phase<Bn> {
 
 	/// Whether the phase is unsigned and open or not, with specific start.
 	pub fn is_unsigned_open_at(&self, at: Bn) -> bool {
-		matches!(self, Phase::Unsigned((true, real)) if *real == at)
-	}
-
-	/// Whether the phase is unsigned and open or not.
-	pub fn is_unsigned_open(&self) -> bool {
-		matches!(self, Phase::Unsigned((true, _)))
+		matches!(self, Phase::Unsigned(real) if *real == at)
 	}
 
 	/// Whether the phase is off or not.

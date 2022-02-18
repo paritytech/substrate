@@ -540,7 +540,7 @@ pub mod pallet {
 				Phase::Signed | Phase::SignedValidation(_) | Phase::Snapshot(0)
 					if remaining_blocks <= unsigned_deadline && remaining_blocks > Zero::zero() =>
 				{
-					<CurrentPhase<T>>::put(Phase::Unsigned((true, now)));
+					<CurrentPhase<T>>::put(Phase::Unsigned(now));
 					Self::deposit_event(Event::UnsignedPhaseStarted(Self::round()));
 					0
 				},
@@ -1179,7 +1179,7 @@ mod phase_rotation {
 			assert_eq!(MultiBlock::round(), 0);
 
 			roll_to(25);
-			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, 25)));
+			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned(25));
 			assert_eq!(
 				multi_block_events(),
 				vec![
@@ -1191,12 +1191,12 @@ mod phase_rotation {
 			assert_ok!(Snapshot::<Runtime>::ensure_snapshot(true, 1));
 
 			roll_to(30);
-			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, 25)));
+			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned(25));
 			assert_ok!(Snapshot::<Runtime>::ensure_snapshot(true, 1));
 
 			// We close when upstream tells us to elect.
 			roll_to(32);
-			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, 25)));
+			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned(25));
 			assert_ok!(Snapshot::<Runtime>::ensure_snapshot(true, 1));
 
 			MultiBlock::elect(0).unwrap();
@@ -1274,7 +1274,7 @@ mod phase_rotation {
 			assert_eq!(MultiBlock::round(), 0);
 
 			roll_to(25);
-			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, 25)));
+			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned(25));
 			assert_eq!(
 				multi_block_events(),
 				vec![
@@ -1286,16 +1286,16 @@ mod phase_rotation {
 			assert_ok!(Snapshot::<Runtime>::ensure_snapshot(true, 2));
 
 			roll_to(29);
-			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, 25)));
+			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned(25));
 			assert_ok!(Snapshot::<Runtime>::ensure_snapshot(true, 2));
 
 			roll_to(30);
-			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, 25)));
+			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned(25));
 			assert_ok!(Snapshot::<Runtime>::ensure_snapshot(true, 2));
 
 			// We close when upstream tells us to elect.
 			roll_to(32);
-			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, 25)));
+			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned(25));
 
 			MultiBlock::elect(0).unwrap(); // and even this one's coming from the fallback.
 			assert!(MultiBlock::current_phase().is_off());
@@ -1376,7 +1376,7 @@ mod phase_rotation {
 			assert_eq!(MultiBlock::round(), 0);
 
 			roll_to(25);
-			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, 25)));
+			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned(25));
 			assert_eq!(
 				multi_block_events(),
 				vec![
@@ -1387,14 +1387,14 @@ mod phase_rotation {
 			);
 
 			roll_to(29);
-			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, 25)));
+			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned(25));
 
 			roll_to(30);
-			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, 25)));
+			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned(25));
 
 			// We close when upstream tells us to elect.
 			roll_to(32);
-			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, 25)));
+			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned(25));
 
 			MultiBlock::elect(0).unwrap();
 			assert!(MultiBlock::current_phase().is_off());
@@ -1484,7 +1484,7 @@ mod phase_rotation {
 				assert_eq!(MultiBlock::round(), 0);
 
 				roll_to(23);
-				assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, 23)));
+				assert_eq!(MultiBlock::current_phase(), Phase::Unsigned(23));
 				assert_eq!(
 					multi_block_events(),
 					vec![
@@ -1495,14 +1495,14 @@ mod phase_rotation {
 				);
 
 				roll_to(27);
-				assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, 23)));
+				assert_eq!(MultiBlock::current_phase(), Phase::Unsigned(23));
 
 				roll_to(28);
-				assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, 23)));
+				assert_eq!(MultiBlock::current_phase(), Phase::Unsigned(23));
 
 				// We close when upstream tells us to elect.
 				roll_to(30);
-				assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, 23)));
+				assert_eq!(MultiBlock::current_phase(), Phase::Unsigned(23));
 
 				MultiBlock::elect(0).unwrap();
 				assert!(MultiBlock::current_phase().is_off());
@@ -1536,12 +1536,110 @@ mod phase_rotation {
 
 	#[test]
 	fn no_unsigned_phase() {
-		todo!()
+		ExtBuilder::full()
+			.pages(3)
+			.unsigned_phase(0)
+			.onchain_fallback(true)
+			.build_and_execute(|| {
+				// 0 --------------------- 17 ------ 20 ---------25 ------- 30
+				//            |            |         |            |          |
+				//                     Snapshot    Signed  SignedValidation   Elect
+
+				assert_eq!(System::block_number(), 0);
+				assert_eq!(MultiBlock::current_phase(), Phase::Off);
+				assert_none_snapshot();
+				assert_eq!(MultiBlock::round(), 0);
+
+				roll_to(4);
+				assert_eq!(MultiBlock::current_phase(), Phase::Off);
+				assert_eq!(MultiBlock::round(), 0);
+
+				roll_to(17);
+				assert_eq!(MultiBlock::current_phase(), Phase::Snapshot(2));
+				roll_to(18);
+				assert_eq!(MultiBlock::current_phase(), Phase::Snapshot(1));
+				roll_to(19);
+				assert_eq!(MultiBlock::current_phase(), Phase::Snapshot(0));
+
+				assert_full_snapshot();
+				assert_eq!(MultiBlock::round(), 0);
+
+				roll_to(20);
+				assert_eq!(MultiBlock::current_phase(), Phase::Signed);
+				roll_to(25);
+				assert_eq!(MultiBlock::current_phase(), Phase::SignedValidation(25));
+
+				assert_eq!(
+					multi_block_events(),
+					vec![Event::SignedPhaseStarted(0), Event::SignedValidationPhaseStarted(0)],
+				);
+
+				// Signed validation can now be expanded until a call to `elect` comes
+				roll_to(27);
+				assert_eq!(MultiBlock::current_phase(), Phase::SignedValidation(25));
+				roll_to(32);
+				assert_eq!(MultiBlock::current_phase(), Phase::SignedValidation(25));
+
+				MultiBlock::elect(0).unwrap();
+				assert!(MultiBlock::current_phase().is_off());
+
+				// all snapshots are gone.
+				assert_none_snapshot();
+				assert_eq!(MultiBlock::round(), 1);
+				assert_ok!(signed::Submissions::<Runtime>::ensure_killed(0));
+				verifier::QueuedSolution::<Runtime>::assert_killed();
+			})
 	}
 
 	#[test]
 	fn no_signed_phase() {
-		todo!()
+		ExtBuilder::full()
+			.pages(3)
+			.signed_phase(0, 0)
+			.onchain_fallback(true)
+			.build_and_execute(|| {
+				// 0 ------------------------- 22 ------ 25 ------- 30
+				//                             |         |          |
+				//                         Snapshot   Unsigned   Elect
+
+				assert_eq!(System::block_number(), 0);
+				assert_eq!(MultiBlock::current_phase(), Phase::Off);
+				assert_none_snapshot();
+				assert_eq!(MultiBlock::round(), 0);
+
+				roll_to(20);
+				assert_eq!(MultiBlock::current_phase(), Phase::Off);
+				assert_eq!(MultiBlock::round(), 0);
+
+				roll_to(22);
+				assert_eq!(MultiBlock::current_phase(), Phase::Snapshot(2));
+				roll_to(23);
+				assert_eq!(MultiBlock::current_phase(), Phase::Snapshot(1));
+				roll_to(24);
+				assert_eq!(MultiBlock::current_phase(), Phase::Snapshot(0));
+
+				assert_full_snapshot();
+				assert_eq!(MultiBlock::round(), 0);
+
+				roll_to(25);
+				assert_eq!(MultiBlock::current_phase(), Phase::Unsigned(25));
+				assert_eq!(multi_block_events(), vec![Event::UnsignedPhaseStarted(0)],);
+
+				// Unsigned can now be expanded until a call to `elect` comes
+				roll_to(27);
+				assert_eq!(MultiBlock::current_phase(), Phase::Unsigned(25));
+				roll_to(32);
+				assert_eq!(MultiBlock::current_phase(), Phase::Unsigned(25));
+
+				MultiBlock::elect(0).unwrap();
+				assert!(MultiBlock::current_phase().is_off());
+
+				// all snapshots are gone.
+				assert_none_snapshot();
+				assert_eq!(MultiBlock::round(), 1);
+				assert_ok!(signed::Submissions::<Runtime>::ensure_killed(0));
+				verifier::QueuedSolution::<Runtime>::assert_killed();
+			})
 	}
 
 	#[test]
@@ -1628,7 +1726,7 @@ mod election_provider {
 			roll_to_unsigned_open();
 
 			// pre-elect state
-			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, 25)));
+			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned(25));
 			assert_eq!(MultiBlock::round(), 0);
 			assert_full_snapshot();
 
@@ -1646,7 +1744,7 @@ mod election_provider {
 				.collect::<Vec<_>>();
 
 			// after the last elect, verifier is cleared,
-			verifier::QueuedSolution::<Runtime>::ensure_killed();
+			verifier::QueuedSolution::<Runtime>::assert_killed();
 			// the phase is off,
 			assert_eq!(MultiBlock::current_phase(), Phase::Off);
 			// the round is incremented,
@@ -1696,7 +1794,7 @@ mod election_provider {
 			roll_to_unsigned_open();
 
 			// pre-elect state:
-			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, 25)));
+			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned(25));
 			assert_eq!(Round::<Runtime>::get(), 0);
 			assert_full_snapshot();
 
@@ -1706,13 +1804,13 @@ mod election_provider {
 			// round is incremented.
 			assert_eq!(MultiBlock::round(), round + 1);
 			// after elect(0) is called, verifier is cleared,
-			verifier::QueuedSolution::<Runtime>::ensure_killed();
+			verifier::QueuedSolution::<Runtime>::assert_killed();
 			// the phase is off,
 			assert_eq!(MultiBlock::current_phase(), Phase::Off);
 			// the round is incremented,
 			assert_eq!(Round::<Runtime>::get(), 1);
 			// the snapshot is cleared,
-			assert_storage_noop!(Snapshot::<Runtime>::kill());
+			assert_none_snapshot();
 			// and signed pallet is clean.
 			assert_ok!(signed::Submissions::<Runtime>::ensure_killed(round));
 		});
@@ -1753,7 +1851,7 @@ mod election_provider {
 			roll_to_unsigned_open();
 
 			// pre-elect state:
-			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned((true, 25)));
+			assert_eq!(MultiBlock::current_phase(), Phase::Unsigned(25));
 			assert_eq!(Round::<Runtime>::get(), 0);
 			assert_full_snapshot();
 
@@ -1782,7 +1880,7 @@ mod election_provider {
 			roll_to_unsigned_open();
 			for _ in 0..100 {
 				roll_next();
-				assert!(matches!(MultiBlock::current_phase(), Phase::Unsigned((_, _))));
+				assert!(matches!(MultiBlock::current_phase(), Phase::Unsigned(_)));
 			}
 		});
 	}
@@ -1821,7 +1919,7 @@ mod election_provider {
 			// round is incremented.
 			assert_eq!(MultiBlock::round(), round + 1);
 			// after elect(0) is called, verifier is cleared,
-			verifier::QueuedSolution::<Runtime>::ensure_killed();
+			verifier::QueuedSolution::<Runtime>::assert_killed();
 			// the phase is off,
 			assert_eq!(MultiBlock::current_phase(), Phase::Off);
 			// the round is incremented,
