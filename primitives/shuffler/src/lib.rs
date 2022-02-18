@@ -110,7 +110,7 @@ pub fn shuffle_using_seed<A: sp_std::cmp::Ord + Encode + Clone, E: Encode + Clon
 	// let mut slots = Vec::with_capacity(extrinsics.len());
 
 	// initial slots - just inherents
-	let mut slots = extrinsics.iter().filter(|tx| tx.0.is_none()).map(|(who,tx)| tx).cloned().collect::<Vec<_>>();
+	let mut slots = extrinsics.iter().filter(|tx| tx.0.is_none()).map(|(_,tx)| tx).cloned().collect::<Vec<_>>();
 	let only_extrinsics = extrinsics.into_iter().filter(|tx| tx.0.is_some()).collect::<Vec<(_,_)>>();
 
 	let mut grouped_extrinsics: BTreeMap<Option<_>, VecDeque<_>> =
@@ -315,7 +315,7 @@ mod tests {
 		assert_eq!(shuffled[4], 5);
 
 		// check that rest of the transactions is still shuffled
-		let origin_order = input.iter().map(|(who,tx)| tx).cloned().collect::<Vec<_>>();
+		let origin_order = input.iter().map(|(_,tx)| tx).cloned().collect::<Vec<_>>();
 		assert_ne!(origin_order, shuffled);
 	}
 }
