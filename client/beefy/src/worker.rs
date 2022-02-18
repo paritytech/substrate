@@ -129,7 +129,8 @@ where
 			.expect("latest block always has header available; qed.")
 			.expect("latest block always has header available; qed.");
 
-		let (waker_tx, waker_rx) = mpsc::channel(10);
+		// Used to wake the main task from the other event stream tasks.
+		let (waker_tx, waker_rx) = mpsc::channel(1);
 		BeefyWorker {
 			client: client.clone(),
 			backend,
@@ -240,7 +241,9 @@ where
 		// update best GRANDPA finalized block we have seen
 		self.best_grandpa_block_header = notification.header;
 
-		warn!(target: "beefy", "🥩 new session, waking up ticker");
+		trace!(target: "beefy", "🥩 new finalized block, waking up ticker");
+		// We can ignore 'buffer full' error since it means some other task already
+		// queued up a wake message.
 		let _ = self.waker_tx.try_send(());
 	}
 
@@ -300,7 +303,9 @@ where
 
 				self.set_best_beefy_block(block_num, None);
 
-				warn!(target: "beefy", "🥩 round concluded, waking up ticker");
+				trace!(target: "beefy", "🥩 round concluded, waking up ticker");
+				// We can ignore 'buffer full' error since it means some other task already
+				// queued up a wake message.
 				let _ = self.waker_tx.try_send(());
 			}
 		}
@@ -335,18 +340,8 @@ where
 		});
 		// Set new best BEEFY block number.
 		self.best_beefy_block = Some(block_num);
-
-		// FIXME: this metric is kind of 'fake'. Best BEEFY block should only be updated once we
-		// have a signed commitment for the block.
 		metric_set!(self, beefy_best_block, block_num);
 	}
-
-	// fn initialize_best_beefy(&mut self) -> NumberFor<B> {
-	// 	// FIXME: currently hardcoded to genesis/block #0.
-	// 	let best_beefy = NumberFor::<B>::from(0u32);
-	// 	self.set_best_beefy_block(best_beefy, None);
-	// 	best_beefy
-	// }
 
 	/// Return first block number pertaining to same session as `header`.
 	fn session_start_for_header(&self, header: &B::Header) -> NumberFor<B> {
@@ -364,7 +359,7 @@ where
 				// TODO: is this proof correct?
 				.expect("header always available when following parent hash; qed.");
 			if let Some(_) = find_authorities_change::<B>(&header) {
-				// Found it! This header is the first of the session.
+				// Found the first header of the session.
 				break
 			}
 			parent_hash = *header.parent_hash();
@@ -373,16 +368,15 @@ where
 	}
 
 	/// Handle potential session changes by starting new voting round for mandatory blocks.
-	///
-	/// Return current session start.
-	fn handle_session_change(&mut self) -> NumberFor<B> {
-		if let Some(active) = self.validator_set(&self.best_grandpa_block_header) {
+	fn handle_session_change(&mut self) {
+		let header = &self.best_grandpa_block_header;
+		if let Some(active) = self.validator_set(header) {
 			// If validator set has changed compared to the one in our active round,
 			if self.rounds.is_none() ||
 				active.id() != self.rounds.as_ref().unwrap().validator_set_id()
 			{
 				// Find new session_start and start new round for mandatory block.
-				let session_start = self.session_start_for_header(&self.best_grandpa_block_header);
+				let session_start = self.session_start_for_header(header);
 
 				debug!(target: "beefy", "🥩 New active validator set: {:?}", active);
 				metric_set!(self, beefy_validator_set_id, active.id());
@@ -394,37 +388,39 @@ where
 
 				if log_enabled!(target: "beefy", log::Level::Debug) {
 					// verify the new validator set - only do it if we're also logging the warning
-					let _ =
-						self.verify_validator_set(self.best_grandpa_block_header.number(), &active);
+					let _ = self.verify_validator_set(header.number(), &active);
 				}
 
 				let id = active.id();
 				self.rounds = Some(round::Rounds::new(session_start, active));
 				debug!(target: "beefy", "🥩 New Rounds for validator set id: {:?} with session_start {:?}", id, session_start);
-
-				session_start
-			} else {
-				// Otherwise, use same session_start.
-				*self.rounds.as_ref().unwrap().session_start()
 			}
 		} else {
 			// TODO: BEEFY pallet not available, stop beefy worker
-			NumberFor::<B>::from(0u32)
+			()
 		}
 	}
 
+	// TODO: doc comment
+	// TODO: propagate errors for stopping beefy worker
 	fn tick(&mut self) {
 		warn!(target: "beefy", "🥩 TICK...");
 
-		// TODO: provide best grandpa as
-		let _session_start = self.handle_session_change();
+		// Check for and handle potential new session.
+		self.handle_session_change();
 
 		if let Some(target_number) = self.current_vote_target() {
 			// Do vote.
 
-			// TODO: it's not always best grandpa - get it from `Client` when it isn't.
-			// let target_header = get_from_num(target_number);
-			let target_header = self.best_grandpa_block_header.clone();
+			// Most of the time we get here, `target` is actually `best_grandpa`,
+			// avoid asking `client` for header in that case.
+			let target_header = if target_number == *self.best_grandpa_block_header.number() {
+				self.best_grandpa_block_header.clone()
+			} else {
+				self.client
+					.expect_header(BlockId::Number(target_number))
+					.expect("FIXME: return error here")
+			};
 			let target_hash = target_header.hash();
 
 			let mmr_root = if let Some(hash) = find_mmr_root_digest::<B, Public>(&target_header) {
@@ -436,7 +432,8 @@ where
 			let payload = Payload::new(known_payload_ids::MMR_ROOT_ID, mmr_root.encode());
 
 			// Don't double vote (same payload and number).
-			// NOTE: we could shortcircuit much earlier if we'd only check for block number (not
+			//
+			// NOTE: we could short-circuit much earlier if we'd only check for block number (not
 			// also payload)...
 			if let Some(rounds) = &self.rounds {
 				if !rounds.should_vote(&(payload.clone(), target_number)) {
