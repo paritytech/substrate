@@ -161,7 +161,7 @@ impl<T, S> BoundedVec<T, S> {
 	}
 
 	/// Exactly the same semantics as [`Vec::iter`].
-	pub fn iter(&mut self) -> core::slice::Iter<'_, T> {
+	pub fn iter(&self) -> core::slice::Iter<'_, T> {
 		self.0.iter()
 	}
 
