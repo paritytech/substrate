@@ -28,7 +28,7 @@ use frame_support::{
 	traits::{defensive_prelude::*, Currency, Get, OnUnbalanced, ReservableCurrency},
 };
 use sp_arithmetic::traits::SaturatedConversion;
-use sp_npos_elections::{is_score_better, ElectionScore, NposSolution};
+use sp_npos_elections::{ElectionScore, NposSolution};
 use sp_runtime::{
 	traits::{Saturating, Zero},
 	RuntimeDebug,
@@ -293,7 +293,7 @@ impl<T: Config> SignedSubmissions<T> {
 				let threshold = T::SolutionImprovementThreshold::get();
 
 				// if we haven't improved on the weakest score, don't change anything.
-				if !is_score_better(insert_score, weakest_score, threshold) {
+				if !insert_score.strict_threshold_better(weakest_score, threshold) {
 					return InsertResult::NotInserted
 				}
 
@@ -592,7 +592,7 @@ mod tests {
 			assert_eq!(balances(&99), (100, 0));
 
 			// make the solution invalid.
-			solution.score[0] += 1;
+			solution.score.minimal_stake += 1;
 
 			assert_ok!(submit_with_witness(Origin::signed(99), solution));
 			assert_eq!(balances(&99), (95, 5));
@@ -618,7 +618,7 @@ mod tests {
 			assert_ok!(submit_with_witness(Origin::signed(99), solution.clone()));
 
 			// make the solution invalid and weaker.
-			solution.score[0] -= 1;
+			solution.score.minimal_stake -= 1;
 			assert_ok!(submit_with_witness(Origin::signed(999), solution));
 			assert_eq!(balances(&99), (95, 5));
 			assert_eq!(balances(&999), (95, 5));
@@ -641,12 +641,18 @@ mod tests {
 
 			for s in 0..SignedMaxSubmissions::get() {
 				// score is always getting better
-				let solution = RawSolution { score: [(5 + s).into(), 0, 0], ..Default::default() };
+				let solution = RawSolution {
+					score: ElectionScore { minimal_stake: (5 + s).into(), ..Default::default() },
+					..Default::default()
+				};
 				assert_ok!(submit_with_witness(Origin::signed(99), solution));
 			}
 
 			// weaker.
-			let solution = RawSolution { score: [4, 0, 0], ..Default::default() };
+			let solution = RawSolution {
+				score: ElectionScore { minimal_stake: 4, ..Default::default() },
+				..Default::default()
+			};
 
 			assert_noop!(
 				submit_with_witness(Origin::signed(99), solution),
@@ -663,27 +669,33 @@ mod tests {
 
 			for s in 0..SignedMaxSubmissions::get() {
 				// score is always getting better
-				let solution = RawSolution { score: [(5 + s).into(), 0, 0], ..Default::default() };
+				let solution = RawSolution {
+					score: ElectionScore { minimal_stake: (5 + s).into(), ..Default::default() },
+					..Default::default()
+				};
 				assert_ok!(submit_with_witness(Origin::signed(99), solution));
 			}
 
 			assert_eq!(
 				MultiPhase::signed_submissions()
 					.iter()
-					.map(|s| s.raw_solution.score[0])
+					.map(|s| s.raw_solution.score.minimal_stake)
 					.collect::<Vec<_>>(),
 				vec![5, 6, 7, 8, 9]
 			);
 
 			// better.
-			let solution = RawSolution { score: [20, 0, 0], ..Default::default() };
+			let solution = RawSolution {
+				score: ElectionScore { minimal_stake: 20, ..Default::default() },
+				..Default::default()
+			};
 			assert_ok!(submit_with_witness(Origin::signed(99), solution));
 
 			// the one with score 5 was rejected, the new one inserted.
 			assert_eq!(
 				MultiPhase::signed_submissions()
 					.iter()
-					.map(|s| s.raw_solution.score[0])
+					.map(|s| s.raw_solution.score.minimal_stake)
 					.collect::<Vec<_>>(),
 				vec![6, 7, 8, 9, 20]
 			);
@@ -698,30 +710,39 @@ mod tests {
 
 			for s in 1..SignedMaxSubmissions::get() {
 				// score is always getting better
-				let solution = RawSolution { score: [(5 + s).into(), 0, 0], ..Default::default() };
+				let solution = RawSolution {
+					score: ElectionScore { minimal_stake: (5 + s).into(), ..Default::default() },
+					..Default::default()
+				};
 				assert_ok!(submit_with_witness(Origin::signed(99), solution));
 			}
 
-			let solution = RawSolution { score: [4, 0, 0], ..Default::default() };
+			let solution = RawSolution {
+				score: ElectionScore { minimal_stake: 4, ..Default::default() },
+				..Default::default()
+			};
 			assert_ok!(submit_with_witness(Origin::signed(99), solution));
 
 			assert_eq!(
 				MultiPhase::signed_submissions()
 					.iter()
-					.map(|s| s.raw_solution.score[0])
+					.map(|s| s.raw_solution.score.minimal_stake)
 					.collect::<Vec<_>>(),
 				vec![4, 6, 7, 8, 9],
 			);
 
 			// better.
-			let solution = RawSolution { score: [5, 0, 0], ..Default::default() };
+			let solution = RawSolution {
+				score: ElectionScore { minimal_stake: 5, ..Default::default() },
+				..Default::default()
+			};
 			assert_ok!(submit_with_witness(Origin::signed(99), solution));
 
 			// the one with score 5 was rejected, the new one inserted.
 			assert_eq!(
 				MultiPhase::signed_submissions()
 					.iter()
-					.map(|s| s.raw_solution.score[0])
+					.map(|s| s.raw_solution.score.minimal_stake)
 					.collect::<Vec<_>>(),
 				vec![5, 6, 7, 8, 9],
 			);
@@ -736,7 +757,10 @@ mod tests {
 
 			for s in 0..SignedMaxSubmissions::get() {
 				// score is always getting better
-				let solution = RawSolution { score: [(5 + s).into(), 0, 0], ..Default::default() };
+				let solution = RawSolution {
+					score: ElectionScore { minimal_stake: (5 + s).into(), ..Default::default() },
+					..Default::default()
+				};
 				assert_ok!(submit_with_witness(Origin::signed(99), solution));
 			}
 
@@ -744,7 +768,10 @@ mod tests {
 			assert_eq!(balances(&999).1, 0);
 
 			// better.
-			let solution = RawSolution { score: [20, 0, 0], ..Default::default() };
+			let solution = RawSolution {
+				score: ElectionScore { minimal_stake: 20, ..Default::default() },
+				..Default::default()
+			};
 			assert_ok!(submit_with_witness(Origin::signed(999), solution));
 
 			// got one bond back.
@@ -760,19 +787,25 @@ mod tests {
 			assert!(MultiPhase::current_phase().is_signed());
 
 			for i in 0..SignedMaxSubmissions::get() {
-				let solution = RawSolution { score: [(5 + i).into(), 0, 0], ..Default::default() };
+				let solution = RawSolution {
+					score: ElectionScore { minimal_stake: (5 + i).into(), ..Default::default() },
+					..Default::default()
+				};
 				assert_ok!(submit_with_witness(Origin::signed(99), solution));
 			}
 			assert_eq!(
 				MultiPhase::signed_submissions()
 					.iter()
-					.map(|s| s.raw_solution.score[0])
+					.map(|s| s.raw_solution.score.minimal_stake)
 					.collect::<Vec<_>>(),
 				vec![5, 6, 7]
 			);
 
 			// 5 is not accepted. This will only cause processing with no benefit.
-			let solution = RawSolution { score: [5, 0, 0], ..Default::default() };
+			let solution = RawSolution {
+				score: ElectionScore { minimal_stake: 5, ..Default::default() },
+				..Default::default()
+			};
 			assert_noop!(
 				submit_with_witness(Origin::signed(99), solution),
 				Error::<Runtime>::SignedQueueFull,
@@ -800,13 +833,13 @@ mod tests {
 
 			// make the solution invalidly better and submit. This ought to be slashed.
 			let mut solution_999 = solution.clone();
-			solution_999.score[0] += 1;
+			solution_999.score.minimal_stake += 1;
 			assert_ok!(submit_with_witness(Origin::signed(999), solution_999));
 
 			// make the solution invalidly worse and submit. This ought to be suppressed and
 			// returned.
 			let mut solution_9999 = solution.clone();
-			solution_9999.score[0] -= 1;
+			solution_9999.score.minimal_stake -= 1;
 			assert_ok!(submit_with_witness(Origin::signed(9999), solution_9999));
 
 			assert_eq!(
@@ -889,13 +922,19 @@ mod tests {
 
 			for s in 0..SignedMaxSubmissions::get() {
 				// score is always getting better
-				let solution = RawSolution { score: [(5 + s).into(), 0, 0], ..Default::default() };
+				let solution = RawSolution {
+					score: ElectionScore { minimal_stake: (5 + s).into(), ..Default::default() },
+					..Default::default()
+				};
 				assert_ok!(submit_with_witness(Origin::signed(99), solution));
 			}
 
 			// this solution has a higher score than any in the queue
 			let solution = RawSolution {
-				score: [(5 + SignedMaxSubmissions::get()).into(), 0, 0],
+				score: ElectionScore {
+					minimal_stake: (5 + SignedMaxSubmissions::get()).into(),
+					..Default::default()
+				},
 				..Default::default()
 			};
 
