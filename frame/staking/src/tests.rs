@@ -3315,26 +3315,41 @@ fn set_history_depth_works() {
 
 #[test]
 fn test_payout_stakers() {
-	// Here we will test validator can set `max_nominators_payout` and it works.
-	// We also test that `payout_extra_nominators` works.
+	// Here we will test that payouts work in general and only reward the top
+	// ``T::MaxNominatorRewardedPerValidator` nominators.
 	ExtBuilder::default().has_stakers(false).build_and_execute(|| {
 		let balance = 1000;
+		// Track the exposure of the validator and all nominators.
+		let mut total_exposure = balance;
+		// Track the exposure of the validator and the nominators that will get paid out.
+		let mut paid_out_exposure = balance;
 		// Create a validator:
 		bond_validator(11, 10, balance); // Default(64)
+		assert_eq!(Validators::<Test>::count(), 1);
 
 		// Create nominators, targeting stash of validators
 		for i in 0..100 {
-			bond_nominator(1000 + i, 100 + i, balance + i as Balance, vec![11]);
+			let bond_amount = balance + i as Balance;
+			bond_nominator(1000 + i, 100 + i, bond_amount, vec![11]);
+			total_exposure += bond_amount;
+			if i >= 36 {
+				paid_out_exposure += bond_amount;
+			};
 		}
+		let payout_exposure_part = Perbill::from_rational(paid_out_exposure, total_exposure);
 
 		mock::start_active_era(1);
 		Staking::reward_by_ids(vec![(11, 1)]);
 
 		// compute and ensure the reward amount is greater than zero.
-		let _ = current_total_payout_for_duration(reward_time_per_era());
+		let payout = current_total_payout_for_duration(reward_time_per_era());
+		let actual_paid_out = payout_exposure_part.mul_ceil(payout);
 
 		mock::start_active_era(2);
+
+		let pre_payout_total_issuance = Balances::total_issuance();
 		assert_ok!(Staking::payout_stakers(Origin::signed(1337), 11, 1));
+		assert_eq!(Balances::total_issuance(), pre_payout_total_issuance + actual_paid_out);
 
 		// Top 64 nominators of validator 11 automatically paid out, including the validator
 		// Validator payout goes to controller.
@@ -3363,10 +3378,13 @@ fn test_payout_stakers() {
 			Staking::reward_by_ids(vec![(11, 1)]);
 
 			// compute and ensure the reward amount is greater than zero.
-			let _ = current_total_payout_for_duration(reward_time_per_era());
+			let payout = current_total_payout_for_duration(reward_time_per_era());
+			let actual_paid_out = payout_exposure_part.mul_ceil(payout);
+			let pre_payout_total_issuance = Balances::total_issuance();
 
 			mock::start_active_era(i);
 			assert_ok!(Staking::payout_stakers(Origin::signed(1337), 11, i - 1));
+			assert_eq!(Balances::total_issuance(), pre_payout_total_issuance + actual_paid_out);
 		}
 
 		// We track rewards in `claimed_rewards` vec
