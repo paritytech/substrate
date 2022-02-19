@@ -1,0 +1,33 @@
+[package]
+name = "pallet-nomination-pools-benchmarking"
+version = "4.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2021"
+license = "Apache-2.0"
+homepage = "https://substrate.io"
+repository = "https://github.com/paritytech/substrate/"
+description = "FRAME nomination pools pallet benchmarking"
+readme = "README.md"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[dependencies]
+# Parity
+codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false }
+scale-info = { version = "1.0", default-features = false, features = ["derive"] }
+
+# FRAME
+pallet-staking = { version = "4.0.0-dev", default-features = false, features = ["runtime-benchmarks"], path = "../../staking" }
+pallet-bags-list = { version = "4.0.0-dev", features = ["runtime-benchmarks"], path = "../../bags-list" }
+frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../../benchmarking" }
+frame-support = { version = "4.0.0-dev", default-features = false, path = "../../support" }
+
+[features]
+default = ["std"]
+std = [
+	"frame-benchmarking/std",
+	"frame-support/std",
+	"frame-system/std",
+	"pallet-staking/std",
+]

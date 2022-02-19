@@ -5,8 +5,8 @@ pub trait WeightInfo {
 	fn join() -> Weight;
 	fn claim_payout() -> Weight;
 	fn unbond_other() -> Weight;
-	fn pool_withdraw_unbonded() -> Weight;
-	fn withdraw_unbonded_other() -> Weight;
+	fn pool_withdraw_unbonded(s: u32) -> Weight;
+	fn withdraw_unbonded_other(s: u32) -> Weight;
 	fn create() -> Weight;
 	fn nominate() -> Weight;
 }
@@ -22,10 +22,10 @@ impl WeightInfo for () {
 	fn unbond_other() -> Weight {
 		0
 	}
-	fn pool_withdraw_unbonded() -> Weight {
+	fn pool_withdraw_unbonded(_s: u32) -> Weight {
 		0
 	}
-	fn withdraw_unbonded_other() -> Weight {
+	fn withdraw_unbonded_other(_s: u32) -> Weight {
 		0
 	}
 	fn create() -> Weight {

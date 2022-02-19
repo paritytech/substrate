@@ -4,6 +4,7 @@ use frame_benchmarking::{account, vec, whitelist_account};
 use frame_system::RawOrigin as Origin;
 
 const USER_SEED: u32 = 0;
+const MAX_SPANS: u32 = 100;
 
 fn clear_storage<T: Config>() {
 	BondedPools::<T>::remove_all();
@@ -234,6 +235,7 @@ frame_benchmarking::benchmarks! {
 
 	// TODO: setup a withdraw unbonded kill scenario
 	pool_withdraw_unbonded {
+		let s in 0 .. MAX_SPANS;
 		clear_storage::<T>();
 
 		let min_create_bond = MinCreateBond::<T>::get()
@@ -267,8 +269,9 @@ frame_benchmarking::benchmarks! {
 		// Set the current era
 		T::StakingInterface::set_current_era(EraIndex::max_value());
 
+		// T::StakingInterface::add_slashing_spans(&pool_account, s);
 		whitelist_account!(pool_account);
-	}: _(Origin::Signed(pool_account.clone()), pool_account.clone(), 0)
+	}: _(Origin::Signed(pool_account.clone()), pool_account.clone(), 2)
 	verify {
 		// The joiners funds didn't change
 		assert_eq!(T::Currency::free_balance(&joiner), min_join_bond);
@@ -279,7 +282,10 @@ frame_benchmarking::benchmarks! {
 
 	// TODO: setup a withdraw unbonded kill scenario, make variable over slashing spans
 	withdraw_unbonded_other {
+		let s in 0 .. MAX_SPANS;
 		clear_storage::<T>();
+
+		// T::StakingInterface::add_slashing_spans(&stash, s);
 
 		let min_create_bond = MinCreateBond::<T>::get()
 			.max(T::StakingInterface::minimum_bond())
@@ -314,6 +320,7 @@ frame_benchmarking::benchmarks! {
 		// Set the current era to ensure we can withdraw unbonded funds
 		T::StakingInterface::set_current_era(EraIndex::max_value());
 
+		// T::StakingInterface::add_slashing_spans(&pool_account, s);
 		whitelist_account!(joiner);
 	}: _(Origin::Signed(joiner.clone()), joiner.clone(), 0)
 	verify {
