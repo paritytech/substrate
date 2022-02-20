@@ -3315,14 +3315,14 @@ fn set_history_depth_works() {
 
 #[test]
 fn test_payout_stakers() {
-	// Here we will test that payouts work in general and only reward the top
-	// ``T::MaxNominatorRewardedPerValidator` nominators.
+	// Test that payout_stakers work in general, including that only the top
+	// `T::MaxNominatorRewardedPerValidator` nominators are rewarded.
 	ExtBuilder::default().has_stakers(false).build_and_execute(|| {
 		let balance = 1000;
 		// Track the exposure of the validator and all nominators.
 		let mut total_exposure = balance;
 		// Track the exposure of the validator and the nominators that will get paid out.
-		let mut paid_out_exposure = balance;
+		let mut payout_exposure = balance;
 		// Create a validator:
 		bond_validator(11, 10, balance); // Default(64)
 		assert_eq!(Validators::<Test>::count(), 1);
@@ -3333,10 +3333,10 @@ fn test_payout_stakers() {
 			bond_nominator(1000 + i, 100 + i, bond_amount, vec![11]);
 			total_exposure += bond_amount;
 			if i >= 36 {
-				paid_out_exposure += bond_amount;
+				payout_exposure += bond_amount;
 			};
 		}
-		let payout_exposure_part = Perbill::from_rational(paid_out_exposure, total_exposure);
+		let payout_exposure_part = Perbill::from_rational(payout_exposure, total_exposure);
 
 		mock::start_active_era(1);
 		Staking::reward_by_ids(vec![(11, 1)]);
