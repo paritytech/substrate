@@ -654,10 +654,10 @@ pub fn proposing_remaining_duration<Block: BlockT>(
 
 		debug!(
 			target: log_target,
-			"No block for {} slots. Applying {} lenience, total proposing duration: {}",
+			"No block for {} slots. Applying {} lenience, total proposing duration: {}ms",
 			slot_info.slot.saturating_sub(parent_slot + 1),
 			slot_lenience_type.as_str(),
-			lenient_proposing_duration.as_secs(),
+			lenient_proposing_duration.as_millis(),
 		);
 
 		lenient_proposing_duration
