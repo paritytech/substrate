@@ -386,9 +386,6 @@ benchmarks_instance_pallet! {
 		assert_last_event::<T, I>(Event::ApprovalCancelled { class, instance, owner: caller, delegate }.into());
 	}
 
-	// TODO: Use force_create where possible and for create make sure the arg-based successful
-	// caller is used.
-
 	set_accept_ownership {
 		let caller: T::AccountId = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, DepositBalanceOf::<T, I>::max_value());
