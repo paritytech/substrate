@@ -70,8 +70,12 @@ pub mod pallet {
 	}
 
 	impl<ClassId: From<u16>, InstanceId: From<u16>> BenchmarkHelper<ClassId, InstanceId> for () {
-		fn class(i: u16) -> ClassId { i.into() }
-		fn instance(i: u16) -> InstanceId { i.into() }
+		fn class(i: u16) -> ClassId {
+			i.into()
+		}
+		fn instance(i: u16) -> InstanceId {
+			i.into()
+		}
 	}
 
 	#[pallet::config]
@@ -679,10 +683,7 @@ pub mod pallet {
 		///
 		/// Weight: `O(1)`
 		#[pallet::weight(T::WeightInfo::freeze_class())]
-		pub fn freeze_class(
-			origin: OriginFor<T>,
-			class: T::ClassId,
-		) -> DispatchResult {
+		pub fn freeze_class(origin: OriginFor<T>, class: T::ClassId) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 
 			Class::<T, I>::try_mutate(class, |maybe_details| {
@@ -706,10 +707,7 @@ pub mod pallet {
 		///
 		/// Weight: `O(1)`
 		#[pallet::weight(T::WeightInfo::thaw_class())]
-		pub fn thaw_class(
-			origin: OriginFor<T>,
-			class: T::ClassId,
-		) -> DispatchResult {
+		pub fn thaw_class(origin: OriginFor<T>, class: T::ClassId) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 
 			Class::<T, I>::try_mutate(class, |maybe_details| {
@@ -1244,10 +1242,7 @@ pub mod pallet {
 		///
 		/// Weight: `O(1)`
 		#[pallet::weight(T::WeightInfo::clear_class_metadata())]
-		pub fn clear_class_metadata(
-			origin: OriginFor<T>,
-			class: T::ClassId,
-		) -> DispatchResult {
+		pub fn clear_class_metadata(origin: OriginFor<T>, class: T::ClassId) -> DispatchResult {
 			let maybe_check_owner = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some))?;
