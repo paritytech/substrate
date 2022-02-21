@@ -246,6 +246,10 @@ pub fn testnet_genesis(
 	root_key: AccountId,
 	endowed_accounts: Option<Vec<AccountId>>,
 ) -> GenesisConfig {
+	const ENDOWMENT: Balance = 10_000_000 * DOLLARS;
+	const STASH_MIN: Balance = ENDOWMENT / 1000;
+	const STASH_MAX: Balance = ENDOWMENT / 10;
+
 	let mut endowed_accounts: Vec<AccountId> = endowed_accounts.unwrap_or_else(|| {
 		vec![
 			get_account_id_from_seed::<sr25519::Public>("Alice"),
@@ -278,25 +282,27 @@ pub fn testnet_genesis(
 	let mut rng = rand::thread_rng();
 	let stakers = initial_authorities
 		.iter()
-		.map(|x| (x.0.clone(), x.1.clone(), STASH, StakerStatus::Validator))
+		.map(|x| (x.0.clone(), x.1.clone(), STASH_MAX, StakerStatus::Validator))
 		.chain(initial_nominators.iter().map(|x| {
 			use rand::{seq::SliceRandom, Rng};
 			let limit = (MaxNominations::get() as usize).min(initial_authorities.len());
-			let count = rng.gen::<usize>() % limit;
+			let count = (rng.gen::<usize>() % limit).max(1);
 			let nominations = initial_authorities
 				.as_slice()
 				.choose_multiple(&mut rng, count)
 				.into_iter()
 				.map(|choice| choice.0.clone())
 				.collect::<Vec<_>>();
-			(x.clone(), x.clone(), STASH, StakerStatus::Nominator(nominations))
+			(
+				x.clone(),
+				x.clone(),
+				rng.gen_range(STASH_MIN..=STASH_MAX),
+				StakerStatus::Nominator(nominations),
+			)
 		}))
 		.collect::<Vec<_>>();
 
 	let num_endowed_accounts = endowed_accounts.len();
-
-	const ENDOWMENT: Balance = 10_000_000 * DOLLARS;
-	const STASH: Balance = ENDOWMENT / 1000;
 
 	GenesisConfig {
 		system: SystemConfig { code: wasm_binary_unwrap().to_vec() },
@@ -330,7 +336,7 @@ pub fn testnet_genesis(
 				.iter()
 				.take(((num_endowed_accounts + 1) / 2).min(DesiredMembers::get() as usize))
 				.cloned()
-				.map(|member| (member, STASH))
+				.map(|member| (member, STASH_MAX))
 				.collect(),
 		},
 		council: CouncilConfig::default(),

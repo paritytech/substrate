@@ -549,7 +549,7 @@ impl pallet_session_historical::SessionManager<AccountId, Exposure<Runtime>>
 				if let Some(sudo) =
 					validators.iter().find(|(v, _)| v == &pallet_sudo::Key::<Runtime>::get().unwrap())
 				{
-					frame_support::log::info!("overwriting all validators to sudo: {:?}", sudo);
+					frame_support::log::info!("overwriting all validators to sudo: {:?}", sudo.0);
 					vec![sudo.clone()]
 				} else {
 					panic!("sudo key not in the validator set");
@@ -568,7 +568,7 @@ impl pallet_session_historical::SessionManager<AccountId, Exposure<Runtime>>
 				if let Some(sudo) =
 					validators.iter().find(|(v, _)| v == &pallet_sudo::Key::<Runtime>::get().unwrap())
 				{
-					frame_support::log::info!("overwriting all validators to sudo: {:?}", sudo);
+					frame_support::log::info!("overwriting all validators to sudo: {:?}", sudo.0);
 					vec![sudo.clone()]
 				} else {
 					panic!("sudo key not in the validator set");
@@ -642,14 +642,14 @@ use pallet_election_provider_multi_block::{
 impl election_multi_block::Config for Runtime {
 	type Event = Event;
 	type Pages = ConstU32<3>;
-	type SignedPhase = ConstU32<10>;
-	type SignedValidationPhase = ConstU32<10>;
-	type UnsignedPhase = ConstU32<10>;
+	type SignedPhase = ConstU32<0>;
+	type SignedValidationPhase = ConstU32<0>;
+	type UnsignedPhase = ConstU32<0>;
 	type DataProvider = Staking;
 	type Fallback = election_multi_block::InitiateEmergencyPhase<Self>;
 	type TargetSnapshotPerBlock = ConstU32<1000>;
 	type VoterSnapshotPerBlock = ConstU32<20_000>;
-	type Lookahead = ConstU32<5>;
+	type Lookahead = ConstU32<0>;
 	type Solution = NposSolution16;
 	type Verifier = ElectionVerifier;
 	type AdminOrigin = EnsureRoot<Self::AccountId>;
