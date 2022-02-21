@@ -378,9 +378,10 @@ where
 		}
 
 		// Walk up the chain looking for the session change digest.
+		let mut header = header.clone();
 		let mut parent_hash = *header.parent_hash();
 		while parent_hash != Default::default() {
-			let header = self
+			header = self
 				.client
 				.expect_header(BlockId::Hash(parent_hash))
 				// TODO: is this proof correct?
