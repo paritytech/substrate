@@ -561,7 +561,8 @@ pub mod pallet {
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 
-			let mut class_details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::UnknownClass)?;
+			let mut class_details =
+				Class::<T, I>::get(&class).ok_or(Error::<T, I>::UnknownClass)?;
 			ensure!(class_details.owner == origin, Error::<T, I>::NoPermission);
 			let deposit = match class_details.free_holding {
 				true => Zero::zero(),
@@ -972,7 +973,8 @@ pub mod pallet {
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some))?;
 
-			let mut class_details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::UnknownClass)?;
+			let mut class_details =
+				Class::<T, I>::get(&class).ok_or(Error::<T, I>::UnknownClass)?;
 			if let Some(check_owner) = &maybe_check_owner {
 				ensure!(check_owner == &class_details.owner, Error::<T, I>::NoPermission);
 			}
@@ -1033,7 +1035,8 @@ pub mod pallet {
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some))?;
 
-			let mut class_details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::UnknownClass)?;
+			let mut class_details =
+				Class::<T, I>::get(&class).ok_or(Error::<T, I>::UnknownClass)?;
 			if let Some(check_owner) = &maybe_check_owner {
 				ensure!(check_owner == &class_details.owner, Error::<T, I>::NoPermission);
 			}
@@ -1083,7 +1086,8 @@ pub mod pallet {
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some))?;
 
-			let mut class_details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::UnknownClass)?;
+			let mut class_details =
+				Class::<T, I>::get(&class).ok_or(Error::<T, I>::UnknownClass)?;
 
 			if let Some(check_owner) = &maybe_check_owner {
 				ensure!(check_owner == &class_details.owner, Error::<T, I>::NoPermission);
@@ -1142,7 +1146,8 @@ pub mod pallet {
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some))?;
 
-			let mut class_details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::UnknownClass)?;
+			let mut class_details =
+				Class::<T, I>::get(&class).ok_or(Error::<T, I>::UnknownClass)?;
 			if let Some(check_owner) = &maybe_check_owner {
 				ensure!(check_owner == &class_details.owner, Error::<T, I>::NoPermission);
 			}

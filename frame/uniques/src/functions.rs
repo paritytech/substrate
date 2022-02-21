@@ -34,7 +34,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let class_details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::UnknownClass)?;
 		ensure!(!class_details.is_frozen, Error::<T, I>::Frozen);
 
-		let mut details = Asset::<T, I>::get(&class, &instance).ok_or(Error::<T, I>::UnknownClass)?;
+		let mut details =
+			Asset::<T, I>::get(&class, &instance).ok_or(Error::<T, I>::UnknownClass)?;
 		ensure!(!details.is_frozen, Error::<T, I>::Frozen);
 		with_details(&class_details, &mut details)?;
 
@@ -165,7 +166,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let owner = Class::<T, I>::try_mutate(
 			&class,
 			|maybe_class_details| -> Result<T::AccountId, DispatchError> {
-				let class_details = maybe_class_details.as_mut().ok_or(Error::<T, I>::UnknownClass)?;
+				let class_details =
+					maybe_class_details.as_mut().ok_or(Error::<T, I>::UnknownClass)?;
 				let details =
 					Asset::<T, I>::get(&class, &instance).ok_or(Error::<T, I>::UnknownClass)?;
 				with_details(&class_details, &details)?;
