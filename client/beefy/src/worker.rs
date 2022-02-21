@@ -202,7 +202,7 @@ where
 		let best_finalized = *self.best_grandpa_block_header.number();
 		let target = vote_target(
 			best_finalized,
-			self.best_beefy_block.unwrap_or(0u32.into()),
+			self.best_beefy_block,
 			*rounds.session_start(),
 			self.min_block_delta,
 		);
@@ -387,11 +387,14 @@ where
 				.expect("header always available when following parent hash; qed.");
 			if let Some(_) = find_authorities_change::<B>(&header) {
 				// Found the first header of the session.
-				break
+				info!(target: "beefy", "🥩 session boundary is: {:?}.", *header.number());
+				return *header.number()
 			}
 			parent_hash = *header.parent_hash();
 		}
-		*header.number()
+
+		info!(target: "beefy", "🥩 no session boundary found, defaulting to block number 1.");
+		1u32.into()
 	}
 
 	/// Handle potential session changes by starting new voting round for mandatory blocks.
@@ -406,6 +409,7 @@ where
 				let session_start = self.session_start_for_header(header);
 
 				debug!(target: "beefy", "🥩 New active validator set: {:?}", active);
+				info!(target: "beefy", "🥩 New BEEFY session starting at: {:?}", session_start);
 				metric_set!(self, beefy_validator_set_id, active.id());
 				// BEEFY should produce a signed commitment for each session
 				if active.id() != GENESIS_AUTHORITY_SET_ID && active.id() != self.last_signed_id + 1
@@ -596,34 +600,44 @@ where
 }
 
 /// Calculate next block number to vote on.
-fn vote_target<N>(best_grandpa: N, best_beefy: N, session_start: N, min_delta: u32) -> N
+fn vote_target<N>(best_grandpa: N, best_beefy: Option<N>, session_start: N, min_delta: u32) -> N
 where
 	N: AtLeast32Bit + Copy + Debug,
 {
 	// if the mandatory block (session_start) does not have a beefy justification yet,
 	// we vote on it
-	if best_beefy < session_start {
-		trace!(
-			target: "beefy",
-			"🥩 vote target - mandatory block: #{:?}",
-			session_start,
-		);
+	match best_beefy {
+		None => {
+			trace!(
+				target: "beefy",
+				"🥩 vote target - mandatory block: #{:?}",
+				session_start,
+			);
+			session_start
+		},
+		Some(bbb) if bbb < session_start => {
+			trace!(
+				target: "beefy",
+				"🥩 vote target - mandatory block: #{:?}",
+				session_start,
+			);
+			session_start
+		},
+		Some(bbb) => {
+			let diff = best_grandpa.saturating_sub(bbb) + 1u32.into();
+			let diff = diff.saturated_into::<u32>() / 2;
+			let target = bbb + min_delta.max(diff.next_power_of_two()).into();
 
-		session_start
-	} else {
-		let diff = best_grandpa.saturating_sub(best_beefy) + 1u32.into();
-		let diff = diff.saturated_into::<u32>() / 2;
-		let target = best_beefy + min_delta.max(diff.next_power_of_two()).into();
+			trace!(
+				target: "beefy",
+				"🥩 vote target - diff: {:?}, next_power_of_two: {:?}, target block: #{:?}",
+				diff,
+				diff.next_power_of_two(),
+				target,
+			);
 
-		trace!(
-			target: "beefy",
-			"🥩 vote target - diff: {:?}, next_power_of_two: {:?}, target block: #{:?}",
-			diff,
-			diff.next_power_of_two(),
-			target,
-		);
-
-		target
+			target
+		},
 	}
 }
 
