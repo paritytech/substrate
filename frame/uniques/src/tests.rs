@@ -307,7 +307,10 @@ fn set_class_metadata_should_work() {
 			Uniques::clear_class_metadata(Origin::signed(2), 0),
 			Error::<Test>::NoPermission
 		);
-		assert_noop!(Uniques::clear_class_metadata(Origin::signed(1), 1), Error::<Test>::UnknownClass);
+		assert_noop!(
+			Uniques::clear_class_metadata(Origin::signed(1), 1),
+			Error::<Test>::UnknownClass
+		);
 		assert_ok!(Uniques::clear_class_metadata(Origin::signed(1), 0));
 		assert!(!ClassMetadataOf::<Test>::contains_key(0));
 	});
@@ -361,7 +364,10 @@ fn set_instance_metadata_should_work() {
 			Uniques::clear_metadata(Origin::signed(2), 0, 42),
 			Error::<Test>::NoPermission
 		);
-		assert_noop!(Uniques::clear_metadata(Origin::signed(1), 1, 42), Error::<Test>::UnknownClass);
+		assert_noop!(
+			Uniques::clear_metadata(Origin::signed(1), 1, 42),
+			Error::<Test>::UnknownClass
+		);
 		assert_ok!(Uniques::clear_metadata(Origin::signed(1), 0, 42));
 		assert!(!InstanceMetadataOf::<Test>::contains_key(0, 42));
 	});
@@ -583,8 +589,14 @@ fn cancel_approval_works_with_force() {
 		assert_ok!(Uniques::mint(Origin::signed(1), 0, 42, 2));
 
 		assert_ok!(Uniques::approve_transfer(Origin::signed(2), 0, 42, 3));
-		assert_noop!(Uniques::cancel_approval(Origin::root(), 1, 42, None), Error::<Test>::UnknownClass);
-		assert_noop!(Uniques::cancel_approval(Origin::root(), 0, 43, None), Error::<Test>::UnknownClass);
+		assert_noop!(
+			Uniques::cancel_approval(Origin::root(), 1, 42, None),
+			Error::<Test>::UnknownClass
+		);
+		assert_noop!(
+			Uniques::cancel_approval(Origin::root(), 0, 43, None),
+			Error::<Test>::UnknownClass
+		);
 		assert_noop!(
 			Uniques::cancel_approval(Origin::root(), 0, 42, Some(4)),
 			Error::<Test>::WrongDelegate
