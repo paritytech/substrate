@@ -164,7 +164,7 @@ mod tests {
 		)
 		.unwrap();
 
-		let rounds = Rounds::<H256, NumberFor<Block>>::new(validators);
+		let rounds = Rounds::<H256, NumberFor<Block>>::new(1, validators);
 
 		assert_eq!(42, rounds.validator_set_id());
 
@@ -184,11 +184,12 @@ mod tests {
 		)
 		.unwrap();
 
-		let mut rounds = Rounds::<H256, NumberFor<Block>>::new(validators);
+		let mut rounds = Rounds::<H256, NumberFor<Block>>::new(1, validators);
 
 		assert!(rounds.add_vote(
 			&(H256::from_low_u64_le(1), 1),
-			(Keyring::Alice.public(), Keyring::Alice.sign(b"I am committed"))
+			(Keyring::Alice.public(), Keyring::Alice.sign(b"I am committed")),
+			true
 		));
 
 		assert!(!rounds.is_done(&(H256::from_low_u64_le(1), 1)));
@@ -196,21 +197,24 @@ mod tests {
 		// invalid vote
 		assert!(!rounds.add_vote(
 			&(H256::from_low_u64_le(1), 1),
-			(Keyring::Dave.public(), Keyring::Dave.sign(b"I am committed"))
+			(Keyring::Dave.public(), Keyring::Dave.sign(b"I am committed")),
+			false
 		));
 
 		assert!(!rounds.is_done(&(H256::from_low_u64_le(1), 1)));
 
 		assert!(rounds.add_vote(
 			&(H256::from_low_u64_le(1), 1),
-			(Keyring::Bob.public(), Keyring::Bob.sign(b"I am committed"))
+			(Keyring::Bob.public(), Keyring::Bob.sign(b"I am committed")),
+			false
 		));
 
 		assert!(!rounds.is_done(&(H256::from_low_u64_le(1), 1)));
 
 		assert!(rounds.add_vote(
 			&(H256::from_low_u64_le(1), 1),
-			(Keyring::Charlie.public(), Keyring::Charlie.sign(b"I am committed"))
+			(Keyring::Charlie.public(), Keyring::Charlie.sign(b"I am committed")),
+			false
 		));
 
 		assert!(rounds.is_done(&(H256::from_low_u64_le(1), 1)));
@@ -226,36 +230,42 @@ mod tests {
 		)
 		.unwrap();
 
-		let mut rounds = Rounds::<H256, NumberFor<Block>>::new(validators);
+		let mut rounds = Rounds::<H256, NumberFor<Block>>::new(1, validators);
 
 		// round 1
 		rounds.add_vote(
 			&(H256::from_low_u64_le(1), 1),
 			(Keyring::Alice.public(), Keyring::Alice.sign(b"I am committed")),
+			true,
 		);
 		rounds.add_vote(
 			&(H256::from_low_u64_le(1), 1),
 			(Keyring::Bob.public(), Keyring::Bob.sign(b"I am committed")),
+			false,
 		);
 
 		// round 2
 		rounds.add_vote(
 			&(H256::from_low_u64_le(2), 2),
 			(Keyring::Alice.public(), Keyring::Alice.sign(b"I am again committed")),
+			false,
 		);
 		rounds.add_vote(
 			&(H256::from_low_u64_le(2), 2),
 			(Keyring::Bob.public(), Keyring::Bob.sign(b"I am again committed")),
+			false,
 		);
 
 		// round 3
 		rounds.add_vote(
 			&(H256::from_low_u64_le(3), 3),
 			(Keyring::Alice.public(), Keyring::Alice.sign(b"I am still committed")),
+			false,
 		);
 		rounds.add_vote(
 			&(H256::from_low_u64_le(3), 3),
 			(Keyring::Bob.public(), Keyring::Bob.sign(b"I am still committed")),
+			false,
 		);
 
 		assert_eq!(3, rounds.rounds.len());

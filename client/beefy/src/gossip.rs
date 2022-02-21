@@ -276,7 +276,6 @@ mod tests {
 
 		let live = gv.known_votes.read();
 		assert!(GossipValidator::<Block>::is_live(&live, &1u64));
-
 		drop(live);
 
 		gv.note_round(3u64);
@@ -285,7 +284,7 @@ mod tests {
 
 		let live = gv.known_votes.read();
 
-		assert_eq!(live.len(), MAX_LIVE_GOSSIP_ROUNDS);
+		assert_eq!(live.live.len(), MAX_LIVE_GOSSIP_ROUNDS);
 
 		assert!(!GossipValidator::<Block>::is_live(&live, &1u64));
 		assert!(GossipValidator::<Block>::is_live(&live, &3u64));
@@ -303,12 +302,9 @@ mod tests {
 		gv.note_round(1u64);
 
 		let live = gv.known_votes.read();
-
-		assert_eq!(live.len(), MAX_LIVE_GOSSIP_ROUNDS);
-
+		assert_eq!(live.live.len(), MAX_LIVE_GOSSIP_ROUNDS);
 		assert!(GossipValidator::<Block>::is_live(&live, &3u64));
 		assert!(!GossipValidator::<Block>::is_live(&live, &1u64));
-
 		drop(live);
 
 		gv.note_round(23u64);
@@ -318,7 +314,7 @@ mod tests {
 
 		let live = gv.known_votes.read();
 
-		assert_eq!(live.len(), MAX_LIVE_GOSSIP_ROUNDS);
+		assert_eq!(live.live.len(), MAX_LIVE_GOSSIP_ROUNDS);
 
 		assert!(GossipValidator::<Block>::is_live(&live, &15u64));
 		assert!(GossipValidator::<Block>::is_live(&live, &20u64));
@@ -334,9 +330,7 @@ mod tests {
 		gv.note_round(10u64);
 
 		let live = gv.known_votes.read();
-
-		assert_eq!(live.len(), MAX_LIVE_GOSSIP_ROUNDS);
-
+		assert_eq!(live.live.len(), MAX_LIVE_GOSSIP_ROUNDS);
 		drop(live);
 
 		// note round #7 again -> should not change anything
@@ -344,7 +338,7 @@ mod tests {
 
 		let live = gv.known_votes.read();
 
-		assert_eq!(live.len(), MAX_LIVE_GOSSIP_ROUNDS);
+		assert_eq!(live.live.len(), MAX_LIVE_GOSSIP_ROUNDS);
 
 		assert!(GossipValidator::<Block>::is_live(&live, &3u64));
 		assert!(GossipValidator::<Block>::is_live(&live, &7u64));
@@ -400,7 +394,7 @@ mod tests {
 
 		assert!(matches!(res, ValidationResult::ProcessAndKeep(_)));
 		assert_eq!(
-			gv.known_votes.read().get(&vote.commitment.block_number).map(|x| x.len()),
+			gv.known_votes.read().live.get(&vote.commitment.block_number).map(|x| x.len()),
 			Some(1)
 		);
 

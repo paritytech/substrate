@@ -633,89 +633,104 @@ mod tests {
 
 	#[test]
 	fn vote_on_min_block_delta() {
-		let t = vote_target(1u32, 0, 4);
-		assert_eq!(4, t);
-		let t = vote_target(2u32, 0, 4);
-		assert_eq!(4, t);
-		let t = vote_target(3u32, 0, 4);
-		assert_eq!(4, t);
-		let t = vote_target(4u32, 0, 4);
-		assert_eq!(4, t);
+		let t = vote_target(1u32, 1, 1, 4);
+		assert_eq!(5, t);
+		let t = vote_target(2u32, 1, 1, 4);
+		assert_eq!(5, t);
+		let t = vote_target(3u32, 1, 1, 4);
+		assert_eq!(5, t);
+		let t = vote_target(4u32, 1, 1, 4);
+		assert_eq!(5, t);
 
-		let t = vote_target(4u32, 4, 4);
+		let t = vote_target(4u32, 4, 1, 4);
 		assert_eq!(8, t);
 
-		let t = vote_target(10u32, 10, 4);
+		let t = vote_target(10u32, 10, 1, 4);
 		assert_eq!(14, t);
-		let t = vote_target(11u32, 10, 4);
+		let t = vote_target(11u32, 10, 1, 4);
 		assert_eq!(14, t);
-		let t = vote_target(12u32, 10, 4);
+		let t = vote_target(12u32, 10, 1, 4);
 		assert_eq!(14, t);
-		let t = vote_target(13u32, 10, 4);
+		let t = vote_target(13u32, 10, 1, 4);
 		assert_eq!(14, t);
 
-		let t = vote_target(10u32, 10, 8);
+		let t = vote_target(10u32, 10, 1, 8);
 		assert_eq!(18, t);
-		let t = vote_target(11u32, 10, 8);
+		let t = vote_target(11u32, 10, 1, 8);
 		assert_eq!(18, t);
-		let t = vote_target(12u32, 10, 8);
+		let t = vote_target(12u32, 10, 1, 8);
 		assert_eq!(18, t);
-		let t = vote_target(13u32, 10, 8);
+		let t = vote_target(13u32, 10, 1, 8);
 		assert_eq!(18, t);
 	}
 
 	#[test]
 	fn vote_on_power_of_two() {
-		let t = vote_target(1008u32, 1000, 4);
+		let t = vote_target(1008u32, 1000, 1, 4);
+		assert_eq!(1004, t);
+
+		let t = vote_target(1016u32, 1000, 1, 4);
 		assert_eq!(1008, t);
 
-		let t = vote_target(1016u32, 1000, 4);
+		let t = vote_target(1032u32, 1000, 1, 4);
 		assert_eq!(1016, t);
 
-		let t = vote_target(1032u32, 1000, 4);
+		let t = vote_target(1064u32, 1000, 1, 4);
 		assert_eq!(1032, t);
 
-		let t = vote_target(1064u32, 1000, 4);
+		let t = vote_target(1128u32, 1000, 1, 4);
 		assert_eq!(1064, t);
 
-		let t = vote_target(1128u32, 1000, 4);
+		let t = vote_target(1256u32, 1000, 1, 4);
 		assert_eq!(1128, t);
 
-		let t = vote_target(1256u32, 1000, 4);
+		let t = vote_target(1512u32, 1000, 1, 4);
 		assert_eq!(1256, t);
 
-		let t = vote_target(1512u32, 1000, 4);
-		assert_eq!(1512, t);
-
-		let t = vote_target(1024u32, 0, 4);
-		assert_eq!(1024, t);
+		let t = vote_target(1024u32, 1, 1, 4);
+		assert_eq!(513, t);
 	}
 
 	#[test]
 	fn vote_on_target_block() {
-		let t = vote_target(1008u32, 1002, 4);
-		assert_eq!(1010, t);
-		let t = vote_target(1010u32, 1002, 4);
-		assert_eq!(1010, t);
+		let t = vote_target(1008u32, 1002, 1, 4);
+		assert_eq!(1006, t);
+		let t = vote_target(1010u32, 1002, 1, 4);
+		assert_eq!(1006, t);
 
-		let t = vote_target(1016u32, 1006, 4);
-		assert_eq!(1022, t);
-		let t = vote_target(1022u32, 1006, 4);
-		assert_eq!(1022, t);
+		let t = vote_target(1016u32, 1006, 1, 4);
+		assert_eq!(1014, t);
+		let t = vote_target(1022u32, 1006, 1, 4);
+		assert_eq!(1014, t);
 
-		let t = vote_target(1032u32, 1012, 4);
-		assert_eq!(1044, t);
-		let t = vote_target(1044u32, 1012, 4);
-		assert_eq!(1044, t);
+		let t = vote_target(1032u32, 1012, 1, 4);
+		assert_eq!(1028, t);
+		let t = vote_target(1044u32, 1012, 1, 4);
+		assert_eq!(1028, t);
 
-		let t = vote_target(1064u32, 1014, 4);
-		assert_eq!(1078, t);
-		let t = vote_target(1078u32, 1014, 4);
-		assert_eq!(1078, t);
+		let t = vote_target(1064u32, 1014, 1, 4);
+		assert_eq!(1046, t);
+		let t = vote_target(1078u32, 1014, 1, 4);
+		assert_eq!(1046, t);
 
-		let t = vote_target(1128u32, 1008, 4);
-		assert_eq!(1136, t);
-		let t = vote_target(1136u32, 1008, 4);
-		assert_eq!(1136, t);
+		let t = vote_target(1128u32, 1008, 1, 4);
+		assert_eq!(1072, t);
+		let t = vote_target(1136u32, 1008, 1, 4);
+		assert_eq!(1072, t);
+	}
+
+	#[test]
+	fn vote_on_mandatory_block() {
+		let t = vote_target(1008u32, 1002, 1004, 4);
+		assert_eq!(1004, t);
+		let t = vote_target(1016u32, 1006, 1007, 4);
+		assert_eq!(1007, t);
+		let t = vote_target(1064u32, 1014, 1063, 4);
+		assert_eq!(1063, t);
+		let t = vote_target(1320u32, 1012, 1234, 4);
+		assert_eq!(1234, t);
+
+		let t = vote_target(1128u32, 1008, 1008, 4);
+		assert_eq!(1072, t);
 	}
 }
