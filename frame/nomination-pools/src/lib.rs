@@ -282,6 +282,8 @@ use sp_staking::{EraIndex, PoolsInterface, SlashPoolArgs, SlashPoolOut, StakingI
 use sp_std::{collections::btree_map::BTreeMap, ops::Div, vec::Vec};
 
 #[cfg(feature = "runtime-benchmarks")]
+pub mod benchmark_utils;
+#[cfg(feature = "runtime-benchmarks")]
 pub mod benchmarking;
 
 #[cfg(test)]
@@ -293,7 +295,7 @@ pub mod weights;
 pub use pallet::*;
 pub use weights::WeightInfo;
 
-type BalanceOf<T> =
+pub type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 type SubPoolsWithEra<T> = BoundedBTreeMap<EraIndex, UnbondPool<T>, TotalUnbondingPools<T>>;
 // NOTE: this assumes the balance type u128 or smaller.
@@ -377,7 +379,7 @@ pub enum PoolState {
 #[cfg_attr(feature = "std", derive(Clone))]
 #[codec(mel_bound(T: Config))]
 #[scale_info(skip_type_params(T))]
-struct BondedPoolStorage<T: Config> {
+pub struct BondedPoolStorage<T: Config> {
 	points: BalanceOf<T>,
 	/// See [`BondedPool::depositor`].
 	depositor: T::AccountId,
@@ -621,7 +623,7 @@ impl<T: Config> RewardPool<T> {
 #[cfg_attr(feature = "std", derive(Clone, PartialEq))]
 #[codec(mel_bound(T: Config))]
 #[scale_info(skip_type_params(T))]
-struct UnbondPool<T: Config> {
+pub struct UnbondPool<T: Config> {
 	points: BalanceOf<T>,
 	balance: BalanceOf<T>,
 }
@@ -646,7 +648,7 @@ impl<T: Config> UnbondPool<T> {
 #[cfg_attr(feature = "std", derive(Clone, PartialEq))]
 #[codec(mel_bound(T: Config))]
 #[scale_info(skip_type_params(T))]
-struct SubPools<T: Config> {
+pub struct SubPools<T: Config> {
 	/// A general, era agnostic pool of funds that have fully unbonded. The pools
 	/// of `Self::with_era` will lazily be merged into into this pool if they are
 	/// older then `current_era - TotalUnbondingPools`.
@@ -705,7 +707,7 @@ impl<T: Config> SubPools<T> {
 /// The maximum amount of eras an unbonding pool can exist prior to being merged with the
 /// `no_era	 pool. This is guaranteed to at least be equal to the staking `UnbondingDuration`. For
 /// improved UX [`Config::PostUnbondingPoolsWindow`] should be configured to a non-zero value.
-struct TotalUnbondingPools<T: Config>(PhantomData<T>);
+pub struct TotalUnbondingPools<T: Config>(PhantomData<T>);
 impl<T: Config> Get<u32> for TotalUnbondingPools<T> {
 	fn get() -> u32 {
 		// TODO: This may be too dangerous in the scenario bonding_duration gets decreased because
@@ -758,38 +760,37 @@ pub mod pallet {
 
 	/// Minimum amount to bond to join a pool.
 	#[pallet::storage]
-	pub(crate) type MinJoinBond<T: Config> = StorageValue<_, BalanceOf<T>, ValueQuery>;
+	pub type MinJoinBond<T: Config> = StorageValue<_, BalanceOf<T>, ValueQuery>;
 
 	/// Minimum bond required to create a pool.
 	#[pallet::storage]
-	pub(crate) type MinCreateBond<T: Config> = StorageValue<_, BalanceOf<T>, ValueQuery>;
+	pub type MinCreateBond<T: Config> = StorageValue<_, BalanceOf<T>, ValueQuery>;
 
 	/// Maximum number of nomination pools that can exist. If `None`, then an unbounded number of
 	/// pools can exist.
 	#[pallet::storage]
-	pub(crate) type MaxPools<T: Config> = StorageValue<_, u32, OptionQuery>;
+	pub type MaxPools<T: Config> = StorageValue<_, u32, OptionQuery>;
 
 	/// Active delegators.
 	#[pallet::storage]
-	pub(crate) type Delegators<T: Config> =
-		CountedStorageMap<_, Twox64Concat, T::AccountId, Delegator<T>>;
+	pub type Delegators<T: Config> = CountedStorageMap<_, Twox64Concat, T::AccountId, Delegator<T>>;
 
 	/// To get or insert a pool see [`BondedPool::get`] and [`BondedPool::put`]
 	#[pallet::storage]
-	pub(crate) type BondedPools<T: Config> =
+	pub type BondedPools<T: Config> =
 		CountedStorageMap<_, Twox64Concat, T::AccountId, BondedPoolStorage<T>>;
 
 	/// Reward pools. This is where there rewards for each pool accumulate. When a delegators payout
 	/// is claimed, the balance comes out fo the reward pool. Keyed by the bonded pools
 	/// _Stash_/_Controller_.
 	#[pallet::storage]
-	pub(crate) type RewardPools<T: Config> =
+	pub type RewardPools<T: Config> =
 		CountedStorageMap<_, Twox64Concat, T::AccountId, RewardPool<T>>;
 
 	/// Groups of unbonding pools. Each group of unbonding pools belongs to a bonded pool,
 	/// hence the name sub-pools. Keyed by the bonded pools _Stash_/_Controller_.
 	#[pallet::storage]
-	pub(crate) type SubPoolsStorage<T: Config> =
+	pub type SubPoolsStorage<T: Config> =
 		CountedStorageMap<_, Twox64Concat, T::AccountId, SubPools<T>>;
 
 	#[pallet::genesis_config]
@@ -1145,6 +1146,8 @@ pub mod pallet {
 			Ok(())
 		}
 
+		// TODO: [now] in addition to a min bond, we could take a fee/deposit. This discourage
+		// people from creating a pool when they just could be a normal nominator.
 		/// Create a pool.
 		///
 		/// Note that the pool creator will delegate `amount` to the pool and cannot unbond until

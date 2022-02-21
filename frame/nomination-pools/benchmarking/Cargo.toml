@@ -23,17 +23,17 @@ frame-election-provider-support = { version = "4.0.0-dev", default-features = fa
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../../system" }
 pallet-bags-list = { version = "4.0.0-dev", features = ["runtime-benchmarks"], path = "../../bags-list" }
-pallet-balances = { version = "4.0.0-dev", default-features = false, path = "../../balances" }
 pallet-staking = { version = "4.0.0-dev", default-features = false, features = ["runtime-benchmarks"], path = "../../staking" }
 pallet-nomination-pools = { version = "1.0.0", default-features = false, features = ["runtime-benchmarks"], path = "../" }
 
-# Substrate
+# Substrate Primitives
 sp-runtime = { version = "5.0.0", default-features = false, path = "../../../primitives/runtime" }
+sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/staking" }
 
 [dev-dependencies]
+pallet-balances = { version = "4.0.0-dev", default-features = false, path = "../../balances" }
 pallet-timestamp = { version = "4.0.0-dev", path = "../../timestamp" }
 pallet-staking-reward-curve = { version = "4.0.0-dev", path = "../../staking/reward-curve" }
-pallet-session = { version = "4.0.0-dev", default-features = false, path = "../../session" }
 sp-core = { version = "5.0.0", path = "../../../primitives/core" }
 sp-io = { version = "5.0.0", path = "../../../primitives/io" }
 
@@ -47,5 +47,6 @@ std = [
 	"frame-election-provider-support/std",
 	"pallet-balances/std",
 	"pallet-staking/std",
-	"sp-runtime/std"
+	"sp-runtime/std",
+	"sp-staking/std"
 ]
