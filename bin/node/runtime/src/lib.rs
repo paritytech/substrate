@@ -1347,6 +1347,7 @@ impl pallet_uniques::Config for Runtime {
 	type KeyLimit = KeyLimit;
 	type ValueLimit = ValueLimit;
 	type WeightInfo = pallet_uniques::weights::SubstrateWeight<Runtime>;
+	type Helper = ();
 }
 
 impl pallet_transaction_storage::Config for Runtime {
