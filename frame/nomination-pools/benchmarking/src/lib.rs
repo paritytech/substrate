@@ -4,10 +4,7 @@ mod mock;
 use frame_benchmarking::{account, frame_support::traits::Currency, vec, whitelist_account};
 use frame_support::ensure;
 use frame_system::RawOrigin as Origin;
-use pallet_nomination_pools::{
-	benchmark_utils::{find_pool_account_by_depositor, unbond_pool, get_reward_pool_account},
-	BalanceOf, Pallet as Pools,
-};
+use pallet_nomination_pools::{BalanceOf, Pallet as Pools};
 use sp_runtime::traits::{StaticLookup, Zero};
 use sp_staking::StakingInterface;
 
@@ -61,7 +58,9 @@ fn create_pool_account<T: pallet_nomination_pools::Config>(
 	)
 	.unwrap();
 
-	let pool_account = find_pool_account_by_depositor::<T>(&pool_creator)
+	let pool_account = pallet_nomination_pools::BondedPools::<T>::iter()
+		.find(|(_, bonded_pool)| bonded_pool.depositor == pool_creator)
+		.map(|(pool_account, _)| pool_account)
 		.expect("pool_creator created a pool above");
 
 	(pool_creator, pool_account)
@@ -119,14 +118,14 @@ impl<T: pallet_nomination_pools::Config> ListScenario<T> {
 			vec![T::Lookup::unlookup(account("random_validator", 0, USER_SEED))].clone(),
 		)?;
 
-		// find a destination weight that will trigger the worst case scenario
+		// Find a destination weight that will trigger the worst case scenario
 		let dest_weight_as_vote =
 			T::StakingInterface::weight_update_worst_case(&pool_origin1, is_increase);
 
 		let dest_weight: BalanceOf<T> =
 			dest_weight_as_vote.try_into().map_err(|_| "could not convert u64 to Balance")?;
 
-		// create an account with the worst case destination weight
+		// Create an account with the worst case destination weight
 		let (_, pool_dest1) = create_pool_account::<T>(USER_SEED + 1, dest_weight);
 		T::StakingInterface::nominate(
 			pool_dest1,
@@ -139,7 +138,7 @@ impl<T: pallet_nomination_pools::Config> ListScenario<T> {
 	fn add_joiner(mut self, amount: BalanceOf<T>) -> Self {
 		let amount = pallet_nomination_pools::MinJoinBond::<T>::get()
 			.max(<T as pallet_nomination_pools::Config>::Currency::minimum_balance())
-			// max the `given` amount with minimum thresholds for account balance and joining a pool
+			// Max the `given` amount with minimum thresholds for account balance and joining a pool
 			// to ensure 1. the user can be created and 2. can join the pool
 			.max(amount);
 
@@ -153,8 +152,13 @@ impl<T: pallet_nomination_pools::Config> ListScenario<T> {
 		let current_bonded = T::StakingInterface::bonded_balance(&self.origin1).unwrap();
 
 		// Unbond `amount` from the underlying pool account so when the delegator joins
-		// we will maintain `current_bonded`
-		unbond_pool::<T>(self.origin1.clone(), amount);
+		// we will maintain `current_bonded`.
+		T::StakingInterface::unbond(self.origin1.clone(), amount);
+
+		// Account pool points for the unbonded balance.
+		pallet_nomination_pools::BondedPools::<T>::mutate(&self.origin1, |maybe_pool| {
+			maybe_pool.as_mut().map(|pool| pool.points -= amount)
+		});
 
 		Pools::<T>::join(Origin::Signed(joiner.clone()).into(), amount, self.origin1.clone())
 			.unwrap();
@@ -202,7 +206,9 @@ frame_benchmarking::benchmarks! {
 		let origin_weight = pallet_nomination_pools::MinCreateBond::<T>::get().max(<T as pallet_nomination_pools::Config>::Currency::minimum_balance()) * 2u32.into();
 		let (depositor, pool_account) = create_pool_account::<T>(0, origin_weight);
 
-		let reward_account = get_reward_pool_account::<T>(&pool_account).expect("pool created above.");
+		let reward_account = pallet_nomination_pools::RewardPools::<T>::get(pool_account)
+			.map(|r| r.account.clone())
+			.expect("pool created above.");
 
 		// Send funds to the reward account of the pool
 		<T as pallet_nomination_pools::Config>::Currency::make_free_balance_be(&reward_account, origin_weight);

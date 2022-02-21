@@ -282,8 +282,6 @@ use sp_staking::{EraIndex, PoolsInterface, SlashPoolArgs, SlashPoolOut, StakingI
 use sp_std::{collections::btree_map::BTreeMap, ops::Div, vec::Vec};
 
 #[cfg(feature = "runtime-benchmarks")]
-pub mod benchmark_utils;
-#[cfg(feature = "runtime-benchmarks")]
 pub mod benchmarking;
 
 #[cfg(test)]
@@ -380,17 +378,18 @@ pub enum PoolState {
 #[codec(mel_bound(T: Config))]
 #[scale_info(skip_type_params(T))]
 pub struct BondedPoolStorage<T: Config> {
-	points: BalanceOf<T>,
+	/// See [`BondedPool::points`].
+	pub points: BalanceOf<T>,
 	/// See [`BondedPool::depositor`].
-	depositor: T::AccountId,
+	pub depositor: T::AccountId,
 	/// See [`BondedPool::admin`].
-	root: T::AccountId,
+	pub root: T::AccountId,
 	/// See [`BondedPool::nominator`].
-	nominator: T::AccountId,
+	pub nominator: T::AccountId,
 	/// See [`BondedPool::state_toggler`].
-	state_toggler: T::AccountId,
+	pub state_toggler: T::AccountId,
 	/// See [`BondedPool::state_toggler`].
-	state: PoolState,
+	pub state: PoolState,
 }
 
 #[derive(RuntimeDebugNoBound)]
@@ -593,18 +592,18 @@ impl<T: Config> BondedPool<T> {
 #[scale_info(skip_type_params(T))]
 pub struct RewardPool<T: Config> {
 	/// The reward destination for the pool.
-	account: T::AccountId,
+	pub account: T::AccountId,
 	/// The balance of this reward pool after the last claimed payout.
-	balance: BalanceOf<T>,
+	pub balance: BalanceOf<T>,
 	/// The total earnings _ever_ of this reward pool after the last claimed payout. I.E. the sum
 	/// of all incoming balance through the pools life.
 	///
 	/// NOTE: We assume this will always be less than total issuance and thus can use the runtimes
 	/// `Balance` type. However in a chain with a burn rate higher than the rate this increases,
 	/// this type should be bigger than `Balance`.
-	total_earnings: BalanceOf<T>,
+	pub total_earnings: BalanceOf<T>,
 	/// The total points of this reward pool after the last claimed payout.
-	points: RewardPoints,
+	pub points: RewardPoints,
 }
 
 impl<T: Config> RewardPool<T> {
