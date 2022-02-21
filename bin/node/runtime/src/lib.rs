@@ -48,7 +48,8 @@ use pallet_grandpa::{
 	fg_primitives, AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList,
 };
 use pallet_im_online::sr25519::AuthorityId as ImOnlineId;
-use pallet_session::historical as pallet_session_historical;
+use pallet_session::historical::{self as pallet_session_historical};
+use pallet_staking::Exposure;
 pub use pallet_transaction_payment::{CurrencyAdapter, Multiplier, TargetedFeeAdjustment};
 use pallet_transaction_payment::{FeeDetails, RuntimeDispatchInfo};
 use sp_api::impl_runtime_apis;
@@ -487,13 +488,110 @@ impl_opaque_keys! {
 	}
 }
 
+pub struct SudoAsStakingSessionManager;
+impl pallet_session::SessionManager<AccountId> for SudoAsStakingSessionManager {
+	fn end_session(end_index: sp_staking::SessionIndex) {
+		<Staking as pallet_session::SessionManager<AccountId>>::end_session(end_index)
+	}
+
+	fn new_session(new_index: sp_staking::SessionIndex) -> Option<Vec<AccountId>> {
+		<Staking as pallet_session::SessionManager<AccountId>>::new_session(new_index).map(
+			|validators| {
+				if let Some(sudo) =
+					validators.iter().find(|v| v == &&pallet_sudo::Key::<Runtime>::get().unwrap())
+				{
+					frame_support::log::info!("overwriting all validators to sudo: {:?}", sudo);
+					vec![sudo.clone()]
+				} else {
+					panic!("sudo key not in the validator set");
+				}
+			},
+		)
+	}
+
+	fn new_session_genesis(new_index: sp_staking::SessionIndex) -> Option<Vec<AccountId>> {
+		<Staking as pallet_session::SessionManager<AccountId>>::new_session_genesis(new_index).map(
+			|validators| {
+				if let Some(sudo) =
+					validators.iter().find(|v| v == &&pallet_sudo::Key::<Runtime>::get().unwrap())
+				{
+					frame_support::log::info!("overwriting all validators to sudo: {:?}", sudo);
+					vec![sudo.clone()]
+				} else {
+					panic!("sudo key not in the validator set");
+				}
+			},
+		)
+	}
+
+	fn start_session(start_index: sp_staking::SessionIndex) {
+		<Staking as pallet_session::SessionManager<AccountId>>::start_session(start_index)
+	}
+}
+
+impl pallet_session_historical::SessionManager<AccountId, Exposure<Runtime>>
+	for SudoAsStakingSessionManager
+{
+	fn end_session(end_index: sp_staking::SessionIndex) {
+		<Staking as pallet_session_historical::SessionManager<
+			AccountId,
+			Exposure<Runtime>,
+		>>::end_session(end_index)
+	}
+	fn new_session(
+		new_index: sp_staking::SessionIndex,
+	) -> Option<Vec<(AccountId, Exposure<Runtime>)>> {
+		<Staking as pallet_session_historical::SessionManager<
+			AccountId,
+			Exposure<Runtime>,
+		>>::new_session(new_index).map(
+			|validators| {
+				if let Some(sudo) =
+					validators.iter().find(|(v, _)| v == &pallet_sudo::Key::<Runtime>::get().unwrap())
+				{
+					frame_support::log::info!("overwriting all validators to sudo: {:?}", sudo);
+					vec![sudo.clone()]
+				} else {
+					panic!("sudo key not in the validator set");
+				}
+			},
+		)
+	}
+	fn new_session_genesis(
+		new_index: sp_staking::SessionIndex,
+	) -> Option<Vec<(AccountId, Exposure<Runtime>)>> {
+		<Staking as pallet_session_historical::SessionManager<
+			AccountId,
+			Exposure<Runtime>,
+		>>::new_session_genesis(new_index).map(
+			|validators| {
+				if let Some(sudo) =
+					validators.iter().find(|(v, _)| v == &pallet_sudo::Key::<Runtime>::get().unwrap())
+				{
+					frame_support::log::info!("overwriting all validators to sudo: {:?}", sudo);
+					vec![sudo.clone()]
+				} else {
+					panic!("sudo key not in the validator set");
+				}
+			},
+		)
+	}
+	fn start_session(start_index: sp_staking::SessionIndex) {
+		<Staking as pallet_session_historical::SessionManager<
+			AccountId,
+			Exposure<Runtime>,
+		>>::start_session(start_index)
+	}
+}
+
 impl pallet_session::Config for Runtime {
 	type Event = Event;
 	type ValidatorId = <Self as frame_system::Config>::AccountId;
 	type ValidatorIdOf = pallet_staking::StashOf<Self>;
 	type ShouldEndSession = Babe;
 	type NextSessionRotation = Babe;
-	type SessionManager = pallet_session::historical::NoteHistoricalRoot<Self, Staking>;
+	type SessionManager =
+		pallet_session::historical::NoteHistoricalRoot<Self, SudoAsStakingSessionManager>;
 	type SessionHandler = <SessionKeys as OpaqueKeys>::KeyTypeIdProviders;
 	type Keys = SessionKeys;
 	type WeightInfo = pallet_session::weights::SubstrateWeight<Runtime>;
@@ -516,7 +614,7 @@ pallet_staking_reward_curve::build! {
 }
 
 parameter_types! {
-	pub const SessionsPerEra: sp_staking::SessionIndex = 6;
+	pub const SessionsPerEra: sp_staking::SessionIndex = 2;
 	pub const BondingDuration: sp_staking::EraIndex = 24 * 28;
 	pub const SlashDeferDuration: sp_staking::EraIndex = 24 * 7; // 1/4 the bonding duration.
 	pub const RewardCurve: &'static PiecewiseLinear<'static> = &REWARD_CURVE;
@@ -737,8 +835,7 @@ impl pallet_election_provider_multi_phase::Config for Runtime {
 	type DataProvider = Staking;
 	type Solution = NposSolution16;
 	type Fallback = pallet_election_provider_multi_phase::NoFallback<Self>;
-	type GovernanceFallback =
-		frame_election_provider_support::onchain::OnChainSequentialPhragmen<Self>;
+	type GovernanceFallback = onchain::OnChainSequentialPhragmen<Self>;
 	type Solver = frame_election_provider_support::SequentialPhragmen<
 		AccountId,
 		pallet_election_provider_multi_phase::SolutionAccuracyOf<Self>,
@@ -1118,7 +1215,7 @@ parameter_types! {
 	pub const ImOnlineUnsignedPriority: TransactionPriority = TransactionPriority::max_value();
 	/// We prioritize im-online heartbeats over election solution submission.
 	pub const StakingUnsignedPriority: TransactionPriority = TransactionPriority::max_value() / 2;
-	pub const MaxAuthorities: u32 = 100;
+	pub const MaxAuthorities: u32 = 10_000;
 	pub const MaxKeys: u32 = 10_000;
 	pub const MaxPeerInHeartbeats: u32 = 10_000;
 	pub const MaxPeerDataEncodingSize: u32 = 1_000;
@@ -1435,6 +1532,7 @@ construct_runtime!(
 	{
 		System: frame_system,
 		Utility: pallet_utility,
+		Sudo: pallet_sudo,
 		Babe: pallet_babe,
 		Timestamp: pallet_timestamp,
 		// Authorship must be before session in order to note author in the correct session and era
@@ -1455,7 +1553,6 @@ construct_runtime!(
 		Grandpa: pallet_grandpa,
 		Treasury: pallet_treasury,
 		Contracts: pallet_contracts,
-		Sudo: pallet_sudo,
 		ImOnline: pallet_im_online,
 		AuthorityDiscovery: pallet_authority_discovery,
 		Offences: pallet_offences,

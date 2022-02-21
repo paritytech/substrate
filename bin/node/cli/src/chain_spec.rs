@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -22,9 +22,9 @@ use grandpa_primitives::AuthorityId as GrandpaId;
 use hex_literal::hex;
 use node_runtime::{
 	constants::currency::*, wasm_binary_unwrap, AuthorityDiscoveryConfig, BabeConfig,
-	BalancesConfig, Block, CouncilConfig, DemocracyConfig, ElectionsConfig, GrandpaConfig,
-	ImOnlineConfig, IndicesConfig, MaxNominations, SessionConfig, SessionKeys, SocietyConfig,
-	StakerStatus, StakingConfig, SudoConfig, SystemConfig, TechnicalCommitteeConfig,
+	BalancesConfig, Block, CouncilConfig, DemocracyConfig, DesiredMembers, ElectionsConfig,
+	GrandpaConfig, ImOnlineConfig, IndicesConfig, MaxNominations, SessionConfig, SessionKeys,
+	SocietyConfig, StakerStatus, StakingConfig, SudoConfig, SystemConfig, TechnicalCommitteeConfig,
 };
 use pallet_im_online::sr25519::AuthorityId as ImOnlineId;
 use sc_chain_spec::ChainSpecExtension;
@@ -221,8 +221,10 @@ pub fn authority_keys_from_seed(
 	seed: &str,
 ) -> (AccountId, AccountId, GrandpaId, BabeId, ImOnlineId, AuthorityDiscoveryId) {
 	(
-		get_account_id_from_seed::<sr25519::Public>(&format!("{}//stash", seed)),
+		// NOTE: the stash account is the raw seed -- this ensures the sanity of
+		// `ChainSpecBuilder::Generate`.
 		get_account_id_from_seed::<sr25519::Public>(seed),
+		get_account_id_from_seed::<sr25519::Public>(&format!("{}//controller", seed)),
 		get_from_seed::<GrandpaId>(seed),
 		get_from_seed::<BabeId>(seed),
 		get_from_seed::<ImOnlineId>(seed),
@@ -260,6 +262,7 @@ pub fn testnet_genesis(
 			get_account_id_from_seed::<sr25519::Public>("Ferdie//stash"),
 		]
 	});
+
 	// endow all authorities and nominators.
 	initial_authorities
 		.iter()
@@ -315,7 +318,7 @@ pub fn testnet_genesis(
 		},
 		staking: StakingConfig {
 			validator_count: initial_authorities.len() as u32,
-			minimum_validator_count: initial_authorities.len() as u32,
+			minimum_validator_count: (initial_authorities.len() as u32 / 2).max(1),
 			invulnerables: initial_authorities.iter().map(|x| x.0.clone()).collect(),
 			slash_reward_fraction: Perbill::from_percent(10),
 			stakers,
@@ -325,7 +328,7 @@ pub fn testnet_genesis(
 		elections: ElectionsConfig {
 			members: endowed_accounts
 				.iter()
-				.take((num_endowed_accounts + 1) / 2)
+				.take(((num_endowed_accounts + 1) / 2).min(DesiredMembers::get() as usize))
 				.cloned()
 				.map(|member| (member, STASH))
 				.collect(),

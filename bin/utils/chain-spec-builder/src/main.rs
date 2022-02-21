@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -39,8 +39,7 @@ use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 #[derive(Parser)]
 #[clap(rename_all = "kebab-case")]
 enum ChainSpecBuilder {
-	/// Create a new chain spec with the given authorities, endowed and sudo
-	/// accounts.
+	/// Create a new chain spec with the given authorities, endowed and sudo accounts.
 	New {
 		/// Authority key seed.
 		#[clap(long, short, required = true)]
@@ -59,8 +58,10 @@ enum ChainSpecBuilder {
 		#[clap(long, short, default_value = "./chain_spec.json")]
 		chain_spec_path: PathBuf,
 	},
-	/// Create a new chain spec with the given number of authorities and endowed
-	/// accounts. Random keys will be generated as required.
+	/// Create a new chain spec with the given number of authorities and endowed accounts. Random
+	/// keys will be generated as required.
+	///
+	/// The first authority's stash key will be used by default as the sudo account.
 	Generate {
 		/// The number of authorities.
 		#[clap(long, short)]
@@ -178,11 +179,8 @@ fn generate_authority_keys_and_store(seeds: &[String], keystore_path: &Path) -> 
 		};
 
 		insert_key(sp_core::crypto::key_types::BABE, babe.as_slice())?;
-
 		insert_key(sp_core::crypto::key_types::GRANDPA, grandpa.as_slice())?;
-
 		insert_key(sp_core::crypto::key_types::IM_ONLINE, im_online.as_slice())?;
-
 		insert_key(
 			sp_core::crypto::key_types::AUTHORITY_DISCOVERY,
 			authority_discovery.as_slice(),
@@ -249,7 +247,10 @@ fn main() -> Result<(), String> {
 			let authority_seeds = (0..authorities).map(|_| rand_str()).collect::<Vec<_>>();
 			let nominator_seeds = (0..nominators).map(|_| rand_str()).collect::<Vec<_>>();
 			let endowed_seeds = (0..endowed).map(|_| rand_str()).collect::<Vec<_>>();
-			let sudo_seed = rand_str();
+			let sudo_seed = authority_seeds
+				.first()
+				.cloned()
+				.expect("authorities has length .max(1); has first element; qed");
 
 			print_seeds(&authority_seeds, &nominator_seeds, &endowed_seeds, &sudo_seed);
 
