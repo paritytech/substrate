@@ -5,19 +5,18 @@ use frame_benchmarking::{account, frame_support::traits::Currency, vec, whitelis
 use frame_support::ensure;
 use frame_system::RawOrigin as Origin;
 use pallet_nomination_pools::{
-	benchmark_utils::{find_pool_account_by_depositor, unbond_pool},
+	benchmark_utils::{find_pool_account_by_depositor, unbond_pool, get_reward_pool_account},
 	BalanceOf, Pallet as Pools,
 };
-use sp_runtime::traits::{Bounded, Convert, Saturating, StaticLookup, TrailingZeroInput, Zero};
+use sp_runtime::traits::{StaticLookup, Zero};
 use sp_staking::StakingInterface;
+
+// Benchmark macro code needs this
+use pallet_nomination_pools::Call;
 
 const USER_SEED: u32 = 0;
 const MAX_SPANS: u32 = 100;
 
-// pub trait NominationPoolsBenchConfig:
-// 	pallet_nomination_pools::Config + pallet_staking::Config + pallet_bags_list::Config
-// {
-// }
 pub trait Config:
 	pallet_nomination_pools::Config + pallet_staking::Config + pallet_bags_list::Config
 {
@@ -166,70 +165,66 @@ impl<T: pallet_nomination_pools::Config> ListScenario<T> {
 	}
 }
 
-// frame_benchmarking::benchmarks! {
-// 	join {
-// 		clear_storage::<T>();
+frame_benchmarking::benchmarks! {
+	join {
+		clear_storage::<T>();
 
-// 		let origin_weight =
-// pallet_nomination_pools::MinCreateBond::<T>::get().max(T::Currency::minimum_balance()) *
-// 2u32.into();
+		let origin_weight = pallet_nomination_pools::MinCreateBond::<T>::get()
+			.max(<T as pallet_nomination_pools::Config>::Currency::minimum_balance())
+			* 2u32.into();
 
-// 		// setup the worst case list scenario.
-// 		let scenario = ListScenario::<T>::new(origin_weight, true)?;
-// 		assert_eq!(
-// 			T::StakingInterface::bonded_balance(&scenario.origin1).unwrap(),
-// 			origin_weight
-// 		);
+		// setup the worst case list scenario.
+		let scenario = ListScenario::<T>::new(origin_weight, true)?;
+		assert_eq!(
+			T::StakingInterface::bonded_balance(&scenario.origin1).unwrap(),
+			origin_weight
+		);
 
-// 		let max_additional = scenario.dest_weight.clone() - origin_weight;
-// 		let joiner_free = T::Currency::minimum_balance() + max_additional;
+		let max_additional = scenario.dest_weight.clone() - origin_weight;
+		let joiner_free = <T as pallet_nomination_pools::Config>::Currency::minimum_balance() + max_additional;
 
-// 		let joiner: T::AccountId
-// 			= create_funded_user_with_balance::<T>("joiner", 0, joiner_free);
+		let joiner: T::AccountId
+			= create_funded_user_with_balance::<T>("joiner", 0, joiner_free);
 
-// 		whitelist_account!(joiner);
-// 	}: _(Origin::Signed(joiner.clone()), max_additional, scenario.origin1.clone())
-// 	verify {
-// 		assert_eq!(T::Currency::free_balance(&joiner), joiner_free - max_additional);
-// 		assert_eq!(
-// 			T::StakingInterface::bonded_balance(&scenario.origin1).unwrap(),
-// 			scenario.dest_weight
-// 		);
-// 	}
+		whitelist_account!(joiner);
+	}: _(Origin::Signed(joiner.clone()), max_additional, scenario.origin1.clone())
+	verify {
+		assert_eq!(<T as pallet_nomination_pools::Config>::Currency::free_balance(&joiner), joiner_free - max_additional);
+		assert_eq!(
+			T::StakingInterface::bonded_balance(&scenario.origin1).unwrap(),
+			scenario.dest_weight
+		);
+	}
 
-// 	claim_payout {
-// 		clear_storage::<T>();
+	claim_payout {
+		clear_storage::<T>();
 
-// 		let origin_weight = MinCreateBond::<T>::get().max(T::Currency::minimum_balance()) * 2u32.into();
-// 		let (depositor, pool_account) = create_pool_account::<T>(0, origin_weight);
+		let origin_weight = pallet_nomination_pools::MinCreateBond::<T>::get().max(<T as pallet_nomination_pools::Config>::Currency::minimum_balance()) * 2u32.into();
+		let (depositor, pool_account) = create_pool_account::<T>(0, origin_weight);
 
-// 		let reward_account = RewardPools::<T>::get(
-// 			pool_account
-// 		)
-// 		.unwrap()
-// 		.account;
+		let reward_account = get_reward_pool_account::<T>(&pool_account).expect("pool created above.");
 
-// 		// Send funds to the reward account of the pool
-// 		T::Currency::make_free_balance_be(&reward_account, origin_weight);
+		// Send funds to the reward account of the pool
+		<T as pallet_nomination_pools::Config>::Currency::make_free_balance_be(&reward_account, origin_weight);
 
-// 		// Sanity check
-// 		assert_eq!(
-// 			T::Currency::free_balance(&depositor),
-// 			origin_weight
-// 		);
+		// Sanity check
+		assert_eq!(
+			<T as pallet_nomination_pools::Config>::Currency::free_balance(&depositor),
+			origin_weight
+		);
 
-// 		whitelist_account!(depositor);
-// 	}:_(Origin::Signed(depositor.clone()))
-// 	verify {
-// 		assert_eq!(
-// 			T::Currency::free_balance(&depositor),
-// 			origin_weight * 2u32.into()
-// 		);
-// 		assert_eq!(
-// 			T::Currency::free_balance(&reward_account),
-// 			Zero::zero()
-// 		);
-// 	}
+		whitelist_account!(depositor);
+	}:_(Origin::Signed(depositor.clone()))
+	verify {
+		assert_eq!(
+			<T as pallet_nomination_pools::Config>::Currency::free_balance(&depositor),
+			origin_weight * 2u32.into()
+		);
+		assert_eq!(
+			<T as pallet_nomination_pools::Config>::Currency::free_balance(&reward_account),
+			Zero::zero()
+		);
+	}
 
 // 	unbond_other {
 // 		clear_storage::<T>();
@@ -434,10 +429,10 @@ impl<T: pallet_nomination_pools::Config> ListScenario<T> {
 // 			Some(min_create_bond)
 // 		);
 // 	}
-// }
+}
 
-// frame_benchmarking::impl_benchmark_test_suite!(
-// 	Pallet,
-// 	crate::mock::new_test_ext(),
-// 	crate::mock::Runtime
-// );
+frame_benchmarking::impl_benchmark_test_suite!(
+	Pallet,
+	crate::mock::new_test_ext(),
+	crate::mock::Runtime
+);

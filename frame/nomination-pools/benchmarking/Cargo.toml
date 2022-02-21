@@ -47,6 +47,7 @@ std = [
 	"frame-election-provider-support/std",
 	"pallet-balances/std",
 	"pallet-staking/std",
+	"pallet-nomination-pools/std",
 	"sp-runtime/std",
 	"sp-staking/std"
 ]

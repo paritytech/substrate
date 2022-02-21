@@ -152,6 +152,8 @@ impl pallet_nomination_pools::Config for Runtime {
 	type PostUnbondingPoolsWindow = PostUnbondingPoolsWindow;
 }
 
+impl crate::Config for Runtime {}
+
 impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Runtime
 where
 	Call: From<LocalCall>,
@@ -178,6 +180,13 @@ frame_support::construct_runtime!(
 );
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let t = frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
-	sp_io::TestExternalities::new(t)
+	let mut storage =
+		frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
+	let _ = pallet_nomination_pools::GenesisConfig::<Runtime> {
+		min_join_bond: 2,
+		min_create_bond: 2,
+		max_pools: Some(3),
+	}
+	.assimilate_storage(&mut storage);
+	sp_io::TestExternalities::from(storage)
 }
