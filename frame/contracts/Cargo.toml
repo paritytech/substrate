@@ -28,8 +28,6 @@ smallvec = { version = "1", default-features = false, features = [
 wasmi-validation = { version = "0.4", default-features = false }
 
 # Only used in benchmarking to generate random contract code
-k256 = { version = "0.10.2", optional = true }
-ecdsa = { version = "0.13.4", optional = true }
 rand = { version = "0.8", optional = true, default-features = false }
 rand_pcg = { version = "0.3", optional = true }
 
@@ -41,6 +39,7 @@ pallet-contracts-primitives = { version = "5.0.0", default-features = false, pat
 pallet-contracts-proc-macro = { version = "4.0.0-dev", path = "proc-macro" }
 sp-core = { version = "5.0.0", default-features = false, path = "../../primitives/core" }
 sp-io = { version = "5.0.0", default-features = false, path = "../../primitives/io" }
+sp-keystore = { version = "0.11.0", default-features = false, path = "../../primitives/keystore" }
 sp-runtime = { version = "5.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-sandbox = { version = "0.10.0-dev", default-features = false, path = "../../primitives/sandbox" }
 sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
@@ -67,6 +66,7 @@ std = [
 	"sp-core/std",
 	"sp-runtime/std",
 	"sp-io/std",
+	"sp-keystore/std",
 	"sp-std/std",
 	"sp-sandbox/std",
 	"frame-benchmarking/std",
@@ -81,8 +81,6 @@ std = [
 ]
 runtime-benchmarks = [
 	"frame-benchmarking/runtime-benchmarks",
-	"k256",
-	"ecdsa",
 	"rand",
 	"rand_pcg",
 	"unstable-interface",

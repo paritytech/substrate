@@ -195,71 +195,6 @@ macro_rules! load_benchmark {
 	}};
 }
 
-// For security reasons `k256` authors decided to not directly expose the low-level
-// api for pre-hashed messages signature.
-// This is a convenience function to wrap the verbose procedure.
-// Refer to [this](https://github.com/RustCrypto/elliptic-curves/issues/525) issue
-// for some details.
-fn sign_prehashed(hash: [u8; 32]) -> [u8; 65] {
-	use ecdsa::{
-		elliptic_curve::{
-			generic_array::{typenum::U32, GenericArray},
-			ops::Reduce,
-		},
-		hazmat::{rfc6979_generate_k, SignPrimitive},
-		signature::PrehashSignature,
-	};
-	use k256::{
-		ecdsa::{Signature, SigningKey},
-		NonZeroScalar, Scalar, U256,
-	};
-	use rand::{CryptoRng, RngCore, SeedableRng};
-
-	// The PCG algorithms are not suitable for cryptographic uses, but
-	// perform well in statistical tests, use little memory and are fairly fast.
-	// For this reason they doesn't implement the `CryptoRng` trait required
-	// by `k256` to generate a new random signing key.
-	// This newtype implements `CryptoRng` only for the scope of the tests.
-	struct Pcg32Wrap(rand_pcg::Pcg32);
-	impl CryptoRng for Pcg32Wrap {}
-	impl RngCore for Pcg32Wrap {
-		fn next_u32(&mut self) -> u32 {
-			self.0.next_u32()
-		}
-		fn next_u64(&mut self) -> u64 {
-			self.0.next_u64()
-		}
-		fn fill_bytes(&mut self, dest: &mut [u8]) {
-			self.0.fill_bytes(dest)
-		}
-		fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), rand::Error> {
-			self.0.try_fill_bytes(dest)
-		}
-	}
-
-	let mut rng = Pcg32Wrap(rand_pcg::Pcg32::seed_from_u64(123456));
-	let signing_key = SigningKey::random(&mut rng);
-
-	let hash_array: GenericArray<u8, U32> = GenericArray::from_slice(&hash).clone();
-	let hash_scalar = <Scalar as Reduce<U256>>::from_be_bytes_reduced(hash_array);
-
-	let priv_bytes = signing_key.to_bytes();
-	let priv_scalar = <NonZeroScalar as Reduce<U256>>::from_be_bytes_reduced(priv_bytes);
-
-	let k = rfc6979_generate_k::<_, <Signature as PrehashSignature>::Digest>(
-		&priv_scalar,
-		&hash_scalar,
-		&[],
-	);
-
-	let (sig, recid) = priv_scalar.try_sign_prehashed(**k, hash_scalar).unwrap();
-
-	let mut full_signature = [0; 65];
-	full_signature[..64].copy_from_slice(sig.as_ref());
-	full_signature[64] = recid.unwrap().to_byte();
-	full_signature
-}
-
 benchmarks! {
 	where_clause { where
 		T::AccountId: UncheckedFrom<T::Hash>,
@@ -1933,8 +1868,14 @@ benchmarks! {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 
 		let message_hash = sp_io::hashing::blake2_256("Hello world".as_bytes());
+		let key_type = sp_core::crypto::KeyTypeId(*b"code");
+		let pub_key = sp_io::crypto::ecdsa_generate(key_type, None);
 		let signatures = (0..r * API_BENCHMARK_BATCH_SIZE)
-			.map(|i| sign_prehashed(message_hash))
+			.map(|i| {
+				let sig = sp_io::crypto::ecdsa_sign_prehashed(key_type, &pub_key, &message_hash).expect("Generates signature");
+				let bytes: &[u8; 65] = sig.as_ref();
+				bytes.to_vec()
+			})
 			.collect::<Vec<_>>();
 		let signatures = signatures.iter().flatten().cloned().collect::<Vec<_>>();
 		let signatures_bytes_len = signatures.len() as i32;
