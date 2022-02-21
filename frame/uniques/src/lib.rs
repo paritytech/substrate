@@ -155,6 +155,15 @@ pub mod pallet {
 	>;
 
 	#[pallet::storage]
+	/// The class, if any, of which an account is willing to take ownership.
+	pub(super) type OwnershipAcceptance<T: Config<I>, I: 'static = ()> = StorageMap<
+		_,
+		Blake2_128Concat,
+		T::AccountId,
+		T::ClassId,
+	>;
+
+	#[pallet::storage]
 	/// The assets held by any given account; set out this way so that assets owned by a single
 	/// account can be enumerated.
 	pub(super) type Account<T: Config<I>, I: 'static = ()> = StorageNMap<
@@ -315,6 +324,11 @@ pub mod pallet {
 			maybe_instance: Option<T::InstanceId>,
 			key: BoundedVec<u8, T::KeyLimit>,
 		},
+		/// Ownership acceptance has changed for an account.
+		OwnershipAcceptanceChanged {
+			who: T::AccountId,
+			maybe_class: Option<T::ClassId>,
+		}
 	}
 
 	#[pallet::error]
@@ -339,6 +353,8 @@ pub mod pallet {
 		NoDelegate,
 		/// No approval exists that would allow the transfer.
 		Unapproved,
+		/// The named owner has not signed ownership of the class is acceptable.
+		Unaccepted,
 	}
 
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
@@ -734,12 +750,12 @@ pub mod pallet {
 		/// Origin must be Signed and the sender should be the Owner of the asset `class`.
 		///
 		/// - `class`: The asset class whose owner should be changed.
-		/// - `owner`: The new Owner of this asset class.
+		/// - `owner`: The new Owner of this asset class. They must have called
+		///   `set_accept_ownership` with `class` in order for this operation to succeed.
 		///
 		/// Emits `OwnerChanged`.
 		///
 		/// Weight: `O(1)`
-		// TODO: Owner must have approved receipt first.
 		#[pallet::weight(T::WeightInfo::transfer_ownership())]
 		pub fn transfer_ownership(
 			origin: OriginFor<T>,
@@ -748,6 +764,9 @@ pub mod pallet {
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 			let owner = T::Lookup::lookup(owner)?;
+
+			let acceptable_class = OwnershipAcceptance::<T, I>::get(&owner);
+			ensure!(acceptable_class.as_ref() == Some(&class), Error::<T, I>::Unaccepted);
 
 			Class::<T, I>::try_mutate(class, |maybe_details| {
 				let details = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
@@ -766,6 +785,7 @@ pub mod pallet {
 				ClassAccount::<T, I>::remove(&details.owner, &class);
 				ClassAccount::<T, I>::insert(&owner, &class, ());
 				details.owner = owner.clone();
+				OwnershipAcceptance::<T, I>::remove(&owner);
 
 				Self::deposit_event(Event::OwnerChanged { class, new_owner: owner });
 				Ok(())
@@ -1270,6 +1290,34 @@ pub mod pallet {
 				Self::deposit_event(Event::ClassMetadataCleared { class });
 				Ok(())
 			})
+		}
+
+		/// Set (or reset) the acceptance of ownership for a particular account.
+		///
+		/// Origin must be `Signed` and if `maybe_class` is `Some`, then the signer must have a
+		/// provider reference.
+		///
+		/// - `maybe_class`: The identifier of the asset class whose ownership the signer is willing
+		///   to accept, or if `None`, an indication that the signer is willing to accept no
+		///   ownership transferal.
+		///
+		/// Emits `OwnershipAcceptanceChanged`.
+		#[pallet::weight(T::WeightInfo::set_accept_ownership())]
+		pub fn set_accept_ownership(origin: OriginFor<T>, maybe_class: Option<T::ClassId>) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+			let old = OwnershipAcceptance::<T, I>::get(&who);
+			match (old.is_some(), maybe_class.is_some()) {
+				(false, true) => { frame_system::Pallet::<T>::inc_consumers(&who)?; },
+				(true, false) => { frame_system::Pallet::<T>::dec_consumers(&who); },
+				_ => {},
+			}
+			if let Some(class) = maybe_class.as_ref() {
+				OwnershipAcceptance::<T, I>::insert(&who, class);
+			} else {
+				OwnershipAcceptance::<T, I>::remove(&who);
+			}
+			Self::deposit_event(Event::OwnershipAcceptanceChanged { who, maybe_class });
+			Ok(())
 		}
 	}
 }

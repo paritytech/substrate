@@ -42,10 +42,11 @@ fn create_class<T: Config<I>, I: 'static>(
 	let caller_lookup = T::Lookup::unlookup(caller.clone());
 	let class = T::Helper::class(0);
 	T::Currency::make_free_balance_be(&caller, DepositBalanceOf::<T, I>::max_value());
-	assert!(Uniques::<T, I>::create(
-		SystemOrigin::Signed(caller.clone()).into(),
+	assert!(Uniques::<T, I>::force_create(
+		SystemOrigin::Root.into(),
 		class,
 		caller_lookup.clone(),
+		false,
 	)
 	.is_ok());
 	(class, caller, caller_lookup)
@@ -136,10 +137,14 @@ fn assert_last_event<T: Config<I>, I: 'static>(generic_event: <T as Config<I>>::
 
 benchmarks_instance_pallet! {
 	create {
-		let caller: T::AccountId = whitelisted_caller();
-		let caller_lookup = T::Lookup::unlookup(caller.clone());
+		let class = T::Helper::class(0);
+		let origin = T::CreateOrigin::successful_origin(&class);
+		let caller = T::CreateOrigin::ensure_origin(origin.clone(), &class).unwrap();
+		whitelist_account!(caller);
+		let admin = T::Lookup::unlookup(caller.clone());
 		T::Currency::make_free_balance_be(&caller, DepositBalanceOf::<T, I>::max_value());
-	}: _(SystemOrigin::Signed(caller.clone()), T::Helper::class(0), caller_lookup)
+		let call = Call::<T, I>::create { class, admin };
+	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
 		assert_last_event::<T, I>(Event::Created { class: T::Helper::class(0), creator: caller.clone(), owner: caller }.into());
 	}
@@ -262,6 +267,8 @@ benchmarks_instance_pallet! {
 		let target: T::AccountId = account("target", 0, SEED);
 		let target_lookup = T::Lookup::unlookup(target.clone());
 		T::Currency::make_free_balance_be(&target, T::Currency::minimum_balance());
+		let origin = SystemOrigin::Signed(target.clone()).into();
+		Uniques::<T, I>::set_accept_ownership(origin, Some(class.clone()))?;
 	}: _(SystemOrigin::Signed(caller), class, target_lookup)
 	verify {
 		assert_last_event::<T, I>(Event::OwnerChanged { class, new_owner: target }.into());
@@ -377,6 +384,21 @@ benchmarks_instance_pallet! {
 	}: _(SystemOrigin::Signed(caller.clone()), class, instance, Some(delegate_lookup))
 	verify {
 		assert_last_event::<T, I>(Event::ApprovalCancelled { class, instance, owner: caller, delegate }.into());
+	}
+
+	// TODO: Use force_create where possible and for create make sure the arg-based successful
+	// caller is used.
+
+	set_accept_ownership {
+		let caller: T::AccountId = whitelisted_caller();
+		T::Currency::make_free_balance_be(&caller, DepositBalanceOf::<T, I>::max_value());
+		let class = T::Helper::class(0);
+	}: _(SystemOrigin::Signed(caller.clone()), Some(class.clone()))
+	verify {
+		assert_last_event::<T, I>(Event::OwnershipAcceptanceChanged {
+			who: caller,
+			maybe_class: Some(class),
+		}.into());
 	}
 
 	impl_benchmark_test_suite!(Uniques, crate::mock::new_test_ext(), crate::mock::Test);
