@@ -42,7 +42,9 @@ pub mod migration;
 pub mod weights;
 
 use codec::{Decode, Encode};
-use frame_support::traits::{BalanceStatus::Reserved, Currency, ReservableCurrency};
+use frame_support::traits::{
+	BalanceStatus::Reserved, Currency, ReservableCurrency, EnsureOriginWithArg,
+};
 use frame_system::Config as SystemConfig;
 use sp_runtime::{
 	traits::{Saturating, StaticLookup, Zero},
@@ -97,6 +99,10 @@ pub mod pallet {
 		/// The origin which may forcibly create or destroy an asset or otherwise alter privileged
 		/// attributes.
 		type ForceOrigin: EnsureOrigin<Self::Origin>;
+
+		/// Standard class creation is only allowed if the origin attempting it and the class are
+		/// in this set.
+		type CreateOrigin: EnsureOriginWithArg<Success = Self::AccountId, Self::Origin, Self::ClassId>;
 
 		/// The basic amount of funds that must be reserved for an asset class.
 		#[pallet::constant]
@@ -366,7 +372,7 @@ pub mod pallet {
 			class: T::ClassId,
 			admin: <T::Lookup as StaticLookup>::Source,
 		) -> DispatchResult {
-			let owner = ensure_signed(origin)?;
+			let owner = T::CreateOrigin::ensure_origin(origin, &class)?;
 			let admin = T::Lookup::lookup(admin)?;
 
 			Self::do_create_class(
@@ -733,6 +739,7 @@ pub mod pallet {
 		/// Emits `OwnerChanged`.
 		///
 		/// Weight: `O(1)`
+		// TODO: Owner must have approved receipt first.
 		#[pallet::weight(T::WeightInfo::transfer_ownership())]
 		pub fn transfer_ownership(
 			origin: OriginFor<T>,

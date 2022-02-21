@@ -87,7 +87,10 @@ pub use storage::{
 };
 
 mod dispatch;
-pub use dispatch::{EnsureOneOf, EnsureOrigin, OriginTrait, UnfilteredDispatchable};
+pub use dispatch::{
+	EnsureOneOf, EnsureOrigin, OriginTrait, UnfilteredDispatchable, EnsureOriginWithArg,
+	AsEnsureOriginWithArg,
+};
 
 mod voting;
 pub use voting::{
