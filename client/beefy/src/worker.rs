@@ -16,10 +16,14 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use std::{collections::BTreeSet, fmt::Debug, marker::PhantomData, sync::Arc};
+use std::{collections::BTreeSet, fmt::Debug, marker::PhantomData, pin::Pin, sync::Arc};
 
 use codec::{Codec, Decode, Encode};
-use futures::{channel::mpsc, future, FutureExt, StreamExt};
+use futures::{
+	future,
+	task::{Context, Poll, Waker},
+	FutureExt, Stream, StreamExt,
+};
 use log::{debug, error, info, log_enabled, trace, warn};
 use parking_lot::Mutex;
 
@@ -65,6 +69,34 @@ where
 	pub metrics: Option<Metrics>,
 }
 
+#[derive(Default)]
+struct BeefyTicker {
+	inner: Arc<Mutex<(bool, Option<Waker>)>>,
+}
+
+impl BeefyTicker {
+	pub fn wake(&mut self) {
+		let mut guard = self.inner.lock();
+		guard.0 = true;
+		guard.1.take().map(|waker| waker.wake());
+	}
+}
+
+impl Stream for BeefyTicker {
+	type Item = ();
+	fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<()>> {
+		let mut guard = self.inner.lock();
+		if guard.0 {
+			// Just tick every time we're woken up.
+			guard.0 = false;
+			Poll::Ready(Some(()))
+		} else {
+			guard.1 = Some(cx.waker().clone());
+			Poll::Pending
+		}
+	}
+}
+
 /// A BEEFY worker plays the BEEFY protocol
 pub(crate) struct BeefyWorker<B, C, BE>
 where
@@ -92,9 +124,7 @@ where
 	/// Validator set id for the last signed commitment
 	last_signed_id: u64,
 	// Used to wake the main task from the other event stream tasks.
-	// TODO: Replace channel-hack with a custom simple object implementing `Stream`.
-	waker_rx: mpsc::Receiver<()>,
-	waker_tx: mpsc::Sender<()>,
+	ticker: BeefyTicker,
 	// keep rustc happy
 	_backend: PhantomData<BE>,
 }
@@ -131,8 +161,6 @@ where
 			.expect("latest block always has header available; qed.")
 			.expect("latest block always has header available; qed.");
 
-		// Used to wake the main task from the other event stream tasks.
-		let (waker_tx, waker_rx) = mpsc::channel(1);
 		BeefyWorker {
 			client: client.clone(),
 			backend,
@@ -148,8 +176,7 @@ where
 			best_beefy_block: None,
 			last_signed_id: 0,
 			beefy_best_block_sender,
-			waker_rx,
-			waker_tx,
+			ticker: BeefyTicker::default(),
 			_backend: PhantomData,
 		}
 	}
@@ -244,9 +271,7 @@ where
 		self.best_grandpa_block_header = notification.header;
 
 		trace!(target: "beefy", "🥩 new finalized block, waking up ticker");
-		// We can ignore 'buffer full' error since it means some other task already
-		// queued up a wake message.
-		let _ = self.waker_tx.try_send(());
+		self.ticker.wake();
 	}
 
 	fn handle_vote(
@@ -308,9 +333,7 @@ where
 				self.set_best_beefy_block(block_num, None);
 
 				trace!(target: "beefy", "🥩 round concluded, waking up ticker");
-				// We can ignore 'buffer full' error since it means some other task already
-				// queued up a wake message.
-				let _ = self.waker_tx.try_send(());
+				self.ticker.wake();
 			}
 		}
 	}
@@ -530,7 +553,7 @@ where
 						return;
 					}
 				},
-				_ = self.waker_rx.next().fuse() => {
+				_ = self.ticker.next().fuse() => {
 					self.tick();
 				},
 				_ = gossip_engine.fuse() => {
