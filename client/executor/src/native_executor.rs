@@ -245,6 +245,12 @@ where
 	}
 }
 
+impl crate::DefaultExecutor {
+	/// Add additional host functions potentially overwriting existing functions.
+	pub fn extend_host_functions(&mut self, functions: Vec<&'static dyn sp_wasm_interface::Function>) {
+	}
+}
+
 impl<H> sp_core::traits::ReadRuntimeVersion for WasmExecutor<H>
 where
 	H: HostFunctions,

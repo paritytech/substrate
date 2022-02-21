@@ -83,6 +83,7 @@ sc-cli = { version = "0.10.0-dev", optional = true, path = "../../../client/cli"
 frame-benchmarking-cli = { version = "4.0.0-dev", optional = true, path = "../../../utils/frame/benchmarking-cli" }
 node-inspect = { version = "0.9.0-dev", optional = true, path = "../inspect" }
 try-runtime-cli = { version = "0.10.0-dev", optional = true, path = "../../../utils/frame/try-runtime/cli" }
+frame-benchmarking = { version = "4.0.0-dev", optional = true, path = "../../../frame/benchmarking" }
 
 [target.'cfg(any(target_arch="x86_64", target_arch="aarch64"))'.dependencies]
 sc-cli = { version = "0.10.0-dev", optional = true, path = "../../../client/cli", features = ["wasmtime"] }
@@ -138,6 +139,7 @@ try-runtime-cli = { version = "0.10.0-dev", optional = true, path = "../../../ut
 sc-cli = { version = "0.10.0-dev", path = "../../../client/cli", optional = true }
 pallet-balances = { version = "4.0.0-dev", path = "../../../frame/balances" }
 substrate-wasm-builder = { version = "5.0.0-dev", path = "../../../utils/wasm-builder" }
+frame-benchmarking = { version = "4.0.0-dev", optional = true, path = "../../../frame/benchmarking" }
 
 [features]
 default = ["cli"]
@@ -152,7 +154,7 @@ cli = [
 	"substrate-build-script-utils",
 	"try-runtime-cli",
 ]
-runtime-benchmarks = ["frame-benchmarking-cli"]
+runtime-benchmarks = ["frame-benchmarking-cli", "frame-benchmarking"]
 # Enable features that allow the runtime to be tried and debugged. Name might be subject to change
 # in the near future.
 try-runtime = ["try-runtime-cli"]

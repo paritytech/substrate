@@ -41,6 +41,18 @@ type FullGrandpaBlockImport =
 /// The transaction pool type defintion.
 pub type TransactionPool = sc_transaction_pool::FullPool<Block, FullClient>;
 
+#[cfg(feature = "runtime-benchmarks")]
+fn extend_host_functions(executor: &mut DefaultExecutor) {
+	use sc_executor::sp_wasm_interface::HostFunctions;
+	executor.extend_host_functions(
+		frame_benchmarking::benchmarking::HostFunctions::host_functions()
+	);
+}
+
+#[cfg(not(feature = "runtime-benchmarks"))]
+fn extend_host_functions(_executor: &mut DefaultExecutor) {
+}
+
 /// Creates a new partial node.
 pub fn new_partial(
 	config: &Configuration,
@@ -78,13 +90,15 @@ pub fn new_partial(
 		})
 		.transpose()?;
 
-	let executor = DefaultExecutor::new(
+	let mut executor = DefaultExecutor::new(
 		config.wasm_method,
 		config.default_heap_pages,
 		config.max_runtime_instances,
 		None,
 		config.runtime_cache_size,
 	);
+
+	extend_host_functions(&mut executor);
 
 	let (client, backend, keystore_container, task_manager) =
 		sc_service::new_full_parts::<Block>(

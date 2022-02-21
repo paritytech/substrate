@@ -54,7 +54,6 @@ pub use sc_executor_common::{error, sandbox, runtime_blob::RuntimeBlob};
 /// Default WASM executor with substrate host function set.
 pub type DefaultExecutor = WasmExecutor<sp_wasm_interface::ExtendedHostFunctions<sp_io::SubstrateHostFunctions, ()>>;
 
-
 /// Extracts the runtime version of a given runtime code.
 pub trait RuntimeVersionOf {
 	/// Extract [`RuntimeVersion`](sp_version::RuntimeVersion) of the given `runtime_code`.
