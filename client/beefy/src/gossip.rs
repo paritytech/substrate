@@ -129,10 +129,7 @@ where
 		debug!(target: "beefy", "🥩 About to drop gossip round #{}", round);
 		let mut known_votes = self.known_votes.write();
 		known_votes.live.remove(&round);
-		known_votes.last_done = match known_votes.last_done {
-			Some(n) => Some(n.max(round)),
-			None => Some(round),
-		};
+		known_votes.last_done = known_votes.last_done.max(Some(round));
 	}
 
 	fn add_known(known_votes: &mut KnownVotes<B>, round: &NumberFor<B>, hash: MessageHash) {
@@ -150,7 +147,7 @@ where
 		let unseen_round = if let Some(max_known_round) = known_votes.live.keys().last() {
 			round > max_known_round
 		} else {
-			known_votes.last_done.map(|last| *round > last).unwrap_or(true)
+			Some(*round) > known_votes.last_done
 		};
 
 		unseen_round || known_votes.live.contains_key(round)
