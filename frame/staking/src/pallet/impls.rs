@@ -1389,11 +1389,4 @@ impl<T: Config> StakingInterface for Pallet<T> {
 	fn set_current_era(era: EraIndex) {
 		CurrentEra::<T>::put(era)
 	}
-
-	fn add_slashing_spans<T: pallet_staking::Config>(_account: &Self::AccountId, _spans: u32) {
-		// TODO: this needs a better design. In order to access the slashing_spans storage
-		// we would need to bound T: pallet_staking::Config - however we want to avoid bounding
-		// the nomination pools
-		// benchmarking::add_slashing_span::<T>(account, spans)
-	}
 }

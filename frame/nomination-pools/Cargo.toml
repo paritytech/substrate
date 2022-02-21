@@ -1,6 +1,6 @@
 [package]
 name = "pallet-nomination-pools"
-version = "0.0.1"
+version = "1.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2021"
 license = "Apache-2.0"

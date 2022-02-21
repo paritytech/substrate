@@ -262,6 +262,8 @@ pub trait ElectionDataProvider {
 	fn clear() {}
 }
 
+// TODO: [now] this isn't practically useful, we require the dataprovider for staking's election
+// provider to be the staking pallet
 /// An election data provider that should only be used for testing.
 #[cfg(feature = "std")]
 pub struct TestDataProvider<X>(sp_std::marker::PhantomData<X>);
@@ -340,11 +342,15 @@ pub trait InstantElectionProvider: ElectionProvider {
 pub struct NoElection<X>(sp_std::marker::PhantomData<X>);
 
 #[cfg(feature = "std")]
-impl<AccountId, BlockNumber> ElectionProvider for NoElection<(AccountId, BlockNumber)> {
+impl<AccountId, BlockNumber, DataProvider> ElectionProvider
+	for NoElection<(AccountId, BlockNumber, DataProvider)>
+where
+	DataProvider: ElectionDataProvider<AccountId = AccountId, BlockNumber = BlockNumber>,
+{
 	type AccountId = AccountId;
 	type BlockNumber = BlockNumber;
 	type Error = &'static str;
-	type DataProvider = TestDataProvider<(AccountId, BlockNumber)>;
+	type DataProvider = DataProvider;
 
 	fn elect() -> Result<Supports<AccountId>, Self::Error> {
 		Err("<NoElection as ElectionProvider> cannot do anything.")

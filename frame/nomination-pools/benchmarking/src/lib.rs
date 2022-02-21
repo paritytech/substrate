@@ -1,2 +1,2 @@
 #[cfg(test)]
-use mock;
+mod mock;

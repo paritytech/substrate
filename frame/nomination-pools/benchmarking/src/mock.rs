@@ -15,19 +15,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![cfg(test)]
-
-use super::*;
+use frame_election_provider_support::VoteWeight;
+use frame_support::{pallet_prelude::*, parameter_types, traits::ConstU64};
+use sp_runtime::traits::{Convert, IdentityLookup};
 
 type AccountId = u64;
 type AccountIndex = u32;
 type BlockNumber = u64;
 type Balance = u64;
-
-parameter_types! {
-	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(2 * WEIGHT_PER_SECOND);
-}
 
 impl frame_system::Config for Runtime {
 	type BaseCallFilter = frame_support::traits::Everything;
@@ -56,6 +51,13 @@ impl frame_system::Config for Runtime {
 	type MaxConsumers = frame_support::traits::ConstU32<16>;
 }
 
+impl pallet_timestamp::Config for Runtime {
+	type Moment = u64;
+	type OnTimestampSet = ();
+	type MinimumPeriod = ConstU64<5>;
+	type WeightInfo = ();
+}
+
 parameter_types! {
 	pub const ExistentialDeposit: Balance = 10;
 }
@@ -71,7 +73,19 @@ impl pallet_balances::Config for Runtime {
 	type WeightInfo = ();
 }
 
-
+pallet_staking_reward_curve::build! {
+	const I_NPOS: sp_runtime::curve::PiecewiseLinear<'static> = curve!(
+		min_inflation: 0_025_000,
+		max_inflation: 0_100_000,
+		ideal_stake: 0_500_000,
+		falloff: 0_050_000,
+		max_piece_count: 40,
+		test_precision: 0_005_000,
+	);
+}
+parameter_types! {
+	pub const RewardCurve: &'static sp_runtime::curve::PiecewiseLinear<'static> = &I_NPOS;
+}
 impl pallet_staking::Config for Runtime {
 	type MaxNominations = ConstU32<16>;
 	type Currency = Balances;
@@ -85,14 +99,16 @@ impl pallet_staking::Config for Runtime {
 	type SlashDeferDuration = ();
 	type SlashCancelOrigin = frame_system::EnsureRoot<Self::AccountId>;
 	type BondingDuration = ();
-	type SessionInterface = Self;
+	type SessionInterface = ();
 	type EraPayout = pallet_staking::ConvertCurve<RewardCurve>;
-	type NextNewSession = Session;
+	type NextNewSession = ();
 	type MaxNominatorRewardedPerValidator = ConstU32<64>;
 	type OffendingValidatorsThreshold = ();
-	type ElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
+	type ElectionProvider =
+		frame_election_provider_support::NoElection<(AccountId, BlockNumber, Staking)>;
 	type GenesisElectionProvider = Self::ElectionProvider;
 	type SortedListProvider = pallet_bags_list::Pallet<Self>;
+	type PoolsInterface = Pools;
 	type BenchmarkingConfig = pallet_staking::TestBenchmarkingConfig;
 	type WeightInfo = ();
 }
@@ -101,24 +117,23 @@ parameter_types! {
 	pub static BagThresholds: &'static [VoteWeight] = &[10, 20, 30, 40, 50, 60, 1_000, 2_000, 10_000];
 }
 
-impl bags_list::Config for Runtime {
+impl pallet_bags_list::Config for Runtime {
 	type Event = Event;
 	type WeightInfo = ();
 	type BagThresholds = BagThresholds;
-	type VoteWeightProvider = pallet_staking::Pallet<Self>;
+	type VoteWeightProvider = Staking;
 }
 
-
 pub struct BalanceToU256;
-impl Convert<Balance, U256> for BalanceToU256 {
-	fn convert(n: Balance) -> U256 {
+impl Convert<Balance, sp_core::U256> for BalanceToU256 {
+	fn convert(n: Balance) -> sp_core::U256 {
 		n.into()
 	}
 }
 
 pub struct U256ToBalance;
-impl Convert<U256, Balance> for U256ToBalance {
-	fn convert(n: U256) -> Balance {
+impl Convert<sp_core::U256, Balance> for U256ToBalance {
+	fn convert(n: sp_core::U256) -> Balance {
 		n.try_into().unwrap()
 	}
 }
@@ -133,28 +148,36 @@ impl pallet_nomination_pools::Config for Runtime {
 	type Currency = Balances;
 	type BalanceToU256 = BalanceToU256;
 	type U256ToBalance = U256ToBalance;
-	type StakingInterface = StakingMock;
+	type StakingInterface = Staking;
 	type PostUnbondingPoolsWindow = PostUnbondingPoolsWindow;
 }
 
+impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Runtime
+where
+	Call: From<LocalCall>,
+{
+	type OverarchingCall = Call;
+	type Extrinsic = UncheckedExtrinsic;
+}
 
-pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
-pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<u32, Call, u64, ()>;
-
+type Block = frame_system::mocking::MockBlock<Runtime>;
+type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Runtime>;
 frame_support::construct_runtime!(
-	pub enum Test where
+	pub enum Runtime where
 		Block = Block,
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
-		System: system::{Pallet, Call, Event<T>},
+		System: frame_system::{Pallet, Call, Event<T>},
+		Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
 		Staking: pallet_staking::{Pallet, Call, Config<T>, Storage, Event<T>},
+		BagsList: pallet_bags_list::{Pallet, Call, Storage, Event<T>},
 		Pools: pallet_nomination_pools::{Pallet, Call, Storage, Event<T>},
 	}
 );
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+	let t = frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
 	sp_io::TestExternalities::new(t)
 }
