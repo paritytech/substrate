@@ -165,7 +165,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let owner = Class::<T, I>::try_mutate(
 			&class,
 			|maybe_class_details| -> Result<T::AccountId, DispatchError> {
-				let class_details = maybe_class_details.as_mut().ok_or(Error::<T, I>::UnknownClassClass)?;
+				let class_details = maybe_class_details.as_mut().ok_or(Error::<T, I>::UnknownClass)?;
 				let details =
 					Asset::<T, I>::get(&class, &instance).ok_or(Error::<T, I>::UnknownClass)?;
 				with_details(&class_details, &details)?;
