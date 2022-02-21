@@ -1873,8 +1873,7 @@ benchmarks! {
 		let signatures = (0..r * API_BENCHMARK_BATCH_SIZE)
 			.map(|i| {
 				let sig = sp_io::crypto::ecdsa_sign_prehashed(key_type, &pub_key, &message_hash).expect("Generates signature");
-				let bytes: &[u8; 65] = sig.as_ref();
-				bytes.to_vec()
+				AsRef::<[u8; 65]>::as_ref(&sig).to_vec()
 			})
 			.collect::<Vec<_>>();
 		let signatures = signatures.iter().flatten().cloned().collect::<Vec<_>>();
