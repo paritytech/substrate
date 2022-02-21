@@ -41,7 +41,7 @@ mod types;
 pub mod migration;
 pub mod weights;
 
-use codec::{Decode, Encode, HasCompact};
+use codec::{Decode, Encode};
 use frame_support::traits::{BalanceStatus::Reserved, Currency, ReservableCurrency};
 use frame_system::Config as SystemConfig;
 use sp_runtime::{
@@ -64,6 +64,16 @@ pub mod pallet {
 	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T, I = ()>(_);
 
+	pub trait BenchmarkHelper<ClassId, InstanceId> {
+		fn class(i: u16) -> ClassId;
+		fn instance(i: u16) -> InstanceId;
+	}
+
+	impl<ClassId: From<u16>, InstanceId: From<u16>> BenchmarkHelper<ClassId, InstanceId> for () {
+		fn class(i: u16) -> ClassId { i.into() }
+		fn instance(i: u16) -> InstanceId { i.into() }
+	}
+
 	#[pallet::config]
 	/// The module configuration trait.
 	pub trait Config<I: 'static = ()>: frame_system::Config {
@@ -71,16 +81,10 @@ pub mod pallet {
 		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
 
 		/// Identifier for the class of asset.
-		type ClassId: Member + Parameter + Default + Copy + HasCompact + MaxEncodedLen;
+		type ClassId: Member + Parameter + MaxEncodedLen + Copy;
 
 		/// The type used to identify a unique asset within an asset class.
-		type InstanceId: Member
-			+ Parameter
-			+ Default
-			+ Copy
-			+ HasCompact
-			+ From<u16>
-			+ MaxEncodedLen;
+		type InstanceId: Member + Parameter + MaxEncodedLen + Copy;
 
 		/// The currency mechanism, used for paying for reserves.
 		type Currency: ReservableCurrency<Self::AccountId>;
@@ -121,6 +125,9 @@ pub mod pallet {
 		/// The maximum length of an attribute value.
 		#[pallet::constant]
 		type ValueLimit: Get<u32>;
+
+		/// A set of helper functions for benchmarking.
+		type Helper: BenchmarkHelper<Self::ClassId, Self::InstanceId>;
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
@@ -350,7 +357,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::create())]
 		pub fn create(
 			origin: OriginFor<T>,
-			#[pallet::compact] class: T::ClassId,
+			class: T::ClassId,
 			admin: <T::Lookup as StaticLookup>::Source,
 		) -> DispatchResult {
 			let owner = ensure_signed(origin)?;
@@ -385,7 +392,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::force_create())]
 		pub fn force_create(
 			origin: OriginFor<T>,
-			#[pallet::compact] class: T::ClassId,
+			class: T::ClassId,
 			owner: <T::Lookup as StaticLookup>::Source,
 			free_holding: bool,
 		) -> DispatchResult {
@@ -424,7 +431,7 @@ pub mod pallet {
  		))]
 		pub fn destroy(
 			origin: OriginFor<T>,
-			#[pallet::compact] class: T::ClassId,
+			class: T::ClassId,
 			witness: DestroyWitness,
 		) -> DispatchResultWithPostInfo {
 			let maybe_check_owner = match T::ForceOrigin::try_origin(origin) {
@@ -455,8 +462,8 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::mint())]
 		pub fn mint(
 			origin: OriginFor<T>,
-			#[pallet::compact] class: T::ClassId,
-			#[pallet::compact] instance: T::InstanceId,
+			class: T::ClassId,
+			instance: T::InstanceId,
 			owner: <T::Lookup as StaticLookup>::Source,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
@@ -484,8 +491,8 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::burn())]
 		pub fn burn(
 			origin: OriginFor<T>,
-			#[pallet::compact] class: T::ClassId,
-			#[pallet::compact] instance: T::InstanceId,
+			class: T::ClassId,
+			instance: T::InstanceId,
 			check_owner: Option<<T::Lookup as StaticLookup>::Source>,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
@@ -520,8 +527,8 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::transfer())]
 		pub fn transfer(
 			origin: OriginFor<T>,
-			#[pallet::compact] class: T::ClassId,
-			#[pallet::compact] instance: T::InstanceId,
+			class: T::ClassId,
+			instance: T::InstanceId,
 			dest: <T::Lookup as StaticLookup>::Source,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
@@ -556,7 +563,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::redeposit(instances.len() as u32))]
 		pub fn redeposit(
 			origin: OriginFor<T>,
-			#[pallet::compact] class: T::ClassId,
+			class: T::ClassId,
 			instances: Vec<T::InstanceId>,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
@@ -615,8 +622,8 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::freeze())]
 		pub fn freeze(
 			origin: OriginFor<T>,
-			#[pallet::compact] class: T::ClassId,
-			#[pallet::compact] instance: T::InstanceId,
+			class: T::ClassId,
+			instance: T::InstanceId,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 
@@ -645,8 +652,8 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::thaw())]
 		pub fn thaw(
 			origin: OriginFor<T>,
-			#[pallet::compact] class: T::ClassId,
-			#[pallet::compact] instance: T::InstanceId,
+			class: T::ClassId,
+			instance: T::InstanceId,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 
@@ -674,7 +681,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::freeze_class())]
 		pub fn freeze_class(
 			origin: OriginFor<T>,
-			#[pallet::compact] class: T::ClassId,
+			class: T::ClassId,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 
@@ -701,7 +708,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::thaw_class())]
 		pub fn thaw_class(
 			origin: OriginFor<T>,
-			#[pallet::compact] class: T::ClassId,
+			class: T::ClassId,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 
@@ -729,7 +736,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::transfer_ownership())]
 		pub fn transfer_ownership(
 			origin: OriginFor<T>,
-			#[pallet::compact] class: T::ClassId,
+			class: T::ClassId,
 			owner: <T::Lookup as StaticLookup>::Source,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
@@ -773,7 +780,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::set_team())]
 		pub fn set_team(
 			origin: OriginFor<T>,
-			#[pallet::compact] class: T::ClassId,
+			class: T::ClassId,
 			issuer: <T::Lookup as StaticLookup>::Source,
 			admin: <T::Lookup as StaticLookup>::Source,
 			freezer: <T::Lookup as StaticLookup>::Source,
@@ -810,8 +817,8 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::approve_transfer())]
 		pub fn approve_transfer(
 			origin: OriginFor<T>,
-			#[pallet::compact] class: T::ClassId,
-			#[pallet::compact] instance: T::InstanceId,
+			class: T::ClassId,
+			instance: T::InstanceId,
 			delegate: <T::Lookup as StaticLookup>::Source,
 		) -> DispatchResult {
 			let maybe_check: Option<T::AccountId> = T::ForceOrigin::try_origin(origin)
@@ -862,8 +869,8 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::cancel_approval())]
 		pub fn cancel_approval(
 			origin: OriginFor<T>,
-			#[pallet::compact] class: T::ClassId,
-			#[pallet::compact] instance: T::InstanceId,
+			class: T::ClassId,
+			instance: T::InstanceId,
 			maybe_check_delegate: Option<<T::Lookup as StaticLookup>::Source>,
 		) -> DispatchResult {
 			let maybe_check: Option<T::AccountId> = T::ForceOrigin::try_origin(origin)
@@ -914,7 +921,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::force_asset_status())]
 		pub fn force_asset_status(
 			origin: OriginFor<T>,
-			#[pallet::compact] class: T::ClassId,
+			class: T::ClassId,
 			owner: <T::Lookup as StaticLookup>::Source,
 			issuer: <T::Lookup as StaticLookup>::Source,
 			admin: <T::Lookup as StaticLookup>::Source,
@@ -963,7 +970,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::set_attribute())]
 		pub fn set_attribute(
 			origin: OriginFor<T>,
-			#[pallet::compact] class: T::ClassId,
+			class: T::ClassId,
 			maybe_instance: Option<T::InstanceId>,
 			key: BoundedVec<u8, T::KeyLimit>,
 			value: BoundedVec<u8, T::ValueLimit>,
@@ -1025,7 +1032,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::clear_attribute())]
 		pub fn clear_attribute(
 			origin: OriginFor<T>,
-			#[pallet::compact] class: T::ClassId,
+			class: T::ClassId,
 			maybe_instance: Option<T::InstanceId>,
 			key: BoundedVec<u8, T::KeyLimit>,
 		) -> DispatchResult {
@@ -1074,8 +1081,8 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::set_metadata())]
 		pub fn set_metadata(
 			origin: OriginFor<T>,
-			#[pallet::compact] class: T::ClassId,
-			#[pallet::compact] instance: T::InstanceId,
+			class: T::ClassId,
+			instance: T::InstanceId,
 			data: BoundedVec<u8, T::StringLimit>,
 			is_frozen: bool,
 		) -> DispatchResult {
@@ -1135,8 +1142,8 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::clear_metadata())]
 		pub fn clear_metadata(
 			origin: OriginFor<T>,
-			#[pallet::compact] class: T::ClassId,
-			#[pallet::compact] instance: T::InstanceId,
+			class: T::ClassId,
+			instance: T::InstanceId,
 		) -> DispatchResult {
 			let maybe_check_owner = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
@@ -1183,7 +1190,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::set_class_metadata())]
 		pub fn set_class_metadata(
 			origin: OriginFor<T>,
-			#[pallet::compact] class: T::ClassId,
+			class: T::ClassId,
 			data: BoundedVec<u8, T::StringLimit>,
 			is_frozen: bool,
 		) -> DispatchResult {
@@ -1239,7 +1246,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::clear_class_metadata())]
 		pub fn clear_class_metadata(
 			origin: OriginFor<T>,
-			#[pallet::compact] class: T::ClassId,
+			class: T::ClassId,
 		) -> DispatchResult {
 			let maybe_check_owner = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)

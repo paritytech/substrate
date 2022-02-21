@@ -99,6 +99,7 @@ impl Config for Test {
 	type KeyLimit = ConstU32<50>;
 	type ValueLimit = ConstU32<50>;
 	type WeightInfo = ();
+	type Helper = ();
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
