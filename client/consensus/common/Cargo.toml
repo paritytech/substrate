@@ -26,7 +26,7 @@ sp-state-machine = { version = "0.11.0", path = "../../../primitives/state-machi
 sp-runtime = { version = "5.0.0", path = "../../../primitives/runtime" }
 sc-utils = { version = "4.0.0-dev", path = "../../utils" }
 sp-api = { version = "4.0.0-dev", path = "../../../primitives/api" }
-parking_lot = "0.11.2"
+parking_lot = "0.12.0"
 serde = { version = "1.0", features = ["derive"] }
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../../utils/prometheus", version = "0.10.0-dev" }
 async-trait = "0.1.42"
