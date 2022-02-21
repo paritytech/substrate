@@ -131,7 +131,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		ensure!(!Asset::<T, I>::contains_key(class, instance), Error::<T, I>::AlreadyExists);
 
 		Class::<T, I>::try_mutate(&class, |maybe_class_details| -> DispatchResult {
-			let class_details = maybe_class_details.as_mut().ok_or(Error::<T, I>::UnknownClassClass)?;
+			let class_details = maybe_class_details.as_mut().ok_or(Error::<T, I>::UnknownClass)?;
 
 			with_details(&class_details)?;
 
