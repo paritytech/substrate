@@ -25,10 +25,49 @@ pub trait Contains<T> {
 	fn contains(t: &T) -> bool;
 }
 
+#[impl_trait_for_tuples::impl_for_tuples(1, 30)]
+impl<T> Contains<T> for Tuple {
+	fn contains(t: &T) -> bool {
+		for_tuples!( #(
+			if Tuple::contains(t) { return true }
+		)* );
+		false
+	}
+}
+
+/// A trait for querying whether a type can be said to "contain" a pair-value.
+pub trait ContainsPair<A, B> {
+	/// Return `true` if this "contains" the pair-value `(a, b)`.
+	fn contains(a: &A, b: &B) -> bool;
+}
+
+#[impl_trait_for_tuples::impl_for_tuples(0, 30)]
+impl<A, B> ContainsPair<A, B> for Tuple {
+	fn contains(a: &A, b: &B) -> bool {
+		for_tuples!( #(
+			if Tuple::contains(a, b) { return true }
+		)* );
+		false
+	}
+}
+
+/// Converter `struct` to use a `ContainsPair` implementation for a `Contains` bound.
+pub struct FromContainsPair<CP>(PhantomData<CP>);
+impl<A, B, CP: ContainsPair<A, B>> Contains<(A, B)> for FromContainsPair<CP> {
+	fn contains((ref a, ref b): &(A, B)) -> bool {
+		CP::contains(a, b)
+	}
+}
+
 /// A [`Contains`] implementation that contains every value.
 pub enum Everything {}
 impl<T> Contains<T> for Everything {
 	fn contains(_: &T) -> bool {
+		true
+	}
+}
+impl<A, B> ContainsPair<A, B> for Everything {
+	fn contains(_: &A, _: &B) -> bool {
 		true
 	}
 }
@@ -39,6 +78,54 @@ impl<T> Contains<T> for Nothing {
 	fn contains(_: &T) -> bool {
 		false
 	}
+}
+impl<A, B> ContainsPair<A, B> for Nothing {
+	fn contains(_: &A, _: &B) -> bool {
+		false
+	}
+}
+
+/// Create a type which implements the `Contains` trait for a particular type with syntax similar
+/// to `matches!`.
+#[macro_export]
+#[deprecated = "Use `match_types!` instead"]
+macro_rules! match_type {
+	($( $x:tt )*) => { match_types!( $( $x )* ); }
+}
+
+/// Create a type which implements the `Contains` trait for a particular type with syntax similar
+/// to `matches!`.
+#[macro_export]
+macro_rules! match_types {
+	(
+		pub type $n:ident: impl Contains<$t:ty> = {
+			$phead:pat_param $( | $ptail:pat )*
+		};
+		$( $rest:tt )*
+	) => {
+		pub struct $n;
+		impl $crate::traits::Contains<$t> for $n {
+			fn contains(l: &$t) -> bool {
+				matches!(l, $phead $( | $ptail )* )
+			}
+		}
+		$crate::match_types!( $( $rest )* );
+	};
+	(
+		pub type $n:ident: impl ContainsPair<$a:ty, $b:ty> = {
+			$phead:pat_param $( | $ptail:pat )*
+		};
+		$( $rest:tt )*
+	) => {
+		pub struct $n;
+		impl $crate::traits::ContainsPair<$a, $b> for $n {
+			fn contains(a: &$a, b: &$b) -> bool {
+				matches!((a, b), $phead $( | $ptail )* )
+			}
+		}
+		$crate::match_types!( $( $rest )* );
+	};
+	() => {}
 }
 
 #[deprecated = "Use `Everything` instead"]
@@ -56,40 +143,16 @@ impl<T, C: Contains<T>> Filter<T> for C {
 	}
 }
 
-#[impl_trait_for_tuples::impl_for_tuples(1, 30)]
-impl<T> Contains<T> for Tuple {
-	fn contains(t: &T) -> bool {
-		for_tuples!( #(
-			if Tuple::contains(t) { return true }
-		)* );
-		false
-	}
-}
-
-/// Create a type which implements the `Contains` trait for a particular type with syntax similar
-/// to `matches!`.
-#[macro_export]
-macro_rules! match_type {
-	( pub type $n:ident: impl Contains<$t:ty> = { $phead:pat_param $( | $ptail:pat )* } ; ) => {
-		pub struct $n;
-		impl $crate::traits::Contains<$t> for $n {
-			fn contains(l: &$t) -> bool {
-				matches!(l, $phead $( | $ptail )* )
-			}
-		}
-	}
-}
-
 #[cfg(test)]
 mod tests {
 	use super::*;
 
-	match_type! {
+	match_types! {
 		pub type OneOrTenToTwenty: impl Contains<u8> = { 1 | 10..=20 };
 	}
 
 	#[test]
-	fn match_type_works() {
+	fn match_types_works() {
 		for i in 0..=255 {
 			assert_eq!(OneOrTenToTwenty::contains(&i), i == 1 || i >= 10 && i <= 20);
 		}

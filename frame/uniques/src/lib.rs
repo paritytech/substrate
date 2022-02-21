@@ -64,11 +64,12 @@ pub mod pallet {
 	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T, I = ()>(_);
 
+	#[cfg(feature = "runtime-benchmarks")]
 	pub trait BenchmarkHelper<ClassId, InstanceId> {
 		fn class(i: u16) -> ClassId;
 		fn instance(i: u16) -> InstanceId;
 	}
-
+	#[cfg(feature = "runtime-benchmarks")]
 	impl<ClassId: From<u16>, InstanceId: From<u16>> BenchmarkHelper<ClassId, InstanceId> for () {
 		fn class(i: u16) -> ClassId {
 			i.into()
@@ -130,6 +131,7 @@ pub mod pallet {
 		#[pallet::constant]
 		type ValueLimit: Get<u32>;
 
+		#[cfg(feature = "runtime-benchmarks")]
 		/// A set of helper functions for benchmarking.
 		type Helper: BenchmarkHelper<Self::ClassId, Self::InstanceId>;
 
