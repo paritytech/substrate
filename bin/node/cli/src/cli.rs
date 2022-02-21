@@ -42,8 +42,8 @@ pub enum Subcommand {
 	#[clap(name = "benchmark", about = "Benchmark runtime pallets.")]
 	Benchmark(frame_benchmarking_cli::BenchmarkCmd),
 
-	#[clap(name = "bedrock-benchmark")]
-	Bedrock(frame_benchmarking_cli::bedrock::BedrockCmd),
+	#[clap(name = "bedrock", subcommand)]
+	Bedrock(frame_benchmarking_cli::bedrock::Bedrock),
 
 	/// Try some command against runtime state.
 	#[cfg(feature = "try-runtime")]

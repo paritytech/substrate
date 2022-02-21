@@ -165,19 +165,12 @@ pub mod constants {
 		pub const BlockExecutionWeight: Weight = 5 * WEIGHT_PER_MILLIS;
 		/// Executing 10,000 System remarks (no-op) txs takes ~1.26 seconds -> ~125 µs per tx
 		pub const ExtrinsicBaseWeight: Weight = 125 * WEIGHT_PER_MICROS;
-		/// By default, Substrate uses RocksDB, so this will be the weight used throughout
-		/// the runtime.
-		pub const RocksDbWeight: RuntimeDbWeight = RuntimeDbWeight {
-			read: 25 * WEIGHT_PER_MICROS,   // ~25 µs @ 200,000 items
-			write: 100 * WEIGHT_PER_MICROS, // ~100 µs @ 200,000 items
-		};
-		/// ParityDB can be enabled with a feature flag, but is still experimental. These weights
-		/// are available for brave runtime engineers who may want to try this out as default.
-		pub const ParityDbWeight: RuntimeDbWeight = RuntimeDbWeight {
-			read: 8 * WEIGHT_PER_MICROS,   // ~8 µs @ 200,000 items
-			write: 50 * WEIGHT_PER_MICROS, // ~50 µs @ 200,000 items
-		};
 	}
+
+	// Expose the auto-generated files.
+	pub use crate::{
+		paritydb_weights::constants::ParityDbWeight, rocksdb_weights::constants::RocksDbWeight,
+	};
 }
 
 /// Means of weighing some particular kind of data (`T`).

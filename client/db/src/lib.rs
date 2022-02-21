@@ -997,6 +997,8 @@ impl<T: Clone> FrozenForDuration<T> {
 /// Disk backend keeps data in a key-value store. In archive mode, trie nodes are kept from all
 /// blocks. Otherwise, trie nodes are kept only from some recent blocks.
 pub struct Backend<Block: BlockT> {
+	// Only needed for benchmarking.
+	db: Arc<dyn Database<DbHash>>,
 	storage: Arc<StorageDb<Block>>,
 	offchain_storage: offchain::LocalStorage,
 	blockchain: BlockchainDb<Block>,
@@ -1070,6 +1072,7 @@ impl<Block: BlockT> Backend<Block> {
 		let offchain_storage = offchain::LocalStorage::new(db.clone());
 
 		let backend = Backend {
+			db: db.clone(),
 			storage: Arc::new(storage_db),
 			offchain_storage,
 			blockchain,
@@ -1973,6 +1976,14 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		self.storage.db.commit(transaction)?;
 
 		Ok(())
+	}
+
+	fn expose_db(&self) -> Option<Arc<dyn Database<DbHash>>> {
+		Some(self.db.clone())
+	}
+
+	fn expose_storage(&self) -> Option<Arc<dyn sp_state_machine::Storage<HashFor<Block>>>> {
+		Some(self.storage.clone())
 	}
 
 	fn offchain_storage(&self) -> Option<Self::OffchainStorage> {

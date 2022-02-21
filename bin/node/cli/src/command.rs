@@ -20,6 +20,7 @@ use crate::{chain_spec, service, service::new_partial, Cli, Subcommand};
 use node_executor::ExecutorDispatch;
 use node_runtime::{Block, RuntimeApi};
 use sc_cli::{ChainSpec, Result, RuntimeVersion, SubstrateCli};
+use sc_client_api::StateBackend;
 use sc_service::PartialComponents;
 
 impl SubstrateCli for Cli {
@@ -97,16 +98,10 @@ pub fn run() -> Result<()> {
 			},
 		// TODO this should be a sub-command of the bench-cli.
 		// Now for testing purposes it is part of the client commands.
-		Some(Subcommand::Bedrock(cmd)) =>
-			if cfg!(feature = "runtime-benchmarks") {
-				let runner = cli.create_runner(cmd)?;
-
-				runner.sync_run(|config| cmd.run::<Block, ExecutorDispatch>(config))
-			} else {
-				Err("Benchmarking wasn't enabled when building the node. \
-				You can enable it with `--features runtime-benchmarks`."
-					.into())
-			},
+		Some(Subcommand::Bedrock(cmd)) => {
+			let runner = cli.create_runner(cmd)?;
+			runner.sync_run(|config| cmd.run::<Block>(config))
+		},
 		Some(Subcommand::Key(cmd)) => cmd.run(&cli),
 		Some(Subcommand::Sign(cmd)) => cmd.run(),
 		Some(Subcommand::Verify(cmd)) => cmd.run(),
@@ -142,6 +137,7 @@ pub fn run() -> Result<()> {
 			runner.async_run(|config| {
 				let PartialComponents { client, task_manager, import_queue, .. } =
 					new_partial(&config)?;
+
 				Ok((cmd.run(client, import_queue), task_manager))
 			})
 		},

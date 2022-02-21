@@ -4,7 +4,8 @@
 
 // TODO license everywhere
 
-use crate::bedrock::{benches, BedrockCmd, BedrockType};
+#![allow(unused_imports)] // TODO
+
 use clap::{ArgEnum, Parser};
 use codec::{Decode, Encode};
 use frame_benchmarking::{
@@ -13,90 +14,138 @@ use frame_benchmarking::{
 };
 use frame_support::traits::StorageInfo;
 use linked_hash_map::LinkedHashMap;
-use sc_cli::{CliConfiguration, DatabaseParams, ExecutionStrategy, Result, SharedParams};
-use sc_client_api::{blockchain::Backend as BlockchainBackend, Backend, UsageProvider};
-use sc_client_db::{utils::{read_meta, open_database, DatabaseType}, Database, DbHash, BenchmarkingState, DatabaseSource, columns};
+use log::{debug, info};
+use sc_block_builder::BlockBuilderProvider;
+use sc_cli::{
+	CliConfiguration, DatabaseParams, ExecutionStrategy, PruningParams, Result, SharedParams,
+};
+use sc_client_api::{
+	blockchain::Backend as BlockchainBackend, Backend, StorageProvider, UsageProvider,
+};
+use sc_client_db::{
+	columns,
+	utils::{open_database, read_meta, DatabaseType},
+	BenchmarkingState, Database, DatabaseSource, DbHash,
+};
+use sc_consensus::BlockImport;
 use sc_executor::NativeElseWasmExecutor;
-use sc_service::{chain_ops::revert_chain, Configuration, NativeExecutionDispatch};
+use sc_service::{
+	chain_ops::revert_chain, Configuration, NativeExecutionDispatch, PartialComponents,
+};
 use sp_core::offchain::{
 	testing::{TestOffchainExt, TestTransactionPoolExt},
 	OffchainDbExt, OffchainWorkerExt, TransactionPoolExt,
 };
+
+use sp_api::StateBackend;
+use sp_blockchain::HeaderBackend;
 use sp_database::Transaction;
 use sp_externalities::Extensions;
 use sp_keystore::{testing::KeyStore, KeystoreExt, SyncCryptoStorePtr};
-use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
+use sp_runtime::{
+	generic::BlockId,
+	traits::{Block as BlockT, HashFor, Header as HeaderT},
+};
 use sp_state_machine::StateMachine;
+
+use crate::bedrock::{benches, Bedrock, Benchmark};
 use std::{fmt::Debug, fs, str::FromStr, sync::Arc, time};
-use log::{info, debug};
 
-type DB = dyn Database<DbHash>;
-
-impl BedrockCmd {
-	pub fn run<BB, ExecDispatch>(&self, config: Configuration) -> Result<()>
+impl Benchmark {
+	/// Dispatches a concrete sub command related to benchmarking with client overhead.
+	pub async fn run<B, BA, S, C>(
+		&self,
+		cfg: Configuration,
+		client: Arc<C>,
+		backend: Arc<BA>,
+	) -> Result<()>
 	where
-		BB: BlockT + Debug,
-		<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
-		<BB as BlockT>::Hash: std::str::FromStr,
-		ExecDispatch: NativeExecutionDispatch + 'static,
+		BA: Backend<B, State = S>,
+		B: BlockT<Hash = sp_core::H256>,
+		C: UsageProvider<B> + StorageProvider<B, BA> + HeaderBackend<B>,
+		S: sp_state_machine::Backend<
+			HashFor<B>,
+			Transaction = sp_trie::PrefixedMemoryDB<HashFor<B>>,
+		>,
 	{
-		match self.bedrock_type {
-			BedrockType::BlockImport => self.block_import(),
-			BedrockType::DbRead => self.db_read(&config),
-			BedrockType::DbWrite => self.db_write::<BB>(&config),
-			BedrockType::TxExecution => self.tx_execution(),
+		info!("DB at: {}", cfg.database.path().unwrap().display());
+		match self {
+			Self::StorageWrite(cmd) => cmd.run(&cfg, client, backend),
+			Self::StorageRead(cmd) => cmd.run(&cfg, client),
+			//Self::ExtBase(cmd) => cmd.run(),
+			_ => unimplemented!(),
+		}
+	}
+}
+
+impl Bedrock {
+	/// Dispatches a concrete sub command related to benchmarking without client overhead.
+	pub fn run<B>(&self, cfg: Configuration) -> Result<()>
+	where
+		B: BlockT,
+	{
+		match self {
+			Self::DbRead(cmd) => cmd.run::<B>(cfg),
+			// TODO add Self::DbWrite(cmd) => cmd.run::<B>(cfg),
+			Self::DbFill(cmd) => cmd.run::<B>(cfg),
+			_ => unimplemented!(),
+		}
+	}
+}
+
+// Boilerplate
+impl CliConfiguration for Benchmark {
+	fn shared_params(&self) -> &SharedParams {
+		match self {
+			Self::StorageRead(cmd) => cmd.shared_params(),
+			Self::StorageWrite(cmd) => cmd.shared_params(),
+			_ => unimplemented!(),
 		}
 	}
 
-	fn block_import(&self) -> Result<()> {
-		// import_single_block
-		unimplemented!();
+	fn database_params(&self) -> Option<&DatabaseParams> {
+		match self {
+			Self::StorageRead(cmd) => cmd.database_params(),
+			Self::StorageWrite(cmd) => cmd.database_params(),
+			_ => unimplemented!(),
+		}
 	}
 
-	fn db_read(&self, config: &Configuration) -> Result<()> {
-		unimplemented!();
-	}
-
-	fn db_write<BB>(&self, config: &Configuration) -> Result<()>
-	where
-		BB: BlockT,
-	{
-		let db = setup_db::<BB>(&config)?;
-		benches::db_write(&self.bedrock_params, db.as_ref());
-		Ok(())
-	}
-
-	fn tx_execution(&self) -> Result<()> {
-		unimplemented!();
+	fn pruning_params(&self) -> Option<&PruningParams> {
+		match self {
+			Self::StorageRead(cmd) => cmd.pruning_params(),
+			Self::StorageWrite(cmd) => cmd.pruning_params(),
+			_ => unimplemented!(),
+		}
 	}
 }
 
-impl CliConfiguration for BedrockCmd {
+// Boilerplate
+impl CliConfiguration for Bedrock {
 	fn shared_params(&self) -> &SharedParams {
-		&self.shared_params
+		match self {
+			Self::DbRead(cmd) => cmd.shared_params(),
+			Self::DbWrite(cmd) => cmd.shared_params(),
+			Self::DbFill(cmd) => cmd.shared_params(),
+			_ => unimplemented!(),
+		}
 	}
 
 	fn database_params(&self) -> Option<&DatabaseParams> {
-		Some(&self.database_params)
+		match self {
+			Self::DbRead(cmd) => cmd.database_params(),
+			Self::DbWrite(cmd) => cmd.database_params(),
+			Self::DbFill(cmd) => cmd.database_params(),
+			_ => unimplemented!(),
+		}
 	}
-}
 
-fn setup_db<BB>(config: &Configuration) -> Result<Arc<DB>>
-	where
-		BB: BlockT,
-	{
-	let mut db_config = sc_client_db::DatabaseSettings {
-		state_cache_size: config.state_cache_size,
-		state_cache_child_ratio: config.state_cache_child_ratio.map(|v| (v, 100)),
-		state_pruning: config.state_pruning.clone(),
-		source: config.database.clone(),
-		keep_blocks: config.keep_blocks.clone(),
-		transaction_storage: config.transaction_storage.clone(),
-	};
-	info!("Loading {}...", db_config.source);
-
-	let db = open_database::<BB>(&db_config, DatabaseType::Full).map_err(|e|  sc_cli::Error::Input("TODO".to_string()))?;
-	let meta = read_meta::<BB>(&*db, columns::HEADER)?;
-	info!("Best block: {}", meta.best_number);
-	Ok(db)
+	fn pruning_params(&self) -> Option<&PruningParams> {
+		match self {
+			Self::DbRead(cmd) => cmd.pruning_params(),
+			Self::DbWrite(cmd) => cmd.pruning_params(),
+			Self::DbFill(cmd) => cmd.pruning_params(),
+			_ => unimplemented!(),
+		}
+	}
 }

@@ -185,7 +185,7 @@ impl Into<sc_service::config::RpcMethods> for RpcMethods {
 }
 
 /// Database backend
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, PartialEq, Copy)]
 pub enum Database {
 	/// Facebooks RocksDB
 	RocksDb,
