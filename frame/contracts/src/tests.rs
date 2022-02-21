@@ -43,7 +43,7 @@ use frame_system::{self as system, EventRecord, Phase};
 use pretty_assertions::assert_eq;
 use sp_core::Bytes;
 use sp_io::hashing::blake2_256;
-use sp_keystore::{KeystoreExt, testing::KeyStore};
+use sp_keystore::{testing::KeyStore, KeystoreExt};
 use sp_runtime::{
 	testing::{Header, H256},
 	traits::{BlakeTwo256, Convert, Hash, IdentityLookup},
