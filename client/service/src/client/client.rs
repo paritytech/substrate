@@ -1116,7 +1116,7 @@ where
 			};
 			let runtime_version =
 				RuntimeVersionOf::runtime_version(executor, &mut ext, &runtime_code)
-					.map_err(|e| sp_blockchain::Error::VersionInvalid(format!("{:?}", e)))?;
+					.map_err(|e| sp_blockchain::Error::VersionInvalid(e.to_string()))?;
 			Ok(runtime_version.state_version())
 		} else {
 			Err(sp_blockchain::Error::VersionInvalid(
@@ -1719,7 +1719,7 @@ where
 
 		let storage_changes =
 			match self.prepare_block_storage_changes(&mut import_block).map_err(|e| {
-				warn!("Block prepare storage changes error:\n{:?}", e);
+				warn!("Block prepare storage changes error: {}", e);
 				ConsensusError::ClientImport(e.to_string())
 			})? {
 				PrepareStorageChangesResult::Discard(res) => return Ok(res),
@@ -1730,7 +1730,7 @@ where
 			self.apply_block(operation, import_block, new_cache, storage_changes)
 		})
 		.map_err(|e| {
-			warn!("Block import error:\n{:?}", e);
+			warn!("Block import error: {}", e);
 			ConsensusError::ClientImport(e.to_string()).into()
 		})
 	}

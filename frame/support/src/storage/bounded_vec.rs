@@ -160,27 +160,22 @@ impl<T, S> BoundedVec<T, S> {
 		self.0.pop()
 	}
 
+	/// Exactly the same semantics as [`slice::iter_mut`].
+	pub fn iter_mut(&mut self) -> core::slice::IterMut<'_, T> {
+		self.0.iter_mut()
+	}
+
 	/// Exactly the same semantics as [`slice::last_mut`].
 	pub fn last_mut(&mut self) -> Option<&mut T> {
 		self.0.last_mut()
 	}
 
 	/// Exact same semantics as [`Vec::drain`].
-	///
-	/// Always a valid operation for a `BoundedVec` because it only can reduce the length.
 	pub fn drain<R>(&mut self, range: R) -> sp_std::vec::Drain<'_, T>
 	where
 		R: RangeBounds<usize>,
 	{
 		self.0.drain(range)
-	}
-
-	/// Exact same semantics as [`slice::iter_mut`].
-	///
-	/// Always a valid operation for a `BoundedVec` because the returned iterator cannot change the
-	/// length of the vec.
-	pub fn iter_mut(&mut self) -> sp_std::slice::IterMut<'_, T> {
-		self.0.iter_mut()
 	}
 }
 

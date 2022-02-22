@@ -187,7 +187,7 @@ impl<'de> Deserialize<'de> for Public {
 
 /// A signature (a 512-bit value, plus 8 bits for recovery ID).
 #[cfg_attr(feature = "full_crypto", derive(Hash))]
-#[derive(Encode, Decode, PassByInner, TypeInfo, PartialEq, Eq)]
+#[derive(Encode, Decode, MaxEncodedLen, PassByInner, TypeInfo, PartialEq, Eq)]
 pub struct Signature(pub [u8; 65]);
 
 impl sp_std::convert::TryFrom<&[u8]> for Signature {
@@ -348,11 +348,7 @@ impl<'a> TryFrom<&'a Signature> for (libsecp256k1::Signature, libsecp256k1::Reco
 /// Derive a single hard junction.
 #[cfg(feature = "full_crypto")]
 fn derive_hard_junction(secret_seed: &Seed, cc: &[u8; 32]) -> Seed {
-	("Secp256k1HDKD", secret_seed, cc).using_encoded(|data| {
-		let mut res = [0u8; 32];
-		res.copy_from_slice(blake2_rfc::blake2b::blake2b(32, &[], data).as_bytes());
-		res
-	})
+	("Secp256k1HDKD", secret_seed, cc).using_encoded(|data| sp_core_hashing::blake2_256(data))
 }
 
 /// An error when deriving a key.
