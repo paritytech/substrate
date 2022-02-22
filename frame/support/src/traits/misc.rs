@@ -27,6 +27,13 @@ use sp_std::{cmp::Ordering, prelude::*};
 const DEFENSIVE_OP_PUBLIC_ERROR: &'static str = "a defensive failure has been triggered; please report the block number at https://github.com/paritytech/substrate/issues";
 const DEFENSIVE_OP_INTERNAL_ERROR: &'static str = "Defensive failure has been triggered!";
 
+/// Generic function to mark an execution path as ONLY defensive.
+///
+/// Similar to mark a match arm or `if/else` branch as `unreachable!`.
+pub fn defensive_path(proof: &'static str) {
+	defensive_with_err!(proof);
+}
+
 /// Prelude module for all defensive traits to be imported at once.
 pub mod defensive_prelude {
 	pub use super::{Defensive, DefensiveOption, DefensiveResult};

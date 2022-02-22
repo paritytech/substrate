@@ -1363,7 +1363,7 @@ impl pallet_transaction_storage::Config for Runtime {
 
 parameter_types! {
 	pub const SignedMigrationMaxLimits: pallet_state_trie_migration::MigrationLimits =
-		pallet_state_trie_migration::MigrationLimits { size: 2 * 1024 * 1024, item: 512 };
+		pallet_state_trie_migration::MigrationLimits { size: 1024 * 1024 / 2, item: 512 };
 	pub const MigrationSignedDepositPerItem: Balance = 1 * CENTS;
 	pub const MigrationSignedDepositBase: Balance = 20 * DOLLARS;
 }
@@ -1528,6 +1528,7 @@ mod benches {
 		[pallet_scheduler, Scheduler]
 		[pallet_session, SessionBench::<Runtime>]
 		[pallet_staking, Staking]
+		[pallet_state_trie_migration, StateTrieMigration]
 		[frame_system, SystemBench::<Runtime>]
 		[pallet_timestamp, Timestamp]
 		[pallet_tips, Tips]

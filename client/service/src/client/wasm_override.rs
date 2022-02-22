@@ -74,7 +74,7 @@ impl WasmBlob {
 		Self { code, hash, path, spec_name, last_warn: Default::default() }
 	}
 
-	pub(crate) fn runtime_code(&self, heap_pages: Option<u64>) -> RuntimeCode {
+	fn runtime_code(&self, heap_pages: Option<u64>) -> RuntimeCode {
 		RuntimeCode { code_fetcher: self, hash: self.hash.clone(), heap_pages }
 	}
 }

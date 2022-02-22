@@ -128,7 +128,7 @@ pub mod pallet {
 		pub(crate) current_top: Option<Vec<u8>>,
 		/// The last child key that we have processed.
 		///
-		/// This is a child key under the current `self.last_top`.
+		/// This is a child key under the current `self.current_top`.
 		///
 		/// If this is set, no further top keys are processed until the child key migration is
 		/// complete.
@@ -137,20 +137,20 @@ pub mod pallet {
 		/// A marker to indicate if the previous tick was a child tree migration or not.
 		pub(crate) prev_tick_child: bool,
 
-		/// dynamic counter for the number of items that we have processed in this execution from
+		/// Dynamic counter for the number of items that we have processed in this execution from
 		/// the top trie.
 		///
 		/// It is not written to storage.
 		#[codec(skip)]
 		pub(crate) dyn_top_items: u32,
-		/// dynamic counter for the number of items that we have processed in this execution from
+		/// Dynamic counter for the number of items that we have processed in this execution from
 		/// any child trie.
 		///
 		/// It is not written to storage.
 		#[codec(skip)]
 		pub(crate) dyn_child_items: u32,
 
-		/// dynamic counter for for the byte size of items that we have processed in this
+		/// Dynamic counter for for the byte size of items that we have processed in this
 		/// execution.
 		///
 		/// It is not written to storage.
@@ -264,7 +264,7 @@ pub mod pallet {
 
 		/// Migrate AT MOST ONE KEY. This can be either a top or a child key.
 		///
-		/// This function is the core of this entire pallet.
+		/// This function is *the* core of this entire pallet.
 		fn migrate_tick(&mut self) {
 			match (self.current_top.as_ref(), self.current_child.as_ref()) {
 				(Some(_), Some(_)) => {
@@ -290,15 +290,15 @@ pub mod pallet {
 							self.migrate_top();
 						},
 						(true, false) => {
-							// start going into a child key. In the first iteration, we always
+							// start going into a child key.
 							let maybe_first_child_key = {
 								// just in case there's some data in `&[]`, read it. Since we can't
 								// check this without reading the actual key, and given that this
 								// function should always read at most one key, we return after
 								// this. The rest of the migration should happen in the next tick.
-								let child_top_key = Pallet::<T>::child_io_key_or_halt(top_key);
-								let _ = sp_io::default_child_storage::get(child_top_key, &vec![]);
-								sp_io::default_child_storage::next_key(child_top_key, &vec![])
+								let child_root = Pallet::<T>::transform_child_key_or_halt(top_key);
+								let _ = sp_io::default_child_storage::get(child_root, &[]);
+								sp_io::default_child_storage::next_key(child_root, &[])
 							};
 							if let Some(first_child_key) = maybe_first_child_key {
 								self.current_child = Some(first_child_key);
@@ -336,10 +336,17 @@ pub mod pallet {
 		///
 		/// It updates the dynamic counters.
 		fn migrate_child(&mut self) {
+			if self.current_child.is_none() || self.current_top.is_none() {
+				// defensive: this function is only called when both of these values exist.
+				// much that we can do otherwise..
+				frame_support::traits::defensive_path("cannot migrate child key.");
+				return
+			}
+
 			let last_child = self.current_child.as_ref().expect("value checked to be `Some`; qed");
 			let last_top = self.current_top.clone().expect("value checked to be `Some`; qed");
 
-			let child_root = Pallet::<T>::child_io_key_or_halt(&last_top);
+			let child_root = Pallet::<T>::transform_child_key_or_halt(&last_top);
 			let added_size =
 				if let Some(data) = sp_io::default_child_storage::get(child_root, &last_child) {
 					self.dyn_size = self.dyn_size.saturating_add(data.len() as u32);
@@ -359,6 +366,12 @@ pub mod pallet {
 		///
 		/// It updates the dynamic counters.
 		fn migrate_top(&mut self) {
+			if self.current_top.is_none() {
+				// defensive: this function is only called when this value exist.
+				// much that we can do otherwise..
+				frame_support::traits::defensive_path("cannot migrate top key.");
+				return
+			}
 			let last_top = self.current_top.as_ref().expect("value checked to be `Some`; qed");
 			let added_size = if let Some(data) = sp_io::storage::get(&last_top) {
 				self.dyn_size = self.dyn_size.saturating_add(data.len() as u32);
@@ -475,7 +488,7 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// control the automatic migration.
+		/// Control the automatic migration.
 		///
 		/// The dispatch origin of this call must be [`Config::ControlOrigin`].
 		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
@@ -554,6 +567,7 @@ pub mod pallet {
 			if real_size_upper < task.dyn_size {
 				// let the imbalance burn.
 				let (_imbalance, _remainder) = T::Currency::slash(&who, deposit);
+				Self::deposit_event(Event::<T>::Slashed { who, amount: deposit });
 				debug_assert!(_remainder.is_zero());
 				return Err(Error::<T>::SizeUpperBoundExceeded.into())
 			}
@@ -612,6 +626,7 @@ pub mod pallet {
 
 			if dyn_size > witness_size {
 				let (_imbalance, _remainder) = T::Currency::slash(&who, deposit);
+				Self::deposit_event(Event::<T>::Slashed { who, amount: deposit });
 				debug_assert!(_remainder.is_zero());
 				return Err("wrong witness data".into())
 			}
@@ -626,7 +641,7 @@ pub mod pallet {
 
 		/// Migrate the list of child keys by iterating each of them one by one.
 		///
-		/// All of the given child keys must be present under one `top_key`.
+		/// All of the given child keys must be present under one `child_root`.
 		///
 		/// This does not affect the global migration process tracker ([`MigrationProcess`]), and
 		/// should only be used in case any keys are leftover due to a bug.
@@ -656,17 +671,14 @@ pub mod pallet {
 			ensure!(T::Currency::can_slash(&who, deposit), "not enough funds");
 
 			let mut dyn_size = 0u32;
+			let transformed_child_key =
+				Self::transform_child_key(&top_key).ok_or("bad child key")?;
 			for child_key in &child_keys {
-				if let Some(data) = sp_io::default_child_storage::get(
-					Self::child_io_key(&top_key).ok_or("bad child key")?,
-					&child_key,
-				) {
+				if let Some(data) =
+					sp_io::default_child_storage::get(transformed_child_key, &child_key)
+				{
 					dyn_size = dyn_size.saturating_add(data.len() as u32);
-					sp_io::default_child_storage::set(
-						Self::child_io_key(&top_key).ok_or("bad child key")?,
-						&child_key,
-						&data,
-					);
+					sp_io::default_child_storage::set(transformed_child_key, &child_key, &data);
 				}
 			}
 
@@ -747,7 +759,7 @@ pub mod pallet {
 		}
 
 		/// Convert a child root key, aka. "Child-bearing top key" into the proper format.
-		fn child_io_key(root: &Vec<u8>) -> Option<&[u8]> {
+		fn transform_child_key(root: &Vec<u8>) -> Option<&[u8]> {
 			use sp_core::storage::{ChildType, PrefixedStorageKey};
 			match ChildType::from_prefixed_key(PrefixedStorageKey::new_ref(root)) {
 				Some((ChildType::ParentKeyId, root)) => Some(root),
@@ -759,8 +771,8 @@ pub mod pallet {
 		/// is used.
 		///
 		/// This should be used when we are sure that `root` is a correct default child root.
-		fn child_io_key_or_halt(root: &Vec<u8>) -> &[u8] {
-			let key = Self::child_io_key(root);
+		fn transform_child_key_or_halt(root: &Vec<u8>) -> &[u8] {
+			let key = Self::transform_child_key(root);
 			if key.is_none() {
 				Self::halt();
 			}
@@ -1286,7 +1298,7 @@ mod test {
 
 /// Exported set of tests to be called against different runtimes.
 #[cfg(feature = "remote-test")]
-pub mod remote_tests {
+pub(crate) mod remote_tests {
 	use crate::{AutoLimits, MigrationLimits, Pallet as StateTrieMigration, LOG_TARGET};
 	use codec::Encode;
 	use frame_benchmarking::Zero;
@@ -1318,7 +1330,7 @@ pub mod remote_tests {
 	/// Run the entire migration, against the given `Runtime`, until completion.
 	///
 	/// This will print some very useful statistics, make sure [`crate::LOG_TARGET`] is enabled.
-	pub async fn run_with_limits<
+	pub(crate) async fn run_with_limits<
 		Runtime: crate::Config<Hash = H256>,
 		Block: BlockT<Hash = H256> + serde::de::DeserializeOwned,
 	>(
@@ -1343,7 +1355,10 @@ pub mod remote_tests {
 		ext.state_version = sp_core::storage::StateVersion::V1;
 
 		let (top_left, child_left) = ext.as_backend().essence().check_migration_state().unwrap();
-		assert!(top_left > 0);
+		assert!(
+			top_left > 0,
+			"no node needs migrating, this probably means that state was initialized with `StateVersion::V1`",
+		);
 
 		log::info!(
 			target: LOG_TARGET,
