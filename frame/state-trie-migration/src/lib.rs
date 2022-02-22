@@ -95,6 +95,8 @@ pub mod pallet {
 		fn continue_migrate_wrong_witness() -> Weight;
 		fn migrate_custom_top_fail() -> Weight;
 		fn migrate_custom_top_success() -> Weight;
+		fn migrate_custom_child_fail() -> Weight;
+		fn migrate_custom_child_success() -> Weight;
 	}
 
 	impl WeightInfo for () {
@@ -111,6 +113,12 @@ pub mod pallet {
 			1000000
 		}
 		fn migrate_custom_top_success() -> Weight {
+			1000000
+		}
+		fn migrate_custom_child_fail() -> Weight {
+			1000000
+		}
+		fn migrate_custom_child_success() -> Weight {
 			1000000
 		}
 	}
@@ -612,15 +620,22 @@ pub mod pallet {
 				let (_imbalance, _remainder) = T::Currency::slash(&who, deposit);
 				Self::deposit_event(Event::<T>::Slashed { who, amount: deposit });
 				debug_assert!(_remainder.is_zero());
-				return Err("wrong witness data".into())
+				Err("wrong witness data".into())
+			} else {
+				Self::deposit_event(Event::<T>::Migrated {
+					top: keys.len() as u32,
+					child: 0,
+					compute: MigrationCompute::Signed,
+				});
+				Ok(PostDispatchInfo {
+					actual_weight: Some(
+						T::WeightInfo::migrate_custom_top_success().saturating_add(
+							Pallet::<T>::dynamic_weight(keys.len() as u32, dyn_size),
+						),
+					),
+					pays_fee: Pays::Yes,
+				})
 			}
-
-			Self::deposit_event(Event::<T>::Migrated {
-				top: keys.len() as u32,
-				child: 0,
-				compute: MigrationCompute::Signed,
-			});
-			Ok(().into())
 		}
 
 		/// Migrate the list of child keys by iterating each of them one by one.
@@ -630,8 +645,8 @@ pub mod pallet {
 		/// This does not affect the global migration process tracker ([`MigrationProcess`]), and
 		/// should only be used in case any keys are leftover due to a bug.
 		#[pallet::weight(
-			T::WeightInfo::migrate_custom_top_success()
-				.max(T::WeightInfo::migrate_custom_top_fail())
+			T::WeightInfo::migrate_custom_child_success()
+				.max(T::WeightInfo::migrate_custom_child_fail())
 			.saturating_add(
 				Pallet::<T>::dynamic_weight(child_keys.len() as u32, *total_size)
 			)
@@ -673,7 +688,7 @@ pub mod pallet {
 				Err(DispatchErrorWithPostInfo {
 					error: "bad witness".into(),
 					post_info: PostDispatchInfo {
-						actual_weight: Some(T::WeightInfo::migrate_custom_top_fail()),
+						actual_weight: Some(T::WeightInfo::migrate_custom_child_fail()),
 						pays_fee: Pays::Yes,
 					},
 				})
@@ -684,7 +699,11 @@ pub mod pallet {
 					compute: MigrationCompute::Signed,
 				});
 				Ok(PostDispatchInfo {
-					actual_weight: Some(T::WeightInfo::migrate_custom_top_success()),
+					actual_weight: Some(
+						T::WeightInfo::migrate_custom_child_success().saturating_add(
+							Pallet::<T>::dynamic_weight(child_keys.len() as u32, total_size),
+						),
+					),
 					pays_fee: Pays::Yes,
 				})
 			}
@@ -828,6 +847,38 @@ mod benchmarks {
 		}: {
 			assert!(
 				StateTrieMigration::<T>::migrate_custom_top(
+					frame_system::RawOrigin::Signed(caller.clone()).into(),
+					vec![b"foo".to_vec()],
+					1,
+				).is_err()
+			)
+		}
+		verify {
+			assert_eq!(StateTrieMigration::<T>::migration_process(), Default::default());
+			// must have gotten slashed
+			assert!(T::Currency::free_balance(&caller) < stash)
+		}
+
+		migrate_custom_child_success {
+			let caller = frame_benchmarking::whitelisted_caller();
+			let stash = T::Currency::minimum_balance() * BalanceOf::<T>::from(10u32);
+			T::Currency::make_free_balance_be(&caller, stash);
+		}: migrate_custom_child(frame_system::RawOrigin::Signed(caller.clone()), Default::default(), 0)
+		verify {
+			assert_eq!(StateTrieMigration::<T>::migration_process(), Default::default());
+			assert_eq!(T::Currency::free_balance(&caller), stash)
+		}
+
+		migrate_custom_top_fail {
+			let caller = frame_benchmarking::whitelisted_caller();
+			let stash = T::Currency::minimum_balance() * BalanceOf::<T>::from(10u32);
+			T::Currency::make_free_balance_be(&caller, stash);
+			// for tests, we need to make sure there is _something_ in storage that is being
+			// migrated.
+			sp_io::storage::set(b"foo", vec![1u8;33].as_ref());
+		}: {
+			assert!(
+				StateTrieMigration::<T>::migrate_custom_child(
 					frame_system::RawOrigin::Signed(caller.clone()).into(),
 					vec![b"foo".to_vec()],
 					1,
