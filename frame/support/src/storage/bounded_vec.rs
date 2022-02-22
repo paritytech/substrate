@@ -210,7 +210,7 @@ impl<T, S: Get<u32>> BoundedVec<T, S> {
 	/// Returns `Ok(maybe_removed)` if the item was inserted, where `maybe_removed` is
 	/// `Some(removed)` if an item was removed to make room for the new one. Returns `Err(())` if
 	/// `element` cannot be inserted.
-	pub fn force_insert_keep_right(&mut self, index: usize, element: T) -> Result<Option<T>, ()>
+	pub fn force_insert_keep_right(&mut self, index: usize, mut element: T) -> Result<Option<T>, ()>
 	where
 		T: Clone,
 	{
@@ -225,12 +225,11 @@ impl<T, S: Get<u32>> BoundedVec<T, S> {
 			if index == 0 {
 				return Err(())
 			}
-			let removed = self[0].clone();
-			self[0] = element;
+			sp_std::mem::swap(&mut self[0], &mut element);
 			// `[0..index] cannot panic since self.len() >= index.
 			// `rotate_left(1)` cannot panic because there is at least 1 element.
 			self[0..index].rotate_left(1);
-			Ok(Some(removed))
+			Ok(Some(element))
 		}
 	}
 
