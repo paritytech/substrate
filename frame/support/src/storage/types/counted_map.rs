@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -98,6 +98,17 @@ where
 	OnEmpty: Get<QueryKind::Query> + 'static,
 	MaxValues: Get<Option<u32>>,
 {
+	/// The key used to store the counter of the map.
+	pub fn counter_storage_final_key() -> [u8; 32] {
+		CounterFor::<Prefix>::hashed_key()
+	}
+
+	/// The prefix used to generate the key of the map.
+	pub fn map_storage_final_prefix() -> Vec<u8> {
+		use crate::storage::generator::StorageMap;
+		<Self as MapWrapper>::Map::prefix_hash()
+	}
+
 	/// Get the storage key used to fetch a value corresponding to a specific key.
 	pub fn hashed_key_for<KeyArg: EncodeLike<Key>>(key: KeyArg) -> Vec<u8> {
 		<Self as MapWrapper>::Map::hashed_key_for(key)
@@ -263,6 +274,9 @@ where
 
 	/// Remove all value of the storage.
 	pub fn remove_all() {
+		// NOTE: it is not possible to remove up to some limit because
+		// `sp_io::storage::clear_prefix` and `StorageMap::remove_all` don't give the number of
+		// value removed from the overlay.
 		CounterFor::<Prefix>::set(0u32);
 		<Self as MapWrapper>::Map::remove_all(None);
 	}
@@ -271,14 +285,7 @@ where
 	///
 	/// NOTE: If a value failed to decode because storage is corrupted then it is skipped.
 	pub fn iter_values() -> crate::storage::PrefixIterator<Value, OnRemovalCounterUpdate<Prefix>> {
-		let map_iterator = <Self as MapWrapper>::Map::iter_values();
-		crate::storage::PrefixIterator {
-			prefix: map_iterator.prefix,
-			previous_key: map_iterator.previous_key,
-			drain: map_iterator.drain,
-			closure: map_iterator.closure,
-			phantom: Default::default(),
-		}
+		<Self as MapWrapper>::Map::iter_values().convert_on_removal()
 	}
 
 	/// Translate the values of all elements by a function `f`, in the map in no particular order.
@@ -360,28 +367,14 @@ where
 	///
 	/// If you alter the map while doing this, you'll get undefined results.
 	pub fn iter() -> crate::storage::PrefixIterator<(Key, Value), OnRemovalCounterUpdate<Prefix>> {
-		let map_iterator = <Self as MapWrapper>::Map::iter();
-		crate::storage::PrefixIterator {
-			prefix: map_iterator.prefix,
-			previous_key: map_iterator.previous_key,
-			drain: map_iterator.drain,
-			closure: map_iterator.closure,
-			phantom: Default::default(),
-		}
+		<Self as MapWrapper>::Map::iter().convert_on_removal()
 	}
 
 	/// Remove all elements from the map and iterate through them in no particular order.
 	///
 	/// If you add elements to the map while doing this, you'll get undefined results.
 	pub fn drain() -> crate::storage::PrefixIterator<(Key, Value), OnRemovalCounterUpdate<Prefix>> {
-		let map_iterator = <Self as MapWrapper>::Map::drain();
-		crate::storage::PrefixIterator {
-			prefix: map_iterator.prefix,
-			previous_key: map_iterator.previous_key,
-			drain: map_iterator.drain,
-			closure: map_iterator.closure,
-			phantom: Default::default(),
-		}
+		<Self as MapWrapper>::Map::drain().convert_on_removal()
 	}
 
 	/// Translate the values of all elements by a function `f`, in the map in no particular order.
@@ -397,6 +390,16 @@ where
 			}
 			res
 		})
+	}
+
+	/// Enumerate all elements in the counted map after a specified `starting_raw_key` in no
+	/// particular order.
+	///
+	/// If you alter the map while doing this, you'll get undefined results.
+	pub fn iter_from(
+		starting_raw_key: Vec<u8>,
+	) -> crate::storage::PrefixIterator<(Key, Value), OnRemovalCounterUpdate<Prefix>> {
+		<Self as MapWrapper>::Map::iter_from(starting_raw_key).convert_on_removal()
 	}
 }
 
@@ -414,7 +417,11 @@ where
 	fn build_metadata(docs: Vec<&'static str>, entries: &mut Vec<StorageEntryMetadata>) {
 		<Self as MapWrapper>::Map::build_metadata(docs, entries);
 		CounterFor::<Prefix>::build_metadata(
-			vec![&"Counter for the related counted storage map"],
+			if cfg!(feature = "no-metadata-docs") {
+				vec![]
+			} else {
+				vec![&"Counter for the related counted storage map"]
+			},
 			entries,
 		);
 	}
@@ -1009,6 +1016,25 @@ mod test {
 	}
 
 	#[test]
+	fn test_iter_from() {
+		type A = CountedStorageMap<Prefix, Twox64Concat, u16, u32>;
+		TestExternalities::default().execute_with(|| {
+			A::insert(1, 1);
+			A::insert(2, 2);
+			A::insert(3, 3);
+			A::insert(4, 4);
+
+			// no prefix is same as normal iter.
+			assert_eq!(A::iter_from(vec![]).collect::<Vec<_>>(), A::iter().collect::<Vec<_>>());
+
+			let iter_all = A::iter().collect::<Vec<_>>();
+			let (before, after) = iter_all.split_at(2);
+			let last_key = before.last().map(|(k, _)| k).unwrap();
+			assert_eq!(A::iter_from(A::hashed_key_for(last_key)).collect::<Vec<_>>(), after);
+		})
+	}
+
+	#[test]
 	fn test_metadata() {
 		type A = CountedStorageMap<Prefix, Twox64Concat, u16, u32, ValueQuery, ADefault>;
 		let mut entries = vec![];
@@ -1032,7 +1058,11 @@ mod test {
 					modifier: StorageEntryModifier::Default,
 					ty: StorageEntryType::Plain(scale_info::meta_type::<u32>()),
 					default: vec![0, 0, 0, 0],
-					docs: vec!["Counter for the related counted storage map"],
+					docs: if cfg!(feature = "no-metadata-docs") {
+						vec![]
+					} else {
+						vec!["Counter for the related counted storage map"]
+					},
 				},
 			]
 		);

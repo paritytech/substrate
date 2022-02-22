@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -129,6 +129,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
+	#[pallet::without_storage_info]
 	pub struct Pallet<T>(_);
 
 	#[pallet::hooks]
@@ -210,7 +211,7 @@ pub mod pallet {
 				});
 				Ok(())
 			})?;
-			Self::deposit_event(Event::Stored(index));
+			Self::deposit_event(Event::Stored { index });
 			Ok(())
 		}
 
@@ -251,7 +252,7 @@ pub mod pallet {
 				});
 				Ok(())
 			})?;
-			Self::deposit_event(Event::Renewed(index));
+			Self::deposit_event(Event::Renewed { index });
 			Ok(().into())
 		}
 
@@ -313,9 +314,9 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// Stored data under specified index.
-		Stored(u32),
+		Stored { index: u32 },
 		/// Renewed data under specified index.
-		Renewed(u32),
+		Renewed { index: u32 },
 		/// Storage proof was successfully checked.
 		ProofChecked,
 	}

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -184,7 +184,9 @@ frame_support::construct_runtime!(
 
 #[test]
 fn create_genesis_config() {
-	GenesisConfig {
+	let config = GenesisConfig {
 		module: module::GenesisConfig { request_life_time: 0, enable_storage_role: true },
 	};
+	assert_eq!(config.module.request_life_time, 0);
+	assert!(config.module.enable_storage_role);
 }

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -21,25 +21,22 @@
 
 pub mod backend;
 pub mod call_executor;
-pub mod cht;
 pub mod client;
 pub mod execution_extensions;
 pub mod in_mem;
 pub mod leaves;
-pub mod light;
 pub mod notifications;
 pub mod proof_provider;
 
 pub use backend::*;
 pub use call_executor::*;
 pub use client::*;
-pub use light::*;
 pub use notifications::*;
 pub use proof_provider::*;
 pub use sp_blockchain as blockchain;
 pub use sp_blockchain::HeaderBackend;
 
-pub use sp_state_machine::{ExecutionStrategy, StorageProof};
+pub use sp_state_machine::{CompactProof, ExecutionStrategy, StorageProof};
 pub use sp_storage::{ChildInfo, PrefixedStorageKey, StorageData, StorageKey};
 
 /// Usage Information Provider interface

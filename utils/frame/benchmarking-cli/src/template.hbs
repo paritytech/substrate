@@ -6,7 +6,7 @@
 //! EXECUTION: {{cmd.execution}}, WASM-EXECUTION: {{cmd.wasm_execution}}, CHAIN: {{cmd.chain}}, DB CACHE: {{cmd.db_cache}}
 
 // Executed Command:
-{{#each args as |arg|~}}
+{{#each args as |arg|}}
 // {{arg}}
 {{/each}}
 
@@ -20,32 +20,32 @@ use sp_std::marker::PhantomData;
 /// Weight functions for `{{pallet}}`.
 pub struct WeightInfo<T>(PhantomData<T>);
 impl<T: frame_system::Config> {{pallet}}::WeightInfo for WeightInfo<T> {
-	{{~#each benchmarks as |benchmark|}}
-	{{~#each benchmark.comments as |comment|}}
+	{{#each benchmarks as |benchmark|}}
+	{{#each benchmark.comments as |comment|}}
 	// {{comment}}
-	{{~/each}}
+	{{/each}}
 	fn {{benchmark.name~}}
 	(
 		{{~#each benchmark.components as |c| ~}}
 		{{~#if (not c.is_used)}}_{{/if}}{{c.name}}: u32, {{/each~}}
 	) -> Weight {
 		({{underscore benchmark.base_weight}} as Weight)
-			{{~#each benchmark.component_weight as |cw|}}
+			{{#each benchmark.component_weight as |cw|}}
 			// Standard Error: {{underscore cw.error}}
 			.saturating_add(({{underscore cw.slope}} as Weight).saturating_mul({{cw.name}} as Weight))
-			{{~/each}}
-			{{~#if (ne benchmark.base_reads "0")}}
+			{{/each}}
+			{{#if (ne benchmark.base_reads "0")}}
 			.saturating_add(T::DbWeight::get().reads({{benchmark.base_reads}} as Weight))
-			{{~/if}}
-			{{~#each benchmark.component_reads as |cr|}}
+			{{/if}}
+			{{#each benchmark.component_reads as |cr|}}
 			.saturating_add(T::DbWeight::get().reads(({{cr.slope}} as Weight).saturating_mul({{cr.name}} as Weight)))
-			{{~/each}}
-			{{~#if (ne benchmark.base_writes "0")}}
+			{{/each}}
+			{{#if (ne benchmark.base_writes "0")}}
 			.saturating_add(T::DbWeight::get().writes({{benchmark.base_writes}} as Weight))
-			{{~/if}}
-			{{~#each benchmark.component_writes as |cw|}}
+			{{/if}}
+			{{#each benchmark.component_writes as |cw|}}
 			.saturating_add(T::DbWeight::get().writes(({{cw.slope}} as Weight).saturating_mul({{cw.name}} as Weight)))
-			{{~/each}}
+			{{/each}}
 	}
-	{{~/each}}
+	{{/each}}
 }

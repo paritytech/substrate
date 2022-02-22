@@ -51,7 +51,7 @@ pub struct Header<Number: Copy + Into<U256> + TryFrom<U256>, Hash: HashT> {
 	/// The merkle root of the extrinsics.
 	pub extrinsics_root: Hash::Output,
 	/// A chain-specific digest of data useful for light clients or referencing auxiliary data.
-	pub digest: Digest<Hash::Output>,
+	pub digest: Digest,
 	/// Previous block extrinsics shuffling seed
 	pub seed: ShufflingSeed,
 	/// Number of extrinsics in this block (rest comes from previous one)
@@ -156,11 +156,11 @@ where
 		self.parent_hash = hash
 	}
 
-	fn digest(&self) -> &Digest<Self::Hash> {
+	fn digest(&self) -> &Digest {
 		&self.digest
 	}
 
-	fn digest_mut(&mut self) -> &mut Digest<Self::Hash> {
+	fn digest_mut(&mut self) -> &mut Digest {
 		#[cfg(feature = "std")]
 		log::debug!(target: "header", "Retrieving mutable reference to digest");
 		&mut self.digest
@@ -187,7 +187,7 @@ where
 		extrinsics_root: Self::Hash,
 		state_root: Self::Hash,
 		parent_hash: Self::Hash,
-		digest: Digest<Self::Hash>,
+		digest: Digest,
 	) -> Self {
 		Self {
 			number,

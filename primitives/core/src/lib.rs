@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -58,7 +58,6 @@ pub mod hexdisplay;
 
 pub mod u32_trait;
 
-mod changes_trie;
 pub mod ecdsa;
 pub mod ed25519;
 pub mod hash;
@@ -78,9 +77,8 @@ pub use self::{
 	hash::{convert_hash, H160, H256, H512},
 	uint::{U256, U512},
 };
-pub use changes_trie::{ChangesTrieConfiguration, ChangesTrieConfigurationRange};
 #[cfg(feature = "full_crypto")]
-pub use crypto::{DeriveJunction, Pair, Public};
+pub use crypto::{ByteArray, DeriveJunction, Pair, Public};
 
 #[cfg(feature = "std")]
 pub use self::hasher::blake2::Blake2Hasher;
@@ -120,15 +118,13 @@ impl ExecutionContext {
 		use ExecutionContext::*;
 
 		match self {
-			Importing | Syncing | BlockConstruction => offchain::Capabilities::none(),
+			Importing | Syncing | BlockConstruction => offchain::Capabilities::empty(),
 			// Enable keystore, transaction pool and Offchain DB reads by default for offchain
 			// calls.
-			OffchainCall(None) => [
-				offchain::Capability::Keystore,
-				offchain::Capability::OffchainDbRead,
-				offchain::Capability::TransactionPool,
-			][..]
-				.into(),
+			OffchainCall(None) =>
+				offchain::Capabilities::KEYSTORE |
+					offchain::Capabilities::OFFCHAIN_DB_READ |
+					offchain::Capabilities::TRANSACTION_POOL,
 			OffchainCall(Some((_, capabilities))) => *capabilities,
 		}
 	}

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,7 +19,7 @@
 
 use crate::{
 	codec::{Codec, Decode, Encode, MaxEncodedLen},
-	generic::{Digest, DigestItem},
+	generic::Digest,
 	scale_info::{MetaType, StaticTypeInfo, TypeInfo},
 	transaction_validity::{
 		TransactionSource, TransactionValidity, TransactionValidityError, UnknownTransaction,
@@ -36,7 +36,10 @@ pub use sp_arithmetic::traits::{
 	CheckedShr, CheckedSub, IntegerSquareRoot, One, SaturatedConversion, Saturating,
 	UniqueSaturatedFrom, UniqueSaturatedInto, Zero,
 };
-use sp_core::{self, Hasher, RuntimeDebug, ShufflingSeed, TypeId};
+use sp_core::{self, Hasher, RuntimeDebug, TypeId};
+use sp_core::ShufflingSeed;
+
+use crate::StateVersion;
 use sp_std::{
 	self,
 	convert::{TryFrom, TryInto},
@@ -459,10 +462,10 @@ pub trait Hash:
 	}
 
 	/// The ordered Patricia tree root of the given `input`.
-	fn ordered_trie_root(input: Vec<Vec<u8>>) -> Self::Output;
+	fn ordered_trie_root(input: Vec<Vec<u8>>, state_version: StateVersion) -> Self::Output;
 
 	/// The Patricia tree root of the given mapping.
-	fn trie_root(input: Vec<(Vec<u8>, Vec<u8>)>) -> Self::Output;
+	fn trie_root(input: Vec<(Vec<u8>, Vec<u8>)>, state_version: StateVersion) -> Self::Output;
 }
 
 /// Blake2-256 Hash implementation.
@@ -483,11 +486,11 @@ impl Hasher for BlakeTwo256 {
 impl Hash for BlakeTwo256 {
 	type Output = sp_core::H256;
 
-	fn trie_root(input: Vec<(Vec<u8>, Vec<u8>)>) -> Self::Output {
+	fn trie_root(input: Vec<(Vec<u8>, Vec<u8>)>, _: StateVersion) -> Self::Output {
 		sp_io::trie::blake2_256_root(input)
 	}
 
-	fn ordered_trie_root(input: Vec<Vec<u8>>) -> Self::Output {
+	fn ordered_trie_root(input: Vec<Vec<u8>>, _: StateVersion) -> Self::Output {
 		sp_io::trie::blake2_256_ordered_root(input)
 	}
 }
@@ -510,11 +513,11 @@ impl Hasher for Keccak256 {
 impl Hash for Keccak256 {
 	type Output = sp_core::H256;
 
-	fn trie_root(input: Vec<(Vec<u8>, Vec<u8>)>) -> Self::Output {
+	fn trie_root(input: Vec<(Vec<u8>, Vec<u8>)>, _: StateVersion) -> Self::Output {
 		sp_io::trie::keccak_256_root(input)
 	}
 
-	fn ordered_trie_root(input: Vec<Vec<u8>>) -> Self::Output {
+	fn ordered_trie_root(input: Vec<Vec<u8>>, _: StateVersion) -> Self::Output {
 		sp_io::trie::keccak_256_ordered_root(input)
 	}
 }
@@ -548,10 +551,7 @@ impl CheckEqual for sp_core::H256 {
 	}
 }
 
-impl<H: PartialEq + Eq + Debug> CheckEqual for super::generic::DigestItem<H>
-where
-	H: Encode,
-{
+impl CheckEqual for super::generic::DigestItem {
 	#[cfg(feature = "std")]
 	fn check_equal(&self, other: &Self) {
 		if self != other {
@@ -642,7 +642,7 @@ pub trait Header:
 		extrinsics_root: Self::Hash,
 		state_root: Self::Hash,
 		parent_hash: Self::Hash,
-		digest: Digest<Self::Hash>,
+		digest: Digest,
 	) -> Self;
 
 	/// Returns a reference to the header number.
@@ -666,9 +666,9 @@ pub trait Header:
 	fn set_parent_hash(&mut self, hash: Self::Hash);
 
 	/// Returns a reference to the digest.
-	fn digest(&self) -> &Digest<Self::Hash>;
+	fn digest(&self) -> &Digest;
 	/// Get a mutable reference to the digest.
-	fn digest_mut(&mut self) -> &mut Digest<Self::Hash>;
+	fn digest_mut(&mut self) -> &mut Digest;
 
 	/// Returns the hash of the header.
 	fn hash(&self) -> Self::Hash {
@@ -783,9 +783,6 @@ pub type HashFor<B> = <<B as Block>::Header as Header>::Hashing;
 /// Extract the number type for a block.
 pub type NumberFor<B> = <<B as Block>::Header as Header>::Number;
 /// Extract the digest type for a block.
-pub type DigestFor<B> = Digest<<<B as Block>::Header as Header>::Hash>;
-/// Extract the digest item type for a block.
-pub type DigestItemFor<B> = DigestItem<<<B as Block>::Header as Header>::Hash>;
 
 /// A "checkable" piece of information, used by the standard Substrate Executive in order to
 /// check the validity of a piece of extrinsic information, usually by verifying the signature.
@@ -886,7 +883,7 @@ pub trait SignedExtension:
 	type AdditionalSigned: Encode + TypeInfo;
 
 	/// The type that encodes information that can be passed from pre_dispatch to post-dispatch.
-	type Pre: Default;
+	type Pre;
 
 	/// Construct any additional data that should be in the signed payload of the transaction. Can
 	/// also perform any pre-signature-verification checks and return an error if needed.
@@ -925,11 +922,7 @@ pub trait SignedExtension:
 		call: &Self::Call,
 		info: &DispatchInfoOf<Self::Call>,
 		len: usize,
-	) -> Result<Self::Pre, TransactionValidityError> {
-		self.validate(who, call, info, len)
-			.map(|_| Self::Pre::default())
-			.map_err(Into::into)
-	}
+	) -> Result<Self::Pre, TransactionValidityError>;
 
 	/// Validate an unsigned transaction for the transaction queue.
 	///
@@ -959,13 +952,14 @@ pub trait SignedExtension:
 		call: &Self::Call,
 		info: &DispatchInfoOf<Self::Call>,
 		len: usize,
-	) -> Result<Self::Pre, TransactionValidityError> {
-		Self::validate_unsigned(call, info, len)
-			.map(|_| Self::Pre::default())
-			.map_err(Into::into)
+	) -> Result<(), TransactionValidityError> {
+		Self::validate_unsigned(call, info, len).map(|_| ()).map_err(Into::into)
 	}
 
 	/// Do any post-flight stuff for an extrinsic.
+	///
+	/// If the transaction is signed, then `_pre` will contain the output of `pre_dispatch`,
+	/// and `None` otherwise.
 	///
 	/// This gets given the `DispatchResult` `_result` from the extrinsic and can, if desired,
 	/// introduce a `TransactionValidityError`, causing the block to become invalid for including
@@ -979,7 +973,7 @@ pub trait SignedExtension:
 	/// introduced by the current block author; generally this implies that it is an inherent and
 	/// will come from either an offchain-worker or via `InherentData`.
 	fn post_dispatch(
-		_pre: Self::Pre,
+		_pre: Option<Self::Pre>,
 		_info: &DispatchInfoOf<Self::Call>,
 		_post_info: &PostDispatchInfoOf<Self::Call>,
 		_len: usize,
@@ -1064,18 +1058,26 @@ impl<AccountId, Call: Dispatchable> SignedExtension for Tuple {
 		call: &Self::Call,
 		info: &DispatchInfoOf<Self::Call>,
 		len: usize,
-	) -> Result<Self::Pre, TransactionValidityError> {
-		Ok(for_tuples!( ( #( Tuple::pre_dispatch_unsigned(call, info, len)? ),* ) ))
+	) -> Result<(), TransactionValidityError> {
+		for_tuples!( #( Tuple::pre_dispatch_unsigned(call, info, len)?; )* );
+		Ok(())
 	}
 
 	fn post_dispatch(
-		pre: Self::Pre,
+		pre: Option<Self::Pre>,
 		info: &DispatchInfoOf<Self::Call>,
 		post_info: &PostDispatchInfoOf<Self::Call>,
 		len: usize,
 		result: &DispatchResult,
 	) -> Result<(), TransactionValidityError> {
-		for_tuples!( #( Tuple::post_dispatch(pre.Tuple, info, post_info, len, result)?; )* );
+		match pre {
+			Some(x) => {
+				for_tuples!( #( Tuple::post_dispatch(Some(x.Tuple), info, post_info, len, result)?; )* );
+			},
+			None => {
+				for_tuples!( #( Tuple::post_dispatch(None, info, post_info, len, result)?; )* );
+			},
+		}
 		Ok(())
 	}
 
@@ -1096,6 +1098,15 @@ impl SignedExtension for () {
 	const IDENTIFIER: &'static str = "UnitSignedExtension";
 	fn additional_signed(&self) -> sp_std::result::Result<(), TransactionValidityError> {
 		Ok(())
+	}
+	fn pre_dispatch(
+		self,
+		who: &Self::AccountId,
+		call: &Self::Call,
+		info: &DispatchInfoOf<Self::Call>,
+		len: usize,
+	) -> Result<Self::Pre, TransactionValidityError> {
+		self.validate(who, call, info, len).map(|_| ())
 	}
 }
 
@@ -1247,6 +1258,11 @@ impl<'a> TrailingZeroInput<'a> {
 	pub fn new(data: &'a [u8]) -> Self {
 		Self(data)
 	}
+
+	/// Create a new instance which only contains zeroes as input.
+	pub fn zeroes() -> Self {
+		Self::new(&[][..])
+	}
 }
 
 impl<'a> codec::Input for TrailingZeroInput<'a> {
@@ -1295,11 +1311,11 @@ pub trait AccountIdConversion<AccountId>: Sized {
 
 /// Format is TYPE_ID ++ encode(parachain ID) ++ 00.... where 00... is indefinite trailing zeroes to
 /// fill AccountId.
-impl<T: Encode + Decode + Default, Id: Encode + Decode + TypeId> AccountIdConversion<T> for Id {
+impl<T: Encode + Decode, Id: Encode + Decode + TypeId> AccountIdConversion<T> for Id {
 	fn into_sub_account<S: Encode>(&self, sub: S) -> T {
 		(Id::TYPE_ID, self, sub)
 			.using_encoded(|b| T::decode(&mut TrailingZeroInput(b)))
-			.unwrap_or_default()
+			.expect("`AccountId` type is never greater than 32 bytes; qed")
 	}
 
 	fn try_from_sub_account<S: Decode>(x: &T) -> Option<(Self, S)> {
@@ -1352,7 +1368,7 @@ macro_rules! impl_opaque_keys_inner {
 	) => {
 		$( #[ $attr ] )*
 		#[derive(
-			Default, Clone, PartialEq, Eq,
+			Clone, PartialEq, Eq,
 			$crate::codec::Encode,
 			$crate::codec::Decode,
 			$crate::scale_info::TypeInfo,
@@ -1651,7 +1667,10 @@ pub trait BlockNumberProvider {
 mod tests {
 	use super::*;
 	use crate::codec::{Decode, Encode, Input};
-	use sp_core::{crypto::Pair, ecdsa};
+	use sp_core::{
+		crypto::{Pair, UncheckedFrom},
+		ecdsa,
+	};
 
 	mod t {
 		use sp_application_crypto::{app_crypto, sr25519};
@@ -1664,8 +1683,8 @@ mod tests {
 		use super::AppVerify;
 		use t::*;
 
-		let s = Signature::default();
-		let _ = s.verify(&[0u8; 100][..], &Public::default());
+		let s = Signature::try_from(vec![0; 64]).unwrap();
+		let _ = s.verify(&[0u8; 100][..], &Public::unchecked_from([0; 32]));
 	}
 
 	#[derive(Encode, Decode, Default, PartialEq, Debug)]

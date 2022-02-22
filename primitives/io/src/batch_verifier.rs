@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -74,6 +74,7 @@ impl BatchVerifier {
 
 		self.scheduler.spawn(
 			name,
+			None,
 			async move {
 				if !f() {
 					invalid_clone.store(true, AtomicOrdering::Relaxed);
@@ -177,7 +178,8 @@ impl BatchVerifier {
 		if pending.len() > 0 {
 			let (sender, receiver) = std::sync::mpsc::channel();
 			self.scheduler.spawn(
-				"substrate_batch_verify_join",
+				"substrate-batch-verify-join",
+				None,
 				async move {
 					futures::future::join_all(pending).await;
 					sender.send(()).expect(

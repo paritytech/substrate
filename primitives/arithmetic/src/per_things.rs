@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -22,7 +22,7 @@ use crate::traits::{
 	BaseArithmetic, Bounded, CheckedAdd, CheckedMul, CheckedSub, One, SaturatedConversion,
 	Saturating, UniqueSaturatedInto, Unsigned, Zero,
 };
-use codec::{CompactAs, Encode};
+use codec::{CompactAs, Encode, MaxEncodedLen};
 use num_traits::{Pow, SaturatingAdd, SaturatingSub};
 use sp_debug_derive::RuntimeDebug;
 use sp_std::{
@@ -427,6 +427,13 @@ macro_rules! implement_per_thing {
 		#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 		#[derive(Encode, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, RuntimeDebug, scale_info::TypeInfo)]
 		pub struct $name($type);
+		
+		impl MaxEncodedLen for $name{
+			fn max_encoded_len() -> usize {
+				// a bit too much but solves problems in parachain_staking
+				<$type>::max_encoded_len()
+			}
+		}
 
 		/// Implementation makes any compact encoding of `PerThing::Inner` valid,
 		/// when decoding it will saturate up to `PerThing::ACCURACY`.
@@ -830,6 +837,16 @@ macro_rules! implement_per_thing {
 			#[inline]
 			fn checked_mul(&self, rhs: &Self) -> Option<Self> {
 				Some(*self * *rhs)
+			}
+		}
+
+		impl $crate::traits::Zero for $name {
+			fn zero() -> Self {
+				Self::zero()
+			}
+
+			fn is_zero(&self) -> bool {
+				self == &Self::zero()
 			}
 		}
 
