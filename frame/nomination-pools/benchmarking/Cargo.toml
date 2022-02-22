@@ -30,6 +30,9 @@ pallet-nomination-pools = { version = "1.0.0", default-features = false, feature
 sp-runtime = { version = "5.0.0", default-features = false, path = "../../../primitives/runtime" }
 sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/staking" }
 
+# TODO: remove
+sp-tracing = { version = "4.0.0", path = "../../../primitives/tracing" }
+
 [dev-dependencies]
 pallet-balances = { version = "4.0.0-dev", default-features = false, path = "../../balances" }
 pallet-timestamp = { version = "4.0.0-dev", path = "../../timestamp" }

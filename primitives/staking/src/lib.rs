@@ -125,15 +125,4 @@ pub trait StakingInterface {
 		stash: Self::AccountId,
 		targets: sp_std::vec::Vec<Self::LookupSource>,
 	) -> DispatchResult;
-
-	// Benchmarking helpers
-
-	#[cfg(feature = "runtime-benchmarks")]
-	fn max_nominations() -> u32;
-
-	#[cfg(feature = "runtime-benchmarks")]
-	fn weight_update_worst_case(who: &Self::AccountId, is_increase: bool) -> u64;
-
-	#[cfg(feature = "runtime-benchmarks")]
-	fn set_current_era(era: EraIndex);
 }

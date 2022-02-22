@@ -6084,6 +6084,7 @@ dependencies = [
  "sp-io",
  "sp-runtime",
  "sp-staking",
+ "sp-tracing",
 ]
 
 [[package]]

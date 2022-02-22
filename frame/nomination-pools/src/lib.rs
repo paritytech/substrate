@@ -350,17 +350,17 @@ fn balance_to_unbond<T: Config>(
 #[codec(mel_bound(T: Config))]
 #[scale_info(skip_type_params(T))]
 pub struct Delegator<T: Config> {
-	pool: T::AccountId,
+	pub pool: T::AccountId,
 	/// The quantity of points this delegator has in the bonded pool or in a sub pool if
 	/// `Self::unbonding_era` is some.
-	points: BalanceOf<T>,
+	pub points: BalanceOf<T>,
 	/// The reward pools total earnings _ever_ the last time this delegator claimed a payout.
 	/// Assuming no massive burning events, we expect this value to always be below total issuance.
 	/// This value lines up with the `RewardPool::total_earnings` after a delegator claims a
 	/// payout.
-	reward_pool_total_earnings: BalanceOf<T>,
+	pub reward_pool_total_earnings: BalanceOf<T>,
 	/// The era this delegator started unbonding at.
-	unbonding_era: Option<EraIndex>,
+	pub unbonding_era: Option<EraIndex>,
 }
 
 /// All of a pool's possible states.
@@ -1002,7 +1002,6 @@ pub mod pallet {
 			// to unbond so we have the correct points for the balance:share ratio.
 			bonded_pool.points = bonded_pool.points.saturating_sub(delegator.points);
 
-			// T::StakingInterface::withdraw_unbonded(delegator.pool.clone(), num_slashing_spans)?;
 			// Unbond in the actual underlying pool
 			T::StakingInterface::unbond(delegator.pool.clone(), balance_to_unbond)?;
 
@@ -1309,7 +1308,7 @@ impl<T: Config> Pallet<T> {
 		// The new points that will be added to the pool. For every unit of balance that has
 		// been earned by the reward pool, we inflate the reward pool points by
 		// `bonded_pool.points`. In effect this allows each, single unit of balance (e.g.
-		// plank) to be divvied up pro-rata among delegators based on points.
+		// plank) to be divvied up pro rata among delegators based on points.
 		let new_points = T::BalanceToU256::convert(bonded_pool.points).saturating_mul(new_earnings);
 
 		// The points of the reward pool after taking into account the new earnings. Notice that

@@ -1,15 +1,21 @@
+//! Benchmarks for the nomination pools coupled with the staking and bags list pallets.
+
 #[cfg(test)]
 mod mock;
 
 use frame_benchmarking::{account, frame_support::traits::Currency, vec, whitelist_account};
+use frame_election_provider_support::SortedListProvider;
 use frame_support::ensure;
 use frame_system::RawOrigin as Origin;
-use pallet_nomination_pools::{BalanceOf, Pallet as Pools};
+use pallet_nomination_pools::MinCreateBond;
+use pallet_nomination_pools::{BalanceOf, BondedPools, Delegators, MinJoinBond, Pallet as Pools};
 use sp_runtime::traits::{StaticLookup, Zero};
-use sp_staking::StakingInterface;
+use sp_staking::{EraIndex, StakingInterface};
 
-// Benchmark macro code needs this
+// `frame_benchmarking::benchmarks!` macro code needs this
 use pallet_nomination_pools::Call;
+
+type CurrencyOf<T> = <T as pallet_nomination_pools::Config>::Currency;
 
 const USER_SEED: u32 = 0;
 const MAX_SPANS: u32 = 100;
@@ -73,7 +79,8 @@ struct ListScenario<T: pallet_nomination_pools::Config> {
 	origin1_delegator: Option<T::AccountId>,
 }
 
-impl<T: pallet_nomination_pools::Config> ListScenario<T> {
+impl<T: 
+Config> ListScenario<T> {
 	/// An expensive scenario for bags-list implementation:
 	///
 	/// - the node to be updated (r) is the head of a bag that has at least one other node. The bag
@@ -120,7 +127,10 @@ impl<T: pallet_nomination_pools::Config> ListScenario<T> {
 
 		// Find a destination weight that will trigger the worst case scenario
 		let dest_weight_as_vote =
-			T::StakingInterface::weight_update_worst_case(&pool_origin1, is_increase);
+			<T as pallet_staking::Config>::SortedListProvider::weight_update_worst_case(
+				&pool_origin1,
+				is_increase,
+			);
 
 		let dest_weight: BalanceOf<T> =
 			dest_weight_as_vote.try_into().map_err(|_| "could not convert u64 to Balance")?;
@@ -136,34 +146,32 @@ impl<T: pallet_nomination_pools::Config> ListScenario<T> {
 	}
 
 	fn add_joiner(mut self, amount: BalanceOf<T>) -> Self {
-		let amount = pallet_nomination_pools::MinJoinBond::<T>::get()
-			.max(<T as pallet_nomination_pools::Config>::Currency::minimum_balance())
+		let amount = MinJoinBond::<T>::get()
+			.max(CurrencyOf::<T>::minimum_balance())
 			// Max the `given` amount with minimum thresholds for account balance and joining a pool
 			// to ensure 1. the user can be created and 2. can join the pool
 			.max(amount);
 
 		let joiner: T::AccountId = account("joiner", USER_SEED, 0);
 		self.origin1_delegator = Some(joiner.clone());
-		<T as pallet_nomination_pools::Config>::Currency::make_free_balance_be(
-			&joiner,
-			amount * 2u32.into(),
-		);
+		CurrencyOf::<T>::make_free_balance_be(&joiner, amount * 2u32.into());
 
-		let current_bonded = T::StakingInterface::bonded_balance(&self.origin1).unwrap();
+		let original_bonded = T::StakingInterface::bonded_balance(&self.origin1).unwrap();
 
 		// Unbond `amount` from the underlying pool account so when the delegator joins
 		// we will maintain `current_bonded`.
-		T::StakingInterface::unbond(self.origin1.clone(), amount);
+		T::StakingInterface::unbond(self.origin1.clone(), amount)
+			.expect("the pool was created in `Self::new`.");
 
 		// Account pool points for the unbonded balance.
-		pallet_nomination_pools::BondedPools::<T>::mutate(&self.origin1, |maybe_pool| {
+		BondedPools::<T>::mutate(&self.origin1, |maybe_pool| {
 			maybe_pool.as_mut().map(|pool| pool.points -= amount)
 		});
 
 		Pools::<T>::join(Origin::Signed(joiner.clone()).into(), amount, self.origin1.clone())
 			.unwrap();
 
-		assert_eq!(T::StakingInterface::bonded_balance(&self.origin1).unwrap(), current_bonded);
+		assert_eq!(T::StakingInterface::bonded_balance(&self.origin1).unwrap(), original_bonded);
 
 		self
 	}
@@ -174,7 +182,7 @@ frame_benchmarking::benchmarks! {
 		clear_storage::<T>();
 
 		let origin_weight = pallet_nomination_pools::MinCreateBond::<T>::get()
-			.max(<T as pallet_nomination_pools::Config>::Currency::minimum_balance())
+			.max(CurrencyOf::<T>::minimum_balance())
 			* 2u32.into();
 
 		// setup the worst case list scenario.
@@ -185,7 +193,7 @@ frame_benchmarking::benchmarks! {
 		);
 
 		let max_additional = scenario.dest_weight.clone() - origin_weight;
-		let joiner_free = <T as pallet_nomination_pools::Config>::Currency::minimum_balance() + max_additional;
+		let joiner_free = CurrencyOf::<T>::minimum_balance() + max_additional;
 
 		let joiner: T::AccountId
 			= create_funded_user_with_balance::<T>("joiner", 0, joiner_free);
@@ -193,7 +201,7 @@ frame_benchmarking::benchmarks! {
 		whitelist_account!(joiner);
 	}: _(Origin::Signed(joiner.clone()), max_additional, scenario.origin1.clone())
 	verify {
-		assert_eq!(<T as pallet_nomination_pools::Config>::Currency::free_balance(&joiner), joiner_free - max_additional);
+		assert_eq!(CurrencyOf::<T>::free_balance(&joiner), joiner_free - max_additional);
 		assert_eq!(
 			T::StakingInterface::bonded_balance(&scenario.origin1).unwrap(),
 			scenario.dest_weight
@@ -203,7 +211,7 @@ frame_benchmarking::benchmarks! {
 	claim_payout {
 		clear_storage::<T>();
 
-		let origin_weight = pallet_nomination_pools::MinCreateBond::<T>::get().max(<T as pallet_nomination_pools::Config>::Currency::minimum_balance()) * 2u32.into();
+		let origin_weight = pallet_nomination_pools::MinCreateBond::<T>::get().max(CurrencyOf::<T>::minimum_balance()) * 2u32.into();
 		let (depositor, pool_account) = create_pool_account::<T>(0, origin_weight);
 
 		let reward_account = pallet_nomination_pools::RewardPools::<T>::get(pool_account)
@@ -211,11 +219,11 @@ frame_benchmarking::benchmarks! {
 			.expect("pool created above.");
 
 		// Send funds to the reward account of the pool
-		<T as pallet_nomination_pools::Config>::Currency::make_free_balance_be(&reward_account, origin_weight);
+		CurrencyOf::<T>::make_free_balance_be(&reward_account, origin_weight);
 
 		// Sanity check
 		assert_eq!(
-			<T as pallet_nomination_pools::Config>::Currency::free_balance(&depositor),
+			CurrencyOf::<T>::free_balance(&depositor),
 			origin_weight
 		);
 
@@ -223,134 +231,160 @@ frame_benchmarking::benchmarks! {
 	}:_(Origin::Signed(depositor.clone()))
 	verify {
 		assert_eq!(
-			<T as pallet_nomination_pools::Config>::Currency::free_balance(&depositor),
+			CurrencyOf::<T>::free_balance(&depositor),
 			origin_weight * 2u32.into()
 		);
 		assert_eq!(
-			<T as pallet_nomination_pools::Config>::Currency::free_balance(&reward_account),
+			CurrencyOf::<T>::free_balance(&reward_account),
 			Zero::zero()
 		);
 	}
 
-// 	unbond_other {
-// 		clear_storage::<T>();
+	unbond_other {
+		clear_storage::<T>();
 
-// 		// the weight the nominator will start at. The value used here is expected to be
-// 		// significantly higher than the first position in a list (e.g. the first bag threshold).
-// 		let origin_weight = BalanceOf::<T>::try_from(952_994_955_240_703u128)
-// 			.map_err(|_| "balance expected to be a u128")
-// 			.unwrap();
-// 		let scenario = ListScenario::<T>::new(origin_weight, false)?;
+		// the weight the nominator will start at. The value used here is expected to be
+		// significantly higher than the first position in a list (e.g. the first bag threshold).
+		let origin_weight = BalanceOf::<T>::try_from(952_994_955_240_703u128)
+			.map_err(|_| "balance expected to be a u128")
+			.unwrap();
+		let scenario = ListScenario::<T>::new(origin_weight, false)?;
 
-// 		let amount = origin_weight - scenario.dest_weight.clone();
+		let amount = origin_weight - scenario.dest_weight.clone();
 
-// 		let scenario = scenario.add_joiner(amount);
+		let scenario = scenario.add_joiner(amount);
+		let delegator_id = scenario.origin1_delegator.unwrap().clone();
 
-// 		let delegator = scenario.origin1_delegator.unwrap().clone();
-// 	}: _(Origin::Signed(delegator.clone()), delegator.clone())
-// 	verify {
-// 		assert!(
-// 			T::StakingInterface::bonded_balance(&scenario.origin1).unwrap()
-// 			<= scenario.dest_weight.clone()
-// 		);
-// 	}
+		// Sanity check the delegator was added correctly
+		let delegator = Delegators::<T>::get(
+			&delegator_id
+		)
+		.unwrap();
+		assert_eq!(
+			delegator.points,
+			amount
+		);
+		assert_eq!(
+			delegator.pool,
+			scenario.origin1
+		);
+		// Sanity check the pool maintained the origin weight
+		let bonded_pool = BondedPools::<T>::get(scenario.origin1.clone()).unwrap();
+		assert_eq!(
+			bonded_pool.points,
+			origin_weight
+		);
+		let bonded_before = T::StakingInterface::bonded_balance(&scenario.origin1).unwrap();
+		assert_eq!(
+			bonded_before,
+			origin_weight
+		);
 
-// 	// TODO: setup a withdraw unbonded kill scenario
-// 	pool_withdraw_unbonded {
-// 		let s in 0 .. MAX_SPANS;
-// 		clear_storage::<T>();
+	}: _(Origin::Signed(delegator_id.clone()), delegator_id.clone())
+	verify {
+		let bonded_after = T::StakingInterface::bonded_balance(&scenario.origin1).unwrap();
+		// We at least went down to the destination bag, (if not an even lower bag)
+		assert!(bonded_after <= scenario.dest_weight.clone());
+		let delegator = Delegators::<T>::get(
+			&delegator_id
+		)
+		.unwrap();
+		assert_eq!(delegator.unbonding_era, Some(0));
+	}
 
-// 		let min_create_bond = MinCreateBond::<T>::get()
-// 			.max(T::StakingInterface::minimum_bond())
-// 			.max(T::Currency::minimum_balance());
-// 		let (depositor, pool_account) = create_pool_account::<T>(0, min_create_bond);
+	// TODO: setup a withdraw unbonded kill scenario
+	pool_withdraw_unbonded {
+		let s in 0 .. MAX_SPANS;
+		clear_storage::<T>();
 
-// 		// Add a new delegator
-// 		let min_join_bond = MinJoinBond::<T>::get().max(T::Currency::minimum_balance());
-// 		let joiner = create_funded_user_with_balance::<T>("joiner", 0, min_join_bond * 2u32.into());
-// 		Pools::<T>::join(Origin::Signed(joiner.clone()).into(), min_join_bond, pool_account.clone())
-// 			.unwrap();
+		let min_create_bond = MinCreateBond::<T>::get()
+			.max(T::StakingInterface::minimum_bond())
+			.max(CurrencyOf::<T>::minimum_balance());
+		let (depositor, pool_account) = create_pool_account::<T>(0, min_create_bond);
 
-// 		// Sanity check join worked
-// 		assert_eq!(
-// 			T::StakingInterface::bonded_balance(&pool_account).unwrap(
+		// Add a new delegator
+		let min_join_bond = MinJoinBond::<T>::get().max(CurrencyOf::<T>::minimum_balance());
+		let joiner = create_funded_user_with_balance::<T>("joiner", 0, min_join_bond * 2u32.into());
+		Pools::<T>::join(Origin::Signed(joiner.clone()).into(), min_join_bond, pool_account.clone())
+			.unwrap();
 
-// 			),
-// 			min_create_bond + min_join_bond
-// 		);
-// 		assert_eq!(T::Currency::free_balance(&joiner), min_join_bond);
+		// Sanity check join worked
+		assert_eq!(
+			T::StakingInterface::bonded_balance(&pool_account).unwrap(),
+			min_create_bond + min_join_bond
+		);
+		assert_eq!(CurrencyOf::<T>::free_balance(&joiner), min_join_bond);
 
-// 		// Unbond the new delegator
-// 		Pools::<T>::unbond_other(Origin::Signed(joiner.clone()).into(), joiner.clone()).unwrap();
+		// Unbond the new delegator
+		Pools::<T>::unbond_other(Origin::Signed(joiner.clone()).into(), joiner.clone()).unwrap();
 
-// 		// Sanity check that unbond worked
-// 		assert_eq!(
-// 			T::StakingInterface::bonded_balance(&pool_account).unwrap(),
-// 			min_create_bond
-// 		);
-// 		// Set the current era
-// 		T::StakingInterface::set_current_era(EraIndex::max_value());
+		// Sanity check that unbond worked
+		assert_eq!(
+			T::StakingInterface::bonded_balance(&pool_account).unwrap(),
+			min_create_bond
+		);
+		assert_eq!(pallet_staking::Ledger::<T>::get(&pool_account).unwrap().unlocking.len(), 1);
+		// Set the current era
+		pallet_staking::CurrentEra::<T>::put(EraIndex::max_value());
 
-// 		// T::StakingInterface::add_slashing_spans(&pool_account, s);
-// 		whitelist_account!(pool_account);
-// 	}: _(Origin::Signed(pool_account.clone()), pool_account.clone(), 2)
-// 	verify {
-// 		// The joiners funds didn't change
-// 		assert_eq!(T::Currency::free_balance(&joiner), min_join_bond);
+		// Add `s` count of slashing spans to storage.
+		pallet_staking::benchmarking::add_slashing_spans::<T>(&pool_account, s);
+		whitelist_account!(pool_account);
+	}: _(Origin::Signed(pool_account.clone()), pool_account.clone(), s)
+	verify {
+		// The joiners funds didn't change
+		assert_eq!(CurrencyOf::<T>::free_balance(&joiner), min_join_bond);
+		// The unlocking chunk was removed
+		assert_eq!(pallet_staking::Ledger::<T>::get(pool_account).unwrap().unlocking.len(), 0);
+	}
 
-// 		// TODO: figure out if we can check anything else. Its tricky because the free balance hasn't
-// 		// changed and I don't we don't have an api from here to the unlocking chunks, or staking balance
-// lock 	}
+	// TODO: setup a withdraw unbonded kill scenario, make variable over slashing spans
+	withdraw_unbonded_other {
+		let s in 0 .. MAX_SPANS;
+		clear_storage::<T>();
 
-// 	// TODO: setup a withdraw unbonded kill scenario, make variable over slashing spans
-// 	withdraw_unbonded_other {
-// 		let s in 0 .. MAX_SPANS;
-// 		clear_storage::<T>();
+		// T::StakingInterface::add_slashing_spans(&stash, s);
 
-// 		// T::StakingInterface::add_slashing_spans(&stash, s);
+		let min_create_bond = MinCreateBond::<T>::get()
+			.max(T::StakingInterface::minimum_bond())
+			.max(CurrencyOf::<T>::minimum_balance());
+		let (depositor, pool_account) = create_pool_account::<T>(0, min_create_bond);
 
-// 		let min_create_bond = MinCreateBond::<T>::get()
-// 			.max(T::StakingInterface::minimum_bond())
-// 			.max(T::Currency::minimum_balance());
-// 		let (depositor, pool_account) = create_pool_account::<T>(0, min_create_bond);
+		// Add a new delegator
+		let min_join_bond = MinJoinBond::<T>::get().max(CurrencyOf::<T>::minimum_balance());
+		let joiner = create_funded_user_with_balance::<T>("joiner", 0, min_join_bond * 2u32.into());
+		Pools::<T>::join(Origin::Signed(joiner.clone()).into(), min_join_bond, pool_account.clone())
+			.unwrap();
 
-// 		// Add a new delegator
-// 		let min_join_bond = MinJoinBond::<T>::get().max(T::Currency::minimum_balance());
-// 		let joiner = create_funded_user_with_balance::<T>("joiner", 0, min_join_bond * 2u32.into());
-// 		Pools::<T>::join(Origin::Signed(joiner.clone()).into(), min_join_bond, pool_account.clone())
-// 			.unwrap();
+		// Sanity check join worked
+		assert_eq!(
+			T::StakingInterface::bonded_balance(&pool_account).unwrap(),
+			min_create_bond + min_join_bond
+		);
+		assert_eq!(CurrencyOf::<T>::free_balance(&joiner), min_join_bond);
 
-// 		// Sanity check join worked
-// 		assert_eq!(
-// 			T::StakingInterface::bonded_balance(&pool_account).unwrap(
+		// Unbond the new delegator
+		pallet_staking::CurrentEra::<T>::put(0);
+		Pools::<T>::unbond_other(Origin::Signed(joiner.clone()).into(), joiner.clone()).unwrap();
 
-// 			),
-// 			min_create_bond + min_join_bond
-// 		);
-// 		assert_eq!(T::Currency::free_balance(&joiner), min_join_bond);
+		// Sanity check that unbond worked
+		assert_eq!(
+			T::StakingInterface::bonded_balance(&pool_account).unwrap(),
+			min_create_bond
+		);
 
-// 		// Unbond the new delegator
-// 		T::StakingInterface::set_current_era(0);
-// 		Pools::<T>::unbond_other(Origin::Signed(joiner.clone()).into(), joiner.clone()).unwrap();
+		// Set the current era to ensure we can withdraw unbonded funds
+		pallet_staking::CurrentEra::<T>::put(EraIndex::max_value());
 
-// 		// Sanity check that unbond worked
-// 		assert_eq!(
-// 			T::StakingInterface::bonded_balance(&pool_account).unwrap(),
-// 			min_create_bond
-// 		);
-
-// 		// Set the current era to ensure we can withdraw unbonded funds
-// 		T::StakingInterface::set_current_era(EraIndex::max_value());
-
-// 		// T::StakingInterface::add_slashing_spans(&pool_account, s);
-// 		whitelist_account!(joiner);
-// 	}: _(Origin::Signed(joiner.clone()), joiner.clone(), 0)
-// 	verify {
-// 		assert_eq!(
-// 			T::Currency::free_balance(&joiner),
-// 			min_join_bond * 2u32.into()
-// 		);
-// 	}
+		// T::StakingInterface::add_slashing_spans(&pool_account, s);
+		whitelist_account!(joiner);
+	}: _(Origin::Signed(joiner.clone()), joiner.clone(), 0)
+	verify {
+		assert_eq!(
+			CurrencyOf::<T>::free_balance(&joiner),
+			min_join_bond * 2u32.into()
+		);
+	}
 
 // 	create {
 // 		clear_storage::<T>();
@@ -407,7 +441,7 @@ frame_benchmarking::benchmarks! {
 // 		let (depositor, pool_account) = create_pool_account::<T>(0, min_create_bond);
 
 // 		// Create some accounts to nominate. For the sake of benchmarking they don't need to be actual
-// validators 		let validators: Vec<_> = (0..T::StakingInterface::max_nominations())
+// validators 		let validators: Vec<_> = (0..T::MaxNominations::get())
 // 			.map(|i|
 // 				T::Lookup::unlookup(account("stash", USER_SEED, i))
 // 			)
