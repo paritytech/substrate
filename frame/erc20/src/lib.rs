@@ -91,9 +91,7 @@ decl_module! {
             let resource_id = T::NativeTokenId::get();
 			let number_amount: u128 = amount.saturated_into();
 
-			// <bridge::Module<T>>::transfer_fungible(dest_id, resource_id, recipient, U256::from(amount.saturated_into()))
             <bridge::Module<T>>::transfer_fungible(dest_id, resource_id, recipient, U256::from(number_amount))
-			// <bridge::Module<T>>::transfer_fungible(dest_id, resource_id, recipient, U256::from(UniqueSaturatedInto::<u128>::unique_saturated_into(amount)))
         }
         
 
