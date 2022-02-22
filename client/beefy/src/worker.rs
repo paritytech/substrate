@@ -322,7 +322,7 @@ where
 					.notify(|| Ok::<_, ()>(signed_commitment))
 					.expect("forwards closure result; the closure always returns Ok; qed.");
 
-				self.set_best_beefy_block(block_num, None);
+				self.set_best_beefy_block(block_num);
 
 				trace!(target: "beefy", "🥩 round concluded, waking up ticker");
 				self.ticker.wake();
@@ -333,33 +333,29 @@ where
 	/// Set best BEEFY block to `block_num`.
 	///
 	/// Also sends/updates the best BEEFY block hash to the RPC worker.
-	/// If the hash is not explicitly provided in `opt_block_hash`,
-	/// this function just gets it from the `Client`.
-	fn set_best_beefy_block(
-		&mut self,
-		block_num: NumberFor<B>,
-		mut opt_block_hash: Option<<<B as Block>::Header as Header>::Hash>,
-	) {
-		if opt_block_hash.is_none() {
+	fn set_best_beefy_block(&mut self, block_num: NumberFor<B>) {
+		if Some(block_num) > self.best_beefy_block {
 			// Try to get block hash ourselves.
-			opt_block_hash = match self.client.hash(block_num) {
+			let block_hash = match self.client.hash(block_num) {
 				Ok(h) => h,
 				Err(e) => {
 					error!(target: "beefy", "🥩 Failed to get hash for block number {}: {}",
 						block_num, e);
 					None
 				},
-			}
-		};
-		// Update RPC worker with new best BEEFY block hash.
-		opt_block_hash.map(|hash| {
-			self.beefy_best_block_sender
-				.notify(|| Ok::<_, ()>(hash))
-				.expect("forwards closure result; the closure always returns Ok; qed.")
-		});
-		// Set new best BEEFY block number.
-		self.best_beefy_block = Some(block_num);
-		metric_set!(self, beefy_best_block, block_num);
+			};
+			// Update RPC worker with new best BEEFY block hash.
+			block_hash.map(|hash| {
+				self.beefy_best_block_sender
+					.notify(|| Ok::<_, ()>(hash))
+					.expect("forwards closure result; the closure always returns Ok; qed.")
+			});
+			// Set new best BEEFY block number.
+			self.best_beefy_block = Some(block_num);
+			metric_set!(self, beefy_best_block, block_num);
+		} else {
+			debug!(target: "beefy", "🥩 Can't set best beefy to older: {}", block_num);
+		}
 	}
 
 	/// Return first block number pertaining to same session as `header`.
