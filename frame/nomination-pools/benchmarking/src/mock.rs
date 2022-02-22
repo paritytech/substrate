@@ -180,7 +180,6 @@ frame_support::construct_runtime!(
 );
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	sp_tracing::try_init_simple();
 	let mut storage = frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
 	let _ = pallet_nomination_pools::GenesisConfig::<Runtime> {
 		min_join_bond: 2,

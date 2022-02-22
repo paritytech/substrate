@@ -1,11 +1,15 @@
 //! Benchmarks for the nomination pools coupled with the staking and bags list pallets.
 
+// Ensure we're `no_std` when compiling for Wasm.
+#![cfg_attr(not(feature = "std"), no_std)]
+
 #[cfg(test)]
 mod mock;
 
 use frame_benchmarking::{account, frame_support::traits::Currency, vec, whitelist_account};
 use frame_election_provider_support::SortedListProvider;
-use frame_support::ensure;
+use frame_support::{ensure, traits::Get};
+use frame_benchmarking::Vec;
 use frame_system::RawOrigin as Origin;
 use pallet_nomination_pools::{
 	BalanceOf, BondedPoolStorage, BondedPools, Delegators, MinCreateBond, MinJoinBond,
@@ -14,7 +18,6 @@ use pallet_nomination_pools::{
 };
 use sp_runtime::traits::{StaticLookup, Zero};
 use sp_staking::{EraIndex, StakingInterface};
-use frame_support::traits::Get;
 
 // `frame_benchmarking::benchmarks!` macro code needs this
 use pallet_nomination_pools::Call;
@@ -445,7 +448,8 @@ frame_benchmarking::benchmarks! {
 			.max(CurrencyOf::<T>::minimum_balance());
 		let (depositor, pool_account) = create_pool_account::<T>(0, min_create_bond);
 
-		// Create some accounts to nominate. For the sake of benchmarking they don't need to be actual validators
+		// Create some accounts to nominate. For the sake of benchmarking they don't need to be
+		// actual validators
 		 let validators: Vec<_> = (0..T::MaxNominations::get())
 			.map(|i|
 				T::Lookup::unlookup(account("stash", USER_SEED, i))

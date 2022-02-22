@@ -4894,6 +4894,7 @@ dependencies = [
  "pallet-mmr",
  "pallet-multisig",
  "pallet-nomination-pools",
+ "pallet-nomination-pools-benchmarking",
  "pallet-offences",
  "pallet-offences-benchmarking",
  "pallet-preimage",
@@ -6049,10 +6050,8 @@ dependencies = [
 name = "pallet-nomination-pools"
 version = "1.0.0"
 dependencies = [
- "frame-benchmarking",
  "frame-support",
  "frame-system",
- "log 0.4.14",
  "pallet-balances",
  "parity-scale-codec",
  "scale-info",
@@ -6066,7 +6065,7 @@ dependencies = [
 
 [[package]]
 name = "pallet-nomination-pools-benchmarking"
-version = "4.0.0"
+version = "1.0.0"
 dependencies = [
  "frame-benchmarking",
  "frame-election-provider-support",
@@ -6084,7 +6083,6 @@ dependencies = [
  "sp-io",
  "sp-runtime",
  "sp-staking",
- "sp-tracing",
 ]
 
 [[package]]

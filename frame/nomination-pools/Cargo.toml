@@ -25,17 +25,9 @@ sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../pr
 sp-core = { version = "5.0.0", default-features = false, path = "../../primitives/core" }
 sp-io = { version = "5.0.0",  default-features = false, path = "../../primitives/io" }
 
-# third party
-log = { version = "0.4.14", default-features = false }
-
-# Optional imports for benchmarking
-frame-benchmarking = { version = "4.0.0-dev", path = "../benchmarking", optional = true, default-features = false }
-
 [dev-dependencies]
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 sp-tracing = { version = "4.0.0", path = "../../primitives/tracing" }
-sp-io = { version = "5.0.0", path = "../../primitives/io" }
-
 
 [features]
 default = ["std"]
@@ -47,8 +39,4 @@ std = [
 	"sp-std/std",
 	"frame-support/std",
 	"frame-system/std",
-]
-runtime-benchmarks = [
-	"frame-benchmarking",
-	"sp-staking/runtime-benchmarks"
 ]
