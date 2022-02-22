@@ -205,6 +205,11 @@ impl<T, S: Get<u32>> BoundedVec<T, S> {
 		S::get() as usize
 	}
 
+	/// Returns true of this collection is full.
+	pub fn full(&self) -> bool {
+		self.len() == Self::bound()
+	}
+
 	/// Forces the insertion of `element` into `self` retaining all items with index at least
 	/// `index`.
 	///
@@ -258,10 +263,15 @@ impl<T, S: Get<u32>> BoundedVec<T, S> {
 		if Self::bound() == index && self.len() <= Self::bound() {
 			return Err(())
 		}
-		// if we truncate anything, it will be this one.
-		let maybe_removed = self.0.get(Self::bound() - 1).cloned();
-		// Cannot panic since `Self.bound() > 0`
-		self.0.truncate(Self::bound() - 1);
+		let maybe_removed = if self.full() {
+			// defensive-only: since we are at capacity, this is a noop.
+			self.0.truncate(Self::bound());
+			// if we truncate anything, it will be the last one.
+			self.0.pop()
+		} else {
+			None
+		};
+
 		// Cannot panic since `self.len() >= index`;
 		self.0.insert(index, element);
 		Ok(maybe_removed)
