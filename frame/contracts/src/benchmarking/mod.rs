@@ -1869,9 +1869,9 @@ benchmarks! {
 
 		let message_hash = sp_io::hashing::blake2_256("Hello world".as_bytes());
 		let key_type = sp_core::crypto::KeyTypeId(*b"code");
-		let pub_key = sp_io::crypto::ecdsa_generate(key_type, None);
 		let signatures = (0..r * API_BENCHMARK_BATCH_SIZE)
 			.map(|i| {
+				let pub_key = sp_io::crypto::ecdsa_generate(key_type, None);
 				let sig = sp_io::crypto::ecdsa_sign_prehashed(key_type, &pub_key, &message_hash).expect("Generates signature");
 				AsRef::<[u8; 65]>::as_ref(&sig).to_vec()
 			})
