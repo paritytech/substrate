@@ -257,7 +257,7 @@ where
 		let root = if let Some(child_info) = child_info.as_ref() {
 			match self.child_root(child_info)? {
 				Some(child_root) => child_root,
-				None => return Ok(false),
+				None => return Ok(true),
 			}
 		} else {
 			self.root
