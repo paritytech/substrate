@@ -18,7 +18,7 @@
 
 use std::{collections::BTreeMap, hash::Hash};
 
-use log::{debug, trace};
+use log::trace;
 
 use beefy_primitives::{
 	crypto::{Public, Signature},
@@ -112,39 +112,37 @@ where
 		}
 	}
 
-	pub(crate) fn is_done(&self, round: &(H, N)) -> bool {
+	pub(crate) fn try_conclude(&mut self, round: &(H, N)) -> Option<Vec<Option<Signature>>> {
 		let done = self
 			.rounds
 			.get(round)
 			.map(|tracker| tracker.is_done(threshold(self.validator_set.len())))
 			.unwrap_or(false);
+		trace!(target: "beefy", "🥩 Round #{} done: {}", round.1, done);
 
-		debug!(target: "beefy", "🥩 Round #{} done: {}", round.1, done);
+		if done {
+			let signatures = self.rounds.remove(round)?.votes;
+			self.best_done = self.best_done.clone().max(Some(round.1.clone()));
+			trace!(target: "beefy", "🥩 Concluded round #{}", round.1);
 
-		done
-	}
-
-	pub(crate) fn conclude(&mut self, round: &(H, N)) -> Option<Vec<Option<Signature>>> {
-		trace!(target: "beefy", "🥩 About to drop round #{}", round.1);
-
-		let signatures = self.rounds.remove(round)?.votes;
-		self.best_done = self.best_done.clone().max(Some(round.1.clone()));
-
-		Some(
-			self.validator_set
-				.validators()
-				.iter()
-				.map(|authority_id| {
-					signatures.iter().find_map(|(id, sig)| {
-						if id == authority_id {
-							Some(sig.clone())
-						} else {
-							None
-						}
+			Some(
+				self.validator_set
+					.validators()
+					.iter()
+					.map(|authority_id| {
+						signatures.iter().find_map(|(id, sig)| {
+							if id == authority_id {
+								Some(sig.clone())
+							} else {
+								None
+							}
+						})
 					})
-				})
-				.collect(),
-		)
+					.collect(),
+			)
+		} else {
+			None
+		}
 	}
 }
 
@@ -197,7 +195,7 @@ mod tests {
 			true
 		));
 
-		assert!(!rounds.is_done(&(H256::from_low_u64_le(1), 1)));
+		assert!(rounds.try_conclude(&(H256::from_low_u64_le(1), 1)).is_none());
 
 		// invalid vote
 		assert!(!rounds.add_vote(
@@ -206,7 +204,7 @@ mod tests {
 			false
 		));
 
-		assert!(!rounds.is_done(&(H256::from_low_u64_le(1), 1)));
+		assert!(rounds.try_conclude(&(H256::from_low_u64_le(1), 1)).is_none());
 
 		assert!(rounds.add_vote(
 			&(H256::from_low_u64_le(1), 1),
@@ -214,7 +212,7 @@ mod tests {
 			false
 		));
 
-		assert!(!rounds.is_done(&(H256::from_low_u64_le(1), 1)));
+		assert!(rounds.try_conclude(&(H256::from_low_u64_le(1), 1)).is_none());
 
 		assert!(rounds.add_vote(
 			&(H256::from_low_u64_le(1), 1),
@@ -222,7 +220,7 @@ mod tests {
 			false
 		));
 
-		assert!(rounds.is_done(&(H256::from_low_u64_le(1), 1)));
+		assert!(rounds.try_conclude(&(H256::from_low_u64_le(1), 1)).is_some());
 	}
 
 	#[test]
@@ -230,7 +228,12 @@ mod tests {
 		sp_tracing::try_init_simple();
 
 		let validators = ValidatorSet::<Public>::new(
-			vec![Keyring::Alice.public(), Keyring::Bob.public(), Keyring::Charlie.public()],
+			vec![
+				Keyring::Alice.public(),
+				Keyring::Bob.public(),
+				Keyring::Charlie.public(),
+				Keyring::Dave.public(),
+			],
 			Default::default(),
 		)
 		.unwrap();
@@ -238,50 +241,63 @@ mod tests {
 		let mut rounds = Rounds::<H256, NumberFor<Block>>::new(1, validators);
 
 		// round 1
-		rounds.add_vote(
+		assert!(rounds.add_vote(
 			&(H256::from_low_u64_le(1), 1),
 			(Keyring::Alice.public(), Keyring::Alice.sign(b"I am committed")),
 			true,
-		);
-		rounds.add_vote(
+		));
+		assert!(rounds.add_vote(
 			&(H256::from_low_u64_le(1), 1),
 			(Keyring::Bob.public(), Keyring::Bob.sign(b"I am committed")),
 			false,
-		);
+		));
+		assert!(rounds.add_vote(
+			&(H256::from_low_u64_le(1), 1),
+			(Keyring::Charlie.public(), Keyring::Charlie.sign(b"I am committed")),
+			false,
+		));
 
 		// round 2
-		rounds.add_vote(
+		assert!(rounds.add_vote(
 			&(H256::from_low_u64_le(2), 2),
 			(Keyring::Alice.public(), Keyring::Alice.sign(b"I am again committed")),
-			false,
-		);
-		rounds.add_vote(
+			true,
+		));
+		assert!(rounds.add_vote(
 			&(H256::from_low_u64_le(2), 2),
 			(Keyring::Bob.public(), Keyring::Bob.sign(b"I am again committed")),
 			false,
-		);
+		));
+		assert!(rounds.add_vote(
+			&(H256::from_low_u64_le(2), 2),
+			(Keyring::Charlie.public(), Keyring::Charlie.sign(b"I am again committed")),
+			false,
+		));
 
 		// round 3
-		rounds.add_vote(
+		assert!(rounds.add_vote(
 			&(H256::from_low_u64_le(3), 3),
 			(Keyring::Alice.public(), Keyring::Alice.sign(b"I am still committed")),
-			false,
-		);
-		rounds.add_vote(
+			true,
+		));
+		assert!(rounds.add_vote(
 			&(H256::from_low_u64_le(3), 3),
 			(Keyring::Bob.public(), Keyring::Bob.sign(b"I am still committed")),
 			false,
-		);
-
+		));
+		assert!(rounds.add_vote(
+			&(H256::from_low_u64_le(3), 3),
+			(Keyring::Charlie.public(), Keyring::Charlie.sign(b"I am still committed")),
+			false,
+		));
 		assert_eq!(3, rounds.rounds.len());
 
 		// conclude unknown round
-		assert!(rounds.conclude(&(H256::from_low_u64_le(5), 5)).is_none());
+		assert!(rounds.try_conclude(&(H256::from_low_u64_le(5), 5)).is_none());
 		assert_eq!(3, rounds.rounds.len());
 
 		// conclude round 2
-		let signatures = rounds.conclude(&(H256::from_low_u64_le(2), 2)).unwrap();
-
+		let signatures = rounds.try_conclude(&(H256::from_low_u64_le(2), 2)).unwrap();
 		assert_eq!(2, rounds.rounds.len());
 
 		assert_eq!(
@@ -289,6 +305,7 @@ mod tests {
 			vec![
 				Some(Keyring::Alice.sign(b"I am again committed")),
 				Some(Keyring::Bob.sign(b"I am again committed")),
+				Some(Keyring::Charlie.sign(b"I am again committed")),
 				None
 			]
 		);

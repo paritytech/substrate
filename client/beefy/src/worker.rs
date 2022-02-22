@@ -287,10 +287,8 @@ where
 			return
 		};
 
-		let vote_added = rounds.add_vote(&round, vote, self_vote);
-
-		if vote_added && rounds.is_done(&round) {
-			if let Some(signatures) = rounds.conclude(&round) {
+		if rounds.add_vote(&round, vote, self_vote) {
+			if let Some(signatures) = rounds.try_conclude(&round) {
 				self.gossip_validator.drop_round(round.1);
 
 				// id is stored for skipped session metric calculation
