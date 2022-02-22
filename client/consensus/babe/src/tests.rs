@@ -36,10 +36,7 @@ use sc_network::config::ProtocolConfig;
 use sc_network_test::{Block as TestBlock, *};
 use sp_application_crypto::key_types::BABE;
 use sp_consensus::{AlwaysCanAuthor, DisableProofRecording, NoNetwork as DummyOracle, Proposal};
-use sp_consensus_babe::{
-	inherents::InherentDataProvider, make_transcript, make_transcript_data, AllowedSlots,
-	AuthorityPair, Slot,
-};
+use sp_consensus_babe::{make_transcript, make_transcript_data, AllowedSlots, AuthorityPair, Slot};
 use sp_core::crypto::Pair;
 use sp_keystore::{vrf::make_transcript as transcript_from_data, SyncCryptoStore};
 use sp_runtime::{
@@ -242,7 +239,7 @@ pub struct TestVerifier {
 			dyn CreateInherentDataProviders<
 				TestBlock,
 				(),
-				InherentDataProviders = (TimestampInherentDataProvider, InherentDataProvider),
+				InherentDataProviders = (TimestampInherentDataProvider,),
 			>,
 		>,
 	>,
@@ -336,12 +333,7 @@ impl TestNetFactory for BabeTestNet {
 				select_chain: longest_chain,
 				create_inherent_data_providers: Box::new(|_, _| async {
 					let timestamp = TimestampInherentDataProvider::from_system_time();
-					let slot = InherentDataProvider::from_timestamp_and_slot_duration(
-						*timestamp,
-						SlotDuration::from_millis(6000),
-					);
-
-					Ok((timestamp, slot))
+					Ok((timestamp,))
 				}),
 				config: data.link.config.clone(),
 				epoch_changes: data.link.epoch_changes.clone(),
@@ -449,12 +441,7 @@ fn run_one_test(mutator: impl Fn(&mut TestHeader, Stage) + Send + Sync + 'static
 				sync_oracle: DummyOracle,
 				create_inherent_data_providers: Box::new(|_, _| async {
 					let timestamp = TimestampInherentDataProvider::from_system_time();
-					let slot = InherentDataProvider::from_timestamp_and_slot_duration(
-						*timestamp,
-						SlotDuration::from_millis(6000),
-					);
-
-					Ok((timestamp, slot))
+					Ok((timestamp,))
 				}),
 				force_authoring: false,
 				backoff_authoring_blocks: Some(BackoffAuthoringOnFinalizedHeadLagging::default()),

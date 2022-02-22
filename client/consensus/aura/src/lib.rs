@@ -75,9 +75,7 @@ pub use import_queue::{
 pub use sc_consensus_slots::SlotProportion;
 pub use sp_consensus::SyncOracle;
 pub use sp_consensus_aura::{
-	digests::CompatibleDigestItem,
-	inherents::{InherentDataProvider, InherentType as AuraInherent, INHERENT_IDENTIFIER},
-	AuraApi, ConsensusLog, SlotDuration, AURA_ENGINE_ID,
+	digests::CompatibleDigestItem, AuraApi, ConsensusLog, SlotDuration, AURA_ENGINE_ID,
 };
 
 type AuthorityId<P> = <P as Pair>::Public;
@@ -638,7 +636,7 @@ mod tests {
 			dyn CreateInherentDataProviders<
 				TestBlock,
 				(),
-				InherentDataProviders = (TimestampInherentDataProvider, InherentDataProvider),
+				InherentDataProviders = (TimestampInherentDataProvider,),
 			>,
 		>,
 	>;
@@ -669,15 +667,11 @@ mod tests {
 
 			assert_eq!(slot_duration.as_millis() as u64, SLOT_DURATION);
 			import_queue::AuraVerifier::new(
+				slot_duration,
 				client,
 				Box::new(|_, _| async {
 					let timestamp = TimestampInherentDataProvider::from_system_time();
-					let slot = InherentDataProvider::from_timestamp_and_slot_duration(
-						*timestamp,
-						SlotDuration::from_millis(6000),
-					);
-
-					Ok((timestamp, slot))
+					Ok((timestamp,))
 				}),
 				AlwaysCanAuthor,
 				CheckForEquivocation::Yes,
@@ -757,12 +751,7 @@ mod tests {
 					justification_sync_link: (),
 					create_inherent_data_providers: |_, _| async {
 						let timestamp = TimestampInherentDataProvider::from_system_time();
-						let slot = InherentDataProvider::from_timestamp_and_slot_duration(
-							*timestamp,
-							SlotDuration::from_millis(6000),
-						);
-
-						Ok((timestamp, slot))
+						Ok((timestamp,))
 					},
 					force_authoring: false,
 					backoff_authoring_blocks: Some(

@@ -39,7 +39,6 @@ use sp_blockchain::{HeaderBackend, HeaderMetadata};
 use sp_consensus::CacheKeyId;
 use sp_consensus_babe::{
 	digests::{NextEpochDescriptor, PreDigest, SecondaryPlainPreDigest},
-	inherents::BabeInherentData,
 	AuthorityId, BabeApi, BabeAuthorityWeight, ConsensusLog, BABE_ENGINE_ID,
 };
 use sp_consensus_slots::Slot;
@@ -194,9 +193,12 @@ where
 	type Transaction = TransactionFor<C, B>;
 
 	fn create_digest(&self, parent: &B::Header, inherents: &InherentData) -> Result<Digest, Error> {
-		let slot = inherents
-			.babe_inherent_data()?
-			.ok_or_else(|| Error::StringError("No babe inherent data".into()))?;
+		let timestamp = inherents
+			.timestamp_inherent_data()?
+			.ok_or_else(|| Error::StringError("No timestamp inherent data".into()))?;
+
+		let slot = Slot::from_timestamp(timestamp, self.config.slot_duration());
+
 		let epoch = self.epoch(parent, slot)?;
 
 		// this is a dev node environment, we should always be able to claim a slot.
@@ -260,9 +262,12 @@ where
 		params: &mut BlockImportParams<B, Self::Transaction>,
 		inherents: &InherentData,
 	) -> Result<(), Error> {
-		let slot = inherents
-			.babe_inherent_data()?
-			.ok_or_else(|| Error::StringError("No babe inherent data".into()))?;
+		let timestamp = inherents
+			.timestamp_inherent_data()?
+			.ok_or_else(|| Error::StringError("No timestamp inherent data".into()))?;
+
+		let slot = Slot::from_timestamp(timestamp, self.config.slot_duration());
+
 		let epoch_changes = self.epoch_changes.shared_data();
 		let mut epoch_descriptor = epoch_changes
 			.epoch_descriptor_for_child_of(

@@ -201,7 +201,6 @@ pub fn new_partial(
 		client.clone(),
 	)?;
 
-	let slot_duration = babe_link.config().slot_duration();
 	let import_queue = sc_consensus_babe::import_queue(
 		babe_link.clone(),
 		block_import.clone(),
@@ -211,16 +210,10 @@ pub fn new_partial(
 		move |_, ()| async move {
 			let timestamp = sp_timestamp::InherentDataProvider::from_system_time();
 
-			let slot =
-				sp_consensus_babe::inherents::InherentDataProvider::from_timestamp_and_slot_duration(
-					*timestamp,
-					slot_duration,
-				);
-
 			let uncles =
 				sp_authorship::InherentDataProvider::<<Block as BlockT>::Header>::check_inherents();
 
-			Ok((timestamp, slot, uncles))
+			Ok((timestamp, uncles))
 		},
 		&task_manager.spawn_essential_handle(),
 		config.prometheus_registry(),
@@ -399,7 +392,6 @@ pub fn new_full_base(
 			sp_consensus::CanAuthorWithNativeVersion::new(client.executor().clone());
 
 		let client_clone = client.clone();
-		let slot_duration = babe_link.config().slot_duration();
 		let babe_config = sc_consensus_babe::BabeParams {
 			keystore: keystore_container.sync_keystore(),
 			client: client.clone(),
@@ -418,19 +410,13 @@ pub fn new_full_base(
 
 					let timestamp = sp_timestamp::InherentDataProvider::from_system_time();
 
-					let slot =
-						sp_consensus_babe::inherents::InherentDataProvider::from_timestamp_and_slot_duration(
-							*timestamp,
-							slot_duration,
-						);
-
 					let storage_proof =
 						sp_transaction_storage_proof::registration::new_data_provider(
 							&*client_clone,
 							&parent,
 						)?;
 
-					Ok((timestamp, slot, uncles, storage_proof))
+					Ok((timestamp, uncles, storage_proof))
 				}
 			},
 			force_authoring,
@@ -667,14 +653,11 @@ mod tests {
 					slot += 1;
 				};
 
-				let inherent_data = (
-					sp_timestamp::InherentDataProvider::new(
-						std::time::Duration::from_millis(SLOT_DURATION * slot).into(),
-					),
-					sp_consensus_babe::inherents::InherentDataProvider::new(slot.into()),
+				let inherent_data = sp_timestamp::InherentDataProvider::new(
+					std::time::Duration::from_millis(SLOT_DURATION * slot).into(),
 				)
-					.create_inherent_data()
-					.expect("Creates inherent data");
+				.create_inherent_data()
+				.expect("Creates inherent data");
 
 				digest.push(<DigestItem as CompatibleDigestItem>::babe_pre_digest(babe_pre_digest));
 

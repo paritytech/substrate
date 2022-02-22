@@ -24,7 +24,6 @@ use sp_runtime::ConsensusEngineId;
 use sp_std::vec::Vec;
 
 pub mod digests;
-pub mod inherents;
 
 pub mod sr25519 {
 	mod app_sr25519 {

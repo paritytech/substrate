@@ -20,7 +20,7 @@
 //!
 //! This is used instead of `futures_timer::Interval` because it was unreliable.
 
-use super::{InherentDataProviderExt, Slot};
+use super::{InherentDataProviderExt, Slot, SlotDuration};
 use sp_consensus::{Error, SelectChain};
 use sp_inherents::{CreateInherentDataProviders, InherentData, InherentDataProvider};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
@@ -172,7 +172,11 @@ where
 			}
 
 			let timestamp = inherent_data_providers.timestamp();
-			let slot = inherent_data_providers.slot();
+			let slot = Slot::from_timestamp(
+				timestamp,
+				SlotDuration::from_millis(self.slot_duration.as_millis() as u64),
+			);
+
 			let inherent_data = inherent_data_providers.create_inherent_data()?;
 
 			// never yield the same slot twice.

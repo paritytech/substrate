@@ -106,7 +106,6 @@ use sp_consensus::{
 	BlockOrigin, CacheKeyId, CanAuthorWith, Environment, Error as ConsensusError, Proposer,
 	SelectChain,
 };
-use sp_consensus_babe::inherents::BabeInherentData;
 use sp_consensus_slots::{Slot, SlotDuration};
 use sp_core::{crypto::ByteArray, ExecutionContext};
 use sp_inherents::{CreateInherentDataProviders, InherentData, InherentDataProvider};
@@ -1142,7 +1141,10 @@ where
 			.await
 			.map_err(|e| Error::<Block>::Client(sp_consensus::Error::from(e).into()))?;
 
-		let slot_now = create_inherent_data_providers.slot();
+		let slot_now = Slot::from_timestamp(
+			create_inherent_data_providers.timestamp(),
+			self.config.slot_duration(),
+		);
 
 		let parent_header_metadata = self
 			.client
@@ -1203,14 +1205,13 @@ where
 					warn!(target: "babe", "Error checking/reporting BABE equivocation: {}", err);
 				}
 
-				// if the body is passed through, we need to use the runtime
-				// to check that the internally-set timestamp in the inherents
-				// actually matches the slot set in the seal.
+				// if the body is passed through, we need to use the
+				// runtime to validate all inherent data
 				if let Some(inner_body) = block.body {
-					let mut inherent_data = create_inherent_data_providers
+					let inherent_data = create_inherent_data_providers
 						.create_inherent_data()
 						.map_err(Error::<Block>::CreateInherents)?;
-					inherent_data.babe_replace_inherent_data(slot);
+
 					let new_block = Block::new(pre_header.clone(), inner_body);
 
 					self.check_inherents(

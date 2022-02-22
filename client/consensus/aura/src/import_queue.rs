@@ -37,8 +37,7 @@ use sp_blockchain::{
 };
 use sp_consensus::{CanAuthorWith, Error as ConsensusError};
 use sp_consensus_aura::{
-	digests::CompatibleDigestItem, inherents::AuraInherentData, AuraApi, ConsensusLog,
-	AURA_ENGINE_ID,
+	digests::CompatibleDigestItem, AuraApi, ConsensusLog, SlotDuration, AURA_ENGINE_ID,
 };
 use sp_consensus_slots::Slot;
 use sp_core::{crypto::Pair, ExecutionContext};
@@ -62,7 +61,7 @@ fn check_header<C, B: BlockT, P: Pair>(
 	hash: B::Hash,
 	authorities: &[AuthorityId<P>],
 	check_for_equivocation: CheckForEquivocation,
-) -> Result<CheckedHeader<B::Header, (Slot, DigestItem)>, Error<B>>
+) -> Result<CheckedHeader<B::Header, DigestItem>, Error<B>>
 where
 	P::Signature: Codec,
 	C: sc_client_api::backend::AuxStore,
@@ -101,7 +100,7 @@ where
 				}
 			}
 
-			Ok(CheckedHeader::Checked(header, (slot, seal)))
+			Ok(CheckedHeader::Checked(header, seal))
 		} else {
 			Err(Error::BadSignature(hash))
 		}
@@ -110,6 +109,7 @@ where
 
 /// A verifier for Aura blocks.
 pub struct AuraVerifier<C, P, CAW, CIDP> {
+	slot_duration: SlotDuration,
 	client: Arc<C>,
 	phantom: PhantomData<P>,
 	create_inherent_data_providers: CIDP,
@@ -120,6 +120,7 @@ pub struct AuraVerifier<C, P, CAW, CIDP> {
 
 impl<C, P, CAW, CIDP> AuraVerifier<C, P, CAW, CIDP> {
 	pub(crate) fn new(
+		slot_duration: SlotDuration,
 		client: Arc<C>,
 		create_inherent_data_providers: CIDP,
 		can_author_with: CAW,
@@ -127,6 +128,7 @@ impl<C, P, CAW, CIDP> AuraVerifier<C, P, CAW, CIDP> {
 		telemetry: Option<TelemetryHandle>,
 	) -> Self {
 		Self {
+			slot_duration,
 			client,
 			create_inherent_data_providers,
 			can_author_with,
@@ -213,11 +215,12 @@ where
 			.await
 			.map_err(|e| Error::<B>::Client(sp_blockchain::Error::Application(e)))?;
 
-		let mut inherent_data = create_inherent_data_providers
+		let slot_now =
+			Slot::from_timestamp(create_inherent_data_providers.timestamp(), self.slot_duration);
+
+		let inherent_data = create_inherent_data_providers
 			.create_inherent_data()
 			.map_err(Error::<B>::Inherent)?;
-
-		let slot_now = create_inherent_data_providers.slot();
 
 		// we add one to allow for some small drift.
 		// FIXME #1019 in the future, alter this queue to allow deferring of
@@ -231,15 +234,13 @@ where
 			self.check_for_equivocation,
 		)
 		.map_err(|e| e.to_string())?;
+
 		match checked_header {
-			CheckedHeader::Checked(pre_header, (slot, seal)) => {
-				// if the body is passed through, we need to use the runtime
-				// to check that the internally-set timestamp in the inherents
-				// actually matches the slot set in the seal.
+			CheckedHeader::Checked(pre_header, seal) => {
+				// if the body is passed through, we need to use the
+				// runtime to validate all inherent data
 				if let Some(inner_body) = block.body.take() {
 					let new_block = B::new(pre_header.clone(), inner_body);
-
-					inherent_data.aura_replace_inherent_data(slot);
 
 					// skip the inherents verification if the runtime API is old.
 					if self
@@ -339,6 +340,8 @@ impl Default for CheckForEquivocation {
 
 /// Parameters of [`import_queue`].
 pub struct ImportQueueParams<'a, Block, I, C, S, CAW, CIDP> {
+	/// The duration of a slot.
+	pub slot_duration: SlotDuration,
 	/// The block import to use.
 	pub block_import: I,
 	/// The justification import.
@@ -362,6 +365,7 @@ pub struct ImportQueueParams<'a, Block, I, C, S, CAW, CIDP> {
 /// Start an import queue for the Aura consensus algorithm.
 pub fn import_queue<'a, P, Block, I, C, S, CAW, CIDP>(
 	ImportQueueParams {
+		slot_duration,
 		block_import,
 		justification_import,
 		client,
@@ -397,6 +401,7 @@ where
 	CIDP::InherentDataProviders: InherentDataProviderExt + Send + Sync,
 {
 	let verifier = build_verifier::<P, _, _, _>(BuildVerifierParams {
+		slot_duration,
 		client,
 		create_inherent_data_providers,
 		can_author_with,
@@ -409,6 +414,8 @@ where
 
 /// Parameters of [`build_verifier`].
 pub struct BuildVerifierParams<C, CIDP, CAW> {
+	/// The duration of a slot.
+	pub slot_duration: SlotDuration,
 	/// The client to interact with the chain.
 	pub client: Arc<C>,
 	/// Something that can create the inherent data providers.
@@ -424,6 +431,7 @@ pub struct BuildVerifierParams<C, CIDP, CAW> {
 /// Build the [`AuraVerifier`]
 pub fn build_verifier<P, C, CIDP, CAW>(
 	BuildVerifierParams {
+		slot_duration,
 		client,
 		create_inherent_data_providers,
 		can_author_with,
@@ -432,6 +440,7 @@ pub fn build_verifier<P, C, CIDP, CAW>(
 	}: BuildVerifierParams<C, CIDP, CAW>,
 ) -> AuraVerifier<C, P, CAW, CIDP> {
 	AuraVerifier::<_, P, _, _>::new(
+		slot_duration,
 		client,
 		create_inherent_data_providers,
 		can_author_with,

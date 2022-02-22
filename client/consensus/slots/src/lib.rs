@@ -418,41 +418,33 @@ pub trait InherentDataProviderExt {
 	/// The current timestamp that will be found in the
 	/// [`InherentData`](`sp_inherents::InherentData`).
 	fn timestamp(&self) -> Timestamp;
-
-	/// The current slot that will be found in the [`InherentData`](`sp_inherents::InherentData`).
-	fn slot(&self) -> Slot;
 }
 
 /// Small macro for implementing `InherentDataProviderExt` for inherent data provider tuple.
 macro_rules! impl_inherent_data_provider_ext_tuple {
-	( T, S $(, $TN:ident)* $( , )?) => {
-		impl<T, S, $( $TN ),*>  InherentDataProviderExt for (T, S, $($TN),*)
+	( T $(, $TN:ident)* $( , )?) => {
+		impl<T, $( $TN ),*>  InherentDataProviderExt for (T, $($TN),*)
 		where
 			T: Deref<Target = Timestamp>,
-			S: Deref<Target = Slot>,
 		{
 			fn timestamp(&self) -> Timestamp {
 				*self.0.deref()
-			}
-
-			fn slot(&self) -> Slot {
-				*self.1.deref()
 			}
 		}
 	}
 }
 
-impl_inherent_data_provider_ext_tuple!(T, S);
-impl_inherent_data_provider_ext_tuple!(T, S, A);
-impl_inherent_data_provider_ext_tuple!(T, S, A, B);
-impl_inherent_data_provider_ext_tuple!(T, S, A, B, C);
-impl_inherent_data_provider_ext_tuple!(T, S, A, B, C, D);
-impl_inherent_data_provider_ext_tuple!(T, S, A, B, C, D, E);
-impl_inherent_data_provider_ext_tuple!(T, S, A, B, C, D, E, F);
-impl_inherent_data_provider_ext_tuple!(T, S, A, B, C, D, E, F, G);
-impl_inherent_data_provider_ext_tuple!(T, S, A, B, C, D, E, F, G, H);
-impl_inherent_data_provider_ext_tuple!(T, S, A, B, C, D, E, F, G, H, I);
-impl_inherent_data_provider_ext_tuple!(T, S, A, B, C, D, E, F, G, H, I, J);
+impl_inherent_data_provider_ext_tuple!(T);
+impl_inherent_data_provider_ext_tuple!(T, A);
+impl_inherent_data_provider_ext_tuple!(T, A, B);
+impl_inherent_data_provider_ext_tuple!(T, A, B, C);
+impl_inherent_data_provider_ext_tuple!(T, A, B, C, D);
+impl_inherent_data_provider_ext_tuple!(T, A, B, C, D, E);
+impl_inherent_data_provider_ext_tuple!(T, A, B, C, D, E, F);
+impl_inherent_data_provider_ext_tuple!(T, A, B, C, D, E, F, G);
+impl_inherent_data_provider_ext_tuple!(T, A, B, C, D, E, F, G, H);
+impl_inherent_data_provider_ext_tuple!(T, A, B, C, D, E, F, G, H, I);
+impl_inherent_data_provider_ext_tuple!(T, A, B, C, D, E, F, G, H, I, J);
 
 /// Start a new slot worker.
 ///

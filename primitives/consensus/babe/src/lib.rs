@@ -21,7 +21,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 pub mod digests;
-pub mod inherents;
 
 pub use merlin::Transcript;
 pub use sp_consensus_vrf::schnorrkel::{
