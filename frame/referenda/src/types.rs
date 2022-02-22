@@ -79,7 +79,7 @@ pub trait InsertSorted<T> {
 		f: F,
 	) -> bool;
 }
-impl<T: Ord + Clone, S: Get<u32>> InsertSorted<T> for BoundedVec<T, S> {
+impl<T: Ord, S: Get<u32>> InsertSorted<T> for BoundedVec<T, S> {
 	fn insert_sorted_by_key<F: FnMut(&T) -> K, K: PartialOrd<K> + Ord>(
 		&mut self,
 		t: T,
