@@ -29,6 +29,7 @@ use sp_std::{boxed::Box, vec::Vec};
 use sp_trie::recorder::Recorder;
 use sp_trie::{
 	child_delta_trie_root, delta_trie_root, empty_child_trie_root, read_child_trie_value,
+	read_trie_value,
 	trie_types::{TrieDBBuilder, TrieError},
 	DBValue, KeySpacedDB, LayoutV0, NodeCodec, PrefixedMemoryDB, Trie, TrieDBIterator,
 	TrieDBKeyIterator,
@@ -161,11 +162,11 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> {
 	#[cfg(feature = "std")]
 	fn with_recorder_and_cache<R>(
 		&self,
+		storage_root: Option<H::Out>,
 		callback: impl FnOnce(
 			Option<&mut dyn TrieRecorder<H::Out>>,
 			Option<&mut dyn TrieCache<NodeCodec<H>>>,
 		) -> R,
-		storage_root: Option<H::Out>,
 	) -> R {
 		let mut recorder = self.recorder.as_ref().map(|r| r.as_trie_recorder());
 		let recorder = recorder.as_deref_mut().map(|r| r as _);
@@ -182,6 +183,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> {
 	#[cfg(not(feature = "std"))]
 	fn with_recorder_and_cache<R>(
 		&self,
+		storage_root: Option<H::Out>,
 		callback: impl FnOnce(
 			Option<&mut dyn TrieRecorder<H::Out>>,
 			Option<&mut dyn TrieCache<NodeCodec<H>>>,
@@ -202,26 +204,26 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> {
 		callback: impl FnOnce(
 			Option<&mut dyn TrieRecorder<H::Out>>,
 			Option<&mut dyn TrieCache<NodeCodec<H>>>,
-		) -> (H::Out, R),
+		) -> (Option<H::Out>, R),
 	) -> R {
 		let mut recorder = self.recorder.as_ref().map(|r| r.as_trie_recorder());
 		let recorder = recorder.as_deref_mut().map(|r| r as _);
 
-		let mut cache = self.trie_node_cache.as_ref().map(|c| c.as_trie_db_mut_cache());
+		let result = if let Some(local_cache) = self.trie_node_cache.as_ref() {
+			let mut cache = local_cache.as_trie_db_mut_cache();
 
-		let (new_root, r) = {
-			let cache = cache.as_mut().map(|c| c as _);
+			let (new_root, r) = callback(recorder, Some(&mut cache));
 
-			callback(recorder, cache)
+			if let Some(new_root) = new_root {
+				cache.merge_into(local_cache, new_root);
+			}
+
+			r
+		} else {
+			callback(recorder, None).1
 		};
 
-		if let Some((cache, local_cache)) =
-			cache.and_then(|c| self.trie_node_cache.as_ref().map(|lc| (c, lc)))
-		{
-			cache.merge_into(local_cache, new_root);
-		}
-
-		r
+		result
 	}
 
 	#[cfg(not(feature = "std"))]
@@ -307,10 +309,11 @@ where
 			dyn_eph = self;
 		}
 
-		self.with_recorder_and_cache(|recorder, cache| {
+		self.with_recorder_and_cache(Some(*root), |recorder, cache| {
 			let trie = TrieDBBuilder::<H>::new(dyn_eph, root)
 				.map_err(|e| format!("TrieDB creation error: {}", e))?
 				.with_optional_recorder(recorder)
+				.with_optional_cache(cache)
 				.build();
 
 			let mut iter = trie.key_iter().map_err(|e| format!("TrieDB iteration error: {}", e))?;
@@ -344,30 +347,8 @@ where
 	pub fn storage(&self, key: &[u8]) -> Result<Option<StorageValue>> {
 		let map_e = |e| format!("Trie lookup error: {}", e);
 
-		self.with_recorder_and_cache(|recorder, cache| {
-			let trie_builder = TrieDBBuilder::<H>::new_unchecked(self, &self.root)
-				.with_optional_recorder(recorder);
-
-			#[cfg(feature = "std")]
-			match self.trie_node_cache {
-				Some(ref cache) => trie_builder
-					.with_cache(&mut cache.as_trie_db_cache(self.root))
-					.build()
-					.get(key)
-					.map_err(map_e),
-				None => trie_builder.build().get(key).map_err(map_e),
-			}
-
-			#[cfg(not(feature = "std"))]
-			trie_builder.build().get(key).map_err(map_e)
-
-			// match &self.trie_node_cache {
-			// 	Some(cache) =>
-			// 		TrieDB::<H>::new_with_cache_unchecked(self, &self.root, &mut cache.as_cache())
-			// 			.get(key)
-			// 			.map_err(map_e),
-			// 	None => TrieDB::<H>::new(self, &self.root).map_err(map_e)?.get(key).map_err(map_e),
-			// }
+		self.with_recorder_and_cache(None, |recorder, cache| {
+			read_trie_value::<Layout<H>, _>(self, &self.root, key, recorder, cache).map_err(map_e)
 		})
 	}
 
@@ -383,9 +364,20 @@ where
 
 		let map_e = |e| format!("Trie lookup error: {}", e);
 
-		self.with_recorder_and_cache(|recorder, cache| {
-			read_child_trie_value::<Layout<H>, _>(child_info.keyspace(), self, &root, key, recorder)
-				.map_err(map_e)
+		let mut child_root = H::Out::default();
+		// root is fetched from DB, not writable by runtime, so it's always valid.
+		child_root.as_mut().copy_from_slice(&root);
+
+		self.with_recorder_and_cache(Some(child_root), |recorder, cache| {
+			read_child_trie_value::<Layout<H>, _>(
+				child_info.keyspace(),
+				self,
+				&root,
+				key,
+				recorder,
+				cache,
+			)
+			.map_err(map_e)
 		})
 	}
 
@@ -493,9 +485,11 @@ where
 		child_info: Option<&ChildInfo>,
 	) {
 		let mut iter = move |db| -> sp_std::result::Result<(), Box<TrieError<H::Out>>> {
-			self.with_recorder_and_cache(|recorder, cache| {
-				let trie =
-					TrieDBBuilder::<H>::new(db, root)?.with_optional_recorder(recorder).build();
+			self.with_recorder_and_cache(Some(*root), |recorder, cache| {
+				let trie = TrieDBBuilder::<H>::new(db, root)?
+					.with_optional_recorder(recorder)
+					.with_optional_cache(cache)
+					.build();
 
 				let iter = if let Some(prefix) = prefix.as_ref() {
 					TrieDBKeyIterator::new_prefixed(&trie, prefix)?
@@ -541,9 +535,11 @@ where
 		allow_missing_nodes: bool,
 	) -> Result<bool> {
 		let mut iter = move |db| -> sp_std::result::Result<bool, Box<TrieError<H::Out>>> {
-			self.with_recorder_and_cache(|recorder, cache| {
-				let trie =
-					TrieDBBuilder::<H>::new(db, root)?.with_optional_recorder(recorder).build();
+			self.with_recorder_and_cache(Some(*root), |recorder, cache| {
+				let trie = TrieDBBuilder::<H>::new(db, root)?
+					.with_optional_recorder(recorder)
+					.with_optional_cache(cache)
+					.build();
 
 				let prefix = prefix.unwrap_or(&[]);
 				let iterator = if let Some(start_at) = start_at {
@@ -597,8 +593,9 @@ where
 	/// Returns all `(key, value)` pairs in the trie.
 	pub fn pairs(&self) -> Vec<(StorageKey, StorageValue)> {
 		let collect_all = || -> sp_std::result::Result<_, Box<TrieError<H::Out>>> {
-			self.with_recorder_and_cache(|recorder, cache| {
+			self.with_recorder_and_cache(None, |recorder, cache| {
 				let trie = TrieDBBuilder::<H>::new(self, self.root())?
+					.with_optional_cache(cache)
 					.with_optional_recorder(recorder)
 					.build();
 
@@ -624,8 +621,9 @@ where
 	/// Returns all keys that start with the given `prefix`.
 	pub fn keys(&self, prefix: &[u8]) -> Vec<StorageKey> {
 		let collect_all = || -> sp_std::result::Result<_, Box<TrieError<H::Out>>> {
-			self.with_recorder_and_cache(|recorder, cache| {
+			self.with_recorder_and_cache(None, |recorder, cache| {
 				let trie = TrieDBBuilder::<H>::new(self, self.root())?
+					.with_optional_cache(cache)
 					.with_optional_recorder(recorder)
 					.build();
 
@@ -653,21 +651,24 @@ where
 		state_version: StateVersion,
 	) -> (H::Out, S::Overlay) {
 		let mut write_overlay = S::Overlay::default();
-		let mut root = *self.root();
 
-		self.with_recorder_and_cache(|recorder, cache| {
+		let root = self.with_recorder_and_cache_for_storage_root(|recorder, cache| {
 			let mut eph = Ephemeral::new(self.backend_storage(), &mut write_overlay);
 			let res = match state_version {
-				StateVersion::V0 =>
-					delta_trie_root::<LayoutV0<H>, _, _, _, _, _>(&mut eph, root, delta, recorder),
+				StateVersion::V0 => delta_trie_root::<LayoutV0<H>, _, _, _, _, _>(
+					&mut eph, self.root, delta, recorder, cache,
+				),
 				StateVersion::V1 => delta_trie_root::<sp_trie::LayoutV1<H>, _, _, _, _, _>(
-					&mut eph, root, delta, recorder,
+					&mut eph, self.root, delta, recorder, cache,
 				),
 			};
 
 			match res {
-				Ok(ret) => root = ret,
-				Err(e) => warn!(target: "trie", "Failed to write to trie: {}", e),
+				Ok(ret) => (Some(ret), ret),
+				Err(e) => {
+					warn!(target: "trie", "Failed to write to trie: {}", e);
+					(None, self.root)
+				},
 			}
 		});
 
@@ -686,8 +687,7 @@ where
 			ChildType::ParentKeyId => empty_child_trie_root::<sp_trie::LayoutV1<H>>(),
 		};
 		let mut write_overlay = S::Overlay::default();
-		let prefixed_storage_key = child_info.prefixed_storage_key();
-		let mut root = match self.storage(prefixed_storage_key.as_slice()) {
+		let mut root = match self.child_root(child_info) {
 			Ok(value) => value
 				.and_then(|r| Decode::decode(&mut &r[..]).ok())
 				.unwrap_or_else(|| default_root.clone()),
@@ -697,7 +697,7 @@ where
 			},
 		};
 
-		self.with_recorder_and_cache(|recorder, cache| {
+		self.with_recorder_and_cache_for_storage_root(|recorder, cache| {
 			let mut eph = Ephemeral::new(self.backend_storage(), &mut write_overlay);
 			match match state_version {
 				StateVersion::V0 => child_delta_trie_root::<LayoutV0<H>, _, _, _, _, _, _>(
@@ -706,6 +706,7 @@ where
 					root,
 					delta,
 					recorder,
+					cache,
 				),
 				StateVersion::V1 =>
 					child_delta_trie_root::<sp_trie::LayoutV1<H>, _, _, _, _, _, _>(
@@ -714,10 +715,14 @@ where
 						root,
 						delta,
 						recorder,
+						cache,
 					),
 			} {
-				Ok(ret) => root = ret,
-				Err(e) => warn!(target: "trie", "Failed to write to trie: {}", e),
+				Ok(ret) => (Some(ret), ret),
+				Err(e) => {
+					warn!(target: "trie", "Failed to write to trie: {}", e);
+					(None, root)
+				},
 			}
 		});
 

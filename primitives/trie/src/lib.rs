@@ -55,7 +55,7 @@ pub use trie_db::{
 };
 use trie_db::{
 	proof::{generate_proof, verify_proof},
-	TrieRecorder,
+	TrieCache, TrieRecorder,
 };
 /// The Substrate format implementation of `TrieStream`.
 pub use trie_stream::TrieStream;
@@ -261,6 +261,7 @@ pub fn delta_trie_root<'a, L: TrieConfiguration, I, A, B, DB, V>(
 	mut root: TrieHash<L>,
 	delta: I,
 	recorder: Option<&mut dyn trie_db::TrieRecorder<TrieHash<L>>>,
+	cache: Option<&mut dyn TrieCache<L::Codec>>,
 ) -> Result<TrieHash<L>, Box<TrieError<L>>>
 where
 	I: IntoIterator<Item = (A, B)>,
@@ -293,8 +294,14 @@ pub fn read_trie_value<L: TrieLayout, DB: hash_db::HashDBRef<L::Hash, trie_db::D
 	db: &DB,
 	root: &TrieHash<L>,
 	key: &[u8],
+	recorder: Option<&mut dyn TrieRecorder<TrieHash<L>>>,
+	cache: Option<&mut dyn TrieCache<L::Codec>>,
 ) -> Result<Option<Vec<u8>>, Box<TrieError<L>>> {
-	TrieDBBuilder::<L>::new(&*db, root)?.build().get(key)
+	TrieDBBuilder::<L>::new_unchecked(&*db, root)
+		.with_optional_cache(cache)
+		.with_optional_recorder(recorder)
+		.build()
+		.get(key)
 }
 
 /// Read a value from the trie with given Query.
@@ -340,6 +347,7 @@ pub fn child_delta_trie_root<L: TrieConfiguration, I, A, B, DB, RD, V>(
 	root_data: RD,
 	delta: I,
 	recorder: Option<&mut dyn TrieRecorder<TrieHash<L>>>,
+	cache: Option<&mut dyn TrieCache<L::Codec>>,
 ) -> Result<<L::Hash as Hasher>::Out, Box<TrieError<L>>>
 where
 	I: IntoIterator<Item = (A, B)>,
@@ -354,7 +362,7 @@ where
 	root.as_mut().copy_from_slice(root_data.as_ref());
 
 	let mut db = KeySpacedDBMut::new(&mut *db, keyspace);
-	delta_trie_root::<L, _, _, _, _, _>(&mut db, root, delta, recorder)
+	delta_trie_root::<L, _, _, _, _, _>(&mut db, root, delta, recorder, cache)
 }
 
 /// Read a value from the child trie.
@@ -364,6 +372,7 @@ pub fn read_child_trie_value<L: TrieConfiguration, DB>(
 	root_slice: &[u8],
 	key: &[u8],
 	recorder: Option<&mut dyn TrieRecorder<TrieHash<L>>>,
+	cache: Option<&mut dyn TrieCache<L::Codec>>,
 ) -> Result<Option<Vec<u8>>, Box<TrieError<L>>>
 where
 	DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue>,
@@ -373,8 +382,9 @@ where
 	root.as_mut().copy_from_slice(root_slice);
 
 	let db = KeySpacedDB::new(&*db, keyspace);
-	TrieDBBuilder::<L>::new(&db, &root)?
+	TrieDBBuilder::<L>::new_unchecked(&db, &root)
 		.with_optional_recorder(recorder)
+		.with_optional_cache(cache)
 		.build()
 		.get(key)
 		.map(|x| x.map(|val| val.to_vec()))
