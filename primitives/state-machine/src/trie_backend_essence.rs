@@ -150,10 +150,7 @@ where
 
 		#[cfg(feature = "std")]
 		{
-			self.cache
-				.write()
-				.child_root
-				.insert(child_info.storage_key().to_vec(), result);
+			self.cache.write().child_root.insert(child_info.storage_key().to_vec(), result);
 		}
 
 		Ok(result)
