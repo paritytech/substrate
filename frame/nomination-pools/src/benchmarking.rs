@@ -25,8 +25,8 @@
 
 // // Create a bonded pool account, bonding `balance` and giving the account `balance * 2` free
 // // balance.
-// fn create_pool_account<T: Config>(n: u32, balance: BalanceOf<T>) -> (T::AccountId, T::AccountId) {
-// 	let pool_creator: T::AccountId =
+// fn create_pool_account<T: Config>(n: u32, balance: BalanceOf<T>) -> (T::AccountId, T::AccountId)
+// { 	let pool_creator: T::AccountId =
 // 		create_funded_user_with_balance::<T>("pool_creator", n, balance * 2u32.into());
 
 // 	Pools::<T>::create(
@@ -159,7 +159,6 @@
 // 			origin_weight
 // 		);
 
-
 // 		let max_additional = scenario.dest_weight.clone() - origin_weight;
 // 		let joiner_free = T::Currency::minimum_balance() + max_additional;
 
@@ -277,8 +276,8 @@
 // 		assert_eq!(T::Currency::free_balance(&joiner), min_join_bond);
 
 // 		// TODO: figure out if we can check anything else. Its tricky because the free balance hasn't
-// 		// changed and I don't we don't have an api from here to the unlocking chunks, or staking balance lock
-// 	}
+// 		// changed and I don't we don't have an api from here to the unlocking chunks, or staking balance
+// lock 	}
 
 // 	// TODO: setup a withdraw unbonded kill scenario, make variable over slashing spans
 // 	withdraw_unbonded_other {
@@ -384,8 +383,8 @@
 // 			.max(T::Currency::minimum_balance());
 // 		let (depositor, pool_account) = create_pool_account::<T>(0, min_create_bond);
 
-// 		// Create some accounts to nominate. For the sake of benchmarking they don't need to be actual validators
-// 		let validators: Vec<_> = (0..T::StakingInterface::max_nominations())
+// 		// Create some accounts to nominate. For the sake of benchmarking they don't need to be actual
+// validators 		let validators: Vec<_> = (0..T::StakingInterface::max_nominations())
 // 			.map(|i|
 // 				T::Lookup::unlookup(account("stash", USER_SEED, i))
 // 			)

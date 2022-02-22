@@ -81,25 +81,6 @@ impl sp_staking::StakingInterface for StakingMock {
 		Nominations::set(nominations);
 		Ok(())
 	}
-
-	fn max_nominations() -> u32 {
-		3
-	}
-
-	fn weight_update_worst_case(_: &Self::AccountId, is_increase: bool) -> u64 {
-		if is_increase {
-			u64::MAX / 2
-		} else {
-			MinCreateBond::<Runtime>::get()
-				.max(StakingMock::minimum_bond())
-				.try_into()
-				.unwrap()
-		}
-	}
-
-	fn set_current_era(era: EraIndex) {
-		CurrentEra::set(era);
-	}
 }
 
 impl frame_system::Config for Runtime {

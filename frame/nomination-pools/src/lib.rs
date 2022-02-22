@@ -1,15 +1,14 @@
 //! # Nomination Pools for Staking Delegation
 //!
 //! This pallet allows delegators to delegate their stake to nominating pools, each of which acts as
-//! a nominator and nominates validators on their behalf.
+//! a nominator and nominates validators on the delegators behalf.
 //!
-//! ## Design
+//! Index:
+//! * [Key terms](#key-terms)
+//! * [Usage](#usage)
+//! * [Design](#design)
 //!
-//! _Notes_: this section uses pseudo code to explain general design and does not necessarily
-//! reflect the exact implementation. Additionally, a strong knowledge of `pallet-staking`'s api is
-//! assumed.
-//!
-//! The delegation pool abstraction is composed of:
+//! ## Key terms
 //!
 //!  * bonded pool: Tracks the distribution of actively staked funds. See [`BondedPool`] and
 //! [`BondedPoolPoints`]
@@ -18,15 +17,99 @@
 //! * unbonding sub pools: Collection of pools at different phases of the unbonding lifecycle. See
 //!   [`SubPools`] and [`SubPoolsStorage`].
 //! * delegators: Accounts that are members of pools. See [`Delegator`] and [`Delegators`].
-// In order to maintain scalability, all operations are independent of the number of delegators. To
-// do this, we store delegation specific information local to the delegator while the pool data
-// structures have bounded datum.
-//
-// ### Design goals
-//
-// * Maintain integrity of slashing events, sufficiently penalizing delegators that where in the
-//   pool while it was backing a validator that got slashed.
-// * Maximize scalability in terms of delegator count.
+//! * point: A measure of a delegators portion of a pools funds.
+//!
+//! ## Usage
+//!
+//! ### Joining
+//!
+//! A account can stake funds with a nomination pool by calling [`Call::join`]. The amount to bond
+//! is transferred from the delegator to the pools account. Note that an account can only belong to
+//! one pool at a time.
+//!
+//! For more detailed docs see the [joining](#joining) section.
+//!
+//! ### Claiming rewards
+//!
+//! The delegator will earn rewards pro rata based on the delegators stake vs the sum of the
+//! delegators in the pools stake. In order to claim their share of rewards a delegator must call
+//! [`Call::claim_payout`]. A delegator can start claiming rewards in the era after they join.
+//! Rewards can be claimed at any time and do not "expire".
+//!
+//! For more detailed docs see the [reward pool](#reward-pool) section.
+//!
+//! ### Leaving
+//!
+//! In order to leave, a delegator must take two steps.
+//!
+//! First, they must call [`Call::unbond_other`]. The unbond other extrinsic will start the
+//! unbonding process by unbonding all of the delegators funds. Once
+//! [`sp_staking::StakingInterface::bonding_duration`] eras have passed, the delegator can call
+//! [`Call::withdraw_unbonded_other`] to withdraw all there funds.
+//!
+//! For more detailed docs see the [bonded pool](#bonded-pool) and [unbonding sub
+//! pools](#unbonding-sub-pools) sections.
+//!
+//! ### Slashes
+//!
+//! Slashes are distributed evenly across the bonded pool and the unbonding pools from slash era+1
+//! through the slash apply era. Thus, any delegator who either a) unbonded or b) was actively
+//! bonded in the aforementioned range of eras will be affected by the slash. A delegator is slashed
+//! pro-rata based on its stake relative to the total slash amount.
+//!
+//! For more detailed docs see the [slashing](#slashing) section.
+//!
+//! ### Adminstration
+//!
+//! A pool can be created with the [`Call::create`] call. Once created, the pools nominator or root
+//! users must call [`Call::nominate`] to start nominating. [`Call::nominate`] can be called at
+//! anytime to update validator selection.
+//!
+//! To help facilitate pool adminstration the pool has one of three states (see [`PoolState`]):
+//!
+//! * Open: Anyone can join the pool and no delegators can be permissionlessly removed.
+//! * Blocked: No delegators can join and some admin roles can kick delegators.
+//! * Destroying: No delegators can join and all delegators can be permissionlessly removed with
+//!   [`Call::unbond_other`] and [`Call::withdraw_unbonded_other`]. Once a pool is destroying state,
+//!   it cannot be reverted to another state.
+//!
+//! A pool has 3 administrative positions (see [`BondedPool`]):
+//!
+//! * Depositor: creates the pool and is the initial delegator. The can only leave pool once all
+//!   other delegators have left. Once they fully leave the pool is destroyed.
+//! * Nominator: can select which validators the pool nominates.
+//! * State-Toggler: can change the pools state and kick delegators if the pool is blocked.
+//! * Root: can change the nominator, state-toggler, or itself and can perform any of the actions
+//!   the nominator or state-toggler can.
+//!
+//! Note: if it is desired that any of the admin roles are not accessible, they can be set to an
+//! anonymous proxy account that has no proxies (and is thus provably keyless).
+//!
+//! **Relevant extrinsics:**
+//!
+//! * [`Call::create`]
+//! * [`Call::nominate`]
+//! * [`Call::unbond_other`]
+//! * [`Call::withdraw_unbonded_other`]
+//!
+//! ## Design
+//!
+//! _Notes_: this section uses pseudo code to explain general design and does not necessarily
+//! reflect the exact implementation. Additionally, a working knowledge of `pallet-staking`'s api is
+//! assumed.
+//! In order to maintain scalability, all operations are independent of the number of delegators. To
+//! do this, we store delegation specific information local to the delegator while the pool data
+//! structures have bounded datum.
+//!
+//! ### Goals
+//!
+//! * Maintain network security by upholding integrity of slashing events, sufficiently penalizing
+//!   delegators that where in the pool while it was backing a validator that got slashed.
+//! * Maximize scalability in terms of delegator count.
+//!
+//! In order to maintain scalability, all operations are independent of the number of delegators. To
+//! do this, delegation specific information is stored local to the delegator while the pool data
+//! structures have bounded datum.
 //!
 //! ### Bonded pool
 //!
@@ -130,6 +213,7 @@
 //! rewards for the active era despite not contributing to the pool's vote weight. If it joins
 //! after the election snapshot is taken it will benefit from the rewards of the next _2_ eras
 //! because it's vote weight will not be counted until the election snapshot in active era + 1.
+//! Related: https://github.com/paritytech/substrate/issues/10861
 //!
 //! **Relevant extrinsics:**
 //!
@@ -182,57 +266,30 @@
 //!
 //! ### Slashing
 //!
-//! Slashes are distributed evenly across the bonded pool and the unbonding pools from slash era+1
-//! through the slash apply era.
-//
-// Slashes are computed and executed by:
-//
-// 1) Balances of the bonded pool and the unbonding pools in range `slash_era +
-// 1..=apply_era` are summed and stored in `total_balance_affected`.
-// 2) `slash_ratio` is computed as `slash_amount / total_balance_affected`.
-// 3) `bonded_pool_balance_after_slash`is computed as `(1- slash_ratio) * bonded_pool_balance`.
-// 4) For all `unbonding_pool` in range `slash_era + 1..=apply_era` set their balance to `(1 -
-// slash_ratio) * unbonding_pool_balance`.
-//
-// Unbonding pools need to be slashed to ensure all nominators whom where in the bonded pool
-// while it was backing a validator that equivocated are punished. Without these measures a
-// nominator could unbond right after a validator equivocated with no consequences.
-//
-// This strategy is unfair to delegators who joined after the slash, because they get slashed as
-// well, but spares delegators who unbond. The latter is much more important for security: if a
-// pool's validators are attacking the network, their delegators need to unbond fast! Avoiding
-// slashes gives them an incentive to do that if validators get repeatedly slashed.
-//
-// To be fair to joiners, this implementation also need joining pools, which are actively staking,
-// in addition to the unbonding pools. For maintenance simplicity these are not implemented.
+//! Slashes are computed and executed by:
 //!
-//! ### Pool administration
+//! 1) Balances of the bonded pool and the unbonding pools in range `slash_era +
+//! 1..=apply_era` are summed and stored in `total_balance_affected`.
+//! 2) `slash_ratio` is computed as `slash_amount / total_balance_affected`.
+//! 3) `bonded_pool_balance_after_slash`is computed as `(1- slash_ratio) * bonded_pool_balance`.
+//! 4) For all `unbonding_pool` in range `slash_era + 1..=apply_era` set their balance to `(1 -
+//! slash_ratio) * unbonding_pool_balance`.
 //!
-//! To help facilitate pool adminstration the pool has one of three states (see [`PoolState`]):
+//! Unbonding pools need to be slashed to ensure all nominators whom where in the bonded pool
+//! while it was backing a validator that equivocated are punished. Without these measures a
+//! nominator could unbond right after a validator equivocated with no consequences.
 //!
-//! * Open: Anyone can join the pool and no delegators can be permissionlessly removed.
-//! * Blocked: No delegators can join and some admin roles can kick delegators.
-//! * Destroying: No delegators can join and all delegators can be permissionlessly removed. Once a
-//!   pool is destroying state, it cannot be reverted to another state.
+//! This strategy is unfair to delegators who joined after the slash, because they get slashed as
+//! well, but spares delegators who unbond. The latter is much more important for security: if a
+//! pool's validators are attacking the network, their delegators need to unbond fast! Avoiding
+//! slashes gives them an incentive to do that if validators get repeatedly slashed.
 //!
-//! A pool has 3 administrative positions (see [`BondedPool`]):
+//! To be fair to joiners, this implementation also need joining pools, which are actively staking,
+//! in addition to the unbonding pools. For maintenance simplicity these are not implemented. Related: https://github.com/paritytech/substrate/issues/10860
 //!
-//! * Depositor: creates the pool and is the initial delegator. The can only leave pool once all
-//!   other delegators have left. Once they fully leave the pool is destroyed.
-//! * Nominator: can select which validators the pool nominates.
-//! * State-Toggler: can change the pools state and kick delegators if the pool is blocked.
-//! * Root: can change the nominator, state-toggler, or itself and can perform any of the actions
-//!   the nominator or state-toggler can.
+//! **Relevant methods:**
 //!
-//! Note: if it is desired that any of the admin roles are not accessible, they can be set to an
-//! anonymous proxy account that has no proxies (and is thus provably keyless).
-//!
-//! **Relevant extrinsics:**
-//!
-//! * [`Call::create`]
-//! * [`Call::nominate`]
-//! * [`Call::unbond_other`]
-//! * [`Call::withdraw_unbonded_other`]
+//! * [`Pallet::do_slash`]
 //!
 //! ### Limitations
 //!

@@ -7,8 +7,9 @@ use frame_benchmarking::{account, frame_support::traits::Currency, vec, whitelis
 use frame_election_provider_support::SortedListProvider;
 use frame_support::ensure;
 use frame_system::RawOrigin as Origin;
-use pallet_nomination_pools::MinCreateBond;
-use pallet_nomination_pools::{BalanceOf, BondedPools, Delegators, MinJoinBond, Pallet as Pools};
+use pallet_nomination_pools::{
+	BalanceOf, BondedPools, Delegators, MinCreateBond, MinJoinBond, Pallet as Pools,
+};
 use sp_runtime::traits::{StaticLookup, Zero};
 use sp_staking::{EraIndex, StakingInterface};
 
@@ -79,8 +80,7 @@ struct ListScenario<T: pallet_nomination_pools::Config> {
 	origin1_delegator: Option<T::AccountId>,
 }
 
-impl<T: 
-Config> ListScenario<T> {
+impl<T: Config> ListScenario<T> {
 	/// An expensive scenario for bags-list implementation:
 	///
 	/// - the node to be updated (r) is the head of a bag that has at least one other node. The bag
@@ -343,11 +343,10 @@ frame_benchmarking::benchmarks! {
 		let s in 0 .. MAX_SPANS;
 		clear_storage::<T>();
 
-		// T::StakingInterface::add_slashing_spans(&stash, s);
 
 		let min_create_bond = MinCreateBond::<T>::get()
-			.max(T::StakingInterface::minimum_bond())
-			.max(CurrencyOf::<T>::minimum_balance());
+		.max(T::StakingInterface::minimum_bond())
+		.max(CurrencyOf::<T>::minimum_balance());
 		let (depositor, pool_account) = create_pool_account::<T>(0, min_create_bond);
 
 		// Add a new delegator
@@ -372,17 +371,24 @@ frame_benchmarking::benchmarks! {
 			T::StakingInterface::bonded_balance(&pool_account).unwrap(),
 			min_create_bond
 		);
+		assert_eq!(pallet_staking::Ledger::<T>::get(&pool_account).unwrap().unlocking.len(), 1);
 
 		// Set the current era to ensure we can withdraw unbonded funds
 		pallet_staking::CurrentEra::<T>::put(EraIndex::max_value());
 
-		// T::StakingInterface::add_slashing_spans(&pool_account, s);
+		pallet_staking::benchmarking::add_slashing_spans::<T>(&pool_account, s);
 		whitelist_account!(joiner);
-	}: _(Origin::Signed(joiner.clone()), joiner.clone(), 0)
+	}: _(Origin::Signed(joiner.clone()), joiner.clone(), s)
 	verify {
 		assert_eq!(
 			CurrencyOf::<T>::free_balance(&joiner),
 			min_join_bond * 2u32.into()
+		);
+		// The unlocking chunk was removed
+		assert_eq!(pallet_staking::Ledger::<T>::get(&pool_account).unwrap().unlocking.len(), 0);
+		assert_eq!(
+			SubPools::<T>::get(&pool_account),
+
 		);
 	}
 
