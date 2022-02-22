@@ -54,4 +54,4 @@ std = [
 runtime-benchmarks = ["frame-benchmarking"]
 try-runtime = ["frame-support/try-runtime"]
 
-remote-tests = [ "std", "serde", "thousands" ]
+remote-test = [ "std", "serde", "thousands" ]

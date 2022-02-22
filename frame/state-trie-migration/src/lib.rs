@@ -122,17 +122,17 @@ pub mod pallet {
 	#[codec(mel_bound(T: Config))]
 	#[scale_info(skip_type_params(T))]
 	pub struct MigrationTask<T: Config> {
-		/// The top key that we currently have to iterate.
+		/// The last top key that we migrated.
 		///
 		/// If it does not exist, it means that the migration is done and no further keys exist.
-		pub(crate) current_top: Option<Vec<u8>>,
+		pub(crate) last_top: Option<Vec<u8>>,
 		/// The last child key that we have processed.
 		///
-		/// This is a child key under the current `self.current_top`.
+		/// This is a child key under the current `self.last_top`.
 		///
 		/// If this is set, no further top keys are processed until the child key migration is
 		/// complete.
-		pub(crate) current_child: Option<Vec<u8>>,
+		pub(crate) last_child: Option<Vec<u8>>,
 
 		/// A marker to indicate if the previous tick was a child tree migration or not.
 		pub(crate) prev_tick_child: bool,
@@ -179,11 +179,11 @@ pub mod pallet {
 			f.debug_struct("MigrationTask")
 				.field(
 					"top",
-					&self.current_top.as_ref().map(|d| sp_core::hexdisplay::HexDisplay::from(d)),
+					&self.last_top.as_ref().map(|d| sp_core::hexdisplay::HexDisplay::from(d)),
 				)
 				.field(
 					"child",
-					&self.current_child.as_ref().map(|d| sp_core::hexdisplay::HexDisplay::from(d)),
+					&self.last_child.as_ref().map(|d| sp_core::hexdisplay::HexDisplay::from(d)),
 				)
 				.field("prev_tick_child", &self.prev_tick_child)
 				.field("dyn_top_items", &self.dyn_top_items)
@@ -199,8 +199,8 @@ pub mod pallet {
 	impl<T: Config> Default for MigrationTask<T> {
 		fn default() -> Self {
 			Self {
-				current_top: Some(Default::default()),
-				current_child: Default::default(),
+				last_top: Some(Default::default()),
+				last_child: Default::default(),
 				dyn_child_items: Default::default(),
 				dyn_top_items: Default::default(),
 				dyn_size: Default::default(),
@@ -216,14 +216,12 @@ pub mod pallet {
 	impl<T: Config> MigrationTask<T> {
 		/// Return true if the task is finished.
 		pub(crate) fn finished(&self) -> bool {
-			self.current_top.is_none() && self.current_child.is_none()
+			self.last_top.is_none() && self.last_child.is_none()
 		}
 
 		/// Check if there's any work left, or if we have exhausted the limits already.
 		fn exhausted(&self, limits: MigrationLimits) -> bool {
-			self.current_top.is_none() ||
-				self.dyn_total_items() >= limits.item ||
-				self.dyn_size >= limits.size
+			self.dyn_total_items() >= limits.item || self.dyn_size >= limits.size
 		}
 
 		/// get the total number of keys affected by the current task.
@@ -248,11 +246,8 @@ pub mod pallet {
 				return
 			}
 
-			loop {
+			while !self.exhausted(limits) && !self.finished() {
 				self.migrate_tick();
-				if self.exhausted(limits) {
-					break
-				}
 			}
 
 			// accumulate dynamic data into the storage items.
@@ -266,7 +261,7 @@ pub mod pallet {
 		///
 		/// This function is *the* core of this entire pallet.
 		fn migrate_tick(&mut self) {
-			match (self.current_top.as_ref(), self.current_child.as_ref()) {
+			match (self.last_top.as_ref(), self.last_child.as_ref()) {
 				(Some(_), Some(_)) => {
 					// we're in the middle of doing work on a child tree.
 					self.migrate_child();
@@ -290,25 +285,9 @@ pub mod pallet {
 							self.migrate_top();
 						},
 						(true, false) => {
-							// start going into a child key.
-							let maybe_first_child_key = {
-								// just in case there's some data in `&[]`, read it. Since we can't
-								// check this without reading the actual key, and given that this
-								// function should always read at most one key, we return after
-								// this. The rest of the migration should happen in the next tick.
-								let child_root = Pallet::<T>::transform_child_key_or_halt(top_key);
-								let _ = sp_io::default_child_storage::get(child_root, &[]);
-								sp_io::default_child_storage::next_key(child_root, &[])
-							};
-							if let Some(first_child_key) = maybe_first_child_key {
-								self.current_child = Some(first_child_key);
-								self.prev_tick_child = true;
-							} else {
-								// we have already done a (pretty useless) child key migration, just
-								// set the flag. Since we don't set the `self.current_child`, next
-								// tick will move forward to the next top key.
-								self.prev_tick_child = true;
-							}
+							self.last_child = Some(Default::default());
+							self.migrate_child();
+							self.prev_tick_child = true;
 						},
 						(true, true) => {
 							// we're done with migrating a child-root.
@@ -336,55 +315,60 @@ pub mod pallet {
 		///
 		/// It updates the dynamic counters.
 		fn migrate_child(&mut self) {
-			if self.current_child.is_none() || self.current_top.is_none() {
+			use sp_io::default_child_storage as child_io;
+			if self.last_child.is_none() || self.last_top.is_none() {
 				// defensive: this function is only called when both of these values exist.
 				// much that we can do otherwise..
 				frame_support::traits::defensive_path("cannot migrate child key.");
 				return
 			}
 
-			let last_child = self.current_child.as_ref().expect("value checked to be `Some`; qed");
-			let last_top = self.current_top.clone().expect("value checked to be `Some`; qed");
+			let last_child = self.last_child.as_ref().expect("value checked to be `Some`; qed");
+			let last_top = self.last_top.clone().expect("value checked to be `Some`; qed");
 
 			let child_root = Pallet::<T>::transform_child_key_or_halt(&last_top);
-			let added_size =
-				if let Some(data) = sp_io::default_child_storage::get(child_root, &last_child) {
-					self.dyn_size = self.dyn_size.saturating_add(data.len() as u32);
-					sp_io::default_child_storage::set(child_root, last_child, &data);
+			let maybe_current_child = child_io::next_key(child_root, last_child);
+			if let Some(ref current_child) = maybe_current_child {
+				let added_size = if let Some(data) = child_io::get(child_root, &current_child) {
+					child_io::set(child_root, current_child, &data);
 					data.len() as u32
 				} else {
 					Zero::zero()
 				};
+				self.dyn_size = self.dyn_size.saturating_add(added_size);
+				self.dyn_child_items.saturating_inc();
+			}
 
-			self.dyn_child_items.saturating_inc();
-			let next_key = sp_io::default_child_storage::next_key(child_root, last_child);
-			self.current_child = next_key;
-			log!(trace, "migrated a child key with size: {:?}, next task: {:?}", added_size, self,);
+			log!(trace, "migrated a child key, next_child_key: {:?}", maybe_current_child);
+			self.last_child = maybe_current_child;
 		}
 
 		/// Migrate the current top key, setting it to its new value, if one exists.
 		///
 		/// It updates the dynamic counters.
 		fn migrate_top(&mut self) {
-			if self.current_top.is_none() {
+			if self.last_top.is_none() {
 				// defensive: this function is only called when this value exist.
 				// much that we can do otherwise..
 				frame_support::traits::defensive_path("cannot migrate top key.");
 				return
 			}
-			let last_top = self.current_top.as_ref().expect("value checked to be `Some`; qed");
-			let added_size = if let Some(data) = sp_io::storage::get(&last_top) {
-				self.dyn_size = self.dyn_size.saturating_add(data.len() as u32);
-				sp_io::storage::set(last_top, &data);
-				data.len() as u32
-			} else {
-				Zero::zero()
-			};
+			let last_top = self.last_top.as_ref().expect("value checked to be `Some`; qed");
 
-			self.dyn_top_items.saturating_inc();
-			let next_key = sp_io::storage::next_key(last_top);
-			self.current_top = next_key;
-			log!(trace, "migrated a top key with size {}, next_task = {:?}", added_size, self);
+			let maybe_current_top = sp_io::storage::next_key(last_top);
+			if let Some(ref current_top) = maybe_current_top {
+				let added_size = if let Some(data) = sp_io::storage::get(&current_top) {
+					sp_io::storage::set(&current_top, &data);
+					data.len() as u32
+				} else {
+					Zero::zero()
+				};
+				self.dyn_size = self.dyn_size.saturating_add(added_size);
+				self.dyn_top_items.saturating_inc();
+			}
+
+			log!(trace, "migrated a top key, next_top_key = {:?}", maybe_current_top);
+			self.last_top = maybe_current_top;
 		}
 	}
 
@@ -806,7 +790,7 @@ mod benchmarks {
 		continue_migrate_wrong_witness {
 			let null = MigrationLimits::default();
 			let caller = frame_benchmarking::whitelisted_caller();
-			let bad_witness = MigrationTask { current_top: Some(vec![1u8]), ..Default::default() };
+			let bad_witness = MigrationTask { last_top: Some(vec![1u8]), ..Default::default() };
 		}: {
 			assert!(
 				StateTrieMigration::<T>::continue_migrate(
@@ -1062,7 +1046,33 @@ mod test {
 	}
 
 	#[test]
-	fn detects_first_child_key() {
+	fn detects_value_in_empty_top_key() {
+		let limit = MigrationLimits { item: 1, size: 1000 };
+		let mut ext = new_test_ext(StateVersion::V0, false);
+
+		let root_upgraded = ext.execute_with(|| {
+			sp_io::storage::set(&[], &vec![66u8; 77]);
+
+			AutoLimits::<Test>::put(Some(limit));
+			let root = run_to_block(30).0;
+
+			// eventually everything is over.
+			assert!(StateTrieMigration::migration_process().finished());
+			root
+		});
+
+		let mut ext2 = new_test_ext(StateVersion::V1, false);
+		let root = ext2.execute_with(|| {
+			sp_io::storage::set(&[], &vec![66u8; 77]);
+			AutoLimits::<Test>::put(Some(limit));
+			run_to_block(30).0
+		});
+
+		assert_eq!(root, root_upgraded);
+	}
+
+	#[test]
+	fn detects_value_in_first_child_key() {
 		use frame_support::storage::child;
 		let limit = MigrationLimits { item: 1, size: 1000 };
 		let mut ext = new_test_ext(StateVersion::V0, false);
@@ -1074,10 +1084,7 @@ mod test {
 			let root = run_to_block(30).0;
 
 			// eventually everything is over.
-			assert!(matches!(
-				StateTrieMigration::migration_process(),
-				MigrationTask { current_child: None, current_top: None, .. }
-			));
+			assert!(StateTrieMigration::migration_process().finished());
 			root
 		});
 
@@ -1111,7 +1118,7 @@ mod test {
 				// eventually everything is over.
 				assert!(matches!(
 					StateTrieMigration::migration_process(),
-					MigrationTask { current_child: None, current_top: None, .. }
+					MigrationTask { last_child: None, last_top: None, .. }
 				));
 				root
 			});
@@ -1173,7 +1180,7 @@ mod test {
 					Origin::signed(1),
 					MigrationLimits { item: 5, size: 100 },
 					100,
-					MigrationTask { current_top: Some(vec![1u8]), ..Default::default() }
+					MigrationTask { last_top: Some(vec![1u8]), ..Default::default() }
 				),
 				Error::<Test>::BadWitness
 			);
@@ -1418,7 +1425,7 @@ pub(crate) mod remote_tests {
 	}
 }
 
-#[cfg(all(test, feature = "remote-tests"))]
+#[cfg(all(test, feature = "remote-test"))]
 mod remote_tests_local {
 	use super::{
 		mock::{Call as MockCall, *},
