@@ -156,9 +156,7 @@ where
 		} = worker_params;
 
 		let last_finalized_header = client
-			.header(BlockId::number(client.info().finalized_number))
-			// TODO: is this proof correct in all cases?
-			.expect("latest block always has header available; qed.")
+			.expect_header(BlockId::number(client.info().finalized_number))
 			.expect("latest block always has header available; qed.");
 
 		BeefyWorker {
@@ -195,7 +193,7 @@ where
 		let rounds = if let Some(r) = &self.rounds {
 			r
 		} else {
-			error!(target: "beefy", "🥩 No voting round started");
+			debug!(target: "beefy", "🥩 No voting round started");
 			return None
 		};
 
