@@ -27,7 +27,7 @@ use sp_blockchain::{HeaderBackend, HeaderMetadata};
 use sp_consensus_aura::{
 	digests::CompatibleDigestItem,
 	sr25519::{AuthorityId, AuthoritySignature},
-	AuraApi, SlotDuration,
+	AuraApi, Slot, SlotDuration,
 };
 use sp_inherents::InherentData;
 use sp_runtime::{traits::Block as BlockT, Digest, DigestItem};
@@ -75,13 +75,15 @@ where
 		_parent: &B::Header,
 		inherents: &InherentData,
 	) -> Result<Digest, Error> {
-		let time_stamp =
-			*inherents.timestamp_inherent_data()?.expect("Timestamp is always present; qed");
+		let timestamp =
+			inherents.timestamp_inherent_data()?.expect("Timestamp is always present; qed");
+
 		// we always calculate the new slot number based on the current time-stamp and the slot
 		// duration.
 		let digest_item = <DigestItem as CompatibleDigestItem<AuthoritySignature>>::aura_pre_digest(
-			(time_stamp / self.slot_duration.as_millis() as u64).into(),
+			Slot::from_timestamp(timestamp, self.slot_duration),
 		);
+
 		Ok(Digest { logs: vec![digest_item] })
 	}
 

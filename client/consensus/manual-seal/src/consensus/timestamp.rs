@@ -28,7 +28,7 @@ use sp_consensus_aura::{
 	AuraApi,
 };
 use sp_consensus_babe::BabeApi;
-use sp_consensus_slots::SlotDuration;
+use sp_consensus_slots::{Slot, SlotDuration};
 use sp_inherents::{InherentData, InherentDataProvider, InherentIdentifier};
 use sp_runtime::{
 	generic::BlockId,
@@ -126,8 +126,11 @@ impl SlotTimestampProvider {
 	}
 
 	/// Get the current slot number
-	pub fn slot(&self) -> u64 {
-		self.unix_millis.load(atomic::Ordering::SeqCst) / self.slot_duration.as_millis() as u64
+	pub fn slot(&self) -> Slot {
+		Slot::from_timestamp(
+			self.unix_millis.load(atomic::Ordering::SeqCst).into(),
+			self.slot_duration,
+		)
 	}
 
 	/// Gets the current time stamp.

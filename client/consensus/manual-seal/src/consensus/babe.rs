@@ -285,15 +285,17 @@ where
 			let timestamp = inherents
 				.timestamp_inherent_data()?
 				.ok_or_else(|| Error::StringError("No timestamp inherent data".into()))?;
-			let slot = *timestamp / self.config.slot_duration().as_millis() as u64;
+
+			let slot = Slot::from_timestamp(timestamp, self.config.slot_duration());
+
 			// manually hard code epoch descriptor
 			epoch_descriptor = match epoch_descriptor {
 				ViableEpochDescriptor::Signaled(identifier, _header) =>
 					ViableEpochDescriptor::Signaled(
 						identifier,
 						EpochHeader {
-							start_slot: slot.into(),
-							end_slot: (slot * self.config.genesis_config().epoch_length).into(),
+							start_slot: slot,
+							end_slot: (*slot * self.config.genesis_config().epoch_length).into(),
 						},
 					),
 				_ => unreachable!(

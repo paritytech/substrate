@@ -62,9 +62,7 @@ impl InherentDataProvider {
 		timestamp: sp_timestamp::Timestamp,
 		slot_duration: sp_consensus_slots::SlotDuration,
 	) -> Self {
-		let slot = InherentType::from(
-			(timestamp.as_duration().as_millis() / slot_duration.as_millis()) as u64,
-		);
+		let slot = InherentType::from_timestamp(timestamp, slot_duration);
 
 		Self { slot }
 	}
