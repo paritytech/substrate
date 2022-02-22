@@ -42,8 +42,14 @@ impl Timestamp {
 	}
 
 	/// Returns `self` as [`Duration`].
-	pub fn as_duration(self) -> Duration {
+	pub const fn as_duration(self) -> Duration {
 		Duration::from_millis(self.0)
+	}
+
+	/// Returns `self` as a `u64` representing the elapsed time since the UNIX_EPOCH in
+	/// milliseconds.
+	pub const fn as_millis(&self) -> u64 {
+		self.0
 	}
 
 	/// Checked subtraction that returns `None` on an underflow.
