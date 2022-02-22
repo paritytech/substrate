@@ -166,7 +166,8 @@ where
 			signed_commitment_sender,
 			gossip_engine: Arc::new(Mutex::new(gossip_engine)),
 			gossip_validator,
-			min_block_delta,
+			// always target at least one block better than current best beefy
+			min_block_delta: min_block_delta.max(1),
 			metrics,
 			rounds: None,
 			finality_notifications: client.finality_notification_stream(),
@@ -198,6 +199,7 @@ where
 		};
 
 		let best_finalized = *self.best_grandpa_block_header.number();
+		// `target` is guaranteed > `best_beefy` since `min_block_delta` is at least `1`.
 		let target = vote_target(
 			best_finalized,
 			self.best_beefy_block,
@@ -208,7 +210,8 @@ where
 
 		trace!(target: "beefy", "🥩 best finalized: #{:?}, next_block_to_vote_on: #{:?}", best_finalized, target);
 
-		// Don't vote for targets until they've been finalized.
+		// Don't vote for targets until they've been finalized
+		// (`target` can be > `best_finalized` when `self.min_block_delta` is big enough).
 		if target > best_finalized {
 			None
 		} else {
@@ -449,12 +452,9 @@ where
 			};
 			let payload = Payload::new(known_payload_ids::MMR_ROOT_ID, mmr_root.encode());
 
-			// Don't double vote (same payload and number).
-			//
-			// NOTE: we could short-circuit much earlier if we'd only check for block number (not
-			// also payload)...
 			if let Some(rounds) = &self.rounds {
 				if !rounds.should_vote(&(payload.clone(), target_number)) {
+					debug!(target: "beefy", "🥩 Don't double vote for block number: {:?}", target_number);
 					return
 				}
 			};
