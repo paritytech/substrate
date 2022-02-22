@@ -8,10 +8,13 @@ use frame_election_provider_support::SortedListProvider;
 use frame_support::ensure;
 use frame_system::RawOrigin as Origin;
 use pallet_nomination_pools::{
-	BalanceOf, BondedPools, Delegators, MinCreateBond, MinJoinBond, Pallet as Pools,
+	BalanceOf, BondedPoolStorage, BondedPools, Delegators, MinCreateBond, MinJoinBond,
+	Pallet as Pools, PoolState, RewardPools, SubPools, SubPoolsStorage, SubPoolsWithEra,
+	UnbondPool,
 };
 use sp_runtime::traits::{StaticLookup, Zero};
 use sp_staking::{EraIndex, StakingInterface};
+use frame_support::traits::Get;
 
 // `frame_benchmarking::benchmarks!` macro code needs this
 use pallet_nomination_pools::Call;
@@ -386,95 +389,91 @@ frame_benchmarking::benchmarks! {
 		);
 		// The unlocking chunk was removed
 		assert_eq!(pallet_staking::Ledger::<T>::get(&pool_account).unwrap().unlocking.len(), 0);
-		assert_eq!(
-			SubPools::<T>::get(&pool_account),
+	}
 
+	create {
+		clear_storage::<T>();
+
+		let min_create_bond = MinCreateBond::<T>::get()
+			.max(T::StakingInterface::minimum_bond())
+			.max(CurrencyOf::<T>::minimum_balance());
+		let depositor: T::AccountId = account("depositor", USER_SEED, 0);
+
+		// Give the depositor some balance to bond
+		CurrencyOf::<T>::make_free_balance_be(&depositor, min_create_bond * 2u32.into());
+
+		// Make sure no pools exist as a pre-condition for our verify checks
+		assert_eq!(RewardPools::<T>::count(), 0);
+		assert_eq!(BondedPools::<T>::count(), 0);
+
+		whitelist_account!(depositor);
+	}: _(
+			Origin::Signed(depositor.clone()),
+			min_create_bond,
+			0,
+			depositor.clone(),
+			depositor.clone(),
+			depositor.clone()
+		)
+	verify {
+		assert_eq!(RewardPools::<T>::count(), 1);
+		assert_eq!(BondedPools::<T>::count(), 1);
+		let (pool_account, new_pool) = BondedPools::<T>::iter().next().unwrap();
+		assert_eq!(
+			new_pool,
+			BondedPoolStorage {
+				points: min_create_bond,
+				depositor: depositor.clone(),
+				root: depositor.clone(),
+				nominator: depositor.clone(),
+				state_toggler: depositor.clone(),
+				state: PoolState::Open,
+			}
+		);
+		assert_eq!(
+			T::StakingInterface::bonded_balance(&pool_account),
+			Some(min_create_bond)
 		);
 	}
 
-// 	create {
-// 		clear_storage::<T>();
+	nominate {
+		clear_storage::<T>();
 
-// 		let min_create_bond = MinCreateBond::<T>::get()
-// 			.max(T::StakingInterface::minimum_bond())
-// 			.max(T::Currency::minimum_balance());
-// 		let depositor: T::AccountId = account("depositor", USER_SEED, 0);
+		// Create a pool
+		let min_create_bond = MinCreateBond::<T>::get()
+			.max(T::StakingInterface::minimum_bond())
+			.max(CurrencyOf::<T>::minimum_balance());
+		let (depositor, pool_account) = create_pool_account::<T>(0, min_create_bond);
 
-// 		// Give the depositor some balance to bond
-// 		T::Currency::make_free_balance_be(&depositor, min_create_bond * 2u32.into());
+		// Create some accounts to nominate. For the sake of benchmarking they don't need to be actual validators
+		 let validators: Vec<_> = (0..T::MaxNominations::get())
+			.map(|i|
+				T::Lookup::unlookup(account("stash", USER_SEED, i))
+			)
+			.collect();
 
-// 		// Make sure no pools exist as a pre-condition for our verify checks
-// 		assert_eq!(RewardPools::<T>::count(), 0);
-// 		assert_eq!(BondedPools::<T>::count(), 0);
-
-// 		whitelist_account!(depositor);
-// 	}: _(
-// 			Origin::Signed(depositor.clone()),
-// 			min_create_bond,
-// 			0,
-// 			depositor.clone(),
-// 			depositor.clone(),
-// 			depositor.clone()
-// 		)
-// 	verify {
-// 		assert_eq!(RewardPools::<T>::count(), 1);
-// 		assert_eq!(BondedPools::<T>::count(), 1);
-// 		let (pool_account, new_pool) = BondedPools::<T>::iter().next().unwrap();
-// 		assert_eq!(
-// 			new_pool,
-// 			BondedPoolStorage {
-// 				points: min_create_bond,
-// 				depositor: depositor.clone(),
-// 				root: depositor.clone(),
-// 				nominator: depositor.clone(),
-// 				state_toggler: depositor.clone(),
-// 				state: PoolState::Open,
-// 			}
-// 		);
-// 		assert_eq!(
-// 			T::StakingInterface::bonded_balance(&pool_account),
-// 			Some(min_create_bond)
-// 		);
-// 	}
-
-// 	nominate {
-// 		clear_storage::<T>();
-
-// 		// Create a pool
-// 		let min_create_bond = MinCreateBond::<T>::get()
-// 			.max(T::StakingInterface::minimum_bond())
-// 			.max(T::Currency::minimum_balance());
-// 		let (depositor, pool_account) = create_pool_account::<T>(0, min_create_bond);
-
-// 		// Create some accounts to nominate. For the sake of benchmarking they don't need to be actual
-// validators 		let validators: Vec<_> = (0..T::MaxNominations::get())
-// 			.map(|i|
-// 				T::Lookup::unlookup(account("stash", USER_SEED, i))
-// 			)
-// 			.collect();
-
-// 		whitelist_account!(depositor);
-// 	}:_(Origin::Signed(depositor.clone()), pool_account, validators)
-// 	verify {
-// 		assert_eq!(RewardPools::<T>::count(), 1);
-// 		assert_eq!(BondedPools::<T>::count(), 1);
-// 		let (pool_account, new_pool) = BondedPools::<T>::iter().next().unwrap();
-// 		assert_eq!(
-// 			new_pool,
-// 			BondedPoolStorage {
-// 				points: min_create_bond,
-// 				depositor: depositor.clone(),
-// 				root: depositor.clone(),
-// 				nominator: depositor.clone(),
-// 				state_toggler: depositor.clone(),
-// 				state: PoolState::Open,
-// 			}
-// 		);
-// 		assert_eq!(
-// 			T::StakingInterface::bonded_balance(&pool_account),
-// 			Some(min_create_bond)
-// 		);
-// 	}
+		whitelist_account!(depositor);
+	}:_(Origin::Signed(depositor.clone()), pool_account, validators)
+	verify {
+		assert_eq!(RewardPools::<T>::count(), 1);
+		assert_eq!(BondedPools::<T>::count(), 1);
+		let (pool_account, new_pool) = BondedPools::<T>::iter().next().unwrap();
+		assert_eq!(
+			new_pool,
+			BondedPoolStorage {
+				points: min_create_bond,
+				depositor: depositor.clone(),
+				root: depositor.clone(),
+				nominator: depositor.clone(),
+				state_toggler: depositor.clone(),
+				state: PoolState::Open,
+			}
+		);
+		assert_eq!(
+			T::StakingInterface::bonded_balance(&pool_account),
+			Some(min_create_bond)
+		);
+	}
 }
 
 frame_benchmarking::impl_benchmark_test_suite!(

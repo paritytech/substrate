@@ -24,8 +24,8 @@
 //! ### Joining
 //!
 //! A account can stake funds with a nomination pool by calling [`Call::join`]. The amount to bond
-//! is transferred from the delegator to the pools account. Note that an account can only belong to
-//! one pool at a time.
+//! is transferred from the delegator to the pools account and immediately increases the pools bond.
+//! Note that an account can only belong to one pool at a time.
 //!
 //! For more detailed docs see the [joining](#joining) section.
 //!
@@ -33,8 +33,8 @@
 //!
 //! The delegator will earn rewards pro rata based on the delegators stake vs the sum of the
 //! delegators in the pools stake. In order to claim their share of rewards a delegator must call
-//! [`Call::claim_payout`]. A delegator can start claiming rewards in the era after they join.
-//! Rewards can be claimed at any time and do not "expire".
+//! [`Call::claim_payout`]. A delegator can start claiming rewards in the era after they join;
+//! rewards can be claimed periodically at any time after that and do not "expire".
 //!
 //! For more detailed docs see the [reward pool](#reward-pool) section.
 //!
@@ -43,9 +43,10 @@
 //! In order to leave, a delegator must take two steps.
 //!
 //! First, they must call [`Call::unbond_other`]. The unbond other extrinsic will start the
-//! unbonding process by unbonding all of the delegators funds. Once
-//! [`sp_staking::StakingInterface::bonding_duration`] eras have passed, the delegator can call
-//! [`Call::withdraw_unbonded_other`] to withdraw all there funds.
+//! unbonding process by unbonding all of the delegators funds.
+//!
+//! Second, Once [`sp_staking::StakingInterface::bonding_duration`] eras have passed, the delegator
+//! can call [`Call::withdraw_unbonded_other`] to withdraw all there funds.
 //!
 //! For more detailed docs see the [bonded pool](#bonded-pool) and [unbonding sub
 //! pools](#unbonding-sub-pools) sections.
@@ -62,7 +63,7 @@
 //! ### Adminstration
 //!
 //! A pool can be created with the [`Call::create`] call. Once created, the pools nominator or root
-//! users must call [`Call::nominate`] to start nominating. [`Call::nominate`] can be called at
+//! user must call [`Call::nominate`] to start nominating. [`Call::nominate`] can be called at
 //! anytime to update validator selection.
 //!
 //! To help facilitate pool adminstration the pool has one of three states (see [`PoolState`]):
@@ -313,7 +314,6 @@
 //   a pool is flipped to a destroying state it cannot change its state.
 
 // TODO
-// - Write user top level docs and make the design docs internal
 // - Refactor staking slashing to always slash unlocking chunks (then back port)
 // - backport making ledger generic over ^^ IDEA: maybe staking can slash unlocking chunks, and then
 //   pools is passed the updated unlocking chunks and makes updates based on that
@@ -352,7 +352,7 @@ pub use weights::WeightInfo;
 
 pub type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
-type SubPoolsWithEra<T> = BoundedBTreeMap<EraIndex, UnbondPool<T>, TotalUnbondingPools<T>>;
+pub type SubPoolsWithEra<T> = BoundedBTreeMap<EraIndex, UnbondPool<T>, TotalUnbondingPools<T>>;
 // NOTE: this assumes the balance type u128 or smaller.
 type RewardPoints = U256;
 
@@ -420,7 +420,7 @@ pub struct Delegator<T: Config> {
 	pub unbonding_era: Option<EraIndex>,
 }
 
-/// All of a pool's possible states.
+/// A pool's possible states.
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, PartialEq, RuntimeDebugNoBound)]
 #[cfg_attr(feature = "std", derive(Clone))]
 pub enum PoolState {
