@@ -61,6 +61,29 @@ impl<B: Block> KnownVotes<B> {
 	pub fn new() -> Self {
 		Self { last_done: None, live: BTreeMap::new() }
 	}
+
+	/// Create new round votes set if not already present.
+	///
+	/// Only [`MAX_LIVE_GOSSIP_ROUNDS`] most **recent** voting rounds sets are kept.
+	pub fn insert(&mut self, round: NumberFor<B>) {
+		let live = &mut self.live;
+
+		if !live.contains_key(&round) {
+			live.insert(round, Default::default());
+		}
+
+		if live.len() > MAX_LIVE_GOSSIP_ROUNDS {
+			let to_remove = live.iter().next().map(|x| x.0).copied();
+			if let Some(first) = to_remove {
+				self.remove(first.clone());
+			}
+		}
+	}
+
+	pub fn remove(&mut self, round: NumberFor<B>) {
+		self.live.remove(&round);
+		self.last_done = self.last_done.max(Some(round));
+	}
 }
 
 /// BEEFY gossip validator
@@ -100,26 +123,7 @@ where
 	/// As long as a voting round is live, it will be gossiped to peer nodes.
 	pub(crate) fn note_round(&self, round: NumberFor<B>) {
 		debug!(target: "beefy", "🥩 About to note gossip round #{}", round);
-
-		let mut to_drop = None;
-		{
-			let mut known_votes = self.known_votes.write();
-			let live = &mut known_votes.live;
-
-			if !live.contains_key(&round) {
-				live.insert(round, Default::default());
-			}
-
-			if live.len() > MAX_LIVE_GOSSIP_ROUNDS {
-				let to_remove = live.iter().next().map(|x| x.0).copied();
-				if let Some(first) = to_remove {
-					to_drop = Some(first);
-				}
-			}
-		}
-		if let Some(to_drop) = to_drop {
-			self.drop_round(to_drop);
-		}
+		self.known_votes.write().insert(round);
 	}
 
 	/// Drop a voting round.
@@ -127,22 +131,10 @@ where
 	/// This can be called once round is complete so we stop gossiping for it.
 	pub(crate) fn drop_round(&self, round: NumberFor<B>) {
 		debug!(target: "beefy", "🥩 About to drop gossip round #{}", round);
-		let mut known_votes = self.known_votes.write();
-		known_votes.live.remove(&round);
-		known_votes.last_done = known_votes.last_done.max(Some(round));
+		self.known_votes.write().remove(round);
 	}
 
-	fn add_known(known_votes: &mut KnownVotes<B>, round: &NumberFor<B>, hash: MessageHash) {
-		known_votes.live.get_mut(round).map(|known| known.insert(hash));
-	}
-
-	// Note that we will always keep the most recent unseen round alive.
-	//
-	// This is a preliminary fix and the detailed description why we are
-	// doing this can be found as part of the issue below
-	//
-	// https://github.com/paritytech/grandpa-bridge-gadget/issues/237
-	//
+	// Return true if `round` is live or if it is newer than previously seen rounds.
 	fn is_live(known_votes: &KnownVotes<B>, round: &NumberFor<B>) -> bool {
 		let unseen_round = if let Some(max_known_round) = known_votes.live.keys().last() {
 			round > max_known_round
@@ -153,6 +145,12 @@ where
 		unseen_round || known_votes.live.contains_key(round)
 	}
 
+	// Add new _known_ `hash` to the round's known votes.
+	fn add_known(known_votes: &mut KnownVotes<B>, round: &NumberFor<B>, hash: MessageHash) {
+		known_votes.live.get_mut(round).map(|known| known.insert(hash));
+	}
+
+	// Check if `hash` is already part of round's known votes.
 	fn is_known(known_votes: &KnownVotes<B>, round: &NumberFor<B>, hash: &MessageHash) -> bool {
 		known_votes.live.get(round).map(|known| known.contains(hash)).unwrap_or(false)
 	}
