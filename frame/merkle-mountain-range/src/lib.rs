@@ -175,9 +175,18 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
 		fn on_initialize(_n: T::BlockNumber) -> Weight {
-			use primitives::LeafDataProvider;
 			let leaves = Self::mmr_leaves();
 			let peaks_before = mmr::utils::NodesUtils::new(leaves).number_of_peaks();
+			let peaks_after = mmr::utils::NodesUtils::new(leaves).number_of_peaks();
+
+			T::WeightInfo::on_initialize(peaks_before.max(peaks_after))
+		}
+
+		// produce leaf_data on_finalize instead of on_initialize because leaf
+		// data might not have changed before on_initialize gets called
+		fn on_finalize(_n: BlockNumberFor<T>) {
+			use primitives::LeafDataProvider;
+			let leaves = Self::mmr_leaves();
 			let data = T::LeafData::leaf_data();
 			// append new leaf to MMR
 			let mut mmr: ModuleMmr<mmr::storage::RuntimeStorage, T, I> = mmr::Mmr::new(leaves);
@@ -189,9 +198,6 @@ pub mod pallet {
 
 			<NumberOfLeaves<T, I>>::put(leaves);
 			<RootHash<T, I>>::put(root);
-
-			let peaks_after = mmr::utils::NodesUtils::new(leaves).number_of_peaks();
-			T::WeightInfo::on_initialize(peaks_before.max(peaks_after))
 		}
 	}
 }
