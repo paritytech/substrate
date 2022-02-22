@@ -114,10 +114,7 @@ pub async fn seal_block<B, BI, SC, C, E, TP, CIDP>(
 
 		let inherent_data = inherent_data_providers.create_inherent_data()?;
 
-		let proposer = env
-			.init(&parent)
-			.map_err(|err| Error::StringError(format!("{:?}", err)))
-			.await?;
+		let proposer = env.init(&parent).map_err(|err| Error::StringError(err.to_string())).await?;
 		let inherents_len = inherent_data.len();
 
 		let digest = if let Some(digest_provider) = digest_provider {
@@ -133,7 +130,7 @@ pub async fn seal_block<B, BI, SC, C, E, TP, CIDP>(
 				Duration::from_secs(MAX_PROPOSAL_DURATION),
 				None,
 			)
-			.map_err(|err| Error::StringError(format!("{:?}", err)))
+			.map_err(|err| Error::StringError(err.to_string()))
 			.await?;
 
 		if proposal.block.extrinsics().len() == inherents_len && !create_empty {

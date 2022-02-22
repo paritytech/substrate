@@ -165,7 +165,7 @@ impl BenchmarkCmd {
 			sp_core::testing::TaskExecutor::new(),
 		)
 		.execute(strategy.into())
-		.map_err(|e| format!("Error getting benchmark list: {:?}", e))?;
+		.map_err(|e| format!("Error getting benchmark list: {}", e))?;
 
 		let (list, storage_info) =
 			<(Vec<BenchmarkList>, Vec<StorageInfo>) as Decode>::decode(&mut &result[..])
@@ -265,7 +265,7 @@ impl BenchmarkCmd {
 					)
 					.execute(strategy.into())
 					.map_err(|e| {
-						format!("Error executing and verifying runtime benchmark: {:?}", e)
+						format!("Error executing and verifying runtime benchmark: {}", e)
 					})?;
 				}
 				// Do one loop of DB tracking.
@@ -290,7 +290,7 @@ impl BenchmarkCmd {
 						sp_core::testing::TaskExecutor::new(),
 					)
 					.execute(strategy.into())
-					.map_err(|e| format!("Error executing runtime benchmark: {:?}", e))?;
+					.map_err(|e| format!("Error executing runtime benchmark: {}", e))?;
 
 					let batch =
 						<std::result::Result<Vec<BenchmarkBatch>, String> as Decode>::decode(
@@ -322,7 +322,7 @@ impl BenchmarkCmd {
 						sp_core::testing::TaskExecutor::new(),
 					)
 					.execute(strategy.into())
-					.map_err(|e| format!("Error executing runtime benchmark: {:?}", e))?;
+					.map_err(|e| format!("Error executing runtime benchmark: {}", e))?;
 
 					let batch =
 						<std::result::Result<Vec<BenchmarkBatch>, String> as Decode>::decode(

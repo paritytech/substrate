@@ -27,7 +27,7 @@ sp-storage = { version = "5.0.0", path = "../../primitives/storage", default-fea
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 log = { version = "0.4.14", default-features = false }
-serde = { version = "1.0.132", optional = true }
+serde = { version = "1.0.136", optional = true }
 
 [dev-dependencies]
 hex-literal = "0.3.4"

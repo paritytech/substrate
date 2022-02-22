@@ -314,25 +314,32 @@ pub mod pallet {
 			let new_free = if wipeout { Zero::zero() } else { new_free };
 			let new_reserved = if wipeout { Zero::zero() } else { new_reserved };
 
-			let (free, reserved) = Self::mutate_account(&who, |account| {
-				if new_free > account.free {
-					mem::drop(PositiveImbalance::<T, I>::new(new_free - account.free));
-				} else if new_free < account.free {
-					mem::drop(NegativeImbalance::<T, I>::new(account.free - new_free));
-				}
-
-				if new_reserved > account.reserved {
-					mem::drop(PositiveImbalance::<T, I>::new(new_reserved - account.reserved));
-				} else if new_reserved < account.reserved {
-					mem::drop(NegativeImbalance::<T, I>::new(account.reserved - new_reserved));
-				}
+			// First we try to modify the account's balance to the forced balance.
+			let (old_free, old_reserved) = Self::mutate_account(&who, |account| {
+				let old_free = account.free;
+				let old_reserved = account.reserved;
 
 				account.free = new_free;
 				account.reserved = new_reserved;
 
-				(account.free, account.reserved)
+				(old_free, old_reserved)
 			})?;
-			Self::deposit_event(Event::BalanceSet { who, free, reserved });
+
+			// This will adjust the total issuance, which was not done by the `mutate_account`
+			// above.
+			if new_free > old_free {
+				mem::drop(PositiveImbalance::<T, I>::new(new_free - old_free));
+			} else if new_free < old_free {
+				mem::drop(NegativeImbalance::<T, I>::new(old_free - new_free));
+			}
+
+			if new_reserved > old_reserved {
+				mem::drop(PositiveImbalance::<T, I>::new(new_reserved - old_reserved));
+			} else if new_reserved < old_reserved {
+				mem::drop(NegativeImbalance::<T, I>::new(old_reserved - new_reserved));
+			}
+
+			Self::deposit_event(Event::BalanceSet { who, free: new_free, reserved: new_reserved });
 			Ok(().into())
 		}
 

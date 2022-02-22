@@ -22,6 +22,7 @@ futures-timer = "3.0.1"
 log = "0.4.8"
 parking_lot = "0.11.2"
 rand = "0.8.4"
+ahash = "0.7.6"
 parity-scale-codec = { version = "2.3.1", features = ["derive"] }
 sp-application-crypto = { version = "5.0.0", path = "../../primitives/application-crypto" }
 sp-arithmetic = { version = "4.0.0", path = "../../primitives/arithmetic" }

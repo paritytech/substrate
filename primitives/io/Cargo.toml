@@ -66,3 +66,22 @@ with-tracing = [
 disable_panic_handler = []
 disable_oom = []
 disable_allocator = []
+
+# This feature flag controls the runtime's behavior when encountering
+# a panic or when it runs out of memory, improving the diagnostics.
+#
+# When enabled the runtime will marshal the relevant error message
+# to the host through the `PanicHandler::abort_on_panic` runtime interface.
+# This gives the caller direct programmatic access to the error message.
+#
+# When disabled the error message will only be printed out in the
+# logs, with the caller receving a generic "wasm `unreachable` instruction executed"
+# error message.
+#
+# This has no effect if both `disable_panic_handler` and `disable_oom`
+# are enabled.
+#
+# WARNING: Enabling this feature flag requires the `PanicHandler::abort_on_panic`
+#          host function to be supported by the host. Do *not* enable it for your
+#          runtime without first upgrading your host client!
+improved_panic_error_reporting = []
