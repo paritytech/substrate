@@ -124,7 +124,7 @@ fn call_in_wasm<E: Externalities>(
 	ext: &mut E,
 ) -> Result<Vec<u8>, Error> {
 	let executor =
-		crate::WasmExecutor::<HostFunctions>::new(execution_method, Some(1024), 8, None, 2);
+		crate::WasmExecutor::new_default(execution_method, Some(1024), 8, None, 2);
 	executor.uncached_call(
 		RuntimeBlob::uncompress_if_needed(wasm_binary_unwrap()).unwrap(),
 		ext,
@@ -453,7 +453,7 @@ test_wasm_execution!(should_trap_when_heap_exhausted);
 fn should_trap_when_heap_exhausted(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 
-	let executor = crate::WasmExecutor::<HostFunctions>::new(
+	let executor = crate::WasmExecutor::new_default(
 		wasm_method,
 		Some(17), // `17` is the initial number of pages compiled into the binary.
 		8,
@@ -479,7 +479,9 @@ fn mk_test_runtime(wasm_method: WasmExecutionMethod, pages: u64) -> Arc<dyn Wasm
 	let blob = RuntimeBlob::uncompress_if_needed(wasm_binary_unwrap())
 		.expect("failed to create a runtime blob out of test runtime");
 
-	crate::wasm_runtime::create_wasm_runtime_with_code::<HostFunctions>(
+	let host_functions = crate::wasm_runtime::HostFunctionCollection::new::<HostFunctions>();
+	crate::wasm_runtime::create_wasm_runtime_with_code(
+		&host_functions,
 		wasm_method,
 		pages,
 		blob,
@@ -566,7 +568,7 @@ fn heap_is_reset_between_calls(wasm_method: WasmExecutionMethod) {
 
 test_wasm_execution!(parallel_execution);
 fn parallel_execution(wasm_method: WasmExecutionMethod) {
-	let executor = std::sync::Arc::new(crate::WasmExecutor::<HostFunctions>::new(
+	let executor = std::sync::Arc::new(crate::WasmExecutor::new_default(
 		wasm_method,
 		Some(1024),
 		8,
@@ -739,7 +741,9 @@ fn memory_is_cleared_between_invocations(wasm_method: WasmExecutionMethod) {
 	 )
 	)"#).unwrap();
 
-	let runtime = crate::wasm_runtime::create_wasm_runtime_with_code::<HostFunctions>(
+	let host_functions = crate::wasm_runtime::HostFunctionCollection::new::<HostFunctions>();
+	let runtime = crate::wasm_runtime::create_wasm_runtime_with_code(
+		&host_functions,
 		wasm_method,
 		1024,
 		RuntimeBlob::uncompress_if_needed(&binary[..]).unwrap(),

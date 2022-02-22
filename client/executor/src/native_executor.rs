@@ -18,13 +18,12 @@
 
 use crate::{
 	error::{Error, Result},
-	wasm_runtime::{RuntimeCache, WasmExecutionMethod},
+	wasm_runtime::{RuntimeCache, WasmExecutionMethod, HostFunctionCollection},
 	RuntimeVersionOf,
 };
 
 use std::{
 	collections::HashMap,
-	marker::PhantomData,
 	panic::{AssertUnwindSafe, UnwindSafe},
 	path::PathBuf,
 	result,
@@ -90,9 +89,10 @@ pub trait NativeExecutionDispatch: Send + Sync {
 	fn native_version() -> NativeVersion;
 }
 
+
 /// An abstraction over Wasm code executor. Supports selecting execution backend and
 /// manages runtime cache.
-pub struct WasmExecutor<H> {
+pub struct WasmExecutor {
 	/// Method used to execute fallback Wasm code.
 	method: WasmExecutionMethod,
 	/// The number of 64KB pages to allocate for Wasm execution.
@@ -102,26 +102,23 @@ pub struct WasmExecutor<H> {
 	/// The path to a directory which the executor can leverage for a file cache, e.g. put there
 	/// compiled artifacts.
 	cache_path: Option<PathBuf>,
-
-	phantom: PhantomData<H>,
+	/// A set of host functions available to be called from Wasm.
+	host_functions: HostFunctionCollection,
 }
 
-impl<H> Clone for WasmExecutor<H> {
+impl Clone for WasmExecutor {
 	fn clone(&self) -> Self {
 		Self {
 			method: self.method,
 			default_heap_pages: self.default_heap_pages,
 			cache: self.cache.clone(),
 			cache_path: self.cache_path.clone(),
-			phantom: self.phantom,
+			host_functions: self.host_functions.clone(),
 		}
 	}
 }
 
-impl<H> WasmExecutor<H>
-where
-	H: HostFunctions,
-{
+impl WasmExecutor {
 	/// Create new instance.
 	///
 	/// # Parameters
@@ -131,15 +128,16 @@ where
 	/// `default_heap_pages` - Number of 64KB pages to allocate for Wasm execution.
 	///   Defaults to `DEFAULT_HEAP_PAGES` if `None` is provided.
 	///
-	/// `host_functions` - The set of host functions to be available for import provided by this
-	///   executor.
-	///
 	/// `max_runtime_instances` - The number of runtime instances to keep in memory ready for reuse.
 	///
 	/// `cache_path` - A path to a directory where the executor can place its files for purposes of
 	///   caching. This may be important in cases when there are many different modules with the
 	///   compiled execution method is used.
-	pub fn new(
+	///
+	/// `runtime_cache_size` - The size of the instances cache for each runtime.
+	///
+	/// The list of supported host functions is extracted from the provided `HostFunctions` implementation.
+	pub fn new<H: HostFunctions>(
 		method: WasmExecutionMethod,
 		default_heap_pages: Option<u64>,
 		max_runtime_instances: usize,
@@ -155,8 +153,72 @@ where
 				runtime_cache_size,
 			)),
 			cache_path,
-			phantom: PhantomData,
+			host_functions: HostFunctionCollection::new::<H>(),
 		}
+	}
+
+	/// Create a new instance with default set of host functions.
+	///
+	/// # Parameters
+	///
+	/// `method` - Method used to execute Wasm code.
+	///
+	/// `default_heap_pages` - Number of 64KB pages to allocate for Wasm execution.
+	///   Defaults to `DEFAULT_HEAP_PAGES` if `None` is provided.
+	///
+	/// `max_runtime_instances` - The number of runtime instances to keep in memory ready for reuse.
+	///
+	/// `cache_path` - A path to a directory where the executor can place its files for purposes of
+	///   caching. This may be important in cases when there are many different modules with the
+	///   compiled execution method is used.
+	///
+	/// `runtime_cache_size` - The size of the instances cache for each runtime.
+	pub fn new_default(
+		method: WasmExecutionMethod,
+		default_heap_pages: Option<u64>,
+		max_runtime_instances: usize,
+		cache_path: Option<PathBuf>,
+		runtime_cache_size: u8,
+	) -> Self {
+		Self::new::<sp_io::SubstrateHostFunctions>(
+			method,
+			default_heap_pages,
+			max_runtime_instances,
+			cache_path,
+			runtime_cache_size,
+		)
+	}
+
+	/// Create a new instance with default set of host functions extended with custom `HostFunctions`
+	///
+	/// # Parameters
+	///
+	/// `method` - Method used to execute Wasm code.
+	///
+	/// `default_heap_pages` - Number of 64KB pages to allocate for Wasm execution.
+	///   Defaults to `DEFAULT_HEAP_PAGES` if `None` is provided.
+	///
+	/// `max_runtime_instances` - The number of runtime instances to keep in memory ready for reuse.
+	///
+	/// `cache_path` - A path to a directory where the executor can place its files for purposes of
+	///   caching. This may be important in cases when there are many different modules with the
+	///   compiled execution method is used.
+	///
+	/// `runtime_cache_size` - The size of the instances cache for each runtime.
+	pub fn new_extended<H: HostFunctions>(
+		method: WasmExecutionMethod,
+		default_heap_pages: Option<u64>,
+		max_runtime_instances: usize,
+		cache_path: Option<PathBuf>,
+		runtime_cache_size: u8,
+	) -> Self {
+		Self::new::<sp_wasm_interface::ExtendedHostFunctions<sp_io::SubstrateHostFunctions, H>>(
+			method,
+			default_heap_pages,
+			max_runtime_instances,
+			cache_path,
+			runtime_cache_size,
+		)
 	}
 
 	/// Execute the given closure `f` with the latest runtime (based on `runtime_code`).
@@ -187,8 +249,9 @@ where
 			AssertUnwindSafe<&mut dyn Externalities>,
 		) -> Result<Result<R>>,
 	{
-		match self.cache.with_instance::<H, _, _>(
+		match self.cache.with_instance(
 			runtime_code,
+			&self.host_functions,
 			ext,
 			self.method,
 			self.default_heap_pages,
@@ -221,7 +284,8 @@ where
 		export_name: &str,
 		call_data: &[u8],
 	) -> std::result::Result<Vec<u8>, Error> {
-		let module = crate::wasm_runtime::create_wasm_runtime_with_code::<H>(
+		let module = crate::wasm_runtime::create_wasm_runtime_with_code(
+			&self.host_functions,
 			self.method,
 			self.default_heap_pages,
 			runtime_blob,
@@ -243,18 +307,14 @@ where
 		})
 		.and_then(|r| r)
 	}
-}
 
-impl crate::DefaultExecutor {
-	/// Add additional host functions potentially overwriting existing functions.
-	pub fn extend_host_functions(&mut self, functions: Vec<&'static dyn sp_wasm_interface::Function>) {
+	#[cfg(test)]
+	pub fn functions(&self) -> &Vec<&'static dyn sp_wasm_interface::Function> {
+		self.host_functions.functions()
 	}
 }
 
-impl<H> sp_core::traits::ReadRuntimeVersion for WasmExecutor<H>
-where
-	H: HostFunctions,
-{
+impl sp_core::traits::ReadRuntimeVersion for WasmExecutor {
 	fn read_runtime_version(
 		&self,
 		wasm_code: &[u8],
@@ -289,10 +349,7 @@ where
 	}
 }
 
-impl<H> CodeExecutor for WasmExecutor<H>
-where
-	H: HostFunctions,
-{
+impl CodeExecutor for WasmExecutor {
 	type Error = Error;
 
 	fn call<
@@ -322,10 +379,7 @@ where
 	}
 }
 
-impl<H> RuntimeVersionOf for WasmExecutor<H>
-where
-	H: HostFunctions,
-{
+impl RuntimeVersionOf for WasmExecutor {
 	fn runtime_version(
 		&self,
 		ext: &mut dyn Externalities,
@@ -348,8 +402,7 @@ where
 	/// Native runtime version info.
 	native_version: NativeVersion,
 	/// Fallback wasm executor.
-	wasm:
-		WasmExecutor<ExtendedHostFunctions<sp_io::SubstrateHostFunctions, D::ExtendHostFunctions>>,
+	wasm: WasmExecutor,
 }
 
 impl<D: NativeExecutionDispatch> NativeElseWasmExecutor<D> {
@@ -367,7 +420,9 @@ impl<D: NativeExecutionDispatch> NativeElseWasmExecutor<D> {
 		max_runtime_instances: usize,
 		runtime_cache_size: u8,
 	) -> Self {
-		let wasm_executor = WasmExecutor::new(
+		let wasm_executor = WasmExecutor::new::
+			<ExtendedHostFunctions<sp_io::SubstrateHostFunctions, D::ExtendHostFunctions>>
+		(
 			fallback_method,
 			default_heap_pages,
 			max_runtime_instances,
@@ -667,13 +722,9 @@ mod tests {
 			2,
 		);
 
-		fn extract_host_functions<H>(
-			_: &WasmExecutor<H>,
-		) -> Vec<&'static dyn sp_wasm_interface::Function>
-		where
-			H: HostFunctions,
+		fn extract_host_functions(executor: &WasmExecutor) -> Vec<&'static dyn sp_wasm_interface::Function>
 		{
-			H::host_functions()
+			executor.functions().clone()
 		}
 
 		my_interface::HostFunctions::host_functions().iter().for_each(|function| {

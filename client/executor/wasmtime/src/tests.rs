@@ -78,7 +78,9 @@ impl RuntimeBuilder {
 				.expect("failed to create a runtime blob out of test runtime")
 		};
 
-		let rt = crate::create_runtime::<HostFunctions>(
+		let registrar = Arc::new(crate::HostFunctionsRegistrar::<HostFunctions>::new());
+
+		let rt = crate::create_runtime(
 			blob,
 			crate::Config {
 				heap_pages: self.heap_pages,
@@ -98,6 +100,7 @@ impl RuntimeBuilder {
 					parallel_compilation: true,
 				},
 			},
+			registrar,
 		)
 		.expect("cannot create runtime");
 
@@ -314,7 +317,8 @@ fn test_max_memory_pages() {
 #[cfg_attr(build_type = "debug", ignore)]
 #[test]
 fn test_instances_without_reuse_are_not_leaked() {
-	let runtime = crate::create_runtime::<HostFunctions>(
+	let registrar = Arc::new(crate::HostFunctionsRegistrar::<HostFunctions>::new());
+	let runtime = crate::create_runtime(
 		RuntimeBlob::uncompress_if_needed(wasm_binary_unwrap()).unwrap(),
 		crate::Config {
 			heap_pages: 2048,
@@ -328,6 +332,7 @@ fn test_instances_without_reuse_are_not_leaked() {
 				parallel_compilation: true,
 			},
 		},
+		registrar,
 	)
 	.unwrap();
 

@@ -24,7 +24,7 @@ use futures::prelude::*;
 use node_primitives::Block;
 use sc_client_api::{BlockBackend, ExecutorProvider};
 use sc_consensus_babe::{self, SlotProportion};
-use sc_executor::DefaultExecutor;
+use sc_executor::WasmExecutor;
 use sc_network::{Event, NetworkService};
 use sc_service::{config::Configuration, error::Error as ServiceError, RpcHandlers, TaskManager};
 use sc_telemetry::{Telemetry, TelemetryWorker};
@@ -42,15 +42,25 @@ type FullGrandpaBlockImport =
 pub type TransactionPool = sc_transaction_pool::FullPool<Block, FullClient>;
 
 #[cfg(feature = "runtime-benchmarks")]
-fn extend_host_functions(executor: &mut DefaultExecutor) {
-	use sc_executor::sp_wasm_interface::HostFunctions;
-	executor.extend_host_functions(
-		frame_benchmarking::benchmarking::HostFunctions::host_functions()
-	);
+fn create_executor(config: &Configuration) -> WasmExecutor {
+	WasmExecutor::new_extended::<frame_benchmarking::benchmarking::HostFunctions>(
+		config.wasm_method,
+		config.default_heap_pages,
+		config.max_runtime_instances,
+		None,
+		config.runtime_cache_size,
+	)
 }
 
 #[cfg(not(feature = "runtime-benchmarks"))]
-fn extend_host_functions(_executor: &mut DefaultExecutor) {
+fn create_executor(config: &Configuration) -> WasmExecutor {
+	WasmExecutor::new_default(
+		config.wasm_method,
+		config.default_heap_pages,
+		config.max_runtime_instances,
+		None,
+		config.runtime_cache_size,
+	)
 }
 
 /// Creates a new partial node.
@@ -90,15 +100,7 @@ pub fn new_partial(
 		})
 		.transpose()?;
 
-	let mut executor = DefaultExecutor::new(
-		config.wasm_method,
-		config.default_heap_pages,
-		config.max_runtime_instances,
-		None,
-		config.runtime_cache_size,
-	);
-
-	extend_host_functions(&mut executor);
+	let executor = create_executor(config);
 
 	let (client, backend, keystore_container, task_manager) =
 		sc_service::new_full_parts::<Block>(

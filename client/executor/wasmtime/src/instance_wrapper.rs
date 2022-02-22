@@ -20,11 +20,12 @@
 //! runtime module.
 
 use crate::runtime::{Store, StoreData};
+use crate::imports::Registrar;
 use sc_executor_common::{
 	error::{Backtrace, Error, MessageWithBacktrace, Result},
 	wasm_runtime::InvokeMethod,
 };
-use sp_wasm_interface::{HostFunctions, Pointer, Value, WordSize};
+use sp_wasm_interface::{Pointer, Value, WordSize};
 use wasmtime::{
 	AsContext, AsContextMut, Extern, Func, Global, Instance, Memory, Module, Table, Val,
 };
@@ -164,14 +165,13 @@ fn extern_func(extern_: &Extern) -> Option<&Func> {
 
 impl InstanceWrapper {
 	/// Create a new instance wrapper from the given wasm module.
-	pub fn new<H>(
+	pub fn new(
 		module: &Module,
+		registrar: &dyn Registrar,
 		heap_pages: u64,
 		allow_missing_func_imports: bool,
 		max_memory_size: Option<usize>,
 	) -> Result<Self>
-	where
-		H: HostFunctions,
 	{
 		let limits = if let Some(max_memory_size) = max_memory_size {
 			wasmtime::StoreLimitsBuilder::new().memory_size(max_memory_size).build()
@@ -189,8 +189,9 @@ impl InstanceWrapper {
 
 		// Scan all imports, find the matching host functions, and create stubs that adapt arguments
 		// and results.
-		let imports = crate::imports::resolve_imports::<H>(
+		let imports = crate::imports::resolve_imports(
 			&mut store,
+			registrar,
 			module,
 			heap_pages,
 			allow_missing_func_imports,
@@ -436,7 +437,8 @@ fn decommit_works() {
 	let engine = wasmtime::Engine::default();
 	let code = wat::parse_str("(module (memory (export \"memory\") 1 4))").unwrap();
 	let module = Module::new(&engine, code).unwrap();
-	let mut wrapper = InstanceWrapper::new::<()>(&module, 2, true, None).unwrap();
+	let registrar = crate::HostFunctionsRegistrar::<()>::new();
+	let mut wrapper = InstanceWrapper::new(&module, &registrar, 2, true, None).unwrap();
 	unsafe { *wrapper.memory.data_ptr(&wrapper.store) = 42 };
 	assert_eq!(unsafe { *wrapper.memory.data_ptr(&wrapper.store) }, 42);
 	wrapper.decommit();

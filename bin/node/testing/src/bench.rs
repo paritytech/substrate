@@ -400,7 +400,7 @@ impl BenchDb {
 		let backend = sc_service::new_db_backend(db_config).expect("Should not fail");
 		let client = sc_service::new_client(
 			backend.clone(),
-			sc_executor::DefaultExecutor::new(WasmExecutionMethod::Compiled, None, 8, None, 2),
+			sc_executor::WasmExecutor::new_default(WasmExecutionMethod::Compiled, None, 8, None, 2),
 			&keyring.generate_genesis(),
 			None,
 			None,

@@ -37,7 +37,29 @@ use std::{
 	sync::Arc,
 };
 
-use sp_wasm_interface::HostFunctions;
+use sp_wasm_interface::{HostFunctions, Function};
+
+#[derive(Clone)]
+pub struct HostFunctionCollection {
+	host_functions: Arc<Vec<&'static dyn Function>>,
+	#[cfg(feature = "wasmtime")]
+	registrar: Arc<dyn sc_executor_wasmtime::Registrar>,
+}
+
+impl HostFunctionCollection {
+	pub fn new<H: HostFunctions>() -> HostFunctionCollection {
+		HostFunctionCollection {
+			host_functions: Arc::new(H::host_functions()),
+			#[cfg(feature = "wasmtime")]
+			registrar: Arc::new(sc_executor_wasmtime::HostFunctionsRegistrar::<H>::new()),
+		}
+	}
+
+	#[cfg(test)]
+	pub fn functions(&self) -> &Vec<&'static dyn Function> {
+		self.host_functions.as_ref()
+	}
+}
 
 /// Specification of different methods of executing the runtime Wasm code.
 #[derive(Debug, PartialEq, Eq, Hash, Copy, Clone)]
@@ -214,9 +236,10 @@ impl RuntimeCache {
 	///
 	/// `Error::InvalidMemoryReference` is returned if no memory export with the
 	/// identifier `memory` can be found in the runtime.
-	pub fn with_instance<'c, H, R, F>(
+	pub fn with_instance<'c, R, F>(
 		&self,
 		runtime_code: &'c RuntimeCode<'c>,
+		host_functions: &HostFunctionCollection,
 		ext: &mut dyn Externalities,
 		wasm_method: WasmExecutionMethod,
 		default_heap_pages: u64,
@@ -224,7 +247,6 @@ impl RuntimeCache {
 		f: F,
 	) -> Result<Result<R, Error>, Error>
 	where
-		H: HostFunctions,
 		F: FnOnce(
 			&Arc<dyn WasmModule>,
 			&mut dyn WasmInstance,
@@ -247,8 +269,9 @@ impl RuntimeCache {
 
 			let time = std::time::Instant::now();
 
-			let result = create_versioned_wasm_runtime::<H>(
+			let result = create_versioned_wasm_runtime(
 				&code,
+				host_functions,
 				ext,
 				wasm_method,
 				heap_pages,
@@ -287,16 +310,14 @@ impl RuntimeCache {
 }
 
 /// Create a wasm runtime with the given `code`.
-pub fn create_wasm_runtime_with_code<H>(
+pub fn create_wasm_runtime_with_code(
+	host_functions: &HostFunctionCollection,
 	wasm_method: WasmExecutionMethod,
 	heap_pages: u64,
 	blob: RuntimeBlob,
 	allow_missing_func_imports: bool,
 	cache_path: Option<&Path>,
-) -> Result<Arc<dyn WasmModule>, WasmError>
-where
-	H: HostFunctions,
-{
+) -> Result<Arc<dyn WasmModule>, WasmError> {
 	match wasm_method {
 		WasmExecutionMethod::Interpreted => {
 			// Wasmi doesn't have any need in a cache directory.
@@ -308,13 +329,13 @@ where
 			sc_executor_wasmi::create_runtime(
 				blob,
 				heap_pages,
-				H::host_functions(),
+				host_functions.host_functions.clone(),
 				allow_missing_func_imports,
 			)
 			.map(|runtime| -> Arc<dyn WasmModule> { Arc::new(runtime) })
 		},
 		#[cfg(feature = "wasmtime")]
-		WasmExecutionMethod::Compiled => sc_executor_wasmtime::create_runtime::<H>(
+		WasmExecutionMethod::Compiled => sc_executor_wasmtime::create_runtime(
 			blob,
 			sc_executor_wasmtime::Config {
 				heap_pages,
@@ -328,6 +349,7 @@ where
 					parallel_compilation: true,
 				},
 			},
+			host_functions.registrar.clone(),
 		)
 		.map(|runtime| -> Arc<dyn WasmModule> { Arc::new(runtime) }),
 	}
@@ -389,18 +411,16 @@ pub fn read_embedded_version(blob: &RuntimeBlob) -> Result<Option<RuntimeVersion
 	}
 }
 
-fn create_versioned_wasm_runtime<H>(
+fn create_versioned_wasm_runtime(
 	code: &[u8],
+	host_functions: &HostFunctionCollection,
 	ext: &mut dyn Externalities,
 	wasm_method: WasmExecutionMethod,
 	heap_pages: u64,
 	allow_missing_func_imports: bool,
 	max_instances: usize,
 	cache_path: Option<&Path>,
-) -> Result<VersionedRuntime, WasmError>
-where
-	H: HostFunctions,
-{
+) -> Result<VersionedRuntime, WasmError> {
 	// The incoming code may be actually compressed. We decompress it here and then work with
 	// the uncompressed code from now on.
 	let blob = sc_executor_common::runtime_blob::RuntimeBlob::uncompress_if_needed(&code)?;
@@ -410,7 +430,8 @@ where
 	// runtime.
 	let mut version: Option<_> = read_embedded_version(&blob)?;
 
-	let runtime = create_wasm_runtime_with_code::<H>(
+	let runtime = create_wasm_runtime_with_code(
+		host_functions,
 		wasm_method,
 		heap_pages,
 		blob,

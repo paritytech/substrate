@@ -68,7 +68,7 @@ pub fn new_partial(
 		})
 		.transpose()?;
 
-	let executor = sc_executor::DefaultExecutor::new(
+	let executor = sc_executor::WasmExecutor::new_default(
 		config.wasm_method,
 		config.default_heap_pages,
 		config.max_runtime_instances,

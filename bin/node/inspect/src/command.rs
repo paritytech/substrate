@@ -23,7 +23,7 @@ use crate::{
 	Inspector,
 };
 use sc_cli::{CliConfiguration, ImportParams, Result, SharedParams};
-use sc_executor::{DefaultExecutor};
+use sc_executor::WasmExecutor;
 use sc_service::{new_full_client, Configuration};
 use sp_runtime::traits::Block;
 use std::str::FromStr;
@@ -35,7 +35,7 @@ impl InspectCmd {
 		B: Block,
 		B::Hash: FromStr,
 	{
-		let executor = DefaultExecutor::new(
+		let executor = WasmExecutor::new_default(
 			config.wasm_method,
 			config.default_heap_pages,
 			config.max_runtime_instances,

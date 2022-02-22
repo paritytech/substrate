@@ -37,9 +37,9 @@ use std::{cell::RefCell, panic::UnwindSafe, result, sync::Arc};
 /// data from local backend.
 pub struct LocalCallExecutor<Block: BlockT, B> {
 	backend: Arc<B>,
-	executor: sc_executor::DefaultExecutor,
+	executor: sc_executor::WasmExecutor,
 	wasm_override: Arc<Option<WasmOverride>>,
-	wasm_substitutes: WasmSubstitutes<Block, sc_executor::DefaultExecutor, B>,
+	wasm_substitutes: WasmSubstitutes<Block, sc_executor::WasmExecutor, B>,
 	spawn_handle: Box<dyn SpawnNamed>,
 	client_config: ClientConfig<Block>,
 }
@@ -51,7 +51,7 @@ where
 	/// Creates new instance of local call executor.
 	pub fn new(
 		backend: Arc<B>,
-		executor: sc_executor::DefaultExecutor,
+		executor: sc_executor::WasmExecutor,
 		spawn_handle: Box<dyn SpawnNamed>,
 		client_config: ClientConfig<Block>,
 	) -> sp_blockchain::Result<Self> {
@@ -135,7 +135,7 @@ where
 	B: backend::Backend<Block>,
 	Block: BlockT,
 {
-	type Error = <sc_executor::DefaultExecutor as sp_core::traits::CodeExecutor>::Error;
+	type Error = <sc_executor::WasmExecutor as sp_core::traits::CodeExecutor>::Error;
 
 	type Backend = B;
 
@@ -350,7 +350,7 @@ mod tests {
 
 	#[test]
 	fn should_get_override_if_exists() {
-		let executor = sc_executor::DefaultExecutor::new(
+		let executor = sc_executor::WasmExecutor::new_default(
 			WasmExecutionMethod::Interpreted,
 			Some(128),
 			1,

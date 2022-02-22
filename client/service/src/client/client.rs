@@ -93,7 +93,7 @@ use std::{
 use {
 	sc_client_api::in_mem,
 	sp_core::traits::SpawnNamed,
-	sc_executor::DefaultExecutor,
+	sc_executor::WasmExecutor,
 };
 
 type NotificationSinks<T> = Mutex<Vec<TracingUnboundedSender<T>>>;
@@ -153,7 +153,7 @@ enum PrepareStorageChangesResult<B: backend::Backend<Block>, Block: BlockT> {
 /// Create an instance of in-memory client.
 #[cfg(feature = "test-helpers")]
 pub fn new_in_mem<Block, S>(
-	executor: DefaultExecutor,
+	executor: WasmExecutor,
 	genesis_storage: &S,
 	keystore: Option<SyncCryptoStorePtr>,
 	prometheus_registry: Option<Registry>,
@@ -212,7 +212,7 @@ impl<Block: BlockT> Default for ClientConfig<Block> {
 #[cfg(feature = "test-helpers")]
 pub fn new_with_backend<B, Block, S>(
 	backend: Arc<B>,
-	executor: DefaultExecutor,
+	executor: WasmExecutor,
 	build_genesis_storage: &S,
 	keystore: Option<SyncCryptoStorePtr>,
 	spawn_handle: Box<dyn SpawnNamed>,

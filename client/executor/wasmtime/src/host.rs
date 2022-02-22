@@ -69,7 +69,7 @@ impl HostState {
 /// A `HostContext` implements `FunctionContext` for making host calls from a Wasmtime
 /// runtime. The `HostContext` exists only for the lifetime of the call and borrows state from
 /// a longer-living `HostState`.
-pub(crate) struct HostContext<'a> {
+pub struct HostContext<'a> {
 	pub(crate) caller: Caller<'a, StoreData>,
 }
 

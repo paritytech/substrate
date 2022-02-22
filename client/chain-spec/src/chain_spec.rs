@@ -108,7 +108,7 @@ impl<G: RuntimeGenesis> GenesisSource<G> {
 				let mut ext = sp_state_machine::BasicExternalities::default();
 				let runtime_code = sc_executor::RuntimeBlob::uncompress_if_needed(code)
 					.map_err(|e| format!("Error loading runtime code: {}", e))?;
-				let executor = sc_executor::DefaultExecutor::new(
+				let executor = sc_executor::WasmExecutor::new_default(
 					sc_executor::WasmExecutionMethod::Interpreted, None, 1, None, 1
 				);
 

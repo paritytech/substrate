@@ -51,9 +51,6 @@ pub use wasmi;
 
 pub use sc_executor_common::{error, sandbox, runtime_blob::RuntimeBlob};
 
-/// Default WASM executor with substrate host function set.
-pub type DefaultExecutor = WasmExecutor<sp_wasm_interface::ExtendedHostFunctions<sp_io::SubstrateHostFunctions, ()>>;
-
 /// Extracts the runtime version of a given runtime code.
 pub trait RuntimeVersionOf {
 	/// Extract [`RuntimeVersion`](sp_version::RuntimeVersion) of the given `runtime_code`.
@@ -76,7 +73,7 @@ mod tests {
 		let mut ext = TestExternalities::default();
 		let mut ext = ext.ext();
 
-		let executor = WasmExecutor::<sp_io::SubstrateHostFunctions>::new(
+		let executor = WasmExecutor::new_default(
 			WasmExecutionMethod::Interpreted,
 			Some(8),
 			8,

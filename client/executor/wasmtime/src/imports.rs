@@ -34,15 +34,13 @@ pub struct Imports {
 
 /// Goes over all imports of a module and prepares a vector of `Extern`s that can be used for
 /// instantiation of the module. Returns an error if there are imports that cannot be satisfied.
-pub(crate) fn resolve_imports<H>(
+pub(crate) fn resolve_imports(
 	store: &mut Store,
+	registrar: &dyn Registrar,
 	module: &Module,
 	heap_pages: u64,
 	allow_missing_func_imports: bool,
-) -> Result<Imports, WasmError>
-where
-	H: HostFunctions,
-{
+) -> Result<Imports, WasmError> {
 	let mut externs = vec![];
 	let mut memory_import_index = None;
 	let mut pending_func_imports = HashMap::new();
@@ -77,8 +75,8 @@ where
 	}
 
 	let mut registry = Registry { store, externs, pending_func_imports };
+	registrar.register_all(&mut registry)?;
 
-	H::register_static(&mut registry)?;
 	let mut externs = registry.externs;
 
 	if !registry.pending_func_imports.is_empty() {
@@ -108,7 +106,7 @@ where
 	Ok(Imports { memory_import_index, externs })
 }
 
-struct Registry<'a, 'b> {
+pub struct Registry<'a, 'b> {
 	store: &'a mut Store,
 	externs: Vec<(usize, Extern)>,
 	pending_func_imports: HashMap<String, (usize, ImportType<'b>, FuncType)>,
@@ -137,6 +135,24 @@ impl<'a, 'b> sp_wasm_interface::HostFunctionRegistry for Registry<'a, 'b> {
 		}
 
 		Ok(())
+	}
+}
+
+pub trait Registrar: Send + Sync + 'static {
+	fn register_all<'a, 'b>(&self, registry: &mut Registry<'a, 'b>) -> Result<(), WasmError>;
+}
+
+pub struct HostFunctionsRegistrar<H: HostFunctions>(std::marker::PhantomData<H>);
+
+impl<H: HostFunctions> HostFunctionsRegistrar<H> {
+	pub fn new() -> Self {
+		HostFunctionsRegistrar::<H>(Default::default())
+	}
+}
+
+impl<H: HostFunctions> Registrar for HostFunctionsRegistrar<H> {
+	fn register_all<'a, 'b>(&self, registry: &mut Registry<'a, 'b>) -> Result<(), WasmError> {
+		H::register_static(registry)
 	}
 }
 

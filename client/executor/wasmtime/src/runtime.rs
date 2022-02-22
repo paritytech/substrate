@@ -21,9 +21,9 @@
 use crate::{
 	host::HostState,
 	instance_wrapper::{EntryPoint, InstanceWrapper},
+	imports::{Registrar, HostFunctionsRegistrar},
 	util,
 };
-use core::marker::PhantomData;
 
 use sc_allocator::FreeingBumpHeapAllocator;
 use sc_executor_common::{
@@ -44,7 +44,7 @@ use std::{
 };
 use wasmtime::{Engine, Memory, StoreLimits, Table};
 
-pub(crate) struct StoreData {
+pub struct StoreData {
 	/// The limits we apply to the store. We need to store it here to return a reference to this
 	/// object when we have the limits enabled.
 	pub(crate) limits: StoreLimits,
@@ -80,31 +80,29 @@ impl StoreData {
 
 pub(crate) type Store = wasmtime::Store<StoreData>;
 
-enum Strategy<H> {
+enum Strategy {
 	FastInstanceReuse {
 		instance_wrapper: InstanceWrapper,
 		globals_snapshot: GlobalsSnapshot<wasmtime::Global>,
 		data_segments_snapshot: Arc<DataSegmentsSnapshot>,
 		heap_base: u32,
 	},
-	RecreateInstance(InstanceCreator<H>),
+	RecreateInstance(InstanceCreator),
 }
 
-struct InstanceCreator<H> {
+struct InstanceCreator {
 	module: Arc<wasmtime::Module>,
+	registrar: Arc<dyn Registrar>,
 	heap_pages: u64,
 	allow_missing_func_imports: bool,
 	max_memory_size: Option<usize>,
-	phantom: PhantomData<H>,
 }
 
-impl<H> InstanceCreator<H>
-where
-	H: HostFunctions,
-{
+impl InstanceCreator {
 	fn instantiate(&mut self) -> Result<InstanceWrapper> {
-		InstanceWrapper::new::<H>(
+		InstanceWrapper::new(
 			&*self.module,
+			&*self.registrar,
 			self.heap_pages,
 			self.allow_missing_func_imports,
 			self.max_memory_size,
@@ -144,21 +142,19 @@ struct InstanceSnapshotData {
 
 /// A `WasmModule` implementation using wasmtime to compile the runtime module to machine code
 /// and execute the compiled code.
-pub struct WasmtimeRuntime<H> {
+pub struct WasmtimeRuntime {
 	module: Arc<wasmtime::Module>,
+	registrar: Arc<dyn Registrar>,
 	snapshot_data: Option<InstanceSnapshotData>,
 	config: Config,
-	phantom: PhantomData<H>,
 }
 
-impl<H> WasmModule for WasmtimeRuntime<H>
-where
-	H: HostFunctions,
-{
+impl WasmModule for WasmtimeRuntime {
 	fn new_instance(&self) -> Result<Box<dyn WasmInstance>> {
 		let strategy = if let Some(ref snapshot_data) = self.snapshot_data {
-			let mut instance_wrapper = InstanceWrapper::new::<H>(
+			let mut instance_wrapper = InstanceWrapper::new(
 				&self.module,
+				&*self.registrar,
 				self.config.heap_pages,
 				self.config.allow_missing_func_imports,
 				self.config.max_memory_size,
@@ -174,19 +170,19 @@ where
 				&mut InstanceGlobals { instance: &mut instance_wrapper },
 			);
 
-			Strategy::<H>::FastInstanceReuse {
+			Strategy::FastInstanceReuse {
 				instance_wrapper,
 				globals_snapshot,
 				data_segments_snapshot: snapshot_data.data_segments_snapshot.clone(),
 				heap_base,
 			}
 		} else {
-			Strategy::<H>::RecreateInstance(InstanceCreator {
+			Strategy::RecreateInstance(InstanceCreator {
 				module: self.module.clone(),
+				registrar: self.registrar.clone(),
 				heap_pages: self.config.heap_pages,
 				allow_missing_func_imports: self.config.allow_missing_func_imports,
 				max_memory_size: self.config.max_memory_size,
-				phantom: PhantomData,
 			})
 		};
 
@@ -196,14 +192,11 @@ where
 
 /// A `WasmInstance` implementation that reuses compiled module and spawns instances
 /// to execute the compiled code.
-pub struct WasmtimeInstance<H> {
-	strategy: Strategy<H>,
+pub struct WasmtimeInstance {
+	strategy: Strategy,
 }
 
-impl<H> WasmInstance for WasmtimeInstance<H>
-where
-	H: HostFunctions,
-{
+impl WasmInstance for WasmtimeInstance {
 	fn call(&mut self, method: InvokeMethod, data: &[u8]) -> Result<Vec<u8>> {
 		match &mut self.strategy {
 			Strategy::FastInstanceReuse {
@@ -495,15 +488,13 @@ enum CodeSupplyMode<'a> {
 ///
 /// The `H` generic parameter is used to statically pass a set of host functions which are exposed
 /// to the runtime.
-pub fn create_runtime<H>(
+pub fn create_runtime(
 	blob: RuntimeBlob,
 	config: Config,
-) -> std::result::Result<WasmtimeRuntime<H>, WasmError>
-where
-	H: HostFunctions,
-{
+	registrar: Arc<dyn Registrar>,
+) -> std::result::Result<WasmtimeRuntime, WasmError> {
 	// SAFETY: this is safe because it doesn't use `CodeSupplyMode::Artifact`.
-	unsafe { do_create_runtime::<H>(CodeSupplyMode::Verbatim { blob }, config) }
+	unsafe { do_create_runtime(CodeSupplyMode::Verbatim { blob }, config, registrar) }
 }
 
 /// The same as [`create_runtime`] but takes a precompiled artifact, which makes this function
@@ -520,24 +511,23 @@ where
 pub unsafe fn create_runtime_from_artifact<H>(
 	compiled_artifact: &[u8],
 	config: Config,
-) -> std::result::Result<WasmtimeRuntime<H>, WasmError>
+) -> std::result::Result<WasmtimeRuntime, WasmError>
 where
 	H: HostFunctions,
 {
-	do_create_runtime::<H>(CodeSupplyMode::Artifact { compiled_artifact }, config)
+	let registrar = Arc::new(HostFunctionsRegistrar::<H>::new());
+	do_create_runtime(CodeSupplyMode::Artifact { compiled_artifact }, config, registrar)
 }
 
 /// # Safety
 ///
 /// This is only unsafe if called with [`CodeSupplyMode::Artifact`]. See
 /// [`create_runtime_from_artifact`] to get more details.
-unsafe fn do_create_runtime<H>(
+unsafe fn do_create_runtime(
 	code_supply_mode: CodeSupplyMode<'_>,
 	config: Config,
-) -> std::result::Result<WasmtimeRuntime<H>, WasmError>
-where
-	H: HostFunctions,
-{
+	registrar: Arc<dyn Registrar>,
+) -> std::result::Result<WasmtimeRuntime, WasmError> {
 	// Create the engine, store and finally the module from the given code.
 	let mut wasmtime_config = common_config(&config.semantics)?;
 	if let Some(ref cache_path) = config.cache_path {
@@ -584,7 +574,7 @@ where
 		},
 	};
 
-	Ok(WasmtimeRuntime { module: Arc::new(module), snapshot_data, config, phantom: PhantomData })
+	Ok(WasmtimeRuntime { module: Arc::new(module), snapshot_data, config, registrar })
 }
 
 fn instrument(

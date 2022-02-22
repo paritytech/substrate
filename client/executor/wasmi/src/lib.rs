@@ -710,7 +710,7 @@ impl WasmModule for WasmiRuntime {
 pub fn create_runtime(
 	blob: RuntimeBlob,
 	heap_pages: u64,
-	host_functions: Vec<&'static dyn Function>,
+	host_functions: Arc<Vec<&'static dyn Function>>,
 	allow_missing_func_imports: bool,
 ) -> Result<WasmiRuntime, WasmError> {
 	let data_segments_snapshot =
@@ -723,7 +723,7 @@ pub fn create_runtime(
 		let (instance, _, _) = instantiate_module(
 			heap_pages as usize,
 			&module,
-			&host_functions,
+			&*host_functions,
 			allow_missing_func_imports,
 		)
 		.map_err(|e| WasmError::Instantiation(e.to_string()))?;
@@ -734,7 +734,7 @@ pub fn create_runtime(
 		module,
 		data_segments_snapshot,
 		global_vals_snapshot,
-		host_functions: Arc::new(host_functions),
+		host_functions,
 		allow_missing_func_imports,
 		heap_pages,
 	})

@@ -24,7 +24,7 @@ use sp_runtime_interface_test_wasm::{test_api::HostFunctions, wasm_binary_unwrap
 use sp_runtime_interface_test_wasm_deprecated::wasm_binary_unwrap as wasm_binary_deprecated_unwrap;
 
 use sc_executor_common::runtime_blob::RuntimeBlob;
-use sp_wasm_interface::{ExtendedHostFunctions, HostFunctions as HostFunctionsT};
+use sp_wasm_interface::{HostFunctions as HostFunctionsT};
 
 use std::{
 	collections::HashSet,
@@ -40,9 +40,9 @@ fn call_wasm_method_with_result<HF: HostFunctionsT>(
 	let mut ext = TestExternalities::default();
 	let mut ext_ext = ext.ext();
 
-	let executor = sc_executor::WasmExecutor::<
-		ExtendedHostFunctions<sp_io::SubstrateHostFunctions, HF>,
-	>::new(sc_executor::WasmExecutionMethod::Interpreted, Some(8), 8, None, 2);
+	let executor = sc_executor::WasmExecutor::new_extended::<HF>(
+		sc_executor::WasmExecutionMethod::Interpreted, Some(8), 8, None, 2
+	);
 
 	executor
 		.uncached_call(

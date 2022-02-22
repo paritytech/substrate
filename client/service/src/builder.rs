@@ -219,7 +219,7 @@ impl KeystoreContainer {
 pub fn new_full_client<TBl>(
 	config: &Configuration,
 	telemetry: Option<TelemetryHandle>,
-	executor: sc_executor::DefaultExecutor,
+	executor: sc_executor::WasmExecutor,
 ) -> Result<TFullClient<TBl>, Error>
 where
 	TBl: BlockT,
@@ -231,7 +231,7 @@ where
 pub fn new_full_parts<TBl>(
 	config: &Configuration,
 	telemetry: Option<TelemetryHandle>,
-	executor: sc_executor::DefaultExecutor,
+	executor: sc_executor::WasmExecutor,
 ) -> Result<TFullParts<TBl>, Error>
 where
 	TBl: BlockT,
@@ -330,7 +330,7 @@ where
 /// Create an instance of client backed by given backend.
 pub fn new_client<Block>(
 	backend: Arc<Backend<Block>>,
-	executor: sc_executor::DefaultExecutor,
+	executor: sc_executor::WasmExecutor,
 	genesis_storage: &dyn BuildStorage,
 	fork_blocks: ForkBlocks<Block>,
 	bad_blocks: BadBlocks<Block>,
