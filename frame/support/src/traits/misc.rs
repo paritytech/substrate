@@ -31,12 +31,18 @@ const DEFENSIVE_OP_INTERNAL_ERROR: &'static str = "Defensive failure has been tr
 ///
 /// Similar to mark a match arm or `if/else` branch as `unreachable!`.
 pub fn defensive_path(proof: &'static str) {
-	defensive_with_err!(proof);
+	debug_assert!(false, "{}: {:?}", DEFENSIVE_OP_INTERNAL_ERROR, proof);
+	frame_support::log::error!(
+		target: "runtime",
+		"{}: {:?}",
+		DEFENSIVE_OP_PUBLIC_ERROR,
+		proof
+	);
 }
 
 /// Prelude module for all defensive traits to be imported at once.
 pub mod defensive_prelude {
-	pub use super::{Defensive, DefensiveOption, DefensiveResult};
+	pub use super::{defensive_path, Defensive, DefensiveOption, DefensiveResult};
 }
 
 /// A trait to handle errors and options when you are really sure that a condition must hold, but
