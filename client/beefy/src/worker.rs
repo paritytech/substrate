@@ -290,7 +290,7 @@ where
 		let vote_added = rounds.add_vote(&round, vote, self_vote);
 
 		if vote_added && rounds.is_done(&round) {
-			if let Some(signatures) = rounds.drop(&round) {
+			if let Some(signatures) = rounds.conclude(&round) {
 				self.gossip_validator.drop_round(round.1);
 
 				// id is stored for skipped session metric calculation
@@ -309,20 +309,14 @@ where
 
 				info!(target: "beefy", "🥩 Round #{} concluded, committed: {:?}.", round.1, signed_commitment);
 
-				if self
-					.backend
-					.append_justification(
-						BlockId::Number(block_num),
-						(
-							BEEFY_ENGINE_ID,
-							VersionedFinalityProof::V1(signed_commitment.clone()).encode(),
-						),
-					)
-					.is_err()
-				{
-					// just a trace, because until the round lifecycle is improved, we will
-					// conclude certain rounds multiple times.
-					trace!(target: "beefy", "🥩 Failed to append justification: {:?}", signed_commitment);
+				if let Err(e) = self.backend.append_justification(
+					BlockId::Number(block_num),
+					(
+						BEEFY_ENGINE_ID,
+						VersionedFinalityProof::V1(signed_commitment.clone()).encode(),
+					),
+				) {
+					trace!(target: "beefy", "🥩 Error {:?} on appending justification: {:?}", e, signed_commitment);
 				}
 				self.signed_commitment_sender
 					.notify(|| Ok::<_, ()>(signed_commitment))

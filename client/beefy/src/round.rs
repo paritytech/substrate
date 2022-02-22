@@ -60,6 +60,7 @@ fn threshold(authorities: usize) -> usize {
 
 pub(crate) struct Rounds<Payload, Number> {
 	rounds: BTreeMap<(Payload, Number), RoundTracker>,
+	best_done: Option<Number>,
 	session_start: Number,
 	validator_set: ValidatorSet<Public>,
 }
@@ -70,7 +71,7 @@ where
 	N: Ord + AtLeast32BitUnsigned + MaybeDisplay,
 {
 	pub(crate) fn new(session_start: N, validator_set: ValidatorSet<Public>) -> Self {
-		Rounds { rounds: BTreeMap::new(), session_start, validator_set }
+		Rounds { rounds: BTreeMap::new(), best_done: None, session_start, validator_set }
 	}
 }
 
@@ -92,7 +93,8 @@ where
 	}
 
 	pub(crate) fn should_vote(&self, round: &(H, N)) -> bool {
-		self.rounds.get(round).map(|tracker| !tracker.has_self_vote()).unwrap_or(true)
+		Some(round.1.clone()) > self.best_done &&
+			self.rounds.get(round).map(|tracker| !tracker.has_self_vote()).unwrap_or(true)
 	}
 
 	pub(crate) fn add_vote(
@@ -101,7 +103,9 @@ where
 		vote: (Public, Signature),
 		self_vote: bool,
 	) -> bool {
-		if self.validator_set.validators().iter().any(|id| vote.0 == *id) {
+		if Some(round.1.clone()) > self.best_done &&
+			self.validator_set.validators().iter().any(|id| vote.0 == *id)
+		{
 			self.rounds.entry(round.clone()).or_default().add_vote(vote, self_vote)
 		} else {
 			false
@@ -120,10 +124,11 @@ where
 		done
 	}
 
-	pub(crate) fn drop(&mut self, round: &(H, N)) -> Option<Vec<Option<Signature>>> {
+	pub(crate) fn conclude(&mut self, round: &(H, N)) -> Option<Vec<Option<Signature>>> {
 		trace!(target: "beefy", "🥩 About to drop round #{}", round.1);
 
 		let signatures = self.rounds.remove(round)?.votes;
+		self.best_done = self.best_done.clone().max(Some(round.1.clone()));
 
 		Some(
 			self.validator_set
@@ -270,12 +275,12 @@ mod tests {
 
 		assert_eq!(3, rounds.rounds.len());
 
-		// drop unknown round
-		assert!(rounds.drop(&(H256::from_low_u64_le(5), 5)).is_none());
+		// conclude unknown round
+		assert!(rounds.conclude(&(H256::from_low_u64_le(5), 5)).is_none());
 		assert_eq!(3, rounds.rounds.len());
 
-		// drop round 2
-		let signatures = rounds.drop(&(H256::from_low_u64_le(2), 2)).unwrap();
+		// conclude round 2
+		let signatures = rounds.conclude(&(H256::from_low_u64_le(2), 2)).unwrap();
 
 		assert_eq!(2, rounds.rounds.len());
 
