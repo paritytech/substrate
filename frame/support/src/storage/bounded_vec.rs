@@ -206,7 +206,7 @@ impl<T, S: Get<u32>> BoundedVec<T, S> {
 	}
 
 	/// Returns true of this collection is full.
-	pub fn full(&self) -> bool {
+	pub fn is_full(&self) -> bool {
 		self.len() == Self::bound()
 	}
 
@@ -263,7 +263,7 @@ impl<T, S: Get<u32>> BoundedVec<T, S> {
 		if Self::bound() == index && self.len() <= Self::bound() {
 			return Err(())
 		}
-		let maybe_removed = if self.full() {
+		let maybe_removed = if self.is_full() {
 			// defensive-only: since we are at capacity, this is a noop.
 			self.0.truncate(Self::bound());
 			// if we truncate anything, it will be the last one.
