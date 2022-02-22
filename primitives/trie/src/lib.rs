@@ -272,6 +272,7 @@ where
 {
 	{
 		let mut trie = TrieDBMutBuilder::<L>::from_existing(db, &mut root)?
+			.with_optional_cache(cache)
 			.with_optional_recorder(recorder)
 			.build();
 

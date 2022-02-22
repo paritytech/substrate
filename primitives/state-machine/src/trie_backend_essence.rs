@@ -19,7 +19,7 @@
 //! from storage.
 
 use crate::{backend::Consolidate, debug, warn, StorageKey, StorageValue};
-use codec::{Codec, Decode, Encode};
+use codec::Codec;
 use hash_db::{self, AsHashDB, HashDB, HashDBRef, Hasher, Prefix};
 #[cfg(feature = "std")]
 use parking_lot::RwLock;
@@ -30,8 +30,8 @@ use sp_trie::recorder::Recorder;
 use sp_trie::{
 	child_delta_trie_root, delta_trie_root, empty_child_trie_root, read_child_trie_value,
 	read_trie_value,
-	trie_types::{TrieDB, TrieError},
-	DBValue, KeySpacedDB, PrefixedMemoryDB, Trie, TrieDBIterator, TrieDBKeyIterator,
+	trie_types::{TrieDBBuilder, TrieError},
+	DBValue, KeySpacedDB, NodeCodec, PrefixedMemoryDB, Trie, TrieDBIterator, TrieDBKeyIterator,
 };
 #[cfg(feature = "std")]
 use std::{collections::HashMap, sync::Arc};
@@ -353,22 +353,18 @@ where
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<StorageValue>> {
-		let root = match self.child_root(child_info)? {
+		let child_root = match self.child_root(child_info)? {
 			Some(root) => root,
 			None => return Ok(None),
 		};
 
 		let map_e = |e| format!("Trie lookup error: {}", e);
 
-		let mut child_root = H::Out::default();
-		// root is fetched from DB, not writable by runtime, so it's always valid.
-		child_root.as_mut().copy_from_slice(&root);
-
 		self.with_recorder_and_cache(Some(child_root), |recorder, cache| {
 			read_child_trie_value::<Layout<H>, _>(
 				child_info.keyspace(),
 				self,
-				&root,
+				&child_root,
 				key,
 				recorder,
 				cache,
@@ -677,7 +673,7 @@ where
 			ChildType::ParentKeyId => empty_child_trie_root::<sp_trie::LayoutV1<H>>(),
 		};
 		let mut write_overlay = S::Overlay::default();
-		let mut root = match self.child_root(child_info) {
+		let root = match self.child_root(child_info) {
 			Ok(Some(hash)) => hash,
 			Ok(None) => default_root,
 			Err(e) => {
@@ -689,14 +685,15 @@ where
 		self.with_recorder_and_cache_for_storage_root(|recorder, cache| {
 			let mut eph = Ephemeral::new(self.backend_storage(), &mut write_overlay);
 			match match state_version {
-				StateVersion::V0 => child_delta_trie_root::<sp_trie::LayoutV0<H>, _, _, _, _, _, _>(
-					child_info.keyspace(),
-					&mut eph,
-					root,
-					delta,
-					recorder,
-					cache,
-				),
+				StateVersion::V0 =>
+					child_delta_trie_root::<sp_trie::LayoutV0<H>, _, _, _, _, _, _>(
+						child_info.keyspace(),
+						&mut eph,
+						root,
+						delta,
+						recorder,
+						cache,
+					),
 				StateVersion::V1 =>
 					child_delta_trie_root::<sp_trie::LayoutV1<H>, _, _, _, _, _, _>(
 						child_info.keyspace(),
