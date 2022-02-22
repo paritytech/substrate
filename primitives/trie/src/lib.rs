@@ -369,7 +369,7 @@ where
 pub fn read_child_trie_value<L: TrieConfiguration, DB>(
 	keyspace: &[u8],
 	db: &DB,
-	root_slice: &[u8],
+	root: &TrieHash<L>,
 	key: &[u8],
 	recorder: Option<&mut dyn TrieRecorder<TrieHash<L>>>,
 	cache: Option<&mut dyn TrieCache<L::Codec>>,
@@ -377,10 +377,6 @@ pub fn read_child_trie_value<L: TrieConfiguration, DB>(
 where
 	DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue>,
 {
-	let mut root = TrieHash::<L>::default();
-	// root is fetched from DB, not writable by runtime, so it's always valid.
-	root.as_mut().copy_from_slice(root_slice);
-
 	let db = KeySpacedDB::new(&*db, keyspace);
 	TrieDBBuilder::<L>::new_unchecked(&db, &root)
 		.with_optional_recorder(recorder)

@@ -19,16 +19,12 @@
 
 use crate::{
 	trie_backend_essence::{TrieBackendEssence, TrieBackendStorage},
-	Backend, ExecutionError, StorageKey, StorageValue,
+	Backend, StorageKey, StorageValue,
 };
 use codec::Codec;
 use hash_db::{HashDBRef, Hasher, EMPTY_PREFIX};
 use sp_core::storage::{ChildInfo, StateVersion};
-use sp_std::{boxed::Box, vec::Vec};
-#[cfg(feature = "std")]
-use sp_trie::recorder::Recorder;
-use sp_trie::{LayoutV1, MemoryDB, StorageProof};
-use trie_db::TrieRecorder;
+use sp_std::vec::Vec;
 
 /// Patricia trie-based backend. Transaction type is an overlay of changes to commit.
 pub struct TrieBackend<S: TrieBackendStorage<H>, H: Hasher> {

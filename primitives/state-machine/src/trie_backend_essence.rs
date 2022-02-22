@@ -30,9 +30,8 @@ use sp_trie::recorder::Recorder;
 use sp_trie::{
 	child_delta_trie_root, delta_trie_root, empty_child_trie_root, read_child_trie_value,
 	read_trie_value,
-	trie_types::{TrieDBBuilder, TrieError},
-	DBValue, KeySpacedDB, LayoutV0, NodeCodec, PrefixedMemoryDB, Trie, TrieDBIterator,
-	TrieDBKeyIterator,
+	trie_types::{TrieDB, TrieError},
+	DBValue, KeySpacedDB, PrefixedMemoryDB, Trie, TrieDBIterator, TrieDBKeyIterator,
 };
 #[cfg(feature = "std")]
 use std::{collections::HashMap, sync::Arc};
@@ -62,12 +61,12 @@ pub trait Storage<H: Hasher>: Send + Sync {
 
 /// Local cache for child root.
 #[cfg(feature = "std")]
-pub(crate) struct Cache {
-	pub child_root: HashMap<Vec<u8>, Option<Vec<u8>>>,
+pub(crate) struct Cache<H> {
+	pub child_root: HashMap<Vec<u8>, Option<H>>,
 }
 
 #[cfg(feature = "std")]
-impl Cache {
+impl<H> Cache<H> {
 	fn new() -> Self {
 		Cache { child_root: HashMap::new() }
 	}
@@ -79,7 +78,7 @@ pub struct TrieBackendEssence<S: TrieBackendStorage<H>, H: Hasher> {
 	root: H::Out,
 	empty: H::Out,
 	#[cfg(feature = "std")]
-	pub(crate) cache: Arc<RwLock<Cache>>,
+	pub(crate) cache: Arc<RwLock<Cache<H::Out>>>,
 	#[cfg(feature = "std")]
 	trie_node_cache: Option<sp_trie::cache::LocalTrieNodeCache<H>>,
 	#[cfg(feature = "std")]
@@ -249,22 +248,26 @@ where
 	}
 
 	/// Access the root of the child storage in its parent trie
-	fn child_root(&self, child_info: &ChildInfo) -> Result<Option<StorageValue>> {
+	fn child_root(&self, child_info: &ChildInfo) -> Result<Option<H::Out>> {
 		#[cfg(feature = "std")]
 		{
 			if let Some(result) = self.cache.read().child_root.get(child_info.storage_key()) {
-				return Ok(result.clone())
+				return Ok(*result)
 			}
 		}
 
-		let result = self.storage(child_info.prefixed_storage_key().as_slice())?;
+		let result = self.storage(child_info.prefixed_storage_key().as_slice())?.map(|r| {
+			let mut hash = H::Out::default();
+
+			// root is fetched from DB, not writable by runtime, so it's always valid.
+			hash.as_mut().copy_from_slice(&r[..]);
+
+			hash
+		});
 
 		#[cfg(feature = "std")]
 		{
-			self.cache
-				.write()
-				.child_root
-				.insert(child_info.storage_key().to_vec(), result.clone());
+			self.cache.write().child_root.insert(child_info.storage_key().to_vec(), result);
 		}
 
 		Ok(result)
@@ -282,15 +285,7 @@ where
 			None => return Ok(None),
 		};
 
-		let mut hash = H::Out::default();
-
-		if child_root.len() != hash.as_ref().len() {
-			return Err(format!("Invalid child storage hash at {:?}", child_info.storage_key()))
-		}
-		// note: child_root and hash must be same size, panics otherwise.
-		hash.as_mut().copy_from_slice(&child_root[..]);
-
-		self.next_storage_key_from_root(&hash, Some(child_info), key)
+		self.next_storage_key_from_root(&child_root, Some(child_info), key)
 	}
 
 	/// Return next key from main trie or child trie by providing corresponding root.
@@ -358,9 +353,10 @@ where
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<StorageValue>> {
-		let root = self
-			.child_root(child_info)?
-			.unwrap_or_else(|| empty_child_trie_root::<Layout<H>>().encode());
+		let root = match self.child_root(child_info)? {
+			Some(root) => root,
+			None => return Ok(None),
+		};
 
 		let map_e = |e| format!("Trie lookup error: {}", e);
 
@@ -393,19 +389,13 @@ where
 		f: impl FnMut(Vec<u8>, Vec<u8>) -> bool,
 		allow_missing_nodes: bool,
 	) -> Result<bool> {
-		let mut child_root;
 		let root = if let Some(child_info) = child_info.as_ref() {
-			if let Some(fetched_child_root) = self.child_root(child_info)? {
-				child_root = H::Out::default();
-				// root is fetched from DB, not writable by runtime, so it's always valid.
-				child_root.as_mut().copy_from_slice(fetched_child_root.as_slice());
-
-				&child_root
-			} else {
-				return Ok(true)
+			match self.child_root(child_info)? {
+				Some(child_root) => child_root,
+				None => return Ok(true),
 			}
 		} else {
-			&self.root
+			self.root
 		};
 
 		self.trie_iter_inner(&root, prefix, f, child_info, start_at, allow_missing_nodes)
@@ -419,22 +409,21 @@ where
 		prefix: Option<&[u8]>,
 		mut f: F,
 	) {
-		let mut child_root = H::Out::default();
 		let root = if let Some(child_info) = child_info.as_ref() {
-			let root_vec = match self.child_root(child_info) {
-				Ok(v) => v.unwrap_or_else(|| empty_child_trie_root::<Layout<H>>().encode()),
+			match self.child_root(child_info) {
+				Ok(Some(v)) => v,
+				// If the child trie doesn't exist, there is no need to continue.
+				Ok(None) => return,
 				Err(e) => {
 					debug!(target: "trie", "Error while iterating child storage: {}", e);
 					return
 				},
-			};
-			child_root.as_mut().copy_from_slice(&root_vec);
-			&child_root
+			}
 		} else {
-			&self.root
+			self.root
 		};
 
-		self.trie_iter_key_inner(root, prefix, |k| f(k), child_info)
+		self.trie_iter_key_inner(&root, prefix, |k| f(k), child_info)
 	}
 
 	/// Execute given closure for all keys starting with prefix.
@@ -444,15 +433,16 @@ where
 		prefix: &[u8],
 		mut f: impl FnMut(&[u8]),
 	) {
-		let root_vec = match self.child_root(child_info) {
-			Ok(v) => v.unwrap_or_else(|| empty_child_trie_root::<Layout<H>>().encode()),
+		let root = match self.child_root(child_info) {
+			Ok(Some(v)) => v,
+			// If the child trie doesn't exist, there is no need to continue.
+			Ok(None) => return,
 			Err(e) => {
 				debug!(target: "trie", "Error while iterating child storage: {}", e);
 				return
 			},
 		};
-		let mut root = H::Out::default();
-		root.as_mut().copy_from_slice(&root_vec);
+
 		self.trie_iter_key_inner(
 			&root,
 			Some(prefix),
@@ -655,7 +645,7 @@ where
 		let root = self.with_recorder_and_cache_for_storage_root(|recorder, cache| {
 			let mut eph = Ephemeral::new(self.backend_storage(), &mut write_overlay);
 			let res = match state_version {
-				StateVersion::V0 => delta_trie_root::<LayoutV0<H>, _, _, _, _, _>(
+				StateVersion::V0 => delta_trie_root::<sp_trie::LayoutV0<H>, _, _, _, _, _>(
 					&mut eph, self.root, delta, recorder, cache,
 				),
 				StateVersion::V1 => delta_trie_root::<sp_trie::LayoutV1<H>, _, _, _, _, _>(
@@ -688,9 +678,8 @@ where
 		};
 		let mut write_overlay = S::Overlay::default();
 		let mut root = match self.child_root(child_info) {
-			Ok(value) => value
-				.and_then(|r| Decode::decode(&mut &r[..]).ok())
-				.unwrap_or_else(|| default_root.clone()),
+			Ok(Some(hash)) => hash,
+			Ok(None) => default_root,
 			Err(e) => {
 				warn!(target: "trie", "Failed to read child storage root: {}", e);
 				default_root.clone()
@@ -700,7 +689,7 @@ where
 		self.with_recorder_and_cache_for_storage_root(|recorder, cache| {
 			let mut eph = Ephemeral::new(self.backend_storage(), &mut write_overlay);
 			match match state_version {
-				StateVersion::V0 => child_delta_trie_root::<LayoutV0<H>, _, _, _, _, _, _>(
+				StateVersion::V0 => child_delta_trie_root::<sp_trie::LayoutV0<H>, _, _, _, _, _, _>(
 					child_info.keyspace(),
 					&mut eph,
 					root,
