@@ -129,13 +129,6 @@ impl<T, S> BoundedVec<T, S> {
 		self.0.sort_by(compare)
 	}
 
-	/// Exactly the same semantics as [`Vec::pop`].
-	///
-	/// This is safe since popping can only shrink the inner vector.
-	pub fn pop(&mut self) -> Option<T> {
-		self.0.pop()
-	}
-
 	/// Exactly the same semantics as [`Vec::remove`].
 	///
 	/// # Panics
@@ -159,19 +152,31 @@ impl<T, S> BoundedVec<T, S> {
 		self.0.retain(f)
 	}
 
-	/// Exactly the same semantics as [`Vec::truncate`].
-	///
-	/// This is safe because `truncate` can never increase the length of the internal vector.
-	pub fn truncate(&mut self, len: usize) {
-		self.0.truncate(len)
-	}
-
 	/// Exactly the same semantics as [`slice::get_mut`].
 	pub fn get_mut<I: SliceIndex<[T]>>(
 		&mut self,
 		index: I,
 	) -> Option<&mut <I as SliceIndex<[T]>>::Output> {
 		self.0.get_mut(index)
+	}
+
+	/// Exactly the same semantics as [`Vec::truncate`].
+	///
+	/// This is safe because `truncate` can never increase the length of the internal vector.
+	pub fn truncate(&mut self, s: usize) {
+		self.0.truncate(s);
+	}
+
+	/// Exactly the same semantics as [`Vec::pop`].
+	///
+	/// This is safe since popping can only shrink the inner vector.
+	pub fn pop(&mut self) -> Option<T> {
+		self.0.pop()
+	}
+
+	/// Exactly the same semantics as [`slice::iter_mut`].
+	pub fn iter_mut(&mut self) -> core::slice::IterMut<'_, T> {
+		self.0.iter_mut()
 	}
 }
 
