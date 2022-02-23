@@ -66,7 +66,16 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
-use std::{borrow::Cow, collections::HashMap, convert::TryInto, pin::Pin, sync::Arc, u64};
+use std::{
+	borrow::Cow,
+	collections::{HashMap, HashSet},
+	convert::TryInto,
+	future::Future,
+	pin::Pin,
+	sync::Arc,
+	task::{Context, Poll},
+	time::Duration,
+};
 
 use codec::{Decode, Encode};
 use futures::{
@@ -82,7 +91,10 @@ use prometheus_endpoint::Registry;
 use retain_mut::RetainMut;
 use schnorrkel::SignatureError;
 
-use sc_client_api::{backend::AuxStore, BlockchainEvents, ProvideUncles, UsageProvider};
+use sc_client_api::{
+	backend::AuxStore, AuxDataOperations, BlockchainEvents, FinalityNotification, PreCommitActions,
+	ProvideUncles, UsageProvider,
+};
 use sc_consensus::{
 	block_import::{
 		BlockCheckParams, BlockImport, BlockImportParams, ForkChoiceStrategy, ImportResult,
@@ -98,7 +110,7 @@ use sc_consensus_slots::{
 	SlotInfo, StorageChanges,
 };
 use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG, CONSENSUS_TRACE};
-use sp_api::{ApiExt, NumberFor, ProvideRuntimeApi};
+use sp_api::{ApiExt, ProvideRuntimeApi};
 use sp_application_crypto::AppKey;
 use sp_block_builder::BlockBuilder as BlockBuilderApi;
 use sp_blockchain::{Error as ClientError, HeaderBackend, HeaderMetadata, Result as ClientResult};
@@ -113,7 +125,7 @@ use sp_inherents::{CreateInherentDataProviders, InherentData, InherentDataProvid
 use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 use sp_runtime::{
 	generic::{BlockId, OpaqueDigestItemId},
-	traits::{Block as BlockT, Header, Zero},
+	traits::{Block as BlockT, Header, NumberFor, One, SaturatedConversion, Saturating, Zero},
 	DigestItem,
 };
 
@@ -458,6 +470,7 @@ where
 	C: ProvideRuntimeApi<B>
 		+ ProvideUncles<B>
 		+ BlockchainEvents<B>
+		+ PreCommitActions<B>
 		+ HeaderBackend<B>
 		+ HeaderMetadata<B, Error = ClientError>
 		+ Send
@@ -501,7 +514,8 @@ where
 	};
 
 	info!(target: "babe", "👶 Starting BABE Authorship worker");
-	let inner = sc_consensus_slots::start_slot_worker(
+
+	let slot_worker = sc_consensus_slots::start_slot_worker(
 		babe_link.config.slot_duration(),
 		select_chain,
 		worker,
@@ -515,11 +529,67 @@ where
 	let answer_requests =
 		answer_requests(worker_rx, babe_link.config, client, babe_link.epoch_changes.clone());
 
+	let inner = future::select(Box::pin(slot_worker), Box::pin(answer_requests));
 	Ok(BabeWorker {
-		inner: Box::pin(future::join(inner, answer_requests).map(|_| ())),
+		inner: Box::pin(inner.map(|_| ())),
 		slot_notification_sinks,
 		handle: BabeWorkerHandle(worker_tx),
 	})
+}
+
+// Remove obsolete block's weight data by leveraging finality notifications.
+// This includes data for all finalized blocks (excluding the most recent one)
+// and all stale branches.
+fn aux_storage_cleanup<C: HeaderMetadata<Block>, Block: BlockT>(
+	client: &C,
+	notification: &FinalityNotification<Block>,
+) -> AuxDataOperations {
+	let mut aux_keys = HashSet::new();
+
+	// Cleans data for finalized block's ancestors down to, and including, the previously
+	// finalized one.
+
+	let first_new_finalized = notification.tree_route.get(0).unwrap_or(&notification.hash);
+	match client.header_metadata(*first_new_finalized) {
+		Ok(meta) => {
+			aux_keys.insert(aux_schema::block_weight_key(meta.parent));
+		},
+		Err(err) => {
+			warn!(target: "babe", "header lookup fail while cleaning data for block {}: {}", first_new_finalized.to_string(), err.to_string());
+		},
+	}
+
+	aux_keys.extend(notification.tree_route.iter().map(aux_schema::block_weight_key));
+
+	// Cleans data for stale branches.
+
+	// A safenet in case of malformed notification.
+	let height_limit = notification.header.number().saturating_sub(
+		notification.tree_route.len().saturated_into::<NumberFor<Block>>() + One::one(),
+	);
+	for head in notification.stale_heads.iter() {
+		let mut hash = *head;
+		// Insert stale blocks hashes until canonical chain is not reached.
+		// Soon or late we should hit an element already present within the `aux_keys` set.
+		while aux_keys.insert(aux_schema::block_weight_key(hash)) {
+			match client.header_metadata(hash) {
+				Ok(meta) => {
+					// This should never happen and must be considered a bug.
+					if meta.number <= height_limit {
+						warn!(target: "babe", "unexpected canonical chain state or malformed finality notification");
+						break
+					}
+					hash = meta.parent;
+				},
+				Err(err) => {
+					warn!(target: "babe", "header lookup fail while cleaning data for block {}: {}", head.to_string(), err.to_string());
+					break
+				},
+			}
+		}
+	}
+
+	aux_keys.into_iter().map(|val| (val, None)).collect()
 }
 
 async fn answer_requests<B: BlockT, C>(
@@ -604,7 +674,7 @@ impl<B: BlockT> BabeWorkerHandle<B> {
 /// Worker for Babe which implements `Future<Output=()>`. This must be polled.
 #[must_use]
 pub struct BabeWorker<B: BlockT> {
-	inner: Pin<Box<dyn futures::Future<Output = ()> + Send + 'static>>,
+	inner: Pin<Box<dyn Future<Output = ()> + Send + 'static>>,
 	slot_notification_sinks: SlotNotificationSinks<B>,
 	handle: BabeWorkerHandle<B>,
 }
@@ -628,13 +698,10 @@ impl<B: BlockT> BabeWorker<B> {
 	}
 }
 
-impl<B: BlockT> futures::Future for BabeWorker<B> {
+impl<B: BlockT> Future for BabeWorker<B> {
 	type Output = ();
 
-	fn poll(
-		mut self: Pin<&mut Self>,
-		cx: &mut futures::task::Context,
-	) -> futures::task::Poll<Self::Output> {
+	fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
 		self.inner.as_mut().poll(cx)
 	}
 }
@@ -857,7 +924,7 @@ where
 		self.telemetry.clone()
 	}
 
-	fn proposing_remaining_duration(&self, slot_info: &SlotInfo<B>) -> std::time::Duration {
+	fn proposing_remaining_duration(&self, slot_info: &SlotInfo<B>) -> Duration {
 		let parent_slot = find_pre_digest::<B>(&slot_info.chain_head).ok().map(|d| d.slot());
 
 		sc_consensus_slots::proposing_remaining_duration(
@@ -1683,7 +1750,11 @@ pub fn block_import<Client, Block: BlockT, I>(
 	client: Arc<Client>,
 ) -> ClientResult<(BabeBlockImport<Block, Client, I>, BabeLink<Block>)>
 where
-	Client: AuxStore + HeaderBackend<Block> + HeaderMetadata<Block, Error = sp_blockchain::Error>,
+	Client: AuxStore
+		+ HeaderBackend<Block>
+		+ HeaderMetadata<Block, Error = sp_blockchain::Error>
+		+ PreCommitActions<Block>
+		+ 'static,
 {
 	let epoch_changes =
 		aux_schema::load_epoch_changes::<Block, _>(&*client, &config.genesis_config)?;
@@ -1693,6 +1764,12 @@ where
 	// epoch tree it is useful as a migration, so that nodes prune long trees on
 	// startup rather than waiting until importing the next epoch change block.
 	prune_finalized(client.clone(), &mut epoch_changes.shared_data())?;
+
+	let client_clone = client.clone();
+	let on_finality = move |summary: &FinalityNotification<Block>| {
+		aux_storage_cleanup(client_clone.as_ref(), summary)
+	};
+	client.register_finality_action(Box::new(on_finality));
 
 	let import = BabeBlockImport::new(client, epoch_changes, wrapped_block_import, config);
 
