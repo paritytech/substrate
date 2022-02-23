@@ -48,7 +48,8 @@ pub trait WeightInfo {
 	fn claim_payout() -> Weight;
 	fn unbond_other() -> Weight;
 	fn pool_withdraw_unbonded(s: u32, ) -> Weight;
-	fn withdraw_unbonded_other(s: u32, ) -> Weight;
+	fn withdraw_unbonded_other_update(s: u32, ) -> Weight;
+	fn withdraw_unbonded_other_kill(s: u32, ) -> Weight;
 	fn create() -> Weight;
 	fn nominate() -> Weight;
 }
@@ -118,7 +119,14 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Balances Locks (r:1 w:1)
 	// Storage: System Account (r:1 w:1)
 	// Storage: NominationPools CounterForDelegators (r:1 w:1)
-	fn withdraw_unbonded_other(s: u32, ) -> Weight {
+	fn withdraw_unbonded_other_update(s: u32, ) -> Weight {
+		(66_522_000 as Weight)
+			// Standard Error: 0
+			.saturating_add((57_000 as Weight).saturating_mul(s as Weight))
+			.saturating_add(T::DbWeight::get().reads(8 as Weight))
+			.saturating_add(T::DbWeight::get().writes(6 as Weight))
+	}
+	fn withdraw_unbonded_other_kill(s: u32, ) -> Weight {
 		(66_522_000 as Weight)
 			// Standard Error: 0
 			.saturating_add((57_000 as Weight).saturating_mul(s as Weight))
@@ -231,7 +239,15 @@ impl WeightInfo for () {
 	// Storage: Balances Locks (r:1 w:1)
 	// Storage: System Account (r:1 w:1)
 	// Storage: NominationPools CounterForDelegators (r:1 w:1)
-	fn withdraw_unbonded_other(s: u32, ) -> Weight {
+	fn withdraw_unbonded_other_update(s: u32) -> Weight {
+		(66_522_000 as Weight)
+			// Standard Error: 0
+			.saturating_add((57_000 as Weight).saturating_mul(s as Weight))
+			.saturating_add(RocksDbWeight::get().reads(8 as Weight))
+			.saturating_add(RocksDbWeight::get().writes(6 as Weight))
+	}
+	// Storage: NominationPools CounterForDelegators (r:1 w:1)
+	fn withdraw_unbonded_other_kill(s: u32) -> Weight {
 		(66_522_000 as Weight)
 			// Standard Error: 0
 			.saturating_add((57_000 as Weight).saturating_mul(s as Weight))

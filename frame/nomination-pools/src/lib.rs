@@ -339,9 +339,6 @@ use sp_runtime::traits::{Bounded, Convert, Saturating, StaticLookup, TrailingZer
 use sp_staking::{EraIndex, PoolsInterface, SlashPoolArgs, SlashPoolOut, StakingInterface};
 use sp_std::{collections::btree_map::BTreeMap, ops::Div, vec::Vec};
 
-#[cfg(feature = "runtime-benchmarks")]
-pub mod benchmarking;
-
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
@@ -367,9 +364,8 @@ fn points_to_issue<T: Config>(
 	new_funds: BalanceOf<T>,
 ) -> BalanceOf<T> {
 	match (current_balance.is_zero(), current_points.is_zero()) {
-		(true, true) | (false, true) => {
-			new_funds.saturating_mul(POINTS_TO_BALANCE_INIT_RATIO.into())
-		},
+		(true, true) | (false, true) =>
+			new_funds.saturating_mul(POINTS_TO_BALANCE_INIT_RATIO.into()),
 		(true, false) => {
 			// The pool was totally slashed.
 			// This is the equivalent of `(current_points / 1) * new_funds`.
@@ -394,7 +390,7 @@ fn balance_to_unbond<T: Config>(
 ) -> BalanceOf<T> {
 	if current_balance.is_zero() || current_points.is_zero() || delegator_points.is_zero() {
 		// There is nothing to unbond
-		return Zero::zero();
+		return Zero::zero()
 	}
 
 	// Equivalent of (current_balance / current_points) * delegator_points
@@ -546,8 +542,8 @@ impl<T: Config> BondedPool<T> {
 		ensure!(points_to_balance_ratio_floor < 10u32.into(), Error::<T>::OverflowRisk);
 		// while restricting the balance to 1/10th of max total issuance,
 		ensure!(
-			new_funds.saturating_add(bonded_balance)
-				< BalanceOf::<T>::max_value().div(10u32.into()),
+			new_funds.saturating_add(bonded_balance) <
+				BalanceOf::<T>::max_value().div(10u32.into()),
 			Error::<T>::OverflowRisk
 		);
 		// then we can be decently confident the bonding pool points will not overflow
@@ -560,7 +556,7 @@ impl<T: Config> BondedPool<T> {
 	}
 
 	fn can_kick(&self, who: &T::AccountId) -> bool {
-		(*who == self.root || *who == self.state_toggler) && self.state == PoolState::Blocked
+		*who == self.root || *who == self.state_toggler && self.state == PoolState::Blocked
 	}
 
 	fn is_destroying(&self) -> bool {
@@ -723,7 +719,7 @@ impl<T: Config> SubPools<T> {
 			// For the first `0..TotalUnbondingPools` eras of the chain we don't need to do
 			// anything. I.E. if `TotalUnbondingPools` is 5 and we are in era 4 we can add a pool
 			// for this era and have exactly `TotalUnbondingPools` pools.
-			return self;
+			return self
 		}
 
 		//  I.E. if `TotalUnbondingPools` is 5 and current era is 10, we only want to retain pools
@@ -1090,8 +1086,8 @@ pub mod pallet {
 
 		/// Call `withdraw_unbonded` for the pools account. This call can be made by any account.
 		///
-		/// This is useful if their are too many unlocking chunks to call `unbond_other`, and some can be cleared
-		/// by withdrawing.
+		/// This is useful if their are too many unlocking chunks to call `unbond_other`, and some
+		/// can be cleared by withdrawing.
 		#[pallet::weight(666)]
 		pub fn pool_withdraw_unbonded(
 			origin: OriginFor<T>,
@@ -1121,19 +1117,21 @@ pub mod pallet {
 		/// - The caller is the target and they are not the depositor.
 		///
 		/// Note: If the target is the depositor, the pool will be destroyed.
-		#[pallet::weight(666)]
+		#[pallet::weight(
+			T::WeightInfo::withdraw_unbonded_other_kill(*num_slashing_spans)
+		)]
 		pub fn withdraw_unbonded_other(
 			origin: OriginFor<T>,
 			target: T::AccountId,
 			num_slashing_spans: u32,
-		) -> DispatchResult {
+		) -> DispatchResultWithPostInfo {
 			let caller = ensure_signed(origin)?;
 			let delegator = Delegators::<T>::get(&target).ok_or(Error::<T>::DelegatorNotFound)?;
 			let unbonding_era = delegator.unbonding_era.ok_or(Error::<T>::NotUnbonding)?;
 			let current_era = T::StakingInterface::current_era().unwrap_or(Zero::zero());
 			ensure!(
-				current_era.saturating_sub(unbonding_era)
-					>= T::StakingInterface::bonding_duration(),
+				current_era.saturating_sub(unbonding_era) >=
+					T::StakingInterface::bonding_duration(),
 				Error::<T>::NotUnbondedYet
 			);
 
@@ -1191,7 +1189,7 @@ pub mod pallet {
 				});
 			}
 
-			if should_remove_pool {
+			let post_info_weight = if should_remove_pool {
 				let reward_pool = RewardPools::<T>::take(&delegator.pool)
 					.defensive_ok_or_else(|| Error::<T>::PoolNotFound)?;
 				SubPoolsStorage::<T>::remove(&delegator.pool);
@@ -1201,13 +1199,15 @@ pub mod pallet {
 				T::Currency::make_free_balance_be(&reward_pool.account, Zero::zero());
 				T::Currency::make_free_balance_be(&bonded_pool.account, Zero::zero());
 				bonded_pool.remove();
-			// Event destroyed
+				// TODO: Event destroyed
+				None
 			} else {
 				SubPoolsStorage::<T>::insert(&delegator.pool, sub_pools);
-			}
+				Some(T::WeightInfo::withdraw_unbonded_other_update(num_slashing_spans))
+			};
 			Delegators::<T>::remove(&target);
 
-			Ok(())
+			Ok(post_info_weight.into())
 		}
 
 		/// Note that the pool creator will delegate `amount` to the pool and cannot unbond until
@@ -1229,8 +1229,8 @@ pub mod pallet {
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			ensure!(
-				amount >= T::StakingInterface::minimum_bond()
-					&& amount >= MinCreateBond::<T>::get(),
+				amount >= T::StakingInterface::minimum_bond() &&
+					amount >= MinCreateBond::<T>::get(),
 				Error::<T>::MinimumBondNotMet
 			);
 			if let Some(max_pools) = MaxPools::<T>::get() {
@@ -1385,9 +1385,9 @@ impl<T: Config> Pallet<T> {
 		let delegator_virtual_points = T::BalanceToU256::convert(delegator.points)
 			.saturating_mul(T::BalanceToU256::convert(new_earnings_since_last_claim));
 
-		let delegator_payout = if delegator_virtual_points.is_zero()
-			|| current_points.is_zero()
-			|| reward_pool.balance.is_zero()
+		let delegator_payout = if delegator_virtual_points.is_zero() ||
+			current_points.is_zero() ||
+			reward_pool.balance.is_zero()
 		{
 			Zero::zero()
 		} else {
@@ -1479,7 +1479,7 @@ impl<T: Config> Pallet<T> {
 			return Some(SlashPoolOut {
 				slashed_bonded: Zero::zero(),
 				slashed_unlocking: Default::default(),
-			});
+			})
 		}
 		let slashed_unlocking: BTreeMap<_, _> = affected_range
 			.filter_map(|era| {
