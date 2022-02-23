@@ -22,13 +22,12 @@
 use crate::{ConsensusDataProvider, Error};
 use sc_client_api::{AuxStore, UsageProvider};
 use sc_consensus::BlockImportParams;
-use sc_consensus_aura::slot_duration;
 use sp_api::{ProvideRuntimeApi, TransactionFor};
 use sp_blockchain::{HeaderBackend, HeaderMetadata};
 use sp_consensus_aura::{
 	digests::CompatibleDigestItem,
 	sr25519::{AuthorityId, AuthoritySignature},
-	AuraApi,
+	AuraApi, Slot, SlotDuration,
 };
 use sp_inherents::InherentData;
 use sp_runtime::{traits::Block as BlockT, Digest, DigestItem};
@@ -37,8 +36,8 @@ use std::{marker::PhantomData, sync::Arc};
 
 /// Consensus data provider for Aura.
 pub struct AuraConsensusDataProvider<B, C> {
-	// slot duration in milliseconds
-	slot_duration: u64,
+	// slot duration
+	slot_duration: SlotDuration,
 	// phantom data for required generics
 	_phantom: PhantomData<(B, C)>,
 }
@@ -52,8 +51,8 @@ where
 	/// Creates a new instance of the [`AuraConsensusDataProvider`], requires that `client`
 	/// implements [`sp_consensus_aura::AuraApi`]
 	pub fn new(client: Arc<C>) -> Self {
-		let slot_duration =
-			(*slot_duration(&*client).expect("slot_duration is always present; qed.")).get();
+		let slot_duration = sc_consensus_aura::slot_duration(&*client)
+			.expect("slot_duration is always present; qed.");
 
 		Self { slot_duration, _phantom: PhantomData }
 	}
@@ -76,13 +75,15 @@ where
 		_parent: &B::Header,
 		inherents: &InherentData,
 	) -> Result<Digest, Error> {
-		let time_stamp =
-			*inherents.timestamp_inherent_data()?.expect("Timestamp is always present; qed");
+		let timestamp =
+			inherents.timestamp_inherent_data()?.expect("Timestamp is always present; qed");
+
 		// we always calculate the new slot number based on the current time-stamp and the slot
 		// duration.
 		let digest_item = <DigestItem as CompatibleDigestItem<AuthoritySignature>>::aura_pre_digest(
-			(time_stamp / self.slot_duration).into(),
+			Slot::from_timestamp(timestamp, self.slot_duration),
 		);
+
 		Ok(Digest { logs: vec![digest_item] })
 	}
 

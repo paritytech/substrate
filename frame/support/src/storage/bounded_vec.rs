@@ -159,6 +159,11 @@ impl<T, S> BoundedVec<T, S> {
 	pub fn pop(&mut self) -> Option<T> {
 		self.0.pop()
 	}
+
+	/// Exactly the same semantics as [`slice::iter_mut`].
+	pub fn iter_mut(&mut self) -> core::slice::IterMut<'_, T> {
+		self.0.iter_mut()
+	}
 }
 
 impl<T, S: Get<u32>> From<BoundedVec<T, S>> for Vec<T> {
