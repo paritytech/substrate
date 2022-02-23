@@ -175,7 +175,7 @@ impl From<TimeWeight> for WeightV2 {
 /// These constants are specific to FRAME, and the current implementation of its various components.
 /// For example: FRAME System, FRAME Executive, our FRAME support libraries, etc...
 pub mod constants {
-	use super::Weight;
+	use super::TimeWeight;
 	use crate::parameter_types;
 
 	pub const WEIGHT_PER_SECOND: TimeWeight = 1_000_000_000_000;
@@ -187,7 +187,7 @@ pub mod constants {
 		/// Importing a block with 0 txs takes ~5 ms
 		pub const BlockExecutionWeight: TimeWeight = 5 * WEIGHT_PER_MILLIS;
 		/// Executing 10,000 System remarks (no-op) txs takes ~1.26 seconds -> ~125 µs per tx
-		pub const ExtrinsicBaseWeight: Weight = 125 * WEIGHT_PER_MICROS;
+		pub const ExtrinsicBaseWeight: TimeWeight = 125 * WEIGHT_PER_MICROS;
 	}
 
 	// Expose the DB weights.
