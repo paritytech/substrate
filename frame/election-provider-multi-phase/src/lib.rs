@@ -1378,7 +1378,7 @@ impl<T: Config> Pallet<T> {
 		if desired_targets > max_len {
 			log!(
 				warn,
-				"desired_targets: {} > targets.len() {}, capping desired_targets",
+				"desired_targets: {} > targets.len(): {}, capping desired_targets",
 				desired_targets,
 				max_len
 			);
