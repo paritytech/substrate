@@ -66,10 +66,10 @@ pub mod inherent;
 pub mod error;
 pub mod instances;
 pub mod migrations;
-mod paritydb_weights;
-mod rocksdb_weights;
 pub mod traits;
 pub mod weights;
+mod paritydb_weights;
+mod rocksdb_weights;
 
 #[doc(hidden)]
 pub mod unsigned {
