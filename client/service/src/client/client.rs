@@ -342,17 +342,6 @@ where
 impl<B, E, Block, RA> Client<B, E, Block, RA>
 where
 	B: backend::Backend<Block>,
-	Block: BlockT,
-{
-	/// Get a reference to the state at a given block.
-	pub fn state_at(&self, block: &BlockId<Block>) -> sp_blockchain::Result<B::State> {
-		self.backend.state_at(*block)
-	}
-}
-
-impl<B, E, Block, RA> Client<B, E, Block, RA>
-where
-	B: backend::Backend<Block>,
 	E: CallExecutor<Block>,
 	Block: BlockT,
 	Block::Header: Clone,
@@ -428,6 +417,11 @@ where
 	/// useful for test environments.
 	pub fn finality_notification_sinks(&self) -> &NotificationSinks<FinalityNotification<Block>> {
 		&self.finality_notification_sinks
+	}
+
+	/// Get a reference to the state at a given block.
+	pub fn state_at(&self, block: &BlockId<Block>) -> sp_blockchain::Result<B::State> {
+		self.backend.state_at(*block)
 	}
 
 	/// Get the code at a given block.

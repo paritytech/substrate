@@ -86,7 +86,7 @@ pub fn run() -> Result<()> {
 
 			runner.sync_run(|config| cmd.run::<Block, RuntimeApi, ExecutorDispatch>(config))
 		},
-		Some(Subcommand::Benchmcark(cmd)) =>
+		Some(Subcommand::Benchmark(cmd)) =>
 			if cfg!(feature = "runtime-benchmarks") {
 				let runner = cli.create_runner(cmd)?;
 
@@ -96,11 +96,21 @@ pub fn run() -> Result<()> {
 				You can enable it with `--features runtime-benchmarks`."
 					.into())
 			},
-		// TODO this should be a sub-command of the bench-cli.
-		// Now for testing purposes it is part of the client commands.
-		Some(Subcommand::Bedrock(cmd)) => {
+		Some(Subcommand::BenchmarkStorage(cmd)) => {
+			if cfg!(feature = "runtime-benchmarks") {
+				return Err("Benchmarking wasn't enabled when building the node. \
+				You can enable it with `--features runtime-benchmarks`."
+					.into())
+			}
+
 			let runner = cli.create_runner(cmd)?;
-			runner.sync_run(|config| cmd.run::<Block>(config))
+			runner.async_run(|config| {
+				let PartialComponents { client, task_manager, backend, .. } = new_partial(&config)?;
+				let db = backend.expose_db();
+				let storage = backend.expose_storage();
+
+				Ok((cmd.run(config, client, db, storage), task_manager))
+			})
 		},
 		Some(Subcommand::Key(cmd)) => cmd.run(&cli),
 		Some(Subcommand::Sign(cmd)) => cmd.run(),

@@ -15,8 +15,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Benchmarks the time it takes to access runtime storage.
-
 use sc_cli::{CliConfiguration, DatabaseParams, PruningParams, Result, SharedParams};
 use sc_client_api::{Backend as ClientBackend, StorageProvider, UsageProvider};
 use sc_client_db::DbHash;
@@ -31,9 +29,9 @@ use sp_trie::PrefixedMemoryDB;
 use clap::Parser;
 use log::info;
 use rand::prelude::*;
-use std::{fmt::Debug, path::PathBuf, sync::Arc};
+use std::{fmt::Debug, sync::Arc};
 
-use super::post_process::{PostProcParams, TemplateData, TimeResult};
+use super::post_process::{PostProcParams, TemplateData};
 
 #[derive(Debug, Parser)]
 pub struct StorageCmd {
