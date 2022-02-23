@@ -446,7 +446,7 @@ where
 			let payload = Payload::new(known_payload_ids::MMR_ROOT_ID, mmr_root.encode());
 
 			if let Some(rounds) = &self.rounds {
-				if !rounds.should_vote(&(payload.clone(), target_number)) {
+				if !rounds.should_self_vote(&(payload.clone(), target_number)) {
 					debug!(target: "beefy", "🥩 Don't double vote for block number: {:?}", target_number);
 					return
 				}

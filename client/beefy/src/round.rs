@@ -92,7 +92,7 @@ where
 		&self.session_start
 	}
 
-	pub(crate) fn should_vote(&self, round: &(H, N)) -> bool {
+	pub(crate) fn should_self_vote(&self, round: &(H, N)) -> bool {
 		Some(round.1.clone()) > self.best_done &&
 			self.rounds.get(round).map(|tracker| !tracker.has_self_vote()).unwrap_or(true)
 	}
@@ -154,8 +154,48 @@ mod tests {
 
 	use beefy_primitives::{crypto::Public, ValidatorSet};
 
-	use super::Rounds;
+	use super::{threshold, RoundTracker, Rounds};
 	use crate::keystore::tests::Keyring;
+
+	#[test]
+	fn round_tracker() {
+		let mut rt = RoundTracker::default();
+		let bob_vote = (Keyring::Bob.public(), Keyring::Bob.sign(b"I am committed"));
+		let threshold = 2;
+
+		// self vote not added yet
+		assert!(!rt.has_self_vote());
+
+		// adding new vote allowed
+		assert!(rt.add_vote(bob_vote.clone(), false));
+		// adding existing vote not allowed
+		assert!(!rt.add_vote(bob_vote, false));
+
+		// self vote still not added yet
+		assert!(!rt.has_self_vote());
+
+		// vote is not done
+		assert!(!rt.is_done(threshold));
+
+		let alice_vote = (Keyring::Alice.public(), Keyring::Alice.sign(b"I am committed"));
+		// adding new vote (self vote this time) allowed
+		assert!(rt.add_vote(alice_vote, true));
+
+		// self vote registered
+		assert!(rt.has_self_vote());
+		// vote is now done
+		assert!(rt.is_done(threshold));
+	}
+
+	#[test]
+	fn vote_threshold() {
+		assert_eq!(threshold(1), 1);
+		assert_eq!(threshold(2), 2);
+		assert_eq!(threshold(3), 3);
+		assert_eq!(threshold(4), 3);
+		assert_eq!(threshold(100), 67);
+		assert_eq!(threshold(300), 201);
+	}
 
 	#[test]
 	fn new_rounds() {
@@ -170,7 +210,7 @@ mod tests {
 		let rounds = Rounds::<H256, NumberFor<Block>>::new(1, validators);
 
 		assert_eq!(42, rounds.validator_set_id());
-
+		assert_eq!(1, *rounds.session_start());
 		assert_eq!(
 			&vec![Keyring::Alice.public(), Keyring::Bob.public(), Keyring::Charlie.public()],
 			rounds.validators()
@@ -178,53 +218,80 @@ mod tests {
 	}
 
 	#[test]
-	fn add_vote() {
+	fn add_and_conclude_votes() {
 		sp_tracing::try_init_simple();
 
 		let validators = ValidatorSet::<Public>::new(
-			vec![Keyring::Alice.public(), Keyring::Bob.public(), Keyring::Charlie.public()],
+			vec![
+				Keyring::Alice.public(),
+				Keyring::Bob.public(),
+				Keyring::Charlie.public(),
+				Keyring::Eve.public(),
+			],
 			Default::default(),
 		)
 		.unwrap();
+		let round = (H256::from_low_u64_le(1), 1);
 
 		let mut rounds = Rounds::<H256, NumberFor<Block>>::new(1, validators);
 
+		// no self vote yet, should self vote
+		assert!(rounds.should_self_vote(&round));
+
+		// add 1st good vote
 		assert!(rounds.add_vote(
-			&(H256::from_low_u64_le(1), 1),
+			&round,
+			(Keyring::Alice.public(), Keyring::Alice.sign(b"I am committed")),
+			true
+		));
+		// round not concluded
+		assert!(rounds.try_conclude(&round).is_none());
+		// self vote already present, should not self vote
+		assert!(!rounds.should_self_vote(&round));
+
+		// double voting not allowed
+		assert!(!rounds.add_vote(
+			&round,
 			(Keyring::Alice.public(), Keyring::Alice.sign(b"I am committed")),
 			true
 		));
 
-		assert!(rounds.try_conclude(&(H256::from_low_u64_le(1), 1)).is_none());
-
-		// invalid vote
+		// invalid vote (Dave is not a validator)
 		assert!(!rounds.add_vote(
-			&(H256::from_low_u64_le(1), 1),
+			&round,
 			(Keyring::Dave.public(), Keyring::Dave.sign(b"I am committed")),
 			false
 		));
+		assert!(rounds.try_conclude(&round).is_none());
 
-		assert!(rounds.try_conclude(&(H256::from_low_u64_le(1), 1)).is_none());
-
+		// add 2nd good vote
 		assert!(rounds.add_vote(
-			&(H256::from_low_u64_le(1), 1),
+			&round,
 			(Keyring::Bob.public(), Keyring::Bob.sign(b"I am committed")),
 			false
 		));
+		// round not concluded
+		assert!(rounds.try_conclude(&round).is_none());
 
-		assert!(rounds.try_conclude(&(H256::from_low_u64_le(1), 1)).is_none());
-
+		// add 3rd good vote
 		assert!(rounds.add_vote(
-			&(H256::from_low_u64_le(1), 1),
+			&round,
 			(Keyring::Charlie.public(), Keyring::Charlie.sign(b"I am committed")),
 			false
 		));
+		// round concluded
+		assert!(rounds.try_conclude(&round).is_some());
 
-		assert!(rounds.try_conclude(&(H256::from_low_u64_le(1), 1)).is_some());
+		// Eve is a validator, but round was concluded, adding vote disallowed
+		assert!(!rounds.add_vote(
+			&round,
+			(Keyring::Eve.public(), Keyring::Eve.sign(b"I am committed")),
+			false
+		));
 	}
 
 	#[test]
-	fn drop() {
+	fn multiple_rounds() {
 		sp_tracing::try_init_simple();
 
 		let validators = ValidatorSet::<Public>::new(
