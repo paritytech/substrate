@@ -20,18 +20,16 @@
 #![cfg(feature = "runtime-benchmarks")]
 
 use super::*;
-use frame_system::{Module as System, RawOrigin};
-use frame_benchmarking::{benchmarks, account, whitelisted_caller};
+use frame_benchmarking::{account, benchmarks, whitelisted_caller};
+use frame_support::traits::{Currency, Get, OnFinalize, OnInitialize};
+use frame_system::{Pallet as System, RawOrigin};
 use sp_core::blake2_256;
-use frame_support::{
-	traits::{OnInitialize, OnFinalize},
-};
-use sp_runtime::traits::One;
+use sp_runtime::traits::{One, Saturating};
 
-use crate::Module as NameService;
+use crate::Pallet as NameService;
 const SEED: u32 = 1;
 
-fn run_to_block<T : Config>(n: T::BlockNumber) {
+fn run_to_block<T: Config>(n: T::BlockNumber) {
 	while System::<T>::block_number() < n {
 		NameService::<T>::on_finalize(System::<T>::block_number());
 		System::<T>::set_block_number(System::<T>::block_number() + One::one());
@@ -40,8 +38,6 @@ fn run_to_block<T : Config>(n: T::BlockNumber) {
 }
 
 benchmarks! {
-	_ { }
-
 	// Benchmark bid with the worst possible scenario
 	// ie. When the bid is ongoing and new_bidder != current_bidder
 	bid {
@@ -49,7 +45,7 @@ benchmarks! {
 		let name_hash = blake2_256(b"shawntabrizi");
 		let current_bidder : T::AccountId = account("current_bidder", 0, SEED);
 		let new_bidder : T::AccountId = whitelisted_caller();
-		let balance = T::Currency::minimum_balance().max(T::MinBid::get()).saturating_mul(100.into());
+		let balance = T::Currency::minimum_balance().max(T::MinBid::get()).saturating_mul(100u32.into());
 		T::Currency::make_free_balance_be(&current_bidder, balance);
 		T::Currency::make_free_balance_be(&new_bidder, balance);
 		// create first bid
@@ -73,12 +69,12 @@ benchmarks! {
 		// Test data
 		let name_hash = blake2_256(b"shawntabrizi");
 		let current_bidder : T::AccountId = whitelisted_caller();
-		let balance = T::Currency::minimum_balance().max(T::MinBid::get()).saturating_mul(100.into());
+		let balance = T::Currency::minimum_balance().max(T::MinBid::get()).saturating_mul(100u32.into());
 		T::Currency::make_free_balance_be(&current_bidder, balance);
 		// create winning bid
 		NameService::<T>::bid(RawOrigin::Signed(
-			current_bidder.clone()).into(), 
-			name_hash, 
+			current_bidder.clone()).into(),
+			name_hash,
 			T::MinBid::get())?;
 		run_to_block::<T>(T::BiddingPeriod::get());
 	}: _(RawOrigin::Signed(current_bidder.clone()), name_hash, 2 as u32)
@@ -91,8 +87,8 @@ benchmarks! {
 			who: current_bidder.clone(),
 			expiration : Some(expected_expiry)
 		});
-		assert_eq!(T::Currency::free_balance(&current_bidder), 
-					balance.saturating_sub(T::MinBid::get().saturating_mul(4.into())));
+		assert_eq!(T::Currency::free_balance(&current_bidder),
+					balance.saturating_sub(T::MinBid::get().saturating_mul(4u32.into())));
 	}
 
 	// Benchmark free with the worst possible scenario
@@ -101,7 +97,7 @@ benchmarks! {
 		// Test data
 		let name_hash = blake2_256(b"shawntabrizi");
 		let current_bidder : T::AccountId = whitelisted_caller();
-		let balance = T::Currency::minimum_balance().max(T::MinBid::get()).saturating_mul(100.into());
+		let balance = T::Currency::minimum_balance().max(T::MinBid::get()).saturating_mul(100u32.into());
 		T::Currency::make_free_balance_be(&current_bidder, balance);
 		// bid for the name
 		NameService::<T>::bid(RawOrigin::Signed(current_bidder.clone()).into(), name_hash, T::MinBid::get())?;
@@ -124,9 +120,9 @@ benchmarks! {
 		let name_hash = blake2_256(b"shawntabrizi");
 		let caller : T::AccountId = whitelisted_caller();
 		// set caller as the owner of name
-		let state = NameStatus::<T::AccountId, T::BlockNumber, BalanceOf<T>>::Owned{ 
-			who : caller.clone(), 
-			expiration : None 
+		let state = NameStatus::<T::AccountId, T::BlockNumber, BalanceOf<T>>::Owned{
+			who : caller.clone(),
+			expiration : None
 		};
 		Registration::<T>::insert(&name_hash, state);
 	}: _(RawOrigin::Signed(caller.clone()), name_hash, Some(caller.clone()))
@@ -155,12 +151,12 @@ benchmarks! {
 		let caller : T::AccountId = whitelisted_caller();
 		let balance = T::Currency::minimum_balance()
 					.max(T::MinBid::get())
-					.saturating_mul(100.into());
+					.saturating_mul(100u32.into());
 		T::Currency::make_free_balance_be(&caller, balance);
 		// set caller as the owner of name
-		let state = NameStatus::<T::AccountId, T::BlockNumber, BalanceOf<T>>::Owned{ 
-			who : caller.clone(), 
-			expiration : Some(0.into()) 
+		let state = NameStatus::<T::AccountId, T::BlockNumber, BalanceOf<T>>::Owned{
+			who : caller.clone(),
+			expiration : Some(0u32.into())
 		};
 		Registration::<T>::insert(&name_hash, state);
 	}: _(RawOrigin::Signed(caller.clone()), name_hash)
@@ -168,58 +164,11 @@ benchmarks! {
 		let stored_data = Registration::<T>::get(&name_hash);
 		assert_eq!(stored_data, NameStatus::Owned {
 			who: caller.clone(),
-			expiration : Some(100.into())
+			expiration : Some(100u32.into())
 		});
-		assert_eq!(T::Currency::free_balance(&caller), 
+		assert_eq!(T::Currency::free_balance(&caller),
 			balance.saturating_sub(T::ExtensionConfig::get().extension_fee));
 	}
-}
 
-#[cfg(test)]
-mod tests {
-	use super::*;
-	use crate::mock::{new_test_ext, Test};
-	use frame_support::assert_ok;
-
-	#[test]
-	fn bid() {
-		new_test_ext().execute_with(|| {
-			assert_ok!(test_benchmark_bid::<Test>());
-		});
-	}
-
-	#[test]
-	fn claim() {
-		new_test_ext().execute_with(|| {
-			assert_ok!(test_benchmark_claim::<Test>());
-		});
-	}
-
-	#[test]
-	fn free() {
-		new_test_ext().execute_with(|| {
-			assert_ok!(test_benchmark_free::<Test>());
-		});
-	}
-
-	#[test]
-	fn assign() {
-		new_test_ext().execute_with(|| {
-			assert_ok!(test_benchmark_assign::<Test>());
-		});
-	}
-
-	#[test]
-	fn unassign() {
-		new_test_ext().execute_with(|| {
-			assert_ok!(test_benchmark_unassign::<Test>());
-		});
-	}
-
-	#[test]
-	fn extend_ownership() {
-		new_test_ext().execute_with(|| {
-			assert_ok!(test_benchmark_extend_ownership::<Test>());
-		});
-	}
+	impl_benchmark_test_suite!(NameService, crate::mock::new_test_ext(), crate::mock::Test);
 }

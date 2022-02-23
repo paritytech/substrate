@@ -19,14 +19,15 @@
 
 #![cfg(test)]
 
-use super::*;
-use super::mock::*;
-use sp_core::blake2_256;
+use super::{mock::*, *};
 use frame_support::{
-	assert_ok, assert_noop,
-	traits::{OnInitialize, OnFinalize},
-	error::BadOrigin
+	assert_noop, assert_ok,
+	error::BadOrigin,
+	traits::{Currency, OnFinalize, OnInitialize},
 };
+use sp_core::blake2_256;
+
+use sp_runtime::MultiAddress;
 
 fn run_to_block(n: u64) {
 	while System::block_number() < n {
@@ -81,7 +82,9 @@ fn end_to_end_should_work() {
 		assert_eq!(Lookup::<Test>::get(name_hash), Some(2));
 
 		// Name can be used instead of AccountId
-		assert_ok!(Balances::transfer(Origin::signed(1), MultiAddress::Address32(name_hash), 40));
+		// TODO assert_ok!(Balances::transfer(Origin::signed(1), MultiAddress::Address32(name_hash),
+		// 40));
+		assert_ok!(Balances::transfer(Origin::signed(1), 2, 40));
 		assert_eq!(Balances::free_balance(&2), 200);
 
 		// Name can expire
@@ -94,14 +97,14 @@ fn end_to_end_should_work() {
 }
 
 #[test]
-fn set_name_works(){
+fn set_name_works() {
 	new_test_ext().execute_with(|| {
 		// Test data
 		let name = b"shawntabrizi";
 		let name_hash = blake2_256(name);
 
 		// name setting by manager works correctly
-		let status = NameStatus::Owned{ who: 1, expiration: None };
+		let status = NameStatus::Owned { who: 1, expiration: None };
 		assert_ok!(NameService::set_name(Origin::signed(100), name_hash.clone(), status.clone()));
 
 		let stored_data = Registration::<Test>::get(&name_hash);
@@ -113,7 +116,7 @@ fn set_name_works(){
 }
 
 #[test]
-fn bid_works(){
+fn bid_works() {
 	new_test_ext().execute_with(|| {
 		// Test data
 		let name = b"shawntabrizi";
@@ -121,18 +124,25 @@ fn bid_works(){
 
 		// call with less than MinBid should fail
 		assert_noop!(
-			NameService::bid(Origin::signed(1), name_hash, <mock::Test as Config>::MinBid::get().saturating_sub(1)),
+			NameService::bid(
+				Origin::signed(1),
+				name_hash,
+				<mock::Test as Config>::MinBid::get() - 1
+			),
 			Error::<Test>::InvalidBid
 		);
 
 		// create bid works correctly
 		assert_ok!(NameService::bid(Origin::signed(1), name_hash, 5));
 		let stored_data = Registration::<Test>::get(&name_hash);
-		assert_eq!(stored_data, NameStatus::Bidding {
-			who: 1,
-			bid_end: <mock::Test as Config>::BiddingPeriod::get(),
-			amount: 5
-		});
+		assert_eq!(
+			stored_data,
+			NameStatus::Bidding {
+				who: 1,
+				bid_end: <mock::Test as Config>::BiddingPeriod::get(),
+				amount: 5
+			}
+		);
 		assert_eq!(Balances::free_balance(&1), 95);
 
 		// another bid at same price should fail
@@ -142,21 +152,27 @@ fn bid_works(){
 		run_to_block(2);
 		assert_ok!(NameService::bid(Origin::signed(1), name_hash, 10));
 		let stored_data = Registration::<Test>::get(&name_hash);
-		assert_eq!(stored_data, NameStatus::Bidding {
-			who: 1,
-			bid_end: <mock::Test as Config>::BiddingPeriod::get().saturating_add(2),
-			amount: 10
-		});
+		assert_eq!(
+			stored_data,
+			NameStatus::Bidding {
+				who: 1,
+				bid_end: <mock::Test as Config>::BiddingPeriod::get() + 2,
+				amount: 10
+			}
+		);
 		assert_eq!(Balances::free_balance(&1), 90);
 
 		// another user can outbid current bidder
 		assert_ok!(NameService::bid(Origin::signed(2), name_hash, 20));
 		let stored_data = Registration::<Test>::get(&name_hash);
-		assert_eq!(stored_data, NameStatus::Bidding {
-			who: 2,
-			bid_end: <mock::Test as Config>::BiddingPeriod::get().saturating_add(2),
-			amount: 20
-		});
+		assert_eq!(
+			stored_data,
+			NameStatus::Bidding {
+				who: 2,
+				bid_end: <mock::Test as Config>::BiddingPeriod::get() + 2,
+				amount: 20
+			}
+		);
 		assert_eq!(Balances::free_balance(&1), 100);
 		assert_eq!(Balances::free_balance(&2), 180);
 
@@ -167,25 +183,34 @@ fn bid_works(){
 }
 
 #[test]
-fn claim_works(){
+fn claim_works() {
 	new_test_ext().execute_with(|| {
 		// Test data
 		let name = b"shawntabrizi";
 		let name_hash = blake2_256(name);
 
 		// claim to non existent name should fail
-		assert_noop!(NameService::claim(Origin::signed(1), name_hash, 1), Error::<Test>::InvalidClaim);
+		assert_noop!(
+			NameService::claim(Origin::signed(1), name_hash, 1),
+			Error::<Test>::InvalidClaim
+		);
 
 		// setup a bid to claim
 		assert_ok!(NameService::bid(Origin::signed(1), name_hash, 10));
 
 		// claim before bid expiry should fail
-		assert_noop!(NameService::claim(Origin::signed(1), name_hash, 1), Error::<Test>::NotExpired);
+		assert_noop!(
+			NameService::claim(Origin::signed(1), name_hash, 1),
+			Error::<Test>::NotExpired
+		);
 
 		run_to_block(<mock::Test as Config>::BiddingPeriod::get());
 
 		// cannot invoke with less than one period
-		assert_noop!(NameService::claim(Origin::signed(1), name_hash, 0), Error::<Test>::InvalidClaim);
+		assert_noop!(
+			NameService::claim(Origin::signed(1), name_hash, 0),
+			Error::<Test>::InvalidClaim
+		);
 
 		// call by not current bidder should fail
 		assert_noop!(NameService::claim(Origin::signed(2), name_hash, 1), Error::<Test>::NotBidder);
@@ -197,27 +222,37 @@ fn claim_works(){
 		assert_eq!(Balances::total_balance(&1), 60);
 
 		let stored_data = Registration::<Test>::get(&name_hash);
-		assert_eq!(stored_data, NameStatus::Owned {
-			who: 1,
-			expiration: Some(<mock::Test as Config>::OwnershipPeriod::get()
-				.saturating_mul(2)
-				.saturating_add(<mock::Test as Config>::BiddingPeriod::get())),
-		});
+		assert_eq!(
+			stored_data,
+			NameStatus::Owned {
+				who: 1,
+				expiration: Some(
+					<mock::Test as Config>::OwnershipPeriod::get() * 2 +
+						<mock::Test as Config>::BiddingPeriod::get()
+				),
+			}
+		);
 
 		// call to previously claimed name should fail
-		assert_noop!(NameService::claim(Origin::signed(1), name_hash, 1), Error::<Test>::InvalidClaim);
+		assert_noop!(
+			NameService::claim(Origin::signed(1), name_hash, 1),
+			Error::<Test>::InvalidClaim
+		);
 	});
 }
 
 #[test]
-fn free_works(){
+fn free_works() {
 	new_test_ext().execute_with(|| {
 		// Test data
 		let name = b"shawntabrizi";
 		let name_hash = blake2_256(name);
 
 		// free non existent name should fail
-		assert_noop!(NameService::free(Origin::signed(1), name_hash), Error::<Test>::AlreadyAvailable);
+		assert_noop!(
+			NameService::free(Origin::signed(1), name_hash),
+			Error::<Test>::AlreadyAvailable
+		);
 
 		// setup a bid to free
 		assert_ok!(NameService::bid(Origin::signed(1), name_hash, 10));
@@ -230,7 +265,8 @@ fn free_works(){
 		assert_noop!(NameService::free(Origin::signed(2), name_hash), Error::<Test>::NotExpired);
 
 		// call after (bid_end+bidding+claim+1) period should pass
-		let ideal_block = <mock::Test as Config>::BiddingPeriod::get().saturating_add(<mock::Test as Config>::ClaimPeriod::get());
+		let ideal_block = <mock::Test as Config>::BiddingPeriod::get()
+			.saturating_add(<mock::Test as Config>::ClaimPeriod::get());
 		run_to_block(ideal_block.saturating_add(11));
 		assert_ok!(NameService::free(Origin::signed(1), name_hash));
 
@@ -252,11 +288,10 @@ fn free_works(){
 		let stored_data = Registration::<Test>::get(&name_hash);
 		assert_eq!(stored_data, NameStatus::default());
 	});
-
 }
 
 #[test]
-fn assign_works(){
+fn assign_works() {
 	new_test_ext().execute_with(|| {
 		// Test data
 		let name = b"shawntabrizi";
@@ -268,7 +303,10 @@ fn assign_works(){
 		assert_ok!(NameService::claim(Origin::signed(1), name_hash, 1));
 
 		// non owner calls should fail
-		assert_noop!(NameService::assign(Origin::signed(2), name_hash, Some(4)), Error::<Test>::NotOwner);
+		assert_noop!(
+			NameService::assign(Origin::signed(2), name_hash, Some(4)),
+			Error::<Test>::NotOwner
+		);
 
 		// owner can assign accountID
 		assert_ok!(NameService::assign(Origin::signed(1), name_hash, Some(4)));
@@ -281,7 +319,7 @@ fn assign_works(){
 }
 
 #[test]
-fn unassign_works(){
+fn unassign_works() {
 	new_test_ext().execute_with(|| {
 		// Test data
 		let name_hash = blake2_256(b"shawntabrizi");
@@ -293,7 +331,10 @@ fn unassign_works(){
 		assert_ok!(NameService::assign(Origin::signed(1), name_hash, Some(1)));
 
 		// non assigned account call should fail
-		assert_noop!(NameService::unassign(Origin::signed(2), name_hash), Error::<Test>::NotAssigned);
+		assert_noop!(
+			NameService::unassign(Origin::signed(2), name_hash),
+			Error::<Test>::NotAssigned
+		);
 
 		// assigned account call should pass
 		assert_ok!(NameService::unassign(Origin::signed(1), name_hash));
@@ -302,7 +343,7 @@ fn unassign_works(){
 }
 
 #[test]
-fn make_permanent_works(){
+fn make_permanent_works() {
 	new_test_ext().execute_with(|| {
 		// Test data
 		let name_hash = blake2_256(b"shawntabrizi");
@@ -318,21 +359,21 @@ fn make_permanent_works(){
 		// call from permeance accout should pass
 		assert_ok!(NameService::make_permanent(Origin::signed(200), name_hash));
 		let stored_data = Registration::<Test>::get(&name_hash);
-		assert_eq!(stored_data, NameStatus::Owned {
-				who: 1,
-				expiration: None,
-		});
+		assert_eq!(stored_data, NameStatus::Owned { who: 1, expiration: None });
 	});
 }
 
 #[test]
-fn extend_ownership_works(){
+fn extend_ownership_works() {
 	new_test_ext().execute_with(|| {
 		// Test data
 		let name_hash = blake2_256(b"shawntabrizi");
 
 		// call with non claimed name should fail
-		assert_noop!(NameService::extend_ownership(Origin::signed(1), name_hash), Error::<Test>::UnexpectedState);
+		assert_noop!(
+			NameService::extend_ownership(Origin::signed(1), name_hash),
+			Error::<Test>::UnexpectedState
+		);
 
 		// setup an assigned name to test
 		assert_ok!(NameService::bid(Origin::signed(1), name_hash, 10));
@@ -342,12 +383,9 @@ fn extend_ownership_works(){
 		// call to extend ownership should pass
 		assert_ok!(NameService::extend_ownership(Origin::signed(2), name_hash));
 		// balance of caller should reduce by the extension fee
-		assert_eq!(Balances::free_balance(&2), 200.saturating_sub(5));
+		assert_eq!(Balances::free_balance(&2), 200 - 5);
 
 		let stored_data = Registration::<Test>::get(&name_hash);
-		assert_eq!(stored_data, NameStatus::Owned {
-			who: 1,
-			expiration: Some(210)
-		});
+		assert_eq!(stored_data, NameStatus::Owned { who: 1, expiration: Some(210) });
 	});
 }

@@ -19,27 +19,39 @@
 
 #![cfg(test)]
 
-use sp_runtime::testing::Header;
-use sp_runtime::Perbill;
+use super::*;
+
+use crate as pallet_name_service;
+use frame_support::{
+	ord_parameter_types,
+	pallet_prelude::*,
+	parameter_types,
+	traits::{ConstU32, ConstU64, Everything},
+};
 use sp_core::H256;
-use frame_support::{impl_outer_origin, impl_outer_event, parameter_types, ord_parameter_types, weights::Weight};
-use crate::{self as pallet_name_service, Module, Config, ExtensionConfig};
+use sp_runtime::{
+	testing::Header,
+	traits::{BlakeTwo256, IdentityLookup},
+	Perbill,
+};
+
 use frame_system::EnsureSignedBy;
 
-impl_outer_origin!{
-	pub enum Origin for Test where system = frame_system {}
-}
-impl_outer_event!{
-	pub enum Event for Test {
-		frame_system<T>,
-		pallet_balances<T>,
-		pallet_name_service<T>,
-	}
-}
+type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+type Block = frame_system::mocking::MockBlock<Test>;
+//type OpaqueCall = super::OpaqueCall<Test>;
 
-// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
-#[derive(Clone, PartialEq, Eq, Debug)]
-pub struct Test;
+frame_support::construct_runtime!(
+	pub enum Test where
+		Block = Block,
+		NodeBlock = Block,
+		UncheckedExtrinsic = UncheckedExtrinsic,
+	{
+		System: frame_system,
+		Balances: pallet_balances,
+		NameService: pallet_name_service,
+	}
+);
 
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
@@ -51,44 +63,48 @@ parameter_types! {
 type BlockNumber = u64;
 type Balance = u64;
 
+parameter_types! {
+	pub BlockWeights: frame_system::limits::BlockWeights =
+		frame_system::limits::BlockWeights::simple_max(1024);
+}
 impl frame_system::Config for Test {
-	type BaseCallFilter = ();
+	type BaseCallFilter = Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
 	type Origin = Origin;
-	type Call = ();
 	type Index = u64;
-	type BlockNumber = BlockNumber;
+	type BlockNumber = u64;
 	type Hash = H256;
-	type Hashing = ::sp_runtime::traits::BlakeTwo256;
+	type Call = Call;
+	type Hashing = BlakeTwo256;
 	type AccountId = u64;
-	type Lookup = NameService;
+	type Lookup = IdentityLookup<Self::AccountId>; // TODO NameService
 	type Header = Header;
 	type Event = Event;
-	type BlockHashCount = BlockHashCount;
+	type BlockHashCount = ConstU64<250>;
 	type Version = ();
-	type PalletInfo = ();
+	type PalletInfo = PalletInfo;
 	type AccountData = pallet_balances::AccountData<u64>;
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
-}
-
-parameter_types! {
-	pub const ExistentialDeposit: u64 = 1;
+	type SS58Prefix = ();
+	type OnSetCode = ();
+	type MaxConsumers = ConstU32<16>;
 }
 
 impl pallet_balances::Config for Test {
 	type MaxLocks = ();
-	type Balance = Balance;
-	type DustRemoval = ();
+	type MaxReserves = ();
+	type ReserveIdentifier = [u8; 8];
+	type Balance = u64;
 	type Event = Event;
-	type ExistentialDeposit = ExistentialDeposit;
+	type DustRemoval = ();
+	type ExistentialDeposit = ConstU64<1>;
 	type AccountStore = System;
 	type WeightInfo = ();
 }
-
 
 parameter_types! {
 	pub const BiddingPeriod: BlockNumber = 10;
@@ -124,12 +140,10 @@ impl Config for Test {
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-	pallet_balances::GenesisConfig::<Test>{
+	pallet_balances::GenesisConfig::<Test> {
 		balances: vec![(1, 100), (2, 200), (3, 300), (4, 400), (5, 500), (6, 600)],
-	}.assimilate_storage(&mut t).unwrap();
+	}
+	.assimilate_storage(&mut t)
+	.unwrap();
 	t.into()
 }
-
-pub type System = frame_system::Module<Test>;
-pub type Balances = pallet_balances::Module<Test>;
-pub type NameService = Module<Test>;

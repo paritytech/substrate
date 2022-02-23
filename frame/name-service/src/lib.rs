@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,122 +19,129 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use sp_std::prelude::*;
-use sp_runtime::MultiAddress;
-use sp_runtime::traits::{LookupError, Saturating, StaticLookup, Member};
-use frame_support::{decl_module, decl_error, decl_event, decl_storage, ensure, RuntimeDebug, Parameter};
-use frame_support::dispatch::DispatchResult;
-use frame_support::traits::{
-	Currency, ReservableCurrency, Get, EnsureOrigin, OnUnbalanced,
-	WithdrawReasons, ExistenceRequirement::KeepAlive, Imbalance,
-};
-use frame_system::ensure_signed;
-use codec::{Codec, Encode, Decode};
+pub use pallet::*;
 
+mod benchmarking;
 mod mock;
 mod tests;
-mod benchmarking;
 
-type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
-type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::NegativeImbalance;
+#[frame_support::pallet]
+pub mod pallet {
+	use frame_support::pallet_prelude::*;
+	use frame_system::pallet_prelude::*;
 
-pub trait WeightInfo {}
-impl WeightInfo for () {}
+	use frame_support::traits::{
+		Currency, ExistenceRequirement::KeepAlive, Imbalance, OnUnbalanced, ReservableCurrency,
+		WithdrawReasons,
+	};
+	use sp_runtime::traits::Saturating;
 
-/// The module's config trait.
-pub trait Config: frame_system::Config {
-	/// An optional `AccountIndex` type for backwards compatibility.
-	type AccountIndex: Parameter + Member + Codec + Default + Copy;
+	use codec::Codec;
 
-	/// The currency trait.
-	type Currency: ReservableCurrency<Self::AccountId>;
+	// The struct on which we build all of our Pallet logic.
+	#[pallet::pallet]
+	pub struct Pallet<T>(_);
 
-	/// The overarching event type.
-	type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
+	pub trait WeightInfo {}
+	impl WeightInfo for () {}
 
-	/// Origin that can have high level control over the name-service pallet.
-	type ManagerOrigin: EnsureOrigin<Self::Origin>;
-
-	/// Origin that can set permanent ownership of a name to an account.
-	type PermanenceOrigin: EnsureOrigin<Self::Origin>;
-
-	/// Time available between subsequent bids for a name.
-	type BiddingPeriod: Get<Self::BlockNumber>;
-
-	/// Time available after bidding has completed for the winner to claim their name.
-	type ClaimPeriod: Get<Self::BlockNumber>;
-
-	/// One ownership period, which can be multiplied through exponential deposit.
-	type OwnershipPeriod: Get<Self::BlockNumber>;
-
-	/// Handler for the unbalanced decrease when funds are burned.
-	type PaymentDestination: OnUnbalanced<NegativeImbalanceOf<Self>>;
-
-	/// Minimum Bid for a name.
-	type MinBid: Get<BalanceOf<Self>>;
-
-	/// Configuration for ownership extensions of a name.
-	type ExtensionConfig: Get<ExtensionConfig<Self::BlockNumber, BalanceOf<Self>>>;
-
-	/// Weight information for extrinsics in this pallet.
-	type WeightInfo: WeightInfo;
-}
-
-#[derive(Default, RuntimeDebug)]
-pub struct ExtensionConfig<BlockNumber, Balance> {
-	enabled: bool,
-	extension_period: BlockNumber,
-	extension_fee: Balance,
-}
-
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
-pub enum NameStatus<AccountId, BlockNumber, Balance> {
-	Available,
-	Bidding {
-		who: AccountId,
-		bid_end: BlockNumber,
-		amount: Balance,
-	},
-	Owned {
-		who: AccountId,
-		expiration: Option<BlockNumber>,
-	}
-}
-
-impl<AccountId, BlockNumber, Balance> Default for NameStatus<AccountId, BlockNumber, Balance> {
-	fn default() -> Self {
-		NameStatus::Available
-	}
-}
-
-type Name = [u8; 32];
-
-decl_storage! {
-	trait Store for Module<T: Config> as NameService {
-		/// Registration information for a given name.
-		pub Registration: map hasher(blake2_128_concat) Name => NameStatus<T::AccountId, T::BlockNumber, BalanceOf<T>>;
-		/// The lookup from name to account.
-		pub Lookup: map hasher(blake2_128_concat) Name => Option<T::AccountId>;
-	}
-}
-
-decl_event!(
-	pub enum Event<T> where
-		Balance = BalanceOf<T>,
+	pub type BalanceOf<T> =
+		<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
+	type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<
 		<T as frame_system::Config>::AccountId,
-		<T as frame_system::Config>::BlockNumber,
-	{
-		BidPlaced(Name, AccountId, Balance, BlockNumber),
-		NameClaimed(Name, AccountId, BlockNumber),
+	>>::NegativeImbalance;
+
+	type Name = [u8; 32];
+
+	#[derive(Default, RuntimeDebug)]
+	pub struct ExtensionConfig<BlockNumber, Balance> {
+		pub enabled: bool,
+		pub extension_period: BlockNumber,
+		pub extension_fee: Balance,
+	}
+
+	#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+	pub enum NameStatus<AccountId, BlockNumber, Balance> {
+		Available,
+		Bidding { who: AccountId, bid_end: BlockNumber, amount: Balance },
+		Owned { who: AccountId, expiration: Option<BlockNumber> },
+	}
+
+	impl<AccountId, BlockNumber, Balance> Default for NameStatus<AccountId, BlockNumber, Balance> {
+		fn default() -> Self {
+			NameStatus::Available
+		}
+	}
+
+	/// Maps the kitty struct to the kitty DNA.
+	#[pallet::storage]
+	pub(super) type Registration<T: Config> = StorageMap<
+		_,
+		Blake2_128Concat,
+		Name,
+		NameStatus<T::AccountId, T::BlockNumber, BalanceOf<T>>,
+		ValueQuery,
+	>;
+
+	/// Track the kitties owned by each account.
+	#[pallet::storage]
+	pub(super) type Lookup<T: Config> = StorageMap<_, Blake2_128Concat, Name, T::AccountId>;
+
+	// Your Pallet's configuration trait, representing custom external types and interfaces.
+	#[pallet::config]
+	pub trait Config: frame_system::Config {
+		/// An optional `AccountIndex` type for backwards compatibility.
+		type AccountIndex: Parameter + Member + Codec + Default + Copy;
+
+		/// The currency trait.
+		type Currency: ReservableCurrency<Self::AccountId>;
+
+		/// The overarching event type.
+		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+
+		/// Origin that can have high level control over the name-service pallet.
+		type ManagerOrigin: EnsureOrigin<Self::Origin>;
+
+		/// Origin that can set permanent ownership of a name to an account.
+		type PermanenceOrigin: EnsureOrigin<Self::Origin>;
+
+		/// Time available between subsequent bids for a name.
+		type BiddingPeriod: Get<Self::BlockNumber>;
+
+		/// Time available after bidding has completed for the winner to claim their name.
+		type ClaimPeriod: Get<Self::BlockNumber>;
+
+		/// One ownership period, which can be multiplied through exponential deposit.
+		type OwnershipPeriod: Get<Self::BlockNumber>;
+
+		/// Handler for the unbalanced decrease when funds are burned.
+		type PaymentDestination: OnUnbalanced<NegativeImbalanceOf<Self>>;
+
+		/// Minimum Bid for a name.
+		type MinBid: Get<BalanceOf<Self>>;
+
+		/// Configuration for ownership extensions of a name.
+		type ExtensionConfig: Get<ExtensionConfig<Self::BlockNumber, BalanceOf<Self>>>;
+
+		/// Weight information for extrinsics in this pallet.
+		type WeightInfo: WeightInfo;
+	}
+
+	// Your Pallet's events.
+	#[pallet::event]
+	#[pallet::generate_deposit(pub(super) fn deposit_event)]
+	pub enum Event<T: Config> {
+		BidPlaced(Name, T::AccountId, BalanceOf<T>, T::BlockNumber),
+		NameClaimed(Name, T::AccountId, T::BlockNumber),
 		NameFreed(Name),
 		NameSet(Name),
-		NameAssigned(Name, AccountId),
+		NameAssigned(Name, T::AccountId),
 		NameUnassigned(Name),
 	}
-);
 
-decl_error! {
-	pub enum Error for Module<T: Config> {
+	// Your Pallet's error messages.
+	#[pallet::error]
+	pub enum Error<T> {
 		/// The current state of the name does not match this step in the state machine.
 		UnexpectedState,
 		/// The name provided does not follow the configured rules.
@@ -158,24 +165,25 @@ decl_error! {
 		/// Ownership extensions are not available.
 		NoExtensions,
 	}
-}
 
-decl_module! {
-	pub struct Module<T: Config> for enum Call where origin: T::Origin, system = frame_system {
-		//TODO: Expose Constants
-
-		fn deposit_event() = default;
-
-		#[weight = 0]
-		fn set_name(origin, name: Name, state: NameStatus<T::AccountId, T::BlockNumber, BalanceOf<T>>) {
+	// Your Pallet's callable functions.
+	#[pallet::call]
+	impl<T: Config> Pallet<T> {
+		#[pallet::weight(0)]
+		pub fn set_name(
+			origin: OriginFor<T>,
+			name: Name,
+			state: NameStatus<T::AccountId, T::BlockNumber, BalanceOf<T>>,
+		) -> DispatchResult {
 			T::ManagerOrigin::ensure_origin(origin)?;
 			// TODO: Make safer with regards to setting or removing `Bidding` state.
 			Registration::<T>::insert(&name, state);
-			Self::deposit_event(RawEvent::NameSet(name));
+			Self::deposit_event(Event::<T>::NameSet(name));
+			Ok(())
 		}
 
-		#[weight = 0]
-		fn make_permanent(origin, name: Name) {
+		#[pallet::weight(0)]
+		pub fn make_permanent(origin: OriginFor<T>, name: Name) -> DispatchResult {
 			T::PermanenceOrigin::ensure_origin(origin)?;
 			Registration::<T>::try_mutate(&name, |state| -> DispatchResult {
 				match state {
@@ -183,18 +191,19 @@ decl_module! {
 						*expiration = None;
 						Ok(())
 					},
-					_ => Err(Error::<T>::UnexpectedState)?
+					_ => Err(Error::<T>::UnexpectedState)?,
 				}
 			})?;
+			Ok(())
 		}
 
 		/// Allow anyone to place a bid for a name.
-		#[weight = 0]
-		fn bid(origin, name: Name, new_bid: BalanceOf<T>) {
+		#[pallet::weight(0)]
+		pub fn bid(origin: OriginFor<T>, name: Name, new_bid: BalanceOf<T>) -> DispatchResult {
 			let new_bidder = ensure_signed(origin)?;
 			ensure!(new_bid >= T::MinBid::get(), Error::<T>::InvalidBid);
 
-			let block_number = frame_system::Module::<T>::block_number();
+			let block_number = frame_system::Pallet::<T>::block_number();
 			let new_bid_end = block_number.saturating_add(T::BiddingPeriod::get());
 
 			Registration::<T>::try_mutate(&name, |state| -> DispatchResult {
@@ -205,17 +214,23 @@ decl_module! {
 						*state = NameStatus::Bidding {
 							who: new_bidder.clone(),
 							bid_end: new_bid_end,
-							amount: new_bid
+							amount: new_bid,
 						};
 						Ok(())
 					},
 					// Bid is ongoing, we need to check if the new bid is valid.
-					NameStatus::Bidding { who: current_bidder, bid_end: current_bid_end, amount: current_bid } => {
+					NameStatus::Bidding {
+						who: current_bidder,
+						bid_end: current_bid_end,
+						amount: current_bid,
+					} => {
 						// New bid must be before expiration and more than the current bid.
 						if block_number < *current_bid_end && *current_bid < new_bid {
-							// Try to reserve the new amount and unreserve the old amount, handling the same bidder.
+							// Try to reserve the new amount and unreserve the old amount, handling
+							// the same bidder.
 							if new_bidder == *current_bidder {
-								// We check that new bid is greater than current bid, so this is safe.
+								// We check that new bid is greater than current bid, so this is
+								// safe.
 								let bid_diff = new_bid - *current_bid;
 								T::Currency::reserve(&new_bidder, bid_diff)?;
 							} else {
@@ -225,7 +240,7 @@ decl_module! {
 							*state = NameStatus::Bidding {
 								who: new_bidder.clone(),
 								bid_end: new_bid_end,
-								amount: new_bid
+								amount: new_bid,
 							};
 							Ok(())
 						} else {
@@ -233,25 +248,25 @@ decl_module! {
 						}
 					},
 					// Name is already owned, this is an invalid bid.
-					NameStatus::Owned { .. } => {
-						Err(Error::<T>::InvalidBid)?
-					}
+					NameStatus::Owned { .. } => Err(Error::<T>::InvalidBid)?,
 				}
 			})?;
-			Self::deposit_event(RawEvent::BidPlaced(name, new_bidder, new_bid, new_bid_end));
+			Self::deposit_event(Event::<T>::BidPlaced(name, new_bidder, new_bid, new_bid_end));
+			Ok(())
 		}
 
 		/// Allow the winner of a bid to claim their name and pay their registration costs.
-		#[weight = 0]
-		fn claim(origin, name: Name, num_of_periods: u32) {
+		#[pallet::weight(0)]
+		pub fn claim(origin: OriginFor<T>, name: Name, num_of_periods: u32) -> DispatchResult {
 			let caller = ensure_signed(origin)?;
 			ensure!(num_of_periods > 0, Error::<T>::InvalidClaim);
 
-			let block_number = frame_system::Module::<T>::block_number();
+			let block_number = frame_system::Pallet::<T>::block_number();
 
 			Registration::<T>::try_mutate(&name, |state| -> DispatchResult {
 				match state {
-					NameStatus::Available | NameStatus::Owned { .. } => Err(Error::<T>::InvalidClaim)?,
+					NameStatus::Available | NameStatus::Owned { .. } =>
+						Err(Error::<T>::InvalidClaim)?,
 					NameStatus::Bidding { who: current_bidder, bid_end, amount } => {
 						ensure!(caller == *current_bidder, Error::<T>::NotBidder);
 						ensure!(*bid_end <= block_number, Error::<T>::NotExpired);
@@ -268,7 +283,7 @@ decl_module! {
 								current_bidder,
 								withdraw_amount,
 								WithdrawReasons::FEE,
-								KeepAlive
+								KeepAlive,
 							)?
 						};
 						// Remove the rest from reserve
@@ -276,30 +291,37 @@ decl_module! {
 						T::PaymentDestination::on_unbalanced(credit);
 						// Grant ownership
 						let ownership_expiration = block_number.saturating_add(
-							T::OwnershipPeriod::get().saturating_mul(num_of_periods.into())
+							T::OwnershipPeriod::get().saturating_mul(num_of_periods.into()),
 						);
 						*state = NameStatus::Owned {
 							who: current_bidder.clone(),
 							expiration: Some(ownership_expiration),
 						};
-						Self::deposit_event(RawEvent::NameClaimed(name.clone(), caller, ownership_expiration));
+						Self::deposit_event(Event::<T>::NameClaimed(
+							name.clone(),
+							caller,
+							ownership_expiration,
+						));
 						Ok(())
 					},
 				}
 			})?;
+			Ok(())
 		}
 
-		/// Allow anyone to make a name available if it is past the claiming period or expiration date.
-		#[weight = 0]
-		fn free(origin, name: Name) {
+		/// Allow anyone to make a name available if it is past the claiming period or expiration
+		/// date.
+		#[pallet::weight(0)]
+		pub fn free(origin: OriginFor<T>, name: Name) -> DispatchResult {
 			let caller = ensure_signed(origin)?;
-			let block_number = frame_system::Module::<T>::block_number();
+			let block_number = frame_system::Pallet::<T>::block_number();
 
 			Registration::<T>::try_mutate(&name, |state| -> DispatchResult {
 				match state {
 					// Name is already free, do nothing.
 					NameStatus::Available => Err(Error::<T>::AlreadyAvailable)?,
-					// Name is in bidding period, check that it is past the bid expiration + claim period.
+					// Name is in bidding period, check that it is past the bid expiration + claim
+					// period.
 					NameStatus::Bidding { who: current_bidder, bid_end, amount } => {
 						let free_block = bid_end
 							.saturating_add(T::BiddingPeriod::get())
@@ -311,9 +333,9 @@ decl_module! {
 						*state = NameStatus::Available;
 						Ok(())
 					},
-					// Name is owned, check that it is past the ownership expiration or the current owner
-					// is calling this function.
-					NameStatus::Owned { who: current_owner, expiration: maybe_expiration } => {
+					// Name is owned, check that it is past the ownership expiration or the current
+					// owner is calling this function.
+					NameStatus::Owned { who: current_owner, expiration: maybe_expiration } =>
 						if let Some(expiration) = maybe_expiration {
 							if caller != *current_owner {
 								ensure!(*expiration <= block_number, Error::<T>::NotExpired);
@@ -322,17 +344,21 @@ decl_module! {
 							Ok(())
 						} else {
 							Err(Error::<T>::Permanent)?
-						}
-					},
+						},
 				}
 			})?;
 
-			Self::deposit_event(RawEvent::NameFreed(name));
+			Self::deposit_event(Event::<T>::NameFreed(name));
+			Ok(())
 		}
 
 		/// Allow the owner of a name to assign or unassign a target.
-		#[weight = 0]
-		fn assign(origin, name: Name, target: Option<T::AccountId>) {
+		#[pallet::weight(0)]
+		pub fn assign(
+			origin: OriginFor<T>,
+			name: Name,
+			target: Option<T::AccountId>,
+		) -> DispatchResult {
 			let caller = ensure_signed(origin)?;
 
 			let registration = Registration::<T>::get(&name);
@@ -345,36 +371,40 @@ decl_module! {
 
 			if let Some(account) = target {
 				Lookup::<T>::insert(&name, account.clone());
-				Self::deposit_event(RawEvent::NameAssigned(name, account));
+				Self::deposit_event(Event::<T>::NameAssigned(name, account));
 			} else {
 				Lookup::<T>::remove(&name);
-				Self::deposit_event(RawEvent::NameUnassigned(name));
+				Self::deposit_event(Event::<T>::NameUnassigned(name));
 			}
+			Ok(())
 		}
 
 		/// Allow the target of a name to unassign themselves from the name.
-		#[weight = 0]
-		fn unassign(origin, name: Name) {
+		#[pallet::weight(0)]
+		pub fn unassign(origin: OriginFor<T>, name: Name) -> DispatchResult {
 			let caller = ensure_signed(origin)?;
 
 			let lookup = Lookup::<T>::get(&name);
 			if let Some(account) = lookup {
 				ensure!(account == caller, Error::<T>::NotAssigned);
 				Lookup::<T>::remove(&name);
-				Self::deposit_event(RawEvent::NameUnassigned(name));
+				Self::deposit_event(Event::<T>::NameUnassigned(name));
 			}
+			Ok(())
 		}
 
-		#[weight = 0]
-		fn extend_ownership(origin, name: Name) {
+		#[pallet::weight(0)]
+		pub fn extend_ownership(origin: OriginFor<T>, name: Name) -> DispatchResult {
 			// Anyone can make this call for any name on behalf of the owner.
 			let caller = ensure_signed(origin)?;
-			let ExtensionConfig { enabled, extension_period, extension_fee } = T::ExtensionConfig::get();
+			let ExtensionConfig { enabled, extension_period, extension_fee } =
+				T::ExtensionConfig::get();
 			ensure!(enabled, Error::<T>::NoExtensions);
 
 			Registration::<T>::try_mutate(&name, |state| -> DispatchResult {
 				match state {
-					NameStatus::Available | NameStatus::Bidding { .. } => Err(Error::<T>::UnexpectedState)?,
+					NameStatus::Available | NameStatus::Bidding { .. } =>
+						Err(Error::<T>::UnexpectedState)?,
 					NameStatus::Owned { expiration, .. } => {
 						// If the name can expire...
 						if let Some(expiration_block) = expiration {
@@ -382,7 +412,7 @@ decl_module! {
 								&caller,
 								extension_fee,
 								WithdrawReasons::FEE,
-								KeepAlive
+								KeepAlive,
 							)?;
 							T::PaymentDestination::on_unbalanced(credit);
 							*expiration_block = expiration_block.saturating_add(extension_period);
@@ -393,30 +423,35 @@ decl_module! {
 					},
 				}
 			})?;
-		}
-	}
-}
-
-impl<T: Config> Module<T> {}
-
-impl<T: Config> StaticLookup for Module<T>
-where
-	MultiAddress<T::AccountId, T::AccountIndex>: Codec,
-{
-	type Source = MultiAddress<T::AccountId, T::AccountIndex>;
-	type Target = T::AccountId;
-
-	fn lookup(a: Self::Source) -> Result<Self::Target, LookupError> {
-		match a {
-			MultiAddress::Id(id) => Ok(id),
-			MultiAddress::Address32(hash) => {
-				Lookup::<T>::get(hash).ok_or(LookupError)
-			},
-			_ => Err(LookupError),
+			Ok(())
 		}
 	}
 
-	fn unlookup(a: Self::Target) -> Self::Source {
-		MultiAddress::Id(a)
-	}
+	// Your Pallet's internal functions.
+	impl<T: Config> Pallet<T> {}
 }
+
+// use sp_runtime::{ traits::{StaticLookup, LookupError}, MultiAddress};
+// use codec::{Codec};
+
+// impl<T: Config> StaticLookup for Pallet<T>
+// where
+// 	MultiAddress<T::AccountId, T::AccountIndex>: Codec,
+// {
+// 	type Source = MultiAddress<T::AccountId, T::AccountIndex>;
+// 	type Target = T::AccountId;
+
+// 	fn lookup(a: Self::Source) -> Result<Self::Target, LookupError> {
+// 		match a {
+// 			MultiAddress::Id(id) => Ok(id),
+// 			MultiAddress::Address32(hash) => {
+// 				Lookup::<T>::get(hash).ok_or(LookupError)
+// 			},
+// 			_ => Err(LookupError),
+// 		}
+// 	}
+
+// 	fn unlookup(a: Self::Target) -> Self::Source {
+// 		MultiAddress::Id(a)
+// 	}
+// }
