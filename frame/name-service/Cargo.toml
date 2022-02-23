@@ -23,10 +23,11 @@ scale-info = { version = "1.0", default-features = false, features = ["derive"] 
 
 # Benchmarking dependencies
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
+sp-io = { version = "5.0.0", default-features = false, path = "../../primitives/io", optional = true }
 
 [dev-dependencies]
-sp-io = { version = "5.0.0", path = "../../primitives/io" }
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
+sp-io = { version = "5.0.0", path = "../../primitives/io" }
 
 [features]
 default = ["std"]
@@ -39,6 +40,7 @@ std = [
 	"frame-system/std",
 ]
 runtime-benchmarks = [
+	"sp-io",
 	"frame-benchmarking",
 	"frame-support/runtime-benchmarks",
 	"frame-system/runtime-benchmarks",

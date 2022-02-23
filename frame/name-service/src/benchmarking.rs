@@ -23,8 +23,8 @@ use super::*;
 use frame_benchmarking::{account, benchmarks, whitelisted_caller};
 use frame_support::traits::{Currency, Get, OnFinalize, OnInitialize};
 use frame_system::{Pallet as System, RawOrigin};
-use sp_core::blake2_256;
 use sp_runtime::traits::{One, Saturating};
+use sp_io::hashing::blake2_256;
 
 use crate::Pallet as NameService;
 const SEED: u32 = 1;
