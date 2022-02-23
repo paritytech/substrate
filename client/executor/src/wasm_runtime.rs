@@ -125,23 +125,23 @@ impl VersionedRuntime {
 				let result = f(&self.module, &mut *instance, self.version.as_ref(), ext);
 				if let Err(e) = &result {
 					if new_inst {
-						log::warn!(
+						tracing::warn!(
 							target: "wasm-runtime",
-							"Fresh runtime instance failed with {}",
-							e,
+							error = %e,
+							"Fresh runtime instance failed",
 						)
 					} else {
-						log::warn!(
+						tracing::warn!(
 							target: "wasm-runtime",
-							"Evicting failed runtime instance: {}",
-							e,
+							error = %e,
+							"Evicting failed runtime instance",
 						);
 					}
 				} else {
 					*locked = Some(instance);
 
 					if new_inst {
-						log::debug!(
+						tracing::debug!(
 							target: "wasm-runtime",
 							"Allocated WASM instance {}/{}",
 							index + 1,
@@ -153,7 +153,7 @@ impl VersionedRuntime {
 				result
 			},
 			None => {
-				log::warn!(target: "wasm-runtime", "Ran out of free WASM instances");
+				tracing::warn!(target: "wasm-runtime", "Ran out of free WASM instances");
 
 				// Allocate a new instance
 				let mut instance = self.module.new_instance()?;
@@ -282,7 +282,7 @@ impl RuntimeCache {
 
 			match result {
 				Ok(ref result) => {
-					log::debug!(
+					tracing::debug!(
 						target: "wasm-runtime",
 						"Prepared new runtime version {:?} in {} ms.",
 						result.version,
@@ -290,7 +290,7 @@ impl RuntimeCache {
 					);
 				},
 				Err(ref err) => {
-					log::warn!(target: "wasm-runtime", "Cannot create a runtime: {:?}", err);
+					tracing::warn!(target: "wasm-runtime", error = ?err, "Cannot create a runtime");
 				},
 			}
 
