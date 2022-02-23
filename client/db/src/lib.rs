@@ -107,7 +107,7 @@ const DEFAULT_CHILD_RATIO: (usize, usize) = (1, 10);
 pub type DbState<B> =
 	sp_state_machine::TrieBackend<Arc<dyn sp_state_machine::Storage<HashFor<B>>>, HashFor<B>>;
 
-pub const DB_HASH_LEN: usize = 32;
+const DB_HASH_LEN: usize = 32;
 /// Hash type that this backend uses for the database.
 pub type DbHash = sp_core::H256;
 
@@ -1054,14 +1054,14 @@ impl<Block: BlockT> Backend<Block> {
 	}
 
 	/// Expose the Database that is used by this backend.
-	/// 
+	///
 	/// Should only be needed for benchmarking.
 	pub fn expose_db(&self) -> Arc<dyn sp_database::Database<DbHash>> {
 		self.db.clone()
 	}
 
 	/// Expose the Storage that is used by this backend.
-	/// 
+	///
 	/// Should only be needed for benchmarking.
 	pub fn expose_storage(&self) -> Arc<dyn sp_state_machine::Storage<HashFor<Block>>> {
 		self.storage.clone()

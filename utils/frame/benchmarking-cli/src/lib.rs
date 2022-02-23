@@ -15,8 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod bedrock;
 mod command;
+pub mod storage;
 mod writer;
 
 use sc_cli::{ExecutionStrategy, WasmExecutionMethod};
