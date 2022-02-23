@@ -106,13 +106,13 @@ where
 			self.client.info().best_hash);
 
 		let (leaf, proof) = MmrRuntimeApi::<Block, MmrHash>::generate_proof_with_context(
-				&api,
-				&BlockId::hash(block_hash),
-				sp_core::ExecutionContext::OffchainCall(None),
-				leaf_index,
-			)
-			.map_err(runtime_error_into_rpc_error)?
-			.map_err(mmr_error_into_rpc_error)?;
+			&api,
+			&BlockId::hash(block_hash),
+			sp_core::ExecutionContext::OffchainCall(None),
+			leaf_index,
+		)
+		.map_err(runtime_error_into_rpc_error)?
+		.map_err(mmr_error_into_rpc_error)?;
 
 		Ok(LeafProof::new(block_hash, leaf, proof))
 	}

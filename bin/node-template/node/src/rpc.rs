@@ -7,12 +7,12 @@
 
 use std::sync::Arc;
 
-use crate::service::{Hash, Block, AccountId, Index, Balance};
+use crate::service::{AccountId, Balance, Block, Hash, Index};
+use pallet_transaction_payment_rpc::TransactionPaymentRuntimeDispatchInfo;
 pub use sc_rpc_api::DenyUnsafe;
 use sc_transaction_pool_api::TransactionPool;
 use sp_api::ProvideRuntimeApi;
 use sp_blockchain::{Error as BlockChainError, HeaderBackend, HeaderMetadata};
-use pallet_transaction_payment_rpc::TransactionPaymentRuntimeDispatchInfo;
 
 /// Full client dependencies.
 pub struct FullDeps<C, P> {
@@ -38,9 +38,17 @@ where
 	let mut io = jsonrpc_core::IoHandler::default();
 	let FullDeps { client, pool, deny_unsafe } = deps;
 
-	io.extend_with(SystemApi::<Hash, AccountId, Index>::to_delegate(FullSystem::new(client.clone(), pool, deny_unsafe)));
+	io.extend_with(SystemApi::<Hash, AccountId, Index>::to_delegate(FullSystem::new(
+		client.clone(),
+		pool,
+		deny_unsafe,
+	)));
 
-	io.extend_with(TransactionPaymentApi::<_, TransactionPaymentRuntimeDispatchInfo<Balance>>::to_delegate(TransactionPayment::new(client.clone())));
+	io.extend_with(
+		TransactionPaymentApi::<_, TransactionPaymentRuntimeDispatchInfo<Balance>>::to_delegate(
+			TransactionPayment::new(client.clone()),
+		),
+	);
 
 	// Extend this RPC with a custom API by using the following syntax.
 	// `YourRpcStruct` should have a reference to a client, which is needed

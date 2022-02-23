@@ -29,7 +29,8 @@ fn build_runtime() {
 	let mut path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
 	path.push("../runtime/Cargo.toml");
 	WasmBuilder::new()
-		.with_project(path.canonicalize().unwrap()).unwrap()
+		.with_project(path.canonicalize().unwrap())
+		.unwrap()
 		.export_heap_base()
 		.import_memory()
 		.build()

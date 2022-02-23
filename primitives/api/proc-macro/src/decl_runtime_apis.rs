@@ -452,7 +452,7 @@ fn generate_runtime_api_call_impl(decl: &ItemTrait) -> Result<TokenStream> {
 	// Generate a native call generator for each function of the given trait.
 	for (attrs, sig) in fns {
 		if remove_supported_attributes(&mut attrs.clone()).contains_key(CHANGED_IN_ATTRIBUTE) {
-			continue;
+			continue
 		}
 
 		let fn_sig = &sig;
@@ -930,7 +930,6 @@ fn generate_call_impl(decls: &[ItemTrait]) -> Result<TokenStream> {
 
 			quote! { #ident #colon_token #bounds }
 		});
-
 
 		let ty_generics = decl.generics.type_params().map(|t| {
 			let ident = &t.ident;

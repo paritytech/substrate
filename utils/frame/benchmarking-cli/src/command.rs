@@ -26,7 +26,7 @@ use linked_hash_map::LinkedHashMap;
 use sc_cli::{CliConfiguration, ExecutionStrategy, Result, SharedParams};
 use sc_client_db::BenchmarkingState;
 use sc_executor::WasmExecutor;
-use sc_service::{Configuration};
+use sc_service::Configuration;
 use sp_core::offchain::{
 	testing::{TestOffchainExt, TestTransactionPoolExt},
 	OffchainDbExt, OffchainWorkerExt, TransactionPoolExt,
@@ -133,7 +133,7 @@ impl BenchmarkCmd {
 		)?;
 		let state_without_tracking =
 			BenchmarkingState::<BB>::new(genesis_storage, cache_size, self.record_proof, false)?;
-		let executor = WasmExecutor::new_default(
+		let executor = WasmExecutor::new_extended::<frame_benchmarking::benchmarking::HostFunctions>(
 			wasm_method,
 			self.heap_pages,
 			2, // The runtime instances cache size.

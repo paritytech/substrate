@@ -28,11 +28,11 @@ use futures::{
 	select,
 };
 use log::{debug, error, info, trace, warn};
-use sc_block_builder::{BlockBuilderProvider};
+use sc_block_builder::BlockBuilderProvider;
 use sc_client_api::backend;
 use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_INFO};
 use sc_transaction_pool_api::{InPoolTransaction, TransactionPool};
-use sp_api::{CallApiAt};
+use sp_api::CallApiAt;
 use sp_blockchain::{ApplyExtrinsicFailed::Validity, Error::ApplyExtrinsicFailed, HeaderBackend};
 use sp_consensus::{
 	evaluation, DisableProofRecording, EnableProofRecording, ProofRecording, Proposal,
@@ -184,7 +184,7 @@ where
 	Block: BlockT,
 	C: BlockBuilderProvider<B, Block, C>
 		+ HeaderBackend<Block>
-		+ CallApiAt<Block, StateBackend=B::State>
+		+ CallApiAt<Block, StateBackend = B::State>
 		+ Send
 		+ Sync
 		+ 'static,
@@ -227,7 +227,7 @@ where
 	Block: BlockT,
 	C: BlockBuilderProvider<B, Block, C>
 		+ HeaderBackend<Block>
-		+ CallApiAt<Block, StateBackend=B::State>
+		+ CallApiAt<Block, StateBackend = B::State>
 		+ Send
 		+ Sync
 		+ 'static,
@@ -266,7 +266,7 @@ where
 	Block: BlockT,
 	C: BlockBuilderProvider<B, Block, C>
 		+ HeaderBackend<Block>
-		+ CallApiAt<Block, StateBackend=B::State>
+		+ CallApiAt<Block, StateBackend = B::State>
 		+ Send
 		+ Sync
 		+ 'static,
@@ -324,7 +324,7 @@ where
 	Block: BlockT,
 	C: BlockBuilderProvider<B, Block, C>
 		+ HeaderBackend<Block>
-		+ CallApiAt<Block, StateBackend=B::State>
+		+ CallApiAt<Block, StateBackend = B::State>
 		+ Send
 		+ Sync
 		+ 'static,
@@ -561,7 +561,7 @@ mod tests {
 	use sc_client_api::Backend;
 	use sc_transaction_pool::BasicPool;
 	use sc_transaction_pool_api::{ChainEvent, MaintainedTransactionPool, TransactionSource};
-	use sp_api::{Core, ProvideRuntimeApi, ApiExt};
+	use sp_api::{ApiExt, Core, ProvideRuntimeApi};
 	use sp_blockchain::HeaderBackend;
 	use sp_consensus::{BlockOrigin, Environment, Proposer};
 	use sp_core::Pair;

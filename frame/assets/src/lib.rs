@@ -155,8 +155,8 @@ use frame_support::{
 	pallet_prelude::DispatchResultWithPostInfo,
 	traits::{
 		tokens::{fungibles, DepositConsequence, WithdrawConsequence},
-		BalanceStatus::Reserved, GenesisBuild,
-		Currency, ReservableCurrency, StoredMap,
+		BalanceStatus::Reserved,
+		Currency, GenesisBuild, ReservableCurrency, StoredMap,
 	},
 };
 use frame_system::Config as SystemConfig;

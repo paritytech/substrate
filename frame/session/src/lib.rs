@@ -120,8 +120,8 @@ use frame_support::{
 	dispatch::{DispatchError, DispatchResult},
 	ensure,
 	traits::{
-		EstimateNextNewSession, EstimateNextSessionRotation, FindAuthor, Get, OneSessionHandler,
-		StorageVersion, ValidatorRegistration, ValidatorSet, GenesisBuild,
+		EstimateNextNewSession, EstimateNextSessionRotation, FindAuthor, GenesisBuild, Get,
+		OneSessionHandler, StorageVersion, ValidatorRegistration, ValidatorSet,
 	},
 	weights::Weight,
 	Parameter,

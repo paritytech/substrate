@@ -103,8 +103,8 @@ use frame_support::{
 	dispatch::WithPostDispatchInfo,
 	traits::{
 		defensive_prelude::*, ChangeMembers, Contains, ContainsLengthBound, Currency,
-		CurrencyToVote, Get, InitializeMembers, LockIdentifier, LockableCurrency, OnUnbalanced,
-		ReservableCurrency, SortedMembers, StorageVersion, WithdrawReasons, GenesisBuild,
+		CurrencyToVote, GenesisBuild, Get, InitializeMembers, LockIdentifier, LockableCurrency,
+		OnUnbalanced, ReservableCurrency, SortedMembers, StorageVersion, WithdrawReasons,
 	},
 	weights::Weight,
 };
@@ -685,7 +685,10 @@ pub mod pallet {
 					Members::<T>::mutate(|members| {
 						match members.binary_search_by(|m| m.who.cmp(member)) {
 							Ok(_) => {
-								panic!("Duplicate member in elections-phragmen genesis: {:?}", member)
+								panic!(
+									"Duplicate member in elections-phragmen genesis: {:?}",
+									member
+								)
 							},
 							Err(pos) => members.insert(
 								pos,

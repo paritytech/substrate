@@ -50,7 +50,9 @@ pub fn expand_outer_config(
 				decl,
 				&field_name,
 			));
-			build_execute_calls.extend(quote!(#scrate::traits::GenesisBuild::<#runtime, _>::build(&self.#field_name);));
+			build_execute_calls.extend(
+				quote!(#scrate::traits::GenesisBuild::<#runtime, _>::build(&self.#field_name);),
+			);
 			query_genesis_config_part_macros.push(quote! {
 				#path::__substrate_genesis_config_check::is_genesis_config_defined!(#pallet_name);
 				#[cfg(feature = "std")]

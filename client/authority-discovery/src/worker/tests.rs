@@ -33,7 +33,7 @@ use futures::{
 use libp2p::{core::multiaddr, PeerId};
 use prometheus_endpoint::prometheus::default_registry;
 
-use sp_api::{ProvideRuntimeApi};
+use sp_api::ProvideRuntimeApi;
 use sp_keystore::{testing::KeyStore, CryptoStore};
 use sp_runtime::traits::{Block as BlockT, NumberFor, Zero};
 use substrate_test_runtime_client::runtime::Block;

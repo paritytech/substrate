@@ -52,8 +52,8 @@ use frame_support::{
 	dispatch::{DispatchError, DispatchResultWithPostInfo, Dispatchable, PostDispatchInfo},
 	ensure,
 	traits::{
-		Backing, ChangeMembers, EnsureOrigin, Get, GetBacking, InitializeMembers, StorageVersion,
-		GenesisBuild,
+		Backing, ChangeMembers, EnsureOrigin, GenesisBuild, Get, GetBacking, InitializeMembers,
+		StorageVersion,
 	},
 	weights::{GetDispatchInfo, Weight},
 };

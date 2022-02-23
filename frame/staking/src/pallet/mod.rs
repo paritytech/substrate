@@ -21,8 +21,8 @@ use frame_election_provider_support::SortedListProvider;
 use frame_support::{
 	pallet_prelude::*,
 	traits::{
-		Currency, CurrencyToVote, EnsureOrigin, EstimateNextNewSession, Get, LockIdentifier,
-		LockableCurrency, OnUnbalanced, UnixTime, GenesisBuild,
+		Currency, CurrencyToVote, EnsureOrigin, EstimateNextNewSession, GenesisBuild, Get,
+		LockIdentifier, LockableCurrency, OnUnbalanced, UnixTime,
 	},
 	weights::Weight,
 };

@@ -25,9 +25,7 @@ use sc_consensus::BlockImportParams;
 use sp_api::{ProvideRuntimeApi, TransactionFor};
 use sp_blockchain::{HeaderBackend, HeaderMetadata};
 use sp_consensus_aura::{
-	digests::CompatibleDigestItem,
-	sr25519::AuthoritySignature,
-	Slot, SlotDuration,
+	digests::CompatibleDigestItem, sr25519::AuthoritySignature, Slot, SlotDuration,
 };
 use sp_inherents::InherentData;
 use sp_runtime::{traits::Block as BlockT, Digest, DigestItem};

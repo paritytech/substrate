@@ -407,8 +407,7 @@ pub type StorageChanges<SBackend, Block> = sp_state_machine::StorageChanges<
 
 /// Extract the state backend type for a type that implements `ProvideRuntimeApi`.
 #[cfg(feature = "std")]
-pub type StateBackendFor<P, Block> =
-	<P as CallApiAt<Block>>::StateBackend;
+pub type StateBackendFor<P, Block> = <P as CallApiAt<Block>>::StateBackend;
 
 /// Extract the state backend transaction type for a type that implements `ProvideRuntimeApi`.
 #[cfg(feature = "std")]
@@ -527,7 +526,8 @@ pub struct RuntimeApi<'a, Block: BlockT, C: CallApiAt<Block>> {
 	pub call: &'a C,
 	pub commit_on_success: std::cell::RefCell<bool>,
 	pub changes: std::cell::RefCell<OverlayedChanges>,
-	pub storage_transaction_cache: std::cell::RefCell<StorageTransactionCache<Block, C::StateBackend>>,
+	pub storage_transaction_cache:
+		std::cell::RefCell<StorageTransactionCache<Block, C::StateBackend>>,
 	pub recorder: Option<ProofRecorder<Block>>,
 }
 
@@ -535,10 +535,10 @@ pub struct RuntimeApi<'a, Block: BlockT, C: CallApiAt<Block>> {
 impl<'a, Block: BlockT, C: CallApiAt<Block>> ApiExt<Block> for RuntimeApi<'a, Block, C> {
 	type StateBackend = C::StateBackend;
 
-	fn execute_in_transaction<F: FnOnce(&Self) -> TransactionOutcome<R>, R>(
-		&self,
-		call: F,
-	) -> R where Self: Sized {
+	fn execute_in_transaction<F: FnOnce(&Self) -> TransactionOutcome<R>, R>(&self, call: F) -> R
+	where
+		Self: Sized,
+	{
 		self.changes.borrow_mut().start_transaction();
 		*self.commit_on_success.borrow_mut() = false;
 		let res = call(self);
@@ -552,7 +552,10 @@ impl<'a, Block: BlockT, C: CallApiAt<Block>> ApiExt<Block> for RuntimeApi<'a, Bl
 	fn has_api<A: RuntimeApiInfo + ?Sized>(
 		&self,
 		at: &BlockId<Block>,
-	) -> std::result::Result<bool, ApiError> where Self: Sized {
+	) -> std::result::Result<bool, ApiError>
+	where
+		Self: Sized,
+	{
 		self.call
 			.runtime_version_at(at)
 			.map(|v| v.has_api_with(&A::ID, |v| v == A::VERSION))
@@ -562,19 +565,21 @@ impl<'a, Block: BlockT, C: CallApiAt<Block>> ApiExt<Block> for RuntimeApi<'a, Bl
 		&self,
 		at: &BlockId<Block>,
 		pred: P,
-	) -> std::result::Result<bool, ApiError> where Self: Sized {
-		self.call
-			.runtime_version_at(at)
-			.map(|v| v.has_api_with(&A::ID, pred))
+	) -> std::result::Result<bool, ApiError>
+	where
+		Self: Sized,
+	{
+		self.call.runtime_version_at(at).map(|v| v.has_api_with(&A::ID, pred))
 	}
 
 	fn api_version<A: RuntimeApiInfo + ?Sized>(
 		&self,
 		at: &BlockId<Block>,
-	) -> std::result::Result<Option<u32>, ApiError> where Self: Sized {
-		self.call
-			.runtime_version_at(at)
-			.map(|v| v.api_version(&A::ID))
+	) -> std::result::Result<Option<u32>, ApiError>
+	where
+		Self: Sized,
+	{
+		self.call.runtime_version_at(at).map(|v| v.api_version(&A::ID))
 	}
 
 	fn record_proof(&mut self) {
@@ -586,21 +591,20 @@ impl<'a, Block: BlockT, C: CallApiAt<Block>> ApiExt<Block> for RuntimeApi<'a, Bl
 	}
 
 	fn extract_proof(&mut self) -> Option<StorageProof> {
-		self.recorder
-			.take()
-			.map(|recorder| recorder.to_storage_proof())
+		self.recorder.take().map(|recorder| recorder.to_storage_proof())
 	}
 
 	fn into_storage_changes(
 		&self,
 		backend: &Self::StateBackend,
 		parent_hash: Block::Hash,
-	) -> std::result::Result<
-		StorageChanges<C::StateBackend, Block>,
-		String
-	> where Self: Sized {
+	) -> std::result::Result<StorageChanges<C::StateBackend, Block>, String>
+	where
+		Self: Sized,
+	{
 		let at = BlockId::Hash(parent_hash.clone());
-		let state_version = self.call
+		let state_version = self
+			.call
 			.runtime_version_at(&at)
 			.map(|v| v.state_version())
 			.map_err(|e| format!("Failed to get state version: {}", e))?;
@@ -616,9 +620,7 @@ impl<'a, Block: BlockT, C: CallApiAt<Block>> ApiExt<Block> for RuntimeApi<'a, Bl
 
 #[cfg(any(feature = "std", test))]
 impl<'a, Block: BlockT, C: CallApiAt<Block>> RuntimeApi<'a, Block, C> {
-	pub fn new(
-		call: &'a C,
-	) -> Self {
+	pub fn new(call: &'a C) -> Self {
 		RuntimeApi {
 			call,
 			commit_on_success: true.into(),
@@ -644,12 +646,8 @@ impl<'a, Block: BlockT, C: CallApiAt<Block>> RuntimeApi<'a, Block, C> {
 		if *self.commit_on_success.borrow() {
 			self.changes.borrow_mut().start_transaction();
 		}
-		let res = call_api_at(
-			&self.call,
-			&self.changes,
-			&self.storage_transaction_cache,
-			&self.recorder,
-		);
+		let res =
+			call_api_at(&self.call, &self.changes, &self.storage_transaction_cache, &self.recorder);
 
 		self.commit_or_rollback(res.is_ok());
 		res

@@ -20,13 +20,13 @@
 #![warn(missing_docs)]
 
 use crate::{extension::GetExtension, ChainType, Properties, RuntimeGenesis};
+use sc_executor::Externalities;
 use sc_network::config::MultiaddrWithPeerId;
 use sc_telemetry::TelemetryEndpoints;
-use sc_executor::Externalities;
 use serde::{Deserialize, Serialize};
 use serde_json as json;
 use sp_core::{
-	storage::{ChildInfo, Storage, StorageChild, StorageData, StorageKey, well_known_keys},
+	storage::{well_known_keys, ChildInfo, Storage, StorageChild, StorageData, StorageKey},
 	Bytes,
 };
 use sp_runtime::BuildStorage;
@@ -37,10 +37,7 @@ enum GenesisSource<G> {
 	Binary(Cow<'static, [u8]>),
 	Factory(Arc<dyn Fn() -> G + Send + Sync>),
 	Storage(Storage),
-	Runtime {
-		code: &'static [u8],
-		method: &'static str
-	},
+	Runtime { code: &'static [u8], method: &'static str },
 }
 
 impl<G> Clone for GenesisSource<G> {
@@ -56,7 +53,6 @@ impl<G> Clone for GenesisSource<G> {
 }
 
 impl<G: RuntimeGenesis> GenesisSource<G> {
-
 	fn from_storage(storage: &Storage) -> Genesis<G> {
 		let top = storage
 			.top
@@ -109,16 +105,21 @@ impl<G: RuntimeGenesis> GenesisSource<G> {
 				let runtime_code = sc_executor::RuntimeBlob::uncompress_if_needed(code)
 					.map_err(|e| format!("Error loading runtime code: {}", e))?;
 				let executor = sc_executor::WasmExecutor::new_default(
-					sc_executor::WasmExecutionMethod::Interpreted, None, 1, None, 1
+					sc_executor::WasmExecutionMethod::Interpreted,
+					None,
+					1,
+					None,
+					1,
 				);
 
-				executor.uncached_call(runtime_code, &mut ext, true, method, &[])
+				executor
+					.uncached_call(runtime_code, &mut ext, true, method, &[])
 					.map_err(|e| format!("Error building genesis with {}: {}", method, e))?;
 
 				ext.set_storage(well_known_keys::CODE.to_vec(), code.to_vec());
 				let storage = ext.into_storages();
 				Ok(Self::from_storage(&storage))
-			}
+			},
 		}
 	}
 }

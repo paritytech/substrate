@@ -18,7 +18,7 @@
 
 use crate::{
 	error::{Error, Result},
-	wasm_runtime::{RuntimeCache, WasmExecutionMethod, HostFunctionCollection},
+	wasm_runtime::{HostFunctionCollection, RuntimeCache, WasmExecutionMethod},
 	RuntimeVersionOf,
 };
 
@@ -88,7 +88,6 @@ pub trait NativeExecutionDispatch: Send + Sync {
 	fn native_version() -> NativeVersion;
 }
 
-
 /// An abstraction over Wasm code executor. Supports selecting execution backend and
 /// manages runtime cache.
 pub struct WasmExecutor {
@@ -135,7 +134,8 @@ impl WasmExecutor {
 	///
 	/// `runtime_cache_size` - The size of the instances cache for each runtime.
 	///
-	/// The list of supported host functions is extracted from the provided `HostFunctions` implementation.
+	/// The list of supported host functions is extracted from the provided `HostFunctions`
+	/// implementation.
 	pub fn new<H: HostFunctions>(
 		method: WasmExecutionMethod,
 		default_heap_pages: Option<u64>,
@@ -188,7 +188,8 @@ impl WasmExecutor {
 		)
 	}
 
-	/// Create a new instance with default set of host functions extended with custom `HostFunctions`
+	/// Create a new instance with default set of host functions extended with custom
+	/// `HostFunctions`
 	///
 	/// # Parameters
 	///
@@ -425,15 +426,10 @@ impl<D: NativeExecutionDispatch> NativeElseWasmExecutor<D> {
 		max_runtime_instances: usize,
 		runtime_cache_size: u8,
 	) -> Self {
-		let wasm_executor = WasmExecutor::new::
-			<ExtendedHostFunctions<sp_io::SubstrateHostFunctions, D::ExtendHostFunctions>>
-		(
-			fallback_method,
-			default_heap_pages,
-			max_runtime_instances,
-			None,
-			runtime_cache_size,
-		);
+		let wasm_executor =
+			WasmExecutor::new::<
+				ExtendedHostFunctions<sp_io::SubstrateHostFunctions, D::ExtendHostFunctions>,
+			>(fallback_method, default_heap_pages, max_runtime_instances, None, runtime_cache_size);
 
 		NativeElseWasmExecutor {
 			_dummy: Default::default(),
@@ -732,8 +728,9 @@ mod tests {
 			2,
 		);
 
-		fn extract_host_functions(executor: &WasmExecutor) -> Vec<&'static dyn sp_wasm_interface::Function>
-		{
+		fn extract_host_functions(
+			executor: &WasmExecutor,
+		) -> Vec<&'static dyn sp_wasm_interface::Function> {
 			executor.functions().clone()
 		}
 

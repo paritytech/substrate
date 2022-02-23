@@ -294,8 +294,8 @@ impl<T> CanAuthorWithVersion<T> {
 	}
 }
 
-impl<T: sp_version::GetRuntimeVersionAt<Block>, Block: BlockT>
-	CanAuthorWith<Block> for CanAuthorWithVersion<T>
+impl<T: sp_version::GetRuntimeVersionAt<Block>, Block: BlockT> CanAuthorWith<Block>
+	for CanAuthorWithVersion<T>
 {
 	fn can_author_with(&self, at: &BlockId<Block>) -> Result<(), String> {
 		match self.0.runtime_version(at) {

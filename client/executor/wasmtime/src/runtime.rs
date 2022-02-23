@@ -20,8 +20,8 @@
 
 use crate::{
 	host::HostState,
+	imports::{HostFunctionsRegistrar, Registrar},
 	instance_wrapper::{EntryPoint, InstanceWrapper},
-	imports::{Registrar, HostFunctionsRegistrar},
 	util,
 };
 

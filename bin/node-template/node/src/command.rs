@@ -3,9 +3,9 @@ use crate::{
 	cli::{Cli, Subcommand},
 	service,
 };
-use service::Block;
-use sc_cli::{SubstrateCli};
+use sc_cli::SubstrateCli;
 use sc_service::PartialComponents;
+use service::Block;
 
 impl SubstrateCli for Cli {
 	fn impl_name() -> String {

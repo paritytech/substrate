@@ -22,7 +22,6 @@
 // `construct_runtime!` does a lot of recursion and requires us to increase the limit to 256.
 #![recursion_limit = "256"]
 
-use hex_literal::hex;
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_election_provider_support::onchain;
 use frame_support::{
@@ -42,13 +41,14 @@ use frame_system::{
 	limits::{BlockLength, BlockWeights},
 	EnsureRoot,
 };
+use hex_literal::hex;
 pub use node_primitives::{AccountId, Signature};
 use node_primitives::{AccountIndex, Balance, BlockNumber, Hash, Index, Moment};
+use pallet_babe::AuthorityId as BabeId;
 use pallet_contracts::weights::WeightInfo;
 use pallet_grandpa::{
 	fg_primitives, AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList,
 };
-use pallet_babe::{AuthorityId as BabeId};
 use pallet_im_online::sr25519::AuthorityId as ImOnlineId;
 use pallet_session::historical as pallet_session_historical;
 pub use pallet_transaction_payment::{CurrencyAdapter, Multiplier, TargetedFeeAdjustment};
@@ -56,8 +56,8 @@ use pallet_transaction_payment::{FeeDetails, RuntimeDispatchInfo};
 use sp_api::impl_runtime_apis;
 use sp_authority_discovery::AuthorityId as AuthorityDiscoveryId;
 use sp_core::{
-	crypto::{UncheckedInto, KeyTypeId, dev_keys::*},
-	OpaqueMetadata, sr25519, ed25519,
+	crypto::{dev_keys::*, KeyTypeId, UncheckedInto},
+	ed25519, sr25519, OpaqueMetadata,
 };
 use sp_inherents::{CheckInherentsResult, InherentData};
 use sp_runtime::{
@@ -1983,10 +1983,12 @@ impl_runtime_apis! {
 	}
 }
 
-
 /// Helper function to generate stash, controller and session keys
-pub fn authority_keys(sr25519_key: sr25519::Public, stash_key: sr25519::Public, ed25519_key: ed25519::Public)
-	-> (AccountId, AccountId, GrandpaId, BabeId, ImOnlineId, AuthorityDiscoveryId) {
+pub fn authority_keys(
+	sr25519_key: sr25519::Public,
+	stash_key: sr25519::Public,
+	ed25519_key: ed25519::Public,
+) -> (AccountId, AccountId, GrandpaId, BabeId, ImOnlineId, AuthorityDiscoveryId) {
 	(
 		sr25519_key.into(),
 		stash_key.into(),
@@ -2052,10 +2054,8 @@ pub fn testnet_genesis(
 		.iter()
 		.map(|x| (x.0.clone(), x.1.clone(), STASH, pallet_staking::StakerStatus::Validator))
 		.chain(initial_nominators.iter().map(|x| {
-			let nominations = initial_authorities
-				.iter()
-				.map(|choice| choice.0.clone())
-				.collect::<Vec<_>>();
+			let nominations =
+				initial_authorities.iter().map(|choice| choice.0.clone()).collect::<Vec<_>>();
 			(x.clone(), x.clone(), STASH, pallet_staking::StakerStatus::Nominator(nominations))
 		}))
 		.collect::<Vec<_>>();
@@ -2110,10 +2110,7 @@ pub fn testnet_genesis(
 			phantom: Default::default(),
 		},
 		sudo: SudoConfig { key: Some(root_key) },
-		babe: BabeConfig {
-			authorities: vec![],
-			epoch_config: Some(BABE_GENESIS_EPOCH_CONFIG),
-		},
+		babe: BabeConfig { authorities: vec![], epoch_config: Some(BABE_GENESIS_EPOCH_CONFIG) },
 		im_online: ImOnlineConfig { keys: vec![] },
 		authority_discovery: AuthorityDiscoveryConfig { keys: vec![] },
 		grandpa: GrandpaConfig { authorities: vec![] },
@@ -2135,7 +2132,6 @@ pub fn testnet_genesis(
 		transaction_payment: Default::default(),
 	}
 }
-
 
 #[cfg(test)]
 mod tests {

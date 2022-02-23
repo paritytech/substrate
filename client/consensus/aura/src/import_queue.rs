@@ -37,8 +37,7 @@ use sp_blockchain::{
 };
 use sp_consensus::{CanAuthorWith, Error as ConsensusError};
 use sp_consensus_aura::{
-	digests::CompatibleDigestItem, inherents::AuraInherentData, ConsensusLog,
-	AURA_ENGINE_ID,
+	digests::CompatibleDigestItem, inherents::AuraInherentData, ConsensusLog, AURA_ENGINE_ID,
 };
 use sp_consensus_slots::Slot;
 use sp_core::{crypto::Pair, ExecutionContext};

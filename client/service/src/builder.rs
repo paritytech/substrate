@@ -52,7 +52,7 @@ use sp_blockchain::{HeaderBackend, HeaderMetadata};
 use sp_consensus::block_validation::{
 	BlockAnnounceValidator, Chain, DefaultBlockAnnounceValidator,
 };
-use sp_core::traits::{SpawnNamed};
+use sp_core::traits::SpawnNamed;
 use sp_keystore::{CryptoStore, SyncCryptoStore, SyncCryptoStorePtr};
 use sp_runtime::{
 	generic::BlockId,
@@ -339,13 +339,7 @@ pub fn new_client<Block>(
 	prometheus_registry: Option<Registry>,
 	telemetry: Option<TelemetryHandle>,
 	config: ClientConfig<Block>,
-) -> Result<
-	crate::client::Client<
-		Backend<Block>,
-		Block,
-	>,
-	sp_blockchain::Error,
->
+) -> Result<crate::client::Client<Backend<Block>, Block>, sp_blockchain::Error>
 where
 	Block: BlockT,
 {

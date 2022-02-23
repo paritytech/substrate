@@ -47,8 +47,8 @@ pub mod prelude {
 	};
 	// Client structs
 	pub use super::{
-		Backend, LocalExecutorDispatch, NativeElseWasmExecutor, TestClient,
-		TestClientBuilder, WasmExecutionMethod,
+		Backend, LocalExecutorDispatch, NativeElseWasmExecutor, TestClient, TestClientBuilder,
+		WasmExecutionMethod,
 	};
 	// Keyring
 	pub use super::{AccountKeyring, Sr25519Keyring};
@@ -72,7 +72,6 @@ impl sc_executor::NativeExecutionDispatch for LocalExecutorDispatch {
 
 /// Test client database backend.
 pub type Backend = substrate_test_client::Backend<substrate_test_runtime::Block>;
-
 
 /// Parameters of test-client builder with test-runtime.
 #[derive(Default)]
@@ -150,17 +149,11 @@ impl substrate_test_client::GenesisInit for GenesisParameters {
 }
 
 /// A `TestClient` with `test-runtime` builder.
-pub type TestClientBuilder<B> = substrate_test_client::TestClientBuilder<
-	substrate_test_runtime::Block,
-	B,
-	GenesisParameters,
->;
+pub type TestClientBuilder<B> =
+	substrate_test_client::TestClientBuilder<substrate_test_runtime::Block, B, GenesisParameters>;
 
 /// Test client type with `LocalExecutorDispatch` and generic Backend.
-pub type Client<B> = client::Client<
-	B,
-	substrate_test_runtime::Block,
->;
+pub type Client<B> = client::Client<B, substrate_test_runtime::Block>;
 
 /// A test client with default backend.
 pub type TestClient = Client<Backend>;
@@ -242,8 +235,8 @@ pub trait TestClientBuilderExt<B>: Sized {
 	fn build_with_backend(self) -> (Client<B>, Arc<B>);
 }
 
-impl<B> TestClientBuilderExt<B>
-	for TestClientBuilder<B> where
+impl<B> TestClientBuilderExt<B> for TestClientBuilder<B>
+where
 	B: sc_client_api::backend::Backend<substrate_test_runtime::Block> + 'static,
 {
 	fn genesis_init_mut(&mut self) -> &mut GenesisParameters {

@@ -471,7 +471,8 @@ mod execution {
 				let (wasm_result, _) = self.execute_aux(false, native_call);
 
 				if (result.is_ok() &&
-					wasm_result.is_ok() && result.as_ref().unwrap().as_encoded() == wasm_result.as_ref().unwrap().as_encoded()) ||
+					wasm_result.is_ok() && result.as_ref().unwrap().as_encoded() ==
+					wasm_result.as_ref().unwrap().as_encoded()) ||
 					result.is_err() && wasm_result.is_err()
 				{
 					result

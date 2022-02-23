@@ -18,7 +18,6 @@
 //! Test crate for frame_support. Allow to make use of `frame_support::decl_storage`.
 //! See tests directory.
 
-
 // Make sure we fail compilation on warnings
 #![warn(missing_docs)]
 #![deny(warnings)]

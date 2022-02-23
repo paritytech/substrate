@@ -23,9 +23,7 @@ use crate::Error;
 use sc_client_api::{AuxStore, UsageProvider};
 use sp_api::ProvideRuntimeApi;
 use sp_blockchain::HeaderBackend;
-use sp_consensus_aura::{
-	sr25519::{AuthoritySignature},
-};
+use sp_consensus_aura::sr25519::AuthoritySignature;
 use sp_consensus_slots::{Slot, SlotDuration};
 use sp_inherents::{InherentData, InherentDataProvider, InherentIdentifier};
 use sp_runtime::{

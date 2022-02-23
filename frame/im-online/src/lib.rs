@@ -85,8 +85,8 @@ pub mod weights;
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	traits::{
-		EstimateNextSessionRotation, Get, OneSessionHandler, ValidatorSet,
-		ValidatorSetWithIdentification, WrapperOpaque, GenesisBuild,
+		EstimateNextSessionRotation, GenesisBuild, Get, OneSessionHandler, ValidatorSet,
+		ValidatorSetWithIdentification, WrapperOpaque,
 	},
 	BoundedSlice, WeakBoundedVec,
 };

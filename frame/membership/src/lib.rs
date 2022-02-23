@@ -24,7 +24,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use frame_support::traits::{
-	ChangeMembers, Contains, Get, InitializeMembers, SortedMembers, StorageVersion, GenesisBuild,
+	ChangeMembers, Contains, GenesisBuild, Get, InitializeMembers, SortedMembers, StorageVersion,
 };
 use sp_std::prelude::*;
 

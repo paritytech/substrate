@@ -120,10 +120,7 @@ impl<B: BlockT> Verifier<B> for PassThroughVerifier {
 	}
 }
 
-pub type PeersFullClient = Client<
-	substrate_test_runtime_client::Backend,
-	Block,
->;
+pub type PeersFullClient = Client<substrate_test_runtime_client::Backend, Block>;
 
 #[derive(Clone)]
 pub struct PeersClient {

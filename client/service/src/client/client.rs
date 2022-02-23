@@ -48,10 +48,7 @@ use sc_consensus::{
 };
 use sc_executor::{RuntimeVersion, RuntimeVersionOf};
 use sc_telemetry::{telemetry, TelemetryHandle, SUBSTRATE_INFO};
-use sp_api::{
-	ProvideRuntimeApi,
-	ApiExt, CallApiAt, CallApiAtParams, Core as CoreApi, RuntimeApi,
-};
+use sp_api::{ApiExt, CallApiAt, CallApiAtParams, Core as CoreApi, ProvideRuntimeApi, RuntimeApi};
 use sp_blockchain::{
 	self as blockchain, well_known_cache_keys::Id as CacheKeyId, Backend as ChainBackend,
 	CachedHeaderMetadata, Error, HeaderBackend as ChainHeaderBackend, HeaderMetadata,
@@ -90,11 +87,7 @@ use std::{
 };
 
 #[cfg(feature = "test-helpers")]
-use {
-	sc_client_api::in_mem,
-	sp_core::traits::SpawnNamed,
-	sc_executor::WasmExecutor,
-};
+use {sc_client_api::in_mem, sc_executor::WasmExecutor, sp_core::traits::SpawnNamed};
 
 type NotificationSinks<T> = Mutex<Vec<TracingUnboundedSender<T>>>;
 
@@ -160,9 +153,7 @@ pub fn new_in_mem<Block, S>(
 	telemetry: Option<TelemetryHandle>,
 	spawn_handle: Box<dyn SpawnNamed>,
 	config: ClientConfig<Block>,
-) -> sp_blockchain::Result<
-	Client<in_mem::Backend<Block>, Block>,
->
+) -> sp_blockchain::Result<Client<in_mem::Backend<Block>, Block>>
 where
 	S: BuildStorage,
 	Block: BlockT,

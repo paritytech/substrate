@@ -49,7 +49,7 @@ pub use sp_wasm_interface;
 pub use wasm_runtime::{read_embedded_version, WasmExecutionMethod};
 pub use wasmi;
 
-pub use sc_executor_common::{error, sandbox, runtime_blob::RuntimeBlob};
+pub use sc_executor_common::{error, runtime_blob::RuntimeBlob, sandbox};
 
 /// Extracts the runtime version of a given runtime code.
 pub trait RuntimeVersionOf {
@@ -73,13 +73,8 @@ mod tests {
 		let mut ext = TestExternalities::default();
 		let mut ext = ext.ext();
 
-		let executor = WasmExecutor::new_default(
-			WasmExecutionMethod::Interpreted,
-			Some(8),
-			8,
-			None,
-			2,
-		);
+		let executor =
+			WasmExecutor::new_default(WasmExecutionMethod::Interpreted, Some(8), 8, None, 2);
 		let res = executor
 			.uncached_call(
 				RuntimeBlob::uncompress_if_needed(wasm_binary_unwrap()).unwrap(),

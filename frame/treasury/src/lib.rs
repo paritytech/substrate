@@ -74,8 +74,8 @@ use sp_std::prelude::*;
 use frame_support::{
 	print,
 	traits::{
-		Currency, ExistenceRequirement::KeepAlive, Get, Imbalance, OnUnbalanced,
-		ReservableCurrency, WithdrawReasons, GenesisBuild,
+		Currency, ExistenceRequirement::KeepAlive, GenesisBuild, Get, Imbalance, OnUnbalanced,
+		ReservableCurrency, WithdrawReasons,
 	},
 	weights::Weight,
 	PalletId,

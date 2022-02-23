@@ -255,7 +255,7 @@ use frame_support::{
 	pallet_prelude::*,
 	traits::{
 		BalanceStatus, ChangeMembers, Currency, EnsureOrigin, ExistenceRequirement::AllowDeath,
-		Imbalance, OnUnbalanced, Randomness, ReservableCurrency, GenesisBuild,
+		GenesisBuild, Imbalance, OnUnbalanced, Randomness, ReservableCurrency,
 	},
 	PalletId,
 };

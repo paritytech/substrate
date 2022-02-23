@@ -170,8 +170,8 @@ use frame_support::{
 		tokens::{fungible, BalanceStatus as Status, DepositConsequence, WithdrawConsequence},
 		Currency, DefensiveSaturating, ExistenceRequirement,
 		ExistenceRequirement::{AllowDeath, KeepAlive},
-		Get, Imbalance, LockIdentifier, LockableCurrency, NamedReservableCurrency, OnUnbalanced,
-		ReservableCurrency, SignedImbalance, StoredMap, TryDrop, WithdrawReasons, GenesisBuild,
+		GenesisBuild, Get, Imbalance, LockIdentifier, LockableCurrency, NamedReservableCurrency,
+		OnUnbalanced, ReservableCurrency, SignedImbalance, StoredMap, TryDrop, WithdrawReasons,
 	},
 	WeakBoundedVec,
 };
@@ -586,12 +586,8 @@ pub mod pallet {
 				)
 			}
 
-			let mut endowed_accounts = self
-				.balances
-				.iter()
-				.map(|(x, _)| x)
-				.cloned()
-				.collect::<Vec<_>>();
+			let mut endowed_accounts =
+				self.balances.iter().map(|(x, _)| x).cloned().collect::<Vec<_>>();
 			endowed_accounts.sort();
 			endowed_accounts.dedup();
 

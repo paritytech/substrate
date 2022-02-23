@@ -1125,37 +1125,65 @@ pub mod key_types {
 
 /// Public keys commonly used for development and testing.
 pub mod dev_keys {
-	use crate::{sr25519, ed25519};
+	use crate::{ed25519, sr25519};
 	/// //Alice
-	pub const ALICE_SR25519: sr25519::Public = sr25519::Public(hex_literal::hex!["d43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d"]);
+	pub const ALICE_SR25519: sr25519::Public = sr25519::Public(hex_literal::hex![
+		"d43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d"
+	]);
 	/// //Alice
-	pub const ALICE_ED25519: ed25519::Public = ed25519::Public(hex_literal::hex!["88dc3417d5058ec4b4503e0c12ea1a0a89be200fe98922423d4334014fa6b0ee"]);
+	pub const ALICE_ED25519: ed25519::Public = ed25519::Public(hex_literal::hex![
+		"88dc3417d5058ec4b4503e0c12ea1a0a89be200fe98922423d4334014fa6b0ee"
+	]);
 	/// //Bob
-	pub const BOB_SR25519: sr25519::Public = sr25519::Public(hex_literal::hex!["8eaf04151687736326c9fea17e25fc5287613693c912909cb226aa4794f26a48"]);
+	pub const BOB_SR25519: sr25519::Public = sr25519::Public(hex_literal::hex![
+		"8eaf04151687736326c9fea17e25fc5287613693c912909cb226aa4794f26a48"
+	]);
 	/// //Bob
-	pub const BOB_ED25519: ed25519::Public = ed25519::Public(hex_literal::hex!["d17c2d7823ebf260fd138f2d7e27d114c0145d968b5ff5006125f2414fadae69"]);
+	pub const BOB_ED25519: ed25519::Public = ed25519::Public(hex_literal::hex![
+		"d17c2d7823ebf260fd138f2d7e27d114c0145d968b5ff5006125f2414fadae69"
+	]);
 
 	/// //Charlie
-	pub const CHARLIE_SR25519: sr25519::Public = sr25519::Public(hex_literal::hex!["90b5ab205c6974c9ea841be688864633dc9ca8a357843eeacf2314649965fe22"]);
+	pub const CHARLIE_SR25519: sr25519::Public = sr25519::Public(hex_literal::hex![
+		"90b5ab205c6974c9ea841be688864633dc9ca8a357843eeacf2314649965fe22"
+	]);
 	/// //Dave
-	pub const DAVE_SR25519: sr25519::Public = sr25519::Public(hex_literal::hex!["306721211d5404bd9da88e0204360a1a9ab8b87c66c1bc2fcdd37f3c2222cc20"]);
+	pub const DAVE_SR25519: sr25519::Public = sr25519::Public(hex_literal::hex![
+		"306721211d5404bd9da88e0204360a1a9ab8b87c66c1bc2fcdd37f3c2222cc20"
+	]);
 	/// //Eve
-	pub const EVE_SR25519: sr25519::Public = sr25519::Public(hex_literal::hex!["e659a7a1628cdd93febc04a4e0646ea20e9f5f0ce097d9a05290d4a9e054df4e"]);
+	pub const EVE_SR25519: sr25519::Public = sr25519::Public(hex_literal::hex![
+		"e659a7a1628cdd93febc04a4e0646ea20e9f5f0ce097d9a05290d4a9e054df4e"
+	]);
 	/// //Ferdie
-	pub const FERDIE_SR25519: sr25519::Public = sr25519::Public(hex_literal::hex!["1cbd2d43530a44705ad088af313e18f80b53ef16b36177cd4b77b846f2a5f07c"]);
+	pub const FERDIE_SR25519: sr25519::Public = sr25519::Public(hex_literal::hex![
+		"1cbd2d43530a44705ad088af313e18f80b53ef16b36177cd4b77b846f2a5f07c"
+	]);
 
 	/// //Alice//stash
-	pub const ALICE_STASH: sr25519::Public = sr25519::Public(hex_literal::hex!["be5ddb1579b72e84524fc29e78609e3caf42e85aa118ebfe0b0ad404b5bdd25f"]);
+	pub const ALICE_STASH: sr25519::Public = sr25519::Public(hex_literal::hex![
+		"be5ddb1579b72e84524fc29e78609e3caf42e85aa118ebfe0b0ad404b5bdd25f"
+	]);
 	/// //Bob//stash
-	pub const BOB_STASH: sr25519::Public = sr25519::Public(hex_literal::hex!["fe65717dad0447d715f660a0a58411de509b42e6efb8375f562f58a554d5860e"]);
+	pub const BOB_STASH: sr25519::Public = sr25519::Public(hex_literal::hex![
+		"fe65717dad0447d715f660a0a58411de509b42e6efb8375f562f58a554d5860e"
+	]);
 	/// //Charlie//stash
-	pub const CHARLIE_STASH: sr25519::Public = sr25519::Public(hex_literal::hex!["1e07379407fecc4b89eb7dbd287c2c781cfb1907a96947a3eb18e4f8e7198625"]);
+	pub const CHARLIE_STASH: sr25519::Public = sr25519::Public(hex_literal::hex![
+		"1e07379407fecc4b89eb7dbd287c2c781cfb1907a96947a3eb18e4f8e7198625"
+	]);
 	/// //Dave//stash
-	pub const DAVE_STASH: sr25519::Public = sr25519::Public(hex_literal::hex!["e860f1b1c7227f7c22602f53f15af80747814dffd839719731ee3bba6edc126c"]);
+	pub const DAVE_STASH: sr25519::Public = sr25519::Public(hex_literal::hex![
+		"e860f1b1c7227f7c22602f53f15af80747814dffd839719731ee3bba6edc126c"
+	]);
 	/// //Eve//stash
-	pub const EVE_STASH: sr25519::Public = sr25519::Public(hex_literal::hex!["8ac59e11963af19174d0b94d5d78041c233f55d2e19324665bafdfb62925af2d"]);
+	pub const EVE_STASH: sr25519::Public = sr25519::Public(hex_literal::hex![
+		"8ac59e11963af19174d0b94d5d78041c233f55d2e19324665bafdfb62925af2d"
+	]);
 	/// //Ferdie//stash
-	pub const FERDIE_STASH: sr25519::Public = sr25519::Public(hex_literal::hex!["101191192fc877c24d725b337120fa3edc63d227bbc92705db1e2cb65f56981a"]);
+	pub const FERDIE_STASH: sr25519::Public = sr25519::Public(hex_literal::hex![
+		"101191192fc877c24d725b337120fa3edc63d227bbc92705db1e2cb65f56981a"
+	]);
 }
 
 #[cfg(test)]

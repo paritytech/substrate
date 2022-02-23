@@ -18,11 +18,11 @@
 
 //! Substrate chain configurations.
 
+pub use node_primitives::{AccountId, Balance, Block, Signature};
 use sc_chain_spec::ChainSpecExtension;
 use sc_service::ChainType;
 use sc_telemetry::TelemetryEndpoints;
 use serde::{Deserialize, Serialize};
-pub use node_primitives::{AccountId, Balance, Signature, Block};
 
 const STAGING_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io/submit/";
 
@@ -114,7 +114,6 @@ pub fn local_testnet_config() -> ChainSpec {
 		Default::default(),
 	)
 }
-
 
 #[cfg(test)]
 pub(crate) mod tests {

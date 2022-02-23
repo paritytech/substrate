@@ -26,7 +26,7 @@ mod tests;
 pub mod weights;
 
 use codec::Codec;
-use frame_support::traits::{BalanceStatus::Reserved, Currency, ReservableCurrency, GenesisBuild};
+use frame_support::traits::{BalanceStatus::Reserved, Currency, GenesisBuild, ReservableCurrency};
 use sp_runtime::{
 	traits::{AtLeast32Bit, LookupError, Saturating, StaticLookup, Zero},
 	MultiAddress,

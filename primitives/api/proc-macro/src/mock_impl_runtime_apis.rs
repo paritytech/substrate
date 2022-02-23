@@ -18,7 +18,7 @@
 use crate::utils::{
 	extract_block_type_from_trait_path, extract_impl_trait,
 	extract_parameter_names_types_and_borrows, generate_crate_access, generate_hidden_includes,
-	generate_method_runtime_api_impl_name, return_type_extract_type, prefix_function_with_trait,
+	generate_method_runtime_api_impl_name, prefix_function_with_trait, return_type_extract_type,
 	AllowSelfRefInParameters, RequireQualifiedTraitPath,
 };
 

@@ -123,8 +123,7 @@ fn call_in_wasm<E: Externalities>(
 	execution_method: WasmExecutionMethod,
 	ext: &mut E,
 ) -> Result<Vec<u8>, Error> {
-	let executor =
-		crate::WasmExecutor::new_default(execution_method, Some(1024), 8, None, 2);
+	let executor = crate::WasmExecutor::new_default(execution_method, Some(1024), 8, None, 2);
 	executor.uncached_call(
 		RuntimeBlob::uncompress_if_needed(wasm_binary_unwrap()).unwrap(),
 		ext,
@@ -568,13 +567,8 @@ fn heap_is_reset_between_calls(wasm_method: WasmExecutionMethod) {
 
 test_wasm_execution!(parallel_execution);
 fn parallel_execution(wasm_method: WasmExecutionMethod) {
-	let executor = std::sync::Arc::new(crate::WasmExecutor::new_default(
-		wasm_method,
-		Some(1024),
-		8,
-		None,
-		2,
-	));
+	let executor =
+		std::sync::Arc::new(crate::WasmExecutor::new_default(wasm_method, Some(1024), 8, None, 2));
 	let threads: Vec<_> = (0..8)
 		.map(|_| {
 			let executor = executor.clone();

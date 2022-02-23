@@ -275,8 +275,8 @@ yamux = { opt-level = 3 }
 zeroize = { opt-level = 3 }
 
 [profile.release]
-panic = "abort"
-incremental = true
+# Substrate runtime requires unwinding.
+panic = "unwind"
 
 [profile.production]
 inherits = "release"
@@ -287,4 +287,3 @@ inherits = "release"
 lto = "fat"
 # https://doc.rust-lang.org/rustc/codegen-options/index.html#codegen-units
 codegen-units = 1
-incremental = false

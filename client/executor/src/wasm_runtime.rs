@@ -37,7 +37,7 @@ use std::{
 	sync::Arc,
 };
 
-use sp_wasm_interface::{HostFunctions, Function};
+use sp_wasm_interface::{Function, HostFunctions};
 
 #[derive(Clone)]
 pub struct HostFunctionCollection {

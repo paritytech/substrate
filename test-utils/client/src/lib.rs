@@ -79,17 +79,13 @@ pub struct TestClientBuilder<Block: BlockT, Backend, G: GenesisInit> {
 	no_genesis: bool,
 }
 
-impl<Block: BlockT, G: GenesisInit> Default
-	for TestClientBuilder<Block, Backend<Block>, G>
-{
+impl<Block: BlockT, G: GenesisInit> Default for TestClientBuilder<Block, Backend<Block>, G> {
 	fn default() -> Self {
 		Self::with_default_backend()
 	}
 }
 
-impl<Block: BlockT, G: GenesisInit>
-	TestClientBuilder<Block, Backend<Block>, G>
-{
+impl<Block: BlockT, G: GenesisInit> TestClientBuilder<Block, Backend<Block>, G> {
 	/// Create new `TestClientBuilder` with default backend.
 	pub fn with_default_backend() -> Self {
 		let backend = Arc::new(Backend::new_test(std::u32::MAX, std::u64::MAX));
@@ -113,9 +109,7 @@ impl<Block: BlockT, G: GenesisInit>
 	}
 }
 
-impl<Block: BlockT, Backend, G: GenesisInit>
-	TestClientBuilder<Block, Backend, G>
-{
+impl<Block: BlockT, Backend, G: GenesisInit> TestClientBuilder<Block, Backend, G> {
 	/// Create a new instance of the test client builder.
 	pub fn with_backend(backend: Arc<Backend>) -> Self {
 		TestClientBuilder {
@@ -201,10 +195,7 @@ impl<Block: BlockT, Backend, G: GenesisInit>
 	pub fn build_with_executor(
 		self,
 		executor: LocalCallExecutor<Block, Backend>,
-	) -> (
-		client::Client<Backend, Block>,
-		sc_consensus::LongestChain<Backend, Block>,
-	)
+	) -> (client::Client<Backend, Block>, sc_consensus::LongestChain<Backend, Block>)
 	where
 		Backend: sc_client_api::backend::Backend<Block>,
 		<Backend as sc_client_api::backend::Backend<Block>>::OffchainStorage: 'static,
@@ -252,24 +243,12 @@ impl<Block: BlockT, Backend, G: GenesisInit>
 	}
 }
 
-impl<Block: BlockT, Backend, G: GenesisInit>
-	TestClientBuilder<
-		Block,
-		Backend,
-		G,
-	> where
-{
+impl<Block: BlockT, Backend, G: GenesisInit> TestClientBuilder<Block, Backend, G> {
 	/// Build the test client with the given native executor.
 	pub fn build_with_wasm_executor<I>(
 		self,
 		executor: I,
-	) -> (
-		client::Client<
-			Backend,
-			Block,
-		>,
-		sc_consensus::LongestChain<Backend, Block>,
-	)
+	) -> (client::Client<Backend, Block>, sc_consensus::LongestChain<Backend, Block>)
 	where
 		I: Into<Option<WasmExecutor>>,
 		Backend: sc_client_api::backend::Backend<Block> + 'static,

@@ -158,8 +158,8 @@ use frame_support::{
 	traits::{
 		defensive_prelude::*,
 		schedule::{DispatchTime, Named as ScheduleNamed},
-		BalanceStatus, Currency, Get, LockIdentifier, LockableCurrency, OnUnbalanced,
-		ReservableCurrency, WithdrawReasons, GenesisBuild,
+		BalanceStatus, Currency, GenesisBuild, Get, LockIdentifier, LockableCurrency, OnUnbalanced,
+		ReservableCurrency, WithdrawReasons,
 	},
 	weights::Weight,
 };

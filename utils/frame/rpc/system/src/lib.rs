@@ -197,7 +197,10 @@ mod tests {
 		transaction_validity::{InvalidTransaction, TransactionValidityError},
 		ApplyExtrinsicResult,
 	};
-	use substrate_test_runtime_client::{runtime::{AccountId, Transfer, Index}, AccountKeyring};
+	use substrate_test_runtime_client::{
+		runtime::{AccountId, Index, Transfer},
+		AccountKeyring,
+	};
 
 	#[test]
 	fn should_return_next_nonce_for_some_account() {
@@ -228,7 +231,8 @@ mod tests {
 		let accounts = FullSystem::new(client, pool, DenyUnsafe::Yes);
 
 		// when
-		let nonce = SystemApi::<_, AccountId, Index>::nonce(&accounts, AccountKeyring::Alice.into());
+		let nonce =
+			SystemApi::<_, AccountId, Index>::nonce(&accounts, AccountKeyring::Alice.into());
 
 		// then
 		assert_eq!(block_on(nonce).unwrap() as Index, 2);

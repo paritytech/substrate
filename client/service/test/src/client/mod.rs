@@ -1733,10 +1733,7 @@ fn cleans_up_closed_notification_sinks_on_block_import() {
 	)
 	.unwrap();
 
-	type TestClient = Client<
-		in_mem::Backend<Block>,
-		Block,
-	>;
+	type TestClient = Client<in_mem::Backend<Block>, Block>;
 
 	let import_notif1 = client.import_notification_stream();
 	let import_notif2 = client.import_notification_stream();

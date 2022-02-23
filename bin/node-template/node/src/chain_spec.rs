@@ -46,4 +46,3 @@ pub fn local_testnet_config() -> Result<ChainSpec, String> {
 		Default::default(),
 	))
 }
-

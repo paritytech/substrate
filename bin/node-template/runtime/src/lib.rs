@@ -11,7 +11,10 @@ use pallet_grandpa::{
 };
 use sp_api::impl_runtime_apis;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
-use sp_core::{crypto::{KeyTypeId, dev_keys::*}, OpaqueMetadata};
+use sp_core::{
+	crypto::{dev_keys::*, KeyTypeId},
+	OpaqueMetadata,
+};
 use sp_runtime::{
 	create_runtime_str, generic, impl_opaque_keys,
 	traits::{AccountIdLookup, BlakeTwo256, Block as BlockT, IdentifyAccount, NumberFor, Verify},
@@ -574,9 +577,7 @@ fn testnet_genesis(
 	endowed_accounts: &[AccountId],
 ) -> GenesisConfig {
 	GenesisConfig {
-		system: SystemConfig {
-			code: vec![],
-		},
+		system: SystemConfig { code: vec![] },
 		balances: BalancesConfig {
 			// Configure endowed accounts with initial balance of 1 << 60.
 			balances: endowed_accounts.iter().cloned().map(|k| (k, 1 << 60)).collect(),

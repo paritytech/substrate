@@ -16,7 +16,7 @@
 // limitations under the License.
 
 use sp_api::{
-	decl_runtime_apis, impl_runtime_apis, mock_impl_runtime_apis, ApiError, RuntimeApiInfo, ApiExt,
+	decl_runtime_apis, impl_runtime_apis, mock_impl_runtime_apis, ApiError, ApiExt, RuntimeApiInfo,
 };
 use sp_core::NativeOrEncoded;
 use sp_runtime::{
@@ -135,10 +135,8 @@ mock_impl_runtime_apis! {
 	}
 }
 
-type TestClient = substrate_test_runtime_client::client::Client<
-	substrate_test_runtime_client::Backend,
-	Block,
->;
+type TestClient =
+	substrate_test_runtime_client::client::Client<substrate_test_runtime_client::Backend, Block>;
 
 #[test]
 fn test_client_side_function_signature() {

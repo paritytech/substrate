@@ -29,7 +29,7 @@
 use codec::Encode;
 
 use sp_api::{
-	ApiExt, RuntimeApi, Core, StorageChanges, StorageProof, TransactionOutcome, CallApiAt,
+	ApiExt, CallApiAt, Core, RuntimeApi, StorageChanges, StorageProof, TransactionOutcome,
 };
 use sp_blockchain::{ApplyExtrinsicFailed, Error};
 use sp_core::ExecutionContext;
@@ -145,7 +145,7 @@ pub struct BlockBuilder<'a, Block: BlockT, A: 'a + CallApiAt<Block>, B> {
 impl<'a, Block, A, B> BlockBuilder<'a, Block, A, B>
 where
 	Block: BlockT,
-	A: CallApiAt<Block, StateBackend=B::State> + 'a,
+	A: CallApiAt<Block, StateBackend = B::State> + 'a,
 	B: backend::Backend<Block>,
 {
 	/// Create a new instance of builder based on the given `parent_hash` and `parent_number`.

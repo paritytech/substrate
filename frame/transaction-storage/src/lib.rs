@@ -31,7 +31,7 @@ mod tests;
 use codec::{Decode, Encode};
 use frame_support::{
 	dispatch::{Dispatchable, GetDispatchInfo},
-	traits::{Currency, OnUnbalanced, ReservableCurrency, GenesisBuild},
+	traits::{Currency, GenesisBuild, OnUnbalanced, ReservableCurrency},
 };
 use sp_runtime::traits::{BlakeTwo256, Hash, One, Saturating, Zero};
 use sp_std::{prelude::*, result};

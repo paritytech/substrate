@@ -60,8 +60,8 @@ use frame_support::{
 	ensure,
 	pallet_prelude::*,
 	traits::{
-		Currency, ExistenceRequirement, Get, LockIdentifier, LockableCurrency, VestingSchedule,
-		WithdrawReasons, GenesisBuild,
+		Currency, ExistenceRequirement, GenesisBuild, Get, LockIdentifier, LockableCurrency,
+		VestingSchedule, WithdrawReasons,
 	},
 };
 use frame_system::{ensure_root, ensure_signed, pallet_prelude::*};

@@ -300,13 +300,13 @@ pub mod weights;
 mod pallet;
 
 use codec::{Decode, Encode, HasCompact};
+#[cfg(feature = "std")]
+use frame_support::traits::ConstU32;
 use frame_support::{
 	traits::{Currency, Get},
 	weights::Weight,
 	BoundedVec, EqNoBound, PartialEqNoBound, RuntimeDebugNoBound,
 };
-#[cfg(feature = "std")]
-use frame_support::traits::ConstU32;
 use scale_info::TypeInfo;
 use sp_runtime::{
 	curve::PiecewiseLinear,

@@ -21,9 +21,11 @@ pub use self::gen_client::Client as TransactionPaymentClient;
 use codec::{Codec, Decode};
 use jsonrpc_core::{Error as RpcError, ErrorCode, Result};
 use jsonrpc_derive::rpc;
-pub use pallet_transaction_payment_rpc_runtime_api::TransactionPaymentApi as TransactionPaymentRuntimeApi;
-pub use pallet_transaction_payment_rpc_runtime_api::RuntimeDispatchInfo as TransactionPaymentRuntimeDispatchInfo;
 use pallet_transaction_payment_rpc_runtime_api::{FeeDetails, InclusionFee, RuntimeDispatchInfo};
+pub use pallet_transaction_payment_rpc_runtime_api::{
+	RuntimeDispatchInfo as TransactionPaymentRuntimeDispatchInfo,
+	TransactionPaymentApi as TransactionPaymentRuntimeApi,
+};
 use sp_api::ProvideRuntimeApi;
 use sp_blockchain::HeaderBackend;
 use sp_core::Bytes;

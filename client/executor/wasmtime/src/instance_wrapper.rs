@@ -19,8 +19,10 @@
 //! Defines data and logic needed for interaction with an WebAssembly instance of a substrate
 //! runtime module.
 
-use crate::runtime::{Store, StoreData};
-use crate::imports::Registrar;
+use crate::{
+	imports::Registrar,
+	runtime::{Store, StoreData},
+};
 use sc_executor_common::{
 	error::{Backtrace, Error, MessageWithBacktrace, Result},
 	wasm_runtime::InvokeMethod,
@@ -171,8 +173,7 @@ impl InstanceWrapper {
 		heap_pages: u64,
 		allow_missing_func_imports: bool,
 		max_memory_size: Option<usize>,
-	) -> Result<Self>
-	{
+	) -> Result<Self> {
 		let limits = if let Some(max_memory_size) = max_memory_size {
 			wasmtime::StoreLimitsBuilder::new().memory_size(max_memory_size).build()
 		} else {

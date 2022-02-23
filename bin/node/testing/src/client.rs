@@ -30,10 +30,7 @@ pub type ExecutorDispatch = sc_executor::NativeElseWasmExecutor<node_executor::E
 pub type Backend = sc_client_db::Backend<node_primitives::Block>;
 
 /// Test client type.
-pub type Client = client::Client<
-	Backend,
-	node_primitives::Block,
->;
+pub type Client = client::Client<Backend, node_primitives::Block>;
 
 /// Transaction for node-runtime.
 pub type Transaction = sc_client_api::backend::TransactionFor<Backend, node_primitives::Block>;
@@ -58,11 +55,7 @@ pub trait TestClientBuilderExt: Sized {
 }
 
 impl TestClientBuilderExt
-	for substrate_test_client::TestClientBuilder<
-		node_primitives::Block,
-		Backend,
-		GenesisParameters,
-	>
+	for substrate_test_client::TestClientBuilder<node_primitives::Block, Backend, GenesisParameters>
 {
 	fn new() -> Self {
 		Self::default()

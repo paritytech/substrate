@@ -64,7 +64,7 @@ use sp_std::prelude::*;
 
 use frame_support::{
 	dispatch::DispatchResult,
-	traits::{EstimateCallFee, Get, GenesisBuild},
+	traits::{EstimateCallFee, GenesisBuild, Get},
 	weights::{
 		DispatchClass, DispatchInfo, GetDispatchInfo, Pays, PostDispatchInfo, Weight,
 		WeightToFeeCoefficient, WeightToFeePolynomial,

@@ -43,7 +43,7 @@ use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
 	pallet_prelude::Get,
 	storage,
-	traits::{KeyOwnerProofSystem, OneSessionHandler, StorageVersion, GenesisBuild},
+	traits::{GenesisBuild, KeyOwnerProofSystem, OneSessionHandler, StorageVersion},
 	weights::{Pays, Weight},
 	WeakBoundedVec,
 };

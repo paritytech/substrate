@@ -25,8 +25,8 @@ use codec::{Decode, Encode};
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
 	traits::{
-		ConstU32, DisabledValidators, FindAuthor, Get, KeyOwnerProofSystem, OnTimestampSet,
-		OneSessionHandler, GenesisBuild,
+		ConstU32, DisabledValidators, FindAuthor, GenesisBuild, Get, KeyOwnerProofSystem,
+		OnTimestampSet, OneSessionHandler,
 	},
 	weights::{Pays, Weight},
 	BoundedVec, WeakBoundedVec,

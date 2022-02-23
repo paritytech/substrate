@@ -38,7 +38,7 @@ pub trait BlockBuilderExt {
 impl<'a, A, B> BlockBuilderExt
 	for sc_block_builder::BlockBuilder<'a, substrate_test_runtime::Block, A, B>
 where
-	A: CallApiAt<substrate_test_runtime::Block, StateBackend=B::State> + 'a,
+	A: CallApiAt<substrate_test_runtime::Block, StateBackend = B::State> + 'a,
 	B: backend::Backend<substrate_test_runtime::Block>,
 {
 	fn push_transfer(
