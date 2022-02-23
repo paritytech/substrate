@@ -28,7 +28,6 @@ smallvec = { version = "1", default-features = false, features = [
 wasmi-validation = { version = "0.4", default-features = false }
 
 # Only used in benchmarking to generate random contract code
-libsecp256k1 = { version = "0.7", optional = true, default-features = false, features = ["hmac", "static-context"] }
 rand = { version = "0.8", optional = true, default-features = false }
 rand_pcg = { version = "0.3", optional = true }
 
@@ -56,6 +55,7 @@ pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 pallet-timestamp = { version = "4.0.0-dev", path = "../timestamp" }
 pallet-randomness-collective-flip = { version = "4.0.0-dev", path = "../randomness-collective-flip" }
 pallet-utility = { version = "4.0.0-dev", path = "../utility" }
+sp-keystore = { version = "0.11.0", path = "../../primitives/keystore" }
 
 [features]
 default = ["std"]
@@ -77,11 +77,9 @@ std = [
 	"pallet-contracts-proc-macro/full",
 	"log/std",
 	"rand/std",
-	"libsecp256k1/std",
 ]
 runtime-benchmarks = [
 	"frame-benchmarking/runtime-benchmarks",
-	"libsecp256k1",
 	"rand",
 	"rand_pcg",
 	"unstable-interface",
