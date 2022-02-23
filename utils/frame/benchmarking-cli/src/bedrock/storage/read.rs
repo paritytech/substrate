@@ -62,7 +62,7 @@ impl ReadCmd {
 			res.time_by_size.push((size as u64, time_by_key_index[i].as_nanos()));
 		}
 
-		let template = res.post_process(&cfg, &self.post_proc)?;
-		template.write(&self.post_proc.weight_out)
+		let template = res.post_process(&cfg, &self.post_proc, true)?;
+		template.write(&self.post_proc.weight_out, true)
 	}
 }

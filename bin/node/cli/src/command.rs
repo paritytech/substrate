@@ -137,7 +137,6 @@ pub fn run() -> Result<()> {
 			runner.async_run(|config| {
 				let PartialComponents { client, task_manager, import_queue, .. } =
 					new_partial(&config)?;
-
 				Ok((cmd.run(client, import_queue), task_manager))
 			})
 		},

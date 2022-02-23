@@ -23,13 +23,11 @@ const TEMPLATE: &str = include_str!("./weights.hbs");
 pub enum Benchmark {
 	//#[clap(about = "Block import base")]
 	//BlockImport(benches::block::BlockImportCmd),
-
 	#[clap(about = "Storage Read")]
 	StorageRead(storage::cmd::ReadCmd),
 
 	#[clap(about = "Storage Write")]
 	StorageWrite(storage::cmd::WriteCmd),
-
 	//#[clap(about = "Extrinsic base")]
 	//ExtBase(benches::extrinsic::ExtBaseCmd),
 }
@@ -59,6 +57,10 @@ pub struct PostProcParams {
 	/// Path to write the filled out weight template.
 	#[clap(long)]
 	pub weight_out: String,
+
+	/// Disable sanity checks for testing/debugging.
+	#[clap(long)]
+	pub insane: bool,
 }
 
 /// Helper type for nano seconds.
@@ -91,24 +93,28 @@ impl TemplateData {
 
 	/// Filles the weights HBS template with its own data.
 	/// Writes the result to `out_path` without appending ".rs".
-	pub fn write(&self, path: &str) -> Result<()> {
+	pub fn write(&self, path: &str, is_read: bool) -> Result<()> {
 		// New Handlebars instance.
 		let mut handlebars = handlebars::Handlebars::new();
 		// Don't HTML escape any characters.
 		handlebars.register_escape_fn(|s| -> String { s.to_string() });
 
-		let out_path = self.out_path(path);
+		let out_path = self.out_path(path, is_read);
 		let mut fd = fs::File::create(&out_path)?;
-		info!("Writing weights to {:?}", fs::canonicalize(&out_path));
+		info!("Writing weights to {:?}", fs::canonicalize(&out_path)?);
 		handlebars
 			.render_template_to_write(&TEMPLATE, &self, &mut fd)
 			.map_err(|e| format!("HBS template write: {:?}", e).into()) // TODO are there custom errors?
 	}
 
-	fn out_path(&self, weight_out: &str) -> PathBuf {
+	fn out_path(&self, weight_out: &str, is_read: bool) -> PathBuf {
 		let mut path = PathBuf::from(weight_out);
+		let mut infix = "write";
+		if is_read {
+			infix = "read";
+		}
 		if path.is_dir() {
-			path.push(format!("{}_weights.rs", self.db_name.to_lowercase()));
+			path.push(format!("{}_{}_weights.rs", self.db_name.to_lowercase(), infix));
 			path.set_extension("rs");
 		}
 		path
@@ -120,6 +126,7 @@ impl TimeResult {
 		&self,
 		cfg: &Configuration,
 		params: &PostProcParams,
+		is_read: bool,
 	) -> Result<TemplateData> {
 		info!("Post processing");
 		if self.time_by_size.is_empty() {
@@ -128,16 +135,15 @@ impl TimeResult {
 		// 1. Print a human-readable summary.
 		self.summary();
 		// 2. Save it as machine-readable json.
-		self.save_json("read.json");
+		self.save_json("read.json")?;
 		// 3. Fill out and save the weights template.
 		let mut template = TemplateData::from(&cfg);
 		let mut times = self.filter_by_size(params.value_len);
 		// check that the weight estimation uses >= 50% of the values.
 		let remain = times.len() as f64 / self.time_by_size.len() as f64;
-		if remain < 0.5 {
-			return Err("Sanity check failed: you ignored too many values.".into()) // TODO add param to only
-			                                                           // warn and to modify the
-			                                                           // threshold.
+		if remain < 0.5 && !params.insane {
+			return Err("Sanity check failed: you ignored too many values.".into())
+			// TODO add param to only warn and to modify the threshold.
 		}
 		times.sort();
 		let index = (times.len() as f64 * 0.75) as usize;
@@ -149,7 +155,11 @@ impl TimeResult {
 			remain * 100.0
 		);
 		info!("75% percentile with index {}/{} is {}", index, times.len() + 1, times[index]);
-		template.read_ns = times[index].try_into().expect("Must fit");
+		if is_read {
+			template.read_ns = times[index].try_into().expect("Must fit");
+		} else {
+			template.write_ns = times[index].try_into().expect("Must fit");
+		}
 
 		Ok(template)
 	}

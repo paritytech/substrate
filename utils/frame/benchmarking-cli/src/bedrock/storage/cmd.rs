@@ -80,16 +80,17 @@ pub struct WriteCmd {
 	#[clap(flatten)]
 	pub pruning_params: PruningParams,
 
-	// /// Use a specific block number. Default is latest.
-	// #[clap(long)]
-	// pub block_num: Option<u32>,
 	/// Specify the state cache size.
 	#[clap(long, value_name = "Bytes", default_value = "0")]
 	pub state_cache_size: usize,
-	
+
 	#[allow(missing_docs)]
 	#[clap(flatten)]
 	pub post_proc: PostProcParams,
+
+	/// RNG seed used to generate key-value pairs.
+	#[clap(long, default_value = "0")]
+	pub seed: u64,
 }
 
 /// Fills a DB with random data and random sizes.

@@ -1053,6 +1053,22 @@ impl<Block: BlockT> Backend<Block> {
 		Self::new(db_setting, canonicalization_delay).expect("failed to create test-db")
 	}
 
+	/// Expose the Database that is used by this backend.
+	/// 
+	/// Should only be needed for benchmarking.
+	#[cfg(feature = "runtime-benchmarks")]
+	pub fn expose_db(&self) -> Arc<dyn sp_database::Database<DbHash>> {
+		self.db.clone()
+	}
+
+	/// Expose the Storage that is used by this backend.
+	/// 
+	/// Should only be needed for benchmarking.
+	#[cfg(feature = "runtime-benchmarks")]
+	pub fn expose_storage(&self) -> Arc<dyn sp_state_machine::Storage<HashFor<Block>>> {
+		self.storage.clone()
+	}
+
 	fn from_database(
 		db: Arc<dyn Database<DbHash>>,
 		canonicalization_delay: u64,
@@ -1976,14 +1992,6 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		self.storage.db.commit(transaction)?;
 
 		Ok(())
-	}
-
-	fn expose_db(&self) -> Option<Arc<dyn Database<DbHash>>> {
-		Some(self.db.clone())
-	}
-
-	fn expose_storage(&self) -> Option<Arc<dyn sp_state_machine::Storage<HashFor<Block>>>> {
-		Some(self.storage.clone())
 	}
 
 	fn offchain_storage(&self) -> Option<Self::OffchainStorage> {

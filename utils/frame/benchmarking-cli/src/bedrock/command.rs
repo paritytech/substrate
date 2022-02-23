@@ -53,24 +53,26 @@ use std::{fmt::Debug, fs, str::FromStr, sync::Arc, time};
 
 impl Benchmark {
 	/// Dispatches a concrete sub command related to benchmarking with client overhead.
-	pub async fn run<B, BA, S, C>(
+	pub async fn run<Block, BA, S, C>(
 		&self,
 		cfg: Configuration,
 		client: Arc<C>,
 		backend: Arc<BA>,
+		db: Arc<dyn sp_database::Database<DbHash>>,
+		storage: Arc<dyn sp_state_machine::Storage<HashFor<Block>>>,
 	) -> Result<()>
 	where
-		BA: Backend<B, State = S>,
-		B: BlockT<Hash = sp_core::H256>,
-		C: UsageProvider<B> + StorageProvider<B, BA> + HeaderBackend<B>,
+		BA: Backend<Block, State = S>,
+		Block: BlockT<Hash = sp_core::H256>,
+		C: UsageProvider<Block> + StorageProvider<Block, BA> + HeaderBackend<Block>,
 		S: sp_state_machine::Backend<
-			HashFor<B>,
-			Transaction = sp_trie::PrefixedMemoryDB<HashFor<B>>,
+			HashFor<Block>,
+			Transaction = sp_trie::PrefixedMemoryDB<HashFor<Block>>,
 		>,
 	{
 		info!("DB at: {}", cfg.database.path().unwrap().display());
 		match self {
-			Self::StorageWrite(cmd) => cmd.run(&cfg, client, backend),
+			Self::StorageWrite(cmd) => cmd.run(&cfg, client, backend, db, storage),
 			Self::StorageRead(cmd) => cmd.run(&cfg, client),
 			//Self::ExtBase(cmd) => cmd.run(),
 			_ => unimplemented!(),

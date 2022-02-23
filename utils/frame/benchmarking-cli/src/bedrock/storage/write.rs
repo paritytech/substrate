@@ -15,6 +15,7 @@ use sp_runtime::{
 };
 use sp_state_machine::*;
 use sp_storage::{StateVersion, StorageMap};
+use sc_client_db::DbHash;
 
 use hash_db::{HashDB, Hasher, Prefix};
 use kvdb::DBTransaction;
@@ -32,82 +33,100 @@ use std::{
 use super::{super::db::setup_db, cmd::WriteCmd};
 use crate::bedrock::TimeResult;
 
+struct StorageUnprefixer<H>(Arc<dyn sp_state_machine::Storage<H>>);
+
+impl<H> sp_state_machine::Storage<H> for StorageUnprefixer<H>
+where
+	H: sp_api::Hasher,
+{
+	fn get(
+		&self,
+		key: &H::Out,
+		prefix: Prefix,
+	) -> sp_std::result::Result<Option<sp_state_machine::DBValue>, sp_state_machine::DefaultError> {
+		let res = self.0.get(&key, prefix);
+		if res.is_err() || res.clone().unwrap().is_none() {
+			warn!(
+				"Not found {} with prefix {}/{}",
+				hex::encode(&key),
+				hex::encode(&prefix.0),
+				prefix.1.unwrap_or_default()
+			);
+		}
+		res
+	}
+}
+
 impl WriteCmd {
-	pub fn run<B, BA, S, H, C>(
+	pub fn run<Block, BA, S, H, C>(
 		&self,
 		cfg: &Configuration,
 		prov: Arc<C>,
-		backend: Arc<BA>,
+		_backend: Arc<BA>,
+		db: Arc<dyn sp_database::Database<DbHash>>,
+		storage: Arc<dyn sp_state_machine::Storage<HashFor<Block>>>,
 	) -> Result<()>
 	where
-		B: BlockT<Header = H, Hash = H256> + Debug,
-		BA: Backend<B, State = S>,
+		Block: BlockT<Header = H, Hash = H256> + Debug,
+		BA: Backend<Block, State = S>,
 		H: HeaderT<Hash = H256>,
-		C: UsageProvider<B> + StorageProvider<B, BA> + HeaderBackend<B>,
+		C: UsageProvider<Block> + StorageProvider<Block, BA> + HeaderBackend<Block>,
 		S: sp_state_machine::Backend<
-			HashFor<B>,
-			Transaction = sp_trie::PrefixedMemoryDB<HashFor<B>>,
+			HashFor<Block>,
+			Transaction = sp_trie::PrefixedMemoryDB<HashFor<Block>>,
 		>,
 	{
 		let COLUMN = sc_client_db::columns::STATE;
-		let state_version = StateVersion::V1;
+		let state_version = StateVersion::V0;
+
 		let block = BlockId::Number(prov.usage_info().chain.best_number);
 		info!("Best block is {}", block);
-		let state = backend.state_at(block)?;
 		let header = prov.header(block).unwrap().unwrap();
 		let original_root = header.state_root();
-		info!("Found {} keys", state.keys(Default::default()).len());
-		let db = backend.expose_db().ok_or("no DB")?;
-		let storage = backend.expose_storage().ok_or("no storage")?;
+
+		let mut rng = StdRng::seed_from_u64(self.seed);
+
+		let state = DbState::<Block>::new(storage.clone(), *original_root);
+		info!("Preparing {} keys", state.keys(Default::default()).len());
 
 		// Load all KV pairs from the DB.
-		let original_kvs = state.pairs();
+		let mut original_kvs = state.pairs();
+		// Randomly shuffle the KV pairs.
+		original_kvs.shuffle(&mut rng);
 		let mut kvs = original_kvs.clone();
 		// Replace each value with a random value of the same size.
 		// NOTE: We use a possibly higher entropy than the original value,
 		// could be improved but acts as an overestimation which is fine for now.
-		let mut rng = StdRng::seed_from_u64(123);	// TODO arg
 		for (_, v) in kvs.iter_mut() {
-			let l = rng.gen_range(0..=v.len());
-			*v = random_vec(&mut rng, l);
+			*v = random_vec(&mut rng, v.len());
 		}
-		// Randomly shuffle the KV pairs.
-		kvs.shuffle(&mut rng);
 
+		info!("Starting run");
 		// Store the time that it took to write a value.
 		let mut time_by_key_index = Vec::<Duration>::with_capacity(kvs.len());
 		// Write each value in one commit.
 		for ((_, ov), (k, v)) in original_kvs.iter().zip(kvs.iter()) {
-			let delta = vec![(k.clone(), v.clone())];
-			let delta = delta.iter().map(|(k, v)| (k.as_ref(), Some(v.as_ref())));
-
 			// Interesting part here:
 			let start = Instant::now();
 			// Create a TX that will modify the Trie in the DB and
 			// calculate the root hash of the Trie after appending `delta`.
+			let delta = vec![(k.clone(), v.clone())];
+			let delta = delta.iter().map(|(k2, v2)| (k2.as_ref(), Some(v2.as_ref())));
 			let (root, tx) = state.storage_root(delta, state_version);
-			let tx = convert_tx::<B>(COLUMN, tx);
+			let tx = convert_tx::<Block>(COLUMN, tx);
 			db.commit(tx).expect("Must commit");
 
 			time_by_key_index.push(start.elapsed());
-			
-			// Trie with the new root.
-			let new_state = DbState::<B>::new(storage.clone(), root);
 
-			// Now undo the changes to restore the original state.
-			// Sanity check that all values have been written.
-			let read2 = new_state.storage(k).expect("Must be in trie").unwrap();
-			if read2 != *v {
-				// FAILS HERE
-				log::error!("Read wrong value. {:?} vs {:?}", read2, *v);
-			}
+			let new_state = DbState::<Block>::new(storage.clone(), root);
+
 			// Replace it with the original value.
 			let delta = vec![(k.clone(), ov.clone())];
-			let delta = delta.iter().map(|(k, v)| (k.as_ref(), Some(v.as_ref())));
-
+			let delta = delta.iter().map(|(k2, v2)| (&**k2, Some(v2.as_ref())));
 			let (root, tx) = new_state.storage_root(delta, state_version);
-			let tx = convert_tx::<B>(COLUMN, tx);
+			let tx = convert_tx::<Block>(COLUMN, tx);
 			db.commit(tx).expect("Must commit");
+
 			// Replacing the value should bring us back to the original root.
 			if root != *original_root {
 				// FAILS HERE
@@ -121,8 +140,8 @@ impl WriteCmd {
 			res.time_by_size.push((v.len() as u64, time_by_key_index[i].as_nanos()));
 		}
 
-		let template = res.post_process(&cfg, &self.post_proc)?;
-		template.write(&self.post_proc.weight_out)
+		let template = res.post_process(&cfg, &self.post_proc, false)?;
+		template.write(&self.post_proc.weight_out, false)
 	}
 }
 
@@ -131,12 +150,19 @@ fn convert_tx<B: BlockT>(
 	mut tx: sp_trie::PrefixedMemoryDB<HashFor<B>>,
 ) -> Transaction<H256> {
 	let mut ret = sp_database::Transaction::<H256>::default();
-	
-	for (k, (v, rc)) in tx.drain().into_iter() {
+
+	for (mut k, (v, rc)) in tx.drain().into_iter() {
+		// HACK
+		k.drain(0..k.len() - 32 /* sc_client_db::DB_HASH_LEN */);
 		if rc > 0 {
 			ret.set(col, k.as_ref(), &v);
+			if v.len() == 0 {
+				panic!("Inserting should never be a removal");
+			}
 		} else if rc < 0 {
 			ret.remove(col, &k);
+		} else if rc == 0 && v.len() == 0 {
+			panic!("should not happen");
 		}
 	}
 	ret

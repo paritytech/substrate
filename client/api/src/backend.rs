@@ -489,18 +489,6 @@ pub trait Backend<Block: BlockT>: AuxStore + Send + Sync {
 	/// Returns reference to blockchain backend.
 	fn blockchain(&self) -> &Self::Blockchain;
 
-	/// BENCHMARKING ONLY - DO NOT CALL
-	fn expose_db(&self) -> Option<std::sync::Arc<dyn sp_database::Database<sp_core::H256>>> {
-		None
-	}
-
-	/// BENCHMARKING ONLY - DO NOT CALL
-	fn expose_storage(
-		&self,
-	) -> Option<std::sync::Arc<dyn sp_state_machine::Storage<HashFor<Block>>>> {
-		None
-	}
-
 	/// Returns current usage statistics.
 	fn usage_info(&self) -> Option<UsageInfo>;
 
