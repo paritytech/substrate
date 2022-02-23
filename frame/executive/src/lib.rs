@@ -994,11 +994,11 @@ mod tests {
 	fn block_import_works() {
 		block_import_works_inner(
 			new_test_ext_v0(1),
-			hex!("1039e1a4bd0cf5deefe65f313577e70169c41c7773d6acf31ca8d671397559f5").into(),
+			hex!("2aaebbb0ef77452cf561abc6f738c33299c09b121fc3aa2ac388ccb878a2ea10").into(),
 		);
 		block_import_works_inner(
 			new_test_ext(1),
-			hex!("75e7d8f360d375bbe91bcf8019c01ab6362448b4a89e3b329717eb9d910340e5").into(),
+			hex!("e5c485cf9d53f651188469fabd91bc765ee1d6ddf17a96533b6b7acb60f697ea").into(),
 		);
 	}
 	fn block_import_works_inner(mut ext: sp_io::TestExternalities, state_root: H256) {
@@ -1007,7 +1007,7 @@ mod tests {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
-					state_root: hex!("1039e1a4bd0cf5deefe65f313577e70169c41c7773d6acf31ca8d671397559f5").into(),
+					state_root,
 					extrinsics_root: hex!(
 						"03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314"
 					)
@@ -1686,7 +1686,7 @@ mod tests {
 						parent_hash: [69u8; 32].into(),
 						number: 1,
 						state_root: hex!(
-							"4a6ce1078f67e58eddfca9b90349e1946ca71f17983073c9c10730639f4db043"
+							"a37408819189bd873665cfb3b7ac54ec63b4eaa56077198fff637fe3aacb2461"
 						)
 						.into(),
 						extrinsics_root: hex!(
