@@ -85,6 +85,47 @@ impl<A, B> ContainsPair<A, B> for Nothing {
 	}
 }
 
+/// A [`Contains`] implementation that contains everything except the values in `Exclude`.
+pub struct EverythingBut<Exclude>(PhantomData<Exclude>);
+impl<T, Exclude: Contains<T>> Contains<T> for EverythingBut<Exclude> {
+	fn contains(t: &T) -> bool {
+		!Exclude::contains(t)
+	}
+}
+impl<A, B, Exclude: ContainsPair<A, B>> ContainsPair<A, B> for EverythingBut<Exclude> {
+	fn contains(a: &A, b: &B) -> bool {
+		!Exclude::contains(a, b)
+	}
+}
+
+/// A [`Contains`] implementation that contains all members of `These` excepting any members in
+/// `Except`.
+pub struct TheseExcept<These, Except>(PhantomData<(These, Except)>);
+impl<T, These: Contains<T>, Except: Contains<T>> Contains<T> for TheseExcept<These, Except> {
+	fn contains(t: &T) -> bool {
+		These::contains(t) && !Except::contains(t)
+	}
+}
+impl<A, B, These: ContainsPair<A, B>, Except: ContainsPair<A, B>> ContainsPair<A, B> for TheseExcept<These, Except> {
+	fn contains(a: &A, b: &B) -> bool {
+		These::contains(a, b) && !Except::contains(a, b)
+	}
+}
+
+/// A [`Contains`] implementation which contains all members of `These` which are also members of
+/// `Those`.
+pub struct InsideBoth<These, Those>(PhantomData<(These, Those)>);
+impl<T, These: Contains<T>, Those: Contains<T>> Contains<T> for InsideBoth<These, Those> {
+	fn contains(t: &T) -> bool {
+		These::contains(t) && Those::contains(t)
+	}
+}
+impl<A, B, These: ContainsPair<A, B>, Those: ContainsPair<A, B>> ContainsPair<A, B> for InsideBoth<These, Those> {
+	fn contains(a: &A, b: &B) -> bool {
+		These::contains(a, b) && Those::contains(a, b)
+	}
+}
+
 /// Create a type which implements the `Contains` trait for a particular type with syntax similar
 /// to `matches!`.
 #[macro_export]

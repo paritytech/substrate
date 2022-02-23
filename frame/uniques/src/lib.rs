@@ -362,6 +362,11 @@ pub mod pallet {
 		pub fn owner(class: T::ClassId, instance: T::InstanceId) -> Option<T::AccountId> {
 			Asset::<T, I>::get(class, instance).map(|i| i.owner)
 		}
+
+		/// Get the owner of the asset instance, if the asset exists.
+		pub fn class_owner(class: T::ClassId) -> Option<T::AccountId> {
+			Class::<T, I>::get(class).map(|i| i.owner)
+		}
 	}
 
 	#[pallet::call]
