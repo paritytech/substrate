@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -23,7 +23,7 @@ use common::*;
 use honggfuzz::fuzz;
 use rand::{self, SeedableRng};
 use sp_npos_elections::{
-	assignment_ratio_to_staked_normalized, is_score_better, seq_phragmen, to_supports,
+	assignment_ratio_to_staked_normalized, seq_phragmen, to_supports, ElectionResult,
 	EvaluateSupport, VoteWeight,
 };
 use sp_runtime::Perbill;
@@ -60,7 +60,7 @@ fn main() {
 				.unwrap();
 				let score = to_supports(staked.as_ref()).evaluate();
 
-				if score[0] == 0 {
+				if score.minimal_stake == 0 {
 					// such cases cannot be improved by balancing.
 					return
 				}
@@ -68,13 +68,8 @@ fn main() {
 			};
 
 			if iterations > 0 {
-				let balanced = seq_phragmen::<AccountId, sp_runtime::Perbill>(
-					to_elect,
-					candidates,
-					voters,
-					Some((iterations, 0)),
-				)
-				.unwrap();
+				let balanced: ElectionResult<AccountId, sp_runtime::Perbill> =
+					seq_phragmen(to_elect, candidates, voters, Some((iterations, 0))).unwrap();
 
 				let balanced_score = {
 					let staked = assignment_ratio_to_staked_normalized(
@@ -85,7 +80,8 @@ fn main() {
 					to_supports(staked.as_ref()).evaluate()
 				};
 
-				let enhance = is_score_better(balanced_score, unbalanced_score, Perbill::zero());
+				let enhance =
+					balanced_score.strict_threshold_better(unbalanced_score, Perbill::zero());
 
 				println!(
 					"iter = {} // {:?} -> {:?} [{}]",
@@ -95,9 +91,9 @@ fn main() {
 				// The only guarantee of balancing is such that the first and third element of the
 				// score cannot decrease.
 				assert!(
-					balanced_score[0] >= unbalanced_score[0] &&
-						balanced_score[1] == unbalanced_score[1] &&
-						balanced_score[2] <= unbalanced_score[2]
+					balanced_score.minimal_stake >= unbalanced_score.minimal_stake &&
+						balanced_score.sum_stake == unbalanced_score.sum_stake &&
+						balanced_score.sum_stake_squared <= unbalanced_score.sum_stake_squared
 				);
 			}
 		});

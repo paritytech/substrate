@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -150,7 +150,7 @@ where
 				Err(e) => {
 					log::warn!(
 						target: "slots",
-						"Unable to author block in slot. No best block header: {:?}",
+						"Unable to author block in slot. No best block header: {}",
 						e,
 					);
 					// Let's try at the next slot..

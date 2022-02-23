@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Helper for handling (i.e. answering) state requests from a remote peer via the
-//! [`crate::request_responses::RequestResponsesBehaviour`].
+//! `crate::request_responses::RequestResponsesBehaviour`.
 
 use crate::{
 	chain::Client,
@@ -241,15 +241,20 @@ impl<B: BlockT> StateRequestHandler<B> {
 	}
 }
 
-#[derive(derive_more::Display, derive_more::From)]
+#[derive(Debug, thiserror::Error)]
 enum HandleRequestError {
-	#[display(fmt = "Failed to decode request: {}.", _0)]
-	DecodeProto(prost::DecodeError),
-	#[display(fmt = "Failed to encode response: {}.", _0)]
-	EncodeProto(prost::EncodeError),
-	#[display(fmt = "Failed to decode block hash: {}.", _0)]
-	InvalidHash(codec::Error),
-	Client(sp_blockchain::Error),
-	#[display(fmt = "Failed to send response.")]
+	#[error("Failed to decode request: {0}.")]
+	DecodeProto(#[from] prost::DecodeError),
+
+	#[error("Failed to encode response: {0}.")]
+	EncodeProto(#[from] prost::EncodeError),
+
+	#[error("Failed to decode block hash: {0}.")]
+	InvalidHash(#[from] codec::Error),
+
+	#[error(transparent)]
+	Client(#[from] sp_blockchain::Error),
+
+	#[error("Failed to send response.")]
 	SendResponse,
 }

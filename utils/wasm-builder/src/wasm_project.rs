@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,6 +17,8 @@
 
 use crate::{write_file_if_changed, CargoCommandVersioned};
 
+use build_helper::rerun_if_changed;
+use cargo_metadata::{CargoOpt, Metadata, MetadataCommand};
 use std::{
 	borrow::ToOwned,
 	collections::HashSet,
@@ -26,13 +28,8 @@ use std::{
 	path::{Path, PathBuf},
 	process,
 };
-
+use strum::{EnumIter, IntoEnumIterator};
 use toml::value::Table;
-
-use build_helper::rerun_if_changed;
-
-use cargo_metadata::{Metadata, MetadataCommand};
-
 use walkdir::WalkDir;
 
 /// Colorize an info message.
@@ -77,8 +74,18 @@ fn crate_metadata(cargo_manifest: &Path) -> Metadata {
 
 	let cargo_lock_existed = cargo_lock.exists();
 
+	// If we can find a `Cargo.lock`, we assume that this is the workspace root and there exists a
+	// `Cargo.toml` that we can use for getting the metadata.
+	let cargo_manifest = if let Some(mut cargo_lock) = find_cargo_lock(cargo_manifest) {
+		cargo_lock.set_file_name("Cargo.toml");
+		cargo_lock
+	} else {
+		cargo_manifest.to_path_buf()
+	};
+
 	let crate_metadata = MetadataCommand::new()
 		.manifest_path(cargo_manifest)
+		.features(CargoOpt::AllFeatures)
 		.exec()
 		.expect("`cargo metadata` can not fail on project `Cargo.toml`; qed");
 
@@ -118,9 +125,9 @@ pub(crate) fn create_and_compile(
 		features_to_enable,
 	);
 
-	build_project(&project, default_rustflags, cargo_cmd);
+	let profile = build_project(&project, default_rustflags, cargo_cmd);
 	let (wasm_binary, wasm_binary_compressed, bloaty) =
-		compact_wasm_file(&project, project_cargo_toml, wasm_binary_name);
+		compact_wasm_file(&project, profile, project_cargo_toml, wasm_binary_name);
 
 	wasm_binary
 		.as_ref()
@@ -151,18 +158,29 @@ fn find_cargo_lock(cargo_manifest: &Path) -> Option<PathBuf> {
 		}
 	}
 
+	if let Ok(workspace) = env::var(crate::WASM_BUILD_WORKSPACE_HINT) {
+		let path = PathBuf::from(workspace);
+
+		if path.join("Cargo.lock").exists() {
+			return Some(path.join("Cargo.lock"))
+		} else {
+			build_helper::warning!(
+				"`{}` env variable doesn't point to a directory that contains a `Cargo.lock`.",
+				crate::WASM_BUILD_WORKSPACE_HINT,
+			);
+		}
+	}
+
 	if let Some(path) = find_impl(build_helper::out_dir()) {
 		return Some(path)
 	}
 
-	if let Some(path) = find_impl(cargo_manifest.to_path_buf()) {
-		return Some(path)
-	}
-
 	build_helper::warning!(
-		"Could not find `Cargo.lock` for `{}`, while searching from `{}`.",
+		"Could not find `Cargo.lock` for `{}`, while searching from `{}`. \
+		 To fix this, point the `{}` env variable to the directory of the workspace being compiled.",
 		cargo_manifest.display(),
-		build_helper::out_dir().display()
+		build_helper::out_dir().display(),
+		crate::WASM_BUILD_WORKSPACE_HINT,
 	);
 
 	None
@@ -225,16 +243,22 @@ fn create_project_cargo_toml(
 
 	let mut wasm_workspace_toml = Table::new();
 
-	// Add `profile` with release and dev
+	// Add different profiles which are selected by setting `WASM_BUILD_TYPE`.
 	let mut release_profile = Table::new();
 	release_profile.insert("panic".into(), "abort".into());
-	release_profile.insert("lto".into(), true.into());
+	release_profile.insert("lto".into(), "thin".into());
+
+	let mut production_profile = Table::new();
+	production_profile.insert("inherits".into(), "release".into());
+	production_profile.insert("lto".into(), "fat".into());
+	production_profile.insert("codegen-units".into(), 1.into());
 
 	let mut dev_profile = Table::new();
 	dev_profile.insert("panic".into(), "abort".into());
 
 	let mut profile = Table::new();
 	profile.insert("release".into(), release_profile.into());
+	profile.insert("production".into(), production_profile.into());
 	profile.insert("dev".into(), dev_profile.into());
 
 	wasm_workspace_toml.insert("profile".into(), profile.into());
@@ -317,12 +341,29 @@ fn project_enabled_features(
 ) -> Vec<String> {
 	let package = find_package_by_manifest_path(cargo_manifest, crate_metadata);
 
+	let std_enabled = package.features.get("std");
+
 	let mut enabled_features = package
 		.features
-		.keys()
-		.filter(|f| {
+		.iter()
+		.filter(|(f, v)| {
 			let mut feature_env = f.replace("-", "_");
 			feature_env.make_ascii_uppercase();
+
+			// If this is a feature that corresponds only to an optional dependency
+			// and this feature is enabled by the `std` feature, we assume that this
+			// is only done through the `std` feature. This is a bad heuristic and should
+			// be removed after namespaced features are landed:
+			// https://doc.rust-lang.org/cargo/reference/unstable.html#namespaced-features
+			// Then we can just express this directly in the `Cargo.toml` and do not require
+			// this heuristic anymore. However, for the transition phase between now and namespaced
+			// features already being present in nightly, we need this code to make
+			// runtimes compile with all the possible rustc versions.
+			if v.len() == 1 && v.get(0).map_or(false, |v| *v == format!("dep:{}", f)) {
+				if std_enabled.as_ref().map(|e| e.iter().any(|ef| ef == *f)).unwrap_or(false) {
+					return false
+				}
+			}
 
 			// We don't want to enable the `std`/`default` feature for the wasm build and
 			// we need to check if the feature is enabled by checking the env variable.
@@ -331,7 +372,7 @@ fn project_enabled_features(
 				.map(|v| v == "1")
 				.unwrap_or_default()
 		})
-		.cloned()
+		.map(|d| d.0.clone())
 		.collect::<Vec<_>>();
 
 	enabled_features.sort();
@@ -399,25 +440,119 @@ fn create_project(
 	wasm_project_folder
 }
 
-/// Returns if the project should be built as a release.
-fn is_release_build() -> bool {
-	if let Ok(var) = env::var(crate::WASM_BUILD_TYPE_ENV) {
-		match var.as_str() {
-			"release" => true,
-			"debug" => false,
-			var => panic!(
-				"Unexpected value for `{}` env variable: {}\nOne of the following are expected: `debug` or `release`.",
-				crate::WASM_BUILD_TYPE_ENV,
-				var,
-			),
+/// The cargo profile that is used to build the wasm project.
+#[derive(Debug, EnumIter)]
+enum Profile {
+	/// The `--profile dev` profile.
+	Debug,
+	/// The `--profile release` profile.
+	Release,
+	/// The `--profile production` profile.
+	Production,
+}
+
+impl Profile {
+	/// Create a profile by detecting which profile is used for the main build.
+	///
+	/// We cannot easily determine the profile that is used by the main cargo invocation
+	/// because the `PROFILE` environment variable won't contain any custom profiles like
+	/// "production". It would only contain the builtin profile where the custom profile
+	/// inherits from. This is why we inspect the build path to learn which profile is used.
+	///
+	/// # Note
+	///
+	/// Can be overriden by setting [`crate::WASM_BUILD_TYPE_ENV`].
+	fn detect(wasm_project: &Path) -> Profile {
+		let (name, overriden) = if let Ok(name) = env::var(crate::WASM_BUILD_TYPE_ENV) {
+			(name, true)
+		} else {
+			// First go backwards to the beginning of the target directory.
+			// Then go forwards to find the "wbuild" directory.
+			// We need to go backwards first because when starting from the root there
+			// might be a chance that someone has a "wbuild" directory somewhere in the path.
+			let name = wasm_project
+				.components()
+				.rev()
+				.take_while(|c| c.as_os_str() != "target")
+				.collect::<Vec<_>>()
+				.iter()
+				.rev()
+				.take_while(|c| c.as_os_str() != "wbuild")
+				.last()
+				.expect("We put the wasm project within a `target/.../wbuild` path; qed")
+				.as_os_str()
+				.to_str()
+				.expect("All our profile directory names are ascii; qed")
+				.to_string();
+			(name, false)
+		};
+		match (Profile::iter().find(|p| p.directory() == name), overriden) {
+			// When not overriden by a env variable we default to using the `Release` profile
+			// for the wasm build even when the main build uses the debug build. This
+			// is because the `Debug` profile is too slow for normal development activities.
+			(Some(Profile::Debug), false) => Profile::Release,
+			// For any other profile or when overriden we take it at face value.
+			(Some(profile), _) => profile,
+			// For non overriden unknown profiles we fall back to `Release`.
+			// This allows us to continue building when a custom profile is used for the
+			// main builds cargo. When explicitly passing a profile via env variable we are
+			// not doing a fallback.
+			(None, false) => {
+				let profile = Profile::Release;
+				build_helper::warning!(
+					"Unknown cargo profile `{}`. Defaulted to `{:?}` for the runtime build.",
+					name,
+					profile,
+				);
+				profile
+			},
+			// Invalid profile specified.
+			(None, true) => {
+				// We use println! + exit instead of a panic in order to have a cleaner output.
+				println!(
+					"Unexpected profile name: `{}`. One of the following is expected: {:?}",
+					name,
+					Profile::iter().map(|p| p.directory()).collect::<Vec<_>>(),
+				);
+				process::exit(1);
+			},
 		}
-	} else {
-		true
+	}
+
+	/// The name of the profile as supplied to the cargo `--profile` cli option.
+	fn name(&self) -> &'static str {
+		match self {
+			Self::Debug => "dev",
+			Self::Release => "release",
+			Self::Production => "production",
+		}
+	}
+
+	/// The sub directory within `target` where cargo places the build output.
+	///
+	/// # Note
+	///
+	/// Usually this is the same as [`Self::name`] with the exception of the debug
+	/// profile which is called `dev`.
+	fn directory(&self) -> &'static str {
+		match self {
+			Self::Debug => "debug",
+			_ => self.name(),
+		}
+	}
+
+	/// Whether the resulting binary should be compacted and compressed.
+	fn wants_compact(&self) -> bool {
+		!matches!(self, Self::Debug)
 	}
 }
 
 /// Build the project to create the WASM binary.
-fn build_project(project: &Path, default_rustflags: &str, cargo_cmd: CargoCommandVersioned) {
+fn build_project(
+	project: &Path,
+	default_rustflags: &str,
+	cargo_cmd: CargoCommandVersioned,
+) -> Profile {
 	let manifest_path = project.join("Cargo.toml");
 	let mut build_cmd = cargo_cmd.command();
 
@@ -446,16 +581,16 @@ fn build_project(project: &Path, default_rustflags: &str, cargo_cmd: CargoComman
 		build_cmd.arg("--color=always");
 	}
 
-	if is_release_build() {
-		build_cmd.arg("--release");
-	};
+	let profile = Profile::detect(project);
+	build_cmd.arg("--profile");
+	build_cmd.arg(profile.name());
 
 	println!("{}", colorize_info_message("Information that should be included in a bug report."));
 	println!("{} {:?}", colorize_info_message("Executing build command:"), build_cmd);
 	println!("{} {}", colorize_info_message("Using rustc version:"), cargo_cmd.rustc_version());
 
 	match build_cmd.status().map(|s| s.success()) {
-		Ok(true) => {},
+		Ok(true) => profile,
 		// Use `process.exit(1)` to have a clean error output.
 		_ => process::exit(1),
 	}
@@ -464,18 +599,17 @@ fn build_project(project: &Path, default_rustflags: &str, cargo_cmd: CargoComman
 /// Compact the WASM binary using `wasm-gc` and compress it using zstd.
 fn compact_wasm_file(
 	project: &Path,
+	profile: Profile,
 	cargo_manifest: &Path,
 	wasm_binary_name: Option<String>,
 ) -> (Option<WasmBinary>, Option<WasmBinary>, WasmBinaryBloaty) {
-	let is_release_build = is_release_build();
-	let target = if is_release_build { "release" } else { "debug" };
 	let default_wasm_binary_name = get_wasm_binary_name(cargo_manifest);
 	let wasm_file = project
 		.join("target/wasm32-unknown-unknown")
-		.join(target)
+		.join(profile.directory())
 		.join(format!("{}.wasm", default_wasm_binary_name));
 
-	let wasm_compact_file = if is_release_build {
+	let wasm_compact_file = if profile.wants_compact() {
 		let wasm_compact_file = project.join(format!(
 			"{}.compact.wasm",
 			wasm_binary_name.clone().unwrap_or_else(|| default_wasm_binary_name.clone()),
@@ -523,8 +657,8 @@ fn compress_wasm(wasm_binary_path: &Path, compressed_binary_out_path: &Path) -> 
 
 		true
 	} else {
-		println!(
-			"cargo:warning=Writing uncompressed wasm. Exceeded maximum size {}",
+		build_helper::warning!(
+			"Writing uncompressed wasm. Exceeded maximum size {}",
 			CODE_BLOB_BOMB_LIMIT,
 		);
 
@@ -666,11 +800,13 @@ fn copy_wasm_to_target_directory(cargo_manifest: &Path, wasm_binary: &WasmBinary
 	};
 
 	if !target_dir.is_absolute() {
-		panic!(
+		// We use println! + exit instead of a panic in order to have a cleaner output.
+		println!(
 			"Environment variable `{}` with `{}` is not an absolute path!",
 			crate::WASM_TARGET_DIRECTORY,
 			target_dir.display(),
 		);
+		process::exit(1);
 	}
 
 	fs::create_dir_all(&target_dir).expect("Creates `WASM_TARGET_DIRECTORY`.");

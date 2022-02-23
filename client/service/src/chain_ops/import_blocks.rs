@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -322,7 +322,7 @@ where
 
 			for result in results {
 				if let (Err(err), hash) = result {
-					warn!("There was an error importing block with hash {:?}: {:?}", hash, err);
+					warn!("There was an error importing block with hash {:?}: {}", hash, err);
 					self.has_error = true;
 					break
 				}

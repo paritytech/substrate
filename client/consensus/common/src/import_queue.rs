@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -161,21 +161,34 @@ pub enum BlockImportStatus<N: std::fmt::Debug + PartialEq> {
 }
 
 /// Block import error.
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum BlockImportError {
 	/// Block missed header, can't be imported
+	#[error("block is missing a header (origin = {0:?})")]
 	IncompleteHeader(Option<Origin>),
+
 	/// Block verification failed, can't be imported
+	#[error("block verification failed (origin = {0:?}): {1}")]
 	VerificationFailed(Option<Origin>, String),
+
 	/// Block is known to be Bad
+	#[error("bad block (origin = {0:?})")]
 	BadBlock(Option<Origin>),
+
 	/// Parent state is missing.
+	#[error("block is missing parent state")]
 	MissingState,
+
 	/// Block has an unknown parent
+	#[error("block has an unknown parent")]
 	UnknownParent,
+
 	/// Block import has been cancelled. This can happen if the parent block fails to be imported.
+	#[error("import has been cancelled")]
 	Cancelled,
+
 	/// Other error.
+	#[error("consensus error: {0}")]
 	Other(ConsensusError),
 }
 
@@ -245,7 +258,7 @@ pub(crate) async fn import_single_block_metered<
 			Err(BlockImportError::BadBlock(peer.clone()))
 		},
 		Err(e) => {
-			debug!(target: "sync", "Error importing block {}: {:?}: {:?}", number, hash, e);
+			debug!(target: "sync", "Error importing block {}: {:?}: {}", number, hash, e);
 			Err(BlockImportError::Other(e))
 		},
 	};

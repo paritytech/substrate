@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -39,7 +39,7 @@ use sp_session::{MembershipProof, ValidatorCount};
 use sp_staking::SessionIndex;
 use sp_std::prelude::*;
 use sp_trie::{
-	trie_types::{TrieDB, TrieDBMut},
+	trie_types::{TrieDB, TrieDBMutV0},
 	MemoryDB, Recorder, Trie, TrieMut, EMPTY_PREFIX,
 };
 
@@ -236,7 +236,7 @@ impl<T: Config> ProvingTrie<T> {
 		let mut root = Default::default();
 
 		{
-			let mut trie = TrieDBMut::new(&mut db, &mut root);
+			let mut trie = TrieDBMutV0::new(&mut db, &mut root);
 			for (i, (validator, full_id)) in validators.into_iter().enumerate() {
 				let i = i as u32;
 				let keys = match <Session<T>>::load_keys(&validator) {

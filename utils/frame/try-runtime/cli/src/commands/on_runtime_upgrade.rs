@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -23,15 +23,15 @@ use sc_service::Configuration;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 
 use crate::{
-	build_executor, ensure_matching_spec, extract_code, local_spec, state_machine_call,
+	build_executor, ensure_matching_spec, extract_code, local_spec, state_machine_call_with_proof,
 	SharedParams, State, LOG_TARGET,
 };
 
 /// Configurations of the [`Command::OnRuntimeUpgrade`].
-#[derive(Debug, Clone, structopt::StructOpt)]
+#[derive(Debug, Clone, clap::Parser)]
 pub struct OnRuntimeUpgradeCmd {
 	/// The state type to use.
-	#[structopt(subcommand)]
+	#[clap(subcommand)]
 	pub state: State,
 }
 
@@ -58,7 +58,7 @@ where
 	};
 
 	if let Some(uri) = command.state.live_uri() {
-		let (expected_spec_name, expected_spec_version) =
+		let (expected_spec_name, expected_spec_version, _) =
 			local_spec::<Block, ExecDispatch>(&ext, &executor);
 		ensure_matching_spec::<Block>(
 			uri,
@@ -69,7 +69,7 @@ where
 		.await;
 	}
 
-	let (_, encoded_result) = state_machine_call::<Block, ExecDispatch>(
+	let (_, encoded_result) = state_machine_call_with_proof::<Block, ExecDispatch>(
 		&ext,
 		&executor,
 		execution,

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -28,54 +28,103 @@
 //! this guarantees that every instrumented contract code in cache cannot have the version equal to
 //! the current one. Thus, before executing a contract it should be reinstrument with new schedule.
 
-#[cfg(feature = "runtime-benchmarks")]
-pub use self::private::reinstrument;
 use crate::{
 	gas::{GasMeter, Token},
 	wasm::{prepare, PrefabWasmModule},
 	weights::WeightInfo,
-	CodeHash, CodeStorage, Config, Error, Event, Pallet as Contracts, PristineCode, Schedule,
+	CodeHash, CodeStorage, Config, Error, Event, OwnerInfoOf, Pallet, PristineCode, Schedule,
 	Weight,
 };
-use frame_support::dispatch::DispatchError;
+use frame_support::{
+	dispatch::{DispatchError, DispatchResult},
+	ensure,
+	traits::ReservableCurrency,
+};
 use sp_core::crypto::UncheckedFrom;
+use sp_runtime::traits::BadOrigin;
 
 /// Put the instrumented module in storage.
 ///
 /// Increments the refcount of the in-storage `prefab_module` if it already exists in storage
 /// under the specified `code_hash`.
-pub fn store<T: Config>(mut prefab_module: PrefabWasmModule<T>)
+pub fn store<T: Config>(mut module: PrefabWasmModule<T>, instantiated: bool) -> DispatchResult
 where
 	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
 {
-	let code_hash = sp_std::mem::take(&mut prefab_module.code_hash);
-
-	// original_code is only `Some` if the contract was instantiated from a new code
-	// but `None` if it was loaded from storage.
-	if let Some(code) = prefab_module.original_code.take() {
-		<PristineCode<T>>::insert(&code_hash, code);
-	}
+	let code_hash = sp_std::mem::take(&mut module.code_hash);
 	<CodeStorage<T>>::mutate(&code_hash, |existing| match existing {
-		Some(module) => increment_64(&mut module.refcount),
-		None => {
-			*existing = Some(prefab_module);
-			Contracts::<T>::deposit_event(Event::CodeStored { code_hash })
+		Some(existing) => {
+			// We instrument any uploaded contract anyways. We might as well store it to save
+			// a potential re-instrumentation later.
+			existing.code = module.code;
+			existing.instruction_weights_version = module.instruction_weights_version;
+			// When the code was merely uploaded but not instantiated we can skip this.
+			if instantiated {
+				<OwnerInfoOf<T>>::mutate(&code_hash, |owner_info| {
+					if let Some(owner_info) = owner_info {
+						owner_info.refcount = owner_info.refcount.checked_add(1).expect(
+							"
+							refcount is 64bit. Generating this overflow would require to store
+							_at least_ 18 exabyte of data assuming that a contract consumes only
+							one byte of data. Any node would run out of storage space before hitting
+							this overflow.
+							qed
+						",
+						);
+					}
+				})
+			}
+			Ok(())
 		},
+		None => {
+			let orig_code = module.original_code.take().expect(
+				"
+					If an executable isn't in storage it was uploaded.
+					If it was uploaded the original code must exist. qed
+				",
+			);
+			let mut owner_info = module.owner_info.take().expect(
+				"If an executable isn't in storage it was uploaded.
+				If it was uploaded the owner info was generated and attached. qed
+				",
+			);
+			// This `None` case happens only in freshly uploaded modules. This means that
+			// the `owner` is always the origin of the current transaction.
+			T::Currency::reserve(&owner_info.owner, owner_info.deposit)
+				.map_err(|_| <Error<T>>::StorageDepositNotEnoughFunds)?;
+			owner_info.refcount = if instantiated { 1 } else { 0 };
+			<PristineCode<T>>::insert(&code_hash, orig_code);
+			<OwnerInfoOf<T>>::insert(&code_hash, owner_info);
+			*existing = Some(module);
+			<Pallet<T>>::deposit_event(Event::CodeStored { code_hash });
+			Ok(())
+		},
+	})
+}
+
+/// Decrement the refcount of a code in-storage by one.
+///
+/// # Note
+///
+/// A contract whose refcount dropped to zero isn't automatically removed. A `remove_code`
+/// transaction must be submitted by the original uploader to do so.
+pub fn decrement_refcount<T: Config>(code_hash: CodeHash<T>) {
+	<OwnerInfoOf<T>>::mutate(code_hash, |existing| {
+		if let Some(info) = existing {
+			info.refcount = info.refcount.saturating_sub(1);
+		}
 	});
 }
 
 /// Increment the refcount of a code in-storage by one.
-pub fn increment_refcount<T: Config>(
-	code_hash: CodeHash<T>,
-	gas_meter: &mut GasMeter<T>,
-) -> Result<(), DispatchError>
-where
-	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
-{
-	gas_meter.charge(CodeToken::UpdateRefcount(estimate_code_size::<T>(&code_hash)?))?;
-	<CodeStorage<T>>::mutate(code_hash, |existing| {
-		if let Some(module) = existing {
-			increment_64(&mut module.refcount);
+///
+/// # Errors
+///
+/// [`Error::CodeNotFound`] is returned if the specified `code_hash` does not exist.
+pub fn increment_refcount<T: Config>(code_hash: CodeHash<T>) -> Result<(), DispatchError> {
+	<OwnerInfoOf<T>>::mutate(code_hash, |existing| -> Result<(), DispatchError> {
+		if let Some(info) = existing {
+			info.refcount = info.refcount.saturating_add(1);
 			Ok(())
 		} else {
 			Err(Error::<T>::CodeNotFound.into())
@@ -83,27 +132,22 @@ where
 	})
 }
 
-/// Decrement the refcount of a code in-storage by one and remove the code when it drops to zero.
-pub fn decrement_refcount<T: Config>(
-	code_hash: CodeHash<T>,
-	gas_meter: &mut GasMeter<T>,
-) -> Result<(), DispatchError>
-where
-	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
-{
-	if let Ok(len) = estimate_code_size::<T>(&code_hash) {
-		gas_meter.charge(CodeToken::UpdateRefcount(len))?;
-	}
-	<CodeStorage<T>>::mutate_exists(code_hash, |existing| {
-		if let Some(module) = existing {
-			module.refcount = module.refcount.saturating_sub(1);
-			if module.refcount == 0 {
-				*existing = None;
-				finish_removal::<T>(code_hash);
-			}
+/// Try to remove code together with all associated information.
+pub fn try_remove<T: Config>(origin: &T::AccountId, code_hash: CodeHash<T>) -> DispatchResult {
+	<OwnerInfoOf<T>>::try_mutate_exists(&code_hash, |existing| {
+		if let Some(owner_info) = existing {
+			ensure!(owner_info.refcount == 0, <Error<T>>::CodeInUse);
+			ensure!(&owner_info.owner == origin, BadOrigin);
+			T::Currency::unreserve(&owner_info.owner, owner_info.deposit);
+			*existing = None;
+			<PristineCode<T>>::remove(&code_hash);
+			<CodeStorage<T>>::remove(&code_hash);
+			<Pallet<T>>::deposit_event(Event::CodeRemoved { code_hash });
+			Ok(())
+		} else {
+			Err(<Error<T>>::CodeNotFound.into())
 		}
-	});
-	Ok(())
+	})
 }
 
 /// Load code with the given code hash.
@@ -111,129 +155,70 @@ where
 /// If the module was instrumented with a lower version of schedule than
 /// the current one given as an argument, then this function will perform
 /// re-instrumentation and update the cache in the storage.
-///
-/// # Note
-///
-/// If `reinstrument` is set it is assumed that the load is performed in the context of
-/// a contract call: This means we charge the size based cased for loading the contract.
 pub fn load<T: Config>(
 	code_hash: CodeHash<T>,
-	mut reinstrument: Option<(&Schedule<T>, &mut GasMeter<T>)>,
+	schedule: &Schedule<T>,
+	gas_meter: &mut GasMeter<T>,
 ) -> Result<PrefabWasmModule<T>, DispatchError>
 where
 	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
 {
-	// The reinstrument case coincides with the cases where we need to charge extra
-	// based upon the code size: On-chain execution.
-	if let Some((_, gas_meter)) = &mut reinstrument {
-		gas_meter.charge(CodeToken::Load(estimate_code_size::<T>(&code_hash)?))?;
-	}
+	let charged = gas_meter.charge(CodeToken::Load(schedule.limits.code_len))?;
 
 	let mut prefab_module =
 		<CodeStorage<T>>::get(code_hash).ok_or_else(|| Error::<T>::CodeNotFound)?;
+	gas_meter.adjust_gas(charged, CodeToken::Load(prefab_module.code.len() as u32));
 	prefab_module.code_hash = code_hash;
 
-	if let Some((schedule, gas_meter)) = reinstrument {
-		if prefab_module.instruction_weights_version < schedule.instruction_weights.version {
-			// The instruction weights have changed.
-			// We need to re-instrument the code with the new instruction weights.
-			gas_meter.charge(CodeToken::Instrument(prefab_module.original_code_len))?;
-			private::reinstrument(&mut prefab_module, schedule)?;
-		}
+	if prefab_module.instruction_weights_version < schedule.instruction_weights.version {
+		// The instruction weights have changed.
+		// We need to re-instrument the code with the new instruction weights.
+		let charged = gas_meter.charge(CodeToken::Reinstrument(schedule.limits.code_len))?;
+		let code_size = reinstrument(&mut prefab_module, schedule)?;
+		gas_meter.adjust_gas(charged, CodeToken::Reinstrument(code_size));
 	}
+
 	Ok(prefab_module)
 }
 
-mod private {
-	use super::*;
-
-	/// Instruments the passed prefab wasm module with the supplied schedule.
-	pub fn reinstrument<T: Config>(
-		prefab_module: &mut PrefabWasmModule<T>,
-		schedule: &Schedule<T>,
-	) -> Result<(), DispatchError>
-	where
-		T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
-	{
-		let original_code = <PristineCode<T>>::get(&prefab_module.code_hash)
-			.ok_or_else(|| Error::<T>::CodeNotFound)?;
-		prefab_module.code = prepare::reinstrument_contract::<T>(original_code, schedule)?;
-		prefab_module.instruction_weights_version = schedule.instruction_weights.version;
-		<CodeStorage<T>>::insert(&prefab_module.code_hash, &*prefab_module);
-		Ok(())
-	}
-}
-
-/// Finish removal of a code by deleting the pristine code and emitting an event.
-fn finish_removal<T: Config>(code_hash: CodeHash<T>)
-where
-	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
-{
-	<PristineCode<T>>::remove(code_hash);
-	Contracts::<T>::deposit_event(Event::CodeRemoved { code_hash })
-}
-
-/// Increment the refcount panicking if it should ever overflow (which will not happen).
+/// Instruments the passed prefab wasm module with the supplied schedule.
 ///
-/// We try hard to be infallible here because otherwise more storage transactions would be
-/// necessary to account for failures in storing code for an already instantiated contract.
-fn increment_64(refcount: &mut u64) {
-	*refcount = refcount.checked_add(1).expect(
-		"
-		refcount is 64bit. Generating this overflow would require to store
-		_at least_ 18 exabyte of data assuming that a contract consumes only
-		one byte of data. Any node would run out of storage space before hitting
-		this overflow.
-		qed
-	",
-	);
-}
-
-/// Get the size of the instrumented code stored at `code_hash` without loading it.
-///
-/// The returned value is slightly too large because it also contains the fields apart from
-/// `code` which are located inside [`PrefabWasmModule`]. However, those are negligible when
-/// compared to the code size. Additionally, charging too much weight is completely safe.
-fn estimate_code_size<T: Config>(code_hash: &CodeHash<T>) -> Result<u32, DispatchError>
-where
-	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
-{
-	let key = <CodeStorage<T>>::hashed_key_for(code_hash);
-	let mut data = [0u8; 0];
-	let len = sp_io::storage::read(&key, &mut data, 0).ok_or_else(|| Error::<T>::CodeNotFound)?;
-	Ok(len)
+/// Returns the size in bytes of the uninstrumented code.
+pub fn reinstrument<T: Config>(
+	prefab_module: &mut PrefabWasmModule<T>,
+	schedule: &Schedule<T>,
+) -> Result<u32, DispatchError> {
+	let original_code =
+		<PristineCode<T>>::get(&prefab_module.code_hash).ok_or_else(|| Error::<T>::CodeNotFound)?;
+	let original_code_len = original_code.len();
+	prefab_module.code = prepare::reinstrument_contract::<T>(original_code, schedule)?;
+	prefab_module.instruction_weights_version = schedule.instruction_weights.version;
+	<CodeStorage<T>>::insert(&prefab_module.code_hash, &*prefab_module);
+	Ok(original_code_len as u32)
 }
 
 /// Costs for operations that are related to code handling.
 #[cfg_attr(test, derive(Debug, PartialEq, Eq))]
 #[derive(Clone, Copy)]
 enum CodeToken {
-	/// Weight for instrumenting a contract contract of the supplied size in bytes.
-	Instrument(u32),
-	/// Weight for loading a contract per kilobyte.
+	/// Weight for reinstrumenting a contract contract of the supplied size in bytes.
+	Reinstrument(u32),
+	/// Weight for loading a contract per byte.
 	Load(u32),
-	/// Weight for changing the refcount of a contract per kilobyte.
-	UpdateRefcount(u32),
 }
 
-impl<T> Token<T> for CodeToken
-where
-	T: Config,
-	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
-{
+impl<T: Config> Token<T> for CodeToken {
 	fn weight(&self) -> Weight {
 		use self::CodeToken::*;
-		// In case of `Load` and `UpdateRefcount` we already covered the general costs of
-		// accessing the storage but still need to account for the actual size of the
+		// In case of `Load` we already covered the general costs of
+		// calling the storage but still need to account for the actual size of the
 		// contract code. This is why we substract `T::*::(0)`. We need to do this at this
-		// point because when charging the general weight we do not know the size of
-		// the contract.
+		// point because when charging the general weight for calling the contract we not know the
+		// size of the contract.
 		match *self {
-			Instrument(len) => T::WeightInfo::instrument(len / 1024),
-			Load(len) =>
-				T::WeightInfo::code_load(len / 1024).saturating_sub(T::WeightInfo::code_load(0)),
-			UpdateRefcount(len) => T::WeightInfo::code_refcount(len / 1024)
-				.saturating_sub(T::WeightInfo::code_refcount(0)),
+			Reinstrument(len) => T::WeightInfo::reinstrument(len),
+			Load(len) => T::WeightInfo::call_with_code_per_byte(len)
+				.saturating_sub(T::WeightInfo::call_with_code_per_byte(0)),
 		}
 	}
 }

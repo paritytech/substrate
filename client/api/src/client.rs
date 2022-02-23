@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -273,10 +273,14 @@ pub struct BlockImportNotification<Block: BlockT> {
 /// Summary of a finalized block.
 #[derive(Clone, Debug)]
 pub struct FinalityNotification<Block: BlockT> {
-	/// Imported block header hash.
+	/// Finalized block header hash.
 	pub hash: Block::Hash,
-	/// Imported block header.
+	/// Finalized block header.
 	pub header: Block::Header,
+	/// Path from the old finalized to new finalized parent (implicitly finalized blocks).
+	pub tree_route: Arc<Vec<Block::Hash>>,
+	/// Stale branches heads.
+	pub stale_heads: Arc<Vec<Block::Hash>>,
 }
 
 impl<B: BlockT> TryFrom<BlockImportNotification<B>> for ChainEvent<B> {
@@ -293,6 +297,6 @@ impl<B: BlockT> TryFrom<BlockImportNotification<B>> for ChainEvent<B> {
 
 impl<B: BlockT> From<FinalityNotification<B>> for ChainEvent<B> {
 	fn from(n: FinalityNotification<B>) -> Self {
-		Self::Finalized { hash: n.hash }
+		Self::Finalized { hash: n.hash, tree_route: n.tree_route }
 	}
 }

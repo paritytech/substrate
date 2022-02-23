@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -38,8 +38,6 @@ use syn::{
 };
 
 use std::collections::HashMap;
-
-use blake2_rfc;
 
 /// The ident used for the block generic parameter.
 const BLOCK_GENERIC_IDENT: &str = "Block";
@@ -235,9 +233,7 @@ fn generate_native_call_generators(decl: &ItemTrait) -> Result<TokenStream> {
 		// compatible. To ensure that we forward it by ref/value, we use the value given by the
 		// the user. Otherwise if it is not using the block, we don't need to add anything.
 		let input_borrows =
-			params
-				.iter()
-				.map(|v| if type_is_using_block(&v.1) { v.2.clone() } else { None });
+			params.iter().map(|v| if type_is_using_block(&v.1) { v.2 } else { None });
 
 		// Replace all `Block` with `NodeBlock`, add `'a` lifetime to references and collect
 		// all the function inputs.
@@ -752,8 +748,10 @@ fn parse_runtime_api_version(version: &Attribute) -> Result<u64> {
 /// Generates the identifier as const variable for the given `trait_name`
 /// by hashing the `trait_name`.
 fn generate_runtime_api_id(trait_name: &str) -> TokenStream {
+	use blake2::digest::{consts::U8, Digest};
+
 	let mut res = [0; 8];
-	res.copy_from_slice(blake2_rfc::blake2b::blake2b(8, &[], trait_name.as_bytes()).as_bytes());
+	res.copy_from_slice(blake2::Blake2b::<U8>::digest(trait_name).as_slice());
 
 	quote!( const ID: [u8; 8] = [ #( #res ),* ]; )
 }

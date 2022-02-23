@@ -49,6 +49,34 @@ fails, A can decide how to handle that failure, either proceeding or reverting A
 
 Those are documented in the [reference documentation](https://docs.rs/pallet-contracts/latest/pallet_contracts/#dispatchable-functions).
 
+### Interface exposed to contracts
+
+Each contract is one WebAssembly module that looks like this:
+
+```wat
+(module
+    ;; Invoked by pallet-contracts when a contract is instantiated.
+    ;; No arguments and empty return type.
+    (func (export "deploy"))
+
+    ;; Invoked by pallet-contracts when a contract is called.
+    ;; No arguments and empty return type.
+    (func (export "call"))
+
+    ;; If a contract uses memory it must be imported. Memory is optional.
+    ;; The maximum allowed memory size depends on the pallet-contracts configuration.
+    (import "env" "memory" (memory 1 1))
+
+    ;; This is one of many functions that can be imported and is implemented by pallet-contracts.
+    ;; This function is used to copy the result buffer and flags back to the caller.
+    (import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
+)
+```
+
+The documentation of all importable functions can be found
+[here](https://github.com/paritytech/substrate/blob/master/frame/contracts/src/wasm/runtime.rs).
+Look for the `define_env!` macro invocation.
+
 ## Usage
 
 This module executes WebAssembly smart contracts. These can potentially be written in any language
@@ -73,7 +101,7 @@ by block production. A good starting point for observing them on the console is 
 command line in the root directory of the substrate repository:
 
 ```bash
-cargo run --release -- --dev --tmp -lerror,runtime::contracts=debug
+cargo run --release -- --dev -lerror,runtime::contracts=debug
 ```
 
 This raises the log level of `runtime::contracts` to `debug` and all other targets

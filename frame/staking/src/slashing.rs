@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -47,11 +47,11 @@
 //! has multiple misbehaviors. However, accounting for such cases is necessary
 //! to deter a class of "rage-quit" attacks.
 //!
-//! Based on research at <https://w3f-research.readthedocs.io/en/latest/polkadot/slashing/npos.html>
+//! Based on research at <https://research.web3.foundation/en/latest/polkadot/slashing/npos.html>
 
 use crate::{
-	BalanceOf, Config, EraIndex, Error, Exposure, NegativeImbalanceOf, Pallet, Perbill,
-	SessionInterface, Store, UnappliedSlash,
+	BalanceOf, Config, Error, Exposure, NegativeImbalanceOf, Pallet, Perbill, SessionInterface,
+	Store, UnappliedSlash,
 };
 use codec::{Decode, Encode};
 use frame_support::{
@@ -63,7 +63,7 @@ use sp_runtime::{
 	traits::{Saturating, Zero},
 	DispatchResult, RuntimeDebug,
 };
-use sp_staking::offence::DisableStrategy;
+use sp_staking::{offence::DisableStrategy, EraIndex};
 use sp_std::vec::Vec;
 
 /// The proportion of the slashing reward to be paid out on the first slashing detection.

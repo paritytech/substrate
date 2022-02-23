@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -31,8 +31,12 @@ use scale_info::{build::Fields, meta_type, Path, StaticTypeInfo, Type, TypeInfo,
 use sp_io::hashing::blake2_256;
 use sp_std::{fmt, prelude::*};
 
-/// Current version of the [`UncheckedExtrinsic`] format.
-const EXTRINSIC_VERSION: u8 = 4;
+/// Current version of the [`UncheckedExtrinsic`] encoded format.
+///
+/// This version needs to be bumped if the encoded representation changes.
+/// It ensures that if the representation is changed and the format is not known,
+/// the decoding fails.
+const EXTRINSIC_FORMAT_VERSION: u8 = 4;
 
 /// A extrinsic right from the external world. This is unchecked and so
 /// can contain a signature.
@@ -164,7 +168,7 @@ impl<Address, Call, Signature, Extra> ExtrinsicMetadata
 where
 	Extra: SignedExtension,
 {
-	const VERSION: u8 = EXTRINSIC_VERSION;
+	const VERSION: u8 = EXTRINSIC_FORMAT_VERSION;
 	type SignedExtensions = Extra;
 }
 
@@ -235,23 +239,33 @@ where
 {
 	fn decode<I: Input>(input: &mut I) -> Result<Self, Error> {
 		// This is a little more complicated than usual since the binary format must be compatible
-		// with substrate's generic `Vec<u8>` type. Basically this just means accepting that there
-		// will be a prefix of vector length (we don't need
-		// to use this).
-		let _length_do_not_remove_me_see_above: Compact<u32> = Decode::decode(input)?;
+		// with SCALE's generic `Vec<u8>` type. Basically this just means accepting that there
+		// will be a prefix of vector length.
+		let expected_length: Compact<u32> = Decode::decode(input)?;
+		let before_length = input.remaining_len()?;
 
 		let version = input.read_byte()?;
 
 		let is_signed = version & 0b1000_0000 != 0;
 		let version = version & 0b0111_1111;
-		if version != EXTRINSIC_VERSION {
+		if version != EXTRINSIC_FORMAT_VERSION {
 			return Err("Invalid transaction version".into())
 		}
 
-		Ok(Self {
-			signature: if is_signed { Some(Decode::decode(input)?) } else { None },
-			function: Decode::decode(input)?,
-		})
+		let signature = is_signed.then(|| Decode::decode(input)).transpose()?;
+		let function = Decode::decode(input)?;
+
+		if let Some((before_length, after_length)) =
+			input.remaining_len()?.and_then(|a| before_length.map(|b| (b, a)))
+		{
+			let length = before_length.saturating_sub(after_length);
+
+			if length != expected_length.0 as usize {
+				return Err("Invalid length prefix".into())
+			}
+		}
+
+		Ok(Self { signature, function })
 	}
 }
 
@@ -268,11 +282,11 @@ where
 		// 1 byte version id.
 		match self.signature.as_ref() {
 			Some(s) => {
-				tmp.push(EXTRINSIC_VERSION | 0b1000_0000);
+				tmp.push(EXTRINSIC_FORMAT_VERSION | 0b1000_0000);
 				s.encode_to(&mut tmp);
 			},
 			None => {
-				tmp.push(EXTRINSIC_VERSION & 0b0111_1111);
+				tmp.push(EXTRINSIC_FORMAT_VERSION & 0b0111_1111);
 			},
 		}
 		self.function.encode_to(&mut tmp);
@@ -364,7 +378,7 @@ mod tests {
 	use crate::{
 		codec::{Decode, Encode},
 		testing::TestSignature as TestSig,
-		traits::{IdentityLookup, SignedExtension},
+		traits::{DispatchInfoOf, IdentityLookup, SignedExtension},
 	};
 	use sp_io::hashing::blake2_256;
 
@@ -387,6 +401,16 @@ mod tests {
 		fn additional_signed(&self) -> sp_std::result::Result<(), TransactionValidityError> {
 			Ok(())
 		}
+
+		fn pre_dispatch(
+			self,
+			who: &Self::AccountId,
+			call: &Self::Call,
+			info: &DispatchInfoOf<Self::Call>,
+			len: usize,
+		) -> Result<Self::Pre, TransactionValidityError> {
+			self.validate(who, call, info, len).map(|_| ())
+		}
 	}
 
 	type Ex = UncheckedExtrinsic<TestAccountId, TestCall, TestSig, TestExtra>;
@@ -397,6 +421,17 @@ mod tests {
 		let ux = Ex::new_unsigned(vec![0u8; 0]);
 		let encoded = ux.encode();
 		assert_eq!(Ex::decode(&mut &encoded[..]), Ok(ux));
+	}
+
+	#[test]
+	fn invalid_length_prefix_is_detected() {
+		let ux = Ex::new_unsigned(vec![0u8; 0]);
+		let mut encoded = ux.encode();
+
+		let length = Compact::<u32>::decode(&mut &encoded[..]).unwrap();
+		Compact(length.0 + 10).encode_to(&mut &mut encoded[..1]);
+
+		assert_eq!(Ex::decode(&mut &encoded[..]), Err("Invalid length prefix".into()));
 	}
 
 	#[test]

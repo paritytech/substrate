@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,8 +19,8 @@
 // TODO: Consolidate one off RPC calls https://github.com/paritytech/substrate/issues/8988
 
 use jsonrpsee::{
+	core::client::ClientT,
 	rpc_params,
-	types::traits::Client,
 	ws_client::{WsClient, WsClientBuilder},
 };
 use sp_runtime::{
@@ -73,7 +73,7 @@ where
 	Ok(signed_block.block)
 }
 
-/// Build a website client that connects to `from`.
+/// Build a websocket client that connects to `from`.
 async fn build_client<S: AsRef<str>>(from: S) -> Result<WsClient, String> {
 	WsClientBuilder::default()
 		.max_request_body_size(u32::MAX)

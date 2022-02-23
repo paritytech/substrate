@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -19,7 +19,7 @@
 //! Helper for incoming light client requests.
 //!
 //! Handle (i.e. answer) incoming light client requests from a remote peer received via
-//! [`crate::request_responses::RequestResponsesBehaviour`] with
+//! `crate::request_responses::RequestResponsesBehaviour` with
 //! [`LightClientRequestHandler`](handler::LightClientRequestHandler).
 
 use crate::{
@@ -284,20 +284,20 @@ impl<B: Block> LightClientRequestHandler<B> {
 	}
 }
 
-#[derive(derive_more::Display, derive_more::From)]
+#[derive(Debug, thiserror::Error)]
 enum HandleRequestError {
-	#[display(fmt = "Failed to decode request: {}.", _0)]
-	DecodeProto(prost::DecodeError),
-	#[display(fmt = "Failed to encode response: {}.", _0)]
-	EncodeProto(prost::EncodeError),
-	#[display(fmt = "Failed to send response.")]
+	#[error("Failed to decode request: {0}.")]
+	DecodeProto(#[from] prost::DecodeError),
+	#[error("Failed to encode response: {0}.")]
+	EncodeProto(#[from] prost::EncodeError),
+	#[error("Failed to send response.")]
 	SendResponse,
 	/// A bad request has been received.
-	#[display(fmt = "bad request: {}", _0)]
+	#[error("bad request: {0}")]
 	BadRequest(&'static str),
 	/// Encoding or decoding of some data failed.
-	#[display(fmt = "codec error: {}", _0)]
-	Codec(codec::Error),
+	#[error("codec error: {0}")]
+	Codec(#[from] codec::Error),
 }
 
 fn fmt_keys(first: Option<&Vec<u8>>, last: Option<&Vec<u8>>) -> String {

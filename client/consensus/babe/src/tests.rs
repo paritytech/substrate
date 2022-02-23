@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -143,7 +143,7 @@ impl DummyProposer {
 				&self.parent_hash,
 				self.parent_number,
 				this_slot,
-				|slot| Epoch::genesis(&self.factory.config, slot),
+				|slot| Epoch::genesis(self.factory.config.genesis_config(), slot),
 			)
 			.expect("client has data to find epoch")
 			.expect("can compute epoch for baked block");
@@ -297,7 +297,7 @@ impl TestNetFactory for BabeTestNet {
 	) {
 		let client = client.as_client();
 
-		let config = Config::get_or_compute(&*client).expect("config available");
+		let config = Config::get(&*client).expect("config available");
 		let (block_import, link) = crate::block_import(config, client.clone(), client.clone())
 			.expect("can initialize block-import");
 
@@ -336,9 +336,9 @@ impl TestNetFactory for BabeTestNet {
 				select_chain: longest_chain,
 				create_inherent_data_providers: Box::new(|_, _| async {
 					let timestamp = TimestampInherentDataProvider::from_system_time();
-					let slot = InherentDataProvider::from_timestamp_and_duration(
+					let slot = InherentDataProvider::from_timestamp_and_slot_duration(
 						*timestamp,
-						Duration::from_secs(6),
+						SlotDuration::from_millis(6000),
 					);
 
 					Ok((timestamp, slot))
@@ -449,9 +449,9 @@ fn run_one_test(mutator: impl Fn(&mut TestHeader, Stage) + Send + Sync + 'static
 				sync_oracle: DummyOracle,
 				create_inherent_data_providers: Box::new(|_, _| async {
 					let timestamp = TimestampInherentDataProvider::from_system_time();
-					let slot = InherentDataProvider::from_timestamp_and_duration(
+					let slot = InherentDataProvider::from_timestamp_and_slot_duration(
 						*timestamp,
-						Duration::from_secs(6),
+						SlotDuration::from_millis(6000),
 					);
 
 					Ok((timestamp, slot))
@@ -699,12 +699,12 @@ fn importing_block_one_sets_genesis_epoch() {
 		&mut block_import,
 	);
 
-	let genesis_epoch = Epoch::genesis(&data.link.config, 999.into());
+	let genesis_epoch = Epoch::genesis(data.link.config.genesis_config(), 999.into());
 
 	let epoch_changes = data.link.epoch_changes.shared_data();
 	let epoch_for_second_block = epoch_changes
 		.epoch_data_for_child_of(descendent_query(&*client), &block_hash, 1, 1000.into(), |slot| {
-			Epoch::genesis(&data.link.config, slot)
+			Epoch::genesis(data.link.config.genesis_config(), slot)
 		})
 		.unwrap()
 		.unwrap();

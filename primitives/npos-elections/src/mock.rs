@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -344,7 +344,7 @@ pub(crate) fn run_and_compare<Output: PerThing128, FS>(
 	FS: Fn(&AccountId) -> VoteWeight,
 {
 	// run fixed point code.
-	let ElectionResult { winners, assignments } = seq_phragmen::<_, Output>(
+	let ElectionResult::<_, Output> { winners, assignments } = seq_phragmen(
 		to_elect,
 		candidates.clone(),
 		voters

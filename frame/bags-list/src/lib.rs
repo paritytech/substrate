@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -26,7 +26,7 @@
 //! the weights of accounts via [`frame_election_provider_support::VoteWeightProvider`].
 //!
 //! This pallet is not configurable at genesis. Whoever uses it should call appropriate functions of
-//! the `SortedListProvider` (e.g. `on_insert`, or `regenerate`) at their genesis.
+//! the `SortedListProvider` (e.g. `on_insert`, or `unsafe_regenerate`) at their genesis.
 //!
 //! # Goals
 //!
@@ -92,7 +92,6 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(crate) trait Store)]
-	#[pallet::generate_storage_info]
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
@@ -173,6 +172,17 @@ pub mod pallet {
 		Rebagged { who: T::AccountId, from: VoteWeight, to: VoteWeight },
 	}
 
+	#[pallet::error]
+	#[cfg_attr(test, derive(PartialEq))]
+	pub enum Error<T> {
+		/// Attempted to place node in front of a node in another bag.
+		NotInSameBag,
+		/// Id not found in list.
+		IdNotFound,
+		/// An Id does not have a greater vote weight than another Id.
+		NotHeavier,
+	}
+
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		/// Declare that some `dislocated` account has, through rewards or penalties, sufficiently
@@ -189,6 +199,20 @@ pub mod pallet {
 			let current_weight = T::VoteWeightProvider::vote_weight(&dislocated);
 			let _ = Pallet::<T>::do_rebag(&dislocated, current_weight);
 			Ok(())
+		}
+
+		/// Move the caller's Id directly in front of `lighter`.
+		///
+		/// The dispatch origin for this call must be _Signed_ and can only be called by the Id of
+		/// the account going in front of `lighter`.
+		///
+		/// Only works if
+		/// - both nodes are within the same bag,
+		/// - and `origin` has a greater `VoteWeight` than `lighter`.
+		#[pallet::weight(T::WeightInfo::put_in_front_of())]
+		pub fn put_in_front_of(origin: OriginFor<T>, lighter: T::AccountId) -> DispatchResult {
+			let heavier = ensure_signed(origin)?;
+			List::<T>::put_in_front_of(&lighter, &heavier).map_err(Into::into)
 		}
 	}
 
@@ -256,11 +280,14 @@ impl<T: Config> SortedListProvider<T::AccountId> for Pallet<T> {
 		List::<T>::remove(id)
 	}
 
-	fn regenerate(
+	fn unsafe_regenerate(
 		all: impl IntoIterator<Item = T::AccountId>,
 		weight_of: Box<dyn Fn(&T::AccountId) -> VoteWeight>,
 	) -> u32 {
-		List::<T>::regenerate(all, weight_of)
+		// NOTE: This call is unsafe for the same reason as SortedListProvider::unsafe_regenerate.
+		// I.e. because it can lead to many storage accesses.
+		// So it is ok to call it as caller must ensure the conditions.
+		List::<T>::unsafe_regenerate(all, weight_of)
 	}
 
 	#[cfg(feature = "std")]
@@ -273,8 +300,11 @@ impl<T: Config> SortedListProvider<T::AccountId> for Pallet<T> {
 		Ok(())
 	}
 
-	fn clear(maybe_count: Option<u32>) -> u32 {
-		List::<T>::clear(maybe_count)
+	fn unsafe_clear() {
+		// NOTE: This call is unsafe for the same reason as SortedListProvider::unsafe_clear.
+		// I.e. because it can lead to many storage accesses.
+		// So it is ok to call it as caller must ensure the conditions.
+		List::<T>::unsafe_clear()
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,7 +17,7 @@
 
 use crate::{
 	build_executor, ensure_matching_spec, extract_code, full_extensions, hash_of, local_spec,
-	state_machine_call, SharedParams, State, LOG_TARGET,
+	state_machine_call_with_proof, SharedParams, State, LOG_TARGET,
 };
 use remote_externalities::rpc_api;
 use sc_service::{Configuration, NativeExecutionDispatch};
@@ -26,25 +26,25 @@ use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 use std::{fmt::Debug, str::FromStr};
 
 /// Configurations of the [`Command::ExecuteBlock`].
-#[derive(Debug, Clone, structopt::StructOpt)]
+#[derive(Debug, Clone, clap::Parser)]
 pub struct ExecuteBlockCmd {
 	/// Overwrite the wasm code in state or not.
-	#[structopt(long)]
+	#[clap(long)]
 	overwrite_wasm_code: bool,
 
 	/// If set, then the state root check is disabled by the virtue of calling into
 	/// `TryRuntime_execute_block_no_check` instead of
 	/// `Core_execute_block`.
-	#[structopt(long)]
+	#[clap(long)]
 	no_check: bool,
 
 	/// The block hash at which to fetch the block.
 	///
 	/// If the `live` state type is being used, then this can be omitted, and is equal to whatever
 	/// the `state::at` is. Only use this (with care) when combined with a snapshot.
-	#[structopt(
+	#[clap(
 		long,
-		multiple = false,
+		multiple_values = false,
 		parse(try_from_str = crate::parse::hash)
 	)]
 	block_at: Option<String>,
@@ -53,9 +53,9 @@ pub struct ExecuteBlockCmd {
 	///
 	/// If the `live` state type is being used, then this can be omitted, and is equal to whatever
 	/// the `state::uri` is. Only use this (with care) when combined with a snapshot.
-	#[structopt(
+	#[clap(
 		long,
-		multiple = false,
+		multiple_values = false,
 		parse(try_from_str = crate::parse::url)
 	)]
 	block_ws_uri: Option<String>,
@@ -65,7 +65,7 @@ pub struct ExecuteBlockCmd {
 	/// For this command only, if the `live` is used, then state of the parent block is fetched.
 	///
 	/// If `block_at` is provided, then the [`State::Live::at`] is being ignored.
-	#[structopt(subcommand)]
+	#[clap(subcommand)]
 	state: State,
 }
 
@@ -157,7 +157,7 @@ where
 	header.digest_mut().pop();
 	let block = Block::new(header, extrinsics);
 
-	let (expected_spec_name, expected_spec_version) =
+	let (expected_spec_name, expected_spec_version, _) =
 		local_spec::<Block, ExecDispatch>(&ext, &executor);
 	ensure_matching_spec::<Block>(
 		block_ws_uri.clone(),
@@ -167,7 +167,7 @@ where
 	)
 	.await;
 
-	let _ = state_machine_call::<Block, ExecDispatch>(
+	let _ = state_machine_call_with_proof::<Block, ExecDispatch>(
 		&ext,
 		&executor,
 		execution,

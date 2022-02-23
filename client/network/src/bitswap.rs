@@ -39,8 +39,7 @@ use libp2p::{
 		UpgradeInfo,
 	},
 	swarm::{
-		IntoProtocolsHandler, NetworkBehaviour, NetworkBehaviourAction, NotifyHandler,
-		OneShotHandler, PollParameters, ProtocolsHandler,
+		NetworkBehaviour, NetworkBehaviourAction, NotifyHandler, OneShotHandler, PollParameters,
 	},
 };
 use log::{debug, error, trace};
@@ -297,12 +296,11 @@ impl<B: BlockT> NetworkBehaviour for Bitswap<B> {
 		self.ready_blocks.push_back((peer, response));
 	}
 
-	fn poll(&mut self, _ctx: &mut Context, _: &mut impl PollParameters) -> Poll<
-		NetworkBehaviourAction<
-			<<Self::ProtocolsHandler as IntoProtocolsHandler>::Handler as ProtocolsHandler>::InEvent,
-			Self::OutEvent,
-		>,
-	>{
+	fn poll(
+		&mut self,
+		_ctx: &mut Context,
+		_: &mut impl PollParameters,
+	) -> Poll<NetworkBehaviourAction<Self::OutEvent, Self::ProtocolsHandler>> {
 		if let Some((peer_id, message)) = self.ready_blocks.pop_front() {
 			return Poll::Ready(NetworkBehaviourAction::NotifyHandler {
 				peer_id,
@@ -315,21 +313,29 @@ impl<B: BlockT> NetworkBehaviour for Bitswap<B> {
 }
 
 /// Bitswap protocol error.
-#[derive(derive_more::Display, derive_more::From)]
+#[derive(Debug, thiserror::Error)]
 pub enum BitswapError {
 	/// Protobuf decoding error.
-	#[display(fmt = "Failed to decode request: {}.", _0)]
-	DecodeProto(prost::DecodeError),
+	#[error("Failed to decode request: {0}.")]
+	DecodeProto(#[from] prost::DecodeError),
+
 	/// Protobuf encoding error.
-	#[display(fmt = "Failed to encode response: {}.", _0)]
-	EncodeProto(prost::EncodeError),
+	#[error("Failed to encode response: {0}.")]
+	EncodeProto(#[from] prost::EncodeError),
+
 	/// Client backend error.
-	Client(sp_blockchain::Error),
+	#[error(transparent)]
+	Client(#[from] sp_blockchain::Error),
+
 	/// Error parsing CID
-	BadCid(cid::Error),
+	#[error(transparent)]
+	BadCid(#[from] cid::Error),
+
 	/// Packet read error.
-	Read(io::Error),
+	#[error(transparent)]
+	Read(#[from] io::Error),
+
 	/// Error sending response.
-	#[display(fmt = "Failed to send response.")]
+	#[error("Failed to send response.")]
 	SendResponse,
 }

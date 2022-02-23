@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -264,6 +264,8 @@ where
 	}
 
 	/// Mutate the item, only if an `Ok` value is returned. Deletes the item if mutated to a `None`.
+	/// `f` will always be called with an option representing if the storage item exists (`Some<V>`)
+	/// or if the storage item does not exist (`None`), independent of the `QueryType`.
 	pub fn try_mutate_exists<KArg1, KArg2, R, E, F>(k1: KArg1, k2: KArg2, f: F) -> Result<R, E>
 	where
 		KArg1: EncodeLike<Key1>,
@@ -335,7 +337,11 @@ where
 		>(key1, key2)
 	}
 
-	/// Remove all value of the storage.
+	/// Remove all values of the storage in the overlay and up to `limit` in the backend.
+	///
+	/// All values in the client overlay will be deleted, if there is some `limit` then up to
+	/// `limit` values are deleted from the client backend, if `limit` is none then all values in
+	/// the client backend are deleted.
 	pub fn remove_all(limit: Option<u32>) -> sp_io::KillStorageResult {
 		<Self as crate::storage::StoragePrefixedMap<Value>>::remove_all(limit)
 	}
@@ -526,6 +532,8 @@ where
 	MaxValues: Get<Option<u32>>,
 {
 	fn build_metadata(docs: Vec<&'static str>, entries: &mut Vec<StorageEntryMetadata>) {
+		let docs = if cfg!(feature = "no-metadata-docs") { vec![] } else { docs };
+
 		let entry = StorageEntryMetadata {
 			name: Prefix::STORAGE_PREFIX,
 			modifier: QueryKind::METADATA,
