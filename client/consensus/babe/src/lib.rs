@@ -66,9 +66,7 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
-use std::{
-	borrow::Cow, collections::HashMap, convert::TryInto, pin::Pin, sync::Arc, time::Duration, u64,
-};
+use std::{borrow::Cow, collections::HashMap, convert::TryInto, pin::Pin, sync::Arc, u64};
 
 use codec::{Decode, Encode};
 use futures::{
@@ -106,10 +104,10 @@ use sp_block_builder::BlockBuilder as BlockBuilderApi;
 use sp_blockchain::{Error as ClientError, HeaderBackend, HeaderMetadata, Result as ClientResult};
 use sp_consensus::{
 	BlockOrigin, CacheKeyId, CanAuthorWith, Environment, Error as ConsensusError, Proposer,
-	SelectChain, SlotData,
+	SelectChain,
 };
 use sp_consensus_babe::inherents::BabeInherentData;
-use sp_consensus_slots::Slot;
+use sp_consensus_slots::{Slot, SlotDuration};
 use sp_core::{crypto::ByteArray, ExecutionContext};
 use sp_inherents::{CreateInherentDataProviders, InherentData, InherentDataProvider};
 use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
@@ -232,7 +230,7 @@ pub enum Error<B: BlockT> {
 	#[error("Multiple BABE config change digests, rejecting!")]
 	MultipleConfigChangeDigests,
 	/// Could not extract timestamp and slot
-	#[error("Could not extract timestamp and slot: {0:?}")]
+	#[error("Could not extract timestamp and slot: {0}")]
 	Extraction(sp_consensus::Error),
 	/// Could not fetch epoch
 	#[error("Could not fetch epoch at {0:?}")]
@@ -274,7 +272,7 @@ pub enum Error<B: BlockT> {
 	#[error("VRF verification failed: {0:?}")]
 	VRFVerificationFailed(SignatureError),
 	/// Could not fetch parent header
-	#[error("Could not fetch parent header: {0:?}")]
+	#[error("Could not fetch parent header: {0}")]
 	FetchParentHeader(sp_blockchain::Error),
 	/// Expected epoch change to happen.
 	#[error("Expected epoch change to happen at {0:?}, s{1}")]
@@ -328,17 +326,15 @@ pub struct BabeIntermediate<B: BlockT> {
 /// Intermediate key for Babe engine.
 pub static INTERMEDIATE_KEY: &[u8] = b"babe1";
 
-/// A slot duration.
-///
-/// Create with [`Self::get`].
-// FIXME: Once Rust has higher-kinded types, the duplication between this
-// and `super::babe::Config` can be eliminated.
-// https://github.com/paritytech/substrate/issues/2434
+/// Configuration for BABE used for defining block verification parameters as
+/// well as authoring (e.g. the slot duration).
 #[derive(Clone)]
-pub struct Config(sc_consensus_slots::SlotDuration<BabeGenesisConfiguration>);
+pub struct Config {
+	genesis_config: BabeGenesisConfiguration,
+}
 
 impl Config {
-	/// Fetch the config from the runtime.
+	/// Create a new config by reading the genesis configuration from the runtime.
 	pub fn get<B: BlockT, C>(client: &C) -> ClientResult<Self>
 	where
 		C: AuxStore + ProvideRuntimeApi<B> + UsageProvider<B>,
@@ -355,7 +351,7 @@ impl Config {
 
 		let version = runtime_api.api_version::<dyn BabeApi<B>>(&best_block_id)?;
 
-		let slot_duration = if version == Some(1) {
+		let genesis_config = if version == Some(1) {
 			#[allow(deprecated)]
 			{
 				runtime_api.configuration_before_version_2(&best_block_id)?.into()
@@ -368,20 +364,17 @@ impl Config {
 			))
 		};
 
-		Ok(Self(sc_consensus_slots::SlotDuration::new(slot_duration)))
+		Ok(Config { genesis_config })
 	}
 
-	/// Get the inner slot duration
-	pub fn slot_duration(&self) -> Duration {
-		self.0.slot_duration()
+	/// Get the genesis configuration.
+	pub fn genesis_config(&self) -> &BabeGenesisConfiguration {
+		&self.genesis_config
 	}
-}
 
-impl std::ops::Deref for Config {
-	type Target = BabeGenesisConfiguration;
-
-	fn deref(&self) -> &BabeGenesisConfiguration {
-		&*self.0
+	/// Get the slot duration defined in the genesis configuration.
+	pub fn slot_duration(&self) -> SlotDuration {
+		SlotDuration::from_millis(self.genesis_config.slot_duration)
 	}
 }
 
@@ -488,7 +481,6 @@ where
 {
 	const HANDLE_BUFFER_SIZE: usize = 1024;
 
-	let config = babe_link.config;
 	let slot_notification_sinks = Arc::new(Mutex::new(Vec::new()));
 
 	let worker = BabeSlotWorker {
@@ -502,7 +494,7 @@ where
 		keystore,
 		epoch_changes: babe_link.epoch_changes.clone(),
 		slot_notification_sinks: slot_notification_sinks.clone(),
-		config: config.clone(),
+		config: babe_link.config.clone(),
 		block_proposal_slot_portion,
 		max_block_proposal_slot_portion,
 		telemetry,
@@ -510,7 +502,7 @@ where
 
 	info!(target: "babe", "👶 Starting BABE Authorship worker");
 	let inner = sc_consensus_slots::start_slot_worker(
-		config.0.clone(),
+		babe_link.config.slot_duration(),
 		select_chain,
 		worker,
 		sync_oracle,
@@ -521,7 +513,8 @@ where
 	let (worker_tx, worker_rx) = channel(HANDLE_BUFFER_SIZE);
 
 	let answer_requests =
-		answer_requests(worker_rx, config.0, client, babe_link.epoch_changes.clone());
+		answer_requests(worker_rx, babe_link.config, client, babe_link.epoch_changes.clone());
+
 	Ok(BabeWorker {
 		inner: Box::pin(future::join(inner, answer_requests).map(|_| ())),
 		slot_notification_sinks,
@@ -531,7 +524,7 @@ where
 
 async fn answer_requests<B: BlockT, C>(
 	mut request_rx: Receiver<BabeRequest<B>>,
-	genesis_config: sc_consensus_slots::SlotDuration<BabeGenesisConfiguration>,
+	config: Config,
 	client: Arc<C>,
 	epoch_changes: SharedEpochChanges<B, Epoch>,
 ) where
@@ -561,7 +554,7 @@ async fn answer_requests<B: BlockT, C>(
 
 					let viable_epoch = epoch_changes
 						.viable_epoch(&epoch_descriptor, |slot| {
-							Epoch::genesis(&genesis_config, slot)
+							Epoch::genesis(&config.genesis_config, slot)
 						})
 						.ok_or_else(|| Error::<B>::FetchEpoch(parent_hash))?;
 
@@ -713,14 +706,16 @@ where
 				parent.number().clone(),
 				slot,
 			)
-			.map_err(|e| ConsensusError::ChainLookup(format!("{:?}", e)))?
+			.map_err(|e| ConsensusError::ChainLookup(e.to_string()))?
 			.ok_or(sp_consensus::Error::InvalidAuthoritiesSet)
 	}
 
 	fn authorities_len(&self, epoch_descriptor: &Self::EpochData) -> Option<usize> {
 		self.epoch_changes
 			.shared_data()
-			.viable_epoch(&epoch_descriptor, |slot| Epoch::genesis(&self.config, slot))
+			.viable_epoch(&epoch_descriptor, |slot| {
+				Epoch::genesis(&self.config.genesis_config, slot)
+			})
 			.map(|epoch| epoch.as_ref().authorities.len())
 	}
 
@@ -735,7 +730,9 @@ where
 			slot,
 			self.epoch_changes
 				.shared_data()
-				.viable_epoch(&epoch_descriptor, |slot| Epoch::genesis(&self.config, slot))?
+				.viable_epoch(&epoch_descriptor, |slot| {
+					Epoch::genesis(&self.config.genesis_config, slot)
+				})?
 				.as_ref(),
 			&self.keystore,
 		);
@@ -753,7 +750,7 @@ where
 		slot: Slot,
 		epoch_descriptor: &ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>,
 	) {
-		self.slot_notification_sinks.lock().retain_mut(|sink| {
+		RetainMut::retain_mut(&mut *self.slot_notification_sinks.lock(), |sink| {
 			match sink.try_send((slot, epoch_descriptor.clone())) {
 				Ok(()) => true,
 				Err(e) =>
@@ -1165,7 +1162,9 @@ where
 				.map_err(|e| Error::<Block>::ForkTree(Box::new(e)))?
 				.ok_or_else(|| Error::<Block>::FetchEpoch(parent_hash))?;
 			let viable_epoch = epoch_changes
-				.viable_epoch(&epoch_descriptor, |slot| Epoch::genesis(&self.config, slot))
+				.viable_epoch(&epoch_descriptor, |slot| {
+					Epoch::genesis(&self.config.genesis_config, slot)
+				})
 				.ok_or_else(|| Error::<Block>::FetchEpoch(parent_hash))?;
 
 			// We add one to the current slot to allow for some small drift.
@@ -1201,7 +1200,7 @@ where
 					)
 					.await
 				{
-					warn!(target: "babe", "Error checking/reporting BABE equivocation: {:?}", err);
+					warn!(target: "babe", "Error checking/reporting BABE equivocation: {}", err);
 				}
 
 				// if the body is passed through, we need to use the runtime
@@ -1498,7 +1497,9 @@ where
 				old_epoch_changes = Some((*epoch_changes).clone());
 
 				let viable_epoch = epoch_changes
-					.viable_epoch(&epoch_descriptor, |slot| Epoch::genesis(&self.config, slot))
+					.viable_epoch(&epoch_descriptor, |slot| {
+						Epoch::genesis(&self.config.genesis_config, slot)
+					})
 					.ok_or_else(|| {
 						ConsensusError::ClientImport(Error::<Block>::FetchEpoch(parent_hash).into())
 					})?;
@@ -1551,7 +1552,7 @@ where
 						)
 						.map_err(|e| {
 							ConsensusError::ClientImport(format!(
-								"Error importing epoch changes: {:?}",
+								"Error importing epoch changes: {}",
 								e
 							))
 						})?;
@@ -1559,7 +1560,7 @@ where
 				};
 
 				if let Err(e) = prune_and_import() {
-					debug!(target: "babe", "Failed to launch next epoch: {:?}", e);
+					debug!(target: "babe", "Failed to launch next epoch: {}", e);
 					*epoch_changes =
 						old_epoch_changes.expect("set `Some` above and not taken; qed");
 					return Err(e)
@@ -1590,7 +1591,7 @@ where
 					parent_weight
 				} else {
 					aux_schema::load_block_weight(&*self.client, last_best)
-						.map_err(|e| ConsensusError::ChainLookup(format!("{:?}", e)))?
+						.map_err(|e| ConsensusError::ChainLookup(e.to_string()))?
 						.ok_or_else(|| {
 							ConsensusError::ChainLookup(
 								"No block weight for parent header.".to_string(),
@@ -1649,7 +1650,7 @@ where
 	let finalized_slot = {
 		let finalized_header = client
 			.header(BlockId::Hash(info.finalized_hash))
-			.map_err(|e| ConsensusError::ClientImport(format!("{:?}", e)))?
+			.map_err(|e| ConsensusError::ClientImport(e.to_string()))?
 			.expect(
 				"best finalized hash was given by client; finalized headers must exist in db; qed",
 			);
@@ -1666,7 +1667,7 @@ where
 			info.finalized_number,
 			finalized_slot,
 		)
-		.map_err(|e| ConsensusError::ClientImport(format!("{:?}", e)))?;
+		.map_err(|e| ConsensusError::ClientImport(e.to_string()))?;
 
 	Ok(())
 }
@@ -1684,7 +1685,8 @@ pub fn block_import<Client, Block: BlockT, I>(
 where
 	Client: AuxStore + HeaderBackend<Block> + HeaderMetadata<Block, Error = sp_blockchain::Error>,
 {
-	let epoch_changes = aux_schema::load_epoch_changes::<Block, _>(&*client, &config)?;
+	let epoch_changes =
+		aux_schema::load_epoch_changes::<Block, _>(&*client, &config.genesis_config)?;
 	let link = BabeLink { epoch_changes: epoch_changes.clone(), config: config.clone() };
 
 	// NOTE: this isn't entirely necessary, but since we didn't use to prune the

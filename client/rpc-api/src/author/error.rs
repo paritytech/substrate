@@ -103,7 +103,7 @@ impl From<Error> for rpc::Error {
 			Error::Verification(e) => rpc::Error {
 				code: rpc::ErrorCode::ServerError(VERIFICATION_ERROR),
 				message: format!("Verification Error: {}", e).into(),
-				data: Some(format!("{:?}", e).into()),
+				data: Some(e.to_string().into()),
 			},
 			Error::Pool(PoolError::InvalidTransaction(InvalidTransaction::Custom(e))) => rpc::Error {
 				code: rpc::ErrorCode::ServerError(POOL_INVALID_TX),

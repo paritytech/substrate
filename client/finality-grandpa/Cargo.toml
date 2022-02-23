@@ -22,6 +22,7 @@ futures-timer = "3.0.1"
 log = "0.4.8"
 parking_lot = "0.11.2"
 rand = "0.8.4"
+ahash = "0.7.6"
 parity-scale-codec = { version = "2.3.1", features = ["derive"] }
 sp-application-crypto = { version = "5.0.0", path = "../../primitives/application-crypto" }
 sp-arithmetic = { version = "4.0.0", path = "../../primitives/arithmetic" }
@@ -54,7 +55,7 @@ finality-grandpa = { version = "0.14.1", features = [
 ] }
 sc-network = { version = "0.10.0-dev", path = "../network" }
 sc-network-test = { version = "0.8.0", path = "../network/test" }
-sp-keyring = { version = "4.1.0-dev", path = "../../primitives/keyring" }
+sp-keyring = { version = "5.0.0", path = "../../primitives/keyring" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
 sp-tracing = { version = "4.0.0", path = "../../primitives/tracing" }
 tokio = "1.15"
