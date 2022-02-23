@@ -66,6 +66,8 @@ pub mod inherent;
 pub mod error;
 pub mod instances;
 pub mod migrations;
+mod paritydb_weights;
+mod rocksdb_weights;
 pub mod traits;
 pub mod weights;
 
