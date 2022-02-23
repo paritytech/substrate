@@ -336,14 +336,13 @@ frame_benchmarking::benchmarks! {
 	}
 
 	// TODO: setup a withdraw unbonded kill scenario, make variable over slashing spans
-	withdraw_unbonded_other {
+	withdraw_unbonded_other_update {
 		let s in 0 .. MAX_SPANS;
 		clear_storage::<T>();
 
-
 		let min_create_bond = MinCreateBond::<T>::get()
-		.max(T::StakingInterface::minimum_bond())
-		.max(CurrencyOf::<T>::minimum_balance());
+			.max(T::StakingInterface::minimum_bond())
+			.max(CurrencyOf::<T>::minimum_balance());
 		let (depositor, pool_account) = create_pool_account::<T>(0, min_create_bond);
 
 		// Add a new delegator
@@ -375,7 +374,7 @@ frame_benchmarking::benchmarks! {
 
 		pallet_staking::benchmarking::add_slashing_spans::<T>(&pool_account, s);
 		whitelist_account!(joiner);
-	}: _(Origin::Signed(joiner.clone()), joiner.clone(), s)
+	}: withdraw_unbonded_other(Origin::Signed(joiner.clone()), joiner.clone(), s)
 	verify {
 		assert_eq!(
 			CurrencyOf::<T>::free_balance(&joiner),
@@ -383,6 +382,74 @@ frame_benchmarking::benchmarks! {
 		);
 		// The unlocking chunk was removed
 		assert_eq!(pallet_staking::Ledger::<T>::get(&pool_account).unwrap().unlocking.len(), 0);
+	}
+
+	withdraw_unbonded_other_kill {
+		let s in 0 .. MAX_SPANS;
+		clear_storage::<T>();
+
+		let min_create_bond = MinCreateBond::<T>::get()
+			.max(T::StakingInterface::minimum_bond())
+			.max(CurrencyOf::<T>::minimum_balance());
+
+		let (depositor, pool_account) = create_pool_account::<T>(0, min_create_bond);
+
+		// We set the pool to the destroying state so the depositor can leave
+		BondedPools::<T>::try_mutate(&pool_account, |maybe_bonded_pool| {
+			maybe_bonded_pool.as_mut().ok_or(()).map(|bonded_pool| {
+				bonded_pool.state = PoolState::Destroying;
+			})
+		})
+		.unwrap();
+
+		// Unbond the creator
+		pallet_staking::CurrentEra::<T>::put(0);
+		Pools::<T>::unbond_other(Origin::Signed(depositor.clone()).into(), depositor.clone()).unwrap();
+
+		// Sanity check that unbond worked
+		assert_eq!(
+			T::StakingInterface::bonded_balance(&pool_account).unwrap(),
+			Zero::zero()
+		);
+		assert_eq!(
+			CurrencyOf::<T>::free_balance(&pool_account),
+			min_create_bond
+		);
+		assert_eq!(pallet_staking::Ledger::<T>::get(&pool_account).unwrap().unlocking.len(), 1);
+
+		// Set the current era to ensure we can withdraw unbonded funds
+		pallet_staking::CurrentEra::<T>::put(EraIndex::max_value());
+
+		// Some last checks that storage items we expect to get cleaned up are present
+		assert!(pallet_staking::Ledger::<T>::contains_key(&pool_account));
+		assert!(BondedPools::<T>::contains_key(&pool_account));
+		assert!(SubPoolsStorage::<T>::contains_key(&pool_account));
+		assert!(RewardPools::<T>::contains_key(&pool_account));
+		assert!(Delegators::<T>::contains_key(&depositor));
+		let reward_account = pallet_nomination_pools::RewardPools::<T>::get(&pool_account)
+			.map(|r| r.account.clone())
+			.expect("pool created above.");
+		// Simulate some rewards so we can check if the rewards storage is cleaned up
+		CurrencyOf::<T>::make_free_balance_be(&reward_account, CurrencyOf::<T>::minimum_balance());
+		assert!(frame_system::Account::<T>::contains_key(&reward_account));
+
+		whitelist_account!(depositor);
+	}: withdraw_unbonded_other(Origin::Signed(depositor.clone()), depositor.clone(), s)
+	verify {
+		// Pool removal worked
+		assert!(!pallet_staking::Ledger::<T>::contains_key(&pool_account));
+		assert!(!BondedPools::<T>::contains_key(&pool_account));
+		assert!(!SubPoolsStorage::<T>::contains_key(&pool_account));
+		assert!(!RewardPools::<T>::contains_key(&pool_account));
+		assert!(!Delegators::<T>::contains_key(&depositor));
+		assert!(!frame_system::Account::<T>::contains_key(&pool_account));
+		assert!(!frame_system::Account::<T>::contains_key(&reward_account));
+
+		// Funds where transferred back correctly
+		assert_eq!(
+			CurrencyOf::<T>::free_balance(&depositor),
+			min_create_bond * 2u32.into()
+		);
 	}
 
 	create {
