@@ -29,11 +29,7 @@ use frame_support::{
 	traits::{ConstU32, ConstU64, Everything},
 };
 use sp_core::H256;
-use sp_runtime::{
-	testing::Header,
-	traits::{BlakeTwo256, IdentityLookup},
-	Perbill,
-};
+use sp_runtime::{testing::Header, traits::BlakeTwo256, Perbill};
 
 use frame_system::EnsureSignedBy;
 
@@ -79,7 +75,7 @@ impl frame_system::Config for Test {
 	type Call = Call;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
-	type Lookup = IdentityLookup<Self::AccountId>; // TODO NameService
+	type Lookup = NameService;
 	type Header = Header;
 	type Event = Event;
 	type BlockHashCount = ConstU64<250>;
@@ -124,7 +120,7 @@ ord_parameter_types! {
 }
 
 impl Config for Test {
-	type AccountIndex = ();
+	type AccountIndex = u32;
 	type Currency = Balances;
 	type Event = Event;
 	type ManagerOrigin = EnsureSignedBy<Manager, u64>;

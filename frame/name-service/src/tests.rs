@@ -82,9 +82,7 @@ fn end_to_end_should_work() {
 		assert_eq!(Lookup::<Test>::get(name_hash), Some(2));
 
 		// Name can be used instead of AccountId
-		// TODO assert_ok!(Balances::transfer(Origin::signed(1), MultiAddress::Address32(name_hash),
-		// 40));
-		assert_ok!(Balances::transfer(Origin::signed(1), 2, 40));
+		assert_ok!(Balances::transfer(Origin::signed(1), MultiAddress::Address32(name_hash), 40));
 		assert_eq!(Balances::free_balance(&2), 200);
 
 		// Name can expire

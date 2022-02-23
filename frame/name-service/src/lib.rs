@@ -34,7 +34,7 @@ pub mod pallet {
 		Currency, ExistenceRequirement::KeepAlive, Imbalance, OnUnbalanced, ReservableCurrency,
 		WithdrawReasons,
 	};
-	use sp_runtime::traits::Saturating;
+	use sp_runtime::traits::{AtLeast32Bit, Saturating};
 
 	use codec::Codec;
 
@@ -91,7 +91,14 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// An optional `AccountIndex` type for backwards compatibility.
-		type AccountIndex: Parameter + Member + Codec + Default + Copy;
+		type AccountIndex: Parameter
+			+ Member
+			+ MaybeSerializeDeserialize
+			+ Codec
+			+ Default
+			+ AtLeast32Bit
+			+ Copy
+			+ MaxEncodedLen;
 
 		/// The currency trait.
 		type Currency: ReservableCurrency<Self::AccountId>;
@@ -431,27 +438,24 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {}
 }
 
-// use sp_runtime::{ traits::{StaticLookup, LookupError}, MultiAddress};
-// use codec::{Codec};
+use sp_runtime::{
+	traits::{LookupError, StaticLookup},
+	MultiAddress,
+};
 
-// impl<T: Config> StaticLookup for Pallet<T>
-// where
-// 	MultiAddress<T::AccountId, T::AccountIndex>: Codec,
-// {
-// 	type Source = MultiAddress<T::AccountId, T::AccountIndex>;
-// 	type Target = T::AccountId;
+impl<T: Config> StaticLookup for Pallet<T> {
+	type Source = MultiAddress<T::AccountId, T::AccountIndex>;
+	type Target = T::AccountId;
 
-// 	fn lookup(a: Self::Source) -> Result<Self::Target, LookupError> {
-// 		match a {
-// 			MultiAddress::Id(id) => Ok(id),
-// 			MultiAddress::Address32(hash) => {
-// 				Lookup::<T>::get(hash).ok_or(LookupError)
-// 			},
-// 			_ => Err(LookupError),
-// 		}
-// 	}
+	fn lookup(a: Self::Source) -> Result<Self::Target, LookupError> {
+		match a {
+			MultiAddress::Id(id) => Ok(id),
+			MultiAddress::Address32(hash) => Lookup::<T>::get(hash).ok_or(LookupError),
+			_ => Err(LookupError),
+		}
+	}
 
-// 	fn unlookup(a: Self::Target) -> Self::Source {
-// 		MultiAddress::Id(a)
-// 	}
-// }
+	fn unlookup(a: Self::Target) -> Self::Source {
+		MultiAddress::Id(a)
+	}
+}
