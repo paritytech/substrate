@@ -152,7 +152,7 @@ pub type Weight = u64;
 /// These constants are specific to FRAME, and the current implementation of its various components.
 /// For example: FRAME System, FRAME Executive, our FRAME support libraries, etc...
 pub mod constants {
-	use super::{RuntimeDbWeight, Weight};
+	use super::Weight;
 	use crate::parameter_types;
 
 	pub const WEIGHT_PER_SECOND: Weight = 1_000_000_000_000;
