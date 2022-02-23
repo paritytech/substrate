@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -39,6 +39,7 @@ pub use core::result;
 pub use core::slice;
 // Allow interpreting vectors of bytes as strings, but not constructing them.
 pub use core::str;
+pub use core::time;
 // We are trying to avoid certain things here, such as `core::string`
 // (if you need `String` you are probably doing something wrong, since
 // runtime doesn't require anything human readable).

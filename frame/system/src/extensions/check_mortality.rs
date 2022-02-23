@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,19 +15,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use codec::{Encode, Decode};
-use crate::{Config, Module, BlockHash};
-use frame_support::StorageMap;
+use crate::{BlockHash, Config, Pallet};
+use codec::{Decode, Encode};
+use scale_info::TypeInfo;
 use sp_runtime::{
 	generic::Era,
-	traits::{SignedExtension, DispatchInfoOf, SaturatedConversion},
+	traits::{DispatchInfoOf, SaturatedConversion, SignedExtension},
 	transaction_validity::{
-		ValidTransaction, TransactionValidityError, InvalidTransaction, TransactionValidity,
+		InvalidTransaction, TransactionValidity, TransactionValidityError, ValidTransaction,
 	},
 };
 
 /// Check for transaction mortality.
-#[derive(Encode, Decode, Clone, Eq, PartialEq)]
+///
+/// # Transaction Validity
+///
+/// The extension affects `longevity` of the transaction according to the [`Era`] definition.
+#[derive(Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+#[scale_info(skip_type_params(T))]
 pub struct CheckMortality<T: Config + Send + Sync>(Era, sp_std::marker::PhantomData<T>);
 
 impl<T: Config + Send + Sync> CheckMortality<T> {
@@ -63,7 +68,7 @@ impl<T: Config + Send + Sync> SignedExtension for CheckMortality<T> {
 		_info: &DispatchInfoOf<Self::Call>,
 		_len: usize,
 	) -> TransactionValidity {
-		let current_u64 = <Module<T>>::block_number().saturated_into::<u64>();
+		let current_u64 = <Pallet<T>>::block_number().saturated_into::<u64>();
 		let valid_till = self.0.death(current_u64);
 		Ok(ValidTransaction {
 			longevity: valid_till.saturating_sub(current_u64),
@@ -72,20 +77,30 @@ impl<T: Config + Send + Sync> SignedExtension for CheckMortality<T> {
 	}
 
 	fn additional_signed(&self) -> Result<Self::AdditionalSigned, TransactionValidityError> {
-		let current_u64 = <Module<T>>::block_number().saturated_into::<u64>();
+		let current_u64 = <Pallet<T>>::block_number().saturated_into::<u64>();
 		let n = self.0.birth(current_u64).saturated_into::<T::BlockNumber>();
 		if !<BlockHash<T>>::contains_key(n) {
 			Err(InvalidTransaction::AncientBirthBlock.into())
 		} else {
-			Ok(<Module<T>>::block_hash(n))
+			Ok(<Pallet<T>>::block_hash(n))
 		}
+	}
+
+	fn pre_dispatch(
+		self,
+		who: &Self::AccountId,
+		call: &Self::Call,
+		info: &DispatchInfoOf<Self::Call>,
+		len: usize,
+	) -> Result<Self::Pre, TransactionValidityError> {
+		self.validate(who, call, info, len).map(|_| ())
 	}
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::mock::{Test, new_test_ext, System, CALL};
+	use crate::mock::{new_test_ext, System, Test, CALL};
 	use frame_support::weights::{DispatchClass, DispatchInfo, Pays};
 	use sp_core::H256;
 
@@ -94,7 +109,10 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			// future
 			assert_eq!(
-				CheckMortality::<Test>::from(Era::mortal(4, 2)).additional_signed().err().unwrap(),
+				CheckMortality::<Test>::from(Era::mortal(4, 2))
+					.additional_signed()
+					.err()
+					.unwrap(),
 				InvalidTransaction::AncientBirthBlock.into(),
 			);
 
@@ -108,10 +126,11 @@ mod tests {
 	#[test]
 	fn signed_ext_check_era_should_change_longevity() {
 		new_test_ext().execute_with(|| {
-			let normal = DispatchInfo { weight: 100, class: DispatchClass::Normal, pays_fee: Pays::Yes };
+			let normal =
+				DispatchInfo { weight: 100, class: DispatchClass::Normal, pays_fee: Pays::Yes };
 			let len = 0_usize;
 			let ext = (
-				crate::CheckWeight::<Test>::default(),
+				crate::CheckWeight::<Test>::new(),
 				CheckMortality::<Test>::from(Era::mortal(16, 256)),
 			);
 			System::set_block_number(17);

@@ -1,0 +1,5 @@
+error: Invalid pallet::call, only method accepted
+  --> $DIR/call_invalid_const.rs:17:3
+   |
+17 |         const Foo: u8 = 3u8;
+   |         ^^^^^

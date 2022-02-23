@@ -1,31 +1,33 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Blockchain API backend for full nodes.
 
-use std::sync::Arc;
-use rpc::futures::future::result;
+use super::{client_err, error::FutureResult, ChainBackend};
+use futures::FutureExt;
 use jsonrpc_pubsub::manager::SubscriptionManager;
-
-use sc_client_api::{BlockchainEvents, BlockBackend};
-use sp_runtime::{generic::{BlockId, SignedBlock}, traits::{Block as BlockT}};
-
-use super::{ChainBackend, client_err, error::FutureResult};
-use std::marker::PhantomData;
+use sc_client_api::{BlockBackend, BlockchainEvents};
 use sp_blockchain::HeaderBackend;
+use sp_runtime::{
+	generic::{BlockId, SignedBlock},
+	traits::Block as BlockT,
+};
+use std::{marker::PhantomData, sync::Arc};
 
 /// Blockchain API backend for full nodes. Reads all the data from local database.
 pub struct FullChain<Block: BlockT, Client> {
@@ -40,16 +42,14 @@ pub struct FullChain<Block: BlockT, Client> {
 impl<Block: BlockT, Client> FullChain<Block, Client> {
 	/// Create new Chain API RPC handler.
 	pub fn new(client: Arc<Client>, subscriptions: SubscriptionManager) -> Self {
-		Self {
-			client,
-			subscriptions,
-			_phantom: PhantomData,
-		}
+		Self { client, subscriptions, _phantom: PhantomData }
 	}
 }
 
-impl<Block, Client> ChainBackend<Client, Block> for FullChain<Block, Client> where
+impl<Block, Client> ChainBackend<Client, Block> for FullChain<Block, Client>
+where
 	Block: BlockT + 'static,
+	Block::Header: Unpin,
 	Client: BlockBackend<Block> + HeaderBackend<Block> + BlockchainEvents<Block> + 'static,
 {
 	fn client(&self) -> &Arc<Client> {
@@ -61,18 +61,12 @@ impl<Block, Client> ChainBackend<Client, Block> for FullChain<Block, Client> whe
 	}
 
 	fn header(&self, hash: Option<Block::Hash>) -> FutureResult<Option<Block::Header>> {
-		Box::new(result(self.client
-			.header(BlockId::Hash(self.unwrap_or_best(hash)))
-			.map_err(client_err)
-		))
+		let res = self.client.header(BlockId::Hash(self.unwrap_or_best(hash))).map_err(client_err);
+		async move { res }.boxed()
 	}
 
-	fn block(&self, hash: Option<Block::Hash>)
-		-> FutureResult<Option<SignedBlock<Block>>>
-	{
-		Box::new(result(self.client
-			.block(&BlockId::Hash(self.unwrap_or_best(hash)))
-			.map_err(client_err)
-		))
+	fn block(&self, hash: Option<Block::Hash>) -> FutureResult<Option<SignedBlock<Block>>> {
+		let res = self.client.block(&BlockId::Hash(self.unwrap_or_best(hash))).map_err(client_err);
+		async move { res }.boxed()
 	}
 }

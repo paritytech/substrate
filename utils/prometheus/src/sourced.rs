@@ -1,23 +1,26 @@
-// Copyright 2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! Metrics that are collected from existing sources.
 
-use prometheus::core::{Collector, Desc, Describer, Number, Opts};
-use prometheus::proto;
+use prometheus::{
+	core::{Collector, Desc, Describer, Number, Opts},
+	proto,
+};
 use std::{cmp::Ordering, marker::PhantomData};
 
 /// A counter whose values are obtained from an existing source.
@@ -79,35 +82,42 @@ impl<T: SourcedType, S: MetricSource> Collector for SourcedMetric<T, S> {
 					let mut c = proto::Counter::default();
 					c.set_value(value.into_f64());
 					m.set_counter(c);
-				}
+				},
 				proto::MetricType::GAUGE => {
 					let mut g = proto::Gauge::default();
 					g.set_value(value.into_f64());
 					m.set_gauge(g);
-				}
+				},
 				t => {
 					log::error!("Unsupported sourced metric type: {:?}", t);
-				}
+				},
 			}
 
 			debug_assert_eq!(self.desc.variable_labels.len(), label_values.len());
 			match self.desc.variable_labels.len().cmp(&label_values.len()) {
-				Ordering::Greater =>
-					log::warn!("Missing label values for sourced metric {}", self.desc.fq_name),
-				Ordering::Less =>
-					log::warn!("Too many label values for sourced metric {}", self.desc.fq_name),
-				Ordering::Equal => {}
+				Ordering::Greater => {
+					log::warn!("Missing label values for sourced metric {}", self.desc.fq_name)
+				},
+				Ordering::Less => {
+					log::warn!("Too many label values for sourced metric {}", self.desc.fq_name)
+				},
+				Ordering::Equal => {},
 			}
 
-			m.set_label(self.desc.variable_labels.iter().zip(label_values)
-				.map(|(l_name, l_value)| {
-					let mut l = proto::LabelPair::default();
-					l.set_name(l_name.to_string());
-					l.set_value(l_value.to_string());
-					l
-				})
-				.chain(self.desc.const_label_pairs.iter().cloned())
-				.collect::<Vec<_>>());
+			m.set_label(
+				self.desc
+					.variable_labels
+					.iter()
+					.zip(label_values)
+					.map(|(l_name, l_value)| {
+						let mut l = proto::LabelPair::default();
+						l.set_name(l_name.to_string());
+						l.set_value(l_value.to_string());
+						l
+					})
+					.chain(self.desc.const_label_pairs.iter().cloned())
+					.collect::<Vec<_>>(),
+			);
 
 			counters.push(m);
 		});
@@ -129,11 +139,15 @@ pub trait SourcedType: private::Sealed + Sync + Send {
 }
 
 impl SourcedType for Counter {
-	fn proto() -> proto::MetricType { proto::MetricType::COUNTER }
+	fn proto() -> proto::MetricType {
+		proto::MetricType::COUNTER
+	}
 }
 
 impl SourcedType for Gauge {
-	fn proto() -> proto::MetricType { proto::MetricType::GAUGE }
+	fn proto() -> proto::MetricType {
+		proto::MetricType::GAUGE
+	}
 }
 
 mod private {

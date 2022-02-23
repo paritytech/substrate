@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -16,117 +16,37 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! A set of utilities for resetting a wasm instance to its initial state.
+//! Utilities used by all backends
 
-use crate::error::{self, Error};
-use std::mem;
-use parity_wasm::elements::{deserialize_buffer, DataSegment, Instruction, Module as RawModule};
+use crate::error::Result;
+use sp_wasm_interface::Pointer;
+use std::ops::Range;
 
-/// A bunch of information collected from a WebAssembly module.
-pub struct WasmModuleInfo {
-	raw_module: RawModule,
-}
-
-impl WasmModuleInfo {
-	/// Create `WasmModuleInfo` from the given wasm code.
-	///
-	/// Returns `None` if the wasm code cannot be deserialized.
-	pub fn new(wasm_code: &[u8]) -> Option<Self> {
-		let raw_module: RawModule = deserialize_buffer(wasm_code).ok()?;
-		Some(Self { raw_module })
-	}
-
-	/// Extract the data segments from the given wasm code.
-	///
-	/// Returns `Err` if the given wasm code cannot be deserialized.
-	fn data_segments(&self) -> Vec<DataSegment> {
-		self.raw_module
-			.data_section()
-			.map(|ds| ds.entries())
-			.unwrap_or(&[])
-			.to_vec()
-	}
-
-	/// The number of globals defined in locally in this module.
-	pub fn declared_globals_count(&self) -> u32 {
-		self.raw_module
-			.global_section()
-			.map(|gs| gs.entries().len() as u32)
-			.unwrap_or(0)
-	}
-
-	/// The number of imports of globals.
-	pub fn imported_globals_count(&self) -> u32 {
-		self.raw_module
-			.import_section()
-			.map(|is| is.globals() as u32)
-			.unwrap_or(0)
+/// Construct a range from an offset to a data length after the offset.
+/// Returns None if the end of the range would exceed some maximum offset.
+pub fn checked_range(offset: usize, len: usize, max: usize) -> Option<Range<usize>> {
+	let end = offset.checked_add(len)?;
+	if end <= max {
+		Some(offset..end)
+	} else {
+		None
 	}
 }
 
-/// This is a snapshot of data segments specialzied for a particular instantiation.
-///
-/// Note that this assumes that no mutable globals are used.
-#[derive(Clone)]
-pub struct DataSegmentsSnapshot {
-	/// The list of data segments represented by (offset, contents).
-	data_segments: Vec<(u32, Vec<u8>)>,
-}
-
-impl DataSegmentsSnapshot {
-	/// Create a snapshot from the data segments from the module.
-	pub fn take(module: &WasmModuleInfo) -> error::Result<Self> {
-		let data_segments = module
-			.data_segments()
-			.into_iter()
-			.map(|mut segment| {
-				// Just replace contents of the segment since the segments will be discarded later
-				// anyway.
-				let contents = mem::replace(segment.value_mut(), vec![]);
-
-				let init_expr = match segment.offset() {
-					Some(offset) => offset.code(),
-					// Return if the segment is passive
-					None => return Err(Error::SharedMemUnsupported),
-				};
-
-				// [op, End]
-				if init_expr.len() != 2 {
-					return Err(Error::InitializerHasTooManyExpressions);
-				}
-				let offset = match &init_expr[0] {
-					Instruction::I32Const(v) => *v as u32,
-					Instruction::GetGlobal(_) => {
-						// In a valid wasm file, initializer expressions can only refer imported
-						// globals.
-						//
-						// At the moment of writing the Substrate Runtime Interface does not provide
-						// any globals. There is nothing that prevents us from supporting this
-						// if/when we gain those.
-						return Err(Error::ImportedGlobalsUnsupported);
-					}
-					insn => {
-						return Err(Error::InvalidInitializerExpression(format!("{:?}", insn)))
-					}
-				};
-
-				Ok((offset, contents))
-			})
-			.collect::<error::Result<Vec<_>>>()?;
-
-		Ok(Self { data_segments })
-	}
-
-	/// Apply the given snapshot to a linear memory.
+/// Provides safe memory access interface using an external buffer
+pub trait MemoryTransfer {
+	/// Read data from a slice of memory into a newly allocated buffer.
 	///
-	/// Linear memory interface is represented by a closure `memory_set`.
-	pub fn apply<E>(
-		&self,
-		mut memory_set: impl FnMut(u32, &[u8]) -> Result<(), E>,
-	) -> Result<(), E> {
-		for (offset, contents) in &self.data_segments {
-			memory_set(*offset, contents)?;
-		}
-		Ok(())
-	}
+	/// Returns an error if the read would go out of the memory bounds.
+	fn read(&self, source_addr: Pointer<u8>, size: usize) -> Result<Vec<u8>>;
+
+	/// Read data from a slice of memory into a destination buffer.
+	///
+	/// Returns an error if the read would go out of the memory bounds.
+	fn read_into(&self, source_addr: Pointer<u8>, destination: &mut [u8]) -> Result<()>;
+
+	/// Write data to a slice of memory.
+	///
+	/// Returns an error if the write would go out of the memory bounds.
+	fn write_from(&self, dest_addr: Pointer<u8>, source: &[u8]) -> Result<()>;
 }

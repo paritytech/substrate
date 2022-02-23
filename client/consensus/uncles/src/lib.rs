@@ -1,65 +1,45 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Uncles functionality for Substrate.
-#![forbid(unsafe_code, missing_docs)]
 
-use sp_consensus::SelectChain;
-use sp_inherents::{InherentDataProviders};
-use log::warn;
 use sc_client_api::ProvideUncles;
-use sp_runtime::traits::{Block as BlockT, Header};
-use std::sync::Arc;
-use sp_authorship;
+use sp_runtime::{generic::BlockId, traits::Block as BlockT};
+
+#[derive(Debug, thiserror::Error)]
+pub enum Error<B: BlockT> {
+	#[error("Could not retrieve the block hash for block id: {0:?}")]
+	NoHashForBlockId(BlockId<B>),
+}
 
 /// Maximum uncles generations we may provide to the runtime.
 const MAX_UNCLE_GENERATIONS: u32 = 8;
 
-/// Register uncles inherent data provider, if not registered already.
-pub fn register_uncles_inherent_data_provider<B, C, SC>(
-	client: Arc<C>,
-	select_chain: SC,
-	inherent_data_providers: &InherentDataProviders,
-) -> Result<(), sp_consensus::Error> where
+/// Create a new [`sp_authorship::InherentDataProvider`] at the given block.
+pub fn create_uncles_inherent_data_provider<B, C>(
+	client: &C,
+	parent: B::Hash,
+) -> Result<sp_authorship::InherentDataProvider<B::Header>, sc_client_api::blockchain::Error>
+where
 	B: BlockT,
-	C: ProvideUncles<B> + Send + Sync + 'static,
-	SC: SelectChain<B> + 'static,
+	C: ProvideUncles<B>,
 {
-	if !inherent_data_providers.has_provider(&sp_authorship::INHERENT_IDENTIFIER) {
-		inherent_data_providers
-			.register_provider(sp_authorship::InherentDataProvider::new(move || {
-				{
-					let chain_head = match select_chain.best_chain() {
-						Ok(x) => x,
-						Err(e) => {
-							warn!(target: "uncles", "Unable to get chain head: {:?}", e);
-							return Vec::new();
-						}
-					};
-					match client.uncles(chain_head.hash(), MAX_UNCLE_GENERATIONS.into()) {
-						Ok(uncles) => uncles,
-						Err(e) => {
-							warn!(target: "uncles", "Unable to get uncles: {:?}", e);
-							Vec::new()
-						}
-					}
-				}
-			}))
-		.map_err(|err| sp_consensus::Error::InherentData(err.into()))?;
-	}
-	Ok(())
-}
+	let uncles = client.uncles(parent, MAX_UNCLE_GENERATIONS.into())?;
 
+	Ok(sp_authorship::InherentDataProvider::new(uncles))
+}

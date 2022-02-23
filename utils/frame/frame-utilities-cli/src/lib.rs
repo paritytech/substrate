@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,7 +17,6 @@
 
 //! frame-system CLI utilities
 
-mod module_id;
+mod pallet_id;
 
-pub use module_id::ModuleIdCmd;
-
+pub use pallet_id::PalletIdCmd;

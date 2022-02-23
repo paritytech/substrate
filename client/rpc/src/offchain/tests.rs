@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -18,7 +18,7 @@
 
 use super::*;
 use assert_matches::assert_matches;
-use sp_core::{Bytes, offchain::storage::InMemOffchainStorage};
+use sp_core::{offchain::storage::InMemOffchainStorage, Bytes};
 
 #[test]
 fn local_storage_should_work() {

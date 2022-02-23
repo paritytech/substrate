@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,13 +19,10 @@
 
 use codec::Encode;
 use sp_runtime::traits::Convert;
-
-use super::super::Config as SessionConfig;
-use super::super::{Module as SessionModule, SessionIndex};
-use super::Config as HistoricalConfig;
-
-use super::shared;
 use sp_std::prelude::*;
+
+use super::{shared, Config as HistoricalConfig};
+use crate::{Config as SessionConfig, Pallet as SessionModule, SessionIndex};
 
 /// Store the validator-set associated to the `session_index` to the off-chain database.
 ///
@@ -55,7 +52,7 @@ pub fn store_session_validator_set_to_offchain<T: HistoricalConfig + SessionConf
 
 /// Store the validator set associated to the _current_ session index to the off-chain database.
 ///
-/// See [`fn store_session_validator_set_...(..)`](Self::store_session_validator_set_to_offchain)
+/// See [`store_session_validator_set_to_offchain`]
 /// for further information and restrictions.
 pub fn store_current_session_validator_set_to_offchain<T: HistoricalConfig + SessionConfig>() {
 	store_session_validator_set_to_offchain::<T>(<SessionModule<T>>::current_index());

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -18,42 +18,43 @@
 
 mod common;
 mod construct;
-#[macro_use] mod core;
-mod import;
+#[macro_use]
+mod core;
 mod generator;
+mod import;
 mod simple_trie;
 mod state_sizes;
 mod tempdb;
 mod trie;
 mod txpool;
 
-use structopt::StructOpt;
+use clap::Parser;
 
-use node_testing::bench::{Profile, KeyTypes, BlockType, DatabaseType as BenchDataBaseType};
+use node_testing::bench::{BlockType, DatabaseType as BenchDataBaseType, KeyTypes, Profile};
 
 use crate::{
 	common::SizeType,
-	core::{run_benchmark, Mode as BenchmarkMode},
-	tempdb::DatabaseType,
-	import::ImportBenchmarkDescription,
-	trie::{TrieReadBenchmarkDescription, TrieWriteBenchmarkDescription, DatabaseSize},
 	construct::ConstructionBenchmarkDescription,
+	core::{run_benchmark, Mode as BenchmarkMode},
+	import::ImportBenchmarkDescription,
+	tempdb::DatabaseType,
+	trie::{DatabaseSize, TrieReadBenchmarkDescription, TrieWriteBenchmarkDescription},
 	txpool::PoolBenchmarkDescription,
 };
 
-#[derive(Debug, StructOpt)]
-#[structopt(name = "node-bench", about = "Node integration benchmarks")]
+#[derive(Debug, Parser)]
+#[clap(name = "node-bench", about = "Node integration benchmarks")]
 struct Opt {
 	/// Show list of all available benchmarks.
 	///
 	/// Will output ("name", "path"). Benchmarks can then be filtered by path.
-	#[structopt(short, long)]
+	#[clap(short, long)]
 	list: bool,
 
 	/// Machine readable json output.
 	///
 	/// This also suppresses all regular output (except to stderr)
-	#[structopt(short, long)]
+	#[clap(short, long)]
 	json: bool,
 
 	/// Filter benchmarks.
@@ -62,7 +63,7 @@ struct Opt {
 	filter: Option<String>,
 
 	/// Number of transactions for block import with `custom` size.
-	#[structopt(long)]
+	#[clap(long)]
 	transactions: Option<usize>,
 
 	/// Mode
@@ -71,12 +72,12 @@ struct Opt {
 	///
 	/// "profile" mode adds pauses between measurable runs,
 	/// so that actual interval can be selected in the profiler of choice.
-	#[structopt(short, long, default_value = "regular")]
+	#[clap(short, long, default_value = "regular")]
 	mode: BenchmarkMode,
 }
 
 fn main() {
-	let opt = Opt::from_args();
+	let opt = Opt::parse();
 
 	if !opt.json {
 		sp_tracing::try_init_simple();
@@ -92,14 +93,25 @@ fn main() {
 			SizeType::Large,
 			SizeType::Full,
 			SizeType::Custom(opt.transactions.unwrap_or(0)),
-		].iter() {
+		]
+		.iter()
+		{
 			for block_type in [
 				BlockType::RandomTransfersKeepAlive,
 				BlockType::RandomTransfersReaping,
 				BlockType::Noop,
-			].iter() {
-				for database_type in [BenchDataBaseType::RocksDb, BenchDataBaseType::ParityDb].iter() {
-					import_benchmarks.push((profile, size.clone(), block_type.clone(), database_type));
+			]
+			.iter()
+			{
+				for database_type in
+					[BenchDataBaseType::RocksDb, BenchDataBaseType::ParityDb].iter()
+				{
+					import_benchmarks.push((
+						profile,
+						size.clone(),
+						block_type.clone(),
+						database_type,
+					));
 				}
 			}
 		}
@@ -163,7 +175,7 @@ fn main() {
 				println!("{}: {}", benchmark.name(), benchmark.path().full())
 			}
 		}
-		return;
+		return
 	}
 
 	let mut results = Vec::new();
@@ -183,7 +195,8 @@ fn main() {
 	}
 
 	if opt.json {
-		let json_result: String = serde_json::to_string(&results).expect("Failed to construct json");
+		let json_result: String =
+			serde_json::to_string(&results).expect("Failed to construct json");
 		println!("{}", json_result);
 	}
 }

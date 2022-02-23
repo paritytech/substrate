@@ -1,11 +1,11 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or 
+// the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
 // This program is distributed in the hope that it will be useful,
@@ -19,36 +19,32 @@
 //! implementation of the `vanity` subcommand
 
 use crate::{
-	error, utils, with_crypto_scheme,
-	CryptoSchemeFlag, NetworkSchemeFlag, OutputTypeFlag,
+	error, utils, with_crypto_scheme, CryptoSchemeFlag, NetworkSchemeFlag, OutputTypeFlag,
 };
-use sp_core::crypto::{Ss58Codec, Ss58AddressFormat};
-use structopt::StructOpt;
+use clap::Parser;
 use rand::{rngs::OsRng, RngCore};
+use sp_core::crypto::{unwrap_or_default_ss58_version, Ss58AddressFormat, Ss58Codec};
 use sp_runtime::traits::IdentifyAccount;
 use utils::print_from_uri;
 
 /// The `vanity` command
-#[derive(Debug, StructOpt)]
-#[structopt(
-	name = "vanity",
-	about = "Generate a seed that provides a vanity address"
-)]
+#[derive(Debug, Clone, Parser)]
+#[clap(name = "vanity", about = "Generate a seed that provides a vanity address")]
 pub struct VanityCmd {
 	/// Desired pattern
-	#[structopt(long, parse(try_from_str = assert_non_empty_string))]
+	#[clap(long, parse(try_from_str = assert_non_empty_string))]
 	pattern: String,
 
 	#[allow(missing_docs)]
-	#[structopt(flatten)]
+	#[clap(flatten)]
 	network_scheme: NetworkSchemeFlag,
 
 	#[allow(missing_docs)]
-	#[structopt(flatten)]
+	#[clap(flatten)]
 	output_scheme: OutputTypeFlag,
 
 	#[allow(missing_docs)]
-	#[structopt(flatten)]
+	#[clap(flatten)]
 	crypto_scheme: CryptoSchemeFlag,
 }
 
@@ -57,7 +53,10 @@ impl VanityCmd {
 	pub fn run(&self) -> error::Result<()> {
 		let formated_seed = with_crypto_scheme!(
 			self.crypto_scheme.scheme,
-			generate_key(&self.pattern, self.network_scheme.network.clone().unwrap_or_default()),
+			generate_key(
+				&self.pattern,
+				unwrap_or_default_ss58_version(self.network_scheme.network)
+			),
 		)?;
 
 		with_crypto_scheme!(
@@ -78,10 +77,10 @@ fn generate_key<Pair>(
 	desired: &str,
 	network_override: Ss58AddressFormat,
 ) -> Result<String, &'static str>
-	where
-		Pair: sp_core::Pair,
-		Pair::Public: IdentifyAccount,
-		<Pair::Public as IdentifyAccount>::AccountId: Ss58Codec,
+where
+	Pair: sp_core::Pair,
+	Pair::Public: IdentifyAccount,
+	<Pair::Public as IdentifyAccount>::AccountId: Ss58Codec,
 {
 	println!("Generating key containing pattern '{}'", desired);
 
@@ -104,7 +103,7 @@ fn generate_key<Pair>(
 			best = score;
 			if best >= top {
 				println!("best: {} == top: {}", best, top);
-				return Ok(utils::format_seed::<Pair>(seed.clone()));
+				return Ok(utils::format_seed::<Pair>(seed.clone()))
 			}
 		}
 		done += 1;
@@ -129,11 +128,11 @@ fn next_seed(seed: &mut [u8]) {
 		match seed[i] {
 			255 => {
 				seed[i] = 0;
-			}
+			},
 			_ => {
 				seed[i] += 1;
-				break;
-			}
+				break
+			},
 		}
 	}
 }
@@ -145,7 +144,7 @@ fn calculate_score(_desired: &str, key: &str) -> usize {
 		let snip_size = _desired.len() - truncate;
 		let truncated = &_desired[0..snip_size];
 		if let Some(pos) = key.find(truncated) {
-			return (47 - pos) + (snip_size * 48);
+			return (47 - pos) + (snip_size * 48)
 		}
 	}
 	0
@@ -160,44 +159,42 @@ fn assert_non_empty_string(pattern: &str) -> Result<String, &'static str> {
 	}
 }
 
-
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sp_core::{crypto::Ss58Codec, Pair};
-	use sp_core::sr25519;
+	use sp_core::{
+		crypto::{default_ss58_version, Ss58AddressFormatRegistry, Ss58Codec},
+		sr25519, Pair,
+	};
 	#[cfg(feature = "bench")]
 	use test::Bencher;
-	use structopt::StructOpt;
 
 	#[test]
 	fn vanity() {
-		let vanity = VanityCmd::from_iter(&["vanity", "--pattern", "j"]);
+		let vanity = VanityCmd::parse_from(&["vanity", "--pattern", "j"]);
 		assert!(vanity.run().is_ok());
 	}
 
 	#[test]
 	fn test_generation_with_single_char() {
-		let seed = generate_key::<sr25519::Pair>("ab", Default::default()).unwrap();
-		assert!(
-			sr25519::Pair::from_seed_slice(&hex::decode(&seed[2..]).unwrap())
-				.unwrap()
-				.public()
-				.to_ss58check()
-				.contains("ab")
-		);
+		let seed = generate_key::<sr25519::Pair>("ab", default_ss58_version()).unwrap();
+		assert!(sr25519::Pair::from_seed_slice(&hex::decode(&seed[2..]).unwrap())
+			.unwrap()
+			.public()
+			.to_ss58check()
+			.contains("ab"));
 	}
 
 	#[test]
 	fn generate_key_respects_network_override() {
-		let seed = generate_key::<sr25519::Pair>("ab", Ss58AddressFormat::PolkadotAccount).unwrap();
-		assert!(
-			sr25519::Pair::from_seed_slice(&hex::decode(&seed[2..]).unwrap())
-				.unwrap()
-				.public()
-				.to_ss58check_with_version(Ss58AddressFormat::PolkadotAccount)
-				.contains("ab")
-		);
+		let seed =
+			generate_key::<sr25519::Pair>("ab", Ss58AddressFormatRegistry::PolkadotAccount.into())
+				.unwrap();
+		assert!(sr25519::Pair::from_seed_slice(&hex::decode(&seed[2..]).unwrap())
+			.unwrap()
+			.public()
+			.to_ss58check_with_version(Ss58AddressFormatRegistry::PolkadotAccount.into())
+			.contains("ab"));
 	}
 
 	#[test]
@@ -208,10 +205,7 @@ mod tests {
 
 	#[test]
 	fn test_score_100() {
-		let score = calculate_score(
-			"Polkadot",
-			"5PolkadotwHY5k9GpdTgpqs9xjuNvtv8EcwCFpEeyEf3KHim",
-		);
+		let score = calculate_score("Polkadot", "5PolkadotwHY5k9GpdTgpqs9xjuNvtv8EcwCFpEeyEf3KHim");
 		assert_eq!(score, 430);
 	}
 
@@ -219,10 +213,7 @@ mod tests {
 	fn test_score_50_2() {
 		// 50% for the position + 50% for the size
 		assert_eq!(
-			calculate_score(
-				"Polkadot",
-				"5PolkXXXXwHY5k9GpdTgpqs9xjuNvtv8EcwCFpEeyEf3KHim"
-			),
+			calculate_score("Polkadot", "5PolkXXXXwHY5k9GpdTgpqs9xjuNvtv8EcwCFpEeyEf3KHim"),
 			238
 		);
 	}
@@ -230,10 +221,7 @@ mod tests {
 	#[test]
 	fn test_score_0() {
 		assert_eq!(
-			calculate_score(
-				"Polkadot",
-				"5GUWv4bLCchGUHJrzULXnh4JgXsMpTKRnjuXTY7Qo1Kh9uYK"
-			),
+			calculate_score("Polkadot", "5GUWv4bLCchGUHJrzULXnh4JgXsMpTKRnjuXTY7Qo1Kh9uYK"),
 			0
 		);
 	}

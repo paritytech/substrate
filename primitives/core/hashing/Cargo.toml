@@ -1,0 +1,33 @@
+[package]
+name = "sp-core-hashing"
+version = "4.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2021"
+license = "Apache-2.0"
+homepage = "https://substrate.dev"
+repository = "https://github.com/paritytech/substrate/"
+description = "Primitive core crate hashing implementation."
+documentation = "https://docs.rs/sp-core-hashing"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[dependencies]
+sp-std = { version = "4.0.0", default-features = false, path = "../../std" }
+byteorder = { version = "1.3.2", default-features = false }
+
+digest = { version = "0.10.2", default-features = false }
+blake2 = { version = "0.10.2", default-features = false }
+sha2 = { version = "0.10.1", default-features = false }
+sha3 = { version = "0.10.0", default-features = false }
+twox-hash = { version = "1.6.2", default-features = false, features = ["digest_0_10"] }
+
+[features]
+default = ["std"]
+std = [
+	"sp-std/std",
+	"blake2/std",
+	"sha2/std",
+	"sha3/std",
+	"twox-hash/std",
+]

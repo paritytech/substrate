@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -37,6 +37,7 @@ pub use std::sync;
 pub use std::result;
 pub use std::slice;
 pub use std::str;
+pub use core::time;
 pub use std::vec;
 
 pub mod collections {

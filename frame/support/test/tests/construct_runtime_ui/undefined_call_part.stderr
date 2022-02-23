@@ -1,0 +1,16 @@
+error: `Pallet` does not have #[pallet::call] defined, perhaps you should remove `Call` from construct_runtime?
+  --> tests/construct_runtime_ui/undefined_call_part.rs:5:1
+   |
+5  |   #[frame_support::pallet]
+   |   ^^^^^^^^^^^^^^^^^^^^^^^^
+...
+49 | / construct_runtime! {
+50 | |     pub enum Runtime where
+51 | |         Block = Block,
+52 | |         NodeBlock = Block,
+...  |
+57 | |     }
+58 | | }
+   | |_- in this macro invocation
+   |
+   = note: this error originates in the macro `pallet::__substrate_call_check::is_call_part_defined` (in Nightly builds, run with -Z macro-backtrace for more info)

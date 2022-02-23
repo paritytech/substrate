@@ -1,15 +1,15 @@
 [package]
 name = "node-template-release"
-version = "2.0.0"
+version = "3.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2018"
+edition = "2021"
 license = "GPL-3.0"
 
 [dependencies]
 toml = "0.4"
 tar = "0.4"
 glob = "0.2"
-structopt = "0.3"
+clap = { version = "3.0", features = ["derive"] }
 tempfile = "3"
 fs_extra = "1"
 git2 = "0.8"

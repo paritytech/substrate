@@ -1,0 +1,13 @@
+error: free type alias without body
+  --> $DIR/storage_incomplete_item.rs:19:2
+   |
+19 |     type Foo;
+   |     ^^^^^^^^-
+   |             |
+   |             help: provide a definition for the type: `= <type>;`
+
+error[E0433]: failed to resolve: use of undeclared crate or module `pallet`
+  --> $DIR/storage_incomplete_item.rs:18:4
+   |
+18 |     #[pallet::storage]
+   |       ^^^^^^ use of undeclared crate or module `pallet`

@@ -1,0 +1,5 @@
+error: Invalid pallet::event, expected item enum
+  --> $DIR/event_wrong_item.rs:19:2
+   |
+19 |     pub struct Foo;
+   |     ^^^

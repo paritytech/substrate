@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,17 +15,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::*;
-use crate::mock::*;
-use crate::primitives::{Proof, Compact};
+use crate::{mmr::utils, mock::*, *};
 
 use frame_support::traits::OnInitialize;
+use mmr_lib::helper;
+use pallet_mmr_primitives::{Compact, Proof};
 use sp_core::{
+	offchain::{testing::TestOffchainExt, OffchainDbExt, OffchainWorkerExt},
 	H256,
-	offchain::{
-		testing::TestOffchainExt,
-		OffchainExt,
-	},
 };
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
@@ -34,35 +31,38 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 
 fn register_offchain_ext(ext: &mut sp_io::TestExternalities) {
 	let (offchain, _offchain_state) = TestOffchainExt::with_offchain_db(ext.offchain_db());
-	ext.register_extension(OffchainExt::new(offchain));
+	ext.register_extension(OffchainDbExt::new(offchain.clone()));
+	ext.register_extension(OffchainWorkerExt::new(offchain));
 }
 
 fn new_block() -> u64 {
-	let number = frame_system::Module::<Test>::block_number() + 1;
+	let number = frame_system::Pallet::<Test>::block_number() + 1;
 	let hash = H256::repeat_byte(number as u8);
 	LEAF_DATA.with(|r| r.borrow_mut().a = number);
 
-	frame_system::Module::<Test>::initialize(
-		&number,
-		&hash,
-		&Default::default(),
-		&Default::default(),
-		frame_system::InitKind::Full,
-	);
+	frame_system::Pallet::<Test>::reset_events();
+	frame_system::Pallet::<Test>::initialize(&number, &hash, &Default::default());
 	MMR::on_initialize(number)
+}
+
+fn peaks_from_leaves_count(leaves_count: NodeIndex) -> Vec<NodeIndex> {
+	let size = utils::NodesUtils::new(leaves_count).size();
+
+	helper::get_peaks(size)
 }
 
 pub(crate) fn hex(s: &str) -> H256 {
 	s.parse().unwrap()
 }
 
-fn decode_node(v: Vec<u8>) -> mmr::Node<
-	<Test as Config>::Hashing,
-	(H256, LeafData),
-> {
+type BlockNumber = <Test as frame_system::Config>::BlockNumber;
+
+fn decode_node(
+	v: Vec<u8>,
+) -> mmr::Node<<Test as Config>::Hashing, ((BlockNumber, H256), LeafData)> {
 	use crate::primitives::DataOrHash;
-	type A = DataOrHash::<<Test as Config>::Hashing, H256>;
-	type B = DataOrHash::<<Test as Config>::Hashing, LeafData>;
+	type A = DataOrHash<<Test as Config>::Hashing, (BlockNumber, H256)>;
+	type B = DataOrHash<<Test as Config>::Hashing, LeafData>;
 	type Node = mmr::Node<<Test as Config>::Hashing, (A, B)>;
 	let tuple: Node = codec::Decode::decode(&mut &v[..]).unwrap();
 
@@ -87,21 +87,25 @@ fn should_start_empty() {
 		// given
 		assert_eq!(
 			crate::RootHash::<Test>::get(),
-			"0000000000000000000000000000000000000000000000000000000000000000".parse().unwrap()
+			"0000000000000000000000000000000000000000000000000000000000000000"
+				.parse()
+				.unwrap()
 		);
-		assert_eq!(crate::NumberOfLeaves::<DefaultInstance>::get(), 0);
+		assert_eq!(crate::NumberOfLeaves::<Test>::get(), 0);
 		assert_eq!(crate::Nodes::<Test>::get(0), None);
 
 		// when
 		let weight = new_block();
 
 		// then
-		assert_eq!(crate::NumberOfLeaves::<DefaultInstance>::get(), 1);
-		assert_eq!(crate::Nodes::<Test>::get(0),
-			Some(hex("da5e6d0616e05c6a6348605a37ca33493fc1a15ad1e6a405ee05c17843fdafed")));
+		assert_eq!(crate::NumberOfLeaves::<Test>::get(), 1);
+		assert_eq!(
+			crate::Nodes::<Test>::get(0),
+			Some(hex("4320435e8c3318562dba60116bdbcc0b82ffcecb9bb39aae3300cfda3ad0b8b0"))
+		);
 		assert_eq!(
 			crate::RootHash::<Test>::get(),
-			hex("da5e6d0616e05c6a6348605a37ca33493fc1a15ad1e6a405ee05c17843fdafed")
+			hex("4320435e8c3318562dba60116bdbcc0b82ffcecb9bb39aae3300cfda3ad0b8b0")
 		);
 		assert!(weight != 0);
 	});
@@ -114,37 +118,64 @@ fn should_append_to_mmr_when_on_initialize_is_called() {
 	ext.execute_with(|| {
 		// when
 		new_block();
+
+		// then
+		assert_eq!(crate::NumberOfLeaves::<Test>::get(), 1);
+		assert_eq!(
+			(
+				crate::Nodes::<Test>::get(0),
+				crate::Nodes::<Test>::get(1),
+				crate::RootHash::<Test>::get(),
+			),
+			(
+				Some(hex("4320435e8c3318562dba60116bdbcc0b82ffcecb9bb39aae3300cfda3ad0b8b0")),
+				None,
+				hex("0x4320435e8c3318562dba60116bdbcc0b82ffcecb9bb39aae3300cfda3ad0b8b0"),
+			)
+		);
+
+		// when
 		new_block();
 
 		// then
-		assert_eq!(crate::NumberOfLeaves::<DefaultInstance>::get(), 2);
-		assert_eq!(crate::Nodes::<Test>::get(0),
-			Some(hex("da5e6d0616e05c6a6348605a37ca33493fc1a15ad1e6a405ee05c17843fdafed")));
-		assert_eq!(crate::Nodes::<Test>::get(1),
-			Some(hex("ff5d891b28463a3440e1b650984685efdf260e482cb3807d53c49090841e755f")));
-		assert_eq!(crate::Nodes::<Test>::get(2),
-			Some(hex("bc54778fab79f586f007bd408dca2c4aa07959b27d1f2c8f4f2549d1fcfac8f8")));
-		assert_eq!(crate::Nodes::<Test>::get(3), None);
+		assert_eq!(crate::NumberOfLeaves::<Test>::get(), 2);
+		let peaks = peaks_from_leaves_count(2);
+		assert_eq!(peaks, vec![2]);
 		assert_eq!(
-			crate::RootHash::<Test>::get(),
-			hex("bc54778fab79f586f007bd408dca2c4aa07959b27d1f2c8f4f2549d1fcfac8f8")
+			(
+				crate::Nodes::<Test>::get(0),
+				crate::Nodes::<Test>::get(1),
+				crate::Nodes::<Test>::get(2),
+				crate::Nodes::<Test>::get(3),
+				crate::RootHash::<Test>::get(),
+			),
+			(
+				None,
+				None,
+				Some(hex("672c04a9cd05a644789d769daa552d35d8de7c33129f8a7cbf49e595234c4854")),
+				None,
+				hex("672c04a9cd05a644789d769daa552d35d8de7c33129f8a7cbf49e595234c4854"),
+			)
 		);
 	});
 
 	// make sure the leaves end up in the offchain DB
 	ext.persist_offchain_overlay();
 	let offchain_db = ext.offchain_db();
-	assert_eq!(offchain_db.get(&MMR::offchain_key(0)).map(decode_node), Some(mmr::Node::Data((
-		H256::repeat_byte(1),
-		LeafData::new(1),
-	))));
-	assert_eq!(offchain_db.get(&MMR::offchain_key(1)).map(decode_node), Some(mmr::Node::Data((
-		H256::repeat_byte(2),
-		LeafData::new(2),
-	))));
-	assert_eq!(offchain_db.get(&MMR::offchain_key(2)).map(decode_node), Some(mmr::Node::Hash(
-		hex("bc54778fab79f586f007bd408dca2c4aa07959b27d1f2c8f4f2549d1fcfac8f8")
-	)));
+	assert_eq!(
+		offchain_db.get(&MMR::offchain_key(0)).map(decode_node),
+		Some(mmr::Node::Data(((0, H256::repeat_byte(1)), LeafData::new(1),)))
+	);
+	assert_eq!(
+		offchain_db.get(&MMR::offchain_key(1)).map(decode_node),
+		Some(mmr::Node::Data(((1, H256::repeat_byte(2)), LeafData::new(2),)))
+	);
+	assert_eq!(
+		offchain_db.get(&MMR::offchain_key(2)).map(decode_node),
+		Some(mmr::Node::Hash(hex(
+			"672c04a9cd05a644789d769daa552d35d8de7c33129f8a7cbf49e595234c4854"
+		)))
+	);
 	assert_eq!(offchain_db.get(&MMR::offchain_key(3)), None);
 }
 
@@ -156,14 +187,25 @@ fn should_construct_larger_mmr_correctly() {
 		init_chain(7);
 
 		// then
-		assert_eq!(crate::NumberOfLeaves::<DefaultInstance>::get(), 7);
-		assert_eq!(crate::Nodes::<Test>::get(0),
-			Some(hex("da5e6d0616e05c6a6348605a37ca33493fc1a15ad1e6a405ee05c17843fdafed")));
-		assert_eq!(crate::Nodes::<Test>::get(10),
-			Some(hex("af3327deed0515c8d1902c9b5cd375942d42f388f3bfe3d1cd6e1b86f9cc456c")));
+		assert_eq!(crate::NumberOfLeaves::<Test>::get(), 7);
+		let peaks = peaks_from_leaves_count(7);
+		assert_eq!(peaks, vec![6, 9, 10]);
+		for i in (0..=10).filter(|p| !peaks.contains(p)) {
+			assert!(crate::Nodes::<Test>::get(i).is_none());
+		}
 		assert_eq!(
-			crate::RootHash::<Test>::get(),
-			hex("fc4f9042bd2f73feb26f3fc42db834c5f1943fa20070ddf106c486a478a0d561")
+			(
+				crate::Nodes::<Test>::get(6),
+				crate::Nodes::<Test>::get(9),
+				crate::Nodes::<Test>::get(10),
+				crate::RootHash::<Test>::get(),
+			),
+			(
+				Some(hex("ae88a0825da50e953e7a359c55fe13c8015e48d03d301b8bdfc9193874da9252")),
+				Some(hex("7e4316ae2ebf7c3b6821cb3a46ca8b7a4f9351a9b40fcf014bb0a4fd8e8f29da")),
+				Some(hex("611c2174c6164952a66d985cfe1ec1a623794393e3acff96b136d198f37a648c")),
+				hex("e45e25259f7930626431347fa4dd9aae7ac83b4966126d425ca70ab343709d2c"),
+			)
 		);
 	});
 }
@@ -181,47 +223,56 @@ fn should_generate_proofs_correctly() {
 	register_offchain_ext(&mut ext);
 	ext.execute_with(|| {
 		// when generate proofs for all leaves
-		let proofs = (0_u64..crate::NumberOfLeaves::<DefaultInstance>::get())
+		let proofs = (0_u64..crate::NumberOfLeaves::<Test>::get())
 			.into_iter()
-			.map(|leaf_index| crate::Module::<Test>::generate_proof(leaf_index).unwrap())
+			.map(|leaf_index| crate::Pallet::<Test>::generate_proof(leaf_index).unwrap())
 			.collect::<Vec<_>>();
 
 		// then
-		assert_eq!(proofs[0], (Compact::new((
-			H256::repeat_byte(1).into(),
-			LeafData::new(1).into(),
-		)), Proof {
-			leaf_index: 0,
-			leaf_count: 7,
-			items: vec![
-				hex("ff5d891b28463a3440e1b650984685efdf260e482cb3807d53c49090841e755f"),
-				hex("00b0046bd2d63fcb760cf50a262448bb2bbf9a264b0b0950d8744044edf00dc3"),
-				hex("16de0900b57bf359a0733674ebfbba0f494e95a8391b4bfeae850019399f3ec0"),
-			],
-		}));
-		assert_eq!(proofs[4], (Compact::new((
-			H256::repeat_byte(5).into(),
-			LeafData::new(5).into(),
-		)), Proof {
-			leaf_index: 4,
-			leaf_count: 7,
-			items: vec![
-				hex("e53ee36ba6c068b1a6cfef7862fed5005df55615e1c9fa6eeefe08329ac4b94b"),
-				hex("c09d4a008a0f1ef37860bef33ec3088ccd94268c0bfba7ff1b3c2a1075b0eb92"),
-				hex("af3327deed0515c8d1902c9b5cd375942d42f388f3bfe3d1cd6e1b86f9cc456c"),
-			],
-		}));
-		assert_eq!(proofs[6], (Compact::new((
-			H256::repeat_byte(7).into(),
-			LeafData::new(7).into(),
-		)), Proof {
-			leaf_index: 6,
-			leaf_count: 7,
-			items: vec![
-				hex("e53ee36ba6c068b1a6cfef7862fed5005df55615e1c9fa6eeefe08329ac4b94b"),
-				hex("dad09f50b41822fc5ecadc25b08c3a61531d4d60e962a5aa0b6998fad5c37c5e"),
-			],
-		}));
+		assert_eq!(
+			proofs[0],
+			(
+				Compact::new(((0, H256::repeat_byte(1)).into(), LeafData::new(1).into(),)),
+				Proof {
+					leaf_index: 0,
+					leaf_count: 7,
+					items: vec![
+						hex("ad4cbc033833612ccd4626d5f023b9dfc50a35e838514dd1f3c86f8506728705"),
+						hex("cb24f4614ad5b2a5430344c99545b421d9af83c46fd632d70a332200884b4d46"),
+						hex("dca421199bdcc55bb773c6b6967e8d16675de69062b52285ca63685241fdf626"),
+					],
+				}
+			)
+		);
+		assert_eq!(
+			proofs[4],
+			(
+				Compact::new(((4, H256::repeat_byte(5)).into(), LeafData::new(5).into(),)),
+				Proof {
+					leaf_index: 4,
+					leaf_count: 7,
+					items: vec![
+						hex("ae88a0825da50e953e7a359c55fe13c8015e48d03d301b8bdfc9193874da9252"),
+						hex("8ed25570209d8f753d02df07c1884ddb36a3d9d4770e4608b188322151c657fe"),
+						hex("611c2174c6164952a66d985cfe1ec1a623794393e3acff96b136d198f37a648c"),
+					],
+				}
+			)
+		);
+		assert_eq!(
+			proofs[6],
+			(
+				Compact::new(((6, H256::repeat_byte(7)).into(), LeafData::new(7).into(),)),
+				Proof {
+					leaf_index: 6,
+					leaf_count: 7,
+					items: vec![
+						hex("ae88a0825da50e953e7a359c55fe13c8015e48d03d301b8bdfc9193874da9252"),
+						hex("7e4316ae2ebf7c3b6821cb3a46ca8b7a4f9351a9b40fcf014bb0a4fd8e8f29da"),
+					],
+				}
+			)
+		);
 	});
 }
 
@@ -240,18 +291,41 @@ fn should_verify() {
 	register_offchain_ext(&mut ext);
 	let (leaf, proof5) = ext.execute_with(|| {
 		// when
-		crate::Module::<Test>::generate_proof(5).unwrap()
+		crate::Pallet::<Test>::generate_proof(5).unwrap()
 	});
 
-	// Now to verify the proof, we really shouldn't require offchain storage or extension.
-	// Hence we initialize the storage once again, using different externalities and then
-	// verify.
-	let mut ext2 = new_test_ext();
-	ext2.execute_with(|| {
+	ext.execute_with(|| {
 		init_chain(7);
 		// then
-		assert_eq!(crate::Module::<Test>::verify_leaf(leaf, proof5), Ok(()));
+		assert_eq!(crate::Pallet::<Test>::verify_leaf(leaf, proof5), Ok(()));
 	});
+}
+
+#[test]
+fn verification_should_be_stateless() {
+	let _ = env_logger::try_init();
+
+	// Start off with chain initialisation and storing indexing data off-chain
+	// (MMR Leafs)
+	let mut ext = new_test_ext();
+	ext.execute_with(|| init_chain(7));
+	ext.persist_offchain_overlay();
+
+	// Try to generate proof now. This requires the offchain extensions to be present
+	// to retrieve full leaf data.
+	register_offchain_ext(&mut ext);
+	let (leaf, proof5) = ext.execute_with(|| {
+		// when
+		crate::Pallet::<Test>::generate_proof(5).unwrap()
+	});
+	let root = ext.execute_with(|| crate::Pallet::<Test>::mmr_root_hash());
+
+	// Verify proof without relying on any on-chain data.
+	let leaf = crate::primitives::DataOrHash::Data(leaf);
+	assert_eq!(
+		crate::verify_leaf_proof::<<Test as Config>::Hashing, _>(root, leaf, proof5),
+		Ok(())
+	);
 }
 
 #[test]
@@ -266,10 +340,10 @@ fn should_verify_on_the_next_block_since_there_is_no_pruning_yet() {
 
 	ext.execute_with(|| {
 		// when
-		let (leaf, proof5) = crate::Module::<Test>::generate_proof(5).unwrap();
+		let (leaf, proof5) = crate::Pallet::<Test>::generate_proof(5).unwrap();
 		new_block();
 
 		// then
-		assert_eq!(crate::Module::<Test>::verify_leaf(leaf, proof5), Ok(()));
+		assert_eq!(crate::Pallet::<Test>::verify_leaf(leaf, proof5), Ok(()));
 	});
 }

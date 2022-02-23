@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,29 +17,31 @@
 
 //! Merkle Mountain Range utilities.
 
+use crate::primitives::{LeafIndex, NodeIndex};
+
 /// MMR nodes & size -related utilities.
 pub struct NodesUtils {
-	no_of_leaves: u64,
+	no_of_leaves: LeafIndex,
 }
 
 impl NodesUtils {
 	/// Create new instance of MMR nodes utilities for given number of leaves.
-	pub fn new(no_of_leaves: u64) -> Self {
+	pub fn new(no_of_leaves: LeafIndex) -> Self {
 		Self { no_of_leaves }
 	}
 
 	/// Calculate number of peaks in the MMR.
-	pub fn number_of_peaks(&self) -> u64 {
-		self.number_of_leaves().count_ones() as u64
+	pub fn number_of_peaks(&self) -> NodeIndex {
+		self.number_of_leaves().count_ones() as NodeIndex
 	}
 
 	/// Return the number of leaves in the MMR.
-	pub fn number_of_leaves(&self) -> u64 {
+	pub fn number_of_leaves(&self) -> LeafIndex {
 		self.no_of_leaves
 	}
 
 	/// Calculate the total size of MMR (number of nodes).
-	pub fn size(&self) -> u64 {
+	pub fn size(&self) -> NodeIndex {
 		2 * self.no_of_leaves - self.number_of_peaks()
 	}
 
@@ -49,9 +51,7 @@ impl NodesUtils {
 			return 0
 		}
 
-		64 - self.no_of_leaves
-				.next_power_of_two()
-				.leading_zeros()
+		64 - self.no_of_leaves.next_power_of_two().leading_zeros()
 	}
 }
 
@@ -114,7 +114,7 @@ mod tests {
 				let mut mmr = crate::mmr::Mmr::<
 					crate::mmr::storage::RuntimeStorage,
 					crate::mock::Test,
-					crate::DefaultInstance,
+					_,
 					_,
 				>::new(0);
 				for i in 0..*s {
@@ -123,9 +123,6 @@ mod tests {
 				actual_sizes.push(mmr.size());
 			})
 		}
-		assert_eq!(
-			sizes[1..],
-			actual_sizes[..],
-		);
+		assert_eq!(sizes[1..], actual_sizes[..]);
 	}
 }

@@ -4,14 +4,14 @@
 ;; The rest of the input is forwarded to the constructor of the callee
 (module
 	(import "seal0" "seal_input" (func $seal_input (param i32 i32)))
-	(import "seal0" "seal_instantiate" (func $seal_instantiate
-		(param i32 i32 i64 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32) (result i32)
+	(import "seal1" "seal_instantiate" (func $seal_instantiate
+		(param i32 i64 i32 i32 i32 i32 i32 i32 i32 i32 i32) (result i32)
 	))
 	(import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
-	;; [0, 8) 100 balance
-	(data (i32.const 0) "\64\00\00\00\00\00\00\00")
+	;; [0, 8) 10_000 balance
+	(data (i32.const 0) "\10\27\00\00\00\00\00\00")
 
 	;; [8, 12) here we store the return code of the transfer
 
@@ -29,10 +29,8 @@
 			(i32.const 8)
 			(call $seal_instantiate
 				(i32.const 16) ;; Pointer to the code hash.
-				(i32.const 32) ;; Length of the code hash.
 				(i64.const 0) ;; How much gas to devote for the execution. 0 = all.
 				(i32.const 0) ;; Pointer to the buffer with value to transfer
-				(i32.const 8) ;; Length of the buffer with value to transfer.
 				(i32.const 48) ;; Pointer to input data buffer address
 				(i32.const 4) ;; Length of input data buffer
 				(i32.const 0xffffffff) ;; u32 max sentinel value: do not copy address

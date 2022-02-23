@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,16 +15,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-///! For instruction benchmarking we do no instantiate a full contract but merely the
-///! sandbox to execute the wasm code. This is because we do not need the full
-///! environment that provides the seal interface as imported functions.
-
-use super::{
-	Config,
-	code::WasmModule,
-};
+/// ! For instruction benchmarking we do no instantiate a full contract but merely the
+/// ! sandbox to execute the wasm code. This is because we do not need the full
+/// ! environment that provides the seal interface as imported functions.
+use super::{code::WasmModule, Config};
 use sp_core::crypto::UncheckedFrom;
-use sp_sandbox::{EnvironmentDefinitionBuilder, Instance, Memory};
+use sp_sandbox::{
+	default_executor::{EnvironmentDefinitionBuilder, Instance, Memory},
+	SandboxEnvironmentBuilder, SandboxInstance,
+};
 
 /// Minimal execution environment without any exported functions.
 pub struct Sandbox {
@@ -51,9 +50,6 @@ where
 		let memory = module.add_memory(&mut env_builder);
 		let instance = Instance::new(&module.code, &env_builder, &mut ())
 			.expect("Failed to create benchmarking Sandbox instance");
-		Self {
-			instance,
-			_memory: memory,
-		}
+		Self { instance, _memory: memory }
 	}
 }

@@ -1,56 +1,150 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use std::{
-	str::FromStr,
-	sync::Arc,
-	convert::TryFrom,
-	thread::sleep,
-	collections::HashSet,
-};
+use std::{collections::HashSet, convert::TryFrom, str::FromStr, sync::Arc, thread::sleep};
 
 use crate::NetworkProvider;
+use codec::{Decode, Encode};
 use futures::Future;
-use log::error;
-use sc_network::{PeerId, Multiaddr};
-use codec::{Encode, Decode};
-use sp_core::OpaquePeerId;
-use sp_core::offchain::{
-	Externalities as OffchainExt, HttpRequestId, Timestamp, HttpRequestStatus, HttpError,
-	OffchainStorage, OpaqueNetworkState, OpaqueMultiaddr, StorageKind,
+pub use http::SharedClient;
+use sc_network::{Multiaddr, PeerId};
+use sp_core::{
+	offchain::{
+		self, HttpError, HttpRequestId, HttpRequestStatus, OffchainStorage, OpaqueMultiaddr,
+		OpaqueNetworkState, StorageKind, Timestamp,
+	},
+	OpaquePeerId,
 };
 pub use sp_offchain::STORAGE_PREFIX;
-pub use http::SharedClient;
 
-#[cfg(not(target_os = "unknown"))]
 mod http;
-
-#[cfg(target_os = "unknown")]
-use http_dummy as http;
-#[cfg(target_os = "unknown")]
-mod http_dummy;
 
 mod timestamp;
 
+fn unavailable_yet<R: Default>(name: &str) -> R {
+	tracing::error!(
+		target: super::LOG_TARGET,
+		"The {:?} API is not available for offchain workers yet. Follow \
+		https://github.com/paritytech/substrate/issues/1458 for details",
+		name
+	);
+	Default::default()
+}
+
+const LOCAL_DB: &str = "LOCAL (fork-aware) DB";
+
+/// Offchain DB reference.
+#[derive(Debug, Clone)]
+pub struct Db<Storage> {
+	/// Persistent storage database.
+	persistent: Storage,
+}
+
+impl<Storage: OffchainStorage> Db<Storage> {
+	/// Create new instance of Offchain DB.
+	pub fn new(persistent: Storage) -> Self {
+		Self { persistent }
+	}
+
+	/// Create new instance of Offchain DB, backed by given backend.
+	pub fn factory_from_backend<Backend, Block>(
+		backend: &Backend,
+	) -> Option<Box<dyn sc_client_api::execution_extensions::DbExternalitiesFactory>>
+	where
+		Backend: sc_client_api::Backend<Block, OffchainStorage = Storage>,
+		Block: sp_runtime::traits::Block,
+		Storage: 'static,
+	{
+		sc_client_api::Backend::offchain_storage(backend).map(|db| Box::new(Self::new(db)) as _)
+	}
+}
+
+impl<Storage: OffchainStorage> offchain::DbExternalities for Db<Storage> {
+	fn local_storage_set(&mut self, kind: StorageKind, key: &[u8], value: &[u8]) {
+		tracing::debug!(
+			target: "offchain-worker::storage",
+			?kind,
+			key = ?hex::encode(key),
+			value = ?hex::encode(value),
+			"Write",
+		);
+		match kind {
+			StorageKind::PERSISTENT => self.persistent.set(STORAGE_PREFIX, key, value),
+			StorageKind::LOCAL => unavailable_yet(LOCAL_DB),
+		}
+	}
+
+	fn local_storage_clear(&mut self, kind: StorageKind, key: &[u8]) {
+		tracing::debug!(
+			target: "offchain-worker::storage",
+			?kind,
+			key = ?hex::encode(key),
+			"Clear",
+		);
+		match kind {
+			StorageKind::PERSISTENT => self.persistent.remove(STORAGE_PREFIX, key),
+			StorageKind::LOCAL => unavailable_yet(LOCAL_DB),
+		}
+	}
+
+	fn local_storage_compare_and_set(
+		&mut self,
+		kind: StorageKind,
+		key: &[u8],
+		old_value: Option<&[u8]>,
+		new_value: &[u8],
+	) -> bool {
+		tracing::debug!(
+			target: "offchain-worker::storage",
+			?kind,
+			key = ?hex::encode(key),
+			new_value = ?hex::encode(new_value),
+			old_value = ?old_value.as_ref().map(hex::encode),
+			"CAS",
+		);
+		match kind {
+			StorageKind::PERSISTENT =>
+				self.persistent.compare_and_set(STORAGE_PREFIX, key, old_value, new_value),
+			StorageKind::LOCAL => unavailable_yet(LOCAL_DB),
+		}
+	}
+
+	fn local_storage_get(&mut self, kind: StorageKind, key: &[u8]) -> Option<Vec<u8>> {
+		let result = match kind {
+			StorageKind::PERSISTENT => self.persistent.get(STORAGE_PREFIX, key),
+			StorageKind::LOCAL => unavailable_yet(LOCAL_DB),
+		};
+		tracing::debug!(
+			target: "offchain-worker::storage",
+			?kind,
+			key = ?hex::encode(key),
+			result = ?result.as_ref().map(hex::encode),
+			"Read",
+		);
+		result
+	}
+}
+
 /// Asynchronous offchain API.
 ///
-/// NOTE this is done to prevent recursive calls into the runtime (which are not supported currently).
-pub(crate) struct Api<Storage> {
-	/// Offchain Workers database.
-	db: Storage,
+/// NOTE this is done to prevent recursive calls into the runtime
+/// (which are not supported currently).
+pub(crate) struct Api {
 	/// A provider for substrate networking.
 	network_provider: Arc<dyn NetworkProvider + Send + Sync>,
 	/// Is this node a potential validator?
@@ -59,17 +153,7 @@ pub(crate) struct Api<Storage> {
 	http: http::HttpApi,
 }
 
-fn unavailable_yet<R: Default>(name: &str) -> R {
-	error!(
-		"The {:?} API is not available for offchain workers yet. Follow \
-		https://github.com/paritytech/substrate/issues/1458 for details", name
-	);
-	Default::default()
-}
-
-const LOCAL_DB: &str = "LOCAL (fork-aware) DB";
-
-impl<Storage: OffchainStorage> OffchainExt for Api<Storage> {
+impl offchain::Externalities for Api {
 	fn is_validator(&self) -> bool {
 		self.is_validator
 	}
@@ -77,10 +161,7 @@ impl<Storage: OffchainStorage> OffchainExt for Api<Storage> {
 	fn network_state(&self) -> Result<OpaqueNetworkState, ()> {
 		let external_addresses = self.network_provider.external_addresses();
 
-		let state = NetworkState::new(
-			self.network_provider.local_peer_id(),
-			external_addresses,
-		);
+		let state = NetworkState::new(self.network_provider.local_peer_id(), external_addresses);
 		Ok(OpaqueNetworkState::from(state))
 	}
 
@@ -96,47 +177,11 @@ impl<Storage: OffchainStorage> OffchainExt for Api<Storage> {
 		rand::random()
 	}
 
-	fn local_storage_set(&mut self, kind: StorageKind, key: &[u8], value: &[u8]) {
-		match kind {
-			StorageKind::PERSISTENT => self.db.set(STORAGE_PREFIX, key, value),
-			StorageKind::LOCAL => unavailable_yet(LOCAL_DB),
-		}
-	}
-
-	fn local_storage_clear(&mut self, kind: StorageKind, key: &[u8]) {
-		match kind {
-			StorageKind::PERSISTENT => self.db.remove(STORAGE_PREFIX, key),
-			StorageKind::LOCAL => unavailable_yet(LOCAL_DB),
-		}
-	}
-
-	fn local_storage_compare_and_set(
-		&mut self,
-		kind: StorageKind,
-		key: &[u8],
-		old_value: Option<&[u8]>,
-		new_value: &[u8],
-	) -> bool {
-		match kind {
-			StorageKind::PERSISTENT => {
-				self.db.compare_and_set(STORAGE_PREFIX, key, old_value, new_value)
-			},
-			StorageKind::LOCAL => unavailable_yet(LOCAL_DB),
-		}
-	}
-
-	fn local_storage_get(&mut self, kind: StorageKind, key: &[u8]) -> Option<Vec<u8>> {
-		match kind {
-			StorageKind::PERSISTENT => self.db.get(STORAGE_PREFIX, key),
-			StorageKind::LOCAL => unavailable_yet(LOCAL_DB),
-		}
-	}
-
 	fn http_request_start(
 		&mut self,
 		method: &str,
 		uri: &str,
-		_meta: &[u8]
+		_meta: &[u8],
 	) -> Result<HttpRequestId, ()> {
 		self.http.request_start(method, uri)
 	}
@@ -145,7 +190,7 @@ impl<Storage: OffchainStorage> OffchainExt for Api<Storage> {
 		&mut self,
 		request_id: HttpRequestId,
 		name: &str,
-		value: &str
+		value: &str,
 	) -> Result<(), ()> {
 		self.http.request_add_header(request_id, name, value)
 	}
@@ -154,7 +199,7 @@ impl<Storage: OffchainStorage> OffchainExt for Api<Storage> {
 		&mut self,
 		request_id: HttpRequestId,
 		chunk: &[u8],
-		deadline: Option<Timestamp>
+		deadline: Option<Timestamp>,
 	) -> Result<(), HttpError> {
 		self.http.request_write_body(request_id, chunk, deadline)
 	}
@@ -162,15 +207,12 @@ impl<Storage: OffchainStorage> OffchainExt for Api<Storage> {
 	fn http_response_wait(
 		&mut self,
 		ids: &[HttpRequestId],
-		deadline: Option<Timestamp>
+		deadline: Option<Timestamp>,
 	) -> Vec<HttpRequestStatus> {
 		self.http.response_wait(ids, deadline)
 	}
 
-	fn http_response_headers(
-		&mut self,
-		request_id: HttpRequestId
-	) -> Vec<(Vec<u8>, Vec<u8>)> {
+	fn http_response_headers(&mut self, request_id: HttpRequestId) -> Vec<(Vec<u8>, Vec<u8>)> {
 		self.http.response_headers(request_id)
 	}
 
@@ -178,16 +220,15 @@ impl<Storage: OffchainStorage> OffchainExt for Api<Storage> {
 		&mut self,
 		request_id: HttpRequestId,
 		buffer: &mut [u8],
-		deadline: Option<Timestamp>
+		deadline: Option<Timestamp>,
 	) -> Result<usize, HttpError> {
 		self.http.response_read_body(request_id, buffer, deadline)
 	}
 
 	fn set_authorized_nodes(&mut self, nodes: Vec<OpaquePeerId>, authorized_only: bool) {
-		let peer_ids: HashSet<PeerId> = nodes.into_iter()
-			.filter_map(|node| PeerId::from_bytes(node.0).ok())
-			.collect();
-		
+		let peer_ids: HashSet<PeerId> =
+			nodes.into_iter().filter_map(|node| PeerId::from_bytes(&node.0).ok()).collect();
+
 		self.network_provider.set_authorized_peers(peer_ids);
 		self.network_provider.set_authorized_only(authorized_only);
 	}
@@ -202,16 +243,13 @@ pub struct NetworkState {
 
 impl NetworkState {
 	fn new(peer_id: PeerId, external_addresses: Vec<Multiaddr>) -> Self {
-		NetworkState {
-			peer_id,
-			external_addresses,
-		}
+		NetworkState { peer_id, external_addresses }
 	}
 }
 
 impl From<NetworkState> for OpaqueNetworkState {
 	fn from(state: NetworkState) -> OpaqueNetworkState {
-		let enc = Encode::encode(&state.peer_id.into_bytes());
+		let enc = Encode::encode(&state.peer_id.to_bytes());
 		let peer_id = OpaquePeerId::new(enc);
 
 		let external_addresses: Vec<OpaqueMultiaddr> = state
@@ -223,10 +261,7 @@ impl From<NetworkState> for OpaqueNetworkState {
 			})
 			.collect();
 
-		OpaqueNetworkState {
-			peer_id,
-			external_addresses,
-		}
+		OpaqueNetworkState { peer_id, external_addresses }
 	}
 }
 
@@ -237,9 +272,10 @@ impl TryFrom<OpaqueNetworkState> for NetworkState {
 		let inner_vec = state.peer_id.0;
 
 		let bytes: Vec<u8> = Decode::decode(&mut &inner_vec[..]).map_err(|_| ())?;
-		let peer_id = PeerId::from_bytes(bytes).map_err(|_| ())?;
+		let peer_id = PeerId::from_bytes(&bytes).map_err(|_| ())?;
 
-		let external_addresses: Result<Vec<Multiaddr>, Self::Error> = state.external_addresses
+		let external_addresses: Result<Vec<Multiaddr>, Self::Error> = state
+			.external_addresses
 			.iter()
 			.map(|enc_multiaddr| -> Result<Multiaddr, Self::Error> {
 				let inner_vec = &enc_multiaddr.0;
@@ -251,10 +287,7 @@ impl TryFrom<OpaqueNetworkState> for NetworkState {
 			.collect();
 		let external_addresses = external_addresses?;
 
-		Ok(NetworkState {
-			peer_id,
-			external_addresses,
-		})
+		Ok(NetworkState { peer_id, external_addresses })
 	}
 }
 
@@ -268,44 +301,38 @@ pub(crate) struct AsyncApi {
 
 impl AsyncApi {
 	/// Creates new Offchain extensions API implementation an the asynchronous processing part.
-	pub fn new<S: OffchainStorage>(
-		db: S,
+	pub fn new(
 		network_provider: Arc<dyn NetworkProvider + Send + Sync>,
 		is_validator: bool,
-		shared_client: SharedClient,
-	) -> (Api<S>, Self) {
-		let (http_api, http_worker) = http::http(shared_client);
+		shared_http_client: SharedClient,
+	) -> (Api, Self) {
+		let (http_api, http_worker) = http::http(shared_http_client);
 
-		let api = Api {
-			db,
-			network_provider,
-			is_validator,
-			http: http_api,
-		};
+		let api = Api { network_provider, is_validator, http: http_api };
 
-		let async_api = Self {
-			http: Some(http_worker),
-		};
+		let async_api = Self { http: Some(http_worker) };
 
 		(api, async_api)
 	}
 
 	/// Run a processing task for the API
-	pub fn process(mut self) -> impl Future<Output = ()> {
-		let http = self.http.take().expect("Take invoked only once.");
-
-		http
+	pub fn process(self) -> impl Future<Output = ()> {
+		self.http.expect("`process` is only called once; qed")
 	}
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use std::{convert::{TryFrom, TryInto}, time::SystemTime};
 	use sc_client_db::offchain::LocalStorage;
 	use sc_network::{NetworkStateInfo, PeerId};
+	use sp_core::offchain::{DbExternalities, Externalities};
+	use std::{
+		convert::{TryFrom, TryInto},
+		time::SystemTime,
+	};
 
-	struct TestNetwork();
+	pub(super) struct TestNetwork();
 
 	impl NetworkProvider for TestNetwork {
 		fn set_authorized_peers(&self, _peers: HashSet<PeerId>) {
@@ -327,18 +354,16 @@ mod tests {
 		}
 	}
 
-	fn offchain_api() -> (Api<LocalStorage>, AsyncApi) {
+	fn offchain_api() -> (Api, AsyncApi) {
 		sp_tracing::try_init_simple();
-		let db = LocalStorage::new_test();
 		let mock = Arc::new(TestNetwork());
 		let shared_client = SharedClient::new();
 
-		AsyncApi::new(
-			db,
-			mock,
-			false,
-			shared_client,
-		)
+		AsyncApi::new(mock, false, shared_client)
+	}
+
+	fn offchain_db() -> Db<LocalStorage> {
+		Db::new(LocalStorage::new_test())
 	}
 
 	#[test]
@@ -347,7 +372,12 @@ mod tests {
 
 		// Get timestamp from std.
 		let now = SystemTime::now();
-		let d: u64 = now.duration_since(SystemTime::UNIX_EPOCH).unwrap().as_millis().try_into().unwrap();
+		let d: u64 = now
+			.duration_since(SystemTime::UNIX_EPOCH)
+			.unwrap()
+			.as_millis()
+			.try_into()
+			.unwrap();
 
 		// Get timestamp from offchain api.
 		let timestamp = api.timestamp();
@@ -379,7 +409,7 @@ mod tests {
 	fn should_set_and_get_local_storage() {
 		// given
 		let kind = StorageKind::PERSISTENT;
-		let mut api = offchain_api().0;
+		let mut api = offchain_db();
 		let key = b"test";
 
 		// when
@@ -394,7 +424,7 @@ mod tests {
 	fn should_compare_and_set_local_storage() {
 		// given
 		let kind = StorageKind::PERSISTENT;
-		let mut api = offchain_api().0;
+		let mut api = offchain_db();
 		let key = b"test";
 		api.local_storage_set(kind, key, b"value");
 
@@ -411,7 +441,7 @@ mod tests {
 	fn should_compare_and_set_local_storage_with_none() {
 		// given
 		let kind = StorageKind::PERSISTENT;
-		let mut api = offchain_api().0;
+		let mut api = offchain_db();
 		let key = b"test";
 
 		// when

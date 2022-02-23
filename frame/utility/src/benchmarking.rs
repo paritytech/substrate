@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,27 +20,22 @@
 #![cfg(feature = "runtime-benchmarks")]
 
 use super::*;
-use frame_system::{RawOrigin, EventRecord};
-use frame_benchmarking::{benchmarks, account, whitelisted_caller};
+use frame_benchmarking::{account, benchmarks, whitelisted_caller};
+use frame_system::RawOrigin;
 
 const SEED: u32 = 0;
 
 fn assert_last_event<T: Config>(generic_event: <T as Config>::Event) {
-	let events = frame_system::Module::<T>::events();
-	let system_event: <T as frame_system::Config>::Event = generic_event.into();
-	// compare to the last event record
-	let EventRecord { event, .. } = &events[events.len() - 1];
-	assert_eq!(event, &system_event);
+	frame_system::Pallet::<T>::assert_last_event(generic_event.into());
 }
 
 benchmarks! {
-	_ { }
-
+	where_clause { where <T::Origin as frame_support::traits::OriginTrait>::PalletsOrigin: Clone }
 	batch {
 		let c in 0 .. 1000;
 		let mut calls: Vec<<T as Config>::Call> = Vec::new();
 		for i in 0 .. c {
-			let call = frame_system::Call::remark(vec![]).into();
+			let call = frame_system::Call::remark { remark: vec![] }.into();
 			calls.push(call);
 		}
 		let caller = whitelisted_caller();
@@ -51,7 +46,7 @@ benchmarks! {
 
 	as_derivative {
 		let caller = account("caller", SEED, SEED);
-		let call = Box::new(frame_system::Call::remark(vec![]).into());
+		let call = Box::new(frame_system::Call::remark { remark: vec![] }.into());
 		// Whitelist caller account from further DB operations.
 		let caller_key = frame_system::Account::<T>::hashed_key_for(&caller);
 		frame_benchmarking::benchmarking::add_to_whitelist(caller_key.into());
@@ -61,7 +56,7 @@ benchmarks! {
 		let c in 0 .. 1000;
 		let mut calls: Vec<<T as Config>::Call> = Vec::new();
 		for i in 0 .. c {
-			let call = frame_system::Call::remark(vec![]).into();
+			let call = frame_system::Call::remark { remark: vec![] }.into();
 			calls.push(call);
 		}
 		let caller = whitelisted_caller();
@@ -69,20 +64,14 @@ benchmarks! {
 	verify {
 		assert_last_event::<T>(Event::BatchCompleted.into())
 	}
-}
 
-#[cfg(test)]
-mod tests {
-	use super::*;
-	use crate::tests::{new_test_ext, Test};
-	use frame_support::assert_ok;
+	dispatch_as {
+		let caller = account("caller", SEED, SEED);
+		let call = Box::new(frame_system::Call::remark { remark: vec![] }.into());
+		let origin: T::Origin = RawOrigin::Signed(caller).into();
+		let pallets_origin: <T::Origin as frame_support::traits::OriginTrait>::PalletsOrigin = origin.caller().clone();
+		let pallets_origin = Into::<T::PalletsOrigin>::into(pallets_origin.clone());
+	}: _(RawOrigin::Root, Box::new(pallets_origin), call)
 
-	#[test]
-	fn test_benchmarks() {
-		new_test_ext().execute_with(|| {
-			assert_ok!(test_benchmark_batch::<Test>());
-			assert_ok!(test_benchmark_as_derivative::<Test>());
-			assert_ok!(test_benchmark_batch_all::<Test>());
-		});
-	}
+	impl_benchmark_test_suite!(Pallet, crate::tests::new_test_ext(), crate::tests::Test);
 }

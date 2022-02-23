@@ -1,0 +1,5 @@
+error: Invalid pallet macro call: expected no attributes, e.g. macro call must be just `#[frame_support::pallet]` or `#[pallet]`
+ --> $DIR/attr_non_empty.rs:1:26
+  |
+1 | #[frame_support::pallet [foo]]
+  |                          ^^^

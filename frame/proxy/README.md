@@ -6,7 +6,7 @@ The accounts to which permission is delegated may be requied to announce the act
 wish to execute some duration prior to execution happens. In this case, the target account may
 reject the announcement and in doing so, veto the execution.
 
-- [`proxy::Trait`](https://docs.rs/pallet-proxy/latest/pallet_proxy/trait.Trait.html)
+- [`proxy::Config`](https://docs.rs/pallet-proxy/latest/pallet_proxy/trait.Config.html)
 - [`Call`](https://docs.rs/pallet-proxy/latest/pallet_proxy/enum.Call.html)
 
 ## Overview

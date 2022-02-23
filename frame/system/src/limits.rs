@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -25,11 +25,12 @@
 //! `DispatchClass`. This module contains configuration object for both resources,
 //! which should be passed to `frame_system` configuration when runtime is being set up.
 
-use frame_support::weights::{Weight, DispatchClass, constants, PerDispatchClass, OneOrMany};
-use sp_runtime::{RuntimeDebug, Perbill};
+use frame_support::weights::{constants, DispatchClass, OneOrMany, PerDispatchClass, Weight};
+use scale_info::TypeInfo;
+use sp_runtime::{Perbill, RuntimeDebug};
 
 /// Block length limit configuration.
-#[derive(RuntimeDebug, Clone)]
+#[derive(RuntimeDebug, Clone, codec::Encode, codec::Decode, TypeInfo)]
 pub struct BlockLength {
 	/// Maximal total length in bytes for each extrinsic class.
 	///
@@ -40,29 +41,26 @@ pub struct BlockLength {
 
 impl Default for BlockLength {
 	fn default() -> Self {
-		BlockLength::max_with_normal_ratio(
-			5 * 1024 * 1024,
-			DEFAULT_NORMAL_RATIO,
-		)
+		BlockLength::max_with_normal_ratio(5 * 1024 * 1024, DEFAULT_NORMAL_RATIO)
 	}
 }
 
 impl BlockLength {
 	/// Create new `BlockLength` with `max` for every class.
 	pub fn max(max: u32) -> Self {
-		Self {
-			max: PerDispatchClass::new(|_| max),
-		}
+		Self { max: PerDispatchClass::new(|_| max) }
 	}
 
 	/// Create new `BlockLength` with `max` for `Operational` & `Mandatory`
 	/// and `normal * max` for `Normal`.
 	pub fn max_with_normal_ratio(max: u32, normal: Perbill) -> Self {
 		Self {
-			max: PerDispatchClass::new(|class| if class == DispatchClass::Normal {
-				normal * max
-			} else {
-				max
+			max: PerDispatchClass::new(|class| {
+				if class == DispatchClass::Normal {
+					normal * max
+				} else {
+					max
+				}
 			}),
 		}
 	}
@@ -94,7 +92,7 @@ pub type ValidationResult = Result<BlockWeights, ValidationErrors>;
 const DEFAULT_NORMAL_RATIO: Perbill = Perbill::from_percent(75);
 
 /// `DispatchClass`-specific weight configuration.
-#[derive(RuntimeDebug, Clone, codec::Encode, codec::Decode)]
+#[derive(RuntimeDebug, Clone, codec::Encode, codec::Decode, TypeInfo)]
 pub struct WeightsPerClass {
 	/// Base weight of single extrinsic of given class.
 	pub base_extrinsic: Weight,
@@ -129,6 +127,7 @@ pub struct WeightsPerClass {
 /// `on_initialize` pallet callbacks are invoked and their cost is added before any extrinsic
 /// is executed. This cost is tracked as `Mandatory` dispatch class.
 ///
+/// ```text,ignore
 /// |   | `max_block`    |   |
 /// |   |                |   |
 /// |   |                |   |
@@ -139,12 +138,15 @@ pub struct WeightsPerClass {
 ///  ||\_ Mandatory
 ///  |\__ Operational
 ///  \___ Normal
+/// ```
 ///
 /// The remaining capacity can be used to dispatch extrinsics. Note that each dispatch class
 /// is being tracked separately, but the sum can't exceed `max_block` (except for `reserved`).
 /// Below you can see a picture representing full block with 3 extrinsics (two `Operational` and
 /// one `Normal`). Each class has it's own limit `max_total`, but also the sum cannot exceed
 /// `max_block` value.
+///
+/// ```text,ignore
 ///                          -- `Mandatory` limit (unlimited)
 /// | # |                 |   |
 /// | # | `Ext3`          | - - `Operational` limit
@@ -153,6 +155,7 @@ pub struct WeightsPerClass {
 /// |  #| `on_initialize` | ##|
 /// |  #| `base_block`    |###|
 /// |NOM|                 |NOM|
+/// ```
 ///
 /// It should be obvious now that it's possible for one class to reach it's limit (say `Normal`),
 /// while the block has still capacity to process more transactions (`max_block` not reached,
@@ -164,6 +167,8 @@ pub struct WeightsPerClass {
 /// full. For instance one might want to prevent high-priority `Normal` transactions from pushing
 /// out lower-priority `Operational` transactions. In such cases you might add a `reserved` capacity
 /// for given class.
+///
+/// ```test,ignore
 ///              _
 ///   #           \
 ///   #   `Ext8`   - `reserved`
@@ -175,6 +180,7 @@ pub struct WeightsPerClass {
 /// |  #| `on_initialize`       |###|
 /// |  #| `base_block`          |###|
 /// |NOM|                       |NOM|
+/// ```
 ///
 /// In the above example, `Ext4-6` fill up the block almost up to `max_block`. `Ext7` would not fit
 /// if there wasn't the extra `reserved` space for `Operational` transactions. Note that `max_total`
@@ -186,7 +192,7 @@ pub struct WeightsPerClass {
 ///
 /// As a consequence of `reserved` space, total consumed block weight might exceed `max_block`
 /// value, so this parameter should rather be thought of as "target block weight" than a hard limit.
-#[derive(RuntimeDebug, Clone, codec::Encode, codec::Decode)]
+#[derive(RuntimeDebug, Clone, codec::Encode, codec::Decode, TypeInfo)]
 pub struct BlockWeights {
 	/// Base weight of block execution.
 	pub base_block: Weight,
@@ -198,10 +204,7 @@ pub struct BlockWeights {
 
 impl Default for BlockWeights {
 	fn default() -> Self {
-		Self::with_sensible_defaults(
-			1 * constants::WEIGHT_PER_SECOND,
-			DEFAULT_NORMAL_RATIO,
-		)
+		Self::with_sensible_defaults(1 * constants::WEIGHT_PER_SECOND, DEFAULT_NORMAL_RATIO)
 	}
 }
 
@@ -237,7 +240,8 @@ impl BlockWeights {
 				weights.max_extrinsic.unwrap_or(0) <= max_for_class.saturating_sub(base_for_class),
 				&mut error,
 				"[{:?}] {:?} (max_extrinsic) can't be greater than {:?} (max for class)",
-				class, weights.max_extrinsic,
+				class,
+				weights.max_extrinsic,
 				max_for_class.saturating_sub(base_for_class),
 			);
 			// Max extrinsic should not be 0
@@ -252,21 +256,27 @@ impl BlockWeights {
 				reserved > base_for_class || reserved == 0,
 				&mut error,
 				"[{:?}] {:?} (reserved) has to be greater than {:?} (base extrinsic) if set",
-				class, reserved, base_for_class,
+				class,
+				reserved,
+				base_for_class,
 			);
 			// Make sure max block is greater than max_total if it's set.
 			error_assert!(
 				self.max_block >= weights.max_total.unwrap_or(0),
 				&mut error,
 				"[{:?}] {:?} (max block) has to be greater than {:?} (max for class)",
-				class, self.max_block, weights.max_total,
+				class,
+				self.max_block,
+				weights.max_total,
 			);
 			// Make sure we can fit at least one extrinsic.
 			error_assert!(
 				self.max_block > base_for_class + self.base_block,
 				&mut error,
 				"[{:?}] {:?} (max block) must fit at least one extrinsic {:?} (base weight)",
-				class, self.max_block, base_for_class + self.base_block,
+				class,
+				self.max_block,
+				base_for_class + self.base_block,
 			);
 		}
 
@@ -301,10 +311,7 @@ impl BlockWeights {
 	/// Assumptions:
 	///  - Average block initialization is assumed to be `10%`.
 	///  - `Operational` transactions have reserved allowance (`1.0 - normal_ratio`)
-	pub fn with_sensible_defaults(
-		expected_block_weight: Weight,
-		normal_ratio: Perbill,
-	) -> Self {
+	pub fn with_sensible_defaults(expected_block_weight: Weight, normal_ratio: Perbill) -> Self {
 		let normal_weight = normal_ratio * expected_block_weight;
 		Self::builder()
 			.for_class(DispatchClass::Normal, |weights| {
@@ -380,7 +387,7 @@ impl BlockWeightsBuilder {
 		for class in class.into_iter() {
 			action(self.weights.per_class.get_mut(class));
 		}
- 		self
+		self
 	}
 
 	/// Construct the `BlockWeights` object.
@@ -400,7 +407,8 @@ impl BlockWeightsBuilder {
 			for class in DispatchClass::all() {
 				let per_class = weights.per_class.get_mut(*class);
 				if per_class.max_extrinsic.is_none() && init_cost.is_some() {
-					per_class.max_extrinsic = per_class.max_total
+					per_class.max_extrinsic = per_class
+						.max_total
 						.map(|x| x.saturating_sub(init_weight))
 						.map(|x| x.saturating_sub(per_class.base_extrinsic));
 				}
@@ -427,8 +435,6 @@ mod tests {
 
 	#[test]
 	fn default_weights_are_valid() {
-		BlockWeights::default()
-			.validate()
-			.unwrap();
+		BlockWeights::default().validate().unwrap();
 	}
 }

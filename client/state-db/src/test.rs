@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -18,9 +18,9 @@
 
 //! Test utils
 
-use std::collections::HashMap;
+use crate::{ChangeSet, CommitSet, DBValue, MetaDb, NodeDb};
 use sp_core::H256;
-use crate::{DBValue, ChangeSet, CommitSet, MetaDb, NodeDb};
+use std::collections::HashMap;
 
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct TestDb {
@@ -67,30 +67,22 @@ pub fn make_changeset(inserted: &[u64], deleted: &[u64]) -> ChangeSet<H256> {
 	ChangeSet {
 		inserted: inserted
 			.iter()
-			.map(|v| {
-				(H256::from_low_u64_be(*v), H256::from_low_u64_be(*v).as_bytes().to_vec())
-			})
+			.map(|v| (H256::from_low_u64_be(*v), H256::from_low_u64_be(*v).as_bytes().to_vec()))
 			.collect(),
 		deleted: deleted.iter().map(|v| H256::from_low_u64_be(*v)).collect(),
 	}
 }
 
 pub fn make_commit(inserted: &[u64], deleted: &[u64]) -> CommitSet<H256> {
-	CommitSet {
-		data: make_changeset(inserted, deleted),
-		meta: ChangeSet::default(),
-	}
+	CommitSet { data: make_changeset(inserted, deleted), meta: ChangeSet::default() }
 }
 
 pub fn make_db(inserted: &[u64]) -> TestDb {
 	TestDb {
 		data: inserted
 			.iter()
-			.map(|v| {
-				(H256::from_low_u64_be(*v), H256::from_low_u64_be(*v).as_bytes().to_vec())
-			})
+			.map(|v| (H256::from_low_u64_be(*v), H256::from_low_u64_be(*v).as_bytes().to_vec()))
 			.collect(),
 		meta: Default::default(),
 	}
 }
-

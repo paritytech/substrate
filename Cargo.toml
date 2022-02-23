@@ -1,15 +1,15 @@
 [workspace]
+resolver = "2"
+
 members = [
 	"bin/node-template/node",
 	"bin/node-template/pallets/template",
 	"bin/node-template/runtime",
 	"bin/node/bench",
-	"bin/node/browser-testing",
 	"bin/node/cli",
 	"bin/node/executor",
 	"bin/node/primitives",
 	"bin/node/rpc",
-	"bin/node/rpc-client",
 	"bin/node/runtime",
 	"bin/node/testing",
 	"bin/utils/chain-spec-builder",
@@ -17,11 +17,12 @@ members = [
 	"client/api",
 	"client/authority-discovery",
 	"client/basic-authorship",
+	"client/beefy",
+	"client/beefy/rpc",
 	"client/block-builder",
 	"client/chain-spec",
 	"client/chain-spec/derive",
 	"client/cli",
-	"client/cli/proc-macro",
 	"client/consensus/aura",
 	"client/consensus/babe",
 	"client/consensus/babe/rpc",
@@ -40,12 +41,12 @@ members = [
 	"client/finality-grandpa",
 	"client/informant",
 	"client/keystore",
-	"client/light",
 	"client/network",
 	"client/network-gossip",
 	"client/network/test",
 	"client/offchain",
 	"client/peerset",
+	"client/allocator",
 	"client/proposer-metrics",
 	"client/rpc",
 	"client/rpc-api",
@@ -56,66 +57,88 @@ members = [
 	"client/sync-state-rpc",
 	"client/telemetry",
 	"client/tracing",
+	"client/tracing/proc-macro",
 	"client/transaction-pool",
-	"client/transaction-pool/graph",
+	"client/transaction-pool/api",
+	"client/utils",
 	"frame/assets",
 	"frame/atomic-swap",
 	"frame/aura",
 	"frame/authority-discovery",
 	"frame/authorship",
 	"frame/babe",
+	"frame/bags-list",
+	"frame/bags-list/fuzzer",
+	"frame/bags-list/remote-tests",
 	"frame/balances",
+	"frame/beefy",
+	"frame/beefy-mmr",
+	"frame/beefy-mmr/primitives",
 	"frame/benchmarking",
+	"frame/bounties",
+	"frame/child-bounties",
 	"frame/collective",
 	"frame/contracts",
 	"frame/contracts/rpc",
 	"frame/contracts/rpc/runtime-api",
+	"frame/conviction-voting",
 	"frame/democracy",
-	"frame/elections",
-	"frame/example",
-	"frame/example-offchain-worker",
-	"frame/example-parallel",
+	"frame/try-runtime",
+	"frame/election-provider-multi-phase",
+	"frame/election-provider-support",
+	"frame/examples/basic",
+	"frame/examples/offchain-worker",
+	"frame/examples/parallel",
 	"frame/executive",
+	"frame/gilt",
 	"frame/grandpa",
 	"frame/identity",
 	"frame/im-online",
 	"frame/indices",
+	"frame/lottery",
 	"frame/membership",
 	"frame/merkle-mountain-range",
-	"frame/metadata",
+	"frame/merkle-mountain-range/primitives",
+	"frame/merkle-mountain-range/rpc",
 	"frame/multisig",
 	"frame/name-service",
 	"frame/nicks",
 	"frame/node-authorization",
 	"frame/offences",
+	"frame/preimage",
 	"frame/proxy",
 	"frame/randomness-collective-flip",
 	"frame/recovery",
+	"frame/referenda",
 	"frame/scheduler",
 	"frame/scored-pool",
 	"frame/session",
 	"frame/session/benchmarking",
 	"frame/society",
 	"frame/staking",
-	"frame/staking/fuzzer",
 	"frame/staking/reward-curve",
+	"frame/staking/reward-fn",
 	"frame/sudo",
 	"frame/support",
 	"frame/support/procedural",
 	"frame/support/procedural/tools",
 	"frame/support/procedural/tools/derive",
 	"frame/support/test",
+	"frame/support/test/compile_pass",
 	"frame/system",
 	"frame/system/benchmarking",
 	"frame/system/rpc/runtime-api",
 	"frame/timestamp",
 	"frame/transaction-payment",
+	"frame/transaction-payment/asset-tx-payment",
 	"frame/transaction-payment/rpc",
 	"frame/transaction-payment/rpc/runtime-api",
+	"frame/transaction-storage",
 	"frame/treasury",
+	"frame/tips",
+	"frame/uniques",
 	"frame/utility",
 	"frame/vesting",
-	"primitives/allocator",
 	"primitives/api",
 	"primitives/api/proc-macro",
 	"primitives/api/test",
@@ -125,15 +148,17 @@ members = [
 	"primitives/arithmetic/fuzzer",
 	"primitives/authority-discovery",
 	"primitives/authorship",
+	"primitives/beefy",
 	"primitives/block-builder",
 	"primitives/blockchain",
-	"primitives/chain-spec",
 	"primitives/consensus/aura",
 	"primitives/consensus/babe",
 	"primitives/consensus/common",
 	"primitives/consensus/pow",
 	"primitives/consensus/vrf",
 	"primitives/core",
+	"primitives/core/hashing",
+	"primitives/core/hashing/proc-macro",
 	"primitives/database",
 	"primitives/debug-derive",
 	"primitives/externalities",
@@ -142,8 +167,9 @@ members = [
 	"primitives/io",
 	"primitives/keyring",
 	"primitives/keystore",
+	"primitives/maybe-compressed-blob",
 	"primitives/npos-elections",
-	"primitives/npos-elections/compact",
+	"primitives/npos-elections/solution-type",
 	"primitives/npos-elections/fuzzer",
 	"primitives/offchain",
 	"primitives/panic-handler",
@@ -166,9 +192,10 @@ members = [
 	"primitives/timestamp",
 	"primitives/tracing",
 	"primitives/transaction-pool",
+	"primitives/transaction-storage-proof",
 	"primitives/trie",
-	"primitives/utils",
 	"primitives/version",
+	"primitives/version/proc-macro",
 	"primitives/wasm-interface",
 	"test-utils/client",
 	"test-utils/derive",
@@ -176,13 +203,16 @@ members = [
 	"test-utils/runtime/client",
 	"test-utils/runtime/transaction-pool",
 	"test-utils/test-crate",
-	"utils/browser",
 	"utils/build-script-utils",
 	"utils/fork-tree",
 	"utils/frame/benchmarking-cli",
+	"utils/frame/remote-externalities",
 	"utils/frame/frame-utilities-cli",
+	"utils/frame/try-runtime/cli",
 	"utils/frame/rpc/support",
 	"utils/frame/rpc/system",
+	"utils/frame/generate-bags",
+	"utils/frame/generate-bags/node-runtime",
 	"utils/prometheus",
 	"utils/wasm-builder",
 ]
@@ -203,8 +233,6 @@ members = [
 #
 # This list is ordered alphabetically.
 [profile.dev.package]
-aes-soft = { opt-level = 3 }
-aesni = { opt-level = 3 }
 blake2 = { opt-level = 3 }
 blake2-rfc = { opt-level = 3 }
 blake2b_simd = { opt-level = 3 }
@@ -213,14 +241,12 @@ cranelift-codegen = { opt-level = 3 }
 cranelift-wasm = { opt-level = 3 }
 crc32fast = { opt-level = 3 }
 crossbeam-deque = { opt-level = 3 }
-crossbeam-queue = { opt-level = 3 }
 crypto-mac = { opt-level = 3 }
 curve25519-dalek = { opt-level = 3 }
 ed25519-dalek = { opt-level = 3 }
 flate2 = { opt-level = 3 }
 futures-channel = { opt-level = 3 }
 hashbrown = { opt-level = 3 }
-h2 = { opt-level = 3 }
 hash-db = { opt-level = 3 }
 hmac = { opt-level = 3 }
 httparse = { opt-level = 3 }
@@ -253,3 +279,13 @@ zeroize = { opt-level = 3 }
 [profile.release]
 # Substrate runtime requires unwinding.
 panic = "unwind"
+
+[profile.production]
+inherits = "release"
+
+# Sacrifice compile speed for execution speed by using optimization flags:
+
+# https://doc.rust-lang.org/rustc/linker-plugin-lto.html
+lto = "fat"
+# https://doc.rust-lang.org/rustc/codegen-options/index.html#codegen-units
+codegen-units = 1

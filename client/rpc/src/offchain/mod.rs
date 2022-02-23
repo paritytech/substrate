@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -21,15 +21,15 @@
 #[cfg(test)]
 mod tests;
 
+use self::error::{Error, Result};
+use parking_lot::RwLock;
 /// Re-export the API for backward compatibility.
 pub use sc_rpc_api::offchain::*;
 use sc_rpc_api::DenyUnsafe;
-use self::error::{Error, Result};
 use sp_core::{
-	Bytes,
 	offchain::{OffchainStorage, StorageKind},
+	Bytes,
 };
-use parking_lot::RwLock;
 use std::sync::Arc;
 
 /// Offchain API
@@ -43,10 +43,7 @@ pub struct Offchain<T: OffchainStorage> {
 impl<T: OffchainStorage> Offchain<T> {
 	/// Create new instance of Offchain API.
 	pub fn new(storage: T, deny_unsafe: DenyUnsafe) -> Self {
-		Offchain {
-			storage: Arc::new(RwLock::new(storage)),
-			deny_unsafe,
-		}
+		Offchain { storage: Arc::new(RwLock::new(storage)), deny_unsafe }
 	}
 }
 

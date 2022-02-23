@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -22,15 +22,17 @@
 
 use libp2p::{core::ConnectedPoint, Multiaddr};
 use serde::{Deserialize, Serialize};
-use slog_derive::SerdeValue;
-use std::{collections::{HashMap, HashSet}, time::Duration};
+use std::{
+	collections::{HashMap, HashSet},
+	time::Duration,
+};
 
 /// Returns general information about the networking.
 ///
 /// Meant for general diagnostic purposes.
 ///
 /// **Warning**: This API is not stable.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, SerdeValue)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NetworkState {
 	/// PeerId of the local node.
@@ -57,12 +59,6 @@ pub struct Peer {
 	pub version_string: Option<String>,
 	/// Latest ping duration with this node.
 	pub latest_ping_time: Option<Duration>,
-	/// If true, the peer is "enabled", which means that we try to open Substrate-related protocols
-	/// with this peer. If false, we stick to Kademlia and/or other network-only protocols.
-	pub enabled: bool,
-	/// If true, the peer is "open", which means that we have a Substrate-related protocol
-	/// with this peer.
-	pub open: bool,
 	/// List of addresses known for this node.
 	pub known_addresses: HashSet<Multiaddr>,
 }
@@ -97,13 +93,9 @@ pub enum PeerEndpoint {
 impl From<ConnectedPoint> for PeerEndpoint {
 	fn from(endpoint: ConnectedPoint) -> Self {
 		match endpoint {
-			ConnectedPoint::Dialer { address } =>
-				PeerEndpoint::Dialing(address),
+			ConnectedPoint::Dialer { address } => Self::Dialing(address),
 			ConnectedPoint::Listener { local_addr, send_back_addr } =>
-				PeerEndpoint::Listening {
-					local_addr,
-					send_back_addr
-				}
+				Self::Listening { local_addr, send_back_addr },
 		}
 	}
 }

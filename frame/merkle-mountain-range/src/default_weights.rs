@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,7 +19,8 @@
 //! This file was not auto-generated.
 
 use frame_support::weights::{
-	Weight, constants::{WEIGHT_PER_NANOS, RocksDbWeight as DbWeight},
+	constants::{RocksDbWeight as DbWeight, WEIGHT_PER_NANOS},
+	Weight,
 };
 
 impl crate::WeightInfo for () {
@@ -34,9 +35,6 @@ impl crate::WeightInfo for () {
 		leaf_weight
 			.saturating_add(hash_weight)
 			.saturating_add(hook_weight)
-			.saturating_add(DbWeight::get().reads_writes(
-				2 + peaks,
-				2 + peaks,
-			))
+			.saturating_add(DbWeight::get().reads_writes(2 + peaks, 2 + peaks))
 	}
 }

@@ -1,18 +1,20 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate is distributed in the hope that it will be useful,
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Authority discovery errors.
 
@@ -22,34 +24,56 @@ use sp_core::crypto::CryptoTypePublicPair;
 pub type Result<T> = std::result::Result<T, Error>;
 
 /// Error type for the authority discovery module.
-#[derive(Debug, derive_more::Display, derive_more::From)]
+#[derive(Debug, thiserror::Error)]
 pub enum Error {
-	/// Received dht value found event with records with different keys.
+	#[error("Received dht value found event with records with different keys.")]
 	ReceivingDhtValueFoundEventWithDifferentKeys,
-	/// Received dht value found event with no records.
+
+	#[error("Received dht value found event with no records.")]
 	ReceivingDhtValueFoundEventWithNoRecords,
-	/// Failed to verify a dht payload with the given signature.
+
+	#[error("Failed to verify a dht payload with the given signature.")]
 	VerifyingDhtPayload,
-	/// Failed to hash the authority id to be used as a dht key.
-	HashingAuthorityId(libp2p::core::multiaddr::multihash::Error),
-	/// Failed calling into the Substrate runtime.
-	CallingRuntime(sp_blockchain::Error),
-	/// Received a dht record with a key that does not match any in-flight awaited keys.
+
+	#[error("Failed to hash the authority id to be used as a dht key.")]
+	HashingAuthorityId(#[from] libp2p::core::multiaddr::multihash::Error),
+
+	#[error("Failed calling into the Substrate runtime: {0}")]
+	CallingRuntime(#[from] sp_blockchain::Error),
+
+	#[error("Received a dht record with a key that does not match any in-flight awaited keys.")]
 	ReceivingUnexpectedRecord,
-	/// Failed to set the authority discovery peerset priority group in the peerset module.
-	SettingPeersetPriorityGroup(String),
-	/// Failed to encode a protobuf payload.
-	EncodingProto(prost::EncodeError),
-	/// Failed to decode a protobuf payload.
-	DecodingProto(prost::DecodeError),
-	/// Failed to encode or decode scale payload.
-	EncodingDecodingScale(codec::Error),
-	/// Failed to parse a libp2p multi address.
-	ParsingMultiaddress(libp2p::core::multiaddr::Error),
-	/// Failed to sign using a specific public key.
+
+	#[error("Failed to encode a protobuf payload.")]
+	EncodingProto(#[from] prost::EncodeError),
+
+	#[error("Failed to decode a protobuf payload.")]
+	DecodingProto(#[from] prost::DecodeError),
+
+	#[error("Failed to encode or decode scale payload.")]
+	EncodingDecodingScale(#[from] codec::Error),
+
+	#[error("Failed to parse a libp2p multi address.")]
+	ParsingMultiaddress(#[from] libp2p::core::multiaddr::Error),
+
+	#[error("Failed to parse a libp2p key.")]
+	ParsingLibp2pIdentity(#[from] sc_network::DecodingError),
+
+	#[error("Failed to sign using a specific public key.")]
 	MissingSignature(CryptoTypePublicPair),
-	/// Failed to sign using all public keys.
+
+	#[error("Failed to sign using all public keys.")]
 	Signing,
-	/// Failed to register Prometheus metric.
-	Prometheus(prometheus_endpoint::PrometheusError),
+
+	#[error("Failed to register Prometheus metric.")]
+	Prometheus(#[from] prometheus_endpoint::PrometheusError),
+
+	#[error("Received authority record that contains addresses with multiple peer ids")]
+	ReceivingDhtValueFoundEventWithDifferentPeerIds,
+
+	#[error("Received authority record without any addresses having a peer id")]
+	ReceivingDhtValueFoundEventWithNoPeerIds,
+
+	#[error("Received authority record without a valid signature for the remote peer id.")]
+	MissingPeerIdSignature,
 }

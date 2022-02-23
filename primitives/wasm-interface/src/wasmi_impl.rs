@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,7 +17,7 @@
 
 //! Implementation of conversions between Substrate and wasmi types.
 
-use crate::{Value, ValueType, Signature};
+use crate::{Signature, Value, ValueType};
 
 impl From<Value> for wasmi::RuntimeValue {
 	fn from(value: Value) -> Self {

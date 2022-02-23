@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,15 +19,17 @@
 
 #![cfg(test)]
 
-use super::*;
-use super::mock::*;
-use frame_support::{assert_ok, assert_noop};
+use super::{mock::*, *};
+use frame_support::{assert_noop, assert_ok};
 use pallet_balances::Error as BalancesError;
 
 #[test]
 fn claiming_should_work() {
 	new_test_ext().execute_with(|| {
-		assert_noop!(Indices::claim(Some(0).into(), 0), BalancesError::<Test, _>::InsufficientBalance);
+		assert_noop!(
+			Indices::claim(Some(0).into(), 0),
+			BalancesError::<Test, _>::InsufficientBalance
+		);
 		assert_ok!(Indices::claim(Some(1).into(), 0));
 		assert_noop!(Indices::claim(Some(2).into(), 0), Error::<Test>::InUse);
 		assert_eq!(Balances::reserved_balance(1), 1);

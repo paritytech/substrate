@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,30 +15,32 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use frame_support::sp_runtime::generic;
-use frame_support::sp_runtime::traits::{BlakeTwo256, Block as _, Verify};
-use frame_support::codec::{Encode, Decode};
-use sp_core::{H256, sr25519};
-use serde::{Serialize, Deserialize};
+use frame_support::{
+	codec::{Decode, Encode},
+	scale_info::TypeInfo,
+	sp_runtime::{
+		generic,
+		traits::{BlakeTwo256, Verify},
+	},
+};
+use serde::{Deserialize, Serialize};
+use sp_core::{sr25519, H256};
 
 mod system;
 
 mod module {
 	use super::*;
 
-	pub type Request<T> = (
-		<T as system::Config>::AccountId,
-		Role,
-		<T as system::Config>::BlockNumber,
-	);
+	pub type Request<T> =
+		(<T as system::Config>::AccountId, Role, <T as system::Config>::BlockNumber);
 	pub type Requests<T> = Vec<Request<T>>;
 
-	#[derive(Encode, Decode, Copy, Clone, Eq, PartialEq, Debug)]
+	#[derive(Encode, Decode, Copy, Clone, Eq, PartialEq, Debug, TypeInfo)]
 	pub enum Role {
 		Storage,
 	}
 
-	#[derive(Encode, Decode, Copy, Clone, Eq, PartialEq, Debug)]
+	#[derive(Encode, Decode, Copy, Clone, Eq, PartialEq, Debug, TypeInfo)]
 	pub struct RoleParameters<T: Config> {
 		// minimum actors to maintain - if role is unstaking
 		// and remaining actors would be less that this value - prevent or punish for unstaking
@@ -81,7 +83,7 @@ mod module {
 		}
 	}
 
-	pub trait Config: system::Config {}
+	pub trait Config: system::Config + TypeInfo {}
 
 	frame_support::decl_module! {
 		pub struct Module<T: Config> for enum Call where origin: T::Origin, system=system {}
@@ -89,14 +91,12 @@ mod module {
 
 	#[derive(Encode, Decode, Copy, Clone, Serialize, Deserialize)]
 	pub struct Data<T: Config> {
-		pub	data: T::BlockNumber,
+		pub data: T::BlockNumber,
 	}
 
 	impl<T: Config> Default for Data<T> {
 		fn default() -> Self {
-			Self {
-				data: T::BlockNumber::default(),
-			}
+			Self { data: T::BlockNumber::default() }
 		}
 	}
 
@@ -158,13 +158,13 @@ pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, Call, Signature, ()>;
 
 impl system::Config for Runtime {
-	type BaseCallFilter = ();
+	type BaseCallFilter = frame_support::traits::Everything;
 	type Hash = H256;
 	type Origin = Origin;
 	type BlockNumber = BlockNumber;
 	type AccountId = AccountId;
 	type Event = Event;
-	type PalletInfo = ();
+	type PalletInfo = PalletInfo;
 	type Call = Call;
 	type DbWeight = ();
 }
@@ -177,17 +177,16 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
-		System: system::{Module, Call, Event<T>},
-		Module: module::{Module, Call, Storage, Config},
+		System: system::{Pallet, Call, Event<T>},
+		Module: module::{Pallet, Call, Storage, Config},
 	}
 );
 
 #[test]
 fn create_genesis_config() {
-	GenesisConfig {
-		module: Some(module::GenesisConfig {
-			request_life_time: 0,
-			enable_storage_role: true,
-		})
+	let config = GenesisConfig {
+		module: module::GenesisConfig { request_life_time: 0, enable_storage_role: true },
 	};
+	assert_eq!(config.module.request_life_time, 0);
+	assert!(config.module.enable_storage_role);
 }

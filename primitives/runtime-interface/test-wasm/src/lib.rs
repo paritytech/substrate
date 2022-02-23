@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -22,7 +22,7 @@
 use sp_runtime_interface::runtime_interface;
 
 #[cfg(not(feature = "std"))]
-use sp_std::{prelude::*, mem, convert::TryFrom};
+use sp_std::{convert::TryFrom, mem, prelude::*};
 
 use sp_core::{sr25519::Public, wasm_export_functions};
 
@@ -33,8 +33,10 @@ include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 /// Wasm binary unwrapped. If built with `SKIP_WASM_BUILD`, the function panics.
 #[cfg(feature = "std")]
 pub fn wasm_binary_unwrap() -> &'static [u8] {
-	WASM_BINARY.expect("Development wasm binary is not available. Testing is only \
-						supported with the flag disabled.")
+	WASM_BINARY.expect(
+		"Development wasm binary is not available. Testing is only \
+						supported with the flag disabled.",
+	)
 }
 
 /// Used in the `test_array_as_mutable_reference` test.
@@ -118,6 +120,15 @@ pub trait TestApi {
 
 	#[version(2)]
 	fn test_versionning(&self, data: u32) -> bool {
+		data == 42
+	}
+
+	fn test_versionning_register_only(&self, data: u32) -> bool {
+		data == 80
+	}
+
+	#[version(2, register_only)]
+	fn test_versionning_register_only(&self, data: u32) -> bool {
 		data == 42
 	}
 
@@ -226,11 +237,11 @@ wasm_export_functions! {
 	}
 
 	fn test_u128_i128_as_parameter_and_return_value() {
-		for val in &[u128::max_value(), 1u128, 5000u128, u64::max_value() as u128] {
+		for val in &[u128::MAX, 1u128, 5000u128, u64::MAX as u128] {
 			assert_eq!(*val, test_api::get_and_return_u128(*val));
 		}
 
-		for val in &[i128::max_value(), i128::min_value(), 1i128, 5000i128, u64::max_value() as i128] {
+		for val in &[i128::MAX, i128::MIN, 1i128, 5000i128, u64::MAX as i128] {
 			assert_eq!(*val, test_api::get_and_return_i128(*val));
 		}
 	}
@@ -267,6 +278,13 @@ wasm_export_functions! {
 
 		assert!(!test_api::test_versionning(50));
 		assert!(!test_api::test_versionning(102));
+	}
+
+	fn test_versionning_register_only_works() {
+		// Ensure that we will import the version of the runtime interface function that
+		// isn't tagged with `register_only`.
+		assert!(!test_api::test_versionning_register_only(42));
+		assert!(test_api::test_versionning_register_only(80));
 	}
 
 	fn test_return_input_as_tuple() {

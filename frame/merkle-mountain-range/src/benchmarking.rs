@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,40 +17,22 @@
 
 //! Benchmarks for the MMR pallet.
 
-#![cfg_attr(not(feature = "std"), no_std)]
-
 use crate::*;
+use frame_benchmarking::benchmarks_instance_pallet;
 use frame_support::traits::OnInitialize;
-use frame_benchmarking::benchmarks;
-use sp_std::prelude::*;
 
-benchmarks! {
-	_ {	}
-
+benchmarks_instance_pallet! {
 	on_initialize {
 		let x in 1 .. 1_000;
 
-		let leaves = x as u64;
+		let leaves = x as NodeIndex;
 	}: {
 		for b in 0..leaves {
-			Module::<T>::on_initialize((b as u32).into());
+			Pallet::<T, I>::on_initialize((b as u32).into());
 		}
 	} verify {
-		assert_eq!(crate::NumberOfLeaves::<DefaultInstance>::get(), leaves);
+		assert_eq!(crate::NumberOfLeaves::<T, I>::get(), leaves);
 	}
-}
 
-#[cfg(test)]
-mod tests {
-	use super::*;
-	use crate::mock::*;
-	use crate::tests::new_test_ext;
-	use frame_support::assert_ok;
-
-	#[test]
-	fn test_benchmarks() {
-		new_test_ext().execute_with(|| {
-			assert_ok!(test_benchmark_on_initialize::<Test>());
-		})
-	}
+	impl_benchmark_test_suite!(Pallet, crate::tests::new_test_ext(), crate::mock::Test);
 }

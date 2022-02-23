@@ -1,0 +1,5 @@
+error[E0599]: no function or associated item named `new` found for type `u32` in the current scope
+  --> $DIR/type_value_error_in_block.rs:20:8
+   |
+20 |         u32::new()
+   |              ^^^ function or associated item not found in `u32`
