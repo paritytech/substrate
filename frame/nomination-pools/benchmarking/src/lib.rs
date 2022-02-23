@@ -17,8 +17,7 @@ use pallet_nomination_pools::{
 };
 use sp_runtime::traits::{StaticLookup, Zero};
 use sp_staking::{EraIndex, StakingInterface};
-
-// `frame_benchmarking::benchmarks!` macro code needs this
+// `frame_benchmarking::benchmarks!` macro needs this
 use pallet_nomination_pools::Call;
 
 type CurrencyOf<T> = <T as pallet_nomination_pools::Config>::Currency;
@@ -40,7 +39,6 @@ fn clear_storage<T: pallet_nomination_pools::Config>() {
 	pallet_nomination_pools::Delegators::<T>::remove_all();
 }
 
-// TODO: [now] replace this with staking test helper util
 fn create_funded_user_with_balance<T: pallet_nomination_pools::Config>(
 	string: &'static str,
 	n: u32,
@@ -289,7 +287,6 @@ frame_benchmarking::benchmarks! {
 		assert_eq!(delegator.unbonding_era, Some(0));
 	}
 
-	// TODO: setup a withdraw unbonded kill scenario
 	pool_withdraw_unbonded {
 		let s in 0 .. MAX_SPANS;
 		clear_storage::<T>();
@@ -335,7 +332,6 @@ frame_benchmarking::benchmarks! {
 		assert_eq!(pallet_staking::Ledger::<T>::get(pool_account).unwrap().unlocking.len(), 0);
 	}
 
-	// TODO: setup a withdraw unbonded kill scenario, make variable over slashing spans
 	withdraw_unbonded_other_update {
 		let s in 0 .. MAX_SPANS;
 		clear_storage::<T>();
