@@ -19,5 +19,3 @@ pub mod cmd;
 pub mod post_process;
 pub mod read;
 pub mod write;
-
-pub use cmd::StorageCmd;

@@ -32,7 +32,7 @@ use log::info;
 use rand::prelude::*;
 use std::{fmt::Debug, sync::Arc, time::Instant};
 
-use super::{post_process::TimeResult, StorageCmd};
+use super::{post_process::TimeResult, cmd::StorageCmd};
 
 impl StorageCmd {
 	pub fn write<Block, H, C>(

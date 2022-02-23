@@ -40,8 +40,7 @@ mod stats;
 mod storage_cache;
 #[cfg(any(feature = "with-kvdb-rocksdb", test))]
 mod upgrade;
-// TODO make public only for runtime benchmarks
-pub mod utils;
+mod utils;
 
 use linked_hash_map::LinkedHashMap;
 use log::{debug, trace, warn};

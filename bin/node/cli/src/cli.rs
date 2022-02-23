@@ -44,7 +44,7 @@ pub enum Subcommand {
 
 	/// Sub command for benchmarking the storage speed.
 	#[clap(name = "benchmark-storage", about = "Benchmark storage speed.")]
-	BenchmarkStorage(frame_benchmarking_cli::storage::StorageCmd),
+	BenchmarkStorage(frame_benchmarking_cli::StorageCmd),
 
 	/// Try some command against runtime state.
 	#[cfg(feature = "try-runtime")]

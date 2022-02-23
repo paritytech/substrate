@@ -16,8 +16,10 @@
 // limitations under the License.
 
 mod command;
-pub mod storage;
+mod storage;
 mod writer;
+
+pub use storage::cmd::StorageCmd;
 
 use sc_cli::{ExecutionStrategy, WasmExecutionMethod};
 use std::{fmt::Debug, path::PathBuf};
