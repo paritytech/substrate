@@ -6,10 +6,9 @@
 #[cfg(test)]
 mod mock;
 
-use frame_benchmarking::{account, frame_support::traits::Currency, vec, whitelist_account};
+use frame_benchmarking::{account, frame_support::traits::Currency, vec, whitelist_account, Vec};
 use frame_election_provider_support::SortedListProvider;
 use frame_support::{ensure, traits::Get};
-use frame_benchmarking::Vec;
 use frame_system::RawOrigin as Origin;
 use pallet_nomination_pools::{
 	BalanceOf, BondedPoolStorage, BondedPools, Delegators, MinCreateBond, MinJoinBond,
@@ -79,6 +78,12 @@ fn create_pool_account<T: pallet_nomination_pools::Config>(
 	(pool_creator, pool_account)
 }
 
+fn vote_to_balance<T: pallet_nomination_pools::Config>(
+	vote: u64,
+) -> Result<BalanceOf<T>, &'static str> {
+	vote.try_into().map_err(|_| "could not convert u64 to Balance")
+}
+
 struct ListScenario<T: pallet_nomination_pools::Config> {
 	/// Stash/Controller that is expected to be moved.
 	origin1: T::AccountId,
@@ -113,9 +118,8 @@ impl<T: Config> ListScenario<T> {
 		);
 
 		// Burn the entire issuance.
-		// TODO: probably don't need this
-		// let i = T::Currency::burn(T::Currency::total_issuance());
-		// sp_std::mem::forget(i);
+		let i = CurrencyOf::<T>::burn(CurrencyOf::<T>::total_issuance());
+		sp_std::mem::forget(i);
 
 		// create accounts with the origin weight
 		let (_, pool_origin1) = create_pool_account::<T>(USER_SEED + 2, origin_weight);
@@ -127,7 +131,7 @@ impl<T: Config> ListScenario<T> {
 
 		let (_, pool_origin2) = create_pool_account::<T>(USER_SEED + 3, origin_weight);
 		T::StakingInterface::nominate(
-			pool_origin2,
+			pool_origin2.clone(),
 			vec![T::Lookup::unlookup(account("random_validator", 0, USER_SEED))].clone(),
 		)?;
 
@@ -144,9 +148,14 @@ impl<T: Config> ListScenario<T> {
 		// Create an account with the worst case destination weight
 		let (_, pool_dest1) = create_pool_account::<T>(USER_SEED + 1, dest_weight);
 		T::StakingInterface::nominate(
-			pool_dest1,
+			pool_dest1.clone(),
 			vec![T::Lookup::unlookup(account("random_validator", 0, USER_SEED))],
 		)?;
+
+		let weight_of = pallet_staking::Pallet::<T>::weight_of_fn();
+		assert_eq!(vote_to_balance::<T>(weight_of(&pool_origin1)).unwrap(), origin_weight);
+		assert_eq!(vote_to_balance::<T>(weight_of(&pool_origin2)).unwrap(), origin_weight);
+		assert_eq!(vote_to_balance::<T>(weight_of(&pool_dest1)).unwrap(), dest_weight);
 
 		Ok(ListScenario { origin1: pool_origin1, dest_weight, origin1_delegator: None })
 	}
@@ -177,7 +186,14 @@ impl<T: Config> ListScenario<T> {
 		Pools::<T>::join(Origin::Signed(joiner.clone()).into(), amount, self.origin1.clone())
 			.unwrap();
 
-		assert_eq!(T::StakingInterface::bonded_balance(&self.origin1).unwrap(), original_bonded);
+		// Sanity check that the vote weight is still the same as the original bonded
+		let weight_of = pallet_staking::Pallet::<T>::weight_of_fn();
+		assert_eq!(vote_to_balance::<T>(weight_of(&self.origin1)).unwrap(), original_bonded);
+
+		// Sanity check the delegator was added correctly
+		let delegator = Delegators::<T>::get(&joiner).unwrap();
+		assert_eq!(delegator.points, amount);
+		assert_eq!(delegator.pool, self.origin1);
 
 		self
 	}
@@ -260,32 +276,7 @@ frame_benchmarking::benchmarks! {
 
 		let scenario = scenario.add_joiner(amount);
 		let delegator_id = scenario.origin1_delegator.unwrap().clone();
-
-		// Sanity check the delegator was added correctly
-		let delegator = Delegators::<T>::get(
-			&delegator_id
-		)
-		.unwrap();
-		assert_eq!(
-			delegator.points,
-			amount
-		);
-		assert_eq!(
-			delegator.pool,
-			scenario.origin1
-		);
-		// Sanity check the pool maintained the origin weight
-		let bonded_pool = BondedPools::<T>::get(scenario.origin1.clone()).unwrap();
-		assert_eq!(
-			bonded_pool.points,
-			origin_weight
-		);
-		let bonded_before = T::StakingInterface::bonded_balance(&scenario.origin1).unwrap();
-		assert_eq!(
-			bonded_before,
-			origin_weight
-		);
-
+		whitelist_account!(delegator_id);
 	}: _(Origin::Signed(delegator_id.clone()), delegator_id.clone())
 	verify {
 		let bonded_after = T::StakingInterface::bonded_balance(&scenario.origin1).unwrap();
