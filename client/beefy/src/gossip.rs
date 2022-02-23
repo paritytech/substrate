@@ -219,6 +219,10 @@ where
 	) -> Box<dyn FnMut(&PeerId, MessageIntent, &B::Hash, &[u8]) -> bool + 'a> {
 		let do_rebroadcast = || {
 			let now = Instant::now();
+			// TODO: right now we're using an object-level rebroadcast gate that will only
+			// allow **a single message** being rebroadcast every `REBROADCAST_AFTER` minutes.
+			//
+			// Should we instead have a per-message/hash rebroadcast cooldown?
 			let mut next_rebroadcast = self.next_rebroadcast.lock();
 			if now >= *next_rebroadcast {
 				*next_rebroadcast = now + REBROADCAST_AFTER;
@@ -236,7 +240,7 @@ where
 
 			let msg = match VoteMessage::<NumberFor<B>, Public, Signature>::decode(&mut data) {
 				Ok(vote) => vote,
-				Err(_) => return true,
+				Err(_) => return false,
 			};
 
 			let round = msg.commitment.block_number;
@@ -262,6 +266,39 @@ mod tests {
 	};
 
 	use super::*;
+
+	#[test]
+	fn known_votes_insert_remove() {
+		let mut kv = KnownVotes::<Block>::new();
+
+		kv.insert(1);
+		kv.insert(1);
+		kv.insert(2);
+		assert_eq!(kv.live.len(), 2);
+
+		for i in 1..MAX_LIVE_GOSSIP_ROUNDS + 2 {
+			kv.insert(i.try_into().unwrap());
+		}
+		assert_eq!(kv.live.len(), MAX_LIVE_GOSSIP_ROUNDS);
+
+		let mut kv = KnownVotes::<Block>::new();
+		kv.insert(1);
+		kv.insert(2);
+		kv.insert(3);
+
+		assert!(kv.last_done.is_none());
+		kv.remove(2);
+		assert_eq!(kv.live.len(), 2);
+		assert!(!kv.live.contains_key(&2));
+		assert_eq!(kv.last_done, Some(2));
+
+		kv.remove(1);
+		assert_eq!(kv.last_done, Some(2));
+
+		kv.remove(3);
+		assert_eq!(kv.last_done, Some(3));
+		assert!(kv.live.is_empty());
+	}
 
 	#[test]
 	fn note_round_works() {
@@ -367,24 +404,27 @@ mod tests {
 		beefy_keystore.sign(&who.public(), &commitment.encode()).unwrap()
 	}
 
+	fn dummy_vote(block_number: u64) -> VoteMessage<u64, Public, Signature> {
+		let payload = Payload::new(known_payload_ids::MMR_ROOT_ID, MmrRootHash::default().encode());
+		let commitment = Commitment { payload, block_number, validator_set_id: 0 };
+		let signature = sign_commitment(&Keyring::Alice, &commitment);
+
+		VoteMessage { commitment, id: Keyring::Alice.public(), signature }
+	}
+
 	#[test]
 	fn should_avoid_verifying_signatures_twice() {
 		let gv = GossipValidator::<Block>::new();
 		let sender = sc_network::PeerId::random();
 		let mut context = TestContext;
 
-		let payload = Payload::new(known_payload_ids::MMR_ROOT_ID, MmrRootHash::default().encode());
-		let commitment = Commitment { payload, block_number: 3_u64, validator_set_id: 0 };
-
-		let signature = sign_commitment(&Keyring::Alice, &commitment);
-
-		let vote = VoteMessage { commitment, id: Keyring::Alice.public(), signature };
+		let vote = dummy_vote(3);
 
 		gv.note_round(3u64);
 		gv.note_round(7u64);
 		gv.note_round(10u64);
 
-		// first time the cache should be populated.
+		// first time the cache should be populated
 		let res = gv.validate(&mut context, &sender, &vote.encode());
 
 		assert!(matches!(res, ValidationResult::ProcessAndKeep(_)));
@@ -398,7 +438,7 @@ mod tests {
 
 		assert!(matches!(res, ValidationResult::ProcessAndKeep(_)));
 
-		// next we should quickly reject if the round is not live.
+		// next we should quickly reject if the round is not live
 		gv.note_round(11_u64);
 		gv.note_round(12_u64);
 
@@ -410,5 +450,63 @@ mod tests {
 		let res = gv.validate(&mut context, &sender, &vote.encode());
 
 		assert!(matches!(res, ValidationResult::Discard));
+	}
+
+	#[test]
+	fn messages_allowed_and_expired() {
+		let gv = GossipValidator::<Block>::new();
+		let sender = sc_network::PeerId::random();
+		let topic = Default::default();
+		let intent = MessageIntent::Broadcast;
+
+		// note round 2
+		gv.note_round(2u64);
+		let mut allowed = gv.message_allowed();
+		let mut expired = gv.message_expired();
+
+		// check bad vote format
+		assert!(!allowed(&sender, intent, &topic, &mut [0u8; 16]));
+		assert!(expired(topic, &mut [0u8; 16]));
+
+		// inactive round 1 -> expired
+		let vote = dummy_vote(1);
+		let mut encoded_vote = vote.encode();
+		assert!(!allowed(&sender, intent, &topic, &mut encoded_vote));
+		assert!(expired(topic, &mut encoded_vote));
+
+		// active round 2 -> !expired
+		let vote = dummy_vote(2);
+		let mut encoded_vote = vote.encode();
+		assert!(allowed(&sender, intent, &topic, &mut encoded_vote));
+		assert!(!expired(topic, &mut encoded_vote));
+
+		// unseen round 3 -> !expired
+		let vote = dummy_vote(3);
+		let mut encoded_vote = vote.encode();
+		assert!(allowed(&sender, intent, &topic, &mut encoded_vote));
+		assert!(!expired(topic, &mut encoded_vote));
+	}
+
+	#[test]
+	fn messages_rebroadcast() {
+		let gv = GossipValidator::<Block>::new();
+		let sender = sc_network::PeerId::random();
+		let topic = Default::default();
+
+		let vote = dummy_vote(1);
+		let mut encoded_vote = vote.encode();
+
+		// re-broadcasting only allowed at `REBROADCAST_AFTER` intervals
+		let intent = MessageIntent::PeriodicRebroadcast;
+		let mut allowed = gv.message_allowed();
+
+		// rebroadcast not allowed so soon after GossipValidator creation
+		assert!(!allowed(&sender, intent, &topic, &mut encoded_vote));
+
+		// hack the inner deadline to be `now`
+		*gv.next_rebroadcast.lock() = Instant::now();
+
+		// rebroadcast should be allowed now
+		assert!(allowed(&sender, intent, &topic, &mut encoded_vote));
 	}
 }
