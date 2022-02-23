@@ -206,17 +206,10 @@ where
 			*rounds.session_start(),
 			self.min_block_delta,
 		);
-		metric_set!(self, beefy_should_vote_on, target);
-
-		trace!(target: "beefy", "🥩 best finalized: #{:?}, next_block_to_vote_on: #{:?}", best_finalized, target);
-
-		// Don't vote for targets until they've been finalized
-		// (`target` can be > `best_finalized` when `self.min_block_delta` is big enough).
-		if target > best_finalized {
-			None
-		} else {
-			Some(target)
+		if let Some(target) = &target {
+			metric_set!(self, beefy_should_vote_on, target);
 		}
+		target
 	}
 
 	/// Return the current active validator set at header `header`.
@@ -587,13 +580,20 @@ where
 }
 
 /// Calculate next block number to vote on.
-fn vote_target<N>(best_grandpa: N, best_beefy: Option<N>, session_start: N, min_delta: u32) -> N
+///
+/// Return `None` if there is no voteable target yet.
+fn vote_target<N>(
+	best_grandpa: N,
+	best_beefy: Option<N>,
+	session_start: N,
+	min_delta: u32,
+) -> Option<N>
 where
 	N: AtLeast32Bit + Copy + Debug,
 {
 	// if the mandatory block (session_start) does not have a beefy justification yet,
 	// we vote on it
-	match best_beefy {
+	let target = match best_beefy {
 		None => {
 			trace!(
 				target: "beefy",
@@ -625,6 +625,15 @@ where
 
 			target
 		},
+	};
+	trace!(target: "beefy", "🥩 best finalized: #{:?}, next_block_to_vote_on: #{:?}", best_grandpa, target);
+
+	// Don't vote for targets until they've been finalized
+	// (`target` can be > `best_grandpa` when `min_delta` is big enough).
+	if target > best_grandpa {
+		None
+	} else {
+		Some(target)
 	}
 }
 
@@ -635,103 +644,92 @@ mod tests {
 	#[test]
 	fn vote_on_min_block_delta() {
 		let t = vote_target(1u32, Some(1), 1, 4);
-		assert_eq!(5, t);
+		assert_eq!(None, t);
 		let t = vote_target(2u32, Some(1), 1, 4);
-		assert_eq!(5, t);
-		let t = vote_target(3u32, Some(1), 1, 4);
-		assert_eq!(5, t);
-		let t = vote_target(4u32, Some(1), 1, 4);
-		assert_eq!(5, t);
+		assert_eq!(None, t);
+		let t = vote_target(4u32, Some(2), 1, 4);
+		assert_eq!(None, t);
+		let t = vote_target(6u32, Some(2), 1, 4);
+		assert_eq!(Some(6), t);
 
-		let t = vote_target(4u32, Some(4), 1, 4);
-		assert_eq!(8, t);
-
-		let t = vote_target(10u32, Some(10), 1, 4);
-		assert_eq!(14, t);
-		let t = vote_target(11u32, Some(10), 1, 4);
-		assert_eq!(14, t);
-		let t = vote_target(12u32, Some(10), 1, 4);
-		assert_eq!(14, t);
-		let t = vote_target(13u32, Some(10), 1, 4);
-		assert_eq!(14, t);
+		let t = vote_target(9u32, Some(4), 1, 4);
+		assert_eq!(Some(8), t);
 
 		let t = vote_target(10u32, Some(10), 1, 8);
-		assert_eq!(18, t);
-		let t = vote_target(11u32, Some(10), 1, 8);
-		assert_eq!(18, t);
+		assert_eq!(None, t);
 		let t = vote_target(12u32, Some(10), 1, 8);
-		assert_eq!(18, t);
-		let t = vote_target(13u32, Some(10), 1, 8);
-		assert_eq!(18, t);
+		assert_eq!(None, t);
+		let t = vote_target(18u32, Some(10), 1, 8);
+		assert_eq!(Some(18), t);
 	}
 
 	#[test]
 	fn vote_on_power_of_two() {
 		let t = vote_target(1008u32, Some(1000), 1, 4);
-		assert_eq!(1004, t);
+		assert_eq!(Some(1004), t);
 
 		let t = vote_target(1016u32, Some(1000), 1, 4);
-		assert_eq!(1008, t);
+		assert_eq!(Some(1008), t);
 
 		let t = vote_target(1032u32, Some(1000), 1, 4);
-		assert_eq!(1016, t);
+		assert_eq!(Some(1016), t);
 
 		let t = vote_target(1064u32, Some(1000), 1, 4);
-		assert_eq!(1032, t);
+		assert_eq!(Some(1032), t);
 
 		let t = vote_target(1128u32, Some(1000), 1, 4);
-		assert_eq!(1064, t);
+		assert_eq!(Some(1064), t);
 
 		let t = vote_target(1256u32, Some(1000), 1, 4);
-		assert_eq!(1128, t);
+		assert_eq!(Some(1128), t);
 
 		let t = vote_target(1512u32, Some(1000), 1, 4);
-		assert_eq!(1256, t);
+		assert_eq!(Some(1256), t);
 
 		let t = vote_target(1024u32, Some(1), 1, 4);
-		assert_eq!(513, t);
+		assert_eq!(Some(513), t);
 	}
 
 	#[test]
 	fn vote_on_target_block() {
 		let t = vote_target(1008u32, Some(1002), 1, 4);
-		assert_eq!(1006, t);
+		assert_eq!(Some(1006), t);
 		let t = vote_target(1010u32, Some(1002), 1, 4);
-		assert_eq!(1006, t);
+		assert_eq!(Some(1006), t);
 
 		let t = vote_target(1016u32, Some(1006), 1, 4);
-		assert_eq!(1014, t);
+		assert_eq!(Some(1014), t);
 		let t = vote_target(1022u32, Some(1006), 1, 4);
-		assert_eq!(1014, t);
+		assert_eq!(Some(1014), t);
 
 		let t = vote_target(1032u32, Some(1012), 1, 4);
-		assert_eq!(1028, t);
+		assert_eq!(Some(1028), t);
 		let t = vote_target(1044u32, Some(1012), 1, 4);
-		assert_eq!(1028, t);
+		assert_eq!(Some(1028), t);
 
 		let t = vote_target(1064u32, Some(1014), 1, 4);
-		assert_eq!(1046, t);
+		assert_eq!(Some(1046), t);
 		let t = vote_target(1078u32, Some(1014), 1, 4);
-		assert_eq!(1046, t);
+		assert_eq!(Some(1046), t);
 
 		let t = vote_target(1128u32, Some(1008), 1, 4);
-		assert_eq!(1072, t);
+		assert_eq!(Some(1072), t);
 		let t = vote_target(1136u32, Some(1008), 1, 4);
-		assert_eq!(1072, t);
+		assert_eq!(Some(1072), t);
 	}
 
 	#[test]
 	fn vote_on_mandatory_block() {
 		let t = vote_target(1008u32, Some(1002), 1004, 4);
-		assert_eq!(1004, t);
+		assert_eq!(Some(1004), t);
 		let t = vote_target(1016u32, Some(1006), 1007, 4);
-		assert_eq!(1007, t);
+		assert_eq!(Some(1007), t);
 		let t = vote_target(1064u32, Some(1014), 1063, 4);
-		assert_eq!(1063, t);
+		assert_eq!(Some(1063), t);
 		let t = vote_target(1320u32, Some(1012), 1234, 4);
-		assert_eq!(1234, t);
+		assert_eq!(Some(1234), t);
 
 		let t = vote_target(1128u32, Some(1008), 1008, 4);
-		assert_eq!(1072, t);
+		assert_eq!(Some(1072), t);
 	}
 }
