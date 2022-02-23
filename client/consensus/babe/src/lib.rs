@@ -110,7 +110,7 @@ use sc_consensus_slots::{
 	SlotInfo, StorageChanges,
 };
 use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG, CONSENSUS_TRACE};
-use sp_api::{ApiExt, NumberFor, ProvideRuntimeApi};
+use sp_api::{ApiExt, ProvideRuntimeApi};
 use sp_application_crypto::AppKey;
 use sp_block_builder::BlockBuilder as BlockBuilderApi;
 use sp_blockchain::{Error as ClientError, HeaderBackend, HeaderMetadata, Result as ClientResult};
@@ -125,7 +125,7 @@ use sp_inherents::{CreateInherentDataProviders, InherentData, InherentDataProvid
 use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 use sp_runtime::{
 	generic::{BlockId, OpaqueDigestItemId},
-	traits::{Block as BlockT, Header, One, Saturating, Zero},
+	traits::{Block as BlockT, Header, NumberFor, One, SaturatedConversion, Saturating, Zero},
 	DigestItem,
 };
 
@@ -550,7 +550,6 @@ fn aux_storage_cleanup<C: HeaderMetadata<Block>, Block: BlockT>(
 	notification: &FinalityNotification<Block>,
 ) -> AuxDataOperations {
 	let mut aux_keys = HashSet::new();
-	let mut height_limit = Zero::zero();
 
 	// Cleans data for finalized block's ancestors down to, and including, the previously
 	// finalized one.
@@ -559,7 +558,6 @@ fn aux_storage_cleanup<C: HeaderMetadata<Block>, Block: BlockT>(
 	match client.header_metadata(*first_new_finalized) {
 		Ok(meta) => {
 			aux_keys.insert(aux_schema::block_weight_key(meta.parent));
-			height_limit = meta.number.saturating_sub(One::one());
 		},
 		Err(err) => {
 			warn!(target: "babe", "header lookup fail while cleaning data for block {}: {}", first_new_finalized.to_string(), err.to_string());
@@ -570,6 +568,10 @@ fn aux_storage_cleanup<C: HeaderMetadata<Block>, Block: BlockT>(
 
 	// Cleans data for stale branches.
 
+	// A safenet in case of malformed notification.
+	let height_limit = notification.header.number().saturating_sub(
+		notification.tree_route.len().saturated_into::<NumberFor<Block>>() + One::one(),
+	);
 	for head in notification.stale_heads.iter() {
 		let mut hash = *head;
 		// Insert stale blocks hashes until canonical chain is not reached.
@@ -577,7 +579,6 @@ fn aux_storage_cleanup<C: HeaderMetadata<Block>, Block: BlockT>(
 		while aux_keys.insert(aux_schema::block_weight_key(hash)) {
 			match client.header_metadata(hash) {
 				Ok(meta) => {
-					// A fallback in case of malformed notification.
 					// This should never happen and must be considered a bug.
 					if meta.number <= height_limit {
 						warn!(target: "babe", "unexpected canonical chain state or malformed finality notification");
