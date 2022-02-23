@@ -1360,13 +1360,29 @@ impl<T: Config> Pallet<T> {
 			T::DataProvider::targets(Some(target_limit)).map_err(ElectionError::DataProvider)?;
 		let voters =
 			T::DataProvider::voters(Some(voter_limit)).map_err(ElectionError::DataProvider)?;
-		let desired_targets =
+		let mut desired_targets =
 			T::DataProvider::desired_targets().map_err(ElectionError::DataProvider)?;
 
 		// Defensive-only.
 		if targets.len() > target_limit || voters.len() > voter_limit {
 			debug_assert!(false, "Snapshot limit has not been respected.");
 			return Err(ElectionError::DataProvider("Snapshot too big for submission."))
+		}
+
+		// If `desired_targets` > `targets.len()`, cap `desired_targets` to that level and emit a
+		// warning
+		let max_len = targets
+			.len()
+			.try_into()
+			.map_err(|_| ElectionError::DataProvider("Failed to convert usize"))?;
+		if desired_targets > max_len {
+			log!(
+				warn,
+				"desired_targets: {} > targets.len() {}, capping desired_targets",
+				desired_targets,
+				max_len
+			);
+			desired_targets = max_len;
 		}
 
 		Ok((targets, voters, desired_targets))
@@ -1602,7 +1618,7 @@ mod feasibility_check {
 		raw_solution, roll_to, EpochLength, ExtBuilder, MultiPhase, Runtime, SignedPhase,
 		TargetIndex, UnsignedPhase, VoterIndex,
 	};
-	use frame_support::assert_noop;
+	use frame_support::{assert_noop, assert_ok};
 
 	const COMPUTE: ElectionCompute = ElectionCompute::OnChain;
 
@@ -1647,12 +1663,11 @@ mod feasibility_check {
 			let raw = raw_solution();
 
 			assert_eq!(raw.solution.unique_targets().len(), 4);
-			assert_eq!(MultiPhase::desired_targets().unwrap(), 8);
+			// desired_targets is capped to the number of targets which is 4
+			assert_eq!(MultiPhase::desired_targets().unwrap(), 4);
 
-			assert_noop!(
-				MultiPhase::feasibility_check(raw, COMPUTE),
-				FeasibilityError::WrongWinnerCount,
-			);
+			// It should succeed
+			assert_ok!(MultiPhase::feasibility_check(raw, COMPUTE));
 		})
 	}
 

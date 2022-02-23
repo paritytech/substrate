@@ -749,7 +749,7 @@ mod tests {
 	use sp_runtime::{
 		offchain::storage_lock::{BlockAndTime, StorageLock},
 		traits::ValidateUnsigned,
-		ModuleError, PerU16, Perbill,
+		PerU16, Perbill,
 	};
 
 	type Assignment = crate::unsigned::Assignment<Runtime>;
@@ -1044,14 +1044,7 @@ mod tests {
 			roll_to(25);
 			assert!(MultiPhase::current_phase().is_unsigned());
 
-			assert_eq!(
-				MultiPhase::mine_check_save_submit().unwrap_err(),
-				MinerError::PreDispatchChecksFailed(DispatchError::Module(ModuleError {
-					index: 2,
-					error: 1,
-					message: Some("PreDispatchWrongWinnerCount"),
-				})),
-			);
+			assert_ok!(MultiPhase::mine_check_save_submit());
 		})
 	}
 
