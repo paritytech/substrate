@@ -28,7 +28,7 @@ serde = "1.0.136"
 serde_json = "1.0.74"
 thiserror = "1.0.30"
 tiny-bip39 = "0.8.2"
-tokio = { version = "1.15", features = ["signal", "rt-multi-thread"] }
+tokio = { version = "1.15", features = ["signal", "rt-multi-thread", "parking_lot"] }
 
 parity-scale-codec = "2.3.1"
 sc-client-api = { version = "4.0.0-dev", path = "../api" }

@@ -221,16 +221,16 @@
 //!
 //! The validator and its nominator split their reward as following:
 //!
-//! The validator can declare an amount, named
-//! [`commission`](ValidatorPrefs::commission), that does not get shared
-//! with the nominators at each reward payout through its
-//! [`ValidatorPrefs`]. This value gets deducted from the total reward
-//! that is paid to the validator and its nominators. The remaining portion is split among the
-//! validator and all of the nominators that nominated the validator, proportional to the value
-//! staked behind this validator (_i.e._ dividing the
-//! [`own`](Exposure::own) or
-//! [`others`](Exposure::others) by
-//! [`total`](Exposure::total) in [`Exposure`]).
+//! The validator can declare an amount, named [`commission`](ValidatorPrefs::commission), that does
+//! not get shared with the nominators at each reward payout through its [`ValidatorPrefs`]. This
+//! value gets deducted from the total reward that is paid to the validator and its nominators. The
+//! remaining portion is split pro rata among the validator and the top
+//! [`Config::MaxNominatorRewardedPerValidator`] nominators that nominated the validator,
+//! proportional to the value staked behind the validator (_i.e._ dividing the
+//! [`own`](Exposure::own) or [`others`](Exposure::others) by [`total`](Exposure::total) in
+//! [`Exposure`]). Note that the pro rata division of rewards uses the total exposure behind the
+//! validator, *not* just the exposure of the validator and the top
+//! [`Config::MaxNominatorRewardedPerValidator`] nominators.
 //!
 //! All entities who receive a reward have the option to choose their reward destination through the
 //! [`Payee`] storage item (see
@@ -653,7 +653,7 @@ impl<AccountId, Balance: HasCompact + Zero> UnappliedSlash<AccountId, Balance> {
 /// Means for interacting with a specialized version of the `session` trait.
 ///
 /// This is needed because `Staking` sets the `ValidatorIdOf` of the `pallet_session::Config`
-pub trait SessionInterface<AccountId>: frame_system::Config {
+pub trait SessionInterface<AccountId> {
 	/// Disable the validator at the given index, returns `false` if the validator was already
 	/// disabled or the index is out of bounds.
 	fn disable_validator(validator_index: u32) -> bool;

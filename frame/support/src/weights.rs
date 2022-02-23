@@ -127,6 +127,9 @@
 //! - Ubuntu 19.10 (GNU/Linux 5.3.0-18-generic x86_64)
 //! - rustc 1.42.0 (b8cedc004 2020-03-09)
 
+mod paritydb_weights;
+mod rocksdb_weights;
+
 use crate::dispatch::{DispatchError, DispatchErrorWithPostInfo, DispatchResultWithPostInfo};
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
@@ -172,7 +175,7 @@ impl From<TimeWeight> for WeightV2 {
 /// These constants are specific to FRAME, and the current implementation of its various components.
 /// For example: FRAME System, FRAME Executive, our FRAME support libraries, etc...
 pub mod constants {
-	use super::{RuntimeDbWeight, TimeWeight};
+	use super::Weight;
 	use crate::parameter_types;
 
 	pub const WEIGHT_PER_SECOND: TimeWeight = 1_000_000_000_000;
@@ -184,20 +187,13 @@ pub mod constants {
 		/// Importing a block with 0 txs takes ~5 ms
 		pub const BlockExecutionWeight: TimeWeight = 5 * WEIGHT_PER_MILLIS;
 		/// Executing 10,000 System remarks (no-op) txs takes ~1.26 seconds -> ~125 µs per tx
-		pub const ExtrinsicBaseWeight: TimeWeight = 125 * WEIGHT_PER_MICROS;
-		/// By default, Substrate uses RocksDB, so this will be the weight used throughout
-		/// the runtime.
-		pub const RocksDbWeight: RuntimeDbWeight = RuntimeDbWeight {
-			read: 25 * WEIGHT_PER_MICROS,   // ~25 µs @ 200,000 items
-			write: 100 * WEIGHT_PER_MICROS, // ~100 µs @ 200,000 items
-		};
-		/// ParityDB can be enabled with a feature flag, but is still experimental. These weights
-		/// are available for brave runtime engineers who may want to try this out as default.
-		pub const ParityDbWeight: RuntimeDbWeight = RuntimeDbWeight {
-			read: 8 * WEIGHT_PER_MICROS,   // ~8 µs @ 200,000 items
-			write: 50 * WEIGHT_PER_MICROS, // ~50 µs @ 200,000 items
-		};
+		pub const ExtrinsicBaseWeight: Weight = 125 * WEIGHT_PER_MICROS;
 	}
+
+	// Expose the DB weights.
+	pub use super::{
+		paritydb_weights::constants::ParityDbWeight, rocksdb_weights::constants::RocksDbWeight,
+	};
 }
 
 /// Means of weighing some particular kind of data (`T`).
