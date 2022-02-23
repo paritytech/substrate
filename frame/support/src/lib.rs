@@ -68,8 +68,6 @@ pub mod instances;
 pub mod migrations;
 pub mod traits;
 pub mod weights;
-mod paritydb_weights;
-mod rocksdb_weights;
 
 #[doc(hidden)]
 pub mod unsigned {

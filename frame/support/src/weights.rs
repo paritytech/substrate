@@ -127,6 +127,9 @@
 //! - Ubuntu 19.10 (GNU/Linux 5.3.0-18-generic x86_64)
 //! - rustc 1.42.0 (b8cedc004 2020-03-09)
 
+mod paritydb_weights;
+mod rocksdb_weights;
+
 use crate::dispatch::{DispatchError, DispatchErrorWithPostInfo, DispatchResultWithPostInfo};
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
@@ -168,7 +171,7 @@ pub mod constants {
 	}
 
 	// Expose the DB weights.
-	pub use crate::{
+	pub use super::{
 		paritydb_weights::constants::ParityDbWeight, rocksdb_weights::constants::RocksDbWeight,
 	};
 }
