@@ -48,10 +48,10 @@ use sp_runtime::{
 };
 use sp_state_machine::StateMachine;
 
-use crate::bedrock::{benches, Bedrock, Benchmark};
+use crate::bedrock::{benches, DBCmd, StorageCmd};
 use std::{fmt::Debug, fs, str::FromStr, sync::Arc, time};
 
-impl Benchmark {
+impl StorageCmd {
 	/// Dispatches a concrete sub command related to benchmarking with client overhead.
 	pub async fn run<Block, BA, S, C>(
 		&self,
@@ -72,81 +72,81 @@ impl Benchmark {
 	{
 		info!("DB at: {}", cfg.database.path().unwrap().display());
 		match self {
-			Self::StorageWrite(cmd) => cmd.run(&cfg, client, backend, db, storage),
-			Self::StorageRead(cmd) => cmd.run(&cfg, client),
+			Self::Write(cmd) => cmd.run(&cfg, client, backend, db, storage),
+			Self::Read(cmd) => cmd.run(&cfg, client),
 			//Self::ExtBase(cmd) => cmd.run(),
 			_ => unimplemented!(),
 		}
 	}
 }
 
-impl Bedrock {
+impl DBCmd {
 	/// Dispatches a concrete sub command related to benchmarking without client overhead.
 	pub fn run<B>(&self, cfg: Configuration) -> Result<()>
 	where
 		B: BlockT,
 	{
 		match self {
-			Self::DbRead(cmd) => cmd.run::<B>(cfg),
+			Self::Read(cmd) => cmd.run::<B>(cfg),
 			// TODO add Self::DbWrite(cmd) => cmd.run::<B>(cfg),
-			Self::DbFill(cmd) => cmd.run::<B>(cfg),
+			Self::Fill(cmd) => cmd.run::<B>(cfg),
 			_ => unimplemented!(),
 		}
 	}
 }
 
 // Boilerplate
-impl CliConfiguration for Benchmark {
+impl CliConfiguration for StorageCmd {
 	fn shared_params(&self) -> &SharedParams {
 		match self {
-			Self::StorageRead(cmd) => cmd.shared_params(),
-			Self::StorageWrite(cmd) => cmd.shared_params(),
+			Self::Read(cmd) => cmd.shared_params(),
+			Self::Write(cmd) => cmd.shared_params(),
 			_ => unimplemented!(),
 		}
 	}
 
 	fn database_params(&self) -> Option<&DatabaseParams> {
 		match self {
-			Self::StorageRead(cmd) => cmd.database_params(),
-			Self::StorageWrite(cmd) => cmd.database_params(),
+			Self::Read(cmd) => cmd.database_params(),
+			Self::Write(cmd) => cmd.database_params(),
 			_ => unimplemented!(),
 		}
 	}
 
 	fn pruning_params(&self) -> Option<&PruningParams> {
 		match self {
-			Self::StorageRead(cmd) => cmd.pruning_params(),
-			Self::StorageWrite(cmd) => cmd.pruning_params(),
+			Self::Read(cmd) => cmd.pruning_params(),
+			Self::Write(cmd) => cmd.pruning_params(),
 			_ => unimplemented!(),
 		}
 	}
 }
 
 // Boilerplate
-impl CliConfiguration for Bedrock {
+impl CliConfiguration for DBCmd {
 	fn shared_params(&self) -> &SharedParams {
 		match self {
-			Self::DbRead(cmd) => cmd.shared_params(),
-			Self::DbWrite(cmd) => cmd.shared_params(),
-			Self::DbFill(cmd) => cmd.shared_params(),
+			Self::Read(cmd) => cmd.shared_params(),
+			Self::Write(cmd) => cmd.shared_params(),
+			Self::Fill(cmd) => cmd.shared_params(),
 			_ => unimplemented!(),
 		}
 	}
 
 	fn database_params(&self) -> Option<&DatabaseParams> {
 		match self {
-			Self::DbRead(cmd) => cmd.database_params(),
-			Self::DbWrite(cmd) => cmd.database_params(),
-			Self::DbFill(cmd) => cmd.database_params(),
+			Self::Read(cmd) => cmd.database_params(),
+			Self::Write(cmd) => cmd.database_params(),
+			Self::Fill(cmd) => cmd.database_params(),
 			_ => unimplemented!(),
 		}
 	}
 
 	fn pruning_params(&self) -> Option<&PruningParams> {
 		match self {
-			Self::DbRead(cmd) => cmd.pruning_params(),
-			Self::DbWrite(cmd) => cmd.pruning_params(),
-			Self::DbFill(cmd) => cmd.pruning_params(),
+			Self::Read(cmd) => cmd.pruning_params(),
+			Self::Write(cmd) => cmd.pruning_params(),
+			Self::Fill(cmd) => cmd.pruning_params(),
 			_ => unimplemented!(),
 		}
 	}

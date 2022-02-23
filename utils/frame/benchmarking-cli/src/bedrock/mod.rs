@@ -20,29 +20,31 @@ const TEMPLATE: &str = include_str!("./weights.hbs");
 
 #[derive(Debug, PartialEq, clap::Subcommand)]
 #[clap(rename_all = "kebab-case")]
-pub enum Benchmark {
-	//#[clap(about = "Block import base")]
-	//BlockImport(benches::block::BlockImportCmd),
+pub enum StorageCmd {
+	#[clap(about = "Storage Read and Write")]
+	Storage,
+
 	#[clap(about = "Storage Read")]
-	StorageRead(storage::cmd::ReadCmd),
+	Read(storage::cmd::ReadCmd),
 
 	#[clap(about = "Storage Write")]
-	StorageWrite(storage::cmd::WriteCmd),
-	//#[clap(about = "Extrinsic base")]
-	//ExtBase(benches::extrinsic::ExtBaseCmd),
+	Write(storage::cmd::WriteCmd),
 }
 
 #[derive(Debug, PartialEq, clap::Subcommand)]
 #[clap(rename_all = "kebab-case")]
-pub enum Bedrock {
+pub enum DBCmd {
+	#[clap(about = "DB Read and Write")]
+	Db,
+
 	#[clap(about = "DB Read")]
-	DbRead(db::cmd::ReadCmd),
+	Read(db::cmd::ReadCmd),
 
 	#[clap(about = "DB Write")]
-	DbWrite(db::cmd::WriteCmd),
+	Write(db::cmd::WriteCmd),
 
 	#[clap(about = "DB Fill")]
-	DbFill(db::cmd::FillCmd),
+	Fill(db::cmd::FillCmd),
 }
 
 #[derive(Debug, Clone, PartialEq, Args)]

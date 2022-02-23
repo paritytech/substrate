@@ -15,7 +15,7 @@ use sp_runtime::{
 };
 use sp_state_machine::*;
 use sp_storage::{StateVersion, StorageMap};
-use sc_client_db::DbHash;
+use sc_client_db::{DatabaseSource, DbHash};
 
 use hash_db::{HashDB, Hasher, Prefix};
 use kvdb::DBTransaction;
@@ -77,8 +77,12 @@ impl WriteCmd {
 		>,
 	{
 		let COLUMN = sc_client_db::columns::STATE;
-		let state_version = StateVersion::V0;
+		let mut state_version = StateVersion::V0;
+		if self.storage_v1 {
+			state_version = StateVersion::V1;
+		}
 
+		let is_parity = matches!(cfg.database, DatabaseSource::ParityDb{path:_});
 		let block = BlockId::Number(prov.usage_info().chain.best_number);
 		info!("Best block is {}", block);
 		let header = prov.header(block).unwrap().unwrap();
@@ -113,7 +117,7 @@ impl WriteCmd {
 			let delta = vec![(k.clone(), v.clone())];
 			let delta = delta.iter().map(|(k2, v2)| (k2.as_ref(), Some(v2.as_ref())));
 			let (root, tx) = state.storage_root(delta, state_version);
-			let tx = convert_tx::<Block>(COLUMN, tx);
+			let tx = convert_tx::<Block>(COLUMN, tx, is_parity);
 			db.commit(tx).expect("Must commit");
 
 			time_by_key_index.push(start.elapsed());
@@ -124,12 +128,11 @@ impl WriteCmd {
 			let delta = vec![(k.clone(), ov.clone())];
 			let delta = delta.iter().map(|(k2, v2)| (&**k2, Some(v2.as_ref())));
 			let (root, tx) = new_state.storage_root(delta, state_version);
-			let tx = convert_tx::<Block>(COLUMN, tx);
+			let tx = convert_tx::<Block>(COLUMN, tx, is_parity);
 			db.commit(tx).expect("Must commit");
 
 			// Replacing the value should bring us back to the original root.
 			if root != *original_root {
-				// FAILS HERE
 				log::error!("Wrong final root. {:?} vs {:?}", root, original_root);
 				std::process::exit(1);
 			}
@@ -148,12 +151,15 @@ impl WriteCmd {
 fn convert_tx<B: BlockT>(
 	col: ColumnId,
 	mut tx: sp_trie::PrefixedMemoryDB<HashFor<B>>,
+	parity_db: bool,
 ) -> Transaction<H256> {
 	let mut ret = sp_database::Transaction::<H256>::default();
 
 	for (mut k, (v, rc)) in tx.drain().into_iter() {
-		// HACK
-		k.drain(0..k.len() - 32 /* sc_client_db::DB_HASH_LEN */);
+		// Trunking keys is only needed for ParityDB.
+		if parity_db {
+			k.drain(0..k.len() - sc_client_db::DB_HASH_LEN);
+		}
 		if rc > 0 {
 			ret.set(col, k.as_ref(), &v);
 			if v.len() == 0 {

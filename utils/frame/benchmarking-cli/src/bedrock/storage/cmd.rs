@@ -91,6 +91,10 @@ pub struct WriteCmd {
 	/// RNG seed used to generate key-value pairs.
 	#[clap(long, default_value = "0")]
 	pub seed: u64,
+
+	/// Use `StorageVersion::V1` instead of `V0`.
+	#[clap(long)]
+	pub storage_v1: bool,
 }
 
 /// Fills a DB with random data and random sizes.
