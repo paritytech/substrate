@@ -36,11 +36,12 @@ use sc_client_api::{
 	client::{
 		BadBlocks, BlockBackend, BlockImportNotification, BlockOf, BlockchainEvents, ClientInfo,
 		FinalityNotification, FinalityNotifications, ForkBlocks, ImportNotifications,
-		ProvideUncles,
+		PreCommitActions, ProvideUncles,
 	},
 	execution_extensions::ExecutionExtensions,
 	notifications::{StorageEventStream, StorageNotifications},
-	CallExecutor, ExecutorProvider, KeyIterator, ProofProvider, UsageProvider,
+	CallExecutor, ExecutorProvider, KeyIterator, OnFinalityAction, OnImportAction, ProofProvider,
+	UsageProvider,
 };
 use sc_consensus::{
 	BlockCheckParams, BlockImportParams, ForkChoiceStrategy, ImportResult, StateAction,
@@ -76,8 +77,9 @@ use sp_runtime::{
 };
 use sp_state_machine::{
 	prove_child_read, prove_range_read_with_child_with_size, prove_read,
-	read_range_proof_check_with_child_on_proving_backend, Backend as StateBackend, KeyValueStates,
-	KeyValueStorageLevel, MAX_NESTED_TRIE_DEPTH,
+	read_range_proof_check_with_child_on_proving_backend, Backend as StateBackend,
+	ChildStorageCollection, KeyValueStates, KeyValueStorageLevel, StorageCollection,
+	MAX_NESTED_TRIE_DEPTH,
 };
 use sp_trie::{CompactProof, StorageProof};
 use std::{
@@ -108,7 +110,13 @@ where
 	storage_notifications: Mutex<StorageNotifications<Block>>,
 	import_notification_sinks: NotificationSinks<BlockImportNotification<Block>>,
 	finality_notification_sinks: NotificationSinks<FinalityNotification<Block>>,
-	// holds the block hash currently being imported. TODO: replace this with block queue
+	// Collects auxiliary operations to be performed atomically together with
+	// block import operations.
+	import_actions: Mutex<Vec<OnImportAction<Block>>>,
+	// Collects auxiliary operations to be performed atomically together with
+	// block finalization operations.
+	finality_actions: Mutex<Vec<OnFinalityAction<Block>>>,
+	// Holds the block hash currently being imported. TODO: replace this with block queue.
 	importing_block: RwLock<Option<Block::Hash>>,
 	block_rules: BlockRules<Block>,
 	execution_extensions: ExecutionExtensions<Block>,
@@ -279,11 +287,32 @@ where
 
 			let r = f(&mut op)?;
 
-			let ClientImportOperation { op, notify_imported, notify_finalized } = op;
+			let ClientImportOperation { mut op, notify_imported, notify_finalized } = op;
+
+			let finality_notification = notify_finalized.map(|summary| summary.into());
+			let (import_notification, storage_changes) = match notify_imported {
+				Some(mut summary) => {
+					let storage_changes = summary.storage_changes.take();
+					(Some(summary.into()), storage_changes)
+				},
+				None => (None, None),
+			};
+
+			if let Some(ref notification) = finality_notification {
+				for action in self.finality_actions.lock().iter_mut() {
+					op.insert_aux(action(notification))?;
+				}
+			}
+			if let Some(ref notification) = import_notification {
+				for action in self.import_actions.lock().iter_mut() {
+					op.insert_aux(action(notification))?;
+				}
+			}
+
 			self.backend.commit_operation(op)?;
 
-			self.notify_finalized(notify_finalized)?;
-			self.notify_imported(notify_imported)?;
+			self.notify_finalized(finality_notification)?;
+			self.notify_imported(import_notification, storage_changes)?;
 
 			Ok(r)
 		};
@@ -367,6 +396,8 @@ where
 			storage_notifications: Mutex::new(StorageNotifications::new(prometheus_registry)),
 			import_notification_sinks: Default::default(),
 			finality_notification_sinks: Default::default(),
+			import_actions: Default::default(),
+			finality_actions: Default::default(),
 			importing_block: Default::default(),
 			block_rules: BlockRules::new(fork_blocks, bad_blocks),
 			execution_extensions,
@@ -686,12 +717,21 @@ where
 		// We only notify when we are already synced to the tip of the chain
 		// or if this import triggers a re-org
 		if make_notifications || tree_route.is_some() {
+			let header = import_headers.into_post();
 			if finalized {
 				let mut summary = match operation.notify_finalized.take() {
-					Some(summary) => summary,
-					None => FinalizeSummary { finalized: Vec::new(), stale_heads: Vec::new() },
+					Some(mut summary) => {
+						summary.header = header.clone();
+						summary.finalized.push(hash);
+						summary
+					},
+					None => FinalizeSummary {
+						header: header.clone(),
+						finalized: vec![hash],
+						stale_heads: Vec::new(),
+					},
 				};
-				summary.finalized.push(hash);
+
 				if parent_exists {
 					// Add to the stale list all heads that are branching from parent besides our
 					// current `head`.
@@ -718,7 +758,7 @@ where
 			operation.notify_imported = Some(ImportSummary {
 				hash,
 				origin,
-				header: import_headers.into_post(),
+				header,
 				is_new_best,
 				storage_changes,
 				tree_route,
@@ -863,7 +903,7 @@ where
 				.backend
 				.blockchain()
 				.number(last_finalized)?
-				.expect("Finalized block expected to be onchain; qed");
+				.expect("Previous finalized block expected to be onchain; qed");
 			let mut stale_heads = Vec::new();
 			for head in self.backend.blockchain().leaves()? {
 				let route_from_finalized =
@@ -884,7 +924,12 @@ where
 					stale_heads.push(head);
 				}
 			}
-			operation.notify_finalized = Some(FinalizeSummary { finalized, stale_heads });
+			let header = self
+				.backend
+				.blockchain()
+				.header(BlockId::Hash(block))?
+				.expect("Finalized block expected to be onchain; qed");
+			operation.notify_finalized = Some(FinalizeSummary { header, finalized, stale_heads });
 		}
 
 		Ok(())
@@ -892,11 +937,11 @@ where
 
 	fn notify_finalized(
 		&self,
-		notify_finalized: Option<FinalizeSummary<Block>>,
+		notification: Option<FinalityNotification<Block>>,
 	) -> sp_blockchain::Result<()> {
 		let mut sinks = self.finality_notification_sinks.lock();
 
-		let mut notify_finalized = match notify_finalized {
+		let notification = match notification {
 			Some(notify_finalized) => notify_finalized,
 			None => {
 				// Cleanup any closed finality notification sinks
@@ -907,29 +952,13 @@ where
 			},
 		};
 
-		let last = notify_finalized.finalized.pop().expect(
-			"At least one finalized block shall exist within a valid finalization summary; qed",
-		);
-
-		let header = self.header(&BlockId::Hash(last))?.expect(
-			"Header already known to exist in DB because it is indicated in the tree route; \
-				qed",
-		);
-
 		telemetry!(
 			self.telemetry;
 			SUBSTRATE_INFO;
 			"notify.finalized";
-			"height" => format!("{}", header.number()),
-			"best" => ?last,
+			"height" => format!("{}", notification.header.number()),
+			"best" => ?notification.hash,
 		);
-
-		let notification = FinalityNotification {
-			hash: last,
-			header,
-			tree_route: Arc::new(notify_finalized.finalized),
-			stale_heads: Arc::new(notify_finalized.stale_heads),
-		};
 
 		sinks.retain(|sink| sink.unbounded_send(notification.clone()).is_ok());
 
@@ -938,12 +967,13 @@ where
 
 	fn notify_imported(
 		&self,
-		notify_import: Option<ImportSummary<Block>>,
+		notification: Option<BlockImportNotification<Block>>,
+		storage_changes: Option<(StorageCollection, ChildStorageCollection)>,
 	) -> sp_blockchain::Result<()> {
-		let notify_import = match notify_import {
+		let notification = match notification {
 			Some(notify_import) => notify_import,
 			None => {
-				// cleanup any closed import notification sinks since we won't
+				// Cleanup any closed import notification sinks since we won't
 				// be sending any notifications below which would remove any
 				// closed sinks. this is necessary since during initial sync we
 				// won't send any import notifications which could lead to a
@@ -954,22 +984,14 @@ where
 			},
 		};
 
-		if let Some(storage_changes) = notify_import.storage_changes {
+		if let Some(storage_changes) = storage_changes {
 			// TODO [ToDr] How to handle re-orgs? Should we re-emit all storage changes?
 			self.storage_notifications.lock().trigger(
-				&notify_import.hash,
+				&notification.hash,
 				storage_changes.0.into_iter(),
 				storage_changes.1.into_iter().map(|(sk, v)| (sk, v.into_iter())),
 			);
 		}
-
-		let notification = BlockImportNotification::<Block> {
-			hash: notify_import.hash,
-			origin: notify_import.origin,
-			header: notify_import.header,
-			is_new_best: notify_import.is_new_best,
-			tree_route: notify_import.tree_route.map(Arc::new),
-		};
 
 		self.import_notification_sinks
 			.lock()
@@ -1889,6 +1911,19 @@ where
 		notify: bool,
 	) -> sp_blockchain::Result<()> {
 		(**self).finalize_block(id, justification, notify)
+	}
+}
+
+impl<B, E, Block, RA> PreCommitActions<Block> for Client<B, E, Block, RA>
+where
+	Block: BlockT,
+{
+	fn register_import_action(&self, action: OnImportAction<Block>) {
+		self.import_actions.lock().push(action);
+	}
+
+	fn register_finality_action(&self, action: OnFinalityAction<Block>) {
+		self.finality_actions.lock().push(action);
 	}
 }
 
