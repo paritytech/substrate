@@ -161,7 +161,7 @@ fn test_whitelist_call_and_execute_decode_consumes_all() {
 		// Appending something does not make the encoded call invalid.
 		// This tests that the decode function consumes all data.
 		call.extend(call.clone());
-		
+
 		let call_hash = <Test as frame_system::Config>::Hashing::hash(&call[..]);
 
 		assert_ok!(Preimage::note_preimage(Origin::root(), call));
