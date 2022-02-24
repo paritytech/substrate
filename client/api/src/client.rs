@@ -27,7 +27,8 @@ use sp_runtime::{
 };
 use std::{collections::HashSet, convert::TryFrom, fmt, sync::Arc};
 
-use crate::{blockchain::Info, notifications::StorageEventStream};
+use crate::{blockchain::Info, notifications::StorageEventStream, FinalizeSummary, ImportSummary};
+
 use sc_transaction_pool_api::ChainEvent;
 use sc_utils::mpsc::TracingUnboundedReceiver;
 use sp_blockchain;
@@ -74,6 +75,34 @@ pub trait BlockchainEvents<Block: BlockT> {
 		filter_keys: Option<&[StorageKey]>,
 		child_filter_keys: Option<&[(StorageKey, Option<Vec<StorageKey>>)]>,
 	) -> sp_blockchain::Result<StorageEventStream<Block::Hash>>;
+}
+
+/// List of operations to be performed on storage aux data.
+/// First tuple element is the encoded data key.
+/// Second tuple element is the encoded optional data to write.
+/// If `None`, the key and the associated data are deleted from storage.
+pub type AuxDataOperations = Vec<(Vec<u8>, Option<Vec<u8>>)>;
+
+/// Callback invoked before committing the operations created during block import.
+/// This gives the opportunity to perform auxiliary pre-commit actions and optionally
+/// enqueue further storage write operations to be atomically performed on commit.
+pub type OnImportAction<Block> =
+	Box<dyn (Fn(&BlockImportNotification<Block>) -> AuxDataOperations) + Send>;
+
+/// Callback invoked before committing the operations created during block finalization.
+/// This gives the opportunity to perform auxiliary pre-commit actions and optionally
+/// enqueue further storage write operations to be atomically performed on commit.
+pub type OnFinalityAction<Block> =
+	Box<dyn (Fn(&FinalityNotification<Block>) -> AuxDataOperations) + Send>;
+
+/// Interface to perform auxiliary actions before committing a block import or
+/// finality operation.
+pub trait PreCommitActions<Block: BlockT> {
+	/// Actions to be performed on block import.
+	fn register_import_action(&self, op: OnImportAction<Block>);
+
+	/// Actions to be performed on block finalization.
+	fn register_finality_action(&self, op: OnFinalityAction<Block>);
 }
 
 /// Interface for fetching block data.
@@ -298,5 +327,29 @@ impl<B: BlockT> TryFrom<BlockImportNotification<B>> for ChainEvent<B> {
 impl<B: BlockT> From<FinalityNotification<B>> for ChainEvent<B> {
 	fn from(n: FinalityNotification<B>) -> Self {
 		Self::Finalized { hash: n.hash, tree_route: n.tree_route }
+	}
+}
+
+impl<B: BlockT> From<FinalizeSummary<B>> for FinalityNotification<B> {
+	fn from(mut summary: FinalizeSummary<B>) -> Self {
+		let hash = summary.finalized.pop().unwrap_or_default();
+		FinalityNotification {
+			hash,
+			header: summary.header,
+			tree_route: Arc::new(summary.finalized),
+			stale_heads: Arc::new(summary.stale_heads),
+		}
+	}
+}
+
+impl<B: BlockT> From<ImportSummary<B>> for BlockImportNotification<B> {
+	fn from(summary: ImportSummary<B>) -> Self {
+		BlockImportNotification {
+			hash: summary.hash,
+			origin: summary.origin,
+			header: summary.header,
+			is_new_best: summary.is_new_best,
+			tree_route: summary.tree_route.map(Arc::new),
+		}
 	}
 }

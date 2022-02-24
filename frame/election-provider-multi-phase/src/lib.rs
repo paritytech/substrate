@@ -1233,7 +1233,7 @@ pub mod pallet {
 	/// capacity, it will simply saturate. We can't just iterate over `SignedSubmissionsMap`,
 	/// because iteration is slow. Instead, we store the value here.
 	#[pallet::storage]
-	pub(crate) type SignedSubmissionNextIndex<T: Config> = StorageValue<_, u32, ValueQuery>;
+	pub type SignedSubmissionNextIndex<T: Config> = StorageValue<_, u32, ValueQuery>;
 
 	/// A sorted, bounded set of `(score, index)`, where each `index` points to a value in
 	/// `SignedSubmissions`.
@@ -1242,7 +1242,7 @@ pub mod pallet {
 	/// can be quite large, so we're willing to pay the cost of multiple database accesses to access
 	/// them one at a time instead of reading and decoding all of them at once.
 	#[pallet::storage]
-	pub(crate) type SignedSubmissionIndices<T: Config> =
+	pub type SignedSubmissionIndices<T: Config> =
 		StorageValue<_, SubmissionIndicesOf<T>, ValueQuery>;
 
 	/// Unchecked, signed solutions.
@@ -1253,7 +1253,7 @@ pub mod pallet {
 	/// Twox note: the key of the map is an auto-incrementing index which users cannot inspect or
 	/// affect; we shouldn't need a cryptographically secure hasher.
 	#[pallet::storage]
-	pub(crate) type SignedSubmissionsMap<T: Config> =
+	pub type SignedSubmissionsMap<T: Config> =
 		StorageMap<_, Twox64Concat, u32, SignedSubmissionOf<T>, OptionQuery>;
 
 	// `SignedSubmissions` items end here.
