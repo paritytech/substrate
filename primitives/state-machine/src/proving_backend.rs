@@ -240,7 +240,7 @@ where
 
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String> {
 		if let Some(v) = self.proof_recorder.get(key) {
-			return Ok(v);
+			return Ok(v)
 		}
 
 		let backend_value = self.backend.get(key, prefix)?;
