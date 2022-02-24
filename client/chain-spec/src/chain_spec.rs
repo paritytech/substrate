@@ -174,6 +174,7 @@ struct ClientSpec<E> {
 	extensions: E,
 	// Never used, left only for backward compatibility.
 	#[serde(default, skip_serializing)]
+	#[allow(unused)]
 	consensus_engine: (),
 	#[serde(skip_serializing)]
 	#[allow(unused)]
