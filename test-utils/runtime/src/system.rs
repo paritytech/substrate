@@ -213,7 +213,7 @@ pub fn finalize_block() -> Header {
 		digest.push(generic::DigestItem::Consensus(*b"babe", new_authorities.encode()));
 	}
 
-	Header { number, extrinsics_root, state_root: storage_root, parent_hash, digest }
+	Header { number, extrinsics_root, state_root: storage_root, parent_hash, digest, count: Default::default(), seed: Default::default() }
 }
 
 #[inline(always)]
@@ -377,6 +377,8 @@ mod tests {
 			state_root: Default::default(),
 			extrinsics_root: Default::default(),
 			digest: Default::default(),
+			count: Default::default(),
+			seed: Default::default(),
 		};
 		let mut b = Block { header: h, extrinsics: vec![] };
 
@@ -429,6 +431,8 @@ mod tests {
 				state_root: Default::default(),
 				extrinsics_root: Default::default(),
 				digest: Default::default(),
+				count: 1,
+				seed: Default::default(),
 			},
 			extrinsics: vec![Transfer {
 				from: AccountKeyring::Alice.into(),
@@ -449,6 +453,8 @@ mod tests {
 				state_root: Default::default(),
 				extrinsics_root: Default::default(),
 				digest: Default::default(),
+				count: Default::default(),
+				seed: Default::default(),
 			},
 			extrinsics: vec![
 				Transfer {

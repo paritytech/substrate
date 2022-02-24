@@ -493,7 +493,7 @@ struct DhtValueFoundTester {
 			TestApi,
 			TestNetwork,
 			sp_runtime::generic::Block<
-				sp_runtime::generic::Header<u64, sp_runtime::traits::BlakeTwo256>,
+				sp_runtime::generic::HeaderVer<u64, sp_runtime::traits::BlakeTwo256>,
 				substrate_test_runtime_client::runtime::Extrinsic,
 			>,
 			std::pin::Pin<Box<futures::channel::mpsc::Receiver<sc_network::DhtEvent>>>,
