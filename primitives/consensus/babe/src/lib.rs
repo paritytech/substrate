@@ -56,7 +56,7 @@ pub static BABE_VRF_INOUT_CONTEXT: &[u8] = b"BabeVRFInOutContext";
 /// The BABE slot inherent identifier. This inherent was deprecated and removed
 /// from the runtime, but we still need to know its identifier in order to validate
 /// historical blocks that included the inherent.
-pub const BABE_DEPRECTED_INHERENT_IDENTIFIER: InherentIdentifier = *b"babeslot";
+pub const BABE_DEPRECATED_INHERENT_IDENTIFIER: InherentIdentifier = *b"babeslot";
 
 /// A Babe authority keypair. Necessarily equivalent to the schnorrkel public key used in
 /// the main Babe module. If that ever changes, then this must, too.

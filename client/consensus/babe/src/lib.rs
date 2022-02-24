@@ -1003,7 +1003,7 @@ where
 					// from the runtime but it is still around when validating historical blocks.
 					// in order to not keep around the slot inherent providers indefinitely we just
 					// ignore the unhandled inherent error.
-					None if i == sp_consensus_babe::BABE_DEPRECTED_INHERENT_IDENTIFIER => {},
+					None if i == sp_consensus_babe::BABE_DEPRECATED_INHERENT_IDENTIFIER => {},
 					None => return Err(Error::CheckInherentsUnhandled(i)),
 					Some(res) => res.map_err(|e| Error::CheckInherents(e))?,
 				}
