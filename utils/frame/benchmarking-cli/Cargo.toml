@@ -24,7 +24,7 @@ sp-externalities = { version = "0.11.0", path = "../../../primitives/externaliti
 sp-keystore = { version = "0.11.0", path = "../../../primitives/keystore" }
 sp-runtime = { version = "5.0.0", path = "../../../primitives/runtime" }
 sp-state-machine = { version = "0.11.0", path = "../../../primitives/state-machine" }
-codec = { version = "2.0.0", package = "parity-scale-codec" }
+codec = { version = "3.0.0", package = "parity-scale-codec" }
 clap = { version = "3.0", features = ["derive"] }
 chrono = "0.4"
 serde = "1.0.136"

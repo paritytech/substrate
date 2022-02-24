@@ -26,8 +26,8 @@ pallet-session = { version = "4.0.0-dev", default-features = false, path = "../.
 pallet-staking = { version = "4.0.0-dev", default-features = false, features = ["runtime-benchmarks"], path = "../../staking" }
 
 [dev-dependencies]
-codec = { package = "parity-scale-codec", version = "2.0.0", features = ["derive"] }
-scale-info = "1.0"
+codec = { package = "parity-scale-codec", version = "3.0.0", features = ["derive"] }
+scale-info = "2.0.0"
 sp-core = { version = "5.0.0", path = "../../../primitives/core" }
 sp-io = { version = "5.0.0", path = "../../../primitives/io" }
 pallet-balances = { version = "4.0.0-dev", path = "../../balances" }
