@@ -300,6 +300,7 @@ where
 	}
 }
 
+/// Aura background worker for authoring new blocks (attempts to author on new slots).
 pub struct AuraWorker<C, E, I, P, SO, L, BS> {
 	client: Arc<C>,
 	block_import: I,
