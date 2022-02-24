@@ -23,20 +23,15 @@
 //!
 //! ### Joining
 //!
-//! A account can stake funds with a nomination pool by calling [`Call::join`]. The amount to bond
-//! is transferred from the delegator to the pools account and immediately increases the pools bond.
-//! Note that an account can only belong to one pool at a time.
+//! A account can stake funds with a nomination pool by calling [`Call::join`].
 //!
-//! For more detailed docs see the [joining](#joining) section.
+//! For more design docs see the [joining](#joining) section.
 //!
 //! ### Claiming rewards
 //!
-//! The delegator will earn rewards pro rata based on the delegators stake vs the sum of the
-//! delegators in the pools stake. In order to claim their share of rewards a delegator must call
-//! [`Call::claim_payout`]. A delegator can start claiming rewards in the era after they join;
-//! rewards can be claimed periodically at any time after that and do not "expire".
+//! After joining a pool, a delegator can claim rewards by calling [`Call::claim_payout`].
 //!
-//! For more detailed docs see the [reward pool](#reward-pool) section.
+//! For more design docs see the [reward pool](#reward-pool) section.
 //!
 //! ### Leaving
 //!
@@ -85,13 +80,6 @@
 //!
 //! Note: if it is desired that any of the admin roles are not accessible, they can be set to an
 //! anonymous proxy account that has no proxies (and is thus provably keyless).
-//!
-//! **Relevant extrinsics:**
-//!
-//! * [`Call::create`]
-//! * [`Call::nominate`]
-//! * [`Call::unbond_other`]
-//! * [`Call::withdraw_unbonded_other`]
 //!
 //! ## Design
 //!
@@ -315,11 +303,8 @@
 
 // TODO
 // - Refactor staking slashing to always slash unlocking chunks (then back port)
-// - backport making ledger generic over ^^ IDEA: maybe staking can slash unlocking chunks, and then
-//   pools is passed the updated unlocking chunks and makes updates based on that
-// - benchmarks
-// - make staking interface current era
 // - write detailed docs for StakingInterface
+// - various backports
 
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
@@ -928,7 +913,8 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// Join a pre-existing pool.
+		/// Stake funds with a pool. The amount to bond is transferred from the delegator to the
+		/// pools account and immediately increases the pools bond.
 		///
 		/// Notes
 		/// * an account can only be a member of a single pool.
@@ -996,9 +982,10 @@ pub mod pallet {
 
 		/// A bonded delegator can use this to claim their payout based on the rewards that the pool
 		/// has accumulated since their last claimed payout (OR since joining if this is there first
-		/// time claiming rewards).
+		/// time claiming rewards). The payout will be transffered to the delegator's account.
 		///
-		/// Note that the payout will go to the delegator's account.
+		/// The delegator will earn rewards pro rata based on the delegators stake vs the sum of the
+		/// delegators in the pools stake. Rewards do not "expire".
 		#[pallet::weight(T::WeightInfo::claim_payout())]
 		pub fn claim_payout(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -1096,7 +1083,7 @@ pub mod pallet {
 			let _ = ensure_signed(origin)?;
 			let pool = BondedPool::<T>::get(&pool_account).ok_or(Error::<T>::PoolNotFound)?;
 			// For now we only allow a pool to withdraw unbonded if its not destroying. If the pool
-			// is destroying then withdraw_unbonded_other can be used.
+			// is destroying then `withdraw_unbonded_other` can be used.
 			ensure!(pool.state != PoolState::Destroying, Error::<T>::NotDestroying);
 			T::StakingInterface::withdraw_unbonded(pool_account, num_slashing_spans)?;
 			Ok(())
@@ -1208,13 +1195,18 @@ pub mod pallet {
 			Ok(post_info_weight.into())
 		}
 
-		/// Note that the pool creator will delegate `amount` to the pool and cannot unbond until
-		/// every
-		/// NOTE: This does not nominate, a pool admin needs to call [`Call::nominate`]
+		/// Create a new delegation pool.
 		///
-		/// * `amount`: Balance to delegate to the pool. Must meet the minimum bond.
-		/// * `index`: Disambiguation index for seeding account generation. Likely only useful when
+		/// # Parameters
+		///
+		/// * `amount`: The amount of funds to delegate to the pool. This also acts of a sort of
+		///   deposit since the pools creator cannot fully unbond funds until the pool is being
+		///   destroyed.
+		/// * `index`: A disambiguation index for creating the account. Likely only useful when
 		///   creating multiple pools in the same extrinsic.
+		/// * `root`: The account to set as [`BondedPool::root`].
+		/// * `nominator`: The account to set as the [`BondedPool::nominator`].
+		/// * `state_toggler`: The account to set as the [`BondedPool::state_toggler`].
 		#[pallet::weight(666)]
 		#[frame_support::transactional]
 		pub fn create(
