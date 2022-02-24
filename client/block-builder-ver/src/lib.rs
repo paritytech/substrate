@@ -402,8 +402,8 @@ where
 	///
 	/// If `include_proof` is `true`, the estimated size of the storage proof will be added
 	/// to the estimation.
-	pub fn estimate_block_size(&self, include_proof: bool) -> usize {
-		let size = self.estimated_header_size + self.extrinsics.encoded_size();
+	pub fn estimate_block_size_without_extrinsics(&self, include_proof: bool) -> usize {
+		let size = self.estimated_header_size + self.inherents.encoded_size();
 
 		if include_proof {
 			size + self.api.proof_recorder().map(|pr| pr.estimate_encoded_size()).unwrap_or(0)
