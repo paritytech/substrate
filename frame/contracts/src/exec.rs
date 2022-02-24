@@ -168,6 +168,9 @@ pub trait Ext: sealing::Sealed {
 	/// However, this function does not require any storage lookup and therefore uses less weight.
 	fn caller_is_origin(&self) -> bool;
 
+	/// Return address of the origin of current call stack
+	fn origin(&self) -> &AccountIdOf<Self::T>;
+
 	/// Returns a reference to the account id of the current contract.
 	fn address(&self) -> &AccountIdOf<Self::T>;
 
@@ -1106,6 +1109,10 @@ where
 		self.caller() == &self.origin
 	}
 
+	fn origin(&self) -> &AccountIdOf<Self::T> {
+		&self.origin
+	}
+
 	fn balance(&self) -> BalanceOf<T> {
 		T::Currency::free_balance(&self.top_frame().account_id)
 	}
@@ -1773,6 +1780,31 @@ mod tests {
 			place_contract(&CHARLIE, code_charlie);
 			let mut storage_meter = storage::meter::Meter::new(&ALICE, Some(0), 0).unwrap();
 			// ALICE -> BOB (caller is origin) -> CHARLIE (caller is not origin)
+			let result = MockStack::run_call(
+				ALICE,
+				BOB,
+				&mut GasMeter::<Test>::new(GAS_LIMIT),
+				&mut storage_meter,
+				&schedule,
+				0,
+				vec![0],
+				None,
+			);
+			assert_matches!(result, Ok(_));
+		});
+	}
+
+	#[test]
+	fn origin_returns_proper_values() {
+		let code_bob = MockLoader::insert(Call, |ctx, _| {
+			assert_eq!(ctx.ext.origin(), &ALICE);
+			exec_success()
+		});
+		ExtBuilder::default().build().execute_with(|| {
+			let schedule = <Test as Config>::Schedule::get();
+			place_contract(&BOB, code_bob);
+			let mut storage_meter = storage::meter::Meter::new(&ALICE, Some(0), 0).unwrap();
+			// ALICE -> BOB: (origin is ALICE)
 			let result = MockStack::run_call(
 				ALICE,
 				BOB,

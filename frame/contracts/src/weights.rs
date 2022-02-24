@@ -57,6 +57,7 @@ pub trait WeightInfo {
 	fn seal_caller(r: u32, ) -> Weight;
 	fn seal_is_contract(r: u32, ) -> Weight;
 	fn seal_caller_is_origin(r: u32, ) -> Weight;
+	fn seal_origin(r: u32, ) -> Weight;
 	fn seal_address(r: u32, ) -> Weight;
 	fn seal_gas_left(r: u32, ) -> Weight;
 	fn seal_balance(r: u32, ) -> Weight;
@@ -284,6 +285,17 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	fn seal_caller_is_origin(r: u32, ) -> Weight {
+		(213_550_000 as Weight)
+			// Standard Error: 63_000
+			.saturating_add((21_519_000 as Weight).saturating_mul(r as Weight))
+			.saturating_add(T::DbWeight::get().reads(4 as Weight))
+			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+	}
+	// Storage: System Account (r:1 w:0)
+	// Storage: Contracts ContractInfoOf (r:1 w:1)
+	// Storage: Contracts CodeStorage (r:1 w:0)
+	// Storage: Timestamp Now (r:1 w:0)
+	fn seal_origin(r: u32, ) -> Weight {
 		(213_550_000 as Weight)
 			// Standard Error: 63_000
 			.saturating_add((21_519_000 as Weight).saturating_mul(r as Weight))
@@ -1175,6 +1187,17 @@ impl WeightInfo for () {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	fn seal_caller_is_origin(r: u32, ) -> Weight {
+		(213_550_000 as Weight)
+			// Standard Error: 63_000
+			.saturating_add((21_519_000 as Weight).saturating_mul(r as Weight))
+			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
+			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+	}
+	// Storage: System Account (r:1 w:0)
+	// Storage: Contracts ContractInfoOf (r:1 w:1)
+	// Storage: Contracts CodeStorage (r:1 w:0)
+	// Storage: Timestamp Now (r:1 w:0)
+	fn seal_origin(r: u32, ) -> Weight {
 		(213_550_000 as Weight)
 			// Standard Error: 63_000
 			.saturating_add((21_519_000 as Weight).saturating_mul(r as Weight))

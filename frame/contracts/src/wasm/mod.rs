@@ -441,6 +441,9 @@ mod tests {
 		fn caller_is_origin(&self) -> bool {
 			false
 		}
+		fn origin(&self) -> &AccountIdOf<Self::T> {
+			&ALICE
+		}
 		fn address(&self) -> &AccountIdOf<Self::T> {
 			&BOB
 		}
@@ -1155,7 +1158,7 @@ mod tests {
 		);
 	}
 
-	/// calls `seal_caller` and compares the result with the constant 42.
+	/// calls `seal_caller` and compares the result with the constant (ALICE's address part).
 	const CODE_CALLER: &str = r#"
 (module
 	(import "seal0" "seal_caller" (func $seal_caller (param i32 i32)))
@@ -1185,7 +1188,7 @@ mod tests {
 			)
 		)
 
-		;; assert that the first 64 byte are the beginning of "ALICE"
+		;; assert that the first 8 bytes are the beginning of "ALICE"
 		(call $assert
 			(i64.eq
 				(i64.load (i32.const 0))
@@ -1203,7 +1206,7 @@ mod tests {
 		assert_ok!(execute(CODE_CALLER, vec![], MockExt::default()));
 	}
 
-	/// calls `seal_address` and compares the result with the constant 69.
+	/// calls `seal_address` and compares the result with the constant (BOB's address part).
 	const CODE_ADDRESS: &str = r#"
 (module
 	(import "seal0" "seal_address" (func $seal_address (param i32 i32)))
@@ -1233,7 +1236,7 @@ mod tests {
 			)
 		)
 
-		;; assert that the first 64 byte are the beginning of "BOB"
+		;; assert that the first 8 bytes are the beginning of "BOB"
 		(call $assert
 			(i64.eq
 				(i64.load (i32.const 0))
@@ -2394,6 +2397,54 @@ mod tests {
 			output,
 			ExecReturnValue { flags: ReturnFlags::empty(), data: Bytes(0u32.encode()) },
 		);
+	}
+
+	#[test]
+	#[cfg(feature = "unstable-interface")]
+	fn origin() {
+		/// calls `seal_origin` and compares the result with the constant (ALICE's address part).
+		const CODE_ORIGIN: &str = r#"
+(module
+	(import "__unstable__" "seal_origin" (func $seal_origin (param i32 i32)))
+	(import "env" "memory" (memory 1 1))
+
+	;; size of our buffer is 32 bytes
+	(data (i32.const 32) "\20")
+
+	(func $assert (param i32)
+		(block $ok
+			(br_if $ok
+				(get_local 0)
+			)
+			(unreachable)
+		)
+	)
+
+	(func (export "call")
+		;; fill the buffer with the origin address.
+		(call $seal_origin (i32.const 0) (i32.const 32))
+
+		;; assert size == 32
+		(call $assert
+			(i32.eq
+				(i32.load (i32.const 32))
+				(i32.const 32)
+			)
+		)
+
+		;; assert that the first 8 bytes are the beginning of "ALICE"
+		(call $assert
+			(i64.eq
+				(i64.load (i32.const 0))
+				(i64.const 0x0101010101010101)
+			)
+		)
+	)
+
+	(func (export "deploy"))
+)
+"#;
+		assert_ok!(execute(CODE_ORIGIN, vec![], MockExt::default()));
 	}
 
 	#[test]
