@@ -107,11 +107,13 @@ pub trait StakingInterface {
 
 	fn unbond(controller: Self::AccountId, value: Self::Balance) -> DispatchResult;
 
+	/// Withdraw unbonded funds from bonded user.
 	fn withdraw_unbonded(
 		controller: Self::AccountId,
 		num_slashing_spans: u32,
 	) -> Result<u64, DispatchError>;
 
+	/// Bond the funds and create a `stash` and `controller`, a bond of `value`, and `payee` account as the reward destination.
 	fn bond(
 		stash: Self::AccountId,
 		controller: Self::AccountId,
@@ -119,8 +121,9 @@ pub trait StakingInterface {
 		payee: Self::AccountId,
 	) -> DispatchResult;
 
+	/// Have `controller` nominate `validators`.
 	fn nominate(
-		stash: Self::AccountId,
-		targets: sp_std::vec::Vec<Self::LookupSource>,
+		controller: Self::AccountId,
+		validators: sp_std::vec::Vec<Self::LookupSource>,
 	) -> DispatchResult;
 }

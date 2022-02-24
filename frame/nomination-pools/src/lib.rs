@@ -21,19 +21,19 @@
 //!
 //! ## Usage
 //!
-//! ### Joining
+//! ### Join
 //!
 //! A account can stake funds with a nomination pool by calling [`Call::join`].
 //!
-//! For more design docs see the [joining](#joining) section.
+//! For design docs see the [joining](#joining) section.
 //!
-//! ### Claiming rewards
+//! ### Claim rewards
 //!
 //! After joining a pool, a delegator can claim rewards by calling [`Call::claim_payout`].
 //!
-//! For more design docs see the [reward pool](#reward-pool) section.
+//! For design docs see the [reward pool](#reward-pool) section.
 //!
-//! ### Leaving
+//! ### Leave
 //!
 //! In order to leave, a delegator must take two steps.
 //!
@@ -43,7 +43,7 @@
 //! Second, Once [`sp_staking::StakingInterface::bonding_duration`] eras have passed, the delegator
 //! can call [`Call::withdraw_unbonded_other`] to withdraw all there funds.
 //!
-//! For more detailed docs see the [bonded pool](#bonded-pool) and [unbonding sub
+//! For design docs see the [bonded pool](#bonded-pool) and [unbonding sub
 //! pools](#unbonding-sub-pools) sections.
 //!
 //! ### Slashes
@@ -53,7 +53,7 @@
 //! bonded in the aforementioned range of eras will be affected by the slash. A delegator is slashed
 //! pro-rata based on its stake relative to the total slash amount.
 //!
-//! For more detailed docs see the [slashing](#slashing) section.
+//! For design docs see the [slashing](#slashing) section.
 //!
 //! ### Adminstration
 //!
@@ -86,9 +86,6 @@
 //! _Notes_: this section uses pseudo code to explain general design and does not necessarily
 //! reflect the exact implementation. Additionally, a working knowledge of `pallet-staking`'s api is
 //! assumed.
-//! In order to maintain scalability, all operations are independent of the number of delegators. To
-//! do this, we store delegation specific information local to the delegator while the pool data
-//! structures have bounded datum.
 //!
 //! ### Goals
 //!
@@ -305,6 +302,7 @@
 // - Refactor staking slashing to always slash unlocking chunks (then back port)
 // - write detailed docs for StakingInterface
 // - various backports
+// - Counter for delegators per pool and allow limiting of delegators per pool
 
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
@@ -772,6 +770,7 @@ pub mod pallet {
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: weights::WeightInfo;
 
+		// TODO: Should this just be part of the StakingInterface trait? We want the currencies to be the same anyways
 		/// The nominating balance.
 		type Currency: Currency<Self::AccountId>;
 
