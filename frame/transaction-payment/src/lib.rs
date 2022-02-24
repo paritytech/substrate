@@ -261,10 +261,6 @@ pub mod pallet {
 		/// might be refunded. In the end the fees can be deposited.
 		type OnChargeTransaction: OnChargeTransaction<Self>;
 
-		/// The fee to be paid for making a transaction; the per-byte portion.
-		#[pallet::constant]
-		type TransactionByteFee: Get<BalanceOf<Self>>;
-
 		/// A fee mulitplier for `Operational` extrinsics to compute "virtual tip" to boost their
 		/// `priority`
 		///
@@ -521,8 +517,6 @@ where
 		class: DispatchClass,
 	) -> FeeDetails<BalanceOf<T>> {
 		if pays_fee == Pays::Yes {
-			let per_byte = T::TransactionByteFee::get();
-
 			// the adjustable part of the fee.
 			let unadjusted_weight_fee = Self::weight_to_fee(weight);
 			let multiplier = Self::next_fee_multiplier();
@@ -530,7 +524,7 @@ where
 			let adjusted_weight_fee = multiplier.saturating_mul_int(unadjusted_weight_fee);
 
 			// length fee. this is adjusted via LengthToFee
-			let len_fee = Self::length_to_fee(len).saturating_mul(per_byte);
+			let len_fee = Self::length_to_fee(len);
 
 			let base_fee = Self::weight_to_fee(T::BlockWeights::get().get(class).base_extrinsic);
 			FeeDetails {
@@ -849,7 +843,6 @@ mod tests {
 	}
 
 	parameter_types! {
-		pub static TransactionByteFee: u64 = 1;
 		pub static WeightToFee: u64 = 1;
 		pub static OperationalFeeMultiplier: u8 = 5;
 	}
@@ -927,7 +920,6 @@ mod tests {
 
 	impl Config for Runtime {
 		type OnChargeTransaction = CurrencyAdapter<Balances, DealWithFees>;
-		type TransactionByteFee = TransactionByteFee;
 		type OperationalFeeMultiplier = OperationalFeeMultiplier;
 		type WeightToFee = WeightToFee;
 		type FeeMultiplierUpdate = ();

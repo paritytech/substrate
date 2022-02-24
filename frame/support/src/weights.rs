@@ -128,6 +128,7 @@
 //! - rustc 1.42.0 (b8cedc004 2020-03-09)
 
 use crate::dispatch::{DispatchError, DispatchErrorWithPostInfo, DispatchResultWithPostInfo};
+use crate::traits::Get;
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
 #[cfg(feature = "std")]
@@ -706,6 +707,26 @@ where
 	fn polynomial() -> WeightToFeeCoefficients<Self::Balance> {
 		smallvec!(WeightToFeeCoefficient {
 			coeff_integer: 1u32.into(),
+			coeff_frac: Perbill::zero(),
+			negative: false,
+			degree: 1,
+		})
+	}
+}
+
+/// Implementor of `WeightToFeePolynomial` that uses a constant modifier.
+pub struct ConstantModifierFee<T, M>(sp_std::marker::PhantomData<T>, sp_std::marker::PhantomData<M>);
+
+impl<T, M> WeightToFeePolynomial for ConstantModifierFee<T, M>
+where
+	T: BaseArithmetic + From<u32> + Copy + Unsigned,
+	M: Get<T>,
+{
+	type Balance = T;
+
+	fn polynomial() -> WeightToFeeCoefficients<Self::Balance> {
+		smallvec!(WeightToFeeCoefficient {
+			coeff_integer: M::get(),
 			coeff_frac: Perbill::zero(),
 			negative: false,
 			degree: 1,
