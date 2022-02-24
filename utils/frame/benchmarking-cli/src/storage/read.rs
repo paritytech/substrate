@@ -69,7 +69,7 @@ impl StorageCmd {
 				.storage(&block, &key)
 				.expect("Checked above to exist")
 				.ok_or("Value unexpectedly empty")?;
-			record.append(v.0.len(), start.elapsed());
+			record.append(v.0.len(), start.elapsed())?;
 		}
 		Ok(record)
 	}

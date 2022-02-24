@@ -18,14 +18,10 @@
 //! Calculates statistics and fills out the `weight.hbs` template.
 
 use sc_cli::Result;
-use sc_service::Configuration;
 
-use clap::Args;
 use log::info;
 use serde::Serialize;
-use std::{env, collections::HashMap, fmt::Debug, fs, path::PathBuf, time::Duration};
-
-use super::{template::TemplateData, cmd::StorageParams};
+use std::{fmt::Debug, fs, time::Duration};
 
 /// Raw output of a Storage benchmark.
 #[derive(Debug, Default, Clone, Serialize)]

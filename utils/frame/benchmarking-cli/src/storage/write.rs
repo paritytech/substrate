@@ -83,7 +83,7 @@ impl StorageCmd {
 			let tx = convert_tx::<Block>(tx, is_parity);
 			db.commit(tx).map_err(|e| format!("Writing to the Database: {}", e))?;
 
-			record.append(new_v.len(), start.elapsed());
+			record.append(new_v.len(), start.elapsed())?;
 
 			// Now undo the change:
 			// Create a Trie with the modified root hash and replace the value with its original.
