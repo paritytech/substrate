@@ -45,5 +45,6 @@ tempfile = "3"
 [features]
 default = []
 test-helpers = []
+runtime-benchmarks = []
 with-kvdb-rocksdb = ["kvdb-rocksdb"]
 with-parity-db = ["parity-db"]

@@ -1064,6 +1064,7 @@ impl<Block: BlockT> Backend<Block> {
 	/// Expose the Database that is used by this backend.
 	///
 	/// Should only be needed for benchmarking.
+	#[cfg(any(feature = "runtime-benchmarks"))]
 	pub fn expose_db(&self) -> Arc<dyn sp_database::Database<DbHash>> {
 		self.db.clone()
 	}
@@ -1071,6 +1072,7 @@ impl<Block: BlockT> Backend<Block> {
 	/// Expose the Storage that is used by this backend.
 	///
 	/// Should only be needed for benchmarking.
+	#[cfg(any(feature = "runtime-benchmarks"))]
 	pub fn expose_storage(&self) -> Arc<dyn sp_state_machine::Storage<HashFor<Block>>> {
 		self.storage.clone()
 	}
