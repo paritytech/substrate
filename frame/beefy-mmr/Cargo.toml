@@ -9,10 +9,10 @@ repository = "https://github.com/paritytech/substrate"
 
 [dependencies]
 hex = { version = "0.4", optional = true }
-codec = { version = "2.2.0", package = "parity-scale-codec", default-features = false, features = ["derive"] }
+codec = { version = "3.0.0", package = "parity-scale-codec", default-features = false, features = ["derive"] }
 k256 = { version = "0.10.2", default-features = false, features = ["arithmetic"] }
 log = { version = "0.4.13", default-features = false }
-scale-info = { version = "1.0", default-features = false, features = ["derive"] }
+scale-info = { version = "2.0.0", default-features = false, features = ["derive"] }
 serde = { version = "1.0.136", optional = true }
 
 frame-support = { version = "4.0.0-dev", path = "../support", default-features = false }
