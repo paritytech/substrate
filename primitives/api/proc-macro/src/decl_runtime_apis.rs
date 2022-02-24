@@ -772,11 +772,7 @@ impl<'a> Fold for ToClientSideDecl<'a> {
 		let is_core_trait = self.found_attributes.contains_key(CORE_TRAIT_ATTRIBUTE);
 		let block_ident = Ident::new(BLOCK_GENERIC_IDENT, Span::call_site());
 
-		if is_core_trait {
-			// Add all the supertraits we want to have for `Core`.
-			//input.supertraits = parse_quote!('static + Send + Sync);
-			input.supertraits = parse_quote!();
-		} else {
+		if !is_core_trait {
 			// Add the `Core` runtime api as super trait.
 			let crate_ = &self.crate_;
 			input.supertraits.push(parse_quote!( #crate_::Core<#block_ident> ));

@@ -130,10 +130,6 @@ pub type TFullClient<TBl> = Client<TFullBackend<TBl>, TBl>;
 /// Full client backend type.
 pub type TFullBackend<TBl> = sc_client_db::Backend<TBl>;
 
-/// Full client call executor type.
-//pub type TFullCallExecutor<TBl, TExec> =
-//	crate::client::LocalCallExecutor<TBl, sc_client_db::Backend<TBl>, TExec>;
-
 type TFullParts<TBl> = (TFullClient<TBl>, Arc<TFullBackend<TBl>>, KeystoreContainer, TaskManager);
 
 trait AsCryptoStoreRef {
