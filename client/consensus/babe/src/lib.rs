@@ -651,6 +651,7 @@ type SlotNotificationSinks<B> = Arc<
 	Mutex<Vec<Sender<(Slot, ViableEpochDescriptor<<B as BlockT>::Hash, NumberFor<B>, Epoch>)>>>,
 >;
 
+/// BABE background worker for authoring new blocks (attempts to author on new slots).
 pub struct BabeSlotWorker<B: BlockT, C, E, I, SO, L, BS> {
 	client: Arc<C>,
 	block_import: I,
