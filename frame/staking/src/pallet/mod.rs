@@ -31,7 +31,7 @@ use sp_runtime::{
 	traits::{CheckedSub, SaturatedConversion, StaticLookup, Zero},
 	Perbill, Percent,
 };
-use sp_staking::{EraIndex, PoolsInterface, SessionIndex};
+use sp_staking::{EraIndex, SessionIndex};
 use sp_std::{convert::From, prelude::*};
 
 mod impls;
@@ -156,7 +156,13 @@ pub mod pallet {
 		/// the bags-list is not desired, [`impls::UseNominatorsMap`] is likely the desired option.
 		type SortedListProvider: SortedListProvider<Self::AccountId>;
 
-		type PoolsInterface: PoolsInterface<AccountId = Self::AccountId, Balance = BalanceOf<Self>>;
+		// type PoolsInterface: PoolsInterface<AccountId = Self::AccountId, Balance =
+		// BalanceOf<Self>>;
+
+		// TODO: create a default impl of OnStakerSlash for staking
+		/// A hook called when any staker is slashed. Mostly likely this can be a no-op unless
+		/// there are delegation pools.
+		type OnStakerSlash: sp_staking::OnStakerSlash<Self::AccountId, BalanceOf<Self>>;
 
 		/// Some parameters of the benchmarking.
 		type BenchmarkingConfig: BenchmarkingConfig;

@@ -315,7 +315,11 @@ use sp_staking::{
 	offence::{Offence, OffenceError, ReportOffence},
 	EraIndex, SessionIndex,
 };
-use sp_std::{collections::btree_map::BTreeMap, convert::From, prelude::*};
+use sp_std::{
+	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
+	convert::From,
+	prelude::*,
+};
 pub use weights::WeightInfo;
 
 pub use pallet::{pallet::*, *};
@@ -521,107 +525,80 @@ impl<T: Config> StakingLedger<T> {
 	}
 
 	/// Slash the staker for a given amount of balance. This can grow the value
-	/// of the slash in the case that the staker has less than `minimum_balance`
-	/// active funds. Returns the amount of funds actually slashed.
+	/// of the slash in the case that the staker has either active bonded or unlocking chunks that
+	/// become dust after slashing.
 	///
-	/// Slashes from `active` funds first, and then `unlocking`, starting with the
-	/// chunks that are closest to unlocking.
+	/// Note that this calls `Config::OnStakerSlash::on_slash` with information as to how the slash
+	/// was applied.
 	fn slash(
 		&mut self,
-		value: BalanceOf<T>,
-		minimum_balance: BalanceOf<T>,
+		staker_slash_amount: BalanceOf<T>,
+		minimum_balance: BalanceOf<T>, // TODO
 		slash_era: EraIndex,
 		active_era: EraIndex,
 	) -> BalanceOf<T> {
-		use sp_staking::{PoolsInterface as _, SlashPoolArgs, SlashPoolOut};
-		if let Some(SlashPoolOut { slashed_bonded, slashed_unlocking }) =
-			T::PoolsInterface::slash_pool(SlashPoolArgs {
-				pool_stash: &self.stash,
-				slash_amount: value,
-				slash_era,
-				apply_era: active_era,
-				active_bonded: self.active,
-			}) {
-			self.pool_slash(slashed_bonded, slashed_unlocking)
-		} else {
-			self.standard_slash(value, minimum_balance)
-		}
-	}
+		use sp_staking::OnStakerSlash as _;
 
-	// TODO look into how to decouple this
-	// move sensitive logic
-	/// Slash a pool account
-	fn pool_slash(
-		&mut self,
-		new_active: BalanceOf<T>,
-		new_chunk_balances: BTreeMap<EraIndex, BalanceOf<T>>,
-	) -> BalanceOf<T> {
-		let mut total_slashed = BalanceOf::<T>::zero();
+		let pre_slash_total = self.total;
 
-		// Modify the unlocking chunks in place
-		for chunk in &mut self.unlocking {
-			if let Some(new_balance) = new_chunk_balances.get(&chunk.era) {
-				let slashed_amount = chunk.value.saturating_sub(*new_balance);
-				self.total = self.total.saturating_sub(slashed_amount);
-				total_slashed = total_slashed.saturating_add(slashed_amount);
-
-				chunk.value = *new_balance;
-			}
+		// The range of eras that the staker could have unbonded in after the equivocation causing
+		// the slash.
+		let affected_range_set: BTreeSet<_> = ((slash_era + 1)..=active_era).collect();
+		// Sum the balance of the affected chunks
+		let unbonding_affected_balance: BalanceOf<T> = self
+			.unlocking
+			.iter()
+			.filter(|chunk| affected_range_set.contains(&chunk.era))
+			.fold(BalanceOf::<T>::zero(), |balance_sum, chunk| {
+				balance_sum.saturating_add(chunk.value)
+			});
+		// Calculate the total affected balance
+		let total_affected_balance = self.active.saturating_add(unbonding_affected_balance);
+		if total_affected_balance.is_zero() {
+			// Exit early because there is nothing to slash
+			return Zero::zero()
 		}
 
-		// Update the actively bonded
-		let slashed_amount = self.active.saturating_sub(new_active);
-		self.total = self.total.saturating_sub(slashed_amount);
-		self.active = new_active;
-
-		total_slashed.saturating_add(slashed_amount)
-	}
-
-	// Slash a validator or nominator's stash
-	fn standard_slash(
-		&mut self,
-		mut value: BalanceOf<T>,
-		minimum_balance: BalanceOf<T>,
-	) -> BalanceOf<T> {
-		let pre_total = self.total;
-		let total = &mut self.total;
-		let active = &mut self.active;
-
-		let slash_out_of = |total_remaining: &mut BalanceOf<T>,
-		                    target: &mut BalanceOf<T>,
-		                    value: &mut BalanceOf<T>| {
-			let mut slash_from_target = (*value).min(*target);
-
-			if !slash_from_target.is_zero() {
-				*target -= slash_from_target;
-
-				// Don't leave a dust balance in the staking system.
-				if *target <= minimum_balance {
-					slash_from_target += *target;
-					*value += sp_std::mem::replace(target, Zero::zero());
-				}
-
-				*total_remaining = total_remaining.saturating_sub(slash_from_target);
-				*value -= slash_from_target;
+		// Helper to update `target` and the ledgers total after accounting for slashing `target`.
+		let do_proportional_slash = |target: &mut BalanceOf<T>, total: &mut BalanceOf<T>| {
+			if total_affected_balance.is_zero() {
+				// This should be checked for prior to calling, but just in case
+				return
 			}
+
+			// Equivalent to `(slash_amount / total_affected_balance) * target`.
+			let slash_from_target = staker_slash_amount.saturating_mul(*target)
+				// Checked for zero above
+				/ total_affected_balance;
+
+			*target = target.saturating_sub(slash_from_target);
+			let actual_slashed = if *target <= minimum_balance {
+				// Slash the entire target if its dust.
+				sp_std::mem::replace(target, Zero::zero())
+			} else {
+				slash_from_target
+			};
+			*total = total.saturating_sub(actual_slashed);
 		};
 
-		slash_out_of(total, active, &mut value);
+		// Slash the active balance
+		do_proportional_slash(&mut self.active, &mut self.total);
 
-		let i = self
+		let slashed_unlocking: BTreeMap<_, _> = self
 			.unlocking
 			.iter_mut()
+			.filter(|chunk| affected_range_set.contains(&chunk.era))
 			.map(|chunk| {
-				slash_out_of(total, &mut chunk.value, &mut value);
-				chunk.value
+				// Slash the chunk
+				do_proportional_slash(&mut chunk.value, &mut self.total);
+
+				(chunk.era, chunk.value)
 			})
-			.take_while(|value| value.is_zero()) // Take all fully-consumed chunks out.
-			.count();
+			.collect();
 
-		// Kill all drained chunks.
-		let _ = self.unlocking.drain(..i);
+		T::OnStakerSlash::on_slash(&self.stash, self.active, &slashed_unlocking);
 
-		pre_total.saturating_sub(*total)
+		pre_slash_total.saturating_sub(self.total)
 	}
 }
 

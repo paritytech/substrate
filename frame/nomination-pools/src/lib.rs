@@ -1,9 +1,10 @@
 //! # Nomination Pools for Staking Delegation
 //!
-//! This pallet allows delegators to delegate their stake to nominating pools, each of which acts as
-//! a nominator and nominates validators on the delegators behalf.
+//! A pallet that allows delegators to delegate their stake to nominating pools, each of which acts
+//! as a nominator and nominates validators on the delegators behalf.
 //!
-//! Index:
+//! # Index
+//!
 //! * [Key terms](#key-terms)
 //! * [Usage](#usage)
 //! * [Design](#design)
@@ -770,7 +771,8 @@ pub mod pallet {
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: weights::WeightInfo;
 
-		// TODO: Should this just be part of the StakingInterface trait? We want the currencies to be the same anyways
+		// TODO: Should this just be part of the StakingInterface trait? We want the currencies to
+		// be the same anyways
 		/// The nominating balance.
 		type Currency: Currency<Self::AccountId>;
 

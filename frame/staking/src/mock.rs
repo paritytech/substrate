@@ -82,17 +82,6 @@ pub fn is_disabled(controller: AccountId) -> bool {
 	Session::disabled_validators().contains(&validator_index)
 }
 
-pub struct PoolsInterfaceMock;
-impl sp_staking::PoolsInterface for PoolsInterfaceMock {
-	type AccountId = AccountId;
-	type Balance = Balance;
-	fn slash_pool(
-		_: sp_staking::SlashPoolArgs<Self::AccountId, Self::Balance>,
-	) -> Option<sp_staking::SlashPoolOut<Self::Balance>> {
-		None
-	}
-}
-
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
@@ -283,7 +272,7 @@ impl crate::pallet::pallet::Config for Test {
 	// NOTE: consider a macro and use `UseNominatorsMap<Self>` as well.
 	type SortedListProvider = BagsList;
 	type BenchmarkingConfig = TestBenchmarkingConfig;
-	type PoolsInterface = PoolsInterfaceMock;
+	type OnStakerSlash = ();
 	type WeightInfo = ();
 }
 
