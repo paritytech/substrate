@@ -998,8 +998,14 @@ where
 		if !inherent_res.ok() {
 			for (i, e) in inherent_res.into_errors() {
 				match create_inherent_data_providers.try_handle_error(&i, &e).await {
-					Some(res) => res.map_err(|e| Error::CheckInherents(e))?,
+					// NOTE: we used to include an inherent with the slot number, which was used to
+					// validate the timestamp inherent. this inherent was deprecated and removed
+					// from the runtime but it is still around when validating historical blocks.
+					// in order to not keep around the slot inherent providers indefinitely we just
+					// ignore the unhandled inherent error.
+					None if i == sp_consensus_babe::BABE_DEPRECTED_INHERENT_IDENTIFIER => {},
 					None => return Err(Error::CheckInherentsUnhandled(i)),
+					Some(res) => res.map_err(|e| Error::CheckInherents(e))?,
 				}
 			}
 		}

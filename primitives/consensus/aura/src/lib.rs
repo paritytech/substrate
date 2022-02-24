@@ -20,6 +20,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use codec::{Codec, Decode, Encode};
+use sp_inherents::InherentIdentifier;
 use sp_runtime::ConsensusEngineId;
 use sp_std::vec::Vec;
 
@@ -65,6 +66,11 @@ pub use sp_consensus_slots::{Slot, SlotDuration};
 
 /// The `ConsensusEngineId` of AuRa.
 pub const AURA_ENGINE_ID: ConsensusEngineId = [b'a', b'u', b'r', b'a'];
+
+/// The Aura slot inherent identifier. This inherent was deprecated and removed
+/// from the runtime, but we still need to know its identifier in order to validate
+/// historical blocks that included the inherent.
+pub const AURA_DEPRECATED_INHERENT_IDENTIFIER: InherentIdentifier = *b"auraslot";
 
 /// The index of an authority.
 pub type AuthorityIndex = u32;
