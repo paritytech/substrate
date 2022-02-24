@@ -130,8 +130,11 @@
 mod paritydb_weights;
 mod rocksdb_weights;
 
+mod weight_v2;
+pub use weight_v2::*;
+
 use crate::dispatch::{DispatchError, DispatchErrorWithPostInfo, DispatchResultWithPostInfo};
-use codec::{Decode, Encode, MaxEncodedLen};
+use codec::{Decode, Encode};
 use scale_info::TypeInfo;
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
@@ -142,7 +145,7 @@ use sp_arithmetic::{
 };
 use sp_runtime::{
 	generic::{CheckedExtrinsic, UncheckedExtrinsic},
-	traits::{SaturatedConversion, SignedExtension},
+	traits::{SaturatedConversion, SignedExtension, Zero, CheckedAdd},
 	RuntimeDebug,
 };
 
@@ -156,21 +159,6 @@ pub type TimeWeight = u64;
 
 /// Numeric range of a transaction storage weight.
 pub type StorageWeight = u64;
-
-#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Eq, PartialEq, Copy, Clone)]
-pub struct WeightV2 {
-	pub time: TimeWeight,
-	pub storage: StorageWeight,
-}
-
-impl From<TimeWeight> for WeightV2 {
-	fn from(t: TimeWeight) -> Self {
-		Self {
-			time: t,
-			storage: 0,
-		}
-	}
-}
 
 /// These constants are specific to FRAME, and the current implementation of its various components.
 /// For example: FRAME System, FRAME Executive, our FRAME support libraries, etc...
@@ -307,7 +295,7 @@ impl<'a> OneOrMany<DispatchClass> for &'a [DispatchClass] {
 #[derive(Clone, Copy, Eq, PartialEq, Default, RuntimeDebug, Encode, Decode, TypeInfo)]
 pub struct DispatchInfo {
 	/// Weight of this transaction.
-	pub weight: Weight,
+	pub weight: WeightV2,
 	/// Class of this transaction.
 	pub class: DispatchClass,
 	/// Does this transaction pay fees.
@@ -334,19 +322,19 @@ impl GetDispatchInfo for () {
 #[derive(Clone, Copy, Eq, PartialEq, Default, RuntimeDebug, Encode, Decode, TypeInfo)]
 pub struct PostDispatchInfo {
 	/// Actual weight consumed by a call or `None` which stands for the worst case static weight.
-	pub actual_weight: Option<Weight>,
+	pub actual_weight: Option<WeightV2>,
 	/// Whether this transaction should pay fees when all is said and done.
 	pub pays_fee: Pays,
 }
 
 impl PostDispatchInfo {
 	/// Calculate how much (if any) weight was not used by the `Dispatchable`.
-	pub fn calc_unspent(&self, info: &DispatchInfo) -> Weight {
+	pub fn calc_unspent(&self, info: &DispatchInfo) -> WeightV2 {
 		info.weight - self.calc_actual_weight(info)
 	}
 
 	/// Calculate how much weight was actually spent by the `Dispatchable`.
-	pub fn calc_actual_weight(&self, info: &DispatchInfo) -> Weight {
+	pub fn calc_actual_weight(&self, info: &DispatchInfo) -> WeightV2 {
 		if let Some(actual_weight) = self.actual_weight {
 			actual_weight.min(info.weight)
 		} else {
@@ -370,7 +358,7 @@ impl PostDispatchInfo {
 }
 
 /// Extract the actual weight from a dispatch result if any or fall back to the default weight.
-pub fn extract_actual_weight(result: &DispatchResultWithPostInfo, info: &DispatchInfo) -> Weight {
+pub fn extract_actual_weight(result: &DispatchResultWithPostInfo, info: &DispatchInfo) -> WeightV2 {
 	match result {
 		Ok(post_info) => &post_info,
 		Err(err) => &err.post_info,
@@ -380,6 +368,17 @@ pub fn extract_actual_weight(result: &DispatchResultWithPostInfo, info: &Dispatc
 
 impl From<(Option<Weight>, Pays)> for PostDispatchInfo {
 	fn from(post_weight_info: (Option<Weight>, Pays)) -> Self {
+		let (actual_time, pays_fee) = post_weight_info;
+		let actual_weight = WeightV2 {
+			time: actual_time,
+			bandwidth: Zero::zero(), // TODO SHAWN, backwards compat
+		};
+		Self { actual_weight, pays_fee }
+	}
+}
+
+impl From<(Option<WeightV2>, Pays)> for PostDispatchInfo {
+	fn from(post_weight_info: (Option<WeightV2>, Pays)) -> Self {
 		let (actual_weight, pays_fee) = post_weight_info;
 		Self { actual_weight, pays_fee }
 	}
@@ -778,10 +777,10 @@ impl<T: Clone> PerDispatchClass<T> {
 	}
 }
 
-impl PerDispatchClass<Weight> {
+impl PerDispatchClass<WeightV2> {
 	/// Returns the total weight consumed by all extrinsics in the block.
-	pub fn total(&self) -> Weight {
-		let mut sum = 0;
+	pub fn total(&self) -> WeightV2 {
+		let mut sum = WeightV2::zero();
 		for class in DispatchClass::all() {
 			sum = sum.saturating_add(*self.get(*class));
 		}
@@ -789,22 +788,22 @@ impl PerDispatchClass<Weight> {
 	}
 
 	/// Add some weight of a specific dispatch class, saturating at the numeric bounds of `Weight`.
-	pub fn add(&mut self, weight: Weight, class: DispatchClass) {
+	pub fn add(&mut self, weight: WeightV2, class: DispatchClass) {
 		let value = self.get_mut(class);
 		*value = value.saturating_add(weight);
 	}
 
 	/// Try to add some weight of a specific dispatch class, returning Err(()) if overflow would
 	/// occur.
-	pub fn checked_add(&mut self, weight: Weight, class: DispatchClass) -> Result<(), ()> {
+	pub fn checked_add(&mut self, weight: WeightV2, class: DispatchClass) -> Result<(), ()> {
 		let value = self.get_mut(class);
-		*value = value.checked_add(weight).ok_or(())?;
+		*value = value.checked_add(&weight).ok_or(())?;
 		Ok(())
 	}
 
 	/// Subtract some weight of a specific dispatch class, saturating at the numeric bounds of
 	/// `Weight`.
-	pub fn sub(&mut self, weight: Weight, class: DispatchClass) {
+	pub fn sub(&mut self, weight: WeightV2, class: DispatchClass) {
 		let value = self.get_mut(class);
 		*value = value.saturating_sub(weight);
 	}

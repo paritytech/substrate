@@ -19,11 +19,11 @@ use crate::{limits::BlockWeights, Config, Pallet};
 use codec::{Decode, Encode};
 use frame_support::{
 	traits::Get,
-	weights::{DispatchClass, DispatchInfo, PostDispatchInfo},
+	weights::{DispatchClass, DispatchInfo, PostDispatchInfo, WeightV2},
 };
 use scale_info::TypeInfo;
 use sp_runtime::{
-	traits::{DispatchInfoOf, Dispatchable, PostDispatchInfoOf, SignedExtension},
+	traits::{DispatchInfoOf, Dispatchable, PostDispatchInfoOf, SignedExtension, Zero},
 	transaction_validity::{InvalidTransaction, TransactionValidity, TransactionValidityError},
 	DispatchResult,
 };
@@ -49,7 +49,8 @@ where
 	) -> Result<(), TransactionValidityError> {
 		let max = T::BlockWeights::get().get(info.class).max_extrinsic;
 		match max {
-			Some(max) if info.weight > max => Err(InvalidTransaction::ExhaustsResources.into()),
+			// TODO SHAWN
+			Some(max) if info.weight > max.time => Err(InvalidTransaction::ExhaustsResources.into()),
 			_ => Ok(()),
 		}
 	}
@@ -127,8 +128,12 @@ pub fn calculate_consumed_weight<Call>(
 where
 	Call: Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
 {
-	let extrinsic_weight =
-		info.weight.saturating_add(maximum_weight.get(info.class).base_extrinsic);
+	let time =
+		info.weight.saturating_add(maximum_weight.get(info.class).base_extrinsic.time);
+	let extrinsic_weight = WeightV2 {
+		time,
+		bandwidth: Zero::zero(),	// TODO SHAWN
+	};
 	let limit_per_class = maximum_weight.get(info.class);
 
 	// add the weight. If class is unlimited, use saturating add instead of checked one.
@@ -152,6 +157,7 @@ where
 
 	// In cases total block weight is exceeded, we need to fall back
 	// to `reserved` pool if there is any.
+	// TODO SHAWN
 	if all_weight.total() > maximum_weight.max_block {
 		match limit_per_class.reserved {
 			// We are over the limit in reserved pool.
