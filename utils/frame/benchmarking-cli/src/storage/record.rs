@@ -129,9 +129,9 @@ impl Stats {
 
 impl Debug for Stats {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "Total: {}", self.sum)?;
-		write!(f, "Min, Max: {}, {}", self.min, self.max)?;
-		write!(f, "Average: {}, Median: {}, Stddev: {}", self.avg, self.median, self.stddev)?;
-		write!(f, "Percentiles 99th, 95th, 75th: {}, {}, {}", self.p99, self.p95, self.p75)
+		write!(f, "Total: {}\n", self.sum)?;
+		write!(f, "Min: {}, Max: {}\n", self.min, self.max)?;
+		write!(f, "Average: {}, Median: {}, Stddev: {}\n", self.avg, self.median, self.stddev)?;
+		write!(f, "Percentiles 99th, 95th, 75th: {}, {}, {}\n", self.p99, self.p95, self.p75)
 	}
 }

@@ -62,7 +62,7 @@ impl StorageCmd {
 
 		// Interesting part here:
 		// Read all the keys in the database and measure the time it takes to access each.
-		info!("Instrumentation round");
+		info!("Reading {} keys", keys.len());
 		for key in keys.clone() {
 			let start = Instant::now();
 			let v = client

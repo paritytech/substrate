@@ -22,6 +22,7 @@ use sc_service::Configuration;
 use sp_api::StateBackend;
 use sp_blockchain::HeaderBackend;
 use sp_core::H256;
+use sp_trie::PrefixedMemoryDB;
 use sp_database::Transaction;
 use sp_runtime::{
 	generic::BlockId,
@@ -70,7 +71,6 @@ impl StorageCmd {
 			// Create a random value to overwrite with.
 			// NOTE: We use a possibly higher entropy than the original value,
 			// could be improved but acts as an over-estimation which is fine for now.
-			//let new_v = random_vec(&mut rng, original_v.len());
 			let mut new_v = vec![0; original_v.len()];
 			rng.fill_bytes(&mut new_v[..]);
 
@@ -106,10 +106,10 @@ impl StorageCmd {
 
 /// Converts a Trie transaction into a DB transaction.
 fn convert_tx<B: BlockT>(
-	mut tx: sp_trie::PrefixedMemoryDB<HashFor<B>>,
+	mut tx: PrefixedMemoryDB<HashFor<B>>,
 	parity_db: bool,
 ) -> Transaction<H256> {
-	let mut ret = sp_database::Transaction::<H256>::default();
+	let mut ret = Transaction::<H256>::default();
 
 	for (mut k, (v, rc)) in tx.drain().into_iter() {
 		// Trunking keys is only needed for ParityDB.

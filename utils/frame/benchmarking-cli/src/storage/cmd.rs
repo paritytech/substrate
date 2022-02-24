@@ -58,7 +58,8 @@ pub struct StorageCmd {
 #[derive(Debug, Default, Serialize, Clone, PartialEq, Args)]
 pub struct StorageParams {
 	/// Path to write weight file to. Can be a file or directory.
-	#[clap(long)]
+	/// For substrate this should go into `frame/support/src/weights`.
+	#[clap(long, default_value = ".")]
 	pub weight_path: String,
 
 	/// Skip the `read` benchmark.
