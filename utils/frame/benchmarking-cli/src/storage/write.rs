@@ -17,7 +17,7 @@
 
 use sc_cli::Result;
 use sc_client_api::UsageProvider;
-use sc_client_db::{columns, DatabaseSource, DbHash, DbState};
+use sc_client_db::{columns, DB_HASH_LEN, DatabaseSource, DbHash, DbState};
 use sc_service::Configuration;
 use sp_api::StateBackend;
 use sp_blockchain::HeaderBackend;
@@ -112,11 +112,10 @@ fn convert_tx<B: BlockT>(
 	let mut ret = Transaction::<H256>::default();
 
 	for (mut k, (v, rc)) in tx.drain().into_iter() {
-		// Trunking keys is only needed for ParityDB.
-		// This is an optimization that ParityDB can do but RocksDB not. RocksDB
-		// needs the full key with prefix.
+		// Using shorter keys is only possible for ParityDB.
+		// RocksDB needs the full key with prefix.
 		if parity_db {
-			k.drain(0..k.len() - 32);
+			k.drain(0..k.len() - DB_HASH_LEN);
 		}
 
 		if rc > 0 {

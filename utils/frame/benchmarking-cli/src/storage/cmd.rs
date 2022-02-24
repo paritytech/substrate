@@ -22,9 +22,8 @@ use sc_service::Configuration;
 use sp_blockchain::HeaderBackend;
 use sp_database::Database;
 use sp_runtime::traits::{Block as BlockT, HashFor};
-use sp_state_machine::{Backend as StateBackend, Storage};
+use sp_state_machine::{Storage};
 use sp_storage::StateVersion;
-use sp_trie::PrefixedMemoryDB;
 
 use serde::Serialize;
 use clap::{Args, Parser};
@@ -54,11 +53,11 @@ pub struct StorageCmd {
 	pub params: StorageParams,
 }
 
-/// Parameters concerned with modifying the post processing behaviour.
+/// Parameters for modifying the benchmark behaviour and the post processing of the results.
 #[derive(Debug, Default, Serialize, Clone, PartialEq, Args)]
 pub struct StorageParams {
-	/// Path to write weight file to. Can be a file or directory.
-	/// For substrate this should go into `frame/support/src/weights`.
+	/// Path to write the *weight* file to. Can be a file or directory.
+	/// For substrate this should be `frame/support/src/weights`.
 	#[clap(long, default_value = ".")]
 	pub weight_path: String,
 
@@ -75,7 +74,7 @@ pub struct StorageParams {
 	#[clap(long, default_value = "1")]
 	pub warmups: u32,
 
-	/// Use a specific seed instead of picking one at random.
+	/// Use a specific seed instead of picking a random one.
 	#[clap(long)]
 	pub seed: Option<u64>,
 
@@ -91,7 +90,7 @@ pub struct StorageParams {
 impl StorageCmd {
 	/// Calls into the Read and Write benchmarking functions.
 	/// Processes the output and writes it into files and stdout.
-	pub async fn run<Block, BA, S, C>(
+	pub async fn run<Block, BA, C>(
 		&self,
 		cfg: Configuration,
 		client: Arc<C>,
@@ -99,10 +98,9 @@ impl StorageCmd {
 		storage: Arc<dyn Storage<HashFor<Block>>>,
 	) -> Result<()>
 	where
-		BA: ClientBackend<Block, State = S>,
+		BA: ClientBackend<Block>,
 		Block: BlockT<Hash = sp_core::H256>,
 		C: UsageProvider<Block> + StorageProvider<Block, BA> + HeaderBackend<Block>,
-		S: StateBackend<HashFor<Block>, Transaction = PrefixedMemoryDB<HashFor<Block>>>,
 	{
 		let mut template = TemplateData::new(&cfg, &self.params);
 
@@ -134,7 +132,7 @@ impl StorageCmd {
 		}
 	}
 
-	/// Creates an rng from the specified seed or a random seed otherwise.
+	/// Creates an rng from the specified seed or from a random seed otherwise.
 	pub(crate) fn setup_rng(&self) -> impl rand::Rng {
 		let seed = self.params.seed.unwrap_or(rand::thread_rng().gen::<u64>());
 		info!("Using seed {}", seed);

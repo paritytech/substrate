@@ -21,7 +21,7 @@ use sc_cli::Result;
 
 use log::info;
 use serde::Serialize;
-use std::{fmt::Debug, fs, time::Duration};
+use std::{fmt, fs, time::Duration};
 
 /// Raw output of a Storage benchmark.
 #[derive(Debug, Default, Clone, Serialize)]
@@ -31,7 +31,7 @@ pub(crate) struct BenchRecord {
 }
 
 /// Various statistics that help to gauge the quality of the produced weights.
-/// Will be displayed in the outputted weight file.
+/// Will be written to the weight file and printed to console.
 #[derive(Serialize, Default, Clone)]
 pub(crate) struct Stats {
 	/// Sum of all values.
@@ -59,11 +59,11 @@ pub(crate) struct Stats {
 impl BenchRecord {
 	/// Appends a new record. Uses safe casts.
 	pub fn append(&mut self, size: usize, d: Duration) -> Result<()> {
+		let size: u64 = size.try_into().map_err(|e| format!("Size overflow u64: {}", e))?;
 		let ns: u64 = d
 			.as_nanos()
 			.try_into()
 			.map_err(|e| format!("Nanoseconds overflow u64: {}", e))?;
-		let size: u64 = size.try_into().map_err(|e| format!("Size overflow u64: {}", e))?;
 		self.ns_per_size.push((size, ns));
 		Ok(())
 	}
@@ -77,7 +77,6 @@ impl BenchRecord {
 	}
 
 	/// Saves the raw results in a json file under the given relative path.
-	///
 	/// Does not append ".json" to the passed path.
 	pub fn save_json(&self, path: &str) -> Result<()> {
 		let json = serde_json::to_string_pretty(&self)
@@ -89,10 +88,10 @@ impl BenchRecord {
 }
 
 impl Stats {
-	/// Calculate statistics and return them.
+	/// Calculates statistics and returns them.
 	pub fn new(xs: &Vec<u64>) -> Result<Self> {
 		if xs.is_empty() {
-			return Err("Empty input is invalid".into())
+			return Err("Empty input is invalid".into());
 		}
 		let (avg, stddev) = Self::avg_and_stddev(&xs);
 
@@ -127,8 +126,8 @@ impl Stats {
 	}
 }
 
-impl Debug for Stats {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Debug for Stats {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		write!(f, "Total: {}\n", self.sum)?;
 		write!(f, "Min: {}, Max: {}\n", self.min, self.max)?;
 		write!(f, "Average: {}, Median: {}, Stddev: {}\n", self.avg, self.median, self.stddev)?;

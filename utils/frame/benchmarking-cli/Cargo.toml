@@ -33,7 +33,6 @@ sp-std = { version = "4.0.0", default-features = false, path = "../../../primiti
 sp-state-machine = { version = "0.11.0", path = "../../../primitives/state-machine" }
 sp-trie = { version = "5.0.0", path = "../../../primitives/trie" }
 codec = { version = "2.0.0", package = "parity-scale-codec" }
-
 clap = { version = "3.0", features = ["derive"] }
 chrono = "0.4"
 serde = "1.0.136"
@@ -52,4 +51,4 @@ rand = { version = "0.8.4", features = ["small_rng"] }
 
 [features]
 default = ["db"]
-db = ["sc-client-db/with-kvdb-rocksdb", "sc-client-db/with-parity-db", "sc-client-db/test-helpers"]
+db = ["sc-client-db/with-kvdb-rocksdb", "sc-client-db/with-parity-db"]

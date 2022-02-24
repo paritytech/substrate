@@ -1,3 +1,20 @@
+// This file is part of Substrate.
+
+// Copyright (C) 2022 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
+
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 use sc_cli::Result;
 use sc_service::Configuration;
 
@@ -10,26 +27,26 @@ use super::{record::Stats, cmd::StorageParams};
 static VERSION: &'static str = env!("CARGO_PKG_VERSION");
 static TEMPLATE: &str = include_str!("./weights.hbs");
 
-/// Data consumed by Handlebar to fill out `weights.hbs`.
+/// Data consumed by Handlebar to fill out the `weights.hbs` template.
 #[derive(Serialize, Default, Debug, Clone)]
 pub(crate) struct TemplateData {
-	/// Name of the database used. Can be "ParityDb" or "RocksDb".
+	/// Name of the database used.
 	db_name: String,
 	/// Name of the runtime. Taken from the chain spec.
 	runtime_name: String,
-	/// Version of the benchmarking CLI.
+	/// Version of the benchmarking CLI used.
 	version: String,
 	/// Date that the template was filled out.
 	date: String,
-	/// Command line arguments that were passed to the program.
+	/// Command line arguments that were passed to the CLI.
 	args: Vec<String>,
 	/// Storage params of the executed command.
 	params: StorageParams,
 	/// Stats about a `read` benchmark. Contains *time* and *value size* stats.
-	/// The *value size* stats are currently unused in the template.
+	/// The *value size* stats are currently not used in the template.
 	pub read: Option<(Stats, Stats)>,
 	/// Stats about a `write` benchmark. Contains *time* and *value size* stats.
-	/// The *value size* stats are currently unused in the template.
+	/// The *value size* stats are currently not used in the template.
 	pub write: Option<(Stats, Stats)>,
 }
 
@@ -50,8 +67,8 @@ impl TemplateData {
 	/// Filles out the `weights.hbs` HBS template with its own data.
 	/// Writes the result to `path` which can be a directory or file.
 	pub fn write(&self, path: &str) -> Result<()> {
-		// New Handlebars instance.
 		let mut handlebars = handlebars::Handlebars::new();
+		// Format large integers with underscore.
 		handlebars.register_helper("underscore", Box::new(crate::writer::UnderscoreHelper));
 		// Don't HTML escape any characters.
 		handlebars.register_escape_fn(|s| -> String { s.to_string() });
