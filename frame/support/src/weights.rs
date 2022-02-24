@@ -127,8 +127,10 @@
 //! - Ubuntu 19.10 (GNU/Linux 5.3.0-18-generic x86_64)
 //! - rustc 1.42.0 (b8cedc004 2020-03-09)
 
-use crate::dispatch::{DispatchError, DispatchErrorWithPostInfo, DispatchResultWithPostInfo};
-use crate::traits::Get;
+use crate::{
+	dispatch::{DispatchError, DispatchErrorWithPostInfo, DispatchResultWithPostInfo},
+	traits::Get
+};
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
 #[cfg(feature = "std")]
@@ -715,7 +717,7 @@ where
 }
 
 /// Implementor of `WeightToFeePolynomial` that uses a constant modifier.
-pub struct ConstantModifierFee<T, M>(sp_std::marker::PhantomData<T>, sp_std::marker::PhantomData<M>);
+pub struct ConstantModifierFee<T, M>(sp_std::marker::PhantomData<(T, M)>);
 
 impl<T, M> WeightToFeePolynomial for ConstantModifierFee<T, M>
 where
@@ -1007,5 +1009,14 @@ mod tests {
 		assert_eq!(IdentityFee::<Balance>::calc(&0), 0);
 		assert_eq!(IdentityFee::<Balance>::calc(&50), 50);
 		assert_eq!(IdentityFee::<Balance>::calc(&Weight::max_value()), Balance::max_value());
+	}
+
+	#[test]
+	fn constant_fee_works() {
+		use crate::traits::ConstU128;
+		assert_eq!(ConstantModifierFee::<u128, ConstU128<100u128>>::calc(&0), 0);
+		assert_eq!(ConstantModifierFee::<u128, ConstU128<10u128>>::calc(&50), 500);
+		assert_eq!(ConstantModifierFee::<u128, ConstU128<1024u128>>::calc(&16), 16384);
+		assert_eq!(ConstantModifierFee::<u128, ConstU128<{ u128::MAX }>>::calc(&2), u128::MAX);
 	}
 }
