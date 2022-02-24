@@ -349,6 +349,11 @@ where
 	Ok((wasm_binary, code_hash))
 }
 
+fn initialize_block(number: u64) {
+	System::reset_events();
+	System::initialize(&number, &[0u8; 32].into(), &Default::default());
+}
+
 // Perform a call to a plain account.
 // The actual transfer fails because we can only call contracts.
 // Then we check that at least the base costs where charged (no runtime gas costs.)
@@ -540,9 +545,67 @@ fn run_out_of_gas() {
 	});
 }
 
-fn initialize_block(number: u64) {
-	System::reset_events();
-	System::initialize(&number, &[0u8; 32].into(), &Default::default());
+/// Check that contracts with the same account id have different trie ids.
+/// Check the `AccountCounter` storage item for more information.
+#[test]
+fn instantiate_unique_trie_id() {
+	let (wasm, code_hash) = compile_module::<Test>("self_destruct").unwrap();
+
+	ExtBuilder::default().existential_deposit(500).build().execute_with(|| {
+		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+		Contracts::upload_code(Origin::signed(ALICE), wasm, None).unwrap();
+		let addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
+
+		// Instantiate the contract and store its trie id for later comparison.
+		assert_ok!(Contracts::instantiate(
+			Origin::signed(ALICE),
+			0,
+			GAS_LIMIT,
+			None,
+			code_hash,
+			vec![],
+			vec![],
+		));
+		let trie_id = ContractInfoOf::<Test>::get(&addr).unwrap().trie_id;
+
+		// Try to instantiate it again without termination should yield an error.
+		assert_err_ignore_postinfo!(
+			Contracts::instantiate(
+				Origin::signed(ALICE),
+				0,
+				GAS_LIMIT,
+				None,
+				code_hash,
+				vec![],
+				vec![],
+			),
+			<Error<Test>>::DuplicateContract,
+		);
+
+		// Terminate the contract.
+		assert_ok!(Contracts::call(
+			Origin::signed(ALICE),
+			addr.clone(),
+			0,
+			GAS_LIMIT,
+			None,
+			vec![]
+		));
+
+		// Re-Instantiate after termination.
+		assert_ok!(Contracts::instantiate(
+			Origin::signed(ALICE),
+			0,
+			GAS_LIMIT,
+			None,
+			code_hash,
+			vec![],
+			vec![],
+		));
+
+		// Trie ids shouldn't match or we might have a collision
+		assert_ne!(trie_id, ContractInfoOf::<Test>::get(&addr).unwrap().trie_id);
+	});
 }
 
 #[test]

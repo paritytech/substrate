@@ -315,9 +315,9 @@ pub struct Stack<'a, T: Config, E> {
 	timestamp: MomentOf<T>,
 	/// The block number at the time of call stack instantiation.
 	block_number: T::BlockNumber,
-	/// The account counter is cached here when accessed. It is written back when the call stack
+	/// The trie_seed is cached here when accessed. It is written back when the call stack
 	/// finishes executing.
-	account_counter: Option<u64>,
+	trie_seed: Option<u64>,
 	/// The actual call stack. One entry per nested contract called/instantiated.
 	/// This does **not** include the [`Self::first_frame`].
 	frames: SmallVec<T::CallStack>,
@@ -596,7 +596,7 @@ where
 		value: BalanceOf<T>,
 		debug_message: Option<&'a mut Vec<u8>>,
 	) -> Result<(Self, E), ExecError> {
-		let (first_frame, executable, account_counter) =
+		let (first_frame, executable, trie_seed) =
 			Self::new_frame(args, value, gas_meter, storage_meter, 0, &schedule)?;
 		let stack = Self {
 			origin,
@@ -605,7 +605,7 @@ where
 			storage_meter,
 			timestamp: T::Time::now(),
 			block_number: <frame_system::Pallet<T>>::block_number(),
-			account_counter,
+			trie_seed,
 			first_frame,
 			frames: Default::default(),
 			debug_message,
@@ -627,7 +627,7 @@ where
 		gas_limit: Weight,
 		schedule: &Schedule<T>,
 	) -> Result<(Frame<T>, E, Option<u64>), ExecError> {
-		let (account_id, contract_info, executable, delegate_caller, entry_point, account_counter) =
+		let (account_id, contract_info, executable, delegate_caller, entry_point, trie_seed) =
 			match frame_args {
 				FrameArgs::Call { dest, cached_info, delegated_call } => {
 					let contract = if let Some(contract) = cached_info {
@@ -676,7 +676,7 @@ where
 			allows_reentry: true,
 		};
 
-		Ok((frame, executable, account_counter))
+		Ok((frame, executable, trie_seed))
 	}
 
 	/// Create a subsequent nested frame.
@@ -782,9 +782,9 @@ where
 	/// This is called after running the current frame. It commits cached values to storage
 	/// and invalidates all stale references to it that might exist further down the call stack.
 	fn pop_frame(&mut self, persist: bool) {
-		// Revert the account counter in case of a failed instantiation.
+		// Revert changes to the trie_seed in case of a failed instantiation.
 		if !persist && self.top_frame().entry_point == ExportedFunction::Constructor {
-			self.account_counter.as_mut().map(|c| *c = c.wrapping_sub(1));
+			self.trie_seed.as_mut().map(|c| *c = c.wrapping_sub(1));
 		}
 
 		// Pop the current frame from the stack and return it in case it needs to interact
@@ -861,8 +861,8 @@ where
 			if let Some(contract) = contract {
 				<ContractInfoOf<T>>::insert(&self.first_frame.account_id, contract);
 			}
-			if let Some(counter) = self.account_counter {
-				<AccountCounter<T>>::set(counter);
+			if let Some(trie_seed) = self.trie_seed {
+				<AccountCounter<T>>::set(trie_seed);
 			}
 		}
 	}
@@ -922,12 +922,12 @@ where
 
 	/// Increments the cached account id and returns the value to be used for the trie_id.
 	fn next_trie_seed(&mut self) -> u64 {
-		let next = if let Some(current) = self.account_counter {
+		let next = if let Some(current) = self.trie_seed {
 			current.wrapping_add(1)
 		} else {
 			Self::initial_trie_seed()
 		};
-		self.account_counter = Some(next);
+		self.trie_seed = Some(next);
 		next
 	}
 
@@ -2445,7 +2445,7 @@ mod tests {
 	}
 
 	#[test]
-	fn account_counter() {
+	fn trie_seed() {
 		let fail_code = MockLoader::insert(Constructor, |_, _| exec_trapped());
 		let success_code = MockLoader::insert(Constructor, |_, _| exec_success());
 		let succ_fail_code = MockLoader::insert(Constructor, move |ctx, _| {

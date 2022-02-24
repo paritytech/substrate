@@ -665,7 +665,27 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(crate) type OwnerInfoOf<T: Config> = StorageMap<_, Identity, CodeHash<T>, OwnerInfo<T>>;
 
-	/// The subtrie counter.
+	/// This is a monotonic counter in order to generate unique trie ids.
+	///
+	/// The trie of a new contract is calculated from hash(account_id, AccountCounter).
+	/// The account counter is required because otherwise the following sequence would lead to
+	/// a possible collision of storage:
+	///
+	/// 1. Create a new contract with account_id = a.
+	/// 2. Terminate the contract.
+	/// 3. Immediately recreate the contract with the same account_id (a).
+	///
+	/// This is bad because the contents of a trie are deleted lazily and there might be
+	/// storage of the old instantiation still in it when the new contract is created. Please
+	/// note that we can't replace the counter by the block number because the sequence above
+	/// can happen in the same block. We also can't keep the account counter in memory only
+	/// because storage is the only way to communicate across different extrinsics in the
+	/// same block.
+	///
+	/// # Note
+	///
+	/// Do not use it to determine the number of contracts. It won't be decremented if
+	/// a contract is destroyed.
 	#[pallet::storage]
 	pub(crate) type AccountCounter<T: Config> = StorageValue<_, u64, ValueQuery>;
 
