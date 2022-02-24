@@ -30,7 +30,7 @@ thiserror = "1.0.30"
 tiny-bip39 = "0.8.2"
 tokio = { version = "1.15", features = ["signal", "rt-multi-thread", "parking_lot"] }
 
-parity-scale-codec = "2.3.1"
+parity-scale-codec = "3.0.0"
 sc-client-api = { version = "4.0.0-dev", path = "../api" }
 sc-keystore = { version = "4.0.0-dev", path = "../keystore" }
 sc-network = { version = "0.10.0-dev", path = "../network" }

@@ -16,7 +16,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 sc-rpc-api = { version = "0.10.0-dev", path = "../rpc-api" }
 sc-client-api = { version = "4.0.0-dev", path = "../api" }
 sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
-codec = { package = "parity-scale-codec", version = "2.0.0" }
+codec = { package = "parity-scale-codec", version = "3.0.0" }
 futures = "0.3.16"
 jsonrpc-pubsub = "18.0.0"
 log = "0.4.8"
@@ -35,7 +35,7 @@ sc-block-builder = { version = "0.10.0-dev", path = "../block-builder" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
 sc-tracing = { version = "4.0.0-dev", path = "../tracing" }
 hash-db = { version = "0.15.2", default-features = false }
-parking_lot = "0.11.2"
+parking_lot = "0.12.0"
 lazy_static = { version = "1.4.0", optional = true }
 sc-transaction-pool-api = { version = "4.0.0-dev", path = "../transaction-pool/api" }
 

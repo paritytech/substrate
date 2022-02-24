@@ -216,9 +216,9 @@ impl<T: Config> Token<T> for CodeToken {
 		// point because when charging the general weight for calling the contract we not know the
 		// size of the contract.
 		match *self {
-			Reinstrument(len) => T::WeightInfo::reinstrument(len / 1024),
-			Load(len) => T::WeightInfo::call_with_code_kb(len / 1024)
-				.saturating_sub(T::WeightInfo::call_with_code_kb(0)),
+			Reinstrument(len) => T::WeightInfo::reinstrument(len),
+			Load(len) => T::WeightInfo::call_with_code_per_byte(len)
+				.saturating_sub(T::WeightInfo::call_with_code_per_byte(0)),
 		}
 	}
 }

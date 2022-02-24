@@ -13,8 +13,8 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
-scale-info = { version = "1.0", default-features = false, features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive"] }
+scale-info = { version = "2.0.0", default-features = false, features = ["derive"] }
 sp-application-crypto = { version = "5.0.0", default-features = false, path = "../../primitives/application-crypto" }
 sp-core = { version = "5.0.0", default-features = false, path = "../../primitives/core" }
 sp-finality-grandpa = { version = "4.0.0-dev", default-features = false, path = "../../primitives/finality-grandpa" }
@@ -32,7 +32,7 @@ log = { version = "0.4.14", default-features = false }
 
 [dev-dependencies]
 frame-benchmarking = { version = "4.0.0-dev", path = "../benchmarking" }
-grandpa = { package = "finality-grandpa", version = "0.14.1", features = ["derive-codec"] }
+grandpa = { package = "finality-grandpa", version = "0.15.0", features = ["derive-codec"] }
 sp-keyring = { version = "5.0.0", path = "../../primitives/keyring" }
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 pallet-offences = { version = "4.0.0-dev", path = "../offences" }
