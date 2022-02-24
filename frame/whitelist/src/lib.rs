@@ -108,10 +108,15 @@ pub mod pallet {
 
 	#[pallet::error]
 	pub enum Error<T> {
+		/// The preimage of the call hash could not be loaded.
 		UnavailablePreImage,
+		/// The call could not be decoded.
 		UndecodableCall,
+		/// The weight of the decoded call was higher than the witness.
 		InvalidCallWeightWitness,
+		/// The call was not whitelisted.
 		CallIsNotWhitelisted,
+		/// The call was already whitelisted; No-Op.
 		CallAlreadyWhitelisted,
 	}
 
