@@ -423,8 +423,12 @@ impl sp_runtime::traits::Printable for PostDispatchInfo {
 		"actual_weight=".print();
 		match self.actual_weight {
 			Some(weight) => {
-				print!("time({:?})", weight.time);
-				print!("bandwidth({:?})", weight.bandwidth);
+				"time(".print();
+				weight.time.print();
+				")".print();
+				"bandwidth(".print();
+				")".print();
+				weight.bandwidth.print();
 			},
 			None => "max-weight".print(),
 		};

@@ -1,7 +1,7 @@
 use codec::{Decode, Encode, MaxEncodedLen};
 use core::ops::{Add, Mul, Sub};
 use sp_runtime::{
-	traits::{CheckedAdd, Zero},
+	traits::{CheckedAdd, One, Zero},
 	RuntimeDebug,
 };
 
@@ -49,6 +49,12 @@ impl Zero for WeightV2 {
 	}
 }
 
+impl One for WeightV2 {
+	fn one() -> Self {
+		Self { time: 1, bandwidth: 1 }
+	}
+}
+
 impl Add for WeightV2 {
 	type Output = Self;
 	fn add(self, rhs: Self) -> Self {
@@ -69,10 +75,24 @@ impl From<TimeWeight> for WeightV2 {
 	}
 }
 
+impl Mul for WeightV2 {
+	type Output = Self;
+	fn mul(self, b: Self) -> Self {
+		Self { time: b.time * self.time, bandwidth: b.bandwidth * self.bandwidth }
+	}
+}
+
 impl Mul<Perbill> for WeightV2 {
 	type Output = Self;
 	fn mul(self, b: Perbill) -> Self {
 		Self { time: b * self.time, bandwidth: b * self.bandwidth }
+	}
+}
+
+impl Mul<WeightV2> for Perbill {
+	type Output = WeightV2;
+	fn mul(self, b: WeightV2) -> WeightV2 {
+		WeightV2 { time: self * b.time, bandwidth: self * b.bandwidth }
 	}
 }
 

@@ -222,7 +222,8 @@ fn deposit_event_uses_actual_weight() {
 		System::initialize(&1, &[0u8; 32].into(), &Default::default());
 		System::note_finished_initialize();
 
-		let pre_info = DispatchInfo { weight: 1000, ..Default::default() };
+		let pre_info =
+			DispatchInfo { weight: WeightV2 { time: 1000, bandwidth: 1000 }, ..Default::default() };
 		System::note_applied_extrinsic(&Ok(Some(300).into()), pre_info);
 		System::note_applied_extrinsic(&Ok(Some(1000).into()), pre_info);
 		System::note_applied_extrinsic(
@@ -230,7 +231,10 @@ fn deposit_event_uses_actual_weight() {
 			&Ok(Some(1200).into()),
 			pre_info,
 		);
-		System::note_applied_extrinsic(&Err(DispatchError::BadOrigin.with_weight(999)), pre_info);
+		System::note_applied_extrinsic(
+			&Err(DispatchError::BadOrigin.with_weight(WeightV2 { time: 999, bandwidth: 999 })),
+			pre_info,
+		);
 
 		assert_eq!(
 			System::events(),
@@ -238,7 +242,10 @@ fn deposit_event_uses_actual_weight() {
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
 					event: SysEvent::ExtrinsicSuccess {
-						dispatch_info: DispatchInfo { weight: 300, ..Default::default() },
+						dispatch_info: DispatchInfo {
+							weight: WeightV2 { time: 300, bandwidth: 0 },
+							..Default::default()
+						},
 					}
 					.into(),
 					topics: vec![]
@@ -246,7 +253,10 @@ fn deposit_event_uses_actual_weight() {
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(1),
 					event: SysEvent::ExtrinsicSuccess {
-						dispatch_info: DispatchInfo { weight: 1000, ..Default::default() },
+						dispatch_info: DispatchInfo {
+							weight: WeightV2 { time: 1000, bandwidth: 0 },
+							..Default::default()
+						},
 					}
 					.into(),
 					topics: vec![]
@@ -254,7 +264,10 @@ fn deposit_event_uses_actual_weight() {
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(2),
 					event: SysEvent::ExtrinsicSuccess {
-						dispatch_info: DispatchInfo { weight: 1000, ..Default::default() },
+						dispatch_info: DispatchInfo {
+							weight: WeightV2 { time: 1000, bandwidth: 0 },
+							..Default::default()
+						},
 					}
 					.into(),
 					topics: vec![]
@@ -263,7 +276,10 @@ fn deposit_event_uses_actual_weight() {
 					phase: Phase::ApplyExtrinsic(3),
 					event: SysEvent::ExtrinsicFailed {
 						dispatch_error: DispatchError::BadOrigin.into(),
-						dispatch_info: DispatchInfo { weight: 999, ..Default::default() },
+						dispatch_info: DispatchInfo {
+							weight: WeightV2 { time: 999, bandwidth: 999 },
+							..Default::default()
+						},
 					}
 					.into(),
 					topics: vec![]

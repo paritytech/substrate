@@ -32,7 +32,7 @@ use sp_runtime::{
 	Perbill, RuntimeDebug,
 };
 
-use std::ops::Mul;
+use core::ops::Mul;
 
 /// Block length limit configuration.
 #[derive(RuntimeDebug, Clone, codec::Encode, codec::Decode, TypeInfo)]

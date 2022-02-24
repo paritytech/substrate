@@ -36,7 +36,7 @@ use cfg_if::cfg_if;
 use frame_support::{
 	parameter_types,
 	traits::{ConstU32, ConstU64, CrateVersion, KeyOwnerProofSystem},
-	weights::RuntimeDbWeight,
+	weights::{RuntimeDbWeight, WeightV2},
 };
 use frame_system::limits::{BlockLength, BlockWeights};
 use sp_api::{decl_runtime_apis, impl_runtime_apis};
@@ -561,7 +561,10 @@ parameter_types! {
 	pub RuntimeBlockLength: BlockLength =
 		BlockLength::max(4 * 1024 * 1024);
 	pub RuntimeBlockWeights: BlockWeights =
-		BlockWeights::with_sensible_defaults(4 * 1024 * 1024, Perbill::from_percent(75));
+		BlockWeights::with_sensible_defaults(WeightV2 {
+			time: 4 * 1024 * 1024,
+			bandwidth: 5 * 1024 * 1024,
+		}, Perbill::from_percent(75));
 }
 
 impl frame_system::Config for Runtime {
