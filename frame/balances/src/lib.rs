@@ -2189,3 +2189,11 @@ where
 		Self::update_locks(who, &locks[..]);
 	}
 }
+
+pub struct BalancesTotalIssuance<T, I = ()>(sp_std::marker::PhantomData<(T, I)>);
+
+impl<T: Config<I>, I: 'static> Get<T::Balance> for BalancesTotalIssuance<T, I> {
+	fn get() -> T::Balance {
+		Pallet::<T, I>::total_issuance()
+	}
+}

@@ -830,6 +830,7 @@ impl pallet_democracy::Config for Runtime {
 	type MaxVotes = frame_support::traits::ConstU32<100>;
 	type WeightInfo = pallet_democracy::weights::SubstrateWeight<Runtime>;
 	type MaxProposals = MaxProposals;
+	type LiquidTotalIssuance = pallet_balances::BalancesTotalIssuance<Self>;
 }
 
 parameter_types! {

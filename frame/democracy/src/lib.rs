@@ -368,6 +368,10 @@ pub mod pallet {
 		/// The maximum number of public proposals that can exist at any time.
 		#[pallet::constant]
 		type MaxProposals: Get<u32>;
+
+		/// The maximumal possible amount of tokens that can participate in the governance.
+		/// Note: This is not a constant.
+		type LiquidTotalIssuance: Get<BalanceOf<Self>>;
 	}
 
 	// TODO: Refactor public proposal queue into its own pallet.
@@ -1705,7 +1709,7 @@ impl<T: Config> Pallet<T> {
 		index: ReferendumIndex,
 		status: ReferendumStatus<T::BlockNumber, T::Hash, BalanceOf<T>>,
 	) -> bool {
-		let total_issuance = T::Currency::total_issuance();
+		let total_issuance = T::LiquidTotalIssuance::get();
 		let approved = status.threshold.approved(status.tally, total_issuance);
 
 		if approved {

@@ -184,6 +184,7 @@ impl Config for Test {
 	type PalletsOrigin = OriginCaller;
 	type WeightInfo = ();
 	type MaxProposals = ConstU32<100>;
+	type LiquidTotalIssuance = pallet_balances::BalancesTotalIssuance<Self>;
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
