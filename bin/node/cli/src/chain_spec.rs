@@ -21,7 +21,7 @@
 use grandpa_primitives::AuthorityId as GrandpaId;
 use hex_literal::hex;
 use node_runtime::{
-	constants::currency::*, wasm_binary_unwrap, AuthorityDiscoveryConfig, AuraConfig, BabeConfig,
+	constants::currency::*, wasm_binary_unwrap, AuthorityDiscoveryConfig, BabeConfig,
 	BalancesConfig, Block, CouncilConfig, DemocracyConfig, ElectionsConfig, GrandpaConfig,
 	ImOnlineConfig, IndicesConfig, SessionConfig, SessionKeys, SocietyConfig, StakerStatus,
 	StakingConfig, SudoConfig, SystemConfig, TechnicalCommitteeConfig, MAX_NOMINATIONS,
@@ -32,8 +32,8 @@ use sc_service::ChainType;
 use sc_telemetry::TelemetryEndpoints;
 use serde::{Deserialize, Serialize};
 use sp_authority_discovery::AuthorityId as AuthorityDiscoveryId;
-use sp_consensus_babe::AuthorityId as BabeId;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
+use sp_consensus_babe::AuthorityId as BabeId;
 use sp_core::{crypto::UncheckedInto, sr25519, Pair, Public};
 use sp_runtime::{
 	traits::{IdentifyAccount, Verify},
@@ -76,11 +76,12 @@ pub fn flaming_fir_config() -> Result<ChainSpec, String> {
 
 fn session_keys(
 	grandpa: GrandpaId,
+	aura: AuraId,
 	babe: BabeId,
 	im_online: ImOnlineId,
 	authority_discovery: AuthorityDiscoveryId,
 ) -> SessionKeys {
-	SessionKeys { grandpa, babe, im_online, authority_discovery }
+	SessionKeys { grandpa, aura, babe, im_online, authority_discovery }
 }
 
 fn staging_testnet_config_genesis() -> GenesisConfig {
@@ -97,6 +98,7 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 		AccountId,
 		AccountId,
 		GrandpaId,
+		AuraId,
 		BabeId,
 		ImOnlineId,
 		AuthorityDiscoveryId,
@@ -108,6 +110,9 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 			hex!["781ead1e2fa9ccb74b44c19d29cb2a7a4b5be3972927ae98cd3877523976a276"].into(),
 			// 5Fb9ayurnxnaXj56CjmyQLBiadfRCqUbL2VWNbbe1nZU6wiC
 			hex!["9becad03e6dcac03cee07edebca5475314861492cdfc96a2144a67bbe9699332"]
+				.unchecked_into(),
+			// 5EZaeQ8djPcq9pheJUhgerXQZt9YaHnMJpiHMRhwQeinqUW8
+			hex!["6e7e4eb42cbd2e0ab4cae8708ce5509580b8c04d11f6758dbf686d50fe9f9106"]
 				.unchecked_into(),
 			// 5EZaeQ8djPcq9pheJUhgerXQZt9YaHnMJpiHMRhwQeinqUW8
 			hex!["6e7e4eb42cbd2e0ab4cae8708ce5509580b8c04d11f6758dbf686d50fe9f9106"]
@@ -136,6 +141,9 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 			// 5DhLtiaQd1L1LU9jaNeeu9HJkP6eyg3BwXA7iNMzKm7qqruQ
 			hex!["482dbd7297a39fa145c570552249c2ca9dd47e281f0c500c971b59c9dcdcd82e"]
 				.unchecked_into(),
+			// 5DhLtiaQd1L1LU9jaNeeu9HJkP6eyg3BwXA7iNMzKm7qqruQ
+			hex!["482dbd7297a39fa145c570552249c2ca9dd47e281f0c500c971b59c9dcdcd82e"]
+				.unchecked_into(),
 		),
 		(
 			// 5DyVtKWPidondEu8iHZgi6Ffv9yrJJ1NDNLom3X9cTDi98qp
@@ -144,6 +152,9 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 			hex!["9e42241d7cd91d001773b0b616d523dd80e13c6c2cab860b1234ef1b9ffc1526"].into(),
 			// 5E1jLYfLdUQKrFrtqoKgFrRvxM3oQPMbf6DfcsrugZZ5Bn8d
 			hex!["5633b70b80a6c8bb16270f82cca6d56b27ed7b76c8fd5af2986a25a4788ce440"]
+				.unchecked_into(),
+			// 5DhKqkHRkndJu8vq7pi2Q5S3DfftWJHGxbEUNH43b46qNspH
+			hex!["482a3389a6cf42d8ed83888cfd920fec738ea30f97e44699ada7323f08c3380a"]
 				.unchecked_into(),
 			// 5DhKqkHRkndJu8vq7pi2Q5S3DfftWJHGxbEUNH43b46qNspH
 			hex!["482a3389a6cf42d8ed83888cfd920fec738ea30f97e44699ada7323f08c3380a"]
@@ -172,6 +183,9 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 			// 5C4vDQxA8LTck2xJEy4Yg1hM9qjDt4LvTQaMo4Y8ne43aU6x
 			hex!["00299981a2b92f878baaf5dbeba5c18d4e70f2a1fcd9c61b32ea18daf38f4378"]
 				.unchecked_into(),
+			// 5C4vDQxA8LTck2xJEy4Yg1hM9qjDt4LvTQaMo4Y8ne43aU6x
+			hex!["00299981a2b92f878baaf5dbeba5c18d4e70f2a1fcd9c61b32ea18daf38f4378"]
+				.unchecked_into(),
 		),
 	];
 
@@ -190,7 +204,7 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 		initial_babe_authorities,
 		vec![],
 		root_key,
-		Some(endowed_accounts)
+		Some(endowed_accounts),
 	)
 }
 
@@ -231,11 +245,12 @@ where
 /// Helper function to generate stash, controller and session key from seed
 pub fn authority_keys_from_seed_babe(
 	seed: &str,
-) -> (AccountId, AccountId, GrandpaId, BabeId, ImOnlineId, AuthorityDiscoveryId) {
+) -> (AccountId, AccountId, GrandpaId, AuraId, BabeId, ImOnlineId, AuthorityDiscoveryId) {
 	(
 		get_account_id_from_seed::<sr25519::Public>(&format!("{}//stash", seed)),
 		get_account_id_from_seed::<sr25519::Public>(seed),
 		get_from_seed::<GrandpaId>(seed),
+		get_from_seed::<AuraId>(seed),
 		get_from_seed::<BabeId>(seed),
 		get_from_seed::<ImOnlineId>(seed),
 		get_from_seed::<AuthorityDiscoveryId>(seed),
@@ -249,6 +264,7 @@ pub fn testnet_genesis(
 		AccountId,
 		AccountId,
 		GrandpaId,
+		AuraId,
 		BabeId,
 		ImOnlineId,
 		AuthorityDiscoveryId,
@@ -324,7 +340,13 @@ pub fn testnet_genesis(
 					(
 						x.0.clone(),
 						x.0.clone(),
-						session_keys(x.2.clone(), x.3.clone(), x.4.clone(), x.5.clone()),
+						session_keys(
+							x.2.clone(),
+							x.3.clone(),
+							x.4.clone(),
+							x.5.clone(),
+							x.6.clone(),
+						),
 					)
 				})
 				.collect::<Vec<_>>(),
@@ -356,9 +378,6 @@ pub fn testnet_genesis(
 			phantom: Default::default(),
 		},
 		sudo: SudoConfig { key: root_key },
-		aura: AuraConfig {
-			authorities: initial_aura_authorities.iter().map(|x| (x.0.clone())).collect(),
-		},
 		babe: BabeConfig {
 			authorities: vec![],
 			epoch_config: Some(node_runtime::BABE_GENESIS_EPOCH_CONFIG),
