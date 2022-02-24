@@ -96,6 +96,7 @@ use frame_support::{
 };
 use scale_info::TypeInfo;
 use sp_core::storage::well_known_keys;
+use core::ops::Mul;
 
 #[cfg(feature = "std")]
 use frame_support::traits::GenesisBuild;
@@ -367,7 +368,7 @@ pub mod pallet {
 		/// A dispatch that will fill the block weight up to the given ratio.
 		// TODO: This should only be available for testing, rather than in general usage, but
 		// that's not possible at present (since it's within the pallet macro).
-		#[pallet::weight(*_ratio * T::BlockWeights::get().max_block)]
+		#[pallet::weight(T::BlockWeights::get().max_block.mul(*_ratio))]
 		pub fn fill_block(origin: OriginFor<T>, _ratio: Perbill) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
 			Ok(().into())
@@ -1379,7 +1380,7 @@ impl<T: Config> Pallet<T> {
 
 	/// Set the current block weight. This should only be used in some integration tests.
 	#[cfg(any(feature = "std", test))]
-	pub fn set_block_consumed_resources(weight: Weight, len: usize) {
+	pub fn set_block_consumed_resources(weight: WeightV2, len: usize) {
 		BlockWeight::<T>::mutate(|current_weight| {
 			current_weight.set(weight, DispatchClass::Normal)
 		});

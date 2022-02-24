@@ -23,7 +23,7 @@ use frame_support::{
 };
 use scale_info::TypeInfo;
 use sp_runtime::{
-	traits::{DispatchInfoOf, Dispatchable, PostDispatchInfoOf, SignedExtension, Zero},
+	traits::{DispatchInfoOf, Dispatchable, PostDispatchInfoOf, Saturating, SignedExtension, Zero},
 	transaction_validity::{InvalidTransaction, TransactionValidity, TransactionValidityError},
 	DispatchResult,
 };
@@ -49,8 +49,7 @@ where
 	) -> Result<(), TransactionValidityError> {
 		let max = T::BlockWeights::get().get(info.class).max_extrinsic;
 		match max {
-			// TODO SHAWN
-			Some(max) if info.weight > max.time => Err(InvalidTransaction::ExhaustsResources.into()),
+			Some(max) if info.weight > max => Err(InvalidTransaction::ExhaustsResources.into()),
 			_ => Ok(()),
 		}
 	}
@@ -128,12 +127,7 @@ pub fn calculate_consumed_weight<Call>(
 where
 	Call: Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
 {
-	let time =
-		info.weight.saturating_add(maximum_weight.get(info.class).base_extrinsic.time);
-	let extrinsic_weight = WeightV2 {
-		time,
-		bandwidth: Zero::zero(),	// TODO SHAWN
-	};
+	let extrinsic_weight = info.weight.saturating_add(maximum_weight.get(info.class).base_extrinsic);
 	let limit_per_class = maximum_weight.get(info.class);
 
 	// add the weight. If class is unlimited, use saturating add instead of checked one.
@@ -244,7 +238,7 @@ where
 		}
 
 		let unspent = post_info.calc_unspent(info);
-		if unspent > 0 {
+		if unspent > Zero::zero() {
 			crate::BlockWeight::<T>::mutate(|current_weight| {
 				current_weight.sub(unspent, info.class);
 			})

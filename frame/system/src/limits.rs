@@ -216,7 +216,8 @@ impl Default for BlockWeights {
 				time: 1 * constants::WEIGHT_PER_SECOND,
 				bandwidth: 5 * 1024 * 1024, // 5 MB
 			},
-			DEFAULT_NORMAL_RATIO)
+			DEFAULT_NORMAL_RATIO,
+		)
 	}
 }
 
@@ -347,11 +348,12 @@ impl BlockWeights {
 			weights: BlockWeights {
 				base_block: WeightV2 {
 					time: constants::BlockExecutionWeight::get(),
-					bandwidth: Zero::zero() // SHAWN TODO
+					bandwidth: Zero::zero(), // SHAWN TODO
 				},
 				max_block: Zero::zero(),
 				per_class: PerDispatchClass::new(|class| {
-					let initial = if class == DispatchClass::Mandatory { None } else { Some(Zero::zero()) };
+					let initial =
+						if class == DispatchClass::Mandatory { None } else { Some(Zero::zero()) };
 					WeightsPerClass {
 						base_extrinsic: WeightV2 {
 							time: constants::ExtrinsicBaseWeight::get(),

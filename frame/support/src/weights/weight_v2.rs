@@ -1,11 +1,24 @@
 use codec::{Decode, Encode, MaxEncodedLen};
-use core::ops::{Add, Sub, Mul};
-use sp_runtime::{traits::{Zero, CheckedAdd}, RuntimeDebug};
+use core::ops::{Add, Mul, Sub};
+use sp_runtime::{
+	traits::{CheckedAdd, Zero},
+	RuntimeDebug,
+};
 
 use super::*;
 
 #[derive(
-	Encode, Decode, MaxEncodedLen, TypeInfo, Eq, PartialEq, Copy, Clone, PartialOrd, RuntimeDebug, Default,
+	Encode,
+	Decode,
+	MaxEncodedLen,
+	TypeInfo,
+	Eq,
+	PartialEq,
+	Copy,
+	Clone,
+	PartialOrd,
+	RuntimeDebug,
+	Default,
 )]
 pub struct WeightV2 {
 	pub time: TimeWeight,
@@ -16,19 +29,13 @@ impl WeightV2 {
 	pub const MAX: Self = Self { time: TimeWeight::MAX, bandwidth: StorageWeight::MAX };
 
 	pub fn min(&self, other: Self) -> Self {
-		Self {
-			time: self.time.min(other.time),
-			bandwidth: self.bandwidth.min(other.bandwidth),
-		}
+		Self { time: self.time.min(other.time), bandwidth: self.bandwidth.min(other.bandwidth) }
 	}
 }
 
 impl From<(TimeWeight, StorageWeight)> for WeightV2 {
 	fn from(a: (TimeWeight, StorageWeight)) -> Self {
-		Self {
-			time: a.0,
-			bandwidth: a.1,
-		}
+		Self { time: a.0, bandwidth: a.1 }
 	}
 }
 
@@ -65,10 +72,7 @@ impl From<TimeWeight> for WeightV2 {
 impl Mul<Perbill> for WeightV2 {
 	type Output = Self;
 	fn mul(self, b: Perbill) -> Self {
-		Self {
-			time: b * self.time,
-			bandwidth: b * self.bandwidth,
-		}
+		Self { time: b * self.time, bandwidth: b * self.bandwidth }
 	}
 }
 
@@ -106,8 +110,6 @@ impl CheckedAdd for WeightV2 {
 	fn checked_add(&self, rhs: &Self) -> Option<Self> {
 		let time = self.time.checked_add(rhs.time)?;
 		let bandwidth = self.bandwidth.checked_add(rhs.bandwidth)?;
-		Some(Self{
-			time, bandwidth
-		})
+		Some(Self { time, bandwidth })
 	}
 }

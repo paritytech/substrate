@@ -145,7 +145,7 @@ use sp_arithmetic::{
 };
 use sp_runtime::{
 	generic::{CheckedExtrinsic, UncheckedExtrinsic},
-	traits::{SaturatedConversion, SignedExtension, Zero, CheckedAdd},
+	traits::{CheckedAdd, SaturatedConversion, SignedExtension, Zero},
 	RuntimeDebug,
 };
 
@@ -188,7 +188,7 @@ pub mod constants {
 pub trait WeighData<T> {
 	/// Weigh the data `T` given by `target`. When implementing this for a dispatchable, `T` will be
 	/// a tuple of all arguments given to the function (except origin).
-	fn weigh_data(&self, target: T) -> Weight;
+	fn weigh_data(&self, target: T) -> WeightV2;
 }
 
 /// Means of classifying a dispatchable function.
@@ -368,10 +368,13 @@ pub fn extract_actual_weight(result: &DispatchResultWithPostInfo, info: &Dispatc
 
 impl From<(Option<Weight>, Pays)> for PostDispatchInfo {
 	fn from(post_weight_info: (Option<Weight>, Pays)) -> Self {
-		let (actual_time, pays_fee) = post_weight_info;
-		let actual_weight = WeightV2 {
-			time: actual_time,
-			bandwidth: Zero::zero(), // TODO SHAWN, backwards compat
+		let (maybe_actual_time, pays_fee) = post_weight_info;
+		let actual_weight = match maybe_actual_time {
+			Some(actual_time) => Some(WeightV2 {
+				time: actual_time,
+				bandwidth: Zero::zero(), // TODO SHAWN, backwards compat
+			}),
+			None => None,
 		};
 		Self { actual_weight, pays_fee }
 	}
@@ -391,7 +394,20 @@ impl From<Pays> for PostDispatchInfo {
 }
 
 impl From<Option<Weight>> for PostDispatchInfo {
-	fn from(actual_weight: Option<Weight>) -> Self {
+	fn from(maybe_actual_time: Option<Weight>) -> Self {
+		let actual_weight = match maybe_actual_time {
+			Some(actual_time) => Some(WeightV2 {
+				time: actual_time,
+				bandwidth: Zero::zero(), // SHAWN TODO BACK COMPAT
+			}),
+			None => None,
+		};
+		Self { actual_weight, pays_fee: Default::default() }
+	}
+}
+
+impl From<Option<WeightV2>> for PostDispatchInfo {
+	fn from(actual_weight: Option<WeightV2>) -> Self {
 		Self { actual_weight, pays_fee: Default::default() }
 	}
 }
@@ -406,7 +422,10 @@ impl sp_runtime::traits::Printable for PostDispatchInfo {
 	fn print(&self) {
 		"actual_weight=".print();
 		match self.actual_weight {
-			Some(weight) => weight.print(),
+			Some(weight) => {
+				print!("time({:?})", weight.time);
+				print!("bandwidth({:?})", weight.bandwidth);
+			},
 			None => "max-weight".print(),
 		};
 		"pays_fee=".print();
@@ -428,14 +447,14 @@ pub trait WithPostDispatchInfo {
 	/// let who = ensure_signed(origin).map_err(|e| e.with_weight(100))?;
 	/// ensure!(who == me, Error::<T>::NotMe.with_weight(200_000));
 	/// ```
-	fn with_weight(self, actual_weight: Weight) -> DispatchErrorWithPostInfo;
+	fn with_weight(self, actual_weight: WeightV2) -> DispatchErrorWithPostInfo;
 }
 
 impl<T> WithPostDispatchInfo for T
 where
 	T: Into<DispatchError>,
 {
-	fn with_weight(self, actual_weight: Weight) -> DispatchErrorWithPostInfo {
+	fn with_weight(self, actual_weight: WeightV2) -> DispatchErrorWithPostInfo {
 		DispatchErrorWithPostInfo {
 			post_info: PostDispatchInfo {
 				actual_weight: Some(actual_weight),
@@ -447,7 +466,16 @@ where
 }
 
 impl<T> WeighData<T> for Weight {
-	fn weigh_data(&self, _: T) -> Weight {
+	fn weigh_data(&self, _: T) -> WeightV2 {
+		return WeightV2 {
+			time: *self,
+			bandwidth: Zero::zero()
+		}
+	}
+}
+
+impl<T> WeighData<T> for WeightV2 {
+	fn weigh_data(&self, _: T) -> WeightV2 {
 		return *self
 	}
 }
@@ -465,8 +493,8 @@ impl<T> PaysFee<T> for Weight {
 }
 
 impl<T> WeighData<T> for (Weight, DispatchClass, Pays) {
-	fn weigh_data(&self, _: T) -> Weight {
-		return self.0
+	fn weigh_data(&self, args: T) -> WeightV2 {
+		return self.0.weigh_data(args)
 	}
 }
 
@@ -483,8 +511,8 @@ impl<T> PaysFee<T> for (Weight, DispatchClass, Pays) {
 }
 
 impl<T> WeighData<T> for (Weight, DispatchClass) {
-	fn weigh_data(&self, _: T) -> Weight {
-		return self.0
+	fn weigh_data(&self, args: T) -> WeightV2 {
+		return self.0.weigh_data(args)
 	}
 }
 
@@ -501,8 +529,8 @@ impl<T> PaysFee<T> for (Weight, DispatchClass) {
 }
 
 impl<T> WeighData<T> for (Weight, Pays) {
-	fn weigh_data(&self, _: T) -> Weight {
-		return self.0
+	fn weigh_data(&self, args: T) -> WeightV2 {
+		return self.0.weigh_data(args)
 	}
 }
 
@@ -533,8 +561,8 @@ pub struct FunctionOf<WD, CD, PF>(pub WD, pub CD, pub PF);
 // `WeighData` as a raw value
 #[allow(deprecated)]
 impl<Args, CD, PF> WeighData<Args> for FunctionOf<Weight, CD, PF> {
-	fn weigh_data(&self, _: Args) -> Weight {
-		self.0
+	fn weigh_data(&self, args: Args) -> WeightV2 {
+		self.0.weigh_data(args)
 	}
 }
 
@@ -544,8 +572,8 @@ impl<Args, WD, CD, PF> WeighData<Args> for FunctionOf<WD, CD, PF>
 where
 	WD: Fn(Args) -> Weight,
 {
-	fn weigh_data(&self, args: Args) -> Weight {
-		(self.0)(args)
+	fn weigh_data(&self, args: Args) -> WeightV2 {
+		(self.0)(args).weigh_data(args)
 	}
 }
 
@@ -614,7 +642,14 @@ where
 impl<Call: Encode, Extra: Encode> GetDispatchInfo for sp_runtime::testing::TestXt<Call, Extra> {
 	fn get_dispatch_info(&self) -> DispatchInfo {
 		// for testing: weight == size.
-		DispatchInfo { weight: self.encode().len() as _, pays_fee: Pays::Yes, ..Default::default() }
+		DispatchInfo {
+			weight: WeightV2 {
+				time: self.encode().len() as _,
+				bandwidth: self.encode().len() as _,
+			},
+			pays_fee: Pays::Yes,
+			..Default::default()
+		}
 	}
 }
 
