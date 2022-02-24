@@ -25,9 +25,7 @@
 //! `DispatchClass`. This module contains configuration object for both resources,
 //! which should be passed to `frame_system` configuration when runtime is being set up.
 
-use frame_support::weights::{
-	constants, DispatchClass, OneOrMany, PerDispatchClass, Weight, WeightV2,
-};
+use frame_support::weights::{constants, DispatchClass, OneOrMany, PerDispatchClass, WeightV2};
 use scale_info::TypeInfo;
 use sp_runtime::{
 	traits::{Saturating, Zero},

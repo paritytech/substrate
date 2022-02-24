@@ -19,7 +19,7 @@ use crate::{limits::BlockWeights, Config, Pallet};
 use codec::{Decode, Encode};
 use frame_support::{
 	traits::Get,
-	weights::{DispatchClass, DispatchInfo, PostDispatchInfo, WeightV2},
+	weights::{DispatchClass, DispatchInfo, PostDispatchInfo},
 };
 use scale_info::TypeInfo;
 use sp_runtime::{
@@ -127,7 +127,8 @@ pub fn calculate_consumed_weight<Call>(
 where
 	Call: Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
 {
-	let extrinsic_weight = info.weight.saturating_add(maximum_weight.get(info.class).base_extrinsic);
+	let extrinsic_weight =
+		info.weight.saturating_add(maximum_weight.get(info.class).base_extrinsic);
 	let limit_per_class = maximum_weight.get(info.class);
 
 	// add the weight. If class is unlimited, use saturating add instead of checked one.

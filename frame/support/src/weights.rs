@@ -467,10 +467,7 @@ where
 
 impl<T> WeighData<T> for Weight {
 	fn weigh_data(&self, _: T) -> WeightV2 {
-		return WeightV2 {
-			time: *self,
-			bandwidth: Zero::zero()
-		}
+		return WeightV2 { time: *self, bandwidth: Zero::zero() }
 	}
 }
 
@@ -486,7 +483,19 @@ impl<T> ClassifyDispatch<T> for Weight {
 	}
 }
 
+impl<T> ClassifyDispatch<T> for WeightV2 {
+	fn classify_dispatch(&self, _: T) -> DispatchClass {
+		DispatchClass::Normal
+	}
+}
+
 impl<T> PaysFee<T> for Weight {
+	fn pays_fee(&self, _: T) -> Pays {
+		Pays::Yes
+	}
+}
+
+impl<T> PaysFee<T> for WeightV2 {
 	fn pays_fee(&self, _: T) -> Pays {
 		Pays::Yes
 	}
@@ -504,7 +513,19 @@ impl<T> ClassifyDispatch<T> for (Weight, DispatchClass, Pays) {
 	}
 }
 
+impl<T> ClassifyDispatch<T> for (WeightV2, DispatchClass, Pays) {
+	fn classify_dispatch(&self, _: T) -> DispatchClass {
+		self.1
+	}
+}
+
 impl<T> PaysFee<T> for (Weight, DispatchClass, Pays) {
+	fn pays_fee(&self, _: T) -> Pays {
+		self.2
+	}
+}
+
+impl<T> PaysFee<T> for (WeightV2, DispatchClass, Pays) {
 	fn pays_fee(&self, _: T) -> Pays {
 		self.2
 	}
@@ -516,7 +537,19 @@ impl<T> WeighData<T> for (Weight, DispatchClass) {
 	}
 }
 
+impl<T> WeighData<T> for (WeightV2, DispatchClass) {
+	fn weigh_data(&self, args: T) -> WeightV2 {
+		return self.0.weigh_data(args)
+	}
+}
+
 impl<T> ClassifyDispatch<T> for (Weight, DispatchClass) {
+	fn classify_dispatch(&self, _: T) -> DispatchClass {
+		self.1
+	}
+}
+
+impl<T> ClassifyDispatch<T> for (WeightV2, DispatchClass) {
 	fn classify_dispatch(&self, _: T) -> DispatchClass {
 		self.1
 	}
@@ -528,7 +561,19 @@ impl<T> PaysFee<T> for (Weight, DispatchClass) {
 	}
 }
 
+impl<T> PaysFee<T> for (WeightV2, DispatchClass) {
+	fn pays_fee(&self, _: T) -> Pays {
+		Pays::Yes
+	}
+}
+
 impl<T> WeighData<T> for (Weight, Pays) {
+	fn weigh_data(&self, args: T) -> WeightV2 {
+		return self.0.weigh_data(args)
+	}
+}
+
+impl<T> WeighData<T> for (WeightV2, Pays) {
 	fn weigh_data(&self, args: T) -> WeightV2 {
 		return self.0.weigh_data(args)
 	}
@@ -540,7 +585,19 @@ impl<T> ClassifyDispatch<T> for (Weight, Pays) {
 	}
 }
 
+impl<T> ClassifyDispatch<T> for (WeightV2, Pays) {
+	fn classify_dispatch(&self, _: T) -> DispatchClass {
+		DispatchClass::Normal
+	}
+}
+
 impl<T> PaysFee<T> for (Weight, Pays) {
+	fn pays_fee(&self, _: T) -> Pays {
+		self.1
+	}
+}
+
+impl<T> PaysFee<T> for (WeightV2, Pays) {
 	fn pays_fee(&self, _: T) -> Pays {
 		self.1
 	}
@@ -566,16 +623,16 @@ impl<Args, CD, PF> WeighData<Args> for FunctionOf<Weight, CD, PF> {
 	}
 }
 
-// `WeighData` as a closure
-#[allow(deprecated)]
-impl<Args, WD, CD, PF> WeighData<Args> for FunctionOf<WD, CD, PF>
-where
-	WD: Fn(Args) -> Weight,
-{
-	fn weigh_data(&self, args: Args) -> WeightV2 {
-		(self.0)(args).weigh_data(args)
-	}
-}
+// // `WeighData` as a closure
+// #[allow(deprecated)]
+// impl<Args, WD, CD, PF> WeighData<Args> for FunctionOf<WD, CD, PF>
+// where
+// 	WD: Fn(Args) -> Weight,
+// {
+// 	fn weigh_data(&self, args: Args) -> WeightV2 {
+// 		(self.0)(args).weigh_data(args)
+// 	}
+// }
 
 // `ClassifyDispatch` as a raw value
 #[allow(deprecated)]

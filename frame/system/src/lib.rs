@@ -81,6 +81,7 @@ use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
 use sp_version::RuntimeVersion;
 
 use codec::{Decode, Encode, EncodeLike, FullCodec, MaxEncodedLen};
+use core::ops::Mul;
 use frame_support::{
 	dispatch::{DispatchResult, DispatchResultWithPostInfo},
 	storage,
@@ -90,13 +91,12 @@ use frame_support::{
 	},
 	weights::{
 		extract_actual_weight, DispatchClass, DispatchInfo, PerDispatchClass, RuntimeDbWeight,
-		Weight, WeightV2,
+		WeightV2,
 	},
 	Parameter,
 };
 use scale_info::TypeInfo;
 use sp_core::storage::well_known_keys;
-use core::ops::Mul;
 
 #[cfg(feature = "std")]
 use frame_support::traits::GenesisBuild;
