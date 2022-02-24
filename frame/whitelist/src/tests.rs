@@ -151,3 +151,25 @@ fn test_whitelist_call_and_execute_without_note_preimage() {
 		);
 	});
 }
+
+#[test]
+fn test_whitelist_call_and_execute_decode_consumes_all() {
+	new_test_ext().execute_with(|| {
+		let call = Call::System(frame_system::Call::remark_with_event { remark: vec![1] });
+		let call_weight = call.get_dispatch_info().weight;
+		let mut call = call.encode();
+		// Appending something does not make the encoded call invalid.
+		// This tests that the decode function consumes all data.
+		call.extend(call.clone());
+		
+		let call_hash = <Test as frame_system::Config>::Hashing::hash(&call[..]);
+
+		assert_ok!(Preimage::note_preimage(Origin::root(), call));
+		assert_ok!(Whitelist::whitelist_call(Origin::root(), call_hash));
+
+		assert_noop!(
+			Whitelist::dispatch_whitelisted_call(Origin::root(), call_hash, call_weight),
+			crate::Error::<Test>::UndecodableCall,
+		);
+	});
+}

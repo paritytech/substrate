@@ -168,7 +168,7 @@ pub mod pallet {
 			let call = T::PreimageProvider::get_preimage(&call_hash)
 				.ok_or(Error::<T>::UnavailablePreImage)?;
 
-			let call = <T as Config>::Call::decode_with_depth_limit(
+			let call = <T as Config>::Call::decode_all_with_depth_limit(
 				sp_api::MAX_EXTRINSIC_DEPTH,
 				&mut &call[..],
 			)
