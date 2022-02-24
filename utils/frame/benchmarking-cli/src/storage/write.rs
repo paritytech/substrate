@@ -62,7 +62,7 @@ impl StorageCmd {
 		info!("Preparing keys from block {}", block);
 		// Load all KV pairs and randomly shuffle them.
 		let mut kvs = trie.pairs();
-		let mut rng = self.setup_rng();
+		let mut rng = Self::setup_rng();
 		kvs.shuffle(&mut rng);
 
 		info!("Writing {} keys", kvs.len());

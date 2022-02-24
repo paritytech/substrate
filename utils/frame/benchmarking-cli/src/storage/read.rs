@@ -46,7 +46,7 @@ impl StorageCmd {
 		// Load all keys and randomly shuffle them.
 		let empty_prefix = StorageKey(Vec::new());
 		let mut keys = client.storage_keys(&block, &empty_prefix)?;
-		let mut rng = self.setup_rng();
+		let mut rng = Self::setup_rng();
 		keys.shuffle(&mut rng);
 
 		// Run some rounds of the benchmark as warmup.

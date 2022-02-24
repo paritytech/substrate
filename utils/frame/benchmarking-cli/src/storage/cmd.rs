@@ -74,10 +74,6 @@ pub struct StorageParams {
 	#[clap(long, default_value = "1")]
 	pub warmups: u32,
 
-	/// Use a specific seed instead of picking a random one.
-	#[clap(long)]
-	pub seed: Option<u64>,
-
 	/// The `StateVersion` to use. Substrate `--dev` should use `V1` and Polkadot `V0`.
 	/// Selecting the wrong version can corrupt the DB.
 	#[clap(long, possible_values = ["0", "1"])]
@@ -133,9 +129,9 @@ impl StorageCmd {
 		}
 	}
 
-	/// Creates an rng from the specified seed or from a random seed otherwise.
-	pub(crate) fn setup_rng(&self) -> impl rand::Rng {
-		let seed = self.params.seed.unwrap_or(rand::thread_rng().gen::<u64>());
+	/// Creates an rng from a random seed.
+	pub(crate) fn setup_rng() -> impl rand::Rng {
+		let seed = rand::thread_rng().gen::<u64>();
 		info!("Using seed {}", seed);
 		StdRng::seed_from_u64(seed)
 	}
