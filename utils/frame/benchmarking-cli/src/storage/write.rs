@@ -17,17 +17,17 @@
 
 use sc_cli::Result;
 use sc_client_api::UsageProvider;
-use sc_client_db::{columns, DB_HASH_LEN, DatabaseSource, DbHash, DbState};
+use sc_client_db::{columns, DatabaseSource, DbHash, DbState, DB_HASH_LEN};
 use sc_service::Configuration;
 use sp_api::StateBackend;
 use sp_blockchain::HeaderBackend;
 use sp_core::H256;
-use sp_trie::PrefixedMemoryDB;
 use sp_database::Transaction;
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, HashFor, Header as HeaderT},
 };
+use sp_trie::PrefixedMemoryDB;
 
 use log::info;
 use rand::prelude::*;

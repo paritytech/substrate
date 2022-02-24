@@ -22,7 +22,7 @@ use log::info;
 use serde::Serialize;
 use std::{env, fs, path::PathBuf};
 
-use super::{record::Stats, cmd::StorageParams};
+use super::{cmd::StorageParams, record::Stats};
 
 static VERSION: &'static str = env!("CARGO_PKG_VERSION");
 static TEMPLATE: &str = include_str!("./weights.hbs");

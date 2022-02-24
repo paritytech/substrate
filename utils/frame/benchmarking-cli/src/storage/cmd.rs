@@ -22,13 +22,13 @@ use sc_service::Configuration;
 use sp_blockchain::HeaderBackend;
 use sp_database::Database;
 use sp_runtime::traits::{Block as BlockT, HashFor};
-use sp_state_machine::{Storage};
+use sp_state_machine::Storage;
 use sp_storage::StateVersion;
 
-use serde::Serialize;
 use clap::{Args, Parser};
 use log::info;
 use rand::prelude::*;
+use serde::Serialize;
 use std::{fmt::Debug, sync::Arc};
 
 use super::template::TemplateData;
