@@ -27,17 +27,19 @@ use log::info;
 use rand::prelude::*;
 use std::{fmt::Debug, sync::Arc, time::Instant};
 
-use super::{post_process::TimeResult, cmd::StorageCmd};
+use super::{cmd::StorageCmd, record::BenchRecord};
 
 impl StorageCmd {
-	pub fn read<B, BA, C>(&self, client: Arc<C>) -> Result<TimeResult>
+	/// Benchmarks the time it takes to read a single Storage item.
+	/// Uses the latest state that is available for the given client.
+	pub(crate) fn bench_read<B, BA, C>(&self, client: Arc<C>) -> Result<BenchRecord>
 	where
 		C: UsageProvider<B> + StorageProvider<B, BA>,
 		B: BlockT + Debug,
 		BA: ClientBackend<B>,
 		<<B as BlockT>::Header as HeaderT>::Number: From<u32>,
 	{
-		let mut times = TimeResult::default();
+		let mut record = BenchRecord::default();
 		let block = BlockId::Number(client.usage_info().chain.best_number);
 
 		info!("Preparing keys from block {}", block);
@@ -47,9 +49,9 @@ impl StorageCmd {
 		let mut rng = self.setup_rng();
 		keys.shuffle(&mut rng);
 
-		// Warmup.
-		for i in 0..self.warmups {
-			info!("Warmup round {}/{}", i + 1, self.warmups);
+		// Run some rounds of the benchmark as warmup.
+		for i in 0..self.params.warmups {
+			info!("Warmup round {}/{}", i + 1, self.params.warmups);
 			for key in keys.clone() {
 				let _ = client
 					.storage(&block, &key)
@@ -67,10 +69,8 @@ impl StorageCmd {
 				.storage(&block, &key)
 				.expect("Checked above to exist")
 				.ok_or("Value unexpectedly empty")?;
-			let elapsed: u64 = start.elapsed().as_nanos().try_into().unwrap();
-			times.ns_by_size.push((v.0.len() as u64, elapsed));
+			record.append(v.0.len(), start.elapsed());
 		}
-
-		Ok(times)
+		Ok(record)
 	}
 }

@@ -16,6 +16,9 @@
 // limitations under the License.
 
 pub mod cmd;
-pub mod post_process;
+pub mod record;
+pub mod template;
 pub mod read;
 pub mod write;
+
+pub use cmd::StorageCmd;

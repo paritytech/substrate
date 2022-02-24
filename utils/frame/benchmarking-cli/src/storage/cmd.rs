@@ -26,13 +26,15 @@ use sp_state_machine::{Backend as StateBackend, Storage};
 use sp_storage::StateVersion;
 use sp_trie::PrefixedMemoryDB;
 
-use clap::Parser;
+use serde::Serialize;
+use clap::{Args, Parser};
 use log::info;
 use rand::prelude::*;
 use std::{fmt::Debug, sync::Arc};
 
-use super::post_process::{PostProcParams, TemplateData};
+use super::template::TemplateData;
 
+/// Benchmark the storage of a Substrate node with a live chain snapshot.
 #[derive(Debug, Parser)]
 pub struct StorageCmd {
 	#[allow(missing_docs)]
@@ -49,7 +51,15 @@ pub struct StorageCmd {
 
 	#[allow(missing_docs)]
 	#[clap(flatten)]
-	pub postproc_params: PostProcParams,
+	pub params: StorageParams,
+}
+
+/// Parameters concerned with modifying the post processing behaviour.
+#[derive(Debug, Default, Serialize, Clone, PartialEq, Args)]
+pub struct StorageParams {
+	/// Path to write weight file to. Can be a file or directory.
+	#[clap(long)]
+	pub weight_path: String,
 
 	/// Skip the `read` benchmark.
 	#[clap(long)]
@@ -59,9 +69,10 @@ pub struct StorageCmd {
 	#[clap(long)]
 	pub skip_write: bool,
 
-	/// State cache size.
-	#[clap(long, default_value = "0")]
-	pub state_cache_size: usize,
+	/// Rounds of warmups before measuring.
+	/// Only supported for `read` benchmarks.
+	#[clap(long, default_value = "1")]
+	pub warmups: u32,
 
 	/// Use a specific seed instead of picking one at random.
 	#[clap(long)]
@@ -71,14 +82,14 @@ pub struct StorageCmd {
 	#[clap(long, possible_values = ["0", "1"], default_value = "0")]
 	pub state_version: u8,
 
-	/// Rounds of warmups before measuring.
-	/// Only supported for `read` benchmarks.
-	#[clap(long, default_value = "1")]
-	pub warmups: u32,
+	/// State cache size.
+	#[clap(long, default_value = "0")]
+	pub state_cache_size: usize,
 }
 
 impl StorageCmd {
-	/// Dispatches a concrete sub command related to benchmarking with client overhead.
+	/// Calls into the Read and Write benchmarking functions.
+	/// Processes the output and writes it into files and stdout.
 	pub async fn run<Block, BA, S, C>(
 		&self,
 		cfg: Configuration,
@@ -92,42 +103,45 @@ impl StorageCmd {
 		C: UsageProvider<Block> + StorageProvider<Block, BA> + HeaderBackend<Block>,
 		S: StateBackend<HashFor<Block>, Transaction = PrefixedMemoryDB<HashFor<Block>>>,
 	{
-		let mut template = TemplateData::new(&cfg);
+		let mut template = TemplateData::new(&cfg, &self.params);
 
-		if !self.skip_read {
-			let times = self.read(client.clone())?;
-			times.summary();
-			times.save_json("read.json")?;
-			template.read = Some(times.stats(&self.postproc_params)?);
+		if !self.params.skip_read {
+			let record = self.bench_read(client.clone())?;
+			record.save_json("read.json")?;
+			let (time_stats, size_stats) = record.stats()?;
+			info!("Time summary:\n{:?}\nValue size summary:\n{:?}", time_stats, size_stats);
+			template.read = Some((time_stats, size_stats));
 		}
 
-		if !self.skip_write {
-			let times = self.write(&cfg, client.clone(), db, storage)?;
-			times.summary();
-			times.save_json("write.json")?;
-			template.write = Some(times.stats(&self.postproc_params)?);
+		if !self.params.skip_write {
+			let record = self.bench_write(&cfg, client, db, storage)?;
+			record.save_json("write.json")?;
+			let (time_stats, size_stats) = record.stats()?;
+			info!("Time summary:\n{:?}\nValue size summary:\n{:?}", time_stats, size_stats);
+			template.write = Some((time_stats, size_stats));
 		}
 
-		template.write(&self.postproc_params.weight_path)
+		template.write(&self.params.weight_path)
 	}
 
-	pub fn state_version(&self) -> StateVersion {
-		match self.state_version {
+	/// Returns the specified state version.
+	pub(crate) fn state_version(&self) -> StateVersion {
+		match self.params.state_version {
 			0 => StateVersion::V0,
 			1 => StateVersion::V1,
 			_ => unreachable!("Clap set to only allow 0 and 1"),
 		}
 	}
 
-	pub fn setup_rng(&self) -> impl rand::Rng {
-		let seed = self.seed.unwrap_or(rand::thread_rng().gen::<u64>());
+	/// Creates an rng from the specified seed or a random seed otherwise.
+	pub(crate) fn setup_rng(&self) -> impl rand::Rng {
+		let seed = self.params.seed.unwrap_or(rand::thread_rng().gen::<u64>());
 		info!("Using seed {}", seed);
 		StdRng::seed_from_u64(seed)
 	}
 }
 
 // Boilerplate
-
 impl CliConfiguration for StorageCmd {
 	fn shared_params(&self) -> &SharedParams {
 		&self.shared_params
@@ -142,6 +156,6 @@ impl CliConfiguration for StorageCmd {
 	}
 
 	fn state_cache_size(&self) -> Result<usize> {
-		Ok(self.state_cache_size)
+		Ok(self.params.state_cache_size)
 	}
 }

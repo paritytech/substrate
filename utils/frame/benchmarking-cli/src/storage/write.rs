@@ -32,23 +32,25 @@ use log::info;
 use rand::prelude::*;
 use std::{fmt::Debug, sync::Arc, time::Instant};
 
-use super::{post_process::TimeResult, cmd::StorageCmd};
+use super::{cmd::StorageCmd, record::BenchRecord};
 
 impl StorageCmd {
-	pub fn write<Block, H, C>(
+	/// Benchmarks the time it takes to write a single Storage item.
+	/// Uses the latest state that is available for the given client.
+	pub(crate) fn bench_write<Block, H, C>(
 		&self,
 		cfg: &Configuration,
 		client: Arc<C>,
 		db: Arc<dyn sp_database::Database<DbHash>>,
 		storage: Arc<dyn sp_state_machine::Storage<HashFor<Block>>>,
-	) -> Result<TimeResult>
+	) -> Result<BenchRecord>
 	where
 		Block: BlockT<Header = H, Hash = H256> + Debug,
 		H: HeaderT<Hash = H256>,
 		C: UsageProvider<Block> + HeaderBackend<Block>,
 	{
 		// Store the time that it took to write each value.
-		let mut times = TimeResult::default();
+		let mut record = BenchRecord::default();
 
 		let is_parity = matches!(cfg.database, DatabaseSource::ParityDb { path: _ });
 		let block = BlockId::Number(client.usage_info().chain.best_number);
@@ -68,7 +70,9 @@ impl StorageCmd {
 			// Create a random value to overwrite with.
 			// NOTE: We use a possibly higher entropy than the original value,
 			// could be improved but acts as an over-estimation which is fine for now.
-			let new_v = random_vec(&mut rng, original_v.len());
+			//let new_v = random_vec(&mut rng, original_v.len());
+			let mut new_v = vec![0; original_v.len()];
+			rng.fill_bytes(&mut new_v[..]);
 
 			// Interesting part here:
 			let start = Instant::now();
@@ -79,8 +83,7 @@ impl StorageCmd {
 			let tx = convert_tx::<Block>(tx, is_parity);
 			db.commit(tx).map_err(|e| format!("Writing to the Database: {}", e))?;
 
-			let elapsed: u64 = start.elapsed().as_nanos().try_into().unwrap();
-			times.ns_by_size.push((new_v.len() as u64, elapsed));
+			record.append(new_v.len(), start.elapsed());
 
 			// Now undo the change:
 			// Create a Trie with the modified root hash and replace the value with its original.
@@ -97,8 +100,7 @@ impl StorageCmd {
 				std::process::exit(1);
 			}
 		}
-
-		Ok(times)
+		Ok(record)
 	}
 }
 
@@ -125,11 +127,4 @@ fn convert_tx<B: BlockT>(
 		// 0 means no modification.
 	}
 	ret
-}
-
-/// Generates a random vector with a specific length.
-fn random_vec<R: Rng>(rng: &mut R, len: usize) -> Vec<u8> {
-	let mut val = vec![0u8; len];
-	rng.fill_bytes(&mut val[..]);
-	val
 }

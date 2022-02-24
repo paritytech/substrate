@@ -19,7 +19,7 @@ mod command;
 mod storage;
 mod writer;
 
-pub use storage::cmd::StorageCmd;
+pub use storage::StorageCmd;
 
 use sc_cli::{ExecutionStrategy, WasmExecutionMethod};
 use std::{fmt::Debug, path::PathBuf};

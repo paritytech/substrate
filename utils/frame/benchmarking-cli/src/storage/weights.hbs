@@ -1,5 +1,3 @@
-//! AUTO GENERATED DO NOT MODIFY
-
 // This file is part of Substrate.
 
 // Copyright (C) 2022 Parity Technologies (UK) Ltd.
@@ -17,6 +15,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! THIS FILE WAS AUTO-GENERATED USING THE SUBSTRATE BENCHMARK CLI VERSION {{version}}
+//! DATE: {{date}}
+//!
+//! DATABASE: `{{db_name}}`, RUNTIME: `{{runtime_name}}`
+//! SKIP-WRITE: `{{params.skip_write}}`, SKIP-READ: `{{params.skip_read}}`, WARMUPS: `{{params.warmups}}`, SEED: `{{params.seed}}`,
+//! STATE-VERSION: `{{params.state_version}}`, STATE-CACHE-SIZE: `{{params.state_cache_size}}`
+//! WEIGHT-PATH: `{{params.weight_path}}`
+
+// Executed Command:
+{{#each args as |arg|}}
+// {{arg}}
+{{/each}}
+
 /// Storage DB weights for the {{runtime_name}} runtime and {{db_name}}.
 pub mod constants {
 	use frame_support::{parameter_types, weights::{RuntimeDbWeight, constants}};
@@ -33,31 +44,31 @@ pub mod constants {
 			/// Time to read one storage item.
 			///
 			/// Stats [ns]:
-			///   Min, Max: {{underscore read.min}}, {{underscore read.max}}
-			///   Average:  {{underscore read.avg}}
-			///   Median:   {{underscore read.median}}
-			///   Mode:     {{underscore read.mode}}
-			///   StdDev:   {{read.stddev}}
+			///   Min, Max: {{underscore read.0.min}}, {{underscore read.0.max}}
+			///   Average:  {{underscore read.0.avg}}
+			///   Median:   {{underscore read.0.median}}
+			///   Mode:     {{underscore read.0.mode}}
+			///   StdDev:   {{read.0.stddev}}
 			///
 			/// Percentiles [ns]:
-			///   99th: {{underscore read.p99}}
-			///   95th: {{underscore read.p95}}
-			///   75th: {{underscore read.p75}}
+			///   99th: {{underscore read.0.p99}}
+			///   95th: {{underscore read.0.p95}}
+			///   75th: {{underscore read.0.p75}}
 			read: 0 * constants::WEIGHT_PER_NANOS,
 
 			/// Time to write one storage item.
 			///
 			/// Stats [ns]:
-			///   Min, Max: {{underscore write.min}}, {{underscore write.max}}
-			///   Average:  {{underscore write.avg}}
-			///   Median:   {{underscore write.median}}
-			///   Mode:     {{underscore write.mode}}
-			///   StdDev:   {{write.stddev}}
+			///   Min, Max: {{underscore write.0.min}}, {{underscore write.0.max}}
+			///   Average:  {{underscore write.0.avg}}
+			///   Median:   {{underscore write.0.median}}
+			///   Mode:     {{underscore write.0.mode}}
+			///   StdDev:   {{write.0.stddev}}
 			///
 			/// Percentiles [ns]:
-			///   99th: {{underscore write.p99}}
-			///   95th: {{underscore write.p95}}
-			///   75th: {{underscore write.p75}}
+			///   99th: {{underscore write.0.p99}}
+			///   95th: {{underscore write.0.p95}}
+			///   75th: {{underscore write.0.p75}}
 			write: 0 * constants::WEIGHT_PER_NANOS,
 		};
 	}
