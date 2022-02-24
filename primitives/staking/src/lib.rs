@@ -98,9 +98,7 @@ pub trait StakingInterface {
 	fn bonding_duration() -> EraIndex;
 
 	/// The current era for the staking system.
-	// TODO: Is it ok to assume None is always era zero? If so, then in the impl we ca do
-	// unwrap_or(0)
-	fn current_era() -> Option<EraIndex>;
+	fn current_era() -> EraIndex;
 
 	/// Balance `controller` has bonded for nominating.
 	fn bonded_balance(controller: &Self::AccountId) -> Option<Self::Balance>;

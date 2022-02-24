@@ -1328,8 +1328,8 @@ impl<T: Config> StakingInterface for Pallet<T> {
 		T::BondingDuration::get()
 	}
 
-	fn current_era() -> Option<EraIndex> {
-		Self::current_era()
+	fn current_era() -> EraIndex {
+		Self::current_era().unwrap_or(Zero::zero())
 	}
 
 	fn bonded_balance(controller: &Self::AccountId) -> Option<Self::Balance> {

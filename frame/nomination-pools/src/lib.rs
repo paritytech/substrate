@@ -319,7 +319,6 @@
 //   pools is passed the updated unlocking chunks and makes updates based on that
 // - benchmarks
 // - make staking interface current era
-// - staking provider current era should not return option, just era index
 // - write detailed docs for StakingInterface
 
 // Ensure we're `no_std` when compiling for Wasm.
@@ -1049,7 +1048,7 @@ pub mod pallet {
 				Delegators::<T>::get(&target).ok_or(Error::<T>::DelegatorNotFound)?;
 			// Note that we lazily create the unbonding pools here if they don't already exist
 			let sub_pools = SubPoolsStorage::<T>::get(&delegator.pool).unwrap_or_default();
-			let current_era = T::StakingInterface::current_era().unwrap_or(Zero::zero());
+			let current_era = T::StakingInterface::current_era();
 
 			let balance_to_unbond = bonded_pool.balance_to_unbond(delegator.points);
 
@@ -1128,7 +1127,7 @@ pub mod pallet {
 			let caller = ensure_signed(origin)?;
 			let delegator = Delegators::<T>::get(&target).ok_or(Error::<T>::DelegatorNotFound)?;
 			let unbonding_era = delegator.unbonding_era.ok_or(Error::<T>::NotUnbonding)?;
-			let current_era = T::StakingInterface::current_era().unwrap_or(Zero::zero());
+			let current_era = T::StakingInterface::current_era();
 			ensure!(
 				current_era.saturating_sub(unbonding_era) >=
 					T::StakingInterface::bonding_duration(),
@@ -1199,7 +1198,6 @@ pub mod pallet {
 				T::Currency::make_free_balance_be(&reward_pool.account, Zero::zero());
 				T::Currency::make_free_balance_be(&bonded_pool.account, Zero::zero());
 				bonded_pool.remove();
-				// TODO: Event destroyed
 				None
 			} else {
 				SubPoolsStorage::<T>::insert(&delegator.pool, sub_pools);

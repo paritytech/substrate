@@ -35,8 +35,8 @@ impl sp_staking::StakingInterface for StakingMock {
 		10
 	}
 
-	fn current_era() -> Option<EraIndex> {
-		Some(CurrentEra::get())
+	fn current_era() -> EraIndex {
+		CurrentEra::get()
 	}
 
 	fn bonding_duration() -> EraIndex {

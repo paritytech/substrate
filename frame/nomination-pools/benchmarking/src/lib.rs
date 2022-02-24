@@ -12,8 +12,7 @@ use frame_support::{ensure, traits::Get};
 use frame_system::RawOrigin as Origin;
 use pallet_nomination_pools::{
 	BalanceOf, BondedPoolStorage, BondedPools, Delegators, MinCreateBond, MinJoinBond,
-	Pallet as Pools, PoolState, RewardPools, SubPools, SubPoolsStorage, SubPoolsWithEra,
-	UnbondPool,
+	Pallet as Pools, PoolState, RewardPools, SubPoolsStorage, UnbondPool,
 };
 use sp_runtime::traits::{StaticLookup, Zero};
 use sp_staking::{EraIndex, StakingInterface};
