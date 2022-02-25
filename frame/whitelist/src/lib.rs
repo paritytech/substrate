@@ -77,6 +77,7 @@ pub mod pallet {
 			+ Dispatchable<Origin = Self::Origin, PostInfo = PostDispatchInfo>
 			+ GetDispatchInfo
 			+ FullCodec
+			+ TypeInfo
 			+ From<frame_system::Call<Self>>
 			+ Parameter;
 
