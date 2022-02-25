@@ -15,8 +15,8 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
-// NOTE: we allow missing docs here because arg_enum! creates the function variants without doc
-#![allow(missing_docs)]
+
+//! Definitions of [`ArgEnum`] types.
 
 use clap::ArgEnum;
 
@@ -90,6 +90,7 @@ impl Into<sc_service::config::WasmExecutionMethod> for WasmExecutionMethod {
 #[derive(Debug, Copy, Clone, PartialEq, Eq, ArgEnum)]
 #[clap(rename_all = "PascalCase")]
 pub enum TracingReceiver {
+	/// Output the tracing records using the log.
 	Log,
 }
 
@@ -101,25 +102,33 @@ impl Into<sc_tracing::TracingReceiver> for TracingReceiver {
 	}
 }
 
-#[allow(missing_docs)]
+/// The type of the node key.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, ArgEnum)]
 #[clap(rename_all = "PascalCase")]
 pub enum NodeKeyType {
+	/// Use ed25519.
 	Ed25519,
 }
 
+/// The crypto scheme to use.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, ArgEnum)]
 #[clap(rename_all = "PascalCase")]
 pub enum CryptoScheme {
+	/// Use ed25519.
 	Ed25519,
+	/// Use sr25519.
 	Sr25519,
+	/// Use
 	Ecdsa,
 }
 
+/// The type of the output format.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, ArgEnum)]
 #[clap(rename_all = "PascalCase")]
 pub enum OutputType {
+	/// Output as json.
 	Json,
+	/// Output as text.
 	Text,
 }
 
@@ -127,13 +136,13 @@ pub enum OutputType {
 #[derive(Debug, Copy, Clone, PartialEq, Eq, ArgEnum)]
 #[clap(rename_all = "PascalCase")]
 pub enum ExecutionStrategy {
-	// Execute with native build (if available, WebAssembly otherwise).
+	/// Execute with native build (if available, WebAssembly otherwise).
 	Native,
-	// Only execute with the WebAssembly build.
+	/// Only execute with the WebAssembly build.
 	Wasm,
-	// Execute with both native (where available) and WebAssembly builds.
+	/// Execute with both native (where available) and WebAssembly builds.
 	Both,
-	// Execute with the native build if possible; if it fails, then execute with WebAssembly.
+	/// Execute with the native build if possible; if it fails, then execute with WebAssembly.
 	NativeElseWasm,
 }
 
@@ -165,12 +174,12 @@ impl ExecutionStrategy {
 #[derive(Debug, Copy, Clone, PartialEq, ArgEnum)]
 #[clap(rename_all = "PascalCase")]
 pub enum RpcMethods {
-	// Expose every RPC method only when RPC is listening on `localhost`,
-	// otherwise serve only safe RPC methods.
+	/// Expose every RPC method only when RPC is listening on `localhost`,
+	/// otherwise serve only safe RPC methods.
 	Auto,
-	// Allow only a safe subset of RPC methods.
+	/// Allow only a safe subset of RPC methods.
 	Safe,
-	// Expose every RPC method (even potentially unsafe ones).
+	/// Expose every RPC method (even potentially unsafe ones).
 	Unsafe,
 }
 
@@ -224,22 +233,25 @@ impl Database {
 #[derive(Debug, Clone, ArgEnum)]
 #[clap(rename_all = "PascalCase")]
 pub enum OffchainWorkerEnabled {
+	/// Always have offchain worker enabled.
 	Always,
+	/// Never enable the offchain worker.
 	Never,
+	/// Only enable the offchain worker when running as validator.
 	WhenValidating,
 }
 
 /// Syncing mode.
-#[derive(Debug, Clone, Copy, ArgEnum)]
+#[derive(Debug, Clone, Copy, ArgEnum, PartialEq)]
 #[clap(rename_all = "PascalCase")]
 pub enum SyncMode {
-	// Full sync. Donwnload end verify all blocks.
+	/// Full sync. Download end verify all blocks.
 	Full,
-	// Download blocks without executing them. Download latest state with proofs.
+	/// Download blocks without executing them. Download latest state with proofs.
 	Fast,
-	// Download blocks without executing them. Download latest state without proofs.
+	/// Download blocks without executing them. Download latest state without proofs.
 	FastUnsafe,
-	// Prove finality and download the latest state.
+	/// Prove finality and download the latest state.
 	Warp,
 }
 
