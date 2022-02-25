@@ -184,26 +184,6 @@ where
 		target
 	}
 
-	/// Return the current active validator set at header `header`.
-	///
-	/// Note that the validator set could be `None`. This is the case if we don't find
-	/// a BEEFY authority set change and we can't fetch the authority set from the
-	/// BEEFY on-chain state.
-	///
-	/// Such a failure is usually an indication that the BEEFY pallet has not been deployed (yet).
-	fn validator_set(&self, header: &B::Header) -> Option<ValidatorSet<Public>> {
-		let new = if let Some(new) = find_authorities_change::<B>(header) {
-			Some(new)
-		} else {
-			let at = BlockId::hash(header.hash());
-			self.client.runtime_api().validator_set(&at).ok().flatten()
-		};
-
-		trace!(target: "beefy", "🥩 active validator set: {:?}", new);
-
-		new
-	}
-
 	/// Verify `active` validator set for `block` against the key store
 	///
 	/// The critical case is, if we do have a public key in the key store which is not
@@ -230,16 +210,76 @@ where
 		Ok(())
 	}
 
+	/// Set best BEEFY block to `block_num`.
+	///
+	/// Also sends/updates the best BEEFY block hash to the RPC worker.
+	fn set_best_beefy_block(&mut self, block_num: NumberFor<B>) {
+		if Some(block_num) > self.best_beefy_block {
+			// Try to get block hash ourselves.
+			let block_hash = match self.client.hash(block_num) {
+				Ok(h) => h,
+				Err(e) => {
+					error!(target: "beefy", "🥩 Failed to get hash for block number {}: {}",
+						block_num, e);
+					None
+				},
+			};
+			// Update RPC worker with new best BEEFY block hash.
+			block_hash.map(|hash| {
+				self.beefy_best_block_sender
+					.notify(|| Ok::<_, ()>(hash))
+					.expect("forwards closure result; the closure always returns Ok; qed.")
+			});
+			// Set new best BEEFY block number.
+			self.best_beefy_block = Some(block_num);
+			metric_set!(self, beefy_best_block, block_num);
+		} else {
+			debug!(target: "beefy", "🥩 Can't set best beefy to older: {}", block_num);
+		}
+	}
+
+	/// Handle session changes by starting new voting round for mandatory blocks.
+	fn init_session_at(&mut self, active: ValidatorSet<AuthorityId>, session_start: NumberFor<B>) {
+		debug!(target: "beefy", "🥩 New active validator set: {:?}", active);
+		metric_set!(self, beefy_validator_set_id, active.id());
+		// BEEFY should produce a signed commitment for each session
+		if active.id() != self.last_signed_id + 1 && active.id() != GENESIS_AUTHORITY_SET_ID {
+			metric_inc!(self, beefy_skipped_sessions);
+		}
+
+		if log_enabled!(target: "beefy", log::Level::Debug) {
+			// verify the new validator set - only do it if we're also logging the warning
+			let _ = self.verify_validator_set(&session_start, &active);
+		}
+
+		let id = active.id();
+		self.rounds = Some(round::Rounds::new(session_start, active));
+		info!(target: "beefy", "🥩 New Rounds for validator set id: {:?} with session_start {:?}", id, session_start);
+	}
+
 	fn handle_finality_notification(&mut self, notification: FinalityNotification<B>) {
 		trace!(target: "beefy", "🥩 Finality notification: {:?}", notification);
+		let number = *notification.header.number();
+
+		// On start-up ignore old finality notifications that we're not interested in.
+		if number <= *self.best_grandpa_block_header.number() {
+			debug!(target: "beefy", "🥩 ignoring finality for old block #{:?}", number);
+			return
+		}
 
 		// update best GRANDPA finalized block we have seen
-		self.best_grandpa_block_header = notification.header;
+		self.best_grandpa_block_header = notification.header.clone();
 
+		self.handle_finality(&notification.header);
+	}
+
+	fn handle_finality(&mut self, header: &B::Header) {
 		// Check for and handle potential new session.
-		self.handle_session_change();
+		if let Some(new_validator_set) = find_authorities_change::<B>(header) {
+			self.init_session_at(new_validator_set, *header.number());
+		}
 
-		// Check if there's a new vote target.
+		// Vote if there's now a new vote target.
 		if let Some(target_number) = self.current_vote_target() {
 			self.do_vote(target_number);
 		}
@@ -295,102 +335,11 @@ where
 
 				self.set_best_beefy_block(block_num);
 
-				// Check if there's a new vote target.
+				// Vote if there's now a new vote target.
 				if let Some(target_number) = self.current_vote_target() {
 					self.do_vote(target_number);
 				}
 			}
-		}
-	}
-
-	/// Set best BEEFY block to `block_num`.
-	///
-	/// Also sends/updates the best BEEFY block hash to the RPC worker.
-	fn set_best_beefy_block(&mut self, block_num: NumberFor<B>) {
-		if Some(block_num) > self.best_beefy_block {
-			// Try to get block hash ourselves.
-			let block_hash = match self.client.hash(block_num) {
-				Ok(h) => h,
-				Err(e) => {
-					error!(target: "beefy", "🥩 Failed to get hash for block number {}: {}",
-						block_num, e);
-					None
-				},
-			};
-			// Update RPC worker with new best BEEFY block hash.
-			block_hash.map(|hash| {
-				self.beefy_best_block_sender
-					.notify(|| Ok::<_, ()>(hash))
-					.expect("forwards closure result; the closure always returns Ok; qed.")
-			});
-			// Set new best BEEFY block number.
-			self.best_beefy_block = Some(block_num);
-			metric_set!(self, beefy_best_block, block_num);
-		} else {
-			debug!(target: "beefy", "🥩 Can't set best beefy to older: {}", block_num);
-		}
-	}
-
-	/// Return first block number pertaining to same session as `header`.
-	fn session_start_for_header(&self, header: &B::Header) -> NumberFor<B> {
-		// Current header is also the session start.
-		if let Some(_) = find_authorities_change::<B>(header) {
-			return *header.number()
-		}
-
-		// Walk up the chain looking for the session change digest.
-		let mut header = header.clone();
-		let mut parent_hash = *header.parent_hash();
-		while parent_hash != Default::default() {
-			header = self
-				.client
-				.expect_header(BlockId::Hash(parent_hash))
-				// TODO: is this proof correct?
-				.expect("header always available when following parent hash; qed.");
-			if let Some(_) = find_authorities_change::<B>(&header) {
-				// Found the first header of the session.
-				info!(target: "beefy", "🥩 session boundary is: {:?}.", *header.number());
-				return *header.number()
-			}
-			parent_hash = *header.parent_hash();
-		}
-
-		info!(target: "beefy", "🥩 no session boundary found, defaulting to block number 1.");
-		1u32.into()
-	}
-
-	/// Handle potential session changes by starting new voting round for mandatory blocks.
-	fn handle_session_change(&mut self) {
-		let header = &self.best_grandpa_block_header;
-		if let Some(active) = self.validator_set(header) {
-			// If validator set has changed compared to the one in our active round,
-			if self.rounds.is_none() ||
-				active.id() != self.rounds.as_ref().unwrap().validator_set_id()
-			{
-				// Find new session_start and start new round for mandatory block.
-				let session_start = self.session_start_for_header(header);
-
-				debug!(target: "beefy", "🥩 New active validator set: {:?}", active);
-				info!(target: "beefy", "🥩 New BEEFY session starting at: {:?}", session_start);
-				metric_set!(self, beefy_validator_set_id, active.id());
-				// BEEFY should produce a signed commitment for each session
-				if active.id() != GENESIS_AUTHORITY_SET_ID && active.id() != self.last_signed_id + 1
-				{
-					metric_inc!(self, beefy_skipped_sessions);
-				}
-
-				if log_enabled!(target: "beefy", log::Level::Debug) {
-					// verify the new validator set - only do it if we're also logging the warning
-					let _ = self.verify_validator_set(header.number(), &active);
-				}
-
-				let id = active.id();
-				self.rounds = Some(round::Rounds::new(session_start, active));
-				debug!(target: "beefy", "🥩 New Rounds for validator set id: {:?} with session_start {:?}", id, session_start);
-			}
-		} else {
-			// TODO: BEEFY pallet not available, stop beefy worker
-			()
 		}
 	}
 
@@ -474,6 +423,34 @@ where
 	}
 
 	pub(crate) async fn run(mut self) {
+		// TODO: split 'pallet-present' and 'pallet-not-present' code to separate parts of the
+		// worker.
+		//
+		// further TODO: when pallet does become available we can run BEEFY initial sync (catch-up)
+		// logic then start this part of the worker that will just work as it does now.
+
+		// TODO: wait for major-sync before doing all of the following (also check for major sync
+		// in the main loop).
+
+		info!(target: "beefy", "🥩 run BEEFY worker, best grandpa: #{:?}.", self.best_grandpa_block_header.number());
+		let at = BlockId::hash(self.best_grandpa_block_header.hash());
+		if let Some(active) = self.client.runtime_api().validator_set(&at).ok().flatten() {
+			if active.id() == GENESIS_AUTHORITY_SET_ID {
+				// When starting from genesis, there is no session boundary digest.
+				// Just initialize `rounds` to Block #1 as BEEFY mandatory block.
+				self.init_session_at(active, 1u32.into());
+				// In all other cases, we just go without `rounds` initialized, meaning the worker
+				// won't vote until it witnesses a session change.
+				// Once we'll implement 'initial sync' (catch-up), the worker will be able to start
+				// voting right away.
+			}
+		} else {
+			// TODO: instead of stopping worker, create a check+sleep+repeat future
+			// that waits for BEEFY pallet to be available.
+			error!(target: "beefy", "🥩 BEEFY pallet not available, stopping gadget.");
+			return
+		}
+
 		let mut votes = Box::pin(self.gossip_engine.lock().messages_for(topic::<B>()).filter_map(
 			|notification| async move {
 				debug!(target: "beefy", "🥩 Got vote message: {:?}", notification);
