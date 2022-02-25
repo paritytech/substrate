@@ -315,11 +315,7 @@ use sp_staking::{
 	offence::{Offence, OffenceError, ReportOffence},
 	EraIndex, SessionIndex,
 };
-use sp_std::{
-	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
-	convert::From,
-	prelude::*,
-};
+use sp_std::{collections::btree_map::BTreeMap, convert::From, prelude::*};
 pub use weights::WeightInfo;
 
 pub use pallet::{pallet::*, *};
@@ -545,8 +541,9 @@ impl<T: Config> StakingLedger<T> {
 		slash_era: EraIndex,
 		_active_era: EraIndex, // TODO
 	) -> BalanceOf<T> {
+		use sp_runtime::traits::CheckedMul as _;
 		use sp_staking::OnStakerSlash as _;
-		use sp_std::ops::Div;
+		use sp_std::ops::Div as _;
 
 		let mut remaining_slash = slash_amount;
 		let pre_slash_total = self.total;
@@ -576,20 +573,19 @@ impl<T: Config> StakingLedger<T> {
 		}
 		// Wether or not this slash can be applied to just the active and affected unbonding chunks.
 		// If not, we have to slash all of the aforementioned and then continue slashing older
-		// unlocking chunks
+		// unlocking chunks.
 		let is_proportional_slash = affected_balance <= slash_amount;
 
 		// Helper to update `target` and the ledgers total after accounting for slashing `target`.
 		let mut slash_out_of = |target: &mut BalanceOf<T>, slash_remaining: &mut BalanceOf<T>| {
+			// We don't want the added complexity of using extended ints, so if this saturates we
+			// will just try and slash as much as possible.
+			let maybe_numerator = slash_amount.checked_mul(target);
 			// Calculate the amount to slash from the target
-			let slash_from_target = if is_proportional_slash {
+			let slash_from_target = match (maybe_numerator, is_proportional_slash) {
 				// Equivalent to `(slash_amount / affected_balance) * target`.
-				slash_amount
-					.saturating_mul(*target)
-					// Checked for zero above
-					.div(affected_balance)
-			} else {
-				(*slash_remaining).min(*target)
+				(Some(numerator), true) => numerator.div(affected_balance),
+				_ => (*slash_remaining).min(*target),
 			};
 
 			*target = target.saturating_sub(slash_from_target);
@@ -612,8 +608,12 @@ impl<T: Config> StakingLedger<T> {
 		let indices_to_slash = if is_proportional_slash {
 			Box::new(affected_indices) as Box<dyn Iterator<Item = usize>>
 		} else {
-			Box::new(affected_indices.chain((0..start_index).rev()))
-				as Box<dyn Iterator<Item = usize>>
+			Box::new(
+				// First slash unbonding chunks from after the slash
+				affected_indices
+					// Then start slashing older chunks, start from the era before the slash
+					.chain((0..start_index).rev()),
+			) as Box<dyn Iterator<Item = usize>>
 		};
 		for i in indices_to_slash {
 			if let Some(chunk) = self.unlocking.get_mut(i) {

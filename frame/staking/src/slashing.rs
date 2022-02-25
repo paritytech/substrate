@@ -611,8 +611,10 @@ pub fn do_slash<T: Config>(
 		None => return, // nothing to do.
 	};
 
+	println!("{:?}=ledger.active 1", ledger.active);
+	println!("{:?}=value", value);
 	let value = ledger.slash(value, T::Currency::minimum_balance(), slash_era, apply_era);
-
+	println!("{:?}=ledger.active 2", ledger.active);
 	if !value.is_zero() {
 		// TODO: if this happens the UnbondPools that did not get slashed could think
 		// there are more funds unbonding then there really is, which could lead to attempts
@@ -620,6 +622,7 @@ pub fn do_slash<T: Config>(
 		// to solve this, when the go to withdraw unbonded, we can min the withdraw amount
 		// with the non locked balance.
 		let (imbalance, missing) = T::Currency::slash(stash, value);
+		println!("{:?}=missing", missing);
 		slashed_imbalance.subsume(imbalance);
 
 		if !missing.is_zero() {
