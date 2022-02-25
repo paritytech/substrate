@@ -133,14 +133,6 @@ impl<A, B, These: ContainsPair<A, B>, Those: ContainsPair<A, B>> ContainsPair<A,
 /// Create a type which implements the `Contains` trait for a particular type with syntax similar
 /// to `matches!`.
 #[macro_export]
-#[deprecated = "Use `match_types!` instead"]
-macro_rules! match_type {
-	($( $x:tt )*) => { match_types!( $( $x )* ); }
-}
-
-/// Create a type which implements the `Contains` trait for a particular type with syntax similar
-/// to `matches!`.
-#[macro_export]
 macro_rules! match_types {
 	(
 		pub type $n:ident: impl Contains<$t:ty> = {
@@ -171,6 +163,14 @@ macro_rules! match_types {
 		$crate::match_types!( $( $rest )* );
 	};
 	() => {}
+}
+
+/// Create a type which implements the `Contains` trait for a particular type with syntax similar
+/// to `matches!`.
+#[macro_export]
+#[deprecated = "Use `match_types!` instead"]
+macro_rules! match_type {
+	($( $x:tt )*) => { $crate::match_types!( $( $x )* ); }
 }
 
 #[deprecated = "Use `Everything` instead"]
