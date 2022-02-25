@@ -145,6 +145,9 @@ pub enum RuntimeCosts {
 	/// Weight of calling `seal_is_contract`.
 	#[cfg(feature = "unstable-interface")]
 	IsContract,
+	/// Weight of calling `seal_code_hash`.
+	#[cfg(feature = "unstable-interface")]
+	CodeHash,
 	/// Weight of calling `seal_caller_is_origin`.
 	#[cfg(feature = "unstable-interface")]
 	CallerIsOrigin,
@@ -241,6 +244,8 @@ impl RuntimeCosts {
 			Caller => s.caller,
 			#[cfg(feature = "unstable-interface")]
 			IsContract => s.is_contract,
+			#[cfg(feature = "unstable-interface")]
+			CodeHash => s.code_hash,
 			#[cfg(feature = "unstable-interface")]
 			CallerIsOrigin => s.caller_is_origin,
 			#[cfg(feature = "unstable-interface")]
@@ -1383,6 +1388,31 @@ define_env!(Env, <E: Ext>,
 			ctx.read_sandbox_memory_as(account_ptr)?;
 
 		Ok(ctx.ext.is_contract(&address) as u32)
+	},
+
+	// Retrieve a code hash for a specified address
+	//
+	// # Parameters
+	//
+	// - account_ptr: a pointer to the address in question.
+	//   Should be decodable as an `T::AccountId`. Traps otherwise.
+	// - `out_ptr`: pointer to the linear memory where the returning value is written to.
+	// - `out_len_ptr`: in-out pointer into linear memory where the buffer length
+	//   is read from and the value length is written to.
+	//
+	// # Errors
+	//
+	// `ReturnCode::KeyNotFound`
+	[__unstable__] seal_code_hash(ctx, account_ptr: u32, out_ptr: u32, out_len_ptr: u32) -> ReturnCode => {
+		ctx.charge_gas(RuntimeCosts::CodeHash)?;
+		let address: <<E as Ext>::T as frame_system::Config>::AccountId =
+			ctx.read_sandbox_memory_as(account_ptr)?;
+		if let Some(value) = ctx.ext.code_hash(&address) {
+			ctx.write_sandbox_output(out_ptr, out_len_ptr, &value.encode(), false, already_charged)?;
+			Ok(ReturnCode::Success)
+		} else {
+			Ok(ReturnCode::KeyNotFound)
+		}
 	},
 
 	// Checks whether the caller of the current contract is the origin of the whole call stack.

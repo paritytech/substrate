@@ -162,6 +162,11 @@ pub trait Ext: sealing::Sealed {
 	/// Check if a contract lives at the specified `address`.
 	fn is_contract(&self, address: &AccountIdOf<Self::T>) -> bool;
 
+	/// Returns the code hash of the contract by the given `address`.
+	///
+	/// Returns 'None' if the `address` does not belong to a contract.
+	fn code_hash(&self, address: &AccountIdOf<Self::T>) -> Option<CodeHash<Self::T>>;
+
 	/// Check if the caller of the current contract is the origin of the whole call stack.
 	///
 	/// This can be checked with `is_contract(self.caller())` as well.
@@ -1105,6 +1110,14 @@ where
 		ContractInfoOf::<T>::contains_key(&address)
 	}
 
+	fn code_hash(&self, address: &T::AccountId) -> Option<CodeHash<Self::T>> {
+		if let Some(contract) = <ContractInfoOf<T>>::get(&address) {
+			Some(contract.code_hash)
+		} else {
+			None
+		}
+	}
+
 	fn caller_is_origin(&self) -> bool {
 		self.caller() == &self.origin
 	}
@@ -1753,6 +1766,35 @@ mod tests {
 				&schedule,
 				0,
 				vec![],
+				None,
+			);
+			assert_matches!(result, Ok(_));
+		});
+	}
+
+	#[test]
+	fn code_hash_returns_proper_values() {
+		let code_bob = MockLoader::insert(Call, |ctx, _| {
+			// ALICE is not a contract and hence she does not have a code_hash
+			assert!(ctx.ext.code_hash(&ALICE).is_none());
+			// BOB is a contract and hence he has a code_hash
+			assert!(ctx.ext.code_hash(&BOB).is_some());
+			exec_success()
+		});
+
+		ExtBuilder::default().build().execute_with(|| {
+			let schedule = <Test as Config>::Schedule::get();
+			place_contract(&BOB, code_bob);
+			let mut storage_meter = storage::meter::Meter::new(&ALICE, Some(0), 0).unwrap();
+			// ALICE (not contract) -> BOB (contract)
+			let result = MockStack::run_call(
+				ALICE,
+				BOB,
+				&mut GasMeter::<Test>::new(GAS_LIMIT),
+				&mut storage_meter,
+				&schedule,
+				0,
+				vec![0],
 				None,
 			);
 			assert_matches!(result, Ok(_));
