@@ -31,7 +31,7 @@ use rand::prelude::*;
 use serde::Serialize;
 use std::{fmt::Debug, sync::Arc};
 
-use super::template::TemplateData;
+use super::{record::StatSelect, template::TemplateData};
 
 /// Benchmark the storage of a Substrate node with a live chain snapshot.
 #[derive(Debug, Parser)]
@@ -60,6 +60,20 @@ pub struct StorageParams {
 	/// For substrate this should be `frame/support/src/weights`.
 	#[clap(long, default_value = ".")]
 	pub weight_path: String,
+
+	/// Select a specific metric to calculate the final weight output.
+	#[clap(long = "metric", default_value = "average")]
+	pub weight_metric: StatSelect,
+
+	/// Multiply the resulting weight with the given factor. Must be positive.
+	/// Is calculated before `weight_add`.
+	#[clap(long = "mul", default_value = "1")]
+	pub weight_mul: f64,
+
+	/// Add the given offset to the resulting weight.
+	/// Is calculated after `weight_mul`.
+	#[clap(long = "add", default_value = "0")]
+	pub weight_add: u64,
 
 	/// Skip the `read` benchmark.
 	#[clap(long)]
@@ -106,7 +120,7 @@ impl StorageCmd {
 			record.save_json("read.json")?;
 			let (time_stats, size_stats) = record.stats()?;
 			info!("Time summary:\n{:?}\nValue size summary:\n{:?}", time_stats, size_stats);
-			template.read = Some((time_stats, size_stats));
+			template.set_stats(Some((time_stats, size_stats)), None)?;
 		}
 
 		if !self.params.skip_write {
@@ -114,7 +128,7 @@ impl StorageCmd {
 			record.save_json("write.json")?;
 			let (time_stats, size_stats) = record.stats()?;
 			info!("Time summary:\n{:?}\nValue size summary:\n{:?}", time_stats, size_stats);
-			template.write = Some((time_stats, size_stats));
+			template.set_stats(None, Some((time_stats, size_stats)))?;
 		}
 
 		template.write(&self.params.weight_path)

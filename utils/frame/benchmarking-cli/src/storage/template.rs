@@ -42,12 +42,16 @@ pub(crate) struct TemplateData {
 	args: Vec<String>,
 	/// Storage params of the executed command.
 	params: StorageParams,
+	/// The weight for one `read`.
+	read_weight: u64,
+	/// The weight for one `write`.
+	write_weight: u64,
 	/// Stats about a `read` benchmark. Contains *time* and *value size* stats.
 	/// The *value size* stats are currently not used in the template.
-	pub read: Option<(Stats, Stats)>,
+	read: Option<(Stats, Stats)>,
 	/// Stats about a `write` benchmark. Contains *time* and *value size* stats.
 	/// The *value size* stats are currently not used in the template.
-	pub write: Option<(Stats, Stats)>,
+	write: Option<(Stats, Stats)>,
 }
 
 impl TemplateData {
@@ -62,6 +66,23 @@ impl TemplateData {
 			params: params.clone(),
 			..Default::default()
 		}
+	}
+
+	/// Sets the stats and calculates the final weights.
+	pub fn set_stats(
+		&mut self,
+		read: Option<(Stats, Stats)>,
+		write: Option<(Stats, Stats)>,
+	) -> Result<()> {
+		if let Some(read) = read {
+			self.read_weight = calc_weight(&read.0, &self.params)?;
+			self.read = Some(read);
+		}
+		if let Some(write) = write {
+			self.write_weight = calc_weight(&write.0, &self.params)?;
+			self.write = Some(write);
+		}
+		Ok(())
 	}
 
 	/// Filles out the `weights.hbs` HBS template with its own data.
@@ -90,4 +111,16 @@ impl TemplateData {
 		}
 		path
 	}
+}
+
+/// Calculates the final weight by multiplying the selected metric with
+/// `mul` and adding `add`.
+/// Does not use safe casts and can overflow.
+fn calc_weight(stat: &Stats, params: &StorageParams) -> Result<u64> {
+	if params.weight_mul.is_sign_negative() || !params.weight_mul.is_normal() {
+		return Err("invalid floating number for `weight_mul`".into())
+	}
+	let s = stat.select(params.weight_metric) as f64;
+	let w = s.mul_add(params.weight_mul, params.weight_add as f64).ceil();
+	Ok(w as u64) // No safe cast here since there is no `From<f64>` for `u64`.
 }

@@ -54,7 +54,7 @@ pub mod constants {
 			///   99th: {{underscore read.0.p99}}
 			///   95th: {{underscore read.0.p95}}
 			///   75th: {{underscore read.0.p75}}
-			read: 0 * constants::WEIGHT_PER_NANOS,
+			read: {{underscore read_weight}} * constants::WEIGHT_PER_NANOS,
 
 			/// Time to write one storage item.
 			///
@@ -69,7 +69,7 @@ pub mod constants {
 			///   99th: {{underscore write.0.p99}}
 			///   95th: {{underscore write.0.p95}}
 			///   75th: {{underscore write.0.p75}}
-			write: 0 * constants::WEIGHT_PER_NANOS,
+			write: {{underscore write_weight}} * constants::WEIGHT_PER_NANOS,
 		};
 	}
 

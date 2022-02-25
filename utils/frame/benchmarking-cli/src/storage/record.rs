@@ -21,7 +21,7 @@ use sc_cli::Result;
 
 use log::info;
 use serde::Serialize;
-use std::{fmt, fs, time::Duration};
+use std::{fmt, fs, result, str::FromStr, time::Duration};
 
 /// Raw output of a Storage benchmark.
 #[derive(Debug, Default, Clone, Serialize)]
@@ -48,12 +48,30 @@ pub(crate) struct Stats {
 	/// Standard derivation of all values.
 	stddev: f64,
 
-	/// 99th percentile.
+	/// 99th percentile. At least 99% of all values are below this threshold.
 	p99: u64,
-	/// 95th percentile.
+	/// 95th percentile. At least 95% of all values are below this threshold.
 	p95: u64,
-	/// 75th percentile.
+	/// 75th percentile. At least 75% of all values are below this threshold.
 	p75: u64,
+}
+
+/// Selects a specific field from a [`Stats`] object.
+/// Not all fields are available.
+#[derive(Debug, Clone, Copy, Serialize, PartialEq)]
+pub enum StatSelect {
+	/// Select the maximum.
+	MAX,
+	/// Select the average.
+	AVERAGE,
+	/// Select the median.
+	MEDIAN,
+	/// Select the 99th percentile.
+	P99,
+	/// Select the 95th percentile.
+	P95,
+	/// Select the 75th percentile.
+	P75,
 }
 
 impl BenchRecord {
@@ -110,6 +128,18 @@ impl Stats {
 		})
 	}
 
+	/// Returns the selected stat.
+	pub(crate) fn select(&self, s: StatSelect) -> u64 {
+		match s {
+			StatSelect::MAX => self.max,
+			StatSelect::AVERAGE => self.avg,
+			StatSelect::MEDIAN => self.median,
+			StatSelect::P99 => self.p99,
+			StatSelect::P95 => self.p95,
+			StatSelect::P75 => self.p75,
+		}
+	}
+
 	/// Returns the *average* and the *standard derivation*.
 	fn avg_and_stddev(xs: &Vec<u64>) -> (f64, f64) {
 		let avg = xs.iter().map(|x| *x as f64).sum::<f64>() / xs.len() as f64;
@@ -132,5 +162,28 @@ impl fmt::Debug for Stats {
 		write!(f, "Min: {}, Max: {}\n", self.min, self.max)?;
 		write!(f, "Average: {}, Median: {}, Stddev: {}\n", self.avg, self.median, self.stddev)?;
 		write!(f, "Percentiles 99th, 95th, 75th: {}, {}, {}", self.p99, self.p95, self.p75)
+	}
+}
+
+impl Default for StatSelect {
+	/// Returns the `Average` selector.
+	fn default() -> Self {
+		Self::AVERAGE
+	}
+}
+
+impl FromStr for StatSelect {
+	type Err = &'static str;
+
+	fn from_str(day: &str) -> result::Result<Self, Self::Err> {
+		match day.to_lowercase().as_str() {
+			"max" => Ok(Self::MAX),
+			"average" => Ok(Self::MAX),
+			"median" => Ok(Self::MAX),
+			"p99" => Ok(Self::P99),
+			"p95" => Ok(Self::P95),
+			"p75" => Ok(Self::P75),
+			_ => Err("String was not a StatSelect"),
+		}
 	}
 }
