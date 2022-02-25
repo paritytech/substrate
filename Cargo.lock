@@ -2127,20 +2127,34 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "handlebars",
+ "hash-db",
+ "hex",
+ "itertools",
+ "kvdb",
  "linked-hash-map",
  "log 0.4.14",
+ "memory-db",
  "parity-scale-codec",
+ "rand 0.8.4",
  "sc-cli",
+ "sc-client-api",
  "sc-client-db",
  "sc-executor",
  "sc-service",
  "serde",
  "serde_json",
+ "serde_nanos",
+ "sp-api",
+ "sp-blockchain",
  "sp-core",
+ "sp-database",
  "sp-externalities",
  "sp-keystore",
  "sp-runtime",
  "sp-state-machine",
+ "sp-std",
+ "sp-storage",
+ "sp-trie",
 ]
 
 [[package]]
@@ -3151,9 +3165,9 @@ checksum = "47be2f14c678be2fdcab04ab1171db51b2762ce6f0a8ee87c8dd4a04ed216135"
 
 [[package]]
 name = "itertools"
-version = "0.10.0"
+version = "0.10.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "37d572918e350e82412fe766d24b15e6682fb2ed2bbe018280caa810397cb319"
+checksum = "a9a9d19fa1e79b6215ff29b9d6880b706147f16e9b1dbb1e4e5947b5b02bc5e3"
 dependencies = [
  "either",
 ]
@@ -7414,9 +7428,9 @@ dependencies = [
 
 [[package]]
 name = "rand_distr"
-version = "0.4.1"
+version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "051b398806e42b9cd04ad9ec8f81e355d0a382c543ac6672c62f5a5b452ef142"
+checksum = "32cb0b9bc82b0a0876c2dd994a7e7a2683d3e7390ca40e6886785ef0c7e3ee31"
 dependencies = [
  "num-traits",
  "rand 0.8.4",
@@ -9286,6 +9300,15 @@ checksum = "ee2bb9cd061c5865d345bb02ca49fcef1391741b672b54a0bf7b679badec3142"
 dependencies = [
  "itoa 1.0.1",
  "ryu",
+ "serde",
+]
+
+[[package]]
+name = "serde_nanos"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e44969a61f5d316be20a42ff97816efb3b407a924d06824c3d8a49fa8450de0e"
+dependencies = [
  "serde",
 ]
 
