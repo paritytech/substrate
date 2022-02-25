@@ -12,7 +12,7 @@ publish = false
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "2.0.0" }
+codec = { package = "parity-scale-codec", version = "3.0.0" }
 futures = "0.3.16"
 hex = "0.4"
 serde = "1.0.136"
