@@ -16,14 +16,10 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use std::{collections::BTreeSet, fmt::Debug, marker::PhantomData, pin::Pin, sync::Arc};
+use std::{collections::BTreeSet, fmt::Debug, marker::PhantomData, sync::Arc};
 
 use codec::{Codec, Decode, Encode};
-use futures::{
-	future,
-	task::{Context, Poll, Waker},
-	FutureExt, Stream, StreamExt,
-};
+use futures::{future, FutureExt, StreamExt};
 use log::{debug, error, info, log_enabled, trace, warn};
 use parking_lot::Mutex;
 
@@ -69,34 +65,6 @@ where
 	pub metrics: Option<Metrics>,
 }
 
-#[derive(Default)]
-struct BeefyTicker {
-	inner: Arc<Mutex<(bool, Option<Waker>)>>,
-}
-
-impl BeefyTicker {
-	pub fn wake(&mut self) {
-		let mut guard = self.inner.lock();
-		guard.0 = true;
-		guard.1.take().map(|waker| waker.wake());
-	}
-}
-
-impl Stream for BeefyTicker {
-	type Item = ();
-	fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<()>> {
-		let mut guard = self.inner.lock();
-		if guard.0 {
-			// Just tick every time we're woken up.
-			guard.0 = false;
-			Poll::Ready(Some(()))
-		} else {
-			guard.1 = Some(cx.waker().clone());
-			Poll::Pending
-		}
-	}
-}
-
 /// A BEEFY worker plays the BEEFY protocol
 pub(crate) struct BeefyWorker<B, C, BE>
 where
@@ -123,8 +91,6 @@ where
 	beefy_best_block_sender: BeefyBestBlockSender<B>,
 	/// Validator set id for the last signed commitment
 	last_signed_id: u64,
-	// Used to wake the main task from the other event stream tasks.
-	ticker: BeefyTicker,
 	// keep rustc happy
 	_backend: PhantomData<BE>,
 }
@@ -175,7 +141,6 @@ where
 			best_beefy_block: None,
 			last_signed_id: 0,
 			beefy_best_block_sender,
-			ticker: BeefyTicker::default(),
 			_backend: PhantomData,
 		}
 	}
@@ -205,6 +170,13 @@ where
 			self.best_beefy_block,
 			*rounds.session_start(),
 			self.min_block_delta,
+		);
+		trace!(
+			target: "beefy",
+			"🥩 best beefy: #{:?}, best finalized: #{:?}, current_vote_target: {:?}",
+			self.best_beefy_block,
+			best_finalized,
+			target
 		);
 		if let Some(target) = &target {
 			metric_set!(self, beefy_should_vote_on, target);
@@ -264,8 +236,13 @@ where
 		// update best GRANDPA finalized block we have seen
 		self.best_grandpa_block_header = notification.header;
 
-		trace!(target: "beefy", "🥩 new finalized block, waking up ticker");
-		self.ticker.wake();
+		// Check for and handle potential new session.
+		self.handle_session_change();
+
+		// Check if there's a new vote target.
+		if let Some(target_number) = self.current_vote_target() {
+			self.do_vote(target_number);
+		}
 	}
 
 	fn handle_vote(
@@ -318,8 +295,10 @@ where
 
 				self.set_best_beefy_block(block_num);
 
-				trace!(target: "beefy", "🥩 round concluded, waking up ticker");
-				self.ticker.wake();
+				// Check if there's a new vote target.
+				if let Some(target_number) = self.current_vote_target() {
+					self.do_vote(target_number);
+				}
 			}
 		}
 	}
@@ -416,90 +395,82 @@ where
 	}
 
 	// TODO: doc comment
-	// TODO: propagate errors for stopping beefy worker
-	fn tick(&mut self) {
-		warn!(target: "beefy", "🥩 TICK...");
+	fn do_vote(&mut self, target_number: NumberFor<B>) {
+		trace!(target: "beefy", "🥩 Try voting on {}", target_number);
 
-		// Check for and handle potential new session.
-		self.handle_session_change();
+		// Most of the time we get here, `target` is actually `best_grandpa`,
+		// avoid asking `client` for header in that case.
+		let target_header = if target_number == *self.best_grandpa_block_header.number() {
+			self.best_grandpa_block_header.clone()
+		} else {
+			self.client
+				.expect_header(BlockId::Number(target_number))
+				.expect("FIXME: return error here")
+		};
+		let target_hash = target_header.hash();
 
-		if let Some(target_number) = self.current_vote_target() {
-			// Do vote.
+		let mmr_root = if let Some(hash) = find_mmr_root_digest::<B, Public>(&target_header) {
+			hash
+		} else {
+			warn!(target: "beefy", "🥩 No MMR root digest found for: {:?}", target_hash);
+			return
+		};
+		let payload = Payload::new(known_payload_ids::MMR_ROOT_ID, mmr_root.encode());
 
-			// Most of the time we get here, `target` is actually `best_grandpa`,
-			// avoid asking `client` for header in that case.
-			let target_header = if target_number == *self.best_grandpa_block_header.number() {
-				self.best_grandpa_block_header.clone()
-			} else {
-				self.client
-					.expect_header(BlockId::Number(target_number))
-					.expect("FIXME: return error here")
-			};
-			let target_hash = target_header.hash();
-
-			let mmr_root = if let Some(hash) = find_mmr_root_digest::<B, Public>(&target_header) {
-				hash
-			} else {
-				warn!(target: "beefy", "🥩 No MMR root digest found for: {:?}", target_hash);
+		if let Some(rounds) = &self.rounds {
+			if !rounds.should_self_vote(&(payload.clone(), target_number)) {
+				debug!(target: "beefy", "🥩 Don't double vote for block number: {:?}", target_number);
 				return
-			};
-			let payload = Payload::new(known_payload_ids::MMR_ROOT_ID, mmr_root.encode());
+			}
+		};
 
-			if let Some(rounds) = &self.rounds {
-				if !rounds.should_self_vote(&(payload.clone(), target_number)) {
-					debug!(target: "beefy", "🥩 Don't double vote for block number: {:?}", target_number);
-					return
-				}
-			};
+		let (validators, validator_set_id) = if let Some(rounds) = &self.rounds {
+			(rounds.validators(), rounds.validator_set_id())
+		} else {
+			debug!(target: "beefy", "🥩 Missing validator set - can't vote for: {:?}", target_hash);
+			return
+		};
+		let authority_id = if let Some(id) = self.key_store.authority_id(validators) {
+			debug!(target: "beefy", "🥩 Local authority id: {:?}", id);
+			id
+		} else {
+			debug!(target: "beefy", "🥩 Missing validator id - can't vote for: {:?}", target_hash);
+			return
+		};
 
-			let (validators, validator_set_id) = if let Some(rounds) = &self.rounds {
-				(rounds.validators(), rounds.validator_set_id())
-			} else {
-				debug!(target: "beefy", "🥩 Missing validator set - can't vote for: {:?}", target_hash);
+		let commitment = Commitment { payload, block_number: target_number, validator_set_id };
+		let encoded_commitment = commitment.encode();
+
+		let signature = match self.key_store.sign(&authority_id, &*encoded_commitment) {
+			Ok(sig) => sig,
+			Err(err) => {
+				warn!(target: "beefy", "🥩 Error signing commitment: {:?}", err);
 				return
-			};
-			let authority_id = if let Some(id) = self.key_store.authority_id(validators) {
-				debug!(target: "beefy", "🥩 Local authority id: {:?}", id);
-				id
-			} else {
-				debug!(target: "beefy", "🥩 Missing validator id - can't vote for: {:?}", target_hash);
-				return
-			};
+			},
+		};
 
-			let commitment = Commitment { payload, block_number: target_number, validator_set_id };
-			let encoded_commitment = commitment.encode();
+		trace!(
+			target: "beefy",
+			"🥩 Produced signature using {:?}, is_valid: {:?}",
+			authority_id,
+			BeefyKeystore::verify(&authority_id, &signature, &*encoded_commitment)
+		);
 
-			let signature = match self.key_store.sign(&authority_id, &*encoded_commitment) {
-				Ok(sig) => sig,
-				Err(err) => {
-					warn!(target: "beefy", "🥩 Error signing commitment: {:?}", err);
-					return
-				},
-			};
+		let message = VoteMessage { commitment, id: authority_id, signature };
 
-			trace!(
-				target: "beefy",
-				"🥩 Produced signature using {:?}, is_valid: {:?}",
-				authority_id,
-				BeefyKeystore::verify(&authority_id, &signature, &*encoded_commitment)
-			);
+		let encoded_message = message.encode();
 
-			let message = VoteMessage { commitment, id: authority_id, signature };
+		metric_inc!(self, beefy_votes_sent);
 
-			let encoded_message = message.encode();
+		debug!(target: "beefy", "🥩 Sent vote message: {:?}", message);
 
-			metric_inc!(self, beefy_votes_sent);
+		self.handle_vote(
+			(message.commitment.payload, message.commitment.block_number),
+			(message.id, message.signature),
+			true,
+		);
 
-			debug!(target: "beefy", "🥩 Sent vote message: {:?}", message);
-
-			self.handle_vote(
-				(message.commitment.payload, message.commitment.block_number),
-				(message.id, message.signature),
-				true,
-			);
-
-			self.gossip_engine.lock().gossip_message(topic::<B>(), encoded_message, false);
-		}
+		self.gossip_engine.lock().gossip_message(topic::<B>(), encoded_message, false);
 	}
 
 	pub(crate) async fn run(mut self) {
@@ -536,9 +507,6 @@ where
 					} else {
 						return;
 					}
-				},
-				_ = self.ticker.next().fuse() => {
-					self.tick();
 				},
 				_ = gossip_engine.fuse() => {
 					error!(target: "beefy", "🥩 Gossip engine has terminated.");
@@ -626,7 +594,6 @@ where
 			target
 		},
 	};
-	trace!(target: "beefy", "🥩 best finalized: #{:?}, next_block_to_vote_on: #{:?}", best_grandpa, target);
 
 	// Don't vote for targets until they've been finalized
 	// (`target` can be > `best_grandpa` when `min_delta` is big enough).
