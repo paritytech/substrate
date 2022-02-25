@@ -1443,9 +1443,6 @@ impl<T: Config> Pallet<T> {
 		let desired_targets =
 			Self::desired_targets().ok_or(FeasibilityError::SnapshotUnavailable)?;
 
-		// NOTE: this is a bit of duplicate, but we keep it around for veracity. The unsigned path
-		// already checked this in `unsigned_per_dispatch_checks`. The signed path *could* check it
-		// upon arrival, thus we would then remove it here. Given overlay it is cheap anyhow
 		ensure!(winners.len() as u32 == desired_targets, FeasibilityError::WrongWinnerCount);
 
 		// Ensure that the solution's score can pass absolute min-score.
@@ -1655,7 +1652,7 @@ mod feasibility_check {
 	}
 
 	#[test]
-	fn desired_targets() {
+	fn desired_targets_gets_capped() {
 		ExtBuilder::default().desired_targets(8).build_and_execute(|| {
 			roll_to(<EpochLength>::get() - <SignedPhase>::get() - <UnsignedPhase>::get());
 			assert!(MultiPhase::current_phase().is_signed());
@@ -1668,6 +1665,29 @@ mod feasibility_check {
 
 			// It should succeed
 			assert_ok!(MultiPhase::feasibility_check(raw, COMPUTE));
+		})
+	}
+
+	#[test]
+	fn desired_targets_fails() {
+		ExtBuilder::default().desired_targets(8).build_and_execute(|| {
+			roll_to(<EpochLength>::get() - <SignedPhase>::get() - <UnsignedPhase>::get());
+			assert!(MultiPhase::current_phase().is_signed());
+
+			let mut raw = raw_solution();
+
+			assert_eq!(raw.solution.unique_targets().len(), 4);
+			// desired_targets is capped to the number of targets which is 4
+			assert_eq!(MultiPhase::desired_targets().unwrap(), 4);
+
+			// Force the number of winners to be bigger to fail
+			raw.solution.votes1[0].1 = 4;
+
+			// It should succeed
+			assert_noop!(
+				MultiPhase::feasibility_check(raw, COMPUTE),
+				FeasibilityError::WrongWinnerCount,
+			);
 		})
 	}
 
