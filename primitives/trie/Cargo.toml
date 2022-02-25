@@ -18,17 +18,17 @@ name = "bench"
 harness = false
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false }
-scale-info = { version = "1.0", default-features = false, features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false }
+scale-info = { version = "2.0.0", default-features = false, features = ["derive"] }
 sp-std = { version = "4.0.0", default-features = false, path = "../std" }
 hash-db = { version = "0.15.2", default-features = false }
-trie-db = { version = "0.23.0", default-features = false }
+trie-db = { version = "0.23.1", default-features = false }
 trie-root = { version = "0.17.0", default-features = false }
-memory-db = { version = "0.28.0", default-features = false }
+memory-db = { version = "0.29.0", default-features = false }
 sp-core = { version = "5.0.0", default-features = false, path = "../core" }
 
 [dev-dependencies]
-trie-bench = "0.29.0"
+trie-bench = "0.30.0"
 trie-standardmap = "0.15.2"
 criterion = "0.3.3"
 hex-literal = "0.3.4"
