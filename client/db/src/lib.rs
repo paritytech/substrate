@@ -392,29 +392,24 @@ impl std::fmt::Display for DatabaseSource {
 	}
 }
 
-/// Column constants.
-pub mod columns {
-	/// Meta
+pub(crate) mod columns {
 	pub const META: u32 = crate::utils::COLUMN_META;
-	/// State
 	pub const STATE: u32 = 1;
-	/// State meta
 	pub const STATE_META: u32 = 2;
 	/// maps hashes to lookup keys and numbers to canon hashes.
 	pub const KEY_LOOKUP: u32 = 3;
-	/// Header
 	pub const HEADER: u32 = 4;
-	/// Body
 	pub const BODY: u32 = 5;
-	/// Justifications
 	pub const JUSTIFICATIONS: u32 = 6;
-	/// Auxiliary
 	pub const AUX: u32 = 8;
 	/// Offchain workers local storage
 	pub const OFFCHAIN: u32 = 9;
 	/// Transactions
 	pub const TRANSACTION: u32 = 11;
 }
+
+/// The column of state entries in the KV Database.
+pub use columns::STATE as COL_STATE;
 
 struct PendingBlock<Block: BlockT> {
 	header: Block::Header,

@@ -17,7 +17,7 @@
 
 use sc_cli::Result;
 use sc_client_api::UsageProvider;
-use sc_client_db::{columns, DatabaseSource, DbHash, DbState, DB_HASH_LEN};
+use sc_client_db::{COL_STATE, DatabaseSource, DbHash, DbState, DB_HASH_LEN};
 use sc_service::Configuration;
 use sp_api::StateBackend;
 use sp_blockchain::HeaderBackend;
@@ -124,9 +124,9 @@ fn convert_tx<B: BlockT>(
 		}
 
 		if rc > 0 {
-			ret.set(columns::STATE, k.as_ref(), &v);
+			ret.set(COL_STATE, k.as_ref(), &v);
 		} else if rc < 0 {
-			ret.remove(columns::STATE, &k);
+			ret.remove(COL_STATE, &k);
 		}
 		// 0 means no modification.
 	}

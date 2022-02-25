@@ -43,7 +43,7 @@ pub mod constants {
 		{{/if}}
 		pub const {{db_name}}Weight: RuntimeDbWeight = RuntimeDbWeight {
 			/// Time to read one storage item.
-			/// Calculated by multiplying the {{params.weight_metric}} with {{params.weight_mul}} and adding {{params.weight_add}}.
+			/// Calculated by multiplying the *{{params.weight_metric}}* with `{{params.weight_mul}}` and adding `{{params.weight_add}}`.
 			///
 			/// Stats [ns]:
 			///   Min, Max: {{underscore read.0.min}}, {{underscore read.0.max}}
@@ -58,7 +58,7 @@ pub mod constants {
 			read: {{underscore read_weight}} * constants::WEIGHT_PER_NANOS,
 
 			/// Time to write one storage item.
-			/// Calculated by multiplying the {{params.weight_metric}} with {{params.weight_mul}} and adding {{params.weight_add}}.
+			/// Calculated by multiplying the *{{params.weight_metric}}* with `{{params.weight_mul}}` and adding `{{params.weight_add}}`.
 			///
 			/// Stats [ns]:
 			///   Min, Max: {{underscore write.0.min}}, {{underscore write.0.max}}
