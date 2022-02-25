@@ -225,7 +225,7 @@ pub trait ElectionDataProvider {
 	/// opposed to `y`. Please check `create_snapshot_external` in `election-provider-multi-phase`
 	/// for more details.
 	///
-	/// This is documented further in issue: https://github.com/paritytech/substrate/issues/9478
+	/// This is documented further in issue: <https://github.com/paritytech/substrate/issues/9478>
 	fn desired_targets() -> data_provider::Result<u32>;
 
 	/// Provide a best effort prediction about when the next election is about to happen.
