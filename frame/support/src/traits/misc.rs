@@ -24,8 +24,10 @@ use sp_arithmetic::traits::{CheckedAdd, CheckedMul, CheckedSub, Saturating};
 use sp_runtime::{traits::Block as BlockT, DispatchError};
 use sp_std::{cmp::Ordering, prelude::*};
 
-const DEFENSIVE_OP_PUBLIC_ERROR: &'static str = "a defensive failure has been triggered; please report the block number at https://github.com/paritytech/substrate/issues";
-const DEFENSIVE_OP_INTERNAL_ERROR: &'static str = "Defensive failure has been triggered!";
+#[doc(hidden)]
+pub const DEFENSIVE_OP_PUBLIC_ERROR: &'static str = "a defensive failure has been triggered; please report the block number at https://github.com/paritytech/substrate/issues";
+#[doc(hidden)]
+pub const DEFENSIVE_OP_INTERNAL_ERROR: &'static str = "Defensive failure has been triggered!";
 
 /// Generic function to mark an execution path as ONLY defensive.
 ///
@@ -36,18 +38,18 @@ macro_rules! defensive {
 		frame_support::log::error!(
 			target: "runtime",
 			"{}",
-			DEFENSIVE_OP_PUBLIC_ERROR
+			$crate::traits::misc::DEFENSIVE_OP_PUBLIC_ERROR
 		);
-		debug_assert!(false, "{}", DEFENSIVE_OP_INTERNAL_ERROR);
+		debug_assert!(false, "{}", $crate::traits::misc::DEFENSIVE_OP_INTERNAL_ERROR);
 	};
 	($error:tt) => {
 		frame_support::log::error!(
 			target: "runtime",
 			"{}: {:?}",
-			DEFENSIVE_OP_PUBLIC_ERROR,
+			$crate::traits::misc::DEFENSIVE_OP_PUBLIC_ERROR,
 			$error
 		);
-		debug_assert!(false, "{}: {:?}", DEFENSIVE_OP_INTERNAL_ERROR, $error);
+		debug_assert!(false, "{}: {:?}", $crate::traits::misc::DEFENSIVE_OP_INTERNAL_ERROR, $error);
 	}
 }
 
