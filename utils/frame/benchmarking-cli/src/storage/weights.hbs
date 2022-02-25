@@ -22,11 +22,11 @@
 //! SKIP-WRITE: `{{params.skip_write}}`, SKIP-READ: `{{params.skip_read}}`, WARMUPS: `{{params.warmups}}`
 //! STATE-VERSION: `V{{params.state_version}}`, STATE-CACHE-SIZE: `{{params.state_cache_size}}`
 //! WEIGHT-PATH: `{{params.weight_path}}`
-//! MUL: `{{params.weight_mul}}`, ADD: `{{params.weight_add}}`, METRIC: `{{params.weight_metric}}`
+//! METRIC: `{{params.weight_metric}}`, WEIGHT-MUL: `{{params.weight_mul}}`, WEIGHT-ADD: `{{params.weight_add}}`
 
 // Executed Command:
 {{#each args as |arg|}}
-//	{{arg}}
+//   {{arg}}
 {{/each}}
 
 /// Storage DB weights for the {{runtime_name}} runtime and {{db_name}}.
@@ -43,7 +43,7 @@ pub mod constants {
 		{{/if}}
 		pub const {{db_name}}Weight: RuntimeDbWeight = RuntimeDbWeight {
 			/// Time to read one storage item.
-			/// Calculated by multiplying the *{{params.weight_metric}}* with `{{params.weight_mul}}` and adding `{{params.weight_add}}`.
+			/// Calculated by multiplying the *{{params.weight_metric}}* of all values with `{{params.weight_mul}}` and adding `{{params.weight_add}}`.
 			///
 			/// Stats [ns]:
 			///   Min, Max: {{underscore read.0.min}}, {{underscore read.0.max}}
@@ -58,7 +58,7 @@ pub mod constants {
 			read: {{underscore read_weight}} * constants::WEIGHT_PER_NANOS,
 
 			/// Time to write one storage item.
-			/// Calculated by multiplying the *{{params.weight_metric}}* with `{{params.weight_mul}}` and adding `{{params.weight_add}}`.
+			/// Calculated by multiplying the *{{params.weight_metric}}* of all values with `{{params.weight_mul}}` and adding `{{params.weight_add}}`.
 			///
 			/// Stats [ns]:
 			///   Min, Max: {{underscore write.0.min}}, {{underscore write.0.max}}

@@ -61,11 +61,11 @@ pub(crate) struct Stats {
 #[derive(Debug, Clone, Copy, Serialize, PartialEq)]
 pub enum StatSelect {
 	/// Select the maximum.
-	MAX,
+	Maximum,
 	/// Select the average.
-	AVERAGE,
+	Average,
 	/// Select the median.
-	MEDIAN,
+	Median,
 	/// Select the 99th percentile.
 	P99,
 	/// Select the 95th percentile.
@@ -131,9 +131,9 @@ impl Stats {
 	/// Returns the selected stat.
 	pub(crate) fn select(&self, s: StatSelect) -> u64 {
 		match s {
-			StatSelect::MAX => self.max,
-			StatSelect::AVERAGE => self.avg,
-			StatSelect::MEDIAN => self.median,
+			StatSelect::Maximum => self.max,
+			StatSelect::Average => self.avg,
+			StatSelect::Median => self.median,
 			StatSelect::P99 => self.p99,
 			StatSelect::P95 => self.p95,
 			StatSelect::P75 => self.p75,
@@ -177,12 +177,12 @@ impl FromStr for StatSelect {
 
 	fn from_str(day: &str) -> result::Result<Self, Self::Err> {
 		match day.to_lowercase().as_str() {
-			"max" => Ok(Self::MAX),
-			"average" => Ok(Self::AVERAGE),
-			"median" => Ok(Self::MEDIAN),
-			"p99" => Ok(Self::P99),
-			"p95" => Ok(Self::P95),
-			"p75" => Ok(Self::P75),
+			"max" => Ok(Self::Maximum),
+			"average" => Ok(Self::Average),
+			"median" => Ok(Self::Median),
+			"p99" => Ok(Self::P99Percentile),
+			"p95" => Ok(Self::P95Percentile),
+			"p75" => Ok(Self::P75Percentile),
 			_ => Err("String was not a StatSelect"),
 		}
 	}
