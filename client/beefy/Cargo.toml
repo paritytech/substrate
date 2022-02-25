@@ -11,11 +11,11 @@ description = "BEEFY Client gadget for substrate"
 fnv = "1.0.6"
 futures = "0.3"
 log = "0.4"
-parking_lot = "0.11"
+parking_lot = "0.12.0"
 thiserror = "1.0"
 wasm-timer = "0.2.5"
 
-codec = { version = "2.2.0", package = "parity-scale-codec", features = ["derive"] }
+codec = { version = "3.0.0", package = "parity-scale-codec", features = ["derive"] }
 prometheus = { version = "0.10.0-dev", package = "substrate-prometheus-endpoint", path = "../../utils/prometheus" }
 
 sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }

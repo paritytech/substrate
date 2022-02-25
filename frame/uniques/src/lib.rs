@@ -336,7 +336,7 @@ pub mod pallet {
 		/// The signing account has no permission to do the operation.
 		NoPermission,
 		/// The given asset ID is unknown.
-		Unknown,
+		UnknownClass,
 		/// The asset instance ID has already been used for an asset.
 		AlreadyExists,
 		/// The owner turned out to be different to what was expected.
@@ -601,7 +601,8 @@ pub mod pallet {
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 
-			let mut class_details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::Unknown)?;
+			let mut class_details =
+				Class::<T, I>::get(&class).ok_or(Error::<T, I>::UnknownClass)?;
 			ensure!(class_details.owner == origin, Error::<T, I>::NoPermission);
 			let deposit = match class_details.free_holding {
 				true => Zero::zero(),
@@ -661,8 +662,8 @@ pub mod pallet {
 			let origin = ensure_signed(origin)?;
 
 			let mut details =
-				Asset::<T, I>::get(&class, &instance).ok_or(Error::<T, I>::Unknown)?;
-			let class_details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::Unknown)?;
+				Asset::<T, I>::get(&class, &instance).ok_or(Error::<T, I>::UnknownClass)?;
+			let class_details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::UnknownClass)?;
 			ensure!(class_details.freezer == origin, Error::<T, I>::NoPermission);
 
 			details.is_frozen = true;
@@ -691,8 +692,8 @@ pub mod pallet {
 			let origin = ensure_signed(origin)?;
 
 			let mut details =
-				Asset::<T, I>::get(&class, &instance).ok_or(Error::<T, I>::Unknown)?;
-			let class_details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::Unknown)?;
+				Asset::<T, I>::get(&class, &instance).ok_or(Error::<T, I>::UnknownClass)?;
+			let class_details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::UnknownClass)?;
 			ensure!(class_details.admin == origin, Error::<T, I>::NoPermission);
 
 			details.is_frozen = false;
@@ -716,7 +717,7 @@ pub mod pallet {
 			let origin = ensure_signed(origin)?;
 
 			Class::<T, I>::try_mutate(class, |maybe_details| {
-				let details = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
+				let details = maybe_details.as_mut().ok_or(Error::<T, I>::UnknownClass)?;
 				ensure!(&origin == &details.freezer, Error::<T, I>::NoPermission);
 
 				details.is_frozen = true;
@@ -740,7 +741,7 @@ pub mod pallet {
 			let origin = ensure_signed(origin)?;
 
 			Class::<T, I>::try_mutate(class, |maybe_details| {
-				let details = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
+				let details = maybe_details.as_mut().ok_or(Error::<T, I>::UnknownClass)?;
 				ensure!(&origin == &details.admin, Error::<T, I>::NoPermission);
 
 				details.is_frozen = false;
@@ -774,7 +775,7 @@ pub mod pallet {
 			ensure!(acceptable_class.as_ref() == Some(&class), Error::<T, I>::Unaccepted);
 
 			Class::<T, I>::try_mutate(class, |maybe_details| {
-				let details = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
+				let details = maybe_details.as_mut().ok_or(Error::<T, I>::UnknownClass)?;
 				ensure!(&origin == &details.owner, Error::<T, I>::NoPermission);
 				if details.owner == owner {
 					return Ok(())
@@ -823,7 +824,7 @@ pub mod pallet {
 			let freezer = T::Lookup::lookup(freezer)?;
 
 			Class::<T, I>::try_mutate(class, |maybe_details| {
-				let details = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
+				let details = maybe_details.as_mut().ok_or(Error::<T, I>::UnknownClass)?;
 				ensure!(&origin == &details.owner, Error::<T, I>::NoPermission);
 
 				details.issuer = issuer.clone();
@@ -859,9 +860,9 @@ pub mod pallet {
 
 			let delegate = T::Lookup::lookup(delegate)?;
 
-			let class_details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::Unknown)?;
+			let class_details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::UnknownClass)?;
 			let mut details =
-				Asset::<T, I>::get(&class, &instance).ok_or(Error::<T, I>::Unknown)?;
+				Asset::<T, I>::get(&class, &instance).ok_or(Error::<T, I>::UnknownClass)?;
 
 			if let Some(check) = maybe_check {
 				let permitted = &check == &class_details.admin || &check == &details.owner;
@@ -909,9 +910,9 @@ pub mod pallet {
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some).map_err(DispatchError::from))?;
 
-			let class_details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::Unknown)?;
+			let class_details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::UnknownClass)?;
 			let mut details =
-				Asset::<T, I>::get(&class, &instance).ok_or(Error::<T, I>::Unknown)?;
+				Asset::<T, I>::get(&class, &instance).ok_or(Error::<T, I>::UnknownClass)?;
 			if let Some(check) = maybe_check {
 				let permitted = &check == &class_details.admin || &check == &details.owner;
 				ensure!(permitted, Error::<T, I>::NoPermission);
@@ -964,7 +965,7 @@ pub mod pallet {
 			T::ForceOrigin::ensure_origin(origin)?;
 
 			Class::<T, I>::try_mutate(class, |maybe_asset| {
-				let mut asset = maybe_asset.take().ok_or(Error::<T, I>::Unknown)?;
+				let mut asset = maybe_asset.take().ok_or(Error::<T, I>::UnknownClass)?;
 				let old_owner = asset.owner;
 				let new_owner = T::Lookup::lookup(owner)?;
 				asset.owner = new_owner.clone();
@@ -1011,7 +1012,8 @@ pub mod pallet {
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some))?;
 
-			let mut class_details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::Unknown)?;
+			let mut class_details =
+				Class::<T, I>::get(&class).ok_or(Error::<T, I>::UnknownClass)?;
 			if let Some(check_owner) = &maybe_check_owner {
 				ensure!(check_owner == &class_details.owner, Error::<T, I>::NoPermission);
 			}
@@ -1072,7 +1074,8 @@ pub mod pallet {
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some))?;
 
-			let mut class_details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::Unknown)?;
+			let mut class_details =
+				Class::<T, I>::get(&class).ok_or(Error::<T, I>::UnknownClass)?;
 			if let Some(check_owner) = &maybe_check_owner {
 				ensure!(check_owner == &class_details.owner, Error::<T, I>::NoPermission);
 			}
@@ -1122,7 +1125,8 @@ pub mod pallet {
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some))?;
 
-			let mut class_details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::Unknown)?;
+			let mut class_details =
+				Class::<T, I>::get(&class).ok_or(Error::<T, I>::UnknownClass)?;
 
 			if let Some(check_owner) = &maybe_check_owner {
 				ensure!(check_owner == &class_details.owner, Error::<T, I>::NoPermission);
@@ -1181,7 +1185,8 @@ pub mod pallet {
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some))?;
 
-			let mut class_details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::Unknown)?;
+			let mut class_details =
+				Class::<T, I>::get(&class).ok_or(Error::<T, I>::UnknownClass)?;
 			if let Some(check_owner) = &maybe_check_owner {
 				ensure!(check_owner == &class_details.owner, Error::<T, I>::NoPermission);
 			}
@@ -1193,7 +1198,7 @@ pub mod pallet {
 				if metadata.is_some() {
 					class_details.instance_metadatas.saturating_dec();
 				}
-				let deposit = metadata.take().ok_or(Error::<T, I>::Unknown)?.deposit;
+				let deposit = metadata.take().ok_or(Error::<T, I>::UnknownClass)?.deposit;
 				T::Currency::unreserve(&class_details.owner, deposit);
 				class_details.total_deposit.saturating_reduce(deposit);
 
@@ -1230,7 +1235,7 @@ pub mod pallet {
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some))?;
 
-			let mut details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::Unknown)?;
+			let mut details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::UnknownClass)?;
 			if let Some(check_owner) = &maybe_check_owner {
 				ensure!(check_owner == &details.owner, Error::<T, I>::NoPermission);
 			}
@@ -1281,7 +1286,7 @@ pub mod pallet {
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some))?;
 
-			let details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::Unknown)?;
+			let details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::UnknownClass)?;
 			if let Some(check_owner) = &maybe_check_owner {
 				ensure!(check_owner == &details.owner, Error::<T, I>::NoPermission);
 			}
@@ -1290,7 +1295,7 @@ pub mod pallet {
 				let was_frozen = metadata.as_ref().map_or(false, |m| m.is_frozen);
 				ensure!(maybe_check_owner.is_none() || !was_frozen, Error::<T, I>::Frozen);
 
-				let deposit = metadata.take().ok_or(Error::<T, I>::Unknown)?.deposit;
+				let deposit = metadata.take().ok_or(Error::<T, I>::UnknownClass)?.deposit;
 				T::Currency::unreserve(&details.owner, deposit);
 				Self::deposit_event(Event::ClassMetadataCleared { class });
 				Ok(())
