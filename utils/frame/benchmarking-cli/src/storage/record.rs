@@ -96,9 +96,9 @@ impl BenchRecord {
 	}
 
 	/// Saves the raw results in a json file in the current directory.
-	/// Prefixes it with the DB name.
-	pub fn save_json(&self, cfg: &Configuration) -> Result<()> {
-		let path = format!("{}_read.json", cfg.database).to_lowercase();
+	/// Prefixes it with the DB name and suffixed with `path_suffix`.
+	pub fn save_json(&self, cfg: &Configuration, path_suffix: &str) -> Result<()> {
+		let path = format!("{}_{}.json", cfg.database, path_suffix).to_lowercase();
 		let json = serde_json::to_string_pretty(&self)
 			.map_err(|e| format!("Serializing as JSON: {:?}", e))?;
 		fs::write(&path, json)?;
