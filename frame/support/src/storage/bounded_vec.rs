@@ -207,7 +207,7 @@ impl<T, S: Get<u32>> BoundedVec<T, S> {
 
 	/// Returns true of this collection is full.
 	pub fn is_full(&self) -> bool {
-		self.len() == Self::bound()
+		self.len() >= Self::bound()
 	}
 
 	/// Forces the insertion of `element` into `self` retaining all items with index at least
