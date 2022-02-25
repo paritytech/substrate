@@ -293,6 +293,7 @@ where
 		at: &BlockId<Block>,
 		method: &str,
 		call_data: &[u8],
+		overlay: Option<sp_api::OverlayedChanges>,
 	) -> sp_blockchain::Result<(Vec<u8>, StorageProof)> {
 		let state = self.backend.state_at(*at)?;
 
@@ -308,7 +309,7 @@ where
 
 		sp_state_machine::prove_execution_on_trie_backend(
 			&trie_backend,
-			&mut Default::default(),
+			&mut overlay.unwrap_or_default(),
 			&self.executor,
 			self.spawn_handle.clone(),
 			method,

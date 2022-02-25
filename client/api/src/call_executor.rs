@@ -105,5 +105,6 @@ pub trait CallExecutor<B: BlockT>: RuntimeVersionOf {
 		at: &BlockId<B>,
 		method: &str,
 		call_data: &[u8],
+		overlay: Option<sp_api::OverlayedChanges>,
 	) -> Result<(Vec<u8>, StorageProof), sp_blockchain::Error>;
 }

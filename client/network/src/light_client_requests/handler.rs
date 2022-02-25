@@ -159,23 +159,24 @@ impl<B: Block> LightClientRequestHandler<B> {
 
 		let block = Decode::decode(&mut request.block.as_ref())?;
 
-		let proof =
-			match self
-				.client
-				.execution_proof(&BlockId::Hash(block), &request.method, &request.data)
-			{
-				Ok((_, proof)) => proof,
-				Err(e) => {
-					trace!(
-						"remote call request from {} ({} at {:?}) failed with: {}",
-						peer,
-						request.method,
-						request.block,
-						e,
-					);
-					StorageProof::empty()
-				},
-			};
+		let proof = match self.client.execution_proof(
+			&BlockId::Hash(block),
+			&request.method,
+			&request.data,
+			None,
+		) {
+			Ok((_, proof)) => proof,
+			Err(e) => {
+				trace!(
+					"remote call request from {} ({} at {:?}) failed with: {}",
+					peer,
+					request.method,
+					request.block,
+					e,
+				);
+				StorageProof::empty()
+			},
+		};
 
 		let response = {
 			let r = schema::v1::light::RemoteCallResponse { proof: proof.encode() };
