@@ -4752,38 +4752,38 @@ fn force_apply_min_commission_works() {
 #[test]
 fn ledger_slash_works_in_simple_cases() {
 	// Given no unlocking chunks
-	let ledger = StakingLedger::<Test> {
-		stash: 123,
-		total: 15,
-		active: 10,
-		unlocking: vec![],
-		claimed_rewards: vec![],
-	};
+	// let ledger = StakingLedger::<Test> {
+	// 	stash: 123,
+	// 	total: 15,
+	// 	active: 10,
+	// 	unlocking: vec![],
+	// 	claimed_rewards: vec![],
+	// };
 
-	// When
-	assert_eq!(ledger.slash(5, 1, 0, 10), 0);
+	// // When
+	// assert_eq!(ledger.slash(5, 1, 0, 10), 0);
 
-	// Then
-	assert_eq!(ledger.total, 10);
-	assert_eq!(ledger.active, 5);
+	// // Then
+	// assert_eq!(ledger.total, 10);
+	// assert_eq!(ledger.active, 5);
 
-	// When the slash amount is greater then the total
-	assert_eq!(ledger.slash(11, 1, 0, 10), 1);
+	// // When the slash amount is greater then the total
+	// assert_eq!(ledger.slash(11, 1, 0, 10), 1);
 
-	// Then
-	assert_eq!(ledger.total, 0);
-	assert_eq!(ledger.active, 0);
+	// // Then
+	// assert_eq!(ledger.total, 0);
+	// assert_eq!(ledger.active, 0);
 
-	// Given
-	let chunks = [0, 1, 8, 9].iter().map(|era| UnlockChunks { era, value: 10 });
-	ledger.total = 4 * 10;
-	ledger.chunks = chunks.clone();
+	// // Given
+	// let chunks = [0, 1, 8, 9].iter().map(|era| UnlockChunks { era, value: 10 });
+	// ledger.total = 4 * 10;
+	// ledger.chunks = chunks.clone();
 
-	// When no chunks overlap with the slash eras,
-	assert_eq!(ledger.slash(10, 1, 1, 7), 10);
+	// // When no chunks overlap with the slash eras,
+	// assert_eq!(ledger.slash(10, 1, 1, 7), 10);
 
-	// Then
-	assert_eq(ledger.total, 4 * 10);
+	// // Then
+	// assert_eq(ledger.total, 4 * 10);
 
 	// // Slash, but all sub pools are out of range
 	// ExtBuilder::default().add_delegators(vec![(100, 100)]).build_and_execute(|| {
