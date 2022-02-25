@@ -136,6 +136,7 @@ members = [
 	"frame/treasury",
 	"frame/tips",
 	"frame/uniques",
+	"frame/uniques-v2",
 	"frame/utility",
 	"frame/vesting",
 	"primitives/api",
