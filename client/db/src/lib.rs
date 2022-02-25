@@ -75,7 +75,7 @@ use sp_core::{
 	offchain::OffchainOverlayedChange,
 	storage::{well_known_keys, ChildInfo},
 };
-use sp_database::Transaction;
+use sp_database::{ColumnId, Transaction};
 use sp_runtime::{
 	generic::BlockId,
 	traits::{
@@ -407,9 +407,6 @@ pub(crate) mod columns {
 	/// Transactions
 	pub const TRANSACTION: u32 = 11;
 }
-
-/// The column of state entries in the KV Database.
-pub use columns::STATE as COL_STATE;
 
 struct PendingBlock<Block: BlockT> {
 	header: Block::Header,
@@ -1055,11 +1052,12 @@ impl<Block: BlockT> Backend<Block> {
 	}
 
 	/// Expose the Database that is used by this backend.
+	/// The second argument is the Column that stores the State.
 	///
 	/// Should only be needed for benchmarking.
 	#[cfg(any(feature = "runtime-benchmarks"))]
-	pub fn expose_db(&self) -> Arc<dyn sp_database::Database<DbHash>> {
-		self.storage.db.clone()
+	pub fn expose_db(&self) -> (Arc<dyn sp_database::Database<DbHash>>, ColumnId) {
+		(self.storage.db.clone(), columns::STATE)
 	}
 
 	/// Expose the Storage that is used by this backend.

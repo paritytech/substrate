@@ -17,11 +17,11 @@
 
 use sc_cli::Result;
 use sc_client_api::UsageProvider;
-use sc_client_db::{COL_STATE, DatabaseSource, DbHash, DbState, DB_HASH_LEN};
+use sc_client_db::{DatabaseSource, DbHash, DbState, DB_HASH_LEN};
 use sc_service::Configuration;
 use sp_api::StateBackend;
 use sp_blockchain::HeaderBackend;
-use sp_database::Transaction;
+use sp_database::{ColumnId, Transaction};
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, HashFor, Header as HeaderT},
@@ -41,7 +41,7 @@ impl StorageCmd {
 		&self,
 		cfg: &Configuration,
 		client: Arc<C>,
-		db: Arc<dyn sp_database::Database<DbHash>>,
+		(db, state_col): (Arc<dyn sp_database::Database<DbHash>>, ColumnId),
 		storage: Arc<dyn sp_state_machine::Storage<HashFor<Block>>>,
 	) -> Result<BenchRecord>
 	where
@@ -79,7 +79,7 @@ impl StorageCmd {
 			// calculate the root hash of the Trie after the modification.
 			let replace = vec![(k.as_ref(), Some(new_v.as_ref()))];
 			let (root, tx) = trie.storage_root(replace.iter().cloned(), self.state_version());
-			let tx = convert_tx::<Block>(tx, is_parity);
+			let tx = convert_tx::<Block>(tx, state_col, is_parity);
 			db.commit(tx).map_err(|e| format!("Writing to the Database: {}", e))?;
 
 			record.append(new_v.len(), start.elapsed())?;
@@ -89,7 +89,7 @@ impl StorageCmd {
 			let trie = DbState::<Block>::new(storage.clone(), root);
 			let replace = vec![(k.as_ref(), Some(original_v.as_ref()))];
 			let (root, tx) = trie.storage_root(replace.iter().cloned(), self.state_version());
-			let tx = convert_tx::<Block>(tx, is_parity);
+			let tx = convert_tx::<Block>(tx, state_col, is_parity);
 			db.commit(tx).map_err(|e| format!("Writing to the Database: {}", e))?;
 
 			// Inserting the orginal value should bring us back to the original root hash.
@@ -112,6 +112,7 @@ impl StorageCmd {
 /// RocksDB cannot do this and needs the whole route, hence no key truncating for RocksDB.
 fn convert_tx<B: BlockT>(
 	mut tx: PrefixedMemoryDB<HashFor<B>>,
+	col: ColumnId,
 	parity_db: bool,
 ) -> Transaction<DbHash> {
 	let mut ret = Transaction::<DbHash>::default();
@@ -124,9 +125,9 @@ fn convert_tx<B: BlockT>(
 		}
 
 		if rc > 0 {
-			ret.set(COL_STATE, k.as_ref(), &v);
+			ret.set(col, k.as_ref(), &v);
 		} else if rc < 0 {
-			ret.remove(COL_STATE, &k);
+			ret.remove(col, &k);
 		}
 		// 0 means no modification.
 	}
