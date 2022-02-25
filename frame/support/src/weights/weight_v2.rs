@@ -115,9 +115,12 @@ impl Mul for WeightV2 {
 	}
 }
 
-impl Mul<Perbill> for WeightV2 {
+impl<T> Mul<T> for WeightV2
+where
+	T: Mul<u64, Output = u64> + Copy,
+{
 	type Output = Self;
-	fn mul(self, b: Perbill) -> Self {
+	fn mul(self, b: T) -> Self {
 		Self { time: b * self.time, bandwidth: b * self.bandwidth }
 	}
 }

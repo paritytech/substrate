@@ -32,8 +32,6 @@ use sp_runtime::{
 	Perbill, RuntimeDebug,
 };
 
-use core::ops::Mul;
-
 /// Block length limit configuration.
 #[derive(RuntimeDebug, Clone, codec::Encode, codec::Decode, TypeInfo)]
 pub struct BlockLength {
@@ -330,7 +328,7 @@ impl BlockWeights {
 	///  - Average block initialization is assumed to be `10%`.
 	///  - `Operational` transactions have reserved allowance (`1.0 - normal_ratio`)
 	pub fn with_sensible_defaults(expected_block_weight: WeightV2, normal_ratio: Perbill) -> Self {
-		let normal_weight = expected_block_weight.mul(normal_ratio);
+		let normal_weight = normal_ratio * expected_block_weight;
 		Self::builder()
 			.for_class(DispatchClass::Normal, |weights| {
 				weights.max_total = normal_weight.into();
@@ -422,7 +420,7 @@ impl BlockWeightsBuilder {
 			};
 		}
 		// compute max size of single extrinsic
-		if let Some(init_weight) = init_cost.map(|rate| weights.max_block.mul(rate)) {
+		if let Some(init_weight) = init_cost.map(|rate| rate * weights.max_block) {
 			for class in DispatchClass::all() {
 				let per_class = weights.per_class.get_mut(*class);
 				if per_class.max_extrinsic.is_none() && init_cost.is_some() {

@@ -71,7 +71,7 @@ parameter_types! {
 			};
 		})
 		.for_class(DispatchClass::Normal, |weights| {
-			weights.max_total = Some(MAX_BLOCK_WEIGHT.mul(NORMAL_DISPATCH_RATIO));
+			weights.max_total = Some(NORMAL_DISPATCH_RATIO * MAX_BLOCK_WEIGHT);
 		})
 		.for_class(DispatchClass::Operational, |weights| {
 			weights.max_total = Some(MAX_BLOCK_WEIGHT);

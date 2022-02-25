@@ -81,7 +81,6 @@ use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
 use sp_version::RuntimeVersion;
 
 use codec::{Decode, Encode, EncodeLike, FullCodec, MaxEncodedLen};
-use core::ops::Mul;
 use frame_support::{
 	dispatch::{DispatchResult, DispatchResultWithPostInfo},
 	storage,
@@ -368,7 +367,7 @@ pub mod pallet {
 		/// A dispatch that will fill the block weight up to the given ratio.
 		// TODO: This should only be available for testing, rather than in general usage, but
 		// that's not possible at present (since it's within the pallet macro).
-		#[pallet::weight(T::BlockWeights::get().max_block.mul(*_ratio))]
+		#[pallet::weight(*_ratio * T::BlockWeights::get().max_block)]
 		pub fn fill_block(origin: OriginFor<T>, _ratio: Perbill) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
 			Ok(().into())
