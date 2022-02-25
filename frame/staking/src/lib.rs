@@ -539,7 +539,6 @@ impl<T: Config> StakingLedger<T> {
 		slash_amount: BalanceOf<T>,
 		minimum_balance: BalanceOf<T>,
 		slash_era: EraIndex,
-		_active_era: EraIndex, // TODO
 	) -> BalanceOf<T> {
 		use sp_runtime::traits::CheckedMul as _;
 		use sp_staking::OnStakerSlash as _;
