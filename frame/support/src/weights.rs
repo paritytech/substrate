@@ -153,7 +153,7 @@ pub type StorageWeight = u64;
 /// These constants are specific to FRAME, and the current implementation of its various components.
 /// For example: FRAME System, FRAME Executive, our FRAME support libraries, etc...
 pub mod constants {
-	use super::TimeWeight;
+	use super::{TimeWeight, WeightV2};
 	use crate::parameter_types;
 
 	pub const WEIGHT_PER_SECOND: TimeWeight = 1_000_000_000_000;
@@ -163,9 +163,15 @@ pub mod constants {
 
 	parameter_types! {
 		/// Importing a block with 0 txs takes ~5 ms
-		pub const BlockExecutionWeight: TimeWeight = 5 * WEIGHT_PER_MILLIS;
+		pub const BlockExecutionWeight: WeightV2 = WeightV2 {
+			time: 5 * WEIGHT_PER_MILLIS,
+			bandwidth: 0, // TODO SHAWN: Calculate this.
+		};
 		/// Executing 10,000 System remarks (no-op) txs takes ~1.26 seconds -> ~125 µs per tx
-		pub const ExtrinsicBaseWeight: TimeWeight = 125 * WEIGHT_PER_MICROS;
+		pub const ExtrinsicBaseWeight: WeightV2 = WeightV2 {
+			time: 125 * WEIGHT_PER_MICROS,
+			bandwidth: 0, // TODO SHAWN: Calculate this.
+		};
 	}
 
 	// Expose the DB weights.
@@ -362,7 +368,8 @@ impl From<(Option<Weight>, Pays)> for PostDispatchInfo {
 		let actual_weight = match maybe_actual_time {
 			Some(actual_time) => Some(WeightV2 {
 				time: actual_time,
-				bandwidth: Zero::zero(), // TODO SHAWN, backwards compat
+				// NOTE: This enables backwards compat for `WeightV1` syntax.
+				bandwidth: Zero::zero(),
 			}),
 			None => None,
 		};
@@ -388,7 +395,8 @@ impl From<Option<Weight>> for PostDispatchInfo {
 		let actual_weight = match maybe_actual_time {
 			Some(actual_time) => Some(WeightV2 {
 				time: actual_time,
-				bandwidth: Zero::zero(), // SHAWN TODO BACK COMPAT
+				// NOTE: This enables backwards compat for `WeightV1` syntax.
+				bandwidth: Zero::zero(),
 			}),
 			None => None,
 		};

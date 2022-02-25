@@ -350,19 +350,13 @@ impl BlockWeights {
 	pub fn builder() -> BlockWeightsBuilder {
 		BlockWeightsBuilder {
 			weights: BlockWeights {
-				base_block: WeightV2 {
-					time: constants::BlockExecutionWeight::get(),
-					bandwidth: Zero::zero(), // SHAWN TODO
-				},
+				base_block: constants::BlockExecutionWeight::get(),
 				max_block: Zero::zero(),
 				per_class: PerDispatchClass::new(|class| {
 					let initial =
 						if class == DispatchClass::Mandatory { None } else { Some(Zero::zero()) };
 					WeightsPerClass {
-						base_extrinsic: WeightV2 {
-							time: constants::ExtrinsicBaseWeight::get(),
-							bandwidth: Zero::zero(), // SHAWN TODO
-						},
+						base_extrinsic: constants::ExtrinsicBaseWeight::get(),
 						max_extrinsic: None,
 						max_total: initial,
 						reserved: initial,
