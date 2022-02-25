@@ -119,7 +119,7 @@ impl<T, S> BoundedVec<T, S> {
 		self.0
 	}
 
-	/// Exactly the same semantics as [`Vec::sort_by`].
+	/// Exactly the same semantics as `Vec::sort_by`.
 	///
 	/// This is safe since sorting cannot change the number of elements in the vector.
 	pub fn sort_by<F>(&mut self, compare: F)
@@ -129,7 +129,7 @@ impl<T, S> BoundedVec<T, S> {
 		self.0.sort_by(compare)
 	}
 
-	/// Exactly the same semantics as [`Vec::remove`].
+	/// Exactly the same semantics as `Vec::remove`.
 	///
 	/// # Panics
 	///
@@ -138,7 +138,7 @@ impl<T, S> BoundedVec<T, S> {
 		self.0.remove(index)
 	}
 
-	/// Exactly the same semantics as [`Vec::swap_remove`].
+	/// Exactly the same semantics as `Vec::swap_remove`.
 	///
 	/// # Panics
 	///
@@ -147,7 +147,7 @@ impl<T, S> BoundedVec<T, S> {
 		self.0.swap_remove(index)
 	}
 
-	/// Exactly the same semantics as [`Vec::retain`].
+	/// Exactly the same semantics as `Vec::retain`].
 	pub fn retain<F: FnMut(&T) -> bool>(&mut self, f: F) {
 		self.0.retain(f)
 	}
