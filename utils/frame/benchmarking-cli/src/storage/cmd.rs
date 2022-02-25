@@ -124,7 +124,7 @@ impl StorageCmd {
 		}
 
 		if !self.params.skip_write {
-			let record = self.bench_write(&cfg, client, db, storage)?;
+			let record = self.bench_write(client, db, storage)?;
 			record.save_json(&cfg, "write")?;
 			let stats = record.calculate_stats()?;
 			info!("Time summary [ns]:\n{:?}\nValue size summary:\n{:?}", stats.0, stats.1);

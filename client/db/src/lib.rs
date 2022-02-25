@@ -75,7 +75,7 @@ use sp_core::{
 	offchain::OffchainOverlayedChange,
 	storage::{well_known_keys, ChildInfo},
 };
-use sp_database::{ColumnId, Transaction};
+use sp_database::Transaction;
 use sp_runtime::{
 	generic::BlockId,
 	traits::{
@@ -1056,7 +1056,7 @@ impl<Block: BlockT> Backend<Block> {
 	///
 	/// Should only be needed for benchmarking.
 	#[cfg(any(feature = "runtime-benchmarks"))]
-	pub fn expose_db(&self) -> (Arc<dyn sp_database::Database<DbHash>>, ColumnId) {
+	pub fn expose_db(&self) -> (Arc<dyn sp_database::Database<DbHash>>, sp_database::ColumnId) {
 		(self.storage.db.clone(), columns::STATE)
 	}
 

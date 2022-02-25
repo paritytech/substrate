@@ -17,8 +17,7 @@
 
 use sc_cli::Result;
 use sc_client_api::UsageProvider;
-use sc_client_db::{DatabaseSource, DbHash, DbState, DB_HASH_LEN};
-use sc_service::Configuration;
+use sc_client_db::{DbHash, DbState, DB_HASH_LEN};
 use sp_api::StateBackend;
 use sp_blockchain::HeaderBackend;
 use sp_database::{ColumnId, Transaction};
@@ -39,7 +38,6 @@ impl StorageCmd {
 	/// Uses the latest state that is available for the given client.
 	pub(crate) fn bench_write<Block, H, C>(
 		&self,
-		cfg: &Configuration,
 		client: Arc<C>,
 		(db, state_col): (Arc<dyn sp_database::Database<DbHash>>, ColumnId),
 		storage: Arc<dyn sp_state_machine::Storage<HashFor<Block>>>,
@@ -52,7 +50,7 @@ impl StorageCmd {
 		// Store the time that it took to write each value.
 		let mut record = BenchRecord::default();
 
-		let is_parity = matches!(cfg.database, DatabaseSource::ParityDb { path: _ });
+		let supports_rc = db.supports_ref_counting();
 		let block = BlockId::Number(client.usage_info().chain.best_number);
 		let header = client.header(block)?.ok_or("Header not found")?;
 		let original_root = *header.state_root();
@@ -78,26 +76,15 @@ impl StorageCmd {
 			// Create a TX that will modify the Trie in the DB and
 			// calculate the root hash of the Trie after the modification.
 			let replace = vec![(k.as_ref(), Some(new_v.as_ref()))];
-			let (root, tx) = trie.storage_root(replace.iter().cloned(), self.state_version());
-			let tx = convert_tx::<Block>(tx, state_col, is_parity);
+			let (_, stx) = trie.storage_root(replace.iter().cloned(), self.state_version());
+			// Only the keep the insertions, since we do not want to benchmark pruning.
+			let tx = convert_tx::<Block>(stx.clone(), true, state_col, supports_rc);
 			db.commit(tx).map_err(|e| format!("Writing to the Database: {}", e))?;
-
 			record.append(new_v.len(), start.elapsed())?;
 
-			// Now undo the change:
-			// Create a Trie with the modified root hash and replace the value with its original.
-			let trie = DbState::<Block>::new(storage.clone(), root);
-			let replace = vec![(k.as_ref(), Some(original_v.as_ref()))];
-			let (root, tx) = trie.storage_root(replace.iter().cloned(), self.state_version());
-			let tx = convert_tx::<Block>(tx, state_col, is_parity);
+			// Now undo the changes by removing what was added.
+			let tx = convert_tx::<Block>(stx.clone(), false, state_col, supports_rc);
 			db.commit(tx).map_err(|e| format!("Writing to the Database: {}", e))?;
-
-			// Inserting the orginal value should bring us back to the original root hash.
-			if root != original_root {
-				// A crash here means hat the chain snapshot is now toast.
-				log::error!("DB corrupted. Wrong final root: {:?} vs {:?}", root, original_root);
-				std::process::exit(1);
-			}
 		}
 		Ok(record)
 	}
@@ -110,23 +97,30 @@ impl StorageCmd {
 /// The last `DB_HASH_LEN` byte are the hash of the actual stored data, everything
 /// before that is the route in the Patricia Trie.
 /// RocksDB cannot do this and needs the whole route, hence no key truncating for RocksDB.
+///
+/// TODO:
+/// This copies logic from [`sp_client_db::Backend::try_commit_operation`] and should be
+/// refactored to use a canonical `sanitize_key` function from `sp_client_db` which
+/// does not yet exist.
+///
+/// `insert` controls whether only insertions should be included.
+/// If it is set to `false`, only removals are included.
 fn convert_tx<B: BlockT>(
 	mut tx: PrefixedMemoryDB<HashFor<B>>,
+	insert: bool,
 	col: ColumnId,
-	parity_db: bool,
+	supports_rc: bool,
 ) -> Transaction<DbHash> {
 	let mut ret = Transaction::<DbHash>::default();
 
 	for (mut k, (v, rc)) in tx.drain().into_iter() {
-		// Using shorter keys is only possible for ParityDB.
-		// RocksDB needs the full key with prefix.
-		if parity_db {
+		if supports_rc {
 			let _prefix = k.drain(0..k.len() - DB_HASH_LEN);
 		}
 
-		if rc > 0 {
+		if rc > 0 && insert {
 			ret.set(col, k.as_ref(), &v);
-		} else if rc < 0 {
+		} else if rc < 0 && !insert {
 			ret.remove(col, &k);
 		}
 		// 0 means no modification.
