@@ -56,7 +56,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Whitelist WhitelistedCall (r:1 w:1)
 	// Storage: Preimage StatusFor (r:1 w:1)
 	fn whitelist_call() -> Weight {
-		(16_122_000 as Weight)
+		(16_254_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
@@ -64,7 +64,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Preimage StatusFor (r:1 w:1)
 	// Storage: Preimage PreimageFor (r:0 w:1)
 	fn remove_whitelisted_call() -> Weight {
-		(17_798_000 as Weight)
+		(18_348_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(3 as Weight))
 	}
@@ -72,7 +72,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Preimage PreimageFor (r:1 w:1)
 	// Storage: Preimage StatusFor (r:1 w:1)
 	fn dispatch_whitelisted_call() -> Weight {
-		(6_696_291_000 as Weight)
+		(6_618_241_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(3 as Weight))
 			.saturating_add(T::DbWeight::get().writes(3 as Weight))
 	}
@@ -80,7 +80,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Preimage StatusFor (r:1 w:1)
 	// Storage: Preimage PreimageFor (r:0 w:1)
 	fn dispatch_whitelisted_call_with_preimage(n: u32, ) -> Weight {
-		(20_451_000 as Weight)
+		(20_619_000 as Weight)
 			// Standard Error: 0
 			.saturating_add((2_000 as Weight).saturating_mul(n as Weight))
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
@@ -93,7 +93,7 @@ impl WeightInfo for () {
 	// Storage: Whitelist WhitelistedCall (r:1 w:1)
 	// Storage: Preimage StatusFor (r:1 w:1)
 	fn whitelist_call() -> Weight {
-		(16_122_000 as Weight)
+		(16_254_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
 	}
@@ -101,7 +101,7 @@ impl WeightInfo for () {
 	// Storage: Preimage StatusFor (r:1 w:1)
 	// Storage: Preimage PreimageFor (r:0 w:1)
 	fn remove_whitelisted_call() -> Weight {
-		(17_798_000 as Weight)
+		(18_348_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
 	}
@@ -109,7 +109,7 @@ impl WeightInfo for () {
 	// Storage: Preimage PreimageFor (r:1 w:1)
 	// Storage: Preimage StatusFor (r:1 w:1)
 	fn dispatch_whitelisted_call() -> Weight {
-		(6_696_291_000 as Weight)
+		(6_618_241_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
 	}
@@ -117,7 +117,7 @@ impl WeightInfo for () {
 	// Storage: Preimage StatusFor (r:1 w:1)
 	// Storage: Preimage PreimageFor (r:0 w:1)
 	fn dispatch_whitelisted_call_with_preimage(n: u32, ) -> Weight {
-		(20_451_000 as Weight)
+		(20_619_000 as Weight)
 			// Standard Error: 0
 			.saturating_add((2_000 as Weight).saturating_mul(n as Weight))
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
