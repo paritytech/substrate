@@ -14,13 +14,13 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 bytes = "1.1"
-codec = { package = "parity-scale-codec", version = "2.0.0", features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "3.0.0", features = ["derive"] }
 hex = "0.4"
 fnv = "1.0.6"
 futures = "0.3.16"
 futures-timer = "3.0.2"
 num_cpus = "1.13"
-parking_lot = "0.11.2"
+parking_lot = "0.12.0"
 rand = "0.7.2"
 sc-client-api = { version = "4.0.0-dev", path = "../api" }
 sc-network = { version = "0.10.0-dev", path = "../network" }
