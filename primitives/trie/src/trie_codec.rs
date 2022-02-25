@@ -23,7 +23,7 @@
 use crate::{
 	CompactProof, HashDBT, StorageProof, TrieConfiguration, TrieError, TrieHash, EMPTY_PREFIX,
 };
-use sp_std::{boxed::Box, vec::Vec};
+use sp_std::{boxed::Box, collections::btree_set::BTreeSet, vec::Vec};
 #[cfg(feature = "std")]
 use std::error::Error as StdError;
 #[cfg(feature = "std")]
@@ -246,5 +246,5 @@ where
 		compact_proof.extend(child_proof);
 	}
 
-	Ok(CompactProof { encoded_nodes: compact_proof })
+	Ok(CompactProof { encoded_nodes: BTreeSet::from_iter(compact_proof) })
 }
