@@ -1419,7 +1419,7 @@ mod tests {
 		execute_works_inner(StateVersion::V1);
 	}
 	fn execute_works_inner(state_version: StateVersion) {
-		let backend = trie_backend::tests::test_trie(state_version);
+		let backend = trie_backend::tests::test_trie(state_version, None, None);
 		let mut overlayed_changes = Default::default();
 		let wasm_code = RuntimeCode::empty();
 
@@ -1447,7 +1447,7 @@ mod tests {
 		execute_works_with_native_else_wasm_inner(StateVersion::V1);
 	}
 	fn execute_works_with_native_else_wasm_inner(state_version: StateVersion) {
-		let backend = trie_backend::tests::test_trie(state_version);
+		let backend = trie_backend::tests::test_trie(state_version, None, None);
 		let mut overlayed_changes = Default::default();
 		let wasm_code = RuntimeCode::empty();
 
@@ -1476,7 +1476,7 @@ mod tests {
 	}
 	fn dual_execution_strategy_detects_consensus_failure_inner(state_version: StateVersion) {
 		let mut consensus_failed = false;
-		let backend = trie_backend::tests::test_trie(state_version);
+		let backend = trie_backend::tests::test_trie(state_version, None, None);
 		let mut overlayed_changes = Default::default();
 		let wasm_code = RuntimeCode::empty();
 
@@ -1520,7 +1520,7 @@ mod tests {
 		};
 
 		// fetch execution proof from 'remote' full node
-		let mut remote_backend = trie_backend::tests::test_trie(state_version);
+		let mut remote_backend = trie_backend::tests::test_trie(state_version, None, None);
 		let remote_root = remote_backend.storage_root(std::iter::empty(), state_version).0;
 		let (remote_result, remote_proof) = prove_execution(
 			&mut remote_backend,
@@ -1813,7 +1813,7 @@ mod tests {
 		let child_info = &child_info;
 		let missing_child_info = &missing_child_info;
 		// fetch read proof from 'remote' full node
-		let remote_backend = trie_backend::tests::test_trie(state_version);
+		let remote_backend = trie_backend::tests::test_trie(state_version, None, None);
 		let remote_root = remote_backend.storage_root(std::iter::empty(), state_version).0;
 		let remote_proof = prove_read(remote_backend, &[b"value2"]).unwrap();
 		let remote_proof = test_compact(remote_proof, &remote_root);
@@ -1831,7 +1831,7 @@ mod tests {
 		);
 		assert_eq!(local_result2, false);
 		// on child trie
-		let remote_backend = trie_backend::tests::test_trie(state_version);
+		let remote_backend = trie_backend::tests::test_trie(state_version, None, None);
 		let remote_root = remote_backend.storage_root(std::iter::empty(), state_version).0;
 		let remote_proof = prove_child_read(remote_backend, child_info, &[b"value3"]).unwrap();
 		let remote_proof = test_compact(remote_proof, &remote_root);
@@ -1961,7 +1961,7 @@ mod tests {
 	#[test]
 	fn prove_read_with_size_limit_works() {
 		let state_version = StateVersion::V0;
-		let remote_backend = trie_backend::tests::test_trie(state_version);
+		let remote_backend = trie_backend::tests::test_trie(state_version, None, None);
 		let remote_root = remote_backend.storage_root(::std::iter::empty(), state_version).0;
 		let (proof, count) =
 			prove_range_read_with_size(remote_backend, None, None, 0, None).unwrap();
@@ -1969,7 +1969,7 @@ mod tests {
 		assert_eq!(proof.into_memory_db::<BlakeTwo256>().drain().len(), 3);
 		assert_eq!(count, 1);
 
-		let remote_backend = trie_backend::tests::test_trie(state_version);
+		let remote_backend = trie_backend::tests::test_trie(state_version, None, None);
 		let (proof, count) =
 			prove_range_read_with_size(remote_backend, None, None, 800, Some(&[])).unwrap();
 		assert_eq!(proof.clone().into_memory_db::<BlakeTwo256>().drain().len(), 9);
@@ -1992,7 +1992,7 @@ mod tests {
 		assert_eq!(results.len() as u32, 101);
 		assert_eq!(completed, false);
 
-		let remote_backend = trie_backend::tests::test_trie(state_version);
+		let remote_backend = trie_backend::tests::test_trie(state_version, None, None);
 		let (proof, count) =
 			prove_range_read_with_size(remote_backend, None, None, 50000, Some(&[])).unwrap();
 		assert_eq!(proof.clone().into_memory_db::<BlakeTwo256>().drain().len(), 11);
@@ -2068,7 +2068,7 @@ mod tests {
 	#[test]
 	fn prove_range_with_child_works() {
 		let state_version = StateVersion::V0;
-		let remote_backend = trie_backend::tests::test_trie(state_version);
+		let remote_backend = trie_backend::tests::test_trie(state_version, None, None);
 		let remote_root = remote_backend.storage_root(std::iter::empty(), state_version).0;
 		let mut start_at = smallvec::SmallVec::<[Vec<u8>; 2]>::new();
 		let trie_backend = remote_backend.as_trie_backend().unwrap();
@@ -2118,7 +2118,7 @@ mod tests {
 		let child_info2 = ChildInfo::new_default(b"sub2");
 		// this root will be include in proof
 		let child_info3 = ChildInfo::new_default(b"sub");
-		let remote_backend = trie_backend::tests::test_trie(state_version);
+		let remote_backend = trie_backend::tests::test_trie(state_version, None, None);
 		let long_vec: Vec<u8> = (0..1024usize).map(|_| 8u8).collect();
 		let (remote_root, transaction) = remote_backend.full_storage_root(
 			std::iter::empty(),
@@ -2178,7 +2178,7 @@ mod tests {
 		let mut overlay = OverlayedChanges::default();
 
 		let mut transaction = {
-			let backend = test_trie(state_version);
+			let backend = test_trie(state_version, None, None);
 			let mut cache = StorageTransactionCache::default();
 			let mut ext = Ext::new(&mut overlay, &mut cache, &backend, None);
 			ext.set_child_storage(&child_info_1, b"abc".to_vec(), b"def".to_vec());
@@ -2235,7 +2235,7 @@ mod tests {
 			struct DummyExt(u32);
 		}
 
-		let backend = trie_backend::tests::test_trie(state_version);
+		let backend = trie_backend::tests::test_trie(state_version, None, None);
 		let mut overlayed_changes = Default::default();
 		let wasm_code = RuntimeCode::empty();
 

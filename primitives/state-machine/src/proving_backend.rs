@@ -328,7 +328,7 @@ mod tests {
 		proof_is_empty_until_value_is_read_inner(StateVersion::V1);
 	}
 	fn proof_is_empty_until_value_is_read_inner(test_hash: StateVersion) {
-		let trie_backend = test_trie(test_hash);
+		let trie_backend = test_trie(test_hash, None, None);
 		assert!(test_proving(&trie_backend).extract_proof().is_empty());
 	}
 
@@ -338,7 +338,7 @@ mod tests {
 		proof_is_non_empty_after_value_is_read_inner(StateVersion::V1);
 	}
 	fn proof_is_non_empty_after_value_is_read_inner(test_hash: StateVersion) {
-		let trie_backend = test_trie(test_hash);
+		let trie_backend = test_trie(test_hash, None, None);
 		let backend = test_proving(&trie_backend);
 		assert_eq!(backend.storage(b"key").unwrap(), Some(b"value".to_vec()));
 		assert!(!backend.extract_proof().is_empty());
@@ -360,7 +360,7 @@ mod tests {
 		passes_through_backend_calls_inner(StateVersion::V1);
 	}
 	fn passes_through_backend_calls_inner(state_version: StateVersion) {
-		let trie_backend = test_trie(state_version);
+		let trie_backend = test_trie(state_version, None, None);
 		let proving_backend = test_proving(&trie_backend);
 		assert_eq!(trie_backend.storage(b"key").unwrap(), proving_backend.storage(b"key").unwrap());
 		assert_eq!(trie_backend.pairs(), proving_backend.pairs());
@@ -501,7 +501,7 @@ mod tests {
 		storage_proof_encoded_size_estimation_works_inner(StateVersion::V1);
 	}
 	fn storage_proof_encoded_size_estimation_works_inner(state_version: StateVersion) {
-		let trie_backend = test_trie(state_version);
+		let trie_backend = test_trie(state_version, None, None);
 		let backend = test_proving(&trie_backend);
 
 		let check_estimation =

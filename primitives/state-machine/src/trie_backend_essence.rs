@@ -82,7 +82,7 @@ pub struct TrieBackendEssence<S: TrieBackendStorage<H>, H: Hasher> {
 	#[cfg(feature = "std")]
 	trie_node_cache: Option<sp_trie::cache::LocalTrieNodeCache<H>>,
 	#[cfg(feature = "std")]
-	recorder: Option<Recorder<H>>,
+	pub(crate) recorder: Option<Recorder<H>>,
 }
 
 impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> {
