@@ -91,6 +91,8 @@ impl StorageCmd {
 }
 
 /// Converts a Trie transaction into a DB transaction.
+/// Removals are ignored and will not be included in the final tx.
+/// `invert_inserts` replaces all inserts with removals.
 ///
 /// The keys of Trie transactions are prefixed, this is treated differently by each DB.
 /// ParityDB can use an optimization where only the last `DB_HASH_LEN` byte are needed.
@@ -102,12 +104,9 @@ impl StorageCmd {
 /// This copies logic from [`sp_client_db::Backend::try_commit_operation`] and should be
 /// refactored to use a canonical `sanitize_key` function from `sp_client_db` which
 /// does not yet exist.
-///
-/// `insert` controls whether only insertions should be included.
-/// If it is set to `false`, only removals are included.
 fn convert_tx<B: BlockT>(
 	mut tx: PrefixedMemoryDB<HashFor<B>>,
-	insert: bool,
+	invert_inserts: bool,
 	col: ColumnId,
 	supports_rc: bool,
 ) -> Transaction<DbHash> {
@@ -118,11 +117,14 @@ fn convert_tx<B: BlockT>(
 			let _prefix = k.drain(0..k.len() - DB_HASH_LEN);
 		}
 
-		if rc > 0 && insert {
-			ret.set(col, k.as_ref(), &v);
-		} else if rc < 0 && !insert {
-			ret.remove(col, &k);
+		if rc > 0 {
+			if invert_inserts {
+				ret.set(col, k.as_ref(), &v);
+			} else {
+				ret.remove(col, &k);
+			}
 		}
+		// < 0 means removal - ignored.
 		// 0 means no modification.
 	}
 	ret
