@@ -312,7 +312,7 @@ mod tests {
 		check(|max, len| {
 			assert_ok!(CheckWeight::<Test>::do_pre_dispatch(max, len));
 			assert_eq!(System::block_weight().total(), WeightV2::MAX);
-			assert!(System::block_weight().total() > block_weight_limit());
+			assert!(System::block_weight().total().is_any_greater_than(&block_weight_limit()));
 		});
 		check(|max, len| {
 			assert_ok!(CheckWeight::<Test>::do_validate(max, len));
@@ -369,7 +369,7 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			System::register_extra_weight_unchecked(WeightV2::MAX, DispatchClass::Normal);
 			assert_eq!(System::block_weight().total(), WeightV2::MAX);
-			assert!(System::block_weight().total() > block_weight_limit());
+			assert!(System::block_weight().total().is_any_greater_than(&block_weight_limit()));
 		});
 	}
 
