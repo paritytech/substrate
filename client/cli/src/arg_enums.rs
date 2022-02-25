@@ -88,7 +88,6 @@ impl Into<sc_service::config::WasmExecutionMethod> for WasmExecutionMethod {
 
 #[allow(missing_docs)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, ArgEnum)]
-#[clap(rename_all = "PascalCase")]
 pub enum TracingReceiver {
 	Log,
 }
@@ -103,13 +102,11 @@ impl Into<sc_tracing::TracingReceiver> for TracingReceiver {
 
 #[allow(missing_docs)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, ArgEnum)]
-#[clap(rename_all = "PascalCase")]
 pub enum NodeKeyType {
 	Ed25519,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, ArgEnum)]
-#[clap(rename_all = "PascalCase")]
 pub enum CryptoScheme {
 	Ed25519,
 	Sr25519,
@@ -117,7 +114,6 @@ pub enum CryptoScheme {
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, ArgEnum)]
-#[clap(rename_all = "PascalCase")]
 pub enum OutputType {
 	Json,
 	Text,
@@ -125,7 +121,6 @@ pub enum OutputType {
 
 /// How to execute blocks
 #[derive(Debug, Copy, Clone, PartialEq, Eq, ArgEnum)]
-#[clap(rename_all = "PascalCase")]
 pub enum ExecutionStrategy {
 	// Execute with native build (if available, WebAssembly otherwise).
 	Native,
@@ -163,7 +158,6 @@ impl ExecutionStrategy {
 /// Available RPC methods.
 #[allow(missing_docs)]
 #[derive(Debug, Copy, Clone, PartialEq, ArgEnum)]
-#[clap(rename_all = "PascalCase")]
 pub enum RpcMethods {
 	// Expose every RPC method only when RPC is listening on `localhost`,
 	// otherwise serve only safe RPC methods.
@@ -222,7 +216,6 @@ impl Database {
 /// Whether off-chain workers are enabled.
 #[allow(missing_docs)]
 #[derive(Debug, Clone, ArgEnum)]
-#[clap(rename_all = "PascalCase")]
 pub enum OffchainWorkerEnabled {
 	Always,
 	Never,
@@ -230,8 +223,7 @@ pub enum OffchainWorkerEnabled {
 }
 
 /// Syncing mode.
-#[derive(Debug, Clone, Copy, ArgEnum)]
-#[clap(rename_all = "PascalCase")]
+#[derive(Debug, Clone, Copy, ArgEnum, PartialEq)]
 pub enum SyncMode {
 	// Full sync. Donwnload end verify all blocks.
 	Full,

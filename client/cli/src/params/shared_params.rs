@@ -46,7 +46,7 @@ pub struct SharedParams {
 	///
 	/// Log levels (least to most verbose) are error, warn, info, debug, and trace.
 	/// By default, all targets log `info`. The global log level can be set with -l<level>.
-	#[clap(short = 'l', long, value_name = "LOG_PATTERN")]
+	#[clap(short = 'l', long, value_name = "LOG_PATTERN", multiple_values(true))]
 	pub log: Vec<String>,
 
 	/// Enable detailed log output.
