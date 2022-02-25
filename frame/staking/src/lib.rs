@@ -526,14 +526,16 @@ impl<T: Config> StakingLedger<T> {
 	///
 	/// Note that this calls `Config::OnStakerSlash::on_slash` with information as to how the slash
 	/// was applied.
-	//
-	// Slashes are computed and executed by:
-	//
-	// 1) Balances of the unlocking chunks in range `slash_era + 1..=apply_era` are summed and
-	// stored in `total_balance_affected`. 2) `slash_ratio` is computed as `slash_amount /
-	// total_balance_affected`. 3) `Ledger::active` is set to `(1- slash_ratio) * Ledger::active`.
-	// 4) For all unlocking chunks in range `slash_era + 1..=apply_era` set their balance to `(1 -
-	// slash_ratio) * unbonding_pool_balance`.
+	///
+	/// Slashes are computed by:
+	///
+	/// 1) Balances of the unlocking chunks in range `slash_era + 1..=apply_era` are summed and
+	/// stored in `total_balance_affected`. 2) `slash_ratio` is computed as `slash_amount /
+	/// total_balance_affected`. 3) `Ledger::active` is set to `(1- slash_ratio) * Ledger::active`.
+	/// 4) For all unlocking chunks in range `slash_era + 1..=apply_era` set their balance to `(1 -
+	/// slash_ratio) * unbonding_pool_balance`.
+	/// 5) Slash any remaining slash amount from the remaining chunks, starting with the `slash_era`
+	/// and going backwards.
 	fn slash(
 		&mut self,
 		slash_amount: BalanceOf<T>,

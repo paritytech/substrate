@@ -636,7 +636,6 @@ pub fn do_slash<T: Config>(
 pub(crate) fn apply_slash<T: Config>(
 	unapplied_slash: UnappliedSlash<T::AccountId, BalanceOf<T>>,
 	slash_era: EraIndex,
-	active_era: EraIndex,
 ) {
 	let mut slashed_imbalance = NegativeImbalanceOf::<T>::zero();
 	let mut reward_payout = unapplied_slash.payout;
