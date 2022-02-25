@@ -106,7 +106,9 @@ impl<T, These: Contains<T>, Except: Contains<T>> Contains<T> for TheseExcept<The
 		These::contains(t) && !Except::contains(t)
 	}
 }
-impl<A, B, These: ContainsPair<A, B>, Except: ContainsPair<A, B>> ContainsPair<A, B> for TheseExcept<These, Except> {
+impl<A, B, These: ContainsPair<A, B>, Except: ContainsPair<A, B>> ContainsPair<A, B>
+	for TheseExcept<These, Except>
+{
 	fn contains(a: &A, b: &B) -> bool {
 		These::contains(a, b) && !Except::contains(a, b)
 	}
@@ -120,7 +122,9 @@ impl<T, These: Contains<T>, Those: Contains<T>> Contains<T> for InsideBoth<These
 		These::contains(t) && Those::contains(t)
 	}
 }
-impl<A, B, These: ContainsPair<A, B>, Those: ContainsPair<A, B>> ContainsPair<A, B> for InsideBoth<These, Those> {
+impl<A, B, These: ContainsPair<A, B>, Those: ContainsPair<A, B>> ContainsPair<A, B>
+	for InsideBoth<These, Those>
+{
 	fn contains(a: &A, b: &B) -> bool {
 		These::contains(a, b) && Those::contains(a, b)
 	}

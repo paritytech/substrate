@@ -43,7 +43,7 @@ pub mod weights;
 
 use codec::{Decode, Encode};
 use frame_support::traits::{
-	BalanceStatus::Reserved, Currency, ReservableCurrency, EnsureOriginWithArg,
+	BalanceStatus::Reserved, Currency, EnsureOriginWithArg, ReservableCurrency,
 };
 use frame_system::Config as SystemConfig;
 use sp_runtime::{
@@ -102,7 +102,11 @@ pub mod pallet {
 
 		/// Standard class creation is only allowed if the origin attempting it and the class are
 		/// in this set.
-		type CreateOrigin: EnsureOriginWithArg<Success = Self::AccountId, Self::Origin, Self::ClassId>;
+		type CreateOrigin: EnsureOriginWithArg<
+			Success = Self::AccountId,
+			Self::Origin,
+			Self::ClassId,
+		>;
 
 		/// The basic amount of funds that must be reserved for an asset class.
 		#[pallet::constant]
@@ -156,12 +160,8 @@ pub mod pallet {
 
 	#[pallet::storage]
 	/// The class, if any, of which an account is willing to take ownership.
-	pub(super) type OwnershipAcceptance<T: Config<I>, I: 'static = ()> = StorageMap<
-		_,
-		Blake2_128Concat,
-		T::AccountId,
-		T::ClassId,
-	>;
+	pub(super) type OwnershipAcceptance<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Blake2_128Concat, T::AccountId, T::ClassId>;
 
 	#[pallet::storage]
 	/// The assets held by any given account; set out this way so that assets owned by a single
@@ -325,10 +325,7 @@ pub mod pallet {
 			key: BoundedVec<u8, T::KeyLimit>,
 		},
 		/// Ownership acceptance has changed for an account.
-		OwnershipAcceptanceChanged {
-			who: T::AccountId,
-			maybe_class: Option<T::ClassId>,
-		}
+		OwnershipAcceptanceChanged { who: T::AccountId, maybe_class: Option<T::ClassId> },
 	}
 
 	#[pallet::error]
@@ -1313,12 +1310,19 @@ pub mod pallet {
 		///
 		/// Emits `OwnershipAcceptanceChanged`.
 		#[pallet::weight(T::WeightInfo::set_accept_ownership())]
-		pub fn set_accept_ownership(origin: OriginFor<T>, maybe_class: Option<T::ClassId>) -> DispatchResult {
+		pub fn set_accept_ownership(
+			origin: OriginFor<T>,
+			maybe_class: Option<T::ClassId>,
+		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let old = OwnershipAcceptance::<T, I>::get(&who);
 			match (old.is_some(), maybe_class.is_some()) {
-				(false, true) => { frame_system::Pallet::<T>::inc_consumers(&who)?; },
-				(true, false) => { frame_system::Pallet::<T>::dec_consumers(&who); },
+				(false, true) => {
+					frame_system::Pallet::<T>::inc_consumers(&who)?;
+				},
+				(true, false) => {
+					frame_system::Pallet::<T>::dec_consumers(&who);
+				},
 				_ => {},
 			}
 			if let Some(class) = maybe_class.as_ref() {

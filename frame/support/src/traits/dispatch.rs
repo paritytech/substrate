@@ -64,7 +64,9 @@ pub trait EnsureOriginWithArg<OuterOrigin, Argument> {
 }
 
 pub struct AsEnsureOriginWithArg<EO>(sp_std::marker::PhantomData<EO>);
-impl<OuterOrigin, Argument, EO: EnsureOrigin<OuterOrigin>> EnsureOriginWithArg<OuterOrigin, Argument> for AsEnsureOriginWithArg<EO> {
+impl<OuterOrigin, Argument, EO: EnsureOrigin<OuterOrigin>>
+	EnsureOriginWithArg<OuterOrigin, Argument> for AsEnsureOriginWithArg<EO>
+{
 	/// A return type.
 	type Success = EO::Success;
 

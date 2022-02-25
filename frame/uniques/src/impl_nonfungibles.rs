@@ -128,7 +128,11 @@ impl<T: Config<I>, I: 'static> Mutate<<T as SystemConfig>::AccountId> for Pallet
 		Self::do_mint(class.clone(), instance.clone(), who.clone(), |_| Ok(()))
 	}
 
-	fn burn(class: &Self::ClassId, instance: &Self::InstanceId, maybe_check_owner: Option<&T::AccountId>) -> DispatchResult {
+	fn burn(
+		class: &Self::ClassId,
+		instance: &Self::InstanceId,
+		maybe_check_owner: Option<&T::AccountId>,
+	) -> DispatchResult {
 		Self::do_burn(class.clone(), instance.clone(), |_, d| {
 			if let Some(check_owner) = maybe_check_owner {
 				if &d.owner != check_owner {
