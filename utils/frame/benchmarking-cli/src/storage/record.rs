@@ -178,8 +178,8 @@ impl FromStr for StatSelect {
 	fn from_str(day: &str) -> result::Result<Self, Self::Err> {
 		match day.to_lowercase().as_str() {
 			"max" => Ok(Self::MAX),
-			"average" => Ok(Self::MAX),
-			"median" => Ok(Self::MAX),
+			"average" => Ok(Self::AVERAGE),
+			"median" => Ok(Self::MEDIAN),
 			"p99" => Ok(Self::P99),
 			"p95" => Ok(Self::P95),
 			"p75" => Ok(Self::P75),
