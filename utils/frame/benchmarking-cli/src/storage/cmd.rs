@@ -117,18 +117,18 @@ impl StorageCmd {
 
 		if !self.params.skip_read {
 			let record = self.bench_read(client.clone())?;
-			record.save_json("read.json")?;
-			let (time_stats, size_stats) = record.stats()?;
-			info!("Time summary:\n{:?}\nValue size summary:\n{:?}", time_stats, size_stats);
-			template.set_stats(Some((time_stats, size_stats)), None)?;
+			record.save_json(&cfg)?;
+			let stats = record.calculate_stats()?;
+			info!("Time summary [ns]:\n{:?}\nValue size summary:\n{:?}", stats.0, stats.1);
+			template.set_stats(Some(stats), None)?;
 		}
 
 		if !self.params.skip_write {
 			let record = self.bench_write(&cfg, client, db, storage)?;
-			record.save_json("write.json")?;
-			let (time_stats, size_stats) = record.stats()?;
-			info!("Time summary:\n{:?}\nValue size summary:\n{:?}", time_stats, size_stats);
-			template.set_stats(None, Some((time_stats, size_stats)))?;
+			record.save_json(&cfg)?;
+			let stats = record.calculate_stats()?;
+			info!("Time summary [ns]:\n{:?}\nValue size summary:\n{:?}", stats.0, stats.1);
+			template.set_stats(None, Some(stats))?;
 		}
 
 		template.write(&self.params.weight_path)

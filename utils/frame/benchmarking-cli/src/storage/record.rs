@@ -18,6 +18,7 @@
 //! Calculates statistics and fills out the `weight.hbs` template.
 
 use sc_cli::Result;
+use sc_service::Configuration;
 
 use log::info;
 use serde::Serialize;
@@ -67,11 +68,11 @@ pub enum StatSelect {
 	/// Select the median.
 	Median,
 	/// Select the 99th percentile.
-	P99,
+	P99Percentile,
 	/// Select the 95th percentile.
-	P95,
+	P95Percentile,
 	/// Select the 75th percentile.
-	P75,
+	P75Percentile,
 }
 
 impl BenchRecord {
@@ -87,16 +88,17 @@ impl BenchRecord {
 	}
 
 	/// Returns the statistics for *time* and *value size*.
-	pub(crate) fn stats(self) -> Result<(Stats, Stats)> {
+	pub(crate) fn calculate_stats(self) -> Result<(Stats, Stats)> {
 		let (size, time): (Vec<_>, Vec<_>) = self.ns_per_size.into_iter().unzip();
 		let size = Stats::new(&size)?;
 		let time = Stats::new(&time)?;
 		Ok((time, size)) // The swap of time/size here is intentional.
 	}
 
-	/// Saves the raw results in a json file under the given relative path.
-	/// Does not append ".json" to the passed path.
-	pub fn save_json(&self, path: &str) -> Result<()> {
+	/// Saves the raw results in a json file in the current directory.
+	/// Prefixes it with the DB name.
+	pub fn save_json(&self, cfg: &Configuration) -> Result<()> {
+		let path = format!("{}_read.json", cfg.database).to_lowercase();
 		let json = serde_json::to_string_pretty(&self)
 			.map_err(|e| format!("Serializing as JSON: {:?}", e))?;
 		fs::write(&path, json)?;
@@ -134,9 +136,9 @@ impl Stats {
 			StatSelect::Maximum => self.max,
 			StatSelect::Average => self.avg,
 			StatSelect::Median => self.median,
-			StatSelect::P99 => self.p99,
-			StatSelect::P95 => self.p95,
-			StatSelect::P75 => self.p75,
+			StatSelect::P99Percentile => self.p99,
+			StatSelect::P95Percentile => self.p95,
+			StatSelect::P75Percentile => self.p75,
 		}
 	}
 
@@ -168,7 +170,7 @@ impl fmt::Debug for Stats {
 impl Default for StatSelect {
 	/// Returns the `Average` selector.
 	fn default() -> Self {
-		Self::AVERAGE
+		Self::Average
 	}
 }
 
