@@ -21,7 +21,7 @@
 
 use crate as pallet_whitelist;
 
-use frame_support::traits::{ConstU32, ConstU64, Nothing};
+use frame_support::{parameter_types, traits::{ConstU32, ConstU64, Nothing}};
 use frame_system::EnsureRoot;
 use sp_core::H256;
 use sp_runtime::{
@@ -89,11 +89,16 @@ impl pallet_balances::Config for Test {
 	type WeightInfo = ();
 }
 
+parameter_types! {
+	// Taken from Polkadot as reference.
+	pub const PreimageMaxSize: u32 = 4096 * 1024;
+}
+
 impl pallet_preimage::Config for Test {
 	type Event = Event;
 	type Currency = Balances;
 	type ManagerOrigin = EnsureRoot<Self::AccountId>;
-	type MaxSize = ConstU32<64>;
+	type MaxSize = PreimageMaxSize;
 	type BaseDeposit = ConstU64<1>;
 	type ByteDeposit = ConstU64<1>;
 	type WeightInfo = ();
