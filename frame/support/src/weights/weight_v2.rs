@@ -177,16 +177,40 @@ impl CheckedAdd for WeightV2 {
 mod tests {
 	use super::*;
 
-	// This test verifies that when any parameter of the WeightV2 is greater, the whole weight is
-	// greater. This can to two things both being greater than each other, but that is okay :)
 	#[test]
-	fn comparison_works_as_expected() {
+	fn comparison_functions_work_as_expected() {
+		let weight1 = WeightV2 { time: 99, bandwidth: 1 };
+		let weight2 = WeightV2 { time: 1, bandwidth: 99 };
+		let weight3 = WeightV2 { time: 50, bandwidth: 50 };
+		let weight4 = WeightV2 { time: 1, bandwidth: 1 };
+
+		assert!(!weight4.is_any_greater_than(&weight3));
+		assert!(weight1.is_any_greater_than(&weight2));
+		assert!(weight2.is_any_greater_than(&weight1));
+
+		assert!(!weight1.is_strictly_greater_than(&weight4));
+		assert!(weight3.is_strictly_greater_than(&weight4));
+
+		assert!(weight1.is_strictly_greater_than_or_equal(&weight4));
+		assert!(!weight4.is_strictly_greater_than_or_equal(&weight1));
+
+		assert!(!weight3.is_any_less_than(&weight4));
+		assert!(weight1.is_any_less_than(&weight2));
+		assert!(weight2.is_any_less_than(&weight1));
+
+		assert!(!weight4.is_strictly_less_than(&weight2));
+		assert!(weight4.is_strictly_less_than(&weight3));
+
+		assert!(weight4.is_strictly_less_than_or_equal(&weight2));
+		assert!(!weight1.is_strictly_less_than_or_equal(&weight2));
+	}
+
+	#[test]
+	fn try_add_works_as_expected() {
 		let limit = WeightV2 { time: 100, bandwidth: 100 };
 
 		let weight1 = WeightV2 { time: 99, bandwidth: 1 };
-
 		let weight2 = WeightV2 { time: 1, bandwidth: 99 };
-
 		let weight3 = WeightV2 { time: 50, bandwidth: 50 };
 
 		let total1 = weight1.try_add(&weight2, &limit);
