@@ -13,7 +13,7 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "2.0.0", features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "3.0.0", features = ["derive"] }
 sp-core = { version = "5.0.0", path = "../../../primitives/core" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
 sp-runtime = { version = "5.0.0", path = "../../../primitives/runtime" }
@@ -27,7 +27,7 @@ sc-consensus = { version = "0.10.0-dev", path = "../../../client/consensus/commo
 log = "0.4.8"
 futures = "0.3.16"
 futures-timer = "3.0.1"
-parking_lot = "0.11.2"
+parking_lot = "0.12.0"
 thiserror = "1.0"
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../../utils/prometheus", version = "0.10.0-dev"}
 async-trait = "0.1.50"

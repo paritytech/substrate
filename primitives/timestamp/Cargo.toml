@@ -16,7 +16,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 sp-api = { version = "4.0.0-dev", default-features = false, path = "../api" }
 sp-std = { version = "4.0.0", default-features = false, path = "../std" }
 sp-runtime = { version = "5.0.0", default-features = false, path = "../runtime" }
-codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive"] }
 sp-inherents = { version = "4.0.0-dev", default-features = false, path = "../inherents" }
 thiserror = { version = "1.0.30", optional = true }
 log = { version = "0.4.8", optional = true }
