@@ -11,7 +11,9 @@ use super::*;
 	Encode, Decode, MaxEncodedLen, TypeInfo, Eq, PartialEq, Copy, Clone, RuntimeDebug, Default,
 )]
 pub struct WeightV2 {
+	/// The weight of computational time used.
 	pub time: TimeWeight,
+	/// The weight of the storage bandwidth used.
 	pub bandwidth: StorageWeight,
 }
 
