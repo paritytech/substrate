@@ -16,9 +16,9 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use std::{collections::BTreeMap, hash::Hash};
+use std::{collections::BTreeMap, fmt::Debug, hash::Hash};
 
-use log::trace;
+use log::{debug, trace};
 
 use beefy_primitives::{
 	crypto::{Public, Signature},
@@ -78,7 +78,7 @@ where
 impl<H, N> Rounds<H, N>
 where
 	H: Ord + Hash + Clone,
-	N: Ord + AtLeast32BitUnsigned + MaybeDisplay + Clone,
+	N: Ord + AtLeast32BitUnsigned + MaybeDisplay + Clone + Debug,
 {
 	pub(crate) fn validator_set_id(&self) -> ValidatorSetId {
 		self.validator_set.id()
@@ -103,12 +103,22 @@ where
 		vote: (Public, Signature),
 		self_vote: bool,
 	) -> bool {
-		if Some(round.1.clone()) > self.best_done &&
-			self.validator_set.validators().iter().any(|id| vote.0 == *id)
-		{
-			self.rounds.entry(round.clone()).or_default().add_vote(vote, self_vote)
-		} else {
+		if Some(round.1.clone()) <= self.best_done {
+			debug!(
+				target: "beefy",
+				"🥩 received vote for old stale round {:?}, ignoring",
+				round.1
+			);
 			false
+		} else if !self.validator_set.validators().iter().any(|id| vote.0 == *id) {
+			debug!(
+				target: "beefy",
+				"🥩 received vote {:?} from validator that is not in the validator set, ignoring",
+				vote
+			);
+			false
+		} else {
+			self.rounds.entry(round.clone()).or_default().add_vote(vote, self_vote)
 		}
 	}
 

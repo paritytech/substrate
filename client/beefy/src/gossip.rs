@@ -80,9 +80,33 @@ impl<B: Block> KnownVotes<B> {
 		}
 	}
 
+	/// Remove round from live set, update `last_done` accordingly.
 	pub fn remove(&mut self, round: NumberFor<B>) {
 		self.live.remove(&round);
 		self.last_done = self.last_done.max(Some(round));
+	}
+
+	/// Return true if `round` is live or if it is newer than previously seen rounds.
+	///
+	/// Last concluded round is still allowed to allow proper gossiping for it.
+	pub fn is_live(&self, round: &NumberFor<B>) -> bool {
+		let unseen_round = if let Some(max_known_round) = self.live.keys().last() {
+			round > max_known_round
+		} else {
+			Some(*round) >= self.last_done
+		};
+
+		unseen_round || self.live.contains_key(round)
+	}
+
+	/// Add new _known_ `hash` to the round's known votes.
+	pub fn add_known(&mut self, round: &NumberFor<B>, hash: MessageHash) {
+		self.live.get_mut(round).map(|known| known.insert(hash));
+	}
+
+	/// Check if `hash` is already part of round's known votes.
+	fn is_known(&self, round: &NumberFor<B>, hash: &MessageHash) -> bool {
+		self.live.get(round).map(|known| known.contains(hash)).unwrap_or(false)
 	}
 }
 
@@ -133,27 +157,6 @@ where
 		debug!(target: "beefy", "🥩 About to drop gossip round #{}", round);
 		self.known_votes.write().remove(round);
 	}
-
-	// Return true if `round` is live or if it is newer than previously seen rounds.
-	fn is_live(known_votes: &KnownVotes<B>, round: &NumberFor<B>) -> bool {
-		let unseen_round = if let Some(max_known_round) = known_votes.live.keys().last() {
-			round > max_known_round
-		} else {
-			Some(*round) > known_votes.last_done
-		};
-
-		unseen_round || known_votes.live.contains_key(round)
-	}
-
-	// Add new _known_ `hash` to the round's known votes.
-	fn add_known(known_votes: &mut KnownVotes<B>, round: &NumberFor<B>, hash: MessageHash) {
-		known_votes.live.get_mut(round).map(|known| known.insert(hash));
-	}
-
-	// Check if `hash` is already part of round's known votes.
-	fn is_known(known_votes: &KnownVotes<B>, round: &NumberFor<B>, hash: &MessageHash) -> bool {
-		known_votes.live.get(round).map(|known| known.contains(hash)).unwrap_or(false)
-	}
 }
 
 impl<B> Validator<B> for GossipValidator<B>
@@ -176,17 +179,17 @@ where
 			{
 				let known_votes = self.known_votes.read();
 
-				if !GossipValidator::<B>::is_live(&known_votes, &round) {
+				if !known_votes.is_live(&round) {
 					return ValidationResult::Discard
 				}
 
-				if GossipValidator::<B>::is_known(&known_votes, &round, &msg_hash) {
+				if known_votes.is_known(&round, &msg_hash) {
 					return ValidationResult::ProcessAndKeep(self.topic)
 				}
 			}
 
 			if BeefyKeystore::verify(&msg.id, &msg.signature, &msg.commitment.encode()) {
-				GossipValidator::<B>::add_known(&mut *self.known_votes.write(), &round, msg_hash);
+				self.known_votes.write().add_known(&round, msg_hash);
 				return ValidationResult::ProcessAndKeep(self.topic)
 			} else {
 				// TODO: report peer
@@ -206,7 +209,7 @@ where
 			};
 
 			let round = msg.commitment.block_number;
-			let expired = !GossipValidator::<B>::is_live(&known_votes, &round);
+			let expired = !known_votes.is_live(&round);
 
 			trace!(target: "beefy", "🥩 Message for round #{} expired: {}", round, expired);
 
@@ -244,7 +247,7 @@ where
 			};
 
 			let round = msg.commitment.block_number;
-			let allowed = GossipValidator::<B>::is_live(&known_votes, &round);
+			let allowed = known_votes.is_live(&round);
 
 			debug!(target: "beefy", "🥩 Message for round #{} allowed: {}", round, allowed);
 
@@ -306,22 +309,22 @@ mod tests {
 
 		gv.note_round(1u64);
 
-		let live = gv.known_votes.read();
-		assert!(GossipValidator::<Block>::is_live(&live, &1u64));
-		drop(live);
+		let votes = gv.known_votes.read();
+		assert!(votes.is_live(&1u64));
+		drop(votes);
 
 		gv.note_round(3u64);
 		gv.note_round(7u64);
 		gv.note_round(10u64);
 
-		let live = gv.known_votes.read();
+		let votes = gv.known_votes.read();
 
-		assert_eq!(live.live.len(), MAX_LIVE_GOSSIP_ROUNDS);
+		assert_eq!(votes.live.len(), MAX_LIVE_GOSSIP_ROUNDS);
 
-		assert!(!GossipValidator::<Block>::is_live(&live, &1u64));
-		assert!(GossipValidator::<Block>::is_live(&live, &3u64));
-		assert!(GossipValidator::<Block>::is_live(&live, &7u64));
-		assert!(GossipValidator::<Block>::is_live(&live, &10u64));
+		assert!(!votes.is_live(&1u64));
+		assert!(votes.is_live(&3u64));
+		assert!(votes.is_live(&7u64));
+		assert!(votes.is_live(&10u64));
 	}
 
 	#[test]
@@ -333,24 +336,24 @@ mod tests {
 		gv.note_round(10u64);
 		gv.note_round(1u64);
 
-		let live = gv.known_votes.read();
-		assert_eq!(live.live.len(), MAX_LIVE_GOSSIP_ROUNDS);
-		assert!(GossipValidator::<Block>::is_live(&live, &3u64));
-		assert!(!GossipValidator::<Block>::is_live(&live, &1u64));
-		drop(live);
+		let votes = gv.known_votes.read();
+		assert_eq!(votes.live.len(), MAX_LIVE_GOSSIP_ROUNDS);
+		assert!(votes.is_live(&3u64));
+		assert!(!votes.is_live(&1u64));
+		drop(votes);
 
 		gv.note_round(23u64);
 		gv.note_round(15u64);
 		gv.note_round(20u64);
 		gv.note_round(2u64);
 
-		let live = gv.known_votes.read();
+		let votes = gv.known_votes.read();
 
-		assert_eq!(live.live.len(), MAX_LIVE_GOSSIP_ROUNDS);
+		assert_eq!(votes.live.len(), MAX_LIVE_GOSSIP_ROUNDS);
 
-		assert!(GossipValidator::<Block>::is_live(&live, &15u64));
-		assert!(GossipValidator::<Block>::is_live(&live, &20u64));
-		assert!(GossipValidator::<Block>::is_live(&live, &23u64));
+		assert!(votes.is_live(&15u64));
+		assert!(votes.is_live(&20u64));
+		assert!(votes.is_live(&23u64));
 	}
 
 	#[test]
@@ -361,20 +364,20 @@ mod tests {
 		gv.note_round(7u64);
 		gv.note_round(10u64);
 
-		let live = gv.known_votes.read();
-		assert_eq!(live.live.len(), MAX_LIVE_GOSSIP_ROUNDS);
-		drop(live);
+		let votes = gv.known_votes.read();
+		assert_eq!(votes.live.len(), MAX_LIVE_GOSSIP_ROUNDS);
+		drop(votes);
 
 		// note round #7 again -> should not change anything
 		gv.note_round(7u64);
 
-		let live = gv.known_votes.read();
+		let votes = gv.known_votes.read();
 
-		assert_eq!(live.live.len(), MAX_LIVE_GOSSIP_ROUNDS);
+		assert_eq!(votes.live.len(), MAX_LIVE_GOSSIP_ROUNDS);
 
-		assert!(GossipValidator::<Block>::is_live(&live, &3u64));
-		assert!(GossipValidator::<Block>::is_live(&live, &7u64));
-		assert!(GossipValidator::<Block>::is_live(&live, &10u64));
+		assert!(votes.is_live(&3u64));
+		assert!(votes.is_live(&7u64));
+		assert!(votes.is_live(&10u64));
 	}
 
 	struct TestContext;
@@ -442,10 +445,7 @@ mod tests {
 		gv.note_round(11_u64);
 		gv.note_round(12_u64);
 
-		assert!(!GossipValidator::<Block>::is_live(
-			&*gv.known_votes.read(),
-			&vote.commitment.block_number
-		));
+		assert!(!gv.known_votes.read().is_live(&vote.commitment.block_number));
 
 		let res = gv.validate(&mut context, &sender, &vote.encode());
 
