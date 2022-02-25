@@ -55,20 +55,12 @@ impl WeightV2 {
 
 	/// Checks if all params of `self` are less than or equal to `other`.
 	pub fn is_strictly_less_than_or_equal(&self, other: &Self) -> bool {
-		if self.time > other.time || self.bandwidth > other.bandwidth {
-			return false
-		}
-
-		true
+		self.time <= other.time && self.bandwidth <= other.bandwidth
 	}
 
 	/// Checks if all params of `self` are greater than or equal to `other`.
 	pub fn is_strictly_greater_than_or_equal(&self, other: &Self) -> bool {
-		if self.time < other.time || self.bandwidth < other.bandwidth {
-			return false
-		}
-
-		true
+		self.time >= other.time && self.bandwidth >= other.bandwidth
 	}
 }
 
