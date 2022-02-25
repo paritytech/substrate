@@ -21,7 +21,6 @@ use sc_client_db::{columns, DatabaseSource, DbHash, DbState, DB_HASH_LEN};
 use sc_service::Configuration;
 use sp_api::StateBackend;
 use sp_blockchain::HeaderBackend;
-use sp_core::H256;
 use sp_database::Transaction;
 use sp_runtime::{
 	generic::BlockId,
@@ -46,8 +45,8 @@ impl StorageCmd {
 		storage: Arc<dyn sp_state_machine::Storage<HashFor<Block>>>,
 	) -> Result<BenchRecord>
 	where
-		Block: BlockT<Header = H, Hash = H256> + Debug,
-		H: HeaderT<Hash = H256>,
+		Block: BlockT<Header = H, Hash = DbHash> + Debug,
+		H: HeaderT<Hash = DbHash>,
 		C: UsageProvider<Block> + HeaderBackend<Block>,
 	{
 		// Store the time that it took to write each value.
@@ -105,17 +104,23 @@ impl StorageCmd {
 }
 
 /// Converts a Trie transaction into a DB transaction.
+///
+/// The keys of Trie transactions are prefixed, this is treated differently by each DB.
+/// ParityDB can use an optimization where only the last `DB_HASH_LEN` byte are needed.
+/// The last `DB_HASH_LEN` byte are the hash of the actual stored data, everything
+/// before that is the route in the Patricia Trie.
+/// RocksDB cannot do this and needs the whole route, hence no key truncating for RocksDB.
 fn convert_tx<B: BlockT>(
 	mut tx: PrefixedMemoryDB<HashFor<B>>,
 	parity_db: bool,
-) -> Transaction<H256> {
-	let mut ret = Transaction::<H256>::default();
+) -> Transaction<DbHash> {
+	let mut ret = Transaction::<DbHash>::default();
 
 	for (mut k, (v, rc)) in tx.drain().into_iter() {
 		// Using shorter keys is only possible for ParityDB.
 		// RocksDB needs the full key with prefix.
 		if parity_db {
-			k.drain(0..k.len() - DB_HASH_LEN);
+			let _prefix = k.drain(0..k.len() - DB_HASH_LEN);
 		}
 
 		if rc > 0 {

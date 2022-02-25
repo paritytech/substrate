@@ -110,7 +110,7 @@ impl StorageCmd {
 	) -> Result<()>
 	where
 		BA: ClientBackend<Block>,
-		Block: BlockT<Hash = sp_core::H256>,
+		Block: BlockT<Hash = DbHash>,
 		C: UsageProvider<Block> + StorageProvider<Block, BA> + HeaderBackend<Block>,
 	{
 		let mut template = TemplateData::new(&cfg, &self.params);

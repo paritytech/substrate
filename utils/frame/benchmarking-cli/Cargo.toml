@@ -50,5 +50,5 @@ memory-db = "0.28.0"
 rand = { version = "0.8.4", features = ["small_rng"] }
 
 [features]
-default = ["db"]
-db = ["sc-client-db/with-kvdb-rocksdb", "sc-client-db/with-parity-db", "sc-client-db/runtime-benchmarks"]
+default = ["db", "sc-client-db/runtime-benchmarks"]
+db = ["sc-client-db/with-kvdb-rocksdb", "sc-client-db/with-parity-db"]
