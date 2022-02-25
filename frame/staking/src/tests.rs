@@ -275,9 +275,9 @@ fn rewards_should_work() {
 		assert_eq_error_rate!(Balances::total_balance(&21), init_balance_21, 2);
 		assert_eq_error_rate!(
 			Balances::total_balance(&100),
-			init_balance_100 +
-				part_for_100_from_10 * total_payout_0 * 2 / 3 +
-				part_for_100_from_20 * total_payout_0 * 1 / 3,
+			init_balance_100
+				+ part_for_100_from_10 * total_payout_0 * 2 / 3
+				+ part_for_100_from_20 * total_payout_0 * 1 / 3,
 			2
 		);
 		assert_eq_error_rate!(Balances::total_balance(&101), init_balance_101, 2);
@@ -313,9 +313,9 @@ fn rewards_should_work() {
 		assert_eq_error_rate!(Balances::total_balance(&21), init_balance_21, 2);
 		assert_eq_error_rate!(
 			Balances::total_balance(&100),
-			init_balance_100 +
-				part_for_100_from_10 * (total_payout_0 * 2 / 3 + total_payout_1) +
-				part_for_100_from_20 * total_payout_0 * 1 / 3,
+			init_balance_100
+				+ part_for_100_from_10 * (total_payout_0 * 2 / 3 + total_payout_1)
+				+ part_for_100_from_20 * total_payout_0 * 1 / 3,
 			2
 		);
 		assert_eq_error_rate!(Balances::total_balance(&101), init_balance_101, 2);
@@ -3967,8 +3967,8 @@ mod election_data_provider {
 	#[test]
 	fn targets_2sec_block() {
 		let mut validators = 1000;
-		while <Test as Config>::WeightInfo::get_npos_targets(validators) <
-			2 * frame_support::weights::constants::WEIGHT_PER_SECOND
+		while <Test as Config>::WeightInfo::get_npos_targets(validators)
+			< 2 * frame_support::weights::constants::WEIGHT_PER_SECOND
 		{
 			validators += 1;
 		}
@@ -3985,8 +3985,8 @@ mod election_data_provider {
 		let slashing_spans = validators;
 		let mut nominators = 1000;
 
-		while <Test as Config>::WeightInfo::get_npos_voters(validators, nominators, slashing_spans) <
-			2 * frame_support::weights::constants::WEIGHT_PER_SECOND
+		while <Test as Config>::WeightInfo::get_npos_voters(validators, nominators, slashing_spans)
+			< 2 * frame_support::weights::constants::WEIGHT_PER_SECOND
 		{
 			nominators += 1;
 		}
@@ -4057,8 +4057,8 @@ mod election_data_provider {
 			.build_and_execute(|| {
 				// sum of all nominators who'd be voters (1), plus the self-votes (4).
 				assert_eq!(
-					<Test as Config>::SortedListProvider::count() +
-						<Validators<Test>>::iter().count() as u32,
+					<Test as Config>::SortedListProvider::count()
+						+ <Validators<Test>>::iter().count() as u32,
 					5
 				);
 
@@ -4097,8 +4097,8 @@ mod election_data_provider {
 
 				// and total voters
 				assert_eq!(
-					<Test as Config>::SortedListProvider::count() +
-						<Validators<Test>>::iter().count() as u32,
+					<Test as Config>::SortedListProvider::count()
+						+ <Validators<Test>>::iter().count() as u32,
 					7
 				);
 
@@ -4142,8 +4142,8 @@ mod election_data_provider {
 
 				// and total voters
 				assert_eq!(
-					<Test as Config>::SortedListProvider::count() +
-						<Validators<Test>>::iter().count() as u32,
+					<Test as Config>::SortedListProvider::count()
+						+ <Validators<Test>>::iter().count() as u32,
 					6
 				);
 
@@ -4748,65 +4748,75 @@ fn force_apply_min_commission_works() {
 }
 
 // TODO: adapt these for the staking use case
-// mod pools_interface {
-// 	use super::*;
 
-// 	#[test]
-// 	fn slash_pool_works_in_simple_cases() {
-// 		// Slash with no sub pools
-// 		ExtBuilder::default().build_and_execute(|| {
-// 			// When
-// 			let SlashPoolOut { slashed_bonded, slashed_unlocking } =
-// 				Pools::slash_pool(SlashPoolArgs {
-// 					pool_stash: &PRIMARY_ACCOUNT,
-// 					slash_amount: 9,
-// 					slash_era: 0,
-// 					apply_era: 3,
-// 					active_bonded: 10,
-// 				})
-// 				.unwrap();
+#[test]
+fn ledger_slash_works_in_simple_cases() {
+	// Given no unlocking chunks
+	let ledger = StakingLedger::<Test> {
+		stash: 123,
+		total: 15,
+		active: 10,
+		unlocking: vec![],
+		claimed_rewards: vec![],
+	};
 
-// 			// Then
-// 			assert_eq!(
-// 				SubPoolsStorage::<Runtime>::get(PRIMARY_ACCOUNT).unwrap(),
-// 				Default::default()
-// 			);
-// 			assert_eq!(slashed_unlocking, Default::default());
-// 			assert_eq!(slashed_bonded, 1);
-// 		});
+	// When
+	assert_eq!(ledger.slash(5, 1, 0, 10), 0);
 
-// 		// Slash, but all sub pools are out of range
-// 		ExtBuilder::default().add_delegators(vec![(100, 100)]).build_and_execute(|| {
-// 			// Given
-// 			// Unbond in era 0
-// 			assert_ok!(Pools::unbond_other(Origin::signed(100), 100));
+	// Then
+	assert_eq!(ledger.total, 10);
+	assert_eq!(ledger.active, 5);
 
-// 			// When
-// 			let SlashPoolOut { slashed_bonded, slashed_unlocking } =
-// 				Pools::slash_pool(SlashPoolArgs {
-// 					pool_stash: &PRIMARY_ACCOUNT,
-// 					slash_amount: 9,
-// 					// We start slashing unbonding pools in `slash_era + 1`
-// 					slash_era: 0,
-// 					apply_era: 3,
-// 					active_bonded: 100,
-// 				})
-// 				.unwrap();
+	// When the slash amount is greater then the total
+	assert_eq!(ledger.slash(11, 1, 0, 10), 1);
 
-// 			// Then
-// 			assert_eq!(
-// 				SubPoolsStorage::<Runtime>::get(PRIMARY_ACCOUNT).unwrap(),
-// 				SubPools {
-// 					no_era: Default::default(),
-// 					with_era: sub_pools_with_era! {
-// 						0 => UnbondPool { points: 100, balance: 100 }
-// 					}
-// 				}
-// 			);
-// 			assert_eq!(slashed_unlocking, Default::default());
-// 			assert_eq!(slashed_bonded, 91);
-// 		});
-// 	}
+	// Then
+	assert_eq!(ledger.total, 0);
+	assert_eq!(ledger.active, 0);
+
+	// Given
+	let chunks = [0, 1, 8, 9].iter().map(|era| UnlockChunks { era, value: 10 });
+	ledger.total = 4 * 10;
+	ledger.chunks = chunks.clone();
+
+	// When no chunks overlap with the slash eras,
+	assert_eq!(ledger.slash(10, 1, 1, 7), 10);
+
+	// Then
+	assert_eq(ledger.total, 4 * 10);
+
+	// // Slash, but all sub pools are out of range
+	// ExtBuilder::default().add_delegators(vec![(100, 100)]).build_and_execute(|| {
+	// 	// Given
+	// 	// Unbond in era 0
+	// 	assert_ok!(Pools::unbond_other(Origin::signed(100), 100));
+
+	// 	// When
+	// 	let SlashPoolOut { slashed_bonded, slashed_unlocking } =
+	// 		Pools::slash_pool(SlashPoolArgs {
+	// 			pool_stash: &PRIMARY_ACCOUNT,
+	// 			slash_amount: 9,
+	// 			// We start slashing unbonding pools in `slash_era + 1`
+	// 			slash_era: 0,
+	// 			apply_era: 3,
+	// 			active_bonded: 100,
+	// 		})
+	// 		.unwrap();
+
+	// 	// Then
+	// 	assert_eq!(
+	// 		SubPoolsStorage::<Runtime>::get(PRIMARY_ACCOUNT).unwrap(),
+	// 		SubPools {
+	// 			no_era: Default::default(),
+	// 			with_era: sub_pools_with_era! {
+	// 				0 => UnbondPool { points: 100, balance: 100 }
+	// 			}
+	// 		}
+	// 	);
+	// 	assert_eq!(slashed_unlocking, Default::default());
+	// 	assert_eq!(slashed_bonded, 91);
+	// });
+}
 
 // 	// Some sub pools are in range of the slash while others are not.
 // 	#[test]
