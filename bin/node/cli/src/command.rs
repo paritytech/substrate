@@ -96,7 +96,7 @@ pub fn run() -> Result<()> {
 					.into())
 			},
 		Some(Subcommand::BenchmarkStorage(cmd)) => {
-			if cfg!(feature = "runtime-benchmarks") {
+			if !cfg!(feature = "runtime-benchmarks") {
 				return Err("Benchmarking wasn't enabled when building the node. \
 				You can enable it with `--features runtime-benchmarks`."
 					.into())
