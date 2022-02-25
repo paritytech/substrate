@@ -519,6 +519,9 @@ pub trait ApiExt<Block: BlockT> {
 	) -> Result<StorageChanges<Self::StateBackend, Block>, String>
 	where
 		Self: Sized;
+
+	/// TODO
+	fn overlay(&self) -> RefCell<OverlayedChanges>;
 }
 
 /// Parameters for [`CallApiAt::call_api_at`].

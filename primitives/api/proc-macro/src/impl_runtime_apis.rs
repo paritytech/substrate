@@ -306,6 +306,10 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 					state_version,
 				)
 			}
+
+			fn overlay(&self) -> std::cell::RefCell<#crate_::OverlayedChanges> {
+				self.changes.clone()
+			}
 		}
 
 		#[cfg(any(feature = "std", test))]

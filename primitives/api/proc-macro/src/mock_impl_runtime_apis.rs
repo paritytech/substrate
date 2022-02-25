@@ -123,6 +123,10 @@ fn implement_common_api_traits(block_type: TypePath, self_ty: Type) -> Result<To
 			> where Self: Sized {
 				unimplemented!("`into_storage_changes` not implemented for runtime api mocks")
 			}
+
+			fn overlay(&self) -> std::cell::RefCell<#crate_::OverlayedChanges> {
+				unimplemented!("`overlay` not implemented for runtime api mocks")
+			}
 		}
 
 		impl #crate_::Core<#block_type> for #self_ty {
