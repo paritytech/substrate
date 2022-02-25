@@ -86,7 +86,7 @@ impl StorageProof {
 		let trie_nodes = proofs
 			.into_iter()
 			.flat_map(|proof| proof.iter_nodes())
-			.collect::<sp_std::collections::btree_set::BTreeSet<_>>()
+			.collect::<BTreeSet<_>>()
 			.into_iter()
 			.collect();
 
