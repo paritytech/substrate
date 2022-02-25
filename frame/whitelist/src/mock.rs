@@ -21,7 +21,10 @@
 
 use crate as pallet_whitelist;
 
-use frame_support::{parameter_types, traits::{ConstU32, ConstU64, Nothing}};
+use frame_support::{
+	parameter_types,
+	traits::{ConstU32, ConstU64, Nothing},
+};
 use frame_system::EnsureRoot;
 use sp_core::H256;
 use sp_runtime::{
