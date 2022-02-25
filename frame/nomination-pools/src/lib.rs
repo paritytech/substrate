@@ -300,10 +300,9 @@
 //   a pool is flipped to a destroying state it cannot change its state.
 
 // TODO
-// - Refactor staking slashing to always slash unlocking chunks (then back port)
-// - write detailed docs for StakingInterface
-// - various backports
 // - Counter for delegators per pool and allow limiting of delegators per pool
+// - write detailed docs for StakingInterface
+// - various back ports
 
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
@@ -319,7 +318,7 @@ use scale_info::TypeInfo;
 use sp_core::U256;
 use sp_io::hashing::blake2_256;
 use sp_runtime::traits::{Bounded, Convert, Saturating, StaticLookup, TrailingZeroInput, Zero};
-use sp_staking::{EraIndex, PoolsInterface, SlashPoolArgs, SlashPoolOut, StakingInterface};
+use sp_staking::{EraIndex, OnStakerSlash, StakingInterface};
 use sp_std::{collections::btree_map::BTreeMap, ops::Div, vec::Vec};
 
 #[cfg(test)]
@@ -347,8 +346,9 @@ fn points_to_issue<T: Config>(
 	new_funds: BalanceOf<T>,
 ) -> BalanceOf<T> {
 	match (current_balance.is_zero(), current_points.is_zero()) {
-		(true, true) | (false, true) =>
-			new_funds.saturating_mul(POINTS_TO_BALANCE_INIT_RATIO.into()),
+		(true, true) | (false, true) => {
+			new_funds.saturating_mul(POINTS_TO_BALANCE_INIT_RATIO.into())
+		},
 		(true, false) => {
 			// The pool was totally slashed.
 			// This is the equivalent of `(current_points / 1) * new_funds`.
@@ -373,7 +373,7 @@ fn balance_to_unbond<T: Config>(
 ) -> BalanceOf<T> {
 	if current_balance.is_zero() || current_points.is_zero() || delegator_points.is_zero() {
 		// There is nothing to unbond
-		return Zero::zero()
+		return Zero::zero();
 	}
 
 	// Equivalent of (current_balance / current_points) * delegator_points
@@ -525,8 +525,8 @@ impl<T: Config> BondedPool<T> {
 		ensure!(points_to_balance_ratio_floor < 10u32.into(), Error::<T>::OverflowRisk);
 		// while restricting the balance to 1/10th of max total issuance,
 		ensure!(
-			new_funds.saturating_add(bonded_balance) <
-				BalanceOf::<T>::max_value().div(10u32.into()),
+			new_funds.saturating_add(bonded_balance)
+				< BalanceOf::<T>::max_value().div(10u32.into()),
 			Error::<T>::OverflowRisk
 		);
 		// then we can be decently confident the bonding pool points will not overflow
@@ -702,7 +702,7 @@ impl<T: Config> SubPools<T> {
 			// For the first `0..TotalUnbondingPools` eras of the chain we don't need to do
 			// anything. I.E. if `TotalUnbondingPools` is 5 and we are in era 4 we can add a pool
 			// for this era and have exactly `TotalUnbondingPools` pools.
-			return self
+			return self;
 		}
 
 		//  I.E. if `TotalUnbondingPools` is 5 and current era is 10, we only want to retain pools
@@ -1117,8 +1117,8 @@ pub mod pallet {
 			let unbonding_era = delegator.unbonding_era.ok_or(Error::<T>::NotUnbonding)?;
 			let current_era = T::StakingInterface::current_era();
 			ensure!(
-				current_era.saturating_sub(unbonding_era) >=
-					T::StakingInterface::bonding_duration(),
+				current_era.saturating_sub(unbonding_era)
+					>= T::StakingInterface::bonding_duration(),
 				Error::<T>::NotUnbondedYet
 			);
 
@@ -1220,8 +1220,8 @@ pub mod pallet {
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			ensure!(
-				amount >= T::StakingInterface::minimum_bond() &&
-					amount >= MinCreateBond::<T>::get(),
+				amount >= T::StakingInterface::minimum_bond()
+					&& amount >= MinCreateBond::<T>::get(),
 				Error::<T>::MinimumBondNotMet
 			);
 			if let Some(max_pools) = MaxPools::<T>::get() {
@@ -1376,9 +1376,9 @@ impl<T: Config> Pallet<T> {
 		let delegator_virtual_points = T::BalanceToU256::convert(delegator.points)
 			.saturating_mul(T::BalanceToU256::convert(new_earnings_since_last_claim));
 
-		let delegator_payout = if delegator_virtual_points.is_zero() ||
-			current_points.is_zero() ||
-			reward_pool.balance.is_zero()
+		let delegator_payout = if delegator_virtual_points.is_zero()
+			|| current_points.is_zero()
+			|| reward_pool.balance.is_zero()
 		{
 			Zero::zero()
 		} else {
@@ -1437,85 +1437,23 @@ impl<T: Config> Pallet<T> {
 
 		Ok(())
 	}
-
-	fn do_slash(
-		SlashPoolArgs {
-			pool_stash,
-			slash_amount,
-			slash_era,
-			apply_era,
-			active_bonded,
-		}: SlashPoolArgs::<T::AccountId, BalanceOf<T>>,
-	) -> Option<SlashPoolOut<BalanceOf<T>>> {
-		// Make sure this is a pool account
-		BondedPools::<T>::contains_key(&pool_stash).then(|| ())?;
-		let mut sub_pools = SubPoolsStorage::<T>::get(pool_stash).unwrap_or_default();
-
-		let affected_range = (slash_era + 1)..=apply_era;
-
-		// Note that this doesn't count the balance in the `no_era` pool
-		let unbonding_affected_balance: BalanceOf<T> =
-			affected_range.clone().fold(BalanceOf::<T>::zero(), |balance_sum, era| {
-				if let Some(unbond_pool) = sub_pools.with_era.get(&era) {
-					balance_sum.saturating_add(unbond_pool.balance)
-				} else {
-					balance_sum
-				}
-			});
-
-		// Note that the balances of the bonded pool and its affected sub-pools will saturated at
-		// zero if slash_amount > total_affected_balance
-		let total_affected_balance = active_bonded.saturating_add(unbonding_affected_balance);
-		if total_affected_balance.is_zero() {
-			return Some(SlashPoolOut {
-				slashed_bonded: Zero::zero(),
-				slashed_unlocking: Default::default(),
-			})
-		}
-		let slashed_unlocking: BTreeMap<_, _> = affected_range
-			.filter_map(|era| {
-				if let Some(mut unbond_pool) = sub_pools.with_era.get_mut(&era) {
-					let after_slash_balance = {
-						// Equivalent to `(slash_amount / total_affected_balance) *
-						// unbond_pool.balance`
-						let pool_slash_amount = slash_amount
-							.saturating_mul(unbond_pool.balance)
-							// We check for zero above
-							.div(total_affected_balance);
-
-						unbond_pool.balance.saturating_sub(pool_slash_amount)
-					};
-
-					unbond_pool.balance = after_slash_balance;
-
-					Some((era, after_slash_balance))
-				} else {
-					None
-				}
-			})
-			.collect();
-		SubPoolsStorage::<T>::insert(pool_stash, sub_pools);
-
-		// Equivalent to `(slash_amount / total_affected_balance) * active_bonded`
-		let slashed_bonded = {
-			let bonded_pool_slash_amount = slash_amount
-				.saturating_mul(active_bonded)
-				// We check for zero above
-				.div(total_affected_balance);
-
-			active_bonded.saturating_sub(bonded_pool_slash_amount)
-		};
-		Some(SlashPoolOut { slashed_bonded, slashed_unlocking })
-	}
 }
 
-impl<T: Config> PoolsInterface for Pallet<T> {
-	type AccountId = T::AccountId;
-	type Balance = BalanceOf<T>;
-
-	fn slash_pool(
-		args: SlashPoolArgs<Self::AccountId, Self::Balance>,
-	) -> Option<SlashPoolOut<Self::Balance>> {
-		Self::do_slash(args)
+impl<T: Config> OnStakerSlash<T::AccountId, BalanceOf<T>> for Pallet<T> {
+	fn on_slash(
+		pool_account: &T::AccountId,
+		_slashed_bonded: BalanceOf<T>,
+		slashed_unlocking: &BTreeMap<EraIndex, BalanceOf<T>>,
+	) {
+		let mut sub_pools = match SubPoolsStorage::<T>::get(pool_account) {
+			Some(sub_pools) => sub_pools,
+			None => return,
+		};
+		for (era, slashed_balance) in slashed_unlocking.iter() {
+			if let Some(pool) = sub_pools.with_era.get_mut(era) {
+				pool.balance = *slashed_balance
+			}
+		}
+		SubPoolsStorage::<T>::insert(pool_account.clone(), sub_pools);
 	}
 }

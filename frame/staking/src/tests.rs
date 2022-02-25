@@ -4747,10 +4747,206 @@ fn force_apply_min_commission_works() {
 	});
 }
 
-mod staking_interface {
-	// use super::*;
-	// use sp_staking::StakingInterface as _;
+// TODO: adapt these for the staking use case
+// mod pools_interface {
+// 	use super::*;
 
-	// TODO: probably should test all other fns of the interface impl? Although benchmarks should
-	// at least make sure those work on the happy path
-}
+// 	#[test]
+// 	fn slash_pool_works_in_simple_cases() {
+// 		// Slash with no sub pools
+// 		ExtBuilder::default().build_and_execute(|| {
+// 			// When
+// 			let SlashPoolOut { slashed_bonded, slashed_unlocking } =
+// 				Pools::slash_pool(SlashPoolArgs {
+// 					pool_stash: &PRIMARY_ACCOUNT,
+// 					slash_amount: 9,
+// 					slash_era: 0,
+// 					apply_era: 3,
+// 					active_bonded: 10,
+// 				})
+// 				.unwrap();
+
+// 			// Then
+// 			assert_eq!(
+// 				SubPoolsStorage::<Runtime>::get(PRIMARY_ACCOUNT).unwrap(),
+// 				Default::default()
+// 			);
+// 			assert_eq!(slashed_unlocking, Default::default());
+// 			assert_eq!(slashed_bonded, 1);
+// 		});
+
+// 		// Slash, but all sub pools are out of range
+// 		ExtBuilder::default().add_delegators(vec![(100, 100)]).build_and_execute(|| {
+// 			// Given
+// 			// Unbond in era 0
+// 			assert_ok!(Pools::unbond_other(Origin::signed(100), 100));
+
+// 			// When
+// 			let SlashPoolOut { slashed_bonded, slashed_unlocking } =
+// 				Pools::slash_pool(SlashPoolArgs {
+// 					pool_stash: &PRIMARY_ACCOUNT,
+// 					slash_amount: 9,
+// 					// We start slashing unbonding pools in `slash_era + 1`
+// 					slash_era: 0,
+// 					apply_era: 3,
+// 					active_bonded: 100,
+// 				})
+// 				.unwrap();
+
+// 			// Then
+// 			assert_eq!(
+// 				SubPoolsStorage::<Runtime>::get(PRIMARY_ACCOUNT).unwrap(),
+// 				SubPools {
+// 					no_era: Default::default(),
+// 					with_era: sub_pools_with_era! {
+// 						0 => UnbondPool { points: 100, balance: 100 }
+// 					}
+// 				}
+// 			);
+// 			assert_eq!(slashed_unlocking, Default::default());
+// 			assert_eq!(slashed_bonded, 91);
+// 		});
+// 	}
+
+// 	// Some sub pools are in range of the slash while others are not.
+// 	#[test]
+// 	fn slash_pool_works_in_complex_cases() {
+// 		ExtBuilder::default()
+// 			.add_delegators(vec![(40, 40), (100, 100), (200, 200), (300, 300), (400, 400)])
+// 			.build_and_execute(|| {
+// 				// Make sure no pools get merged into `SubPools::no_era` until era 7.
+// 				BondingDuration::set(5);
+// 				assert_eq!(TotalUnbondingPools::<Runtime>::get(), 7);
+
+// 				assert_ok!(Pools::unbond_other(Origin::signed(400), 400));
+
+// 				CurrentEra::set(1);
+// 				assert_ok!(Pools::unbond_other(Origin::signed(40), 40));
+
+// 				CurrentEra::set(3);
+// 				assert_ok!(Pools::unbond_other(Origin::signed(100), 100));
+
+// 				CurrentEra::set(5);
+// 				assert_ok!(Pools::unbond_other(Origin::signed(200), 200));
+
+// 				CurrentEra::set(6);
+// 				assert_ok!(Pools::unbond_other(Origin::signed(300), 300));
+
+// 				// Given
+// 				assert_eq!(
+// 					SubPoolsStorage::<Runtime>::get(PRIMARY_ACCOUNT).unwrap(),
+// 					SubPools {
+// 						no_era: Default::default(),
+// 						with_era: sub_pools_with_era! {
+// 							0 => UnbondPool { points: 400, balance: 400 },
+// 							1 => UnbondPool { points: 40, balance: 40 },
+// 							3 => UnbondPool { points: 100, balance: 100 },
+// 							5 => UnbondPool { points: 200, balance: 200 },
+// 							6 => UnbondPool { points: 300, balance: 300 },
+// 						}
+// 					}
+// 				);
+
+// 				// When
+// 				let SlashPoolOut { slashed_bonded, slashed_unlocking } =
+// 					Pools::slash_pool(SlashPoolArgs {
+// 						pool_stash: &PRIMARY_ACCOUNT,
+// 						slash_amount: (40 + 100 + 200 + 10) / 2,
+// 						slash_era: 0,
+// 						apply_era: 5,
+// 						active_bonded: 10,
+// 					})
+// 					.unwrap();
+
+// 				// Then
+// 				assert_eq!(
+// 					SubPoolsStorage::<Runtime>::get(PRIMARY_ACCOUNT).unwrap(),
+// 					SubPools {
+// 						no_era: Default::default(),
+// 						with_era: sub_pools_with_era! {
+// 							0 => UnbondPool { points: 400, balance: 400 },
+// 							1 => UnbondPool { points: 40, balance: 40 / 2 },
+// 							3 => UnbondPool { points: 100, balance: 100 / 2},
+// 							5 => UnbondPool { points: 200, balance: 200 / 2},
+// 							6 => UnbondPool { points: 300, balance: 300 },
+// 						}
+// 					}
+// 				);
+// 				let expected_slashed_unlocking: BTreeMap<_, _> =
+// 					[(1, 40 / 2), (3, 100 / 2), (5, 200 / 2)].into_iter().collect();
+// 				assert_eq!(slashed_unlocking, expected_slashed_unlocking);
+// 				assert_eq!(slashed_bonded, 10 / 2);
+// 			});
+// 	}
+
+// 	// Same as above, but the slash amount is greater than the slash-able balance of the pool.
+// 	#[test]
+// 	fn pool_slash_works_with_slash_amount_greater_than_slashable() {
+// 		ExtBuilder::default()
+// 			.add_delegators(vec![(40, 40), (100, 100), (200, 200), (300, 300), (400, 400)])
+// 			.build_and_execute(|| {
+// 				// Make sure no pools get merged into `SubPools::no_era` until era 7.
+// 				BondingDuration::set(5);
+// 				assert_eq!(TotalUnbondingPools::<Runtime>::get(), 7);
+
+// 				assert_ok!(Pools::unbond_other(Origin::signed(400), 400));
+
+// 				CurrentEra::set(1);
+// 				assert_ok!(Pools::unbond_other(Origin::signed(40), 40));
+
+// 				CurrentEra::set(3);
+// 				assert_ok!(Pools::unbond_other(Origin::signed(100), 100));
+
+// 				CurrentEra::set(5);
+// 				assert_ok!(Pools::unbond_other(Origin::signed(200), 200));
+
+// 				CurrentEra::set(6);
+// 				assert_ok!(Pools::unbond_other(Origin::signed(300), 300));
+
+// 				// Given
+// 				assert_eq!(
+// 					SubPoolsStorage::<Runtime>::get(PRIMARY_ACCOUNT).unwrap(),
+// 					SubPools {
+// 						no_era: Default::default(),
+// 						with_era: sub_pools_with_era! {
+// 							0 => UnbondPool { points: 400, balance: 400 },
+// 							1 => UnbondPool { points: 40, balance: 40 },
+// 							3 => UnbondPool { points: 100, balance: 100 },
+// 							5 => UnbondPool { points: 200, balance: 200 },
+// 							6 => UnbondPool { points: 300, balance: 300 },
+// 						}
+// 					}
+// 				);
+
+// 				// When
+// 				let SlashPoolOut { slashed_bonded, slashed_unlocking } =
+// 					Pools::slash_pool(SlashPoolArgs {
+// 						pool_stash: &PRIMARY_ACCOUNT,
+// 						slash_amount: 40 + 100 + 200 + 400 + 10,
+// 						slash_era: 0,
+// 						apply_era: 5,
+// 						active_bonded: 10,
+// 					})
+// 					.unwrap();
+
+// 				// Then
+// 				assert_eq!(
+// 					SubPoolsStorage::<Runtime>::get(PRIMARY_ACCOUNT).unwrap(),
+// 					SubPools {
+// 						no_era: Default::default(),
+// 						with_era: sub_pools_with_era! {
+// 							0 => UnbondPool { points: 400, balance: 400 },
+// 							1 => UnbondPool { points: 40, balance: 0 },
+// 							3 => UnbondPool { points: 100, balance: 0 },
+// 							5 => UnbondPool { points: 200, balance: 0 },
+// 							6 => UnbondPool { points: 300, balance: 300 },
+// 						}
+// 					}
+// 				);
+// 				let expected_slashed_unlocking: BTreeMap<_, _> =
+// 					[(1, 0), (3, 0), (5, 0)].into_iter().collect();
+// 				assert_eq!(slashed_unlocking, expected_slashed_unlocking);
+// 				assert_eq!(slashed_bonded, 0);
+// 			});
+// 	}
+// }
