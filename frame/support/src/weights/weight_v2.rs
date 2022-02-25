@@ -8,17 +8,7 @@ use sp_runtime::{
 use super::*;
 
 #[derive(
-	Encode,
-	Decode,
-	MaxEncodedLen,
-	TypeInfo,
-	Eq,
-	PartialEq,
-	Copy,
-	Clone,
-	PartialOrd,
-	RuntimeDebug,
-	Default,
+	Encode, Decode, MaxEncodedLen, TypeInfo, Eq, PartialEq, Copy, Clone, RuntimeDebug, Default,
 )]
 pub struct WeightV2 {
 	pub time: TimeWeight,
@@ -28,8 +18,57 @@ pub struct WeightV2 {
 impl WeightV2 {
 	pub const MAX: Self = Self { time: TimeWeight::MAX, bandwidth: StorageWeight::MAX };
 
+	/// Get the conservative min of `self` and `other` weight.
 	pub fn min(&self, other: Self) -> Self {
 		Self { time: self.time.min(other.time), bandwidth: self.bandwidth.min(other.bandwidth) }
+	}
+
+	/// Try to add some `other` weight while upholding the `limit`.
+	pub fn try_add(&self, other: &Self, limit: &Self) -> Option<Self> {
+		let total = self.checked_add(other)?;
+		if total.time > limit.time || total.bandwidth > limit.bandwidth {
+			None
+		} else {
+			Some(total)
+		}
+	}
+
+	/// Checks if any param of `self` is less than `other`.
+	pub fn is_any_less_than(&self, other: &Self) -> bool {
+		self.time < other.time || self.bandwidth < other.bandwidth
+	}
+
+	/// Checks if any param of `self` is less than `other`.
+	pub fn is_any_greater_than(&self, other: &Self) -> bool {
+		self.time > other.time || self.bandwidth > other.bandwidth
+	}
+
+	/// Checks if all params of `self` are less than `other`.
+	pub fn is_strictly_less_than(&self, other: &Self) -> bool {
+		self.time < other.time && self.bandwidth < other.bandwidth
+	}
+
+	/// Checks if all params of `self` are greater than `other`.
+	pub fn is_strictly_greater_than(&self, other: &Self) -> bool {
+		self.time > other.time && self.bandwidth > other.bandwidth
+	}
+
+	/// Checks if all params of `self` are less than or equal to `other`.
+	pub fn is_strictly_less_than_or_equal(&self, other: &Self) -> bool {
+		if self.time > other.time || self.bandwidth > other.bandwidth {
+			return false
+		}
+
+		true
+	}
+
+	/// Checks if all params of `self` are greater than or equal to `other`.
+	pub fn is_strictly_greater_than_or_equal(&self, other: &Self) -> bool {
+		if self.time < other.time || self.bandwidth < other.bandwidth {
+			return false
+		}
+
+		true
 	}
 }
 
@@ -131,5 +170,31 @@ impl CheckedAdd for WeightV2 {
 		let time = self.time.checked_add(rhs.time)?;
 		let bandwidth = self.bandwidth.checked_add(rhs.bandwidth)?;
 		Some(Self { time, bandwidth })
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	// This test verifies that when any parameter of the WeightV2 is greater, the whole weight is
+	// greater. This can to two things both being greater than each other, but that is okay :)
+	#[test]
+	fn comparison_works_as_expected() {
+		let limit = WeightV2 { time: 100, bandwidth: 100 };
+
+		let weight1 = WeightV2 { time: 99, bandwidth: 1 };
+
+		let weight2 = WeightV2 { time: 1, bandwidth: 99 };
+
+		let weight3 = WeightV2 { time: 50, bandwidth: 50 };
+
+		let total1 = weight1.try_add(&weight2, &limit);
+		let total2 = weight1.try_add(&weight3, &limit);
+		let total3 = weight2.try_add(&weight3, &limit);
+
+		assert_eq!(total1.unwrap(), limit);
+		assert!(total2.is_none());
+		assert!(total3.is_none());
 	}
 }

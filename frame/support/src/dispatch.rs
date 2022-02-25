@@ -174,13 +174,13 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug + 
 /// ```
 /// # #[macro_use]
 /// # extern crate frame_support;
-/// # use frame_support::dispatch::{DispatchResultWithPostInfo, WithPostDispatchInfo};
+/// # use frame_support::{dispatch::{DispatchResultWithPostInfo, WithPostDispatchInfo}, weights::WeightV2};
 /// # use frame_system::{Config, ensure_signed};
 /// decl_module! {
 /// 	pub struct Module<T: Config> for enum Call where origin: T::Origin {
 /// 		#[weight = 1_000_000]
 /// 		fn my_long_function(origin, do_expensive_calc: bool) -> DispatchResultWithPostInfo {
-/// 			ensure_signed(origin).map_err(|e| e.with_weight(100_000))?;
+/// 			ensure_signed(origin).map_err(|e| e.with_weight(WeightV2 { time: 100_000, bandwidth: 100_000 }))?;
 /// 			if do_expensive_calc {
 /// 				// do the expensive calculation
 /// 				// ...
@@ -2583,7 +2583,7 @@ mod tests {
 			CrateVersion, Get, GetCallName, IntegrityTest, OnFinalize, OnIdle, OnInitialize,
 			OnRuntimeUpgrade, PalletInfo,
 		},
-		weights::{DispatchClass, DispatchInfo, Pays, RuntimeDbWeight},
+		weights::{DispatchClass, DispatchInfo, Pays, RuntimeDbWeight, WeightV2},
 	};
 
 	pub trait Config: system::Config + Sized
@@ -2832,12 +2832,20 @@ mod tests {
 		// operational.
 		assert_eq!(
 			Call::<TraitImpl>::operational {}.get_dispatch_info(),
-			DispatchInfo { weight: 5, class: DispatchClass::Operational, pays_fee: Pays::Yes },
+			DispatchInfo {
+				weight: WeightV2 { time: 5, bandwidth: 0 },
+				class: DispatchClass::Operational,
+				pays_fee: Pays::Yes
+			},
 		);
 		// custom basic
 		assert_eq!(
 			Call::<TraitImpl>::aux_3 {}.get_dispatch_info(),
-			DispatchInfo { weight: 3, class: DispatchClass::Normal, pays_fee: Pays::Yes },
+			DispatchInfo {
+				weight: WeightV2 { time: 3, bandwidth: 0 },
+				class: DispatchClass::Normal,
+				pays_fee: Pays::Yes
+			},
 		);
 	}
 

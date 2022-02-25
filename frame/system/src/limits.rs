@@ -240,7 +240,10 @@ impl BlockWeights {
 			// Make sure that if total is set it's greater than base_block &&
 			// base_for_class
 			error_assert!(
-				(max_for_class > self.base_block && max_for_class > base_for_class)
+				(
+					max_for_class.is_strictly_greater_than(&self.base_block) &&
+					max_for_class.is_strictly_greater_than(&base_for_class)
+				)
 				|| max_for_class == Zero::zero(),
 				&mut error,
 				"[{:?}] {:?} (total) has to be greater than {:?} (base block) & {:?} (base extrinsic)",
@@ -248,8 +251,10 @@ impl BlockWeights {
 			);
 			// Max extrinsic can't be greater than max_for_class.
 			error_assert!(
-				weights.max_extrinsic.unwrap_or(Zero::zero()) <=
-					max_for_class.saturating_sub(base_for_class),
+				weights
+					.max_extrinsic
+					.unwrap_or(Zero::zero())
+					.is_strictly_less_than_or_equal(&max_for_class.saturating_sub(base_for_class)),
 				&mut error,
 				"[{:?}] {:?} (max_extrinsic) can't be greater than {:?} (max for class)",
 				class,
@@ -258,14 +263,14 @@ impl BlockWeights {
 			);
 			// Max extrinsic should not be 0
 			error_assert!(
-				weights.max_extrinsic.unwrap_or_else(|| WeightV2::MAX) > Zero::zero(),
+				weights.max_extrinsic.unwrap_or_else(|| WeightV2::MAX) != Zero::zero(),
 				&mut error,
 				"[{:?}] {:?} (max_extrinsic) must not be 0. Check base cost and average initialization cost.",
 				class, weights.max_extrinsic,
 			);
 			// Make sure that if reserved is set it's greater than base_for_class.
 			error_assert!(
-				reserved > base_for_class || reserved == Zero::zero(),
+				reserved.is_strictly_greater_than(&base_for_class) || reserved == Zero::zero(),
 				&mut error,
 				"[{:?}] {:?} (reserved) has to be greater than {:?} (base extrinsic) if set",
 				class,
@@ -274,7 +279,8 @@ impl BlockWeights {
 			);
 			// Make sure max block is greater than max_total if it's set.
 			error_assert!(
-				self.max_block >= weights.max_total.unwrap_or(Zero::zero()),
+				self.max_block
+					.is_strictly_greater_than_or_equal(&weights.max_total.unwrap_or(Zero::zero())),
 				&mut error,
 				"[{:?}] {:?} (max block) has to be greater than {:?} (max for class)",
 				class,
@@ -283,7 +289,7 @@ impl BlockWeights {
 			);
 			// Make sure we can fit at least one extrinsic.
 			error_assert!(
-				self.max_block > base_for_class + self.base_block,
+				self.max_block.is_strictly_greater_than(&(base_for_class + self.base_block)),
 				&mut error,
 				"[{:?}] {:?} (max block) must fit at least one extrinsic {:?} (base weight)",
 				class,
@@ -417,7 +423,7 @@ impl BlockWeightsBuilder {
 		// compute max block size.
 		for class in DispatchClass::all() {
 			weights.max_block = match weights.per_class.get(*class).max_total {
-				Some(max) if max > weights.max_block => max,
+				Some(max) if weights.max_block.is_strictly_less_than(&max) => max,
 				_ => weights.max_block,
 			};
 		}
