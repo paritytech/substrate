@@ -119,7 +119,7 @@ mod multiplier_tests {
 			.unwrap()
 			.into();
 		t.execute_with(|| {
-			System::set_block_consumed_resources(w, 0);
+			System::set_block_consumed_resources(Some(w), None, None);
 			assertions()
 		});
 	}

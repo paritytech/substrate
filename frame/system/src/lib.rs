@@ -1379,11 +1379,24 @@ impl<T: Config> Pallet<T> {
 
 	/// Set the current block weight. This should only be used in some integration tests.
 	#[cfg(any(feature = "std", test))]
-	pub fn set_block_consumed_resources(weight: WeightV2, len: usize) {
+	pub fn set_block_consumed_resources(
+		maybe_computation: Option<frame_support::weights::ComputationWeight>,
+		maybe_bandwidth: Option<frame_support::weights::BandwidthWeight>,
+		maybe_len: Option<usize>,
+	) {
 		BlockWeight::<T>::mutate(|current_weight| {
-			current_weight.set(weight, DispatchClass::Normal)
+			let mut new_weight: WeightV2 = *current_weight.get(DispatchClass::Normal);
+			if let Some(computation) = maybe_computation {
+				new_weight.computation = computation;
+			}
+			if let Some(bandwidth) = maybe_bandwidth {
+				new_weight.bandwidth = bandwidth;
+			}
+			current_weight.set(new_weight, DispatchClass::Normal)
 		});
-		AllExtrinsicsLen::<T>::put(len as u32);
+		if let Some(len) = maybe_len {
+			AllExtrinsicsLen::<T>::put(len as u32);
+		}
 	}
 
 	/// Reset events.

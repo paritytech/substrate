@@ -192,11 +192,14 @@ where
 			.unwrap_or_else(|| weights.max_block);
 		let current_block_weight = <frame_system::Pallet<T>>::block_weight();
 		let normal_block_weight =
-			*current_block_weight.get(DispatchClass::Normal).min(&normal_max_weight);
+			current_block_weight.get(DispatchClass::Normal).min(normal_max_weight);
 
 		let s = S::get();
 		let v = V::get();
 
+		// TODO SHAWN: only factors computation weight.
+		let normal_max_weight = normal_max_weight.computation;
+		let normal_block_weight = normal_block_weight.computation;
 		let target_weight = (s * normal_max_weight) as u128;
 		let block_weight = normal_block_weight as u128;
 
@@ -350,16 +353,20 @@ pub mod pallet {
 			assert!(
 				<Multiplier as sp_runtime::traits::Bounded>::max_value() >=
 					Multiplier::checked_from_integer(
-						T::BlockWeights::get().max_block.try_into().unwrap()
+						T::BlockWeights::get().max_block.computation.try_into().unwrap()
 					)
 					.unwrap(),
 			);
 
 			let target = T::FeeMultiplierUpdate::target() *
-				T::BlockWeights::get().get(DispatchClass::Normal).max_total.expect(
-					"Setting `max_total` for `Normal` dispatch class is not compatible with \
+				T::BlockWeights::get()
+					.get(DispatchClass::Normal)
+					.max_total
+					.expect(
+						"Setting `max_total` for `Normal` dispatch class is not compatible with \
 					`transaction-payment` pallet.",
-				);
+					)
+					.computation;
 			// add 1 percent;
 			let addition = target / 100;
 			if addition == 0 {
@@ -377,7 +384,7 @@ pub mod pallet {
 
 				let target = target + addition;
 
-				<frame_system::Pallet<T>>::set_block_consumed_resources(target, 0);
+				<frame_system::Pallet<T>>::set_block_consumed_resources(Some(target), None, None);
 				let next = T::FeeMultiplierUpdate::convert(min_value);
 				assert!(
 					next > min_value,
@@ -425,7 +432,8 @@ where
 
 		let DispatchInfo { weight, class, .. } = dispatch_info;
 
-		RuntimeDispatchInfo { weight, class, partial_fee }
+		// TODO SHAWN: Only uses computation weight
+		RuntimeDispatchInfo { weight: weight.computation, class, partial_fee }
 	}
 
 	/// Query the detailed fee of a given `call`.
@@ -465,7 +473,7 @@ where
 	where
 		T::Call: Dispatchable<Info = DispatchInfo>,
 	{
-		Self::compute_fee_raw(len, info.weight, tip, info.pays_fee, info.class)
+		Self::compute_fee_raw(len, info.weight.computation, tip, info.pays_fee, info.class)
 	}
 
 	/// Compute the actual post dispatch fee for a particular transaction.
@@ -496,7 +504,7 @@ where
 	{
 		Self::compute_fee_raw(
 			len,
-			post_info.calc_actual_weight(info),
+			post_info.calc_actual_weight(info).computation,
 			tip,
 			post_info.pays_fee(info),
 			info.class,
@@ -523,7 +531,8 @@ where
 			// final adjusted weight fee.
 			let adjusted_weight_fee = multiplier.saturating_mul_int(unadjusted_weight_fee);
 
-			let base_fee = Self::weight_to_fee(T::BlockWeights::get().get(class).base_extrinsic);
+			let base_fee =
+				Self::weight_to_fee(T::BlockWeights::get().get(class).base_extrinsic.computation);
 			FeeDetails {
 				inclusion_fee: Some(InclusionFee {
 					base_fee,
@@ -540,7 +549,7 @@ where
 	fn weight_to_fee(weight: Weight) -> BalanceOf<T> {
 		// cap the weight to the maximum defined in runtime, otherwise it will be the
 		// `Bounded` maximum of its data type, which is not desired.
-		let capped_weight = weight.min(T::BlockWeights::get().max_block);
+		let capped_weight = weight.min(T::BlockWeights::get().max_block.computation);
 		T::WeightToFee::calc(&capped_weight)
 	}
 }
@@ -632,11 +641,11 @@ where
 	) -> TransactionPriority {
 		// Calculate how many such extrinsics we could fit into an empty block and take
 		// the limitting factor.
-		let max_block_weight = T::BlockWeights::get().max_block;
+		let max_block_weight = T::BlockWeights::get().max_block.computation;
 		let max_block_length = *T::BlockLength::get().max.get(info.class) as u64;
 
-		let bounded_weight = info.weight.max(1).min(max_block_weight);
-		let bounded_length = (len as u64).max(1).min(max_block_length);
+		let bounded_weight = info.weight.computation.max(One::one()).min(max_block_weight);
+		let bounded_length = (len as u64).max(One::one()).min(max_block_length);
 
 		let max_tx_per_block_weight = max_block_weight / bounded_weight;
 		let max_tx_per_block_length = max_block_length / bounded_length;
@@ -791,8 +800,8 @@ mod tests {
 		assert_noop, assert_ok, parameter_types,
 		traits::{ConstU32, ConstU64, Currency, Imbalance, OnUnbalanced},
 		weights::{
-			DispatchClass, DispatchInfo, GetDispatchInfo, PostDispatchInfo, Weight,
-			WeightToFeeCoefficient, WeightToFeeCoefficients, WeightToFeePolynomial,
+			DispatchClass, DispatchInfo, GetDispatchInfo, PostDispatchInfo, WeightToFeeCoefficient,
+			WeightToFeeCoefficients, WeightToFeePolynomial, WeightV2,
 		},
 	};
 	use frame_system as system;
@@ -824,12 +833,12 @@ mod tests {
 	impl Get<frame_system::limits::BlockWeights> for BlockWeights {
 		fn get() -> frame_system::limits::BlockWeights {
 			frame_system::limits::BlockWeights::builder()
-				.base_block(0)
+				.base_block(Zero::zero())
 				.for_class(DispatchClass::all(), |weights| {
 					weights.base_extrinsic = EXTRINSIC_BASE_WEIGHT.with(|v| *v.borrow()).into();
 				})
 				.for_class(DispatchClass::non_mandatory(), |weights| {
-					weights.max_total = 1024.into();
+					weights.max_total = Some(WeightV2 { computation: 1024, bandwidth: 1 });
 				})
 				.build_or_panic()
 		}
@@ -929,7 +938,7 @@ mod tests {
 
 	impl Default for ExtBuilder {
 		fn default() -> Self {
-			Self { balance_factor: 1, base_weight: 0, byte_fee: 1, weight_to_fee: 1 }
+			Self { balance_factor: 1, base_weight: Zero::zero(), byte_fee: 1, weight_to_fee: 1 }
 		}
 	}
 
@@ -979,12 +988,12 @@ mod tests {
 	}
 
 	/// create a transaction info struct from weight. Handy to avoid building the whole struct.
-	pub fn info_from_weight(w: Weight) -> DispatchInfo {
+	pub fn info_from_weight(w: WeightV2) -> DispatchInfo {
 		// pays_fee: Pays::Yes -- class: DispatchClass::Normal
 		DispatchInfo { weight: w, ..Default::default() }
 	}
 
-	fn post_info_from_weight(w: Weight) -> PostDispatchInfo {
+	fn post_info_from_weight(w: WeightV2) -> PostDispatchInfo {
 		PostDispatchInfo { actual_weight: Some(w), pays_fee: Default::default() }
 	}
 
@@ -1005,13 +1014,18 @@ mod tests {
 			.execute_with(|| {
 				let len = 10;
 				let pre = ChargeTransactionPayment::<Runtime>::from(0)
-					.pre_dispatch(&1, CALL, &info_from_weight(5), len)
+					.pre_dispatch(
+						&1,
+						CALL,
+						&info_from_weight(WeightV2 { computation: 5, bandwidth: 1 }),
+						len,
+					)
 					.unwrap();
 				assert_eq!(Balances::free_balance(1), 100 - 5 - 5 - 10);
 
 				assert_ok!(ChargeTransactionPayment::<Runtime>::post_dispatch(
 					Some(pre),
-					&info_from_weight(5),
+					&info_from_weight(WeightV2 { computation: 5, bandwidth: 1 }),
 					&default_post_info(),
 					len,
 					&Ok(())
@@ -1023,14 +1037,19 @@ mod tests {
 				FEE_UNBALANCED_AMOUNT.with(|a| *a.borrow_mut() = 0);
 
 				let pre = ChargeTransactionPayment::<Runtime>::from(5 /* tipped */)
-					.pre_dispatch(&2, CALL, &info_from_weight(100), len)
+					.pre_dispatch(
+						&2,
+						CALL,
+						&info_from_weight(WeightV2 { computation: 100, bandwidth: 1 }),
+						len,
+					)
 					.unwrap();
 				assert_eq!(Balances::free_balance(2), 200 - 5 - 10 - 100 - 5);
 
 				assert_ok!(ChargeTransactionPayment::<Runtime>::post_dispatch(
 					Some(pre),
-					&info_from_weight(100),
-					&post_info_from_weight(50),
+					&info_from_weight(WeightV2 { computation: 100, bandwidth: 1 }),
+					&post_info_from_weight(WeightV2 { computation: 50, bandwidth: 1 }),
 					len,
 					&Ok(())
 				));
@@ -1051,15 +1070,20 @@ mod tests {
 				<NextFeeMultiplier<Runtime>>::put(Multiplier::saturating_from_rational(3, 2));
 
 				let pre = ChargeTransactionPayment::<Runtime>::from(5 /* tipped */)
-					.pre_dispatch(&2, CALL, &info_from_weight(100), len)
+					.pre_dispatch(
+						&2,
+						CALL,
+						&info_from_weight(WeightV2 { computation: 100, bandwidth: 1 }),
+						len,
+					)
 					.unwrap();
 				// 5 base fee, 10 byte fee, 3/2 * 100 weight fee, 5 tip
 				assert_eq!(Balances::free_balance(2), 200 - 5 - 10 - 150 - 5);
 
 				assert_ok!(ChargeTransactionPayment::<Runtime>::post_dispatch(
 					Some(pre),
-					&info_from_weight(100),
-					&post_info_from_weight(50),
+					&info_from_weight(WeightV2 { computation: 100, bandwidth: 1 }),
+					&post_info_from_weight(WeightV2 { computation: 50, bandwidth: 1 }),
 					len,
 					&Ok(())
 				));
@@ -1075,13 +1099,15 @@ mod tests {
 			assert_ok!(ChargeTransactionPayment::<Runtime>::from(0).pre_dispatch(
 				&1,
 				CALL,
-				&info_from_weight(Weight::max_value()),
+				&info_from_weight(WeightV2::MAX),
 				10
 			));
 			// fee will be proportional to what is the actual maximum weight in the runtime.
 			assert_eq!(
 				Balances::free_balance(&1),
-				(10000 - <Runtime as frame_system::Config>::BlockWeights::get().max_block) as u64
+				(10000 -
+					<Runtime as frame_system::Config>::BlockWeights::get().max_block.computation)
+					as u64
 			);
 		});
 	}
@@ -1100,7 +1126,7 @@ mod tests {
 
 				// This is a completely free (and thus wholly insecure/DoS-ridden) transaction.
 				let operational_transaction = DispatchInfo {
-					weight: 0,
+					weight: Zero::zero(),
 					class: DispatchClass::Operational,
 					pays_fee: Pays::No,
 				};
@@ -1112,8 +1138,11 @@ mod tests {
 				));
 
 				// like a InsecureFreeNormal
-				let free_transaction =
-					DispatchInfo { weight: 0, class: DispatchClass::Normal, pays_fee: Pays::Yes };
+				let free_transaction = DispatchInfo {
+					weight: Zero::zero(),
+					class: DispatchClass::Normal,
+					pays_fee: Pays::Yes,
+				};
 				assert_noop!(
 					ChargeTransactionPayment::<Runtime>::from(0).validate(
 						&1,
@@ -1138,7 +1167,12 @@ mod tests {
 				let len = 10;
 
 				assert_ok!(ChargeTransactionPayment::<Runtime>::from(10) // tipped
-					.pre_dispatch(&1, CALL, &info_from_weight(3), len));
+					.pre_dispatch(
+						&1,
+						CALL,
+						&info_from_weight(WeightV2 { computation: 3, bandwidth: 1 }),
+						len
+					));
 				assert_eq!(
 					Balances::free_balance(1),
 					100 // original
@@ -1170,18 +1204,18 @@ mod tests {
 			assert_eq!(
 				TransactionPayment::query_info(xt.clone(), len),
 				RuntimeDispatchInfo {
-					weight: info.weight,
+					weight: info.weight.computation,
 					class: info.class,
 					partial_fee: 5 * 2 /* base * weight_fee */
 						+ len as u64  /* len * 1 */
-						+ info.weight.min(BlockWeights::get().max_block) as u64 * 2 * 3 / 2 /* weight */
+						+ info.weight.computation.min(BlockWeights::get().max_block.computation) as u64 * 2 * 3 / 2 /* weight */
 				},
 			);
 
 			assert_eq!(
 				TransactionPayment::query_info(unsigned_xt.clone(), len),
 				RuntimeDispatchInfo {
-					weight: unsigned_xt_info.weight,
+					weight: unsigned_xt_info.weight.computation,
 					class: unsigned_xt_info.class,
 					partial_fee: 0,
 				},
@@ -1193,7 +1227,7 @@ mod tests {
 					inclusion_fee: Some(InclusionFee {
 						base_fee: 5 * 2,
 						len_fee: len as u64,
-						adjusted_weight_fee: info.weight.min(BlockWeights::get().max_block) as u64 *
+						adjusted_weight_fee: info.weight.computation.min(BlockWeights::get().max_block.computation) as u64 *
 							2 * 3 / 2
 					}),
 					tip: 0,
@@ -1220,14 +1254,14 @@ mod tests {
 
 				// Tip only, no fees works
 				let dispatch_info = DispatchInfo {
-					weight: 0,
+					weight: Zero::zero(),
 					class: DispatchClass::Operational,
 					pays_fee: Pays::No,
 				};
 				assert_eq!(Pallet::<Runtime>::compute_fee(0, &dispatch_info, 10), 10);
 				// No tip, only base fee works
 				let dispatch_info = DispatchInfo {
-					weight: 0,
+					weight: Zero::zero(),
 					class: DispatchClass::Operational,
 					pays_fee: Pays::Yes,
 				};
@@ -1238,7 +1272,7 @@ mod tests {
 				assert_eq!(Pallet::<Runtime>::compute_fee(42, &dispatch_info, 0), 520);
 				// Weight fee + base fee works
 				let dispatch_info = DispatchInfo {
-					weight: 1000,
+					weight: WeightV2 { computation: 1000, bandwidth: 1 },
 					class: DispatchClass::Operational,
 					pays_fee: Pays::Yes,
 				};
@@ -1258,7 +1292,7 @@ mod tests {
 				<NextFeeMultiplier<Runtime>>::put(Multiplier::saturating_from_rational(3, 2));
 				// Base fee is unaffected by multiplier
 				let dispatch_info = DispatchInfo {
-					weight: 0,
+					weight: Zero::zero(),
 					class: DispatchClass::Operational,
 					pays_fee: Pays::Yes,
 				};
@@ -1266,7 +1300,7 @@ mod tests {
 
 				// Everything works together :)
 				let dispatch_info = DispatchInfo {
-					weight: 123,
+					weight: WeightV2 { computation: 123, bandwidth: 1 },
 					class: DispatchClass::Operational,
 					pays_fee: Pays::Yes,
 				};
@@ -1291,7 +1325,7 @@ mod tests {
 
 				// Base fee is unaffected by multiplier.
 				let dispatch_info = DispatchInfo {
-					weight: 0,
+					weight: Zero::zero(),
 					class: DispatchClass::Operational,
 					pays_fee: Pays::Yes,
 				};
@@ -1299,7 +1333,7 @@ mod tests {
 
 				// Everything works together.
 				let dispatch_info = DispatchInfo {
-					weight: 123,
+					weight: WeightV2 { computation: 123, bandwidth: 1 },
 					class: DispatchClass::Operational,
 					pays_fee: Pays::Yes,
 				};
@@ -1321,7 +1355,7 @@ mod tests {
 			.execute_with(|| {
 				// Overflow is handled
 				let dispatch_info = DispatchInfo {
-					weight: Weight::max_value(),
+					weight: WeightV2::MAX,
 					class: DispatchClass::Operational,
 					pays_fee: Pays::Yes,
 				};
@@ -1343,7 +1377,12 @@ mod tests {
 				System::set_block_number(10);
 				let len = 10;
 				let pre = ChargeTransactionPayment::<Runtime>::from(5 /* tipped */)
-					.pre_dispatch(&2, CALL, &info_from_weight(100), len)
+					.pre_dispatch(
+						&2,
+						CALL,
+						&info_from_weight(WeightV2 { computation: 100, bandwidth: 1 }),
+						len,
+					)
 					.unwrap();
 				assert_eq!(Balances::free_balance(2), 200 - 5 - 10 - 100 - 5);
 
@@ -1353,8 +1392,8 @@ mod tests {
 
 				assert_ok!(ChargeTransactionPayment::<Runtime>::post_dispatch(
 					Some(pre),
-					&info_from_weight(100),
-					&post_info_from_weight(50),
+					&info_from_weight(WeightV2 { computation: 100, bandwidth: 1 }),
+					&post_info_from_weight(WeightV2 { computation: 50, bandwidth: 1 }),
 					len,
 					&Ok(())
 				));
@@ -1381,14 +1420,19 @@ mod tests {
 			.execute_with(|| {
 				let len = 10;
 				let pre = ChargeTransactionPayment::<Runtime>::from(5 /* tipped */)
-					.pre_dispatch(&2, CALL, &info_from_weight(100), len)
+					.pre_dispatch(
+						&2,
+						CALL,
+						&info_from_weight(WeightV2 { computation: 100, bandwidth: 1 }),
+						len,
+					)
 					.unwrap();
 				assert_eq!(Balances::free_balance(2), 200 - 5 - 10 - 100 - 5);
 
 				assert_ok!(ChargeTransactionPayment::<Runtime>::post_dispatch(
 					Some(pre),
-					&info_from_weight(100),
-					&post_info_from_weight(101),
+					&info_from_weight(WeightV2 { computation: 100, bandwidth: 1 }),
+					&post_info_from_weight(WeightV2 { computation: 101, bandwidth: 1 }),
 					len,
 					&Ok(())
 				));
@@ -1406,8 +1450,11 @@ mod tests {
 				// So events are emitted
 				System::set_block_number(10);
 				let len = 10;
-				let dispatch_info =
-					DispatchInfo { weight: 100, pays_fee: Pays::No, class: DispatchClass::Normal };
+				let dispatch_info = DispatchInfo {
+					weight: WeightV2 { computation: 100, bandwidth: 1 },
+					pays_fee: Pays::No,
+					class: DispatchClass::Normal,
+				};
 				let user = 69;
 				let pre = ChargeTransactionPayment::<Runtime>::from(0)
 					.pre_dispatch(&user, CALL, &dispatch_info, len)
@@ -1433,8 +1480,11 @@ mod tests {
 			.base_weight(7)
 			.build()
 			.execute_with(|| {
-				let info = info_from_weight(100);
-				let post_info = post_info_from_weight(33);
+				let info = info_from_weight(WeightV2 { computation: 100, bandwidth: 1 });
+				let post_info = post_info_from_weight(WeightV2 {
+					computation: 33,
+					bandwidth: 1,
+				});
 				let prev_balance = Balances::free_balance(2);
 				let len = 10;
 				let tip = 5;
@@ -1471,7 +1521,7 @@ mod tests {
 
 		ExtBuilder::default().balance_factor(100).build().execute_with(|| {
 			let normal =
-				DispatchInfo { weight: 100, class: DispatchClass::Normal, pays_fee: Pays::Yes };
+				DispatchInfo { weight: WeightV2 { computation: 100, bandwidth: 1 }, class: DispatchClass::Normal, pays_fee: Pays::Yes };
 			let priority = ChargeTransactionPayment::<Runtime>(tip)
 				.validate(&2, CALL, &normal, len)
 				.unwrap()
@@ -1489,7 +1539,7 @@ mod tests {
 
 		ExtBuilder::default().balance_factor(100).build().execute_with(|| {
 			let op = DispatchInfo {
-				weight: 100,
+				weight: WeightV2 { computation: 100, bandwidth: 1 },
 				class: DispatchClass::Operational,
 				pays_fee: Pays::Yes,
 			};
@@ -1514,7 +1564,7 @@ mod tests {
 
 		ExtBuilder::default().balance_factor(100).build().execute_with(|| {
 			let normal =
-				DispatchInfo { weight: 100, class: DispatchClass::Normal, pays_fee: Pays::Yes };
+				DispatchInfo { weight: WeightV2 { computation: 100, bandwidth: 1 }, class: DispatchClass::Normal, pays_fee: Pays::Yes };
 			let priority = ChargeTransactionPayment::<Runtime>(tip)
 				.validate(&2, CALL, &normal, len)
 				.unwrap()
@@ -1525,7 +1575,7 @@ mod tests {
 
 		ExtBuilder::default().balance_factor(100).build().execute_with(|| {
 			let op = DispatchInfo {
-				weight: 100,
+				weight: WeightV2 { computation: 100, bandwidth: 1 },
 				class: DispatchClass::Operational,
 				pays_fee: Pays::Yes,
 			};
@@ -1545,7 +1595,7 @@ mod tests {
 			let len = 10;
 			ExtBuilder::default().balance_factor(100).build().execute_with(|| {
 				let normal =
-					DispatchInfo { weight: 100, class: DispatchClass::Normal, pays_fee: Pays::Yes };
+					DispatchInfo { weight: WeightV2 { computation: 100, bandwidth: 1 }, class: DispatchClass::Normal, pays_fee: Pays::Yes };
 				priority1 = ChargeTransactionPayment::<Runtime>(tip)
 					.validate(&2, CALL, &normal, len)
 					.unwrap()
@@ -1554,7 +1604,7 @@ mod tests {
 
 			ExtBuilder::default().balance_factor(100).build().execute_with(|| {
 				let op = DispatchInfo {
-					weight: 100,
+					weight: WeightV2 { computation: 100, bandwidth: 1 },
 					class: DispatchClass::Operational,
 					pays_fee: Pays::Yes,
 				};
@@ -1584,7 +1634,7 @@ mod tests {
 			.base_weight(7)
 			.build()
 			.execute_with(|| {
-				let info = info_from_weight(100);
+				let info = info_from_weight(WeightV2 { computation: 100, bandwidth: 1 });
 				let post_info = post_info_from_pays(Pays::No);
 				let prev_balance = Balances::free_balance(2);
 				let len = 10;
