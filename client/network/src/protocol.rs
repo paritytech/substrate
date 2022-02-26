@@ -1666,7 +1666,7 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 					}
 				} else {
 					match (
-						message::Roles::decode_all(&received_handshake[..]),
+						message::Roles::decode_all(&mut &received_handshake[..]),
 						self.peers.get(&peer_id),
 					) {
 						(Ok(roles), _) => CustomMessageOutcome::NotificationStreamOpened {

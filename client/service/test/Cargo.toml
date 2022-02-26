@@ -18,7 +18,7 @@ tempfile = "3.1.0"
 tokio = { version = "1.15.0", features = ["time"] }
 log = "0.4.8"
 fdlimit = "0.2.1"
-parking_lot = "0.11.2"
+parking_lot = "0.12.0"
 sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
 sp-api = { version = "4.0.0-dev", path = "../../../primitives/api" }
 sp-state-machine = { version = "0.11.0", path = "../../../primitives/state-machine" }
@@ -40,5 +40,5 @@ sc-client-api = { version = "4.0.0-dev", path = "../../api" }
 sc-block-builder = { version = "0.10.0-dev", path = "../../block-builder" }
 sc-executor = { version = "0.10.0-dev", path = "../../executor" }
 sp-panic-handler = { version = "4.0.0", path = "../../../primitives/panic-handler" }
-parity-scale-codec = "2.3.1"
+parity-scale-codec = "3.0.0"
 sp-tracing = { version = "4.0.0", path = "../../../primitives/tracing" }
