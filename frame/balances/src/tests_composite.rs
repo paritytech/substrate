@@ -23,7 +23,7 @@ use crate::{self as pallet_balances, decl_tests, Config, Pallet};
 use frame_support::{
 	parameter_types,
 	traits::{ConstU32, ConstU64, ConstU8},
-	weights::{DispatchInfo, IdentityFee, Weight},
+	weights::{DispatchInfo, IdentityFee, WeightV2},
 };
 use pallet_transaction_payment::CurrencyAdapter;
 use sp_core::H256;
@@ -46,7 +46,10 @@ frame_support::construct_runtime!(
 
 parameter_types! {
 	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(1024);
+		frame_system::limits::BlockWeights::simple_max(WeightV2 {
+			computation: 1024,
+			bandwidth: 1024,
+		});
 	pub static ExistentialDeposit: u64 = 0;
 }
 impl frame_system::Config for Test {

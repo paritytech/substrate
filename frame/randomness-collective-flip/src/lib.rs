@@ -187,10 +187,11 @@ mod tests {
 	);
 
 	parameter_types! {
-		pub BlockWeights: limits::BlockWeights = limits::BlockWeights
-			::simple_max(1024);
-		pub BlockLength: limits::BlockLength = limits::BlockLength
-			::max(2 * 1024);
+		pub BlockWeights: limits::BlockWeights = limits::BlockWeights::simple_max(WeightV2 {
+			computation: 1024,
+			bandwidth: 1024,
+		});
+		pub BlockLength: limits::BlockLength = limits::BlockLength::max(2 * 1024);
 	}
 
 	impl frame_system::Config for Test {

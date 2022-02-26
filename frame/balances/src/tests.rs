@@ -42,7 +42,7 @@ macro_rules! decl_tests {
 			&Call::Balances(pallet_balances::Call::transfer { dest: 0, value: 0 });
 
 		/// create a transaction info struct from weight. Handy to avoid building the whole struct.
-		pub fn info_from_weight(w: Weight) -> DispatchInfo {
+		pub fn info_from_weight(w: WeightV2) -> DispatchInfo {
 			DispatchInfo { weight: w, ..Default::default() }
 		}
 
@@ -188,14 +188,14 @@ macro_rules! decl_tests {
 						ChargeTransactionPayment::from(1),
 						&1,
 						CALL,
-						&info_from_weight(1),
+						&info_from_weight(One::one()),
 						1,
 					).is_err());
 					assert_ok!(<ChargeTransactionPayment<$test> as SignedExtension>::pre_dispatch(
 						ChargeTransactionPayment::from(0),
 						&1,
 						CALL,
-						&info_from_weight(1),
+						&info_from_weight(One::one()),
 						1,
 					));
 

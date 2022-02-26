@@ -1481,10 +1481,7 @@ mod tests {
 			.build()
 			.execute_with(|| {
 				let info = info_from_weight(WeightV2 { computation: 100, bandwidth: 1 });
-				let post_info = post_info_from_weight(WeightV2 {
-					computation: 33,
-					bandwidth: 1,
-				});
+				let post_info = post_info_from_weight(WeightV2 { computation: 33, bandwidth: 1 });
 				let prev_balance = Balances::free_balance(2);
 				let len = 10;
 				let tip = 5;
@@ -1520,8 +1517,11 @@ mod tests {
 		let len = 10;
 
 		ExtBuilder::default().balance_factor(100).build().execute_with(|| {
-			let normal =
-				DispatchInfo { weight: WeightV2 { computation: 100, bandwidth: 1 }, class: DispatchClass::Normal, pays_fee: Pays::Yes };
+			let normal = DispatchInfo {
+				weight: WeightV2 { computation: 100, bandwidth: 1 },
+				class: DispatchClass::Normal,
+				pays_fee: Pays::Yes,
+			};
 			let priority = ChargeTransactionPayment::<Runtime>(tip)
 				.validate(&2, CALL, &normal, len)
 				.unwrap()
@@ -1563,8 +1563,11 @@ mod tests {
 		let len = 10;
 
 		ExtBuilder::default().balance_factor(100).build().execute_with(|| {
-			let normal =
-				DispatchInfo { weight: WeightV2 { computation: 100, bandwidth: 1 }, class: DispatchClass::Normal, pays_fee: Pays::Yes };
+			let normal = DispatchInfo {
+				weight: WeightV2 { computation: 100, bandwidth: 1 },
+				class: DispatchClass::Normal,
+				pays_fee: Pays::Yes,
+			};
 			let priority = ChargeTransactionPayment::<Runtime>(tip)
 				.validate(&2, CALL, &normal, len)
 				.unwrap()
@@ -1594,8 +1597,11 @@ mod tests {
 			let mut priority2 = 0;
 			let len = 10;
 			ExtBuilder::default().balance_factor(100).build().execute_with(|| {
-				let normal =
-					DispatchInfo { weight: WeightV2 { computation: 100, bandwidth: 1 }, class: DispatchClass::Normal, pays_fee: Pays::Yes };
+				let normal = DispatchInfo {
+					weight: WeightV2 { computation: 100, bandwidth: 1 },
+					class: DispatchClass::Normal,
+					pays_fee: Pays::Yes,
+				};
 				priority1 = ChargeTransactionPayment::<Runtime>(tip)
 					.validate(&2, CALL, &normal, len)
 					.unwrap()

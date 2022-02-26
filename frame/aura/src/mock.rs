@@ -49,7 +49,10 @@ frame_support::construct_runtime!(
 
 parameter_types! {
 	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(1024);
+		frame_system::limits::BlockWeights::simple_max(WeightV2 {
+			computation: 1024,
+			bandwidth: 1024,
+		});
 }
 
 impl frame_system::Config for Test {
