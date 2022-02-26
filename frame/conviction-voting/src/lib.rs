@@ -182,6 +182,8 @@ pub mod pallet {
 		ClassNeeded,
 		/// The class ID supplied is invalid.
 		BadClass,
+		/// The account's vote is still valid.
+		VoteStillValid,
 	}
 
 	#[pallet::call]
@@ -352,6 +354,18 @@ pub mod pallet {
 			let who = ensure_signed(origin)?;
 			let scope = if target == who { UnvoteScope::Any } else { UnvoteScope::OnlyExpired };
 			Self::try_remove_vote(&target, index, Some(class), scope)?;
+			Ok(())
+		}
+
+		#[pallet::weight(100)]
+		pub fn rebalance(
+			origin: OriginFor<T>,
+			target: T::AccountId,
+			class: ClassOf<T>,
+			index: PollIndexOf<T>,
+		)-> DispatchResult {
+			ensure_signed(origin)?;
+			Self::try_rebalance(&target, index, Some(class))?;
 			Ok(())
 		}
 	}
@@ -628,5 +642,52 @@ impl<T: Config> Pallet<T> {
 				WithdrawReasons::TRANSFER,
 			);
 		}
+	}
+
+	fn try_rebalance(
+		who: &T::AccountId,
+		poll_index: PollIndexOf<T>,
+		class_hint: Option<ClassOf<T>>,
+	) -> DispatchResult {
+		// if T::Currency::free_balance(who) <= vote.balance {}
+		let class = class_hint
+			.or_else(|| Some(T::Polls::as_ongoing(poll_index)?.1))
+			.ok_or(Error::<T>::ClassNeeded)?;
+		VotingFor::<T>::try_mutate(who, &class, |voting| {
+			if let Voting::Casting(Casting { ref mut votes, delegations, ref mut prior }) = voting {
+				let i = votes
+					.binary_search_by_key(&poll_index, |i| i.0)
+					.map_err(|_| Error::<T>::NotVoter)?;
+
+				ensure!(votes[i].1.balance() > T::Currency::free_balance(who), Error::<T>::VoteStillValid);
+				let v = votes.remove(i);
+
+				T::Polls::try_access_poll(poll_index, |poll_status| match poll_status {
+					PollStatus::Ongoing(tally, _) => {
+						tally.remove(v.1).ok_or(ArithmeticError::Underflow)?;
+						if let Some(approve) = v.1.as_standard() {
+							tally.reduce(approve, *delegations);
+						}
+						Ok(())
+					},
+					PollStatus::Completed(end, approved) => {
+						if let Some((lock_periods, balance)) = v.1.locked_if(approved) {
+							let unlock_at = end.saturating_add(
+								T::VoteLockingPeriod::get().saturating_mul(lock_periods.into()),
+							);
+							let now = frame_system::Pallet::<T>::block_number();
+							if now < unlock_at {
+								
+								prior.accumulate(unlock_at, balance)
+							}
+						}
+						Ok(())
+					},
+					PollStatus::None => Ok(())
+				})
+			} else { 
+				Ok(())
+			 }
+		})
 	}
 }

@@ -810,6 +810,32 @@ fn remove_other_vote_works() {
 }
 
 #[test]
+fn rebalance_works() {
+	new_test_ext().execute_with(|| {
+	
+		assert_noop!(
+			Voting::rebalance(Origin::signed(2), 1, 0, 3),
+			Error::<Test>::NotVoter
+		);
+
+		assert_ok!(Voting::vote(Origin::signed(1), 3, aye(7, 2)));
+		
+		Balances::slash(&1, 7);
+
+		assert_eq!(Balances::free_balance(1), 3);
+
+		assert_ok!(Voting::rebalance(Origin::signed(2), 1, 0, 3));
+
+		run_to(2);
+		assert_ok!(Voting::vote(Origin::signed(2), 3, aye(3, 2)));
+
+		Balances::slash(&2, 3);
+
+		assert_noop!(Voting::rebalance(Origin::signed(3), 2, 0, 3), Error::<Test>::VoteStillValid);
+	})
+}
+
+#[test]
 fn errors_with_remove_vote_work() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(Voting::remove_vote(Origin::signed(1), Some(0), 3), Error::<Test>::NotVoter);
