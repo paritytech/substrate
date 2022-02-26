@@ -164,9 +164,6 @@ fn initialize_block_works() {
 }
 
 #[test]
-#[ignore]
-/// that test should be easy to allign once we have
-/// encrypted extrinscs intended to  be executed in the same block as submitted
 fn record_proof_works() {
 	let (client, longest_chain) = TestClientBuilder::new()
 		.set_execution_strategy(ExecutionStrategy::Both)

@@ -820,7 +820,6 @@ fn sync_to_tip_requires_that_sync_protocol_is_informed_about_best_block() {
 /// Ensures that if we as a syncing node sync to the tip while we are connected to another peer
 /// that is currently also doing a major sync.
 #[test]
-#[ignore]
 fn sync_to_tip_when_we_sync_together_with_multiple_peers() {
 	sp_tracing::try_init_simple();
 
@@ -1181,7 +1180,6 @@ fn syncs_indexed_blocks() {
 }
 
 #[test]
-#[ignore]
 fn warp_sync() {
 	sp_tracing::try_init_simple();
 	let mut net = TestNet::new(0);
