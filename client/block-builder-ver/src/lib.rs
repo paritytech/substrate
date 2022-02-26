@@ -35,11 +35,8 @@ use sp_blockchain::{ApplyExtrinsicFailed, Backend, Error};
 use sp_core::ExecutionContext;
 use sp_runtime::{
 	generic::BlockId,
-	traits::{
-		BlakeTwo256, Block as BlockT, Hash, HashFor, Header as HeaderT, NumberFor, One,
-	},
-	Digest,
-	SaturatedConversion,
+	traits::{BlakeTwo256, Block as BlockT, Hash, HashFor, Header as HeaderT, NumberFor, One},
+	Digest, SaturatedConversion,
 };
 
 pub use sp_block_builder::BlockBuilder as BlockBuilderApi;
@@ -355,7 +352,7 @@ where
 
 		let extrinsics_root = HashFor::<Block>::ordered_trie_root(
 			all_extrinsics.iter().map(Encode::encode).collect(),
-            sp_runtime::StateVersion::V0,
+			sp_runtime::StateVersion::V0,
 		);
 		header.set_extrinsics_root(extrinsics_root);
 		header.set_seed(seed);

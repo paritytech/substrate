@@ -439,8 +439,8 @@ where
 		let mut transaction_pushed = false;
 		let mut hit_block_size_limit = false;
 
-		let mut block_size =
-			block_builder.estimate_block_size_without_extrinsics(self.include_proof_in_block_size_estimation);
+		let mut block_size = block_builder
+			.estimate_block_size_without_extrinsics(self.include_proof_in_block_size_estimation);
 
 		// after previous block is applied it is possible to prevalidate incomming transaction
 		// but eventually changess needs to be rolled back, as those can be executed
@@ -828,7 +828,7 @@ mod tests {
 		let mut size = genesis_header.encoded_size() + Vec::<Extrinsic>::new().encoded_size();
 
 		println!("{}", size);
-		for i in extrinsics.iter(){
+		for i in extrinsics.iter() {
 			size += i.encoded_size();
 			println!("{}", size)
 		}

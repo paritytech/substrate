@@ -36,8 +36,7 @@ pub use sp_arithmetic::traits::{
 	CheckedShr, CheckedSub, IntegerSquareRoot, One, SaturatedConversion, Saturating,
 	UniqueSaturatedFrom, UniqueSaturatedInto, Zero,
 };
-use sp_core::{self, Hasher, RuntimeDebug, TypeId};
-use sp_core::ShufflingSeed;
+use sp_core::{self, Hasher, RuntimeDebug, ShufflingSeed, TypeId};
 
 use crate::StateVersion;
 use sp_std::{

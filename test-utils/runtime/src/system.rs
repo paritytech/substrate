@@ -213,7 +213,15 @@ pub fn finalize_block() -> Header {
 		digest.push(generic::DigestItem::Consensus(*b"babe", new_authorities.encode()));
 	}
 
-	Header { number, extrinsics_root, state_root: storage_root, parent_hash, digest, count: Default::default(), seed: Default::default() }
+	Header {
+		number,
+		extrinsics_root,
+		state_root: storage_root,
+		parent_hash,
+		digest,
+		count: Default::default(),
+		seed: Default::default(),
+	}
 }
 
 #[inline(always)]

@@ -427,7 +427,7 @@ macro_rules! implement_per_thing {
 		#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 		#[derive(Encode, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, RuntimeDebug, scale_info::TypeInfo)]
 		pub struct $name($type);
-		
+
 		impl MaxEncodedLen for $name{
 			fn max_encoded_len() -> usize {
 				// a bit too much but solves problems in parachain_staking

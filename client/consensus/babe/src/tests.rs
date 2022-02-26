@@ -485,7 +485,7 @@ fn run_one_test(mutator: impl Fn(&mut TestHeader, Stage) + Send + Sync + 'static
 	));
 }
 
-/// NOTE: BABE is not used in mangata-node 
+/// NOTE: BABE is not used in mangata-node
 #[test]
 #[ignore]
 fn authoring_blocks() {
