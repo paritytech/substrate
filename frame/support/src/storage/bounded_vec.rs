@@ -119,7 +119,7 @@ impl<T, S> BoundedVec<T, S> {
 		self.0
 	}
 
-	/// Exactly the same semantics as `Vec::sort_by`.
+	/// Exactly the same semantics as [`slice::sort_by`].
 	///
 	/// This is safe since sorting cannot change the number of elements in the vector.
 	pub fn sort_by<F>(&mut self, compare: F)
@@ -138,7 +138,7 @@ impl<T, S> BoundedVec<T, S> {
 		self.0.remove(index)
 	}
 
-	/// Exactly the same semantics as `Vec::swap_remove`.
+	/// Exactly the same semantics as `slice::swap_remove`.
 	///
 	/// # Panics
 	///
@@ -174,7 +174,7 @@ impl<T, S> BoundedVec<T, S> {
 		self.0.pop()
 	}
 
-	/// Exactly the same semantics as `slice::iter_mut`.
+	/// Exactly the same semantics as [`slice::iter_mut`].
 	pub fn iter_mut(&mut self) -> core::slice::IterMut<'_, T> {
 		self.0.iter_mut()
 	}
