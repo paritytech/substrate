@@ -18,7 +18,7 @@
 use codec::{Decode, Encode};
 use hash_db::{HashDB, Hasher};
 use scale_info::TypeInfo;
-use sp_std::{iter::IntoIterator, vec::Vec};
+use sp_std::vec::Vec;
 // Note that `LayoutV1` usage here (proof compaction) is compatible
 // with `LayoutV0`.
 use crate::LayoutV1 as Layout;
