@@ -180,7 +180,7 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug + 
 /// 	pub struct Module<T: Config> for enum Call where origin: T::Origin {
 /// 		#[weight = 1_000_000]
 /// 		fn my_long_function(origin, do_expensive_calc: bool) -> DispatchResultWithPostInfo {
-/// 			ensure_signed(origin).map_err(|e| e.with_weight(WeightV2 { time: 100_000, bandwidth: 100_000 }))?;
+/// 			ensure_signed(origin).map_err(|e| e.with_weight(WeightV2 { computation: 100_000, bandwidth: 100_000 }))?;
 /// 			if do_expensive_calc {
 /// 				// do the expensive calculation
 /// 				// ...
@@ -2833,7 +2833,7 @@ mod tests {
 		assert_eq!(
 			Call::<TraitImpl>::operational {}.get_dispatch_info(),
 			DispatchInfo {
-				weight: WeightV2 { time: 5, bandwidth: 0 },
+				weight: WeightV2 { computation: 5, bandwidth: 0 },
 				class: DispatchClass::Operational,
 				pays_fee: Pays::Yes
 			},
@@ -2842,7 +2842,7 @@ mod tests {
 		assert_eq!(
 			Call::<TraitImpl>::aux_3 {}.get_dispatch_info(),
 			DispatchInfo {
-				weight: WeightV2 { time: 3, bandwidth: 0 },
+				weight: WeightV2 { computation: 3, bandwidth: 0 },
 				class: DispatchClass::Normal,
 				pays_fee: Pays::Yes
 			},
