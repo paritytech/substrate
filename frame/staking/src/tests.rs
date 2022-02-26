@@ -4750,213 +4750,219 @@ fn force_apply_min_commission_works() {
 // TODO: adapt these for the staking use case
 
 #[test]
-fn ledger_slash_works_in_simple_cases() {
-	// Given no unlocking chunks
-	// let ledger = StakingLedger::<Test> {
-	// 	stash: 123,
-	// 	total: 15,
-	// 	active: 10,
-	// 	unlocking: vec![],
-	// 	claimed_rewards: vec![],
-	// };
+fn ledger_slash_works() {
+	let c = |era, value| UnlockChunk::<Balance> { era, value };
+	// Given
+	let mut ledger = StakingLedger::<Test> {
+		stash: 123,
+		total: 10,
+		active: 10,
+		unlocking: vec![],
+		claimed_rewards: vec![],
+	};
 
-	// // When
-	// assert_eq!(ledger.slash(5, 1, 0, 10), 0);
+	// When we slash a ledger with no unlocking chunks
+	assert_eq!(ledger.slash(5, 1, 0), 5);
+	// Then
+	assert_eq!(ledger.total, 5);
+	assert_eq!(ledger.active, 5);
 
-	// // Then
-	// assert_eq!(ledger.total, 10);
-	// assert_eq!(ledger.active, 5);
+	// When we slash a ledger with no unlocking chunks and the slash amount is greater then the
+	// total
+	assert_eq!(ledger.slash(11, 1, 0), 5);
+	// Then
+	assert_eq!(ledger.total, 0);
+	assert_eq!(ledger.active, 0);
 
-	// // When the slash amount is greater then the total
-	// assert_eq!(ledger.slash(11, 1, 0, 10), 1);
+	// Given
+	ledger.unlocking = vec![c(0, 10), c(1, 10)];
+	ledger.total = 2 * 10;
+	ledger.active = 0;
+	// When all the chunks overlap with the slash eras
+	assert_eq!(ledger.slash(20, 0, 0), 20);
+	// Then
+	assert_eq!(ledger.total, 0);
+	assert_eq!(ledger.unlocking, vec![c(0, 0), c(1, 0)]);
 
-	// // Then
-	// assert_eq!(ledger.total, 0);
-	// assert_eq!(ledger.active, 0);
+	// Given
+	ledger.unlocking = vec![c(0, 40), c(1, 100), c(2, 10), c(3, 250)];
+	ledger.active = 500;
+	ledger.total = 40 + 10 + 100 + 250 + 500; // 900
 
-	// // Given
-	// let chunks = [0, 1, 8, 9].iter().map(|era| UnlockChunks { era, value: 10 });
-	// ledger.total = 4 * 10;
-	// ledger.chunks = chunks.clone();
+	// When we have a partial slash that touches all chunks
+	assert_eq!(ledger.slash(900 / 2, 0, 0), 450);
 
-	// // When no chunks overlap with the slash eras,
-	// assert_eq!(ledger.slash(10, 1, 1, 7), 10);
+	// Then
+	assert_eq!(ledger.unlocking, vec![c(0, 40 / 2), c(1, 100 / 2), c(2, 10 / 2), c(3, 250 / 2)]);
+	assert_eq!(ledger.active, 500 / 2);
+	assert_eq!(ledger.total, 900 / 2);
 
-	// // Then
-	// assert_eq(ledger.total, 4 * 10);
+	// Given we have the same as above,
+	ledger.unlocking = vec![c(0, 40), c(1, 100), c(2, 10), c(3, 250)];
+	ledger.active = 500;
+	ledger.total = 40 + 10 + 100 + 250 + 500; // 900
+	assert_eq!(ledger.total, 900);
 
-	// // Slash, but all sub pools are out of range
-	// ExtBuilder::default().add_delegators(vec![(100, 100)]).build_and_execute(|| {
-	// 	// Given
-	// 	// Unbond in era 0
-	// 	assert_ok!(Pools::unbond_other(Origin::signed(100), 100));
+	// When  we have a higher min balance
+	assert_eq!(
+		ledger.slash(
+			900 / 2,
+			25, /* min balance - chunks with era 0 & 2 will be slashed to <=25, causing it to
+			     * get swept */
+			0
+		),
+		475
+	);
 
-	// 	// When
-	// 	let SlashPoolOut { slashed_bonded, slashed_unlocking } =
-	// 		Pools::slash_pool(SlashPoolArgs {
-	// 			pool_stash: &PRIMARY_ACCOUNT,
-	// 			slash_amount: 9,
-	// 			// We start slashing unbonding pools in `slash_era + 1`
-	// 			slash_era: 0,
-	// 			apply_era: 3,
-	// 			active_bonded: 100,
-	// 		})
-	// 		.unwrap();
+	// Then
+	assert_eq!(ledger.active, 500 / 2);
+	assert_eq!(ledger.unlocking, vec![c(0, 0), c(1, 100 / 2), c(2, 0), c(3, 250 / 2)]);
+	assert_eq!(ledger.total, 425);
 
-	// 	// Then
-	// 	assert_eq!(
-	// 		SubPoolsStorage::<Runtime>::get(PRIMARY_ACCOUNT).unwrap(),
-	// 		SubPools {
-	// 			no_era: Default::default(),
-	// 			with_era: sub_pools_with_era! {
-	// 				0 => UnbondPool { points: 100, balance: 100 }
-	// 			}
-	// 		}
-	// 	);
-	// 	assert_eq!(slashed_unlocking, Default::default());
-	// 	assert_eq!(slashed_bonded, 91);
-	// });
+	// Given we have the same as above,
+	ledger.unlocking = vec![c(0, 40), c(1, 100), c(2, 10), c(3, 250)];
+	ledger.active = 500;
+	ledger.total = 40 + 10 + 100 + 250 + 500; // 900
+
+	// When
+	assert_eq!(
+		ledger.slash(
+			900 / 2,
+			25, /* min balance - chunks with era 0 & 2 will be slashed to <=25, causing it to
+			     * get swept */
+			0
+		),
+		475
+	);
+
+	// Then
+	assert_eq!(ledger.active, 500 / 2);
+	assert_eq!(ledger.unlocking, vec![c(0, 0), c(1, 100 / 2), c(2, 0), c(3, 250 / 2)]);
+	assert_eq!(ledger.total, 425);
+
+	// Given
+	ledger.unlocking = vec![c(0, 40), c(1, 100), c(2, 10), c(3, 250)];
+	ledger.active = 500;
+	ledger.total = 40 + 10 + 100 + 250 + 500; // 900
+
+	// When
+	assert_eq!(
+		ledger.slash(
+			500 + 10 + 250 + 100 / 2, // active + era 2 + era 3 + era 1 / 2
+			0,
+			2 /* slash era 2 first, so the affected parts are era 2, era 3 and ledge.active.
+			   * This will cause the affected to go to zero, and then we will start slashing
+			   * older chunks */
+		),
+		500 + 250 + 10 + 100 / 2
+	);
+
+	assert_eq!(ledger.active, 0);
+	// iteration order ------------------NA----------2-------------0--------1----
+	assert_eq!(ledger.unlocking, vec![c(0, 40), c(1, 100 / 2), c(2, 0), c(3, 0)]);
+	assert_eq!(ledger.total, 90);
+
+	// Given
+	ledger.unlocking = vec![c(0, 100), c(1, 100), c(2, 100), c(3, 100)];
+	ledger.active = 100;
+	ledger.total = 5 * 100;
+
+	// When
+	assert_eq!(
+		ledger.slash(
+			350, // active + era 2 + era 3 + era 1 / 2
+			50,
+			2 /* slash era 2 first, so the affected parts are era 2, era 3 and ledge.active.
+			    * This will cause the affected to go to zero, and then we will start slashing
+			    * older chunks */
+		),
+		400
+	);
+
+	// Then
+	assert_eq!(ledger.active, 0);
+	// iteration order ------------------NA---------2--------0--------1----
+	assert_eq!(ledger.unlocking, vec![c(0, 100), c(1, 0), c(2, 0), c(3, 0)]);
+	//------goes to min balance and then gets dusted^^^
+	assert_eq!(ledger.total, 100);
+
+	// Tests for saturating arithmetic
+
+	// Given
+	let slash = u64::MAX as Balance * 2;
+	let value = slash
+		- (9 * 4) // The value of the other parts of ledger that will get slashed
+		+ 1;
+	// slash * value will saturate
+	assert!(slash.checked_mul(value - 20).is_none());
+
+	ledger.active = 10;
+	ledger.unlocking = vec![c(0, 10), c(1, 10), c(2, 10), c(3, value)];
+
+	ledger.total = value + 40;
+
+	// When
+	assert_eq!(ledger.slash(slash, 0, 0), slash);
+
+	// Then
+	assert_eq!(ledger.active, 1); // slash of 9
+	assert_eq!(
+		ledger.unlocking,
+		vec![
+			c(0, 1), // slash of 9
+			c(1, 1), // slash of 9
+			c(2, 1), // slash of 9 ------------(slash - 9 * 4).min(value)
+			c(3, 1), // saturates, so slash of remaining_slash.min(value)
+		]
+	);
+	assert_eq!(ledger.total, 5);
+
+	// Given
+	let slash = u64::MAX as Balance * 2;
+	let value = u64::MAX as Balance * 2;
+	let unit = 100;
+	// slash * value that will saturate
+	assert!(slash.checked_mul(value).is_none());
+	// but slash * unit.
+	assert!(slash.checked_mul(unit).is_some());
+
+	ledger.unlocking = vec![c(0, unit), c(1, value), c(2, unit), c(3, unit)];
+	//------------------------------note value^^^
+	ledger.active = unit;
+	ledger.total = unit * 4 + value;
+
+	// When
+	assert_eq!(ledger.slash(slash, 0, 0), slash);
+
+	// Then
+
+	// The amount slashed out of `unit`
+	let unit_slash = {
+		let affected_balance = value + unit * 4;
+		slash * unit / affected_balance
+	};
+	// `unit` after the slash is applied
+	let unit_slashed = unit - unit_slash;
+
+	// `value` after the slash is applied
+	let value_slashed = {
+		// We slash active and era 1 before we slash era 2
+		let previous_slashed_amount = unit_slash * 2;
+		let remaining_slash = slash - previous_slashed_amount;
+		value - remaining_slash
+	};
+	assert_eq!(ledger.active, unit_slashed);
+	assert_eq!(
+		ledger.unlocking,
+		vec![
+			c(0, unit_slashed),
+			// We reached the slash here because we slashed value.min(remaining_slash), which was
+			// remaining_slash
+			c(1, value_slashed),
+			c(2, unit), /* The rest are untouched even though they where in the slashing range.
+			             * This is problematic for pools, but should be rare enough that its ok. */
+			c(3, unit)
+		]
+	);
+	assert_eq!(ledger.total, unit_slashed + unit_slashed + value_slashed + unit + unit);
 }
-
-// 	// Some sub pools are in range of the slash while others are not.
-// 	#[test]
-// 	fn slash_pool_works_in_complex_cases() {
-// 		ExtBuilder::default()
-// 			.add_delegators(vec![(40, 40), (100, 100), (200, 200), (300, 300), (400, 400)])
-// 			.build_and_execute(|| {
-// 				// Make sure no pools get merged into `SubPools::no_era` until era 7.
-// 				BondingDuration::set(5);
-// 				assert_eq!(TotalUnbondingPools::<Runtime>::get(), 7);
-
-// 				assert_ok!(Pools::unbond_other(Origin::signed(400), 400));
-
-// 				CurrentEra::set(1);
-// 				assert_ok!(Pools::unbond_other(Origin::signed(40), 40));
-
-// 				CurrentEra::set(3);
-// 				assert_ok!(Pools::unbond_other(Origin::signed(100), 100));
-
-// 				CurrentEra::set(5);
-// 				assert_ok!(Pools::unbond_other(Origin::signed(200), 200));
-
-// 				CurrentEra::set(6);
-// 				assert_ok!(Pools::unbond_other(Origin::signed(300), 300));
-
-// 				// Given
-// 				assert_eq!(
-// 					SubPoolsStorage::<Runtime>::get(PRIMARY_ACCOUNT).unwrap(),
-// 					SubPools {
-// 						no_era: Default::default(),
-// 						with_era: sub_pools_with_era! {
-// 							0 => UnbondPool { points: 400, balance: 400 },
-// 							1 => UnbondPool { points: 40, balance: 40 },
-// 							3 => UnbondPool { points: 100, balance: 100 },
-// 							5 => UnbondPool { points: 200, balance: 200 },
-// 							6 => UnbondPool { points: 300, balance: 300 },
-// 						}
-// 					}
-// 				);
-
-// 				// When
-// 				let SlashPoolOut { slashed_bonded, slashed_unlocking } =
-// 					Pools::slash_pool(SlashPoolArgs {
-// 						pool_stash: &PRIMARY_ACCOUNT,
-// 						slash_amount: (40 + 100 + 200 + 10) / 2,
-// 						slash_era: 0,
-// 						apply_era: 5,
-// 						active_bonded: 10,
-// 					})
-// 					.unwrap();
-
-// 				// Then
-// 				assert_eq!(
-// 					SubPoolsStorage::<Runtime>::get(PRIMARY_ACCOUNT).unwrap(),
-// 					SubPools {
-// 						no_era: Default::default(),
-// 						with_era: sub_pools_with_era! {
-// 							0 => UnbondPool { points: 400, balance: 400 },
-// 							1 => UnbondPool { points: 40, balance: 40 / 2 },
-// 							3 => UnbondPool { points: 100, balance: 100 / 2},
-// 							5 => UnbondPool { points: 200, balance: 200 / 2},
-// 							6 => UnbondPool { points: 300, balance: 300 },
-// 						}
-// 					}
-// 				);
-// 				let expected_slashed_unlocking: BTreeMap<_, _> =
-// 					[(1, 40 / 2), (3, 100 / 2), (5, 200 / 2)].into_iter().collect();
-// 				assert_eq!(slashed_unlocking, expected_slashed_unlocking);
-// 				assert_eq!(slashed_bonded, 10 / 2);
-// 			});
-// 	}
-
-// 	// Same as above, but the slash amount is greater than the slash-able balance of the pool.
-// 	#[test]
-// 	fn pool_slash_works_with_slash_amount_greater_than_slashable() {
-// 		ExtBuilder::default()
-// 			.add_delegators(vec![(40, 40), (100, 100), (200, 200), (300, 300), (400, 400)])
-// 			.build_and_execute(|| {
-// 				// Make sure no pools get merged into `SubPools::no_era` until era 7.
-// 				BondingDuration::set(5);
-// 				assert_eq!(TotalUnbondingPools::<Runtime>::get(), 7);
-
-// 				assert_ok!(Pools::unbond_other(Origin::signed(400), 400));
-
-// 				CurrentEra::set(1);
-// 				assert_ok!(Pools::unbond_other(Origin::signed(40), 40));
-
-// 				CurrentEra::set(3);
-// 				assert_ok!(Pools::unbond_other(Origin::signed(100), 100));
-
-// 				CurrentEra::set(5);
-// 				assert_ok!(Pools::unbond_other(Origin::signed(200), 200));
-
-// 				CurrentEra::set(6);
-// 				assert_ok!(Pools::unbond_other(Origin::signed(300), 300));
-
-// 				// Given
-// 				assert_eq!(
-// 					SubPoolsStorage::<Runtime>::get(PRIMARY_ACCOUNT).unwrap(),
-// 					SubPools {
-// 						no_era: Default::default(),
-// 						with_era: sub_pools_with_era! {
-// 							0 => UnbondPool { points: 400, balance: 400 },
-// 							1 => UnbondPool { points: 40, balance: 40 },
-// 							3 => UnbondPool { points: 100, balance: 100 },
-// 							5 => UnbondPool { points: 200, balance: 200 },
-// 							6 => UnbondPool { points: 300, balance: 300 },
-// 						}
-// 					}
-// 				);
-
-// 				// When
-// 				let SlashPoolOut { slashed_bonded, slashed_unlocking } =
-// 					Pools::slash_pool(SlashPoolArgs {
-// 						pool_stash: &PRIMARY_ACCOUNT,
-// 						slash_amount: 40 + 100 + 200 + 400 + 10,
-// 						slash_era: 0,
-// 						apply_era: 5,
-// 						active_bonded: 10,
-// 					})
-// 					.unwrap();
-
-// 				// Then
-// 				assert_eq!(
-// 					SubPoolsStorage::<Runtime>::get(PRIMARY_ACCOUNT).unwrap(),
-// 					SubPools {
-// 						no_era: Default::default(),
-// 						with_era: sub_pools_with_era! {
-// 							0 => UnbondPool { points: 400, balance: 400 },
-// 							1 => UnbondPool { points: 40, balance: 0 },
-// 							3 => UnbondPool { points: 100, balance: 0 },
-// 							5 => UnbondPool { points: 200, balance: 0 },
-// 							6 => UnbondPool { points: 300, balance: 300 },
-// 						}
-// 					}
-// 				);
-// 				let expected_slashed_unlocking: BTreeMap<_, _> =
-// 					[(1, 0), (3, 0), (5, 0)].into_iter().collect();
-// 				assert_eq!(slashed_unlocking, expected_slashed_unlocking);
-// 				assert_eq!(slashed_bonded, 0);
-// 			});
-// 	}
-// }

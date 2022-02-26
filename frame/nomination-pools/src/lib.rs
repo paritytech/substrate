@@ -341,9 +341,8 @@ fn points_to_issue<T: Config>(
 	new_funds: BalanceOf<T>,
 ) -> BalanceOf<T> {
 	match (current_balance.is_zero(), current_points.is_zero()) {
-		(true, true) | (false, true) => {
-			new_funds.saturating_mul(POINTS_TO_BALANCE_INIT_RATIO.into())
-		},
+		(true, true) | (false, true) =>
+			new_funds.saturating_mul(POINTS_TO_BALANCE_INIT_RATIO.into()),
 		(true, false) => {
 			// The pool was totally slashed.
 			// This is the equivalent of `(current_points / 1) * new_funds`.
@@ -368,7 +367,7 @@ fn balance_to_unbond<T: Config>(
 ) -> BalanceOf<T> {
 	if current_balance.is_zero() || current_points.is_zero() || delegator_points.is_zero() {
 		// There is nothing to unbond
-		return Zero::zero();
+		return Zero::zero()
 	}
 
 	// Equivalent of (current_balance / current_points) * delegator_points
@@ -520,8 +519,8 @@ impl<T: Config> BondedPool<T> {
 		ensure!(points_to_balance_ratio_floor < 10u32.into(), Error::<T>::OverflowRisk);
 		// while restricting the balance to 1/10th of max total issuance,
 		ensure!(
-			new_funds.saturating_add(bonded_balance)
-				< BalanceOf::<T>::max_value().div(10u32.into()),
+			new_funds.saturating_add(bonded_balance) <
+				BalanceOf::<T>::max_value().div(10u32.into()),
 			Error::<T>::OverflowRisk
 		);
 		// then we can be decently confident the bonding pool points will not overflow
@@ -642,7 +641,7 @@ pub struct RewardPool<T: Config> {
 impl<T: Config> RewardPool<T> {
 	/// Mutate the reward pool by updating the total earnings and current free balance.
 	fn update_total_earnings_and_balance(&mut self) {
-		let current_balance = T::Currency::free_balance(&self.account);
+		let current_balance = T::Currency::usable_balance(&self.account);
 		// The earnings since the last time it was updated
 		let new_earnings = current_balance.saturating_sub(self.balance);
 		// The lifetime earnings of the of the reward pool
@@ -697,7 +696,7 @@ impl<T: Config> SubPools<T> {
 			// For the first `0..TotalUnbondingPools` eras of the chain we don't need to do
 			// anything. I.E. if `TotalUnbondingPools` is 5 and we are in era 4 we can add a pool
 			// for this era and have exactly `TotalUnbondingPools` pools.
-			return self;
+			return self
 		}
 
 		//  I.E. if `TotalUnbondingPools` is 5 and current era is 10, we only want to retain pools
@@ -1112,8 +1111,8 @@ pub mod pallet {
 			let unbonding_era = delegator.unbonding_era.ok_or(Error::<T>::NotUnbonding)?;
 			let current_era = T::StakingInterface::current_era();
 			ensure!(
-				current_era.saturating_sub(unbonding_era)
-					>= T::StakingInterface::bonding_duration(),
+				current_era.saturating_sub(unbonding_era) >=
+					T::StakingInterface::bonding_duration(),
 				Error::<T>::NotUnbondedYet
 			);
 
@@ -1124,31 +1123,35 @@ pub mod pallet {
 			let should_remove_pool = bonded_pool
 				.ok_to_withdraw_unbonded_other_with(&caller, &target, &delegator, &sub_pools)?;
 
-			let balance_to_unbond = if let Some(pool) = sub_pools.with_era.get_mut(&unbonding_era) {
-				let balance_to_unbond = pool.balance_to_unbond(delegator.points);
-				pool.points = pool.points.saturating_sub(delegator.points);
-				pool.balance = pool.balance.saturating_sub(balance_to_unbond);
-				if pool.points.is_zero() {
-					// Clean up pool that is no longer used
-					sub_pools.with_era.remove(&unbonding_era);
+			let balance_to_unbond =
+				if let Some(pool) = sub_pools.with_era.get_mut(&unbonding_era) {
+					let balance_to_unbond = pool.balance_to_unbond(delegator.points);
+					pool.points = pool.points.saturating_sub(delegator.points);
+					pool.balance = pool.balance.saturating_sub(balance_to_unbond);
+					if pool.points.is_zero() {
+						// Clean up pool that is no longer used
+						sub_pools.with_era.remove(&unbonding_era);
+					}
+
+					balance_to_unbond
+				} else {
+					// A pool does not belong to this era, so it must have been merged to the
+					// era-less pool.
+					let balance_to_unbond = sub_pools.no_era.balance_to_unbond(delegator.points);
+					sub_pools.no_era.points =
+						sub_pools.no_era.points.saturating_sub(delegator.points);
+					sub_pools.no_era.balance =
+						sub_pools.no_era.balance.saturating_sub(balance_to_unbond);
+
+					balance_to_unbond
 				}
-
-				balance_to_unbond
-			} else {
-				// A pool does not belong to this era, so it must have been merged to the era-less
-				// pool.
-				let balance_to_unbond = sub_pools.no_era.balance_to_unbond(delegator.points);
-				sub_pools.no_era.points = sub_pools.no_era.points.saturating_sub(delegator.points);
-				sub_pools.no_era.balance =
-					sub_pools.no_era.balance.saturating_sub(balance_to_unbond);
-
-				balance_to_unbond
-			};
+				// In the rare case a pool had such an extreme slash that it erased all the bonded
+				// balance and balance in unlocking chunks
+				.min(T::Currency::usable_balance(&delegator.pool));
 
 			T::StakingInterface::withdraw_unbonded(delegator.pool.clone(), num_slashing_spans)?;
-			// TODO Make sure T::Currency::free_balance(&delegator.pool) doesn't include bonded
-			// else this check is bad
-			if T::Currency::free_balance(&delegator.pool) >= balance_to_unbond {
+
+			if balance_to_unbond <= T::Currency::minimum_balance() {
 				T::Currency::transfer(
 					&delegator.pool,
 					&target,
@@ -1162,9 +1165,13 @@ pub mod pallet {
 					amount: balance_to_unbond,
 				});
 			} else {
-				// This should only happen in the case a previous withdraw put the pools balance
-				// below ED and it was dusted. We gracefully carry primarily to ensure the pool can
-				// eventually be destroyed
+				// This should only happen if 1) a previous withdraw put the pools balance
+				// below ED and it was dusted or 2) the pool was slashed a huge amount that wiped
+				// all the unlocking chunks and bonded balance, thus causing inconsistencies with
+				// unbond pool's tracked balance and the actual balance (if this happens, the pool
+				// is in an invalid state anyways because there are no bonded funds so no one can
+				// join). We gracefully carry on, primarily to ensure the pool can eventually be
+				// destroyed
 				Self::deposit_event(Event::<T>::DustWithdrawn {
 					delegator: target.clone(),
 					pool: delegator.pool.clone(),
@@ -1215,8 +1222,8 @@ pub mod pallet {
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			ensure!(
-				amount >= T::StakingInterface::minimum_bond()
-					&& amount >= MinCreateBond::<T>::get(),
+				amount >= T::StakingInterface::minimum_bond() &&
+					amount >= MinCreateBond::<T>::get(),
 				Error::<T>::MinimumBondNotMet
 			);
 			if let Some(max_pools) = MaxPools::<T>::get() {
@@ -1371,9 +1378,9 @@ impl<T: Config> Pallet<T> {
 		let delegator_virtual_points = T::BalanceToU256::convert(delegator.points)
 			.saturating_mul(T::BalanceToU256::convert(new_earnings_since_last_claim));
 
-		let delegator_payout = if delegator_virtual_points.is_zero()
-			|| current_points.is_zero()
-			|| reward_pool.balance.is_zero()
+		let delegator_payout = if delegator_virtual_points.is_zero() ||
+			current_points.is_zero() ||
+			reward_pool.balance.is_zero()
 		{
 			Zero::zero()
 		} else {

@@ -549,7 +549,7 @@ impl<T: Config> StakingLedger<T> {
 		let mut remaining_slash = slash_amount;
 		let pre_slash_total = self.total;
 
-		// The index of the first chunk after the slash
+		// The index of the first chunk after the slash (OR the last index if the
 		let start_index = self.unlocking.partition_point(|c| c.era < slash_era);
 		// The indices of from the first chunk after the slash up through the most recent chunk.
 		// (The most recent chunk is at greatest from this era)
@@ -575,25 +575,27 @@ impl<T: Config> StakingLedger<T> {
 		// Wether or not this slash can be applied to just the active and affected unbonding chunks.
 		// If not, we have to slash all of the aforementioned and then continue slashing older
 		// unlocking chunks.
-		let is_proportional_slash = affected_balance <= slash_amount;
+		let is_proportional_slash = slash_amount < affected_balance;
 
 		// Helper to update `target` and the ledgers total after accounting for slashing `target`.
 		let mut slash_out_of = |target: &mut BalanceOf<T>, slash_remaining: &mut BalanceOf<T>| {
 			// We don't want the added complexity of using extended ints, so if this saturates we
-			// will just try and slash as much as possible.
+			// will always just try and slash as much as possible.
 			let maybe_numerator = slash_amount.checked_mul(target);
+			println!("{:?}=maybe_numerator", maybe_numerator);
+
 			// Calculate the amount to slash from the target
 			let slash_from_target = match (maybe_numerator, is_proportional_slash) {
 				// Equivalent to `(slash_amount / affected_balance) * target`.
 				(Some(numerator), true) => numerator.div(affected_balance),
-				_ => (*slash_remaining).min(*target),
+				(None, _) | (_, false) => (*slash_remaining).min(*target),
 			};
 
 			*target = target.saturating_sub(slash_from_target);
 
 			let actual_slashed = if *target <= minimum_balance {
 				// Slash the rest of the target if its dust
-				sp_std::mem::replace(target, Zero::zero()) + slash_from_target
+				sp_std::mem::replace(target, Zero::zero()).saturating_add(slash_from_target)
 			} else {
 				slash_from_target
 			};
@@ -606,16 +608,11 @@ impl<T: Config> StakingLedger<T> {
 		slash_out_of(&mut self.active, &mut remaining_slash);
 
 		let mut slashed_unlocking = BTreeMap::<_, _>::new();
-		let indices_to_slash = if is_proportional_slash {
-			Box::new(affected_indices) as Box<dyn Iterator<Item = usize>>
-		} else {
-			Box::new(
-				// First slash unbonding chunks from after the slash
-				affected_indices
+		let indices_to_slash
+		// First slash unbonding chunks from after the slash
+			= affected_indices
 					// Then start slashing older chunks, start from the era before the slash
-					.chain((0..start_index).rev()),
-			) as Box<dyn Iterator<Item = usize>>
-		};
+					.chain((0..start_index).rev());
 		for i in indices_to_slash {
 			if let Some(chunk) = self.unlocking.get_mut(i) {
 				slash_out_of(&mut chunk.value, &mut remaining_slash);
@@ -625,7 +622,7 @@ impl<T: Config> StakingLedger<T> {
 					break
 				}
 			} else {
-				break // defensive
+				break // defensive, indices should always be in bounds.
 			}
 		}
 
