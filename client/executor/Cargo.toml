@@ -31,7 +31,6 @@ sc-executor-common = { version = "0.10.0-dev", path = "common" }
 sc-executor-wasmi = { version = "0.10.0-dev", path = "wasmi" }
 sc-executor-wasmtime = { version = "0.10.0-dev", path = "wasmtime", optional = true }
 parking_lot = "0.12.0"
-libsecp256k1 = "0.7"
 sp-core-hashing-proc-macro = { version = "4.0.0-dev", path = "../../primitives/core/hashing/proc-macro" }
 lru = "0.6.6"
 tracing = "0.1.29"
