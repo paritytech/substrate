@@ -562,7 +562,7 @@ parameter_types! {
 		BlockLength::max(4 * 1024 * 1024);
 	pub RuntimeBlockWeights: BlockWeights =
 		BlockWeights::with_sensible_defaults(WeightV2 {
-			time: 4 * 1024 * 1024,
+			computation: 4 * 1024 * 1024,
 			bandwidth: 5 * 1024 * 1024,
 		}, Perbill::from_percent(75));
 }

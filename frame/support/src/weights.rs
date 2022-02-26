@@ -146,34 +146,34 @@ pub use sp_runtime::transaction_validity::TransactionPriority;
 pub type Weight = WeightV1;
 
 /// The first version of Weight introduced into FRAME.
-pub type WeightV1 = TimeWeight;
+pub type WeightV1 = ComputationWeight;
 
 /// Numeric range of a transaction time weight.
-pub type TimeWeight = u64;
+pub type ComputationWeight = u64;
 
 /// Numeric range of a transaction storage weight.
-pub type StorageWeight = u64;
+pub type BandwidthWeight = u64;
 
 /// These constants are specific to FRAME, and the current implementation of its various components.
 /// For example: FRAME System, FRAME Executive, our FRAME support libraries, etc...
 pub mod constants {
-	use super::{TimeWeight, WeightV2};
+	use super::{ComputationWeight, WeightV2};
 	use crate::parameter_types;
 
-	pub const WEIGHT_PER_SECOND: TimeWeight = 1_000_000_000_000;
-	pub const WEIGHT_PER_MILLIS: TimeWeight = WEIGHT_PER_SECOND / 1000; // 1_000_000_000
-	pub const WEIGHT_PER_MICROS: TimeWeight = WEIGHT_PER_MILLIS / 1000; // 1_000_000
-	pub const WEIGHT_PER_NANOS: TimeWeight = WEIGHT_PER_MICROS / 1000; // 1_000
+	pub const WEIGHT_PER_SECOND: ComputationWeight = 1_000_000_000_000;
+	pub const WEIGHT_PER_MILLIS: ComputationWeight = WEIGHT_PER_SECOND / 1000; // 1_000_000_000
+	pub const WEIGHT_PER_MICROS: ComputationWeight = WEIGHT_PER_MILLIS / 1000; // 1_000_000
+	pub const WEIGHT_PER_NANOS: ComputationWeight = WEIGHT_PER_MICROS / 1000; // 1_000
 
 	parameter_types! {
 		/// Importing a block with 0 txs takes ~5 ms
 		pub const BlockExecutionWeight: WeightV2 = WeightV2 {
-			time: 5 * WEIGHT_PER_MILLIS,
+			computation: 5 * WEIGHT_PER_MILLIS,
 			bandwidth: 0, // TODO SHAWN: Calculate this.
 		};
 		/// Executing 10,000 System remarks (no-op) txs takes ~1.26 seconds -> ~125 µs per tx
 		pub const ExtrinsicBaseWeight: WeightV2 = WeightV2 {
-			time: 125 * WEIGHT_PER_MICROS,
+			computation: 125 * WEIGHT_PER_MICROS,
 			bandwidth: 0, // TODO SHAWN: Calculate this.
 		};
 	}
@@ -371,7 +371,7 @@ impl From<(Option<Weight>, Pays)> for PostDispatchInfo {
 		let (maybe_actual_time, pays_fee) = post_weight_info;
 		let actual_weight = match maybe_actual_time {
 			Some(actual_time) => Some(WeightV2 {
-				time: actual_time,
+				computation: actual_time,
 				// NOTE: This enables backwards compat for `WeightV1` syntax.
 				bandwidth: Zero::zero(),
 			}),
@@ -388,10 +388,10 @@ impl From<Pays> for PostDispatchInfo {
 }
 
 impl From<Option<Weight>> for PostDispatchInfo {
-	fn from(maybe_actual_time: Option<Weight>) -> Self {
-		let actual_weight = match maybe_actual_time {
-			Some(actual_time) => Some(WeightV2 {
-				time: actual_time,
+	fn from(maybe_actual_computation: Option<Weight>) -> Self {
+		let actual_weight = match maybe_actual_computation {
+			Some(actual_computation) => Some(WeightV2 {
+				computation: actual_computation,
 				// NOTE: This enables backwards compat for `WeightV1` syntax.
 				bandwidth: Zero::zero(),
 			}),
@@ -413,7 +413,7 @@ impl sp_runtime::traits::Printable for PostDispatchInfo {
 		match self.actual_weight {
 			Some(weight) => {
 				"time(".print();
-				weight.time.print();
+				weight.computation.print();
 				")".print();
 				"bandwidth(".print();
 				")".print();
@@ -437,8 +437,8 @@ pub trait WithPostDispatchInfo {
 	/// # Example
 	///
 	/// ```ignore
-	/// let who = ensure_signed(origin).map_err(|e| e.with_weight(WeightV2 { time: 100, bandwidth: 100 }))?;
-	/// ensure!(who == me, Error::<T>::NotMe.with_weight(WeightV2 { time: 200_000, bandwidth: 100 }));
+	/// let who = ensure_signed(origin).map_err(|e| e.with_weight(WeightV2 { computation: 100, bandwidth: 100 }))?;
+	/// ensure!(who == me, Error::<T>::NotMe.with_weight(WeightV2 { computation: 200_000, bandwidth: 100 }));
 	/// ```
 	fn with_weight(self, actual_weight: WeightV2) -> DispatchErrorWithPostInfo;
 }
@@ -460,7 +460,7 @@ where
 
 impl<T> WeighData<T> for Weight {
 	fn weigh_data(&self, _: T) -> WeightV2 {
-		return WeightV2 { time: *self, bandwidth: Zero::zero() }
+		return WeightV2 { computation: *self, bandwidth: Zero::zero() }
 	}
 }
 
@@ -559,7 +559,7 @@ impl<Call: Encode, Extra: Encode> GetDispatchInfo for sp_runtime::testing::TestX
 		// for testing: weight == size.
 		DispatchInfo {
 			weight: WeightV2 {
-				time: self.encode().len() as _,
+				computation: self.encode().len() as _,
 				bandwidth: self.encode().len() as _,
 			},
 			pays_fee: Pays::Yes,
@@ -825,88 +825,94 @@ mod tests {
 	fn weights_are_correct() {
 		// #[weight = 1000]
 		let info = Call::<TraitImpl>::f00 {}.get_dispatch_info();
-		assert_eq!(info.weight, WeightV2 { time: 1000, bandwidth: 0 });
+		assert_eq!(info.weight, WeightV2 { computation: 1000, bandwidth: 0 });
 		assert_eq!(info.class, DispatchClass::Normal);
 		assert_eq!(info.pays_fee, Pays::Yes);
 
 		// #[weight = (1000, DispatchClass::Mandatory)]
 		let info = Call::<TraitImpl>::f01 {}.get_dispatch_info();
-		assert_eq!(info.weight, WeightV2 { time: 1000, bandwidth: 0 });
+		assert_eq!(info.weight, WeightV2 { computation: 1000, bandwidth: 0 });
 		assert_eq!(info.class, DispatchClass::Mandatory);
 		assert_eq!(info.pays_fee, Pays::Yes);
 
 		// #[weight = (1000, Pays::No)]
 		let info = Call::<TraitImpl>::f02 {}.get_dispatch_info();
-		assert_eq!(info.weight, WeightV2 { time: 1000, bandwidth: 0 });
+		assert_eq!(info.weight, WeightV2 { computation: 1000, bandwidth: 0 });
 		assert_eq!(info.class, DispatchClass::Normal);
 		assert_eq!(info.pays_fee, Pays::No);
 
 		// #[weight = (1000, DispatchClass::Operational, Pays::No)]
 		let info = Call::<TraitImpl>::f03 {}.get_dispatch_info();
-		assert_eq!(info.weight, WeightV2 { time: 1000, bandwidth: 0 });
+		assert_eq!(info.weight, WeightV2 { computation: 1000, bandwidth: 0 });
 		assert_eq!(info.class, DispatchClass::Operational);
 		assert_eq!(info.pays_fee, Pays::No);
 
 		// #[weight = ((_a * 10 + _eb * 1) as Weight, DispatchClass::Normal, Pays::Yes)]
 		let info = Call::<TraitImpl>::f11 { _a: 13, _eb: 20 }.get_dispatch_info();
-		assert_eq!(info.weight, WeightV2 { time: 150, bandwidth: 0 }); // 13*10 + 20
+		assert_eq!(info.weight, WeightV2 { computation: 150, bandwidth: 0 }); // 13*10 + 20
 		assert_eq!(info.class, DispatchClass::Normal);
 		assert_eq!(info.pays_fee, Pays::Yes);
 
 		// #[weight = (0, DispatchClass::Operational, Pays::Yes)]
 		let info = Call::<TraitImpl>::f12 { _a: 10, _eb: 20 }.get_dispatch_info();
-		assert_eq!(info.weight, WeightV2 { time: 0, bandwidth: 0 });
+		assert_eq!(info.weight, WeightV2 { computation: 0, bandwidth: 0 });
 		assert_eq!(info.class, DispatchClass::Operational);
 		assert_eq!(info.pays_fee, Pays::Yes);
 
 		// #[weight = T::DbWeight::get().reads(3) + T::DbWeight::get().writes(2) + 10_000]
 		let info = Call::<TraitImpl>::f20 {}.get_dispatch_info();
-		assert_eq!(info.weight, WeightV2 { time: 12300, bandwidth: 0 }); // 100*3 + 1000*2 + 10_1000
+		assert_eq!(info.weight, WeightV2 { computation: 12300, bandwidth: 0 }); // 100*3 + 1000*2 + 10_1000
 		assert_eq!(info.class, DispatchClass::Normal);
 		assert_eq!(info.pays_fee, Pays::Yes);
 
 		// #[weight = T::DbWeight::get().reads_writes(6, 5) + 40_000]
 		let info = Call::<TraitImpl>::f21 {}.get_dispatch_info();
-		assert_eq!(info.weight, WeightV2 { time: 45600, bandwidth: 0 }); // 100*6 + 1000*5 + 40_1000
+		assert_eq!(info.weight, WeightV2 { computation: 45600, bandwidth: 0 }); // 100*6 + 1000*5 + 40_1000
 		assert_eq!(info.class, DispatchClass::Normal);
 		assert_eq!(info.pays_fee, Pays::Yes);
 	}
 
 	#[test]
 	fn extract_actual_weight_works() {
-		let pre =
-			DispatchInfo { weight: WeightV2 { time: 1000, bandwidth: 123 }, ..Default::default() };
+		let pre = DispatchInfo {
+			weight: WeightV2 { computation: 1000, bandwidth: 123 },
+			..Default::default()
+		};
 		assert_eq!(
 			extract_actual_weight(&Ok(Some(7).into()), &pre),
-			WeightV2 { time: 7, bandwidth: 0 }
+			WeightV2 { computation: 7, bandwidth: 0 }
 		);
 		assert_eq!(
 			extract_actual_weight(&Ok(Some(1000).into()), &pre),
-			WeightV2 { time: 1000, bandwidth: 0 }
+			WeightV2 { computation: 1000, bandwidth: 0 }
 		);
 		assert_eq!(
 			extract_actual_weight(
-				&Err(DispatchError::BadOrigin.with_weight(WeightV2 { time: 9, bandwidth: 99 })),
+				&Err(DispatchError::BadOrigin
+					.with_weight(WeightV2 { computation: 9, bandwidth: 99 })),
 				&pre
 			),
-			WeightV2 { time: 9, bandwidth: 99 }
+			WeightV2 { computation: 9, bandwidth: 99 }
 		);
 	}
 
 	#[test]
 	fn extract_actual_weight_caps_at_pre_weight() {
-		let pre =
-			DispatchInfo { weight: WeightV2 { time: 1000, bandwidth: 120 }, ..Default::default() };
+		let pre = DispatchInfo {
+			weight: WeightV2 { computation: 1000, bandwidth: 120 },
+			..Default::default()
+		};
 		assert_eq!(
 			extract_actual_weight(&Ok(Some(1250).into()), &pre),
-			WeightV2 { time: 1000, bandwidth: 0 }
+			WeightV2 { computation: 1000, bandwidth: 0 }
 		);
 		assert_eq!(
 			extract_actual_weight(
-				&Err(DispatchError::BadOrigin.with_weight(WeightV2 { time: 1300, bandwidth: 130 })),
+				&Err(DispatchError::BadOrigin
+					.with_weight(WeightV2 { computation: 1300, bandwidth: 130 })),
 				&pre
 			),
-			WeightV2 { time: 1000, bandwidth: 120 }
+			WeightV2 { computation: 1000, bandwidth: 120 }
 		);
 	}
 

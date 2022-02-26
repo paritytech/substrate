@@ -209,7 +209,7 @@ impl Default for BlockWeights {
 	fn default() -> Self {
 		Self::with_sensible_defaults(
 			WeightV2 {
-				time: 1 * constants::WEIGHT_PER_SECOND,
+				computation: 1 * constants::WEIGHT_PER_SECOND,
 				bandwidth: 5 * 1024 * 1024, // 5 MB
 			},
 			DEFAULT_NORMAL_RATIO,

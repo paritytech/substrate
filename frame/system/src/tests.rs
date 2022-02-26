@@ -222,8 +222,10 @@ fn deposit_event_uses_actual_weight() {
 		System::initialize(&1, &[0u8; 32].into(), &Default::default());
 		System::note_finished_initialize();
 
-		let pre_info =
-			DispatchInfo { weight: WeightV2 { time: 1000, bandwidth: 1000 }, ..Default::default() };
+		let pre_info = DispatchInfo {
+			weight: WeightV2 { computation: 1000, bandwidth: 1000 },
+			..Default::default()
+		};
 		System::note_applied_extrinsic(&Ok(Some(300).into()), pre_info);
 		System::note_applied_extrinsic(&Ok(Some(1000).into()), pre_info);
 		System::note_applied_extrinsic(
@@ -232,7 +234,9 @@ fn deposit_event_uses_actual_weight() {
 			pre_info,
 		);
 		System::note_applied_extrinsic(
-			&Err(DispatchError::BadOrigin.with_weight(WeightV2 { time: 999, bandwidth: 999 })),
+			&Err(
+				DispatchError::BadOrigin.with_weight(WeightV2 { computation: 999, bandwidth: 999 })
+			),
 			pre_info,
 		);
 
@@ -243,7 +247,7 @@ fn deposit_event_uses_actual_weight() {
 					phase: Phase::ApplyExtrinsic(0),
 					event: SysEvent::ExtrinsicSuccess {
 						dispatch_info: DispatchInfo {
-							weight: WeightV2 { time: 300, bandwidth: 0 },
+							weight: WeightV2 { computation: 300, bandwidth: 0 },
 							..Default::default()
 						},
 					}
@@ -254,7 +258,7 @@ fn deposit_event_uses_actual_weight() {
 					phase: Phase::ApplyExtrinsic(1),
 					event: SysEvent::ExtrinsicSuccess {
 						dispatch_info: DispatchInfo {
-							weight: WeightV2 { time: 1000, bandwidth: 0 },
+							weight: WeightV2 { computation: 1000, bandwidth: 0 },
 							..Default::default()
 						},
 					}
@@ -265,7 +269,7 @@ fn deposit_event_uses_actual_weight() {
 					phase: Phase::ApplyExtrinsic(2),
 					event: SysEvent::ExtrinsicSuccess {
 						dispatch_info: DispatchInfo {
-							weight: WeightV2 { time: 1000, bandwidth: 0 },
+							weight: WeightV2 { computation: 1000, bandwidth: 0 },
 							..Default::default()
 						},
 					}
@@ -277,7 +281,7 @@ fn deposit_event_uses_actual_weight() {
 					event: SysEvent::ExtrinsicFailed {
 						dispatch_error: DispatchError::BadOrigin.into(),
 						dispatch_info: DispatchInfo {
-							weight: WeightV2 { time: 999, bandwidth: 999 },
+							weight: WeightV2 { computation: 999, bandwidth: 999 },
 							..Default::default()
 						},
 					}
