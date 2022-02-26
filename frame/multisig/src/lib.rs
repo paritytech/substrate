@@ -57,7 +57,7 @@ use frame_support::{
 	},
 	ensure,
 	traits::{Currency, Get, ReservableCurrency, WrapperKeepOpaque},
-	weights::{GetDispatchInfo, Weight},
+	weights::{GetDispatchInfo, Weight, WeightV2},
 	RuntimeDebug,
 };
 use frame_system::{self as system, RawOrigin};
@@ -257,7 +257,7 @@ pub mod pallet {
 			let dispatch_info = call.get_dispatch_info();
 			(
 				T::WeightInfo::as_multi_threshold_1(call.using_encoded(|c| c.len() as u32))
-					.saturating_add(dispatch_info.weight)
+					.saturating_add(dispatch_info.weight.computation)
 					// AccountData for inner call origin accountdata.
 					.saturating_add(T::DbWeight::get().reads_writes(1, 1)),
 				dispatch_info.class,
@@ -286,14 +286,14 @@ pub mod pallet {
 						.actual_weight
 						.map(|actual_weight| {
 							T::WeightInfo::as_multi_threshold_1(call_len as u32)
-								.saturating_add(actual_weight)
+								.saturating_add(actual_weight.computation)
 						})
 						.into()
 				})
 				.map_err(|err| match err.post_info.actual_weight {
 					Some(actual_weight) => {
 						let weight_used = T::WeightInfo::as_multi_threshold_1(call_len as u32)
-							.saturating_add(actual_weight);
+							.saturating_add(actual_weight.computation);
 						let post_info = Some(weight_used).into();
 						let error = err.error.into();
 						DispatchErrorWithPostInfo { post_info, error }
@@ -564,7 +564,7 @@ impl<T: Config> Pallet<T> {
 
 			if let Some((call, call_len)) = maybe_approved_call {
 				// verify weight
-				ensure!(call.get_dispatch_info().weight <= max_weight, Error::<T>::MaxWeightTooLow);
+				ensure!(call.get_dispatch_info().weight.computation <= max_weight, Error::<T>::MaxWeightTooLow);
 
 				// Clean up storage before executing call to avoid an possibility of reentrancy
 				// attack.
@@ -586,7 +586,7 @@ impl<T: Config> Pallet<T> {
 							other_signatories_len as u32,
 							call_len as u32,
 						)
-						.saturating_add(actual_weight)
+						.saturating_add(actual_weight.computation)
 					})
 					.into())
 			} else {
@@ -747,7 +747,7 @@ impl<T: Config> Pallet<T> {
 /// Return the weight of a dispatch call result as an `Option`.
 ///
 /// Will return the weight regardless of what the state of the result is.
-fn get_result_weight(result: DispatchResultWithPostInfo) -> Option<Weight> {
+fn get_result_weight(result: DispatchResultWithPostInfo) -> Option<WeightV2> {
 	match result {
 		Ok(post_info) => post_info.actual_weight,
 		Err(err) => err.post_info.actual_weight,
