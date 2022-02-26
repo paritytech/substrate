@@ -33,7 +33,7 @@ use sp_trie::{
 	LayoutV1, MemoryDB, Recorder, StorageProof,
 };
 use std::{
-	collections::{btree_map::Entry, BTreeMap},
+	collections::{hash_map::Entry, HashMap},
 	sync::Arc,
 };
 
@@ -115,7 +115,7 @@ where
 #[derive(Default)]
 struct ProofRecorderInner<Hash> {
 	/// All the records that we have stored so far.
-	records: BTreeMap<Hash, Option<DBValue>>,
+	records: HashMap<Hash, Option<DBValue>>,
 	/// The encoded size of all recorded values.
 	encoded_size: usize,
 }
@@ -126,7 +126,7 @@ pub struct ProofRecorder<Hash> {
 	inner: Arc<RwLock<ProofRecorderInner<Hash>>>,
 }
 
-impl<Hash: std::hash::Hash + Eq + Ord> ProofRecorder<Hash> {
+impl<Hash: std::hash::Hash + Eq> ProofRecorder<Hash> {
 	/// Record the given `key` => `val` combination.
 	pub fn record(&self, key: Hash, val: Option<DBValue>) {
 		let mut inner = self.inner.write();
@@ -158,13 +158,17 @@ impl<Hash: std::hash::Hash + Eq + Ord> ProofRecorder<Hash> {
 
 	/// Convert into a [`StorageProof`].
 	pub fn to_storage_proof(&self) -> StorageProof {
-		StorageProof::new(
-			self.inner
-				.read()
-				.records
-				.iter()
-				.filter_map(|(_k, v)| v.as_ref().map(|v| v.to_vec())),
-		)
+		let mut trie_nodes = self
+			.inner
+			.read()
+			.records
+			.iter()
+			.filter_map(|(_k, v)| v.as_ref().map(|v| v.to_vec()))
+			.collect::<Vec<_>>();
+
+		trie_nodes.sort();
+
+		StorageProof::new(trie_nodes)
 	}
 
 	/// Reset the internal state.
@@ -179,9 +183,7 @@ impl<Hash: std::hash::Hash + Eq + Ord> ProofRecorder<Hash> {
 /// These can be sent to remote node and used as a proof of execution.
 pub struct ProvingBackend<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher>(
 	TrieBackend<ProofRecorderBackend<'a, S, H>, H>,
-)
-where
-	H::Out: Ord;
+);
 
 /// Trie backend storage with its proof recorder.
 pub struct ProofRecorderBackend<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> {
@@ -191,7 +193,7 @@ pub struct ProofRecorderBackend<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hashe
 
 impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> ProvingBackend<'a, S, H>
 where
-	H::Out: Codec + Ord,
+	H::Out: Codec,
 {
 	/// Create new proving backend.
 	pub fn new(backend: &'a TrieBackend<S, H>) -> Self {
@@ -231,8 +233,6 @@ where
 
 impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> TrieBackendStorage<H>
 	for ProofRecorderBackend<'a, S, H>
-where
-	H::Out: Ord,
 {
 	type Overlay = S::Overlay;
 
@@ -247,9 +247,8 @@ where
 	}
 }
 
-impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> std::fmt::Debug for ProvingBackend<'a, S, H>
-where
-	H::Out: Ord,
+impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> std::fmt::Debug
+	for ProvingBackend<'a, S, H>
 {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(f, "ProvingBackend")
