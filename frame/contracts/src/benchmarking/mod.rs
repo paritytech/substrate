@@ -457,10 +457,10 @@ benchmarks! {
 			}],
 			call_body: Some(body::repeated_dyn(r * API_BENCHMARK_BATCH_SIZE, vec![
 				Counter(0, account_len as u32),    // address_ptr
-				Regular(Instruction::I32Const(4)), // ptr where to store output
+(Instruction::I32Const(4)), // ptr where to store output
 				Regular(Instruction::I32Const(0)), // ptr to length
 				Regular(Instruction::Call(0)),
-				Regular(Instruction::Drop),  
+				Regular(Instruction::Drop),
 			])),
 			.. Default::default()
 		});
