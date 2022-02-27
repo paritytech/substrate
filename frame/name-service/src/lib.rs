@@ -36,7 +36,7 @@ pub mod pallet {
 	};
 	use sp_runtime::traits::{AtLeast32Bit, Saturating};
 
-	use codec::Codec;
+	use codec::{Codec, MaxEncodedLen};
 
 	// The struct on which we build all of our Pallet logic.
 	#[pallet::pallet]
