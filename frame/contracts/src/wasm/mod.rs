@@ -2393,7 +2393,7 @@ mod tests {
 
 	(func (export "call")
 		;; fill the buffer with the code hash.
-		(call $seal_code_hash 
+		(call $seal_code_hash
 			(i32.const 0) ;; input: address_ptr (before call)
 			(i32.const 0) ;; output: code_hash_ptr (after call)
 			(i32.const 32) ;; same 32 bytes length for input and output
@@ -2445,8 +2445,8 @@ mod tests {
 	)
 
 	(func (export "call")
-		;; fill the buffer with the code hash.
-		(call $seal_own_code_hash 
+		;; fill the buffer with the code hash
+		(call $seal_own_code_hash
 			(i32.const 0)  ;; output: code_hash_ptr
 			(i32.const 32) ;; 32 bytes length of code_hash output
 		)
