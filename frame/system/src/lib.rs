@@ -1272,6 +1272,22 @@ impl<T: Config> Pallet<T> {
 	/// Remove temporary "environment" entries in storage, compute the storage root and return the
 	/// resulting header for this block.
 	pub fn finalize() -> T::Header {
+		log::debug!(
+			target: "runtime::system",
+			"[{:?}] length: {} (normal {:?}, op: {:?}, mandatory {:?}) / normal weight: {} ({:?}) / op weight {} ({:?}) / mandatory weight {} ({:?})",
+			Self::block_number(),
+			Self::all_extrinsics_len(),
+			sp_runtime::Percent::from_rational(Self::all_extrinsics_len(), *T::BlockLength::get().max.get(DispatchClass::Normal)),
+			sp_runtime::Percent::from_rational(Self::all_extrinsics_len(), *T::BlockLength::get().max.get(DispatchClass::Operational)),
+			sp_runtime::Percent::from_rational(Self::all_extrinsics_len(), *T::BlockLength::get().max.get(DispatchClass::Mandatory)),
+			Self::block_weight().get(DispatchClass::Normal),
+			T::BlockWeights::get().get(DispatchClass::Normal),
+			Self::block_weight().get(DispatchClass::Operational),
+			T::BlockWeights::get().get(DispatchClass::Operational),
+			Self::block_weight().get(DispatchClass::Mandatory),
+			T::BlockWeights::get().get(DispatchClass::Mandatory),
+		);
+
 		ExecutionPhase::<T>::kill();
 		AllExtrinsicsLen::<T>::kill();
 
