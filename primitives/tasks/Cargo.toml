@@ -22,7 +22,7 @@ sp-runtime-interface = { version = "5.0.0", default-features = false, path = "..
 sp-std = { version = "4.0.0", default-features = false, path = "../std" }
 
 [dev-dependencies]
-codec = { package = "parity-scale-codec", default-features = false, version = "2.0.0" }
+codec = { package = "parity-scale-codec", default-features = false, version = "3.0.0" }
 
 [features]
 default = ["std"]

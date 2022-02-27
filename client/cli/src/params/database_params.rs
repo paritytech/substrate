@@ -21,7 +21,7 @@ use clap::Args;
 use sc_service::TransactionStorageMode;
 
 /// Parameters for block import.
-#[derive(Debug, Clone, Args)]
+#[derive(Debug, Clone, PartialEq, Args)]
 pub struct DatabaseParams {
 	/// Select database backend to use.
 	#[clap(

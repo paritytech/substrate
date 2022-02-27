@@ -32,15 +32,14 @@ pub use aux_schema::{check_equivocation, MAX_SLOT_CAPACITY, PRUNING_BOUND};
 pub use slots::SlotInfo;
 use slots::Slots;
 
-use codec::{Decode, Encode};
 use futures::{future::Either, Future, TryFutureExt};
 use futures_timer::Delay;
-use log::{debug, error, info, warn};
+use log::{debug, info, warn};
 use sc_consensus::{BlockImport, JustificationSyncLink};
 use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG, CONSENSUS_INFO, CONSENSUS_WARN};
 use sp_arithmetic::traits::BaseArithmetic;
-use sp_consensus::{CanAuthorWith, Proposer, SelectChain, SlotData, SyncOracle};
-use sp_consensus_slots::Slot;
+use sp_consensus::{CanAuthorWith, Proposer, SelectChain, SyncOracle};
+use sp_consensus_slots::{Slot, SlotDuration};
 use sp_inherents::CreateInherentDataProviders;
 use sp_runtime::{
 	generic::BlockId,
@@ -459,8 +458,8 @@ impl_inherent_data_provider_ext_tuple!(T, S, A, B, C, D, E, F, G, H, I, J);
 ///
 /// Every time a new slot is triggered, `worker.on_slot` is called and the future it returns is
 /// polled until completion, unless we are major syncing.
-pub async fn start_slot_worker<B, C, W, T, SO, CIDP, CAW, Proof>(
-	slot_duration: SlotDuration<T>,
+pub async fn start_slot_worker<B, C, W, SO, CIDP, CAW, Proof>(
+	slot_duration: SlotDuration,
 	client: C,
 	mut worker: W,
 	mut sync_oracle: SO,
@@ -471,15 +470,11 @@ pub async fn start_slot_worker<B, C, W, T, SO, CIDP, CAW, Proof>(
 	C: SelectChain<B>,
 	W: SlotWorker<B, Proof>,
 	SO: SyncOracle + Send,
-	T: SlotData + Clone,
 	CIDP: CreateInherentDataProviders<B, ()> + Send,
 	CIDP::InherentDataProviders: InherentDataProviderExt + Send,
 	CAW: CanAuthorWith<B> + Send,
 {
-	let SlotDuration(slot_duration) = slot_duration;
-
-	let mut slots =
-		Slots::new(slot_duration.slot_duration(), create_inherent_data_providers, client);
+	let mut slots = Slots::new(slot_duration.as_duration(), create_inherent_data_providers, client);
 
 	loop {
 		let slot_info = match slots.next_slot().await {
@@ -521,45 +516,6 @@ pub enum CheckedHeader<H, S> {
 	///
 	/// Includes the digest item that encoded the seal.
 	Checked(H, S),
-}
-
-#[derive(Debug, thiserror::Error)]
-#[allow(missing_docs)]
-pub enum Error<T>
-where
-	T: Debug,
-{
-	#[error("Slot duration is invalid: {0:?}")]
-	SlotDurationInvalid(SlotDuration<T>),
-}
-
-/// A slot duration. Create with [`Self::new`].
-#[derive(Clone, Copy, Debug, Encode, Decode, Hash, PartialOrd, Ord, PartialEq, Eq)]
-pub struct SlotDuration<T>(T);
-
-impl<T> Deref for SlotDuration<T> {
-	type Target = T;
-	fn deref(&self) -> &T {
-		&self.0
-	}
-}
-
-impl<T: SlotData> SlotData for SlotDuration<T> {
-	fn slot_duration(&self) -> std::time::Duration {
-		self.0.slot_duration()
-	}
-}
-
-impl<T: Clone + Send + Sync + 'static> SlotDuration<T> {
-	/// Create a new instance of `Self`.
-	pub fn new(val: T) -> Self {
-		Self(val)
-	}
-
-	/// Returns slot data value.
-	pub fn get(&self) -> T {
-		self.0.clone()
-	}
 }
 
 /// A unit type wrapper to express the proportion of a slot.
