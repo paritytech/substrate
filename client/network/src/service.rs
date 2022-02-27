@@ -2108,10 +2108,6 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 				.peerset_num_discovered
 				.set(this.network_service.behaviour_mut().user_protocol().num_discovered_peers()
 					as u64);
-			metrics.peerset_num_requested.set(
-				this.network_service.behaviour_mut().user_protocol().requested_peers().count()
-					as u64,
-			);
 			metrics.pending_connections.set(
 				Swarm::network_info(&this.network_service).connection_counters().num_pending()
 					as u64,

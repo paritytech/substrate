@@ -14,7 +14,7 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "2.0.0", features = [
+codec = { package = "parity-scale-codec", version = "3.0.0", features = [
     "derive",
 ] }
 sp-consensus-babe = { version = "0.10.0-dev", path = "../../../primitives/consensus/babe" }
@@ -44,7 +44,7 @@ sp-runtime = { version = "5.0.0", path = "../../../primitives/runtime" }
 fork-tree = { version = "3.0.0", path = "../../../utils/fork-tree" }
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../../utils/prometheus", version = "0.10.0-dev" }
 futures = "0.3.9"
-parking_lot = "0.11.2"
+parking_lot = "0.12.0"
 log = "0.4.8"
 schnorrkel = { version = "0.9.1", features = ["preaudit_deprecated"] }
 rand = "0.7.2"

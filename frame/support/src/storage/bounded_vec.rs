@@ -119,7 +119,7 @@ impl<T, S> BoundedVec<T, S> {
 		self.0
 	}
 
-	/// Exactly the same semantics as [`Vec::sort_by`].
+	/// Exactly the same semantics as [`slice::sort_by`].
 	///
 	/// This is safe since sorting cannot change the number of elements in the vector.
 	pub fn sort_by<F>(&mut self, compare: F)
@@ -129,14 +129,7 @@ impl<T, S> BoundedVec<T, S> {
 		self.0.sort_by(compare)
 	}
 
-	/// Exactly the same semantics as [`Vec::pop`].
-	///
-	/// This is safe since popping can only shrink the inner vector.
-	pub fn pop(&mut self) -> Option<T> {
-		self.0.pop()
-	}
-
-	/// Exactly the same semantics as [`Vec::remove`].
+	/// Exactly the same semantics as `Vec::remove`.
 	///
 	/// # Panics
 	///
@@ -145,7 +138,7 @@ impl<T, S> BoundedVec<T, S> {
 		self.0.remove(index)
 	}
 
-	/// Exactly the same semantics as [`Vec::swap_remove`].
+	/// Exactly the same semantics as `slice::swap_remove`.
 	///
 	/// # Panics
 	///
@@ -154,24 +147,36 @@ impl<T, S> BoundedVec<T, S> {
 		self.0.swap_remove(index)
 	}
 
-	/// Exactly the same semantics as [`Vec::retain`].
+	/// Exactly the same semantics as `Vec::retain`.
 	pub fn retain<F: FnMut(&T) -> bool>(&mut self, f: F) {
 		self.0.retain(f)
 	}
 
-	/// Exactly the same semantics as [`Vec::truncate`].
-	///
-	/// This is safe because `truncate` can never increase the length of the internal vector.
-	pub fn truncate(&mut self, len: usize) {
-		self.0.truncate(len)
-	}
-
-	/// Exactly the same semantics as [`slice::get_mut`].
+	/// Exactly the same semantics as `slice::get_mut`.
 	pub fn get_mut<I: SliceIndex<[T]>>(
 		&mut self,
 		index: I,
 	) -> Option<&mut <I as SliceIndex<[T]>>::Output> {
 		self.0.get_mut(index)
+	}
+
+	/// Exactly the same semantics as `Vec::truncate`.
+	///
+	/// This is safe because `truncate` can never increase the length of the internal vector.
+	pub fn truncate(&mut self, s: usize) {
+		self.0.truncate(s);
+	}
+
+	/// Exactly the same semantics as `Vec::pop`.
+	///
+	/// This is safe since popping can only shrink the inner vector.
+	pub fn pop(&mut self) -> Option<T> {
+		self.0.pop()
+	}
+
+	/// Exactly the same semantics as [`slice::iter_mut`].
+	pub fn iter_mut(&mut self) -> core::slice::IterMut<'_, T> {
+		self.0.iter_mut()
 	}
 }
 
@@ -200,6 +205,11 @@ impl<T, S: Get<u32>> BoundedVec<T, S> {
 		S::get() as usize
 	}
 
+	/// Returns true of this collection is full.
+	pub fn is_full(&self) -> bool {
+		self.len() >= Self::bound()
+	}
+
 	/// Forces the insertion of `element` into `self` retaining all items with index at least
 	/// `index`.
 	///
@@ -210,10 +220,11 @@ impl<T, S: Get<u32>> BoundedVec<T, S> {
 	/// Returns `Ok(maybe_removed)` if the item was inserted, where `maybe_removed` is
 	/// `Some(removed)` if an item was removed to make room for the new one. Returns `Err(())` if
 	/// `element` cannot be inserted.
-	pub fn force_insert_keep_right(&mut self, index: usize, element: T) -> Result<Option<T>, ()>
-	where
-		T: Clone,
-	{
+	pub fn force_insert_keep_right(
+		&mut self,
+		index: usize,
+		mut element: T,
+	) -> Result<Option<T>, ()> {
 		// Check against panics.
 		if Self::bound() < index || self.len() < index {
 			Err(())
@@ -225,12 +236,11 @@ impl<T, S: Get<u32>> BoundedVec<T, S> {
 			if index == 0 {
 				return Err(())
 			}
-			let removed = self[0].clone();
-			self[0] = element;
+			sp_std::mem::swap(&mut self[0], &mut element);
 			// `[0..index] cannot panic since self.len() >= index.
 			// `rotate_left(1)` cannot panic because there is at least 1 element.
 			self[0..index].rotate_left(1);
-			Ok(Some(removed))
+			Ok(Some(element))
 		}
 	}
 
@@ -244,10 +254,7 @@ impl<T, S: Get<u32>> BoundedVec<T, S> {
 	/// Returns `Ok(maybe_removed)` if the item was inserted, where `maybe_removed` is
 	/// `Some(removed)` if an item was removed to make room for the new one. Returns `Err(())` if
 	/// `element` cannot be inserted.
-	pub fn force_insert_keep_left(&mut self, index: usize, element: T) -> Result<Option<T>, ()>
-	where
-		T: Clone,
-	{
+	pub fn force_insert_keep_left(&mut self, index: usize, element: T) -> Result<Option<T>, ()> {
 		// Check against panics.
 		if Self::bound() < index || self.len() < index || Self::bound() == 0 {
 			return Err(())
@@ -256,10 +263,15 @@ impl<T, S: Get<u32>> BoundedVec<T, S> {
 		if Self::bound() == index && self.len() <= Self::bound() {
 			return Err(())
 		}
-		// if we truncate anything, it will be this one.
-		let maybe_removed = self.0.get(Self::bound() - 1).cloned();
-		// Cannot panic since `Self.bound() > 0`
-		self.0.truncate(Self::bound() - 1);
+		let maybe_removed = if self.is_full() {
+			// defensive-only: since we are at capacity, this is a noop.
+			self.0.truncate(Self::bound());
+			// if we truncate anything, it will be the last one.
+			self.0.pop()
+		} else {
+			None
+		};
+
 		// Cannot panic since `self.len() >= index`;
 		self.0.insert(index, element);
 		Ok(maybe_removed)
