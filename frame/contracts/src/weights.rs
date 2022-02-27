@@ -57,6 +57,7 @@ pub trait WeightInfo {
 	fn seal_caller(r: u32, ) -> Weight;
 	fn seal_is_contract(r: u32, ) -> Weight;
 	fn seal_code_hash(r: u32, ) -> Weight;
+	fn seal_own_code_hash(r: u32, ) -> Weight;
 	fn seal_caller_is_origin(r: u32, ) -> Weight;
 	fn seal_origin(r: u32, ) -> Weight;
 	fn seal_address(r: u32, ) -> Weight;
@@ -286,6 +287,18 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	fn seal_code_hash(r: u32, ) -> Weight {
+		(102_073_000 as Weight)
+			// Standard Error: 843_000
+			.saturating_add((369_025_000 as Weight).saturating_mul(r as Weight))
+			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
+			.saturating_add(RocksDbWeight::get().reads((100 as Weight).saturating_mul(r as Weight)))
+			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+	}
+	// Storage: System Account (r:1 w:0)
+	// Storage: Contracts ContractInfoOf (r:1 w:1)
+	// Storage: Contracts CodeStorage (r:1 w:0)
+	// Storage: Timestamp Now (r:1 w:0)
+	fn seal_own_code_hash(r: u32, ) -> Weight {
 		(102_073_000 as Weight)
 			// Standard Error: 843_000
 			.saturating_add((369_025_000 as Weight).saturating_mul(r as Weight))
@@ -1200,6 +1213,18 @@ impl WeightInfo for () {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	fn seal_code_hash(r: u32, ) -> Weight {
+		(102_073_000 as Weight)
+			// Standard Error: 843_000
+			.saturating_add((369_025_000 as Weight).saturating_mul(r as Weight))
+			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
+			.saturating_add(RocksDbWeight::get().reads((100 as Weight).saturating_mul(r as Weight)))
+			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+	}
+	// Storage: System Account (r:1 w:0)
+	// Storage: Contracts ContractInfoOf (r:1 w:1)
+	// Storage: Contracts CodeStorage (r:1 w:0)
+	// Storage: Timestamp Now (r:1 w:0)
+	fn seal_own_code_hash(r: u32, ) -> Weight {
 		(102_073_000 as Weight)
 			// Standard Error: 843_000
 			.saturating_add((369_025_000 as Weight).saturating_mul(r as Weight))

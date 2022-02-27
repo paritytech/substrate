@@ -148,6 +148,8 @@ pub enum RuntimeCosts {
 	/// Weight of calling `seal_code_hash`.
 	#[cfg(feature = "unstable-interface")]
 	CodeHash,
+	#[cfg(feature = "unstable-interface")]
+	OwnCodeHash,
 	/// Weight of calling `seal_caller_is_origin`.
 	#[cfg(feature = "unstable-interface")]
 	CallerIsOrigin,
@@ -246,6 +248,8 @@ impl RuntimeCosts {
 			IsContract => s.is_contract,
 			#[cfg(feature = "unstable-interface")]
 			CodeHash => s.code_hash,
+			#[cfg(feature = "unstable-interface")]
+			OwnCodeHash => s.own_code_hash,
 			#[cfg(feature = "unstable-interface")]
 			CallerIsOrigin => s.caller_is_origin,
 			#[cfg(feature = "unstable-interface")]
@@ -1413,6 +1417,19 @@ define_env!(Env, <E: Ext>,
 		} else {
 			Ok(ReturnCode::KeyNotFound)
 		}
+	},
+
+	// Retrieve own code hash for current contract
+	//
+	// # Parameters
+	//
+	// - `out_ptr`: pointer to the linear memory where the returning value is written to.
+	// - `out_len_ptr`: in-out pointer into linear memory where the buffer length
+	//   is read from and the value length is written to.
+	[__unstable__] seal_own_code_hash(ctx, out_ptr: u32, out_len_ptr: u32) => {
+		ctx.charge_gas(RuntimeCosts::OwnCodeHash)?;
+		let code_hash_encoded = &ctx.ext.own_code_hash().encode();
+		Ok(ctx.write_sandbox_output(out_ptr, out_len_ptr, code_hash_encoded, false, already_charged)?)
 	},
 
 	// Checks whether the caller of the current contract is the origin of the whole call stack.
