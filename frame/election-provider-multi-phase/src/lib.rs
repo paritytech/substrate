@@ -1105,6 +1105,7 @@ pub mod pallet {
 
 	/// Error of the pallet that can be returned in response to dispatches.
 	#[pallet::error]
+	#[derive(PartialEq)]
 	pub enum Error<T> {
 		/// Submission was too early.
 		PreDispatchEarlySubmission,
@@ -1148,7 +1149,7 @@ pub mod pallet {
 						log!(debug, "unsigned transaction validation failed due to {:?}", err);
 						err
 					})
-					.map_err(dispatch_error_to_invalid)?;
+					.map_err(|e| dispatch_error_to_invalid(e.into()))?;
 
 				ValidTransaction::with_tag_prefix("OffchainElection")
 					// The higher the score.minimal_stake, the better a solution is.
@@ -1172,6 +1173,7 @@ pub mod pallet {
 		fn pre_dispatch(call: &Self::Call) -> Result<(), TransactionValidityError> {
 			if let Call::submit_unsigned { raw_solution, .. } = call {
 				Self::unsigned_pre_dispatch_checks(raw_solution)
+					.map_err(Into::into)
 					.map_err(dispatch_error_to_invalid)
 					.map_err(Into::into)
 			} else {
@@ -1287,13 +1289,11 @@ impl<T: Config> Pallet<T> {
 		log!(trace, "lock for offchain worker acquired. Phase = {:?}", current_phase);
 		match current_phase {
 			Phase::Unsigned((true, opened)) if opened == now => {
+				// Any cache is now invalid. Clear it.
+				unsigned::kill_ocw_solution::<T>();
 				// Mine a new solution, cache it, and attempt to submit it
-				let initial_output = Self::ensure_offchain_repeat_frequency(now).and_then(|_| {
-					// This is executed at the beginning of each round. Any cache is now invalid.
-					// Clear it.
-					unsigned::kill_ocw_solution::<T>();
-					Self::mine_check_save_submit()
-				});
+				let initial_output = Self::ensure_offchain_repeat_frequency(now)
+					.and_then(|_| Self::mine_check_save_submit());
 				log!(debug, "initial offchain thread output: {:?}", initial_output);
 			},
 			Phase::Unsigned((true, opened)) if opened < now => {

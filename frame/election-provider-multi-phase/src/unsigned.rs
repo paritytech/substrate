@@ -70,7 +70,7 @@ pub enum MinerError<T: Config> {
 	/// Submitting a transaction to the pool failed.
 	PoolSubmissionFailed,
 	/// The pre-dispatch checks failed for the mined solution.
-	PreDispatchChecksFailed(DispatchError),
+	PreDispatchChecksFailed(crate::Error<T>),
 	/// The solution generated from the miner is not feasible.
 	Feasibility(FeasibilityError),
 	/// Something went wrong fetching the lock.
@@ -177,16 +177,16 @@ impl<T: Config> Pallet<T> {
 						save_solution(&call)?;
 						Ok(call)
 					},
-					MinerError::Feasibility(_) => {
-						log!(trace, "wiping infeasible solution.");
-						// kill the infeasible solution, hopefully in the next runs (whenever they
-						// may be) we mine a new one.
-						kill_ocw_solution::<T>();
-						clear_offchain_repeat_frequency();
+					MinerError::PreDispatchChecksFailed(Error::<T>::PreDispatchWeakSubmission) => {
+						// in the common case of a stronger solution being already stored onchain,
+						// do nothing.
 						Err(error)
 					},
 					_ => {
-						// nothing to do. Return the error as-is.
+						// any other error should cause the OCW cache to be cleared.
+						log!(debug, "wiping infeasible solution .");
+						kill_ocw_solution::<T>();
+						clear_offchain_repeat_frequency();
 						Err(error)
 					},
 				}
@@ -609,7 +609,7 @@ impl<T: Config> Pallet<T> {
 	/// code, so that we do less and less storage reads here.
 	pub fn unsigned_pre_dispatch_checks(
 		raw_solution: &RawSolution<SolutionOf<T>>,
-	) -> DispatchResult {
+	) -> Result<(), Error<T>> {
 		// ensure solution is timely. Don't panic yet. This is a cheap check.
 		ensure!(Self::current_phase().is_unsigned_open(), Error::<T>::PreDispatchEarlySubmission);
 
@@ -931,10 +931,10 @@ mod tests {
 	}
 
 	#[test]
-	#[should_panic(expected = "Invalid unsigned submission must produce invalid block and \
-	                           deprive validator from their authoring reward.: \
-	                           Module(ModuleError { index: 2, error: 1, message: \
-	                           Some(\"PreDispatchWrongWinnerCount\") })")]
+	#[should_panic(
+		expected = "Invalid unsigned submission must produce invalid block and deprive validator \
+					from their authoring reward.: PreDispatchWrongWinnerCount"
+	)]
 	fn unfeasible_solution_panics() {
 		ExtBuilder::default().build_and_execute(|| {
 			roll_to(25);
@@ -1048,11 +1048,7 @@ mod tests {
 
 			assert_eq!(
 				MultiPhase::mine_check_save_submit().unwrap_err(),
-				MinerError::PreDispatchChecksFailed(DispatchError::Module(ModuleError {
-					index: 2,
-					error: 1,
-					message: Some("PreDispatchWrongWinnerCount"),
-				})),
+				MinerError::PreDispatchChecksFailed(Error::<Runtime>::PreDispatchWrongWinnerCount),
 			);
 		})
 	}
