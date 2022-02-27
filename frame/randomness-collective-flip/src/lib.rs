@@ -187,7 +187,7 @@ mod tests {
 	);
 
 	parameter_types! {
-		pub BlockWeights: limits::BlockWeights = limits::BlockWeights::simple_max(WeightV2 {
+		pub BlockWeights: limits::BlockWeights = limits::BlockWeights::simple_max(frame_support::weights::WeightV2 {
 			computation: 1024,
 			bandwidth: 1024,
 		});

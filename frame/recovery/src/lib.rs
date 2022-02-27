@@ -371,12 +371,13 @@ pub mod pallet {
 		/// - One storage lookup to check account is recovered by `who`. O(1)
 		/// # </weight>
 		#[pallet::weight({
-			let dispatch_info = call.get_dispatch_info();
+			let mut dispatch_info = call.get_dispatch_info();
+			dispatch_info.weight.computation = dispatch_info.weight.computation
+				.saturating_add(10_000)
+				// AccountData for inner call origin accountdata.
+				.saturating_add(T::DbWeight::get().reads_writes(1, 1));
 			(
-				dispatch_info.weight
-					.saturating_add(10_000)
-					// AccountData for inner call origin accountdata.
-					.saturating_add(T::DbWeight::get().reads_writes(1, 1)),
+				dispatch_info.weight,
 				dispatch_info.class,
 			)
 		})]
