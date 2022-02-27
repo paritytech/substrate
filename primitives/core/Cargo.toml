@@ -54,8 +54,9 @@ schnorrkel = { version = "0.9.1", features = [
 	"u64_backend",
 ], default-features = false, optional = true }
 hex = { version = "0.4", default-features = false, optional = true }
-libsecp256k1 = { version = "0.7", default-features = false, features = ["hmac", "static-context"], optional = true }
+libsecp256k1 = { version = "0.7", default-features = false, features = ["static-context"], optional = true }
 merlin = { version = "2.0", default-features = false, optional = true }
+secp256k1 = { version = "0.21.2", default-features = false, features = ["recovery", "global-context"], optional = true }
 ss58-registry = { version = "1.11.0", default-features = false }
 sp-core-hashing = { version = "4.0.0", path = "./hashing", default-features = false, optional = true }
 sp-runtime-interface = { version = "5.0.0", default-features = false, path = "../runtime-interface" }
@@ -106,6 +107,7 @@ std = [
 	"schnorrkel/std",
 	"regex",
 	"num-traits/std",
+	"secp256k1/std",
 	"sp-core-hashing/std",
 	"sp-debug-derive/std",
 	"sp-externalities",
@@ -129,6 +131,7 @@ full_crypto = [
 	"schnorrkel",
 	"hex",
 	"libsecp256k1",
+	"secp256k1",
 	"sp-core-hashing",
 	"sp-runtime-interface/disable_target_static_assertions",
 	"merlin",
