@@ -1281,11 +1281,11 @@ impl<T: Config> Pallet<T> {
 			sp_runtime::Percent::from_rational(Self::all_extrinsics_len(), *T::BlockLength::get().max.get(DispatchClass::Operational)),
 			sp_runtime::Percent::from_rational(Self::all_extrinsics_len(), *T::BlockLength::get().max.get(DispatchClass::Mandatory)),
 			Self::block_weight().get(DispatchClass::Normal),
-			T::BlockWeights::get().get(DispatchClass::Normal),
+			sp_runtime::Percent::from_rational(*Self::block_weight().get(DispatchClass::Normal), T::BlockWeights::get().get(DispatchClass::Normal).max_total.unwrap_or(Bounded::max_value())),
 			Self::block_weight().get(DispatchClass::Operational),
-			T::BlockWeights::get().get(DispatchClass::Operational),
+			sp_runtime::Percent::from_rational(*Self::block_weight().get(DispatchClass::Operational), T::BlockWeights::get().get(DispatchClass::Operational).max_total.unwrap_or(Bounded::max_value())),
 			Self::block_weight().get(DispatchClass::Mandatory),
-			T::BlockWeights::get().get(DispatchClass::Mandatory),
+			sp_runtime::Percent::from_rational(*Self::block_weight().get(DispatchClass::Mandatory), T::BlockWeights::get().get(DispatchClass::Mandatory).max_total.unwrap_or(Bounded::max_value())),
 		);
 
 		ExecutionPhase::<T>::kill();
