@@ -14,9 +14,9 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 serde = { version = "1.0.136", optional = true, features = ["derive"] }
-codec = { package = "parity-scale-codec", version = "2.2.0", default-features = false, features = ["derive", "max-encoded-len"] }
-scale-info = { version = "1.0", default-features = false, features = ["derive"] }
-frame-metadata = { version = "14.2.0", default-features = false, features = ["v14"] }
+codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive", "max-encoded-len"] }
+scale-info = { version = "2.0.0", default-features = false, features = ["derive"] }
+frame-metadata = { version = "15.0.0", default-features = false, features = ["v14"] }
 sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
 sp-io = { version = "5.0.0", default-features = false, path = "../../primitives/io" }
 sp-runtime = { version = "5.0.0", default-features = false, path = "../../primitives/runtime" }
@@ -40,7 +40,7 @@ sp-core-hashing-proc-macro = { version = "4.0.0-dev", path = "../../primitives/c
 assert_matches = "1.3.0"
 pretty_assertions = "1.0.0"
 frame-system = { version = "4.0.0-dev", path = "../system" }
-parity-util-mem = { version = "0.10.2", default-features = false, features = ["primitive-types"] }
+parity-util-mem = { version = "0.11.0", default-features = false, features = ["primitive-types"] }
 
 [features]
 default = ["std"]
