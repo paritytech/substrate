@@ -13,6 +13,7 @@ futures = "0.3"
 log = "0.4"
 parking_lot = "0.12.0"
 thiserror = "1.0"
+tokio = { version = "1.15", features = ["time"] }
 wasm-timer = "0.2.5"
 
 codec = { version = "3.0.0", package = "parity-scale-codec", features = ["derive"] }
@@ -22,6 +23,7 @@ sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
 sp-application-crypto = { version = "5.0.0", path = "../../primitives/application-crypto" }
 sp-arithmetic = { version = "4.0.0", path = "../../primitives/arithmetic" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
+sp-consensus = { version = "0.10.0-dev", path = "../../primitives/consensus/common" }
 sp-core = { version = "5.0.0", path = "../../primitives/core" }
 sp-keystore = { version = "0.11.0", path = "../../primitives/keystore" }
 sp-runtime = { version = "5.0.0", path = "../../primitives/runtime" }

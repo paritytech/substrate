@@ -26,6 +26,7 @@ use sc_network_gossip::{GossipEngine, Network as GossipNetwork};
 
 use sp_api::ProvideRuntimeApi;
 use sp_blockchain::HeaderBackend;
+use sp_consensus::SyncOracle;
 use sp_keystore::SyncCryptoStorePtr;
 use sp_runtime::traits::Block;
 
@@ -112,7 +113,7 @@ where
 	BE: Backend<B>,
 	C: Client<B, BE>,
 	C::Api: BeefyApi<B>,
-	N: GossipNetwork<B> + Clone + Send + 'static,
+	N: GossipNetwork<B> + Clone + SyncOracle + Send + Sync + 'static,
 {
 	/// BEEFY client
 	pub client: Arc<C>,
@@ -143,7 +144,7 @@ where
 	BE: Backend<B>,
 	C: Client<B, BE>,
 	C::Api: BeefyApi<B>,
-	N: GossipNetwork<B> + Clone + Send + 'static,
+	N: GossipNetwork<B> + Clone + SyncOracle + Send + Sync + 'static,
 {
 	let BeefyParams {
 		client,
@@ -157,6 +158,7 @@ where
 		protocol_name,
 	} = beefy_params;
 
+	let sync_oracle = network.clone();
 	let gossip_validator = Arc::new(gossip::GossipValidator::new());
 	let gossip_engine = GossipEngine::new(network, protocol_name, gossip_validator.clone(), None);
 
@@ -184,9 +186,10 @@ where
 		gossip_validator,
 		min_block_delta,
 		metrics,
+		sync_oracle,
 	};
 
-	let worker = worker::BeefyWorker::<_, _, _>::new(worker_params);
+	let worker = worker::BeefyWorker::<_, _, _, _>::new(worker_params);
 
 	worker.run().await
 }

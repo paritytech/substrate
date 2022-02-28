@@ -498,6 +498,7 @@ dependencies = [
  "sp-application-crypto",
  "sp-arithmetic",
  "sp-blockchain",
+ "sp-consensus",
  "sp-core",
  "sp-keystore",
  "sp-runtime",
@@ -505,6 +506,7 @@ dependencies = [
  "strum",
  "substrate-prometheus-endpoint",
  "thiserror",
+ "tokio",
  "wasm-timer",
 ]
 

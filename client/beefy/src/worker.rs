@@ -28,6 +28,7 @@ use sc_network_gossip::GossipEngine;
 
 use sp_api::BlockId;
 use sp_arithmetic::traits::AtLeast32Bit;
+use sp_consensus::SyncOracle;
 use sp_runtime::{
 	generic::OpaqueDigestItemId,
 	traits::{Block, Header, NumberFor},
@@ -50,7 +51,7 @@ use crate::{
 	round, Client,
 };
 
-pub(crate) struct WorkerParams<B, BE, C>
+pub(crate) struct WorkerParams<B, BE, C, SO>
 where
 	B: Block,
 {
@@ -63,14 +64,16 @@ where
 	pub gossip_validator: Arc<GossipValidator<B>>,
 	pub min_block_delta: u32,
 	pub metrics: Option<Metrics>,
+	pub sync_oracle: SO,
 }
 
 /// A BEEFY worker plays the BEEFY protocol
-pub(crate) struct BeefyWorker<B, C, BE>
+pub(crate) struct BeefyWorker<B, C, BE, SO>
 where
 	B: Block,
 	BE: Backend<B>,
 	C: Client<B, BE>,
+	SO: SyncOracle + Send + Sync + Clone + 'static,
 {
 	client: Arc<C>,
 	backend: Arc<BE>,
@@ -91,16 +94,19 @@ where
 	beefy_best_block_sender: BeefyBestBlockSender<B>,
 	/// Validator set id for the last signed commitment
 	last_signed_id: u64,
+	/// Handle to the sync oracle
+	sync_oracle: SO,
 	// keep rustc happy
 	_backend: PhantomData<BE>,
 }
 
-impl<B, C, BE> BeefyWorker<B, C, BE>
+impl<B, C, BE, SO> BeefyWorker<B, C, BE, SO>
 where
 	B: Block + Codec,
 	BE: Backend<B>,
 	C: Client<B, BE>,
 	C::Api: BeefyApi<B>,
+	SO: SyncOracle + Send + Sync + Clone + 'static,
 {
 	/// Return a new BEEFY worker instance.
 	///
@@ -108,7 +114,7 @@ where
 	/// BEEFY pallet has been deployed on-chain.
 	///
 	/// The BEEFY pallet is needed in order to keep track of the BEEFY authority set.
-	pub(crate) fn new(worker_params: WorkerParams<B, BE, C>) -> Self {
+	pub(crate) fn new(worker_params: WorkerParams<B, BE, C, SO>) -> Self {
 		let WorkerParams {
 			client,
 			backend,
@@ -119,6 +125,7 @@ where
 			gossip_validator,
 			min_block_delta,
 			metrics,
+			sync_oracle,
 		} = worker_params;
 
 		let last_finalized_header = client
@@ -141,17 +148,19 @@ where
 			best_beefy_block: None,
 			last_signed_id: 0,
 			beefy_best_block_sender,
+			sync_oracle,
 			_backend: PhantomData,
 		}
 	}
 }
 
-impl<B, C, BE> BeefyWorker<B, C, BE>
+impl<B, C, BE, SO> BeefyWorker<B, C, BE, SO>
 where
 	B: Block,
 	BE: Backend<B>,
 	C: Client<B, BE>,
 	C::Api: BeefyApi<B>,
+	SO: SyncOracle + Send + Sync + Clone + 'static,
 {
 	/// Return `Some(number)` if we should be voting on block `number` now,
 	/// return `None` if there is no block we should vote on now.
@@ -263,7 +272,7 @@ where
 
 		// On start-up ignore old finality notifications that we're not interested in.
 		if number <= *self.best_grandpa_block_header.number() {
-			debug!(target: "beefy", "🥩 ignoring finality for old block #{:?}", number);
+			debug!(target: "beefy", "🥩 Got unexpected finality for old block #{:?}", number);
 			return
 		}
 
@@ -429,9 +438,6 @@ where
 		// further TODO: when pallet does become available we can run BEEFY initial sync (catch-up)
 		// logic then start this part of the worker that will just work as it does now.
 
-		// TODO: wait for major-sync before doing all of the following (also check for major sync
-		// in the main loop).
-
 		info!(target: "beefy", "🥩 run BEEFY worker, best grandpa: #{:?}.", self.best_grandpa_block_header.number());
 		let at = BlockId::hash(self.best_grandpa_block_header.hash());
 		if let Some(active) = self.client.runtime_api().validator_set(&at).ok().flatten() {
@@ -463,6 +469,11 @@ where
 		));
 
 		loop {
+			while self.sync_oracle.is_major_syncing() {
+				debug!(target: "beefy", "Waiting for major sync to complete.");
+				tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+			}
+
 			let engine = self.gossip_engine.clone();
 			let gossip_engine = future::poll_fn(|cx| engine.lock().poll_unpin(cx));
 
