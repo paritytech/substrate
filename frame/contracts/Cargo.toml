@@ -55,7 +55,7 @@ pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 pallet-timestamp = { version = "4.0.0-dev", path = "../timestamp" }
 pallet-randomness-collective-flip = { version = "4.0.0-dev", path = "../randomness-collective-flip" }
 pallet-utility = { version = "4.0.0-dev", path = "../utility" }
-sp-keystore = { version = "0.11.0", path = "../../primitives/keystore" }
+sp-keystore = { version = "0.12.0", path = "../../primitives/keystore" }
 
 [features]
 default = ["std"]

@@ -27,7 +27,7 @@ sp-state-machine = { version = "0.12.0", path = "../../../../primitives/state-ma
 sp-runtime = { version = "6.0.0", path = "../../../../primitives/runtime" }
 sp-core = { version = "6.0.0", path = "../../../../primitives/core" }
 sp-io = { version = "6.0.0", path = "../../../../primitives/io" }
-sp-keystore = { version = "0.11.0", path = "../../../../primitives/keystore" }
+sp-keystore = { version = "0.12.0", path = "../../../../primitives/keystore" }
 sp-externalities = { version = "0.12.0", path = "../../../../primitives/externalities" }
 sp-version = { version = "4.0.0-dev", path = "../../../../primitives/version" }
 
