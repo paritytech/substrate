@@ -9067,6 +9067,7 @@ dependencies = [
  "futures 0.3.16",
  "futures-timer",
  "lazy_static",
+ "log 0.4.14",
  "parking_lot 0.12.0",
  "prometheus",
  "tokio-test",
