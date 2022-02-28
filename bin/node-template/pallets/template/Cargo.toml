@@ -23,7 +23,7 @@ frame-benchmarking = { default-features = false, version = "4.0.0-dev", path = "
 
 [dev-dependencies]
 sp-core = { default-features = false, version = "6.0.0", path = "../../../../primitives/core" }
-sp-io = { default-features = false, version = "5.0.0", path = "../../../../primitives/io" }
+sp-io = { default-features = false, version = "6.0.0", path = "../../../../primitives/io" }
 sp-runtime = { default-features = false, version = "6.0.0", path = "../../../../primitives/runtime" }
 
 [features]

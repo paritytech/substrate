@@ -26,7 +26,7 @@ sp-offchain = { version = "4.0.0-dev", default-features = false, path = "../../p
 sp-core = { version = "6.0.0", default-features = false, path = "../../primitives/core" }
 sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
 sp-runtime-interface = { version = "6.0.0", default-features = false, path = "../../primitives/runtime-interface" }
-sp-io = { version = "5.0.0", default-features = false, path = "../../primitives/io" }
+sp-io = { version = "6.0.0", default-features = false, path = "../../primitives/io" }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../../frame/support" }
 sp-version = { version = "4.0.0-dev", default-features = false, path = "../../primitives/version" }
 sp-session = { version = "4.0.0-dev", default-features = false, path = "../../primitives/session" }

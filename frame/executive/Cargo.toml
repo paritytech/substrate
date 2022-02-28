@@ -22,13 +22,13 @@ frame-system = { version = "4.0.0-dev", default-features = false, path = "../sys
 sp-runtime = { version = "6.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-tracing = { version = "4.0.0", default-features = false, path = "../../primitives/tracing" }
 sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
-sp-io = { version = "5.0.0", default-features = false, path = "../../primitives/io" }
+sp-io = { version = "6.0.0", default-features = false, path = "../../primitives/io" }
 sp-core = { version = "6.0.0", default-features = false, path = "../../primitives/core" }
 
 [dev-dependencies]
 hex-literal = "0.3.4"
 sp-core = { version = "6.0.0", path = "../../primitives/core" }
-sp-io = { version = "5.0.0", path = "../../primitives/io" }
+sp-io = { version = "6.0.0", path = "../../primitives/io" }
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 pallet-transaction-payment = { version = "4.0.0-dev", path = "../transaction-payment" }
 sp-version = { version = "4.0.0-dev", path = "../../primitives/version" }
