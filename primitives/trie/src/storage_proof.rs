@@ -60,6 +60,11 @@ impl StorageProof {
 		self.trie_nodes.is_empty()
 	}
 
+    /// Returns `true` if the proof is equivalent to the other one.
+	pub fn compare(&self, other: &Self) -> bool {
+		self.trie_nodes == other.trie_nodes
+	}
+
 	/// Create an iterator over trie nodes constructed from the proof. The nodes are not guaranteed
 	/// to be traversed in any particular order.
 	pub fn iter_nodes(self) -> StorageProofNodeIterator {
