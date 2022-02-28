@@ -25,7 +25,6 @@ use crate as pallet_multisig;
 use frame_support::{
 	assert_noop, assert_ok, parameter_types,
 	traits::{ConstU16, ConstU32, ConstU64, Contains},
-	weights::WeightV2,
 };
 use sp_core::H256;
 use sp_runtime::{
