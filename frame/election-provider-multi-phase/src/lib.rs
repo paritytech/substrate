@@ -974,13 +974,6 @@ pub mod pallet {
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
-			// ensure witness data is correct.
-			ensure!(
-				T::SignedMaxSubmissions::get() >=
-					<SignedSubmissions<T>>::decode_len().unwrap_or_default() as u32,
-				Error::<T>::SignedInvalidWitness,
-			);
-
 			// ensure solution is timely.
 			ensure!(Self::current_phase().is_signed(), Error::<T>::PreDispatchEarlySubmission);
 
