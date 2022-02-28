@@ -18,7 +18,7 @@
 //! Tests for the module.
 
 use super::*;
-use frame_support::{assert_noop, assert_ok};
+use frame_support::{assert_noop, assert_ok, weights::WeightV2};
 use mock::{
 	new_test_ext, Call, Event as TestEvent, Logger, LoggerCall, Origin, Sudo, SudoCall, System,
 	Test,
@@ -83,7 +83,10 @@ fn sudo_unchecked_weight_basics() {
 		let call = Box::new(Call::Logger(LoggerCall::privileged_i32_log { i: 42, weight: 1 }));
 		let sudo_unchecked_weight_call = SudoCall::sudo_unchecked_weight { call, weight: 1_000 };
 		let info = sudo_unchecked_weight_call.get_dispatch_info();
-		assert_eq!(info.weight, 1_000);
+		assert_eq!(info.weight, WeightV2 {
+			computation: 1_000,
+			bandwidth: 0,
+		});
 	});
 }
 
