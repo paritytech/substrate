@@ -1,6 +1,6 @@
 [package]
 name = "sp-trie"
-version = "5.0.0"
+version = "6.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Patricia trie stuff using a parity-scale-codec node format"
 repository = "https://github.com/paritytech/substrate/"

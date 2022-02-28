@@ -102,7 +102,7 @@ sc-cli = { version = "0.10.0-dev", optional = true, path = "../../../client/cli"
 sc-service = { version = "0.10.0-dev", default-features = false, path = "../../../client/service", features = [
 	"wasmtime",
 ] }
-sp-trie = { version = "5.0.0", default-features = false, path = "../../../primitives/trie", features = [
+sp-trie = { version = "6.0.0", default-features = false, path = "../../../primitives/trie", features = [
 	"memory-tracker",
 ] }
 
