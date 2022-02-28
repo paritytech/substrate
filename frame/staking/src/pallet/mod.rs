@@ -39,10 +39,9 @@ mod impls;
 pub use impls::*;
 
 use crate::{
-	log, slashing, weights::WeightInfo, ActiveEraInfo, BalanceOf, EraPayout, EraRewardPoints,
-	Exposure, Forcing, NegativeImbalanceOf, Nominations, PositiveImbalanceOf, Releases,
-	RewardDestination, SessionInterface, StakingLedger, UnappliedSlash, UnlockChunk,
-	ValidatorPrefs,
+	slashing, weights::WeightInfo, ActiveEraInfo, BalanceOf, EraPayout, EraRewardPoints, Exposure,
+	Forcing, NegativeImbalanceOf, Nominations, PositiveImbalanceOf, Releases, RewardDestination,
+	SessionInterface, StakingLedger, UnappliedSlash, UnlockChunk, ValidatorPrefs,
 };
 
 pub const MAX_UNLOCKING_CHUNKS: usize = 32;
@@ -153,7 +152,8 @@ pub mod pallet {
 
 		/// Something that can provide a sorted list of voters in a somewhat sorted way. The
 		/// original use case for this was designed with `pallet_bags_list::Pallet` in mind. If
-		/// the bags-list is not desired, [`impls::UseNominatorsMap`] is likely the desired option.
+		/// the bags-list is not desired, [`impls::UseNominatorsAndValidatorsMap`] is likely the
+		/// desired option.
 		type SortedListProvider: SortedListProvider<Self::AccountId>;
 
 		/// Some parameters of the benchmarking.
@@ -534,7 +534,7 @@ pub mod pallet {
 			}
 
 			for &(ref stash, ref controller, balance, ref status) in &self.stakers {
-				log!(
+				crate::log!(
 					trace,
 					"inserting genesis staker: {:?} => {:?} => {:?}",
 					stash,
@@ -567,7 +567,7 @@ pub mod pallet {
 			// all voters are reported to the `SortedListProvider`.
 			assert_eq!(
 				T::SortedListProvider::count(),
-				Nominators::<T>::count(),
+				Nominators::<T>::count() + Validators::<T>::count(),
 				"not all genesis stakers were inserted into sorted list provider, something is wrong."
 			);
 		}

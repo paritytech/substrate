@@ -301,7 +301,7 @@ mod pallet;
 
 use codec::{Decode, Encode, HasCompact};
 use frame_support::{
-	traits::{ConstU32, Currency, Get},
+	traits::{Currency, Get},
 	weights::Weight,
 	BoundedVec, EqNoBound, PartialEqNoBound, RuntimeDebugNoBound,
 };
@@ -771,6 +771,7 @@ enum Releases {
 	V6_0_0, // removal of all storage associated with offchain phragmen.
 	V7_0_0, // keep track of number of nominators / validators in map
 	V8_0_0, // populate `SortedListProvider`.
+	V9_0_0, // inject validators into `SortedListProvider` as well.
 }
 
 impl Default for Releases {
@@ -851,6 +852,6 @@ pub struct TestBenchmarkingConfig;
 
 #[cfg(feature = "std")]
 impl BenchmarkingConfig for TestBenchmarkingConfig {
-	type MaxValidators = ConstU32<100>;
-	type MaxNominators = ConstU32<100>;
+	type MaxValidators = frame_support::traits::ConstU32<100>;
+	type MaxNominators = frame_support::traits::ConstU32<100>;
 }

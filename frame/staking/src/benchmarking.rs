@@ -332,24 +332,20 @@ benchmarks! {
 	}
 
 	validate {
-		// clean up any existing state.
-		clear_validators_and_nominators::<T>();
-
-		let origin_weight = MinNominatorBond::<T>::get().max(T::Currency::minimum_balance());
-
-		// setup a worst case scenario where the user calling validate was formerly a nominator so
-		// they must be removed from the list.
-		let scenario = ListScenario::<T>::new(origin_weight, true)?;
-		let controller = scenario.origin_controller1.clone();
-		let stash = scenario.origin_stash1.clone();
-		assert!(T::SortedListProvider::contains(&stash));
+		let (stash, controller) = create_stash_controller::<T>(
+			T::MaxNominations::get() - 1,
+			100,
+			Default::default(),
+		)?;
+		// because it is chilled.
+		assert!(!T::SortedListProvider::contains(&stash));
 
 		let prefs = ValidatorPrefs::default();
 		whitelist_account!(controller);
 	}: _(RawOrigin::Signed(controller), prefs)
 	verify {
 		assert!(Validators::<T>::contains_key(&stash));
-		assert!(!T::SortedListProvider::contains(&stash));
+		assert!(T::SortedListProvider::contains(&stash));
 	}
 
 	kick {
