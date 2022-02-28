@@ -37,7 +37,7 @@ rand = "0.7.2"
 sp-state-machine = { version = "0.12.0", path = "../state-machine" }
 sp-api = { version = "4.0.0-dev", path = "../api" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
-sp-tracing = { version = "4.0.0", path = "../../primitives/tracing" }
+sp-tracing = { version = "5.0.0", path = "../../primitives/tracing" }
 zstd = "0.9"
 
 [features]

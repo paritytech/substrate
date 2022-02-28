@@ -20,7 +20,7 @@ frame-metadata = { version = "15.0.0", default-features = false, features = ["v1
 sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
 sp-io = { version = "6.0.0", default-features = false, path = "../../primitives/io" }
 sp-runtime = { version = "6.0.0", default-features = false, path = "../../primitives/runtime" }
-sp-tracing = { version = "4.0.0", default-features = false, path = "../../primitives/tracing" }
+sp-tracing = { version = "5.0.0", default-features = false, path = "../../primitives/tracing" }
 sp-core = { version = "6.0.0", default-features = false, path = "../../primitives/core" }
 sp-arithmetic = { version = "4.0.0", default-features = false, path = "../../primitives/arithmetic" }
 sp-inherents = { version = "4.0.0-dev", default-features = false, path = "../../primitives/inherents" }

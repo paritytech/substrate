@@ -36,7 +36,7 @@ sc-network-gossip = { version = "0.10.0-dev", path = "../network-gossip" }
 beefy-primitives = { version = "4.0.0-dev", path = "../../primitives/beefy" }
 
 [dev-dependencies]
-sp-tracing = { version = "4.0.0", path = "../../primitives/tracing" }
+sp-tracing = { version = "5.0.0", path = "../../primitives/tracing" }
 sc-network-test = { version = "0.8.0", path = "../network/test" }
 
 strum = { version = "0.23", features = ["derive"] }

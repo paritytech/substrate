@@ -39,5 +39,5 @@ sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
 
 [dev-dependencies]
 quickcheck = "1.0.3"
-sp-tracing = { version = "4.0.0", path = "../../primitives/tracing" }
+sp-tracing = { version = "5.0.0", path = "../../primitives/tracing" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }

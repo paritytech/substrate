@@ -41,4 +41,4 @@ sc-block-builder = { version = "0.10.0-dev", path = "../../block-builder" }
 sc-executor = { version = "0.10.0-dev", path = "../../executor" }
 sp-panic-handler = { version = "4.0.0", path = "../../../primitives/panic-handler" }
 parity-scale-codec = "3.0.0"
-sp-tracing = { version = "4.0.0", path = "../../../primitives/tracing" }
+sp-tracing = { version = "5.0.0", path = "../../../primitives/tracing" }
