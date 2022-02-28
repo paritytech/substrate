@@ -28,7 +28,7 @@ sp-std = { version = "4.0.0", default-features = false, path = "../../primitives
 sp-core = { version = "6.0.0", default-features = false, path = "../../primitives/core" }
 sp-runtime = { version = "6.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-npos-elections = { version = "4.0.0-dev", default-features = false, path = "../../primitives/npos-elections" }
-sp-arithmetic = { version = "4.0.0", default-features = false, path = "../../primitives/arithmetic" }
+sp-arithmetic = { version = "5.0.0", default-features = false, path = "../../primitives/arithmetic" }
 frame-election-provider-support = { version = "4.0.0-dev", default-features = false, path = "../election-provider-support" }
 
 # Optional imports for benchmarking
