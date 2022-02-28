@@ -19,5 +19,5 @@ sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain"
 sp-runtime = { version = "5.0.0", path = "../../../primitives/runtime" }
 sc-transaction-pool = { version = "4.0.0-dev", path = "../../../client/transaction-pool" }
 sc-transaction-pool-api = { version = "4.0.0-dev", path = "../../../client/transaction-pool/api" }
-futures = "0.3.16"
+futures = "0.3.19"
 thiserror = "1.0"
