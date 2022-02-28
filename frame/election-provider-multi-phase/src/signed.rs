@@ -506,10 +506,7 @@ mod tests {
 		origin: Origin,
 		solution: RawSolution<SolutionOf<Runtime>>,
 	) -> DispatchResult {
-		MultiPhase::submit(
-			origin,
-			Box::new(solution),
-		)
+		MultiPhase::submit(origin, Box::new(solution))
 	}
 
 	#[test]
@@ -539,12 +536,6 @@ mod tests {
 			// submit this once correctly
 			assert_ok!(submit_with_witness(Origin::signed(99), solution.clone()));
 			assert_eq!(MultiPhase::signed_submissions().len(), 1);
-
-			// now try and cheat by passing a lower queue length
-			assert_noop!(
-				MultiPhase::submit(Origin::signed(99), Box::new(solution)),
-				Error::<Runtime>::SignedInvalidWitness,
-			);
 		})
 	}
 

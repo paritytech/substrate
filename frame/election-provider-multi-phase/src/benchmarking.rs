@@ -310,7 +310,7 @@ frame_benchmarking::benchmarks! {
 	}
 
 	submit {
-		let c = T::SignedMaxSubmissions::get();
+		let c in 1 .. (T::SignedMaxSubmissions::get() - 1);
 
 		// the solution will be worse than all of them meaning the score need to be checked against
 		// ~ log2(c)
@@ -342,7 +342,7 @@ frame_benchmarking::benchmarks! {
 		let caller = frame_benchmarking::whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller,  T::Currency::minimum_balance() * 10u32.into());
 
-	}: _(RawOrigin::Signed(caller), Box::new(solution), c)
+	}: _(RawOrigin::Signed(caller), Box::new(solution))
 	verify {
 		assert!(<MultiPhase<T>>::signed_submissions().len() as u32 == c + 1);
 	}

@@ -999,8 +999,7 @@ pub mod pallet {
 			// create the submission
 			let deposit = Self::deposit_for(&raw_solution, size);
 			let reward = {
-				let call =
-					Call::submit { raw_solution: raw_solution.clone() };
+				let call = Call::submit { raw_solution: raw_solution.clone() };
 				let call_fee = T::EstimateCallFee::estimate_call_fee(&call, None.into());
 				T::SignedRewardBase::get().saturating_add(call_fee)
 			};
@@ -1969,10 +1968,9 @@ mod tests {
 					score: ElectionScore { minimal_stake: (5 + s).into(), ..Default::default() },
 					..Default::default()
 				};
-				assert_ok!(MultiPhase::submit(
-					crate::mock::Origin::signed(99),
-					Box::new(solution),
-				));
+				assert_ok!(
+					MultiPhase::submit(crate::mock::Origin::signed(99), Box::new(solution),)
+				);
 			}
 
 			// an unexpected call to elect.
