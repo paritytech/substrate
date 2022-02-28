@@ -30,5 +30,5 @@ sc-chain-spec = { path = "../chain-spec", version = "4.0.0-dev" }
 serde = { version = "1.0.136", features = ["derive"] }
 serde_json = "1.0.74"
 sc-transaction-pool-api = { version = "4.0.0-dev", path = "../transaction-pool/api" }
-sp-rpc = { version = "5.0.0", path = "../../primitives/rpc" }
+sp-rpc = { version = "6.0.0", path = "../../primitives/rpc" }
 sp-tracing = { version = "4.0.0", path = "../../primitives/tracing" }
