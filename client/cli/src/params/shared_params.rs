@@ -22,7 +22,7 @@ use sc_service::config::BasePath;
 use std::path::PathBuf;
 
 /// Shared parameters used by all `CoreParams`.
-#[derive(Debug, Clone, Args)]
+#[derive(Debug, Clone, PartialEq, Args)]
 pub struct SharedParams {
 	/// Specify the chain specification.
 	///
@@ -46,7 +46,7 @@ pub struct SharedParams {
 	///
 	/// Log levels (least to most verbose) are error, warn, info, debug, and trace.
 	/// By default, all targets log `info`. The global log level can be set with -l<level>.
-	#[clap(short = 'l', long, value_name = "LOG_PATTERN")]
+	#[clap(short = 'l', long, value_name = "LOG_PATTERN", multiple_values(true))]
 	pub log: Vec<String>,
 
 	/// Enable detailed log output.

@@ -17,13 +17,21 @@ frame-benchmarking = { version = "4.0.0-dev", path = "../../../frame/benchmarkin
 frame-support = { version = "4.0.0-dev", path = "../../../frame/support" }
 sp-core = { version = "5.0.0", path = "../../../primitives/core" }
 sc-service = { version = "0.10.0-dev", default-features = false, path = "../../../client/service" }
+sc-client-api = { version = "4.0.0-dev", path = "../../../client/api" }
 sc-cli = { version = "0.10.0-dev", path = "../../../client/cli" }
 sc-client-db = { version = "0.10.0-dev", path = "../../../client/db" }
 sc-executor = { version = "0.10.0-dev", path = "../../../client/executor" }
+
+sp-api = { version = "4.0.0-dev", path = "../../../primitives/api" }
 sp-externalities = { version = "0.11.0", path = "../../../primitives/externalities" }
+sp-database = { version = "4.0.0-dev", path = "../../../primitives/database" }
+sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
 sp-keystore = { version = "0.11.0", path = "../../../primitives/keystore" }
+sp-storage = { version = "5.0.0", path = "../../../primitives/storage" }
 sp-runtime = { version = "5.0.0", path = "../../../primitives/runtime" }
+sp-std = { version = "4.0.0", default-features = false, path = "../../../primitives/std" }
 sp-state-machine = { version = "0.11.0", path = "../../../primitives/state-machine" }
+sp-trie = { version = "5.0.0", path = "../../../primitives/trie" }
 codec = { version = "3.0.0", package = "parity-scale-codec" }
 clap = { version = "3.0", features = ["derive"] }
 chrono = "0.4"
@@ -33,7 +41,14 @@ handlebars = "4.1.6"
 Inflector = "0.11.4"
 linked-hash-map = "0.5.4"
 log = "0.4.8"
+itertools = "0.10.3"
+serde_nanos = "0.1.2"
+kvdb = "0.11.0"
+hash-db = "0.15.2"
+hex = "0.4.3"
+memory-db = "0.29.0"
+rand = { version = "0.8.4", features = ["small_rng"] }
 
 [features]
-default = ["db"]
+default = ["db", "sc-client-db/runtime-benchmarks"]
 db = ["sc-client-db/with-kvdb-rocksdb", "sc-client-db/with-parity-db"]
