@@ -103,7 +103,7 @@
 //!
 //! Validators will only submit solutions if the one that they have computed is sufficiently better
 //! than the best queued one (see [`pallet::Config::SolutionImprovementThreshold`]) and will limit
-//! the weigh of the solution to [`pallet::Config::MinerMaxWeight`].
+//! the weight of the solution to [`pallet::Config::MinerMaxWeight`].
 //!
 //! The unsigned phase can be made passive depending on how the previous signed phase went, by
 //! setting the first inner value of [`Phase`] to `false`. For now, the signed phase is always
@@ -147,13 +147,13 @@
 //! which is capable of connecting to a live network, and generating appropriate `supports` using a
 //! standard algorithm, and outputting the `supports` in hex format, ready for submission. Note that
 //! while this binary lives in the Polkadot repository, this particular subcommand of it can work
-//! against any substrate based-chain.
+//! against any substrate-based chain.
 //!
 //! See the `staking-miner` documentation in the Polkadot repository for more information.
 //!
 //! ## Feasible Solution (correct solution)
 //!
-//! All submissions must undergo a feasibility check. Signed solutions are checked on by one at the
+//! All submissions must undergo a feasibility check. Signed solutions are checked one by one at the
 //! end of the signed phase, and the unsigned solutions are checked on the spot. A feasible solution
 //! is as follows:
 //!
@@ -1233,7 +1233,7 @@ pub mod pallet {
 	/// capacity, it will simply saturate. We can't just iterate over `SignedSubmissionsMap`,
 	/// because iteration is slow. Instead, we store the value here.
 	#[pallet::storage]
-	pub(crate) type SignedSubmissionNextIndex<T: Config> = StorageValue<_, u32, ValueQuery>;
+	pub type SignedSubmissionNextIndex<T: Config> = StorageValue<_, u32, ValueQuery>;
 
 	/// A sorted, bounded set of `(score, index)`, where each `index` points to a value in
 	/// `SignedSubmissions`.
@@ -1242,7 +1242,7 @@ pub mod pallet {
 	/// can be quite large, so we're willing to pay the cost of multiple database accesses to access
 	/// them one at a time instead of reading and decoding all of them at once.
 	#[pallet::storage]
-	pub(crate) type SignedSubmissionIndices<T: Config> =
+	pub type SignedSubmissionIndices<T: Config> =
 		StorageValue<_, SubmissionIndicesOf<T>, ValueQuery>;
 
 	/// Unchecked, signed solutions.
@@ -1253,7 +1253,7 @@ pub mod pallet {
 	/// Twox note: the key of the map is an auto-incrementing index which users cannot inspect or
 	/// affect; we shouldn't need a cryptographically secure hasher.
 	#[pallet::storage]
-	pub(crate) type SignedSubmissionsMap<T: Config> =
+	pub type SignedSubmissionsMap<T: Config> =
 		StorageMap<_, Twox64Concat, u32, SignedSubmissionOf<T>, OptionQuery>;
 
 	// `SignedSubmissions` items end here.
