@@ -420,6 +420,7 @@ where
 	}
 
 	/// Execute given extrinsics and take care of post-extrinsics book-keeping.
+	#[cfg(not(feature = "background-sig-check"))]
 	fn execute_extrinsics_with_book_keeping(
 		extrinsics: Vec<Block::Extrinsic>,
 		block_number: NumberFor<Block>,
