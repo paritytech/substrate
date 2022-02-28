@@ -75,12 +75,12 @@ frame_support::construct_runtime!(
 pub mod test_utils {
 	use super::{Balances, Test};
 	use crate::{
-		exec::AccountIdOf, storage::Storage, AccountCounter, CodeHash, Config, ContractInfoOf,
+		exec::AccountIdOf, storage::Storage, Nonce, CodeHash, Config, ContractInfoOf,
 	};
 	use frame_support::traits::Currency;
 
 	pub fn place_contract(address: &AccountIdOf<Test>, code_hash: CodeHash<Test>) {
-		let nonce = <AccountCounter<Test>>::mutate(|counter| {
+		let nonce = <Nonce<Test>>::mutate(|counter| {
 			*counter += 1;
 			*counter
 		});
@@ -546,7 +546,7 @@ fn run_out_of_gas() {
 }
 
 /// Check that contracts with the same account id have different trie ids.
-/// Check the `AccountCounter` storage item for more information.
+/// Check the `Nonce` storage item for more information.
 #[test]
 fn instantiate_unique_trie_id() {
 	let (wasm, code_hash) = compile_module::<Test>("self_destruct").unwrap();

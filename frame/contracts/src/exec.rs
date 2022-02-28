@@ -18,7 +18,7 @@
 use crate::{
 	gas::GasMeter,
 	storage::{self, Storage, WriteOutcome},
-	AccountCounter, BalanceOf, CodeHash, Config, ContractInfo, ContractInfoOf, Error, Event,
+	Nonce, BalanceOf, CodeHash, Config, ContractInfo, ContractInfoOf, Error, Event,
 	Pallet as Contracts, Schedule,
 };
 use frame_support::{
@@ -316,7 +316,8 @@ pub struct Stack<'a, T: Config, E> {
 	/// The block number at the time of call stack instantiation.
 	block_number: T::BlockNumber,
 	/// The nonce is cached here when accessed. It is written back when the call stack
-	/// finishes executing.
+	/// finishes executing. Please refer to [`Nonce`] to a description of
+	/// the nonce itself.
 	nonce: Option<u64>,
 	/// The actual call stack. One entry per nested contract called/instantiated.
 	/// This does **not** include the [`Self::first_frame`].
@@ -862,7 +863,7 @@ where
 				<ContractInfoOf<T>>::insert(&self.first_frame.account_id, contract);
 			}
 			if let Some(nonce) = self.nonce {
-				<AccountCounter<T>>::set(nonce);
+				<Nonce<T>>::set(nonce);
 			}
 		}
 	}
@@ -933,7 +934,7 @@ where
 
 	/// Pull the current nonce from storage.
 	fn initial_nonce() -> u64 {
-		<AccountCounter<T>>::get().wrapping_add(1)
+		<Nonce<T>>::get().wrapping_add(1)
 	}
 }
 
@@ -2495,7 +2496,7 @@ mod tests {
 				None,
 			)
 			.ok();
-			assert_eq!(<AccountCounter<Test>>::get(), 0);
+			assert_eq!(<Nonce<Test>>::get(), 0);
 
 			assert_ok!(MockStack::run_instantiate(
 				ALICE,
@@ -2508,7 +2509,7 @@ mod tests {
 				&[],
 				None,
 			));
-			assert_eq!(<AccountCounter<Test>>::get(), 1);
+			assert_eq!(<Nonce<Test>>::get(), 1);
 
 			assert_ok!(MockStack::run_instantiate(
 				ALICE,
@@ -2521,7 +2522,7 @@ mod tests {
 				&[],
 				None,
 			));
-			assert_eq!(<AccountCounter<Test>>::get(), 2);
+			assert_eq!(<Nonce<Test>>::get(), 2);
 
 			assert_ok!(MockStack::run_instantiate(
 				ALICE,
@@ -2534,7 +2535,7 @@ mod tests {
 				&[],
 				None,
 			));
-			assert_eq!(<AccountCounter<Test>>::get(), 4);
+			assert_eq!(<Nonce<Test>>::get(), 4);
 		});
 	}
 

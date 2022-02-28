@@ -22,6 +22,7 @@ use frame_support::{
 	storage::migration,
 	traits::{Get, PalletInfoAccess},
 	Identity, Twox64Concat,
+	pallet_prelude::*,
 };
 use sp_std::{marker::PhantomData, prelude::*};
 
@@ -45,6 +46,11 @@ pub fn migrate<T: Config>() -> Weight {
 	if version < 6 {
 		weight = weight.saturating_add(v6::migrate::<T>());
 		StorageVersion::new(6).put::<Pallet<T>>();
+	}
+
+	if version < 7 {
+		weight = weight.saturating_add(v7::migrate::<T>());
+		StorageVersion::new(7).put::<Pallet<T>>();
 	}
 
 	weight
@@ -248,4 +254,23 @@ mod v6 {
 
 		weight
 	}
+}
+
+/// Rename `AccountCounter` to `Nonce`.
+mod v7 {
+	use super::*;
+
+	pub fn migrate<T: Config>() -> Weight {
+		generate_storage_alias!(
+			Contracts,
+			AccountCounter => Value<u64, ValueQuery>
+		);
+		generate_storage_alias!(
+			Contracts,
+			Nonce => Value<u64, ValueQuery>
+		);
+		Nonce::set(AccountCounter::take());
+		T::DbWeight::get().reads_writes(1, 2)
+	}
+
 }

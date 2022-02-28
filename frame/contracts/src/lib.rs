@@ -134,7 +134,7 @@ type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
 /// The current storage version.
-const STORAGE_VERSION: StorageVersion = StorageVersion::new(6);
+const STORAGE_VERSION: StorageVersion = StorageVersion::new(7);
 
 /// Used as a sentinel value when reading and writing contract memory.
 ///
@@ -665,15 +665,16 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(crate) type OwnerInfoOf<T: Config> = StorageMap<_, Identity, CodeHash<T>, OwnerInfo<T>>;
 
-	/// This is a monotonic counter in order to generate unique trie ids.
+	/// This is a **monotonic** counter incremented on contract instantiation.
 	///
-	/// The trie of a new contract is calculated from hash(account_id, AccountCounter).
-	/// The account counter is required because otherwise the following sequence would lead to
+	/// This is used in order to generate unique trie ids for contracts.
+	/// The trie id of a new contract is calculated from hash(account_id, nonce).
+	/// The nonce is required because otherwise the following sequence would lead to
 	/// a possible collision of storage:
 	///
-	/// 1. Create a new contract with account_id = a.
+	/// 1. Create a new contract.
 	/// 2. Terminate the contract.
-	/// 3. Immediately recreate the contract with the same account_id (a).
+	/// 3. Immediately recreate the contract with the same account_id.
 	///
 	/// This is bad because the contents of a trie are deleted lazily and there might be
 	/// storage of the old instantiation still in it when the new contract is created. Please
@@ -687,7 +688,7 @@ pub mod pallet {
 	/// Do not use it to determine the number of contracts. It won't be decremented if
 	/// a contract is destroyed.
 	#[pallet::storage]
-	pub(crate) type AccountCounter<T: Config> = StorageValue<_, u64, ValueQuery>;
+	pub(crate) type Nonce<T: Config> = StorageValue<_, u64, ValueQuery>;
 
 	/// The code associated with a given account.
 	///
