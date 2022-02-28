@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -29,7 +29,9 @@ pub trait StoredMap<K, T: Default> {
 	fn get(k: &K) -> T;
 
 	/// Maybe mutate the item only if an `Ok` value is returned from `f`. Do nothing if an `Err` is
-	/// returned. It is removed or reset to default value if it has been mutated to `None`
+	/// returned. It is removed or reset to default value if it has been mutated to `None`.
+	/// `f` will always be called with an option representing if the storage item exists (`Some<V>`)
+	/// or if the storage item does not exist (`None`), independent of the `QueryType`.
 	fn try_mutate_exists<R, E: From<DispatchError>>(
 		k: &K,
 		f: impl FnOnce(&mut Option<T>) -> Result<R, E>,

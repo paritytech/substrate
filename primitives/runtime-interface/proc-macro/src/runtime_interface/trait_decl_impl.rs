@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -153,7 +153,7 @@ fn impl_trait_for_externalities(trait_def: &ItemTrait, is_wasm_only: bool) -> Re
 	let crate_ = generate_crate_access();
 	let interface = get_runtime_interface(trait_def)?;
 	let methods = interface.all_versions().map(|(version, method)| {
-		let mut cloned = method.clone();
+		let mut cloned = (*method).clone();
 		cloned.attrs.retain(|a| !a.path.is_ident("version"));
 		cloned.sig.ident = create_function_ident_with_version(&cloned.sig.ident, version);
 		cloned

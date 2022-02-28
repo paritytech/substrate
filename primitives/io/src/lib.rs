@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -51,11 +51,13 @@ use sp_core::{
 	offchain::{
 		HttpError, HttpRequestId, HttpRequestStatus, OpaqueNetworkState, StorageKind, Timestamp,
 	},
-	sr25519, LogLevel, LogLevelFilter, OpaquePeerId, H256,
+	sr25519,
+	storage::StateVersion,
+	LogLevel, LogLevelFilter, OpaquePeerId, H256,
 };
 
 #[cfg(feature = "std")]
-use sp_trie::{trie_types::Layout, TrieConfiguration};
+use sp_trie::{LayoutV0, LayoutV1, TrieConfiguration};
 
 use sp_runtime_interface::{
 	pass_by::{PassBy, PassByCodec},
@@ -192,7 +194,17 @@ pub trait Storage {
 	///
 	/// Returns a `Vec<u8>` that holds the SCALE encoded hash.
 	fn root(&mut self) -> Vec<u8> {
-		self.storage_root()
+		self.storage_root(StateVersion::V0)
+	}
+
+	/// "Commit" all existing operations and compute the resulting storage root.
+	///
+	/// The hashing algorithm is defined by the `Block`.
+	///
+	/// Returns a `Vec<u8>` that holds the SCALE encoded hash.
+	#[version(2)]
+	fn root(&mut self, version: StateVersion) -> Vec<u8> {
+		self.storage_root(version)
 	}
 
 	/// Always returns `None`. This function exists for compatibility reasons.
@@ -373,7 +385,19 @@ pub trait DefaultChildStorage {
 	/// Returns a `Vec<u8>` that holds the SCALE encoded hash.
 	fn root(&mut self, storage_key: &[u8]) -> Vec<u8> {
 		let child_info = ChildInfo::new_default(storage_key);
-		self.child_storage_root(&child_info)
+		self.child_storage_root(&child_info, StateVersion::V0)
+	}
+
+	/// Default child root calculation.
+	///
+	/// "Commit" all existing operations and compute the resulting child storage root.
+	/// The hashing algorithm is defined by the `Block`.
+	///
+	/// Returns a `Vec<u8>` that holds the SCALE encoded hash.
+	#[version(2)]
+	fn root(&mut self, storage_key: &[u8], version: StateVersion) -> Vec<u8> {
+		let child_info = ChildInfo::new_default(storage_key);
+		self.child_storage_root(&child_info, version)
 	}
 
 	/// Child storage key iteration.
@@ -390,27 +414,63 @@ pub trait DefaultChildStorage {
 pub trait Trie {
 	/// A trie root formed from the iterated items.
 	fn blake2_256_root(input: Vec<(Vec<u8>, Vec<u8>)>) -> H256 {
-		Layout::<sp_core::Blake2Hasher>::trie_root(input)
+		LayoutV0::<sp_core::Blake2Hasher>::trie_root(input)
+	}
+
+	/// A trie root formed from the iterated items.
+	#[version(2)]
+	fn blake2_256_root(input: Vec<(Vec<u8>, Vec<u8>)>, version: StateVersion) -> H256 {
+		match version {
+			StateVersion::V0 => LayoutV0::<sp_core::Blake2Hasher>::trie_root(input),
+			StateVersion::V1 => LayoutV1::<sp_core::Blake2Hasher>::trie_root(input),
+		}
 	}
 
 	/// A trie root formed from the enumerated items.
 	fn blake2_256_ordered_root(input: Vec<Vec<u8>>) -> H256 {
-		Layout::<sp_core::Blake2Hasher>::ordered_trie_root(input)
+		LayoutV0::<sp_core::Blake2Hasher>::ordered_trie_root(input)
+	}
+
+	/// A trie root formed from the enumerated items.
+	#[version(2)]
+	fn blake2_256_ordered_root(input: Vec<Vec<u8>>, version: StateVersion) -> H256 {
+		match version {
+			StateVersion::V0 => LayoutV0::<sp_core::Blake2Hasher>::ordered_trie_root(input),
+			StateVersion::V1 => LayoutV1::<sp_core::Blake2Hasher>::ordered_trie_root(input),
+		}
 	}
 
 	/// A trie root formed from the iterated items.
 	fn keccak_256_root(input: Vec<(Vec<u8>, Vec<u8>)>) -> H256 {
-		Layout::<sp_core::KeccakHasher>::trie_root(input)
+		LayoutV0::<sp_core::KeccakHasher>::trie_root(input)
+	}
+
+	/// A trie root formed from the iterated items.
+	#[version(2)]
+	fn keccak_256_root(input: Vec<(Vec<u8>, Vec<u8>)>, version: StateVersion) -> H256 {
+		match version {
+			StateVersion::V0 => LayoutV0::<sp_core::KeccakHasher>::trie_root(input),
+			StateVersion::V1 => LayoutV1::<sp_core::KeccakHasher>::trie_root(input),
+		}
 	}
 
 	/// A trie root formed from the enumerated items.
 	fn keccak_256_ordered_root(input: Vec<Vec<u8>>) -> H256 {
-		Layout::<sp_core::KeccakHasher>::ordered_trie_root(input)
+		LayoutV0::<sp_core::KeccakHasher>::ordered_trie_root(input)
+	}
+
+	/// A trie root formed from the enumerated items.
+	#[version(2)]
+	fn keccak_256_ordered_root(input: Vec<Vec<u8>>, version: StateVersion) -> H256 {
+		match version {
+			StateVersion::V0 => LayoutV0::<sp_core::KeccakHasher>::ordered_trie_root(input),
+			StateVersion::V1 => LayoutV1::<sp_core::KeccakHasher>::ordered_trie_root(input),
+		}
 	}
 
 	/// Verify trie proof
 	fn blake2_256_verify_proof(root: H256, proof: &[Vec<u8>], key: &[u8], value: &[u8]) -> bool {
-		sp_trie::verify_trie_proof::<Layout<sp_core::Blake2Hasher>, _, _, _>(
+		sp_trie::verify_trie_proof::<LayoutV0<sp_core::Blake2Hasher>, _, _, _>(
 			&root,
 			proof,
 			&[(key, Some(value))],
@@ -419,13 +479,67 @@ pub trait Trie {
 	}
 
 	/// Verify trie proof
+	#[version(2)]
+	fn blake2_256_verify_proof(
+		root: H256,
+		proof: &[Vec<u8>],
+		key: &[u8],
+		value: &[u8],
+		version: StateVersion,
+	) -> bool {
+		match version {
+			StateVersion::V0 => sp_trie::verify_trie_proof::<
+				LayoutV0<sp_core::Blake2Hasher>,
+				_,
+				_,
+				_,
+			>(&root, proof, &[(key, Some(value))])
+			.is_ok(),
+			StateVersion::V1 => sp_trie::verify_trie_proof::<
+				LayoutV1<sp_core::Blake2Hasher>,
+				_,
+				_,
+				_,
+			>(&root, proof, &[(key, Some(value))])
+			.is_ok(),
+		}
+	}
+
+	/// Verify trie proof
 	fn keccak_256_verify_proof(root: H256, proof: &[Vec<u8>], key: &[u8], value: &[u8]) -> bool {
-		sp_trie::verify_trie_proof::<Layout<sp_core::KeccakHasher>, _, _, _>(
+		sp_trie::verify_trie_proof::<LayoutV0<sp_core::KeccakHasher>, _, _, _>(
 			&root,
 			proof,
 			&[(key, Some(value))],
 		)
 		.is_ok()
+	}
+
+	/// Verify trie proof
+	#[version(2)]
+	fn keccak_256_verify_proof(
+		root: H256,
+		proof: &[Vec<u8>],
+		key: &[u8],
+		value: &[u8],
+		version: StateVersion,
+	) -> bool {
+		match version {
+			StateVersion::V0 => sp_trie::verify_trie_proof::<
+				LayoutV0<sp_core::KeccakHasher>,
+				_,
+				_,
+				_,
+			>(&root, proof, &[(key, Some(value))])
+			.is_ok(),
+			StateVersion::V1 => sp_trie::verify_trie_proof::<
+				LayoutV1<sp_core::KeccakHasher>,
+				_,
+				_,
+				_,
+			>(&root, proof, &[(key, Some(value))])
+			.is_ok(),
+		}
 	}
 }
 
@@ -1176,6 +1290,17 @@ pub trait Allocator {
 	}
 }
 
+/// WASM-only interface which allows for aborting the execution in case
+/// of an unrecoverable error.
+#[runtime_interface(wasm_only)]
+pub trait PanicHandler {
+	/// Aborts the current execution with the given error message.
+	#[trap_on_return]
+	fn abort_on_panic(&mut self, message: &str) {
+		self.register_panic_error_message(message);
+	}
+}
+
 /// Interface that provides functions for logging from within the runtime.
 #[runtime_interface]
 pub trait Logging {
@@ -1474,14 +1599,14 @@ pub trait RuntimeTasks {
 }
 
 /// Allocator used by Substrate when executing the Wasm runtime.
-#[cfg(not(feature = "std"))]
+#[cfg(all(target_arch = "wasm32", not(feature = "std")))]
 struct WasmAllocator;
 
-#[cfg(all(not(feature = "disable_allocator"), not(feature = "std")))]
+#[cfg(all(target_arch = "wasm32", not(feature = "disable_allocator"), not(feature = "std")))]
 #[global_allocator]
 static ALLOCATOR: WasmAllocator = WasmAllocator;
 
-#[cfg(not(feature = "std"))]
+#[cfg(all(target_arch = "wasm32", not(feature = "std")))]
 mod allocator_impl {
 	use super::*;
 	use core::alloc::{GlobalAlloc, Layout};
@@ -1503,16 +1628,30 @@ mod allocator_impl {
 #[no_mangle]
 pub fn panic(info: &core::panic::PanicInfo) -> ! {
 	let message = sp_std::alloc::format!("{}", info);
-	logging::log(LogLevel::Error, "runtime", message.as_bytes());
-	core::arch::wasm32::unreachable();
+	#[cfg(feature = "improved_panic_error_reporting")]
+	{
+		panic_handler::abort_on_panic(&message);
+	}
+	#[cfg(not(feature = "improved_panic_error_reporting"))]
+	{
+		logging::log(LogLevel::Error, "runtime", message.as_bytes());
+		core::arch::wasm32::unreachable();
+	}
 }
 
 /// A default OOM handler for WASM environment.
 #[cfg(all(not(feature = "disable_oom"), not(feature = "std")))]
 #[alloc_error_handler]
 pub fn oom(_: core::alloc::Layout) -> ! {
-	logging::log(LogLevel::Error, "runtime", b"Runtime memory exhausted. Aborting");
-	core::arch::wasm32::unreachable();
+	#[cfg(feature = "improved_panic_error_reporting")]
+	{
+		panic_handler::abort_on_panic("Runtime memory exhausted.");
+	}
+	#[cfg(not(feature = "improved_panic_error_reporting"))]
+	{
+		logging::log(LogLevel::Error, "runtime", b"Runtime memory exhausted. Aborting");
+		core::arch::wasm32::unreachable();
+	}
 }
 
 /// Type alias for Externalities implementation used in tests.
@@ -1532,6 +1671,7 @@ pub type SubstrateHostFunctions = (
 	crypto::HostFunctions,
 	hashing::HostFunctions,
 	allocator::HostFunctions,
+	panic_handler::HostFunctions,
 	logging::HostFunctions,
 	sandbox::HostFunctions,
 	crate::trie::HostFunctions,
@@ -1569,6 +1709,16 @@ mod tests {
 		t.execute_with(|| {
 			assert_eq!(storage::get(b"hello"), None);
 			assert_eq!(storage::get(b"foo"), Some(b"bar".to_vec()));
+		});
+
+		let value = vec![7u8; 35];
+		let storage =
+			Storage { top: map![b"foo00".to_vec() => value.clone()], children_default: map![] };
+		t = BasicExternalities::new(storage);
+
+		t.execute_with(|| {
+			assert_eq!(storage::get(b"hello"), None);
+			assert_eq!(storage::get(b"foo00"), Some(value.clone()));
 		});
 	}
 

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,7 +20,11 @@
 use super::*;
 use crate::{unsigned::IndexAssignmentOf, Pallet as MultiPhase};
 use frame_benchmarking::account;
-use frame_support::{assert_ok, traits::Hooks};
+use frame_support::{
+	assert_ok,
+	traits::{Hooks, TryCollect},
+	BoundedVec,
+};
 use frame_system::RawOrigin;
 use rand::{prelude::SliceRandom, rngs::SmallRng, SeedableRng};
 use sp_arithmetic::{per_things::Percent, traits::One};
@@ -69,11 +73,12 @@ fn solution_with_size<T: Config>(
 	let active_voters = (0..active_voters_count)
 		.map(|i| {
 			// chose a random subset of winners.
-			let winner_votes = winners
+			let winner_votes: BoundedVec<_, _> = winners
 				.as_slice()
 				.choose_multiple(&mut rng, <SolutionOf<T>>::LIMIT)
 				.cloned()
-				.collect::<Vec<_>>();
+				.try_collect()
+				.expect("<SolutionOf<T>>::LIMIT is the correct bound; qed.");
 			let voter = frame_benchmarking::account::<T::AccountId>("Voter", i, SEED);
 			(voter, stake, winner_votes)
 		})
@@ -87,10 +92,11 @@ fn solution_with_size<T: Config>(
 		.collect::<Vec<T::AccountId>>();
 	let rest_voters = (active_voters_count..size.voters)
 		.map(|i| {
-			let votes = (&non_winners)
+			let votes: BoundedVec<_, _> = (&non_winners)
 				.choose_multiple(&mut rng, <SolutionOf<T>>::LIMIT)
 				.cloned()
-				.collect::<Vec<T::AccountId>>();
+				.try_collect()
+				.expect("<SolutionOf<T>>::LIMIT is the correct bound; qed.");
 			let voter = frame_benchmarking::account::<T::AccountId>("Voter", i, SEED);
 			(voter, stake, votes)
 		})
@@ -142,7 +148,10 @@ fn solution_with_size<T: Config>(
 	let score = solution.clone().score(stake_of, voter_at, target_at).unwrap();
 	let round = <MultiPhase<T>>::round();
 
-	assert!(score[0] > 0, "score is zero, this probably means that the stakes are not set.");
+	assert!(
+		score.minimal_stake > 0,
+		"score is zero, this probably means that the stakes are not set."
+	);
 	Ok(RawSolution { solution, score, round })
 }
 
@@ -152,7 +161,7 @@ fn set_up_data_provider<T: Config>(v: u32, t: u32) {
 		info,
 		"setting up with voters = {} [degree = {}], targets = {}",
 		v,
-		T::DataProvider::MAXIMUM_VOTES_PER_VOTER,
+		<T::DataProvider as ElectionDataProvider>::MaxVotesPerVoter::get(),
 		t
 	);
 
@@ -165,14 +174,16 @@ fn set_up_data_provider<T: Config>(v: u32, t: u32) {
 		})
 		.collect::<Vec<_>>();
 	// we should always have enough voters to fill.
-	assert!(targets.len() > T::DataProvider::MAXIMUM_VOTES_PER_VOTER as usize);
-	targets.truncate(T::DataProvider::MAXIMUM_VOTES_PER_VOTER as usize);
+	assert!(
+		targets.len() > <T::DataProvider as ElectionDataProvider>::MaxVotesPerVoter::get() as usize
+	);
+	targets.truncate(<T::DataProvider as ElectionDataProvider>::MaxVotesPerVoter::get() as usize);
 
 	// fill voters.
 	(0..v).for_each(|i| {
 		let voter = frame_benchmarking::account::<T::AccountId>("Voter", i, SEED);
 		let weight = T::Currency::minimum_balance().saturated_into::<u64>() * 1000;
-		T::DataProvider::add_voter(voter, weight, targets.clone());
+		T::DataProvider::add_voter(voter, weight, targets.clone().try_into().unwrap());
 	});
 }
 
@@ -289,7 +300,7 @@ frame_benchmarking::benchmarks! {
 		assert!(<Snapshot<T>>::get().is_some());
 		assert!(<SnapshotMetadata<T>>::get().is_some());
 	}: {
-		assert_ok!(<MultiPhase<T> as ElectionProvider<T::AccountId, T::BlockNumber>>::elect());
+		assert_ok!(<MultiPhase<T> as ElectionProvider>::elect());
 	} verify {
 		assert!(<MultiPhase<T>>::queued_solution().is_none());
 		assert!(<DesiredTargets<T>>::get().is_none());
@@ -304,7 +315,7 @@ frame_benchmarking::benchmarks! {
 		// the solution will be worse than all of them meaning the score need to be checked against
 		// ~ log2(c)
 		let solution = RawSolution {
-			score: [(10_000_000u128 - 1).into(), 0, 0],
+			score: ElectionScore { minimal_stake: 10_000_000u128 - 1, ..Default::default() },
 			..Default::default()
 		};
 
@@ -315,7 +326,7 @@ frame_benchmarking::benchmarks! {
 		let mut signed_submissions = SignedSubmissions::<T>::get();
 		for i in 0..c {
 			let raw_solution = RawSolution {
-				score: [(10_000_000 + i).into(), 0, 0],
+				score: ElectionScore { minimal_stake: 10_000_000u128 + (i as u128), ..Default::default() },
 				..Default::default()
 			};
 			let signed_submission = SignedSubmission {

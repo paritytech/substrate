@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -250,16 +250,6 @@ impl PeerState {
 			}),
 			_ => None,
 		}
-	}
-
-	/// True if that node has been requested by the PSM.
-	fn is_requested(&self) -> bool {
-		matches!(
-			self,
-			Self::PendingRequest { .. } |
-				Self::Requested | Self::DisabledPendingEnable { .. } |
-				Self::Enabled { .. }
-		)
 	}
 }
 
@@ -558,17 +548,6 @@ impl Notifications {
 				error!(target: "sub-libp2p", "State of {:?} is poisoned", peer_id)
 			},
 		}
-	}
-
-	/// Returns the list of all the peers that the peerset currently requests us to be connected to.
-	pub fn requested_peers<'a>(
-		&'a self,
-		set_id: sc_peerset::SetId,
-	) -> impl Iterator<Item = &'a PeerId> + 'a {
-		self.peers
-			.iter()
-			.filter(move |((_, set), state)| *set == set_id && state.is_requested())
-			.map(|((id, _), _)| id)
 	}
 
 	/// Returns the list of reserved peers.

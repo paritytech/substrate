@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -18,11 +18,11 @@
 
 use log::warn;
 
-pub fn internal<E: ::std::fmt::Debug>(e: E) -> jsonrpc_core::Error {
-	warn!("Unknown error: {:?}", e);
+pub fn internal<E: std::fmt::Display>(e: E) -> jsonrpc_core::Error {
+	warn!("Unknown error: {}", e);
 	jsonrpc_core::Error {
 		code: jsonrpc_core::ErrorCode::InternalError,
 		message: "Unknown error occurred".into(),
-		data: Some(format!("{:?}", e).into()),
+		data: Some(e.to_string().into()),
 	}
 }

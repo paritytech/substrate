@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -153,11 +153,11 @@ macro_rules! decl_error {
 					::index::<$module<$generic $(, $inst_generic)?>>()
 					.expect("Every active module has an index in the runtime; qed") as u8;
 
-				$crate::sp_runtime::DispatchError::Module {
+				$crate::sp_runtime::DispatchError::Module($crate::sp_runtime::ModuleError {
 					index,
 					error: err.as_u8(),
 					message: Some(err.as_str()),
-				}
+				})
 			}
 		}
 	};

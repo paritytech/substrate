@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -17,7 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use codec::{Decode as _, Encode as _};
-use sc_executor_common::{runtime_blob::RuntimeBlob, wasm_runtime::WasmModule};
+use sc_executor_common::{error::Error, runtime_blob::RuntimeBlob, wasm_runtime::WasmModule};
 use sc_runtime_test::wasm_binary_unwrap;
 use std::sync::Arc;
 
@@ -158,11 +158,13 @@ fn test_stack_depth_reaching() {
 	};
 	let mut instance = runtime.new_instance().expect("failed to instantiate a runtime");
 
-	let err = instance.call_export("test-many-locals", &[]).unwrap_err();
-
-	assert!(
-		format!("{:?}", err).starts_with("Other(\"Wasm execution trapped: wasm trap: unreachable")
-	);
+	match instance.call_export("test-many-locals", &[]).unwrap_err() {
+		Error::AbortedDueToTrap(error) => {
+			let expected = "wasm trap: wasm `unreachable` instruction executed";
+			assert_eq!(error.message, expected);
+		},
+		error => panic!("unexpected error: {:?}", error),
+	}
 }
 
 #[test]
@@ -313,7 +315,7 @@ fn test_max_memory_pages() {
 #[test]
 fn test_instances_without_reuse_are_not_leaked() {
 	let runtime = crate::create_runtime::<HostFunctions>(
-		RuntimeBlob::uncompress_if_needed(&wasm_binary_unwrap()[..]).unwrap(),
+		RuntimeBlob::uncompress_if_needed(wasm_binary_unwrap()).unwrap(),
 		crate::Config {
 			heap_pages: 2048,
 			max_memory_size: None,

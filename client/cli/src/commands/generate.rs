@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,30 +21,30 @@ use crate::{
 	NetworkSchemeFlag, OutputTypeFlag,
 };
 use bip39::{Language, Mnemonic, MnemonicType};
-use structopt::StructOpt;
+use clap::Parser;
 
 /// The `generate` command
-#[derive(Debug, StructOpt, Clone)]
-#[structopt(name = "generate", about = "Generate a random account")]
+#[derive(Debug, Clone, Parser)]
+#[clap(name = "generate", about = "Generate a random account")]
 pub struct GenerateCmd {
 	/// The number of words in the phrase to generate. One of 12 (default), 15, 18, 21 and 24.
-	#[structopt(long, short = "w", value_name = "WORDS")]
+	#[clap(short = 'w', long, value_name = "WORDS")]
 	words: Option<usize>,
 
 	#[allow(missing_docs)]
-	#[structopt(flatten)]
+	#[clap(flatten)]
 	pub keystore_params: KeystoreParams,
 
 	#[allow(missing_docs)]
-	#[structopt(flatten)]
+	#[clap(flatten)]
 	pub network_scheme: NetworkSchemeFlag,
 
 	#[allow(missing_docs)]
-	#[structopt(flatten)]
+	#[clap(flatten)]
 	pub output_scheme: OutputTypeFlag,
 
 	#[allow(missing_docs)]
-	#[structopt(flatten)]
+	#[clap(flatten)]
 	pub crypto_scheme: CryptoSchemeFlag,
 }
 
@@ -78,12 +78,11 @@ impl GenerateCmd {
 
 #[cfg(test)]
 mod tests {
-	use super::GenerateCmd;
-	use structopt::StructOpt;
+	use super::*;
 
 	#[test]
 	fn generate() {
-		let generate = GenerateCmd::from_iter(&["generate", "--password", "12345"]);
+		let generate = GenerateCmd::parse_from(&["generate", "--password", "12345"]);
 		assert!(generate.run().is_ok())
 	}
 }

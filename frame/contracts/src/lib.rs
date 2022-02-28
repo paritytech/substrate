@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -87,12 +87,12 @@
 mod gas;
 mod benchmarking;
 mod exec;
-mod migration;
 mod schedule;
 mod storage;
 mod wasm;
 
 pub mod chain_extension;
+pub mod migration;
 pub mod weights;
 
 #[cfg(test)]
@@ -135,6 +135,63 @@ type BalanceOf<T> =
 
 /// The current storage version.
 const STORAGE_VERSION: StorageVersion = StorageVersion::new(6);
+
+/// Used as a sentinel value when reading and writing contract memory.
+///
+/// It is usually used to signal `None` to a contract when only a primitive is allowed
+/// and we don't want to go through encoding a full Rust type. Using `u32::Max` is a safe
+/// sentinel because contracts are never allowed to use such a large amount of resources
+/// that this value makes sense for a memory location or length.
+const SENTINEL: u32 = u32::MAX;
+
+/// Provides the contract address generation method.
+///
+/// See [`DefaultAddressGenerator`] for the default implementation.
+pub trait AddressGenerator<T: frame_system::Config> {
+	/// Generate the address of a contract based on the given instantiate parameters.
+	///
+	/// # Note for implementors
+	/// 1. Make sure that there are no collisions, different inputs never lead to the same output.
+	/// 2. Make sure that the same inputs lead to the same output.
+	/// 3. Changing the implementation through a runtime upgrade without a proper storage migration
+	/// would lead to catastrophic misbehavior.
+	fn generate_address(
+		deploying_address: &T::AccountId,
+		code_hash: &CodeHash<T>,
+		salt: &[u8],
+	) -> T::AccountId;
+}
+
+/// Default address generator.
+///
+/// This is the default address generator used by contract instantiation. Its result
+/// is only dependend on its inputs. It can therefore be used to reliably predict the
+/// address of a contract. This is akin to the formular of eth's CREATE2 opcode. There
+/// is no CREATE equivalent because CREATE2 is strictly more powerful.
+///
+/// Formula: `hash(deploying_address ++ code_hash ++ salt)`
+pub struct DefaultAddressGenerator;
+
+impl<T> AddressGenerator<T> for DefaultAddressGenerator
+where
+	T: frame_system::Config,
+	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
+{
+	fn generate_address(
+		deploying_address: &T::AccountId,
+		code_hash: &CodeHash<T>,
+		salt: &[u8],
+	) -> T::AccountId {
+		let buf: Vec<_> = deploying_address
+			.as_ref()
+			.iter()
+			.chain(code_hash.as_ref())
+			.chain(salt)
+			.cloned()
+			.collect();
+		UncheckedFrom::unchecked_from(T::Hashing::hash(&buf))
+	}
+}
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -205,11 +262,30 @@ pub mod pallet {
 		/// In other words only the origin called "root contract" is allowed to execute then.
 		type CallStack: smallvec::Array<Item = Frame<Self>>;
 
-		/// The maximum number of tries that can be queued for deletion.
+		/// The maximum number of contracts that can be pending for deletion.
+		///
+		/// When a contract is deleted by calling `seal_terminate` it becomes inaccessible
+		/// immediately, but the deletion of the storage items it has accumulated is performed
+		/// later. The contract is put into the deletion queue. This defines how many
+		/// contracts can be queued up at the same time. If that limit is reached `seal_terminate`
+		/// will fail. The action must be retried in a later block in that case.
+		///
+		/// The reasons for limiting the queue depth are:
+		///
+		/// 1. The queue is in storage in order to be persistent between blocks. We want to limit
+		/// 	the amount of storage that can be consumed.
+		/// 2. The queue is stored in a vector and needs to be decoded as a whole when reading
+		///		it at the end of each block. Longer queues take more weight to decode and hence
+		///		limit the amount of items that can be deleted per block.
 		#[pallet::constant]
 		type DeletionQueueDepth: Get<u32>;
 
 		/// The maximum amount of weight that can be consumed per block for lazy trie removal.
+		///
+		/// The amount of weight that is dedicated per block to work on the deletion queue. Larger
+		/// values allow more trie keys to be deleted in each block but reduce the amount of
+		/// weight that is left for transactions. See [`Self::DeletionQueueDepth`] for more
+		/// information about the deletion queue.
 		#[pallet::constant]
 		type DeletionWeightLimit: Get<Weight>;
 
@@ -222,15 +298,20 @@ pub mod pallet {
 		type DepositPerByte: Get<BalanceOf<Self>>;
 
 		/// The amount of balance a caller has to pay for each storage item.
+		///
 		/// # Note
 		///
 		/// Changing this value for an existing chain might need a storage migration.
 		#[pallet::constant]
 		type DepositPerItem: Get<BalanceOf<Self>>;
+
+		/// The address generator used to generate the addresses of contracts.
+		type AddressGenerator: AddressGenerator<Self>;
 	}
 
 	#[pallet::pallet]
 	#[pallet::storage_version(STORAGE_VERSION)]
+	#[pallet::without_storage_info]
 	pub struct Pallet<T>(PhantomData<T>);
 
 	#[pallet::hooks]
@@ -248,10 +329,6 @@ pub mod pallet {
 				.min(T::DeletionWeightLimit::get());
 			Storage::<T>::process_deletion_queue_batch(weight_limit)
 				.saturating_add(T::WeightInfo::on_initialize())
-		}
-
-		fn on_runtime_upgrade() -> Weight {
-			migration::migrate::<T>()
 		}
 	}
 
@@ -333,10 +410,7 @@ pub mod pallet {
 		/// - The `value` is transferred to the new account.
 		/// - The `deploy` function is executed in the context of the newly-created account.
 		#[pallet::weight(
-			T::WeightInfo::instantiate_with_code(
-				code.len() as u32 / 1024,
-				salt.len() as u32 / 1024,
-			)
+			T::WeightInfo::instantiate_with_code(code.len() as u32, salt.len() as u32)
 			.saturating_add(*gas_limit)
 		)]
 		pub fn instantiate_with_code(
@@ -368,7 +442,7 @@ pub mod pallet {
 			}
 			output.gas_meter.into_dispatch_result(
 				output.result.map(|(_address, result)| result),
-				T::WeightInfo::instantiate_with_code(code_len / 1024, salt_len / 1024),
+				T::WeightInfo::instantiate_with_code(code_len, salt_len),
 			)
 		}
 
@@ -378,7 +452,7 @@ pub mod pallet {
 		/// code deployment step. Instead, the `code_hash` of an on-chain deployed wasm binary
 		/// must be supplied.
 		#[pallet::weight(
-			T::WeightInfo::instantiate(salt.len() as u32 / 1024).saturating_add(*gas_limit)
+			T::WeightInfo::instantiate(salt.len() as u32).saturating_add(*gas_limit)
 		)]
 		pub fn instantiate(
 			origin: OriginFor<T>,
@@ -408,7 +482,7 @@ pub mod pallet {
 			}
 			output.gas_meter.into_dispatch_result(
 				output.result.map(|(_address, output)| output),
-				T::WeightInfo::instantiate(salt_len / 1024),
+				T::WeightInfo::instantiate(salt_len),
 			)
 		}
 
@@ -428,7 +502,7 @@ pub mod pallet {
 		/// To avoid this situation a constructor could employ access control so that it can
 		/// only be instantiated by permissioned entities. The same is true when uploading
 		/// through [`Self::instantiate_with_code`].
-		#[pallet::weight(T::WeightInfo::upload_code(code.len() as u32 / 1024))]
+		#[pallet::weight(T::WeightInfo::upload_code(code.len() as u32))]
 		pub fn upload_code(
 			origin: OriginFor<T>,
 			code: Vec<u8>,
@@ -487,12 +561,24 @@ pub mod pallet {
 
 		/// A code with the specified hash was removed.
 		CodeRemoved { code_hash: T::Hash },
+
+		/// A contract's code was updated.
+		ContractCodeUpdated {
+			/// The contract that has been updated.
+			contract: T::AccountId,
+			/// New code hash that was set for the contract.
+			new_code_hash: T::Hash,
+			/// Previous code hash of the contract.
+			old_code_hash: T::Hash,
+		},
 	}
 
 	#[pallet::error]
 	pub enum Error<T> {
 		/// A new schedule must have a greater version than the current one.
 		InvalidScheduleVersion,
+		/// Invalid combination of flags supplied to `seal_call` or `seal_delegate_call`.
+		InvalidCallFlags,
 		/// The executed contract exhausted its gas limit.
 		OutOfGas,
 		/// The output buffer supplied to a contract API call was too small.
@@ -560,6 +646,10 @@ pub mod pallet {
 		/// or via RPC an `Ok` will be returned. In this case the caller needs to inspect the flags
 		/// to determine whether a reversion has taken place.
 		ContractReverted,
+		/// The contract's code was found to be invalid during validation or instrumentation.
+		/// A more detailed error can be found on the node console if debug messages are enabled
+		/// or in the debug buffer which is returned to RPC clients.
+		CodeRejected,
 	}
 
 	/// A mapping from an original code hash to the original code, untouched by instrumentation.
@@ -709,7 +799,8 @@ where
 		storage_deposit_limit: Option<BalanceOf<T>>,
 	) -> CodeUploadResult<CodeHash<T>, BalanceOf<T>> {
 		let schedule = T::Schedule::get();
-		let module = PrefabWasmModule::from_code(code, &schedule, origin)?;
+		let module = PrefabWasmModule::from_code(code, &schedule, origin)
+			.map_err(|_| <Error<T>>::CodeRejected)?;
 		let deposit = module.open_deposit();
 		if let Some(storage_deposit_limit) = storage_deposit_limit {
 			ensure!(storage_deposit_limit >= deposit, <Error<T>>::StorageDepositLimitExhausted);
@@ -728,27 +819,16 @@ where
 		Ok(maybe_value)
 	}
 
-	/// Determine the address of a contract,
+	/// Determine the address of a contract.
 	///
-	/// This is the address generation function used by contract instantiation. Its result
-	/// is only dependend on its inputs. It can therefore be used to reliably predict the
-	/// address of a contract. This is akin to the formular of eth's CREATE2 opcode. There
-	/// is no CREATE equivalent because CREATE2 is strictly more powerful.
-	///
-	/// Formula: `hash(deploying_address ++ code_hash ++ salt)`
+	/// This is the address generation function used by contract instantiation. See
+	/// [`DefaultAddressGenerator`] for the default implementation.
 	pub fn contract_address(
 		deploying_address: &T::AccountId,
 		code_hash: &CodeHash<T>,
 		salt: &[u8],
 	) -> T::AccountId {
-		let buf: Vec<_> = deploying_address
-			.as_ref()
-			.iter()
-			.chain(code_hash.as_ref())
-			.chain(salt)
-			.cloned()
-			.collect();
-		UncheckedFrom::unchecked_from(T::Hashing::hash(&buf))
+		T::AddressGenerator::generate_address(deploying_address, code_hash, salt)
 	}
 
 	/// Store code for benchmarks which does not check nor instrument the code.
@@ -768,7 +848,7 @@ where
 		module: &mut PrefabWasmModule<T>,
 		schedule: &Schedule<T>,
 	) -> frame_support::dispatch::DispatchResult {
-		self::wasm::reinstrument(module, schedule)
+		self::wasm::reinstrument(module, schedule).map(|_| ())
 	}
 
 	/// Internal function that does the actual call.
@@ -818,7 +898,7 @@ where
 		code: Code<CodeHash<T>>,
 		data: Vec<u8>,
 		salt: Vec<u8>,
-		debug_message: Option<&mut Vec<u8>>,
+		mut debug_message: Option<&mut Vec<u8>>,
 	) -> InternalInstantiateOutput<T> {
 		let mut storage_deposit = Default::default();
 		let mut gas_meter = GasMeter::new(gas_limit);
@@ -830,8 +910,11 @@ where
 						binary.len() as u32 <= schedule.limits.code_len,
 						<Error<T>>::CodeTooLarge
 					);
-					let executable =
-						PrefabWasmModule::from_code(binary, &schedule, origin.clone())?;
+					let executable = PrefabWasmModule::from_code(binary, &schedule, origin.clone())
+						.map_err(|msg| {
+							debug_message.as_mut().map(|buffer| buffer.extend(msg.as_bytes()));
+							<Error<T>>::CodeRejected
+						})?;
 					ensure!(
 						executable.code_len() <= schedule.limits.code_len,
 						<Error<T>>::CodeTooLarge

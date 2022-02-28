@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -26,32 +26,32 @@
 //! message, assuming it is valid.
 //!
 //! Topics are a single 32-byte tag associated with a message, used to group those messages
-//! in an opaque way. Consensus code can invoke `broadcast_topic` to attempt to send all messages
-//! under a single topic to all peers who don't have them yet, and `send_topic` to
-//! send all messages under a single topic to a specific peer.
+//! in an opaque way. Consensus code can invoke [`ValidatorContext::broadcast_topic`] to
+//! attempt to send all messages under a single topic to all peers who don't have them yet, and
+//! [`ValidatorContext::send_topic`] to send all messages under a single topic to a specific peer.
 //!
 //! # Usage
 //!
-//! - Implement the `Network` trait, representing the low-level networking primitives. It is already
-//!   implemented on `sc_network::NetworkService`.
-//! - Implement the `Validator` trait. See the section below.
+//! - Implement the [`Network`] trait, representing the low-level networking primitives. It is
+//!   already implemented on `sc_network::NetworkService`.
+//! - Implement the [`Validator`] trait. See the section below.
 //! - Decide on a protocol name. Each gossiping protocol should have a different one.
-//! - Build a `GossipEngine` using these three elements.
-//! - Use the methods of the `GossipEngine` in order to send out messages and receive incoming
+//! - Build a [`GossipEngine`] using these three elements.
+//! - Use the methods of the [`GossipEngine`] in order to send out messages and receive incoming
 //!   messages.
 //!
-//! The `GossipEngine` will automatically use `Network::add_set_reserved` and
-//! `Network::remove_set_reserved` to maintain a set of peers equal to the set of peers the
+//! The [`GossipEngine`] will automatically use [`Network::add_set_reserved`] and
+//! [`Network::remove_set_reserved`] to maintain a set of peers equal to the set of peers the
 //! node is syncing from. See the documentation of `sc-network` for more explanations about the
 //! concepts of peer sets.
 //!
 //! # What is a validator?
 //!
-//! The primary role of a `Validator` is to process incoming messages from peers, and decide
+//! The primary role of a [`Validator`] is to process incoming messages from peers, and decide
 //! whether to discard them or process them. It also decides whether to re-broadcast the message.
 //!
-//! The secondary role of the `Validator` is to check if a message is allowed to be sent to a given
-//! peer. All messages, before being sent, will be checked against this filter.
+//! The secondary role of the [`Validator`] is to check if a message is allowed to be sent to a
+//! given peer. All messages, before being sent, will be checked against this filter.
 //! This enables the validator to use information it's aware of about connected peers to decide
 //! whether to send messages to them at any given moment in time - In particular, to wait until
 //! peers can accept and process the message before sending it.

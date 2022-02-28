@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -457,9 +457,9 @@ impl<'a> Ready<'a> {
 }
 
 /// Error specific to the collection of protocols.
-#[derive(Debug, derive_more::Display, derive_more::Error)]
+#[derive(Debug, thiserror::Error)]
 pub enum NotifsHandlerError {
-	/// Channel of synchronous notifications is full.
+	#[error("Channel of synchronous notifications is full.")]
 	SyncNotificationsClogged,
 }
 

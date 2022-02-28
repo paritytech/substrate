@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -23,9 +23,9 @@
 use codec::{Decode, Encode};
 
 use jsonrpsee::{
+	core::{client::ClientT, Error as RpcError},
 	proc_macros::rpc,
 	rpc_params,
-	types::{traits::Client, Error as RpcError},
 	ws_client::{WsClient, WsClientBuilder},
 };
 
@@ -44,6 +44,7 @@ use sp_runtime::traits::Block as BlockT;
 use std::{
 	fs,
 	path::{Path, PathBuf},
+	sync::Arc,
 };
 
 pub mod rpc_api;
@@ -123,21 +124,52 @@ impl<P: Into<PathBuf>> From<P> for SnapshotConfig {
 }
 
 /// Description of the transport protocol (for online execution).
-#[derive(Debug)]
-pub struct Transport {
-	uri: String,
-	client: Option<WsClient>,
+#[derive(Debug, Clone)]
+pub enum Transport {
+	/// Use the `URI` to open a new WebSocket connection.
+	Uri(String),
+	/// Use existing WebSocket connection.
+	RemoteClient(Arc<WsClient>),
 }
 
-impl Clone for Transport {
-	fn clone(&self) -> Self {
-		Self { uri: self.uri.clone(), client: None }
+impl Transport {
+	fn as_client(&self) -> Option<&WsClient> {
+		match self {
+			Self::RemoteClient(client) => Some(&*client),
+			_ => None,
+		}
+	}
+
+	// Open a new WebSocket connection if it's not connected.
+	async fn map_uri(&mut self) -> Result<(), &'static str> {
+		if let Self::Uri(uri) = self {
+			log::debug!(target: LOG_TARGET, "initializing remote client to {:?}", uri);
+
+			let ws_client = WsClientBuilder::default()
+				.max_request_body_size(u32::MAX)
+				.build(&uri)
+				.await
+				.map_err(|e| {
+					log::error!(target: LOG_TARGET, "error: {:?}", e);
+					"failed to build ws client"
+				})?;
+
+			*self = Self::RemoteClient(Arc::new(ws_client))
+		}
+
+		Ok(())
 	}
 }
 
 impl From<String> for Transport {
-	fn from(t: String) -> Self {
-		Self { uri: t, client: None }
+	fn from(uri: String) -> Self {
+		Transport::Uri(uri)
+	}
+}
+
+impl From<Arc<WsClient>> for Transport {
+	fn from(client: Arc<WsClient>) -> Self {
+		Transport::RemoteClient(client)
 	}
 }
 
@@ -161,8 +193,7 @@ impl<B: BlockT> OnlineConfig<B> {
 	/// Return rpc (ws) client.
 	fn rpc_client(&self) -> &WsClient {
 		self.transport
-			.client
-			.as_ref()
+			.as_client()
 			.expect("ws client must have been initialized by now; qed.")
 	}
 }
@@ -170,7 +201,7 @@ impl<B: BlockT> OnlineConfig<B> {
 impl<B: BlockT> Default for OnlineConfig<B> {
 	fn default() -> Self {
 		Self {
-			transport: Transport { uri: DEFAULT_TARGET.to_owned(), client: None },
+			transport: Transport::Uri(DEFAULT_TARGET.to_owned()),
 			at: None,
 			state_snapshot: None,
 			pallets: vec![],
@@ -629,19 +660,8 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 	}
 
 	pub(crate) async fn init_remote_client(&mut self) -> Result<(), &'static str> {
-		let mut online = self.as_online_mut();
-		log::debug!(target: LOG_TARGET, "initializing remote client to {:?}", online.transport.uri);
-
 		// First, initialize the ws client.
-		let ws_client = WsClientBuilder::default()
-			.max_request_body_size(u32::MAX)
-			.build(&online.transport.uri)
-			.await
-			.map_err(|e| {
-				log::error!(target: LOG_TARGET, "error: {:?}", e);
-				"failed to build ws client"
-			})?;
-		online.transport.client = Some(ws_client);
+		self.as_online_mut().transport.map_uri().await?;
 
 		// Then, if `at` is not set, set it.
 		if self.as_online().at.is_none() {
@@ -738,7 +758,7 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 		self
 	}
 
-	/// Just a utility wrapper of [`inject_hashed_prefix`] that injects
+	/// Just a utility wrapper of [`Self::inject_hashed_prefix`] that injects
 	/// [`DEFAULT_CHILD_STORAGE_KEY_PREFIX`] as a prefix.
 	///
 	/// If set, this will guarantee that the child-tree data of ALL pallets will be downloaded.
@@ -747,9 +767,9 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 	///
 	/// Otherwise, the only other way to make sure a child-tree is manually included is to inject
 	/// its root (`DEFAULT_CHILD_STORAGE_KEY_PREFIX`, plus some other postfix) into
-	/// [`inject_hashed_key`]. Unfortunately, there's no federated way of managing child tree roots
-	/// as of now and each pallet does its own thing. Therefore, it is not possible for this library
-	/// to automatically include child trees of pallet X, when its top keys are included.
+	/// [`Self::inject_hashed_key`]. Unfortunately, there's no federated way of managing child tree
+	/// roots as of now and each pallet does its own thing. Therefore, it is not possible for this
+	/// library to automatically include child trees of pallet X, when its top keys are included.
 	pub fn inject_default_child_tree_prefix(self) -> Self {
 		self.inject_hashed_prefix(DEFAULT_CHILD_STORAGE_KEY_PREFIX)
 	}

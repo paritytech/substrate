@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -16,7 +16,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! BABE consensus data provider
+//! BABE consensus data provider, This allows manual seal author blocks that are valid for runtimes
+//! that expect babe-specific digests.
 
 use super::ConsensusDataProvider;
 use crate::Error;
@@ -30,11 +31,7 @@ use sc_consensus_epochs::{
 	descendent_query, EpochHeader, SharedEpochChanges, ViableEpochDescriptor,
 };
 use sp_keystore::SyncCryptoStorePtr;
-use std::{
-	borrow::Cow,
-	sync::{atomic, Arc},
-	time::SystemTime,
-};
+use std::{borrow::Cow, sync::Arc};
 
 use sc_consensus::{BlockImportParams, ForkChoiceStrategy, Verifier};
 use sp_api::{ProvideRuntimeApi, TransactionFor};
@@ -46,13 +43,13 @@ use sp_consensus_babe::{
 	AuthorityId, BabeApi, BabeAuthorityWeight, ConsensusLog, BABE_ENGINE_ID,
 };
 use sp_consensus_slots::Slot;
-use sp_inherents::{InherentData, InherentDataProvider, InherentIdentifier};
+use sp_inherents::InherentData;
 use sp_runtime::{
 	generic::{BlockId, Digest},
-	traits::{Block as BlockT, Header, Zero},
+	traits::{Block as BlockT, Header},
 	DigestItem,
 };
-use sp_timestamp::{InherentType, TimestampInherentData, INHERENT_IDENTIFIER};
+use sp_timestamp::TimestampInherentData;
 
 /// Provides BABE-compatible predigests and BlockImportParams.
 /// Intended for use with BABE runtimes.
@@ -121,7 +118,7 @@ where
 				pre_digest.slot(),
 			)
 			.map_err(|e| format!("failed to fetch epoch_descriptor: {}", e))?
-			.ok_or_else(|| format!("{:?}", sp_consensus::Error::InvalidAuthoritiesSet))?;
+			.ok_or_else(|| format!("{}", sp_consensus::Error::InvalidAuthoritiesSet))?;
 		// drop the lock
 		drop(epoch_changes);
 
@@ -154,7 +151,7 @@ where
 			return Err(Error::StringError("Cannot supply empty authority set!".into()))
 		}
 
-		let config = Config::get_or_compute(&*client)?;
+		let config = Config::get(&*client)?;
 
 		Ok(Self { config, client, keystore, epoch_changes, authorities })
 	}
@@ -172,7 +169,9 @@ where
 			.ok_or_else(|| sp_consensus::Error::InvalidAuthoritiesSet)?;
 
 		let epoch = epoch_changes
-			.viable_epoch(&epoch_descriptor, |slot| Epoch::genesis(&self.config, slot))
+			.viable_epoch(&epoch_descriptor, |slot| {
+				Epoch::genesis(self.config.genesis_config(), slot)
+			})
 			.ok_or_else(|| {
 				log::info!(target: "babe", "create_digest: no viable_epoch :(");
 				sp_consensus::Error::InvalidAuthoritiesSet
@@ -279,22 +278,24 @@ where
 		// a quick check to see if we're in the authorities
 		let epoch = self.epoch(parent, slot)?;
 		let (authority, _) = self.authorities.first().expect("authorities is non-emptyp; qed");
-		let has_authority = epoch.authorities.iter().find(|(id, _)| *id == *authority).is_some();
+		let has_authority = epoch.authorities.iter().any(|(id, _)| *id == *authority);
 
 		if !has_authority {
 			log::info!(target: "manual-seal", "authority not found");
 			let timestamp = inherents
 				.timestamp_inherent_data()?
 				.ok_or_else(|| Error::StringError("No timestamp inherent data".into()))?;
-			let slot = *timestamp / self.config.slot_duration;
+
+			let slot = Slot::from_timestamp(timestamp, self.config.slot_duration());
+
 			// manually hard code epoch descriptor
 			epoch_descriptor = match epoch_descriptor {
 				ViableEpochDescriptor::Signaled(identifier, _header) =>
 					ViableEpochDescriptor::Signaled(
 						identifier,
 						EpochHeader {
-							start_slot: slot.into(),
-							end_slot: (slot * self.config.epoch_length).into(),
+							start_slot: slot,
+							end_slot: (*slot * self.config.genesis_config().epoch_length).into(),
 						},
 					),
 				_ => unreachable!(
@@ -309,69 +310,5 @@ where
 		);
 
 		Ok(())
-	}
-}
-
-/// Provide duration since unix epoch in millisecond for timestamp inherent.
-/// Mocks the timestamp inherent to always produce the timestamp for the next babe slot.
-pub struct SlotTimestampProvider {
-	time: atomic::AtomicU64,
-	slot_duration: u64,
-}
-
-impl SlotTimestampProvider {
-	/// Create a new mocked time stamp provider.
-	pub fn new<B, C>(client: Arc<C>) -> Result<Self, Error>
-	where
-		B: BlockT,
-		C: AuxStore + HeaderBackend<B> + ProvideRuntimeApi<B> + UsageProvider<B>,
-		C::Api: BabeApi<B>,
-	{
-		let slot_duration = Config::get_or_compute(&*client)?.slot_duration;
-		let info = client.info();
-
-		// looks like this isn't the first block, rehydrate the fake time.
-		// otherwise we'd be producing blocks for older slots.
-		let time = if info.best_number != Zero::zero() {
-			let header = client.header(BlockId::Hash(info.best_hash))?.unwrap();
-			let slot = find_pre_digest::<B>(&header).unwrap().slot();
-			// add the slot duration so there's no collision of slots
-			(*slot * slot_duration) + slot_duration
-		} else {
-			// this is the first block, use the correct time.
-			let now = SystemTime::now();
-			now.duration_since(SystemTime::UNIX_EPOCH)
-				.map_err(|err| Error::StringError(format!("{}", err)))?
-				.as_millis() as u64
-		};
-
-		Ok(Self { time: atomic::AtomicU64::new(time), slot_duration })
-	}
-
-	/// Get the current slot number
-	pub fn slot(&self) -> u64 {
-		self.time.load(atomic::Ordering::SeqCst) / self.slot_duration
-	}
-}
-
-#[async_trait::async_trait]
-impl InherentDataProvider for SlotTimestampProvider {
-	fn provide_inherent_data(
-		&self,
-		inherent_data: &mut InherentData,
-	) -> Result<(), sp_inherents::Error> {
-		// we update the time here.
-		let duration: InherentType =
-			self.time.fetch_add(self.slot_duration, atomic::Ordering::SeqCst).into();
-		inherent_data.put_data(INHERENT_IDENTIFIER, &duration)?;
-		Ok(())
-	}
-
-	async fn try_handle_error(
-		&self,
-		_: &InherentIdentifier,
-		_: &[u8],
-	) -> Option<Result<(), sp_inherents::Error>> {
-		None
 	}
 }

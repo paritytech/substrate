@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -125,7 +125,7 @@ pub mod v1 {
 	/// A type that can be used as a scheduler.
 	pub trait Anon<BlockNumber, Call, Origin> {
 		/// An address which can be used for removing a scheduled task.
-		type Address: Codec + Clone + Eq + EncodeLike + Debug;
+		type Address: Codec + Clone + Eq + EncodeLike + Debug + TypeInfo;
 
 		/// Schedule a dispatch to happen at the beginning of some block in the future.
 		///
@@ -280,7 +280,7 @@ pub mod v2 {
 	/// A type that can be used as a scheduler.
 	pub trait Anon<BlockNumber, Call, Origin> {
 		/// An address which can be used for removing a scheduled task.
-		type Address: Codec + Clone + Eq + EncodeLike + Debug;
+		type Address: Codec + Clone + Eq + EncodeLike + Debug + TypeInfo;
 		/// A means of expressing a call by the hash of its encoded data.
 		type Hash;
 

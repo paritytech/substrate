@@ -6,39 +6,39 @@ evaluation_interval: 1m
 tests:
     - interval: 1m
       input_series:
-          - series: 'polkadot_sub_libp2p_peers_count{
-              job="polkadot",
-              pod="polkadot-abcdef01234-abcdef",
-              instance="polkadot-abcdef01234-abcdef",
+          - series: 'substrate_sub_libp2p_peers_count{
+              job="substrate",
+              pod="substrate-abcdef01234-abcdef",
+              instance="substrate-abcdef01234-abcdef",
             }'
             values: '3 2+0x4 1+0x9' # 3 2 2 2 2 2 1 1 1 1 1 1 1 1 1 1
 
-          - series: 'polkadot_sub_txpool_validations_scheduled{
-              job="polkadot",
-              pod="polkadot-abcdef01234-abcdef",
-              instance="polkadot-abcdef01234-abcdef",
+          - series: 'substrate_sub_txpool_validations_scheduled{
+              job="substrate",
+              pod="substrate-abcdef01234-abcdef",
+              instance="substrate-abcdef01234-abcdef",
             }'
             values: '11+1x10 22+2x30 10043x5'
 
-          - series: 'polkadot_sub_txpool_validations_finished{
-              job="polkadot",
-              pod="polkadot-abcdef01234-abcdef",
-              instance="polkadot-abcdef01234-abcdef",
+          - series: 'substrate_sub_txpool_validations_finished{
+              job="substrate",
+              pod="substrate-abcdef01234-abcdef",
+              instance="substrate-abcdef01234-abcdef",
             }'
             values: '0+1x42 42x5'
 
-          - series: 'polkadot_block_height{
-              status="best", job="polkadot",
-              pod="polkadot-abcdef01234-abcdef",
-              instance="polkadot-abcdef01234-abcdef",
+          - series: 'substrate_block_height{
+              status="best", job="substrate",
+              pod="substrate-abcdef01234-abcdef",
+              instance="substrate-abcdef01234-abcdef",
             }'
             values: '1+1x3 4+0x13' # 1 2 3 4 4 4 4 4 4 4 4 4 ...
 
-          - series: 'polkadot_block_height{
+          - series: 'substrate_block_height{
               status="finalized",
-              job="polkadot",
-              pod="polkadot-abcdef01234-abcdef",
-              instance="polkadot-abcdef01234-abcdef",
+              job="substrate",
+              pod="substrate-abcdef01234-abcdef",
+              instance="substrate-abcdef01234-abcdef",
             }'
             values: '1+1x3 4+0x13' # 1 2 3 4 4 4 4 4 4 4 4 4 ...
 
@@ -56,13 +56,13 @@ tests:
             exp_alerts:
                 - exp_labels:
                       severity: warning
-                      pod: polkadot-abcdef01234-abcdef
-                      instance: polkadot-abcdef01234-abcdef
-                      job: polkadot
+                      pod: substrate-abcdef01234-abcdef
+                      instance: substrate-abcdef01234-abcdef
+                      job: substrate
                       status: best
                   exp_annotations:
                       message: "Best block on instance
-                      polkadot-abcdef01234-abcdef increases by less than 1 per
+                      substrate-abcdef01234-abcdef increases by less than 1 per
                       minute for more than 3 minutes."
 
           - eval_time: 14m
@@ -70,23 +70,23 @@ tests:
             exp_alerts:
                 - exp_labels:
                       severity: warning
-                      pod: polkadot-abcdef01234-abcdef
-                      instance: polkadot-abcdef01234-abcdef
-                      job: polkadot
+                      pod: substrate-abcdef01234-abcdef
+                      instance: substrate-abcdef01234-abcdef
+                      job: substrate
                       status: best
                   exp_annotations:
                       message: "Best block on instance
-                      polkadot-abcdef01234-abcdef increases by less than 1 per
+                      substrate-abcdef01234-abcdef increases by less than 1 per
                       minute for more than 3 minutes."
                 - exp_labels:
                       severity: critical
-                      pod: polkadot-abcdef01234-abcdef
-                      instance: polkadot-abcdef01234-abcdef
-                      job: polkadot
+                      pod: substrate-abcdef01234-abcdef
+                      instance: substrate-abcdef01234-abcdef
+                      job: substrate
                       status: best
                   exp_annotations:
                       message: "Best block on instance
-                      polkadot-abcdef01234-abcdef increases by less than 1 per
+                      substrate-abcdef01234-abcdef increases by less than 1 per
                       minute for more than 10 minutes."
 
           ######################################################################
@@ -101,13 +101,13 @@ tests:
             exp_alerts:
                 - exp_labels:
                       severity: warning
-                      pod: polkadot-abcdef01234-abcdef
-                      instance: polkadot-abcdef01234-abcdef
-                      job: polkadot
+                      pod: substrate-abcdef01234-abcdef
+                      instance: substrate-abcdef01234-abcdef
+                      job: substrate
                       status: finalized
                   exp_annotations:
                       message: "Finalized block on instance
-                      polkadot-abcdef01234-abcdef increases by less than 1 per
+                      substrate-abcdef01234-abcdef increases by less than 1 per
                       minute for more than 3 minutes."
 
           - eval_time: 14m
@@ -115,23 +115,23 @@ tests:
             exp_alerts:
                 - exp_labels:
                       severity: warning
-                      pod: polkadot-abcdef01234-abcdef
-                      instance: polkadot-abcdef01234-abcdef
-                      job: polkadot
+                      pod: substrate-abcdef01234-abcdef
+                      instance: substrate-abcdef01234-abcdef
+                      job: substrate
                       status: finalized
                   exp_annotations:
                       message: "Finalized block on instance
-                      polkadot-abcdef01234-abcdef increases by less than 1 per
+                      substrate-abcdef01234-abcdef increases by less than 1 per
                       minute for more than 3 minutes."
                 - exp_labels:
                       severity: critical
-                      pod: polkadot-abcdef01234-abcdef
-                      instance: polkadot-abcdef01234-abcdef
-                      job: polkadot
+                      pod: substrate-abcdef01234-abcdef
+                      instance: substrate-abcdef01234-abcdef
+                      job: substrate
                       status: finalized
                   exp_annotations:
                       message: "Finalized block on instance
-                      polkadot-abcdef01234-abcdef increases by less than 1 per
+                      substrate-abcdef01234-abcdef increases by less than 1 per
                       minute for more than 10 minutes."
 
           ######################################################################
@@ -152,12 +152,12 @@ tests:
             exp_alerts:
                 - exp_labels:
                       severity: warning
-                      pod: polkadot-abcdef01234-abcdef
-                      instance: polkadot-abcdef01234-abcdef
-                      job: polkadot
+                      pod: substrate-abcdef01234-abcdef
+                      instance: substrate-abcdef01234-abcdef
+                      job: substrate
                   exp_annotations:
                       message: "The transaction pool size on node
-                      polkadot-abcdef01234-abcdef has been monotonically
+                      substrate-abcdef01234-abcdef has been monotonically
                       increasing for more than 10 minutes."
           - eval_time: 43m
             alertname: TransactionQueueSizeIncreasing
@@ -167,21 +167,21 @@ tests:
             exp_alerts:
                 - exp_labels:
                       severity: warning
-                      pod: polkadot-abcdef01234-abcdef
-                      instance: polkadot-abcdef01234-abcdef
-                      job: polkadot
+                      pod: substrate-abcdef01234-abcdef
+                      instance: substrate-abcdef01234-abcdef
+                      job: substrate
                   exp_annotations:
                       message: "The transaction pool size on node
-                      polkadot-abcdef01234-abcdef has been monotonically
+                      substrate-abcdef01234-abcdef has been monotonically
                       increasing for more than 10 minutes."
                 - exp_labels:
                       severity: warning
-                      pod: polkadot-abcdef01234-abcdef
-                      instance: polkadot-abcdef01234-abcdef
-                      job: polkadot
+                      pod: substrate-abcdef01234-abcdef
+                      instance: substrate-abcdef01234-abcdef
+                      job: substrate
                   exp_annotations:
                       message: "The transaction pool size on node
-                      polkadot-abcdef01234-abcdef has been monotonically
+                      substrate-abcdef01234-abcdef has been monotonically
                       increasing for more than 30 minutes."
           - eval_time: 49m
             alertname: TransactionQueueSizeHigh
@@ -191,12 +191,12 @@ tests:
             exp_alerts:
                 - exp_labels:
                       severity: warning
-                      pod: polkadot-abcdef01234-abcdef
-                      instance: polkadot-abcdef01234-abcdef
-                      job: polkadot
+                      pod: substrate-abcdef01234-abcdef
+                      instance: substrate-abcdef01234-abcdef
+                      job: substrate
                   exp_annotations:
                       message: "The transaction pool size on node
-                      polkadot-abcdef01234-abcdef has been above 10_000 for more
+                      substrate-abcdef01234-abcdef has been above 10_000 for more
                       than 5 minutes."
 
           ######################################################################
@@ -211,11 +211,11 @@ tests:
             exp_alerts:
                 - exp_labels:
                       severity: warning
-                      pod: polkadot-abcdef01234-abcdef
-                      instance: polkadot-abcdef01234-abcdef
-                      job: polkadot
+                      pod: substrate-abcdef01234-abcdef
+                      instance: substrate-abcdef01234-abcdef
+                      job: substrate
                   exp_annotations:
-                      message: "The node polkadot-abcdef01234-abcdef has less
+                      message: "The node substrate-abcdef01234-abcdef has less
                       than 3 peers for more than 3 minutes"
 
           - eval_time: 16m # Values: 3 2 2 2 2 2 1 1 1 1 1 1 1 1 1 1 1
@@ -223,17 +223,17 @@ tests:
             exp_alerts:
                 - exp_labels:
                       severity: warning
-                      pod: polkadot-abcdef01234-abcdef
-                      instance: polkadot-abcdef01234-abcdef
-                      job: polkadot
+                      pod: substrate-abcdef01234-abcdef
+                      instance: substrate-abcdef01234-abcdef
+                      job: substrate
                   exp_annotations:
-                      message: "The node polkadot-abcdef01234-abcdef has less
+                      message: "The node substrate-abcdef01234-abcdef has less
                       than 3 peers for more than 3 minutes"
                 - exp_labels:
                       severity: critical
-                      pod: polkadot-abcdef01234-abcdef
-                      instance: polkadot-abcdef01234-abcdef
-                      job: polkadot
+                      pod: substrate-abcdef01234-abcdef
+                      instance: substrate-abcdef01234-abcdef
+                      job: substrate
                   exp_annotations:
-                      message: "The node polkadot-abcdef01234-abcdef has less
+                      message: "The node substrate-abcdef01234-abcdef has less
                       than 3 peers for more than 15 minutes"

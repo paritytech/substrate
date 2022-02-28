@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -16,21 +16,21 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-#[derive(derive_more::Display, derive_more::From)]
+#[derive(Debug, thiserror::Error)]
 /// Top-level error type for the RPC handler
 pub enum Error {
 	/// The GRANDPA RPC endpoint is not ready.
-	#[display(fmt = "GRANDPA RPC endpoint not ready")]
+	#[error("GRANDPA RPC endpoint not ready")]
 	EndpointNotReady,
 	/// GRANDPA reports the authority set id to be larger than 32-bits.
-	#[display(fmt = "GRANDPA reports authority set id unreasonably large")]
+	#[error("GRANDPA reports authority set id unreasonably large")]
 	AuthoritySetIdReportedAsUnreasonablyLarge,
 	/// GRANDPA reports voter state with round id or weights larger than 32-bits.
-	#[display(fmt = "GRANDPA reports voter state as unreasonably large")]
+	#[error("GRANDPA reports voter state as unreasonably large")]
 	VoterStateReportsUnreasonablyLargeNumbers,
 	/// GRANDPA prove finality failed.
-	#[display(fmt = "GRANDPA prove finality rpc failed: {}", _0)]
-	ProveFinalityFailed(sc_finality_grandpa::FinalityProofError),
+	#[error("GRANDPA prove finality rpc failed: {0}")]
+	ProveFinalityFailed(#[from] sc_finality_grandpa::FinalityProofError),
 }
 
 /// The error codes returned by jsonrpc.

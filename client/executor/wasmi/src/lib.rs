@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -21,7 +21,7 @@
 use codec::{Decode, Encode};
 use log::{debug, error, trace};
 use sc_executor_common::{
-	error::{Error, WasmError},
+	error::{Error, MessageWithBacktrace, WasmError},
 	runtime_blob::{DataSegmentsSnapshot, RuntimeBlob},
 	sandbox,
 	util::MemoryTransfer,
@@ -48,6 +48,7 @@ struct FunctionExecutor {
 	host_functions: Arc<Vec<&'static dyn Function>>,
 	allow_missing_func_imports: bool,
 	missing_functions: Arc<Vec<String>>,
+	panic_message: Option<String>,
 }
 
 impl FunctionExecutor {
@@ -69,6 +70,7 @@ impl FunctionExecutor {
 			host_functions,
 			allow_missing_func_imports,
 			missing_functions,
+			panic_message: None,
 		})
 	}
 }
@@ -100,7 +102,7 @@ impl<'a> sandbox::SandboxContext for SandboxContext<'a> {
 		match result {
 			Ok(Some(RuntimeValue::I64(val))) => Ok(val),
 			Ok(_) => return Err("Supervisor function returned unexpected result!".into()),
-			Err(err) => Err(Error::Trap(err)),
+			Err(err) => Err(Error::Sandbox(err.to_string())),
 		}
 	}
 
@@ -132,6 +134,10 @@ impl FunctionContext for FunctionExecutor {
 
 	fn sandbox(&mut self) -> &mut dyn Sandbox {
 		self
+	}
+
+	fn register_panic_error_message(&mut self, message: &str) {
+		self.panic_message = Some(message.to_owned());
 	}
 }
 
@@ -213,7 +219,6 @@ impl Sandbox for FunctionExecutor {
 		let args = Vec::<sp_wasm_interface::Value>::decode(&mut args)
 			.map_err(|_| "Can't decode serialized arguments for the invocation")?
 			.into_iter()
-			.map(Into::into)
 			.collect::<Vec<_>>();
 
 		let instance =
@@ -502,12 +507,31 @@ fn call_in_wasm_module(
 	let offset = function_executor.allocate_memory(data.len() as u32)?;
 	function_executor.write_memory(offset, data)?;
 
+	fn convert_trap(executor: &mut FunctionExecutor, trap: wasmi::Trap) -> Error {
+		if let Some(message) = executor.panic_message.take() {
+			Error::AbortedDueToPanic(MessageWithBacktrace { message, backtrace: None })
+		} else {
+			Error::AbortedDueToTrap(MessageWithBacktrace {
+				message: trap.to_string(),
+				backtrace: None,
+			})
+		}
+	}
+
 	let result = match method {
-		InvokeMethod::Export(method) => module_instance.invoke_export(
-			method,
-			&[I32(u32::from(offset) as i32), I32(data.len() as i32)],
-			&mut function_executor,
-		),
+		InvokeMethod::Export(method) => module_instance
+			.invoke_export(
+				method,
+				&[I32(u32::from(offset) as i32), I32(data.len() as i32)],
+				&mut function_executor,
+			)
+			.map_err(|error| {
+				if let wasmi::Error::Trap(trap) = error {
+					convert_trap(&mut function_executor, trap)
+				} else {
+					error.into()
+				}
+			}),
 		InvokeMethod::Table(func_ref) => {
 			let func = table
 				.ok_or(Error::NoTable)?
@@ -518,7 +542,7 @@ fn call_in_wasm_module(
 				&[I32(u32::from(offset) as i32), I32(data.len() as i32)],
 				&mut function_executor,
 			)
-			.map_err(Into::into)
+			.map_err(|trap| convert_trap(&mut function_executor, trap))
 		},
 		InvokeMethod::TableWithWrapper { dispatcher_ref, func } => {
 			let dispatcher = table
@@ -531,7 +555,7 @@ fn call_in_wasm_module(
 				&[I32(func as _), I32(u32::from(offset) as i32), I32(data.len() as i32)],
 				&mut function_executor,
 			)
-			.map_err(Into::into)
+			.map_err(|trap| convert_trap(&mut function_executor, trap))
 		},
 	};
 
