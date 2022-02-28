@@ -370,7 +370,7 @@ pub mod pallet {
 		type MaxProposals: Get<u32>;
 
 		/// The maximumal possible amount of tokens that can participate in the governance.
-		/// 
+		///
 		/// Note: This is not a constant.
 		type LiquidTotalIssuance: Get<BalanceOf<Self>>;
 	}
