@@ -1962,7 +1962,7 @@ mod tests {
 					..Default::default()
 				};
 				assert_ok!(
-					MultiPhase::submit(crate::mock::Origin::signed(99), Box::new(solution),)
+					MultiPhase::submit(crate::mock::Origin::signed(99), Box::new(solution))
 				);
 			}
 
