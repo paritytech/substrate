@@ -34,6 +34,7 @@ impl<T: Config> OnRuntimeUpgrade for InjectValidatorsIntoVoterList<T> {
 				});
 			}
 
+			StorageVersion::<T>::put(Releases::V9_0_0);
 			T::BlockWeights::get().max_block
 		} else {
 			log!(warn, "InjectValidatorsIntoVoterList being executed on the wrong storage version, expected Releases::V8_0_0");
@@ -44,10 +45,7 @@ impl<T: Config> OnRuntimeUpgrade for InjectValidatorsIntoVoterList<T> {
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<(), &'static str> {
 		use frame_support::traits::OnRuntimeUpgradeHelpersExt;
-		frame_support::ensure!(
-			StorageVersion::<T>::get() == crate::Releases::V8_0_0,
-			"must upgrade linearly"
-		);
+		ensure!(StorageVersion::<T>::get() == crate::Releases::V8_0_0, "must upgrade linearly");
 
 		let prev_count = T::VoterList::count();
 		Self::set_temp_storage(prev_count, "prev");
@@ -60,7 +58,43 @@ impl<T: Config> OnRuntimeUpgrade for InjectValidatorsIntoVoterList<T> {
 		let post_count = T::VoterList::count();
 		let prev_count = Self::get_temp_storage::<u32>("prev").unwrap();
 		let validators = Validators::<T>::count();
-		assert!(post_count == prev_count + validators);
+		ensure!(post_count == prev_count + validators, "incorrect count");
+		ensure!(StorageVersion::<T>::get(), Releases::V9_0_0, "version not set");
+		Ok(())
+	}
+}
+
+/// Migration implementation that injects all validators into sorted list.
+///
+/// This is only useful for chains that started their `VoterList` just based on nominators.
+pub struct InjectValidatorsIntoTargetList<T>(sp_std::marker::PhantomData<T>);
+impl<T: Config> OnRuntimeUpgrade for InjectValidatorsIntoTargetList<T> {
+	fn on_runtime_upgrade() -> Weight {
+		if StorageVersion::<T>::get() == Releases::V9_0_0 {
+			for (v, _) in Validators::<T>::iter() {
+				let weight = Pallet::<T>::vote_weight(&v);
+				let _ = T::TargetList::on_insert(v.clone(), weight).map_err(|err| {
+					log!(warn, "failed to insert {:?} into TargetList: {:?}", v, err)
+				});
+			}
+
+			StorageVersion::<T>::put(Releases::V10_0_0);
+			T::BlockWeights::get().max_block
+		} else {
+			log!(warn, "InjectValidatorsIntoTargetList being executed on the wrong storage version, expected Releases::V9_0_0");
+			T::DbWeight::get().reads(1)
+		}
+	}
+
+	#[cfg(feature = "try-runtime")]
+	fn pre_upgrade() -> Result<(), &'static str> {
+		ensure!(StorageVersion::<T>::get() == Releases::V9_0_0, "must upgrade linearly");
+		Ok(())
+	}
+
+	#[cfg(feature = "try-runtime")]
+	fn post_upgrade() -> Result<(), &'static str> {
+		ensure!(StorageVersion::<T>::get(), Releases::V10_0_0, "must upgrade linearly");
 		Ok(())
 	}
 }
