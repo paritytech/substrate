@@ -21,7 +21,7 @@ rand = { version = "0.8", features = ["std", "small_rng"] }
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive"] }
 scale-info = { version = "2.0.0", default-features = false, features = ["derive"] }
 sp-npos-elections = { version = "4.0.0-dev", path = ".." }
-sp-runtime = { version = "5.0.0", path = "../../runtime" }
+sp-runtime = { version = "6.0.0", path = "../../runtime" }
 
 [[bin]]
 name = "reduce"
