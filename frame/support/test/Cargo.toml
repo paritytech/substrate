@@ -22,7 +22,7 @@ frame-support = { version = "4.0.0-dev", default-features = false, path = "../" 
 sp-runtime = { version = "6.0.0", default-features = false, path = "../../../primitives/runtime" }
 sp-core = { version = "6.0.0", default-features = false, path = "../../../primitives/core" }
 sp-std = { version = "4.0.0", default-features = false, path = "../../../primitives/std" }
-sp-version = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/version" }
+sp-version = { version = "5.0.0", default-features = false, path = "../../../primitives/version" }
 trybuild = "1.0.53"
 pretty_assertions = "1.0.0"
 rustversion = "1.0.6"

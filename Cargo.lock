@@ -10348,7 +10348,7 @@ dependencies = [
 
 [[package]]
 name = "sp-version"
-version = "4.0.0-dev"
+version = "5.0.0"
 dependencies = [
  "impl-serde",
  "parity-scale-codec",
