@@ -17,7 +17,7 @@ sp-api = { version = "4.0.0-dev", default-features = false, path = "../../api" }
 sp-std = { version = "4.0.0", default-features = false, path = "../../std" }
 sp-runtime = { version = "5.0.0", default-features = false, path = "../../runtime" }
 sp-core = { version = "5.0.0", default-features = false, path = "../../core" }
-codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive"] }
 
 [features]
 default = ["std"]

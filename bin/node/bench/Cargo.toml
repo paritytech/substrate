@@ -20,8 +20,8 @@ sp-state-machine = { version = "0.11.0", path = "../../../primitives/state-machi
 serde = "1.0.136"
 serde_json = "1.0.74"
 derive_more = "0.99.16"
-kvdb = "0.10.0"
-kvdb-rocksdb = "0.14.0"
+kvdb = "0.11.0"
+kvdb-rocksdb = "0.15.1"
 sp-trie = { version = "5.0.0", path = "../../../primitives/trie" }
 sp-core = { version = "5.0.0", path = "../../../primitives/core" }
 sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
@@ -35,7 +35,7 @@ fs_extra = "1"
 hex = "0.4.0"
 rand = { version = "0.7.2", features = ["small_rng"] }
 lazy_static = "1.4.0"
-parity-util-mem = { version = "0.10.2", default-features = false, features = ["primitive-types"] }
+parity-util-mem = { version = "0.11.0", default-features = false, features = ["primitive-types"] }
 parity-db = { version = "0.3" }
 sc-transaction-pool = { version = "4.0.0-dev", path = "../../../client/transaction-pool" }
 sc-transaction-pool-api = { version = "4.0.0-dev", path = "../../../client/transaction-pool/api" }
