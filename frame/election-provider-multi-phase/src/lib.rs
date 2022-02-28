@@ -1961,9 +1961,7 @@ mod tests {
 					score: ElectionScore { minimal_stake: (5 + s).into(), ..Default::default() },
 					..Default::default()
 				};
-				assert_ok!(
-					MultiPhase::submit(crate::mock::Origin::signed(99), Box::new(solution))
-				);
+				assert_ok!(MultiPhase::submit(crate::mock::Origin::signed(99), Box::new(solution)));
 			}
 
 			// an unexpected call to elect.
