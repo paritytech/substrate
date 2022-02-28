@@ -24,12 +24,11 @@
 //! ## Overview
 //!
 //! This pallet contains functionality for multi-signature dispatch, a (potentially) stateful
-//! operation, allowing multiple signed
-//! origins (accounts) to coordinate and dispatch a call from a well-known origin, derivable
-//! deterministically from the set of account IDs and the threshold number of accounts from the
-//! set that must approve it. In the case that the threshold is just one then this is a stateless
-//! operation. This is useful for multisig wallets where cryptographic threshold signatures are
-//! not available or desired.
+//! operation, allowing multiple signed origins (accounts) to coordinate and dispatch a call from a
+//! well-known origin, derivable deterministically from the set of account IDs and the threshold
+//! number of accounts from the set that must approve it. In the case that the threshold is just one
+//! then this is a stateless operation. This is useful for multisig wallets where cryptographic
+//! threshold signatures are not available or desired.
 //!
 //! ## Interface
 //!
