@@ -74,9 +74,7 @@ frame_support::construct_runtime!(
 #[macro_use]
 pub mod test_utils {
 	use super::{Balances, Test};
-	use crate::{
-		exec::AccountIdOf, storage::Storage, Nonce, CodeHash, Config, ContractInfoOf,
-	};
+	use crate::{exec::AccountIdOf, storage::Storage, CodeHash, Config, ContractInfoOf, Nonce};
 	use frame_support::traits::Currency;
 
 	pub fn place_contract(address: &AccountIdOf<Test>, code_hash: CodeHash<Test>) {

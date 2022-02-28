@@ -18,7 +18,7 @@
 use crate::{
 	gas::GasMeter,
 	storage::{self, Storage, WriteOutcome},
-	Nonce, BalanceOf, CodeHash, Config, ContractInfo, ContractInfoOf, Error, Event,
+	BalanceOf, CodeHash, Config, ContractInfo, ContractInfoOf, Error, Event, Nonce,
 	Pallet as Contracts, Schedule,
 };
 use frame_support::{

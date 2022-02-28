@@ -19,10 +19,10 @@ use crate::{BalanceOf, CodeHash, Config, Pallet, TrieId, Weight};
 use codec::{Decode, Encode};
 use frame_support::{
 	codec, generate_storage_alias,
+	pallet_prelude::*,
 	storage::migration,
 	traits::{Get, PalletInfoAccess},
 	Identity, Twox64Concat,
-	pallet_prelude::*,
 };
 use sp_std::{marker::PhantomData, prelude::*};
 
@@ -272,5 +272,4 @@ mod v7 {
 		Nonce::set(AccountCounter::take());
 		T::DbWeight::get().reads_writes(1, 2)
 	}
-
 }
