@@ -80,11 +80,11 @@ pub mod test_utils {
 	use frame_support::traits::Currency;
 
 	pub fn place_contract(address: &AccountIdOf<Test>, code_hash: CodeHash<Test>) {
-		let seed = <AccountCounter<Test>>::mutate(|counter| {
+		let nonce = <AccountCounter<Test>>::mutate(|counter| {
 			*counter += 1;
 			*counter
 		});
-		let trie_id = Storage::<Test>::generate_trie_id(address, seed);
+		let trie_id = Storage::<Test>::generate_trie_id(address, nonce);
 		set_balance(address, <Test as Config>::Currency::minimum_balance() * 10);
 		let contract = Storage::<Test>::new_contract(&address, trie_id, code_hash).unwrap();
 		<ContractInfoOf<Test>>::insert(address, contract);
