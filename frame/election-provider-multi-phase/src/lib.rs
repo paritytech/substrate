@@ -967,17 +967,16 @@ pub mod pallet {
 		/// # <weight>
 		/// Queue size must be provided as witness data.
 		/// # </weight>
-		#[pallet::weight(T::WeightInfo::submit(*num_signed_submissions))]
+		#[pallet::weight(T::DbWeight::get().reads_writes(5, 3))]
 		pub fn submit(
 			origin: OriginFor<T>,
 			raw_solution: Box<RawSolution<SolutionOf<T>>>,
-			num_signed_submissions: u32,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
 			// ensure witness data is correct.
 			ensure!(
-				num_signed_submissions >=
+				T::SignedMaxSubmissions::get() >=
 					<SignedSubmissions<T>>::decode_len().unwrap_or_default() as u32,
 				Error::<T>::SignedInvalidWitness,
 			);
@@ -1001,7 +1000,7 @@ pub mod pallet {
 			let deposit = Self::deposit_for(&raw_solution, size);
 			let reward = {
 				let call =
-					Call::submit { raw_solution: raw_solution.clone(), num_signed_submissions };
+					Call::submit { raw_solution: raw_solution.clone() };
 				let call_fee = T::EstimateCallFee::estimate_call_fee(&call, None.into());
 				T::SignedRewardBase::get().saturating_add(call_fee)
 			};
@@ -1973,7 +1972,6 @@ mod tests {
 				assert_ok!(MultiPhase::submit(
 					crate::mock::Origin::signed(99),
 					Box::new(solution),
-					MultiPhase::signed_submissions().len() as u32
 				));
 			}
 

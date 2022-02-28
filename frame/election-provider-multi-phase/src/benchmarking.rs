@@ -310,7 +310,7 @@ frame_benchmarking::benchmarks! {
 	}
 
 	submit {
-		let c in 1 .. (T::SignedMaxSubmissions::get() - 1);
+		let c = T::SignedMaxSubmissions::get();
 
 		// the solution will be worse than all of them meaning the score need to be checked against
 		// ~ log2(c)
