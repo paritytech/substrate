@@ -38,11 +38,11 @@ const SEED: u32 = 0;
 pub fn clear_validators_and_nominators<T: Config>() {
 	Validators::<T>::remove_all();
 
-	// whenever we touch nominators counter we should update `T::SortedListProvider` as well.
+	// whenever we touch nominators counter we should update `T::VoterList` as well.
 	Nominators::<T>::remove_all();
 
 	// NOTE: safe to call outside block production
-	T::SortedListProvider::unsafe_clear();
+	T::VoterList::unsafe_clear();
 }
 
 /// Grab a funded user.
