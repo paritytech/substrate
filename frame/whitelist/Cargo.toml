@@ -1,56 +1,47 @@
 [package]
-name = "pallet-referenda"
+name = "pallet-whitelist"
 version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2021"
 license = "Apache-2.0"
 homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
-description = "FRAME pallet for inclusive on-chain decisions"
+description = "FRAME pallet for whitelisting call, and dispatch from specific origin"
 readme = "README.md"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-serde = { version = "1.0.136", optional = true, features = ["derive"] }
-codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = [
-	"derive",
-] }
-scale-info = { version = "2.0.0", default-features = false, features = ["derive"] }
-sp-std = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
+codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive", "max-encoded-len"] }
+scale-info = { version = "2.0", default-features = false, features = ["derive"] }
+sp-api = { version = "4.0.0-dev", default-features = false, path = "../../primitives/api" }
+sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
 sp-io = { version = "5.0.0", default-features = false, path = "../../primitives/io" }
 sp-runtime = { version = "5.0.0", default-features = false, path = "../../primitives/runtime" }
-frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
-assert_matches = { version = "1.5", optional = true }
+frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
 
 [dev-dependencies]
 sp-core = { version = "5.0.0", path = "../../primitives/core" }
-pallet-balances = { version = "4.0.0-dev", path = "../balances" }
-pallet-scheduler = { version = "4.0.0-dev", path = "../scheduler" }
-pallet-preimage = { version = "4.0.0-dev", path = "../preimage" }
-assert_matches = { version = "1.5" }
+pallet-preimage = { version = "4.0.0-dev", path = "../preimage/" }
+pallet-balances = { version = "4.0.0-dev", path = "../balances/" }
 
 [features]
 default = ["std"]
 std = [
-	"serde",
 	"codec/std",
 	"scale-info/std",
 	"sp-std/std",
 	"sp-io/std",
-	"frame-benchmarking/std",
-	"frame-support/std",
 	"sp-runtime/std",
+	"frame-support/std",
 	"frame-system/std",
 ]
 runtime-benchmarks = [
 	"frame-benchmarking",
-	"frame-system/runtime-benchmarks",
 	"frame-support/runtime-benchmarks",
-	"sp-runtime/runtime-benchmarks",
-	"assert_matches",
+	"frame-system/runtime-benchmarks",
 ]
 try-runtime = ["frame-support/try-runtime"]
