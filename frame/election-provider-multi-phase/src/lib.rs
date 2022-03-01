@@ -103,7 +103,7 @@
 //!
 //! Validators will only submit solutions if the one that they have computed is sufficiently better
 //! than the best queued one (see [`pallet::Config::SolutionImprovementThreshold`]) and will limit
-//! the weigh of the solution to [`pallet::Config::MinerMaxWeight`].
+//! the weight of the solution to [`pallet::Config::MinerMaxWeight`].
 //!
 //! The unsigned phase can be made passive depending on how the previous signed phase went, by
 //! setting the first inner value of [`Phase`] to `false`. For now, the signed phase is always
@@ -147,13 +147,13 @@
 //! which is capable of connecting to a live network, and generating appropriate `supports` using a
 //! standard algorithm, and outputting the `supports` in hex format, ready for submission. Note that
 //! while this binary lives in the Polkadot repository, this particular subcommand of it can work
-//! against any substrate based-chain.
+//! against any substrate-based chain.
 //!
 //! See the `staking-miner` documentation in the Polkadot repository for more information.
 //!
 //! ## Feasible Solution (correct solution)
 //!
-//! All submissions must undergo a feasibility check. Signed solutions are checked on by one at the
+//! All submissions must undergo a feasibility check. Signed solutions are checked one by one at the
 //! end of the signed phase, and the unsigned solutions are checked on the spot. A feasible solution
 //! is as follows:
 //!

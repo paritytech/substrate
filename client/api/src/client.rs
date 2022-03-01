@@ -307,9 +307,9 @@ pub struct FinalityNotification<Block: BlockT> {
 	/// Finalized block header.
 	pub header: Block::Header,
 	/// Path from the old finalized to new finalized parent (implicitly finalized blocks).
-	pub tree_route: Arc<Vec<Block::Hash>>,
+	pub tree_route: Arc<[Block::Hash]>,
 	/// Stale branches heads.
-	pub stale_heads: Arc<Vec<Block::Hash>>,
+	pub stale_heads: Arc<[Block::Hash]>,
 }
 
 impl<B: BlockT> TryFrom<BlockImportNotification<B>> for ChainEvent<B> {
@@ -336,8 +336,8 @@ impl<B: BlockT> From<FinalizeSummary<B>> for FinalityNotification<B> {
 		FinalityNotification {
 			hash,
 			header: summary.header,
-			tree_route: Arc::new(summary.finalized),
-			stale_heads: Arc::new(summary.stale_heads),
+			tree_route: Arc::from(summary.finalized),
+			stale_heads: Arc::from(summary.stale_heads),
 		}
 	}
 }

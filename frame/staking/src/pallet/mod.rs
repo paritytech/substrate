@@ -96,6 +96,7 @@ pub mod pallet {
 		>;
 
 		/// Maximum number of nominations per nominator.
+		#[pallet::constant]
 		type MaxNominations: Get<u32>;
 
 		/// Tokens have been minted and are unused for validator-reward.
