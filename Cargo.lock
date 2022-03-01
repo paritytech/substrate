@@ -10121,7 +10121,7 @@ dependencies = [
 
 [[package]]
 name = "sp-runtime-interface-proc-macro"
-version = "4.0.0"
+version = "5.0.0"
 dependencies = [
  "Inflector",
  "proc-macro-crate 1.1.0",
