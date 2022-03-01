@@ -1669,7 +1669,7 @@ mod feasibility_check {
 	}
 
 	#[test]
-	fn desired_targets_fails() {
+	fn less_than_desired_targets_fails() {
 		ExtBuilder::default().desired_targets(8).build_and_execute(|| {
 			roll_to(<EpochLength>::get() - <SignedPhase>::get() - <UnsignedPhase>::get());
 			assert!(MultiPhase::current_phase().is_signed());
