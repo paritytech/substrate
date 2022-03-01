@@ -266,7 +266,7 @@ pub type Digest = sp_runtime::generic::Digest;
 /// A test block.
 pub type Block = sp_runtime::generic::Block<Header, Extrinsic>;
 /// A test block's header.
-pub type Header = sp_runtime::generic::Header<BlockNumber, Hashing>;
+pub type Header = sp_runtime::generic::HeaderVer<BlockNumber, Hashing>;
 
 /// Run whatever tests we have.
 pub fn run_tests(mut input: &[u8]) -> Vec<u8> {
