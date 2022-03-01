@@ -27,7 +27,7 @@ codec = { package = "parity-scale-codec", version = "3.0.0", default-features = 
 num-traits = { version = "0.2.8", default-features = false }
 rand = { version = "0.7.2", optional = true }
 sp-externalities = { version = "0.11.0", path = "../externalities", default-features = false }
-smallvec = "1.7.0"
+smallvec = "1.8.0"
 sp-std = { version = "4.0.0", default-features = false, path = "../std" }
 tracing = { version = "0.1.29", optional = true }
 
