@@ -169,6 +169,8 @@ impl TestApi {
 			extrinsics_root: Hash::random(),
 			parent_hash: parent,
 			state_root: Default::default(),
+			seed: Default::default(),
+			count: Default::default(),
 		};
 
 		self.add_block(Block::new(header.clone(), xts), is_best_block);

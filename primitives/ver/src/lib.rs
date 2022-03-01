@@ -26,9 +26,7 @@ pub trait CompatibleDigestItemVer<B: BlockT>: Sized {
 	fn as_ver_pre_digest(&self) -> Option<PreDigestVer<B>>;
 }
 
-impl<B: BlockT> CompatibleDigestItemVer<B> for DigestItem
-where
-{
+impl<B: BlockT> CompatibleDigestItemVer<B> for DigestItem {
 	fn ver_pre_digest(digest: PreDigestVer<B>) -> Self {
 		DigestItem::PreRuntime(VER_ENGINE_ID, digest.encode())
 	}

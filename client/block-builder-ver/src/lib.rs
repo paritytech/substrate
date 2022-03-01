@@ -35,11 +35,8 @@ use sp_blockchain::{ApplyExtrinsicFailed, Backend, Error};
 use sp_core::ExecutionContext;
 use sp_runtime::{
 	generic::BlockId,
-	traits::{
-		BlakeTwo256, Block as BlockT, Hash, HashFor, Header as HeaderT, NumberFor, One,
-	},
-	Digest,
-	SaturatedConversion,
+	traits::{BlakeTwo256, Block as BlockT, Hash, HashFor, Header as HeaderT, NumberFor, One},
+	Digest, SaturatedConversion,
 };
 
 pub use sp_block_builder::BlockBuilder as BlockBuilderApi;
@@ -355,7 +352,7 @@ where
 
 		let extrinsics_root = HashFor::<Block>::ordered_trie_root(
 			all_extrinsics.iter().map(Encode::encode).collect(),
-            sp_runtime::StateVersion::V0,
+			sp_runtime::StateVersion::V0,
 		);
 		header.set_extrinsics_root(extrinsics_root);
 		header.set_seed(seed);
@@ -402,8 +399,8 @@ where
 	///
 	/// If `include_proof` is `true`, the estimated size of the storage proof will be added
 	/// to the estimation.
-	pub fn estimate_block_size(&self, include_proof: bool) -> usize {
-		let size = self.estimated_header_size + self.extrinsics.encoded_size();
+	pub fn estimate_block_size_without_extrinsics(&self, include_proof: bool) -> usize {
+		let size = self.estimated_header_size + self.inherents.encoded_size();
 
 		if include_proof {
 			size + self.api.proof_recorder().map(|pr| pr.estimate_encoded_size()).unwrap_or(0)
@@ -442,43 +439,43 @@ where
 	})
 }
 
-// #[cfg(test)]
-// mod tests {
-// 	use super::*;
-// 	use sp_blockchain::HeaderBackend;
-// 	use sp_core::Blake2Hasher;
-// 	use sp_state_machine::Backend;
-// 	use substrate_test_runtime_client::{DefaultTestClientBuilderExt, TestClientBuilderExt};
-//
-// 	#[test]
-// 	fn block_building_storage_proof_does_not_include_runtime_by_default() {
-// 		let builder = substrate_test_runtime_client::TestClientBuilder::new();
-// 		let backend = builder.backend();
-// 		let client = builder.build();
-//
-// 		let block = BlockBuilder::new(
-// 			&client,
-// 			client.info().best_hash,
-// 			client.info().best_number,
-// 			RecordProof::Yes,
-// 			Default::default(),
-// 			&*backend,
-// 		)
-// 		.unwrap()
-// 		.build_with_seed(Default::default())
-// 		.unwrap();
-//
-// 		let proof = block.proof.expect("Proof is build on request");
-//
-// 		let backend = sp_state_machine::create_proof_check_backend::<Blake2Hasher>(
-// 			block.storage_changes.transaction_storage_root,
-// 			proof,
-// 		)
-// 		.unwrap();
-//
-// 		assert!(backend
-// 			.storage(&sp_core::storage::well_known_keys::CODE)
-// 			.unwrap_err()
-// 			.contains("Database missing expected key"),);
-// 	}
-// }
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use sp_blockchain::HeaderBackend;
+	use sp_core::Blake2Hasher;
+	use sp_state_machine::Backend;
+	use substrate_test_runtime_client::{DefaultTestClientBuilderExt, TestClientBuilderExt};
+
+	#[test]
+	fn block_building_storage_proof_does_not_include_runtime_by_default() {
+		let builder = substrate_test_runtime_client::TestClientBuilder::new();
+		let backend = builder.backend();
+		let client = builder.build();
+
+		let block = BlockBuilder::new(
+			&client,
+			client.info().best_hash,
+			client.info().best_number,
+			RecordProof::Yes,
+			Default::default(),
+			&*backend,
+		)
+		.unwrap()
+		.build_with_seed(Default::default())
+		.unwrap();
+
+		let proof = block.proof.expect("Proof is build on request");
+
+		let backend = sp_state_machine::create_proof_check_backend::<Blake2Hasher>(
+			block.storage_changes.transaction_storage_root,
+			proof,
+		)
+		.unwrap();
+
+		assert!(backend
+			.storage(&sp_core::storage::well_known_keys::CODE)
+			.unwrap_err()
+			.contains("Database missing expected key"),);
+	}
+}
