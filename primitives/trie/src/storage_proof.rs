@@ -35,12 +35,6 @@ pub struct StorageProof {
 	trie_nodes: Vec<Vec<u8>>,
 }
 
-/// Storage proof in compact form.
-#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode, TypeInfo)]
-pub struct CompactProof {
-	pub encoded_nodes: Vec<Vec<u8>>,
-}
-
 impl StorageProof {
 	/// Constructs a storage proof from a subset of encoded trie nodes in a storage backend.
 	pub fn new(trie_nodes: Vec<Vec<u8>>) -> Self {
@@ -79,10 +73,7 @@ impl StorageProof {
 	/// Merges multiple storage proofs covering potentially different sets of keys into one proof
 	/// covering all keys. The merged proof output may be smaller than the aggregate size of the
 	/// input proofs due to deduplication of trie nodes.
-	pub fn merge<I>(proofs: I) -> Self
-	where
-		I: IntoIterator<Item = Self>,
-	{
+	pub fn merge(proofs: impl IntoIterator<Item = Self>) -> Self {
 		let trie_nodes = proofs
 			.into_iter()
 			.flat_map(|proof| proof.iter_nodes())
@@ -113,6 +104,22 @@ impl StorageProof {
 	}
 }
 
+impl<H: Hasher> From<StorageProof> for crate::MemoryDB<H> {
+	fn from(proof: StorageProof) -> Self {
+		let mut db = crate::MemoryDB::default();
+		proof.iter_nodes().for_each(|n| {
+			db.insert(crate::EMPTY_PREFIX, &n);
+		});
+		db
+	}
+}
+
+/// Storage proof in compact form.
+#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode, TypeInfo)]
+pub struct CompactProof {
+	pub encoded_nodes: Vec<Vec<u8>>,
+}
+
 impl CompactProof {
 	/// Return an iterator on the compact encoded nodes.
 	pub fn iter_compact_encoded_nodes(&self) -> impl Iterator<Item = &[u8]> {
@@ -140,6 +147,25 @@ impl CompactProof {
 			root,
 		))
 	}
+
+	/// Convert self into a [`MemoryDB`](crate::MemoryDB).
+	///
+	/// `expected_root` is the expected root of this compact proof.
+	///
+	/// Returns the memory db and the root of the trie.
+	pub fn to_memory_db<H: Hasher>(
+		&self,
+		expected_root: Option<&H::Out>,
+	) -> Result<(crate::MemoryDB<H>, H::Out), crate::CompactProofError<H::Out, crate::Error>> {
+		let mut db = crate::MemoryDB::<H>::new(&[]);
+		let root = crate::decode_compact::<Layout<H>, _, _>(
+			&mut db,
+			self.iter_compact_encoded_nodes(),
+			expected_root,
+		)?;
+
+		Ok((db, root))
+	}
 }
 
 /// An iterator over trie nodes constructed from a storage proof. The nodes are not guaranteed to
@@ -159,15 +185,5 @@ impl Iterator for StorageProofNodeIterator {
 
 	fn next(&mut self) -> Option<Self::Item> {
 		self.inner.next()
-	}
-}
-
-impl<H: Hasher> From<StorageProof> for crate::MemoryDB<H> {
-	fn from(proof: StorageProof) -> Self {
-		let mut db = crate::MemoryDB::default();
-		proof.iter_nodes().for_each(|n| {
-			db.insert(crate::EMPTY_PREFIX, &n);
-		});
-		db
 	}
 }
