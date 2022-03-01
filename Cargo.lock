@@ -9873,7 +9873,7 @@ dependencies = [
 
 [[package]]
 name = "sp-core-hashing-proc-macro"
-version = "4.0.0-dev"
+version = "5.0.0"
 dependencies = [
  "proc-macro2",
  "quote",
