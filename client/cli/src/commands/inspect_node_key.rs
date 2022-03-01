@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -47,7 +47,7 @@ impl InspectNodeKeyCmd {
 			ed25519::SecretKey::from_bytes(&mut file_content).map_err(|_| "Bad node key file")?;
 
 		let keypair = ed25519::Keypair::from(secret);
-		let peer_id = PublicKey::Ed25519(keypair.public()).into_peer_id();
+		let peer_id = PublicKey::Ed25519(keypair.public()).to_peer_id();
 
 		println!("{}", peer_id);
 

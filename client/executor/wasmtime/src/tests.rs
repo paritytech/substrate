@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -78,7 +78,7 @@ impl RuntimeBuilder {
 				.expect("failed to create a runtime blob out of test runtime")
 		};
 
-		let rt = crate::create_runtime(
+		let rt = crate::create_runtime::<HostFunctions>(
 			blob,
 			crate::Config {
 				heap_pages: self.heap_pages,
@@ -97,10 +97,6 @@ impl RuntimeBuilder {
 					canonicalize_nans: self.canonicalize_nans,
 					parallel_compilation: true,
 				},
-			},
-			{
-				use sp_wasm_interface::HostFunctions as _;
-				HostFunctions::host_functions()
 			},
 		)
 		.expect("cannot create runtime");
@@ -164,9 +160,9 @@ fn test_stack_depth_reaching() {
 
 	let err = instance.call_export("test-many-locals", &[]).unwrap_err();
 
-	assert!(
-		format!("{:?}", err).starts_with("Other(\"Wasm execution trapped: wasm trap: unreachable")
-	);
+	assert!(format!("{:?}", err).starts_with(
+		"Other(\"Wasm execution trapped: wasm trap: wasm `unreachable` instruction executed"
+	));
 }
 
 #[test]
@@ -309,4 +305,37 @@ fn test_max_memory_pages() {
 		"#,
 	)
 	.unwrap();
+}
+
+// This test takes quite a while to execute in a debug build (over 6 minutes on a TR 3970x)
+// so it's ignored by default unless it was compiled with `--release`.
+#[cfg_attr(build_type = "debug", ignore)]
+#[test]
+fn test_instances_without_reuse_are_not_leaked() {
+	let runtime = crate::create_runtime::<HostFunctions>(
+		RuntimeBlob::uncompress_if_needed(wasm_binary_unwrap()).unwrap(),
+		crate::Config {
+			heap_pages: 2048,
+			max_memory_size: None,
+			allow_missing_func_imports: true,
+			cache_path: None,
+			semantics: crate::Semantics {
+				fast_instance_reuse: false,
+				deterministic_stack_limit: None,
+				canonicalize_nans: false,
+				parallel_compilation: true,
+			},
+		},
+	)
+	.unwrap();
+
+	// As long as the `wasmtime`'s `Store` lives the instances spawned through it
+	// will live indefinitely. Currently it has a maximum limit of 10k instances,
+	// so let's spawn 10k + 1 of them to make sure our code doesn't keep the `Store`
+	// alive longer than it is necessary. (And since we disabled instance reuse
+	// a new instance will be spawned on each call.)
+	let mut instance = runtime.new_instance().unwrap();
+	for _ in 0..10001 {
+		instance.call_export("test_empty_return", &[0]).unwrap();
+	}
 }

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -35,10 +35,8 @@ use sp_blockchain::{ApplyExtrinsicFailed, Backend, Error};
 use sp_core::ExecutionContext;
 use sp_runtime::{
 	generic::BlockId,
-	traits::{
-		BlakeTwo256, Block as BlockT, DigestFor, Hash, HashFor, Header as HeaderT, NumberFor, One,
-	},
-	SaturatedConversion,
+	traits::{BlakeTwo256, Block as BlockT, Hash, HashFor, Header as HeaderT, NumberFor, One},
+	Digest, SaturatedConversion,
 };
 
 pub use sp_block_builder::BlockBuilder as BlockBuilderApi;
@@ -126,14 +124,14 @@ where
 	fn new_block_at<R: Into<RecordProof>>(
 		&self,
 		parent: &BlockId<Block>,
-		inherent_digests: DigestFor<Block>,
+		inherent_digests: Digest,
 		record_proof: R,
 	) -> sp_blockchain::Result<BlockBuilder<Block, RA, B>>;
 
 	/// Create a new block, built on the head of the chain.
 	fn new_block(
 		&self,
-		inherent_digests: DigestFor<Block>,
+		inherent_digests: Digest,
 	) -> sp_blockchain::Result<BlockBuilder<Block, RA, B>>;
 }
 
@@ -169,7 +167,7 @@ where
 		parent_hash: Block::Hash,
 		parent_number: NumberFor<Block>,
 		record_proof: RecordProof,
-		inherent_digests: DigestFor<Block>,
+		inherent_digests: Digest,
 		backend: &'a B,
 	) -> Result<Self, Error> {
 		let header = <<Block as BlockT>::Header as HeaderT>::new(
@@ -335,15 +333,11 @@ where
 		let proof = self.api.extract_proof();
 
 		let state = self.backend.state_at(self.block_id)?;
-		let changes_trie_state = backend::changes_tries_state_at_block(
-			&self.block_id,
-			self.backend.changes_trie_storage(),
-		)?;
 		let parent_hash = self.parent_hash;
 
 		let storage_changes = self
 			.api
-			.into_storage_changes(&state, changes_trie_state.as_ref(), parent_hash)
+			.into_storage_changes(&state, parent_hash)
 			.map_err(|e| sp_blockchain::Error::StorageChanges(e))?;
 		// store hash of all extrinsics include in given bloack
 		//
@@ -358,6 +352,7 @@ where
 
 		let extrinsics_root = HashFor::<Block>::ordered_trie_root(
 			all_extrinsics.iter().map(Encode::encode).collect(),
+			sp_runtime::StateVersion::V0,
 		);
 		header.set_extrinsics_root(extrinsics_root);
 		header.set_seed(seed);
@@ -404,8 +399,8 @@ where
 	///
 	/// If `include_proof` is `true`, the estimated size of the storage proof will be added
 	/// to the estimation.
-	pub fn estimate_block_size(&self, include_proof: bool) -> usize {
-		let size = self.estimated_header_size + self.extrinsics.encoded_size();
+	pub fn estimate_block_size_without_extrinsics(&self, include_proof: bool) -> usize {
+		let size = self.estimated_header_size + self.inherents.encoded_size();
 
 		if include_proof {
 			size + self.api.proof_recorder().map(|pr| pr.estimate_encoded_size()).unwrap_or(0)
@@ -444,43 +439,43 @@ where
 	})
 }
 
-// #[cfg(test)]
-// mod tests {
-// 	use super::*;
-// 	use sp_blockchain::HeaderBackend;
-// 	use sp_core::Blake2Hasher;
-// 	use sp_state_machine::Backend;
-// 	use substrate_test_runtime_client::{DefaultTestClientBuilderExt, TestClientBuilderExt};
-//
-// 	#[test]
-// 	fn block_building_storage_proof_does_not_include_runtime_by_default() {
-// 		let builder = substrate_test_runtime_client::TestClientBuilder::new();
-// 		let backend = builder.backend();
-// 		let client = builder.build();
-//
-// 		let block = BlockBuilder::new(
-// 			&client,
-// 			client.info().best_hash,
-// 			client.info().best_number,
-// 			RecordProof::Yes,
-// 			Default::default(),
-// 			&*backend,
-// 		)
-// 		.unwrap()
-// 		.build_with_seed(Default::default())
-// 		.unwrap();
-//
-// 		let proof = block.proof.expect("Proof is build on request");
-//
-// 		let backend = sp_state_machine::create_proof_check_backend::<Blake2Hasher>(
-// 			block.storage_changes.transaction_storage_root,
-// 			proof,
-// 		)
-// 		.unwrap();
-//
-// 		assert!(backend
-// 			.storage(&sp_core::storage::well_known_keys::CODE)
-// 			.unwrap_err()
-// 			.contains("Database missing expected key"),);
-// 	}
-// }
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use sp_blockchain::HeaderBackend;
+	use sp_core::Blake2Hasher;
+	use sp_state_machine::Backend;
+	use substrate_test_runtime_client::{DefaultTestClientBuilderExt, TestClientBuilderExt};
+
+	#[test]
+	fn block_building_storage_proof_does_not_include_runtime_by_default() {
+		let builder = substrate_test_runtime_client::TestClientBuilder::new();
+		let backend = builder.backend();
+		let client = builder.build();
+
+		let block = BlockBuilder::new(
+			&client,
+			client.info().best_hash,
+			client.info().best_number,
+			RecordProof::Yes,
+			Default::default(),
+			&*backend,
+		)
+		.unwrap()
+		.build_with_seed(Default::default())
+		.unwrap();
+
+		let proof = block.proof.expect("Proof is build on request");
+
+		let backend = sp_state_machine::create_proof_check_backend::<Blake2Hasher>(
+			block.storage_changes.transaction_storage_root,
+			proof,
+		)
+		.unwrap();
+
+		assert!(backend
+			.storage(&sp_core::storage::well_known_keys::CODE)
+			.unwrap_err()
+			.contains("Database missing expected key"),);
+	}
+}

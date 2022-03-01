@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -196,6 +196,7 @@ pub fn staging_testnet_config() -> ChainSpec {
 		),
 		None,
 		None,
+		None,
 		Default::default(),
 	)
 }
@@ -295,10 +296,7 @@ pub fn testnet_genesis(
 	const STASH: Balance = ENDOWMENT / 1000;
 
 	GenesisConfig {
-		system: SystemConfig {
-			code: wasm_binary_unwrap().to_vec(),
-			changes_trie_config: Default::default(),
-		},
+		system: SystemConfig { code: wasm_binary_unwrap().to_vec() },
 		balances: BalancesConfig {
 			balances: endowed_accounts.iter().cloned().map(|x| (x, ENDOWMENT)).collect(),
 		},
@@ -341,7 +339,7 @@ pub fn testnet_genesis(
 				.collect(),
 			phantom: Default::default(),
 		},
-		sudo: SudoConfig { key: root_key },
+		sudo: SudoConfig { key: Some(root_key) },
 		babe: BabeConfig {
 			authorities: vec![],
 			epoch_config: Some(node_runtime::BABE_GENESIS_EPOCH_CONFIG),
@@ -364,6 +362,7 @@ pub fn testnet_genesis(
 		assets: Default::default(),
 		gilt: Default::default(),
 		transaction_storage: Default::default(),
+		transaction_payment: Default::default(),
 	}
 }
 
@@ -384,6 +383,7 @@ pub fn development_config() -> ChainSpec {
 		ChainType::Development,
 		development_config_genesis,
 		vec![],
+		None,
 		None,
 		None,
 		None,
@@ -411,6 +411,7 @@ pub fn local_testnet_config() -> ChainSpec {
 		None,
 		None,
 		None,
+		None,
 		Default::default(),
 	)
 }
@@ -418,7 +419,7 @@ pub fn local_testnet_config() -> ChainSpec {
 #[cfg(test)]
 pub(crate) mod tests {
 	use super::*;
-	use crate::service::{new_full_base, new_light_base, NewFullBase};
+	use crate::service::{new_full_base, NewFullBase};
 	use sc_service_test;
 	use sp_runtime::BuildStorage;
 
@@ -442,6 +443,7 @@ pub(crate) mod tests {
 			None,
 			None,
 			None,
+			None,
 			Default::default(),
 		)
 	}
@@ -457,6 +459,7 @@ pub(crate) mod tests {
 			None,
 			None,
 			None,
+			None,
 			Default::default(),
 		)
 	}
@@ -466,28 +469,16 @@ pub(crate) mod tests {
 	fn test_connectivity() {
 		sp_tracing::try_init_simple();
 
-		sc_service_test::connectivity(
-			integration_test_config_with_two_authorities(),
-			|config| {
-				let NewFullBase { task_manager, client, network, transaction_pool, .. } =
-					new_full_base(config, |_, _| ())?;
-				Ok(sc_service_test::TestNetComponents::new(
-					task_manager,
-					client,
-					network,
-					transaction_pool,
-				))
-			},
-			|config| {
-				let (keep_alive, _, client, network, transaction_pool) = new_light_base(config)?;
-				Ok(sc_service_test::TestNetComponents::new(
-					keep_alive,
-					client,
-					network,
-					transaction_pool,
-				))
-			},
-		);
+		sc_service_test::connectivity(integration_test_config_with_two_authorities(), |config| {
+			let NewFullBase { task_manager, client, network, transaction_pool, .. } =
+				new_full_base(config, |_, _| ())?;
+			Ok(sc_service_test::TestNetComponents::new(
+				task_manager,
+				client,
+				network,
+				transaction_pool,
+			))
+		});
 	}
 
 	#[test]

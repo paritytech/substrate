@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -42,6 +42,8 @@ fn should_return_header() {
 			extrinsics_root:
 				"03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314".parse().unwrap(),
 			digest: Default::default(),
+			count: Default::default(),
+			seed: Default::default(),
 		}
 	);
 
@@ -54,6 +56,8 @@ fn should_return_header() {
 			extrinsics_root:
 				"03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314".parse().unwrap(),
 			digest: Default::default(),
+			count: Default::default(),
+			seed: Default::default(),
 		}
 	);
 
@@ -88,6 +92,8 @@ fn should_return_a_block() {
 				extrinsics_root:
 					"03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314".parse().unwrap(),
 				digest: Default::default(),
+				count: Default::default(),
+				seed: Default::default(),
 			},
 			extrinsics: vec![],
 		}
@@ -103,6 +109,8 @@ fn should_return_a_block() {
 				extrinsics_root:
 					"03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314".parse().unwrap(),
 				digest: Default::default(),
+				count: Default::default(),
+				seed: Default::default(),
 			},
 			extrinsics: vec![],
 		}

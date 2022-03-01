@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -59,7 +59,7 @@ fn calling_native_runtime_function_with_non_decodable_parameter() {
 		.build();
 	let runtime_api = client.runtime_api();
 	let block_id = BlockId::Number(client.chain_info().best_number);
-	runtime_api.fail_convert_parameter(&block_id, DecodeFails::new()).unwrap();
+	runtime_api.fail_convert_parameter(&block_id, DecodeFails::default()).unwrap();
 }
 
 #[test]
@@ -164,9 +164,6 @@ fn initialize_block_works() {
 }
 
 #[test]
-#[ignore]
-/// that test should be easy to allign once we have
-/// encrypted extrinscs intended to  be executed in the same block as submitted
 fn record_proof_works() {
 	let (client, longest_chain) = TestClientBuilder::new()
 		.set_execution_strategy(ExecutionStrategy::Both)
@@ -190,7 +187,7 @@ fn record_proof_works() {
 		amount: 1000,
 		nonce: 0,
 		from: AccountKeyring::Alice.into(),
-		to: Default::default(),
+		to: AccountKeyring::Bob.into(),
 	}
 	.into_signed_tx();
 
@@ -213,8 +210,9 @@ fn record_proof_works() {
 		WasmExecutionMethod::Interpreted,
 		None,
 		8,
+		2,
 	);
-	execution_proof_check_on_trie_backend::<_, u64, _, _>(
+	execution_proof_check_on_trie_backend(
 		&backend,
 		&mut overlay,
 		&executor,

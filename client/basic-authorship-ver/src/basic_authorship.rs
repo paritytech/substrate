@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -41,7 +41,8 @@ use sp_core::traits::SpawnNamed;
 use sp_inherents::InherentData;
 use sp_runtime::{
 	generic::BlockId,
-	traits::{BlakeTwo256, Block as BlockT, DigestFor, Hash as HashT, Header as HeaderT},
+	traits::{BlakeTwo256, Block as BlockT, Hash as HashT, Header as HeaderT},
+	Digest, Percent, SaturatedConversion,
 };
 use std::{marker::PhantomData, pin::Pin, sync::Arc, time};
 use ver_api::VerApi;
@@ -61,6 +62,8 @@ use std::ops::Add;
 /// transferred to other nodes.
 pub const DEFAULT_BLOCK_SIZE_LIMIT: usize = 4 * 1024 * 1024 + 512;
 
+const DEFAULT_SOFT_DEADLINE_PERCENT: Percent = Percent::from_percent(50);
+
 /// [`Proposer`] factory.
 pub struct ProposerFactory<A, B, C, PR> {
 	spawn_handle: Box<dyn SpawnNamed>,
@@ -75,6 +78,14 @@ pub struct ProposerFactory<A, B, C, PR> {
 	/// If no `block_size_limit` is passed to [`sp_consensus::Proposer::propose`], this block size
 	/// limit will be used.
 	default_block_size_limit: usize,
+	/// Soft deadline percentage of hard deadline.
+	///
+	/// The value is used to compute soft deadline during block production.
+	/// The soft deadline indicates where we should stop attempting to add transactions
+	/// to the block, which exhaust resources. After soft deadline is reached,
+	/// we switch to a fixed-amount mode, in which after we see `MAX_SKIPPED_TRANSACTIONS`
+	/// transactions which exhaust resrouces, we will conclude that the block is full.
+	soft_deadline_percent: Percent,
 	telemetry: Option<TelemetryHandle>,
 	/// When estimating the block size, should the proof be included?
 	include_proof_in_block_size_estimation: bool,
@@ -99,6 +110,7 @@ impl<A, B, C> ProposerFactory<A, B, C, DisableProofRecording> {
 			transaction_pool,
 			metrics: PrometheusMetrics::new(prometheus),
 			default_block_size_limit: DEFAULT_BLOCK_SIZE_LIMIT,
+			soft_deadline_percent: DEFAULT_SOFT_DEADLINE_PERCENT,
 			telemetry,
 			client,
 			include_proof_in_block_size_estimation: false,
@@ -127,6 +139,7 @@ impl<A, B, C> ProposerFactory<A, B, C, EnableProofRecording> {
 			transaction_pool,
 			metrics: PrometheusMetrics::new(prometheus),
 			default_block_size_limit: DEFAULT_BLOCK_SIZE_LIMIT,
+			soft_deadline_percent: DEFAULT_SOFT_DEADLINE_PERCENT,
 			telemetry,
 			include_proof_in_block_size_estimation: true,
 			_phantom: PhantomData,
@@ -149,6 +162,22 @@ impl<A, B, C, PR> ProposerFactory<A, B, C, PR> {
 	/// will be used.
 	pub fn set_default_block_size_limit(&mut self, limit: usize) {
 		self.default_block_size_limit = limit;
+	}
+
+	/// Set soft deadline percentage.
+	///
+	/// The value is used to compute soft deadline during block production.
+	/// The soft deadline indicates where we should stop attempting to add transactions
+	/// to the block, which exhaust resources. After soft deadline is reached,
+	/// we switch to a fixed-amount mode, in which after we see `MAX_SKIPPED_TRANSACTIONS`
+	/// transactions which exhaust resrouces, we will conclude that the block is full.
+	///
+	/// Setting the value too low will significantly limit the amount of transactions
+	/// we try in case they exhaust resources. Setting the value too high can
+	/// potentially open a DoS vector, where many "exhaust resources" transactions
+	/// are being tried with no success, hence block producer ends up creating an empty block.
+	pub fn set_soft_deadline(&mut self, percent: Percent) {
+		self.soft_deadline_percent = percent;
 	}
 }
 
@@ -187,6 +216,7 @@ where
 			now,
 			metrics: self.metrics.clone(),
 			default_block_size_limit: self.default_block_size_limit,
+			soft_deadline_percent: self.soft_deadline_percent,
 			telemetry: self.telemetry.clone(),
 			_phantom: PhantomData,
 			include_proof_in_block_size_estimation: self.include_proof_in_block_size_estimation,
@@ -233,6 +263,7 @@ pub struct Proposer<B, Block: BlockT, C, A: TransactionPool, PR> {
 	metrics: PrometheusMetrics,
 	default_block_size_limit: usize,
 	include_proof_in_block_size_estimation: bool,
+	soft_deadline_percent: Percent,
 	telemetry: Option<TelemetryHandle>,
 	_phantom: PhantomData<(B, PR)>,
 }
@@ -267,7 +298,7 @@ where
 	fn propose(
 		self,
 		mut inherent_data: InherentData,
-		inherent_digests: DigestFor<Block>,
+		inherent_digests: Digest,
 		max_duration: time::Duration,
 		block_size_limit: Option<usize>,
 	) -> Self::Proposal {
@@ -284,6 +315,7 @@ where
 
 		spawn_handle.spawn_blocking(
 			"basic-authorship-proposer",
+			None,
 			Box::pin(async move {
 				// leave some time for evaluation and block finalization (33%)
 				let deadline = (self.now)() + max_duration - max_duration / 3;
@@ -324,19 +356,31 @@ where
 	async fn propose_with(
 		self,
 		inherent_data: InherentData,
-		inherent_digests: DigestFor<Block>,
+		inherent_digests: Digest,
 		deadline: time::Instant,
 		block_size_limit: Option<usize>,
 	) -> Result<Proposal<Block, backend::TransactionFor<B, Block>, PR::Proof>, sp_blockchain::Error>
 	{
+		let propose_with_start = time::Instant::now();
 		let next_block_number = self.parent_number.add(One::one()).add(One::one());
 
 		let mut block_builder =
 			self.client.new_block_at(&self.parent_id, inherent_digests, PR::ENABLED)?;
+
+		let create_inherents_start = time::Instant::now();
+		let (seed, inherents) = block_builder.create_inherents(inherent_data.clone())?;
+		let create_inherents_end = time::Instant::now();
+
+		self.metrics.report(|metrics| {
+			metrics.create_inherents_time.observe(
+				create_inherents_end
+					.saturating_duration_since(create_inherents_start)
+					.as_secs_f64(),
+			);
+		});
 		let api = self.client.runtime_api();
 		let omit_transactions = api.is_new_session(&self.parent_id, next_block_number).unwrap();
 
-		let (seed, inherents) = block_builder.create_inherents(inherent_data.clone())?;
 		debug!(target:"block_builder", "found {} inherents", inherents.len());
 		for inherent in inherents {
 			debug!(target:"block_builder", "processing inherent");
@@ -363,7 +407,10 @@ where
 		// proceed with transactions
 		// We calculate soft deadline used only in case we start skipping transactions.
 		let now = (self.now)();
-		let soft_deadline = now + deadline.saturating_duration_since(now) / 2;
+		let left = deadline.saturating_duration_since(now);
+		let left_micros: u64 = left.as_micros().saturated_into();
+		let soft_deadline =
+			now + time::Duration::from_micros(self.soft_deadline_percent.mul_floor(left_micros));
 		let block_timer = time::Instant::now();
 		let mut skipped = 0;
 		let mut unqueue_invalid = Vec::new();
@@ -392,8 +439,8 @@ where
 		let mut transaction_pushed = false;
 		let mut hit_block_size_limit = false;
 
-		let block_size =
-			block_builder.estimate_block_size(self.include_proof_in_block_size_estimation);
+		let mut block_size = block_builder
+			.estimate_block_size_without_extrinsics(self.include_proof_in_block_size_estimation);
 
 		// after previous block is applied it is possible to prevalidate incomming transaction
 		// but eventually changess needs to be rolled back, as those can be executed
@@ -418,7 +465,8 @@ where
 				let pending_tx_data = pending_tx.data().clone();
 				let pending_tx_hash = pending_tx.hash().clone();
 
-				if block_size + pending_tx_data.encoded_size() > block_size_limit {
+				block_size += pending_tx_data.encoded_size();
+				if block_size > block_size_limit {
 					pending_iterator.report_invalid(&pending_tx);
 					if skipped < MAX_SKIPPED_TRANSACTIONS {
 						skipped += 1;
@@ -503,8 +551,9 @@ where
 		});
 
 		info!(
-			"🎁 Prepared block for proposing at {} [hash: {:?}; parent_hash: {}; extrinsics ({}): [{}]]",
+			"🎁 Prepared block for proposing at {} ({} ms) [hash: {:?}; parent_hash: {}; extrinsics ({}): [{}]]",
 			block.header().number(),
+			block_timer.elapsed().as_millis(),
 			<Block as BlockT>::Hash::from(block.header().hash()),
 			block.header().parent_hash(),
 			block.extrinsics().len(),
@@ -534,559 +583,449 @@ where
 
 		let proof =
 			PR::into_proof(proof).map_err(|e| sp_blockchain::Error::Application(Box::new(e)))?;
+
+		let propose_with_end = time::Instant::now();
+		self.metrics.report(|metrics| {
+			metrics.create_block_proposal_time.observe(
+				propose_with_end.saturating_duration_since(propose_with_start).as_secs_f64(),
+			);
+		});
 		Ok(Proposal { block, proof, storage_changes })
 	}
 }
-//
-// #[cfg(test)]
-// mod tests {
-// 	use super::*;
-//
-// 	use futures::executor::block_on;
-// 	use parking_lot::Mutex;
-// 	use sc_client_api::Backend;
-// 	use sc_transaction_pool::BasicPool;
-// 	use sc_transaction_pool_api::{ChainEvent, MaintainedTransactionPool, TransactionSource};
-// 	use sp_api::Core;
-// 	use sp_blockchain::HeaderBackend;
-// 	use sp_consensus::{BlockOrigin, Environment, Proposer};
-// 	use sp_core::Pair;
-// 	use sp_runtime::traits::NumberFor;
-// 	use substrate_test_runtime_client::{
-// 		prelude::*,
-// 		runtime::{Block, Extrinsic, Transfer},
-// 		TestClientBuilder, TestClientBuilderExt,
-// 	};
-//
-// 	const SOURCE: TransactionSource = TransactionSource::External;
-//
-// 	fn extrinsic(nonce: u64) -> Extrinsic {
-// 		Transfer {
-// 			amount: Default::default(),
-// 			nonce,
-// 			from: AccountKeyring::Alice.into(),
-// 			to: Default::default(),
-// 		}
-// 		.into_signed_tx()
-// 	}
-//
-// 	fn exhausts_resources_extrinsic_from(who: usize) -> Extrinsic {
-// 		let pair = AccountKeyring::numeric(who);
-// 		let transfer = Transfer {
-// 			// increase the amount to bump priority
-// 			amount: 1,
-// 			nonce: 0,
-// 			from: pair.public(),
-// 			to: Default::default(),
-// 		};
-// 		let signature = pair.sign(&transfer.encode()).into();
-// 		Extrinsic::Transfer { transfer, signature, exhaust_resources_when_not_first: true }
-// 	}
-//
-// 	fn chain_event<B: BlockT>(header: B::Header) -> ChainEvent<B>
-// 	where
-// 		NumberFor<B>: From<u64>,
-// 	{
-// 		ChainEvent::NewBestBlock { hash: header.hash(), tree_route: None }
-// 	}
-//
-// 	#[test]
-// 	fn should_cease_building_block_when_deadline_is_reached() {
-// 		// given
-// 		let client = Arc::new(substrate_test_runtime_client::new());
-// 		let spawner = sp_core::testing::TaskExecutor::new();
-// 		let txpool = BasicPool::new_full(
-// 			Default::default(),
-// 			true.into(),
-// 			None,
-// 			spawner.clone(),
-// 			client.clone(),
-// 		);
-//
-// 		block_on(txpool.submit_at(&BlockId::number(0), SOURCE, vec![extrinsic(0), extrinsic(1)]))
-// 			.unwrap();
-//
-// 		block_on(
-// 			txpool.maintain(chain_event(
-// 				client
-// 					.header(&BlockId::Number(0u64))
-// 					.expect("header get error")
-// 					.expect("there should be header"),
-// 			)),
-// 		);
-//
-// 		let mut proposer_factory =
-// 			ProposerFactory::new(spawner.clone(), client.clone(), txpool.clone(), None, None);
-//
-// 		let cell = Mutex::new((false, time::Instant::now()));
-// 		let proposer = proposer_factory.init_with_now(
-// 			&client.header(&BlockId::number(0)).unwrap().unwrap(),
-// 			Box::new(move || {
-// 				let mut value = cell.lock();
-// 				if !value.0 {
-// 					value.0 = true;
-// 					return value.1
-// 				}
-// 				let old = value.1;
-// 				let new = old + time::Duration::from_secs(1);
-// 				*value = (true, new);
-// 				old
-// 			}),
-// 		);
-//
-// 		// when
-// 		let deadline = time::Duration::from_secs(3);
-// 		let block =
-// 			block_on(proposer.propose(Default::default(), Default::default(), deadline, None))
-// 				.map(|r| r.block)
-// 				.unwrap();
-//
-// 		// then
-// 		// block should have some extrinsics although we have some more in the pool.
-// 		assert_eq!(block.extrinsics().len(), 1);
-// 		assert_eq!(txpool.ready().count(), 2);
-// 	}
-//
-// 	#[test]
-// 	fn should_not_panic_when_deadline_is_reached() {
-// 		let client = Arc::new(substrate_test_runtime_client::new());
-// 		let spawner = sp_core::testing::TaskExecutor::new();
-// 		let txpool = BasicPool::new_full(
-// 			Default::default(),
-// 			true.into(),
-// 			None,
-// 			spawner.clone(),
-// 			client.clone(),
-// 		);
-//
-// 		let mut proposer_factory =
-// 			ProposerFactory::new(spawner.clone(), client.clone(), txpool.clone(), None, None);
-//
-// 		let cell = Mutex::new((false, time::Instant::now()));
-// 		let proposer = proposer_factory.init_with_now(
-// 			&client.header(&BlockId::number(0)).unwrap().unwrap(),
-// 			Box::new(move || {
-// 				let mut value = cell.lock();
-// 				if !value.0 {
-// 					value.0 = true;
-// 					return value.1
-// 				}
-// 				let new = value.1 + time::Duration::from_secs(160);
-// 				*value = (true, new);
-// 				new
-// 			}),
-// 		);
-//
-// 		let deadline = time::Duration::from_secs(1);
-// 		block_on(proposer.propose(Default::default(), Default::default(), deadline, None))
-// 			.map(|r| r.block)
-// 			.unwrap();
-// 	}
-//
-// 	#[test]
-// 	fn proposed_storage_changes_should_match_execute_block_storage_changes() {
-// 		env_logger::try_init();
-// 		let (client, backend) = TestClientBuilder::new().build_with_backend();
-// 		let client = Arc::new(client);
-// 		let spawner = sp_core::testing::TaskExecutor::new();
-// 		let txpool = BasicPool::new_full(
-// 			Default::default(),
-// 			true.into(),
-// 			None,
-// 			spawner.clone(),
-// 			client.clone(),
-// 		);
-//
-// 		let genesis_hash = client.info().best_hash;
-// 		let block_id = BlockId::Hash(genesis_hash);
-//
-// 		block_on(txpool.submit_at(&BlockId::number(0), SOURCE, vec![extrinsic(0)])).unwrap();
-//
-// 		block_on(
-// 			txpool.maintain(chain_event(
-// 				client
-// 					.header(&BlockId::Number(0u64))
-// 					.expect("header get error")
-// 					.expect("there should be header"),
-// 			)),
-// 		);
-//
-// 		let mut proposer_factory =
-// 			ProposerFactory::new(spawner.clone(), client.clone(), txpool.clone(), None, None);
-//
-// 		let proposer = proposer_factory.init_with_now(
-// 			&client.header(&block_id).unwrap().unwrap(),
-// 			Box::new(move || time::Instant::now()),
-// 		);
-//
-// 		let deadline = time::Duration::from_secs(9);
-// 		let proposal =
-// 			block_on(proposer.propose(Default::default(), Default::default(), deadline, None))
-// 				.unwrap();
-//
-// 		assert_eq!(proposal.block.extrinsics().len(), 1);
-//
-// 		let api = client.runtime_api();
-// 		let mut header = proposal.block.header.clone();
-// 		let prev_header =
-// 			backend.blockchain().header(BlockId::Hash(genesis_hash)).unwrap().unwrap();
-// 		header.set_extrinsics_root(*prev_header.extrinsics_root());
-// 		api.execute_block(&block_id, <Block as BlockT>::new(header, vec![])).unwrap();
-//
-// 		let state = backend.state_at(block_id).unwrap();
-// 		let changes_trie_state =
-// 			backend::changes_tries_state_at_block(&block_id, backend.changes_trie_storage())
-// 				.unwrap();
-//
-// 		let storage_changes = api
-// 			.into_storage_changes(&state, changes_trie_state.as_ref(), genesis_hash)
-// 			.unwrap();
-//
-// 		assert_eq!(
-// 			proposal.storage_changes.transaction_storage_root,
-// 			storage_changes.transaction_storage_root,
-// 		);
-// 	}
-//
-// 	#[test]
-// 	fn should_not_remove_invalid_transactions_when_skipping() {
-// 		env_logger::try_init();
-// 		// given
-// 		let mut client = Arc::new(substrate_test_runtime_client::new());
-// 		let spawner = sp_core::testing::TaskExecutor::new();
-// 		let txpool = BasicPool::new_full(
-// 			Default::default(),
-// 			true.into(),
-// 			None,
-// 			spawner.clone(),
-// 			client.clone(),
-// 		);
-//
-// 		block_on(txpool.submit_at(
-// 			&BlockId::number(0),
-// 			SOURCE,
-// 			vec![
-// 				extrinsic(0),
-// 				extrinsic(1),
-// 				Transfer {
-// 					amount: Default::default(),
-// 					nonce: 2,
-// 					from: AccountKeyring::Alice.into(),
-// 					to: Default::default(),
-// 				}.into_resources_exhausting_tx(),
-// 				extrinsic(3),
-// 				Transfer {
-// 					amount: Default::default(),
-// 					nonce: 4,
-// 					from: AccountKeyring::Alice.into(),
-// 					to: Default::default(),
-// 				}.into_resources_exhausting_tx(),
-// 				extrinsic(5),
-// 				extrinsic(6),
-// 			],
-// 		))
-// 		.unwrap();
-//
-// 		let mut proposer_factory =
-// 			ProposerFactory::new(spawner.clone(), client.clone(), txpool.clone(), None, None);
-// 		let mut propose_block = |client: &TestClient,
-// 		                         number,
-// 		                         expected_block_extrinsics,
-// 		                         expected_pool_transactions| {
-// 			let proposer = proposer_factory.init_with_now(
-// 				&client.header(&BlockId::number(number)).unwrap().unwrap(),
-// 				Box::new(move || time::Instant::now()),
-// 			);
-//
-// 			// when
-// 			let deadline = time::Duration::from_secs(900);
-// 			let block =
-// 				block_on(proposer.propose(Default::default(), Default::default(), deadline, None))
-// 					.map(|r| r.block)
-// 					.unwrap();
-//
-// 			// then
-// 			// block should have some extrinsics although we have some more in the pool.
-// 			assert_eq!(block.extrinsics().len(), expected_block_extrinsics);
-// 			assert_eq!(txpool.ready().count(), expected_pool_transactions);
-//
-// 			block
-// 		};
-//
-// 		block_on(
-// 			txpool.maintain(chain_event(
-// 				client
-// 					.header(&BlockId::Number(0u64))
-// 					.expect("header get error")
-// 					.expect("there should be header"),
-// 			)),
-// 		);
-// 		assert_eq!(txpool.ready().count(), 7);
-//
-// 		// let's create one block and import it
-// 		let block = propose_block(&client, 0, 2, 7);
-// 		let block_hash = block.header().hash();
-// 		block_on(client.import(BlockOrigin::Own, block)).unwrap();
-// 		block_on(
-// 			txpool.maintain(chain_event(
-// 				client
-// 					.header(&BlockId::Number(1))
-// 					.expect("header get error")
-// 					.expect("there should be header"),
-// 			)),
-// 		);
-// 		assert_eq!(txpool.ready().count(), 5);
-//
-// 		// push one extra block - extrinsics in the pool makred as 'exhausted_resources'
-// 		// to succeed needs to be executed as first in the processed block. Due to
-// 		// modifications in block_builder all extrinsics from previous block are applied
-// 		// beofre trying to validate extrinsics from the tx pool. Once we include empty
-// 		// block in between 'exhausted_resources' extrinsic from the pool is exeucted as
-// 		// the first one and the origin test logic is maintained
-// 		let block = client
-// 			.new_block_at(&BlockId::Hash(block_hash), Default::default(), false)
-// 			.unwrap()
-// 			.build_with_seed(Default::default())
-// 			.unwrap();
-// 		block_on(client.import(BlockOrigin::Own, block.block)).unwrap();
-//
-// 		block_on(
-// 			txpool.maintain(chain_event(
-// 				client
-// 					.header(&BlockId::Number(2))
-// 					.expect("header get error")
-// 					.expect("there should be header"),
-// 			)),
-// 		);
-// 		assert_eq!(txpool.ready().count(), 5);
-//
-// 		// now let's make sure that we can still make some progress
-// 		let block = propose_block(&client, 2, 2, 5);
-// 		// block_on(client.import(BlockOrigin::Own, block)).unwrap();
-// 	}
-//
-// 	#[test]
-// 	fn should_cease_building_block_when_block_limit_is_reached() {
-// 		let client = Arc::new(substrate_test_runtime_client::new());
-// 		let spawner = sp_core::testing::TaskExecutor::new();
-// 		let txpool = BasicPool::new_full(
-// 			Default::default(),
-// 			true.into(),
-// 			None,
-// 			spawner.clone(),
-// 			client.clone(),
-// 		);
-// 		let genesis_header = client
-// 			.header(&BlockId::Number(0u64))
-// 			.expect("header get error")
-// 			.expect("there should be header");
-//
-// 		let extrinsics_num = 4;
-// 		let extrinsics = (0..extrinsics_num)
-// 			.map(|v| Extrinsic::IncludeData(vec![v as u8; 10]))
-// 			.collect::<Vec<_>>();
-//
-// 		let block_limit = genesis_header.encoded_size() +
-// 			extrinsics
-// 				.iter()
-// 				.take(extrinsics_num - 1)
-// 				.map(Encode::encoded_size)
-// 				.sum::<usize>() +
-// 			Vec::<Extrinsic>::new().encoded_size();
-//
-// 		block_on(txpool.submit_at(&BlockId::number(0), SOURCE, extrinsics)).unwrap();
-//
-// 		block_on(txpool.maintain(chain_event(genesis_header.clone())));
-//
-// 		let mut proposer_factory =
-// 			ProposerFactory::new(spawner.clone(), client.clone(), txpool.clone(), None, None);
-//
-// 		let proposer = block_on(proposer_factory.init(&genesis_header)).unwrap();
-//
-// 		// Give it enough time
-// 		let deadline = time::Duration::from_secs(300);
-// 		let block = block_on(proposer.propose(
-// 			Default::default(),
-// 			Default::default(),
-// 			deadline,
-// 			Some(block_limit),
-// 		))
-// 		.map(|r| r.block)
-// 		.unwrap();
-//
-// 		// Based on the block limit, one transaction shouldn't be included.
-// 		assert_eq!(block.extrinsics().len(), extrinsics_num - 1);
-//
-// 		let proposer = block_on(proposer_factory.init(&genesis_header)).unwrap();
-//
-// 		let block =
-// 			block_on(proposer.propose(Default::default(), Default::default(), deadline, None))
-// 				.map(|r| r.block)
-// 				.unwrap();
-//
-// 		// Without a block limit we should include all of them
-// 		assert_eq!(block.extrinsics().len(), extrinsics_num);
-//
-// 		let mut proposer_factory = ProposerFactory::with_proof_recording(
-// 			spawner.clone(),
-// 			client.clone(),
-// 			txpool.clone(),
-// 			None,
-// 			None,
-// 		);
-//
-// 		let proposer = block_on(proposer_factory.init(&genesis_header)).unwrap();
-//
-// 		// Give it enough time
-// 		let block = block_on(proposer.propose(
-// 			Default::default(),
-// 			Default::default(),
-// 			deadline,
-// 			Some(block_limit),
-// 		))
-// 		.map(|r| r.block)
-// 		.unwrap();
-//
-// 		// The block limit didn't changed, but we now include the proof in the estimation of the
-// 		// block size and thus, one less transaction should fit into the limit.
-// 		assert_eq!(block.extrinsics().len(), extrinsics_num - 2);
-// 	}
-//
-// 	#[test]
-// 	fn should_keep_adding_transactions_after_exhausts_resources_before_soft_deadline() {
-// 		// given
-// 		let client = Arc::new(substrate_test_runtime_client::new());
-// 		let spawner = sp_core::testing::TaskExecutor::new();
-// 		let txpool = BasicPool::new_full(
-// 			Default::default(),
-// 			true.into(),
-// 			None,
-// 			spawner.clone(),
-// 			client.clone(),
-// 		);
-//
-// 		block_on(
-// 			txpool.submit_at(
-// 				&BlockId::number(0),
-// 				SOURCE,
-// 				// add 2 * MAX_SKIPPED_TRANSACTIONS that exhaust resources
-// 				(0..MAX_SKIPPED_TRANSACTIONS * 2)
-// 					.into_iter()
-// 					.map(|i| exhausts_resources_extrinsic_from(i))
-// 					// and some transactions that are okay.
-// 					.chain((0..MAX_SKIPPED_TRANSACTIONS).into_iter().map(|i| extrinsic(i as _)))
-// 					.collect(),
-// 			),
-// 		)
-// 		.unwrap();
-//
-// 		block_on(
-// 			txpool.maintain(chain_event(
-// 				client
-// 					.header(&BlockId::Number(0u64))
-// 					.expect("header get error")
-// 					.expect("there should be header"),
-// 			)),
-// 		);
-// 		assert_eq!(txpool.ready().count(), MAX_SKIPPED_TRANSACTIONS * 3);
-//
-// 		let mut proposer_factory =
-// 			ProposerFactory::new(spawner.clone(), client.clone(), txpool.clone(), None, None);
-//
-// 		let cell = Mutex::new(time::Instant::now());
-// 		let proposer = proposer_factory.init_with_now(
-// 			&client.header(&BlockId::number(0)).unwrap().unwrap(),
-// 			Box::new(move || {
-// 				let mut value = cell.lock();
-// 				let old = *value;
-// 				*value = old + time::Duration::from_secs(1);
-// 				old
-// 			}),
-// 		);
-//
-// 		// when
-// 		// give it enough time so that deadline is never triggered.
-// 		let deadline = time::Duration::from_secs(900);
-// 		let block =
-// 			block_on(proposer.propose(Default::default(), Default::default(), deadline, None))
-// 				.map(|r| r.block)
-// 				.unwrap();
-//
-// 		// then block should have all non-exhaust resources extrinsics (+ the first one).
-// 		assert_eq!(block.extrinsics().len(), MAX_SKIPPED_TRANSACTIONS + 1);
-// 	}
-//
-// 	#[test]
-// 	fn should_only_skip_up_to_some_limit_after_soft_deadline() {
-// 		// given
-// 		let client = Arc::new(substrate_test_runtime_client::new());
-// 		let spawner = sp_core::testing::TaskExecutor::new();
-// 		let txpool = BasicPool::new_full(
-// 			Default::default(),
-// 			true.into(),
-// 			None,
-// 			spawner.clone(),
-// 			client.clone(),
-// 		);
-//
-// 		block_on(
-// 			txpool.submit_at(
-// 				&BlockId::number(0),
-// 				SOURCE,
-// 				(0..MAX_SKIPPED_TRANSACTIONS + 2)
-// 					.into_iter()
-// 					.map(|i| exhausts_resources_extrinsic_from(i))
-// 					// and some transactions that are okay.
-// 					.chain((0..MAX_SKIPPED_TRANSACTIONS).into_iter().map(|i| extrinsic(i as _)))
-// 					.collect(),
-// 			),
-// 		)
-// 		.unwrap();
-//
-// 		block_on(
-// 			txpool.maintain(chain_event(
-// 				client
-// 					.header(&BlockId::Number(0u64))
-// 					.expect("header get error")
-// 					.expect("there should be header"),
-// 			)),
-// 		);
-// 		assert_eq!(txpool.ready().count(), MAX_SKIPPED_TRANSACTIONS * 2 + 2);
-//
-// 		let mut proposer_factory =
-// 			ProposerFactory::new(spawner.clone(), client.clone(), txpool.clone(), None, None);
-//
-// 		let deadline = time::Duration::from_secs(600);
-// 		let cell = Arc::new(Mutex::new((0, time::Instant::now())));
-// 		let cell2 = cell.clone();
-// 		let proposer = proposer_factory.init_with_now(
-// 			&client.header(&BlockId::number(0)).unwrap().unwrap(),
-// 			Box::new(move || {
-// 				let mut value = cell.lock();
-// 				let (called, old) = *value;
-// 				// add time after deadline is calculated internally (hence 1)
-// 				let increase = if called == 1 {
-// 					// we start after the soft_deadline should have already been reached.
-// 					deadline / 2
-// 				} else {
-// 					// but we make sure to never reach the actual deadline
-// 					time::Duration::from_millis(0)
-// 				};
-// 				*value = (called + 1, old + increase);
-// 				old
-// 			}),
-// 		);
-//
-// 		let block =
-// 			block_on(proposer.propose(Default::default(), Default::default(), deadline, None))
-// 				.map(|r| r.block)
-// 				.unwrap();
-//
-// 		// then the block should have no transactions despite some in the pool
-// 		assert_eq!(block.extrinsics().len(), 1);
-// 		assert!(
-// 			cell2.lock().0 > MAX_SKIPPED_TRANSACTIONS,
-// 			"Not enough calls to current time, which indicates the test might have ended because of deadline,
-// not soft deadline" 		);
-// 	}
-// }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	use futures::executor::block_on;
+	use parking_lot::Mutex;
+	use sc_client_api::Backend;
+	use sc_transaction_pool::BasicPool;
+	use sc_transaction_pool_api::{ChainEvent, MaintainedTransactionPool, TransactionSource};
+	use sp_api::Core;
+	use sp_blockchain::HeaderBackend;
+	use sp_consensus::{BlockOrigin, Environment, Proposer};
+	use sp_core::Pair;
+	use sp_runtime::traits::NumberFor;
+	use substrate_test_runtime_client::{
+		prelude::*,
+		runtime::{Extrinsic, Transfer},
+		TestClientBuilder, TestClientBuilderExt,
+	};
+
+	const SOURCE: TransactionSource = TransactionSource::External;
+
+	fn extrinsic(nonce: u64) -> Extrinsic {
+		Transfer {
+			amount: Default::default(),
+			nonce,
+			from: AccountKeyring::Alice.into(),
+			to: AccountKeyring::Bob.into(),
+		}
+		.into_signed_tx()
+	}
+
+	fn exhausts_resources_extrinsic_from(who: usize) -> Extrinsic {
+		let pair = AccountKeyring::numeric(who);
+		let transfer = Transfer {
+			// increase the amount to bump priority
+			amount: 1,
+			nonce: 0,
+			from: pair.public(),
+			to: AccountKeyring::Bob.into(),
+		};
+		let signature = pair.sign(&transfer.encode()).into();
+		Extrinsic::Transfer { transfer, signature, exhaust_resources_when_not_first: true }
+	}
+
+	fn chain_event<B: BlockT>(header: B::Header) -> ChainEvent<B>
+	where
+		NumberFor<B>: From<u64>,
+	{
+		ChainEvent::NewBestBlock { hash: header.hash(), tree_route: None }
+	}
+
+	#[test]
+	fn should_cease_building_block_when_deadline_is_reached() {
+		// given
+		let client = Arc::new(substrate_test_runtime_client::new());
+		let spawner = sp_core::testing::TaskExecutor::new();
+		let txpool = BasicPool::new_full(
+			Default::default(),
+			true.into(),
+			None,
+			spawner.clone(),
+			client.clone(),
+		);
+
+		block_on(txpool.submit_at(&BlockId::number(0), SOURCE, vec![extrinsic(0), extrinsic(1)]))
+			.unwrap();
+
+		block_on(
+			txpool.maintain(chain_event(
+				client
+					.header(&BlockId::Number(0u64))
+					.expect("header get error")
+					.expect("there should be header"),
+			)),
+		);
+
+		let mut proposer_factory =
+			ProposerFactory::new(spawner.clone(), client.clone(), txpool.clone(), None, None);
+
+		let cell = Mutex::new((false, time::Instant::now()));
+		let proposer = proposer_factory.init_with_now(
+			&client.header(&BlockId::number(0)).unwrap().unwrap(),
+			Box::new(move || {
+				let mut value = cell.lock();
+				if !value.0 {
+					value.0 = true;
+					return value.1
+				}
+				let old = value.1;
+				let new = old + time::Duration::from_secs(1);
+				*value = (true, new);
+				old
+			}),
+		);
+
+		// when
+		let deadline = time::Duration::from_secs(3);
+		let block =
+			block_on(proposer.propose(Default::default(), Default::default(), deadline, None))
+				.map(|r| r.block)
+				.unwrap();
+
+		// then
+		// block should have some extrinsics although we have some more in the pool.
+		assert_eq!(block.extrinsics().len(), 1);
+		assert_eq!(txpool.ready().count(), 2);
+	}
+
+	#[test]
+	fn should_not_panic_when_deadline_is_reached() {
+		let client = Arc::new(substrate_test_runtime_client::new());
+		let spawner = sp_core::testing::TaskExecutor::new();
+		let txpool = BasicPool::new_full(
+			Default::default(),
+			true.into(),
+			None,
+			spawner.clone(),
+			client.clone(),
+		);
+
+		let mut proposer_factory =
+			ProposerFactory::new(spawner.clone(), client.clone(), txpool.clone(), None, None);
+
+		let cell = Mutex::new((false, time::Instant::now()));
+		let proposer = proposer_factory.init_with_now(
+			&client.header(&BlockId::number(0)).unwrap().unwrap(),
+			Box::new(move || {
+				let mut value = cell.lock();
+				if !value.0 {
+					value.0 = true;
+					return value.1
+				}
+				let new = value.1 + time::Duration::from_secs(160);
+				*value = (true, new);
+				new
+			}),
+		);
+
+		let deadline = time::Duration::from_secs(1);
+		block_on(proposer.propose(Default::default(), Default::default(), deadline, None))
+			.map(|r| r.block)
+			.unwrap();
+	}
+
+	#[test]
+	fn proposed_storage_changes_should_match_execute_block_storage_changes() {
+		let (client, backend) = TestClientBuilder::new().build_with_backend();
+		let client = Arc::new(client);
+		let spawner = sp_core::testing::TaskExecutor::new();
+		let txpool = BasicPool::new_full(
+			Default::default(),
+			true.into(),
+			None,
+			spawner.clone(),
+			client.clone(),
+		);
+
+		let genesis_hash = client.info().best_hash;
+		let block_id = BlockId::Hash(genesis_hash);
+
+		block_on(txpool.submit_at(&BlockId::number(0), SOURCE, vec![extrinsic(0)])).unwrap();
+
+		block_on(
+			txpool.maintain(chain_event(
+				client
+					.header(&BlockId::Number(0u64))
+					.expect("header get error")
+					.expect("there should be header"),
+			)),
+		);
+
+		let mut proposer_factory =
+			ProposerFactory::new(spawner.clone(), client.clone(), txpool.clone(), None, None);
+
+		let proposer = proposer_factory.init_with_now(
+			&client.header(&block_id).unwrap().unwrap(),
+			Box::new(move || time::Instant::now()),
+		);
+
+		let deadline = time::Duration::from_secs(9);
+		let proposal =
+			block_on(proposer.propose(Default::default(), Default::default(), deadline, None))
+				.unwrap();
+
+		assert_eq!(proposal.block.extrinsics().len(), 1);
+
+		let api = client.runtime_api();
+		// as test runtime does not implement ver block execution below does not apply
+		// api.execute_block(&block_id, proposal.block).unwrap();
+		//
+		// let state = backend.state_at(block_id).unwrap();
+		//
+		// let storage_changes = api.into_storage_changes(&state, genesis_hash).unwrap();
+		//
+		// assert_eq!(
+		// 	proposal.storage_changes.transaction_storage_root,
+		// 	storage_changes.transaction_storage_root,
+		// );
+	}
+
+	#[test]
+	fn should_cease_building_block_when_block_limit_is_reached() {
+		env_logger::try_init();
+		let client = Arc::new(substrate_test_runtime_client::new());
+		let spawner = sp_core::testing::TaskExecutor::new();
+		let txpool = BasicPool::new_full(
+			Default::default(),
+			true.into(),
+			None,
+			spawner.clone(),
+			client.clone(),
+		);
+		let genesis_header = client
+			.header(&BlockId::Number(0u64))
+			.expect("header get error")
+			.expect("there should be header");
+
+		let extrinsics_num = 4;
+		let extrinsics = (0..extrinsics_num)
+			.map(|v| Extrinsic::IncludeData(vec![v as u8; 10]))
+			.collect::<Vec<_>>();
+
+		let block_limit = genesis_header.encoded_size() +
+			extrinsics
+				.iter()
+				.take(extrinsics_num - 1)
+				.map(Encode::encoded_size)
+				.sum::<usize>() +
+			Vec::<Extrinsic>::new().encoded_size();
+
+		let mut size = genesis_header.encoded_size() + Vec::<Extrinsic>::new().encoded_size();
+
+		println!("{}", size);
+		for i in extrinsics.iter() {
+			size += i.encoded_size();
+			println!("{}", size)
+		}
+
+		block_on(txpool.submit_at(&BlockId::number(0), SOURCE, extrinsics)).unwrap();
+
+		block_on(txpool.maintain(chain_event(genesis_header.clone())));
+
+		let mut proposer_factory =
+			ProposerFactory::new(spawner.clone(), client.clone(), txpool.clone(), None, None);
+
+		let proposer = block_on(proposer_factory.init(&genesis_header)).unwrap();
+
+		// Give it enough time
+		let deadline = time::Duration::from_secs(300);
+		let block = block_on(proposer.propose(
+			Default::default(),
+			Default::default(),
+			deadline,
+			Some(block_limit),
+		))
+		.map(|r| r.block)
+		.unwrap();
+
+		// Based on the block limit, one transaction shouldn't be included.
+		assert_eq!(block.extrinsics().len(), extrinsics_num - 1);
+
+		let proposer = block_on(proposer_factory.init(&genesis_header)).unwrap();
+
+		let block =
+			block_on(proposer.propose(Default::default(), Default::default(), deadline, None))
+				.map(|r| r.block)
+				.unwrap();
+
+		// Without a block limit we should include all of them
+		assert_eq!(block.extrinsics().len(), extrinsics_num);
+
+		let mut proposer_factory = ProposerFactory::with_proof_recording(
+			spawner.clone(),
+			client.clone(),
+			txpool.clone(),
+			None,
+			None,
+		);
+
+		let proposer = block_on(proposer_factory.init(&genesis_header)).unwrap();
+
+		// Give it enough time
+		let block = block_on(proposer.propose(
+			Default::default(),
+			Default::default(),
+			deadline,
+			Some(block_limit),
+		))
+		.map(|r| r.block)
+		.unwrap();
+
+		// The block limit didn't changed, but we now include the proof in the estimation of the
+		// block size and thus, one less transaction should fit into the limit.
+		assert_eq!(block.extrinsics().len(), extrinsics_num - 2);
+	}
+
+	#[test]
+	fn should_keep_adding_transactions_after_exhausts_resources_before_soft_deadline() {
+		// given
+		let client = Arc::new(substrate_test_runtime_client::new());
+		let spawner = sp_core::testing::TaskExecutor::new();
+		let txpool = BasicPool::new_full(
+			Default::default(),
+			true.into(),
+			None,
+			spawner.clone(),
+			client.clone(),
+		);
+
+		block_on(
+			txpool.submit_at(
+				&BlockId::number(0),
+				SOURCE,
+				// add 2 * MAX_SKIPPED_TRANSACTIONS that exhaust resources
+				(0..MAX_SKIPPED_TRANSACTIONS * 2)
+					.into_iter()
+					.map(|i| exhausts_resources_extrinsic_from(i))
+					// and some transactions that are okay.
+					.chain((0..MAX_SKIPPED_TRANSACTIONS).into_iter().map(|i| extrinsic(i as _)))
+					.collect(),
+			),
+		)
+		.unwrap();
+
+		block_on(
+			txpool.maintain(chain_event(
+				client
+					.header(&BlockId::Number(0u64))
+					.expect("header get error")
+					.expect("there should be header"),
+			)),
+		);
+		assert_eq!(txpool.ready().count(), MAX_SKIPPED_TRANSACTIONS * 3);
+
+		let mut proposer_factory =
+			ProposerFactory::new(spawner.clone(), client.clone(), txpool.clone(), None, None);
+
+		let cell = Mutex::new(time::Instant::now());
+		let proposer = proposer_factory.init_with_now(
+			&client.header(&BlockId::number(0)).unwrap().unwrap(),
+			Box::new(move || {
+				let mut value = cell.lock();
+				let old = *value;
+				*value = old + time::Duration::from_secs(1);
+				old
+			}),
+		);
+
+		// when
+		// give it enough time so that deadline is never triggered.
+		let deadline = time::Duration::from_secs(900);
+		let block =
+			block_on(proposer.propose(Default::default(), Default::default(), deadline, None))
+				.map(|r| r.block)
+				.unwrap();
+
+		// then block should have all non-exhaust resources extrinsics (+ the first one).
+		assert_eq!(block.extrinsics().len(), MAX_SKIPPED_TRANSACTIONS + 1);
+	}
+
+	#[test]
+	fn should_only_skip_up_to_some_limit_after_soft_deadline() {
+		// given
+		let client = Arc::new(substrate_test_runtime_client::new());
+		let spawner = sp_core::testing::TaskExecutor::new();
+		let txpool = BasicPool::new_full(
+			Default::default(),
+			true.into(),
+			None,
+			spawner.clone(),
+			client.clone(),
+		);
+
+		block_on(
+			txpool.submit_at(
+				&BlockId::number(0),
+				SOURCE,
+				(0..MAX_SKIPPED_TRANSACTIONS + 2)
+					.into_iter()
+					.map(|i| exhausts_resources_extrinsic_from(i))
+					// and some transactions that are okay.
+					.chain((0..MAX_SKIPPED_TRANSACTIONS).into_iter().map(|i| extrinsic(i as _)))
+					.collect(),
+			),
+		)
+		.unwrap();
+
+		block_on(
+			txpool.maintain(chain_event(
+				client
+					.header(&BlockId::Number(0u64))
+					.expect("header get error")
+					.expect("there should be header"),
+			)),
+		);
+		assert_eq!(txpool.ready().count(), MAX_SKIPPED_TRANSACTIONS * 2 + 2);
+
+		let mut proposer_factory =
+			ProposerFactory::new(spawner.clone(), client.clone(), txpool.clone(), None, None);
+
+		let deadline = time::Duration::from_secs(600);
+		let cell = Arc::new(Mutex::new((0, time::Instant::now())));
+		let cell2 = cell.clone();
+		let proposer = proposer_factory.init_with_now(
+			&client.header(&BlockId::number(0)).unwrap().unwrap(),
+			Box::new(move || {
+				let mut value = cell.lock();
+				let (called, old) = *value;
+				// add time after deadline is calculated internally (hence 1)
+				let increase = if called == 1 {
+					// we start after the soft_deadline should have already been reached.
+					deadline / 2
+				} else {
+					// but we make sure to never reach the actual deadline
+					time::Duration::from_millis(0)
+				};
+				*value = (called + 1, old + increase);
+				old
+			}),
+		);
+
+		let block =
+			block_on(proposer.propose(Default::default(), Default::default(), deadline, None))
+				.map(|r| r.block)
+				.unwrap();
+
+		// then the block should have no transactions despite some in the pool
+		assert_eq!(block.extrinsics().len(), 1);
+		assert!(
+			cell2.lock().0 > MAX_SKIPPED_TRANSACTIONS,
+			"Not enough calls to current time, which indicates the test might have ended because of deadline, not soft deadline"
+		);
+	}
+}

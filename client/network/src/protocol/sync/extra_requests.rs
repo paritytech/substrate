@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -255,7 +255,6 @@ impl<B: BlockT> ExtraRequests<B> {
 
 	/// Get some key metrics.
 	pub(crate) fn metrics(&self) -> Metrics {
-		use std::convert::TryInto;
 		Metrics {
 			pending_requests: self.pending_requests.len().try_into().unwrap_or(std::u32::MAX),
 			active_requests: self.active_requests.len().try_into().unwrap_or(std::u32::MAX),

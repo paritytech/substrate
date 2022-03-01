@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -288,20 +288,22 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 			fn into_storage_changes(
 				&self,
 				backend: &Self::StateBackend,
-				changes_trie_state: Option<&#crate_::ChangesTrieState<
-					#crate_::HashFor<Block>,
-					#crate_::NumberFor<Block>,
-				>>,
 				parent_hash: Block::Hash,
 			) -> std::result::Result<
 				#crate_::StorageChanges<C::StateBackend, Block>,
 				String
 			> where Self: Sized {
+				let at = #crate_::BlockId::Hash(parent_hash.clone());
+				let state_version = self.call
+					.runtime_version_at(&at)
+					.map(|v| v.state_version())
+					.map_err(|e| format!("Failed to get state version: {:?}", e))?;
+
 				self.changes.replace(Default::default()).into_storage_changes(
 					backend,
-					changes_trie_state,
 					parent_hash,
 					self.storage_transaction_cache.replace(Default::default()),
+					state_version,
 				)
 			}
 		}

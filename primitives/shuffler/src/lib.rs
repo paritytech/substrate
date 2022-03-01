@@ -90,7 +90,7 @@ impl FisherYates {
 	}
 }
 
-pub fn shuffle_using_seed<A: sp_std::cmp::Ord + Encode + Clone, E: Encode>(
+pub fn shuffle_using_seed<A: sp_std::cmp::Ord + Encode + Clone, E: Encode + Clone>(
 	extrinsics: Vec<(Option<A>, E)>,
 	seed: &H256,
 ) -> Vec<E> {
@@ -107,10 +107,20 @@ pub fn shuffle_using_seed<A: sp_std::cmp::Ord + Encode + Clone, E: Encode>(
 	// [ Alice, Alice, Alice, ... , Bob, Bob, Bob, ... ]
 	// let mut slots: Vec<Option<_>> =
 	// 	extrinsics.iter().map(|(who, _)| who).cloned().collect();
-	let mut slots = Vec::with_capacity(extrinsics.len());
+	// let mut slots = Vec::with_capacity(extrinsics.len());
+
+	// initial slots - just inherents
+	let mut slots = extrinsics
+		.iter()
+		.filter(|tx| tx.0.is_none())
+		.map(|(_, tx)| tx)
+		.cloned()
+		.collect::<Vec<_>>();
+	let only_extrinsics =
+		extrinsics.into_iter().filter(|tx| tx.0.is_some()).collect::<Vec<(_, _)>>();
 
 	let mut grouped_extrinsics: BTreeMap<Option<_>, VecDeque<_>> =
-		extrinsics.into_iter().fold(BTreeMap::new(), |mut groups, (who, tx)| {
+		only_extrinsics.into_iter().fold(BTreeMap::new(), |mut groups, (who, tx)| {
 			groups.entry(who).or_insert_with(VecDeque::new).push_back(tx);
 			groups
 		});
@@ -280,5 +290,37 @@ mod tests {
 				.unwrap(),
 		);
 		assert_ne!(shuffled1, shuffled2);
+	}
+
+	#[test]
+	fn inherents_executed_with_highest_priority() {
+		let input = vec![
+			(None, 1),
+			(None, 2),
+			(None, 3),
+			(None, 4),
+			(None, 5),
+			(Some("A"), 10),
+			(Some("B"), 20),
+			(Some("C"), 30),
+			(Some("D"), 40),
+		];
+
+		let shuffled = shuffle_using_seed(
+			input.clone(),
+			&H256::from_str("0xff8611a4d212fc161dae19dd57f0f1ba9309f45d6207da13f2d3eab4c6839e91")
+				.unwrap(),
+		);
+
+		// check that txs comming from None account are in the front
+		assert_eq!(shuffled[0], 1);
+		assert_eq!(shuffled[1], 2);
+		assert_eq!(shuffled[2], 3);
+		assert_eq!(shuffled[3], 4);
+		assert_eq!(shuffled[4], 5);
+
+		// check that rest of the transactions is still shuffled
+		let origin_order = input.iter().map(|(_, tx)| tx).cloned().collect::<Vec<_>>();
+		assert_ne!(origin_order, shuffled);
 	}
 }

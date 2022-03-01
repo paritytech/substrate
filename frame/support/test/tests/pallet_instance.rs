@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,7 +18,7 @@
 use frame_support::{
 	dispatch::UnfilteredDispatchable,
 	storage::unhashed,
-	traits::{GetCallName, OnFinalize, OnGenesis, OnInitialize, OnRuntimeUpgrade},
+	traits::{ConstU32, GetCallName, OnFinalize, OnGenesis, OnInitialize, OnRuntimeUpgrade},
 	weights::{DispatchClass, DispatchInfo, GetDispatchInfo, Pays},
 };
 use sp_io::{
@@ -245,11 +245,6 @@ pub mod pallet2 {
 	}
 }
 
-frame_support::parameter_types!(
-	pub const MyGetParam: u32 = 10;
-	pub const BlockHashCount: u32 = 250;
-);
-
 impl frame_system::Config for Runtime {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type Origin = Origin;
@@ -262,7 +257,7 @@ impl frame_system::Config for Runtime {
 	type Lookup = sp_runtime::traits::IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = Event;
-	type BlockHashCount = BlockHashCount;
+	type BlockHashCount = ConstU32<250>;
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
@@ -274,15 +269,16 @@ impl frame_system::Config for Runtime {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
+	type MaxConsumers = ConstU32<16>;
 }
 impl pallet::Config for Runtime {
 	type Event = Event;
-	type MyGetParam = MyGetParam;
+	type MyGetParam = ConstU32<10>;
 	type Balance = u64;
 }
 impl pallet::Config<pallet::Instance1> for Runtime {
 	type Event = Event;
-	type MyGetParam = MyGetParam;
+	type MyGetParam = ConstU32<10>;
 	type Balance = u64;
 }
 impl pallet2::Config for Runtime {
@@ -302,13 +298,12 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
-		System: frame_system::{Pallet, Call, Event<T>},
-		Example: pallet::{Pallet, Call, Event<T>, Config, Storage, Inherent, Origin<T>, ValidateUnsigned},
-		Instance1Example: pallet::<Instance1>::{
-			Pallet, Call, Event<T>, Config, Storage, Inherent, Origin<T>, ValidateUnsigned
-		},
-		Example2: pallet2::{Pallet, Event<T>, Config<T>, Storage},
-		Instance1Example2: pallet2::<Instance1>::{Pallet, Event<T>, Config<T>, Storage},
+		// Exclude part `Storage` in order not to check its metadata in tests.
+		System: frame_system exclude_parts { Storage },
+		Example: pallet,
+		Instance1Example: pallet::<Instance1>,
+		Example2: pallet2,
+		Instance1Example2: pallet2::<Instance1>,
 	}
 );
 
@@ -506,39 +501,80 @@ fn storage_expand() {
 }
 
 #[test]
+fn pallet_metadata_expands() {
+	use frame_support::traits::{CrateVersion, PalletInfoData, PalletsInfoAccess};
+	let mut infos = AllPalletsWithSystem::infos();
+	infos.sort_by_key(|x| x.index);
+	assert_eq!(
+		infos,
+		vec![
+			PalletInfoData {
+				index: 0,
+				name: "System",
+				module_name: "frame_system",
+				crate_version: CrateVersion { major: 4, minor: 0, patch: 0 },
+			},
+			PalletInfoData {
+				index: 1,
+				name: "Example",
+				module_name: "pallet",
+				crate_version: CrateVersion { major: 3, minor: 0, patch: 0 },
+			},
+			PalletInfoData {
+				index: 2,
+				name: "Instance1Example",
+				module_name: "pallet",
+				crate_version: CrateVersion { major: 3, minor: 0, patch: 0 },
+			},
+			PalletInfoData {
+				index: 3,
+				name: "Example2",
+				module_name: "pallet2",
+				crate_version: CrateVersion { major: 3, minor: 0, patch: 0 },
+			},
+			PalletInfoData {
+				index: 4,
+				name: "Instance1Example2",
+				module_name: "pallet2",
+				crate_version: CrateVersion { major: 3, minor: 0, patch: 0 },
+			},
+		]
+	);
+}
+
+#[test]
 fn pallet_hooks_expand() {
 	TestExternalities::default().execute_with(|| {
 		frame_system::Pallet::<Runtime>::set_block_number(1);
 
-		assert_eq!(AllPallets::on_initialize(1), 21);
-		AllPallets::on_finalize(1);
+		assert_eq!(AllPalletsWithoutSystem::on_initialize(1), 21);
+		AllPalletsWithoutSystem::on_finalize(1);
 
-		assert_eq!(AllPallets::on_runtime_upgrade(), 61);
+		assert_eq!(AllPalletsWithoutSystem::on_runtime_upgrade(), 61);
 
-		// The order is indeed reversed due to https://github.com/paritytech/substrate/issues/6280
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[0].event,
-			Event::Instance1Example(pallet::Event::Something(11)),
-		);
-		assert_eq!(
-			frame_system::Pallet::<Runtime>::events()[1].event,
 			Event::Example(pallet::Event::Something(10)),
 		);
 		assert_eq!(
-			frame_system::Pallet::<Runtime>::events()[2].event,
-			Event::Instance1Example(pallet::Event::Something(21)),
+			frame_system::Pallet::<Runtime>::events()[1].event,
+			Event::Instance1Example(pallet::Event::Something(11)),
 		);
 		assert_eq!(
-			frame_system::Pallet::<Runtime>::events()[3].event,
+			frame_system::Pallet::<Runtime>::events()[2].event,
 			Event::Example(pallet::Event::Something(20)),
 		);
 		assert_eq!(
+			frame_system::Pallet::<Runtime>::events()[3].event,
+			Event::Instance1Example(pallet::Event::Something(21)),
+		);
+		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[4].event,
-			Event::Instance1Example(pallet::Event::Something(31)),
+			Event::Example(pallet::Event::Something(30)),
 		);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[5].event,
-			Event::Example(pallet::Event::Something(30)),
+			Event::Instance1Example(pallet::Event::Something(31)),
 		);
 	})
 }
@@ -559,7 +595,7 @@ fn metadata() {
 	let system_pallet_metadata = PalletMetadata {
 		index: 0,
 		name: "System",
-		storage: None,
+		storage: None, // The storage metadatas have been excluded.
 		calls: Some(scale_info::meta_type::<frame_system::Call<Runtime>>().into()),
 		event: Some(PalletEventMetadata {
 			ty: scale_info::meta_type::<frame_system::Event<Runtime>>(),
