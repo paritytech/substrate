@@ -56,7 +56,8 @@ pub async fn execute<Runtime: crate::RuntimeT, Block: BlockT + DeserializeOwned>
 		);
 
 		let voters =
-			<pallet_staking::Pallet<Runtime> as ElectionDataProvider>::voters(voter_limit).unwrap();
+			<pallet_staking::Pallet<Runtime> as ElectionDataProvider>::electing_voters(voter_limit)
+				.unwrap();
 
 		let mut voters_nominator_only = voters
 			.iter()

@@ -138,7 +138,7 @@
 //!         type DataProvider = T::DataProvider;
 //!
 //!         fn elect() -> Result<Supports<AccountId>, Self::Error> {
-//!             Self::DataProvider::targets(None)
+//!             Self::DataProvider::electable_targets(None)
 //!                 .map_err(|_| "failed to elect")
 //!                 .map(|t| vec![(t[0], Support::default())])
 //!         }
@@ -194,16 +194,18 @@ pub trait ElectionDataProvider {
 	/// Maximum number of votes per voter that this data provider is providing.
 	type MaxVotesPerVoter: Get<u32>;
 
-	/// All possible targets for the election, i.e. the candidates.
+	/// All possible targets for the election, i.e. the that could become elected, thus "electable".
 	///
 	/// If `maybe_max_len` is `Some(v)` then the resulting vector MUST NOT be longer than `v` items
 	/// long.
 	///
 	/// This should be implemented as a self-weighing function. The implementor should register its
 	/// appropriate weight at the end of execution with the system pallet directly.
-	fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<Self::AccountId>>;
+	fn electable_targets(
+		maybe_max_len: Option<usize>,
+	) -> data_provider::Result<Vec<Self::AccountId>>;
 
-	/// All possible voters for the election.
+	/// All possible voters that influence the outcome of the election, thus "electing".
 	///
 	/// Note that if a notion of self-vote exists, it should be represented here.
 	///
@@ -212,7 +214,7 @@ pub trait ElectionDataProvider {
 	///
 	/// This should be implemented as a self-weighing function. The implementor should register its
 	/// appropriate weight at the end of execution with the system pallet directly.
-	fn voters(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<VoterOf<Self>>>;
+	fn electing_voters(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<VoterOf<Self>>>;
 
 	/// The number of targets to elect.
 	///
@@ -272,11 +274,11 @@ impl<AccountId, BlockNumber> ElectionDataProvider for TestDataProvider<(AccountI
 	type BlockNumber = BlockNumber;
 	type MaxVotesPerVoter = ();
 
-	fn targets(_maybe_max_len: Option<usize>) -> data_provider::Result<Vec<AccountId>> {
+	fn electable_targets(_maybe_max_len: Option<usize>) -> data_provider::Result<Vec<AccountId>> {
 		Ok(Default::default())
 	}
 
-	fn voters(_maybe_max_len: Option<usize>) -> data_provider::Result<Vec<VoterOf<Self>>> {
+	fn electing_voters(_maybe_max_len: Option<usize>) -> data_provider::Result<Vec<VoterOf<Self>>> {
 		Ok(Default::default())
 	}
 
