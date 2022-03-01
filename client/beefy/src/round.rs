@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use std::{collections::BTreeMap, fmt::Debug, hash::Hash};
+use std::{collections::BTreeMap, hash::Hash};
 
 use log::{debug, trace};
 
@@ -24,8 +24,7 @@ use beefy_primitives::{
 	crypto::{Public, Signature},
 	ValidatorSet, ValidatorSetId,
 };
-use sp_arithmetic::traits::AtLeast32BitUnsigned;
-use sp_runtime::traits::MaybeDisplay;
+use sp_runtime::traits::{Block, NumberFor};
 
 #[derive(Default)]
 struct RoundTracker {
@@ -58,48 +57,71 @@ fn threshold(authorities: usize) -> usize {
 	authorities - faulty
 }
 
-pub(crate) struct Rounds<Payload, Number> {
-	rounds: BTreeMap<(Payload, Number), RoundTracker>,
-	best_done: Option<Number>,
-	session_start: Number,
+pub(crate) struct Rounds<Payload, B: Block> {
+	rounds: BTreeMap<(Payload, NumberFor<B>), RoundTracker>,
+	best_done: Option<NumberFor<B>>,
+	session_start: NumberFor<B>,
 	validator_set: ValidatorSet<Public>,
+	prev_validator_set: ValidatorSet<Public>,
 }
 
-impl<P, N> Rounds<P, N>
+impl<P, B> Rounds<P, B>
 where
-	P: Ord + Hash,
-	N: Ord + AtLeast32BitUnsigned + MaybeDisplay,
+	P: Ord + Hash + Clone,
+	B: Block,
 {
-	pub(crate) fn new(session_start: N, validator_set: ValidatorSet<Public>) -> Self {
-		Rounds { rounds: BTreeMap::new(), best_done: None, session_start, validator_set }
+	pub(crate) fn new(
+		session_start: NumberFor<B>,
+		validator_set: ValidatorSet<Public>,
+		prev_validator_set: ValidatorSet<Public>,
+	) -> Self {
+		Rounds {
+			rounds: BTreeMap::new(),
+			best_done: None,
+			session_start,
+			validator_set,
+			prev_validator_set,
+		}
 	}
 }
 
-impl<H, N> Rounds<H, N>
+impl<P, B> Rounds<P, B>
 where
-	H: Ord + Hash + Clone,
-	N: Ord + AtLeast32BitUnsigned + MaybeDisplay + Clone + Debug,
+	P: Ord + Hash + Clone,
+	B: Block,
 {
-	pub(crate) fn validator_set_id(&self) -> ValidatorSetId {
-		self.validator_set.id()
+	pub(crate) fn validator_set_id_for(&self, block_number: NumberFor<B>) -> ValidatorSetId {
+		if block_number != self.session_start {
+			self.validator_set.id()
+		} else {
+			self.prev_validator_set.id()
+		}
 	}
 
-	pub(crate) fn validators(&self) -> &[Public] {
-		self.validator_set.validators()
+	pub(crate) fn validators_for(&self, block_number: NumberFor<B>) -> &[Public] {
+		if block_number != self.session_start {
+			self.validator_set.validators()
+		} else {
+			self.prev_validator_set.validators()
+		}
 	}
 
-	pub(crate) fn session_start(&self) -> &N {
+	pub(crate) fn validator_set(&self) -> &ValidatorSet<Public> {
+		&self.validator_set
+	}
+
+	pub(crate) fn session_start(&self) -> &NumberFor<B> {
 		&self.session_start
 	}
 
-	pub(crate) fn should_self_vote(&self, round: &(H, N)) -> bool {
+	pub(crate) fn should_self_vote(&self, round: &(P, NumberFor<B>)) -> bool {
 		Some(round.1.clone()) > self.best_done &&
 			self.rounds.get(round).map(|tracker| !tracker.has_self_vote()).unwrap_or(true)
 	}
 
 	pub(crate) fn add_vote(
 		&mut self,
-		round: &(H, N),
+		round: &(P, NumberFor<B>),
 		vote: (Public, Signature),
 		self_vote: bool,
 	) -> bool {
@@ -122,7 +144,10 @@ where
 		}
 	}
 
-	pub(crate) fn try_conclude(&mut self, round: &(H, N)) -> Option<Vec<Option<Signature>>> {
+	pub(crate) fn try_conclude(
+		&mut self,
+		round: &(P, NumberFor<B>),
+	) -> Option<Vec<Option<Signature>>> {
 		let done = self
 			.rounds
 			.get(round)
@@ -160,7 +185,6 @@ where
 mod tests {
 	use sc_network_test::Block;
 	use sp_core::H256;
-	use sp_runtime::traits::NumberFor;
 
 	use beefy_primitives::{crypto::Public, ValidatorSet};
 
@@ -217,13 +241,14 @@ mod tests {
 		)
 		.unwrap();
 
-		let rounds = Rounds::<H256, NumberFor<Block>>::new(1, validators);
+		let session_start = 1u64.into();
+		let rounds = Rounds::<H256, Block>::new(session_start, validators.clone(), validators);
 
-		assert_eq!(42, rounds.validator_set_id());
+		assert_eq!(42, rounds.validator_set_id_for(session_start));
 		assert_eq!(1, *rounds.session_start());
 		assert_eq!(
 			&vec![Keyring::Alice.public(), Keyring::Bob.public(), Keyring::Charlie.public()],
-			rounds.validators()
+			rounds.validators_for(session_start)
 		);
 	}
 
@@ -243,7 +268,8 @@ mod tests {
 		.unwrap();
 		let round = (H256::from_low_u64_le(1), 1);
 
-		let mut rounds = Rounds::<H256, NumberFor<Block>>::new(1, validators);
+		let session_start = 1u64.into();
+		let mut rounds = Rounds::<H256, Block>::new(session_start, validators.clone(), validators);
 
 		// no self vote yet, should self vote
 		assert!(rounds.should_self_vote(&round));
@@ -315,7 +341,8 @@ mod tests {
 		)
 		.unwrap();
 
-		let mut rounds = Rounds::<H256, NumberFor<Block>>::new(1, validators);
+		let session_start = 1u64.into();
+		let mut rounds = Rounds::<H256, Block>::new(session_start, validators.clone(), validators);
 
 		// round 1
 		assert!(rounds.add_vote(

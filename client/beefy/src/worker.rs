@@ -49,7 +49,8 @@ use crate::{
 	metric_inc, metric_set,
 	metrics::Metrics,
 	notification::{BeefyBestBlockSender, BeefySignedCommitmentSender},
-	round, Client,
+	round::Rounds,
+	Client,
 };
 
 pub(crate) struct WorkerParams<B, BE, C, SO>
@@ -85,7 +86,7 @@ where
 	/// Min delta in block numbers between two blocks, BEEFY should vote on
 	min_block_delta: u32,
 	metrics: Option<Metrics>,
-	rounds: Option<round::Rounds<Payload, NumberFor<B>>>,
+	rounds: Option<Rounds<Payload, B>>,
 	finality_notifications: FinalityNotifications<B>,
 	/// Best block we received a GRANDPA notification for
 	best_grandpa_block_header: <B as Block>::Header,
@@ -254,6 +255,7 @@ where
 		metric_set!(self, beefy_validator_set_id, active.id());
 		// BEEFY should produce a signed commitment for each session
 		if active.id() != self.last_signed_id + 1 && active.id() != GENESIS_AUTHORITY_SET_ID {
+			error!(target: "beefy", "🥩 active id {:?} ; last_signed_id {:?}", active.id(), self.last_signed_id);
 			metric_inc!(self, beefy_skipped_sessions);
 		}
 
@@ -262,8 +264,14 @@ where
 			let _ = self.verify_validator_set(&session_start, &active);
 		}
 
+		let prev_validator_set = if let Some(r) = &self.rounds {
+			r.validator_set().clone()
+		} else {
+			// no previous rounds present use new validator set instead (genesis case)
+			active.clone()
+		};
 		let id = active.id();
-		self.rounds = Some(round::Rounds::new(session_start, active));
+		self.rounds = Some(Rounds::new(session_start, active, prev_validator_set));
 		info!(target: "beefy", "🥩 New Rounds for validator set id: {:?} with session_start {:?}", id, session_start);
 	}
 
@@ -315,7 +323,7 @@ where
 				self.gossip_validator.drop_round(round.1);
 
 				// id is stored for skipped session metric calculation
-				self.last_signed_id = rounds.validator_set_id();
+				self.last_signed_id = rounds.validator_set_id_for(round.1);
 
 				let block_num = round.1;
 				let commitment = Commitment {
@@ -387,15 +395,12 @@ where
 		};
 		let payload = Payload::new(known_payload_ids::MMR_ROOT_ID, mmr_root.encode());
 
-		if let Some(rounds) = &self.rounds {
+		let (validators, validator_set_id) = if let Some(rounds) = &self.rounds {
 			if !rounds.should_self_vote(&(payload.clone(), target_number)) {
 				debug!(target: "beefy", "🥩 Don't double vote for block number: {:?}", target_number);
 				return
 			}
-		};
-
-		let (validators, validator_set_id) = if let Some(rounds) = &self.rounds {
-			(rounds.validators(), rounds.validator_set_id())
+			(rounds.validators_for(target_number), rounds.validator_set_id_for(target_number))
 		} else {
 			debug!(target: "beefy", "🥩 Missing validator set - can't vote for: {:?}", target_hash);
 			return
