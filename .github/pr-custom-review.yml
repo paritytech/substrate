@@ -2,9 +2,7 @@ rules:
   - name: FILES
     condition: .*/runtime/.*lib.rs
     check_type: changed_files
-    any:
-      - min_approvals: 1
-        users:
-      - min_approvals: 1
-        teams:
-          - substrateteamleads
+    min_approvals: 2
+    users:
+    teams:
+      - substrateteamleads
