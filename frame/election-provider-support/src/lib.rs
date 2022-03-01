@@ -219,11 +219,7 @@ pub trait ElectionDataProvider {
 	/// This should be implemented as a self-weighing function. The implementor should register its
 	/// appropriate weight at the end of execution with the system pallet directly.
 	///
-	/// We don't want to have a scenario where the return of `desired_targets`, call it `y`,
-	/// is bigger than the size of the `Vec` returned by `targets`, call it `x`.
-	/// If this were to happen, the call-site should emit a warning and use `min(x, y)` as
-	/// opposed to `y`. Please check `create_snapshot_external` in `election-provider-multi-phase`
-	/// for more details.
+	/// A sensible implementation should use the minimum between this value and [`Self::targets().len()`], since desiring a winner set larger than candidates is not feasible.  
 	///
 	/// This is documented further in issue: <https://github.com/paritytech/substrate/issues/9478>
 	fn desired_targets() -> data_provider::Result<u32>;
