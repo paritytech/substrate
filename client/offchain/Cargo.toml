@@ -17,7 +17,7 @@ bytes = "1.1"
 codec = { package = "parity-scale-codec", version = "3.0.0", features = ["derive"] }
 hex = "0.4"
 fnv = "1.0.6"
-futures = "0.3.16"
+futures = "0.3.19"
 futures-timer = "3.0.2"
 num_cpus = "1.13"
 parking_lot = "0.12.0"
