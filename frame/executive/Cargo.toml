@@ -19,19 +19,19 @@ codec = { package = "parity-scale-codec", version = "3.0.0", default-features = 
 scale-info = { version = "2.0.0", default-features = false, features = ["derive"] }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
-sp-runtime = { version = "5.0.0", default-features = false, path = "../../primitives/runtime" }
-sp-tracing = { version = "4.0.0", default-features = false, path = "../../primitives/tracing" }
+sp-runtime = { version = "6.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-tracing = { version = "5.0.0", default-features = false, path = "../../primitives/tracing" }
 sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
-sp-io = { version = "5.0.0", default-features = false, path = "../../primitives/io" }
-sp-core = { version = "5.0.0", default-features = false, path = "../../primitives/core" }
+sp-io = { version = "6.0.0", default-features = false, path = "../../primitives/io" }
+sp-core = { version = "6.0.0", default-features = false, path = "../../primitives/core" }
 
 [dev-dependencies]
 hex-literal = "0.3.4"
-sp-core = { version = "5.0.0", path = "../../primitives/core" }
-sp-io = { version = "5.0.0", path = "../../primitives/io" }
+sp-core = { version = "6.0.0", path = "../../primitives/core" }
+sp-io = { version = "6.0.0", path = "../../primitives/io" }
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 pallet-transaction-payment = { version = "4.0.0-dev", path = "../transaction-payment" }
-sp-version = { version = "4.0.0-dev", path = "../../primitives/version" }
+sp-version = { version = "5.0.0", path = "../../primitives/version" }
 sp-inherents = { version = "4.0.0-dev", path = "../../primitives/inherents" }
 
 [features]
