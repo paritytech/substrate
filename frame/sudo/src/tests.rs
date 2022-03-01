@@ -83,10 +83,7 @@ fn sudo_unchecked_weight_basics() {
 		let call = Box::new(Call::Logger(LoggerCall::privileged_i32_log { i: 42, weight: 1 }));
 		let sudo_unchecked_weight_call = SudoCall::sudo_unchecked_weight { call, weight: 1_000 };
 		let info = sudo_unchecked_weight_call.get_dispatch_info();
-		assert_eq!(info.weight, WeightV2 {
-			computation: 1_000,
-			bandwidth: 0,
-		});
+		assert_eq!(info.weight, WeightV2 { computation: 1_000, bandwidth: 0 });
 	});
 }
 

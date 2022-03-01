@@ -1,5 +1,5 @@
 use codec::{Decode, Encode, MaxEncodedLen};
-use core::ops::{Add, Mul, Sub};
+use core::ops::{Add, Div, Mul, Sub};
 use sp_runtime::{
 	traits::{CheckedAdd, One, Zero},
 	RuntimeDebug,
@@ -37,6 +37,12 @@ impl WeightV2 {
 		} else {
 			Some(total)
 		}
+	}
+
+	/// This is a simple helper function which allows us to be backwards compatible, but will be
+	/// removed in the future.
+	pub fn todo_from_v1(computation: Weight) -> Self {
+		Self { computation, bandwidth: Zero::zero() }
 	}
 
 	/// Checks if any param of `self` is less than `other`.
@@ -138,6 +144,17 @@ where
 	}
 }
 
+impl<T> Div<T> for WeightV2
+where
+	u64: Div<T, Output = u64>,
+	T: Copy,
+{
+	type Output = Self;
+	fn div(self, b: T) -> Self {
+		Self { computation: self.computation / b, bandwidth: self.bandwidth / b }
+	}
+}
+
 impl Mul<WeightV2> for Perbill {
 	type Output = WeightV2;
 	fn mul(self, b: WeightV2) -> WeightV2 {
@@ -232,12 +249,11 @@ impl From<(Option<WeightV2>, Pays)> for PostDispatchInfo {
 	}
 }
 
-// SHAWN TODO: Disambiguate NONE
-// impl From<Option<WeightV2>> for PostDispatchInfo {
-// 	fn from(actual_weight: Option<WeightV2>) -> Self {
-// 		Self { actual_weight, pays_fee: Default::default() }
-// 	}
-// }
+impl From<Option<WeightV2>> for PostDispatchInfo {
+	fn from(actual_weight: Option<WeightV2>) -> Self {
+		Self { actual_weight, pays_fee: Default::default() }
+	}
+}
 
 impl<T> WeighData<T> for WeightV2 {
 	fn weigh_data(&self, _: T) -> WeightV2 {
