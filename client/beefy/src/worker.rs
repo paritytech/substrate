@@ -22,6 +22,7 @@ use codec::{Codec, Decode, Encode};
 use futures::{future, FutureExt, StreamExt};
 use log::{debug, error, info, log_enabled, trace, warn};
 use parking_lot::Mutex;
+use tokio::time::{sleep, Duration};
 
 use sc_client_api::{Backend, FinalityNotification, FinalityNotifications};
 use sc_network_gossip::GossipEngine;
@@ -352,7 +353,9 @@ where
 		}
 	}
 
-	// TODO: doc comment
+	/// Create and gossip Signed Commitment for block number `target_number`.
+	///
+	/// Also handle this self vote by calling `self.handle_vote()` for it.
 	fn do_vote(&mut self, target_number: NumberFor<B>) {
 		trace!(target: "beefy", "🥩 Try voting on {}", target_number);
 
@@ -361,9 +364,18 @@ where
 		let target_header = if target_number == *self.best_grandpa_block_header.number() {
 			self.best_grandpa_block_header.clone()
 		} else {
-			self.client
-				.expect_header(BlockId::Number(target_number))
-				.expect("FIXME: return error here")
+			match self.client.expect_header(BlockId::Number(target_number)) {
+				Ok(h) => h,
+				Err(err) => {
+					debug!(
+						target: "beefy",
+						"🥩 Could not get header for block #{:?} (error: {:?}), skipping vote..",
+						target_number,
+						err
+					);
+					return
+				},
+			}
 		};
 		let target_hash = target_header.hash();
 
@@ -431,30 +443,29 @@ where
 		self.gossip_engine.lock().gossip_message(topic::<B>(), encoded_message, false);
 	}
 
+	/// Main loop for BEEFY worker.
+	///
+	/// Wait for BEEFY runtime pallet to be available, then start the main async loop
+	/// which is driven by finality notifications and gossiped votes.
 	pub(crate) async fn run(mut self) {
-		// TODO: split 'pallet-present' and 'pallet-not-present' code to separate parts of the
-		// worker.
-		//
-		// further TODO: when pallet does become available we can run BEEFY initial sync (catch-up)
-		// logic then start this part of the worker that will just work as it does now.
-
 		info!(target: "beefy", "🥩 run BEEFY worker, best grandpa: #{:?}.", self.best_grandpa_block_header.number());
-		let at = BlockId::hash(self.best_grandpa_block_header.hash());
-		if let Some(active) = self.client.runtime_api().validator_set(&at).ok().flatten() {
-			if active.id() == GENESIS_AUTHORITY_SET_ID {
-				// When starting from genesis, there is no session boundary digest.
-				// Just initialize `rounds` to Block #1 as BEEFY mandatory block.
-				self.init_session_at(active, 1u32.into());
+		loop {
+			let at = BlockId::hash(self.best_grandpa_block_header.hash());
+			if let Some(active) = self.client.runtime_api().validator_set(&at).ok().flatten() {
+				if active.id() == GENESIS_AUTHORITY_SET_ID {
+					// When starting from genesis, there is no session boundary digest.
+					// Just initialize `rounds` to Block #1 as BEEFY mandatory block.
+					self.init_session_at(active, 1u32.into());
+				}
 				// In all other cases, we just go without `rounds` initialized, meaning the worker
 				// won't vote until it witnesses a session change.
 				// Once we'll implement 'initial sync' (catch-up), the worker will be able to start
 				// voting right away.
+				break
+			} else {
+				info!(target: "beefy", "Waiting BEEFY pallet to become available...");
+				sleep(Duration::from_secs(5)).await;
 			}
-		} else {
-			// TODO: instead of stopping worker, create a check+sleep+repeat future
-			// that waits for BEEFY pallet to be available.
-			error!(target: "beefy", "🥩 BEEFY pallet not available, stopping gadget.");
-			return
 		}
 
 		let mut votes = Box::pin(self.gossip_engine.lock().messages_for(topic::<B>()).filter_map(
@@ -470,8 +481,8 @@ where
 
 		loop {
 			while self.sync_oracle.is_major_syncing() {
-				debug!(target: "beefy", "Waiting for major sync to complete.");
-				tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+				debug!(target: "beefy", "Waiting for major sync to complete...");
+				sleep(Duration::from_secs(5)).await;
 			}
 
 			let engine = self.gossip_engine.clone();
