@@ -247,7 +247,7 @@ fn deposit_event_uses_actual_weight() {
 					phase: Phase::ApplyExtrinsic(0),
 					event: SysEvent::ExtrinsicSuccess {
 						dispatch_info: DispatchInfo {
-							weight: WeightV2 { computation: 300, bandwidth: 0 },
+							weight: WeightV2::todo_from_v1(300),
 							..Default::default()
 						},
 					}
@@ -258,7 +258,7 @@ fn deposit_event_uses_actual_weight() {
 					phase: Phase::ApplyExtrinsic(1),
 					event: SysEvent::ExtrinsicSuccess {
 						dispatch_info: DispatchInfo {
-							weight: WeightV2 { computation: 1000, bandwidth: 0 },
+							weight: WeightV2::todo_from_v1(1000),
 							..Default::default()
 						},
 					}
@@ -269,7 +269,7 @@ fn deposit_event_uses_actual_weight() {
 					phase: Phase::ApplyExtrinsic(2),
 					event: SysEvent::ExtrinsicSuccess {
 						dispatch_info: DispatchInfo {
-							weight: WeightV2 { computation: 1000, bandwidth: 0 },
+							weight: WeightV2::todo_from_v1(1000),
 							..Default::default()
 						},
 					}
