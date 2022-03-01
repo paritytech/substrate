@@ -10362,6 +10362,7 @@ dependencies = [
  "sp-core",
  "sp-runtime",
  "sp-std",
+ "thiserror",
  "trie-bench",
  "trie-db",
  "trie-root",
