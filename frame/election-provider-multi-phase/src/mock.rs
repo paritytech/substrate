@@ -266,7 +266,7 @@ parameter_types! {
 	pub static VoterSnapshotPerBlock: VoterIndex = u32::max_value();
 
 	pub static EpochLength: u64 = 30;
-	pub static OnChianFallback: bool = true;
+	pub static OnChainFallback: bool = true;
 }
 
 impl onchain::Config for Runtime {
@@ -282,11 +282,23 @@ impl ElectionProvider for MockFallback {
 	type DataProvider = StakingMock;
 
 	fn elect() -> Result<Supports<AccountId>, Self::Error> {
-		if OnChianFallback::get() {
-			onchain::OnChainSequentialPhragmen::<Runtime>::elect()
-				.map_err(|_| "OnChainSequentialPhragmen failed")
+		Self::instant_elect(None, None)
+	}
+}
+
+impl InstantElectionProvider for MockFallback {
+	fn instant_elect(
+		maybe_max_voters: Option<usize>,
+		maybe_max_targets: Option<usize>,
+	) -> Result<Supports<Self::AccountId>, Self::Error> {
+		if OnChainFallback::get() {
+			onchain::OnChainSequentialPhragmen::<Runtime>::instant_elect(
+				maybe_max_voters,
+				maybe_max_targets,
+			)
+			.map_err(|_| "OnChainSequentialPhragmen failed")
 		} else {
-			super::NoFallback::<Runtime>::elect()
+			super::NoFallback::<Runtime>::instant_elect(maybe_max_voters, maybe_max_targets)
 		}
 	}
 }
@@ -410,6 +422,8 @@ impl crate::Config for Runtime {
 	type WeightInfo = DualMockWeightInfo;
 	type BenchmarkingConfig = TestBenchmarkingConfig;
 	type Fallback = MockFallback;
+	type FallbackVoterBound = frame_support::traits::ConstUSize<10>;
+	type FallbackTargetsBound = frame_support::traits::ConstUSize<100_000>;
 	type GovernanceFallback = NoFallback<Self>;
 	type ForceOrigin = frame_system::EnsureRoot<AccountId>;
 	type Solution = TestNposSolution;
@@ -522,7 +536,7 @@ impl ExtBuilder {
 		self
 	}
 	pub fn onchain_fallback(self, onchain: bool) -> Self {
-		<OnChianFallback>::set(onchain);
+		<OnChainFallback>::set(onchain);
 		self
 	}
 	pub fn miner_weight(self, weight: Weight) -> Self {
