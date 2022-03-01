@@ -71,7 +71,7 @@ impl StorageProof {
 		self.trie_nodes
 	}
 
-	/// Creates a `MemoryDB` from `Self`.
+	/// Creates a [`MemoryDB`](crate::MemoryDB) from `Self`.
 	pub fn into_memory_db<H: Hasher>(self) -> crate::MemoryDB<H> {
 		self.into()
 	}
@@ -93,12 +93,11 @@ impl StorageProof {
 		Self { trie_nodes }
 	}
 
-	/// Encode as a compact proof with default
-	/// trie layout.
+	/// Encode as a compact proof with default trie layout.
 	pub fn into_compact_proof<H: Hasher>(
 		self,
 		root: H::Out,
-	) -> Result<CompactProof, crate::CompactProofError<Layout<H>>> {
+	) -> Result<CompactProof, crate::CompactProofError<H::Out, crate::Error>> {
 		crate::encode_compact::<Layout<H>>(self, root)
 	}
 
@@ -121,13 +120,10 @@ impl CompactProof {
 	}
 
 	/// Decode to a full storage_proof.
-	///
-	/// Method use a temporary `HashDB`, and `sp_trie::decode_compact`
-	/// is often better.
 	pub fn to_storage_proof<H: Hasher>(
 		&self,
 		expected_root: Option<&H::Out>,
-	) -> Result<(StorageProof, H::Out), crate::CompactProofError<Layout<H>>> {
+	) -> Result<(StorageProof, H::Out), crate::CompactProofError<H::Out, crate::Error>> {
 		let mut db = crate::MemoryDB::<H>::new(&[]);
 		let root = crate::decode_compact::<Layout<H>, _, _>(
 			&mut db,
@@ -169,9 +165,9 @@ impl Iterator for StorageProofNodeIterator {
 impl<H: Hasher> From<StorageProof> for crate::MemoryDB<H> {
 	fn from(proof: StorageProof) -> Self {
 		let mut db = crate::MemoryDB::default();
-		for item in proof.iter_nodes() {
-			db.insert(crate::EMPTY_PREFIX, &item);
-		}
+		proof.iter_nodes().for_each(|n| {
+			db.insert(crate::EMPTY_PREFIX, &n);
+		});
 		db
 	}
 }
