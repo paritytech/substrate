@@ -15,7 +15,7 @@ description = "Substrate RPC for FRAME's support"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-futures = "0.3.16"
+futures = "0.3.19"
 jsonrpc-client-transports = { version = "18.0.0", features = ["http"] }
 codec = { package = "parity-scale-codec", version = "3.0.0" }
 serde = "1"

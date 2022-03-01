@@ -23,7 +23,7 @@ sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/c
 sc-consensus = { version = "0.10.0-dev", path = "../../../client/consensus/common" }
 sp-consensus-slots = { version = "0.10.0-dev", path = "../../../primitives/consensus/slots" }
 thiserror = "1.0"
-futures = "0.3.9"
+futures = "0.3.19"
 sp-inherents = { version = "4.0.0-dev", path = "../../../primitives/inherents" }
 log = "0.4.8"
 sp-core = { version = "5.0.0", path = "../../../primitives/core" }
