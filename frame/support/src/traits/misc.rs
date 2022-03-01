@@ -447,6 +447,7 @@ impl_const_get!(ConstU16, u16);
 impl_const_get!(ConstU32, u32);
 impl_const_get!(ConstU64, u64);
 impl_const_get!(ConstU128, u128);
+impl_const_get!(ConstUSize, usize);
 impl_const_get!(ConstI8, i8);
 impl_const_get!(ConstI16, i16);
 impl_const_get!(ConstI32, i32);

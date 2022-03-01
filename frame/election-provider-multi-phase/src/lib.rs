@@ -683,8 +683,14 @@ pub mod pallet {
 			+ NposSolution
 			+ TypeInfo;
 
+		/// Maximum number of voters for the election fallback
+		type FallbackVoterBound: Get<usize>;
+
+		/// Maximum number of targets for election fallback
+		type FallbackTargetsBound: Get<usize>;
+
 		/// Configuration for the fallback.
-		type Fallback: ElectionProvider<
+		type Fallback: InstantElectionProvider<
 			AccountId = Self::AccountId,
 			BlockNumber = Self::BlockNumber,
 			DataProvider = Self::DataProvider,
@@ -1538,9 +1544,12 @@ impl<T: Config> Pallet<T> {
 		<QueuedSolution<T>>::take()
 			.map_or_else(
 				|| {
-					T::Fallback::elect()
-						.map_err(|fe| ElectionError::Fallback(fe))
-						.map(|supports| (supports, ElectionCompute::Fallback))
+					T::Fallback::instant_elect(
+						Some(T::FallbackVoterBound::get()),
+						Some(T::FallbackTargetsBound::get()),
+					)
+					.map_err(|fe| ElectionError::Fallback(fe))
+					.map(|supports| (supports, ElectionCompute::Fallback))
 				},
 				|ReadySolution { supports, compute, .. }| Ok((supports, compute)),
 			)
