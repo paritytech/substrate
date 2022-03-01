@@ -167,15 +167,9 @@ pub mod constants {
 
 	parameter_types! {
 		/// Importing a block with 0 txs takes ~5 ms
-		pub const BlockExecutionWeight: WeightV2 = WeightV2 {
-			computation: 5 * WEIGHT_PER_MILLIS,
-			bandwidth: 0, // TODO SHAWN: Calculate this.
-		};
+		pub const BlockExecutionWeight: WeightV2 = WeightV2::todo_from_v1(5 * WEIGHT_PER_MILLIS);
 		/// Executing 10,000 System remarks (no-op) txs takes ~1.26 seconds -> ~125 µs per tx
-		pub const ExtrinsicBaseWeight: WeightV2 = WeightV2 {
-			computation: 125 * WEIGHT_PER_MICROS,
-			bandwidth: 0, // TODO SHAWN: Calculate this.
-		};
+		pub const ExtrinsicBaseWeight: WeightV2 = WeightV2::todo_from_v1(125 * WEIGHT_PER_MICROS);
 	}
 
 	// Expose the DB weights.

@@ -185,7 +185,8 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug + 
 /// 				// do the expensive calculation
 /// 				// ...
 /// 				// return None to indicate that we are using all weight (the default)
-/// 				return Ok(None.into());
+/// 				let none: Option<WeightV2> = None;
+/// 				return Ok(none.into());
 /// 			}
 /// 			// expensive calculation not executed: use only a portion of the weight
 /// 			Ok(Some(100_000).into())
@@ -2833,7 +2834,7 @@ mod tests {
 		assert_eq!(
 			Call::<TraitImpl>::operational {}.get_dispatch_info(),
 			DispatchInfo {
-				weight: WeightV2 { computation: 5, bandwidth: 0 },
+				weight: WeightV2::todo_from_v1(5),
 				class: DispatchClass::Operational,
 				pays_fee: Pays::Yes
 			},
@@ -2842,7 +2843,7 @@ mod tests {
 		assert_eq!(
 			Call::<TraitImpl>::aux_3 {}.get_dispatch_info(),
 			DispatchInfo {
-				weight: WeightV2 { computation: 3, bandwidth: 0 },
+				weight: WeightV2::todo_from_v1(3),
 				class: DispatchClass::Normal,
 				pays_fee: Pays::Yes
 			},

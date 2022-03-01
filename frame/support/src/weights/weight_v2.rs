@@ -41,8 +41,8 @@ impl WeightV2 {
 
 	/// This is a simple helper function which allows us to be backwards compatible, but will be
 	/// removed in the future.
-	pub fn todo_from_v1(computation: Weight) -> Self {
-		Self { computation, bandwidth: Zero::zero() }
+	pub const fn todo_from_v1(computation: Weight) -> Self {
+		Self { computation, bandwidth: 0 }
 	}
 
 	/// Checks if any param of `self` is less than `other`.
