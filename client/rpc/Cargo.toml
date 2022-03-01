@@ -20,16 +20,16 @@ codec = { package = "parity-scale-codec", version = "3.0.0" }
 futures = "0.3.19"
 jsonrpc-pubsub = "18.0.0"
 log = "0.4.8"
-sp-core = { version = "5.0.0", path = "../../primitives/core" }
+sp-core = { version = "6.0.0", path = "../../primitives/core" }
 rpc = { package = "jsonrpc-core", version = "18.0.0" }
-sp-version = { version = "4.0.0-dev", path = "../../primitives/version" }
+sp-version = { version = "5.0.0", path = "../../primitives/version" }
 serde_json = "1.0.74"
 sp-session = { version = "4.0.0-dev", path = "../../primitives/session" }
 sp-offchain = { version = "4.0.0-dev", path = "../../primitives/offchain" }
-sp-runtime = { version = "5.0.0", path = "../../primitives/runtime" }
+sp-runtime = { version = "6.0.0", path = "../../primitives/runtime" }
 sc-utils = { version = "4.0.0-dev", path = "../utils" }
-sp-rpc = { version = "5.0.0", path = "../../primitives/rpc" }
-sp-keystore = { version = "0.11.0", path = "../../primitives/keystore" }
+sp-rpc = { version = "6.0.0", path = "../../primitives/rpc" }
+sp-keystore = { version = "0.12.0", path = "../../primitives/keystore" }
 sc-chain-spec = { version = "4.0.0-dev", path = "../chain-spec" }
 sc-block-builder = { version = "0.10.0-dev", path = "../block-builder" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
@@ -43,7 +43,7 @@ sc-transaction-pool-api = { version = "4.0.0-dev", path = "../transaction-pool/a
 assert_matches = "1.3.0"
 lazy_static = "1.4.0"
 sc-network = { version = "0.10.0-dev", path = "../network" }
-sp-io = { version = "5.0.0", path = "../../primitives/io" }
+sp-io = { version = "6.0.0", path = "../../primitives/io" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
 sc-transaction-pool = { version = "4.0.0-dev", path = "../transaction-pool" }
 sp-consensus = { version = "0.10.0-dev", path = "../../primitives/consensus/common" }

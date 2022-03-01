@@ -21,12 +21,12 @@ frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../../system" }
 pallet-balances = { version = "4.0.0-dev", default-features = false, path = "../../balances" }
-sp-io = { version = "5.0.0", default-features = false, path = "../../../primitives/io" }
-sp-runtime = { version = "5.0.0", default-features = false, path = "../../../primitives/runtime" }
+sp-io = { version = "6.0.0", default-features = false, path = "../../../primitives/io" }
+sp-runtime = { version = "6.0.0", default-features = false, path = "../../../primitives/runtime" }
 sp-std = { version = "4.0.0", default-features = false, path = "../../../primitives/std" }
 
 [dev-dependencies]
-sp-core = { version = "5.0.0", path = "../../../primitives/core", default-features = false }
+sp-core = { version = "6.0.0", path = "../../../primitives/core", default-features = false }
 
 [features]
 default = ["std"]

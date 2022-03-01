@@ -12,15 +12,15 @@ codec = { version = "3.0.0", package = "parity-scale-codec", default-features = 
 scale-info = { version = "2.0.0", default-features = false, features = ["derive"] }
 
 sp-api = { version = "4.0.0-dev", path = "../api", default-features = false }
-sp-application-crypto = { version = "5.0.0", path = "../application-crypto", default-features = false }
-sp-core = { version = "5.0.0", path = "../core", default-features = false }
-sp-runtime = { version = "5.0.0", path = "../runtime", default-features = false }
+sp-application-crypto = { version = "6.0.0", path = "../application-crypto", default-features = false }
+sp-core = { version = "6.0.0", path = "../core", default-features = false }
+sp-runtime = { version = "6.0.0", path = "../runtime", default-features = false }
 sp-std = { version = "4.0.0", path = "../std", default-features = false }
 
 [dev-dependencies]
 hex = "0.4.3"
 hex-literal = "0.3"
-sp-keystore = { version = "0.11.0", path = "../keystore" }
+sp-keystore = { version = "0.12.0", path = "../keystore" }
 
 [features]
 default = ["std"]

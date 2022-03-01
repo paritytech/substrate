@@ -19,15 +19,15 @@ codec = { package = "parity-scale-codec", version = "3.0.0", default-features = 
 ] }
 scale-info = { version = "2.0.0", default-features = false, features = ["derive"] }
 sp-std = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
-sp-io = { version = "5.0.0", default-features = false, path = "../../primitives/io" }
-sp-runtime = { version = "5.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-io = { version = "6.0.0", default-features = false, path = "../../primitives/io" }
+sp-runtime = { version = "6.0.0", default-features = false, path = "../../primitives/runtime" }
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 assert_matches = { version = "1.5", optional = true }
 
 [dev-dependencies]
-sp-core = { version = "5.0.0", path = "../../primitives/core" }
+sp-core = { version = "6.0.0", path = "../../primitives/core" }
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 pallet-scheduler = { version = "4.0.0-dev", path = "../scheduler" }
 pallet-preimage = { version = "4.0.0-dev", path = "../preimage" }

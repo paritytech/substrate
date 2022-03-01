@@ -21,18 +21,18 @@ fdlimit = "0.2.1"
 parking_lot = "0.12.0"
 sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
 sp-api = { version = "4.0.0-dev", path = "../../../primitives/api" }
-sp-state-machine = { version = "0.11.0", path = "../../../primitives/state-machine" }
-sp-externalities = { version = "0.11.0", path = "../../../primitives/externalities" }
-sp-trie = { version = "5.0.0", path = "../../../primitives/trie" }
-sp-storage = { version = "5.0.0", path = "../../../primitives/storage" }
+sp-state-machine = { version = "0.12.0", path = "../../../primitives/state-machine" }
+sp-externalities = { version = "0.12.0", path = "../../../primitives/externalities" }
+sp-trie = { version = "6.0.0", path = "../../../primitives/trie" }
+sp-storage = { version = "6.0.0", path = "../../../primitives/storage" }
 sc-client-db = { version = "0.10.0-dev", default-features = false, path = "../../db" }
 futures = "0.3.19"
 sc-service = { version = "0.10.0-dev", features = ["test-helpers"], path = "../../service" }
 sc-network = { version = "0.10.0-dev", path = "../../network" }
 sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
 sc-consensus = { version = "0.10.0-dev", path = "../../../client/consensus/common" }
-sp-runtime = { version = "5.0.0", path = "../../../primitives/runtime" }
-sp-core = { version = "5.0.0", path = "../../../primitives/core" }
+sp-runtime = { version = "6.0.0", path = "../../../primitives/runtime" }
+sp-core = { version = "6.0.0", path = "../../../primitives/core" }
 sc-transaction-pool-api = { version = "4.0.0-dev", path = "../../../client/transaction-pool/api" }
 substrate-test-runtime = { version = "2.0.0", path = "../../../test-utils/runtime" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../../test-utils/runtime/client" }
@@ -41,4 +41,4 @@ sc-block-builder = { version = "0.10.0-dev", path = "../../block-builder" }
 sc-executor = { version = "0.10.0-dev", path = "../../executor" }
 sp-panic-handler = { version = "4.0.0", path = "../../../primitives/panic-handler" }
 parity-scale-codec = "3.0.0"
-sp-tracing = { version = "4.0.0", path = "../../../primitives/tracing" }
+sp-tracing = { version = "5.0.0", path = "../../../primitives/tracing" }

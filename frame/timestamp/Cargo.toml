@@ -18,8 +18,8 @@ targets = ["x86_64-unknown-linux-gnu"]
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive", "max-encoded-len"] }
 scale-info = { version = "2.0.0", default-features = false, features = ["derive"] }
 sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
-sp-io = { version = "5.0.0", default-features = false, path = "../../primitives/io", optional = true }
-sp-runtime = { version = "5.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-io = { version = "6.0.0", default-features = false, path = "../../primitives/io", optional = true }
+sp-runtime = { version = "6.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-inherents = { version = "4.0.0-dev", default-features = false, path = "../../primitives/inherents" }
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
@@ -28,8 +28,8 @@ sp-timestamp = { version = "4.0.0-dev", default-features = false, path = "../../
 log = { version = "0.4.14", default-features = false }
 
 [dev-dependencies]
-sp-io ={ version = "5.0.0", path = "../../primitives/io" }
-sp-core = { version = "5.0.0", path = "../../primitives/core" }
+sp-io ={ version = "6.0.0", path = "../../primitives/io" }
+sp-core = { version = "6.0.0", path = "../../primitives/core" }
 
 [features]
 default = ["std"]

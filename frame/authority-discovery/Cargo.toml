@@ -14,7 +14,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 sp-authority-discovery = { version = "4.0.0-dev", default-features = false, path = "../../primitives/authority-discovery" }
-sp-application-crypto = { version = "5.0.0", default-features = false, path = "../../primitives/application-crypto" }
+sp-application-crypto = { version = "6.0.0", default-features = false, path = "../../primitives/application-crypto" }
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = [
 	"derive",
 ] }
@@ -23,13 +23,13 @@ sp-std = { version = "4.0.0", default-features = false, path = "../../primitives
 pallet-session = { version = "4.0.0-dev", features = [
 	"historical",
 ], path = "../session", default-features = false }
-sp-runtime = { version = "5.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-runtime = { version = "6.0.0", default-features = false, path = "../../primitives/runtime" }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 
 [dev-dependencies]
-sp-core = { version = "5.0.0", path = "../../primitives/core" }
-sp-io = { version = "5.0.0", path = "../../primitives/io" }
+sp-core = { version = "6.0.0", path = "../../primitives/core" }
+sp-io = { version = "6.0.0", path = "../../primitives/io" }
 
 [features]
 default = ["std"]
