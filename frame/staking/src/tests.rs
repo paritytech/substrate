@@ -4747,8 +4747,6 @@ fn force_apply_min_commission_works() {
 	});
 }
 
-// TODO: adapt these for the staking use case
-
 #[test]
 fn ledger_slash_works() {
 	let c = |era, value| UnlockChunk::<Balance> { era, value };

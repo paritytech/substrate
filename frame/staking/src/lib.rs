@@ -530,12 +530,12 @@ impl<T: Config> StakingLedger<T> {
 	/// Slashes are computed by:
 	///
 	/// 1) Balances of the unlocking chunks in range `slash_era + 1..=apply_era` are summed and
-	/// stored in `total_balance_affected`. 2) `slash_ratio` is computed as `slash_amount /
-	/// total_balance_affected`. 3) `Ledger::active` is set to `(1- slash_ratio) * Ledger::active`.
-	/// 4) For all unlocking chunks in range `slash_era + 1..=apply_era` set their balance to `(1 -
-	/// slash_ratio) * unbonding_pool_balance`.
-	/// 5) Slash any remaining slash amount from the remaining chunks, starting with the `slash_era`
-	/// and going backwards.
+	/// stored in `total_balance_affected`.
+	/// 2) `slash_ratio` is computed as `slash_amount / total_balance_affected`. 3) `Ledger::active`
+	/// is set to `(1- slash_ratio) * Ledger::active`. 4) For all unlocking chunks in range
+	/// `slash_era + 1..=apply_era` set their balance to `(1 - slash_ratio) *
+	/// unbonding_pool_balance`. 5) Slash any remaining slash amount from the remaining chunks,
+	/// starting with the `slash_era` and going backwards.
 	fn slash(
 		&mut self,
 		slash_amount: BalanceOf<T>,
@@ -549,7 +549,7 @@ impl<T: Config> StakingLedger<T> {
 		let mut remaining_slash = slash_amount;
 		let pre_slash_total = self.total;
 
-		// The index of the first chunk after the slash (OR the last index if the
+		// The index of the first chunk after the slash era
 		let start_index = self.unlocking.partition_point(|c| c.era < slash_era);
 		// The indices of from the first chunk after the slash up through the most recent chunk.
 		// (The most recent chunk is at greatest from this era)
@@ -581,11 +581,12 @@ impl<T: Config> StakingLedger<T> {
 		let mut slash_out_of = |target: &mut BalanceOf<T>, slash_remaining: &mut BalanceOf<T>| {
 			// We don't want the added complexity of using extended ints, so if this saturates we
 			// will always just try and slash as much as possible.
-			let maybe_numerator = slash_amount.checked_mul(target);
+			let maybe_numerator = slash_amount.checked_mul(target); // Use a Perbill
 			println!("{:?}=maybe_numerator", maybe_numerator);
 
 			// Calculate the amount to slash from the target
 			let slash_from_target = match (maybe_numerator, is_proportional_slash) {
+				// Perbill::from_rational(slash_amount, affected_balance) * target
 				// Equivalent to `(slash_amount / affected_balance) * target`.
 				(Some(numerator), true) => numerator.div(affected_balance),
 				(None, _) | (_, false) => (*slash_remaining).min(*target),

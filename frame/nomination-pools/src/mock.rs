@@ -239,6 +239,10 @@ fn post_checks() {
 	assert_eq!(RewardPools::<Runtime>::count(), BondedPools::<Runtime>::count());
 	assert!(SubPoolsStorage::<Runtime>::count() <= BondedPools::<Runtime>::count());
 	assert!(Delegators::<Runtime>::count() >= BondedPools::<Runtime>::count());
+	// TODO
+	// MaxDelegator === Delegator::count
+	// Each pool has most max delegators per pool
+	// sum of all pools delegator counts
 }
 
 pub(crate) fn unsafe_set_state(pool_account: &AccountId, state: PoolState) -> Result<(), ()> {

@@ -36,7 +36,7 @@ pub trait OnStakerSlash<AccountId, Balance> {
 	///
 	/// # Arguments
 	///
-	/// * `stash` - the staker whom the slash was applied to.
+	/// * `stash` - The stash of the staker whom the slash was applied to.
 	/// * `slashed_bonded` - The new bonded balance of the staker after the slash was applied.
 	/// * `slashed_unlocking` - A map from eras that the staker is unbonding in to the new balance
 	///   after the slash was applied.
@@ -52,69 +52,6 @@ impl<AccountId, Balance> OnStakerSlash<AccountId, Balance> for () {
 		// Nothing to do here
 	}
 }
-
-/// Arguments for [`PoolsInterface::slash_pool`].
-// pub struct AccountSlashCalcArgs<'a, AccountId, Balance> {
-// 	/// _Stash_ account of the account to slash.
-// 	pub pool_stash: &'a AccountId,
-// 	/// The amount to slash.
-// 	pub slash_amount: Balance,
-// 	/// Era the slash happened in.
-// 	pub slash_era: EraIndex,
-// 	/// Era the slash is applied in.
-// 	pub apply_era: EraIndex,
-// 	/// The current active bonded of the account (i.e. `StakingLedger::active`)
-// 	pub active_bonded: Balance,
-// 	/// Unlocking funds
-// 	pub unlocking: BTreeMap<EraIndex, Balance>,
-// }
-
-// /// Output for [`AccountSlashCalc::calc_slash_distribution`].
-// pub struct AccountSlashCalcOut<Balance> {
-// 	/// The new active bonded balance of the stash with the proportional slash amounted subtracted.
-// 	pub slashed_bonded: Balance,
-// 	/// A map from era of unlocking chunks to their new balance with the proportional slash amount
-// 	/// subtracted.
-// 	pub slashed_unlocking: BTreeMap<EraIndex, Balance>,
-// }
-
-/// Something that calculates the new balances of a staked account that has had a slash applied to
-/// it.
-// pub trait AccountSlashCalc {
-// 	type AccountId;
-// 	type Balance;
-
-// 	// The current approach here is to share `BTreeMap<EraIndex, BalanceOf<T>>` with the staking
-// 	// API. This is arguably a leaky, suboptimal API because both sides have to share this
-// 	// non-trivial data structure. With the current design we do this because we track the unbonding
-// 	// balance in both the pallet-staking `unlocking` chunks and in here with the pallet-pools
-// 	// `SubPools`. Because both pallets need to know about slashes to unbonding funds we either have
-// 	// to replicate the slashing logic between the pallets, or share some data. A ALTERNATIVE is
-// 	// having the pallet-pools read the unbonding balance per era directly from pallet-staking. The
-// 	// downside of this is that once a delegator calls `withdraw_unbonded`, the chunk is removed and
-// 	// we can't keep track of the balance for that `UnbondPool` anymore, thus we must merge the
-// 	// balance and points of that `UnbondPool` with the `no_era` pool immediately upon calling
-// 	// withdraw_unbonded. We choose not to do this because if there was a slash, it would negatively
-// 	// affect the points:balance ratio of the `no_era` pool for everyone, including those who may
-// 	// not have been unbonding in eras effected by the slash.
-// 	/// Calculate the distribution of a slash for the given account. The distribution can be over
-// 	/// the bonded balance of the account, and the unbonding balance per era.
-// 	fn calc_slash_distribution(
-// 		args: SlashPoolArgs<Self::AccountId, Self::Balance>,
-// 	) -> Option<SlashPoolOut<Self::Balance>>;
-// }
-
-// pub trait PoolsInterface {
-// 	type AccountId;
-// 	type Balance;
-
-// 	/// Calculate the slashes for each unbonding chunk/unbonding pool and the actively bonded
-// 	/// balance. This should apply the updated balances to the pools and return the updated balances
-// 	/// to the caller (presumably pallet-staking) so they can do the corresponding updates.
-// 	fn slash_pool(
-// 		args: SlashPoolArgs<Self::AccountId, Self::Balance>,
-// 	) -> Option<SlashPoolOut<Self::Balance>>;
-// }
 
 /// Trait for communication with the staking pallet.
 pub trait StakingInterface {

@@ -235,6 +235,7 @@ const THRESHOLDS: [sp_npos_elections::VoteWeight; 9] =
 parameter_types! {
 	pub static BagThresholds: &'static [sp_npos_elections::VoteWeight] = &THRESHOLDS;
 	pub static MaxNominations: u32 = 16;
+	pub static LedgerSlashPerEra: (BalanceOf<T>, HashMap<EraIndex, Balance>) = HashMap::new();
 }
 
 impl pallet_bags_list::Config for Test {
@@ -247,6 +248,17 @@ impl pallet_bags_list::Config for Test {
 impl onchain::Config for Test {
 	type Accuracy = Perbill;
 	type DataProvider = Staking;
+}
+
+struct OnStakerSlashMock<T: Config>(PhantomData<T>);
+impl<T: Config> OnStakerSlash<T::AccountId, BalanceOf<T>> for OnStakerSlashMock<T> {
+	fn on_slash(
+		pool_account: &AccountId,
+		slashed_bonded: Balance,
+		slashed_chunks: &BTreeMap<EraIndex, Balance>,
+	) {
+		LedgerSlashPerEra::put((slashed_bonded, slashed_chunks));
+	}
 }
 
 impl crate::pallet::pallet::Config for Test {
