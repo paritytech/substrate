@@ -17,8 +17,7 @@
 
 //! Tests for the module.
 
-use super::{ConfigOp, Event, *};
-use super::{Event, MaxUnlockingChunks, *};
+use super::{ConfigOp, Event, MaxUnlockingChunks, *};
 use frame_election_provider_support::{ElectionProvider, SortedListProvider, Support};
 use frame_support::{
 	assert_noop, assert_ok, bounded_vec,
