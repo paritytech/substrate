@@ -226,10 +226,7 @@ pub trait Hooks<BlockNumber, Weight: Zero> {
 	/// Will not fire if the remaining weight is 0.
 	/// Return the weight used, the hook will subtract it from current weight used
 	/// and pass the result to the next `on_idle` hook if it exists.
-	fn on_idle(
-		_n: BlockNumber,
-		_remaining_weight: Weight,
-	) -> Weight {
+	fn on_idle(_n: BlockNumber, _remaining_weight: Weight) -> Weight {
 		Weight::zero()
 	}
 

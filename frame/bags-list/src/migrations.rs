@@ -17,8 +17,7 @@
 
 //! The migrations of this pallet.
 
-use frame_support::traits::OnRuntimeUpgrade;
-use frame_support::weights::Weight;
+use frame_support::{traits::OnRuntimeUpgrade, weights::Weight};
 
 /// A struct that does not migration, but only checks that the counter prefix exists and is correct.
 pub struct CheckCounterPrefix<T: crate::Config>(sp_std::marker::PhantomData<T>);
