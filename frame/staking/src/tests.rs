@@ -70,7 +70,6 @@ fn set_staking_configs_works() {
 			ConfigOp::Noop,
 			ConfigOp::Noop
 		));
-
 		assert_eq!(MinNominatorBond::<Test>::get(), 1_500);
 		assert_eq!(MinValidatorBond::<Test>::get(), 2_000);
 		assert_eq!(MaxNominatorsCount::<Test>::get(), Some(10));
@@ -88,7 +87,6 @@ fn set_staking_configs_works() {
 			ConfigOp::Remove,
 			ConfigOp::Remove
 		));
-
 		assert_eq!(MinNominatorBond::<Test>::get(), 0);
 		assert_eq!(MinValidatorBond::<Test>::get(), 0);
 		assert_eq!(MaxNominatorsCount::<Test>::get(), None);
