@@ -17,10 +17,10 @@ error: Invalid generic declaration, trait is defined with instance but generic u
    |                     ^^^^^^
 
 error: Invalid generic declaration, trait is defined with instance but generic use none
-  --> $DIR/inconsistent_instance_1.rs:13:47
+  --> $DIR/inconsistent_instance_1.rs:13:55
    |
 13 |     impl<T: Config> Hooks<BlockNumberFor<T>, Weight> for Pallet<T> {}
-   |                                                  ^^^^^^
+   |                                                          ^^^^^^
 
 error: Invalid generic declaration, trait is defined with instance but generic use none
   --> $DIR/inconsistent_instance_1.rs:13:7

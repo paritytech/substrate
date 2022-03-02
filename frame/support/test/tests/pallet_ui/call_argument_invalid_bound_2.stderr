@@ -40,7 +40,7 @@ error[E0277]: the trait bound `<T as pallet::Config>::Bar: WrapperTypeEncode` is
     |  _in this procedural macro expansion
     | |
 2   | | mod pallet {
-3   | |     use frame_support::pallet_prelude::{Hooks, DispatchResultWithPostInfo};
+3   | |     use frame_support::pallet_prelude::{Hooks, DispatchResultWithPostInfo, Weight};
 4   | |     use frame_system::pallet_prelude::{BlockNumberFor, OriginFor};
 ...   |
 16  | |
