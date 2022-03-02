@@ -513,7 +513,7 @@ impl ExtBuilder {
 			ext.execute_with(|| {
 				System::set_block_number(1);
 				Session::on_initialize(1);
-				<Staking as Hooks<u64>>::on_initialize(1);
+				<Staking as Hooks<u64, Weight>>::on_initialize(1);
 				Timestamp::set_timestamp(INIT_TIMESTAMP);
 			});
 		}
@@ -667,7 +667,7 @@ pub(crate) fn run_to_block(n: BlockNumber) {
 	for b in (System::block_number() + 1)..=n {
 		System::set_block_number(b);
 		Session::on_initialize(b);
-		<Staking as Hooks<u64>>::on_initialize(b);
+		<Staking as Hooks<u64, Weight>>::on_initialize(b);
 		Timestamp::set_timestamp(System::block_number() * BLOCK_TIME + INIT_TIMESTAMP);
 		if b != n {
 			Staking::on_finalize(System::block_number());

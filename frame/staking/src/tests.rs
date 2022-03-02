@@ -3961,7 +3961,7 @@ fn do_not_die_when_active_is_ed() {
 fn on_finalize_weight_is_nonzero() {
 	ExtBuilder::default().build_and_execute(|| {
 		let on_finalize_weight = <Test as frame_system::Config>::DbWeight::get().reads(1);
-		assert!(<Staking as Hooks<u64>>::on_initialize(1) >= on_finalize_weight);
+		assert!(<Staking as Hooks<u64, Weight>>::on_initialize(1) >= on_finalize_weight);
 	})
 }
 
