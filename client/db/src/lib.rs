@@ -109,7 +109,8 @@ pub type DbState<B> = sp_state_machine::TrieBackend<
 	HashFor<B>,
 >;
 
-const DB_HASH_LEN: usize = 32;
+/// Length of a [`DbHash`].
+pub const DB_HASH_LEN: usize = 32;
 /// Hash type that this backend uses for the database.
 pub type DbHash = sp_core::H256;
 
@@ -1065,6 +1066,23 @@ impl<Block: BlockT> Backend<Block> {
 		};
 
 		Self::new(db_setting, canonicalization_delay).expect("failed to create test-db")
+	}
+
+	/// Expose the Database that is used by this backend.
+	/// The second argument is the Column that stores the State.
+	///
+	/// Should only be needed for benchmarking.
+	#[cfg(any(feature = "runtime-benchmarks"))]
+	pub fn expose_db(&self) -> (Arc<dyn sp_database::Database<DbHash>>, sp_database::ColumnId) {
+		(self.storage.db.clone(), columns::STATE)
+	}
+
+	/// Expose the Storage that is used by this backend.
+	///
+	/// Should only be needed for benchmarking.
+	#[cfg(any(feature = "runtime-benchmarks"))]
+	pub fn expose_storage(&self) -> Arc<dyn sp_state_machine::Storage<HashFor<Block>>> {
+		self.storage.clone()
 	}
 
 	fn from_database(

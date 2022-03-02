@@ -16,10 +16,13 @@
 // limitations under the License.
 
 mod command;
+mod storage;
 mod writer;
 
 use sc_cli::{ExecutionStrategy, WasmExecutionMethod};
 use std::{fmt::Debug, path::PathBuf};
+
+pub use storage::StorageCmd;
 
 // Add a more relaxed parsing for pallet names by allowing pallet directory names with `-` to be
 // used like crate names with `_`
