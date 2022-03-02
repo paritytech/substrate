@@ -63,7 +63,7 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 		let frame_system = &def.frame_system;
 		quote::quote! {
 			impl<#type_impl_gen>
-				#frame_support::traits::Hooks<<T as #frame_system::Config>::BlockNumber>
+				#frame_support::traits::Hooks<<T as #frame_system::Config>::BlockNumber, #frame_support::weights::Weight>
 				for Pallet<#type_use_gen> {}
 		}
 	} else {
@@ -83,7 +83,8 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 				);
 				<
 					Self as #frame_support::traits::Hooks<
-						<T as #frame_system::Config>::BlockNumber
+						<T as #frame_system::Config>::BlockNumber,
+						#frame_support::weights::Weight,
 					>
 				>::on_finalize(n)
 			}
@@ -99,7 +100,8 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 			) -> #frame_support::weights::Weight {
 				<
 					Self as #frame_support::traits::Hooks<
-						<T as #frame_system::Config>::BlockNumber
+						<T as #frame_system::Config>::BlockNumber,
+						#frame_support::weights::Weight,
 					>
 				>::on_idle(n, remaining_weight)
 			}
@@ -117,7 +119,8 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 				);
 				<
 					Self as #frame_support::traits::Hooks<
-						<T as #frame_system::Config>::BlockNumber
+						<T as #frame_system::Config>::BlockNumber,
+						#frame_support::weights::Weight,
 					>
 				>::on_initialize(n)
 			}
@@ -142,7 +145,8 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 
 				<
 					Self as #frame_support::traits::Hooks<
-						<T as #frame_system::Config>::BlockNumber
+						<T as #frame_system::Config>::BlockNumber,
+						#frame_support::weights::Weight,
 					>
 				>::on_runtime_upgrade()
 			}
@@ -152,7 +156,7 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 				<
 					Self
 					as
-					#frame_support::traits::Hooks<<T as #frame_system::Config>::BlockNumber>
+					#frame_support::traits::Hooks<<T as #frame_system::Config>::BlockNumber, #frame_support::weights::Weight>
 				>::pre_upgrade()
 			}
 
@@ -161,7 +165,7 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 				<
 					Self
 					as
-					#frame_support::traits::Hooks<<T as #frame_system::Config>::BlockNumber>
+					#frame_support::traits::Hooks<<T as #frame_system::Config>::BlockNumber, #frame_support::weights::Weight>
 				>::post_upgrade()
 			}
 		}
@@ -173,7 +177,8 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 			fn offchain_worker(n: <T as #frame_system::Config>::BlockNumber) {
 				<
 					Self as #frame_support::traits::Hooks<
-						<T as #frame_system::Config>::BlockNumber
+						<T as #frame_system::Config>::BlockNumber,
+						#frame_support::weights::Weight,
 					>
 				>::offchain_worker(n)
 			}
@@ -186,7 +191,8 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 			fn integrity_test() {
 				<
 					Self as #frame_support::traits::Hooks<
-						<T as #frame_system::Config>::BlockNumber
+						<T as #frame_system::Config>::BlockNumber,
+						#frame_support::weights::Weight,
 					>
 				>::integrity_test()
 			}

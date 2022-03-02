@@ -239,7 +239,7 @@ pub mod pallet {
 		StorageValue<_, BoundedVec<CallIndex, T::MaxCalls>, ValueQuery>;
 
 	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+	impl<T: Config> Hooks<BlockNumberFor<T>, Weight> for Pallet<T> {
 		fn on_initialize(n: T::BlockNumber) -> Weight {
 			Lottery::<T>::mutate(|mut lottery| -> Weight {
 				if let Some(config) = &mut lottery {

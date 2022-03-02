@@ -128,7 +128,7 @@ pub mod pallet {
 	pub struct Pallet<T>(_);
 
 	#[pallet::hooks]
-	impl<T: Config> Hooks<T::BlockNumber> for Pallet<T> {
+	impl<T: Config> Hooks<T::BlockNumber, Weight> for Pallet<T> {
 		fn on_initialize(_n: T::BlockNumber) -> Weight {
 			<Dummy<T>>::put(T::Balance::from(10));
 			10

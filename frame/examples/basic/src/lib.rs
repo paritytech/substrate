@@ -384,7 +384,7 @@ pub mod pallet {
 
 	// Pallet implements [`Hooks`] trait to define some logic to execute in some context.
 	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+	impl<T: Config> Hooks<BlockNumberFor<T>, Weight> for Pallet<T> {
 		// `on_initialize` is executed at the beginning of the block before any extrinsic are
 		// dispatched.
 		//

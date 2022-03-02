@@ -292,7 +292,7 @@ pub mod pallet {
 	}
 
 	#[pallet::hooks]
-	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
+	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>, Weight> for Pallet<T, I> {
 		/// # <weight>
 		/// - Complexity: `O(A)` where `A` is the number of approvals
 		/// - Db reads and writes: `Approvals`, `pot account data`

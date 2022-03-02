@@ -84,7 +84,7 @@ pub mod pallet {
 	pub struct Pallet<T>(sp_std::marker::PhantomData<T>);
 
 	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+	impl<T: Config> Hooks<BlockNumberFor<T>, Weight> for Pallet<T> {
 		fn on_initialize(_: T::BlockNumber) -> Weight {
 			if let Some(new_slot) = Self::current_slot_from_digests() {
 				let current_slot = CurrentSlot::<T>::get();

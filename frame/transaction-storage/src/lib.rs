@@ -133,7 +133,7 @@ pub mod pallet {
 	pub struct Pallet<T>(_);
 
 	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+	impl<T: Config> Hooks<BlockNumberFor<T>, Weight> for Pallet<T> {
 		fn on_initialize(n: T::BlockNumber) -> Weight {
 			// Drop obsolete roots. The proof for `obsolete` will be checked later
 			// in this block, so we drop `obsolete` - 1.

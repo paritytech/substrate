@@ -217,7 +217,7 @@ pub mod pallet {
 	}
 
 	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+	impl<T: Config> Hooks<BlockNumberFor<T>, Weight> for Pallet<T> {
 		fn integrity_test() {
 			// ensure they are strictly increasing, this also implies that duplicates are detected.
 			assert!(

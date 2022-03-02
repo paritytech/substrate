@@ -272,7 +272,7 @@ pub mod pallet {
 	}
 
 	#[pallet::hooks]
-	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
+	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>, Weight> for Pallet<T, I> {
 		/// Every `Period` blocks the `Members` set is refreshed from the
 		/// highest scoring members in the pool.
 		fn on_initialize(n: T::BlockNumber) -> Weight {

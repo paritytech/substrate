@@ -217,7 +217,7 @@ where
 }
 
 /// The pallet hooks trait. Implementing this lets you express some logic to execute.
-pub trait Hooks<BlockNumber> {
+pub trait Hooks<BlockNumber, Weight: Zero> {
 	/// The block is being finalized. Implement to have something happen.
 	fn on_finalize(_n: BlockNumber) {}
 
@@ -228,16 +228,16 @@ pub trait Hooks<BlockNumber> {
 	/// and pass the result to the next `on_idle` hook if it exists.
 	fn on_idle(
 		_n: BlockNumber,
-		_remaining_weight: crate::weights::Weight,
-	) -> crate::weights::Weight {
-		0
+		_remaining_weight: Weight,
+	) -> Weight {
+		Weight::zero()
 	}
 
 	/// The block is being initialized. Implement to have something happen.
 	///
 	/// Return the non-negotiable weight consumed in the block.
-	fn on_initialize(_n: BlockNumber) -> crate::weights::Weight {
-		0
+	fn on_initialize(_n: BlockNumber) -> Weight {
+		Weight::zero()
 	}
 
 	/// Perform a module upgrade.
@@ -259,8 +259,8 @@ pub trait Hooks<BlockNumber> {
 	/// pallet is discouraged and might get deprecated in the future. Alternatively, export the same
 	/// logic as a free-function from your pallet, and pass it to `type Executive` from the
 	/// top-level runtime.
-	fn on_runtime_upgrade() -> crate::weights::Weight {
-		0
+	fn on_runtime_upgrade() -> Weight {
+		Weight::zero()
 	}
 
 	/// Execute some pre-checks prior to a runtime upgrade.
@@ -365,7 +365,7 @@ mod tests {
 		struct Test3;
 		type TestTuple = (Test1, Test2, Test3);
 		impl OnIdle<u32, Weight> for Test1 {
-			fn on_idle(_n: u32, _weight: crate::weights::Weight) -> crate::weights::Weight {
+			fn on_idle(_n: u32, _weight: Weight) -> Weight {
 				unsafe {
 					ON_IDLE_INVOCATION_ORDER.push("Test1");
 				}
@@ -373,7 +373,7 @@ mod tests {
 			}
 		}
 		impl OnIdle<u32, Weight> for Test2 {
-			fn on_idle(_n: u32, _weight: crate::weights::Weight) -> crate::weights::Weight {
+			fn on_idle(_n: u32, _weight: Weight) -> Weight {
 				unsafe {
 					ON_IDLE_INVOCATION_ORDER.push("Test2");
 				}
@@ -381,7 +381,7 @@ mod tests {
 			}
 		}
 		impl OnIdle<u32, Weight> for Test3 {
-			fn on_idle(_n: u32, _weight: crate::weights::Weight) -> crate::weights::Weight {
+			fn on_idle(_n: u32, _weight: Weight) -> Weight {
 				unsafe {
 					ON_IDLE_INVOCATION_ORDER.push("Test3");
 				}

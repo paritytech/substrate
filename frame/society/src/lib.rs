@@ -613,7 +613,7 @@ pub mod pallet {
 	pub(super) type MaxMembers<T: Config<I>, I: 'static = ()> = StorageValue<_, u32, ValueQuery>;
 
 	#[pallet::hooks]
-	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
+	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>, Weight> for Pallet<T, I> {
 		fn on_initialize(n: T::BlockNumber) -> Weight {
 			let mut members = vec![];
 

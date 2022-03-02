@@ -12,7 +12,7 @@ mod pallet {
 	pub struct Pallet<T>(_);
 
 	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T>
+	impl<T: Config> Hooks<BlockNumberFor<T>, Weight> for Pallet<T>
 	where <T as frame_system::Config>::AccountId: From<u32>
 	{}
 

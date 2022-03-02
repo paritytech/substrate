@@ -10,7 +10,7 @@ mod pallet {
 	pub struct Pallet<T, I = ()>(core::marker::PhantomData<(T, I)>);
 
 	#[pallet::hooks]
-	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {}
+	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>, Weight> for Pallet<T, I> {}
 
 	#[pallet::call]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {}

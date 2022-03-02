@@ -165,7 +165,7 @@ pub mod pallet {
 	pub struct Pallet<T>(_);
 
 	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+	impl<T: Config> Hooks<BlockNumberFor<T>, Weight> for Pallet<T> {
 		/// Offchain Worker entry point.
 		///
 		/// By implementing `fn offchain_worker` you declare a new offchain worker.

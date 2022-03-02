@@ -1527,18 +1527,18 @@ pub mod pallet_prelude {
 /// Item must be defined as
 /// ```ignore
 /// #[pallet::hooks]
-/// impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> $optional_where_clause {
+/// impl<T: Config> Hooks<BlockNumberFor<T>, Weight> for Pallet<T> $optional_where_clause {
 /// }
 /// ```
 /// I.e. a regular trait implementation with generic bound: `T: Config`, for the trait
-/// `Hooks<BlockNumberFor<T>>` (they are defined in preludes), for the type `Pallet<T>`
+/// `Hooks<BlockNumberFor<T>, Weight>` (they are defined in preludes), for the type `Pallet<T>`
 /// and with an optional where clause.
 ///
 /// If no `#[pallet::hooks]` exists, then a default implementation corresponding to the
 /// following code is automatically generated:
 /// ```ignore
 /// #[pallet::hooks]
-/// impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
+/// impl<T: Config> Hooks<BlockNumberFor<T>, Weight> for Pallet<T> {}
 /// ```
 ///
 /// ### Macro expansion:
@@ -2008,7 +2008,7 @@ pub mod pallet_prelude {
 ///
 /// 	// Implement the pallet hooks.
 /// 	#[pallet::hooks]
-/// 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+/// 	impl<T: Config> Hooks<BlockNumberFor<T>, Weight> for Pallet<T> {
 /// 		fn on_initialize(_n: BlockNumberFor<T>) -> Weight {
 /// 			unimplemented!();
 /// 		}
@@ -2194,7 +2194,7 @@ pub mod pallet_prelude {
 /// 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 ///
 /// 	#[pallet::hooks]
-/// 	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
+/// 	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>, Weight> for Pallet<T, I> {
 /// 	}
 ///
 /// 	#[pallet::call]

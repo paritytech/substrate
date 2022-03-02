@@ -160,7 +160,7 @@ pub mod pallet {
 	pub struct Pallet<T>(_);
 
 	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T>
+	impl<T: Config> Hooks<BlockNumberFor<T>, Weight> for Pallet<T>
 	where
 		T::AccountId: From<SomeType2> + From<SomeType1> + SomeAssociation1,
 	{
@@ -453,7 +453,7 @@ pub mod pallet2 {
 	pub struct Pallet<T>(_);
 
 	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T>
+	impl<T: Config> Hooks<BlockNumberFor<T>, Weight> for Pallet<T>
 	where
 		T::AccountId: From<SomeType1> + SomeAssociation1,
 	{

@@ -567,7 +567,7 @@ pub mod pallet {
 	}
 
 	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+	impl<T: Config> Hooks<BlockNumberFor<T>, Weight> for Pallet<T> {
 		/// Called when a block is initialized. Will rotate session if it is the last
 		/// block of the current session.
 		fn on_initialize(n: T::BlockNumber) -> Weight {

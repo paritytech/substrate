@@ -97,7 +97,7 @@ pub mod pallet {
 	pub trait Config: frame_system::Config {}
 
 	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+	impl<T: Config> Hooks<BlockNumberFor<T>, Weight> for Pallet<T> {
 		fn on_initialize(block_number: T::BlockNumber) -> Weight {
 			let parent_hash = <frame_system::Pallet<T>>::parent_hash();
 

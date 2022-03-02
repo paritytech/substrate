@@ -315,7 +315,7 @@ pub mod pallet {
 	pub struct Pallet<T>(PhantomData<T>);
 
 	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T>
+	impl<T: Config> Hooks<BlockNumberFor<T>, Weight> for Pallet<T>
 	where
 		T::AccountId: UncheckedFrom<T::Hash>,
 		T::AccountId: AsRef<[u8]>,

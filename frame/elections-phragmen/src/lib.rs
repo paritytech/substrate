@@ -254,7 +254,7 @@ pub mod pallet {
 	pub struct Pallet<T>(PhantomData<T>);
 
 	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+	impl<T: Config> Hooks<BlockNumberFor<T>, Weight> for Pallet<T> {
 		/// What to do at the end of each block.
 		///
 		/// Checks if an election needs to happen or not.

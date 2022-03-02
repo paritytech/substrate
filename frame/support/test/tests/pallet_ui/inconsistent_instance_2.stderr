@@ -19,11 +19,11 @@ error: Invalid generic declaration, trait is defined without instance but generi
 error: Invalid generic declaration, trait is defined without instance but generic use some
   --> $DIR/inconsistent_instance_2.rs:13:62
    |
-13 |     impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {}
+13 |     impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>, Weight> for Pallet<T, I> {}
    |                                                                 ^^^^^^
 
 error: Invalid generic declaration, trait is defined without instance but generic use some
   --> $DIR/inconsistent_instance_2.rs:13:7
    |
-13 |     impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {}
+13 |     impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>, Weight> for Pallet<T, I> {}
    |          ^

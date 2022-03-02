@@ -516,7 +516,7 @@ pub mod pallet {
 	}
 
 	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+	impl<T: Config> Hooks<BlockNumberFor<T>, Weight> for Pallet<T> {
 		fn offchain_worker(now: BlockNumberFor<T>) {
 			// Only send messages if we are a potential validator.
 			if sp_io::offchain::is_validator() {

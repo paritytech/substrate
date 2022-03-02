@@ -11,7 +11,7 @@ mod pallet {
 	pub struct Pallet<T>(core::marker::PhantomData<T>);
 
 	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
+	impl<T: Config> Hooks<BlockNumberFor<T>, Weight> for Pallet<T> {}
 
 	#[derive(Encode, Decode, scale_info::TypeInfo, PartialEq, Clone)]
 	struct Bar;

@@ -600,7 +600,7 @@ mod tests {
 		pub trait Config: frame_system::Config {}
 
 		#[pallet::hooks]
-		impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		impl<T: Config> Hooks<BlockNumberFor<T>, Weight> for Pallet<T> {
 			// module hooks.
 			// one with block number arg and one without
 			fn on_initialize(n: T::BlockNumber) -> Weight {

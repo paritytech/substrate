@@ -601,7 +601,7 @@ pub mod pallet {
 	}
 
 	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+	impl<T: Config> Hooks<BlockNumberFor<T>, Weight> for Pallet<T> {
 		/// Weight: see `begin_block`
 		fn on_initialize(n: T::BlockNumber) -> Weight {
 			Self::begin_block(n)

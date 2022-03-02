@@ -160,7 +160,7 @@ pub mod pallet {
 	pub(super) type DidUpdate<T: Config> = StorageValue<_, bool, ValueQuery>;
 
 	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+	impl<T: Config> Hooks<BlockNumberFor<T>, Weight> for Pallet<T> {
 		/// dummy `on_initialize` to return the weight used in `on_finalize`.
 		fn on_initialize(_n: BlockNumberFor<T>) -> Weight {
 			// weight of `on_finalize`

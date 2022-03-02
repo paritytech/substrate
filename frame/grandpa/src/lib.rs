@@ -128,7 +128,7 @@ pub mod pallet {
 	}
 
 	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+	impl<T: Config> Hooks<BlockNumberFor<T>, Weight> for Pallet<T> {
 		fn on_finalize(block_number: T::BlockNumber) {
 			// check for scheduled pending authority set changes
 			if let Some(pending_change) = <PendingChange<T>>::get() {

@@ -715,7 +715,7 @@ pub mod pallet {
 	}
 
 	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+	impl<T: Config> Hooks<BlockNumberFor<T>, Weight> for Pallet<T> {
 		fn on_initialize(now: T::BlockNumber) -> Weight {
 			let next_election = T::DataProvider::next_election_prediction(now).max(now);
 

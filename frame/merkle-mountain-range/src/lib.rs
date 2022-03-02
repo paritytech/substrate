@@ -173,7 +173,7 @@ pub mod pallet {
 		StorageMap<_, Identity, NodeIndex, <T as Config<I>>::Hash, OptionQuery>;
 
 	#[pallet::hooks]
-	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
+	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>, Weight> for Pallet<T, I> {
 		fn on_initialize(_n: T::BlockNumber) -> Weight {
 			use primitives::LeafDataProvider;
 			let leaves = Self::mmr_leaves();
