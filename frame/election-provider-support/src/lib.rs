@@ -205,7 +205,7 @@ pub trait ElectionDataProvider {
 		maybe_max_len: Option<usize>,
 	) -> data_provider::Result<Vec<Self::AccountId>>;
 
-	/// All possible voters that influence the outcome of the election, thus "electing".
+	/// All the voters that participate in the election, thus "electing".
 	///
 	/// Note that if a notion of self-vote exists, it should be represented here.
 	///
