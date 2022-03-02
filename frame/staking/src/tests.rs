@@ -20,7 +20,7 @@
 use super::{ConfigOp, Event, MaxUnlockingChunks, *};
 use frame_election_provider_support::{ElectionProvider, SortedListProvider, Support};
 use frame_support::{
-	assert_noop, assert_ok, bounded_vec,
+	assert_noop, assert_ok, assert_storage_noop, bounded_vec,
 	dispatch::WithPostDispatchInfo,
 	pallet_prelude::*,
 	traits::{Currency, Get, ReservableCurrency},
@@ -61,7 +61,7 @@ fn set_staking_configs_works() {
 		assert_eq!(MinCommission::<Test>::get(), Perbill::from_percent(0));
 
 		// noop does nothing
-		assert_storage_noop!(Staking::set_staking_configs(
+		assert_storage_noop!(assert_ok!(Staking::set_staking_configs(
 			Origin::root(),
 			ConfigOp::Noop,
 			ConfigOp::Noop,
@@ -69,7 +69,7 @@ fn set_staking_configs_works() {
 			ConfigOp::Noop,
 			ConfigOp::Noop,
 			ConfigOp::Noop
-		));
+		)));
 
 		// removing works
 		assert_ok!(Staking::set_staking_configs(
