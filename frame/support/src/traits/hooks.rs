@@ -67,7 +67,7 @@ pub trait OnFinalize<BlockNumber> {
 ///
 /// Implementing this lets you express what should happen for your pallet before
 /// block finalization (see `on_finalize` hook) in case any remaining weight is left.
-pub trait OnIdle<BlockNumber> {
+pub trait OnIdle<BlockNumber, Weight: Zero> {
 	/// The block is being finalized.
 	/// Implement to have something happen in case there is leftover weight.
 	/// Check the passed `remaining_weight` to make sure it is high enough to allow for
@@ -75,22 +75,21 @@ pub trait OnIdle<BlockNumber> {
 	///
 	/// NOTE: This function is called AFTER ALL extrinsics - including inherent extrinsics -
 	/// in a block are applied but before `on_finalize` is executed.
-	fn on_idle(
-		_n: BlockNumber,
-		_remaining_weight: crate::weights::Weight,
-	) -> crate::weights::Weight {
-		0
+	fn on_idle(_n: BlockNumber, _remaining_weight: Weight) -> Weight {
+		Zero::zero()
 	}
 }
 
 #[impl_for_tuples(30)]
-impl<BlockNumber: Copy + AtLeast32BitUnsigned> OnIdle<BlockNumber> for Tuple {
-	fn on_idle(n: BlockNumber, remaining_weight: crate::weights::Weight) -> crate::weights::Weight {
-		let on_idle_functions: &[fn(
-			BlockNumber,
-			crate::weights::Weight,
-		) -> crate::weights::Weight] = &[for_tuples!( #( Tuple::on_idle ),* )];
-		let mut weight = 0;
+impl<BlockNumber, Weight> OnIdle<BlockNumber, Weight> for Tuple
+where
+	BlockNumber: Copy + AtLeast32BitUnsigned,
+	Weight: Zero + Saturating + Copy,
+{
+	fn on_idle(n: BlockNumber, remaining_weight: Weight) -> Weight {
+		let on_idle_functions: &[fn(BlockNumber, Weight) -> Weight] =
+			&[for_tuples!( #( Tuple::on_idle ),* )];
+		let mut weight: Weight = Zero::zero();
 		let len = on_idle_functions.len();
 		let start_index = n % (len as u32).into();
 		let start_index = start_index.try_into().ok().expect(
@@ -362,7 +361,7 @@ mod tests {
 		struct Test2;
 		struct Test3;
 		type TestTuple = (Test1, Test2, Test3);
-		impl OnIdle<u32> for Test1 {
+		impl OnIdle<u32, Weight> for Test1 {
 			fn on_idle(_n: u32, _weight: crate::weights::Weight) -> crate::weights::Weight {
 				unsafe {
 					ON_IDLE_INVOCATION_ORDER.push("Test1");
@@ -370,7 +369,7 @@ mod tests {
 				0
 			}
 		}
-		impl OnIdle<u32> for Test2 {
+		impl OnIdle<u32, Weight> for Test2 {
 			fn on_idle(_n: u32, _weight: crate::weights::Weight) -> crate::weights::Weight {
 				unsafe {
 					ON_IDLE_INVOCATION_ORDER.push("Test2");
@@ -378,7 +377,7 @@ mod tests {
 				0
 			}
 		}
-		impl OnIdle<u32> for Test3 {
+		impl OnIdle<u32, Weight> for Test3 {
 			fn on_idle(_n: u32, _weight: crate::weights::Weight) -> crate::weights::Weight {
 				unsafe {
 					ON_IDLE_INVOCATION_ORDER.push("Test3");

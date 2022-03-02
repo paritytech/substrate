@@ -176,7 +176,7 @@ impl<
 		UnsignedValidator,
 		AllPalletsWithSystem: OnRuntimeUpgrade
 			+ OnInitialize<System::BlockNumber, Weight>
-			+ OnIdle<System::BlockNumber>
+			+ OnIdle<System::BlockNumber, Weight>
 			+ OnFinalize<System::BlockNumber>
 			+ OffchainWorker<System::BlockNumber>,
 		COnRuntimeUpgrade: OnRuntimeUpgrade,
@@ -209,7 +209,7 @@ impl<
 		UnsignedValidator,
 		AllPalletsWithSystem: OnRuntimeUpgrade
 			+ OnInitialize<System::BlockNumber, Weight>
-			+ OnIdle<System::BlockNumber>
+			+ OnIdle<System::BlockNumber, Weight>
 			+ OnFinalize<System::BlockNumber>
 			+ OffchainWorker<System::BlockNumber>,
 		COnRuntimeUpgrade: OnRuntimeUpgrade,
@@ -415,10 +415,11 @@ where
 		let remaining_weight = max_weight.saturating_sub(weight.total());
 
 		if remaining_weight > 0 {
-			let used_weight = <AllPalletsWithSystem as OnIdle<System::BlockNumber>>::on_idle(
-				block_number,
-				remaining_weight,
-			);
+			let used_weight =
+				<AllPalletsWithSystem as OnIdle<System::BlockNumber, Weight>>::on_idle(
+					block_number,
+					remaining_weight,
+				);
 			<frame_system::Pallet<System>>::register_extra_weight_unchecked(
 				used_weight,
 				DispatchClass::Mandatory,

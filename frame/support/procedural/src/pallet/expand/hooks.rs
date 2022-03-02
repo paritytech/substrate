@@ -90,7 +90,7 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 		}
 
 		impl<#type_impl_gen>
-			#frame_support::traits::OnIdle<<T as #frame_system::Config>::BlockNumber>
+			#frame_support::traits::OnIdle<<T as #frame_system::Config>::BlockNumber, #frame_support::weights::Weight>
 			for #pallet_ident<#type_use_gen> #where_clause
 		{
 			fn on_idle(

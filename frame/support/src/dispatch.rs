@@ -1704,7 +1704,7 @@ macro_rules! decl_module {
 		fn on_idle($param1:ident : $param1_ty:ty, $param2:ident: $param2_ty:ty) -> $return:ty { $( $impl:tt )* }
 	) => {
 		impl<$trait_instance: $system::Config + $trait_name$(<I>, $instance: $instantiable)?>
-			$crate::traits::OnIdle<<$trait_instance as $system::Config>::BlockNumber>
+			$crate::traits::OnIdle<<$trait_instance as $system::Config>::BlockNumber, $crate::weights::Weight>
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
 			fn on_idle($param1: $param1_ty, $param2: $param2_ty) -> $return {
@@ -1720,7 +1720,7 @@ macro_rules! decl_module {
 		{ $( $other_where_bounds:tt )* }
 	) => {
 		impl<$trait_instance: $system::Config + $trait_name$(<I>, $instance: $instantiable)?>
-			$crate::traits::OnIdle<<$trait_instance as $system::Config>::BlockNumber>
+			$crate::traits::OnIdle<<$trait_instance as $system::Config>::BlockNumber, $crate::weights::Weight>
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
 		}
@@ -2800,18 +2800,18 @@ mod tests {
 	#[test]
 	#[should_panic(expected = "on_idle")]
 	fn on_idle_should_work_1() {
-		<Module<TraitImpl> as OnIdle<u32>>::on_idle(42, 9);
+		<Module<TraitImpl> as OnIdle<u32, Weight>>::on_idle(42, 9);
 	}
 
 	#[test]
 	#[should_panic(expected = "on_idle")]
 	fn on_idle_should_work_2() {
-		<Module<TraitImpl> as OnIdle<u32>>::on_idle(9, 42);
+		<Module<TraitImpl> as OnIdle<u32, Weight>>::on_idle(9, 42);
 	}
 
 	#[test]
 	fn on_idle_should_work_3() {
-		assert_eq!(<Module<TraitImpl> as OnIdle<u32>>::on_idle(10, 11), 7);
+		assert_eq!(<Module<TraitImpl> as OnIdle<u32, Weight>>::on_idle(10, 11), 7);
 	}
 
 	#[test]
