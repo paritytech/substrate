@@ -49,6 +49,12 @@ hex = "0.4.3"
 memory-db = "0.29.0"
 rand = { version = "0.8.4", features = ["small_rng"] }
 
+sc-block-builder = { version = "0.10.0-dev", path = "../../../client/block-builder" }
+sp-inherents = { version = "4.0.0-dev", path = "../../../primitives/inherents" }
+futures = "0.3.19"
+sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
+sc-consensus = { version = "0.10.0-dev", path = "../../../client/consensus/common" }
+
 [features]
 default = ["db", "sc-client-db/runtime-benchmarks"]
 db = ["sc-client-db/with-kvdb-rocksdb", "sc-client-db/with-parity-db"]

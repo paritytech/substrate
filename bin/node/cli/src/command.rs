@@ -18,9 +18,11 @@
 
 use crate::{chain_spec, service, service::new_partial, Cli, Subcommand};
 use node_executor::ExecutorDispatch;
-use node_runtime::{Block, RuntimeApi};
+use node_runtime::RuntimeApi;
 use sc_cli::{ChainSpec, Result, RuntimeVersion, SubstrateCli};
 use sc_service::PartialComponents;
+
+use std::sync::Arc;
 
 impl SubstrateCli for Cli {
 	fn impl_name() -> String {
@@ -68,6 +70,46 @@ impl SubstrateCli for Cli {
 		&node_runtime::VERSION
 	}
 }
+struct ExtrinsicGen {
+	client: Arc<FullClient>,
+}
+use crate::service::{create_extrinsic, FullClient};
+use node_primitives::Block;
+use node_runtime::{BalancesCall, SystemCall};
+use sp_keyring::Sr25519Keyring;
+use sp_runtime::AccountId32;
+use sp_runtime::{traits::Block as BlockT, MultiAddress, OpaqueExtrinsic};
+impl frame_benchmarking_cli::block::cmd::ExtrinsicGenerator for ExtrinsicGen {
+	fn noop(&self, nonce: u32) -> Option<OpaqueExtrinsic> {
+		let src = Sr25519Keyring::Alice.pair();
+
+		let extrinsic: OpaqueExtrinsic = create_extrinsic(
+			self.client.as_ref(),
+			src.clone(),
+			SystemCall::remark { remark: vec![] },
+			Some(nonce),
+		)
+		.into();
+		Some(extrinsic)
+	}
+}
+
+#[derive(Default)]
+struct InherentProv {}
+
+impl frame_benchmarking_cli::block::cmd::BlockInherentDataProvider for InherentProv {
+	fn providers(
+		&self,
+		block: u64,
+	) -> std::result::Result<Vec<Arc<dyn sp_inherents::InherentDataProvider>>, sp_inherents::Error>
+	{
+		log::info!("Creating inherents for block #{}", block);
+		let d = std::time::Duration::from_millis(0);
+		let timestamp = sp_timestamp::InherentDataProvider::new(d.into());
+
+		Ok(vec![Arc::new(timestamp)])
+	}
+}
 
 /// Parse command line arguments into service configuration.
 pub fn run() -> Result<()> {
@@ -95,6 +137,32 @@ pub fn run() -> Result<()> {
 				You can enable it with `--features runtime-benchmarks`."
 					.into())
 			},
+		Some(Subcommand::BenchmarkBlock(cmd)) => {
+			let runner = cli.create_runner(cmd)?;
+			runner.async_run(|mut config| {
+				config.role = sc_service::Role::Full;
+
+				let PartialComponents { client, task_manager, backend, .. } = new_partial(&config)?;
+				let db = backend.expose_db();
+				let storage = backend.expose_storage();
+				let ext_gen = ExtrinsicGen { client: client.clone() };
+
+				let provs: InherentProv = Default::default();
+				Ok((
+					cmd.run(
+						config,
+						client.clone(),
+						client.clone(),
+						db,
+						storage,
+						client.clone(),
+						Arc::new(provs),
+						Arc::new(ext_gen),
+					),
+					task_manager,
+				))
+			})
+		},
 		Some(Subcommand::BenchmarkStorage(cmd)) => {
 			if !cfg!(feature = "runtime-benchmarks") {
 				return Err("Benchmarking wasn't enabled when building the node. \

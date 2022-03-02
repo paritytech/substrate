@@ -154,7 +154,7 @@ impl Stats {
 	fn percentile(mut xs: Vec<u64>, p: f64) -> u64 {
 		xs.sort();
 		let index = (xs.len() as f64 * p).ceil() as usize;
-		xs[index]
+		xs[index-1]
 	}
 }
 
