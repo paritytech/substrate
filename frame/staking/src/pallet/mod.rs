@@ -61,7 +61,7 @@ pub mod pallet {
 	#[pallet::without_storage_info]
 	pub struct Pallet<T>(_);
 
-	/// Possible operations on the configuration values of this pallet. 	
+	/// Possible operations on the configuration values of this pallet.
 	#[derive(TypeInfo, Debug, Clone, Encode, Decode, PartialEq)]
 	pub enum ConfigOp<T: Default + Codec> {
 		/// Don't change.
