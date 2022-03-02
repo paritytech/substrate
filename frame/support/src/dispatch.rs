@@ -1549,7 +1549,7 @@ macro_rules! decl_module {
 		fn on_runtime_upgrade() -> $return:ty { $( $impl:tt )* }
 	) => {
 		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?>
-			$crate::traits::OnRuntimeUpgrade
+			$crate::traits::OnRuntimeUpgrade<$crate::weights::Weight>
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
 			fn on_runtime_upgrade() -> $return {
@@ -1590,7 +1590,7 @@ macro_rules! decl_module {
 		{ $( $other_where_bounds:tt )* }
 	) => {
 		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?>
-			$crate::traits::OnRuntimeUpgrade
+			$crate::traits::OnRuntimeUpgrade<$crate::weights::Weight>
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
 			fn on_runtime_upgrade() -> $crate::dispatch::Weight {
@@ -2823,7 +2823,7 @@ mod tests {
 	#[test]
 	fn on_runtime_upgrade_should_work() {
 		sp_io::TestExternalities::default().execute_with(|| {
-			assert_eq!(<Module<TraitImpl> as OnRuntimeUpgrade>::on_runtime_upgrade(), 10)
+			assert_eq!(<Module<TraitImpl> as OnRuntimeUpgrade<Weight>>::on_runtime_upgrade(), 10)
 		});
 	}
 

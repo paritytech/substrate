@@ -103,9 +103,10 @@
 //! #         UnknownTransaction::NoUnsignedValidator.into()
 //! #     }
 //! # }
+//! # use frame_support::weights::Weight;
 //! struct CustomOnRuntimeUpgrade;
-//! impl frame_support::traits::OnRuntimeUpgrade for CustomOnRuntimeUpgrade {
-//!     fn on_runtime_upgrade() -> frame_support::weights::Weight {
+//! impl frame_support::traits::OnRuntimeUpgrade<Weight> for CustomOnRuntimeUpgrade {
+//!     fn on_runtime_upgrade() -> Weight {
 //!         // Do whatever you want.
 //!         0
 //!     }
@@ -174,12 +175,12 @@ impl<
 		Block: traits::Block<Header = System::Header, Hash = System::Hash>,
 		Context: Default,
 		UnsignedValidator,
-		AllPalletsWithSystem: OnRuntimeUpgrade
+		AllPalletsWithSystem: OnRuntimeUpgrade<Weight>
 			+ OnInitialize<System::BlockNumber, Weight>
 			+ OnIdle<System::BlockNumber, Weight>
 			+ OnFinalize<System::BlockNumber>
 			+ OffchainWorker<System::BlockNumber>,
-		COnRuntimeUpgrade: OnRuntimeUpgrade,
+		COnRuntimeUpgrade: OnRuntimeUpgrade<Weight>,
 	> ExecuteBlock<Block>
 	for Executive<System, Block, Context, UnsignedValidator, AllPalletsWithSystem, COnRuntimeUpgrade>
 where
@@ -207,12 +208,12 @@ impl<
 		Block: traits::Block<Header = System::Header, Hash = System::Hash>,
 		Context: Default,
 		UnsignedValidator,
-		AllPalletsWithSystem: OnRuntimeUpgrade
+		AllPalletsWithSystem: OnRuntimeUpgrade<Weight>
 			+ OnInitialize<System::BlockNumber, Weight>
 			+ OnIdle<System::BlockNumber, Weight>
 			+ OnFinalize<System::BlockNumber>
 			+ OffchainWorker<System::BlockNumber>,
-		COnRuntimeUpgrade: OnRuntimeUpgrade,
+		COnRuntimeUpgrade: OnRuntimeUpgrade<Weight>,
 	> Executive<System, Block, Context, UnsignedValidator, AllPalletsWithSystem, COnRuntimeUpgrade>
 where
 	Block::Extrinsic: Checkable<Context> + Codec,
@@ -224,7 +225,7 @@ where
 {
 	/// Execute all `OnRuntimeUpgrade` of this runtime, and return the aggregate weight.
 	pub fn execute_on_runtime_upgrade() -> frame_support::weights::Weight {
-		<(COnRuntimeUpgrade, AllPalletsWithSystem) as OnRuntimeUpgrade>::on_runtime_upgrade()
+		<(COnRuntimeUpgrade, AllPalletsWithSystem) as OnRuntimeUpgrade<Weight>>::on_runtime_upgrade()
 	}
 
 	/// Execute given block, but don't do any of the `final_checks`.
@@ -263,10 +264,10 @@ where
 	/// This should only be used for testing.
 	#[cfg(feature = "try-runtime")]
 	pub fn try_runtime_upgrade() -> Result<frame_support::weights::Weight, &'static str> {
-		<(COnRuntimeUpgrade, AllPalletsWithSystem) as OnRuntimeUpgrade>::pre_upgrade().unwrap();
+		<(COnRuntimeUpgrade, AllPalletsWithSystem) as OnRuntimeUpgrade<Weight>>::pre_upgrade().unwrap();
 		let weight = Self::execute_on_runtime_upgrade();
 
-		<(COnRuntimeUpgrade, AllPalletsWithSystem) as OnRuntimeUpgrade>::post_upgrade().unwrap();
+		<(COnRuntimeUpgrade, AllPalletsWithSystem) as OnRuntimeUpgrade<Weight>>::post_upgrade().unwrap();
 
 		Ok(weight)
 	}
@@ -822,7 +823,7 @@ mod tests {
 	const CUSTOM_ON_RUNTIME_KEY: &[u8] = &*b":custom:on_runtime";
 
 	struct CustomOnRuntimeUpgrade;
-	impl OnRuntimeUpgrade for CustomOnRuntimeUpgrade {
+	impl OnRuntimeUpgrade<Weight> for CustomOnRuntimeUpgrade {
 		fn on_runtime_upgrade() -> Weight {
 			sp_io::storage::set(TEST_KEY, "custom_upgrade".as_bytes());
 			sp_io::storage::set(CUSTOM_ON_RUNTIME_KEY, &true.encode());
@@ -1388,7 +1389,7 @@ mod tests {
 			// All weights that show up in the `initialize_block_impl`
 			let custom_runtime_upgrade_weight = CustomOnRuntimeUpgrade::on_runtime_upgrade();
 			let runtime_upgrade_weight =
-				<AllPalletsWithSystem as OnRuntimeUpgrade>::on_runtime_upgrade();
+				<AllPalletsWithSystem as OnRuntimeUpgrade<Weight>>::on_runtime_upgrade();
 			let on_initialize_weight =
 				<AllPalletsWithSystem as OnInitialize<u64, Weight>>::on_initialize(block_number);
 			let base_block_weight =

@@ -159,7 +159,7 @@ impl<U: OnRuntimeUpgrade> OnRuntimeUpgradeHelpersExt for U {}
 ///
 /// Implementing this lets you express what should happen when the runtime upgrades,
 /// and changes may need to occur to your module.
-pub trait OnRuntimeUpgrade {
+pub trait OnRuntimeUpgrade<Weight: Zero> {
 	/// Perform a module upgrade.
 	///
 	/// # Warning
@@ -169,8 +169,8 @@ pub trait OnRuntimeUpgrade {
 	/// block local data are not accessible.
 	///
 	/// Return the non-negotiable weight consumed for runtime upgrade.
-	fn on_runtime_upgrade() -> crate::weights::Weight {
-		0
+	fn on_runtime_upgrade() -> Weight {
+		Zero::zero()
 	}
 
 	/// Execute some pre-checks prior to a runtime upgrade.
@@ -191,9 +191,12 @@ pub trait OnRuntimeUpgrade {
 }
 
 #[impl_for_tuples(30)]
-impl OnRuntimeUpgrade for Tuple {
-	fn on_runtime_upgrade() -> crate::weights::Weight {
-		let mut weight = 0;
+impl<Weight> OnRuntimeUpgrade<Weight> for Tuple
+where
+	Weight: Zero + Saturating,
+{
+	fn on_runtime_upgrade() -> Weight {
+		let mut weight = Weight::zero();
 		for_tuples!( #( weight = weight.saturating_add(Tuple::on_runtime_upgrade()); )* );
 		weight
 	}
@@ -343,7 +346,7 @@ mod tests {
 				10
 			}
 		}
-		impl OnRuntimeUpgrade for Test {
+		impl OnRuntimeUpgrade<Weight> for Test {
 			fn on_runtime_upgrade() -> Weight {
 				20
 			}

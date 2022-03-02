@@ -52,9 +52,10 @@ the on runtime upgrade logic of all modules is called.
 
 ```rust
 #
+use frame_support::weights::Weight;
 struct CustomOnRuntimeUpgrade;
-impl frame_support::traits::OnRuntimeUpgrade for CustomOnRuntimeUpgrade {
-    fn on_runtime_upgrade() -> frame_support::weights::Weight {
+impl frame_support::traits::OnRuntimeUpgrade<Weight> for CustomOnRuntimeUpgrade {
+    fn on_runtime_upgrade() -> Weight {
         // Do whatever you want.
         0
     }
