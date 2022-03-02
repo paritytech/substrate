@@ -1530,7 +1530,7 @@ fn rebond_is_fifo() {
 				active: 300,
 				unlocking: bounded_vec![
 					UnlockChunk { value: 400, era: 2 + 3 },
-					UnlockChunk { value: 300, era: 3 + 3 }
+					UnlockChunk { value: 300, era: 3 + 3 },
 				],
 				claimed_rewards: vec![],
 			})
@@ -1549,7 +1549,7 @@ fn rebond_is_fifo() {
 				unlocking: bounded_vec![
 					UnlockChunk { value: 400, era: 2 + 3 },
 					UnlockChunk { value: 300, era: 3 + 3 },
-					UnlockChunk { value: 200, era: 4 + 3 }
+					UnlockChunk { value: 200, era: 4 + 3 },
 				],
 				claimed_rewards: vec![],
 			})
@@ -1565,7 +1565,7 @@ fn rebond_is_fifo() {
 				active: 500,
 				unlocking: bounded_vec![
 					UnlockChunk { value: 400, era: 2 + 3 },
-					UnlockChunk { value: 100, era: 3 + 3 }
+					UnlockChunk { value: 100, era: 3 + 3 },
 				],
 				claimed_rewards: vec![],
 			})
