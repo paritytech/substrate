@@ -61,7 +61,7 @@ fn set_staking_configs_works() {
 		assert_eq!(MinCommission::<Test>::get(), Perbill::from_percent(0));
 
 		// noop does nothing
-		assert_ok!(Staking::set_staking_configs(
+		assert_storage_noop!(Staking::set_staking_configs(
 			Origin::root(),
 			ConfigOp::Noop,
 			ConfigOp::Noop,
@@ -70,12 +70,6 @@ fn set_staking_configs_works() {
 			ConfigOp::Noop,
 			ConfigOp::Noop
 		));
-		assert_eq!(MinNominatorBond::<Test>::get(), 1_500);
-		assert_eq!(MinValidatorBond::<Test>::get(), 2_000);
-		assert_eq!(MaxNominatorsCount::<Test>::get(), Some(10));
-		assert_eq!(MaxValidatorsCount::<Test>::get(), Some(20));
-		assert_eq!(ChillThreshold::<Test>::get(), Some(Percent::from_percent(75)));
-		assert_eq!(MinCommission::<Test>::get(), Perbill::from_percent(0));
 
 		// removing works
 		assert_ok!(Staking::set_staking_configs(
