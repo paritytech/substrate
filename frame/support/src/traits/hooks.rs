@@ -118,9 +118,9 @@ pub trait OnGenesis {
 #[cfg(feature = "try-runtime")]
 pub const ON_RUNTIME_UPGRADE_PREFIX: &[u8] = b"__ON_RUNTIME_UPGRADE__";
 
-/// Some helper functions for [`OnRuntimeUpgrade`] during `try-runtime` testing.
+/// Some helper functions for [`OnRuntimeUpgrade<Weight>`] during `try-runtime` testing.
 #[cfg(feature = "try-runtime")]
-pub trait OnRuntimeUpgradeHelpersExt {
+pub trait OnRuntimeUpgradeHelpersExt<Weight> {
 	/// Generate a storage key unique to this runtime upgrade.
 	///
 	/// This can be used to communicate data from pre-upgrade to post-upgrade state and check
@@ -153,7 +153,7 @@ pub trait OnRuntimeUpgradeHelpersExt {
 }
 
 #[cfg(feature = "try-runtime")]
-impl<U> OnRuntimeUpgradeHelpersExt for U {}
+impl<Weight: Zero, U: OnRuntimeUpgrade<Weight>> OnRuntimeUpgradeHelpersExt<Weight> for U {}
 
 /// The runtime upgrade trait.
 ///
