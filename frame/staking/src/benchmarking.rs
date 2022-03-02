@@ -857,9 +857,9 @@ benchmarks! {
 		RawOrigin::Root,
 		ConfigOp::Set(BalanceOf::<T>::max_value()),
 		ConfigOp::Set(BalanceOf::<T>::max_value()),
-		ConfigOp::Set(Some(u32::MAX)),
-		ConfigOp::Set(Some(u32::MAX)),
-		ConfigOp::Set(Some(Percent::max_value())),
+		ConfigOp::Set(u32::MAX),
+		ConfigOp::Set(u32::MAX),
+		ConfigOp::Set(Percent::max_value()),
 		ConfigOp::Set(Perbill::max_value())
 	) verify {
 		assert_eq!(MinNominatorBond::<T>::get(), BalanceOf::<T>::max_value());
@@ -905,9 +905,9 @@ benchmarks! {
 			RawOrigin::Root.into(),
 			ConfigOp::Set(BalanceOf::<T>::max_value()),
 			ConfigOp::Set(BalanceOf::<T>::max_value()),
-			ConfigOp::Set(Some(0)),
-			ConfigOp::Set(Some(0)),
-			ConfigOp::Set(Some(Percent::from_percent(0))),
+			ConfigOp::Set(0),
+			ConfigOp::Set(0),
+			ConfigOp::Set(Percent::from_percent(0)),
 			ConfigOp::Set(Zero::zero()),
 		)?;
 

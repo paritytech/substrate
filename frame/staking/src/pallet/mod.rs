@@ -1534,9 +1534,9 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			min_nominator_bond: ConfigOp<BalanceOf<T>>,
 			min_validator_bond: ConfigOp<BalanceOf<T>>,
-			max_nominator_count: ConfigOp<Option<u32>>,
-			max_validator_count: ConfigOp<Option<u32>>,
-			chill_threshold: ConfigOp<Option<Percent>>,
+			max_nominator_count: ConfigOp<u32>,
+			max_validator_count: ConfigOp<u32>,
+			chill_threshold: ConfigOp<Percent>,
 			min_commission: ConfigOp<Perbill>,
 		) -> DispatchResult {
 			ensure_root(origin)?;
@@ -1545,7 +1545,7 @@ pub mod pallet {
 				($storage:ty, $op:ident) => {
 					match $op {
 						ConfigOp::Noop => (),
-						ConfigOp::Set(v) => <$storage>::set(v),
+						ConfigOp::Set(v) => <$storage>::put(v),
 						ConfigOp::Remove => <$storage>::kill(),
 					}
 				};
