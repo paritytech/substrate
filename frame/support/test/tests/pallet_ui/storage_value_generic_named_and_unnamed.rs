@@ -1,6 +1,6 @@
 #[frame_support::pallet]
 mod pallet {
-	use frame_support::pallet_prelude::{Hooks, StorageValue, OptionQuery};
+	use frame_support::pallet_prelude::{Hooks, OptionQuery, StorageValue, Weight};
 	use frame_system::pallet_prelude::BlockNumberFor;
 
 	#[pallet::config]

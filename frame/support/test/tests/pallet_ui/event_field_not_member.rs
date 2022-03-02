@@ -1,6 +1,6 @@
 #[frame_support::pallet]
 mod pallet {
-	use frame_support::pallet_prelude::{Hooks, IsType};
+	use frame_support::pallet_prelude::{Hooks, IsType, Weight};
 	use frame_system::pallet_prelude::BlockNumberFor;
 
 	#[pallet::config]

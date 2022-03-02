@@ -1,6 +1,6 @@
 #[frame_support::pallet]
 mod pallet {
-	use frame_support::pallet_prelude::Hooks;
+	use frame_support::pallet_prelude::{Hooks, Weight};
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {}

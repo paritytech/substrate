@@ -1,7 +1,7 @@
 #[frame_support::pallet]
 mod pallet {
 	use codec::{Decode, Encode};
-	use frame_support::pallet_prelude::{DispatchResultWithPostInfo, Hooks};
+	use frame_support::pallet_prelude::{DispatchResultWithPostInfo, Hooks, Weight};
 	use frame_system::pallet_prelude::{BlockNumberFor, OriginFor};
 
 	#[pallet::config]
