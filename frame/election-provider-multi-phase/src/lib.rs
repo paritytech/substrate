@@ -963,11 +963,7 @@ pub mod pallet {
 		///
 		/// A deposit is reserved and recorded for the solution. Based on the outcome, the solution
 		/// might be rewarded, slashed, or get all or a part of the deposit back.
-		///
-		/// # <weight>
-		/// Queue size must be provided as witness data.
-		/// # </weight>
-		#[pallet::weight(T::DbWeight::get().reads_writes(5, 3))]
+		#[pallet::weight(T::WeightInfo::submit(0))]
 		pub fn submit(
 			origin: OriginFor<T>,
 			raw_solution: Box<RawSolution<SolutionOf<T>>>,

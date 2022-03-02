@@ -310,7 +310,6 @@ frame_benchmarking::benchmarks! {
 	}
 
 	submit {
-		let c in 1 .. (T::SignedMaxSubmissions::get() - 1);
 
 		// the solution will be worse than all of them meaning the score need to be checked against
 		// ~ log2(c)
@@ -324,7 +323,10 @@ frame_benchmarking::benchmarks! {
 		<Round<T>>::put(1);
 
 		let mut signed_submissions = SignedSubmissions::<T>::get();
-		for i in 0..c {
+
+		// Insert `max - 1` submissions because the call to `submit` will insert another
+		// submission and the score is worse then the previous scores.
+		for i in 0..(T::SignedMaxSubmissions::get() - 1) {
 			let raw_solution = RawSolution {
 				score: ElectionScore { minimal_stake: 10_000_000u128 + (i as u128), ..Default::default() },
 				..Default::default()
@@ -344,7 +346,7 @@ frame_benchmarking::benchmarks! {
 
 	}: _(RawOrigin::Signed(caller), Box::new(solution))
 	verify {
-		assert!(<MultiPhase<T>>::signed_submissions().len() as u32 == c + 1);
+		assert!(<MultiPhase<T>>::signed_submissions().len() as u32 == T::SignedMaxSubmissions::get());
 	}
 
 	submit_unsigned {
