@@ -1,8 +1,7 @@
 use super::*;
 use crate::mock::{
-	unsafe_set_state, Balance, Balances, BondingDuration, CurrentEra, ExistentialDeposit,
-	ExtBuilder, Nominations, Origin, Pools, Runtime, StakingMock, PRIMARY_ACCOUNT, REWARDS_ACCOUNT,
-	UNBONDING_BALANCE_MAP,
+	unsafe_set_state, Balance, Balances, CurrentEra, ExistentialDeposit, ExtBuilder, Nominations,
+	Origin, Pools, Runtime, StakingMock, PRIMARY_ACCOUNT, REWARDS_ACCOUNT, UNBONDING_BALANCE_MAP,
 };
 use frame_support::{assert_noop, assert_ok};
 
@@ -32,6 +31,7 @@ fn test_setup_works() {
 				root: 900,
 				nominator: 901,
 				state_toggler: 902,
+				delegator_counter: 1,
 			}
 		);
 		assert_eq!(
@@ -77,6 +77,7 @@ mod bonded_pool {
 			root: 900,
 			nominator: 901,
 			state_toggler: 902,
+			delegator_counter: 1,
 		};
 
 		// 1 points : 1 balance ratio
@@ -129,6 +130,7 @@ mod bonded_pool {
 			root: 900,
 			nominator: 901,
 			state_toggler: 902,
+			delegator_counter: 1,
 		};
 		StakingMock::set_bonded_balance(123, 100);
 		assert_eq!(bonded_pool.balance_to_unbond(10), 10);
@@ -175,6 +177,7 @@ mod bonded_pool {
 				root: 900,
 				nominator: 901,
 				state_toggler: 902,
+				delegator_counter: 1,
 			};
 
 			// Simulate a 100% slashed pool
@@ -356,7 +359,7 @@ mod join {
 
 	#[test]
 	fn join_works() {
-		let bonded = |points| BondedPool::<Runtime> {
+		let bonded = |points, delegator_counter| BondedPool::<Runtime> {
 			depositor: 10,
 			state: PoolState::Open,
 			points,
@@ -364,6 +367,7 @@ mod join {
 			root: 900,
 			nominator: 901,
 			state_toggler: 902,
+			delegator_counter,
 		};
 		ExtBuilder::default().build_and_execute(|| {
 			// Given
@@ -383,7 +387,7 @@ mod join {
 					unbonding_era: None
 				}
 			);
-			assert_eq!(BondedPool::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap(), bonded(12));
+			assert_eq!(BondedPool::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap(), bonded(12, 2));
 
 			// Given
 			// The bonded balance is slashed in half
@@ -405,7 +409,7 @@ mod join {
 					unbonding_era: None
 				}
 			);
-			assert_eq!(BondedPool::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap(), bonded(12 + 24));
+			assert_eq!(BondedPool::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap(), bonded(12 + 24, 3));
 		});
 	}
 
@@ -434,6 +438,7 @@ mod join {
 				root: 900,
 				nominator: 901,
 				state_toggler: 902,
+				delegator_counter: 1,
 			}
 			.put();
 			// Force the points:balance ratio to 100/10 (so 10)
@@ -484,10 +489,19 @@ mod join {
 				root: 900,
 				nominator: 901,
 				state_toggler: 902,
+				delegator_counter: 1,
 			}
 			.put();
 			let _ = Pools::join(Origin::signed(11), 420, 123);
 		});
+	}
+
+	fn join_max_delegator_limits_are_respected() {
+		todo!()
+	}
+
+	fn join_max_pools_limits_are_respected() {
+		todo!()
 	}
 }
 
@@ -1192,6 +1206,7 @@ mod unbond {
 					root: 900,
 					nominator: 901,
 					state_toggler: 902,
+					delegator_counter: 1,
 				}
 			);
 
@@ -1227,6 +1242,7 @@ mod unbond {
 						root: 900,
 						nominator: 901,
 						state_toggler: 902,
+						delegator_counter: 3,
 					}
 				);
 				assert_eq!(StakingMock::bonded_balance(&PRIMARY_ACCOUNT).unwrap(), 94);
@@ -1252,6 +1268,7 @@ mod unbond {
 						root: 900,
 						nominator: 901,
 						state_toggler: 902,
+						delegator_counter: 3,
 					}
 				);
 				assert_eq!(StakingMock::bonded_balance(&PRIMARY_ACCOUNT).unwrap(), 2);
@@ -1276,6 +1293,7 @@ mod unbond {
 						root: 900,
 						nominator: 901,
 						state_toggler: 902,
+						delegator_counter: 3,
 					}
 				);
 				assert_eq!(StakingMock::bonded_balance(&PRIMARY_ACCOUNT).unwrap(), 0);
@@ -1355,7 +1373,8 @@ mod unbond {
 						account: PRIMARY_ACCOUNT,
 						depositor: 10,
 						state: PoolState::Blocked,
-						points: 10 // Only 10 points because 200 + 100 was unbonded
+						points: 10, // Only 10 points because 200 + 100 was unbonded
+						delegator_counter: 3,
 					}
 				);
 				assert_eq!(StakingMock::bonded_balance(&PRIMARY_ACCOUNT).unwrap(), 10);
@@ -1474,6 +1493,7 @@ mod unbond {
 				root: 900,
 				nominator: 901,
 				state_toggler: 902,
+				delegator_counter: 1,
 			}
 			.put();
 
@@ -1491,13 +1511,17 @@ mod pool_withdraw_unbonded {
 			// Given 10 unbond'ed directly against the pool account
 			assert_ok!(StakingMock::unbond(PRIMARY_ACCOUNT, 5));
 			// and the pool account only has 10 balance
-			assert_eq!(Balances::free_balance(PRIMARY_ACCOUNT), 10);
+			assert_eq!(StakingMock::bonded_balance(&PRIMARY_ACCOUNT), Some(5));
+			assert_eq!(StakingMock::locked_balance(&PRIMARY_ACCOUNT), Some(10));
+			assert_eq!(Balances::free_balance(&PRIMARY_ACCOUNT), 10);
 
 			// When
 			assert_ok!(Pools::pool_withdraw_unbonded(Origin::signed(10), PRIMARY_ACCOUNT, 0));
 
-			// Then there unbonding balance becomes free
-			assert_eq!(Balances::free_balance(PRIMARY_ACCOUNT), 15);
+			// Then there unbonding balance is no longer locked
+			assert_eq!(StakingMock::bonded_balance(&PRIMARY_ACCOUNT), Some(5));
+			assert_eq!(StakingMock::locked_balance(&PRIMARY_ACCOUNT), Some(5));
+			assert_eq!(Balances::free_balance(&PRIMARY_ACCOUNT), 10);
 		});
 	}
 }
@@ -1511,9 +1535,9 @@ mod withdraw_unbonded_other {
 			.add_delegators(vec![(40, 40), (550, 550)])
 			.build_and_execute(|| {
 				// Given
-				Balances::make_free_balance_be(&PRIMARY_ACCOUNT, 0);
 				assert_ok!(Pools::unbond_other(Origin::signed(550), 550));
 				assert_ok!(Pools::unbond_other(Origin::signed(40), 40));
+				assert_eq!(Balances::free_balance(&PRIMARY_ACCOUNT), 600);
 
 				let mut current_era = 1;
 				CurrentEra::set(current_era);
@@ -1526,13 +1550,13 @@ mod withdraw_unbonded_other {
 				// Sanity check
 				assert_eq!(*unbond_pool, UnbondPool { points: 10, balance: 10 });
 
-				// Simulate a slash to the pool with_era(current_era) decreasing the balance by half
+				// Simulate a slash to the pool with_era(current_era), decreasing the balance by half
 				unbond_pool.balance = 5;
 				SubPoolsStorage::<Runtime>::insert(PRIMARY_ACCOUNT, sub_pools);
-
 				// Update the equivalent of the unbonding chunks for the `StakingMock`
 				UNBONDING_BALANCE_MAP
 					.with(|m| *m.borrow_mut().get_mut(&PRIMARY_ACCOUNT).unwrap() -= 5);
+				Balances::make_free_balance_be(&PRIMARY_ACCOUNT, 595);
 
 				// Advance the current_era to ensure all `with_era` pools will be merged into
 				// `no_era` pool
@@ -1600,7 +1624,7 @@ mod withdraw_unbonded_other {
 			.build_and_execute(|| {
 				// Given
 				StakingMock::set_bonded_balance(PRIMARY_ACCOUNT, 100); // slash bonded balance
-				Balances::make_free_balance_be(&PRIMARY_ACCOUNT, 0);
+				Balances::make_free_balance_be(&PRIMARY_ACCOUNT, 100);
 
 				assert_ok!(Pools::unbond_other(Origin::signed(40), 40));
 				assert_ok!(Pools::unbond_other(Origin::signed(550), 550));
@@ -1719,6 +1743,7 @@ mod withdraw_unbonded_other {
 						root: 900,
 						nominator: 901,
 						state_toggler: 902,
+						delegator_counter: 3,
 					}
 				);
 				CurrentEra::set(StakingMock::bonding_duration());
@@ -1770,9 +1795,11 @@ mod withdraw_unbonded_other {
 					root: 900,
 					nominator: 901,
 					state_toggler: 902,
+					delegator_counter: 2,
 				}
 			);
 			CurrentEra::set(StakingMock::bonding_duration());
+			assert_eq!(Balances::free_balance(100), 100);
 
 			// Cannot permissionlessly withdraw
 			assert_noop!(
@@ -1967,7 +1994,8 @@ mod create {
 					account: stash.clone(),
 					root: 123,
 					nominator: 456,
-					state_toggler: 789
+					state_toggler: 789,
+					delegator_counter: 1,
 				}
 			);
 			assert_eq!(StakingMock::bonded_balance(&stash).unwrap(), StakingMock::minimum_bond());
@@ -2018,6 +2046,7 @@ mod create {
 				root: 900,
 				nominator: 901,
 				state_toggler: 902,
+				delegator_counter: 1,
 			}
 			.put();
 			assert_eq!(MaxPools::<Runtime>::get(), Some(2));

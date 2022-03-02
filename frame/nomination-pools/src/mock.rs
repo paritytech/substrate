@@ -47,6 +47,17 @@ impl sp_staking::StakingInterface for StakingMock {
 		BondedBalanceMap::get().get(who).map(|v| *v)
 	}
 
+	fn locked_balance(who: &Self::AccountId) -> Option<Self::Balance> {
+		match (
+			UnbondingBalanceMap::get().get(who).map(|v| *v),
+			BondedBalanceMap::get().get(who).map(|v| *v),
+		) {
+			(None, None) => None,
+			(Some(v), None) | (None, Some(v)) => Some(v),
+			(Some(a), Some(b)) => Some(a + b),
+		}
+	}
+
 	fn bond_extra(who: Self::AccountId, extra: Self::Balance) -> DispatchResult {
 		BONDED_BALANCE_MAP.with(|m| *m.borrow_mut().get_mut(&who).unwrap() += extra);
 		Ok(())
@@ -60,10 +71,9 @@ impl sp_staking::StakingInterface for StakingMock {
 	}
 
 	fn withdraw_unbonded(who: Self::AccountId, _: u32) -> Result<u64, DispatchError> {
-		let maybe_new_free = UNBONDING_BALANCE_MAP.with(|m| m.borrow_mut().remove(&who));
-		if let Some(new_free) = maybe_new_free {
-			assert_ok!(Balances::mutate_account(&who, |a| a.free += new_free));
-		}
+		// Simulates removing unlocking chunks and only having the bonded balance locked
+		let _maybe_new_free = UNBONDING_BALANCE_MAP.with(|m| m.borrow_mut().remove(&who));
+
 		Ok(100)
 	}
 

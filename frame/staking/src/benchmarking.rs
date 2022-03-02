@@ -808,7 +808,6 @@ benchmarks! {
 			&mut BalanceOf::<T>::zero(),
 			&mut NegativeImbalanceOf::<T>::zero(),
 			0,
-			0
 		);
 	} verify {
 		let balance_after = T::Currency::free_balance(&stash);

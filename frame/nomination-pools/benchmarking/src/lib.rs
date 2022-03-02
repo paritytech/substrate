@@ -484,6 +484,7 @@ frame_benchmarking::benchmarks! {
 				nominator: depositor.clone(),
 				state_toggler: depositor.clone(),
 				state: PoolState::Open,
+				delegator_counter: 1
 			}
 		);
 		assert_eq!(
@@ -524,6 +525,7 @@ frame_benchmarking::benchmarks! {
 				nominator: depositor.clone(),
 				state_toggler: depositor.clone(),
 				state: PoolState::Open,
+				delegator_counter: 1,
 			}
 		);
 		assert_eq!(
@@ -532,6 +534,8 @@ frame_benchmarking::benchmarks! {
 		);
 	}
 }
+
+// TODO: consider benchmarking slashing logic with pools
 
 frame_benchmarking::impl_benchmark_test_suite!(
 	Pallet,

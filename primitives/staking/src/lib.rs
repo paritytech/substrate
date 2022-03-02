@@ -78,6 +78,10 @@ pub trait StakingInterface {
 	/// Balance `controller` has bonded for nominating.
 	fn bonded_balance(controller: &Self::AccountId) -> Option<Self::Balance>;
 
+	/// Balance `controller` has locked by the staking system. This is the bonded funds and the
+	/// unlocking funds and thus is a superset of bonded funds.
+	fn locked_balance(controller: &Self::AccountId) -> Option<Self::Balance>;
+
 	fn bond_extra(controller: Self::AccountId, extra: Self::Balance) -> DispatchResult;
 
 	fn unbond(controller: Self::AccountId, value: Self::Balance) -> DispatchResult;

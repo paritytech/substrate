@@ -298,11 +298,12 @@
 // TODO
 // - Counter for delegators per pool and allow limiting of delegators per pool
 // - tests for the above
+// - counter for delegators should never be below 1 (below 1 means the pool should be destroyed)
 // - write detailed docs for StakingInterface
 // - various back ports
 // - test delegator counter
-// - slashing - test for correct input to hook
-// - transparent account ids
+// - slashing - test for correct input to hook (these tests need to be in staking side)
+// - transparent account ids - prefix with pls/rewd and pls/stsh, also use PalletId for entropy
 
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
@@ -311,13 +312,17 @@ use frame_support::{
 	ensure,
 	pallet_prelude::*,
 	storage::bounded_btree_map::BoundedBTreeMap,
-	traits::{Currency, DefensiveOption, DefensiveResult, ExistenceRequirement, Get},
+	traits::{
+		Currency, DefensiveOption, DefensiveResult, DefensiveSaturating, ExistenceRequirement, Get,
+	},
 	DefaultNoBound, RuntimeDebugNoBound,
 };
 use scale_info::TypeInfo;
 use sp_core::U256;
 use sp_io::hashing::blake2_256;
-use sp_runtime::traits::{Bounded, Convert, Saturating, StaticLookup, TrailingZeroInput, Zero};
+use sp_runtime::traits::{
+	Bounded, Convert, One, Saturating, StaticLookup, TrailingZeroInput, Zero,
+};
 use sp_staking::{EraIndex, OnStakerSlash, StakingInterface};
 use sp_std::{collections::btree_map::BTreeMap, ops::Div, vec::Vec};
 
@@ -551,7 +556,6 @@ impl<T: Config> BondedPool<T> {
 	}
 
 	fn can_kick(&self, who: &T::AccountId) -> bool {
-		let (root, toggler, state) = (self.root, self.state_toggler, self.state);
 		*who == self.root || *who == self.state_toggler && self.state == PoolState::Blocked
 	}
 
@@ -638,26 +642,27 @@ impl<T: Config> BondedPool<T> {
 
 	/// Increment the delegator counter. Ensures that the pool and system delegator limits are
 	/// respected.
-	fn inc_delegators(&self) -> Result<(), DispatchError> {
+	fn inc_delegators(&mut self) -> Result<(), DispatchError> {
 		if let Some(max_per_pool) = MaxDelegatorsPerPool::<T>::get() {
 			ensure!(self.delegator_counter < max_per_pool, Error::<T>::MaxDelegators);
 		}
 		if let Some(max) = MaxDelegators::<T>::get() {
 			ensure!(Delegators::<T>::count() < max, Error::<T>::MaxDelegators);
 		}
-		self.delegator_counter += 1;
+		self.delegator_counter = self.delegator_counter.defensive_saturating_add(1);
 		Ok(())
 	}
 
 	/// Decrement the delegator counter.
-	fn dec_delegators(self) -> Self {
-		self.delegator_counter -= 1;
+	fn dec_delegators(mut self) -> Self {
+		self.delegator_counter = self.delegator_counter.defensive_saturating_sub(1);
 		self
 	}
 
-	fn non_bonded_balance(&self) -> BalanceOf<T> {
+	/// The pools balance that is not locked. This assumes the staking system is the only
+	fn non_locked_balance(&self) -> BalanceOf<T> {
 		T::Currency::free_balance(&self.account).saturating_sub(
-			T::StakingInterface::bonded_balance(&self.account).unwrap_or(Zero::zero()),
+			T::StakingInterface::locked_balance(&self.account).unwrap_or(Zero::zero()),
 		)
 	}
 }
@@ -1185,35 +1190,36 @@ pub mod pallet {
 			let should_remove_pool = bonded_pool
 				.ok_to_withdraw_unbonded_other_with(&caller, &target, &delegator, &sub_pools)?;
 
-			let balance_to_unbond =
-				if let Some(pool) = sub_pools.with_era.get_mut(&unbonding_era) {
-					let balance_to_unbond = pool.balance_to_unbond(delegator.points);
-					pool.points = pool.points.saturating_sub(delegator.points);
-					pool.balance = pool.balance.saturating_sub(balance_to_unbond);
-					if pool.points.is_zero() {
-						// Clean up pool that is no longer used
-						sub_pools.with_era.remove(&unbonding_era);
-					}
-
-					balance_to_unbond
-				} else {
-					// A pool does not belong to this era, so it must have been merged to the
-					// era-less pool.
-					let balance_to_unbond = sub_pools.no_era.balance_to_unbond(delegator.points);
-					sub_pools.no_era.points =
-						sub_pools.no_era.points.saturating_sub(delegator.points);
-					sub_pools.no_era.balance =
-						sub_pools.no_era.balance.saturating_sub(balance_to_unbond);
-
-					balance_to_unbond
-				}
-				// We can get here in the rare case a pool had such an extreme slash that it erased
-				// all the bonded balance and balance in unlocking chunks
-				.min(bonded_pool.not_bonded_balance());
-
+			// Before calculate the `balance_to_unbond`, with call withdraw unbonded to ensure the
+			// `non_locked_balance` is correct.
 			T::StakingInterface::withdraw_unbonded(delegator.pool.clone(), num_slashing_spans)?;
 
-			if balance_to_unbond <= T::Currency::minimum_balance() {
+			let balance_to_unbond = if let Some(pool) = sub_pools.with_era.get_mut(&unbonding_era) {
+				let balance_to_unbond = pool.balance_to_unbond(delegator.points);
+				pool.points = pool.points.saturating_sub(delegator.points);
+				pool.balance = pool.balance.saturating_sub(balance_to_unbond);
+				if pool.points.is_zero() {
+					// Clean up pool that is no longer used
+					sub_pools.with_era.remove(&unbonding_era);
+				}
+
+				balance_to_unbond
+			} else {
+				// A pool does not belong to this era, so it must have been merged to the
+				// era-less pool.
+				let balance_to_unbond = sub_pools.no_era.balance_to_unbond(delegator.points);
+				sub_pools.no_era.points = sub_pools.no_era.points.saturating_sub(delegator.points);
+				sub_pools.no_era.balance =
+					sub_pools.no_era.balance.saturating_sub(balance_to_unbond);
+
+				balance_to_unbond
+			}
+			// TODO: make sure this is a test for this edge case
+			// We can get here in the rare case a pool had such an extreme slash that it erased
+			// all the bonded balance and balance in unlocking chunks
+			.min(bonded_pool.non_locked_balance());
+
+			if balance_to_unbond >= T::Currency::minimum_balance() {
 				T::Currency::transfer(
 					&delegator.pool,
 					&target,
@@ -1227,7 +1233,7 @@ pub mod pallet {
 					amount: balance_to_unbond,
 				});
 			} else {
-				// This should only happen if 1) a previous withdraw put the pools balance
+				//This should only happen if 1) a previous withdraw put the pools balance
 				// below ED and it was dusted or 2) the pool was slashed a huge amount that wiped
 				// all the unlocking chunks and bonded balance, thus causing inconsistencies with
 				// unbond pool's tracked balance and the actual balance (if this happens, the pool
@@ -1250,6 +1256,7 @@ pub mod pallet {
 				T::Currency::make_free_balance_be(&reward_pool.account, Zero::zero());
 				T::Currency::make_free_balance_be(&bonded_pool.account, Zero::zero());
 				bonded_pool.remove();
+				// TODO: destroy event
 				None
 			} else {
 				bonded_pool.dec_delegators().put();
@@ -1300,7 +1307,7 @@ pub mod pallet {
 			let mut bonded_pool = BondedPool::<T> {
 				account: pool_account.clone(),
 				points: Zero::zero(),
-				delegator_counter: Zero::zero(),
+				delegator_counter: One::one(),
 				depositor: who.clone(),
 				root,
 				nominator,
@@ -1338,6 +1345,8 @@ pub mod pallet {
 					account: reward_account,
 				},
 			);
+
+			// TODO: event
 
 			Ok(())
 		}

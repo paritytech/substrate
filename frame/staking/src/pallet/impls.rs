@@ -1336,6 +1336,10 @@ impl<T: Config> StakingInterface for Pallet<T> {
 		Self::ledger(controller).map(|l| l.active)
 	}
 
+	fn locked_balance(controller: &Self::AccountId) -> Option<Self::Balance> {
+		Self::ledger(controller).map(|l| l.total)
+	}
+
 	fn bond_extra(stash: Self::AccountId, extra: Self::Balance) -> DispatchResult {
 		Self::bond_extra(RawOrigin::Signed(stash).into(), extra)
 	}
