@@ -22,7 +22,7 @@ proc-macro-crate = "1.1.0"
 
 [dev-dependencies]
 parity-scale-codec = "3.0.0"
-scale-info = "2.0.0"
+scale-info = "2.0.1"
 sp-arithmetic = { path = "../../arithmetic", version = "5.0.0"}
 # used by generate_solution_type:
 sp-npos-elections = { path = "..", version = "4.0.0-dev" }
