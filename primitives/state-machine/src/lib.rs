@@ -134,7 +134,7 @@ pub use crate::{
 		StorageTransactionCache, StorageValue,
 	},
 	stats::{StateMachineStats, UsageInfo, UsageUnit},
-	trie_backend::TrieBackend,
+	trie_backend::{TrieBackend, TrieBackendBuilder},
 	trie_backend_essence::{Storage, TrieBackendStorage},
 };
 
@@ -2025,7 +2025,7 @@ mod tests {
 		}
 
 		let check_proof = |mdb, root, state_version| -> StorageProof {
-			let remote_backend = TrieBackend::new(mdb, root);
+			let remote_backend = TrieBackendBuilder::new(mdb, root).build();
 			let remote_root = remote_backend.storage_root(std::iter::empty(), state_version).0;
 			let remote_proof = prove_read(remote_backend, &[b"foo222"]).unwrap();
 			// check proof locally
@@ -2152,7 +2152,7 @@ mod tests {
 		);
 		let mut remote_storage = remote_backend.backend_storage().clone();
 		remote_storage.consolidate(transaction);
-		let remote_backend = TrieBackend::new(remote_storage, remote_root);
+		let remote_backend = TrieBackendBuilder::new(remote_storage, remote_root).build();
 		let remote_proof = prove_child_read(remote_backend, &child_info1, &[b"key1"]).unwrap();
 		let size = remote_proof.encoded_size();
 		let remote_proof = test_compact(remote_proof, &remote_root);

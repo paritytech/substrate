@@ -18,7 +18,7 @@
 //! State machine in memory backend.
 
 use crate::{
-	backend::Backend, trie_backend::TrieBackend, StorageCollection, StorageKey, StorageValue,
+	backend::Backend, trie_backend::TrieBackend, StorageCollection, StorageKey, StorageValue, TrieBackendBuilder,
 };
 use codec::Codec;
 use hash_db::Hasher;
@@ -34,7 +34,7 @@ where
 {
 	let db = MemoryDB::default();
 	// V1 is same as V0 for an empty trie.
-	TrieBackend::new(db, empty_trie_root::<LayoutV1<H>>())
+	TrieBackendBuilder::new(db, empty_trie_root::<LayoutV1<H>>()).build()
 }
 
 impl<H: Hasher> TrieBackend<MemoryDB<H>, H>
@@ -74,14 +74,14 @@ where
 	pub fn update_backend(&self, root: H::Out, changes: MemoryDB<H>) -> Self {
 		let mut clone = self.backend_storage().clone();
 		clone.consolidate(changes);
-		Self::new(clone, root)
+		TrieBackendBuilder::new(clone, root).build()
 	}
 
 	/// Apply the given transaction to this backend and set the root to the given value.
 	pub fn apply_transaction(&mut self, root: H::Out, transaction: MemoryDB<H>) {
 		let mut storage = sp_std::mem::take(self).into_storage();
 		storage.consolidate(transaction);
-		*self = TrieBackend::new(storage, root);
+		*self = TrieBackendBuilder::new(storage, root).build();
 	}
 
 	/// Compare with another in-memory backend.
@@ -95,7 +95,7 @@ where
 	H::Out: Codec + Ord,
 {
 	fn clone(&self) -> Self {
-		TrieBackend::new(self.backend_storage().clone(), self.root().clone())
+		TrieBackendBuilder::new(self.backend_storage().clone(), self.root().clone()).build()
 	}
 }
 

@@ -180,7 +180,7 @@ impl core::Benchmark for TrieReadBenchmark {
 		let storage: Arc<dyn sp_state_machine::Storage<sp_core::Blake2Hasher>> =
 			Arc::new(Storage(db.open(self.database_type)));
 
-		let trie_backend = sp_state_machine::TrieBackend::new(storage, self.root);
+		let trie_backend = sp_state_machine::TrieBackendBuilder::new(storage, self.root).build();
 		for (warmup_key, warmup_value) in self.warmup_keys.iter() {
 			let value = trie_backend
 				.storage(&warmup_key[..])

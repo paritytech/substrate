@@ -19,7 +19,7 @@
 
 use crate::{
 	trie_backend::TrieBackend, trie_backend_essence::TrieBackendStorage, Backend, DBValue, Error,
-	ExecutionError,
+	ExecutionError, TrieBackendBuilder,
 };
 use codec::{Codec, Encode};
 use hash_db::{HashDB, Hasher, Prefix, EMPTY_PREFIX};
@@ -127,7 +127,7 @@ where
 		let essence = backend.essence();
 		let root = essence.root().clone();
 		let recorder = ProofRecorderBackend { backend: essence.backend_storage(), proof_recorder };
-		ProvingBackend(TrieBackend::new(recorder, root))
+		ProvingBackend(TrieBackendBuilder::new(recorder, root).build())
 	}
 
 	/// Extracting the gathered unordered proof.
@@ -300,7 +300,7 @@ where
 	let db = proof.into_memory_db();
 
 	if db.contains(&root, EMPTY_PREFIX) {
-		Ok(TrieBackend::new(db, root))
+		Ok(TrieBackendBuilder::new(db, root).build())
 	} else {
 		Err(Box::new(ExecutionError::InvalidProof))
 	}

@@ -118,57 +118,6 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackend<S, H>
 where
 	H::Out: Codec,
 {
-	/// Create new trie-based backend.
-	pub fn new(storage: S, root: H::Out) -> Self {
-		TrieBackend { essence: TrieBackendEssence::new(storage, root) }
-	}
-
-	/// Create new trie-based backend.
-	#[cfg(feature = "std")]
-	pub fn new_with_recorder<'a>(
-		backend: &'a Self,
-		recorder: Recorder<H>,
-	) -> TrieBackend<&'a S, H> {
-		TrieBackend {
-			essence: TrieBackendEssence::new_with_cache_and_recorder(
-				backend.backend_storage(),
-				*backend.root(),
-				None,
-				Some(recorder.clone()),
-			),
-		}
-	}
-
-	/// Create new trie-based backend.
-	#[cfg(feature = "std")]
-	pub fn new_with_cache(
-		storage: S,
-		root: H::Out,
-		cache: sp_trie::cache::LocalTrieNodeCache<H>,
-	) -> Self {
-		TrieBackend {
-			essence: TrieBackendEssence::new_with_cache_and_recorder(
-				storage,
-				root,
-				Some(cache),
-				None,
-			),
-		}
-	}
-
-	/// Create new trie-based backend.
-	#[cfg(feature = "std")]
-	pub fn wrap_with_recorder<'a>(other: &'a Self, recorder: Recorder<H>) -> TrieBackend<&'a S, H> {
-		TrieBackend {
-			essence: TrieBackendEssence::new_with_cache_and_recorder(
-				other.backend_storage(),
-				*other.root(),
-				None,
-				Some(recorder.clone()),
-			),
-		}
-	}
-
 	/// Get backend essence reference.
 	pub fn essence(&self) -> &TrieBackendEssence<S, H> {
 		&self.essence
@@ -337,7 +286,7 @@ where
 	let db = proof.into_memory_db();
 
 	if db.contains(&root, EMPTY_PREFIX) {
-		Ok(TrieBackend::new(db, root))
+		Ok(TrieBackendBuilder::new(db, root).build())
 	} else {
 		Err(Box::new(ExecutionError::InvalidProof))
 	}
@@ -534,10 +483,11 @@ pub mod tests {
 
 	#[test]
 	fn pairs_are_empty_on_empty_storage() {
-		assert!(TrieBackend::<PrefixedMemoryDB<BlakeTwo256>, BlakeTwo256>::new(
+		assert!(TrieBackendBuilder::<PrefixedMemoryDB<BlakeTwo256>, BlakeTwo256>::new(
 			PrefixedMemoryDB::default(),
 			Default::default(),
 		)
+		.build()
 		.pairs()
 		.is_empty());
 	}
@@ -605,7 +555,9 @@ pub mod tests {
 		recorder: Option<Recorder>,
 	) {
 		let trie_backend = test_trie(state_version, cache, recorder);
-		assert!(TrieBackend::wrap_with_recorder(&trie_backend, Recorder::default())
+		assert!(TrieBackendBuilder::wrap(&trie_backend)
+			.with_recorder(Recorder::default())
+			.build()
 			.extract_proof()
 			.unwrap()
 			.unwrap()
@@ -622,7 +574,9 @@ pub mod tests {
 		recorder: Option<Recorder>,
 	) {
 		let trie_backend = test_trie(state_version, cache, recorder);
-		let backend = TrieBackend::wrap_with_recorder(&trie_backend, Recorder::default());
+		let backend = TrieBackendBuilder::wrap(&trie_backend)
+			.with_recorder(Recorder::default())
+			.build();
 		assert_eq!(backend.storage(b"key").unwrap(), Some(b"value".to_vec()));
 		assert!(!backend.extract_proof().unwrap().unwrap().is_empty());
 	}
@@ -643,7 +597,9 @@ pub mod tests {
 		recorder: Option<Recorder>,
 	) {
 		let trie_backend = test_trie(state_version, cache, recorder);
-		let proving_backend = TrieBackend::wrap_with_recorder(&trie_backend, Recorder::default());
+		let proving_backend = TrieBackendBuilder::wrap(&trie_backend)
+			.with_recorder(Recorder::default())
+			.build();
 		assert_eq!(trie_backend.storage(b"key").unwrap(), proving_backend.storage(b"key").unwrap());
 		assert_eq!(trie_backend.pairs(), proving_backend.pairs());
 
