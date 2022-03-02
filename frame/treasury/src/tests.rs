@@ -189,7 +189,7 @@ fn accepted_spend_proposal_ignored_outside_spend_period() {
 		assert_ok!(Treasury::propose_spend(Origin::signed(0), 100, 3));
 		assert_ok!(Treasury::approve_proposal(Origin::root(), 0));
 
-		<Treasury as OnInitialize<u64>>::on_initialize(1);
+		<Treasury as OnInitialize<u64, Weight>>::on_initialize(1);
 		assert_eq!(Balances::free_balance(3), 0);
 		assert_eq!(Treasury::pot(), 100);
 	});
@@ -202,7 +202,7 @@ fn unused_pot_should_diminish() {
 		Balances::make_free_balance_be(&Treasury::account_id(), 101);
 		assert_eq!(Balances::total_issuance(), init_total_issuance + 100);
 
-		<Treasury as OnInitialize<u64>>::on_initialize(2);
+		<Treasury as OnInitialize<u64, Weight>>::on_initialize(2);
 		assert_eq!(Treasury::pot(), 50);
 		assert_eq!(Balances::total_issuance(), init_total_issuance + 50);
 	});
@@ -216,7 +216,7 @@ fn rejected_spend_proposal_ignored_on_spend_period() {
 		assert_ok!(Treasury::propose_spend(Origin::signed(0), 100, 3));
 		assert_ok!(Treasury::reject_proposal(Origin::root(), 0));
 
-		<Treasury as OnInitialize<u64>>::on_initialize(2);
+		<Treasury as OnInitialize<u64, Weight>>::on_initialize(2);
 		assert_eq!(Balances::free_balance(3), 0);
 		assert_eq!(Treasury::pot(), 50);
 	});
@@ -267,7 +267,7 @@ fn accepted_spend_proposal_enacted_on_spend_period() {
 		assert_ok!(Treasury::propose_spend(Origin::signed(0), 100, 3));
 		assert_ok!(Treasury::approve_proposal(Origin::root(), 0));
 
-		<Treasury as OnInitialize<u64>>::on_initialize(2);
+		<Treasury as OnInitialize<u64, Weight>>::on_initialize(2);
 		assert_eq!(Balances::free_balance(3), 100);
 		assert_eq!(Treasury::pot(), 0);
 	});
@@ -282,11 +282,11 @@ fn pot_underflow_should_not_diminish() {
 		assert_ok!(Treasury::propose_spend(Origin::signed(0), 150, 3));
 		assert_ok!(Treasury::approve_proposal(Origin::root(), 0));
 
-		<Treasury as OnInitialize<u64>>::on_initialize(2);
+		<Treasury as OnInitialize<u64, Weight>>::on_initialize(2);
 		assert_eq!(Treasury::pot(), 100); // Pot hasn't changed
 
 		let _ = Balances::deposit_into_existing(&Treasury::account_id(), 100).unwrap();
-		<Treasury as OnInitialize<u64>>::on_initialize(4);
+		<Treasury as OnInitialize<u64, Weight>>::on_initialize(4);
 		assert_eq!(Balances::free_balance(3), 150); // Fund has been spent
 		assert_eq!(Treasury::pot(), 25); // Pot has finally changed
 	});
@@ -304,13 +304,13 @@ fn treasury_account_doesnt_get_deleted() {
 		assert_ok!(Treasury::propose_spend(Origin::signed(0), treasury_balance, 3));
 		assert_ok!(Treasury::approve_proposal(Origin::root(), 0));
 
-		<Treasury as OnInitialize<u64>>::on_initialize(2);
+		<Treasury as OnInitialize<u64, Weight>>::on_initialize(2);
 		assert_eq!(Treasury::pot(), 100); // Pot hasn't changed
 
 		assert_ok!(Treasury::propose_spend(Origin::signed(0), Treasury::pot(), 3));
 		assert_ok!(Treasury::approve_proposal(Origin::root(), 1));
 
-		<Treasury as OnInitialize<u64>>::on_initialize(4);
+		<Treasury as OnInitialize<u64, Weight>>::on_initialize(4);
 		assert_eq!(Treasury::pot(), 0); // Pot is emptied
 		assert_eq!(Balances::free_balance(Treasury::account_id()), 1); // but the account is still there
 	});
@@ -335,7 +335,7 @@ fn inexistent_account_works() {
 		assert_ok!(Treasury::approve_proposal(Origin::root(), 0));
 		assert_ok!(Treasury::propose_spend(Origin::signed(0), 1, 3));
 		assert_ok!(Treasury::approve_proposal(Origin::root(), 1));
-		<Treasury as OnInitialize<u64>>::on_initialize(2);
+		<Treasury as OnInitialize<u64, Weight>>::on_initialize(2);
 		assert_eq!(Treasury::pot(), 0); // Pot hasn't changed
 		assert_eq!(Balances::free_balance(3), 0); // Balance of `3` hasn't changed
 
@@ -343,7 +343,7 @@ fn inexistent_account_works() {
 		assert_eq!(Treasury::pot(), 99); // Pot now contains funds
 		assert_eq!(Balances::free_balance(Treasury::account_id()), 100); // Account does exist
 
-		<Treasury as OnInitialize<u64>>::on_initialize(4);
+		<Treasury as OnInitialize<u64, Weight>>::on_initialize(4);
 
 		assert_eq!(Treasury::pot(), 0); // Pot has changed
 		assert_eq!(Balances::free_balance(3), 99); // Balance of `3` has changed

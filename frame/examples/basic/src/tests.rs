@@ -131,7 +131,7 @@ fn it_works_for_optional_value() {
 		assert_eq!(Example::dummy(), Some(val1 + val2));
 
 		// Check that accumulate works when we Dummy has None in it.
-		<Example as OnInitialize<u64>>::on_initialize(2);
+		<Example as OnInitialize<u64, Weight>>::on_initialize(2);
 		assert_ok!(Example::accumulate_dummy(Origin::signed(1), val1));
 		assert_eq!(Example::dummy(), Some(val1 + val2 + val1));
 	});

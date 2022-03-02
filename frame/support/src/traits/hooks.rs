@@ -18,14 +18,14 @@
 //! Traits for hooking tasks to events in a blockchain's lifecycle.
 
 use impl_trait_for_tuples::impl_for_tuples;
-use sp_arithmetic::traits::Saturating;
+use sp_arithmetic::traits::{Saturating, Zero};
 use sp_runtime::traits::AtLeast32BitUnsigned;
 
 /// The block initialization trait.
 ///
 /// Implementing this lets you express what should happen for your pallet when the block is
 /// beginning (right before the first extrinsic is executed).
-pub trait OnInitialize<BlockNumber> {
+pub trait OnInitialize<BlockNumber, Weight: Zero> {
 	/// The block is being initialized. Implement to have something happen.
 	///
 	/// Return the non-negotiable weight consumed in the block.
@@ -33,15 +33,19 @@ pub trait OnInitialize<BlockNumber> {
 	/// NOTE: This function is called BEFORE ANY extrinsic in a block is applied,
 	/// including inherent extrinsics. Hence for instance, if you runtime includes
 	/// `pallet_timestamp`, the `timestamp` is not yet up to date at this point.
-	fn on_initialize(_n: BlockNumber) -> crate::weights::Weight {
-		0
+	fn on_initialize(_n: BlockNumber) -> Weight {
+		Zero::zero()
 	}
 }
 
 #[impl_for_tuples(30)]
-impl<BlockNumber: Clone> OnInitialize<BlockNumber> for Tuple {
-	fn on_initialize(n: BlockNumber) -> crate::weights::Weight {
-		let mut weight = 0;
+impl<BlockNumber, Weight> OnInitialize<BlockNumber, Weight> for Tuple
+where
+	BlockNumber: Clone,
+	Weight: Zero + Saturating,
+{
+	fn on_initialize(n: BlockNumber) -> Weight {
+		let mut weight: Weight = Zero::zero();
 		for_tuples!( #( weight = weight.saturating_add(Tuple::on_initialize(n.clone())); )* );
 		weight
 	}
@@ -330,17 +334,18 @@ pub trait OnTimestampSet<Moment> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate::weights::Weight;
 
 	#[test]
 	fn on_initialize_and_on_runtime_upgrade_weight_merge_works() {
 		struct Test;
-		impl OnInitialize<u8> for Test {
-			fn on_initialize(_n: u8) -> crate::weights::Weight {
+		impl OnInitialize<u8, Weight> for Test {
+			fn on_initialize(_n: u8) -> Weight {
 				10
 			}
 		}
 		impl OnRuntimeUpgrade for Test {
-			fn on_runtime_upgrade() -> crate::weights::Weight {
+			fn on_runtime_upgrade() -> Weight {
 				20
 			}
 		}

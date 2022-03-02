@@ -123,7 +123,7 @@ use frame_support::{
 		EnsureInherentsAreFirst, ExecuteBlock, OffchainWorker, OnFinalize, OnIdle, OnInitialize,
 		OnRuntimeUpgrade,
 	},
-	weights::{DispatchClass, DispatchInfo, GetDispatchInfo},
+	weights::{DispatchClass, DispatchInfo, GetDispatchInfo, Weight},
 };
 use sp_runtime::{
 	generic::Digest,
@@ -175,7 +175,7 @@ impl<
 		Context: Default,
 		UnsignedValidator,
 		AllPalletsWithSystem: OnRuntimeUpgrade
-			+ OnInitialize<System::BlockNumber>
+			+ OnInitialize<System::BlockNumber, Weight>
 			+ OnIdle<System::BlockNumber>
 			+ OnFinalize<System::BlockNumber>
 			+ OffchainWorker<System::BlockNumber>,
@@ -208,7 +208,7 @@ impl<
 		Context: Default,
 		UnsignedValidator,
 		AllPalletsWithSystem: OnRuntimeUpgrade
-			+ OnInitialize<System::BlockNumber>
+			+ OnInitialize<System::BlockNumber, Weight>
 			+ OnIdle<System::BlockNumber>
 			+ OnFinalize<System::BlockNumber>
 			+ OffchainWorker<System::BlockNumber>,
@@ -306,6 +306,7 @@ where
 		<frame_system::Pallet<System>>::initialize(block_number, parent_hash, digest);
 		weight = weight.saturating_add(<AllPalletsWithSystem as OnInitialize<
 			System::BlockNumber,
+			Weight,
 		>>::on_initialize(*block_number));
 		weight = weight.saturating_add(
 			<System::BlockWeights as frame_support::traits::Get<_>>::get().base_block,
@@ -1388,7 +1389,7 @@ mod tests {
 			let runtime_upgrade_weight =
 				<AllPalletsWithSystem as OnRuntimeUpgrade>::on_runtime_upgrade();
 			let on_initialize_weight =
-				<AllPalletsWithSystem as OnInitialize<u64>>::on_initialize(block_number);
+				<AllPalletsWithSystem as OnInitialize<u64, Weight>>::on_initialize(block_number);
 			let base_block_weight =
 				<Runtime as frame_system::Config>::BlockWeights::get().base_block;
 

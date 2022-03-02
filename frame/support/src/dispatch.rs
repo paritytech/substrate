@@ -1504,7 +1504,7 @@ macro_rules! decl_module {
 		fn on_initialize() -> $return:ty { $( $impl:tt )* }
 	) => {
 		impl<$trait_instance: $system::Config + $trait_name$(<I>, $instance: $instantiable)?>
-			$crate::traits::OnInitialize<<$trait_instance as $system::Config>::BlockNumber>
+			$crate::traits::OnInitialize<<$trait_instance as $system::Config>::BlockNumber, $crate::weights::Weight>
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
 			fn on_initialize(_block_number_not_used: <$trait_instance as $system::Config>::BlockNumber) -> $return {
@@ -1521,7 +1521,7 @@ macro_rules! decl_module {
 		fn on_initialize($param:ident : $param_ty:ty) -> $return:ty { $( $impl:tt )* }
 	) => {
 		impl<$trait_instance: $system::Config + $trait_name$(<I>, $instance: $instantiable)?>
-			$crate::traits::OnInitialize<<$trait_instance as $system::Config>::BlockNumber>
+			$crate::traits::OnInitialize<<$trait_instance as $system::Config>::BlockNumber, $crate::weights::Weight>
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
 			fn on_initialize($param: $param_ty) -> $return {
@@ -1537,7 +1537,7 @@ macro_rules! decl_module {
 		{ $( $other_where_bounds:tt )* }
 	) => {
 		impl<$trait_instance: $system::Config + $trait_name$(<I>, $instance: $instantiable)?>
-			$crate::traits::OnInitialize<<$trait_instance as $system::Config>::BlockNumber>
+			$crate::traits::OnInitialize<<$trait_instance as $system::Config>::BlockNumber, $crate::weights::Weight>
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{}
 	};
@@ -2789,12 +2789,12 @@ mod tests {
 	#[test]
 	#[should_panic(expected = "on_initialize")]
 	fn on_initialize_should_work_1() {
-		<Module<TraitImpl> as OnInitialize<u32>>::on_initialize(42);
+		<Module<TraitImpl> as OnInitialize<u32, Weight>>::on_initialize(42);
 	}
 
 	#[test]
 	fn on_initialize_should_work_2() {
-		assert_eq!(<Module<TraitImpl> as OnInitialize<u32>>::on_initialize(10), 7);
+		assert_eq!(<Module<TraitImpl> as OnInitialize<u32, Weight>>::on_initialize(10), 7);
 	}
 
 	#[test]
