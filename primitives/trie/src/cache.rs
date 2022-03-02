@@ -167,8 +167,8 @@ impl<'a, H: Hasher> trie_db::TrieCache<NodeCodec<H>> for TrieNodeCache<'a, H> {
 	fn get_or_insert_node(
 		&mut self,
 		hash: H::Out,
-		fetch_node: &mut dyn FnMut() -> trie_db::Result<NodeOwned<H::Out>, H::Out, Error>,
-	) -> trie_db::Result<&NodeOwned<H::Out>, H::Out, Error> {
+		fetch_node: &mut dyn FnMut() -> trie_db::Result<NodeOwned<H::Out>, H::Out, Error<H::Out>>,
+	) -> trie_db::Result<&NodeOwned<H::Out>, H::Out, Error<H::Out>> {
 		if let Some(res) = self.shared_cache.get(&hash) {
 			return Ok(res)
 		}

@@ -15,12 +15,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{cache::TrieNodeCache, NodeCodec, StorageProof, TrieDBBuilder};
+use crate::{cache::TrieNodeCache, Error, NodeCodec, StorageProof, TrieDBBuilder};
 use codec::Encode;
 use hash_db::{HashDBRef, Hasher};
 use parking_lot::{Mutex, MutexGuard};
 use std::{collections::HashMap, mem, sync::Arc};
-use trie_db::{CError, DBValue, TrieAccess, TrieLayout, TrieRecorder};
+use trie_db::{DBValue, TrieAccess, TrieLayout, TrieRecorder};
 
 pub struct Recorder<H: Hasher> {
 	inner: Arc<Mutex<RecorderInner<H>>>,
@@ -48,7 +48,7 @@ impl<H: Hasher> Recorder<H> {
 		root: &H::Out,
 		hash_db: &dyn HashDBRef<H, DBValue>,
 		cache: Option<&mut TrieNodeCache<H>>,
-	) -> trie_db::Result<StorageProof, H::Out, CError<L>> {
+	) -> Result<StorageProof, crate::Error<H::Out>> {
 		let mut recorder = mem::take(&mut *self.inner.lock());
 		let accessed_keys = mem::take(&mut recorder.accessed_keys);
 
@@ -59,10 +59,15 @@ impl<H: Hasher> Recorder<H> {
 
 		// For all keys we don't have recorded the trie nodes, we need to traverse
 		// the trie to record all required nodes.
-		accessed_keys
-			.iter()
-			.filter_map(|(k, v)| (!v.trie_nodes_recorded).then(|| k))
-			.try_for_each(|k| trie.traverse_to(&k))?;
+		accessed_keys.into_iter().filter(|(_, v)| !v.trie_nodes_recorded).try_for_each(
+			|(k, v)| {
+				if trie.traverse_to(&k)? != v.exists {
+					Err(Error::InvalidRecording(k, v.exists))
+				} else {
+					Ok(())
+				}
+			},
+		)?;
 
 		Ok(StorageProof::new(recorder.accessed_nodes.drain().map(|(_, v)| v).collect()))
 	}
@@ -78,8 +83,12 @@ impl<H: Hasher> Recorder<H> {
 	}
 }
 
+/// Combines information about an accessed key.
 struct AccessedKey {
+	/// Did we already recorded all the trie nodes for accessing this key?
 	trie_nodes_recorded: bool,
+	/// Exists the value for the key in the trie?
+	exists: bool,
 }
 
 struct RecorderInner<H: Hasher> {
@@ -118,9 +127,10 @@ impl<H: Hasher> trie_db::TrieRecorder<H::Out> for RecorderInner<H> {
 						// some of these nodes. So, we only take into account the encoded
 						// size of the value + length of a hash in the trie
 						// (ignoring that the value may is inlined).
-						self.encoded_size_estimation += value.encoded_size() + H::LENGTH;
+						self.encoded_size_estimation +=
+							value.as_ref().map_or(0, |v| v.encoded_size()) + H::LENGTH;
 
-						AccessedKey { trie_nodes_recorded: false }
+						AccessedKey { trie_nodes_recorded: false, exists: value.is_some() }
 					});
 			},
 			TrieAccess::NodeOwned { hash, node_owned } => {
@@ -156,7 +166,7 @@ impl<H: Hasher> trie_db::TrieRecorder<H::Out> for RecorderInner<H> {
 					// us that we already have recorded all the trie nodes for this.
 					// This prevents that we need to traverse the trie again when we
 					// are building the proof for this key.
-					.or_insert_with(|| AccessedKey { trie_nodes_recorded: true });
+					.or_insert_with(|| AccessedKey { trie_nodes_recorded: true, exists: true });
 			},
 		}
 	}

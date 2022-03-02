@@ -85,7 +85,7 @@ where
 	H: Hasher,
 {
 	const ESCAPE_HEADER: Option<u8> = Some(trie_constants::ESCAPE_COMPACT_HEADER);
-	type Error = Error;
+	type Error = Error<H::Out>;
 	type HashOut = H::Out;
 
 	fn hashed_null_node() -> <H as Hasher>::Out {
@@ -304,7 +304,7 @@ const BITMAP_LENGTH: usize = 2;
 pub(crate) struct Bitmap(u16);
 
 impl Bitmap {
-	pub fn decode(mut data: &[u8]) -> Result<Self, Error> {
+	pub fn decode(mut data: &[u8]) -> Result<Self, codec::Error> {
 		Ok(Bitmap(u16::decode(&mut data)?))
 	}
 

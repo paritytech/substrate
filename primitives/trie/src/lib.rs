@@ -208,7 +208,7 @@ pub mod trie_types {
 	/// Querying interface, as in `trie_db` but less generic.
 	pub type Lookup<'a, 'cache, H, Q> = trie_db::Lookup<'a, 'cache, LayoutV1<H>, Q>;
 	/// As in `trie_db`, but less generic, error type for the crate.
-	pub type TrieError<H> = trie_db::TrieError<H, super::Error>;
+	pub type TrieError<H> = trie_db::TrieError<H, super::Error<H>>;
 }
 
 /// Create a proof for a subset of keys in a trie.
@@ -956,12 +956,16 @@ mod tests {
 			&mut proof_db.clone(),
 			storage_root,
 			valid_delta,
+			None,
+			None,
 		)
 		.unwrap();
 		let second_storage_root = delta_trie_root::<LayoutV0, _, _, _, _, _>(
 			&mut proof_db.clone(),
 			storage_root,
 			invalid_delta,
+			None,
+			None,
 		)
 		.unwrap();
 

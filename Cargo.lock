@@ -4497,8 +4497,6 @@ dependencies = [
 [[package]]
 name = "memory-db"
 version = "0.29.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6566c70c1016f525ced45d7b7f97730a2bafb037c788211d0c186ef5b2189f0a"
 dependencies = [
  "hash-db",
  "hashbrown 0.12.0",
@@ -7173,7 +7171,7 @@ dependencies = [
  "log 0.4.14",
  "nix",
  "parking_lot 0.11.2",
- "smallvec 1.7.0",
+ "smallvec 1.8.0",
  "symbolic-demangle",
  "tempfile",
  "thiserror",
@@ -8231,6 +8229,7 @@ dependencies = [
  "parity-db",
  "parity-scale-codec",
  "parking_lot 0.12.0",
+ "pprof",
  "quickcheck",
  "rand 0.8.4",
  "sc-client-api",
@@ -8245,7 +8244,6 @@ dependencies = [
  "sp-trie",
  "substrate-test-runtime-client",
  "tempfile",
- "trie-db 0.22.6",
 ]
 
 [[package]]
@@ -10358,7 +10356,7 @@ dependencies = [
  "sp-trie",
  "thiserror",
  "tracing",
- "trie-db 0.23.0",
+ "trie-db",
  "trie-root",
 ]
 
@@ -10468,7 +10466,7 @@ dependencies = [
  "sp-std",
  "thiserror",
  "trie-bench",
- "trie-db 0.23.0",
+ "trie-db",
  "trie-root",
  "trie-standardmap 0.15.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -10761,7 +10759,7 @@ dependencies = [
  "sp-version",
  "substrate-test-runtime-client",
  "substrate-wasm-builder",
- "trie-db 0.23.0",
+ "trie-db",
 ]
 
 [[package]]
@@ -11338,7 +11336,7 @@ dependencies = [
  "chrono",
  "lazy_static",
  "matchers",
- "parking_lot 0.11.2",
+ "parking_lot 0.9.0",
  "regex",
  "serde",
  "serde_json",
@@ -11366,37 +11364,20 @@ checksum = "a7f741b240f1a48843f9b8e0444fb55fb2a4ff67293b50a9179dfd5ea67f8d41"
 [[package]]
 name = "trie-bench"
 version = "0.30.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "57ecec5d10427b35e9ae374b059dccc0801d02d832617c04c78afc7a8c5c4a34"
 dependencies = [
  "criterion",
  "hash-db",
- "keccak-hasher",
+ "keccak-hasher 0.15.3",
  "memory-db",
  "parity-scale-codec",
- "trie-db 0.23.0",
+ "trie-db",
  "trie-root",
  "trie-standardmap 0.15.2",
 ]
 
 [[package]]
 name = "trie-db"
-version = "0.22.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9eac131e334e81b6b3be07399482042838adcd7957aa0010231d0813e39e02fa"
-dependencies = [
- "hash-db",
- "hashbrown 0.11.2",
- "log 0.4.14",
- "rustc-hex",
- "smallvec 1.7.0",
-]
-
-[[package]]
-name = "trie-db"
 version = "0.23.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d32d034c0d3db64b43c31de38e945f15b40cd4ca6d2dcfc26d4798ce8de4ab83"
 dependencies = [
  "hash-db",
  "hashbrown 0.12.0",
@@ -11530,9 +11511,9 @@ version = "1.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4ee73e6e4924fe940354b8d4d98cad5231175d615cd855b758adc658c0aac6a0"
 dependencies = [
- "cfg-if 1.0.0",
+ "cfg-if 0.1.10",
  "digest 0.10.2",
- "rand 0.8.4",
+ "rand 0.6.5",
  "static_assertions",
 ]
 
