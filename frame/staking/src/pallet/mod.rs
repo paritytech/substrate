@@ -158,6 +158,7 @@ pub mod pallet {
 
 		/// The maximum number of `unlocking` chunks a [`StakingLedger`] can have. Effectively
 		/// determines how many unique eras a staker may be unbonding in.
+		#[pallet::constant]
 		type MaxUnlockingChunks: Get<u32>;
 
 		/// Some parameters of the benchmarking.
