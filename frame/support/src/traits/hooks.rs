@@ -153,7 +153,7 @@ pub trait OnRuntimeUpgradeHelpersExt {
 }
 
 #[cfg(feature = "try-runtime")]
-impl<U: OnRuntimeUpgrade> OnRuntimeUpgradeHelpersExt for U {}
+impl<U> OnRuntimeUpgradeHelpersExt for U {}
 
 /// The runtime upgrade trait.
 ///
