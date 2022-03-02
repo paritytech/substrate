@@ -220,9 +220,9 @@ impl Default for Pays {
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 #[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug, TypeInfo)]
 pub enum DispatchClass {
-	/// A normal dispatch.
+	/// Dispatches in this class represent normal user-triggered transactions. 
 	Normal,
-	/// An operational dispatch.
+	/// An operational dispatch provides network capabilities (E.g. for XCM). 
 	Operational,
 	/// A mandatory dispatch. These kinds of dispatch are always included regardless of their
 	/// weight, therefore it is critical that they are separately validated to ensure that a
