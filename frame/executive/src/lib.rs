@@ -224,7 +224,7 @@ where
 	UnsignedValidator: ValidateUnsigned<Call = CallOf<Block::Extrinsic, Context>>,
 {
 	/// Execute all `OnRuntimeUpgrade` of this runtime, and return the aggregate weight.
-	pub fn execute_on_runtime_upgrade() -> frame_support::weights::Weight {
+	pub fn execute_on_runtime_upgrade() -> Weight {
 		<(COnRuntimeUpgrade, AllPalletsWithSystem) as OnRuntimeUpgrade<Weight>>::on_runtime_upgrade()
 	}
 
@@ -232,7 +232,7 @@ where
 	///
 	/// Should only be used for testing.
 	#[cfg(feature = "try-runtime")]
-	pub fn execute_block_no_check(block: Block) -> frame_support::weights::Weight {
+	pub fn execute_block_no_check(block: Block) -> Weight {
 		Self::initialize_block(block.header());
 		Self::initial_checks(&block);
 
@@ -263,7 +263,7 @@ where
 	///
 	/// This should only be used for testing.
 	#[cfg(feature = "try-runtime")]
-	pub fn try_runtime_upgrade() -> Result<frame_support::weights::Weight, &'static str> {
+	pub fn try_runtime_upgrade() -> Result<Weight, &'static str> {
 		<(COnRuntimeUpgrade, AllPalletsWithSystem) as OnRuntimeUpgrade<Weight>>::pre_upgrade().unwrap();
 		let weight = Self::execute_on_runtime_upgrade();
 
