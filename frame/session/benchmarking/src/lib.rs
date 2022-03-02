@@ -29,6 +29,7 @@ use frame_benchmarking::benchmarks;
 use frame_support::{
 	codec::Decode,
 	traits::{Get, KeyOwnerProofSystem, OnInitialize},
+	weights::Weight,
 };
 use frame_system::RawOrigin;
 use pallet_session::{historical::Pallet as Historical, Pallet as Session, *};
@@ -45,7 +46,7 @@ pub trait Config:
 {
 }
 
-impl<T: Config> OnInitialize<T::BlockNumber> for Pallet<T> {
+impl<T: Config> OnInitialize<T::BlockNumber, Weight> for Pallet<T> {
 	fn on_initialize(n: T::BlockNumber) -> frame_support::weights::Weight {
 		pallet_session::Pallet::<T>::on_initialize(n)
 	}
