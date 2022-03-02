@@ -618,7 +618,7 @@ benchmarks! {
 	}
 
 	rebond {
-		let l in 1 .. MAX_UNLOCKING_CHUNKS as u32;
+		let l in 1 .. MaxUnlockingChunks::get() as u32;
 
 		// clean up any existing state.
 		clear_validators_and_nominators::<T>();
@@ -652,7 +652,7 @@ benchmarks! {
 		let mut staking_ledger = Ledger::<T>::get(controller.clone()).unwrap();
 
 		for _ in 0 .. l {
-			staking_ledger.unlocking.push(unlock_chunk.clone())
+			staking_ledger.unlocking.try_push(unlock_chunk.clone()).unwrap()
 		}
 		Ledger::<T>::insert(controller.clone(), staking_ledger.clone());
 		let original_bonded: BalanceOf<T> = staking_ledger.active;
@@ -702,7 +702,7 @@ benchmarks! {
 			stash: stash.clone(),
 			active: T::Currency::minimum_balance() - One::one(),
 			total: T::Currency::minimum_balance() - One::one(),
-			unlocking: vec![],
+			unlocking: Default::default(),
 			claimed_rewards: vec![],
 		};
 		Ledger::<T>::insert(&controller, l);
@@ -788,7 +788,7 @@ benchmarks! {
 
 	#[extra]
 	do_slash {
-		let l in 1 .. MAX_UNLOCKING_CHUNKS as u32;
+		let l in 1 .. MaxUnlockingChunks::get() as u32;
 		let (stash, controller) = create_stash_controller::<T>(0, 100, Default::default())?;
 		let mut staking_ledger = Ledger::<T>::get(controller.clone()).unwrap();
 		let unlock_chunk = UnlockChunk::<BalanceOf<T>> {
@@ -796,7 +796,7 @@ benchmarks! {
 			era: EraIndex::zero(),
 		};
 		for _ in 0 .. l {
-			staking_ledger.unlocking.push(unlock_chunk.clone())
+			staking_ledger.unlocking.try_push(unlock_chunk.clone()).unwrap();
 		}
 		Ledger::<T>::insert(controller, staking_ledger);
 		let slash_amount = T::Currency::minimum_balance() * 10u32.into();
