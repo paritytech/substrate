@@ -10372,7 +10372,7 @@ dependencies = [
 
 [[package]]
 name = "sp-version"
-version = "5.0.0"
+version = "5.0.1"
 dependencies = [
  "impl-serde",
  "parity-scale-codec",
@@ -10388,7 +10388,7 @@ dependencies = [
 
 [[package]]
 name = "sp-version-proc-macro"
-version = "4.0.0-dev"
+version = "5.0.0"
 dependencies = [
  "parity-scale-codec",
  "proc-macro2",
