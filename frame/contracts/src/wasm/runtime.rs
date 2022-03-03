@@ -145,7 +145,6 @@ pub enum RuntimeCosts {
 	/// Weight of calling `seal_is_contract`.
 	IsContract,
 	/// Weight of calling `seal_caller_is_origin`.
-	#[cfg(feature = "unstable-interface")]
 	CallerIsOrigin,
 	/// Weight of calling `seal_address`.
 	Address,
@@ -236,7 +235,6 @@ impl RuntimeCosts {
 			CopyToContract(len) => s.input_per_byte.saturating_mul(len.into()),
 			Caller => s.caller,
 			IsContract => s.is_contract,
-			#[cfg(feature = "unstable-interface")]
 			CallerIsOrigin => s.caller_is_origin,
 			Address => s.address,
 			GasLeft => s.gas_left,
@@ -1388,7 +1386,7 @@ define_env!(Env, <E: Ext>,
 	// and `false` indicates that the caller is another contract.
 	//
 	// Returned value is a u32-encoded boolean: (0 = false, 1 = true).
-	[__unstable__] seal_caller_is_origin(ctx) -> u32 => {
+	[seal0] seal_caller_is_origin(ctx) -> u32 => {
 		ctx.charge_gas(RuntimeCosts::CallerIsOrigin)?;
 		Ok(ctx.ext.caller_is_origin() as u32)
 	},
