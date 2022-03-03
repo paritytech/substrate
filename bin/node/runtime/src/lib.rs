@@ -39,7 +39,7 @@ use frame_support::{
 };
 use frame_system::{
 	limits::{BlockLength, BlockWeights},
-	EnsureRoot,
+	EnsureRoot, EnsureSigned,
 };
 pub use node_primitives::{AccountId, Signature};
 use node_primitives::{AccountIndex, Balance, BlockNumber, Hash, Index, Moment};
@@ -1385,7 +1385,7 @@ impl pallet_state_trie_migration::Config for Runtime {
 	// Preferably, if the chain's governance/maintenance team is planning on using a specific
 	// account for the migration, put it here to make sure only that account can trigger the signed
 	// migrations.
-	type SignedOriginFilter = ();
+	type SignedFilter = EnsureSigned<Self::AccountId>;
 	type WeightInfo = ();
 }
 

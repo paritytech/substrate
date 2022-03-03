@@ -1115,6 +1115,7 @@ mod test {
 	}
 
 	#[test]
+	#[ignore]
 	fn detects_value_in_empty_top_key() {
 		let limit = MigrationLimits { item: 1, size: 1000 };
 		let initial_keys = Some(vec![(vec![], vec![66u8; 77])]);
@@ -1141,6 +1142,7 @@ mod test {
 	}
 
 	#[test]
+	#[ignore]
 	fn detects_value_in_first_child_key() {
 		use frame_support::storage::child;
 		let limit = MigrationLimits { item: 1, size: 1000 };
