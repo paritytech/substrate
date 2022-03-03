@@ -26,6 +26,8 @@ use frame_support::RuntimeDebug;
 #[derive(Copy, Clone, RuntimeDebug, PartialEq, Encode, Decode, MaxEncodedLen, TypeInfo)]
 pub enum UserFeatures {
 	Administration,
+	Royalty,
+	Limited,
 }
 
 // Support for up to 64 system-enabled features on a token.
@@ -36,8 +38,24 @@ pub enum SystemFeatures {
 	NoDeposit,
 }
 
-#[derive(Encode, Decode, MaxEncodedLen, TypeInfo)]
+#[derive(Encode, Decode, PartialEq, Debug, Clone, Copy, MaxEncodedLen, TypeInfo)]
 pub struct TokenConfig {
 	pub system_features: SystemFeatures,
 	pub user_features: UserFeatures,
+}
+
+#[derive(Encode, Decode, PartialEq, Default, MaxEncodedLen, TypeInfo)]
+pub struct Collection<CollectionId, Account, Balance, Metadata> {
+	pub id: CollectionId,
+	pub owner: Account,
+	pub deposit: Balance,
+	pub metadata: Metadata,
+}
+
+#[derive(Encode, Decode, PartialEq, Default, MaxEncodedLen, TypeInfo)]
+pub struct Asset<AssetId, Account, Balance, Metadata> {
+	pub id: AssetId,
+	pub owner: Account,
+	pub deposit: Balance,
+	pub metadata: Metadata,
 }

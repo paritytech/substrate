@@ -20,19 +20,19 @@ use frame_support::pallet_prelude::*;
 use enumflags2::BitFlags;
 
 impl<T: Config> Pallet<T> {
-	pub fn do_set_admin(id: CollectionIdOf<T>, config: TokenConfig, maybe_caller: Option<T::AccountId>, new_admin: T::AccountId) -> DispatchResult {
+	pub fn do_transfer(id: CollectionIdOf<T>, config: TokenConfig, sender: T::AccountId, receiver: T::AccountId, amount: Option<BalanceOf<T>>) -> DispatchResult {
 		let user_features: BitFlags<UserFeatures> = config.user_features.into();
-		ensure!(user_features.contains(UserFeatures::Administration), Error::<T>::NotConfigured);
-		Admins::<T>::try_mutate(id, |maybe_admin| -> DispatchResult {
-			if let Some(caller) = maybe_caller {
-				if let Some(admin) = maybe_admin {
-					ensure!(admin == &caller, Error::<T>::NotAuthorized);
-				}
-			}
 
-			*maybe_admin = Some(new_admin);
-			Ok(())
-		})?;
+		if user_features.contains(UserFeatures::Royalty) {
+			// take a part of the transfer amount
+		}
+
+		if user_features.contains(UserFeatures::Limited) {
+			//crate::limited::limited_check(receiver)?;
+		}
+
+		// do the transfer logic
+
 		Ok(())
 	}
 }

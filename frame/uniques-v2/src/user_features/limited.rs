@@ -20,19 +20,22 @@ use frame_support::pallet_prelude::*;
 use enumflags2::BitFlags;
 
 impl<T: Config> Pallet<T> {
-	pub fn do_set_admin(id: CollectionIdOf<T>, config: TokenConfig, maybe_caller: Option<T::AccountId>, new_admin: T::AccountId) -> DispatchResult {
-		let user_features: BitFlags<UserFeatures> = config.user_features.into();
-		ensure!(user_features.contains(UserFeatures::Administration), Error::<T>::NotConfigured);
-		Admins::<T>::try_mutate(id, |maybe_admin| -> DispatchResult {
-			if let Some(caller) = maybe_caller {
-				if let Some(admin) = maybe_admin {
-					ensure!(admin == &caller, Error::<T>::NotAuthorized);
-				}
-			}
+	pub fn limited_check() -> DispatchResult {
 
-			*maybe_admin = Some(new_admin);
-			Ok(())
-		})?;
+	}
+
+
+
 		Ok(())
 	}
 }
+
+
+macro_rules! my_macro {
+	(expression) => {
+		let result = Self::wrapper_function(expression);
+		ensure!(result.is_ok());
+	}
+}
+
+my_macro!(x+5)
