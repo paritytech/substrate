@@ -53,7 +53,7 @@ pub trait WeightInfo {
 	fn finalize_signed_phase_reject_solution() -> Weight;
 	fn create_snapshot_internal(v: u32, t: u32, ) -> Weight;
 	fn elect_queued(a: u32, d: u32, ) -> Weight;
-	fn submit(c: u32, ) -> Weight;
+	fn submit() -> Weight;
 	fn submit_unsigned(v: u32, t: u32, a: u32, d: u32, ) -> Weight;
 	fn feasibility_check(v: u32, t: u32, a: u32, d: u32, ) -> Weight;
 }
@@ -135,10 +135,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: TransactionPayment NextFeeMultiplier (r:1 w:0)
 	// Storage: ElectionProviderMultiPhase SignedSubmissionNextIndex (r:1 w:1)
 	// Storage: ElectionProviderMultiPhase SignedSubmissionsMap (r:0 w:1)
-	fn submit(c: u32, ) -> Weight {
+	fn submit() -> Weight {
 		(39_488_000 as Weight)
 			// Standard Error: 22_000
-			.saturating_add((230_000 as Weight).saturating_mul(c as Weight))
 			.saturating_add(T::DbWeight::get().reads(5 as Weight))
 			.saturating_add(T::DbWeight::get().writes(3 as Weight))
 	}
@@ -256,10 +255,9 @@ impl WeightInfo for () {
 	// Storage: TransactionPayment NextFeeMultiplier (r:1 w:0)
 	// Storage: ElectionProviderMultiPhase SignedSubmissionNextIndex (r:1 w:1)
 	// Storage: ElectionProviderMultiPhase SignedSubmissionsMap (r:0 w:1)
-	fn submit(c: u32, ) -> Weight {
+	fn submit() -> Weight {
 		(39_488_000 as Weight)
 			// Standard Error: 22_000
-			.saturating_add((230_000 as Weight).saturating_mul(c as Weight))
 			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
 	}

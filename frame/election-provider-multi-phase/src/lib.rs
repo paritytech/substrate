@@ -963,7 +963,7 @@ pub mod pallet {
 		///
 		/// A deposit is reserved and recorded for the solution. Based on the outcome, the solution
 		/// might be rewarded, slashed, or get all or a part of the deposit back.
-		#[pallet::weight(T::WeightInfo::submit(0))]
+		#[pallet::weight(T::WeightInfo::submit())]
 		pub fn submit(
 			origin: OriginFor<T>,
 			raw_solution: Box<RawSolution<SolutionOf<T>>>,
