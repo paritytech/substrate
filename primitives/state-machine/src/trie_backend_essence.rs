@@ -23,7 +23,7 @@ use codec::Encode;
 use hash_db::{self, AsHashDB, HashDB, HashDBRef, Hasher, Prefix};
 #[cfg(feature = "std")]
 use parking_lot::RwLock;
-use sp_core::storage::{ChildInfo, ChildType, StateVersion, PrefixedStorageKey};
+use sp_core::storage::{ChildInfo, ChildType, PrefixedStorageKey, StateVersion};
 use sp_std::{boxed::Box, vec::Vec};
 use sp_trie::{
 	child_delta_trie_root, delta_trie_root, empty_child_trie_root, read_child_trie_value,
