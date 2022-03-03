@@ -130,7 +130,10 @@
 mod paritydb_weights;
 mod rocksdb_weights;
 
-use crate::dispatch::{DispatchError, DispatchErrorWithPostInfo, DispatchResultWithPostInfo};
+use crate::{
+	dispatch::{DispatchError, DispatchErrorWithPostInfo, DispatchResultWithPostInfo},
+	traits::Get,
+};
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
 #[cfg(feature = "std")]
