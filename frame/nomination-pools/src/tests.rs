@@ -520,7 +520,7 @@ mod join {
 			assert_eq!(Delegators::<Runtime>::count(), 3);
 			assert_eq!(MaxDelegators::<Runtime>::get(), Some(4));
 			Balances::make_free_balance_be(&104, 100 + Balances::minimum_balance());
-			assert_ok!(Pools::create(Origin::signed(104), 100, 1, 104, 104, 104));
+			assert_ok!(Pools::create(Origin::signed(104), 100, 104, 104, 104));
 			let pool_account = BondedPools::<Runtime>::iter()
 				.find(|(_, bonded_pool)| bonded_pool.depositor == 104)
 				.map(|(pool_account, _)| pool_account)
@@ -1989,7 +1989,7 @@ mod create {
 	#[test]
 	fn create_works() {
 		ExtBuilder::default().build_and_execute(|| {
-			let stash = 337692978;
+			let stash = 3548237456;
 
 			assert!(!BondedPools::<Runtime>::contains_key(1));
 			assert!(!RewardPools::<Runtime>::contains_key(1));
@@ -2000,7 +2000,6 @@ mod create {
 			assert_ok!(Pools::create(
 				Origin::signed(11),
 				StakingMock::minimum_bond(),
-				42,
 				123,
 				456,
 				789
@@ -2036,7 +2035,7 @@ mod create {
 					balance: Zero::zero(),
 					points: U256::zero(),
 					total_earnings: Zero::zero(),
-					account: 2844952004
+					account: 1657614948
 				}
 			);
 		});
@@ -2046,8 +2045,8 @@ mod create {
 	fn create_errors_correctly() {
 		ExtBuilder::default().build_and_execute_no_checks(|| {
 			assert_noop!(
-				Pools::create(Origin::signed(11), 420, 0, 123, 456, 789),
-				Error::<Runtime>::IdInUse
+				Pools::create(Origin::signed(10), 10, 123, 456, 789),
+				Error::<Runtime>::AccountBelongsToOtherPool
 			);
 
 			// Given
@@ -2056,7 +2055,7 @@ mod create {
 
 			// Then
 			assert_noop!(
-				Pools::create(Origin::signed(11), 9, 42, 123, 456, 789),
+				Pools::create(Origin::signed(11), 9, 123, 456, 789),
 				Error::<Runtime>::MinimumBondNotMet
 			);
 
@@ -2065,7 +2064,7 @@ mod create {
 
 			// Then
 			assert_noop!(
-				Pools::create(Origin::signed(11), 19, 42, 123, 456, 789),
+				Pools::create(Origin::signed(11), 19, 123, 456, 789),
 				Error::<Runtime>::MinimumBondNotMet
 			);
 
@@ -2086,7 +2085,7 @@ mod create {
 
 			// Then
 			assert_noop!(
-				Pools::create(Origin::signed(11), 20, 42, 123, 456, 789),
+				Pools::create(Origin::signed(11), 20, 123, 456, 789),
 				Error::<Runtime>::MaxPools
 			);
 
@@ -2097,8 +2096,8 @@ mod create {
 
 			// Then
 			assert_noop!(
-				Pools::create(Origin::signed(11), 20, 0, 11, 11, 11),
-				Error::<Runtime>::MaxPools
+				Pools::create(Origin::signed(11), 20, 11, 11, 11),
+				Error::<Runtime>::MaxDelegators
 			);
 		});
 	}

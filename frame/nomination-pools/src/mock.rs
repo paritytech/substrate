@@ -7,9 +7,9 @@ pub type AccountId = u32;
 pub type Balance = u128;
 
 /// _Stash_ of the pool that gets created by the [`ExtBuilder`].
-pub const PRIMARY_ACCOUNT: u32 = 1708226889;
+pub const PRIMARY_ACCOUNT: u32 = 1552898353;
 /// Reward destination of the pool that gets created by the [`ExtBuilder`].
-pub const REWARDS_ACCOUNT: u32 = 1842460259;
+pub const REWARDS_ACCOUNT: u32 = 3802151463;
 
 parameter_types! {
 	pub static CurrentEra: EraIndex = 0;
@@ -213,7 +213,6 @@ impl ExtBuilder {
 			assert_ok!(Pools::create(
 				RawOrigin::Signed(10).into(),
 				amount_to_bond,
-				0,
 				900,
 				901,
 				902

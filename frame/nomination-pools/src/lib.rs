@@ -315,10 +315,11 @@ use frame_support::{
 	traits::{
 		Currency, DefensiveOption, DefensiveResult, DefensiveSaturating, ExistenceRequirement, Get,
 	},
-	DefaultNoBound, PalletId, RuntimeDebugNoBound,
+	DefaultNoBound, RuntimeDebugNoBound,
 };
 use scale_info::TypeInfo;
 use sp_core::U256;
+use sp_io::hashing::blake2_256;
 use sp_runtime::traits::{Bounded, Convert, Saturating, StaticLookup, TrailingZeroInput, Zero};
 use sp_staking::{EraIndex, OnStakerSlash, StakingInterface};
 use sp_std::{collections::btree_map::BTreeMap, ops::Div, vec::Vec};
@@ -350,8 +351,9 @@ fn points_to_issue<T: Config>(
 	new_funds: BalanceOf<T>,
 ) -> BalanceOf<T> {
 	match (current_balance.is_zero(), current_points.is_zero()) {
-		(true, true) | (false, true) =>
-			new_funds.saturating_mul(POINTS_TO_BALANCE_INIT_RATIO.into()),
+		(true, true) | (false, true) => {
+			new_funds.saturating_mul(POINTS_TO_BALANCE_INIT_RATIO.into())
+		},
 		(true, false) => {
 			// The pool was totally slashed.
 			// This is the equivalent of `(current_points / 1) * new_funds`.
@@ -376,7 +378,7 @@ fn balance_to_unbond<T: Config>(
 ) -> BalanceOf<T> {
 	if current_balance.is_zero() || current_points.is_zero() || delegator_points.is_zero() {
 		// There is nothing to unbond
-		return Zero::zero()
+		return Zero::zero();
 	}
 
 	// Equivalent of (current_balance / current_points) * delegator_points
@@ -516,11 +518,10 @@ impl<T: Config> BondedPool<T> {
 	}
 
 	fn create_account(index: [u8; 4], depositor: T::AccountId) -> T::AccountId {
-		(b"npls", index, depositor.clone()).using_encoded(|encoded| {
-			let trimmed = &encoded[..T::AccountId::max_encoded_len()];
-			Decode::decode(&mut TrailingZeroInput::new(trimmed))
-				.expect("Input is trimmed to the max encoded length. qed")
-		})
+		// TODO: look into make the prefix transparent by not hashing anything
+		let entropy = (b"npls", index, depositor).using_encoded(blake2_256);
+		Decode::decode(&mut TrailingZeroInput::new(&entropy))
+			.expect("Input is trimmed to the max encoded length. qed")
 	}
 
 	fn reward_account(&self) -> T::AccountId {
@@ -570,8 +571,8 @@ impl<T: Config> BondedPool<T> {
 		ensure!(points_to_balance_ratio_floor < 10u32.into(), Error::<T>::OverflowRisk);
 		// while restricting the balance to 1/10th of max total issuance,
 		ensure!(
-			new_funds.saturating_add(bonded_balance) <
-				BalanceOf::<T>::max_value().div(10u32.into()),
+			new_funds.saturating_add(bonded_balance)
+				< BalanceOf::<T>::max_value().div(10u32.into()),
 			Error::<T>::OverflowRisk
 		);
 		// then we can be decently confident the bonding pool points will not overflow
@@ -773,7 +774,7 @@ impl<T: Config> SubPools<T> {
 			// For the first `0..TotalUnbondingPools` eras of the chain we don't need to do
 			// anything. I.E. if `TotalUnbondingPools` is 5 and we are in era 4 we can add a pool
 			// for this era and have exactly `TotalUnbondingPools` pools.
-			return self
+			return self;
 		}
 
 		//  I.E. if `TotalUnbondingPools` is 5 and current era is 10, we only want to retain pools
@@ -1221,8 +1222,8 @@ pub mod pallet {
 			let unbonding_era = delegator.unbonding_era.ok_or(Error::<T>::NotUnbonding)?;
 			let current_era = T::StakingInterface::current_era();
 			ensure!(
-				current_era.saturating_sub(unbonding_era) >=
-					T::StakingInterface::bonding_duration(),
+				current_era.saturating_sub(unbonding_era)
+					>= T::StakingInterface::bonding_duration(),
 				Error::<T>::NotUnbondedYet
 			);
 
@@ -1336,8 +1337,8 @@ pub mod pallet {
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			ensure!(
-				amount >= T::StakingInterface::minimum_bond() &&
-					amount >= MinCreateBond::<T>::get(),
+				amount >= T::StakingInterface::minimum_bond()
+					&& amount >= MinCreateBond::<T>::get(),
 				Error::<T>::MinimumBondNotMet
 			);
 			if let Some(max_pools) = MaxPools::<T>::get() {
@@ -1346,6 +1347,8 @@ pub mod pallet {
 			ensure!(!Delegators::<T>::contains_key(&who), Error::<T>::AccountBelongsToOtherPool);
 
 			let mut bonded_pool = BondedPool::<T>::new(who.clone(), root, nominator, state_toggler);
+			// This shouldn't be possible since we are ensured the delegator is not a depositor and the
+			// the account ID is generated based on the accountId
 			ensure!(!BondedPools::<T>::contains_key(&bonded_pool.account), Error::<T>::IdInUse);
 			// Increase the delegator counter to account for depositor; checks delegator limits.
 			bonded_pool.inc_delegators()?;
@@ -1474,9 +1477,9 @@ impl<T: Config> Pallet<T> {
 		let delegator_virtual_points = T::BalanceToU256::convert(delegator.points)
 			.saturating_mul(T::BalanceToU256::convert(new_earnings_since_last_claim));
 
-		let delegator_payout = if delegator_virtual_points.is_zero() ||
-			current_points.is_zero() ||
-			reward_pool.balance.is_zero()
+		let delegator_payout = if delegator_virtual_points.is_zero()
+			|| current_points.is_zero()
+			|| reward_pool.balance.is_zero()
 		{
 			Zero::zero()
 		} else {
