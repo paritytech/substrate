@@ -38,7 +38,7 @@
 //!
 //! ### Signed migration
 //!
-//! as a backup, the migration process can be set in motion via signed transactions that basically
+//! As a backup, the migration process can be set in motion via signed transactions that basically
 //! say in advance how many items and how many bytes they will consume, and pay for it as well. This
 //! can be a good safe alternative, if the former system is not desirable.
 //!
