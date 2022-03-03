@@ -1866,20 +1866,14 @@ benchmarks! {
 	// It generates different private keys and signatures for the message "Hello world".
 	seal_ecdsa_recover {
 		let r in 0 .. API_BENCHMARK_BATCHES;
-		use rand::SeedableRng;
-		let mut rng = rand_pcg::Pcg32::seed_from_u64(123456);
 
 		let message_hash = sp_io::hashing::blake2_256("Hello world".as_bytes());
+		let key_type = sp_core::crypto::KeyTypeId(*b"code");
 		let signatures = (0..r * API_BENCHMARK_BATCH_SIZE)
 			.map(|i| {
-				use libsecp256k1::{SecretKey, Message, sign};
-
-				let private_key = SecretKey::random(&mut rng);
-				let (signature, recovery_id) = sign(&Message::parse(&message_hash), &private_key);
-				let mut full_signature = [0; 65];
-				full_signature[..64].copy_from_slice(&signature.serialize());
-				full_signature[64] = recovery_id.serialize();
-				full_signature
+				let pub_key = sp_io::crypto::ecdsa_generate(key_type, None);
+				let sig = sp_io::crypto::ecdsa_sign_prehashed(key_type, &pub_key, &message_hash).expect("Generates signature");
+				AsRef::<[u8; 65]>::as_ref(&sig).to_vec()
 			})
 			.collect::<Vec<_>>();
 		let signatures = signatures.iter().flatten().cloned().collect::<Vec<_>>();

@@ -292,7 +292,7 @@ pub enum ChainEvent<B: BlockT> {
 		/// Hash of just finalized block.
 		hash: B::Hash,
 		/// Path from old finalized to new finalized parent.
-		tree_route: Arc<Vec<B::Hash>>,
+		tree_route: Arc<[B::Hash]>,
 	},
 }
 

@@ -863,23 +863,24 @@ mod benchmarks {
 			let caller = frame_benchmarking::whitelisted_caller();
 			let stash = T::Currency::minimum_balance() * BalanceOf::<T>::from(10u32);
 			T::Currency::make_free_balance_be(&caller, stash);
-		}: migrate_custom_child(frame_system::RawOrigin::Signed(caller.clone()), Default::default(), 0)
+		}: migrate_custom_child(frame_system::RawOrigin::Signed(caller.clone()), Default::default(), Default::default(), 0)
 		verify {
 			assert_eq!(StateTrieMigration::<T>::migration_process(), Default::default());
 			assert_eq!(T::Currency::free_balance(&caller), stash)
 		}
 
-		migrate_custom_top_fail {
+		migrate_custom_child_fail {
 			let caller = frame_benchmarking::whitelisted_caller();
 			let stash = T::Currency::minimum_balance() * BalanceOf::<T>::from(10u32);
 			T::Currency::make_free_balance_be(&caller, stash);
 			// for tests, we need to make sure there is _something_ in storage that is being
 			// migrated.
-			sp_io::storage::set(b"foo", vec![1u8;33].as_ref());
+			sp_io::default_child_storage::set(b"top", b"foo", vec![1u8;33].as_ref());
 		}: {
 			assert!(
 				StateTrieMigration::<T>::migrate_custom_child(
 					frame_system::RawOrigin::Signed(caller.clone()).into(),
+					b"top".to_vec(),
 					vec![b"foo".to_vec()],
 					1,
 				).is_err()
