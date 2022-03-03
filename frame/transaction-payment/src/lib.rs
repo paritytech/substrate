@@ -302,9 +302,9 @@ pub mod pallet {
 			T::WeightToFee::polynomial().to_vec()
 		}
 
-		#[allow(non_snake_case)]
+		#[pallet::constant_name(LengthToFee)]
 		/// The polynomial that is a pplied in order to derive fee from length.
-		fn LengthToFee() -> Vec<WeightToFeeCoefficient<BalanceOf<T>>> {
+		fn length_to_fee_polynomial() -> Vec<WeightToFeeCoefficient<BalanceOf<T>>> {
 			T::LengthToFee::polynomial().to_vec()
 		}
 	}
