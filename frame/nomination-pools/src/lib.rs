@@ -315,11 +315,10 @@ use frame_support::{
 	traits::{
 		Currency, DefensiveOption, DefensiveResult, DefensiveSaturating, ExistenceRequirement, Get,
 	},
-	DefaultNoBound, RuntimeDebugNoBound,
+	DefaultNoBound, PalletId, RuntimeDebugNoBound,
 };
 use scale_info::TypeInfo;
 use sp_core::U256;
-use sp_io::hashing::blake2_256;
 use sp_runtime::traits::{Bounded, Convert, Saturating, StaticLookup, TrailingZeroInput, Zero};
 use sp_staking::{EraIndex, OnStakerSlash, StakingInterface};
 use sp_std::{collections::btree_map::BTreeMap, ops::Div, vec::Vec};
@@ -340,6 +339,8 @@ pub type SubPoolsWithEra<T> = BoundedBTreeMap<EraIndex, UnbondPool<T>, TotalUnbo
 type RewardPoints = U256;
 
 const POINTS_TO_BALANCE_INIT_RATIO: u32 = 1;
+const BONDED_ACCOUNT_INDEX: [u8; 4] = *b"bond";
+const REWARD_ACCOUNT_INDEX: [u8; 4] = *b"rewd";
 
 /// Calculate the number of points to issue from a pool as `(current_points / current_balance) *
 /// new_funds` except for some zero edge cases; see logic and tests for details.
@@ -435,7 +436,9 @@ pub struct BondedPoolStorage<T: Config> {
 }
 
 #[derive(RuntimeDebugNoBound)]
+// #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, RuntimeDebugNoBound, PartialEq)]
 #[cfg_attr(feature = "std", derive(Clone, PartialEq))]
+// #[cfg_attr(feature = "std", derive(Clone,))]
 pub struct BondedPool<T: Config> {
 	/// Points of the pool. Each delegator has some corresponding the points. The portion of points
 	/// that belong to a delegator represent the portion of the pools bonded funds belong to the
@@ -456,11 +459,28 @@ pub struct BondedPool<T: Config> {
 	/// Can toggle the pools state, including setting the pool as blocked or putting the pool into
 	/// destruction mode. The state toggle can also "kick" delegators by unbonding them.
 	state_toggler: T::AccountId,
-	/// AccountId of the pool.
+	// /// AccountId of the pool.
 	account: T::AccountId,
 }
 
 impl<T: Config> BondedPool<T> {
+	fn new(
+		depositor: T::AccountId,
+		root: T::AccountId,
+		nominator: T::AccountId,
+		state_toggler: T::AccountId,
+	) -> Self {
+		Self {
+			account: Self::create_account(BONDED_ACCOUNT_INDEX, depositor.clone()),
+			depositor,
+			root,
+			nominator,
+			state_toggler,
+			state: PoolState::Open,
+			points: Zero::zero(),
+			delegator_counter: Zero::zero(),
+		}
+	}
 	/// Get [`Self`] from storage. Returns `None` if no entry for `pool_account` exists.
 	fn get(pool_account: &T::AccountId) -> Option<Self> {
 		BondedPools::<T>::try_get(pool_account).ok().map(|storage| Self {
@@ -490,10 +510,21 @@ impl<T: Config> BondedPool<T> {
 			},
 		);
 	}
-
 	/// Consume and remove [`Self`] from storage.
 	fn remove(self) {
 		BondedPools::<T>::remove(self.account);
+	}
+
+	fn create_account(index: [u8; 4], depositor: T::AccountId) -> T::AccountId {
+		(b"npls", index, depositor.clone()).using_encoded(|encoded| {
+			let trimmed = &encoded[..T::AccountId::max_encoded_len()];
+			Decode::decode(&mut TrailingZeroInput::new(trimmed))
+				.expect("Input is trimmed to the max encoded length. qed")
+		})
+	}
+
+	fn reward_account(&self) -> T::AccountId {
+		Self::create_account(REWARD_ACCOUNT_INDEX, self.depositor.clone())
 	}
 
 	/// Get the amount of points to issue for some new funds that will be bonded in the pool.
@@ -868,6 +899,7 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type BondedPools<T: Config> =
 		CountedStorageMap<_, Twox64Concat, T::AccountId, BondedPoolStorage<T>>;
+	// CountedStorageMap<_, Twox64Concat, T::AccountId, BondedPoolStorage<T>>;
 
 	/// Reward pools. This is where there rewards for each pool accumulate. When a delegators payout
 	/// is claimed, the balance comes out fo the reward pool. Keyed by the bonded pools
@@ -1298,7 +1330,6 @@ pub mod pallet {
 		pub fn create(
 			origin: OriginFor<T>,
 			amount: BalanceOf<T>,
-			index: u16,
 			root: T::AccountId,
 			nominator: T::AccountId,
 			state_toggler: T::AccountId,
@@ -1314,52 +1345,46 @@ pub mod pallet {
 			}
 			ensure!(!Delegators::<T>::contains_key(&who), Error::<T>::AccountBelongsToOtherPool);
 
-			let (pool_account, reward_account) = Self::create_accounts(index);
-			ensure!(!BondedPools::<T>::contains_key(&pool_account), Error::<T>::IdInUse);
-
-			let mut bonded_pool = BondedPool::<T> {
-				account: pool_account.clone(),
-				points: Zero::zero(),
-				delegator_counter: Zero::zero(),
-				depositor: who.clone(),
-				root,
-				nominator,
-				state_toggler,
-				state: PoolState::Open,
-			};
+			let mut bonded_pool = BondedPool::<T>::new(who.clone(), root, nominator, state_toggler);
+			ensure!(!BondedPools::<T>::contains_key(&bonded_pool.account), Error::<T>::IdInUse);
 			// Increase the delegator counter to account for depositor; checks delegator limits.
 			bonded_pool.inc_delegators()?;
 			// We must calculate the points issued *before* we bond who's funds, else
 			// points:balance ratio will be wrong.
 			let points_issued = bonded_pool.issue(amount);
-			T::Currency::transfer(&who, &pool_account, amount, ExistenceRequirement::AllowDeath)?;
-			T::StakingInterface::bond(
-				pool_account.clone(),
-				// We make the stash and controller the same for simplicity
-				pool_account.clone(),
+			T::Currency::transfer(
+				&who,
+				&bonded_pool.account,
 				amount,
-				reward_account.clone(),
+				ExistenceRequirement::AllowDeath,
+			)?;
+			T::StakingInterface::bond(
+				bonded_pool.account.clone(),
+				// We make the stash and controller the same for simplicity
+				bonded_pool.account.clone(),
+				amount,
+				bonded_pool.reward_account(),
 			)?;
 
 			Delegators::<T>::insert(
 				who,
 				Delegator::<T> {
-					pool: pool_account.clone(),
+					pool: bonded_pool.account.clone(),
 					points: points_issued,
 					reward_pool_total_earnings: Zero::zero(),
 					unbonding_era: None,
 				},
 			);
-			bonded_pool.put();
 			RewardPools::<T>::insert(
-				pool_account,
+				bonded_pool.account.clone(),
 				RewardPool::<T> {
 					balance: Zero::zero(),
 					points: U256::zero(),
 					total_earnings: Zero::zero(),
-					account: reward_account,
+					account: bonded_pool.reward_account(),
 				},
 			);
+			bonded_pool.put();
 
 			// TODO: event
 
@@ -1414,29 +1439,6 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
-	fn create_accounts(index: u16) -> (T::AccountId, T::AccountId) {
-		let parent_hash = frame_system::Pallet::<T>::parent_hash();
-		// let parent_hash = frame_system::Pallet::<T>::block_number(); // TODO
-		let ext_index = frame_system::Pallet::<T>::extrinsic_index().unwrap_or_default();
-
-		// TODO use a transparent prefix before the hashed part
-		// (b"identifier/stash", (identifier, who).using_encoded(blake2_256))
-		// (b"identifier/rewards", (identifier, who).using_encoded(blake2_256))
-		// (b"nom-pools/bonded", (index, parent_hash, ext_index).using_encoded(blake2_256))
-		// (b"nom-pools/rewards", (index, parent_hash, ext_index).using_encoded(blake2_256))
-		let stash_entropy =
-			(b"pools/stash", index, parent_hash, ext_index).using_encoded(blake2_256);
-		let reward_entropy =
-			(b"pools/rewards", index, parent_hash, ext_index).using_encoded(blake2_256);
-
-		(
-			Decode::decode(&mut TrailingZeroInput::new(stash_entropy.as_ref()))
-				.expect("infinite length input; no invalid inputs for type; qed"),
-			Decode::decode(&mut TrailingZeroInput::new(reward_entropy.as_ref()))
-				.expect("infinite length input; no invalid inputs for type; qed"),
-		)
-	}
-
 	/// Calculate the rewards for `delegator`.
 	fn calculate_delegator_payout(
 		bonded_pool: &BondedPool<T>,
