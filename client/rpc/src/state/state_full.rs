@@ -51,7 +51,7 @@ use super::{
 };
 use sc_client_api::{
 	Backend, BlockBackend, BlockchainEvents, CallExecutor, ExecutorProvider, ProofProvider,
-	StorageProvider,
+	StorageNotification, StorageProvider,
 };
 use std::marker::PhantomData;
 
@@ -466,7 +466,7 @@ where
 		);
 
 		self.subscriptions.add(subscriber, |sink| {
-			let stream = stream.map(|(block, changes)| {
+			let stream = stream.map(|StorageNotification { block, changes }| {
 				Ok(Ok::<_, rpc::Error>(StorageChangeSet {
 					block,
 					changes: changes

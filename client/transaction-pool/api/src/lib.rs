@@ -292,7 +292,7 @@ pub enum ChainEvent<B: BlockT> {
 		/// Hash of just finalized block.
 		hash: B::Hash,
 		/// Path from old finalized to new finalized parent.
-		tree_route: Arc<Vec<B::Hash>>,
+		tree_route: Arc<[B::Hash]>,
 	},
 }
 
@@ -355,7 +355,7 @@ impl<TPool: LocalTransactionPool> OffchainSubmitTransaction<TPool::Block> for TP
 		result.map(|_| ()).map_err(|e| {
 			log::warn!(
 				target: "txpool",
-				"(offchain call) Error submitting a transaction to the pool: {:?}",
+				"(offchain call) Error submitting a transaction to the pool: {}",
 				e
 			)
 		})

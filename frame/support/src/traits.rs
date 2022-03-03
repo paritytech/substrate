@@ -23,7 +23,7 @@ pub mod tokens;
 pub use tokens::{
 	currency::{
 		Currency, LockIdentifier, LockableCurrency, NamedReservableCurrency, ReservableCurrency,
-		VestingSchedule,
+		TotalIssuanceOf, VestingSchedule,
 	},
 	fungible, fungibles,
 	imbalance::{Imbalance, OnUnbalanced, SignedImbalance},
@@ -58,6 +58,8 @@ pub use misc::{
 	PreimageRecipient, PrivilegeCmp, SameOrOther, Time, TryCollect, TryDrop, UnixTime,
 	WrapperKeepOpaque, WrapperOpaque,
 };
+#[doc(hidden)]
+pub use misc::{DEFENSIVE_OP_INTERNAL_ERROR, DEFENSIVE_OP_PUBLIC_ERROR};
 
 mod stored_map;
 pub use stored_map::{StorageMapShim, StoredMap};
@@ -90,4 +92,6 @@ mod dispatch;
 pub use dispatch::{EnsureOneOf, EnsureOrigin, OriginTrait, UnfilteredDispatchable};
 
 mod voting;
-pub use voting::{CurrencyToVote, SaturatingCurrencyToVote, U128CurrencyToVote};
+pub use voting::{
+	CurrencyToVote, PollStatus, Polling, SaturatingCurrencyToVote, U128CurrencyToVote, VoteTally,
+};

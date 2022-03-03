@@ -124,11 +124,11 @@ pub fn expand_error(def: &mut Def) -> proc_macro2::TokenStream {
 				>::index::<Pallet<#type_use_gen>>()
 					.expect("Every active module has an index in the runtime; qed") as u8;
 
-				#frame_support::sp_runtime::DispatchError::Module {
+				#frame_support::sp_runtime::DispatchError::Module(#frame_support::sp_runtime::ModuleError {
 					index,
 					error: err.as_u8(),
 					message: Some(err.as_str()),
-				}
+				})
 			}
 		}
 	)

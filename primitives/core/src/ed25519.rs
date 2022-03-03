@@ -321,10 +321,13 @@ impl Signature {
 	///
 	/// NOTE: No checking goes on to ensure this is a real signature. Only use it if
 	/// you are certain that the array actually is a signature. GIGO!
-	pub fn from_slice(data: &[u8]) -> Self {
+	pub fn from_slice(data: &[u8]) -> Option<Self> {
+		if data.len() != 64 {
+			return None
+		}
 		let mut r = [0u8; 64];
 		r.copy_from_slice(data);
-		Signature(r)
+		Some(Signature(r))
 	}
 
 	/// A new instance from an H512.
@@ -396,11 +399,7 @@ impl From<&Public> for CryptoTypePublicPair {
 /// Derive a single hard junction.
 #[cfg(feature = "full_crypto")]
 fn derive_hard_junction(secret_seed: &Seed, cc: &[u8; 32]) -> Seed {
-	("Ed25519HDKD", secret_seed, cc).using_encoded(|data| {
-		let mut res = [0u8; 32];
-		res.copy_from_slice(blake2_rfc::blake2b::blake2b(32, &[], data).as_bytes());
-		res
-	})
+	("Ed25519HDKD", secret_seed, cc).using_encoded(|data| sp_core_hashing::blake2_256(data))
 }
 
 /// An error when deriving a key.
