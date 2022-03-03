@@ -201,7 +201,7 @@ pub enum Database {
 	/// ParityDb. <https://github.com/paritytech/parity-db/>
 	ParityDb,
 	/// Detect whether there is an existing database. Use it, if there is, if not, create new
-	/// instance of RocksDb
+	/// instance of ParityDb
 	Auto,
 	/// ParityDb. <https://github.com/paritytech/parity-db/>
 	ParityDbDeprecated,
