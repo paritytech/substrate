@@ -38,37 +38,24 @@ macro_rules! defensive {
 		frame_support::log::error!(
 			target: "runtime",
 			"{}",
-			$crate::traits::misc::DEFENSIVE_OP_PUBLIC_ERROR
+			$crate::traits::DEFENSIVE_OP_PUBLIC_ERROR
 		);
-		debug_assert!(false, "{}", $crate::traits::misc::DEFENSIVE_OP_INTERNAL_ERROR);
+		debug_assert!(false, "{}", $crate::traits::DEFENSIVE_OP_INTERNAL_ERROR);
 	};
 	($error:tt) => {
 		frame_support::log::error!(
 			target: "runtime",
 			"{}: {:?}",
-			$crate::traits::misc::DEFENSIVE_OP_PUBLIC_ERROR,
+			$crate::traits::DEFENSIVE_OP_PUBLIC_ERROR,
 			$error
 		);
-		debug_assert!(false, "{}: {:?}", $crate::traits::misc::DEFENSIVE_OP_INTERNAL_ERROR, $error);
+		debug_assert!(false, "{}: {:?}", $crate::traits::DEFENSIVE_OP_INTERNAL_ERROR, $error);
 	}
-}
-
-/// Generic function to mark an execution path as ONLY defensive.
-///
-/// Similar to mark a match arm or `if/else` branch as `unreachable!`.
-pub fn defensive_path(proof: &'static str) {
-	debug_assert!(false, "{}: {:?}", DEFENSIVE_OP_INTERNAL_ERROR, proof);
-	frame_support::log::error!(
-		target: "runtime",
-		"{}: {:?}",
-		DEFENSIVE_OP_PUBLIC_ERROR,
-		proof
-	);
 }
 
 /// Prelude module for all defensive traits to be imported at once.
 pub mod defensive_prelude {
-	pub use super::{defensive_path, Defensive, DefensiveOption, DefensiveResult};
+	pub use super::{Defensive, DefensiveOption, DefensiveResult};
 }
 
 /// A trait to handle errors and options when you are really sure that a condition must hold, but

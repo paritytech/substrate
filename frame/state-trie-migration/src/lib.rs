@@ -77,7 +77,7 @@ pub mod pallet {
 		pallet_prelude::*,
 		traits::{Currency, Get},
 	};
-	use frame_system::{self, ensure_signed, pallet_prelude::*};
+	use frame_system::{self, pallet_prelude::*};
 	use sp_core::storage::well_known_keys::DEFAULT_CHILD_STORAGE_KEY_PREFIX;
 	use sp_runtime::{
 		self,
@@ -324,18 +324,18 @@ pub mod pallet {
 		/// It updates the dynamic counters.
 		fn migrate_child(&mut self) {
 			use sp_io::default_child_storage as child_io;
-			if self.last_child.is_none() || self.last_top.is_none() {
-				// defensive: this function is only called when both of these values exist.
-				// much that we can do otherwise..
-				frame_support::traits::defensive_path("cannot migrate child key.");
-				return
-			}
-
-			let last_child = self.last_child.as_ref().expect("value checked to be `Some`; qed");
-			let last_top = self.last_top.clone().expect("value checked to be `Some`; qed");
+			let (last_child, last_top) = match (&self.last_child, &self.last_top) {
+				(Some(last_child), Some(last_top)) => (last_child, last_top),
+				_ => {
+					// defensive: this function is only called when both of these values exist.
+					// much that we can do otherwise..
+					frame_support::defensive!("cannot migrate child key.");
+					return
+				},
+			};
 
 			let child_root = Pallet::<T>::transform_child_key_or_halt(&last_top);
-			let maybe_current_child = child_io::next_key(child_root, last_child);
+			let maybe_current_child = child_io::next_key(child_root, &last_child);
 			if let Some(ref current_child) = maybe_current_child {
 				let added_size = if let Some(data) = child_io::get(child_root, &current_child) {
 					child_io::set(child_root, current_child, &data);
@@ -355,13 +355,15 @@ pub mod pallet {
 		///
 		/// It updates the dynamic counters.
 		fn migrate_top(&mut self) {
-			if self.last_top.is_none() {
-				// defensive: this function is only called when this value exist.
-				// much that we can do otherwise..
-				frame_support::traits::defensive_path("cannot migrate top key.");
-				return
-			}
-			let last_top = self.last_top.as_ref().expect("value checked to be `Some`; qed");
+			let last_top = match &self.last_top {
+				Some(last_top) => last_top,
+				None => {
+					// defensive: this function is only called when this value exist.
+					// much that we can do otherwise..
+					frame_support::defensive!("cannot migrate top key.");
+					return
+				},
+			};
 
 			let maybe_current_top = sp_io::storage::next_key(last_top);
 			if let Some(ref current_top) = maybe_current_top {
@@ -409,6 +411,8 @@ pub mod pallet {
 		Slashed { who: T::AccountId, amount: BalanceOf<T> },
 		/// The auto migration task finished.
 		AutoMigrationFinished,
+		/// Migration got halted.
+		Halted,
 	}
 
 	/// The outer Pallet struct.
@@ -423,9 +427,8 @@ pub mod pallet {
 		/// Origin that can control the configurations of this pallet.
 		type ControlOrigin: frame_support::traits::EnsureOrigin<Self::Origin>;
 
-		/// Filter on which signed origin that trigger the manual migrations. All origins are
-		/// allowed if set to `None`.
-		type SignedOriginFilter: Get<Option<Self::AccountId>>;
+		/// Filter on which origin that trigger the manual migrations.
+		type SignedFilter: EnsureOrigin<Self::Origin, Success = Self::AccountId>;
 
 		/// The overarching event type.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
@@ -526,11 +529,7 @@ pub mod pallet {
 			real_size_upper: u32,
 			witness_task: MigrationTask<T>,
 		) -> DispatchResultWithPostInfo {
-			let who = ensure_signed(origin)?;
-			ensure!(
-				T::SignedOriginFilter::get().map_or(true, |o| o == who),
-				DispatchError::BadOrigin
-			);
+			let who = T::SignedFilter::ensure_origin(origin)?;
 
 			let max_limits = T::SignedMigrationMaxLimits::get();
 			ensure!(
@@ -596,11 +595,7 @@ pub mod pallet {
 			keys: Vec<Vec<u8>>,
 			witness_size: u32,
 		) -> DispatchResultWithPostInfo {
-			let who = ensure_signed(origin)?;
-			ensure!(
-				T::SignedOriginFilter::get().map_or(true, |o| o == who),
-				DispatchError::BadOrigin
-			);
+			let who = T::SignedFilter::ensure_origin(origin)?;
 
 			// ensure they can pay more than the fee.
 			let deposit = T::SignedDepositBase::get().saturating_add(
@@ -657,11 +652,7 @@ pub mod pallet {
 			child_keys: Vec<Vec<u8>>,
 			total_size: u32,
 		) -> DispatchResultWithPostInfo {
-			let who = ensure_signed(origin)?;
-			ensure!(
-				T::SignedOriginFilter::get().map_or(true, |o| o == who),
-				DispatchError::BadOrigin
-			);
+			let who = T::SignedFilter::ensure_origin(origin)?;
 
 			// ensure they can pay more than the fee.
 			let deposit = T::SignedDepositBase::get().saturating_add(
@@ -759,6 +750,7 @@ pub mod pallet {
 		/// Put a stop to all ongoing migrations.
 		fn halt() {
 			AutoLimits::<T>::kill();
+			Self::deposit_event(Event::<T>::Halted);
 		}
 
 		/// Convert a child root key, aka. "Child-bearing top key" into the proper format.
@@ -906,7 +898,7 @@ mod benchmarks {
 
 		impl_benchmark_test_suite!(
 			StateTrieMigration,
-			crate::mock::new_test_ext(sp_runtime::StateVersion::V0, true),
+			crate::mock::new_test_ext(sp_runtime::StateVersion::V0, true, None, None),
 			crate::mock::Test
 		);
 	}
@@ -917,9 +909,15 @@ mod mock {
 	use super::*;
 	use crate as pallet_state_trie_migration;
 	use frame_support::{parameter_types, traits::Hooks};
-	use frame_system::EnsureRoot;
-	use sp_core::{storage::StateVersion, H256};
-	use sp_runtime::traits::{BlakeTwo256, Header as _, IdentityLookup};
+	use frame_system::{EnsureRoot, EnsureSigned};
+	use sp_core::{
+		storage::{ChildInfo, StateVersion},
+		H256,
+	};
+	use sp_runtime::{
+		traits::{BlakeTwo256, Header as _, IdentityLookup},
+		StorageChild,
+	};
 
 	type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 	type Block = frame_system::mocking::MockBlock<Test>;
@@ -996,13 +994,16 @@ mod mock {
 		type SignedDepositPerItem = SignedDepositPerItem;
 		type SignedDepositBase = SignedDepositBase;
 		type SignedMigrationMaxLimits = SignedMigrationMaxLimits;
-		type SignedOriginFilter = ();
+		type SignedFilter = EnsureSigned<Self::AccountId>;
 		type WeightInfo = ();
 	}
 
-	pub fn new_test_ext(version: StateVersion, with_pallets: bool) -> sp_io::TestExternalities {
-		use sp_core::storage::ChildInfo;
-
+	pub fn new_test_ext(
+		version: StateVersion,
+		with_pallets: bool,
+		custom_keys: Option<Vec<(Vec<u8>, Vec<u8>)>>,
+		custom_child: Option<Vec<(Vec<u8>, Vec<u8>, Vec<u8>)>>,
+	) -> sp_io::TestExternalities {
 		let minimum_size = sp_core::storage::TRIE_VALUE_NODE_THRESHOLD as usize + 1;
 		let mut custom_storage = sp_core::storage::Storage {
 			top: vec![
@@ -1018,11 +1019,12 @@ mod mock {
 				(b"CODE".to_vec(), vec![1u8; minimum_size + 100]), // 434f4445
 			]
 			.into_iter()
+			.chain(custom_keys.unwrap_or_default())
 			.collect(),
 			children_default: vec![
 				(
 					b"chk1".to_vec(), // 63686b31
-					sp_core::storage::StorageChild {
+					StorageChild {
 						data: vec![
 							(b"key1".to_vec(), vec![1u8; 55]),
 							(b"key2".to_vec(), vec![2u8; 66]),
@@ -1034,7 +1036,7 @@ mod mock {
 				),
 				(
 					b"chk2".to_vec(),
-					sp_core::storage::StorageChild {
+					StorageChild {
 						data: vec![
 							(b"key1".to_vec(), vec![1u8; 54]),
 							(b"key2".to_vec(), vec![2u8; 64]),
@@ -1046,6 +1048,21 @@ mod mock {
 				),
 			]
 			.into_iter()
+			.chain(
+				custom_child
+					.unwrap_or_default()
+					.into_iter()
+					.map(|(r, k, v)| {
+						(
+							r.clone(),
+							StorageChild {
+								data: vec![(k, v)].into_iter().collect(),
+								child_info: ChildInfo::new_default(&r),
+							},
+						)
+					})
+					.collect::<Vec<_>>(),
+			)
 			.collect(),
 		};
 
@@ -1087,10 +1104,10 @@ mod test {
 
 	#[test]
 	fn fails_if_no_migration() {
-		let mut ext = new_test_ext(StateVersion::V0, false);
+		let mut ext = new_test_ext(StateVersion::V0, false, None, None);
 		let root1 = ext.execute_with(|| run_to_block(30).0);
 
-		let mut ext2 = new_test_ext(StateVersion::V1, false);
+		let mut ext2 = new_test_ext(StateVersion::V1, false, None, None);
 		let root2 = ext2.execute_with(|| run_to_block(30).0);
 
 		// these two roots should not be the same.
@@ -1100,7 +1117,8 @@ mod test {
 	#[test]
 	fn detects_value_in_empty_top_key() {
 		let limit = MigrationLimits { item: 1, size: 1000 };
-		let mut ext = new_test_ext(StateVersion::V0, false);
+		let initial_keys = Some(vec![(vec![], vec![66u8; 77])]);
+		let mut ext = new_test_ext(StateVersion::V0, false, initial_keys.clone(), None);
 
 		let root_upgraded = ext.execute_with(|| {
 			sp_io::storage::set(&[], &vec![66u8; 77]);
@@ -1113,9 +1131,8 @@ mod test {
 			root
 		});
 
-		let mut ext2 = new_test_ext(StateVersion::V1, false);
+		let mut ext2 = new_test_ext(StateVersion::V1, false, initial_keys, None);
 		let root = ext2.execute_with(|| {
-			sp_io::storage::set(&[], &vec![66u8; 77]);
 			AutoLimits::<Test>::put(Some(limit));
 			run_to_block(30).0
 		});
@@ -1127,11 +1144,10 @@ mod test {
 	fn detects_value_in_first_child_key() {
 		use frame_support::storage::child;
 		let limit = MigrationLimits { item: 1, size: 1000 };
-		let mut ext = new_test_ext(StateVersion::V0, false);
+		let initial_child = Some(vec![(b"chk1".to_vec(), vec![], vec![66u8; 77])]);
+		let mut ext = new_test_ext(StateVersion::V0, false, None, initial_child.clone());
 
 		let root_upgraded = ext.execute_with(|| {
-			child::put(&child::ChildInfo::new_default(b"chk1"), &[], &vec![66u8; 77]);
-
 			AutoLimits::<Test>::put(Some(limit));
 			let root = run_to_block(30).0;
 
@@ -1140,7 +1156,7 @@ mod test {
 			root
 		});
 
-		let mut ext2 = new_test_ext(StateVersion::V1, false);
+		let mut ext2 = new_test_ext(StateVersion::V1, false, None, initial_child);
 		let root = ext2.execute_with(|| {
 			child::put(&child::ChildInfo::new_default(b"chk1"), &[], &vec![66u8; 77]);
 			AutoLimits::<Test>::put(Some(limit));
@@ -1153,7 +1169,7 @@ mod test {
 	#[test]
 	fn auto_migrate_works() {
 		let run_with_limits = |limit, from, until| {
-			let mut ext = new_test_ext(StateVersion::V0, false);
+			let mut ext = new_test_ext(StateVersion::V0, false, None, None);
 			let root_upgraded = ext.execute_with(|| {
 				assert_eq!(AutoLimits::<Test>::get(), None);
 				assert_eq!(MigrationProcess::<Test>::get(), Default::default());
@@ -1175,7 +1191,7 @@ mod test {
 				root
 			});
 
-			let mut ext2 = new_test_ext(StateVersion::V1, false);
+			let mut ext2 = new_test_ext(StateVersion::V1, false, None, None);
 			let root = ext2.execute_with(|| {
 				// update ex2 to contain the new items
 				let _ = run_to_block(from);
@@ -1201,7 +1217,7 @@ mod test {
 
 	#[test]
 	fn signed_migrate_works() {
-		new_test_ext(StateVersion::V0, true).execute_with(|| {
+		new_test_ext(StateVersion::V0, true, None, None).execute_with(|| {
 			assert_eq!(MigrationProcess::<Test>::get(), Default::default());
 
 			// can't submit if limit is too high.
@@ -1265,7 +1281,7 @@ mod test {
 	#[test]
 	fn custom_migrate_top_works() {
 		let correct_witness = 3 + sp_core::storage::TRIE_VALUE_NODE_THRESHOLD * 3 + 1 + 2 + 3;
-		new_test_ext(StateVersion::V0, true).execute_with(|| {
+		new_test_ext(StateVersion::V0, true, None, None).execute_with(|| {
 			frame_support::assert_ok!(StateTrieMigration::migrate_custom_top(
 				Origin::signed(1),
 				vec![b"key1".to_vec(), b"key2".to_vec(), b"key3".to_vec()],
@@ -1277,7 +1293,7 @@ mod test {
 			assert_eq!(Balances::free_balance(&1), 1000);
 		});
 
-		new_test_ext(StateVersion::V0, true).execute_with(|| {
+		new_test_ext(StateVersion::V0, true, None, None).execute_with(|| {
 			// works if the witness is an overestimate
 			frame_support::assert_ok!(StateTrieMigration::migrate_custom_top(
 				Origin::signed(1),
@@ -1290,7 +1306,7 @@ mod test {
 			assert_eq!(Balances::free_balance(&1), 1000);
 		});
 
-		new_test_ext(StateVersion::V0, true).execute_with(|| {
+		new_test_ext(StateVersion::V0, true, None, None).execute_with(|| {
 			assert_eq!(Balances::free_balance(&1), 1000);
 
 			// note that we don't expect this to be a noop -- we do slash.
@@ -1320,7 +1336,7 @@ mod test {
 			string
 		};
 
-		new_test_ext(StateVersion::V0, true).execute_with(|| {
+		new_test_ext(StateVersion::V0, true, None, None).execute_with(|| {
 			frame_support::assert_ok!(StateTrieMigration::migrate_custom_child(
 				Origin::signed(1),
 				childify("chk1"),
@@ -1333,7 +1349,7 @@ mod test {
 			assert_eq!(Balances::free_balance(&1), 1000);
 		});
 
-		new_test_ext(StateVersion::V0, true).execute_with(|| {
+		new_test_ext(StateVersion::V0, true, None, None).execute_with(|| {
 			assert_eq!(Balances::free_balance(&1), 1000);
 
 			// note that we don't expect this to be a noop -- we do slash.
@@ -1495,12 +1511,10 @@ mod remote_tests_local {
 	async fn on_initialize_migration() {
 		sp_tracing::try_init_simple();
 		let mode = Mode::OfflineOrElseOnline(
-			OfflineConfig {
-				state_snapshot: "/home/kianenigma/remote-builds/state".to_owned().into(),
-			},
+			OfflineConfig { state_snapshot: env!("SNAP").to_owned().into() },
 			OnlineConfig {
 				transport: std::env!("WS_API").to_owned().into(),
-				state_snapshot: Some("/home/kianenigma/remote-builds/state".to_owned().into()),
+				state_snapshot: Some(env!("SNAP").to_owned().into()),
 				..Default::default()
 			},
 		);
