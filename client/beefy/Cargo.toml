@@ -10,6 +10,7 @@ description = "BEEFY Client gadget for substrate"
 [dependencies]
 fnv = "1.0.6"
 futures = "0.3"
+hex = "0.4.2"
 log = "0.4"
 parking_lot = "0.12.0"
 thiserror = "1.0"
@@ -39,4 +40,5 @@ beefy-primitives = { version = "4.0.0-dev", path = "../../primitives/beefy" }
 sp-tracing = { version = "5.0.0", path = "../../primitives/tracing" }
 sc-network-test = { version = "0.8.0", path = "../network/test" }
 
+serde = "1.0.136"
 strum = { version = "0.23", features = ["derive"] }
