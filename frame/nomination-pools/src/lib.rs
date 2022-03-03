@@ -340,8 +340,8 @@ pub type SubPoolsWithEra<T> = BoundedBTreeMap<EraIndex, UnbondPool<T>, TotalUnbo
 type RewardPoints = U256;
 
 const POINTS_TO_BALANCE_INIT_RATIO: u32 = 1;
-const BONDED_ACCOUNT_INDEX: [u8; 4] = *b"bond";
-const REWARD_ACCOUNT_INDEX: [u8; 4] = *b"rewd";
+const BONDED_ACCOUNT_INDEX: &[u8; 4] = b"bond";
+const REWARD_ACCOUNT_INDEX: &[u8; 4] = b"rewd";
 
 /// Calculate the number of points to issue from a pool as `(current_points / current_balance) *
 /// new_funds` except for some zero edge cases; see logic and tests for details.
@@ -517,8 +517,9 @@ impl<T: Config> BondedPool<T> {
 		BondedPools::<T>::remove(self.account);
 	}
 
-	fn create_account(index: [u8; 4], depositor: T::AccountId) -> T::AccountId {
+	fn create_account(index: &[u8; 4], depositor: T::AccountId) -> T::AccountId {
 		// TODO: look into make the prefix transparent by not hashing anything
+		// TODO: look into a using a configurable module id.
 		let entropy = (b"npls", index, depositor).using_encoded(blake2_256);
 		Decode::decode(&mut TrailingZeroInput::new(&entropy))
 			.expect("Input is trimmed to the max encoded length. qed")
