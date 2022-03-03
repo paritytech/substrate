@@ -235,7 +235,7 @@ const THRESHOLDS: [sp_npos_elections::VoteWeight; 9] =
 parameter_types! {
 	pub static BagThresholds: &'static [sp_npos_elections::VoteWeight] = &THRESHOLDS;
 	pub static MaxNominations: u32 = 16;
-	pub static LedgerSlashPerEra: (BalanceOf<T>, HashMap<EraIndex, Balance>) = HashMap::new();
+	pub static LedgerSlashPerEra: (BalanceOf<Test>, BTreeMap<EraIndex, Balance>) = (Zero::zero(), BTreeMap::new());
 }
 
 impl pallet_bags_list::Config for Test {
@@ -250,14 +250,14 @@ impl onchain::Config for Test {
 	type DataProvider = Staking;
 }
 
-struct OnStakerSlashMock<T: Config>(PhantomData<T>);
-impl<T: Config> OnStakerSlash<T::AccountId, BalanceOf<T>> for OnStakerSlashMock<T> {
+struct OnStakerSlashMock<T: Config>(core::marker::PhantomData<T>);
+impl<T: Config> sp_staking::OnStakerSlash<T::AccountId, BalanceOf<T>> for OnStakerSlashMock<T> {
 	fn on_slash(
-		pool_account: &AccountId,
-		slashed_bonded: Balance,
-		slashed_chunks: &BTreeMap<EraIndex, Balance>,
+		pool_account: &T::AccountId,
+		slashed_bonded: BalanceOf<T>,
+		slashed_chunks: &BTreeMap<EraIndex, BalanceOf<T>>,
 	) {
-		LedgerSlashPerEra::put((slashed_bonded, slashed_chunks));
+		LedgerSlashPerEra::set((slashed_bonded as u128, slashed_chunks.clone()));
 	}
 }
 
@@ -283,6 +283,7 @@ impl crate::pallet::pallet::Config for Test {
 	type GenesisElectionProvider = Self::ElectionProvider;
 	// NOTE: consider a macro and use `UseNominatorsMap<Self>` as well.
 	type SortedListProvider = BagsList;
+	type MaxUnlockingChunks = ConstU32<32>;
 	type BenchmarkingConfig = TestBenchmarkingConfig;
 	type OnStakerSlash = ();
 	type WeightInfo = ();
@@ -786,9 +787,9 @@ pub(crate) fn on_offence_in_era(
 	for &(bonded_era, start_session) in bonded_eras.iter() {
 		if bonded_era == era {
 			let _ = Staking::on_offence(offenders, slash_fraction, start_session, disable_strategy);
-			return
+			return;
 		} else if bonded_era > era {
-			break
+			break;
 		}
 	}
 

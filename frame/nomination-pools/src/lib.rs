@@ -522,7 +522,7 @@ impl<T: Config> BondedPool<T> {
 		// TODO: look into a using a configurable module id.
 		let entropy = (b"npls", index, depositor).using_encoded(blake2_256);
 		Decode::decode(&mut TrailingZeroInput::new(&entropy))
-			.expect("Input is trimmed to the max encoded length. qed")
+			.expect("Infinite length input. qed")
 	}
 
 	fn reward_account(&self) -> T::AccountId {
