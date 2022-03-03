@@ -297,10 +297,9 @@ pub mod pallet {
 
 	#[pallet::extra_constants]
 	impl<T: Config> Pallet<T> {
-		// TODO: rename to snake case after https://github.com/paritytech/substrate/issues/8826 fixed.
-		#[allow(non_snake_case)]
+		#[pallet::constant_name(WeightToFee)]
 		/// The polynomial that is applied in order to derive fee from weight.
-		fn WeightToFee() -> Vec<WeightToFeeCoefficient<BalanceOf<T>>> {
+		fn weight_to_fee_polynomial() -> Vec<WeightToFeeCoefficient<BalanceOf<T>>> {
 			T::WeightToFee::polynomial().to_vec()
 		}
 	}

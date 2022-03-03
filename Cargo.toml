@@ -138,6 +138,7 @@ members = [
 	"frame/uniques",
 	"frame/utility",
 	"frame/vesting",
+	"frame/whitelist",
 	"primitives/api",
 	"primitives/api/proc-macro",
 	"primitives/api/test",
