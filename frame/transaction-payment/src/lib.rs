@@ -539,7 +539,7 @@ where
 	}
 
 	fn length_to_fee(length: u32) -> BalanceOf<T> {
-		T::LengthToFee::calc(&(length as u64)) // TODO: saturating / upper bound
+		T::LengthToFee::calc(&(length as u64))
 	}
 
 	fn weight_to_fee(weight: Weight) -> BalanceOf<T> {
