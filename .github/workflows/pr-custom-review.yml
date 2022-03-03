@@ -21,6 +21,7 @@ jobs:
         uses: paritytech/pr-custom-review@v1
         with:
           token: ${{ secrets.PRCR_TOKEN }}
-          locks-review-team: non-parity-devs
+          # team that reviews changes in lines marked with 🔒
+          locks-review-team: locks-review
           team-leads-team: substrateteamleads
           action-review-team: ci
