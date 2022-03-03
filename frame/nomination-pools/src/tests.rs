@@ -496,12 +496,42 @@ mod join {
 		});
 	}
 
+	#[test]
 	fn join_max_delegator_limits_are_respected() {
-		todo!()
-	}
+		ExtBuilder::default().build_and_execute(|| {
+			// Given
+			assert_eq!(MaxDelegatorsPerPool::<Runtime>::get(), Some(3));
+			for i in 1..3 {
+				let account = i + 100;
+				Balances::make_free_balance_be(&account, 100 + Balances::minimum_balance());
 
-	fn join_max_pools_limits_are_respected() {
-		todo!()
+				assert_ok!(Pools::join(Origin::signed(account), 100, PRIMARY_ACCOUNT));
+			}
+
+			Balances::make_free_balance_be(&103, 100 + Balances::minimum_balance());
+
+			// Then
+			assert_noop!(
+				Pools::join(Origin::signed(103), 100, PRIMARY_ACCOUNT),
+				Error::<Runtime>::MaxDelegators
+			);
+
+			// Given
+			assert_eq!(Delegators::<Runtime>::count(), 3);
+			assert_eq!(MaxDelegators::<Runtime>::get(), Some(4));
+			Balances::make_free_balance_be(&104, 100 + Balances::minimum_balance());
+			assert_ok!(Pools::create(Origin::signed(104), 100, 1, 104, 104, 104));
+			let pool_account = BondedPools::<Runtime>::iter()
+				.find(|(_, bonded_pool)| bonded_pool.depositor == 104)
+				.map(|(pool_account, _)| pool_account)
+				.unwrap();
+
+			// Then
+			assert_noop!(
+				Pools::join(Origin::signed(103), 100, pool_account),
+				Error::<Runtime>::MaxDelegators
+			);
+		});
 	}
 }
 
@@ -1550,7 +1580,8 @@ mod withdraw_unbonded_other {
 				// Sanity check
 				assert_eq!(*unbond_pool, UnbondPool { points: 10, balance: 10 });
 
-				// Simulate a slash to the pool with_era(current_era), decreasing the balance by half
+				// Simulate a slash to the pool with_era(current_era), decreasing the balance by
+				// half
 				unbond_pool.balance = 5;
 				SubPoolsStorage::<Runtime>::insert(PRIMARY_ACCOUNT, sub_pools);
 				// Update the equivalent of the unbonding chunks for the `StakingMock`
@@ -2038,6 +2069,7 @@ mod create {
 				Error::<Runtime>::MinimumBondNotMet
 			);
 
+			// Given
 			BondedPool::<Runtime> {
 				depositor: 10,
 				state: PoolState::Open,
@@ -2052,8 +2084,20 @@ mod create {
 			assert_eq!(MaxPools::<Runtime>::get(), Some(2));
 			assert_eq!(BondedPools::<Runtime>::count(), 2);
 
+			// Then
 			assert_noop!(
 				Pools::create(Origin::signed(11), 20, 42, 123, 456, 789),
+				Error::<Runtime>::MaxPools
+			);
+
+			// Given
+			assert_eq!(Delegators::<Runtime>::count(), 1);
+			MaxPools::<Runtime>::put(3);
+			MaxDelegators::<Runtime>::put(1);
+
+			// Then
+			assert_noop!(
+				Pools::create(Origin::signed(11), 20, 0, 11, 11, 11),
 				Error::<Runtime>::MaxPools
 			);
 		});

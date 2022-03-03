@@ -199,6 +199,8 @@ impl ExtBuilder {
 			min_join_bond: 2,
 			min_create_bond: 2,
 			max_pools: Some(2),
+			max_delegators_per_pool: Some(3),
+			max_delegators: Some(4),
 		}
 		.assimilate_storage(&mut storage);
 
