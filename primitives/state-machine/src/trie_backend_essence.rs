@@ -168,7 +168,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> {
 		) -> R,
 	) -> R {
 		let mut recorder = self.recorder.as_ref().map(|r| r.as_trie_recorder());
-		let recorder = recorder.as_deref_mut().map(|r| r as _);
+		let recorder = recorder.as_mut().map(|r| r as _);
 
 		let mut cache = self
 			.trie_node_cache
@@ -206,7 +206,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> {
 		) -> (Option<H::Out>, R),
 	) -> R {
 		let mut recorder = self.recorder.as_ref().map(|r| r.as_trie_recorder());
-		let recorder = recorder.as_deref_mut().map(|r| r as _);
+		let recorder = recorder.as_mut().map(|r| r as _);
 
 		let result = if let Some(local_cache) = self.trie_node_cache.as_ref() {
 			let mut cache = local_cache.as_trie_db_mut_cache();
