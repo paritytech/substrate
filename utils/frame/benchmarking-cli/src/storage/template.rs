@@ -85,7 +85,7 @@ impl TemplateData {
 		Ok(())
 	}
 
-	/// Filles out the `weights.hbs` HBS template with its own data.
+	/// Fills out the `weights.hbs` HBS template with its own data.
 	/// Writes the result to `path` which can be a directory or file.
 	pub fn write(&self, path: &str) -> Result<()> {
 		let mut handlebars = handlebars::Handlebars::new();

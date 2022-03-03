@@ -67,7 +67,7 @@ pub struct BenchmarkCmd {
 	#[clap(long = "json")]
 	pub json_output: bool,
 
-	/// Write the raw results in JSON format into the give file.
+	/// Write the raw results in JSON format into the given file.
 	#[clap(long, conflicts_with = "json-output")]
 	pub json_file: Option<PathBuf>,
 
