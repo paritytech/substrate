@@ -29,7 +29,7 @@ use clap::{Args, Parser};
 use log::info;
 use rand::prelude::*;
 use serde::Serialize;
-use std::{fmt::Debug, sync::Arc};
+use std::{fmt::Debug, path::PathBuf, sync::Arc};
 
 use super::{record::StatSelect, template::TemplateData};
 
@@ -83,6 +83,10 @@ pub struct StorageParams {
 	#[clap(long)]
 	pub skip_write: bool,
 
+	/// Path to Handlebars template file used for outputting benchmark results. (Optional)
+	#[clap(long)]
+	pub template_path: Option<PathBuf>,
+
 	/// Rounds of warmups before measuring.
 	/// Only supported for `read` benchmarks.
 	#[clap(long, default_value = "1")]
@@ -113,6 +117,12 @@ impl StorageCmd {
 		Block: BlockT<Hash = DbHash>,
 		C: UsageProvider<Block> + StorageProvider<Block, BA> + HeaderBackend<Block>,
 	{
+		if let Some(hbs_template) = &self.params.template_path {
+			if !hbs_template.is_file() {
+				return Err("Handlebars template file is invalid!".into())
+			};
+		}
+
 		let mut template = TemplateData::new(&cfg, &self.params);
 
 		if !self.params.skip_read {
@@ -131,7 +141,7 @@ impl StorageCmd {
 			template.set_stats(None, Some(stats))?;
 		}
 
-		template.write(&self.params.weight_path)
+		template.write(&self.params.weight_path, &self.params.template_path)
 	}
 
 	/// Returns the specified state version.

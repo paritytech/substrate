@@ -85,9 +85,9 @@ impl TemplateData {
 		Ok(())
 	}
 
-	/// Fills out the `weights.hbs` HBS template with its own data.
+	/// Fills out the `weights.hbs` or specified HBS template with its own data.
 	/// Writes the result to `path` which can be a directory or file.
-	pub fn write(&self, path: &str) -> Result<()> {
+	pub fn write(&self, path: &str, hbs_template_path: &Option<PathBuf>) -> Result<()> {
 		let mut handlebars = handlebars::Handlebars::new();
 		// Format large integers with underscore.
 		handlebars.register_helper("underscore", Box::new(crate::writer::UnderscoreHelper));
@@ -97,8 +97,14 @@ impl TemplateData {
 		let out_path = self.build_path(path);
 		let mut fd = fs::File::create(&out_path)?;
 		info!("Writing weights to {:?}", fs::canonicalize(&out_path)?);
+
+		// Use custom template if provided.
+		let template = match hbs_template_path {
+			Some(template)  => fs::read_to_string(template)?,
+			None => TEMPLATE.to_string(),
+		};
 		handlebars
-			.render_template_to_write(&TEMPLATE, &self, &mut fd)
+			.render_template_to_write(&template, &self, &mut fd)
 			.map_err(|e| format!("HBS template write: {:?}", e).into())
 	}
 
