@@ -158,7 +158,6 @@ pub type Weight = u64;
 /// For example: FRAME System, FRAME Executive, our FRAME support libraries, etc...
 pub mod constants {
 	use super::Weight;
-	use crate::parameter_types;
 
 	pub const WEIGHT_PER_SECOND: Weight = 1_000_000_000_000;
 	pub const WEIGHT_PER_MILLIS: Weight = WEIGHT_PER_SECOND / 1000; // 1_000_000_000
