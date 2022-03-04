@@ -20,7 +20,7 @@ use crate::arg_enums::Database;
 use clap::Args;
 
 /// Parameters for block import.
-#[derive(Debug, Clone, Args)]
+#[derive(Debug, Clone, PartialEq, Args)]
 pub struct DatabaseParams {
 	/// Select database backend to use.
 	#[clap(

@@ -106,7 +106,8 @@ const DEFAULT_CHILD_RATIO: (usize, usize) = (1, 10);
 pub type DbState<B> =
 	sp_state_machine::TrieBackend<Arc<dyn sp_state_machine::Storage<HashFor<B>>>, HashFor<B>>;
 
-const DB_HASH_LEN: usize = 32;
+/// Length of a [`DbHash`].
+pub const DB_HASH_LEN: usize = 32;
 /// Hash type that this backend uses for the database.
 pub type DbHash = sp_core::H256;
 
@@ -1026,6 +1027,23 @@ impl<Block: BlockT> Backend<Block> {
 		Self::new(db_setting, canonicalization_delay).expect("failed to create test-db")
 	}
 
+	/// Expose the Database that is used by this backend.
+	/// The second argument is the Column that stores the State.
+	///
+	/// Should only be needed for benchmarking.
+	#[cfg(any(feature = "runtime-benchmarks"))]
+	pub fn expose_db(&self) -> (Arc<dyn sp_database::Database<DbHash>>, sp_database::ColumnId) {
+		(self.storage.db.clone(), columns::STATE)
+	}
+
+	/// Expose the Storage that is used by this backend.
+	///
+	/// Should only be needed for benchmarking.
+	#[cfg(any(feature = "runtime-benchmarks"))]
+	pub fn expose_storage(&self) -> Arc<dyn sp_state_machine::Storage<HashFor<Block>>> {
+		self.storage.clone()
+	}
+
 	fn from_database(
 		db: Arc<dyn Database<DbHash>>,
 		canonicalization_delay: u64,
@@ -1439,7 +1457,8 @@ impl<Block: BlockT> Backend<Block> {
 			}
 
 			if !existing_header {
-				{
+				// Add a new leaf if the block has the potential to be finalized.
+				if number > last_finalized_num || last_finalized_num.is_zero() {
 					let mut leaves = self.blockchain.leaves.write();
 					leaves.import(hash, number, parent_hash);
 					leaves.prepare_transaction(
@@ -2303,6 +2322,29 @@ pub(crate) mod tests {
 		backend.commit_operation(op)?;
 
 		Ok(header_hash)
+	}
+
+	pub fn insert_header_no_head(
+		backend: &Backend<Block>,
+		number: u64,
+		parent_hash: H256,
+		extrinsics_root: H256,
+	) -> H256 {
+		use sp_runtime::testing::Digest;
+
+		let digest = Digest::default();
+		let header = Header {
+			number,
+			parent_hash,
+			state_root: BlakeTwo256::trie_root(Vec::new(), StateVersion::V1),
+			digest,
+			extrinsics_root,
+		};
+		let header_hash = header.hash();
+		let mut op = backend.begin_operation().unwrap();
+		op.set_block_data(header, None, None, None, NewBlockState::Normal).unwrap();
+		backend.commit_operation(op).unwrap();
+		header_hash
 	}
 
 	#[test]
@@ -3354,5 +3396,20 @@ pub(crate) mod tests {
 			sp_blockchain::Error::StateDatabase(m) if m == "Block already exists" => (),
 			e @ _ => panic!("Unexpected error {:?}", e),
 		}
+	}
+
+	#[test]
+	fn test_leaves_not_created_for_ancient_blocks() {
+		let backend: Backend<Block> = Backend::new_test(10, 10);
+		let block0 = insert_header(&backend, 0, Default::default(), None, Default::default());
+
+		let block1_a = insert_header(&backend, 1, block0, None, Default::default());
+		let block2_a = insert_header(&backend, 2, block1_a, None, Default::default());
+		backend.finalize_block(BlockId::hash(block1_a), None).unwrap();
+		assert_eq!(backend.blockchain().leaves().unwrap(), vec![block2_a]);
+
+		// Insert a fork prior to finalization point. Leave should not be created.
+		insert_header_no_head(&backend, 1, block0, [1; 32].into());
+		assert_eq!(backend.blockchain().leaves().unwrap(), vec![block2_a]);
 	}
 }
