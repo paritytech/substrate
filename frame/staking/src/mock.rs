@@ -251,8 +251,7 @@ impl onchain::Config for Test {
 }
 
 struct OnStakerSlashMock<T: Config>(core::marker::PhantomData<T>);
-impl<T: Config> sp_staking::OnStakerSlash<
-AccountId, Balance> for OnStakerSlashMock<T> {
+impl<T: Config> sp_staking::OnStakerSlash<AccountId, Balance> for OnStakerSlashMock<T> {
 	fn on_slash(
 		_pool_account: &AccountId,
 		slashed_bonded: Balance,

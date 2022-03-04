@@ -555,11 +555,15 @@ impl<T: Config> StakingLedger<T> {
 		use sp_runtime::traits::CheckedMul as _;
 		use sp_staking::OnStakerSlash as _;
 		use sp_std::ops::Div as _;
+		if slash_amount.is_zero() {
+			return Zero::zero()
+		}
 
 		let mut remaining_slash = slash_amount;
 		let pre_slash_total = self.total;
 
 		// The index of the first chunk after the slash era
+		// TODO: we want slash_era + 1? Double check why though
 		let start_index = self.unlocking.partition_point(|c| c.era < slash_era);
 		// The indices of from the first chunk after the slash up through the most recent chunk.
 		// (The most recent chunk is at greatest from this era)
@@ -578,29 +582,35 @@ impl<T: Config> StakingLedger<T> {
 			self.active.saturating_add(unbonding_affected_balance)
 		};
 
-		if affected_balance.is_zero() {
-			// Exit early because there is nothing to slash
-			return Zero::zero()
-		}
-		// Wether or not this slash can be applied to just the active and affected unbonding chunks.
-		// If not, we have to slash all of the aforementioned and then continue slashing older
-		// unlocking chunks.
-		let is_proportional_slash = slash_amount < affected_balance;
+		// Its ok if this ratio is 1, that means the affected balance is less than the
+		// `slash_amount`, in which case we just try and slash as much as possible
+		let ratio = if affected_balance.is_zero() {
+			Perbill::one()
+		} else {
+			let ratio = Perbill::from_rational(slash_amount, affected_balance);
+			if ratio.is_zero() {
+				// We know that slash_amount isn't zero, so from_rational was not able to
+				// approximate with high enough fidelity.
+				Perbill::one()
+			} else {
+				ratio
+			}
+		};
 
 		// Helper to update `target` and the ledgers total after accounting for slashing `target`.
 		let mut slash_out_of = |target: &mut BalanceOf<T>, slash_remaining: &mut BalanceOf<T>| {
 			// We don't want the added complexity of using extended ints, so if this saturates we
 			// will always just try and slash as much as possible.
-			let maybe_numerator = slash_amount.checked_mul(target); // Use a Perbill
-			println!("{:?}=maybe_numerator", maybe_numerator);
 
-			// Calculate the amount to slash from the target
-			let slash_from_target = match (maybe_numerator, is_proportional_slash) {
-				// Perbill::from_rational(slash_amount, affected_balance) * target
-				// Equivalent to `(slash_amount / affected_balance) * target`.
-				(Some(numerator), true) => numerator.div(affected_balance),
-				(None, _) | (_, false) => (*slash_remaining).min(*target),
-			};
+			let slash_from_target = ratio.mul_floor(*target).min(*slash_remaining);
+
+			// let maybe_numerator = slash_amount.checked_mul(target);
+			// // // Calculate the amount to slash from the target
+			// let slash_from_target = match (maybe_numerator, is_proportional_slash) {
+			// 	// Equivalent to `(slash_amount / affected_balance) * target`.
+			// 	(Some(numerator), true) => numerator.div(affected_balance),
+			// 	(None, _) | (_, false) => (*slash_remaining).min(*target),
+			// };
 
 			*target = target.saturating_sub(slash_from_target);
 
