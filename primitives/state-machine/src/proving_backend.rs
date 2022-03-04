@@ -158,17 +158,13 @@ impl<Hash: std::hash::Hash + Eq> ProofRecorder<Hash> {
 
 	/// Convert into a [`StorageProof`].
 	pub fn to_storage_proof(&self) -> StorageProof {
-		let mut trie_nodes = self
-			.inner
-			.read()
-			.records
-			.iter()
-			.filter_map(|(_k, v)| v.as_ref().map(|v| v.to_vec()))
-			.collect::<Vec<_>>();
-
-		trie_nodes.sort();
-
-		StorageProof::new(trie_nodes)
+		StorageProof::new(
+			self.inner
+				.read()
+				.records
+				.iter()
+				.filter_map(|(_k, v)| v.as_ref().map(|v| v.to_vec())),
+		)
 	}
 
 	/// Reset the internal state.
