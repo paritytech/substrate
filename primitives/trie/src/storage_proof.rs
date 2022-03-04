@@ -54,8 +54,8 @@ impl StorageProof {
 		self.trie_nodes.is_empty()
 	}
 
-	/// Create an iterator over trie nodes constructed from the proof. The nodes are not guaranteed
-	/// to be traversed in any particular order.
+	/// Create an iterator over encoded trie nodes in lexicographical order constructed
+	/// from the proof.
 	pub fn iter_nodes(self) -> StorageProofNodeIterator {
 		StorageProofNodeIterator::new(self)
 	}
