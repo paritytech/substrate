@@ -27,7 +27,13 @@ use frame_support::{assert_ok, assert_storage_noop};
 fn basic_setup_works() {
 	ExtBuilder::default().build_and_execute(|| {
 		// syntactic sugar to create a raw node
-		let node = |phantom, id, prev, next, bag_upper| Node::<Runtime> { phantom, id, prev, next, bag_upper };
+		let node = |phantom, id, prev, next, bag_upper| Node::<Runtime> {
+			phantom,
+			id,
+			prev,
+			next,
+			bag_upper,
+		};
 
 		assert_eq!(ListNodes::<Runtime>::count(), 4);
 		assert_eq!(ListNodes::<Runtime>::iter().count(), 4);
@@ -45,9 +51,18 @@ fn basic_setup_works() {
 			Bag::<Runtime> { phantom: PhantomData, head: Some(2), tail: Some(4), bag_upper: 0 }
 		);
 
-		assert_eq!(ListNodes::<Runtime>::get(2).unwrap(), node(PhantomData, 2, None, Some(3), 1_000));
-		assert_eq!(ListNodes::<Runtime>::get(3).unwrap(), node(PhantomData, 3, Some(2), Some(4), 1_000));
-		assert_eq!(ListNodes::<Runtime>::get(4).unwrap(), node(PhantomData, 4, Some(3), None, 1_000));
+		assert_eq!(
+			ListNodes::<Runtime>::get(2).unwrap(),
+			node(PhantomData, 2, None, Some(3), 1_000)
+		);
+		assert_eq!(
+			ListNodes::<Runtime>::get(3).unwrap(),
+			node(PhantomData, 3, Some(2), Some(4), 1_000)
+		);
+		assert_eq!(
+			ListNodes::<Runtime>::get(4).unwrap(),
+			node(PhantomData, 4, Some(3), None, 1_000)
+		);
 		assert_eq!(ListNodes::<Runtime>::get(1).unwrap(), node(PhantomData, 1, None, None, 10));
 
 		// non-existent id does not have a storage footprint
@@ -388,8 +403,20 @@ mod list {
 	#[should_panic = "given nodes must always have a valid bag. qed."]
 	fn put_in_front_of_panics_if_bag_not_found() {
 		ExtBuilder::default().skip_genesis_ids().build_and_execute_no_post_check(|| {
-			let node_10_no_bag = Node::<Runtime> { phantom: PhantomData, id: 10, prev: None, next: None, bag_upper: 15 };
-			let node_11_no_bag = Node::<Runtime> { phantom: PhantomData, id: 11, prev: None, next: None, bag_upper: 15 };
+			let node_10_no_bag = Node::<Runtime> {
+				phantom: PhantomData,
+				id: 10,
+				prev: None,
+				next: None,
+				bag_upper: 15,
+			};
+			let node_11_no_bag = Node::<Runtime> {
+				phantom: PhantomData,
+				id: 11,
+				prev: None,
+				next: None,
+				bag_upper: 15,
+			};
 
 			// given
 			ListNodes::<Runtime>::insert(10, node_10_no_bag);
@@ -414,8 +441,13 @@ mod list {
 			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4])]);
 
 			// implicitly also test that `node`'s `prev`/`next` are correctly re-assigned.
-			let node_42 =
-				Node::<Runtime> { phantom: PhantomData, id: 42, prev: Some(1), next: Some(2), bag_upper: 1_000 };
+			let node_42 = Node::<Runtime> {
+				phantom: PhantomData,
+				id: 42,
+				prev: Some(1),
+				next: Some(2),
+				bag_upper: 1_000,
+			};
 			assert!(!crate::ListNodes::<Runtime>::contains_key(42));
 
 			let node_1 = crate::ListNodes::<Runtime>::get(&1).unwrap();
@@ -438,7 +470,13 @@ mod list {
 			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4])]);
 
 			// implicitly also test that `node`'s `prev`/`next` are correctly re-assigned.
-			let node_42 = Node::<Runtime> { phantom: PhantomData, id: 42, prev: Some(4), next: None, bag_upper: 1_000 };
+			let node_42 = Node::<Runtime> {
+				phantom: PhantomData,
+				id: 42,
+				prev: Some(4),
+				next: None,
+				bag_upper: 1_000,
+			};
 			assert!(!crate::ListNodes::<Runtime>::contains_key(42));
 
 			let node_2 = crate::ListNodes::<Runtime>::get(&2).unwrap();
@@ -461,7 +499,13 @@ mod list {
 			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4])]);
 
 			// implicitly also test that `node`'s `prev`/`next` are correctly re-assigned.
-			let node_42 = Node::<Runtime> { phantom: PhantomData, id: 42, prev: None, next: Some(2), bag_upper: 1_000 };
+			let node_42 = Node::<Runtime> {
+				phantom: PhantomData,
+				id: 42,
+				prev: None,
+				next: Some(2),
+				bag_upper: 1_000,
+			};
 			assert!(!crate::ListNodes::<Runtime>::contains_key(42));
 
 			let node_3 = crate::ListNodes::<Runtime>::get(&3).unwrap();
@@ -484,8 +528,13 @@ mod list {
 			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4])]);
 
 			// implicitly also test that `node`'s `prev`/`next` are correctly re-assigned.
-			let node_42 =
-				Node::<Runtime> { phantom: PhantomData, id: 42, prev: Some(42), next: Some(42), bag_upper: 1_000 };
+			let node_42 = Node::<Runtime> {
+				phantom: PhantomData,
+				id: 42,
+				prev: Some(42),
+				next: Some(42),
+				bag_upper: 1_000,
+			};
 			assert!(!crate::ListNodes::<Runtime>::contains_key(42));
 
 			let node_4 = crate::ListNodes::<Runtime>::get(&4).unwrap();
@@ -543,7 +592,13 @@ mod bags {
 	#[test]
 	fn insert_node_sets_proper_bag() {
 		ExtBuilder::default().build_and_execute_no_post_check(|| {
-			let node = |id, bag_upper| Node::<Runtime> { phantom: PhantomData, id, prev: None, next: None, bag_upper };
+			let node = |id, bag_upper| Node::<Runtime> {
+				phantom: PhantomData,
+				id,
+				prev: None,
+				next: None,
+				bag_upper,
+			};
 
 			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4])]);
 
@@ -560,7 +615,13 @@ mod bags {
 	#[test]
 	fn insert_node_happy_paths_works() {
 		ExtBuilder::default().build_and_execute_no_post_check(|| {
-			let node = |id, bag_upper| Node::<Runtime> { phantom: PhantomData, id, prev: None, next: None, bag_upper };
+			let node = |id, bag_upper| Node::<Runtime> {
+				phantom: PhantomData,
+				id,
+				prev: None,
+				next: None,
+				bag_upper,
+			};
 
 			// when inserting into a bag with 1 node
 			let mut bag_10 = Bag::<Runtime>::get(10).unwrap();
@@ -581,15 +642,26 @@ mod bags {
 			assert_eq!(bag_as_ids(&bag_20), vec![62]);
 
 			// when inserting a node pointing to the accounts not in the bag
-			let node_61 =
-				Node::<Runtime> { phantom: PhantomData, id: 61, prev: Some(21), next: Some(101), bag_upper: 20 };
+			let node_61 = Node::<Runtime> {
+				phantom: PhantomData,
+				id: 61,
+				prev: Some(21),
+				next: Some(101),
+				bag_upper: 20,
+			};
 			bag_20.insert_node_unchecked(node_61);
 			// then ids are in order
 			assert_eq!(bag_as_ids(&bag_20), vec![62, 61]);
 			// and when the node is re-fetched all the info is correct
 			assert_eq!(
 				Node::<Runtime>::get(&61).unwrap(),
-				Node::<Runtime> { phantom: PhantomData, id: 61, prev: Some(62), next: None, bag_upper: 20 }
+				Node::<Runtime> {
+					phantom: PhantomData,
+					id: 61,
+					prev: Some(62),
+					next: None,
+					bag_upper: 20
+				}
 			);
 
 			// state of all bags is as expected
@@ -604,7 +676,13 @@ mod bags {
 	// Document improper ways `insert_node` may be getting used.
 	#[test]
 	fn insert_node_bad_paths_documented() {
-		let node = | phantom, id, prev, next, bag_upper| Node::<Runtime> { phantom, id, prev, next, bag_upper };
+		let node = |phantom, id, prev, next, bag_upper| Node::<Runtime> {
+			phantom,
+			id,
+			prev,
+			next,
+			bag_upper,
+		};
 		ExtBuilder::default().build_and_execute_no_post_check(|| {
 			// when inserting a node with both prev & next pointing at an account in an incorrect
 			// bag.
@@ -657,7 +735,10 @@ mod bags {
 			);
 			//         ^^^ despite being the bags head, it has a prev
 
-			assert_eq!(bag_1000, Bag { phantom: PhantomData, head: Some(2), tail: Some(2), bag_upper: 1_000 })
+			assert_eq!(
+				bag_1000,
+				Bag { phantom: PhantomData, head: Some(2), tail: Some(2), bag_upper: 1_000 }
+			)
 		});
 	}
 
@@ -669,7 +750,13 @@ mod bags {
 	)]
 	fn insert_node_duplicate_tail_panics_with_debug_assert() {
 		ExtBuilder::default().build_and_execute(|| {
-			let node = | phantom, id, prev, next, bag_upper| Node::<Runtime> { phantom, id, prev, next, bag_upper };
+			let node = |phantom, id, prev, next, bag_upper| Node::<Runtime> {
+				phantom,
+				id,
+				prev,
+				next,
+				bag_upper,
+			};
 
 			// given
 			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4])],);

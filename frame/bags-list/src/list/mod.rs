@@ -135,11 +135,13 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 
 		// we can't check all preconditions, but we can check one
 		debug_assert!(
-			crate::ListBags::<T, I>::iter().all(|(threshold, _)| old_thresholds.contains(&threshold)),
+			crate::ListBags::<T, I>::iter()
+				.all(|(threshold, _)| old_thresholds.contains(&threshold)),
 			"not all `bag_upper` currently in storage are members of `old_thresholds`",
 		);
 		debug_assert!(
-			crate::ListNodes::<T, I>::iter().all(|(_, node)| old_thresholds.contains(&node.bag_upper)),
+			crate::ListNodes::<T, I>::iter()
+				.all(|(_, node)| old_thresholds.contains(&node.bag_upper)),
 			"not all `node.bag_upper` currently in storage are members of `old_thresholds`",
 		);
 
@@ -531,7 +533,8 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 		};
 
 		iter.filter_map(|t| {
-			Bag::<T, I>::get(t).map(|bag| (t, bag.iter().map(|n| n.id().clone()).collect::<Vec<_>>()))
+			Bag::<T, I>::get(t)
+				.map(|bag| (t, bag.iter().map(|n| n.id().clone()).collect::<Vec<_>>()))
 		})
 		.collect::<Vec<_>>()
 	}
@@ -622,7 +625,13 @@ impl<T: Config<I>, I: 'static> Bag<T, I> {
 		// insert_node will overwrite `prev`, `next` and `bag_upper` to the proper values. As long
 		// as this bag is the correct one, we're good. All calls to this must come after getting the
 		// correct [`notional_bag_for`].
-		self.insert_node_unchecked(Node::<T, I> { phantom: Default::default(), id, prev: None, next: None, bag_upper: 0 });
+		self.insert_node_unchecked(Node::<T, I> {
+			phantom: Default::default(),
+			id,
+			prev: None,
+			next: None,
+			bag_upper: 0,
+		});
 	}
 
 	/// Insert a node into this bag.

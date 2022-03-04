@@ -91,7 +91,10 @@ mod pallet {
 
 			// then
 			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1, 4]), (1_000, vec![2, 3])]);
-			assert_eq!(Bag::<Runtime>::get(1_000).unwrap(), Bag::new(PhantomData, Some(2), Some(3), 1_000));
+			assert_eq!(
+				Bag::<Runtime>::get(1_000).unwrap(),
+				Bag::new(PhantomData, Some(2), Some(3), 1_000)
+			);
 
 			// when
 			StakingMock::set_vote_weight_of(&3, 10);
@@ -100,8 +103,14 @@ mod pallet {
 			// then
 			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1, 4, 3]), (1_000, vec![2])]);
 
-			assert_eq!(Bag::<Runtime>::get(10).unwrap(), Bag::new(PhantomData, Some(1), Some(3), 10));
-			assert_eq!(Bag::<Runtime>::get(1_000).unwrap(), Bag::new(PhantomData, Some(2), Some(2), 1_000));
+			assert_eq!(
+				Bag::<Runtime>::get(10).unwrap(),
+				Bag::new(PhantomData, Some(1), Some(3), 10)
+			);
+			assert_eq!(
+				Bag::<Runtime>::get(1_000).unwrap(),
+				Bag::new(PhantomData, Some(2), Some(2), 1_000)
+			);
 			assert_eq!(get_list_as_ids(), vec![2u32, 1, 4, 3]);
 
 			// when
@@ -125,7 +134,10 @@ mod pallet {
 
 			// then
 			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1, 2]), (1_000, vec![3, 4])]);
-			assert_eq!(Bag::<Runtime>::get(1_000).unwrap(), Bag::new(PhantomData, Some(3), Some(4), 1_000));
+			assert_eq!(
+				Bag::<Runtime>::get(1_000).unwrap(),
+				Bag::new(PhantomData, Some(3), Some(4), 1_000)
+			);
 
 			// when
 			StakingMock::set_vote_weight_of(&3, 10);
@@ -133,7 +145,10 @@ mod pallet {
 
 			// then
 			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1, 2, 3]), (1_000, vec![4])]);
-			assert_eq!(Bag::<Runtime>::get(1_000).unwrap(), Bag::new(PhantomData, Some(4), Some(4), 1_000));
+			assert_eq!(
+				Bag::<Runtime>::get(1_000).unwrap(),
+				Bag::new(PhantomData, Some(4), Some(4), 1_000)
+			);
 
 			// when
 			StakingMock::set_vote_weight_of(&4, 10);

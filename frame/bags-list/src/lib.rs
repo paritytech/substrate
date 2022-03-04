@@ -163,7 +163,8 @@ pub mod pallet {
 	///
 	/// Stores a `Bag` struct, which stores head and tail pointers to itself.
 	#[pallet::storage]
-	pub(crate) type ListBags<T: Config<I>, I: 'static = ()> = StorageMap<_, Twox64Concat, VoteWeight, list::Bag<T, I>>;
+	pub(crate) type ListBags<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Twox64Concat, VoteWeight, list::Bag<T, I>>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(crate) fn deposit_event)]
