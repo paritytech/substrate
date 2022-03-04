@@ -350,8 +350,9 @@ fn points_to_issue<T: Config>(
 	new_funds: BalanceOf<T>,
 ) -> BalanceOf<T> {
 	match (current_balance.is_zero(), current_points.is_zero()) {
-		(true, true) | (false, true) =>
-			new_funds.saturating_mul(POINTS_TO_BALANCE_INIT_RATIO.into()),
+		(true, true) | (false, true) => {
+			new_funds.saturating_mul(POINTS_TO_BALANCE_INIT_RATIO.into())
+		},
 		(true, false) => {
 			// The pool was totally slashed.
 			// This is the equivalent of `(current_points / 1) * new_funds`.
@@ -376,7 +377,7 @@ fn balance_to_unbond<T: Config>(
 ) -> BalanceOf<T> {
 	if current_balance.is_zero() || current_points.is_zero() || delegator_points.is_zero() {
 		// There is nothing to unbond
-		return Zero::zero()
+		return Zero::zero();
 	}
 
 	// Equivalent of (current_balance / current_points) * delegator_points
@@ -571,8 +572,8 @@ impl<T: Config> BondedPool<T> {
 		ensure!(points_to_balance_ratio_floor < 10u32.into(), Error::<T>::OverflowRisk);
 		// while restricting the balance to 1/10th of max total issuance,
 		ensure!(
-			new_funds.saturating_add(bonded_balance) <
-				BalanceOf::<T>::max_value().div(10u32.into()),
+			new_funds.saturating_add(bonded_balance)
+				< BalanceOf::<T>::max_value().div(10u32.into()),
 			Error::<T>::OverflowRisk
 		);
 		// then we can be decently confident the bonding pool points will not overflow
@@ -774,7 +775,7 @@ impl<T: Config> SubPools<T> {
 			// For the first `0..TotalUnbondingPools` eras of the chain we don't need to do
 			// anything. I.E. if `TotalUnbondingPools` is 5 and we are in era 4 we can add a pool
 			// for this era and have exactly `TotalUnbondingPools` pools.
-			return self
+			return self;
 		}
 
 		//  I.E. if `TotalUnbondingPools` is 5 and current era is 10, we only want to retain pools
@@ -1140,6 +1141,7 @@ pub mod pallet {
 			// Note that we lazily create the unbonding pools here if they don't already exist
 			let sub_pools = SubPoolsStorage::<T>::get(&delegator.pool).unwrap_or_default();
 			let current_era = T::StakingInterface::current_era();
+			let unbond_era = T::StakingInterface::bonding_duration().saturating_add(current_era);
 
 			let balance_to_unbond = bonded_pool.balance_to_unbond(delegator.points);
 
@@ -1152,14 +1154,14 @@ pub mod pallet {
 
 			// Merge any older pools into the general, era agnostic unbond pool. Note that we do
 			// this before inserting to ensure we don't go over the max unbonding pools.
-			let mut sub_pools = sub_pools.maybe_merge_pools(current_era);
+			let mut sub_pools = sub_pools.maybe_merge_pools(unbond_era);
 
 			// Update the unbond pool associated with the current era with the
 			// unbonded funds. Note that we lazily create the unbond pool if it
 			// does not yet exist.
-			sub_pools.unchecked_with_era_get_or_make(current_era).issue(balance_to_unbond);
+			sub_pools.unchecked_with_era_get_or_make(unbond_era).issue(balance_to_unbond);
 
-			delegator.unbonding_era = Some(current_era);
+			delegator.unbonding_era = Some(unbond_era);
 
 			Self::deposit_event(Event::<T>::Unbonded {
 				delegator: target.clone(),
@@ -1221,11 +1223,7 @@ pub mod pallet {
 			let delegator = Delegators::<T>::get(&target).ok_or(Error::<T>::DelegatorNotFound)?;
 			let unbonding_era = delegator.unbonding_era.ok_or(Error::<T>::NotUnbonding)?;
 			let current_era = T::StakingInterface::current_era();
-			ensure!(
-				current_era.saturating_sub(unbonding_era) >=
-					T::StakingInterface::bonding_duration(),
-				Error::<T>::NotUnbondedYet
-			);
+			ensure!(current_era >= unbonding_era, Error::<T>::NotUnbondedYet);
 
 			let mut sub_pools = SubPoolsStorage::<T>::get(&delegator.pool)
 				.defensive_ok_or_else(|| Error::<T>::SubPoolsNotFound)?;
@@ -1337,8 +1335,8 @@ pub mod pallet {
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			ensure!(
-				amount >= T::StakingInterface::minimum_bond() &&
-					amount >= MinCreateBond::<T>::get(),
+				amount >= T::StakingInterface::minimum_bond()
+					&& amount >= MinCreateBond::<T>::get(),
 				Error::<T>::MinimumBondNotMet
 			);
 			if let Some(max_pools) = MaxPools::<T>::get() {
@@ -1477,9 +1475,9 @@ impl<T: Config> Pallet<T> {
 		let delegator_virtual_points = T::BalanceToU256::convert(delegator.points)
 			.saturating_mul(T::BalanceToU256::convert(new_earnings_since_last_claim));
 
-		let delegator_payout = if delegator_virtual_points.is_zero() ||
-			current_points.is_zero() ||
-			reward_pool.balance.is_zero()
+		let delegator_payout = if delegator_virtual_points.is_zero()
+			|| current_points.is_zero()
+			|| reward_pool.balance.is_zero()
 		{
 			Zero::zero()
 		} else {
