@@ -19,7 +19,7 @@ codec = { package = "parity-scale-codec", version = "3.0.0", default-features = 
 ] }
 sp-consensus = { version = "0.10.0-dev", path = "../../primitives/consensus/common" }
 sc-executor = { version = "0.10.0-dev", path = "../executor" }
-sp-externalities = { version = "0.11.0", path = "../../primitives/externalities" }
+sp-externalities = { version = "0.12.0", path = "../../primitives/externalities" }
 fnv = "1.0.6"
 futures = "0.3.19"
 hash-db = { version = "0.15.2", default-features = false }
@@ -27,14 +27,14 @@ sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
 log = "0.4.8"
 parking_lot = "0.12.0"
 sp-database = { version = "4.0.0-dev", path = "../../primitives/database" }
-sp-core = { version = "5.0.0", default-features = false, path = "../../primitives/core" }
-sp-keystore = { version = "0.11.0", default-features = false, path = "../../primitives/keystore" }
+sp-core = { version = "6.0.0", default-features = false, path = "../../primitives/core" }
+sp-keystore = { version = "0.12.0", default-features = false, path = "../../primitives/keystore" }
 sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
 sc-utils = { version = "4.0.0-dev", path = "../utils" }
-sp-runtime = { version = "5.0.0", default-features = false, path = "../../primitives/runtime" }
-sp-state-machine = { version = "0.11.0", path = "../../primitives/state-machine" }
-sp-trie = { version = "5.0.0", path = "../../primitives/trie" }
-sp-storage = { version = "5.0.0", path = "../../primitives/storage" }
+sp-runtime = { version = "6.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-state-machine = { version = "0.12.0", path = "../../primitives/state-machine" }
+sp-trie = { version = "6.0.0", path = "../../primitives/trie" }
+sp-storage = { version = "6.0.0", path = "../../primitives/storage" }
 sc-transaction-pool-api = { version = "4.0.0-dev", path = "../transaction-pool/api" }
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.10.0-dev", path = "../../utils/prometheus" }
 

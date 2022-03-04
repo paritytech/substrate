@@ -21,20 +21,20 @@ jsonrpc-derive = "18.0.0"
 sp-consensus-babe = { version = "0.10.0-dev", path = "../../../../primitives/consensus/babe" }
 serde = { version = "1.0.136", features = ["derive"] }
 sp-blockchain = { version = "4.0.0-dev", path = "../../../../primitives/blockchain" }
-sp-runtime = { version = "5.0.0", path = "../../../../primitives/runtime" }
+sp-runtime = { version = "6.0.0", path = "../../../../primitives/runtime" }
 sc-consensus-epochs = { version = "0.10.0-dev", path = "../../epochs" }
 futures = "0.3.19"
 thiserror = "1.0"
 sp-api = { version = "4.0.0-dev", path = "../../../../primitives/api" }
 sp-consensus = { version = "0.10.0-dev", path = "../../../../primitives/consensus/common" }
-sp-core = { version = "5.0.0", path = "../../../../primitives/core" }
-sp-application-crypto = { version = "5.0.0", path = "../../../../primitives/application-crypto" }
-sp-keystore = { version = "0.11.0", path = "../../../../primitives/keystore" }
+sp-core = { version = "6.0.0", path = "../../../../primitives/core" }
+sp-application-crypto = { version = "6.0.0", path = "../../../../primitives/application-crypto" }
+sp-keystore = { version = "0.12.0", path = "../../../../primitives/keystore" }
 
 [dev-dependencies]
 sc-consensus = { version = "0.10.0-dev", path = "../../../consensus/common" }
 serde_json = "1.0.74"
-sp-keyring = { version = "5.0.0", path = "../../../../primitives/keyring" }
+sp-keyring = { version = "6.0.0", path = "../../../../primitives/keyring" }
 sc-keystore = { version = "4.0.0-dev", path = "../../../keystore" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../../../test-utils/runtime/client" }
 tempfile = "3.1.0"

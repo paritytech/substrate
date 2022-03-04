@@ -36,21 +36,21 @@ hash-db = "0.15.2"
 serde = "1.0.136"
 serde_json = "1.0.74"
 sc-keystore = { version = "4.0.0-dev", path = "../keystore" }
-sp-runtime = { version = "5.0.0", path = "../../primitives/runtime" }
-sp-trie = { version = "5.0.0", path = "../../primitives/trie" }
-sp-externalities = { version = "0.11.0", path = "../../primitives/externalities" }
+sp-runtime = { version = "6.0.0", path = "../../primitives/runtime" }
+sp-trie = { version = "6.0.0", path = "../../primitives/trie" }
+sp-externalities = { version = "0.12.0", path = "../../primitives/externalities" }
 sc-utils = { version = "4.0.0-dev", path = "../utils" }
-sp-version = { version = "4.0.0-dev", path = "../../primitives/version" }
+sp-version = { version = "5.0.0", path = "../../primitives/version" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
-sp-core = { version = "5.0.0", path = "../../primitives/core" }
-sp-keystore = { version = "0.11.0", path = "../../primitives/keystore" }
+sp-core = { version = "6.0.0", path = "../../primitives/core" }
+sp-keystore = { version = "0.12.0", path = "../../primitives/keystore" }
 sp-session = { version = "4.0.0-dev", path = "../../primitives/session" }
-sp-state-machine = { version = "0.11.0", path = "../../primitives/state-machine" }
-sp-application-crypto = { version = "5.0.0", path = "../../primitives/application-crypto" }
+sp-state-machine = { version = "0.12.0", path = "../../primitives/state-machine" }
+sp-application-crypto = { version = "6.0.0", path = "../../primitives/application-crypto" }
 sp-consensus = { version = "0.10.0-dev", path = "../../primitives/consensus/common" }
 sc-consensus = { version = "0.10.0-dev", path = "../../client/consensus/common" }
 sp-inherents = { version = "4.0.0-dev", path = "../../primitives/inherents" }
-sp-storage = { version = "5.0.0", path = "../../primitives/storage" }
+sp-storage = { version = "6.0.0", path = "../../primitives/storage" }
 sc-network = { version = "0.10.0-dev", path = "../network" }
 sc-chain-spec = { version = "4.0.0-dev", path = "../chain-spec" }
 sc-client-api = { version = "4.0.0-dev", path = "../api" }
@@ -71,7 +71,7 @@ sc-telemetry = { version = "4.0.0-dev", path = "../telemetry" }
 sc-offchain = { version = "4.0.0-dev", path = "../offchain" }
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../utils/prometheus", version = "0.10.0-dev" }
 sc-tracing = { version = "4.0.0-dev", path = "../tracing" }
-sp-tracing = { version = "4.0.0", path = "../../primitives/tracing" }
+sp-tracing = { version = "5.0.0", path = "../../primitives/tracing" }
 tracing = "0.1.29"
 tracing-futures = { version = "0.2.4" }
 parity-util-mem = { version = "0.11.0", default-features = false, features = [

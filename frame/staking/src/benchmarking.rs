@@ -18,7 +18,7 @@
 //! Staking pallet benchmarking.
 
 use super::*;
-use crate::Pallet as Staking;
+use crate::{ConfigOp, Pallet as Staking};
 use testing_utils::*;
 
 use codec::Decode;
@@ -618,7 +618,7 @@ benchmarks! {
 	}
 
 	rebond {
-		let l in 1 .. MAX_UNLOCKING_CHUNKS as u32;
+		let l in 1 .. MaxUnlockingChunks::get() as u32;
 
 		// clean up any existing state.
 		clear_validators_and_nominators::<T>();
@@ -652,7 +652,7 @@ benchmarks! {
 		let mut staking_ledger = Ledger::<T>::get(controller.clone()).unwrap();
 
 		for _ in 0 .. l {
-			staking_ledger.unlocking.push(unlock_chunk.clone())
+			staking_ledger.unlocking.try_push(unlock_chunk.clone()).unwrap()
 		}
 		Ledger::<T>::insert(controller.clone(), staking_ledger.clone());
 		let original_bonded: BalanceOf<T> = staking_ledger.active;
@@ -702,7 +702,7 @@ benchmarks! {
 			stash: stash.clone(),
 			active: T::Currency::minimum_balance() - One::one(),
 			total: T::Currency::minimum_balance() - One::one(),
-			unlocking: vec![],
+			unlocking: Default::default(),
 			claimed_rewards: vec![],
 		};
 		Ledger::<T>::insert(&controller, l);
@@ -788,7 +788,7 @@ benchmarks! {
 
 	#[extra]
 	do_slash {
-		let l in 1 .. MAX_UNLOCKING_CHUNKS as u32;
+		let l in 1 .. MaxUnlockingChunks::get() as u32;
 		let (stash, controller) = create_stash_controller::<T>(0, 100, Default::default())?;
 		let mut staking_ledger = Ledger::<T>::get(controller.clone()).unwrap();
 		let unlock_chunk = UnlockChunk::<BalanceOf<T>> {
@@ -796,7 +796,7 @@ benchmarks! {
 			era: EraIndex::zero(),
 		};
 		for _ in 0 .. l {
-			staking_ledger.unlocking.push(unlock_chunk.clone())
+			staking_ledger.unlocking.try_push(unlock_chunk.clone()).unwrap();
 		}
 		Ledger::<T>::insert(controller, staking_ledger);
 		let slash_amount = T::Currency::minimum_balance() * 10u32.into();
@@ -852,16 +852,15 @@ benchmarks! {
 		assert_eq!(targets.len() as u32, v);
 	}
 
-	set_staking_configs {
-		// This function always does the same thing... just write to 4 storage items.
-	}: _(
+	set_staking_configs_all_set {
+	}: set_staking_configs(
 		RawOrigin::Root,
-		BalanceOf::<T>::max_value(),
-		BalanceOf::<T>::max_value(),
-		Some(u32::MAX),
-		Some(u32::MAX),
-		Some(Percent::max_value()),
-		Perbill::max_value()
+		ConfigOp::Set(BalanceOf::<T>::max_value()),
+		ConfigOp::Set(BalanceOf::<T>::max_value()),
+		ConfigOp::Set(u32::MAX),
+		ConfigOp::Set(u32::MAX),
+		ConfigOp::Set(Percent::max_value()),
+		ConfigOp::Set(Perbill::max_value())
 	) verify {
 		assert_eq!(MinNominatorBond::<T>::get(), BalanceOf::<T>::max_value());
 		assert_eq!(MinValidatorBond::<T>::get(), BalanceOf::<T>::max_value());
@@ -869,6 +868,24 @@ benchmarks! {
 		assert_eq!(MaxValidatorsCount::<T>::get(), Some(u32::MAX));
 		assert_eq!(ChillThreshold::<T>::get(), Some(Percent::from_percent(100)));
 		assert_eq!(MinCommission::<T>::get(), Perbill::from_percent(100));
+	}
+
+	set_staking_configs_all_remove {
+	}: set_staking_configs(
+		RawOrigin::Root,
+		ConfigOp::Remove,
+		ConfigOp::Remove,
+		ConfigOp::Remove,
+		ConfigOp::Remove,
+		ConfigOp::Remove,
+		ConfigOp::Remove
+	) verify {
+		assert!(!MinNominatorBond::<T>::exists());
+		assert!(!MinValidatorBond::<T>::exists());
+		assert!(!MaxNominatorsCount::<T>::exists());
+		assert!(!MaxValidatorsCount::<T>::exists());
+		assert!(!ChillThreshold::<T>::exists());
+		assert!(!MinCommission::<T>::exists());
 	}
 
 	chill_other {
@@ -886,12 +903,12 @@ benchmarks! {
 
 		Staking::<T>::set_staking_configs(
 			RawOrigin::Root.into(),
-			BalanceOf::<T>::max_value(),
-			BalanceOf::<T>::max_value(),
-			Some(0),
-			Some(0),
-			Some(Percent::from_percent(0)),
-			Zero::zero(),
+			ConfigOp::Set(BalanceOf::<T>::max_value()),
+			ConfigOp::Set(BalanceOf::<T>::max_value()),
+			ConfigOp::Set(0),
+			ConfigOp::Set(0),
+			ConfigOp::Set(Percent::from_percent(0)),
+			ConfigOp::Set(Zero::zero()),
 		)?;
 
 		let caller = whitelisted_caller();

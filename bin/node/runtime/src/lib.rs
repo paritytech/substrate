@@ -558,6 +558,7 @@ impl pallet_staking::Config for Runtime {
 	// Alternatively, use pallet_staking::UseNominatorsMap<Runtime> to just use the nominators map.
 	// Note that the aforementioned does not scale to a very large number of nominators.
 	type SortedListProvider = BagsList;
+	type MaxUnlockingChunks = ConstU32<32>;
 	type WeightInfo = pallet_staking::weights::SubstrateWeight<Runtime>;
 	type BenchmarkingConfig = StakingBenchmarkingConfig;
 }
@@ -1357,6 +1358,15 @@ impl pallet_transaction_storage::Config for Runtime {
 	type WeightInfo = pallet_transaction_storage::weights::SubstrateWeight<Runtime>;
 }
 
+impl pallet_whitelist::Config for Runtime {
+	type Event = Event;
+	type Call = Call;
+	type WhitelistOrigin = EnsureRoot<AccountId>;
+	type DispatchWhitelistedOrigin = EnsureRoot<AccountId>;
+	type PreimageProvider = Preimage;
+	type WeightInfo = pallet_whitelist::weights::SubstrateWeight<Runtime>;
+}
+
 construct_runtime!(
 	pub enum Runtime where
 		Block = Block,
@@ -1411,6 +1421,7 @@ construct_runtime!(
 		ChildBounties: pallet_child_bounties,
 		Referenda: pallet_referenda,
 		ConvictionVoting: pallet_conviction_voting,
+		Whitelist: pallet_whitelist,
 	}
 );
 
@@ -1509,6 +1520,7 @@ mod benches {
 		[pallet_uniques, Uniques]
 		[pallet_utility, Utility]
 		[pallet_vesting, Vesting]
+		[pallet_whitelist, Whitelist]
 	);
 }
 
