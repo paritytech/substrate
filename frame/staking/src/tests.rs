@@ -4814,7 +4814,7 @@ fn ledger_slash_works() {
 			     * get swept */
 			0
 		),
-		450
+		475
 	);
 
 	// Then
@@ -4825,12 +4825,10 @@ fn ledger_slash_works() {
 			c(0, 0),
 			c(1, 100 / 2),
 			c(2, 0),
-			// We reach the slash amount early due to 2 of the previous chunks falling below ED
-			// and getting swept
-			c(3, 250 / 2 + 25)
+			c(3, 250 / 2)
 		]
 	);
-	assert_eq!(ledger.total, 450);
+	assert_eq!(ledger.total, 425);
 
 	// Given we have the same as above,
 	ledger.unlocking = bounded_vec![c(0, 40), c(1, 100), c(2, 10), c(3, 250)];

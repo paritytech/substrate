@@ -523,7 +523,7 @@ impl<T: Config> StakingLedger<T> {
 			}
 
 			if unlocking_balance >= value {
-				break
+				break;
 			}
 		}
 
@@ -556,7 +556,7 @@ impl<T: Config> StakingLedger<T> {
 		use sp_staking::OnStakerSlash as _;
 		use sp_std::ops::Div as _;
 		if slash_amount.is_zero() {
-			return Zero::zero()
+			return Zero::zero();
 		}
 
 		let mut remaining_slash = slash_amount;
@@ -582,35 +582,16 @@ impl<T: Config> StakingLedger<T> {
 			self.active.saturating_add(unbonding_affected_balance)
 		};
 
-		// Its ok if this ratio is 1, that means the affected balance is less than the
-		// `slash_amount`, in which case we just try and slash as much as possible
-		let ratio = if affected_balance.is_zero() {
-			Perbill::one()
-		} else {
-			let ratio = Perbill::from_rational(slash_amount, affected_balance);
-			if ratio.is_zero() {
-				// We know that slash_amount isn't zero, so from_rational was not able to
-				// approximate with high enough fidelity.
-				Perbill::one()
-			} else {
-				ratio
-			}
-		};
-
+		let is_proportional_slash = slash_amount < affected_balance;
 		// Helper to update `target` and the ledgers total after accounting for slashing `target`.
 		let mut slash_out_of = |target: &mut BalanceOf<T>, slash_remaining: &mut BalanceOf<T>| {
-			// We don't want the added complexity of using extended ints, so if this saturates we
-			// will always just try and slash as much as possible.
-
-			let slash_from_target = ratio.mul_floor(*target).min(*slash_remaining);
-
-			// let maybe_numerator = slash_amount.checked_mul(target);
-			// // // Calculate the amount to slash from the target
-			// let slash_from_target = match (maybe_numerator, is_proportional_slash) {
-			// 	// Equivalent to `(slash_amount / affected_balance) * target`.
-			// 	(Some(numerator), true) => numerator.div(affected_balance),
-			// 	(None, _) | (_, false) => (*slash_remaining).min(*target),
-			// };
+			let maybe_numerator = slash_amount.checked_mul(target);
+			// // Calculate the amount to slash from the target
+			let slash_from_target = match (maybe_numerator, is_proportional_slash) {
+				// Equivalent to `(slash_amount / affected_balance) * target`.
+				(Some(numerator), true) => numerator.div(affected_balance),
+				(None, _) | (_, false) => (*slash_remaining).min(*target),
+			};
 
 			*target = target.saturating_sub(slash_from_target);
 
@@ -640,10 +621,10 @@ impl<T: Config> StakingLedger<T> {
 				slashed_unlocking.insert(chunk.era, chunk.value);
 
 				if remaining_slash.is_zero() {
-					break
+					break;
 				}
 			} else {
-				break // defensive, indices should always be in bounds.
+				break; // defensive, indices should always be in bounds.
 			}
 		}
 
