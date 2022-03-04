@@ -245,7 +245,7 @@ pub mod pallet {
 		/// reading a key, we simply cannot know how many bytes it is. In other words, this should
 		/// not be used in any environment where resources are strictly bounded (e.g. a parachain),
 		/// but it is acceptable otherwise (relay chain, offchain workers).
-		pub(crate) fn migrate_until_exhaustion(&mut self, limits: MigrationLimits) {
+		pub fn migrate_until_exhaustion(&mut self, limits: MigrationLimits) {
 			log!(debug, "running migrations on top of {:?} until {:?}", self, limits);
 
 			if limits.item.is_zero() || limits.size.is_zero() {
@@ -441,7 +441,7 @@ pub mod pallet {
 		/// This should reflect the average storage value size in the worse case.
 		type SignedDepositPerItem: Get<BalanceOf<Self>>;
 
-		/// The base value of [`SignedDepositPerItem`].
+		/// The base value of [`Config::SignedDepositPerItem`].
 		///
 		/// Final deposit is `items * SignedDepositPerItem + SignedDepositBase`.
 		type SignedDepositBase: Get<BalanceOf<Self>>;
@@ -601,9 +601,6 @@ pub mod pallet {
 			let deposit = T::SignedDepositBase::get().saturating_add(
 				T::SignedDepositPerItem::get().saturating_mul((keys.len() as u32).into()),
 			);
-			sp_std::if_std! {
-				println!("{:?} / {:?} / {:?}", who, deposit, T::Currency::free_balance(&who));
-			}
 			ensure!(T::Currency::can_slash(&who, deposit), "not enough funds");
 
 			let mut dyn_size = 0u32;
