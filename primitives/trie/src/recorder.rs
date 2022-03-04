@@ -19,12 +19,7 @@ use crate::{cache::TrieNodeCache, Error, NodeCodec, StorageProof, TrieDBBuilder}
 use codec::Encode;
 use hash_db::{HashDBRef, Hasher};
 use parking_lot::Mutex;
-use std::{
-	collections::HashMap,
-	mem,
-	ops::{Deref, DerefMut},
-	sync::Arc,
-};
+use std::{collections::HashMap, mem, ops::DerefMut, sync::Arc};
 use trie_db::{DBValue, TrieAccess, TrieLayout};
 
 /// Combines information about an accessed key.
@@ -74,8 +69,14 @@ impl<H: Hasher> Clone for Recorder<H> {
 }
 
 impl<H: Hasher> Recorder<H> {
-	pub fn as_trie_recorder(&self) -> impl trie_db::TrieRecorder<H::Out> + '_ {
-		TrieRecorder::<H, _> { inner: self.inner.lock(), storage_root: Default::default() }
+	/// Returns the recorder as [`TrieRecorder`](trie_db::TrieRecorder) compatible type.
+	///
+	/// The given `storage_root` is the storage root of trie for that the access is being recorded.
+	pub fn as_trie_recorder(
+		&self,
+		storage_root: H::Out,
+	) -> impl trie_db::TrieRecorder<H::Out> + '_ {
+		TrieRecorder::<H, _> { inner: self.inner.lock(), storage_root }
 	}
 
 	pub fn into_storage_proof<L: TrieLayout<Hash = H, Codec = NodeCodec<H>>>(
@@ -124,7 +125,7 @@ struct TrieRecorder<H: Hasher, I> {
 	storage_root: H::Out,
 }
 
-impl<H: Hasher, I: DerefMut + Deref<Target = RecorderInner<H::Out>>> trie_db::TrieRecorder<H::Out>
+impl<H: Hasher, I: DerefMut<Target = RecorderInner<H::Out>>> trie_db::TrieRecorder<H::Out>
 	for TrieRecorder<H, I>
 {
 	fn record<'b>(&mut self, access: TrieAccess<'b, H::Out>) {
@@ -228,9 +229,9 @@ mod tests {
 		let recorder = Recorder::default();
 
 		{
-			let mut trie_recorder = recorder.as_trie_recorder();
+			let mut trie_recorder = recorder.as_trie_recorder(root);
 			let trie = TrieDBBuilder::<Layout>::new_unchecked(&db, &root)
-				.with_recorder(&mut *trie_recorder)
+				.with_recorder(&mut trie_recorder)
 				.build();
 			assert_eq!(TEST_DATA[0].1.to_vec(), trie.get(TEST_DATA[0].0).unwrap().unwrap());
 		}
