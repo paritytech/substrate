@@ -30,7 +30,7 @@ use crate::LayoutV1 as Layout;
 /// The proof consists of the set of serialized nodes in the storage trie accessed when looking up
 /// the keys covered by the proof. Verifying the proof requires constructing the partial trie from
 /// the serialized nodes and performing the key lookups.
-#[derive(Debug, Clone, Encode, Decode, TypeInfo)]
+#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode, TypeInfo)]
 pub struct StorageProof {
 	trie_nodes: BTreeSet<Vec<u8>>,
 }

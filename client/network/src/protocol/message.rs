@@ -123,7 +123,7 @@ pub enum BlockState {
 }
 
 /// Remote call response.
-#[derive(Debug, Clone, Encode, Decode)]
+#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
 pub struct RemoteCallResponse {
 	/// Id of a request this response was made for.
 	pub id: RequestId,
@@ -131,7 +131,7 @@ pub struct RemoteCallResponse {
 	pub proof: StorageProof,
 }
 
-#[derive(Debug, Clone, Encode, Decode)]
+#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
 /// Remote read response.
 pub struct RemoteReadResponse {
 	/// Id of a request this response was made for.
@@ -265,7 +265,7 @@ pub mod generic {
 	}
 
 	/// A network message.
-	#[derive(Debug, Clone, Encode, Decode)]
+	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
 	pub enum Message<Header, Hash, Number, Extrinsic> {
 		/// Status packet.
 		Status(Status<Hash, Number>),
@@ -488,7 +488,7 @@ pub mod generic {
 		pub block: N,
 	}
 
-	#[derive(Debug, Clone, Encode, Decode)]
+	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
 	/// Remote header response.
 	pub struct RemoteHeaderResponse<Header> {
 		/// Id of a request this response was made for.
@@ -519,7 +519,7 @@ pub mod generic {
 		pub key: Vec<u8>,
 	}
 
-	#[derive(Debug, Clone, Encode, Decode)]
+	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
 	/// Remote changes response.
 	pub struct RemoteChangesResponse<N, H> {
 		/// Id of a request this response was made for.

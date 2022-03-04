@@ -609,12 +609,6 @@ mod tests {
 			.for_each(|(key, val)| proof_recorder.record(key, val));
 		let proof2 = proof_recorder.to_storage_proof();
 
-		let nodes1 = proof1.into_nodes();
-		let nodes2 = proof2.into_nodes();
-
-		assert_eq!(nodes1.len(), nodes2.len());
-		for (node1, node2) in nodes1.into_iter().zip(nodes2.into_iter()) {
-			assert_eq!(node1, node2);
-		}
+		assert_eq!(proof1, proof2);
 	}
 }
