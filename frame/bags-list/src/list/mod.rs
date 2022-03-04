@@ -73,7 +73,7 @@ pub fn notional_bag_for<T: Config<I>, I: 'static>(weight: VoteWeight) -> VoteWei
 // weight decreases as successive bags are reached. This means that it is valid to truncate
 // iteration at any desired point; only those ids in the lowest bag can be excluded. This
 // satisfies both the desire for fairness and the requirement for efficiency.
-pub struct List<T: Config<I>, I: 'static = ()>(PhantomData<T>);
+pub struct List<T: Config<I>, I: 'static = ()>(PhantomData<(T, I)>);
 
 impl<T: Config<I>, I: 'static> List<T, I> {
 	/// Remove all data associated with the list from storage.
@@ -546,9 +546,10 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 /// appearing within the ids set.
 #[derive(DefaultNoBound, Encode, Decode, MaxEncodedLen, TypeInfo)]
 #[codec(mel_bound())]
-#[scale_info(skip_type_params(T))]
+#[scale_info(skip_type_params(T, I))]
 #[cfg_attr(feature = "std", derive(frame_support::DebugNoBound, Clone, PartialEq))]
 pub struct Bag<T: Config<I>, I: 'static = ()> {
+	phantom: PhantomData<I>,
 	head: Option<T::AccountId>,
 	tail: Option<T::AccountId>,
 
@@ -559,11 +560,12 @@ pub struct Bag<T: Config<I>, I: 'static = ()> {
 impl<T: Config<I>, I: 'static> Bag<T, I> {
 	#[cfg(test)]
 	pub(crate) fn new(
+		phantom: PhantomData<I>,
 		head: Option<T::AccountId>,
 		tail: Option<T::AccountId>,
 		bag_upper: VoteWeight,
 	) -> Self {
-		Self { head, tail, bag_upper }
+		Self { phantom, head, tail, bag_upper }
 	}
 
 	/// Get a bag by its upper vote weight.
@@ -620,7 +622,7 @@ impl<T: Config<I>, I: 'static> Bag<T, I> {
 		// insert_node will overwrite `prev`, `next` and `bag_upper` to the proper values. As long
 		// as this bag is the correct one, we're good. All calls to this must come after getting the
 		// correct [`notional_bag_for`].
-		self.insert_node_unchecked(Node::<T, I> { id, prev: None, next: None, bag_upper: 0 });
+		self.insert_node_unchecked(Node::<T, I> { phantom: Default::default(), id, prev: None, next: None, bag_upper: 0 });
 	}
 
 	/// Insert a node into this bag.
@@ -749,9 +751,10 @@ impl<T: Config<I>, I: 'static> Bag<T, I> {
 /// A Node is the fundamental element comprising the doubly-linked list described by `Bag`.
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo)]
 #[codec(mel_bound())]
-#[scale_info(skip_type_params(T))]
+#[scale_info(skip_type_params(T, I))]
 #[cfg_attr(feature = "std", derive(frame_support::DebugNoBound, Clone, PartialEq))]
 pub struct Node<T: Config<I>, I: 'static = ()> {
+	phantom: PhantomData<I>,
 	id: T::AccountId,
 	prev: Option<T::AccountId>,
 	next: Option<T::AccountId>,

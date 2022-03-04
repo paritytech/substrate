@@ -92,7 +92,7 @@ pub fn display_and_check_bags<Runtime: RuntimeT>(currency_unit: u64, currency_na
 					"Account {:?} can be rebagged from {:?} to {:?}",
 					id,
 					vote_weight_thresh_as_unit,
-					pallet_bags_list::notional_bag_for::<Runtime>(vote_weight) as f64 /
+					pallet_bags_list::notional_bag_for::<Runtime, _>(vote_weight) as f64 /
 						currency_unit as f64
 				);
 			}
