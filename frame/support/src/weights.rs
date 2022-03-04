@@ -712,7 +712,7 @@ where
 	}
 }
 
-/// Implementor of `WeightToFeePolynomial` that uses a constant modifier.
+/// Implementor of [`WeightToFeePolynomial`] that uses a constant modifier.
 pub struct ConstantModifierFee<T, M>(sp_std::marker::PhantomData<(T, M)>);
 
 impl<T, M> WeightToFeePolynomial for ConstantModifierFee<T, M>
