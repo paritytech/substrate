@@ -661,10 +661,7 @@ impl<Block: BlockT> sc_client_api::blockchain::Backend<Block> for BlockchainDb<B
 				Ok(Some(transactions))
 			},
 			Err(err) =>
-				Err(sp_blockchain::Error::Backend(format!(
-					"Error decoding body list: {}",
-					err
-				))),
+				Err(sp_blockchain::Error::Backend(format!("Error decoding body list: {}", err))),
 		}
 	}
 }
