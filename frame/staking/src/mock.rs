@@ -235,6 +235,7 @@ const THRESHOLDS: [sp_npos_elections::VoteWeight; 9] =
 parameter_types! {
 	pub static BagThresholds: &'static [sp_npos_elections::VoteWeight] = &THRESHOLDS;
 	pub static MaxNominations: u32 = 16;
+	pub static LedgerSlashPerEra: (BalanceOf<Test>, BTreeMap<EraIndex, BalanceOf<Test>>) = (Zero::zero(), BTreeMap::new());
 }
 
 impl pallet_bags_list::Config for Test {
@@ -247,6 +248,17 @@ impl pallet_bags_list::Config for Test {
 impl onchain::Config for Test {
 	type Accuracy = Perbill;
 	type DataProvider = Staking;
+}
+
+pub struct OnStakerSlashMock<T: Config>(core::marker::PhantomData<T>);
+impl<T: Config> sp_staking::OnStakerSlash<AccountId, Balance> for OnStakerSlashMock<T> {
+	fn on_slash(
+		_pool_account: &AccountId,
+		slashed_bonded: Balance,
+		slashed_chunks: &BTreeMap<EraIndex, Balance>,
+	) {
+		LedgerSlashPerEra::set((slashed_bonded, slashed_chunks.clone()));
+	}
 }
 
 impl crate::pallet::pallet::Config for Test {
@@ -272,6 +284,7 @@ impl crate::pallet::pallet::Config for Test {
 	// NOTE: consider a macro and use `UseNominatorsMap<Self>` as well.
 	type SortedListProvider = BagsList;
 	type MaxUnlockingChunks = ConstU32<32>;
+	type OnStakerSlash = OnStakerSlashMock<Test>;
 	type BenchmarkingConfig = TestBenchmarkingConfig;
 	type WeightInfo = ();
 }

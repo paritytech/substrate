@@ -19,6 +19,7 @@
 
 //! A crate which contains primitives that are useful for implementation that uses staking
 //! approaches in general. Definitions related to sessions, slashing, etc go here.
+use sp_std::collections::btree_map::BTreeMap;
 
 pub mod offence;
 
@@ -27,3 +28,27 @@ pub type SessionIndex = u32;
 
 /// Counter for the number of eras that have passed.
 pub type EraIndex = u32;
+
+/// Trait describing something that implements a hook for any operations to perform when a staker is
+/// slashed.
+pub trait OnStakerSlash<AccountId, Balance> {
+	/// A hook for any operations to perform when a staker is slashed.
+	///
+	/// # Arguments
+	///
+	/// * `stash` - The stash of the staker whom the slash was applied to.
+	/// * `slashed_bonded` - The new bonded balance of the staker after the slash was applied.
+	/// * `slashed_unlocking` - A map from eras that the staker is unbonding in to the new balance
+	///   after the slash was applied.
+	fn on_slash(
+		stash: &AccountId,
+		slashed_bonded: Balance,
+		slashed_unlocking: &BTreeMap<EraIndex, Balance>,
+	);
+}
+
+impl<AccountId, Balance> OnStakerSlash<AccountId, Balance> for () {
+	fn on_slash(_: &AccountId, _: Balance, _: &BTreeMap<EraIndex, Balance>) {
+		// Nothing to do here
+	}
+}
