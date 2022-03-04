@@ -648,7 +648,7 @@ pub mod pallet {
 		)]
 		pub fn migrate_custom_child(
 			origin: OriginFor<T>,
-			top_key: Vec<u8>,
+			root: Vec<u8>,
 			child_keys: Vec<Vec<u8>>,
 			total_size: u32,
 		) -> DispatchResultWithPostInfo {
@@ -661,8 +661,7 @@ pub mod pallet {
 			ensure!(T::Currency::can_slash(&who, deposit), "not enough funds");
 
 			let mut dyn_size = 0u32;
-			let transformed_child_key =
-				Self::transform_child_key(&top_key).ok_or("bad child key")?;
+			let transformed_child_key = Self::transform_child_key(&root).ok_or("bad child key")?;
 			for child_key in &child_keys {
 				if let Some(data) =
 					sp_io::default_child_storage::get(transformed_child_key, &child_key)
@@ -773,6 +772,14 @@ pub mod pallet {
 			}
 			key.unwrap_or_default()
 		}
+
+		/// Convert a child root to be in the default child-tree.
+		#[cfg(any(test, feature = "runtime-benchmarks"))]
+		pub(crate) fn childify(root: &'static str) -> Vec<u8> {
+			let mut string = DEFAULT_CHILD_STORAGE_KEY_PREFIX.to_vec();
+			string.extend_from_slice(root.as_ref());
+			string
+		}
 	}
 }
 
@@ -855,10 +862,15 @@ mod benchmarks {
 			let caller = frame_benchmarking::whitelisted_caller();
 			let stash = T::Currency::minimum_balance() * BalanceOf::<T>::from(10u32);
 			T::Currency::make_free_balance_be(&caller, stash);
-		}: migrate_custom_child(frame_system::RawOrigin::Signed(caller.clone()), Default::default(), Default::default(), 0)
+		}: migrate_custom_child(
+			frame_system::RawOrigin::Signed(caller.clone()),
+			StateTrieMigration::<T>::childify(Default::default()),
+			Default::default(),
+			0
+		)
 		verify {
 			assert_eq!(StateTrieMigration::<T>::migration_process(), Default::default());
-			assert_eq!(T::Currency::free_balance(&caller), stash)
+			assert_eq!(T::Currency::free_balance(&caller), stash);
 		}
 
 		migrate_custom_child_fail {
@@ -872,7 +884,7 @@ mod benchmarks {
 			assert!(
 				StateTrieMigration::<T>::migrate_custom_child(
 					frame_system::RawOrigin::Signed(caller.clone()).into(),
-					b"top".to_vec(),
+					StateTrieMigration::<T>::childify("top"),
 					vec![b"foo".to_vec()],
 					1,
 				).is_err()
@@ -1099,7 +1111,6 @@ mod mock {
 #[cfg(test)]
 mod test {
 	use super::{mock::*, *};
-	use sp_core::storage::well_known_keys::DEFAULT_CHILD_STORAGE_KEY_PREFIX;
 	use sp_runtime::{traits::Bounded, StateVersion};
 
 	#[test]
@@ -1332,16 +1343,10 @@ mod test {
 
 	#[test]
 	fn custom_migrate_child_works() {
-		let childify = |s: &'static str| {
-			let mut string = DEFAULT_CHILD_STORAGE_KEY_PREFIX.to_vec();
-			string.extend_from_slice(s.as_ref());
-			string
-		};
-
 		new_test_ext(StateVersion::V0, true, None, None).execute_with(|| {
 			frame_support::assert_ok!(StateTrieMigration::migrate_custom_child(
 				Origin::signed(1),
-				childify("chk1"),
+				StateTrieMigration::childify("chk1"),
 				vec![b"key1".to_vec(), b"key2".to_vec()],
 				55 + 66,
 			));
@@ -1357,7 +1362,7 @@ mod test {
 			// note that we don't expect this to be a noop -- we do slash.
 			assert!(StateTrieMigration::migrate_custom_child(
 				Origin::signed(1),
-				childify("chk1"),
+				StateTrieMigration::childify("chk1"),
 				vec![b"key1".to_vec(), b"key2".to_vec()],
 				999999, // wrong witness
 			)
