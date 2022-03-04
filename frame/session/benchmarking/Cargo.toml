@@ -27,7 +27,7 @@ pallet-staking = { version = "4.0.0-dev", default-features = false, features = [
 
 [dev-dependencies]
 codec = { package = "parity-scale-codec", version = "3.0.0", features = ["derive"] }
-scale-info = "2.0.0"
+scale-info = "2.0.1"
 sp-core = { version = "6.0.0", path = "../../../primitives/core" }
 sp-io = { version = "6.0.0", path = "../../../primitives/io" }
 pallet-balances = { version = "4.0.0-dev", path = "../../balances" }
