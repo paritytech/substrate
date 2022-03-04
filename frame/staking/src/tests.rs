@@ -4849,10 +4849,8 @@ fn ledger_slash_works() {
 	ledger.unlocking = bounded_vec![c(4, 40), c(5, 100), c(6, 10), c(7, 250)];
 	ledger.active = 500;
 	ledger.total = 40 + 10 + 100 + 250 + 500; // 900
-
-	// When we have a partial slash that touches all chunks
+										  // When we have a partial slash that touches all chunks
 	assert_eq!(ledger.slash(900 / 2, 0, 0), 450);
-
 	// Then
 	assert_eq!(ledger.active, 500 / 2);
 	assert_eq!(ledger.unlocking, vec![c(4, 40 / 2), c(5, 100 / 2), c(6, 10 / 2), c(7, 250 / 2)]);
@@ -4868,7 +4866,6 @@ fn ledger_slash_works() {
 	ledger.active = 500;
 	ledger.total = 40 + 10 + 100 + 250 + 500; // 900
 	assert_eq!(ledger.total, 900);
-
 	// When  we have a higher min balance
 	assert_eq!(
 		ledger.slash(
@@ -4879,7 +4876,6 @@ fn ledger_slash_works() {
 		),
 		475
 	);
-
 	// Then
 	assert_eq!(ledger.active, 500 / 2);
 	assert_eq!(ledger.unlocking, vec![c(4, 0), c(5, 100 / 2), c(6, 0), c(7, 250 / 2)]);
@@ -4894,18 +4890,16 @@ fn ledger_slash_works() {
 	ledger.unlocking = bounded_vec![c(4, 40), c(5, 100), c(6, 10), c(7, 250)];
 	ledger.active = 500;
 	ledger.total = 40 + 10 + 100 + 250 + 500; // 900
-
-	// When
+										  // When
 	assert_eq!(
 		ledger.slash(
 			900 / 2,
-			25, /* min balance - chunks with era 0 & 2 will be slashed to <=25, causing it to
+			25, /* min balance - chunks with era 5 & 5 will be slashed to <=25, causing them to
 			     * get swept */
 			0
 		),
 		475
 	);
-
 	// Then
 	assert_eq!(ledger.active, 500 / 2);
 	assert_eq!(ledger.unlocking, vec![c(4, 0), c(5, 100 / 2), c(6, 0), c(7, 250 / 2)]);
@@ -4920,8 +4914,7 @@ fn ledger_slash_works() {
 	ledger.unlocking = bounded_vec![c(4, 40), c(5, 100), c(6, 10), c(7, 250)];
 	ledger.active = 500;
 	ledger.total = 40 + 10 + 100 + 250 + 500; // 900
-
-	// When
+										  // When
 	assert_eq!(
 		ledger.slash(
 			500 + 10 + 250 + 100 / 2, // active + era 6 + era 7 + era 5 / 2
@@ -4932,7 +4925,7 @@ fn ledger_slash_works() {
 		),
 		500 + 250 + 10 + 100 / 2
 	);
-
+	// Then
 	assert_eq!(ledger.active, 0);
 	// iteration order ------------------NA----------2-------------0--------1----
 	assert_eq!(ledger.unlocking, vec![c(4, 40), c(5, 100 / 2), c(6, 0), c(7, 0)]);
@@ -4944,19 +4937,17 @@ fn ledger_slash_works() {
 	ledger.unlocking = bounded_vec![c(4, 100), c(5, 100), c(6, 100), c(7, 100)];
 	ledger.active = 100;
 	ledger.total = 5 * 100;
-
 	// When
 	assert_eq!(
 		ledger.slash(
-			350, // active + era 2 + era 3 + era 1 / 2
-			50,
-			2 /* slash era 2+4 first, so the affected parts are era 2+4, era 3+4 and
-			    * ledge.active. This will cause the affected to go to zero, and then we will
-			    * start slashing older chunks */
+			350, // active + era 6 + era 7 + era 5 / 2
+			50,  // min balance - everything slashed to 50 or below will get dusted
+			2    /* slash era 2+4 first, so the affected parts are era 2+4, era 3+4 and
+			      * ledge.active. This will cause the affected to go to zero, and then we will
+			      * start slashing older chunks */
 		),
 		400
 	);
-
 	// Then
 	assert_eq!(ledger.active, 0);
 	// iteration order ------------------NA---------2--------0--------1----
@@ -4975,15 +4966,11 @@ fn ledger_slash_works() {
 		+ 1;
 	// slash * value will saturate
 	assert!(slash.checked_mul(value - 20).is_none());
-
 	ledger.active = 10;
 	ledger.unlocking = bounded_vec![c(4, 10), c(5, 10), c(6, 10), c(7, value)];
-
 	ledger.total = value + 40;
-
 	// When
 	assert_eq!(ledger.slash(slash, 0, 0), slash);
-
 	// Then
 	assert_eq!(ledger.active, 1); // slash of 9
 	assert_eq!(
@@ -4991,8 +4978,8 @@ fn ledger_slash_works() {
 		vec![
 			c(4, 1), // slash of 9
 			c(5, 1), // slash of 9
-			c(6, 1), // slash of 9 ------------(slash - 9 * 4).min(value)
-			c(7, 1), // saturates, so slash of remaining_slash.min(value)
+			c(6, 1), // slash of 9
+			c(7, 1), // saturates, so slash of remaining_slash.min(value) equivalent of (slash - 9 * 4).min(value)
 		]
 	);
 	assert_eq!(ledger.total, 5);
@@ -5005,19 +4992,15 @@ fn ledger_slash_works() {
 	let unit = 100;
 	// slash * value that will saturate
 	assert!(slash.checked_mul(value).is_none());
-	// but slash * unit.
+	// but slash * unit won't.
 	assert!(slash.checked_mul(unit).is_some());
-
 	ledger.unlocking = bounded_vec![c(4, unit), c(5, value), c(6, unit), c(7, unit)];
 	//--------------------------------------note value^^^
 	ledger.active = unit;
 	ledger.total = unit * 4 + value;
-
 	// When
 	assert_eq!(ledger.slash(slash, 0, 0), slash);
-
 	// Then
-
 	// The amount slashed out of `unit`
 	let unit_slash = {
 		let affected_balance = value + unit * 4;
@@ -5025,10 +5008,9 @@ fn ledger_slash_works() {
 	};
 	// `unit` after the slash is applied
 	let unit_slashed = unit - unit_slash;
-
 	// `value` after the slash is applied
 	let value_slashed = {
-		// We slash active and era 1 before we slash era 2
+		// We slash active and era 4 before we slash era 5
 		let previous_slashed_amount = unit_slash * 2;
 		let remaining_slash = slash - previous_slashed_amount;
 		value - remaining_slash
@@ -5038,8 +5020,8 @@ fn ledger_slash_works() {
 		ledger.unlocking,
 		vec![
 			c(4, unit_slashed),
-			// We reached the slash here because we slashed value.min(remaining_slash), which was
-			// remaining_slash
+			// We reached the full slash amount here because we slashed value.min(remaining_slash),
+			// which was remaining_slash
 			c(5, value_slashed),
 			c(6, unit), /* The rest are untouched even though they where in the slashing range.
 			             * This is problematic for pools, but should be rare enough that its ok. */

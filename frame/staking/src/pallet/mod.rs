@@ -174,7 +174,7 @@ pub mod pallet {
 		type MaxUnlockingChunks: Get<u32>;
 
 		/// A hook called when any staker is slashed. Mostly likely this can be a no-op unless
-		/// there are delegation pools.
+		/// there are nomination pools.
 		type OnStakerSlash: sp_staking::OnStakerSlash<Self::AccountId, BalanceOf<Self>>;
 
 		/// Some parameters of the benchmarking.

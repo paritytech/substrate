@@ -571,14 +571,13 @@ impl<T: Config> StakingLedger<T> {
 		let mut remaining_slash = slash_amount;
 		let pre_slash_total = self.total;
 
-		// The index of the first chunk after the slash era
 		let era_after_slash = slash_era + 1;
 		// When a user unbonds, the chunk is given the era `current_era + BondingDuration`. See
 		// logic in [`Self::unbond`].
 		let era_of_chunks_created_after_slash = era_after_slash + T::BondingDuration::get();
 		let start_index =
 			self.unlocking.partition_point(|c| c.era < era_of_chunks_created_after_slash);
-		// The indices of from the first chunk after the slash up through the most recent chunk.
+		// The indices of the first chunk after the slash up through the most recent chunk.
 		// (The most recent chunk is at greatest from this era)
 		let affected_indices = start_index..self.unlocking.len();
 
@@ -599,10 +598,11 @@ impl<T: Config> StakingLedger<T> {
 		// Helper to update `target` and the ledgers total after accounting for slashing `target`.
 		let mut slash_out_of = |target: &mut BalanceOf<T>, slash_remaining: &mut BalanceOf<T>| {
 			let maybe_numerator = slash_amount.checked_mul(target);
-			// // Calculate the amount to slash from the target
 			let slash_from_target = match (maybe_numerator, is_proportional_slash) {
 				// Equivalent to `(slash_amount / affected_balance) * target`.
 				(Some(numerator), true) => numerator.div(affected_balance),
+				// If the slash amount is gt than the affected balance OR the arithmetic to
+				// calculate the proportion saturated, we just try to slash as much as possible.
 				(None, _) | (_, false) => (*target).min(*slash_remaining),
 			};
 
@@ -626,7 +626,7 @@ impl<T: Config> StakingLedger<T> {
 		let indices_to_slash
 		// First slash unbonding chunks from after the slash
 			= affected_indices
-					// Then start slashing older chunks, start from the era before the slash
+					// Then start slashing older chunks, start from the era of the slash
 					.chain((0..start_index).rev());
 		for i in indices_to_slash {
 			if let Some(chunk) = self.unlocking.get_mut(i) {
