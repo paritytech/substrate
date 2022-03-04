@@ -662,6 +662,9 @@ pub mod pallet {
 			let deposit = T::SignedDepositBase::get().saturating_add(
 				T::SignedDepositPerItem::get().saturating_mul((child_keys.len() as u32).into()),
 			);
+			sp_std::if_std! {
+				println!("+ {:?} / {:?} / {:?}", who, deposit, T::Currency::free_balance(&who));
+			}
 			ensure!(T::Currency::can_slash(&who, deposit), "not enough funds");
 
 			let mut dyn_size = 0u32;
@@ -869,7 +872,10 @@ mod benchmarks {
 
 		migrate_custom_child_success {
 			let caller = frame_benchmarking::whitelisted_caller();
-			let stash = T::Currency::minimum_balance() * BalanceOf::<T>::from(10u32);
+			let deposit = T::SignedDepositBase::get().saturating_add(
+				T::SignedDepositPerItem::get().saturating_mul(1u32.into()),
+			);
+			let stash = T::Currency::minimum_balance() * BalanceOf::<T>::from(1000u32) + deposit;
 			T::Currency::make_free_balance_be(&caller, stash);
 		}: migrate_custom_child(
 			frame_system::RawOrigin::Signed(caller.clone()),
@@ -884,7 +890,10 @@ mod benchmarks {
 
 		migrate_custom_child_fail {
 			let caller = frame_benchmarking::whitelisted_caller();
-			let stash = T::Currency::minimum_balance() * BalanceOf::<T>::from(10u32);
+			let deposit = T::SignedDepositBase::get().saturating_add(
+				T::SignedDepositPerItem::get().saturating_mul(1u32.into()),
+			);
+			let stash = T::Currency::minimum_balance() * BalanceOf::<T>::from(1000u32) + deposit;
 			T::Currency::make_free_balance_be(&caller, stash);
 			// for tests, we need to make sure there is _something_ in storage that is being
 			// migrated.
