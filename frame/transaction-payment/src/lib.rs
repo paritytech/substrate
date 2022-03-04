@@ -539,7 +539,7 @@ where
 	}
 
 	fn length_to_fee(length: u32) -> BalanceOf<T> {
-		T::LengthToFee::calc(&(length as u64))
+		T::LengthToFee::calc(&(length as Weight))
 	}
 
 	fn weight_to_fee(weight: Weight) -> BalanceOf<T> {
