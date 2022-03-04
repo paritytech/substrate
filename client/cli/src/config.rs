@@ -31,7 +31,7 @@ use sc_service::{
 		NodeKeyConfig, OffchainWorkerConfig, PrometheusConfig, PruningMode, Role, RpcMethods,
 		TelemetryEndpoints, TransactionPoolOptions, WasmExecutionMethod,
 	},
-	ChainSpec, KeepBlocks, TracingReceiver, TransactionStorageMode,
+	ChainSpec, KeepBlocks, TracingReceiver,
 };
 use sc_tracing::logging::LoggerBuilder;
 use std::{net::SocketAddr, path::PathBuf};
@@ -196,14 +196,6 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 	/// By default this is retrieved from `DatabaseParams` if it is available. Otherwise its `None`.
 	fn database_cache_size(&self) -> Result<Option<usize>> {
 		Ok(self.database_params().map(|x| x.database_cache_size()).unwrap_or_default())
-	}
-
-	/// Get the database transaction storage scheme.
-	fn database_transaction_storage(&self) -> Result<TransactionStorageMode> {
-		Ok(self
-			.database_params()
-			.map(|x| x.transaction_storage())
-			.unwrap_or(TransactionStorageMode::BlockBody))
 	}
 
 	/// Get the database backend variant.
@@ -519,7 +511,6 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			state_cache_child_ratio: self.state_cache_child_ratio()?,
 			state_pruning: self.state_pruning(unsafe_pruning, &role)?,
 			keep_blocks: self.keep_blocks()?,
-			transaction_storage: self.database_transaction_storage()?,
 			wasm_method: self.wasm_method()?,
 			wasm_runtime_overrides: self.wasm_runtime_overrides(),
 			execution_strategies: self.execution_strategies(is_dev, is_validator)?,
