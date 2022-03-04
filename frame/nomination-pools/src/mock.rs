@@ -210,13 +210,7 @@ impl ExtBuilder {
 			// make a pool
 			let amount_to_bond = <Runtime as pools::Config>::StakingInterface::minimum_bond();
 			Balances::make_free_balance_be(&10, amount_to_bond * 2);
-			assert_ok!(Pools::create(
-				RawOrigin::Signed(10).into(),
-				amount_to_bond,
-				900,
-				901,
-				902
-			));
+			assert_ok!(Pools::create(RawOrigin::Signed(10).into(), amount_to_bond, 900, 901, 902));
 
 			for (account_id, bonded) in self.delegators {
 				Balances::make_free_balance_be(&account_id, bonded * 2);

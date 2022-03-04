@@ -12,7 +12,7 @@ use frame_support::{ensure, traits::Get};
 use frame_system::RawOrigin as Origin;
 use pallet_nomination_pools::{
 	BalanceOf, BondedPoolStorage, BondedPools, Delegators, MinCreateBond, MinJoinBond,
-	Pallet as Pools, PoolState, RewardPools, SubPoolsStorage, UnbondPool,
+	Pallet as Pools, PoolState, RewardPools, SubPoolsStorage,
 };
 use sp_runtime::traits::{StaticLookup, Zero};
 use sp_staking::{EraIndex, StakingInterface};
@@ -60,7 +60,6 @@ fn create_pool_account<T: pallet_nomination_pools::Config>(
 	Pools::<T>::create(
 		Origin::Signed(pool_creator.clone()).into(),
 		balance,
-		n as u16,
 		pool_creator.clone(),
 		pool_creator.clone(),
 		pool_creator.clone(),
@@ -466,7 +465,6 @@ frame_benchmarking::benchmarks! {
 	}: _(
 			Origin::Signed(depositor.clone()),
 			min_create_bond,
-			0,
 			depositor.clone(),
 			depositor.clone(),
 			depositor.clone()
