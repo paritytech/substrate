@@ -19,6 +19,7 @@
 
 use frame_election_provider_support::SortedListProvider;
 use frame_support::{
+	dispatch::Codec,
 	pallet_prelude::*,
 	traits::{
 		Currency, CurrencyToVote, DefensiveSaturating, EnsureOrigin, EstimateNextNewSession, Get,
@@ -32,7 +33,7 @@ use sp_runtime::{
 	DispatchError, Perbill, Percent,
 };
 use sp_staking::{EraIndex, SessionIndex};
-use sp_std::{convert::From, prelude::*};
+use sp_std::{cmp::max, convert::From, prelude::*};
 
 mod impls;
 
@@ -59,6 +60,17 @@ pub mod pallet {
 	#[pallet::generate_store(pub(crate) trait Store)]
 	#[pallet::without_storage_info]
 	pub struct Pallet<T>(_);
+
+	/// Possible operations on the configuration values of this pallet.
+	#[derive(TypeInfo, Debug, Clone, Encode, Decode, PartialEq)]
+	pub enum ConfigOp<T: Default + Codec> {
+		/// Don't change.
+		Noop,
+		/// Set the given value.
+		Set(T),
+		/// Remove from storage.
+		Remove,
+	}
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config + SendTransactionTypes<Call<Self>> {
@@ -1532,23 +1544,39 @@ pub mod pallet {
 		///
 		/// NOTE: Existing nominators and validators will not be affected by this update.
 		/// to kick people under the new limits, `chill_other` should be called.
-		#[pallet::weight(T::WeightInfo::set_staking_configs())]
+		// We assume the worst case for this call is either: all items are set or all items are
+		// removed.
+		#[pallet::weight(max(
+			T::WeightInfo::set_staking_configs_all_set(),
+			T::WeightInfo::set_staking_configs_all_remove()
+		))]
 		pub fn set_staking_configs(
 			origin: OriginFor<T>,
-			min_nominator_bond: BalanceOf<T>,
-			min_validator_bond: BalanceOf<T>,
-			max_nominator_count: Option<u32>,
-			max_validator_count: Option<u32>,
-			chill_threshold: Option<Percent>,
-			min_commission: Perbill,
+			min_nominator_bond: ConfigOp<BalanceOf<T>>,
+			min_validator_bond: ConfigOp<BalanceOf<T>>,
+			max_nominator_count: ConfigOp<u32>,
+			max_validator_count: ConfigOp<u32>,
+			chill_threshold: ConfigOp<Percent>,
+			min_commission: ConfigOp<Perbill>,
 		) -> DispatchResult {
 			ensure_root(origin)?;
-			MinNominatorBond::<T>::set(min_nominator_bond);
-			MinValidatorBond::<T>::set(min_validator_bond);
-			MaxNominatorsCount::<T>::set(max_nominator_count);
-			MaxValidatorsCount::<T>::set(max_validator_count);
-			ChillThreshold::<T>::set(chill_threshold);
-			MinCommission::<T>::set(min_commission);
+
+			macro_rules! config_op_exp {
+				($storage:ty, $op:ident) => {
+					match $op {
+						ConfigOp::Noop => (),
+						ConfigOp::Set(v) => <$storage>::put(v),
+						ConfigOp::Remove => <$storage>::kill(),
+					}
+				};
+			}
+
+			config_op_exp!(MinNominatorBond<T>, min_nominator_bond);
+			config_op_exp!(MinValidatorBond<T>, min_validator_bond);
+			config_op_exp!(MaxNominatorsCount<T>, max_nominator_count);
+			config_op_exp!(MaxValidatorsCount<T>, max_validator_count);
+			config_op_exp!(ChillThreshold<T>, chill_threshold);
+			config_op_exp!(MinCommission<T>, min_commission);
 			Ok(())
 		}
 
