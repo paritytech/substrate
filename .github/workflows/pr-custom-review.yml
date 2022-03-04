@@ -14,7 +14,7 @@ on:
   pull_request_review:
 
 jobs:
-  build:
+  pr-custom-review:
     runs-on: ubuntu-latest
     steps:
       - name: pr-custom-review
