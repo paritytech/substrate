@@ -194,7 +194,7 @@ pub trait ElectionDataProvider {
 	/// Maximum number of votes per voter that this data provider is providing.
 	type MaxVotesPerVoter: Get<u32>;
 
-	/// All possible targets for the election, i.e. the that could become elected, thus "electable".
+	/// All possible targets for the election, i.e. the targets that could become elected, thus "electable".
 	///
 	/// If `maybe_max_len` is `Some(v)` then the resulting vector MUST NOT be longer than `v` items
 	/// long.
@@ -205,7 +205,7 @@ pub trait ElectionDataProvider {
 		maybe_max_len: Option<usize>,
 	) -> data_provider::Result<Vec<Self::AccountId>>;
 
-	/// All possible voters that influence the outcome of the election, thus "electing".
+	/// All the voters that participate in the election, thus "electing".
 	///
 	/// Note that if a notion of self-vote exists, it should be represented here.
 	///
