@@ -77,13 +77,13 @@ pub mod grandpa_protocol_name {
 	/// Name of the notifications protocol used by GRANDPA.
 	///
 	/// Must be registered towards the networking in order for GRANDPA to properly function.
-	pub fn standard_name<Hash: std::fmt::Display>(
+	pub fn standard_name<Hash: AsRef<[u8]>>(
 		genesis_hash: &Hash,
 		chain_spec: &Box<dyn ChainSpec>,
 	) -> std::borrow::Cow<'static, str> {
 		let chain_prefix = match chain_spec.fork_id() {
-			Some(fork_id) => format!("/{}/{}", genesis_hash, fork_id),
-			None => format!("/{}", genesis_hash),
+			Some(fork_id) => format!("/{}/{}", hex::encode(genesis_hash), fork_id),
+			None => format!("/{}", hex::encode(genesis_hash)),
 		};
 		format!("{}{}", chain_prefix, NAME).into()
 	}
