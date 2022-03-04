@@ -518,7 +518,7 @@ where
 	let slot_worker = sc_consensus_slots::start_slot_worker(
 		babe_link.config.slot_duration(),
 		select_chain,
-		worker,
+		sc_consensus_slots::SimpleSlotWorkerToSlotWorker(worker),
 		sync_oracle,
 		create_inherent_data_providers,
 		can_author_with,

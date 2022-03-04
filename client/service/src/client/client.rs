@@ -107,7 +107,7 @@ where
 {
 	backend: Arc<B>,
 	executor: E,
-	storage_notifications: Mutex<StorageNotifications<Block>>,
+	storage_notifications: StorageNotifications<Block>,
 	import_notification_sinks: NotificationSinks<BlockImportNotification<Block>>,
 	finality_notification_sinks: NotificationSinks<FinalityNotification<Block>>,
 	// Collects auxiliary operations to be performed atomically together with
@@ -393,7 +393,7 @@ where
 		Ok(Client {
 			backend,
 			executor,
-			storage_notifications: Mutex::new(StorageNotifications::new(prometheus_registry)),
+			storage_notifications: StorageNotifications::new(prometheus_registry),
 			import_notification_sinks: Default::default(),
 			finality_notification_sinks: Default::default(),
 			import_actions: Default::default(),
@@ -986,7 +986,7 @@ where
 
 		if let Some(storage_changes) = storage_changes {
 			// TODO [ToDr] How to handle re-orgs? Should we re-emit all storage changes?
-			self.storage_notifications.lock().trigger(
+			self.storage_notifications.trigger(
 				&notification.hash,
 				storage_changes.0.into_iter(),
 				storage_changes.1.into_iter().map(|(sk, v)| (sk, v.into_iter())),
@@ -1951,7 +1951,7 @@ where
 		filter_keys: Option<&[StorageKey]>,
 		child_filter_keys: Option<&[(StorageKey, Option<Vec<StorageKey>>)]>,
 	) -> sp_blockchain::Result<StorageEventStream<Block::Hash>> {
-		Ok(self.storage_notifications.lock().listen(filter_keys, child_filter_keys))
+		Ok(self.storage_notifications.listen(filter_keys, child_filter_keys))
 	}
 }
 
