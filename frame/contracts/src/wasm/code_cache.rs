@@ -108,13 +108,12 @@ where
 ///
 /// A contract whose refcount dropped to zero isn't automatically removed. A `remove_code`
 /// transaction must be submitted by the original uploader to do so.
-pub fn decrement_refcount<T: Config>(code_hash: CodeHash<T>) -> Result<(), DispatchError> {
+pub fn decrement_refcount<T: Config>(code_hash: CodeHash<T>) {
 	<OwnerInfoOf<T>>::mutate(code_hash, |existing| {
 		if let Some(info) = existing {
 			info.refcount = info.refcount.saturating_sub(1);
 		}
 	});
-	Ok(())
 }
 
 /// Increment the refcount of a code in-storage by one.
@@ -217,9 +216,9 @@ impl<T: Config> Token<T> for CodeToken {
 		// point because when charging the general weight for calling the contract we not know the
 		// size of the contract.
 		match *self {
-			Reinstrument(len) => T::WeightInfo::reinstrument(len / 1024),
-			Load(len) => T::WeightInfo::call_with_code_kb(len / 1024)
-				.saturating_sub(T::WeightInfo::call_with_code_kb(0)),
+			Reinstrument(len) => T::WeightInfo::reinstrument(len),
+			Load(len) => T::WeightInfo::call_with_code_per_byte(len)
+				.saturating_sub(T::WeightInfo::call_with_code_per_byte(0)),
 		}
 	}
 }

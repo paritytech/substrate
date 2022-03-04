@@ -18,7 +18,6 @@
 use crate::{
 	gas::GasMeter,
 	storage::{self, Storage, WriteOutcome},
-	wasm::{decrement_refcount, increment_refcount},
 	AccountCounter, BalanceOf, CodeHash, Config, ContractInfo, ContractInfoOf, Error, Event,
 	Pallet as Contracts, Schedule,
 };
@@ -92,10 +91,6 @@ pub trait Ext: sealing::Sealed {
 	/// Call (possibly transferring some amount of funds) into the specified account.
 	///
 	/// Returns the original code size of the called contract.
-	///
-	/// # Return Value
-	///
-	/// Result<(ExecReturnValue, CodeSize), (ExecError, CodeSize)>
 	fn call(
 		&mut self,
 		gas_limit: Weight,
@@ -108,10 +103,6 @@ pub trait Ext: sealing::Sealed {
 	/// Execute code in the current frame.
 	///
 	/// Returns the original code size of the called contract.
-	///
-	/// # Return Value
-	///
-	/// Result<ExecReturnValue, ExecError>
 	fn delegate_call(
 		&mut self,
 		code: CodeHash<Self::T>,
@@ -123,10 +114,6 @@ pub trait Ext: sealing::Sealed {
 	/// Returns the original code size of the called contract.
 	/// The newly created account will be associated with `code`. `value` specifies the amount of
 	/// value transferred from this to the newly created account.
-	///
-	/// # Return Value
-	///
-	/// Result<(AccountId, ExecReturnValue, CodeSize), (ExecError, CodeSize)>
 	fn instantiate(
 		&mut self,
 		gas_limit: Weight,
@@ -269,12 +256,17 @@ pub trait Executable<T: Config>: Sized {
 		gas_meter: &mut GasMeter<T>,
 	) -> Result<Self, DispatchError>;
 
+	/// Increment the refcount of a code in-storage by one.
+	///
+	/// This is needed when the code is not set via instantiate but `seal_set_code_hash`.
+	///
+	/// # Errors
+	///
+	/// [`Error::CodeNotFound`] is returned if the specified `code_hash` does not exist.
+	fn add_user(code_hash: CodeHash<T>) -> Result<(), DispatchError>;
+
 	/// Decrement the refcount by one if the code exists.
-	///
-	/// # Note
-	///
-	/// Charges weight proportional to the code size from the gas meter.
-	fn remove_user(code_hash: CodeHash<T>) -> Result<(), DispatchError>;
+	fn remove_user(code_hash: CodeHash<T>);
 
 	/// Execute the specified exported function and return the result.
 	///
@@ -1058,7 +1050,7 @@ where
 			T::Currency::free_balance(&frame.account_id),
 		)?;
 		ContractInfoOf::<T>::remove(&frame.account_id);
-		E::remove_user(info.code_hash)?;
+		E::remove_user(info.code_hash);
 		Contracts::<T>::deposit_event(Event::Terminated {
 			contract: frame.account_id.clone(),
 			beneficiary: beneficiary.clone(),
@@ -1188,10 +1180,10 @@ where
 	}
 
 	fn set_code_hash(&mut self, hash: CodeHash<Self::T>) -> Result<(), DispatchError> {
-		increment_refcount::<Self::T>(hash)?;
+		E::add_user(hash)?;
 		let top_frame = self.top_frame_mut();
 		let prev_hash = top_frame.contract_info().code_hash.clone();
-		decrement_refcount::<Self::T>(prev_hash.clone())?;
+		E::remove_user(prev_hash.clone());
 		top_frame.contract_info().code_hash = hash;
 		Contracts::<Self::T>::deposit_event(Event::ContractCodeUpdated {
 			contract: top_frame.account_id.clone(),
@@ -1249,7 +1241,11 @@ mod tests {
 	use pretty_assertions::assert_eq;
 	use sp_core::Bytes;
 	use sp_runtime::{traits::Hash, DispatchError};
-	use std::{cell::RefCell, collections::HashMap, rc::Rc};
+	use std::{
+		cell::RefCell,
+		collections::hash_map::{Entry, HashMap},
+		rc::Rc,
+	};
 
 	type System = frame_system::Pallet<Test>;
 
@@ -1311,15 +1307,15 @@ mod tests {
 			})
 		}
 
-		fn increment_refcount(code_hash: CodeHash<Test>) {
+		fn increment_refcount(code_hash: CodeHash<Test>) -> Result<(), DispatchError> {
 			LOADER.with(|loader| {
 				let mut loader = loader.borrow_mut();
-				loader
-					.map
-					.entry(code_hash)
-					.and_modify(|executable| executable.refcount += 1)
-					.or_insert_with(|| panic!("code_hash does not exist"));
-			});
+				match loader.map.entry(code_hash) {
+					Entry::Vacant(_) => Err(<Error<Test>>::CodeNotFound)?,
+					Entry::Occupied(mut entry) => entry.get_mut().refcount += 1,
+				}
+				Ok(())
+			})
 		}
 
 		fn decrement_refcount(code_hash: CodeHash<Test>) {
@@ -1355,9 +1351,12 @@ mod tests {
 			})
 		}
 
-		fn remove_user(code_hash: CodeHash<Test>) -> Result<(), DispatchError> {
+		fn add_user(code_hash: CodeHash<Test>) -> Result<(), DispatchError> {
+			MockLoader::increment_refcount(code_hash)
+		}
+
+		fn remove_user(code_hash: CodeHash<Test>) {
 			MockLoader::decrement_refcount(code_hash);
-			Ok(())
 		}
 
 		fn execute<E: Ext<T = Test>>(
@@ -1367,7 +1366,7 @@ mod tests {
 			input_data: Vec<u8>,
 		) -> ExecResult {
 			if let &Constructor = function {
-				MockLoader::increment_refcount(self.code_hash);
+				Self::add_user(self.code_hash).unwrap();
 			}
 			if function == &self.func_type {
 				(self.func)(MockCtx { ext, input_data }, &self)
