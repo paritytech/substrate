@@ -19,10 +19,10 @@
 
 use jsonrpc_core::{Error, ErrorCode, Result};
 use jsonrpc_derive::rpc;
+use sc_rpc_api::DenyUnsafe;
 use serde::{Deserialize, Serialize};
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 use std::sync::Arc;
-use sc_rpc_api::DenyUnsafe;
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -70,7 +70,7 @@ where
 {
 	fn call(&self, at: Option<<B as BlockT>::Hash>) -> Result<MigrationStatusResult> {
 		if let Err(err) = self.deny_unsafe.check_if_safe() {
-			return Err(err.into());
+			return Err(err.into())
 		}
 
 		let block_id = BlockId::hash(at.unwrap_or_else(|| self.client.info().best_hash));

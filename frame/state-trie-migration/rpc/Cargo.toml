@@ -13,7 +13,7 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "2" }
+codec = { package = "parity-scale-codec", version = "3" }
 jsonrpc-core = "18.0.0"
 jsonrpc-core-client = "18.0.0"
 jsonrpc-derive = "18.0.0"
@@ -22,7 +22,7 @@ serde = { version = "1", features = ["derive"] }
 # Substrate Dependencies
 sc-client-api = { version = "4.0.0-dev", path = "../../../client/api" }
 sc-rpc-api = { version = "0.10.0-dev", path = "../../../client/rpc-api" }
-sp-runtime = { version = "5.0.0", path = "../../../primitives/runtime" }
+sp-runtime = { version = "6.0.0", path = "../../../primitives/runtime" }
 
 [dev-dependencies]
 serde_json = "1"
