@@ -601,6 +601,9 @@ pub mod pallet {
 			let deposit = T::SignedDepositBase::get().saturating_add(
 				T::SignedDepositPerItem::get().saturating_mul((keys.len() as u32).into()),
 			);
+			sp_std::if_std! {
+				println!("{:?} / {:?} / {:?}", who, deposit, T::Currency::free_balance(&who));
+			}
 			ensure!(T::Currency::can_slash(&who, deposit), "not enough funds");
 
 			let mut dyn_size = 0u32;
@@ -652,6 +655,7 @@ pub mod pallet {
 			child_keys: Vec<Vec<u8>>,
 			total_size: u32,
 		) -> DispatchResultWithPostInfo {
+			use sp_io::default_child_storage as child_io;
 			let who = T::SignedFilter::ensure_origin(origin)?;
 
 			// ensure they can pay more than the fee.
@@ -663,11 +667,9 @@ pub mod pallet {
 			let mut dyn_size = 0u32;
 			let transformed_child_key = Self::transform_child_key(&root).ok_or("bad child key")?;
 			for child_key in &child_keys {
-				if let Some(data) =
-					sp_io::default_child_storage::get(transformed_child_key, &child_key)
-				{
+				if let Some(data) = child_io::get(transformed_child_key, &child_key) {
 					dyn_size = dyn_size.saturating_add(data.len() as u32);
-					sp_io::default_child_storage::set(transformed_child_key, &child_key, &data);
+					child_io::set(transformed_child_key, &child_key, &data);
 				}
 			}
 
@@ -786,7 +788,8 @@ pub mod pallet {
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarks {
 	use super::{pallet::Pallet as StateTrieMigration, *};
-	use frame_support::traits::Currency;
+	use frame_support::traits::{Currency, Get};
+	use sp_runtime::traits::Saturating;
 	use sp_std::prelude::*;
 
 	// The size of the key seemingly makes no difference in the read/write time, so we make it
@@ -827,7 +830,10 @@ mod benchmarks {
 		migrate_custom_top_success {
 			let null = MigrationLimits::default();
 			let caller = frame_benchmarking::whitelisted_caller();
-			let stash = T::Currency::minimum_balance() * BalanceOf::<T>::from(10u32);
+			let deposit = T::SignedDepositBase::get().saturating_add(
+				T::SignedDepositPerItem::get().saturating_mul(1u32.into()),
+			);
+			let stash = T::Currency::minimum_balance() * BalanceOf::<T>::from(1000u32) + deposit;
 			T::Currency::make_free_balance_be(&caller, stash);
 		}: migrate_custom_top(frame_system::RawOrigin::Signed(caller.clone()), Default::default(), 0)
 		verify {
@@ -838,7 +844,10 @@ mod benchmarks {
 		migrate_custom_top_fail {
 			let null = MigrationLimits::default();
 			let caller = frame_benchmarking::whitelisted_caller();
-			let stash = T::Currency::minimum_balance() * BalanceOf::<T>::from(10u32);
+			let deposit = T::SignedDepositBase::get().saturating_add(
+				T::SignedDepositPerItem::get().saturating_mul(1u32.into()),
+			);
+			let stash = T::Currency::minimum_balance() * BalanceOf::<T>::from(1000u32) + deposit;
 			T::Currency::make_free_balance_be(&caller, stash);
 			// for tests, we need to make sure there is _something_ in storage that is being
 			// migrated.
