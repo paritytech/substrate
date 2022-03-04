@@ -21,7 +21,7 @@ jobs:
         uses: paritytech/pr-custom-review@v1
         with:
           token: ${{ secrets.PRCR_TOKEN }}
-          # team that reviews changes in lines marked with 🔒
+          # 🔒 PROTECTED: Changes to locks-review-team should be approved by the current locks-review-team
           locks-review-team: locks-review
           team-leads-team: substrateteamleads
           action-review-team: ci
