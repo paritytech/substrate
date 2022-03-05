@@ -206,7 +206,7 @@ impl<Block: BlockT> TreeRoute<Block> {
 /// Handles header metadata: hash, number, parent hash, etc.
 pub trait HeaderMetadata<Block: BlockT> {
 	/// Error used in case the header metadata is not found.
-	type Error;
+	type Error: std::error::Error;
 
 	fn header_metadata(
 		&self,

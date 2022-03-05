@@ -58,7 +58,6 @@ pub use self::{
 };
 pub use config::{
 	BasePath, Configuration, DatabaseSource, KeepBlocks, PruningMode, Role, RpcMethods, TaskType,
-	TransactionStorageMode,
 };
 pub use sc_chain_spec::{
 	ChainSpec, ChainType, Extension as ChainSpecExtension, GenericChainSpec, NoExtension,
@@ -509,7 +508,7 @@ where
 						TransactionImport::Bad
 					},
 					Err(e) => {
-						debug!("Error converting pool error: {:?}", e);
+						debug!("Error converting pool error: {}", e);
 						// it is not bad at least, just some internal node logic error, so peer is
 						// innocent.
 						TransactionImport::KnownGood
