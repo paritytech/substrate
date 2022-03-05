@@ -484,6 +484,7 @@ dependencies = [
  "beefy-primitives",
  "fnv",
  "futures 0.3.19",
+ "hex",
  "log 0.4.14",
  "parity-scale-codec",
  "parking_lot 0.12.0",
@@ -494,6 +495,7 @@ dependencies = [
  "sc-network-gossip",
  "sc-network-test",
  "sc-utils",
+ "serde",
  "sp-api",
  "sp-application-crypto",
  "sp-arithmetic",
@@ -5010,6 +5012,7 @@ dependencies = [
  "pallet-society",
  "pallet-staking",
  "pallet-staking-reward-curve",
+ "pallet-state-trie-migration",
  "pallet-sudo",
  "pallet-timestamp",
  "pallet-tips",
@@ -6420,6 +6423,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-state-trie-migration"
+version = "4.0.0-dev"
+dependencies = [
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "log 0.4.14",
+ "pallet-balances",
+ "parity-scale-codec",
+ "parking_lot 0.12.0",
+ "remote-externalities",
+ "scale-info",
+ "serde",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+ "sp-tracing",
+ "thousands",
+ "tokio",
+ "zstd",
+]
+
+[[package]]
 name = "pallet-sudo"
 version = "4.0.0-dev"
 dependencies = [
@@ -6637,9 +6664,9 @@ dependencies = [
 
 [[package]]
 name = "parity-db"
-version = "0.3.5"
+version = "0.3.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "78a95abf24f1097c6e3181abbbbfc3630b3b5e681470940f719b69acb4911c7f"
+checksum = "865edee5b792f537356d9e55cbc138e7f4718dc881a7ea45a18b37bf61c21e3d"
 dependencies = [
  "blake2-rfc",
  "crc32fast",
@@ -8500,6 +8527,7 @@ dependencies = [
  "fork-tree",
  "futures 0.3.19",
  "futures-timer",
+ "hex",
  "log 0.4.14",
  "parity-scale-codec",
  "parking_lot 0.12.0",
@@ -8514,6 +8542,7 @@ dependencies = [
  "sc-network-test",
  "sc-telemetry",
  "sc-utils",
+ "serde",
  "serde_json",
  "sp-api",
  "sp-application-crypto",
@@ -10837,6 +10866,12 @@ dependencies = [
  "quote",
  "syn",
 ]
+
+[[package]]
+name = "thousands"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3bf63baf9f5039dadc247375c29eb13706706cfde997d0330d05aa63a77d8820"
 
 [[package]]
 name = "thread_local"
