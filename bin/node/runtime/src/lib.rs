@@ -666,9 +666,11 @@ impl pallet_election_provider_multi_phase::Config for Runtime {
 	type RewardHandler = (); // nothing to do upon rewards
 	type DataProvider = Staking;
 	type Solution = NposSolution16;
-	type Fallback = frame_election_provider_support::onchain::OnChainSequentialPhragmen<Self>;
-	type FallbackVoterBound = frame_support::traits::ConstUSize<10>;
-	type FallbackTargetsBound = frame_support::traits::ConstUSize<100_000>;
+	type Fallback = frame_election_provider_support::onchain::BoundedOnChainSequentialPhragmen<
+		Self,
+		frame_support::traits::ConstUSize<10>,
+		frame_support::traits::ConstUSize<100_000>,
+	>;
 	type GovernanceFallback =
 		frame_election_provider_support::onchain::OnChainSequentialPhragmen<Self>;
 	type Solver = frame_election_provider_support::SequentialPhragmen<

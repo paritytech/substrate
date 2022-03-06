@@ -74,39 +74,31 @@ pub trait Config: frame_system::Config {
 	>;
 }
 
-impl<T: Config> OnChainSequentialPhragmen<T> {
-	fn elect_with(
-		maybe_max_voters: Option<usize>,
-		maybe_max_targets: Option<usize>,
-	) -> Result<Supports<T::AccountId>, Error> {
-		let voters = <Self as ElectionProvider>::DataProvider::voters(maybe_max_voters)
-			.map_err(Error::DataProvider)?;
-		let targets = <Self as ElectionProvider>::DataProvider::targets(maybe_max_targets)
-			.map_err(Error::DataProvider)?;
-		let desired_targets = <Self as ElectionProvider>::DataProvider::desired_targets()
-			.map_err(Error::DataProvider)?;
+fn elect_with<T: Config>(
+	maybe_max_voters: Option<usize>,
+	maybe_max_targets: Option<usize>,
+) -> Result<Supports<T::AccountId>, Error> {
+	let voters = T::DataProvider::voters(maybe_max_voters).map_err(Error::DataProvider)?;
+	let targets = T::DataProvider::targets(maybe_max_targets).map_err(Error::DataProvider)?;
+	let desired_targets = T::DataProvider::desired_targets().map_err(Error::DataProvider)?;
 
-		let stake_map: BTreeMap<T::AccountId, VoteWeight> = voters
-			.iter()
-			.map(|(validator, vote_weight, _)| (validator.clone(), *vote_weight))
-			.collect();
+	let stake_map: BTreeMap<T::AccountId, VoteWeight> = voters
+		.iter()
+		.map(|(validator, vote_weight, _)| (validator.clone(), *vote_weight))
+		.collect();
 
-		let stake_of =
-			|w: &T::AccountId| -> VoteWeight { stake_map.get(w).cloned().unwrap_or_default() };
+	let stake_of =
+		|w: &T::AccountId| -> VoteWeight { stake_map.get(w).cloned().unwrap_or_default() };
 
-		let ElectionResult::<_, T::Accuracy> { winners: _, assignments } =
-			seq_phragmen(desired_targets as usize, targets, voters, None).map_err(Error::from)?;
+	let ElectionResult::<_, T::Accuracy> { winners: _, assignments } =
+		seq_phragmen(desired_targets as usize, targets, voters, None).map_err(Error::from)?;
 
-		let staked = assignment_ratio_to_staked_normalized(assignments, &stake_of)?;
+	let staked = assignment_ratio_to_staked_normalized(assignments, &stake_of)?;
 
-		let weight = T::BlockWeights::get().max_block;
-		frame_system::Pallet::<T>::register_extra_weight_unchecked(
-			weight,
-			DispatchClass::Mandatory,
-		);
+	let weight = T::BlockWeights::get().max_block;
+	frame_system::Pallet::<T>::register_extra_weight_unchecked(weight, DispatchClass::Mandatory);
 
-		Ok(to_supports(&staked))
-	}
+	Ok(to_supports(&staked))
 }
 
 impl<T: Config> ElectionProvider for OnChainSequentialPhragmen<T> {
@@ -116,7 +108,7 @@ impl<T: Config> ElectionProvider for OnChainSequentialPhragmen<T> {
 	type DataProvider = T::DataProvider;
 
 	fn elect() -> Result<Supports<T::AccountId>, Self::Error> {
-		Self::elect_with(None, None)
+		elect_with::<T>(None, None)
 	}
 }
 
@@ -125,7 +117,44 @@ impl<T: Config> InstantElectionProvider for OnChainSequentialPhragmen<T> {
 		maybe_max_voters: Option<usize>,
 		maybe_max_targets: Option<usize>,
 	) -> Result<Supports<Self::AccountId>, Self::Error> {
-		Self::elect_with(maybe_max_voters, maybe_max_targets)
+		elect_with::<T>(maybe_max_voters, maybe_max_targets)
+	}
+}
+
+/// Similar to `OnChainSequentialPhragmen` but with generic bounds for the election.
+///
+/// `VotersBound` bounds the number of voters.
+/// `TargetsBound` bounds the number of targets.
+pub struct BoundedOnChainSequentialPhragmen<
+	T: Config,
+	VotersBound: Get<usize>,
+	TargetsBound: Get<usize>,
+>(PhantomData<T>, PhantomData<VotersBound>, PhantomData<TargetsBound>);
+
+impl<T: Config, VotersBound: Get<usize>, TargetsBound: Get<usize>> ElectionProvider
+	for BoundedOnChainSequentialPhragmen<T, VotersBound, TargetsBound>
+{
+	type AccountId = T::AccountId;
+	type BlockNumber = T::BlockNumber;
+	type Error = Error;
+	type DataProvider = T::DataProvider;
+
+	fn elect() -> Result<Supports<T::AccountId>, Self::Error> {
+		elect_with::<T>(None, None)
+	}
+}
+
+impl<T: Config, VotersBound: Get<usize>, TargetsBound: Get<usize>> InstantElectionProvider
+	for BoundedOnChainSequentialPhragmen<T, VotersBound, TargetsBound>
+{
+	fn instant_elect(
+		maybe_max_voters: Option<usize>,
+		maybe_max_targets: Option<usize>,
+	) -> Result<Supports<Self::AccountId>, Self::Error> {
+		elect_with::<T>(
+			Some(maybe_max_voters.unwrap_or(0).max(VotersBound::get())),
+			Some(maybe_max_targets.unwrap_or(0).max(TargetsBound::get())),
+		)
 	}
 }
 

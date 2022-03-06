@@ -422,8 +422,6 @@ impl crate::Config for Runtime {
 	type WeightInfo = DualMockWeightInfo;
 	type BenchmarkingConfig = TestBenchmarkingConfig;
 	type Fallback = MockFallback;
-	type FallbackVoterBound = frame_support::traits::ConstUSize<10>;
-	type FallbackTargetsBound = frame_support::traits::ConstUSize<100_000>;
 	type GovernanceFallback = NoFallback<Self>;
 	type ForceOrigin = frame_system::EnsureRoot<AccountId>;
 	type Solution = TestNposSolution;
