@@ -1,4 +1,4 @@
-use sp_npos_elections_solution_type::generate_solution_type;
+use frame_npos_elections_solution_type::generate_solution_type;
 
 generate_solution_type!(pub struct TestSolution::<
 	u16,

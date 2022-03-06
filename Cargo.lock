@@ -2233,6 +2233,7 @@ dependencies = [
  "quote",
  "scale-info",
  "sp-arithmetic",
+ "sp-npos-elections",
  "syn",
  "trybuild",
 ]

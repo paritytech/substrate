@@ -24,4 +24,6 @@ proc-macro-crate = "1.1.0"
 parity-scale-codec = "3.0.0"
 scale-info = "2.0.1"
 sp-arithmetic = { version = "5.0.0", default-features = false, path = "../../../primitives/arithmetic" }
+# used by generate_solution_type:
+sp-npos-elections = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/npos-elections" }
 trybuild = "1.0.53"
