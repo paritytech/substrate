@@ -4819,15 +4819,7 @@ fn ledger_slash_works() {
 
 	// Then
 	assert_eq!(ledger.active, 500 / 2);
-	assert_eq!(
-		ledger.unlocking,
-		vec![
-			c(0, 0),
-			c(1, 100 / 2),
-			c(2, 0),
-			c(3, 250 / 2)
-		]
-	);
+	assert_eq!(ledger.unlocking, vec![c(0, 0), c(1, 100 / 2), c(2, 0), c(3, 250 / 2)]);
 	assert_eq!(ledger.total, 425);
 
 	// Given we have the same as above,

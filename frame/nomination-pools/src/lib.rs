@@ -294,16 +294,13 @@
 // * If the depositor is actively unbonding, the pool is in destroying state. To achieve this, once
 //   a pool is flipped to a destroying state it cannot change its state.
 // * The sum of each pools delegator counter equals the `Delegators::count()`.
+// * A pool's `delegator_counter` should always be gt 0.
 
 // TODO
-// - Counter for delegators per pool and allow limiting of delegators per pool
-// - tests for the above
 // - counter for delegators should never be below 1 (below 1 means the pool should be destroyed)
 // - write detailed docs for StakingInterface
-// - various back ports
-// - test delegator counter
 // - slashing - test for correct input to hook (these tests need to be in staking side)
-// - transparent account ids - prefix with pls/rewd and pls/stsh, also use PalletId for entropy
+// - transparent prefx for account ids
 
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
@@ -350,9 +347,8 @@ fn points_to_issue<T: Config>(
 	new_funds: BalanceOf<T>,
 ) -> BalanceOf<T> {
 	match (current_balance.is_zero(), current_points.is_zero()) {
-		(true, true) | (false, true) => {
-			new_funds.saturating_mul(POINTS_TO_BALANCE_INIT_RATIO.into())
-		},
+		(true, true) | (false, true) =>
+			new_funds.saturating_mul(POINTS_TO_BALANCE_INIT_RATIO.into()),
 		(true, false) => {
 			// The pool was totally slashed.
 			// This is the equivalent of `(current_points / 1) * new_funds`.
@@ -377,7 +373,7 @@ fn balance_to_unbond<T: Config>(
 ) -> BalanceOf<T> {
 	if current_balance.is_zero() || current_points.is_zero() || delegator_points.is_zero() {
 		// There is nothing to unbond
-		return Zero::zero();
+		return Zero::zero()
 	}
 
 	// Equivalent of (current_balance / current_points) * delegator_points
@@ -572,8 +568,8 @@ impl<T: Config> BondedPool<T> {
 		ensure!(points_to_balance_ratio_floor < 10u32.into(), Error::<T>::OverflowRisk);
 		// while restricting the balance to 1/10th of max total issuance,
 		ensure!(
-			new_funds.saturating_add(bonded_balance)
-				< BalanceOf::<T>::max_value().div(10u32.into()),
+			new_funds.saturating_add(bonded_balance) <
+				BalanceOf::<T>::max_value().div(10u32.into()),
 			Error::<T>::OverflowRisk
 		);
 		// then we can be decently confident the bonding pool points will not overflow
@@ -775,7 +771,7 @@ impl<T: Config> SubPools<T> {
 			// For the first `0..TotalUnbondingPools` eras of the chain we don't need to do
 			// anything. I.E. if `TotalUnbondingPools` is 5 and we are in era 4 we can add a pool
 			// for this era and have exactly `TotalUnbondingPools` pools.
-			return self;
+			return self
 		}
 
 		//  I.E. if `TotalUnbondingPools` is 5 and current era is 10, we only want to retain pools
@@ -1335,8 +1331,8 @@ pub mod pallet {
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			ensure!(
-				amount >= T::StakingInterface::minimum_bond()
-					&& amount >= MinCreateBond::<T>::get(),
+				amount >= T::StakingInterface::minimum_bond() &&
+					amount >= MinCreateBond::<T>::get(),
 				Error::<T>::MinimumBondNotMet
 			);
 			if let Some(max_pools) = MaxPools::<T>::get() {
@@ -1475,9 +1471,9 @@ impl<T: Config> Pallet<T> {
 		let delegator_virtual_points = T::BalanceToU256::convert(delegator.points)
 			.saturating_mul(T::BalanceToU256::convert(new_earnings_since_last_claim));
 
-		let delegator_payout = if delegator_virtual_points.is_zero()
-			|| current_points.is_zero()
-			|| reward_pool.balance.is_zero()
+		let delegator_payout = if delegator_virtual_points.is_zero() ||
+			current_points.is_zero() ||
+			reward_pool.balance.is_zero()
 		{
 			Zero::zero()
 		} else {

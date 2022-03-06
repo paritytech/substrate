@@ -523,7 +523,7 @@ impl<T: Config> StakingLedger<T> {
 			}
 
 			if unlocking_balance >= value {
-				break;
+				break
 			}
 		}
 
@@ -556,7 +556,7 @@ impl<T: Config> StakingLedger<T> {
 		use sp_staking::OnStakerSlash as _;
 		use sp_std::ops::Div as _;
 		if slash_amount.is_zero() {
-			return Zero::zero();
+			return Zero::zero()
 		}
 
 		let mut remaining_slash = slash_amount;
@@ -621,10 +621,10 @@ impl<T: Config> StakingLedger<T> {
 				slashed_unlocking.insert(chunk.era, chunk.value);
 
 				if remaining_slash.is_zero() {
-					break;
+					break
 				}
 			} else {
-				break; // defensive, indices should always be in bounds.
+				break // defensive, indices should always be in bounds.
 			}
 		}
 
