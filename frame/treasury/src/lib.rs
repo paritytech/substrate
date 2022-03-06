@@ -413,17 +413,15 @@ pub mod pallet {
 			T::RejectOrigin::ensure_origin(origin)?;
 
 			ensure!(<Proposals<T, I>>::contains_key(proposal_id), Error::<T, I>::InvalidIndex);
-			let proprosal_removed = Approvals::<T, I>::try_mutate(|v|{
+			Approvals::<T, I>::try_mutate(|v| -> DispatchResult {
 				if let Some(index) = v.iter().position(|x| x == &proposal_id) {
 					v.remove(index);
 					Ok(())
 				}
 				else{
-					Err(())
+					Err(Error::<T, I>::ProposalNotApproved.into())
 				}
-			});
-
-			ensure!(proprosal_removed.is_ok(), Error::<T, I>::ProposalNotApproved);
+			})?;
 
 			Ok(())
 		}
