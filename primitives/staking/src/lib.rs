@@ -61,39 +61,41 @@ pub trait StakingInterface {
 	/// AccountId type used by the staking system
 	type AccountId;
 
+	/// The type for the `validators` argument to `Self::nominate`.
 	type LookupSource;
 
-	/// The minimum amount necessary to bond to be a nominator. This does not necessarily mean the
-	/// nomination will be counted in an election, but instead just enough to be stored as a
-	/// nominator (e.g. in the bags-list of polkadot)
+	/// The minimum amount required to bond in order to be a nominator. This does not necessarily
+	/// mean the nomination will be counted in an election, but instead just enough to be stored as
+	/// a nominator. In other words, this is the minimum amount to register the intention to
+	/// nominate.
 	fn minimum_bond() -> Self::Balance;
 
-	/// Number of eras that staked funds must remain bonded for. NOTE: it is assumed that this is
-	/// always strictly greater than the slash deffer duration.
+	/// Number of eras that staked funds must remain bonded for.
+	///
+	/// # Note
+	///
+	/// This must be strictly greater than the staking systems slash deffer duration.
 	fn bonding_duration() -> EraIndex;
 
-	/// The current era for the staking system.
+	/// The current era index.
+	///
+	/// This should be the latest planned era that the staking system knows about.
 	fn current_era() -> EraIndex;
 
 	/// Balance `controller` has bonded for nominating.
 	fn bonded_balance(controller: &Self::AccountId) -> Option<Self::Balance>;
 
-	/// Balance `controller` has locked by the staking system. This is the bonded funds and the
-	/// unlocking funds and thus is a superset of bonded funds.
+	/// Balance the _Stash_ linked to `controller` has locked by the staking system. This should
+	/// include both the users bonded funds and their unlocking funds.
+	///
+	/// # Note
+	///
+	/// This is only guaranteed to reflect the amount locked by the staking system. If there are
+	/// non-staking locks on the bonded pair's balance this may not be accurate.
 	fn locked_balance(controller: &Self::AccountId) -> Option<Self::Balance>;
 
-	fn bond_extra(controller: Self::AccountId, extra: Self::Balance) -> DispatchResult;
-
-	fn unbond(controller: Self::AccountId, value: Self::Balance) -> DispatchResult;
-
-	/// Withdraw unbonded funds from bonded user.
-	fn withdraw_unbonded(
-		controller: Self::AccountId,
-		num_slashing_spans: u32,
-	) -> Result<u64, DispatchError>;
-
-	/// Bond the funds and create a `stash` and `controller`, a bond of `value`, and `payee` account
-	/// as the reward destination.
+	/// Bond (lock) `value` of `stash`'s balance. `controller` will be set as the account
+	/// controlling `stash`. This creates what is referred to as "bonded pair".
 	fn bond(
 		stash: Self::AccountId,
 		controller: Self::AccountId,
@@ -106,4 +108,26 @@ pub trait StakingInterface {
 		controller: Self::AccountId,
 		validators: sp_std::vec::Vec<Self::LookupSource>,
 	) -> DispatchResult;
+
+	/// Bond some extra amount in the _Stash_'s free balance against the active bonded balance of
+	/// the account. The amount extra actually bonded will never be more than the _Stash_'s free
+	/// balance.
+	fn bond_extra(controller: Self::AccountId, extra: Self::Balance) -> DispatchResult;
+
+	/// Schedule a portion of the active bonded balance to be unlocked at era
+	/// [Self::current_era] + [`Self::bonding_duration`].
+	///
+	/// Once the unlock era has been reached, [`Self::withdraw_unbonded`] can be called to unlock
+	/// the funds.
+	///
+	/// The amount of times this can be successfully called is limited based on how many distinct
+	/// eras funds are schedule to unlock in. Calling [`Self::withdraw_unbonded`] after some unlock
+	/// schedules have reached their unlocking era should allow more calls to this function.
+	fn unbond(controller: Self::AccountId, value: Self::Balance) -> DispatchResult;
+
+	/// Unlock any funds schedule to unlock before or at the current era.
+	fn withdraw_unbonded(
+		controller: Self::AccountId,
+		num_slashing_spans: u32,
+	) -> Result<u64, DispatchError>;
 }

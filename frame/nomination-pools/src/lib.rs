@@ -297,9 +297,7 @@
 // * A pool's `delegator_counter` should always be gt 0.
 
 // TODO
-// - counter for delegators should never be below 1 (below 1 means the pool should be destroyed)
 // - write detailed docs for StakingInterface
-// - slashing - test for correct input to hook (these tests need to be in staking side)
 // - transparent prefx for account ids
 
 // Ensure we're `no_std` when compiling for Wasm.
@@ -1136,7 +1134,7 @@ pub mod pallet {
 			// Note that we lazily create the unbonding pools here if they don't already exist
 			let sub_pools = SubPoolsStorage::<T>::get(&delegator.pool).unwrap_or_default();
 			let current_era = T::StakingInterface::current_era();
-			// TODO: [now] look into removing bonding_duration and instead exposing 
+			// TODO: [now] look into removing bonding_duration and instead exposing
 			// `StakingInterface::unbond_era_for(current)`
 			let unbond_era = T::StakingInterface::bonding_duration().saturating_add(current_era);
 
