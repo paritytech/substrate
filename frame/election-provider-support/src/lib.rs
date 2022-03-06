@@ -262,33 +262,6 @@ pub trait ElectionDataProvider {
 	fn clear() {}
 }
 
-/// An election data provider that should only be used for testing.
-#[cfg(feature = "std")]
-pub struct TestDataProvider<X>(sp_std::marker::PhantomData<X>);
-
-#[cfg(feature = "std")]
-impl<AccountId, BlockNumber> ElectionDataProvider for TestDataProvider<(AccountId, BlockNumber)> {
-	type AccountId = AccountId;
-	type BlockNumber = BlockNumber;
-	type MaxVotesPerVoter = ();
-
-	fn targets(_maybe_max_len: Option<usize>) -> data_provider::Result<Vec<AccountId>> {
-		Ok(Default::default())
-	}
-
-	fn voters(_maybe_max_len: Option<usize>) -> data_provider::Result<Vec<VoterOf<Self>>> {
-		Ok(Default::default())
-	}
-
-	fn desired_targets() -> data_provider::Result<u32> {
-		Ok(Default::default())
-	}
-
-	fn next_election_prediction(now: BlockNumber) -> BlockNumber {
-		now
-	}
-}
-
 /// Something that can compute the result of an election and pass it back to the caller.
 ///
 /// This trait only provides an interface to _request_ an election, i.e.
@@ -340,11 +313,15 @@ pub trait InstantElectionProvider: ElectionProvider {
 pub struct NoElection<X>(sp_std::marker::PhantomData<X>);
 
 #[cfg(feature = "std")]
-impl<AccountId, BlockNumber> ElectionProvider for NoElection<(AccountId, BlockNumber)> {
+impl<AccountId, BlockNumber, DataProvider> ElectionProvider
+	for NoElection<(AccountId, BlockNumber, DataProvider)>
+where
+	DataProvider: ElectionDataProvider<AccountId = AccountId, BlockNumber = BlockNumber>,
+{
 	type AccountId = AccountId;
 	type BlockNumber = BlockNumber;
 	type Error = &'static str;
-	type DataProvider = TestDataProvider<(AccountId, BlockNumber)>;
+	type DataProvider = DataProvider;
 
 	fn elect() -> Result<Supports<AccountId>, Self::Error> {
 		Err("<NoElection as ElectionProvider> cannot do anything.")
