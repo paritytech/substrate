@@ -1,13 +1,12 @@
 [package]
-name = "sp-npos-elections-fuzzer"
+name = "frame-election-solution-type-fuzzer"
 version = "2.0.0-alpha.5"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2021"
 license = "Apache-2.0"
 homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
-description = "Fuzzer for phragmén implementation."
-documentation = "https://docs.rs/sp-npos-elections-fuzzer"
+description = "Fuzzer for phragmén solution type implementation."
 publish = false
 
 [package.metadata.docs.rs]
@@ -20,21 +19,12 @@ rand = { version = "0.8", features = ["std", "small_rng"] }
 
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive"] }
 scale-info = { version = "2.0.1", default-features = false, features = ["derive"] }
-sp-npos-elections = { version = "4.0.0-dev", path = ".." }
-sp-runtime = { version = "6.0.0", path = "../../runtime" }
+frame-npos-elections-solution-type = { version = "4.0.0-dev", path = ".." }
+sp-arithmetic = { version = "5.0.0", path = "../../../../primitives/arithmetic" }
+sp-runtime = { version = "6.0.0", path = "../../../../primitives/runtime" }
+# used by generate_solution_type:
+sp-npos-elections = { version = "4.0.0-dev", default-features = false, path = "../../../../primitives/npos-elections" }
 
 [[bin]]
-name = "reduce"
-path = "src/reduce.rs"
-
-[[bin]]
-name = "phragmen_balancing"
-path = "src/phragmen_balancing.rs"
-
-[[bin]]
-name = "phragmms_balancing"
-path = "src/phragmms_balancing.rs"
-
-[[bin]]
-name = "phragmen_pjr"
-path = "src/phragmen_pjr.rs"
+name = "compact"
+path = "src/compact.rs"

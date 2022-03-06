@@ -2177,6 +2177,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "frame-election-solution-type-fuzzer"
+version = "2.0.0-alpha.5"
+dependencies = [
+ "clap 3.0.7",
+ "frame-npos-elections-solution-type",
+ "honggfuzz",
+ "parity-scale-codec",
+ "rand 0.8.4",
+ "scale-info",
+ "sp-arithmetic",
+ "sp-npos-elections",
+ "sp-runtime",
+]
+
+[[package]]
 name = "frame-executive"
 version = "4.0.0-dev"
 dependencies = [
@@ -2206,6 +2221,20 @@ dependencies = [
  "parity-scale-codec",
  "scale-info",
  "serde",
+]
+
+[[package]]
+name = "frame-npos-elections-solution-type"
+version = "4.0.0-dev"
+dependencies = [
+ "parity-scale-codec",
+ "proc-macro-crate 1.1.0",
+ "proc-macro2",
+ "quote",
+ "scale-info",
+ "sp-arithmetic",
+ "syn",
+ "trybuild",
 ]
 
 [[package]]
@@ -4965,6 +4994,7 @@ dependencies = [
  "frame-benchmarking",
  "frame-election-provider-support",
  "frame-executive",
+ "frame-npos-elections-solution-type",
  "frame-support",
  "frame-system",
  "frame-system-benchmarking",
@@ -10058,7 +10088,6 @@ dependencies = [
  "serde",
  "sp-arithmetic",
  "sp-core",
- "sp-npos-elections-solution-type",
  "sp-runtime",
  "sp-std",
  "substrate-test-utils",
@@ -10075,21 +10104,6 @@ dependencies = [
  "scale-info",
  "sp-npos-elections",
  "sp-runtime",
-]
-
-[[package]]
-name = "sp-npos-elections-solution-type"
-version = "4.0.0-dev"
-dependencies = [
- "parity-scale-codec",
- "proc-macro-crate 1.1.0",
- "proc-macro2",
- "quote",
- "scale-info",
- "sp-arithmetic",
- "sp-npos-elections",
- "syn",
- "trybuild",
 ]
 
 [[package]]

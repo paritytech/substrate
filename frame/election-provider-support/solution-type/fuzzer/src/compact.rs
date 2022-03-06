@@ -1,6 +1,7 @@
 use honggfuzz::fuzz;
-use sp_npos_elections::{generate_solution_type, sp_arithmetic::Percent};
+use sp_arithmetic::Percent;
 use sp_runtime::codec::{Encode, Error};
+use frame_npos_elections_solution_type::generate_solution_type;
 
 fn main() {
 	generate_solution_type!(#[compact] pub struct InnerTestSolutionCompact::<
