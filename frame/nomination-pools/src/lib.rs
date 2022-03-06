@@ -764,10 +764,9 @@ pub struct SubPools<T: Config> {
 }
 
 impl<T: Config> SubPools<T> {
-	/// Merge the oldest unbonding pool with an era into the general unbond pool with no associated
-	/// era.
-	fn maybe_merge_pools(mut self, current_era: EraIndex) -> Self {
-		if current_era < TotalUnbondingPools::<T>::get().into() {
+	/// Merge the oldest `with_era` unbond pools into the `no_era` unbond pool.
+	fn maybe_merge_pools(mut self, unbond_era: EraIndex) -> Self {
+		if unbond_era < TotalUnbondingPools::<T>::get().into() {
 			// For the first `0..TotalUnbondingPools` eras of the chain we don't need to do
 			// anything. I.E. if `TotalUnbondingPools` is 5 and we are in era 4 we can add a pool
 			// for this era and have exactly `TotalUnbondingPools` pools.
@@ -776,7 +775,7 @@ impl<T: Config> SubPools<T> {
 
 		//  I.E. if `TotalUnbondingPools` is 5 and current era is 10, we only want to retain pools
 		// 6..=10.
-		let newest_era_to_remove = current_era.saturating_sub(TotalUnbondingPools::<T>::get());
+		let newest_era_to_remove = unbond_era.saturating_sub(TotalUnbondingPools::<T>::get());
 
 		let eras_to_remove: Vec<_> = self
 			.with_era
@@ -1137,6 +1136,8 @@ pub mod pallet {
 			// Note that we lazily create the unbonding pools here if they don't already exist
 			let sub_pools = SubPoolsStorage::<T>::get(&delegator.pool).unwrap_or_default();
 			let current_era = T::StakingInterface::current_era();
+			// TODO: [now] look into removing bonding_duration and instead exposing 
+			// `StakingInterface::unbond_era_for(current)`
 			let unbond_era = T::StakingInterface::bonding_duration().saturating_add(current_era);
 
 			let balance_to_unbond = bonded_pool.balance_to_unbond(delegator.points);

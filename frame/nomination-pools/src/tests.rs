@@ -20,6 +20,7 @@ fn test_setup_works() {
 		assert_eq!(RewardPools::<Runtime>::count(), 1);
 		assert_eq!(SubPoolsStorage::<Runtime>::count(), 0);
 		assert_eq!(Delegators::<Runtime>::count(), 1);
+		assert_eq!(StakingMock::bonding_duration(), 3);
 
 		assert_eq!(
 			BondedPool::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap(),
@@ -742,7 +743,7 @@ mod claim_payout {
 			let bonded_pool = BondedPool::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap();
 			let reward_pool = RewardPools::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap();
 			let mut delegator = Delegators::<Runtime>::get(10).unwrap();
-			delegator.unbonding_era = Some(0);
+			delegator.unbonding_era = Some(0 + 3);
 
 			assert_noop!(
 				Pools::calculate_delegator_payout(&bonded_pool, reward_pool, delegator),
@@ -1223,7 +1224,7 @@ mod unbond {
 
 			assert_eq!(
 				SubPoolsStorage::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap().with_era,
-				sub_pools_with_era! { 0 => UnbondPool::<Runtime> { points: 10, balance: 10 }}
+				sub_pools_with_era! { 0 + 3 => UnbondPool::<Runtime> { points: 10, balance: 10 }}
 			);
 
 			assert_eq!(
@@ -1260,7 +1261,7 @@ mod unbond {
 				// Then
 				assert_eq!(
 					SubPoolsStorage::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap().with_era,
-					sub_pools_with_era! { 0 => UnbondPool { points: 6, balance: 6 }}
+					sub_pools_with_era! { 0 + 3 => UnbondPool { points: 6, balance: 6 }}
 				);
 				assert_eq!(
 					BondedPool::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap(),
@@ -1276,7 +1277,7 @@ mod unbond {
 					}
 				);
 				assert_eq!(StakingMock::bonded_balance(&PRIMARY_ACCOUNT).unwrap(), 94);
-				assert_eq!(Delegators::<Runtime>::get(40).unwrap().unbonding_era, Some(0));
+				assert_eq!(Delegators::<Runtime>::get(40).unwrap().unbonding_era, Some(0 + 3));
 				assert_eq!(Balances::free_balance(&40), 40 + 40); // We claim rewards when unbonding
 
 				// When
@@ -1286,7 +1287,7 @@ mod unbond {
 				// Then
 				assert_eq!(
 					SubPoolsStorage::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap().with_era,
-					sub_pools_with_era! { 0 => UnbondPool { points: 98, balance: 98 }}
+					sub_pools_with_era! { 0 + 3 => UnbondPool { points: 98, balance: 98 }}
 				);
 				assert_eq!(
 					BondedPool::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap(),
@@ -1302,7 +1303,7 @@ mod unbond {
 					}
 				);
 				assert_eq!(StakingMock::bonded_balance(&PRIMARY_ACCOUNT).unwrap(), 2);
-				assert_eq!(Delegators::<Runtime>::get(550).unwrap().unbonding_era, Some(0));
+				assert_eq!(Delegators::<Runtime>::get(550).unwrap().unbonding_era, Some(0 + 3));
 				assert_eq!(Balances::free_balance(&550), 550 + 550);
 
 				// When
@@ -1311,7 +1312,7 @@ mod unbond {
 				// Then
 				assert_eq!(
 					SubPoolsStorage::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap().with_era,
-					sub_pools_with_era! { 0 => UnbondPool { points: 100, balance: 100 }}
+					sub_pools_with_era! { 0 + 3 => UnbondPool { points: 100, balance: 100 }}
 				);
 				assert_eq!(
 					BondedPool::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap(),
@@ -1327,23 +1328,24 @@ mod unbond {
 					}
 				);
 				assert_eq!(StakingMock::bonded_balance(&PRIMARY_ACCOUNT).unwrap(), 0);
-				assert_eq!(Delegators::<Runtime>::get(550).unwrap().unbonding_era, Some(0));
+				assert_eq!(Delegators::<Runtime>::get(550).unwrap().unbonding_era, Some(0 + 3));
 				assert_eq!(Balances::free_balance(&550), 550 + 550);
 			});
 	}
 
 	#[test]
-	fn unbond_merges_older_pools() {
+	fn unbond_other_merges_older_pools() {
 		ExtBuilder::default().build_and_execute(|| {
 			// Given
+			assert_eq!(StakingMock::bonding_duration(), 3);
 			SubPoolsStorage::<Runtime>::insert(
 				PRIMARY_ACCOUNT,
 				SubPools {
 					no_era: Default::default(),
 					with_era: sub_pools_with_era! {
-						0 => UnbondPool { balance: 10, points: 100 },
-						1 => UnbondPool { balance: 20, points: 20 },
-						2 => UnbondPool { balance: 101, points: 101}
+						0 + 3 => UnbondPool { balance: 10, points: 100 },
+						1 + 3 => UnbondPool { balance: 20, points: 20 },
+						2 + 3 => UnbondPool { balance: 101, points: 101}
 					},
 				},
 			);
@@ -1361,8 +1363,8 @@ mod unbond {
 				SubPools {
 					no_era: UnbondPool { balance: 10 + 20, points: 100 + 20 },
 					with_era: sub_pools_with_era! {
-						2 => UnbondPool { balance: 101, points: 101},
-						current_era => UnbondPool { balance: 10, points: 10 },
+						2 + 3 => UnbondPool { balance: 101, points: 101},
+						current_era + 3 => UnbondPool { balance: 10, points: 10 },
 					},
 				},
 			)
@@ -1413,7 +1415,7 @@ mod unbond {
 					SubPools {
 						no_era: Default::default(),
 						with_era: sub_pools_with_era! {
-							0 => UnbondPool { points: 100 + 200, balance: 100 + 200 }
+							0 + 3 => UnbondPool { points: 100 + 200, balance: 100 + 200 }
 						},
 					}
 				);
@@ -1470,7 +1472,7 @@ mod unbond {
 				SubPools {
 					no_era: Default::default(),
 					with_era: sub_pools_with_era! {
-						0 => UnbondPool { points: 110, balance: 110 }
+						0 + 3 => UnbondPool { points: 110, balance: 110 }
 					}
 				}
 			);
@@ -1565,6 +1567,7 @@ mod withdraw_unbonded_other {
 			.add_delegators(vec![(40, 40), (550, 550)])
 			.build_and_execute(|| {
 				// Given
+				assert_eq!(StakingMock::bonding_duration(), 3);
 				assert_ok!(Pools::unbond_other(Origin::signed(550), 550));
 				assert_ok!(Pools::unbond_other(Origin::signed(40), 40));
 				assert_eq!(Balances::free_balance(&PRIMARY_ACCOUNT), 600);
@@ -1576,7 +1579,9 @@ mod withdraw_unbonded_other {
 				assert_ok!(Pools::unbond_other(Origin::signed(10), 10));
 
 				let mut sub_pools = SubPoolsStorage::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap();
-				let unbond_pool = sub_pools.with_era.get_mut(&current_era).unwrap();
+				// TODO: [now] in the future we could use StakingMock::unbond_era_for(current_era)
+				// instead of current_era + 3.
+				let unbond_pool = sub_pools.with_era.get_mut(&(current_era + 3)).unwrap();
 				// Sanity check
 				assert_eq!(*unbond_pool, UnbondPool { points: 10, balance: 10 });
 
@@ -1598,13 +1603,13 @@ mod withdraw_unbonded_other {
 				// `no_era`
 				let sub_pools = SubPoolsStorage::<Runtime>::get(&PRIMARY_ACCOUNT)
 					.unwrap()
-					.maybe_merge_pools(current_era);
+					.maybe_merge_pools(current_era + 3);
 				SubPoolsStorage::<Runtime>::insert(PRIMARY_ACCOUNT, sub_pools);
 				assert_eq!(
 					SubPoolsStorage::<Runtime>::get(PRIMARY_ACCOUNT).unwrap(),
 					SubPools {
-						with_era: Default::default(),
-						no_era: UnbondPool { points: 550 + 40 + 10, balance: 550 + 40 + 5 }
+						no_era: UnbondPool { points: 550 + 40 + 10, balance: 550 + 40 + 5 },
+						with_era: Default::default()
 					}
 				);
 
@@ -1666,7 +1671,7 @@ mod withdraw_unbonded_other {
 					PRIMARY_ACCOUNT,
 					SubPools {
 						no_era: Default::default(),
-						with_era: sub_pools_with_era! { 0 => UnbondPool { points: 600, balance: 100 }},
+						with_era: sub_pools_with_era! { 0 + 3 => UnbondPool { points: 600, balance: 100 }},
 					},
 				);
 				CurrentEra::set(StakingMock::bonding_duration());
@@ -1677,7 +1682,7 @@ mod withdraw_unbonded_other {
 				// Then
 				assert_eq!(
 					SubPoolsStorage::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap().with_era,
-					sub_pools_with_era! { 0 => UnbondPool { points: 560, balance: 94 }}
+					sub_pools_with_era! { 0 + 3 => UnbondPool { points: 560, balance: 94 }}
 				);
 				assert_eq!(Balances::free_balance(&40), 40 + 6);
 				assert_eq!(Balances::free_balance(&PRIMARY_ACCOUNT), 94);
@@ -1689,7 +1694,7 @@ mod withdraw_unbonded_other {
 				// Then
 				assert_eq!(
 					SubPoolsStorage::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap().with_era,
-					sub_pools_with_era! { 0 => UnbondPool { points: 10, balance: 2 }}
+					sub_pools_with_era! { 0 + 3 => UnbondPool { points: 10, balance: 2 }}
 				);
 				assert_eq!(Balances::free_balance(&550), 550 + 92);
 				// The account was dusted because it went below ED(5)
@@ -1712,11 +1717,11 @@ mod withdraw_unbonded_other {
 
 	#[test]
 	fn withdraw_unbonded_other_errors_correctly() {
-		ExtBuilder::default().build_and_execute(|| {
+		ExtBuilder::default().build_and_execute_no_checks(|| {
 			// Insert the sub-pool
 			let sub_pools = SubPools {
 				no_era: Default::default(),
-				with_era: sub_pools_with_era! { 0 => UnbondPool { points: 10, balance: 10  }},
+				with_era: sub_pools_with_era! { 0 + 3 => UnbondPool { points: 10, balance: 10  }},
 			};
 			SubPoolsStorage::<Runtime>::insert(123, sub_pools.clone());
 
@@ -1740,7 +1745,7 @@ mod withdraw_unbonded_other {
 			);
 
 			// Simulate calling `unbond`
-			delegator.unbonding_era = Some(0);
+			delegator.unbonding_era = Some(0 + 3);
 			Delegators::<Runtime>::insert(11, delegator.clone());
 
 			// We are still in the bonding duration
@@ -1873,8 +1878,8 @@ mod withdraw_unbonded_other {
 					SubPools {
 						no_era: Default::default(),
 						with_era: sub_pools_with_era! {
-							0 => UnbondPool { points: 100, balance: 100},
-							1 => UnbondPool { points: 200 + 10, balance: 200 + 10 }
+							0 + 3 => UnbondPool { points: 100, balance: 100},
+							1 + 3 => UnbondPool { points: 200 + 10, balance: 200 + 10 }
 						}
 					}
 				);
@@ -1895,8 +1900,8 @@ mod withdraw_unbonded_other {
 					SubPools {
 						no_era: Default::default(),
 						with_era: sub_pools_with_era! {
-							// Note that era 0 unbond pool is destroyed because points went to 0
-							1 => UnbondPool { points: 200 + 10, balance: 200 + 10 }
+							// Note that era 0+3 unbond pool is destroyed because points went to 0
+							1 + 3 => UnbondPool { points: 200 + 10, balance: 200 + 10 }
 						}
 					}
 				);
@@ -1914,7 +1919,7 @@ mod withdraw_unbonded_other {
 					SubPools {
 						no_era: Default::default(),
 						with_era: sub_pools_with_era! {
-							1 => UnbondPool { points: 10, balance: 10 }
+							1 + 3 => UnbondPool { points: 10, balance: 10 }
 						}
 					}
 				);
@@ -1945,7 +1950,7 @@ mod withdraw_unbonded_other {
 			// Simulate some other withdraw that caused the pool to merge
 			let sub_pools = SubPoolsStorage::<Runtime>::get(&PRIMARY_ACCOUNT)
 				.unwrap()
-				.maybe_merge_pools(current_era);
+				.maybe_merge_pools(current_era + 3);
 			SubPoolsStorage::<Runtime>::insert(&PRIMARY_ACCOUNT, sub_pools);
 			assert_eq!(
 				SubPoolsStorage::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap(),
