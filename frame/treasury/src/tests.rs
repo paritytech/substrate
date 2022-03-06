@@ -388,3 +388,15 @@ fn max_approvals_limited() {
 		);
 	});
 }
+
+#[test]
+fn remove_already_removed_approval_fails() {
+	new_test_ext().execute_with(|| {
+		Balances::make_free_balance_be(&Treasury::account_id(), 101);
+
+		assert_ok!(Treasury::propose_spend(Origin::signed(0), 100, 3));
+		assert_ok!(Treasury::approve_proposal(Origin::root(), 0));
+		assert_ok!(Treasury::remove_approval(Origin::root(), 0));
+		assert_noop!(Treasury::remove_approval(Origin::root(), 0), Error::<Test, _>::ProposalNotApproved);
+	});
+}

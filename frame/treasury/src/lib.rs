@@ -289,6 +289,8 @@ pub mod pallet {
 		InvalidIndex,
 		/// Too many approvals in the queue.
 		TooManyApprovals,
+		/// Proposal not in approval queue.
+		ProposalNotApproved,
 	}
 
 	#[pallet::hooks]
@@ -391,6 +393,38 @@ pub mod pallet {
 			ensure!(<Proposals<T, I>>::contains_key(proposal_id), Error::<T, I>::InvalidIndex);
 			Approvals::<T, I>::try_append(proposal_id)
 				.map_err(|_| Error::<T, I>::TooManyApprovals)?;
+			Ok(())
+		}
+
+		/// Force a previously approved proposal to be removed from the approval queue. 
+		///
+		/// May only be called from `T::RejectOrigin`.
+		///
+		/// # <weight>
+		/// - Complexity: O(A) where `A` is the number of approvals
+		/// - DbReads: `Proposals`, `Approvals`
+		/// - DbWrites: `Approvals`
+		/// # </weight>
+		#[pallet::weight((T::WeightInfo::remove_approval(), DispatchClass::Operational))]
+		pub fn remove_approval(
+			origin: OriginFor<T>,
+			#[pallet::compact] proposal_id: ProposalIndex,
+		) -> DispatchResult {
+			T::RejectOrigin::ensure_origin(origin)?;
+
+			ensure!(<Proposals<T, I>>::contains_key(proposal_id), Error::<T, I>::InvalidIndex);
+			let proprosal_removed = Approvals::<T, I>::try_mutate(|v|{
+				if let Some(index) = v.iter().position(|x| x == &proposal_id) {
+					v.remove(index);
+					Ok(())
+				}
+				else{
+					Err(())
+				}
+			});
+
+			ensure!(proprosal_removed.is_ok(), Error::<T, I>::ProposalNotApproved);
+
 			Ok(())
 		}
 	}
