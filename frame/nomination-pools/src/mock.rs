@@ -152,6 +152,7 @@ impl Convert<U256, Balance> for U256ToBalance {
 
 parameter_types! {
 	pub static PostUnbondingPoolsWindow: u32 = 2;
+	pub static MaxMetadataLen: u32 = 2;
 }
 
 impl pools::Config for Runtime {
@@ -162,6 +163,7 @@ impl pools::Config for Runtime {
 	type U256ToBalance = U256ToBalance;
 	type StakingInterface = StakingMock;
 	type PostUnbondingPoolsWindow = PostUnbondingPoolsWindow;
+	type MaxMetadataLen = MaxMetadataLen;
 }
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Runtime>;

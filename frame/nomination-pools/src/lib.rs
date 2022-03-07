@@ -544,9 +544,9 @@ impl<T: Config> BondedPool<T> {
 		points_to_issue
 	}
 
-	/// Check that the pool can accept a member with `new_funds`.
-	fn ok_to_join_with(&self, new_funds: BalanceOf<T>) -> Result<(), DispatchError> {
-		ensure!(self.state == PoolState::Open, Error::<T>::NotOpen);
+	/// Whether or not the pool is ok to be in `PoolSate::Open`. If this return an `Err`, then the
+	/// pool is unrecoverable and should be to a destroying state.
+	fn ok_to_be_open(&self) -> Result<(), DispatchError> {
 		let bonded_balance =
 			T::StakingInterface::bonded_balance(&self.account).unwrap_or(Zero::zero());
 		ensure!(!bonded_balance.is_zero(), Error::<T>::OverflowRisk);
@@ -565,12 +565,29 @@ impl<T: Config> BondedPool<T> {
 		ensure!(points_to_balance_ratio_floor < 10u32.into(), Error::<T>::OverflowRisk);
 		// while restricting the balance to 1/10th of max total issuance,
 		ensure!(
-			new_funds.saturating_add(bonded_balance) <
-				BalanceOf::<T>::max_value().div(10u32.into()),
+			bonded_balance < BalanceOf::<T>::max_value().div(10u32.into()),
 			Error::<T>::OverflowRisk
 		);
 		// then we can be decently confident the bonding pool points will not overflow
 		// `BalanceOf<T>`.
+
+		Ok(())
+	}
+
+	/// Check that the pool can accept a member with `new_funds`.
+	fn ok_to_join_with(&self, new_funds: BalanceOf<T>) -> Result<(), DispatchError> {
+		ensure!(self.state == PoolState::Open, Error::<T>::NotOpen);
+
+		self.ok_to_be_open()?;
+
+		let bonded_balance =
+			T::StakingInterface::bonded_balance(&self.account).unwrap_or(Zero::zero());
+		ensure!(
+			new_funds.saturating_add(bonded_balance) <
+				BalanceOf::<T>::max_value().div(10u32.into()),
+			Error::<T>::OverflowRisk
+		);
+
 		Ok(())
 	}
 
@@ -580,6 +597,14 @@ impl<T: Config> BondedPool<T> {
 
 	fn can_kick(&self, who: &T::AccountId) -> bool {
 		*who == self.root || *who == self.state_toggler && self.state == PoolState::Blocked
+	}
+
+	fn can_toggle_state(&self, who: &T::AccountId) -> bool {
+		*who == self.root || *who == self.state_toggler && self.state != PoolState::Destroying
+	}
+
+	fn can_set_metadata(&self, who: &T::AccountId) -> bool {
+		*who == self.root || *who == self.state_toggler
 	}
 
 	fn is_destroying(&self) -> bool {
@@ -765,12 +790,12 @@ impl<T: Config> SubPools<T> {
 	fn maybe_merge_pools(mut self, unbond_era: EraIndex) -> Self {
 		if unbond_era < TotalUnbondingPools::<T>::get().into() {
 			// For the first `0..TotalUnbondingPools` eras of the chain we don't need to do
-			// anything. I.E. if `TotalUnbondingPools` is 5 and we are in era 4 we can add a pool
+			// anything. Ex: if `TotalUnbondingPools` is 5 and we are in era 4 we can add a pool
 			// for this era and have exactly `TotalUnbondingPools` pools.
 			return self
 		}
 
-		//  I.E. if `TotalUnbondingPools` is 5 and current era is 10, we only want to retain pools
+		// Ex: if `TotalUnbondingPools` is 5 and current era is 10, we only want to retain pools
 		// 6..=10.
 		let newest_era_to_remove = unbond_era.saturating_sub(TotalUnbondingPools::<T>::get());
 
@@ -860,6 +885,9 @@ pub mod pallet {
 		/// points to balance; once the `with_era` pool is merged into the `no_era` pool, the ratio
 		/// can become skewed due to some slashed ratio getting merged in at some point.
 		type PostUnbondingPoolsWindow: Get<u32>;
+
+		/// The maximum length, in bytes, that a pools metadata maybe.
+		type MaxMetadataLen: Get<u32>;
 	}
 
 	/// Minimum amount to bond to join a pool.
@@ -907,6 +935,16 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type SubPoolsStorage<T: Config> =
 		CountedStorageMap<_, Twox64Concat, T::AccountId, SubPools<T>>;
+
+	/// Metadata for the pool
+	#[pallet::storage]
+	pub type Metadata<T: Config> = CountedStorageMap<
+		_,
+		Twox64Concat,
+		T::AccountId,
+		BoundedVec<u8, T::MaxMetadataLen>,
+		ValueQuery,
+	>;
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
@@ -978,7 +1016,7 @@ pub mod pallet {
 		AlreadyUnbonding,
 		/// The delegator is not unbonding and thus cannot withdraw funds.
 		NotUnbonding,
-		/// Unbonded funds cannot be withdrawn yet because the bond duration has not passed.
+		/// Unbonded funds cannot be withdrawn yet because the bonding duration has not passed.
 		NotUnbondedYet,
 		/// The amount does not meet the minimum bond to either join or create a pool.
 		MinimumBondNotMet,
@@ -995,7 +1033,7 @@ pub mod pallet {
 		NotOnlyDelegator,
 		/// The caller does not have nominating permissions for the pool.
 		NotNominator,
-		/// Either a) the caller cannot make a valid kick or b) the pool is not destroying
+		/// Either a) the caller cannot make a valid kick or b) the pool is not destroying.
 		NotKickerOrDestroying,
 		/// The pool is not open to join
 		NotOpen,
@@ -1003,6 +1041,10 @@ pub mod pallet {
 		MaxPools,
 		/// Too many delegators in the pool or system.
 		MaxDelegators,
+		/// The pools state cannot be changed.
+		CanNotChangeState,
+		/// The caller does not have adequate permissions.
+		DoesNotHavePermission,
 	}
 
 	#[pallet::call]
@@ -1391,23 +1433,62 @@ pub mod pallet {
 			Ok(())
 		}
 
-		// pub fn set_state_other(origin: OriginFor<T>, pool_account: T::AccountId, state:
-		// PoolState) -> DispatchError { 	let who = ensure_signed!(origin);
-		// 	BondedPool::<Runtime>::try_mutate(pool_account, |maybe_bonded_pool| {
-		// 		maybe_bonded_pool.ok_or(Error::<T>::PoolNotFound).map(|bonded_pool|
-		// 			if bonded_pool.is_destroying() {
-		// 				// invariant, a destroying pool cannot become non-destroying
-		// 				// this is because
-		// 				Err(Error::<T>::Err)?
-		// 			}
+		#[pallet::weight(42)] // TODO: [now] add bench for this
+		pub fn set_state_other(
+			origin: OriginFor<T>,
+			pool_account: T::AccountId,
+			state: PoolState,
+		) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+			let mut bonded_pool =
+				BondedPool::<T>::get(&pool_account).ok_or(Error::<T>::PoolNotFound)?;
+			ensure!(bonded_pool.state != PoolState::Destroying, Error::<T>::CanNotChangeState);
 
-		// 			if bonded_pool.is_spoiled() && state == PoolState::Destroying {
-		// 				bonded_pool.state = PoolState::Destroying
-		// 			} else if bonded_pool.root == who || bonded_pool.state_toggler == who {
-		// 				bonded_pool.state = who
-		// 			}
-		// 		)
-		// 	})
+			// TODO: [now] we could  check if bonded_pool.ok_to_be_open().is_err(), and if thats
+			// true always set the state to destroying, regardless of the stat the caller passes.
+			// The downside is that this seems like a misleading API
+
+			if bonded_pool.can_toggle_state(&who) {
+				bonded_pool.state = state
+			} else if bonded_pool.ok_to_be_open().is_err() && state == PoolState::Destroying {
+				// If the pool has bad properties, then anyone can set it as destroying
+				bonded_pool.state = PoolState::Destroying;
+			} else {
+				Err(Error::<T>::CanNotChangeState)?;
+			}
+
+			bonded_pool.put();
+
+			Ok(())
+		}
+
+		#[pallet::weight(42)] // TODO: [now] add bench for this
+		pub fn set_metadata(
+			origin: OriginFor<T>,
+			pool_account: T::AccountId,
+			metadata: BoundedVec<u8, T::MaxMetadataLen>,
+		) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+			ensure!(
+				BondedPool::<T>::get(&pool_account)
+					.ok_or(Error::<T>::PoolNotFound)?
+					.can_set_metadata(&who),
+				Error::<T>::DoesNotHavePermission
+			);
+
+			Metadata::<T>::mutate(&pool_account, |pool_meta| *pool_meta = metadata);
+
+			Ok(())
+		}
+
+		// Set
+		// * `min_join_bond`
+		// * `min_create_bond`
+		// * `max_pools`
+		// * `max_delegators_per_pool`
+		// * `max_delegators`
+		// pub fn set_parameters(origin: OriginFor<T>, ) -> DispatchResult {
+
 		// }
 	}
 
