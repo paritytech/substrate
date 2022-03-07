@@ -28,6 +28,7 @@ pub(crate) fn generate(def: crate::SolutionDef) -> Result<TokenStream2> {
 		voter_type,
 		target_type,
 		weight_type,
+		size_bound,
 		compact_encoding,
 	} = def;
 
@@ -178,6 +179,13 @@ pub(crate) fn generate(def: crate::SolutionDef) -> Result<TokenStream2> {
 			<#ident as _npos::NposSolution>::TargetIndex,
 			<#ident as _npos::NposSolution>::Accuracy,
 		>;
+		impl _npos::codec::MaxEncodedLen for #ident {
+			fn max_encoded_len() -> usize {
+				use frame_support::traits::Get;
+				let s: u32 = #size_bound::get();
+				s as usize
+			}
+		}
 		impl<'a> _npos::sp_std::convert::TryFrom<&'a [__IndexAssignment]> for #ident {
 			type Error = _npos::Error;
 			fn try_from(index_assignments: &'a [__IndexAssignment]) -> Result<Self, Self::Error> {
