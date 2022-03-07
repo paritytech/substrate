@@ -27,4 +27,5 @@ sp-arithmetic = { version = "5.0.0", path = "../../../primitives/arithmetic" }
 # used by generate_solution_type:
 sp-npos-elections = { version = "4.0.0-dev", path = "../../../primitives/npos-elections" }
 frame-election-provider-support = { version = "4.0.0-dev", path = ".." }
+frame-support = { version = "4.0.0-dev", path = "../../support" }
 trybuild = "1.0.53"

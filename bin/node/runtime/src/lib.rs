@@ -594,11 +594,13 @@ frame_election_provider_support::generate_solution_type!(
 		VoterIndex = u32,
 		TargetIndex = u16,
 		Accuracy = sp_runtime::PerU16,
+		SizeBound = VoterSnapshotPerBlock,
 	>(16)
 );
 
 parameter_types! {
 	pub MaxNominations: u32 = <NposSolution16 as frame_election_provider_support::NposSolution>::LIMIT as u32;
+	pub VoterSnapshotPerBlock: u32 = 10_000;
 }
 
 /// The numbers configured here could always be more than the the maximum limits of staking pallet
@@ -681,7 +683,7 @@ impl pallet_election_provider_multi_phase::Config for Runtime {
 	// BagsList allows a practically unbounded count of nominators to participate in NPoS elections.
 	// To ensure we respect memory limits when using the BagsList this must be set to a number of
 	// voters we know can fit into a single vec allocation.
-	type VoterSnapshotPerBlock = ConstU32<10_000>;
+	type VoterSnapshotPerBlock = VoterSnapshotPerBlock;
 }
 
 parameter_types! {
