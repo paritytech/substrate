@@ -29,10 +29,15 @@ use log::info;
 use serde::Serialize;
 use std::{fmt::Debug, sync::Arc};
 
-use super::bench::{Benchmark, BenchmarkParams, BenchmarkType};
-use crate::{block::template::TemplateData, post_processing::WeightParams, storage::record::Stats};
+use crate::{
+	block::{
+		bench::{Benchmark, BenchmarkParams, BenchmarkType},
+		template::TemplateData,
+	},
+	post_processing::WeightParams,
+};
 
-/// General parameters for a [`BlockCmd`].
+/// Parameters for a [`BlockCmd`].
 #[derive(Debug, Parser)]
 pub struct BlockCmd {
 	#[allow(missing_docs)]
@@ -52,7 +57,7 @@ pub struct BlockCmd {
 	pub params: BlockParams,
 }
 
-/// Specific parameters for a [`BlockCmd`].
+/// Parameter for a block benchmark and post processing.
 #[derive(Debug, Default, Serialize, Clone, PartialEq, Args)]
 pub struct BlockParams {
 	#[allow(missing_docs)]
@@ -82,21 +87,15 @@ impl BlockCmd {
 		let bench = Benchmark::new(client, self.params.bench.clone(), self.params.no_check);
 
 		if !self.params.bench.skip_block {
-			let record = bench.bench(BenchmarkType::Block)?;
-			// TODO save json
-			let stats = Stats::new(&record)?;
+			let stats = bench.bench(BenchmarkType::Block)?;
 			info!("Executing an empty block [ns]:\n{:?}", stats);
-			// TODO weight
 			let template = TemplateData::new(BenchmarkType::Block, &cfg, &self.params, &stats)?;
 			template.write(&self.params.weight.weight_path)?;
 		}
 
 		if !self.params.bench.skip_extrinsic {
-			let record = bench.bench(BenchmarkType::Extrinsic)?;
-			// TODO save json
-			let stats = Stats::new(&record)?;
+			let stats = bench.bench(BenchmarkType::Extrinsic)?;
 			info!("Executing a NO-OP extrinsic [ns]:\n{:?}", stats);
-			// TODO weight
 			let template = TemplateData::new(BenchmarkType::Extrinsic, &cfg, &self.params, &stats)?;
 			template.write(&self.params.weight.weight_path)?;
 		}

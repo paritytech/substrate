@@ -15,12 +15,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use sc_cli::{
-	CliConfiguration, DatabaseParams, PruningParams, Result, SharedParams, TransactionPoolParams,
-};
+use sc_cli::{CliConfiguration, DatabaseParams, PruningParams, Result, SharedParams};
 use sc_client_api::{Backend as ClientBackend, StorageProvider, UsageProvider};
 use sc_client_db::DbHash;
-use sc_service::{config::TransactionPoolOptions, Configuration};
+use sc_service::Configuration;
 use sp_blockchain::HeaderBackend;
 use sp_database::{ColumnId, Database};
 use sp_runtime::traits::{Block as BlockT, HashFor};
@@ -49,10 +47,6 @@ pub struct StorageCmd {
 	#[allow(missing_docs)]
 	#[clap(flatten)]
 	pub pruning_params: PruningParams,
-
-	#[allow(missing_docs)]
-	#[clap(flatten)]
-	pub pool_params: TransactionPoolParams,
 
 	#[allow(missing_docs)]
 	#[clap(flatten)]
@@ -154,10 +148,6 @@ impl CliConfiguration for StorageCmd {
 
 	fn pruning_params(&self) -> Option<&PruningParams> {
 		Some(&self.pruning_params)
-	}
-
-	fn transaction_pool(&self) -> Result<TransactionPoolOptions> {
-		Ok(self.pool_params.transaction_pool())
 	}
 
 	fn state_cache_size(&self) -> Result<usize> {

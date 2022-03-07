@@ -26,7 +26,9 @@ use sp_runtime::{traits::Block as BlockT, DigestItem};
 use clap::Args;
 use log::{info, warn};
 use serde::Serialize;
-use std::{fmt, marker::PhantomData, sync::Arc, time::Instant};
+use std::{marker::PhantomData, sync::Arc, time::Instant};
+
+use crate::storage::record::Stats;
 
 /// Parameters to configure a block benchmark.
 #[derive(Debug, Default, Serialize, Clone, PartialEq, Args)]
@@ -39,12 +41,12 @@ pub struct BenchmarkParams {
 	#[clap(long)]
 	pub skip_block: bool,
 
-	/// Specify the number of a full block. 0 is treated as last block.
+	/// Specify the id of a full block. 0 is treated as last block.
 	/// The block should be filled with `System::remark` extrinsics.
 	#[clap(long, default_value = "0")]
 	pub full_block: u32,
 
-	/// Specify the number of an empty block. 0 is treated as last block.
+	/// Specify the id of an empty block. 0 is treated as last block.
 	/// The block should not contains any user extrinsics but only inherents.
 	#[clap(long, default_value = "0")]
 	pub empty_block: u32,
@@ -67,11 +69,9 @@ pub struct BenchmarkParams {
 	pub max_inherents: u32,
 
 	/// Minimum number of extrinsics that must be present in a block
-	/// such that the block will still be considered full.
+	/// such that the block will be considered full.
 	///
 	/// Default is 12_000 since in Substrate a block can hold that many NO-OPs.
-	/// To benchmark the speed of a NO-OP extrinsic, there should be
-	/// as many in the block as possible, for Substrate this is 12_000.
 	#[clap(long, default_value = "12000")]
 	pub min_extrinsics: u32,
 }
@@ -79,10 +79,12 @@ pub struct BenchmarkParams {
 /// The results of multiple runs in ns.
 pub(crate) type BenchRecord = Vec<u64>;
 
-/// Type of
+/// Type of a benchmark.
 #[derive(Serialize, Clone)]
 pub(crate) enum BenchmarkType {
+	/// Extrinsic execution speed was measured.
 	Extrinsic,
+	/// Empty block execution speed was measured.
 	Block,
 }
 
@@ -106,24 +108,18 @@ where
 	}
 
 	/// Benchmarks the execution time of a block.
-	/// `empty_block` defines if the block should be empty.
-	pub fn bench(&self, which: BenchmarkType) -> Result<BenchRecord> {
-		let block_empty: bool;
-		let block = match which {
-			BenchmarkType::Block => {
-				block_empty = true;
-				self.load_block(self.params.empty_block)?
-			},
-			BenchmarkType::Extrinsic => {
-				block_empty = false;
-				self.load_block(self.params.full_block)?
-			},
+	pub fn bench(&self, which: BenchmarkType) -> Result<Stats> {
+		let (id, empty) = match which {
+			BenchmarkType::Block => (self.params.empty_block, true),
+			BenchmarkType::Extrinsic => (self.params.full_block, false),
 		};
-		let parent = BlockId::Hash(*block.header().parent_hash());
+		let block = self.load_block(id)?;
+		self.check_block(&block, empty)?;
+		let block = self.unsealed(block)?;
 
-		self.check_block(&block, block_empty)?;
-		let block = self.unseal(block)?;
-		self.measure_block(&block, &parent, !block_empty)
+		let parent = BlockId::Hash(*block.header().parent_hash());
+		let rec = self.measure_block(&block, &parent, !empty)?;
+		Stats::new(&rec)
 	}
 
 	/// Loads a block. 0 loads the latest block.
@@ -134,7 +130,7 @@ where
 		}
 		info!("Loading block {}", num);
 
-		self.client.block(&num)?.map(|b| b.block).ok_or("Could not find block".into())
+		self.client.block(&num)?.map(|b| b.block).ok_or("Could not load block".into())
 	}
 
 	/// Checks if the passed block is empty.
@@ -154,16 +150,16 @@ where
 		} else {
 			match (is_full, self.no_check) {
 				(true, _) => {},
-				(false, true) => warn!("Treating non-full block as full because of --no-check"),
 				(false, false) => return Err("Block should be full but was not".into()),
+				(false, true) => warn!("Treating non-full block as full because of --no-check"),
 			}
 		}
 
 		Ok(())
 	}
 
-	/// Removes the consensus seal from the block if there is any.
-	fn unseal(&self, block: B) -> Result<B> {
+	/// Removes the consensus seal from a block if there is any.
+	fn unsealed(&self, block: B) -> Result<B> {
 		let (mut header, extrinsics) = block.deconstruct();
 		match header.digest_mut().pop() {
 			Some(DigestItem::Seal(_, _)) => {},
@@ -176,13 +172,13 @@ where
 	/// Measures the time that it take to execute a block.
 	/// `per_ext` specifies if the result should be divided
 	/// by the number of extrinsics in the block.
-	/// This is useful for the case that you only want to know
+	/// This is useful for the case that you want to know
 	/// how long it takes to execute one extrinsic.
 	fn measure_block(&self, block: &B, before: &BlockId<B>, per_ext: bool) -> Result<BenchRecord> {
 		let mut record = BenchRecord::new();
 		let num_ext = block.extrinsics().len() as u64;
 		if per_ext && num_ext == 0 {
-			return Err("Cannot measure extrinsic time of empty block".into());
+			return Err("Cannot measure extrinsic time of empty block".into())
 		}
 
 		info!("Running {} warmups...", self.params.warmup);
@@ -206,7 +202,7 @@ where
 
 			let elapsed = start.elapsed().as_nanos();
 			if per_ext {
-				// non zero checked above
+				// non zero checked above.
 				record.push(elapsed as u64 / num_ext);
 			} else {
 				record.push(elapsed as u64);
@@ -217,17 +213,17 @@ where
 	}
 }
 
-impl fmt::Debug for BenchmarkType {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl BenchmarkType {
+	/// Short name of the benchmark type.
+	pub(crate) fn short_name(&self) -> &'static str {
 		match self {
-			Self::Extrinsic => write!(f, "extrinsic"),
-			Self::Block => write!(f, "block"),
+			Self::Extrinsic => "extrinsic",
+			Self::Block => "block",
 		}
 	}
-}
 
-impl BenchmarkType {
-	pub(crate) fn name(&self) -> &'static str {
+	/// Long name of the benchmark type.
+	pub(crate) fn long_name(&self) -> &'static str {
 		match self {
 			Self::Extrinsic => "ExtrinsicBase",
 			Self::Block => "BlockExecution",

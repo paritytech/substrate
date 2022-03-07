@@ -33,8 +33,10 @@ static TEMPLATE: &str = include_str!("./weights.hbs");
 /// Data consumed by Handlebar to fill out the `weights.hbs` template.
 #[derive(Serialize, Debug, Clone)]
 pub(crate) struct TemplateData {
-	template_type: BenchmarkType,
+	/// Name of the benchmark. String version of `template_type`.
 	template_name: String,
+	/// Path prefix that will be used to save the resulting file.
+	template_path: String,
 	/// Name of the runtime. Taken from the chain spec.
 	runtime_name: String,
 	/// Version of the benchmarking CLI used.
@@ -45,9 +47,9 @@ pub(crate) struct TemplateData {
 	args: Vec<String>,
 	/// Params of the executed command.
 	params: BlockParams,
-	/// Stats about a benchmark result.
+	/// Stats about the benchmark result.
 	stats: Stats,
-	/// The weight for one `read`.
+	/// The resulting weight in ns.
 	weight: u64,
 }
 
@@ -62,8 +64,8 @@ impl TemplateData {
 		let weight = params.weight.calc_weight(stats)?;
 
 		Ok(TemplateData {
-			template_name: t.name().into(),
-			template_type: t,
+			template_name: t.short_name().into(),
+			template_path: t.long_name().into(),
 			runtime_name: cfg.chain_spec.name().into(),
 			version: VERSION.into(),
 			date: chrono::Utc::now().format("%Y-%m-%d (Y/M/D)").to_string(),
@@ -75,10 +77,10 @@ impl TemplateData {
 	}
 
 	/// Filles out the `weights.hbs` HBS template with its own data.
-	/// Writes the result to `path` which can be a directory or file.
+	/// Writes the result to `path` which can be a directory or a file.
 	pub fn write(&self, path: &str) -> Result<()> {
 		let mut handlebars = handlebars::Handlebars::new();
-		// Format large integers with underscore.
+		// Format large integers with underscores.
 		handlebars.register_helper("underscore", Box::new(crate::writer::UnderscoreHelper));
 		// Don't HTML escape any characters.
 		handlebars.register_escape_fn(|s| -> String { s.to_string() });
@@ -95,7 +97,7 @@ impl TemplateData {
 	fn build_path(&self, weight_out: &str) -> PathBuf {
 		let mut path = PathBuf::from(weight_out);
 		if path.is_dir() {
-			path.push(format!("{:?}_weights.rs", self.template_type).to_lowercase());
+			path.push(format!("{:?}_weights.rs", self.template_name));
 			path.set_extension("rs");
 		}
 		path

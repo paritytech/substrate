@@ -96,7 +96,12 @@ pub fn run() -> Result<()> {
 					.into())
 			},
 		Some(Subcommand::BenchmarkBlock(cmd)) => {
-			// TODO feature check
+			if !cfg!(feature = "runtime-benchmarks") {
+				return Err("Benchmarking wasn't enabled when building the node. \
+				You can enable it with `--features runtime-benchmarks`."
+					.into())
+			}
+
 			let runner = cli.create_runner(cmd)?;
 			runner.async_run(|config| {
 				let PartialComponents { client, task_manager, .. } = new_partial(&config)?;
