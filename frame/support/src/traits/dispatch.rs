@@ -27,10 +27,12 @@ use sp_runtime::{
 pub trait EnsureOrigin<OuterOrigin> {
 	/// A return type.
 	type Success;
+
 	/// Perform the origin check.
 	fn ensure_origin(o: OuterOrigin) -> Result<Self::Success, BadOrigin> {
 		Self::try_origin(o).map_err(|_| BadOrigin)
 	}
+
 	/// Perform the origin check.
 	fn try_origin(o: OuterOrigin) -> Result<Self::Success, OuterOrigin>;
 
@@ -39,6 +41,52 @@ pub trait EnsureOrigin<OuterOrigin> {
 	/// ** Should be used for benchmarking only!!! **
 	#[cfg(feature = "runtime-benchmarks")]
 	fn successful_origin() -> OuterOrigin;
+}
+
+/// Some sort of check on the origin is performed by this object.
+pub trait EnsureOriginWithArg<OuterOrigin, Argument> {
+	/// A return type.
+	type Success;
+
+	/// Perform the origin check.
+	fn ensure_origin(o: OuterOrigin, a: &Argument) -> Result<Self::Success, BadOrigin> {
+		Self::try_origin(o, a).map_err(|_| BadOrigin)
+	}
+
+	/// Perform the origin check, returning the origin value if unsuccessful. This allows chaining.
+	fn try_origin(o: OuterOrigin, a: &Argument) -> Result<Self::Success, OuterOrigin>;
+
+	/// Returns an outer origin capable of passing `try_origin` check.
+	///
+	/// ** Should be used for benchmarking only!!! **
+	#[cfg(feature = "runtime-benchmarks")]
+	fn successful_origin(a: &Argument) -> OuterOrigin;
+}
+
+pub struct AsEnsureOriginWithArg<EO>(sp_std::marker::PhantomData<EO>);
+impl<OuterOrigin, Argument, EO: EnsureOrigin<OuterOrigin>>
+	EnsureOriginWithArg<OuterOrigin, Argument> for AsEnsureOriginWithArg<EO>
+{
+	/// A return type.
+	type Success = EO::Success;
+
+	/// Perform the origin check.
+	fn ensure_origin(o: OuterOrigin, _: &Argument) -> Result<Self::Success, BadOrigin> {
+		EO::ensure_origin(o)
+	}
+
+	/// Perform the origin check, returning the origin value if unsuccessful. This allows chaining.
+	fn try_origin(o: OuterOrigin, _: &Argument) -> Result<Self::Success, OuterOrigin> {
+		EO::try_origin(o)
+	}
+
+	/// Returns an outer origin capable of passing `try_origin` check.
+	///
+	/// ** Should be used for benchmarking only!!! **
+	#[cfg(feature = "runtime-benchmarks")]
+	fn successful_origin(_: &Argument) -> OuterOrigin {
+		EO::successful_origin()
+	}
 }
 
 /// Type that can be dispatched with an origin but without checking the origin filter.
