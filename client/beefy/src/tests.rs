@@ -36,7 +36,7 @@ use sc_network_test::{
 use sc_utils::notification::NotificationReceiver;
 
 use beefy_primitives::{
-	crypto::AuthorityId as BeefyId, ConsensusLog, MmrRootHash, ValidatorSet, BEEFY_ENGINE_ID,
+	crypto::AuthorityId, ConsensusLog, MmrRootHash, ValidatorSet, BEEFY_ENGINE_ID,
 	KEY_TYPE as BeefyKeyType,
 };
 use sp_consensus::BlockOrigin;
@@ -48,11 +48,14 @@ use sp_runtime::{
 
 use substrate_test_runtime_client::ClientExt;
 
-use crate::{beefy_protocol_name, keystore::tests::Keyring as BeefyKeyring, notification::*};
+use crate::{
+	beefy_protocol_name, keystore::tests::Keyring as BeefyKeyring, notification::*,
+	worker::tests::TestModifiers,
+};
 
 const BEEFY_PROTOCOL_NAME: &'static str = "/beefy/1";
 
-type BeefyValidatorSet = ValidatorSet<BeefyId>;
+type BeefyValidatorSet = ValidatorSet<AuthorityId>;
 type BeefyPeer = Peer<PeerData, PeersClient>;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -199,7 +202,7 @@ impl TestNetFactory for BeefyTestNet {
 	}
 }
 
-fn make_beefy_ids(keys: &[BeefyKeyring]) -> Vec<BeefyId> {
+fn make_beefy_ids(keys: &[BeefyKeyring]) -> Vec<AuthorityId> {
 	keys.iter().map(|key| key.clone().public().into()).collect()
 }
 
@@ -211,7 +214,12 @@ fn create_beefy_keystore(authority: BeefyKeyring) -> SyncCryptoStorePtr {
 }
 
 // Spawns beefy voters. Returns a future to spawn on the runtime.
-fn initialize_beefy(net: &mut BeefyTestNet, peers: &[BeefyKeyring]) -> impl Future<Output = ()> {
+fn initialize_beefy(
+	net: &mut BeefyTestNet,
+	peers: &[BeefyKeyring],
+	validators: &ValidatorSet<AuthorityId>,
+	min_block_delta: u32,
+) -> impl Future<Output = ()> {
 	let voters = FuturesUnordered::new();
 
 	for (peer_id, key) in peers.iter().enumerate() {
@@ -232,11 +240,14 @@ fn initialize_beefy(net: &mut BeefyTestNet, peers: &[BeefyKeyring]) -> impl Futu
 			network: net.peers[peer_id].network_service().clone(),
 			signed_commitment_sender,
 			beefy_best_block_sender,
-			min_block_delta: 4,
+			min_block_delta,
 			prometheus_registry: None,
 			protocol_name: BEEFY_PROTOCOL_NAME.into(),
 		};
-		let gadget = crate::start_beefy_gadget::<_, _, _, _>(beefy_params);
+		let gadget = crate::start_beefy_gadget::<_, _, _, _>(
+			beefy_params,
+			TestModifiers { active_validators: validators.clone() },
+		);
 
 		fn assert_send<T: Send>(_: &T) {}
 		assert_send(&gadget);
@@ -257,14 +268,14 @@ fn block_until(future: impl Future + Unpin, net: &Arc<Mutex<BeefyTestNet>>, runt
 fn add_mmr_digest(block: &mut Block, mmr_hash: MmrRootHash) {
 	block.header.digest_mut().push(DigestItem::Consensus(
 		BEEFY_ENGINE_ID,
-		ConsensusLog::<BeefyId>::MmrRoot(mmr_hash).encode(),
+		ConsensusLog::<AuthorityId>::MmrRoot(mmr_hash).encode(),
 	));
 }
 
 fn add_auth_change_digest(block: &mut Block, new_auth_set: BeefyValidatorSet) {
 	block.header.digest_mut().push(DigestItem::Consensus(
 		BEEFY_ENGINE_ID,
-		ConsensusLog::<BeefyId>::AuthoritiesChange(new_auth_set).encode(),
+		ConsensusLog::<AuthorityId>::AuthoritiesChange(new_auth_set).encode(),
 	));
 }
 
@@ -334,9 +345,10 @@ fn beefy_finalizing_blocks() {
 	let peers = &[BeefyKeyring::Alice, BeefyKeyring::Bob];
 	let validator_set = ValidatorSet::new(make_beefy_ids(peers), 0).unwrap();
 	let session_len = 10;
+	let min_block_delta = 4;
 
 	let mut net = BeefyTestNet::new(2, 0);
-	runtime.spawn(initialize_beefy(&mut net, peers));
+	runtime.spawn(initialize_beefy(&mut net, peers, &validator_set, min_block_delta));
 
 	// push 42 blocks including `AuthorityChange` digests every 10 blocks.
 	net.generate_blocks(42, session_len, &validator_set);
@@ -344,14 +356,16 @@ fn beefy_finalizing_blocks() {
 
 	let net = Arc::new(Mutex::new(net));
 
+	// Minimum BEEFY block delta is 4.
+
 	// finalize block #5 -> BEEFY should finalize #1 (mandatory) and #5 from diff-power-of-two rule.
 	finalize_block_and_wait_for_beefy(&net, peers, &mut runtime, 5, &[1, 5]);
 
 	// GRANDPA finalize #10 -> BEEFY finalize #10 (mandatory)
 	finalize_block_and_wait_for_beefy(&net, peers, &mut runtime, 10, &[10]);
 
-	// GRANDPA finalize #18 -> BEEFY finalize #14 (diff-power-of-two rule)
-	finalize_block_and_wait_for_beefy(&net, peers, &mut runtime, 18, &[14]);
+	// GRANDPA finalize #18 -> BEEFY finalize #14, then #18 (diff-power-of-two rule)
+	finalize_block_and_wait_for_beefy(&net, peers, &mut runtime, 18, &[14, 18]);
 
 	// GRANDPA finalize #20 -> BEEFY finalize #20 (mandatory)
 	finalize_block_and_wait_for_beefy(&net, peers, &mut runtime, 20, &[20]);

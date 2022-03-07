@@ -37,7 +37,7 @@ use sp_runtime::{
 };
 
 use beefy_primitives::{
-	crypto::{AuthorityId, Public, Signature},
+	crypto::{AuthorityId, Signature},
 	known_payload_ids, BeefyApi, Commitment, ConsensusLog, MmrRootHash, Payload, SignedCommitment,
 	ValidatorSet, VersionedFinalityProof, VoteMessage, BEEFY_ENGINE_ID, GENESIS_AUTHORITY_SET_ID,
 };
@@ -100,6 +100,9 @@ where
 	sync_oracle: SO,
 	// keep rustc happy
 	_backend: PhantomData<BE>,
+	#[cfg(test)]
+	// behavior modifiers used in tests
+	test_res: tests::TestModifiers,
 }
 
 impl<B, C, BE, SO> BeefyWorker<B, C, BE, SO>
@@ -116,7 +119,12 @@ where
 	/// BEEFY pallet has been deployed on-chain.
 	///
 	/// The BEEFY pallet is needed in order to keep track of the BEEFY authority set.
-	pub(crate) fn new(worker_params: WorkerParams<B, BE, C, SO>) -> Self {
+	pub(crate) fn new(
+		worker_params: WorkerParams<B, BE, C, SO>,
+		#[cfg(test)]
+		// behavior modifiers used in tests
+		test_res: tests::TestModifiers,
+	) -> Self {
 		let WorkerParams {
 			client,
 			backend,
@@ -152,6 +160,8 @@ where
 			beefy_best_block_sender,
 			sync_oracle,
 			_backend: PhantomData,
+			#[cfg(test)]
+			test_res,
 		}
 	}
 }
@@ -205,12 +215,12 @@ where
 	fn verify_validator_set(
 		&self,
 		block: &NumberFor<B>,
-		active: &ValidatorSet<Public>,
+		active: &ValidatorSet<AuthorityId>,
 	) -> Result<(), error::Error> {
-		let active: BTreeSet<&Public> = active.validators().iter().collect();
+		let active: BTreeSet<&AuthorityId> = active.validators().iter().collect();
 
 		let public_keys = self.key_store.public_keys()?;
-		let store: BTreeSet<&Public> = public_keys.iter().collect();
+		let store: BTreeSet<&AuthorityId> = public_keys.iter().collect();
 
 		let missing: Vec<_> = store.difference(&active).cloned().collect();
 
@@ -305,7 +315,7 @@ where
 	fn handle_vote(
 		&mut self,
 		round: (Payload, NumberFor<B>),
-		vote: (Public, Signature),
+		vote: (AuthorityId, Signature),
 		self_vote: bool,
 	) {
 		self.gossip_validator.note_round(round.1);
@@ -386,7 +396,7 @@ where
 		};
 		let target_hash = target_header.hash();
 
-		let mmr_root = if let Some(hash) = find_mmr_root_digest::<B, Public>(&target_header) {
+		let mmr_root = if let Some(hash) = find_mmr_root_digest::<B, AuthorityId>(&target_header) {
 			hash
 		} else {
 			warn!(target: "beefy", "🥩 No MMR root digest found for: {:?}", target_hash);
@@ -447,12 +457,9 @@ where
 		self.gossip_engine.lock().gossip_message(topic::<B>(), encoded_message, false);
 	}
 
-	/// Main loop for BEEFY worker.
-	///
-	/// Wait for BEEFY runtime pallet to be available, then start the main async loop
-	/// which is driven by finality notifications and gossiped votes.
-	pub(crate) async fn run(mut self) {
-		info!(target: "beefy", "🥩 run BEEFY worker, best grandpa: #{:?}.", self.best_grandpa_block_header.number());
+	/// Wait for BEEFY runtime pallet to be available.
+	#[cfg(not(test))]
+	async fn wait_for_runtime_pallet(&mut self) {
 		loop {
 			let at = BlockId::hash(self.best_grandpa_block_header.hash());
 			if let Some(active) = self.client.runtime_api().validator_set(&at).ok().flatten() {
@@ -471,12 +478,28 @@ where
 				sleep(Duration::from_secs(5)).await;
 			}
 		}
+	}
+
+	/// For tests don't use runtime pallet. Start rounds from block #1.
+	#[cfg(test)]
+	async fn wait_for_runtime_pallet(&mut self) {
+		let active = self.test_res.active_validators.clone();
+		self.init_session_at(active, 1u32.into());
+	}
+
+	/// Main loop for BEEFY worker.
+	///
+	/// Wait for BEEFY runtime pallet to be available, then start the main async loop
+	/// which is driven by finality notifications and gossiped votes.
+	pub(crate) async fn run(mut self) {
+		info!(target: "beefy", "🥩 run BEEFY worker, best grandpa: #{:?}.", self.best_grandpa_block_header.number());
+		self.wait_for_runtime_pallet().await;
 
 		let mut votes = Box::pin(self.gossip_engine.lock().messages_for(topic::<B>()).filter_map(
 			|notification| async move {
 				debug!(target: "beefy", "🥩 Got vote message: {:?}", notification);
 
-				VoteMessage::<NumberFor<B>, Public, Signature>::decode(
+				VoteMessage::<NumberFor<B>, AuthorityId, Signature>::decode(
 					&mut &notification.message[..],
 				)
 				.ok()
@@ -608,8 +631,12 @@ where
 }
 
 #[cfg(test)]
-mod tests {
-	use super::vote_target;
+pub(crate) mod tests {
+	use super::*;
+
+	pub struct TestModifiers {
+		pub active_validators: ValidatorSet<AuthorityId>,
+	}
 
 	#[test]
 	fn vote_on_min_block_delta() {

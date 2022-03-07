@@ -142,8 +142,12 @@ where
 /// Start the BEEFY gadget.
 ///
 /// This is a thin shim around running and awaiting a BEEFY worker.
-pub async fn start_beefy_gadget<B, BE, C, N>(beefy_params: BeefyParams<B, BE, C, N>)
-where
+pub async fn start_beefy_gadget<B, BE, C, N>(
+	beefy_params: BeefyParams<B, BE, C, N>,
+	#[cfg(test)]
+	// behavior modifiers used in tests
+	test_res: worker::tests::TestModifiers,
+) where
 	B: Block,
 	BE: Backend<B>,
 	C: Client<B, BE>,
@@ -193,7 +197,11 @@ where
 		sync_oracle,
 	};
 
-	let worker = worker::BeefyWorker::<_, _, _, _>::new(worker_params);
+	let worker = worker::BeefyWorker::<_, _, _, _>::new(
+		worker_params,
+		#[cfg(test)]
+		test_res,
+	);
 
 	worker.run().await
 }
