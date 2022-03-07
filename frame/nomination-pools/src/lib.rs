@@ -296,7 +296,6 @@
 // * The sum of each pools delegator counter equals the `Delegators::count()`.
 // * A pool's `delegator_counter` should always be gt 0.
 
-//
 // - transparent prefx for account ids
 
 // Ensure we're `no_std` when compiling for Wasm.
@@ -344,8 +343,9 @@ fn points_to_issue<T: Config>(
 	new_funds: BalanceOf<T>,
 ) -> BalanceOf<T> {
 	match (current_balance.is_zero(), current_points.is_zero()) {
-		(true, true) | (false, true) =>
-			new_funds.saturating_mul(POINTS_TO_BALANCE_INIT_RATIO.into()),
+		(true, true) | (false, true) => {
+			new_funds.saturating_mul(POINTS_TO_BALANCE_INIT_RATIO.into())
+		},
 		(true, false) => {
 			// The pool was totally slashed.
 			// This is the equivalent of `(current_points / 1) * new_funds`.
@@ -370,7 +370,7 @@ fn balance_to_unbond<T: Config>(
 ) -> BalanceOf<T> {
 	if current_balance.is_zero() || current_points.is_zero() || delegator_points.is_zero() {
 		// There is nothing to unbond
-		return Zero::zero()
+		return Zero::zero();
 	}
 
 	// Equivalent of (current_balance / current_points) * delegator_points
@@ -544,9 +544,11 @@ impl<T: Config> BondedPool<T> {
 		points_to_issue
 	}
 
-	/// Whether or not the pool is ok to be in `PoolSate::Open`. If this return an `Err`, then the
-	/// pool is unrecoverable and should be to a destroying state.
+	/// Whether or not the pool is ok to be in `PoolSate::Open`. If this returns an `Err`, then the
+	/// pool is unrecoverable and should be in the destroying state.
 	fn ok_to_be_open(&self) -> Result<(), DispatchError> {
+		ensure!(!self.is_destroying(), Error::<T>::CanNotChangeState);
+
 		let bonded_balance =
 			T::StakingInterface::bonded_balance(&self.account).unwrap_or(Zero::zero());
 		ensure!(!bonded_balance.is_zero(), Error::<T>::OverflowRisk);
@@ -583,8 +585,8 @@ impl<T: Config> BondedPool<T> {
 		let bonded_balance =
 			T::StakingInterface::bonded_balance(&self.account).unwrap_or(Zero::zero());
 		ensure!(
-			new_funds.saturating_add(bonded_balance) <
-				BalanceOf::<T>::max_value().div(10u32.into()),
+			new_funds.saturating_add(bonded_balance)
+				< BalanceOf::<T>::max_value().div(10u32.into()),
 			Error::<T>::OverflowRisk
 		);
 
@@ -600,7 +602,7 @@ impl<T: Config> BondedPool<T> {
 	}
 
 	fn can_toggle_state(&self, who: &T::AccountId) -> bool {
-		*who == self.root || *who == self.state_toggler && self.state != PoolState::Destroying
+		*who == self.root || *who == self.state_toggler && !self.is_destroying()
 	}
 
 	fn can_set_metadata(&self, who: &T::AccountId) -> bool {
@@ -792,7 +794,7 @@ impl<T: Config> SubPools<T> {
 			// For the first `0..TotalUnbondingPools` eras of the chain we don't need to do
 			// anything. Ex: if `TotalUnbondingPools` is 5 and we are in era 4 we can add a pool
 			// for this era and have exactly `TotalUnbondingPools` pools.
-			return self
+			return self;
 		}
 
 		// Ex: if `TotalUnbondingPools` is 5 and current era is 10, we only want to retain pools
@@ -1045,6 +1047,8 @@ pub mod pallet {
 		CanNotChangeState,
 		/// The caller does not have adequate permissions.
 		DoesNotHavePermission,
+		/// Metadata exceeds [`T::MaxMetadataLen`]
+		MetadataExceedsMaxLen,
 	}
 
 	#[pallet::call]
@@ -1360,8 +1364,8 @@ pub mod pallet {
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			ensure!(
-				amount >= T::StakingInterface::minimum_bond() &&
-					amount >= MinCreateBond::<T>::get(),
+				amount >= T::StakingInterface::minimum_bond()
+					&& amount >= MinCreateBond::<T>::get(),
 				Error::<T>::MinimumBondNotMet
 			);
 			if let Some(max_pools) = MaxPools::<T>::get() {
@@ -1466,9 +1470,11 @@ pub mod pallet {
 		pub fn set_metadata(
 			origin: OriginFor<T>,
 			pool_account: T::AccountId,
-			metadata: BoundedVec<u8, T::MaxMetadataLen>,
+			metadata: Vec<u8>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
+			let metadata: BoundedVec<_, _> =
+				metadata.try_into().map_err(|_| Error::<T>::MetadataExceedsMaxLen)?;
 			ensure!(
 				BondedPool::<T>::get(&pool_account)
 					.ok_or(Error::<T>::PoolNotFound)?
@@ -1541,9 +1547,9 @@ impl<T: Config> Pallet<T> {
 		let delegator_virtual_points = T::BalanceToU256::convert(delegator.points)
 			.saturating_mul(T::BalanceToU256::convert(new_earnings_since_last_claim));
 
-		let delegator_payout = if delegator_virtual_points.is_zero() ||
-			current_points.is_zero() ||
-			reward_pool.balance.is_zero()
+		let delegator_payout = if delegator_virtual_points.is_zero()
+			|| current_points.is_zero()
+			|| reward_pool.balance.is_zero()
 		{
 			Zero::zero()
 		} else {
@@ -1607,7 +1613,7 @@ impl<T: Config> Pallet<T> {
 impl<T: Config> OnStakerSlash<T::AccountId, BalanceOf<T>> for Pallet<T> {
 	fn on_slash(
 		pool_account: &T::AccountId,
-		_slashed_bonded: BalanceOf<T>, // bonded balance is always read directly from staking.
+		_slashed_bonded: BalanceOf<T>, // Bonded balance is always read directly from staking.
 		slashed_unlocking: &BTreeMap<EraIndex, BalanceOf<T>>,
 	) {
 		let mut sub_pools = match SubPoolsStorage::<T>::get(pool_account) {

@@ -2172,3 +2172,101 @@ mod nominate {
 		});
 	}
 }
+
+mod set_state_other {
+	use super::*;
+
+	#[test]
+	fn set_state_other_works() {
+		ExtBuilder::default().build_and_execute(|| {
+			// Only the root and state_toggler can change the state when the pool is ok to be open.
+			assert_ok!(BondedPool::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap().ok_to_be_open());
+			assert_noop!(
+				Pools::set_state_other(Origin::signed(10), PRIMARY_ACCOUNT, PoolState::Blocked),
+				Error::<Runtime>::CanNotChangeState
+			);
+			assert_noop!(
+				Pools::set_state_other(Origin::signed(901), PRIMARY_ACCOUNT, PoolState::Blocked),
+				Error::<Runtime>::CanNotChangeState
+			);
+
+			assert_ok!(Pools::set_state_other(
+				Origin::signed(900),
+				PRIMARY_ACCOUNT,
+				PoolState::Blocked
+			));
+			assert_eq!(
+				BondedPool::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap().state,
+				PoolState::Blocked
+			);
+
+			assert_ok!(Pools::set_state_other(
+				Origin::signed(902),
+				PRIMARY_ACCOUNT,
+				PoolState::Destroying
+			));
+			assert_eq!(
+				BondedPool::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap().state,
+				PoolState::Destroying
+			);
+
+			// If the pool is destroying, then no one can set state
+			assert_noop!(
+				Pools::set_state_other(Origin::signed(900), PRIMARY_ACCOUNT, PoolState::Blocked),
+				Error::<Runtime>::CanNotChangeState
+			);
+			assert_noop!(
+				Pools::set_state_other(Origin::signed(902), PRIMARY_ACCOUNT, PoolState::Blocked),
+				Error::<Runtime>::CanNotChangeState
+			);
+
+			// If the pool is not ok to be open, then anyone can set it to destroying
+
+			// Given
+			unsafe_set_state(&PRIMARY_ACCOUNT, PoolState::Open).unwrap();
+			let mut bonded_pool = BondedPool::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap();
+			bonded_pool.points = 100;
+			bonded_pool.put();
+			// When
+			assert_ok!(Pools::set_state_other(
+				Origin::signed(11),
+				PRIMARY_ACCOUNT,
+				PoolState::Destroying
+			));
+			// Then
+			assert_eq!(
+				BondedPool::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap().state,
+				PoolState::Destroying
+			);
+
+			// Given
+			Balances::make_free_balance_be(&PRIMARY_ACCOUNT, Balance::max_value() / 10);
+			unsafe_set_state(&PRIMARY_ACCOUNT, PoolState::Open).unwrap();
+			// When
+			assert_ok!(Pools::set_state_other(
+				Origin::signed(11),
+				PRIMARY_ACCOUNT,
+				PoolState::Destroying
+			));
+			// Then
+			assert_eq!(
+				BondedPool::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap().state,
+				PoolState::Destroying
+			);
+
+			// If the pool is not ok to be open, it cannot be permissionleslly set to a state that isn't destroying
+			unsafe_set_state(&PRIMARY_ACCOUNT, PoolState::Open).unwrap();
+			assert_noop!(
+				Pools::set_state_other(Origin::signed(11), PRIMARY_ACCOUNT, PoolState::Blocked),
+				Error::<Runtime>::CanNotChangeState
+			);
+		});
+	}
+}
+
+mod set_metadata {
+	use super::*;
+
+	#[test]
+	fn set_metadata_works() {}
+}
