@@ -296,8 +296,7 @@
 // * The sum of each pools delegator counter equals the `Delegators::count()`.
 // * A pool's `delegator_counter` should always be gt 0.
 
-// TODO
-// - write detailed docs for StakingInterface
+// 
 // - transparent prefx for account ids
 
 // Ensure we're `no_std` when compiling for Wasm.
@@ -951,11 +950,13 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(crate) fn deposit_event)]
 	pub enum Event<T: Config> {
+		Created { pool: T::AccountId, depositor: T::AccountId },
 		Joined { delegator: T::AccountId, pool: T::AccountId, bonded: BalanceOf<T> },
 		PaidOut { delegator: T::AccountId, pool: T::AccountId, payout: BalanceOf<T> },
 		Unbonded { delegator: T::AccountId, pool: T::AccountId, amount: BalanceOf<T> },
 		Withdrawn { delegator: T::AccountId, pool: T::AccountId, amount: BalanceOf<T> },
 		DustWithdrawn { delegator: T::AccountId, pool: T::AccountId },
+		Destroyed { pool: T::AccountId },
 	}
 
 	#[pallet::error]
@@ -1134,8 +1135,6 @@ pub mod pallet {
 			// Note that we lazily create the unbonding pools here if they don't already exist
 			let sub_pools = SubPoolsStorage::<T>::get(&delegator.pool).unwrap_or_default();
 			let current_era = T::StakingInterface::current_era();
-			// TODO: [now] look into removing bonding_duration and instead exposing
-			// `StakingInterface::unbond_era_for(current)`
 			let unbond_era = T::StakingInterface::bonding_duration().saturating_add(current_era);
 
 			let balance_to_unbond = bonded_pool.balance_to_unbond(delegator.points);
@@ -1258,6 +1257,7 @@ pub mod pallet {
 				// all the bonded balance and balance in unlocking chunks
 				.min(bonded_pool.non_locked_balance());
 
+			// TODO: [now] this check probably isn't necessary
 			if balance_to_unbond >= T::Currency::minimum_balance() {
 				T::Currency::transfer(
 					&delegator.pool,
@@ -1288,6 +1288,7 @@ pub mod pallet {
 			let post_info_weight = if should_remove_pool {
 				let reward_pool = RewardPools::<T>::take(&delegator.pool)
 					.defensive_ok_or_else(|| Error::<T>::PoolNotFound)?;
+				Self::deposit_event(Event::<T>::Destroyed { pool: delegator.pool.clone() });
 				SubPoolsStorage::<T>::remove(&delegator.pool);
 				// Kill accounts from storage by making their balance go below ED. We assume that
 				// the accounts have no references that would prevent destruction once we get to
@@ -1295,7 +1296,6 @@ pub mod pallet {
 				T::Currency::make_free_balance_be(&reward_pool.account, Zero::zero());
 				T::Currency::make_free_balance_be(&bonded_pool.account, Zero::zero());
 				bonded_pool.remove();
-				// TODO: destroy event
 				None
 			} else {
 				bonded_pool.dec_delegators().put();
@@ -1362,6 +1362,10 @@ pub mod pallet {
 				bonded_pool.reward_account(),
 			)?;
 
+			Self::deposit_event(Event::<T>::Created {
+				depositor: who.clone(),
+				pool: bonded_pool.account.clone(),
+			});
 			Delegators::<T>::insert(
 				who,
 				Delegator::<T> {
