@@ -816,7 +816,7 @@ mod benchmarks {
 		continue_migrate_wrong_witness {
 			let null = MigrationLimits::default();
 			let caller = frame_benchmarking::whitelisted_caller();
-			let bad_witness = MigrationTask { progress_top: Some(vec![1u8]), ..Default::default() };
+			let bad_witness = MigrationTask { progress_top: Progress::LastKey(vec![1u8]), ..Default::default() };
 		}: {
 			assert!(
 				StateTrieMigration::<T>::continue_migrate(
