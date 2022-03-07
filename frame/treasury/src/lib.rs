@@ -402,8 +402,7 @@ pub mod pallet {
 		///
 		/// # <weight>
 		/// - Complexity: O(A) where `A` is the number of approvals
-		/// - DbReads: `Proposals`, `Approvals`
-		/// - DbWrites: `Approvals`
+		/// - Db reads and writes: `Approvals`
 		/// # </weight>
 		#[pallet::weight((T::WeightInfo::remove_approval(), DispatchClass::Operational))]
 		pub fn remove_approval(
@@ -412,7 +411,6 @@ pub mod pallet {
 		) -> DispatchResult {
 			T::RejectOrigin::ensure_origin(origin)?;
 
-			ensure!(<Proposals<T, I>>::contains_key(proposal_id), Error::<T, I>::InvalidIndex);
 			Approvals::<T, I>::try_mutate(|v| -> DispatchResult {
 				if let Some(index) = v.iter().position(|x| x == &proposal_id) {
 					v.remove(index);
