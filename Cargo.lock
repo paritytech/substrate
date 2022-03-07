@@ -4936,7 +4936,6 @@ dependencies = [
  "node-primitives",
  "pallet-contracts-rpc",
  "pallet-mmr-rpc",
- "pallet-state-trie-migration-rpc",
  "pallet-transaction-payment-rpc",
  "sc-chain-spec",
  "sc-client-api",
@@ -4947,6 +4946,7 @@ dependencies = [
  "sc-finality-grandpa-rpc",
  "sc-rpc",
  "sc-rpc-api",
+ "sc-state-trie-migration-rpc",
  "sc-sync-state-rpc",
  "sc-transaction-pool-api",
  "sp-api",
@@ -6445,21 +6445,6 @@ dependencies = [
  "thousands",
  "tokio",
  "zstd",
-]
-
-[[package]]
-name = "pallet-state-trie-migration-rpc"
-version = "4.0.0-dev"
-dependencies = [
- "jsonrpc-core",
- "jsonrpc-core-client",
- "jsonrpc-derive",
- "parity-scale-codec",
- "sc-client-api",
- "sc-rpc-api",
- "serde",
- "serde_json",
- "sp-runtime",
 ]
 
 [[package]]
@@ -8999,6 +8984,21 @@ dependencies = [
  "parking_lot 0.12.0",
  "sc-client-api",
  "sp-core",
+]
+
+[[package]]
+name = "sc-state-trie-migration-rpc"
+version = "4.0.0-dev"
+dependencies = [
+ "jsonrpc-core",
+ "jsonrpc-core-client",
+ "jsonrpc-derive",
+ "parity-scale-codec",
+ "sc-client-api",
+ "sc-rpc-api",
+ "serde",
+ "serde_json",
+ "sp-runtime",
 ]
 
 [[package]]
