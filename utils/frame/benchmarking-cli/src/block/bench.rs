@@ -100,6 +100,7 @@ where
 	C: UsageProvider<B> + HeaderBackend<B> + BlockBackend<B> + ProvideRuntimeApi<B, Api = API>,
 	API: ApiExt<B> + BlockBuilderApi<B>,
 {
+	/// Create a new benchmark object. `no_check` will ignore some safety checks.
 	pub fn new(client: Arc<C>, params: BenchmarkParams, no_check: bool) -> Self {
 		Self { client, params, no_check, _p: PhantomData }
 	}
@@ -178,19 +179,21 @@ where
 	/// This is useful for the case that you only want to know
 	/// how long it takes to execute one extrinsic.
 	fn measure_block(&self, block: &B, before: &BlockId<B>, per_ext: bool) -> Result<BenchRecord> {
-		let num_ext = block.extrinsics().len() as u64;
-		info!("Executing block with {} extrinsics {} times", num_ext, self.params.repeat);
 		let mut record = BenchRecord::new();
+		let num_ext = block.extrinsics().len() as u64;
+		if per_ext && num_ext == 0 {
+			return Err("Cannot measure extrinsic time of empty block".into());
+		}
 
-		info!("Running warmup...");
+		info!("Running {} warmups...", self.params.warmup);
 		for _ in 0..self.params.warmup {
 			self.client
 				.runtime_api()
 				.execute_block(before, block.clone())
-				.expect("Old blocks must execute");
+				.expect("Past blocks must execute");
 		}
 
-		info!("Measuring execution time");
+		info!("Executing block {} times", self.params.repeat);
 		// Interesting part here:
 		// Execute a block multiple times and record each execution time.
 		for _ in 0..self.params.repeat {
@@ -199,11 +202,11 @@ where
 			self.client
 				.runtime_api()
 				.execute_block(before, block)
-				.expect("Old blocks must execute");
+				.expect("Past blocks must execute");
 
 			let elapsed = start.elapsed().as_nanos();
 			if per_ext {
-				// Zero div here can only happen with --no-check.
+				// non zero checked above
 				record.push(elapsed as u64 / num_ext);
 			} else {
 				record.push(elapsed as u64);
