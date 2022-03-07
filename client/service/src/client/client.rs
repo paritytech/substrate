@@ -1524,7 +1524,7 @@ where
 	}
 
 	fn state_migration_status(&self, id: &BlockId<Block>) -> sp_blockchain::Result<(u64, u64)> {
-		pallet_state_trie_migration::utils::migration_status(&self.state_at(id)?)
+		sp_state_trie_migration::migration_status(&self.state_at(id)?)
 			.map_err(|e| Error::Backend(e))
 	}
 }

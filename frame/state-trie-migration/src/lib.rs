@@ -1128,97 +1128,6 @@ mod mock {
 	}
 }
 
-/// Migration utility module.
-#[cfg(feature = "std")]
-pub mod utils {
-	use sp_core::{
-		storage::{ChildInfo, ChildType, PrefixedStorageKey},
-		Hasher,
-	};
-	use sp_state_machine::Backend;
-	use sp_trie::{KeySpacedDB, Trie};
-	use trie_db::{
-		node::{NodePlan, ValuePlan},
-		TrieDBNodeIterator,
-	};
-
-	/// Check trie migration status.
-	pub fn migration_status<H, B>(backend: &B) -> Result<(u64, u64), String>
-	where
-		H: Hasher,
-		H::Out: codec::Codec,
-		B: Backend<H>,
-	{
-		let trie_backend = if let Some(backend) = backend.as_trie_backend() {
-			backend
-		} else {
-			return Err("No access to trie from backend.".to_string())
-		};
-		let essence = trie_backend.essence();
-
-		let threshold: u32 = sp_core::storage::TRIE_VALUE_NODE_THRESHOLD;
-		let mut nb_to_migrate = 0;
-		let mut nb_to_migrate_child = 0;
-
-		let trie = sp_trie::trie_types::TrieDB::new(essence, &essence.root())
-			.map_err(|e| format!("TrieDB creation error: {}", e))?;
-		let iter_node = TrieDBNodeIterator::new(&trie)
-			.map_err(|e| format!("TrieDB node iterator error: {}", e))?;
-		for node in iter_node {
-			let node = node.map_err(|e| format!("TrieDB node iterator error: {}", e))?;
-			match node.2.node_plan() {
-				NodePlan::Leaf { value, .. } |
-				NodePlan::NibbledBranch { value: Some(value), .. } =>
-					if let ValuePlan::Inline(range) = value {
-						if (range.end - range.start) as u32 >= threshold {
-							nb_to_migrate += 1;
-						}
-					},
-				_ => (),
-			}
-		}
-
-		let mut child_roots: Vec<(ChildInfo, Vec<u8>)> = Vec::new();
-		// get all child trie roots
-		for key_value in trie.iter().map_err(|e| format!("TrieDB node iterator error: {}", e))? {
-			let (key, value) =
-				key_value.map_err(|e| format!("TrieDB node iterator error: {}", e))?;
-			if key[..]
-				.starts_with(sp_core::storage::well_known_keys::DEFAULT_CHILD_STORAGE_KEY_PREFIX)
-			{
-				let prefixed_key = PrefixedStorageKey::new(key);
-				let (_type, unprefixed) = ChildType::from_prefixed_key(&prefixed_key).unwrap();
-				child_roots.push((ChildInfo::new_default(unprefixed), value));
-			}
-		}
-		for (child_info, root) in child_roots {
-			let mut child_root = H::Out::default();
-			let storage = KeySpacedDB::new(essence, child_info.keyspace());
-
-			child_root.as_mut()[..].copy_from_slice(&root[..]);
-			let trie = sp_trie::trie_types::TrieDB::new(&storage, &child_root)
-				.map_err(|e| format!("New child TrieDB error: {}", e))?;
-			let iter_node = TrieDBNodeIterator::new(&trie)
-				.map_err(|e| format!("TrieDB node iterator error: {}", e))?;
-			for node in iter_node {
-				let node = node.map_err(|e| format!("Child TrieDB node iterator error: {}", e))?;
-				match node.2.node_plan() {
-					NodePlan::Leaf { value, .. } |
-					NodePlan::NibbledBranch { value: Some(value), .. } =>
-						if let ValuePlan::Inline(range) = value {
-							if (range.end - range.start) as u32 >= threshold {
-								nb_to_migrate_child += 1;
-							}
-						},
-					_ => (),
-				}
-			}
-		}
-
-		Ok((nb_to_migrate, nb_to_migrate_child))
-	}
-}
-
 #[cfg(test)]
 mod test {
 	use super::{mock::*, *};
@@ -1544,7 +1453,8 @@ pub(crate) mod remote_tests {
 		// set the version to 1, as if the upgrade happened.
 		ext.state_version = sp_core::storage::StateVersion::V1;
 
-		let (top_left, child_left) = crate::utils::migration_status(&ext.as_backend()).unwrap();
+		let (top_left, child_left) =
+			sp_state_trie_migration::migration_status(&ext.as_backend()).unwrap();
 		assert!(
 			top_left > 0,
 			"no node needs migrating, this probably means that state was initialized with `StateVersion::V1`",
@@ -1602,7 +1512,8 @@ pub(crate) mod remote_tests {
 			)
 		});
 
-		let (top_left, child_left) = crate::utils::migration_status(&ext.as_backend()).unwrap();
+		let (top_left, child_left) =
+			sp_state_trie_migration::migration_status(&ext.as_backend()).unwrap();
 		assert_eq!(top_left, 0);
 		assert_eq!(child_left, 0);
 	}
