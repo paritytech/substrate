@@ -31,11 +31,11 @@
 pub mod constants {
 	use frame_support::{
 		parameter_types,
-		weights::{constants, Weight},
+		weights::{constants::WEIGHT_PER_NANOS, Weight},
 	};
 
 	parameter_types! {
-		{{#if (eq template_type "block")}}
+		{{#if (eq template_type "Block")}}
 		/// Time to execute an empty block.
 		{{else}}
 		/// Time to execute a NO-OP extrinsic eg. `System::remark`.
@@ -52,7 +52,7 @@ pub mod constants {
 		///   99th: {{underscore stats.p99}}
 		///   95th: {{underscore stats.p95}}
 		///   75th: {{underscore stats.p75}}
-		pub const {{template_name}}Weight: Weight = {{underscore weight}} * constants::WEIGHT_PER_NANOS;
+		pub const {{template_name}}Weight: Weight = {{underscore weight}} * WEIGHT_PER_NANOS;
 	}
 
 	#[cfg(test)]
@@ -66,16 +66,28 @@ pub mod constants {
 		fn sane() {
 			let w = super::constants::{{template_name}}Weight::get();
 
-			{{#if (eq template_type "block")}}			
+			{{#if (eq template_type "Block")}}			
 			// At least 100 µs.
-			assert!(w >= 100 * constants::WEIGHT_PER_MICROS, "Weight should be at least 100 µs.");
+			assert!(
+				w >= 100 * constants::WEIGHT_PER_MICROS,
+				"Weight should be at least 100 µs."
+			);
 			// At most 50 ms.
-			assert!(w <= 50 * constants::WEIGHT_PER_MILLIS, "Weight should be at most 50 ms.");
+			assert!(
+				w <= 50 * constants::WEIGHT_PER_MILLIS,
+				"Weight should be at most 50 ms."
+			);
 			{{else}}
 			// At least 10 µs.
-			assert!(w >= 10 * constants::WEIGHT_PER_MICROS, "Weight should be at least 10 µs.");
+			assert!(
+				w >= 10 * constants::WEIGHT_PER_MICROS,
+				"Weight should be at least 10 µs."
+			);
 			// At most 1 ms.
-			assert!(w <= constants::WEIGHT_PER_MILLIS, "Weight should be at most 1 ms.");
+			assert!(
+				w <= constants::WEIGHT_PER_MILLIS,
+				"Weight should be at most 1 ms."
+			);
 			{{/if}}
 		}
 	}
