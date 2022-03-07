@@ -42,6 +42,10 @@ pub enum Subcommand {
 	#[clap(name = "benchmark", about = "Benchmark runtime pallets.")]
 	Benchmark(frame_benchmarking_cli::BenchmarkCmd),
 
+	/// Sub command for benchmarking block and extrinsic base weight.
+	#[clap(name = "benchmark-block", about = "Benchmark block and extrinsic bas weight.")]
+	BenchmarkBlock(frame_benchmarking_cli::block::cmd::BlockCmd),
+
 	/// Sub command for benchmarking the storage speed.
 	#[clap(name = "benchmark-storage", about = "Benchmark storage speed.")]
 	BenchmarkStorage(frame_benchmarking_cli::StorageCmd),

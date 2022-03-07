@@ -15,10 +15,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use sc_cli::{CliConfiguration, DatabaseParams, PruningParams, Result, SharedParams};
+use sc_cli::{
+	CliConfiguration, DatabaseParams, PruningParams, Result, SharedParams, TransactionPoolParams,
+};
 use sc_client_api::{Backend as ClientBackend, StorageProvider, UsageProvider};
 use sc_client_db::DbHash;
-use sc_service::Configuration;
+use sc_service::{config::TransactionPoolOptions, Configuration};
 use sp_blockchain::HeaderBackend;
 use sp_database::{ColumnId, Database};
 use sp_runtime::traits::{Block as BlockT, HashFor};
@@ -31,8 +33,8 @@ use rand::prelude::*;
 use serde::Serialize;
 use std::{fmt::Debug, sync::Arc};
 
-use super::{record::StatSelect, template::TemplateData};
-
+use super::template::TemplateData;
+use crate::post_processing::WeightParams;
 /// Benchmark the storage of a Substrate node with a live chain snapshot.
 #[derive(Debug, Parser)]
 pub struct StorageCmd {
@@ -50,30 +52,19 @@ pub struct StorageCmd {
 
 	#[allow(missing_docs)]
 	#[clap(flatten)]
+	pub pool_params: TransactionPoolParams,
+
+	#[allow(missing_docs)]
+	#[clap(flatten)]
 	pub params: StorageParams,
 }
 
 /// Parameters for modifying the benchmark behaviour and the post processing of the results.
 #[derive(Debug, Default, Serialize, Clone, PartialEq, Args)]
 pub struct StorageParams {
-	/// Path to write the *weight* file to. Can be a file or directory.
-	/// For substrate this should be `frame/support/src/weights`.
-	#[clap(long, default_value = ".")]
-	pub weight_path: String,
-
-	/// Select a specific metric to calculate the final weight output.
-	#[clap(long = "metric", default_value = "average")]
-	pub weight_metric: StatSelect,
-
-	/// Multiply the resulting weight with the given factor. Must be positive.
-	/// Is calculated before `weight_add`.
-	#[clap(long = "mul", default_value = "1")]
-	pub weight_mul: f64,
-
-	/// Add the given offset to the resulting weight.
-	/// Is calculated after `weight_mul`.
-	#[clap(long = "add", default_value = "0")]
-	pub weight_add: u64,
+	#[allow(missing_docs)]
+	#[clap(flatten)]
+	pub weight_params: WeightParams,
 
 	/// Skip the `read` benchmark.
 	#[clap(long)]
@@ -131,7 +122,7 @@ impl StorageCmd {
 			template.set_stats(None, Some(stats))?;
 		}
 
-		template.write(&self.params.weight_path)
+		template.write(&self.params.weight_params.weight_path)
 	}
 
 	/// Returns the specified state version.
@@ -163,6 +154,10 @@ impl CliConfiguration for StorageCmd {
 
 	fn pruning_params(&self) -> Option<&PruningParams> {
 		Some(&self.pruning_params)
+	}
+
+	fn transaction_pool(&self) -> Result<TransactionPoolOptions> {
+		Ok(self.pool_params.transaction_pool())
 	}
 
 	fn state_cache_size(&self) -> Result<usize> {

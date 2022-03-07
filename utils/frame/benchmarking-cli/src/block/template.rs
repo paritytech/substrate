@@ -22,16 +22,19 @@ use log::info;
 use serde::Serialize;
 use std::{env, fs, path::PathBuf};
 
-use super::{cmd::StorageParams, record::Stats};
+use crate::{
+	block::{bench::BenchmarkType, cmd::BlockParams},
+	storage::record::Stats,
+};
 
 static VERSION: &'static str = env!("CARGO_PKG_VERSION");
 static TEMPLATE: &str = include_str!("./weights.hbs");
 
 /// Data consumed by Handlebar to fill out the `weights.hbs` template.
-#[derive(Serialize, Default, Debug, Clone)]
+#[derive(Serialize, Debug, Clone)]
 pub(crate) struct TemplateData {
-	/// Name of the database used.
-	db_name: String,
+	template_type: BenchmarkType,
+	template_name: String,
 	/// Name of the runtime. Taken from the chain spec.
 	runtime_name: String,
 	/// Version of the benchmarking CLI used.
@@ -40,49 +43,35 @@ pub(crate) struct TemplateData {
 	date: String,
 	/// Command line arguments that were passed to the CLI.
 	args: Vec<String>,
-	/// Storage params of the executed command.
-	params: StorageParams,
+	/// Params of the executed command.
+	params: BlockParams,
+	/// Stats about a benchmark result.
+	stats: Stats,
 	/// The weight for one `read`.
-	read_weight: u64,
-	/// The weight for one `write`.
-	write_weight: u64,
-	/// Stats about a `read` benchmark. Contains *time* and *value size* stats.
-	/// The *value size* stats are currently not used in the template.
-	read: Option<(Stats, Stats)>,
-	/// Stats about a `write` benchmark. Contains *time* and *value size* stats.
-	/// The *value size* stats are currently not used in the template.
-	write: Option<(Stats, Stats)>,
+	weight: u64,
 }
 
 impl TemplateData {
 	/// Returns a new [`Self`] from the given configuration.
-	pub fn new(cfg: &Configuration, params: &StorageParams) -> Self {
-		TemplateData {
-			db_name: format!("{}", cfg.database),
+	pub(crate) fn new(
+		t: BenchmarkType,
+		cfg: &Configuration,
+		params: &BlockParams,
+		stats: &Stats,
+	) -> Result<Self> {
+		let weight = params.weight.calc_weight(stats)?;
+
+		Ok(TemplateData {
+			template_name: t.name().into(),
+			template_type: t,
 			runtime_name: cfg.chain_spec.name().into(),
 			version: VERSION.into(),
 			date: chrono::Utc::now().format("%Y-%m-%d (Y/M/D)").to_string(),
 			args: env::args().collect::<Vec<String>>(),
 			params: params.clone(),
-			..Default::default()
-		}
-	}
-
-	/// Sets the stats and calculates the final weights.
-	pub fn set_stats(
-		&mut self,
-		read: Option<(Stats, Stats)>,
-		write: Option<(Stats, Stats)>,
-	) -> Result<()> {
-		if let Some(read) = read {
-			self.read_weight = self.params.weight_params.calc_weight(&read.0)?;
-			self.read = Some(read);
-		}
-		if let Some(write) = write {
-			self.write_weight = self.params.weight_params.calc_weight(&write.0)?;
-			self.write = Some(write);
-		}
-		Ok(())
+			stats: stats.clone(),
+			weight,
+		})
 	}
 
 	/// Filles out the `weights.hbs` HBS template with its own data.
@@ -106,7 +95,7 @@ impl TemplateData {
 	fn build_path(&self, weight_out: &str) -> PathBuf {
 		let mut path = PathBuf::from(weight_out);
 		if path.is_dir() {
-			path.push(format!("{}_weights.rs", self.db_name.to_lowercase()));
+			path.push(format!("{:?}_weights.rs", self.template_type).to_lowercase());
 			path.set_extension("rs");
 		}
 		path

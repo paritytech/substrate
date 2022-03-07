@@ -15,13 +15,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod block;
 mod command;
+mod post_processing;
 mod storage;
 mod writer;
 
 use sc_cli::{ExecutionStrategy, WasmExecutionMethod};
 use std::{fmt::Debug, path::PathBuf};
 
+pub use block::BlockCmd;
 pub use storage::StorageCmd;
 
 // Add a more relaxed parsing for pallet names by allowing pallet directory names with `-` to be
