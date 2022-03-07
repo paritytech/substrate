@@ -270,9 +270,6 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 	fn get_read_and_written_keys(&self) -> Vec<(Vec<u8>, u32, u32, bool)> {
 		unimplemented!()
 	}
-
-	/// Check trie migration status.
-	fn migration_status(&self) -> Result<(u64, u64), Self::Error>;
 }
 
 /// Trait that allows consolidate two transactions together.

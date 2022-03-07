@@ -21,6 +21,9 @@ sp-std = { default-features = false, path = "../../primitives/std" }
 sp-io = { default-features = false, path = "../../primitives/io" }
 sp-core = { default-features = false, path = "../../primitives/core" }
 sp-runtime = { default-features = false, path = "../../primitives/runtime" }
+sp-state-machine = { optional = true, path = "../../primitives/state-machine" }
+sp-trie = { optional = true, path = "../../primitives/trie" }
+trie-db = { version = "0.23.1", optional = true }
 
 frame-support = { default-features = false, path = "../support" }
 frame-system = { default-features = false, path = "../system" }
@@ -49,7 +52,10 @@ std = [
 	"sp-core/std",
 	"sp-io/std",
 	"sp-runtime/std",
-	"sp-std/std"
+	"sp-state-machine",
+	"sp-std/std",
+	"sp-trie",
+	"trie-db"
 ]
 runtime-benchmarks = ["frame-benchmarking"]
 try-runtime = ["frame-support/try-runtime"]

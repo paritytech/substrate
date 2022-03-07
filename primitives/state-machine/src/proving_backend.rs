@@ -364,11 +364,6 @@ where
 	fn usage_info(&self) -> crate::stats::UsageInfo {
 		self.0.usage_info()
 	}
-
-	fn migration_status(&self) -> Result<(u64, u64), Self::Error> {
-		// TODO consider error (proof over the whole state could be exclude from use case).
-		self.0.migration_status()
-	}
 }
 
 /// Create a backend used for checking the proof., using `H` as hasher.

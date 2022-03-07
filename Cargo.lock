@@ -6440,10 +6440,13 @@ dependencies = [
  "sp-core",
  "sp-io",
  "sp-runtime",
+ "sp-state-machine",
  "sp-std",
  "sp-tracing",
+ "sp-trie",
  "thousands",
  "tokio",
+ "trie-db",
  "zstd",
 ]
 
@@ -8885,6 +8888,7 @@ dependencies = [
  "jsonrpc-core",
  "jsonrpc-pubsub",
  "log 0.4.14",
+ "pallet-state-trie-migration",
  "parity-scale-codec",
  "parity-util-mem",
  "parking_lot 0.12.0",
@@ -10301,7 +10305,6 @@ dependencies = [
  "sp-trie",
  "thiserror",
  "tracing",
- "trie-db",
  "trie-root",
 ]
 

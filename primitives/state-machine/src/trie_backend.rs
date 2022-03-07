@@ -181,10 +181,6 @@ where
 	fn wipe(&self) -> Result<(), Self::Error> {
 		Ok(())
 	}
-
-	fn migration_status(&self) -> Result<(u64, u64), Self::Error> {
-		self.essence().check_migration_state()
-	}
 }
 
 #[cfg(test)]
