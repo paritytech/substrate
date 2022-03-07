@@ -396,7 +396,7 @@ where
 		};
 		let target_hash = target_header.hash();
 
-		let mmr_root = if let Some(hash) = find_mmr_root_digest::<B, AuthorityId>(&target_header) {
+		let mmr_root = if let Some(hash) = find_mmr_root_digest::<B>(&target_header) {
 			hash
 		} else {
 			warn!(target: "beefy", "🥩 No MMR root digest found for: {:?}", target_hash);
@@ -544,17 +544,17 @@ where
 }
 
 /// Extract the MMR root hash from a digest in the given header, if it exists.
-fn find_mmr_root_digest<B, Id>(header: &B::Header) -> Option<MmrRootHash>
+fn find_mmr_root_digest<B>(header: &B::Header) -> Option<MmrRootHash>
 where
 	B: Block,
-	Id: Codec,
 {
-	header.digest().logs().iter().find_map(|log| {
-		match log.try_to::<ConsensusLog<Id>>(OpaqueDigestItemId::Consensus(&BEEFY_ENGINE_ID)) {
-			Some(ConsensusLog::MmrRoot(root)) => Some(root),
-			_ => None,
-		}
-	})
+	let id = OpaqueDigestItemId::Consensus(&BEEFY_ENGINE_ID);
+
+	let filter = |log: ConsensusLog<AuthorityId>| match log {
+		ConsensusLog::MmrRoot(root) => Some(root),
+		_ => None,
+	};
+	header.digest().convert_first(|l| l.try_to(id).and_then(filter))
 }
 
 /// Scan the `header` digest log for a BEEFY validator set change. Return either the new
@@ -569,7 +569,6 @@ where
 		ConsensusLog::AuthoritiesChange(validator_set) => Some(validator_set),
 		_ => None,
 	};
-
 	header.digest().convert_first(|l| l.try_to(id).and_then(filter))
 }
 
@@ -633,6 +632,10 @@ where
 #[cfg(test)]
 pub(crate) mod tests {
 	use super::*;
+	use crate::{keystore::tests::Keyring, tests::make_beefy_ids};
+
+	use sp_api::HeaderT;
+	use substrate_test_runtime_client::runtime::{Block, Digest, DigestItem, Header, H256};
 
 	pub struct TestModifiers {
 		pub active_validators: ValidatorSet<AuthorityId>,
@@ -728,5 +731,55 @@ pub(crate) mod tests {
 
 		let t = vote_target(1128u32, Some(1008), 1008, 4);
 		assert_eq!(Some(1072), t);
+	}
+
+	#[test]
+	fn extract_authorities_change_digest() {
+		let mut header = Header::new(
+			1u32.into(),
+			Default::default(),
+			Default::default(),
+			Default::default(),
+			Digest::default(),
+		);
+
+		// verify empty digest shows nothing
+		assert!(find_authorities_change::<Block>(&header).is_none());
+
+		let peers = &[Keyring::One, Keyring::Two];
+		let id = 42;
+		let validator_set = ValidatorSet::new(make_beefy_ids(peers), id).unwrap();
+		header.digest_mut().push(DigestItem::Consensus(
+			BEEFY_ENGINE_ID,
+			ConsensusLog::<AuthorityId>::AuthoritiesChange(validator_set.clone()).encode(),
+		));
+
+		// verify validator set is correctly extracted from digest
+		let extracted = find_authorities_change::<Block>(&header);
+		assert_eq!(extracted, Some(validator_set));
+	}
+
+	#[test]
+	fn extract_mmr_root_digest() {
+		let mut header = Header::new(
+			1u32.into(),
+			Default::default(),
+			Default::default(),
+			Default::default(),
+			Digest::default(),
+		);
+
+		// verify empty digest shows nothing
+		assert!(find_mmr_root_digest::<Block>(&header).is_none());
+
+		let mmr_root_hash = H256::random();
+		header.digest_mut().push(DigestItem::Consensus(
+			BEEFY_ENGINE_ID,
+			ConsensusLog::<AuthorityId>::MmrRoot(mmr_root_hash.clone()).encode(),
+		));
+
+		// verify validator set is correctly extracted from digest
+		let extracted = find_mmr_root_digest::<Block>(&header);
+		assert_eq!(extracted, Some(mmr_root_hash));
 	}
 }

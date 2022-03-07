@@ -203,7 +203,7 @@ impl TestNetFactory for BeefyTestNet {
 	}
 }
 
-fn make_beefy_ids(keys: &[BeefyKeyring]) -> Vec<AuthorityId> {
+pub(crate) fn make_beefy_ids(keys: &[BeefyKeyring]) -> Vec<AuthorityId> {
 	keys.iter().map(|key| key.clone().public().into()).collect()
 }
 
