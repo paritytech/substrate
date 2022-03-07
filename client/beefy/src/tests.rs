@@ -20,9 +20,11 @@
 
 use futures::{future, stream::FuturesUnordered, Future, StreamExt};
 use parking_lot::Mutex;
+use serde::{Deserialize, Serialize};
 use std::{sync::Arc, task::Poll};
 use tokio::runtime::Runtime;
 
+use sc_chain_spec::{ChainSpec, GenericChainSpec};
 use sc_client_api::HeaderBackend;
 use sc_consensus::BoxJustificationImport;
 use sc_keystore::LocalKeystore;
@@ -41,16 +43,54 @@ use sp_api::{ApiRef, ProvideRuntimeApi};
 use sp_consensus::BlockOrigin;
 use sp_core::H256;
 use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
-use sp_runtime::{codec::Encode, generic::BlockId, traits::Header as HeaderT, DigestItem};
+use sp_runtime::{
+	codec::Encode, generic::BlockId, traits::Header as HeaderT, BuildStorage, DigestItem, Storage,
+};
 
 use substrate_test_runtime_client::ClientExt;
 
-use crate::{keystore::tests::Keyring as BeefyKeyring, notification::*};
+use crate::{beefy_protocol_name, keystore::tests::Keyring as BeefyKeyring, notification::*};
 
 const BEEFY_PROTOCOL_NAME: &'static str = "/beefy/1";
 
 type BeefyValidatorSet = ValidatorSet<BeefyId>;
 type BeefyPeer = Peer<PeerData, PeersClient>;
+
+#[derive(Debug, Serialize, Deserialize)]
+struct Genesis(std::collections::BTreeMap<String, String>);
+impl BuildStorage for Genesis {
+	fn assimilate_storage(&self, storage: &mut Storage) -> Result<(), String> {
+		storage
+			.top
+			.extend(self.0.iter().map(|(a, b)| (a.clone().into_bytes(), b.clone().into_bytes())));
+		Ok(())
+	}
+}
+
+#[test]
+fn beefy_protocol_name() {
+	let chain_spec = GenericChainSpec::<Genesis>::from_json_file(std::path::PathBuf::from(
+		"../chain-spec/res/chain_spec.json",
+	))
+	.unwrap()
+	.cloned_box();
+
+	// Create protocol name using random genesis hash.
+	let genesis_hash = H256::random();
+	let expected = format!("/{}/beefy/1", hex::encode(genesis_hash));
+	let proto_name = beefy_protocol_name::standard_name(&genesis_hash, &chain_spec);
+	assert_eq!(proto_name.to_string(), expected);
+
+	// Create protocol name using hardcoded genesis hash. Verify exact representation.
+	let genesis_hash = [
+		50, 4, 60, 123, 58, 106, 216, 246, 194, 188, 139, 193, 33, 212, 202, 171, 9, 55, 123, 94,
+		8, 43, 12, 251, 187, 57, 173, 19, 188, 74, 205, 147,
+	];
+	let expected =
+		"/32043c7b3a6ad8f6c2bc8bc121d4caab09377b5e082b0cfbbb39ad13bc4acd93/beefy/1".to_string();
+	let proto_name = beefy_protocol_name::standard_name(&genesis_hash, &chain_spec);
+	assert_eq!(proto_name.to_string(), expected);
+}
 
 // TODO: compiler warns us about unused `signed_commitment_stream`, will use in later tests
 #[allow(dead_code)]
