@@ -1437,7 +1437,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::weight(42)] // TODO: [now] add bench for this
+		#[pallet::weight(T::WeightInfo::set_state_other())]
 		pub fn set_state_other(
 			origin: OriginFor<T>,
 			pool_account: T::AccountId,
@@ -1466,7 +1466,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::weight(42)] // TODO: [now] add bench for this
+		#[pallet::weight(T::WeightInfo::set_metadata())]
 		pub fn set_metadata(
 			origin: OriginFor<T>,
 			pool_account: T::AccountId,
