@@ -43,10 +43,6 @@ pub enum Subcommand {
 	Benchmark(frame_benchmarking_cli::BenchmarkCmd),
 
 	/// Sub command for benchmarking the storage speed.
-	#[clap(name = "benchmark-block", about = "Benchmark TODO.")]
-	BenchmarkBlock(frame_benchmarking_cli::BlockCmd),
-
-	/// Sub command for benchmarking the storage speed.
 	#[clap(name = "benchmark-storage", about = "Benchmark storage speed.")]
 	BenchmarkStorage(frame_benchmarking_cli::StorageCmd),
 

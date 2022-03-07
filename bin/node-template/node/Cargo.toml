@@ -37,12 +37,6 @@ sc-client-api = { version = "4.0.0-dev", path = "../../../client/api" }
 sp-runtime = { version = "6.0.0", path = "../../../primitives/runtime" }
 sp-timestamp = { version = "4.0.0-dev", path = "../../../primitives/timestamp" }
 
-# OTY added
-sp-consensus-slots = { version = "0.10.0-dev", path = "../../../primitives/consensus/slots" }
-sp-consensus-babe = { version = "0.10.0-dev", path = "../../../primitives/consensus/babe" }
-sp-inherents = { version = "4.0.0-dev", path = "../../../primitives/inherents" }
-log = "0.4.8"
-
 # These dependencies are used for the node template's RPCs
 jsonrpc-core = "18.0.0"
 sc-rpc = { version = "4.0.0-dev", path = "../../../client/rpc" }
@@ -63,10 +57,6 @@ node-template-runtime = { version = "4.0.0-dev", path = "../runtime" }
 
 # CLI-specific dependencies
 try-runtime-cli = { version = "0.10.0-dev", optional = true, path = "../../../utils/frame/try-runtime/cli" }
-# OTY added
-sp-keyring = { version = "6.0.0", path = "../../../primitives/keyring" }
-node-runtime = { version = "3.0.0-dev", path = "../../node/runtime" }
-node-cli = { version = "3.0.0-dev", path = "../../node/cli" }
 
 [build-dependencies]
 substrate-build-script-utils = { version = "3.0.0", path = "../../../utils/build-script-utils" }
