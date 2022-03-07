@@ -1661,6 +1661,7 @@ mod withdraw_unbonded_other {
 				// Given
 				StakingMock::set_bonded_balance(PRIMARY_ACCOUNT, 100); // slash bonded balance
 				Balances::make_free_balance_be(&PRIMARY_ACCOUNT, 100);
+				assert_eq!(StakingMock::locked_balance(&PRIMARY_ACCOUNT), Some(100));
 
 				assert_ok!(Pools::unbond_other(Origin::signed(40), 40));
 				assert_ok!(Pools::unbond_other(Origin::signed(550), 550));
@@ -1713,6 +1714,35 @@ mod withdraw_unbonded_other {
 				assert!(!RewardPools::<Runtime>::contains_key(&PRIMARY_ACCOUNT),);
 				assert!(!BondedPools::<Runtime>::contains_key(&PRIMARY_ACCOUNT),);
 			});
+	}
+
+	#[test]
+	fn withdraw_unbonded_other_handles_faulty_sub_pool_accounting() {
+		ExtBuilder::default().build_and_execute(|| {
+			// Given
+			assert_eq!(Balances::minimum_balance(), 5);
+			assert_eq!(Balances::free_balance(&10), 10);
+			assert_eq!(Balances::free_balance(&PRIMARY_ACCOUNT), 10);
+			unsafe_set_state(&PRIMARY_ACCOUNT, PoolState::Destroying).unwrap();
+			assert_ok!(Pools::unbond_other(Origin::signed(10), 10));
+
+			// Simulate a slash that is not accounted for in the sub pools.
+			Balances::make_free_balance_be(&PRIMARY_ACCOUNT, 5);
+			assert_eq!(
+				SubPoolsStorage::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap().with_era,
+				//------------------------------balance decrease is not account for
+				sub_pools_with_era! { 0 + 3 => UnbondPool { points: 10, balance: 10 } }
+			);
+
+			CurrentEra::set(0 + 3);
+
+			// When
+			assert_ok!(Pools::withdraw_unbonded_other(Origin::signed(10), 10, 0));
+
+			// Then
+			assert_eq!(Balances::free_balance(10), 10 + 5);
+			assert_eq!(Balances::free_balance(&PRIMARY_ACCOUNT), 0);
+		});
 	}
 
 	#[test]

@@ -296,7 +296,7 @@
 // * The sum of each pools delegator counter equals the `Delegators::count()`.
 // * A pool's `delegator_counter` should always be gt 0.
 
-// 
+//
 // - transparent prefx for account ids
 
 // Ensure we're `no_std` when compiling for Wasm.
@@ -617,7 +617,7 @@ impl<T: Config> BondedPool<T> {
 		Ok(())
 	}
 
-	/// Returns a result indicating if `Call::withdraw_unbonded_other` can be executed.
+	/// Returns a result indicating if [`Pallet::withdraw_unbonded_other`] can be executed.
 	fn ok_to_withdraw_unbonded_other_with(
 		&self,
 		caller: &T::AccountId,
@@ -1251,9 +1251,13 @@ pub mod pallet {
 
 					balance_to_unbond
 				}
-				// TODO: make sure this is a test for this edge case
-				// We can get here in the rare case a pool had such an extreme slash that it erased
-				// all the bonded balance and balance in unlocking chunks
+				// A call to this function may cause the pool's stash to get dusted. If this happens
+				// before the last delegator has withdrawn, then all subsequent withdraws will be 0.
+				// However the unbond pools do no get updated to reflect this. In the aforementioned
+				// scenario, this check ensures we don't try to withdraw funds that don't exist.
+				// This check is also defensive in cases where the unbond pool does not update its
+				// balance (e.g. a bug in the slashing hook.) We gracefully proceed in
+				// order to ensure delegators can leave the pool and it can be destroyed.
 				.min(bonded_pool.non_locked_balance());
 
 			T::Currency::transfer(
