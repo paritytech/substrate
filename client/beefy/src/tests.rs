@@ -29,6 +29,7 @@ use sc_client_api::HeaderBackend;
 use sc_consensus::BoxJustificationImport;
 use sc_keystore::LocalKeystore;
 use sc_network::config::ProtocolConfig;
+use sc_network_gossip::GossipEngine;
 use sc_network_test::{
 	Block, BlockImportAdapter, FullPeerConfig, PassThroughVerifier, Peer, PeersClient,
 	TestNetFactory,
@@ -233,21 +234,30 @@ fn initialize_beefy(
 		let beefy_link_half = BeefyLinkHalf { signed_commitment_stream, beefy_best_block_stream };
 		*net.peers[peer_id].data.beefy_link_half.lock() = Some(beefy_link_half);
 
-		let beefy_params = crate::BeefyParams {
+		let network = net.peers[peer_id].network_service().clone();
+		let sync_oracle = network.clone();
+		let gossip_validator = Arc::new(crate::gossip::GossipValidator::new());
+		let gossip_engine =
+			GossipEngine::new(network, BEEFY_PROTOCOL_NAME, gossip_validator.clone(), None);
+		let worker_params = crate::worker::WorkerParams {
 			client: net.peers[peer_id].client().as_client(),
 			backend: net.peers[peer_id].client().as_backend(),
-			key_store: Some(keystore),
-			network: net.peers[peer_id].network_service().clone(),
+			key_store: Some(keystore).into(),
 			signed_commitment_sender,
 			beefy_best_block_sender,
+			gossip_engine,
+			gossip_validator,
 			min_block_delta,
-			prometheus_registry: None,
-			protocol_name: BEEFY_PROTOCOL_NAME.into(),
+			metrics: None,
+			sync_oracle,
 		};
-		let gadget = crate::start_beefy_gadget::<_, _, _, _>(
-			beefy_params,
+
+		let worker = crate::worker::BeefyWorker::<_, _, _, _>::new(
+			worker_params,
 			TestModifiers { active_validators: validators.clone() },
 		);
+
+		let gadget = worker.run();
 
 		fn assert_send<T: Send>(_: &T) {}
 		assert_send(&gadget);

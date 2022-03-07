@@ -18,11 +18,10 @@
 
 use std::sync::Arc;
 
-use log::debug;
 use prometheus::Registry;
 
 use sc_client_api::{Backend, BlockchainEvents, Finalizer};
-use sc_network_gossip::{GossipEngine, Network as GossipNetwork};
+use sc_network_gossip::Network as GossipNetwork;
 
 use sp_api::ProvideRuntimeApi;
 use sp_blockchain::HeaderBackend;
@@ -139,15 +138,12 @@ where
 	pub protocol_name: std::borrow::Cow<'static, str>,
 }
 
+#[cfg(not(test))]
 /// Start the BEEFY gadget.
 ///
 /// This is a thin shim around running and awaiting a BEEFY worker.
-pub async fn start_beefy_gadget<B, BE, C, N>(
-	beefy_params: BeefyParams<B, BE, C, N>,
-	#[cfg(test)]
-	// behavior modifiers used in tests
-	test_res: worker::tests::TestModifiers,
-) where
+pub async fn start_beefy_gadget<B, BE, C, N>(beefy_params: BeefyParams<B, BE, C, N>)
+where
 	B: Block,
 	BE: Backend<B>,
 	C: Client<B, BE>,
@@ -168,17 +164,22 @@ pub async fn start_beefy_gadget<B, BE, C, N>(
 
 	let sync_oracle = network.clone();
 	let gossip_validator = Arc::new(gossip::GossipValidator::new());
-	let gossip_engine = GossipEngine::new(network, protocol_name, gossip_validator.clone(), None);
+	let gossip_engine = sc_network_gossip::GossipEngine::new(
+		network,
+		protocol_name,
+		gossip_validator.clone(),
+		None,
+	);
 
 	let metrics =
 		prometheus_registry.as_ref().map(metrics::Metrics::register).and_then(
 			|result| match result {
 				Ok(metrics) => {
-					debug!(target: "beefy", "🥩 Registered metrics");
+					log::debug!(target: "beefy", "🥩 Registered metrics");
 					Some(metrics)
 				},
 				Err(err) => {
-					debug!(target: "beefy", "🥩 Failed to register metrics: {:?}", err);
+					log::debug!(target: "beefy", "🥩 Failed to register metrics: {:?}", err);
 					None
 				},
 			},
@@ -197,11 +198,7 @@ pub async fn start_beefy_gadget<B, BE, C, N>(
 		sync_oracle,
 	};
 
-	let worker = worker::BeefyWorker::<_, _, _, _>::new(
-		worker_params,
-		#[cfg(test)]
-		test_res,
-	);
+	let worker = worker::BeefyWorker::<_, _, _, _>::new(worker_params);
 
 	worker.run().await
 }

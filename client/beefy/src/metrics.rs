@@ -37,6 +37,7 @@ pub(crate) struct Metrics {
 }
 
 impl Metrics {
+	#![cfg_attr(test, allow(dead_code))]
 	pub(crate) fn register(registry: &Registry) -> Result<Self, PrometheusError> {
 		Ok(Self {
 			beefy_validator_set_id: register(
