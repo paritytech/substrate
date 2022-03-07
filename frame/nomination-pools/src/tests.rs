@@ -2179,7 +2179,7 @@ mod set_state_other {
 	#[test]
 	fn set_state_other_works() {
 		ExtBuilder::default().build_and_execute(|| {
-			// Only the root and state_toggler can change the state when the pool is ok to be open.
+			// Only the root and state toggler can change the state when the pool is ok to be open.
 			assert_ok!(BondedPool::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap().ok_to_be_open());
 			assert_noop!(
 				Pools::set_state_other(Origin::signed(10), PRIMARY_ACCOUNT, PoolState::Blocked),
@@ -2190,6 +2190,7 @@ mod set_state_other {
 				Error::<Runtime>::CanNotChangeState
 			);
 
+			// Root can change state
 			assert_ok!(Pools::set_state_other(
 				Origin::signed(900),
 				PRIMARY_ACCOUNT,
@@ -2200,6 +2201,7 @@ mod set_state_other {
 				PoolState::Blocked
 			);
 
+			// State toggler can change state
 			assert_ok!(Pools::set_state_other(
 				Origin::signed(902),
 				PRIMARY_ACCOUNT,
@@ -2254,7 +2256,8 @@ mod set_state_other {
 				PoolState::Destroying
 			);
 
-			// If the pool is not ok to be open, it cannot be permissionleslly set to a state that isn't destroying
+			// If the pool is not ok to be open, it cannot be permissionleslly set to a state that
+			// isn't destroying
 			unsafe_set_state(&PRIMARY_ACCOUNT, PoolState::Open).unwrap();
 			assert_noop!(
 				Pools::set_state_other(Origin::signed(11), PRIMARY_ACCOUNT, PoolState::Blocked),
@@ -2268,5 +2271,33 @@ mod set_metadata {
 	use super::*;
 
 	#[test]
-	fn set_metadata_works() {}
+	fn set_metadata_works() {
+		ExtBuilder::default().build_and_execute(|| {
+			// Root can set metadata
+			assert_ok!(Pools::set_metadata(Origin::signed(900), PRIMARY_ACCOUNT, vec![1, 1]));
+			assert_eq!(Metadata::<Runtime>::get(PRIMARY_ACCOUNT), vec![1, 1]);
+
+			// State toggler can set metadata
+			assert_ok!(Pools::set_metadata(Origin::signed(902), PRIMARY_ACCOUNT, vec![2, 2]));
+			assert_eq!(Metadata::<Runtime>::get(PRIMARY_ACCOUNT), vec![2, 2]);
+
+			// Depositor can't set metadata
+			assert_noop!(
+				Pools::set_metadata(Origin::signed(10), PRIMARY_ACCOUNT, vec![3, 3]),
+				Error::<Runtime>::DoesNotHavePermission
+			);
+
+			// Nominator can't set metadata
+			assert_noop!(
+				Pools::set_metadata(Origin::signed(901), PRIMARY_ACCOUNT, vec![3, 3]),
+				Error::<Runtime>::DoesNotHavePermission
+			);
+
+			// Metadata cannot be longer than `MaxMetadataLen`
+			assert_noop!(
+				Pools::set_metadata(Origin::signed(900), PRIMARY_ACCOUNT, vec![1, 1, 1]),
+				Error::<Runtime>::MetadataExceedsMaxLen
+			);
+		});
+	}
 }
