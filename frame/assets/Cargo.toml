@@ -14,7 +14,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false }
-scale-info = { version = "2.0.0", default-features = false, features = ["derive"] }
+scale-info = { version = "2.0.1", default-features = false, features = ["derive"] }
 sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
 # Needed for various traits. In our case, `OnFinalize`.
 sp-runtime = { version = "6.0.0", default-features = false, path = "../../primitives/runtime" }
