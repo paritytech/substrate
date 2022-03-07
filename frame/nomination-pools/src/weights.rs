@@ -1,5 +1,4 @@
 // This file is part of Substrate.
-
 // Copyright (C) 2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
@@ -52,6 +51,8 @@ pub trait WeightInfo {
 	fn withdraw_unbonded_other_kill(s: u32, ) -> Weight;
 	fn create() -> Weight;
 	fn nominate() -> Weight;
+	fn set_state_other() -> Weight;
+	fn set_metadata() -> Weight;
 }
 
 /// Weights for pallet_nomination_pools using the Substrate node and recommended hardware.
@@ -173,6 +174,18 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(28 as Weight))
 			.saturating_add(T::DbWeight::get().writes(5 as Weight))
 	}
+
+	fn set_state_other() -> Weight {
+		(79_587_000 as Weight)
+			.saturating_add(T::DbWeight::get().reads(28 as Weight))
+			.saturating_add(T::DbWeight::get().writes(5 as Weight))
+	}
+	fn set_metadata() -> Weight {
+		(79_587_000 as Weight)
+			.saturating_add(T::DbWeight::get().reads(28 as Weight))
+			.saturating_add(T::DbWeight::get().writes(5 as Weight))
+	}
+
 }
 
 // For backwards compatibility and tests
@@ -290,6 +303,16 @@ impl WeightInfo for () {
 	// Storage: BagsList CounterForListNodes (r:1 w:1)
 	// Storage: Staking CounterForNominators (r:1 w:1)
 	fn nominate() -> Weight {
+		(79_587_000 as Weight)
+			.saturating_add(RocksDbWeight::get().reads(28 as Weight))
+			.saturating_add(RocksDbWeight::get().writes(5 as Weight))
+	}
+	fn set_state_other() -> Weight {
+		(79_587_000 as Weight)
+			.saturating_add(RocksDbWeight::get().reads(28 as Weight))
+			.saturating_add(RocksDbWeight::get().writes(5 as Weight))
+	}
+	fn set_metadata() -> Weight {
 		(79_587_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(28 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(5 as Weight))

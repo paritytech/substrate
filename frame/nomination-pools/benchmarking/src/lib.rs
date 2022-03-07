@@ -11,7 +11,7 @@ use frame_election_provider_support::SortedListProvider;
 use frame_support::{ensure, traits::Get};
 use frame_system::RawOrigin as Origin;
 use pallet_nomination_pools::{
-	BalanceOf, BondedPoolStorage, BondedPools, Delegators, MinCreateBond, MinJoinBond,
+	BalanceOf, BondedPoolStorage, BondedPools, Delegators, Metadata, MinCreateBond, MinJoinBond,
 	Pallet as Pools, PoolState, RewardPools, SubPoolsStorage,
 };
 use sp_runtime::traits::{StaticLookup, Zero};
@@ -530,6 +530,42 @@ frame_benchmarking::benchmarks! {
 			T::StakingInterface::bonded_balance(&pool_account),
 			Some(min_create_bond)
 		);
+	}
+
+	set_state_other {
+		// Create a pool
+		let min_create_bond = MinCreateBond::<T>::get()
+			.max(T::StakingInterface::minimum_bond())
+			.max(CurrencyOf::<T>::minimum_balance());
+		let (depositor, pool_account) = create_pool_account::<T>(0, min_create_bond);
+		BondedPools::<T>::mutate(&pool_account, |maybe_pool| {
+			// Force the pool into an invalid state
+			maybe_pool.as_mut().map(|mut pool| pool.points = min_create_bond * 10u32.into());
+		});
+
+		let caller = account("caller", 0, USER_SEED);
+		whitelist_account!(caller);
+	}:_(Origin::Signed(caller), pool_account.clone(), PoolState::Destroying)
+	verify {
+		assert_eq!(BondedPools::<T>::get(pool_account).unwrap().state, PoolState::Destroying);
+	}
+
+	set_metadata {
+		clear_storage::<T>();
+
+		// Create a pool
+		let min_create_bond = MinCreateBond::<T>::get()
+			.max(T::StakingInterface::minimum_bond())
+			.max(CurrencyOf::<T>::minimum_balance());
+		let (depositor, pool_account) = create_pool_account::<T>(0, min_create_bond);
+
+		// Create metadata of the max possible size
+		let metadata: Vec<u8> = (0..<T as pallet_nomination_pools::Config>::MaxMetadataLen::get()).map(|_| 42).collect();
+
+		whitelist_account!(depositor);
+	}:_(Origin::Signed(depositor), pool_account.clone(), metadata.clone())
+	verify {
+		assert_eq!(Metadata::<T>::get(&pool_account), metadata);
 	}
 }
 

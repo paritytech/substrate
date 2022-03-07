@@ -296,7 +296,7 @@
 // * The sum of each pools delegator counter equals the `Delegators::count()`.
 // * A pool's `delegator_counter` should always be gt 0.
 
-// 
+//
 // - transparent prefx for account ids
 
 // Ensure we're `no_std` when compiling for Wasm.

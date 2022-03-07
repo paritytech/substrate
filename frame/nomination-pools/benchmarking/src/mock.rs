@@ -151,6 +151,7 @@ impl pallet_nomination_pools::Config for Runtime {
 	type U256ToBalance = U256ToBalance;
 	type StakingInterface = Staking;
 	type PostUnbondingPoolsWindow = PostUnbondingPoolsWindow;
+	type MaxMetadataLen = ConstU32<256>;
 }
 
 impl crate::Config for Runtime {}
