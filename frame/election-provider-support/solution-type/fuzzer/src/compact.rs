@@ -1,13 +1,14 @@
+use frame_npos_elections_solution_type::generate_solution_type;
 use honggfuzz::fuzz;
 use sp_arithmetic::Percent;
 use sp_runtime::codec::{Encode, Error};
-use frame_npos_elections_solution_type::generate_solution_type;
 
 fn main() {
 	generate_solution_type!(#[compact] pub struct InnerTestSolutionCompact::<
 		VoterIndex = u32,
 		TargetIndex = u32,
 		Accuracy = Percent,
+		SizeBound = frame_support::traits::ConstU32::<100_000>, //TODO: unsure about size
 	>(16));
 	loop {
 		fuzz!(|fuzzer_data: &[u8]| {
