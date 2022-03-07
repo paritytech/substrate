@@ -36,10 +36,9 @@ use sc_network_test::{
 use sc_utils::notification::NotificationReceiver;
 
 use beefy_primitives::{
-	crypto::AuthorityId as BeefyId, BeefyApi, ConsensusLog, MmrRootHash, ValidatorSet,
-	BEEFY_ENGINE_ID, KEY_TYPE as BeefyKeyType,
+	crypto::AuthorityId as BeefyId, ConsensusLog, MmrRootHash, ValidatorSet, BEEFY_ENGINE_ID,
+	KEY_TYPE as BeefyKeyType,
 };
-use sp_api::{ApiRef, ProvideRuntimeApi};
 use sp_consensus::BlockOrigin;
 use sp_core::H256;
 use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
@@ -107,15 +106,11 @@ struct PeerData {
 
 struct BeefyTestNet {
 	peers: Vec<BeefyPeer>,
-	test_api: Arc<TestApi>,
 }
 
 impl BeefyTestNet {
 	fn new(n_authority: usize, n_full: usize) -> Self {
-		let mut net = BeefyTestNet {
-			peers: Vec::with_capacity(n_authority + n_full),
-			test_api: Arc::new(TestApi {}),
-		};
+		let mut net = BeefyTestNet { peers: Vec::with_capacity(n_authority + n_full) };
 		for _ in 0..n_authority {
 			net.add_authority_peer();
 		}
@@ -160,7 +155,7 @@ impl TestNetFactory for BeefyTestNet {
 
 	/// Create new test network with peers and given config.
 	fn from_config(_config: &ProtocolConfig) -> Self {
-		BeefyTestNet { peers: Vec::new(), test_api: Arc::new(TestApi {}) }
+		BeefyTestNet { peers: Vec::new() }
 	}
 
 	fn make_verifier(
@@ -204,32 +199,6 @@ impl TestNetFactory for BeefyTestNet {
 	}
 }
 
-#[derive(Clone)]
-pub(crate) struct TestApi {}
-
-// compiler warns us about unused inner
-#[allow(dead_code)]
-pub(crate) struct RuntimeApi {
-	inner: TestApi,
-}
-
-impl ProvideRuntimeApi<Block> for TestApi {
-	type Api = RuntimeApi;
-
-	fn runtime_api<'a>(&'a self) -> ApiRef<'a, Self::Api> {
-		RuntimeApi { inner: self.clone() }.into()
-	}
-}
-
-sp_api::mock_impl_runtime_apis! {
-	impl BeefyApi<Block> for RuntimeApi {
-		fn validator_set() -> Option<BeefyValidatorSet> {
-			// TODO: make this customizable
-			ValidatorSet::new(make_beefy_ids(&[BeefyKeyring::Alice, BeefyKeyring::Bob]), 0)
-		}
-	}
-}
-
 fn make_beefy_ids(keys: &[BeefyKeyring]) -> Vec<BeefyId> {
 	keys.iter().map(|key| key.clone().public().into()).collect()
 }
@@ -259,7 +228,6 @@ fn initialize_beefy(net: &mut BeefyTestNet, peers: &[BeefyKeyring]) -> impl Futu
 		let beefy_params = crate::BeefyParams {
 			client: net.peers[peer_id].client().as_client(),
 			backend: net.peers[peer_id].client().as_backend(),
-			runtime: net.test_api.clone(),
 			key_store: Some(keystore),
 			network: net.peers[peer_id].network_service().clone(),
 			signed_commitment_sender,
@@ -268,7 +236,7 @@ fn initialize_beefy(net: &mut BeefyTestNet, peers: &[BeefyKeyring]) -> impl Futu
 			prometheus_registry: None,
 			protocol_name: BEEFY_PROTOCOL_NAME.into(),
 		};
-		let gadget = crate::start_beefy_gadget::<_, _, _, _, _>(beefy_params);
+		let gadget = crate::start_beefy_gadget::<_, _, _, _>(beefy_params);
 
 		fn assert_send<T: Send>(_: &T) {}
 		assert_send(&gadget);

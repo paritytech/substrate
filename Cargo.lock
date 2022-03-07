@@ -10650,6 +10650,7 @@ dependencies = [
 name = "substrate-test-runtime"
 version = "2.0.0"
 dependencies = [
+ "beefy-primitives",
  "cfg-if 1.0.0",
  "frame-support",
  "frame-system",

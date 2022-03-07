@@ -27,7 +27,7 @@ use tokio::time::{sleep, Duration};
 use sc_client_api::{Backend, FinalityNotification, FinalityNotifications};
 use sc_network_gossip::GossipEngine;
 
-use sp_api::{BlockId, ProvideRuntimeApi};
+use sp_api::BlockId;
 use sp_arithmetic::traits::AtLeast32Bit;
 use sp_consensus::SyncOracle;
 use sp_runtime::{
@@ -53,13 +53,12 @@ use crate::{
 	Client,
 };
 
-pub(crate) struct WorkerParams<B, BE, C, R, SO>
+pub(crate) struct WorkerParams<B, BE, C, SO>
 where
 	B: Block,
 {
 	pub client: Arc<C>,
 	pub backend: Arc<BE>,
-	pub runtime: Arc<R>,
 	pub key_store: BeefyKeystore,
 	pub signed_commitment_sender: BeefySignedCommitmentSender<B>,
 	pub beefy_best_block_sender: BeefyBestBlockSender<B>,
@@ -71,17 +70,15 @@ where
 }
 
 /// A BEEFY worker plays the BEEFY protocol
-pub(crate) struct BeefyWorker<B, C, BE, R, SO>
+pub(crate) struct BeefyWorker<B, C, BE, SO>
 where
 	B: Block,
 	BE: Backend<B>,
 	C: Client<B, BE>,
-	R: ProvideRuntimeApi<B>,
 	SO: SyncOracle + Send + Sync + Clone + 'static,
 {
 	client: Arc<C>,
 	backend: Arc<BE>,
-	runtime: Arc<R>,
 	key_store: BeefyKeystore,
 	signed_commitment_sender: BeefySignedCommitmentSender<B>,
 	gossip_engine: Arc<Mutex<GossipEngine<B>>>,
@@ -105,13 +102,12 @@ where
 	_backend: PhantomData<BE>,
 }
 
-impl<B, C, BE, R, SO> BeefyWorker<B, C, BE, R, SO>
+impl<B, C, BE, SO> BeefyWorker<B, C, BE, SO>
 where
 	B: Block + Codec,
 	BE: Backend<B>,
 	C: Client<B, BE>,
-	R: ProvideRuntimeApi<B>,
-	R::Api: BeefyApi<B>,
+	C::Api: BeefyApi<B>,
 	SO: SyncOracle + Send + Sync + Clone + 'static,
 {
 	/// Return a new BEEFY worker instance.
@@ -120,11 +116,10 @@ where
 	/// BEEFY pallet has been deployed on-chain.
 	///
 	/// The BEEFY pallet is needed in order to keep track of the BEEFY authority set.
-	pub(crate) fn new(worker_params: WorkerParams<B, BE, C, R, SO>) -> Self {
+	pub(crate) fn new(worker_params: WorkerParams<B, BE, C, SO>) -> Self {
 		let WorkerParams {
 			client,
 			backend,
-			runtime,
 			key_store,
 			signed_commitment_sender,
 			beefy_best_block_sender,
@@ -142,7 +137,6 @@ where
 		BeefyWorker {
 			client: client.clone(),
 			backend,
-			runtime,
 			key_store,
 			signed_commitment_sender,
 			gossip_engine: Arc::new(Mutex::new(gossip_engine)),
@@ -162,13 +156,12 @@ where
 	}
 }
 
-impl<B, C, BE, R, SO> BeefyWorker<B, C, BE, R, SO>
+impl<B, C, BE, SO> BeefyWorker<B, C, BE, SO>
 where
 	B: Block,
 	BE: Backend<B>,
 	C: Client<B, BE>,
-	R: ProvideRuntimeApi<B>,
-	R::Api: BeefyApi<B>,
+	C::Api: BeefyApi<B>,
 	SO: SyncOracle + Send + Sync + Clone + 'static,
 {
 	/// Return `Some(number)` if we should be voting on block `number` now,
@@ -462,7 +455,7 @@ where
 		info!(target: "beefy", "🥩 run BEEFY worker, best grandpa: #{:?}.", self.best_grandpa_block_header.number());
 		loop {
 			let at = BlockId::hash(self.best_grandpa_block_header.hash());
-			if let Some(active) = self.runtime.runtime_api().validator_set(&at).ok().flatten() {
+			if let Some(active) = self.client.runtime_api().validator_set(&at).ok().flatten() {
 				if active.id() == GENESIS_AUTHORITY_SET_ID {
 					// When starting from genesis, there is no session boundary digest.
 					// Just initialize `rounds` to Block #1 as BEEFY mandatory block.
