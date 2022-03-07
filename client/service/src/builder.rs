@@ -19,7 +19,7 @@
 use crate::{
 	build_network_future,
 	client::{Client, ClientConfig},
-	config::{Configuration, KeystoreConfig, PrometheusConfig, TransactionStorageMode},
+	config::{Configuration, KeystoreConfig, PrometheusConfig},
 	error::Error,
 	metrics::MetricsService,
 	start_rpc_servers, RpcHandlers, SpawnTaskHandle, TaskManager, TransactionPoolAdapter,
@@ -39,7 +39,7 @@ use sc_executor::RuntimeVersionOf;
 use sc_keystore::LocalKeystore;
 use sc_network::{
 	block_request_handler::{self, BlockRequestHandler},
-	config::{Role, SyncMode},
+	config::Role,
 	light_client_requests::{self, handler::LightClientRequestHandler},
 	state_request_handler::{self, StateRequestHandler},
 	warp_request_handler::{self, RequestHandler as WarpSyncRequestHandler, WarpSyncProvider},
@@ -264,7 +264,6 @@ where
 			state_pruning: config.state_pruning.clone(),
 			source: config.database.clone(),
 			keep_blocks: config.keep_blocks.clone(),
-			transaction_storage: config.transaction_storage.clone(),
 		};
 
 		let backend = new_db_backend(db_config)?;
@@ -842,7 +841,7 @@ where
 		}
 	};
 
-	let mut network_params = sc_network::config::Params {
+	let network_params = sc_network::config::Params {
 		role: config.role.clone(),
 		executor: {
 			let spawn_handle = Clone::clone(&spawn_handle);
@@ -868,13 +867,6 @@ where
 		warp_sync: warp_sync_params,
 		light_client_request_protocol_config,
 	};
-
-	// Storage chains don't keep full block history and can't be synced in full mode.
-	// Force fast sync when storage chain mode is enabled.
-	if matches!(config.transaction_storage, TransactionStorageMode::StorageChain) {
-		network_params.network_config.sync_mode =
-			SyncMode::Fast { storage_chain_mode: true, skip_proofs: false };
-	}
 
 	let has_bootnodes = !network_params.network_config.boot_nodes.is_empty();
 	let network_mut = sc_network::NetworkWorker::new(network_params)?;
