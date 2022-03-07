@@ -955,7 +955,6 @@ pub mod pallet {
 		PaidOut { delegator: T::AccountId, pool: T::AccountId, payout: BalanceOf<T> },
 		Unbonded { delegator: T::AccountId, pool: T::AccountId, amount: BalanceOf<T> },
 		Withdrawn { delegator: T::AccountId, pool: T::AccountId, amount: BalanceOf<T> },
-		DustWithdrawn { delegator: T::AccountId, pool: T::AccountId },
 		Destroyed { pool: T::AccountId },
 	}
 
@@ -1257,33 +1256,18 @@ pub mod pallet {
 				// all the bonded balance and balance in unlocking chunks
 				.min(bonded_pool.non_locked_balance());
 
-			// TODO: [now] this check probably isn't necessary
-			if balance_to_unbond >= T::Currency::minimum_balance() {
-				T::Currency::transfer(
-					&delegator.pool,
-					&target,
-					balance_to_unbond,
-					ExistenceRequirement::AllowDeath,
-				)
-				.defensive_map_err(|e| e)?;
-				Self::deposit_event(Event::<T>::Withdrawn {
-					delegator: target.clone(),
-					pool: delegator.pool.clone(),
-					amount: balance_to_unbond,
-				});
-			} else {
-				//This should only happen if 1) a previous withdraw put the pools balance
-				// below ED and it was dusted or 2) the pool was slashed a huge amount that wiped
-				// all the unlocking chunks and bonded balance, thus causing inconsistencies with
-				// unbond pool's tracked balance and the actual balance (if this happens, the pool
-				// is in an invalid state anyways because there are no bonded funds so no one can
-				// join). We gracefully carry on, primarily to ensure the pool can eventually be
-				// destroyed
-				Self::deposit_event(Event::<T>::DustWithdrawn {
-					delegator: target.clone(),
-					pool: delegator.pool.clone(),
-				});
-			}
+			T::Currency::transfer(
+				&delegator.pool,
+				&target,
+				balance_to_unbond,
+				ExistenceRequirement::AllowDeath,
+			)
+			.defensive_map_err(|e| e)?;
+			Self::deposit_event(Event::<T>::Withdrawn {
+				delegator: target.clone(),
+				pool: delegator.pool.clone(),
+				amount: balance_to_unbond,
+			});
 
 			let post_info_weight = if should_remove_pool {
 				let reward_pool = RewardPools::<T>::take(&delegator.pool)
@@ -1385,8 +1369,6 @@ pub mod pallet {
 				},
 			);
 			bonded_pool.put();
-
-			// TODO: event
 
 			Ok(())
 		}
