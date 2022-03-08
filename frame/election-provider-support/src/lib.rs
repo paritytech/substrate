@@ -343,6 +343,8 @@ pub trait SortedListProvider<AccountId> {
 	/// The list's error type.
 	type Error: sp_std::fmt::Debug;
 
+	type Value;
+
 	/// An iterator over the list, which can have `take` called on it.
 	fn iter() -> Box<dyn Iterator<Item = AccountId>>;
 
@@ -353,10 +355,10 @@ pub trait SortedListProvider<AccountId> {
 	fn contains(id: &AccountId) -> bool;
 
 	/// Hook for inserting a new id.
-	fn on_insert(id: AccountId, weight: VoteWeight) -> Result<(), Self::Error>;
+	fn on_insert(id: AccountId, weight: Self::Value) -> Result<(), Self::Error>;
 
 	/// Hook for updating a single id.
-	fn on_update(id: &AccountId, weight: VoteWeight);
+	fn on_update(id: &AccountId, weight: Self::Value);
 
 	/// Hook for removing am id from the list.
 	fn on_remove(id: &AccountId);
@@ -371,7 +373,7 @@ pub trait SortedListProvider<AccountId> {
 	/// new list, which can lead to too many storage accesses, exhausting the block weight.
 	fn unsafe_regenerate(
 		all: impl IntoIterator<Item = AccountId>,
-		weight_of: Box<dyn Fn(&AccountId) -> VoteWeight>,
+		weight_of: Box<dyn Fn(&AccountId) -> Self::Value>,
 	) -> u32;
 
 	/// Remove all items from the list.
@@ -388,21 +390,21 @@ pub trait SortedListProvider<AccountId> {
 	/// If `who` changes by the returned amount they are guaranteed to have a worst case change
 	/// in their list position.
 	#[cfg(feature = "runtime-benchmarks")]
-	fn weight_update_worst_case(_who: &AccountId, _is_increase: bool) -> VoteWeight {
-		VoteWeight::MAX
-	}
+	fn weight_update_worst_case(_who: &AccountId, _is_increase: bool) -> Self::Value;
 }
 
 /// Something that can provide the `VoteWeight` of an account. Similar to [`ElectionProvider`] and
 /// [`ElectionDataProvider`], this should typically be implementing by whoever is supposed to *use*
 /// `SortedListProvider`.
-pub trait VoteWeightProvider<AccountId> {
+pub trait ValueProvider<AccountId> {
+	type Value;
+
 	/// Get the current `VoteWeight` of `who`.
-	fn vote_weight(who: &AccountId) -> VoteWeight;
+	fn value(who: &AccountId) -> Self::Value;
 
 	/// For tests and benchmarks, set the `VoteWeight`.
 	#[cfg(any(feature = "runtime-benchmarks", test))]
-	fn set_vote_weight_of(_: &AccountId, _: VoteWeight) {}
+	fn set_value_of(_: &AccountId, _: Self::Value) {}
 }
 
 /// Something that can compute the result to an NPoS solution.

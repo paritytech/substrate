@@ -35,7 +35,7 @@ mod pallet {
 			);
 
 			// when increasing vote weight to the level of non-existent bag
-			StakingMock::set_vote_weight_of(&42, 2_000);
+			StakingMock::set_value_of(&42, 2_000);
 			assert_ok!(BagsList::rebag(Origin::signed(0), 42));
 
 			// then a new bag is created and the id moves into it
@@ -45,7 +45,7 @@ mod pallet {
 			);
 
 			// when decreasing weight within the range of the current bag
-			StakingMock::set_vote_weight_of(&42, 1_001);
+			StakingMock::set_value_of(&42, 1_001);
 			assert_ok!(BagsList::rebag(Origin::signed(0), 42));
 
 			// then the id does not move
@@ -55,7 +55,7 @@ mod pallet {
 			);
 
 			// when reducing weight to the level of a non-existent bag
-			StakingMock::set_vote_weight_of(&42, 30);
+			StakingMock::set_value_of(&42, 30);
 			assert_ok!(BagsList::rebag(Origin::signed(0), 42));
 
 			// then a new bag is created and the id moves into it
@@ -65,7 +65,7 @@ mod pallet {
 			);
 
 			// when increasing weight to the level of a pre-existing bag
-			StakingMock::set_vote_weight_of(&42, 500);
+			StakingMock::set_value_of(&42, 500);
 			assert_ok!(BagsList::rebag(Origin::signed(0), 42));
 
 			// then the id moves into that bag
@@ -85,35 +85,26 @@ mod pallet {
 			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4])]);
 
 			// when
-			StakingMock::set_vote_weight_of(&4, 10);
+			StakingMock::set_value_of(&4, 10);
 			assert_ok!(BagsList::rebag(Origin::signed(0), 4));
 
 			// then
 			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1, 4]), (1_000, vec![2, 3])]);
-			assert_eq!(
-				Bag::<Runtime>::get(1_000).unwrap(),
-				Bag::new(Some(2), Some(3), 1_000)
-			);
+			assert_eq!(Bag::<Runtime>::get(1_000).unwrap(), Bag::new(Some(2), Some(3), 1_000));
 
 			// when
-			StakingMock::set_vote_weight_of(&3, 10);
+			StakingMock::set_value_of(&3, 10);
 			assert_ok!(BagsList::rebag(Origin::signed(0), 3));
 
 			// then
 			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1, 4, 3]), (1_000, vec![2])]);
 
-			assert_eq!(
-				Bag::<Runtime>::get(10).unwrap(),
-				Bag::new(Some(1), Some(3), 10)
-			);
-			assert_eq!(
-				Bag::<Runtime>::get(1_000).unwrap(),
-				Bag::new(Some(2), Some(2), 1_000)
-			);
+			assert_eq!(Bag::<Runtime>::get(10).unwrap(), Bag::new(Some(1), Some(3), 10));
+			assert_eq!(Bag::<Runtime>::get(1_000).unwrap(), Bag::new(Some(2), Some(2), 1_000));
 			assert_eq!(get_list_as_ids(), vec![2u32, 1, 4, 3]);
 
 			// when
-			StakingMock::set_vote_weight_of(&2, 10);
+			StakingMock::set_value_of(&2, 10);
 			assert_ok!(BagsList::rebag(Origin::signed(0), 2));
 
 			// then
@@ -128,29 +119,23 @@ mod pallet {
 	fn rebag_head_works() {
 		ExtBuilder::default().build_and_execute(|| {
 			// when
-			StakingMock::set_vote_weight_of(&2, 10);
+			StakingMock::set_value_of(&2, 10);
 			assert_ok!(BagsList::rebag(Origin::signed(0), 2));
 
 			// then
 			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1, 2]), (1_000, vec![3, 4])]);
-			assert_eq!(
-				Bag::<Runtime>::get(1_000).unwrap(),
-				Bag::new(Some(3), Some(4), 1_000)
-			);
+			assert_eq!(Bag::<Runtime>::get(1_000).unwrap(), Bag::new(Some(3), Some(4), 1_000));
 
 			// when
-			StakingMock::set_vote_weight_of(&3, 10);
+			StakingMock::set_value_of(&3, 10);
 			assert_ok!(BagsList::rebag(Origin::signed(0), 3));
 
 			// then
 			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1, 2, 3]), (1_000, vec![4])]);
-			assert_eq!(
-				Bag::<Runtime>::get(1_000).unwrap(),
-				Bag::new(Some(4), Some(4), 1_000)
-			);
+			assert_eq!(Bag::<Runtime>::get(1_000).unwrap(), Bag::new(Some(4), Some(4), 1_000));
 
 			// when
-			StakingMock::set_vote_weight_of(&4, 10);
+			StakingMock::set_value_of(&4, 10);
 			assert_ok!(BagsList::rebag(Origin::signed(0), 4));
 
 			// then
@@ -181,7 +166,7 @@ mod pallet {
 	#[test]
 	#[should_panic = "thresholds must strictly increase, and have no duplicates"]
 	fn duplicate_in_bags_threshold_panics() {
-		const DUPE_THRESH: &[VoteWeight; 4] = &[10, 20, 30, 30];
+		const DUPE_THRESH: &[u64; 4] = &[10, 20, 30, 30];
 		BagThresholds::set(DUPE_THRESH);
 		BagsList::integrity_test();
 	}
@@ -189,7 +174,7 @@ mod pallet {
 	#[test]
 	#[should_panic = "thresholds must strictly increase, and have no duplicates"]
 	fn decreasing_in_bags_threshold_panics() {
-		const DECREASING_THRESH: &[VoteWeight; 4] = &[10, 30, 20, 40];
+		const DECREASING_THRESH: &[u64; 4] = &[10, 30, 20, 40];
 		BagThresholds::set(DECREASING_THRESH);
 		BagsList::integrity_test();
 	}
@@ -200,15 +185,12 @@ mod pallet {
 
 		ExtBuilder::default().build_and_execute(|| {
 			// everyone in the same bag.
-			assert_eq!(List::<Runtime>::get_bags(), vec![(VoteWeight::MAX, vec![1, 2, 3, 4])]);
+			assert_eq!(List::<Runtime>::get_bags(), vec![(u64::MAX, vec![1, 2, 3, 4])]);
 
 			// any insertion goes there as well.
 			assert_ok!(List::<Runtime>::insert(5, 999));
 			assert_ok!(List::<Runtime>::insert(6, 0));
-			assert_eq!(
-				List::<Runtime>::get_bags(),
-				vec![(VoteWeight::MAX, vec![1, 2, 3, 4, 5, 6])]
-			);
+			assert_eq!(List::<Runtime>::get_bags(), vec![(u64::MAX, vec![1, 2, 3, 4, 5, 6])]);
 
 			// any rebag is noop.
 			assert_storage_noop!(assert!(BagsList::rebag(Origin::signed(0), 1).is_ok()));
@@ -256,7 +238,7 @@ mod pallet {
 			// given
 			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4, 5])]);
 
-			StakingMock::set_vote_weight_of(&3, 999);
+			StakingMock::set_value_of(&3, 999);
 
 			// when
 			assert_ok!(BagsList::put_in_front_of(Origin::signed(4), 3));
@@ -277,7 +259,7 @@ mod pallet {
 					vec![(10, vec![1]), (1_000, vec![2, 3, 4, 5, 6])]
 				);
 
-				StakingMock::set_vote_weight_of(&5, 999);
+				StakingMock::set_value_of(&5, 999);
 
 				// when
 				assert_ok!(BagsList::put_in_front_of(Origin::signed(3), 5));
@@ -296,7 +278,7 @@ mod pallet {
 			// given
 			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4])]);
 
-			StakingMock::set_vote_weight_of(&2, 999);
+			StakingMock::set_value_of(&2, 999);
 
 			// when
 			assert_ok!(BagsList::put_in_front_of(Origin::signed(3), 2));
@@ -312,7 +294,7 @@ mod pallet {
 			// given
 			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4])]);
 
-			StakingMock::set_vote_weight_of(&3, 999);
+			StakingMock::set_value_of(&3, 999);
 
 			// when
 			assert_ok!(BagsList::put_in_front_of(Origin::signed(4), 3));
@@ -328,7 +310,7 @@ mod pallet {
 			// given
 			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4, 5])]);
 
-			StakingMock::set_vote_weight_of(&2, 999);
+			StakingMock::set_value_of(&2, 999);
 
 			// when
 			assert_ok!(BagsList::put_in_front_of(Origin::signed(5), 2));
@@ -344,7 +326,7 @@ mod pallet {
 			// given
 			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4, 5])]);
 
-			StakingMock::set_vote_weight_of(&4, 999);
+			StakingMock::set_value_of(&4, 999);
 
 			// when
 			BagsList::put_in_front_of(Origin::signed(2), 4).unwrap();
@@ -374,7 +356,7 @@ mod pallet {
 			// given
 			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4])]);
 
-			StakingMock::set_vote_weight_of(&4, 999);
+			StakingMock::set_value_of(&4, 999);
 
 			// when
 			BagsList::put_in_front_of(Origin::signed(2), 4).unwrap();
@@ -390,7 +372,7 @@ mod pallet {
 			// given
 			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4])]);
 
-			StakingMock::set_vote_weight_of(&3, 999);
+			StakingMock::set_value_of(&3, 999);
 
 			// then
 			assert_noop!(
@@ -490,7 +472,7 @@ mod sorted_list_provider {
 			assert_eq!(BagsList::count(), 4);
 
 			// when updating
-			BagsList::on_update(&201, VoteWeight::MAX);
+			BagsList::on_update(&201, u64::MAX);
 			// then the count stays the same
 			assert_eq!(BagsList::count(), 4);
 		});
@@ -571,12 +553,12 @@ mod sorted_list_provider {
 			assert_eq!(BagsList::iter().collect::<Vec<_>>(), vec![42, 2, 3, 4, 1]);
 
 			// when increasing weight to the level of a non-existent bag with the max threshold
-			BagsList::on_update(&42, VoteWeight::MAX);
+			BagsList::on_update(&42, u64::MAX);
 
 			// the the new bag is created with the id in it,
 			assert_eq!(
 				List::<Runtime>::get_bags(),
-				vec![(10, vec![1]), (1_000, vec![2, 3, 4]), (VoteWeight::MAX, vec![42])]
+				vec![(10, vec![1]), (1_000, vec![2, 3, 4]), (u64::MAX, vec![42])]
 			);
 			// and the id position is updated in the list.
 			assert_eq!(BagsList::iter().collect::<Vec<_>>(), vec![42, 2, 3, 4, 1]);

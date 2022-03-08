@@ -240,8 +240,9 @@ parameter_types! {
 impl pallet_bags_list::Config for Test {
 	type Event = Event;
 	type WeightInfo = ();
-	type VoteWeightProvider = Staking;
+	type ValueProvider = Staking;
 	type BagThresholds = BagThresholds;
+	type Value = u64;
 }
 
 impl onchain::Config for Test {

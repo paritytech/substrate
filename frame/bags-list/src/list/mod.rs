@@ -26,9 +26,10 @@
 
 use crate::Config;
 use codec::{Decode, Encode, MaxEncodedLen};
-use frame_election_provider_support::{VoteWeight, VoteWeightProvider};
+use frame_election_provider_support::ValueProvider;
 use frame_support::{traits::Get, DefaultNoBound};
 use scale_info::TypeInfo;
+use sp_runtime::traits::{Bounded, Zero};
 use sp_std::{
 	boxed::Box,
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
@@ -46,26 +47,26 @@ pub enum Error {
 #[cfg(test)]
 mod tests;
 
-/// Given a certain vote weight, to which bag does it belong to?
+/// Given a certain value, to which bag does it belong to?
 ///
 /// Bags are identified by their upper threshold; the value returned by this function is guaranteed
 /// to be a member of `T::BagThresholds`.
 ///
-/// Note that even if the thresholds list does not have `VoteWeight::MAX` as its final member, this
-/// function behaves as if it does.
-pub fn notional_bag_for<T: Config<I>, I: 'static>(weight: VoteWeight) -> VoteWeight {
+/// Note that even if the thresholds list does not have `T::Value::max_value()` as its final member,
+/// this function behaves as if it does.
+pub fn notional_bag_for<T: Config<I>, I: 'static>(weight: T::Value) -> T::Value {
 	let thresholds = T::BagThresholds::get();
 	let idx = thresholds.partition_point(|&threshold| weight > threshold);
-	thresholds.get(idx).copied().unwrap_or(VoteWeight::MAX)
+	thresholds.get(idx).copied().unwrap_or(T::Value::max_value())
 }
 
 /// The **ONLY** entry point of this module. All operations to the bags-list should happen through
 /// this interface. It is forbidden to access other module members directly.
 //
-// Data structure providing efficient mostly-accurate selection of the top N id by `VoteWeight`.
+// Data structure providing efficient mostly-accurate selection of the top N id by `Value`.
 //
 // It's implemented as a set of linked lists. Each linked list comprises a bag of ids of
-// arbitrary and unbounded length, all having a vote weight within a particular constant range.
+// arbitrary and unbounded length, all having a value within a particular constant range.
 // This structure means that ids can be added and removed in `O(1)` time.
 //
 // Iteration is accomplished by chaining the iteration of each bag, from greatest to least. While
@@ -98,7 +99,7 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 	/// Returns the number of ids migrated.
 	pub fn unsafe_regenerate(
 		all: impl IntoIterator<Item = T::AccountId>,
-		weight_of: Box<dyn Fn(&T::AccountId) -> VoteWeight>,
+		weight_of: Box<dyn Fn(&T::AccountId) -> T::Value>,
 	) -> u32 {
 		// NOTE: This call is unsafe for the same reason as SortedListProvider::unsafe_regenerate.
 		// I.e. because it can lead to many storage accesses.
@@ -127,7 +128,7 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 	/// - ids whose bags change at all are implicitly rebagged into the appropriate bag in the new
 	///   threshold set.
 	#[allow(dead_code)]
-	pub fn migrate(old_thresholds: &[VoteWeight]) -> u32 {
+	pub fn migrate(old_thresholds: &[T::Value]) -> u32 {
 		let new_thresholds = T::BagThresholds::get();
 		if new_thresholds == old_thresholds {
 			return 0
@@ -160,7 +161,7 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 			let affected_bag = {
 				// this recreates `notional_bag_for` logic, but with the old thresholds.
 				let idx = old_thresholds.partition_point(|&threshold| inserted_bag > threshold);
-				old_thresholds.get(idx).copied().unwrap_or(VoteWeight::MAX)
+				old_thresholds.get(idx).copied().unwrap_or(T::Value::max_value())
 			};
 			if !affected_old_bags.insert(affected_bag) {
 				// If the previous threshold list was [10, 20], and we insert [3, 5], then there's
@@ -187,7 +188,7 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 
 		// migrate the voters whose bag has changed
 		let num_affected = affected_accounts.len() as u32;
-		let weight_of = T::VoteWeightProvider::vote_weight;
+		let weight_of = T::ValueProvider::value;
 		let _removed = Self::remove_many(&affected_accounts);
 		debug_assert_eq!(_removed, num_affected);
 		let _inserted = Self::insert_many(affected_accounts.into_iter(), weight_of);
@@ -230,12 +231,14 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 		// easier; they can just configure `type BagThresholds = ()`.
 		let thresholds = T::BagThresholds::get();
 		let iter = thresholds.iter().copied();
-		let iter: Box<dyn Iterator<Item = u64>> = if thresholds.last() == Some(&VoteWeight::MAX) {
+		let iter: Box<dyn Iterator<Item = T::Value>> = if thresholds.last() ==
+			Some(&T::Value::max_value())
+		{
 			// in the event that they included it, we can just pass the iterator through unchanged.
 			Box::new(iter.rev())
 		} else {
 			// otherwise, insert it here.
-			Box::new(iter.chain(iter::once(VoteWeight::MAX)).rev())
+			Box::new(iter.chain(iter::once(T::Value::max_value())).rev())
 		};
 
 		iter.filter_map(Bag::get).flat_map(|bag| bag.iter())
@@ -247,7 +250,7 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 	/// Returns the final count of number of ids inserted.
 	fn insert_many(
 		ids: impl IntoIterator<Item = T::AccountId>,
-		weight_of: impl Fn(&T::AccountId) -> VoteWeight,
+		weight_of: impl Fn(&T::AccountId) -> T::Value,
 	) -> u32 {
 		let mut count = 0;
 		ids.into_iter().for_each(|v| {
@@ -263,7 +266,7 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 	/// Insert a new id into the appropriate bag in the list.
 	///
 	/// Returns an error if the list already contains `id`.
-	pub(crate) fn insert(id: T::AccountId, weight: VoteWeight) -> Result<(), Error> {
+	pub(crate) fn insert(id: T::AccountId, weight: T::Value) -> Result<(), Error> {
 		if Self::contains(&id) {
 			return Err(Error::Duplicate)
 		}
@@ -278,7 +281,8 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 
 		crate::log!(
 			debug,
-			"inserted {:?} with weight {} into bag {:?}, new count is {}",
+			"inserted {:?} with weight {:?
+			} into bag {:?}, new count is {}",
 			id,
 			weight,
 			bag_weight,
@@ -344,8 +348,8 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 	/// to call [`self.remove_many`] followed by [`self.insert_many`].
 	pub(crate) fn update_position_for(
 		node: Node<T, I>,
-		new_weight: VoteWeight,
-	) -> Option<(VoteWeight, VoteWeight)> {
+		new_weight: T::Value,
+	) -> Option<(T::Value, T::Value)> {
 		node.is_misplaced(new_weight).then(move || {
 			let old_bag_upper = node.bag_upper;
 
@@ -394,8 +398,7 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 
 		// this is the most expensive check, so we do it last.
 		ensure!(
-			T::VoteWeightProvider::vote_weight(&heavier_id) >
-				T::VoteWeightProvider::vote_weight(&lighter_id),
+			T::ValueProvider::value(&heavier_id) > T::ValueProvider::value(&lighter_id),
 			pallet::Error::NotHeavier
 		);
 
@@ -484,13 +487,14 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 
 		let active_bags = {
 			let thresholds = T::BagThresholds::get().iter().copied();
-			let thresholds: Vec<u64> = if thresholds.clone().last() == Some(VoteWeight::MAX) {
-				// in the event that they included it, we don't need to make any changes
-				thresholds.collect()
-			} else {
-				// otherwise, insert it here.
-				thresholds.chain(iter::once(VoteWeight::MAX)).collect()
-			};
+			let thresholds: Vec<T::Value> =
+				if thresholds.clone().last() == Some(T::Value::max_value()) {
+					// in the event that they included it, we don't need to make any changes
+					thresholds.collect()
+				} else {
+					// otherwise, insert it here.
+					thresholds.chain(iter::once(T::Value::max_value())).collect()
+				};
 			thresholds.into_iter().filter_map(|t| Bag::<T, I>::get(t))
 		};
 
@@ -519,17 +523,19 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 	/// Returns the nodes of all non-empty bags. For testing and benchmarks.
 	#[cfg(any(feature = "std", feature = "runtime-benchmarks"))]
 	#[allow(dead_code)]
-	pub(crate) fn get_bags() -> Vec<(VoteWeight, Vec<T::AccountId>)> {
+	pub(crate) fn get_bags() -> Vec<(T::Value, Vec<T::AccountId>)> {
 		use frame_support::traits::Get as _;
 
 		let thresholds = T::BagThresholds::get();
 		let iter = thresholds.iter().copied();
-		let iter: Box<dyn Iterator<Item = u64>> = if thresholds.last() == Some(&VoteWeight::MAX) {
+		let iter: Box<dyn Iterator<Item = T::Value>> = if thresholds.last() ==
+			Some(&T::Value::max_value())
+		{
 			// in the event that they included it, we can just pass the iterator through unchanged.
 			Box::new(iter)
 		} else {
 			// otherwise, insert it here.
-			Box::new(iter.chain(sp_std::iter::once(VoteWeight::MAX)))
+			Box::new(iter.chain(sp_std::iter::once(T::Value::max_value())))
 		};
 
 		iter.filter_map(|t| {
@@ -556,7 +562,7 @@ pub struct Bag<T: Config<I>, I: 'static = ()> {
 	tail: Option<T::AccountId>,
 
 	#[codec(skip)]
-	bag_upper: VoteWeight,
+	bag_upper: T::Value,
 	#[codec(skip)]
 	phantom: PhantomData<I>,
 }
@@ -566,22 +572,22 @@ impl<T: Config<I>, I: 'static> Bag<T, I> {
 	pub(crate) fn new(
 		head: Option<T::AccountId>,
 		tail: Option<T::AccountId>,
-		bag_upper: VoteWeight,
+		bag_upper: T::Value,
 	) -> Self {
-		Self { head, tail, bag_upper, phantom: PhantomData, }
+		Self { head, tail, bag_upper, phantom: PhantomData }
 	}
 
-	/// Get a bag by its upper vote weight.
-	pub(crate) fn get(bag_upper: VoteWeight) -> Option<Bag<T, I>> {
+	/// Get a bag by its upper value.
+	pub(crate) fn get(bag_upper: T::Value) -> Option<Bag<T, I>> {
 		crate::ListBags::<T, I>::try_get(bag_upper).ok().map(|mut bag| {
 			bag.bag_upper = bag_upper;
 			bag
 		})
 	}
 
-	/// Get a bag by its upper vote weight or make it, appropriately initialized. Does not check if
+	/// Get a bag by its upper value or make it, appropriately initialized. Does not check if
 	/// if `bag_upper` is a valid threshold.
-	fn get_or_make(bag_upper: VoteWeight) -> Bag<T, I> {
+	fn get_or_make(bag_upper: T::Value) -> Bag<T, I> {
 		Self::get(bag_upper).unwrap_or(Bag { bag_upper, ..Default::default() })
 	}
 
@@ -629,7 +635,7 @@ impl<T: Config<I>, I: 'static> Bag<T, I> {
 			id,
 			prev: None,
 			next: None,
-			bag_upper: 0,
+			bag_upper: Zero::zero(),
 			phantom: PhantomData,
 		});
 	}
@@ -766,7 +772,7 @@ pub struct Node<T: Config<I>, I: 'static = ()> {
 	id: T::AccountId,
 	prev: Option<T::AccountId>,
 	next: Option<T::AccountId>,
-	bag_upper: VoteWeight,
+	bag_upper: T::Value,
 	phantom: PhantomData<I>,
 }
 
@@ -816,7 +822,7 @@ impl<T: Config<I>, I: 'static> Node<T, I> {
 	}
 
 	/// `true` when this voter is in the wrong bag.
-	pub fn is_misplaced(&self, current_weight: VoteWeight) -> bool {
+	pub fn is_misplaced(&self, current_weight: T::Value) -> bool {
 		notional_bag_for::<T, I>(current_weight) != self.bag_upper
 	}
 
@@ -840,7 +846,7 @@ impl<T: Config<I>, I: 'static> Node<T, I> {
 	/// The bag this nodes belongs to (public for benchmarks).
 	#[cfg(feature = "runtime-benchmarks")]
 	#[allow(dead_code)]
-	pub fn bag_upper(&self) -> VoteWeight {
+	pub fn bag_upper(&self) -> T::Value {
 		self.bag_upper
 	}
 

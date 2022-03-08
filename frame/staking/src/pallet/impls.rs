@@ -19,7 +19,7 @@
 
 use frame_election_provider_support::{
 	data_provider, ElectionDataProvider, ElectionProvider, SortedListProvider, Supports,
-	VoteWeight, VoteWeightProvider, VoterOf,
+	VoteWeight, ValueProvider, VoterOf,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -1244,13 +1244,15 @@ where
 	}
 }
 
-impl<T: Config> VoteWeightProvider<T::AccountId> for Pallet<T> {
-	fn vote_weight(who: &T::AccountId) -> VoteWeight {
+impl<T: Config> ValueProvider<T::AccountId> for Pallet<T> {
+	type Value = VoteWeight;
+
+	fn value(who: &T::AccountId) -> Self::Value {
 		Self::weight_of(who)
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn set_vote_weight_of(who: &T::AccountId, weight: VoteWeight) {
+	fn set_value_of(who: &T::AccountId, weight: Self::Value) {
 		// this will clearly results in an inconsistent state, but it should not matter for a
 		// benchmark.
 		let active: BalanceOf<T> = weight.try_into().map_err(|_| ()).unwrap();
@@ -1277,8 +1279,10 @@ impl<T: Config> VoteWeightProvider<T::AccountId> for Pallet<T> {
 /// does not provided nominators in sorted ordered. If you desire nominators in a sorted order take
 /// a look at [`pallet-bags-list].
 pub struct UseNominatorsMap<T>(sp_std::marker::PhantomData<T>);
+
 impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsMap<T> {
 	type Error = ();
+	type Value = VoteWeight;
 
 	/// Returns iterator over voter list, which can have `take` called on it.
 	fn iter() -> Box<dyn Iterator<Item = T::AccountId>> {
@@ -1290,11 +1294,11 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsMap<T> {
 	fn contains(id: &T::AccountId) -> bool {
 		Nominators::<T>::contains_key(id)
 	}
-	fn on_insert(_: T::AccountId, _weight: VoteWeight) -> Result<(), Self::Error> {
+	fn on_insert(_: T::AccountId, _weight: Self::Value) -> Result<(), Self::Error> {
 		// nothing to do on insert.
 		Ok(())
 	}
-	fn on_update(_: &T::AccountId, _weight: VoteWeight) {
+	fn on_update(_: &T::AccountId, _weight: Self::Value) {
 		// nothing to do on update.
 	}
 	fn on_remove(_: &T::AccountId) {
@@ -1302,7 +1306,7 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsMap<T> {
 	}
 	fn unsafe_regenerate(
 		_: impl IntoIterator<Item = T::AccountId>,
-		_: Box<dyn Fn(&T::AccountId) -> VoteWeight>,
+		_: Box<dyn Fn(&T::AccountId) -> Self::Value>,
 	) -> u32 {
 		// nothing to do upon regenerate.
 		0
@@ -1315,5 +1319,9 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsMap<T> {
 		// NOTE: Caller must ensure this doesn't lead to too many storage accesses. This is a
 		// condition of SortedListProvider::unsafe_clear.
 		Nominators::<T>::remove_all();
+	}
+
+	fn weight_update_worst_case(_: &T::AccountId, _: bool) -> Self::Value {
+		u64::MAX
 	}
 }

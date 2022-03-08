@@ -19,7 +19,6 @@
 
 use super::*;
 use crate::{self as bags_list};
-use frame_election_provider_support::VoteWeight;
 use frame_support::parameter_types;
 use std::collections::HashMap;
 
@@ -27,19 +26,21 @@ pub type AccountId = u32;
 pub type Balance = u32;
 
 parameter_types! {
-	// Set the vote weight for any id who's weight has _not_ been set with `set_vote_weight_of`.
-	pub static NextVoteWeight: VoteWeight = 0;
-	pub static NextVoteWeightMap: HashMap<AccountId, VoteWeight> = Default::default();
+	// Set the vote weight for any id who's weight has _not_ been set with `set_value_of`.
+	pub static NextVoteWeight: u64 = 0;
+	pub static NextVoteWeightMap: HashMap<AccountId, u64> = Default::default();
 }
 
 pub struct StakingMock;
-impl frame_election_provider_support::VoteWeightProvider<AccountId> for StakingMock {
-	fn vote_weight(id: &AccountId) -> VoteWeight {
+impl frame_election_provider_support::ValueProvider<AccountId> for StakingMock {
+	type Value = u64;
+
+	fn value(id: &AccountId) -> Self::Value {
 		*NextVoteWeightMap::get().get(id).unwrap_or(&NextVoteWeight::get())
 	}
 
 	#[cfg(any(feature = "runtime-benchmarks", test))]
-	fn set_vote_weight_of(id: &AccountId, weight: VoteWeight) {
+	fn set_value_of(id: &AccountId, weight: Self::Value) {
 		NEXT_VOTE_WEIGHT_MAP.with(|m| m.borrow_mut().insert(id.clone(), weight));
 	}
 }
@@ -72,14 +73,15 @@ impl frame_system::Config for Runtime {
 }
 
 parameter_types! {
-	pub static BagThresholds: &'static [VoteWeight] = &[10, 20, 30, 40, 50, 60, 1_000, 2_000, 10_000];
+	pub static BagThresholds: &'static [u64] = &[10, 20, 30, 40, 50, 60, 1_000, 2_000, 10_000];
 }
 
 impl bags_list::Config for Runtime {
 	type Event = Event;
 	type WeightInfo = ();
 	type BagThresholds = BagThresholds;
-	type VoteWeightProvider = StakingMock;
+	type ValueProvider = StakingMock;
+	type Value = u64;
 }
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Runtime>;
@@ -96,12 +98,11 @@ frame_support::construct_runtime!(
 );
 
 /// Default AccountIds and their weights.
-pub(crate) const GENESIS_IDS: [(AccountId, VoteWeight); 4] =
-	[(1, 10), (2, 1_000), (3, 1_000), (4, 1_000)];
+pub(crate) const GENESIS_IDS: [(AccountId, u64); 4] = [(1, 10), (2, 1_000), (3, 1_000), (4, 1_000)];
 
 #[derive(Default)]
 pub struct ExtBuilder {
-	ids: Vec<(AccountId, VoteWeight)>,
+	ids: Vec<(AccountId, u64)>,
 	skip_genesis_ids: bool,
 }
 
@@ -115,7 +116,7 @@ impl ExtBuilder {
 
 	/// Add some AccountIds to insert into `List`.
 	#[cfg(test)]
-	pub(crate) fn add_ids(mut self, ids: Vec<(AccountId, VoteWeight)>) -> Self {
+	pub(crate) fn add_ids(mut self, ids: Vec<(AccountId, u64)>) -> Self {
 		self.ids = ids;
 		self
 	}
@@ -134,7 +135,7 @@ impl ExtBuilder {
 		ext.execute_with(|| {
 			for (id, weight) in ids_with_weight {
 				frame_support::assert_ok!(List::<Runtime>::insert(*id, *weight));
-				StakingMock::set_vote_weight_of(id, *weight);
+				StakingMock::set_value_of(id, *weight);
 			}
 		});
 

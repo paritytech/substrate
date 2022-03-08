@@ -17,13 +17,14 @@
 
 //! # Bags-List Pallet
 //!
-//! A semi-sorted list, where items hold an `AccountId` based on some `VoteWeight`. The `AccountId`
-//! (`id` for short) might be synonym to a `voter` or `nominator` in some context, and `VoteWeight`
-//! signifies the chance of each id being included in the final [`SortedListProvider::iter`].
+//! A semi-sorted list, where items hold an `AccountId` based on some `Value`. The
+//! `AccountId` (`id` for short) might be synonym to a `voter` or `nominator` in some context, and
+//! `Value` signifies the chance of each id being included in the final
+//! [`SortedListProvider::iter`].
 //!
 //! It implements [`frame_election_provider_support::SortedListProvider`] to provide a semi-sorted
 //! list of accounts to another pallet. It needs some other pallet to give it some information about
-//! the weights of accounts via [`frame_election_provider_support::VoteWeightProvider`].
+//! the weights of accounts via [`frame_election_provider_support::ValueProvider`].
 //!
 //! This pallet is not configurable at genesis. Whoever uses it should call appropriate functions of
 //! the `SortedListProvider` (e.g. `on_insert`, or `unsafe_regenerate`) at their genesis.
@@ -52,8 +53,10 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use frame_election_provider_support::{SortedListProvider, VoteWeight, VoteWeightProvider};
+use codec::{Codec, FullCodec};
+use frame_election_provider_support::{SortedListProvider, ValueProvider};
 use frame_system::ensure_signed;
+use sp_runtime::traits::{AtLeast32BitUnsigned, Bounded};
 use sp_std::prelude::*;
 
 #[cfg(any(feature = "runtime-benchmarks", test))]
@@ -103,7 +106,7 @@ pub mod pallet {
 		type WeightInfo: weights::WeightInfo;
 
 		/// Something that provides the weights of ids.
-		type VoteWeightProvider: VoteWeightProvider<Self::AccountId>;
+		type ValueProvider: ValueProvider<Self::AccountId, Value = Self::Value>;
 
 		/// The list of thresholds separating the various bags.
 		///
@@ -120,10 +123,10 @@ pub mod pallet {
 		/// This constant must be sorted in strictly increasing order. Duplicate items are not
 		/// permitted.
 		///
-		/// There is an implied upper limit of `VoteWeight::MAX`; that value does not need to be
+		/// There is an implied upper limit of `Value::MAX`; that value does not need to be
 		/// specified within the bag. For any two threshold lists, if one ends with
-		/// `VoteWeight::MAX`, the other one does not, and they are otherwise equal, the two lists
-		/// will behave identically.
+		/// `Value::MAX`, the other one does not, and they are otherwise equal, the two
+		/// lists will behave identically.
 		///
 		/// # Calculation
 		///
@@ -149,7 +152,23 @@ pub mod pallet {
 		/// In the event that this list ever changes, a copy of the old bags list must be retained.
 		/// With that `List::migrate` can be called, which will perform the appropriate migration.
 		#[pallet::constant]
-		type BagThresholds: Get<&'static [VoteWeight]>;
+		type BagThresholds: Get<&'static [Self::Value]>;
+
+		/// The type of value used to dictate a node position relative to other nodes.
+		type Value: Clone
+			+ Default
+			+ PartialEq
+			+ Eq
+			+ Ord
+			+ PartialOrd
+			+ sp_std::fmt::Debug
+			+ Copy
+			+ AtLeast32BitUnsigned
+			+ Bounded
+			+ TypeInfo
+			+ Codec
+			+ FullCodec
+			+ MaxEncodedLen;
 	}
 
 	/// A single node, within some bag.
@@ -164,13 +183,13 @@ pub mod pallet {
 	/// Stores a `Bag` struct, which stores head and tail pointers to itself.
 	#[pallet::storage]
 	pub(crate) type ListBags<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Twox64Concat, VoteWeight, list::Bag<T, I>>;
+		StorageMap<_, Twox64Concat, T::Value, list::Bag<T, I>>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(crate) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
 		/// Moved an account from one bag to another.
-		Rebagged { who: T::AccountId, from: VoteWeight, to: VoteWeight },
+		Rebagged { who: T::AccountId, from: T::Value, to: T::Value },
 	}
 
 	#[pallet::error]
@@ -197,7 +216,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::rebag_non_terminal().max(T::WeightInfo::rebag_terminal()))]
 		pub fn rebag(origin: OriginFor<T>, dislocated: T::AccountId) -> DispatchResult {
 			ensure_signed(origin)?;
-			let current_weight = T::VoteWeightProvider::vote_weight(&dislocated);
+			let current_weight = T::ValueProvider::value(&dislocated);
 			let _ = Pallet::<T, I>::do_rebag(&dislocated, current_weight);
 			Ok(())
 		}
@@ -209,7 +228,7 @@ pub mod pallet {
 		///
 		/// Only works if
 		/// - both nodes are within the same bag,
-		/// - and `origin` has a greater `VoteWeight` than `lighter`.
+		/// - and `origin` has a greater `Value` than `lighter`.
 		#[pallet::weight(T::WeightInfo::put_in_front_of())]
 		pub fn put_in_front_of(origin: OriginFor<T>, lighter: T::AccountId) -> DispatchResult {
 			let heavier = ensure_signed(origin)?;
@@ -233,10 +252,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Move an account from one bag to another, depositing an event on success.
 	///
 	/// If the account changed bags, returns `Some((from, to))`.
-	pub fn do_rebag(
-		account: &T::AccountId,
-		new_weight: VoteWeight,
-	) -> Option<(VoteWeight, VoteWeight)> {
+	pub fn do_rebag(account: &T::AccountId, new_weight: T::Value) -> Option<(T::Value, T::Value)> {
 		// if no voter at that node, don't do anything.
 		// the caller just wasted the fee to call this.
 		let maybe_movement = list::Node::<T, I>::get(&account)
@@ -249,13 +265,15 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	/// Equivalent to `ListBags::get`, but public. Useful for tests in outside of this crate.
 	#[cfg(feature = "std")]
-	pub fn list_bags_get(weight: VoteWeight) -> Option<list::Bag<T, I>> {
+	pub fn list_bags_get(weight: T::Value) -> Option<list::Bag<T, I>> {
 		ListBags::get(weight)
 	}
 }
 
 impl<T: Config<I>, I: 'static> SortedListProvider<T::AccountId> for Pallet<T, I> {
 	type Error = Error;
+
+	type Value = T::Value;
 
 	fn iter() -> Box<dyn Iterator<Item = T::AccountId>> {
 		Box::new(List::<T, I>::iter().map(|n| n.id().clone()))
@@ -269,11 +287,11 @@ impl<T: Config<I>, I: 'static> SortedListProvider<T::AccountId> for Pallet<T, I>
 		List::<T, I>::contains(id)
 	}
 
-	fn on_insert(id: T::AccountId, weight: VoteWeight) -> Result<(), Error> {
+	fn on_insert(id: T::AccountId, weight: T::Value) -> Result<(), Error> {
 		List::<T, I>::insert(id, weight)
 	}
 
-	fn on_update(id: &T::AccountId, new_weight: VoteWeight) {
+	fn on_update(id: &T::AccountId, new_weight: T::Value) {
 		Pallet::<T, I>::do_rebag(id, new_weight);
 	}
 
@@ -283,7 +301,7 @@ impl<T: Config<I>, I: 'static> SortedListProvider<T::AccountId> for Pallet<T, I>
 
 	fn unsafe_regenerate(
 		all: impl IntoIterator<Item = T::AccountId>,
-		weight_of: Box<dyn Fn(&T::AccountId) -> VoteWeight>,
+		weight_of: Box<dyn Fn(&T::AccountId) -> T::Value>,
 	) -> u32 {
 		// NOTE: This call is unsafe for the same reason as SortedListProvider::unsafe_regenerate.
 		// I.e. because it can lead to many storage accesses.
@@ -309,13 +327,13 @@ impl<T: Config<I>, I: 'static> SortedListProvider<T::AccountId> for Pallet<T, I>
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn weight_update_worst_case(who: &T::AccountId, is_increase: bool) -> VoteWeight {
+	fn weight_update_worst_case(who: &T::AccountId, is_increase: bool) -> Self::Value {
 		use frame_support::traits::Get as _;
 		let thresholds = T::BagThresholds::get();
 		let node = list::Node::<T, I>::get(who).unwrap();
 		let current_bag_idx = thresholds
 			.iter()
-			.chain(sp_std::iter::once(&VoteWeight::MAX))
+			.chain(sp_std::iter::once(&T::Value::max_value()))
 			.position(|w| w == &node.bag_upper())
 			.unwrap();
 

@@ -51,18 +51,9 @@ fn basic_setup_works() {
 			Bag::<Runtime> { head: Some(2), tail: Some(4), bag_upper: 0, phantom: PhantomData }
 		);
 
-		assert_eq!(
-			ListNodes::<Runtime>::get(2).unwrap(),
-			node(2, None, Some(3), 1_000)
-		);
-		assert_eq!(
-			ListNodes::<Runtime>::get(3).unwrap(),
-			node(3, Some(2), Some(4), 1_000)
-		);
-		assert_eq!(
-			ListNodes::<Runtime>::get(4).unwrap(),
-			node(4, Some(3), None, 1_000)
-		);
+		assert_eq!(ListNodes::<Runtime>::get(2).unwrap(), node(2, None, Some(3), 1_000));
+		assert_eq!(ListNodes::<Runtime>::get(3).unwrap(), node(3, Some(2), Some(4), 1_000));
+		assert_eq!(ListNodes::<Runtime>::get(4).unwrap(), node(4, Some(3), None, 1_000));
 		assert_eq!(ListNodes::<Runtime>::get(1).unwrap(), node(1, None, None, 10));
 
 		// non-existent id does not have a storage footprint
@@ -92,12 +83,12 @@ fn notional_bag_for_works() {
 	let max_explicit_threshold = *<Runtime as Config>::BagThresholds::get().last().unwrap();
 	assert_eq!(max_explicit_threshold, 10_000);
 
-	// if the max explicit threshold is less than VoteWeight::MAX,
-	assert!(VoteWeight::MAX > max_explicit_threshold);
+	// if the max explicit threshold is less than T::Value::max_value(),
+	assert!(u64::MAX > max_explicit_threshold);
 
-	// then anything above it will belong to the VoteWeight::MAX bag.
+	// then anything above it will belong to the T::Value::max_value() bag.
 	assert_eq!(notional_bag_for::<Runtime, _>(max_explicit_threshold), max_explicit_threshold);
-	assert_eq!(notional_bag_for::<Runtime, _>(max_explicit_threshold + 1), VoteWeight::MAX);
+	assert_eq!(notional_bag_for::<Runtime, _>(max_explicit_threshold + 1), u64::MAX);
 }
 
 #[test]
@@ -141,8 +132,7 @@ fn migrate_works() {
 			assert_eq!(old_thresholds, vec![10, 20, 30, 40, 50, 60, 1_000, 2_000, 10_000]);
 
 			// when the new thresholds adds `15` and removes `2_000`
-			const NEW_THRESHOLDS: &'static [VoteWeight] =
-				&[10, 15, 20, 30, 40, 50, 60, 1_000, 10_000];
+			const NEW_THRESHOLDS: &'static [u64] = &[10, 15, 20, 30, 40, 50, 60, 1_000, 10_000];
 			BagThresholds::set(NEW_THRESHOLDS);
 			// and we call
 			List::<Runtime>::migrate(old_thresholds);
@@ -421,8 +411,8 @@ mod list {
 			// given
 			ListNodes::<Runtime>::insert(10, node_10_no_bag);
 			ListNodes::<Runtime>::insert(11, node_11_no_bag);
-			StakingMock::set_vote_weight_of(&10, 14);
-			StakingMock::set_vote_weight_of(&11, 15);
+			StakingMock::set_value_of(&10, 14);
+			StakingMock::set_value_of(&11, 15);
 			assert!(!ListBags::<Runtime>::contains_key(15));
 			assert_eq!(List::<Runtime>::get_bags(), vec![]);
 
@@ -574,7 +564,7 @@ mod bags {
 			// and all other bag thresholds don't get bags.
 			<Runtime as Config>::BagThresholds::get()
 				.iter()
-				.chain(iter::once(&VoteWeight::MAX))
+				.chain(iter::once(&u64::MAX))
 				.filter(|bag_upper| !vec![10, 1_000].contains(bag_upper))
 				.for_each(|bag_upper| {
 					assert_storage_noop!(assert_eq!(Bag::<Runtime>::get(*bag_upper), None));
