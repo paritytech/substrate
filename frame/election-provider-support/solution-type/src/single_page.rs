@@ -184,12 +184,18 @@ pub(crate) fn generate(def: crate::SolutionDef) -> Result<TokenStream2> {
 				use frame_support::traits::Get;
 				use _npos::codec::Encode;
 				let s: u32 = #size_bound::get();
+				// The last element of the struct is a vec with 1 voter
+				// then #count-1 tuple of target with an accuracy
+				// and then lastly the final target
 				let max_element_size = #voter_type::max_encoded_len()
-					.max(#target_type::max_encoded_len()
-					.max(#weight_type::max_encoded_len()));
-				#count.saturating_mul(
-					_npos::codec::Compact(s).encoded_size()
-					.saturating_add((s as usize).saturating_mul(max_element_size)))
+					.saturating_add((#count - 1)
+						.saturating_mul(#target_type::max_encoded_len()
+							.saturating_add(#weight_type::max_encoded_len())))
+					.saturating_add(#target_type::max_encoded_len());
+				// The assumption is that it contains #count-1 empty elements
+				// and then last element with full size
+				#count.saturating_mul(_npos::codec::Compact(0u32).encoded_size())
+					.saturating_add((s as usize).saturating_mul(max_element_size))
 			}
 		}
 		impl<'a> _npos::sp_std::convert::TryFrom<&'a [__IndexAssignment]> for #ident {

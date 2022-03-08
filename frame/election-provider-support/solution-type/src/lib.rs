@@ -49,7 +49,8 @@ pub(crate) fn syn_err(message: &'static str) -> syn::Error {
 ///   compact encoding.
 /// - The accuracy of the ratios. This must be one of the `PerThing` types defined in
 ///   `sp-arithmetic`.
-/// - The maximum number of votes per snapshot. This must be of type `Get<u32>`.
+/// - The maximum number of voters per snapshot. This must be of type `Get<u32>`. Check <https://github.com/paritytech/substrate/issues/10866>
+///   for more details
 ///
 /// Moreover, the maximum number of edges per voter (distribution per assignment) also need to be
 /// specified. Attempting to convert from/to an assignment with more distributions will fail.
