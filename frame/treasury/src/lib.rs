@@ -396,7 +396,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Force a previously approved proposal to be removed from the approval queue. 
+		/// Force a previously approved proposal to be removed from the approval queue.
 		///
 		/// May only be called from `T::RejectOrigin`.
 		///
@@ -415,8 +415,7 @@ pub mod pallet {
 				if let Some(index) = v.iter().position(|x| x == &proposal_id) {
 					v.remove(index);
 					Ok(())
-				}
-				else{
+				} else {
 					Err(Error::<T, I>::ProposalNotApproved.into())
 				}
 			})?;
