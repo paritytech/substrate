@@ -21,7 +21,6 @@ use super::*;
 use frame_election_provider_support::SortedListProvider;
 use list::Bag;
 use mock::{test_utils::*, *};
-use sp_std::marker::PhantomData;
 
 mod pallet {
 	use super::*;
@@ -93,7 +92,7 @@ mod pallet {
 			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1, 4]), (1_000, vec![2, 3])]);
 			assert_eq!(
 				Bag::<Runtime>::get(1_000).unwrap(),
-				Bag::new(PhantomData, Some(2), Some(3), 1_000)
+				Bag::new(Some(2), Some(3), 1_000)
 			);
 
 			// when
@@ -105,11 +104,11 @@ mod pallet {
 
 			assert_eq!(
 				Bag::<Runtime>::get(10).unwrap(),
-				Bag::new(PhantomData, Some(1), Some(3), 10)
+				Bag::new(Some(1), Some(3), 10)
 			);
 			assert_eq!(
 				Bag::<Runtime>::get(1_000).unwrap(),
-				Bag::new(PhantomData, Some(2), Some(2), 1_000)
+				Bag::new(Some(2), Some(2), 1_000)
 			);
 			assert_eq!(get_list_as_ids(), vec![2u32, 1, 4, 3]);
 
@@ -136,7 +135,7 @@ mod pallet {
 			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1, 2]), (1_000, vec![3, 4])]);
 			assert_eq!(
 				Bag::<Runtime>::get(1_000).unwrap(),
-				Bag::new(PhantomData, Some(3), Some(4), 1_000)
+				Bag::new(Some(3), Some(4), 1_000)
 			);
 
 			// when
@@ -147,7 +146,7 @@ mod pallet {
 			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1, 2, 3]), (1_000, vec![4])]);
 			assert_eq!(
 				Bag::<Runtime>::get(1_000).unwrap(),
-				Bag::new(PhantomData, Some(4), Some(4), 1_000)
+				Bag::new(Some(4), Some(4), 1_000)
 			);
 
 			// when

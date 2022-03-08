@@ -552,23 +552,23 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 #[scale_info(skip_type_params(T, I))]
 #[cfg_attr(feature = "std", derive(frame_support::DebugNoBound, Clone, PartialEq))]
 pub struct Bag<T: Config<I>, I: 'static = ()> {
-	phantom: PhantomData<I>,
 	head: Option<T::AccountId>,
 	tail: Option<T::AccountId>,
 
 	#[codec(skip)]
 	bag_upper: VoteWeight,
+	#[codec(skip)]
+	phantom: PhantomData<I>,
 }
 
 impl<T: Config<I>, I: 'static> Bag<T, I> {
 	#[cfg(test)]
 	pub(crate) fn new(
-		phantom: PhantomData<I>,
 		head: Option<T::AccountId>,
 		tail: Option<T::AccountId>,
 		bag_upper: VoteWeight,
 	) -> Self {
-		Self { phantom, head, tail, bag_upper }
+		Self { head, tail, bag_upper, phantom: PhantomData, }
 	}
 
 	/// Get a bag by its upper vote weight.
@@ -626,11 +626,11 @@ impl<T: Config<I>, I: 'static> Bag<T, I> {
 		// as this bag is the correct one, we're good. All calls to this must come after getting the
 		// correct [`notional_bag_for`].
 		self.insert_node_unchecked(Node::<T, I> {
-			phantom: Default::default(),
 			id,
 			prev: None,
 			next: None,
 			bag_upper: 0,
+			phantom: PhantomData,
 		});
 	}
 
@@ -763,11 +763,11 @@ impl<T: Config<I>, I: 'static> Bag<T, I> {
 #[scale_info(skip_type_params(T, I))]
 #[cfg_attr(feature = "std", derive(frame_support::DebugNoBound, Clone, PartialEq))]
 pub struct Node<T: Config<I>, I: 'static = ()> {
-	phantom: PhantomData<I>,
 	id: T::AccountId,
 	prev: Option<T::AccountId>,
 	next: Option<T::AccountId>,
 	bag_upper: VoteWeight,
+	phantom: PhantomData<I>,
 }
 
 impl<T: Config<I>, I: 'static> Node<T, I> {
