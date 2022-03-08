@@ -62,10 +62,7 @@ impl<C, B, BA> MigrationRpc<C, B, BA> {
 impl<C, B, BA> StateMigrationApi<<B as BlockT>::Hash> for MigrationRpc<C, B, BA>
 where
 	B: BlockT,
-	C: Send
-		+ Sync
-		+ 'static
-		+ sc_client_api::HeaderBackend<B>,
+	C: Send + Sync + 'static + sc_client_api::HeaderBackend<B>,
 	BA: 'static + sc_client_api::backend::Backend<B>,
 {
 	fn call(&self, at: Option<<B as BlockT>::Hash>) -> Result<MigrationStatusResult> {
@@ -75,7 +72,8 @@ where
 
 		let block_id = BlockId::hash(at.unwrap_or_else(|| self.client.info().best_hash));
 		let state = self.backend.state_at(block_id).map_err(error_into_rpc_err)?;
-		let (top, child) = sp_state_trie_migration::migration_status(&state).map_err(error_into_rpc_err)?;
+		let (top, child) =
+			sp_state_trie_migration::migration_status(&state).map_err(error_into_rpc_err)?;
 
 		Ok(MigrationStatusResult {
 			top_remaining_to_migrate: top,
