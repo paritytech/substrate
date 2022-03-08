@@ -355,7 +355,12 @@ fn submit_errors_work() {
 		let h = set_balance_proposal_hash(1);
 		// No track for Signed origins.
 		assert_noop!(
-			Referenda::submit(Origin::signed(1), RawOrigin::Signed(2).into(), h, DispatchTime::At(10),),
+			Referenda::submit(
+				Origin::signed(1),
+				RawOrigin::Signed(2).into(),
+				h,
+				DispatchTime::At(10),
+			),
 			Error::<Test>::NoTrack
 		);
 

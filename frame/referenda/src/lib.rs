@@ -68,8 +68,8 @@ use frame_support::{
 			v2::{Anon as ScheduleAnon, Named as ScheduleNamed},
 			DispatchTime, MaybeHashed,
 		},
-		Currency, Get, LockIdentifier, OnUnbalanced, OriginTrait, PollStatus,
-		Polling, ReservableCurrency, VoteTally,
+		Currency, Get, LockIdentifier, OnUnbalanced, OriginTrait, PollStatus, Polling,
+		ReservableCurrency, VoteTally,
 	},
 	BoundedVec,
 };
