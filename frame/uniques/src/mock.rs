@@ -22,7 +22,7 @@ use crate as pallet_uniques;
 
 use frame_support::{
 	construct_runtime,
-	traits::{ConstU32, ConstU64},
+	traits::{AsEnsureOriginWithArg, ConstU32, ConstU64},
 };
 use sp_core::H256;
 use sp_runtime::{
@@ -89,6 +89,7 @@ impl Config for Test {
 	type ClassId = u32;
 	type InstanceId = u32;
 	type Currency = Balances;
+	type CreateOrigin = AsEnsureOriginWithArg<frame_system::EnsureSigned<u64>>;
 	type ForceOrigin = frame_system::EnsureRoot<u64>;
 	type ClassDeposit = ConstU64<2>;
 	type InstanceDeposit = ConstU64<1>;
@@ -99,6 +100,8 @@ impl Config for Test {
 	type KeyLimit = ConstU32<50>;
 	type ValueLimit = ConstU32<50>;
 	type WeightInfo = ();
+	#[cfg(feature = "runtime-benchmarks")]
+	type Helper = ();
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
