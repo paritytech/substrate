@@ -27,12 +27,12 @@ use frame_support::{assert_ok, assert_storage_noop};
 fn basic_setup_works() {
 	ExtBuilder::default().build_and_execute(|| {
 		// syntactic sugar to create a raw node
-		let node = |phantom, id, prev, next, bag_upper| Node::<Runtime> {
-			phantom,
+		let node = |id, prev, next, bag_upper| Node::<Runtime> {
 			id,
 			prev,
 			next,
 			bag_upper,
+			phantom: PhantomData,
 		};
 
 		assert_eq!(ListNodes::<Runtime>::count(), 4);
