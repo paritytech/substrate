@@ -113,24 +113,33 @@ where
 			BenchmarkType::Block => (self.params.empty_block, true),
 			BenchmarkType::Extrinsic => (self.params.full_block, false),
 		};
-		let block = self.load_block(id)?;
+		let (block, parent) = self.load_block(id)?;
 		self.check_block(&block, empty)?;
 		let block = self.unsealed(block)?;
 
-		let parent = BlockId::Hash(*block.header().parent_hash());
 		let rec = self.measure_block(&block, &parent, !empty)?;
 		Stats::new(&rec)
 	}
 
-	/// Loads a block. 0 loads the latest block.
-	fn load_block(&self, num: u32) -> Result<B> {
+	/// Loads a block and its parent hash. 0 loads the latest block.
+	fn load_block(&self, num: u32) -> Result<(B, BlockId<B>)> {
 		let mut num = BlockId::Number(num.into());
 		if num == BlockId::Number(0u32.into()) {
 			num = BlockId::Number(self.client.info().best_number);
+
+			if num == BlockId::Number(0u32.into()) {
+				return Err("Chain must have some blocks but was empty".into())
+			}
 		}
 		info!("Loading block {}", num);
 
-		self.client.block(&num)?.map(|b| b.block).ok_or("Could not load block".into())
+		let block = self
+			.client
+			.block(&num)?
+			.map(|b| b.block)
+			.ok_or::<sc_cli::Error>("Could not load block".into())?;
+		let parent = BlockId::Hash(*block.header().parent_hash());
+		Ok((block, parent))
 	}
 
 	/// Checks if the passed block is empty.
