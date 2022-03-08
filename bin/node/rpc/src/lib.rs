@@ -102,7 +102,7 @@ pub fn create_full<C, P, SC, B>(
 ) -> Result<jsonrpc_core::IoHandler<sc_rpc_api::Metadata>, Box<dyn std::error::Error + Send + Sync>>
 where
 	C: ProvideRuntimeApi<Block>
-		+ sc_client_api::StorageProvider<Block, B>
+		+ sc_client_api::StateMigrationStatusProvider<Block, B>
 		+ HeaderBackend<Block>
 		+ AuxStore
 		+ HeaderMetadata<Block, Error = BlockChainError>

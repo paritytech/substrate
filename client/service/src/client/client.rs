@@ -41,7 +41,7 @@ use sc_client_api::{
 	execution_extensions::ExecutionExtensions,
 	notifications::{StorageEventStream, StorageNotifications},
 	CallExecutor, ExecutorProvider, KeyIterator, OnFinalityAction, OnImportAction, ProofProvider,
-	UsageProvider,
+	StateMigrationStatusProvider, UsageProvider,
 };
 use sc_consensus::{
 	BlockCheckParams, BlockImportParams, ForkChoiceStrategy, ImportResult, StateAction,
@@ -1522,7 +1522,14 @@ where
 			.child_storage_hash(child_info, &key.0)
 			.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))
 	}
+}
 
+impl<B, E, Block, RA> StateMigrationStatusProvider<Block, B> for Client<B, E, Block, RA>
+where
+	B: backend::Backend<Block>,
+	E: CallExecutor<Block>,
+	Block: BlockT,
+{
 	fn state_migration_status(&self, id: &BlockId<Block>) -> sp_blockchain::Result<(u64, u64)> {
 		sp_state_trie_migration::migration_status(&self.state_at(id)?)
 			.map_err(|e| Error::Backend(e))

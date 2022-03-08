@@ -64,7 +64,7 @@ where
 	C: Send
 		+ Sync
 		+ 'static
-		+ sc_client_api::StorageProvider<B, BA>
+		+ sc_client_api::StateMigrationStatusProvider<B, BA>
 		+ sc_client_api::HeaderBackend<B>,
 	BA: 'static + sc_client_api::backend::Backend<B>,
 {

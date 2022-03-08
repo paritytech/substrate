@@ -430,7 +430,10 @@ pub trait StorageProvider<Block: BlockT, B: Backend<Block>> {
 		child_info: &ChildInfo,
 		key: &StorageKey,
 	) -> sp_blockchain::Result<Option<Block::Hash>>;
+}
 
+/// Provides acess to state migration status.
+pub trait StateMigrationStatusProvider<Block: BlockT, B: Backend<Block>> {
 	/// Given a `BlockId` check trie state of all key.
 	/// Return number on unmigrated key for the top state and number
 	/// of unmigrated keys for all child states.
