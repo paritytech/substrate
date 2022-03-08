@@ -8922,7 +8922,6 @@ dependencies = [
  "sp-runtime",
  "sp-session",
  "sp-state-machine",
- "sp-state-trie-migration",
  "sp-storage",
  "sp-tracing",
  "sp-transaction-pool",
@@ -9001,6 +9000,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sp-runtime",
+ "sp-state-trie-migration",
 ]
 
 [[package]]

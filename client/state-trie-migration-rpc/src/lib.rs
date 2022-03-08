@@ -47,14 +47,15 @@ pub trait StateMigrationApi<BlockHash> {
 /// An implementation of state migration specific RPC methods.
 pub struct MigrationRpc<C, B, BA> {
 	client: Arc<C>,
+	backend: Arc<BA>,
 	deny_unsafe: DenyUnsafe,
 	_marker: std::marker::PhantomData<(B, BA)>,
 }
 
 impl<C, B, BA> MigrationRpc<C, B, BA> {
 	/// Create new state migration rpc for the given reference to the client.
-	pub fn new(client: Arc<C>, deny_unsafe: DenyUnsafe) -> Self {
-		MigrationRpc { client, deny_unsafe, _marker: Default::default() }
+	pub fn new(client: Arc<C>, backend: Arc<BA>, deny_unsafe: DenyUnsafe) -> Self {
+		MigrationRpc { client, backend, deny_unsafe, _marker: Default::default() }
 	}
 }
 
@@ -64,7 +65,6 @@ where
 	C: Send
 		+ Sync
 		+ 'static
-		+ sc_client_api::StateMigrationStatusProvider<B, BA>
 		+ sc_client_api::HeaderBackend<B>,
 	BA: 'static + sc_client_api::backend::Backend<B>,
 {
@@ -74,8 +74,9 @@ where
 		}
 
 		let block_id = BlockId::hash(at.unwrap_or_else(|| self.client.info().best_hash));
-		let (top, child) =
-			self.client.state_migration_status(&block_id).map_err(error_into_rpc_err)?;
+		let state = self.backend.state_at(block_id).map_err(error_into_rpc_err)?;
+		let (top, child) = sp_state_trie_migration::migration_status(&state).map_err(error_into_rpc_err)?;
+
 		Ok(MigrationStatusResult {
 			top_remaining_to_migrate: top,
 			child_remaining_to_migrate: child,

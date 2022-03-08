@@ -99,10 +99,10 @@ pub type IoHandler = jsonrpc_core::IoHandler<sc_rpc::Metadata>;
 /// Instantiate all Full RPC extensions.
 pub fn create_full<C, P, SC, B>(
 	deps: FullDeps<C, P, SC, B>,
+	backend: Arc<B>,
 ) -> Result<jsonrpc_core::IoHandler<sc_rpc_api::Metadata>, Box<dyn std::error::Error + Send + Sync>>
 where
 	C: ProvideRuntimeApi<Block>
-		+ sc_client_api::StateMigrationStatusProvider<Block, B>
 		+ HeaderBackend<Block>
 		+ AuxStore
 		+ HeaderMetadata<Block, Error = BlockChainError>
@@ -161,7 +161,7 @@ where
 	)));
 
 	io.extend_with(sc_state_trie_migration_rpc::StateMigrationApi::to_delegate(
-		sc_state_trie_migration_rpc::MigrationRpc::new(client.clone(), deny_unsafe),
+		sc_state_trie_migration_rpc::MigrationRpc::new(client.clone(), backend, deny_unsafe),
 	));
 
 	io.extend_with(sc_sync_state_rpc::SyncStateRpcApi::to_delegate(

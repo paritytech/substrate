@@ -18,6 +18,7 @@ jsonrpc-core = "18.0.0"
 jsonrpc-core-client = "18.0.0"
 jsonrpc-derive = "18.0.0"
 serde = { version = "1", features = ["derive"] }
+sp-state-trie-migration = { version = "4.0.0-dev", path = "../../primitives/state-trie-migration" }
 
 # Substrate Dependencies
 sc-client-api = { version = "4.0.0-dev", path = "../api" }
