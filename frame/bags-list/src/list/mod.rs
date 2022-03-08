@@ -552,23 +552,25 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 #[scale_info(skip_type_params(T, I))]
 #[cfg_attr(feature = "std", derive(frame_support::DebugNoBound, Clone, PartialEq))]
 pub struct Bag<T: Config<I>, I: 'static = ()> {
-	phantom: PhantomData<I>,
 	head: Option<T::AccountId>,
 	tail: Option<T::AccountId>,
 
 	#[codec(skip)]
 	bag_upper: VoteWeight,
+
+	#[codec(skip)]
+	phantom: PhantomData<I>,
 }
 
 impl<T: Config<I>, I: 'static> Bag<T, I> {
 	#[cfg(test)]
 	pub(crate) fn new(
-		phantom: PhantomData<I>,
+		phantom: Default::default,
 		head: Option<T::AccountId>,
 		tail: Option<T::AccountId>,
 		bag_upper: VoteWeight,
 	) -> Self {
-		Self { phantom, head, tail, bag_upper }
+		Self { head, tail, bag_upper, phantom }
 	}
 
 	/// Get a bag by its upper vote weight.
@@ -763,11 +765,13 @@ impl<T: Config<I>, I: 'static> Bag<T, I> {
 #[scale_info(skip_type_params(T, I))]
 #[cfg_attr(feature = "std", derive(frame_support::DebugNoBound, Clone, PartialEq))]
 pub struct Node<T: Config<I>, I: 'static = ()> {
-	phantom: PhantomData<I>,
 	id: T::AccountId,
 	prev: Option<T::AccountId>,
 	next: Option<T::AccountId>,
 	bag_upper: VoteWeight,
+
+	#[codec(skip)]
+	phantom: PhantomData<I>,
 }
 
 impl<T: Config<I>, I: 'static> Node<T, I> {
