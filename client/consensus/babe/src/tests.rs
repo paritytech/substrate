@@ -736,6 +736,68 @@ fn importing_block_one_sets_genesis_epoch() {
 }
 
 #[test]
+fn revert_prunes_epoch_changes_tree() {
+	let mut net = BabeTestNet::new(1);
+
+	let peer = net.peer(0);
+	let data = peer.data.as_ref().expect("babe link set up during initialization");
+
+	let client = peer.client().as_client();
+	let mut block_import = data.block_import.lock().take().expect("import set up during init");
+	let epoch_changes = data.link.epoch_changes.clone();
+
+	let mut proposer_factory = DummyFactory {
+		client: client.clone(),
+		config: data.link.config.clone(),
+		epoch_changes: data.link.epoch_changes.clone(),
+		mutator: Arc::new(|_, _| ()),
+	};
+
+	let mut propose_and_import_blocks_wrap = |parent_id, n| {
+		propose_and_import_blocks(&client, &mut proposer_factory, &mut block_import, parent_id, n)
+	};
+
+	// Test scenario.
+	// Information for epoch 19 is produced on three different forks at block #13.
+	// One branch starts before the revert point (epoch data should be maintained).
+	// One branch starts after the revert point (epoch data should be removed).
+	//
+	//                        *----------------- F(#13)                < fork #2
+	//                       /
+	// A(#1) ---- B(#7) ----#8----+-----#12----- C(#13) ---- D(#19)    < canon
+	//   \                        ^       \
+	//    \                    revert      *---- G(#13) -----H(#19)    < fork #3
+	//     \                   here (#9)
+	//      *-----E(#7)                                                < fork #1
+
+	let canon = propose_and_import_blocks_wrap(BlockId::Number(0), 21);
+	let _fork_1 = propose_and_import_blocks_wrap(BlockId::Hash(canon[0]), 10);
+	let _fork_2 = propose_and_import_blocks_wrap(BlockId::Hash(canon[7]), 10);
+	let _fork_3 = propose_and_import_blocks_wrap(BlockId::Hash(canon[11]), 10);
+
+	// We should be tracking a total of 9 epochs in the fork tree
+	assert_eq!(epoch_changes.shared_data().tree().iter().count(), 8);
+	// And only one root
+	assert_eq!(epoch_changes.shared_data().tree().roots().count(), 1);
+
+	{
+		let epoch_changes = epoch_changes.shared_data();
+		let it: Vec<_> = epoch_changes.tree().iter().collect();
+		dbg!(it);
+	}
+
+	// Revert to block #9
+	revert(client, 12).unwrap();
+
+	{
+		// THIS IS NOT REFRESHED...
+		// let epoch_changes = epoch_changes.shared_data();
+		// let it: Vec<_> = epoch_changes.tree().iter().collect();
+		// dbg!(it);
+	}
+}
+
+#[test]
 fn importing_epoch_change_block_prunes_tree() {
 	let mut net = BabeTestNet::new(1);
 

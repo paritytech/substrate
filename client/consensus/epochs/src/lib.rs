@@ -660,15 +660,6 @@ where
 		parent_number: Number,
 		slot: E::Slot,
 	) -> Result<Option<ViableEpochDescriptor<Hash, Number, E>>, fork_tree::Error<D::Error>> {
-		// find_node_where will give you the node in the fork-tree which is an ancestor
-		// of the `parent_hash` by default. if the last epoch was signalled at the parent_hash,
-		// then it won't be returned. we need to create a new fake chain head hash which
-		// "descends" from our parent-hash.
-		let fake_head_hash = fake_head_hash(parent_hash);
-
-		let is_descendent_of =
-			descendent_of_builder.build_is_descendent_of(Some((fake_head_hash, *parent_hash)));
-
 		if parent_number == Zero::zero() {
 			// need to insert the genesis epoch.
 			return Ok(Some(ViableEpochDescriptor::UnimportedGenesis(slot)))
@@ -682,6 +673,15 @@ where
 				)))
 			}
 		}
+
+		// find_node_where will give you the node in the fork-tree which is an ancestor
+		// of the `parent_hash` by default. if the last epoch was signalled at the parent_hash,
+		// then it won't be returned. we need to create a new fake chain head hash which
+		// "descends" from our parent-hash.
+		let fake_head_hash = fake_head_hash(parent_hash);
+
+		let is_descendent_of =
+			descendent_of_builder.build_is_descendent_of(Some((fake_head_hash, *parent_hash)));
 
 		// We want to find the deepest node in the tree which is an ancestor
 		// of our block and where the start slot of the epoch was before the
@@ -797,6 +797,42 @@ where
 			Ok(true) as Result<bool, fork_tree::Error<ClientError>>
 		});
 		self.epochs.insert((hash, number), persisted);
+	}
+
+	/// TODO: document appropriately.
+	///
+	/// Revert a branch down to the node after the specified block.
+	pub fn revert<D: IsDescendentOfBuilder<Hash>>(
+		&mut self,
+		descendent_of_builder: D,
+		hash: Hash,
+		number: Number,
+	) {
+		let is_descendent_of = descendent_of_builder.build_is_descendent_of(None);
+
+		let mut some_removed = false;
+		let mut predicate = |node_hash: &Hash, node_num: &Number, _: &PersistedEpochHeader<E>| {
+			if number >= *node_num &&
+				(is_descendent_of(node_hash, &hash).unwrap_or_default() || *node_hash == hash)
+			{
+				// Continue the search in this subtree.
+				(false, None)
+			} else if is_descendent_of(&hash, node_hash).unwrap_or_default() {
+				// Found a node to be removed.
+				some_removed = true;
+				(true, None)
+			} else if some_removed && *node_num < number {
+				// Backtrack detected, we can early stop the overall filtering operation.
+				(false, Some(true))
+			} else {
+				// Not a parent or child of the one we're looking for, stop processing this branch.
+				(false, Some(false))
+			}
+		};
+
+		self.inner.filter(&mut predicate).for_each(|(h, n, _)| {
+			self.epochs.remove(&(h, n));
+		});
 	}
 }
 

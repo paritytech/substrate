@@ -624,6 +624,35 @@ where
 			(None, false) => Ok(FinalizationResult::Unchanged),
 		}
 	}
+
+	/// Remove from the tree some nodes (and their subtrees) using a `predicate`.
+	/// The `predicate` should return a tuple where the first `bool` indicates
+	/// if a node and its subtree should be removed, the second `Option<bool>`
+	/// indicates if the filtering operation should be stopped.
+	/// If `Some(false)` stop is requested only for the current node subtree,
+	/// if `Some(true)` stop is requested for the full filtering operation.
+	/// Tree traversal is performed using an pre-order depth-first search.
+	/// An iterator over all the pruned nodes is returned.
+	pub fn filter<F>(&mut self, predicate: &mut F) -> impl Iterator<Item = (H, N, V)>
+	where
+		F: FnMut(&H, &N, &V) -> (bool, Option<bool>),
+	{
+		let mut removed = Vec::new();
+		let mut i = 0;
+		while i < self.roots.len() {
+			let (remove, stop) = self.roots[i].filter(predicate, &mut removed);
+			if remove {
+				removed.push(self.roots.remove(i));
+			} else {
+				i += 1;
+			}
+			if stop {
+				break
+			}
+		}
+		self.rebalance();
+		RemovedIterator { stack: removed }
+	}
 }
 
 // Workaround for: https://github.com/rust-lang/rust/issues/34537
@@ -849,6 +878,45 @@ mod node_implementation {
 				},
 			}
 		}
+
+		/// Calls a `predicate` for the given node.
+		/// The `predicate` should return a tuple where the first `bool` indicates
+		/// if the node and its subtree should be removed, the second `Option<bool>`
+		/// indicates if the filtering operation should be stopped.
+		/// If `Some(false)` stop is requested only for the node subtree,
+		/// if `Some(true)` stop is requested for the full filtering operation.
+		/// Pruned subtrees are added to the `removed` list.
+		/// Removal of this node optionally enacted by the caller.
+		/// Returns a couple of booleans where the fist indicates if a node
+		/// (and its subtree) should be removed, the second indicates if the
+		/// overall filtering operation stopped.
+		pub fn filter<F>(
+			&mut self,
+			predicate: &mut F,
+			removed: &mut Vec<Node<H, N, V>>,
+		) -> (bool, bool)
+		where
+			F: FnMut(&H, &N, &V) -> (bool, Option<bool>),
+		{
+			let (remove, pred_stop) = predicate(&self.hash, &self.number, &self.data);
+			let mut stop = pred_stop == Some(true);
+			if !remove && pred_stop.is_none() {
+				let mut i = 0;
+				while i < self.children.len() {
+					let (child_remove, child_stop) = self.children[i].filter(predicate, removed);
+					if child_remove {
+						removed.push(self.children.remove(i));
+					} else {
+						i += 1;
+					}
+					if child_stop {
+						stop = child_stop;
+						break
+					}
+				}
+			}
+			(remove, stop)
+		}
 	}
 }
 
@@ -919,11 +987,11 @@ mod test {
 		//   /   - G
 		//  /   /
 		// A - F - H - I
-		//          \
-		//           - L - M \
-		//               - O
-		//  \
-		//   — J - K
+		//  \       \
+		//   \       - L - M
+		//    \          \
+		//     \          - O
+		//      - J - K
 		//
 		// (where N is not a part of fork tree)
 		//
@@ -1457,5 +1525,35 @@ mod test {
 			tree.iter().map(|(h, _, _)| *h).collect::<Vec<_>>(),
 			["A", "F", "H", "L", "O", "P", "M", "I", "G", "B", "C", "D", "E", "J", "K"]
 		);
+	}
+
+	#[test]
+	fn tree_filter() {
+		let (mut tree, _) = test_fork_tree();
+
+		let mut predicate = |h: &&str, _: &u64, _: &()| {
+			match *h {
+				// Don't remove and continue filtering.
+				"A" | "B" | "F" => (false, None),
+				// Don't remove and don't filter the node subtree.
+				"C" => (false, Some(false)),
+				// Don't remove and stop the overall filtering operation.
+				"G" => (false, Some(true)),
+				// Remove and continue filtering.
+				"H" => (true, None),
+				// Should never happen because of the stop and pruning conditions.
+				"D" | "E" | "I" | "L" | "M" | "O" | "J" | "K" | _ =>
+					panic!("Unexpected filtering for: {}", *h),
+			}
+		};
+
+		let removed = tree.filter(&mut predicate);
+
+		assert_eq!(
+			tree.iter().map(|(h, _, _)| *h).collect::<Vec<_>>(),
+			["A", "B", "C", "D", "E", "F", "G", "J", "K"]
+		);
+
+		assert_eq!(removed.map(|(h, _, _)| h).collect::<Vec<_>>(), vec!["H", "L", "M", "O", "I"]);
 	}
 }

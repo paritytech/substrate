@@ -1830,3 +1830,41 @@ where
 
 	Ok(BasicQueue::new(verifier, Box::new(block_import), justification_import, spawner, registry))
 }
+
+/// Reverts aux data.
+pub fn revert<Block, Client>(client: Arc<Client>, blocks: NumberFor<Block>) -> ClientResult<()>
+where
+	Block: BlockT,
+	Client: AuxStore
+		+ HeaderMetadata<Block, Error = sp_blockchain::Error>
+		+ HeaderBackend<Block>
+		+ ProvideRuntimeApi<Block>
+		+ UsageProvider<Block>,
+	Client::Api: BabeApi<Block>,
+{
+	let best_number = client.info().best_number;
+	let finalized = client.info().finalized_number;
+	let revertible = blocks.min(best_number - finalized);
+
+	let number = best_number.saturating_sub(revertible);
+	let hash = client
+		.block_hash_from_id(&BlockId::Number(number))?
+		.ok_or(ClientError::Backend(format!("Hash lookup failure for block number: {}", number)))?;
+
+	let config = Config::get(&*client)?;
+	let epoch_changes =
+		aux_schema::load_epoch_changes::<Block, Client>(&*client, config.genesis_config())?;
+	let mut epoch_changes = epoch_changes.shared_data();
+
+	if number == Zero::zero() {
+		// Special case, no epoch changes data were present on genesis.
+		*epoch_changes = EpochChangesFor::<Block, Epoch>::default();
+	} else {
+		epoch_changes.revert(descendent_query(&*client), hash, number);
+	}
+
+	aux_schema::write_epoch_changes::<Block, _, _>(&epoch_changes, |values| {
+		client.insert_aux(values, &[]).unwrap();
+	});
+	Ok(())
+}
