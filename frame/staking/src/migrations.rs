@@ -17,14 +17,15 @@
 //! Storage migrations for the Staking pallet.
 
 use super::*;
-use frame_election_provider_support::{SortedListProvider, VoteWeightProvider};
-use frame_support::traits::OnRuntimeUpgrade;
+use frame_election_provider_support::{SortedListProvider, VoteWeight, VoteWeightProvider};
+use frame_support::traits::{Defensive, OnRuntimeUpgrade};
+use sp_std::collections::btree_map::BTreeMap;
 
 /// Migration implementation that injects all validators into sorted list.
 ///
 /// This is only useful for chains that started their `VoterList` just based on nominators.
-pub struct InjectValidatorsIntoVoterList<T>(sp_std::marker::PhantomData<T>);
-impl<T: Config> OnRuntimeUpgrade for InjectValidatorsIntoVoterList<T> {
+pub struct InjectValidatorsSelfStakeIntoVoterList<T>(sp_std::marker::PhantomData<T>);
+impl<T: Config> OnRuntimeUpgrade for InjectValidatorsSelfStakeIntoVoterList<T> {
 	fn on_runtime_upgrade() -> Weight {
 		if StorageVersion::<T>::get() == Releases::V8_0_0 {
 			for (v, _) in Validators::<T>::iter() {
@@ -67,15 +68,32 @@ impl<T: Config> OnRuntimeUpgrade for InjectValidatorsIntoVoterList<T> {
 /// Migration implementation that injects all validators into sorted list.
 ///
 /// This is only useful for chains that started their `VoterList` just based on nominators.
-pub struct InjectValidatorsIntoTargetList<T>(sp_std::marker::PhantomData<T>);
-impl<T: Config> OnRuntimeUpgrade for InjectValidatorsIntoTargetList<T> {
+pub struct InjectValidatorsApprovalStakeIntoTargetList<T>(sp_std::marker::PhantomData<T>);
+
+impl<T: Config> InjectValidatorsApprovalStakeIntoTargetList<T> {
+	pub(crate) fn build_approval_stakes() -> BTreeMap<T::AccountId, VoteWeight> {
+		let mut approval_stakes = BTreeMap::<T::AccountId, VoteWeight>::new();
+		Nominators::<T>::iter().for_each(|(who, nomination)| {
+			let stake = Pallet::<T>::weight_of(&who);
+			for target in nomination.targets {
+				let current = approval_stakes.entry(target).or_default();
+				*current = current.saturating_add(stake);
+			}
+		});
+
+		approval_stakes
+	}
+}
+
+impl<T: Config> OnRuntimeUpgrade for InjectValidatorsApprovalStakeIntoTargetList<T> {
 	fn on_runtime_upgrade() -> Weight {
 		if StorageVersion::<T>::get() == Releases::V9_0_0 {
+			// TODO: maybe write this in a multi-block fashion.
+			// TODO: TargetList should store balance, not u64.
+			let approval_stakes = Self::build_approval_stakes();
 			for (v, _) in Validators::<T>::iter() {
-				let weight = Pallet::<T>::vote_weight(&v);
-				let _ = T::TargetList::on_insert(v.clone(), weight).map_err(|err| {
-					log!(warn, "failed to insert {:?} into TargetList: {:?}", v, err)
-				});
+				let approval_stake = approval_stakes.get(&v).map(|x| *x).unwrap_or_default();
+				let _ = T::TargetList::on_insert(v.clone(), approval_stake).defensive();
 			}
 
 			StorageVersion::<T>::put(Releases::V10_0_0);

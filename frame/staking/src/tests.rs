@@ -4071,8 +4071,14 @@ mod election_data_provider {
 				assert_eq!(Staking::targets(Some(6)).unwrap().len(), 4);
 				assert_eq!(Staking::targets(Some(4)).unwrap().len(), 4);
 
-				// if target limit is less, then we return an error.
-				assert_eq!(Staking::targets(Some(1)).unwrap_err(), "Target snapshot too big");
+				// if target limit is less, then we still return something based on `TargetList`
+				// implementation. Currently, it should be the validators with the highest approval
+				// stake.
+				assert_eq!(
+					<Test as crate::Config>::TargetList::iter().take(1).collect::<Vec<_>>(),
+					vec![31]
+				);
+				assert_eq!(Staking::targets(Some(1)).unwrap(), vec![31]);
 			});
 	}
 

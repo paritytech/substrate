@@ -272,6 +272,10 @@ impl<T: Config> SortedListProvider<T::AccountId> for Pallet<T> {
 		List::<T>::insert(id, weight)
 	}
 
+	fn get_weight(id: &T::AccountId) -> Result<VoteWeight, Error> {
+		List::<T>::get_weight(id)
+	}
+
 	fn on_update(id: &T::AccountId, new_weight: VoteWeight) {
 		Pallet::<T>::do_rebag(id, new_weight);
 	}

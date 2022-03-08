@@ -201,13 +201,23 @@ impl<T: Config> Pallet<T> {
 
 	/// Update the ledger for a controller.
 	///
-	/// This will also update the stash lock.
+	/// All updates to the ledger amount MUST be reported ot this function, so that the lock amount
+	/// and other bookkeeping is maintained.
 	pub(crate) fn update_ledger(
 		controller: &T::AccountId,
 		ledger: &StakingLedger<T::AccountId, BalanceOf<T>>,
 	) {
 		T::Currency::set_lock(STAKING_ID, &ledger.stash, ledger.total, WithdrawReasons::all());
 		<Ledger<T>>::insert(controller, ledger);
+
+		if let Some(targets) = Self::bonded(controller)
+			.and_then(|stash| Self::nominators(stash))
+			.map(|nomination| nomination.targets)
+		{
+			for target in targets {
+				T::TargetList::on_update(&target, Self::vote_weight(&ledger.stash))
+			}
+		}
 	}
 
 	/// Chill a stash account.
@@ -810,8 +820,6 @@ impl<T: Config> Pallet<T> {
 			// maybe update sorted list.
 			let _ = T::VoterList::on_insert(who.clone(), Self::weight_of(who))
 				.defensive_unwrap_or_default();
-			let _ = T::TargetList::on_insert(who.clone(), Self::weight_of(who))
-				.defensive_unwrap_or_default();
 		}
 		Validators::<T>::insert(who, prefs);
 
@@ -830,7 +838,6 @@ impl<T: Config> Pallet<T> {
 		let outcome = if Validators::<T>::contains_key(who) {
 			Validators::<T>::remove(who);
 			T::VoterList::on_remove(who);
-			T::TargetList::on_remove(who);
 			true
 		} else {
 			false
@@ -853,15 +860,24 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Perform all checks related to both [`Config::TargetList`] and [`Config::VoterList`].
-	#[cfg(debug_assertions)]
-	fn sanity_check_list_providers() {
+	#[cfg(any(debug_assertions, feature = "std"))]
+	pub(crate) fn sanity_check_list_providers() {
 		debug_assert_eq!(
 			Nominators::<T>::count() + Validators::<T>::count(),
 			T::VoterList::count()
 		);
 		debug_assert_eq!(Validators::<T>::count(), T::TargetList::count());
+
 		debug_assert_eq!(T::VoterList::sanity_check(), Ok(()));
-		debug_assert_eq!(T::VoterList::sanity_check(), Ok(()));
+		debug_assert_eq!(T::TargetList::sanity_check(), Ok(()));
+
+		// additionally, if asked for the full check, we ensure that the TargetList is indeed
+		// composed of the approval stakes.
+		use crate::migrations::InjectValidatorsApprovalStakeIntoTargetList as TargetListMigration;
+		let approval_stakes = TargetListMigration::<T>::build_approval_stakes();
+		debug_assert!(approval_stakes
+			.iter()
+			.all(|(v, a)| T::TargetList::get_weight(v).unwrap_or_default() == *a))
 	}
 }
 
@@ -1310,6 +1326,10 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsAndValidatorsM
 		// nothing to do on insert.
 		Ok(())
 	}
+	fn get_weight(id: &T::AccountId) -> Result<VoteWeight, Self::Error> {
+		// TODO: this is not consistent, should ideally return an error if not exists.
+		Ok(Pallet::<T>::weight_of(id))
+	}
 	fn on_update(_: &T::AccountId, _weight: VoteWeight) {
 		// nothing to do on update.
 	}
@@ -1333,9 +1353,7 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsAndValidatorsM
 	}
 }
 
-/// A simple sorted list implementation that does not require any additional pallets. Note, this
-/// does not provided validators in sorted ordered. If you desire nominators in a sorted order take
-/// a look at [`pallet-bags-list].
+// TODO: move this to mock, as it is only for testing anyway.
 pub struct UseValidatorsMap<T>(sp_std::marker::PhantomData<T>);
 impl<T: Config> SortedListProvider<T::AccountId> for UseValidatorsMap<T> {
 	type Error = ();
@@ -1353,6 +1371,15 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseValidatorsMap<T> {
 	fn on_insert(_: T::AccountId, _weight: VoteWeight) -> Result<(), Self::Error> {
 		// nothing to do on insert.
 		Ok(())
+	}
+	fn get_weight(id: &T::AccountId) -> Result<VoteWeight, Self::Error> {
+		let mut approval_stake = VoteWeight::zero();
+		Nominators::<T>::iter().for_each(|(nominator, nomination)| {
+			if nomination.targets.contains(id) {
+				approval_stake += Pallet::<T>::weight_of(&nominator);
+			}
+		});
+		Ok(approval_stake)
 	}
 	fn on_update(_: &T::AccountId, _weight: VoteWeight) {
 		// nothing to do on update.

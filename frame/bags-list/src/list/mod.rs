@@ -41,6 +41,8 @@ use sp_std::{
 pub enum Error {
 	/// A duplicate id has been detected.
 	Duplicate,
+	/// the given id does not exists.
+	NonExistent,
 }
 
 #[cfg(test)]
@@ -215,6 +217,11 @@ impl<T: Config> List<T> {
 		crate::ListNodes::<T>::contains_key(id)
 	}
 
+	/// Get the weight of the given node,
+	pub fn get_weight(id: &T::AccountId) -> Result<VoteWeight, Error> {
+		Node::<T>::get(id).map(|node| node.weight()).ok_or(Error::NonExistent)
+	}
+
 	/// Iterate over all nodes in all bags in the list.
 	///
 	/// Full iteration can be expensive; it's recommended to limit the number of items with
@@ -269,7 +276,7 @@ impl<T: Config> List<T> {
 		let bag_weight = notional_bag_for::<T>(weight);
 		let mut bag = Bag::<T>::get_or_make(bag_weight);
 		// unchecked insertion is okay; we just got the correct `notional_bag_for`.
-		bag.insert_unchecked(id.clone());
+		bag.insert_unchecked(id.clone(), weight);
 
 		// new inserts are always the tail, so we must write the bag.
 		bag.put();
@@ -616,11 +623,11 @@ impl<T: Config> Bag<T> {
 	///
 	/// Storage note: this modifies storage, but only for the nodes. You still need to call
 	/// `self.put()` after use.
-	fn insert_unchecked(&mut self, id: T::AccountId) {
+	fn insert_unchecked(&mut self, id: T::AccountId, weight: VoteWeight) {
 		// insert_node will overwrite `prev`, `next` and `bag_upper` to the proper values. As long
 		// as this bag is the correct one, we're good. All calls to this must come after getting the
 		// correct [`notional_bag_for`].
-		self.insert_node_unchecked(Node::<T> { id, prev: None, next: None, bag_upper: 0 });
+		self.insert_node_unchecked(Node::<T> { id, weight, prev: None, next: None, bag_upper: 0 });
 	}
 
 	/// Insert a node into this bag.
@@ -756,6 +763,7 @@ pub struct Node<T: Config> {
 	prev: Option<T::AccountId>,
 	next: Option<T::AccountId>,
 	bag_upper: VoteWeight,
+	weight: VoteWeight,
 }
 
 impl<T: Config> Node<T> {
@@ -816,6 +824,11 @@ impl<T: Config> Node<T> {
 	/// Get the underlying voter.
 	pub(crate) fn id(&self) -> &T::AccountId {
 		&self.id
+	}
+
+	/// Get the current vote weight of the node.
+	pub(crate) fn weight(&self) -> VoteWeight {
+		self.weight
 	}
 
 	/// Get the underlying voter (public fo tests).

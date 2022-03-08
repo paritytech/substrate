@@ -21,8 +21,8 @@ use frame_election_provider_support::SortedListProvider;
 use frame_support::{
 	pallet_prelude::*,
 	traits::{
-		Currency, CurrencyToVote, EnsureOrigin, EstimateNextNewSession, Get, LockIdentifier,
-		LockableCurrency, OnUnbalanced, UnixTime,
+		Currency, CurrencyToVote, Defensive, DefensiveResult, EnsureOrigin, EstimateNextNewSession,
+		Get, LockIdentifier, LockableCurrency, OnUnbalanced, UnixTime,
 	},
 	weights::Weight,
 };
@@ -568,16 +568,7 @@ pub mod pallet {
 			}
 
 			// all voters are reported to the `VoterList`.
-			assert_eq!(
-				T::VoterList::count(),
-				Nominators::<T>::count() + Validators::<T>::count(),
-				"not all genesis stakers were inserted into sorted list provider, something is wrong."
-			);
-			assert_eq!(
-				T::TargetList::count(),
-				Validators::<T>::count(),
-				"not all genesis stakers were inserted into sorted list provider, something is wrong."
-			);
+			Pallet::<T>::sanity_check_list_providers();
 		}
 	}
 
@@ -830,10 +821,6 @@ pub mod pallet {
 					T::VoterList::on_update(&stash, Self::weight_of(&ledger.stash));
 					debug_assert_eq!(T::VoterList::sanity_check(), Ok(()));
 				}
-				if T::TargetList::contains(&stash) {
-					T::TargetList::on_update(&stash, Self::weight_of(&ledger.stash));
-					debug_assert_eq!(T::VoterList::sanity_check(), Ok(()));
-				}
 
 				Self::deposit_event(Event::<T>::Bonded(stash.clone(), extra));
 			}
@@ -900,9 +887,6 @@ pub mod pallet {
 				// update this staker in the sorted list, if they exist in it.
 				if T::VoterList::contains(&ledger.stash) {
 					T::VoterList::on_update(&ledger.stash, Self::weight_of(&ledger.stash));
-				}
-				if T::TargetList::contains(&ledger.stash) {
-					T::TargetList::on_update(&ledger.stash, Self::weight_of(&ledger.stash));
 				}
 
 				Self::deposit_event(Event::<T>::Unbonded(ledger.stash, value));
@@ -1056,7 +1040,35 @@ pub mod pallet {
 				})
 				.collect::<Result<Vec<_>, _>>()?
 				.try_into()
-				.map_err(|_| Error::<T>::TooManyNominators)?;
+				.defensive_map_err(|_| Error::<T>::TooManyTargets)?;
+
+			ensure!(
+				targets.len() ==
+					targets
+						.iter()
+						.collect::<sp_std::collections::btree_set::BTreeSet<_>>()
+						.len(),
+				"DuplicateTargets"
+			);
+
+			let incoming = targets.iter().cloned().filter(|x| !old.contains(x)).collect::<Vec<_>>();
+			let outgoing = old.iter().cloned().filter(|x| !targets.contains(x)).collect::<Vec<_>>();
+			incoming.into_iter().for_each(|i| {
+				if T::TargetList::contains(&i) {
+					// TODO: these are all rather inefficient now based on how vote_weight is
+					// implemented, but I don't care because: https://github.com/paritytech/substrate/issues/10990
+					let _ = T::TargetList::on_increase(&i, Self::weight_of(stash)).defensive();
+				} else {
+					let _ = T::TargetList::on_insert(i, Self::weight_of(stash)).defensive();
+				}
+			});
+			outgoing.into_iter().for_each(|o| {
+				if T::TargetList::contains(&o) {
+					let _ = T::TargetList::on_decrease(&o, Self::weight_of(stash));
+				} else {
+					frame_support::defensive!("this validator must have, at some point in the past, been inserted into `TargetList`");
+				}
+			});
 
 			let nominations = Nominations {
 				targets,
@@ -1387,9 +1399,6 @@ pub mod pallet {
 
 			if T::VoterList::contains(&ledger.stash) {
 				T::VoterList::on_update(&ledger.stash, Self::weight_of(&ledger.stash));
-			}
-			if T::TargetList::contains(&ledger.stash) {
-				T::TargetList::on_update(&ledger.stash, Self::weight_of(&ledger.stash));
 			}
 
 			let removed_chunks = 1u32 // for the case where the last iterated chunk is not removed

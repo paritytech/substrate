@@ -376,10 +376,34 @@ pub trait SortedListProvider<AccountId> {
 	fn contains(id: &AccountId) -> bool;
 
 	/// Hook for inserting a new id.
+	///
+	/// Implementation should return an error if duplicate item is being
 	fn on_insert(id: AccountId, weight: VoteWeight) -> Result<(), Self::Error>;
 
 	/// Hook for updating a single id.
+	///
+	/// The `new` weight is given.
+	// TODO: why not return result here?
 	fn on_update(id: &AccountId, weight: VoteWeight);
+
+	/// Get the weight of `id`.
+	fn get_weight(id: &AccountId) -> Result<VoteWeight, Self::Error>;
+
+	/// Same as `on_update`, but incorporate some increased vote weight.
+	fn on_increase(id: &AccountId, additional: VoteWeight) -> Result<(), Self::Error> {
+		let old_weight = Self::get_weight(id)?;
+		let new_weight = old_weight.saturating_add(additional);
+		Self::on_update(id, new_weight);
+		Ok(())
+	}
+
+	/// Same as `on_update`, but incorporate some decreased vote weight.
+	fn on_decrease(id: &AccountId, decreased: VoteWeight) -> Result<(), Self::Error> {
+		let old_weight = Self::get_weight(id)?;
+		let new_weight = old_weight.saturating_sub(decreased);
+		Self::on_update(id, new_weight);
+		Ok(())
+	}
 
 	/// Hook for removing am id from the list.
 	fn on_remove(id: &AccountId);
