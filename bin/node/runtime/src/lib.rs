@@ -669,8 +669,8 @@ impl pallet_election_provider_multi_phase::Config for Runtime {
 	type Solution = NposSolution16;
 	type Fallback = frame_election_provider_support::onchain::BoundedOnChainSequentialPhragmen<
 		Self,
-		frame_support::traits::ConstUSize<10>,
-		frame_support::traits::ConstUSize<100_000>,
+		frame_support::traits::ConstU32<10>,
+		frame_support::traits::ConstU32<100_000>,
 	>;
 	type GovernanceFallback =
 		frame_election_provider_support::onchain::OnChainSequentialPhragmen<Self>;

@@ -127,11 +127,11 @@ impl<T: Config> InstantElectionProvider for OnChainSequentialPhragmen<T> {
 /// `TargetsBound` bounds the number of targets.
 pub struct BoundedOnChainSequentialPhragmen<
 	T: Config,
-	VotersBound: Get<usize>,
-	TargetsBound: Get<usize>,
+	VotersBound: Get<u32>,
+	TargetsBound: Get<u32>,
 >(PhantomData<T>, PhantomData<VotersBound>, PhantomData<TargetsBound>);
 
-impl<T: Config, VotersBound: Get<usize>, TargetsBound: Get<usize>> ElectionProvider
+impl<T: Config, VotersBound: Get<u32>, TargetsBound: Get<u32>> ElectionProvider
 	for BoundedOnChainSequentialPhragmen<T, VotersBound, TargetsBound>
 {
 	type AccountId = T::AccountId;
@@ -144,7 +144,7 @@ impl<T: Config, VotersBound: Get<usize>, TargetsBound: Get<usize>> ElectionProvi
 	}
 }
 
-impl<T: Config, VotersBound: Get<usize>, TargetsBound: Get<usize>> InstantElectionProvider
+impl<T: Config, VotersBound: Get<u32>, TargetsBound: Get<u32>> InstantElectionProvider
 	for BoundedOnChainSequentialPhragmen<T, VotersBound, TargetsBound>
 {
 	fn instant_elect(
@@ -152,8 +152,8 @@ impl<T: Config, VotersBound: Get<usize>, TargetsBound: Get<usize>> InstantElecti
 		maybe_max_targets: Option<usize>,
 	) -> Result<Supports<Self::AccountId>, Self::Error> {
 		elect_with::<T>(
-			Some(maybe_max_voters.unwrap_or(0).max(VotersBound::get())),
-			Some(maybe_max_targets.unwrap_or(0).max(TargetsBound::get())),
+			Some(maybe_max_voters.unwrap_or(0).max(VotersBound::get().try_into().unwrap_or(0))),
+			Some(maybe_max_targets.unwrap_or(0).max(TargetsBound::get().try_into().unwrap_or(0))),
 		)
 	}
 }
