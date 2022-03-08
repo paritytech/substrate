@@ -28,11 +28,11 @@ use sc_chain_spec::{ChainSpec, GenericChainSpec};
 use sc_client_api::HeaderBackend;
 use sc_consensus::BoxJustificationImport;
 use sc_keystore::LocalKeystore;
-use sc_network::config::ProtocolConfig;
+use sc_network::{config::ProtocolConfig, NetworkService};
 use sc_network_gossip::GossipEngine;
 use sc_network_test::{
 	Block, BlockImportAdapter, FullPeerConfig, PassThroughVerifier, Peer, PeersClient,
-	TestNetFactory,
+	PeersFullClient, TestNetFactory,
 };
 use sc_utils::notification::NotificationReceiver;
 
@@ -47,11 +47,13 @@ use sp_runtime::{
 	codec::Encode, generic::BlockId, traits::Header as HeaderT, BuildStorage, DigestItem, Storage,
 };
 
-use substrate_test_runtime_client::ClientExt;
+use substrate_test_runtime_client::{Backend, ClientExt};
 
 use crate::{
-	beefy_protocol_name, keystore::tests::Keyring as BeefyKeyring, notification::*,
-	worker::tests::TestModifiers,
+	beefy_protocol_name,
+	keystore::tests::Keyring as BeefyKeyring,
+	notification::*,
+	worker::{tests::TestModifiers, BeefyWorker},
 };
 
 const BEEFY_PROTOCOL_NAME: &'static str = "/beefy/1";
@@ -98,22 +100,22 @@ fn beefy_protocol_name() {
 // TODO: compiler warns us about unused `signed_commitment_stream`, will use in later tests
 #[allow(dead_code)]
 #[derive(Clone)]
-pub struct BeefyLinkHalf {
+pub(crate) struct BeefyLinkHalf {
 	signed_commitment_stream: BeefySignedCommitmentStream<Block>,
 	beefy_best_block_stream: BeefyBestBlockStream<Block>,
 }
 
 #[derive(Default)]
-struct PeerData {
+pub(crate) struct PeerData {
 	beefy_link_half: Mutex<Option<BeefyLinkHalf>>,
 }
 
-struct BeefyTestNet {
+pub(crate) struct BeefyTestNet {
 	peers: Vec<BeefyPeer>,
 }
 
 impl BeefyTestNet {
-	fn new(n_authority: usize, n_full: usize) -> Self {
+	pub(crate) fn new(n_authority: usize, n_full: usize) -> Self {
 		let mut net = BeefyTestNet { peers: Vec::with_capacity(n_authority + n_full) };
 		for _ in 0..n_authority {
 			net.add_authority_peer();
@@ -124,7 +126,7 @@ impl BeefyTestNet {
 		net
 	}
 
-	fn add_authority_peer(&mut self) {
+	pub(crate) fn add_authority_peer(&mut self) {
 		self.add_full_peer_with_config(FullPeerConfig {
 			notifications_protocols: vec![BEEFY_PROTOCOL_NAME.into()],
 			is_authority: true,
@@ -132,7 +134,7 @@ impl BeefyTestNet {
 		})
 	}
 
-	fn generate_blocks(
+	pub(crate) fn generate_blocks(
 		&mut self,
 		count: usize,
 		session_length: u64,
@@ -207,11 +209,51 @@ pub(crate) fn make_beefy_ids(keys: &[BeefyKeyring]) -> Vec<AuthorityId> {
 	keys.iter().map(|key| key.clone().public().into()).collect()
 }
 
-fn create_beefy_keystore(authority: BeefyKeyring) -> SyncCryptoStorePtr {
+pub(crate) fn create_beefy_keystore(authority: BeefyKeyring) -> SyncCryptoStorePtr {
 	let keystore = Arc::new(LocalKeystore::in_memory());
 	SyncCryptoStore::ecdsa_generate_new(&*keystore, BeefyKeyType, Some(&authority.to_seed()))
 		.expect("Creates authority key");
 	keystore
+}
+
+pub(crate) fn create_beefy_worker(
+	peer: &BeefyPeer,
+	key: &BeefyKeyring,
+	validators: &ValidatorSet<AuthorityId>,
+	min_block_delta: u32,
+) -> BeefyWorker<Block, PeersFullClient, Backend, Arc<NetworkService<Block, H256>>> {
+	let keystore = create_beefy_keystore(*key);
+
+	let (signed_commitment_sender, signed_commitment_stream) =
+		BeefySignedCommitmentStream::<Block>::channel();
+	let (beefy_best_block_sender, beefy_best_block_stream) =
+		BeefyBestBlockStream::<Block>::channel();
+
+	let beefy_link_half = BeefyLinkHalf { signed_commitment_stream, beefy_best_block_stream };
+	*peer.data.beefy_link_half.lock() = Some(beefy_link_half);
+
+	let network = peer.network_service().clone();
+	let sync_oracle = network.clone();
+	let gossip_validator = Arc::new(crate::gossip::GossipValidator::new());
+	let gossip_engine =
+		GossipEngine::new(network, BEEFY_PROTOCOL_NAME, gossip_validator.clone(), None);
+	let worker_params = crate::worker::WorkerParams {
+		client: peer.client().as_client(),
+		backend: peer.client().as_backend(),
+		key_store: Some(keystore).into(),
+		signed_commitment_sender,
+		beefy_best_block_sender,
+		gossip_engine,
+		gossip_validator,
+		min_block_delta,
+		metrics: None,
+		sync_oracle,
+	};
+
+	BeefyWorker::<_, _, _, _>::new(
+		worker_params,
+		TestModifiers { active_validators: validators.clone() },
+	)
 }
 
 // Spawns beefy voters. Returns a future to spawn on the runtime.
@@ -224,39 +266,7 @@ fn initialize_beefy(
 	let voters = FuturesUnordered::new();
 
 	for (peer_id, key) in peers.iter().enumerate() {
-		let keystore = create_beefy_keystore(*key);
-
-		let (signed_commitment_sender, signed_commitment_stream) =
-			BeefySignedCommitmentStream::<Block>::channel();
-		let (beefy_best_block_sender, beefy_best_block_stream) =
-			BeefyBestBlockStream::<Block>::channel();
-
-		let beefy_link_half = BeefyLinkHalf { signed_commitment_stream, beefy_best_block_stream };
-		*net.peers[peer_id].data.beefy_link_half.lock() = Some(beefy_link_half);
-
-		let network = net.peers[peer_id].network_service().clone();
-		let sync_oracle = network.clone();
-		let gossip_validator = Arc::new(crate::gossip::GossipValidator::new());
-		let gossip_engine =
-			GossipEngine::new(network, BEEFY_PROTOCOL_NAME, gossip_validator.clone(), None);
-		let worker_params = crate::worker::WorkerParams {
-			client: net.peers[peer_id].client().as_client(),
-			backend: net.peers[peer_id].client().as_backend(),
-			key_store: Some(keystore).into(),
-			signed_commitment_sender,
-			beefy_best_block_sender,
-			gossip_engine,
-			gossip_validator,
-			min_block_delta,
-			metrics: None,
-			sync_oracle,
-		};
-
-		let worker = crate::worker::BeefyWorker::<_, _, _, _>::new(
-			worker_params,
-			TestModifiers { active_validators: validators.clone() },
-		);
-
+		let worker = create_beefy_worker(&net.peers[peer_id], key, validators, min_block_delta);
 		let gadget = worker.run();
 
 		fn assert_send<T: Send>(_: &T) {}
@@ -289,7 +299,7 @@ fn add_auth_change_digest(block: &mut Block, new_auth_set: BeefyValidatorSet) {
 	));
 }
 
-fn get_best_block_receivers(
+pub(crate) fn get_best_block_receivers(
 	net: &mut BeefyTestNet,
 	peers: &[BeefyKeyring],
 ) -> Vec<NotificationReceiver<H256>> {

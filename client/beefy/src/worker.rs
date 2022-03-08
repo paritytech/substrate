@@ -224,11 +224,13 @@ where
 
 		let missing: Vec<_> = store.difference(&active).cloned().collect();
 
-		if !missing.is_empty() {
-			debug!(target: "beefy", "🥩 for block {:?} public key missing in validator set: {:?}", block, missing);
+		if missing.is_empty() {
+			Ok(())
+		} else {
+			let msg = format!("public key missing in validator set: {:?}", missing);
+			debug!(target: "beefy", "🥩 for block {:?} {}", block, msg);
+			Err(error::Error::Keystore(msg))
 		}
-
-		Ok(())
 	}
 
 	/// Set best BEEFY block to `block_num`.
@@ -632,10 +634,21 @@ where
 #[cfg(test)]
 pub(crate) mod tests {
 	use super::*;
-	use crate::{keystore::tests::Keyring, tests::make_beefy_ids};
+	use crate::{
+		keystore::tests::Keyring,
+		tests::{create_beefy_worker, get_best_block_receivers, make_beefy_ids, BeefyTestNet},
+	};
 
+	use futures::{channel::mpsc, executor::block_on, future::poll_fn, task::Poll};
+
+	use sc_client_api::HeaderBackend;
+	use sc_network::NetworkService;
+	use sc_network_test::{PeersFullClient, TestNetFactory};
 	use sp_api::HeaderT;
-	use substrate_test_runtime_client::runtime::{Block, Digest, DigestItem, Header, H256};
+	use substrate_test_runtime_client::{
+		runtime::{Block, Digest, DigestItem, Header, H256},
+		Backend,
+	};
 
 	pub struct TestModifiers {
 		pub active_validators: ValidatorSet<AuthorityId>,
@@ -781,5 +794,139 @@ pub(crate) mod tests {
 		// verify validator set is correctly extracted from digest
 		let extracted = find_mmr_root_digest::<Block>(&header);
 		assert_eq!(extracted, Some(mmr_root_hash));
+	}
+
+	#[test]
+	fn should_vote_target() {
+		let keys = &[Keyring::Alice];
+		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
+		let mut net = BeefyTestNet::new(1, 0);
+		let mut worker = create_beefy_worker(&net.peer(0), &keys[0], &validator_set, 1);
+
+		// rounds not initialized -> should vote: `None`
+		assert_eq!(worker.current_vote_target(), None);
+
+		let set_up = |worker: &mut BeefyWorker<
+			Block,
+			PeersFullClient,
+			Backend,
+			Arc<NetworkService<Block, H256>>,
+		>,
+		              best_grandpa: u64,
+		              best_beefy: Option<u64>,
+		              session_start: u64,
+		              min_delta: u32| {
+			let grandpa_header = Header::new(
+				best_grandpa,
+				Default::default(),
+				Default::default(),
+				Default::default(),
+				Default::default(),
+			);
+			worker.best_grandpa_block_header = grandpa_header;
+			worker.best_beefy_block = best_beefy;
+			worker.min_block_delta = min_delta;
+			worker.rounds =
+				Some(Rounds::new(session_start, validator_set.clone(), validator_set.clone()));
+		};
+
+		// under min delta
+		set_up(&mut worker, 1, Some(1), 1, 4);
+		assert_eq!(worker.current_vote_target(), None);
+		set_up(&mut worker, 5, Some(2), 1, 4);
+		assert_eq!(worker.current_vote_target(), None);
+
+		// vote on min delta
+		set_up(&mut worker, 9, Some(4), 1, 4);
+		assert_eq!(worker.current_vote_target(), Some(8));
+		set_up(&mut worker, 18, Some(10), 1, 8);
+		assert_eq!(worker.current_vote_target(), Some(18));
+
+		// vote on power of two
+		set_up(&mut worker, 1008, Some(1000), 1, 1);
+		assert_eq!(worker.current_vote_target(), Some(1004));
+		set_up(&mut worker, 1016, Some(1000), 1, 2);
+		assert_eq!(worker.current_vote_target(), Some(1008));
+
+		// nothing new to vote on
+		set_up(&mut worker, 1000, Some(1000), 1, 1);
+		assert_eq!(worker.current_vote_target(), None);
+
+		// vote on mandatory
+		set_up(&mut worker, 1008, None, 1000, 8);
+		assert_eq!(worker.current_vote_target(), Some(1000));
+		set_up(&mut worker, 1008, Some(1000), 1001, 8);
+		assert_eq!(worker.current_vote_target(), Some(1001));
+	}
+
+	#[test]
+	fn keystore_vs_validator_set() {
+		let keys = &[Keyring::Alice];
+		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
+		let mut net = BeefyTestNet::new(1, 0);
+		let mut worker = create_beefy_worker(&net.peer(0), &keys[0], &validator_set, 1);
+
+		// keystore doesn't contain other keys than validators'
+		assert_eq!(worker.verify_validator_set(&1, &validator_set), Ok(()));
+
+		// unknown `Bob` key
+		let keys = &[Keyring::Bob];
+		let missing = make_beefy_ids(&[Keyring::Alice]);
+		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
+		let err_msg = format!("public key missing in validator set: {:?}", missing.as_slice());
+		let expected = Err(error::Error::Keystore(err_msg));
+		assert_eq!(worker.verify_validator_set(&1, &validator_set), expected);
+
+		// worker has no keystore
+		worker.key_store = None.into();
+		let expected_err = Err(error::Error::Keystore("no Keystore".into()));
+		assert_eq!(worker.verify_validator_set(&1, &validator_set), expected_err);
+	}
+
+	#[test]
+	fn setting_best_beefy_block() {
+		let keys = &[Keyring::Alice];
+		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
+		let mut net = BeefyTestNet::new(1, 0);
+		let mut worker = create_beefy_worker(&net.peer(0), &keys[0], &validator_set, 1);
+
+		let mut best_block_stream =
+			get_best_block_receivers(&mut net, keys).drain(..).next().unwrap();
+
+		// no 'best beefy block'
+		assert_eq!(worker.best_beefy_block, None);
+		block_on(poll_fn(move |cx| {
+			assert_eq!(best_block_stream.poll_next_unpin(cx), Poll::Pending);
+			Poll::Ready(())
+		}));
+
+		// unknown hash for block #1
+		let mut best_block_stream =
+			get_best_block_receivers(&mut net, keys).drain(..).next().unwrap();
+		worker.set_best_beefy_block(1);
+		assert_eq!(worker.best_beefy_block, Some(1));
+		block_on(poll_fn(move |cx| {
+			assert_eq!(best_block_stream.poll_next_unpin(cx), Poll::Pending);
+			Poll::Ready(())
+		}));
+
+		// generate 2 blocks, try again expect success
+		let mut best_block_stream =
+			get_best_block_receivers(&mut net, keys).drain(..).next().unwrap();
+		net.generate_blocks(2, 10, &validator_set);
+
+		worker.set_best_beefy_block(2);
+		assert_eq!(worker.best_beefy_block, Some(2));
+		block_on(poll_fn(move |cx| {
+			match best_block_stream.poll_next_unpin(cx) {
+				// expect Some(hash-of-block-2)
+				Poll::Ready(Some(hash)) => {
+					let block_num = net.peer(0).client().as_client().number(hash).unwrap();
+					assert_eq!(block_num, Some(2));
+				},
+				v => panic!("unexpected value: {:?}", v),
+			}
+			Poll::Ready(())
+		}));
 	}
 }
