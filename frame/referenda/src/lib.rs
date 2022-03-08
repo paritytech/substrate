@@ -297,7 +297,7 @@ pub mod pallet {
 		/// Referendum is not ongoing.
 		NotOngoing,
 		/// Referendum's decision deposit is already paid.
-		HaveDeposit,
+		HasDeposit,
 		/// The track identifier given was invalid.
 		BadTrack,
 		/// There are already a full complement of referendums in progress for this track.
@@ -381,7 +381,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			let mut status = Self::ensure_ongoing(index)?;
-			ensure!(status.decision_deposit.is_none(), Error::<T>::HaveDeposit);
+			ensure!(status.decision_deposit.is_none(), Error::<T>::HasDeposit);
 			let track = Self::track(status.track).ok_or(Error::<T>::NoTrack)?;
 			status.decision_deposit =
 				Some(Self::take_deposit(who.clone(), track.decision_deposit)?);

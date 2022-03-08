@@ -384,7 +384,7 @@ fn decision_deposit_errors_work() {
 		assert_noop!(Referenda::place_decision_deposit(Origin::signed(10), 0), e);
 
 		assert_ok!(Referenda::place_decision_deposit(Origin::signed(2), 0));
-		let e = Error::<Test>::HaveDeposit;
+		let e = Error::<Test>::HasDeposit;
 		assert_noop!(Referenda::place_decision_deposit(Origin::signed(2), 0), e);
 	});
 }
