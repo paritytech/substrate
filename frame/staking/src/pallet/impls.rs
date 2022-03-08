@@ -956,7 +956,7 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 				stash: voter.clone(),
 				active: stake,
 				total: stake,
-				unlocking: vec![],
+				unlocking: Default::default(),
 				claimed_rewards: vec![],
 			},
 		);
@@ -974,7 +974,7 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 				stash: target.clone(),
 				active: stake,
 				total: stake,
-				unlocking: vec![],
+				unlocking: Default::default(),
 				claimed_rewards: vec![],
 			},
 		);
@@ -1011,7 +1011,7 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 					stash: v.clone(),
 					active: stake,
 					total: stake,
-					unlocking: vec![],
+					unlocking: Default::default(),
 					claimed_rewards: vec![],
 				},
 			);
@@ -1032,7 +1032,7 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 					stash: v.clone(),
 					active: stake,
 					total: stake,
-					unlocking: vec![],
+					unlocking: Default::default(),
 					claimed_rewards: vec![],
 				},
 			);
