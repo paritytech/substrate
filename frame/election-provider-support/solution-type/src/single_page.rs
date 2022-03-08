@@ -182,8 +182,14 @@ pub(crate) fn generate(def: crate::SolutionDef) -> Result<TokenStream2> {
 		impl _npos::codec::MaxEncodedLen for #ident {
 			fn max_encoded_len() -> usize {
 				use frame_support::traits::Get;
+				use _npos::codec::Encode;
 				let s: u32 = #size_bound::get();
-				s as usize
+				let max_element_size = #voter_type::max_encoded_len()
+					.max(#target_type::max_encoded_len()
+					.max(#weight_type::max_encoded_len()));
+				#count.saturating_mul(
+					_npos::codec::Compact(s).encoded_size()
+					.saturating_add((s as usize).saturating_mul(max_element_size)))
 			}
 		}
 		impl<'a> _npos::sp_std::convert::TryFrom<&'a [__IndexAssignment]> for #ident {
