@@ -325,7 +325,8 @@ pub mod pallet {
 				},
 				(Progress::ToStart, Progress::LastKey(last_top)) => {
 					let child_root = Pallet::<T>::transform_child_key_or_halt(&last_top);
-					(Some(Default::default()), child_root)
+					// Start with the empty key as first key.
+					(Some(Vec::new()), child_root)
 				},
 				_ => {
 					// defensive: this function is only called when both of these values exist.
@@ -359,7 +360,8 @@ pub mod pallet {
 		fn migrate_top(&mut self) {
 			let maybe_current_top = match &self.progress_top {
 				Progress::LastKey(last_top) => sp_io::storage::next_key(last_top),
-				Progress::ToStart => Some(Default::default()),
+				// Start with the empty key as first key.
+				Progress::ToStart => Some(Vec::new()),
 				Progress::Complete => {
 					// defensive: this function is only called when this value exist.
 					// much that we can do otherwise..

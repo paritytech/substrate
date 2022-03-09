@@ -84,7 +84,7 @@ where
 
 fn error_into_rpc_err(err: impl std::fmt::Display) -> Error {
 	Error {
-		code: ErrorCode::ServerError(0), // TODO check errors code
+		code: ErrorCode::InternalError,
 		message: "Error while checking migration state".into(),
 		data: Some(err.to_string().into()),
 	}
