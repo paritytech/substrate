@@ -992,8 +992,13 @@ pub mod pallet {
 				T::EstimateCallFee::estimate_call_fee(&call, None.into())
 			};
 
-			let submission =
-				SignedSubmission { who: who.clone(), deposit, raw_solution: *raw_solution, reward: T::SignedRewardBase::get(), call_fee };
+			let submission = SignedSubmission {
+				who: who.clone(),
+				deposit,
+				raw_solution: *raw_solution,
+				reward: T::SignedRewardBase::get(),
+				call_fee,
+			};
 
 			// insert the submission if the queue has space or it's better than the weakest
 			// eject the weakest if the queue was full

@@ -52,7 +52,7 @@ pub struct SignedSubmission<AccountId, Balance: HasCompact, Solution> {
 	pub raw_solution: RawSolution<Solution>,
 	/// The reward that should potentially be paid for this solution, if accepted.
 	pub reward: Balance,
-	// The estimated fee the origin paid to submit the solution.
+	// The estimated fee `who` paid to submit the solution.
 	pub call_fee: Balance,
 }
 
@@ -494,13 +494,12 @@ impl<T: Config> Pallet<T> {
 	fn finalize_signed_phase_handle_refund(
 		who: &T::AccountId,
 		deposit: BalanceOf<T>,
-		call_fee: BalanceOf<T>
+		call_fee: BalanceOf<T>,
 	) {
 		// Unreserve deposit
 		let _remaining = T::Currency::unreserve(who, deposit);
 		debug_assert!(_remaining.is_zero());
 
-		println!("{:?}=call_fee", call_fee);
 		// Refund fee
 		let _ = T::Currency::deposit_creating(who, call_fee);
 	}
