@@ -36,6 +36,7 @@ use sp_runtime::{
 };
 use sp_staking::offence::{DisableStrategy, OffenceDetails, OnOffenceHandler};
 use std::cell::RefCell;
+use frame_election_provider_support::VoteWeight;
 
 pub const INIT_TIMESTAMP: u64 = 30_000;
 pub const BLOCK_TIME: u64 = 1000;
@@ -240,9 +241,9 @@ parameter_types! {
 impl pallet_bags_list::Config for Test {
 	type Event = Event;
 	type WeightInfo = ();
-	type ValueProvider = Staking;
+	type ScoreProvider = Staking;
 	type BagThresholds = BagThresholds;
-	type Value = u64;
+	type Score = VoteWeight;
 }
 
 impl onchain::Config for Test {

@@ -21,6 +21,7 @@ use super::*;
 use frame_election_provider_support::SortedListProvider;
 use list::Bag;
 use mock::{test_utils::*, *};
+use frame_election_provider_support::VoteWeight;
 
 mod pallet {
 	use super::*;
@@ -166,7 +167,7 @@ mod pallet {
 	#[test]
 	#[should_panic = "thresholds must strictly increase, and have no duplicates"]
 	fn duplicate_in_bags_threshold_panics() {
-		const DUPE_THRESH: &[u64; 4] = &[10, 20, 30, 30];
+		const DUPE_THRESH: &[VoteWeight; 4] = &[10, 20, 30, 30];
 		BagThresholds::set(DUPE_THRESH);
 		BagsList::integrity_test();
 	}
@@ -174,7 +175,7 @@ mod pallet {
 	#[test]
 	#[should_panic = "thresholds must strictly increase, and have no duplicates"]
 	fn decreasing_in_bags_threshold_panics() {
-		const DECREASING_THRESH: &[u64; 4] = &[10, 30, 20, 40];
+		const DECREASING_THRESH: &[VoteWeight; 4] = &[10, 30, 20, 40];
 		BagThresholds::set(DECREASING_THRESH);
 		BagsList::integrity_test();
 	}
@@ -185,12 +186,12 @@ mod pallet {
 
 		ExtBuilder::default().build_and_execute(|| {
 			// everyone in the same bag.
-			assert_eq!(List::<Runtime>::get_bags(), vec![(u64::MAX, vec![1, 2, 3, 4])]);
+			assert_eq!(List::<Runtime>::get_bags(), vec![(VoteWeight::MAX, vec![1, 2, 3, 4])]);
 
 			// any insertion goes there as well.
 			assert_ok!(List::<Runtime>::insert(5, 999));
 			assert_ok!(List::<Runtime>::insert(6, 0));
-			assert_eq!(List::<Runtime>::get_bags(), vec![(u64::MAX, vec![1, 2, 3, 4, 5, 6])]);
+			assert_eq!(List::<Runtime>::get_bags(), vec![(VoteWeight::MAX, vec![1, 2, 3, 4, 5, 6])]);
 
 			// any rebag is noop.
 			assert_storage_noop!(assert!(BagsList::rebag(Origin::signed(0), 1).is_ok()));
@@ -472,7 +473,7 @@ mod sorted_list_provider {
 			assert_eq!(BagsList::count(), 4);
 
 			// when updating
-			BagsList::on_update(&201, u64::MAX);
+			BagsList::on_update(&201, VoteWeight::MAX);
 			// then the count stays the same
 			assert_eq!(BagsList::count(), 4);
 		});
@@ -553,12 +554,12 @@ mod sorted_list_provider {
 			assert_eq!(BagsList::iter().collect::<Vec<_>>(), vec![42, 2, 3, 4, 1]);
 
 			// when increasing weight to the level of a non-existent bag with the max threshold
-			BagsList::on_update(&42, u64::MAX);
+			BagsList::on_update(&42, VoteWeight::MAX);
 
 			// the the new bag is created with the id in it,
 			assert_eq!(
 				List::<Runtime>::get_bags(),
-				vec![(10, vec![1]), (1_000, vec![2, 3, 4]), (u64::MAX, vec![42])]
+				vec![(10, vec![1]), (1_000, vec![2, 3, 4]), (VoteWeight::MAX, vec![42])]
 			);
 			// and the id position is updated in the list.
 			assert_eq!(BagsList::iter().collect::<Vec<_>>(), vec![42, 2, 3, 4, 1]);
