@@ -85,7 +85,10 @@ pub trait Mutate<AccountId>: Inspect<AccountId> {
 	/// Burn some asset `instance`.
 	///
 	/// By default, this is not a supported operation.
-	fn burn_from(_instance: &Self::InstanceId) -> DispatchResult {
+	fn burn(
+		_instance: &Self::InstanceId,
+		_maybe_check_owner: Option<&AccountId>,
+	) -> DispatchResult {
 		Err(TokenError::Unsupported.into())
 	}
 
@@ -166,8 +169,8 @@ impl<
 	fn mint_into(instance: &Self::InstanceId, who: &AccountId) -> DispatchResult {
 		<F as nonfungibles::Mutate<AccountId>>::mint_into(&A::get(), instance, who)
 	}
-	fn burn_from(instance: &Self::InstanceId) -> DispatchResult {
-		<F as nonfungibles::Mutate<AccountId>>::burn_from(&A::get(), instance)
+	fn burn(instance: &Self::InstanceId, maybe_check_owner: Option<&AccountId>) -> DispatchResult {
+		<F as nonfungibles::Mutate<AccountId>>::burn(&A::get(), instance, maybe_check_owner)
 	}
 	fn set_attribute(instance: &Self::InstanceId, key: &[u8], value: &[u8]) -> DispatchResult {
 		<F as nonfungibles::Mutate<AccountId>>::set_attribute(&A::get(), instance, key, value)

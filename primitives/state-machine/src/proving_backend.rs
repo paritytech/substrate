@@ -158,15 +158,13 @@ impl<Hash: std::hash::Hash + Eq> ProofRecorder<Hash> {
 
 	/// Convert into a [`StorageProof`].
 	pub fn to_storage_proof(&self) -> StorageProof {
-		let trie_nodes = self
-			.inner
-			.read()
-			.records
-			.iter()
-			.filter_map(|(_k, v)| v.as_ref().map(|v| v.to_vec()))
-			.collect();
-
-		StorageProof::new(trie_nodes)
+		StorageProof::new(
+			self.inner
+				.read()
+				.records
+				.iter()
+				.filter_map(|(_k, v)| v.as_ref().map(|v| v.to_vec())),
+		)
 	}
 
 	/// Reset the internal state.
@@ -393,6 +391,7 @@ mod tests {
 		proving_backend::create_proof_check_backend, trie_backend::tests::test_trie,
 		InMemoryBackend,
 	};
+	use sp_core::H256;
 	use sp_runtime::traits::BlakeTwo256;
 	use sp_trie::PrefixedMemoryDB;
 
@@ -426,7 +425,6 @@ mod tests {
 
 	#[test]
 	fn proof_is_invalid_when_does_not_contains_root() {
-		use sp_core::H256;
 		let result = create_proof_check_backend::<BlakeTwo256>(
 			H256::from_low_u64_be(1),
 			StorageProof::empty(),
@@ -581,5 +579,36 @@ mod tests {
 
 		assert!(backend.storage(b"doesnotexist2").unwrap().is_none());
 		check_estimation(&backend);
+	}
+
+	#[test]
+	fn proof_recorded_for_same_execution_should_be_deterministic() {
+		let storage_changes = vec![
+			(H256::random(), Some(b"value1".to_vec())),
+			(H256::random(), Some(b"value2".to_vec())),
+			(H256::random(), Some(b"value3".to_vec())),
+			(H256::random(), Some(b"value4".to_vec())),
+			(H256::random(), Some(b"value5".to_vec())),
+			(H256::random(), Some(b"value6".to_vec())),
+			(H256::random(), Some(b"value7".to_vec())),
+			(H256::random(), Some(b"value8".to_vec())),
+		];
+
+		let proof_recorder =
+			ProofRecorder::<H256> { inner: Arc::new(RwLock::new(ProofRecorderInner::default())) };
+		storage_changes
+			.clone()
+			.into_iter()
+			.for_each(|(key, val)| proof_recorder.record(key, val));
+		let proof1 = proof_recorder.to_storage_proof();
+
+		let proof_recorder =
+			ProofRecorder::<H256> { inner: Arc::new(RwLock::new(ProofRecorderInner::default())) };
+		storage_changes
+			.into_iter()
+			.for_each(|(key, val)| proof_recorder.record(key, val));
+		let proof2 = proof_recorder.to_storage_proof();
+
+		assert_eq!(proof1, proof2);
 	}
 }
