@@ -18,7 +18,7 @@
 //! Test utilities
 
 use crate::{self as pallet_staking, *};
-use frame_election_provider_support::{onchain, SortedListProvider};
+use frame_election_provider_support::{onchain, SortedListProvider, VoteWeight};
 use frame_support::{
 	assert_ok, parameter_types,
 	traits::{
@@ -35,7 +35,7 @@ use sp_runtime::{
 	traits::{IdentityLookup, Zero},
 };
 use sp_staking::offence::{DisableStrategy, OffenceDetails, OnOffenceHandler};
-use std::cell::RefCell;
+use std::{cell::RefCell, cmp::Ordering};
 
 pub const INIT_TIMESTAMP: u64 = 30_000;
 pub const BLOCK_TIME: u64 = 1000;
@@ -98,7 +98,8 @@ frame_support::construct_runtime!(
 		Staking: pallet_staking::{Pallet, Call, Config<T>, Storage, Event<T>},
 		Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},
 		Historical: pallet_session::historical::{Pallet, Storage},
-		BagsList: pallet_bags_list::{Pallet, Call, Storage, Event<T>},
+		VoterBagsList: pallet_bags_list::<Instance1>::{Pallet, Call, Storage, Event<T>},
+		TargetBagsList: pallet_bags_list::<Instance2>::{Pallet, Call, Storage, Event<T>},
 	}
 );
 
@@ -237,16 +238,77 @@ parameter_types! {
 	pub static MaxNominations: u32 = 16;
 }
 
-impl pallet_bags_list::Config for Test {
+type VoterBagsListInstance = pallet_bags_list::Instance1;
+impl pallet_bags_list::Config<VoterBagsListInstance> for Test {
 	type Event = Event;
 	type WeightInfo = ();
+	// Staking is the source of truth for voter bags list, since they are not kept up to date.
 	type VoteWeightProvider = Staking;
+	type BagThresholds = BagThresholds;
+}
+
+type TargetBagsListInstance = pallet_bags_list::Instance2;
+impl pallet_bags_list::Config<TargetBagsListInstance> for Test {
+	type Event = Event;
+	type WeightInfo = ();
+	// Target bags-list are always kept up to date, and in fact Staking does not know them at all!
+	type VoteWeightProvider = pallet_bags_list::Pallet<Self, TargetBagsListInstance>;
 	type BagThresholds = BagThresholds;
 }
 
 impl onchain::Config for Test {
 	type Accuracy = Perbill;
 	type DataProvider = Staking;
+}
+
+pub struct TargetBagListCompat;
+impl SortedListProvider<AccountId> for TargetBagListCompat {
+	type Error = <TargetBagsList as SortedListProvider<AccountId>>::Error;
+
+	fn iter() -> Box<dyn Iterator<Item = AccountId>> {
+		let mut all = TargetBagsList::iter()
+			.map(|x| (x, TargetBagsList::get_weight(&x).unwrap_or_default()))
+			.collect::<Vec<_>>();
+		all.sort_by(|a, b| match a.1.partial_cmp(&b.1).unwrap() {
+			Ordering::Equal => b.0.partial_cmp(&a.0).unwrap(),
+			x @ _ => x,
+		});
+		Box::new(all.into_iter().map(|(x, _)| x))
+	}
+	fn count() -> u32 {
+		TargetBagsList::count()
+	}
+	fn contains(id: &AccountId) -> bool {
+		TargetBagsList::contains(id)
+	}
+	fn on_insert(id: AccountId, weight: VoteWeight) -> Result<(), Self::Error> {
+		TargetBagsList::on_insert(id, weight)
+	}
+	fn on_update(id: &AccountId, weight: VoteWeight) -> Result<(), Self::Error> {
+		TargetBagsList::on_update(id, weight)
+	}
+	fn get_weight(id: &AccountId) -> Result<VoteWeight, Self::Error> {
+		TargetBagsList::get_weight(id)
+	}
+	fn on_remove(id: &AccountId) -> Result<(), Self::Error> {
+		TargetBagsList::on_remove(id)
+	}
+	fn unsafe_regenerate(
+		all: impl IntoIterator<Item = AccountId>,
+		weight_of: Box<dyn Fn(&AccountId) -> VoteWeight>,
+	) -> u32 {
+		TargetBagsList::unsafe_regenerate(all, weight_of)
+	}
+	fn unsafe_clear() {
+		TargetBagsList::unsafe_clear();
+	}
+	fn sanity_check() -> Result<(), &'static str> {
+		TargetBagsList::sanity_check()
+	}
+	#[cfg(feature = "runtime-benchmarks")]
+	fn weight_update_worst_case(_who: &AccountId, _is_increase: bool) -> VoteWeight {
+		VoteWeight::MAX
+	}
 }
 
 impl crate::pallet::pallet::Config for Test {
@@ -270,8 +332,8 @@ impl crate::pallet::pallet::Config for Test {
 	type ElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
 	type GenesisElectionProvider = Self::ElectionProvider;
 	// NOTE: consider a macro and use `UseNominatorsAndValidatorsMap<Self>` as well.
-	type VoterList = BagsList;
-	type TargetList = UseValidatorsMap<Self>;
+	type VoterList = VoterBagsList;
+	type TargetList = TargetBagListCompat;
 	type MaxUnlockingChunks = ConstU32<32>;
 	type BenchmarkingConfig = TestBenchmarkingConfig;
 	type WeightInfo = ();

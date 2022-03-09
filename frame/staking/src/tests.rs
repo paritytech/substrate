@@ -18,7 +18,7 @@
 //! Tests for the module.
 
 use super::{ConfigOp, Event, MaxUnlockingChunks, *};
-use frame_election_provider_support::{ElectionProvider, SortedListProvider, Support};
+use frame_election_provider_support::SortedListProvider;
 use frame_support::{
 	assert_noop, assert_ok, assert_storage_noop, bounded_vec,
 	dispatch::WithPostDispatchInfo,
@@ -192,7 +192,7 @@ fn basic_setup_works() {
 				claimed_rewards: vec![]
 			})
 		);
-		assert_eq!(Staking::nominators(101).unwrap().targets, vec![11, 21]);
+		assert_eq!(Nominators::<Test>::get(&101).unwrap().targets, vec![11, 21]);
 
 		assert_eq!(
 			Staking::eras_stakers(active_era(), 11),
@@ -292,10 +292,15 @@ fn rewards_should_work() {
 				individual: vec![(11, 100), (21, 50)].into_iter().collect(),
 			}
 		);
-		let part_for_10 = Perbill::from_rational::<u32>(1000, 1125);
-		let part_for_20 = Perbill::from_rational::<u32>(1000, 1375);
-		let part_for_100_from_10 = Perbill::from_rational::<u32>(125, 1125);
-		let part_for_100_from_20 = Perbill::from_rational::<u32>(375, 1375);
+		let expo_11 = Staking::eras_stakers(active_era(), 11);
+		let expo_21 = Staking::eras_stakers(active_era(), 21);
+
+		let part_for_10 = Perbill::from_rational(expo_11.own, expo_11.total);
+		let part_for_20 = Perbill::from_rational(expo_21.own, expo_21.total);
+		let part_for_100_from_10 =
+			Perbill::from_rational(expo_11.others.first().map(|i| i.value).unwrap(), expo_11.total);
+		let part_for_100_from_20 =
+			Perbill::from_rational(expo_21.others.first().map(|i| i.value).unwrap(), expo_21.total);
 
 		start_session(2);
 		start_session(3);
@@ -1928,90 +1933,25 @@ fn bond_with_little_staked_value_bounded() {
 }
 
 #[test]
-fn bond_with_duplicate_vote_should_be_ignored_by_election_provider() {
-	ExtBuilder::default()
-		.validator_count(2)
-		.nominate(false)
-		.minimum_validator_count(1)
-		.set_stake(31, 1000)
-		.build_and_execute(|| {
-			// ensure all have equal stake.
-			assert_eq!(
-				<Validators<Test>>::iter()
-					.map(|(v, _)| (v, Staking::ledger(v - 1).unwrap().total))
-					.collect::<Vec<_>>(),
-				vec![(31, 1000), (21, 1000), (11, 1000)],
-			);
-			// no nominators shall exist.
-			assert!(<Nominators<Test>>::iter().map(|(n, _)| n).collect::<Vec<_>>().is_empty());
+fn duplicate_nomination_prevented() {
+	ExtBuilder::default().nominate(true).validator_count(1).build_and_execute(|| {
+		// resubmit and it is back
+		assert_noop!(
+			Staking::nominate(Origin::signed(100), vec![11, 11, 21]),
+			Error::<Test>::DuplicateTarget
+		);
 
-			// give the man some money.
-			let initial_balance = 1000;
-			for i in [1, 2, 3, 4].iter() {
-				let _ = Balances::make_free_balance_be(i, initial_balance);
-			}
+		assert_noop!(
+			Staking::nominate(Origin::signed(100), vec![11, 21, 11,]),
+			Error::<Test>::DuplicateTarget
+		);
 
-			assert_ok!(Staking::bond(Origin::signed(1), 2, 1000, RewardDestination::Controller));
-			assert_ok!(Staking::nominate(Origin::signed(2), vec![11, 11, 11, 21, 31]));
-
-			assert_ok!(Staking::bond(Origin::signed(3), 4, 1000, RewardDestination::Controller));
-			assert_ok!(Staking::nominate(Origin::signed(4), vec![21, 31]));
-
-			// winners should be 21 and 31. Otherwise this election is taking duplicates into
-			// account.
-			let supports = <Test as Config>::ElectionProvider::elect().unwrap();
-			assert_eq!(
-				supports,
-				vec![
-					(21, Support { total: 1800, voters: vec![(21, 1000), (1, 400), (3, 400)] }),
-					(31, Support { total: 2200, voters: vec![(31, 1000), (1, 600), (3, 600)] })
-				],
-			);
-		});
-}
-
-#[test]
-fn bond_with_duplicate_vote_should_be_ignored_by_election_provider_elected() {
-	// same as above but ensures that even when the dupe is being elected, everything is sane.
-	ExtBuilder::default()
-		.validator_count(2)
-		.nominate(false)
-		.set_stake(31, 1000)
-		.minimum_validator_count(1)
-		.build_and_execute(|| {
-			// ensure all have equal stake.
-			assert_eq!(
-				<Validators<Test>>::iter()
-					.map(|(v, _)| (v, Staking::ledger(v - 1).unwrap().total))
-					.collect::<Vec<_>>(),
-				vec![(31, 1000), (21, 1000), (11, 1000)],
-			);
-
-			// no nominators shall exist.
-			assert!(<Nominators<Test>>::iter().collect::<Vec<_>>().is_empty());
-
-			// give the man some money.
-			let initial_balance = 1000;
-			for i in [1, 2, 3, 4].iter() {
-				let _ = Balances::make_free_balance_be(i, initial_balance);
-			}
-
-			assert_ok!(Staking::bond(Origin::signed(1), 2, 1000, RewardDestination::Controller));
-			assert_ok!(Staking::nominate(Origin::signed(2), vec![11, 11, 11, 21]));
-
-			assert_ok!(Staking::bond(Origin::signed(3), 4, 1000, RewardDestination::Controller));
-			assert_ok!(Staking::nominate(Origin::signed(4), vec![21]));
-
-			// winners should be 21 and 11.
-			let supports = <Test as Config>::ElectionProvider::elect().unwrap();
-			assert_eq!(
-				supports,
-				vec![
-					(11, Support { total: 1500, voters: vec![(11, 1000), (1, 500)] }),
-					(21, Support { total: 2500, voters: vec![(21, 1000), (1, 500), (3, 1000)] })
-				],
-			);
-		});
+		assert_noop!(
+			Staking::nominate(Origin::signed(100), vec![21, 11, 31, 11]),
+			Error::<Test>::DuplicateTarget
+		);
+		assert_ok!(Staking::nominate(Origin::signed(100), vec![21, 11]));
+	})
 }
 
 #[test]
@@ -4065,7 +4005,7 @@ mod election_data_provider {
 	#[test]
 	fn voters_exclude_slashed() {
 		ExtBuilder::default().build_and_execute(|| {
-			assert_eq!(Staking::nominators(101).unwrap().targets, vec![11, 21]);
+			assert_eq!(Nominators::<Test>::get(101).unwrap().targets, vec![11, 21]);
 			assert_eq!(
 				<Staking as ElectionDataProvider>::voters(None)
 					.unwrap()
@@ -4694,7 +4634,6 @@ fn change_of_max_nominations() {
 			assert!(Nominators::<Test>::get(70).is_none());
 
 			assert_eq!(Staking::voters(None).unwrap().len(), 3 + 2);
-			assert!(Nominators::<Test>::contains_key(101));
 
 			// abrupt change from 2 to 1, this should cause some nominators to be non-decodable, and
 			// thus non-existent unless if they update.
@@ -4728,6 +4667,108 @@ fn change_of_max_nominations() {
 			assert!(!Nominators::<Test>::contains_key(101));
 			assert!(Nominators::<Test>::get(101).is_none());
 		})
+}
+
+#[test]
+fn un_decodable_nominator_revive_via_nominate_correct_approval_update() {
+	ExtBuilder::default()
+		.add_staker(60, 61, 10, StakerStatus::Nominator(vec![1]))
+		.add_staker(70, 71, 10, StakerStatus::Nominator(vec![1, 2, 3]))
+		.balance_factor(10)
+		.build_and_execute(|| {
+			// initial approval stakes.
+			assert_eq!(<Test as Config>::TargetList::get_weight(&1).unwrap(), 20);
+			assert_eq!(<Test as Config>::TargetList::get_weight(&2).unwrap(), 10);
+			assert_eq!(<Test as Config>::TargetList::get_weight(&3).unwrap(), 10);
+
+			// 70 is now gone
+			MaxNominations::set(2);
+
+			// but approval stakes are the same.
+			assert_eq!(<Test as Config>::TargetList::get_weight(&1).unwrap(), 20);
+			assert_eq!(<Test as Config>::TargetList::get_weight(&2).unwrap(), 10);
+			assert_eq!(<Test as Config>::TargetList::get_weight(&3).unwrap(), 10);
+
+			// now they revive themselves via a fresh new nominate call.
+			assert_ok!(Staking::nominate(Origin::signed(71), vec![2]));
+
+			// approvals must be correctly updated
+			assert_eq!(<Test as Config>::TargetList::get_weight(&1).unwrap(), 10);
+			assert_eq!(<Test as Config>::TargetList::get_weight(&2).unwrap(), 10);
+			assert_eq!(
+				<Test as Config>::TargetList::get_weight(&3),
+				Err(pallet_bags_list::Error::NonExistent)
+			);
+		});
+}
+
+#[test]
+fn un_decodable_nominator_chill_correct_approval_update() {
+	ExtBuilder::default()
+		.add_staker(60, 61, 10, StakerStatus::Nominator(vec![1]))
+		.add_staker(70, 71, 10, StakerStatus::Nominator(vec![1, 2, 3]))
+		.balance_factor(10)
+		.build_and_execute(|| {
+			// initial approval stakes.
+			assert_eq!(<Test as Config>::TargetList::get_weight(&1).unwrap(), 20);
+			assert_eq!(<Test as Config>::TargetList::get_weight(&2).unwrap(), 10);
+			assert_eq!(<Test as Config>::TargetList::get_weight(&3).unwrap(), 10);
+
+			// 70 is now gone
+			MaxNominations::set(2);
+
+			// but approval stakes are the same.
+			assert_eq!(<Test as Config>::TargetList::get_weight(&1).unwrap(), 20);
+			assert_eq!(<Test as Config>::TargetList::get_weight(&2).unwrap(), 10);
+			assert_eq!(<Test as Config>::TargetList::get_weight(&3).unwrap(), 10);
+
+			// now they get chilled
+			assert_ok!(Staking::chill_other(Origin::signed(1), 71));
+
+			// approvals must be correctly updated.
+			assert_eq!(<Test as Config>::TargetList::get_weight(&1).unwrap(), 10);
+			assert_eq!(
+				<Test as Config>::TargetList::get_weight(&2).unwrap_err(),
+				pallet_bags_list::Error::NonExistent
+			);
+			assert_eq!(
+				<Test as Config>::TargetList::get_weight(&3).unwrap_err(),
+				pallet_bags_list::Error::NonExistent
+			);
+		});
+}
+
+#[test]
+fn un_decodable_nominator_bond_extra_correct_approval_update() {
+	ExtBuilder::default()
+		.add_staker(60, 61, 10, StakerStatus::Nominator(vec![1]))
+		.add_staker(70, 71, 10, StakerStatus::Nominator(vec![1, 2, 3]))
+		.balance_factor(10)
+		.build_and_execute(|| {
+			// initial approval stakes.
+			assert_eq!(<Test as Config>::TargetList::get_weight(&1).unwrap(), 20);
+			assert_eq!(<Test as Config>::TargetList::get_weight(&2).unwrap(), 10);
+			assert_eq!(<Test as Config>::TargetList::get_weight(&3).unwrap(), 10);
+
+			// 70 is now gone
+			MaxNominations::set(2);
+
+			// but approval stakes are the same.
+			assert_eq!(<Test as Config>::TargetList::get_weight(&1).unwrap(), 20);
+			assert_eq!(<Test as Config>::TargetList::get_weight(&2).unwrap(), 10);
+			assert_eq!(<Test as Config>::TargetList::get_weight(&3).unwrap(), 10);
+
+			// now they get chilled
+			Balances::make_free_balance_be(&70, 1000);
+			assert_eq!(Staking::weight_of(&70), 10);
+			assert_ok!(Staking::bond_extra(Origin::signed(70), 10));
+			assert_eq!(Staking::weight_of(&70), 20);
+
+			// approvals must be correctly updated.
+			assert_eq!(<Test as Config>::TargetList::get_weight(&1).unwrap(), 20 + 10);
+			assert_eq!(<Test as Config>::TargetList::get_weight(&2).unwrap(), 10 + 10);
+			assert_eq!(<Test as Config>::TargetList::get_weight(&3).unwrap(), 10 + 10);
+		});
 }
 
 mod sorted_list_provider {

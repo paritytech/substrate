@@ -42,8 +42,8 @@ pub use impls::*;
 use crate::{
 	slashing, weights::WeightInfo, ActiveEraInfo, BalanceOf, EraPayout, EraRewardPoints, Exposure,
 	Forcing, MaxUnlockingChunks, NegativeImbalanceOf, Nominations, PositiveImbalanceOf, Releases,
-	RewardDestination, SessionInterface, StakingLedger, UnappliedSlash, UnlockChunk,
-	ValidatorPrefs,
+	RewardDestination, SessionInterface, StakingLedger, UnappliedSlash, UnboundedNominations,
+	UnlockChunk, ValidatorPrefs,
 };
 
 const STAKING_ID: LockIdentifier = *b"staking ";
@@ -168,8 +168,7 @@ pub mod pallet {
 		/// [`impls::UseNominatorsAndValidatorsMap`] is likely the second option.
 		type VoterList: SortedListProvider<Self::AccountId>;
 		/// Something that can provide a list of targets in a somewhat sorted way. The original use
-		/// case for this was designed with `pallet_bags_list::Pallet` in mind. Otherwise,
-		/// [`impls::UseValidatorsMap`] is likely the second option.
+		/// case for this was designed with `pallet_bags_list::Pallet` in mind.
 		type TargetList: SortedListProvider<Self::AccountId>;
 
 		/// The maximum number of `unlocking` chunks a [`StakingLedger`] can have. Effectively
@@ -276,10 +275,51 @@ pub mod pallet {
 	///
 	/// Lastly, if any of the nominators become non-decodable, they can be chilled immediately via
 	/// [`Call::chill_other`] dispatchable by anyone.
+	// Implementors Note: Due to the above nuance, consider using `NominatorsHelper` when ambiguous.
 	#[pallet::storage]
-	#[pallet::getter(fn nominators)]
-	pub type Nominators<T: Config> =
+	pub(crate) type Nominators<T: Config> =
 		CountedStorageMap<_, Twox64Concat, T::AccountId, Nominations<T>>;
+
+	/// A helper struct with some explicit functions about nominators that are existing in storage,
+	/// but cannot be decoded. See [`Nominators`] for more info.
+	pub(crate) struct NominatorsHelper<T>(sp_std::marker::PhantomData<T>);
+	impl<T: Config> NominatorsHelper<T> {
+		/// True IFF nominator exists, and is decodable.
+		pub(crate) fn contains_decodable(who: &T::AccountId) -> bool {
+			Nominators::<T>::get(who).is_some()
+		}
+
+		/// True if the nominator exists, regardless of being decodable or not.
+		pub(crate) fn contains_any(who: &T::AccountId) -> bool {
+			Nominators::<T>::contains_key(who)
+		}
+
+		/// True IFF nominators exists, and is NOT decodable.
+		pub(crate) fn is_undecodable(who: &T::AccountId) -> bool {
+			Self::contains_any(who) && !Self::contains_decodable(who)
+		}
+
+		/// Iterate over all nominators, regardless of being decodable or not.
+		pub(crate) fn iter_all() -> impl Iterator<Item = (T::AccountId, UnboundedNominations<T>)> {
+			Nominators::<T>::iter_keys().filter_map(|who| {
+				if let Some(u) = Self::get_any(&who) {
+					Some((who, u))
+				} else {
+					frame_support::defensive!(
+						"any nominators that has a key must be unbounded accessible"
+					);
+					None
+				}
+			})
+		}
+
+		/// Get the nominator `who`, regardless of being decodable or not.
+		pub(crate) fn get_any(who: &T::AccountId) -> Option<UnboundedNominations<T>> {
+			frame_support::storage::unhashed::get::<UnboundedNominations<T>>(
+				&Nominators::<T>::hashed_key_for(who),
+			)
+		}
+	}
 
 	/// The maximum nominator count before we stop allowing new validators to join.
 	///
@@ -556,7 +596,7 @@ pub mod pallet {
 
 			for &(ref stash, ref controller, balance, ref status) in &self.stakers {
 				crate::log!(
-					trace,
+					debug,
 					"inserting genesis staker: {:?} => {:?} => {:?}",
 					stash,
 					balance,
@@ -586,7 +626,10 @@ pub mod pallet {
 			}
 
 			// all voters are reported to the `VoterList`.
+			#[cfg(debug_assertions)]
 			Pallet::<T>::sanity_check_list_providers();
+			#[cfg(debug_assertions)]
+			Pallet::<T>::sanity_check_approval_stakes();
 		}
 	}
 
@@ -682,6 +725,8 @@ pub mod pallet {
 		TooManyValidators,
 		/// Commission is too low. Must be at least `MinCommission`.
 		CommissionTooLow,
+		/// Duplicate targets to nomination.
+		DuplicateTarget,
 	}
 
 	#[pallet::hooks]
@@ -836,7 +881,8 @@ pub mod pallet {
 
 				// update this staker in the sorted list, if they exist in it.
 				if T::VoterList::contains(&stash) {
-					T::VoterList::on_update(&stash, Self::weight_of(&ledger.stash));
+					let _ =
+						T::VoterList::on_update(&stash, Self::weight_of(&ledger.stash)).defensive();
 					debug_assert_eq!(T::VoterList::sanity_check(), Ok(()));
 				}
 
@@ -917,9 +963,11 @@ pub mod pallet {
 				// NOTE: ledger must be updated prior to calling `Self::weight_of`.
 				Self::update_ledger(&controller, &ledger);
 
+				// TODO: we do some of the update in update ledger and some here... not good.
 				// update this staker in the sorted list, if they exist in it.
 				if T::VoterList::contains(&ledger.stash) {
-					T::VoterList::on_update(&ledger.stash, Self::weight_of(&ledger.stash));
+					let _ = T::VoterList::on_update(&ledger.stash, Self::weight_of(&ledger.stash))
+						.defensive();
 				}
 
 				Self::deposit_event(Event::<T>::Unbonded(ledger.stash, value));
@@ -1057,7 +1105,7 @@ pub mod pallet {
 			ensure!(!targets.is_empty(), Error::<T>::EmptyTargets);
 			ensure!(targets.len() <= T::MaxNominations::get() as usize, Error::<T>::TooManyTargets);
 
-			let old = Nominators::<T>::get(stash).map_or_else(Vec::new, |x| x.targets.into_inner());
+			let old = NominatorsHelper::<T>::get_any(stash).map(|n| n.targets).unwrap_or_default();
 
 			let targets: BoundedVec<_, _> = targets
 				.into_iter()
@@ -1081,23 +1129,24 @@ pub mod pallet {
 						.iter()
 						.collect::<sp_std::collections::btree_set::BTreeSet<_>>()
 						.len(),
-				"DuplicateTargets"
+				Error::<T>::DuplicateTarget
 			);
 
 			let incoming = targets.iter().cloned().filter(|x| !old.contains(x)).collect::<Vec<_>>();
 			let outgoing = old.iter().cloned().filter(|x| !targets.contains(x)).collect::<Vec<_>>();
+			// TODO: these are all rather inefficient now based on how vote_weight is
+			// implemented, but I don't care because: https://github.com/paritytech/substrate/issues/10990
+			let weight = Self::weight_of(stash);
 			incoming.into_iter().for_each(|i| {
 				if T::TargetList::contains(&i) {
-					// TODO: these are all rather inefficient now based on how vote_weight is
-					// implemented, but I don't care because: https://github.com/paritytech/substrate/issues/10990
-					let _ = T::TargetList::on_increase(&i, Self::weight_of(stash)).defensive();
+					let _ = T::TargetList::on_increase(&i, weight).defensive();
 				} else {
-					let _ = T::TargetList::on_insert(i, Self::weight_of(stash)).defensive();
+					let _ = T::TargetList::on_insert(i, weight).defensive();
 				}
 			});
 			outgoing.into_iter().for_each(|o| {
 				if T::TargetList::contains(&o) {
-					let _ = T::TargetList::on_decrease(&o, Self::weight_of(stash));
+					let _ = T::TargetList::on_decrease(&o, weight);
 				} else {
 					frame_support::defensive!("this validator must have, at some point in the past, been inserted into `TargetList`");
 				}
@@ -1112,6 +1161,12 @@ pub mod pallet {
 
 			Self::do_remove_validator(stash);
 			Self::do_add_nominator(stash, nominations);
+
+			// NOTE: we need to do this after all validators and nominators have been updated in the
+			// previous two function calls.
+			#[cfg(debug_assertions)]
+			Self::sanity_check_approval_stakes();
+
 			Ok(())
 		}
 
@@ -1659,7 +1714,7 @@ pub mod pallet {
 			//
 			// Otherwise, if caller is the same as the controller, this is just like `chill`.
 
-			if Nominators::<T>::contains_key(&stash) && Nominators::<T>::get(&stash).is_none() {
+			if NominatorsHelper::<T>::is_undecodable(&stash) {
 				Self::chill_stash(&stash);
 				return Ok(())
 			}

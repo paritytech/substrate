@@ -27,7 +27,10 @@
 use crate::Config;
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_election_provider_support::{VoteWeight, VoteWeightProvider};
-use frame_support::{traits::Get, DefaultNoBound};
+use frame_support::{
+	traits::{Defensive, Get},
+	DefaultNoBound,
+};
 use scale_info::TypeInfo;
 use sp_std::{
 	boxed::Box,
@@ -55,7 +58,7 @@ mod tests;
 ///
 /// Note that even if the thresholds list does not have `VoteWeight::MAX` as its final member, this
 /// function behaves as if it does.
-pub fn notional_bag_for<T: Config>(weight: VoteWeight) -> VoteWeight {
+pub fn notional_bag_for<T: Config<I>, I: 'static>(weight: VoteWeight) -> VoteWeight {
 	let thresholds = T::BagThresholds::get();
 	let idx = thresholds.partition_point(|&threshold| weight > threshold);
 	thresholds.get(idx).copied().unwrap_or(VoteWeight::MAX)
@@ -75,9 +78,9 @@ pub fn notional_bag_for<T: Config>(weight: VoteWeight) -> VoteWeight {
 // weight decreases as successive bags are reached. This means that it is valid to truncate
 // iteration at any desired point; only those ids in the lowest bag can be excluded. This
 // satisfies both the desire for fairness and the requirement for efficiency.
-pub struct List<T: Config>(PhantomData<T>);
+pub struct List<T: Config<I>, I: 'static = ()>(PhantomData<(T, I)>);
 
-impl<T: Config> List<T> {
+impl<T: Config<I>, I: 'static> List<T, I> {
 	/// Remove all data associated with the list from storage.
 	///
 	/// ## WARNING
@@ -85,8 +88,8 @@ impl<T: Config> List<T> {
 	/// this function should generally not be used in production as it could lead to a very large
 	/// number of storage accesses.
 	pub(crate) fn unsafe_clear() {
-		crate::ListBags::<T>::remove_all(None);
-		crate::ListNodes::<T>::remove_all();
+		crate::ListBags::<T, I>::remove_all(None);
+		crate::ListNodes::<T, I>::remove_all();
 	}
 
 	/// Regenerate all of the data from the given ids.
@@ -137,11 +140,13 @@ impl<T: Config> List<T> {
 
 		// we can't check all preconditions, but we can check one
 		debug_assert!(
-			crate::ListBags::<T>::iter().all(|(threshold, _)| old_thresholds.contains(&threshold)),
+			crate::ListBags::<T, I>::iter()
+				.all(|(threshold, _)| old_thresholds.contains(&threshold)),
 			"not all `bag_upper` currently in storage are members of `old_thresholds`",
 		);
 		debug_assert!(
-			crate::ListNodes::<T>::iter().all(|(_, node)| old_thresholds.contains(&node.bag_upper)),
+			crate::ListNodes::<T, I>::iter()
+				.all(|(_, node)| old_thresholds.contains(&node.bag_upper)),
 			"not all `node.bag_upper` currently in storage are members of `old_thresholds`",
 		);
 
@@ -168,7 +173,7 @@ impl<T: Config> List<T> {
 				continue
 			}
 
-			if let Some(bag) = Bag::<T>::get(affected_bag) {
+			if let Some(bag) = Bag::<T, I>::get(affected_bag) {
 				affected_accounts.extend(bag.iter().map(|node| node.id));
 			}
 		}
@@ -180,7 +185,7 @@ impl<T: Config> List<T> {
 				continue
 			}
 
-			if let Some(bag) = Bag::<T>::get(removed_bag) {
+			if let Some(bag) = Bag::<T, I>::get(removed_bag) {
 				affected_accounts.extend(bag.iter().map(|node| node.id));
 			}
 		}
@@ -201,10 +206,10 @@ impl<T: Config> List<T> {
 		// lookups.
 		for removed_bag in removed_bags {
 			debug_assert!(
-				!crate::ListNodes::<T>::iter().any(|(_, node)| node.bag_upper == removed_bag),
+				!crate::ListNodes::<T, I>::iter().any(|(_, node)| node.bag_upper == removed_bag),
 				"no id should be present in a removed bag",
 			);
-			crate::ListBags::<T>::remove(removed_bag);
+			crate::ListBags::<T, I>::remove(removed_bag);
 		}
 
 		debug_assert_eq!(Self::sanity_check(), Ok(()));
@@ -214,19 +219,19 @@ impl<T: Config> List<T> {
 
 	/// Returns `true` if the list contains `id`, otherwise returns `false`.
 	pub(crate) fn contains(id: &T::AccountId) -> bool {
-		crate::ListNodes::<T>::contains_key(id)
+		crate::ListNodes::<T, I>::contains_key(id)
 	}
 
 	/// Get the weight of the given node,
 	pub fn get_weight(id: &T::AccountId) -> Result<VoteWeight, Error> {
-		Node::<T>::get(id).map(|node| node.weight()).ok_or(Error::NonExistent)
+		Node::<T, I>::get(id).map(|node| node.weight()).ok_or(Error::NonExistent)
 	}
 
 	/// Iterate over all nodes in all bags in the list.
 	///
 	/// Full iteration can be expensive; it's recommended to limit the number of items with
 	/// `.take(n)`.
-	pub(crate) fn iter() -> impl Iterator<Item = Node<T>> {
+	pub(crate) fn iter() -> impl Iterator<Item = Node<T, I>> {
 		// We need a touch of special handling here: because we permit `T::BagThresholds` to
 		// omit the final bound, we need to ensure that we explicitly include that threshold in the
 		// list.
@@ -273,8 +278,8 @@ impl<T: Config> List<T> {
 			return Err(Error::Duplicate)
 		}
 
-		let bag_weight = notional_bag_for::<T>(weight);
-		let mut bag = Bag::<T>::get_or_make(bag_weight);
+		let bag_weight = notional_bag_for::<T, I>(weight);
+		let mut bag = Bag::<T, I>::get_or_make(bag_weight);
 		// unchecked insertion is okay; we just got the correct `notional_bag_for`.
 		bag.insert_unchecked(id.clone(), weight);
 
@@ -287,15 +292,19 @@ impl<T: Config> List<T> {
 			id,
 			weight,
 			bag_weight,
-			crate::ListNodes::<T>::count(),
+			crate::ListNodes::<T, I>::count(),
 		);
 
 		Ok(())
 	}
 
 	/// Remove an id from the list.
-	pub(crate) fn remove(id: &T::AccountId) {
-		Self::remove_many(sp_std::iter::once(id));
+	pub(crate) fn remove(id: &T::AccountId) -> Result<(), Error> {
+		if !Self::contains(id) {
+			return Err(Error::NonExistent)
+		}
+		let _ = Self::remove_many(sp_std::iter::once(id));
+		Ok(())
 	}
 
 	/// Remove many ids from the list.
@@ -308,7 +317,7 @@ impl<T: Config> List<T> {
 		let mut count = 0;
 
 		for id in ids.into_iter() {
-			let node = match Node::<T>::get(id) {
+			let node = match Node::<T, I>::get(id) {
 				Some(node) => node,
 				None => continue,
 			};
@@ -321,7 +330,7 @@ impl<T: Config> List<T> {
 				// this node is a head or tail, so the bag needs to be updated
 				let bag = bags
 					.entry(node.bag_upper)
-					.or_insert_with(|| Bag::<T>::get_or_make(node.bag_upper));
+					.or_insert_with(|| Bag::<T, I>::get_or_make(node.bag_upper));
 				// node.bag_upper must be correct, therefore this bag will contain this node.
 				bag.remove_node_unchecked(&node);
 			}
@@ -348,17 +357,26 @@ impl<T: Config> List<T> {
 	/// [`self.insert`]. However, given large quantities of nodes to move, it may be more efficient
 	/// to call [`self.remove_many`] followed by [`self.insert_many`].
 	pub(crate) fn update_position_for(
-		node: Node<T>,
+		mut node: Node<T, I>,
 		new_weight: VoteWeight,
 	) -> Option<(VoteWeight, VoteWeight)> {
-		node.is_misplaced(new_weight).then(move || {
+		crate::log!(
+			debug,
+			"trying to rebag {:?} from {:?} to {:?} ({})",
+			node.id,
+			node.weight(),
+			new_weight,
+			node.is_misplaced(new_weight)
+		);
+		node.weight = new_weight;
+		if node.is_misplaced(new_weight) {
 			let old_bag_upper = node.bag_upper;
 
 			if !node.is_terminal() {
 				// this node is not a head or a tail, so we can just cut it out of the list. update
 				// and put the prev and next of this node, we do `node.put` inside `insert_note`.
 				node.excise();
-			} else if let Some(mut bag) = Bag::<T>::get(node.bag_upper) {
+			} else if let Some(mut bag) = Bag::<T, I>::get(node.bag_upper) {
 				// this is a head or tail, so the bag must be updated.
 				bag.remove_node_unchecked(&node);
 				bag.put();
@@ -372,15 +390,19 @@ impl<T: Config> List<T> {
 			}
 
 			// put the node into the appropriate new bag.
-			let new_bag_upper = notional_bag_for::<T>(new_weight);
-			let mut bag = Bag::<T>::get_or_make(new_bag_upper);
+			let new_bag_upper = notional_bag_for::<T, I>(new_weight);
+			let mut bag = Bag::<T, I>::get_or_make(new_bag_upper);
 			// prev, next, and bag_upper of the node are updated inside `insert_node`, also
 			// `node.put` is in there.
 			bag.insert_node_unchecked(node);
 			bag.put();
 
-			(old_bag_upper, new_bag_upper)
-		})
+			Some((old_bag_upper, new_bag_upper))
+		} else {
+			// just write the new weight.
+			node.put();
+			None
+		}
 	}
 
 	/// Put `heavier_id` to the position directly in front of `lighter_id`. Both ids must be in the
@@ -388,12 +410,12 @@ impl<T: Config> List<T> {
 	pub(crate) fn put_in_front_of(
 		lighter_id: &T::AccountId,
 		heavier_id: &T::AccountId,
-	) -> Result<(), crate::pallet::Error<T>> {
+	) -> Result<(), crate::pallet::Error<T, I>> {
 		use crate::pallet;
 		use frame_support::ensure;
 
-		let lighter_node = Node::<T>::get(&lighter_id).ok_or(pallet::Error::IdNotFound)?;
-		let heavier_node = Node::<T>::get(&heavier_id).ok_or(pallet::Error::IdNotFound)?;
+		let lighter_node = Node::<T, I>::get(&lighter_id).ok_or(pallet::Error::IdNotFound)?;
+		let heavier_node = Node::<T, I>::get(&heavier_id).ok_or(pallet::Error::IdNotFound)?;
 
 		ensure!(lighter_node.bag_upper == heavier_node.bag_upper, pallet::Error::NotInSameBag);
 
@@ -406,11 +428,12 @@ impl<T: Config> List<T> {
 
 		// remove the heavier node from this list. Note that this removes the node from storage and
 		// decrements the node counter.
-		Self::remove(&heavier_id);
+		// defensive: both nodes have been checked to exist.
+		let _ = Self::remove(&heavier_id).defensive();
 
 		// re-fetch `lighter_node` from storage since it may have been updated when `heavier_node`
 		// was removed.
-		let lighter_node = Node::<T>::get(&lighter_id).ok_or_else(|| {
+		let lighter_node = Node::<T, I>::get(&lighter_id).ok_or_else(|| {
 			debug_assert!(false, "id that should exist cannot be found");
 			crate::log!(warn, "id that should exist cannot be found");
 			pallet::Error::IdNotFound
@@ -429,7 +452,7 @@ impl<T: Config> List<T> {
 	/// - this is a naive function in that it does not check if `node` belongs to the same bag as
 	/// `at`. It is expected that the call site will check preconditions.
 	/// - this will panic if `at.bag_upper` is not a bag that already exists in storage.
-	fn insert_at_unchecked(mut at: Node<T>, mut node: Node<T>) {
+	fn insert_at_unchecked(mut at: Node<T, I>, mut node: Node<T, I>) {
 		// connect `node` to its new `prev`.
 		node.prev = at.prev.clone();
 		if let Some(mut prev) = at.prev() {
@@ -446,7 +469,7 @@ impl<T: Config> List<T> {
 			// since `node` is always in front of `at` we know that 1) there is always at least 2
 			// nodes in the bag, and 2) only `node` could be the head and only `at` could be the
 			// tail.
-			let mut bag = Bag::<T>::get(at.bag_upper)
+			let mut bag = Bag::<T, I>::get(at.bag_upper)
 				.expect("given nodes must always have a valid bag. qed.");
 
 			if node.prev == None {
@@ -480,12 +503,12 @@ impl<T: Config> List<T> {
 		);
 
 		let iter_count = Self::iter().count() as u32;
-		let stored_count = crate::ListNodes::<T>::count();
-		let nodes_count = crate::ListNodes::<T>::iter().count() as u32;
+		let stored_count = crate::ListNodes::<T, I>::count();
+		let nodes_count = crate::ListNodes::<T, I>::iter().count() as u32;
 		ensure!(iter_count == stored_count, "iter_count != stored_count");
 		ensure!(stored_count == nodes_count, "stored_count != nodes_count");
 
-		crate::log!(debug, "count of nodes: {}", stored_count);
+		crate::log!(trace, "count of nodes: {}", stored_count);
 
 		let active_bags = {
 			let thresholds = T::BagThresholds::get().iter().copied();
@@ -496,7 +519,7 @@ impl<T: Config> List<T> {
 				// otherwise, insert it here.
 				thresholds.chain(iter::once(VoteWeight::MAX)).collect()
 			};
-			thresholds.into_iter().filter_map(|t| Bag::<T>::get(t))
+			thresholds.into_iter().filter_map(|t| Bag::<T, I>::get(t))
 		};
 
 		let _ = active_bags.clone().map(|b| b.sanity_check()).collect::<Result<_, _>>()?;
@@ -505,11 +528,11 @@ impl<T: Config> List<T> {
 			active_bags.clone().fold(0u32, |acc, cur| acc + cur.iter().count() as u32);
 		ensure!(nodes_count == nodes_in_bags_count, "stored_count != nodes_in_bags_count");
 
-		crate::log!(debug, "count of active bags {}", active_bags.count());
+		crate::log!(trace, "count of active bags {}", active_bags.count());
 
 		// check that all nodes are sane. We check the `ListNodes` storage item directly in case we
 		// have some "stale" nodes that are not in a bag.
-		for (_id, node) in crate::ListNodes::<T>::iter() {
+		for (_id, node) in crate::ListNodes::<T, I>::iter() {
 			node.sanity_check()?
 		}
 
@@ -538,7 +561,8 @@ impl<T: Config> List<T> {
 		};
 
 		iter.filter_map(|t| {
-			Bag::<T>::get(t).map(|bag| (t, bag.iter().map(|n| n.id().clone()).collect::<Vec<_>>()))
+			Bag::<T, I>::get(t)
+				.map(|bag| (t, bag.iter().map(|n| n.id().clone()).collect::<Vec<_>>()))
 		})
 		.collect::<Vec<_>>()
 	}
@@ -553,9 +577,10 @@ impl<T: Config> List<T> {
 /// appearing within the ids set.
 #[derive(DefaultNoBound, Encode, Decode, MaxEncodedLen, TypeInfo)]
 #[codec(mel_bound())]
-#[scale_info(skip_type_params(T))]
+#[scale_info(skip_type_params(T, I))]
 #[cfg_attr(feature = "std", derive(frame_support::DebugNoBound, Clone, PartialEq))]
-pub struct Bag<T: Config> {
+pub struct Bag<T: Config<I>, I: 'static = ()> {
+	phantom: PhantomData<I>,
 	head: Option<T::AccountId>,
 	tail: Option<T::AccountId>,
 
@@ -563,19 +588,20 @@ pub struct Bag<T: Config> {
 	bag_upper: VoteWeight,
 }
 
-impl<T: Config> Bag<T> {
+impl<T: Config<I>, I: 'static> Bag<T, I> {
 	#[cfg(test)]
 	pub(crate) fn new(
+		phantom: PhantomData<I>,
 		head: Option<T::AccountId>,
 		tail: Option<T::AccountId>,
 		bag_upper: VoteWeight,
 	) -> Self {
-		Self { head, tail, bag_upper }
+		Self { phantom, head, tail, bag_upper }
 	}
 
 	/// Get a bag by its upper vote weight.
-	pub(crate) fn get(bag_upper: VoteWeight) -> Option<Bag<T>> {
-		crate::ListBags::<T>::try_get(bag_upper).ok().map(|mut bag| {
+	pub(crate) fn get(bag_upper: VoteWeight) -> Option<Bag<T, I>> {
+		crate::ListBags::<T, I>::try_get(bag_upper).ok().map(|mut bag| {
 			bag.bag_upper = bag_upper;
 			bag
 		})
@@ -583,7 +609,7 @@ impl<T: Config> Bag<T> {
 
 	/// Get a bag by its upper vote weight or make it, appropriately initialized. Does not check if
 	/// if `bag_upper` is a valid threshold.
-	fn get_or_make(bag_upper: VoteWeight) -> Bag<T> {
+	fn get_or_make(bag_upper: VoteWeight) -> Bag<T, I> {
 		Self::get(bag_upper).unwrap_or(Bag { bag_upper, ..Default::default() })
 	}
 
@@ -595,24 +621,24 @@ impl<T: Config> Bag<T> {
 	/// Put the bag back into storage.
 	fn put(self) {
 		if self.is_empty() {
-			crate::ListBags::<T>::remove(self.bag_upper);
+			crate::ListBags::<T, I>::remove(self.bag_upper);
 		} else {
-			crate::ListBags::<T>::insert(self.bag_upper, self);
+			crate::ListBags::<T, I>::insert(self.bag_upper, self);
 		}
 	}
 
 	/// Get the head node in this bag.
-	fn head(&self) -> Option<Node<T>> {
+	fn head(&self) -> Option<Node<T, I>> {
 		self.head.as_ref().and_then(|id| Node::get(id))
 	}
 
 	/// Get the tail node in this bag.
-	fn tail(&self) -> Option<Node<T>> {
+	fn tail(&self) -> Option<Node<T, I>> {
 		self.tail.as_ref().and_then(|id| Node::get(id))
 	}
 
 	/// Iterate over the nodes in this bag.
-	pub(crate) fn iter(&self) -> impl Iterator<Item = Node<T>> {
+	pub(crate) fn iter(&self) -> impl Iterator<Item = Node<T, I>> {
 		sp_std::iter::successors(self.head(), |prev| prev.next())
 	}
 
@@ -627,7 +653,14 @@ impl<T: Config> Bag<T> {
 		// insert_node will overwrite `prev`, `next` and `bag_upper` to the proper values. As long
 		// as this bag is the correct one, we're good. All calls to this must come after getting the
 		// correct [`notional_bag_for`].
-		self.insert_node_unchecked(Node::<T> { id, weight, prev: None, next: None, bag_upper: 0 });
+		self.insert_node_unchecked(Node::<T, I> {
+			phantom: Default::default(),
+			weight,
+			id,
+			prev: None,
+			next: None,
+			bag_upper: 0,
+		});
 	}
 
 	/// Insert a node into this bag.
@@ -637,7 +670,7 @@ impl<T: Config> Bag<T> {
 	///
 	/// Storage note: this modifies storage, but only for the node. You still need to call
 	/// `self.put()` after use.
-	fn insert_node_unchecked(&mut self, mut node: Node<T>) {
+	fn insert_node_unchecked(&mut self, mut node: Node<T, I>) {
 		if let Some(tail) = &self.tail {
 			if *tail == node.id {
 				// this should never happen, but this check prevents one path to a worst case
@@ -681,7 +714,7 @@ impl<T: Config> Bag<T> {
 	///
 	/// Storage note: this modifies storage, but only for adjacent nodes. You still need to call
 	/// `self.put()` and `ListNodes::remove(id)` to update storage for the bag and `node`.
-	fn remove_node_unchecked(&mut self, node: &Node<T>) {
+	fn remove_node_unchecked(&mut self, node: &Node<T, I>) {
 		// reassign neighboring nodes.
 		node.excise();
 
@@ -742,7 +775,7 @@ impl<T: Config> Bag<T> {
 	/// Iterate over the nodes in this bag (public for tests).
 	#[cfg(feature = "std")]
 	#[allow(dead_code)]
-	pub fn std_iter(&self) -> impl Iterator<Item = Node<T>> {
+	pub fn std_iter(&self) -> impl Iterator<Item = Node<T, I>> {
 		sp_std::iter::successors(self.head(), |prev| prev.next())
 	}
 
@@ -756,9 +789,10 @@ impl<T: Config> Bag<T> {
 /// A Node is the fundamental element comprising the doubly-linked list described by `Bag`.
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo)]
 #[codec(mel_bound())]
-#[scale_info(skip_type_params(T))]
+#[scale_info(skip_type_params(T, I))]
 #[cfg_attr(feature = "std", derive(frame_support::DebugNoBound, Clone, PartialEq))]
-pub struct Node<T: Config> {
+pub struct Node<T: Config<I>, I: 'static = ()> {
+	phantom: PhantomData<I>,
 	id: T::AccountId,
 	prev: Option<T::AccountId>,
 	next: Option<T::AccountId>,
@@ -766,15 +800,15 @@ pub struct Node<T: Config> {
 	weight: VoteWeight,
 }
 
-impl<T: Config> Node<T> {
+impl<T: Config<I>, I: 'static> Node<T, I> {
 	/// Get a node by id.
-	pub fn get(id: &T::AccountId) -> Option<Node<T>> {
-		crate::ListNodes::<T>::try_get(id).ok()
+	pub fn get(id: &T::AccountId) -> Option<Node<T, I>> {
+		crate::ListNodes::<T, I>::try_get(id).ok()
 	}
 
 	/// Put the node back into storage.
 	fn put(self) {
-		crate::ListNodes::<T>::insert(self.id.clone(), self);
+		crate::ListNodes::<T, I>::insert(self.id.clone(), self);
 	}
 
 	/// Update neighboring nodes to point to reach other.
@@ -798,22 +832,22 @@ impl<T: Config> Node<T> {
 	///
 	/// It is naive because it does not check if the node has first been removed from its bag.
 	fn remove_from_storage_unchecked(&self) {
-		crate::ListNodes::<T>::remove(&self.id)
+		crate::ListNodes::<T, I>::remove(&self.id)
 	}
 
 	/// Get the previous node in the bag.
-	fn prev(&self) -> Option<Node<T>> {
+	fn prev(&self) -> Option<Node<T, I>> {
 		self.prev.as_ref().and_then(|id| Node::get(id))
 	}
 
 	/// Get the next node in the bag.
-	fn next(&self) -> Option<Node<T>> {
+	fn next(&self) -> Option<Node<T, I>> {
 		self.next.as_ref().and_then(|id| Node::get(id))
 	}
 
 	/// `true` when this voter is in the wrong bag.
 	pub fn is_misplaced(&self, current_weight: VoteWeight) -> bool {
-		notional_bag_for::<T>(current_weight) != self.bag_upper
+		notional_bag_for::<T, I>(current_weight) != self.bag_upper
 	}
 
 	/// `true` when this voter is a bag head or tail.
@@ -847,7 +881,7 @@ impl<T: Config> Node<T> {
 
 	#[cfg(feature = "std")]
 	fn sanity_check(&self) -> Result<(), &'static str> {
-		let expected_bag = Bag::<T>::get(self.bag_upper).ok_or("bag not found for node")?;
+		let expected_bag = Bag::<T, I>::get(self.bag_upper).ok_or("bag not found for node")?;
 
 		let id = self.id();
 

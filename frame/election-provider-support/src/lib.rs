@@ -168,6 +168,7 @@
 
 pub mod onchain;
 use frame_support::{traits::Get, BoundedVec};
+use sp_arithmetic::traits::Zero;
 use sp_std::{fmt::Debug, prelude::*};
 
 /// Re-export some type as they are used in the interface.
@@ -360,8 +361,9 @@ pub trait SortedListProvider<AccountId> {
 	/// Hook for updating a single id.
 	///
 	/// The `new` weight is given.
-	// TODO: why not return result here?
-	fn on_update(id: &AccountId, weight: VoteWeight);
+	///
+	/// Returns `Ok(())` iff it successfully updates an item, an `Err(_)` otherwise.
+	fn on_update(id: &AccountId, weight: VoteWeight) -> Result<(), Self::Error>;
 
 	/// Get the weight of `id`.
 	fn get_weight(id: &AccountId) -> Result<VoteWeight, Self::Error>;
@@ -370,20 +372,26 @@ pub trait SortedListProvider<AccountId> {
 	fn on_increase(id: &AccountId, additional: VoteWeight) -> Result<(), Self::Error> {
 		let old_weight = Self::get_weight(id)?;
 		let new_weight = old_weight.saturating_add(additional);
-		Self::on_update(id, new_weight);
-		Ok(())
+		Self::on_update(id, new_weight)
 	}
 
 	/// Same as `on_update`, but incorporate some decreased vote weight.
+	///
+	/// If the new weight of the item is `Zero`, it is removed.
 	fn on_decrease(id: &AccountId, decreased: VoteWeight) -> Result<(), Self::Error> {
 		let old_weight = Self::get_weight(id)?;
 		let new_weight = old_weight.saturating_sub(decreased);
-		Self::on_update(id, new_weight);
-		Ok(())
+		if new_weight.is_zero() {
+			Self::on_remove(id)
+		} else {
+			Self::on_update(id, new_weight)
+		}
 	}
 
 	/// Hook for removing am id from the list.
-	fn on_remove(id: &AccountId);
+	///
+	/// Returns `Ok(())` iff it successfully removes an item, an `Err(_)` otherwise.
+	fn on_remove(id: &AccountId) -> Result<(), Self::Error>;
 
 	/// Regenerate this list from scratch. Returns the count of items inserted.
 	///

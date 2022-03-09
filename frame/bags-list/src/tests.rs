@@ -21,6 +21,7 @@ use super::*;
 use frame_election_provider_support::SortedListProvider;
 use list::Bag;
 use mock::{test_utils::*, *};
+use sp_std::marker::PhantomData;
 
 mod pallet {
 	use super::*;
@@ -90,7 +91,10 @@ mod pallet {
 
 			// then
 			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1, 4]), (1_000, vec![2, 3])]);
-			assert_eq!(Bag::<Runtime>::get(1_000).unwrap(), Bag::new(Some(2), Some(3), 1_000));
+			assert_eq!(
+				Bag::<Runtime>::get(1_000).unwrap(),
+				Bag::new(PhantomData, Some(2), Some(3), 1_000)
+			);
 
 			// when
 			StakingMock::set_vote_weight_of(&3, 10);
@@ -99,8 +103,14 @@ mod pallet {
 			// then
 			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1, 4, 3]), (1_000, vec![2])]);
 
-			assert_eq!(Bag::<Runtime>::get(10).unwrap(), Bag::new(Some(1), Some(3), 10));
-			assert_eq!(Bag::<Runtime>::get(1_000).unwrap(), Bag::new(Some(2), Some(2), 1_000));
+			assert_eq!(
+				Bag::<Runtime>::get(10).unwrap(),
+				Bag::new(PhantomData, Some(1), Some(3), 10)
+			);
+			assert_eq!(
+				Bag::<Runtime>::get(1_000).unwrap(),
+				Bag::new(PhantomData, Some(2), Some(2), 1_000)
+			);
 			assert_eq!(get_list_as_ids(), vec![2u32, 1, 4, 3]);
 
 			// when
@@ -124,7 +134,10 @@ mod pallet {
 
 			// then
 			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1, 2]), (1_000, vec![3, 4])]);
-			assert_eq!(Bag::<Runtime>::get(1_000).unwrap(), Bag::new(Some(3), Some(4), 1_000));
+			assert_eq!(
+				Bag::<Runtime>::get(1_000).unwrap(),
+				Bag::new(PhantomData, Some(3), Some(4), 1_000)
+			);
 
 			// when
 			StakingMock::set_vote_weight_of(&3, 10);
@@ -132,7 +145,10 @@ mod pallet {
 
 			// then
 			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1, 2, 3]), (1_000, vec![4])]);
-			assert_eq!(Bag::<Runtime>::get(1_000).unwrap(), Bag::new(Some(4), Some(4), 1_000));
+			assert_eq!(
+				Bag::<Runtime>::get(1_000).unwrap(),
+				Bag::new(PhantomData, Some(4), Some(4), 1_000)
+			);
 
 			// when
 			StakingMock::set_vote_weight_of(&4, 10);
@@ -470,12 +486,12 @@ mod sorted_list_provider {
 			assert_eq!(BagsList::count(), 5);
 
 			// when removing
-			BagsList::on_remove(&201);
+			BagsList::on_remove(&201).unwrap();
 			// then the count goes down
 			assert_eq!(BagsList::count(), 4);
 
 			// when updating
-			BagsList::on_update(&201, VoteWeight::MAX);
+			BagsList::on_update(&201, VoteWeight::MAX).unwrap();
 			// then the count stays the same
 			assert_eq!(BagsList::count(), 4);
 		});
@@ -534,7 +550,7 @@ mod sorted_list_provider {
 			assert_eq!(BagsList::count(), 5);
 
 			// when increasing weight to the level of non-existent bag
-			BagsList::on_update(&42, 2_000);
+			BagsList::on_update(&42, 2_000).unwrap();
 
 			// then the bag is created with the id in it,
 			assert_eq!(
@@ -545,7 +561,7 @@ mod sorted_list_provider {
 			assert_eq!(BagsList::iter().collect::<Vec<_>>(), vec![42, 2, 3, 4, 1]);
 
 			// when decreasing weight within the range of the current bag
-			BagsList::on_update(&42, 1_001);
+			BagsList::on_update(&42, 1_001).unwrap();
 
 			// then the id does not change bags,
 			assert_eq!(
@@ -556,7 +572,7 @@ mod sorted_list_provider {
 			assert_eq!(BagsList::iter().collect::<Vec<_>>(), vec![42, 2, 3, 4, 1]);
 
 			// when increasing weight to the level of a non-existent bag with the max threshold
-			BagsList::on_update(&42, VoteWeight::MAX);
+			BagsList::on_update(&42, VoteWeight::MAX).unwrap();
 
 			// the the new bag is created with the id in it,
 			assert_eq!(
@@ -567,7 +583,7 @@ mod sorted_list_provider {
 			assert_eq!(BagsList::iter().collect::<Vec<_>>(), vec![42, 2, 3, 4, 1]);
 
 			// when decreasing the weight to a pre-existing bag
-			BagsList::on_update(&42, 1_000);
+			BagsList::on_update(&42, 1_000).unwrap();
 
 			// then id is moved to the correct bag (as the last member),
 			assert_eq!(
@@ -597,7 +613,7 @@ mod sorted_list_provider {
 			assert_storage_noop!(BagsList::on_remove(&42));
 
 			// when removing a node from a bag with multiple nodes
-			BagsList::on_remove(&2);
+			BagsList::on_remove(&2).unwrap();
 
 			// then
 			assert_eq!(get_list_as_ids(), vec![3, 4, 1]);
@@ -605,7 +621,7 @@ mod sorted_list_provider {
 			ensure_left(2, 3);
 
 			// when removing a node from a bag with only one node
-			BagsList::on_remove(&1);
+			BagsList::on_remove(&1).unwrap();
 
 			// then
 			assert_eq!(get_list_as_ids(), vec![3, 4]);
@@ -613,10 +629,10 @@ mod sorted_list_provider {
 			ensure_left(1, 2);
 
 			// when removing all remaining ids
-			BagsList::on_remove(&4);
+			BagsList::on_remove(&4).unwrap();
 			assert_eq!(get_list_as_ids(), vec![3]);
 			ensure_left(4, 1);
-			BagsList::on_remove(&3);
+			BagsList::on_remove(&3).unwrap();
 
 			// then the storage is completely cleaned up
 			assert_eq!(get_list_as_ids(), Vec::<AccountId>::new());

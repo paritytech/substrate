@@ -45,7 +45,7 @@ use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 use crate::{
 	log, slashing, weights::WeightInfo, ActiveEraInfo, BalanceOf, EraPayout, Exposure, ExposureOf,
 	Forcing, IndividualExposure, Nominations, PositiveImbalanceOf, RewardDestination,
-	SessionInterface, StakingLedger, ValidatorPrefs,
+	SessionInterface, StakingLedger, UnboundedNominations, ValidatorPrefs,
 };
 
 use super::{pallet::*, STAKING_ID};
@@ -207,16 +207,48 @@ impl<T: Config> Pallet<T> {
 		controller: &T::AccountId,
 		ledger: &StakingLedger<T::AccountId, BalanceOf<T>>,
 	) {
+		let prev_active = Self::ledger(controller).map(|l| l.active).unwrap_or_default();
 		T::Currency::set_lock(STAKING_ID, &ledger.stash, ledger.total, WithdrawReasons::all());
 		<Ledger<T>>::insert(controller, ledger);
 
-		if let Some(targets) = Self::bonded(controller)
-			.and_then(|stash| Self::nominators(stash))
-			.map(|nomination| nomination.targets)
+		let total_issuance = T::Currency::total_issuance();
+		let apply_change = |who: &T::AccountId| {
+			use sp_std::cmp::Ordering;
+			match ledger.active.cmp(&prev_active) {
+				Ordering::Greater => {
+					let _ = T::TargetList::on_increase(
+						who,
+						T::CurrencyToVote::to_vote(ledger.active - prev_active, total_issuance),
+					)
+					.defensive();
+				},
+				Ordering::Less => {
+					let _ = T::TargetList::on_decrease(
+						who,
+						T::CurrencyToVote::to_vote(prev_active - ledger.active, total_issuance),
+					)
+					.defensive();
+				},
+				Ordering::Equal => (),
+			};
+		};
+
+		// if this ledger belonged to a nominator..
+		if let Some(targets) =
+			NominatorsHelper::<T>::get_any(&ledger.stash).map(|nomination| nomination.targets)
 		{
 			for target in targets {
-				T::TargetList::on_update(&target, Self::vote_weight(&ledger.stash))
+				apply_change(&target);
 			}
+			#[cfg(debug_assertions)]
+			Self::sanity_check_list_providers();
+		}
+
+		// if this ledger belonged to a validator..
+		if Validators::<T>::contains_key(&ledger.stash) {
+			apply_change(&ledger.stash);
+			#[cfg(debug_assertions)]
+			Self::sanity_check_list_providers();
 		}
 	}
 
@@ -573,12 +605,14 @@ impl<T: Config> Pallet<T> {
 
 		slashing::clear_stash_metadata::<T>(stash, num_slashing_spans)?;
 
-		<Bonded<T>>::remove(stash);
-		<Ledger<T>>::remove(&controller);
-
-		<Payee<T>>::remove(stash);
+		// IMPORTANT: critical to remove the nominator before we wipe their stash, so we have access
+		// to their stake and update the approvals one last time.
 		Self::do_remove_validator(stash);
 		Self::do_remove_nominator(stash);
+
+		<Bonded<T>>::remove(stash);
+		<Ledger<T>>::remove(&controller);
+		<Payee<T>>::remove(stash);
 
 		frame_system::Pallet::<T>::dec_consumers(stash);
 
@@ -726,7 +760,7 @@ impl<T: Config> Pallet<T> {
 				// or bug if it does.
 				log!(
 					warn,
-					"DEFENSIVE: invalid item in `VoterList`: {:?}, this nominator probably has too many nominations now",
+					"invalid item in `VoterList`: {:?}, this nominator probably has too many nominations now",
 					voter
 				)
 			}
@@ -761,6 +795,7 @@ impl<T: Config> Pallet<T> {
 			.collect::<Vec<_>>();
 
 		Self::register_weight(T::WeightInfo::get_npos_targets(targets.len() as u32));
+		log!(info, "generated {} npos targets", targets.len());
 
 		targets
 	}
@@ -774,7 +809,7 @@ impl<T: Config> Pallet<T> {
 	/// to `Nominators` or `VoterList` outside of this function is almost certainly
 	/// wrong.
 	pub fn do_add_nominator(who: &T::AccountId, nominations: Nominations<T>) {
-		if !Nominators::<T>::contains_key(who) {
+		if !NominatorsHelper::<T>::contains_any(who) {
 			// maybe update sorted list.
 			let _ = T::VoterList::on_insert(who.clone(), Self::weight_of(who))
 				.defensive_unwrap_or_default();
@@ -793,10 +828,18 @@ impl<T: Config> Pallet<T> {
 	/// NOTE: you must ALWAYS use this function to remove a nominator from the system. Any access to
 	/// `Nominators` or `VoterList` outside of this function is almost certainly
 	/// wrong.
+	///
+	/// IMPORTANT: this function should be called before potentially the ledger of this staker is
+	/// reaped.
 	pub fn do_remove_nominator(who: &T::AccountId) -> bool {
-		let outcome = if Nominators::<T>::contains_key(who) {
+		let outcome = if let Some(targets) = NominatorsHelper::<T>::get_any(who).map(|n| n.targets)
+		{
+			let stake = Self::weight_of(&who);
+			for target in targets {
+				let _ = T::TargetList::on_decrease(&target, stake).defensive();
+			}
+			let _ = T::VoterList::on_remove(who).defensive();
 			Nominators::<T>::remove(who);
-			T::VoterList::on_remove(who);
 			true
 		} else {
 			false
@@ -820,6 +863,12 @@ impl<T: Config> Pallet<T> {
 			// maybe update sorted list.
 			let _ = T::VoterList::on_insert(who.clone(), Self::weight_of(who))
 				.defensive_unwrap_or_default();
+
+			if T::TargetList::contains(who) {
+				let _ = T::TargetList::on_increase(who, Self::weight_of(who)).defensive();
+			} else {
+				let _ = T::TargetList::on_insert(who.clone(), Self::weight_of(who)).defensive();
+			}
 		}
 		Validators::<T>::insert(who, prefs);
 
@@ -834,10 +883,14 @@ impl<T: Config> Pallet<T> {
 	/// NOTE: you must ALWAYS use this function to remove a validator from the system. Any access to
 	/// `Validators` or `VoterList` outside of this function is almost certainly
 	/// wrong.
+	///
+	/// IMPORTANT: this function should be called before potentially the ledger of this staker is
+	/// reaped.
 	pub fn do_remove_validator(who: &T::AccountId) -> bool {
 		let outcome = if Validators::<T>::contains_key(who) {
 			Validators::<T>::remove(who);
-			T::VoterList::on_remove(who);
+			let _ = T::VoterList::on_remove(who).defensive();
+			let _ = T::TargetList::on_decrease(who, Self::weight_of(who)).defensive();
 			true
 		} else {
 			false
@@ -866,18 +919,28 @@ impl<T: Config> Pallet<T> {
 			Nominators::<T>::count() + Validators::<T>::count(),
 			T::VoterList::count()
 		);
-		debug_assert_eq!(Validators::<T>::count(), T::TargetList::count());
 
 		debug_assert_eq!(T::VoterList::sanity_check(), Ok(()));
 		debug_assert_eq!(T::TargetList::sanity_check(), Ok(()));
+		// note that we cannot say much about the count of the target list.
+	}
 
+	#[cfg(any(debug_assertions, feature = "std"))]
+	pub(crate) fn sanity_check_approval_stakes() {
 		// additionally, if asked for the full check, we ensure that the TargetList is indeed
 		// composed of the approval stakes.
 		use crate::migrations::InjectValidatorsApprovalStakeIntoTargetList as TargetListMigration;
 		let approval_stakes = TargetListMigration::<T>::build_approval_stakes();
-		debug_assert!(approval_stakes
-			.iter()
-			.all(|(v, a)| T::TargetList::get_weight(v).unwrap_or_default() == *a))
+		approval_stakes.iter().for_each(|(v, a)| {
+			debug_assert_eq!(
+				T::TargetList::get_weight(v).unwrap_or_default(),
+				*a,
+				"staker {:?}, weight in TargetList {:?}, computed: {:?}",
+				v,
+				T::TargetList::get_weight(v).unwrap_or_default(),
+				a
+			)
+		});
 	}
 }
 
@@ -1330,11 +1393,13 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsAndValidatorsM
 		// TODO: this is not consistent, should ideally return an error if not exists.
 		Ok(Pallet::<T>::weight_of(id))
 	}
-	fn on_update(_: &T::AccountId, _weight: VoteWeight) {
+	fn on_update(_: &T::AccountId, _weight: VoteWeight) -> Result<(), Self::Error> {
 		// nothing to do on update.
+		Ok(())
 	}
-	fn on_remove(_: &T::AccountId) {
+	fn on_remove(_: &T::AccountId) -> Result<(), Self::Error> {
 		// nothing to do on remove.
+		Ok(())
 	}
 	fn unsafe_regenerate(
 		_: impl IntoIterator<Item = T::AccountId>,
@@ -1349,56 +1414,6 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsAndValidatorsM
 
 	fn unsafe_clear() {
 		Nominators::<T>::remove_all();
-		Validators::<T>::remove_all();
-	}
-}
-
-// TODO: move this to mock, as it is only for testing anyway.
-pub struct UseValidatorsMap<T>(sp_std::marker::PhantomData<T>);
-impl<T: Config> SortedListProvider<T::AccountId> for UseValidatorsMap<T> {
-	type Error = ();
-
-	/// Returns iterator over voter list, which can have `take` called on it.
-	fn iter() -> Box<dyn Iterator<Item = T::AccountId>> {
-		Box::new(Validators::<T>::iter().map(|(v, _)| v))
-	}
-	fn count() -> u32 {
-		Validators::<T>::count()
-	}
-	fn contains(id: &T::AccountId) -> bool {
-		Validators::<T>::contains_key(id)
-	}
-	fn on_insert(_: T::AccountId, _weight: VoteWeight) -> Result<(), Self::Error> {
-		// nothing to do on insert.
-		Ok(())
-	}
-	fn get_weight(id: &T::AccountId) -> Result<VoteWeight, Self::Error> {
-		let mut approval_stake = VoteWeight::zero();
-		Nominators::<T>::iter().for_each(|(nominator, nomination)| {
-			if nomination.targets.contains(id) {
-				approval_stake += Pallet::<T>::weight_of(&nominator);
-			}
-		});
-		Ok(approval_stake)
-	}
-	fn on_update(_: &T::AccountId, _weight: VoteWeight) {
-		// nothing to do on update.
-	}
-	fn on_remove(_: &T::AccountId) {
-		// nothing to do on remove.
-	}
-	fn unsafe_regenerate(
-		_: impl IntoIterator<Item = T::AccountId>,
-		_: Box<dyn Fn(&T::AccountId) -> VoteWeight>,
-	) -> u32 {
-		// nothing to do upon regenerate.
-		0
-	}
-	fn sanity_check() -> Result<(), &'static str> {
-		Ok(())
-	}
-
-	fn unsafe_clear() {
 		Validators::<T>::remove_all();
 	}
 }

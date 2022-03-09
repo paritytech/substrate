@@ -79,7 +79,10 @@ macro_rules! log {
 	($level:tt, $patter:expr $(, $values:expr)* $(,)?) => {
 		log::$level!(
 			target: crate::LOG_TARGET,
-			concat!("[{:?}] 👜", $patter), <frame_system::Pallet<T>>::block_number() $(, $values)*
+			concat!("[{:?}][{}] 👜", $patter),
+			<frame_system::Pallet<T>>::block_number(),
+			<crate::Pallet::<T, I> as frame_support::traits::PalletInfoAccess>::name()
+			$(, $values)*
 		)
 	};
 }
@@ -92,12 +95,12 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(crate) trait Store)]
-	pub struct Pallet<T>(_);
+	pub struct Pallet<T, I = ()>(_);
 
 	#[pallet::config]
-	pub trait Config: frame_system::Config {
+	pub trait Config<I: 'static = ()>: frame_system::Config {
 		/// The overarching event type.
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: weights::WeightInfo;
@@ -156,25 +159,26 @@ pub mod pallet {
 	///
 	/// Nodes store links forward and back within their respective bags.
 	#[pallet::storage]
-	pub(crate) type ListNodes<T: Config> =
-		CountedStorageMap<_, Twox64Concat, T::AccountId, list::Node<T>>;
+	pub(crate) type ListNodes<T: Config<I>, I: 'static = ()> =
+		CountedStorageMap<_, Twox64Concat, T::AccountId, list::Node<T, I>>;
 
 	/// A bag stored in storage.
 	///
 	/// Stores a `Bag` struct, which stores head and tail pointers to itself.
 	#[pallet::storage]
-	pub(crate) type ListBags<T: Config> = StorageMap<_, Twox64Concat, VoteWeight, list::Bag<T>>;
+	pub(crate) type ListBags<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Twox64Concat, VoteWeight, list::Bag<T, I>>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(crate) fn deposit_event)]
-	pub enum Event<T: Config> {
+	pub enum Event<T: Config<I>, I: 'static = ()> {
 		/// Moved an account from one bag to another.
 		Rebagged { who: T::AccountId, from: VoteWeight, to: VoteWeight },
 	}
 
 	#[pallet::error]
 	#[cfg_attr(test, derive(PartialEq))]
-	pub enum Error<T> {
+	pub enum Error<T, I = ()> {
 		/// Attempted to place node in front of a node in another bag.
 		NotInSameBag,
 		/// Id not found in list.
@@ -184,7 +188,7 @@ pub mod pallet {
 	}
 
 	#[pallet::call]
-	impl<T: Config> Pallet<T> {
+	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		/// Declare that some `dislocated` account has, through rewards or penalties, sufficiently
 		/// changed its weight that it should properly fall into a different bag than its current
 		/// one.
@@ -197,7 +201,8 @@ pub mod pallet {
 		pub fn rebag(origin: OriginFor<T>, dislocated: T::AccountId) -> DispatchResult {
 			ensure_signed(origin)?;
 			let current_weight = T::VoteWeightProvider::vote_weight(&dislocated);
-			let _ = Pallet::<T>::do_rebag(&dislocated, current_weight);
+			// TODO: we might want to reflect the error here.
+			let _ = Pallet::<T, I>::do_rebag(&dislocated, current_weight);
 			Ok(())
 		}
 
@@ -212,12 +217,12 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::put_in_front_of())]
 		pub fn put_in_front_of(origin: OriginFor<T>, lighter: T::AccountId) -> DispatchResult {
 			let heavier = ensure_signed(origin)?;
-			List::<T>::put_in_front_of(&lighter, &heavier).map_err(Into::into)
+			List::<T, I>::put_in_front_of(&lighter, &heavier).map_err(Into::into)
 		}
 	}
 
 	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
 		fn integrity_test() {
 			// ensure they are strictly increasing, this also implies that duplicates are detected.
 			assert!(
@@ -228,60 +233,60 @@ pub mod pallet {
 	}
 }
 
-impl<T: Config> Pallet<T> {
+impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Move an account from one bag to another, depositing an event on success.
 	///
-	/// If the account changed bags, returns `Some((from, to))`.
+	/// If the account changed bags, returns `Ok((from, to))`.
 	pub fn do_rebag(
 		account: &T::AccountId,
 		new_weight: VoteWeight,
-	) -> Option<(VoteWeight, VoteWeight)> {
-		// if no voter at that node, don't do anything.
-		// the caller just wasted the fee to call this.
-		let maybe_movement = list::Node::<T>::get(&account)
-			.and_then(|node| List::update_position_for(node, new_weight));
-		if let Some((from, to)) = maybe_movement {
-			Self::deposit_event(Event::<T>::Rebagged { who: account.clone(), from, to });
+	) -> Result<(VoteWeight, VoteWeight), Error> {
+		// If no voter at that node, don't do anything. the caller just wasted the fee to call this.
+		let maybe_movement = list::Node::<T, I>::get(&account)
+			.and_then(|node| List::update_position_for(node, new_weight))
+			.ok_or(Error::NonExistent);
+		if let Ok((from, to)) = maybe_movement {
+			Self::deposit_event(Event::<T, I>::Rebagged { who: account.clone(), from, to });
 		};
 		maybe_movement
 	}
 
 	/// Equivalent to `ListBags::get`, but public. Useful for tests in outside of this crate.
 	#[cfg(feature = "std")]
-	pub fn list_bags_get(weight: VoteWeight) -> Option<list::Bag<T>> {
+	pub fn list_bags_get(weight: VoteWeight) -> Option<list::Bag<T, I>> {
 		ListBags::get(weight)
 	}
 }
 
-impl<T: Config> SortedListProvider<T::AccountId> for Pallet<T> {
+impl<T: Config<I>, I: 'static> SortedListProvider<T::AccountId> for Pallet<T, I> {
 	type Error = Error;
 
 	fn iter() -> Box<dyn Iterator<Item = T::AccountId>> {
-		Box::new(List::<T>::iter().map(|n| n.id().clone()))
+		Box::new(List::<T, I>::iter().map(|n| n.id().clone()))
 	}
 
 	fn count() -> u32 {
-		ListNodes::<T>::count()
+		ListNodes::<T, I>::count()
 	}
 
 	fn contains(id: &T::AccountId) -> bool {
-		List::<T>::contains(id)
+		List::<T, I>::contains(id)
 	}
 
 	fn on_insert(id: T::AccountId, weight: VoteWeight) -> Result<(), Error> {
-		List::<T>::insert(id, weight)
+		List::<T, I>::insert(id, weight)
 	}
 
 	fn get_weight(id: &T::AccountId) -> Result<VoteWeight, Error> {
-		List::<T>::get_weight(id)
+		List::<T, I>::get_weight(id)
 	}
 
-	fn on_update(id: &T::AccountId, new_weight: VoteWeight) {
-		Pallet::<T>::do_rebag(id, new_weight);
+	fn on_update(id: &T::AccountId, new_weight: VoteWeight) -> Result<(), Error> {
+		Pallet::<T, I>::do_rebag(id, new_weight).map(|_| ())
 	}
 
-	fn on_remove(id: &T::AccountId) {
-		List::<T>::remove(id)
+	fn on_remove(id: &T::AccountId) -> Result<(), Error> {
+		List::<T, I>::remove(id)
 	}
 
 	fn unsafe_regenerate(
@@ -291,12 +296,12 @@ impl<T: Config> SortedListProvider<T::AccountId> for Pallet<T> {
 		// NOTE: This call is unsafe for the same reason as SortedListProvider::unsafe_regenerate.
 		// I.e. because it can lead to many storage accesses.
 		// So it is ok to call it as caller must ensure the conditions.
-		List::<T>::unsafe_regenerate(all, weight_of)
+		List::<T, I>::unsafe_regenerate(all, weight_of)
 	}
 
 	#[cfg(feature = "std")]
 	fn sanity_check() -> Result<(), &'static str> {
-		List::<T>::sanity_check()
+		List::<T, I>::sanity_check()
 	}
 
 	#[cfg(not(feature = "std"))]
@@ -308,14 +313,14 @@ impl<T: Config> SortedListProvider<T::AccountId> for Pallet<T> {
 		// NOTE: This call is unsafe for the same reason as SortedListProvider::unsafe_clear.
 		// I.e. because it can lead to many storage accesses.
 		// So it is ok to call it as caller must ensure the conditions.
-		List::<T>::unsafe_clear()
+		List::<T, I>::unsafe_clear()
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn weight_update_worst_case(who: &T::AccountId, is_increase: bool) -> VoteWeight {
 		use frame_support::traits::Get as _;
 		let thresholds = T::BagThresholds::get();
-		let node = list::Node::<T>::get(who).unwrap();
+		let node = list::Node::<T, I>::get(who).unwrap();
 		let current_bag_idx = thresholds
 			.iter()
 			.chain(sp_std::iter::once(&VoteWeight::MAX))
@@ -331,5 +336,16 @@ impl<T: Config> SortedListProvider<T::AccountId> for Pallet<T> {
 			let prev_threshold_idx = current_bag_idx - 1;
 			thresholds[prev_threshold_idx]
 		}
+	}
+}
+
+impl<T: Config<I>, I: 'static> VoteWeightProvider<T::AccountId> for Pallet<T, I> {
+	fn vote_weight(id: &T::AccountId) -> VoteWeight {
+		Node::<T, I>::get(id).map(|node| node.weight()).unwrap_or_default()
+	}
+
+	#[cfg(any(feature = "runtime-benchmarks", test))]
+	fn set_vote_weight_of(_: &T::AccountId, _: VoteWeight) {
+		todo!();
 	}
 }

@@ -73,12 +73,19 @@ pub struct InjectValidatorsApprovalStakeIntoTargetList<T>(sp_std::marker::Phanto
 impl<T: Config> InjectValidatorsApprovalStakeIntoTargetList<T> {
 	pub(crate) fn build_approval_stakes() -> BTreeMap<T::AccountId, VoteWeight> {
 		let mut approval_stakes = BTreeMap::<T::AccountId, VoteWeight>::new();
-		Nominators::<T>::iter().for_each(|(who, nomination)| {
+
+		NominatorsHelper::<T>::iter_all().for_each(|(who, nomination)| {
 			let stake = Pallet::<T>::weight_of(&who);
 			for target in nomination.targets {
 				let current = approval_stakes.entry(target).or_default();
 				*current = current.saturating_add(stake);
 			}
+		});
+
+		Validators::<T>::iter().for_each(|(v, _)| {
+			let stake = Pallet::<T>::weight_of(&v);
+			let current = approval_stakes.entry(v).or_default();
+			*current = current.saturating_add(stake);
 		});
 
 		approval_stakes
@@ -89,11 +96,10 @@ impl<T: Config> OnRuntimeUpgrade for InjectValidatorsApprovalStakeIntoTargetList
 	fn on_runtime_upgrade() -> Weight {
 		if StorageVersion::<T>::get() == Releases::V9_0_0 {
 			// TODO: maybe write this in a multi-block fashion.
-			// TODO: TargetList should store balance, not u64.
 			let approval_stakes = Self::build_approval_stakes();
-			for (v, _) in Validators::<T>::iter() {
-				let approval_stake = approval_stakes.get(&v).map(|x| *x).unwrap_or_default();
-				let _ = T::TargetList::on_insert(v.clone(), approval_stake).defensive();
+
+			for (v, a) in approval_stakes {
+				let _ = T::TargetList::on_insert(v, a).defensive();
 			}
 
 			StorageVersion::<T>::put(Releases::V10_0_0);
