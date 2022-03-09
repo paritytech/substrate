@@ -411,6 +411,7 @@ where
 
 			// execute extrinsics
 			let (header, extrinsics) = block.deconstruct();
+
 			Self::execute_extrinsics_with_book_keeping(extrinsics, *header.number());
 
 			if !signature_batching.verify() {
@@ -459,7 +460,7 @@ where
 			).collect();
 			let shuffled_extrinsics = extrinsic_shuffler::shuffle_using_seed(extrinsics_with_author, &header.seed().seed);
 
-			Self::execute_extrinsics_with_book_keeping(shuffled_extrinsics, *header.number());
+			Self::execute_extrinsics_impl(shuffled_extrinsics, *header.number());
 
 			if !signature_batching.verify() {
 				panic!("Signature verification failed.");
@@ -487,6 +488,38 @@ where
 
 		Self::idle_and_finalize_hook(block_number);
 	}
+
+	#[cfg(not(feature = "disable-execution"))]
+	/// regular impl execute inherents & extrinsics
+	fn execute_extrinsics_impl(
+		extrinsics: Vec<Block::Extrinsic>,
+		block_number: NumberFor<Block>,
+	) {
+		Self::execute_extrinsics_with_book_keeping(extrinsics, block_number)
+	}
+
+	#[cfg(feature = "disable-execution")]
+	/// impl for benchmark -  execute inherents only
+	fn execute_extrinsics_impl(
+		extrinsics: Vec<Block::Extrinsic>,
+		block_number: NumberFor<Block>,
+	) {
+		extrinsics.into_iter()
+			.filter(|e| !e.is_signed().unwrap())
+			.for_each(|e| {
+			if let Err(e) = Self::apply_extrinsic(e) {
+				let err: &'static str = e.into();
+				panic!("{}", err)
+			}
+		});
+
+		// post-extrinsics book-keeping
+		<frame_system::Pallet<System>>::note_finished_extrinsics();
+
+		Self::idle_and_finalize_hook(block_number);
+	}
+
+
 
 	/// Finalize the block - it is up the caller to ensure that all header fields are valid
 	/// except state-root.
