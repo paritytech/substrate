@@ -242,7 +242,7 @@ use frame_support::{
 use frame_system::{ensure_none, offchain::SendTransactionTypes};
 use scale_info::TypeInfo;
 use sp_arithmetic::{
-	traits::{CheckedAdd, Saturating, Zero},
+	traits::{CheckedAdd, Zero},
 	UpperOf,
 };
 use sp_npos_elections::{
@@ -987,14 +987,13 @@ pub mod pallet {
 
 			// create the submission
 			let deposit = Self::deposit_for(&raw_solution, size);
-			let reward = {
+			let call_fee = {
 				let call = Call::submit { raw_solution: raw_solution.clone() };
-				let call_fee = T::EstimateCallFee::estimate_call_fee(&call, None.into());
-				T::SignedRewardBase::get().saturating_add(call_fee)
+				T::EstimateCallFee::estimate_call_fee(&call, None.into())
 			};
 
 			let submission =
-				SignedSubmission { who: who.clone(), deposit, raw_solution: *raw_solution, reward };
+				SignedSubmission { who: who.clone(), deposit, raw_solution: *raw_solution, reward: T::SignedRewardBase::get(), call_fee };
 
 			// insert the submission if the queue has space or it's better than the weakest
 			// eject the weakest if the queue was full

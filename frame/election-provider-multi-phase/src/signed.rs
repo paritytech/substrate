@@ -52,6 +52,8 @@ pub struct SignedSubmission<AccountId, Balance: HasCompact, Solution> {
 	pub raw_solution: RawSolution<Solution>,
 	/// The reward that should potentially be paid for this solution, if accepted.
 	pub reward: Balance,
+	// The estimated fee the origin paid to submit the solution.
+	pub call_fee: Balance,
 }
 
 impl<AccountId, Balance, Solution> Ord for SignedSubmission<AccountId, Balance, Solution>
@@ -361,7 +363,7 @@ impl<T: Config> Pallet<T> {
 			Self::snapshot_metadata().unwrap_or_default();
 
 		while let Some(best) = all_submissions.pop_last() {
-			let SignedSubmission { raw_solution, who, deposit, reward } = best;
+			let SignedSubmission { raw_solution, who, deposit, reward, call_fee } = best;
 			let active_voters = raw_solution.solution.voter_count() as u32;
 			let feasibility_weight = {
 				// defensive only: at the end of signed phase, snapshot will exits.
@@ -377,6 +379,7 @@ impl<T: Config> Pallet<T> {
 						&who,
 						deposit,
 						reward,
+						call_fee,
 					);
 					found_solution = true;
 
@@ -395,10 +398,9 @@ impl<T: Config> Pallet<T> {
 		// Any unprocessed solution is pointless to even consider. Feasible or malicious,
 		// they didn't end up being used. Unreserve the bonds.
 		let discarded = all_submissions.len();
-		for SignedSubmission { who, deposit, .. } in all_submissions.drain() {
-			let _remaining = T::Currency::unreserve(&who, deposit);
-			weight = weight.saturating_add(T::DbWeight::get().writes(1));
-			debug_assert!(_remaining.is_zero());
+		for SignedSubmission { who, deposit, call_fee, .. } in all_submissions.drain() {
+			Self::finalize_signed_phase_handle_refund(&who, deposit, call_fee);
+			weight = weight.saturating_add(T::DbWeight::get().writes(2));
 		}
 
 		debug_assert!(!SignedSubmissionIndices::<T>::exists());
@@ -424,6 +426,7 @@ impl<T: Config> Pallet<T> {
 		who: &T::AccountId,
 		deposit: BalanceOf<T>,
 		reward: BalanceOf<T>,
+		call_fee: BalanceOf<T>,
 	) {
 		// write this ready solution.
 		<QueuedSolution<T>>::put(ready_solution);
@@ -431,9 +434,7 @@ impl<T: Config> Pallet<T> {
 		// emit reward event
 		Self::deposit_event(crate::Event::Rewarded { account: who.clone(), value: reward });
 
-		// unreserve deposit.
-		let _remaining = T::Currency::unreserve(who, deposit);
-		debug_assert!(_remaining.is_zero());
+		Self::finalize_signed_phase_handle_refund(who, deposit, call_fee);
 
 		// Reward.
 		let positive_imbalance = T::Currency::deposit_creating(who, reward);
@@ -487,6 +488,21 @@ impl<T: Config> Pallet<T> {
 		T::SignedDepositBase::get()
 			.saturating_add(len_deposit)
 			.saturating_add(weight_deposit)
+	}
+
+	/// Unreserve `who`s deposit and refund their transaction fee.
+	fn finalize_signed_phase_handle_refund(
+		who: &T::AccountId,
+		deposit: BalanceOf<T>,
+		call_fee: BalanceOf<T>
+	) {
+		// Unreserve deposit
+		let _remaining = T::Currency::unreserve(who, deposit);
+		debug_assert!(_remaining.is_zero());
+
+		println!("{:?}=call_fee", call_fee);
+		// Refund fee
+		let _ = T::Currency::deposit_creating(who, call_fee);
 	}
 }
 
@@ -598,8 +614,8 @@ mod tests {
 
 			// 99 is rewarded.
 			assert_eq!(balances(&99), (100 + 7 + 8, 0));
-			// 999 gets everything back.
-			assert_eq!(balances(&999), (100, 0));
+			// 999 gets everything back, including the call fee.
+			assert_eq!(balances(&999), (100 + 8, 0));
 		})
 	}
 
@@ -824,8 +840,8 @@ mod tests {
 			assert_eq!(balances(&99), (100 + 7 + 8, 0));
 			// 999 is slashed.
 			assert_eq!(balances(&999), (95, 0));
-			// 9999 gets everything back.
-			assert_eq!(balances(&9999), (100, 0));
+			// 9999 gets everything back, including the call fee.
+			assert_eq!(balances(&9999), (100 + 8, 0));
 		})
 	}
 
