@@ -129,7 +129,7 @@ pub struct BoundedOnChainSequentialPhragmen<
 	T: Config,
 	VotersBound: Get<u32>,
 	TargetsBound: Get<u32>,
->(PhantomData<T>, PhantomData<VotersBound>, PhantomData<TargetsBound>);
+>(PhantomData<(T, VotersBound, TargetsBound)>);
 
 impl<T: Config, VotersBound: Get<u32>, TargetsBound: Get<u32>> ElectionProvider
 	for BoundedOnChainSequentialPhragmen<T, VotersBound, TargetsBound>
