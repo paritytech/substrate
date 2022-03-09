@@ -51,18 +51,9 @@ fn basic_setup_works() {
 			Bag::<Runtime> { phantom: PhantomData, head: Some(2), tail: Some(4), bag_upper: 0 }
 		);
 
-		assert_eq!(
-			ListNodes::<Runtime>::get(2).unwrap(),
-			node(2, None, Some(3), 1_000)
-		);
-		assert_eq!(
-			ListNodes::<Runtime>::get(3).unwrap(),
-			node(3, Some(2), Some(4), 1_000)
-		);
-		assert_eq!(
-			ListNodes::<Runtime>::get(4).unwrap(),
-			node(4, Some(3), None, 1_000)
-		);
+		assert_eq!(ListNodes::<Runtime>::get(2).unwrap(), node(2, None, Some(3), 1_000));
+		assert_eq!(ListNodes::<Runtime>::get(3).unwrap(), node(3, Some(2), Some(4), 1_000));
+		assert_eq!(ListNodes::<Runtime>::get(4).unwrap(), node(4, Some(3), None, 1_000));
 		assert_eq!(ListNodes::<Runtime>::get(1).unwrap(), node(1, None, None, 10));
 
 		// non-existent id does not have a storage footprint
