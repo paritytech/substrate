@@ -44,11 +44,11 @@ fn basic_setup_works() {
 		// the state of the bags is as expected
 		assert_eq!(
 			ListBags::<Runtime>::get(10).unwrap(),
-			Bag::<Runtime> { phantom: PhantomData, head: Some(1), tail: Some(1), bag_upper: 0 }
+			Bag::<Runtime> { head: Some(1), tail: Some(1), bag_upper: 0, phantom: PhantomData }
 		);
 		assert_eq!(
 			ListBags::<Runtime>::get(1_000).unwrap(),
-			Bag::<Runtime> { phantom: PhantomData, head: Some(2), tail: Some(4), bag_upper: 0 }
+			Bag::<Runtime> { head: Some(2), tail: Some(4), bag_upper: 0, phantom: PhantomData }
 		);
 
 		assert_eq!(ListNodes::<Runtime>::get(2).unwrap(), node(2, None, Some(3), 1_000));
@@ -395,18 +395,18 @@ mod list {
 	fn put_in_front_of_panics_if_bag_not_found() {
 		ExtBuilder::default().skip_genesis_ids().build_and_execute_no_post_check(|| {
 			let node_10_no_bag = Node::<Runtime> {
-				phantom: PhantomData,
 				id: 10,
 				prev: None,
 				next: None,
 				bag_upper: 15,
+				phantom: PhantomData,
 			};
 			let node_11_no_bag = Node::<Runtime> {
-				phantom: PhantomData,
 				id: 11,
 				prev: None,
 				next: None,
 				bag_upper: 15,
+				phantom: PhantomData,
 			};
 
 			// given
@@ -433,11 +433,11 @@ mod list {
 
 			// implicitly also test that `node`'s `prev`/`next` are correctly re-assigned.
 			let node_42 = Node::<Runtime> {
-				phantom: PhantomData,
 				id: 42,
 				prev: Some(1),
 				next: Some(2),
 				bag_upper: 1_000,
+				phantom: PhantomData,
 			};
 			assert!(!crate::ListNodes::<Runtime>::contains_key(42));
 
@@ -462,11 +462,11 @@ mod list {
 
 			// implicitly also test that `node`'s `prev`/`next` are correctly re-assigned.
 			let node_42 = Node::<Runtime> {
-				phantom: PhantomData,
 				id: 42,
 				prev: Some(4),
 				next: None,
 				bag_upper: 1_000,
+				phantom: PhantomData,
 			};
 			assert!(!crate::ListNodes::<Runtime>::contains_key(42));
 
@@ -491,11 +491,11 @@ mod list {
 
 			// implicitly also test that `node`'s `prev`/`next` are correctly re-assigned.
 			let node_42 = Node::<Runtime> {
-				phantom: PhantomData,
 				id: 42,
 				prev: None,
 				next: Some(2),
 				bag_upper: 1_000,
+				phantom: PhantomData,
 			};
 			assert!(!crate::ListNodes::<Runtime>::contains_key(42));
 
@@ -520,11 +520,11 @@ mod list {
 
 			// implicitly also test that `node`'s `prev`/`next` are correctly re-assigned.
 			let node_42 = Node::<Runtime> {
-				phantom: PhantomData,
 				id: 42,
 				prev: Some(42),
 				next: Some(42),
 				bag_upper: 1_000,
+				phantom: PhantomData,
 			};
 			assert!(!crate::ListNodes::<Runtime>::contains_key(42));
 
@@ -552,7 +552,7 @@ mod bags {
 				let bag = Bag::<Runtime>::get(bag_upper).unwrap();
 				let bag_ids = bag.iter().map(|n| *n.id()).collect::<Vec<_>>();
 
-				assert_eq!(bag, Bag::<Runtime> { phantom: PhantomData, head, tail, bag_upper });
+				assert_eq!(bag, Bag::<Runtime> { head, tail, bag_upper, phantom: PhantomData });
 				assert_eq!(bag_ids, ids);
 			};
 
@@ -584,11 +584,11 @@ mod bags {
 	fn insert_node_sets_proper_bag() {
 		ExtBuilder::default().build_and_execute_no_post_check(|| {
 			let node = |id, bag_upper| Node::<Runtime> {
-				phantom: PhantomData,
 				id,
 				prev: None,
 				next: None,
 				bag_upper,
+				phantom: PhantomData,
 			};
 
 			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4])]);
@@ -598,7 +598,7 @@ mod bags {
 
 			assert_eq!(
 				ListNodes::<Runtime>::get(&42).unwrap(),
-				Node { phantom: PhantomData, bag_upper: 10, prev: Some(1), next: None, id: 42 }
+				Node { id: 42, prev: Some(1), next: None, bag_upper: 10, phantom: PhantomData }
 			);
 		});
 	}
@@ -607,11 +607,11 @@ mod bags {
 	fn insert_node_happy_paths_works() {
 		ExtBuilder::default().build_and_execute_no_post_check(|| {
 			let node = |id, bag_upper| Node::<Runtime> {
-				phantom: PhantomData,
 				id,
 				prev: None,
 				next: None,
 				bag_upper,
+				phantom: PhantomData,
 			};
 
 			// when inserting into a bag with 1 node
@@ -634,11 +634,11 @@ mod bags {
 
 			// when inserting a node pointing to the accounts not in the bag
 			let node_61 = Node::<Runtime> {
-				phantom: PhantomData,
 				id: 61,
 				prev: Some(21),
 				next: Some(101),
 				bag_upper: 20,
+				phantom: PhantomData,
 			};
 			bag_20.insert_node_unchecked(node_61);
 			// then ids are in order
@@ -647,11 +647,11 @@ mod bags {
 			assert_eq!(
 				Node::<Runtime>::get(&61).unwrap(),
 				Node::<Runtime> {
-					phantom: PhantomData,
 					id: 61,
 					prev: Some(62),
 					next: None,
-					bag_upper: 20
+					bag_upper: 20,
+					phantom: PhantomData,
 				}
 			);
 
@@ -667,18 +667,18 @@ mod bags {
 	// Document improper ways `insert_node` may be getting used.
 	#[test]
 	fn insert_node_bad_paths_documented() {
-		let node = |phantom, id, prev, next, bag_upper| Node::<Runtime> {
-			phantom,
+		let node = |id, prev, next, bag_upper, phantom| Node::<Runtime> {
 			id,
 			prev,
 			next,
 			bag_upper,
+			phantom,
 		};
 		ExtBuilder::default().build_and_execute_no_post_check(|| {
 			// when inserting a node with both prev & next pointing at an account in an incorrect
 			// bag.
 			let mut bag_1000 = Bag::<Runtime>::get(1_000).unwrap();
-			bag_1000.insert_node_unchecked(node(PhantomData, 42, Some(1), Some(1), 500));
+			bag_1000.insert_node_unchecked(node(42, Some(1), Some(1), 500, PhantomData));
 
 			// then the proper prev and next is set.
 			assert_eq!(bag_as_ids(&bag_1000), vec![2, 3, 4, 42]);
@@ -686,7 +686,7 @@ mod bags {
 			// and when the node is re-fetched all the info is correct
 			assert_eq!(
 				Node::<Runtime>::get(&42).unwrap(),
-				node(PhantomData, 42, Some(4), None, bag_1000.bag_upper)
+				node(42, Some(4), None, bag_1000.bag_upper, PhantomData,)
 			);
 		});
 
@@ -696,7 +696,7 @@ mod bags {
 			assert_eq!(bag_as_ids(&bag_1000), vec![2, 3, 4]);
 
 			// when inserting a node with duplicate id 3
-			bag_1000.insert_node_unchecked(node(PhantomData, 3, None, None, bag_1000.bag_upper));
+			bag_1000.insert_node_unchecked(node(3, None, None, bag_1000.bag_upper, PhantomData));
 
 			// then all the nodes after the duplicate are lost (because it is set as the tail)
 			assert_eq!(bag_as_ids(&bag_1000), vec![2, 3]);
@@ -706,7 +706,7 @@ mod bags {
 			// and the last accessible node has an **incorrect** prev pointer.
 			assert_eq!(
 				Node::<Runtime>::get(&3).unwrap(),
-				node(PhantomData, 3, Some(4), None, bag_1000.bag_upper)
+				node(3, Some(4), None, bag_1000.bag_upper, PhantomData)
 			);
 		});
 
@@ -714,7 +714,7 @@ mod bags {
 			// when inserting a duplicate id of the head
 			let mut bag_1000 = Bag::<Runtime>::get(1_000).unwrap();
 			assert_eq!(bag_as_ids(&bag_1000), vec![2, 3, 4]);
-			bag_1000.insert_node_unchecked(node(PhantomData, 2, None, None, 0));
+			bag_1000.insert_node_unchecked(node(2, None, None, 0, PhantomData));
 
 			// then all nodes after the head are lost
 			assert_eq!(bag_as_ids(&bag_1000), vec![2]);
@@ -722,13 +722,13 @@ mod bags {
 			// and the re-fetched node has bad pointers
 			assert_eq!(
 				Node::<Runtime>::get(&2).unwrap(),
-				node(PhantomData, 2, Some(4), None, bag_1000.bag_upper)
+				node(2, Some(4), None, bag_1000.bag_upper, PhantomData)
 			);
 			//         ^^^ despite being the bags head, it has a prev
 
 			assert_eq!(
 				bag_1000,
-				Bag { phantom: PhantomData, head: Some(2), tail: Some(2), bag_upper: 1_000 }
+				Bag { head: Some(2), tail: Some(2), bag_upper: 1_000, phantom: PhantomData }
 			)
 		});
 	}
@@ -741,12 +741,12 @@ mod bags {
 	)]
 	fn insert_node_duplicate_tail_panics_with_debug_assert() {
 		ExtBuilder::default().build_and_execute(|| {
-			let node = |phantom, id, prev, next, bag_upper| Node::<Runtime> {
-				phantom,
+			let node = |id, prev, next, bag_upper, phantom| Node::<Runtime> {
 				id,
 				prev,
 				next,
 				bag_upper,
+				phantom,
 			};
 
 			// given
@@ -756,7 +756,7 @@ mod bags {
 			// when inserting a duplicate id that is already the tail
 			assert_eq!(bag_1000.tail, Some(4));
 			assert_eq!(bag_1000.iter().count(), 3);
-			bag_1000.insert_node_unchecked(node(PhantomData, 4, None, None, bag_1000.bag_upper)); // panics in debug
+			bag_1000.insert_node_unchecked(node(4, None, None, bag_1000.bag_upper, PhantomData)); // panics in debug
 			assert_eq!(bag_1000.iter().count(), 3); // in release we expect it to silently ignore the request.
 		});
 	}
@@ -875,11 +875,11 @@ mod bags {
 	fn remove_node_bad_paths_documented() {
 		ExtBuilder::default().build_and_execute_no_post_check(|| {
 			let bad_upper_node_2 = Node::<Runtime> {
-				phantom: PhantomData,
 				id: 2,
 				prev: None,
 				next: Some(3),
 				bag_upper: 10, // should be 1_000
+				phantom: PhantomData,
 			};
 			let mut bag_1000 = Bag::<Runtime>::get(1_000).unwrap();
 
