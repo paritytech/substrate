@@ -25,6 +25,7 @@ pub use pallet::*;
 pub mod pallet {
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
+	use sp_runtime::traits::{Hash, Saturating};
 
 	use frame_support::traits::{Currency, ReservableCurrency};
 
@@ -50,11 +51,11 @@ pub mod pallet {
 
 		/// The deposit a user needs to make in order to commit to a name registration.
 		#[pallet::constant]
-		type CommitmentDeposit = Get<BalanceOf<T>>;
+		type CommitmentDeposit: Get<BalanceOf<Self>>;
 
 		/// The deposit a user needs to place in order to keep their name registration in storage.
 		#[pallet::constant]
-		type NameDeposit = Get<BalanceOf<T>>;
+		type NameDeposit: Get<BalanceOf<Self>>;
 	}
 
 	#[derive(Encode, Decode, Default, MaxEncodedLen, TypeInfo)]
@@ -100,8 +101,8 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		Committed { who: T::AccountId, hash: CommitmentHash },
-
+		// TODO: Potentially make events more lightweight
+		Committed { sender: T::AccountId, who: T::AccountId, hash: CommitmentHash },
 	}
 
 	// Your Pallet's error messages.
@@ -109,60 +110,89 @@ pub mod pallet {
 	pub enum Error<T> {
 		/// This commitment hash already exists in storage.
 		AlreadyCommitted,
+		/// This commitment does not exist.
+		CommitmentNotFound,
+		/// This name is already registered.
+		AlreadyRegistered,
 	}
 
 	// Your Pallet's callable functions.
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
+		// TODO: Should we allow registration on behalf of?
 		#[pallet::weight(0)]
-		pub fn commit(origin: OriginFor<T>, commitment_hash: CommitmentHash) -> DispatchResult {
+		pub fn commit(
+			origin: OriginFor<T>,
+			who: T::AccountId,
+			commitment_hash: CommitmentHash,
+		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 			ensure!(!Commitments::<T>::contains_key(commitment_hash), Error::<T>::AlreadyCommitted);
 			let block_number = frame_system::Pallet::<T>::block_number();
 			let deposit = T::CommitmentDeposit::get();
 
-			T::Currenty::reserve(sender, deposit)?;
+			T::Currency::reserve(&sender, deposit)?;
 
-			let commitment = Commitment {
-				who: sender,
-				when: block_number,
-				deposit,
-			}
+			let commitment = Commitment { who: who.clone(), when: block_number, deposit };
 
 			Commitments::<T>::insert(commitment_hash, commitment);
-			Self::deposit_event()
+			Self::deposit_event(Event::<T>::Committed { sender, who, hash: commitment_hash });
 
 			Ok(())
 		}
 
 		#[pallet::weight(0)]
-		pub fn reveal(origin: OriginFor<T>, commitment_hash: CommitmentHash) -> DispatchResult {
+		pub fn reveal(
+			origin: OriginFor<T>,
+			name: Vec<u8>,
+			secret: u64,
+			length: T::BlockNumber,
+		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
-			ensure!(!Commitments::<T>::contains_key(commitment_hash), Error::<T>::AlreadyCommitted);
+			let commitment_hash = sp_io::hashing::blake2_256(&(name.clone(), secret).encode());
+
+			let commitment =
+				Commitments::<T>::get(commitment_hash).ok_or(Error::<T>::CommitmentNotFound)?;
+
+			let name_hash = sp_io::hashing::blake2_256(&name);
+
+			ensure!(Registrations::<T>::contains_key(name_hash), Error::<T>::AlreadyRegistered);
+
+			let fee = Self::registration_fee(name, length);
+
+			// TODO make more configurable
+			//T::Currency::burn(sender, fee)?;
+
 			let block_number = frame_system::Pallet::<T>::block_number();
-			let deposit = T::CommitmentDeposit::get();
 
-			T::Currenty::reserve(sender, deposit)?;
+			let registration = Registration {
+				owner: commitment.who.clone(),
+				registrant: commitment.who,
+				expiry: block_number.saturating_add(length),
+				// Handle deposit in the future maybe.
+				deposit: Default::default(),
+			};
 
-			let commitment = Commitment {
-				who: sender,
-				when: block_number,
-				deposit,
-			}
+			Registrations::<T>::insert(name_hash, registration);
 
-			Commitments::<T>::insert(commitment_hash, commitment);
-			Self::deposit_event()
-
+			// TODO: Registration Event here
 			Ok(())
 		}
-
-
 	}
 
 	// Your Pallet's internal functions.
 	impl<T: Config> Pallet<T> {
-		fn do_register(name_hash: NameHash, who: T::AccountId, deposit: BalanceOf<T>) -> DispatchResult {
+		fn do_register(
+			name_hash: NameHash,
+			who: T::AccountId,
+			deposit: BalanceOf<T>,
+		) -> DispatchResult {
 			Ok(())
+		}
+
+		// TODO
+		fn registration_fee(name: Vec<u8>, length: T::BlockNumber) -> BalanceOf<T> {
+			Default::default()
 		}
 	}
 }
