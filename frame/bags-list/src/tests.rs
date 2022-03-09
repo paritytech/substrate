@@ -18,7 +18,7 @@
 use frame_support::{assert_noop, assert_ok, assert_storage_noop, traits::IntegrityTest};
 
 use super::*;
-use frame_election_provider_support::SortedListProvider;
+use frame_election_provider_support::{SortedListProvider, VoteWeight};
 use list::Bag;
 use mock::{test_utils::*, *};
 
@@ -35,7 +35,7 @@ mod pallet {
 			);
 
 			// when increasing vote weight to the level of non-existent bag
-			StakingMock::set_vote_weight_of(&42, 2_000);
+			StakingMock::set_score_of(&42, 2_000);
 			assert_ok!(BagsList::rebag(Origin::signed(0), 42));
 
 			// then a new bag is created and the id moves into it
@@ -45,7 +45,7 @@ mod pallet {
 			);
 
 			// when decreasing weight within the range of the current bag
-			StakingMock::set_vote_weight_of(&42, 1_001);
+			StakingMock::set_score_of(&42, 1_001);
 			assert_ok!(BagsList::rebag(Origin::signed(0), 42));
 
 			// then the id does not move
@@ -55,7 +55,7 @@ mod pallet {
 			);
 
 			// when reducing weight to the level of a non-existent bag
-			StakingMock::set_vote_weight_of(&42, 30);
+			StakingMock::set_score_of(&42, 30);
 			assert_ok!(BagsList::rebag(Origin::signed(0), 42));
 
 			// then a new bag is created and the id moves into it
@@ -65,7 +65,7 @@ mod pallet {
 			);
 
 			// when increasing weight to the level of a pre-existing bag
-			StakingMock::set_vote_weight_of(&42, 500);
+			StakingMock::set_score_of(&42, 500);
 			assert_ok!(BagsList::rebag(Origin::signed(0), 42));
 
 			// then the id moves into that bag
@@ -85,7 +85,7 @@ mod pallet {
 			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4])]);
 
 			// when
-			StakingMock::set_vote_weight_of(&4, 10);
+			StakingMock::set_score_of(&4, 10);
 			assert_ok!(BagsList::rebag(Origin::signed(0), 4));
 
 			// then
@@ -93,7 +93,7 @@ mod pallet {
 			assert_eq!(Bag::<Runtime>::get(1_000).unwrap(), Bag::new(Some(2), Some(3), 1_000));
 
 			// when
-			StakingMock::set_vote_weight_of(&3, 10);
+			StakingMock::set_score_of(&3, 10);
 			assert_ok!(BagsList::rebag(Origin::signed(0), 3));
 
 			// then
@@ -104,7 +104,7 @@ mod pallet {
 			assert_eq!(get_list_as_ids(), vec![2u32, 1, 4, 3]);
 
 			// when
-			StakingMock::set_vote_weight_of(&2, 10);
+			StakingMock::set_score_of(&2, 10);
 			assert_ok!(BagsList::rebag(Origin::signed(0), 2));
 
 			// then
@@ -119,7 +119,7 @@ mod pallet {
 	fn rebag_head_works() {
 		ExtBuilder::default().build_and_execute(|| {
 			// when
-			StakingMock::set_vote_weight_of(&2, 10);
+			StakingMock::set_score_of(&2, 10);
 			assert_ok!(BagsList::rebag(Origin::signed(0), 2));
 
 			// then
@@ -127,7 +127,7 @@ mod pallet {
 			assert_eq!(Bag::<Runtime>::get(1_000).unwrap(), Bag::new(Some(3), Some(4), 1_000));
 
 			// when
-			StakingMock::set_vote_weight_of(&3, 10);
+			StakingMock::set_score_of(&3, 10);
 			assert_ok!(BagsList::rebag(Origin::signed(0), 3));
 
 			// then
@@ -135,7 +135,7 @@ mod pallet {
 			assert_eq!(Bag::<Runtime>::get(1_000).unwrap(), Bag::new(Some(4), Some(4), 1_000));
 
 			// when
-			StakingMock::set_vote_weight_of(&4, 10);
+			StakingMock::set_score_of(&4, 10);
 			assert_ok!(BagsList::rebag(Origin::signed(0), 4));
 
 			// then
@@ -241,7 +241,7 @@ mod pallet {
 			// given
 			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4, 5])]);
 
-			StakingMock::set_vote_weight_of(&3, 999);
+			StakingMock::set_score_of(&3, 999);
 
 			// when
 			assert_ok!(BagsList::put_in_front_of(Origin::signed(4), 3));
@@ -262,7 +262,7 @@ mod pallet {
 					vec![(10, vec![1]), (1_000, vec![2, 3, 4, 5, 6])]
 				);
 
-				StakingMock::set_vote_weight_of(&5, 999);
+				StakingMock::set_score_of(&5, 999);
 
 				// when
 				assert_ok!(BagsList::put_in_front_of(Origin::signed(3), 5));
@@ -281,7 +281,7 @@ mod pallet {
 			// given
 			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4])]);
 
-			StakingMock::set_vote_weight_of(&2, 999);
+			StakingMock::set_score_of(&2, 999);
 
 			// when
 			assert_ok!(BagsList::put_in_front_of(Origin::signed(3), 2));
@@ -297,7 +297,7 @@ mod pallet {
 			// given
 			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4])]);
 
-			StakingMock::set_vote_weight_of(&3, 999);
+			StakingMock::set_score_of(&3, 999);
 
 			// when
 			assert_ok!(BagsList::put_in_front_of(Origin::signed(4), 3));
@@ -313,7 +313,7 @@ mod pallet {
 			// given
 			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4, 5])]);
 
-			StakingMock::set_vote_weight_of(&2, 999);
+			StakingMock::set_score_of(&2, 999);
 
 			// when
 			assert_ok!(BagsList::put_in_front_of(Origin::signed(5), 2));
@@ -329,7 +329,7 @@ mod pallet {
 			// given
 			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4, 5])]);
 
-			StakingMock::set_vote_weight_of(&4, 999);
+			StakingMock::set_score_of(&4, 999);
 
 			// when
 			BagsList::put_in_front_of(Origin::signed(2), 4).unwrap();
@@ -359,7 +359,7 @@ mod pallet {
 			// given
 			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4])]);
 
-			StakingMock::set_vote_weight_of(&4, 999);
+			StakingMock::set_score_of(&4, 999);
 
 			// when
 			BagsList::put_in_front_of(Origin::signed(2), 4).unwrap();
@@ -375,7 +375,7 @@ mod pallet {
 			// given
 			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4])]);
 
-			StakingMock::set_vote_weight_of(&3, 999);
+			StakingMock::set_score_of(&3, 999);
 
 			// then
 			assert_noop!(
