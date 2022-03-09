@@ -189,7 +189,7 @@ impl<T: Config> ListScenario<T> {
 
 		// find a destination weight that will trigger the worst case scenario
 		let dest_weight_as_vote =
-			T::SortedListProvider::weight_update_worst_case(&origin_stash1, is_increase);
+			T::SortedListProvider::score_update_worst_case(&origin_stash1, is_increase);
 
 		let total_issuance = T::Currency::total_issuance();
 

@@ -20,7 +20,7 @@
 use super::*;
 use crate::list::List;
 use frame_benchmarking::{account, whitelist_account, whitelisted_caller};
-use frame_election_provider_support::ValueProvider;
+use frame_election_provider_support::ScoreProvider;
 use frame_support::{assert_ok, traits::Get};
 use frame_system::RawOrigin as SystemOrigin;
 use sp_runtime::traits::One;
@@ -68,7 +68,7 @@ frame_benchmarking::benchmarks! {
 
 		let caller = whitelisted_caller();
 		// update the weight of `origin_middle` to guarantee it will be rebagged into the destination.
-		T::ValueProvider::set_value_of(&origin_middle, dest_bag_thresh);
+		T::ScoreProvider::set_score_of(&origin_middle, dest_bag_thresh);
 	}: rebag(SystemOrigin::Signed(caller), origin_middle.clone())
 	verify {
 		// check the bags have updated as expected.
@@ -125,7 +125,7 @@ frame_benchmarking::benchmarks! {
 
 		let caller = whitelisted_caller();
 		// update the weight of `origin_tail` to guarantee it will be rebagged into the destination.
-		T::ValueProvider::set_value_of(&origin_tail, dest_bag_thresh);
+		T::ScoreProvider::set_score_of(&origin_tail, dest_bag_thresh);
 	}: rebag(SystemOrigin::Signed(caller), origin_tail.clone())
 	verify {
 		// check the bags have updated as expected.
@@ -159,8 +159,8 @@ frame_benchmarking::benchmarks! {
 		let heavier_next: T::AccountId = account("heavier_next", 0, 0);
 		assert_ok!(List::<T, _>::insert(heavier_next.clone(), bag_thresh));
 
-		T::ValueProvider::set_value_of(&lighter, bag_thresh - One::one());
-		T::ValueProvider::set_value_of(&heavier, bag_thresh);
+		T::ScoreProvider::set_score_of(&lighter, bag_thresh - One::one());
+		T::ScoreProvider::set_score_of(&heavier, bag_thresh);
 
 		assert_eq!(
 			List::<T, _>::iter().map(|n| n.id().clone()).collect::<Vec<_>>(),

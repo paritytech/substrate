@@ -411,8 +411,8 @@ mod list {
 			// given
 			ListNodes::<Runtime>::insert(10, node_10_no_bag);
 			ListNodes::<Runtime>::insert(11, node_11_no_bag);
-			StakingMock::set_value_of(&10, 14);
-			StakingMock::set_value_of(&11, 15);
+			StakingMock::set_score_of(&10, 14);
+			StakingMock::set_score_of(&11, 15);
 			assert!(!ListBags::<Runtime>::contains_key(15));
 			assert_eq!(List::<Runtime>::get_bags(), vec![]);
 

@@ -690,10 +690,10 @@ parameter_types! {
 
 impl pallet_bags_list::Config for Runtime {
 	type Event = Event;
-	type ValueProvider = Staking;
+	type ScoreProvider = Staking;
 	type WeightInfo = pallet_bags_list::weights::SubstrateWeight<Runtime>;
 	type BagThresholds = BagThresholds;
-	type Value = sp_npos_elections::VoteWeight;
+	type Score = sp_npos_elections::VoteWeight;
 }
 
 parameter_types! {

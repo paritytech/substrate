@@ -19,7 +19,7 @@
 
 use frame_election_provider_support::{
 	data_provider, ElectionDataProvider, ElectionProvider, SortedListProvider, Supports,
-	VoteWeight, ValueProvider, VoterOf,
+	ScoreProvider, VoteWeight, VoterOf,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -1244,15 +1244,15 @@ where
 	}
 }
 
-impl<T: Config> ValueProvider<T::AccountId> for Pallet<T> {
-	type Value = VoteWeight;
+impl<T: Config> ScoreProvider<T::AccountId> for Pallet<T> {
+	type Score = VoteWeight;
 
-	fn value(who: &T::AccountId) -> Self::Value {
+	fn score(who: &T::AccountId) -> Self::Score {
 		Self::weight_of(who)
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn set_value_of(who: &T::AccountId, weight: Self::Value) {
+	fn set_score_of(who: &T::AccountId, weight: Self::Score) {
 		// this will clearly results in an inconsistent state, but it should not matter for a
 		// benchmark.
 		let active: BalanceOf<T> = weight.try_into().map_err(|_| ()).unwrap();
@@ -1282,7 +1282,7 @@ pub struct UseNominatorsMap<T>(sp_std::marker::PhantomData<T>);
 
 impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsMap<T> {
 	type Error = ();
-	type Value = VoteWeight;
+	type Score = VoteWeight;
 
 	/// Returns iterator over voter list, which can have `take` called on it.
 	fn iter() -> Box<dyn Iterator<Item = T::AccountId>> {
@@ -1294,11 +1294,11 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsMap<T> {
 	fn contains(id: &T::AccountId) -> bool {
 		Nominators::<T>::contains_key(id)
 	}
-	fn on_insert(_: T::AccountId, _weight: Self::Value) -> Result<(), Self::Error> {
+	fn on_insert(_: T::AccountId, _weight: Self::Score) -> Result<(), Self::Error> {
 		// nothing to do on insert.
 		Ok(())
 	}
-	fn on_update(_: &T::AccountId, _weight: Self::Value) {
+	fn on_update(_: &T::AccountId, _weight: Self::Score) {
 		// nothing to do on update.
 	}
 	fn on_remove(_: &T::AccountId) {
@@ -1306,7 +1306,7 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsMap<T> {
 	}
 	fn unsafe_regenerate(
 		_: impl IntoIterator<Item = T::AccountId>,
-		_: Box<dyn Fn(&T::AccountId) -> Self::Value>,
+		_: Box<dyn Fn(&T::AccountId) -> Self::Score>,
 	) -> u32 {
 		// nothing to do upon regenerate.
 		0
