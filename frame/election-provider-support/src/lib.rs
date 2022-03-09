@@ -169,6 +169,7 @@
 pub mod onchain;
 use frame_support::{traits::Get, BoundedVec};
 use sp_std::{fmt::Debug, prelude::*};
+use sp_runtime::traits::Bounded;
 
 /// Re-export some type as they are used in the interface.
 pub use sp_arithmetic::PerThing;
@@ -343,7 +344,7 @@ pub trait SortedListProvider<AccountId> {
 	/// The list's error type.
 	type Error: sp_std::fmt::Debug;
 
-	type Value;
+	type Value: Bounded;
 
 	/// An iterator over the list, which can have `take` called on it.
 	fn iter() -> Box<dyn Iterator<Item = AccountId>>;
@@ -390,7 +391,9 @@ pub trait SortedListProvider<AccountId> {
 	/// If `who` changes by the returned amount they are guaranteed to have a worst case change
 	/// in their list position.
 	#[cfg(feature = "runtime-benchmarks")]
-	fn weight_update_worst_case(_who: &AccountId, _is_increase: bool) -> Self::Value;
+	fn weight_update_worst_case(_who: &AccountId, _is_increase: bool) -> Self::Value {
+		Self::Value::max_value()
+	}
 }
 
 /// Something that can provide the `VoteWeight` of an account. Similar to [`ElectionProvider`] and

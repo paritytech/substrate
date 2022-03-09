@@ -21,19 +21,20 @@ use super::*;
 use crate::{self as bags_list};
 use frame_support::parameter_types;
 use std::collections::HashMap;
+use frame_election_provider_support::VoteWeight;
 
 pub type AccountId = u32;
 pub type Balance = u32;
 
 parameter_types! {
 	// Set the vote weight for any id who's weight has _not_ been set with `set_value_of`.
-	pub static NextVoteWeight: u64 = 0;
-	pub static NextVoteWeightMap: HashMap<AccountId, u64> = Default::default();
+	pub static NextVoteWeight: VoteWeight = 0;
+	pub static NextVoteWeightMap: HashMap<AccountId, VoteWeight> = Default::default();
 }
 
 pub struct StakingMock;
 impl frame_election_provider_support::ValueProvider<AccountId> for StakingMock {
-	type Value = u64;
+	type Value = VoteWeight;
 
 	fn value(id: &AccountId) -> Self::Value {
 		*NextVoteWeightMap::get().get(id).unwrap_or(&NextVoteWeight::get())
@@ -73,7 +74,7 @@ impl frame_system::Config for Runtime {
 }
 
 parameter_types! {
-	pub static BagThresholds: &'static [u64] = &[10, 20, 30, 40, 50, 60, 1_000, 2_000, 10_000];
+	pub static BagThresholds: &'static [VoteWeight] = &[10, 20, 30, 40, 50, 60, 1_000, 2_000, 10_000];
 }
 
 impl bags_list::Config for Runtime {
@@ -81,7 +82,7 @@ impl bags_list::Config for Runtime {
 	type WeightInfo = ();
 	type BagThresholds = BagThresholds;
 	type ValueProvider = StakingMock;
-	type Value = u64;
+	type Value = VoteWeight;
 }
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Runtime>;
@@ -98,11 +99,11 @@ frame_support::construct_runtime!(
 );
 
 /// Default AccountIds and their weights.
-pub(crate) const GENESIS_IDS: [(AccountId, u64); 4] = [(1, 10), (2, 1_000), (3, 1_000), (4, 1_000)];
+pub(crate) const GENESIS_IDS: [(AccountId, VoteWeight); 4] = [(1, 10), (2, 1_000), (3, 1_000), (4, 1_000)];
 
 #[derive(Default)]
 pub struct ExtBuilder {
-	ids: Vec<(AccountId, u64)>,
+	ids: Vec<(AccountId, VoteWeight)>,
 	skip_genesis_ids: bool,
 }
 
@@ -116,7 +117,7 @@ impl ExtBuilder {
 
 	/// Add some AccountIds to insert into `List`.
 	#[cfg(test)]
-	pub(crate) fn add_ids(mut self, ids: Vec<(AccountId, u64)>) -> Self {
+	pub(crate) fn add_ids(mut self, ids: Vec<(AccountId, VoteWeight)>) -> Self {
 		self.ids = ids;
 		self
 	}
