@@ -636,7 +636,7 @@ pub(crate) mod tests {
 	use super::*;
 	use crate::{
 		keystore::tests::Keyring,
-		tests::{create_beefy_worker, get_best_block_receivers, make_beefy_ids, BeefyTestNet},
+		tests::{create_beefy_worker, get_beefy_streams, make_beefy_ids, BeefyTestNet},
 	};
 
 	use futures::{executor::block_on, future::poll_fn, task::Poll};
@@ -890,8 +890,8 @@ pub(crate) mod tests {
 		let mut net = BeefyTestNet::new(1, 0);
 		let mut worker = create_beefy_worker(&net.peer(0), &keys[0], &validator_set, 1);
 
-		let mut best_block_stream =
-			get_best_block_receivers(&mut net, keys).drain(..).next().unwrap();
+		let (mut best_block_streams, _) = get_beefy_streams(&mut net, keys);
+		let mut best_block_stream = best_block_streams.drain(..).next().unwrap();
 
 		// no 'best beefy block'
 		assert_eq!(worker.best_beefy_block, None);
@@ -901,8 +901,8 @@ pub(crate) mod tests {
 		}));
 
 		// unknown hash for block #1
-		let mut best_block_stream =
-			get_best_block_receivers(&mut net, keys).drain(..).next().unwrap();
+		let (mut best_block_streams, _) = get_beefy_streams(&mut net, keys);
+		let mut best_block_stream = best_block_streams.drain(..).next().unwrap();
 		worker.set_best_beefy_block(1);
 		assert_eq!(worker.best_beefy_block, Some(1));
 		block_on(poll_fn(move |cx| {
@@ -911,8 +911,8 @@ pub(crate) mod tests {
 		}));
 
 		// generate 2 blocks, try again expect success
-		let mut best_block_stream =
-			get_best_block_receivers(&mut net, keys).drain(..).next().unwrap();
+		let (mut best_block_streams, _) = get_beefy_streams(&mut net, keys);
+		let mut best_block_stream = best_block_streams.drain(..).next().unwrap();
 		net.generate_blocks(2, 10, &validator_set);
 
 		worker.set_best_beefy_block(2);

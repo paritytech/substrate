@@ -304,19 +304,20 @@ fn run_for(duration: Duration, net: &Arc<Mutex<BeefyTestNet>>, runtime: &mut Run
 	block_until(sleep, net, runtime);
 }
 
-pub(crate) fn get_best_block_receivers(
+pub(crate) fn get_beefy_streams(
 	net: &mut BeefyTestNet,
 	peers: &[BeefyKeyring],
-) -> Vec<NotificationReceiver<H256>> {
+) -> (Vec<NotificationReceiver<H256>>, Vec<NotificationReceiver<BeefySignedCommitment<Block>>>) {
 	let mut best_block_streams = Vec::new();
+	let mut signed_commitment_streams = Vec::new();
 	for peer_id in 0..peers.len() {
 		let beefy_link_half =
 			net.peer(peer_id).data.beefy_link_half.lock().as_ref().unwrap().clone();
-		let BeefyLinkHalf { signed_commitment_stream: _, beefy_best_block_stream } =
-			beefy_link_half;
+		let BeefyLinkHalf { signed_commitment_stream, beefy_best_block_stream } = beefy_link_half;
 		best_block_streams.push(beefy_best_block_stream.subscribe());
+		signed_commitment_streams.push(signed_commitment_stream.subscribe());
 	}
-	best_block_streams
+	(best_block_streams, signed_commitment_streams)
 }
 
 fn wait_for_best_beefy_blocks(
@@ -345,16 +346,41 @@ fn wait_for_best_beefy_blocks(
 	block_until(wait_for, net, runtime);
 }
 
+fn wait_for_beefy_signed_commitments(
+	streams: Vec<NotificationReceiver<BeefySignedCommitment<Block>>>,
+	net: &Arc<Mutex<BeefyTestNet>>,
+	runtime: &mut Runtime,
+	expected_commitment_block_nums: &[u64],
+) {
+	let mut wait_for = Vec::new();
+	let len = expected_commitment_block_nums.len();
+	streams.into_iter().for_each(|stream| {
+		let mut expected = expected_commitment_block_nums.iter();
+		wait_for.push(Box::pin(stream.take(len).for_each(move |signed_commitment| {
+			let expected = expected.next();
+			async move {
+				let commitment_block_num = signed_commitment.commitment.block_number;
+				assert_eq!(expected, Some(commitment_block_num).as_ref());
+				// TODO: also verify commitment payload, validator set id, and signatures.
+			}
+		})));
+	});
+	let wait_for = futures::future::join_all(wait_for);
+	block_until(wait_for, net, runtime);
+}
+
 fn streams_empty_after_timeout<T>(
 	streams: Vec<NotificationReceiver<T>>,
 	net: &Arc<Mutex<BeefyTestNet>>,
 	runtime: &mut Runtime,
-	timeout: Duration,
+	timeout: Option<Duration>,
 ) where
 	T: std::fmt::Debug,
 	T: std::cmp::PartialEq,
 {
-	run_for(timeout, net, runtime);
+	if let Some(timeout) = timeout {
+		run_for(timeout, net, runtime);
+	}
 	streams.into_iter().for_each(|mut stream| {
 		runtime.block_on(future::poll_fn(move |cx| {
 			assert_eq!(stream.poll_next_unpin(cx), Poll::Pending);
@@ -370,7 +396,7 @@ fn finalize_block_and_wait_for_beefy(
 	finalize_target: u32,
 	expected_beefy: &[u64],
 ) {
-	let best_block_streams = get_best_block_receivers(&mut *net.lock(), peers);
+	let (best_blocks, signed_commitments) = get_beefy_streams(&mut *net.lock(), peers);
 
 	let finalize = BlockId::number(finalize_target.into());
 	for i in 0..peers.len() {
@@ -379,10 +405,13 @@ fn finalize_block_and_wait_for_beefy(
 
 	if expected_beefy.is_empty() {
 		// run for 1 second then verify no new best beefy block available
-		streams_empty_after_timeout(best_block_streams, &net, runtime, Duration::from_secs(1));
+		let timeout = Some(Duration::from_secs(1));
+		streams_empty_after_timeout(best_blocks, &net, runtime, timeout);
+		streams_empty_after_timeout(signed_commitments, &net, runtime, None);
 	} else {
 		// run until expected beefy blocks are received
-		wait_for_best_beefy_blocks(best_block_streams, &net, runtime, expected_beefy);
+		wait_for_best_beefy_blocks(best_blocks, &net, runtime, expected_beefy);
+		wait_for_beefy_signed_commitments(signed_commitments, &net, runtime, expected_beefy);
 	}
 }
 
