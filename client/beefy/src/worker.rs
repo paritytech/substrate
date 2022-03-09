@@ -639,7 +639,7 @@ pub(crate) mod tests {
 		tests::{create_beefy_worker, get_best_block_receivers, make_beefy_ids, BeefyTestNet},
 	};
 
-	use futures::{channel::mpsc, executor::block_on, future::poll_fn, task::Poll};
+	use futures::{executor::block_on, future::poll_fn, task::Poll};
 
 	use sc_client_api::HeaderBackend;
 	use sc_network::NetworkService;
