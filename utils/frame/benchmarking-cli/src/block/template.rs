@@ -33,10 +33,10 @@ static TEMPLATE: &str = include_str!("./weights.hbs");
 /// Data consumed by Handlebar to fill out the `weights.hbs` template.
 #[derive(Serialize, Debug, Clone)]
 pub(crate) struct TemplateData {
-	/// Name of the benchmark. String version of `template_type`.
-	template_name: String,
-	/// Path prefix that will be used to save the resulting file.
-	template_path: String,
+	/// Short name of the benchmark. Can be "block" or "extrinsic".
+	long_name: String,
+	/// Long name of the benchmark. Can be "BlockExecution" "ExtrinsicBase".
+	short_name: String,
 	/// Name of the runtime. Taken from the chain spec.
 	runtime_name: String,
 	/// Version of the benchmarking CLI used.
@@ -64,8 +64,8 @@ impl TemplateData {
 		let weight = params.weight.calc_weight(stats)?;
 
 		Ok(TemplateData {
-			template_name: t.short_name().into(),
-			template_path: t.long_name().into(),
+			short_name: t.short_name().into(),
+			long_name: t.long_name().into(),
 			runtime_name: cfg.chain_spec.name().into(),
 			version: VERSION.into(),
 			date: chrono::Utc::now().format("%Y-%m-%d (Y/M/D)").to_string(),
@@ -97,7 +97,7 @@ impl TemplateData {
 	fn build_path(&self, weight_out: &str) -> PathBuf {
 		let mut path = PathBuf::from(weight_out);
 		if path.is_dir() {
-			path.push(format!("{:?}_weights.rs", self.template_name));
+			path.push(format!("{}_weights.rs", self.short_name));
 			path.set_extension("rs");
 		}
 		path

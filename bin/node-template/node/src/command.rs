@@ -99,7 +99,6 @@ pub fn run() -> sc_cli::Result<()> {
 			})
 		},
 		Some(Subcommand::BenchmarkBlock(cmd)) => {
-			// TODO feature check
 			let runner = cli.create_runner(cmd)?;
 			runner.async_run(|config| {
 				let PartialComponents { client, task_manager, .. } = service::new_partial(&config)?;

@@ -18,7 +18,7 @@
 //! THIS FILE WAS AUTO-GENERATED USING THE SUBSTRATE BENCHMARK CLI VERSION {{version}}
 //! DATE: {{date}}
 //!
-//! TYPE: `{{template_type}}`, RUNTIME: `{{runtime_name}}`
+//! SHORT-NAME: `{{short_name}}`, LONG-NAME: `{{long_name}}`, RUNTIME: `{{runtime_name}}`
 //! WARMUPS: `{{params.bench.warmup}}`, REPEAT: `{{params.bench.repeat}}`
 //! WEIGHT-PATH: `{{params.weight.weight_path}}`
 //! WEIGHT-METRIC: `{{params.weight.weight_metric}}`, WEIGHT-MUL: `{{params.weight.weight_mul}}`, WEIGHT-ADD: `{{params.weight.weight_add}}`
@@ -35,7 +35,7 @@ pub mod constants {
 	};
 
 	parameter_types! {
-		{{#if (eq template_name "block")}}
+		{{#if (eq short_name "block")}}
 		/// Time to execute an empty block.
 		{{else}}
 		/// Time to execute a NO-OP extrinsic eg. `System::remark`.
@@ -52,7 +52,7 @@ pub mod constants {
 		///   99th: {{underscore stats.p99}}
 		///   95th: {{underscore stats.p95}}
 		///   75th: {{underscore stats.p75}}
-		pub const {{template_name}}Weight: Weight = {{underscore weight}} * WEIGHT_PER_NANOS;
+		pub const {{long_name}}Weight: Weight = {{underscore weight}} * WEIGHT_PER_NANOS;
 	}
 
 	#[cfg(test)]
@@ -64,9 +64,9 @@ pub mod constants {
 		// you can delete it.
 		#[test]
 		fn sane() {
-			let w = super::constants::{{template_name}}Weight::get();
+			let w = super::constants::{{long_name}}Weight::get();
 
-			{{#if (eq template_name "block")}}			
+			{{#if (eq short_name "block")}}			
 			// At least 100 µs.
 			assert!(
 				w >= 100 * constants::WEIGHT_PER_MICROS,
