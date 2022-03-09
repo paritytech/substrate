@@ -18,7 +18,7 @@
 //! Test utilities
 
 use crate::{self as pallet_staking, *};
-use frame_election_provider_support::{onchain, SortedListProvider};
+use frame_election_provider_support::{onchain, SortedListProvider, VoteWeight};
 use frame_support::{
 	assert_ok, parameter_types,
 	traits::{
@@ -240,8 +240,9 @@ parameter_types! {
 impl pallet_bags_list::Config for Test {
 	type Event = Event;
 	type WeightInfo = ();
-	type VoteWeightProvider = Staking;
+	type ScoreProvider = Staking;
 	type BagThresholds = BagThresholds;
+	type Score = VoteWeight;
 }
 
 impl onchain::Config for Test {

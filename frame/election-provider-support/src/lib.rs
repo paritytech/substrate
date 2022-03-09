@@ -168,6 +168,7 @@
 
 pub mod onchain;
 use frame_support::{traits::Get, BoundedVec};
+use sp_runtime::traits::Bounded;
 use sp_std::{fmt::Debug, prelude::*};
 
 /// Re-export some type as they are used in the interface.
@@ -333,15 +334,16 @@ where
 /// This is generic over `AccountId` and it can represent a validator, a nominator, or any other
 /// entity.
 ///
-/// To simplify the trait, the `VoteWeight` is hardcoded as the weight of each entity. The weights
-/// are ascending, the higher, the better. In the long term, if this trait ends up having use cases
-/// outside of the election context, it is easy enough to make it generic over the `VoteWeight`.
+/// The scores (see [`Self::Score`]) are ascending, the higher, the better.
 ///
 /// Something that implements this trait will do a best-effort sort over ids, and thus can be
 /// used on the implementing side of [`ElectionDataProvider`].
 pub trait SortedListProvider<AccountId> {
 	/// The list's error type.
 	type Error: sp_std::fmt::Debug;
+
+	/// The type used by the list to compare nodes for ordering.
+	type Score: Bounded;
 
 	/// An iterator over the list, which can have `take` called on it.
 	fn iter() -> Box<dyn Iterator<Item = AccountId>>;
@@ -353,10 +355,10 @@ pub trait SortedListProvider<AccountId> {
 	fn contains(id: &AccountId) -> bool;
 
 	/// Hook for inserting a new id.
-	fn on_insert(id: AccountId, weight: VoteWeight) -> Result<(), Self::Error>;
+	fn on_insert(id: AccountId, score: Self::Score) -> Result<(), Self::Error>;
 
 	/// Hook for updating a single id.
-	fn on_update(id: &AccountId, weight: VoteWeight);
+	fn on_update(id: &AccountId, score: Self::Score);
 
 	/// Hook for removing am id from the list.
 	fn on_remove(id: &AccountId);
@@ -371,7 +373,7 @@ pub trait SortedListProvider<AccountId> {
 	/// new list, which can lead to too many storage accesses, exhausting the block weight.
 	fn unsafe_regenerate(
 		all: impl IntoIterator<Item = AccountId>,
-		weight_of: Box<dyn Fn(&AccountId) -> VoteWeight>,
+		score_of: Box<dyn Fn(&AccountId) -> Self::Score>,
 	) -> u32;
 
 	/// Remove all items from the list.
@@ -388,21 +390,23 @@ pub trait SortedListProvider<AccountId> {
 	/// If `who` changes by the returned amount they are guaranteed to have a worst case change
 	/// in their list position.
 	#[cfg(feature = "runtime-benchmarks")]
-	fn weight_update_worst_case(_who: &AccountId, _is_increase: bool) -> VoteWeight {
-		VoteWeight::MAX
+	fn score_update_worst_case(_who: &AccountId, _is_increase: bool) -> Self::Score {
+		Self::Score::max_value()
 	}
 }
 
 /// Something that can provide the `VoteWeight` of an account. Similar to [`ElectionProvider`] and
 /// [`ElectionDataProvider`], this should typically be implementing by whoever is supposed to *use*
 /// `SortedListProvider`.
-pub trait VoteWeightProvider<AccountId> {
-	/// Get the current `VoteWeight` of `who`.
-	fn vote_weight(who: &AccountId) -> VoteWeight;
+pub trait ScoreProvider<AccountId> {
+	type Score;
+
+	/// Get the current `Score` of `who`.
+	fn score(who: &AccountId) -> Self::Score;
 
 	/// For tests and benchmarks, set the `VoteWeight`.
 	#[cfg(any(feature = "runtime-benchmarks", test))]
-	fn set_vote_weight_of(_: &AccountId, _: VoteWeight) {}
+	fn set_score_of(_: &AccountId, _: Self::Score) {}
 }
 
 /// Something that can compute the result to an NPoS solution.
