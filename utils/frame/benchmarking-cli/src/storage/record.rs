@@ -107,6 +107,7 @@ impl BenchRecord {
 	}
 }
 
+// TODO refactor once https://doc.rust-lang.org/test/stats/trait.Stats.html is stabilized.
 impl Stats {
 	/// Calculates statistics and returns them.
 	pub fn new(xs: &Vec<u64>) -> Result<Self> {
@@ -153,8 +154,8 @@ impl Stats {
 	/// This is best effort since it ignores the interpolation case.
 	fn percentile(mut xs: Vec<u64>, p: f64) -> u64 {
 		xs.sort();
-		let index = (xs.len() as f64 * p).ceil() as usize;
-		xs[index - 1]
+		let index = (xs.len() as f64 * p).ceil() as usize - 1;
+		xs[index.clamp(0, xs.len() - 1)]
 	}
 }
 
@@ -186,6 +187,44 @@ impl FromStr for StatSelect {
 			"p95" => Ok(Self::P95Percentile),
 			"p75" => Ok(Self::P75Percentile),
 			_ => Err("String was not a StatSelect"),
+		}
+	}
+}
+
+#[cfg(test)]
+mod test_stats {
+	use super::Stats;
+	use rand::{seq::SliceRandom, thread_rng};
+
+	#[test]
+	fn stats_correct() {
+		let mut data: Vec<u64> = (1..=100).collect();
+		data.shuffle(&mut thread_rng());
+		let stats = Stats::new(&data).unwrap();
+
+		assert_eq!(stats.sum, 5050);
+		assert_eq!(stats.min, 1);
+		assert_eq!(stats.max, 100);
+
+		assert_eq!(stats.avg, 50);
+		assert_eq!(stats.median, 50); // 50.5 to be exact.
+							  // Rounded with 1/100 precision.
+		assert_eq!(stats.stddev, 28.87);
+
+		assert_eq!(stats.p99, 99);
+		assert_eq!(stats.p95, 95);
+		assert_eq!(stats.p75, 75);
+	}
+
+	#[test]
+	fn no_panic_different_lengths() {
+		// No input errors.
+		assert!(Stats::new(&vec![]).is_err());
+
+		// Different small input lengths are fine.
+		for l in 1..10 {
+			let data = (0..=l).collect();
+			assert!(Stats::new(&data).is_ok());
 		}
 	}
 }
