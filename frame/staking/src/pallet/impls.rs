@@ -1323,6 +1323,6 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsMap<T> {
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn weight_update_worst_case(_: &T::AccountId, _: bool) -> Self::Value {
-		u64::MAX
+		VoteWeight::MAX
 	}
 }
