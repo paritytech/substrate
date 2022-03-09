@@ -87,16 +87,12 @@ pub struct StorageParams {
 	#[clap(long)]
 	pub template_path: Option<PathBuf>,
 
-	/// Don't write benchmark output to a JSON file.
+	/// Write the raw 'read' results in JSON format to the specified file.
 	#[clap(long)]
-	pub no_json: bool,
-
-	/// Optionally specify the filename where to write the raw 'read' results in JSON format.
-	#[clap(long, conflicts_with = "no-json")]
 	pub json_read_path: Option<String>,
 
-	/// Optionally specify the filename where to write the raw 'write' results in JSON format.
-	#[clap(long, conflicts_with = "no-json")]
+	/// Write the raw 'write' results in JSON format to the specified file.
+	#[clap(long)]
 	pub json_write_path: Option<String>,
 
 	/// Rounds of warmups before measuring.
@@ -139,8 +135,8 @@ impl StorageCmd {
 
 		if !self.params.skip_read {
 			let record = self.bench_read(client.clone())?;
-			if !self.params.no_json {
-				record.save_json(&cfg, &self.params.json_read_path, "read")?;
+			if let Some(path) = &self.params.json_read_path {
+				record.save_json(&cfg, &path, "read")?;
 			}
 			let stats = record.calculate_stats()?;
 			info!("Time summary [ns]:\n{:?}\nValue size summary:\n{:?}", stats.0, stats.1);
@@ -149,8 +145,8 @@ impl StorageCmd {
 
 		if !self.params.skip_write {
 			let record = self.bench_write(client, db, storage)?;
-			if !self.params.no_json {
-				record.save_json(&cfg, &self.params.json_write_path, "write")?;
+			if let Some(path) = &self.params.json_write_path {
+				record.save_json(&cfg, &path, "write")?;
 			}
 			let stats = record.calculate_stats()?;
 			info!("Time summary [ns]:\n{:?}\nValue size summary:\n{:?}", stats.0, stats.1);

@@ -22,7 +22,6 @@ use sc_service::Configuration;
 
 use log::info;
 use serde::Serialize;
-use sp_runtime::traits::Clear;
 use std::{fmt, fs, path::PathBuf, result, str::FromStr, time::Duration};
 
 /// Raw output of a Storage benchmark.
@@ -98,18 +97,9 @@ impl BenchRecord {
 
 	/// Unless a path is specified, saves the raw results in a json file in the current directory.
 	/// Prefixes it with the DB name and suffixed with `path_suffix`.
-	pub fn save_json(
-		&self,
-		cfg: &Configuration,
-		out_path: &Option<String>,
-		path_suffix: &str,
-	) -> Result<()> {
-		let mut path = PathBuf::new();
-		if let Some(p) = out_path {
-			path = PathBuf::from(p);
-		}
-
-		if path.is_clear() || path.is_dir() {
+	pub fn save_json(&self, cfg: &Configuration, out_path: &str, path_suffix: &str) -> Result<()> {
+		let mut path = PathBuf::from(out_path);
+		if path.is_dir() {
 			path.push(&format!("{}_{}.json", cfg.database, path_suffix).to_lowercase());
 			path.set_extension("json");
 		}
