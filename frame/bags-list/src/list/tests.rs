@@ -32,7 +32,7 @@ fn basic_setup_works() {
 			prev,
 			next,
 			bag_upper,
-			phantom: PhantomData,
+			_phantom: PhantomData,
 		};
 
 		assert_eq!(ListNodes::<Runtime>::count(), 4);
@@ -44,11 +44,11 @@ fn basic_setup_works() {
 		// the state of the bags is as expected
 		assert_eq!(
 			ListBags::<Runtime>::get(10).unwrap(),
-			Bag::<Runtime> { head: Some(1), tail: Some(1), bag_upper: 0, phantom: PhantomData }
+			Bag::<Runtime> { head: Some(1), tail: Some(1), bag_upper: 0, _phantom: PhantomData }
 		);
 		assert_eq!(
 			ListBags::<Runtime>::get(1_000).unwrap(),
-			Bag::<Runtime> { head: Some(2), tail: Some(4), bag_upper: 0, phantom: PhantomData }
+			Bag::<Runtime> { head: Some(2), tail: Some(4), bag_upper: 0, _phantom: PhantomData }
 		);
 
 		assert_eq!(ListNodes::<Runtime>::get(2).unwrap(), node(2, None, Some(3), 1_000));
@@ -398,14 +398,14 @@ mod list {
 				prev: None,
 				next: None,
 				bag_upper: 15,
-				phantom: PhantomData,
+				_phantom: PhantomData,
 			};
 			let node_11_no_bag = Node::<Runtime> {
 				id: 11,
 				prev: None,
 				next: None,
 				bag_upper: 15,
-				phantom: PhantomData,
+				_phantom: PhantomData,
 			};
 
 			// given
@@ -436,7 +436,7 @@ mod list {
 				prev: Some(1),
 				next: Some(2),
 				bag_upper: 1_000,
-				phantom: PhantomData,
+				_phantom: PhantomData,
 			};
 			assert!(!crate::ListNodes::<Runtime>::contains_key(42));
 
@@ -465,7 +465,7 @@ mod list {
 				prev: Some(4),
 				next: None,
 				bag_upper: 1_000,
-				phantom: PhantomData,
+				_phantom: PhantomData,
 			};
 			assert!(!crate::ListNodes::<Runtime>::contains_key(42));
 
@@ -494,7 +494,7 @@ mod list {
 				prev: None,
 				next: Some(2),
 				bag_upper: 1_000,
-				phantom: PhantomData,
+				_phantom: PhantomData,
 			};
 			assert!(!crate::ListNodes::<Runtime>::contains_key(42));
 
@@ -523,7 +523,7 @@ mod list {
 				prev: Some(42),
 				next: Some(42),
 				bag_upper: 1_000,
-				phantom: PhantomData,
+				_phantom: PhantomData,
 			};
 			assert!(!crate::ListNodes::<Runtime>::contains_key(42));
 
@@ -551,7 +551,7 @@ mod bags {
 				let bag = Bag::<Runtime>::get(bag_upper).unwrap();
 				let bag_ids = bag.iter().map(|n| *n.id()).collect::<Vec<_>>();
 
-				assert_eq!(bag, Bag::<Runtime> { head, tail, bag_upper, phantom: PhantomData });
+				assert_eq!(bag, Bag::<Runtime> { head, tail, bag_upper, _phantom: PhantomData });
 				assert_eq!(bag_ids, ids);
 			};
 
@@ -587,7 +587,7 @@ mod bags {
 				prev: None,
 				next: None,
 				bag_upper,
-				phantom: PhantomData,
+				_phantom: PhantomData,
 			};
 
 			assert_eq!(List::<Runtime>::get_bags(), vec![(10, vec![1]), (1_000, vec![2, 3, 4])]);
@@ -597,7 +597,7 @@ mod bags {
 
 			assert_eq!(
 				ListNodes::<Runtime>::get(&42).unwrap(),
-				Node { bag_upper: 10, prev: Some(1), next: None, id: 42, phantom: PhantomData }
+				Node { bag_upper: 10, prev: Some(1), next: None, id: 42, _phantom: PhantomData }
 			);
 		});
 	}
@@ -610,7 +610,7 @@ mod bags {
 				prev: None,
 				next: None,
 				bag_upper,
-				phantom: PhantomData,
+				_phantom: PhantomData,
 			};
 
 			// when inserting into a bag with 1 node
@@ -637,7 +637,7 @@ mod bags {
 				prev: Some(21),
 				next: Some(101),
 				bag_upper: 20,
-				phantom: PhantomData,
+				_phantom: PhantomData,
 			};
 			bag_20.insert_node_unchecked(node_61);
 			// then ids are in order
@@ -650,7 +650,7 @@ mod bags {
 					prev: Some(62),
 					next: None,
 					bag_upper: 20,
-					phantom: PhantomData,
+					_phantom: PhantomData,
 				}
 			);
 
@@ -671,7 +671,7 @@ mod bags {
 			prev,
 			next,
 			bag_upper,
-			phantom: PhantomData,
+			_phantom: PhantomData,
 		};
 		ExtBuilder::default().build_and_execute_no_post_check(|| {
 			// when inserting a node with both prev & next pointing at an account in an incorrect
@@ -727,7 +727,7 @@ mod bags {
 
 			assert_eq!(
 				bag_1000,
-				Bag { head: Some(2), tail: Some(2), bag_upper: 1_000, phantom: PhantomData }
+				Bag { head: Some(2), tail: Some(2), bag_upper: 1_000, _phantom: PhantomData }
 			)
 		});
 	}
@@ -745,7 +745,7 @@ mod bags {
 				prev,
 				next,
 				bag_upper,
-				phantom: PhantomData,
+				_phantom: PhantomData,
 			};
 
 			// given
@@ -878,7 +878,7 @@ mod bags {
 				prev: None,
 				next: Some(3),
 				bag_upper: 10, // should be 1_000
-				phantom: PhantomData,
+				_phantom: PhantomData,
 			};
 			let mut bag_1000 = Bag::<Runtime>::get(1_000).unwrap();
 

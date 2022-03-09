@@ -1321,6 +1321,7 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsMap<T> {
 		Nominators::<T>::remove_all();
 	}
 
+	#[cfg(feature = "runtime-benchmarks")]
 	fn weight_update_worst_case(_: &T::AccountId, _: bool) -> Self::Value {
 		u64::MAX
 	}

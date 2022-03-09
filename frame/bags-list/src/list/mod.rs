@@ -564,7 +564,7 @@ pub struct Bag<T: Config<I>, I: 'static = ()> {
 	#[codec(skip)]
 	bag_upper: T::Value,
 	#[codec(skip)]
-	phantom: PhantomData<I>,
+	_phantom: PhantomData<I>,
 }
 
 impl<T: Config<I>, I: 'static> Bag<T, I> {
@@ -574,7 +574,7 @@ impl<T: Config<I>, I: 'static> Bag<T, I> {
 		tail: Option<T::AccountId>,
 		bag_upper: T::Value,
 	) -> Self {
-		Self { head, tail, bag_upper, phantom: PhantomData }
+		Self { head, tail, bag_upper, _phantom: PhantomData }
 	}
 
 	/// Get a bag by its upper value.
@@ -636,7 +636,7 @@ impl<T: Config<I>, I: 'static> Bag<T, I> {
 			prev: None,
 			next: None,
 			bag_upper: Zero::zero(),
-			phantom: PhantomData,
+			_phantom: PhantomData,
 		});
 	}
 
@@ -773,7 +773,8 @@ pub struct Node<T: Config<I>, I: 'static = ()> {
 	prev: Option<T::AccountId>,
 	next: Option<T::AccountId>,
 	bag_upper: T::Value,
-	phantom: PhantomData<I>,
+	#[codec(skip)]
+	_phantom: PhantomData<I>,
 }
 
 impl<T: Config<I>, I: 'static> Node<T, I> {
