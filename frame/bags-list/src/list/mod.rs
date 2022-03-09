@@ -565,12 +565,11 @@ pub struct Bag<T: Config<I>, I: 'static = ()> {
 impl<T: Config<I>, I: 'static> Bag<T, I> {
 	#[cfg(test)]
 	pub(crate) fn new(
-		phantom: Default::default,
 		head: Option<T::AccountId>,
 		tail: Option<T::AccountId>,
 		bag_upper: VoteWeight,
 	) -> Self {
-		Self { head, tail, bag_upper, phantom }
+		Self { head, tail, bag_upper, phantom: Default::default() }
 	}
 
 	/// Get a bag by its upper vote weight.
@@ -628,11 +627,11 @@ impl<T: Config<I>, I: 'static> Bag<T, I> {
 		// as this bag is the correct one, we're good. All calls to this must come after getting the
 		// correct [`notional_bag_for`].
 		self.insert_node_unchecked(Node::<T, I> {
-			phantom: Default::default(),
 			id,
 			prev: None,
 			next: None,
 			bag_upper: 0,
+			phantom: Default::default(),
 		});
 	}
 

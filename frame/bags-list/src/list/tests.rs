@@ -53,17 +53,17 @@ fn basic_setup_works() {
 
 		assert_eq!(
 			ListNodes::<Runtime>::get(2).unwrap(),
-			node(PhantomData, 2, None, Some(3), 1_000)
+			node(2, None, Some(3), 1_000)
 		);
 		assert_eq!(
 			ListNodes::<Runtime>::get(3).unwrap(),
-			node(PhantomData, 3, Some(2), Some(4), 1_000)
+			node(3, Some(2), Some(4), 1_000)
 		);
 		assert_eq!(
 			ListNodes::<Runtime>::get(4).unwrap(),
-			node(PhantomData, 4, Some(3), None, 1_000)
+			node(4, Some(3), None, 1_000)
 		);
-		assert_eq!(ListNodes::<Runtime>::get(1).unwrap(), node(PhantomData, 1, None, None, 10));
+		assert_eq!(ListNodes::<Runtime>::get(1).unwrap(), node(1, None, None, 10));
 
 		// non-existent id does not have a storage footprint
 		assert_eq!(ListNodes::<Runtime>::get(42), None);
