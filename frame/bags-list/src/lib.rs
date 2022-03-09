@@ -47,14 +47,14 @@
 //!   it will worsen its position in list iteration; this reduces incentives for some types of spam
 //!   that involve consistently removing and inserting for better position. Further, ordering
 //!   granularity is thus dictated by range between each bag threshold.
-//! - if an item's score changes to a value no longer within the range of its current bag the
-//!   item's position will need to be updated by an external actor with rebag (update), or removal
-//!   and insertion.
+//! - if an item's score changes to a value no longer within the range of its current bag the item's
+//!   position will need to be updated by an external actor with rebag (update), or removal and
+//!   insertion.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use codec::{Codec, FullCodec};
-use frame_election_provider_support::{SortedListProvider, ScoreProvider};
+use frame_election_provider_support::{ScoreProvider, SortedListProvider};
 use frame_system::ensure_signed;
 use sp_runtime::traits::{AtLeast32BitUnsigned, Bounded};
 use sp_std::prelude::*;

@@ -18,7 +18,7 @@
 //! Test utilities
 
 use crate::{self as pallet_staking, *};
-use frame_election_provider_support::{onchain, SortedListProvider};
+use frame_election_provider_support::{onchain, SortedListProvider, VoteWeight};
 use frame_support::{
 	assert_ok, parameter_types,
 	traits::{
@@ -36,7 +36,6 @@ use sp_runtime::{
 };
 use sp_staking::offence::{DisableStrategy, OffenceDetails, OnOffenceHandler};
 use std::cell::RefCell;
-use frame_election_provider_support::VoteWeight;
 
 pub const INIT_TIMESTAMP: u64 = 30_000;
 pub const BLOCK_TIME: u64 = 1000;

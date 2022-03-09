@@ -20,9 +20,8 @@ use crate::{
 	mock::{test_utils::*, *},
 	ListBags, ListNodes,
 };
-use frame_election_provider_support::SortedListProvider;
+use frame_election_provider_support::{SortedListProvider, VoteWeight};
 use frame_support::{assert_ok, assert_storage_noop};
-use frame_election_provider_support::VoteWeight;
 
 #[test]
 fn basic_setup_works() {
@@ -133,7 +132,8 @@ fn migrate_works() {
 			assert_eq!(old_thresholds, vec![10, 20, 30, 40, 50, 60, 1_000, 2_000, 10_000]);
 
 			// when the new thresholds adds `15` and removes `2_000`
-			const NEW_THRESHOLDS: &'static [VoteWeight] = &[10, 15, 20, 30, 40, 50, 60, 1_000, 10_000];
+			const NEW_THRESHOLDS: &'static [VoteWeight] =
+				&[10, 15, 20, 30, 40, 50, 60, 1_000, 10_000];
 			BagThresholds::set(NEW_THRESHOLDS);
 			// and we call
 			List::<Runtime>::migrate(old_thresholds);

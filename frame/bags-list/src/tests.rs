@@ -18,10 +18,9 @@
 use frame_support::{assert_noop, assert_ok, assert_storage_noop, traits::IntegrityTest};
 
 use super::*;
-use frame_election_provider_support::SortedListProvider;
+use frame_election_provider_support::{SortedListProvider, VoteWeight};
 use list::Bag;
 use mock::{test_utils::*, *};
-use frame_election_provider_support::VoteWeight;
 
 mod pallet {
 	use super::*;
@@ -191,7 +190,10 @@ mod pallet {
 			// any insertion goes there as well.
 			assert_ok!(List::<Runtime>::insert(5, 999));
 			assert_ok!(List::<Runtime>::insert(6, 0));
-			assert_eq!(List::<Runtime>::get_bags(), vec![(VoteWeight::MAX, vec![1, 2, 3, 4, 5, 6])]);
+			assert_eq!(
+				List::<Runtime>::get_bags(),
+				vec![(VoteWeight::MAX, vec![1, 2, 3, 4, 5, 6])]
+			);
 
 			// any rebag is noop.
 			assert_storage_noop!(assert!(BagsList::rebag(Origin::signed(0), 1).is_ok()));
