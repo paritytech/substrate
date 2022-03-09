@@ -53,7 +53,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use codec::{Codec, FullCodec};
+use codec::FullCodec;
 use frame_election_provider_support::{ScoreProvider, SortedListProvider};
 use frame_system::ensure_signed;
 use sp_runtime::traits::{AtLeast32BitUnsigned, Bounded};
@@ -166,7 +166,6 @@ pub mod pallet {
 			+ AtLeast32BitUnsigned
 			+ Bounded
 			+ TypeInfo
-			+ Codec
 			+ FullCodec
 			+ MaxEncodedLen;
 	}
