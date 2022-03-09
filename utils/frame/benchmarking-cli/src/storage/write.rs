@@ -62,6 +62,22 @@ impl StorageCmd {
 		let mut rng = Self::setup_rng();
 		kvs.shuffle(&mut rng);
 
+		// Run some rounds of the benchmark as warmup.
+		for i in 0..self.params.warmups {
+			info!("Warmup round {}/{}", i + 1, self.params.warmups);
+			for (k, original_v) in kvs.clone().iter() {
+				let mut new_v = vec![0; original_v.len()];
+				rng.fill_bytes(&mut new_v[..]);
+
+				let replace = vec![(k.as_ref(), Some(new_v.as_ref()))];
+				let (_, stx) = trie.storage_root(replace.iter().cloned(), self.state_version());
+				let tx = convert_tx::<Block>(stx.clone(), true, state_col, supports_rc);
+				db.commit(tx).map_err(|e| format!("Writing to the Database: {}", e))?;
+				let tx = convert_tx::<Block>(stx.clone(), false, state_col, supports_rc);
+				db.commit(tx).map_err(|e| format!("Writing to the Database: {}", e))?;
+			}
+		}
+
 		info!("Writing {} keys", kvs.len());
 		// Write each value in one commit.
 		for (k, original_v) in kvs.iter() {

@@ -97,7 +97,6 @@ pub struct StorageParams {
 	pub json_write_path: Option<String>,
 
 	/// Rounds of warmups before measuring.
-	/// Only supported for `read` benchmarks.
 	#[clap(long, default_value = "1")]
 	pub warmups: u32,
 
