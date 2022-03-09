@@ -393,19 +393,21 @@ fn finalize_block_and_wait_for_beefy(
 	net: &Arc<Mutex<BeefyTestNet>>,
 	peers: &[BeefyKeyring],
 	runtime: &mut Runtime,
-	finalize_target: u32,
+	finalize_targets: &[u64],
 	expected_beefy: &[u64],
 ) {
 	let (best_blocks, signed_commitments) = get_beefy_streams(&mut *net.lock(), peers);
 
-	let finalize = BlockId::number(finalize_target.into());
-	for i in 0..peers.len() {
-		net.lock().peer(i).client().as_client().finalize_block(finalize, None).unwrap();
+	for block in finalize_targets {
+		let finalize = BlockId::number(*block);
+		for i in 0..peers.len() {
+			net.lock().peer(i).client().as_client().finalize_block(finalize, None).unwrap();
+		}
 	}
 
 	if expected_beefy.is_empty() {
 		// run for 1 second then verify no new best beefy block available
-		let timeout = Some(Duration::from_secs(1));
+		let timeout = Some(Duration::from_millis(500));
 		streams_empty_after_timeout(best_blocks, &net, runtime, timeout);
 		streams_empty_after_timeout(signed_commitments, &net, runtime, None);
 	} else {
@@ -437,17 +439,60 @@ fn beefy_finalizing_blocks() {
 	// Minimum BEEFY block delta is 4.
 
 	// finalize block #5 -> BEEFY should finalize #1 (mandatory) and #5 from diff-power-of-two rule.
-	finalize_block_and_wait_for_beefy(&net, peers, &mut runtime, 5, &[1, 5]);
+	finalize_block_and_wait_for_beefy(&net, peers, &mut runtime, &[5], &[1, 5]);
 
 	// GRANDPA finalize #10 -> BEEFY finalize #10 (mandatory)
-	finalize_block_and_wait_for_beefy(&net, peers, &mut runtime, 10, &[10]);
+	finalize_block_and_wait_for_beefy(&net, peers, &mut runtime, &[10], &[10]);
 
 	// GRANDPA finalize #18 -> BEEFY finalize #14, then #18 (diff-power-of-two rule)
-	finalize_block_and_wait_for_beefy(&net, peers, &mut runtime, 18, &[14, 18]);
+	finalize_block_and_wait_for_beefy(&net, peers, &mut runtime, &[18], &[14, 18]);
 
 	// GRANDPA finalize #20 -> BEEFY finalize #20 (mandatory)
-	finalize_block_and_wait_for_beefy(&net, peers, &mut runtime, 20, &[20]);
+	finalize_block_and_wait_for_beefy(&net, peers, &mut runtime, &[20], &[20]);
 
-	// GRANDPA finalize #21 -> BEEFY finalize nothing (yet)
-	finalize_block_and_wait_for_beefy(&net, peers, &mut runtime, 21, &[]);
+	// GRANDPA finalize #21 -> BEEFY finalize nothing (yet) because min delta is 4
+	finalize_block_and_wait_for_beefy(&net, peers, &mut runtime, &[21], &[]);
+}
+
+#[test]
+fn lagging_validators() {
+	sp_tracing::try_init_simple();
+
+	let mut runtime = Runtime::new().unwrap();
+	let peers = &[BeefyKeyring::Charlie, BeefyKeyring::Dave];
+	let validator_set = ValidatorSet::new(make_beefy_ids(peers), 0).unwrap();
+	let session_len = 30;
+	let min_block_delta = 1;
+
+	let mut net = BeefyTestNet::new(2, 0);
+	runtime.spawn(initialize_beefy(&mut net, peers, &validator_set, min_block_delta));
+
+	// push 42 blocks including `AuthorityChange` digests every 30 blocks.
+	net.generate_blocks(42, session_len, &validator_set);
+	net.block_until_sync();
+
+	let net = Arc::new(Mutex::new(net));
+
+	// finalize block #15 -> BEEFY should finalize #1 (mandatory) and #9, #13, #14, #15 from
+	// diff-power-of-two rule.
+	finalize_block_and_wait_for_beefy(&net, peers, &mut runtime, &[15], &[1, 9, 13, 14, 15]);
+
+	// Charlie finalizes #25, Dave lags behind
+	let finalize = BlockId::number(25);
+	let (best_blocks, signed_commitments) = get_beefy_streams(&mut *net.lock(), peers);
+	net.lock().peer(0).client().as_client().finalize_block(finalize, None).unwrap();
+	// verify nothing gets finalized by BEEFY
+	let timeout = Some(Duration::from_secs(1));
+	streams_empty_after_timeout(best_blocks, &net, &mut runtime, timeout);
+	streams_empty_after_timeout(signed_commitments, &net, &mut runtime, None);
+
+	// Dave catches up and also finalizes #25
+	let (best_blocks, signed_commitments) = get_beefy_streams(&mut *net.lock(), peers);
+	net.lock().peer(1).client().as_client().finalize_block(finalize, None).unwrap();
+	// expected beefy finalizes block #17 from diff-power-of-two
+	wait_for_best_beefy_blocks(best_blocks, &net, &mut runtime, &[23, 24, 25]);
+	wait_for_beefy_signed_commitments(signed_commitments, &net, &mut runtime, &[23, 24, 25]);
+
+	// Both finalize #30 (mandatory session) and #32 -> BEEFY finalize #30 (mandatory), #31, #32
+	finalize_block_and_wait_for_beefy(&net, peers, &mut runtime, &[30, 32], &[30, 31, 32]);
 }

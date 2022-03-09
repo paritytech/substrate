@@ -331,7 +331,7 @@ where
 
 		if rounds.add_vote(&round, vote, self_vote) {
 			if let Some(signatures) = rounds.try_conclude(&round) {
-				self.gossip_validator.drop_round(round.1);
+				self.gossip_validator.conclude_round(round.1);
 
 				// id is stored for skipped session metric calculation
 				self.last_signed_id = rounds.validator_set_id_for(round.1);

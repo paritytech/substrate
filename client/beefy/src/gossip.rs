@@ -35,9 +35,6 @@ use beefy_primitives::{
 
 use crate::keystore::BeefyKeystore;
 
-// Limit BEEFY gossip by keeping only a bound number of voting rounds alive.
-const MAX_LIVE_GOSSIP_ROUNDS: usize = 3;
-
 // Timeout for rebroadcasting messages.
 const REBROADCAST_AFTER: Duration = Duration::from_secs(60 * 5);
 
@@ -63,20 +60,9 @@ impl<B: Block> KnownVotes<B> {
 	}
 
 	/// Create new round votes set if not already present.
-	///
-	/// Only [`MAX_LIVE_GOSSIP_ROUNDS`] most **recent** voting rounds sets are kept.
 	pub fn insert(&mut self, round: NumberFor<B>) {
-		let live = &mut self.live;
-
-		if !live.contains_key(&round) {
-			live.insert(round, Default::default());
-		}
-
-		if live.len() > MAX_LIVE_GOSSIP_ROUNDS {
-			let to_remove = live.iter().next().map(|x| x.0).copied();
-			if let Some(first) = to_remove {
-				self.remove(first.clone());
-			}
+		if !self.live.contains_key(&round) {
+			self.live.insert(round, Default::default());
 		}
 	}
 
@@ -86,17 +72,11 @@ impl<B: Block> KnownVotes<B> {
 		self.last_done = self.last_done.max(Some(round));
 	}
 
-	/// Return true if `round` is live or if it is newer than previously seen rounds.
+	/// Return true if `round` is newer than previously concluded rounds.
 	///
-	/// Last concluded round is still allowed to allow proper gossiping for it.
+	/// Latest concluded round is still considered alive to allow proper gossiping for it.
 	pub fn is_live(&self, round: &NumberFor<B>) -> bool {
-		let unseen_round = if let Some(max_known_round) = self.live.keys().last() {
-			round > max_known_round
-		} else {
-			Some(*round) >= self.last_done
-		};
-
-		unseen_round || self.live.contains_key(round)
+		Some(*round) >= self.last_done
 	}
 
 	/// Add new _known_ `hash` to the round's known votes.
@@ -114,7 +94,7 @@ impl<B: Block> KnownVotes<B> {
 ///
 /// Validate BEEFY gossip messages and limit the number of live BEEFY voting rounds.
 ///
-/// Allows messages from last [`MAX_LIVE_GOSSIP_ROUNDS`] to flow, everything else gets
+/// Allows messages for 'rounds >= last concluded' to flow, everything else gets
 /// rejected/expired.
 ///
 ///All messaging is handled in a single BEEFY global topic.
@@ -141,19 +121,16 @@ where
 
 	/// Note a voting round.
 	///
-	/// Noting `round` will keep `round` live.
-	///
-	/// We retain the [`MAX_LIVE_GOSSIP_ROUNDS`] most **recent** voting rounds as live.
-	/// As long as a voting round is live, it will be gossiped to peer nodes.
+	/// Noting round will start a live `round`.
 	pub(crate) fn note_round(&self, round: NumberFor<B>) {
 		debug!(target: "beefy", "🥩 About to note gossip round #{}", round);
 		self.known_votes.write().insert(round);
 	}
 
-	/// Drop a voting round.
+	/// Conclude a voting round.
 	///
 	/// This can be called once round is complete so we stop gossiping for it.
-	pub(crate) fn drop_round(&self, round: NumberFor<B>) {
+	pub(crate) fn conclude_round(&self, round: NumberFor<B>) {
 		debug!(target: "beefy", "🥩 About to drop gossip round #{}", round);
 		self.known_votes.write().remove(round);
 	}
@@ -279,11 +256,6 @@ mod tests {
 		kv.insert(2);
 		assert_eq!(kv.live.len(), 2);
 
-		for i in 1..MAX_LIVE_GOSSIP_ROUNDS + 2 {
-			kv.insert(i.try_into().unwrap());
-		}
-		assert_eq!(kv.live.len(), MAX_LIVE_GOSSIP_ROUNDS);
-
 		let mut kv = KnownVotes::<Block>::new();
 		kv.insert(1);
 		kv.insert(2);
@@ -304,56 +276,30 @@ mod tests {
 	}
 
 	#[test]
-	fn note_round_works() {
+	fn note_and_drop_round_works() {
 		let gv = GossipValidator::<Block>::new();
 
 		gv.note_round(1u64);
 
-		let votes = gv.known_votes.read();
-		assert!(votes.is_live(&1u64));
-		drop(votes);
+		assert!(gv.known_votes.read().is_live(&1u64));
 
 		gv.note_round(3u64);
 		gv.note_round(7u64);
 		gv.note_round(10u64);
 
+		assert_eq!(gv.known_votes.read().live.len(), 4);
+
+		gv.conclude_round(7u64);
+
 		let votes = gv.known_votes.read();
 
-		assert_eq!(votes.live.len(), MAX_LIVE_GOSSIP_ROUNDS);
-
+		// rounds 1 and 3 are outdated, don't gossip anymore
 		assert!(!votes.is_live(&1u64));
-		assert!(votes.is_live(&3u64));
+		assert!(!votes.is_live(&3u64));
+		// latest concluded round is still gossiped
 		assert!(votes.is_live(&7u64));
+		// round 10 is alive and in-progress
 		assert!(votes.is_live(&10u64));
-	}
-
-	#[test]
-	fn keeps_most_recent_max_rounds() {
-		let gv = GossipValidator::<Block>::new();
-
-		gv.note_round(3u64);
-		gv.note_round(7u64);
-		gv.note_round(10u64);
-		gv.note_round(1u64);
-
-		let votes = gv.known_votes.read();
-		assert_eq!(votes.live.len(), MAX_LIVE_GOSSIP_ROUNDS);
-		assert!(votes.is_live(&3u64));
-		assert!(!votes.is_live(&1u64));
-		drop(votes);
-
-		gv.note_round(23u64);
-		gv.note_round(15u64);
-		gv.note_round(20u64);
-		gv.note_round(2u64);
-
-		let votes = gv.known_votes.read();
-
-		assert_eq!(votes.live.len(), MAX_LIVE_GOSSIP_ROUNDS);
-
-		assert!(votes.is_live(&15u64));
-		assert!(votes.is_live(&20u64));
-		assert!(votes.is_live(&23u64));
 	}
 
 	#[test]
@@ -364,16 +310,14 @@ mod tests {
 		gv.note_round(7u64);
 		gv.note_round(10u64);
 
-		let votes = gv.known_votes.read();
-		assert_eq!(votes.live.len(), MAX_LIVE_GOSSIP_ROUNDS);
-		drop(votes);
+		assert_eq!(gv.known_votes.read().live.len(), 3);
 
 		// note round #7 again -> should not change anything
 		gv.note_round(7u64);
 
 		let votes = gv.known_votes.read();
 
-		assert_eq!(votes.live.len(), MAX_LIVE_GOSSIP_ROUNDS);
+		assert_eq!(votes.live.len(), 3);
 
 		assert!(votes.is_live(&3u64));
 		assert!(votes.is_live(&7u64));
@@ -442,8 +386,7 @@ mod tests {
 		assert!(matches!(res, ValidationResult::ProcessAndKeep(_)));
 
 		// next we should quickly reject if the round is not live
-		gv.note_round(11_u64);
-		gv.note_round(12_u64);
+		gv.conclude_round(7_u64);
 
 		assert!(!gv.known_votes.read().is_live(&vote.commitment.block_number));
 
@@ -459,8 +402,10 @@ mod tests {
 		let topic = Default::default();
 		let intent = MessageIntent::Broadcast;
 
-		// note round 2
+		// note round 2 and 3, then conclude 2
 		gv.note_round(2u64);
+		gv.note_round(3u64);
+		gv.conclude_round(2u64);
 		let mut allowed = gv.message_allowed();
 		let mut expired = gv.message_expired();
 
@@ -474,13 +419,19 @@ mod tests {
 		assert!(!allowed(&sender, intent, &topic, &mut encoded_vote));
 		assert!(expired(topic, &mut encoded_vote));
 
-		// active round 2 -> !expired
+		// active round 2 -> !expired - concluded but still gossiped
 		let vote = dummy_vote(2);
 		let mut encoded_vote = vote.encode();
 		assert!(allowed(&sender, intent, &topic, &mut encoded_vote));
 		assert!(!expired(topic, &mut encoded_vote));
 
-		// unseen round 3 -> !expired
+		// in progress round 3 -> !expired
+		let vote = dummy_vote(3);
+		let mut encoded_vote = vote.encode();
+		assert!(allowed(&sender, intent, &topic, &mut encoded_vote));
+		assert!(!expired(topic, &mut encoded_vote));
+
+		// unseen round 4 -> !expired
 		let vote = dummy_vote(3);
 		let mut encoded_vote = vote.encode();
 		assert!(allowed(&sender, intent, &topic, &mut encoded_vote));
