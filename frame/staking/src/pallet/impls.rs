@@ -1279,7 +1279,6 @@ impl<T: Config> ScoreProvider<T::AccountId> for Pallet<T> {
 /// does not provided nominators in sorted ordered. If you desire nominators in a sorted order take
 /// a look at [`pallet-bags-list].
 pub struct UseNominatorsMap<T>(sp_std::marker::PhantomData<T>);
-
 impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsMap<T> {
 	type Error = ();
 	type Score = VoteWeight;
