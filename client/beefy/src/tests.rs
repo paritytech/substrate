@@ -22,7 +22,7 @@ use futures::{future, stream::FuturesUnordered, Future, StreamExt};
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use std::{sync::Arc, task::Poll};
-use tokio::runtime::Runtime;
+use tokio::{runtime::Runtime, time::Duration};
 
 use sc_chain_spec::{ChainSpec, GenericChainSpec};
 use sc_client_api::HeaderBackend;
@@ -205,6 +205,20 @@ impl TestNetFactory for BeefyTestNet {
 	}
 }
 
+fn add_mmr_digest(block: &mut Block, mmr_hash: MmrRootHash) {
+	block.header.digest_mut().push(DigestItem::Consensus(
+		BEEFY_ENGINE_ID,
+		ConsensusLog::<AuthorityId>::MmrRoot(mmr_hash).encode(),
+	));
+}
+
+fn add_auth_change_digest(block: &mut Block, new_auth_set: BeefyValidatorSet) {
+	block.header.digest_mut().push(DigestItem::Consensus(
+		BEEFY_ENGINE_ID,
+		ConsensusLog::<AuthorityId>::AuthoritiesChange(new_auth_set).encode(),
+	));
+}
+
 pub(crate) fn make_beefy_ids(keys: &[BeefyKeyring]) -> Vec<AuthorityId> {
 	keys.iter().map(|key| key.clone().public().into()).collect()
 }
@@ -285,18 +299,9 @@ fn block_until(future: impl Future + Unpin, net: &Arc<Mutex<BeefyTestNet>>, runt
 	runtime.block_on(future::select(future, drive_to_completion));
 }
 
-fn add_mmr_digest(block: &mut Block, mmr_hash: MmrRootHash) {
-	block.header.digest_mut().push(DigestItem::Consensus(
-		BEEFY_ENGINE_ID,
-		ConsensusLog::<AuthorityId>::MmrRoot(mmr_hash).encode(),
-	));
-}
-
-fn add_auth_change_digest(block: &mut Block, new_auth_set: BeefyValidatorSet) {
-	block.header.digest_mut().push(DigestItem::Consensus(
-		BEEFY_ENGINE_ID,
-		ConsensusLog::<AuthorityId>::AuthoritiesChange(new_auth_set).encode(),
-	));
+fn run_for(duration: Duration, net: &Arc<Mutex<BeefyTestNet>>, runtime: &mut Runtime) {
+	let sleep = runtime.spawn(async move { tokio::time::sleep(duration).await });
+	block_until(sleep, net, runtime);
 }
 
 pub(crate) fn get_best_block_receivers(
@@ -340,6 +345,24 @@ fn wait_for_best_beefy_blocks(
 	block_until(wait_for, net, runtime);
 }
 
+fn streams_empty_after_timeout<T>(
+	streams: Vec<NotificationReceiver<T>>,
+	net: &Arc<Mutex<BeefyTestNet>>,
+	runtime: &mut Runtime,
+	timeout: Duration,
+) where
+	T: std::fmt::Debug,
+	T: std::cmp::PartialEq,
+{
+	run_for(timeout, net, runtime);
+	streams.into_iter().for_each(|mut stream| {
+		runtime.block_on(future::poll_fn(move |cx| {
+			assert_eq!(stream.poll_next_unpin(cx), Poll::Pending);
+			Poll::Ready(())
+		}));
+	});
+}
+
 fn finalize_block_and_wait_for_beefy(
 	net: &Arc<Mutex<BeefyTestNet>>,
 	peers: &[BeefyKeyring],
@@ -353,8 +376,14 @@ fn finalize_block_and_wait_for_beefy(
 	for i in 0..peers.len() {
 		net.lock().peer(i).client().as_client().finalize_block(finalize, None).unwrap();
 	}
-	// TODO: if `expected_beefy.is_empty()` we should _verify_ that `best_block_streams` also empty
-	wait_for_best_beefy_blocks(best_block_streams, &net, runtime, expected_beefy);
+
+	if expected_beefy.is_empty() {
+		// run for 1 second then verify no new best beefy block available
+		streams_empty_after_timeout(best_block_streams, &net, runtime, Duration::from_secs(1));
+	} else {
+		// run until expected beefy blocks are received
+		wait_for_best_beefy_blocks(best_block_streams, &net, runtime, expected_beefy);
+	}
 }
 
 #[test]
