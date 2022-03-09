@@ -18,7 +18,6 @@
 use sc_block_builder::BlockBuilderApi;
 use sc_cli::Result;
 use sc_client_api::{BlockBackend, UsageProvider};
-use sc_client_db::DbHash;
 use sp_api::{ApiExt, BlockId, HeaderT, ProvideRuntimeApi};
 use sp_blockchain::HeaderBackend;
 use sp_runtime::{traits::Block as BlockT, DigestItem};
@@ -98,7 +97,7 @@ pub(crate) struct Benchmark<B, C, API> {
 
 impl<B, C, API> Benchmark<B, C, API>
 where
-	B: BlockT<Hash = DbHash>,
+	B: BlockT,
 	C: UsageProvider<B> + HeaderBackend<B> + BlockBackend<B> + ProvideRuntimeApi<B, Api = API>,
 	API: ApiExt<B> + BlockBuilderApi<B>,
 {
@@ -187,7 +186,7 @@ where
 		let mut record = BenchRecord::new();
 		let num_ext = block.extrinsics().len() as u64;
 		if per_ext && num_ext == 0 {
-			return Err("Cannot measure extrinsic time of empty block".into())
+			return Err("Cannot measure the extrinsic time of an empty block".into())
 		}
 
 		info!("Running {} warmups...", self.params.warmup);
@@ -211,7 +210,7 @@ where
 
 			let elapsed = start.elapsed().as_nanos();
 			if per_ext {
-				// non zero checked above.
+				// checked for non zero div above.
 				record.push(elapsed as u64 / num_ext);
 			} else {
 				record.push(elapsed as u64);

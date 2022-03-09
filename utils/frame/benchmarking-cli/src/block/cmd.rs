@@ -18,7 +18,6 @@
 use sc_block_builder::BlockBuilderApi;
 use sc_cli::{CliConfiguration, DatabaseParams, PruningParams, Result, SharedParams};
 use sc_client_api::{BlockBackend, UsageProvider};
-use sc_client_db::DbHash;
 use sc_service::Configuration;
 use sp_api::{ApiExt, ProvideRuntimeApi};
 use sp_blockchain::HeaderBackend;
@@ -37,7 +36,7 @@ use crate::{
 	post_processing::WeightParams,
 };
 
-/// Parameters for a [`BlockCmd`].
+/// Command for running block and extrinsic benchmarks.
 #[derive(Debug, Parser)]
 pub struct BlockCmd {
 	#[allow(missing_docs)]
@@ -57,7 +56,7 @@ pub struct BlockCmd {
 	pub params: BlockParams,
 }
 
-/// Parameter for a block benchmark and post processing.
+/// Parameters for a block benchmark and its result post processing.
 #[derive(Debug, Default, Serialize, Clone, PartialEq, Args)]
 pub struct BlockParams {
 	#[allow(missing_docs)]
@@ -77,7 +76,7 @@ impl BlockCmd {
 	/// Run the block and extrinsic benchmark.
 	pub async fn run<Block, C, API>(&self, cfg: Configuration, client: Arc<C>) -> Result<()>
 	where
-		Block: BlockT<Hash = DbHash>,
+		Block: BlockT,
 		C: UsageProvider<Block>
 			+ HeaderBackend<Block>
 			+ BlockBackend<Block>

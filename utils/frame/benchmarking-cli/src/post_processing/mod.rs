@@ -58,3 +58,32 @@ impl WeightParams {
 		Ok(w as u64) // No safe cast here since there is no `From<f64>` for `u64`.
 	}
 }
+
+#[cfg(test)]
+mod test_weight_params {
+	use super::WeightParams;
+	use crate::storage::record::{StatSelect, Stats};
+
+	#[test]
+	fn calc_weight_works() {
+		let stats = Stats { avg: 113, ..Default::default() };
+		let params = WeightParams {
+			weight_metric: StatSelect::Average,
+			weight_mul: 0.75,
+			weight_add: 3,
+			..Default::default()
+		};
+
+		let want = (113.0f64 * 0.75 + 3.0).ceil() as u64; // Ceil for overestimation.
+		let got = params.calc_weight(&stats).unwrap();
+		assert_eq!(want, got);
+	}
+
+	#[test]
+	fn calc_weight_detects_negative_mul() {
+		let stats = Stats::default();
+		let params = WeightParams { weight_mul: -0.75, ..Default::default() };
+
+		assert!(params.calc_weight(&stats).is_err());
+	}
+}

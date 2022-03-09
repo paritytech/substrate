@@ -36,25 +36,25 @@ pub(crate) struct BenchRecord {
 #[derive(Serialize, Default, Clone)]
 pub(crate) struct Stats {
 	/// Sum of all values.
-	sum: u64,
+	pub(crate) sum: u64,
 	/// Minimal observed value.
-	min: u64,
+	pub(crate) min: u64,
 	/// Maximal observed value.
-	max: u64,
+	pub(crate) max: u64,
 
 	/// Average of all values.
-	avg: u64,
+	pub(crate) avg: u64,
 	/// Median of all values.
-	median: u64,
+	pub(crate) median: u64,
 	/// Standard derivation of all values.
-	stddev: f64,
+	pub(crate) stddev: f64,
 
 	/// 99th percentile. At least 99% of all values are below this threshold.
-	p99: u64,
+	pub(crate) p99: u64,
 	/// 95th percentile. At least 95% of all values are below this threshold.
-	p95: u64,
+	pub(crate) p95: u64,
 	/// 75th percentile. At least 75% of all values are below this threshold.
-	p75: u64,
+	pub(crate) p75: u64,
 }
 
 /// Selects a specific field from a [`Stats`] object.
@@ -208,8 +208,7 @@ mod test_stats {
 
 		assert_eq!(stats.avg, 50);
 		assert_eq!(stats.median, 50); // 50.5 to be exact.
-							  // Rounded with 1/100 precision.
-		assert_eq!(stats.stddev, 28.87);
+		assert_eq!(stats.stddev, 28.87); // Rounded with 1/100 precision.
 
 		assert_eq!(stats.p99, 99);
 		assert_eq!(stats.p95, 95);
@@ -217,8 +216,8 @@ mod test_stats {
 	}
 
 	#[test]
-	fn no_panic_different_lengths() {
-		// No input errors.
+	fn no_panic_short_lengths() {
+		// Empty input does error.
 		assert!(Stats::new(&vec![]).is_err());
 
 		// Different small input lengths are fine.

@@ -18,6 +18,7 @@
 use sc_cli::Result;
 use sc_service::Configuration;
 
+use handlebars::Handlebars;
 use log::info;
 use serde::Serialize;
 use std::{env, fs, path::PathBuf};
@@ -79,7 +80,7 @@ impl TemplateData {
 	/// Filles out the `weights.hbs` HBS template with its own data.
 	/// Writes the result to `path` which can be a directory or a file.
 	pub fn write(&self, path: &str) -> Result<()> {
-		let mut handlebars = handlebars::Handlebars::new();
+		let mut handlebars = Handlebars::new();
 		// Format large integers with underscores.
 		handlebars.register_helper("underscore", Box::new(crate::writer::UnderscoreHelper));
 		// Don't HTML escape any characters.
