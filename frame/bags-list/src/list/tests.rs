@@ -22,6 +22,7 @@ use crate::{
 };
 use frame_election_provider_support::SortedListProvider;
 use frame_support::{assert_ok, assert_storage_noop};
+use frame_election_provider_support::VoteWeight;
 
 #[test]
 fn basic_setup_works() {
@@ -84,11 +85,11 @@ fn notional_bag_for_works() {
 	assert_eq!(max_explicit_threshold, 10_000);
 
 	// if the max explicit threshold is less than T::Value::max_value(),
-	assert!(u64::MAX > max_explicit_threshold);
+	assert!(VoteWeight::MAX > max_explicit_threshold);
 
 	// then anything above it will belong to the T::Value::max_value() bag.
 	assert_eq!(notional_bag_for::<Runtime, _>(max_explicit_threshold), max_explicit_threshold);
-	assert_eq!(notional_bag_for::<Runtime, _>(max_explicit_threshold + 1), u64::MAX);
+	assert_eq!(notional_bag_for::<Runtime, _>(max_explicit_threshold + 1), VoteWeight::MAX);
 }
 
 #[test]
@@ -132,7 +133,7 @@ fn migrate_works() {
 			assert_eq!(old_thresholds, vec![10, 20, 30, 40, 50, 60, 1_000, 2_000, 10_000]);
 
 			// when the new thresholds adds `15` and removes `2_000`
-			const NEW_THRESHOLDS: &'static [u64] = &[10, 15, 20, 30, 40, 50, 60, 1_000, 10_000];
+			const NEW_THRESHOLDS: &'static [VoteWeight] = &[10, 15, 20, 30, 40, 50, 60, 1_000, 10_000];
 			BagThresholds::set(NEW_THRESHOLDS);
 			// and we call
 			List::<Runtime>::migrate(old_thresholds);
@@ -564,7 +565,7 @@ mod bags {
 			// and all other bag thresholds don't get bags.
 			<Runtime as Config>::BagThresholds::get()
 				.iter()
-				.chain(iter::once(&u64::MAX))
+				.chain(iter::once(&VoteWeight::MAX))
 				.filter(|bag_upper| !vec![10, 1_000].contains(bag_upper))
 				.for_each(|bag_upper| {
 					assert_storage_noop!(assert_eq!(Bag::<Runtime>::get(*bag_upper), None));
