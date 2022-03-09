@@ -32,6 +32,8 @@ static TEMPLATE: &str = include_str!("./weights.hbs");
 pub(crate) struct TemplateData {
 	/// Name of the database used.
 	db_name: String,
+	/// Block number that was used.
+	block_id: String,
 	/// Name of the runtime. Taken from the chain spec.
 	runtime_name: String,
 	/// Version of the benchmarking CLI used.
@@ -85,6 +87,11 @@ impl TemplateData {
 		Ok(())
 	}
 
+	/// Sets the block id that was used.
+	pub fn set_block_id(&mut self, block_id: String) {
+		self.block_id = block_id
+	}
+
 	/// Fills out the `weights.hbs` or specified HBS template with its own data.
 	/// Writes the result to `path` which can be a directory or file.
 	pub fn write(&self, path: &str, hbs_template_path: &Option<PathBuf>) -> Result<()> {
@@ -100,7 +107,7 @@ impl TemplateData {
 
 		// Use custom template if provided.
 		let template = match hbs_template_path {
-			Some(template)  => fs::read_to_string(template)?,
+			Some(template) => fs::read_to_string(template)?,
 			None => TEMPLATE.to_string(),
 		};
 		handlebars

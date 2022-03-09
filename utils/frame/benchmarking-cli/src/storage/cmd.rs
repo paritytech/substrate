@@ -29,6 +29,7 @@ use clap::{Args, Parser};
 use log::info;
 use rand::prelude::*;
 use serde::Serialize;
+use sp_runtime::generic::BlockId;
 use std::{fmt::Debug, path::PathBuf, sync::Arc};
 
 use super::{record::StatSelect, template::TemplateData};
@@ -132,6 +133,9 @@ impl StorageCmd {
 		}
 
 		let mut template = TemplateData::new(&cfg, &self.params);
+
+		let block_id = BlockId::<Block>::Number(client.usage_info().chain.best_number);
+		template.set_block_id(block_id.to_string());
 
 		if !self.params.skip_read {
 			let record = self.bench_read(client.clone())?;
