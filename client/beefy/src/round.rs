@@ -91,7 +91,7 @@ where
 	B: Block,
 {
 	pub(crate) fn validator_set_id_for(&self, block_number: NumberFor<B>) -> ValidatorSetId {
-		if block_number != self.session_start {
+		if block_number > self.session_start {
 			self.validator_set.id()
 		} else {
 			self.prev_validator_set.id()
@@ -99,7 +99,7 @@ where
 	}
 
 	pub(crate) fn validators_for(&self, block_number: NumberFor<B>) -> &[Public] {
-		if block_number != self.session_start {
+		if block_number > self.session_start {
 			self.validator_set.validators()
 		} else {
 			self.prev_validator_set.validators()

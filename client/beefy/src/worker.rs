@@ -929,4 +929,39 @@ pub(crate) mod tests {
 			Poll::Ready(())
 		}));
 	}
+
+	#[test]
+	fn setting_initial_session() {
+		let keys = &[Keyring::Alice];
+		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
+		let mut net = BeefyTestNet::new(1, 0);
+		let mut worker = create_beefy_worker(&net.peer(0), &keys[0], &validator_set, 1);
+
+		assert!(worker.rounds.is_none());
+
+		// verify setting the correct validator sets and boundary for genesis session
+		worker.init_session_at(validator_set.clone(), 1);
+
+		let worker_rounds = worker.rounds.as_ref().unwrap();
+		assert_eq!(worker_rounds.validator_set(), &validator_set);
+		assert_eq!(worker_rounds.session_start(), &1);
+		// in genesis case both current and prev validator sets are the same
+		assert_eq!(worker_rounds.validator_set_id_for(1), validator_set.id());
+		assert_eq!(worker_rounds.validator_set_id_for(2), validator_set.id());
+
+		// new validator set
+		let keys = &[Keyring::Bob];
+		let new_validator_set = ValidatorSet::new(make_beefy_ids(keys), 1).unwrap();
+
+		// verify setting the correct validator sets and boundary for non-genesis session
+		worker.init_session_at(new_validator_set.clone(), 11);
+
+		let worker_rounds = worker.rounds.as_ref().unwrap();
+		assert_eq!(worker_rounds.validator_set(), &new_validator_set);
+		assert_eq!(worker_rounds.session_start(), &11);
+		// mandatory block gets prev set, further blocks get new set
+		assert_eq!(worker_rounds.validator_set_id_for(11), validator_set.id());
+		assert_eq!(worker_rounds.validator_set_id_for(12), new_validator_set.id());
+		assert_eq!(worker_rounds.validator_set_id_for(13), new_validator_set.id());
+	}
 }
