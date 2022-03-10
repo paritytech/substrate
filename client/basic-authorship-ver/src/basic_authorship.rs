@@ -438,7 +438,8 @@ where
 			},
 		};
 
-		let block_size_limit = block_size_limit.unwrap_or(self.default_block_size_limit);
+		let block_size_limit = block_size_limit.unwrap_or(self.default_block_size_limit) / 2;
+
 
 		debug!("Attempting to push transactions from the pool.");
 		debug!("Pool status: {:?}", self.transaction_pool.status());
