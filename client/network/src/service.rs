@@ -1947,10 +1947,12 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 						);
 
 						if this.boot_node_ids.contains(&peer_id) {
-							if let DialError::InvalidPeerId = error {
+							if let DialError::WrongPeerId { obtained, endpoint } = error {
 								error!(
-									"💔 The bootnode you want to connect provided a different peer ID than the one you expect: `{}`.",
+									"💔 The bootnode you want to connect provided a different peer ID than the one you expect: `{}` with `{}`:`{}`.",
 									peer_id,
+									obtained,
+									endpoint,
 								);
 							}
 						}
@@ -1959,7 +1961,7 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					if let Some(metrics) = this.metrics.as_ref() {
 						let reason = match error {
 							DialError::ConnectionLimit(_) => Some("limit-reached"),
-							DialError::InvalidPeerId => Some("invalid-peer-id"),
+							DialError::WrongPeerId{..} => Some("invalid-peer-id"),
 							DialError::Transport(_) | DialError::ConnectionIo(_) =>
 								Some("transport-error"),
 							DialError::Banned |
@@ -1999,7 +2001,7 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					if let Some(metrics) = this.metrics.as_ref() {
 						let reason = match error {
 							PendingConnectionError::ConnectionLimit(_) => Some("limit-reached"),
-							PendingConnectionError::InvalidPeerId => Some("invalid-peer-id"),
+							PendingConnectionError::WrongPeerId => Some("invalid-peer-id"),
 							PendingConnectionError::Transport(_) |
 							PendingConnectionError::IO(_) => Some("transport-error"),
 							PendingConnectionError::Aborted => None, // ignore it

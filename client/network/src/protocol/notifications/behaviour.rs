@@ -26,7 +26,7 @@ use futures::prelude::*;
 use libp2p::{
 	core::{connection::ConnectionId, ConnectedPoint, Multiaddr, PeerId},
 	swarm::{
-		DialError, DialPeerCondition, IntoProtocolsHandler, NetworkBehaviour,
+		DialError, DialPeerCondition, IntoConnectionHandler, NetworkBehaviour,
 		NetworkBehaviourAction, NotifyHandler, PollParameters,
 	},
 };
@@ -1059,18 +1059,16 @@ impl Notifications {
 }
 
 impl NetworkBehaviour for Notifications {
-	type ProtocolsHandler = NotifsHandlerProto;
+	type ConnectionHandler = NotifsHandlerProto;
 	type OutEvent = NotificationsOut;
 
-	fn new_handler(&mut self) -> Self::ProtocolsHandler {
+	fn new_handler(&mut self) -> Self::ConnectionHandler {
 		NotifsHandlerProto::new(self.notif_protocols.clone())
 	}
 
 	fn addresses_of_peer(&mut self, _: &PeerId) -> Vec<Multiaddr> {
 		Vec::new()
 	}
-
-	fn inject_connected(&mut self, _: &PeerId) {}
 
 	fn inject_connection_established(
 		&mut self,
@@ -1136,7 +1134,7 @@ impl NetworkBehaviour for Notifications {
 		peer_id: &PeerId,
 		conn: &ConnectionId,
 		_endpoint: &ConnectedPoint,
-		_handler: <Self::ProtocolsHandler as IntoProtocolsHandler>::Handler,
+		_handler: <Self::ConnectionHandler as IntoConnectionHandler>::Handler,
 	) {
 		for set_id in (0..self.notif_protocols.len()).map(sc_peerset::SetId::from) {
 			let mut entry = if let Entry::Occupied(entry) = self.peers.entry((*peer_id, set_id)) {
@@ -1394,12 +1392,10 @@ impl NetworkBehaviour for Notifications {
 		}
 	}
 
-	fn inject_disconnected(&mut self, _peer_id: &PeerId) {}
-
 	fn inject_dial_failure(
 		&mut self,
 		peer_id: Option<PeerId>,
-		_: Self::ProtocolsHandler,
+		_: Self::ConnectionHandler,
 		error: &DialError,
 	) {
 		if let DialError::Transport(errors) = error {
@@ -1989,7 +1985,7 @@ impl NetworkBehaviour for Notifications {
 		&mut self,
 		cx: &mut Context,
 		_params: &mut impl PollParameters,
-	) -> Poll<NetworkBehaviourAction<Self::OutEvent, Self::ProtocolsHandler>> {
+	) -> Poll<NetworkBehaviourAction<Self::OutEvent, Self::ConnectionHandler>> {
 		if let Some(event) = self.events.pop_front() {
 			return Poll::Ready(event)
 		}

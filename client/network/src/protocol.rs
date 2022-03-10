@@ -36,8 +36,8 @@ use libp2p::{
 	},
 	request_response::OutboundFailure,
 	swarm::{
-		IntoProtocolsHandler, NetworkBehaviour, NetworkBehaviourAction, PollParameters,
-		ProtocolsHandler,
+		IntoConnectionHandler, NetworkBehaviour, NetworkBehaviourAction, PollParameters,
+		ConnectionHandler,
 	},
 	Multiaddr, PeerId,
 };
@@ -1368,10 +1368,10 @@ pub enum CustomMessageOutcome<B: BlockT> {
 }
 
 impl<B: BlockT> NetworkBehaviour for Protocol<B> {
-	type ProtocolsHandler = <Notifications as NetworkBehaviour>::ProtocolsHandler;
+	type ConnectionHandler = <Notifications as NetworkBehaviour>::ConnectionHandler;
 	type OutEvent = CustomMessageOutcome<B>;
 
-	fn new_handler(&mut self) -> Self::ProtocolsHandler {
+	fn new_handler(&mut self) -> Self::ConnectionHandler {
 		self.behaviour.new_handler()
 	}
 
@@ -1395,24 +1395,16 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 		peer_id: &PeerId,
 		conn: &ConnectionId,
 		endpoint: &ConnectedPoint,
-		handler: <Self::ProtocolsHandler as IntoProtocolsHandler>::Handler,
+		handler: <Self::ConnectionHandler as IntoConnectionHandler>::Handler,
 	) {
 		self.behaviour.inject_connection_closed(peer_id, conn, endpoint, handler)
-	}
-
-	fn inject_connected(&mut self, peer_id: &PeerId) {
-		self.behaviour.inject_connected(peer_id)
-	}
-
-	fn inject_disconnected(&mut self, peer_id: &PeerId) {
-		self.behaviour.inject_disconnected(peer_id)
 	}
 
 	fn inject_event(
 		&mut self,
 		peer_id: PeerId,
 		connection: ConnectionId,
-		event: <<Self::ProtocolsHandler as IntoProtocolsHandler>::Handler as ProtocolsHandler>::OutEvent,
+		event: <<Self::ConnectionHandler as IntoConnectionHandler>::Handler as ConnectionHandler>::OutEvent,
 	) {
 		self.behaviour.inject_event(peer_id, connection, event)
 	}
@@ -1421,7 +1413,7 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 		&mut self,
 		cx: &mut std::task::Context,
 		params: &mut impl PollParameters,
-	) -> Poll<NetworkBehaviourAction<Self::OutEvent, Self::ProtocolsHandler>> {
+	) -> Poll<NetworkBehaviourAction<Self::OutEvent, Self::ConnectionHandler>> {
 		if let Some(message) = self.pending_messages.pop_front() {
 			return Poll::Ready(NetworkBehaviourAction::GenerateEvent(message))
 		}
@@ -1801,7 +1793,7 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 	fn inject_dial_failure(
 		&mut self,
 		peer_id: Option<PeerId>,
-		handler: Self::ProtocolsHandler,
+		handler: Self::ConnectionHandler,
 		error: &libp2p::swarm::DialError,
 	) {
 		self.behaviour.inject_dial_failure(peer_id, handler, error);

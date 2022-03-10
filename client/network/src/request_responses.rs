@@ -49,8 +49,8 @@ use libp2p::{
 		RequestResponseConfig, RequestResponseEvent, RequestResponseMessage, ResponseChannel,
 	},
 	swarm::{
-		protocols_handler::multi::MultiHandler, IntoProtocolsHandler, NetworkBehaviour,
-		NetworkBehaviourAction, PollParameters, ProtocolsHandler,
+		handler::multi::MultiHandler, IntoProtocolsHandler, NetworkBehaviour,
+		NetworkBehaviourAction, PollParameters, ConnectionHandler,
 	},
 };
 use std::{
@@ -382,7 +382,7 @@ impl RequestResponsesBehaviour {
 		&mut self,
 		protocol: String,
 		handler: RequestResponseHandler<GenericCodec>,
-	) -> <RequestResponsesBehaviour as NetworkBehaviour>::ProtocolsHandler {
+	) -> <RequestResponsesBehaviour as NetworkBehaviour>::ConnectionHandler {
 		let mut handlers: HashMap<_, _> = self
 			.protocols
 			.iter_mut()
@@ -401,11 +401,11 @@ impl RequestResponsesBehaviour {
 }
 
 impl NetworkBehaviour for RequestResponsesBehaviour {
-	type ProtocolsHandler =
-		MultiHandler<String, <RequestResponse<GenericCodec> as NetworkBehaviour>::ProtocolsHandler>;
+	type ConnectionHandler =
+		MultiHandler<String, <RequestResponse<GenericCodec> as NetworkBehaviour>::ConnectionHandler>;
 	type OutEvent = Event;
 
-	fn new_handler(&mut self) -> Self::ProtocolsHandler {
+	fn new_handler(&mut self) -> Self::ConnectionHandler {
 		let iter = self
 			.protocols
 			.iter_mut()
@@ -439,18 +439,12 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 		}
 	}
 
-	fn inject_connected(&mut self, peer_id: &PeerId) {
-		for (p, _) in self.protocols.values_mut() {
-			NetworkBehaviour::inject_connected(p, peer_id)
-		}
-	}
-
 	fn inject_connection_closed(
 		&mut self,
 		peer_id: &PeerId,
 		conn: &ConnectionId,
 		endpoint: &ConnectedPoint,
-		_handler: <Self::ProtocolsHandler as IntoProtocolsHandler>::Handler,
+		_handler: <Self::ConnectionHandler as IntoProtocolsHandler>::Handler,
 	) {
 		for (p, _) in self.protocols.values_mut() {
 			let handler = p.new_handler();
@@ -458,17 +452,11 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 		}
 	}
 
-	fn inject_disconnected(&mut self, peer_id: &PeerId) {
-		for (p, _) in self.protocols.values_mut() {
-			NetworkBehaviour::inject_disconnected(p, peer_id)
-		}
-	}
-
 	fn inject_event(
 		&mut self,
 		peer_id: PeerId,
 		connection: ConnectionId,
-		(p_name, event): <Self::ProtocolsHandler as ProtocolsHandler>::OutEvent,
+		(p_name, event): <Self::ConnectionHandler as ConnectionHandler>::OutEvent,
 	) {
 		if let Some((proto, _)) = self.protocols.get_mut(&*p_name) {
 			return proto.inject_event(peer_id, connection, event)
@@ -500,7 +488,7 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 	fn inject_dial_failure(
 		&mut self,
 		peer_id: Option<PeerId>,
-		_: Self::ProtocolsHandler,
+		_: Self::ConnectionHandler,
 		error: &libp2p::swarm::DialError,
 	) {
 		for (p, _) in self.protocols.values_mut() {
@@ -537,7 +525,7 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 		&mut self,
 		cx: &mut Context,
 		params: &mut impl PollParameters,
-	) -> Poll<NetworkBehaviourAction<Self::OutEvent, Self::ProtocolsHandler>> {
+	) -> Poll<NetworkBehaviourAction<Self::OutEvent, Self::ConnectionHandler>> {
 		'poll_all: loop {
 			if let Some(message_request) = self.message_request.take() {
 				// Now we can can poll `MessageRequest` until we get the reputation

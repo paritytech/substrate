@@ -33,7 +33,7 @@ use libp2p::{
 	identify::IdentifyInfo,
 	kad::record,
 	swarm::{
-		toggle::Toggle, NetworkBehaviour, NetworkBehaviourAction, NetworkBehaviourEventProcess,
+		behaviour::toggle::Toggle, NetworkBehaviour, NetworkBehaviourAction, NetworkBehaviourEventProcess,
 		PollParameters,
 	},
 	NetworkBehaviour,
@@ -519,7 +519,7 @@ impl<B: BlockT> Behaviour<B> {
 		&mut self,
 		_cx: &mut Context,
 		_: &mut impl PollParameters,
-	) -> Poll<NetworkBehaviourAction<BehaviourOut<B>, <Self as NetworkBehaviour>::ProtocolsHandler>>
+	) -> Poll<NetworkBehaviourAction<BehaviourOut<B>, <Self as NetworkBehaviour>::ConnectionHandler>>
 	{
 		if let Some(event) = self.events.pop_front() {
 			return Poll::Ready(NetworkBehaviourAction::GenerateEvent(event))
