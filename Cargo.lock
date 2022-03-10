@@ -4946,7 +4946,6 @@ dependencies = [
  "sc-finality-grandpa-rpc",
  "sc-rpc",
  "sc-rpc-api",
- "sc-state-trie-migration-rpc",
  "sc-sync-state-rpc",
  "sc-transaction-pool-api",
  "sp-api",
@@ -4957,6 +4956,7 @@ dependencies = [
  "sp-keystore",
  "sp-runtime",
  "substrate-frame-rpc-system",
+ "substrate-state-trie-migration-rpc",
 ]
 
 [[package]]
@@ -8988,22 +8988,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sc-state-trie-migration-rpc"
-version = "4.0.0-dev"
-dependencies = [
- "jsonrpc-core",
- "jsonrpc-core-client",
- "jsonrpc-derive",
- "parity-scale-codec",
- "sc-client-api",
- "sc-rpc-api",
- "serde",
- "serde_json",
- "sp-runtime",
- "sp-state-trie-migration",
-]
-
-[[package]]
 name = "sc-sync-state-rpc"
 version = "0.10.0-dev"
 dependencies = [
@@ -10643,6 +10627,22 @@ dependencies = [
  "prometheus",
  "thiserror",
  "tokio",
+]
+
+[[package]]
+name = "substrate-state-trie-migration-rpc"
+version = "4.0.0-dev"
+dependencies = [
+ "jsonrpc-core",
+ "jsonrpc-core-client",
+ "jsonrpc-derive",
+ "parity-scale-codec",
+ "sc-client-api",
+ "sc-rpc-api",
+ "serde",
+ "serde_json",
+ "sp-runtime",
+ "sp-state-trie-migration",
 ]
 
 [[package]]

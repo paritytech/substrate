@@ -25,7 +25,6 @@ sc-finality-grandpa = { version = "0.10.0-dev", path = "../../../client/finality
 sc-finality-grandpa-rpc = { version = "0.10.0-dev", path = "../../../client/finality-grandpa/rpc" }
 sc-rpc-api = { version = "0.10.0-dev", path = "../../../client/rpc-api" }
 sc-rpc = { version = "4.0.0-dev", path = "../../../client/rpc" }
-sc-state-trie-migration-rpc = { version = "4.0.0-dev", path = "../../../client/state-trie-migration-rpc/" }
 sc-sync-state-rpc = { version = "0.10.0-dev", path = "../../../client/sync-state-rpc" }
 sp-api = { version = "4.0.0-dev", path = "../../../primitives/api" }
 sp-block-builder = { version = "4.0.0-dev", path = "../../../primitives/block-builder" }
@@ -36,3 +35,4 @@ sp-consensus-babe = { version = "0.10.0-dev", path = "../../../primitives/consen
 sp-runtime = { version = "6.0.0", path = "../../../primitives/runtime" }
 sc-transaction-pool-api = { version = "4.0.0-dev", path = "../../../client/transaction-pool/api" }
 substrate-frame-rpc-system = { version = "4.0.0-dev", path = "../../../utils/frame/rpc/system" }
+substrate-state-trie-migration-rpc = { version = "4.0.0-dev", path = "../../../utils/frame/rpc/state-trie-migration-rpc/" }

@@ -160,8 +160,8 @@ where
 		finality_provider,
 	)));
 
-	io.extend_with(sc_state_trie_migration_rpc::StateMigrationApi::to_delegate(
-		sc_state_trie_migration_rpc::MigrationRpc::new(client.clone(), backend, deny_unsafe),
+	io.extend_with(substrate_state_trie_migration_rpc::StateMigrationApi::to_delegate(
+		substrate_state_trie_migration_rpc::MigrationRpc::new(client.clone(), backend, deny_unsafe),
 	));
 
 	io.extend_with(sc_sync_state_rpc::SyncStateRpcApi::to_delegate(
