@@ -4677,26 +4677,26 @@ fn un_decodable_nominator_revive_via_nominate_correct_approval_update() {
 		.balance_factor(10)
 		.build_and_execute(|| {
 			// initial approval stakes.
-			assert_eq!(<Test as Config>::TargetList::get_weight(&1).unwrap(), 20);
-			assert_eq!(<Test as Config>::TargetList::get_weight(&2).unwrap(), 10);
-			assert_eq!(<Test as Config>::TargetList::get_weight(&3).unwrap(), 10);
+			assert_eq!(<Test as Config>::TargetList::get_score(&1).unwrap(), 20);
+			assert_eq!(<Test as Config>::TargetList::get_score(&2).unwrap(), 10);
+			assert_eq!(<Test as Config>::TargetList::get_score(&3).unwrap(), 10);
 
 			// 70 is now gone
 			MaxNominations::set(2);
 
 			// but approval stakes are the same.
-			assert_eq!(<Test as Config>::TargetList::get_weight(&1).unwrap(), 20);
-			assert_eq!(<Test as Config>::TargetList::get_weight(&2).unwrap(), 10);
-			assert_eq!(<Test as Config>::TargetList::get_weight(&3).unwrap(), 10);
+			assert_eq!(<Test as Config>::TargetList::get_score(&1).unwrap(), 20);
+			assert_eq!(<Test as Config>::TargetList::get_score(&2).unwrap(), 10);
+			assert_eq!(<Test as Config>::TargetList::get_score(&3).unwrap(), 10);
 
 			// now they revive themselves via a fresh new nominate call.
 			assert_ok!(Staking::nominate(Origin::signed(71), vec![2]));
 
 			// approvals must be correctly updated
-			assert_eq!(<Test as Config>::TargetList::get_weight(&1).unwrap(), 10);
-			assert_eq!(<Test as Config>::TargetList::get_weight(&2).unwrap(), 10);
+			assert_eq!(<Test as Config>::TargetList::get_score(&1).unwrap(), 10);
+			assert_eq!(<Test as Config>::TargetList::get_score(&2).unwrap(), 10);
 			assert_eq!(
-				<Test as Config>::TargetList::get_weight(&3),
+				<Test as Config>::TargetList::get_score(&3),
 				Err(pallet_bags_list::Error::NonExistent)
 			);
 		});
@@ -4710,29 +4710,29 @@ fn un_decodable_nominator_chill_correct_approval_update() {
 		.balance_factor(10)
 		.build_and_execute(|| {
 			// initial approval stakes.
-			assert_eq!(<Test as Config>::TargetList::get_weight(&1).unwrap(), 20);
-			assert_eq!(<Test as Config>::TargetList::get_weight(&2).unwrap(), 10);
-			assert_eq!(<Test as Config>::TargetList::get_weight(&3).unwrap(), 10);
+			assert_eq!(<Test as Config>::TargetList::get_score(&1).unwrap(), 20);
+			assert_eq!(<Test as Config>::TargetList::get_score(&2).unwrap(), 10);
+			assert_eq!(<Test as Config>::TargetList::get_score(&3).unwrap(), 10);
 
 			// 70 is now gone
 			MaxNominations::set(2);
 
 			// but approval stakes are the same.
-			assert_eq!(<Test as Config>::TargetList::get_weight(&1).unwrap(), 20);
-			assert_eq!(<Test as Config>::TargetList::get_weight(&2).unwrap(), 10);
-			assert_eq!(<Test as Config>::TargetList::get_weight(&3).unwrap(), 10);
+			assert_eq!(<Test as Config>::TargetList::get_score(&1).unwrap(), 20);
+			assert_eq!(<Test as Config>::TargetList::get_score(&2).unwrap(), 10);
+			assert_eq!(<Test as Config>::TargetList::get_score(&3).unwrap(), 10);
 
 			// now they get chilled
 			assert_ok!(Staking::chill_other(Origin::signed(1), 71));
 
 			// approvals must be correctly updated.
-			assert_eq!(<Test as Config>::TargetList::get_weight(&1).unwrap(), 10);
+			assert_eq!(<Test as Config>::TargetList::get_score(&1).unwrap(), 10);
 			assert_eq!(
-				<Test as Config>::TargetList::get_weight(&2).unwrap_err(),
+				<Test as Config>::TargetList::get_score(&2).unwrap_err(),
 				pallet_bags_list::Error::NonExistent
 			);
 			assert_eq!(
-				<Test as Config>::TargetList::get_weight(&3).unwrap_err(),
+				<Test as Config>::TargetList::get_score(&3).unwrap_err(),
 				pallet_bags_list::Error::NonExistent
 			);
 		});
@@ -4746,17 +4746,17 @@ fn un_decodable_nominator_bond_extra_correct_approval_update() {
 		.balance_factor(10)
 		.build_and_execute(|| {
 			// initial approval stakes.
-			assert_eq!(<Test as Config>::TargetList::get_weight(&1).unwrap(), 20);
-			assert_eq!(<Test as Config>::TargetList::get_weight(&2).unwrap(), 10);
-			assert_eq!(<Test as Config>::TargetList::get_weight(&3).unwrap(), 10);
+			assert_eq!(<Test as Config>::TargetList::get_score(&1).unwrap(), 20);
+			assert_eq!(<Test as Config>::TargetList::get_score(&2).unwrap(), 10);
+			assert_eq!(<Test as Config>::TargetList::get_score(&3).unwrap(), 10);
 
 			// 70 is now gone
 			MaxNominations::set(2);
 
 			// but approval stakes are the same.
-			assert_eq!(<Test as Config>::TargetList::get_weight(&1).unwrap(), 20);
-			assert_eq!(<Test as Config>::TargetList::get_weight(&2).unwrap(), 10);
-			assert_eq!(<Test as Config>::TargetList::get_weight(&3).unwrap(), 10);
+			assert_eq!(<Test as Config>::TargetList::get_score(&1).unwrap(), 20);
+			assert_eq!(<Test as Config>::TargetList::get_score(&2).unwrap(), 10);
+			assert_eq!(<Test as Config>::TargetList::get_score(&3).unwrap(), 10);
 
 			// now they get chilled
 			Balances::make_free_balance_be(&70, 1000);
@@ -4765,9 +4765,9 @@ fn un_decodable_nominator_bond_extra_correct_approval_update() {
 			assert_eq!(Staking::weight_of(&70), 20);
 
 			// approvals must be correctly updated.
-			assert_eq!(<Test as Config>::TargetList::get_weight(&1).unwrap(), 20 + 10);
-			assert_eq!(<Test as Config>::TargetList::get_weight(&2).unwrap(), 10 + 10);
-			assert_eq!(<Test as Config>::TargetList::get_weight(&3).unwrap(), 10 + 10);
+			assert_eq!(<Test as Config>::TargetList::get_score(&1).unwrap(), 20 + 10);
+			assert_eq!(<Test as Config>::TargetList::get_score(&2).unwrap(), 10 + 10);
+			assert_eq!(<Test as Config>::TargetList::get_score(&3).unwrap(), 10 + 10);
 		});
 }
 

@@ -17,7 +17,7 @@
 //! Storage migrations for the Staking pallet.
 
 use super::*;
-use frame_election_provider_support::{SortedListProvider, VoteWeight, VoteWeightProvider};
+use frame_election_provider_support::{ScoreProvider, SortedListProvider, VoteWeight};
 use frame_support::traits::{Defensive, OnRuntimeUpgrade};
 use sp_std::collections::btree_map::BTreeMap;
 
@@ -29,7 +29,7 @@ impl<T: Config> OnRuntimeUpgrade for InjectValidatorsSelfStakeIntoVoterList<T> {
 	fn on_runtime_upgrade() -> Weight {
 		if StorageVersion::<T>::get() == Releases::V8_0_0 {
 			for (v, _) in Validators::<T>::iter() {
-				let weight = Pallet::<T>::vote_weight(&v);
+				let weight = Pallet::<T>::weight_of(&v);
 				let _ = T::VoterList::on_insert(v.clone(), weight).map_err(|err| {
 					log!(warn, "failed to insert {:?} into VoterList: {:?}", v, err)
 				});

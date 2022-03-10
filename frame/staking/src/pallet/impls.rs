@@ -18,8 +18,8 @@
 //! Implementations for the Staking FRAME Pallet.
 
 use frame_election_provider_support::{
-	data_provider, ElectionDataProvider, ElectionProvider, SortedListProvider, Supports,
-	VoteWeight, VoteWeightProvider, VoterOf,
+	data_provider, ElectionDataProvider, ElectionProvider, ScoreProvider, SortedListProvider,
+	Supports, VoteWeight, VoterOf,
 };
 use frame_support::{
 	defensive,
@@ -933,11 +933,11 @@ impl<T: Config> Pallet<T> {
 		let approval_stakes = TargetListMigration::<T>::build_approval_stakes();
 		approval_stakes.iter().for_each(|(v, a)| {
 			debug_assert_eq!(
-				T::TargetList::get_weight(v).unwrap_or_default(),
+				T::TargetList::get_score(v).unwrap_or_default(),
 				*a,
-				"staker {:?}, weight in TargetList {:?}, computed: {:?}",
+				"staker {:?}, score in TargetList {:?}, computed: {:?}",
 				v,
-				T::TargetList::get_weight(v).unwrap_or_default(),
+				T::TargetList::get_score(v).unwrap_or_default(),
 				a
 			)
 		});
@@ -1335,13 +1335,15 @@ where
 	}
 }
 
-impl<T: Config> VoteWeightProvider<T::AccountId> for Pallet<T> {
-	fn vote_weight(who: &T::AccountId) -> VoteWeight {
+impl<T: Config> ScoreProvider<T::AccountId> for Pallet<T> {
+	type Score = VoteWeight;
+
+	fn score(who: &T::AccountId) -> Self::Score {
 		Self::weight_of(who)
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn set_vote_weight_of(who: &T::AccountId, weight: VoteWeight) {
+	fn set_score_of(who: &T::AccountId, weight: Self::Score) {
 		// this will clearly results in an inconsistent state, but it should not matter for a
 		// benchmark.
 		let active: BalanceOf<T> = weight.try_into().map_err(|_| ()).unwrap();
@@ -1370,6 +1372,7 @@ impl<T: Config> VoteWeightProvider<T::AccountId> for Pallet<T> {
 pub struct UseNominatorsAndValidatorsMap<T>(sp_std::marker::PhantomData<T>);
 impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsAndValidatorsMap<T> {
 	type Error = ();
+	type Score = VoteWeight;
 
 	/// Returns iterator over voter list, which can have `take` called on it.
 	fn iter() -> Box<dyn Iterator<Item = T::AccountId>> {
@@ -1385,11 +1388,11 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsAndValidatorsM
 	fn contains(id: &T::AccountId) -> bool {
 		Nominators::<T>::contains_key(id) || Validators::<T>::contains_key(id)
 	}
-	fn on_insert(_: T::AccountId, _weight: VoteWeight) -> Result<(), Self::Error> {
+	fn on_insert(_: T::AccountId, _weight: Self::Score) -> Result<(), Self::Error> {
 		// nothing to do on insert.
 		Ok(())
 	}
-	fn get_weight(id: &T::AccountId) -> Result<VoteWeight, Self::Error> {
+	fn get_score(id: &T::AccountId) -> Result<Self::Score, Self::Error> {
 		// TODO: this is not consistent, should ideally return an error if not exists.
 		Ok(Pallet::<T>::weight_of(id))
 	}
@@ -1403,7 +1406,7 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsAndValidatorsM
 	}
 	fn unsafe_regenerate(
 		_: impl IntoIterator<Item = T::AccountId>,
-		_: Box<dyn Fn(&T::AccountId) -> VoteWeight>,
+		_: Box<dyn Fn(&T::AccountId) -> Self::Score>,
 	) -> u32 {
 		// nothing to do upon regenerate.
 		0

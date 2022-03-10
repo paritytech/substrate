@@ -163,15 +163,17 @@ pub mod pallet {
 		/// After the threshold is reached a new era will be forced.
 		type OffendingValidatorsThreshold: Get<Perbill>;
 
-		/// Something that can provide a list of voters in a somewhat sorted way. The original use
-		/// case for this was designed with `pallet_bags_list::Pallet` in mind. Otherwise,
-		/// [`impls::UseNominatorsAndValidatorsMap`] is likely the second option.
-		type VoterList: SortedListProvider<Self::AccountId>;
-		/// Something that can provide a list of targets in a somewhat sorted way. The original use
-		/// case for this was designed with `pallet_bags_list::Pallet` in mind.
-		type TargetList: SortedListProvider<Self::AccountId>;
+		type VoterList: SortedListProvider<
+			Self::AccountId,
+			Score = frame_election_provider_support::VoteWeight,
+		>;
 
-		/// The maximum number of `unlocking` chunks a [`StakingLedger`] can have. Effectively
+		// type TargetList: SortedListProvider<Self::AccountId, Score = BalanceOf<Self>>;
+		type TargetList: SortedListProvider<
+			Self::AccountId,
+			Score = frame_election_provider_support::VoteWeight,
+		>;
+
 		/// determines how many unique eras a staker may be unbonding in.
 		#[pallet::constant]
 		type MaxUnlockingChunks: Get<u32>;
@@ -1106,7 +1108,6 @@ pub mod pallet {
 			ensure!(targets.len() <= T::MaxNominations::get() as usize, Error::<T>::TooManyTargets);
 
 			let old = NominatorsHelper::<T>::get_any(stash).map(|n| n.targets).unwrap_or_default();
-
 			let targets: BoundedVec<_, _> = targets
 				.into_iter()
 				.map(|t| T::Lookup::lookup(t).map_err(DispatchError::from))
@@ -1134,6 +1135,7 @@ pub mod pallet {
 
 			let incoming = targets.iter().cloned().filter(|x| !old.contains(x)).collect::<Vec<_>>();
 			let outgoing = old.iter().cloned().filter(|x| !targets.contains(x)).collect::<Vec<_>>();
+
 			// TODO: these are all rather inefficient now based on how vote_weight is
 			// implemented, but I don't care because: https://github.com/paritytech/substrate/issues/10990
 			let weight = Self::weight_of(stash);

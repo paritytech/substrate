@@ -243,8 +243,9 @@ impl pallet_bags_list::Config<VoterBagsListInstance> for Test {
 	type Event = Event;
 	type WeightInfo = ();
 	// Staking is the source of truth for voter bags list, since they are not kept up to date.
-	type VoteWeightProvider = Staking;
+	type ScoreProvider = Staking;
 	type BagThresholds = BagThresholds;
+	type Score = VoteWeight;
 }
 
 type TargetBagsListInstance = pallet_bags_list::Instance2;
@@ -252,8 +253,9 @@ impl pallet_bags_list::Config<TargetBagsListInstance> for Test {
 	type Event = Event;
 	type WeightInfo = ();
 	// Target bags-list are always kept up to date, and in fact Staking does not know them at all!
-	type VoteWeightProvider = pallet_bags_list::Pallet<Self, TargetBagsListInstance>;
+	type ScoreProvider = pallet_bags_list::Pallet<Self, TargetBagsListInstance>;
 	type BagThresholds = BagThresholds;
+	type Score = VoteWeight;
 }
 
 impl onchain::Config for Test {
@@ -264,10 +266,11 @@ impl onchain::Config for Test {
 pub struct TargetBagListCompat;
 impl SortedListProvider<AccountId> for TargetBagListCompat {
 	type Error = <TargetBagsList as SortedListProvider<AccountId>>::Error;
+	type Score = <TargetBagsList as SortedListProvider<AccountId>>::Score;
 
 	fn iter() -> Box<dyn Iterator<Item = AccountId>> {
 		let mut all = TargetBagsList::iter()
-			.map(|x| (x, TargetBagsList::get_weight(&x).unwrap_or_default()))
+			.map(|x| (x, TargetBagsList::get_score(&x).unwrap_or_default()))
 			.collect::<Vec<_>>();
 		all.sort_by(|a, b| match a.1.partial_cmp(&b.1).unwrap() {
 			Ordering::Equal => b.0.partial_cmp(&a.0).unwrap(),
@@ -287,8 +290,8 @@ impl SortedListProvider<AccountId> for TargetBagListCompat {
 	fn on_update(id: &AccountId, weight: VoteWeight) -> Result<(), Self::Error> {
 		TargetBagsList::on_update(id, weight)
 	}
-	fn get_weight(id: &AccountId) -> Result<VoteWeight, Self::Error> {
-		TargetBagsList::get_weight(id)
+	fn get_score(id: &AccountId) -> Result<VoteWeight, Self::Error> {
+		TargetBagsList::get_score(id)
 	}
 	fn on_remove(id: &AccountId) -> Result<(), Self::Error> {
 		TargetBagsList::on_remove(id)
@@ -306,7 +309,7 @@ impl SortedListProvider<AccountId> for TargetBagListCompat {
 		TargetBagsList::sanity_check()
 	}
 	#[cfg(feature = "runtime-benchmarks")]
-	fn weight_update_worst_case(_who: &AccountId, _is_increase: bool) -> VoteWeight {
+	fn score_update_worst_case(_who: &AccountId, _is_increase: bool) -> VoteWeight {
 		VoteWeight::MAX
 	}
 }
