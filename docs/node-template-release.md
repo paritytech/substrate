@@ -7,7 +7,7 @@ the existence of your current git commit ID in the remote repository.
 	Assume you are in root directory of Substrate. Run:
 
 	```bash
-	cd .scripts/ci/
+	cd scripts/ci/
 	./node-template-release.sh <output tar.gz file>
 	```
 
