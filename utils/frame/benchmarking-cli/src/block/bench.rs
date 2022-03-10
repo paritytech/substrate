@@ -141,7 +141,7 @@ where
 		let num_ext = block.extrinsics().len() as u32;
 		info!("Block contains {} transactions", num_ext);
 		if num_ext < self.params.num_inherents {
-			return Err("A block cannot have less than `num_inherents` transactions".into());
+			return Err("A block cannot have less than `num_inherents` transactions".into())
 		}
 		let is_empty = num_ext == self.params.num_inherents;
 
