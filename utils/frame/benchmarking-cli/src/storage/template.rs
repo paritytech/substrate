@@ -120,7 +120,7 @@ impl TemplateData {
 	fn build_path(&self, weight_out: &str) -> PathBuf {
 		let mut path = PathBuf::from(weight_out);
 		if path.is_dir() {
-			path.push(format!("{}_weights.rs", self.db_name.to_lowercase()));
+			path.push(format!("{}_weights", self.db_name.to_lowercase()));
 			path.set_extension("rs");
 		}
 		path
