@@ -16,11 +16,17 @@
 // limitations under the License.
 
 use crate::*;
-use frame_support::pallet_prelude::*;
 use enumflags2::BitFlags;
+use frame_support::pallet_prelude::*;
 
 impl<T: Config> Pallet<T> {
-	pub fn do_transfer(id: CollectionIdOf<T>, config: TokenConfig, sender: T::AccountId, receiver: T::AccountId, amount: Option<BalanceOf<T>>) -> DispatchResult {
+	pub fn do_transfer(
+		id: CollectionIdOf<T>,
+		config: TokenConfig,
+		sender: T::AccountId,
+		receiver: T::AccountId,
+		amount: Option<BalanceOf<T>>,
+	) -> DispatchResult {
 		let user_features: BitFlags<UserFeatures> = config.user_features.into();
 
 		if user_features.contains(UserFeatures::Royalty) {

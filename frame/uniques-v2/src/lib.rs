@@ -17,9 +17,15 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+mod general_features;
 mod types;
 mod user_features;
-mod general_features;
+
+#[cfg(test)]
+mod tests;
+
+#[cfg(test)]
+mod mock;
 
 pub use pallet::*;
 pub use types::*;
@@ -31,7 +37,7 @@ pub mod pallet {
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 
-	use frame_support::traits::{ Currency, ReservableCurrency};
+	use frame_support::traits::{Currency, ReservableCurrency};
 	use sp_runtime::traits::Hash;
 
 	// The struct on which we build all of our Pallet logic.
@@ -50,32 +56,22 @@ pub mod pallet {
 		type MetadataBound: Get<u32>; // = up to 10 kb;
 
 		type DefaultSystemConfig: Get<SystemFeatures>;
-
 	}
 
 	pub type CollectionIdOf<T> = <T as frame_system::Config>::Hash;
 	pub type MetadataOf<T> = BoundedVec<u8, <T as Config>::MetadataBound>;
-	pub type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
-
+	pub type BalanceOf<T> =
+		<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
 	/// Maps a unique token id to it's config.
 	#[pallet::storage]
-	pub(super) type TokenConfigs<T: Config> = StorageMap<
-		_,
-		Blake2_128Concat,
-		CollectionIdOf<T>,
-		TokenConfig,
-	>;
+	pub(super) type TokenConfigs<T: Config> =
+		StorageMap<_, Blake2_128Concat, CollectionIdOf<T>, TokenConfig>;
 
 	/// Maps a unique token id to it's administrator.
 	#[pallet::storage]
-	pub(super) type Admins<T: Config> = StorageMap<
-		_,
-		Blake2_128Concat,
-		CollectionIdOf<T>,
-		T::AccountId,
-		OptionQuery,
-	>;
+	pub(super) type Admins<T: Config> =
+		StorageMap<_, Blake2_128Concat, CollectionIdOf<T>, T::AccountId, OptionQuery>;
 
 	/// Maps a collection id to it's metadata.
 	#[pallet::storage]
@@ -103,7 +99,7 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		CollectionCreated { id: CollectionIdOf<T> }
+		CollectionCreated { id: CollectionIdOf<T> },
 	}
 
 	// Your Pallet's error messages.
@@ -125,7 +121,11 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		#[pallet::weight(0)]
-		pub fn create(origin: OriginFor<T>, maybe_salt: Option<u64>, config: UserFeatures) -> DispatchResult {
+		pub fn create(
+			origin: OriginFor<T>,
+			maybe_salt: Option<u64>,
+			config: UserFeatures,
+		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 
 			let id = if let Some(salt) = maybe_salt {
@@ -139,19 +139,20 @@ pub mod pallet {
 
 			ensure!(!TokenConfigs::<T>::contains_key(id), Error::<T>::TokenIdTaken);
 
-
 			let default_system_config = T::DefaultSystemConfig::get();
-			let config = TokenConfig {
-				system_features: default_system_config,
-				user_features: config,
-			};
+			let config =
+				TokenConfig { system_features: default_system_config, user_features: config };
 			TokenConfigs::<T>::insert(id, config);
 			Self::deposit_event(Event::<T>::CollectionCreated { id });
 			Ok(())
 		}
 
 		#[pallet::weight(0)]
-		pub fn set_admin(origin: OriginFor<T>, id: CollectionIdOf<T>, new_admin: T::AccountId) -> DispatchResult {
+		pub fn set_admin(
+			origin: OriginFor<T>,
+			id: CollectionIdOf<T>,
+			new_admin: T::AccountId,
+		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 			let config = TokenConfigs::<T>::get(id).ok_or(Error::<T>::TokenNotFound)?;
 			Self::do_set_admin(id, config, Some(sender), new_admin)?;
@@ -163,7 +164,12 @@ pub mod pallet {
 			// todo
 			//Self::config_to_weight(config_hint)
 		)]
-		pub fn transfer(origin: OriginFor<T>, id: CollectionIdOf<T>, receiver: T::AccountId, config_hint: TokenConfig) -> DispatchResult {
+		pub fn transfer(
+			origin: OriginFor<T>,
+			id: CollectionIdOf<T>,
+			receiver: T::AccountId,
+			config_hint: TokenConfig,
+		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 			let config = TokenConfigs::<T>::get(id).ok_or(Error::<T>::TokenNotFound)?;
 			ensure!(config == config_hint, Error::<T>::BadHint);

@@ -16,11 +16,16 @@
 // limitations under the License.
 
 use crate::*;
-use frame_support::pallet_prelude::*;
 use enumflags2::BitFlags;
+use frame_support::pallet_prelude::*;
 
 impl<T: Config> Pallet<T> {
-	pub fn do_set_admin(id: CollectionIdOf<T>, config: TokenConfig, maybe_caller: Option<T::AccountId>, new_admin: T::AccountId) -> DispatchResult {
+	pub fn do_set_admin(
+		id: CollectionIdOf<T>,
+		config: TokenConfig,
+		maybe_caller: Option<T::AccountId>,
+		new_admin: T::AccountId,
+	) -> DispatchResult {
 		let user_features: BitFlags<UserFeatures> = config.user_features.into();
 		ensure!(user_features.contains(UserFeatures::Administration), Error::<T>::NotConfigured);
 		Admins::<T>::try_mutate(id, |maybe_admin| -> DispatchResult {

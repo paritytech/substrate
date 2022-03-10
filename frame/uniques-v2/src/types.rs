@@ -15,10 +15,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use enumflags2::bitflags;
-use codec::{Encode, Decode, MaxEncodedLen};
-use scale_info::TypeInfo;
+use codec::{Decode, Encode, MaxEncodedLen};
+use enumflags2::{bitflags, BitFlag, BitFlags};
 use frame_support::RuntimeDebug;
+use scale_info::TypeInfo;
 
 // Support for up to 64 user-enabled features on a token.
 #[bitflags]
@@ -37,6 +37,8 @@ pub enum UserFeatures {
 pub enum SystemFeatures {
 	NoDeposit,
 }
+
+// TODO: Implement Default
 
 #[derive(Encode, Decode, PartialEq, Debug, Clone, Copy, MaxEncodedLen, TypeInfo)]
 pub struct TokenConfig {
