@@ -211,6 +211,7 @@ impl std::str::FromStr for Database {
 	type Err = String;
 
 	fn from_str(s: &str) -> Result<Self, String> {
+		eprintln!("ELSE: {}", s);
 		if s.eq_ignore_ascii_case("rocksdb") {
 			Ok(Self::RocksDb)
 		} else if s.eq_ignore_ascii_case("paritydb-experimental") {
