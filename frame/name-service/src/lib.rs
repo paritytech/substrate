@@ -27,7 +27,9 @@ pub mod pallet {
 	use frame_system::pallet_prelude::*;
 	use sp_runtime::traits::{Hash, Saturating};
 
-	use frame_support::traits::{Currency, ReservableCurrency};
+	use frame_support::traits::{
+		Currency, ExistenceRequirement, OnUnbalanced, ReservableCurrency, WithdrawReasons,
+	};
 
 	// The struct on which we build all of our Pallet logic.
 	#[pallet::pallet]
@@ -40,6 +42,9 @@ pub mod pallet {
 	// Allows easy access our Pallet's `Balance` type. Comes from `Currency` interface.
 	type BalanceOf<T> =
 		<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
+	type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<
+		<T as frame_system::Config>::AccountId,
+	>>::NegativeImbalance;
 
 	// Your Pallet's configuration trait, representing custom external types and interfaces.
 	#[pallet::config]
@@ -48,6 +53,9 @@ pub mod pallet {
 
 		/// The Currency handler for the kitties pallet.
 		type Currency: ReservableCurrency<Self::AccountId>;
+
+		/// The account where registration fees are paid to.
+		type RegistrationFeeHandler: OnUnbalanced<NegativeImbalanceOf<Self>>;
 
 		/// The deposit a user needs to make in order to commit to a name registration.
 		#[pallet::constant]
@@ -73,10 +81,16 @@ pub mod pallet {
 		pub deposit: Balance,
 	}
 
+	#[derive(Encode, Decode, MaxEncodedLen, TypeInfo)]
+	pub enum Resolver<AccountId> {
+		Default(AccountId),
+	}
+
 	/* Placeholder for defining custom storage items. */
 
 	/// Name Commitments
 	#[pallet::storage]
+	#[pallet::getter(fn commitment)]
 	pub(super) type Commitments<T: Config> = StorageMap<
 		_,
 		Blake2_128Concat,
@@ -86,6 +100,7 @@ pub mod pallet {
 
 	/// Name Registrations
 	#[pallet::storage]
+	#[pallet::getter(fn registration)]
 	pub(super) type Registrations<T: Config> = StorageMap<
 		_,
 		Blake2_128Concat,
@@ -93,16 +108,30 @@ pub mod pallet {
 		Registration<T::AccountId, BalanceOf<T>, T::BlockNumber>,
 	>;
 
-	/// Name Registrations
+	/// This resolver maps name hashes to an account
 	#[pallet::storage]
-	pub(super) type Names<T: Config> = StorageMap<_, Blake2_128Concat, T::AccountId, NameHash>;
+	#[pallet::getter(fn resolver)]
+	pub(super) type Resolvers<T: Config> =
+		StorageMap<_, Blake2_128Concat, NameHash, Resolver<T::AccountId>>;
 
 	// Your Pallet's events.
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		// TODO: Potentially make events more lightweight
+		/// A new `Commitment` has taken place.
 		Committed { sender: T::AccountId, who: T::AccountId, hash: CommitmentHash },
+		/// A new `Registration` has taken added.
+		Registered {
+			owner: T::AccountId,
+			registrant: T::AccountId,
+			expiry: T::BlockNumber,
+			deposit: BalanceOf<T>,
+		},
+		/// A `Registration` has been transferred to a new owner.
+		Transfer { from: T::AccountId, to: T::AccountId },
+		/// A `Registration` has been extended.
+		Extended { name_hash: NameHash, expires: T::BlockNumber },
 	}
 
 	// Your Pallet's error messages.
@@ -114,6 +143,12 @@ pub mod pallet {
 		CommitmentNotFound,
 		/// This name is already registered.
 		AlreadyRegistered,
+		/// This registration does not exist.
+		RegistrationNotFound,
+		/// The sender is not the registration owner.
+		NotRegistrationOwner,
+		/// This resolver does not exist.
+		ResolverNotFound,
 	}
 
 	// Your Pallet's callable functions.
@@ -151,31 +186,111 @@ pub mod pallet {
 			let sender = ensure_signed(origin)?;
 			let commitment_hash = sp_io::hashing::blake2_256(&(name.clone(), secret).encode());
 
-			let commitment =
-				Commitments::<T>::get(commitment_hash).ok_or(Error::<T>::CommitmentNotFound)?;
-
+			let commitment = Commitments::<T>::get(commitment_hash.clone())
+				.ok_or(Error::<T>::CommitmentNotFound)?;
 			let name_hash = sp_io::hashing::blake2_256(&name);
 
 			ensure!(Registrations::<T>::contains_key(name_hash), Error::<T>::AlreadyRegistered);
 
-			let fee = Self::registration_fee(name, length);
+			// TODO: check if sender has adequate balance to meet fee obligations?
 
-			// TODO make more configurable
-			//T::Currency::burn(sender, fee)?;
+			let fee = Self::registration_fee(name.clone(), length);
+			// send fees to designated account
+			let imbalance = T::Currency::withdraw(
+				&sender,
+				fee,
+				WithdrawReasons::FEE,
+				ExistenceRequirement::KeepAlive,
+			)?;
 
 			let block_number = frame_system::Pallet::<T>::block_number();
+			let expiry = block_number.saturating_add(length);
+			let deposit: BalanceOf<T> = Default::default();
 
 			let registration = Registration {
 				owner: commitment.who.clone(),
-				registrant: commitment.who,
-				expiry: block_number.saturating_add(length),
+				registrant: commitment.who.clone(),
+				expiry,
 				// Handle deposit in the future maybe.
-				deposit: Default::default(),
+				deposit,
 			};
 
 			Registrations::<T>::insert(name_hash, registration);
 
-			// TODO: Registration Event here
+			// copied to Registration.
+			Commitments::<T>::remove(commitment_hash);
+
+			T::RegistrationFeeHandler::on_unbalanced(imbalance);
+
+			Self::deposit_event(Event::<T>::Registered {
+				owner: commitment.who.clone(),
+				registrant: commitment.who,
+				expiry,
+				deposit,
+			});
+
+			Ok(())
+		}
+
+		#[pallet::weight(0)]
+		pub fn transfer(
+			origin: OriginFor<T>,
+			to: T::AccountId,
+			name_hash: NameHash,
+		) -> DispatchResult {
+			let sender = ensure_signed(origin)?;
+
+			Registrations::<T>::try_mutate(name_hash, |maybe_registration| {
+				let r = maybe_registration.as_mut().ok_or(Error::<T>::RegistrationNotFound)?;
+				ensure!(r.owner == sender, Error::<T>::NotRegistrationOwner);
+
+				r.owner = to.clone();
+
+				Self::deposit_event(Event::<T>::Transfer { from: sender, to });
+				Ok(())
+			})
+		}
+
+		#[pallet::weight(0)]
+		pub fn renew(
+			origin: OriginFor<T>,
+			name_hash: NameHash,
+			length: T::BlockNumber,
+		) -> DispatchResult {
+			let sender = ensure_signed(origin)?;
+
+			Registrations::<T>::try_mutate(name_hash, |maybe_registration| {
+				let r = maybe_registration.as_mut().ok_or(Error::<T>::RegistrationNotFound)?;
+
+				// TODO: check if sender has adequate balance to meet fee obligations?
+
+				let fee = Self::extension_fee(length);
+				//TODO: T::Currency::deposit_creating(&T::RegistrationFeeAccount::get(), fee);
+
+				let expiry_new = r.expiry.saturating_add(length);
+				r.expiry = expiry_new.clone();
+
+				Self::deposit_event(Event::<T>::Extended { name_hash, expires: expiry_new });
+				Ok(())
+			})
+		}
+
+		#[pallet::weight(0)]
+		pub fn set_address(
+			origin: OriginFor<T>,
+			name_hash: NameHash,
+			address: T::AccountId,
+		) -> DispatchResult {
+			let sender = ensure_signed(origin)?;
+
+			let registration =
+				Registrations::<T>::get(name_hash).ok_or(Error::<T>::RegistrationNotFound)?;
+			ensure!(registration.owner == sender, Error::<T>::NotRegistrationOwner);
+
+			Resolvers::<T>::insert(name_hash, Resolver::Default(address));
+
+			// TODO: deposit event
+
 			Ok(())
 		}
 	}
@@ -190,8 +305,13 @@ pub mod pallet {
 			Ok(())
 		}
 
-		// TODO
+		// TODO (register + duration fee)
 		fn registration_fee(name: Vec<u8>, length: T::BlockNumber) -> BalanceOf<T> {
+			Default::default()
+		}
+
+		// TODO (duration fee only)
+		fn extension_fee(length: T::BlockNumber) -> BalanceOf<T> {
 			Default::default()
 		}
 	}
