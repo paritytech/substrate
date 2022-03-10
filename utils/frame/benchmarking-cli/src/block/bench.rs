@@ -34,20 +34,22 @@ use crate::storage::record::Stats;
 pub struct BenchmarkParams {
 	/// Skip benchmarking NO-OP extrinsics.
 	#[clap(long)]
-	pub skip_extrinsic: bool,
+	pub skip_extrinsic_benchmark: bool,
 
 	/// Skip benchmark an empty block.
 	#[clap(long)]
-	pub skip_block: bool,
+	pub skip_block_benchmark: bool,
 
-	/// Specify the id of a full block. 0 is treated as last block.
+	/// Specify the number of a full block. 0 is treated as last block.
 	/// The block should be filled with `System::remark` extrinsics.
-	#[clap(long, default_value = "0")]
+	/// Set to one since that is the first block which could be full.
+	#[clap(long, default_value = "1")]
 	pub full_block: u32,
 
-	/// Specify the id of an empty block. 0 is treated as last block.
+	/// Specify the number of an empty block. 0 is treated as last block.
 	/// The block should not contains any user extrinsics but only inherents.
-	#[clap(long, default_value = "0")]
+	/// Set to one since that is the first block which could be empty.
+	#[clap(long, default_value = "1")]
 	pub empty_block: u32,
 
 	/// How many executions should be measured.
@@ -58,21 +60,13 @@ pub struct BenchmarkParams {
 	#[clap(long, default_value = "100")]
 	pub warmup: u32,
 
-	/// Maximum number of inherents that can be present in a block
-	/// such that the block will still be considered empty.
-	///
-	/// Default is 1 since that is the case for Substrate.
-	/// This check exists to make sure that a non-empty block is not
-	/// accidentally counted as empty.
-	#[clap(long, default_value = "1")]
-	pub max_inherents: u32,
-
-	/// Minimum number of extrinsics that must be present in a block
-	/// such that the block will be considered full.
-	///
-	/// Default is 12_000 since in Substrate a block can hold that many NO-OPs.
-	#[clap(long, default_value = "12000")]
-	pub min_extrinsics: u32,
+	/// Specify the number of inherents that are present per block.
+	/// Blocks with extrinsics besides the inherents will be counted
+	/// as full and can be used for an extrinsics benchmark.
+	/// Blocks with only the inherents will be considered empty and
+	/// can only be used for a block benchmark.
+	#[clap(long)]
+	pub num_inherents: u32,
 }
 
 /// The results of multiple runs in ns.
@@ -145,9 +139,11 @@ where
 	/// The resulting error can be demoted to a warning via `--no-check`.
 	fn check_block(&self, block: &B, want_empty: bool) -> Result<()> {
 		let num_ext = block.extrinsics().len() as u32;
-		let is_empty = num_ext <= self.params.max_inherents;
-		let is_full = num_ext >= self.params.min_extrinsics;
-		info!("Block contains {} extrinsics", num_ext);
+		info!("Block contains {} transactions", num_ext);
+		if num_ext < self.params.num_inherents {
+			return Err("A block cannot have less than `num_inherents` transactions".into());
+		}
+		let is_empty = num_ext == self.params.num_inherents;
 
 		if want_empty {
 			match (is_empty, self.no_check) {
@@ -156,7 +152,7 @@ where
 				(false, true) => warn!("Treating non-empty block as empty because of --no-check"),
 			}
 		} else {
-			match (is_full, self.no_check) {
+			match (!is_empty, self.no_check) {
 				(true, _) => {},
 				(false, false) => return Err("Block should be full but was not".into()),
 				(false, true) => warn!("Treating non-full block as full because of --no-check"),
@@ -169,11 +165,7 @@ where
 	/// Removes the consensus seal from a block if there is any.
 	fn unsealed(&self, block: B) -> Result<B> {
 		let (mut header, extrinsics) = block.deconstruct();
-		match header.digest_mut().pop() {
-			Some(DigestItem::Seal(_, _)) => {},
-			Some(other) => header.digest_mut().push(other),
-			_ => {},
-		}
+		header.digest_mut().logs.retain(|item| !matches!(item, DigestItem::Seal(_, _)));
 		Ok(B::new(header, extrinsics))
 	}
 

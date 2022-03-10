@@ -107,7 +107,6 @@ impl BenchRecord {
 	}
 }
 
-// TODO refactor once https://doc.rust-lang.org/test/stats/trait.Stats.html is stabilized.
 impl Stats {
 	/// Calculates statistics and returns them.
 	pub fn new(xs: &Vec<u64>) -> Result<Self> {

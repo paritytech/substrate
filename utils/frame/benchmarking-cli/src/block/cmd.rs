@@ -85,14 +85,14 @@ impl BlockCmd {
 	{
 		let bench = Benchmark::new(client, self.params.bench.clone(), self.params.no_check);
 
-		if !self.params.bench.skip_block {
+		if !self.params.bench.skip_block_benchmark {
 			let stats = bench.bench(BenchmarkType::Block)?;
 			info!("Executing an empty block [ns]:\n{:?}", stats);
 			let template = TemplateData::new(BenchmarkType::Block, &cfg, &self.params, &stats)?;
 			template.write(&self.params.weight.weight_path)?;
 		}
 
-		if !self.params.bench.skip_extrinsic {
+		if !self.params.bench.skip_extrinsic_benchmark {
 			let stats = bench.bench(BenchmarkType::Extrinsic)?;
 			info!("Executing a NO-OP extrinsic [ns]:\n{:?}", stats);
 			let template = TemplateData::new(BenchmarkType::Extrinsic, &cfg, &self.params, &stats)?;
