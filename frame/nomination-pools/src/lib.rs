@@ -335,8 +335,17 @@ type RewardPoints = U256;
 
 const POINTS_TO_BALANCE_INIT_RATIO: u32 = 1;
 
+/// Extrinsics that bond some funds to the pool.
+enum PoolBond {
+	Create,
+	Join,
+}
+
+/// Identifier for encoding different pool account types.
 enum AccountType {
+	/// The bonded account of the pool. This is functionally both the stash and controller account.
 	Bonded,
+	/// The reward account of the pool.
 	Reward,
 }
 
@@ -566,7 +575,6 @@ impl<T: Config> BondedPool<T> {
 		points_to_issue
 	}
 
-
 	/// Increment the delegator counter. Ensures that the pool and system delegator limits are
 	/// respected.
 	fn inc_delegators(&mut self) -> Result<(), DispatchError> {
@@ -757,31 +765,50 @@ impl<T: Config> BondedPool<T> {
 		}
 	}
 
-	fn try_bond_delegator(who: &T::AccountId, amount: BalanceOf<T>) -> DispatchResult {
-		
-		// This shouldn't be possible since we are ensured the delegator is not a depositor and
-		// the the account ID is generated based on the accountId
-		ensure!(!BondedPools::<T>::contains_key(&bonded_pool.account), Error::<T>::IdInUse);
-		bonded_pool.ok_to_join_with(amount, &who);
-		// Increase the delegator counter to account for depositor; checks delegator limits.
-		bonded_pool.inc_delegators()?;
+	/// Try to transfer a delegators funds to the bonded pool account and then try to bond them.
+	///
+	/// # Warning
+	///
+	/// This must only be used inside of transactional extrinsic, as funds are transferred prior to
+	/// attempting a fallible bond.
+	fn try_bond_delegator(
+		&mut self,
+		who: &T::AccountId,
+		amount: BalanceOf<T>,
+		ty: PoolBond,
+	) -> Result<BalanceOf<T>, DispatchError> {
 
-
+		// Transfer the funds to be bonded from `who` to the pools account so the pool can then
+		// go bond them.
 		T::Currency::transfer(
 			&who,
 			&self.account,
 			amount,
-			ExistenceRequirement::AllowDeath,
+			match ty {
+				PoolBond::Create => ExistenceRequirement::AllowDeath,
+				PoolBond::Join => ExistenceRequirement::KeepAlive,
+			},
 		)?;
-		let points_issued = bonded_pool.issue(amount);
-		// Consider making StakingInterface use reference.
-		T::StakingInterface::bond(
-			bonded_pool.account.clone(),
-			// We make the stash and controller the same for simplicity
-			bonded_pool.account.clone(),
-			amount,
-			bonded_pool.reward_account(),
-		)?;
+		// We must calculate the points issued *before* we bond who's funds, else points:balance
+		// ratio will be wrong.
+		let points_issued = self.issue(amount);
+
+		match ty {
+			// TODO: Consider making StakingInterface use reference.
+			PoolBond::Create => T::StakingInterface::bond(
+				self.account.clone(),
+				// We make the stash and controller the same for simplicity
+				self.account.clone(),
+				amount,
+				self.reward_account(),
+			)?,
+			// The pool should always be created in such a way its in a state to bond extra, but if
+			// the active balance is slashed below the minimum bonded or the account cannot be
+			// found, we exit early.
+			PoolBond::Join => T::StakingInterface::bond_extra(self.account.clone(), amount)?,
+		}
+
+		Ok(points_issued)
 	}
 }
 
@@ -1164,24 +1191,25 @@ pub mod pallet {
 			let reward_pool = RewardPool::<T>::get_and_update(&pool_account)
 				.defensive_ok_or_else(|| Error::<T>::RewardPoolNotFound)?;
 
-			// Transfer the funds to be bonded from `who` to the pools account so the pool can then
-			// go bond them.
-			T::Currency::transfer(&who, &pool_account, amount, ExistenceRequirement::KeepAlive)?;
+			// // Transfer the funds to be bonded from `who` to the pools account so the pool can then
+			// // go bond them.
+			// T::Currency::transfer(&who, &pool_account, amount, ExistenceRequirement::KeepAlive)?;
 
-			// TODO: this can go into one function, similar to `create`.
-			// We must calculate the points to issue *before* we bond `who`'s funds, else the
-			// points:balance ratio will be wrong.
-			let new_points = bonded_pool.issue(amount);
-			// The pool should always be created in such a way its in a state to bond extra, but if
-			// the active balance is slashed below the minimum bonded or the account cannot be
-			// found, we exit early.
-			T::StakingInterface::bond_extra(pool_account.clone(), amount)?;
+			// // We must calculate the points to issue *before* we bond `who`'s funds, else the
+			// // points:balance ratio will be wrong.
+			// let new_points = bonded_pool.issue(amount);
+			// // The pool should always be created in such a way its in a state to bond extra, but if
+			// // the active balance is slashed below the minimum bonded or the account cannot be
+			// // found, we exit early.
+			// T::StakingInterface::bond_extra(pool_account.clone(), amount)?;
+
+			let points_issued = bonded_pool.try_bond_delegator(&who, amount, PoolBond::Join)?;
 
 			Delegators::insert(
 				who.clone(),
 				Delegator::<T> {
 					pool: pool_account.clone(),
-					points: new_points,
+					points: points_issued,
 					// At best the reward pool has the rewards up through the previous era. If the
 					// delegator joins prior to the snapshot they will benefit from the rewards of
 					// the active era despite not contributing to the pool's vote weight. If they
@@ -1441,6 +1469,7 @@ pub mod pallet {
 			state_toggler: T::AccountId,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
+
 			ensure!(
 				amount >= T::StakingInterface::minimum_bond() &&
 					amount >= MinCreateBond::<T>::get(),
@@ -1451,30 +1480,35 @@ pub mod pallet {
 					.map_or(true, |max_pools| BondedPools::<T>::count() < max_pools),
 				Error::<T>::MaxPools
 			);
+			ensure!(!Delegators::<T>::contains_key(&who), Error::<T>::AccountBelongsToOtherPool);
 
 			let mut bonded_pool = BondedPool::<T>::new(who.clone(), root, nominator, state_toggler);
+			// This shouldn't be possible since we are ensured the delegator is not a depositor and
+			// the the account ID is generated based on the accountId
+			ensure!(!BondedPools::<T>::contains_key(&bonded_pool.account), Error::<T>::IdInUse);
+			bonded_pool.inc_delegators()?;
 
-
+			let points_issued =
+				bonded_pool.try_bond_delegator(&who, amount, PoolBond::Create)?;
 
 			// TODO: make these one function that does this in the correct order
 			// We must calculate the points issued *before* we bond who's funds, else points:balance
 			// ratio will be wrong.
-
-			T::Currency::transfer(
-				&who,
-				&bonded_pool.account,
-				amount,
-				ExistenceRequirement::AllowDeath,
-			)?;
-			let points_issued = bonded_pool.issue(amount);
-			// Consider making StakingInterface use reference.
-			T::StakingInterface::bond(
-				bonded_pool.account.clone(),
-				// We make the stash and controller the same for simplicity
-				bonded_pool.account.clone(),
-				amount,
-				bonded_pool.reward_account(),
-			)?;
+			// T::Currency::transfer(
+			// 	&who,
+			// 	&bonded_pool.account,
+			// 	amount,
+			// 	ExistenceRequirement::AllowDeath,
+			// )?;
+			// let points_issued = bonded_pool.issue(amount);
+			// // Consider making StakingInterface use reference.
+			// T::StakingInterface::bond(
+			// 	bonded_pool.account.clone(),
+			// 	// We make the stash and controller the same for simplicity
+			// 	bonded_pool.account.clone(),
+			// 	amount,
+			// 	bonded_pool.reward_account(),
+			// )?;
 
 			Self::deposit_event(Event::<T>::Created {
 				depositor: who.clone(),

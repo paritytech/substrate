@@ -2079,8 +2079,12 @@ mod create {
 	#[test]
 	fn create_errors_correctly() {
 		ExtBuilder::default().build_and_execute_no_checks(|| {
+			// assert_noop!(
+			// 	Pools::create(Origin::signed(10), 420, 123, 456, 789),
+			// 	Error::<Runtime>::AccountBelongsToOtherPool
+			// );
 			assert_noop!(
-				Pools::create(Origin::signed(10), 10, 123, 456, 789),
+				Pools::create(Origin::signed(10), 420, 123, 456, 789),
 				Error::<Runtime>::AccountBelongsToOtherPool
 			);
 
