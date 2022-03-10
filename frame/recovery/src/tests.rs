@@ -18,7 +18,7 @@
 //! Tests for the module.
 
 use super::*;
-use frame_support::{assert_noop, assert_ok, traits::Currency};
+use frame_support::{assert_noop, assert_ok, bounded_vec, traits::Currency};
 use mock::{
 	new_test_ext, run_to_block, Balances, BalancesCall, Call, Origin, Recovery, RecoveryCall, Test,
 };
@@ -201,8 +201,12 @@ fn create_recovery_works() {
 		// Base 10 + 1 per friends = 13 total reserved
 		assert_eq!(Balances::reserved_balance(5), 13);
 		// Recovery configuration is correctly stored
-		let recovery_config =
-			RecoveryConfig { delay_period, deposit: 13, friends: friends.clone(), threshold };
+		let recovery_config = RecoveryConfig {
+			delay_period,
+			deposit: 13,
+			friends: friends.try_into().unwrap(),
+			threshold,
+		};
 		assert_eq!(Recovery::recovery_config(5), Some(recovery_config));
 	});
 }
@@ -254,7 +258,8 @@ fn initiate_recovery_works() {
 		// Deposit is reserved
 		assert_eq!(Balances::reserved_balance(1), 10);
 		// Recovery status object is created correctly
-		let recovery_status = ActiveRecovery { created: 0, deposit: 10, friends: vec![] };
+		let recovery_status =
+			ActiveRecovery { created: 0, deposit: 10, friends: Default::default() };
 		assert_eq!(<ActiveRecoveries<Test>>::get(&5, &1), Some(recovery_status));
 		// Multiple users can attempt to recover the same account
 		assert_ok!(Recovery::initiate_recovery(Origin::signed(2), 5));
@@ -314,7 +319,8 @@ fn vouch_recovery_works() {
 		assert_ok!(Recovery::vouch_recovery(Origin::signed(4), 5, 1));
 		assert_ok!(Recovery::vouch_recovery(Origin::signed(3), 5, 1));
 		// Final recovery status object is updated correctly
-		let recovery_status = ActiveRecovery { created: 0, deposit: 10, friends: vec![2, 3, 4] };
+		let recovery_status =
+			ActiveRecovery { created: 0, deposit: 10, friends: bounded_vec![2, 3, 4] };
 		assert_eq!(<ActiveRecoveries<Test>>::get(&5, &1), Some(recovery_status));
 	});
 }

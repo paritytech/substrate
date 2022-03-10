@@ -26,7 +26,8 @@ use sc_cli::{
 #[clap(
 	name = "subkey",
 	author = "Parity Team <admin@parity.io>",
-	about = "Utility for generating and restoring with Substrate keys"
+	about = "Utility for generating and restoring with Substrate keys",
+	version
 )]
 pub enum Subkey {
 	/// Generate a random node libp2p key, save it to file or print it to stdout

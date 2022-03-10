@@ -79,7 +79,7 @@ pub const MEDIAN_ALGORITHM_CARDINALITY: usize = 1200; // arbitrary suggestion by
 /// The index of an authority.
 pub type AuthorityIndex = u32;
 
-pub use sp_consensus_slots::Slot;
+pub use sp_consensus_slots::{Slot, SlotDuration};
 
 /// An equivocation proof for multiple block authorships on the same slot (i.e. double vote).
 pub type EquivocationProof<H> = sp_consensus_slots::EquivocationProof<H, AuthorityId>;
@@ -234,13 +234,6 @@ impl AllowedSlots {
 	/// Whether VRF secondary slots are allowed.
 	pub fn is_secondary_vrf_slots_allowed(&self) -> bool {
 		*self == Self::PrimaryAndSecondaryVRFSlots
-	}
-}
-
-#[cfg(feature = "std")]
-impl sp_consensus::SlotData for BabeGenesisConfiguration {
-	fn slot_duration(&self) -> std::time::Duration {
-		std::time::Duration::from_millis(self.slot_duration)
 	}
 }
 

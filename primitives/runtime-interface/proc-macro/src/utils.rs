@@ -39,18 +39,64 @@ mod attributes {
 	syn::custom_keyword!(register_only);
 }
 
-/// Runtime interface function with all associated versions of this function.
-pub struct RuntimeInterfaceFunction<'a> {
-	latest_version_to_call: Option<u32>,
-	versions: BTreeMap<u32, &'a TraitItemMethod>,
+/// A concrete, specific version of a runtime interface function.
+pub struct RuntimeInterfaceFunction {
+	item: TraitItemMethod,
+	should_trap_on_return: bool,
 }
 
-impl<'a> RuntimeInterfaceFunction<'a> {
-	fn new(version: VersionAttribute, trait_item: &'a TraitItemMethod) -> Self {
-		Self {
-			latest_version_to_call: version.is_callable().then(|| version.version),
-			versions: BTreeMap::from([(version.version, trait_item)]),
+impl std::ops::Deref for RuntimeInterfaceFunction {
+	type Target = TraitItemMethod;
+	fn deref(&self) -> &Self::Target {
+		&self.item
+	}
+}
+
+impl RuntimeInterfaceFunction {
+	fn new(item: &TraitItemMethod) -> Result<Self> {
+		let mut item = item.clone();
+		let mut should_trap_on_return = false;
+		item.attrs.retain(|attr| {
+			if attr.path.is_ident("trap_on_return") {
+				should_trap_on_return = true;
+				false
+			} else {
+				true
+			}
+		});
+
+		if should_trap_on_return {
+			if !matches!(item.sig.output, syn::ReturnType::Default) {
+				return Err(Error::new(
+					item.sig.ident.span(),
+					"Methods marked as #[trap_on_return] cannot return anything",
+				))
+			}
 		}
+
+		Ok(Self { item, should_trap_on_return })
+	}
+
+	pub fn should_trap_on_return(&self) -> bool {
+		self.should_trap_on_return
+	}
+}
+
+/// Runtime interface function with all associated versions of this function.
+struct RuntimeInterfaceFunctionSet {
+	latest_version_to_call: Option<u32>,
+	versions: BTreeMap<u32, RuntimeInterfaceFunction>,
+}
+
+impl RuntimeInterfaceFunctionSet {
+	fn new(version: VersionAttribute, trait_item: &TraitItemMethod) -> Result<Self> {
+		Ok(Self {
+			latest_version_to_call: version.is_callable().then(|| version.version),
+			versions: BTreeMap::from([(
+				version.version,
+				RuntimeInterfaceFunction::new(trait_item)?,
+			)]),
+		})
 	}
 
 	/// Returns the latest version of this runtime interface function plus the actual function
@@ -59,11 +105,11 @@ impl<'a> RuntimeInterfaceFunction<'a> {
 	/// This isn't required to be the latest version, because a runtime interface function can be
 	/// annotated with `register_only` to ensure that the host exposes the host function but it
 	/// isn't used when compiling the runtime.
-	pub fn latest_version_to_call(&self) -> Option<(u32, &TraitItemMethod)> {
+	pub fn latest_version_to_call(&self) -> Option<(u32, &RuntimeInterfaceFunction)> {
 		self.latest_version_to_call.map(|v| {
 			(
 			v,
-			*self.versions.get(&v).expect(
+			self.versions.get(&v).expect(
 				"If latest_version_to_call has a value, the key with this value is in the versions; qed",
 			),
 		)
@@ -74,7 +120,7 @@ impl<'a> RuntimeInterfaceFunction<'a> {
 	fn add_version(
 		&mut self,
 		version: VersionAttribute,
-		trait_item: &'a TraitItemMethod,
+		trait_item: &TraitItemMethod,
 	) -> Result<()> {
 		if let Some(existing_item) = self.versions.get(&version.version) {
 			let mut err = Error::new(trait_item.span(), "Duplicated version attribute");
@@ -86,7 +132,8 @@ impl<'a> RuntimeInterfaceFunction<'a> {
 			return Err(err)
 		}
 
-		self.versions.insert(version.version, trait_item);
+		self.versions
+			.insert(version.version, RuntimeInterfaceFunction::new(trait_item)?);
 		if self.latest_version_to_call.map_or(true, |v| v < version.version) &&
 			version.is_callable()
 		{
@@ -98,22 +145,24 @@ impl<'a> RuntimeInterfaceFunction<'a> {
 }
 
 /// All functions of a runtime interface grouped by the function names.
-pub struct RuntimeInterface<'a> {
-	items: BTreeMap<syn::Ident, RuntimeInterfaceFunction<'a>>,
+pub struct RuntimeInterface {
+	items: BTreeMap<syn::Ident, RuntimeInterfaceFunctionSet>,
 }
 
-impl<'a> RuntimeInterface<'a> {
+impl RuntimeInterface {
 	/// Returns an iterator over all runtime interface function
-	/// [`latest_version_to_call`](RuntimeInterfaceFunction::latest_version).
-	pub fn latest_versions_to_call(&self) -> impl Iterator<Item = (u32, &TraitItemMethod)> {
+	/// [`latest_version_to_call`](RuntimeInterfaceFunctionSet::latest_version).
+	pub fn latest_versions_to_call(
+		&self,
+	) -> impl Iterator<Item = (u32, &RuntimeInterfaceFunction)> {
 		self.items.iter().filter_map(|(_, item)| item.latest_version_to_call())
 	}
 
-	pub fn all_versions(&self) -> impl Iterator<Item = (u32, &TraitItemMethod)> {
+	pub fn all_versions(&self) -> impl Iterator<Item = (u32, &RuntimeInterfaceFunction)> {
 		self.items
 			.iter()
 			.flat_map(|(_, item)| item.versions.iter())
-			.map(|(v, i)| (*v, *i))
+			.map(|(v, i)| (*v, i))
 	}
 }
 
@@ -288,8 +337,8 @@ fn get_item_version(item: &TraitItemMethod) -> Result<Option<VersionAttribute>> 
 }
 
 /// Returns all runtime interface members, with versions.
-pub fn get_runtime_interface<'a>(trait_def: &'a ItemTrait) -> Result<RuntimeInterface<'a>> {
-	let mut functions: BTreeMap<syn::Ident, RuntimeInterfaceFunction<'a>> = BTreeMap::new();
+pub fn get_runtime_interface(trait_def: &ItemTrait) -> Result<RuntimeInterface> {
+	let mut functions: BTreeMap<syn::Ident, RuntimeInterfaceFunctionSet> = BTreeMap::new();
 
 	for item in get_trait_methods(trait_def) {
 		let name = item.sig.ident.clone();
@@ -301,7 +350,7 @@ pub fn get_runtime_interface<'a>(trait_def: &'a ItemTrait) -> Result<RuntimeInte
 
 		match functions.entry(name.clone()) {
 			Entry::Vacant(entry) => {
-				entry.insert(RuntimeInterfaceFunction::new(version, item));
+				entry.insert(RuntimeInterfaceFunctionSet::new(version, item)?);
 			},
 			Entry::Occupied(mut entry) => {
 				entry.get_mut().add_version(version, item)?;

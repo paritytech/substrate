@@ -86,7 +86,7 @@ fn generate_impl_call(
 		let (#( #pnames ),*) : ( #( #ptypes ),* ) =
 			match #c::DecodeLimit::decode_all_with_depth_limit(
 				#c::MAX_EXTRINSIC_DEPTH,
-				&#input,
+				&mut #input,
 			) {
 				Ok(res) => res,
 				Err(e) => panic!("Bad input data provided to {}: {}", #fn_name_str, e),
@@ -297,7 +297,7 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 				let state_version = self.call
 					.runtime_version_at(&at)
 					.map(|v| v.state_version())
-					.map_err(|e| format!("Failed to get state version: {:?}", e))?;
+					.map_err(|e| format!("Failed to get state version: {}", e))?;
 
 				self.changes.replace(Default::default()).into_storage_changes(
 					backend,

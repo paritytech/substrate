@@ -151,6 +151,6 @@ where
 		let mut ext = BasicExternalities::default();
 		executor
 			.runtime_version(&mut ext, &code.runtime_code(None))
-			.map_err(|e| WasmSubstituteError::VersionInvalid(format!("{:?}", e)).into())
+			.map_err(|e| WasmSubstituteError::VersionInvalid(e.to_string()).into())
 	}
 }

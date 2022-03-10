@@ -128,7 +128,7 @@ impl<V: FullCodec> StorageQuery<V> {
 		StateClient: StateApiClient<Hash> + Sync,
 	{
 		let opt: Option<StorageData> = state_client.storage(self.key, block_index).await?;
-		opt.map(|encoded| V::decode_all(&encoded.0))
+		opt.map(|encoded| V::decode_all(&mut &encoded.0[..]))
 			.transpose()
 			.map_err(|decode_err| RpcError::Custom(decode_err.to_string()))
 	}

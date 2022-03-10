@@ -18,7 +18,7 @@
 
 use crate::{
 	error,
-	params::{BlockNumberOrHash, PruningParams, SharedParams},
+	params::{BlockNumberOrHash, DatabaseParams, PruningParams, SharedParams},
 	CliConfiguration,
 };
 use clap::Parser;
@@ -42,6 +42,10 @@ pub struct ExportStateCmd {
 	#[allow(missing_docs)]
 	#[clap(flatten)]
 	pub pruning_params: PruningParams,
+
+	#[allow(missing_docs)]
+	#[clap(flatten)]
+	pub database_params: DatabaseParams,
 }
 
 impl ExportStateCmd {
@@ -80,5 +84,9 @@ impl CliConfiguration for ExportStateCmd {
 
 	fn pruning_params(&self) -> Option<&PruningParams> {
 		Some(&self.pruning_params)
+	}
+
+	fn database_params(&self) -> Option<&DatabaseParams> {
+		Some(&self.database_params)
 	}
 }

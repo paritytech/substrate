@@ -18,4 +18,4 @@ jsonrpsee = { version = "0.9", features = ["server"] }
 log = "0.4.8"
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../utils/prometheus", version = "0.10.0-dev"}
 serde_json = "1.0.74"
-tokio = "1.15.0"
+tokio = { version = "1.15", features = ["parking_lot"] }

@@ -534,7 +534,7 @@ async fn prune_known_txs_for_block<Block: BlockT, Api: graph::ChainApi<Block = B
 		.block_body(&block_id)
 		.await
 		.unwrap_or_else(|e| {
-			log::warn!("Prune known transactions: error request {:?}!", e);
+			log::warn!("Prune known transactions: error request: {}", e);
 			None
 		})
 		.unwrap_or_default();
@@ -550,14 +550,14 @@ async fn prune_known_txs_for_block<Block: BlockT, Api: graph::ChainApi<Block = B
 			return hashes
 		},
 		Err(e) => {
-			log::debug!(target: "txpool", "Error retrieving header for {:?}: {:?}", block_id, e);
+			log::debug!(target: "txpool", "Error retrieving header for {:?}: {}", block_id, e);
 			return hashes
 		},
 	};
 
 	if let Err(e) = pool.prune(&block_id, &BlockId::hash(*header.parent_hash()), &extrinsics).await
 	{
-		log::error!("Cannot prune known in the pool {:?}!", e);
+		log::error!("Cannot prune known in the pool: {}", e);
 	}
 
 	hashes
@@ -639,7 +639,7 @@ where
 								.block_body(&BlockId::hash(hash))
 								.await
 								.unwrap_or_else(|e| {
-									log::warn!("Failed to fetch block body {:?}!", e);
+									log::warn!("Failed to fetch block body: {}", e);
 									None
 								})
 								.unwrap_or_default()
@@ -685,7 +685,7 @@ where
 						{
 							log::debug!(
 								target: "txpool",
-								"[{:?}] Error re-submitting transactions: {:?}",
+								"[{:?}] Error re-submitting transactions: {}",
 								id,
 								e,
 							)

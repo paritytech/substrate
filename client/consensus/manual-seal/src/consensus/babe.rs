@@ -118,7 +118,7 @@ where
 				pre_digest.slot(),
 			)
 			.map_err(|e| format!("failed to fetch epoch_descriptor: {}", e))?
-			.ok_or_else(|| format!("{:?}", sp_consensus::Error::InvalidAuthoritiesSet))?;
+			.ok_or_else(|| format!("{}", sp_consensus::Error::InvalidAuthoritiesSet))?;
 		// drop the lock
 		drop(epoch_changes);
 
@@ -169,7 +169,9 @@ where
 			.ok_or_else(|| sp_consensus::Error::InvalidAuthoritiesSet)?;
 
 		let epoch = epoch_changes
-			.viable_epoch(&epoch_descriptor, |slot| Epoch::genesis(&self.config, slot))
+			.viable_epoch(&epoch_descriptor, |slot| {
+				Epoch::genesis(self.config.genesis_config(), slot)
+			})
 			.ok_or_else(|| {
 				log::info!(target: "babe", "create_digest: no viable_epoch :(");
 				sp_consensus::Error::InvalidAuthoritiesSet
@@ -283,15 +285,17 @@ where
 			let timestamp = inherents
 				.timestamp_inherent_data()?
 				.ok_or_else(|| Error::StringError("No timestamp inherent data".into()))?;
-			let slot = *timestamp / self.config.slot_duration;
+
+			let slot = Slot::from_timestamp(timestamp, self.config.slot_duration());
+
 			// manually hard code epoch descriptor
 			epoch_descriptor = match epoch_descriptor {
 				ViableEpochDescriptor::Signaled(identifier, _header) =>
 					ViableEpochDescriptor::Signaled(
 						identifier,
 						EpochHeader {
-							start_slot: slot.into(),
-							end_slot: (slot * self.config.epoch_length).into(),
+							start_slot: slot,
+							end_slot: (*slot * self.config.genesis_config().epoch_length).into(),
 						},
 					),
 				_ => unreachable!(

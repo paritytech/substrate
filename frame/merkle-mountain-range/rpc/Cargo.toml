@@ -13,14 +13,13 @@ publish = false
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "2.0.0" }
+codec = { package = "parity-scale-codec", version = "3.0.0" }
 jsonrpsee = { version = "0.9", features = ["server", "macros"] }
-serde_json = "1.0.74"
-serde = { version = "1.0.132", features = ["derive"] }
-
+serde = { version = "1.0.136", features = ["derive"] }
+serde_json = "1"
 sp-api = { version = "4.0.0-dev", path = "../../../primitives/api" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
-sp-core = { version = "5.0.0", path = "../../../primitives/core" }
-sp-runtime = { version = "5.0.0", path = "../../../primitives/runtime" }
+sp-core = { version = "6.0.0", path = "../../../primitives/core" }
+sp-runtime = { version = "6.0.0", path = "../../../primitives/runtime" }
 
 pallet-mmr-primitives = { version = "4.0.0-dev", path = "../primitives" }
