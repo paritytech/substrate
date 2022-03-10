@@ -183,25 +183,25 @@ mod bonded_pool {
 
 			// Simulate a 100% slashed pool
 			StakingMock::set_bonded_balance(123, 0);
-			assert_noop!(pool.ok_to_join_with(100), Error::<Runtime>::OverflowRisk);
+			assert_noop!(pool.ok_to_join_with(100, &11), Error::<Runtime>::OverflowRisk);
 
 			// Simulate a 89%
 			StakingMock::set_bonded_balance(123, 11);
-			assert_ok!(pool.ok_to_join_with(100));
+			assert_ok!(pool.ok_to_join_with(100, &11));
 
 			// Simulate a 90% slashed pool
 			StakingMock::set_bonded_balance(123, 10);
-			assert_noop!(pool.ok_to_join_with(100), Error::<Runtime>::OverflowRisk);
+			assert_noop!(pool.ok_to_join_with(100, &11), Error::<Runtime>::OverflowRisk);
 
 			let bonded = 100;
 			StakingMock::set_bonded_balance(123, bonded);
 			// New bonded balance would be over 1/10th of Balance type
 			assert_noop!(
-				pool.ok_to_join_with(Balance::MAX / 10 - bonded),
+				pool.ok_to_join_with(Balance::MAX / 10 - bonded, &11),
 				Error::<Runtime>::OverflowRisk
 			);
 			// and a sanity check
-			assert_ok!(pool.ok_to_join_with(Balance::MAX / 100 - bonded + 1),);
+			assert_ok!(pool.ok_to_join_with(Balance::MAX / 100 - bonded + 1, &11));
 		});
 	}
 }
@@ -418,7 +418,7 @@ mod join {
 	fn join_errors_correctly() {
 		ExtBuilder::default().build_and_execute_no_checks(|| {
 			assert_noop!(
-				Pools::join(Origin::signed(10), 420, 420),
+				Pools::join(Origin::signed(10), 420, PRIMARY_ACCOUNT),
 				Error::<Runtime>::AccountBelongsToOtherPool
 			);
 

@@ -314,10 +314,14 @@ use sp_io::hashing::blake2_256;
 use sp_runtime::traits::{Bounded, Convert, Saturating, StaticLookup, TrailingZeroInput, Zero};
 use sp_staking::{EraIndex, OnStakerSlash, StakingInterface};
 use sp_std::{collections::btree_map::BTreeMap, ops::Div, vec::Vec};
+
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
+mod sanity;
+#[cfg(test)]
 mod tests;
+
 pub mod weights;
 
 pub use pallet::*;
@@ -330,10 +334,6 @@ pub type SubPoolsWithEra<T> = BoundedBTreeMap<EraIndex, UnbondPool<T>, TotalUnbo
 type RewardPoints = U256;
 
 const POINTS_TO_BALANCE_INIT_RATIO: u32 = 1;
-
-// // TODO: maybe merge these two into an enum
-// const BONDED_ACCOUNT_INDEX: &[u8; 4] = b"bond";
-// const REWARD_ACCOUNT_INDEX: &[u8; 4] = b"rewd";
 
 enum AccountType {
 	Bonded,
@@ -478,14 +478,6 @@ pub struct BondedPool<T: Config> {
 }
 
 impl<T: Config> BondedPool<T> {
-	// TODO: finish this
-	pub(crate) fn mutate_checked<R>(update: impl FnOnce() -> R) -> R {
-		let r = update();
-
-		// sanity checks
-		r
-	}
-
 	fn new(
 		depositor: T::AccountId,
 		root: T::AccountId,
@@ -549,7 +541,6 @@ impl<T: Config> BondedPool<T> {
 	}
 
 	fn reward_account(&self) -> T::AccountId {
-		println!("REWARD:");
 		Self::create_account(AccountType::Reward, self.depositor.clone())
 	}
 
@@ -573,6 +564,56 @@ impl<T: Config> BondedPool<T> {
 		self.points = self.points.saturating_add(points_to_issue);
 
 		points_to_issue
+	}
+
+
+	/// Increment the delegator counter. Ensures that the pool and system delegator limits are
+	/// respected.
+	fn inc_delegators(&mut self) -> Result<(), DispatchError> {
+		ensure!(
+			MaxDelegatorsPerPool::<T>::get()
+				.map_or(true, |max_per_pool| self.delegator_counter < max_per_pool),
+			Error::<T>::MaxDelegators
+		);
+		ensure!(
+			MaxDelegators::<T>::get().map_or(true, |max| Delegators::<T>::count() < max),
+			Error::<T>::MaxDelegators
+		);
+		self.delegator_counter = self.delegator_counter.defensive_saturating_add(1);
+		Ok(())
+	}
+
+	/// Decrement the delegator counter.
+	fn dec_delegators(mut self) -> Self {
+		self.delegator_counter = self.delegator_counter.defensive_saturating_sub(1);
+		self
+	}
+
+	/// The pools balance that is not locked. This assumes the staking system is the only
+	fn non_locked_balance(&self) -> BalanceOf<T> {
+		T::Currency::free_balance(&self.account).saturating_sub(
+			T::StakingInterface::locked_balance(&self.account).unwrap_or(Zero::zero()),
+		)
+	}
+
+	fn can_nominate(&self, who: &T::AccountId) -> bool {
+		*who == self.root || *who == self.nominator
+	}
+
+	fn can_kick(&self, who: &T::AccountId) -> bool {
+		*who == self.root || *who == self.state_toggler && self.state == PoolState::Blocked
+	}
+
+	fn can_toggle_state(&self, who: &T::AccountId) -> bool {
+		*who == self.root || *who == self.state_toggler && !self.is_destroying()
+	}
+
+	fn can_set_metadata(&self, who: &T::AccountId) -> bool {
+		*who == self.root || *who == self.state_toggler
+	}
+
+	fn is_destroying(&self) -> bool {
+		self.state == PoolState::Destroying
 	}
 
 	/// Whether or not the pool is ok to be in `PoolSate::Open`. If this returns an `Err`, then the
@@ -608,7 +649,18 @@ impl<T: Config> BondedPool<T> {
 	}
 
 	/// Check that the pool can accept a member with `new_funds`.
-	fn ok_to_join_with(&self, new_funds: BalanceOf<T>) -> Result<(), DispatchError> {
+	fn ok_to_join_with(
+		&self,
+		new_funds: BalanceOf<T>,
+		possible_delegator_id: &T::AccountId,
+	) -> Result<(), DispatchError> {
+		// If a delegator already exists that means they already belong to a pool
+		ensure!(
+			!Delegators::<T>::contains_key(possible_delegator_id),
+			Error::<T>::AccountBelongsToOtherPool
+		);
+		ensure!(new_funds >= MinJoinBond::<T>::get(), Error::<T>::MinimumBondNotMet);
+
 		ensure!(self.state == PoolState::Open, Error::<T>::NotOpen);
 
 		self.ok_to_be_open()?;
@@ -626,26 +678,6 @@ impl<T: Config> BondedPool<T> {
 		);
 
 		Ok(())
-	}
-
-	fn can_nominate(&self, who: &T::AccountId) -> bool {
-		*who == self.root || *who == self.nominator
-	}
-
-	fn can_kick(&self, who: &T::AccountId) -> bool {
-		*who == self.root || *who == self.state_toggler && self.state == PoolState::Blocked
-	}
-
-	fn can_toggle_state(&self, who: &T::AccountId) -> bool {
-		*who == self.root || *who == self.state_toggler && !self.is_destroying()
-	}
-
-	fn can_set_metadata(&self, who: &T::AccountId) -> bool {
-		*who == self.root || *who == self.state_toggler
-	}
-
-	fn is_destroying(&self) -> bool {
-		self.state == PoolState::Destroying
 	}
 
 	fn ok_to_unbond_other_with(
@@ -725,33 +757,31 @@ impl<T: Config> BondedPool<T> {
 		}
 	}
 
-	/// Increment the delegator counter. Ensures that the pool and system delegator limits are
-	/// respected.
-	fn inc_delegators(&mut self) -> Result<(), DispatchError> {
-		ensure!(
-			MaxDelegatorsPerPool::<T>::get()
-				.map_or(true, |max_per_pool| self.delegator_counter < max_per_pool),
-			Error::<T>::MaxDelegators
-		);
-		ensure!(
-			MaxDelegators::<T>::get().map_or(true, |max| Delegators::<T>::count() < max),
-			Error::<T>::MaxDelegators
-		);
-		self.delegator_counter = self.delegator_counter.defensive_saturating_add(1);
-		Ok(())
-	}
+	fn try_bond_delegator(who: &T::AccountId, amount: BalanceOf<T>) -> DispatchResult {
+		
+		// This shouldn't be possible since we are ensured the delegator is not a depositor and
+		// the the account ID is generated based on the accountId
+		ensure!(!BondedPools::<T>::contains_key(&bonded_pool.account), Error::<T>::IdInUse);
+		bonded_pool.ok_to_join_with(amount, &who);
+		// Increase the delegator counter to account for depositor; checks delegator limits.
+		bonded_pool.inc_delegators()?;
 
-	/// Decrement the delegator counter.
-	fn dec_delegators(mut self) -> Self {
-		self.delegator_counter = self.delegator_counter.defensive_saturating_sub(1);
-		self
-	}
 
-	/// The pools balance that is not locked. This assumes the staking system is the only
-	fn non_locked_balance(&self) -> BalanceOf<T> {
-		T::Currency::free_balance(&self.account).saturating_sub(
-			T::StakingInterface::locked_balance(&self.account).unwrap_or(Zero::zero()),
-		)
+		T::Currency::transfer(
+			&who,
+			&self.account,
+			amount,
+			ExistenceRequirement::AllowDeath,
+		)?;
+		let points_issued = bonded_pool.issue(amount);
+		// Consider making StakingInterface use reference.
+		T::StakingInterface::bond(
+			bonded_pool.account.clone(),
+			// We make the stash and controller the same for simplicity
+			bonded_pool.account.clone(),
+			amount,
+			bonded_pool.reward_account(),
+		)?;
 	}
 }
 
@@ -784,6 +814,14 @@ impl<T: Config> RewardPool<T> {
 		// The lifetime earnings of the of the reward pool
 		self.total_earnings = new_earnings.saturating_add(self.total_earnings);
 		self.balance = current_balance;
+	}
+
+	/// Get a reward pool and update its total earnings and balance
+	fn get_and_update(bonded_pool_account: &T::AccountId) -> Option<Self> {
+		RewardPools::<T>::get(bonded_pool_account).map(|mut r| {
+			r.update_total_earnings_and_balance();
+			r
+		})
 	}
 }
 
@@ -1109,22 +1147,21 @@ pub mod pallet {
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
-			// TODO: consider merging these checks into ok_to_join_with, also use the same checker
-			// functions in `fn create()`.
-			ensure!(amount >= MinJoinBond::<T>::get(), Error::<T>::MinimumBondNotMet);
-			// If a delegator already exists that means they already belong to a pool
-			ensure!(!Delegators::<T>::contains_key(&who), Error::<T>::AccountBelongsToOtherPool);
+			// // TODO: consider merging these checks into ok_to_join_with, also use the same
+			// checker // functions in `fn create()`.
+			// ensure!(amount >= MinJoinBond::<T>::get(), Error::<T>::MinimumBondNotMet);
+			// // If a delegator already exists that means they already belong to a pool
+			// ensure!(!Delegators::<T>::contains_key(&who), Error::<T>::AccountBelongsToOtherPool);
 
 			let mut bonded_pool =
 				BondedPool::<T>::get(&pool_account).ok_or(Error::<T>::PoolNotFound)?;
-			bonded_pool.ok_to_join_with(amount)?;
+			bonded_pool.ok_to_join_with(amount, &who)?;
 			bonded_pool.inc_delegators()?;
 
 			// TODO: seems like a lot of this and `create` can be factored into a `do_join`. We
 			// don't actually care about writing the reward pool, we just need its total earnings at
 			// this point in time.
-			// TODO: consider `get_and_update`.
-			let mut reward_pool = RewardPools::<T>::get(&pool_account)
+			let reward_pool = RewardPool::<T>::get_and_update(&pool_account)
 				.defensive_ok_or_else(|| Error::<T>::RewardPoolNotFound)?;
 
 			// Transfer the funds to be bonded from `who` to the pools account so the pool can then
@@ -1139,9 +1176,6 @@ pub mod pallet {
 			// the active balance is slashed below the minimum bonded or the account cannot be
 			// found, we exit early.
 			T::StakingInterface::bond_extra(pool_account.clone(), amount)?;
-
-			// This is important because we want the most up-to-date total earnings.
-			reward_pool.update_total_earnings_and_balance();
 
 			Delegators::insert(
 				who.clone(),
@@ -1412,18 +1446,15 @@ pub mod pallet {
 					amount >= MinCreateBond::<T>::get(),
 				Error::<T>::MinimumBondNotMet
 			);
-			if let Some(max_pools) = MaxPools::<T>::get() {
-				ensure!((BondedPools::<T>::count() as u32) < max_pools, Error::<T>::MaxPools);
-			}
-			ensure!(!Delegators::<T>::contains_key(&who), Error::<T>::AccountBelongsToOtherPool);
+			ensure!(
+				MaxPools::<T>::get()
+					.map_or(true, |max_pools| BondedPools::<T>::count() < max_pools),
+				Error::<T>::MaxPools
+			);
 
 			let mut bonded_pool = BondedPool::<T>::new(who.clone(), root, nominator, state_toggler);
-			// This shouldn't be possible since we are ensured the delegator is not a depositor and
-			// the the account ID is generated based on the accountId
-			ensure!(!BondedPools::<T>::contains_key(&bonded_pool.account), Error::<T>::IdInUse);
 
-			// Increase the delegator counter to account for depositor; checks delegator limits.
-			bonded_pool.inc_delegators()?;
+
 
 			// TODO: make these one function that does this in the correct order
 			// We must calculate the points issued *before* we bond who's funds, else points:balance
@@ -1576,7 +1607,6 @@ impl<T: Config> Pallet<T> {
 		reward_pool.update_total_earnings_and_balance();
 
 		// Notice there is an edge case where total_earnings have not increased and this is zero
-		// TODO: make a shorter conversion closure name.
 		let new_earnings = u256(reward_pool.total_earnings.saturating_sub(last_total_earnings));
 
 		// The new points that will be added to the pool. For every unit of balance that has been

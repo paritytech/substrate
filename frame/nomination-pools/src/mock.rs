@@ -231,7 +231,7 @@ impl ExtBuilder {
 	pub fn build_and_execute(self, test: impl FnOnce() -> ()) {
 		self.build().execute_with(|| {
 			test();
-			post_checks();
+			crate::sanity::checks::<Runtime>();
 		})
 	}
 
@@ -240,24 +240,6 @@ impl ExtBuilder {
 			test();
 		})
 	}
-}
-
-// TODO: move this to a pallet function?
-fn post_checks() {
-	assert_eq!(RewardPools::<Runtime>::count(), BondedPools::<Runtime>::count());
-	assert!(SubPoolsStorage::<Runtime>::count() <= BondedPools::<Runtime>::count());
-	assert!(Delegators::<Runtime>::count() >= BondedPools::<Runtime>::count());
-	bonding_pools_checks();
-}
-
-fn bonding_pools_checks() {
-	let mut delegators_seen = 0;
-	for (_account, pool) in BondedPools::<Runtime>::iter() {
-		assert!(pool.delegator_counter >= 1);
-		assert!(pool.delegator_counter <= MaxDelegatorsPerPool::<Runtime>::get().unwrap());
-		delegators_seen += pool.delegator_counter;
-	}
-	assert_eq!(delegators_seen, Delegators::<Runtime>::count());
 }
 
 pub(crate) fn unsafe_set_state(pool_account: &AccountId, state: PoolState) -> Result<(), ()> {
