@@ -259,15 +259,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub fn do_rebag(
 		account: &T::AccountId,
 		new_score: T::Score,
-	) -> Result<(T::Score, T::Score), Error> {
+	) -> Result<Option<(T::Score, T::Score)>, Error> {
 		// If no voter at that node, don't do anything. the caller just wasted the fee to call this.
-		let maybe_movement = list::Node::<T, I>::get(&account)
-			.and_then(|node| List::update_position_for(node, new_score))
-			.ok_or(Error::NonExistent);
-		if let Ok((from, to)) = maybe_movement {
+		let node = list::Node::<T, I>::get(&account).ok_or(Error::NonExistent)?;
+		let maybe_movement = List::update_position_for(node, new_score);
+		if let Some((from, to)) = maybe_movement {
 			Self::deposit_event(Event::<T, I>::Rebagged { who: account.clone(), from, to });
 		};
-		maybe_movement
+		Ok(maybe_movement)
 	}
 
 	/// Equivalent to `ListBags::get`, but public. Useful for tests in outside of this crate.

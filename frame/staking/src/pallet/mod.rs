@@ -1488,7 +1488,7 @@ pub mod pallet {
 			Self::update_ledger(&controller, &ledger);
 
 			if T::VoterList::contains(&ledger.stash) {
-				T::VoterList::on_update(&ledger.stash, Self::weight_of(&ledger.stash));
+				T::VoterList::on_update(&ledger.stash, Self::weight_of(&ledger.stash)).defensive();
 			}
 
 			let removed_chunks = 1u32 // for the case where the last iterated chunk is not removed

@@ -17,7 +17,7 @@
 //! Storage migrations for the Staking pallet.
 
 use super::*;
-use frame_election_provider_support::{ScoreProvider, SortedListProvider, VoteWeight};
+use frame_election_provider_support::{SortedListProvider, VoteWeight};
 use frame_support::traits::{Defensive, OnRuntimeUpgrade};
 use sp_std::collections::btree_map::BTreeMap;
 

@@ -34,7 +34,7 @@ mod pallet {
 				vec![(10, vec![1]), (20, vec![42]), (1_000, vec![2, 3, 4])]
 			);
 
-			// when increasing vote weight to the level of non-existent bag
+			// when increasing vote score to the level of non-existent bag
 			StakingMock::set_score_of(&42, 2_000);
 			assert_ok!(BagsList::rebag(Origin::signed(0), 42));
 
@@ -44,7 +44,7 @@ mod pallet {
 				vec![(10, vec![1]), (1_000, vec![2, 3, 4]), (2_000, vec![42])]
 			);
 
-			// when decreasing weight within the range of the current bag
+			// when decreasing score within the range of the current bag
 			StakingMock::set_score_of(&42, 1_001);
 			assert_ok!(BagsList::rebag(Origin::signed(0), 42));
 
@@ -54,7 +54,7 @@ mod pallet {
 				vec![(10, vec![1]), (1_000, vec![2, 3, 4]), (2_000, vec![42])]
 			);
 
-			// when reducing weight to the level of a non-existent bag
+			// when reducing score to the level of a non-existent bag
 			StakingMock::set_score_of(&42, 30);
 			assert_ok!(BagsList::rebag(Origin::signed(0), 42));
 
@@ -64,7 +64,7 @@ mod pallet {
 				vec![(10, vec![1]), (30, vec![42]), (1_000, vec![2, 3, 4])]
 			);
 
-			// when increasing weight to the level of a pre-existing bag
+			// when increasing score to the level of a pre-existing bag
 			StakingMock::set_score_of(&42, 500);
 			assert_ok!(BagsList::rebag(Origin::signed(0), 42));
 
@@ -148,11 +148,11 @@ mod pallet {
 	fn wrong_rebag_is_noop() {
 		ExtBuilder::default().build_and_execute(|| {
 			let node_3 = list::Node::<Runtime>::get(&3).unwrap();
-			// when account 3 is _not_ misplaced with weight 500
+			// when account 3 is _not_ misplaced with score 500
 			NextVoteWeight::set(500);
 			assert!(!node_3.is_misplaced(500));
 
-			// then calling rebag on account 3 with weight 500 is a noop
+			// then calling rebag on account 3 with score 500 is a noop
 			assert_storage_noop!(assert_eq!(BagsList::rebag(Origin::signed(0), 3), Ok(())));
 
 			// when account 42 is not in the list
@@ -475,7 +475,10 @@ mod sorted_list_provider {
 			assert_eq!(BagsList::count(), 4);
 
 			// when updating
-			BagsList::on_update(&201, VoteWeight::MAX).unwrap();
+			assert_storage_noop!(assert_eq!(
+				BagsList::on_update(&201, VoteWeight::MAX).unwrap_err(),
+				Error::NonExistent
+			));
 			// then the count stays the same
 			assert_eq!(BagsList::count(), 4);
 		});
@@ -533,7 +536,7 @@ mod sorted_list_provider {
 			);
 			assert_eq!(BagsList::count(), 5);
 
-			// when increasing weight to the level of non-existent bag
+			// when increasing score to the level of non-existent bag
 			BagsList::on_update(&42, 2_000).unwrap();
 
 			// then the bag is created with the id in it,
@@ -544,7 +547,7 @@ mod sorted_list_provider {
 			// and the id position is updated in the list.
 			assert_eq!(BagsList::iter().collect::<Vec<_>>(), vec![42, 2, 3, 4, 1]);
 
-			// when decreasing weight within the range of the current bag
+			// when decreasing score within the range of the current bag
 			BagsList::on_update(&42, 1_001).unwrap();
 
 			// then the id does not change bags,
@@ -555,7 +558,7 @@ mod sorted_list_provider {
 			// or change position in the list.
 			assert_eq!(BagsList::iter().collect::<Vec<_>>(), vec![42, 2, 3, 4, 1]);
 
-			// when increasing weight to the level of a non-existent bag with the max threshold
+			// when increasing score to the level of a non-existent bag with the max threshold
 			BagsList::on_update(&42, VoteWeight::MAX).unwrap();
 
 			// the the new bag is created with the id in it,
@@ -566,7 +569,7 @@ mod sorted_list_provider {
 			// and the id position is updated in the list.
 			assert_eq!(BagsList::iter().collect::<Vec<_>>(), vec![42, 2, 3, 4, 1]);
 
-			// when decreasing the weight to a pre-existing bag
+			// when decreasing the score to a pre-existing bag
 			BagsList::on_update(&42, 1_000).unwrap();
 
 			// then id is moved to the correct bag (as the last member),

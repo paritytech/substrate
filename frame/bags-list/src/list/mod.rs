@@ -355,7 +355,8 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 	/// If the node was in the correct bag, no effect. If the node was in the incorrect bag, they
 	/// are moved into the correct bag.
 	///
-	/// Returns `Some((old_idx, new_idx))` if the node moved, otherwise `None`.
+	/// Returns `Some((old_idx, new_idx))` if the node moved, otherwise `None`. In both cases, the
+	/// node's score is written to the `score_score`. Thus, this is not a noop, even if `None`.
 	///
 	/// This operation is somewhat more efficient than simply calling [`self.remove`] followed by
 	/// [`self.insert`]. However, given large quantities of nodes to move, it may be more efficient
@@ -385,12 +386,9 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 				bag.remove_node_unchecked(&node);
 				bag.put();
 			} else {
-				crate::log!(
-					error,
-					"Node {:?} did not have a bag; ListBags is in an inconsistent state",
-					node.id,
+				frame_support::defensive!(
+					"Node did not have a bag; BagsList is in an inconsistent state"
 				);
-				debug_assert!(false, "every node must have an extant bag associated with it");
 			}
 
 			// put the node into the appropriate new bag.
