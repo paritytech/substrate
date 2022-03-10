@@ -242,7 +242,6 @@ impl ExtBuilder {
 	}
 }
 
-
 // TODO: move this to a pallet function?
 fn post_checks() {
 	assert_eq!(RewardPools::<Runtime>::count(), BondedPools::<Runtime>::count());

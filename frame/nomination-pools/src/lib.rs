@@ -331,13 +331,22 @@ type RewardPoints = U256;
 
 const POINTS_TO_BALANCE_INIT_RATIO: u32 = 1;
 
-// TODO: maybe merge these two into an enum 
-const BONDED_ACCOUNT_INDEX: &[u8; 4] = b"bond";
-const REWARD_ACCOUNT_INDEX: &[u8; 4] = b"rewd";
+// // TODO: maybe merge these two into an enum
+// const BONDED_ACCOUNT_INDEX: &[u8; 4] = b"bond";
+// const REWARD_ACCOUNT_INDEX: &[u8; 4] = b"rewd";
 
 enum AccountType {
-	Bonded(&[u8]),
-	Reward(&[u8]),
+	Bonded,
+	Reward,
+}
+
+impl Encode for AccountType {
+	fn encode(&self) -> Vec<u8> {
+		match self {
+			Self::Bonded => b"bond".to_vec(),
+			Self::Reward => b"rewd".to_vec(),
+		}
+	}
 }
 
 /// Calculate the number of points to issue from a pool as `(current_points / current_balance) *
@@ -389,7 +398,8 @@ fn balance_to_unbond<T: Config>(
 #[codec(mel_bound(T: Config))]
 #[scale_info(skip_type_params(T))]
 pub struct Delegator<T: Config> {
-	// TODO pool_bonded_account. Add in top level docs note about pool always ID'ed by bonded account
+	// TODO pool_bonded_account. Add in top level docs note about pool always ID'ed by bonded
+	// account
 	pub pool: T::AccountId,
 	/// The quantity of points this delegator has in the bonded pool or in a sub pool if
 	/// `Self::unbonding_era` is some.
@@ -470,10 +480,10 @@ pub struct BondedPool<T: Config> {
 impl<T: Config> BondedPool<T> {
 	// TODO: finish this
 	pub(crate) fn mutate_checked<R>(update: impl FnOnce() -> R) -> R {
-		let r = update(); 
+		let r = update();
 
 		// sanity checks
-		r 
+		r
 	}
 
 	fn new(
@@ -483,7 +493,7 @@ impl<T: Config> BondedPool<T> {
 		state_toggler: T::AccountId,
 	) -> Self {
 		Self {
-			account: Self::create_account(BONDED_ACCOUNT_INDEX, depositor.clone()),
+			account: Self::create_account(AccountType::Bonded, depositor.clone()),
 			depositor,
 			root,
 			nominator,
@@ -531,15 +541,20 @@ impl<T: Config> BondedPool<T> {
 		BondedPools::<T>::remove(self.account);
 	}
 
-	fn create_account(index: &[u8; 4], depositor: T::AccountId) -> T::AccountId {
+	fn create_account(account_type: AccountType, depositor: T::AccountId) -> T::AccountId {
 		// TODO: look into make the prefix transparent by not hashing anything
 		// TODO: look into a using a configurable module id.
-		let entropy = (b"npls", index, depositor).using_encoded(blake2_256);
-		Decode::decode(&mut TrailingZeroInput::new(&entropy)).expect("Infinite length input. qed")
+		let entropy = (b"npls", account_type, depositor).using_encoded(blake2_256);
+		let a = Decode::decode(&mut TrailingZeroInput::new(&entropy)).expect("Infinite length input. qed");
+
+		println!("{:?}=create_account out", a);
+
+		a
 	}
 
 	fn reward_account(&self) -> T::AccountId {
-		Self::create_account(REWARD_ACCOUNT_INDEX, self.depositor.clone())
+		println!("REWARD:");
+		Self::create_account(AccountType::Reward, self.depositor.clone())
 	}
 
 	/// Get the amount of points to issue for some new funds that will be bonded in the pool.
@@ -596,7 +611,6 @@ impl<T: Config> BondedPool<T> {
 		Ok(())
 	}
 
-
 	/// Check that the pool can accept a member with `new_funds`.
 	fn ok_to_join_with(&self, new_funds: BalanceOf<T>) -> Result<(), DispatchError> {
 		ensure!(self.state == PoolState::Open, Error::<T>::NotOpen);
@@ -605,10 +619,10 @@ impl<T: Config> BondedPool<T> {
 
 		let bonded_balance =
 			T::StakingInterface::bonded_balance(&self.account).unwrap_or(Zero::zero());
-		
-		// TODO: this is highly questionable.  
+
+		// TODO: this is highly questionable.
 		// instead of this, where we multiply and it could saturate, watch out for being close to
-		// the point of saturation. 
+		// the point of saturation.
 		ensure!(
 			new_funds.saturating_add(bonded_balance) <
 				BalanceOf::<T>::max_value().div(10u32.into()),
@@ -719,11 +733,12 @@ impl<T: Config> BondedPool<T> {
 	/// respected.
 	fn inc_delegators(&mut self) -> Result<(), DispatchError> {
 		ensure!(
-			MaxDelegatorsPerPool::<T>::get().map_or(true, |max_per_pool| self.delegator_counter < max_per_pool),
+			MaxDelegatorsPerPool::<T>::get()
+				.map_or(true, |max_per_pool| self.delegator_counter < max_per_pool),
 			Error::<T>::MaxDelegators
 		);
 		ensure!(
-			MaxDelegatorsPerPool::<T>::get().map_or(true, |max| Delegators::<T>::count() < max),
+			MaxDelegators::<T>::get().map_or(true, |max| Delegators::<T>::count() < max),
 			Error::<T>::MaxDelegators
 		);
 		self.delegator_counter = self.delegator_counter.defensive_saturating_add(1);
@@ -1099,7 +1114,7 @@ pub mod pallet {
 			let who = ensure_signed(origin)?;
 
 			// TODO: consider merging these checks into ok_to_join_with, also use the same checker
-			// functions in `fn create()`. 
+			// functions in `fn create()`.
 			ensure!(amount >= MinJoinBond::<T>::get(), Error::<T>::MinimumBondNotMet);
 			// If a delegator already exists that means they already belong to a pool
 			ensure!(!Delegators::<T>::contains_key(&who), Error::<T>::AccountBelongsToOtherPool);
@@ -1121,7 +1136,7 @@ pub mod pallet {
 			// go bond them.
 			T::Currency::transfer(&who, &pool_account, amount, ExistenceRequirement::KeepAlive)?;
 
-			// TODO: this can go into one function, similar to `create`. 
+			// TODO: this can go into one function, similar to `create`.
 			// We must calculate the points to issue *before* we bond `who`'s funds, else the
 			// points:balance ratio will be wrong.
 			let new_points = bonded_pool.issue(amount);
@@ -1415,7 +1430,7 @@ pub mod pallet {
 			// TODO: make these one function that does this in the correct order
 			// We must calculate the points issued *before* we bond who's funds, else points:balance
 			// ratio will be wrong.
-			
+
 			T::Currency::transfer(
 				&who,
 				&bonded_pool.account,
@@ -1607,7 +1622,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	fn do_reward_payout(
-		// TODO :doesn't delegator have its id? 
+		// TODO :doesn't delegator have its id?
 		delegator_id: T::AccountId,
 		delegator: Delegator<T>, // TODO: make clear this is mut
 		bonded_pool: &BondedPool<T>,
@@ -1619,8 +1634,17 @@ impl<T: Config> Pallet<T> {
 			Self::calculate_delegator_payout(bonded_pool, reward_pool, delegator)?;
 
 		// Transfer payout to the delegator.
-		T::Currency::transfer(reward_pool.account, &delegator_id, payout, ExistenceRequirement::AllowDeath)?;
-		Self::deposit_event(Event::<T>::PaidOut { delegator: delegator_id.clone(), delegator.pool.clone(), payout });
+		T::Currency::transfer(
+			&reward_pool.account,
+			&delegator_id,
+			delegator_payout,
+			ExistenceRequirement::AllowDeath,
+		)?;
+		Self::deposit_event(Event::<T>::PaidOut {
+			delegator: delegator_id.clone(),
+			pool: delegator.pool.clone(),
+			payout: delegator_payout,
+		});
 
 		// Write the updated delegator and reward pool to storage
 		RewardPools::insert(&delegator.pool, reward_pool);
