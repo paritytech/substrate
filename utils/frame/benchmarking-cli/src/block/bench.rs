@@ -81,9 +81,9 @@ pub(crate) type BenchRecord = Vec<u64>;
 /// Type of a benchmark.
 #[derive(Serialize, Clone)]
 pub(crate) enum BenchmarkType {
-	/// Extrinsic execution speed was measured.
+	/// Per-extrinsic execution overhead was measured.
 	Extrinsic,
-	/// Empty block execution speed was measured.
+	/// Per-block execution overhead was measured.
 	Block,
 }
 
