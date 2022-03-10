@@ -409,8 +409,11 @@ where
 		let now = (self.now)();
 		let left = deadline.saturating_duration_since(now);
 		let left_micros: u64 = left.as_micros().saturated_into();
+		// NOTE reduce deadline by half as we want to avoid situation where
+		// fully filled previous block does not allow for any extrinsic to be included in following
+		// one
 		let soft_deadline =
-			now + time::Duration::from_micros(self.soft_deadline_percent.mul_floor(left_micros));
+			now + time::Duration::from_micros(self.soft_deadline_percent.mul_floor(left_micros) / 2);
 		let block_timer = time::Instant::now();
 		let mut skipped = 0;
 		let mut unqueue_invalid = Vec::new();
