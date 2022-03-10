@@ -6440,9 +6440,9 @@ dependencies = [
  "sp-core",
  "sp-io",
  "sp-runtime",
- "sp-state-trie-migration",
  "sp-std",
  "sp-tracing",
+ "substrate-state-trie-migration-rpc",
  "thousands",
  "tokio",
  "zstd",
@@ -10291,21 +10291,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sp-state-trie-migration"
-version = "4.0.0-dev"
-dependencies = [
- "log 0.4.14",
- "parity-scale-codec",
- "scale-info",
- "sp-core",
- "sp-io",
- "sp-state-machine",
- "sp-std",
- "sp-trie",
- "trie-db",
-]
-
-[[package]]
 name = "sp-std"
 version = "4.0.0"
 
@@ -10636,13 +10621,20 @@ dependencies = [
  "jsonrpc-core",
  "jsonrpc-core-client",
  "jsonrpc-derive",
+ "log 0.4.14",
  "parity-scale-codec",
  "sc-client-api",
  "sc-rpc-api",
+ "scale-info",
  "serde",
  "serde_json",
+ "sp-core",
+ "sp-io",
  "sp-runtime",
- "sp-state-trie-migration",
+ "sp-state-machine",
+ "sp-std",
+ "sp-trie",
+ "trie-db",
 ]
 
 [[package]]

@@ -1456,7 +1456,7 @@ pub(crate) mod remote_tests {
 		ext.state_version = sp_core::storage::StateVersion::V1;
 
 		let (top_left, child_left) =
-			sp_state_trie_migration::migration_status(&ext.as_backend()).unwrap();
+			substrate_state_trie_migration_rpc::migration_status(&ext.as_backend()).unwrap();
 		assert!(
 			top_left > 0,
 			"no node needs migrating, this probably means that state was initialized with `StateVersion::V1`",
@@ -1515,7 +1515,7 @@ pub(crate) mod remote_tests {
 		});
 
 		let (top_left, child_left) =
-			sp_state_trie_migration::migration_status(&ext.as_backend()).unwrap();
+			substrate_state_trie_migration_rpc::migration_status(&ext.as_backend()).unwrap();
 		assert_eq!(top_left, 0);
 		assert_eq!(child_left, 0);
 	}

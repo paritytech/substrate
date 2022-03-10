@@ -186,7 +186,6 @@ members = [
 	"primitives/session",
 	"primitives/staking",
 	"primitives/state-machine",
-	"primitives/state-trie-migration",
 	"primitives/std",
 	"primitives/storage",
 	"primitives/tasks",
