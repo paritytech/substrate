@@ -996,7 +996,6 @@ pub mod pallet {
 				who: who.clone(),
 				deposit,
 				raw_solution: *raw_solution,
-				reward: T::SignedRewardBase::get(),
 				call_fee,
 			};
 

@@ -50,8 +50,6 @@ pub struct SignedSubmission<AccountId, Balance: HasCompact, Solution> {
 	pub deposit: Balance,
 	/// The raw solution itself.
 	pub raw_solution: RawSolution<Solution>,
-	/// The reward that should potentially be paid for this solution, if accepted.
-	pub reward: Balance,
 	// The estimated fee `who` paid to submit the solution.
 	pub call_fee: Balance,
 }
@@ -363,7 +361,7 @@ impl<T: Config> Pallet<T> {
 			Self::snapshot_metadata().unwrap_or_default();
 
 		while let Some(best) = all_submissions.pop_last() {
-			let SignedSubmission { raw_solution, who, deposit, reward, call_fee } = best;
+			let SignedSubmission { raw_solution, who, deposit, call_fee } = best;
 			let active_voters = raw_solution.solution.voter_count() as u32;
 			let feasibility_weight = {
 				// defensive only: at the end of signed phase, snapshot will exits.
@@ -378,7 +376,6 @@ impl<T: Config> Pallet<T> {
 						ready_solution,
 						&who,
 						deposit,
-						reward,
 						call_fee,
 					);
 					found_solution = true;
@@ -425,12 +422,12 @@ impl<T: Config> Pallet<T> {
 		ready_solution: ReadySolution<T::AccountId>,
 		who: &T::AccountId,
 		deposit: BalanceOf<T>,
-		reward: BalanceOf<T>,
 		call_fee: BalanceOf<T>,
 	) {
 		// write this ready solution.
 		<QueuedSolution<T>>::put(ready_solution);
 
+		let reward = T::SignedRewardBase::get();
 		// emit reward event
 		Self::deposit_event(crate::Event::Rewarded { account: who.clone(), value: reward });
 

@@ -226,7 +226,8 @@ frame_benchmarking::benchmarks! {
 			compute: Default::default()
 		};
 		let deposit: BalanceOf<T> = 10u32.into();
-		let reward: BalanceOf<T> = 20u32.into();
+
+		let reward: BalanceOf<T> = T::SignedRewardBase::get();
 		let call_fee: BalanceOf<T> = 30u32.into();
 
 		assert_ok!(T::Currency::reserve(&receiver, deposit));
@@ -236,13 +237,12 @@ frame_benchmarking::benchmarks! {
 			ready,
 			&receiver,
 			deposit,
-			reward,
 			call_fee
 		)
 	} verify {
 		assert_eq!(
 			T::Currency::free_balance(&receiver),
-			initial_balance + 20u32.into() + 30u32.into()
+			initial_balance + reward + call_fee
 		);
 		assert_eq!(T::Currency::reserved_balance(&receiver), 0u32.into());
 	}
@@ -345,7 +345,6 @@ frame_benchmarking::benchmarks! {
 				raw_solution,
 				who: account("submitters", i, SEED),
 				deposit: Default::default(),
-				reward: Default::default(),
 				call_fee: Default::default(),
 			};
 			signed_submissions.insert(signed_submission);
