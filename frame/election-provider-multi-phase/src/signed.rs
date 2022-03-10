@@ -395,7 +395,18 @@ impl<T: Config> Pallet<T> {
 		// Any unprocessed solution is pointless to even consider. Feasible or malicious,
 		// they didn't end up being used. Unreserve the bonds.
 		let discarded = all_submissions.len();
+		let mut count = 0;
 		for SignedSubmission { who, deposit, call_fee, .. } in all_submissions.drain() {
+			if T::SignedMaxRefunds::get().map_or(true, |max| count < max) {
+				// Refund fee
+				let _ = T::Currency::deposit_creating(&who, call_fee);
+				count += 1;
+			}
+
+			// Unreserve deposit
+			let _remaining = T::Currency::unreserve(&who, deposit);
+			debug_assert!(_remaining.is_zero());
+
 			Self::finalize_signed_phase_handle_refund(&who, deposit, call_fee);
 			weight = weight.saturating_add(T::DbWeight::get().writes(2));
 		}
