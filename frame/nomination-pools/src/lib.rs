@@ -545,11 +545,7 @@ impl<T: Config> BondedPool<T> {
 		// TODO: look into make the prefix transparent by not hashing anything
 		// TODO: look into a using a configurable module id.
 		let entropy = (b"npls", account_type, depositor).using_encoded(blake2_256);
-		let a = Decode::decode(&mut TrailingZeroInput::new(&entropy)).expect("Infinite length input. qed");
-
-		println!("{:?}=create_account out", a);
-
-		a
+		Decode::decode(&mut TrailingZeroInput::new(&entropy)).expect("Infinite length input. qed")
 	}
 
 	fn reward_account(&self) -> T::AccountId {
@@ -1127,10 +1123,9 @@ pub mod pallet {
 			// TODO: seems like a lot of this and `create` can be factored into a `do_join`. We
 			// don't actually care about writing the reward pool, we just need its total earnings at
 			// this point in time.
+			// TODO: consider `get_and_update`.
 			let mut reward_pool = RewardPools::<T>::get(&pool_account)
 				.defensive_ok_or_else(|| Error::<T>::RewardPoolNotFound)?;
-			// This is important because we want the most up-to-date total earnings.
-			reward_pool.update_total_earnings_and_balance();
 
 			// Transfer the funds to be bonded from `who` to the pools account so the pool can then
 			// go bond them.
@@ -1144,6 +1139,9 @@ pub mod pallet {
 			// the active balance is slashed below the minimum bonded or the account cannot be
 			// found, we exit early.
 			T::StakingInterface::bond_extra(pool_account.clone(), amount)?;
+
+			// This is important because we want the most up-to-date total earnings.
+			reward_pool.update_total_earnings_and_balance();
 
 			Delegators::insert(
 				who.clone(),
@@ -1569,34 +1567,36 @@ impl<T: Config> Pallet<T> {
 		mut reward_pool: RewardPool<T>,
 		mut delegator: Delegator<T>,
 	) -> Result<(RewardPool<T>, Delegator<T>, BalanceOf<T>), DispatchError> {
+		let u256 = |x| T::BalanceToU256::convert(x);
 		// If the delegator is unbonding they cannot claim rewards. Note that when the delegator
 		// goes to unbond, the unbond function should claim rewards for the final time.
 		ensure!(delegator.unbonding_era.is_none(), Error::<T>::AlreadyUnbonding);
 
 		let last_total_earnings = reward_pool.total_earnings;
 		reward_pool.update_total_earnings_and_balance();
-		// Notice there is an edge case where total_earnings have not increased and this is zero
-		let new_earnings = T::BalanceToU256::convert(
-			reward_pool.total_earnings.saturating_sub(last_total_earnings),
-		);
 
-		// The new points that will be added to the pool. For every unit of balance that has
-		// been earned by the reward pool, we inflate the reward pool points by
-		// `bonded_pool.points`. In effect this allows each, single unit of balance (e.g.
-		// plank) to be divvied up pro rata among delegators based on points.
-		let new_points = T::BalanceToU256::convert(bonded_pool.points).saturating_mul(new_earnings);
+		// Notice there is an edge case where total_earnings have not increased and this is zero
+		// TODO: make a shorter conversion closure name.
+		let new_earnings = u256(reward_pool.total_earnings.saturating_sub(last_total_earnings));
+
+		// The new points that will be added to the pool. For every unit of balance that has been
+		// earned by the reward pool, we inflate the reward pool points by `bonded_pool.points`. In
+		// effect this allows each, single unit of balance (e.g. plank) to be divvied up pro rata
+		// among delegators based on points.
+		let new_points = u256(bonded_pool.points).saturating_mul(new_earnings);
 
 		// The points of the reward pool after taking into account the new earnings. Notice that
 		// this only stays even or increases over time except for when we subtract delegator virtual
 		// shares.
 		let current_points = reward_pool.points.saturating_add(new_points);
 
-		// The rewards pool's earnings since the last time this delegator claimed a payout
+		// The rewards pool's earnings since the last time this delegator claimed a payout.
 		let new_earnings_since_last_claim =
 			reward_pool.total_earnings.saturating_sub(delegator.reward_pool_total_earnings);
+
 		// The points of the reward pool that belong to the delegator.
-		let delegator_virtual_points = T::BalanceToU256::convert(delegator.points)
-			.saturating_mul(T::BalanceToU256::convert(new_earnings_since_last_claim));
+		let delegator_virtual_points =
+			u256(delegator.points).saturating_mul(u256(new_earnings_since_last_claim));
 
 		let delegator_payout = if delegator_virtual_points.is_zero() ||
 			current_points.is_zero() ||
@@ -1607,7 +1607,7 @@ impl<T: Config> Pallet<T> {
 			// Equivalent to `(delegator_virtual_points / current_points) * reward_pool.balance`
 			T::U256ToBalance::convert(
 				delegator_virtual_points
-					.saturating_mul(T::BalanceToU256::convert(reward_pool.balance))
+					.saturating_mul(u256(reward_pool.balance))
 					// We check for zero above
 					.div(current_points),
 			)
