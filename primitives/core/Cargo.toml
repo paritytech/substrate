@@ -54,7 +54,7 @@ schnorrkel = { version = "0.9.1", features = [
 	"preaudit_deprecated",
 	"u64_backend",
 ], default-features = false, optional = true }
-bls = {git = "https://github.com/w3f/bls", branch = "skalman-hash-to-curve-wb"}
+bls-like = "*"
 sha2 = { version = "0.10.0", default-features = false, optional = true }
 hex = { version = "0.4", default-features = false, optional = true }
 twox-hash = { version = "1.6.2", default-features = false, optional = true }
@@ -143,3 +143,4 @@ full_crypto = [
 	"sp-runtime-interface/disable_target_static_assertions",
 	"merlin",
 ]
+

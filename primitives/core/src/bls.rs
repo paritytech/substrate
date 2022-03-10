@@ -38,8 +38,8 @@ use bip39::{Language, Mnemonic, MnemonicType};
 #[cfg(feature = "full_crypto")]
 use core::convert::TryFrom;
 #[cfg(feature = "full_crypto")]
-use bls::{
-    Keypair,BLS377,Message,Signed,pop::BatchAssumingProofsOfPossession
+use bls_like::{
+    BLS377, Keypair, Message,Signed,schnorr_pop::{ProofOfPossessionGenerator, ProofOfPossessionVerifier}, pop::BatchAssumingProofsOfPossession
 };
 #[cfg(feature = "std")]
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
@@ -73,16 +73,16 @@ type Seed = [u8; 32];
 	MaxEncodedLen,
 	TypeInfo,
 )]
-pub struct Public(pub [u8; 32]);
+pub struct Public(pub [u8; BLS377::PUBLIC_KEY_SIZE]);
 
 /// A key pair.
 #[cfg(feature = "full_crypto")]
-pub struct Pair(bls::Keypair);
+pub struct Pair(Keypair);
 
 #[cfg(feature = "full_crypto")]
 impl Clone for Pair {
 	fn clone(&self) -> Self {
-		Pair(bls::Keypair.clone())
+		Pair(Keypair.clone())
 	}
 }
 
