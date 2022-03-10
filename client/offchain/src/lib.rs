@@ -194,7 +194,7 @@ where
 				if let Err(e) = run {
 					tracing::error!(
 						target: LOG_TARGET,
-						"Error running offchain workers at {:?}: {:?}",
+						"Error running offchain workers at {:?}: {}",
 						at,
 						e
 					);

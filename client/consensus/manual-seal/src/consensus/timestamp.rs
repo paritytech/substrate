@@ -21,8 +21,6 @@
 
 use crate::Error;
 use sc_client_api::{AuxStore, UsageProvider};
-use sc_consensus_aura::slot_duration;
-use sc_consensus_babe::Config;
 use sp_api::ProvideRuntimeApi;
 use sp_blockchain::HeaderBackend;
 use sp_consensus_aura::{
@@ -30,6 +28,7 @@ use sp_consensus_aura::{
 	AuraApi,
 };
 use sp_consensus_babe::BabeApi;
+use sp_consensus_slots::{Slot, SlotDuration};
 use sp_inherents::{InherentData, InherentDataProvider, InherentIdentifier};
 use sp_runtime::{
 	generic::BlockId,
@@ -53,7 +52,7 @@ pub struct SlotTimestampProvider {
 	// holds the unix millisecnd timestamp for the most recent block
 	unix_millis: atomic::AtomicU64,
 	// configured slot_duration in the runtime
-	slot_duration: u64,
+	slot_duration: SlotDuration,
 }
 
 impl SlotTimestampProvider {
@@ -64,7 +63,7 @@ impl SlotTimestampProvider {
 		C: AuxStore + HeaderBackend<B> + ProvideRuntimeApi<B> + UsageProvider<B>,
 		C::Api: BabeApi<B>,
 	{
-		let slot_duration = Config::get(&*client)?.slot_duration;
+		let slot_duration = sc_consensus_babe::Config::get(&*client)?.slot_duration();
 
 		let time = Self::with_header(&client, slot_duration, |header| {
 			let slot_number = *sc_consensus_babe::find_pre_digest::<B>(&header)
@@ -83,7 +82,7 @@ impl SlotTimestampProvider {
 		C: AuxStore + HeaderBackend<B> + ProvideRuntimeApi<B> + UsageProvider<B>,
 		C::Api: AuraApi<B, AuthorityId>,
 	{
-		let slot_duration = (*slot_duration(&*client)?).get();
+		let slot_duration = sc_consensus_aura::slot_duration(&*client)?;
 
 		let time = Self::with_header(&client, slot_duration, |header| {
 			let slot_number = *sc_consensus_aura::find_pre_digest::<B, AuthoritySignature>(&header)
@@ -94,7 +93,11 @@ impl SlotTimestampProvider {
 		Ok(Self { unix_millis: atomic::AtomicU64::new(time), slot_duration })
 	}
 
-	fn with_header<F, C, B>(client: &Arc<C>, slot_duration: u64, func: F) -> Result<u64, Error>
+	fn with_header<F, C, B>(
+		client: &Arc<C>,
+		slot_duration: SlotDuration,
+		func: F,
+	) -> Result<u64, Error>
 	where
 		B: BlockT,
 		C: AuxStore + HeaderBackend<B> + UsageProvider<B>,
@@ -110,7 +113,7 @@ impl SlotTimestampProvider {
 				.ok_or_else(|| "best header not found in the db!".to_string())?;
 			let slot = func(header)?;
 			// add the slot duration so there's no collision of slots
-			(slot * slot_duration) + slot_duration
+			(slot * slot_duration.as_millis() as u64) + slot_duration.as_millis() as u64
 		} else {
 			// this is the first block, use the correct time.
 			let now = SystemTime::now();
@@ -123,8 +126,11 @@ impl SlotTimestampProvider {
 	}
 
 	/// Get the current slot number
-	pub fn slot(&self) -> u64 {
-		self.unix_millis.load(atomic::Ordering::SeqCst) / self.slot_duration
+	pub fn slot(&self) -> Slot {
+		Slot::from_timestamp(
+			self.unix_millis.load(atomic::Ordering::SeqCst).into(),
+			self.slot_duration,
+		)
 	}
 
 	/// Gets the current time stamp.
@@ -140,8 +146,10 @@ impl InherentDataProvider for SlotTimestampProvider {
 		inherent_data: &mut InherentData,
 	) -> Result<(), sp_inherents::Error> {
 		// we update the time here.
-		let new_time: InherentType =
-			self.unix_millis.fetch_add(self.slot_duration, atomic::Ordering::SeqCst).into();
+		let new_time: InherentType = self
+			.unix_millis
+			.fetch_add(self.slot_duration.as_millis() as u64, atomic::Ordering::SeqCst)
+			.into();
 		inherent_data.put_data(INHERENT_IDENTIFIER, &new_time)?;
 		Ok(())
 	}

@@ -18,9 +18,9 @@
 //! Tests for npos-elections.
 
 use crate::{
-	balancing, helpers::*, is_score_better, mock::*, seq_phragmen, seq_phragmen_core, setup_inputs,
-	to_support_map, Assignment, ElectionResult, ExtendedBalance, IndexAssignment, NposSolution,
-	StakedAssignment, Support, Voter,
+	balancing, helpers::*, mock::*, seq_phragmen, seq_phragmen_core, setup_inputs, to_support_map,
+	Assignment, ElectionResult, ExtendedBalance, IndexAssignment, NposSolution, StakedAssignment,
+	Support, Voter,
 };
 use rand::{self, SeedableRng};
 use sp_arithmetic::{PerU16, Perbill, Percent, Permill};
@@ -792,6 +792,21 @@ mod assignment_convert_normalize {
 
 mod score {
 	use super::*;
+	use crate::ElectionScore;
+	use sp_arithmetic::PerThing;
+
+	/// NOTE: in tests, we still use the legacy [u128; 3] since it is more compact. Each `u128`
+	/// corresponds to element at the respective field index of `ElectionScore`.
+	impl From<[ExtendedBalance; 3]> for ElectionScore {
+		fn from(t: [ExtendedBalance; 3]) -> Self {
+			Self { minimal_stake: t[0], sum_stake: t[1], sum_stake_squared: t[2] }
+		}
+	}
+
+	fn is_score_better(this: [u128; 3], that: [u128; 3], p: impl PerThing) -> bool {
+		ElectionScore::from(this).strict_threshold_better(ElectionScore::from(that), p)
+	}
+
 	#[test]
 	fn score_comparison_is_lexicographical_no_epsilon() {
 		let epsilon = Perbill::zero();
@@ -882,6 +897,26 @@ mod score {
 			is_score_better(claim.clone(), initial.clone(), Perbill::from_rational(5u32, 10_000),),
 			false,
 		);
+	}
+
+	#[test]
+	fn ord_works() {
+		// equal only when all elements are equal
+		assert!(ElectionScore::from([10, 5, 15]) == ElectionScore::from([10, 5, 15]));
+		assert!(ElectionScore::from([10, 5, 15]) != ElectionScore::from([9, 5, 15]));
+		assert!(ElectionScore::from([10, 5, 15]) != ElectionScore::from([10, 5, 14]));
+
+		// first element greater, rest don't matter
+		assert!(ElectionScore::from([10, 5, 15]) > ElectionScore::from([8, 5, 25]));
+		assert!(ElectionScore::from([10, 5, 15]) > ElectionScore::from([9, 20, 5]));
+
+		// second element greater, rest don't matter
+		assert!(ElectionScore::from([10, 5, 15]) > ElectionScore::from([10, 4, 25]));
+		assert!(ElectionScore::from([10, 5, 15]) > ElectionScore::from([10, 4, 5]));
+
+		// second element is less, rest don't matter. Note that this is swapped.
+		assert!(ElectionScore::from([10, 5, 15]) > ElectionScore::from([10, 5, 16]));
+		assert!(ElectionScore::from([10, 5, 15]) > ElectionScore::from([10, 5, 25]));
 	}
 }
 

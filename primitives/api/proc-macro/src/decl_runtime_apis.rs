@@ -39,8 +39,6 @@ use syn::{
 
 use std::collections::HashMap;
 
-use blake2_rfc;
-
 /// The ident used for the block generic parameter.
 const BLOCK_GENERIC_IDENT: &str = "Block";
 
@@ -183,7 +181,7 @@ fn generate_native_call_generators(decl: &ItemTrait) -> Result<TokenStream> {
 		{
 			<R as #crate_::DecodeLimit>::decode_with_depth_limit(
 				#crate_::MAX_EXTRINSIC_DEPTH,
-				&#crate_::Encode::encode(input)[..],
+				&mut &#crate_::Encode::encode(input)[..],
 			).map_err(map_error)
 		}
 	));
@@ -750,8 +748,10 @@ fn parse_runtime_api_version(version: &Attribute) -> Result<u64> {
 /// Generates the identifier as const variable for the given `trait_name`
 /// by hashing the `trait_name`.
 fn generate_runtime_api_id(trait_name: &str) -> TokenStream {
+	use blake2::digest::{consts::U8, Digest};
+
 	let mut res = [0; 8];
-	res.copy_from_slice(blake2_rfc::blake2b::blake2b(8, &[], trait_name.as_bytes()).as_bytes());
+	res.copy_from_slice(blake2::Blake2b::<U8>::digest(trait_name).as_slice());
 
 	quote!( const ID: [u8; 8] = [ #( #res ),* ]; )
 }
