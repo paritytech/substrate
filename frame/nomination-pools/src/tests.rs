@@ -47,7 +47,7 @@ fn test_setup_works() {
 		assert_eq!(
 			Delegators::<Runtime>::get(10).unwrap(),
 			Delegator::<Runtime> {
-				pool: PRIMARY_ACCOUNT,
+				bonded_pool_account: PRIMARY_ACCOUNT,
 				points: 10,
 				reward_pool_total_earnings: 0,
 				unbonding_era: None
@@ -183,25 +183,22 @@ mod bonded_pool {
 
 			// Simulate a 100% slashed pool
 			StakingMock::set_bonded_balance(123, 0);
-			assert_noop!(pool.ok_to_join_with(100, &11), Error::<Runtime>::OverflowRisk);
+			assert_noop!(pool.ok_to_join(), Error::<Runtime>::OverflowRisk);
 
 			// Simulate a 89%
 			StakingMock::set_bonded_balance(123, 11);
-			assert_ok!(pool.ok_to_join_with(100, &11));
+			assert_ok!(pool.ok_to_join());
 
 			// Simulate a 90% slashed pool
 			StakingMock::set_bonded_balance(123, 10);
-			assert_noop!(pool.ok_to_join_with(100, &11), Error::<Runtime>::OverflowRisk);
+			assert_noop!(pool.ok_to_join(), Error::<Runtime>::OverflowRisk);
 
-			let bonded = 100;
-			StakingMock::set_bonded_balance(123, bonded);
+			StakingMock::set_bonded_balance(123, Balance::MAX / 10);
 			// New bonded balance would be over 1/10th of Balance type
-			assert_noop!(
-				pool.ok_to_join_with(Balance::MAX / 10 - bonded, &11),
-				Error::<Runtime>::OverflowRisk
-			);
+			assert_noop!(pool.ok_to_join(), Error::<Runtime>::OverflowRisk);
 			// and a sanity check
-			assert_ok!(pool.ok_to_join_with(Balance::MAX / 100 - bonded + 1, &11));
+			StakingMock::set_bonded_balance(123, Balance::MAX / 10 - 1);
+			assert_ok!(pool.ok_to_join());
 		});
 	}
 }
@@ -382,7 +379,7 @@ mod join {
 			assert_eq!(
 				Delegators::<Runtime>::get(&11).unwrap(),
 				Delegator::<Runtime> {
-					pool: PRIMARY_ACCOUNT,
+					bonded_pool_account: PRIMARY_ACCOUNT,
 					points: 2,
 					reward_pool_total_earnings: 0,
 					unbonding_era: None
@@ -404,7 +401,7 @@ mod join {
 			assert_eq!(
 				Delegators::<Runtime>::get(&12).unwrap(),
 				Delegator::<Runtime> {
-					pool: PRIMARY_ACCOUNT,
+					bonded_pool_account: PRIMARY_ACCOUNT,
 					points: 24,
 					reward_pool_total_earnings: 0,
 					unbonding_era: None
@@ -431,6 +428,7 @@ mod join {
 				Error::<Runtime>::OverflowRisk
 			);
 
+			// Given a mocked bonded pool
 			BondedPool::<Runtime> {
 				depositor: 10,
 				state: PoolState::Open,
@@ -442,18 +440,26 @@ mod join {
 				delegator_counter: 1,
 			}
 			.put();
-			// Force the points:balance ratio to 100/10 (so 10)
+			// and reward pool
+			RewardPools::<Runtime>::insert(
+				123,
+				RewardPool::<Runtime> {
+					account: 1123,
+					balance: Zero::zero(),
+					total_earnings: Zero::zero(),
+					points: U256::from(0),
+				},
+			);
+
+			// Force the points:balance ratio to 100/10
 			StakingMock::set_bonded_balance(123, 10);
 			assert_noop!(Pools::join(Origin::signed(11), 420, 123), Error::<Runtime>::OverflowRisk);
 
-			// Force the points:balance ratio to be a valid 100/100
-			StakingMock::set_bonded_balance(123, 100);
-			// Cumulative balance is > 1/10 of Balance::MAX
-			assert_noop!(
-				Pools::join(Origin::signed(11), Balance::MAX / 10 - 100, 123),
-				Error::<Runtime>::OverflowRisk
-			);
+			StakingMock::set_bonded_balance(123, Balance::MAX / 10);
+			// Balance is gt 1/10 of Balance::MAX
+			assert_noop!(Pools::join(Origin::signed(11), 5, 123), Error::<Runtime>::OverflowRisk);
 
+			StakingMock::set_bonded_balance(123, 100);
 			// Cannot join a pool that isn't open
 			unsafe_set_state(&PRIMARY_ACCOUNT, PoolState::Blocked).unwrap();
 			assert_noop!(
@@ -540,7 +546,12 @@ mod claim_payout {
 	use super::*;
 
 	fn del(points: Balance, reward_pool_total_earnings: Balance) -> Delegator<Runtime> {
-		Delegator { pool: PRIMARY_ACCOUNT, points, reward_pool_total_earnings, unbonding_era: None }
+		Delegator {
+			bonded_pool_account: PRIMARY_ACCOUNT,
+			points,
+			reward_pool_total_earnings,
+			unbonding_era: None,
+		}
 	}
 
 	fn rew(balance: Balance, points: u32, total_earnings: Balance) -> RewardPool<Runtime> {
@@ -1495,7 +1506,7 @@ mod unbond {
 
 			// Add the delegator
 			let delegator = Delegator {
-				pool: 1,
+				bonded_pool_account: 1,
 				points: 10,
 				reward_pool_total_earnings: 0,
 				unbonding_era: None,
@@ -1511,7 +1522,7 @@ mod unbond {
 	fn unbond_panics_when_reward_pool_not_found() {
 		ExtBuilder::default().build_and_execute(|| {
 			let delegator = Delegator {
-				pool: 1,
+				bonded_pool_account: 1,
 				points: 10,
 				reward_pool_total_earnings: 0,
 				unbonding_era: None,
@@ -1761,7 +1772,7 @@ mod withdraw_unbonded_other {
 			);
 
 			let mut delegator = Delegator {
-				pool: PRIMARY_ACCOUNT,
+				bonded_pool_account: PRIMARY_ACCOUNT,
 				points: 10,
 				reward_pool_total_earnings: 0,
 				unbonding_era: None,
@@ -2044,7 +2055,7 @@ mod create {
 			assert_eq!(
 				Delegators::<Runtime>::get(11).unwrap(),
 				Delegator {
-					pool: stash,
+					bonded_pool_account: stash,
 					points: StakingMock::minimum_bond(),
 					reward_pool_total_earnings: Zero::zero(),
 					unbonding_era: None
@@ -2183,8 +2194,10 @@ mod set_state_other {
 	#[test]
 	fn set_state_other_works() {
 		ExtBuilder::default().build_and_execute(|| {
-			// Only the root and state toggler can change the state when the pool is ok to be open.
+			// Given
 			assert_ok!(BondedPool::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap().ok_to_be_open());
+
+			// Only the root and state toggler can change the state when the pool is ok to be open.
 			assert_noop!(
 				Pools::set_state_other(Origin::signed(10), PRIMARY_ACCOUNT, PoolState::Blocked),
 				Error::<Runtime>::CanNotChangeState
