@@ -39,7 +39,14 @@ pub(crate) fn initialize_transport() -> Result<WsTrans, io::Error> {
 					future::ready(Ok::<_, io::Error>(item))
 				})
 				.try_filter(|item| future::ready(item.is_data()))
-				.map_ok(|data| data.into_bytes());
+				.map_ok(|item| {
+					let data = if let libp2p::websocket::framed::Incoming::Data(data) = item {
+						data
+					} else {
+						unreachable!("The item contains Data; qed");
+					};
+					data.into_bytes()
+				});
 			future::ready(Ok::<_, io::Error>(connec))
 		})
 	};
