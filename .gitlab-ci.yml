@@ -185,7 +185,7 @@ default:
           tee ./artifacts/substrate/VERSION;
     fi
   - sha256sum ./artifacts/substrate/substrate | tee ./artifacts/substrate/substrate.sha256
-  - cp -r scripts/ci/docker/substrate.Dockerfile ./artifacts/substrate/
+  - cp -r ./scripts/ci/docker/substrate.Dockerfile ./artifacts/substrate/
   - sccache -s
 
 #### Vault secrets
@@ -288,11 +288,11 @@ test-prometheus-alerting-rules:
     - if: $CI_COMMIT_BRANCH
       changes:
         - .gitlab-ci.yml
-        - scripts/ci/monitoring/**/*
+        - ./scripts/ci/monitoring/**/*
   script:
-    - promtool check rules scripts/ci/monitoring/alerting-rules/alerting-rules.yaml
-    - cat scripts/ci/monitoring/alerting-rules/alerting-rules.yaml |
-        promtool test rules scripts/ci/monitoring/alerting-rules/alerting-rule-tests.yaml
+    - promtool check rules ./scripts/ci/monitoring/alerting-rules/alerting-rules.yaml
+    - cat ./scripts/ci/monitoring/alerting-rules/alerting-rules.yaml |
+        promtool test rules ./scripts/ci/monitoring/alerting-rules/alerting-rule-tests.yaml
 
 #### stage:                        test
 
@@ -301,10 +301,10 @@ cargo-deny:
   <<:                              *docker-env
   <<:                              *nightly-pipeline
   script:
-    - cargo deny check --hide-inclusion-graph -c scripts/ci/deny.toml
+    - cargo deny check --hide-inclusion-graph -c ./scripts/ci/deny.toml
   after_script:
     - echo "___The complete log is in the artifacts___"
-    - cargo deny check -c scripts/ci/deny.toml 2> deny.log
+    - cargo deny check -c ./scripts/ci/deny.toml 2> deny.log
   artifacts:
     name:                          $CI_COMMIT_SHORT_SHA
     expire_in:                     3 days
@@ -590,7 +590,7 @@ build-linux-subkey:                &build-subkey
         sed -n -E 's/^subkey ([0-9.]+.*)/\1/p' |
           tee ./artifacts/subkey/VERSION;
     - sha256sum ./artifacts/subkey/subkey | tee ./artifacts/subkey/subkey.sha256
-    - cp -r scripts/ci/docker/subkey.Dockerfile ./artifacts/subkey/
+    - cp -r ./scripts/ci/docker/subkey.Dockerfile ./artifacts/subkey/
     - sccache -s
 
 build-macos-subkey:
@@ -807,4 +807,4 @@ deploy-prometheus-alerting-rules:
     - if: $CI_COMMIT_REF_NAME == "master"
       changes:
         - .gitlab-ci.yml
-        - scripts/ci/monitoring/**/*
+        - ./scripts/ci/monitoring/**/*
