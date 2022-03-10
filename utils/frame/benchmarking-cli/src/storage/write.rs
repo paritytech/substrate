@@ -63,6 +63,7 @@ impl StorageCmd {
 		kvs.shuffle(&mut rng);
 
 		// Run some rounds of the benchmark as warmup.
+		// The code here is a copy of the instrumentation run below, look there for comments.
 		for i in 0..self.params.warmups {
 			info!("Warmup round {}/{}", i + 1, self.params.warmups);
 			for (k, original_v) in kvs.clone().iter() {

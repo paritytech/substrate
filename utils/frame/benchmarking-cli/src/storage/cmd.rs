@@ -84,7 +84,7 @@ pub struct StorageParams {
 	#[clap(long)]
 	pub skip_write: bool,
 
-	/// Path to Handlebars template file used for outputting benchmark results. (Optional)
+	/// Specify the Handlebars template to use for outputting benchmark results.
 	#[clap(long)]
 	pub template_path: Option<PathBuf>,
 
@@ -125,16 +125,10 @@ impl StorageCmd {
 		Block: BlockT<Hash = DbHash>,
 		C: UsageProvider<Block> + StorageProvider<Block, BA> + HeaderBackend<Block>,
 	{
-		if let Some(hbs_template) = &self.params.template_path {
-			if !hbs_template.is_file() {
-				return Err("Handlebars template file is invalid!".into())
-			};
-		}
-
 		let mut template = TemplateData::new(&cfg, &self.params);
 
 		let block_id = BlockId::<Block>::Number(client.usage_info().chain.best_number);
-		template.set_block_id(block_id.to_string());
+		template.set_block_number(block_id.to_string());
 
 		if !self.params.skip_read {
 			let record = self.bench_read(client.clone())?;

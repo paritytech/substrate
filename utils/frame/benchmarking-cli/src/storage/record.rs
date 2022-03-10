@@ -100,7 +100,7 @@ impl BenchRecord {
 	pub fn save_json(&self, cfg: &Configuration, out_path: &str, path_suffix: &str) -> Result<()> {
 		let mut path = PathBuf::from(out_path);
 		if path.is_dir() {
-			path.push(&format!("{}_{}.json", cfg.database, path_suffix).to_lowercase());
+			path.push(&format!("{}_{}", cfg.database, path_suffix).to_lowercase());
 			path.set_extension("json");
 		}
 

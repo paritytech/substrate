@@ -33,7 +33,7 @@ pub(crate) struct TemplateData {
 	/// Name of the database used.
 	db_name: String,
 	/// Block number that was used.
-	block_id: String,
+	block_number: String,
 	/// Name of the runtime. Taken from the chain spec.
 	runtime_name: String,
 	/// Version of the benchmarking CLI used.
@@ -88,8 +88,8 @@ impl TemplateData {
 	}
 
 	/// Sets the block id that was used.
-	pub fn set_block_id(&mut self, block_id: String) {
-		self.block_id = block_id
+	pub fn set_block_number(&mut self, block_number: String) {
+		self.block_number = block_number
 	}
 
 	/// Fills out the `weights.hbs` or specified HBS template with its own data.
@@ -100,16 +100,17 @@ impl TemplateData {
 		handlebars.register_helper("underscore", Box::new(crate::writer::UnderscoreHelper));
 		// Don't HTML escape any characters.
 		handlebars.register_escape_fn(|s| -> String { s.to_string() });
+		// Use custom template if provided.
+		let template = match hbs_template_path {
+			Some(template) if template.is_file() => fs::read_to_string(template)?,
+			Some(_) => return Err("Handlebars template file is invalid!".into()),
+			None => TEMPLATE.to_string(),
+		};
 
 		let out_path = self.build_path(path);
 		let mut fd = fs::File::create(&out_path)?;
 		info!("Writing weights to {:?}", fs::canonicalize(&out_path)?);
 
-		// Use custom template if provided.
-		let template = match hbs_template_path {
-			Some(template) => fs::read_to_string(template)?,
-			None => TEMPLATE.to_string(),
-		};
 		handlebars
 			.render_template_to_write(&template, &self, &mut fd)
 			.map_err(|e| format!("HBS template write: {:?}", e).into())
