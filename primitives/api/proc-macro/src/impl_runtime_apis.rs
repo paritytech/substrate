@@ -301,7 +301,6 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 
 				self.changes.replace(Default::default()).into_storage_changes(
 					backend,
-					parent_hash,
 					self.storage_transaction_cache.replace(Default::default()),
 					state_version,
 				)
