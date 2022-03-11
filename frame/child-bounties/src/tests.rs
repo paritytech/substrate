@@ -201,10 +201,10 @@ fn minting_works() {
 fn add_child_bounty() {
 	new_test_ext().execute_with(|| {
 		// TestProcedure.
-		// 1, Create bounty & move to active state with enough bounty fund & master-curator.
-		// 2, Master-curator adds child-bounty child-bounty-1, test for error like RequireCurator
+		// 1, Create bounty & move to active state with enough bounty fund & parent curator.
+		// 2, Parent curator adds child-bounty child-bounty-1, test for error like RequireCurator
 		//    ,InsufficientProposersBalance, InsufficientBountyBalance with invalid arguments.
-		// 3, Master-curator adds child-bounty child-bounty-1, moves to "Approved" state &
+		// 3, Parent curator adds child-bounty child-bounty-1, moves to "Approved" state &
 		//    test for the event Added.
 		// 4, Test for DB state of `Bounties` & `ChildBounties`.
 		// 5, Observe fund transaction moment between Bounty, Child-bounty,
@@ -221,27 +221,30 @@ fn add_child_bounty() {
 		System::set_block_number(2);
 		<Treasury as OnInitialize<u64>>::on_initialize(2);
 
-		assert_ok!(Bounties::propose_curator(Origin::root(), 0, 4, 4));
+		let fee = 8;
+		assert_ok!(Bounties::propose_curator(Origin::root(), 0, 4, fee));
 
 		Balances::make_free_balance_be(&4, 10);
 
 		assert_ok!(Bounties::accept_curator(Origin::signed(4), 0));
 
-		assert_eq!(Balances::free_balance(&4), 8);
-		assert_eq!(Balances::reserved_balance(&4), 2);
+		// This verifies that the accept curator logic took a deposit.
+		let expected_deposit = BountyCuratorDeposit::get() * fee;
+		assert_eq!(Balances::reserved_balance(&4), expected_deposit);
+		assert_eq!(Balances::free_balance(&4), 10 - expected_deposit);
 
 		// Add child-bounty.
-		// Acc-4 is the master curator.
+		// Acc-4 is the parent curator.
 		// Call from invalid origin & check for error "RequireCurator".
 		assert_noop!(
 			ChildBounties::add_child_bounty(Origin::signed(0), 0, 10, b"12345-p1".to_vec()),
 			BountiesError::RequireCurator,
 		);
 
-		// Update the master curator balance.
+		// Update the parent curator balance.
 		Balances::make_free_balance_be(&4, 101);
 
-		// Master curator fee is reserved on parent bounty account.
+		// parent curator fee is reserved on parent bounty account.
 		assert_eq!(Balances::free_balance(Bounties::bounty_account_id(0)), 50);
 		assert_eq!(Balances::reserved_balance(Bounties::bounty_account_id(0)), 0);
 
@@ -262,7 +265,7 @@ fn add_child_bounty() {
 		assert_eq!(last_event(), ChildBountiesEvent::Added { index: 0, child_index: 0 });
 
 		assert_eq!(Balances::free_balance(4), 101);
-		assert_eq!(Balances::reserved_balance(4), 2);
+		assert_eq!(Balances::reserved_balance(4), expected_deposit);
 
 		// DB check.
 		// Check the child-bounty status.
@@ -289,8 +292,8 @@ fn add_child_bounty() {
 fn child_bounty_assign_curator() {
 	new_test_ext().execute_with(|| {
 		// TestProcedure
-		// 1, Create bounty & move to active state with enough bounty fund & master-curator.
-		// 2, Master-curator adds child-bounty child-bounty-1, moves to "Active" state.
+		// 1, Create bounty & move to active state with enough bounty fund & parent curator.
+		// 2, Parent curator adds child-bounty child-bounty-1, moves to "Active" state.
 		// 3, Test for DB state of `ChildBounties`.
 
 		// Make the parent bounty.
@@ -314,13 +317,13 @@ fn child_bounty_assign_curator() {
 		assert_eq!(Balances::free_balance(Bounties::bounty_account_id(0)), 50);
 		assert_eq!(Balances::reserved_balance(Bounties::bounty_account_id(0)), 0);
 
-		// Check the balance of master curator.
-		// Curator deposit is reserved for master curator on parent bounty.
+		// Check the balance of parent curator.
+		// Curator deposit is reserved for parent curator on parent bounty.
 		assert_eq!(Balances::free_balance(4), 99);
 		assert_eq!(Balances::reserved_balance(4), 2);
 
 		// Add child-bounty.
-		// Acc-4 is the master curator & make sure enough deposit.
+		// Acc-4 is the parent curator & make sure enough deposit.
 		assert_ok!(ChildBounties::add_child_bounty(Origin::signed(4), 0, 10, b"12345-p1".to_vec()));
 
 		assert_eq!(last_event(), ChildBountiesEvent::Added { index: 0, child_index: 0 });
@@ -333,22 +336,25 @@ fn child_bounty_assign_curator() {
 		assert_eq!(Balances::free_balance(ChildBounties::child_bounty_account_id(0)), 10);
 		assert_eq!(Balances::reserved_balance(ChildBounties::child_bounty_account_id(0)), 0);
 
-		assert_ok!(ChildBounties::propose_curator(Origin::signed(4), 0, 0, 8, 2));
+		let fee = 4u64;
+		assert_ok!(ChildBounties::propose_curator(Origin::signed(4), 0, 0, 8, fee));
 
 		assert_eq!(
 			ChildBounties::child_bounties(0, 0).unwrap(),
 			ChildBounty {
 				parent_bounty: 0,
 				value: 10,
-				fee: 2,
+				fee,
 				curator_deposit: 0,
 				status: ChildBountyStatus::CuratorProposed { curator: 8 },
 			}
 		);
 
-		// Check the balance of master curator.
-		assert_eq!(Balances::free_balance(4), 99);
-		assert_eq!(Balances::reserved_balance(4), 2);
+		let expected_deposit = ChildCuratorDepositMultiplierWithFee::get() * fee;
+
+		// Check the balance of parent curator.
+		assert_eq!(Balances::free_balance(4), 101 - expected_deposit);
+		assert_eq!(Balances::reserved_balance(4), expected_deposit);
 
 		assert_noop!(
 			ChildBounties::accept_curator(Origin::signed(3), 0, 0),
@@ -362,15 +368,15 @@ fn child_bounty_assign_curator() {
 			ChildBounty {
 				parent_bounty: 0,
 				value: 10,
-				fee: 2,
-				curator_deposit: 1,
+				fee,
+				curator_deposit: expected_deposit,
 				status: ChildBountyStatus::Active { curator: 8 },
 			}
 		);
 
-		// Deposit for child-bounty curator is reserved.
-		assert_eq!(Balances::free_balance(8), 100);
-		assert_eq!(Balances::reserved_balance(8), 1);
+		// Deposit for child-bounty curator deposit is reserved.
+		assert_eq!(Balances::free_balance(8), 101 - expected_deposit);
+		assert_eq!(Balances::reserved_balance(8), expected_deposit);
 
 		// Bounty account status at exit.
 		assert_eq!(Balances::free_balance(Bounties::bounty_account_id(0)), 40);
@@ -415,7 +421,8 @@ fn award_claim_child_bounty() {
 		assert_eq!(last_event(), ChildBountiesEvent::Added { index: 0, child_index: 0 });
 
 		// Propose and accept curator for child-bounty.
-		assert_ok!(ChildBounties::propose_curator(Origin::signed(4), 0, 0, 8, 2));
+		let fee = 4;
+		assert_ok!(ChildBounties::propose_curator(Origin::signed(4), 0, 0, 8, fee));
 		assert_ok!(ChildBounties::accept_curator(Origin::signed(8), 0, 0));
 
 		// Award child-bounty.
@@ -427,13 +434,14 @@ fn award_claim_child_bounty() {
 
 		assert_ok!(ChildBounties::award_child_bounty(Origin::signed(8), 0, 0, 7));
 
+		let expected_deposit = ChildCuratorDepositMultiplierWithFee::get() * fee;
 		assert_eq!(
 			ChildBounties::child_bounties(0, 0).unwrap(),
 			ChildBounty {
 				parent_bounty: 0,
 				value: 10,
-				fee: 2,
-				curator_deposit: 1,
+				fee,
+				curator_deposit: expected_deposit,
 				status: ChildBountyStatus::PendingPayout {
 					curator: 8,
 					beneficiary: 7,
@@ -454,11 +462,11 @@ fn award_claim_child_bounty() {
 		assert_ok!(ChildBounties::claim_child_bounty(Origin::signed(7), 0, 0));
 
 		// Ensure child-bounty curator is paid with curator fee & deposit refund.
-		assert_eq!(Balances::free_balance(8), 103);
+		assert_eq!(Balances::free_balance(8), 101 + fee);
 		assert_eq!(Balances::reserved_balance(8), 0);
 
 		// Ensure executor is paid with beneficiary amount.
-		assert_eq!(Balances::free_balance(7), 8);
+		assert_eq!(Balances::free_balance(7), 10 - fee);
 		assert_eq!(Balances::reserved_balance(7), 0);
 
 		// Child-bounty account status.
@@ -605,7 +613,8 @@ fn close_child_bounty_pending() {
 		assert_eq!(last_event(), ChildBountiesEvent::Added { index: 0, child_index: 0 });
 
 		// Propose and accept curator for child-bounty.
-		assert_ok!(ChildBounties::propose_curator(Origin::signed(4), 0, 0, 8, 2));
+		let fee = 4;
+		assert_ok!(ChildBounties::propose_curator(Origin::signed(4), 0, 0, 8, 4));
 		assert_ok!(ChildBounties::accept_curator(Origin::signed(8), 0, 0));
 
 		assert_ok!(ChildBounties::award_child_bounty(Origin::signed(8), 0, 0, 7));
@@ -620,8 +629,9 @@ fn close_child_bounty_pending() {
 		assert_eq!(ChildBounties::parent_child_bounties(0), 1);
 
 		// Ensure no changes in child-bounty curator balance.
-		assert_eq!(Balances::free_balance(8), 100);
-		assert_eq!(Balances::reserved_balance(8), 1);
+		let expected_deposit = ChildCuratorDepositMultiplierWithFee::get() * fee;
+		assert_eq!(Balances::reserved_balance(8), expected_deposit);
+		assert_eq!(Balances::free_balance(8), 101 - expected_deposit);
 
 		// Child-bounty account status.
 		assert_eq!(Balances::free_balance(ChildBounties::child_bounty_account_id(0)), 10);
@@ -824,7 +834,7 @@ fn child_bounty_active_unassign_curator() {
 		System::set_block_number(5);
 		<Treasury as OnInitialize<u64>>::on_initialize(5);
 
-		// Unassign curator again - from master curator.
+		// Unassign curator again - from parent curator.
 		assert_ok!(ChildBounties::unassign_curator(Origin::signed(4), 0, 0));
 
 		// Verify updated child-bounty status.
@@ -1052,7 +1062,7 @@ fn parent_bounty_inactive_unassign_curator_child_bounty() {
 		System::set_block_number(9);
 		<Treasury as OnInitialize<u64>>::on_initialize(9);
 
-		// Unassign curator again - from master curator.
+		// Unassign curator again - from parent curator.
 		assert_ok!(ChildBounties::unassign_curator(Origin::signed(7), 0, 0));
 
 		// Verify updated child-bounty status.
