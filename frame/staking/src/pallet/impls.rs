@@ -836,8 +836,6 @@ impl<T: Config> Pallet<T> {
 
 		// TODO: edge case: some wanker nominating themselves? should only be possible if they are a
 		// validator and now they nominate themselves.
-		// TODO: these are all rather inefficient now based on how vote_weight is
-		// implemented, but I don't care because: https://github.com/paritytech/substrate/issues/10990
 		let score = Self::slashable_balance_of(stash);
 		incoming.into_iter().for_each(|i| {
 			if T::TargetList::contains(i) {
@@ -1441,7 +1439,6 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsAndValidatorsM
 		Ok(())
 	}
 	fn get_score(id: &T::AccountId) -> Result<Self::Score, Self::Error> {
-		// TODO: this is not consistent, should ideally return an error if not exists.
 		Ok(Pallet::<T>::weight_of(id))
 	}
 	fn on_update(_: &T::AccountId, _weight: VoteWeight) -> Result<(), Self::Error> {

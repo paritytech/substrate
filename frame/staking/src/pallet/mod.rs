@@ -163,9 +163,16 @@ pub mod pallet {
 		/// After the threshold is reached a new era will be forced.
 		type OffendingValidatorsThreshold: Get<Perbill>;
 
+		/// Something that provides a best-effort sorted list of voters aka electing nominators,
+		/// used for NPoS election.
+		///
+		/// The changes to nominators are reported to this.
 		type VoterList: SortedListProvider<Self::AccountId, Score = VoteWeight>;
 
-		// type TargetList: SortedListProvider<Self::AccountId, Score = BalanceOf<Self>>;
+		/// Something that provides a best-effort sorted list of targets aka electable validators,
+		/// used for NPoS election.
+		///
+		/// The changes to the approval stake of each validator are reported to this.
 		type TargetList: SortedListProvider<Self::AccountId, Score = BalanceOf<Self>>;
 
 		/// determines how many unique eras a staker may be unbonding in.
