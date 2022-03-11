@@ -192,7 +192,7 @@ fn basic_setup_works() {
 				claimed_rewards: vec![]
 			})
 		);
-		assert_eq!(Nominators::<Test>::get(&101).unwrap().targets, vec![11, 21]);
+		assert_eq!(nominator_targets(101), vec![11, 21]);
 
 		assert_eq!(
 			Staking::eras_stakers(active_era(), 11),
@@ -720,6 +720,7 @@ fn double_staking_should_fail() {
 	// * an account already bonded as stash cannot nominate.
 	// * an account already bonded as controller can nominate.
 	ExtBuilder::default().build_and_execute(|| {
+		let some_validator = validator_ids().first().cloned().unwrap();
 		let arbitrary_value = 5;
 		// 2 = controller, 1 stashed => ok
 		assert_ok!(Staking::bond(
@@ -734,9 +735,12 @@ fn double_staking_should_fail() {
 			Error::<Test>::AlreadyBonded,
 		);
 		// 1 = stashed => attempting to nominate should fail.
-		assert_noop!(Staking::nominate(Origin::signed(1), vec![1]), Error::<Test>::NotController);
+		assert_noop!(
+			Staking::nominate(Origin::signed(1), vec![some_validator]),
+			Error::<Test>::NotController
+		);
 		// 2 = controller  => nominating should work.
-		assert_ok!(Staking::nominate(Origin::signed(2), vec![1]));
+		assert_ok!(Staking::nominate(Origin::signed(2), vec![some_validator]));
 	});
 }
 
@@ -1742,81 +1746,6 @@ fn reap_stash_works() {
 }
 
 #[test]
-fn switching_roles() {
-	// Test that it should be possible to switch between roles (nominator, validator, idle) with
-	// minimal overhead.
-	ExtBuilder::default().nominate(false).build_and_execute(|| {
-		// Reset reward destination
-		for i in &[10, 20] {
-			assert_ok!(Staking::set_payee(Origin::signed(*i), RewardDestination::Controller));
-		}
-
-		assert_eq_uvec!(validator_controllers(), vec![20, 10]);
-
-		// put some money in account that we'll use.
-		for i in 1..7 {
-			let _ = Balances::deposit_creating(&i, 5000);
-		}
-
-		// add 2 nominators
-		assert_ok!(Staking::bond(Origin::signed(1), 2, 2000, RewardDestination::Controller));
-		assert_ok!(Staking::nominate(Origin::signed(2), vec![11, 5]));
-
-		assert_ok!(Staking::bond(Origin::signed(3), 4, 500, RewardDestination::Controller));
-		assert_ok!(Staking::nominate(Origin::signed(4), vec![21, 1]));
-
-		// add a new validator candidate
-		assert_ok!(Staking::bond(Origin::signed(5), 6, 1000, RewardDestination::Controller));
-		assert_ok!(Staking::validate(Origin::signed(6), ValidatorPrefs::default()));
-		assert_ok!(Session::set_keys(Origin::signed(6), SessionKeys { other: 6.into() }, vec![]));
-
-		mock::start_active_era(1);
-
-		// with current nominators 10 and 5 have the most stake
-		assert_eq_uvec!(validator_controllers(), vec![6, 10]);
-
-		// 2 decides to be a validator. Consequences:
-		assert_ok!(Staking::validate(Origin::signed(2), ValidatorPrefs::default()));
-		assert_ok!(Session::set_keys(Origin::signed(2), SessionKeys { other: 2.into() }, vec![]));
-		// new stakes:
-		// 10: 1000 self vote
-		// 20: 1000 self vote + 250 vote
-		// 6 : 1000 self vote
-		// 2 : 2000 self vote + 250 vote.
-		// Winners: 20 and 2
-
-		mock::start_active_era(2);
-
-		assert_eq_uvec!(validator_controllers(), vec![2, 20]);
-	});
-}
-
-#[test]
-fn wrong_vote_is_moot() {
-	ExtBuilder::default()
-		.add_staker(
-			61,
-			60,
-			500,
-			StakerStatus::Nominator(vec![
-				11, 21, // good votes
-				1, 2, 15, 1000, 25, // crap votes. No effect.
-			]),
-		)
-		.build_and_execute(|| {
-			// the genesis validators already reflect the above vote, nonetheless start a new era.
-			mock::start_active_era(1);
-
-			// new validators
-			assert_eq_uvec!(validator_controllers(), vec![20, 10]);
-
-			// our new voter is taken into account
-			assert!(Staking::eras_stakers(active_era(), 11).others.iter().any(|i| i.who == 61));
-			assert!(Staking::eras_stakers(active_era(), 21).others.iter().any(|i| i.who == 61));
-		});
-}
-
-#[test]
 fn bond_with_no_staked_value() {
 	// Behavior when someone bonds with no staked value.
 	// Particularly when she votes and the candidate is elected.
@@ -1930,28 +1859,6 @@ fn bond_with_little_staked_value_bounded() {
 				2,
 			);
 		});
-}
-
-#[test]
-fn duplicate_nomination_prevented() {
-	ExtBuilder::default().nominate(true).validator_count(1).build_and_execute(|| {
-		// resubmit and it is back
-		assert_noop!(
-			Staking::nominate(Origin::signed(100), vec![11, 11, 21]),
-			Error::<Test>::DuplicateTarget
-		);
-
-		assert_noop!(
-			Staking::nominate(Origin::signed(100), vec![11, 21, 11,]),
-			Error::<Test>::DuplicateTarget
-		);
-
-		assert_noop!(
-			Staking::nominate(Origin::signed(100), vec![21, 11, 31, 11]),
-			Error::<Test>::DuplicateTarget
-		);
-		assert_ok!(Staking::nominate(Origin::signed(100), vec![21, 11]));
-	})
 }
 
 #[test]
@@ -4031,7 +3938,10 @@ mod election_data_provider {
 				vec![21]
 			);
 
-			// resubmit and it is back
+			// they re-validate again.
+			assert_ok!(Staking::validate(Origin::signed(10), ValidatorPrefs::default()));
+
+			// resubmit and it is back.
 			assert_ok!(Staking::nominate(Origin::signed(100), vec![11, 21]));
 			assert_eq!(
 				<Staking as ElectionDataProvider>::voters(None)
@@ -4249,9 +4159,10 @@ fn min_bond_checks_work() {
 		.min_validator_bond(1_500)
 		.build_and_execute(|| {
 			// 500 is not enough for any role
+			let some_validator = validator_ids().first().cloned().unwrap();
 			assert_ok!(Staking::bond(Origin::signed(3), 4, 500, RewardDestination::Controller));
 			assert_noop!(
-				Staking::nominate(Origin::signed(4), vec![1]),
+				Staking::nominate(Origin::signed(4), vec![some_validator]),
 				Error::<Test>::InsufficientBond
 			);
 			assert_noop!(
@@ -4261,7 +4172,7 @@ fn min_bond_checks_work() {
 
 			// 1000 is enough for nominator
 			assert_ok!(Staking::bond_extra(Origin::signed(3), 500));
-			assert_ok!(Staking::nominate(Origin::signed(4), vec![1]));
+			assert_ok!(Staking::nominate(Origin::signed(4), vec![some_validator]));
 			assert_noop!(
 				Staking::validate(Origin::signed(4), ValidatorPrefs::default()),
 				Error::<Test>::InsufficientBond,
@@ -4269,14 +4180,14 @@ fn min_bond_checks_work() {
 
 			// 1500 is enough for validator
 			assert_ok!(Staking::bond_extra(Origin::signed(3), 500));
-			assert_ok!(Staking::nominate(Origin::signed(4), vec![1]));
+			assert_ok!(Staking::nominate(Origin::signed(4), vec![some_validator]));
 			assert_ok!(Staking::validate(Origin::signed(4), ValidatorPrefs::default()));
 
 			// Can't unbond anything as validator
 			assert_noop!(Staking::unbond(Origin::signed(4), 500), Error::<Test>::InsufficientBond);
 
 			// Once they are a nominator, they can unbond 500
-			assert_ok!(Staking::nominate(Origin::signed(4), vec![1]));
+			assert_ok!(Staking::nominate(Origin::signed(4), vec![some_validator]));
 			assert_ok!(Staking::unbond(Origin::signed(4), 500));
 			assert_noop!(Staking::unbond(Origin::signed(4), 500), Error::<Test>::InsufficientBond);
 
@@ -4294,6 +4205,7 @@ fn chill_other_works() {
 		.min_nominator_bond(1_000)
 		.min_validator_bond(1_500)
 		.build_and_execute(|| {
+			let some_validator = validator_ids().first().cloned().unwrap();
 			let initial_validators = Validators::<Test>::count();
 			let initial_nominators = Nominators::<Test>::count();
 			for i in 0..15 {
@@ -4313,7 +4225,7 @@ fn chill_other_works() {
 					1000,
 					RewardDestination::Controller
 				));
-				assert_ok!(Staking::nominate(Origin::signed(b), vec![1]));
+				assert_ok!(Staking::nominate(Origin::signed(b), vec![some_validator]));
 
 				// Validator
 				assert_ok!(Staking::bond(
@@ -4464,8 +4376,9 @@ fn capped_stakers_works() {
 
 		// can create `max - validator_count` validators
 		let mut some_existing_validator = AccountId::default();
+		let mut some_existing_stash = AccountId::default();
 		for i in 0..max - validator_count {
-			let (_, controller) = testing_utils::create_stash_controller::<Test>(
+			let (stash, controller) = testing_utils::create_stash_controller::<Test>(
 				i + 10_000_000,
 				100,
 				RewardDestination::Controller,
@@ -4473,6 +4386,7 @@ fn capped_stakers_works() {
 			.unwrap();
 			assert_ok!(Staking::validate(Origin::signed(controller), ValidatorPrefs::default()));
 			some_existing_validator = controller;
+			some_existing_stash = stash;
 		}
 
 		// but no more
@@ -4497,7 +4411,7 @@ fn capped_stakers_works() {
 				RewardDestination::Controller,
 			)
 			.unwrap();
-			assert_ok!(Staking::nominate(Origin::signed(controller), vec![1]));
+			assert_ok!(Staking::nominate(Origin::signed(controller), vec![some_existing_stash]));
 			some_existing_nominator = controller;
 		}
 
@@ -4509,12 +4423,15 @@ fn capped_stakers_works() {
 		)
 		.unwrap();
 		assert_noop!(
-			Staking::nominate(Origin::signed(last_nominator), vec![1]),
+			Staking::nominate(Origin::signed(last_nominator), vec![some_existing_stash]),
 			Error::<Test>::TooManyNominators
 		);
 
 		// Re-nominate works fine
-		assert_ok!(Staking::nominate(Origin::signed(some_existing_nominator), vec![1]));
+		assert_ok!(Staking::nominate(
+			Origin::signed(some_existing_nominator),
+			vec![some_existing_stash]
+		));
 		// Re-validate works fine
 		assert_ok!(Staking::validate(
 			Origin::signed(some_existing_validator),
@@ -4531,7 +4448,7 @@ fn capped_stakers_works() {
 			ConfigOp::Noop,
 			ConfigOp::Noop,
 		));
-		assert_ok!(Staking::nominate(Origin::signed(last_nominator), vec![1]));
+		assert_ok!(Staking::nominate(Origin::signed(last_nominator), vec![some_existing_stash]));
 		assert_ok!(Staking::validate(Origin::signed(last_validator), ValidatorPrefs::default()));
 	})
 }
@@ -4580,6 +4497,9 @@ fn min_commission_works() {
 fn change_of_max_nominations() {
 	use frame_election_provider_support::ElectionDataProvider;
 	ExtBuilder::default()
+		.add_staker(1, 1, 5, StakerStatus::Validator)
+		.add_staker(2, 2, 5, StakerStatus::Validator)
+		.add_staker(3, 3, 5, StakerStatus::Validator)
 		.add_staker(60, 61, 10, StakerStatus::Nominator(vec![1]))
 		.add_staker(70, 71, 10, StakerStatus::Nominator(vec![1, 2, 3]))
 		.balance_factor(10)
@@ -4594,7 +4514,7 @@ fn change_of_max_nominations() {
 				vec![(70, 3), (101, 2), (60, 1)]
 			);
 			// 3 validators and 3 nominators
-			assert_eq!(Staking::voters(None).unwrap().len(), 3 + 3);
+			assert_eq!(Staking::voters(None).unwrap().len(), 3 + 3 + 3);
 
 			// abrupt change from 16 to 4, everyone should be fine.
 			MaxNominations::set(4);
@@ -4605,7 +4525,7 @@ fn change_of_max_nominations() {
 					.collect::<Vec<_>>(),
 				vec![(70, 3), (101, 2), (60, 1)]
 			);
-			assert_eq!(Staking::voters(None).unwrap().len(), 3 + 3);
+			assert_eq!(Staking::voters(None).unwrap().len(), 3 + 3 + 3);
 
 			// abrupt change from 4 to 3, everyone should be fine.
 			MaxNominations::set(3);
@@ -4616,7 +4536,7 @@ fn change_of_max_nominations() {
 					.collect::<Vec<_>>(),
 				vec![(70, 3), (101, 2), (60, 1)]
 			);
-			assert_eq!(Staking::voters(None).unwrap().len(), 3 + 3);
+			assert_eq!(Staking::voters(None).unwrap().len(), 3 + 3 + 3);
 
 			// abrupt change from 3 to 2, this should cause some nominators to be non-decodable, and
 			// thus non-existent unless if they update.
@@ -4633,7 +4553,7 @@ fn change_of_max_nominations() {
 			// but its value cannot be decoded and default is returned.
 			assert!(Nominators::<Test>::get(70).is_none());
 
-			assert_eq!(Staking::voters(None).unwrap().len(), 3 + 2);
+			assert_eq!(Staking::voters(None).unwrap().len(), 3 + 3 + 2);
 
 			// abrupt change from 2 to 1, this should cause some nominators to be non-decodable, and
 			// thus non-existent unless if they update.
@@ -4649,7 +4569,7 @@ fn change_of_max_nominations() {
 			assert!(Nominators::<Test>::contains_key(60));
 			assert!(Nominators::<Test>::get(70).is_none());
 			assert!(Nominators::<Test>::get(60).is_some());
-			assert_eq!(Staking::voters(None).unwrap().len(), 3 + 1);
+			assert_eq!(Staking::voters(None).unwrap().len(), 3 + 3 + 1);
 
 			// now one of them can revive themselves by re-nominating to a proper value.
 			assert_ok!(Staking::nominate(Origin::signed(71), vec![1]));
@@ -4669,109 +4589,358 @@ fn change_of_max_nominations() {
 		})
 }
 
-#[test]
-fn un_decodable_nominator_revive_via_nominate_correct_approval_update() {
-	ExtBuilder::default()
-		.add_staker(60, 61, 10, StakerStatus::Nominator(vec![1]))
-		.add_staker(70, 71, 10, StakerStatus::Nominator(vec![1, 2, 3]))
-		.balance_factor(10)
-		.build_and_execute(|| {
-			// initial approval stakes.
-			assert_eq!(<Test as Config>::TargetList::get_score(&1).unwrap(), 20);
-			assert_eq!(<Test as Config>::TargetList::get_score(&2).unwrap(), 10);
-			assert_eq!(<Test as Config>::TargetList::get_score(&3).unwrap(), 10);
+mod target_list {
+	use frame_support::storage::with_transaction;
 
-			// 70 is now gone
-			MaxNominations::set(2);
+	use super::*;
 
-			// but approval stakes are the same.
-			assert_eq!(<Test as Config>::TargetList::get_score(&1).unwrap(), 20);
-			assert_eq!(<Test as Config>::TargetList::get_score(&2).unwrap(), 10);
-			assert_eq!(<Test as Config>::TargetList::get_score(&3).unwrap(), 10);
+	#[test]
+	fn duplicate_nomination_prevented() {
+		ExtBuilder::default().nominate(true).validator_count(1).build_and_execute(|| {
+			// resubmit and it is back
+			assert_noop!(
+				Staking::nominate(Origin::signed(100), vec![11, 11, 21]),
+				Error::<Test>::DuplicateTarget
+			);
 
-			// now they revive themselves via a fresh new nominate call.
-			assert_ok!(Staking::nominate(Origin::signed(71), vec![2]));
+			assert_noop!(
+				Staking::nominate(Origin::signed(100), vec![11, 21, 11,]),
+				Error::<Test>::DuplicateTarget
+			);
 
-			// approvals must be correctly updated
-			assert_eq!(<Test as Config>::TargetList::get_score(&1).unwrap(), 10);
-			assert_eq!(<Test as Config>::TargetList::get_score(&2).unwrap(), 10);
-			assert_eq!(
-				<Test as Config>::TargetList::get_score(&3),
-				Err(pallet_bags_list::Error::NonExistent)
+			assert_noop!(
+				Staking::nominate(Origin::signed(100), vec![21, 11, 31, 11]),
+				Error::<Test>::DuplicateTarget
+			);
+			assert_ok!(Staking::nominate(Origin::signed(100), vec![21, 11]));
+		})
+	}
+
+	#[test]
+	fn invalid_nomination_prevented() {
+		ExtBuilder::default().build_and_execute(|| {
+			assert_eq!(Nominators::<Test>::get(101).unwrap().targets, vec![11, 21]);
+			assert_eq_uvec!(validator_ids(), vec![11, 21, 31]);
+
+			// can re-nominate correct ones.
+			assert_ok!(Staking::nominate(Origin::signed(100), vec![11]));
+			assert_ok!(Staking::nominate(Origin::signed(100), vec![21]));
+			assert_ok!(Staking::nominate(Origin::signed(100), vec![11, 21]));
+
+			// but not bad ones.
+			assert_noop!(
+				Staking::nominate(Origin::signed(100), vec![11, 21, 1]),
+				Error::<Test>::BadTarget
+			);
+			assert_noop!(Staking::nominate(Origin::signed(100), vec![2]), Error::<Test>::BadTarget);
+		});
+	}
+
+	#[test]
+	fn basic_setup_works() {
+		ExtBuilder::default().build_and_execute(|| {
+			assert_eq_uvec!(
+				<Test as Config>::TargetList::iter()
+					.map(|t| (t, <Test as Config>::TargetList::get_score(&t).unwrap()))
+					.collect::<Vec<_>>(),
+				vec![(11, 1500), (21, 1500), (31, 500)]
 			);
 		});
-}
+	}
 
-#[test]
-fn un_decodable_nominator_chill_correct_approval_update() {
-	ExtBuilder::default()
-		.add_staker(60, 61, 10, StakerStatus::Nominator(vec![1]))
-		.add_staker(70, 71, 10, StakerStatus::Nominator(vec![1, 2, 3]))
-		.balance_factor(10)
-		.build_and_execute(|| {
-			// initial approval stakes.
-			assert_eq!(<Test as Config>::TargetList::get_score(&1).unwrap(), 20);
-			assert_eq!(<Test as Config>::TargetList::get_score(&2).unwrap(), 10);
-			assert_eq!(<Test as Config>::TargetList::get_score(&3).unwrap(), 10);
-
-			// 70 is now gone
-			MaxNominations::set(2);
-
-			// but approval stakes are the same.
-			assert_eq!(<Test as Config>::TargetList::get_score(&1).unwrap(), 20);
-			assert_eq!(<Test as Config>::TargetList::get_score(&2).unwrap(), 10);
-			assert_eq!(<Test as Config>::TargetList::get_score(&3).unwrap(), 10);
-
-			// now they get chilled
-			assert_ok!(Staking::chill_other(Origin::signed(1), 71));
-
-			// approvals must be correctly updated.
-			assert_eq!(<Test as Config>::TargetList::get_score(&1).unwrap(), 10);
-			assert_eq!(
-				<Test as Config>::TargetList::get_score(&2).unwrap_err(),
-				pallet_bags_list::Error::NonExistent
+	#[test]
+	fn nominator_actions() {
+		ExtBuilder::default().build_and_execute(|| {
+			// given
+			assert_eq_uvec!(
+				<Test as Config>::TargetList::iter()
+					.map(|t| (t, <Test as Config>::TargetList::get_score(&t).unwrap()))
+					.collect::<Vec<_>>(),
+				vec![(11, 1500), (21, 1500), (31, 500)]
 			);
-			assert_eq!(
-				<Test as Config>::TargetList::get_score(&3).unwrap_err(),
-				pallet_bags_list::Error::NonExistent
+			assert_eq_uvec!(nominator_ids(), vec![101]);
+			assert_eq_uvec!(nominator_targets(101), vec![21, 11]);
+
+			// chilling should decrease the target list items.
+			with_transaction(|| {
+				assert_ok!(Staking::chill(Origin::signed(100)));
+				assert_eq_uvec!(
+					<Test as Config>::TargetList::iter()
+						.map(|t| (t, <Test as Config>::TargetList::get_score(&t).unwrap()))
+						.collect::<Vec<_>>(),
+					vec![(11, 1000), (21, 1000), (31, 500)]
+				);
+
+				sp_runtime::TransactionOutcome::Rollback(())
+			});
+
+			// validating should be same is chilling.
+			with_transaction(|| {
+				assert_ok!(Staking::validate(Origin::signed(100), Default::default()));
+				assert_eq_uvec!(
+					<Test as Config>::TargetList::iter()
+						.map(|t| (t, <Test as Config>::TargetList::get_score(&t).unwrap()))
+						.collect::<Vec<_>>(),
+					vec![(11, 1000), (21, 1000), (31, 500), (101, 500)]
+				);
+
+				sp_runtime::TransactionOutcome::Rollback(())
+			});
+
+			// re-nominating to different targets should increase and decrease.
+			with_transaction(|| {
+				assert_ok!(Staking::nominate(Origin::signed(100), vec![21, 31]));
+				assert_eq_uvec!(
+					<Test as Config>::TargetList::iter()
+						.map(|t| (t, <Test as Config>::TargetList::get_score(&t).unwrap()))
+						.collect::<Vec<_>>(),
+					vec![(11, 1000), (21, 1500), (31, 1000)]
+				);
+
+				sp_runtime::TransactionOutcome::Rollback(())
+			});
+
+			// bonding more should increase.
+			with_transaction(|| {
+				assert_ok!(Staking::bond_extra(Origin::signed(101), 100));
+				assert_eq_uvec!(
+					<Test as Config>::TargetList::iter()
+						.map(|t| (t, <Test as Config>::TargetList::get_score(&t).unwrap()))
+						.collect::<Vec<_>>(),
+					vec![(11, 1600), (21, 1600), (31, 500)]
+				);
+
+				sp_runtime::TransactionOutcome::Rollback(())
+			});
+
+			// unbonding should decrease.
+			with_transaction(|| {
+				assert_ok!(Staking::unbond(Origin::signed(100), 100));
+				assert_eq_uvec!(
+					<Test as Config>::TargetList::iter()
+						.map(|t| (t, <Test as Config>::TargetList::get_score(&t).unwrap()))
+						.collect::<Vec<_>>(),
+					vec![(11, 1400), (21, 1400), (31, 500)]
+				);
+
+				// .. and rebonding should increase.
+				assert_ok!(Staking::rebond(Origin::signed(100), 100));
+				assert_eq_uvec!(
+					<Test as Config>::TargetList::iter()
+						.map(|t| (t, <Test as Config>::TargetList::get_score(&t).unwrap()))
+						.collect::<Vec<_>>(),
+					vec![(11, 1500), (21, 1500), (31, 500)]
+				);
+				sp_runtime::TransactionOutcome::Rollback(())
+			});
+		});
+	}
+
+	#[test]
+	fn validator_actions() {
+		ExtBuilder::default().build_and_execute(|| {
+			// given
+			assert_eq_uvec!(
+				<Test as Config>::TargetList::iter()
+					.map(|t| (t, <Test as Config>::TargetList::get_score(&t).unwrap()))
+					.collect::<Vec<_>>(),
+				vec![(11, 1500), (21, 1500), (31, 500)]
 			);
+			assert_eq_uvec!(validator_ids(), vec![11, 21, 31]);
+
+			// chilling should remove the target list items.
+			with_transaction(|| {
+				assert_ok!(Staking::chill(Origin::signed(20)));
+				assert_eq_uvec!(
+					<Test as Config>::TargetList::iter()
+						.map(|t| (t, <Test as Config>::TargetList::get_score(&t).unwrap()))
+						.collect::<Vec<_>>(),
+					vec![(11, 1500), (31, 500)]
+				);
+
+				sp_runtime::TransactionOutcome::Rollback(())
+			});
+
+			// re-validating takes us back to the initial state.
+			with_transaction(|| {
+				assert_ok!(Staking::validate(Origin::signed(20), Default::default()));
+				assert_eq_uvec!(
+					<Test as Config>::TargetList::iter()
+						.map(|t| (t, <Test as Config>::TargetList::get_score(&t).unwrap()))
+						.collect::<Vec<_>>(),
+					vec![(11, 1500), (21, 1500), (31, 500)]
+				);
+
+				sp_runtime::TransactionOutcome::Rollback(())
+			});
+
+			// nominating is same as chilling
+			with_transaction(|| {
+				assert_ok!(Staking::nominate(Origin::signed(20), vec![31]));
+				assert_eq_uvec!(
+					<Test as Config>::TargetList::iter()
+						.map(|t| (t, <Test as Config>::TargetList::get_score(&t).unwrap()))
+						.collect::<Vec<_>>(),
+					vec![(11, 1000), (31, 500)]
+				);
+
+				sp_runtime::TransactionOutcome::Rollback(())
+			});
+
+			// bonding more should increase.
+			with_transaction(|| {
+				assert_ok!(Staking::bond_extra(Origin::signed(20), 100));
+				assert_eq_uvec!(
+					<Test as Config>::TargetList::iter()
+						.map(|t| (t, <Test as Config>::TargetList::get_score(&t).unwrap()))
+						.collect::<Vec<_>>(),
+					vec![(11, 1500), (21, 1600), (31, 500)]
+				);
+
+				sp_runtime::TransactionOutcome::Rollback(())
+			});
+
+			// unbonding should decrease.
+			with_transaction(|| {
+				assert_ok!(Staking::unbond(Origin::signed(20), 100));
+				assert_eq_uvec!(
+					<Test as Config>::TargetList::iter()
+						.map(|t| (t, <Test as Config>::TargetList::get_score(&t).unwrap()))
+						.collect::<Vec<_>>(),
+					vec![(11, 1500), (21, 1400), (31, 500)]
+				);
+
+				// .. and rebonding should increase.
+				assert_ok!(Staking::rebond(Origin::signed(20), 100));
+				assert_eq_uvec!(
+					<Test as Config>::TargetList::iter()
+						.map(|t| (t, <Test as Config>::TargetList::get_score(&t).unwrap()))
+						.collect::<Vec<_>>(),
+					vec![(11, 1500), (21, 1500), (31, 500)]
+				);
+				sp_runtime::TransactionOutcome::Rollback(())
+			});
 		});
+	}
+
+	#[test]
+	fn chilled_validator_afterwards_backers_chill() {
+		todo!("once a validator chills, then if their nominator re-nominates, we should compute the outgoing correctly etc.")
+	}
+
+	#[test]
+	fn chilled_actions() {
+		todo!();
+	}
+
+	#[test]
+	fn un_decodable_nominator_revive_via_nominate_correct_approval_update() {
+		ExtBuilder::default()
+			.add_staker(1, 1, 5, StakerStatus::Validator)
+			.add_staker(2, 2, 5, StakerStatus::Validator)
+			.add_staker(3, 3, 5, StakerStatus::Validator)
+			.add_staker(60, 61, 10, StakerStatus::Nominator(vec![1]))
+			.add_staker(70, 71, 10, StakerStatus::Nominator(vec![1, 2, 3]))
+			.balance_factor(10)
+			.build_and_execute(|| {
+				// initial approval stakes.
+				assert_eq!(<Test as Config>::TargetList::get_score(&1).unwrap(), 25);
+				assert_eq!(<Test as Config>::TargetList::get_score(&2).unwrap(), 15);
+				assert_eq!(<Test as Config>::TargetList::get_score(&3).unwrap(), 15);
+
+				// 70 is now gone
+				MaxNominations::set(2);
+
+				// but approval stakes are the same.
+				assert_eq!(<Test as Config>::TargetList::get_score(&1).unwrap(), 25);
+				assert_eq!(<Test as Config>::TargetList::get_score(&2).unwrap(), 15);
+				assert_eq!(<Test as Config>::TargetList::get_score(&3).unwrap(), 15);
+
+				// now they revive themselves via a fresh new nominate call.
+				assert_ok!(Staking::nominate(Origin::signed(71), vec![2]));
+
+				// approvals must be correctly updated
+				assert_eq!(<Test as Config>::TargetList::get_score(&1).unwrap(), 15);
+				assert_eq!(<Test as Config>::TargetList::get_score(&2).unwrap(), 15);
+				assert_eq!(<Test as Config>::TargetList::get_score(&3).unwrap(), 5);
+				assert_eq!(
+					<Test as Config>::TargetList::get_score(&4).unwrap_err(),
+					pallet_bags_list::Error::NonExistent
+				);
+			});
+	}
+
+	#[test]
+	fn un_decodable_nominator_chill_correct_approval_update() {
+		ExtBuilder::default()
+			.add_staker(1, 1, 5, StakerStatus::Validator)
+			.add_staker(2, 2, 5, StakerStatus::Validator)
+			.add_staker(3, 3, 5, StakerStatus::Validator)
+			.add_staker(60, 61, 10, StakerStatus::Nominator(vec![1]))
+			.add_staker(70, 71, 10, StakerStatus::Nominator(vec![1, 2, 3]))
+			.balance_factor(10)
+			.build_and_execute(|| {
+				// initial approval stakes.
+				assert_eq!(<Test as Config>::TargetList::get_score(&1).unwrap(), 25);
+				assert_eq!(<Test as Config>::TargetList::get_score(&2).unwrap(), 15);
+				assert_eq!(<Test as Config>::TargetList::get_score(&3).unwrap(), 15);
+
+				// 70 is now gone
+				MaxNominations::set(2);
+
+				// but approval stakes are the same.
+				assert_eq!(<Test as Config>::TargetList::get_score(&1).unwrap(), 25);
+				assert_eq!(<Test as Config>::TargetList::get_score(&2).unwrap(), 15);
+				assert_eq!(<Test as Config>::TargetList::get_score(&3).unwrap(), 15);
+
+				// now they get chilled
+				assert_ok!(Staking::chill_other(Origin::signed(1), 71));
+
+				// approvals must be correctly updated.
+				assert_eq!(<Test as Config>::TargetList::get_score(&1).unwrap(), 15);
+				assert_eq!(<Test as Config>::TargetList::get_score(&2).unwrap(), 5);
+				assert_eq!(<Test as Config>::TargetList::get_score(&3).unwrap(), 5);
+			});
+	}
+
+	#[test]
+	fn un_decodable_nominator_bond_extra_correct_approval_update() {
+		ExtBuilder::default()
+			.add_staker(1, 1, 5, StakerStatus::Validator)
+			.add_staker(2, 2, 5, StakerStatus::Validator)
+			.add_staker(60, 61, 10, StakerStatus::Nominator(vec![1]))
+			.add_staker(3, 3, 5, StakerStatus::Validator)
+			.add_staker(70, 71, 10, StakerStatus::Nominator(vec![1, 2, 3]))
+			.balance_factor(10)
+			.build_and_execute(|| {
+				// initial approval stakes.
+				assert_eq!(<Test as Config>::TargetList::get_score(&1).unwrap(), 25);
+				assert_eq!(<Test as Config>::TargetList::get_score(&2).unwrap(), 15);
+				assert_eq!(<Test as Config>::TargetList::get_score(&3).unwrap(), 15);
+
+				// 70 is now gone
+				MaxNominations::set(2);
+
+				// but approval stakes are the same.
+				assert_eq!(<Test as Config>::TargetList::get_score(&1).unwrap(), 25);
+				assert_eq!(<Test as Config>::TargetList::get_score(&2).unwrap(), 15);
+				assert_eq!(<Test as Config>::TargetList::get_score(&3).unwrap(), 15);
+
+				// now they get chilled
+				Balances::make_free_balance_be(&70, 1000);
+				assert_eq!(Staking::weight_of(&70), 10);
+				assert_ok!(Staking::bond_extra(Origin::signed(70), 10));
+				assert_eq!(Staking::weight_of(&70), 20);
+
+				// approvals must be correctly updated.
+				assert_eq!(<Test as Config>::TargetList::get_score(&1).unwrap(), 25 + 10);
+				assert_eq!(<Test as Config>::TargetList::get_score(&2).unwrap(), 15 + 10);
+				assert_eq!(<Test as Config>::TargetList::get_score(&3).unwrap(), 15 + 10);
+			});
+	}
 }
 
-#[test]
-fn un_decodable_nominator_bond_extra_correct_approval_update() {
-	ExtBuilder::default()
-		.add_staker(60, 61, 10, StakerStatus::Nominator(vec![1]))
-		.add_staker(70, 71, 10, StakerStatus::Nominator(vec![1, 2, 3]))
-		.balance_factor(10)
-		.build_and_execute(|| {
-			// initial approval stakes.
-			assert_eq!(<Test as Config>::TargetList::get_score(&1).unwrap(), 20);
-			assert_eq!(<Test as Config>::TargetList::get_score(&2).unwrap(), 10);
-			assert_eq!(<Test as Config>::TargetList::get_score(&3).unwrap(), 10);
-
-			// 70 is now gone
-			MaxNominations::set(2);
-
-			// but approval stakes are the same.
-			assert_eq!(<Test as Config>::TargetList::get_score(&1).unwrap(), 20);
-			assert_eq!(<Test as Config>::TargetList::get_score(&2).unwrap(), 10);
-			assert_eq!(<Test as Config>::TargetList::get_score(&3).unwrap(), 10);
-
-			// now they get chilled
-			Balances::make_free_balance_be(&70, 1000);
-			assert_eq!(Staking::weight_of(&70), 10);
-			assert_ok!(Staking::bond_extra(Origin::signed(70), 10));
-			assert_eq!(Staking::weight_of(&70), 20);
-
-			// approvals must be correctly updated.
-			assert_eq!(<Test as Config>::TargetList::get_score(&1).unwrap(), 20 + 10);
-			assert_eq!(<Test as Config>::TargetList::get_score(&2).unwrap(), 10 + 10);
-			assert_eq!(<Test as Config>::TargetList::get_score(&3).unwrap(), 10 + 10);
-		});
-}
-
-mod sorted_list_provider {
+mod voter_list {
 	use super::*;
 	use frame_election_provider_support::SortedListProvider;
 
@@ -4789,7 +4958,7 @@ mod sorted_list_provider {
 			);
 
 			// when account 101 renominates
-			assert_ok!(Staking::nominate(Origin::signed(100), vec![41]));
+			assert_ok!(Staking::nominate(Origin::signed(100), vec![11, 21]));
 
 			// then counts don't change
 			assert_eq!(<Test as Config>::VoterList::count(), pre_insert_voter_count);

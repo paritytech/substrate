@@ -878,16 +878,7 @@ pub mod pallet {
 					Error::<T>::InsufficientBond
 				);
 
-				// NOTE: ledger must be updated prior to calling `Self::weight_of`.
 				Self::update_ledger(&controller, &ledger);
-
-				// update this staker in the sorted list, if they exist in it.
-				if T::VoterList::contains(&stash) {
-					let _ =
-						T::VoterList::on_update(&stash, Self::weight_of(&ledger.stash)).defensive();
-					debug_assert_eq!(T::VoterList::sanity_check(), Ok(()));
-				}
-
 				Self::deposit_event(Event::<T>::Bonded(stash.clone(), extra));
 			}
 			Ok(())
@@ -962,16 +953,8 @@ pub mod pallet {
 						.try_push(UnlockChunk { value, era })
 						.map_err(|_| Error::<T>::NoMoreChunks)?;
 				};
-				// NOTE: ledger must be updated prior to calling `Self::weight_of`.
+
 				Self::update_ledger(&controller, &ledger);
-
-				// TODO: we do some of the update in update ledger and some here... not good.
-				// update this staker in the sorted list, if they exist in it.
-				if T::VoterList::contains(&ledger.stash) {
-					let _ = T::VoterList::on_update(&ledger.stash, Self::weight_of(&ledger.stash))
-						.defensive();
-				}
-
 				Self::deposit_event(Event::<T>::Unbonded(ledger.stash, value));
 			}
 			Ok(())
@@ -1066,6 +1049,10 @@ pub mod pallet {
 
 			Self::do_remove_nominator(stash);
 			Self::do_add_validator(stash, prefs);
+
+			#[cfg(debug_assertions)]
+			Self::sanity_check_approval_stakes();
+
 			Ok(())
 		}
 
@@ -1113,7 +1100,9 @@ pub mod pallet {
 				.map(|t| T::Lookup::lookup(t).map_err(DispatchError::from))
 				.map(|n| {
 					n.and_then(|n| {
-						if old.contains(&n) || !Validators::<T>::get(&n).blocked {
+						if Validators::<T>::contains_key(&n) &&
+							(old.contains(&n) || !Validators::<T>::get(&n).blocked)
+						{
 							Ok(n)
 						} else {
 							Err(Error::<T>::BadTarget.into())
@@ -1133,27 +1122,6 @@ pub mod pallet {
 				Error::<T>::DuplicateTarget
 			);
 
-			let incoming = targets.iter().cloned().filter(|x| !old.contains(x)).collect::<Vec<_>>();
-			let outgoing = old.iter().cloned().filter(|x| !targets.contains(x)).collect::<Vec<_>>();
-
-			// TODO: these are all rather inefficient now based on how vote_weight is
-			// implemented, but I don't care because: https://github.com/paritytech/substrate/issues/10990
-			let weight = Self::weight_of(stash);
-			incoming.into_iter().for_each(|i| {
-				if T::TargetList::contains(&i) {
-					let _ = T::TargetList::on_increase(&i, weight).defensive();
-				} else {
-					let _ = T::TargetList::on_insert(i, weight).defensive();
-				}
-			});
-			outgoing.into_iter().for_each(|o| {
-				if T::TargetList::contains(&o) {
-					let _ = T::TargetList::on_decrease(&o, weight);
-				} else {
-					frame_support::defensive!("this validator must have, at some point in the past, been inserted into `TargetList`");
-				}
-			});
-
 			let nominations = Nominations {
 				targets,
 				// Initial nominations are considered submitted at era 0. See `Nominations` doc.
@@ -1162,7 +1130,7 @@ pub mod pallet {
 			};
 
 			Self::do_remove_validator(stash);
-			Self::do_add_nominator(stash, nominations);
+			Self::do_add_nominator(stash, old, nominations);
 
 			// NOTE: we need to do this after all validators and nominators have been updated in the
 			// previous two function calls.
@@ -1488,7 +1456,8 @@ pub mod pallet {
 			Self::update_ledger(&controller, &ledger);
 
 			if T::VoterList::contains(&ledger.stash) {
-				T::VoterList::on_update(&ledger.stash, Self::weight_of(&ledger.stash)).defensive();
+				let _ = T::VoterList::on_update(&ledger.stash, Self::weight_of(&ledger.stash))
+					.defensive();
 			}
 
 			let removed_chunks = 1u32 // for the case where the last iterated chunk is not removed

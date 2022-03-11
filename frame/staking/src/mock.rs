@@ -820,13 +820,6 @@ pub(crate) fn reward_all_elected() {
 	<Pallet<Test>>::reward_by_ids(rewards)
 }
 
-pub(crate) fn validator_controllers() -> Vec<AccountId> {
-	Session::validators()
-		.into_iter()
-		.map(|s| Staking::bonded(&s).expect("no controller for validator"))
-		.collect()
-}
-
 pub(crate) fn on_offence_in_era(
 	offenders: &[OffenceDetails<
 		AccountId,
@@ -924,4 +917,23 @@ pub(crate) fn staking_events() -> Vec<crate::Event<Test>> {
 
 pub(crate) fn balances(who: &AccountId) -> (Balance, Balance) {
 	(Balances::free_balance(who), Balances::reserved_balance(who))
+}
+
+pub(crate) fn validator_ids() -> Vec<AccountId> {
+	Validators::<Test>::iter().map(|(v, _)| v).collect::<Vec<_>>()
+}
+
+pub(crate) fn nominator_ids() -> Vec<AccountId> {
+	Nominators::<Test>::iter().map(|(n, _)| n).collect::<Vec<_>>()
+}
+
+pub(crate) fn nominator_targets(who: AccountId) -> Vec<AccountId> {
+	Nominators::<Test>::get(&who).map(|n| n.targets).unwrap().into_inner()
+}
+
+pub(crate) fn validator_controllers() -> Vec<AccountId> {
+	Session::validators()
+		.into_iter()
+		.map(|s| Staking::bonded(&s).expect("no controller for validator"))
+		.collect()
 }

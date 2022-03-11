@@ -212,22 +212,18 @@ impl<T: Config> Pallet<T> {
 		<Ledger<T>>::insert(controller, ledger);
 
 		let total_issuance = T::Currency::total_issuance();
-		let apply_change = |who: &T::AccountId| {
+		let to_vote = |x| T::CurrencyToVote::to_vote(x, total_issuance);
+
+		let update_target_list = |who: &T::AccountId| {
 			use sp_std::cmp::Ordering;
 			match ledger.active.cmp(&prev_active) {
 				Ordering::Greater => {
-					let _ = T::TargetList::on_increase(
-						who,
-						T::CurrencyToVote::to_vote(ledger.active - prev_active, total_issuance),
-					)
-					.defensive();
+					let _ = T::TargetList::on_increase(who, to_vote(ledger.active - prev_active))
+						.defensive();
 				},
 				Ordering::Less => {
-					let _ = T::TargetList::on_decrease(
-						who,
-						T::CurrencyToVote::to_vote(prev_active - ledger.active, total_issuance),
-					)
-					.defensive();
+					let _ = T::TargetList::on_decrease(who, to_vote(prev_active - ledger.active))
+						.defensive();
 				},
 				Ordering::Equal => (),
 			};
@@ -237,16 +233,26 @@ impl<T: Config> Pallet<T> {
 		if let Some(targets) =
 			NominatorsHelper::<T>::get_any(&ledger.stash).map(|nomination| nomination.targets)
 		{
+			// update the target list.
 			for target in targets {
-				apply_change(&target);
+				update_target_list(&target);
 			}
+
+			// update the voter list.
+			let _ = T::VoterList::on_update(&ledger.stash, to_vote(ledger.active))
+				.defensive_proof("any nominator should an entry in the voter list.");
+
 			#[cfg(debug_assertions)]
 			Self::sanity_check_list_providers();
 		}
 
 		// if this ledger belonged to a validator..
 		if Validators::<T>::contains_key(&ledger.stash) {
-			apply_change(&ledger.stash);
+			update_target_list(&ledger.stash);
+
+			let _ = T::VoterList::on_update(&ledger.stash, to_vote(ledger.active))
+				.defensive_proof("any validator should an entry in the voter list.");
+
 			#[cfg(debug_assertions)]
 			Self::sanity_check_list_providers();
 		}
@@ -259,6 +265,9 @@ impl<T: Config> Pallet<T> {
 		if chilled_as_validator || chilled_as_nominator {
 			Self::deposit_event(Event::<T>::Chilled(stash.clone()));
 		}
+
+		#[cfg(debug_assertions)]
+		Self::sanity_check_approval_stakes();
 	}
 
 	/// Actually make a payment to a staker. This uses the currency's reward function
@@ -610,6 +619,9 @@ impl<T: Config> Pallet<T> {
 		Self::do_remove_validator(stash);
 		Self::do_remove_nominator(stash);
 
+		#[cfg(debug_assertions)]
+		Self::sanity_check_approval_stakes();
+
 		<Bonded<T>>::remove(stash);
 		<Ledger<T>>::remove(&controller);
 		<Payee<T>>::remove(stash);
@@ -808,13 +820,42 @@ impl<T: Config> Pallet<T> {
 	/// NOTE: you must ALWAYS use this function to add nominator or update their targets. Any access
 	/// to `Nominators` or `VoterList` outside of this function is almost certainly
 	/// wrong.
-	pub fn do_add_nominator(who: &T::AccountId, nominations: Nominations<T>) {
-		if !NominatorsHelper::<T>::contains_any(who) {
+	pub fn do_add_nominator(
+		stash: &T::AccountId,
+		old: Vec<T::AccountId>,
+		nominations: Nominations<T>,
+	) {
+		if !NominatorsHelper::<T>::contains_any(stash) {
 			// maybe update sorted list.
-			let _ = T::VoterList::on_insert(who.clone(), Self::weight_of(who))
-				.defensive_unwrap_or_default();
+			let _ = T::VoterList::on_insert(stash.clone(), Self::weight_of(stash)).defensive();
 		}
-		Nominators::<T>::insert(who, nominations);
+
+		let incoming = nominations.targets.iter().filter(|x| !old.contains(x)).collect::<Vec<_>>();
+		let outgoing =
+			old.into_iter().filter(|x| !nominations.targets.contains(x)).collect::<Vec<_>>();
+
+		// TODO: edge case: some wanker nominating themselves? should only be possible if they are a
+		// validator and now they nominate themselves.
+		// TODO: these are all rather inefficient now based on how vote_weight is
+		// implemented, but I don't care because: https://github.com/paritytech/substrate/issues/10990
+		let weight = Self::weight_of(stash);
+		incoming.into_iter().for_each(|i| {
+			if T::TargetList::contains(i) {
+				let _ = T::TargetList::on_increase(i, weight).defensive();
+			} else {
+				defensive!("no incoming target can not have an entry in the target-list");
+			}
+		});
+		outgoing.into_iter().for_each(|o| {
+			if T::TargetList::contains(&o) {
+				let _ = T::TargetList::on_decrease(&o, weight);
+			} else {
+				// probably the validator has already been chilled and their target list entry
+				// removed.
+			}
+		});
+
+		Nominators::<T>::insert(stash, nominations);
 
 		#[cfg(debug_assertions)]
 		Self::sanity_check_list_providers();
@@ -861,8 +902,7 @@ impl<T: Config> Pallet<T> {
 	pub fn do_add_validator(who: &T::AccountId, prefs: ValidatorPrefs) {
 		if !Validators::<T>::contains_key(who) {
 			// maybe update sorted list.
-			let _ = T::VoterList::on_insert(who.clone(), Self::weight_of(who))
-				.defensive_unwrap_or_default();
+			let _ = T::VoterList::on_insert(who.clone(), Self::weight_of(who)).defensive();
 
 			if T::TargetList::contains(who) {
 				let _ = T::TargetList::on_increase(who, Self::weight_of(who)).defensive();
@@ -890,7 +930,8 @@ impl<T: Config> Pallet<T> {
 		let outcome = if Validators::<T>::contains_key(who) {
 			Validators::<T>::remove(who);
 			let _ = T::VoterList::on_remove(who).defensive();
-			let _ = T::TargetList::on_decrease(who, Self::weight_of(who)).defensive();
+			// NOTE: simply remove, not decrease.
+			let _ = T::TargetList::on_remove(who).defensive();
 			true
 		} else {
 			false
@@ -1024,7 +1065,11 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 			},
 		);
 
-		Self::do_add_nominator(&voter, Nominations { targets, submitted_in: 0, suppressed: false });
+		Self::do_add_nominator(
+			&voter,
+			Default::default(),
+			Nominations { targets, submitted_in: 0, suppressed: false },
+		);
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
@@ -1101,6 +1146,7 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 			);
 			Self::do_add_nominator(
 				&v,
+				Default::default(),
 				Nominations { targets: t.try_into().unwrap(), submitted_in: 0, suppressed: false },
 			);
 		});

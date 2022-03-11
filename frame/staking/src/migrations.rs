@@ -74,18 +74,19 @@ impl<T: Config> InjectValidatorsApprovalStakeIntoTargetList<T> {
 	pub(crate) fn build_approval_stakes() -> BTreeMap<T::AccountId, VoteWeight> {
 		let mut approval_stakes = BTreeMap::<T::AccountId, VoteWeight>::new();
 
-		NominatorsHelper::<T>::iter_all().for_each(|(who, nomination)| {
-			let stake = Pallet::<T>::weight_of(&who);
-			for target in nomination.targets {
-				let current = approval_stakes.entry(target).or_default();
-				*current = current.saturating_add(stake);
-			}
-		});
-
 		Validators::<T>::iter().for_each(|(v, _)| {
 			let stake = Pallet::<T>::weight_of(&v);
 			let current = approval_stakes.entry(v).or_default();
 			*current = current.saturating_add(stake);
+		});
+
+		NominatorsHelper::<T>::iter_all().for_each(|(who, nomination)| {
+			let stake = Pallet::<T>::weight_of(&who);
+			for target in nomination.targets {
+				if let Some(current) = approval_stakes.get_mut(&target) {
+					*current = current.saturating_add(stake);
+				}
+			}
 		});
 
 		approval_stakes

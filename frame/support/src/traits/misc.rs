@@ -102,6 +102,10 @@ pub trait Defensive<T> {
 	/// }
 	/// ```
 	fn defensive(self) -> Self;
+
+	/// Same as [`Defensive::defensive`], but it takes a proof is input.
+	// TODO: make the macro accept this for Result as well and backport it.
+	fn defensive_proof(self, proof: &'static str) -> Self;
 }
 
 /// Subset of methods similar to [`Defensive`] that can only work for a `Result`.
@@ -180,6 +184,16 @@ impl<T> Defensive<T> for Option<T> {
 			},
 		}
 	}
+
+	fn defensive_proof(self, proof: &'static str) -> Self {
+		match self {
+			Some(inner) => Some(inner),
+			None => {
+				defensive!(proof);
+				None
+			},
+		}
+	}
 }
 
 impl<T, E: sp_std::fmt::Debug> Defensive<T> for Result<T, E> {
@@ -221,6 +235,17 @@ impl<T, E: sp_std::fmt::Debug> Defensive<T> for Result<T, E> {
 			Ok(inner) => Ok(inner),
 			Err(e) => {
 				defensive!(e);
+				Err(e)
+			},
+		}
+	}
+
+	fn defensive_proof(self, proof: &'static str) -> Self {
+		match self {
+			Ok(inner) => Ok(inner),
+			Err(e) => {
+				defensive!(e);
+				defensive!(proof);
 				Err(e)
 			},
 		}
