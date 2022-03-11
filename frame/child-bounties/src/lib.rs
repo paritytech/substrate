@@ -793,7 +793,7 @@ impl<T: Config> Pallet<T> {
 		bounty_value: &BalanceOf<T>,
 		bounty_fee: &BalanceOf<T>,
 	) -> BalanceOf<T> {
-		let fee: BalanceOf<T> = if bounty_fee.is_zero() {
+		let deposit: BalanceOf<T> = if bounty_fee.is_zero() {
 			if parent_curator == child_curator {
 				return Zero::zero()
 			}
@@ -802,7 +802,7 @@ impl<T: Config> Pallet<T> {
 			T::ChildCuratorDepositMultiplierWithFee::get() * *bounty_fee
 		};
 
-		fee
+		deposit
 	}
 
 	/// The account ID of a child-bounty account.
