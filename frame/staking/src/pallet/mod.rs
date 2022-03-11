@@ -166,7 +166,8 @@ pub mod pallet {
 		/// Something that provides a best-effort sorted list of voters aka electing nominators,
 		/// used for NPoS election.
 		///
-		/// The changes to nominators are reported to this.
+		/// The changes to nominators are reported to this. Moreover, each validator's self-vote is
+		/// also reported as one independent vote.
 		type VoterList: SortedListProvider<Self::AccountId, Score = VoteWeight>;
 
 		/// Something that provides a best-effort sorted list of targets aka electable validators,
