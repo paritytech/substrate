@@ -17,7 +17,7 @@
 //! Storage migrations for the Staking pallet.
 
 use super::*;
-use frame_election_provider_support::{SortedListProvider, VoteWeight};
+use frame_election_provider_support::SortedListProvider;
 use frame_support::traits::{Defensive, OnRuntimeUpgrade};
 use sp_std::collections::btree_map::BTreeMap;
 
@@ -71,11 +71,11 @@ impl<T: Config> OnRuntimeUpgrade for InjectValidatorsSelfStakeIntoVoterList<T> {
 pub struct InjectValidatorsApprovalStakeIntoTargetList<T>(sp_std::marker::PhantomData<T>);
 
 impl<T: Config> InjectValidatorsApprovalStakeIntoTargetList<T> {
-	pub(crate) fn build_approval_stakes() -> BTreeMap<T::AccountId, VoteWeight> {
-		let mut approval_stakes = BTreeMap::<T::AccountId, VoteWeight>::new();
+	pub(crate) fn build_approval_stakes() -> BTreeMap<T::AccountId, BalanceOf<T>> {
+		let mut approval_stakes = BTreeMap::<T::AccountId, BalanceOf<T>>::new();
 
 		NominatorsHelper::<T>::iter_all().for_each(|(who, nomination)| {
-			let stake = Pallet::<T>::weight_of(&who);
+			let stake = Pallet::<T>::slashable_balance_of(&who);
 			for target in nomination.targets {
 				let current = approval_stakes.entry(target).or_default();
 				*current = current.saturating_add(stake);
@@ -83,7 +83,7 @@ impl<T: Config> InjectValidatorsApprovalStakeIntoTargetList<T> {
 		});
 
 		Validators::<T>::iter().for_each(|(v, _)| {
-			let stake = Pallet::<T>::weight_of(&v);
+			let stake = Pallet::<T>::slashable_balance_of(&v);
 			let current = approval_stakes.entry(v).or_default();
 			*current = current.saturating_add(stake);
 		});

@@ -230,11 +230,11 @@ impl OnUnbalanced<NegativeImbalanceOf<Test>> for RewardRemainderMock {
 	}
 }
 
-const THRESHOLDS: [sp_npos_elections::VoteWeight; 9] =
-	[10, 20, 30, 40, 50, 60, 1_000, 2_000, 10_000];
-
+const THRESHOLDS: [VoteWeight; 9] = [10, 20, 30, 40, 50, 60, 1_000, 2_000, 10_000];
+const THRESHOLDS_BALANCE: [Balance; 9] = [10, 20, 30, 40, 50, 60, 1_000, 2_000, 10_000];
 parameter_types! {
-	pub static BagThresholds: &'static [sp_npos_elections::VoteWeight] = &THRESHOLDS;
+	pub static BagThresholds: &'static [VoteWeight] = &THRESHOLDS;
+	pub static BagThresholdsBalance: &'static [Balance] = &THRESHOLDS_BALANCE;
 	pub static MaxNominations: u32 = 16;
 }
 
@@ -254,8 +254,8 @@ impl pallet_bags_list::Config<TargetBagsListInstance> for Test {
 	type WeightInfo = ();
 	// Target bags-list are always kept up to date, and in fact Staking does not know them at all!
 	type ScoreProvider = pallet_bags_list::Pallet<Self, TargetBagsListInstance>;
-	type BagThresholds = BagThresholds;
-	type Score = VoteWeight;
+	type BagThresholds = BagThresholdsBalance;
+	type Score = Balance;
 }
 
 impl onchain::Config for Test {
@@ -284,13 +284,13 @@ impl SortedListProvider<AccountId> for TargetBagListCompat {
 	fn contains(id: &AccountId) -> bool {
 		TargetBagsList::contains(id)
 	}
-	fn on_insert(id: AccountId, weight: VoteWeight) -> Result<(), Self::Error> {
+	fn on_insert(id: AccountId, weight: Self::Score) -> Result<(), Self::Error> {
 		TargetBagsList::on_insert(id, weight)
 	}
-	fn on_update(id: &AccountId, weight: VoteWeight) -> Result<(), Self::Error> {
+	fn on_update(id: &AccountId, weight: Self::Score) -> Result<(), Self::Error> {
 		TargetBagsList::on_update(id, weight)
 	}
-	fn get_score(id: &AccountId) -> Result<VoteWeight, Self::Error> {
+	fn get_score(id: &AccountId) -> Result<Self::Score, Self::Error> {
 		TargetBagsList::get_score(id)
 	}
 	fn on_remove(id: &AccountId) -> Result<(), Self::Error> {
@@ -298,7 +298,7 @@ impl SortedListProvider<AccountId> for TargetBagListCompat {
 	}
 	fn unsafe_regenerate(
 		all: impl IntoIterator<Item = AccountId>,
-		weight_of: Box<dyn Fn(&AccountId) -> VoteWeight>,
+		weight_of: Box<dyn Fn(&AccountId) -> Self::Score>,
 	) -> u32 {
 		TargetBagsList::unsafe_regenerate(all, weight_of)
 	}
@@ -309,8 +309,8 @@ impl SortedListProvider<AccountId> for TargetBagListCompat {
 		TargetBagsList::sanity_check()
 	}
 	#[cfg(feature = "runtime-benchmarks")]
-	fn score_update_worst_case(_who: &AccountId, _is_increase: bool) -> VoteWeight {
-		VoteWeight::MAX
+	fn score_update_worst_case(_who: &AccountId, _is_increase: bool) -> Self::Score {
+		Balance::MAX
 	}
 }
 

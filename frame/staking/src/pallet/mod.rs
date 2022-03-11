@@ -17,7 +17,7 @@
 
 //! Staking FRAME Pallet.
 
-use frame_election_provider_support::SortedListProvider;
+use frame_election_provider_support::{SortedListProvider, VoteWeight};
 use frame_support::{
 	dispatch::Codec,
 	pallet_prelude::*,
@@ -163,16 +163,10 @@ pub mod pallet {
 		/// After the threshold is reached a new era will be forced.
 		type OffendingValidatorsThreshold: Get<Perbill>;
 
-		type VoterList: SortedListProvider<
-			Self::AccountId,
-			Score = frame_election_provider_support::VoteWeight,
-		>;
+		type VoterList: SortedListProvider<Self::AccountId, Score = VoteWeight>;
 
 		// type TargetList: SortedListProvider<Self::AccountId, Score = BalanceOf<Self>>;
-		type TargetList: SortedListProvider<
-			Self::AccountId,
-			Score = frame_election_provider_support::VoteWeight,
-		>;
+		type TargetList: SortedListProvider<Self::AccountId, Score = BalanceOf<Self>>;
 
 		/// determines how many unique eras a staker may be unbonding in.
 		#[pallet::constant]

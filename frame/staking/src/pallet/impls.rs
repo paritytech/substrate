@@ -218,12 +218,12 @@ impl<T: Config> Pallet<T> {
 			use sp_std::cmp::Ordering;
 			match ledger.active.cmp(&prev_active) {
 				Ordering::Greater => {
-					let _ = T::TargetList::on_increase(who, to_vote(ledger.active - prev_active))
-						.defensive();
+					let _ =
+						T::TargetList::on_increase(who, ledger.active - prev_active).defensive();
 				},
 				Ordering::Less => {
-					let _ = T::TargetList::on_decrease(who, to_vote(prev_active - ledger.active))
-						.defensive();
+					let _ =
+						T::TargetList::on_decrease(who, prev_active - ledger.active).defensive();
 				},
 				Ordering::Equal => (),
 			};
@@ -838,17 +838,17 @@ impl<T: Config> Pallet<T> {
 		// validator and now they nominate themselves.
 		// TODO: these are all rather inefficient now based on how vote_weight is
 		// implemented, but I don't care because: https://github.com/paritytech/substrate/issues/10990
-		let weight = Self::weight_of(stash);
+		let score = Self::slashable_balance_of(stash);
 		incoming.into_iter().for_each(|i| {
 			if T::TargetList::contains(i) {
-				let _ = T::TargetList::on_increase(i, weight).defensive();
+				let _ = T::TargetList::on_increase(i, score).defensive();
 			} else {
 				defensive!("no incoming target can not have an entry in the target-list");
 			}
 		});
 		outgoing.into_iter().for_each(|o| {
 			if T::TargetList::contains(&o) {
-				let _ = T::TargetList::on_decrease(&o, weight);
+				let _ = T::TargetList::on_decrease(&o, score);
 			} else {
 				// probably the validator has already been chilled and their target list entry
 				// removed.
@@ -875,9 +875,9 @@ impl<T: Config> Pallet<T> {
 	pub fn do_remove_nominator(who: &T::AccountId) -> bool {
 		let outcome = if let Some(targets) = NominatorsHelper::<T>::get_any(who).map(|n| n.targets)
 		{
-			let stake = Self::weight_of(&who);
+			let score = Self::slashable_balance_of(&who);
 			for target in targets {
-				let _ = T::TargetList::on_decrease(&target, stake).defensive();
+				let _ = T::TargetList::on_decrease(&target, score).defensive();
 			}
 			let _ = T::VoterList::on_remove(who).defensive();
 			Nominators::<T>::remove(who);
@@ -905,11 +905,14 @@ impl<T: Config> Pallet<T> {
 			let _ = T::VoterList::on_insert(who.clone(), Self::weight_of(who)).defensive();
 
 			if T::TargetList::contains(who) {
-				let _ = T::TargetList::on_increase(who, Self::weight_of(who)).defensive();
+				let _ =
+					T::TargetList::on_increase(who, Self::slashable_balance_of(who)).defensive();
 			} else {
-				let _ = T::TargetList::on_insert(who.clone(), Self::weight_of(who)).defensive();
+				let _ = T::TargetList::on_insert(who.clone(), Self::slashable_balance_of(who))
+					.defensive();
 			}
 		}
+
 		Validators::<T>::insert(who, prefs);
 
 		#[cfg(debug_assertions)]
@@ -930,7 +933,7 @@ impl<T: Config> Pallet<T> {
 		let outcome = if Validators::<T>::contains_key(who) {
 			Validators::<T>::remove(who);
 			let _ = T::VoterList::on_remove(who).defensive();
-			let _ = T::TargetList::on_decrease(who, Self::weight_of(who)).defensive();
+			let _ = T::TargetList::on_decrease(who, Self::slashable_balance_of(who)).defensive();
 			true
 		} else {
 			false
