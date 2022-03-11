@@ -17,7 +17,7 @@
 //! Storage migrations for the Staking pallet.
 
 use super::*;
-use frame_election_provider_support::{SortedListProvider, VoteWeightProvider};
+use frame_election_provider_support::{SortedListProvider, ScoreProvider};
 use frame_support::traits::OnRuntimeUpgrade;
 
 /// Migration implementation that injects all validators into sorted list.
@@ -27,13 +27,15 @@ pub struct InjectValidatorsIntoSortedListProvider<T>(sp_std::marker::PhantomData
 impl<T: Config> OnRuntimeUpgrade for InjectValidatorsIntoSortedListProvider<T> {
 	fn on_runtime_upgrade() -> Weight {
 		if StorageVersion::<T>::get() == Releases::V8_0_0 {
+			let weight_of_cached = Pallet::<T>::weight_of_fn();
 			for (v, _) in Validators::<T>::iter() {
-				let weight = Pallet::<T>::vote_weight(&v);
+				let weight = weight_of_cached(&v);
 				let _ = T::SortedListProvider::on_insert(v.clone(), weight).map_err(|err| {
 					log!(warn, "failed to insert {:?} into SortedListProvider: {:?}", v, err)
 				});
 			}
 
+			StorageVersion::<T>::put(crate::Releases::V9_0_0);
 			T::BlockWeights::get().max_block
 		} else {
 			log!(warn, "InjectValidatorsIntoSortedListProvider being executed on the wrong storage version, expected Releases::V8_0_0");
