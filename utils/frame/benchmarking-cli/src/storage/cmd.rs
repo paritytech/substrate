@@ -59,8 +59,8 @@ pub struct StorageCmd {
 pub struct StorageParams {
 	/// Path to write the *weight* file to. Can be a file or directory.
 	/// For substrate this should be `frame/support/src/weights`.
-	#[clap(long, default_value = ".")]
-	pub weight_path: String,
+	#[clap(long)]
+	pub weight_path: Option<PathBuf>,
 
 	/// Select a specific metric to calculate the final weight output.
 	#[clap(long = "metric", default_value = "average")]

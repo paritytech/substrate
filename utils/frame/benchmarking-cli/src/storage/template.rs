@@ -94,14 +94,14 @@ impl TemplateData {
 
 	/// Fills out the `weights.hbs` or specified HBS template with its own data.
 	/// Writes the result to `path` which can be a directory or file.
-	pub fn write(&self, path: &str, hbs_template_path: &Option<PathBuf>) -> Result<()> {
+	pub fn write(&self, path: &Option<PathBuf>, hbs_template: &Option<PathBuf>) -> Result<()> {
 		let mut handlebars = handlebars::Handlebars::new();
 		// Format large integers with underscore.
 		handlebars.register_helper("underscore", Box::new(crate::writer::UnderscoreHelper));
 		// Don't HTML escape any characters.
 		handlebars.register_escape_fn(|s| -> String { s.to_string() });
 		// Use custom template if provided.
-		let template = match hbs_template_path {
+		let template = match hbs_template {
 			Some(template) if template.is_file() => fs::read_to_string(template)?,
 			Some(_) => return Err("Handlebars template is not a valid file!".into()),
 			None => TEMPLATE.to_string(),
@@ -117,9 +117,13 @@ impl TemplateData {
 	}
 
 	/// Builds a path for the weight file.
-	fn build_path(&self, weight_out: &str) -> PathBuf {
-		let mut path = PathBuf::from(weight_out);
-		if path.is_dir() {
+	fn build_path(&self, weight_out: &Option<PathBuf>) -> PathBuf {
+		let mut path = match weight_out {
+			Some(p) => PathBuf::from(p),
+			None => PathBuf::new(),
+		};
+
+		if path.is_dir() || path.as_os_str().is_empty() {
 			path.push(format!("{}_weights", self.db_name.to_lowercase()));
 			path.set_extension("rs");
 		}
