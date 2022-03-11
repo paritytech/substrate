@@ -50,6 +50,14 @@ use crate::{
 
 use super::{pallet::*, STAKING_ID};
 
+/// The maximum number of iterations that we do whilst iterating over `T::VoterList` in
+/// `get_npos_voters`.
+///
+/// In most cases, if we want n items, we iterate exactly n times. In rare cases, if a voter is
+/// invalid (for any reason) the iteration continues. With this constant, we iterate at most 2 * n
+/// times and then give up.
+const NPOS_MAX_ITERATIONS_COEFFICIENT: u32 = 2;
+
 impl<T: Config> Pallet<T> {
 	/// The total balance that can be slashed from a stash account as of right now.
 	pub fn slashable_balance_of(stash: &T::AccountId) -> BalanceOf<T> {
@@ -240,7 +248,7 @@ impl<T: Config> Pallet<T> {
 
 			// update the voter list.
 			let _ = T::VoterList::on_update(&ledger.stash, to_vote(ledger.active))
-				.defensive_proof("any nominator should an entry in the voter list.");
+				.defensive_proof("any nominator should have an entry in the voter list.");
 
 			#[cfg(debug_assertions)]
 			Self::sanity_check_list_providers();
@@ -251,7 +259,7 @@ impl<T: Config> Pallet<T> {
 			update_target_list(&ledger.stash);
 
 			let _ = T::VoterList::on_update(&ledger.stash, to_vote(ledger.active))
-				.defensive_proof("any validator should an entry in the voter list.");
+				.defensive_proof("any validator should have an entry in the voter list.");
 
 			#[cfg(debug_assertions)]
 			Self::sanity_check_list_providers();
@@ -731,7 +739,9 @@ impl<T: Config> Pallet<T> {
 		let mut nominators_taken = 0u32;
 
 		let mut sorted_voters = T::VoterList::iter();
-		while all_voters.len() < max_allowed_len && voters_seen < (2 * max_allowed_len as u32) {
+		while all_voters.len() < max_allowed_len &&
+			voters_seen < (NPOS_MAX_ITERATIONS_COEFFICIENT * max_allowed_len as u32)
+		{
 			let voter = match sorted_voters.next() {
 				Some(voter) => {
 					voters_seen.saturating_inc();
@@ -757,7 +767,7 @@ impl<T: Config> Pallet<T> {
 				// if this voter is a validator:
 				let self_vote = (
 					voter.clone(),
-					Self::weight_of(&voter),
+					weight_of(&voter),
 					vec![voter.clone()]
 						.try_into()
 						.expect("`MaxVotesPerVoter` must be greater than or equal to 1"),
@@ -902,13 +912,11 @@ impl<T: Config> Pallet<T> {
 			// maybe update sorted list.
 			let _ = T::VoterList::on_insert(who.clone(), Self::weight_of(who)).defensive();
 
-			if T::TargetList::contains(who) {
-				let _ =
-					T::TargetList::on_increase(who, Self::slashable_balance_of(who)).defensive();
+			let _ = if T::TargetList::contains(who) {
+				T::TargetList::on_increase(who, Self::slashable_balance_of(who)).defensive()
 			} else {
-				let _ = T::TargetList::on_insert(who.clone(), Self::slashable_balance_of(who))
-					.defensive();
-			}
+				T::TargetList::on_insert(who.clone(), Self::slashable_balance_of(who)).defensive()
+			};
 		}
 
 		Validators::<T>::insert(who, prefs);
@@ -970,7 +978,7 @@ impl<T: Config> Pallet<T> {
 	pub(crate) fn sanity_check_approval_stakes() {
 		// additionally, if asked for the full check, we ensure that the TargetList is indeed
 		// composed of the approval stakes.
-		use crate::migrations::InjectValidatorsApprovalStakeIntoTargetList as TargetListMigration;
+		use crate::migrations::v10::InjectValidatorsApprovalStakeIntoTargetList as TargetListMigration;
 		let approval_stakes = TargetListMigration::<T>::build_approval_stakes();
 		approval_stakes.iter().for_each(|(v, a)| {
 			debug_assert_eq!(

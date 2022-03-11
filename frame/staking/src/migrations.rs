@@ -21,32 +21,115 @@ use frame_election_provider_support::SortedListProvider;
 use frame_support::traits::{Defensive, OnRuntimeUpgrade};
 use sp_std::collections::btree_map::BTreeMap;
 
-/// Migration implementation that injects all validators into sorted list.
-///
-/// This is only useful for chains that started their `VoterList` just based on nominators.
-pub struct InjectValidatorsSelfStakeIntoVoterList<T>(sp_std::marker::PhantomData<T>);
-impl<T: Config> OnRuntimeUpgrade for InjectValidatorsSelfStakeIntoVoterList<T> {
-	fn on_runtime_upgrade() -> Weight {
-		if StorageVersion::<T>::get() == Releases::V8_0_0 {
-			for (v, _) in Validators::<T>::iter() {
-				let weight = Pallet::<T>::weight_of(&v);
-				let _ = T::VoterList::on_insert(v.clone(), weight).map_err(|err| {
-					log!(warn, "failed to insert {:?} into VoterList: {:?}", v, err)
-				});
-			}
+pub mod v10 {
+	use super::*;
 
-			StorageVersion::<T>::put(Releases::V9_0_0);
-			T::BlockWeights::get().max_block
-		} else {
-			log!(warn, "InjectValidatorsIntoVoterList being executed on the wrong storage version, expected Releases::V8_0_0");
-			T::DbWeight::get().reads(1)
+	/// Migration implementation that injects all validators into sorted list.
+	///
+	/// This is only useful for chains that started their `VoterList` just based on nominators.
+	pub struct InjectValidatorsApprovalStakeIntoTargetList<T>(sp_std::marker::PhantomData<T>);
+
+	impl<T: Config> InjectValidatorsApprovalStakeIntoTargetList<T> {
+		pub(crate) fn build_approval_stakes() -> BTreeMap<T::AccountId, BalanceOf<T>> {
+			let mut approval_stakes = BTreeMap::<T::AccountId, BalanceOf<T>>::new();
+
+			NominatorsHelper::<T>::iter_all().for_each(|(who, nomination)| {
+				let stake = Pallet::<T>::slashable_balance_of(&who);
+				for target in nomination.targets {
+					let current = approval_stakes.entry(target).or_default();
+					*current = current.saturating_add(stake);
+				}
+			});
+
+			Validators::<T>::iter().for_each(|(v, _)| {
+				let stake = Pallet::<T>::slashable_balance_of(&v);
+				let current = approval_stakes.entry(v).or_default();
+				*current = current.saturating_add(stake);
+			});
+
+			approval_stakes
+		}
+	}
+
+	impl<T: Config> OnRuntimeUpgrade for InjectValidatorsApprovalStakeIntoTargetList<T> {
+		fn on_runtime_upgrade() -> Weight {
+			if StorageVersion::<T>::get() == Releases::V9_0_0 {
+				// TODO: maybe write this in a multi-block fashion.
+				let approval_stakes = Self::build_approval_stakes();
+
+				for (v, a) in approval_stakes {
+					let _ = T::TargetList::on_insert(v, a).defensive();
+				}
+
+				StorageVersion::<T>::put(Releases::V10_0_0);
+				T::BlockWeights::get().max_block
+			} else {
+				log!(warn, "InjectValidatorsIntoTargetList being executed on the wrong storage version, expected Releases::V9_0_0");
+				T::DbWeight::get().reads(1)
+			}
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn pre_upgrade() -> Result<(), &'static str> {
+			ensure!(StorageVersion::<T>::get() == Releases::V9_0_0, "must upgrade linearly");
+			Ok(())
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn post_upgrade() -> Result<(), &'static str> {
+			ensure!(StorageVersion::<T>::get(), Releases::V10_0_0, "must upgrade linearly");
+			Ok(())
+		}
+	}
+}
+
+pub mod v9 {
+	use super::*;
+
+	/// Migration implementation that injects all validators into sorted list.
+	///
+	/// This is only useful for chains that started their `VoterList` just based on nominators.
+	pub struct InjectValidatorsIntoVoterList<T>(sp_std::marker::PhantomData<T>);
+	impl<T: Config> OnRuntimeUpgrade for InjectValidatorsIntoVoterList<T> {
+		fn on_runtime_upgrade() -> Weight {
+			if StorageVersion::<T>::get() == Releases::V8_0_0 {
+				let prev_count = T::VoterList::count();
+				let weight_of_cached = Pallet::<T>::weight_of_fn();
+				for (v, _) in Validators::<T>::iter() {
+					let weight = weight_of_cached(&v);
+					let _ = T::VoterList::on_insert(v.clone(), weight).map_err(|err| {
+						log!(warn, "failed to insert {:?} into VoterList: {:?}", v, err)
+					});
+				}
+
+				log!(
+					info,
+					"injected a total of {} new voters, prev count: {} next count: {}, updating to version 9",
+					Validators::<T>::count(),
+					prev_count,
+					T::VoterList::count(),
+				);
+
+				StorageVersion::<T>::put(crate::Releases::V9_0_0);
+				T::BlockWeights::get().max_block
+			} else {
+				log!(
+					warn,
+					"InjectValidatorsIntoVoterList being executed on the wrong storage \
+				version, expected Releases::V8_0_0"
+				);
+				T::DbWeight::get().reads(1)
+			}
 		}
 	}
 
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<(), &'static str> {
 		use frame_support::traits::OnRuntimeUpgradeHelpersExt;
-		ensure!(StorageVersion::<T>::get() == crate::Releases::V8_0_0, "must upgrade linearly");
+		frame_support::ensure!(
+			StorageVersion::<T>::get() == crate::Releases::V8_0_0,
+			"must upgrade linearly"
+		);
 
 		let prev_count = T::VoterList::count();
 		Self::set_temp_storage(prev_count, "prev");
@@ -59,75 +142,20 @@ impl<T: Config> OnRuntimeUpgrade for InjectValidatorsSelfStakeIntoVoterList<T> {
 		let post_count = T::VoterList::count();
 		let prev_count = Self::get_temp_storage::<u32>("prev").unwrap();
 		let validators = Validators::<T>::count();
-		ensure!(post_count == prev_count + validators, "incorrect count");
-		ensure!(StorageVersion::<T>::get(), Releases::V9_0_0, "version not set");
-		Ok(())
-	}
-}
+		assert!(post_count == prev_count + validators);
 
-/// Migration implementation that injects all validators into sorted list.
-///
-/// This is only useful for chains that started their `VoterList` just based on nominators.
-pub struct InjectValidatorsApprovalStakeIntoTargetList<T>(sp_std::marker::PhantomData<T>);
-
-impl<T: Config> InjectValidatorsApprovalStakeIntoTargetList<T> {
-	pub(crate) fn build_approval_stakes() -> BTreeMap<T::AccountId, BalanceOf<T>> {
-		let mut approval_stakes = BTreeMap::<T::AccountId, BalanceOf<T>>::new();
-
-		NominatorsHelper::<T>::iter_all().for_each(|(who, nomination)| {
-			let stake = Pallet::<T>::slashable_balance_of(&who);
-			for target in nomination.targets {
-				let current = approval_stakes.entry(target).or_default();
-				*current = current.saturating_add(stake);
-			}
-		});
-
-		Validators::<T>::iter().for_each(|(v, _)| {
-			let stake = Pallet::<T>::slashable_balance_of(&v);
-			let current = approval_stakes.entry(v).or_default();
-			*current = current.saturating_add(stake);
-		});
-
-		approval_stakes
-	}
-}
-
-impl<T: Config> OnRuntimeUpgrade for InjectValidatorsApprovalStakeIntoTargetList<T> {
-	fn on_runtime_upgrade() -> Weight {
-		if StorageVersion::<T>::get() == Releases::V9_0_0 {
-			// TODO: maybe write this in a multi-block fashion.
-			let approval_stakes = Self::build_approval_stakes();
-
-			for (v, a) in approval_stakes {
-				let _ = T::TargetList::on_insert(v, a).defensive();
-			}
-
-			StorageVersion::<T>::put(Releases::V10_0_0);
-			T::BlockWeights::get().max_block
-		} else {
-			log!(warn, "InjectValidatorsIntoTargetList being executed on the wrong storage version, expected Releases::V9_0_0");
-			T::DbWeight::get().reads(1)
-		}
-	}
-
-	#[cfg(feature = "try-runtime")]
-	fn pre_upgrade() -> Result<(), &'static str> {
-		ensure!(StorageVersion::<T>::get() == Releases::V9_0_0, "must upgrade linearly");
-		Ok(())
-	}
-
-	#[cfg(feature = "try-runtime")]
-	fn post_upgrade() -> Result<(), &'static str> {
-		ensure!(StorageVersion::<T>::get(), Releases::V10_0_0, "must upgrade linearly");
+		frame_support::ensure!(
+			StorageVersion::<T>::get() == crate::Releases::V9_0_0,
+			"must upgrade "
+		);
 		Ok(())
 	}
 }
 
 pub mod v8 {
+	use crate::{Config, Nominators, Pallet, StorageVersion, Weight};
 	use frame_election_provider_support::SortedListProvider;
 	use frame_support::traits::Get;
-
-	use crate::{Config, Nominators, Pallet, StorageVersion, Weight};
 
 	#[cfg(feature = "try-runtime")]
 	pub fn pre_migrate<T: Config>() -> Result<(), &'static str> {
@@ -140,7 +168,7 @@ pub mod v8 {
 		Ok(())
 	}
 
-	/// Migration to sorted [`SortedListProvider`].
+	/// Migration to sorted `VoterList`.
 	pub fn migrate<T: Config>() -> Weight {
 		if StorageVersion::<T>::get() == crate::Releases::V7_0_0 {
 			crate::log!(info, "migrating staking to Releases::V8_0_0");

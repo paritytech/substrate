@@ -155,8 +155,8 @@ impl<T: Config> ListScenario<T> {
 	/// - the destination bag has at least one node, which will need its next pointer updated.
 	///
 	/// NOTE: while this scenario specifically targets a worst case for the bags-list, it should
-	/// also elicit a worst case for other known `SortedListProvider` implementations; although
-	/// this may not be true against unknown `SortedListProvider` implementations.
+	/// also elicit a worst case for other known `VoterList` implementations; although
+	/// this may not be true against unknown `VoterList` implementations.
 	fn new(origin_weight: BalanceOf<T>, is_increase: bool) -> Result<Self, &'static str> {
 		ensure!(!origin_weight.is_zero(), "origin weight must be greater than 0");
 
