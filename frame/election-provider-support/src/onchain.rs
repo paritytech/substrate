@@ -55,11 +55,31 @@ impl From<sp_npos_elections::Error> for Error {
 /// It is advisable to use the former ([`ElectionProvider::elect`]) only at genesis, or for testing,
 /// the latter [`InstantElectionProvider::instant_elect`] for onchain operations, with thoughtful
 /// bounds.
-pub struct OnChainSequentialPhragmen<T: Config>(PhantomData<T>);
-
-/// Configuration trait of [`OnChainSequentialPhragmen`].
 ///
-/// Note that this is similar to a pallet traits, but [`OnChainSequentialPhragmen`] is not a pallet.
+/// Please use `BoundedOnChainSequentialPhragmen` at all times except at genesis or for testing,
+/// with thoughtful bounds in order to bound the potential execution time.
+/// Only use `UnboundedSequentialPhragmen` at genesis or for testing, as it does not
+/// bound the inputs.
+///
+/// `VotersBound` bounds the number of voters.
+/// `TargetsBound` bounds the number of targets.
+pub struct BoundedOnChainSequentialPhragmen<
+	T: Config,
+	VotersBound: Get<u32>,
+	TargetsBound: Get<u32>,
+>(PhantomData<(T, VotersBound, TargetsBound)>);
+#[cfg_attr(
+	not(feature = "std"),
+	deprecated(note = "use `BoundedOnChainSequentialPhragmen` instead")
+)]
+pub struct UnboundedSequentialPhragmen<T: Config>(PhantomData<T>);
+#[deprecated(note = "use `BoundedOnChainSequentialPhragmen` instead")]
+pub type OnChainSequentialPhragmen<T> = UnboundedSequentialPhragmen<T>;
+
+/// Configuration trait of [`UnboundedSequentialPhragmen`] and [`BoundedOnChainSequentialPhragmen`].
+///
+/// Note that this is similar to a pallet traits, but [`UnboundedSequentialPhragmen`] and
+/// [`BoundedOnChainSequentialPhragmen`] are not pallets.
 ///
 /// WARNING: the user of this pallet must ensure that the `Accuracy` type will work nicely with the
 /// normalization operation done inside `seq_phragmen`. See
@@ -101,7 +121,7 @@ fn elect_with<T: Config>(
 	Ok(to_supports(&staked))
 }
 
-impl<T: Config> ElectionProvider for OnChainSequentialPhragmen<T> {
+impl<T: Config> ElectionProvider for UnboundedSequentialPhragmen<T> {
 	type AccountId = T::AccountId;
 	type BlockNumber = T::BlockNumber;
 	type Error = Error;
@@ -112,7 +132,7 @@ impl<T: Config> ElectionProvider for OnChainSequentialPhragmen<T> {
 	}
 }
 
-impl<T: Config> InstantElectionProvider for OnChainSequentialPhragmen<T> {
+impl<T: Config> InstantElectionProvider for UnboundedSequentialPhragmen<T> {
 	fn instant_elect(
 		maybe_max_voters: Option<usize>,
 		maybe_max_targets: Option<usize>,
@@ -120,16 +140,6 @@ impl<T: Config> InstantElectionProvider for OnChainSequentialPhragmen<T> {
 		elect_with::<T>(maybe_max_voters, maybe_max_targets)
 	}
 }
-
-/// Similar to `OnChainSequentialPhragmen` but with generic bounds for the election.
-///
-/// `VotersBound` bounds the number of voters.
-/// `TargetsBound` bounds the number of targets.
-pub struct BoundedOnChainSequentialPhragmen<
-	T: Config,
-	VotersBound: Get<u32>,
-	TargetsBound: Get<u32>,
->(PhantomData<(T, VotersBound, TargetsBound)>);
 
 impl<T: Config, VotersBound: Get<u32>, TargetsBound: Get<u32>> ElectionProvider
 	for BoundedOnChainSequentialPhragmen<T, VotersBound, TargetsBound>
@@ -140,7 +150,10 @@ impl<T: Config, VotersBound: Get<u32>, TargetsBound: Get<u32>> ElectionProvider
 	type DataProvider = T::DataProvider;
 
 	fn elect() -> Result<Supports<T::AccountId>, Self::Error> {
-		elect_with::<T>(None, None)
+		elect_with::<T>(
+			Some(VotersBound::get().try_into().unwrap_or(0)),
+			Some(TargetsBound::get().try_into().unwrap_or(0)),
+		)
 	}
 }
 
@@ -213,7 +226,7 @@ mod tests {
 		type DataProvider = mock_data_provider::DataProvider;
 	}
 
-	type OnChainPhragmen = OnChainSequentialPhragmen<Runtime>;
+	type OnChainPhragmen = UnboundedSequentialPhragmen<Runtime>;
 
 	mod mock_data_provider {
 		use frame_support::{bounded_vec, traits::ConstU32};

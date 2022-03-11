@@ -554,7 +554,7 @@ impl pallet_staking::Config for Runtime {
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
 	type OffendingValidatorsThreshold = OffendingValidatorsThreshold;
 	type ElectionProvider = ElectionProviderMultiPhase;
-	type GenesisElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
+	type GenesisElectionProvider = onchain::UnboundedSequentialPhragmen<Self>;
 	// Alternatively, use pallet_staking::UseNominatorsMap<Runtime> to just use the nominators map.
 	// Note that the aforementioned does not scale to a very large number of nominators.
 	type SortedListProvider = BagsList;
@@ -673,7 +673,11 @@ impl pallet_election_provider_multi_phase::Config for Runtime {
 		ConstU32<2_000>,
 	>;
 	type GovernanceFallback =
-		frame_election_provider_support::onchain::OnChainSequentialPhragmen<Self>;
+		frame_election_provider_support::onchain::BoundedOnChainSequentialPhragmen<
+			Self,
+			ConstU32<20_000>,
+			ConstU32<2_000>,
+		>;
 	type Solver = frame_election_provider_support::SequentialPhragmen<
 		AccountId,
 		pallet_election_provider_multi_phase::SolutionAccuracyOf<Self>,

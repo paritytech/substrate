@@ -292,11 +292,11 @@ impl InstantElectionProvider for MockFallback {
 		maybe_max_targets: Option<usize>,
 	) -> Result<Supports<Self::AccountId>, Self::Error> {
 		if OnChainFallback::get() {
-			onchain::OnChainSequentialPhragmen::<Runtime>::instant_elect(
+			onchain::UnboundedSequentialPhragmen::<Runtime>::instant_elect(
 				maybe_max_voters,
 				maybe_max_targets,
 			)
-			.map_err(|_| "OnChainSequentialPhragmen failed")
+			.map_err(|_| "UnboundedSequentialPhragmen failed")
 		} else {
 			super::NoFallback::<Runtime>::instant_elect(maybe_max_voters, maybe_max_targets)
 		}
