@@ -18,7 +18,10 @@
 
 use super::*;
 use frame_election_provider_support::SortedListProvider;
-use frame_support::traits::{Defensive, OnRuntimeUpgrade};
+use frame_support::{
+	ensure,
+	traits::{Defensive, OnRuntimeUpgrade},
+};
 use sp_std::collections::btree_map::BTreeMap;
 
 pub mod v10 {
@@ -77,7 +80,7 @@ pub mod v10 {
 
 		#[cfg(feature = "try-runtime")]
 		fn post_upgrade() -> Result<(), &'static str> {
-			ensure!(StorageVersion::<T>::get(), Releases::V10_0_0, "must upgrade linearly");
+			ensure!(StorageVersion::<T>::get() == Releases::V10_0_0, "must upgrade linearly");
 			Ok(())
 		}
 	}
@@ -121,34 +124,34 @@ pub mod v9 {
 				T::DbWeight::get().reads(1)
 			}
 		}
-	}
 
-	#[cfg(feature = "try-runtime")]
-	fn pre_upgrade() -> Result<(), &'static str> {
-		use frame_support::traits::OnRuntimeUpgradeHelpersExt;
-		frame_support::ensure!(
-			StorageVersion::<T>::get() == crate::Releases::V8_0_0,
-			"must upgrade linearly"
-		);
+		#[cfg(feature = "try-runtime")]
+		fn pre_upgrade() -> Result<(), &'static str> {
+			use frame_support::traits::OnRuntimeUpgradeHelpersExt;
+			frame_support::ensure!(
+				StorageVersion::<T>::get() == crate::Releases::V8_0_0,
+				"must upgrade linearly"
+			);
 
-		let prev_count = T::VoterList::count();
-		Self::set_temp_storage(prev_count, "prev");
-		Ok(())
-	}
+			let prev_count = T::VoterList::count();
+			Self::set_temp_storage(prev_count, "prev");
+			Ok(())
+		}
 
-	#[cfg(feature = "try-runtime")]
-	fn post_upgrade() -> Result<(), &'static str> {
-		use frame_support::traits::OnRuntimeUpgradeHelpersExt;
-		let post_count = T::VoterList::count();
-		let prev_count = Self::get_temp_storage::<u32>("prev").unwrap();
-		let validators = Validators::<T>::count();
-		assert!(post_count == prev_count + validators);
+		#[cfg(feature = "try-runtime")]
+		fn post_upgrade() -> Result<(), &'static str> {
+			use frame_support::traits::OnRuntimeUpgradeHelpersExt;
+			let post_count = T::VoterList::count();
+			let prev_count = Self::get_temp_storage::<u32>("prev").unwrap();
+			let validators = Validators::<T>::count();
+			assert!(post_count == prev_count + validators);
 
-		frame_support::ensure!(
-			StorageVersion::<T>::get() == crate::Releases::V9_0_0,
-			"must upgrade "
-		);
-		Ok(())
+			frame_support::ensure!(
+				StorageVersion::<T>::get() == crate::Releases::V9_0_0,
+				"must upgrade "
+			);
+			Ok(())
+		}
 	}
 }
 
