@@ -930,8 +930,7 @@ impl<T: Config> Pallet<T> {
 		let outcome = if Validators::<T>::contains_key(who) {
 			Validators::<T>::remove(who);
 			let _ = T::VoterList::on_remove(who).defensive();
-			// NOTE: simply remove, not decrease.
-			let _ = T::TargetList::on_remove(who).defensive();
+			let _ = T::TargetList::on_decrease(who, Self::weight_of(who)).defensive();
 			true
 		} else {
 			false

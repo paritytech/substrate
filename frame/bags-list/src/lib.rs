@@ -82,7 +82,7 @@ macro_rules! log {
 	($level:tt, $patter:expr $(, $values:expr)* $(,)?) => {
 		log::$level!(
 			target: crate::LOG_TARGET,
-			concat!("[{:?}][{}] 👜", $patter),
+			concat!("[{:?}] 👜 [{}]", $patter),
 			<frame_system::Pallet<T>>::block_number(),
 			<crate::Pallet::<T, I> as frame_support::traits::PalletInfoAccess>::name()
 			$(, $values)*

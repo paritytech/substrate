@@ -367,7 +367,7 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 	) -> Option<(T::Score, T::Score)> {
 		crate::log!(
 			debug,
-			"trying to rebag {:?} from {:?} to {:?} ({})",
+			"trying to update {:?} from {:?} to {:?} (rebag?: {})",
 			node.id,
 			node.score(),
 			new_score,

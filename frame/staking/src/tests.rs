@@ -1723,9 +1723,9 @@ fn reap_stash_works() {
 
 			// no easy way to cause an account to go below ED, we tweak their staking ledger
 			// instead.
-			Ledger::<Test>::insert(
-				10,
-				StakingLedger {
+			Staking::update_ledger(
+				&10,
+				&StakingLedger {
 					stash: 11,
 					total: 5,
 					active: 5,
@@ -4748,14 +4748,14 @@ mod target_list {
 			);
 			assert_eq_uvec!(validator_ids(), vec![11, 21, 31]);
 
-			// chilling should remove the target list items.
+			// chilling does not remove, but rather decrease the validator's approval stake.
 			with_transaction(|| {
 				assert_ok!(Staking::chill(Origin::signed(20)));
 				assert_eq_uvec!(
 					<Test as Config>::TargetList::iter()
 						.map(|t| (t, <Test as Config>::TargetList::get_score(&t).unwrap()))
 						.collect::<Vec<_>>(),
-					vec![(11, 1500), (31, 500)]
+					vec![(11, 1500), (21, 500), (31, 500)]
 				);
 
 				sp_runtime::TransactionOutcome::Rollback(())
@@ -4774,14 +4774,14 @@ mod target_list {
 				sp_runtime::TransactionOutcome::Rollback(())
 			});
 
-			// nominating is same as chilling
+			// nominating is similar to chilling, and we contribute to 31.
 			with_transaction(|| {
 				assert_ok!(Staking::nominate(Origin::signed(20), vec![31]));
 				assert_eq_uvec!(
 					<Test as Config>::TargetList::iter()
 						.map(|t| (t, <Test as Config>::TargetList::get_score(&t).unwrap()))
 						.collect::<Vec<_>>(),
-					vec![(11, 1000), (31, 500)]
+					vec![(11, 1500), (21, 500), (31, 1500)]
 				);
 
 				sp_runtime::TransactionOutcome::Rollback(())
@@ -4789,7 +4789,7 @@ mod target_list {
 
 			// bonding more should increase.
 			with_transaction(|| {
-				assert_ok!(Staking::bond_extra(Origin::signed(20), 100));
+				assert_ok!(Staking::bond_extra(Origin::signed(21), 100));
 				assert_eq_uvec!(
 					<Test as Config>::TargetList::iter()
 						.map(|t| (t, <Test as Config>::TargetList::get_score(&t).unwrap()))
@@ -4824,13 +4824,61 @@ mod target_list {
 	}
 
 	#[test]
-	fn chilled_validator_afterwards_backers_chill() {
-		todo!("once a validator chills, then if their nominator re-nominates, we should compute the outgoing correctly etc.")
-	}
-
-	#[test]
 	fn chilled_actions() {
-		todo!();
+		ExtBuilder::default().build_and_execute(|| {
+			// given
+			let initial_approvals = || {
+				assert_eq_uvec!(
+					<Test as Config>::TargetList::iter()
+						.map(|t| (t, <Test as Config>::TargetList::get_score(&t).unwrap()))
+						.collect::<Vec<_>>(),
+					vec![(11, 1500), (21, 1500), (31, 500)]
+				);
+			};
+			let stash = 41;
+			let ctrl = 40;
+
+			initial_approvals();
+			assert_eq_uvec!(validator_ids(), vec![11, 21, 31]);
+
+			// validating adds us.
+			with_transaction(|| {
+				assert_ok!(Staking::validate(Origin::signed(ctrl), Default::default()));
+				assert_eq_uvec!(
+					<Test as Config>::TargetList::iter()
+						.map(|t| (t, <Test as Config>::TargetList::get_score(&t).unwrap()))
+						.collect::<Vec<_>>(),
+					vec![(11, 1500), (21, 1500), (31, 500), (41, 1000)]
+				);
+
+				sp_runtime::TransactionOutcome::Rollback(())
+			});
+
+			// nominating, and we contribute to 31.
+			with_transaction(|| {
+				assert_ok!(Staking::nominate(Origin::signed(ctrl), vec![31]));
+				assert_eq_uvec!(
+					<Test as Config>::TargetList::iter()
+						.map(|t| (t, <Test as Config>::TargetList::get_score(&t).unwrap()))
+						.collect::<Vec<_>>(),
+					vec![(11, 1500), (21, 1500), (31, 1500)]
+				);
+
+				sp_runtime::TransactionOutcome::Rollback(())
+			});
+
+			// rest of the operations is a
+			with_transaction(|| {
+				assert_ok!(Staking::bond_extra(Origin::signed(stash), 100));
+				initial_approvals();
+				assert_ok!(Staking::unbond(Origin::signed(ctrl), 100));
+				initial_approvals();
+				assert_ok!(Staking::rebond(Origin::signed(ctrl), 100));
+				initial_approvals();
+
+				sp_runtime::TransactionOutcome::Rollback(())
+			});
+		});
 	}
 
 	#[test]
