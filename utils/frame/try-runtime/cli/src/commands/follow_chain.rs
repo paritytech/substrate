@@ -150,7 +150,6 @@ where
 		let storage_changes = changes
 			.drain_storage_changes(
 				&state_ext.backend,
-				Default::default(),
 				&mut Default::default(),
 				// Note that in case a block contains a runtime upgrade,
 				// state version could potentially be incorrect here,
