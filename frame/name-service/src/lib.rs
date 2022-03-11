@@ -42,10 +42,10 @@ pub mod pallet {
 	// Allows easy access our Pallet's `Balance` type. Comes from `Currency` interface.
 	type BalanceOf<T> =
 		<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
+
 	type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<
 		<T as frame_system::Config>::AccountId,
 	>>::NegativeImbalance;
-
 	// Your Pallet's configuration trait, representing custom external types and interfaces.
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
@@ -149,6 +149,8 @@ pub mod pallet {
 		NotRegistrationOwner,
 		/// This resolver does not exist.
 		ResolverNotFound,
+		/// This registration has expired.
+		RegistrationExpired,
 	}
 
 	// Your Pallet's callable functions.
@@ -239,10 +241,12 @@ pub mod pallet {
 			name_hash: NameHash,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
+			let block_number = frame_system::Pallet::<T>::block_number();
 
 			Registrations::<T>::try_mutate(name_hash, |maybe_registration| {
 				let r = maybe_registration.as_mut().ok_or(Error::<T>::RegistrationNotFound)?;
 				ensure!(r.owner == sender, Error::<T>::NotRegistrationOwner);
+				ensure!(r.expiry > block_number, Error::<T>::RegistrationExpired);
 
 				r.owner = to.clone();
 
