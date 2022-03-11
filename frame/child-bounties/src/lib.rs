@@ -144,10 +144,21 @@ pub mod pallet {
 		#[pallet::constant]
 		type ChildBountyValueMinimum: Get<BalanceOf<Self>>;
 
-		/// Percentage of child-bounty value to be reserved as curator deposit
-		/// when curator fee is zero.
+
+		/// In the case a child bounty has a non-zero fee, the deposit for the curator
+		/// will be a fraction of that fee based on the multiplier below.
 		#[pallet::constant]
-		type ChildBountyCuratorDepositBase: Get<Permill>;
+		type ChildCuratorDepositMultiplierWithFee: Get<Permill>;
+
+		/// In the case a child bounty has no fee, we use this multiplier in the following logic:
+		///  - if the child curator is the same as the parent curator, we know they already made
+		///    a deposit, and thus we don't need to take another deposit here.
+		///  - if the child curator is different, since there is no fee, we use this multiplier
+		///    against the total value of the bounty, which should always be non-zero.
+		///
+		/// When there is a fee set, we use `ChildCuratorDepositMultiplierWithFee`, see above.
+		#[pallet::constant]
+		type ChildCuratorDepositMultiplierWithNoFee: Get<Permill>;
 
 		/// The overarching event type.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
@@ -392,7 +403,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
 
-			let _ = Self::ensure_bounty_active(parent_bounty_id)?;
+			let (parent_curator, _) = Self::ensure_bounty_active(parent_bounty_id)?;
 			// Mutate child-bounty.
 			ChildBounties::<T>::try_mutate_exists(
 				parent_bounty_id,
@@ -410,7 +421,13 @@ pub mod pallet {
 						// is reserved based on a percentage of child-bounty
 						// value instead of fee, to avoid no deposit in case the
 						// fee is set as zero.
-						let deposit = T::ChildBountyCuratorDepositBase::get() * child_bounty.value;
+						let deposit = Self::calculate_curator_deposit(
+							&parent_curator,
+							curator,
+							&child_bounty.value,
+							&child_bounty.fee,
+						);
+
 						T::Currency::reserve(curator, deposit)?;
 						child_bounty.curator_deposit = deposit;
 
@@ -770,6 +787,25 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
+	// This function will calculate the deposit of a curator.
+	fn calculate_curator_deposit(
+		parent_curator: &T::AccountId,
+		child_curator: &T::AccountId,
+		bounty_value: &BalanceOf<T>,
+		bounty_fee: &BalanceOf<T>,
+	) -> BalanceOf<T> {
+		let fee: BalanceOf<T> = if bounty_fee.is_zero() {
+			if parent_curator == child_curator {
+				return Zero::zero()
+			}
+			T::ChildCuratorDepositMultiplierWithNoFee::get() * *bounty_value
+		} else {
+			T::ChildCuratorDepositMultiplierWithFee::get() * *bounty_fee
+		};
+
+		fee
+	}
+
 	/// The account ID of a child-bounty account.
 	pub fn child_bounty_account_id(id: BountyIndex) -> T::AccountId {
 		// This function is taken from the parent (bounties) pallet, but the

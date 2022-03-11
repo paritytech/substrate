@@ -145,13 +145,17 @@ impl pallet_bounties::Config for Test {
 	type ChildBountyManager = ChildBounties;
 }
 parameter_types! {
-	pub const ChildBountyCuratorDepositBase: Permill = Permill::from_percent(10);
+	// This will be 50% of the bounty fee.
+	pub const ChildCuratorDepositMultiplierWithFee: Permill = Permill::from_percent(50);
+	// This will be 1% of the bounty value.
+	pub const ChildCuratorDepositMultiplierWithNoFee: Permill = Permill::from_percent(1);
 }
 impl pallet_child_bounties::Config for Test {
 	type Event = Event;
 	type MaxActiveChildBountyCount = ConstU32<2>;
 	type ChildBountyValueMinimum = ConstU64<1>;
-	type ChildBountyCuratorDepositBase = ChildBountyCuratorDepositBase;
+	type ChildCuratorDepositMultiplierWithFee = ChildCuratorDepositMultiplierWithFee;
+	type ChildCuratorDepositMultiplierWithNoFee = ChildCuratorDepositMultiplierWithNoFee;
 	type WeightInfo = ();
 }
 
