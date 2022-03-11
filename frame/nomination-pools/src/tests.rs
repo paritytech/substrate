@@ -774,7 +774,7 @@ mod claim_payout {
 
 			// Given no rewards have been earned
 			// When
-			let (reward_pool, delegator, payout) =
+			let payout =
 				Pools::calculate_delegator_payout(&bonded_pool, reward_pool, delegator).unwrap();
 
 			// Then
@@ -786,7 +786,7 @@ mod claim_payout {
 			Balances::make_free_balance_be(&reward_pool.account, 5);
 
 			// When
-			let (reward_pool, delegator, payout) =
+			let payout =
 				Pools::calculate_delegator_payout(&bonded_pool, reward_pool, delegator).unwrap();
 
 			// Then
@@ -798,8 +798,8 @@ mod claim_payout {
 			Balances::make_free_balance_be(&REWARDS_ACCOUNT, 10);
 
 			// When
-			let (reward_pool, delegator, payout) =
-				Pools::calculate_delegator_payout(&bonded_pool, reward_pool, delegator).unwrap();
+			let payout =
+				Pools::calculate_delegator_payout(&bonded_pool, &reward_pool, &delegator).unwrap();
 
 			// Then
 			assert_eq!(payout, 10); // (10 * 10 del virtual points / 10 pool points) * 5 pool balance
@@ -810,7 +810,7 @@ mod claim_payout {
 			Balances::make_free_balance_be(&REWARDS_ACCOUNT, 0);
 
 			// When
-			let (reward_pool, delegator, payout) =
+			let payout =
 				Pools::calculate_delegator_payout(&bonded_pool, reward_pool, delegator).unwrap();
 
 			// Then
@@ -841,8 +841,8 @@ mod claim_payout {
 				Balances::make_free_balance_be(&REWARDS_ACCOUNT, 100);
 
 				// When
-				let (reward_pool, del_10, payout) =
-					Pools::calculate_delegator_payout(&bonded_pool, reward_pool, del_10).unwrap();
+				let payout =
+					Pools::calculate_delegator_payout(&bonded_pool, &reward_pool, &del_10).unwrap();
 
 				// Then
 				assert_eq!(payout, 10); // (10 del virtual points / 100 pool points) * 100 pool balance
@@ -852,8 +852,8 @@ mod claim_payout {
 				assert_ok!(Balances::mutate_account(&REWARDS_ACCOUNT, |a| a.free -= 10));
 
 				// When
-				let (reward_pool, del_40, payout) =
-					Pools::calculate_delegator_payout(&bonded_pool, reward_pool, del_40).unwrap();
+				let payout =
+					Pools::calculate_delegator_payout(&bonded_pool, &reward_pool, &del_40).unwrap();
 
 				// Then
 				assert_eq!(payout, 40); // (400 del virtual points / 900 pool points) * 90 pool balance
@@ -871,8 +871,8 @@ mod claim_payout {
 				assert_ok!(Balances::mutate_account(&REWARDS_ACCOUNT, |a| a.free -= 40));
 
 				// When
-				let (reward_pool, del_50, payout) =
-					Pools::calculate_delegator_payout(&bonded_pool, reward_pool, del_50).unwrap();
+				let payout =
+					Pools::calculate_delegator_payout(&bonded_pool, &reward_pool, &del_50).unwrap();
 
 				// Then
 				assert_eq!(payout, 50); // (50 del virtual points / 50 pool points) * 50 pool balance
@@ -885,8 +885,8 @@ mod claim_payout {
 				Balances::make_free_balance_be(&REWARDS_ACCOUNT, 50);
 
 				// When
-				let (reward_pool, del_10, payout) =
-					Pools::calculate_delegator_payout(&bonded_pool, reward_pool, del_10).unwrap();
+				let payout =
+					Pools::calculate_delegator_payout(&bonded_pool, &reward_pool, &del_10).unwrap();
 
 				// Then
 				assert_eq!(payout, 5); // (500  del virtual points / 5,000 pool points) * 50 pool balance
@@ -896,8 +896,8 @@ mod claim_payout {
 				assert_ok!(Balances::mutate_account(&REWARDS_ACCOUNT, |a| a.free -= 5));
 
 				// When
-				let (reward_pool, del_40, payout) =
-					Pools::calculate_delegator_payout(&bonded_pool, reward_pool, del_40).unwrap();
+				let payout =
+					Pools::calculate_delegator_payout(&bonded_pool, &reward_pool, &del_40).unwrap();
 
 				// Then
 				assert_eq!(payout, 20); // (2,000 del virtual points / 4,500 pool points) * 45 pool balance
@@ -910,8 +910,8 @@ mod claim_payout {
 				assert_eq!(Balances::free_balance(&REWARDS_ACCOUNT), 75);
 
 				// When
-				let (reward_pool, del_50, payout) =
-					Pools::calculate_delegator_payout(&bonded_pool, reward_pool, del_50).unwrap();
+				let payout =
+					Pools::calculate_delegator_payout(&bonded_pool, &reward_pool, &del_50).unwrap();
 
 				// Then
 				assert_eq!(payout, 50); // (5,000 del virtual points / 7,5000 pool points) * 75 pool balance
@@ -932,8 +932,8 @@ mod claim_payout {
 				assert_ok!(Balances::mutate_account(&REWARDS_ACCOUNT, |a| a.free -= 50));
 
 				// When
-				let (reward_pool, del_10, payout) =
-					Pools::calculate_delegator_payout(&bonded_pool, reward_pool, del_10).unwrap();
+				let payout =
+					Pools::calculate_delegator_payout(&bonded_pool, &reward_pool, &del_10).unwrap();
 
 				// Then
 				assert_eq!(payout, 5);
@@ -947,8 +947,8 @@ mod claim_payout {
 				assert_eq!(Balances::free_balance(&REWARDS_ACCOUNT), 420);
 
 				// When
-				let (reward_pool, del_10, payout) =
-					Pools::calculate_delegator_payout(&bonded_pool, reward_pool, del_10).unwrap();
+				let payout =
+					Pools::calculate_delegator_payout(&bonded_pool, &reward_pool, &del_10).unwrap();
 
 				// Then
 				assert_eq!(payout, 40);
@@ -973,8 +973,8 @@ mod claim_payout {
 				assert_eq!(Balances::free_balance(&REWARDS_ACCOUNT), 400);
 
 				// When
-				let (reward_pool, del_10, payout) =
-					Pools::calculate_delegator_payout(&bonded_pool, reward_pool, del_10).unwrap();
+				let payout =
+					Pools::calculate_delegator_payout(&bonded_pool, &reward_pool, &del_10).unwrap();
 
 				// Then
 				assert_eq!(payout, 2); // (200 del virtual points / 38,000 pool points) * 400 pool balance
@@ -984,8 +984,8 @@ mod claim_payout {
 				assert_ok!(Balances::mutate_account(&REWARDS_ACCOUNT, |a| a.free -= 2));
 
 				// When
-				let (reward_pool, del_40, payout) =
-					Pools::calculate_delegator_payout(&bonded_pool, reward_pool, del_40).unwrap();
+				let payout =
+					Pools::calculate_delegator_payout(&bonded_pool, &reward_pool, &del_40).unwrap();
 
 				// Then
 				assert_eq!(payout, 188); // (18,800 del virtual points /  39,800 pool points) * 399 pool balance
@@ -995,8 +995,8 @@ mod claim_payout {
 				assert_ok!(Balances::mutate_account(&REWARDS_ACCOUNT, |a| a.free -= 188));
 
 				// When
-				let (reward_pool, del_50, payout) =
-					Pools::calculate_delegator_payout(&bonded_pool, reward_pool, del_50).unwrap();
+				let payout =
+					Pools::calculate_delegator_payout(&bonded_pool, &reward_pool, &del_50).unwrap();
 
 				// Then
 				assert_eq!(payout, 210); // (21,000 / 21,000) * 210

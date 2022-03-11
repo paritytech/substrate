@@ -791,6 +791,24 @@ impl<T: Config> BondedPool<T> {
 
 		Ok(points_issued)
 	}
+
+	/// If the the product of `a` and `b` saturates type `U`, then the pool is set to destroying and
+	/// the upper bound of `U` is returned.
+	///
+	/// # Note
+	///
+	/// This only performs in memory modifications. The pool should be written to storage if its
+	/// state is set to destroying.
+	fn destroying_mul<U>(&mut self, a: U, b: U) -> U
+	where U: U: Saturating + CheckedMul + Bounded,
+	{
+		if let Some(res) = a.check_mul(b) {
+			res
+		} else {
+			self.state = PoolState::Destroying;
+			U::max_value()
+		}
+	}
 }
 
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, RuntimeDebugNoBound)]
@@ -1208,7 +1226,7 @@ pub mod pallet {
 			let bonded_pool = BondedPool::<T>::get(&delegator.bonded_pool_account)
 				.defensive_ok_or_else(|| Error::<T>::PoolNotFound)?;
 
-			Self::do_reward_payout(who, delegator, &bonded_pool)?;
+			Self::do_reward_payout(who, delegator, bonded_pool)?;
 
 			Ok(())
 		}
@@ -1580,9 +1598,9 @@ pub mod pallet {
 impl<T: Config> Pallet<T> {
 	/// Calculate the rewards for `delegator`.
 	fn calculate_delegator_payout(
-		bonded_pool: &BondedPool<T>,
-		mut reward_pool: RewardPool<T>,
-		mut delegator: Delegator<T>,
+		bonded_pool: &mut BondedPool<T>,
+		reward_pool: &mut RewardPool<T>,
+		delegator: &mut Delegator<T>,
 	) -> Result<(RewardPool<T>, Delegator<T>, BalanceOf<T>), DispatchError> {
 		let u256 = |x| T::BalanceToU256::convert(x);
 		// If the delegator is unbonding they cannot claim rewards. Note that when the delegator
@@ -1599,7 +1617,7 @@ impl<T: Config> Pallet<T> {
 		// earned by the reward pool, we inflate the reward pool points by `bonded_pool.points`. In
 		// effect this allows each, single unit of balance (e.g. plank) to be divvied up pro rata
 		// among delegators based on points.
-		let new_points = u256(bonded_pool.points).saturating_mul(new_earnings);
+		let new_points = bonded_pool.destroying_mul(u256(bonded_pool.points), new_earnings);
 
 		// The points of the reward pool after taking into account the new earnings. Notice that
 		// this only stays even or increases over time except for when we subtract delegator virtual
@@ -1612,7 +1630,7 @@ impl<T: Config> Pallet<T> {
 
 		// The points of the reward pool that belong to the delegator.
 		let delegator_virtual_points =
-			u256(delegator.points).saturating_mul(u256(new_earnings_since_last_claim));
+			bonded_pool.destroying_mul(u256(delegator.points), u256(new_earnings_since_last_claim));
 
 		let delegator_payout = if delegator_virtual_points.is_zero() ||
 			current_points.is_zero() ||
@@ -1622,8 +1640,7 @@ impl<T: Config> Pallet<T> {
 		} else {
 			// Equivalent to `(delegator_virtual_points / current_points) * reward_pool.balance`
 			T::U256ToBalance::convert(
-				delegator_virtual_points
-					.saturating_mul(u256(reward_pool.balance))
+				bonded_pool.destroying_mul(delegator_virtual_points, u256(reward_pool.balance))
 					// We check for zero above
 					.div(current_points),
 			)
@@ -1634,18 +1651,19 @@ impl<T: Config> Pallet<T> {
 		reward_pool.points = current_points.saturating_sub(delegator_virtual_points);
 		reward_pool.balance = reward_pool.balance.saturating_sub(delegator_payout);
 
-		Ok((reward_pool, delegator, delegator_payout))
+		Ok(delegator_payout)
 	}
 
 	fn do_reward_payout(
 		delegator_id: T::AccountId,
 		delegator: Delegator<T>, // TODO: make clear this is mut
-		bonded_pool: &BondedPool<T>,
+		bonded_pool: BondedPool<T>,
 	) -> DispatchResult {
+		let was_destroying = bonded_pool.is_destroying();
 		let reward_pool = RewardPools::<T>::get(&delegator.bonded_pool_account)
 			.defensive_ok_or_else(|| Error::<T>::RewardPoolNotFound)?;
 
-		let (reward_pool, delegator, delegator_payout) =
+		let delegator_payout =
 			Self::calculate_delegator_payout(bonded_pool, reward_pool, delegator)?;
 
 		// Transfer payout to the delegator.
@@ -1664,6 +1682,11 @@ impl<T: Config> Pallet<T> {
 		// Write the updated delegator and reward pool to storage
 		RewardPools::insert(&delegator.bonded_pool_account, reward_pool);
 		Delegators::insert(delegator_id, delegator);
+		if bonded_pool.is_destroying() && !was_destroying {
+			// Event that pool was state was changed
+			bonded_pool.put()
+		}
+
 
 		Ok(())
 	}
