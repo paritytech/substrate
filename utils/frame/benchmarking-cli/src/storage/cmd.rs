@@ -88,13 +88,13 @@ pub struct StorageParams {
 	#[clap(long)]
 	pub template_path: Option<PathBuf>,
 
-	/// Write the raw 'read' results in JSON format to the specified file.
+	/// Path to write the raw 'read' results in JSON format to. Can be a file or directory.
 	#[clap(long)]
-	pub json_read_path: Option<String>,
+	pub json_read_path: Option<PathBuf>,
 
-	/// Write the raw 'write' results in JSON format to the specified file.
+	/// Path to write the raw 'write' results in JSON format to. Can be a file or directory.
 	#[clap(long)]
-	pub json_write_path: Option<String>,
+	pub json_write_path: Option<PathBuf>,
 
 	/// Rounds of warmups before measuring.
 	#[clap(long, default_value = "1")]
@@ -133,7 +133,7 @@ impl StorageCmd {
 		if !self.params.skip_read {
 			let record = self.bench_read(client.clone())?;
 			if let Some(path) = &self.params.json_read_path {
-				record.save_json(&cfg, &path, "read")?;
+				record.save_json(&cfg, path, "read")?;
 			}
 			let stats = record.calculate_stats()?;
 			info!("Time summary [ns]:\n{:?}\nValue size summary:\n{:?}", stats.0, stats.1);
@@ -143,7 +143,7 @@ impl StorageCmd {
 		if !self.params.skip_write {
 			let record = self.bench_write(client, db, storage)?;
 			if let Some(path) = &self.params.json_write_path {
-				record.save_json(&cfg, &path, "write")?;
+				record.save_json(&cfg, path, "write")?;
 			}
 			let stats = record.calculate_stats()?;
 			info!("Time summary [ns]:\n{:?}\nValue size summary:\n{:?}", stats.0, stats.1);

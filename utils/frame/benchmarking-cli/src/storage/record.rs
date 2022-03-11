@@ -97,10 +97,10 @@ impl BenchRecord {
 
 	/// Unless a path is specified, saves the raw results in a json file in the current directory.
 	/// Prefixes it with the DB name and suffixed with `path_suffix`.
-	pub fn save_json(&self, cfg: &Configuration, out_path: &str, path_suffix: &str) -> Result<()> {
+	pub fn save_json(&self, cfg: &Configuration, out_path: &PathBuf, suffix: &str) -> Result<()> {
 		let mut path = PathBuf::from(out_path);
-		if path.is_dir() {
-			path.push(&format!("{}_{}", cfg.database, path_suffix).to_lowercase());
+		if path.is_dir() || path.as_os_str().is_empty() {
+			path.push(&format!("{}_{}", cfg.database, suffix).to_lowercase());
 			path.set_extension("json");
 		}
 
