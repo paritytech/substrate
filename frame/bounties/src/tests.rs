@@ -1036,3 +1036,54 @@ fn unassign_curator_self() {
 		assert_eq!(Balances::reserved_balance(1), 0); // not slashed
 	});
 }
+
+#[test]
+fn accept_curator_handles_different_deposit_calculations() {
+	// This test will verify that a bounty with and without a fee results
+	// in a different curator deposit: one using the value, and one using the fee.
+	new_test_ext().execute_with(|| {
+		// Case 1: With a fee
+		let user = 1;
+		let bounty_index = 0;
+		let value = 88;
+		let fee = 42;
+
+		System::set_block_number(1);
+		Balances::make_free_balance_be(&Treasury::account_id(), 101);
+		Balances::make_free_balance_be(&user, 100);
+		assert_ok!(Bounties::propose_bounty(Origin::signed(0), value, b"12345".to_vec()));
+		assert_ok!(Bounties::approve_bounty(Origin::root(), bounty_index));
+
+		System::set_block_number(2);
+		<Treasury as OnInitialize<u64>>::on_initialize(2);
+
+		assert_ok!(Bounties::propose_curator(Origin::root(), bounty_index, user, fee));
+		assert_ok!(Bounties::accept_curator(Origin::signed(user), bounty_index));
+
+		let expected_deposit = CuratorDepositMultiplierWithFee::get() * fee;
+		assert_eq!(Balances::free_balance(&user), 100 - expected_deposit);
+		assert_eq!(Balances::reserved_balance(&user), expected_deposit);
+
+		// Case 2: Without a fee
+		let user = 2;
+		let bounty_index = 1;
+		let value = 35;
+		let fee = 0;
+
+		Balances::make_free_balance_be(&Treasury::account_id(), 101);
+		Balances::make_free_balance_be(&user, 100);
+
+		assert_ok!(Bounties::propose_bounty(Origin::signed(0), value, b"12345".to_vec()));
+		assert_ok!(Bounties::approve_bounty(Origin::root(), bounty_index));
+
+		System::set_block_number(3);
+		<Treasury as OnInitialize<u64>>::on_initialize(3);
+
+		assert_ok!(Bounties::propose_curator(Origin::root(), bounty_index, user, fee));
+		assert_ok!(Bounties::accept_curator(Origin::signed(user), bounty_index));
+
+		let expected_deposit = CuratorDepositMultiplierWithNoFee::get() * value;
+		assert_eq!(Balances::free_balance(&user), 100 - expected_deposit);
+		assert_eq!(Balances::reserved_balance(&user), expected_deposit);
+	});
+}
