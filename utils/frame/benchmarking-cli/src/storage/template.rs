@@ -103,7 +103,7 @@ impl TemplateData {
 		// Use custom template if provided.
 		let template = match hbs_template_path {
 			Some(template) if template.is_file() => fs::read_to_string(template)?,
-			Some(_) => return Err("Handlebars template file is invalid!".into()),
+			Some(_) => return Err("Handlebars template is not a valid file!".into()),
 			None => TEMPLATE.to_string(),
 		};
 
