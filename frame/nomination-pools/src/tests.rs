@@ -748,16 +748,35 @@ mod claim_payout {
 			});
 	}
 
+	// TODO
+	// #[test]
+	// fn calculate_delegator_payout_sets_pool_state_to_destroying_if_mul_saturates() {
+	// 	ExtBuilder::default().build_and_execute(|| {
+	// 		let bonded_pool = BondedPool::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap();
+	// 		let reward_pool = RewardPools::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap();
+	// 		let delegator = Delegators::<Runtime>::get(10).unwrap();
+
+	// 		let u64_max_u128 = u64::MAX as u128;
+	// 		assert!(u64_max_u128.check_mul(u64_max_u128).is_none());
+	// 		Balances::make_free_balance_be(&reward_pool.account, u64::MAX as u128);
+	// 		// let reward_pool =
+	// 	});
+	// }
+
 	#[test]
 	fn calculate_delegator_payout_errors_if_a_delegator_is_unbonding() {
 		ExtBuilder::default().build_and_execute(|| {
-			let bonded_pool = BondedPool::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap();
-			let reward_pool = RewardPools::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap();
+			let mut bonded_pool = BondedPool::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap();
+			let mut reward_pool = RewardPools::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap();
 			let mut delegator = Delegators::<Runtime>::get(10).unwrap();
 			delegator.unbonding_era = Some(0 + 3);
 
 			assert_noop!(
-				Pools::calculate_delegator_payout(&bonded_pool, reward_pool, delegator),
+				Pools::calculate_delegator_payout(
+					&mut bonded_pool,
+					&mut reward_pool,
+					&mut delegator
+				),
 				Error::<Runtime>::AlreadyUnbonding
 			);
 		});
@@ -768,14 +787,18 @@ mod claim_payout {
 		let del = |reward_pool_total_earnings| del(10, reward_pool_total_earnings);
 
 		ExtBuilder::default().build_and_execute(|| {
-			let bonded_pool = BondedPool::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap();
-			let reward_pool = RewardPools::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap();
-			let delegator = Delegators::<Runtime>::get(10).unwrap();
+			let mut bonded_pool = BondedPool::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap();
+			let mut reward_pool = RewardPools::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap();
+			let mut delegator = Delegators::<Runtime>::get(10).unwrap();
 
 			// Given no rewards have been earned
 			// When
-			let payout =
-				Pools::calculate_delegator_payout(&bonded_pool, reward_pool, delegator).unwrap();
+			let payout = Pools::calculate_delegator_payout(
+				&mut bonded_pool,
+				&mut reward_pool,
+				&mut delegator,
+			)
+			.unwrap();
 
 			// Then
 			assert_eq!(payout, 0);
@@ -786,8 +809,12 @@ mod claim_payout {
 			Balances::make_free_balance_be(&reward_pool.account, 5);
 
 			// When
-			let payout =
-				Pools::calculate_delegator_payout(&bonded_pool, reward_pool, delegator).unwrap();
+			let payout = Pools::calculate_delegator_payout(
+				&mut bonded_pool,
+				&mut reward_pool,
+				&mut delegator,
+			)
+			.unwrap();
 
 			// Then
 			assert_eq!(payout, 5); //  (10 * 5 del virtual points / 10 * 5 pool points) * 5 pool balance
@@ -798,8 +825,12 @@ mod claim_payout {
 			Balances::make_free_balance_be(&REWARDS_ACCOUNT, 10);
 
 			// When
-			let payout =
-				Pools::calculate_delegator_payout(&bonded_pool, &reward_pool, &delegator).unwrap();
+			let payout = Pools::calculate_delegator_payout(
+				&mut bonded_pool,
+				&mut reward_pool,
+				&mut delegator,
+			)
+			.unwrap();
 
 			// Then
 			assert_eq!(payout, 10); // (10 * 10 del virtual points / 10 pool points) * 5 pool balance
@@ -810,8 +841,12 @@ mod claim_payout {
 			Balances::make_free_balance_be(&REWARDS_ACCOUNT, 0);
 
 			// When
-			let payout =
-				Pools::calculate_delegator_payout(&bonded_pool, reward_pool, delegator).unwrap();
+			let payout = Pools::calculate_delegator_payout(
+				&mut bonded_pool,
+				&mut reward_pool,
+				&mut delegator,
+			)
+			.unwrap();
 
 			// Then
 			assert_eq!(payout, 0);
@@ -825,14 +860,14 @@ mod claim_payout {
 		ExtBuilder::default()
 			.add_delegators(vec![(40, 40), (50, 50)])
 			.build_and_execute(|| {
-				let bonded_pool = BondedPool::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap();
-				let reward_pool = RewardPools::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap();
+				let mut bonded_pool = BondedPool::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap();
+				let mut reward_pool = RewardPools::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap();
 				// Delegator with 10 points
-				let del_10 = Delegators::<Runtime>::get(10).unwrap();
+				let mut del_10 = Delegators::<Runtime>::get(10).unwrap();
 				// Delegator with 40 points
-				let del_40 = Delegators::<Runtime>::get(40).unwrap();
+				let mut del_40 = Delegators::<Runtime>::get(40).unwrap();
 				// Delegator with 50 points
-				let del_50 = Delegators::<Runtime>::get(50).unwrap();
+				let mut del_50 = Delegators::<Runtime>::get(50).unwrap();
 
 				// Given we have a total of 100 points split among the delegators
 				assert_eq!(del_50.points + del_40.points + del_10.points, 100);
@@ -841,8 +876,12 @@ mod claim_payout {
 				Balances::make_free_balance_be(&REWARDS_ACCOUNT, 100);
 
 				// When
-				let payout =
-					Pools::calculate_delegator_payout(&bonded_pool, &reward_pool, &del_10).unwrap();
+				let payout = Pools::calculate_delegator_payout(
+					&mut bonded_pool,
+					&mut reward_pool,
+					&mut del_10,
+				)
+				.unwrap();
 
 				// Then
 				assert_eq!(payout, 10); // (10 del virtual points / 100 pool points) * 100 pool balance
@@ -852,8 +891,12 @@ mod claim_payout {
 				assert_ok!(Balances::mutate_account(&REWARDS_ACCOUNT, |a| a.free -= 10));
 
 				// When
-				let payout =
-					Pools::calculate_delegator_payout(&bonded_pool, &reward_pool, &del_40).unwrap();
+				let payout = Pools::calculate_delegator_payout(
+					&mut bonded_pool,
+					&mut reward_pool,
+					&mut del_40,
+				)
+				.unwrap();
 
 				// Then
 				assert_eq!(payout, 40); // (400 del virtual points / 900 pool points) * 90 pool balance
@@ -871,8 +914,12 @@ mod claim_payout {
 				assert_ok!(Balances::mutate_account(&REWARDS_ACCOUNT, |a| a.free -= 40));
 
 				// When
-				let payout =
-					Pools::calculate_delegator_payout(&bonded_pool, &reward_pool, &del_50).unwrap();
+				let payout = Pools::calculate_delegator_payout(
+					&mut bonded_pool,
+					&mut reward_pool,
+					&mut del_50,
+				)
+				.unwrap();
 
 				// Then
 				assert_eq!(payout, 50); // (50 del virtual points / 50 pool points) * 50 pool balance
@@ -885,8 +932,12 @@ mod claim_payout {
 				Balances::make_free_balance_be(&REWARDS_ACCOUNT, 50);
 
 				// When
-				let payout =
-					Pools::calculate_delegator_payout(&bonded_pool, &reward_pool, &del_10).unwrap();
+				let payout = Pools::calculate_delegator_payout(
+					&mut bonded_pool,
+					&mut reward_pool,
+					&mut del_10,
+				)
+				.unwrap();
 
 				// Then
 				assert_eq!(payout, 5); // (500  del virtual points / 5,000 pool points) * 50 pool balance
@@ -896,8 +947,12 @@ mod claim_payout {
 				assert_ok!(Balances::mutate_account(&REWARDS_ACCOUNT, |a| a.free -= 5));
 
 				// When
-				let payout =
-					Pools::calculate_delegator_payout(&bonded_pool, &reward_pool, &del_40).unwrap();
+				let payout = Pools::calculate_delegator_payout(
+					&mut bonded_pool,
+					&mut reward_pool,
+					&mut del_40,
+				)
+				.unwrap();
 
 				// Then
 				assert_eq!(payout, 20); // (2,000 del virtual points / 4,500 pool points) * 45 pool balance
@@ -910,8 +965,12 @@ mod claim_payout {
 				assert_eq!(Balances::free_balance(&REWARDS_ACCOUNT), 75);
 
 				// When
-				let payout =
-					Pools::calculate_delegator_payout(&bonded_pool, &reward_pool, &del_50).unwrap();
+				let payout = Pools::calculate_delegator_payout(
+					&mut bonded_pool,
+					&mut reward_pool,
+					&mut del_50,
+				)
+				.unwrap();
 
 				// Then
 				assert_eq!(payout, 50); // (5,000 del virtual points / 7,5000 pool points) * 75 pool balance
@@ -932,8 +991,12 @@ mod claim_payout {
 				assert_ok!(Balances::mutate_account(&REWARDS_ACCOUNT, |a| a.free -= 50));
 
 				// When
-				let payout =
-					Pools::calculate_delegator_payout(&bonded_pool, &reward_pool, &del_10).unwrap();
+				let payout = Pools::calculate_delegator_payout(
+					&mut bonded_pool,
+					&mut reward_pool,
+					&mut del_10,
+				)
+				.unwrap();
 
 				// Then
 				assert_eq!(payout, 5);
@@ -947,8 +1010,12 @@ mod claim_payout {
 				assert_eq!(Balances::free_balance(&REWARDS_ACCOUNT), 420);
 
 				// When
-				let payout =
-					Pools::calculate_delegator_payout(&bonded_pool, &reward_pool, &del_10).unwrap();
+				let payout = Pools::calculate_delegator_payout(
+					&mut bonded_pool,
+					&mut reward_pool,
+					&mut del_10,
+				)
+				.unwrap();
 
 				// Then
 				assert_eq!(payout, 40);
@@ -973,8 +1040,12 @@ mod claim_payout {
 				assert_eq!(Balances::free_balance(&REWARDS_ACCOUNT), 400);
 
 				// When
-				let payout =
-					Pools::calculate_delegator_payout(&bonded_pool, &reward_pool, &del_10).unwrap();
+				let payout = Pools::calculate_delegator_payout(
+					&mut bonded_pool,
+					&mut reward_pool,
+					&mut del_10,
+				)
+				.unwrap();
 
 				// Then
 				assert_eq!(payout, 2); // (200 del virtual points / 38,000 pool points) * 400 pool balance
@@ -984,8 +1055,12 @@ mod claim_payout {
 				assert_ok!(Balances::mutate_account(&REWARDS_ACCOUNT, |a| a.free -= 2));
 
 				// When
-				let payout =
-					Pools::calculate_delegator_payout(&bonded_pool, &reward_pool, &del_40).unwrap();
+				let payout = Pools::calculate_delegator_payout(
+					&mut bonded_pool,
+					&mut reward_pool,
+					&mut del_40,
+				)
+				.unwrap();
 
 				// Then
 				assert_eq!(payout, 188); // (18,800 del virtual points /  39,800 pool points) * 399 pool balance
@@ -995,8 +1070,12 @@ mod claim_payout {
 				assert_ok!(Balances::mutate_account(&REWARDS_ACCOUNT, |a| a.free -= 188));
 
 				// When
-				let payout =
-					Pools::calculate_delegator_payout(&bonded_pool, &reward_pool, &del_50).unwrap();
+				let payout = Pools::calculate_delegator_payout(
+					&mut bonded_pool,
+					&mut reward_pool,
+					&mut del_50,
+				)
+				.unwrap();
 
 				// Then
 				assert_eq!(payout, 210); // (21,000 / 21,000) * 210
@@ -1010,7 +1089,7 @@ mod claim_payout {
 		ExtBuilder::default()
 			.add_delegators(vec![(40, 40), (50, 50)])
 			.build_and_execute(|| {
-				let bonded_pool = BondedPool::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap();
+				let mut bonded_pool = BondedPool::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap();
 
 				// Given the bonded pool has 100 points
 				assert_eq!(bonded_pool.points, 100);
@@ -1021,13 +1100,17 @@ mod claim_payout {
 				// and the reward pool has earned 100 in rewards
 				Balances::make_free_balance_be(&REWARDS_ACCOUNT, 100);
 
+				let mut del_10 = Delegators::get(10).unwrap();
+				let mut del_40 = Delegators::get(40).unwrap();
+				let mut del_50 = Delegators::get(50).unwrap();
+
 				// When
-				assert_ok!(Pools::do_reward_payout(10, Delegators::get(10).unwrap(), &bonded_pool));
+				assert_ok!(Pools::do_reward_payout(10, &mut del_10, &mut bonded_pool));
 
 				// Then
 				// Expect a payout of 10: (10 del virtual points / 100 pool points) * 100 pool
 				// balance
-				assert_eq!(Delegators::<Runtime>::get(10).unwrap(), del(10, 100));
+				assert_eq!(del_10, del(10, 100));
 				assert_eq!(
 					RewardPools::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap(),
 					rew(90, 100 * 100 - 100 * 10, 100)
@@ -1036,11 +1119,11 @@ mod claim_payout {
 				assert_eq!(Balances::free_balance(&REWARDS_ACCOUNT), 90);
 
 				// When
-				assert_ok!(Pools::do_reward_payout(40, Delegators::get(40).unwrap(), &bonded_pool));
+				assert_ok!(Pools::do_reward_payout(40, &mut del_40, &mut bonded_pool));
 
 				// Then
 				// Expect payout 40: (400 del virtual points / 900 pool points) * 90 pool balance
-				assert_eq!(Delegators::<Runtime>::get(40).unwrap(), del(40, 100));
+				assert_eq!(del_40, del(40, 100));
 				assert_eq!(
 					RewardPools::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap(),
 					rew(50, 9_000 - 100 * 40, 100)
@@ -1049,11 +1132,11 @@ mod claim_payout {
 				assert_eq!(Balances::free_balance(&REWARDS_ACCOUNT), 50);
 
 				// When
-				assert_ok!(Pools::do_reward_payout(50, Delegators::get(50).unwrap(), &bonded_pool));
+				assert_ok!(Pools::do_reward_payout(50, &mut del_50, &mut bonded_pool));
 
 				// Then
 				// Expect payout 50: (50 del virtual points / 50 pool points) * 50 pool balance
-				assert_eq!(Delegators::<Runtime>::get(50).unwrap(), del(50, 100));
+				assert_eq!(del_50, del(50, 100));
 				assert_eq!(RewardPools::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap(), rew(0, 0, 100));
 				assert_eq!(Balances::free_balance(&50), 50);
 				assert_eq!(Balances::free_balance(&REWARDS_ACCOUNT), 0);
@@ -1062,11 +1145,11 @@ mod claim_payout {
 				Balances::make_free_balance_be(&REWARDS_ACCOUNT, 50);
 
 				// When
-				assert_ok!(Pools::do_reward_payout(10, Delegators::get(10).unwrap(), &bonded_pool));
+				assert_ok!(Pools::do_reward_payout(10, &mut del_10, &mut bonded_pool));
 
 				// Then
 				// Expect payout 5: (500  del virtual points / 5,000 pool points) * 50 pool balance
-				assert_eq!(Delegators::<Runtime>::get(10).unwrap(), del(10, 150));
+				assert_eq!(del_10, del(10, 150));
 				assert_eq!(
 					RewardPools::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap(),
 					rew(45, 5_000 - 50 * 10, 150)
@@ -1075,12 +1158,12 @@ mod claim_payout {
 				assert_eq!(Balances::free_balance(&REWARDS_ACCOUNT), 45);
 
 				// When
-				assert_ok!(Pools::do_reward_payout(40, Delegators::get(40).unwrap(), &bonded_pool));
+				assert_ok!(Pools::do_reward_payout(40, &mut del_40, &mut bonded_pool));
 
 				// Then
 				// Expect payout 20: (2,000 del virtual points / 4,500 pool points) * 45 pool
 				// balance
-				assert_eq!(Delegators::<Runtime>::get(40).unwrap(), del(40, 150));
+				assert_eq!(del_40, del(40, 150));
 				assert_eq!(
 					RewardPools::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap(),
 					rew(25, 4_500 - 50 * 40, 150)
@@ -1093,12 +1176,12 @@ mod claim_payout {
 				assert_eq!(Balances::free_balance(&REWARDS_ACCOUNT), 75);
 
 				// When
-				assert_ok!(Pools::do_reward_payout(50, Delegators::get(50).unwrap(), &bonded_pool));
+				assert_ok!(Pools::do_reward_payout(50, &mut del_50, &mut bonded_pool));
 
 				// Then
 				// We expect a payout of 50: (5,000 del virtual points / 7,5000 pool points) * 75
 				// pool balance
-				assert_eq!(Delegators::<Runtime>::get(50).unwrap(), del(50, 200));
+				assert_eq!(del_50, del(50, 200));
 				assert_eq!(
 					RewardPools::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap(),
 					rew(
@@ -1115,11 +1198,11 @@ mod claim_payout {
 				assert_eq!(Balances::free_balance(&REWARDS_ACCOUNT), 25);
 
 				// When
-				assert_ok!(Pools::do_reward_payout(10, Delegators::get(10).unwrap(), &bonded_pool));
+				assert_ok!(Pools::do_reward_payout(10, &mut del_10, &mut bonded_pool));
 
 				// Then
 				// We expect a payout of 5
-				assert_eq!(Delegators::<Runtime>::get(10).unwrap(), del(10, 200));
+				assert_eq!(del_10, del(10, 200));
 				assert_eq!(
 					RewardPools::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap(),
 					rew(20, 2_500 - 10 * 50, 200)
@@ -1132,11 +1215,11 @@ mod claim_payout {
 				assert_eq!(Balances::free_balance(&REWARDS_ACCOUNT), 420);
 
 				// When
-				assert_ok!(Pools::do_reward_payout(10, Delegators::get(10).unwrap(), &bonded_pool));
+				assert_ok!(Pools::do_reward_payout(10, &mut del_10, &mut bonded_pool));
 
 				// Then
 				// We expect a payout of 40
-				assert_eq!(Delegators::<Runtime>::get(10).unwrap(), del(10, 600));
+				assert_eq!(del_10, del(10, 600));
 				assert_eq!(
 					RewardPools::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap(),
 					rew(
@@ -1157,12 +1240,12 @@ mod claim_payout {
 				assert_eq!(Balances::free_balance(&REWARDS_ACCOUNT), 400);
 
 				// When
-				assert_ok!(Pools::do_reward_payout(10, Delegators::get(10).unwrap(), &bonded_pool));
+				assert_ok!(Pools::do_reward_payout(10, &mut del_10, &mut bonded_pool));
 
 				// Then
 				// Expect a payout of 2: (200 del virtual points / 38,000 pool points) * 400 pool
 				// balance
-				assert_eq!(Delegators::<Runtime>::get(10).unwrap(), del(10, 620));
+				assert_eq!(del_10, del(10, 620));
 				assert_eq!(
 					RewardPools::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap(),
 					rew(398, (38_000 + 20 * 100) - 10 * 20, 620)
@@ -1171,12 +1254,12 @@ mod claim_payout {
 				assert_eq!(Balances::free_balance(&REWARDS_ACCOUNT), 398);
 
 				// When
-				assert_ok!(Pools::do_reward_payout(40, Delegators::get(40).unwrap(), &bonded_pool));
+				assert_ok!(Pools::do_reward_payout(40, &mut del_40, &mut bonded_pool));
 
 				// Then
 				// Expect a payout of 188: (18,800 del virtual points /  39,800 pool points) * 399
 				// pool balance
-				assert_eq!(Delegators::<Runtime>::get(40).unwrap(), del(40, 620));
+				assert_eq!(del_40, del(40, 620));
 				assert_eq!(
 					RewardPools::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap(),
 					rew(210, 39_800 - 40 * 470, 620)
@@ -1185,11 +1268,11 @@ mod claim_payout {
 				assert_eq!(Balances::free_balance(&REWARDS_ACCOUNT), 210);
 
 				// When
-				assert_ok!(Pools::do_reward_payout(50, Delegators::get(50).unwrap(), &bonded_pool));
+				assert_ok!(Pools::do_reward_payout(50, &mut del_50, &mut bonded_pool));
 
 				// Then
 				// Expect payout of 210: (21,000 / 21,000) * 210
-				assert_eq!(Delegators::<Runtime>::get(50).unwrap(), del(50, 620));
+				assert_eq!(del_50, del(50, 620));
 				assert_eq!(
 					RewardPools::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap(),
 					rew(0, 21_000 - 50 * 420, 620)
@@ -1202,7 +1285,7 @@ mod claim_payout {
 	#[test]
 	fn do_reward_payout_errors_correctly() {
 		ExtBuilder::default().build_and_execute(|| {
-			let bonded_pool = BondedPool::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap();
+			let mut bonded_pool = BondedPool::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap();
 			let mut delegator = Delegators::<Runtime>::get(10).unwrap();
 
 			// The only place this can return an error is with the balance transfer from the
@@ -1217,7 +1300,7 @@ mod claim_payout {
 			// Then
 			// Expect attempt payout of 15/10 * 10 when free balance is actually 10
 			assert_noop!(
-				Pools::do_reward_payout(10, delegator, &bonded_pool),
+				Pools::do_reward_payout(10, &mut delegator, &mut bonded_pool),
 				pallet_balances::Error::<Runtime>::InsufficientBalance
 			);
 		});
