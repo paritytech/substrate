@@ -46,6 +46,7 @@ pub mod pallet {
 	type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<
 		<T as frame_system::Config>::AccountId,
 	>>::NegativeImbalance;
+
 	// Your Pallet's configuration trait, representing custom external types and interfaces.
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
@@ -64,6 +65,11 @@ pub mod pallet {
 		/// The deposit a user needs to place in order to keep their name registration in storage.
 		#[pallet::constant]
 		type NameDeposit: Get<BalanceOf<Self>>;
+
+		// The fee tiers for registration a name
+		type TierThreeLetters: Get<BalanceOf<Self>>;
+		type TierFourLetters: Get<BalanceOf<Self>>;
+		type TierDefault: Get<BalanceOf<Self>>;
 	}
 
 	#[derive(Encode, Decode, Default, MaxEncodedLen, TypeInfo)]
@@ -166,8 +172,8 @@ pub mod pallet {
 			commitment_hash: CommitmentHash,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
-			ensure!(!Commitments::<T>::contains_key(commitment_hash), Error::<T>::AlreadyCommitted);
 			ensure!(Self::available(name_hash), Error::<T>::AlreadyRegistered);
+			ensure!(!Commitments::<T>::contains_key(commitment_hash), Error::<T>::AlreadyCommitted);
 
 			let block_number = frame_system::Pallet::<T>::block_number();
 			let deposit = T::CommitmentDeposit::get();
@@ -251,6 +257,11 @@ pub mod pallet {
 			Registrations::<T>::try_mutate(name_hash, |maybe_registration| {
 				let r = maybe_registration.as_mut().ok_or(Error::<T>::RegistrationNotFound)?;
 
+				// TODO: check if within expiry or in grace period
+				// if we are in grace period, new expiry is current block + length 
+				// if we are before expiry, new expiry is currency expiry + length
+				// if we are beyond grace period, need to re-register (fail renew).
+
 				let fee = Self::extension_fee(length);
 
 				// withdraw fees from account
@@ -320,6 +331,7 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		fn available(name_hash: NameHash) -> bool {
 			match Registrations::<T>::get(name_hash) {
+				// TODO: add grace period to expiry
 				Some(r) => match r.expiry < frame_system::Pallet::<T>::block_number() {
 					true => true,
 					false => false,
@@ -331,9 +343,9 @@ pub mod pallet {
 		fn registration_fee(name: Vec<u8>, length: T::BlockNumber) -> BalanceOf<T> {
 			// TODO: plug in registration fees
 			let fee_reg: BalanceOf<T> = match name.len() {
-				3 => Default::default(),
-				4 => Default::default(),
-				_ => Default::default(),
+				3 => T::TierThreeLetters::get(),
+				4 => T::TierFourLetters::get(),
+				_ => T::TierDefault::get(),
 			};
 
 			// TODO: calculate length fee
@@ -355,13 +367,8 @@ pub mod pallet {
 			let block_number = frame_system::Pallet::<T>::block_number();
 			let expiry = block_number.saturating_add(length);
 
-			let registration = Registration {
-				owner: who.clone(),
-				registrant: who.clone(),
-				expiry,
-				// TODO: Handle deposit in the future maybe.
-				deposit,
-			};
+			let registration =
+				Registration { owner: who.clone(), registrant: who.clone(), expiry, deposit };
 
 			Registrations::<T>::insert(name_hash, registration);
 
