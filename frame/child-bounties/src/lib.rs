@@ -144,15 +144,14 @@ pub mod pallet {
 		#[pallet::constant]
 		type ChildBountyValueMinimum: Get<BalanceOf<Self>>;
 
-
 		/// In the case a child bounty has a non-zero fee, the deposit for the curator
 		/// will be a fraction of that fee based on the multiplier below.
 		#[pallet::constant]
 		type ChildCuratorDepositMultiplierWithFee: Get<Permill>;
 
 		/// In the case a child bounty has no fee, we use this multiplier in the following logic:
-		///  - if the child curator is the same as the parent curator, we know they already made
-		///    a deposit, and thus we don't need to take another deposit here.
+		///  - if the child curator is the same as the parent curator, we know they already made a
+		///    deposit, and thus we don't need to take another deposit here.
 		///  - if the child curator is different, since there is no fee, we use this multiplier
 		///    against the total value of the bounty, which should always be non-zero.
 		///

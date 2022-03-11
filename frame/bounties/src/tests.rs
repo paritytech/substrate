@@ -126,14 +126,16 @@ impl pallet_treasury::Config for Test {
 	type MaxApprovals = ConstU32<100>;
 }
 parameter_types! {
-	pub const BountyCuratorDeposit: Permill = Permill::from_percent(50);
+	pub const CuratorDepositMultiplierWithFee: Permill = Permill::from_percent(50);
+	pub const CuratorDepositMultiplierWithNoFee: Permill = Permill::from_percent(1);
 }
 impl Config for Test {
 	type Event = Event;
 	type BountyDepositBase = ConstU64<80>;
 	type BountyDepositPayoutDelay = ConstU64<3>;
 	type BountyUpdatePeriod = ConstU64<20>;
-	type BountyCuratorDeposit = BountyCuratorDeposit;
+	type CuratorDepositMultiplierWithFee = CuratorDepositMultiplierWithFee;
+	type CuratorDepositMultiplierWithNoFee = CuratorDepositMultiplierWithNoFee;
 	type BountyValueMinimum = ConstU64<1>;
 	type DataDepositPerByte = ConstU64<1>;
 	type MaximumReasonLength = ConstU32<16384>;

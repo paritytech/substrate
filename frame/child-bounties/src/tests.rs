@@ -130,14 +130,16 @@ impl pallet_treasury::Config for Test {
 	type MaxApprovals = ConstU32<100>;
 }
 parameter_types! {
-	pub const BountyCuratorDeposit: Permill = Permill::from_percent(50);
+	pub const CuratorDepositMultiplierWithFee: Permill = Permill::from_percent(50);
+	pub const CuratorDepositMultiplierWithNoFee: Permill = Permill::from_percent(1);
 }
 impl pallet_bounties::Config for Test {
 	type Event = Event;
 	type BountyDepositBase = ConstU64<80>;
 	type BountyDepositPayoutDelay = ConstU64<3>;
 	type BountyUpdatePeriod = ConstU64<10>;
-	type BountyCuratorDeposit = BountyCuratorDeposit;
+	type CuratorDepositMultiplierWithFee = CuratorDepositMultiplierWithFee;
+	type CuratorDepositMultiplierWithNoFee = CuratorDepositMultiplierWithNoFee;
 	type BountyValueMinimum = ConstU64<5>;
 	type DataDepositPerByte = ConstU64<1>;
 	type MaximumReasonLength = ConstU32<300>;
@@ -229,7 +231,7 @@ fn add_child_bounty() {
 		assert_ok!(Bounties::accept_curator(Origin::signed(4), 0));
 
 		// This verifies that the accept curator logic took a deposit.
-		let expected_deposit = BountyCuratorDeposit::get() * fee;
+		let expected_deposit = CuratorDepositMultiplierWithFee::get() * fee;
 		assert_eq!(Balances::reserved_balance(&4), expected_deposit);
 		assert_eq!(Balances::free_balance(&4), 10 - expected_deposit);
 
