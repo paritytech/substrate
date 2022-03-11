@@ -196,12 +196,11 @@ pub mod pallet {
 				.ok_or(Error::<T>::CommitmentNotFound)?;
 			let name_hash = sp_io::hashing::blake2_256(&name);
 
-			ensure!(self::available(), Error::<T>::AlreadyRegistered);
-
-			// TODO: check if sender has adequate balance to meet fee obligations?
+			ensure!(Self::available(name_hash), Error::<T>::AlreadyRegistered);
 
 			let fee = Self::registration_fee(name.clone(), length);
-			// send fees to designated account
+
+			// withdraw fees from account
 			let imbalance = T::Currency::withdraw(
 				&sender,
 				fee,
@@ -209,31 +208,13 @@ pub mod pallet {
 				ExistenceRequirement::KeepAlive,
 			)?;
 
-			let block_number = frame_system::Pallet::<T>::block_number();
-			let expiry = block_number.saturating_add(length);
-			let deposit: BalanceOf<T> = Default::default();
-
-			let registration = Registration {
-				owner: commitment.who.clone(),
-				registrant: commitment.who.clone(),
-				expiry,
-				// Handle deposit in the future maybe.
-				deposit,
-			};
-
-			Registrations::<T>::insert(name_hash, registration);
-
-			// copied to Registration.
-			Commitments::<T>::remove(commitment_hash);
-
 			T::RegistrationFeeHandler::on_unbalanced(imbalance);
 
-			Self::deposit_event(Event::<T>::Registered {
-				owner: commitment.who.clone(),
-				registrant: commitment.who,
-				expiry,
-				deposit,
-			});
+			// TODO: handle deposits maybe in the future
+			let deposit: BalanceOf<T> = Default::default();
+
+			Self::do_register(name_hash, commitment.who, deposit, length);
+			Commitments::<T>::remove(commitment_hash);
 
 			Ok(())
 		}
@@ -270,13 +251,20 @@ pub mod pallet {
 			Registrations::<T>::try_mutate(name_hash, |maybe_registration| {
 				let r = maybe_registration.as_mut().ok_or(Error::<T>::RegistrationNotFound)?;
 
-				// TODO: check if sender has adequate balance to meet fee obligations?
-
 				let fee = Self::extension_fee(length);
-				//TODO: T::Currency::deposit_creating(&T::RegistrationFeeAccount::get(), fee);
+
+				// withdraw fees from account
+				let imbalance = T::Currency::withdraw(
+					&sender,
+					fee,
+					WithdrawReasons::FEE,
+					ExistenceRequirement::KeepAlive,
+				)?;
 
 				let expiry_new = r.expiry.saturating_add(length);
 				r.expiry = expiry_new.clone();
+
+				T::RegistrationFeeHandler::on_unbalanced(imbalance);
 
 				Self::deposit_event(Event::<T>::Extended { name_hash, expires: expiry_new });
 				Ok(())
@@ -330,18 +318,8 @@ pub mod pallet {
 
 	// Your Pallet's internal functions.
 	impl<T: Config> Pallet<T> {
-		fn do_register(
-			name_hash: NameHash,
-			who: T::AccountId,
-			deposit: BalanceOf<T>,
-		) -> DispatchResult {
-			Ok(())
-		}
-
 		fn available(name_hash: NameHash) -> bool {
-			let registration = Registrations::<T>::get(name_hash);
-
-			match registration {
+			match Registrations::<T>::get(name_hash) {
 				Some(r) => match r.expiry < frame_system::Pallet::<T>::block_number() {
 					true => true,
 					false => false,
@@ -350,14 +328,51 @@ pub mod pallet {
 			}
 		}
 
-		// TODO (register + duration fee)
 		fn registration_fee(name: Vec<u8>, length: T::BlockNumber) -> BalanceOf<T> {
+			// TODO: plug in registration fees
+			let fee_reg: BalanceOf<T> = match name.len() {
+				3 => Default::default(),
+				4 => Default::default(),
+				_ => Default::default(),
+			};
+
+			// TODO: calculate length fee
+			let fee_length = Default::default();
+			fee_reg.saturating_add(fee_length)
+		}
+
+		fn extension_fee(length: T::BlockNumber) -> BalanceOf<T> {
+			// TODO: calculate length fee
 			Default::default()
 		}
 
-		// TODO (duration fee only)
-		fn extension_fee(length: T::BlockNumber) -> BalanceOf<T> {
-			Default::default()
+		fn do_register(
+			name_hash: NameHash,
+			who: T::AccountId,
+			deposit: BalanceOf<T>,
+			length: T::BlockNumber,
+		) -> DispatchResult {
+			let block_number = frame_system::Pallet::<T>::block_number();
+			let expiry = block_number.saturating_add(length);
+
+			let registration = Registration {
+				owner: who.clone(),
+				registrant: who.clone(),
+				expiry,
+				// TODO: Handle deposit in the future maybe.
+				deposit,
+			};
+
+			Registrations::<T>::insert(name_hash, registration);
+
+			Self::deposit_event(Event::<T>::Registered {
+				owner: who.clone(),
+				registrant: who,
+				expiry,
+				deposit,
+			});
+
+			Ok(())
 		}
 	}
 }
