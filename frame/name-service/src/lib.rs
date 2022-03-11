@@ -162,10 +162,13 @@ pub mod pallet {
 		pub fn commit(
 			origin: OriginFor<T>,
 			who: T::AccountId,
+			name_hash: NameHash,
 			commitment_hash: CommitmentHash,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 			ensure!(!Commitments::<T>::contains_key(commitment_hash), Error::<T>::AlreadyCommitted);
+			ensure!(Self::available(name_hash), Error::<T>::AlreadyRegistered);
+
 			let block_number = frame_system::Pallet::<T>::block_number();
 			let deposit = T::CommitmentDeposit::get();
 
@@ -193,7 +196,7 @@ pub mod pallet {
 				.ok_or(Error::<T>::CommitmentNotFound)?;
 			let name_hash = sp_io::hashing::blake2_256(&name);
 
-			ensure!(Registrations::<T>::contains_key(name_hash), Error::<T>::AlreadyRegistered);
+			ensure!(self::available(), Error::<T>::AlreadyRegistered);
 
 			// TODO: check if sender has adequate balance to meet fee obligations?
 
@@ -291,7 +294,10 @@ pub mod pallet {
 			let registration =
 				Registrations::<T>::get(name_hash).ok_or(Error::<T>::RegistrationNotFound)?;
 			ensure!(registration.owner == sender, Error::<T>::NotRegistrationOwner);
-			ensure!(registration.expiry > frame_system::Pallet::<T>::block_number(), Error::<T>::RegistrationExpired);
+			ensure!(
+				registration.expiry > frame_system::Pallet::<T>::block_number(),
+				Error::<T>::RegistrationExpired
+			);
 
 			Resolvers::<T>::insert(name_hash, Resolver::Default(address.clone()));
 
@@ -301,18 +307,17 @@ pub mod pallet {
 		}
 
 		#[pallet::weight(0)]
-		pub fn resolve(
-			origin: OriginFor<T>,
-			name_hash: NameHash,
-		) -> DispatchResult {
+		pub fn resolve(origin: OriginFor<T>, name_hash: NameHash) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 
 			let registration =
 				Registrations::<T>::get(name_hash).ok_or(Error::<T>::RegistrationNotFound)?;
-			ensure!(registration.expiry > frame_system::Pallet::<T>::block_number(), Error::<T>::RegistrationExpired);
+			ensure!(
+				registration.expiry > frame_system::Pallet::<T>::block_number(),
+				Error::<T>::RegistrationExpired
+			);
 
-			let resolver =
-				Resolvers::<T>::get(name_hash).ok_or(Error::<T>::ResolverNotFound)?;
+			let resolver = Resolvers::<T>::get(name_hash).ok_or(Error::<T>::ResolverNotFound)?;
 
 			// TODO: return address
 			// match resolver {
@@ -331,6 +336,18 @@ pub mod pallet {
 			deposit: BalanceOf<T>,
 		) -> DispatchResult {
 			Ok(())
+		}
+
+		fn available(name_hash: NameHash) -> bool {
+			let registration = Registrations::<T>::get(name_hash);
+
+			match registration {
+				Some(r) => match r.expiry < frame_system::Pallet::<T>::block_number() {
+					true => true,
+					false => false,
+				},
+				None => true,
+			}
 		}
 
 		// TODO (register + duration fee)
