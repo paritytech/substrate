@@ -66,15 +66,20 @@ pub mod pallet {
 		#[pallet::constant]
 		type NameDeposit: Get<BalanceOf<Self>>;
 
-		// The fee tiers for registration a name
+		/// Registration fee for registering a 3-letter name.
 		#[pallet::constant]
 		type TierThreeLetters: Get<BalanceOf<Self>>;
 
+		/// Registration fee for registering a 4-letter name.
 		#[pallet::constant]
 		type TierFourLetters: Get<BalanceOf<Self>>;
 
+		/// Default registration fee for 5+ letter names.
 		#[pallet::constant]
 		type TierDefault: Get<BalanceOf<Self>>;
+
+		/// The origin that has super-user access to manage all name registrations.
+		type RegistrationManager: EnsureOrigin<Self::Origin>;
 	}
 
 	#[derive(Encode, Decode, Default, MaxEncodedLen, TypeInfo)]
@@ -173,11 +178,13 @@ pub mod pallet {
 		pub fn commit(
 			origin: OriginFor<T>,
 			who: T::AccountId,
-			name_hash: NameHash,
 			commitment_hash: CommitmentHash,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
-			ensure!(Self::available(name_hash), Error::<T>::AlreadyRegistered);
+
+			// TODO: Redefine logic for ensuring registration does not already exist
+			// ensure!(Self::is_available(name_hash), Error::<T>::AlreadyRegistered);
+
 			ensure!(!Commitments::<T>::contains_key(commitment_hash), Error::<T>::AlreadyCommitted);
 
 			let block_number = frame_system::Pallet::<T>::block_number();
@@ -203,21 +210,18 @@ pub mod pallet {
 			let sender = ensure_signed(origin)?;
 			let commitment_hash = sp_io::hashing::blake2_256(&(name.clone(), secret).encode());
 
-			let commitment = Commitments::<T>::get(commitment_hash.clone())
-				.ok_or(Error::<T>::CommitmentNotFound)?;
+			let commitment =
+				Commitments::<T>::get(commitment_hash.clone()).ok_or(Error::<T>::CommitmentNotFound)?;
 			let name_hash = sp_io::hashing::blake2_256(&name);
 
-			ensure!(Self::available(name_hash), Error::<T>::AlreadyRegistered);
+			// TODO: if statement, available then register, otherwise remove commitment
+			ensure!(Self::is_available(name_hash), Error::<T>::AlreadyRegistered);
 
 			let fee = Self::registration_fee(name.clone(), length);
 
 			// withdraw fees from account
-			let imbalance = T::Currency::withdraw(
-				&sender,
-				fee,
-				WithdrawReasons::FEE,
-				ExistenceRequirement::KeepAlive,
-			)?;
+			let imbalance =
+				T::Currency::withdraw(&sender, fee, WithdrawReasons::FEE, ExistenceRequirement::KeepAlive)?;
 
 			T::RegistrationFeeHandler::on_unbalanced(imbalance);
 
@@ -225,17 +229,15 @@ pub mod pallet {
 			let deposit: BalanceOf<T> = Default::default();
 
 			Self::do_register(name_hash, commitment.who, deposit, length);
+
+			// TODO: handle this if name expires
 			Commitments::<T>::remove(commitment_hash);
 
 			Ok(())
 		}
 
 		#[pallet::weight(0)]
-		pub fn transfer(
-			origin: OriginFor<T>,
-			to: T::AccountId,
-			name_hash: NameHash,
-		) -> DispatchResult {
+		pub fn transfer(origin: OriginFor<T>, to: T::AccountId, name_hash: NameHash) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 			let block_number = frame_system::Pallet::<T>::block_number();
 
@@ -267,7 +269,7 @@ pub mod pallet {
 				// if we are before expiry, new expiry is currency expiry + length
 				// if we are beyond grace period, need to re-register (fail renew).
 
-				let fee = Self::extension_fee(length);
+				let fee = Self::length_fee(length);
 
 				// withdraw fees from account
 				let imbalance = T::Currency::withdraw(
@@ -330,11 +332,26 @@ pub mod pallet {
 
 			Ok(())
 		}
+
+		#[pallet::weight(0)]
+		pub fn force_register(
+			origin: OriginFor<T>,
+			name_hash: NameHash,
+			who: T::AccountId,
+			length: T::BlockNumber,
+		) -> DispatchResult {
+			T::RegistrationManager::ensure_origin(origin)?;
+			// TODO: Deposit maybe should just be ZERO
+			let deposit = Default::default();
+			Self::do_register(name_hash, who, deposit, length)?;
+			Ok(())
+		}
 	}
 
 	// Your Pallet's internal functions.
+	// TODO: make block_number function parameter?
 	impl<T: Config> Pallet<T> {
-		fn available(name_hash: NameHash) -> bool {
+		fn is_available(name_hash: NameHash) -> bool {
 			match Registrations::<T>::get(name_hash) {
 				// TODO: add grace period to expiry
 				Some(r) => match r.expiry < frame_system::Pallet::<T>::block_number() {
@@ -346,19 +363,18 @@ pub mod pallet {
 		}
 
 		fn registration_fee(name: Vec<u8>, length: T::BlockNumber) -> BalanceOf<T> {
-			// TODO: plug in registration fees
 			let fee_reg: BalanceOf<T> = match name.len() {
 				3 => T::TierThreeLetters::get(),
 				4 => T::TierFourLetters::get(),
 				_ => T::TierDefault::get(),
 			};
 
-			// TODO: calculate length fee
-			let fee_length = Default::default();
+			// TODO: calculate length fee (constant FEE_PER_BLOCK)
+			let fee_length = Self::length_fee(length);
 			fee_reg.saturating_add(fee_length)
 		}
 
-		fn extension_fee(length: T::BlockNumber) -> BalanceOf<T> {
+		fn length_fee(length: T::BlockNumber) -> BalanceOf<T> {
 			// TODO: calculate length fee
 			Default::default()
 		}
