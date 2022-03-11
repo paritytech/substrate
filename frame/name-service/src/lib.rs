@@ -132,6 +132,8 @@ pub mod pallet {
 		Transfer { from: T::AccountId, to: T::AccountId },
 		/// A `Registration` has been extended.
 		Extended { name_hash: NameHash, expires: T::BlockNumber },
+		/// An address has been set for a name hash to resolve to.
+		AddressSet { name_hash: NameHash, address: T::AccountId },
 	}
 
 	// Your Pallet's error messages.
@@ -286,14 +288,16 @@ pub mod pallet {
 			address: T::AccountId,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
+			let block_number = frame_system::Pallet::<T>::block_number();
 
 			let registration =
 				Registrations::<T>::get(name_hash).ok_or(Error::<T>::RegistrationNotFound)?;
 			ensure!(registration.owner == sender, Error::<T>::NotRegistrationOwner);
+			ensure!(registration.expiry > block_number, Error::<T>::RegistrationExpired);
 
-			Resolvers::<T>::insert(name_hash, Resolver::Default(address));
+			Resolvers::<T>::insert(name_hash, Resolver::Default(address.clone()));
 
-			// TODO: deposit event
+			Self::deposit_event(Event::<T>::AddressSet { name_hash, address });
 
 			Ok(())
 		}
