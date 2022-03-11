@@ -41,11 +41,12 @@ pub mod v9 {
 
 				log!(
 					info,
-					"injected a total of {} new voters, prev count: {} next count: {}",
+					"injected a total of {} new voters, prev count: {} next count: {}, updating to version 9",
 					Validators::<T>::count(),
 					prev_count,
 					T::VoterList::count(),
 				);
+
 				StorageVersion::<T>::put(crate::Releases::V9_0_0);
 				T::BlockWeights::get().max_block
 			} else {
@@ -78,6 +79,11 @@ pub mod v9 {
 			let prev_count = Self::get_temp_storage::<u32>("prev").unwrap();
 			let validators = Validators::<T>::count();
 			assert!(post_count == prev_count + validators);
+
+			frame_support::ensure!(
+				StorageVersion::<T>::get() == crate::Releases::V9_0_0,
+				"must upgrade "
+			);
 			Ok(())
 		}
 	}
