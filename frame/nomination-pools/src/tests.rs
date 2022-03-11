@@ -748,20 +748,44 @@ mod claim_payout {
 			});
 	}
 
-	// TODO
-	// #[test]
-	// fn calculate_delegator_payout_sets_pool_state_to_destroying_if_mul_saturates() {
-	// 	ExtBuilder::default().build_and_execute(|| {
-	// 		let bonded_pool = BondedPool::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap();
-	// 		let reward_pool = RewardPools::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap();
-	// 		let delegator = Delegators::<Runtime>::get(10).unwrap();
+	#[test]
+	fn do_reward_payout_correctly_sets_pool_state_to_destroying() {
+		ExtBuilder::default().build_and_execute(|| {
+			let mut bonded_pool = BondedPool::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap();
+			let mut reward_pool = RewardPools::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap();
+			let mut delegator = Delegators::<Runtime>::get(10).unwrap();
 
-	// 		let u64_max_u128 = u64::MAX as u128;
-	// 		assert!(u64_max_u128.check_mul(u64_max_u128).is_none());
-	// 		Balances::make_free_balance_be(&reward_pool.account, u64::MAX as u128);
-	// 		// let reward_pool =
-	// 	});
-	// }
+			// --- reward_pool.total_earnings saturates
+
+			// Given
+			Balances::make_free_balance_be(&reward_pool.account, Balance::MAX);
+
+			// When
+			assert_ok!(Pools::do_reward_payout(10, &mut delegator, &mut bonded_pool));
+
+			// Then
+			assert!(bonded_pool.is_destroying());
+
+
+			// -- current_points saturates (reward_pool.points + new_earnings * bonded_pool.points)
+
+			// Given
+			let mut bonded_pool = BondedPool::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap();
+			let mut delegator = Delegators::<Runtime>::get(10).unwrap();
+			// Force new_earnings * bonded_pool.points == 100
+			Balances::make_free_balance_be(&reward_pool.account, 10);
+			assert_eq!(bonded_pool.points, 10);
+			// Force reward_pool.points == U256::MAX - new_earnings * bonded_pool.points
+			reward_pool.points = U256::MAX - U256::from(100);
+			RewardPools::<Runtime>::insert(PRIMARY_ACCOUNT, reward_pool.clone());
+
+			// When
+			assert_ok!(Pools::do_reward_payout(10, &mut delegator, &mut bonded_pool));
+
+			// Then
+			assert!(bonded_pool.is_destroying());
+		});
+	}
 
 	#[test]
 	fn calculate_delegator_payout_errors_if_a_delegator_is_unbonding() {

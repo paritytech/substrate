@@ -636,8 +636,6 @@ impl<T: Config> BondedPool<T> {
 			// We checked for zero above
 			.div(bonded_balance);
 
-		println!("{:?}=points", self.points);
-		println!("{:?}=bonded_balance", bonded_balance);
 		// TODO make sure these checks make sense. Taken from staking design chat with Al
 
 		// Pool points can inflate relative to balance, but only if the pool is slashed.
