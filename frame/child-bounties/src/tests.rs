@@ -1225,3 +1225,140 @@ fn children_curator_fee_calculation_test() {
 		assert_eq!(Balances::reserved_balance(9), 0);
 	});
 }
+
+#[test]
+fn accept_curator_handles_different_deposit_calculations() {
+	// This test will verify that a bounty with and without a fee results
+	// in a different curator deposit, and if the child curator matches the parent curator.
+	new_test_ext().execute_with(|| {
+		// Setup a parent bounty.
+		let parent_curator = 0;
+		let parent_index = 0;
+		let parent_value = 10_000;
+		let parent_fee = 1_000;
+
+		System::set_block_number(1);
+		Balances::make_free_balance_be(&Treasury::account_id(), parent_value * 3);
+		Balances::make_free_balance_be(&parent_curator, parent_fee * 100);
+		assert_ok!(Bounties::propose_bounty(
+			Origin::signed(parent_curator),
+			parent_value,
+			b"12345".to_vec()
+		));
+		assert_ok!(Bounties::approve_bounty(Origin::root(), parent_index));
+
+		System::set_block_number(2);
+		<Treasury as OnInitialize<u64>>::on_initialize(2);
+
+		assert_ok!(Bounties::propose_curator(
+			Origin::root(),
+			parent_index,
+			parent_curator,
+			parent_fee
+		));
+		assert_ok!(Bounties::accept_curator(Origin::signed(parent_curator), parent_index));
+
+		// Now we can start creating some child bounties.
+		// Case 1: There is a fee, we don't care if parent and child curator are the same.
+
+		let child_index = 0;
+		let child_curator = 1;
+		let child_value = 1_000;
+		let child_fee = 100;
+		let starting_balance = 100 * child_fee + child_value;
+
+		Balances::make_free_balance_be(&child_curator, starting_balance);
+		assert_ok!(ChildBounties::add_child_bounty(
+			Origin::signed(parent_curator),
+			parent_index,
+			child_value,
+			b"12345-p1".to_vec()
+		));
+		System::set_block_number(3);
+		<Treasury as OnInitialize<u64>>::on_initialize(3);
+		assert_ok!(ChildBounties::propose_curator(
+			Origin::signed(parent_curator),
+			parent_index,
+			child_index,
+			child_curator,
+			child_fee
+		));
+		assert_ok!(ChildBounties::accept_curator(
+			Origin::signed(child_curator),
+			parent_index,
+			child_index
+		));
+
+		let expected_deposit = ChildCuratorDepositMultiplierWithFee::get() * child_fee;
+		assert_eq!(Balances::free_balance(child_curator), starting_balance - expected_deposit);
+		assert_eq!(Balances::reserved_balance(child_curator), expected_deposit);
+
+		// Case 2: There is no fee, and the parent and child curator are the same.
+
+		let child_index = 1;
+		let child_curator = parent_curator; // The same as parent bounty curator
+		let child_value = 1_000;
+		let child_fee = 0; // No fee
+
+		let free_before = Balances::free_balance(&parent_curator);
+		let reserved_before = Balances::reserved_balance(&parent_curator);
+
+		assert_ok!(ChildBounties::add_child_bounty(
+			Origin::signed(parent_curator),
+			parent_index,
+			child_value,
+			b"12345-p1".to_vec()
+		));
+		System::set_block_number(4);
+		<Treasury as OnInitialize<u64>>::on_initialize(4);
+		assert_ok!(ChildBounties::propose_curator(
+			Origin::signed(parent_curator),
+			parent_index,
+			child_index,
+			child_curator,
+			child_fee
+		));
+		assert_ok!(ChildBounties::accept_curator(
+			Origin::signed(child_curator),
+			parent_index,
+			child_index
+		));
+
+		// No expected deposit
+		assert_eq!(Balances::free_balance(child_curator), free_before);
+		assert_eq!(Balances::reserved_balance(child_curator), reserved_before);
+
+		// Case 3: There is no fee, and the parent and child curator are not the same.
+
+		let child_index = 2;
+		let child_curator = 2;
+		let child_value = 1_000;
+		let child_fee = 0; // No fee
+
+		Balances::make_free_balance_be(&child_curator, starting_balance);
+		assert_ok!(ChildBounties::add_child_bounty(
+			Origin::signed(parent_curator),
+			parent_index,
+			child_value,
+			b"12345-p1".to_vec()
+		));
+		System::set_block_number(5);
+		<Treasury as OnInitialize<u64>>::on_initialize(5);
+		assert_ok!(ChildBounties::propose_curator(
+			Origin::signed(parent_curator),
+			parent_index,
+			child_index,
+			child_curator,
+			child_fee
+		));
+		assert_ok!(ChildBounties::accept_curator(
+			Origin::signed(child_curator),
+			parent_index,
+			child_index
+		));
+
+		let expected_deposit = ChildCuratorDepositMultiplierWithNoFee::get() * child_value;
+		assert_eq!(Balances::free_balance(child_curator), starting_balance - expected_deposit);
+		assert_eq!(Balances::reserved_balance(child_curator), expected_deposit);
+	});
+}
