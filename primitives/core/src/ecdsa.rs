@@ -34,12 +34,14 @@ use crate::{
 };
 #[cfg(feature = "std")]
 use bip39::{Language, Mnemonic, MnemonicType};
-#[cfg(feature = "full_crypto")]
-use core::convert::TryFrom;
+#[cfg(all(feature = "full_crypto", not(feature = "std")))]
+use secp256k1::Secp256k1;
+#[cfg(feature = "std")]
+use secp256k1::SECP256K1;
 #[cfg(feature = "full_crypto")]
 use secp256k1::{
 	ecdsa::{RecoverableSignature, RecoveryId},
-	Message, PublicKey, SecretKey, SECP256K1,
+	Message, PublicKey, SecretKey,
 };
 #[cfg(feature = "std")]
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
@@ -334,7 +336,13 @@ impl Signature {
 		let rid = RecoveryId::from_i32(self.0[64] as i32).ok()?;
 		let sig = RecoverableSignature::from_compact(&self.0[..64], rid).ok()?;
 		let message = Message::from_slice(message).expect("Message is 32 bytes; qed");
-		SECP256K1
+
+		#[cfg(feature = "std")]
+		let context = SECP256K1;
+		#[cfg(not(feature = "std"))]
+		let context = Secp256k1::verification_only();
+
+		context
 			.recover_ecdsa(&message, &sig)
 			.ok()
 			.map(|pubkey| Public(pubkey.serialize()))
@@ -425,7 +433,13 @@ impl TraitPair for Pair {
 	fn from_seed_slice(seed_slice: &[u8]) -> Result<Pair, SecretStringError> {
 		let secret =
 			SecretKey::from_slice(seed_slice).map_err(|_| SecretStringError::InvalidSeedLength)?;
-		let public = PublicKey::from_secret_key(SECP256K1, &secret);
+
+		#[cfg(feature = "std")]
+		let context = SECP256K1;
+		#[cfg(not(feature = "std"))]
+		let context = Secp256k1::signing_only();
+
+		let public = PublicKey::from_secret_key(&context, &secret);
 		let public = Public(public.serialize());
 		Ok(Pair { public, secret })
 	}
@@ -503,7 +517,13 @@ impl Pair {
 	/// Sign a pre-hashed message
 	pub fn sign_prehashed(&self, message: &[u8; 32]) -> Signature {
 		let message = Message::from_slice(message).expect("Message is 32 bytes; qed");
-		SECP256K1.sign_ecdsa_recoverable(&message, &self.secret).into()
+
+		#[cfg(feature = "std")]
+		let context = SECP256K1;
+		#[cfg(not(feature = "std"))]
+		let context = Secp256k1::signing_only();
+
+		context.sign_ecdsa_recoverable(&message, &self.secret).into()
 	}
 
 	/// Verify a signature on a pre-hashed message. Return `true` if the signature is valid
