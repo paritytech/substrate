@@ -398,7 +398,7 @@ where
 		};
 		let target_hash = target_header.hash();
 
-		let mmr_root = if let Some(hash) = find_mmr_root_digest::<B>(&target_header) {
+		let mmr_root = if let Some(hash) = self.extract_mmr_root_digest(&target_header) {
 			hash
 		} else {
 			warn!(target: "beefy", "🥩 No MMR root digest found for: {:?}", target_hash);
@@ -543,6 +543,22 @@ where
 			}
 		}
 	}
+
+	/// Simple wrapper over mmr root extraction.
+	#[cfg(not(test))]
+	fn extract_mmr_root_digest(&self, header: &B::Header) -> Option<MmrRootHash> {
+		find_mmr_root_digest::<B>(header)
+	}
+
+	/// For tests, have the option to modify mmr root.
+	#[cfg(test)]
+	fn extract_mmr_root_digest(&self, header: &B::Header) -> Option<MmrRootHash> {
+		let mut mmr_root = find_mmr_root_digest::<B>(header);
+		if self.test_res.corrupt_mmr_roots {
+			mmr_root.as_mut().map(|hash| *hash ^= MmrRootHash::random());
+		}
+		mmr_root
+	}
 }
 
 /// Extract the MMR root hash from a digest in the given header, if it exists.
@@ -650,8 +666,10 @@ pub(crate) mod tests {
 		Backend,
 	};
 
+	#[derive(Clone)]
 	pub struct TestModifiers {
 		pub active_validators: ValidatorSet<AuthorityId>,
+		pub corrupt_mmr_roots: bool,
 	}
 
 	#[test]
@@ -801,7 +819,8 @@ pub(crate) mod tests {
 		let keys = &[Keyring::Alice];
 		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
 		let mut net = BeefyTestNet::new(1, 0);
-		let mut worker = create_beefy_worker(&net.peer(0), &keys[0], &validator_set, 1);
+		net.peer(0).data.use_validator_set(&validator_set);
+		let mut worker = create_beefy_worker(&net.peer(0), &keys[0], 1);
 
 		// rounds not initialized -> should vote: `None`
 		assert_eq!(worker.current_vote_target(), None);
@@ -864,7 +883,8 @@ pub(crate) mod tests {
 		let keys = &[Keyring::Alice];
 		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
 		let mut net = BeefyTestNet::new(1, 0);
-		let mut worker = create_beefy_worker(&net.peer(0), &keys[0], &validator_set, 1);
+		net.peer(0).data.use_validator_set(&validator_set);
+		let mut worker = create_beefy_worker(&net.peer(0), &keys[0], 1);
 
 		// keystore doesn't contain other keys than validators'
 		assert_eq!(worker.verify_validator_set(&1, &validator_set), Ok(()));
@@ -888,7 +908,8 @@ pub(crate) mod tests {
 		let keys = &[Keyring::Alice];
 		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
 		let mut net = BeefyTestNet::new(1, 0);
-		let mut worker = create_beefy_worker(&net.peer(0), &keys[0], &validator_set, 1);
+		net.peer(0).data.use_validator_set(&validator_set);
+		let mut worker = create_beefy_worker(&net.peer(0), &keys[0], 1);
 
 		let (mut best_block_streams, _) = get_beefy_streams(&mut net, keys);
 		let mut best_block_stream = best_block_streams.drain(..).next().unwrap();
@@ -935,7 +956,8 @@ pub(crate) mod tests {
 		let keys = &[Keyring::Alice];
 		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
 		let mut net = BeefyTestNet::new(1, 0);
-		let mut worker = create_beefy_worker(&net.peer(0), &keys[0], &validator_set, 1);
+		net.peer(0).data.use_validator_set(&validator_set);
+		let mut worker = create_beefy_worker(&net.peer(0), &keys[0], 1);
 
 		assert!(worker.rounds.is_none());
 

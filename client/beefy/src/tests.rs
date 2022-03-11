@@ -47,7 +47,7 @@ use sp_runtime::{
 	codec::Encode, generic::BlockId, traits::Header as HeaderT, BuildStorage, DigestItem, Storage,
 };
 
-use substrate_test_runtime_client::{Backend, ClientExt};
+use substrate_test_runtime_client::{runtime::Header, Backend, ClientExt};
 
 use crate::{
 	beefy_protocol_name,
@@ -107,7 +107,21 @@ pub(crate) struct BeefyLinkHalf {
 
 #[derive(Default)]
 pub(crate) struct PeerData {
-	beefy_link_half: Mutex<Option<BeefyLinkHalf>>,
+	pub(crate) beefy_link_half: Mutex<Option<BeefyLinkHalf>>,
+	pub(crate) test_modifiers: Option<TestModifiers>,
+}
+
+impl PeerData {
+	pub(crate) fn use_validator_set(&mut self, validator_set: &ValidatorSet<AuthorityId>) {
+		if let Some(tm) = self.test_modifiers.as_mut() {
+			tm.active_validators = validator_set.clone();
+		} else {
+			self.test_modifiers = Some(TestModifiers {
+				active_validators: validator_set.clone(),
+				corrupt_mmr_roots: false,
+			});
+		}
+	}
 }
 
 pub(crate) struct BeefyTestNet {
@@ -143,10 +157,14 @@ impl BeefyTestNet {
 		self.peer(0).generate_blocks(count, BlockOrigin::File, |builder| {
 			let mut block = builder.build().unwrap().block;
 
-			add_mmr_digest(&mut block, MmrRootHash::default());
+			let block_num = *block.header.number();
+			let num_byte = block_num.to_le_bytes().into_iter().next().unwrap();
+			let mmr_root = MmrRootHash::repeat_byte(num_byte);
 
-			if *block.header.number() % session_length == 0 {
-				add_auth_change_digest(&mut block, validator_set.clone());
+			add_mmr_digest(&mut block.header, mmr_root);
+
+			if block_num % session_length == 0 {
+				add_auth_change_digest(&mut block.header, validator_set.clone());
 			}
 
 			block
@@ -205,15 +223,15 @@ impl TestNetFactory for BeefyTestNet {
 	}
 }
 
-fn add_mmr_digest(block: &mut Block, mmr_hash: MmrRootHash) {
-	block.header.digest_mut().push(DigestItem::Consensus(
+fn add_mmr_digest(header: &mut Header, mmr_hash: MmrRootHash) {
+	header.digest_mut().push(DigestItem::Consensus(
 		BEEFY_ENGINE_ID,
 		ConsensusLog::<AuthorityId>::MmrRoot(mmr_hash).encode(),
 	));
 }
 
-fn add_auth_change_digest(block: &mut Block, new_auth_set: BeefyValidatorSet) {
-	block.header.digest_mut().push(DigestItem::Consensus(
+fn add_auth_change_digest(header: &mut Header, new_auth_set: BeefyValidatorSet) {
+	header.digest_mut().push(DigestItem::Consensus(
 		BEEFY_ENGINE_ID,
 		ConsensusLog::<AuthorityId>::AuthoritiesChange(new_auth_set).encode(),
 	));
@@ -233,7 +251,6 @@ pub(crate) fn create_beefy_keystore(authority: BeefyKeyring) -> SyncCryptoStoreP
 pub(crate) fn create_beefy_worker(
 	peer: &BeefyPeer,
 	key: &BeefyKeyring,
-	validators: &ValidatorSet<AuthorityId>,
 	min_block_delta: u32,
 ) -> BeefyWorker<Block, PeersFullClient, Backend, Arc<NetworkService<Block, H256>>> {
 	let keystore = create_beefy_keystore(*key);
@@ -245,6 +262,7 @@ pub(crate) fn create_beefy_worker(
 
 	let beefy_link_half = BeefyLinkHalf { signed_commitment_stream, beefy_best_block_stream };
 	*peer.data.beefy_link_half.lock() = Some(beefy_link_half);
+	let test_modifiers = peer.data.test_modifiers.clone().unwrap();
 
 	let network = peer.network_service().clone();
 	let sync_oracle = network.clone();
@@ -264,23 +282,19 @@ pub(crate) fn create_beefy_worker(
 		sync_oracle,
 	};
 
-	BeefyWorker::<_, _, _, _>::new(
-		worker_params,
-		TestModifiers { active_validators: validators.clone() },
-	)
+	BeefyWorker::<_, _, _, _>::new(worker_params, test_modifiers)
 }
 
 // Spawns beefy voters. Returns a future to spawn on the runtime.
 fn initialize_beefy(
 	net: &mut BeefyTestNet,
 	peers: &[BeefyKeyring],
-	validators: &ValidatorSet<AuthorityId>,
 	min_block_delta: u32,
 ) -> impl Future<Output = ()> {
 	let voters = FuturesUnordered::new();
 
 	for (peer_id, key) in peers.iter().enumerate() {
-		let worker = create_beefy_worker(&net.peers[peer_id], key, validators, min_block_delta);
+		let worker = create_beefy_worker(&net.peers[peer_id], key, min_block_delta);
 		let gadget = worker.run();
 
 		fn assert_send<T: Send>(_: &T) {}
@@ -428,7 +442,11 @@ fn beefy_finalizing_blocks() {
 	let min_block_delta = 4;
 
 	let mut net = BeefyTestNet::new(2, 0);
-	runtime.spawn(initialize_beefy(&mut net, peers, &validator_set, min_block_delta));
+
+	for i in 0..peers.len() {
+		net.peer(i).data.use_validator_set(&validator_set);
+	}
+	runtime.spawn(initialize_beefy(&mut net, peers, min_block_delta));
 
 	// push 42 blocks including `AuthorityChange` digests every 10 blocks.
 	net.generate_blocks(42, session_len, &validator_set);
@@ -465,7 +483,10 @@ fn lagging_validators() {
 	let min_block_delta = 1;
 
 	let mut net = BeefyTestNet::new(2, 0);
-	runtime.spawn(initialize_beefy(&mut net, peers, &validator_set, min_block_delta));
+	for i in 0..peers.len() {
+		net.peer(i).data.use_validator_set(&validator_set);
+	}
+	runtime.spawn(initialize_beefy(&mut net, peers, min_block_delta));
 
 	// push 42 blocks including `AuthorityChange` digests every 30 blocks.
 	net.generate_blocks(42, session_len, &validator_set);
@@ -482,7 +503,7 @@ fn lagging_validators() {
 	let (best_blocks, signed_commitments) = get_beefy_streams(&mut *net.lock(), peers);
 	net.lock().peer(0).client().as_client().finalize_block(finalize, None).unwrap();
 	// verify nothing gets finalized by BEEFY
-	let timeout = Some(Duration::from_secs(1));
+	let timeout = Some(Duration::from_millis(500));
 	streams_empty_after_timeout(best_blocks, &net, &mut runtime, timeout);
 	streams_empty_after_timeout(signed_commitments, &net, &mut runtime, None);
 
@@ -495,4 +516,75 @@ fn lagging_validators() {
 
 	// Both finalize #30 (mandatory session) and #32 -> BEEFY finalize #30 (mandatory), #31, #32
 	finalize_block_and_wait_for_beefy(&net, peers, &mut runtime, &[30, 32], &[30, 31, 32]);
+}
+
+#[test]
+fn correct_beefy_payload() {
+	sp_tracing::try_init_simple();
+
+	let mut runtime = Runtime::new().unwrap();
+	let peers =
+		&[BeefyKeyring::Alice, BeefyKeyring::Bob, BeefyKeyring::Charlie, BeefyKeyring::Dave];
+	let validator_set = ValidatorSet::new(make_beefy_ids(peers), 0).unwrap();
+	let session_len = 20;
+	let min_block_delta = 2;
+
+	let mut net = BeefyTestNet::new(4, 0);
+	for i in 0..peers.len() {
+		net.peer(i).data.use_validator_set(&validator_set);
+	}
+
+	// Dave will vote on bad mmr roots
+	net.peer(3).data.test_modifiers.as_mut().map(|tm| tm.corrupt_mmr_roots = true);
+	runtime.spawn(initialize_beefy(&mut net, peers, min_block_delta));
+
+	// push 10 blocks
+	net.generate_blocks(12, session_len, &validator_set);
+	net.block_until_sync();
+
+	let net = Arc::new(Mutex::new(net));
+	// with 3 good voters and 1 bad one, consensus should happen and best blocks produced.
+	finalize_block_and_wait_for_beefy(&net, peers, &mut runtime, &[10], &[1, 9]);
+
+	let (best_blocks, signed_commitments) =
+		get_beefy_streams(&mut *net.lock(), &[BeefyKeyring::Alice]);
+
+	// now 2 good validators and 1 bad one are voting
+	net.lock()
+		.peer(0)
+		.client()
+		.as_client()
+		.finalize_block(BlockId::number(11), None)
+		.unwrap();
+	net.lock()
+		.peer(1)
+		.client()
+		.as_client()
+		.finalize_block(BlockId::number(11), None)
+		.unwrap();
+	net.lock()
+		.peer(3)
+		.client()
+		.as_client()
+		.finalize_block(BlockId::number(11), None)
+		.unwrap();
+
+	// verify consensus is _not_ reached
+	let timeout = Some(Duration::from_millis(500));
+	streams_empty_after_timeout(best_blocks, &net, &mut runtime, timeout);
+	streams_empty_after_timeout(signed_commitments, &net, &mut runtime, None);
+
+	// 3rd good validator catches up and votes as well
+	let (best_blocks, signed_commitments) =
+		get_beefy_streams(&mut *net.lock(), &[BeefyKeyring::Alice]);
+	net.lock()
+		.peer(2)
+		.client()
+		.as_client()
+		.finalize_block(BlockId::number(11), None)
+		.unwrap();
+
+	// verify consensus is reached
+	wait_for_best_beefy_blocks(best_blocks, &net, &mut runtime, &[11]);
+	wait_for_beefy_signed_commitments(signed_commitments, &net, &mut runtime, &[11]);
 }
