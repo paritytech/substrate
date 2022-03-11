@@ -17,7 +17,7 @@
 //! Storage migrations for the Staking pallet.
 
 use super::*;
-use frame_election_provider_support::{SortedListProvider, ScoreProvider};
+use frame_election_provider_support::{ScoreProvider, SortedListProvider};
 use frame_support::traits::OnRuntimeUpgrade;
 
 /// Migration implementation that injects all validators into sorted list.
@@ -38,7 +38,11 @@ impl<T: Config> OnRuntimeUpgrade for InjectValidatorsIntoSortedListProvider<T> {
 			StorageVersion::<T>::put(crate::Releases::V9_0_0);
 			T::BlockWeights::get().max_block
 		} else {
-			log!(warn, "InjectValidatorsIntoSortedListProvider being executed on the wrong storage version, expected Releases::V8_0_0");
+			log!(
+				warn,
+				"InjectValidatorsIntoSortedListProvider being executed on the wrong storage \
+				version, expected Releases::V8_0_0"
+			);
 			T::DbWeight::get().reads(1)
 		}
 	}
