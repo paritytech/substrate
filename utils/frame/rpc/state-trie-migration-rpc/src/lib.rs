@@ -29,11 +29,36 @@ use sp_core::{
 	Hasher,
 };
 use sp_state_machine::Backend;
-use sp_trie::{KeySpacedDB, Trie};
+use sp_trie::{trie_types::TrieDB, KeySpacedDB, Trie};
 use trie_db::{
 	node::{NodePlan, ValuePlan},
 	TrieDBNodeIterator,
 };
+
+fn count_migrate<'a, H: Hasher>(
+	storage: &'a dyn trie_db::HashDBRef<H, Vec<u8>>,
+	root: &'a H::Out,
+) -> std::result::Result<(u64, TrieDB<'a, H>), String> {
+	let mut nb = 0u64;
+	let trie = TrieDB::new(storage, root).map_err(|e| format!("TrieDB creation error: {}", e))?;
+	let iter_node =
+		TrieDBNodeIterator::new(&trie).map_err(|e| format!("TrieDB node iterator error: {}", e))?;
+	for node in iter_node {
+		let node = node.map_err(|e| format!("TrieDB node iterator error: {}", e))?;
+		match node.2.node_plan() {
+			NodePlan::Leaf { value, .. } | NodePlan::NibbledBranch { value: Some(value), .. } =>
+				if let ValuePlan::Inline(range) = value {
+					if (range.end - range.start) as u32 >=
+						sp_core::storage::TRIE_VALUE_NODE_THRESHOLD
+					{
+						nb += 1;
+					}
+				},
+			_ => (),
+		}
+	}
+	Ok((nb, trie))
+}
 
 /// Check trie migration status.
 pub fn migration_status<H, B>(backend: &B) -> std::result::Result<(u64, u64), String>
@@ -48,28 +73,9 @@ where
 		return Err("No access to trie from backend.".to_string())
 	};
 	let essence = trie_backend.essence();
+	let (nb_to_migrate, trie) = count_migrate(essence, &essence.root())?;
 
-	let threshold: u32 = sp_core::storage::TRIE_VALUE_NODE_THRESHOLD;
-	let mut nb_to_migrate = 0;
 	let mut nb_to_migrate_child = 0;
-
-	let trie = sp_trie::trie_types::TrieDB::new(essence, &essence.root())
-		.map_err(|e| format!("TrieDB creation error: {}", e))?;
-	let iter_node =
-		TrieDBNodeIterator::new(&trie).map_err(|e| format!("TrieDB node iterator error: {}", e))?;
-	for node in iter_node {
-		let node = node.map_err(|e| format!("TrieDB node iterator error: {}", e))?;
-		match node.2.node_plan() {
-			NodePlan::Leaf { value, .. } | NodePlan::NibbledBranch { value: Some(value), .. } =>
-				if let ValuePlan::Inline(range) = value {
-					if (range.end - range.start) as u32 >= threshold {
-						nb_to_migrate += 1;
-					}
-				},
-			_ => (),
-		}
-	}
-
 	let mut child_roots: Vec<(ChildInfo, Vec<u8>)> = Vec::new();
 	// get all child trie roots
 	for key_value in trie.iter().map_err(|e| format!("TrieDB node iterator error: {}", e))? {
@@ -86,23 +92,7 @@ where
 		let storage = KeySpacedDB::new(essence, child_info.keyspace());
 
 		child_root.as_mut()[..].copy_from_slice(&root[..]);
-		let trie = sp_trie::trie_types::TrieDB::new(&storage, &child_root)
-			.map_err(|e| format!("New child TrieDB error: {}", e))?;
-		let iter_node = TrieDBNodeIterator::new(&trie)
-			.map_err(|e| format!("TrieDB node iterator error: {}", e))?;
-		for node in iter_node {
-			let node = node.map_err(|e| format!("Child TrieDB node iterator error: {}", e))?;
-			match node.2.node_plan() {
-				NodePlan::Leaf { value, .. } |
-				NodePlan::NibbledBranch { value: Some(value), .. } =>
-					if let ValuePlan::Inline(range) = value {
-						if (range.end - range.start) as u32 >= threshold {
-							nb_to_migrate_child += 1;
-						}
-					},
-				_ => (),
-			}
-		}
+		nb_to_migrate_child += count_migrate(&storage, &child_root)?.0;
 	}
 
 	Ok((nb_to_migrate, nb_to_migrate_child))

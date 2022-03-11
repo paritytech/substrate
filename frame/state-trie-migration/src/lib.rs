@@ -138,8 +138,6 @@ pub mod pallet {
 	#[scale_info(skip_type_params(T))]
 	pub struct MigrationTask<T: Config> {
 		/// The current top trie migration progress.
-		///
-		/// If it does not exist, it means that the migration is done and no further keys exist.
 		pub(crate) progress_top: Progress,
 		/// The current child trie migration progress.
 		///
@@ -188,10 +186,8 @@ pub mod pallet {
 		fn fmt(&self, f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
 			match self {
 				Progress::ToStart => f.write_str("To start"),
-				Progress::LastKey(key) => f.write_fmt(format_args!(
-					"Last: {:?}",
-					sp_core::hexdisplay::HexDisplay::from(key)
-				)),
+				Progress::LastKey(key) =>
+					write!(f, "Last: {:?}", sp_core::hexdisplay::HexDisplay::from(key)),
 				Progress::Complete => f.write_str("Complete"),
 			}
 		}
@@ -329,8 +325,7 @@ pub mod pallet {
 					(Some(Vec::new()), child_root)
 				},
 				_ => {
-					// defensive: this function is only called when both of these values exist.
-					// much that we can do otherwise..
+					// defensive: there must be an ongoing top migration.
 					frame_support::defensive!("cannot migrate child key.");
 					return
 				},
@@ -363,8 +358,7 @@ pub mod pallet {
 				// Start with the empty key as first key.
 				Progress::ToStart => Some(Vec::new()),
 				Progress::Complete => {
-					// defensive: this function is only called when this value exist.
-					// much that we can do otherwise..
+					// defensive: there must be an ongoing top migration.
 					frame_support::defensive!("cannot migrate top key.");
 					return
 				},
