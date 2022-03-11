@@ -769,7 +769,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// This function will add a nominator to the `Nominators` storage map,
-	/// and [`VoterList`].
+	/// and `VoterList`.
 	///
 	/// If the nominator already exists, their nominations will be updated.
 	///
@@ -792,7 +792,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// This function will remove a nominator from the `Nominators` storage map,
-	/// and [`VoterList`].
+	/// and `VoterList`.
 	///
 	/// Returns true if `who` was removed from `Nominators`, otherwise false.
 	///

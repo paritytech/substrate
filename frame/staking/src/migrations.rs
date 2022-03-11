@@ -20,62 +20,73 @@ use super::*;
 use frame_election_provider_support::SortedListProvider;
 use frame_support::traits::OnRuntimeUpgrade;
 
-/// Migration implementation that injects all validators into sorted list.
-///
-/// This is only useful for chains that started their `VoterList` just based on nominators.
-pub struct InjectValidatorsIntoVoterList<T>(sp_std::marker::PhantomData<T>);
-impl<T: Config> OnRuntimeUpgrade for InjectValidatorsIntoVoterList<T> {
-	fn on_runtime_upgrade() -> Weight {
-		if StorageVersion::<T>::get() == Releases::V8_0_0 {
-			let weight_of_cached = Pallet::<T>::weight_of_fn();
-			for (v, _) in Validators::<T>::iter() {
-				let weight = weight_of_cached(&v);
-				let _ = T::VoterList::on_insert(v.clone(), weight).map_err(|err| {
-					log!(warn, "failed to insert {:?} into VoterList: {:?}", v, err)
-				});
-			}
+pub mod v9 {
+	use super::*;
 
-			StorageVersion::<T>::put(crate::Releases::V9_0_0);
-			T::BlockWeights::get().max_block
-		} else {
-			log!(
-				warn,
-				"InjectValidatorsIntoVoterList being executed on the wrong storage \
+	/// Migration implementation that injects all validators into sorted list.
+	///
+	/// This is only useful for chains that started their `VoterList` just based on nominators.
+	pub struct InjectValidatorsIntoVoterList<T>(sp_std::marker::PhantomData<T>);
+	impl<T: Config> OnRuntimeUpgrade for InjectValidatorsIntoVoterList<T> {
+		fn on_runtime_upgrade() -> Weight {
+			if StorageVersion::<T>::get() == Releases::V8_0_0 {
+				let prev_count = T::VoterList::count();
+				let weight_of_cached = Pallet::<T>::weight_of_fn();
+				for (v, _) in Validators::<T>::iter() {
+					let weight = weight_of_cached(&v);
+					let _ = T::VoterList::on_insert(v.clone(), weight).map_err(|err| {
+						log!(warn, "failed to insert {:?} into VoterList: {:?}", v, err)
+					});
+				}
+
+				log!(
+					info,
+					"injected a total of {} new voters, prev count: {} next count: {}",
+					Validators::<T>::count(),
+					prev_count,
+					T::VoterList::count(),
+				);
+				StorageVersion::<T>::put(crate::Releases::V9_0_0);
+				T::BlockWeights::get().max_block
+			} else {
+				log!(
+					warn,
+					"InjectValidatorsIntoVoterList being executed on the wrong storage \
 				version, expected Releases::V8_0_0"
-			);
-			T::DbWeight::get().reads(1)
+				);
+				T::DbWeight::get().reads(1)
+			}
 		}
-	}
 
-	#[cfg(feature = "try-runtime")]
-	fn pre_upgrade() -> Result<(), &'static str> {
-		use frame_support::traits::OnRuntimeUpgradeHelpersExt;
-		frame_support::ensure!(
-			StorageVersion::<T>::get() == crate::Releases::V8_0_0,
-			"must upgrade linearly"
-		);
+		#[cfg(feature = "try-runtime")]
+		fn pre_upgrade() -> Result<(), &'static str> {
+			use frame_support::traits::OnRuntimeUpgradeHelpersExt;
+			frame_support::ensure!(
+				StorageVersion::<T>::get() == crate::Releases::V8_0_0,
+				"must upgrade linearly"
+			);
 
-		let prev_count = T::VoterList::count();
-		Self::set_temp_storage(prev_count, "prev");
-		Ok(())
-	}
+			let prev_count = T::VoterList::count();
+			Self::set_temp_storage(prev_count, "prev");
+			Ok(())
+		}
 
-	#[cfg(feature = "try-runtime")]
-	fn post_upgrade() -> Result<(), &'static str> {
-		use frame_support::traits::OnRuntimeUpgradeHelpersExt;
-		let post_count = T::VoterList::count();
-		let prev_count = Self::get_temp_storage::<u32>("prev").unwrap();
-		let validators = Validators::<T>::count();
-		assert!(post_count == prev_count + validators);
-		Ok(())
+		#[cfg(feature = "try-runtime")]
+		fn post_upgrade() -> Result<(), &'static str> {
+			use frame_support::traits::OnRuntimeUpgradeHelpersExt;
+			let post_count = T::VoterList::count();
+			let prev_count = Self::get_temp_storage::<u32>("prev").unwrap();
+			let validators = Validators::<T>::count();
+			assert!(post_count == prev_count + validators);
+			Ok(())
+		}
 	}
 }
 
 pub mod v8 {
+	use crate::{Config, Nominators, Pallet, StorageVersion, Weight};
 	use frame_election_provider_support::SortedListProvider;
 	use frame_support::traits::Get;
-
-	use crate::{Config, Nominators, Pallet, StorageVersion, Weight};
 
 	#[cfg(feature = "try-runtime")]
 	pub fn pre_migrate<T: Config>() -> Result<(), &'static str> {
@@ -88,7 +99,7 @@ pub mod v8 {
 		Ok(())
 	}
 
-	/// Migration to sorted [`VoterList`].
+	/// Migration to sorted `VoterList`.
 	pub fn migrate<T: Config>() -> Weight {
 		if StorageVersion::<T>::get() == crate::Releases::V7_0_0 {
 			crate::log!(info, "migrating staking to Releases::V8_0_0");
