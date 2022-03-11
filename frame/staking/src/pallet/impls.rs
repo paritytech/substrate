@@ -49,6 +49,14 @@ use crate::{
 
 use super::{pallet::*, STAKING_ID};
 
+/// The maximum number of iterations that we do whilst iterating over `T::VoterList` in
+/// `get_npos_voters`.
+///
+/// In most cases, if we want n items, we iterate exactly n times. In rare cases, if a voter is
+/// invalid (for any reason) the iteration continues. With this constant, we iterate at most 2 * n
+/// times and then give up.
+const NPOS_MAX_ITERATIONS_COEFFICIENT: u32 = 2;
+
 impl<T: Config> Pallet<T> {
 	/// The total balance that can be slashed from a stash account as of right now.
 	pub fn slashable_balance_of(stash: &T::AccountId) -> BalanceOf<T> {
@@ -674,7 +682,9 @@ impl<T: Config> Pallet<T> {
 		let mut nominators_taken = 0u32;
 
 		let mut sorted_voters = T::SortedListProvider::iter();
-		while all_voters.len() < max_allowed_len && voters_seen < (2 * max_allowed_len as u32) {
+		while all_voters.len() < max_allowed_len &&
+			voters_seen < (NPOS_MAX_ITERATIONS_COEFFICIENT * max_allowed_len as u32)
+		{
 			let voter = match sorted_voters.next() {
 				Some(voter) => {
 					voters_seen.saturating_inc();

@@ -17,7 +17,7 @@
 //! Storage migrations for the Staking pallet.
 
 use super::*;
-use frame_election_provider_support::{ScoreProvider, SortedListProvider};
+use frame_election_provider_support::SortedListProvider;
 use frame_support::traits::OnRuntimeUpgrade;
 
 /// Migration implementation that injects all validators into sorted list.
