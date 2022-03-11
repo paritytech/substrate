@@ -22,16 +22,16 @@ use frame_support::traits::OnRuntimeUpgrade;
 
 /// Migration implementation that injects all validators into sorted list.
 ///
-/// This is only useful for chains that started their `SortedListProvider` just based on nominators.
-pub struct InjectValidatorsIntoSortedListProvider<T>(sp_std::marker::PhantomData<T>);
-impl<T: Config> OnRuntimeUpgrade for InjectValidatorsIntoSortedListProvider<T> {
+/// This is only useful for chains that started their `VoterList` just based on nominators.
+pub struct InjectValidatorsIntoVoterList<T>(sp_std::marker::PhantomData<T>);
+impl<T: Config> OnRuntimeUpgrade for InjectValidatorsIntoVoterList<T> {
 	fn on_runtime_upgrade() -> Weight {
 		if StorageVersion::<T>::get() == Releases::V8_0_0 {
 			let weight_of_cached = Pallet::<T>::weight_of_fn();
 			for (v, _) in Validators::<T>::iter() {
 				let weight = weight_of_cached(&v);
-				let _ = T::SortedListProvider::on_insert(v.clone(), weight).map_err(|err| {
-					log!(warn, "failed to insert {:?} into SortedListProvider: {:?}", v, err)
+				let _ = T::VoterList::on_insert(v.clone(), weight).map_err(|err| {
+					log!(warn, "failed to insert {:?} into VoterList: {:?}", v, err)
 				});
 			}
 
@@ -40,7 +40,7 @@ impl<T: Config> OnRuntimeUpgrade for InjectValidatorsIntoSortedListProvider<T> {
 		} else {
 			log!(
 				warn,
-				"InjectValidatorsIntoSortedListProvider being executed on the wrong storage \
+				"InjectValidatorsIntoVoterList being executed on the wrong storage \
 				version, expected Releases::V8_0_0"
 			);
 			T::DbWeight::get().reads(1)
@@ -55,7 +55,7 @@ impl<T: Config> OnRuntimeUpgrade for InjectValidatorsIntoSortedListProvider<T> {
 			"must upgrade linearly"
 		);
 
-		let prev_count = T::SortedListProvider::count();
+		let prev_count = T::VoterList::count();
 		Self::set_temp_storage(prev_count, "prev");
 		Ok(())
 	}
@@ -63,7 +63,7 @@ impl<T: Config> OnRuntimeUpgrade for InjectValidatorsIntoSortedListProvider<T> {
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade() -> Result<(), &'static str> {
 		use frame_support::traits::OnRuntimeUpgradeHelpersExt;
-		let post_count = T::SortedListProvider::count();
+		let post_count = T::VoterList::count();
 		let prev_count = Self::get_temp_storage::<u32>("prev").unwrap();
 		let validators = Validators::<T>::count();
 		assert!(post_count == prev_count + validators);
@@ -88,16 +88,16 @@ pub mod v8 {
 		Ok(())
 	}
 
-	/// Migration to sorted [`SortedListProvider`].
+	/// Migration to sorted [`VoterList`].
 	pub fn migrate<T: Config>() -> Weight {
 		if StorageVersion::<T>::get() == crate::Releases::V7_0_0 {
 			crate::log!(info, "migrating staking to Releases::V8_0_0");
 
-			let migrated = T::SortedListProvider::unsafe_regenerate(
+			let migrated = T::VoterList::unsafe_regenerate(
 				Nominators::<T>::iter().map(|(id, _)| id),
 				Pallet::<T>::weight_of_fn(),
 			);
-			debug_assert_eq!(T::SortedListProvider::sanity_check(), Ok(()));
+			debug_assert_eq!(T::VoterList::sanity_check(), Ok(()));
 
 			StorageVersion::<T>::put(crate::Releases::V8_0_0);
 			crate::log!(
@@ -114,8 +114,7 @@ pub mod v8 {
 
 	#[cfg(feature = "try-runtime")]
 	pub fn post_migrate<T: Config>() -> Result<(), &'static str> {
-		T::SortedListProvider::sanity_check()
-			.map_err(|_| "SortedListProvider is not in a sane state.")?;
+		T::VoterList::sanity_check().map_err(|_| "VoterList is not in a sane state.")?;
 		crate::log!(info, "👜 staking bags-list migration passes POST migrate checks ✅",);
 		Ok(())
 	}

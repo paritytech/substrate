@@ -4111,7 +4111,7 @@ mod election_data_provider {
 			.set_status(41, StakerStatus::Validator)
 			.build_and_execute(|| {
 				// sum of all nominators who'd be voters (1), plus the self-votes (4).
-				assert_eq!(<Test as Config>::SortedListProvider::count(), 5);
+				assert_eq!(<Test as Config>::VoterList::count(), 5);
 
 				// if limits is less..
 				assert_eq!(Staking::voters(Some(1)).unwrap().len(), 1);
@@ -4145,7 +4145,7 @@ mod election_data_provider {
 			.build_and_execute(|| {
 				// all voters ordered by stake,
 				assert_eq!(
-					<Test as Config>::SortedListProvider::iter().collect::<Vec<_>>(),
+					<Test as Config>::VoterList::iter().collect::<Vec<_>>(),
 					vec![61, 71, 81, 11, 21, 31]
 				);
 
@@ -4187,7 +4187,7 @@ mod election_data_provider {
 			.build_and_execute(|| {
 				// given our voters ordered by stake,
 				assert_eq!(
-					<Test as Config>::SortedListProvider::iter().collect::<Vec<_>>(),
+					<Test as Config>::VoterList::iter().collect::<Vec<_>>(),
 					vec![11, 21, 31, 61, 71, 81]
 				);
 
@@ -4734,10 +4734,10 @@ mod sorted_list_provider {
 			// given
 			let pre_insert_voter_count =
 				(Nominators::<Test>::count() + Validators::<Test>::count()) as u32;
-			assert_eq!(<Test as Config>::SortedListProvider::count(), pre_insert_voter_count);
+			assert_eq!(<Test as Config>::VoterList::count(), pre_insert_voter_count);
 
 			assert_eq!(
-				<Test as Config>::SortedListProvider::iter().collect::<Vec<_>>(),
+				<Test as Config>::VoterList::iter().collect::<Vec<_>>(),
 				vec![11, 21, 31, 101]
 			);
 
@@ -4745,10 +4745,10 @@ mod sorted_list_provider {
 			assert_ok!(Staking::nominate(Origin::signed(100), vec![41]));
 
 			// then counts don't change
-			assert_eq!(<Test as Config>::SortedListProvider::count(), pre_insert_voter_count);
+			assert_eq!(<Test as Config>::VoterList::count(), pre_insert_voter_count);
 			// and the list is the same
 			assert_eq!(
-				<Test as Config>::SortedListProvider::iter().collect::<Vec<_>>(),
+				<Test as Config>::VoterList::iter().collect::<Vec<_>>(),
 				vec![11, 21, 31, 101]
 			);
 		});
@@ -4760,23 +4760,17 @@ mod sorted_list_provider {
 			// given
 			let pre_insert_voter_count =
 				(Nominators::<Test>::count() + Validators::<Test>::count()) as u32;
-			assert_eq!(<Test as Config>::SortedListProvider::count(), pre_insert_voter_count);
+			assert_eq!(<Test as Config>::VoterList::count(), pre_insert_voter_count);
 
-			assert_eq!(
-				<Test as Config>::SortedListProvider::iter().collect::<Vec<_>>(),
-				vec![11, 21, 31]
-			);
+			assert_eq!(<Test as Config>::VoterList::iter().collect::<Vec<_>>(), vec![11, 21, 31]);
 
 			// when account 11 re-validates
 			assert_ok!(Staking::validate(Origin::signed(10), Default::default()));
 
 			// then counts don't change
-			assert_eq!(<Test as Config>::SortedListProvider::count(), pre_insert_voter_count);
+			assert_eq!(<Test as Config>::VoterList::count(), pre_insert_voter_count);
 			// and the list is the same
-			assert_eq!(
-				<Test as Config>::SortedListProvider::iter().collect::<Vec<_>>(),
-				vec![11, 21, 31]
-			);
+			assert_eq!(<Test as Config>::VoterList::iter().collect::<Vec<_>>(), vec![11, 21, 31]);
 		});
 	}
 }

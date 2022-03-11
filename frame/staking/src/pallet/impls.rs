@@ -667,7 +667,7 @@ impl<T: Config> Pallet<T> {
 	/// target are *auto-chilled*, but still count towards the limit imposed by `maybe_max_len`.
 	pub fn get_npos_voters(maybe_max_len: Option<usize>) -> Vec<VoterOf<Self>> {
 		let max_allowed_len = {
-			let all_voter_count = T::SortedListProvider::count() as usize;
+			let all_voter_count = T::VoterList::count() as usize;
 			maybe_max_len.unwrap_or(all_voter_count).min(all_voter_count)
 		};
 
@@ -681,7 +681,7 @@ impl<T: Config> Pallet<T> {
 		let mut validators_taken = 0u32;
 		let mut nominators_taken = 0u32;
 
-		let mut sorted_voters = T::SortedListProvider::iter();
+		let mut sorted_voters = T::VoterList::iter();
 		while all_voters.len() < max_allowed_len &&
 			voters_seen < (NPOS_MAX_ITERATIONS_COEFFICIENT * max_allowed_len as u32)
 		{
@@ -725,7 +725,7 @@ impl<T: Config> Pallet<T> {
 				// or bug if it does.
 				log!(
 					warn,
-					"DEFENSIVE: invalid item in `SortedListProvider`: {:?}, this nominator probably has too many nominations now",
+					"DEFENSIVE: invalid item in `VoterList`: {:?}, this nominator probably has too many nominations now",
 					voter
 				)
 			}
@@ -769,7 +769,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// This function will add a nominator to the `Nominators` storage map,
-	/// and [`SortedListProvider`].
+	/// and [`VoterList`].
 	///
 	/// If the nominator already exists, their nominations will be updated.
 	///
@@ -779,20 +779,20 @@ impl<T: Config> Pallet<T> {
 	pub fn do_add_nominator(who: &T::AccountId, nominations: Nominations<T>) {
 		if !Nominators::<T>::contains_key(who) {
 			// maybe update sorted list.
-			let _ = T::SortedListProvider::on_insert(who.clone(), Self::weight_of(who))
+			let _ = T::VoterList::on_insert(who.clone(), Self::weight_of(who))
 				.defensive_unwrap_or_default();
 		}
 		Nominators::<T>::insert(who, nominations);
 
 		debug_assert_eq!(
 			Nominators::<T>::count() + Validators::<T>::count(),
-			T::SortedListProvider::count()
+			T::VoterList::count()
 		);
-		debug_assert_eq!(T::SortedListProvider::sanity_check(), Ok(()));
+		debug_assert_eq!(T::VoterList::sanity_check(), Ok(()));
 	}
 
 	/// This function will remove a nominator from the `Nominators` storage map,
-	/// and [`SortedListProvider`].
+	/// and [`VoterList`].
 	///
 	/// Returns true if `who` was removed from `Nominators`, otherwise false.
 	///
@@ -802,16 +802,16 @@ impl<T: Config> Pallet<T> {
 	pub fn do_remove_nominator(who: &T::AccountId) -> bool {
 		let outcome = if Nominators::<T>::contains_key(who) {
 			Nominators::<T>::remove(who);
-			T::SortedListProvider::on_remove(who);
+			T::VoterList::on_remove(who);
 			true
 		} else {
 			false
 		};
 
-		debug_assert_eq!(T::SortedListProvider::sanity_check(), Ok(()));
+		debug_assert_eq!(T::VoterList::sanity_check(), Ok(()));
 		debug_assert_eq!(
 			Nominators::<T>::count() + Validators::<T>::count(),
-			T::SortedListProvider::count()
+			T::VoterList::count()
 		);
 
 		outcome
@@ -827,16 +827,16 @@ impl<T: Config> Pallet<T> {
 	pub fn do_add_validator(who: &T::AccountId, prefs: ValidatorPrefs) {
 		if !Validators::<T>::contains_key(who) {
 			// maybe update sorted list.
-			let _ = T::SortedListProvider::on_insert(who.clone(), Self::weight_of(who))
+			let _ = T::VoterList::on_insert(who.clone(), Self::weight_of(who))
 				.defensive_unwrap_or_default();
 		}
 		Validators::<T>::insert(who, prefs);
 
 		debug_assert_eq!(
 			Nominators::<T>::count() + Validators::<T>::count(),
-			T::SortedListProvider::count()
+			T::VoterList::count()
 		);
-		debug_assert_eq!(T::SortedListProvider::sanity_check(), Ok(()));
+		debug_assert_eq!(T::VoterList::sanity_check(), Ok(()));
 	}
 
 	/// This function will remove a validator from the `Validators` storage map.
@@ -849,16 +849,16 @@ impl<T: Config> Pallet<T> {
 	pub fn do_remove_validator(who: &T::AccountId) -> bool {
 		let outcome = if Validators::<T>::contains_key(who) {
 			Validators::<T>::remove(who);
-			T::SortedListProvider::on_remove(who);
+			T::VoterList::on_remove(who);
 			true
 		} else {
 			false
 		};
 
-		debug_assert_eq!(T::SortedListProvider::sanity_check(), Ok(()));
+		debug_assert_eq!(T::VoterList::sanity_check(), Ok(()));
 		debug_assert_eq!(
 			Nominators::<T>::count() + Validators::<T>::count(),
-			T::SortedListProvider::count()
+			T::VoterList::count()
 		);
 
 		outcome
@@ -988,7 +988,7 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 		<Validators<T>>::remove_all();
 		<Nominators<T>>::remove_all();
 
-		T::SortedListProvider::unsafe_clear();
+		T::VoterList::unsafe_clear();
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
