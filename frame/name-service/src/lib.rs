@@ -110,7 +110,6 @@ pub mod pallet {
 
 	/// This resolver maps name hashes to an account
 	#[pallet::storage]
-	#[pallet::getter(fn resolver)]
 	pub(super) type Resolvers<T: Config> =
 		StorageMap<_, Blake2_128Concat, NameHash, Resolver<T::AccountId>>;
 
@@ -288,16 +287,37 @@ pub mod pallet {
 			address: T::AccountId,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
-			let block_number = frame_system::Pallet::<T>::block_number();
 
 			let registration =
 				Registrations::<T>::get(name_hash).ok_or(Error::<T>::RegistrationNotFound)?;
 			ensure!(registration.owner == sender, Error::<T>::NotRegistrationOwner);
-			ensure!(registration.expiry > block_number, Error::<T>::RegistrationExpired);
+			ensure!(registration.expiry > frame_system::Pallet::<T>::block_number(), Error::<T>::RegistrationExpired);
 
 			Resolvers::<T>::insert(name_hash, Resolver::Default(address.clone()));
 
 			Self::deposit_event(Event::<T>::AddressSet { name_hash, address });
+
+			Ok(())
+		}
+
+		#[pallet::weight(0)]
+		pub fn resolve(
+			origin: OriginFor<T>,
+			name_hash: NameHash,
+		) -> DispatchResult {
+			let sender = ensure_signed(origin)?;
+
+			let registration =
+				Registrations::<T>::get(name_hash).ok_or(Error::<T>::RegistrationNotFound)?;
+			ensure!(registration.expiry > frame_system::Pallet::<T>::block_number(), Error::<T>::RegistrationExpired);
+
+			let resolver =
+				Resolvers::<T>::get(name_hash).ok_or(Error::<T>::ResolverNotFound)?;
+
+			// TODO: return address
+			// match resolver {
+			// 	Resolver::Default(address) => Ok(address),
+			// };
 
 			Ok(())
 		}
