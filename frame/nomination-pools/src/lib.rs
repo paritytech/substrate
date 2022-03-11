@@ -1269,14 +1269,6 @@ pub mod pallet {
 			// It is not strictly necessary to claim the rewards, but we do it here for UX.
 			Self::do_reward_payout(target.clone(), &mut delegator, &mut bonded_pool)?;
 
-			// TODO: make do_reward_payout pass through delegator and bonded_pool
-			// // Re-fetch the delegator because they where updated by `do_reward_payout`.
-			// let mut delegator =
-			// 	Delegators::<T>::get(&target).ok_or(Error::<T>::DelegatorNotFound)?;
-			// // Re-fetch the bonded pool because they where updated by `do_reward_payout`.
-			// let mut bonded_pool = BondedPool::<T>::get(&delegator.bonded_pool_account)
-			// 	.defensive_ok_or_else(|| Error::<T>::PoolNotFound)?;
-
 			// Note that we lazily create the unbonding pools here if they don't already exist
 			let sub_pools =
 				SubPoolsStorage::<T>::get(&delegator.bonded_pool_account).unwrap_or_default();
