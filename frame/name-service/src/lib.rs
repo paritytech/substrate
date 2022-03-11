@@ -67,8 +67,13 @@ pub mod pallet {
 		type NameDeposit: Get<BalanceOf<Self>>;
 
 		// The fee tiers for registration a name
+		#[pallet::constant]
 		type TierThreeLetters: Get<BalanceOf<Self>>;
+
+		#[pallet::constant]
 		type TierFourLetters: Get<BalanceOf<Self>>;
+
+		#[pallet::constant]
 		type TierDefault: Get<BalanceOf<Self>>;
 	}
 
@@ -258,7 +263,7 @@ pub mod pallet {
 				let r = maybe_registration.as_mut().ok_or(Error::<T>::RegistrationNotFound)?;
 
 				// TODO: check if within expiry or in grace period
-				// if we are in grace period, new expiry is current block + length 
+				// if we are in grace period, new expiry is current block + length
 				// if we are before expiry, new expiry is currency expiry + length
 				// if we are beyond grace period, need to re-register (fail renew).
 
