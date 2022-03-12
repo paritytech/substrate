@@ -35,17 +35,10 @@
 //! curator or once the bounty is active or payout is pending, resulting in the slash of the
 //! curator's deposit.
 //!
-//! This pallet may opt into using a [`ChildBountyManager`] that enables bounties to be split into
-//! sub-bounties, as children of anh established bounty (called the parent in the context of it's
-//! children).
-//!
-//! > NOTE: The parent bounty cannot be closed if it has a non-zero number of it has active child
-//! > bounties associated with it.
 //!
 //! ### Terminology
 //!
 //! Bounty:
-//!
 //! - **Bounty spending proposal:** A proposal to reward a predefined body of work upon completion
 //!   by the Treasury.
 //! - **Proposer:** An account proposing a bounty spending.
@@ -67,7 +60,6 @@
 //! ### Dispatchable Functions
 //!
 //! Bounty protocol:
-//!
 //! - `propose_bounty` - Propose a specific treasury amount to be earmarked for a predefined set of
 //!   tasks and stake the required deposit.
 //! - `approve_bounty` - Accept a specific treasury amount to be earmarked for a predefined body of
@@ -173,9 +165,9 @@ pub enum BountyStatus<AccountId, BlockNumber> {
 	},
 }
 
-/// The child bounty manager.
+/// The child-bounty manager.
 pub trait ChildBountyManager<Balance> {
-	/// Get the active child bounties for a parent bounty.
+	/// Get the active child-bounties for a parent bounty.
 	fn child_bounties_count(bounty_id: BountyIndex) -> BountyIndex;
 
 	/// Get total curator fees of children-bounty curators.
@@ -238,7 +230,7 @@ pub mod pallet {
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
 
-		/// The child bounty manager.
+		/// The child-bounty manager.
 		type ChildBountyManager: ChildBountyManager<BalanceOf<Self>>;
 	}
 
@@ -263,7 +255,7 @@ pub mod pallet {
 		PendingPayout,
 		/// The bounties cannot be claimed/closed because it's still in the countdown period.
 		Premature,
-		/// The bounty cannot be closed because it has active child bounties.
+		/// The bounty cannot be closed because it has active child-bounties.
 		HasActiveChildBounty,
 		/// Too many approvals are already queued.
 		TooManyQueued,
@@ -559,7 +551,7 @@ pub mod pallet {
 			Bounties::<T>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
 				let mut bounty = maybe_bounty.as_mut().ok_or(Error::<T>::InvalidIndex)?;
 
-				// Ensure no active child bounties before processing the call.
+				// Ensure no active child-bounties before processing the call.
 				ensure!(
 					T::ChildBountyManager::child_bounties_count(bounty_id) == 0,
 					Error::<T>::HasActiveChildBounty
@@ -617,8 +609,8 @@ pub mod pallet {
 					let err_amount = T::Currency::unreserve(&curator, bounty.curator_deposit);
 					debug_assert!(err_amount.is_zero());
 
-					// Get total child bounties curator fees, and subtract it from the parent
-					// curator fee (the fee in present referenced bounty, `self`).
+					// Get total child-bounties curator fees, and subtract it from master curator
+					// fee.
 					let children_fee = T::ChildBountyManager::children_curator_fees(bounty_id);
 					debug_assert!(children_fee <= fee);
 
@@ -670,7 +662,7 @@ pub mod pallet {
 				|maybe_bounty| -> DispatchResultWithPostInfo {
 					let bounty = maybe_bounty.as_ref().ok_or(Error::<T>::InvalidIndex)?;
 
-					// Ensure no active child bounties before processing the call.
+					// Ensure no active child-bounties before processing the call.
 					ensure!(
 						T::ChildBountyManager::child_bounties_count(bounty_id) == 0,
 						Error::<T>::HasActiveChildBounty
