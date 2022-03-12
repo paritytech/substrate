@@ -1844,18 +1844,18 @@ dependencies = [
 
 [[package]]
 name = "enumflags2"
-version = "0.7.1"
+version = "0.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a8672257d642ffdd235f6e9c723c2326ac1253c8f3c022e7cfd2e57da55b1131"
+checksum = "83c8d82922337cd23a15f88b70d8e4ef5f11da38dd7cdb55e84dd5de99695da0"
 dependencies = [
  "enumflags2_derive",
 ]
 
 [[package]]
 name = "enumflags2_derive"
-version = "0.7.0"
+version = "0.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "33526f770a27828ce7c2792fdb7cb240220237e0ff12933ed6c23957fc5dd7cf"
+checksum = "946ee94e3dbf58fdd324f9ce245c7b238d46a66f00e86a020b71996349e46cce"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4604,19 +4604,9 @@ dependencies = [
  "blake3",
  "digest 0.9.0",
  "generic-array 0.14.4",
-<<<<<<< HEAD
-<<<<<<< HEAD
  "multihash-derive",
  "sha2 0.9.8",
  "sha3 0.9.1",
-=======
- "multihash-derive 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
-=======
- "multihash-derive",
->>>>>>> 4482b77565 (Derive pallet_identity::Config and Fix test/benchmarking)
- "sha2 0.9.3",
- "sha3",
->>>>>>> 2369417073 (Add pallet-alliance)
  "unsigned-varint 0.5.1",
 ]
 
@@ -4629,7 +4619,7 @@ dependencies = [
  "digest 0.9.0",
  "generic-array 0.14.4",
  "multihash-derive",
- "sha2 0.9.3",
+ "sha2 0.9.8",
  "unsigned-varint 0.7.0",
 ]
 
@@ -4983,11 +4973,8 @@ dependencies = [
  "hex-literal",
  "log 0.4.14",
  "node-primitives",
-<<<<<<< HEAD
- "pallet-asset-tx-payment",
-=======
  "pallet-alliance",
->>>>>>> 4a8ad01901 (Add pallet-alliance into node runtime)
+ "pallet-asset-tx-payment",
  "pallet-assets",
  "pallet-authority-discovery",
  "pallet-authorship",
@@ -5422,22 +5409,6 @@ dependencies = [
 ]
 
 [[package]]
-<<<<<<< HEAD
-name = "pallet-asset-tx-payment"
-version = "4.0.0-dev"
-dependencies = [
- "frame-support",
- "frame-system",
- "pallet-assets",
- "pallet-authorship",
- "pallet-balances",
- "pallet-transaction-payment",
- "parity-scale-codec",
- "scale-info",
- "serde",
- "serde_json",
- "smallvec 1.8.0",
-=======
 name = "pallet-alliance"
 version = "4.0.0-dev"
 dependencies = [
@@ -5452,23 +5423,33 @@ dependencies = [
  "pallet-identity",
  "parity-scale-codec",
  "scale-info",
-<<<<<<< HEAD
-<<<<<<< HEAD
->>>>>>> 2369417073 (Add pallet-alliance)
-=======
- "sha2 0.9.3",
->>>>>>> 4482b77565 (Derive pallet_identity::Config and Fix test/benchmarking)
-=======
- "sha2 0.9.5",
->>>>>>> b0f38f7b9f (Remove pallet_identity Config trait)
+ "sha2 0.10.1",
  "sp-core",
  "sp-io",
  "sp-runtime",
  "sp-std",
-<<<<<<< HEAD
+]
+
+[[package]]
+name = "pallet-asset-tx-payment"
+version = "4.0.0-dev"
+dependencies = [
+ "frame-support",
+ "frame-system",
+ "pallet-assets",
+ "pallet-authorship",
+ "pallet-balances",
+ "pallet-transaction-payment",
+ "parity-scale-codec",
+ "scale-info",
+ "serde",
+ "serde_json",
+ "smallvec 1.8.0",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
  "sp-storage",
-=======
->>>>>>> 2369417073 (Add pallet-alliance)
 ]
 
 [[package]]
@@ -8671,14 +8652,8 @@ dependencies = [
  "async-trait",
  "asynchronous-codec 0.5.0",
  "bitflags",
-<<<<<<< HEAD
  "bytes 1.1.0",
  "cid",
-=======
- "bytes 1.0.1",
- "cid",
- "derive_more",
->>>>>>> 2369417073 (Add pallet-alliance)
  "either",
  "fnv",
  "fork-tree",

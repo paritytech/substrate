@@ -88,7 +88,6 @@ pub use types::{
 	Data, IdentityField, IdentityFields, IdentityInfo, Judgement, RegistrarIndex, RegistrarInfo,
 	Registration,
 };
-pub use weights::WeightInfo;
 
 type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;

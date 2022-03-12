@@ -690,10 +690,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		let seats = Self::members().len() as MemberCount;
 		let result = proposal.dispatch(RawOrigin::Members(1, seats).into());
-		Self::deposit_event(Event::Executed(
+		Self::deposit_event(Event::Executed {
 			proposal_hash,
-			result.map(|_| ()).map_err(|e| e.error),
-		));
+			result: result.map(|_| ()).map_err(|e| e.error),
+		});
 		Ok((proposal_len as u32, result))
 	}
 
@@ -725,7 +725,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		};
 		<Voting<T, I>>::insert(proposal_hash, votes);
 
-		Self::deposit_event(Event::Proposed(who, index, proposal_hash, threshold));
+		Self::deposit_event(Event::Proposed {
+			account: who,
+			proposal_index: index,
+			proposal_hash,
+			threshold
+		});
 		Ok((proposal_len as u32, active_proposals as u32))
 	}
 
@@ -768,7 +773,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		let yes_votes = voting.ayes.len() as MemberCount;
 		let no_votes = voting.nays.len() as MemberCount;
-		Self::deposit_event(Event::Voted(who, proposal, approve, yes_votes, no_votes));
+		Self::deposit_event(Event::Voted {
+			account: who,
+			proposal_hash: proposal,
+			voted: approve,
+			yes: yes_votes,
+			no: no_votes,
+		});
 
 		Voting::<T, I>::insert(&proposal, voting);
 
@@ -797,7 +808,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				length_bound,
 				proposal_weight_bound,
 			)?;
-			Self::deposit_event(Event::Closed(proposal_hash, yes_votes, no_votes));
+			Self::deposit_event(Event::Closed {
+				proposal_hash,
+				yes: yes_votes,
+				no: no_votes,
+			});
 			let (proposal_weight, proposal_count) =
 				Self::do_approve_proposal(seats, yes_votes, proposal_hash, proposal);
 			return Ok((
@@ -809,7 +824,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			)
 				.into())
 		} else if disapproved {
-			Self::deposit_event(Event::Closed(proposal_hash, yes_votes, no_votes));
+			Self::deposit_event(Event::Closed {
+				proposal_hash,
+				yes: yes_votes,
+				no: no_votes,
+			});
 			let proposal_count = Self::do_disapprove_proposal(proposal_hash);
 			return Ok((
 				Some(T::WeightInfo::close_early_disapproved(seats, proposal_count)),
@@ -839,7 +858,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				length_bound,
 				proposal_weight_bound,
 			)?;
-			Self::deposit_event(Event::Closed(proposal_hash, yes_votes, no_votes));
+			Self::deposit_event(Event::Closed {
+				proposal_hash,
+				yes: yes_votes,
+				no: no_votes,
+			});
 			let (proposal_weight, proposal_count) =
 				Self::do_approve_proposal(seats, yes_votes, proposal_hash, proposal);
 			Ok((
@@ -851,7 +874,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			)
 				.into())
 		} else {
-			Self::deposit_event(Event::Closed(proposal_hash, yes_votes, no_votes));
+			Self::deposit_event(Event::Closed {
+				proposal_hash,
+				yes: yes_votes,
+				no: no_votes,
+			});
 			let proposal_count = Self::do_disapprove_proposal(proposal_hash);
 			Ok((Some(T::WeightInfo::close_disapproved(seats, proposal_count)), Pays::No).into())
 		}
