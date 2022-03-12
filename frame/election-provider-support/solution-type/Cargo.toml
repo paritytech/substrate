@@ -1,5 +1,5 @@
 [package]
-name = "frame-npos-elections-solution-type"
+name = "frame-election-provider-solution-type"
 version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2021"

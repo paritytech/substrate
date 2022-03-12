@@ -2161,9 +2161,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "frame-election-provider-solution-type"
+version = "4.0.0-dev"
+dependencies = [
+ "parity-scale-codec",
+ "proc-macro-crate 1.1.0",
+ "proc-macro2",
+ "quote",
+ "scale-info",
+ "sp-arithmetic",
+ "sp-npos-elections",
+ "syn",
+ "trybuild",
+]
+
+[[package]]
 name = "frame-election-provider-support"
 version = "4.0.0-dev"
 dependencies = [
+ "frame-election-provider-solution-type",
  "frame-support",
  "frame-system",
  "parity-scale-codec",
@@ -2181,7 +2197,7 @@ name = "frame-election-solution-type-fuzzer"
 version = "2.0.0-alpha.5"
 dependencies = [
  "clap 3.0.7",
- "frame-npos-elections-solution-type",
+ "frame-election-provider-solution-type",
  "honggfuzz",
  "parity-scale-codec",
  "rand 0.8.4",
@@ -2221,21 +2237,6 @@ dependencies = [
  "parity-scale-codec",
  "scale-info",
  "serde",
-]
-
-[[package]]
-name = "frame-npos-elections-solution-type"
-version = "4.0.0-dev"
-dependencies = [
- "parity-scale-codec",
- "proc-macro-crate 1.1.0",
- "proc-macro2",
- "quote",
- "scale-info",
- "sp-arithmetic",
- "sp-npos-elections",
- "syn",
- "trybuild",
 ]
 
 [[package]]
@@ -4995,7 +4996,6 @@ dependencies = [
  "frame-benchmarking",
  "frame-election-provider-support",
  "frame-executive",
- "frame-npos-elections-solution-type",
  "frame-support",
  "frame-system",
  "frame-system-benchmarking",
@@ -5865,7 +5865,6 @@ version = "4.0.0-dev"
 dependencies = [
  "frame-benchmarking",
  "frame-election-provider-support",
- "frame-npos-elections-solution-type",
  "frame-support",
  "frame-system",
  "log 0.4.14",

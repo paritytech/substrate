@@ -17,8 +17,6 @@
 
 //! Tests for npos-elections.
 
-#![cfg(test)]
-
 use crate::{
 	balancing, helpers::*, mock::*, seq_phragmen, seq_phragmen_core, setup_inputs, to_support_map,
 	Assignment, ElectionResult, ExtendedBalance, StakedAssignment, Support, Voter,

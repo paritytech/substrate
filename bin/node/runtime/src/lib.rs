@@ -588,7 +588,7 @@ parameter_types! {
 		.get(DispatchClass::Normal);
 }
 
-frame_npos_elections_solution_type::generate_solution_type!(
+frame_election_provider_support::generate_solution_type!(
 	#[compact]
 	pub struct NposSolution16::<
 		VoterIndex = u32,
