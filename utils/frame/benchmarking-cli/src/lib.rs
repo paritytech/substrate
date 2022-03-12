@@ -19,7 +19,7 @@ mod command;
 mod storage;
 mod writer;
 
-use sc_cli::{ExecutionStrategy, WasmExecutionMethod};
+use sc_cli::{ExecutionStrategy, WasmExecutionMethod, DEFAULT_WASM_EXECUTION_METHOD};
 use std::{fmt::Debug, path::PathBuf};
 
 pub use storage::StorageCmd;
@@ -130,7 +130,7 @@ pub struct BenchmarkCmd {
 		value_name = "METHOD",
 		possible_values = WasmExecutionMethod::variants(),
 		ignore_case = true,
-		default_value = "compiled"
+		default_value = DEFAULT_WASM_EXECUTION_METHOD,
 	)]
 	pub wasm_method: WasmExecutionMethod,
 

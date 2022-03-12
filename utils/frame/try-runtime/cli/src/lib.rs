@@ -270,7 +270,9 @@ use remote_externalities::{
 	Builder, Mode, OfflineConfig, OnlineConfig, SnapshotConfig, TestExternalities,
 };
 use sc_chain_spec::ChainSpec;
-use sc_cli::{CliConfiguration, ExecutionStrategy, WasmExecutionMethod};
+use sc_cli::{
+	CliConfiguration, ExecutionStrategy, WasmExecutionMethod, DEFAULT_WASM_EXECUTION_METHOD,
+};
 use sc_executor::NativeElseWasmExecutor;
 use sc_service::{Configuration, NativeExecutionDispatch};
 use sp_core::{
@@ -394,7 +396,7 @@ pub struct SharedParams {
 		value_name = "METHOD",
 		possible_values = WasmExecutionMethod::variants(),
 		ignore_case = true,
-		default_value = "Compiled"
+		default_value = DEFAULT_WASM_EXECUTION_METHOD,
 	)]
 	pub wasm_method: WasmExecutionMethod,
 
