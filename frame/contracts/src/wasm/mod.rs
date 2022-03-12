@@ -25,11 +25,8 @@ mod prepare;
 mod runtime;
 
 #[cfg(feature = "runtime-benchmarks")]
-pub use self::code_cache::reinstrument;
-pub use self::{
-	code_cache::{decrement_refcount, increment_refcount},
-	runtime::{ReturnCode, Runtime, RuntimeCosts},
-};
+pub use crate::wasm::code_cache::reinstrument;
+pub use crate::wasm::runtime::{CallFlags, ReturnCode, Runtime, RuntimeCosts};
 use crate::{
 	exec::{ExecResult, Executable, ExportedFunction, Ext},
 	gas::GasMeter,
@@ -201,7 +198,11 @@ where
 		code_cache::load(code_hash, schedule, gas_meter)
 	}
 
-	fn remove_user(code_hash: CodeHash<T>) -> Result<(), DispatchError> {
+	fn add_user(code_hash: CodeHash<T>) -> Result<(), DispatchError> {
+		code_cache::increment_refcount::<T>(code_hash)
+	}
+
+	fn remove_user(code_hash: CodeHash<T>) {
 		code_cache::decrement_refcount::<T>(code_hash)
 	}
 
@@ -2320,12 +2321,11 @@ mod tests {
 	}
 
 	#[test]
-	#[cfg(feature = "unstable-interface")]
 	fn is_contract_works() {
 		const CODE_IS_CONTRACT: &str = r#"
 ;; This runs `is_contract` check on zero account address
 (module
-	(import "__unstable__" "seal_is_contract" (func $seal_is_contract (param i32) (result i32)))
+	(import "seal0" "seal_is_contract" (func $seal_is_contract (param i32) (result i32)))
 	(import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
@@ -2361,12 +2361,11 @@ mod tests {
 	}
 
 	#[test]
-	#[cfg(feature = "unstable-interface")]
 	fn caller_is_origin_works() {
 		const CODE_CALLER_IS_ORIGIN: &str = r#"
 ;; This runs `caller_is_origin` check on zero account address
 (module
-	(import "__unstable__" "seal_caller_is_origin" (func $seal_caller_is_origin (result i32)))
+	(import "seal0" "seal_caller_is_origin" (func $seal_caller_is_origin (result i32)))
 	(import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
 

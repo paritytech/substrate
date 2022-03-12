@@ -279,7 +279,7 @@ impl Config {
 pub enum Error {
 	/// An error within grandpa.
 	#[error("grandpa error: {0}")]
-	Grandpa(GrandpaError),
+	Grandpa(#[from] GrandpaError),
 
 	/// A network error.
 	#[error("network error: {0}")]
@@ -291,7 +291,7 @@ pub enum Error {
 
 	/// Could not complete a round on disk.
 	#[error("could not complete a round on disk: {0}")]
-	Client(ClientError),
+	Client(#[from] ClientError),
 
 	/// Could not sign outgoing message
 	#[error("could not sign outgoing message: {0}")]
@@ -308,18 +308,6 @@ pub enum Error {
 	/// A runtime api request failed.
 	#[error("runtime API request failed: {0}")]
 	RuntimeApi(sp_api::ApiError),
-}
-
-impl From<GrandpaError> for Error {
-	fn from(e: GrandpaError) -> Self {
-		Error::Grandpa(e)
-	}
-}
-
-impl From<ClientError> for Error {
-	fn from(e: ClientError) -> Self {
-		Error::Client(e)
-	}
 }
 
 /// Something which can determine if a block is known.

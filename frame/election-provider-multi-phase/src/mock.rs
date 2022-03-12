@@ -343,11 +343,11 @@ impl multi_phase::weights::WeightInfo for DualMockWeightInfo {
 			<() as multi_phase::weights::WeightInfo>::finalize_signed_phase_reject_solution()
 		}
 	}
-	fn submit(c: u32) -> Weight {
+	fn submit() -> Weight {
 		if MockWeightInfo::get() {
 			Zero::zero()
 		} else {
-			<() as multi_phase::weights::WeightInfo>::submit(c)
+			<() as multi_phase::weights::WeightInfo>::submit()
 		}
 	}
 	fn submit_unsigned(v: u32, t: u32, a: u32, d: u32) -> Weight {

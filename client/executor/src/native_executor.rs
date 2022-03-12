@@ -35,7 +35,6 @@ use std::{
 };
 
 use codec::{Decode, Encode};
-use log::trace;
 use sc_executor_common::{
 	runtime_blob::RuntimeBlob,
 	wasm_runtime::{InvokeMethod, WasmInstance, WasmModule},
@@ -301,6 +300,12 @@ where
 		_use_native: bool,
 		_native_call: Option<NC>,
 	) -> (Result<NativeOrEncoded<R>>, bool) {
+		tracing::trace!(
+			target: "executor",
+			%method,
+			"Executing function",
+		);
+
 		let result = self.with_instance(
 			runtime_code,
 			ext,
@@ -422,10 +427,10 @@ impl RuntimeSpawn for RuntimeInstanceSpawn {
 				let async_ext = match new_async_externalities(scheduler.clone()) {
 					Ok(val) => val,
 					Err(e) => {
-						log::error!(
+						tracing::error!(
 							target: "executor",
-							"Failed to setup externalities for async context: {}",
-							e,
+							error = %e,
+							"Failed to setup externalities for async context.",
 						);
 
 						// This will drop sender and receiver end will panic
@@ -438,10 +443,10 @@ impl RuntimeSpawn for RuntimeInstanceSpawn {
 				)) {
 					Ok(val) => val,
 					Err(e) => {
-						log::error!(
+						tracing::error!(
 							target: "executor",
-							"Failed to setup runtime extension for async externalities: {}",
-							e,
+							error = %e,
+							"Failed to setup runtime extension for async externalities",
 						);
 
 						// This will drop sender and receiver end will panic
@@ -457,8 +462,9 @@ impl RuntimeSpawn for RuntimeInstanceSpawn {
 					// https://github.com/paritytech/substrate/issues/7354
 					let mut instance = match module.new_instance() {
 						Ok(instance) => instance,
-						Err(error) =>
-							panic!("failed to create new instance from module: {}", error),
+						Err(error) => {
+							panic!("failed to create new instance from module: {}", error)
+						},
 					};
 
 					match instance
@@ -476,7 +482,7 @@ impl RuntimeSpawn for RuntimeInstanceSpawn {
 					Err(error) => {
 						// If execution is panicked, the `join` in the original runtime code will
 						// panic as well, since the sender is dropped without sending anything.
-						log::error!("Call error in spawned task: {}", error);
+						tracing::error!(error = %error, "Call error in spawned task");
 					},
 				}
 			}),
@@ -518,10 +524,10 @@ fn preregister_builtin_ext(module: Arc<dyn WasmModule>) {
 			RuntimeInstanceSpawn::with_externalities_and_module(module, ext)
 		{
 			if let Err(e) = ext.register_extension(RuntimeSpawnExt(Box::new(runtime_spawn))) {
-				trace!(
+				tracing::trace!(
 					target: "executor",
-					"Failed to register `RuntimeSpawnExt` instance on externalities: {:?}",
-					e,
+					error = ?e,
+					"Failed to register `RuntimeSpawnExt` instance on externalities",
 				)
 			}
 		}
@@ -543,6 +549,12 @@ impl<D: NativeExecutionDispatch + 'static> CodeExecutor for NativeElseWasmExecut
 		use_native: bool,
 		native_call: Option<NC>,
 	) -> (Result<NativeOrEncoded<R>>, bool) {
+		tracing::trace!(
+			target: "executor",
+			function = %method,
+			"Executing function",
+		);
+
 		let mut used_native = false;
 		let result = self.wasm.with_instance(
 			runtime_code,
@@ -558,11 +570,11 @@ impl<D: NativeExecutionDispatch + 'static> CodeExecutor for NativeElseWasmExecut
 				match (use_native, can_call_with, native_call) {
 					(_, false, _) | (false, _, _) => {
 						if !can_call_with {
-							trace!(
+							tracing::trace!(
 								target: "executor",
-								"Request for native execution failed (native: {}, chain: {})",
-								self.native_version.runtime_version,
-								onchain_version,
+								native = %self.native_version.runtime_version,
+								chain = %onchain_version,
+								"Request for native execution failed",
 							);
 						}
 
@@ -572,12 +584,11 @@ impl<D: NativeExecutionDispatch + 'static> CodeExecutor for NativeElseWasmExecut
 						})
 					},
 					(true, true, Some(call)) => {
-						trace!(
+						tracing::trace!(
 							target: "executor",
-							"Request for native execution with native call succeeded \
-							(native: {}, chain: {}).",
-							self.native_version.runtime_version,
-							onchain_version,
+							native = %self.native_version.runtime_version,
+							chain = %onchain_version,
+							"Request for native execution with native call succeeded"
 						);
 
 						used_native = true;
@@ -587,11 +598,11 @@ impl<D: NativeExecutionDispatch + 'static> CodeExecutor for NativeElseWasmExecut
 						Ok(res)
 					},
 					_ => {
-						trace!(
+						tracing::trace!(
 							target: "executor",
-							"Request for native execution succeeded (native: {}, chain: {})",
-							self.native_version.runtime_version,
-							onchain_version
+							native = %self.native_version.runtime_version,
+							chain = %onchain_version,
+							"Request for native execution succeeded",
 						);
 
 						used_native = true;

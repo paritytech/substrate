@@ -39,8 +39,6 @@ use syn::{
 
 use std::collections::HashMap;
 
-use blake2_rfc;
-
 /// The ident used for the block generic parameter.
 const BLOCK_GENERIC_IDENT: &str = "Block";
 
@@ -183,7 +181,7 @@ fn generate_native_call_generators(decl: &ItemTrait) -> Result<TokenStream> {
 		{
 			<R as #crate_::DecodeLimit>::decode_with_depth_limit(
 				#crate_::MAX_EXTRINSIC_DEPTH,
-				&#crate_::Encode::encode(input)[..],
+				&mut &#crate_::Encode::encode(input)[..],
 			).map_err(map_error)
 		}
 	));
@@ -380,21 +378,21 @@ fn generate_call_api_at_calls(decl: &ItemTrait) -> Result<TokenStream> {
 			#[cfg(any(feature = "std", test))]
 			#[allow(clippy::too_many_arguments)]
 			pub fn #fn_name<
-				R: #crate_::Encode + #crate_::Decode + PartialEq,
+				R: #crate_::Encode + #crate_::Decode + std::cmp::PartialEq,
 				NC: FnOnce() -> std::result::Result<R, #crate_::ApiError> + std::panic::UnwindSafe,
 				Block: #crate_::BlockT,
 				T: #crate_::CallApiAt<Block>,
 			>(
 				call_runtime_at: &T,
 				at: &#crate_::BlockId<Block>,
-				args: Vec<u8>,
+				args: std::vec::Vec<u8>,
 				changes: &std::cell::RefCell<#crate_::OverlayedChanges>,
 				storage_transaction_cache: &std::cell::RefCell<
 					#crate_::StorageTransactionCache<Block, T::StateBackend>
 				>,
-				native_call: Option<NC>,
+				native_call: std::option::Option<NC>,
 				context: #crate_::ExecutionContext,
-				recorder: &Option<#crate_::ProofRecorder<Block>>,
+				recorder: &std::option::Option<#crate_::ProofRecorder<Block>>,
 			) -> std::result::Result<#crate_::NativeOrEncoded<R>, #crate_::ApiError> {
 				let version = call_runtime_at.runtime_version_at(at)?;
 
@@ -414,7 +412,7 @@ fn generate_call_api_at_calls(decl: &ItemTrait) -> Result<TokenStream> {
 							recorder,
 						};
 
-						let ret = call_runtime_at.call_api_at(params)?;
+						let ret = #crate_::CallApiAt::<Block>::call_api_at(call_runtime_at, params)?;
 
 						return Ok(ret)
 					}
@@ -431,7 +429,7 @@ fn generate_call_api_at_calls(decl: &ItemTrait) -> Result<TokenStream> {
 					recorder,
 				};
 
-				call_runtime_at.call_api_at(params)
+				#crate_::CallApiAt::<Block>::call_api_at(call_runtime_at, params)
 			}
 		));
 	}
@@ -679,13 +677,13 @@ impl<'a> ToClientSideDecl<'a> {
 							#native_handling
 						},
 						#crate_::NativeOrEncoded::Encoded(r) => {
-							<#ret_type as #crate_::Decode>::decode(&mut &r[..])
-								.map_err(|err|
-									#crate_::ApiError::FailedToDecodeReturnValue {
-										function: #function_name,
-										error: err,
-									}
-								)
+							std::result::Result::map_err(
+								<#ret_type as #crate_::Decode>::decode(&mut &r[..]),
+								|err| #crate_::ApiError::FailedToDecodeReturnValue {
+									function: #function_name,
+									error: err,
+								}
+							)
 						}
 					}
 				)
@@ -750,8 +748,10 @@ fn parse_runtime_api_version(version: &Attribute) -> Result<u64> {
 /// Generates the identifier as const variable for the given `trait_name`
 /// by hashing the `trait_name`.
 fn generate_runtime_api_id(trait_name: &str) -> TokenStream {
+	use blake2::digest::{consts::U8, Digest};
+
 	let mut res = [0; 8];
-	res.copy_from_slice(blake2_rfc::blake2b::blake2b(8, &[], trait_name.as_bytes()).as_bytes());
+	res.copy_from_slice(blake2::Blake2b::<U8>::digest(trait_name).as_slice());
 
 	quote!( const ID: [u8; 8] = [ #( #res ),* ]; )
 }

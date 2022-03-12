@@ -134,7 +134,7 @@ type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
 /// The current storage version.
-const STORAGE_VERSION: StorageVersion = StorageVersion::new(6);
+const STORAGE_VERSION: StorageVersion = StorageVersion::new(7);
 
 /// Used as a sentinel value when reading and writing contract memory.
 ///
@@ -410,10 +410,7 @@ pub mod pallet {
 		/// - The `value` is transferred to the new account.
 		/// - The `deploy` function is executed in the context of the newly-created account.
 		#[pallet::weight(
-			T::WeightInfo::instantiate_with_code(
-				code.len() as u32 / 1024,
-				salt.len() as u32 / 1024,
-			)
+			T::WeightInfo::instantiate_with_code(code.len() as u32, salt.len() as u32)
 			.saturating_add(*gas_limit)
 		)]
 		pub fn instantiate_with_code(
@@ -445,7 +442,7 @@ pub mod pallet {
 			}
 			output.gas_meter.into_dispatch_result(
 				output.result.map(|(_address, result)| result),
-				T::WeightInfo::instantiate_with_code(code_len / 1024, salt_len / 1024),
+				T::WeightInfo::instantiate_with_code(code_len, salt_len),
 			)
 		}
 
@@ -455,7 +452,7 @@ pub mod pallet {
 		/// code deployment step. Instead, the `code_hash` of an on-chain deployed wasm binary
 		/// must be supplied.
 		#[pallet::weight(
-			T::WeightInfo::instantiate(salt.len() as u32 / 1024).saturating_add(*gas_limit)
+			T::WeightInfo::instantiate(salt.len() as u32).saturating_add(*gas_limit)
 		)]
 		pub fn instantiate(
 			origin: OriginFor<T>,
@@ -485,7 +482,7 @@ pub mod pallet {
 			}
 			output.gas_meter.into_dispatch_result(
 				output.result.map(|(_address, output)| output),
-				T::WeightInfo::instantiate(salt_len / 1024),
+				T::WeightInfo::instantiate(salt_len),
 			)
 		}
 
@@ -505,7 +502,7 @@ pub mod pallet {
 		/// To avoid this situation a constructor could employ access control so that it can
 		/// only be instantiated by permissioned entities. The same is true when uploading
 		/// through [`Self::instantiate_with_code`].
-		#[pallet::weight(T::WeightInfo::upload_code(code.len() as u32 / 1024))]
+		#[pallet::weight(T::WeightInfo::upload_code(code.len() as u32))]
 		pub fn upload_code(
 			origin: OriginFor<T>,
 			code: Vec<u8>,
@@ -668,9 +665,30 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(crate) type OwnerInfoOf<T: Config> = StorageMap<_, Identity, CodeHash<T>, OwnerInfo<T>>;
 
-	/// The subtrie counter.
+	/// This is a **monotonic** counter incremented on contract instantiation.
+	///
+	/// This is used in order to generate unique trie ids for contracts.
+	/// The trie id of a new contract is calculated from hash(account_id, nonce).
+	/// The nonce is required because otherwise the following sequence would lead to
+	/// a possible collision of storage:
+	///
+	/// 1. Create a new contract.
+	/// 2. Terminate the contract.
+	/// 3. Immediately recreate the contract with the same account_id.
+	///
+	/// This is bad because the contents of a trie are deleted lazily and there might be
+	/// storage of the old instantiation still in it when the new contract is created. Please
+	/// note that we can't replace the counter by the block number because the sequence above
+	/// can happen in the same block. We also can't keep the account counter in memory only
+	/// because storage is the only way to communicate across different extrinsics in the
+	/// same block.
+	///
+	/// # Note
+	///
+	/// Do not use it to determine the number of contracts. It won't be decremented if
+	/// a contract is destroyed.
 	#[pallet::storage]
-	pub(crate) type AccountCounter<T: Config> = StorageValue<_, u64, ValueQuery>;
+	pub(crate) type Nonce<T: Config> = StorageValue<_, u64, ValueQuery>;
 
 	/// The code associated with a given account.
 	///
