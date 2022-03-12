@@ -55,7 +55,6 @@ use sp_arithmetic::traits::{Bounded, Zero};
 use sp_std::{
 	collections::btree_map::{BTreeMap, Entry::*},
 	prelude::*,
-	vec,
 };
 
 /// Map type used for reduce_4. Can be easily swapped with HashMap.

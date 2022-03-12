@@ -26,7 +26,7 @@ use crate::{
 	VoteWeight, Voter,
 };
 use sp_arithmetic::{traits::Bounded, PerThing, Rational128};
-use sp_std::{prelude::*, rc::Rc, vec};
+use sp_std::{prelude::*, rc::Rc};
 
 /// Execute the phragmms method.
 ///
