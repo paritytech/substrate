@@ -384,6 +384,53 @@ where
 	}
 }
 
+/// Create a new trie backend with delta changes in the memory DB form.
+///
+/// This can be used to verify any extrinsic-specific execution on the composite state constructed
+/// by applying the delta changes on top of `backend`.
+pub fn create_delta_backend<
+	'a,
+	S: 'a + TrieBackendStorage<H>,
+	H: 'a + Hasher,
+	HDB: HashDB<H, DBValue>,
+>(
+	backend: &'a TrieBackend<S, H>,
+	delta: HDB,
+	post_delta_root: H::Out,
+) -> TrieBackend<DeltaBackend<'a, S, H, HDB>, H>
+where
+	H::Out: Codec,
+{
+	let essence = backend.essence();
+	let delta_backend = DeltaBackend {
+		backend: essence.backend_storage(),
+		delta,
+		_phantom: sp_std::marker::PhantomData::<H>,
+	};
+	TrieBackend::new(delta_backend, post_delta_root)
+}
+
+/// Trie backend storage with delta changes.
+pub struct DeltaBackend<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher, HDB: HashDB<H, DBValue>>
+{
+	backend: &'a S,
+	delta: HDB,
+	_phantom: sp_std::marker::PhantomData<H>,
+}
+
+impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher, HDB: HashDB<H, DBValue>>
+	TrieBackendStorage<H> for DeltaBackend<'a, S, H, HDB>
+{
+	type Overlay = S::Overlay;
+
+	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String> {
+		match HashDB::get(&self.delta, key, prefix) {
+			Some(v) => Ok(Some(v)),
+			None => Ok(self.backend.get(key, prefix)?),
+		}
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;

@@ -1189,8 +1189,9 @@ where
 		id: &BlockId<Block>,
 		method: &str,
 		call_data: &[u8],
+		delta_changes: Option<(sp_trie::PrefixedMemoryDB<HashFor<Block>>, Block::Hash)>,
 	) -> sp_blockchain::Result<(Vec<u8>, StorageProof)> {
-		self.executor.prove_execution(id, method, call_data)
+		self.executor.prove_execution(id, method, call_data, delta_changes)
 	}
 
 	fn read_proof_collection(

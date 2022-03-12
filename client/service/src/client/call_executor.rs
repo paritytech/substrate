@@ -26,7 +26,10 @@ use sp_core::{
 	NativeOrEncoded, NeverNativeValue,
 };
 use sp_externalities::Extensions;
-use sp_runtime::{generic::BlockId, traits::Block as BlockT};
+use sp_runtime::{
+	generic::BlockId,
+	traits::{Block as BlockT, HashFor},
+};
 use sp_state_machine::{
 	self, backend::Backend as _, ExecutionManager, ExecutionStrategy, Ext, OverlayedChanges,
 	StateMachine, StorageProof,
@@ -293,6 +296,7 @@ where
 		at: &BlockId<Block>,
 		method: &str,
 		call_data: &[u8],
+		delta_changes: Option<(sp_trie::PrefixedMemoryDB<HashFor<Block>>, Block::Hash)>,
 	) -> sp_blockchain::Result<(Vec<u8>, StorageProof)> {
 		let state = self.backend.state_at(*at)?;
 
@@ -306,16 +310,31 @@ where
 			state_runtime_code.runtime_code().map_err(sp_blockchain::Error::RuntimeCode)?;
 		let runtime_code = self.check_override(runtime_code, at)?;
 
-		sp_state_machine::prove_execution_on_trie_backend(
-			&trie_backend,
-			&mut Default::default(),
-			&self.executor,
-			self.spawn_handle.clone(),
-			method,
-			call_data,
-			&runtime_code,
-		)
-		.map_err(Into::into)
+		if let Some((delta, post_delta_root)) = delta_changes {
+			let delta_backend =
+				sp_state_machine::create_delta_backend(trie_backend, delta, post_delta_root);
+			sp_state_machine::prove_execution_on_trie_backend(
+				&delta_backend,
+				&mut Default::default(),
+				&self.executor,
+				self.spawn_handle.clone(),
+				method,
+				call_data,
+				&runtime_code,
+			)
+			.map_err(Into::into)
+		} else {
+			sp_state_machine::prove_execution_on_trie_backend(
+				trie_backend,
+				&mut Default::default(),
+				&self.executor,
+				self.spawn_handle.clone(),
+				method,
+				call_data,
+				&runtime_code,
+			)
+			.map_err(Into::into)
+		}
 	}
 }
 

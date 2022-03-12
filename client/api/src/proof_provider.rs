@@ -18,7 +18,10 @@
 
 //! Proof utilities
 use crate::{CompactProof, StorageProof};
-use sp_runtime::{generic::BlockId, traits::Block as BlockT};
+use sp_runtime::{
+	generic::BlockId,
+	traits::{Block as BlockT, HashFor},
+};
 use sp_state_machine::{KeyValueStates, KeyValueStorageLevel};
 use sp_storage::ChildInfo;
 
@@ -49,6 +52,7 @@ pub trait ProofProvider<Block: BlockT> {
 		id: &BlockId<Block>,
 		method: &str,
 		call_data: &[u8],
+		delta_changes: Option<(sp_trie::PrefixedMemoryDB<HashFor<Block>>, Block::Hash)>,
 	) -> sp_blockchain::Result<(Vec<u8>, StorageProof)>;
 
 	/// Given a `BlockId` iterate over all storage values starting at `start_keys`.

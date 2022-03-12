@@ -145,7 +145,8 @@ mod std_reexport {
 		error::{Error, ExecutionError},
 		in_memory_backend::new_in_mem,
 		proving_backend::{
-			create_proof_check_backend, ProofRecorder, ProvingBackend, ProvingBackendRecorder,
+			create_delta_backend, create_proof_check_backend, DeltaBackend, ProofRecorder,
+			ProvingBackend, ProvingBackendRecorder,
 		},
 		read_only::{InspectState, ReadOnlyExternalities},
 		testing::TestExternalities,

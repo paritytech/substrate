@@ -22,7 +22,10 @@ use codec::{Decode, Encode};
 use sc_executor::{RuntimeVersion, RuntimeVersionOf};
 use sp_core::NativeOrEncoded;
 use sp_externalities::Extensions;
-use sp_runtime::{generic::BlockId, traits::Block as BlockT};
+use sp_runtime::{
+	generic::BlockId,
+	traits::{Block as BlockT, HashFor},
+};
 use sp_state_machine::{ExecutionManager, ExecutionStrategy, OverlayedChanges, StorageProof};
 use std::{cell::RefCell, panic::UnwindSafe, result};
 
@@ -105,5 +108,6 @@ pub trait CallExecutor<B: BlockT>: RuntimeVersionOf {
 		at: &BlockId<B>,
 		method: &str,
 		call_data: &[u8],
+		delta_changes: Option<(sp_trie::PrefixedMemoryDB<HashFor<B>>, B::Hash)>,
 	) -> Result<(Vec<u8>, StorageProof), sp_blockchain::Error>;
 }
