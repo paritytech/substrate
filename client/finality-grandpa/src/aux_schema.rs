@@ -28,7 +28,7 @@ use fork_tree::ForkTree;
 use sc_client_api::backend::AuxStore;
 use sp_blockchain::{Error as ClientError, Result as ClientResult};
 use sp_finality_grandpa::{AuthorityList, RoundNumber, SetId};
-use sp_runtime::traits::{Block as BlockT, NumberFor};
+use sp_runtime::traits::{Block as BlockT, HashFor, NumberFor};
 
 use crate::{
 	authorities::{
@@ -156,29 +156,30 @@ pub(crate) fn load_decode<B: AuxStore, T: Decode>(
 
 /// Persistent data kept between runs.
 pub(crate) struct PersistentData<Block: BlockT> {
-	pub(crate) authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
+	pub(crate) authority_set: SharedAuthoritySet<HashFor<Block>, NumberFor<Block>>,
 	pub(crate) set_state: SharedVoterSetState<Block>,
 }
 
 fn migrate_from_version0<Block: BlockT, B, G>(
 	backend: &B,
 	genesis_round: &G,
-) -> ClientResult<Option<(AuthoritySet<Block::Hash, NumberFor<Block>>, VoterSetState<Block>)>>
+) -> ClientResult<Option<(AuthoritySet<HashFor<Block>, NumberFor<Block>>, VoterSetState<Block>)>>
 where
 	B: AuxStore,
-	G: Fn() -> RoundState<Block::Hash, NumberFor<Block>>,
+	G: Fn() -> RoundState<HashFor<Block>, NumberFor<Block>>,
 {
 	CURRENT_VERSION.using_encoded(|s| backend.insert_aux(&[(VERSION_KEY, s)], &[]))?;
 
-	if let Some(old_set) =
-		load_decode::<_, V0AuthoritySet<Block::Hash, NumberFor<Block>>>(backend, AUTHORITY_SET_KEY)?
-	{
-		let new_set: AuthoritySet<Block::Hash, NumberFor<Block>> = old_set.into();
+	if let Some(old_set) = load_decode::<_, V0AuthoritySet<HashFor<Block>, NumberFor<Block>>>(
+		backend,
+		AUTHORITY_SET_KEY,
+	)? {
+		let new_set: AuthoritySet<HashFor<Block>, NumberFor<Block>> = old_set.into();
 		backend.insert_aux(&[(AUTHORITY_SET_KEY, new_set.encode().as_slice())], &[])?;
 
 		let (last_round_number, last_round_state) = match load_decode::<
 			_,
-			V0VoterSetState<Block::Hash, NumberFor<Block>>,
+			V0VoterSetState<HashFor<Block>, NumberFor<Block>>,
 		>(backend, SET_STATE_KEY)?
 		{
 			Some((number, state)) => (number, state),
@@ -219,16 +220,17 @@ where
 fn migrate_from_version1<Block: BlockT, B, G>(
 	backend: &B,
 	genesis_round: &G,
-) -> ClientResult<Option<(AuthoritySet<Block::Hash, NumberFor<Block>>, VoterSetState<Block>)>>
+) -> ClientResult<Option<(AuthoritySet<HashFor<Block>, NumberFor<Block>>, VoterSetState<Block>)>>
 where
 	B: AuxStore,
-	G: Fn() -> RoundState<Block::Hash, NumberFor<Block>>,
+	G: Fn() -> RoundState<HashFor<Block>, NumberFor<Block>>,
 {
 	CURRENT_VERSION.using_encoded(|s| backend.insert_aux(&[(VERSION_KEY, s)], &[]))?;
 
-	if let Some(set) =
-		load_decode::<_, AuthoritySet<Block::Hash, NumberFor<Block>>>(backend, AUTHORITY_SET_KEY)?
-	{
+	if let Some(set) = load_decode::<_, AuthoritySet<HashFor<Block>, NumberFor<Block>>>(
+		backend,
+		AUTHORITY_SET_KEY,
+	)? {
 		let set_id = set.set_id;
 
 		let completed_rounds = |number, state, base| {
@@ -239,7 +241,7 @@ where
 			)
 		};
 
-		let set_state = match load_decode::<_, V1VoterSetState<Block::Hash, NumberFor<Block>>>(
+		let set_state = match load_decode::<_, V1VoterSetState<HashFor<Block>, NumberFor<Block>>>(
 			backend,
 			SET_STATE_KEY,
 		)? {
@@ -283,17 +285,18 @@ where
 fn migrate_from_version2<Block: BlockT, B, G>(
 	backend: &B,
 	genesis_round: &G,
-) -> ClientResult<Option<(AuthoritySet<Block::Hash, NumberFor<Block>>, VoterSetState<Block>)>>
+) -> ClientResult<Option<(AuthoritySet<HashFor<Block>, NumberFor<Block>>, VoterSetState<Block>)>>
 where
 	B: AuxStore,
-	G: Fn() -> RoundState<Block::Hash, NumberFor<Block>>,
+	G: Fn() -> RoundState<HashFor<Block>, NumberFor<Block>>,
 {
 	CURRENT_VERSION.using_encoded(|s| backend.insert_aux(&[(VERSION_KEY, s)], &[]))?;
 
-	if let Some(old_set) =
-		load_decode::<_, V2AuthoritySet<Block::Hash, NumberFor<Block>>>(backend, AUTHORITY_SET_KEY)?
-	{
-		let new_set: AuthoritySet<Block::Hash, NumberFor<Block>> = old_set.into();
+	if let Some(old_set) = load_decode::<_, V2AuthoritySet<HashFor<Block>, NumberFor<Block>>>(
+		backend,
+		AUTHORITY_SET_KEY,
+	)? {
+		let new_set: AuthoritySet<HashFor<Block>, NumberFor<Block>> = old_set.into();
 		backend.insert_aux(&[(AUTHORITY_SET_KEY, new_set.encode().as_slice())], &[])?;
 
 		let set_state = match load_decode::<_, VoterSetState<Block>>(backend, SET_STATE_KEY)? {
@@ -316,7 +319,7 @@ where
 /// Load or initialize persistent data from backend.
 pub(crate) fn load_persistent<Block: BlockT, B, G>(
 	backend: &B,
-	genesis_hash: Block::Hash,
+	genesis_hash: HashFor<Block>,
 	genesis_number: NumberFor<Block>,
 	genesis_authorities: G,
 ) -> ClientResult<PersistentData<Block>>
@@ -360,7 +363,7 @@ where
 			}
 		},
 		Some(3) => {
-			if let Some(set) = load_decode::<_, AuthoritySet<Block::Hash, NumberFor<Block>>>(
+			if let Some(set) = load_decode::<_, AuthoritySet<HashFor<Block>, NumberFor<Block>>>(
 				backend,
 				AUTHORITY_SET_KEY,
 			)? {
@@ -414,8 +417,8 @@ where
 /// handoff. `set` in all cases should reflect the current authority set, with all
 /// changes and handoffs applied.
 pub(crate) fn update_authority_set<Block: BlockT, F, R>(
-	set: &AuthoritySet<Block::Hash, NumberFor<Block>>,
-	new_set: Option<&NewAuthoritySet<Block::Hash, NumberFor<Block>>>,
+	set: &AuthoritySet<HashFor<Block>, NumberFor<Block>>,
+	new_set: Option<&NewAuthoritySet<HashFor<Block>, NumberFor<Block>>>,
 	write_aux: F,
 ) -> R
 where

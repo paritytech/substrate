@@ -27,7 +27,7 @@ use log::trace;
 use parking_lot::{RwLock, RwLockUpgradableReadGuard};
 use sp_core::{hexdisplay::HexDisplay, storage::ChildInfo};
 use sp_runtime::{
-	traits::{Block as BlockT, HashFor, Header, NumberFor},
+	traits::{Block as BlockT, HashFor, HashingFor, Header, NumberFor},
 	StateVersion,
 };
 use sp_state_machine::{
@@ -287,7 +287,7 @@ pub struct CacheChanges<B: BlockT> {
 	/// Shared canonical state cache.
 	shared_cache: SharedCache<B>,
 	/// Local cache of values for this state.
-	local_cache: RwLock<LocalCache<HashFor<B>>>,
+	local_cache: RwLock<LocalCache<HashingFor<B>>>,
 	/// Hash of the block on top of which this instance was created or
 	/// `None` if cache is disabled
 	pub parent_hash: Option<B::Hash>,
@@ -443,7 +443,7 @@ impl<B: BlockT> CacheChanges<B> {
 	}
 }
 
-impl<S: StateBackend<HashFor<B>>, B: BlockT> CachingState<S, B> {
+impl<S: StateBackend<HashingFor<B>>, B: BlockT> CachingState<S, B> {
 	/// Create a new instance wrapping generic State and shared cache.
 	pub(crate) fn new(
 		state: S,
@@ -520,7 +520,7 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> CachingState<S, B> {
 	}
 }
 
-impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for CachingState<S, B> {
+impl<S: StateBackend<HashingFor<B>>, B: BlockT> StateBackend<HashingFor<B>> for CachingState<S, B> {
 	type Error = S::Error;
 	type Transaction = S::Transaction;
 	type TrieBackendStorage = S::TrieBackendStorage;
@@ -708,7 +708,7 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Cachin
 		self.state.child_keys(child_info, prefix)
 	}
 
-	fn as_trie_backend(&self) -> Option<&TrieBackend<Self::TrieBackendStorage, HashFor<B>>> {
+	fn as_trie_backend(&self) -> Option<&TrieBackend<Self::TrieBackendStorage, HashingFor<B>>> {
 		self.state.as_trie_backend()
 	}
 
@@ -728,7 +728,7 @@ pub struct SyncingCachingState<S, Block: BlockT> {
 	/// The usage statistics of the backend. These will be updated on drop.
 	state_usage: Arc<StateUsageStats>,
 	/// Reference to the meta db.
-	meta: Arc<RwLock<Meta<NumberFor<Block>, Block::Hash>>>,
+	meta: Arc<RwLock<Meta<NumberFor<Block>, HashFor<Block>>>>,
 	/// Mutex to lock get exlusive access to the backend.
 	lock: Arc<RwLock<()>>,
 	/// The wrapped caching state.
@@ -783,7 +783,7 @@ impl<S, B: BlockT> std::fmt::Debug for SyncingCachingState<S, B> {
 	}
 }
 
-impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>>
+impl<S: StateBackend<HashingFor<B>>, B: BlockT> StateBackend<HashingFor<B>>
 	for SyncingCachingState<S, B>
 {
 	type Error = S::Error;
@@ -908,7 +908,7 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>>
 		self.caching_state().child_keys(child_info, prefix)
 	}
 
-	fn as_trie_backend(&self) -> Option<&TrieBackend<Self::TrieBackendStorage, HashFor<B>>> {
+	fn as_trie_backend(&self) -> Option<&TrieBackend<Self::TrieBackendStorage, HashingFor<B>>> {
 		self.caching_state
 			.as_ref()
 			.expect("`caching_state` is valid for the lifetime of the object; qed")

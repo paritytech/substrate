@@ -28,7 +28,7 @@ use remote_externalities::{rpc_api, Builder, Mode, OnlineConfig};
 use sc_executor::NativeExecutionDispatch;
 use sc_service::Configuration;
 use sp_core::H256;
-use sp_runtime::traits::{Block as BlockT, Header, NumberFor};
+use sp_runtime::traits::{Block as BlockT, HashFor, Header, NumberFor};
 use std::{fmt::Debug, str::FromStr};
 
 const SUB: &'static str = "chain_subscribeFinalizedHeads";
@@ -49,9 +49,9 @@ pub(crate) async fn follow_chain<Block, ExecDispatch>(
 ) -> sc_cli::Result<()>
 where
 	Block: BlockT<Hash = H256> + serde::de::DeserializeOwned,
-	Block::Hash: FromStr,
+	HashFor<Block>: FromStr,
 	Block::Header: serde::de::DeserializeOwned,
-	<Block::Hash as FromStr>::Err: Debug,
+	<HashFor<Block> as FromStr>::Err: Debug,
 	NumberFor<Block>: FromStr,
 	<NumberFor<Block> as FromStr>::Err: Debug,
 	ExecDispatch: NativeExecutionDispatch + 'static,

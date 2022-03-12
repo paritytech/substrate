@@ -27,7 +27,7 @@ use sp_blockchain::{Error as ClientError, HeaderBackend};
 use sp_finality_grandpa::AuthorityId;
 use sp_runtime::{
 	generic::BlockId,
-	traits::{Block as BlockT, Header as HeaderT, NumberFor},
+	traits::{Block as BlockT, HashFor, Header as HeaderT, NumberFor},
 };
 
 use crate::{AuthorityList, Commit, Error};
@@ -97,7 +97,7 @@ impl<Block: BlockT> GrandpaJustification<Block> {
 	/// ancestry proofs finalize the given block.
 	pub fn decode_and_verify_finalizes(
 		encoded: &[u8],
-		finalized_target: (Block::Hash, NumberFor<Block>),
+		finalized_target: (HashFor<Block>, NumberFor<Block>),
 		set_id: u64,
 		voters: &VoterSet<AuthorityId>,
 	) -> Result<GrandpaJustification<Block>, ClientError>
@@ -199,7 +199,7 @@ impl<Block: BlockT> GrandpaJustification<Block> {
 	}
 
 	/// The target block number and hash that this justifications proves finality for.
-	pub fn target(&self) -> (NumberFor<Block>, Block::Hash) {
+	pub fn target(&self) -> (NumberFor<Block>, HashFor<Block>) {
 		(self.commit.target_number, self.commit.target_hash)
 	}
 }
@@ -208,7 +208,7 @@ impl<Block: BlockT> GrandpaJustification<Block> {
 /// This is useful when validating commits, using the given set of headers to
 /// verify a valid ancestry route to the target commit block.
 struct AncestryChain<Block: BlockT> {
-	ancestry: HashMap<Block::Hash, Block::Header>,
+	ancestry: HashMap<HashFor<Block>, Block::Header>,
 }
 
 impl<Block: BlockT> AncestryChain<Block> {
@@ -220,15 +220,16 @@ impl<Block: BlockT> AncestryChain<Block> {
 	}
 }
 
-impl<Block: BlockT> finality_grandpa::Chain<Block::Hash, NumberFor<Block>> for AncestryChain<Block>
+impl<Block: BlockT> finality_grandpa::Chain<HashFor<Block>, NumberFor<Block>>
+	for AncestryChain<Block>
 where
 	NumberFor<Block>: finality_grandpa::BlockNumberOps,
 {
 	fn ancestry(
 		&self,
-		base: Block::Hash,
-		block: Block::Hash,
-	) -> Result<Vec<Block::Hash>, GrandpaError> {
+		base: HashFor<Block>,
+		block: HashFor<Block>,
+	) -> Result<Vec<HashFor<Block>>, GrandpaError> {
 		let mut route = Vec::new();
 		let mut current_hash = block;
 		loop {

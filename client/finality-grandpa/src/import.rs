@@ -35,7 +35,7 @@ use sp_core::hashing::twox_128;
 use sp_finality_grandpa::{ConsensusLog, GrandpaApi, ScheduledChange, SetId, GRANDPA_ENGINE_ID};
 use sp_runtime::{
 	generic::{BlockId, OpaqueDigestItemId},
-	traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero},
+	traits::{Block as BlockT, HashFor, Header as HeaderT, NumberFor, Zero},
 	Justification,
 };
 
@@ -59,9 +59,10 @@ use crate::{
 pub struct GrandpaBlockImport<Backend, Block: BlockT, Client, SC> {
 	inner: Arc<Client>,
 	select_chain: SC,
-	authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
-	send_voter_commands: TracingUnboundedSender<VoterCommand<Block::Hash, NumberFor<Block>>>,
-	authority_set_hard_forks: HashMap<Block::Hash, PendingChange<Block::Hash, NumberFor<Block>>>,
+	authority_set: SharedAuthoritySet<HashFor<Block>, NumberFor<Block>>,
+	send_voter_commands: TracingUnboundedSender<VoterCommand<HashFor<Block>, NumberFor<Block>>>,
+	authority_set_hard_forks:
+		HashMap<HashFor<Block>, PendingChange<HashFor<Block>, NumberFor<Block>>>,
 	justification_sender: GrandpaJustificationSender<Block>,
 	telemetry: Option<TelemetryHandle>,
 	_phantom: PhantomData<Backend>,
@@ -95,7 +96,7 @@ where
 {
 	type Error = ConsensusError;
 
-	async fn on_start(&mut self) -> Vec<(Block::Hash, NumberFor<Block>)> {
+	async fn on_start(&mut self) -> Vec<(HashFor<Block>, NumberFor<Block>)> {
 		let mut out = Vec::new();
 		let chain_info = self.inner.info();
 
@@ -135,7 +136,7 @@ where
 
 	async fn import_justification(
 		&mut self,
-		hash: Block::Hash,
+		hash: HashFor<Block>,
 		number: NumberFor<Block>,
 		justification: Justification,
 	) -> Result<(), Self::Error> {
@@ -165,10 +166,10 @@ impl<H, N> AppliedChanges<H, N> {
 
 struct PendingSetChanges<Block: BlockT> {
 	just_in_case: Option<(
-		AuthoritySet<Block::Hash, NumberFor<Block>>,
-		SharedDataLockedUpgradable<AuthoritySet<Block::Hash, NumberFor<Block>>>,
+		AuthoritySet<HashFor<Block>, NumberFor<Block>>,
+		SharedDataLockedUpgradable<AuthoritySet<HashFor<Block>, NumberFor<Block>>>,
 	)>,
-	applied_changes: AppliedChanges<Block::Hash, NumberFor<Block>>,
+	applied_changes: AppliedChanges<HashFor<Block>, NumberFor<Block>>,
 	do_pause: bool,
 }
 
@@ -176,7 +177,7 @@ impl<Block: BlockT> PendingSetChanges<Block> {
 	// revert the pending set change explicitly.
 	fn revert(self) {}
 
-	fn defuse(mut self) -> (AppliedChanges<Block::Hash, NumberFor<Block>>, bool) {
+	fn defuse(mut self) -> (AppliedChanges<HashFor<Block>, NumberFor<Block>>, bool) {
 		self.just_in_case = None;
 		let applied_changes = std::mem::replace(&mut self.applied_changes, AppliedChanges::None);
 		(applied_changes, self.do_pause)
@@ -239,8 +240,8 @@ where
 	fn check_new_change(
 		&self,
 		header: &Block::Header,
-		hash: Block::Hash,
-	) -> Option<PendingChange<Block::Hash, NumberFor<Block>>> {
+		hash: HashFor<Block>,
+	) -> Option<PendingChange<HashFor<Block>, NumberFor<Block>>> {
 		// check for forced authority set hard forks
 		if let Some(change) = self.authority_set_hard_forks.get(&hash) {
 			return Some(change.clone())
@@ -271,7 +272,7 @@ where
 	fn make_authorities_changes(
 		&self,
 		block: &mut BlockImportParams<Block, TransactionFor<Client, Block>>,
-		hash: Block::Hash,
+		hash: HashFor<Block>,
 		initial_sync: bool,
 	) -> Result<PendingSetChanges<Block>, ConsensusError> {
 		// when we update the authorities, we need to hold the lock
@@ -701,9 +702,9 @@ impl<Backend, Block: BlockT, Client, SC> GrandpaBlockImport<Backend, Block, Clie
 	pub(crate) fn new(
 		inner: Arc<Client>,
 		select_chain: SC,
-		authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
-		send_voter_commands: TracingUnboundedSender<VoterCommand<Block::Hash, NumberFor<Block>>>,
-		authority_set_hard_forks: Vec<(SetId, PendingChange<Block::Hash, NumberFor<Block>>)>,
+		authority_set: SharedAuthoritySet<HashFor<Block>, NumberFor<Block>>,
+		send_voter_commands: TracingUnboundedSender<VoterCommand<HashFor<Block>, NumberFor<Block>>>,
+		authority_set_hard_forks: Vec<(SetId, PendingChange<HashFor<Block>, NumberFor<Block>>)>,
 		justification_sender: GrandpaJustificationSender<Block>,
 		telemetry: Option<TelemetryHandle>,
 	) -> GrandpaBlockImport<Backend, Block, Client, SC> {
@@ -761,7 +762,7 @@ where
 	/// enact an authority set change, the function will panic otherwise.
 	fn import_justification(
 		&mut self,
-		hash: Block::Hash,
+		hash: HashFor<Block>,
 		number: NumberFor<Block>,
 		justification: Justification,
 		enacts_change: bool,

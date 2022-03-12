@@ -758,7 +758,9 @@ pub trait ExtrinsicMetadata {
 }
 
 /// Extract the hashing type for a block.
-pub type HashFor<B> = <<B as Block>::Header as Header>::Hashing;
+pub type HashingFor<B> = <<B as Block>::Header as Header>::Hashing;
+/// Extract the hash type for a block.
+pub type HashFor<B> = <B as Block>::Hash;
 /// Extract the number type for a block.
 pub type NumberFor<B> = <<B as Block>::Header as Header>::Number;
 /// Extract the digest type for a block.
@@ -1593,7 +1595,7 @@ pub trait BlockIdTo<Block: self::Block> {
 	fn to_hash(
 		&self,
 		block_id: &crate::generic::BlockId<Block>,
-	) -> Result<Option<Block::Hash>, Self::Error>;
+	) -> Result<Option<HashFor<Block>>, Self::Error>;
 
 	/// Convert the given `block_id` to the corresponding block number.
 	fn to_number(

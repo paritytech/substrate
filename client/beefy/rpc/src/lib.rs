@@ -23,7 +23,7 @@
 use parking_lot::RwLock;
 use std::sync::Arc;
 
-use sp_runtime::traits::Block as BlockT;
+use sp_runtime::traits::{Block as BlockT, HashFor};
 
 use futures::{task::SpawnError, FutureExt, SinkExt, StreamExt, TryFutureExt};
 use jsonrpc_derive::rpc;
@@ -118,7 +118,7 @@ pub trait BeefyApi<Notification, Hash> {
 /// Implements the BeefyApi RPC trait for interacting with BEEFY.
 pub struct BeefyRpcHandler<Block: BlockT> {
 	signed_commitment_stream: BeefySignedCommitmentStream<Block>,
-	beefy_best_block: Arc<RwLock<Option<Block::Hash>>>,
+	beefy_best_block: Arc<RwLock<Option<HashFor<Block>>>>,
 	manager: SubscriptionManager,
 }
 
@@ -155,7 +155,8 @@ impl<Block: BlockT> BeefyRpcHandler<Block> {
 	}
 }
 
-impl<Block> BeefyApi<notification::EncodedSignedCommitment, Block::Hash> for BeefyRpcHandler<Block>
+impl<Block> BeefyApi<notification::EncodedSignedCommitment, HashFor<Block>>
+	for BeefyRpcHandler<Block>
 where
 	Block: BlockT,
 {
@@ -186,8 +187,8 @@ where
 		Ok(self.manager.cancel(id))
 	}
 
-	fn latest_finalized(&self) -> FutureResult<Block::Hash> {
-		let result: Result<Block::Hash, jsonrpc_core::Error> = self
+	fn latest_finalized(&self) -> FutureResult<HashFor<Block>> {
+		let result: Result<HashFor<Block>, jsonrpc_core::Error> = self
 			.beefy_best_block
 			.read()
 			.as_ref()

@@ -45,7 +45,7 @@ use sp_blockchain::{Backend as BlockchainBackend, HeaderBackend};
 use sp_finality_grandpa::GRANDPA_ENGINE_ID;
 use sp_runtime::{
 	generic::BlockId,
-	traits::{Block as BlockT, Header as HeaderT, NumberFor, One},
+	traits::{Block as BlockT, HashFor, Header as HeaderT, NumberFor, One},
 };
 
 use crate::{
@@ -60,7 +60,7 @@ const MAX_UNKNOWN_HEADERS: usize = 100_000;
 /// Finality proof provider for serving network requests.
 pub struct FinalityProofProvider<BE, Block: BlockT> {
 	backend: Arc<BE>,
-	shared_authority_set: Option<SharedAuthoritySet<Block::Hash, NumberFor<Block>>>,
+	shared_authority_set: Option<SharedAuthoritySet<HashFor<Block>, NumberFor<Block>>>,
 }
 
 impl<B, Block> FinalityProofProvider<B, Block>
@@ -75,7 +75,7 @@ where
 	/// - shared_authority_set for accessing authority set data
 	pub fn new(
 		backend: Arc<B>,
-		shared_authority_set: Option<SharedAuthoritySet<Block::Hash, NumberFor<Block>>>,
+		shared_authority_set: Option<SharedAuthoritySet<HashFor<Block>, NumberFor<Block>>>,
 	) -> Self {
 		FinalityProofProvider { backend, shared_authority_set }
 	}
@@ -87,7 +87,7 @@ where
 	/// - shared_authority_set for accessing authority set data
 	pub fn new_for_service(
 		backend: Arc<B>,
-		shared_authority_set: Option<SharedAuthoritySet<Block::Hash, NumberFor<Block>>>,
+		shared_authority_set: Option<SharedAuthoritySet<HashFor<Block>, NumberFor<Block>>>,
 	) -> Arc<Self> {
 		Arc::new(Self::new(backend, shared_authority_set))
 	}

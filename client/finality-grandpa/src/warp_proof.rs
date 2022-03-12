@@ -28,7 +28,7 @@ use sp_blockchain::{Backend as BlockchainBackend, HeaderBackend};
 use sp_finality_grandpa::{AuthorityList, SetId, GRANDPA_ENGINE_ID};
 use sp_runtime::{
 	generic::BlockId,
-	traits::{Block as BlockT, Header as HeaderT, NumberFor, One},
+	traits::{Block as BlockT, HashFor, Header as HeaderT, NumberFor, One},
 };
 
 use std::{collections::HashMap, sync::Arc};
@@ -80,7 +80,7 @@ impl<Block: BlockT> WarpSyncProof<Block> {
 	/// (capped by MAX_WARP_SYNC_PROOF_SIZE).
 	fn generate<Backend>(
 		backend: &Backend,
-		begin: Block::Hash,
+		begin: HashFor<Block>,
 		set_changes: &AuthoritySetChanges<NumberFor<Block>>,
 	) -> Result<WarpSyncProof<Block>, Error>
 	where
@@ -193,7 +193,7 @@ impl<Block: BlockT> WarpSyncProof<Block> {
 		&self,
 		set_id: SetId,
 		authorities: AuthorityList,
-		hard_forks: &HashMap<(Block::Hash, NumberFor<Block>), (SetId, AuthorityList)>,
+		hard_forks: &HashMap<(HashFor<Block>, NumberFor<Block>), (SetId, AuthorityList)>,
 	) -> Result<(SetId, AuthorityList), Error>
 	where
 		NumberFor<Block>: BlockNumberOps,
@@ -242,8 +242,8 @@ where
 	NumberFor<Block>: BlockNumberOps,
 {
 	backend: Arc<Backend>,
-	authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
-	hard_forks: HashMap<(Block::Hash, NumberFor<Block>), (SetId, AuthorityList)>,
+	authority_set: SharedAuthoritySet<HashFor<Block>, NumberFor<Block>>,
+	hard_forks: HashMap<(HashFor<Block>, NumberFor<Block>), (SetId, AuthorityList)>,
 }
 
 impl<Block: BlockT, Backend: ClientBackend<Block>> NetworkProvider<Block, Backend>
@@ -253,7 +253,7 @@ where
 	/// Create a new istance for a given backend and authority set.
 	pub fn new(
 		backend: Arc<Backend>,
-		authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
+		authority_set: SharedAuthoritySet<HashFor<Block>, NumberFor<Block>>,
 		hard_forks: Vec<AuthoritySetHardFork<Block>>,
 	) -> Self {
 		NetworkProvider {
@@ -274,7 +274,7 @@ where
 {
 	fn generate(
 		&self,
-		start: Block::Hash,
+		start: HashFor<Block>,
 	) -> Result<EncodedProof, Box<dyn std::error::Error + Send + Sync>> {
 		let proof = WarpSyncProof::<Block>::generate(
 			&*self.backend,

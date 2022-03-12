@@ -41,7 +41,7 @@ use sp_core::hexdisplay::HexDisplay;
 use sp_rpc::tracing::{BlockTrace, Span, TraceBlockResponse, TraceError};
 use sp_runtime::{
 	generic::BlockId,
-	traits::{Block as BlockT, Header},
+	traits::{Block as BlockT, HashFor, Header},
 };
 use sp_tracing::{WASM_NAME_KEY, WASM_TARGET_KEY, WASM_TRACE_IDENTIFIER};
 
@@ -178,7 +178,7 @@ impl Subscriber for BlockSubscriber {
 /// filtered out.
 pub struct BlockExecutor<Block: BlockT, Client> {
 	client: Arc<Client>,
-	block: Block::Hash,
+	block: HashFor<Block>,
 	targets: Option<String>,
 	storage_keys: Option<String>,
 	methods: Option<String>,
@@ -199,7 +199,7 @@ where
 	/// Create a new `BlockExecutor`
 	pub fn new(
 		client: Arc<Client>,
-		block: Block::Hash,
+		block: HashFor<Block>,
 		targets: Option<String>,
 		storage_keys: Option<String>,
 		methods: Option<String>,

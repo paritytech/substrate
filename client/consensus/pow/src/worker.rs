@@ -28,7 +28,7 @@ use sc_consensus::{BlockImportParams, BoxBlockImport, StateAction, StorageChange
 use sp_consensus::{BlockOrigin, Proposal};
 use sp_runtime::{
 	generic::BlockId,
-	traits::{Block as BlockT, Header as HeaderT},
+	traits::{Block as BlockT, HashFor, Header as HeaderT},
 	DigestItem,
 };
 use std::{
@@ -65,7 +65,7 @@ pub struct MiningBuild<
 	Proof,
 > {
 	/// Mining metadata.
-	pub metadata: MiningMetadata<Block::Hash, Algorithm::Difficulty>,
+	pub metadata: MiningMetadata<HashFor<Block>, Algorithm::Difficulty>,
 	/// Mining proposal.
 	pub proposal: Proposal<Block, sp_api::TransactionFor<C, Block>, Proof>,
 }
@@ -138,12 +138,12 @@ where
 
 	/// Get the current best hash. `None` if the worker has just started or the client is doing
 	/// major syncing.
-	pub fn best_hash(&self) -> Option<Block::Hash> {
+	pub fn best_hash(&self) -> Option<HashFor<Block>> {
 		self.build.lock().as_ref().map(|b| b.metadata.best_hash)
 	}
 
 	/// Get a copy of the current mining metadata, if available.
-	pub fn metadata(&self) -> Option<MiningMetadata<Block::Hash, Algorithm::Difficulty>> {
+	pub fn metadata(&self) -> Option<MiningMetadata<HashFor<Block>, Algorithm::Difficulty>> {
 		self.build.lock().as_ref().map(|b| b.metadata.clone())
 	}
 

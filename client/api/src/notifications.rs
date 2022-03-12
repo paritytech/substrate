@@ -26,7 +26,6 @@ use std::{
 };
 
 use futures::Stream;
-
 use prometheus_endpoint::Registry as PrometheusRegistry;
 
 use sc_utils::pubsub::{Hub, Receiver};

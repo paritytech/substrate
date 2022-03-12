@@ -29,7 +29,7 @@ use dyn_clone::DynClone;
 use sc_client_api::blockchain::HeaderBackend;
 use sp_runtime::{
 	generic::BlockId,
-	traits::{Block as BlockT, Header, NumberFor, One, Zero},
+	traits::{Block as BlockT, HashFor, Header, NumberFor, One, Zero},
 };
 
 /// A future returned by a `VotingRule` to restrict a given vote, if any restriction is necessary.
@@ -174,7 +174,7 @@ fn find_target<Block, B>(
 	backend: &B,
 	target_number: NumberFor<Block>,
 	current_header: &Block::Header,
-) -> Option<(Block::Hash, NumberFor<Block>)>
+) -> Option<(HashFor<Block>, NumberFor<Block>)>
 where
 	Block: BlockT,
 	B: HeaderBackend<Block>,

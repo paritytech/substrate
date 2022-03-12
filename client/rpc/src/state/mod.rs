@@ -33,7 +33,7 @@ use sp_core::{
 	storage::{PrefixedStorageKey, StorageChangeSet, StorageData, StorageKey},
 	Bytes,
 };
-use sp_runtime::traits::Block as BlockT;
+use sp_runtime::traits::{Block as BlockT, HashFor};
 use sp_version::RuntimeVersion;
 
 use sp_api::{CallApiAt, Metadata, ProvideRuntimeApi};
@@ -57,7 +57,7 @@ where
 	/// Call runtime method at given block.
 	fn call(
 		&self,
-		block: Option<Block::Hash>,
+		block: Option<HashFor<Block>>,
 		method: String,
 		call_data: Bytes,
 	) -> FutureResult<Bytes>;
@@ -65,21 +65,21 @@ where
 	/// Returns the keys with prefix, leave empty to get all the keys.
 	fn storage_keys(
 		&self,
-		block: Option<Block::Hash>,
+		block: Option<HashFor<Block>>,
 		prefix: StorageKey,
 	) -> FutureResult<Vec<StorageKey>>;
 
 	/// Returns the keys with prefix along with their values, leave empty to get all the pairs.
 	fn storage_pairs(
 		&self,
-		block: Option<Block::Hash>,
+		block: Option<HashFor<Block>>,
 		prefix: StorageKey,
 	) -> FutureResult<Vec<(StorageKey, StorageData)>>;
 
 	/// Returns the keys with prefix with pagination support.
 	fn storage_keys_paged(
 		&self,
-		block: Option<Block::Hash>,
+		block: Option<HashFor<Block>>,
 		prefix: Option<StorageKey>,
 		count: u32,
 		start_key: Option<StorageKey>,
@@ -88,16 +88,16 @@ where
 	/// Returns a storage entry at a specific block's state.
 	fn storage(
 		&self,
-		block: Option<Block::Hash>,
+		block: Option<HashFor<Block>>,
 		key: StorageKey,
 	) -> FutureResult<Option<StorageData>>;
 
 	/// Returns the hash of a storage entry at a block's state.
 	fn storage_hash(
 		&self,
-		block: Option<Block::Hash>,
+		block: Option<HashFor<Block>>,
 		key: StorageKey,
-	) -> FutureResult<Option<Block::Hash>>;
+	) -> FutureResult<Option<HashFor<Block>>>;
 
 	/// Returns the size of a storage entry at a block's state.
 	///
@@ -105,15 +105,15 @@ where
 	/// prefix is returned, i.e. all the storage (double) maps that have this prefix.
 	fn storage_size(
 		&self,
-		block: Option<Block::Hash>,
+		block: Option<HashFor<Block>>,
 		key: StorageKey,
 	) -> FutureResult<Option<u64>>;
 
 	/// Returns the runtime metadata as an opaque blob.
-	fn metadata(&self, block: Option<Block::Hash>) -> FutureResult<Bytes>;
+	fn metadata(&self, block: Option<HashFor<Block>>) -> FutureResult<Bytes>;
 
 	/// Get the runtime version.
-	fn runtime_version(&self, block: Option<Block::Hash>) -> FutureResult<RuntimeVersion>;
+	fn runtime_version(&self, block: Option<HashFor<Block>>) -> FutureResult<RuntimeVersion>;
 
 	/// Query historical storage entries (by key) starting from a block given as the second
 	/// parameter.
@@ -122,24 +122,24 @@ where
 	/// Subsequent values in the vector represent changes to the previous state (diffs).
 	fn query_storage(
 		&self,
-		from: Block::Hash,
-		to: Option<Block::Hash>,
+		from: HashFor<Block>,
+		to: Option<HashFor<Block>>,
 		keys: Vec<StorageKey>,
-	) -> FutureResult<Vec<StorageChangeSet<Block::Hash>>>;
+	) -> FutureResult<Vec<StorageChangeSet<HashFor<Block>>>>;
 
 	/// Query storage entries (by key) starting at block hash given as the second parameter.
 	fn query_storage_at(
 		&self,
 		keys: Vec<StorageKey>,
-		at: Option<Block::Hash>,
-	) -> FutureResult<Vec<StorageChangeSet<Block::Hash>>>;
+		at: Option<HashFor<Block>>,
+	) -> FutureResult<Vec<StorageChangeSet<HashFor<Block>>>>;
 
 	/// Returns proof of storage entries at a specific block's state.
 	fn read_proof(
 		&self,
-		block: Option<Block::Hash>,
+		block: Option<HashFor<Block>>,
 		keys: Vec<StorageKey>,
-	) -> FutureResult<ReadProof<Block::Hash>>;
+	) -> FutureResult<ReadProof<HashFor<Block>>>;
 
 	/// New runtime version subscription
 	fn subscribe_runtime_version(
@@ -159,7 +159,7 @@ where
 	fn subscribe_storage(
 		&self,
 		_meta: crate::Metadata,
-		subscriber: Subscriber<StorageChangeSet<Block::Hash>>,
+		subscriber: Subscriber<StorageChangeSet<HashFor<Block>>>,
 		keys: Option<Vec<StorageKey>>,
 	);
 
@@ -173,7 +173,7 @@ where
 	/// Trace storage changes for block
 	fn trace_block(
 		&self,
-		block: Block::Hash,
+		block: HashFor<Block>,
 		targets: Option<String>,
 		storage_keys: Option<String>,
 		methods: Option<String>,
@@ -189,7 +189,7 @@ pub fn new_full<BE, Block: BlockT, Client>(
 ) -> (State<Block, Client>, ChildState<Block, Client>)
 where
 	Block: BlockT + 'static,
-	Block::Hash: Unpin,
+	HashFor<Block>: Unpin,
 	BE: Backend<Block> + 'static,
 	Client: ExecutorProvider<Block>
 		+ StorageProvider<Block, BE>
@@ -222,21 +222,26 @@ pub struct State<Block, Client> {
 	deny_unsafe: DenyUnsafe,
 }
 
-impl<Block, Client> StateApi<Block::Hash> for State<Block, Client>
+impl<Block, Client> StateApi<HashFor<Block>> for State<Block, Client>
 where
 	Block: BlockT + 'static,
 	Client: Send + Sync + 'static,
 {
 	type Metadata = crate::Metadata;
 
-	fn call(&self, method: String, data: Bytes, block: Option<Block::Hash>) -> FutureResult<Bytes> {
+	fn call(
+		&self,
+		method: String,
+		data: Bytes,
+		block: Option<HashFor<Block>>,
+	) -> FutureResult<Bytes> {
 		self.backend.call(block, method, data)
 	}
 
 	fn storage_keys(
 		&self,
 		key_prefix: StorageKey,
-		block: Option<Block::Hash>,
+		block: Option<HashFor<Block>>,
 	) -> FutureResult<Vec<StorageKey>> {
 		self.backend.storage_keys(block, key_prefix)
 	}
@@ -244,7 +249,7 @@ where
 	fn storage_pairs(
 		&self,
 		key_prefix: StorageKey,
-		block: Option<Block::Hash>,
+		block: Option<HashFor<Block>>,
 	) -> FutureResult<Vec<(StorageKey, StorageData)>> {
 		if let Err(err) = self.deny_unsafe.check_if_safe() {
 			return async move { Err(err.into()) }.boxed()
@@ -258,7 +263,7 @@ where
 		prefix: Option<StorageKey>,
 		count: u32,
 		start_key: Option<StorageKey>,
-		block: Option<Block::Hash>,
+		block: Option<HashFor<Block>>,
 	) -> FutureResult<Vec<StorageKey>> {
 		if count > STORAGE_KEYS_PAGED_MAX_COUNT {
 			return async move {
@@ -272,7 +277,7 @@ where
 	fn storage(
 		&self,
 		key: StorageKey,
-		block: Option<Block::Hash>,
+		block: Option<HashFor<Block>>,
 	) -> FutureResult<Option<StorageData>> {
 		self.backend.storage(block, key)
 	}
@@ -280,29 +285,29 @@ where
 	fn storage_hash(
 		&self,
 		key: StorageKey,
-		block: Option<Block::Hash>,
-	) -> FutureResult<Option<Block::Hash>> {
+		block: Option<HashFor<Block>>,
+	) -> FutureResult<Option<HashFor<Block>>> {
 		self.backend.storage_hash(block, key)
 	}
 
 	fn storage_size(
 		&self,
 		key: StorageKey,
-		block: Option<Block::Hash>,
+		block: Option<HashFor<Block>>,
 	) -> FutureResult<Option<u64>> {
 		self.backend.storage_size(block, key)
 	}
 
-	fn metadata(&self, block: Option<Block::Hash>) -> FutureResult<Bytes> {
+	fn metadata(&self, block: Option<HashFor<Block>>) -> FutureResult<Bytes> {
 		self.backend.metadata(block)
 	}
 
 	fn query_storage(
 		&self,
 		keys: Vec<StorageKey>,
-		from: Block::Hash,
-		to: Option<Block::Hash>,
-	) -> FutureResult<Vec<StorageChangeSet<Block::Hash>>> {
+		from: HashFor<Block>,
+		to: Option<HashFor<Block>>,
+	) -> FutureResult<Vec<StorageChangeSet<HashFor<Block>>>> {
 		if let Err(err) = self.deny_unsafe.check_if_safe() {
 			return async move { Err(err.into()) }.boxed()
 		}
@@ -313,23 +318,23 @@ where
 	fn query_storage_at(
 		&self,
 		keys: Vec<StorageKey>,
-		at: Option<Block::Hash>,
-	) -> FutureResult<Vec<StorageChangeSet<Block::Hash>>> {
+		at: Option<HashFor<Block>>,
+	) -> FutureResult<Vec<StorageChangeSet<HashFor<Block>>>> {
 		self.backend.query_storage_at(keys, at)
 	}
 
 	fn read_proof(
 		&self,
 		keys: Vec<StorageKey>,
-		block: Option<Block::Hash>,
-	) -> FutureResult<ReadProof<Block::Hash>> {
+		block: Option<HashFor<Block>>,
+	) -> FutureResult<ReadProof<HashFor<Block>>> {
 		self.backend.read_proof(block, keys)
 	}
 
 	fn subscribe_storage(
 		&self,
 		meta: Self::Metadata,
-		subscriber: Subscriber<StorageChangeSet<Block::Hash>>,
+		subscriber: Subscriber<StorageChangeSet<HashFor<Block>>>,
 		keys: Option<Vec<StorageKey>>,
 	) {
 		self.backend.subscribe_storage(meta, subscriber, keys);
@@ -343,7 +348,7 @@ where
 		self.backend.unsubscribe_storage(meta, id)
 	}
 
-	fn runtime_version(&self, at: Option<Block::Hash>) -> FutureResult<RuntimeVersion> {
+	fn runtime_version(&self, at: Option<HashFor<Block>>) -> FutureResult<RuntimeVersion> {
 		self.backend.runtime_version(at)
 	}
 
@@ -370,7 +375,7 @@ where
 	/// Note: requires runtimes compiled with wasm tracing support, `--features with-tracing`.
 	fn trace_block(
 		&self,
-		block: Block::Hash,
+		block: HashFor<Block>,
 		targets: Option<String>,
 		storage_keys: Option<String>,
 		methods: Option<String>,
@@ -392,16 +397,16 @@ where
 	/// Returns proof of storage for a child key entries at a specific block's state.
 	fn read_child_proof(
 		&self,
-		block: Option<Block::Hash>,
+		block: Option<HashFor<Block>>,
 		storage_key: PrefixedStorageKey,
 		keys: Vec<StorageKey>,
-	) -> FutureResult<ReadProof<Block::Hash>>;
+	) -> FutureResult<ReadProof<HashFor<Block>>>;
 
 	/// Returns the keys with prefix from a child storage,
 	/// leave prefix empty to get all the keys.
 	fn storage_keys(
 		&self,
-		block: Option<Block::Hash>,
+		block: Option<HashFor<Block>>,
 		storage_key: PrefixedStorageKey,
 		prefix: StorageKey,
 	) -> FutureResult<Vec<StorageKey>>;
@@ -409,7 +414,7 @@ where
 	/// Returns the keys with prefix from a child storage with pagination support.
 	fn storage_keys_paged(
 		&self,
-		block: Option<Block::Hash>,
+		block: Option<HashFor<Block>>,
 		storage_key: PrefixedStorageKey,
 		prefix: Option<StorageKey>,
 		count: u32,
@@ -419,7 +424,7 @@ where
 	/// Returns a child storage entry at a specific block's state.
 	fn storage(
 		&self,
-		block: Option<Block::Hash>,
+		block: Option<HashFor<Block>>,
 		storage_key: PrefixedStorageKey,
 		key: StorageKey,
 	) -> FutureResult<Option<StorageData>>;
@@ -427,7 +432,7 @@ where
 	/// Returns child storage entries at a specific block's state.
 	fn storage_entries(
 		&self,
-		block: Option<Block::Hash>,
+		block: Option<HashFor<Block>>,
 		storage_key: PrefixedStorageKey,
 		keys: Vec<StorageKey>,
 	) -> FutureResult<Vec<Option<StorageData>>>;
@@ -435,15 +440,15 @@ where
 	/// Returns the hash of a child storage entry at a block's state.
 	fn storage_hash(
 		&self,
-		block: Option<Block::Hash>,
+		block: Option<HashFor<Block>>,
 		storage_key: PrefixedStorageKey,
 		key: StorageKey,
-	) -> FutureResult<Option<Block::Hash>>;
+	) -> FutureResult<Option<HashFor<Block>>>;
 
 	/// Returns the size of a child storage entry at a block's state.
 	fn storage_size(
 		&self,
-		block: Option<Block::Hash>,
+		block: Option<HashFor<Block>>,
 		storage_key: PrefixedStorageKey,
 		key: StorageKey,
 	) -> FutureResult<Option<u64>> {
@@ -458,7 +463,7 @@ pub struct ChildState<Block, Client> {
 	backend: Box<dyn ChildStateBackend<Block, Client>>,
 }
 
-impl<Block, Client> ChildStateApi<Block::Hash> for ChildState<Block, Client>
+impl<Block, Client> ChildStateApi<HashFor<Block>> for ChildState<Block, Client>
 where
 	Block: BlockT + 'static,
 	Client: Send + Sync + 'static,
@@ -469,8 +474,8 @@ where
 		&self,
 		child_storage_key: PrefixedStorageKey,
 		keys: Vec<StorageKey>,
-		block: Option<Block::Hash>,
-	) -> FutureResult<ReadProof<Block::Hash>> {
+		block: Option<HashFor<Block>>,
+	) -> FutureResult<ReadProof<HashFor<Block>>> {
 		self.backend.read_child_proof(block, child_storage_key, keys)
 	}
 
@@ -478,7 +483,7 @@ where
 		&self,
 		storage_key: PrefixedStorageKey,
 		key: StorageKey,
-		block: Option<Block::Hash>,
+		block: Option<HashFor<Block>>,
 	) -> FutureResult<Option<StorageData>> {
 		self.backend.storage(block, storage_key, key)
 	}
@@ -487,7 +492,7 @@ where
 		&self,
 		storage_key: PrefixedStorageKey,
 		keys: Vec<StorageKey>,
-		block: Option<Block::Hash>,
+		block: Option<HashFor<Block>>,
 	) -> FutureResult<Vec<Option<StorageData>>> {
 		self.backend.storage_entries(block, storage_key, keys)
 	}
@@ -496,7 +501,7 @@ where
 		&self,
 		storage_key: PrefixedStorageKey,
 		key_prefix: StorageKey,
-		block: Option<Block::Hash>,
+		block: Option<HashFor<Block>>,
 	) -> FutureResult<Vec<StorageKey>> {
 		self.backend.storage_keys(block, storage_key, key_prefix)
 	}
@@ -507,7 +512,7 @@ where
 		prefix: Option<StorageKey>,
 		count: u32,
 		start_key: Option<StorageKey>,
-		block: Option<Block::Hash>,
+		block: Option<HashFor<Block>>,
 	) -> FutureResult<Vec<StorageKey>> {
 		self.backend.storage_keys_paged(block, storage_key, prefix, count, start_key)
 	}
@@ -516,8 +521,8 @@ where
 		&self,
 		storage_key: PrefixedStorageKey,
 		key: StorageKey,
-		block: Option<Block::Hash>,
-	) -> FutureResult<Option<Block::Hash>> {
+		block: Option<HashFor<Block>>,
+	) -> FutureResult<Option<HashFor<Block>>> {
 		self.backend.storage_hash(block, storage_key, key)
 	}
 
@@ -525,7 +530,7 @@ where
 		&self,
 		storage_key: PrefixedStorageKey,
 		key: StorageKey,
-		block: Option<Block::Hash>,
+		block: Option<HashFor<Block>>,
 	) -> FutureResult<Option<u64>> {
 		self.backend.storage_size(block, storage_key, key)
 	}

@@ -43,7 +43,7 @@ use sp_consensus_slots::{Slot, SlotDuration};
 use sp_inherents::CreateInherentDataProviders;
 use sp_runtime::{
 	generic::BlockId,
-	traits::{Block as BlockT, HashFor, Header as HeaderT},
+	traits::{Block as BlockT, HashingFor, Header as HeaderT},
 };
 use sp_timestamp::Timestamp;
 use std::{fmt::Debug, ops::Deref, time::Duration};
@@ -52,7 +52,7 @@ use std::{fmt::Debug, ops::Deref, time::Duration};
 ///
 /// See [`sp_state_machine::StorageChanges`] for more information.
 pub type StorageChanges<Transaction, Block> =
-	sp_state_machine::StorageChanges<Transaction, HashFor<Block>>;
+	sp_state_machine::StorageChanges<Transaction, HashingFor<Block>>;
 
 /// The result of [`SlotWorker::on_slot`].
 #[derive(Debug, Clone)]

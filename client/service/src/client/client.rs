@@ -71,7 +71,8 @@ use sp_keystore::SyncCryptoStorePtr;
 use sp_runtime::{
 	generic::{BlockId, SignedBlock},
 	traits::{
-		Block as BlockT, HashFor, Header as HeaderT, NumberFor, One, SaturatedConversion, Zero,
+		Block as BlockT, HashFor, HashingFor, Header as HeaderT, NumberFor, One,
+		SaturatedConversion, Zero,
 	},
 	BuildStorage, Digest, Justification, Justifications, StateVersion,
 };
@@ -532,7 +533,7 @@ where
 		&self,
 		operation: &mut ClientImportOperation<Block, B>,
 		origin: BlockOrigin,
-		hash: Block::Hash,
+		hash: HashFor<Block>,
 		import_headers: PrePostHeader<Block::Header>,
 		justifications: Option<Justifications>,
 		body: Option<Vec<Block::Extrinsic>>,
@@ -842,9 +843,9 @@ where
 	fn apply_finality_with_block_hash(
 		&self,
 		operation: &mut ClientImportOperation<Block, B>,
-		block: Block::Hash,
+		block: HashFor<Block>,
 		justification: Option<Justification>,
-		best_block: Block::Hash,
+		best_block: HashFor<Block>,
 		notify: bool,
 	) -> sp_blockchain::Result<()> {
 		// find tree route from last finalized to given block.
@@ -1078,10 +1079,10 @@ where
 	/// Gets the uncles of the block with `target_hash` going back `max_generation` ancestors.
 	pub fn uncles(
 		&self,
-		target_hash: Block::Hash,
+		target_hash: HashFor<Block>,
 		max_generation: NumberFor<Block>,
-	) -> sp_blockchain::Result<Vec<Block::Hash>> {
-		let load_header = |id: Block::Hash| -> sp_blockchain::Result<Block::Header> {
+	) -> sp_blockchain::Result<Vec<HashFor<Block>>> {
+		let load_header = |id: HashFor<Block>| -> sp_blockchain::Result<Block::Header> {
 			self.backend
 				.blockchain()
 				.header(BlockId::Hash(id))?
@@ -1203,11 +1204,11 @@ where
 		// this is a read proof, using version V0 or V1 is equivalent.
 		let root = state.storage_root(std::iter::empty(), StateVersion::V0).0;
 
-		let (proof, count) = prove_range_read_with_child_with_size::<_, HashFor<Block>>(
+		let (proof, count) = prove_range_read_with_child_with_size::<_, HashingFor<Block>>(
 			state, size_limit, start_key,
 		)?;
 		// This is read proof only, we can use either LayoutV0 or LayoutV1.
-		let proof = sp_trie::encode_compact::<sp_trie::LayoutV0<HashFor<Block>>>(proof, root)
+		let proof = sp_trie::encode_compact::<sp_trie::LayoutV0<HashingFor<Block>>>(proof, root)
 			.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?;
 		Ok((proof, count))
 	}
@@ -1327,20 +1328,20 @@ where
 
 	fn verify_range_proof(
 		&self,
-		root: Block::Hash,
+		root: HashFor<Block>,
 		proof: CompactProof,
 		start_key: &[Vec<u8>],
 	) -> sp_blockchain::Result<(KeyValueStates, usize)> {
-		let mut db = sp_state_machine::MemoryDB::<HashFor<Block>>::new(&[]);
+		let mut db = sp_state_machine::MemoryDB::<HashingFor<Block>>::new(&[]);
 		// Compact encoding
-		let _ = sp_trie::decode_compact::<sp_state_machine::LayoutV0<HashFor<Block>>, _, _>(
+		let _ = sp_trie::decode_compact::<sp_state_machine::LayoutV0<HashingFor<Block>>, _, _>(
 			&mut db,
 			proof.iter_compact_encoded_nodes(),
 			Some(&root),
 		)
 		.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?;
 		let proving_backend = sp_state_machine::TrieBackend::new(db, root);
-		let state = read_range_proof_check_with_child_on_proving_backend::<HashFor<Block>>(
+		let state = read_range_proof_check_with_child_on_proving_backend::<HashingFor<Block>>(
 			&proving_backend,
 			start_key,
 		)?;
@@ -1478,7 +1479,7 @@ where
 		&self,
 		id: &BlockId<Block>,
 		key: &StorageKey,
-	) -> sp_blockchain::Result<Option<Block::Hash>> {
+	) -> sp_blockchain::Result<Option<HashFor<Block>>> {
 		self.state_at(id)?
 			.storage_hash(&key.0)
 			.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))
@@ -1517,7 +1518,7 @@ where
 		id: &BlockId<Block>,
 		child_info: &ChildInfo,
 		key: &StorageKey,
-	) -> sp_blockchain::Result<Option<Block::Hash>> {
+	) -> sp_blockchain::Result<Option<HashFor<Block>>> {
 		self.state_at(id)?
 			.child_storage_hash(child_info, &key.0)
 			.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))
@@ -1534,16 +1535,16 @@ where
 
 	fn header_metadata(
 		&self,
-		hash: Block::Hash,
+		hash: HashFor<Block>,
 	) -> Result<CachedHeaderMetadata<Block>, Self::Error> {
 		self.backend.blockchain().header_metadata(hash)
 	}
 
-	fn insert_header_metadata(&self, hash: Block::Hash, metadata: CachedHeaderMetadata<Block>) {
+	fn insert_header_metadata(&self, hash: HashFor<Block>, metadata: CachedHeaderMetadata<Block>) {
 		self.backend.blockchain().insert_header_metadata(hash, metadata)
 	}
 
-	fn remove_header_metadata(&self, hash: Block::Hash) {
+	fn remove_header_metadata(&self, hash: HashFor<Block>) {
 		self.backend.blockchain().remove_header_metadata(hash)
 	}
 }
@@ -1556,7 +1557,7 @@ where
 {
 	fn uncles(
 		&self,
-		target_hash: Block::Hash,
+		target_hash: HashFor<Block>,
 		max_generation: NumberFor<Block>,
 	) -> sp_blockchain::Result<Vec<Block::Header>> {
 		Ok(Client::uncles(self, target_hash, max_generation)?
@@ -1587,12 +1588,12 @@ where
 
 	fn number(
 		&self,
-		hash: Block::Hash,
+		hash: HashFor<Block>,
 	) -> sp_blockchain::Result<Option<<<Block as BlockT>::Header as HeaderT>::Number>> {
 		self.backend.blockchain().number(hash)
 	}
 
-	fn hash(&self, number: NumberFor<Block>) -> sp_blockchain::Result<Option<Block::Hash>> {
+	fn hash(&self, number: NumberFor<Block>) -> sp_blockchain::Result<Option<HashFor<Block>>> {
 		self.backend.blockchain().hash(number)
 	}
 }
@@ -1606,7 +1607,7 @@ where
 {
 	type Error = Error;
 
-	fn to_hash(&self, block_id: &BlockId<Block>) -> sp_blockchain::Result<Option<Block::Hash>> {
+	fn to_hash(&self, block_id: &BlockId<Block>) -> sp_blockchain::Result<Option<HashFor<Block>>> {
 		self.block_hash_from_id(block_id)
 	}
 
@@ -1639,12 +1640,12 @@ where
 
 	fn number(
 		&self,
-		hash: Block::Hash,
+		hash: HashFor<Block>,
 	) -> sp_blockchain::Result<Option<<<Block as BlockT>::Header as HeaderT>::Number>> {
 		(**self).number(hash)
 	}
 
-	fn hash(&self, number: NumberFor<Block>) -> sp_blockchain::Result<Option<Block::Hash>> {
+	fn hash(&self, number: NumberFor<Block>) -> sp_blockchain::Result<Option<HashFor<Block>>> {
 		(**self).hash(number)
 	}
 }
@@ -1984,15 +1985,18 @@ where
 		self.backend.blockchain().justifications(*id)
 	}
 
-	fn block_hash(&self, number: NumberFor<Block>) -> sp_blockchain::Result<Option<Block::Hash>> {
+	fn block_hash(
+		&self,
+		number: NumberFor<Block>,
+	) -> sp_blockchain::Result<Option<HashFor<Block>>> {
 		self.backend.blockchain().hash(number)
 	}
 
-	fn indexed_transaction(&self, hash: &Block::Hash) -> sp_blockchain::Result<Option<Vec<u8>>> {
+	fn indexed_transaction(&self, hash: &HashFor<Block>) -> sp_blockchain::Result<Option<Vec<u8>>> {
 		self.backend.blockchain().indexed_transaction(hash)
 	}
 
-	fn has_indexed_transaction(&self, hash: &Block::Hash) -> sp_blockchain::Result<bool> {
+	fn has_indexed_transaction(&self, hash: &HashFor<Block>) -> sp_blockchain::Result<bool> {
 		self.backend.blockchain().has_indexed_transaction(hash)
 	}
 

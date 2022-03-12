@@ -26,8 +26,8 @@ use serde::{Deserialize, Serialize};
 use crate::{
 	codec::{Codec, Decode, Encode},
 	traits::{
-		self, Block as BlockT, Header as HeaderT, MaybeMallocSizeOf, MaybeSerialize, Member,
-		NumberFor,
+		self, Block as BlockT, HashFor, Header as HeaderT, MaybeMallocSizeOf, MaybeSerialize,
+		Member, NumberFor,
 	},
 	Justifications,
 };
@@ -41,14 +41,14 @@ use sp_std::prelude::*;
 #[cfg_attr(feature = "std", serde(deny_unknown_fields))]
 pub enum BlockId<Block: BlockT> {
 	/// Identify by block header hash.
-	Hash(Block::Hash),
+	Hash(HashFor<Block>),
 	/// Identify by block number.
 	Number(NumberFor<Block>),
 }
 
 impl<Block: BlockT> BlockId<Block> {
 	/// Create a block ID from a hash.
-	pub fn hash(hash: Block::Hash) -> Self {
+	pub fn hash(hash: HashFor<Block>) -> Self {
 		BlockId::Hash(hash)
 	}
 

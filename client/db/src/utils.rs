@@ -28,7 +28,9 @@ use codec::Decode;
 use sp_database::Transaction;
 use sp_runtime::{
 	generic::BlockId,
-	traits::{Block as BlockT, Header as HeaderT, UniqueSaturatedFrom, UniqueSaturatedInto, Zero},
+	traits::{
+		Block as BlockT, HashFor, Header as HeaderT, UniqueSaturatedFrom, UniqueSaturatedInto, Zero,
+	},
 };
 use sp_trie::DBValue;
 
@@ -467,11 +469,14 @@ pub fn read_header<Block: BlockT>(
 pub fn read_meta<Block>(
 	db: &dyn Database<DbHash>,
 	col_header: u32,
-) -> Result<Meta<<<Block as BlockT>::Header as HeaderT>::Number, Block::Hash>, sp_blockchain::Error>
+) -> Result<
+	Meta<<<Block as BlockT>::Header as HeaderT>::Number, HashFor<Block>>,
+	sp_blockchain::Error,
+>
 where
 	Block: BlockT,
 {
-	let genesis_hash: Block::Hash = match read_genesis_hash(db)? {
+	let genesis_hash: HashFor<Block> = match read_genesis_hash(db)? {
 		Some(genesis_hash) => genesis_hash,
 		None =>
 			return Ok(Meta {

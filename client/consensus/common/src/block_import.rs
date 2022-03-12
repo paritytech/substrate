@@ -20,7 +20,7 @@
 
 use serde::{Deserialize, Serialize};
 use sp_runtime::{
-	traits::{Block as BlockT, HashFor, Header as HeaderT, NumberFor},
+	traits::{Block as BlockT, HashFor, HashingFor, Header as HeaderT, NumberFor},
 	DigestItem, Justification, Justifications,
 };
 use std::{any::Any, borrow::Cow, collections::HashMap, sync::Arc};
@@ -106,11 +106,11 @@ pub enum ForkChoiceStrategy {
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct BlockCheckParams<Block: BlockT> {
 	/// Hash of the block that we verify.
-	pub hash: Block::Hash,
+	pub hash: HashFor<Block>,
 	/// Block number of the block that we verify.
 	pub number: NumberFor<Block>,
 	/// Parent hash of the block that we verify.
-	pub parent_hash: Block::Hash,
+	pub parent_hash: HashFor<Block>,
 	/// Allow importing the block skipping state verification if parent state is missing.
 	pub allow_missing_state: bool,
 	/// Allow importing the block if parent block is missing.
@@ -122,7 +122,7 @@ pub struct BlockCheckParams<Block: BlockT> {
 /// Precomputed storage.
 pub enum StorageChanges<Block: BlockT, Transaction> {
 	/// Changes coming from block execution.
-	Changes(sp_state_machine::StorageChanges<Transaction, HashFor<Block>>),
+	Changes(sp_state_machine::StorageChanges<Transaction, HashingFor<Block>>),
 	/// Whole new state.
 	Import(ImportedState<Block>),
 }
@@ -204,7 +204,7 @@ pub struct BlockImportParams<Block: BlockT, Transaction> {
 	/// Re-validate existing block.
 	pub import_existing: bool,
 	/// Cached full header hash (with post-digests applied).
-	pub post_hash: Option<Block::Hash>,
+	pub post_hash: Option<HashFor<Block>>,
 }
 
 impl<Block: BlockT, Transaction> BlockImportParams<Block, Transaction> {
@@ -228,7 +228,7 @@ impl<Block: BlockT, Transaction> BlockImportParams<Block, Transaction> {
 	}
 
 	/// Get the full header hash (with post-digests applied).
-	pub fn post_hash(&self) -> Block::Hash {
+	pub fn post_hash(&self) -> HashFor<Block> {
 		if let Some(hash) = self.post_hash {
 			hash
 		} else {

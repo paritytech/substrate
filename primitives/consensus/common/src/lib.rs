@@ -26,7 +26,7 @@ use std::{sync::Arc, time::Duration};
 use futures::prelude::*;
 use sp_runtime::{
 	generic::BlockId,
-	traits::{Block as BlockT, HashFor},
+	traits::{Block as BlockT, HashingFor},
 	Digest,
 };
 use sp_state_machine::StorageProof;
@@ -112,7 +112,7 @@ pub struct Proposal<Block: BlockT, Transaction, Proof> {
 	/// Proof that was recorded while building the block.
 	pub proof: Proof,
 	/// The storage changes while building this block.
-	pub storage_changes: sp_state_machine::StorageChanges<Transaction, HashFor<Block>>,
+	pub storage_changes: sp_state_machine::StorageChanges<Transaction, HashingFor<Block>>,
 }
 
 /// Error that is returned when [`ProofRecording`] requested to record a proof,

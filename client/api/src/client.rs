@@ -22,7 +22,7 @@ use sp_consensus::BlockOrigin;
 use sp_core::storage::StorageKey;
 use sp_runtime::{
 	generic::{BlockId, SignedBlock},
-	traits::{Block as BlockT, NumberFor},
+	traits::{Block as BlockT, HashFor, NumberFor},
 	Justifications,
 };
 use std::{collections::HashSet, convert::TryFrom, fmt, sync::Arc};
@@ -74,7 +74,7 @@ pub trait BlockchainEvents<Block: BlockT> {
 		&self,
 		filter_keys: Option<&[StorageKey]>,
 		child_filter_keys: Option<&[(StorageKey, Option<Vec<StorageKey>>)]>,
-	) -> sp_blockchain::Result<StorageEventStream<Block::Hash>>;
+	) -> sp_blockchain::Result<StorageEventStream<HashFor<Block>>>;
 }
 
 /// List of operations to be performed on storage aux data.
@@ -134,16 +134,17 @@ pub trait BlockBackend<Block: BlockT> {
 	fn justifications(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Option<Justifications>>;
 
 	/// Get block hash by number.
-	fn block_hash(&self, number: NumberFor<Block>) -> sp_blockchain::Result<Option<Block::Hash>>;
+	fn block_hash(&self, number: NumberFor<Block>)
+		-> sp_blockchain::Result<Option<HashFor<Block>>>;
 
 	/// Get single indexed transaction by content hash.
 	///
 	/// Note that this will only fetch transactions
 	/// that are indexed by the runtime with `storage_index_transaction`.
-	fn indexed_transaction(&self, hash: &Block::Hash) -> sp_blockchain::Result<Option<Vec<u8>>>;
+	fn indexed_transaction(&self, hash: &HashFor<Block>) -> sp_blockchain::Result<Option<Vec<u8>>>;
 
 	/// Check if transaction index exists.
-	fn has_indexed_transaction(&self, hash: &Block::Hash) -> sp_blockchain::Result<bool> {
+	fn has_indexed_transaction(&self, hash: &HashFor<Block>) -> sp_blockchain::Result<bool> {
 		Ok(self.indexed_transaction(hash)?.is_some())
 	}
 }
@@ -153,7 +154,7 @@ pub trait ProvideUncles<Block: BlockT> {
 	/// Gets the uncles of the block with `target_hash` going back `max_generation` ancestors.
 	fn uncles(
 		&self,
-		target_hash: Block::Hash,
+		target_hash: HashFor<Block>,
 		max_generation: NumberFor<Block>,
 	) -> sp_blockchain::Result<Vec<Block::Header>>;
 }
@@ -286,7 +287,7 @@ impl fmt::Display for UsageInfo {
 #[derive(Clone, Debug)]
 pub struct BlockImportNotification<Block: BlockT> {
 	/// Imported block header hash.
-	pub hash: Block::Hash,
+	pub hash: HashFor<Block>,
 	/// Imported block origin.
 	pub origin: BlockOrigin,
 	/// Imported block header.
@@ -303,7 +304,7 @@ pub struct BlockImportNotification<Block: BlockT> {
 #[derive(Clone, Debug)]
 pub struct FinalityNotification<Block: BlockT> {
 	/// Finalized block header hash.
-	pub hash: Block::Hash,
+	pub hash: HashFor<Block>,
 	/// Finalized block header.
 	pub header: Block::Header,
 	/// Path from the old finalized to new finalized parent (implicitly finalized blocks).

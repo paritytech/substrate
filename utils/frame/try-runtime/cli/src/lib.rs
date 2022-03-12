@@ -288,7 +288,7 @@ use sp_core::{
 use sp_externalities::Extensions;
 use sp_keystore::{testing::KeyStore, KeystoreExt};
 use sp_runtime::{
-	traits::{Block as BlockT, NumberFor},
+	traits::{Block as BlockT, HashFor, NumberFor},
 	DeserializeOwned,
 };
 use sp_state_machine::{InMemoryProvingBackend, OverlayedChanges, StateMachine};
@@ -477,8 +477,8 @@ impl State {
 	/// Create the [`remote_externalities::Builder`] from self.
 	pub(crate) fn builder<Block: BlockT + DeserializeOwned>(&self) -> sc_cli::Result<Builder<Block>>
 	where
-		Block::Hash: FromStr,
-		<Block::Hash as FromStr>::Err: Debug,
+		HashFor<Block>: FromStr,
+		<HashFor<Block> as FromStr>::Err: Debug,
 	{
 		Ok(match self {
 			State::Snap { snapshot_path } =>
@@ -523,8 +523,8 @@ impl TryRuntimeCmd {
 	where
 		Block: BlockT<Hash = H256> + serde::de::DeserializeOwned,
 		Block::Header: serde::de::DeserializeOwned,
-		Block::Hash: FromStr,
-		<Block::Hash as FromStr>::Err: Debug,
+		HashFor<Block>: FromStr,
+		<HashFor<Block> as FromStr>::Err: Debug,
 		NumberFor<Block>: FromStr,
 		<NumberFor<Block> as FromStr>::Err: Debug,
 		ExecDispatch: NativeExecutionDispatch + 'static,
@@ -592,10 +592,10 @@ pub(crate) fn extract_code(spec: &Box<dyn ChainSpec>) -> sc_cli::Result<(Storage
 }
 
 /// Get the hash type of the generic `Block` from a `hash_str`.
-pub(crate) fn hash_of<Block: BlockT>(hash_str: &str) -> sc_cli::Result<Block::Hash>
+pub(crate) fn hash_of<Block: BlockT>(hash_str: &str) -> sc_cli::Result<HashFor<Block>>
 where
-	Block::Hash: FromStr,
-	<Block::Hash as FromStr>::Err: Debug,
+	HashFor<Block>: FromStr,
+	<HashFor<Block> as FromStr>::Err: Debug,
 {
 	hash_str
 		.parse::<<Block as BlockT>::Hash>()

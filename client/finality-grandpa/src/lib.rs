@@ -77,7 +77,7 @@ use sp_core::crypto::ByteArray;
 use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 use sp_runtime::{
 	generic::BlockId,
-	traits::{Block as BlockT, NumberFor, Zero},
+	traits::{Block as BlockT, HashFor, NumberFor, Zero},
 };
 
 pub use finality_grandpa::BlockNumberOps;
@@ -315,7 +315,7 @@ pub(crate) trait BlockStatus<Block: BlockT> {
 	/// Return `Ok(Some(number))` or `Ok(None)` depending on whether the block
 	/// is definitely known and has been imported.
 	/// If an unexpected error occurs, return that.
-	fn block_number(&self, hash: Block::Hash) -> Result<Option<NumberFor<Block>>, Error>;
+	fn block_number(&self, hash: HashFor<Block>) -> Result<Option<NumberFor<Block>>, Error>;
 }
 
 impl<Block: BlockT, Client> BlockStatus<Block> for Arc<Client>
@@ -323,7 +323,7 @@ where
 	Client: HeaderBackend<Block>,
 	NumberFor<Block>: BlockNumberOps,
 {
-	fn block_number(&self, hash: Block::Hash) -> Result<Option<NumberFor<Block>>, Error> {
+	fn block_number(&self, hash: HashFor<Block>) -> Result<Option<NumberFor<Block>>, Error> {
 		self.block_number_from_id(&BlockId::Hash(hash))
 			.map_err(|e| Error::Blockchain(e.to_string()))
 	}
@@ -377,7 +377,7 @@ pub(crate) trait BlockSyncRequester<Block: BlockT> {
 	fn set_sync_fork_request(
 		&self,
 		peers: Vec<sc_network::PeerId>,
-		hash: Block::Hash,
+		hash: HashFor<Block>,
 		number: NumberFor<Block>,
 	);
 }
@@ -390,7 +390,7 @@ where
 	fn set_sync_fork_request(
 		&self,
 		peers: Vec<sc_network::PeerId>,
-		hash: Block::Hash,
+		hash: HashFor<Block>,
 		number: NumberFor<Block>,
 	) {
 		NetworkBridge::set_sync_fork_request(self, peers, hash, number)
@@ -473,7 +473,7 @@ pub struct LinkHalf<Block: BlockT, C, SC> {
 	client: Arc<C>,
 	select_chain: SC,
 	persistent_data: PersistentData<Block>,
-	voter_commands_rx: TracingUnboundedReceiver<VoterCommand<Block::Hash, NumberFor<Block>>>,
+	voter_commands_rx: TracingUnboundedReceiver<VoterCommand<HashFor<Block>, NumberFor<Block>>>,
 	justification_sender: GrandpaJustificationSender<Block>,
 	justification_stream: GrandpaJustificationStream<Block>,
 	telemetry: Option<TelemetryHandle>,
@@ -481,7 +481,7 @@ pub struct LinkHalf<Block: BlockT, C, SC> {
 
 impl<Block: BlockT, C, SC> LinkHalf<Block, C, SC> {
 	/// Get the shared authority set.
-	pub fn shared_authority_set(&self) -> &SharedAuthoritySet<Block::Hash, NumberFor<Block>> {
+	pub fn shared_authority_set(&self) -> &SharedAuthoritySet<HashFor<Block>, NumberFor<Block>> {
 		&self.persistent_data.authority_set
 	}
 
@@ -554,7 +554,7 @@ pub struct AuthoritySetHardFork<Block: BlockT> {
 	/// The new authority set id.
 	pub set_id: SetId,
 	/// The block hash and number at which the hard fork should be applied.
-	pub block: (Block::Hash, NumberFor<Block>),
+	pub block: (HashFor<Block>, NumberFor<Block>),
 	/// The authorities in the new set.
 	pub authorities: AuthorityList,
 	/// The latest block number that was finalized before this authority set
@@ -659,13 +659,13 @@ fn global_communication<BE, Block: BlockT, C, N>(
 ) -> (
 	impl Stream<
 		Item = Result<
-			CommunicationInH<Block, Block::Hash>,
-			CommandOrError<Block::Hash, NumberFor<Block>>,
+			CommunicationInH<Block, HashFor<Block>>,
+			CommandOrError<HashFor<Block>, NumberFor<Block>>,
 		>,
 	>,
 	impl Sink<
-		CommunicationOutH<Block, Block::Hash>,
-		Error = CommandOrError<Block::Hash, NumberFor<Block>>,
+		CommunicationOutH<Block, HashFor<Block>>,
+		Error = CommandOrError<HashFor<Block>, NumberFor<Block>>,
 	>,
 )
 where
@@ -745,7 +745,7 @@ pub fn run_grandpa_voter<Block: BlockT, BE: 'static, C, N, SC, VR>(
 	grandpa_params: GrandpaParams<Block, C, N, SC, VR>,
 ) -> sp_blockchain::Result<impl Future<Output = ()> + Send>
 where
-	Block::Hash: Ord,
+	HashFor<Block>: Ord,
 	BE: Backend<Block> + 'static,
 	N: NetworkT<Block> + Sync + 'static,
 	SC: SelectChain<Block> + 'static,
@@ -868,11 +868,14 @@ impl Metrics {
 #[must_use]
 struct VoterWork<B, Block: BlockT, C, N: NetworkT<Block>, SC, VR> {
 	voter: Pin<
-		Box<dyn Future<Output = Result<(), CommandOrError<Block::Hash, NumberFor<Block>>>> + Send>,
+		Box<
+			dyn Future<Output = Result<(), CommandOrError<HashFor<Block>, NumberFor<Block>>>>
+				+ Send,
+		>,
 	>,
 	shared_voter_state: SharedVoterState,
 	env: Arc<Environment<B, Block, C, N, SC, VR>>,
-	voter_commands_rx: TracingUnboundedReceiver<VoterCommand<Block::Hash, NumberFor<Block>>>,
+	voter_commands_rx: TracingUnboundedReceiver<VoterCommand<HashFor<Block>, NumberFor<Block>>>,
 	network: NetworkBridge<Block, N>,
 	telemetry: Option<TelemetryHandle>,
 	/// Prometheus metrics.
@@ -897,7 +900,7 @@ where
 		select_chain: SC,
 		voting_rule: VR,
 		persistent_data: PersistentData<Block>,
-		voter_commands_rx: TracingUnboundedReceiver<VoterCommand<Block::Hash, NumberFor<Block>>>,
+		voter_commands_rx: TracingUnboundedReceiver<VoterCommand<HashFor<Block>, NumberFor<Block>>>,
 		prometheus_registry: Option<prometheus_endpoint::Registry>,
 		shared_voter_state: SharedVoterState,
 		justification_sender: GrandpaJustificationSender<Block>,
@@ -1023,7 +1026,7 @@ where
 
 	fn handle_voter_command(
 		&mut self,
-		command: VoterCommand<Block::Hash, NumberFor<Block>>,
+		command: VoterCommand<HashFor<Block>, NumberFor<Block>>,
 	) -> Result<(), Error> {
 		match command {
 			VoterCommand::ChangeAuthorities(new) => {

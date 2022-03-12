@@ -21,7 +21,7 @@ use log::warn;
 use parking_lot::RwLock;
 use sp_runtime::{
 	generic::BlockId,
-	traits::{Block as BlockT, Header as HeaderT, NumberFor},
+	traits::{Block as BlockT, HashFor, Header as HeaderT, NumberFor},
 	Justifications,
 };
 
@@ -40,13 +40,13 @@ pub trait HeaderBackend<Block: BlockT>: Send + Sync {
 	/// Get block number by hash. Returns `None` if the header is not in the chain.
 	fn number(
 		&self,
-		hash: Block::Hash,
+		hash: HashFor<Block>,
 	) -> Result<Option<<<Block as BlockT>::Header as HeaderT>::Number>>;
 	/// Get block hash by number. Returns `None` if the header is not in the chain.
-	fn hash(&self, number: NumberFor<Block>) -> Result<Option<Block::Hash>>;
+	fn hash(&self, number: NumberFor<Block>) -> Result<Option<HashFor<Block>>>;
 
 	/// Convert an arbitrary block ID into a block hash.
-	fn block_hash_from_id(&self, id: &BlockId<Block>) -> Result<Option<Block::Hash>> {
+	fn block_hash_from_id(&self, id: &BlockId<Block>) -> Result<Option<HashFor<Block>>> {
 		match *id {
 			BlockId::Hash(h) => Ok(Some(h)),
 			BlockId::Number(n) => self.hash(n),
@@ -77,7 +77,7 @@ pub trait HeaderBackend<Block: BlockT>: Send + Sync {
 
 	/// Convert an arbitrary block ID into a block hash. Returns `UnknownBlock` error if block is
 	/// not found.
-	fn expect_block_hash_from_id(&self, id: &BlockId<Block>) -> Result<Block::Hash> {
+	fn expect_block_hash_from_id(&self, id: &BlockId<Block>) -> Result<HashFor<Block>> {
 		self.block_hash_from_id(id).and_then(|n| {
 			n.ok_or_else(|| Error::UnknownBlock(format!("Expect block hash from id: {}", id)))
 		})
@@ -93,15 +93,15 @@ pub trait Backend<Block: BlockT>:
 	/// Get block justifications. Returns `None` if no justification exists.
 	fn justifications(&self, id: BlockId<Block>) -> Result<Option<Justifications>>;
 	/// Get last finalized block hash.
-	fn last_finalized(&self) -> Result<Block::Hash>;
+	fn last_finalized(&self) -> Result<HashFor<Block>>;
 
 	/// Returns hashes of all blocks that are leaves of the block tree.
 	/// in other words, that have no children, are chain heads.
 	/// Results must be ordered best (longest, highest) chain first.
-	fn leaves(&self) -> Result<Vec<Block::Hash>>;
+	fn leaves(&self) -> Result<Vec<HashFor<Block>>>;
 
 	/// Return hashes of all blocks that are children of the block with `parent_hash`.
-	fn children(&self, parent_hash: Block::Hash) -> Result<Vec<Block::Hash>>;
+	fn children(&self, parent_hash: HashFor<Block>) -> Result<Vec<HashFor<Block>>>;
 
 	/// Get the most recent block hash of the best (longest) chains
 	/// that contain block with the given `target_hash`.
@@ -116,10 +116,10 @@ pub trait Backend<Block: BlockT>:
 	/// TODO: document time complexity of this, see [#1444](https://github.com/paritytech/substrate/issues/1444)
 	fn best_containing(
 		&self,
-		target_hash: Block::Hash,
+		target_hash: HashFor<Block>,
 		maybe_max_number: Option<NumberFor<Block>>,
 		import_lock: &RwLock<()>,
-	) -> Result<Option<Block::Hash>> {
+	) -> Result<Option<HashFor<Block>>> {
 		let target_header = {
 			match self.header(BlockId::Hash(target_hash))? {
 				Some(x) => x,
@@ -223,10 +223,10 @@ pub trait Backend<Block: BlockT>:
 
 	/// Get single indexed transaction by content hash. Note that this will only fetch transactions
 	/// that are indexed by the runtime with `storage_index_transaction`.
-	fn indexed_transaction(&self, hash: &Block::Hash) -> Result<Option<Vec<u8>>>;
+	fn indexed_transaction(&self, hash: &HashFor<Block>) -> Result<Option<Vec<u8>>>;
 
 	/// Check if indexed transaction exists.
-	fn has_indexed_transaction(&self, hash: &Block::Hash) -> Result<bool> {
+	fn has_indexed_transaction(&self, hash: &HashFor<Block>) -> Result<bool> {
 		Ok(self.indexed_transaction(hash)?.is_some())
 	}
 
@@ -237,17 +237,17 @@ pub trait Backend<Block: BlockT>:
 #[derive(Debug, Eq, PartialEq)]
 pub struct Info<Block: BlockT> {
 	/// Best block hash.
-	pub best_hash: Block::Hash,
+	pub best_hash: HashFor<Block>,
 	/// Best block number.
 	pub best_number: <<Block as BlockT>::Header as HeaderT>::Number,
 	/// Genesis block hash.
-	pub genesis_hash: Block::Hash,
+	pub genesis_hash: HashFor<Block>,
 	/// The head of the finalized chain.
-	pub finalized_hash: Block::Hash,
+	pub finalized_hash: HashFor<Block>,
 	/// Last finalized block number.
 	pub finalized_number: <<Block as BlockT>::Header as HeaderT>::Number,
 	/// Last finalized state.
-	pub finalized_state: Option<(Block::Hash, <<Block as BlockT>::Header as HeaderT>::Number)>,
+	pub finalized_state: Option<(HashFor<Block>, <<Block as BlockT>::Header as HeaderT>::Number)>,
 	/// Number of concurrent leave forks.
 	pub number_leaves: usize,
 	/// Missing blocks after warp sync. (start, end).

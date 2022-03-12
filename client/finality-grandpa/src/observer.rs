@@ -34,7 +34,7 @@ use sp_blockchain::HeaderMetadata;
 use sp_consensus::SelectChain;
 use sp_finality_grandpa::AuthorityId;
 use sp_keystore::SyncCryptoStorePtr;
-use sp_runtime::traits::{Block as BlockT, NumberFor};
+use sp_runtime::traits::{Block as BlockT, HashFor, NumberFor};
 
 use crate::{
 	authorities::SharedAuthoritySet,
@@ -51,7 +51,7 @@ struct ObserverChain<'a, Block: BlockT, Client> {
 	_phantom: PhantomData<Block>,
 }
 
-impl<'a, Block, Client> finality_grandpa::Chain<Block::Hash, NumberFor<Block>>
+impl<'a, Block, Client> finality_grandpa::Chain<HashFor<Block>, NumberFor<Block>>
 	for ObserverChain<'a, Block, Client>
 where
 	Block: BlockT,
@@ -60,26 +60,28 @@ where
 {
 	fn ancestry(
 		&self,
-		base: Block::Hash,
-		block: Block::Hash,
-	) -> Result<Vec<Block::Hash>, GrandpaError> {
+		base: HashFor<Block>,
+		block: HashFor<Block>,
+	) -> Result<Vec<HashFor<Block>>, GrandpaError> {
 		environment::ancestry(&self.client, base, block)
 	}
 }
 
 fn grandpa_observer<BE, Block: BlockT, Client, S, F>(
 	client: &Arc<Client>,
-	authority_set: &SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
+	authority_set: &SharedAuthoritySet<HashFor<Block>, NumberFor<Block>>,
 	voters: &Arc<VoterSet<AuthorityId>>,
 	justification_sender: &Option<GrandpaJustificationSender<Block>>,
 	last_finalized_number: NumberFor<Block>,
 	commits: S,
 	note_round: F,
 	telemetry: Option<TelemetryHandle>,
-) -> impl Future<Output = Result<(), CommandOrError<Block::Hash, NumberFor<Block>>>>
+) -> impl Future<Output = Result<(), CommandOrError<HashFor<Block>, NumberFor<Block>>>>
 where
 	NumberFor<Block>: BlockNumberOps,
-	S: Stream<Item = Result<CommunicationIn<Block>, CommandOrError<Block::Hash, NumberFor<Block>>>>,
+	S: Stream<
+		Item = Result<CommunicationIn<Block>, CommandOrError<HashFor<Block>, NumberFor<Block>>>,
+	>,
 	F: Fn(u64),
 	BE: Backend<Block>,
 	Client: ClientForGrandpa<Block, BE>,

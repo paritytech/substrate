@@ -35,7 +35,7 @@ use prometheus_endpoint::prometheus::default_registry;
 
 use sp_api::{ApiRef, ProvideRuntimeApi};
 use sp_keystore::{testing::KeyStore, CryptoStore};
-use sp_runtime::traits::{Block as BlockT, NumberFor, Zero};
+use sp_runtime::traits::{Block as BlockT, HashFor, NumberFor, Zero};
 use substrate_test_runtime_client::runtime::Block;
 
 use super::*;
@@ -84,7 +84,7 @@ impl<Block: BlockT> HeaderBackend<Block> for TestApi {
 
 	fn number(
 		&self,
-		_hash: Block::Hash,
+		_hash: HashFor<Block>,
 	) -> std::result::Result<Option<NumberFor<Block>>, sp_blockchain::Error> {
 		Ok(None)
 	}
@@ -92,7 +92,7 @@ impl<Block: BlockT> HeaderBackend<Block> for TestApi {
 	fn hash(
 		&self,
 		_number: NumberFor<Block>,
-	) -> std::result::Result<Option<Block::Hash>, sp_blockchain::Error> {
+	) -> std::result::Result<Option<HashFor<Block>>, sp_blockchain::Error> {
 		Ok(None)
 	}
 }

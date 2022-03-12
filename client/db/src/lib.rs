@@ -79,8 +79,8 @@ use sp_database::Transaction;
 use sp_runtime::{
 	generic::BlockId,
 	traits::{
-		Block as BlockT, Hash, HashFor, Header as HeaderT, NumberFor, One, SaturatedConversion,
-		Zero,
+		Block as BlockT, Hash, HashFor, HashingFor, Header as HeaderT, NumberFor, One,
+		SaturatedConversion, Zero,
 	},
 	Justification, Justifications, StateVersion, Storage,
 };
@@ -104,7 +104,7 @@ const DEFAULT_CHILD_RATIO: (usize, usize) = (1, 10);
 
 /// DB-backed patricia trie state, transaction type is an overlay of changes to commit.
 pub type DbState<B> =
-	sp_state_machine::TrieBackend<Arc<dyn sp_state_machine::Storage<HashFor<B>>>, HashFor<B>>;
+	sp_state_machine::TrieBackend<Arc<dyn sp_state_machine::Storage<HashingFor<B>>>, HashingFor<B>>;
 
 /// Length of a [`DbHash`].
 pub const DB_HASH_LEN: usize = 32;
@@ -132,7 +132,7 @@ enum DbExtrinsic<B: BlockT> {
 pub struct RefTrackingState<Block: BlockT> {
 	state: DbState<Block>,
 	storage: Arc<StorageDb<Block>>,
-	parent_hash: Option<Block::Hash>,
+	parent_hash: Option<HashFor<Block>>,
 }
 
 impl<B: BlockT> RefTrackingState<B> {
@@ -155,10 +155,10 @@ impl<Block: BlockT> std::fmt::Debug for RefTrackingState<Block> {
 	}
 }
 
-impl<B: BlockT> StateBackend<HashFor<B>> for RefTrackingState<B> {
-	type Error = <DbState<B> as StateBackend<HashFor<B>>>::Error;
-	type Transaction = <DbState<B> as StateBackend<HashFor<B>>>::Transaction;
-	type TrieBackendStorage = <DbState<B> as StateBackend<HashFor<B>>>::TrieBackendStorage;
+impl<B: BlockT> StateBackend<HashingFor<B>> for RefTrackingState<B> {
+	type Error = <DbState<B> as StateBackend<HashingFor<B>>>::Error;
+	type Transaction = <DbState<B> as StateBackend<HashingFor<B>>>::Transaction;
+	type TrieBackendStorage = <DbState<B> as StateBackend<HashingFor<B>>>::TrieBackendStorage;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		self.state.storage(key)
@@ -275,7 +275,7 @@ impl<B: BlockT> StateBackend<HashFor<B>> for RefTrackingState<B> {
 
 	fn as_trie_backend(
 		&self,
-	) -> Option<&sp_state_machine::TrieBackend<Self::TrieBackendStorage, HashFor<B>>> {
+	) -> Option<&sp_state_machine::TrieBackend<Self::TrieBackendStorage, HashingFor<B>>> {
 		self.state.as_trie_backend()
 	}
 
@@ -422,7 +422,7 @@ impl<'a> sc_state_db::MetaDb for StateMetaDb<'a> {
 }
 
 struct MetaUpdate<Block: BlockT> {
-	pub hash: Block::Hash,
+	pub hash: HashFor<Block>,
 	pub number: NumberFor<Block>,
 	pub is_best: bool,
 	pub is_finalized: bool,
@@ -443,8 +443,8 @@ fn cache_header<Hash: std::cmp::Eq + std::hash::Hash, Header>(
 /// Block database
 pub struct BlockchainDb<Block: BlockT> {
 	db: Arc<dyn Database<DbHash>>,
-	meta: Arc<RwLock<Meta<NumberFor<Block>, Block::Hash>>>,
-	leaves: RwLock<LeafSet<Block::Hash, NumberFor<Block>>>,
+	meta: Arc<RwLock<Meta<NumberFor<Block>, HashFor<Block>>>>,
+	leaves: RwLock<LeafSet<HashFor<Block>, NumberFor<Block>>>,
 	header_metadata_cache: Arc<HeaderMetadataCache<Block>>,
 	header_cache: Mutex<LinkedHashMap<Block::Hash, Option<Block::Header>>>,
 }
@@ -532,11 +532,11 @@ impl<Block: BlockT> sc_client_api::blockchain::HeaderBackend<Block> for Blockcha
 		}
 	}
 
-	fn number(&self, hash: Block::Hash) -> ClientResult<Option<NumberFor<Block>>> {
+	fn number(&self, hash: HashFor<Block>) -> ClientResult<Option<NumberFor<Block>>> {
 		Ok(self.header_metadata(hash).ok().map(|header_metadata| header_metadata.number))
 	}
 
-	fn hash(&self, number: NumberFor<Block>) -> ClientResult<Option<Block::Hash>> {
+	fn hash(&self, number: NumberFor<Block>) -> ClientResult<Option<HashFor<Block>>> {
 		self.header(BlockId::Number(number))
 			.and_then(|maybe_header| match maybe_header {
 				Some(header) => Ok(Some(header.hash().clone())),
@@ -618,23 +618,23 @@ impl<Block: BlockT> sc_client_api::blockchain::Backend<Block> for BlockchainDb<B
 		}
 	}
 
-	fn last_finalized(&self) -> ClientResult<Block::Hash> {
+	fn last_finalized(&self) -> ClientResult<HashFor<Block>> {
 		Ok(self.meta.read().finalized_hash.clone())
 	}
 
-	fn leaves(&self) -> ClientResult<Vec<Block::Hash>> {
+	fn leaves(&self) -> ClientResult<Vec<HashFor<Block>>> {
 		Ok(self.leaves.read().hashes())
 	}
 
-	fn children(&self, parent_hash: Block::Hash) -> ClientResult<Vec<Block::Hash>> {
+	fn children(&self, parent_hash: HashFor<Block>) -> ClientResult<Vec<HashFor<Block>>> {
 		children::read_children(&*self.db, columns::META, meta_keys::CHILDREN_PREFIX, parent_hash)
 	}
 
-	fn indexed_transaction(&self, hash: &Block::Hash) -> ClientResult<Option<Vec<u8>>> {
+	fn indexed_transaction(&self, hash: &HashFor<Block>) -> ClientResult<Option<Vec<u8>>> {
 		Ok(self.db.get(columns::TRANSACTION, hash.as_ref()))
 	}
 
-	fn has_indexed_transaction(&self, hash: &Block::Hash) -> ClientResult<bool> {
+	fn has_indexed_transaction(&self, hash: &HashFor<Block>) -> ClientResult<bool> {
 		Ok(self.db.contains(columns::TRANSACTION, hash.as_ref()))
 	}
 
@@ -671,7 +671,7 @@ impl<Block: BlockT> HeaderMetadata<Block> for BlockchainDb<Block> {
 
 	fn header_metadata(
 		&self,
-		hash: Block::Hash,
+		hash: HashFor<Block>,
 	) -> Result<CachedHeaderMetadata<Block>, Self::Error> {
 		self.header_metadata_cache.header_metadata(hash).map_or_else(
 			|| {
@@ -693,11 +693,11 @@ impl<Block: BlockT> HeaderMetadata<Block> for BlockchainDb<Block> {
 		)
 	}
 
-	fn insert_header_metadata(&self, hash: Block::Hash, metadata: CachedHeaderMetadata<Block>) {
+	fn insert_header_metadata(&self, hash: HashFor<Block>, metadata: CachedHeaderMetadata<Block>) {
 		self.header_metadata_cache.insert_header_metadata(hash, metadata)
 	}
 
-	fn remove_header_metadata(&self, hash: Block::Hash) {
+	fn remove_header_metadata(&self, hash: HashFor<Block>) {
 		self.header_cache.lock().remove(&hash);
 		self.header_metadata_cache.remove_header_metadata(hash);
 	}
@@ -706,7 +706,7 @@ impl<Block: BlockT> HeaderMetadata<Block> for BlockchainDb<Block> {
 /// Database transaction
 pub struct BlockImportOperation<Block: BlockT> {
 	old_state: SyncingCachingState<RefTrackingState<Block>, Block>,
-	db_updates: PrefixedMemoryDB<HashFor<Block>>,
+	db_updates: PrefixedMemoryDB<HashingFor<Block>>,
 	storage_updates: StorageCollection,
 	child_storage_updates: ChildStorageCollection,
 	offchain_storage_updates: OffchainChangesCollection,
@@ -749,7 +749,7 @@ impl<Block: BlockT> BlockImportOperation<Block> {
 		&mut self,
 		storage: Storage,
 		state_version: StateVersion,
-	) -> ClientResult<Block::Hash> {
+	) -> ClientResult<HashFor<Block>> {
 		if storage.top.keys().any(|k| well_known_keys::is_child_storage_key(&k)) {
 			return Err(sp_blockchain::Error::InvalidState.into())
 		}
@@ -799,7 +799,10 @@ impl<Block: BlockT> sc_client_api::backend::BlockImportOperation<Block>
 		// Currently cache isn't implemented on full nodes.
 	}
 
-	fn update_db_storage(&mut self, update: PrefixedMemoryDB<HashFor<Block>>) -> ClientResult<()> {
+	fn update_db_storage(
+		&mut self,
+		update: PrefixedMemoryDB<HashingFor<Block>>,
+	) -> ClientResult<()> {
 		self.db_updates = update;
 		Ok(())
 	}
@@ -808,7 +811,7 @@ impl<Block: BlockT> sc_client_api::backend::BlockImportOperation<Block>
 		&mut self,
 		storage: Storage,
 		state_version: StateVersion,
-	) -> ClientResult<Block::Hash> {
+	) -> ClientResult<HashFor<Block>> {
 		let root = self.apply_new_state(storage, state_version)?;
 		self.commit_state = true;
 		Ok(root)
@@ -819,7 +822,7 @@ impl<Block: BlockT> sc_client_api::backend::BlockImportOperation<Block>
 		storage: Storage,
 		commit: bool,
 		state_version: StateVersion,
-	) -> ClientResult<Block::Hash> {
+	) -> ClientResult<HashFor<Block>> {
 		let root = self.apply_new_state(storage, state_version)?;
 		self.commit_state = commit;
 		Ok(root)
@@ -874,14 +877,14 @@ impl<Block: BlockT> sc_client_api::backend::BlockImportOperation<Block>
 
 struct StorageDb<Block: BlockT> {
 	pub db: Arc<dyn Database<DbHash>>,
-	pub state_db: StateDb<Block::Hash, Vec<u8>>,
+	pub state_db: StateDb<HashFor<Block>, Vec<u8>>,
 	prefix_keys: bool,
 }
 
-impl<Block: BlockT> sp_state_machine::Storage<HashFor<Block>> for StorageDb<Block> {
-	fn get(&self, key: &Block::Hash, prefix: Prefix) -> Result<Option<DBValue>, String> {
+impl<Block: BlockT> sp_state_machine::Storage<HashingFor<Block>> for StorageDb<Block> {
+	fn get(&self, key: &HashFor<Block>, prefix: Prefix) -> Result<Option<DBValue>, String> {
 		if self.prefix_keys {
-			let key = prefixed_key::<HashFor<Block>>(key, prefix);
+			let key = prefixed_key::<HashingFor<Block>>(key, prefix);
 			self.state_db.get(&key, self)
 		} else {
 			self.state_db.get(key.as_ref(), self)
@@ -900,37 +903,37 @@ impl<Block: BlockT> sc_state_db::NodeDb for StorageDb<Block> {
 }
 
 struct DbGenesisStorage<Block: BlockT> {
-	root: Block::Hash,
-	storage: PrefixedMemoryDB<HashFor<Block>>,
+	root: HashFor<Block>,
+	storage: PrefixedMemoryDB<HashingFor<Block>>,
 }
 
 impl<Block: BlockT> DbGenesisStorage<Block> {
-	pub fn new(root: Block::Hash, storage: PrefixedMemoryDB<HashFor<Block>>) -> Self {
+	pub fn new(root: HashFor<Block>, storage: PrefixedMemoryDB<HashingFor<Block>>) -> Self {
 		DbGenesisStorage { root, storage }
 	}
 }
 
-impl<Block: BlockT> sp_state_machine::Storage<HashFor<Block>> for DbGenesisStorage<Block> {
-	fn get(&self, key: &Block::Hash, prefix: Prefix) -> Result<Option<DBValue>, String> {
+impl<Block: BlockT> sp_state_machine::Storage<HashingFor<Block>> for DbGenesisStorage<Block> {
+	fn get(&self, key: &HashFor<Block>, prefix: Prefix) -> Result<Option<DBValue>, String> {
 		use hash_db::HashDB;
 		Ok(self.storage.get(key, prefix))
 	}
 }
 
-struct EmptyStorage<Block: BlockT>(pub Block::Hash);
+struct EmptyStorage<Block: BlockT>(pub HashFor<Block>);
 
 impl<Block: BlockT> EmptyStorage<Block> {
 	pub fn new() -> Self {
-		let mut root = Block::Hash::default();
-		let mut mdb = MemoryDB::<HashFor<Block>>::default();
+		let mut root = HashFor::<Block>::default();
+		let mut mdb = MemoryDB::<HashingFor<Block>>::default();
 		// both triedbmut are the same on empty storage.
-		sp_state_machine::TrieDBMutV1::<HashFor<Block>>::new(&mut mdb, &mut root);
+		sp_state_machine::TrieDBMutV1::<HashingFor<Block>>::new(&mut mdb, &mut root);
 		EmptyStorage(root)
 	}
 }
 
-impl<Block: BlockT> sp_state_machine::Storage<HashFor<Block>> for EmptyStorage<Block> {
-	fn get(&self, _key: &Block::Hash, _prefix: Prefix) -> Result<Option<DBValue>, String> {
+impl<Block: BlockT> sp_state_machine::Storage<HashingFor<Block>> for EmptyStorage<Block> {
+	fn get(&self, _key: &HashFor<Block>, _prefix: Prefix) -> Result<Option<DBValue>, String> {
 		Ok(None)
 	}
 }
@@ -1106,9 +1109,9 @@ impl<Block: BlockT> Backend<Block> {
 	fn set_head_with_transaction(
 		&self,
 		transaction: &mut Transaction<DbHash>,
-		route_to: Block::Hash,
-		best_to: (NumberFor<Block>, Block::Hash),
-	) -> ClientResult<(Vec<Block::Hash>, Vec<Block::Hash>)> {
+		route_to: HashFor<Block>,
+		best_to: (NumberFor<Block>, HashFor<Block>),
+	) -> ClientResult<(Vec<HashFor<Block>>, Vec<HashFor<Block>>)> {
 		let mut enacted = Vec::default();
 		let mut retracted = Vec::default();
 
@@ -1173,7 +1176,7 @@ impl<Block: BlockT> Backend<Block> {
 	fn ensure_sequential_finalization(
 		&self,
 		header: &Block::Header,
-		last_finalized: Option<Block::Hash>,
+		last_finalized: Option<HashFor<Block>>,
 	) -> ClientResult<()> {
 		let last_finalized =
 			last_finalized.unwrap_or_else(|| self.blockchain.meta.read().finalized_hash);
@@ -1193,11 +1196,13 @@ impl<Block: BlockT> Backend<Block> {
 	fn finalize_block_with_transaction(
 		&self,
 		transaction: &mut Transaction<DbHash>,
-		hash: &Block::Hash,
+		hash: &HashFor<Block>,
 		header: &Block::Header,
-		last_finalized: Option<Block::Hash>,
+		last_finalized: Option<HashFor<Block>>,
 		justification: Option<Justification>,
-		finalization_displaced: &mut Option<FinalizationDisplaced<Block::Hash, NumberFor<Block>>>,
+		finalization_displaced: &mut Option<
+			FinalizationDisplaced<HashFor<Block>, NumberFor<Block>>,
+		>,
 	) -> ClientResult<MetaUpdate<Block>> {
 		// TODO: ensure best chain contains this block.
 		let number = *header.number();
@@ -1220,7 +1225,7 @@ impl<Block: BlockT> Backend<Block> {
 	fn force_delayed_canonicalize(
 		&self,
 		transaction: &mut Transaction<DbHash>,
-		hash: Block::Hash,
+		hash: HashFor<Block>,
 		number: NumberFor<Block>,
 	) -> ClientResult<()> {
 		let number_u64 = number.saturated_into::<u64>();
@@ -1600,8 +1605,8 @@ impl<Block: BlockT> Backend<Block> {
 		&self,
 		transaction: &mut Transaction<DbHash>,
 		f_header: &Block::Header,
-		f_hash: Block::Hash,
-		displaced: &mut Option<FinalizationDisplaced<Block::Hash, NumberFor<Block>>>,
+		f_hash: HashFor<Block>,
+		displaced: &mut Option<FinalizationDisplaced<HashFor<Block>, NumberFor<Block>>>,
 		with_state: bool,
 	) -> ClientResult<()> {
 		let f_num = f_header.number().clone();
@@ -1639,7 +1644,7 @@ impl<Block: BlockT> Backend<Block> {
 		&self,
 		transaction: &mut Transaction<DbHash>,
 		finalized: NumberFor<Block>,
-		displaced: &FinalizationDisplaced<Block::Hash, NumberFor<Block>>,
+		displaced: &FinalizationDisplaced<HashFor<Block>, NumberFor<Block>>,
 	) -> ClientResult<()> {
 		if let KeepBlocks::Some(keep_blocks) = self.keep_blocks {
 			// Always keep the last finalized block
@@ -2004,7 +2009,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		&self,
 		n: NumberFor<Block>,
 		revert_finalized: bool,
-	) -> ClientResult<(NumberFor<Block>, HashSet<Block::Hash>)> {
+	) -> ClientResult<(NumberFor<Block>, HashSet<HashFor<Block>>)> {
 		let mut reverted_finalized = HashSet::new();
 
 		let mut best_number = self.blockchain.info().best_number;
@@ -2124,7 +2129,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		Ok((reverted, reverted_finalized))
 	}
 
-	fn remove_leaf_block(&self, hash: &Block::Hash) -> ClientResult<()> {
+	fn remove_leaf_block(&self, hash: &HashFor<Block>) -> ClientResult<()> {
 		let best_hash = self.blockchain.info().best_hash;
 
 		if best_hash == *hash {
@@ -2227,7 +2232,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		}
 	}
 
-	fn have_state_at(&self, hash: &Block::Hash, number: NumberFor<Block>) -> bool {
+	fn have_state_at(&self, hash: &HashFor<Block>, number: NumberFor<Block>) -> bool {
 		if self.is_archive {
 			match self.blockchain.header_metadata(hash.clone()) {
 				Ok(header) => sp_state_machine::Storage::get(
@@ -3236,7 +3241,7 @@ pub(crate) mod tests {
 		let mut blocks = Vec::new();
 		let mut prev_hash = Default::default();
 		let x1 = ExtrinsicWrapper::from(0u64).encode();
-		let x1_hash = <HashFor<Block> as sp_core::Hasher>::hash(&x1[1..]);
+		let x1_hash = <HashingFor<Block> as sp_core::Hasher>::hash(&x1[1..]);
 		for i in 0..10 {
 			let mut index = Vec::new();
 			if i == 0 {

@@ -83,7 +83,6 @@
 //! ## Message Validation
 //!
 //! We only send polite messages to peers,
-
 use ahash::{AHashMap, AHashSet};
 use log::{debug, trace};
 use parity_scale_codec::{Decode, Encode};
@@ -874,7 +873,7 @@ impl<Block: BlockT> Inner<Block> {
 		&self,
 		who: &PeerId,
 		full: &VoteMessage<Block>,
-	) -> Action<Block::Hash> {
+	) -> Action<HashFor<Block>> {
 		match self.consider_vote(full.round, full.set_id) {
 			Consider::RejectFuture => return Action::Discard(Misbehavior::FutureMessage.cost()),
 			Consider::RejectOutOfScope =>
@@ -921,7 +920,7 @@ impl<Block: BlockT> Inner<Block> {
 		&mut self,
 		who: &PeerId,
 		full: &FullCommitMessage<Block>,
-	) -> Action<Block::Hash> {
+	) -> Action<HashFor<Block>> {
 		if let Err(misbehavior) = self.peers.update_commit_height(who, full.message.target_number) {
 			return Action::Discard(misbehavior.cost())
 		}
@@ -960,7 +959,7 @@ impl<Block: BlockT> Inner<Block> {
 		&mut self,
 		who: &PeerId,
 		full: &FullCatchUpMessage<Block>,
-	) -> Action<Block::Hash> {
+	) -> Action<HashFor<Block>> {
 		match &self.pending_catch_up {
 			PendingCatchUp::Requesting { who: peer, request, instant } => {
 				if peer != who {
@@ -1009,7 +1008,7 @@ impl<Block: BlockT> Inner<Block> {
 		who: &PeerId,
 		request: CatchUpRequestMessage,
 		set_state: &environment::SharedVoterSetState<Block>,
-	) -> (Option<GossipMessage<Block>>, Action<Block::Hash>) {
+	) -> (Option<GossipMessage<Block>>, Action<HashFor<Block>>) {
 		let local_view = match self.local_view {
 			None => return (None, Action::Discard(Misbehavior::OutOfScopeMessage.cost())),
 			Some(ref view) => view,
@@ -1134,7 +1133,8 @@ impl<Block: BlockT> Inner<Block> {
 		&mut self,
 		who: &PeerId,
 		update: NeighborPacket<NumberFor<Block>>,
-	) -> (Vec<Block::Hash>, Action<Block::Hash>, Option<GossipMessage<Block>>, Option<Report>) {
+	) -> (Vec<HashFor<Block>>, Action<HashFor<Block>>, Option<GossipMessage<Block>>, Option<Report>)
+	{
 		let update_res = self.peers.update_peer_state(who, update);
 
 		let (cost_benefit, topics) = match update_res {
@@ -1400,7 +1400,7 @@ impl<Block: BlockT> GossipValidator<Block> {
 		&self,
 		who: &PeerId,
 		mut data: &[u8],
-	) -> (Action<Block::Hash>, Vec<Block::Hash>, Option<GossipMessage<Block>>) {
+	) -> (Action<HashFor<Block>>, Vec<HashFor<Block>>, Option<GossipMessage<Block>>) {
 		let mut broadcast_topics = Vec::new();
 		let mut peer_reply = None;
 
@@ -1512,7 +1512,7 @@ impl<Block: BlockT> sc_network_gossip::Validator<Block> for GossipValidator<Bloc
 		context: &mut dyn ValidatorContext<Block>,
 		who: &PeerId,
 		data: &[u8],
-	) -> sc_network_gossip::ValidationResult<Block::Hash> {
+	) -> sc_network_gossip::ValidationResult<HashFor<Block>> {
 		let (action, broadcast_topics, peer_reply) = self.do_validate(who, data);
 
 		// not with lock held!
@@ -1543,7 +1543,7 @@ impl<Block: BlockT> sc_network_gossip::Validator<Block> for GossipValidator<Bloc
 
 	fn message_allowed<'a>(
 		&'a self,
-	) -> Box<dyn FnMut(&PeerId, MessageIntent, &Block::Hash, &[u8]) -> bool + 'a> {
+	) -> Box<dyn FnMut(&PeerId, MessageIntent, &HashFor<Block>, &[u8]) -> bool + 'a> {
 		let (inner, do_rebroadcast) = {
 			use parking_lot::RwLockWriteGuard;
 
@@ -1621,7 +1621,7 @@ impl<Block: BlockT> sc_network_gossip::Validator<Block> for GossipValidator<Bloc
 		})
 	}
 
-	fn message_expired<'a>(&'a self) -> Box<dyn FnMut(Block::Hash, &[u8]) -> bool + 'a> {
+	fn message_expired<'a>(&'a self) -> Box<dyn FnMut(HashFor<Block>, &[u8]) -> bool + 'a> {
 		let inner = self.inner.read();
 		Box::new(move |topic, mut data| {
 			// if the topic is not one of the ones that we are keeping at the moment,

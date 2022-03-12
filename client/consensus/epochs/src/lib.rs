@@ -24,7 +24,7 @@ use codec::{Decode, Encode};
 use fork_tree::ForkTree;
 use sc_client_api::utils::is_descendent_of;
 use sp_blockchain::{Error as ClientError, HeaderBackend, HeaderMetadata};
-use sp_runtime::traits::{Block as BlockT, NumberFor, One, Zero};
+use sp_runtime::traits::{Block as BlockT, HashFor, NumberFor, One, Zero};
 use std::{
 	borrow::{Borrow, BorrowMut},
 	collections::BTreeMap,
@@ -57,18 +57,19 @@ pub fn descendent_query<H, Block>(client: &H) -> HeaderBackendDescendentBuilder<
 /// `IsDescendentOfBuilder` for header backends.
 pub struct HeaderBackendDescendentBuilder<H, Block>(H, std::marker::PhantomData<Block>);
 
-impl<'a, H, Block> IsDescendentOfBuilder<Block::Hash>
+impl<'a, H, Block> IsDescendentOfBuilder<HashFor<Block>>
 	for HeaderBackendDescendentBuilder<&'a H, Block>
 where
 	H: HeaderBackend<Block> + HeaderMetadata<Block, Error = ClientError>,
 	Block: BlockT,
 {
 	type Error = ClientError;
-	type IsDescendentOf = Box<dyn Fn(&Block::Hash, &Block::Hash) -> Result<bool, ClientError> + 'a>;
+	type IsDescendentOf =
+		Box<dyn Fn(&HashFor<Block>, &HashFor<Block>) -> Result<bool, ClientError> + 'a>;
 
 	fn build_is_descendent_of(
 		&self,
-		current: Option<(Block::Hash, Block::Hash)>,
+		current: Option<(HashFor<Block>, HashFor<Block>)>,
 	) -> Self::IsDescendentOf {
 		Box::new(is_descendent_of(self.0, current))
 	}

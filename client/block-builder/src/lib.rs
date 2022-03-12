@@ -35,7 +35,7 @@ use sp_blockchain::{ApplyExtrinsicFailed, Error};
 use sp_core::ExecutionContext;
 use sp_runtime::{
 	generic::BlockId,
-	traits::{Block as BlockT, Hash, HashFor, Header as HeaderT, NumberFor, One},
+	traits::{Block as BlockT, Hash, HashFor, HashingFor, Header as HeaderT, NumberFor, One},
 	Digest,
 };
 
@@ -86,7 +86,7 @@ impl From<bool> for RecordProof {
 /// backend to get the state of the block. Furthermore an optional `proof` is included which
 /// can be used to proof that the build block contains the expected data. The `proof` will
 /// only be set when proof recording was activated.
-pub struct BuiltBlock<Block: BlockT, StateBackend: backend::StateBackend<HashFor<Block>>> {
+pub struct BuiltBlock<Block: BlockT, StateBackend: backend::StateBackend<HashingFor<Block>>> {
 	/// The actual block that was build.
 	pub block: Block,
 	/// The changes that need to be applied to the backend to get the state of the build block.
@@ -95,7 +95,7 @@ pub struct BuiltBlock<Block: BlockT, StateBackend: backend::StateBackend<HashFor
 	pub proof: Option<StorageProof>,
 }
 
-impl<Block: BlockT, StateBackend: backend::StateBackend<HashFor<Block>>>
+impl<Block: BlockT, StateBackend: backend::StateBackend<HashingFor<Block>>>
 	BuiltBlock<Block, StateBackend>
 {
 	/// Convert into the inner values.
@@ -136,7 +136,7 @@ pub struct BlockBuilder<'a, Block: BlockT, A: ProvideRuntimeApi<Block>, B> {
 	extrinsics: Vec<Block::Extrinsic>,
 	api: ApiRef<'a, A::Api>,
 	block_id: BlockId<Block>,
-	parent_hash: Block::Hash,
+	parent_hash: HashFor<Block>,
 	backend: &'a B,
 	/// The estimated size of the block header.
 	estimated_header_size: usize,
@@ -157,7 +157,7 @@ where
 	/// output of this block builder without having access to the full storage.
 	pub fn new(
 		api: &'a A,
-		parent_hash: Block::Hash,
+		parent_hash: HashFor<Block>,
 		parent_number: NumberFor<Block>,
 		record_proof: RecordProof,
 		inherent_digests: Digest,
@@ -230,7 +230,7 @@ where
 
 		debug_assert_eq!(
 			header.extrinsics_root().clone(),
-			HashFor::<Block>::ordered_trie_root(
+			HashingFor::<Block>::ordered_trie_root(
 				self.extrinsics.iter().map(Encode::encode).collect(),
 				sp_runtime::StateVersion::V0,
 			),

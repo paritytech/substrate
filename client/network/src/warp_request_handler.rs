@@ -23,7 +23,7 @@ use futures::{
 	stream::StreamExt,
 };
 use log::debug;
-use sp_runtime::traits::Block as BlockT;
+use sp_runtime::traits::{Block as BlockT, HashFor};
 use std::{sync::Arc, time::Duration};
 
 pub use sp_finality_grandpa::{AuthorityList, SetId};
@@ -43,7 +43,7 @@ const MAX_RESPONSE_SIZE: u64 = 16 * 1024 * 1024;
 /// Proof verification result.
 pub enum VerificationResult<Block: BlockT> {
 	/// Proof is valid, but the target was not reached.
-	Partial(SetId, AuthorityList, Block::Hash),
+	Partial(SetId, AuthorityList, HashFor<Block>),
 	/// Target finality is proved.
 	Complete(SetId, AuthorityList, Block::Header),
 }

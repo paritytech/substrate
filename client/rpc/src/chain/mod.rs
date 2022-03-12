@@ -36,7 +36,7 @@ use sc_client_api::BlockchainEvents;
 use sp_rpc::{list::ListOrValue, number::NumberOrHex};
 use sp_runtime::{
 	generic::{BlockId, SignedBlock},
-	traits::{Block as BlockT, Header, NumberFor},
+	traits::{Block as BlockT, HashFor, Header, NumberFor},
 };
 
 use self::error::{Error, FutureResult, Result};
@@ -59,7 +59,7 @@ where
 	fn subscriptions(&self) -> &SubscriptionManager;
 
 	/// Tries to unwrap passed block hash, or uses best block hash otherwise.
-	fn unwrap_or_best(&self, hash: Option<Block::Hash>) -> Block::Hash {
+	fn unwrap_or_best(&self, hash: Option<HashFor<Block>>) -> HashFor<Block> {
 		match hash.into() {
 			None => self.client().info().best_hash,
 			Some(hash) => hash,
@@ -67,15 +67,15 @@ where
 	}
 
 	/// Get header of a relay chain block.
-	fn header(&self, hash: Option<Block::Hash>) -> FutureResult<Option<Block::Header>>;
+	fn header(&self, hash: Option<HashFor<Block>>) -> FutureResult<Option<Block::Header>>;
 
 	/// Get header and body of a relay chain block.
-	fn block(&self, hash: Option<Block::Hash>) -> FutureResult<Option<SignedBlock<Block>>>;
+	fn block(&self, hash: Option<HashFor<Block>>) -> FutureResult<Option<SignedBlock<Block>>>;
 
 	/// Get hash of the n-th block in the canon chain.
 	///
 	/// By default returns latest block hash.
-	fn block_hash(&self, number: Option<NumberOrHex>) -> Result<Option<Block::Hash>> {
+	fn block_hash(&self, number: Option<NumberOrHex>) -> Result<Option<HashFor<Block>>> {
 		match number {
 			None => Ok(Some(self.client().info().best_hash)),
 			Some(num_or_hex) => {
@@ -97,7 +97,7 @@ where
 	}
 
 	/// Get hash of the last finalized block in the canon chain.
-	fn finalized_head(&self) -> Result<Block::Hash> {
+	fn finalized_head(&self) -> Result<HashFor<Block>> {
 		Ok(self.client().info().finalized_hash)
 	}
 
@@ -205,7 +205,7 @@ pub struct Chain<Block: BlockT, Client> {
 	backend: Box<dyn ChainBackend<Client, Block>>,
 }
 
-impl<Block, Client> ChainApi<NumberFor<Block>, Block::Hash, Block::Header, SignedBlock<Block>>
+impl<Block, Client> ChainApi<NumberFor<Block>, HashFor<Block>, Block::Header, SignedBlock<Block>>
 	for Chain<Block, Client>
 where
 	Block: BlockT + 'static,
@@ -214,18 +214,18 @@ where
 {
 	type Metadata = crate::Metadata;
 
-	fn header(&self, hash: Option<Block::Hash>) -> FutureResult<Option<Block::Header>> {
+	fn header(&self, hash: Option<HashFor<Block>>) -> FutureResult<Option<Block::Header>> {
 		self.backend.header(hash)
 	}
 
-	fn block(&self, hash: Option<Block::Hash>) -> FutureResult<Option<SignedBlock<Block>>> {
+	fn block(&self, hash: Option<HashFor<Block>>) -> FutureResult<Option<SignedBlock<Block>>> {
 		self.backend.block(hash)
 	}
 
 	fn block_hash(
 		&self,
 		number: Option<ListOrValue<NumberOrHex>>,
-	) -> Result<ListOrValue<Option<Block::Hash>>> {
+	) -> Result<ListOrValue<Option<HashFor<Block>>>> {
 		match number {
 			None => self.backend.block_hash(None).map(ListOrValue::Value),
 			Some(ListOrValue::Value(number)) =>
@@ -238,7 +238,7 @@ where
 		}
 	}
 
-	fn finalized_head(&self) -> Result<Block::Hash> {
+	fn finalized_head(&self) -> Result<HashFor<Block>> {
 		self.backend.finalized_head()
 	}
 
@@ -295,7 +295,7 @@ fn subscribe_headers<Block, Client, F, G, S>(
 	Block::Header: Unpin,
 	Client: HeaderBackend<Block> + 'static,
 	F: FnOnce() -> S,
-	G: FnOnce() -> Block::Hash,
+	G: FnOnce() -> HashFor<Block>,
 	S: Stream<Item = std::result::Result<Block::Header, rpc::Error>> + Send + 'static,
 {
 	subscriptions.add(subscriber, |sink| {

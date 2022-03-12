@@ -45,7 +45,7 @@ use sc_client_api::StorageData;
 use sp_blockchain::HeaderBackend;
 use sp_runtime::{
 	generic::BlockId,
-	traits::{Block as BlockT, NumberFor},
+	traits::{Block as BlockT, HashFor, NumberFor},
 };
 use std::sync::Arc;
 
@@ -64,7 +64,7 @@ pub enum Error<Block: BlockT> {
 	Blockchain(#[from] sp_blockchain::Error),
 
 	#[error("Failed to load the block weight for block {0:?}")]
-	LoadingBlockWeightFailed(Block::Hash),
+	LoadingBlockWeightFailed(HashFor<Block>),
 
 	#[error("JsonRpc error: {0}")]
 	JsonRpc(String),

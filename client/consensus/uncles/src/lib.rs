@@ -24,7 +24,7 @@ use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 #[derive(Debug, thiserror::Error)]
 pub enum Error<B: BlockT> {
 	#[error("Could not retrieve the block hash for block id: {0:?}")]
-	NoHashForBlockId(BlockId<B>),
+	NoHashingForBlockId(BlockId<B>),
 }
 
 /// Maximum uncles generations we may provide to the runtime.
