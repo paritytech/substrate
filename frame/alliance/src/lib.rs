@@ -541,9 +541,9 @@ pub mod pallet {
 			let proposor = ensure_signed(origin)?;
 			ensure!(Self::is_founder(&proposor), Error::<T, I>::NotFounder);
 
-			let proposal = T::ProposalProvider::proposal_of(proposal_hash);
-			ensure!(proposal.is_some(), Error::<T, I>::MissingProposalHash);
-			match proposal.expect("proposal must be exist; qed").is_sub_type() {
+			let proposal = T::ProposalProvider::proposal_of(proposal_hash)
+				.ok_or(Error::<T, I>::MissingProposalHash)?;
+			match proposal.is_sub_type() {
 				Some(Call::set_rule { .. }) | Some(Call::elevate_ally { .. }) => {
 					T::ProposalProvider::veto_proposal(proposal_hash);
 					Ok(())
@@ -580,8 +580,8 @@ pub mod pallet {
 			let who = ensure_signed(origin)?;
 			ensure!(Self::is_votable_member(&who), Error::<T, I>::NotVotableMember);
 
-			let proposal = T::ProposalProvider::proposal_of(proposal_hash);
-			ensure!(proposal.is_some(), Error::<T, I>::MissingProposalHash);
+			let proposal = T::ProposalProvider::proposal_of(proposal_hash)
+				.ok_or(Error::<T, I>::MissingProposalHash)?;
 
 			let info = T::ProposalProvider::close_proposal(
 				proposal_hash,
@@ -590,9 +590,7 @@ pub mod pallet {
 				length_bound,
 			)?;
 			if Pays::No == info.pays_fee {
-				if let Some(Call::kick_member { who }) =
-					proposal.expect("proposal must be exist; qed").is_sub_type()
-				{
+				if let Some(Call::kick_member { who }) = proposal.is_sub_type() {
 					let strike = T::Lookup::lookup(who.clone())?;
 					<KickingMembers<T, I>>::remove(strike);
 				}
@@ -676,10 +674,7 @@ pub mod pallet {
 
 		/// Remove the announcement.
 		#[pallet::weight(T::WeightInfo::remove_announcement())]
-		pub fn remove_announcement(
-			origin: OriginFor<T>,
-			announcement: Cid,
-		) -> DispatchResult {
+		pub fn remove_announcement(origin: OriginFor<T>, announcement: Cid) -> DispatchResult {
 			T::SuperMajorityOrigin::ensure_origin(origin)?;
 
 			let mut announcements = <Announcements<T, I>>::get();
