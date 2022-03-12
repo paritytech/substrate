@@ -26,8 +26,8 @@ use frame_support::{
 	weights::Weight,
 };
 use pallet_alliance::{IdentityVerifier, ProposalIndex, ProposalProvider};
-use pallet_identity::Judgement;
 use pallet_asset_tx_payment::HandleCredit;
+use pallet_identity::Judgement;
 
 use crate::{AllianceMotion, Authorship, Balances, Call, NegativeImbalance};
 

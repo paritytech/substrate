@@ -15,18 +15,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, MaxEncodedLen};
+use frame_support::{traits::ConstU32, BoundedVec};
 use scale_info::TypeInfo;
 use sp_runtime::RuntimeDebug;
 use sp_std::prelude::*;
 
 /// A Multihash instance that only supports the basic functionality and no hashing.
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, RuntimeDebug, Encode, Decode, TypeInfo)]
+#[derive(
+	Clone, PartialEq, Eq, PartialOrd, Ord, RuntimeDebug, Encode, Decode, TypeInfo, MaxEncodedLen,
+)]
 pub struct Multihash {
 	/// The code of the Multihash.
 	pub code: u64,
 	/// The digest.
-	pub digest: Vec<u8>,
+	pub digest: BoundedVec<u8, ConstU32<68>>, // 4 byte dig size + 64 bytes hash digest
 }
 
 impl Multihash {
@@ -38,7 +41,17 @@ impl Multihash {
 
 /// The version of the CID.
 #[derive(
-	Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, RuntimeDebug, Encode, Decode, TypeInfo,
+	Clone,
+	Copy,
+	PartialEq,
+	Eq,
+	PartialOrd,
+	Ord,
+	RuntimeDebug,
+	Encode,
+	Decode,
+	TypeInfo,
+	MaxEncodedLen,
 )]
 pub enum Version {
 	/// CID version 0.
@@ -50,7 +63,9 @@ pub enum Version {
 /// Representation of a CID.
 ///
 /// The generic is about the allocated size of the multihash.
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, RuntimeDebug, Encode, Decode, TypeInfo)]
+#[derive(
+	Clone, PartialEq, Eq, PartialOrd, Ord, RuntimeDebug, Encode, Decode, TypeInfo, MaxEncodedLen,
+)]
 pub struct Cid {
 	/// The version of CID.
 	pub version: Version,
@@ -71,6 +86,10 @@ impl Cid {
 		let digest = sha2_256_digest.into();
 		assert!(digest.len() == 32);
 
-		Self { version: Version::V0, codec: DAG_PB, hash: Multihash { code: SHA2_256, digest } }
+		Self {
+			version: Version::V0,
+			codec: DAG_PB,
+			hash: Multihash { code: SHA2_256, digest: digest.try_into().expect("msg") },
+		}
 	}
 }

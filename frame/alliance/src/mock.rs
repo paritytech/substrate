@@ -26,9 +26,11 @@ pub use sp_runtime::{
 use sp_std::convert::TryInto;
 
 pub use frame_support::{
-	assert_ok, ord_parameter_types, parameter_types, traits::SortedMembers, BoundedVec,
+	assert_ok, ord_parameter_types, parameter_types,
+	traits::{EnsureOneOf, GenesisBuild, SortedMembers},
+	BoundedVec,
 };
-pub use frame_system::{EnsureOneOf, EnsureRoot, EnsureSignedBy};
+use frame_system::{EnsureRoot, EnsureSignedBy};
 use pallet_identity::{Data, IdentityInfo, Judgement};
 
 pub use crate as pallet_alliance;
@@ -62,6 +64,7 @@ impl frame_system::Config for Test {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
+	type MaxConsumers = frame_support::traits::ConstU32<16>;
 }
 
 parameter_types! {
@@ -112,8 +115,8 @@ ord_parameter_types! {
 	pub const Four: u64 = 4;
 	pub const Five: u64 = 5;
 }
-type EnsureOneOrRoot = EnsureOneOf<u64, EnsureRoot<u64>, EnsureSignedBy<One, u64>>;
-type EnsureTwoOrRoot = EnsureOneOf<u64, EnsureRoot<u64>, EnsureSignedBy<Two, u64>>;
+type EnsureOneOrRoot = EnsureOneOf<EnsureRoot<u64>, EnsureSignedBy<One, u64>>;
+type EnsureTwoOrRoot = EnsureOneOf<EnsureRoot<u64>, EnsureSignedBy<Two, u64>>;
 
 impl pallet_identity::Config for Test {
 	type Event = Event;
@@ -247,27 +250,32 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Pallet, Call, Storage, Event<T>},
-		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
-		Identity: pallet_identity::{Pallet, Call, Storage, Event<T>},
-		AllianceMotion: pallet_collective::<Instance1>::{Pallet, Storage, Origin<T>, Event<T>},
-		Alliance: pallet_alliance::{Pallet, Call, Storage, Event<T>, Config<T>},
+		System: frame_system,
+		Balances: pallet_balances,
+		Identity: pallet_identity,
+		AllianceMotion: pallet_collective::<Instance1>,
+		Alliance: pallet_alliance,
 	}
 );
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let t = GenesisConfig {
-		balances: pallet_balances::GenesisConfig {
-			balances: vec![(1, 50), (2, 50), (3, 50), (4, 50), (5, 30), (6, 50), (7, 50)],
-		},
-		alliance: pallet_alliance::GenesisConfig {
+	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+
+	pallet_balances::GenesisConfig::<Test> {
+		balances: vec![(1, 50), (2, 50), (3, 50), (4, 50), (5, 30), (6, 50), (7, 50)],
+	}
+	.assimilate_storage(&mut t)
+	.unwrap();
+
+	GenesisBuild::<Test>::assimilate_storage(
+		&pallet_alliance::GenesisConfig {
 			founders: vec![],
 			fellows: vec![],
 			allies: vec![],
 			phantom: Default::default(),
 		},
-	}
-	.build_storage()
+		&mut t,
+	)
 	.unwrap();
 
 	let mut ext = sp_io::TestExternalities::new(t);
