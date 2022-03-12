@@ -336,34 +336,38 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
-		/// A new rule has been set. \[rule\]
-		NewRule(Cid),
-		/// A new announcement has been proposed. \[announcement\]
-		NewAnnouncement(Cid),
-		/// A on-chain announcement has been removed. \[announcement\]
-		AnnouncementRemoved(Cid),
-		/// Some accounts have been initialized to members (founders/fellows/allies). \[founders,
-		/// fellows, allies\]
-		MembersInitialized(Vec<T::AccountId>, Vec<T::AccountId>, Vec<T::AccountId>),
-		/// An account has been added as a candidate and lock its deposit. \[candidate, nominator,
-		/// reserved\]
-		CandidateAdded(T::AccountId, Option<T::AccountId>, Option<BalanceOf<T, I>>),
-		/// A proposal has been proposed to approve the candidate. \[candidate\]
-		CandidateApproved(T::AccountId),
-		/// A proposal has been proposed to reject the candidate. \[candidate\]
-		CandidateRejected(T::AccountId),
-		/// As an active member, an ally has been elevated to fellow. \[ally\]
-		AllyElevated(T::AccountId),
-		/// A member has retired to an ordinary account with its deposit unreserved. \[member,
-		/// unreserved\]
-		MemberRetired(T::AccountId, Option<BalanceOf<T, I>>),
-		/// A member has been kicked out to an ordinary account with its deposit slashed. \[member,
-		/// slashed\]
-		MemberKicked(T::AccountId, Option<BalanceOf<T, I>>),
-		/// Accounts or websites have been added into blacklist. \[items\]
-		BlacklistAdded(Vec<BlacklistItem<T::AccountId>>),
-		/// Accounts or websites have been removed from blacklist. \[items\]
-		BlacklistRemoved(Vec<BlacklistItem<T::AccountId>>),
+		/// A new rule has been set.
+		NewRule { rule: Cid },
+		/// A new announcement has been proposed.
+		NewAnnouncement { announcement: Cid },
+		/// A on-chain announcement has been removed.
+		AnnouncementRemoved { announcement: Cid },
+		/// Some accounts have been initialized to members (founders/fellows/allies).
+		MembersInitialized {
+			founders: Vec<T::AccountId>,
+			fellows: Vec<T::AccountId>,
+			allies: Vec<T::AccountId>,
+		},
+		/// An account has been added as a candidate and lock its deposit.
+		CandidateAdded {
+			candidate: T::AccountId,
+			nominator: Option<T::AccountId>,
+			reserved: Option<BalanceOf<T, I>>,
+		},
+		/// A proposal has been proposed to approve the candidate.
+		CandidateApproved { candidate: T::AccountId },
+		/// A proposal has been proposed to reject the candidate.
+		CandidateRejected { candidate: T::AccountId },
+		/// As an active member, an ally has been elevated to fellow.
+		AllyElevated { ally: T::AccountId },
+		/// A member has retired to an ordinary account with its deposit unreserved.
+		MemberRetired { member: T::AccountId, unreserved: Option<BalanceOf<T, I>> },
+		/// A member has been kicked out to an ordinary account with its deposit slashed.
+		MemberKicked { member: T::AccountId, slashed: Option<BalanceOf<T, I>> },
+		/// Accounts or websites have been added into blacklist.
+		BlacklistAdded { items: Vec<BlacklistItem<T::AccountId>> },
+		/// Accounts or websites have been removed from blacklist.
+		BlacklistRemoved { items: Vec<BlacklistItem<T::AccountId>> },
 	}
 
 	#[pallet::genesis_config]
@@ -642,7 +646,7 @@ pub mod pallet {
 				founders, fellows, allies
 			);
 
-			Self::deposit_event(Event::MembersInitialized(founders, fellows, allies));
+			Self::deposit_event(Event::MembersInitialized { founders, fellows, allies });
 			Ok(().into())
 		}
 
@@ -653,7 +657,7 @@ pub mod pallet {
 
 			Rule::<T, I>::put(&rule);
 
-			Self::deposit_event(Event::NewRule(rule));
+			Self::deposit_event(Event::NewRule { rule });
 			Ok(().into())
 		}
 
@@ -666,7 +670,7 @@ pub mod pallet {
 			announcements.push(announcement.clone());
 			<Announcements<T, I>>::put(announcements);
 
-			Self::deposit_event(Event::NewAnnouncement(announcement));
+			Self::deposit_event(Event::NewAnnouncement { announcement });
 			Ok(().into())
 		}
 
@@ -686,7 +690,7 @@ pub mod pallet {
 			announcements.remove(pos);
 			<Announcements<T, I>>::put(announcements);
 
-			Self::deposit_event(Event::AnnouncementRemoved(announcement));
+			Self::deposit_event(Event::AnnouncementRemoved { announcement });
 			Ok(().into())
 		}
 
@@ -709,7 +713,11 @@ pub mod pallet {
 			let res = Self::add_candidate(&who);
 			debug_assert!(res.is_ok());
 
-			Self::deposit_event(Event::CandidateAdded(who, None, Some(deposit)));
+			Self::deposit_event(Event::CandidateAdded {
+				candidate: who,
+				nominator: None,
+				reserved: Some(deposit),
+			});
 			Ok(().into())
 		}
 
@@ -733,7 +741,11 @@ pub mod pallet {
 			let res = Self::add_candidate(&who);
 			debug_assert!(res.is_ok());
 
-			Self::deposit_event(Event::CandidateAdded(who, Some(nominator), None));
+			Self::deposit_event(Event::CandidateAdded {
+				candidate: who,
+				nominator: Some(nominator),
+				reserved: None,
+			});
 			Ok(().into())
 		}
 
@@ -751,7 +763,7 @@ pub mod pallet {
 			Self::remove_candidate(&candidate)?;
 			Self::add_member(&candidate, MemberRole::Ally)?;
 
-			Self::deposit_event(Event::CandidateApproved(candidate));
+			Self::deposit_event(Event::CandidateApproved { candidate });
 			Ok(().into())
 		}
 
@@ -771,7 +783,7 @@ pub mod pallet {
 				T::Slashed::on_unbalanced(T::Currency::slash_reserved(&candidate, deposit).0);
 			}
 
-			Self::deposit_event(Event::CandidateRejected(candidate));
+			Self::deposit_event(Event::CandidateRejected { candidate });
 			Ok(().into())
 		}
 
@@ -789,7 +801,7 @@ pub mod pallet {
 			Self::remove_member(&ally, MemberRole::Ally)?;
 			Self::add_member(&ally, MemberRole::Fellow)?;
 
-			Self::deposit_event(Event::AllyElevated(ally));
+			Self::deposit_event(Event::AllyElevated { ally });
 			Ok(().into())
 		}
 
@@ -806,7 +818,7 @@ pub mod pallet {
 				let err_amount = T::Currency::unreserve(&who, deposit);
 				debug_assert!(err_amount.is_zero());
 			}
-			Self::deposit_event(Event::MemberRetired(who, deposit));
+			Self::deposit_event(Event::MemberRetired { member: who, unreserved: deposit });
 			Ok(().into())
 		}
 
@@ -826,7 +838,7 @@ pub mod pallet {
 			if let Some(deposit) = deposit {
 				T::Slashed::on_unbalanced(T::Currency::slash_reserved(&member, deposit).0);
 			}
-			Self::deposit_event(Event::MemberKicked(member, deposit));
+			Self::deposit_event(Event::MemberKicked { member, slashed: deposit });
 			Ok(().into())
 		}
 
@@ -866,7 +878,7 @@ pub mod pallet {
 			);
 
 			Self::do_add_blacklist(&mut accounts, &mut webs)?;
-			Self::deposit_event(Event::BlacklistAdded(infos));
+			Self::deposit_event(Event::BlacklistAdded { items: infos });
 			Ok(().into())
 		}
 
@@ -887,7 +899,7 @@ pub mod pallet {
 				}
 			}
 			Self::do_remove_blacklist(&mut accounts, &mut webs)?;
-			Self::deposit_event(Event::BlacklistRemoved(infos));
+			Self::deposit_event(Event::BlacklistRemoved { items: infos });
 			Ok(().into())
 		}
 	}

@@ -239,7 +239,7 @@ fn set_rule_works() {
 		assert_ok!(Alliance::set_rule(Origin::signed(1), cid.clone()));
 		assert_eq!(Alliance::rule(), Some(cid.clone()));
 
-		System::assert_last_event(mock::Event::Alliance(crate::Event::NewRule(cid)));
+		System::assert_last_event(mock::Event::Alliance(crate::Event::NewRule { rule: cid }));
 	});
 }
 
@@ -250,7 +250,9 @@ fn announce_works() {
 		assert_ok!(Alliance::announce(Origin::signed(1), cid.clone()));
 		assert_eq!(Alliance::announcements(), vec![cid.clone()]);
 
-		System::assert_last_event(mock::Event::Alliance(crate::Event::NewAnnouncement(cid)));
+		System::assert_last_event(mock::Event::Alliance(crate::Event::NewAnnouncement {
+			announcement: cid,
+		}));
 	});
 }
 
@@ -260,15 +262,17 @@ fn remove_announcement_works() {
 		let cid = test_cid();
 		assert_ok!(Alliance::announce(Origin::signed(1), cid.clone()));
 		assert_eq!(Alliance::announcements(), vec![cid.clone()]);
-		System::assert_last_event(mock::Event::Alliance(crate::Event::NewAnnouncement(
-			cid.clone(),
-		)));
+		System::assert_last_event(mock::Event::Alliance(crate::Event::NewAnnouncement {
+			announcement: cid.clone(),
+		}));
 
 		System::set_block_number(2);
 
 		assert_ok!(Alliance::remove_announcement(Origin::signed(1), cid.clone()));
 		assert_eq!(Alliance::announcements(), vec![]);
-		System::assert_last_event(mock::Event::Alliance(crate::Event::AnnouncementRemoved(cid)));
+		System::assert_last_event(mock::Event::Alliance(crate::Event::AnnouncementRemoved {
+			announcement: cid,
+		}));
 	});
 }
 
