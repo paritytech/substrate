@@ -125,10 +125,14 @@ impl pallet_treasury::Config for Test {
 	type SpendFunds = Bounties;
 	type MaxApprovals = ConstU32<100>;
 }
+
 parameter_types! {
+	// This will be 50% of the bounty fee.
 	pub const CuratorDepositMultiplierWithFee: Permill = Permill::from_percent(50);
+	// This will be 1% of the bounty value.
 	pub const CuratorDepositMultiplierWithNoFee: Permill = Permill::from_percent(1);
 }
+
 impl Config for Test {
 	type Event = Event;
 	type BountyDepositBase = ConstU64<80>;
