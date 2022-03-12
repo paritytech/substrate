@@ -17,19 +17,15 @@
 
 //! Some configurable implementations as associated type for the substrate runtime.
 
-use node_primitives::{AccountId, Hash};
-use sp_std::prelude::*;
-
-use frame_support::{
-	dispatch::{DispatchError, DispatchResultWithPostInfo},
-	traits::{Currency, OnUnbalanced},
-	weights::Weight,
+use crate::{AccountId, Assets, AllianceMotion, Authorship, Balances, NegativeImbalance, Runtime, Hash, Call};
+use frame_support::traits::{
+	fungibles::{Balanced, CreditOf},
+	Currency, OnUnbalanced,
 };
-use pallet_alliance::{IdentityVerifier, ProposalIndex, ProposalProvider};
 use pallet_asset_tx_payment::HandleCredit;
-use pallet_identity::Judgement;
-
-use crate::{AllianceMotion, Authorship, Balances, Call, NegativeImbalance};
+use pallet_alliance::{IdentityVerifier, ProposalIndex, ProposalProvider};
+use sp_std::prelude::*;
+use frame_support::pallet_prelude::*;
 
 pub struct Author;
 impl OnUnbalanced<NegativeImbalance> for Author {

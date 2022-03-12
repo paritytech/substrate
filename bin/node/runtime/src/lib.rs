@@ -1415,13 +1415,12 @@ parameter_types! {
 	pub const MaxWebsiteUrlLength: u32 = 255;
 }
 
-impl pallet_alliance::Config<AllianceCollective> for Runtime {
+impl pallet_alliance::Config for Runtime {
 	type Event = Event;
 	type Proposal = Call;
 	type SuperMajorityOrigin = EnsureOneOf<
-		AccountId,
 		EnsureRoot<AccountId>,
-		pallet_collective::EnsureProportionMoreThan<_2, _3, AccountId, AllianceCollective>,
+		pallet_collective::EnsureProportionMoreThan<AccountId, AllianceCollective, 2, 3>,
 	>;
 	type Currency = Balances;
 	type Slashed = Treasury;
@@ -1935,47 +1934,6 @@ impl_runtime_apis! {
 			let mut batches = Vec::<BenchmarkBatch>::new();
 			let params = (&config, &whitelist);
 			add_benchmarks!(params, batches);
-
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
-=======
-			add_benchmark!(params, batches, pallet_alliance, Alliance);
->>>>>>> 4482b77565 (Derive pallet_identity::Config and Fix test/benchmarking)
-			add_benchmark!(params, batches, pallet_assets, Assets);
-			add_benchmark!(params, batches, pallet_babe, Babe);
-			add_benchmark!(params, batches, pallet_balances, Balances);
-			add_benchmark!(params, batches, pallet_bounties, Bounties);
-			add_benchmark!(params, batches, pallet_collective, Council);
-			add_benchmark!(params, batches, pallet_contracts, Contracts);
-			add_benchmark!(params, batches, pallet_democracy, Democracy);
-			add_benchmark!(params, batches, pallet_election_provider_multi_phase, ElectionProviderMultiPhase);
-			add_benchmark!(params, batches, pallet_elections_phragmen, Elections);
-			add_benchmark!(params, batches, pallet_gilt, Gilt);
-			add_benchmark!(params, batches, pallet_grandpa, Grandpa);
-			add_benchmark!(params, batches, pallet_identity, Identity);
-			add_benchmark!(params, batches, pallet_im_online, ImOnline);
-			add_benchmark!(params, batches, pallet_indices, Indices);
-			add_benchmark!(params, batches, pallet_lottery, Lottery);
-			add_benchmark!(params, batches, pallet_membership, TechnicalMembership);
-			add_benchmark!(params, batches, pallet_mmr, Mmr);
-			add_benchmark!(params, batches, pallet_multisig, Multisig);
-			add_benchmark!(params, batches, pallet_offences, OffencesBench::<Runtime>);
-			add_benchmark!(params, batches, pallet_proxy, Proxy);
-			add_benchmark!(params, batches, pallet_scheduler, Scheduler);
-			add_benchmark!(params, batches, pallet_session, SessionBench::<Runtime>);
-			add_benchmark!(params, batches, pallet_staking, Staking);
-			add_benchmark!(params, batches, frame_system, SystemBench::<Runtime>);
-			add_benchmark!(params, batches, pallet_timestamp, Timestamp);
-			add_benchmark!(params, batches, pallet_tips, Tips);
-			add_benchmark!(params, batches, pallet_transaction_storage, TransactionStorage);
-			add_benchmark!(params, batches, pallet_treasury, Treasury);
-			add_benchmark!(params, batches, pallet_uniques, Uniques);
-			add_benchmark!(params, batches, pallet_utility, Utility);
-			add_benchmark!(params, batches, pallet_vesting, Vesting);
-
-			if batches.is_empty() { return Err("Benchmark not found for this pallet.".into()) }
->>>>>>> 4a8ad01901 (Add pallet-alliance into node runtime)
 			Ok(batches)
 		}
 	}
