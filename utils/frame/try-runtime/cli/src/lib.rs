@@ -270,7 +270,9 @@ use remote_externalities::{
 	Builder, Mode, OfflineConfig, OnlineConfig, SnapshotConfig, TestExternalities,
 };
 use sc_chain_spec::ChainSpec;
-use sc_cli::{CliConfiguration, ExecutionStrategy, WasmExecutionMethod};
+use sc_cli::{
+	CliConfiguration, ExecutionStrategy, WasmExecutionMethod, DEFAULT_WASM_EXECUTION_METHOD,
+};
 use sc_executor::NativeElseWasmExecutor;
 use sc_service::{Configuration, NativeExecutionDispatch};
 use sp_core::{
@@ -394,7 +396,7 @@ pub struct SharedParams {
 		value_name = "METHOD",
 		possible_values = WasmExecutionMethod::variants(),
 		ignore_case = true,
-		default_value = "Compiled"
+		default_value = DEFAULT_WASM_EXECUTION_METHOD,
 	)]
 	pub wasm_method: WasmExecutionMethod,
 
@@ -458,15 +460,15 @@ pub enum State {
 		snapshot_path: Option<PathBuf>,
 
 		/// The pallets to scrape. If empty, entire chain state will be scraped.
-		#[clap(short, long, require_delimiter = true)]
-		pallets: Option<Vec<String>>,
+		#[clap(short, long, multiple_values = true)]
+		pallets: Vec<String>,
 
 		/// Fetch the child-keys as well.
 		///
-		/// Default is `false`, if specific `pallets` are specified, true otherwise. In other
+		/// Default is `false`, if specific `--pallets` are specified, `true` otherwise. In other
 		/// words, if you scrape the whole state the child tree data is included out of the box.
 		/// Otherwise, it must be enabled explicitly using this flag.
-		#[clap(long, require_delimiter = true)]
+		#[clap(long)]
 		child_tree: bool,
 	},
 }
@@ -492,7 +494,7 @@ impl State {
 					.mode(Mode::Online(OnlineConfig {
 						transport: uri.to_owned().into(),
 						state_snapshot: snapshot_path.as_ref().map(SnapshotConfig::new),
-						pallets: pallets.clone().unwrap_or_default(),
+						pallets: pallets.clone(),
 						scrape_children: true,
 						at,
 					}))
