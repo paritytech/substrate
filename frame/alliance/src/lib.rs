@@ -908,20 +908,20 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	/// Add a candidate to the sorted candidate list.
 	fn add_candidate(who: &T::AccountId) -> DispatchResult {
-		let mut candidates = <Candidates<T, I>>::get();
-		let pos = candidates.binary_search(who).err().ok_or(Error::<T, I>::AlreadyCandidate)?;
-		candidates.insert(pos, who.clone());
-		Candidates::<T, I>::put(candidates);
-		Ok(())
+		<Candidates<T, I>>::try_mutate(|candidates| {
+			let pos = candidates.binary_search(who).err().ok_or(Error::<T, I>::AlreadyCandidate)?;
+			candidates.insert(pos, who.clone());
+			Ok(())
+		})
 	}
 
 	/// Remove a candidate from the candidates list.
 	fn remove_candidate(who: &T::AccountId) -> DispatchResult {
-		let mut candidates = <Candidates<T, I>>::get();
-		let pos = candidates.binary_search(who).ok().ok_or(Error::<T, I>::NotCandidate)?;
-		candidates.remove(pos);
-		Candidates::<T, I>::put(candidates);
-		Ok(())
+		<Candidates<T, I>>::try_mutate(|candidates| {
+			let pos = candidates.binary_search(who).ok().ok_or(Error::<T, I>::NotCandidate)?;
+			candidates.remove(pos);
+			Ok(())
+		})
 	}
 
 	fn has_member(role: MemberRole) -> bool {
@@ -972,10 +972,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	/// Add a user to the sorted alliance member set.
 	fn add_member(who: &T::AccountId, role: MemberRole) -> DispatchResult {
-		let mut members = <Members<T, I>>::get(role);
-		let pos = members.binary_search(who).err().ok_or(Error::<T, I>::AlreadyMember)?;
-		members.insert(pos, who.clone());
-		Members::<T, I>::insert(role, members);
+		<Members<T, I>>::try_mutate(role, |members| -> DispatchResult {
+			let pos = members.binary_search(who).err().ok_or(Error::<T, I>::AlreadyMember)?;
+			members.insert(pos, who.clone());
+			Ok(())
+		})?;
 
 		if role == MemberRole::Founder || role == MemberRole::Fellow {
 			let members = Self::votable_member_sorted();
@@ -986,10 +987,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	/// Remove a user from the alliance member set.
 	fn remove_member(who: &T::AccountId, role: MemberRole) -> DispatchResult {
-		let mut members = <Members<T, I>>::get(role);
-		let pos = members.binary_search(who).ok().ok_or(Error::<T, I>::NotMember)?;
-		members.remove(pos);
-		Members::<T, I>::insert(role, members);
+		<Members<T, I>>::try_mutate(role, |members| -> DispatchResult {
+			let pos = members.binary_search(who).ok().ok_or(Error::<T, I>::NotMember)?;
+			members.remove(pos);
+			Ok(())
+		})?;
 
 		if role == MemberRole::Founder || role == MemberRole::Fellow {
 			let members = Self::votable_member_sorted();
@@ -1017,16 +1019,16 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		new_webs: &mut Vec<Url>,
 	) -> DispatchResult {
 		if !new_accounts.is_empty() {
-			let mut accounts = <AccountBlacklist<T, I>>::get();
-			accounts.append(new_accounts);
-			accounts.sort();
-			AccountBlacklist::<T, I>::put(accounts);
+			<AccountBlacklist<T, I>>::mutate(|accounts| {
+				accounts.append(new_accounts);
+				accounts.sort();
+			});
 		}
 		if !new_webs.is_empty() {
-			let mut webs = <WebsiteBlacklist<T, I>>::get();
-			webs.append(new_webs);
-			webs.sort();
-			WebsiteBlacklist::<T, I>::put(webs);
+			<WebsiteBlacklist<T, I>>::mutate(|webs| {
+				webs.append(new_webs);
+				webs.sort();
+			});
 		}
 		Ok(())
 	}
@@ -1037,20 +1039,23 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		out_webs: &mut Vec<Url>,
 	) -> DispatchResult {
 		if !out_accounts.is_empty() {
-			let mut accounts = <AccountBlacklist<T, I>>::get();
-			for who in out_accounts.iter() {
-				let pos = accounts.binary_search(who).ok().ok_or(Error::<T, I>::NotInBlacklist)?;
-				accounts.remove(pos);
-			}
-			AccountBlacklist::<T, I>::put(accounts);
+			<AccountBlacklist<T, I>>::try_mutate(|accounts| -> DispatchResult {
+				for who in out_accounts.iter() {
+					let pos =
+						accounts.binary_search(who).ok().ok_or(Error::<T, I>::NotInBlacklist)?;
+					accounts.remove(pos);
+				}
+				Ok(())
+			})?;
 		}
 		if !out_webs.is_empty() {
-			let mut webs = <WebsiteBlacklist<T, I>>::get();
-			for web in out_webs.iter() {
-				let pos = webs.binary_search(web).ok().ok_or(Error::<T, I>::NotInBlacklist)?;
-				webs.remove(pos);
-			}
-			WebsiteBlacklist::<T, I>::put(webs);
+			<WebsiteBlacklist<T, I>>::try_mutate(|webs| -> DispatchResult {
+				for web in out_webs.iter() {
+					let pos = webs.binary_search(web).ok().ok_or(Error::<T, I>::NotInBlacklist)?;
+					webs.remove(pos);
+				}
+				Ok(())
+			})?;
 		}
 		Ok(())
 	}
