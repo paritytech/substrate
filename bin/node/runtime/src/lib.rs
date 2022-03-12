@@ -1426,7 +1426,10 @@ impl pallet_alliance::Config for Runtime {
 	type Slashed = Treasury;
 	type InitializeMembers = AllianceMotion;
 	type MembershipChanged = AllianceMotion;
+	#[cfg(not(feature = "runtime-benchmarks"))]
 	type IdentityVerifier = AllianceIdentityVerifier;
+	#[cfg(feature = "runtime-benchmarks")]
+	type IdentityVerifier = ();
 	type ProposalProvider = AllianceProposalProvider;
 	type MaxProposals = AllianceMaxProposals;
 	type MaxFounders = MaxFounders;

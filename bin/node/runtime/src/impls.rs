@@ -50,17 +50,10 @@ impl HandleCredit<AccountId, Assets> for CreditToBlockAuthor {
 
 pub struct AllianceIdentityVerifier;
 impl IdentityVerifier<AccountId> for AllianceIdentityVerifier {
-	#[cfg(not(feature = "runtime-benchmarks"))]
 	fn has_identity(who: &AccountId, fields: u64) -> bool {
 		crate::Identity::has_identity(who, fields)
 	}
 
-	#[cfg(feature = "runtime-benchmarks")]
-	fn has_identity(_who: &AccountId, _fields: u64) -> bool {
-		true
-	}
-
-	#[cfg(not(feature = "runtime-benchmarks"))]
 	fn has_good_judgement(who: &AccountId) -> bool {
 		use pallet_identity::Judgement;
 		if let Some(judgements) =
@@ -75,19 +68,8 @@ impl IdentityVerifier<AccountId> for AllianceIdentityVerifier {
 		}
 	}
 
-	#[cfg(feature = "runtime-benchmarks")]
-	fn has_good_judgement(_who: &AccountId) -> bool {
-		true
-	}
-
-	#[cfg(not(feature = "runtime-benchmarks"))]
 	fn super_account_id(who: &AccountId) -> Option<AccountId> {
 		crate::Identity::super_of(who).map(|parent| parent.0)
-	}
-
-	#[cfg(feature = "runtime-benchmarks")]
-	fn super_account_id(_who: &AccountId) -> Option<AccountId> {
-		None
 	}
 }
 

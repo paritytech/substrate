@@ -136,12 +136,26 @@ type NegativeImbalanceOf<T, I = ()> = <<T as Config<I>>::Currency as Currency<
 	<T as frame_system::Config>::AccountId,
 >>::NegativeImbalance;
 
-pub trait IdentityVerifier<AccountId: Clone + Ord> {
+pub trait IdentityVerifier<AccountId> {
 	fn has_identity(who: &AccountId, fields: u64) -> bool;
 
 	fn has_good_judgement(who: &AccountId) -> bool;
 
 	fn super_account_id(who: &AccountId) -> Option<AccountId>;
+}
+
+impl<AccountId> IdentityVerifier<AccountId> for () {
+	fn has_identity(_who: &AccountId, _fields: u64) -> bool {
+		true
+	}
+
+	fn has_good_judgement(_who: &AccountId) -> bool {
+		true
+	}
+
+	fn super_account_id(_who: &AccountId) -> Option<AccountId> {
+		None
+	}
 }
 
 pub trait ProposalProvider<AccountId, Hash, Proposal> {
