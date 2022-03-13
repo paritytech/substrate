@@ -44,7 +44,6 @@ pub mod pallet {
 
 	type NameHash = [u8; 32];
 
-	/// TODO: integrate
 	type CommitmentHash = [u8; 32];
 
 	// Allows easy access our Pallet's `Balance` type. Comes from `Currency` interface.
@@ -301,9 +300,8 @@ pub mod pallet {
 					ExistenceRequirement::KeepAlive,
 				)?;
 
-				let periods_as_block_number: T::BlockNumber = periods.try_into().ok().unwrap();
-
 				// TODO: if expired, add from current block number
+				
 				let expiry_new = r.expiry.saturating_add(Self::length(periods));
 
 				r.expiry = expiry_new.clone();
