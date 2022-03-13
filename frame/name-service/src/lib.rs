@@ -31,7 +31,7 @@ pub use pallet::*;
 pub mod pallet {
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
-	use sp_runtime::traits::{Hash, Saturating};
+	use sp_runtime::traits::{Hash, Saturating, Convert};
 
 	use frame_support::traits::{
 		Currency, ExistenceRequirement, OnUnbalanced, ReservableCurrency, WithdrawReasons,
@@ -60,6 +60,9 @@ pub mod pallet {
 
 		/// The Currency handler for the kitties pallet.
 		type Currency: ReservableCurrency<Self::AccountId>;
+
+		/// Convert the block number into a balance.
+		type BlockNumberToBalance: Convert<Self::BlockNumber, BalanceOf<Self>>;
 
 		/// The account where registration fees are paid to.
 		type RegistrationFeeHandler: OnUnbalanced<NegativeImbalanceOf<Self>>;
@@ -133,7 +136,7 @@ pub mod pallet {
 		NameHash,
 		Registration<T::AccountId, BalanceOf<T>, T::BlockNumber>,
 	>;
-
+	
 	/// This resolver maps name hashes to an account
 	#[pallet::storage]
 	pub(super) type Resolvers<T: Config> =
@@ -356,8 +359,8 @@ pub mod pallet {
 		}
 
 		fn length_fee(length: T::BlockNumber) -> BalanceOf<T> {
-			// T::FeePerBlock::get().saturating_mul(length.into())
-			Default::default()
+			let length_as_balance = T::BlockNumberToBalance::convert(length);
+			T::FeePerBlock::get().saturating_mul(length_as_balance)
 		}
 
 		fn do_register(

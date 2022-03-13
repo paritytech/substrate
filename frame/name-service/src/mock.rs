@@ -31,7 +31,7 @@ use frame_support::{
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
-	traits::{BlakeTwo256, IdentityLookup},
+	traits::{BlakeTwo256, IdentityLookup, Identity},
 	Perbill,
 };
 
@@ -101,6 +101,7 @@ impl pallet_balances::Config for Test {
 impl Config for Test {
 	type Event = Event;
 	type Currency = Balances;
+	type BlockNumberToBalance = Identity;
 	// TODO: make a custom handler and test behavior
 	type RegistrationFeeHandler = ();
 	type CommitmentDeposit = ConstU64<10>;
