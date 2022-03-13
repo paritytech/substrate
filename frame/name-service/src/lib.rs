@@ -19,6 +19,12 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+#[cfg(test)]
+mod mock;
+
+#[cfg(test)]
+mod tests;
+
 pub use pallet::*;
 
 #[frame_support::pallet]
@@ -77,6 +83,10 @@ pub mod pallet {
 		/// Default registration fee for 5+ letter names.
 		#[pallet::constant]
 		type TierDefault: Get<BalanceOf<Self>>;
+
+		// Registration fee per block. Included in registration and extension fees.
+		#[pallet::constant]
+		type FeePerBlock: Get<BalanceOf<Self>>;
 
 		/// The origin that has super-user access to manage all name registrations.
 		type RegistrationManager: EnsureOrigin<Self::Origin>;
@@ -182,9 +192,6 @@ pub mod pallet {
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 
-			// TODO: Redefine logic for ensuring registration does not already exist
-			// ensure!(Self::is_available(name_hash), Error::<T>::AlreadyRegistered);
-
 			ensure!(!Commitments::<T>::contains_key(commitment_hash), Error::<T>::AlreadyCommitted);
 
 			let block_number = frame_system::Pallet::<T>::block_number();
@@ -215,7 +222,7 @@ pub mod pallet {
 			let name_hash = sp_io::hashing::blake2_256(&name);
 
 			// TODO: if statement, available then register, otherwise remove commitment
-			ensure!(Self::is_available(name_hash), Error::<T>::AlreadyRegistered);
+			ensure!(Self::is_available(name_hash, frame_system::Pallet::<T>::block_number()), Error::<T>::AlreadyRegistered);
 
 			let fee = Self::registration_fee(name.clone(), length);
 
@@ -313,27 +320,6 @@ pub mod pallet {
 		}
 
 		#[pallet::weight(0)]
-		pub fn resolve(origin: OriginFor<T>, name_hash: NameHash) -> DispatchResult {
-			let sender = ensure_signed(origin)?;
-
-			let registration =
-				Registrations::<T>::get(name_hash).ok_or(Error::<T>::RegistrationNotFound)?;
-			ensure!(
-				registration.expiry > frame_system::Pallet::<T>::block_number(),
-				Error::<T>::RegistrationExpired
-			);
-
-			let resolver = Resolvers::<T>::get(name_hash).ok_or(Error::<T>::ResolverNotFound)?;
-
-			// TODO: return address
-			// match resolver {
-			// 	Resolver::Default(address) => Ok(address),
-			// };
-
-			Ok(())
-		}
-
-		#[pallet::weight(0)]
 		pub fn force_register(
 			origin: OriginFor<T>,
 			name_hash: NameHash,
@@ -351,13 +337,10 @@ pub mod pallet {
 	// Your Pallet's internal functions.
 	// TODO: make block_number function parameter?
 	impl<T: Config> Pallet<T> {
-		fn is_available(name_hash: NameHash) -> bool {
+		fn is_available(name_hash: NameHash, block_number: T::BlockNumber) -> bool {
 			match Registrations::<T>::get(name_hash) {
 				// TODO: add grace period to expiry
-				Some(r) => match r.expiry < frame_system::Pallet::<T>::block_number() {
-					true => true,
-					false => false,
-				},
+				Some(r) => r.expiry < block_number,
 				None => true,
 			}
 		}
@@ -368,14 +351,12 @@ pub mod pallet {
 				4 => T::TierFourLetters::get(),
 				_ => T::TierDefault::get(),
 			};
-
-			// TODO: calculate length fee (constant FEE_PER_BLOCK)
 			let fee_length = Self::length_fee(length);
 			fee_reg.saturating_add(fee_length)
 		}
 
 		fn length_fee(length: T::BlockNumber) -> BalanceOf<T> {
-			// TODO: calculate length fee
+			// T::FeePerBlock::get().saturating_mul(length.into())
 			Default::default()
 		}
 

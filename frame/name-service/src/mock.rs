@@ -29,13 +29,16 @@ use frame_support::{
 	traits::{ConstU32, ConstU64, Everything},
 };
 use sp_core::H256;
-use sp_runtime::{testing::Header, traits::BlakeTwo256, Perbill};
+use sp_runtime::{
+	testing::Header,
+	traits::{BlakeTwo256, IdentityLookup},
+	Perbill,
+};
 
-use frame_system::EnsureSignedBy;
+use frame_system::{EnsureRoot, EnsureSignedBy};
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
-//type OpaqueCall = super::OpaqueCall<Test>;
 
 frame_support::construct_runtime!(
 	pub enum Test where
@@ -49,13 +52,6 @@ frame_support::construct_runtime!(
 	}
 );
 
-parameter_types! {
-	pub const BlockHashCount: u64 = 250;
-	pub const MaximumBlockWeight: Weight = 1024;
-	pub const MaximumBlockLength: u32 = 2 * 1024;
-	pub const AvailableBlockRatio: Perbill = Perbill::one();
-}
-
 type BlockNumber = u64;
 type Balance = u64;
 
@@ -64,21 +60,21 @@ parameter_types! {
 		frame_system::limits::BlockWeights::simple_max(1024);
 }
 impl frame_system::Config for Test {
-	type BaseCallFilter = Everything;
+	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
-	type DbWeight = ();
 	type Origin = Origin;
+	type Call = Call;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
-	type Call = Call;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
-	type Lookup = NameService;
+	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = Event;
 	type BlockHashCount = ConstU64<250>;
+	type DbWeight = ();
 	type Version = ();
 	type PalletInfo = PalletInfo;
 	type AccountData = pallet_balances::AccountData<u64>;
@@ -87,7 +83,7 @@ impl frame_system::Config for Test {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
-	type MaxConsumers = ConstU32<16>;
+	type MaxConsumers = frame_support::traits::ConstU32<16>;
 }
 
 impl pallet_balances::Config for Test {
@@ -102,44 +98,33 @@ impl pallet_balances::Config for Test {
 	type WeightInfo = ();
 }
 
-parameter_types! {
-	pub const BiddingPeriod: BlockNumber = 10;
-	pub const ClaimPeriod: BlockNumber = 5;
-	pub const OwnershipPeriod: BlockNumber = 100;
-	pub const MinBid: Balance = 5;
-	pub ExtensionsOn: ExtensionConfig<BlockNumber, Balance> = ExtensionConfig {
-		enabled: true,
-		extension_period: 100,
-		extension_fee: 5,
-	};
-}
-
-ord_parameter_types! {
-	pub const Manager: u64 = 100;
-	pub const Permanence: u64 = 200;
-}
-
 impl Config for Test {
-	type AccountIndex = u32;
-	type Currency = Balances;
 	type Event = Event;
-	type ManagerOrigin = EnsureSignedBy<Manager, u64>;
-	type PermanenceOrigin = EnsureSignedBy<Permanence, u64>;
-	type BiddingPeriod = BiddingPeriod;
-	type ClaimPeriod = ClaimPeriod;
-	type OwnershipPeriod = OwnershipPeriod;
-	type PaymentDestination = ();
-	type MinBid = MinBid;
-	type ExtensionConfig = ExtensionsOn;
-	type WeightInfo = ();
+	type Currency = Balances;
+	// TODO: make a custom handler and test behavior
+	type RegistrationFeeHandler = ();
+	type CommitmentDeposit = ConstU64<10>;
+	type NameDeposit = ConstU64<5>;
+	type TierThreeLetters = ConstU64<7>;
+	type TierFourLetters = ConstU64<3>;
+	type FeePerBlock = ConstU64<1>;
+	type TierDefault = ConstU64<1>;
+	type RegistrationManager = EnsureRoot<Self::AccountId>;
 }
 
-pub fn new_test_ext() -> sp_io::TestExternalities {
+pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+
 	pallet_balances::GenesisConfig::<Test> {
 		balances: vec![(1, 100), (2, 200), (3, 300), (4, 400), (5, 500), (6, 600)],
 	}
 	.assimilate_storage(&mut t)
 	.unwrap();
-	t.into()
+
+	let mut ext = sp_io::TestExternalities::new(t);
+	ext.execute_with(|| System::set_block_number(1));
+	ext
 }
+
+pub type NameServiceEvent = crate::Event<Test>;
+pub type BalancesError = pallet_balances::Error<Test>;
