@@ -387,7 +387,7 @@ pub mod pallet {
 
 		fn is_available(name_hash: NameHash, block_number: T::BlockNumber) -> bool {
 			match Registrations::<T>::get(name_hash) {
-				Some(r) => r.expiry < block_number,
+				Some(r) => r.expiry <= block_number,
 				None => true,
 			}
 		}
@@ -421,7 +421,7 @@ pub mod pallet {
 			let registration =
 				Registrations::<T>::get(name_hash).ok_or(Error::<T>::RegistrationNotFound)?;
 			ensure!(
-				registration.expiry < frame_system::Pallet::<T>::block_number(),
+				registration.expiry <= frame_system::Pallet::<T>::block_number(),
 				Error::<T>::RegistrationNotExpired
 			);
 
