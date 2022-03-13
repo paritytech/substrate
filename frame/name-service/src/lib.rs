@@ -328,7 +328,10 @@ pub mod pallet {
 				Registrations::<T>::get(name_hash).ok_or(Error::<T>::RegistrationNotFound)?;
 			ensure!(registration.owner == sender, Error::<T>::NotRegistrationOwner);
 
-			// TODO: deregister if already expired
+			if (registration.expiry <= frame_system::Pallet::<T>::block_number()) {
+				Self::do_deregister(name_hash)?;
+			}
+
 			ensure!(
 				registration.expiry > frame_system::Pallet::<T>::block_number(),
 				Error::<T>::RegistrationExpired
