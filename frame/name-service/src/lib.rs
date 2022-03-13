@@ -300,9 +300,12 @@ pub mod pallet {
 					ExistenceRequirement::KeepAlive,
 				)?;
 
-				// TODO: if expired, add from current block number
-				
-				let expiry_new = r.expiry.saturating_add(Self::length(periods));
+				let block_number = frame_system::Pallet::<T>::block_number();
+
+				let expiry_new = match r.expiry > block_number {
+					true => r.expiry.saturating_add(Self::length(periods)),
+					false => block_number.saturating_add(Self::length(periods)),
+				};
 
 				r.expiry = expiry_new.clone();
 
