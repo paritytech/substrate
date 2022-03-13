@@ -31,7 +31,7 @@ pub use pallet::*;
 pub mod pallet {
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
-	use sp_runtime::traits::{Hash, Saturating, Convert};
+	use sp_runtime::traits::{Convert, Hash, Saturating, Zero};
 
 	use frame_support::traits::{
 		Currency, ExistenceRequirement, OnUnbalanced, ReservableCurrency, WithdrawReasons,
@@ -43,7 +43,12 @@ pub mod pallet {
 
 	type NameHash = [u8; 32];
 
+	/// TODO: integrate
 	type CommitmentHash = [u8; 32];
+
+	/// Number of periods to register for. Multiplies by `RegistrationPeriod` to determine total
+	/// length.
+	type NumRegistrationPeriods = [u8; 32];
 
 	// Allows easy access our Pallet's `Balance` type. Comes from `Currency` interface.
 	type BalanceOf<T> =
@@ -87,9 +92,14 @@ pub mod pallet {
 		#[pallet::constant]
 		type TierDefault: Get<BalanceOf<Self>>;
 
-		// Registration fee per block. Included in registration and extension fees.
+		/// How long a registration period is in blocks.
+		/// TODO: integrate
 		#[pallet::constant]
-		type FeePerBlock: Get<BalanceOf<Self>>;
+		type RegistrationPeriod: Get<Self::BlockNumber>;
+
+		/// Registration fee per registration period, defined as a number of blocks.
+		#[pallet::constant]
+		type FeePerRegistrationPeriod: Get<BalanceOf<Self>>;
 
 		/// The origin that has super-user access to manage all name registrations.
 		type RegistrationManager: EnsureOrigin<Self::Origin>;
@@ -136,7 +146,7 @@ pub mod pallet {
 		NameHash,
 		Registration<T::AccountId, BalanceOf<T>, T::BlockNumber>,
 	>;
-	
+
 	/// This resolver maps name hashes to an account
 	#[pallet::storage]
 	pub(super) type Resolvers<T: Config> =
@@ -162,6 +172,8 @@ pub mod pallet {
 		Extended { name_hash: NameHash, expires: T::BlockNumber },
 		/// An address has been set for a name hash to resolve to.
 		AddressSet { name_hash: NameHash, address: T::AccountId },
+		/// An address was deregistered.
+		AddressDeregistered { name_hash: NameHash },
 	}
 
 	// Your Pallet's error messages.
@@ -181,6 +193,8 @@ pub mod pallet {
 		ResolverNotFound,
 		/// This registration has expired.
 		RegistrationExpired,
+		/// This registration has not yet expired.
+		RegistrationNotExpired,
 	}
 
 	// Your Pallet's callable functions.
@@ -220,34 +234,39 @@ pub mod pallet {
 			let sender = ensure_signed(origin)?;
 			let commitment_hash = sp_io::hashing::blake2_256(&(name.clone(), secret).encode());
 
-			let commitment =
-				Commitments::<T>::get(commitment_hash.clone()).ok_or(Error::<T>::CommitmentNotFound)?;
+			let commitment = Commitments::<T>::get(commitment_hash.clone())
+				.ok_or(Error::<T>::CommitmentNotFound)?;
 			let name_hash = sp_io::hashing::blake2_256(&name);
 
-			// TODO: if statement, available then register, otherwise remove commitment
-			ensure!(Self::is_available(name_hash, frame_system::Pallet::<T>::block_number()), Error::<T>::AlreadyRegistered);
+			if (Self::is_available(name_hash, frame_system::Pallet::<T>::block_number())) {
+				let fee = Self::registration_fee(name.clone(), length);
 
-			let fee = Self::registration_fee(name.clone(), length);
+				let imbalance = T::Currency::withdraw(
+					&sender,
+					fee,
+					WithdrawReasons::FEE,
+					ExistenceRequirement::KeepAlive,
+				)?;
 
-			// withdraw fees from account
-			let imbalance =
-				T::Currency::withdraw(&sender, fee, WithdrawReasons::FEE, ExistenceRequirement::KeepAlive)?;
+				T::RegistrationFeeHandler::on_unbalanced(imbalance);
 
-			T::RegistrationFeeHandler::on_unbalanced(imbalance);
+				// TODO: handle deposits maybe in the future
+				let deposit: BalanceOf<T> = Default::default();
 
-			// TODO: handle deposits maybe in the future
-			let deposit: BalanceOf<T> = Default::default();
+				Self::do_register(name_hash, commitment.who, deposit, length);
+			}
 
-			Self::do_register(name_hash, commitment.who, deposit, length);
-
-			// TODO: handle this if name expires
 			Commitments::<T>::remove(commitment_hash);
 
 			Ok(())
 		}
 
 		#[pallet::weight(0)]
-		pub fn transfer(origin: OriginFor<T>, to: T::AccountId, name_hash: NameHash) -> DispatchResult {
+		pub fn transfer(
+			origin: OriginFor<T>,
+			to: T::AccountId,
+			name_hash: NameHash,
+		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 			let block_number = frame_system::Pallet::<T>::block_number();
 
@@ -310,6 +329,8 @@ pub mod pallet {
 			let registration =
 				Registrations::<T>::get(name_hash).ok_or(Error::<T>::RegistrationNotFound)?;
 			ensure!(registration.owner == sender, Error::<T>::NotRegistrationOwner);
+
+			// TODO: deregister if already expired
 			ensure!(
 				registration.expiry > frame_system::Pallet::<T>::block_number(),
 				Error::<T>::RegistrationExpired
@@ -323,6 +344,13 @@ pub mod pallet {
 		}
 
 		#[pallet::weight(0)]
+		pub fn deregister(origin: OriginFor<T>, name_hash: NameHash) -> DispatchResult {
+			let sender = ensure_signed(origin)?;
+			Self::do_deregister(name_hash)?;
+			Ok(())
+		}
+
+		#[pallet::weight(0)]
 		pub fn force_register(
 			origin: OriginFor<T>,
 			name_hash: NameHash,
@@ -330,15 +358,13 @@ pub mod pallet {
 			length: T::BlockNumber,
 		) -> DispatchResult {
 			T::RegistrationManager::ensure_origin(origin)?;
-			// TODO: Deposit maybe should just be ZERO
-			let deposit = Default::default();
+			let deposit: BalanceOf<T> = Zero::zero();
 			Self::do_register(name_hash, who, deposit, length)?;
 			Ok(())
 		}
 	}
 
-	// Your Pallet's internal functions.
-	// TODO: make block_number function parameter?
+	// Pallet internal functions
 	impl<T: Config> Pallet<T> {
 		fn is_available(name_hash: NameHash, block_number: T::BlockNumber) -> bool {
 			match Registrations::<T>::get(name_hash) {
@@ -360,7 +386,7 @@ pub mod pallet {
 
 		fn length_fee(length: T::BlockNumber) -> BalanceOf<T> {
 			let length_as_balance = T::BlockNumberToBalance::convert(length);
-			T::FeePerBlock::get().saturating_mul(length_as_balance)
+			T::FeePerRegistrationPeriod::get().saturating_mul(length_as_balance)
 		}
 
 		fn do_register(
@@ -376,6 +402,7 @@ pub mod pallet {
 				Registration { owner: who.clone(), registrant: who.clone(), expiry, deposit };
 
 			Registrations::<T>::insert(name_hash, registration);
+			// TODO: add reverse registration when in place also
 
 			Self::deposit_event(Event::<T>::Registered {
 				owner: who.clone(),
@@ -383,6 +410,21 @@ pub mod pallet {
 				expiry,
 				deposit,
 			});
+
+			Ok(())
+		}
+
+		fn do_deregister(name_hash: NameHash) -> DispatchResult {
+			let registration =
+				Registrations::<T>::get(name_hash).ok_or(Error::<T>::RegistrationNotFound)?;
+			ensure!(
+				registration.expiry < frame_system::Pallet::<T>::block_number(),
+				Error::<T>::RegistrationNotExpired
+			);
+
+			Registrations::<T>::remove(name_hash);
+
+			Self::deposit_event(Event::<T>::AddressDeregistered { name_hash });
 
 			Ok(())
 		}

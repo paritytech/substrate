@@ -31,7 +31,7 @@ use frame_support::{
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
-	traits::{BlakeTwo256, IdentityLookup, Identity},
+	traits::{BlakeTwo256, Identity, IdentityLookup},
 	Perbill,
 };
 
@@ -108,7 +108,8 @@ impl Config for Test {
 	type NameDeposit = ConstU64<5>;
 	type TierThreeLetters = ConstU64<7>;
 	type TierFourLetters = ConstU64<3>;
-	type FeePerBlock = ConstU64<1>;
+	type RegistrationPeriod = ConstU64<3153600>;
+	type FeePerRegistrationPeriod = ConstU64<1>;
 	type TierDefault = ConstU64<1>;
 	type RegistrationManager = EnsureRoot<Self::AccountId>;
 }
