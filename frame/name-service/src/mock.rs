@@ -108,7 +108,8 @@ impl Config for Test {
 	type NameDeposit = ConstU64<5>;
 	type TierThreeLetters = ConstU64<7>;
 	type TierFourLetters = ConstU64<3>;
-	type RegistrationPeriod = ConstU64<3153600>;
+	type BlocksPerRegistrationPeriod = ConstU64<5256000>;
+	type NotificationPeriod = ConstU64<432000>;
 	type FeePerRegistrationPeriod = ConstU64<1>;
 	type TierDefault = ConstU64<1>;
 	type RegistrationManager = EnsureRoot<Self::AccountId>;

@@ -32,6 +32,7 @@ pub mod pallet {
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 	use sp_runtime::traits::{Convert, Hash, Saturating, Zero};
+	use sp_std::convert::TryInto;
 
 	use frame_support::traits::{
 		Currency, ExistenceRequirement, OnUnbalanced, ReservableCurrency, WithdrawReasons,
@@ -45,10 +46,6 @@ pub mod pallet {
 
 	/// TODO: integrate
 	type CommitmentHash = [u8; 32];
-
-	/// Number of periods to register for. Multiplies by `RegistrationPeriod` to determine total
-	/// length.
-	type NumRegistrationPeriods = [u8; 32];
 
 	// Allows easy access our Pallet's `Balance` type. Comes from `Currency` interface.
 	type BalanceOf<T> =
@@ -93,9 +90,12 @@ pub mod pallet {
 		type TierDefault: Get<BalanceOf<Self>>;
 
 		/// How long a registration period is in blocks.
-		/// TODO: integrate
 		#[pallet::constant]
-		type RegistrationPeriod: Get<Self::BlockNumber>;
+		type BlocksPerRegistrationPeriod: Get<Self::BlockNumber>;
+
+		/// Notification duration before expiry, in blocks.
+		#[pallet::constant]
+		type NotificationPeriod: Get<Self::BlockNumber>;
 
 		/// Registration fee per registration period, defined as a number of blocks.
 		#[pallet::constant]
@@ -195,6 +195,8 @@ pub mod pallet {
 		RegistrationExpired,
 		/// This registration has not yet expired.
 		RegistrationNotExpired,
+		/// Conversion error
+		ConversionError,
 	}
 
 	// Your Pallet's callable functions.
@@ -229,7 +231,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			name: Vec<u8>,
 			secret: u64,
-			length: T::BlockNumber,
+			periods: u32,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 			let commitment_hash = sp_io::hashing::blake2_256(&(name.clone(), secret).encode());
@@ -238,8 +240,8 @@ pub mod pallet {
 				.ok_or(Error::<T>::CommitmentNotFound)?;
 			let name_hash = sp_io::hashing::blake2_256(&name);
 
-			if (Self::is_available(name_hash, frame_system::Pallet::<T>::block_number())) {
-				let fee = Self::registration_fee(name.clone(), length);
+			if Self::is_available(name_hash, frame_system::Pallet::<T>::block_number()) {
+				let fee = Self::registration_fee(name.clone(), periods);
 
 				let imbalance = T::Currency::withdraw(
 					&sender,
@@ -253,7 +255,7 @@ pub mod pallet {
 				// TODO: handle deposits maybe in the future
 				let deposit: BalanceOf<T> = Default::default();
 
-				Self::do_register(name_hash, commitment.who, deposit, length);
+				Self::do_register(name_hash, commitment.who, deposit, periods);
 			}
 
 			Commitments::<T>::remove(commitment_hash);
@@ -283,22 +285,13 @@ pub mod pallet {
 		}
 
 		#[pallet::weight(0)]
-		pub fn renew(
-			origin: OriginFor<T>,
-			name_hash: NameHash,
-			length: T::BlockNumber,
-		) -> DispatchResult {
+		pub fn renew(origin: OriginFor<T>, name_hash: NameHash, periods: u32) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 
 			Registrations::<T>::try_mutate(name_hash, |maybe_registration| {
 				let r = maybe_registration.as_mut().ok_or(Error::<T>::RegistrationNotFound)?;
 
-				// TODO: check if within expiry or in grace period
-				// if we are in grace period, new expiry is current block + length
-				// if we are before expiry, new expiry is currency expiry + length
-				// if we are beyond grace period, need to re-register (fail renew).
-
-				let fee = Self::length_fee(length);
+				let fee = Self::length_fee(periods);
 
 				// withdraw fees from account
 				let imbalance = T::Currency::withdraw(
@@ -308,7 +301,11 @@ pub mod pallet {
 					ExistenceRequirement::KeepAlive,
 				)?;
 
-				let expiry_new = r.expiry.saturating_add(length);
+				let periods_as_block_number: T::BlockNumber = periods.try_into().ok().unwrap();
+
+				// TODO: if expired, add from current block number
+				let expiry_new = r.expiry.saturating_add(Self::length(periods));
+
 				r.expiry = expiry_new.clone();
 
 				T::RegistrationFeeHandler::on_unbalanced(imbalance);
@@ -355,48 +352,53 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			name_hash: NameHash,
 			who: T::AccountId,
-			length: T::BlockNumber,
+			periods: u32,
 		) -> DispatchResult {
 			T::RegistrationManager::ensure_origin(origin)?;
 			let deposit: BalanceOf<T> = Zero::zero();
-			Self::do_register(name_hash, who, deposit, length)?;
+			Self::do_register(name_hash, who, deposit, periods)?;
 			Ok(())
 		}
 	}
 
 	// Pallet internal functions
 	impl<T: Config> Pallet<T> {
-		fn is_available(name_hash: NameHash, block_number: T::BlockNumber) -> bool {
-			match Registrations::<T>::get(name_hash) {
-				// TODO: add grace period to expiry
-				Some(r) => r.expiry < block_number,
-				None => true,
-			}
-		}
-
-		fn registration_fee(name: Vec<u8>, length: T::BlockNumber) -> BalanceOf<T> {
+		fn registration_fee(name: Vec<u8>, periods: u32) -> BalanceOf<T> {
 			let fee_reg: BalanceOf<T> = match name.len() {
 				3 => T::TierThreeLetters::get(),
 				4 => T::TierFourLetters::get(),
 				_ => T::TierDefault::get(),
 			};
-			let fee_length = Self::length_fee(length);
+
+			let fee_length = Self::length_fee(periods);
 			fee_reg.saturating_add(fee_length)
 		}
 
-		fn length_fee(length: T::BlockNumber) -> BalanceOf<T> {
-			let length_as_balance = T::BlockNumberToBalance::convert(length);
-			T::FeePerRegistrationPeriod::get().saturating_mul(length_as_balance)
+		fn length_fee(periods: u32) -> BalanceOf<T> {
+			let periods_as_balance: BalanceOf<T> = periods.try_into().ok().unwrap();
+			T::FeePerRegistrationPeriod::get().saturating_mul(periods_as_balance)
+		}
+
+		fn length(periods: u32) -> T::BlockNumber {
+			let periods_as_block_number: T::BlockNumber = periods.try_into().ok().unwrap();
+			periods_as_block_number.saturating_mul(T::BlocksPerRegistrationPeriod::get())
+		}
+
+		fn is_available(name_hash: NameHash, block_number: T::BlockNumber) -> bool {
+			match Registrations::<T>::get(name_hash) {
+				Some(r) => r.expiry < block_number,
+				None => true,
+			}
 		}
 
 		fn do_register(
 			name_hash: NameHash,
 			who: T::AccountId,
 			deposit: BalanceOf<T>,
-			length: T::BlockNumber,
+			periods: u32,
 		) -> DispatchResult {
 			let block_number = frame_system::Pallet::<T>::block_number();
-			let expiry = block_number.saturating_add(length);
+			let expiry = block_number.saturating_add(Self::length(periods));
 
 			let registration =
 				Registration { owner: who.clone(), registrant: who.clone(), expiry, deposit };
