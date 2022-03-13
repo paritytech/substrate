@@ -167,6 +167,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 pub mod onchain;
+pub mod traits;
 use frame_support::{traits::Get, BoundedVec};
 use sp_runtime::traits::Bounded;
 use sp_std::{fmt::Debug, prelude::*};
@@ -178,6 +179,7 @@ pub use sp_npos_elections::{
 	Assignment, ElectionResult, ExtendedBalance, IdentifierT, PerThing128, Support, Supports,
 	VoteWeight,
 };
+pub use traits::NposSolution;
 
 /// Types that are used by the data provider trait.
 pub mod data_provider {

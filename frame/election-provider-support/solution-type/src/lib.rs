@@ -101,7 +101,7 @@ pub(crate) fn syn_err(message: &'static str) -> syn::Error {
 ///
 /// ```
 /// # use frame_election_provider_solution_type::generate_solution_type;
-/// # use sp_npos_elections::NposSolution;
+/// # use frame_election_provider_support::NposSolution;
 /// # use sp_arithmetic::per_things::Perbill;
 /// generate_solution_type!(
 ///     #[compact]

@@ -100,14 +100,14 @@ pub mod pjr;
 pub mod reduce;
 pub mod traits;
 
-pub use assignments::{Assignment, IndexAssignment, IndexAssignmentOf, StakedAssignment};
+pub use assignments::{Assignment, IndexAssignment, StakedAssignment};
 pub use balancing::*;
 pub use helpers::*;
 pub use phragmen::*;
 pub use phragmms::*;
 pub use pjr::*;
 pub use reduce::reduce;
-pub use traits::{IdentifierT, NposSolution, PerThing128, __OrInvalidIndex};
+pub use traits::{IdentifierT, PerThing128, __OrInvalidIndex};
 
 // re-export for the solution macro, with the dependencies of the macro.
 #[doc(hidden)]

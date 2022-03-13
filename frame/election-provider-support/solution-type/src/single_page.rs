@@ -102,7 +102,7 @@ pub(crate) fn generate(def: crate::SolutionDef) -> Result<TokenStream2> {
 		#vis struct #ident { #single #rest }
 
 		use _npos::__OrInvalidIndex;
-		impl _npos::NposSolution for #ident {
+		impl frame_election_provider_support::NposSolution for #ident {
 			const LIMIT: usize = #count;
 			type VoterIndex = #voter_type;
 			type TargetIndex = #target_type;
@@ -174,9 +174,9 @@ pub(crate) fn generate(def: crate::SolutionDef) -> Result<TokenStream2> {
 		}
 
 		type __IndexAssignment = _npos::IndexAssignment<
-			<#ident as _npos::NposSolution>::VoterIndex,
-			<#ident as _npos::NposSolution>::TargetIndex,
-			<#ident as _npos::NposSolution>::Accuracy,
+			<#ident as frame_election_provider_support::NposSolution>::VoterIndex,
+			<#ident as frame_election_provider_support::NposSolution>::TargetIndex,
+			<#ident as frame_election_provider_support::NposSolution>::Accuracy,
 		>;
 		impl<'a> _npos::sp_std::convert::TryFrom<&'a [__IndexAssignment]> for #ident {
 			type Error = _npos::Error;

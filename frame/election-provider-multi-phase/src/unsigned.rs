@@ -23,12 +23,11 @@ use crate::{
 	WeightInfo,
 };
 use codec::Encode;
-use frame_election_provider_support::{NposSolver, PerThing128};
+use frame_election_provider_support::{NposSolution, NposSolver, PerThing128};
 use frame_support::{dispatch::DispatchResult, ensure, traits::Get};
 use frame_system::offchain::SubmitTransaction;
 use sp_npos_elections::{
 	assignment_ratio_to_staked_normalized, assignment_staked_to_ratio_normalized, ElectionResult,
-	NposSolution,
 };
 use sp_runtime::{
 	offchain::storage::{MutateStorageError, StorageValueRef},
@@ -54,7 +53,8 @@ pub type Assignment<T> =
 
 /// The [`IndexAssignment`][sp_npos_elections::IndexAssignment] type specialized for a particular
 /// runtime `T`.
-pub type IndexAssignmentOf<T> = sp_npos_elections::IndexAssignmentOf<SolutionOf<T>>;
+pub type IndexAssignmentOf<T> =
+	frame_election_provider_support::traits::IndexAssignmentOf<SolutionOf<T>>;
 
 /// Error type of the pallet's [`crate::Config::Solver`].
 pub type SolverErrorOf<T> = <<T as Config>::Solver as NposSolver>::Error;
