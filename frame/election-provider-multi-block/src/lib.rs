@@ -482,7 +482,17 @@ pub mod pallet {
 			let remaining_blocks = next_election - now;
 			let current_phase = Self::current_phase();
 
-			log!(trace, "current phase {:?}, next election {:?}", current_phase, next_election,);
+			log!(
+				trace,
+				"current phase {:?}, next election {:?}, remaining: {:?}, deadlines: [unsigned {:?} signed_validation {:?}, signed {:?}, snapshot {:?}]",
+				current_phase,
+				next_election,
+				remaining_blocks,
+				unsigned_deadline,
+				signed_validation_deadline,
+				signed_deadline,
+				snapshot_deadline,
+			);
 
 			match current_phase {
 				// start and continue snapshot.
