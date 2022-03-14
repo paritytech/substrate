@@ -15,54 +15,41 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use sc_block_builder::{BlockBuilder, BlockBuilderApi, BlockBuilderProvider};
-use sc_cli::{CliConfiguration, DatabaseParams, PruningParams, Result, SharedParams};
-use sc_client_api::{Backend as ClientBackend, StorageProvider, UsageProvider};
-use sc_client_db::DbHash;
-use sc_consensus::{
-	block_import::{BlockImportParams, ForkChoiceStrategy},
-	BlockImport, StateAction,
-};
+use sc_block_builder::{BlockBuilderApi, BlockBuilderProvider};
+use sc_cli::{CliConfiguration, Result, SharedParams};
+use sc_client_api::Backend as ClientBackend;
 use sc_service::Configuration;
-use sp_api::{ApiExt, BlockId, Core, ProvideRuntimeApi};
-use sp_blockchain::{ApplyExtrinsicFailed::Validity, Error::ApplyExtrinsicFailed, HeaderBackend};
-use sp_consensus::BlockOrigin;
-use sp_database::{ColumnId, Database};
-use sp_inherents::InherentData;
-use sp_runtime::{
-	traits::{Block as BlockT, HashFor, Zero},
-	transaction_validity::{InvalidTransaction, TransactionValidityError},
-	OpaqueExtrinsic,
-};
-use sp_state_machine::Storage;
-use sp_storage::StateVersion;
+use sp_api::{ApiExt, ProvideRuntimeApi};
+use sp_runtime::{traits::Block as BlockT, OpaqueExtrinsic};
 
 use clap::{Args, Parser};
 use log::info;
-use rand::prelude::*;
 use serde::Serialize;
-use std::{boxed::Box, fmt::Debug, sync::Arc, time::Instant};
+use std::{fmt::Debug, sync::Arc};
 
 use crate::{
+	overhead::{
+		bench::{Benchmark, BenchmarkParams, BenchmarkType},
+		template::TemplateData,
+	},
 	post_processing::WeightParams,
-	storage::{
-	record::{StatSelect, Stats},
-}};
-use super::{template::TemplateData, bench::{Benchmark, BenchmarkType, BenchmarkParams}};
+};
 
+/// Benchmarks the per-block and per-extrinsic execution overhead.
 #[derive(Debug, Parser)]
-pub struct BlockCmd {
+pub struct OverheadCmd {
 	#[allow(missing_docs)]
 	#[clap(flatten)]
 	pub shared_params: SharedParams,
 
 	#[allow(missing_docs)]
 	#[clap(flatten)]
-	pub params: CommandParams,
+	pub params: OverheadParams,
 }
 
+/// Configures the benchmark and the post processing and weight generation.
 #[derive(Debug, Default, Serialize, Clone, PartialEq, Args)]
-pub struct CommandParams {
+pub struct OverheadParams {
 	#[allow(missing_docs)]
 	#[clap(flatten)]
 	pub weight: WeightParams,
@@ -73,12 +60,18 @@ pub struct CommandParams {
 }
 
 /// Used by the benchmark to generate signed extrinsics.
+/// This must be implemented per-runtime since the signed extensions
+/// depend on the runtime.
 pub trait ExtrinsicGenerator {
 	/// Generates a `System::remark` extrinsic.
 	fn remark(&self, nonce: u32) -> Option<OpaqueExtrinsic>;
 }
 
-impl BlockCmd {
+impl OverheadCmd {
+	/// Measures the per-block and per-extrinsic execution overhead.
+	///
+	/// Writes the results to console and into two instances of the
+	/// `weights.hbs` template.
 	pub async fn run<Block, BA, C>(
 		&self,
 		cfg: Configuration,
@@ -92,17 +85,19 @@ impl BlockCmd {
 		C: BlockBuilderProvider<BA, Block, C> + ProvideRuntimeApi<Block>,
 		C::Api: ApiExt<Block, StateBackend = BA::State> + BlockBuilderApi<Block>,
 	{
-		let bench = Benchmark::new(client, inherent_data, ext_gen, self.params.bench.clone());
+		let bench = Benchmark::new(client, self.params.bench.clone(), inherent_data, ext_gen);
 
+		// per-block execution overhead
 		{
 			let stats = bench.bench(BenchmarkType::Block)?;
-			info!("Executing an empty block [ns]:\n{:?}", stats);
+			info!("Per-block execution overhead [ns]:\n{:?}", stats);
 			let template = TemplateData::new(BenchmarkType::Block, &cfg, &self.params, &stats)?;
 			template.write(&self.params.weight.weight_path)?;
 		}
+		// per-extrinsic execution overhead
 		{
 			let stats = bench.bench(BenchmarkType::Extrinsic)?;
-			info!("Executing a NO-OP extrinsic [ns]:\n{:?}", stats);
+			info!("Per-extrinsic execution overhead [ns]:\n{:?}", stats);
 			let template = TemplateData::new(BenchmarkType::Extrinsic, &cfg, &self.params, &stats)?;
 			template.write(&self.params.weight.weight_path)?;
 		}
@@ -112,7 +107,7 @@ impl BlockCmd {
 }
 
 // Boilerplate
-impl CliConfiguration for BlockCmd {
+impl CliConfiguration for OverheadCmd {
 	fn shared_params(&self) -> &SharedParams {
 		&self.shared_params
 	}

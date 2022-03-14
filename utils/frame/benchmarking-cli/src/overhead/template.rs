@@ -24,9 +24,7 @@ use serde::Serialize;
 use std::{env, fs, path::PathBuf};
 
 use crate::{
-	block::{bench::{BenchmarkParams, BenchmarkType}},
-	post_processing::WeightParams,
-	block::cmd::CommandParams,
+	overhead::{bench::BenchmarkType, cmd::OverheadParams},
 	storage::record::Stats,
 };
 
@@ -49,7 +47,7 @@ pub(crate) struct TemplateData {
 	/// Command line arguments that were passed to the CLI.
 	args: Vec<String>,
 	/// Params of the executed command TODO.
-	params: CommandParams,
+	params: OverheadParams,
 	/// Stats about the benchmark result.
 	stats: Stats,
 	/// The resulting weight in ns.
@@ -61,7 +59,7 @@ impl TemplateData {
 	pub(crate) fn new(
 		t: BenchmarkType,
 		cfg: &Configuration,
-		params: &CommandParams,
+		params: &OverheadParams,
 		stats: &Stats,
 	) -> Result<Self> {
 		let weight = params.weight.calc_weight(stats)?;

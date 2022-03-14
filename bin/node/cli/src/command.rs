@@ -75,12 +75,12 @@ struct ExtrinsicGen {
 }
 use crate::service::{create_extrinsic, FullClient};
 use node_primitives::Block;
-use node_runtime::{SystemCall};
+use node_runtime::SystemCall;
 use sp_keyring::Sr25519Keyring;
-use sp_runtime::{OpaqueExtrinsic};
-impl frame_benchmarking_cli::block::cmd::ExtrinsicGenerator for ExtrinsicGen {
+use sp_runtime::OpaqueExtrinsic;
+impl frame_benchmarking_cli::overhead::cmd::ExtrinsicGenerator for ExtrinsicGen {
 	fn remark(&self, nonce: u32) -> Option<OpaqueExtrinsic> {
-		let src = Sr25519Keyring::Alice.pair();
+		let src = Sr25519Keyring::Bob.pair();
 
 		// This `create_extrinsic` only exists for the node and has no
 		// equivalent in other runtimes.
@@ -133,12 +133,14 @@ pub fn run() -> Result<()> {
 				You can enable it with `--features runtime-benchmarks`."
 					.into())
 			},
-		Some(Subcommand::BenchmarkBlock(cmd)) => {
+		Some(Subcommand::BenchmarkOverhead(cmd)) => {
 			let runner = cli.create_runner(cmd)?;
 			runner.async_run(|mut config| {
+				// TODO 1. is this needed?
+				//      2. should other stuff be disabled as well?
 				config.role = sc_service::Role::Full;
 
-				let PartialComponents { client, task_manager, backend, .. } = new_partial(&config)?;
+				let PartialComponents { client, task_manager, .. } = new_partial(&config)?;
 				let ext_gen = ExtrinsicGen { client: client.clone() };
 
 				let inherents = inherent_data()?;
