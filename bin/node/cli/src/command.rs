@@ -26,11 +26,11 @@ use node_primitives::Block;
 use node_runtime::{RuntimeApi, SystemCall};
 use sc_cli::{ChainSpec, Result, RuntimeVersion, SubstrateCli};
 use sc_service::PartialComponents;
-use sp_inherents::InherentDataProvider;
+use sp_inherents::{InherentData, InherentDataProvider};
 use sp_keyring::Sr25519Keyring;
 use sp_runtime::OpaqueExtrinsic;
 
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 impl SubstrateCli for Cli {
 	fn impl_name() -> String {
@@ -80,29 +80,30 @@ impl SubstrateCli for Cli {
 }
 
 /// Generates extrinsics for the `overhead` benchmark.
+/// TODO I will move this into a different file once we agreed on the structure.
 struct ExtrinsicBuilder {
 	client: Arc<FullClient>,
 }
 
-impl frame_benchmarking_cli::overhead::cmd::ExtrinsicBuilder for ExtrinsicBuilder {
+impl frame_benchmarking_cli::ExtrinsicBuilder for ExtrinsicBuilder {
 	fn remark(&self, nonce: u32) -> Option<OpaqueExtrinsic> {
 		let acc = Sr25519Keyring::Bob.pair();
-
 		let extrinsic: OpaqueExtrinsic = create_extrinsic(
 			self.client.as_ref(),
-			acc.clone(),
+			acc,
 			SystemCall::remark { remark: vec![] },
 			Some(nonce),
 		)
 		.into();
+
 		Some(extrinsic)
 	}
 }
 
-/// Creates the inherent data needed to build a block.
-fn inherent_data() -> Result<sp_inherents::InherentData> {
-	let mut inherent_data = sp_inherents::InherentData::new();
-	let d = std::time::Duration::from_millis(0);
+/// Create the inherent data needed to build a block.
+fn inherent_data() -> Result<InherentData> {
+	let mut inherent_data = InherentData::new();
+	let d = Duration::from_millis(0);
 	let timestamp = sp_timestamp::InherentDataProvider::new(d.into());
 
 	timestamp
@@ -146,10 +147,9 @@ pub fn run() -> Result<()> {
 
 				let PartialComponents { client, task_manager, .. } = new_partial(&config)?;
 				let ext_builder = ExtrinsicBuilder { client: client.clone() };
-				let inherents = inherent_data()?;
 
 				Ok((
-					cmd.run(config, client.clone(), inherents, Arc::new(ext_builder)),
+					cmd.run(config, client.clone(), inherent_data()?, Arc::new(ext_builder)),
 					task_manager,
 				))
 			})

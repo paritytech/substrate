@@ -15,6 +15,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! Converts the benchmark results into [`TemplateData`] which gets
+//! written into the `weights.hbs` template.
+
 use sc_cli::Result;
 use sc_service::Configuration;
 

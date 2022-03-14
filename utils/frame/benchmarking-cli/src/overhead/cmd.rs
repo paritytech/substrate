@@ -15,6 +15,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! Contains the [`OverheadCmd`] which the CLI uses as entry point
+//! for the *overhead* benchmarks.
+
 use sc_block_builder::{BlockBuilderApi, BlockBuilderProvider};
 use sc_cli::{CliConfiguration, Result, SharedParams};
 use sc_client_api::Backend as ClientBackend;
@@ -60,8 +63,8 @@ pub struct OverheadParams {
 }
 
 /// Used by the benchmark to build signed extrinsics.
-/// This must be implemented per-runtime since the signed extensions
-/// depend on the runtime.
+///
+/// This only has to work for the first block who's parent block is the genesis block.
 pub trait ExtrinsicBuilder {
 	/// Build a `System::remark` extrinsic.
 	fn remark(&self, nonce: u32) -> Option<OpaqueExtrinsic>;
