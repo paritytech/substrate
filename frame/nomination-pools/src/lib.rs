@@ -12,7 +12,7 @@
 //! ## Key terms
 //!
 //!  * bonded pool: Tracks the distribution of actively staked funds. See [`BondedPool`] and
-//! [`BondedPoolStorage`]. Bonded pools are identified via the pools bonded account.
+//! [`BondedPoolInner`]. Bonded pools are identified via the pools bonded account.
 //! * reward pool: Tracks rewards earned by actively staked funds. See [`RewardPool`] and
 //!   [`RewardPools`]. Reward pools are identified via the pools bonded account.
 //! * unbonding sub pools: Collection of pools at different phases of the unbonding lifecycle. See
@@ -286,8 +286,8 @@
 
 // Invariants
 // * A `delegator.bonded_pool_account` must always be a valid entry in `RewardPools`, and
-//   `BondedPoolStorage`.
-// * Every entry in `BondedPoolStorage` must have  a corresponding entry in `RewardPools`
+//   `BondedPoolInner`.
+// * Every entry in `BondedPoolInner` must have  a corresponding entry in `RewardPools`
 // * If a delegator unbonds, the sub pools should always correctly track slashses such that the
 //   calculated amount when withdrawing unbonded is a lower bound of the pools free balance.
 // * If the depositor is actively unbonding, the pool is in destroying state. To achieve this, once
@@ -393,56 +393,52 @@ pub enum PoolState {
 	Destroying,
 }
 
-// TODO: call Inner
 /// Pool permissions and state
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, RuntimeDebugNoBound, PartialEq)]
 #[cfg_attr(feature = "std", derive(Clone))]
 #[codec(mel_bound(T: Config))]
 #[scale_info(skip_type_params(T))]
-pub struct BondedPoolStorage<T: Config> {
+pub struct BondedPoolInner<T: Config> {
 	/// See [`BondedPool::points`].
-	pub points: BalanceOf<T>,
+	points: BalanceOf<T>,
 	/// See [`BondedPool::state_toggler`].
-	pub state: PoolState,
+	state: PoolState,
 	/// See [`BondedPool::delegator_counter`]
-	pub delegator_counter: u32,
+	delegator_counter: u32,
 	/// See [`BondedPool::depositor`].
-	pub depositor: T::AccountId,
+	depositor: T::AccountId,
 	/// See [`BondedPool::admin`].
-	pub root: T::AccountId,
+	root: T::AccountId,
 	/// See [`BondedPool::nominator`].
-	pub nominator: T::AccountId,
+	nominator: T::AccountId,
 	/// See [`BondedPool::state_toggler`].
-	pub state_toggler: T::AccountId,
+	state_toggler: T::AccountId,
 }
 
+/// A wrapper for bonded pools, with utility functions.
+///
+/// The main purpose of this is to wrap a [`BondedPoolInner`], with the account id of the pool, for
+/// easier access.
 #[derive(RuntimeDebugNoBound)]
 #[cfg_attr(feature = "std", derive(Clone, PartialEq))]
 pub struct BondedPool<T: Config> {
-	/// Points of the pool.
-	///
-	/// Each delegator has some corresponding the points. The portion of points that belong to a
-	/// delegator represent the portion of the pools bonded funds belong to the delegator.
-	points: BalanceOf<T>,
-	/// State of the pool.
-	state: PoolState,
-	/// Count of delegators that belong to this pool.
-	delegator_counter: u32,
-	/// Account that puts down a deposit to create the pool.
-	///
-	/// This account acts a delegator, but can only unbond if no other delegators belong to the
-	/// pool.
-	depositor: T::AccountId,
-	/// Can perform the same actions as [`Self::nominator`] and [`Self::state_toggler`].
-	/// Additionally, this account can set the `nominator` and `state_toggler` at any time.
-	root: T::AccountId,
-	/// Can set the pool's nominations at any time.
-	nominator: T::AccountId,
-	/// Can toggle the pools state, including setting the pool as blocked or putting the pool into
-	/// destruction mode. The state toggle can also "kick" delegators by unbonding them.
-	state_toggler: T::AccountId,
+	/// The inner fields.
+	inner: BondedPoolInner<T>,
 	/// AccountId of the pool.
 	account: T::AccountId,
+}
+
+impl<T: Config> sp_std::ops::Deref for BondedPool<T> {
+	type Target = BondedPoolInner<T>;
+	fn deref(&self) -> &Self::Target {
+		&self.inner
+	}
+}
+
+impl<T: Config> sp_std::ops::DerefMut for BondedPool<T> {
+	fn deref_mut(&mut self) -> &mut Self::Target {
+		&mut self.inner
+	}
 }
 
 impl<T: Config> BondedPool<T> {
@@ -454,48 +450,28 @@ impl<T: Config> BondedPool<T> {
 	) -> Self {
 		Self {
 			account: Self::create_account(AccountType::Bonded, depositor.clone()),
-			depositor,
-			root,
-			nominator,
-			state_toggler,
-			state: PoolState::Open,
-			points: Zero::zero(),
-			delegator_counter: Zero::zero(),
+			inner: BondedPoolInner {
+				depositor,
+				root,
+				nominator,
+				state_toggler,
+				state: PoolState::Open,
+				points: Zero::zero(),
+				delegator_counter: Zero::zero(),
+			},
 		}
 	}
 
-	// TODO: figure out if we should ditch BondedPoolStorage vs BondedPool and instead just have
-	// BondedPool that doesn't have `account` field. Instead just use deterministic accountId
-	// generation function. Only downside is this will have some increased computational cost.
-
 	/// Get [`Self`] from storage. Returns `None` if no entry for `pool_account` exists.
 	fn get(pool_account: &T::AccountId) -> Option<Self> {
-		BondedPools::<T>::try_get(pool_account).ok().map(|storage| Self {
-			points: storage.points,
-			delegator_counter: storage.delegator_counter,
-			state_toggler: storage.state_toggler,
-			depositor: storage.depositor,
-			root: storage.root,
-			nominator: storage.nominator,
-			state: storage.state,
-			account: pool_account.clone(),
-		})
+		BondedPools::<T>::try_get(pool_account)
+			.ok()
+			.map(|inner| Self { account: pool_account.clone(), inner })
 	}
 
 	/// Consume self and put into storage.
 	fn put(self) {
-		BondedPools::<T>::insert(
-			self.account,
-			BondedPoolStorage {
-				points: self.points,
-				delegator_counter: self.delegator_counter,
-				depositor: self.depositor,
-				root: self.root,
-				nominator: self.nominator,
-				state_toggler: self.state_toggler,
-				state: self.state,
-			},
-		);
+		BondedPools::<T>::insert(self.account, BondedPoolInner { ..self.inner });
 	}
 
 	/// Consume self and remove from storage.
@@ -503,7 +479,7 @@ impl<T: Config> BondedPool<T> {
 		BondedPools::<T>::remove(self.account);
 	}
 
-	// TODO: put `BondedPool` and `BondedPoolStorage` into a private module, then you have to think
+	// TODO: put `BondedPool` and `BondedPoolInner` into a private module, then you have to think
 	// about which functions need to be public and which not as well. Then make sure public ones are
 	// documented.
 
@@ -993,7 +969,7 @@ pub mod pallet {
 	/// To get or insert a pool see [`BondedPool::get`] and [`BondedPool::put`]
 	#[pallet::storage]
 	pub type BondedPools<T: Config> =
-		CountedStorageMap<_, Twox64Concat, T::AccountId, BondedPoolStorage<T>>;
+		CountedStorageMap<_, Twox64Concat, T::AccountId, BondedPoolInner<T>>;
 
 	/// Reward pools. This is where there rewards for each pool accumulate. When a delegators payout
 	/// is claimed, the balance comes out fo the reward pool. Keyed by the bonded pools account.

@@ -1,7 +1,8 @@
 use super::*;
 use crate::mock::{
-	unsafe_set_state, Balance, Balances, CurrentEra, ExistentialDeposit, ExtBuilder, Nominations,
-	Origin, Pools, Runtime, StakingMock, PRIMARY_ACCOUNT, REWARDS_ACCOUNT, UNBONDING_BALANCE_MAP,
+	unsafe_set_state, AccountId, Balance, Balances, CurrentEra, ExistentialDeposit, ExtBuilder,
+	Nominations, Origin, Pools, Runtime, StakingMock, PRIMARY_ACCOUNT, REWARDS_ACCOUNT,
+	UNBONDING_BALANCE_MAP,
 };
 use frame_support::{assert_noop, assert_ok};
 
@@ -25,14 +26,16 @@ fn test_setup_works() {
 		assert_eq!(
 			BondedPool::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap(),
 			BondedPool::<Runtime> {
-				depositor: 10,
-				state: PoolState::Open,
-				points: 10,
 				account: PRIMARY_ACCOUNT,
-				root: 900,
-				nominator: 901,
-				state_toggler: 902,
-				delegator_counter: 1,
+				inner: BondedPoolInner {
+					depositor: 10,
+					state: PoolState::Open,
+					points: 10,
+					root: 900,
+					nominator: 901,
+					state_toggler: 902,
+					delegator_counter: 1,
+				},
 			}
 		);
 		assert_eq!(
@@ -71,14 +74,16 @@ mod bonded_pool {
 	#[test]
 	fn points_to_issue_works() {
 		let mut bonded_pool = BondedPool::<Runtime> {
-			depositor: 10,
-			state: PoolState::Open,
-			points: 100,
 			account: 123,
-			root: 900,
-			nominator: 901,
-			state_toggler: 902,
-			delegator_counter: 1,
+			inner: BondedPoolInner {
+				depositor: 10,
+				state: PoolState::Open,
+				points: 100,
+				root: 900,
+				nominator: 901,
+				state_toggler: 902,
+				delegator_counter: 1,
+			},
 		};
 
 		// 1 points : 1 balance ratio
@@ -124,14 +129,16 @@ mod bonded_pool {
 	fn balance_to_unbond_works() {
 		// 1 balance : 1 points ratio
 		let mut bonded_pool = BondedPool::<Runtime> {
-			depositor: 10,
-			state: PoolState::Open,
-			points: 100,
 			account: 123,
-			root: 900,
-			nominator: 901,
-			state_toggler: 902,
-			delegator_counter: 1,
+			inner: BondedPoolInner {
+				depositor: 10,
+				state: PoolState::Open,
+				points: 100,
+				root: 900,
+				nominator: 901,
+				state_toggler: 902,
+				delegator_counter: 1,
+			},
 		};
 		StakingMock::set_bonded_balance(123, 100);
 		assert_eq!(bonded_pool.balance_to_unbond(10), 10);
@@ -171,14 +178,16 @@ mod bonded_pool {
 	fn ok_to_join_with_works() {
 		ExtBuilder::default().build_and_execute(|| {
 			let pool = BondedPool::<Runtime> {
-				depositor: 10,
-				state: PoolState::Open,
-				points: 100,
 				account: 123,
-				root: 900,
-				nominator: 901,
-				state_toggler: 902,
-				delegator_counter: 1,
+				inner: BondedPoolInner {
+					depositor: 10,
+					state: PoolState::Open,
+					points: 100,
+					root: 900,
+					nominator: 901,
+					state_toggler: 902,
+					delegator_counter: 1,
+				},
 			};
 
 			// Simulate a 100% slashed pool
@@ -358,14 +367,16 @@ mod join {
 	#[test]
 	fn join_works() {
 		let bonded = |points, delegator_counter| BondedPool::<Runtime> {
-			depositor: 10,
-			state: PoolState::Open,
-			points,
 			account: PRIMARY_ACCOUNT,
-			root: 900,
-			nominator: 901,
-			state_toggler: 902,
-			delegator_counter,
+			inner: BondedPoolInner {
+				depositor: 10,
+				state: PoolState::Open,
+				points,
+				root: 900,
+				nominator: 901,
+				state_toggler: 902,
+				delegator_counter,
+			},
 		};
 		ExtBuilder::default().build_and_execute(|| {
 			// Given
@@ -430,14 +441,16 @@ mod join {
 
 			// Given a mocked bonded pool
 			BondedPool::<Runtime> {
-				depositor: 10,
-				state: PoolState::Open,
-				points: 100,
 				account: 123,
-				root: 900,
-				nominator: 901,
-				state_toggler: 902,
-				delegator_counter: 1,
+				inner: BondedPoolInner {
+					depositor: 10,
+					state: PoolState::Open,
+					points: 100,
+					root: 900,
+					nominator: 901,
+					state_toggler: 902,
+					delegator_counter: 1,
+				},
 			}
 			.put();
 			// and reward pool
@@ -489,14 +502,16 @@ mod join {
 		ExtBuilder::default().build_and_execute(|| {
 			StakingMock::set_bonded_balance(123, 100);
 			BondedPool::<Runtime> {
-				depositor: 10,
-				state: PoolState::Open,
-				points: 100,
 				account: 123,
-				root: 900,
-				nominator: 901,
-				state_toggler: 902,
-				delegator_counter: 1,
+				inner: BondedPoolInner {
+					depositor: 10,
+					state: PoolState::Open,
+					points: 100,
+					root: 900,
+					nominator: 901,
+					state_toggler: 902,
+					delegator_counter: 1,
+				},
 			}
 			.put();
 			let _ = Pools::join(Origin::signed(11), 420, 123);
@@ -765,7 +780,6 @@ mod claim_payout {
 
 			// Then
 			assert!(bonded_pool.is_destroying());
-
 
 			// -- current_points saturates (reward_pool.points + new_earnings * bonded_pool.points)
 
@@ -1348,14 +1362,16 @@ mod unbond {
 			assert_eq!(
 				BondedPool::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap(),
 				BondedPool {
-					depositor: 10,
-					state: PoolState::Destroying,
-					points: 0,
 					account: PRIMARY_ACCOUNT,
-					root: 900,
-					nominator: 901,
-					state_toggler: 902,
-					delegator_counter: 1,
+					inner: BondedPoolInner {
+						depositor: 10,
+						state: PoolState::Destroying,
+						points: 0,
+						root: 900,
+						nominator: 901,
+						state_toggler: 902,
+						delegator_counter: 1,
+					}
 				}
 			);
 
@@ -1384,14 +1400,16 @@ mod unbond {
 				assert_eq!(
 					BondedPool::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap(),
 					BondedPool {
-						depositor: 10,
-						state: PoolState::Open,
-						points: 560,
 						account: PRIMARY_ACCOUNT,
-						root: 900,
-						nominator: 901,
-						state_toggler: 902,
-						delegator_counter: 3,
+						inner: BondedPoolInner {
+							depositor: 10,
+							state: PoolState::Open,
+							points: 560,
+							root: 900,
+							nominator: 901,
+							state_toggler: 902,
+							delegator_counter: 3,
+						}
 					}
 				);
 				assert_eq!(StakingMock::bonded_balance(&PRIMARY_ACCOUNT).unwrap(), 94);
@@ -1410,14 +1428,16 @@ mod unbond {
 				assert_eq!(
 					BondedPool::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap(),
 					BondedPool {
-						depositor: 10,
-						state: PoolState::Destroying,
-						points: 10,
 						account: PRIMARY_ACCOUNT,
-						root: 900,
-						nominator: 901,
-						state_toggler: 902,
-						delegator_counter: 3,
+						inner: BondedPoolInner {
+							depositor: 10,
+							state: PoolState::Destroying,
+							points: 10,
+							root: 900,
+							nominator: 901,
+							state_toggler: 902,
+							delegator_counter: 3,
+						}
 					}
 				);
 				assert_eq!(StakingMock::bonded_balance(&PRIMARY_ACCOUNT).unwrap(), 2);
@@ -1435,14 +1455,16 @@ mod unbond {
 				assert_eq!(
 					BondedPool::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap(),
 					BondedPool {
-						depositor: 10,
-						state: PoolState::Destroying,
-						points: 0,
 						account: PRIMARY_ACCOUNT,
-						root: 900,
-						nominator: 901,
-						state_toggler: 902,
-						delegator_counter: 3,
+						inner: BondedPoolInner {
+							depositor: 10,
+							state: PoolState::Destroying,
+							points: 0,
+							root: 900,
+							nominator: 901,
+							state_toggler: 902,
+							delegator_counter: 3,
+						}
 					}
 				);
 				assert_eq!(StakingMock::bonded_balance(&PRIMARY_ACCOUNT).unwrap(), 0);
@@ -1517,14 +1539,16 @@ mod unbond {
 				assert_eq!(
 					BondedPool::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap(),
 					BondedPool {
-						root: 900,
-						nominator: 901,
-						state_toggler: 902,
 						account: PRIMARY_ACCOUNT,
-						depositor: 10,
-						state: PoolState::Blocked,
-						points: 10, // Only 10 points because 200 + 100 was unbonded
-						delegator_counter: 3,
+						inner: BondedPoolInner {
+							root: 900,
+							nominator: 901,
+							state_toggler: 902,
+							depositor: 10,
+							state: PoolState::Blocked,
+							points: 10, // Only 10 points because 200 + 100 was unbonded
+							delegator_counter: 3,
+						}
 					}
 				);
 				assert_eq!(StakingMock::bonded_balance(&PRIMARY_ACCOUNT).unwrap(), 10);
@@ -1636,14 +1660,16 @@ mod unbond {
 			};
 			Delegators::<Runtime>::insert(11, delegator);
 			BondedPool::<Runtime> {
-				depositor: 10,
-				state: PoolState::Open,
-				points: 10,
 				account: 1,
-				root: 900,
-				nominator: 901,
-				state_toggler: 902,
-				delegator_counter: 1,
+				inner: BondedPoolInner {
+					depositor: 10,
+					state: PoolState::Open,
+					points: 10,
+					root: 900,
+					nominator: 901,
+					state_toggler: 902,
+					delegator_counter: 1,
+				},
 			}
 			.put();
 
@@ -1920,14 +1946,16 @@ mod withdraw_unbonded_other {
 				assert_eq!(
 					BondedPool::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap(),
 					BondedPool {
-						points: 10,
-						state: PoolState::Open,
-						depositor: 10,
 						account: PRIMARY_ACCOUNT,
-						root: 900,
-						nominator: 901,
-						state_toggler: 902,
-						delegator_counter: 3,
+						inner: BondedPoolInner {
+							points: 10,
+							state: PoolState::Open,
+							depositor: 10,
+							root: 900,
+							nominator: 901,
+							state_toggler: 902,
+							delegator_counter: 3,
+						}
 					}
 				);
 				CurrentEra::set(StakingMock::bonding_duration());
@@ -1972,14 +2000,16 @@ mod withdraw_unbonded_other {
 			assert_eq!(
 				BondedPool::<Runtime>::get(&PRIMARY_ACCOUNT).unwrap(),
 				BondedPool {
-					points: 10,
-					state: PoolState::Open,
-					depositor: 10,
 					account: PRIMARY_ACCOUNT,
-					root: 900,
-					nominator: 901,
-					state_toggler: 902,
-					delegator_counter: 2,
+					inner: BondedPoolInner {
+						points: 10,
+						state: PoolState::Open,
+						depositor: 10,
+						root: 900,
+						nominator: 901,
+						state_toggler: 902,
+						delegator_counter: 2,
+					}
 				}
 			);
 			CurrentEra::set(StakingMock::bonding_duration());
@@ -2171,14 +2201,16 @@ mod create {
 			assert_eq!(
 				BondedPool::<Runtime>::get(&stash).unwrap(),
 				BondedPool {
-					points: StakingMock::minimum_bond(),
-					depositor: 11,
-					state: PoolState::Open,
 					account: stash.clone(),
-					root: 123,
-					nominator: 456,
-					state_toggler: 789,
-					delegator_counter: 1,
+					inner: BondedPoolInner {
+						points: StakingMock::minimum_bond(),
+						depositor: 11,
+						state: PoolState::Open,
+						root: 123,
+						nominator: 456,
+						state_toggler: 789,
+						delegator_counter: 1,
+					}
 				}
 			);
 			assert_eq!(StakingMock::bonded_balance(&stash).unwrap(), StakingMock::minimum_bond());
@@ -2227,14 +2259,16 @@ mod create {
 
 			// Given
 			BondedPool::<Runtime> {
-				depositor: 10,
-				state: PoolState::Open,
-				points: 10,
 				account: 123,
-				root: 900,
-				nominator: 901,
-				state_toggler: 902,
-				delegator_counter: 1,
+				inner: BondedPoolInner {
+					depositor: 10,
+					state: PoolState::Open,
+					points: 10,
+					root: 900,
+					nominator: 901,
+					state_toggler: 902,
+					delegator_counter: 1,
+				},
 			}
 			.put();
 			assert_eq!(MaxPools::<Runtime>::get(), Some(2));

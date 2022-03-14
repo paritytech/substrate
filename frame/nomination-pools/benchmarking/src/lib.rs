@@ -11,7 +11,7 @@ use frame_election_provider_support::SortedListProvider;
 use frame_support::{ensure, traits::Get};
 use frame_system::RawOrigin as Origin;
 use pallet_nomination_pools::{
-	BalanceOf, BondedPoolStorage, BondedPools, Delegators, Metadata, MinCreateBond, MinJoinBond,
+	BalanceOf, BondedPoolInner, BondedPools, Delegators, Metadata, MinCreateBond, MinJoinBond,
 	Pallet as Pools, PoolState, RewardPools, SubPoolsStorage,
 };
 use sp_runtime::traits::{StaticLookup, Zero};
@@ -475,7 +475,7 @@ frame_benchmarking::benchmarks! {
 		let (pool_account, new_pool) = BondedPools::<T>::iter().next().unwrap();
 		assert_eq!(
 			new_pool,
-			BondedPoolStorage {
+			BondedPoolInner {
 				points: min_create_bond,
 				depositor: depositor.clone(),
 				root: depositor.clone(),
@@ -516,7 +516,7 @@ frame_benchmarking::benchmarks! {
 		let (pool_account, new_pool) = BondedPools::<T>::iter().next().unwrap();
 		assert_eq!(
 			new_pool,
-			BondedPoolStorage {
+			BondedPoolInner {
 				points: min_create_bond,
 				depositor: depositor.clone(),
 				root: depositor.clone(),
