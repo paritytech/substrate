@@ -175,7 +175,7 @@ pub mod pallet {
 				T::EventHandler::note_author(author);
 			}
 
-			0
+			Weight::zero()
 		}
 
 		fn on_finalize(_: T::BlockNumber) {
