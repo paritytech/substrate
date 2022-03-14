@@ -784,11 +784,17 @@ fn revert_prunes_epoch_changes_tree() {
 	revert(client.clone(), 12).expect("revert should work for the baked test scenario");
 
 	// Load and check epoch changes.
-	let config = Config::get(&*client).expect("config created during initialization");
-	let epoch_changes =
-		aux_schema::load_epoch_changes::<Block, TestClient>(&*client, config.genesis_config())
-			.expect("epoch changes available");
-	let epoch_changes = epoch_changes.shared_data();
+
+	let actual_nodes = aux_schema::load_epoch_changes::<Block, TestClient>(
+		&*client,
+		data.link.config.genesis_config(),
+	)
+	.expect("load epoch changes")
+	.shared_data()
+	.tree()
+	.iter()
+	.map(|(h, _, _)| *h)
+	.collect::<Vec<_>>();
 
 	let expected_nodes = vec![
 		canon[0], // A
@@ -796,7 +802,8 @@ fn revert_prunes_epoch_changes_tree() {
 		fork2[4], // F
 		fork1[5], // E
 	];
-	assert_eq!(epoch_changes.tree().iter().map(|(h, _, _)| *h).collect::<Vec<_>>(), expected_nodes);
+
+	assert_eq!(actual_nodes, expected_nodes);
 }
 
 #[test]
