@@ -15,8 +15,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::*;
-
 /// Trait to handle asset locking mechanism to ensure interactions with the asset can be implemented
 /// downstream to extend logic of Uniques current functionality
 #[allow(clippy::upper_case_acronyms)]
