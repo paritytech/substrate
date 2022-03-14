@@ -1864,7 +1864,6 @@ where
 	}
 
 	aux_schema::write_epoch_changes::<Block, _, _>(&epoch_changes, |values| {
-		client.insert_aux(values, &[]).unwrap();
-	});
-	Ok(())
+		client.insert_aux(values, &[])
+	})
 }

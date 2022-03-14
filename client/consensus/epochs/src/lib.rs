@@ -799,9 +799,9 @@ where
 		self.epochs.insert((hash, number), persisted);
 	}
 
-	/// TODO: document appropriately.
-	///
-	/// Revert a branch down to the node after the specified block.
+	/// Revert to a specified block given its `hash` and `number`.
+	/// This removes all the epoch changes information that were announced by
+	/// all the given block descendents.
 	pub fn revert<D: IsDescendentOfBuilder<Hash>>(
 		&mut self,
 		descendent_of_builder: D,

@@ -767,34 +767,36 @@ fn revert_prunes_epoch_changes_tree() {
 	// A(#1) ---- B(#7) ----#8----+-----#12----- C(#13) ---- D(#19)    < canon
 	//   \                        ^       \
 	//    \                    revert      *---- G(#13) -----H(#19)    < fork #3
-	//     \                   here (#9)
+	//     \                   to #10
 	//      *-----E(#7)                                                < fork #1
 
 	let canon = propose_and_import_blocks_wrap(BlockId::Number(0), 21);
-	let _fork_1 = propose_and_import_blocks_wrap(BlockId::Hash(canon[0]), 10);
-	let _fork_2 = propose_and_import_blocks_wrap(BlockId::Hash(canon[7]), 10);
-	let _fork_3 = propose_and_import_blocks_wrap(BlockId::Hash(canon[11]), 10);
+	let fork1 = propose_and_import_blocks_wrap(BlockId::Hash(canon[0]), 10);
+	let fork2 = propose_and_import_blocks_wrap(BlockId::Hash(canon[7]), 10);
+	let _fork3 = propose_and_import_blocks_wrap(BlockId::Hash(canon[11]), 10);
 
 	// We should be tracking a total of 9 epochs in the fork tree
 	assert_eq!(epoch_changes.shared_data().tree().iter().count(), 8);
 	// And only one root
 	assert_eq!(epoch_changes.shared_data().tree().roots().count(), 1);
 
-	{
-		let epoch_changes = epoch_changes.shared_data();
-		let it: Vec<_> = epoch_changes.tree().iter().collect();
-		dbg!(it);
-	}
+	// Revert to block #10 (best(22) - 12)
+	revert(client.clone(), 12).expect("revert should work for the baked test scenario");
 
-	// Revert to block #9
-	revert(client, 12).unwrap();
+	// Load and check epoch changes.
+	let config = Config::get(&*client).expect("config created during initialization");
+	let epoch_changes =
+		aux_schema::load_epoch_changes::<Block, TestClient>(&*client, config.genesis_config())
+			.expect("epoch changes available");
+	let epoch_changes = epoch_changes.shared_data();
 
-	{
-		// THIS IS NOT REFRESHED...
-		// let epoch_changes = epoch_changes.shared_data();
-		// let it: Vec<_> = epoch_changes.tree().iter().collect();
-		// dbg!(it);
-	}
+	let expected_nodes = vec![
+		canon[0], // A
+		canon[6], // B
+		fork2[4], // F
+		fork1[5], // E
+	];
+	assert_eq!(epoch_changes.tree().iter().map(|(h, _, _)| *h).collect::<Vec<_>>(), expected_nodes);
 }
 
 #[test]
