@@ -236,8 +236,8 @@ pub mod pallet {
 			let sender = ensure_signed(origin)?;
 			let commitment_hash = sp_io::hashing::blake2_256(&(name.clone(), secret).encode());
 
-			let commitment =
-				Commitments::<T>::get(commitment_hash.clone()).ok_or(Error::<T>::CommitmentNotFound)?;
+			let commitment = Commitments::<T>::get(commitment_hash.clone())
+				.ok_or(Error::<T>::CommitmentNotFound)?;
 			let name_hash = sp_io::hashing::blake2_256(&name);
 
 			if Self::is_available(name_hash, frame_system::Pallet::<T>::block_number()) {
@@ -264,7 +264,11 @@ pub mod pallet {
 		}
 
 		#[pallet::weight(0)]
-		pub fn transfer(origin: OriginFor<T>, to: T::AccountId, name_hash: NameHash) -> DispatchResult {
+		pub fn transfer(
+			origin: OriginFor<T>,
+			to: T::AccountId,
+			name_hash: NameHash,
+		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 			let block_number = frame_system::Pallet::<T>::block_number();
 
