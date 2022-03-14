@@ -380,7 +380,7 @@ pub struct Delegator<T: Config> {
 }
 
 /// A pool's possible states.
-#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, PartialEq, RuntimeDebugNoBound, Clone)]
+#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, PartialEq, RuntimeDebugNoBound, Clone, Copy)]
 pub enum PoolState {
 	/// The pool is open to be joined, and is working normally.
 	Open,
@@ -400,19 +400,19 @@ pub enum PoolState {
 #[scale_info(skip_type_params(T))]
 pub struct BondedPoolInner<T: Config> {
 	/// See [`BondedPool::points`].
-	points: BalanceOf<T>,
+	pub points: BalanceOf<T>,
 	/// See [`BondedPool::state_toggler`].
-	state: PoolState,
+	pub state: PoolState,
 	/// See [`BondedPool::delegator_counter`]
-	delegator_counter: u32,
+	pub delegator_counter: u32,
 	/// See [`BondedPool::depositor`].
-	depositor: T::AccountId,
-	/// See [`BondedPool::admin`].
-	root: T::AccountId,
+	pub depositor: T::AccountId,
+	/// See [`BondedPool::root`].
+	pub root: T::AccountId,
 	/// See [`BondedPool::nominator`].
-	nominator: T::AccountId,
+	pub nominator: T::AccountId,
 	/// See [`BondedPool::state_toggler`].
-	state_toggler: T::AccountId,
+	pub state_toggler: T::AccountId,
 }
 
 /// A wrapper for bonded pools, with utility functions.

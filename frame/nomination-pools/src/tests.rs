@@ -1,8 +1,7 @@
 use super::*;
 use crate::mock::{
-	unsafe_set_state, AccountId, Balance, Balances, CurrentEra, ExistentialDeposit, ExtBuilder,
-	Nominations, Origin, Pools, Runtime, StakingMock, PRIMARY_ACCOUNT, REWARDS_ACCOUNT,
-	UNBONDING_BALANCE_MAP,
+	unsafe_set_state, Balance, Balances, CurrentEra, ExistentialDeposit, ExtBuilder, Nominations,
+	Origin, Pools, Runtime, StakingMock, PRIMARY_ACCOUNT, REWARDS_ACCOUNT, UNBONDING_BALANCE_MAP,
 };
 use frame_support::{assert_noop, assert_ok};
 

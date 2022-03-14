@@ -189,7 +189,7 @@ impl<T: Config> ListScenario<T> {
 		// Sanity check the delegator was added correctly
 		let delegator = Delegators::<T>::get(&joiner).unwrap();
 		assert_eq!(delegator.points, amount);
-		assert_eq!(delegator.pool, self.origin1);
+		assert_eq!(delegator.bonded_pool_account, self.origin1);
 
 		self
 	}
