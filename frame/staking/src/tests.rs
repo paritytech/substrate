@@ -17,10 +17,10 @@
 
 //! Tests for the module.
 
-use super::{Event, MaxUnlockingChunks, *};
+use super::{ConfigOp, Event, MaxUnlockingChunks, *};
 use frame_election_provider_support::{ElectionProvider, SortedListProvider, Support};
 use frame_support::{
-	assert_noop, assert_ok, bounded_vec,
+	assert_noop, assert_ok, assert_storage_noop, bounded_vec,
 	dispatch::WithPostDispatchInfo,
 	pallet_prelude::*,
 	traits::{Currency, Get, ReservableCurrency},
@@ -39,6 +39,56 @@ use sp_staking::{
 };
 use sp_std::prelude::*;
 use substrate_test_utils::assert_eq_uvec;
+
+#[test]
+fn set_staking_configs_works() {
+	ExtBuilder::default().build_and_execute(|| {
+		// setting works
+		assert_ok!(Staking::set_staking_configs(
+			Origin::root(),
+			ConfigOp::Set(1_500),
+			ConfigOp::Set(2_000),
+			ConfigOp::Set(10),
+			ConfigOp::Set(20),
+			ConfigOp::Set(Percent::from_percent(75)),
+			ConfigOp::Set(Zero::zero())
+		));
+		assert_eq!(MinNominatorBond::<Test>::get(), 1_500);
+		assert_eq!(MinValidatorBond::<Test>::get(), 2_000);
+		assert_eq!(MaxNominatorsCount::<Test>::get(), Some(10));
+		assert_eq!(MaxValidatorsCount::<Test>::get(), Some(20));
+		assert_eq!(ChillThreshold::<Test>::get(), Some(Percent::from_percent(75)));
+		assert_eq!(MinCommission::<Test>::get(), Perbill::from_percent(0));
+
+		// noop does nothing
+		assert_storage_noop!(assert_ok!(Staking::set_staking_configs(
+			Origin::root(),
+			ConfigOp::Noop,
+			ConfigOp::Noop,
+			ConfigOp::Noop,
+			ConfigOp::Noop,
+			ConfigOp::Noop,
+			ConfigOp::Noop
+		)));
+
+		// removing works
+		assert_ok!(Staking::set_staking_configs(
+			Origin::root(),
+			ConfigOp::Remove,
+			ConfigOp::Remove,
+			ConfigOp::Remove,
+			ConfigOp::Remove,
+			ConfigOp::Remove,
+			ConfigOp::Remove
+		));
+		assert_eq!(MinNominatorBond::<Test>::get(), 0);
+		assert_eq!(MinValidatorBond::<Test>::get(), 0);
+		assert_eq!(MaxNominatorsCount::<Test>::get(), None);
+		assert_eq!(MaxValidatorsCount::<Test>::get(), None);
+		assert_eq!(ChillThreshold::<Test>::get(), None);
+		assert_eq!(MinCommission::<Test>::get(), Perbill::from_percent(0));
+	});
+}
 
 #[test]
 fn force_unstake_works() {
@@ -4368,12 +4418,12 @@ fn chill_other_works() {
 			// Change the minimum bond... but no limits.
 			assert_ok!(Staking::set_staking_configs(
 				Origin::root(),
-				1_500,
-				2_000,
-				None,
-				None,
-				None,
-				Zero::zero()
+				ConfigOp::Set(1_500),
+				ConfigOp::Set(2_000),
+				ConfigOp::Remove,
+				ConfigOp::Remove,
+				ConfigOp::Remove,
+				ConfigOp::Remove
 			));
 
 			// Still can't chill these users
@@ -4389,12 +4439,12 @@ fn chill_other_works() {
 			// Add limits, but no threshold
 			assert_ok!(Staking::set_staking_configs(
 				Origin::root(),
-				1_500,
-				2_000,
-				Some(10),
-				Some(10),
-				None,
-				Zero::zero()
+				ConfigOp::Noop,
+				ConfigOp::Noop,
+				ConfigOp::Set(10),
+				ConfigOp::Set(10),
+				ConfigOp::Noop,
+				ConfigOp::Noop
 			));
 
 			// Still can't chill these users
@@ -4410,12 +4460,12 @@ fn chill_other_works() {
 			// Add threshold, but no limits
 			assert_ok!(Staking::set_staking_configs(
 				Origin::root(),
-				1_500,
-				2_000,
-				None,
-				None,
-				Some(Percent::from_percent(0)),
-				Zero::zero()
+				ConfigOp::Noop,
+				ConfigOp::Noop,
+				ConfigOp::Remove,
+				ConfigOp::Remove,
+				ConfigOp::Noop,
+				ConfigOp::Noop
 			));
 
 			// Still can't chill these users
@@ -4431,12 +4481,12 @@ fn chill_other_works() {
 			// Add threshold and limits
 			assert_ok!(Staking::set_staking_configs(
 				Origin::root(),
-				1_500,
-				2_000,
-				Some(10),
-				Some(10),
-				Some(Percent::from_percent(75)),
-				Zero::zero()
+				ConfigOp::Noop,
+				ConfigOp::Noop,
+				ConfigOp::Set(10),
+				ConfigOp::Set(10),
+				ConfigOp::Set(Percent::from_percent(75)),
+				ConfigOp::Noop
 			));
 
 			// 16 people total because tests start with 2 active one
@@ -4476,12 +4526,12 @@ fn capped_stakers_works() {
 		let max = 10;
 		assert_ok!(Staking::set_staking_configs(
 			Origin::root(),
-			10,
-			10,
-			Some(max),
-			Some(max),
-			Some(Percent::from_percent(0)),
-			Zero::zero(),
+			ConfigOp::Set(10),
+			ConfigOp::Set(10),
+			ConfigOp::Set(max),
+			ConfigOp::Set(max),
+			ConfigOp::Remove,
+			ConfigOp::Remove,
 		));
 
 		// can create `max - validator_count` validators
@@ -4546,12 +4596,12 @@ fn capped_stakers_works() {
 		// No problem when we set to `None` again
 		assert_ok!(Staking::set_staking_configs(
 			Origin::root(),
-			10,
-			10,
-			None,
-			None,
-			None,
-			Zero::zero(),
+			ConfigOp::Noop,
+			ConfigOp::Noop,
+			ConfigOp::Remove,
+			ConfigOp::Remove,
+			ConfigOp::Noop,
+			ConfigOp::Noop,
 		));
 		assert_ok!(Staking::nominate(Origin::signed(last_nominator), vec![1]));
 		assert_ok!(Staking::validate(Origin::signed(last_validator), ValidatorPrefs::default()));
@@ -4568,12 +4618,12 @@ fn min_commission_works() {
 
 		assert_ok!(Staking::set_staking_configs(
 			Origin::root(),
-			0,
-			0,
-			None,
-			None,
-			None,
-			Perbill::from_percent(10),
+			ConfigOp::Remove,
+			ConfigOp::Remove,
+			ConfigOp::Remove,
+			ConfigOp::Remove,
+			ConfigOp::Remove,
+			ConfigOp::Set(Perbill::from_percent(10)),
 		));
 
 		// can't make it less than 10 now

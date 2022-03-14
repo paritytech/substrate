@@ -34,8 +34,9 @@ mod members;
 #[allow(deprecated)]
 pub use members::{AllowAll, DenyAll, Filter};
 pub use members::{
-	AsContains, ChangeMembers, Contains, ContainsLengthBound, Everything, InitializeMembers,
-	IsInVec, Nothing, SortedMembers,
+	AsContains, ChangeMembers, Contains, ContainsLengthBound, ContainsPair, Everything,
+	EverythingBut, FromContainsPair, InitializeMembers, InsideBoth, IsInVec, Nothing,
+	SortedMembers, TheseExcept,
 };
 
 mod validation;
@@ -89,7 +90,10 @@ pub use storage::{
 };
 
 mod dispatch;
-pub use dispatch::{EnsureOneOf, EnsureOrigin, OriginTrait, UnfilteredDispatchable};
+pub use dispatch::{
+	AsEnsureOriginWithArg, EnsureOneOf, EnsureOrigin, EnsureOriginWithArg, OriginTrait,
+	UnfilteredDispatchable,
+};
 
 mod voting;
 pub use voting::{

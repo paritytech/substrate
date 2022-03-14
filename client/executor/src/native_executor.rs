@@ -462,8 +462,9 @@ impl RuntimeSpawn for RuntimeInstanceSpawn {
 					// https://github.com/paritytech/substrate/issues/7354
 					let mut instance = match module.new_instance() {
 						Ok(instance) => instance,
-						Err(error) =>
-							panic!("failed to create new instance from module: {}", error),
+						Err(error) => {
+							panic!("failed to create new instance from module: {}", error)
+						},
 					};
 
 					match instance

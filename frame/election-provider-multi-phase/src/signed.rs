@@ -500,18 +500,7 @@ mod tests {
 		},
 		Error, Phase,
 	};
-	use frame_support::{assert_noop, assert_ok, assert_storage_noop, dispatch::DispatchResult};
-
-	fn submit_with_witness(
-		origin: Origin,
-		solution: RawSolution<SolutionOf<Runtime>>,
-	) -> DispatchResult {
-		MultiPhase::submit(
-			origin,
-			Box::new(solution),
-			MultiPhase::signed_submissions().len() as u32,
-		)
-	}
+	use frame_support::{assert_noop, assert_ok, assert_storage_noop};
 
 	#[test]
 	fn cannot_submit_too_early() {
@@ -524,27 +513,8 @@ mod tests {
 			let solution = raw_solution();
 
 			assert_noop!(
-				submit_with_witness(Origin::signed(10), solution),
+				MultiPhase::submit(Origin::signed(10), Box::new(solution)),
 				Error::<Runtime>::PreDispatchEarlySubmission,
-			);
-		})
-	}
-
-	#[test]
-	fn wrong_witness_fails() {
-		ExtBuilder::default().build_and_execute(|| {
-			roll_to(15);
-			assert!(MultiPhase::current_phase().is_signed());
-
-			let solution = raw_solution();
-			// submit this once correctly
-			assert_ok!(submit_with_witness(Origin::signed(99), solution.clone()));
-			assert_eq!(MultiPhase::signed_submissions().len(), 1);
-
-			// now try and cheat by passing a lower queue length
-			assert_noop!(
-				MultiPhase::submit(Origin::signed(99), Box::new(solution), 0),
-				Error::<Runtime>::SignedInvalidWitness,
 			);
 		})
 	}
@@ -558,7 +528,7 @@ mod tests {
 			let solution = raw_solution();
 			assert_eq!(balances(&99), (100, 0));
 
-			assert_ok!(submit_with_witness(Origin::signed(99), solution));
+			assert_ok!(MultiPhase::submit(Origin::signed(99), Box::new(solution)));
 
 			assert_eq!(balances(&99), (95, 5));
 			assert_eq!(MultiPhase::signed_submissions().iter().next().unwrap().deposit, 5);
@@ -574,7 +544,7 @@ mod tests {
 			let solution = raw_solution();
 			assert_eq!(balances(&99), (100, 0));
 
-			assert_ok!(submit_with_witness(Origin::signed(99), solution));
+			assert_ok!(MultiPhase::submit(Origin::signed(99), Box::new(solution)));
 			assert_eq!(balances(&99), (95, 5));
 
 			assert!(MultiPhase::finalize_signed_phase());
@@ -594,7 +564,7 @@ mod tests {
 			// make the solution invalid.
 			solution.score.minimal_stake += 1;
 
-			assert_ok!(submit_with_witness(Origin::signed(99), solution));
+			assert_ok!(MultiPhase::submit(Origin::signed(99), Box::new(solution)));
 			assert_eq!(balances(&99), (95, 5));
 
 			// no good solution was stored.
@@ -615,11 +585,11 @@ mod tests {
 			assert_eq!(balances(&999), (100, 0));
 
 			// submit as correct.
-			assert_ok!(submit_with_witness(Origin::signed(99), solution.clone()));
+			assert_ok!(MultiPhase::submit(Origin::signed(99), Box::new(solution.clone())));
 
 			// make the solution invalid and weaker.
 			solution.score.minimal_stake -= 1;
-			assert_ok!(submit_with_witness(Origin::signed(999), solution));
+			assert_ok!(MultiPhase::submit(Origin::signed(999), Box::new(solution)));
 			assert_eq!(balances(&99), (95, 5));
 			assert_eq!(balances(&999), (95, 5));
 
@@ -645,7 +615,7 @@ mod tests {
 					score: ElectionScore { minimal_stake: (5 + s).into(), ..Default::default() },
 					..Default::default()
 				};
-				assert_ok!(submit_with_witness(Origin::signed(99), solution));
+				assert_ok!(MultiPhase::submit(Origin::signed(99), Box::new(solution)));
 			}
 
 			// weaker.
@@ -655,7 +625,7 @@ mod tests {
 			};
 
 			assert_noop!(
-				submit_with_witness(Origin::signed(99), solution),
+				MultiPhase::submit(Origin::signed(99), Box::new(solution)),
 				Error::<Runtime>::SignedQueueFull,
 			);
 		})
@@ -673,7 +643,7 @@ mod tests {
 					score: ElectionScore { minimal_stake: (5 + s).into(), ..Default::default() },
 					..Default::default()
 				};
-				assert_ok!(submit_with_witness(Origin::signed(99), solution));
+				assert_ok!(MultiPhase::submit(Origin::signed(99), Box::new(solution)));
 			}
 
 			assert_eq!(
@@ -689,7 +659,7 @@ mod tests {
 				score: ElectionScore { minimal_stake: 20, ..Default::default() },
 				..Default::default()
 			};
-			assert_ok!(submit_with_witness(Origin::signed(99), solution));
+			assert_ok!(MultiPhase::submit(Origin::signed(99), Box::new(solution)));
 
 			// the one with score 5 was rejected, the new one inserted.
 			assert_eq!(
@@ -714,14 +684,14 @@ mod tests {
 					score: ElectionScore { minimal_stake: (5 + s).into(), ..Default::default() },
 					..Default::default()
 				};
-				assert_ok!(submit_with_witness(Origin::signed(99), solution));
+				assert_ok!(MultiPhase::submit(Origin::signed(99), Box::new(solution)));
 			}
 
 			let solution = RawSolution {
 				score: ElectionScore { minimal_stake: 4, ..Default::default() },
 				..Default::default()
 			};
-			assert_ok!(submit_with_witness(Origin::signed(99), solution));
+			assert_ok!(MultiPhase::submit(Origin::signed(99), Box::new(solution)));
 
 			assert_eq!(
 				MultiPhase::signed_submissions()
@@ -736,7 +706,7 @@ mod tests {
 				score: ElectionScore { minimal_stake: 5, ..Default::default() },
 				..Default::default()
 			};
-			assert_ok!(submit_with_witness(Origin::signed(99), solution));
+			assert_ok!(MultiPhase::submit(Origin::signed(99), Box::new(solution)));
 
 			// the one with score 5 was rejected, the new one inserted.
 			assert_eq!(
@@ -761,7 +731,7 @@ mod tests {
 					score: ElectionScore { minimal_stake: (5 + s).into(), ..Default::default() },
 					..Default::default()
 				};
-				assert_ok!(submit_with_witness(Origin::signed(99), solution));
+				assert_ok!(MultiPhase::submit(Origin::signed(99), Box::new(solution)));
 			}
 
 			assert_eq!(balances(&99).1, 2 * 5);
@@ -772,7 +742,7 @@ mod tests {
 				score: ElectionScore { minimal_stake: 20, ..Default::default() },
 				..Default::default()
 			};
-			assert_ok!(submit_with_witness(Origin::signed(999), solution));
+			assert_ok!(MultiPhase::submit(Origin::signed(999), Box::new(solution)));
 
 			// got one bond back.
 			assert_eq!(balances(&99).1, 2 * 4);
@@ -791,7 +761,7 @@ mod tests {
 					score: ElectionScore { minimal_stake: (5 + i).into(), ..Default::default() },
 					..Default::default()
 				};
-				assert_ok!(submit_with_witness(Origin::signed(99), solution));
+				assert_ok!(MultiPhase::submit(Origin::signed(99), Box::new(solution)));
 			}
 			assert_eq!(
 				MultiPhase::signed_submissions()
@@ -807,7 +777,7 @@ mod tests {
 				..Default::default()
 			};
 			assert_noop!(
-				submit_with_witness(Origin::signed(99), solution),
+				MultiPhase::submit(Origin::signed(99), Box::new(solution)),
 				Error::<Runtime>::SignedQueueFull,
 			);
 		})
@@ -829,18 +799,18 @@ mod tests {
 			let solution = raw_solution();
 
 			// submit a correct one.
-			assert_ok!(submit_with_witness(Origin::signed(99), solution.clone()));
+			assert_ok!(MultiPhase::submit(Origin::signed(99), Box::new(solution.clone())));
 
 			// make the solution invalidly better and submit. This ought to be slashed.
 			let mut solution_999 = solution.clone();
 			solution_999.score.minimal_stake += 1;
-			assert_ok!(submit_with_witness(Origin::signed(999), solution_999));
+			assert_ok!(MultiPhase::submit(Origin::signed(999), Box::new(solution_999)));
 
 			// make the solution invalidly worse and submit. This ought to be suppressed and
 			// returned.
 			let mut solution_9999 = solution.clone();
 			solution_9999.score.minimal_stake -= 1;
-			assert_ok!(submit_with_witness(Origin::signed(9999), solution_9999));
+			assert_ok!(MultiPhase::submit(Origin::signed(9999), Box::new(solution_9999)));
 
 			assert_eq!(
 				MultiPhase::signed_submissions().iter().map(|x| x.who).collect::<Vec<_>>(),
@@ -881,14 +851,14 @@ mod tests {
 				assert_eq!(raw.solution.voter_count(), 5);
 				assert_eq!(<Runtime as Config>::SignedMaxWeight::get(), 40);
 
-				assert_ok!(submit_with_witness(Origin::signed(99), raw.clone()));
+				assert_ok!(MultiPhase::submit(Origin::signed(99), Box::new(raw.clone())));
 
 				<SignedMaxWeight>::set(30);
 
 				// note: resubmitting the same solution is technically okay as long as the queue has
 				// space.
 				assert_noop!(
-					submit_with_witness(Origin::signed(99), raw),
+					MultiPhase::submit(Origin::signed(99), Box::new(raw)),
 					Error::<Runtime>::SignedTooMuchWeight,
 				);
 			})
@@ -904,7 +874,7 @@ mod tests {
 
 			assert_eq!(balances(&123), (0, 0));
 			assert_noop!(
-				submit_with_witness(Origin::signed(123), solution),
+				MultiPhase::submit(Origin::signed(123), Box::new(solution)),
 				Error::<Runtime>::SignedCannotPayDeposit,
 			);
 
@@ -926,7 +896,7 @@ mod tests {
 					score: ElectionScore { minimal_stake: (5 + s).into(), ..Default::default() },
 					..Default::default()
 				};
-				assert_ok!(submit_with_witness(Origin::signed(99), solution));
+				assert_ok!(MultiPhase::submit(Origin::signed(99), Box::new(solution)));
 			}
 
 			// this solution has a higher score than any in the queue
@@ -940,7 +910,7 @@ mod tests {
 
 			assert_eq!(balances(&123), (0, 0));
 			assert_noop!(
-				submit_with_witness(Origin::signed(123), solution),
+				MultiPhase::submit(Origin::signed(123), Box::new(solution)),
 				Error::<Runtime>::SignedCannotPayDeposit,
 			);
 
@@ -969,7 +939,7 @@ mod tests {
 			let solution = raw_solution();
 
 			// submit a correct one.
-			assert_ok!(submit_with_witness(Origin::signed(99), solution.clone()));
+			assert_ok!(MultiPhase::submit(Origin::signed(99), Box::new(solution)));
 
 			// _some_ good solution was stored.
 			assert!(MultiPhase::finalize_signed_phase());
