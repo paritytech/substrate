@@ -395,19 +395,18 @@ impl<T: Config> Pallet<T> {
 		// Any unprocessed solution is pointless to even consider. Feasible or malicious,
 		// they didn't end up being used. Unreserve the bonds.
 		let discarded = all_submissions.len();
-		let mut count = 0;
+		let mut refund_count = 0;
+		let maybe_max_refunds =  T::SignedMaxRefunds::get();
 		for SignedSubmission { who, deposit, call_fee, .. } in all_submissions.drain() {
-			if T::SignedMaxRefunds::get().map_or(true, |max| count < max) {
+			if maybe_max_refunds.map_or(true, |max| refund_count < max) {
 				// Refund fee
 				let _ = T::Currency::deposit_creating(&who, call_fee);
-				count += 1;
+				refund_count += 1;
 			}
 
 			// Unreserve deposit
 			let _remaining = T::Currency::unreserve(&who, deposit);
 			debug_assert!(_remaining.is_zero());
-
-			Self::finalize_signed_phase_handle_refund(&who, deposit, call_fee);
 			weight = weight.saturating_add(T::DbWeight::get().writes(2));
 		}
 
@@ -442,10 +441,12 @@ impl<T: Config> Pallet<T> {
 		// emit reward event
 		Self::deposit_event(crate::Event::Rewarded { account: who.clone(), value: reward });
 
-		Self::finalize_signed_phase_handle_refund(who, deposit, call_fee);
+		// Unreserve deposit
+		let _remaining = T::Currency::unreserve(who, deposit);
+		debug_assert!(_remaining.is_zero());
 
-		// Reward.
-		let positive_imbalance = T::Currency::deposit_creating(who, reward);
+		// Reward and refund the call fee.
+		let positive_imbalance = T::Currency::deposit_creating(who, reward.saturating_add(call_fee));
 		T::RewardHandler::on_unbalanced(positive_imbalance);
 	}
 
@@ -497,20 +498,6 @@ impl<T: Config> Pallet<T> {
 			.saturating_add(len_deposit)
 			.saturating_add(weight_deposit)
 	}
-
-	/// Unreserve `who`s deposit and refund their transaction fee.
-	fn finalize_signed_phase_handle_refund(
-		who: &T::AccountId,
-		deposit: BalanceOf<T>,
-		call_fee: BalanceOf<T>,
-	) {
-		// Unreserve deposit
-		let _remaining = T::Currency::unreserve(who, deposit);
-		debug_assert!(_remaining.is_zero());
-
-		// Refund fee
-		let _ = T::Currency::deposit_creating(who, call_fee);
-	}
 }
 
 #[cfg(test)]
@@ -519,7 +506,7 @@ mod tests {
 	use crate::{
 		mock::{
 			balances, raw_solution, roll_to, ExtBuilder, MultiPhase, Origin, Runtime,
-			SignedMaxSubmissions, SignedMaxWeight,
+			SignedMaxSubmissions, SignedMaxWeight, Balances, SignedMaxRefunds
 		},
 		Error, Phase,
 	};
@@ -661,12 +648,15 @@ mod tests {
 			assert!(MultiPhase::current_phase().is_signed());
 
 			for s in 0..SignedMaxSubmissions::get() {
+				let account = 99 + s as u64;
+				Balances::make_free_balance_be(&account, 100);
 				// score is always getting better
 				let solution = RawSolution {
 					score: ElectionScore { minimal_stake: (5 + s).into(), ..Default::default() },
 					..Default::default()
 				};
-				assert_ok!(MultiPhase::submit(Origin::signed(99), Box::new(solution)));
+				assert_ok!(MultiPhase::submit(Origin::signed(account), Box::new(solution)));
+				assert_eq!(balances(&account), (95, 5));
 			}
 
 			assert_eq!(
@@ -682,7 +672,7 @@ mod tests {
 				score: ElectionScore { minimal_stake: 20, ..Default::default() },
 				..Default::default()
 			};
-			assert_ok!(MultiPhase::submit(Origin::signed(99), Box::new(solution)));
+			assert_ok!(MultiPhase::submit(Origin::signed(999), Box::new(solution)));
 
 			// the one with score 5 was rejected, the new one inserted.
 			assert_eq!(
@@ -692,6 +682,32 @@ mod tests {
 					.collect::<Vec<_>>(),
 				vec![6, 7, 8, 9, 20]
 			);
+
+			// the submitter of the ejected solution does *not* get a call fee refund
+			assert_eq!(balances(&(99 + 0)), (100, 0));
+
+			// set the max refunds to None
+			SignedMaxRefunds::set(None);
+			assert!(<Runtime as Config>::SignedMaxRefunds::get().is_none());
+
+			// submit another solution to force an ejection
+			let solution = RawSolution {
+				score: ElectionScore { minimal_stake: 21, ..Default::default() },
+				..Default::default()
+			};
+			assert_ok!(MultiPhase::submit(Origin::signed(999), Box::new(solution)));
+
+			// the one with score 6 was rejected, the new one inserted.
+			assert_eq!(
+				MultiPhase::signed_submissions()
+					.iter()
+					.map(|s| s.raw_solution.score.minimal_stake)
+					.collect::<Vec<_>>(),
+				vec![7, 8, 9, 20, 21]
+			);
+
+			// the submitter of the ejected solution gets a call fee refund
+			assert_eq!(balances(&(99 + 1)), (100 + 8, 0));
 		})
 	}
 

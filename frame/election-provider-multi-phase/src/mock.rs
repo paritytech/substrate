@@ -252,7 +252,7 @@ parameter_types! {
 	pub static SignedPhase: BlockNumber = 10;
 	pub static UnsignedPhase: BlockNumber = 5;
 	pub static SignedMaxSubmissions: u32 = 5;
-	pub static SignedMaxRefunds: u32 = 1;
+	pub static SignedMaxRefunds: Option<u32> = Some(1);
 	pub static SignedDepositBase: Balance = 5;
 	pub static SignedDepositByte: Balance = 0;
 	pub static SignedDepositWeight: Balance = 0;
