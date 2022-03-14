@@ -15,28 +15,41 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use sc_block_builder::BlockBuilderApi;
+use sc_block_builder::{BlockBuilder, BlockBuilderApi, BlockBuilderProvider};
 use sc_cli::{CliConfiguration, DatabaseParams, PruningParams, Result, SharedParams};
-use sc_client_api::{BlockBackend, UsageProvider};
+use sc_client_api::{Backend as ClientBackend, StorageProvider, UsageProvider};
+use sc_client_db::DbHash;
+use sc_consensus::{
+	block_import::{BlockImportParams, ForkChoiceStrategy},
+	BlockImport, StateAction,
+};
 use sc_service::Configuration;
-use sp_api::{ApiExt, ProvideRuntimeApi};
-use sp_blockchain::HeaderBackend;
-use sp_runtime::traits::Block as BlockT;
+use sp_api::{ApiExt, BlockId, Core, ProvideRuntimeApi};
+use sp_blockchain::{ApplyExtrinsicFailed::Validity, Error::ApplyExtrinsicFailed, HeaderBackend};
+use sp_consensus::BlockOrigin;
+use sp_database::{ColumnId, Database};
+use sp_inherents::InherentData;
+use sp_runtime::{
+	traits::{Block as BlockT, HashFor, Zero},
+	transaction_validity::{InvalidTransaction, TransactionValidityError},
+	OpaqueExtrinsic,
+};
+use sp_state_machine::Storage;
+use sp_storage::StateVersion;
 
 use clap::{Args, Parser};
 use log::info;
+use rand::prelude::*;
 use serde::Serialize;
-use std::{fmt::Debug, sync::Arc};
+use std::{boxed::Box, fmt::Debug, sync::Arc, time::Instant};
 
 use crate::{
-	block::{
-		bench::{Benchmark, BenchmarkParams, BenchmarkType},
-		template::TemplateData,
-	},
 	post_processing::WeightParams,
-};
+	storage::{
+	record::{StatSelect, Stats},
+}};
+use super::{template::TemplateData, bench::{Benchmark, BenchmarkType, BenchmarkParams}};
 
-/// Command for running block and extrinsic benchmarks.
 #[derive(Debug, Parser)]
 pub struct BlockCmd {
 	#[allow(missing_docs)]
@@ -45,20 +58,11 @@ pub struct BlockCmd {
 
 	#[allow(missing_docs)]
 	#[clap(flatten)]
-	pub database_params: DatabaseParams,
-
-	#[allow(missing_docs)]
-	#[clap(flatten)]
-	pub pruning_params: PruningParams,
-
-	#[allow(missing_docs)]
-	#[clap(flatten)]
-	pub params: BlockParams,
+	pub params: CommandParams,
 }
 
-/// Parameters for a block benchmark and its result post processing.
 #[derive(Debug, Default, Serialize, Clone, PartialEq, Args)]
-pub struct BlockParams {
+pub struct CommandParams {
 	#[allow(missing_docs)]
 	#[clap(flatten)]
 	pub weight: WeightParams,
@@ -66,33 +70,39 @@ pub struct BlockParams {
 	#[allow(missing_docs)]
 	#[clap(flatten)]
 	pub bench: BenchmarkParams,
+}
 
-	/// Ignore safety checks. Only useful for debugging.
-	#[clap(long)]
-	pub no_check: bool,
+/// Used by the benchmark to generate signed extrinsics.
+pub trait ExtrinsicGenerator {
+	/// Generates a `System::remark` extrinsic.
+	fn remark(&self, nonce: u32) -> Option<OpaqueExtrinsic>;
 }
 
 impl BlockCmd {
-	/// Run the block and extrinsic benchmark.
-	pub async fn run<Block, C, API>(&self, cfg: Configuration, client: Arc<C>) -> Result<()>
+	pub async fn run<Block, BA, C>(
+		&self,
+		cfg: Configuration,
+		client: Arc<C>,
+		inherent_data: sp_inherents::InherentData,
+		ext_gen: Arc<dyn ExtrinsicGenerator>,
+	) -> Result<()>
 	where
-		Block: BlockT,
-		C: UsageProvider<Block>
-			+ HeaderBackend<Block>
-			+ BlockBackend<Block>
-			+ ProvideRuntimeApi<Block, Api = API>,
-		API: ApiExt<Block> + BlockBuilderApi<Block>,
+		Block: BlockT<Extrinsic = OpaqueExtrinsic>,
+		BA: ClientBackend<Block>,
+		C: BlockBuilderProvider<BA, Block, C> + ProvideRuntimeApi<Block>,
+		C::Api: ApiExt<Block, StateBackend = BA::State> + BlockBuilderApi<Block>,
 	{
-		let bench = Benchmark::new(client, self.params.bench.clone(), self.params.no_check);
+		let bench = Benchmark::new(client, inherent_data, ext_gen, self.params.bench.clone());
 
-		if !self.params.bench.skip_block_benchmark {
+		// Empty block benchmark.
+		{
 			let stats = bench.bench(BenchmarkType::Block)?;
 			info!("Executing an empty block [ns]:\n{:?}", stats);
 			let template = TemplateData::new(BenchmarkType::Block, &cfg, &self.params, &stats)?;
 			template.write(&self.params.weight.weight_path)?;
 		}
-
-		if !self.params.bench.skip_extrinsic_benchmark {
+		// NO-OP extrinsic benchmark.
+		{
 			let stats = bench.bench(BenchmarkType::Extrinsic)?;
 			info!("Executing a NO-OP extrinsic [ns]:\n{:?}", stats);
 			let template = TemplateData::new(BenchmarkType::Extrinsic, &cfg, &self.params, &stats)?;
@@ -107,13 +117,5 @@ impl BlockCmd {
 impl CliConfiguration for BlockCmd {
 	fn shared_params(&self) -> &SharedParams {
 		&self.shared_params
-	}
-
-	fn database_params(&self) -> Option<&DatabaseParams> {
-		Some(&self.database_params)
-	}
-
-	fn pruning_params(&self) -> Option<&PruningParams> {
-		Some(&self.pruning_params)
 	}
 }

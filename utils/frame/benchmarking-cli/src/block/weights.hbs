@@ -74,6 +74,7 @@ pub mod constants {
 			);
 			// At most 50 ms.
 			assert!(
+<<<<<<< HEAD
 				w <= 50 * constants::WEIGHT_PER_MILLIS,
 				"Weight should be at most 50 ms."
 			);
@@ -89,6 +90,30 @@ pub mod constants {
 				"Weight should be at most 1 ms."
 			);
 			{{/if}}
+=======
+				W::get() <= 10 * constants::WEIGHT_PER_MILLIS,
+				"Weight should be at most 10 ms."
+			);
+		}
+
+		/// Checks that the extrinsic weight exist and is sane.
+		// NOTE: If this test fails but you are sure that the generated values are fine,
+		// you can delete it.
+		#[test]
+		fn sane_extrinsic() {
+			use super::constants::ExtrinsicBaseWeight as W;
+
+			// At least 10 µs.
+			assert!(
+				W::get() >= 10 * constants::WEIGHT_PER_MICROS,
+				"Weight should be at least 100 µs."
+			);
+			// At most 1 ms.
+			assert!(
+				W::get() <= constants::WEIGHT_PER_MILLIS,
+				"Weight should be at most 10 ms."
+			);
+>>>>>>> fd925a91ec7 (WIP)
 		}
 	}
 }

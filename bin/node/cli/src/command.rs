@@ -18,9 +18,11 @@
 
 use crate::{chain_spec, service, service::new_partial, Cli, Subcommand};
 use node_executor::ExecutorDispatch;
-use node_runtime::{Block, RuntimeApi};
+use node_runtime::RuntimeApi;
 use sc_cli::{ChainSpec, Result, RuntimeVersion, SubstrateCli};
 use sc_service::PartialComponents;
+
+use std::sync::Arc;
 
 impl SubstrateCli for Cli {
 	fn impl_name() -> String {
@@ -68,6 +70,42 @@ impl SubstrateCli for Cli {
 		&node_runtime::VERSION
 	}
 }
+struct ExtrinsicGen {
+	client: Arc<FullClient>,
+}
+use crate::service::{create_extrinsic, FullClient};
+use node_primitives::Block;
+use node_runtime::{SystemCall};
+use sp_keyring::Sr25519Keyring;
+use sp_runtime::{OpaqueExtrinsic};
+impl frame_benchmarking_cli::block::cmd::ExtrinsicGenerator for ExtrinsicGen {
+	fn remark(&self, nonce: u32) -> Option<OpaqueExtrinsic> {
+		let src = Sr25519Keyring::Alice.pair();
+
+		// This `create_extrinsic` only exists for the node and has no
+		// equivalent in other runtimes.
+		let extrinsic: OpaqueExtrinsic = create_extrinsic(
+			self.client.as_ref(),
+			src.clone(),
+			SystemCall::remark { remark: vec![] },
+			Some(nonce),
+		)
+		.into();
+		Some(extrinsic)
+	}
+}
+
+use sp_inherents::InherentDataProvider;
+fn inherent_data() -> Result<sp_inherents::InherentData> {
+	let mut inherent_data = sp_inherents::InherentData::new();
+	let d = std::time::Duration::from_millis(0);
+	let timestamp = sp_timestamp::InherentDataProvider::new(d.into());
+
+	timestamp
+		.provide_inherent_data(&mut inherent_data)
+		.map_err(|e| format!("creating inherent data: {:?}", e))?;
+	Ok(inherent_data)
+}
 
 /// Parse command line arguments into service configuration.
 pub fn run() -> Result<()> {
@@ -97,10 +135,14 @@ pub fn run() -> Result<()> {
 			},
 		Some(Subcommand::BenchmarkBlock(cmd)) => {
 			let runner = cli.create_runner(cmd)?;
-			runner.async_run(|config| {
-				let PartialComponents { client, task_manager, .. } = new_partial(&config)?;
+			runner.async_run(|mut config| {
+				config.role = sc_service::Role::Full;
 
-				Ok((cmd.run(config, client), task_manager))
+				let PartialComponents { client, task_manager, backend, .. } = new_partial(&config)?;
+				let ext_gen = ExtrinsicGen { client: client.clone() };
+
+				let inherents = inherent_data()?;
+				Ok((cmd.run(config, client.clone(), inherents, Arc::new(ext_gen)), task_manager))
 			})
 		},
 		Some(Subcommand::BenchmarkStorage(cmd)) => {

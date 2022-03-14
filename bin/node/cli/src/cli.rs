@@ -45,7 +45,7 @@ pub enum Subcommand {
 	/// Sub command for benchmarking block and extrinsic base weight.
 	#[clap(name = "benchmark-block", about = "Benchmark block and extrinsic base weight.")]
 	BenchmarkBlock(frame_benchmarking_cli::BlockCmd),
-
+	
 	/// Sub command for benchmarking the storage speed.
 	#[clap(name = "benchmark-storage", about = "Benchmark storage speed.")]
 	BenchmarkStorage(frame_benchmarking_cli::StorageCmd),

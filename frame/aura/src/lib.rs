@@ -282,9 +282,6 @@ impl<T: Config> OnTimestampSet<T::Moment> for Pallet<T> {
 		let timestamp_slot = moment / slot_duration;
 		let timestamp_slot = Slot::from(timestamp_slot.saturated_into::<u64>());
 
-		assert!(
-			CurrentSlot::<T>::get() == timestamp_slot,
-			"Timestamp slot must match `CurrentSlot`"
-		);
+		assert!(CurrentSlot::<T>::get() == timestamp_slot, "sdaf`");
 	}
 }

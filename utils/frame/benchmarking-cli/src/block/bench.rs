@@ -15,58 +15,54 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use sc_block_builder::BlockBuilderApi;
-use sc_cli::Result;
-use sc_client_api::{BlockBackend, UsageProvider};
-use sp_api::{ApiExt, BlockId, HeaderT, ProvideRuntimeApi};
-use sp_blockchain::HeaderBackend;
-use sp_runtime::{traits::Block as BlockT, DigestItem};
+use sc_block_builder::{BlockBuilder, BlockBuilderApi, BlockBuilderProvider};
+use sc_cli::{CliConfiguration, DatabaseParams, PruningParams, Result, SharedParams};
+use sc_client_api::{Backend as ClientBackend, StorageProvider, UsageProvider};
+use sc_client_db::DbHash;
+use sc_consensus::{
+	block_import::{BlockImportParams, ForkChoiceStrategy},
+	BlockImport, StateAction,
+};
+use sc_service::Configuration;
+use sp_api::{ApiExt, BlockId, Core, ProvideRuntimeApi};
+use sp_blockchain::{ApplyExtrinsicFailed::Validity, Error::ApplyExtrinsicFailed, HeaderBackend};
+use sp_consensus::BlockOrigin;
+use sp_database::{ColumnId, Database};
+use sp_inherents::InherentData;
+use sp_runtime::{
+	traits::{Block as BlockT, HashFor, Zero},
+	transaction_validity::{InvalidTransaction, TransactionValidityError},
+	OpaqueExtrinsic,
+};
+use sp_state_machine::Storage;
+use sp_storage::StateVersion;
+
 
 use clap::Args;
 use log::{info, warn};
 use serde::Serialize;
 use std::{marker::PhantomData, sync::Arc, time::Instant};
 
+use super::cmd::{CommandParams, ExtrinsicGenerator};
 use crate::storage::record::Stats;
 
 /// Parameters to configure a block benchmark.
 #[derive(Debug, Default, Serialize, Clone, PartialEq, Args)]
 pub struct BenchmarkParams {
-	/// Skip benchmarking NO-OP extrinsics.
-	#[clap(long)]
-	pub skip_extrinsic_benchmark: bool,
-
-	/// Skip benchmark an empty block.
-	#[clap(long)]
-	pub skip_block_benchmark: bool,
-
-	/// Specify the number of a full block. 0 is treated as last block.
-	/// The block should be filled with `System::remark` extrinsics.
-	/// Set to one since that is the first block which could be full.
-	#[clap(long, default_value = "1")]
-	pub full_block: u32,
-
-	/// Specify the number of an empty block. 0 is treated as last block.
-	/// The block should not contains any user extrinsics but only inherents.
-	/// Set to one since that is the first block which could be empty.
-	#[clap(long, default_value = "1")]
-	pub empty_block: u32,
-
-	/// How many executions should be measured.
-	#[clap(long, default_value = "100")]
-	pub repeat: u32,
-
-	/// How many executions should be run as warmup.
+	/// Rounds of warmups before measuring.
 	#[clap(long, default_value = "100")]
 	pub warmup: u32,
 
-	/// Specify the number of inherents that are present per block.
-	/// Blocks with extrinsics besides the inherents will be counted
-	/// as full and can be used for an extrinsics benchmark.
-	/// Blocks with only the inherents will be considered empty and
-	/// can only be used for a block benchmark.
+	/// How many times the benchmark should be repeated.
+	#[clap(long, default_value = "1000")]
+	pub repeat: u32,
+
+	/// Limit them number of extrinsics per block.
+	///
+	/// Only useful for debugging since for a real benchmark you
+	/// want full blocks.
 	#[clap(long)]
-	pub num_inherents: u32,
+	pub max_ext_per_block: Option<u32>,
 }
 
 /// The results of multiple runs in ns.
@@ -82,91 +78,66 @@ pub(crate) enum BenchmarkType {
 }
 
 /// Benchmarks the time it takes to execute an empty block or a NO-OP extrinsic.
-pub(crate) struct Benchmark<B, C, API> {
+pub(crate) struct Benchmark<Block, BA, C> {
 	client: Arc<C>,
 	params: BenchmarkParams,
-	no_check: bool,
-	_p: PhantomData<(B, API)>,
+	inherent_data: sp_inherents::InherentData,
+	ext_gen: Arc<dyn ExtrinsicGenerator>,
+	_p: PhantomData<(Block, BA)>,
 }
 
-impl<B, C, API> Benchmark<B, C, API>
+impl<Block, BA, C> Benchmark<Block, BA, C>
 where
-	B: BlockT,
-	C: UsageProvider<B> + HeaderBackend<B> + BlockBackend<B> + ProvideRuntimeApi<B, Api = API>,
-	API: ApiExt<B> + BlockBuilderApi<B>,
+	Block: BlockT<Extrinsic = OpaqueExtrinsic>,
+	BA: ClientBackend<Block>,
+	C: BlockBuilderProvider<BA, Block, C> + ProvideRuntimeApi<Block>,
+	C::Api: ApiExt<Block, StateBackend = BA::State> + BlockBuilderApi<Block>,
 {
-	/// Create a new benchmark object. `no_check` will ignore some safety checks.
-	pub fn new(client: Arc<C>, params: BenchmarkParams, no_check: bool) -> Self {
-		Self { client, params, no_check, _p: PhantomData }
+	/// Create a new benchmark object.
+	pub fn new(client: Arc<C>,inherent_data: sp_inherents::InherentData,
+		ext_gen: Arc<dyn ExtrinsicGenerator>, params: BenchmarkParams) -> Self {
+		Self { client, params, inherent_data, ext_gen, _p: PhantomData }
 	}
 
 	/// Benchmarks the execution time of a block.
 	pub fn bench(&self, which: BenchmarkType) -> Result<Stats> {
-		let (id, empty) = match which {
-			BenchmarkType::Block => (self.params.empty_block, true),
-			BenchmarkType::Extrinsic => (self.params.full_block, false),
-		};
-		let (block, parent) = self.load_block(id)?;
-		self.check_block(&block, empty)?;
-		let block = self.unsealed(block)?;
-
-		let rec = self.measure_block(&block, &parent, !empty)?;
+		let has_extrinsics = which.has_extrinsics();
+		let (block, extrinsics) = self.build_block(!has_extrinsics)?;
+		// TODO only divide by extrinsics.len not block.ext.len
+		let rec = self.measure_block(&block, has_extrinsics)?;
 		Stats::new(&rec)
 	}
 
-	/// Loads a block and its parent hash. 0 loads the latest block.
-	fn load_block(&self, num: u32) -> Result<(B, BlockId<B>)> {
-		let mut num = BlockId::Number(num.into());
-		if num == BlockId::Number(0u32.into()) {
-			num = BlockId::Number(self.client.info().best_number);
-
-			if num == BlockId::Number(0u32.into()) {
-				return Err("Chain must have some blocks but was empty".into())
-			}
-		}
-		info!("Loading block {}", num);
-
-		let block = self
-			.client
-			.block(&num)?
-			.map(|b| b.block)
-			.ok_or::<sc_cli::Error>("Could not load block".into())?;
-		let parent = BlockId::Hash(*block.header().parent_hash());
-		Ok((block, parent))
-	}
-
-	/// Checks if the passed block is empty.
-	/// The resulting error can be demoted to a warning via `--no-check`.
-	fn check_block(&self, block: &B, want_empty: bool) -> Result<()> {
-		let num_ext = block.extrinsics().len() as u32;
-		info!("Block contains {} transactions", num_ext);
-		if num_ext < self.params.num_inherents {
-			return Err("A block cannot have less than `num_inherents` transactions".into())
-		}
-		let is_empty = num_ext == self.params.num_inherents;
-
-		if want_empty {
-			match (is_empty, self.no_check) {
-				(true, _) => {},
-				(false, false) => return Err("Block should be empty but was not".into()),
-				(false, true) => warn!("Treating non-empty block as empty because of --no-check"),
-			}
-		} else {
-			match (!is_empty, self.no_check) {
-				(true, _) => {},
-				(false, false) => return Err("Block should be full but was not".into()),
-				(false, true) => warn!("Treating non-full block as full because of --no-check"),
-			}
+	fn build_block(&self, empty: bool) -> Result<(Block, Vec<Block::Extrinsic>)> {
+		let mut build = self.client.new_block(Default::default()).unwrap();
+		let inherents = build.create_inherents(self.inherent_data.clone()).unwrap();
+		for inherent in inherents {
+			build.push(inherent)?;
 		}
 
-		Ok(())
-	}
+		// Return early if we just want an empty block.
+		if empty {
+			return Ok((build.build()?.block, vec![]));
+		}
 
-	/// Removes the consensus seal from a block if there is any.
-	fn unsealed(&self, block: B) -> Result<B> {
-		let (mut header, extrinsics) = block.deconstruct();
-		header.digest_mut().logs.retain(|item| !matches!(item, DigestItem::Seal(_, _)));
-		Ok(B::new(header, extrinsics))
+		info!("Counting max NO-OPs per block, capped at {}", self.max_ext_per_block());
+		let mut remarks = Vec::new();
+		for nonce in 0..self.max_ext_per_block() {
+			let ext = self.ext_gen.remark(nonce).expect("Need remark");
+			match build.push(ext.clone()) {
+				Ok(_) => {},
+				Err(ApplyExtrinsicFailed(Validity(TransactionValidityError::Invalid(
+					InvalidTransaction::ExhaustsResources,
+				)))) => break,
+				Err(error) => panic!("{}", error),
+			}
+			remarks.push(ext);
+		}
+		assert!(!remarks.is_empty(), "A Block must hold at least one extrinsic");
+		info!("Max NO-OPs per block: {}", remarks.len());
+		let block = build.build()?.block;
+
+		Ok((block, remarks))
 	}
 
 	/// Measures the time that it take to execute a block.
@@ -174,18 +145,19 @@ where
 	/// by the number of extrinsics in the block.
 	/// This is useful for the case that you want to know
 	/// how long it takes to execute one extrinsic.
-	fn measure_block(&self, block: &B, before: &BlockId<B>, per_ext: bool) -> Result<BenchRecord> {
+	fn measure_block(&self, block: &Block, per_ext: bool) -> Result<BenchRecord> {
 		let mut record = BenchRecord::new();
 		let num_ext = block.extrinsics().len() as u64;
 		if per_ext && num_ext == 0 {
 			return Err("Cannot measure the extrinsic time of an empty block".into())
 		}
+		let genesis = BlockId::Number(Zero::zero());
 
 		info!("Running {} warmups...", self.params.warmup);
 		for _ in 0..self.params.warmup {
 			self.client
 				.runtime_api()
-				.execute_block(before, block.clone())
+				.execute_block(&genesis, block.clone())
 				.expect("Past blocks must execute");
 		}
 
@@ -197,7 +169,7 @@ where
 			let start = Instant::now();
 			self.client
 				.runtime_api()
-				.execute_block(before, block)
+				.execute_block(&genesis, block)
 				.expect("Past blocks must execute");
 
 			let elapsed = start.elapsed().as_nanos();
@@ -211,9 +183,20 @@ where
 
 		Ok(record)
 	}
+
+	fn max_ext_per_block(&self) -> u32 {
+		self.params.max_ext_per_block.unwrap_or(u32::MAX)
+	}
 }
 
 impl BenchmarkType {
+	pub(crate) fn has_extrinsics(&self) -> bool {
+		match self {
+			Self::Extrinsic => true,
+			Self::Block => false,
+		}
+	}
+
 	/// Short name of the benchmark type.
 	pub(crate) fn short_name(&self) -> &'static str {
 		match self {

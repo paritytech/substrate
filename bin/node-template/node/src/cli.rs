@@ -36,13 +36,13 @@ pub enum Subcommand {
 	/// Revert the chain to a previous state.
 	Revert(sc_cli::RevertCmd),
 
-	/// Sub command for benchmarking block and extrinsic base weight.
-	#[clap(name = "benchmark-block", about = "Benchmark block and extrinsic base weight.")]
-	BenchmarkBlock(frame_benchmarking_cli::BlockCmd),
-
 	/// The custom benchmark subcommand benchmarking runtime pallets.
 	#[clap(name = "benchmark", about = "Benchmark runtime pallets.")]
 	Benchmark(frame_benchmarking_cli::BenchmarkCmd),
+
+	/// The custom benchmark subcommand benchmarking runtime pallets.
+	#[clap(name = "benchmark-block", about = "Benchmark runtime pallets.")]
+	BenchmarkBlock(frame_benchmarking_cli::BlockCmd),
 
 	/// Try some command against runtime state.
 	#[cfg(feature = "try-runtime")]

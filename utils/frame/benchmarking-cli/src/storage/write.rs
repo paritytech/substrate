@@ -51,6 +51,7 @@ impl StorageCmd {
 		let mut record = BenchRecord::default();
 
 		let supports_rc = db.supports_ref_counting();
+		// TODO use HeaderBackend.info()
 		let block = BlockId::Number(client.usage_info().chain.best_number);
 		let header = client.header(block)?.ok_or("Header not found")?;
 		let original_root = *header.state_root();
