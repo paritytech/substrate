@@ -159,10 +159,8 @@ pub fn run() -> Result<()> {
 				let PartialComponents { client, task_manager, backend, .. } = new_partial(&config)?;
 				let client_clone = client.clone();
 				let revert_aux = Box::new(move |blocks| {
-					sc_consensus_babe::revert::<node_primitives::Block, service::FullClient>(
-						client_clone,
-						blocks,
-					)?;
+					sc_consensus_babe::revert(client_clone, blocks)?;
+					// TODO: grandpa
 					Ok(())
 				});
 

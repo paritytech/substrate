@@ -43,6 +43,7 @@ pub struct RevertCmd {
 	pub pruning_params: PruningParams,
 }
 
+/// Revert handler for auxiliary data (e.g. consensus).
 type AuxRevertHandler<B> = Box<dyn FnOnce(NumberFor<B>) -> error::Result<()>>;
 
 impl RevertCmd {
