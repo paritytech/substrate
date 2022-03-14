@@ -119,7 +119,7 @@ where
 		if empty {
 			return Ok((build.build()?.block, vec![]));
 		}
-
+		
 		info!("Counting max NO-OPs per block, capped at {}", self.max_ext_per_block());
 		let mut remarks = Vec::new();
 		for nonce in 0..self.max_ext_per_block() {

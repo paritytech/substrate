@@ -94,14 +94,12 @@ impl BlockCmd {
 	{
 		let bench = Benchmark::new(client, inherent_data, ext_gen, self.params.bench.clone());
 
-		// Empty block benchmark.
 		{
 			let stats = bench.bench(BenchmarkType::Block)?;
 			info!("Executing an empty block [ns]:\n{:?}", stats);
 			let template = TemplateData::new(BenchmarkType::Block, &cfg, &self.params, &stats)?;
 			template.write(&self.params.weight.weight_path)?;
 		}
-		// NO-OP extrinsic benchmark.
 		{
 			let stats = bench.bench(BenchmarkType::Extrinsic)?;
 			info!("Executing a NO-OP extrinsic [ns]:\n{:?}", stats);
