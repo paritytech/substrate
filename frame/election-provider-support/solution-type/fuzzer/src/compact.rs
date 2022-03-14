@@ -1,5 +1,6 @@
+use frame_election_provider_solution_type::generate_solution_type;
 use honggfuzz::fuzz;
-use sp_npos_elections::{generate_solution_type, sp_arithmetic::Percent};
+use sp_arithmetic::Percent;
 use sp_runtime::codec::{Encode, Error};
 
 fn main() {
