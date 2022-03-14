@@ -459,7 +459,7 @@ mod join {
 			// Balance is gt 1/10 of Balance::MAX
 			assert_noop!(Pools::join(Origin::signed(11), 5, 123), Error::<Runtime>::OverflowRisk);
 
-			StakingMock::set_bonded_balance(123, 100);
+			StakingMock::set_bonded_balance(PRIMARY_ACCOUNT, 10);
 			// Cannot join a pool that isn't open
 			unsafe_set_state(&PRIMARY_ACCOUNT, PoolState::Blocked).unwrap();
 			assert_noop!(

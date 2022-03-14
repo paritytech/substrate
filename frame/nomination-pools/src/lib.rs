@@ -634,8 +634,8 @@ impl<T: Config> BondedPool<T> {
 
 	/// Check that the pool can accept a member with `new_funds`.
 	fn ok_to_join(&self) -> Result<(), DispatchError> {
-		self.ok_to_be_open()?;
 		ensure!(self.state == PoolState::Open, Error::<T>::NotOpen);
+		self.ok_to_be_open()?;
 		Ok(())
 	}
 
