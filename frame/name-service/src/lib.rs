@@ -31,7 +31,7 @@ pub use pallet::*;
 pub mod pallet {
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
-	use sp_runtime::traits::{Convert, Hash, Saturating, Zero};
+	use sp_runtime::traits::{Convert, Saturating, Zero};
 	use sp_std::convert::TryInto;
 
 	use frame_support::traits::{
@@ -255,7 +255,7 @@ pub mod pallet {
 				// TODO: handle deposits maybe in the future
 				let deposit: BalanceOf<T> = Default::default();
 
-				Self::do_register(name_hash, commitment.who, deposit, periods);
+				Self::do_register(name_hash, commitment.who, deposit, periods)?;
 			}
 
 			Commitments::<T>::remove(commitment_hash);
@@ -329,7 +329,7 @@ pub mod pallet {
 				Registrations::<T>::get(name_hash).ok_or(Error::<T>::RegistrationNotFound)?;
 			ensure!(registration.owner == sender, Error::<T>::NotRegistrationOwner);
 
-			if (registration.expiry <= frame_system::Pallet::<T>::block_number()) {
+			if registration.expiry <= frame_system::Pallet::<T>::block_number() {
 				Self::do_deregister(name_hash)?;
 			}
 

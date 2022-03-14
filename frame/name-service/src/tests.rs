@@ -23,12 +23,9 @@ use super::{mock::*, *};
 use codec::Encode;
 use frame_support::{
 	assert_noop, assert_ok,
-	error::BadOrigin,
-	traits::{Currency, OnFinalize, OnInitialize},
+	traits::{OnFinalize, OnInitialize},
 };
 use sp_core::blake2_256;
-
-use sp_runtime::MultiAddress;
 
 fn run_to_block(n: u64) {
 	while System::block_number() < n {
