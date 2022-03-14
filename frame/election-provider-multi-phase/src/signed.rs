@@ -396,7 +396,7 @@ impl<T: Config> Pallet<T> {
 		// they didn't end up being used. Unreserve the bonds.
 		let discarded = all_submissions.len();
 		let mut refund_count = 0;
-		let maybe_max_refunds =  T::SignedMaxRefunds::get();
+		let maybe_max_refunds = T::SignedMaxRefunds::get();
 		for SignedSubmission { who, deposit, call_fee, .. } in all_submissions.drain() {
 			if maybe_max_refunds.map_or(true, |max| refund_count < max) {
 				// Refund fee
@@ -446,7 +446,8 @@ impl<T: Config> Pallet<T> {
 		debug_assert!(_remaining.is_zero());
 
 		// Reward and refund the call fee.
-		let positive_imbalance = T::Currency::deposit_creating(who, reward.saturating_add(call_fee));
+		let positive_imbalance =
+			T::Currency::deposit_creating(who, reward.saturating_add(call_fee));
 		T::RewardHandler::on_unbalanced(positive_imbalance);
 	}
 
@@ -505,8 +506,8 @@ mod tests {
 	use super::*;
 	use crate::{
 		mock::{
-			balances, raw_solution, roll_to, ExtBuilder, MultiPhase, Origin, Runtime,
-			SignedMaxSubmissions, SignedMaxWeight, Balances, SignedMaxRefunds
+			balances, raw_solution, roll_to, Balances, ExtBuilder, MultiPhase, Origin, Runtime,
+			SignedMaxRefunds, SignedMaxSubmissions, SignedMaxWeight,
 		},
 		Error, Phase,
 	};
@@ -639,6 +640,44 @@ mod tests {
 				Error::<Runtime>::SignedQueueFull,
 			);
 		})
+	}
+
+	#[test]
+	fn call_fee_refund_is_limited_by_signed_max_refunds() {
+		ExtBuilder::default().build_and_execute(|| {
+			roll_to(15);
+			assert!(MultiPhase::current_phase().is_signed());
+			assert_eq!(SignedMaxRefunds::get(), Some(1));
+			assert!(SignedMaxSubmissions::get() > 2);
+
+			for s in 0..SignedMaxSubmissions::get() {
+				let account = 99 + s as u64;
+				Balances::make_free_balance_be(&account, 100);
+				// score is always decreasing better
+				let mut solution = raw_solution();
+				solution.score.minimal_stake -= s as u128;
+
+				assert_ok!(MultiPhase::submit(Origin::signed(account), Box::new(solution)));
+				assert_eq!(balances(&account), (95, 5));
+			}
+
+			assert!(MultiPhase::finalize_signed_phase());
+
+			for s in 0..SignedMaxSubmissions::get() {
+				let account = 99 + s as u64;
+				// lower accounts have higher scores
+				if s == 0 {
+					// winning solution always gets call fee + reward
+					assert_eq!(balances(&account), (100 + 8 + 7, 0))
+				} else if s == 1 {
+					// 1 runner up gets there call fee refunded
+					assert_eq!(balances(&account), (100 + 8, 0))
+				} else {
+					// all other solutions don't get a call fee refunds
+					assert_eq!(balances(&account), (100, 0));
+				}
+			}
+		});
 	}
 
 	#[test]
