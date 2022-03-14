@@ -168,13 +168,8 @@ where
 	)?;
 
 	io.merge(
-		SyncStateRpc::new(
-			chain_spec,
-			client,
-			shared_authority_set,
-			shared_epoch_changes,
-		)?
-		.into_rpc(),
+		SyncStateRpc::new(chain_spec, client, shared_authority_set, shared_epoch_changes)?
+			.into_rpc(),
 	)?;
 
 	Ok(io)

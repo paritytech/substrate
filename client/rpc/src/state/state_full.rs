@@ -421,7 +421,8 @@ where
 		// let storage_stream = stream.map(|(block, changes)| StorageChangeSet {
 		let storage_stream = stream.map(|storage_notif| StorageChangeSet {
 			block: storage_notif.block,
-			changes: storage_notif.changes
+			changes: storage_notif
+				.changes
 				.iter()
 				.filter_map(|(o_sk, k, v)| o_sk.is_none().then(|| (k.clone(), v.cloned())))
 				.collect(),
