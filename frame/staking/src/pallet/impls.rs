@@ -459,7 +459,7 @@ impl<T: Config> Pallet<T> {
 					})
 					.ok()?
 			} else {
-				// we take the validators from `<NExtValidators>`, which should have already been
+				// we take the validators from `<NextValidators>`, which should have already been
 				// stored and saved. Else. we do a last attempt at fetching something useful from
 				// the election provider. This comes handy in tests and benchmarks, but also a
 				// reasonable backup to have in production.

@@ -267,14 +267,14 @@ pub use weights::WeightInfo;
 
 /// A fallback implementation that transitions the pallet to the emergency phase.
 pub struct InitiateEmergencyPhase<T>(sp_std::marker::PhantomData<T>);
-impl<T: Config> ElectionProvider for InitiateEmergencyPhase<T> {
+impl<T: verifier::Config> ElectionProvider for InitiateEmergencyPhase<T> {
 	type AccountId = T::AccountId;
 	type BlockNumber = T::BlockNumber;
 	type DataProvider = T::DataProvider;
 	type Error = &'static str;
 	type Pages = ConstU32<1>;
-	type MaxBackersPerWinner = ();
-	type MaxWinnersPerPage = ();
+	type MaxBackersPerWinner = T::MaxBackersPerWinner;
+	type MaxWinnersPerPage = T::MaxWinnersPerPage;
 
 	fn elect(remaining: PageIndex) -> Result<BoundedSupportsOf<Self>, Self::Error> {
 		ensure!(remaining == 0, "fallback should only have 1 page");
@@ -497,8 +497,9 @@ pub mod pallet {
 			match current_phase {
 				// start and continue snapshot.
 				Phase::Off
-					if remaining_blocks <= snapshot_deadline &&
-						remaining_blocks > signed_deadline =>
+					if remaining_blocks <= snapshot_deadline
+					// && remaining_blocks > signed_deadline
+					=>
 				{
 					let remaining_pages = Self::msp();
 					log!(info, "starting snapshot creation, remaining block: {}", remaining_pages);

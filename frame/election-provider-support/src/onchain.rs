@@ -141,6 +141,7 @@ impl<T: Config> OnChainSequentialPhragmen<T> {
 			DispatchClass::Mandatory,
 		);
 
+		// TODO: a sort impl as well would be good.
 		let supports = to_supports(&staked);
 		let bounded_supports = supports.truncate_into_bounded_supports();
 		Ok(bounded_supports.into())

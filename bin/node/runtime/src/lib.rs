@@ -629,8 +629,8 @@ impl frame_election_provider_support::onchain::Config for Runtime {
 	type DataProvider = <Self as pallet_election_provider_multi_phase::Config>::DataProvider;
 	type VoterPageSize = ();
 	type TargetPageSize = ();
-	type MaxBackersPerWinner = ConstU32<{ u32::MAX }>;
-	type MaxWinnersPerPage = ConstU32<{ u32::MAX }>;
+	type MaxBackersPerWinner = <Self as election_verifier::Config>::MaxBackersPerWinner;
+	type MaxWinnersPerPage = <Self as election_verifier::Config>::MaxWinnersPerPage;
 }
 
 // Multi-block election provider pallet group.
@@ -718,7 +718,7 @@ impl pallet_staking::Config for Runtime {
 	type NextNewSession = Session;
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
 	type OffendingValidatorsThreshold = OffendingValidatorsThreshold;
-	type ElectionProvider = ElectionProviderMultiPhase;
+	type ElectionProvider = ElectionMultiBlock;
 	type ElectionProviderLookahead = Lookahead;
 	type GenesisElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
 	// Alternatively, use pallet_staking::UseNominatorsMap<Runtime> to just use the nominators map.
