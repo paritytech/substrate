@@ -1542,8 +1542,7 @@ mod test {
 				// Remove and continue filtering.
 				"H" => (true, None),
 				// Should never happen because of the stop and pruning conditions.
-				"D" | "E" | "I" | "L" | "M" | "O" | "J" | "K" | _ =>
-					panic!("Unexpected filtering for: {}", *h),
+				_ => panic!("Unexpected filtering for node: {}", *h),
 			}
 		};
 
