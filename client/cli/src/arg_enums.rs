@@ -86,6 +86,14 @@ impl Into<sc_service::config::WasmExecutionMethod> for WasmExecutionMethod {
 	}
 }
 
+/// The default [`WasmExecutionMethod`].
+#[cfg(feature = "wasmtime")]
+pub const DEFAULT_WASM_EXECUTION_METHOD: &str = "Compiled";
+
+/// The default [`WasmExecutionMethod`].
+#[cfg(not(feature = "wasmtime"))]
+pub const DEFAULT_WASM_EXECUTION_METHOD: &str = "interpreted-i-know-what-i-do";
+
 #[allow(missing_docs)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, ArgEnum)]
 #[clap(rename_all = "PascalCase")]
