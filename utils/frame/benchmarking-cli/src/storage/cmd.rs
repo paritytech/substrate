@@ -20,6 +20,7 @@ use sc_client_api::{Backend as ClientBackend, StorageProvider, UsageProvider};
 use sc_client_db::DbHash;
 use sc_service::Configuration;
 use sp_blockchain::HeaderBackend;
+use sp_core::storage::StorageKey;
 use sp_database::{ColumnId, Database};
 use sp_runtime::traits::{Block as BlockT, HashFor};
 use sp_state_machine::Storage;
@@ -131,6 +132,7 @@ impl StorageCmd {
 		template.set_block_number(block_id.to_string());
 
 		if !self.params.skip_read {
+			self.bench_warmup(&client)?;
 			let record = self.bench_read(client.clone())?;
 			if let Some(path) = &self.params.json_read_path {
 				record.save_json(&cfg, path, "read")?;
@@ -141,6 +143,7 @@ impl StorageCmd {
 		}
 
 		if !self.params.skip_write {
+			self.bench_warmup(&client)?;
 			let record = self.bench_write(client, db, storage)?;
 			if let Some(path) = &self.params.json_write_path {
 				record.save_json(&cfg, path, "write")?;
@@ -167,6 +170,33 @@ impl StorageCmd {
 		let seed = rand::thread_rng().gen::<u64>();
 		info!("Using seed {}", seed);
 		StdRng::seed_from_u64(seed)
+	}
+
+	/// Run some rounds of the (read) benchmark as warmup.
+	/// See `frame_benchmarking_cli::storage::read::bench_read` for detailed comments.
+	fn bench_warmup<B, BA, C>(&self, client: &Arc<C>) -> Result<()>
+	where
+		C: UsageProvider<B> + StorageProvider<B, BA>,
+		B: BlockT + Debug,
+		BA: ClientBackend<B>,
+	{
+		let block = BlockId::Number(client.usage_info().chain.best_number);
+		let empty_prefix = StorageKey(Vec::new());
+		let mut keys = client.storage_keys(&block, &empty_prefix)?;
+		let mut rng = Self::setup_rng();
+		keys.shuffle(&mut rng);
+
+		for i in 0..self.params.warmups {
+			info!("Warmup round {}/{}", i + 1, self.params.warmups);
+			for key in keys.clone() {
+				let _ = client
+					.storage(&block, &key)
+					.expect("Checked above to exist")
+					.ok_or("Value unexpectedly empty");
+			}
+		}
+
+		Ok(())
 	}
 }
 
