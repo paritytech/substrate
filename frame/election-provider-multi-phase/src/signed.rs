@@ -407,7 +407,7 @@ impl<T: Config> Pallet<T> {
 			// Unreserve deposit
 			let _remaining = T::Currency::unreserve(&who, deposit);
 			debug_assert!(_remaining.is_zero());
-			weight = weight.saturating_add(T::DbWeight::get().writes(2));
+			weight = weight.saturating_add(T::DbWeight::get().reads_writes(1, 2));
 		}
 
 		debug_assert!(!SignedSubmissionIndices::<T>::exists());
