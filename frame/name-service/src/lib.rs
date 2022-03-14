@@ -46,10 +46,10 @@ pub mod pallet {
 
 	type CommitmentHash = [u8; 32];
 
-	// Allows easy access our Pallet's `Balance` type. Comes from `Currency` interface.
+	// Allows easy access our Pallet's `Balance` and `NegativeImbalance` type. Comes from `Currency`
+	// interface.
 	type BalanceOf<T> =
 		<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
-
 	type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<
 		<T as frame_system::Config>::AccountId,
 	>>::NegativeImbalance;
@@ -329,10 +329,6 @@ pub mod pallet {
 				Registrations::<T>::get(name_hash).ok_or(Error::<T>::RegistrationNotFound)?;
 			ensure!(registration.owner == sender, Error::<T>::NotRegistrationOwner);
 
-			if registration.expiry <= frame_system::Pallet::<T>::block_number() {
-				Self::do_deregister(name_hash)?;
-			}
-
 			ensure!(
 				registration.expiry > frame_system::Pallet::<T>::block_number(),
 				Error::<T>::RegistrationExpired
@@ -348,7 +344,7 @@ pub mod pallet {
 		#[pallet::weight(0)]
 		pub fn deregister(origin: OriginFor<T>, name_hash: NameHash) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
-			Self::do_deregister(name_hash)?;
+			Self::do_deregister(name_hash, Some(sender))?;
 			Ok(())
 		}
 
@@ -421,13 +417,24 @@ pub mod pallet {
 			Ok(())
 		}
 
-		fn do_deregister(name_hash: NameHash) -> DispatchResult {
+		fn do_deregister(
+			name_hash: NameHash,
+			maybe_sender: Option<T::AccountId>,
+		) -> DispatchResult {
 			let registration =
 				Registrations::<T>::get(name_hash).ok_or(Error::<T>::RegistrationNotFound)?;
-			ensure!(
-				registration.expiry <= frame_system::Pallet::<T>::block_number(),
-				Error::<T>::RegistrationNotExpired
-			);
+
+			let is_owner =
+				if let Some(sender) = maybe_sender { registration.owner == sender } else { false };
+
+			// If the sender is not the owner, we need to verify that the registration has expired.
+			// Otherwise, we can skip this check since owner can do whatever they want.
+			if !is_owner {
+				ensure!(
+					registration.expiry <= frame_system::Pallet::<T>::block_number(),
+					Error::<T>::RegistrationNotExpired
+				);
+			}
 
 			Registrations::<T>::remove(name_hash);
 
