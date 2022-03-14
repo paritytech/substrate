@@ -34,7 +34,10 @@ pub use crate::{
 		TransactionPriority, WeighData, Weight, WithPostDispatchInfo,
 	},
 };
-pub use sp_runtime::{traits::{Dispatchable, Zero}, DispatchError, RuntimeDebug};
+pub use sp_runtime::{
+	traits::{Dispatchable, Zero},
+	DispatchError, RuntimeDebug,
+};
 
 /// The return type of a `Dispatchable` in frame. When returned explicitly from
 /// a dispatchable function it allows overriding the default `PostDispatchInfo`
@@ -2795,7 +2798,10 @@ mod tests {
 
 	#[test]
 	fn on_initialize_should_work_2() {
-		assert_eq!(<Module<TraitImpl> as OnInitialize<u32>>::on_initialize(10), Weight::todo_from_v1(7));
+		assert_eq!(
+			<Module<TraitImpl> as OnInitialize<u32>>::on_initialize(10),
+			Weight::todo_from_v1(7)
+		);
 	}
 
 	#[test]
@@ -2812,7 +2818,10 @@ mod tests {
 
 	#[test]
 	fn on_idle_should_work_3() {
-		assert_eq!(<Module<TraitImpl> as OnIdle<u32>>::on_idle(10, Weight::todo_from_v1(11)), Weight::todo_from_v1(7));
+		assert_eq!(
+			<Module<TraitImpl> as OnIdle<u32>>::on_idle(10, Weight::todo_from_v1(11)),
+			Weight::todo_from_v1(7)
+		);
 	}
 
 	#[test]
@@ -2824,7 +2833,10 @@ mod tests {
 	#[test]
 	fn on_runtime_upgrade_should_work() {
 		sp_io::TestExternalities::default().execute_with(|| {
-			assert_eq!(<Module<TraitImpl> as OnRuntimeUpgrade>::on_runtime_upgrade(), Weight::todo_from_v1(10))
+			assert_eq!(
+				<Module<TraitImpl> as OnRuntimeUpgrade>::on_runtime_upgrade(),
+				Weight::todo_from_v1(10)
+			)
 		});
 	}
 

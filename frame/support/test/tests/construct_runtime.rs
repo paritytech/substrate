@@ -21,7 +21,10 @@
 
 #![recursion_limit = "128"]
 
-use frame_support::traits::{CrateVersion, PalletInfo as _};
+use frame_support::{
+	traits::{CrateVersion, PalletInfo as _},
+	weights::Weight,
+};
 use scale_info::TypeInfo;
 use sp_core::{sr25519, H256};
 use sp_runtime::{
@@ -541,12 +544,20 @@ fn call_weight_should_attach_to_call_enum() {
 	// operational.
 	assert_eq!(
 		module3::Call::<Runtime>::operational {}.get_dispatch_info(),
-		DispatchInfo { weight: 5, class: DispatchClass::Operational, pays_fee: Pays::Yes },
+		DispatchInfo {
+			weight: Weight::todo_from_v1(5),
+			class: DispatchClass::Operational,
+			pays_fee: Pays::Yes
+		},
 	);
 	// custom basic
 	assert_eq!(
 		module3::Call::<Runtime>::aux_4 {}.get_dispatch_info(),
-		DispatchInfo { weight: 3, class: DispatchClass::Normal, pays_fee: Pays::Yes },
+		DispatchInfo {
+			weight: Weight::todo_from_v1(3),
+			class: DispatchClass::Normal,
+			pays_fee: Pays::Yes
+		},
 	);
 }
 

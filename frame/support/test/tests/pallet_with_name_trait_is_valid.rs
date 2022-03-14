@@ -15,6 +15,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use frame_support::weights::Weight;
+use sp_runtime::traits::Zero;
+
 pub trait Trait: frame_system::Config {
 	type Balance: frame_support::dispatch::Parameter;
 	/// The overarching event type.
@@ -53,8 +56,8 @@ frame_support::decl_module! {
 			unimplemented!();
 		}
 
-		fn on_initialize(_n: T::BlockNumber) -> frame_support::weights::Weight {
-			0
+		fn on_initialize(_n: T::BlockNumber) -> Weight {
+			Weight::zero()
 		}
 	}
 }

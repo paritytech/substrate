@@ -17,10 +17,10 @@
 
 //! Traits for hooking tasks to events in a blockchain's lifecycle.
 
+use crate::weights::Weight;
 use impl_trait_for_tuples::impl_for_tuples;
 use sp_arithmetic::traits::{Saturating, Zero};
 use sp_runtime::traits::AtLeast32BitUnsigned;
-use crate::weights::Weight;
 
 /// The block initialization trait.
 ///
@@ -72,10 +72,7 @@ pub trait OnIdle<BlockNumber> {
 	///
 	/// NOTE: This function is called AFTER ALL extrinsics - including inherent extrinsics -
 	/// in a block are applied but before `on_finalize` is executed.
-	fn on_idle(
-		_n: BlockNumber,
-		_remaining_weight: Weight,
-	) -> Weight {
+	fn on_idle(_n: BlockNumber, _remaining_weight: Weight) -> Weight {
 		Weight::zero()
 	}
 }
@@ -83,10 +80,8 @@ pub trait OnIdle<BlockNumber> {
 #[impl_for_tuples(30)]
 impl<BlockNumber: Copy + AtLeast32BitUnsigned> OnIdle<BlockNumber> for Tuple {
 	fn on_idle(n: BlockNumber, remaining_weight: Weight) -> Weight {
-		let on_idle_functions: &[fn(
-			BlockNumber,
-			Weight,
-		) -> Weight] = &[for_tuples!( #( Tuple::on_idle ),* )];
+		let on_idle_functions: &[fn(BlockNumber, Weight) -> Weight] =
+			&[for_tuples!( #( Tuple::on_idle ),* )];
 		let mut weight = Weight::zero();
 		let len = on_idle_functions.len();
 		let start_index = n % (len as u32).into();
@@ -221,10 +216,7 @@ pub trait Hooks<BlockNumber> {
 	/// Will not fire if the remaining weight is 0.
 	/// Return the weight used, the hook will subtract it from current weight used
 	/// and pass the result to the next `on_idle` hook if it exists.
-	fn on_idle(
-		_n: BlockNumber,
-		_remaining_weight: Weight,
-	) -> Weight {
+	fn on_idle(_n: BlockNumber, _remaining_weight: Weight) -> Weight {
 		Weight::zero()
 	}
 
