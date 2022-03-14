@@ -99,7 +99,7 @@ pub fn migrate_from_single_u8_to_triple_ref_count<T: V2ToV3>() -> Weight {
 	);
 	<UpgradedToU32RefCount>::put(true);
 	<UpgradedToTripleRefCount>::put(true);
-	Weight::max_value()
+	Weight::MAX
 }
 
 /// Migrate from unique `u32` reference counting to triple `u32` reference counting.
@@ -117,7 +117,7 @@ pub fn migrate_from_single_to_triple_ref_count<T: V2ToV3>() -> Weight {
 		translated
 	);
 	<UpgradedToTripleRefCount>::put(true);
-	Weight::max_value()
+	Weight::MAX
 }
 
 /// Migrate from dual `u32` reference counting to triple `u32` reference counting.
@@ -135,5 +135,5 @@ pub fn migrate_from_dual_to_triple_ref_count<T: V2ToV3>() -> Weight {
 		translated
 	);
 	<UpgradedToTripleRefCount>::put(true);
-	Weight::max_value()
+	Weight::MAX
 }

@@ -102,7 +102,7 @@ pub fn apply<T: V2ToV3>(old_voter_bond: T::Balance, old_candidacy_bond: T::Balan
 
 		StorageVersion::new(3).put::<T::Pallet>();
 
-		Weight::max_value()
+		Weight::MAX
 	} else {
 		log::warn!(
 			target: "runtime::elections-phragmen",

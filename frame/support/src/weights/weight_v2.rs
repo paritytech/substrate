@@ -41,7 +41,7 @@ impl WeightV2 {
 
 	/// This is a simple helper function which allows us to be backwards compatible, but will be
 	/// removed in the future.
-	pub const fn todo_from_v1(computation: Weight) -> Self {
+	pub const fn todo_from_v1(computation: WeightV1) -> Self {
 		Self { computation, bandwidth: 0 }
 	}
 
@@ -207,6 +207,12 @@ impl<T> PaysFee<T> for (WeightV2, DispatchClass, Pays) {
 }
 
 impl<T> WeighData<T> for (WeightV2, DispatchClass) {
+	fn weigh_data(&self, args: T) -> WeightV2 {
+		return self.0.weigh_data(args)
+	}
+}
+
+impl<T> WeighData<T> for (WeightV2, DispatchClass, Pays) {
 	fn weigh_data(&self, args: T) -> WeightV2 {
 		return self.0.weigh_data(args)
 	}

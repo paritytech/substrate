@@ -34,7 +34,7 @@ pub use crate::{
 		TransactionPriority, WeighData, Weight, WithPostDispatchInfo,
 	},
 };
-pub use sp_runtime::{traits::Dispatchable, DispatchError, RuntimeDebug};
+pub use sp_runtime::{traits::{Dispatchable, Zero}, DispatchError, RuntimeDebug};
 
 /// The return type of a `Dispatchable` in frame. When returned explicitly from
 /// a dispatchable function it allows overriding the default `PostDispatchInfo`
@@ -1608,7 +1608,7 @@ macro_rules! decl_module {
 					pallet_name,
 				);
 
-				0
+				<$crate::weights::Weight as sp_runtime::traits::Zero>::zero()
 			}
 
 			#[cfg(feature = "try-runtime")]
@@ -2635,13 +2635,13 @@ mod tests {
 			#[weight = (5, DispatchClass::Operational)]
 			fn operational(_origin) { unreachable!() }
 
-			fn on_initialize(n: T::BlockNumber,) -> Weight { if n.into() == 42 { panic!("on_initialize") } 7 }
+			fn on_initialize(n: T::BlockNumber,) -> Weight { if n.into() == 42 { panic!("on_initialize") } Weight::todo_from_v1(7) }
 			fn on_idle(n: T::BlockNumber, remaining_weight: Weight,) -> Weight {
-				if n.into() == 42 || remaining_weight == 42  { panic!("on_idle") }
-				7
+				if n.into() == 42 || remaining_weight == Weight::todo_from_v1(42) { panic!("on_idle") }
+				Weight::todo_from_v1(7)
 			}
 			fn on_finalize(n: T::BlockNumber,) { if n.into() == 42 { panic!("on_finalize") } }
-			fn on_runtime_upgrade() -> Weight { 10 }
+			fn on_runtime_upgrade() -> Weight { Weight::todo_from_v1(10) }
 			fn offchain_worker() {}
 			/// Some doc
 			fn integrity_test() { panic!("integrity_test") }
@@ -2795,24 +2795,24 @@ mod tests {
 
 	#[test]
 	fn on_initialize_should_work_2() {
-		assert_eq!(<Module<TraitImpl> as OnInitialize<u32>>::on_initialize(10), 7);
+		assert_eq!(<Module<TraitImpl> as OnInitialize<u32>>::on_initialize(10), Weight::todo_from_v1(7));
 	}
 
 	#[test]
 	#[should_panic(expected = "on_idle")]
 	fn on_idle_should_work_1() {
-		<Module<TraitImpl> as OnIdle<u32>>::on_idle(42, 9);
+		<Module<TraitImpl> as OnIdle<u32>>::on_idle(42, Weight::todo_from_v1(9));
 	}
 
 	#[test]
 	#[should_panic(expected = "on_idle")]
 	fn on_idle_should_work_2() {
-		<Module<TraitImpl> as OnIdle<u32>>::on_idle(9, 42);
+		<Module<TraitImpl> as OnIdle<u32>>::on_idle(9, Weight::todo_from_v1(42));
 	}
 
 	#[test]
 	fn on_idle_should_work_3() {
-		assert_eq!(<Module<TraitImpl> as OnIdle<u32>>::on_idle(10, 11), 7);
+		assert_eq!(<Module<TraitImpl> as OnIdle<u32>>::on_idle(10, Weight::todo_from_v1(11)), Weight::todo_from_v1(7));
 	}
 
 	#[test]
@@ -2824,7 +2824,7 @@ mod tests {
 	#[test]
 	fn on_runtime_upgrade_should_work() {
 		sp_io::TestExternalities::default().execute_with(|| {
-			assert_eq!(<Module<TraitImpl> as OnRuntimeUpgrade>::on_runtime_upgrade(), 10)
+			assert_eq!(<Module<TraitImpl> as OnRuntimeUpgrade>::on_runtime_upgrade(), Weight::todo_from_v1(10))
 		});
 	}
 

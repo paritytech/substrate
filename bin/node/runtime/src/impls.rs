@@ -355,8 +355,8 @@ mod multiplier_tests {
 			4294967295,
 			BlockWeights::get().max_block / 2,
 			BlockWeights::get().max_block,
-			Weight::max_value() / 2,
-			Weight::max_value(),
+			Weight::MAX / 2,
+			Weight::MAX,
 		]
 		.into_iter()
 		.for_each(|i| {
