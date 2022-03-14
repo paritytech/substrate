@@ -148,10 +148,7 @@ pub fn run() -> Result<()> {
 				let PartialComponents { client, task_manager, .. } = new_partial(&config)?;
 				let ext_builder = ExtrinsicBuilder { client: client.clone() };
 
-				Ok((
-					cmd.run(config, client.clone(), inherent_data()?, Arc::new(ext_builder)),
-					task_manager,
-				))
+				Ok((cmd.run(config, client, inherent_data()?, Arc::new(ext_builder)), task_manager))
 			})
 		},
 		Some(Subcommand::BenchmarkStorage(cmd)) => {

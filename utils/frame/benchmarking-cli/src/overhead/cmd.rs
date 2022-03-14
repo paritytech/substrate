@@ -15,8 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Contains the [`OverheadCmd`] which the CLI uses as entry point
-//! for the *overhead* benchmarks.
+//! Contains the [`OverheadCmd`] as entry point for the CLI to execute
+//! the *overhead* benchmarks.
 
 use sc_block_builder::{BlockBuilderApi, BlockBuilderProvider};
 use sc_cli::{CliConfiguration, Result, SharedParams};
@@ -50,7 +50,7 @@ pub struct OverheadCmd {
 	pub params: OverheadParams,
 }
 
-/// Configures the benchmark and the post processing and weight generation.
+/// Configures the benchmark, the post-processing and weight generation.
 #[derive(Debug, Default, Serialize, Clone, PartialEq, Args)]
 pub struct OverheadParams {
 	#[allow(missing_docs)]
@@ -64,7 +64,8 @@ pub struct OverheadParams {
 
 /// Used by the benchmark to build signed extrinsics.
 ///
-/// This only has to work for the first block who's parent block is the genesis block.
+/// The built extrinsics only need to be valid in the first block
+/// who's parent block is the genesis block.
 pub trait ExtrinsicBuilder {
 	/// Build a `System::remark` extrinsic.
 	fn remark(&self, nonce: u32) -> Option<OpaqueExtrinsic>;
@@ -74,7 +75,7 @@ impl OverheadCmd {
 	/// Measures the per-block and per-extrinsic execution overhead.
 	///
 	/// Writes the results to console and into two instances of the
-	/// `weights.hbs` template.
+	/// `weights.hbs` template, one for each benchmark.
 	pub async fn run<Block, BA, C>(
 		&self,
 		cfg: Configuration,

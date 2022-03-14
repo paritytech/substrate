@@ -15,8 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Converts the benchmark results into [`TemplateData`] which gets
-//! written into the `weights.hbs` template.
+//! Converts a benchmark result into [`TemplateData`] and writes
+//! it into the `weights.hbs` template.
 
 use sc_cli::Result;
 use sc_service::Configuration;
@@ -58,7 +58,7 @@ pub(crate) struct TemplateData {
 }
 
 impl TemplateData {
-	/// Returns a new [`Self`] from the given configuration.
+	/// Returns a new [`Self`] from the given params.
 	pub(crate) fn new(
 		t: BenchmarkType,
 		cfg: &Configuration,

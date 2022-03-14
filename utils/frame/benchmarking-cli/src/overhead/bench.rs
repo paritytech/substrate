@@ -115,7 +115,7 @@ where
 		info!("Building block, this takes some time...");
 		let mut num_ext = 0;
 		for nonce in 0.. {
-			let ext = self.ext_builder.remark(nonce).ok_or("Could not generate extrinsic")?;
+			let ext = self.ext_builder.remark(nonce).ok_or("Could not build extrinsic")?;
 			match builder.push(ext.clone()) {
 				Ok(_) => {},
 				Err(ApplyExtrinsicFailed(Validity(TransactionValidityError::Invalid(
@@ -133,10 +133,6 @@ where
 	}
 
 	/// Measures the time that it take to execute a block or an extrinsic.
-	/// `per_ext` specifies if the result should be divided
-	/// by the number of extrinsics in the block.
-	/// This is useful for the case that you want to know
-	/// how long it takes to execute one extrinsic.
 	fn measure_block(
 		&self,
 		block: &Block,

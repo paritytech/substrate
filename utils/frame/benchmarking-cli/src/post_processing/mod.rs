@@ -15,6 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! Calculates a weight from the statistics of a benchmark result.
+
 use sc_cli::Result;
 
 use clap::Args;
@@ -22,11 +24,11 @@ use serde::Serialize;
 
 use crate::storage::record::{StatSelect, Stats};
 
-/// Parameters to configure the post processing of the weights.
+/// Configures the weight generation.
 #[derive(Debug, Default, Serialize, Clone, PartialEq, Args)]
 pub struct WeightParams {
 	/// Path to write the *weight* file to. Can be a file or directory.
-	/// For substrate this should be `frame/support/src/weights`.
+	/// For Substrate this should be `frame/support/src/weights`.
 	#[clap(long, default_value = ".")]
 	pub weight_path: String,
 
@@ -35,18 +37,18 @@ pub struct WeightParams {
 	pub weight_metric: StatSelect,
 
 	/// Multiply the resulting weight with the given factor. Must be positive.
-	/// Is calculated before `weight_add`.
+	/// Is applied before `weight_add`.
 	#[clap(long = "mul", default_value = "1")]
 	pub weight_mul: f64,
 
 	/// Add the given offset to the resulting weight.
-	/// Is calculated after `weight_mul`.
+	/// Is applied after `weight_mul`.
 	#[clap(long = "add", default_value = "0")]
 	pub weight_add: u64,
 }
 
 /// Calculates the final weight by multiplying the selected metric with
-/// `mul` and adding `add`.
+/// `weight_mul` and adding `weight_add`.
 /// Does not use safe casts and can overflow.
 impl WeightParams {
 	pub(crate) fn calc_weight(&self, stat: &Stats) -> Result<u64> {
