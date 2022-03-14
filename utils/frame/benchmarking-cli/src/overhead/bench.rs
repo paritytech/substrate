@@ -16,10 +16,13 @@
 // limitations under the License.
 
 use sc_block_builder::{BlockBuilderApi, BlockBuilderProvider};
-use sc_cli::Result;
+use sc_cli::{Error, Result};
 use sc_client_api::Backend as ClientBackend;
 use sp_api::{ApiExt, BlockId, Core, ProvideRuntimeApi};
-use sp_blockchain::{ApplyExtrinsicFailed::Validity, Error::ApplyExtrinsicFailed};
+use sp_blockchain::{
+	ApplyExtrinsicFailed::Validity,
+	Error::{ApplyExtrinsicFailed, RuntimeApiError},
+};
 use sp_runtime::{
 	traits::{Block as BlockT, Zero},
 	transaction_validity::{InvalidTransaction, TransactionValidityError},
@@ -31,9 +34,9 @@ use log::info;
 use serde::Serialize;
 use std::{marker::PhantomData, sync::Arc, time::Instant};
 
-use crate::{overhead::cmd::ExtrinsicGenerator, storage::record::Stats};
+use crate::{overhead::cmd::ExtrinsicBuilder, storage::record::Stats};
 
-/// Parameters to configure a block benchmark.
+/// Parameters to configure a *overhead* benchmark.
 #[derive(Debug, Default, Serialize, Clone, PartialEq, Args)]
 pub struct BenchmarkParams {
 	/// Rounds of warmups before measuring.
@@ -43,13 +46,6 @@ pub struct BenchmarkParams {
 	/// How many times the benchmark should be repeated.
 	#[clap(long, default_value = "1000")]
 	pub repeat: u32,
-
-	/// Limit them number of extrinsics per block.
-	///
-	/// Only useful for debugging since for a real benchmark you
-	/// want full blocks.
-	#[clap(long)]
-	pub max_ext_per_block: Option<u32>,
 }
 
 /// The results of multiple runs in ns.
@@ -64,12 +60,12 @@ pub(crate) enum BenchmarkType {
 	Block,
 }
 
-/// Benchmarks the time it takes to execute an empty block or a NO-OP extrinsic.
+/// Holds all objects needed to run the *overhead* benchmarks.
 pub(crate) struct Benchmark<Block, BA, C> {
 	client: Arc<C>,
 	params: BenchmarkParams,
 	inherent_data: sp_inherents::InherentData,
-	ext_gen: Arc<dyn ExtrinsicGenerator>,
+	ext_builder: Arc<dyn ExtrinsicBuilder>,
 	_p: PhantomData<(Block, BA)>,
 }
 
@@ -85,9 +81,9 @@ where
 		client: Arc<C>,
 		params: BenchmarkParams,
 		inherent_data: sp_inherents::InherentData,
-		ext_gen: Arc<dyn ExtrinsicGenerator>,
+		ext_builder: Arc<dyn ExtrinsicBuilder>,
 	) -> Self {
-		Self { client, params, inherent_data, ext_gen, _p: PhantomData }
+		Self { client, params, inherent_data, ext_builder, _p: PhantomData }
 	}
 
 	/// Run the specified benchmark.
@@ -101,24 +97,24 @@ where
 	///
 	/// Returns the block and the number of extrinsics in the block.
 	fn build_block(&self, bench_type: BenchmarkType) -> Result<(Block, u64)> {
-		let mut build = self.client.new_block(Default::default()).unwrap();
+		let mut builder = self.client.new_block(Default::default())?;
 		// Create and insert the inherents.
-		let inherents = build.create_inherents(self.inherent_data.clone())?;
+		let inherents = builder.create_inherents(self.inherent_data.clone())?;
 		for inherent in inherents {
-			build.push(inherent)?;
+			builder.push(inherent)?;
 		}
 
 		// Return early if we just want an empty block.
 		if bench_type == BenchmarkType::Block {
-			return Ok((build.build()?.block, 0))
+			return Ok((builder.build()?.block, 0))
 		}
 
 		// Put as many extrinsics into the block as possible and count them.
-		info!("Building block...");
+		info!("Building block, this takes some time...");
 		let mut num_ext = 0;
-		for nonce in 0..self.max_ext_per_block() {
-			let ext = self.ext_gen.remark(nonce).expect("Need remark");
-			match build.push(ext.clone()) {
+		for nonce in 0.. {
+			let ext = self.ext_builder.remark(nonce).ok_or("Could not generate extrinsic")?;
+			match builder.push(ext.clone()) {
 				Ok(_) => {},
 				Err(ApplyExtrinsicFailed(Validity(TransactionValidityError::Invalid(
 					InvalidTransaction::ExhaustsResources,
@@ -129,7 +125,7 @@ where
 		}
 		assert!(num_ext != 0, "A Block must hold at least one extrinsic");
 		info!("Remarks per block: {}", num_ext);
-		let block = build.build()?.block;
+		let block = builder.build()?.block;
 
 		Ok((block, num_ext))
 	}
@@ -156,7 +152,7 @@ where
 			self.client
 				.runtime_api()
 				.execute_block(&genesis, block.clone())
-				.expect("Past blocks must execute");
+				.map_err(|e| Error::Client(RuntimeApiError(e)))?;
 		}
 
 		info!("Executing block {} times", self.params.repeat);
@@ -168,7 +164,7 @@ where
 			self.client
 				.runtime_api()
 				.execute_block(&genesis, block)
-				.expect("Past blocks must execute");
+				.map_err(|e| Error::Client(RuntimeApiError(e)))?;
 
 			let elapsed = start.elapsed().as_nanos();
 			if bench_type == BenchmarkType::Extrinsic {
@@ -180,12 +176,6 @@ where
 		}
 
 		Ok(record)
-	}
-
-	/// Returns the maximum number of extrinsics that should be put in
-	/// a block or `u32::MAX` if no option was passed.
-	fn max_ext_per_block(&self) -> u32 {
-		self.params.max_ext_per_block.unwrap_or(u32::MAX)
 	}
 }
 
@@ -201,7 +191,7 @@ impl BenchmarkType {
 	/// Long name of the benchmark type.
 	pub(crate) fn long_name(&self) -> &'static str {
 		match self {
-			Self::Extrinsic => "Extrinsic",
+			Self::Extrinsic => "ExtrinsicBase",
 			Self::Block => "BlockExecution",
 		}
 	}

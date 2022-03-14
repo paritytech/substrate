@@ -16,11 +16,19 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::{chain_spec, service, service::new_partial, Cli, Subcommand};
+use crate::{
+	chain_spec, service,
+	service::{create_extrinsic, new_partial, FullClient},
+	Cli, Subcommand,
+};
 use node_executor::ExecutorDispatch;
-use node_runtime::RuntimeApi;
+use node_primitives::Block;
+use node_runtime::{RuntimeApi, SystemCall};
 use sc_cli::{ChainSpec, Result, RuntimeVersion, SubstrateCli};
 use sc_service::PartialComponents;
+use sp_inherents::InherentDataProvider;
+use sp_keyring::Sr25519Keyring;
+use sp_runtime::OpaqueExtrinsic;
 
 use std::sync::Arc;
 
@@ -70,23 +78,19 @@ impl SubstrateCli for Cli {
 		&node_runtime::VERSION
 	}
 }
-struct ExtrinsicGen {
+
+/// Generates extrinsics for the `overhead` benchmark.
+struct ExtrinsicBuilder {
 	client: Arc<FullClient>,
 }
-use crate::service::{create_extrinsic, FullClient};
-use node_primitives::Block;
-use node_runtime::SystemCall;
-use sp_keyring::Sr25519Keyring;
-use sp_runtime::OpaqueExtrinsic;
-impl frame_benchmarking_cli::overhead::cmd::ExtrinsicGenerator for ExtrinsicGen {
-	fn remark(&self, nonce: u32) -> Option<OpaqueExtrinsic> {
-		let src = Sr25519Keyring::Bob.pair();
 
-		// This `create_extrinsic` only exists for the node and has no
-		// equivalent in other runtimes.
+impl frame_benchmarking_cli::overhead::cmd::ExtrinsicBuilder for ExtrinsicBuilder {
+	fn remark(&self, nonce: u32) -> Option<OpaqueExtrinsic> {
+		let acc = Sr25519Keyring::Bob.pair();
+
 		let extrinsic: OpaqueExtrinsic = create_extrinsic(
 			self.client.as_ref(),
-			src.clone(),
+			acc.clone(),
 			SystemCall::remark { remark: vec![] },
 			Some(nonce),
 		)
@@ -95,7 +99,7 @@ impl frame_benchmarking_cli::overhead::cmd::ExtrinsicGenerator for ExtrinsicGen 
 	}
 }
 
-use sp_inherents::InherentDataProvider;
+/// Creates the inherent data needed to build a block.
 fn inherent_data() -> Result<sp_inherents::InherentData> {
 	let mut inherent_data = sp_inherents::InherentData::new();
 	let d = std::time::Duration::from_millis(0);
@@ -141,10 +145,13 @@ pub fn run() -> Result<()> {
 				config.role = sc_service::Role::Full;
 
 				let PartialComponents { client, task_manager, .. } = new_partial(&config)?;
-				let ext_gen = ExtrinsicGen { client: client.clone() };
-
+				let ext_builder = ExtrinsicBuilder { client: client.clone() };
 				let inherents = inherent_data()?;
-				Ok((cmd.run(config, client.clone(), inherents, Arc::new(ext_gen)), task_manager))
+
+				Ok((
+					cmd.run(config, client.clone(), inherents, Arc::new(ext_builder)),
+					task_manager,
+				))
 			})
 		},
 		Some(Subcommand::BenchmarkStorage(cmd)) => {

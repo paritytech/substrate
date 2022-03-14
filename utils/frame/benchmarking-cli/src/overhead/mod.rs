@@ -19,4 +19,4 @@ mod bench;
 pub mod cmd;
 mod template;
 
-pub use cmd::{ExtrinsicGenerator, OverheadCmd};
+pub use cmd::{ExtrinsicBuilder, OverheadCmd};

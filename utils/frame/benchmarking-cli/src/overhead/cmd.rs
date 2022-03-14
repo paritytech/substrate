@@ -59,11 +59,11 @@ pub struct OverheadParams {
 	pub bench: BenchmarkParams,
 }
 
-/// Used by the benchmark to generate signed extrinsics.
+/// Used by the benchmark to build signed extrinsics.
 /// This must be implemented per-runtime since the signed extensions
 /// depend on the runtime.
-pub trait ExtrinsicGenerator {
-	/// Generates a `System::remark` extrinsic.
+pub trait ExtrinsicBuilder {
+	/// Build a `System::remark` extrinsic.
 	fn remark(&self, nonce: u32) -> Option<OpaqueExtrinsic>;
 }
 
@@ -77,7 +77,7 @@ impl OverheadCmd {
 		cfg: Configuration,
 		client: Arc<C>,
 		inherent_data: sp_inherents::InherentData,
-		ext_gen: Arc<dyn ExtrinsicGenerator>,
+		ext_builder: Arc<dyn ExtrinsicBuilder>,
 	) -> Result<()>
 	where
 		Block: BlockT<Extrinsic = OpaqueExtrinsic>,
@@ -85,7 +85,7 @@ impl OverheadCmd {
 		C: BlockBuilderProvider<BA, Block, C> + ProvideRuntimeApi<Block>,
 		C::Api: ApiExt<Block, StateBackend = BA::State> + BlockBuilderApi<Block>,
 	{
-		let bench = Benchmark::new(client, self.params.bench.clone(), inherent_data, ext_gen);
+		let bench = Benchmark::new(client, self.params.bench.clone(), inherent_data, ext_builder);
 
 		// per-block execution overhead
 		{

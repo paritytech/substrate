@@ -2129,6 +2129,7 @@ dependencies = [
  "clap 3.1.6",
  "frame-benchmarking",
  "frame-support",
+ "futures 0.3.19",
  "handlebars",
  "hash-db",
  "hex",
@@ -2139,6 +2140,7 @@ dependencies = [
  "memory-db",
  "parity-scale-codec",
  "rand 0.8.4",
+ "sc-block-builder",
  "sc-cli",
  "sc-client-api",
  "sc-client-db",
@@ -2152,6 +2154,7 @@ dependencies = [
  "sp-core",
  "sp-database",
  "sp-externalities",
+ "sp-inherents",
  "sp-keystore",
  "sp-runtime",
  "sp-state-machine",
@@ -2196,7 +2199,7 @@ dependencies = [
 name = "frame-election-solution-type-fuzzer"
 version = "2.0.0-alpha.5"
 dependencies = [
- "clap 3.0.7",
+ "clap 3.1.6",
  "frame-election-provider-solution-type",
  "honggfuzz",
  "parity-scale-codec",

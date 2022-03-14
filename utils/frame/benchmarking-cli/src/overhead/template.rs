@@ -36,7 +36,7 @@ static TEMPLATE: &str = include_str!("./weights.hbs");
 pub(crate) struct TemplateData {
 	/// Short name of the benchmark. Can be "block" or "extrinsic".
 	long_name: String,
-	/// Long name of the benchmark. Can be "BlockExecution" "ExtrinsicBase".
+	/// Long name of the benchmark. Can be "BlockExecution" or "ExtrinsicBase".
 	short_name: String,
 	/// Name of the runtime. Taken from the chain spec.
 	runtime_name: String,
@@ -77,7 +77,7 @@ impl TemplateData {
 		})
 	}
 
-	/// Filles out the `weights.hbs` HBS template with its own data.
+	/// Fill out the `weights.hbs` HBS template with its own data.
 	/// Writes the result to `path` which can be a directory or a file.
 	pub fn write(&self, path: &str) -> Result<()> {
 		let mut handlebars = Handlebars::new();
@@ -94,7 +94,7 @@ impl TemplateData {
 			.map_err(|e| format!("HBS template write: {:?}", e).into())
 	}
 
-	/// Builds a path for the weight file.
+	/// Build a path for the weight file.
 	fn build_path(&self, weight_out: &str) -> PathBuf {
 		let mut path = PathBuf::from(weight_out);
 		if path.is_dir() {
