@@ -441,7 +441,7 @@ impl<T: Config> Pallet<T> {
 		// emit reward event
 		Self::deposit_event(crate::Event::Rewarded { account: who.clone(), value: reward });
 
-		// Unreserve deposit
+		// Unreserve deposit.
 		let _remaining = T::Currency::unreserve(who, deposit);
 		debug_assert!(_remaining.is_zero());
 
@@ -653,7 +653,7 @@ mod tests {
 			for s in 0..SignedMaxSubmissions::get() {
 				let account = 99 + s as u64;
 				Balances::make_free_balance_be(&account, 100);
-				// score is always decreasing better
+				// score is always decreasing
 				let mut solution = raw_solution();
 				solution.score.minimal_stake -= s as u128;
 
@@ -670,10 +670,10 @@ mod tests {
 					// winning solution always gets call fee + reward
 					assert_eq!(balances(&account), (100 + 8 + 7, 0))
 				} else if s == 1 {
-					// 1 runner up gets there call fee refunded
+					// 1 runner up gets their call fee refunded
 					assert_eq!(balances(&account), (100 + 8, 0))
 				} else {
-					// all other solutions don't get a call fee refunds
+					// all other solutions don't get a call fee refund
 					assert_eq!(balances(&account), (100, 0));
 				}
 			}
