@@ -2196,7 +2196,7 @@ dependencies = [
 name = "frame-election-solution-type-fuzzer"
 version = "2.0.0-alpha.5"
 dependencies = [
- "clap 3.0.7",
+ "clap 3.1.6",
  "frame-election-provider-solution-type",
  "honggfuzz",
  "parity-scale-codec",
