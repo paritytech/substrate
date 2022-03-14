@@ -620,6 +620,8 @@ fn transferring_less_than_one_unit_is_fine() {
 		assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
 		assert_eq!(Assets::balance(0, 1), 100);
 		assert_ok!(Assets::transfer(Origin::signed(1), 0, 2, 0));
+		// `ForceCreated` and `Issued` but no `Transferred` event.
+		assert_eq!(System::events().len(), 2);
 	});
 }
 
