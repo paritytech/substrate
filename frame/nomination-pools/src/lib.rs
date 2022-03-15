@@ -709,10 +709,21 @@ impl<T: Config> BondedPool<T> {
 	/// number saturating indicates the pool can no longer correctly keep track of state.
 	fn bound_check(&mut self, n: U256) -> U256 {
 		if n == U256::max_value() {
-			self.state = PoolState::Destroying
+			self.set_state(PoolState::Destroying)
 		}
 
 		n
+	}
+
+	// Set the state of `self`, and deposit and event if the state changed.
+	fn set_state(&mut self, state: PoolState) {
+		if self.state != state {
+			self.state = state;
+			Pallet::<T>::deposit_event(Event::<T>::State {
+				pool_id: self.id,
+				new_state: state,
+			});
+		};
 	}
 }
 
@@ -1462,18 +1473,13 @@ pub mod pallet {
 			// The downside is that this seems like a misleading API
 
 			if bonded_pool.can_toggle_state(&who) {
-				bonded_pool.state = state
+				bonded_pool.set_state(state);
 			} else if bonded_pool.ok_to_be_open().is_err() && state == PoolState::Destroying {
 				// If the pool has bad properties, then anyone can set it as destroying
-				bonded_pool.state = PoolState::Destroying;
+				bonded_pool.set_state(PoolState::Destroying);
 			} else {
 				Err(Error::<T>::CanNotChangeState)?;
 			}
-
-			Self::deposit_event(Event::<T>::State {
-				pool_id,
-				new_state: bonded_pool.state.clone(),
-			});
 
 			bonded_pool.put();
 
@@ -1678,6 +1684,9 @@ impl<T: Config> Pallet<T> {
 		};
 
 		// Record updates
+		if reward_pool.total_earnings == BalanceOf::<T>::max_value() {
+			bonded_pool.set_state(PoolState::Destroying);
+		};
 		delegator.reward_pool_total_earnings = reward_pool.total_earnings;
 		reward_pool.points = current_points.saturating_sub(delegator_virtual_points);
 		reward_pool.balance = reward_pool.balance.saturating_sub(delegator_payout);
@@ -1710,16 +1719,6 @@ impl<T: Config> Pallet<T> {
 			delegator_payout,
 			ExistenceRequirement::AllowDeath,
 		)?;
-
-		if reward_pool.total_earnings == BalanceOf::<T>::max_value() &&
-			bonded_pool.state != PoolState::Destroying
-		{
-			bonded_pool.state = PoolState::Destroying;
-			Self::deposit_event(Event::<T>::State {
-				pool_id: delegator.pool_id,
-				new_state: PoolState::Destroying,
-			});
-		}
 
 		Self::deposit_event(Event::<T>::PaidOut {
 			delegator: delegator_account,
