@@ -164,7 +164,7 @@ pub trait Ext: sealing::Sealed {
 
 	/// Returns the code hash of the contract for the given `address`.
 	///
-	/// Returns 'None' if the `address` does not belong to a contract.
+	/// Returns `None` if the `address` does not belong to a contract.
 	fn code_hash(&self, address: &AccountIdOf<Self::T>) -> Option<CodeHash<Self::T>>;
 
 	/// Returns the code hash of the contract being executed.
@@ -176,7 +176,7 @@ pub trait Ext: sealing::Sealed {
 	/// However, this function does not require any storage lookup and therefore uses less weight.
 	fn caller_is_origin(&self) -> bool;
 
-	/// Return address of the origin of current call stack
+	/// Returns the address of the origin of the whole call stack.
 	fn origin(&self) -> &AccountIdOf<Self::T>;
 
 	/// Returns a reference to the account id of the current contract.
@@ -1114,11 +1114,7 @@ where
 	}
 
 	fn code_hash(&self, address: &T::AccountId) -> Option<CodeHash<Self::T>> {
-		if let Some(contract) = <ContractInfoOf<T>>::get(&address) {
-			Some(contract.code_hash)
-		} else {
-			None
-		}
+		<ContractInfoOf<T>>::get(&address).map(|contract| contract.code_hash)
 	}
 
 	fn own_code_hash(&mut self) -> &CodeHash<Self::T> {
