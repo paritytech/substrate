@@ -16,7 +16,7 @@
 // limitations under the License.
 
 use frame_election_provider_support::VoteWeight;
-use frame_support::{pallet_prelude::*, parameter_types, traits::ConstU64};
+use frame_support::{pallet_prelude::*, parameter_types, traits::ConstU64, PalletId};
 use sp_runtime::traits::{Convert, IdentityLookup};
 
 type AccountId = u64;
@@ -141,6 +141,7 @@ impl Convert<sp_core::U256, Balance> for U256ToBalance {
 
 parameter_types! {
 	pub static PostUnbondingPoolsWindow: u32 = 10;
+	pub const PoolsPalletId: PalletId = PalletId(*b"py/nopls");
 }
 
 impl pallet_nomination_pools::Config for Runtime {
@@ -152,6 +153,7 @@ impl pallet_nomination_pools::Config for Runtime {
 	type StakingInterface = Staking;
 	type PostUnbondingPoolsWindow = PostUnbondingPoolsWindow;
 	type MaxMetadataLen = ConstU32<256>;
+	type PalletId = PoolsPalletId;
 }
 
 impl crate::Config for Runtime {}

@@ -1,15 +1,20 @@
 use super::*;
 use crate::{self as pools};
-use frame_support::{assert_ok, parameter_types};
+use frame_support::{assert_ok, parameter_types, PalletId};
 use frame_system::RawOrigin;
 
-pub type AccountId = u32;
+pub type AccountId = u128;
 pub type Balance = u128;
 
-/// _Stash_ of the pool that gets created by the [`ExtBuilder`].
-pub const PRIMARY_ACCOUNT: u32 = 1552898353;
-/// Reward destination of the pool that gets created by the [`ExtBuilder`].
-pub const REWARDS_ACCOUNT: u32 = 3802151463;
+// Ext builder creates a pool with id 1.
+pub fn default_bonded_account() -> AccountId {
+	Pools::create_bonded_account(1)
+}
+
+// Ext builder creates a pool with id 1.
+pub fn default_reward_account() -> AccountId {
+	Pools::create_reward_account(1)
+}
 
 parameter_types! {
 	pub static CurrentEra: EraIndex = 0;
@@ -153,8 +158,8 @@ impl Convert<U256, Balance> for U256ToBalance {
 parameter_types! {
 	pub static PostUnbondingPoolsWindow: u32 = 2;
 	pub static MaxMetadataLen: u32 = 2;
+	pub const PoolsPalletId: PalletId = PalletId(*b"py/nopls");
 }
-
 impl pools::Config for Runtime {
 	type Event = Event;
 	type WeightInfo = ();
@@ -163,6 +168,7 @@ impl pools::Config for Runtime {
 	type U256ToBalance = U256ToBalance;
 	type StakingInterface = StakingMock;
 	type PostUnbondingPoolsWindow = PostUnbondingPoolsWindow;
+	type PalletId = PoolsPalletId;
 	type MaxMetadataLen = MaxMetadataLen;
 }
 
@@ -214,14 +220,10 @@ impl ExtBuilder {
 			Balances::make_free_balance_be(&10, amount_to_bond * 2);
 			assert_ok!(Pools::create(RawOrigin::Signed(10).into(), amount_to_bond, 900, 901, 902));
 
+			let last_pool = LastPoolId::<Runtime>::get();
 			for (account_id, bonded) in self.delegators {
 				Balances::make_free_balance_be(&account_id, bonded * 2);
-
-				assert_ok!(Pools::join(
-					RawOrigin::Signed(account_id).into(),
-					bonded,
-					PRIMARY_ACCOUNT
-				));
+				assert_ok!(Pools::join(RawOrigin::Signed(account_id).into(), bonded, last_pool));
 			}
 		});
 
@@ -242,8 +244,8 @@ impl ExtBuilder {
 	}
 }
 
-pub(crate) fn unsafe_set_state(pool_account: &AccountId, state: PoolState) -> Result<(), ()> {
-	BondedPools::<Runtime>::try_mutate(pool_account, |maybe_bonded_pool| {
+pub(crate) fn unsafe_set_state(pool_id: PoolId, state: PoolState) -> Result<(), ()> {
+	BondedPools::<Runtime>::try_mutate(pool_id, |maybe_bonded_pool| {
 		maybe_bonded_pool.as_mut().ok_or(()).map(|bonded_pool| {
 			bonded_pool.state = state;
 		})

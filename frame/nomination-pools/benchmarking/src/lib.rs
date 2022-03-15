@@ -12,7 +12,7 @@ use frame_support::{ensure, traits::Get};
 use frame_system::RawOrigin as Origin;
 use pallet_nomination_pools::{
 	BalanceOf, BondedPoolInner, BondedPools, Delegators, Metadata, MinCreateBond, MinJoinBond,
-	Pallet as Pools, PoolState, RewardPools, SubPoolsStorage,
+	Pallet as Pools, PoolRoles, PoolState, RewardPools, SubPoolsStorage,
 };
 use sp_runtime::traits::{StaticLookup, Zero};
 use sp_staking::{EraIndex, StakingInterface};
@@ -67,7 +67,7 @@ fn create_pool_account<T: pallet_nomination_pools::Config>(
 	.unwrap();
 
 	let pool_account = pallet_nomination_pools::BondedPools::<T>::iter()
-		.find(|(_, bonded_pool)| bonded_pool.depositor == pool_creator)
+		.find(|(_, bonded_pool)| bonded_pool.roles.depositor == pool_creator)
 		.map(|(pool_account, _)| pool_account)
 		.expect("pool_creator created a pool above");
 
@@ -477,12 +477,14 @@ frame_benchmarking::benchmarks! {
 			new_pool,
 			BondedPoolInner {
 				points: min_create_bond,
-				depositor: depositor.clone(),
-				root: depositor.clone(),
-				nominator: depositor.clone(),
-				state_toggler: depositor.clone(),
 				state: PoolState::Open,
-				delegator_counter: 1
+				delegator_counter: 1,
+				roles: PoolRoles {
+					depositor: depositor.clone(),
+					root: depositor.clone(),
+					nominator: depositor.clone(),
+					state_toggler: depositor.clone(),
+				},
 			}
 		);
 		assert_eq!(
@@ -518,12 +520,14 @@ frame_benchmarking::benchmarks! {
 			new_pool,
 			BondedPoolInner {
 				points: min_create_bond,
-				depositor: depositor.clone(),
-				root: depositor.clone(),
-				nominator: depositor.clone(),
-				state_toggler: depositor.clone(),
 				state: PoolState::Open,
 				delegator_counter: 1,
+				roles: PoolRoles {
+					depositor: depositor.clone(),
+					root: depositor.clone(),
+					nominator: depositor.clone(),
+					state_toggler: depositor.clone(),
+				}
 			}
 		);
 		assert_eq!(
