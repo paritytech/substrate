@@ -28,6 +28,7 @@ use crate::storage::record::{StatSelect, Stats};
 #[derive(Debug, Default, Serialize, Clone, PartialEq, Args)]
 pub struct WeightParams {
 	/// Path to write the *weight* file to. Can be a file or directory.
+	///
 	/// For Substrate this should be `frame/support/src/weights`.
 	#[clap(long, default_value = ".")]
 	pub weight_path: String,
@@ -37,11 +38,13 @@ pub struct WeightParams {
 	pub weight_metric: StatSelect,
 
 	/// Multiply the resulting weight with the given factor. Must be positive.
+	///
 	/// Is applied before `weight_add`.
 	#[clap(long = "mul", default_value = "1")]
 	pub weight_mul: f64,
 
 	/// Add the given offset to the resulting weight.
+	///
 	/// Is applied after `weight_mul`.
 	#[clap(long = "add", default_value = "0")]
 	pub weight_add: u64,

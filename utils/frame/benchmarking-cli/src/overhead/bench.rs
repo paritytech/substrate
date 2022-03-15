@@ -54,7 +54,7 @@ pub struct BenchmarkParams {
 pub(crate) type BenchRecord = Vec<u64>;
 
 /// Type of a benchmark.
-#[derive(Serialize, Clone, PartialEq)]
+#[derive(Serialize, Clone, PartialEq, Copy)]
 pub(crate) enum BenchmarkType {
 	/// Measure the per-extrinsic execution overhead.
 	Extrinsic,
@@ -90,7 +90,7 @@ where
 
 	/// Run the specified benchmark.
 	pub fn bench(&self, bench_type: BenchmarkType) -> Result<Stats> {
-		let (block, num_ext) = self.build_block(bench_type.clone())?;
+		let (block, num_ext) = self.build_block(bench_type)?;
 		let record = self.measure_block(&block, num_ext, bench_type)?;
 		Stats::new(&record)
 	}
@@ -117,7 +117,8 @@ where
 		for nonce in 0.. {
 			let ext = self.ext_builder.remark(nonce).ok_or("Could not build extrinsic")?;
 			match builder.push(ext.clone()) {
-				Ok(_) => {},
+				Ok(Ok(())) => {},
+				Ok(r) => panic!("Failed to apply extrinsic: {:?}", r),
 				Err(ApplyExtrinsicFailed(Validity(TransactionValidityError::Invalid(
 					InvalidTransaction::ExhaustsResources,
 				)))) => break,
@@ -158,9 +159,10 @@ where
 		// Execute a block multiple times and record each execution time.
 		for _ in 0..self.params.repeat {
 			let block = block.clone();
+			let runtime_api = self.client.runtime_api();
 			let start = Instant::now();
-			self.client
-				.runtime_api()
+			
+			runtime_api
 				.execute_block(&genesis, block)
 				.map_err(|e| Error::Client(RuntimeApiError(e)))?;
 
