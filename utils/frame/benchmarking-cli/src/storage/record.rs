@@ -22,7 +22,7 @@ use sc_service::Configuration;
 
 use log::info;
 use serde::Serialize;
-use std::{fmt, fs, result, str::FromStr, time::Duration};
+use std::{fmt, fs, path::PathBuf, result, str::FromStr, time::Duration};
 
 /// Raw output of a Storage benchmark.
 #[derive(Debug, Default, Clone, Serialize)]
@@ -95,12 +95,18 @@ impl BenchRecord {
 		Ok((time, size)) // The swap of time/size here is intentional.
 	}
 
-	/// Saves the raw results in a json file in the current directory.
+	/// Unless a path is specified, saves the raw results in a json file in the current directory.
 	/// Prefixes it with the DB name and suffixed with `path_suffix`.
-	pub fn save_json(&self, cfg: &Configuration, path_suffix: &str) -> Result<()> {
-		let path = format!("{}_{}.json", cfg.database, path_suffix).to_lowercase();
+	pub fn save_json(&self, cfg: &Configuration, out_path: &PathBuf, suffix: &str) -> Result<()> {
+		let mut path = PathBuf::from(out_path);
+		if path.is_dir() || path.as_os_str().is_empty() {
+			path.push(&format!("{}_{}", cfg.database, suffix).to_lowercase());
+			path.set_extension("json");
+		}
+
 		let json = serde_json::to_string_pretty(&self)
 			.map_err(|e| format!("Serializing as JSON: {:?}", e))?;
+
 		fs::write(&path, json)?;
 		info!("Raw data written to {:?}", fs::canonicalize(&path)?);
 		Ok(())

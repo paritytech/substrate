@@ -27,11 +27,11 @@ use crate::storage::record::{StatSelect, Stats};
 /// Configures the weight generation.
 #[derive(Debug, Default, Serialize, Clone, PartialEq, Args)]
 pub struct WeightParams {
-	/// Directory to write the *weight* files to.
+	/// File or directory to write the *weight* files to.
 	///
 	/// For Substrate this should be `frame/support/src/weights`.
-	#[clap(long, default_value = ".")]
-	pub weight_path: String,
+	#[clap(long)]
+	pub weight_path: Option<PathBuf>,
 
 	/// Select a specific metric to calculate the final weight output.
 	#[clap(long = "metric", default_value = "average")]
