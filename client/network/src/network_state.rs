@@ -94,9 +94,9 @@ pub enum PeerEndpoint {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Endpoint {
-	/// The socket comes from a dialer.
+    /// The socket comes from a dialer.
     Dialer,
-	/// The socket comes from a listener.
+    /// The socket comes from a listener.
     Listener,
 }
 
