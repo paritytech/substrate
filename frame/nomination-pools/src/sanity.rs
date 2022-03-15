@@ -12,7 +12,7 @@ fn bonding_pools_checks<T: Config>() {
 	let mut delegators_seen = 0;
 	for (_account, pool) in BondedPools::<T>::iter() {
 		assert!(pool.delegator_counter >= 1);
-		assert!(pool.delegator_counter <= MaxDelegatorsPerPool::<T>::get().unwrap());
+		assert!(MaxDelegatorsPerPool::<T>::get().map_or(true, |max| pool.delegator_counter <= max));
 		delegators_seen += pool.delegator_counter;
 	}
 	assert_eq!(delegators_seen, Delegators::<T>::count());
