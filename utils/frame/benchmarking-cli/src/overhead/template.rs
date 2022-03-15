@@ -99,7 +99,7 @@ impl TemplateData {
 
 	/// Build a path for the weight file.
 	fn build_path(&self, weight_out: &Option<PathBuf>) -> Result<PathBuf> {
-		let mut path = weight_out.clone().unwrap_or(PathBuf::new());
+		let mut path = weight_out.clone().unwrap_or(PathBuf::from("."));
 
 		if !path.is_dir() {
 			return Err("Need directory as --weight-path".into())
