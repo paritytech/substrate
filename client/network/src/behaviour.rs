@@ -304,7 +304,7 @@ impl<B: BlockT> Behaviour<B> {
 
 	/// Start querying a record from the DHT. Will later produce either a `ValueFound` or a
 	/// `ValueNotFound` event.
-	pub fn get_value(&mut self, key: &record::Key) {
+	pub fn get_value(&mut self, key: record::Key) {
 		self.discovery.get_value(key);
 	}
 

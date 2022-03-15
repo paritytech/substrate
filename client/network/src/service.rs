@@ -1532,7 +1532,7 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 				ServiceToWorkerMsg::PropagateTransactions =>
 					this.tx_handler_controller.propagate_transactions(),
 				ServiceToWorkerMsg::GetValue(key) =>
-					this.network_service.behaviour_mut().get_value(&key),
+					this.network_service.behaviour_mut().get_value(key),
 				ServiceToWorkerMsg::PutValue(key, value) =>
 					this.network_service.behaviour_mut().put_value(key, value),
 				ServiceToWorkerMsg::SetReservedOnly(reserved_only) => this

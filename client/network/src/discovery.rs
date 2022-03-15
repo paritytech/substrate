@@ -355,9 +355,9 @@ impl DiscoveryBehaviour {
 	/// Start fetching a record from the DHT.
 	///
 	/// A corresponding `ValueFound` or `ValueNotFound` event will later be generated.
-	pub fn get_value(&mut self, key: &record::Key) {
+	pub fn get_value(&mut self, key: record::Key) {
 		for k in self.kademlias.values_mut() {
-			k.get_record(key, Quorum::One);
+			k.get_record(key.clone(), Quorum::One);
 		}
 	}
 
