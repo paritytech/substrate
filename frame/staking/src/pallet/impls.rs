@@ -1318,7 +1318,6 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsMap<T> {
 impl<T: Config> StakingInterface for Pallet<T> {
 	type AccountId = T::AccountId;
 	type Balance = BalanceOf<T>;
-	type LookupSource = <T::Lookup as StaticLookup>::Source;
 
 	fn minimum_bond() -> Self::Balance {
 		MinNominatorBond::<T>::get()
@@ -1332,11 +1331,11 @@ impl<T: Config> StakingInterface for Pallet<T> {
 		Self::current_era().unwrap_or(Zero::zero())
 	}
 
-	fn bonded_balance(controller: &Self::AccountId) -> Option<Self::Balance> {
+	fn active_stake(controller: &Self::AccountId) -> Option<Self::Balance> {
 		Self::ledger(controller).map(|l| l.active)
 	}
 
-	fn locked_balance(controller: &Self::AccountId) -> Option<Self::Balance> {
+	fn total_stake(controller: &Self::AccountId) -> Option<Self::Balance> {
 		Self::ledger(controller).map(|l| l.total)
 	}
 
@@ -1375,7 +1374,8 @@ impl<T: Config> StakingInterface for Pallet<T> {
 		)
 	}
 
-	fn nominate(controller: Self::AccountId, targets: Vec<Self::LookupSource>) -> DispatchResult {
+	fn nominate(controller: Self::AccountId, targets: Vec<Self::AccountId>) -> DispatchResult {
+		let targets = targets.into_iter().map(T::Lookup::unlookup).collect::<Vec<_>>();
 		Self::nominate(RawOrigin::Signed(controller).into(), targets)
 	}
 }

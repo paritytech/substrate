@@ -167,7 +167,7 @@ impl<T: Config> ListScenario<T> {
 		self.origin1_delegator = Some(joiner.clone());
 		CurrencyOf::<T>::make_free_balance_be(&joiner, amount * 2u32.into());
 
-		let original_bonded = T::StakingInterface::bonded_balance(&self.origin1).unwrap();
+		let original_bonded = T::StakingInterface::active_stake(&self.origin1).unwrap();
 
 		// Unbond `amount` from the underlying pool account so when the delegator joins
 		// we will maintain `current_bonded`.
@@ -206,7 +206,7 @@ frame_benchmarking::benchmarks! {
 		// setup the worst case list scenario.
 		let scenario = ListScenario::<T>::new(origin_weight, true)?;
 		assert_eq!(
-			T::StakingInterface::bonded_balance(&scenario.origin1).unwrap(),
+			T::StakingInterface::active_stake(&scenario.origin1).unwrap(),
 			origin_weight
 		);
 
@@ -221,7 +221,7 @@ frame_benchmarking::benchmarks! {
 	verify {
 		assert_eq!(CurrencyOf::<T>::free_balance(&joiner), joiner_free - max_additional);
 		assert_eq!(
-			T::StakingInterface::bonded_balance(&scenario.origin1).unwrap(),
+			T::StakingInterface::active_stake(&scenario.origin1).unwrap(),
 			scenario.dest_weight
 		);
 	}
@@ -275,7 +275,7 @@ frame_benchmarking::benchmarks! {
 		whitelist_account!(delegator_id);
 	}: _(Origin::Signed(delegator_id.clone()), delegator_id.clone())
 	verify {
-		let bonded_after = T::StakingInterface::bonded_balance(&scenario.origin1).unwrap();
+		let bonded_after = T::StakingInterface::active_stake(&scenario.origin1).unwrap();
 		// We at least went down to the destination bag, (if not an even lower bag)
 		assert!(bonded_after <= scenario.dest_weight.clone());
 		let delegator = Delegators::<T>::get(
@@ -302,7 +302,7 @@ frame_benchmarking::benchmarks! {
 
 		// Sanity check join worked
 		assert_eq!(
-			T::StakingInterface::bonded_balance(&pool_account).unwrap(),
+			T::StakingInterface::active_stake(&pool_account).unwrap(),
 			min_create_bond + min_join_bond
 		);
 		assert_eq!(CurrencyOf::<T>::free_balance(&joiner), min_join_bond);
@@ -312,7 +312,7 @@ frame_benchmarking::benchmarks! {
 
 		// Sanity check that unbond worked
 		assert_eq!(
-			T::StakingInterface::bonded_balance(&pool_account).unwrap(),
+			T::StakingInterface::active_stake(&pool_account).unwrap(),
 			min_create_bond
 		);
 		assert_eq!(pallet_staking::Ledger::<T>::get(&pool_account).unwrap().unlocking.len(), 1);
@@ -347,7 +347,7 @@ frame_benchmarking::benchmarks! {
 
 		// Sanity check join worked
 		assert_eq!(
-			T::StakingInterface::bonded_balance(&pool_account).unwrap(),
+			T::StakingInterface::active_stake(&pool_account).unwrap(),
 			min_create_bond + min_join_bond
 		);
 		assert_eq!(CurrencyOf::<T>::free_balance(&joiner), min_join_bond);
@@ -358,7 +358,7 @@ frame_benchmarking::benchmarks! {
 
 		// Sanity check that unbond worked
 		assert_eq!(
-			T::StakingInterface::bonded_balance(&pool_account).unwrap(),
+			T::StakingInterface::active_stake(&pool_account).unwrap(),
 			min_create_bond
 		);
 		assert_eq!(pallet_staking::Ledger::<T>::get(&pool_account).unwrap().unlocking.len(), 1);
@@ -402,7 +402,7 @@ frame_benchmarking::benchmarks! {
 
 		// Sanity check that unbond worked
 		assert_eq!(
-			T::StakingInterface::bonded_balance(&pool_account).unwrap(),
+			T::StakingInterface::active_stake(&pool_account).unwrap(),
 			Zero::zero()
 		);
 		assert_eq!(
@@ -488,7 +488,7 @@ frame_benchmarking::benchmarks! {
 			}
 		);
 		assert_eq!(
-			T::StakingInterface::bonded_balance(&pool_account),
+			T::StakingInterface::active_stake(&pool_account),
 			Some(min_create_bond)
 		);
 	}
@@ -531,7 +531,7 @@ frame_benchmarking::benchmarks! {
 			}
 		);
 		assert_eq!(
-			T::StakingInterface::bonded_balance(&pool_account),
+			T::StakingInterface::active_stake(&pool_account),
 			Some(min_create_bond)
 		);
 	}

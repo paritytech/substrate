@@ -61,9 +61,6 @@ pub trait StakingInterface {
 	/// AccountId type used by the staking system
 	type AccountId;
 
-	/// The type for the `validators` argument to `Self::nominate`.
-	type LookupSource;
-
 	/// The minimum amount required to bond in order to be a nominator. This does not necessarily
 	/// mean the nomination will be counted in an election, but instead just enough to be stored as
 	/// a nominator. In other words, this is the minimum amount to register the intention to
@@ -82,17 +79,17 @@ pub trait StakingInterface {
 	/// This should be the latest planned era that the staking system knows about.
 	fn current_era() -> EraIndex;
 
-	/// Balance `controller` has bonded for nominating.
-	fn bonded_balance(controller: &Self::AccountId) -> Option<Self::Balance>;
+	/// The amount of active stake that `controller` has in the staking system.
+	fn active_stake(controller: &Self::AccountId) -> Option<Self::Balance>;
 
-	/// Balance the _Stash_ linked to `controller` has locked by the staking system. This should
-	/// include both the users bonded funds and their unlocking funds.
+	/// The total stake that `controller` has in the staking system. This includes the
+	/// [`active_stake`], and any funds currently in the process of unbonding via [`unbond`].
 	///
 	/// # Note
 	///
 	/// This is only guaranteed to reflect the amount locked by the staking system. If there are
 	/// non-staking locks on the bonded pair's balance this may not be accurate.
-	fn locked_balance(controller: &Self::AccountId) -> Option<Self::Balance>;
+	fn total_stake(controller: &Self::AccountId) -> Option<Self::Balance>;
 
 	/// Bond (lock) `value` of `stash`'s balance. `controller` will be set as the account
 	/// controlling `stash`. This creates what is referred to as "bonded pair".
@@ -106,7 +103,7 @@ pub trait StakingInterface {
 	/// Have `controller` nominate `validators`.
 	fn nominate(
 		controller: Self::AccountId,
-		validators: sp_std::vec::Vec<Self::LookupSource>,
+		validators: sp_std::vec::Vec<Self::AccountId>,
 	) -> DispatchResult;
 
 	/// Bond some extra amount in the _Stash_'s free balance against the active bonded balance of
