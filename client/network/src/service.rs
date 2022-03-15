@@ -1961,13 +1961,14 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					if let Some(metrics) = this.metrics.as_ref() {
 						let reason = match error {
 							DialError::ConnectionLimit(_) => Some("limit-reached"),
-							DialError::WrongPeerId{..} => Some("invalid-peer-id"),
+							DialError::InvalidPeerId(_) => Some("invalid-peer-id"),
 							DialError::Transport(_) | DialError::ConnectionIo(_) =>
 								Some("transport-error"),
 							DialError::Banned |
 							DialError::LocalPeerId |
 							DialError::NoAddresses |
 							DialError::DialPeerConditionFalse(_) |
+							DialError::WrongPeerId { .. } |
 							DialError::Aborted => None, // ignore them
 						};
 						if let Some(reason) = reason {
@@ -2001,7 +2002,7 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					if let Some(metrics) = this.metrics.as_ref() {
 						let reason = match error {
 							PendingConnectionError::ConnectionLimit(_) => Some("limit-reached"),
-							PendingConnectionError::WrongPeerId => Some("invalid-peer-id"),
+							PendingConnectionError::WrongPeerId { .. } => Some("invalid-peer-id"),
 							PendingConnectionError::Transport(_) |
 							PendingConnectionError::IO(_) => Some("transport-error"),
 							PendingConnectionError::Aborted => None, // ignore it
