@@ -32,7 +32,7 @@ pub mod pallet {
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 	use sp_runtime::traits::{Convert, Saturating, Zero};
-	use sp_std::convert::TryInto;
+	use sp_std::{convert::TryInto, vec::Vec};
 
 	use frame_support::traits::{
 		Currency, ExistenceRequirement, OnUnbalanced, ReservableCurrency, WithdrawReasons,

@@ -205,7 +205,7 @@ impl frame_system::Config for Runtime {
 	type Hash = Hash;
 	type Hashing = BlakeTwo256;
 	type AccountId = AccountId;
-	type Lookup = (Indices, NameService);
+	type Lookup = Indices;
 	type Header = generic::Header<BlockNumber, BlakeTwo256>;
 	type Event = Event;
 	type BlockHashCount = BlockHashCount;
@@ -1259,20 +1259,31 @@ parameter_types! {
 	pub const MinBid: Balance = 10 * DOLLARS;
 }
 
+parameter_types! {
+	pub const CommitmentDeposit: Balance = 1 * DOLLARS;
+	pub const NameDeposit: Balance = 1 * DOLLARS;
+	pub const TierThreeLetters: Balance = 640 * DOLLARS;
+	pub const TierFourLetters: Balance = 160 * DOLLARS;
+	pub const TierDefault: Balance = 5 * DOLLARS;
+	pub const BlocksPerRegistrationPeriod: BlockNumber = 1 * MINUTES;
+	pub const NotificationPeriod: BlockNumber = 90 * DAYS;
+	pub const FeePerRegistrationPeriod: Balance = 1 * DOLLARS / (365 * DAYS as Balance);
+}
+
 impl pallet_name_service::Config for Runtime {
-	type AccountIndex = AccountIndex;
-	type Currency = Balances;
 	type Event = Event;
-	type ManagerOrigin = EnsureRoot<AccountId>;
-	type PermanenceOrigin = EnsureRoot<AccountId>;
-	type BiddingPeriod = BiddingPeriod;
-	type ClaimPeriod = ClaimPeriod;
-	type OwnershipPeriod = OwnershipPeriod;
-	type PaymentDestination = Treasury;
-	type MinBid = MinBid;
-	// Extensions off
-	type ExtensionConfig = ();
-	type WeightInfo = ();
+	type Currency = Balances;
+	type BlockNumberToBalance = ConvertInto;
+	type RegistrationFeeHandler = ();
+	type CommitmentDeposit = CommitmentDeposit;
+	type NameDeposit = NameDeposit;
+	type TierThreeLetters = TierThreeLetters;
+	type TierFourLetters = TierFourLetters;
+	type TierDefault = TierDefault;
+	type BlocksPerRegistrationPeriod = BlocksPerRegistrationPeriod;
+	type NotificationPeriod = NotificationPeriod;
+	type FeePerRegistrationPeriod = FeePerRegistrationPeriod;
+	type RegistrationManager = EnsureRoot<Self::AccountId>;
 }
 
 parameter_types! {
