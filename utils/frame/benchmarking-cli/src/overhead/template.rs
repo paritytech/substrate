@@ -82,7 +82,7 @@ impl TemplateData {
 
 	/// Fill out the `weights.hbs` HBS template with its own data.
 	/// Writes the result to `path` which can be a directory or a file.
-	pub fn write(&self, path: &str) -> Result<()> {
+	pub fn write(&self, path: &Option<PathBuf>) -> Result<()> {
 		let mut handlebars = Handlebars::new();
 		// Format large integers with underscores.
 		handlebars.register_helper("underscore", Box::new(crate::writer::UnderscoreHelper));
@@ -98,8 +98,9 @@ impl TemplateData {
 	}
 
 	/// Build a path for the weight file.
-	fn build_path(&self, weight_out: &str) -> Result<PathBuf> {
-		let mut path = PathBuf::from(weight_out);
+	fn build_path(&self, weight_out: &Option<PathBuf>) -> Result<PathBuf> {
+		let mut path = weight_out.clone().unwrap_or(PathBuf::new());
+
 		if !path.is_dir() {
 			return Err("Need directory as --weight-path".into())
 		}
