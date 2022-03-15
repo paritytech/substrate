@@ -18,7 +18,7 @@
 #   script:
 #     - echo "List of shell commands to run in your job"
 #     - echo "You can also just specify a script here, like so:"
-#     - ./.maintain/gitlab/my_amazing_script.sh
+#     - ./scripts/ci/gitlab/my_amazing_script.sh
 
 stages:
   - check
@@ -165,12 +165,12 @@ default:
     fi
 
 .cargo-check-benches-script:       &cargo-check-benches-script
-  - mkdir -p artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA
+  - mkdir -p ./artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA
   - SKIP_WASM_BUILD=1 time cargo +nightly check --benches --all
   - 'cargo run --release -p node-bench -- ::node::import::native::sr25519::transfer_keep_alive::paritydb::small --json
-    | tee artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA/::node::import::native::sr25519::transfer_keep_alive::paritydb::small.json'
+    | tee ./artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA/::node::import::native::sr25519::transfer_keep_alive::paritydb::small.json'
   - 'cargo run --release -p node-bench -- ::trie::read::small --json
-    | tee artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA/::trie::read::small.json'
+    | tee ./artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA/::trie::read::small.json'
   - sccache -s
 
 .build-linux-substrate-script:     &build-linux-substrate-script
@@ -185,7 +185,7 @@ default:
           tee ./artifacts/substrate/VERSION;
     fi
   - sha256sum ./artifacts/substrate/substrate | tee ./artifacts/substrate/substrate.sha256
-  - cp -r .maintain/docker/substrate.Dockerfile ./artifacts/substrate/
+  - cp -r ./scripts/ci/docker/substrate.Dockerfile ./artifacts/substrate/
   - sccache -s
 
 #### Vault secrets
@@ -241,7 +241,7 @@ skip-if-draft:
      - echo "Commit message is ${CI_COMMIT_MESSAGE}"
      - echo "Ref is ${CI_COMMIT_REF_NAME}"
      - echo "pipeline source is ${CI_PIPELINE_SOURCE}"
-     - ./.maintain/gitlab/skip_if_draft.sh
+     - ./scripts/ci/gitlab/skip_if_draft.sh
 
 #### stage:                        check
 
@@ -256,7 +256,7 @@ check-runtime:
     GITLAB_API:                    "https://gitlab.parity.io/api/v4"
     GITHUB_API_PROJECT:            "parity%2Finfrastructure%2Fgithub-api"
   script:
-    - ./.maintain/gitlab/check_runtime.sh
+    - ./scripts/ci/gitlab/check_runtime.sh
   allow_failure:                   true
 
 check-signed-tag:
@@ -267,7 +267,7 @@ check-signed-tag:
     - if: $CI_COMMIT_REF_NAME =~ /^ci-release-.*$/
     - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
   script:
-    - ./.maintain/gitlab/check_signed.sh
+    - ./scripts/ci/gitlab/check_signed.sh
 
 test-dependency-rules:
   stage:                           check
@@ -276,7 +276,7 @@ test-dependency-rules:
   rules:
     - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
   script:
-    - .maintain/ensure-deps.sh
+    - ./scripts/ci/gitlab/ensure-deps.sh
 
 test-prometheus-alerting-rules:
   stage:                           check
@@ -288,11 +288,11 @@ test-prometheus-alerting-rules:
     - if: $CI_COMMIT_BRANCH
       changes:
         - .gitlab-ci.yml
-        - .maintain/monitoring/**/*
+        - ./scripts/ci/monitoring/**/*
   script:
-    - promtool check rules .maintain/monitoring/alerting-rules/alerting-rules.yaml
-    - cat .maintain/monitoring/alerting-rules/alerting-rules.yaml |
-        promtool test rules .maintain/monitoring/alerting-rules/alerting-rule-tests.yaml
+    - promtool check rules ./scripts/ci/monitoring/alerting-rules/alerting-rules.yaml
+    - cat ./scripts/ci/monitoring/alerting-rules/alerting-rules.yaml |
+        promtool test rules ./scripts/ci/monitoring/alerting-rules/alerting-rule-tests.yaml
 
 #### stage:                        test
 
@@ -301,10 +301,10 @@ cargo-deny:
   <<:                              *docker-env
   <<:                              *nightly-pipeline
   script:
-    - cargo deny check --hide-inclusion-graph -c .maintain/deny.toml
+    - cargo deny check --hide-inclusion-graph -c ./scripts/ci/deny.toml
   after_script:
     - echo "___The complete log is in the artifacts___"
-    - cargo deny check -c .maintain/deny.toml 2> deny.log
+    - cargo deny check -c ./scripts/ci/deny.toml 2> deny.log
   artifacts:
     name:                          $CI_COMMIT_SHORT_SHA
     expire_in:                     3 days
@@ -404,13 +404,13 @@ test-deterministic-wasm:
     # build runtime
     - cargo build --verbose --release -p node-runtime
     # make checksum
-    - sha256sum target/release/wbuild/node-runtime/target/wasm32-unknown-unknown/release/node_runtime.wasm > checksum.sha256
+    - sha256sum ./target/release/wbuild/node-runtime/target/wasm32-unknown-unknown/release/node_runtime.wasm > checksum.sha256
     # clean up – FIXME: can we reuse some of the artifacts?
     - cargo clean
     # build again
     - cargo build --verbose --release -p node-runtime
     # confirm checksum
-    - sha256sum -c checksum.sha256
+    - sha256sum -c ./checksum.sha256
     - sccache -s
 
 test-linux-stable:                 &test-linux
@@ -426,8 +426,8 @@ test-linux-stable:                 &test-linux
     WASM_BUILD_NO_COLOR:           1
   script:
     # this job runs all tests in former runtime-benchmarks, frame-staking and wasmtime tests
-    - time cargo test --workspace --locked --release --verbose --features runtime-benchmarks --manifest-path bin/node/cli/Cargo.toml
-    - time cargo test -p frame-support-test --features=conditional-storage,no-metadata-docs --manifest-path frame/support/test/Cargo.toml --test pallet # does not reuse cache 1 min 44 sec
+    - time cargo test --workspace --locked --release --verbose --features runtime-benchmarks --manifest-path ./bin/node/cli/Cargo.toml
+    - time cargo test -p frame-support-test --features=conditional-storage,no-metadata-docs --manifest-path ./frame/support/test/Cargo.toml --test pallet # does not reuse cache 1 min 44 sec
     - SUBSTRATE_TEST_TIMEOUT=1 time cargo test -p substrate-test-utils --release --verbose --locked -- --ignored timeout
     - sccache -s
 
@@ -443,7 +443,7 @@ test-frame-examples-compile-to-wasm:
     RUSTFLAGS:                     "-Cdebug-assertions=y"
     RUST_BACKTRACE: 1
   script:
-    - cd frame/examples/offchain-worker/
+    - cd ./frame/examples/offchain-worker/
     - cargo +nightly build --target=wasm32-unknown-unknown --no-default-features
     - cd ../basic
     - cargo +nightly build --target=wasm32-unknown-unknown --no-default-features
@@ -475,8 +475,8 @@ check-tracing:
   <<:                              *test-refs
   script:
     # with-tracing must be explicitly activated, we run a test to ensure this works as expected in both cases
-    - time cargo +nightly test --manifest-path primitives/tracing/Cargo.toml --no-default-features
-    - time cargo +nightly test --manifest-path primitives/tracing/Cargo.toml --no-default-features --features=with-tracing
+    - time cargo +nightly test --manifest-path ./primitives/tracing/Cargo.toml --no-default-features
+    - time cargo +nightly test --manifest-path ./primitives/tracing/Cargo.toml --no-default-features --features=with-tracing
     - sccache -s
 
 test-full-crypto-feature:
@@ -568,7 +568,7 @@ build-linux-substrate:
   script:
     - *build-linux-substrate-script
     - printf '\n# building node-template\n\n'
-    - ./.maintain/node-template-release.sh ./artifacts/substrate/substrate-node-template.tar.gz
+    - ./scripts/ci/node-template-release.sh ./artifacts/substrate/substrate-node-template.tar.gz
 
 build-linux-subkey:                &build-subkey
   stage:                           build
@@ -590,7 +590,7 @@ build-linux-subkey:                &build-subkey
         sed -n -E 's/^subkey ([0-9.]+.*)/\1/p' |
           tee ./artifacts/subkey/VERSION;
     - sha256sum ./artifacts/subkey/subkey | tee ./artifacts/subkey/subkey.sha256
-    - cp -r .maintain/docker/subkey.Dockerfile ./artifacts/subkey/
+    - cp -r ./scripts/ci/docker/subkey.Dockerfile ./artifacts/subkey/
     - sccache -s
 
 build-macos-subkey:
@@ -784,7 +784,7 @@ publish-draft-release:
     - if: $CI_COMMIT_REF_NAME =~ /^ci-release-.*$/
     - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
   script:
-    - ./.maintain/gitlab/publish_draft_release.sh
+    - ./scripts/ci/gitlab/publish_draft_release.sh
   allow_failure:                   true
 
 #### stage:                        deploy
@@ -807,4 +807,4 @@ deploy-prometheus-alerting-rules:
     - if: $CI_COMMIT_REF_NAME == "master"
       changes:
         - .gitlab-ci.yml
-        - .maintain/monitoring/**/*
+        - ./scripts/ci/monitoring/**/*

@@ -22,6 +22,9 @@
 #![warn(unused_extern_crates)]
 #![warn(unused_imports)]
 
+use clap::{CommandFactory, FromArgMatches, Parser};
+use sc_service::Configuration;
+
 pub mod arg_enums;
 mod commands;
 mod config;
@@ -31,33 +34,31 @@ mod runner;
 
 pub use arg_enums::*;
 pub use clap;
-use clap::{AppSettings, FromArgMatches, IntoApp, Parser};
 pub use commands::*;
 pub use config::*;
 pub use error::*;
 pub use params::*;
 pub use runner::*;
-use sc_service::Configuration;
 pub use sc_service::{ChainSpec, Role};
 pub use sc_tracing::logging::LoggerBuilder;
 pub use sp_version::RuntimeVersion;
 
 /// Substrate client CLI
 ///
-/// This trait needs to be defined on the root structopt of the application. It will provide the
-/// implementation name, version, executable name, description, author, support_url, copyright start
-/// year and most importantly: how to load the chain spec.
-///
-/// StructOpt must not be in scope to use from_args (or the similar methods). This trait provides
-/// its own implementation that will fill the necessary field based on the trait's functions.
+/// This trait needs to be implemented on the root CLI struct of the application. It will provide
+/// the implementation `name`, `version`, `executable name`, `description`, `author`, `support_url`,
+/// `copyright start year` and most importantly: how to load the chain spec.
 pub trait SubstrateCli: Sized {
 	/// Implementation name.
 	fn impl_name() -> String;
 
 	/// Implementation version.
 	///
-	/// By default this will look like this: 2.0.0-b950f731c-x86_64-linux-gnu where the hash is the
-	/// short commit hash of the commit of in the Git repository.
+	/// By default this will look like this:
+	///
+	/// `2.0.0-b950f731c-x86_64-linux-gnu`
+	///
+	/// Where the hash is the short commit hash of the commit of in the Git repository.
 	fn impl_version() -> String;
 
 	/// Executable file name.
@@ -88,14 +89,13 @@ pub trait SubstrateCli: Sized {
 	fn load_spec(&self, id: &str) -> std::result::Result<Box<dyn ChainSpec>, String>;
 
 	/// Helper function used to parse the command line arguments. This is the equivalent of
-	/// `structopt`'s `from_iter()` except that it takes a `VersionInfo` argument to provide the
-	/// name of the application, author, "about" and version. It will also set
-	/// `AppSettings::GlobalVersion`.
+	/// [`clap::Parser::parse()`].
 	///
-	/// To allow running the node without subcommand, tt also sets a few more settings:
-	/// `AppSettings::ArgsNegateSubcommands` and `AppSettings::SubcommandsNegateReqs`.
+	/// To allow running the node without subcommand, it also sets a few more settings:
+	/// [`clap::Command::propagate_version`], [`clap::Command::args_conflicts_with_subcommands`],
+	/// [`clap::Command::subcommand_negates_reqs`].
 	///
-	/// Gets the struct from the command line arguments. Print the
+	/// Creates `Self` from the command line arguments. Print the
 	/// error message and quit the program in case of failure.
 	fn from_args() -> Self
 	where
@@ -105,14 +105,13 @@ pub trait SubstrateCli: Sized {
 	}
 
 	/// Helper function used to parse the command line arguments. This is the equivalent of
-	/// `structopt`'s `from_iter()` except that it takes a `VersionInfo` argument to provide the
-	/// name of the application, author, "about" and version. It will also set
-	/// `AppSettings::GlobalVersion`.
+	/// [`clap::Parser::parse_from`].
 	///
 	/// To allow running the node without subcommand, it also sets a few more settings:
-	/// `AppSettings::ArgsNegateSubcommands` and `AppSettings::SubcommandsNegateReqs`.
+	/// [`clap::Command::propagate_version`], [`clap::Command::args_conflicts_with_subcommands`],
+	/// [`clap::Command::subcommand_negates_reqs`].
 	///
-	/// Gets the struct from any iterator such as a `Vec` of your making.
+	/// Creates `Self` from any iterator over arguments.
 	/// Print the error message and quit the program in case of failure.
 	fn from_iter<I>(iter: I) -> Self
 	where
@@ -120,7 +119,7 @@ pub trait SubstrateCli: Sized {
 		I: IntoIterator,
 		I::Item: Into<std::ffi::OsString> + Clone,
 	{
-		let app = <Self as IntoApp>::into_app();
+		let app = <Self as CommandFactory>::command();
 
 		let mut full_version = Self::impl_version();
 		full_version.push_str("\n");
@@ -133,11 +132,9 @@ pub trait SubstrateCli: Sized {
 			.author(author.as_str())
 			.about(about.as_str())
 			.version(full_version.as_str())
-			.setting(
-				AppSettings::PropagateVersion |
-					AppSettings::ArgsNegateSubcommands |
-					AppSettings::SubcommandsNegateReqs,
-			);
+			.propagate_version(true)
+			.args_conflicts_with_subcommands(true)
+			.subcommand_negates_reqs(true);
 
 		let matches = app.try_get_matches_from(iter).unwrap_or_else(|e| e.exit());
 
@@ -145,14 +142,13 @@ pub trait SubstrateCli: Sized {
 	}
 
 	/// Helper function used to parse the command line arguments. This is the equivalent of
-	/// `structopt`'s `from_iter()` except that it takes a `VersionInfo` argument to provide the
-	/// name of the application, author, "about" and version. It will also set
-	/// `AppSettings::GlobalVersion`.
+	/// [`clap::Parser::try_parse_from`]
 	///
 	/// To allow running the node without subcommand, it also sets a few more settings:
-	/// `AppSettings::ArgsNegateSubcommands` and `AppSettings::SubcommandsNegateReqs`.
+	/// [`clap::Command::propagate_version`], [`clap::Command::args_conflicts_with_subcommands`],
+	/// [`clap::Command::subcommand_negates_reqs`].
 	///
-	/// Gets the struct from any iterator such as a `Vec` of your making.
+	/// Creates `Self` from any iterator over arguments.
 	/// Print the error message and quit the program in case of failure.
 	///
 	/// **NOTE:** This method WILL NOT exit when `--help` or `--version` (or short versions) are
@@ -165,7 +161,7 @@ pub trait SubstrateCli: Sized {
 		I: IntoIterator,
 		I::Item: Into<std::ffi::OsString> + Clone,
 	{
-		let app = <Self as IntoApp>::into_app();
+		let app = <Self as CommandFactory>::command();
 
 		let mut full_version = Self::impl_version();
 		full_version.push_str("\n");
