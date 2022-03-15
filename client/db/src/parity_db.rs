@@ -112,4 +112,8 @@ impl<H: Clone + AsRef<[u8]>> Database<H> for DbAdapter {
 	fn supports_ref_counting(&self) -> bool {
 		true
 	}
+
+	fn sanitize_key<'a>(&self, key: &'a [u8]) -> &'a [u8] {
+		&key[0..key.len() - crate::DB_HASH_LEN]
+	}
 }
