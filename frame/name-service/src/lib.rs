@@ -160,16 +160,11 @@ pub mod pallet {
 		/// A new `Commitment` has taken place.
 		Committed { sender: T::AccountId, who: T::AccountId, hash: CommitmentHash },
 		/// A new `Registration` has taken added.
-		Registered {
-			owner: T::AccountId,
-			registrant: T::AccountId,
-			expiry: T::BlockNumber,
-			deposit: BalanceOf<T>,
-		},
+		NameRegistered { name_hash: NameHash, owner: T::AccountId, expiry: T::BlockNumber },
 		/// A `Registration` has been transferred to a new owner.
 		Transfer { from: T::AccountId, to: T::AccountId },
-		/// A `Registration` has been extended.
-		Extended { name_hash: NameHash, expires: T::BlockNumber },
+		/// A `Registration` has been renewed.
+		NameRenewed { name_hash: NameHash, expires: T::BlockNumber },
 		/// An address has been set for a name hash to resolve to.
 		AddressSet { name_hash: NameHash, address: T::AccountId },
 		/// An address was deregistered.
@@ -236,8 +231,8 @@ pub mod pallet {
 			let sender = ensure_signed(origin)?;
 			let commitment_hash = sp_io::hashing::blake2_256(&(name.clone(), secret).encode());
 
-			let commitment = Commitments::<T>::get(commitment_hash.clone())
-				.ok_or(Error::<T>::CommitmentNotFound)?;
+			let commitment =
+				Commitments::<T>::get(commitment_hash).ok_or(Error::<T>::CommitmentNotFound)?;
 			let name_hash = sp_io::hashing::blake2_256(&name);
 
 			if Self::is_available(name_hash, frame_system::Pallet::<T>::block_number()) {
@@ -308,11 +303,11 @@ pub mod pallet {
 					false => block_number.saturating_add(Self::length(periods)),
 				};
 
-				r.expiry = expiry_new.clone();
+				r.expiry = expiry_new;
 
 				T::RegistrationFeeHandler::on_unbalanced(imbalance);
 
-				Self::deposit_event(Event::<T>::Extended { name_hash, expires: expiry_new });
+				Self::deposit_event(Event::<T>::NameRenewed { name_hash, expires: expiry_new });
 				Ok(())
 			})
 		}
@@ -385,16 +380,16 @@ pub mod pallet {
 			periods_as_block_number.saturating_mul(T::BlocksPerRegistrationPeriod::get())
 		}
 
-		fn is_available(name_hash: NameHash, block_number: T::BlockNumber) -> bool {
+		fn is_available(name_hash: NameHash, current_block_number: T::BlockNumber) -> bool {
 			match Registrations::<T>::get(name_hash) {
-				Some(r) => r.expiry <= block_number,
+				Some(r) => r.expiry <= current_block_number,
 				None => true,
 			}
 		}
 
 		fn do_register(
 			name_hash: NameHash,
-			who: T::AccountId,
+			owner: T::AccountId,
 			deposit: BalanceOf<T>,
 			periods: u32,
 		) -> DispatchResult {
@@ -402,17 +397,11 @@ pub mod pallet {
 			let expiry = block_number.saturating_add(Self::length(periods));
 
 			let registration =
-				Registration { owner: who.clone(), registrant: who.clone(), expiry, deposit };
+				Registration { owner: owner.clone(), registrant: owner.clone(), expiry, deposit };
 
 			Registrations::<T>::insert(name_hash, registration);
-			// TODO: add reverse registration when in place also
 
-			Self::deposit_event(Event::<T>::Registered {
-				owner: who.clone(),
-				registrant: who,
-				expiry,
-				deposit,
-			});
+			Self::deposit_event(Event::<T>::NameRegistered { name_hash, owner, expiry });
 
 			Ok(())
 		}
