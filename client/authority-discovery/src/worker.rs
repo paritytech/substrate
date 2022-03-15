@@ -46,7 +46,7 @@ use prost::Message;
 use rand::{seq::SliceRandom, thread_rng};
 use sc_client_api::blockchain::HeaderBackend;
 use sc_network::{DhtEvent, ExHashT, Multiaddr, NetworkStateInfo, PeerId};
-use sp_api::ProvideRuntimeApi;
+use sp_api::{ApiError, ProvideRuntimeApi};
 use sp_authority_discovery::{
 	AuthorityDiscoveryApi, AuthorityId, AuthorityPair, AuthoritySignature,
 };
@@ -148,12 +148,26 @@ pub struct Worker<Client, Network, Block, DhtEventStream> {
 	phantom: PhantomData<Block>,
 }
 
+pub trait AuthorityDiscoveryWrapper<Block: BlockT> {
+	fn authorities(&self, at: &BlockId<Block>) -> std::result::Result<Vec<AuthorityId>, ApiError>;
+}
+
+impl<Block, T> AuthorityDiscoveryWrapper<Block> for T
+where
+	T: ProvideRuntimeApi<Block>,
+	T::Api: AuthorityDiscoveryApi<Block>,
+	Block: BlockT,
+{
+	fn authorities(&self, at: &BlockId<Block>) -> std::result::Result<Vec<AuthorityId>, ApiError> {
+		self.runtime_api().authorities(at)
+	}
+}
+
 impl<Client, Network, Block, DhtEventStream> Worker<Client, Network, Block, DhtEventStream>
 where
 	Block: BlockT + Unpin + 'static,
 	Network: NetworkProvider,
-	Client: ProvideRuntimeApi<Block> + Send + Sync + 'static + HeaderBackend<Block>,
-	<Client as ProvideRuntimeApi<Block>>::Api: AuthorityDiscoveryApi<Block>,
+	Client: AuthorityDiscoveryWrapper<Block> + Send + Sync + 'static + HeaderBackend<Block>,
 	DhtEventStream: Stream<Item = DhtEvent> + Unpin,
 {
 	/// Construct a [`Worker`].
@@ -365,7 +379,6 @@ where
 
 		let mut authorities = self
 			.client
-			.runtime_api()
 			.authorities(&id)
 			.map_err(|e| Error::CallingRuntime(e.into()))?
 			.into_iter()
@@ -577,7 +590,6 @@ where
 
 		let id = BlockId::hash(client.info().best_hash);
 		let authorities = client
-			.runtime_api()
 			.authorities(&id)
 			.map_err(|e| Error::CallingRuntime(e.into()))?
 			.into_iter()
