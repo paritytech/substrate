@@ -89,7 +89,7 @@ impl TemplateData {
 		// Don't HTML escape any characters.
 		handlebars.register_escape_fn(|s| -> String { s.to_string() });
 
-		let out_path = self.build_path(path);
+		let out_path = self.build_path(path)?;
 		let mut fd = fs::File::create(&out_path)?;
 		info!("Writing weights to {:?}", fs::canonicalize(&out_path)?);
 		handlebars
@@ -98,11 +98,12 @@ impl TemplateData {
 	}
 
 	/// Build a path for the weight file.
-	fn build_path(&self, weight_out: &str) -> PathBuf {
+	fn build_path(&self, weight_out: &str) -> Result<PathBuf> {
 		let mut path = PathBuf::from(weight_out);
-		if path.is_dir() {
-			path.push(format!("{}_weights.rs", self.short_name));
+		if !path.is_dir() {
+			return Err("Need directory as --weight-path".into())
 		}
-		path
+		path.push(format!("{}_weights.rs", self.short_name));
+		Ok(path)
 	}
 }

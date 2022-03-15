@@ -48,6 +48,12 @@ pub struct BenchmarkParams {
 	/// How many times the benchmark should be repeated.
 	#[clap(long, default_value = "1000")]
 	pub repeat: u32,
+
+	/// Maximal number of extrinsics that should be put into a block.
+	///
+	/// Only useful for debugging.
+	#[clap(long)]
+	pub max_ext_per_block: Option<u32>,
 }
 
 /// The results of multiple runs in nano seconds.
@@ -115,7 +121,7 @@ where
 		// Put as many extrinsics into the block as possible and count them.
 		info!("Building block, this takes some time...");
 		let mut num_ext = 0;
-		for nonce in 0.. {
+		for nonce in 0..self.max_ext_per_block() {
 			let ext = self.ext_builder.remark(nonce).ok_or("Could not build extrinsic")?;
 			match builder.push(ext.clone()) {
 				Ok(()) => {},
@@ -178,6 +184,10 @@ where
 		}
 
 		Ok(record)
+	}
+
+	fn max_ext_per_block(&self) -> u32 {
+		self.params.max_ext_per_block.unwrap_or(u32::MAX)
 	}
 }
 
