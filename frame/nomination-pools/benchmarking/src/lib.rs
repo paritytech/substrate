@@ -397,8 +397,8 @@ frame_benchmarking::benchmarks! {
 		pallet_staking::CurrentEra::<T>::put(0);
 		// Simulate some rewards so we can check if the rewards storage is cleaned up. We check this
 		// here to ensure the complete flow for destroying a pool works - the reward pool account
-		// should never exist by time the depositor withdraws so we must test that it gets cleaned
-		// up here.
+		// should never exist by time the depositor withdraws so we test that it gets cleaned
+		// up when unbonding.
 		let reward_account = Pools::<T>::create_reward_account(1);
 		CurrencyOf::<T>::make_free_balance_be(&reward_account, CurrencyOf::<T>::minimum_balance());
 		assert!(frame_system::Account::<T>::contains_key(&reward_account));
