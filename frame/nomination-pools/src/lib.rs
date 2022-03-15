@@ -719,10 +719,7 @@ impl<T: Config> BondedPool<T> {
 	fn set_state(&mut self, state: PoolState) {
 		if self.state != state {
 			self.state = state;
-			Pallet::<T>::deposit_event(Event::<T>::State {
-				pool_id: self.id,
-				new_state: state,
-			});
+			Pallet::<T>::deposit_event(Event::<T>::State { pool_id: self.id, new_state: state });
 		};
 	}
 }
