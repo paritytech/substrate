@@ -32,6 +32,8 @@ static TEMPLATE: &str = include_str!("./weights.hbs");
 pub(crate) struct TemplateData {
 	/// Name of the database used.
 	db_name: String,
+	/// Block number that was used.
+	block_number: String,
 	/// Name of the runtime. Taken from the chain spec.
 	runtime_name: String,
 	/// Version of the benchmarking CLI used.
@@ -85,28 +87,44 @@ impl TemplateData {
 		Ok(())
 	}
 
-	/// Filles out the `weights.hbs` HBS template with its own data.
+	/// Sets the block id that was used.
+	pub fn set_block_number(&mut self, block_number: String) {
+		self.block_number = block_number
+	}
+
+	/// Fills out the `weights.hbs` or specified HBS template with its own data.
 	/// Writes the result to `path` which can be a directory or file.
-	pub fn write(&self, path: &str) -> Result<()> {
+	pub fn write(&self, path: &Option<PathBuf>, hbs_template: &Option<PathBuf>) -> Result<()> {
 		let mut handlebars = handlebars::Handlebars::new();
 		// Format large integers with underscore.
 		handlebars.register_helper("underscore", Box::new(crate::writer::UnderscoreHelper));
 		// Don't HTML escape any characters.
 		handlebars.register_escape_fn(|s| -> String { s.to_string() });
+		// Use custom template if provided.
+		let template = match hbs_template {
+			Some(template) if template.is_file() => fs::read_to_string(template)?,
+			Some(_) => return Err("Handlebars template is not a valid file!".into()),
+			None => TEMPLATE.to_string(),
+		};
 
 		let out_path = self.build_path(path);
 		let mut fd = fs::File::create(&out_path)?;
 		info!("Writing weights to {:?}", fs::canonicalize(&out_path)?);
+
 		handlebars
-			.render_template_to_write(&TEMPLATE, &self, &mut fd)
+			.render_template_to_write(&template, &self, &mut fd)
 			.map_err(|e| format!("HBS template write: {:?}", e).into())
 	}
 
 	/// Builds a path for the weight file.
-	fn build_path(&self, weight_out: &str) -> PathBuf {
-		let mut path = PathBuf::from(weight_out);
-		if path.is_dir() {
-			path.push(format!("{}_weights.rs", self.db_name.to_lowercase()));
+	fn build_path(&self, weight_out: &Option<PathBuf>) -> PathBuf {
+		let mut path = match weight_out {
+			Some(p) => PathBuf::from(p),
+			None => PathBuf::new(),
+		};
+
+		if path.is_dir() || path.as_os_str().is_empty() {
+			path.push(format!("{}_weights", self.db_name.to_lowercase()));
 			path.set_extension("rs");
 		}
 		path
