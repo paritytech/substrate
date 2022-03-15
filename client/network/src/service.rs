@@ -1949,7 +1949,7 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 						if this.boot_node_ids.contains(&peer_id) {
 							if let DialError::WrongPeerId { obtained, endpoint } = error {
 								error!(
-									"💔 The bootnode you want to connect provided a different peer ID than the one you expect: `{}` with `{}`:`{}`.",
+									"💔 The bootnode you want to connect provided a different peer ID than the one you expect: `{}` with `{}`:`{:?}`.",
 									peer_id,
 									obtained,
 									endpoint,
