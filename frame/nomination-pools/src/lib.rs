@@ -621,8 +621,7 @@ impl<T: Config> BondedPool<T> {
 			// This is a depositor
 			if !sub_pools.no_era.points.is_zero() {
 				// Unbonded pool has some points, so if they are the last delegator they must be
-				// here
-				// Since the depositor is the last to unbond, this should never be possible
+				// here. Since the depositor is the last to unbond, this should never be possible.
 				ensure!(sub_pools.with_era.len().is_zero(), Error::<T>::NotOnlyDelegator);
 				ensure!(
 					sub_pools.no_era.points == target_delegator.points,
@@ -1539,14 +1538,15 @@ pub mod pallet {
 
 impl<T: Config> Pallet<T> {
 	/// Create the main, bonded account of a pool with the given id.
-	fn create_bonded_account(id: PoolId) -> T::AccountId {
+	pub fn create_bonded_account(id: PoolId) -> T::AccountId {
+		// 4bytes ++ 8bytes ++ 1byte ++ 4bytes
 		T::PalletId::get().into_sub_account((1u8, id))
 	}
 
 	/// Create the reward account of a pool with the given id.
-	fn create_reward_account(id: PoolId) -> T::AccountId {
+	pub fn create_reward_account(id: PoolId) -> T::AccountId {
 		// TODO: integrity check for what is the reasonable max number of pools based on this.
-		// 4 + 8 + 4 + 1
+		// 4bytes ++ 8bytes ++ 1byte ++ 4bytes
 		T::PalletId::get().into_sub_account((2u8, id))
 	}
 
