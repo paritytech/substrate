@@ -407,7 +407,7 @@ mod join {
 
 	#[test]
 	fn join_errors_correctly() {
-		ExtBuilder::default().build_and_execute_no_checks(|| {
+		ExtBuilder::default().with_check(0).build_and_execute(|| {
 			// 10 is already part of the default pool created.
 			assert_eq!(Delegators::<Runtime>::get(&10).unwrap().pool_id, 1);
 
@@ -1322,7 +1322,7 @@ mod unbond {
 				}
 			);
 
-			assert_eq!(StakingMock::bonded_balance(&default_bonded_account()).unwrap(), 0);
+			assert_eq!(StakingMock::active_stake(&default_bonded_account()).unwrap(), 0);
 		});
 	}
 
@@ -1357,7 +1357,7 @@ mod unbond {
 					}
 				);
 
-				assert_eq!(StakingMock::bonded_balance(&default_bonded_account()).unwrap(), 94);
+				assert_eq!(StakingMock::active_stake(&default_bonded_account()).unwrap(), 94);
 				assert_eq!(Delegators::<Runtime>::get(40).unwrap().unbonding_era, Some(0 + 3));
 				assert_eq!(Balances::free_balance(&40), 40 + 40); // We claim rewards when unbonding
 
@@ -1382,7 +1382,7 @@ mod unbond {
 						}
 					}
 				);
-				assert_eq!(StakingMock::bonded_balance(&default_bonded_account()).unwrap(), 2);
+				assert_eq!(StakingMock::active_stake(&default_bonded_account()).unwrap(), 2);
 				assert_eq!(Delegators::<Runtime>::get(550).unwrap().unbonding_era, Some(0 + 3));
 				assert_eq!(Balances::free_balance(&550), 550 + 550);
 
@@ -1406,7 +1406,7 @@ mod unbond {
 						}
 					}
 				);
-				assert_eq!(StakingMock::bonded_balance(&default_bonded_account()).unwrap(), 0);
+				assert_eq!(StakingMock::active_stake(&default_bonded_account()).unwrap(), 0);
 				assert_eq!(Delegators::<Runtime>::get(550).unwrap().unbonding_era, Some(0 + 3));
 				assert_eq!(Balances::free_balance(&550), 550 + 550);
 			});
@@ -1414,7 +1414,7 @@ mod unbond {
 
 	#[test]
 	fn unbond_other_merges_older_pools() {
-		ExtBuilder::default().build_and_execute(|| {
+		ExtBuilder::default().with_check(1).build_and_execute(|| {
 			// Given
 			assert_eq!(StakingMock::bonding_duration(), 3);
 			SubPoolsStorage::<Runtime>::insert(
@@ -1487,7 +1487,7 @@ mod unbond {
 						}
 					}
 				);
-				assert_eq!(StakingMock::bonded_balance(&default_bonded_account()).unwrap(), 10);
+				assert_eq!(StakingMock::active_stake(&default_bonded_account()).unwrap(), 10);
 				assert_eq!(
 					SubPoolsStorage::<Runtime>::get(1).unwrap(),
 					SubPools {
@@ -1555,7 +1555,7 @@ mod unbond {
 					}
 				}
 			);
-			assert_eq!(StakingMock::bonded_balance(&default_bonded_account()).unwrap(), 0);
+			assert_eq!(StakingMock::active_stake(&default_bonded_account()).unwrap(), 0);
 			assert_eq!(
 				UNBONDING_BALANCE_MAP
 					.with(|m| *m.borrow_mut().get(&default_bonded_account()).unwrap()),
@@ -1622,16 +1622,16 @@ mod pool_withdraw_unbonded {
 			// Given 10 unbond'ed directly against the pool account
 			assert_ok!(StakingMock::unbond(default_bonded_account(), 5));
 			// and the pool account only has 10 balance
-			assert_eq!(StakingMock::bonded_balance(&default_bonded_account()), Some(5));
-			assert_eq!(StakingMock::locked_balance(&default_bonded_account()), Some(10));
+			assert_eq!(StakingMock::active_stake(&default_bonded_account()), Some(5));
+			assert_eq!(StakingMock::total_stake(&default_bonded_account()), Some(10));
 			assert_eq!(Balances::free_balance(&default_bonded_account()), 10);
 
 			// When
 			assert_ok!(Pools::pool_withdraw_unbonded(Origin::signed(10), 1, 0));
 
 			// Then there unbonding balance is no longer locked
-			assert_eq!(StakingMock::bonded_balance(&default_bonded_account()), Some(5));
-			assert_eq!(StakingMock::locked_balance(&default_bonded_account()), Some(5));
+			assert_eq!(StakingMock::active_stake(&default_bonded_account()), Some(5));
+			assert_eq!(StakingMock::total_stake(&default_bonded_account()), Some(5));
 			assert_eq!(Balances::free_balance(&default_bonded_account()), 10);
 		});
 	}
@@ -1739,7 +1739,7 @@ mod withdraw_unbonded_other {
 				// Given
 				StakingMock::set_bonded_balance(default_bonded_account(), 100); // slash bonded balance
 				Balances::make_free_balance_be(&default_bonded_account(), 100);
-				assert_eq!(StakingMock::locked_balance(&default_bonded_account()), Some(100));
+				assert_eq!(StakingMock::total_stake(&default_bonded_account()), Some(100));
 
 				assert_ok!(Pools::unbond_other(Origin::signed(40), 40));
 				assert_ok!(Pools::unbond_other(Origin::signed(550), 550));
@@ -1825,7 +1825,7 @@ mod withdraw_unbonded_other {
 
 	#[test]
 	fn withdraw_unbonded_other_errors_correctly() {
-		ExtBuilder::default().build_and_execute_no_checks(|| {
+		ExtBuilder::default().with_check(0).build_and_execute(|| {
 			// Insert the sub-pool
 			let sub_pools = SubPools {
 				no_era: Default::default(),
@@ -2099,7 +2099,7 @@ mod create {
 			assert!(!BondedPools::<Runtime>::contains_key(2));
 			assert!(!RewardPools::<Runtime>::contains_key(2));
 			assert!(!Delegators::<Runtime>::contains_key(11));
-			assert_eq!(StakingMock::bonded_balance(&next_pool_stash), None);
+			assert_eq!(StakingMock::active_stake(&next_pool_stash), None);
 
 			Balances::make_free_balance_be(&11, StakingMock::minimum_bond());
 			assert_ok!(Pools::create(
@@ -2138,7 +2138,7 @@ mod create {
 				}
 			);
 			assert_eq!(
-				StakingMock::bonded_balance(&next_pool_stash).unwrap(),
+				StakingMock::active_stake(&next_pool_stash).unwrap(),
 				StakingMock::minimum_bond()
 			);
 			assert_eq!(
@@ -2154,7 +2154,7 @@ mod create {
 
 	#[test]
 	fn create_errors_correctly() {
-		ExtBuilder::default().build_and_execute_no_checks(|| {
+		ExtBuilder::default().with_check(0).build_and_execute(|| {
 			assert_noop!(
 				Pools::create(Origin::signed(10), 420, 123, 456, 789),
 				Error::<Runtime>::AccountBelongsToOtherPool

@@ -34,7 +34,6 @@ impl StakingMock {
 impl sp_staking::StakingInterface for StakingMock {
 	type Balance = Balance;
 	type AccountId = AccountId;
-	type LookupSource = Self::AccountId;
 
 	fn minimum_bond() -> Self::Balance {
 		10
@@ -48,11 +47,11 @@ impl sp_staking::StakingInterface for StakingMock {
 		BondingDuration::get()
 	}
 
-	fn bonded_balance(who: &Self::AccountId) -> Option<Self::Balance> {
+	fn active_stake(who: &Self::AccountId) -> Option<Self::Balance> {
 		BondedBalanceMap::get().get(who).map(|v| *v)
 	}
 
-	fn locked_balance(who: &Self::AccountId) -> Option<Self::Balance> {
+	fn total_stake(who: &Self::AccountId) -> Option<Self::Balance> {
 		match (
 			UnbondingBalanceMap::get().get(who).map(|v| *v),
 			BondedBalanceMap::get().get(who).map(|v| *v),
@@ -92,7 +91,7 @@ impl sp_staking::StakingInterface for StakingMock {
 		Ok(())
 	}
 
-	fn nominate(_: Self::AccountId, nominations: Vec<Self::LookupSource>) -> DispatchResult {
+	fn nominate(_: Self::AccountId, nominations: Vec<Self::AccountId>) -> DispatchResult {
 		Nominations::set(nominations);
 		Ok(())
 	}
@@ -158,6 +157,7 @@ impl Convert<U256, Balance> for U256ToBalance {
 parameter_types! {
 	pub static PostUnbondingPoolsWindow: u32 = 2;
 	pub static MaxMetadataLen: u32 = 2;
+	pub static CheckLevel: u8 = 255;
 	pub const PoolsPalletId: PalletId = PalletId(*b"py/nopls");
 }
 impl pools::Config for Runtime {
@@ -198,6 +198,11 @@ impl ExtBuilder {
 		self
 	}
 
+	pub(crate) fn with_check(self, level: u8) -> Self {
+		CheckLevel::set(level);
+		self
+	}
+
 	pub(crate) fn build(self) -> sp_io::TestExternalities {
 		// sp_tracing::try_init_simple();
 		let mut storage =
@@ -233,13 +238,7 @@ impl ExtBuilder {
 	pub fn build_and_execute(self, test: impl FnOnce() -> ()) {
 		self.build().execute_with(|| {
 			test();
-			crate::sanity::checks::<Runtime>();
-		})
-	}
-
-	pub fn build_and_execute_no_checks(self, test: impl FnOnce() -> ()) {
-		self.build().execute_with(|| {
-			test();
+			Pools::sanity_checks(CheckLevel::get()).unwrap();
 		})
 	}
 }
