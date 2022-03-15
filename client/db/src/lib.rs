@@ -1351,8 +1351,8 @@ impl<Block: BlockT> Backend<Block> {
 				let mut bytes: u64 = 0;
 				let mut removal: u64 = 0;
 				let mut bytes_removal: u64 = 0;
-				for (key, (val, rc)) in operation.db_updates.drain() {
-					let key = self.storage.db.sanitize_key(&key).to_vec();
+				for (mut key, (val, rc)) in operation.db_updates.drain() {
+					self.storage.db.sanitize_key(&mut key);
 					if rc > 0 {
 						ops += 1;
 						bytes += key.len() as u64 + val.len() as u64;

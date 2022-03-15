@@ -113,7 +113,7 @@ impl<H: Clone + AsRef<[u8]>> Database<H> for DbAdapter {
 		true
 	}
 
-	fn sanitize_key<'a>(&self, key: &'a [u8]) -> &'a [u8] {
-		&key[0..key.len() - crate::DB_HASH_LEN]
+	fn sanitize_key(&self, key: &mut Vec<u8>) {
+		let _prefix = key.drain(0..key.len() - crate::DB_HASH_LEN);
 	}
 }

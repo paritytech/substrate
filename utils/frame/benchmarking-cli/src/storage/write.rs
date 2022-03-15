@@ -27,7 +27,7 @@ use sp_runtime::{
 };
 use sp_trie::PrefixedMemoryDB;
 
-use log::info;
+use log::{info, trace};
 use rand::prelude::*;
 use std::{fmt::Debug, sync::Arc, time::Instant};
 
@@ -63,30 +63,29 @@ impl StorageCmd {
 
 		// Generate all random values first; Make sure there are no collisions with existing
 		// db entries, so we can rollback all additions without corrupting existing entries.
-		let mut new_values = Vec::with_capacity(kvs.len());
-		for (k, original_v) in kvs.clone() {
+		for (k, original_v) in kvs.iter_mut() {
 			'retry: loop {
 				let mut new_v = vec![0; original_v.len()];
 				rng.fill_bytes(&mut new_v[..]);
 				let new_kv = vec![(k.as_ref(), Some(new_v.as_ref()))];
 				let (_, mut stx) = trie.storage_root(new_kv.iter().cloned(), self.state_version());
-				for (k, (_, rc)) in stx.drain().into_iter() {
-					let k = db.sanitize_key(&k);
-
+				for (mut k, (_, rc)) in stx.drain().into_iter() {
 					if rc > 0 {
-						if db.get(state_col, k.as_ref()).is_some() {
+						db.sanitize_key(&mut k);
+						if db.get(state_col, &k).is_some() {
+							trace!("Benchmark-store key creation: Key collision detected, retry");
 							continue 'retry
 						}
 					}
 				}
-				new_values.push(new_v);
+				*original_v = new_v;
 				break
 			}
 		}
 
 		info!("Writing {} keys", kvs.len());
 		// Write each value in one commit.
-		for ((k, _), new_v) in kvs.iter().zip(&new_values) {
+		for (k, new_v) in kvs.iter() {
 			// Interesting part here:
 			let start = Instant::now();
 			// Create a TX that will modify the Trie in the DB and
@@ -117,12 +116,11 @@ fn convert_tx<B: BlockT>(
 ) -> Transaction<DbHash> {
 	let mut ret = Transaction::<DbHash>::default();
 
-	for (k, (v, rc)) in tx.drain().into_iter() {
-		let k = db.sanitize_key(&k);
-
+	for (mut k, (v, rc)) in tx.drain().into_iter() {
 		if rc > 0 {
+			db.sanitize_key(&mut k);
 			if invert_inserts {
-				ret.set(col, k.as_ref(), &v);
+				ret.set(col, &k, &v);
 			} else {
 				ret.remove(col, &k);
 			}
