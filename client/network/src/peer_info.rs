@@ -260,6 +260,7 @@ impl NetworkBehaviour for PeerInfoBehaviour {
 		);
 
 		if let Some(entry) = self.nodes_info.get_mut(peer_id) {
+			entry.info_expire = Some(Instant::now() + CACHE_EXPIRE);
 			entry.endpoints.retain(|ep| ep != endpoint)
 		} else {
 			error!(target: "sub-libp2p",
