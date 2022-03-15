@@ -396,9 +396,9 @@ impl<T: Config> Pallet<T> {
 		// they didn't end up being used. Unreserve the bonds.
 		let discarded = all_submissions.len();
 		let mut refund_count = 0;
-		let maybe_max_refunds = T::SignedMaxRefunds::get();
+		let max_refunds = T::SignedMaxRefunds::get();
 		for SignedSubmission { who, deposit, call_fee, .. } in all_submissions.drain() {
-			if maybe_max_refunds.map_or(true, |max| refund_count < max) {
+			if refund_count < max_refunds {
 				// Refund fee
 				let _ = T::Currency::deposit_creating(&who, call_fee);
 				refund_count += 1;
@@ -647,7 +647,7 @@ mod tests {
 		ExtBuilder::default().build_and_execute(|| {
 			roll_to(15);
 			assert!(MultiPhase::current_phase().is_signed());
-			assert_eq!(SignedMaxRefunds::get(), Some(1));
+			assert_eq!(SignedMaxRefunds::get(), 1);
 			assert!(SignedMaxSubmissions::get() > 2);
 
 			for s in 0..SignedMaxSubmissions::get() {
@@ -724,29 +724,6 @@ mod tests {
 
 			// the submitter of the ejected solution does *not* get a call fee refund
 			assert_eq!(balances(&(99 + 0)), (100, 0));
-
-			// set the max refunds to None
-			SignedMaxRefunds::set(None);
-			assert!(<Runtime as Config>::SignedMaxRefunds::get().is_none());
-
-			// submit another solution to force an ejection
-			let solution = RawSolution {
-				score: ElectionScore { minimal_stake: 21, ..Default::default() },
-				..Default::default()
-			};
-			assert_ok!(MultiPhase::submit(Origin::signed(999), Box::new(solution)));
-
-			// the one with score 6 was rejected, the new one inserted.
-			assert_eq!(
-				MultiPhase::signed_submissions()
-					.iter()
-					.map(|s| s.raw_solution.score.minimal_stake)
-					.collect::<Vec<_>>(),
-				vec![7, 8, 9, 20, 21]
-			);
-
-			// the submitter of the ejected solution gets a call fee refund
-			assert_eq!(balances(&(99 + 1)), (100 + 8, 0));
 		})
 	}
 

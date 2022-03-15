@@ -599,7 +599,7 @@ frame_election_provider_support::generate_solution_type!(
 
 parameter_types! {
 	pub MaxNominations: u32 = <NposSolution16 as sp_npos_elections::NposSolution>::LIMIT as u32;
-	pub SignedMaxRefunds: Option<u32> = Some(10);
+	pub SignedMaxRefunds: u32 = 10;
 }
 
 /// The numbers configured here could always be more than the the maximum limits of staking pallet

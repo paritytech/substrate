@@ -631,7 +631,7 @@ pub mod pallet {
 		/// The maximum amount of unchecked solutions to refund the call fee for. If `None`, all
 		/// solutions, including ejected solutions, will get a refund.
 		#[pallet::constant]
-		type SignedMaxRefunds: Get<Option<u32>>;
+		type SignedMaxRefunds: Get<u32>;
 
 		/// Base reward for a signed solution
 		#[pallet::constant]
@@ -1021,10 +1021,6 @@ pub mod pallet {
 			let ejected_a_solution = maybe_removed.is_some();
 			// if we had to remove the weakest solution, unreserve its deposit
 			if let Some(removed) = maybe_removed {
-				if T::SignedMaxRefunds::get().is_none() {
-					// There are no limits on how many solutions get their call fee refunded
-					let _ = T::Currency::deposit_creating(&removed.who, removed.call_fee);
-				}
 				let _remainder = T::Currency::unreserve(&removed.who, removed.deposit);
 				debug_assert!(_remainder.is_zero());
 			}
