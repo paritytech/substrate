@@ -97,7 +97,8 @@ where
 
 	/// Builds a block for the given benchmark type.
 	///
-	/// Returns the block and the number of extrinsics in the block.
+	/// Returns the block and the number of extrinsics in the block
+	/// that are not inherents.
 	fn build_block(&self, bench_type: BenchmarkType) -> Result<(Block, u64)> {
 		let mut builder = self.client.new_block(Default::default())?;
 		// Create and insert the inherents.
@@ -106,7 +107,7 @@ where
 			builder.push(inherent)?;
 		}
 
-		// Return early if we just want an empty block.
+		// Return early if we just want a block with inherents and no additional extrinsics.
 		if bench_type == BenchmarkType::Block {
 			return Ok((builder.build()?.block, 0))
 		}
@@ -117,17 +118,18 @@ where
 		for nonce in 0.. {
 			let ext = self.ext_builder.remark(nonce).ok_or("Could not build extrinsic")?;
 			match builder.push(ext.clone()) {
-				Ok(Ok(())) => {},
-				Ok(r) => panic!("Failed to apply extrinsic: {:?}", r),
+				Ok(()) => {},
 				Err(ApplyExtrinsicFailed(Validity(TransactionValidityError::Invalid(
 					InvalidTransaction::ExhaustsResources,
-				)))) => break,
-				Err(error) => panic!("{}", error),
+				)))) => break, // Block is full
+				Err(e) => return Err(Error::Client(e)),
 			}
 			num_ext += 1;
 		}
-		assert!(num_ext != 0, "A Block must hold at least one extrinsic");
-		info!("Remarks per block: {}", num_ext);
+		if num_ext == 0 {
+			return Err("A Block must hold at least one extrinsic".into())
+		}
+		info!("Extrinsics per block: {}", num_ext);
 		let block = builder.build()?.block;
 
 		Ok((block, num_ext))
@@ -161,7 +163,7 @@ where
 			let block = block.clone();
 			let runtime_api = self.client.runtime_api();
 			let start = Instant::now();
-			
+
 			runtime_api
 				.execute_block(&genesis, block)
 				.map_err(|e| Error::Client(RuntimeApiError(e)))?;
@@ -169,7 +171,7 @@ where
 			let elapsed = start.elapsed().as_nanos();
 			if bench_type == BenchmarkType::Extrinsic {
 				// Checked for non-zero div above.
-				record.push(elapsed as u64 / num_ext);
+				record.push((elapsed as f64 / num_ext as f64).ceil() as u64);
 			} else {
 				record.push(elapsed as u64);
 			}

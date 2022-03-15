@@ -167,7 +167,7 @@ fn prepare_benchmark(client: &FullClient) -> (usize, Vec<OpaqueExtrinsic>) {
 			Err(ApplyExtrinsicFailed(Validity(TransactionValidityError::Invalid(
 				InvalidTransaction::ExhaustsResources,
 			)))) => break,
-			Err(error) => panic!("{}", error),
+			Err(e) => e,
 		}
 
 		extrinsics.push(extrinsic);
