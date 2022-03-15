@@ -176,10 +176,20 @@ use sp_std::{fmt::Debug, prelude::*};
 pub use frame_election_provider_solution_type::generate_solution_type;
 pub use sp_arithmetic::PerThing;
 pub use sp_npos_elections::{
-	Assignment, ElectionResult, ExtendedBalance, IdentifierT, PerThing128, Support, Supports,
-	VoteWeight,
+	Assignment, ElectionResult, Error, ExtendedBalance, IdentifierT, IndexAssignment, PerThing128,
+	Support, Supports, VoteWeight, __OrInvalidIndex,
 };
 pub use traits::NposSolution;
+
+// re-export for the solution macro, with the dependencies of the macro.
+#[doc(hidden)]
+pub use codec;
+#[doc(hidden)]
+pub use scale_info;
+#[doc(hidden)]
+pub use sp_arithmetic;
+#[doc(hidden)]
+pub use sp_std;
 
 /// Types that are used by the data provider trait.
 pub mod data_provider {
