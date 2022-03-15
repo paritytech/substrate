@@ -1576,10 +1576,8 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 		let event = match self.behaviour.poll(cx, params) {
 			Poll::Pending => return Poll::Pending,
 			Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev)) => ev,
-			Poll::Ready(NetworkBehaviourAction::DialAddress { address, handler }) =>
-				return Poll::Ready(NetworkBehaviourAction::DialAddress { address, handler }),
-			Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id, condition, handler }) =>
-				return Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id, condition, handler }),
+			Poll::Ready(NetworkBehaviourAction::Dial { opts, handler }) =>
+				return Poll::Ready(NetworkBehaviourAction::Dial { opts, handler }),
 			Poll::Ready(NetworkBehaviourAction::NotifyHandler { peer_id, handler, event }) =>
 				return Poll::Ready(NetworkBehaviourAction::NotifyHandler {
 					peer_id,

@@ -881,19 +881,10 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 							warn!(target: "sub-libp2p", "Libp2p => Unhandled Kademlia event: {:?}", e)
 						},
 					},
-					NetworkBehaviourAction::DialAddress { address, handler } => {
+					NetworkBehaviourAction::Dial { opts, handler } => {
 						let pid = pid.clone();
 						let handler = self.new_handler_with_replacement(pid, handler);
-						return Poll::Ready(NetworkBehaviourAction::DialAddress { address, handler })
-					},
-					NetworkBehaviourAction::DialPeer { peer_id, condition, handler } => {
-						let pid = pid.clone();
-						let handler = self.new_handler_with_replacement(pid, handler);
-						return Poll::Ready(NetworkBehaviourAction::DialPeer {
-							peer_id,
-							condition,
-							handler,
-						})
+						return Poll::Ready(NetworkBehaviourAction::Dial { opts, handler })
 					},
 					NetworkBehaviourAction::NotifyHandler { peer_id, handler, event } =>
 						return Poll::Ready(NetworkBehaviourAction::NotifyHandler {
@@ -932,10 +923,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 					},
 					MdnsEvent::Expired(_) => {},
 				},
-				NetworkBehaviourAction::DialAddress { .. } => {
-					unreachable!("mDNS never dials!");
-				},
-				NetworkBehaviourAction::DialPeer { .. } => {
+				NetworkBehaviourAction::Dial { .. } => {
 					unreachable!("mDNS never dials!");
 				},
 				NetworkBehaviourAction::NotifyHandler { event, .. } => match event {}, /* `event` is an enum with no variant */

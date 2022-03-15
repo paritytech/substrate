@@ -26,7 +26,7 @@ use futures::prelude::*;
 use libp2p::{
 	core::{connection::ConnectionId, ConnectedPoint, Multiaddr, PeerId},
 	swarm::{
-		DialError, DialPeerCondition, IntoConnectionHandler, NetworkBehaviour,
+		DialError, IntoConnectionHandler, NetworkBehaviour,
 		NetworkBehaviourAction, NotifyHandler, PollParameters,
 	},
 };
@@ -620,10 +620,8 @@ impl Notifications {
 					set_id,
 				);
 				trace!(target: "sub-libp2p", "Libp2p <= Dial {}", entry.key().0);
-				// The `DialPeerCondition` ensures that dial attempts are de-duplicated
-				self.events.push_back(NetworkBehaviourAction::DialPeer {
-					peer_id: entry.key().0.clone(),
-					condition: DialPeerCondition::Disconnected,
+				self.events.push_back(NetworkBehaviourAction::Dial {
+					opts: entry.key().0.clone().into(),
 					handler,
 				});
 				entry.insert(PeerState::Requested);
@@ -657,10 +655,8 @@ impl Notifications {
 					set_id,
 				);
 				trace!(target: "sub-libp2p", "Libp2p <= Dial {:?}", occ_entry.key());
-				// The `DialPeerCondition` ensures that dial attempts are de-duplicated
-				self.events.push_back(NetworkBehaviourAction::DialPeer {
-					peer_id: occ_entry.key().0.clone(),
-					condition: DialPeerCondition::Disconnected,
+				self.events.push_back(NetworkBehaviourAction::Dial {
+					opts: occ_entry.key().0.clone().into(),
 					handler,
 				});
 				*occ_entry.into_mut() = PeerState::Requested;
@@ -2036,10 +2032,8 @@ impl NetworkBehaviour for Notifications {
 
 				PeerState::PendingRequest { timer, .. } if *timer == delay_id => {
 					trace!(target: "sub-libp2p", "Libp2p <= Dial {:?} now that ban has expired", peer_id);
-					// The `DialPeerCondition` ensures that dial attempts are de-duplicated
-					self.events.push_back(NetworkBehaviourAction::DialPeer {
-						peer_id,
-						condition: DialPeerCondition::Disconnected,
+					self.events.push_back(NetworkBehaviourAction::Dial {
+						opts: peer_id.into(),
 						handler,
 					});
 					*peer_state = PeerState::Requested;
