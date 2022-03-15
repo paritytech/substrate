@@ -1344,10 +1344,8 @@ pub mod pallet {
 				SubPoolsStorage::<T>::remove(delegator.pool_id);
 				// Kill accounts from storage by making their balance go below ED. We assume that
 				// the accounts have no references that would prevent destruction once we get to
-				// this point.
-				// TODO: in correct scenario, these two accounts should be zero when we reach there
-				// anyway.
-
+				// this point. This is defensive, these two accounts should be zero by time we get 
+				// here.
 				#[cfg(test)]
 				sanity::pre_pool_destruction_checks::<T>(bonded_pool.bonded_account(), bonded_pool.reward_account());
 				T::Currency::make_free_balance_be(&bonded_pool.reward_account(), Zero::zero());
