@@ -559,6 +559,7 @@ impl pallet_staking::Config for Runtime {
 	// Note that the aforementioned does not scale to a very large number of nominators.
 	type SortedListProvider = BagsList;
 	type MaxUnlockingChunks = ConstU32<32>;
+	type OnStakerSlash = ();
 	type WeightInfo = pallet_staking::weights::SubstrateWeight<Runtime>;
 	type BenchmarkingConfig = StakingBenchmarkingConfig;
 }
