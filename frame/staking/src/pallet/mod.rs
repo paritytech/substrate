@@ -176,7 +176,7 @@ pub mod pallet {
 		#[pallet::constant]
 		type MaxUnlockingChunks: Get<u32>;
 
-		/// A hook called when any staker is slashed. Mostly likely this can be a no-op unless 
+		/// A hook called when any staker is slashed. Mostly likely this can be a no-op unless
 		/// other pallets exist that are affected by slashing per-staker.
 		type OnStakerSlash: sp_staking::OnStakerSlash<Self::AccountId, BalanceOf<Self>>;
 
