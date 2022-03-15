@@ -1572,8 +1572,8 @@ impl<T: Config> Pallet<T> {
 
 	/// Create the reward account of a pool with the given id.
 	pub fn create_reward_account(id: PoolId) -> T::AccountId {
-		// NOTE: account_type must be at the beginning so that in test's account-id (u128) there is
-		// a distinction.
+		// NOTE: in order to have a distinction in the test account id type (u128), we put account_type first so
+		// it does not get truncated out.
 		T::PalletId::get().into_sub_account((AccountType::Reward, id))
 	}
 
