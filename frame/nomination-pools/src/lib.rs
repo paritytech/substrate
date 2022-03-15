@@ -715,7 +715,8 @@ impl<T: Config> BondedPool<T> {
 		n
 	}
 
-	// Set the state of `self`, and deposit and event if the state changed.
+	// Set the state of `self`, and deposit an event if the state changed. State should never be set directly in
+	// in order to ensure a state change event is always correctly deposited.
 	fn set_state(&mut self, state: PoolState) {
 		if self.state != state {
 			self.state = state;
