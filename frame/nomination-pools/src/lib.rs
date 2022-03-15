@@ -294,7 +294,7 @@
 //   a pool is flipped to a destroying state it cannot change its state.
 // * The sum of each pools delegator counter equals the `Delegators::count()`.
 // * A pool's `delegator_counter` should always be gt 0.
-// * TODO: metadata should only exist if the pool exist.
+// * Metadata should only exist if the pool exist.
 
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
@@ -1347,19 +1347,9 @@ pub mod pallet {
 				// this point.
 				// TODO: in correct scenario, these two accounts should be zero when we reach there
 				// anyway.
-				debug_assert_eq!(
-					T::Currency::free_balance(&bonded_pool.reward_account()),
-					Zero::zero()
-				);
-				debug_assert_eq!(
-					T::Currency::free_balance(&bonded_pool.bonded_account()),
-					Zero::zero()
-				);
-				debug_assert_eq!(
-					T::StakingInterface::locked_balance(&bonded_pool.bonded_account())
-						.unwrap_or_default(),
-					Zero::zero()
-				);
+
+				#[cfg(test)]
+				sanity::pre_pool_destruction_checks::<T>(bonded_pool.bonded_account(), bonded_pool.reward_account());
 				T::Currency::make_free_balance_be(&bonded_pool.reward_account(), Zero::zero());
 				T::Currency::make_free_balance_be(&bonded_pool.bonded_account(), Zero::zero());
 				bonded_pool.remove();
@@ -1468,9 +1458,6 @@ pub mod pallet {
 			let who = ensure_signed(origin)?;
 			let mut bonded_pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
 			ensure!(bonded_pool.state != PoolState::Destroying, Error::<T>::CanNotChangeState);
-			// TODO: [now] we could  check if bonded_pool.ok_to_be_open().is_err(), and if thats
-			// true always set the state to destroying, regardless of the stat the caller passes.
-			// The downside is that this seems like a misleading API
 
 			if bonded_pool.can_toggle_state(&who) {
 				bonded_pool.state = state
