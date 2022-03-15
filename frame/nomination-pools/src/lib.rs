@@ -1563,12 +1563,12 @@ pub mod pallet {
 
 impl<T: Config> Pallet<T> {
 	/// Create the main, bonded account of a pool with the given id.
-	fn create_bonded_account(id: PoolId) -> T::AccountId {
+	pub fn create_bonded_account(id: PoolId) -> T::AccountId {
 		T::PalletId::get().into_sub_account((AccountType::Bonded, id))
 	}
 
 	/// Create the reward account of a pool with the given id.
-	fn create_reward_account(id: PoolId) -> T::AccountId {
+	pub fn create_reward_account(id: PoolId) -> T::AccountId {
 		// NOTE: account_type must be at the beginning so that in test's account-id (u128) there is
 		// a distinction.
 		T::PalletId::get().into_sub_account((AccountType::Reward, id))
@@ -1802,7 +1802,7 @@ impl<T: Config> Pallet<T> {
 		});
 		assert!(MaxDelegators::<T>::get().map_or(true, |max| all_delegators <= max));
 
-		if level <= u8::MAX / 2 {
+		if level <= 1 {
 			return Ok(())
 		}
 

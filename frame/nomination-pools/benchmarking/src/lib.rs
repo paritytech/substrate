@@ -15,7 +15,7 @@ use pallet_nomination_pools::{
 	MaxDelegatorsPerPool, MaxPools, Metadata, MinCreateBond, MinJoinBond, Pallet as Pools,
 	PoolRoles, PoolState, RewardPools, SubPoolsStorage,
 };
-use sp_runtime::traits::{Bounded, StaticLookup, Zero};
+use sp_runtime::traits::{Bounded, Zero};
 use sp_staking::{EraIndex, StakingInterface};
 // `frame_benchmarking::benchmarks!` macro needs this
 use pallet_nomination_pools::Call;
@@ -123,13 +123,13 @@ impl<T: Config> ListScenario<T> {
 		T::StakingInterface::nominate(
 			pool_origin1.clone(),
 			// NOTE: these don't really need to be validators.
-			vec![T::Lookup::unlookup(account("random_validator", 0, USER_SEED))],
+			vec![account("random_validator", 0, USER_SEED)],
 		)?;
 
 		let (_, pool_origin2) = create_pool_account::<T>(USER_SEED + 2, origin_weight);
 		T::StakingInterface::nominate(
 			pool_origin2.clone(),
-			vec![T::Lookup::unlookup(account("random_validator", 0, USER_SEED))].clone(),
+			vec![account("random_validator", 0, USER_SEED)].clone(),
 		)?;
 
 		// Find a destination weight that will trigger the worst case scenario
@@ -146,7 +146,7 @@ impl<T: Config> ListScenario<T> {
 		let (_, pool_dest1) = create_pool_account::<T>(USER_SEED + 3, dest_weight);
 		T::StakingInterface::nominate(
 			pool_dest1.clone(),
-			vec![T::Lookup::unlookup(account("random_validator", 0, USER_SEED))],
+			vec![account("random_validator", 0, USER_SEED)],
 		)?;
 
 		let weight_of = pallet_staking::Pallet::<T>::weight_of_fn();
@@ -488,7 +488,7 @@ frame_benchmarking::benchmarks! {
 			}
 		);
 		assert_eq!(
-			T::StakingInterface::active_balance(&Pools::<T>::create_bonded_account(1)),
+			T::StakingInterface::active_stake(&Pools::<T>::create_bonded_account(1)),
 			Some(min_create_bond)
 		);
 	}
@@ -505,9 +505,7 @@ frame_benchmarking::benchmarks! {
 		// Create some accounts to nominate. For the sake of benchmarking they don't need to be
 		// actual validators
 		 let validators: Vec<_> = (0..T::MaxNominations::get())
-			.map(|i|
-				T::Lookup::unlookup(account("stash", USER_SEED, i))
-			)
+			.map(|i| account("stash", USER_SEED, i))
 			.collect();
 
 		whitelist_account!(depositor);
