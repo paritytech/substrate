@@ -49,16 +49,12 @@ use crate::{
 use codec::Encode as _;
 use futures::{channel::oneshot, prelude::*};
 use libp2p::{
-	core::{
-		either::EitherError,
-		upgrade, ConnectedPoint, Executor,
-	},
+	core::{either::EitherError, upgrade, ConnectedPoint, Executor},
 	multiaddr,
 	ping::Failure as PingFailure,
 	swarm::{
-		ConnectionError, ConnectionLimits, PendingConnectionError,
-		AddressScore, DialError, NetworkBehaviour,
-		SwarmBuilder, SwarmEvent,
+		AddressScore, ConnectionError, ConnectionLimits, DialError, NetworkBehaviour,
+		PendingConnectionError, SwarmBuilder, SwarmEvent,
 	},
 	Multiaddr, PeerId,
 };
@@ -1898,18 +1894,17 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 						};
 						let reason = match cause {
 							Some(ConnectionError::IO(_)) => "transport-error",
-							Some(ConnectionError::Handler(
-								EitherError::A(EitherError::A(EitherError::A(EitherError::B(
-									EitherError::A(PingFailure::Timeout),
+							Some(ConnectionError::Handler(EitherError::A(EitherError::A(
+								EitherError::A(EitherError::B(EitherError::A(
+									PingFailure::Timeout,
 								))),
-							))) => "ping-timeout",
-							Some(ConnectionError::Handler(
-								EitherError::A(EitherError::A(EitherError::A(EitherError::A(
+							)))) => "ping-timeout",
+							Some(ConnectionError::Handler(EitherError::A(EitherError::A(
+								EitherError::A(EitherError::A(
 									NotifsHandlerError::SyncNotificationsClogged,
-								))),
-							))) => "sync-notifications-clogged",
-							Some(ConnectionError::Handler(_)) =>
-								"protocol-error",
+								)),
+							)))) => "sync-notifications-clogged",
+							Some(ConnectionError::Handler(_)) => "protocol-error",
 							Some(ConnectionError::KeepAliveTimeout) => "keep-alive-timeout",
 							None => "actively-closed",
 						};

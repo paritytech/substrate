@@ -28,8 +28,8 @@ use libp2p::{
 	identify::{Identify, IdentifyConfig, IdentifyEvent, IdentifyInfo},
 	ping::{Ping, PingConfig, PingEvent, PingSuccess},
 	swarm::{
-		IntoConnectionHandler, IntoConnectionHandlerSelect, NetworkBehaviour, NetworkBehaviourAction,
-		PollParameters, ConnectionHandler,
+		ConnectionHandler, IntoConnectionHandler, IntoConnectionHandlerSelect, NetworkBehaviour,
+		NetworkBehaviourAction, PollParameters,
 	},
 	Multiaddr,
 };
@@ -205,10 +205,20 @@ impl NetworkBehaviour for PeerInfoBehaviour {
 		failed_addresses: Option<&Vec<Multiaddr>>,
 		other_established: usize,
 	) {
-		self.ping
-			.inject_connection_established(peer_id, conn, endpoint, failed_addresses, other_established);
-		self.identify
-			.inject_connection_established(peer_id, conn, endpoint, failed_addresses, other_established);
+		self.ping.inject_connection_established(
+			peer_id,
+			conn,
+			endpoint,
+			failed_addresses,
+			other_established,
+		);
+		self.identify.inject_connection_established(
+			peer_id,
+			conn,
+			endpoint,
+			failed_addresses,
+			other_established,
+		);
 		match self.nodes_info.entry(*peer_id) {
 			Entry::Vacant(e) => {
 				e.insert(NodeInfo::new(endpoint.clone()));
@@ -234,9 +244,20 @@ impl NetworkBehaviour for PeerInfoBehaviour {
 		remaining_established: usize,
 	) {
 		let (ping_handler, identity_handler) = handler.into_inner();
-		self.identify
-			.inject_connection_closed(peer_id, conn, endpoint, identity_handler, remaining_established);
-		self.ping.inject_connection_closed(peer_id, conn, endpoint, ping_handler, remaining_established);
+		self.identify.inject_connection_closed(
+			peer_id,
+			conn,
+			endpoint,
+			identity_handler,
+			remaining_established,
+		);
+		self.ping.inject_connection_closed(
+			peer_id,
+			conn,
+			endpoint,
+			ping_handler,
+			remaining_established,
+		);
 
 		if let Some(entry) = self.nodes_info.get_mut(peer_id) {
 			entry.endpoints.retain(|ep| ep != endpoint)

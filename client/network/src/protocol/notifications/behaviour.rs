@@ -26,8 +26,8 @@ use futures::prelude::*;
 use libp2p::{
 	core::{connection::ConnectionId, ConnectedPoint, Multiaddr, PeerId},
 	swarm::{
-		DialError, IntoConnectionHandler, NetworkBehaviour,
-		NetworkBehaviourAction, NotifyHandler, PollParameters,
+		DialError, IntoConnectionHandler, NetworkBehaviour, NetworkBehaviourAction, NotifyHandler,
+		PollParameters,
 	},
 };
 use log::{error, trace, warn};
@@ -2032,10 +2032,8 @@ impl NetworkBehaviour for Notifications {
 
 				PeerState::PendingRequest { timer, .. } if *timer == delay_id => {
 					trace!(target: "sub-libp2p", "Libp2p <= Dial {:?} now that ban has expired", peer_id);
-					self.events.push_back(NetworkBehaviourAction::Dial {
-						opts: peer_id.into(),
-						handler,
-					});
+					self.events
+						.push_back(NetworkBehaviourAction::Dial { opts: peer_id.into(), handler });
 					*peer_state = PeerState::Requested;
 				},
 

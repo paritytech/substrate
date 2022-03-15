@@ -67,8 +67,8 @@ use libp2p::{
 	mdns::{Mdns, MdnsConfig, MdnsEvent},
 	multiaddr::Protocol,
 	swarm::{
-		handler::multi::IntoMultiHandler, DialError, IntoConnectionHandler,
-		NetworkBehaviour, NetworkBehaviourAction, PollParameters, ConnectionHandler,
+		handler::multi::IntoMultiHandler, ConnectionHandler, DialError, IntoConnectionHandler,
+		NetworkBehaviour, NetworkBehaviourAction, PollParameters,
 	},
 };
 use log::{debug, error, info, trace, warn};

@@ -74,8 +74,8 @@ use libp2p::{
 		ConnectedPoint, PeerId,
 	},
 	swarm::{
-		IntoConnectionHandler, KeepAlive, NegotiatedSubstream, ConnectionHandler,
-		ConnectionHandlerEvent, ConnectionHandlerUpgrErr, SubstreamProtocol,
+		ConnectionHandler, ConnectionHandlerEvent, ConnectionHandlerUpgrErr, IntoConnectionHandler,
+		KeepAlive, NegotiatedSubstream, SubstreamProtocol,
 	},
 };
 use log::error;

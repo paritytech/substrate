@@ -49,8 +49,8 @@ use libp2p::{
 		RequestResponseConfig, RequestResponseEvent, RequestResponseMessage, ResponseChannel,
 	},
 	swarm::{
-		handler::multi::MultiHandler, IntoConnectionHandler, NetworkBehaviour,
-		NetworkBehaviourAction, PollParameters, ConnectionHandler,
+		handler::multi::MultiHandler, ConnectionHandler, IntoConnectionHandler, NetworkBehaviour,
+		NetworkBehaviourAction, PollParameters,
 	},
 };
 use std::{
@@ -401,8 +401,10 @@ impl RequestResponsesBehaviour {
 }
 
 impl NetworkBehaviour for RequestResponsesBehaviour {
-	type ConnectionHandler =
-		MultiHandler<String, <RequestResponse<GenericCodec> as NetworkBehaviour>::ConnectionHandler>;
+	type ConnectionHandler = MultiHandler<
+		String,
+		<RequestResponse<GenericCodec> as NetworkBehaviour>::ConnectionHandler,
+	>;
 	type OutEvent = Event;
 
 	fn new_handler(&mut self) -> Self::ConnectionHandler {
@@ -451,7 +453,14 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 	) {
 		for (p, _) in self.protocols.values_mut() {
 			let handler = p.new_handler();
-			NetworkBehaviour::inject_connection_closed(p, peer_id, conn, endpoint, handler, remaining_established);
+			NetworkBehaviour::inject_connection_closed(
+				p,
+				peer_id,
+				conn,
+				endpoint,
+				handler,
+				remaining_established,
+			);
 		}
 	}
 
@@ -677,10 +686,7 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 							}
 							let protocol = protocol.to_string();
 							let handler = self.new_handler_with_replacement(protocol, handler);
-							return Poll::Ready(NetworkBehaviourAction::Dial {
-								opts,
-								handler,
-							})
+							return Poll::Ready(NetworkBehaviourAction::Dial { opts, handler })
 						},
 						NetworkBehaviourAction::NotifyHandler { peer_id, handler, event } =>
 							return Poll::Ready(NetworkBehaviourAction::NotifyHandler {

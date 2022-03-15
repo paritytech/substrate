@@ -36,8 +36,8 @@ use libp2p::{
 	},
 	request_response::OutboundFailure,
 	swarm::{
-		IntoConnectionHandler, NetworkBehaviour, NetworkBehaviourAction, PollParameters,
-		ConnectionHandler,
+		ConnectionHandler, IntoConnectionHandler, NetworkBehaviour, NetworkBehaviourAction,
+		PollParameters,
 	},
 	Multiaddr, PeerId,
 };
@@ -1387,8 +1387,13 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 		failed_addresses: Option<&Vec<Multiaddr>>,
 		other_established: usize,
 	) {
-		self.behaviour
-			.inject_connection_established(peer_id, conn, endpoint, failed_addresses, other_established)
+		self.behaviour.inject_connection_established(
+			peer_id,
+			conn,
+			endpoint,
+			failed_addresses,
+			other_established,
+		)
 	}
 
 	fn inject_connection_closed(
@@ -1399,7 +1404,13 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 		handler: <Self::ConnectionHandler as IntoConnectionHandler>::Handler,
 		remaining_established: usize,
 	) {
-		self.behaviour.inject_connection_closed(peer_id, conn, endpoint, handler, remaining_established)
+		self.behaviour.inject_connection_closed(
+			peer_id,
+			conn,
+			endpoint,
+			handler,
+			remaining_established,
+		)
 	}
 
 	fn inject_event(

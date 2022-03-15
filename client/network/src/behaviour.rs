@@ -33,8 +33,8 @@ use libp2p::{
 	identify::IdentifyInfo,
 	kad::record,
 	swarm::{
-		behaviour::toggle::Toggle, NetworkBehaviour, NetworkBehaviourAction, NetworkBehaviourEventProcess,
-		PollParameters,
+		behaviour::toggle::Toggle, NetworkBehaviour, NetworkBehaviourAction,
+		NetworkBehaviourEventProcess, PollParameters,
 	},
 	NetworkBehaviour,
 };

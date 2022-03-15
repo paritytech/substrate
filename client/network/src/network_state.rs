@@ -20,7 +20,10 @@
 //!
 //! **Warning**: These APIs are not stable.
 
-use libp2p::{core::{Endpoint as CoreEndpoint, ConnectedPoint}, Multiaddr};
+use libp2p::{
+	core::{ConnectedPoint, Endpoint as CoreEndpoint},
+	Multiaddr,
+};
 use serde::{Deserialize, Serialize};
 use std::{
 	collections::{HashMap, HashSet},
@@ -94,16 +97,17 @@ pub enum PeerEndpoint {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Endpoint {
-    /// The socket comes from a dialer.
-    Dialer,
-    /// The socket comes from a listener.
-    Listener,
+	/// The socket comes from a dialer.
+	Dialer,
+	/// The socket comes from a listener.
+	Listener,
 }
 
 impl From<ConnectedPoint> for PeerEndpoint {
 	fn from(endpoint: ConnectedPoint) -> Self {
 		match endpoint {
-			ConnectedPoint::Dialer { address, role_override } => Self::Dialing(address, role_override.into()),
+			ConnectedPoint::Dialer { address, role_override } =>
+				Self::Dialing(address, role_override.into()),
 			ConnectedPoint::Listener { local_addr, send_back_addr } =>
 				Self::Listening { local_addr, send_back_addr },
 		}
