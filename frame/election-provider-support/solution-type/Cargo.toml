@@ -1,5 +1,5 @@
 [package]
-name = "sp-npos-elections-solution-type"
+name = "frame-election-provider-solution-type"
 version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2021"
@@ -23,7 +23,7 @@ proc-macro-crate = "1.1.0"
 [dev-dependencies]
 parity-scale-codec = "3.0.0"
 scale-info = "2.0.1"
-sp-arithmetic = { path = "../../arithmetic", version = "5.0.0"}
+sp-arithmetic = { version = "5.0.0", path = "../../../primitives/arithmetic" }
 # used by generate_solution_type:
-sp-npos-elections = { path = "..", version = "4.0.0-dev" }
+sp-npos-elections = { version = "4.0.0-dev", path = "../../../primitives/npos-elections" }
 trybuild = "1.0.53"

@@ -57,7 +57,7 @@ pub(crate) fn syn_err(message: &'static str) -> syn::Error {
 /// type, `u8` target type and `Perbill` accuracy with maximum of 4 edges per voter.
 ///
 /// ```
-/// # use sp_npos_elections_solution_type::generate_solution_type;
+/// # use frame_election_provider_solution_type::generate_solution_type;
 /// # use sp_arithmetic::per_things::Perbill;
 /// generate_solution_type!(pub struct TestSolution::<
 ///     VoterIndex = u16,
@@ -100,7 +100,7 @@ pub(crate) fn syn_err(message: &'static str) -> syn::Error {
 /// for numbers will be used, similar to how `parity-scale-codec`'s `Compact` works.
 ///
 /// ```
-/// # use sp_npos_elections_solution_type::generate_solution_type;
+/// # use frame_election_provider_solution_type::generate_solution_type;
 /// # use sp_npos_elections::NposSolution;
 /// # use sp_arithmetic::per_things::Perbill;
 /// generate_solution_type!(

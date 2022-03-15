@@ -26,8 +26,8 @@ use hash_db::Hasher;
 use sp_std::vec::Vec;
 use trie_root;
 
-#[derive(Default, Clone)]
 /// Codec-flavored TrieStream.
+#[derive(Default, Clone)]
 pub struct TrieStream {
 	/// Current node buffer.
 	buffer: Vec<u8>,
