@@ -203,11 +203,12 @@ impl NetworkBehaviour for PeerInfoBehaviour {
 		conn: &ConnectionId,
 		endpoint: &ConnectedPoint,
 		failed_addresses: Option<&Vec<Multiaddr>>,
+		other_established: usize,
 	) {
 		self.ping
-			.inject_connection_established(peer_id, conn, endpoint, failed_addresses);
+			.inject_connection_established(peer_id, conn, endpoint, failed_addresses, other_established);
 		self.identify
-			.inject_connection_established(peer_id, conn, endpoint, failed_addresses);
+			.inject_connection_established(peer_id, conn, endpoint, failed_addresses, other_established);
 		match self.nodes_info.entry(*peer_id) {
 			Entry::Vacant(e) => {
 				e.insert(NodeInfo::new(endpoint.clone()));
@@ -230,11 +231,12 @@ impl NetworkBehaviour for PeerInfoBehaviour {
 		conn: &ConnectionId,
 		endpoint: &ConnectedPoint,
 		handler: <Self::ConnectionHandler as IntoConnectionHandler>::Handler,
+		remaining_established: usize,
 	) {
 		let (ping_handler, identity_handler) = handler.into_inner();
 		self.identify
-			.inject_connection_closed(peer_id, conn, endpoint, identity_handler);
-		self.ping.inject_connection_closed(peer_id, conn, endpoint, ping_handler);
+			.inject_connection_closed(peer_id, conn, endpoint, identity_handler, remaining_established);
+		self.ping.inject_connection_closed(peer_id, conn, endpoint, ping_handler, remaining_established);
 
 		if let Some(entry) = self.nodes_info.get_mut(peer_id) {
 			entry.endpoints.retain(|ep| ep != endpoint)

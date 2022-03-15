@@ -427,6 +427,7 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 		conn: &ConnectionId,
 		endpoint: &ConnectedPoint,
 		failed_addresses: Option<&Vec<Multiaddr>>,
+		other_established: usize,
 	) {
 		for (p, _) in self.protocols.values_mut() {
 			NetworkBehaviour::inject_connection_established(
@@ -435,6 +436,7 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 				conn,
 				endpoint,
 				failed_addresses,
+				other_established,
 			)
 		}
 	}
@@ -445,10 +447,11 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 		conn: &ConnectionId,
 		endpoint: &ConnectedPoint,
 		_handler: <Self::ConnectionHandler as IntoProtocolsHandler>::Handler,
+		remaining_established: usize,
 	) {
 		for (p, _) in self.protocols.values_mut() {
 			let handler = p.new_handler();
-			NetworkBehaviour::inject_connection_closed(p, peer_id, conn, endpoint, handler);
+			NetworkBehaviour::inject_connection_closed(p, peer_id, conn, endpoint, handler, remaining_established);
 		}
 	}
 

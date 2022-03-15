@@ -1385,9 +1385,10 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 		conn: &ConnectionId,
 		endpoint: &ConnectedPoint,
 		failed_addresses: Option<&Vec<Multiaddr>>,
+		other_established: usize,
 	) {
 		self.behaviour
-			.inject_connection_established(peer_id, conn, endpoint, failed_addresses)
+			.inject_connection_established(peer_id, conn, endpoint, failed_addresses, other_established)
 	}
 
 	fn inject_connection_closed(
@@ -1396,8 +1397,9 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 		conn: &ConnectionId,
 		endpoint: &ConnectedPoint,
 		handler: <Self::ConnectionHandler as IntoConnectionHandler>::Handler,
+		remaining_established: usize,
 	) {
-		self.behaviour.inject_connection_closed(peer_id, conn, endpoint, handler)
+		self.behaviour.inject_connection_closed(peer_id, conn, endpoint, handler, remaining_established)
 	}
 
 	fn inject_event(

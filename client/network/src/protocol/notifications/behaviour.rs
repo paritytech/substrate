@@ -1076,6 +1076,7 @@ impl NetworkBehaviour for Notifications {
 		conn: &ConnectionId,
 		endpoint: &ConnectedPoint,
 		_failed_addresses: Option<&Vec<Multiaddr>>,
+		_other_established: usize,
 	) {
 		for set_id in (0..self.notif_protocols.len()).map(sc_peerset::SetId::from) {
 			match self.peers.entry((*peer_id, set_id)).or_insert(PeerState::Poisoned) {
@@ -1135,6 +1136,7 @@ impl NetworkBehaviour for Notifications {
 		conn: &ConnectionId,
 		_endpoint: &ConnectedPoint,
 		_handler: <Self::ConnectionHandler as IntoConnectionHandler>::Handler,
+		_remaining_established: usize,
 	) {
 		for set_id in (0..self.notif_protocols.len()).map(sc_peerset::SetId::from) {
 			let mut entry = if let Entry::Occupied(entry) = self.peers.entry((*peer_id, set_id)) {

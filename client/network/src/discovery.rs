@@ -568,6 +568,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 		conn: &ConnectionId,
 		endpoint: &ConnectedPoint,
 		failed_addresses: Option<&Vec<Multiaddr>>,
+		other_established: usize,
 	) {
 		self.num_connections += 1;
 		for k in self.kademlias.values_mut() {
@@ -577,6 +578,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 				conn,
 				endpoint,
 				failed_addresses,
+				other_established,
 			)
 		}
 	}
@@ -587,6 +589,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 		_conn: &ConnectionId,
 		_endpoint: &ConnectedPoint,
 		_handler: <Self::ConnectionHandler as IntoConnectionHandler>::Handler,
+		_remaining_established: usize,
 	) {
 		self.num_connections -= 1;
 		// NetworkBehaviour::inject_connection_closed on Kademlia<MemoryStore> does nothing.
