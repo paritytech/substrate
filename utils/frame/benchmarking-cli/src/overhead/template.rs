@@ -101,8 +101,7 @@ impl TemplateData {
 	fn build_path(&self, weight_out: &str) -> PathBuf {
 		let mut path = PathBuf::from(weight_out);
 		if path.is_dir() {
-			path.push(format!("{}_weights", self.short_name));
-			path.set_extension("rs");
+			path.push(format!("{}_weights.rs", self.short_name));
 		}
 		path
 	}
