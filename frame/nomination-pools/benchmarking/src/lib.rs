@@ -395,7 +395,15 @@ frame_benchmarking::benchmarks! {
 
 		// Unbond the creator
 		pallet_staking::CurrentEra::<T>::put(0);
+		// Simulate some rewards so we can check if the rewards storage is cleaned up. We check this
+		// here to ensure the complete flow for destroying a pool works - the reward pool account
+		// should never exist by time the depositor withdraws so we must test that it gets cleaned
+		// up here.
+		let reward_account = Pools::<T>::create_reward_account(1);
+		CurrencyOf::<T>::make_free_balance_be(&reward_account, CurrencyOf::<T>::minimum_balance());
+		assert!(frame_system::Account::<T>::contains_key(&reward_account));
 		Pools::<T>::unbond_other(Origin::Signed(depositor.clone()).into(), depositor.clone()).unwrap();
+		assert!(!frame_system::Account::<T>::contains_key(&reward_account));
 
 		// Sanity check that unbond worked
 		assert_eq!(
@@ -417,10 +425,6 @@ frame_benchmarking::benchmarks! {
 		assert!(SubPoolsStorage::<T>::contains_key(&1));
 		assert!(RewardPools::<T>::contains_key(&1));
 		assert!(Delegators::<T>::contains_key(&depositor));
-		let reward_account = Pools::<T>::create_reward_account(1);
-		// Simulate some rewards so we can check if the rewards storage is cleaned up
-		CurrencyOf::<T>::make_free_balance_be(&reward_account, CurrencyOf::<T>::minimum_balance());
-		assert!(frame_system::Account::<T>::contains_key(&reward_account));
 
 		whitelist_account!(depositor);
 	}: withdraw_unbonded_other(Origin::Signed(depositor.clone()), depositor.clone(), s)
@@ -432,12 +436,12 @@ frame_benchmarking::benchmarks! {
 		assert!(!RewardPools::<T>::contains_key(&1));
 		assert!(!Delegators::<T>::contains_key(&depositor));
 		assert!(!frame_system::Account::<T>::contains_key(&pool_account));
-		assert!(!frame_system::Account::<T>::contains_key(&reward_account));
 
 		// Funds where transferred back correctly
 		assert_eq!(
 			CurrencyOf::<T>::free_balance(&depositor),
-			min_create_bond * 2u32.into()
+			// gets bond back + rewards collecting when unbonding
+			min_create_bond * 2u32.into() + CurrencyOf::<T>::minimum_balance()
 		);
 	}
 

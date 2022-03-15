@@ -1348,6 +1348,10 @@ pub mod pallet {
 				// TODO: in correct scenario, these two accounts should be zero when we reach there
 				// anyway.
 				debug_assert_eq!(
+					T::Currency::free_balance(&bonded_pool.reward_account()),
+					Zero::zero()
+				);
+				debug_assert_eq!(
 					T::Currency::free_balance(&bonded_pool.bonded_account()),
 					Zero::zero()
 				);
