@@ -49,7 +49,7 @@ pub(crate) struct TemplateData {
 	date: String,
 	/// Command line arguments that were passed to the CLI.
 	args: Vec<String>,
-	/// Params of the executed command TODO.
+	/// Params of the executed command.
 	params: OverheadParams,
 	/// Stats about the benchmark result.
 	stats: Stats,
