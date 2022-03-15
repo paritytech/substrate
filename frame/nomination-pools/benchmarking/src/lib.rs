@@ -11,8 +11,8 @@ use frame_election_provider_support::SortedListProvider;
 use frame_support::{ensure, traits::Get};
 use frame_system::RawOrigin as Origin;
 use pallet_nomination_pools::{
-	BalanceOf, BondedPoolStorage, BondedPools, Delegators, Metadata, MinCreateBond, MinJoinBond,
-	Pallet as Pools, PoolState, RewardPools, SubPoolsStorage,
+	BalanceOf, BondedPoolInner, BondedPools, Delegators, Metadata, MinCreateBond, MinJoinBond,
+	Pallet as Pools, PoolRoles, PoolState, RewardPools, SubPoolsStorage,
 };
 use sp_runtime::traits::{StaticLookup, Zero};
 use sp_staking::{EraIndex, StakingInterface};
@@ -67,7 +67,7 @@ fn create_pool_account<T: pallet_nomination_pools::Config>(
 	.unwrap();
 
 	let pool_account = pallet_nomination_pools::BondedPools::<T>::iter()
-		.find(|(_, bonded_pool)| bonded_pool.depositor == pool_creator)
+		.find(|(_, bonded_pool)| bonded_pool.roles.depositor == pool_creator)
 		.map(|(pool_account, _)| pool_account)
 		.expect("pool_creator created a pool above");
 
@@ -189,7 +189,7 @@ impl<T: Config> ListScenario<T> {
 		// Sanity check the delegator was added correctly
 		let delegator = Delegators::<T>::get(&joiner).unwrap();
 		assert_eq!(delegator.points, amount);
-		assert_eq!(delegator.pool, self.origin1);
+		assert_eq!(delegator.bonded_pool_account, self.origin1);
 
 		self
 	}
@@ -475,14 +475,16 @@ frame_benchmarking::benchmarks! {
 		let (pool_account, new_pool) = BondedPools::<T>::iter().next().unwrap();
 		assert_eq!(
 			new_pool,
-			BondedPoolStorage {
+			BondedPoolInner {
 				points: min_create_bond,
-				depositor: depositor.clone(),
-				root: depositor.clone(),
-				nominator: depositor.clone(),
-				state_toggler: depositor.clone(),
 				state: PoolState::Open,
-				delegator_counter: 1
+				delegator_counter: 1,
+				roles: PoolRoles {
+					depositor: depositor.clone(),
+					root: depositor.clone(),
+					nominator: depositor.clone(),
+					state_toggler: depositor.clone(),
+				},
 			}
 		);
 		assert_eq!(
@@ -516,14 +518,16 @@ frame_benchmarking::benchmarks! {
 		let (pool_account, new_pool) = BondedPools::<T>::iter().next().unwrap();
 		assert_eq!(
 			new_pool,
-			BondedPoolStorage {
+			BondedPoolInner {
 				points: min_create_bond,
-				depositor: depositor.clone(),
-				root: depositor.clone(),
-				nominator: depositor.clone(),
-				state_toggler: depositor.clone(),
 				state: PoolState::Open,
 				delegator_counter: 1,
+				roles: PoolRoles {
+					depositor: depositor.clone(),
+					root: depositor.clone(),
+					nominator: depositor.clone(),
+					state_toggler: depositor.clone(),
+				}
 			}
 		);
 		assert_eq!(

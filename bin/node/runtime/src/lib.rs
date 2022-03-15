@@ -698,6 +698,7 @@ impl pallet_bags_list::Config for Runtime {
 
 parameter_types! {
 	pub const PostUnbondPoolsWindow: u32 = 4;
+	pub const NominationPoolsPalletId: PalletId = PalletId(*b"py/npols");
 }
 
 use sp_runtime::traits::Convert;
@@ -723,6 +724,7 @@ impl pallet_nomination_pools::Config for Runtime {
 	type StakingInterface = pallet_staking::Pallet<Self>;
 	type PostUnbondingPoolsWindow = PostUnbondPoolsWindow;
 	type MaxMetadataLen = ConstU32<256>;
+	type PalletId = NominationPoolsPalletId;
 }
 
 parameter_types! {
