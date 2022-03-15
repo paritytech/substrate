@@ -38,7 +38,7 @@ use std::{marker::PhantomData, sync::Arc, time::Instant};
 
 use crate::{overhead::cmd::ExtrinsicBuilder, storage::record::Stats};
 
-/// Parameters to configure a *overhead* benchmark.
+/// Parameters to configure an *overhead* benchmark.
 #[derive(Debug, Default, Serialize, Clone, PartialEq, Args)]
 pub struct BenchmarkParams {
 	/// Rounds of warmups before measuring.
@@ -50,7 +50,7 @@ pub struct BenchmarkParams {
 	pub repeat: u32,
 }
 
-/// The results of multiple runs in ns.
+/// The results of multiple runs in nano seconds.
 pub(crate) type BenchRecord = Vec<u64>;
 
 /// Type of a benchmark.
