@@ -1566,6 +1566,7 @@ pub mod pallet {
 
 impl<T: Config> Pallet<T> {
 	/// Create the main, bonded account of a pool with the given id.
+
 	pub fn create_bonded_account(id: PoolId) -> T::AccountId {
 		T::PalletId::get().into_sub_account((AccountType::Bonded, id))
 	}
@@ -1716,6 +1717,16 @@ impl<T: Config> Pallet<T> {
 			delegator_payout,
 			ExistenceRequirement::AllowDeath,
 		)?;
+
+		if reward_pool.total_earnings == BalanceOf::<T>::max_value() &&
+			bonded_pool.state != PoolState::Destroying
+		{
+			bonded_pool.state = PoolState::Destroying;
+			Self::deposit_event(Event::<T>::State {
+				pool_id: delegator.pool_id,
+				new_state: PoolState::Destroying,
+			});
+		}
 
 		Self::deposit_event(Event::<T>::PaidOut {
 			delegator: delegator_account,
