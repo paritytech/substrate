@@ -49,7 +49,7 @@ use libp2p::{
 		RequestResponseConfig, RequestResponseEvent, RequestResponseMessage, ResponseChannel,
 	},
 	swarm::{
-		handler::multi::MultiHandler, IntoProtocolsHandler, NetworkBehaviour,
+		handler::multi::MultiHandler, IntoConnectionHandler, NetworkBehaviour,
 		NetworkBehaviourAction, PollParameters, ConnectionHandler,
 	},
 };
@@ -446,7 +446,7 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 		peer_id: &PeerId,
 		conn: &ConnectionId,
 		endpoint: &ConnectedPoint,
-		_handler: <Self::ConnectionHandler as IntoProtocolsHandler>::Handler,
+		_handler: <Self::ConnectionHandler as IntoConnectionHandler>::Handler,
 		remaining_established: usize,
 	) {
 		for (p, _) in self.protocols.values_mut() {
