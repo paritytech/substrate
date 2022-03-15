@@ -50,14 +50,14 @@ use codec::Encode as _;
 use futures::{channel::oneshot, prelude::*};
 use libp2p::{
 	core::{
-		connection::{ConnectionError, ConnectionLimits, PendingConnectionError},
 		either::EitherError,
 		upgrade, ConnectedPoint, Executor,
 	},
 	multiaddr,
 	ping::Failure as PingFailure,
 	swarm::{
-		protocols_handler::NodeHandlerWrapperError, AddressScore, DialError, NetworkBehaviour,
+		ConnectionError, ConnectionLimits, PendingConnectionError,
+		AddressScore, DialError, NetworkBehaviour,
 		SwarmBuilder, SwarmEvent,
 	},
 	Multiaddr, PeerId,
@@ -1898,21 +1898,19 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 						};
 						let reason = match cause {
 							Some(ConnectionError::IO(_)) => "transport-error",
-							Some(ConnectionError::Handler(NodeHandlerWrapperError::Handler(
+							Some(ConnectionError::Handler(
 								EitherError::A(EitherError::A(EitherError::A(EitherError::B(
 									EitherError::A(PingFailure::Timeout),
-								)))),
+								))),
 							))) => "ping-timeout",
-							Some(ConnectionError::Handler(NodeHandlerWrapperError::Handler(
+							Some(ConnectionError::Handler(
 								EitherError::A(EitherError::A(EitherError::A(EitherError::A(
 									NotifsHandlerError::SyncNotificationsClogged,
-								)))),
+								))),
 							))) => "sync-notifications-clogged",
-							Some(ConnectionError::Handler(NodeHandlerWrapperError::Handler(_))) =>
+							Some(ConnectionError::Handler(_)) =>
 								"protocol-error",
-							Some(ConnectionError::Handler(
-								NodeHandlerWrapperError::KeepAliveTimeout,
-							)) => "keep-alive-timeout",
+							Some(ConnectionError::KeepAliveTimeout) => "keep-alive-timeout",
 							None => "actively-closed",
 						};
 						metrics
