@@ -172,6 +172,7 @@ use sp_runtime::traits::Bounded;
 use sp_std::{fmt::Debug, prelude::*};
 
 /// Re-export some type as they are used in the interface.
+pub use frame_election_provider_solution_type::generate_solution_type;
 pub use sp_arithmetic::PerThing;
 pub use sp_npos_elections::{
 	Assignment, ElectionResult, ExtendedBalance, IdentifierT, PerThing128, Support, Supports,

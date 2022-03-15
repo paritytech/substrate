@@ -762,7 +762,6 @@ fn deploy_and_call_other_contract() {
 }
 
 #[test]
-#[cfg(feature = "unstable-interface")]
 fn delegate_call() {
 	let (caller_wasm, caller_code_hash) = compile_module::<Test>("delegate_call").unwrap();
 	let (callee_wasm, callee_code_hash) = compile_module::<Test>("delegate_call_lib").unwrap();
