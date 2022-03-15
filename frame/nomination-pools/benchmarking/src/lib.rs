@@ -118,14 +118,14 @@ impl<T: Config> ListScenario<T> {
 		sp_std::mem::forget(i);
 
 		// Create accounts with the origin weight
-		let (_, pool_origin1) = create_pool_account::<T>(USER_SEED + 5, origin_weight);
+		let (_, pool_origin1) = create_pool_account::<T>(USER_SEED + 1, origin_weight);
 		T::StakingInterface::nominate(
 			pool_origin1.clone(),
 			// NOTE: these don't really need to be validators.
 			vec![T::Lookup::unlookup(account("random_validator", 0, USER_SEED))],
 		)?;
 
-		let (_, pool_origin2) = create_pool_account::<T>(USER_SEED + 6, origin_weight);
+		let (_, pool_origin2) = create_pool_account::<T>(USER_SEED + 2, origin_weight);
 		T::StakingInterface::nominate(
 			pool_origin2.clone(),
 			vec![T::Lookup::unlookup(account("random_validator", 0, USER_SEED))].clone(),
@@ -142,7 +142,7 @@ impl<T: Config> ListScenario<T> {
 			dest_weight_as_vote.try_into().map_err(|_| "could not convert u64 to Balance")?;
 
 		// Create an account with the worst case destination weight
-		let (_, pool_dest1) = create_pool_account::<T>(USER_SEED + 7, dest_weight);
+		let (_, pool_dest1) = create_pool_account::<T>(USER_SEED + 3, dest_weight);
 		T::StakingInterface::nominate(
 			pool_dest1.clone(),
 			vec![T::Lookup::unlookup(account("random_validator", 0, USER_SEED))],
