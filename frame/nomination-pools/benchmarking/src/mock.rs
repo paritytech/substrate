@@ -19,7 +19,7 @@ use frame_election_provider_support::VoteWeight;
 use frame_support::{pallet_prelude::*, parameter_types, traits::ConstU64, PalletId};
 use sp_runtime::traits::{Convert, IdentityLookup};
 
-type AccountId = u64;
+type AccountId = u128;
 type AccountIndex = u32;
 type BlockNumber = u64;
 type Balance = u128;

@@ -285,6 +285,8 @@
 //!   chains total issuance, staking reward rate, and burn rate.
 
 #![cfg_attr(not(feature = "std"), no_std)]
+
+use codec::Codec;
 use frame_support::{
 	ensure,
 	pallet_prelude::{MaxEncodedLen, *},
@@ -299,7 +301,7 @@ use scale_info::TypeInfo;
 use sp_core::U256;
 use sp_runtime::traits::{AccountIdConversion, Bounded, Convert, Saturating, Zero};
 use sp_staking::{EraIndex, OnStakerSlash, StakingInterface};
-use sp_std::{collections::btree_map::BTreeMap, ops::Div, vec::Vec};
+use sp_std::{collections::btree_map::BTreeMap, fmt::Debug, ops::Div, vec::Vec};
 
 #[cfg(test)]
 mod mock;
@@ -318,6 +320,17 @@ pub type RewardPoints = U256;
 pub type PoolId = u32;
 
 const POINTS_TO_BALANCE_INIT_RATIO: u32 = 1;
+
+/// Possible operations on the configuration values of this pallet.
+#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, RuntimeDebugNoBound, PartialEq, Clone)]
+pub enum ConfigOp<T: Default + Codec + Debug> {
+	/// Don't change.
+	Noop,
+	/// Set the given value.
+	Set(T),
+	/// Remove from storage.
+	Remove,
+}
 
 /// Extrinsics that bond some funds to the pool.
 enum PoolBond {
@@ -611,8 +624,7 @@ impl<T: Config> BondedPool<T> {
 			// This is a depositor
 			if !sub_pools.no_era.points.is_zero() {
 				// Unbonded pool has some points, so if they are the last delegator they must be
-				// here
-				// Since the depositor is the last to unbond, this should never be possible
+				// here. Since the depositor is the last to unbond, this should never be possible.
 				ensure!(sub_pools.with_era.len().is_zero(), Error::<T>::NotOnlyDelegator);
 				ensure!(
 					sub_pools.no_era.points == target_delegator.points,
@@ -1489,15 +1501,45 @@ pub mod pallet {
 			Ok(())
 		}
 
-		// Set
-		// * `min_join_bond`
-		// * `min_create_bond`
-		// * `max_pools`
-		// * `max_delegators_per_pool`
-		// * `max_delegators`
-		// pub fn set_parameters(origin: OriginFor<T>, ) -> DispatchResult {
+		/// Update configurations for the nomination pools. The origin must for this call must be
+		/// Root.
+		///
+		/// # Arguments
+		///
+		/// * `min_join_bond` - Set [`Self::MinJoinBond`].
+		/// * `min_create_bond` - Set [`Self::MinCreateBond`].
+		/// * `max_pools` - Set [`Self::MaxPools`].
+		/// * `max_delegators` - Set [`Self::MaxDelegators`].
+		/// * `max_delegators_per_pool` - Set [`Self::MaxDelegatorsPerPool`].
+		#[pallet::weight(T::WeightInfo::set_configs())]
+		pub fn set_configs(
+			origin: OriginFor<T>,
+			min_join_bond: ConfigOp<BalanceOf<T>>,
+			min_create_bond: ConfigOp<BalanceOf<T>>,
+			max_pools: ConfigOp<u32>,
+			max_delegators: ConfigOp<u32>,
+			max_delegators_per_pool: ConfigOp<u32>,
+		) -> DispatchResult {
+			ensure_root(origin)?;
 
-		// }
+			macro_rules! config_op_exp {
+				($storage:ty, $op:ident) => {
+					match $op {
+						ConfigOp::Noop => (),
+						ConfigOp::Set(v) => <$storage>::put(v),
+						ConfigOp::Remove => <$storage>::kill(),
+					}
+				};
+			}
+
+			config_op_exp!(MinJoinBond::<T>, min_join_bond);
+			config_op_exp!(MinCreateBond::<T>, min_create_bond);
+			config_op_exp!(MaxPools::<T>, max_pools);
+			config_op_exp!(MaxDelegators::<T>, max_delegators);
+			config_op_exp!(MaxDelegatorsPerPool::<T>, max_delegators_per_pool);
+
+			Ok(())
+		}
 	}
 
 	#[pallet::hooks]

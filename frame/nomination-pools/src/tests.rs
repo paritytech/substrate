@@ -1,6 +1,6 @@
 use super::*;
 use crate::mock::*;
-use frame_support::{assert_noop, assert_ok};
+use frame_support::{assert_noop, assert_ok, assert_storage_noop};
 
 macro_rules! sub_pools_with_era {
 	($($k:expr => $v:expr),* $(,)?) => {{
@@ -2347,6 +2347,55 @@ mod set_metadata {
 				Pools::set_metadata(Origin::signed(900), 1, vec![1, 1, 1]),
 				Error::<Runtime>::MetadataExceedsMaxLen
 			);
+		});
+	}
+}
+
+mod set_configs {
+	use super::*;
+
+	#[test]
+	fn set_configs_works() {
+		ExtBuilder::default().build_and_execute(|| {
+			// Setting works
+			assert_ok!(Pools::set_configs(
+				Origin::root(),
+				ConfigOp::Set(1 as Balance),
+				ConfigOp::Set(2 as Balance),
+				ConfigOp::Set(3u32),
+				ConfigOp::Set(4u32),
+				ConfigOp::Set(5u32),
+			));
+			assert_eq!(MinJoinBond::<Runtime>::get(), 1);
+			assert_eq!(MinCreateBond::<Runtime>::get(), 2);
+			assert_eq!(MaxPools::<Runtime>::get(), Some(3));
+			assert_eq!(MaxDelegators::<Runtime>::get(), Some(4));
+			assert_eq!(MaxDelegatorsPerPool::<Runtime>::get(), Some(5));
+
+			// Noop does nothing
+			assert_storage_noop!(assert_ok!(Pools::set_configs(
+				Origin::root(),
+				ConfigOp::Noop,
+				ConfigOp::Noop,
+				ConfigOp::Noop,
+				ConfigOp::Noop,
+				ConfigOp::Noop,
+			)));
+
+			// Removing works
+			assert_ok!(Pools::set_configs(
+				Origin::root(),
+				ConfigOp::Remove,
+				ConfigOp::Remove,
+				ConfigOp::Remove,
+				ConfigOp::Remove,
+				ConfigOp::Remove
+			));
+			assert_eq!(MinJoinBond::<Runtime>::get(), 0);
+			assert_eq!(MinCreateBond::<Runtime>::get(), 0);
+			assert_eq!(MaxPools::<Runtime>::get(), None);
+			assert_eq!(MaxDelegators::<Runtime>::get(), None);
+			assert_eq!(MaxDelegatorsPerPool::<Runtime>::get(), None);
 		});
 	}
 }
