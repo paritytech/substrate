@@ -1137,7 +1137,7 @@ mod tests {
 		// this test, so they wouldn't connect to each other.
 		{
 			let dial_addr = swarms[1].1.clone();
-			Swarm::dial_addr(&mut swarms[0].0, dial_addr).unwrap();
+			Swarm::dial(&mut swarms[0].0, dial_addr).unwrap();
 		}
 
 		let (mut swarm, _, peerset) = swarms.remove(0);
@@ -1237,7 +1237,7 @@ mod tests {
 		// this test, so they wouldn't connect to each other.
 		{
 			let dial_addr = swarms[1].1.clone();
-			Swarm::dial_addr(&mut swarms[0].0, dial_addr).unwrap();
+			Swarm::dial(&mut swarms[0].0, dial_addr).unwrap();
 		}
 
 		// Running `swarm[0]` in the background until a `InboundRequest` event happens,
@@ -1366,7 +1366,7 @@ mod tests {
 
 		// Ask swarm 1 to dial swarm 2. There isn't any discovery mechanism in place in this test,
 		// so they wouldn't connect to each other.
-		swarm_1.dial_addr(listen_add_2).unwrap();
+		swarm_1.dial(listen_add_2).unwrap();
 
 		// Run swarm 2 in the background, receiving two requests.
 		pool.spawner()
