@@ -422,7 +422,6 @@ impl<T: Config> sp_std::ops::Deref for BondedPool<T> {
 	}
 }
 
-// TODO: ask a rust guy if this is a bad thing to do.
 impl<T: Config> sp_std::ops::DerefMut for BondedPool<T> {
 	fn deref_mut(&mut self) -> &mut Self::Target {
 		&mut self.inner
@@ -688,7 +687,6 @@ impl<T: Config> BondedPool<T> {
 		let points_issued = self.issue(amount);
 
 		match ty {
-			// TODO: Consider making StakingInterface use reference.
 			PoolBond::Create => T::StakingInterface::bond(
 				self.bonded_account(),
 				// We make the stash and controller the same for simplicity
@@ -795,51 +793,29 @@ pub struct SubPools<T: Config> {
 
 impl<T: Config> SubPools<T> {
 	/// Merge the oldest `with_era` unbond pools into the `no_era` unbond pool.
-	// TODO: Consider not consuming self.
+	///
+	/// This is often used whilst getting the sub-pool from storage, thus it consumes and returns
+	/// `Self` for ergonomic purposes.
 	fn maybe_merge_pools(mut self, unbond_era: EraIndex) -> Self {
-		// TODO: remove
-		if unbond_era < TotalUnbondingPools::<T>::get().into() {
-			// For the first `0..TotalUnbondingPools` eras of the chain we don't need to do
-			// anything. Ex: if `TotalUnbondingPools` is 5 and we are in era 4 we can add a pool
-			// for this era and have exactly `TotalUnbondingPools` pools.
-			return self
-		}
-
 		// Ex: if `TotalUnbondingPools` is 5 and current era is 10, we only want to retain pools
-		// 6..=10.
-		let newest_era_to_remove = unbond_era.saturating_sub(TotalUnbondingPools::<T>::get());
-
-		// TODO: eras to keep, one filter, tweak self.no_era whilst filtering.
-		let eras_to_remove: Vec<_> = self
-			.with_era
-			.keys()
-			.cloned()
-			.filter(|era| *era <= newest_era_to_remove)
-			.collect();
-		for era in eras_to_remove {
-			if let Some(p) = self.with_era.remove(&era).defensive() {
-				self.no_era.points = self.no_era.points.saturating_add(p.points);
-				self.no_era.balance = self.no_era.balance.saturating_add(p.balance);
-			}
+		// 6..=10. Note that in the first few eras where `checked_sub` is `None`, we don't remove
+		// anything.
+		if let Some(newest_era_to_remove) = unbond_era.checked_sub(TotalUnbondingPools::<T>::get())
+		{
+			self.with_era.retain(|k, v| {
+				if *k > newest_era_to_remove {
+					// keep
+					true
+				} else {
+					// merge into the no-era pool
+					self.no_era.points = self.no_era.points.saturating_add(v.points);
+					self.no_era.balance = self.no_era.balance.saturating_add(v.balance);
+					false
+				}
+			});
 		}
 
 		self
-	}
-
-	/// Get the unbond pool for `era`. If one does not exist a default entry will be inserted.
-	///
-	/// The caller must ensure that the `SubPools::with_era` has room for 1 more entry. Calling
-	/// [`SubPools::maybe_merge_pools`] with the current era should the sub pools are in an ok state
-	/// to call this method.
-	// TODO: dissolve and move to call site.
-	fn unchecked_with_era_get_or_make(&mut self, era: EraIndex) -> &mut UnbondPool<T> {
-		if !self.with_era.contains_key(&era) {
-			self.with_era
-				.try_insert(era, UnbondPool::default())
-				.expect("caller has checked pre-conditions. qed.");
-		}
-
-		self.with_era.get_mut(&era).expect("entry inserted on the line above. qed.")
 	}
 }
 
@@ -1185,18 +1161,26 @@ pub mod pallet {
 			// Unbond in the actual underlying pool
 			T::StakingInterface::unbond(bonded_pool.bonded_account(), balance_to_unbond)?;
 
-			// Note that we lazily create the unbonding pools here if they don't already exist
-			let sub_pools = SubPoolsStorage::<T>::get(delegator.pool_id).unwrap_or_default();
 			let current_era = T::StakingInterface::current_era();
 			let unbond_era = T::StakingInterface::bonding_duration().saturating_add(current_era);
-
-			// Merge any older pools into the general, era agnostic unbond pool. Note that we do
-			// this before inserting to ensure we don't go over the max unbonding pools.
-			let mut sub_pools = sub_pools.maybe_merge_pools(unbond_era);
+			// Note that we lazily create the unbonding pools here if they don't already exist
+			let mut sub_pools = SubPoolsStorage::<T>::get(delegator.pool_id)
+				.unwrap_or_default()
+				.maybe_merge_pools(unbond_era);
 
 			// Update the unbond pool associated with the current era with the unbonded funds. Note
 			// that we lazily create the unbond pool if it does not yet exist.
-			sub_pools.unchecked_with_era_get_or_make(unbond_era).issue(balance_to_unbond);
+			if !sub_pools.with_era.contains_key(&unbond_era) {
+				sub_pools
+					.with_era
+					.try_insert(unbond_era, UnbondPool::default())
+					.expect("caller has checked pre-conditions. qed."); // TODO: i do NOT see any proof for this.
+			}
+			sub_pools
+				.with_era
+				.get_mut(&unbond_era)
+				.expect("entry inserted on the line above. qed.")
+				.issue(balance_to_unbond);
 
 			delegator.unbonding_era = Some(unbond_era);
 
@@ -1457,7 +1441,7 @@ pub mod pallet {
 			let who = ensure_signed(origin)?;
 			let mut bonded_pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
 			ensure!(bonded_pool.state != PoolState::Destroying, Error::<T>::CanNotChangeState);
-			// TODO: [now] we could  check if bonded_pool.ok_to_be_open().is_err(), and if thats
+			// TODO: [now] we could check if bonded_pool.ok_to_be_open().is_err(), and if thats
 			// true always set the state to destroying, regardless of the stat the caller passes.
 			// The downside is that this seems like a misleading API
 
@@ -1688,7 +1672,6 @@ impl<T: Config> Pallet<T> {
 	/// If the delegator has some rewards, transfer a payout from the reward pool to the delegator.
 	///
 	/// # Note
-	// TODO: revise this.
 	/// This will persist updates for the reward pool to storage. But it will *not* persist updates
 	/// to the `delegator` or `bonded_pool` to storage, that is the responsibility of the caller.
 	fn do_reward_payout(
