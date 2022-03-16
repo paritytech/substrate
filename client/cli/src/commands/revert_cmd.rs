@@ -44,7 +44,8 @@ pub struct RevertCmd {
 }
 
 /// Revert handler for auxiliary data (e.g. consensus).
-type AuxRevertHandler<B> = Box<dyn FnOnce(NumberFor<B>) -> error::Result<()>>;
+type AuxRevertHandler<C, BA, B> =
+	Box<dyn FnOnce(Arc<C>, Arc<BA>, NumberFor<B>) -> error::Result<()>>;
 
 impl RevertCmd {
 	/// Run the revert command
@@ -52,7 +53,7 @@ impl RevertCmd {
 		&self,
 		client: Arc<C>,
 		backend: Arc<BA>,
-		aux_revert: Option<AuxRevertHandler<B>>,
+		aux_revert: Option<AuxRevertHandler<C, BA, B>>,
 	) -> error::Result<()>
 	where
 		B: BlockT,
@@ -62,7 +63,7 @@ impl RevertCmd {
 	{
 		let blocks = self.num.parse()?;
 		if let Some(aux_revert) = aux_revert {
-			aux_revert(blocks)?;
+			aux_revert(client.clone(), backend.clone(), blocks)?;
 		}
 		revert_chain(client, backend, blocks)?;
 

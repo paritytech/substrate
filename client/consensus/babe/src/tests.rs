@@ -736,13 +736,14 @@ fn importing_block_one_sets_genesis_epoch() {
 }
 
 #[test]
-fn revert_prunes_epoch_changes_tree() {
+fn revert_prunes_epoch_changes_and_removes_weights() {
 	let mut net = BabeTestNet::new(1);
 
 	let peer = net.peer(0);
 	let data = peer.data.as_ref().expect("babe link set up during initialization");
 
 	let client = peer.client().as_client();
+	let backend = peer.client().as_backend();
 	let mut block_import = data.block_import.lock().take().expect("import set up during init");
 	let epoch_changes = data.link.epoch_changes.clone();
 
@@ -762,26 +763,25 @@ fn revert_prunes_epoch_changes_tree() {
 	// One branch starts before the revert point (epoch data should be maintained).
 	// One branch starts after the revert point (epoch data should be removed).
 	//
-	//                        *----------------- F(#13)                < fork #2
+	//                        *----------------- F(#13) --#18                  < fork #2
 	//                       /
-	// A(#1) ---- B(#7) ----#8----+-----#12----- C(#13) ---- D(#19)    < canon
+	// A(#1) ---- B(#7) ----#8----+-----#12----- C(#13) ---- D(#19) ------#21  < canon
 	//   \                        ^       \
-	//    \                    revert      *---- G(#13) -----H(#19)    < fork #3
+	//    \                    revert      *---- G(#13) ---- H(#19) ---#20     < fork #3
 	//     \                   to #10
-	//      *-----E(#7)                                                < fork #1
-
+	//      *-----E(#7)---#11                                          < fork #1
 	let canon = propose_and_import_blocks_wrap(BlockId::Number(0), 21);
 	let fork1 = propose_and_import_blocks_wrap(BlockId::Hash(canon[0]), 10);
 	let fork2 = propose_and_import_blocks_wrap(BlockId::Hash(canon[7]), 10);
-	let _fork3 = propose_and_import_blocks_wrap(BlockId::Hash(canon[11]), 10);
+	let fork3 = propose_and_import_blocks_wrap(BlockId::Hash(canon[11]), 8);
 
 	// We should be tracking a total of 9 epochs in the fork tree
 	assert_eq!(epoch_changes.shared_data().tree().iter().count(), 8);
 	// And only one root
 	assert_eq!(epoch_changes.shared_data().tree().roots().count(), 1);
 
-	// Revert to block #10 (best(22) - 12)
-	revert(client.clone(), 12).expect("revert should work for the baked test scenario");
+	// Revert canon chain to block #10 (best(21) - 11)
+	revert(client.clone(), backend, 11).expect("revert should work for baked test scenario");
 
 	// Load and check epoch changes.
 
@@ -804,6 +804,17 @@ fn revert_prunes_epoch_changes_tree() {
 	];
 
 	assert_eq!(actual_nodes, expected_nodes);
+
+	let weight_data_check = |hashes: &[Hash], expected: bool| {
+		hashes.iter().all(|hash| {
+			aux_schema::load_block_weight(&*client, hash).unwrap().is_some() == expected
+		})
+	};
+	assert!(weight_data_check(&canon[..10], true));
+	assert!(weight_data_check(&canon[10..], false));
+	assert!(weight_data_check(&fork1, true));
+	assert!(weight_data_check(&fork2, true));
+	assert!(weight_data_check(&fork3, false));
 }
 
 #[test]
