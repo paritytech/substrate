@@ -1702,16 +1702,6 @@ impl<T: Config> Pallet<T> {
 			ExistenceRequirement::AllowDeath,
 		)?;
 
-		if reward_pool.total_earnings == BalanceOf::<T>::max_value() &&
-			bonded_pool.state != PoolState::Destroying
-		{
-			bonded_pool.state = PoolState::Destroying;
-			Self::deposit_event(Event::<T>::State {
-				pool_id: delegator.pool_id,
-				new_state: PoolState::Destroying,
-			});
-		}
-
 		Self::deposit_event(Event::<T>::PaidOut {
 			delegator: delegator_account,
 			pool_id: delegator.pool_id,
