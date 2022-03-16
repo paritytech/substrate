@@ -170,18 +170,18 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// A child-bounty is added.
-		Added { parent_index: BountyIndex, child_index: BountyIndex },
+		Added { index: BountyIndex, child_index: BountyIndex },
 		/// A child-bounty is awarded to a beneficiary.
-		Awarded { parent_index: BountyIndex, child_index: BountyIndex, beneficiary: T::AccountId },
+		Awarded { index: BountyIndex, child_index: BountyIndex, beneficiary: T::AccountId },
 		/// A child-bounty is claimed by beneficiary.
 		Claimed {
-			parent_index: BountyIndex,
+			index: BountyIndex,
 			child_index: BountyIndex,
 			payout: BalanceOf<T>,
 			beneficiary: T::AccountId,
 		},
 		/// A child-bounty is cancelled.
-		Canceled { parent_index: BountyIndex, child_index: BountyIndex },
+		Canceled { index: BountyIndex, child_index: BountyIndex },
 	}
 
 	/// Number of total child bounties.
@@ -614,7 +614,7 @@ pub mod pallet {
 
 			// Trigger the event Awarded.
 			Self::deposit_event(Event::<T>::Awarded {
-				parent_index: parent_bounty_id,
+				index: parent_bounty_id,
 				child_index: child_bounty_id,
 				beneficiary,
 			});
@@ -700,7 +700,7 @@ pub mod pallet {
 
 						// Trigger the Claimed event.
 						Self::deposit_event(Event::<T>::Claimed {
-							parent_index: parent_bounty_id,
+							index: parent_bounty_id,
 							child_index: child_bounty_id,
 							payout,
 							beneficiary: beneficiary.clone(),
@@ -794,7 +794,7 @@ impl<T: Config> Pallet<T> {
 		ChildBounties::<T>::insert(parent_bounty_id, child_bounty_id, &child_bounty);
 		ChildBountyDescriptions::<T>::insert(child_bounty_id, description);
 		Self::deposit_event(Event::Added {
-			parent_index: parent_bounty_id,
+			index: parent_bounty_id,
 			child_index: child_bounty_id,
 		});
 	}
@@ -870,7 +870,7 @@ impl<T: Config> Pallet<T> {
 				*maybe_child_bounty = None;
 
 				Self::deposit_event(Event::<T>::Canceled {
-					parent_index: parent_bounty_id,
+					index: parent_bounty_id,
 					child_index: child_bounty_id,
 				});
 				Ok(())
