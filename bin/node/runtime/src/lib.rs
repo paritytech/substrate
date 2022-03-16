@@ -678,10 +678,8 @@ impl pallet_election_provider_multi_phase::Config for Runtime {
 	type WeightInfo = pallet_election_provider_multi_phase::weights::SubstrateWeight<Self>;
 	type ForceOrigin = EnsureRootOrHalfCouncil;
 	type BenchmarkingConfig = ElectionProviderBenchmarkConfig;
-	// BagsList allows a practically unbounded count of nominators to participate in NPoS elections.
-	// To ensure we respect memory limits when using the BagsList this must be set to a number of
-	// voters we know can fit into a single vec allocation.
-	type ElectingVotersPerBlock = ConstU32<10_000>;
+	type MaxElectingVoters = ConstU32<10_000>;
+	type MaxElectableTargets = ConstU32< { u32::MAX }>;
 }
 
 parameter_types! {

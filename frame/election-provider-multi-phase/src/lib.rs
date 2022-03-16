@@ -648,7 +648,11 @@ pub mod pallet {
 		/// are only over a single block, but once multi-block elections are introduced they will
 		/// take place over multiple blocks.
 		#[pallet::constant]
-		type ElectingVotersPerBlock: Get<SolutionVoterIndexOf<Self>>;
+		type MaxElectingVoters: Get<SolutionVoterIndexOf<Self>>;
+
+		/// The maximum number of electable targets to put in the snapshot.
+		#[pallet::constant]
+		type MaxElectableTargets: Get<SolutionTargetIndexOf<Self>>;
 
 		/// Handler for the slashed deposits.
 		type SlashHandler: OnUnbalanced<NegativeImbalanceOf<Self>>;
@@ -815,7 +819,7 @@ pub mod pallet {
 		fn integrity_test() {
 			use sp_std::mem::size_of;
 			// The index type of both voters and targets need to be smaller than that of usize (very
-			// unlikely to be the case, but anyhow).
+			// unlikely to be the case, but anyhow)..
 			assert!(size_of::<SolutionVoterIndexOf<T>>() <= size_of::<usize>());
 			assert!(size_of::<SolutionTargetIndexOf<T>>() <= size_of::<usize>());
 
@@ -1336,8 +1340,8 @@ impl<T: Config> Pallet<T> {
 	/// Extracted for easier weight calculation.
 	fn create_snapshot_external(
 	) -> Result<(Vec<T::AccountId>, Vec<VoterOf<T>>, u32), ElectionError<T>> {
-		let target_limit = <SolutionTargetIndexOf<T>>::max_value().saturated_into::<usize>();
-		let voter_limit = T::ElectingVotersPerBlock::get().saturated_into::<usize>();
+		let target_limit = T::MaxElectableTargets::get().saturated_into::<usize>();
+		let voter_limit = T::MaxElectingVoters::get().saturated_into::<usize>();
 
 		let targets = T::DataProvider::electable_targets(Some(target_limit))
 			.map_err(ElectionError::DataProvider)?;
@@ -2052,7 +2056,7 @@ mod tests {
 			// we have 8 voters in total.
 			assert_eq!(crate::mock::Voters::get().len(), 8);
 			// but we want to take 2.
-			crate::mock::ElectingVotersPerBlock::set(2);
+			crate::mock::MaxElectingVoters::set(2);
 
 			// Signed phase opens just fine.
 			roll_to(15);
