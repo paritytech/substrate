@@ -35,7 +35,6 @@ pub mod mock;
 mod tests;
 
 mod functions;
-mod impl_locker;
 mod impl_nonfungibles;
 mod types;
 
@@ -44,7 +43,7 @@ pub mod weights;
 
 use codec::{Decode, Encode};
 use frame_support::traits::{
-	BalanceStatus::Reserved, Currency, EnsureOriginWithArg, ReservableCurrency,
+	BalanceStatus::Reserved, Currency, EnsureOriginWithArg, ReservableCurrency, Locker,
 };
 use frame_system::Config as SystemConfig;
 use sp_runtime::{
@@ -53,7 +52,6 @@ use sp_runtime::{
 };
 use sp_std::prelude::*;
 
-pub use impl_locker::Locker;
 pub use pallet::*;
 pub use types::*;
 pub use weights::WeightInfo;
