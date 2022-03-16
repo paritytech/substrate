@@ -250,7 +250,6 @@ use sp_npos_elections::{
 	VoteWeight,
 };
 use sp_runtime::{
-	traits::Bounded,
 	transaction_validity::{
 		InvalidTransaction, TransactionPriority, TransactionSource, TransactionValidity,
 		TransactionValidityError, ValidTransaction,
