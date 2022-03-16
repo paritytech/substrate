@@ -33,7 +33,7 @@ pub trait DevApi<Hash, BlockStats> {
 	///
 	/// This function will require the specified block and its parent to be available
 	/// at the queried node. The latter is needed to generate the compact proof.
-	/// For more information see [`BlockStats`].
+	/// For more information see [`sp_runtime::BlockStats`].
 	#[rpc(name = "dev_getBlockStats")]
 	fn block_stats(&self, block_hash: Hash) -> Result<Option<BlockStats>>;
 }
