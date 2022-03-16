@@ -301,8 +301,6 @@ pub const BOB: AccountId32 = AccountId32::new([2u8; 32]);
 pub const CHARLIE: AccountId32 = AccountId32::new([3u8; 32]);
 pub const DJANGO: AccountId32 = AccountId32::new([4u8; 32]);
 
-pub const HASH: H256 = H256::repeat_byte(0x10);
-
 pub const GAS_LIMIT: Weight = 100_000_000_000;
 
 pub struct ExtBuilder {

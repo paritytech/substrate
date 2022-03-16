@@ -148,6 +148,7 @@ pub enum RuntimeCosts {
 	/// Weight of calling `seal_code_hash`.
 	#[cfg(feature = "unstable-interface")]
 	CodeHash,
+	/// Weight of calling `seal_own_code_hash`.
 	#[cfg(feature = "unstable-interface")]
 	OwnCodeHash,
 	/// Weight of calling `seal_caller_is_origin`.
