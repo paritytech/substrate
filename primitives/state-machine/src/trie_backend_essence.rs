@@ -23,7 +23,7 @@ use codec::Encode;
 use hash_db::{self, AsHashDB, HashDB, HashDBRef, Hasher, Prefix};
 #[cfg(feature = "std")]
 use parking_lot::RwLock;
-use sp_core::storage::{ChildInfo, ChildType, PrefixedStorageKey, StateVersion};
+use sp_core::storage::{ChildInfo, ChildType, StateVersion};
 use sp_std::{boxed::Box, vec::Vec};
 use sp_trie::{
 	child_delta_trie_root, delta_trie_root, empty_child_trie_root, read_child_trie_value,
@@ -36,10 +36,6 @@ use sp_trie::{
 use std::collections::HashMap;
 #[cfg(feature = "std")]
 use std::sync::Arc;
-use trie_db::{
-	node::{NodePlan, ValuePlan},
-	TrieDBNodeIterator,
-};
 
 #[cfg(not(feature = "std"))]
 macro_rules! format {
@@ -431,72 +427,6 @@ where
 			None,
 			false,
 		);
-	}
-
-	/// Check remaining state item to migrate. Note this function should be remove when all state
-	/// migration did finished as it is only an utility.
-	// original author: @cheme
-	pub fn check_migration_state(&self) -> Result<(u64, u64)> {
-		let threshold: u32 = sp_core::storage::TRIE_VALUE_NODE_THRESHOLD;
-		let mut nb_to_migrate = 0;
-		let mut nb_to_migrate_child = 0;
-
-		let trie = sp_trie::trie_types::TrieDB::new(self, &self.root)
-			.map_err(|e| format!("TrieDB creation error: {}", e))?;
-		let iter_node = TrieDBNodeIterator::new(&trie)
-			.map_err(|e| format!("TrieDB node iterator error: {}", e))?;
-		for node in iter_node {
-			let node = node.map_err(|e| format!("TrieDB node iterator error: {}", e))?;
-			match node.2.node_plan() {
-				NodePlan::Leaf { value, .. } |
-				NodePlan::NibbledBranch { value: Some(value), .. } =>
-					if let ValuePlan::Inline(range) = value {
-						if (range.end - range.start) as u32 >= threshold {
-							nb_to_migrate += 1;
-						}
-					},
-				_ => (),
-			}
-		}
-
-		let mut child_roots: Vec<(ChildInfo, Vec<u8>)> = Vec::new();
-		// get all child trie roots
-		for key_value in trie.iter().map_err(|e| format!("TrieDB node iterator error: {}", e))? {
-			let (key, value) =
-				key_value.map_err(|e| format!("TrieDB node iterator error: {}", e))?;
-			if key[..]
-				.starts_with(sp_core::storage::well_known_keys::DEFAULT_CHILD_STORAGE_KEY_PREFIX)
-			{
-				let prefixed_key = PrefixedStorageKey::new(key);
-				let (_type, unprefixed) = ChildType::from_prefixed_key(&prefixed_key).unwrap();
-				child_roots.push((ChildInfo::new_default(unprefixed), value));
-			}
-		}
-		for (child_info, root) in child_roots {
-			let mut child_root = H::Out::default();
-			let storage = KeySpacedDB::new(self, child_info.keyspace());
-
-			child_root.as_mut()[..].copy_from_slice(&root[..]);
-			let trie = sp_trie::trie_types::TrieDB::new(&storage, &child_root)
-				.map_err(|e| format!("New child TrieDB error: {}", e))?;
-			let iter_node = TrieDBNodeIterator::new(&trie)
-				.map_err(|e| format!("TrieDB node iterator error: {}", e))?;
-			for node in iter_node {
-				let node = node.map_err(|e| format!("Child TrieDB node iterator error: {}", e))?;
-				match node.2.node_plan() {
-					NodePlan::Leaf { value, .. } |
-					NodePlan::NibbledBranch { value: Some(value), .. } =>
-						if let ValuePlan::Inline(range) = value {
-							if (range.end - range.start) as u32 >= threshold {
-								nb_to_migrate_child += 1;
-							}
-						},
-					_ => (),
-				}
-			}
-		}
-
-		Ok((nb_to_migrate, nb_to_migrate_child))
 	}
 
 	/// Returns all `(key, value)` pairs in the trie.
