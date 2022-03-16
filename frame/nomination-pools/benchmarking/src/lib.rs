@@ -127,7 +127,7 @@ impl<T: Config> ListScenario<T> {
 
 		// Find a destination weight that will trigger the worst case scenario
 		let dest_weight_as_vote =
-			<T as pallet_staking::Config>::SortedListProvider::weight_update_worst_case(
+			<T as pallet_staking::Config>::SortedListProvider::score_update_worst_case(
 				&pool_origin1,
 				is_increase,
 			);
