@@ -40,7 +40,7 @@ pub(crate) fn generate(def: crate::SolutionDef) -> Result<TokenStream2> {
 		let name = vote_field(1);
 		// NOTE: we use the visibility of the struct for the fields as well.. could be made better.
 		quote!(
-			#vis #name: _npos::sp_std::prelude::Vec<(#voter_type, #target_type)>,
+			#vis #name: _feps::sp_std::prelude::Vec<(#voter_type, #target_type)>,
 		)
 	};
 
@@ -49,7 +49,7 @@ pub(crate) fn generate(def: crate::SolutionDef) -> Result<TokenStream2> {
 			let field_name = vote_field(c);
 			let array_len = c - 1;
 			quote!(
-				#vis #field_name: _npos::sp_std::prelude::Vec<(
+				#vis #field_name: _feps::sp_std::prelude::Vec<(
 					#voter_type,
 					[(#target_type, #weight_type); #array_len],
 					#target_type
@@ -84,9 +84,9 @@ pub(crate) fn generate(def: crate::SolutionDef) -> Result<TokenStream2> {
 			Eq,
 			Clone,
 			Debug,
-			_npos::codec::Encode,
-			_npos::codec::Decode,
-			_npos::scale_info::TypeInfo,
+			_feps::codec::Encode,
+			_feps::codec::Decode,
+			_feps::scale_info::TypeInfo,
 		)])
 	};
 
@@ -102,8 +102,8 @@ pub(crate) fn generate(def: crate::SolutionDef) -> Result<TokenStream2> {
 		#derives_and_maybe_compact_encoding
 		#vis struct #ident { #single #rest }
 
-		use _npos::__OrInvalidIndex;
-		impl frame_election_provider_support::NposSolution for #ident {
+		use _feps::__OrInvalidIndex;
+		impl _feps::NposSolution for #ident {
 			const LIMIT: usize = #count;
 			type VoterIndex = #voter_type;
 			type TargetIndex = #target_type;
@@ -115,34 +115,34 @@ pub(crate) fn generate(def: crate::SolutionDef) -> Result<TokenStream2> {
 			}
 
 			fn from_assignment<FV, FT, A>(
-				assignments: &[_npos::Assignment<A, #weight_type>],
+				assignments: &[_feps::Assignment<A, #weight_type>],
 				voter_index: FV,
 				target_index: FT,
-			) -> Result<Self, _npos::Error>
+			) -> Result<Self, _feps::Error>
 				where
-					A: _npos::IdentifierT,
+					A: _feps::IdentifierT,
 					for<'r> FV: Fn(&'r A) -> Option<Self::VoterIndex>,
 					for<'r> FT: Fn(&'r A) -> Option<Self::TargetIndex>,
 			{
 				let mut #struct_name: #ident = Default::default();
-				for _npos::Assignment { who, distribution } in assignments {
+				for _feps::Assignment { who, distribution } in assignments {
 					match distribution.len() {
 						0 => continue,
 						#from_impl
 						_ => {
-							return Err(_npos::Error::SolutionTargetOverflow);
+							return Err(_feps::Error::SolutionTargetOverflow);
 						}
 					}
 				};
 				Ok(#struct_name)
 			}
 
-			fn into_assignment<A: _npos::IdentifierT>(
+			fn into_assignment<A: _feps::IdentifierT>(
 				self,
 				voter_at: impl Fn(Self::VoterIndex) -> Option<A>,
 				target_at: impl Fn(Self::TargetIndex) -> Option<A>,
-			) -> Result<_npos::sp_std::prelude::Vec<_npos::Assignment<A, #weight_type>>, _npos::Error> {
-				let mut #assignment_name: _npos::sp_std::prelude::Vec<_npos::Assignment<A, #weight_type>> = Default::default();
+			) -> Result<_feps::sp_std::prelude::Vec<_feps::Assignment<A, #weight_type>>, _feps::Error> {
+				let mut #assignment_name: _feps::sp_std::prelude::Vec<_feps::Assignment<A, #weight_type>> = Default::default();
 				#into_impl
 				Ok(#assignment_name)
 			}
@@ -159,10 +159,10 @@ pub(crate) fn generate(def: crate::SolutionDef) -> Result<TokenStream2> {
 				all_edges
 			}
 
-			fn unique_targets(&self) -> _npos::sp_std::prelude::Vec<Self::TargetIndex> {
+			fn unique_targets(&self) -> _feps::sp_std::prelude::Vec<Self::TargetIndex> {
 				// NOTE: this implementation returns the targets sorted, but we don't use it yet per
 				// se, nor is the API enforcing it.
-				use _npos::sp_std::collections::btree_set::BTreeSet;
+				use _feps::sp_std::collections::btree_set::BTreeSet;
 				let mut all_targets: BTreeSet<Self::TargetIndex> = BTreeSet::new();
 				let mut maybe_insert_target = |t: Self::TargetIndex| {
 					all_targets.insert(t);
@@ -174,15 +174,15 @@ pub(crate) fn generate(def: crate::SolutionDef) -> Result<TokenStream2> {
 			}
 		}
 
-		type __IndexAssignment = _npos::IndexAssignment<
-			<#ident as frame_election_provider_support::NposSolution>::VoterIndex,
-			<#ident as frame_election_provider_support::NposSolution>::TargetIndex,
-			<#ident as frame_election_provider_support::NposSolution>::Accuracy,
+		type __IndexAssignment = _feps::IndexAssignment<
+			<#ident as _feps::NposSolution>::VoterIndex,
+			<#ident as _feps::NposSolution>::TargetIndex,
+			<#ident as _feps::NposSolution>::Accuracy,
 		>;
-		impl _npos::codec::MaxEncodedLen for #ident {
+		impl _feps::codec::MaxEncodedLen for #ident {
 			fn max_encoded_len() -> usize {
 				use frame_support::traits::Get;
-				use _npos::codec::Encode;
+				use _feps::codec::Encode;
 				let s: u32 = #size_bound::get();
 				// The last element of the struct is a vec with 1 voter
 				// then #count-1 tuple of target with an accuracy
@@ -194,21 +194,21 @@ pub(crate) fn generate(def: crate::SolutionDef) -> Result<TokenStream2> {
 					.saturating_add(#target_type::max_encoded_len());
 				// The assumption is that it contains #count-1 empty elements
 				// and then last element with full size
-				#count.saturating_mul(_npos::codec::Compact(0u32).encoded_size())
+				#count.saturating_mul(_feps::codec::Compact(0u32).encoded_size())
 					.saturating_add((s as usize).saturating_mul(max_element_size))
 			}
 		}
-		impl<'a> _npos::sp_std::convert::TryFrom<&'a [__IndexAssignment]> for #ident {
-			type Error = _npos::Error;
+		impl<'a> _feps::sp_std::convert::TryFrom<&'a [__IndexAssignment]> for #ident {
+			type Error = _feps::Error;
 			fn try_from(index_assignments: &'a [__IndexAssignment]) -> Result<Self, Self::Error> {
 				let mut #struct_name =  #ident::default();
 
-				for _npos::IndexAssignment { who, distribution } in index_assignments {
+				for _feps::IndexAssignment { who, distribution } in index_assignments {
 					match distribution.len() {
 						0 => {}
 						#from_index_impl
 						_ => {
-							return Err(_npos::Error::SolutionTargetOverflow);
+							return Err(_feps::Error::SolutionTargetOverflow);
 						}
 					}
 				};
@@ -330,7 +330,7 @@ pub(crate) fn into_impl(
 		let name = vote_field(1);
 		quote!(
 			for (voter_index, target_index) in self.#name {
-				#assignments.push(_npos::Assignment {
+				#assignments.push(_feps::Assignment {
 					who: voter_at(voter_index).or_invalid_index()?,
 					distribution: vec![
 						(target_at(target_index).or_invalid_index()?, #per_thing::one())
@@ -349,25 +349,25 @@ pub(crate) fn into_impl(
 					let mut inners_parsed = inners
 						.iter()
 						.map(|(ref t_idx, p)| {
-							sum = _npos::sp_arithmetic::traits::Saturating::saturating_add(sum, *p);
+							sum = _feps::sp_arithmetic::traits::Saturating::saturating_add(sum, *p);
 							let target = target_at(*t_idx).or_invalid_index()?;
 							Ok((target, *p))
 						})
-						.collect::<Result<_npos::sp_std::prelude::Vec<(A, #per_thing)>, _npos::Error>>()?;
+						.collect::<Result<_feps::sp_std::prelude::Vec<(A, #per_thing)>, _feps::Error>>()?;
 
 					if sum >= #per_thing::one() {
-						return Err(_npos::Error::SolutionWeightOverflow);
+						return Err(_feps::Error::SolutionWeightOverflow);
 					}
 
 					// defensive only. Since Percent doesn't have `Sub`.
-					let p_last = _npos::sp_arithmetic::traits::Saturating::saturating_sub(
+					let p_last = _feps::sp_arithmetic::traits::Saturating::saturating_sub(
 						#per_thing::one(),
 						sum,
 					);
 
 					inners_parsed.push((target_at(t_last_idx).or_invalid_index()?, p_last));
 
-					#assignments.push(_npos::Assignment {
+					#assignments.push(_feps::Assignment {
 						who: voter_at(voter_index).or_invalid_index()?,
 						distribution: inners_parsed,
 					});

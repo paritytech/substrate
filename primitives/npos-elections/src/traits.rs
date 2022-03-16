@@ -17,7 +17,7 @@
 
 //! Traits for the npos-election operations.
 
-use crate::{Error, ExtendedBalance};
+use crate::ExtendedBalance;
 use sp_arithmetic::PerThing;
 use sp_std::{fmt::Debug, ops::Mul, prelude::*};
 
@@ -29,17 +29,3 @@ impl<T: Clone + Eq + Ord + Debug + codec::Codec> IdentifierT for T {}
 /// Aggregator trait for a PerThing that can be multiplied by u128 (ExtendedBalance).
 pub trait PerThing128: PerThing + Mul<ExtendedBalance, Output = ExtendedBalance> {}
 impl<T: PerThing + Mul<ExtendedBalance, Output = ExtendedBalance>> PerThing128 for T {}
-
-/// Simple Extension trait to easily convert `None` from index closures to `Err`.
-///
-/// This is only generated and re-exported for the solution code to use.
-#[doc(hidden)]
-pub trait __OrInvalidIndex<T> {
-	fn or_invalid_index(self) -> Result<T, Error>;
-}
-
-impl<T> __OrInvalidIndex<T> for Option<T> {
-	fn or_invalid_index(self) -> Result<T, Error> {
-		self.ok_or(Error::SolutionInvalidIndex)
-	}
-}
