@@ -100,14 +100,14 @@ pub mod pjr;
 pub mod reduce;
 pub mod traits;
 
-pub use assignments::{Assignment, IndexAssignment, StakedAssignment};
+pub use assignments::{Assignment, StakedAssignment};
 pub use balancing::*;
 pub use helpers::*;
 pub use phragmen::*;
 pub use phragmms::*;
 pub use pjr::*;
 pub use reduce::reduce;
-pub use traits::{IdentifierT, PerThing128, __OrInvalidIndex};
+pub use traits::{IdentifierT, PerThing128};
 
 /// The errors that might occur in this crate and `frame-election-provider-solution-type`.
 #[derive(Eq, PartialEq, RuntimeDebug)]

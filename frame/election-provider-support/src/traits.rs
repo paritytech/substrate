@@ -17,11 +17,11 @@
 
 //! Traits for the election operations.
 
-use crate::{Assignment, IdentifierT, PerThing128, VoteWeight};
+use crate::{Assignment, IdentifierT, PerThing128, VoteWeight, IndexAssignmentOf};
 use codec::Encode;
 use scale_info::TypeInfo;
 use sp_arithmetic::traits::{Bounded, UniqueSaturatedInto};
-use sp_npos_elections::{ElectionScore, Error, EvaluateSupport, IndexAssignment};
+use sp_npos_elections::{ElectionScore, Error, EvaluateSupport};
 use sp_std::{
 	convert::{TryFrom, TryInto},
 	fmt::Debug,
@@ -127,10 +127,3 @@ where
 		target_at: impl Fn(Self::TargetIndex) -> Option<A>,
 	) -> Result<Vec<Assignment<A, Self::Accuracy>>, Error>;
 }
-
-/// A type alias for [`IndexAssignment`] made from [`NposSolution`].
-pub type IndexAssignmentOf<C> = IndexAssignment<
-	<C as NposSolution>::VoterIndex,
-	<C as NposSolution>::TargetIndex,
-	<C as NposSolution>::Accuracy,
->;
