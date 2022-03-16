@@ -5031,6 +5031,7 @@ dependencies = [
  "pallet-membership",
  "pallet-mmr",
  "pallet-multisig",
+ "pallet-name-service",
  "pallet-offences",
  "pallet-offences-benchmarking",
  "pallet-preimage",
@@ -6141,6 +6142,22 @@ dependencies = [
 
 [[package]]
 name = "pallet-multisig"
+version = "4.0.0-dev"
+dependencies = [
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "pallet-balances",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
+name = "pallet-name-service"
 version = "4.0.0-dev"
 dependencies = [
  "frame-benchmarking",
