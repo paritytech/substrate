@@ -196,7 +196,7 @@ pub mod pallet {
 	pub type ParentChildBounties<T: Config> =
 		StorageMap<_, Twox64Concat, BountyIndex, u32, ValueQuery>;
 
-	/// child bounties that have been added.
+	/// Child bounties that have been added.
 	#[pallet::storage]
 	#[pallet::getter(fn child_bounties)]
 	pub type ChildBounties<T: Config> = StorageDoubleMap<
@@ -797,9 +797,9 @@ impl<T: Config> Pallet<T> {
 	}
 
 	fn ensure_bounty_active(
-		parent_bounty_id: BountyIndex,
+		bounty_id: BountyIndex,
 	) -> Result<(T::AccountId, T::BlockNumber), DispatchError> {
-		let parent_bounty = pallet_bounties::Pallet::<T>::bounties(parent_bounty_id)
+		let parent_bounty = pallet_bounties::Pallet::<T>::bounties(bounty_id)
 			.ok_or(BountiesError::<T>::InvalidIndex)?;
 		if let BountyStatus::Active { curator, update_due } = parent_bounty.get_status() {
 			Ok((curator, update_due))
