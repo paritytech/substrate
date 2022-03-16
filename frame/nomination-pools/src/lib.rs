@@ -707,10 +707,19 @@ impl<T: Config> BondedPool<T> {
 	/// number saturating indicates the pool can no longer correctly keep track of state.
 	fn bound_check(&mut self, n: U256) -> U256 {
 		if n == U256::max_value() {
-			self.state = PoolState::Destroying
+			self.set_state(PoolState::Destroying)
 		}
 
 		n
+	}
+
+	// Set the state of `self`, and deposit an event if the state changed. State should never be set
+	// directly in in order to ensure a state change event is always correctly deposited.
+	fn set_state(&mut self, state: PoolState) {
+		if self.state != state {
+			self.state = state;
+			Pallet::<T>::deposit_event(Event::<T>::State { pool_id: self.id, new_state: state });
+		};
 	}
 }
 
@@ -1446,18 +1455,13 @@ pub mod pallet {
 			// The downside is that this seems like a misleading API
 
 			if bonded_pool.can_toggle_state(&who) {
-				bonded_pool.state = state
+				bonded_pool.set_state(state);
 			} else if bonded_pool.ok_to_be_open().is_err() && state == PoolState::Destroying {
 				// If the pool has bad properties, then anyone can set it as destroying
-				bonded_pool.state = PoolState::Destroying;
+				bonded_pool.set_state(PoolState::Destroying);
 			} else {
 				Err(Error::<T>::CanNotChangeState)?;
 			}
-
-			Self::deposit_event(Event::<T>::State {
-				pool_id,
-				new_state: bonded_pool.state.clone(),
-			});
 
 			bonded_pool.put();
 
@@ -1547,14 +1551,15 @@ pub mod pallet {
 
 impl<T: Config> Pallet<T> {
 	/// Create the main, bonded account of a pool with the given id.
-	fn create_bonded_account(id: PoolId) -> T::AccountId {
+
+	pub fn create_bonded_account(id: PoolId) -> T::AccountId {
 		T::PalletId::get().into_sub_account((AccountType::Bonded, id))
 	}
 
 	/// Create the reward account of a pool with the given id.
-	fn create_reward_account(id: PoolId) -> T::AccountId {
-		// NOTE: account_type must be at the beginning so that in test's account-id (u128) there is
-		// a distinction.
+	pub fn create_reward_account(id: PoolId) -> T::AccountId {
+		// NOTE: in order to have a distinction in the test account id type (u128), we put
+		// account_type first so it does not get truncated out.
 		T::PalletId::get().into_sub_account((AccountType::Reward, id))
 	}
 
@@ -1662,6 +1667,9 @@ impl<T: Config> Pallet<T> {
 		};
 
 		// Record updates
+		if reward_pool.total_earnings == BalanceOf::<T>::max_value() {
+			bonded_pool.set_state(PoolState::Destroying);
+		};
 		delegator.reward_pool_total_earnings = reward_pool.total_earnings;
 		reward_pool.points = current_points.saturating_sub(delegator_virtual_points);
 		reward_pool.balance = reward_pool.balance.saturating_sub(delegator_payout);
@@ -1785,7 +1793,7 @@ impl<T: Config> Pallet<T> {
 		});
 		assert!(MaxDelegators::<T>::get().map_or(true, |max| all_delegators <= max));
 
-		if level <= u8::MAX / 2 {
+		if level <= 1 {
 			return Ok(())
 		}
 

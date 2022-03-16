@@ -122,7 +122,8 @@ impl pallet_bags_list::Config for Runtime {
 	type Event = Event;
 	type WeightInfo = ();
 	type BagThresholds = BagThresholds;
-	type VoteWeightProvider = Staking;
+	type ScoreProvider = Staking;
+	type Score = VoteWeight;
 }
 
 pub struct BalanceToU256;

@@ -15,7 +15,7 @@ use pallet_nomination_pools::{
 	MaxDelegatorsPerPool, MaxPools, Metadata, MinCreateBond, MinJoinBond, Pallet as Pools,
 	PoolRoles, PoolState, RewardPools, SubPoolsStorage,
 };
-use sp_runtime::traits::{Bounded, StaticLookup, Zero};
+use sp_runtime::traits::{Bounded, Zero};
 use sp_staking::{EraIndex, StakingInterface};
 // `frame_benchmarking::benchmarks!` macro needs this
 use pallet_nomination_pools::Call;
@@ -31,13 +31,6 @@ pub trait Config:
 }
 
 pub struct Pallet<T: Config>(Pools<T>);
-
-fn clear_storage<T: pallet_nomination_pools::Config>() {
-	pallet_nomination_pools::BondedPools::<T>::remove_all();
-	pallet_nomination_pools::RewardPools::<T>::remove_all();
-	pallet_nomination_pools::SubPoolsStorage::<T>::remove_all();
-	pallet_nomination_pools::Delegators::<T>::remove_all();
-}
 
 fn create_funded_user_with_balance<T: pallet_nomination_pools::Config>(
 	string: &'static str,
@@ -123,18 +116,18 @@ impl<T: Config> ListScenario<T> {
 		T::StakingInterface::nominate(
 			pool_origin1.clone(),
 			// NOTE: these don't really need to be validators.
-			vec![T::Lookup::unlookup(account("random_validator", 0, USER_SEED))],
+			vec![account("random_validator", 0, USER_SEED)],
 		)?;
 
 		let (_, pool_origin2) = create_pool_account::<T>(USER_SEED + 2, origin_weight);
 		T::StakingInterface::nominate(
 			pool_origin2.clone(),
-			vec![T::Lookup::unlookup(account("random_validator", 0, USER_SEED))].clone(),
+			vec![account("random_validator", 0, USER_SEED)].clone(),
 		)?;
 
 		// Find a destination weight that will trigger the worst case scenario
 		let dest_weight_as_vote =
-			<T as pallet_staking::Config>::SortedListProvider::weight_update_worst_case(
+			<T as pallet_staking::Config>::SortedListProvider::score_update_worst_case(
 				&pool_origin1,
 				is_increase,
 			);
@@ -146,7 +139,7 @@ impl<T: Config> ListScenario<T> {
 		let (_, pool_dest1) = create_pool_account::<T>(USER_SEED + 3, dest_weight);
 		T::StakingInterface::nominate(
 			pool_dest1.clone(),
-			vec![T::Lookup::unlookup(account("random_validator", 0, USER_SEED))],
+			vec![account("random_validator", 0, USER_SEED)],
 		)?;
 
 		let weight_of = pallet_staking::Pallet::<T>::weight_of_fn();
@@ -197,8 +190,6 @@ impl<T: Config> ListScenario<T> {
 
 frame_benchmarking::benchmarks! {
 	join {
-		clear_storage::<T>();
-
 		let origin_weight = pallet_nomination_pools::MinCreateBond::<T>::get()
 			.max(CurrencyOf::<T>::minimum_balance())
 			* 2u32.into();
@@ -227,8 +218,6 @@ frame_benchmarking::benchmarks! {
 	}
 
 	claim_payout {
-		clear_storage::<T>();
-
 		let origin_weight = pallet_nomination_pools::MinCreateBond::<T>::get().max(CurrencyOf::<T>::minimum_balance()) * 2u32.into();
 		let (depositor, pool_account) = create_pool_account::<T>(0, origin_weight);
 
@@ -257,8 +246,6 @@ frame_benchmarking::benchmarks! {
 	}
 
 	unbond_other {
-		clear_storage::<T>();
-
 		// the weight the nominator will start at. The value used here is expected to be
 		// significantly higher than the first position in a list (e.g. the first bag threshold).
 		let origin_weight = BalanceOf::<T>::try_from(952_994_955_240_703u128)
@@ -285,7 +272,6 @@ frame_benchmarking::benchmarks! {
 
 	pool_withdraw_unbonded {
 		let s in 0 .. MAX_SPANS;
-		clear_storage::<T>();
 
 		let min_create_bond = MinCreateBond::<T>::get()
 			.max(T::StakingInterface::minimum_bond())
@@ -330,7 +316,6 @@ frame_benchmarking::benchmarks! {
 
 	withdraw_unbonded_other_update {
 		let s in 0 .. MAX_SPANS;
-		clear_storage::<T>();
 
 		let min_create_bond = MinCreateBond::<T>::get()
 			.max(T::StakingInterface::minimum_bond())
@@ -378,7 +363,6 @@ frame_benchmarking::benchmarks! {
 
 	withdraw_unbonded_other_kill {
 		let s in 0 .. MAX_SPANS;
-		clear_storage::<T>();
 
 		let min_create_bond = MinCreateBond::<T>::get()
 			.max(T::StakingInterface::minimum_bond())
@@ -447,8 +431,6 @@ frame_benchmarking::benchmarks! {
 	}
 
 	create {
-		clear_storage::<T>();
-
 		let min_create_bond = MinCreateBond::<T>::get()
 			.max(T::StakingInterface::minimum_bond())
 			.max(CurrencyOf::<T>::minimum_balance());
@@ -488,14 +470,12 @@ frame_benchmarking::benchmarks! {
 			}
 		);
 		assert_eq!(
-			T::StakingInterface::active_balance(&Pools::<T>::create_bonded_account(1)),
+			T::StakingInterface::active_stake(&Pools::<T>::create_bonded_account(1)),
 			Some(min_create_bond)
 		);
 	}
 
 	nominate {
-		clear_storage::<T>();
-
 		// Create a pool
 		let min_create_bond = MinCreateBond::<T>::get()
 			.max(T::StakingInterface::minimum_bond())
@@ -505,9 +485,7 @@ frame_benchmarking::benchmarks! {
 		// Create some accounts to nominate. For the sake of benchmarking they don't need to be
 		// actual validators
 		 let validators: Vec<_> = (0..T::MaxNominations::get())
-			.map(|i|
-				T::Lookup::unlookup(account("stash", USER_SEED, i))
-			)
+			.map(|i| account("stash", USER_SEED, i))
 			.collect();
 
 		whitelist_account!(depositor);
@@ -555,8 +533,6 @@ frame_benchmarking::benchmarks! {
 	}
 
 	set_metadata {
-		clear_storage::<T>();
-
 		// Create a pool
 		let min_create_bond = MinCreateBond::<T>::get()
 			.max(T::StakingInterface::minimum_bond())

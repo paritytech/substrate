@@ -86,6 +86,14 @@ impl Into<sc_service::config::WasmExecutionMethod> for WasmExecutionMethod {
 	}
 }
 
+/// The default [`WasmExecutionMethod`].
+#[cfg(feature = "wasmtime")]
+pub const DEFAULT_WASM_EXECUTION_METHOD: &str = "Compiled";
+
+/// The default [`WasmExecutionMethod`].
+#[cfg(not(feature = "wasmtime"))]
+pub const DEFAULT_WASM_EXECUTION_METHOD: &str = "interpreted-i-know-what-i-do";
+
 #[allow(missing_docs)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, ArgEnum)]
 #[clap(rename_all = "PascalCase")]
@@ -201,8 +209,10 @@ pub enum Database {
 	/// ParityDb. <https://github.com/paritytech/parity-db/>
 	ParityDb,
 	/// Detect whether there is an existing database. Use it, if there is, if not, create new
-	/// instance of paritydb
+	/// instance of ParityDb
 	Auto,
+	/// ParityDb. <https://github.com/paritytech/parity-db/>
+	ParityDbDeprecated,
 }
 
 impl std::str::FromStr for Database {
@@ -212,6 +222,8 @@ impl std::str::FromStr for Database {
 		if s.eq_ignore_ascii_case("rocksdb") {
 			Ok(Self::RocksDb)
 		} else if s.eq_ignore_ascii_case("paritydb-experimental") {
+			Ok(Self::ParityDbDeprecated)
+		} else if s.eq_ignore_ascii_case("paritydb") {
 			Ok(Self::ParityDb)
 		} else if s.eq_ignore_ascii_case("auto") {
 			Ok(Self::Auto)
@@ -224,7 +236,7 @@ impl std::str::FromStr for Database {
 impl Database {
 	/// Returns all the variants of this enum to be shown in the cli.
 	pub fn variants() -> &'static [&'static str] {
-		&["rocksdb", "paritydb-experimental", "auto"]
+		&["rocksdb", "paritydb", "paritydb-experimental", "auto"]
 	}
 }
 
