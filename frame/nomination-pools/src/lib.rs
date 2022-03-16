@@ -1366,6 +1366,11 @@ pub mod pallet {
 		/// * `root` - The account to set as [`BondedPool::root`].
 		/// * `nominator` - The account to set as the [`BondedPool::nominator`].
 		/// * `state_toggler` - The account to set as the [`BondedPool::state_toggler`].
+		// TODO: The creator needs to transfer ED to the pool account and then have their delegators
+		// `reward_pool_total_earnings` ever set to the balance of the reward pool. This will make
+		// an invariant that the reward pool account will always have ED until destroyed.
+		// The reward pool balance and total earnings ever will also need to be updated to reflect
+		// that it has ED so the payout calculations work
 		#[pallet::weight(T::WeightInfo::create())]
 		#[frame_support::transactional]
 		pub fn create(
@@ -1391,6 +1396,7 @@ pub mod pallet {
 			);
 			ensure!(!Delegators::<T>::contains_key(&who), Error::<T>::AccountBelongsToOtherPool);
 
+			// TODO: transfer ED to reward pool and update reward pool total earnings and balance.
 			let pool_id = LastPoolId::<T>::mutate(|id| {
 				*id += 1;
 				*id
