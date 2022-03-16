@@ -92,57 +92,29 @@ fn ref_counted_column(col: u32) -> bool {
 
 impl<H: Clone + AsRef<[u8]>> Database<H> for DbAdapter {
 	fn commit(&self, transaction: Transaction<H>) -> Result<(), DatabaseError> {
-		handle_err(self.0.commit(transaction.0.into_iter().filter_map(|change| {
-			Some(match change {
-				Change::Set(col, key, value) => (col as u8, key, Some(value)),
-				Change::Remove(col, key) => (col as u8, key, None),
-				Change::Store(col, key, value) =>
-					if ref_counted_column(col) {
-						(col as u8, key, Some(value))
-					} else {
-						match sp_database::read_external_counter::<H, _>(&*self, col, key.as_ref())?
-						{
-							(counter_key, Some(mut counter)) => {
-								counter += 1;
-								(col, &counter_key, &counter.to_le_bytes());
-							},
-							(counter_key, None) => {
-								let d = 1u32.to_le_bytes();
-								(col, &counter_key, Some(&d))(col, key.as_ref(), Some(value))
-							},
-						}
-					},
-				Change::Reference(col, key) =>
-					if ref_counted_column(col) {
-						// FIXME this need to be optimize in parity-db.
-						if let Some(value) = self.get(col, key) {
-							(col as u8, key, Some(&value))
-						} else {
-							return None
-						}
-					} else if let (counter_key, Some(mut counter)) =
-						sp_database::read_external_counter::<H, _>(&*self, col, key.as_ref())?
-					{
-						counter += 1;
-						(col, &counter_key, Some(&counter.to_le_bytes()));
-					} else {
-						return None
-					},
-				Change::Release(col, key) =>
-					if ref_counted_column(col) {
-						(col as u8, key, None)
-					} else if let (counter_key, Some(mut counter)) =
-						sp_database::read_external_counter::<H, _>(&*self, col, key.as_ref())?
-					{
-						counter -= 1;
-						if counter == 0 {
-// TODO rem key							(col, &counter_key, None)
-							(col, key.as_ref(), None)
-						} else {
-							(col, &counter_key, Some(&counter.to_le_bytes()))
-						}
-					},
-			})
+		handle_err(self.0.commit(transaction.0.into_iter().map(|change| match change {
+			Change::Set(col, key, value) => (col as u8, key, Some(value)),
+			Change::Remove(col, key) => (col as u8, key, None),
+			Change::Store(col, key, value) =>
+				if ref_counted_column(col) {
+					(col as u8, key.as_ref().to_vec(), Some(value))
+				} else {
+					unimplemented!()
+				},
+			Change::Reference(col, key) =>
+				if ref_counted_column(col) {
+					// FIXME accessing value is not strictly needed, optimize this in parity-db.
+					let value = <Self as Database<H>>::get(self, col, key.as_ref());
+					(col as u8, key.as_ref().to_vec(), value)
+				} else {
+					unimplemented!()
+				},
+			Change::Release(col, key) =>
+				if ref_counted_column(col) {
+					(col as u8, key.as_ref().to_vec(), None)
+				} else {
+					unimplemented!()
+				},
 		})));
 
 		Ok(())

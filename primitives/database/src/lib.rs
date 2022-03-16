@@ -112,40 +112,6 @@ pub trait Database<H: Clone + AsRef<[u8]>>: Send + Sync {
 	}
 }
 
-/// Returns a stored counter key and counter value if it exists.
-///
-/// Counter location is `key ++ 0u8`, there is no key collision guaranties.
-/// (usually reference counter are use on hash of value, in this case no
-/// collision are possible).
-pub fn read_external_counter<H, DB>(
-	db: &DB,
-	col: ColumnId,
-	key: &[u8],
-) -> error::Result<(Vec<u8>, Option<u32>)>
-where
-	H: Clone + AsRef<[u8]>,
-	DB: Database<H>,
-{
-	// Add a key suffix for the counter
-	let mut counter_key = key.to_vec();
-	counter_key.push(0);
-	Ok(match db.get(col, &counter_key) {
-		Some(data) => {
-			let mut counter_data = [0; 4];
-			if data.len() != 4 {
-				return Err(error::DatabaseError(Box::new(std::io::Error::new(
-					std::io::ErrorKind::Other,
-					format!("Unexpected counter len {}", data.len()),
-				))))
-			}
-			counter_data.copy_from_slice(&data);
-			let counter = u32::from_le_bytes(counter_data);
-			(counter_key, Some(counter))
-		},
-		None => (counter_key, None),
-	})
-}
-
 impl<H> std::fmt::Debug for dyn Database<H> {
 	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
 		write!(f, "Database")
