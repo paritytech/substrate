@@ -662,7 +662,7 @@ mod max_weight {
 		fn finalize_signed_phase_reject_solution() -> Weight {
 			unreachable!()
 		}
-		fn submit(c: u32) -> Weight {
+		fn submit() -> Weight {
 			unreachable!()
 		}
 		fn submit_unsigned(v: u32, t: u32, a: u32, d: u32) -> Weight {

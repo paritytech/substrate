@@ -68,8 +68,8 @@ use frame_support::{
 			v2::{Anon as ScheduleAnon, Named as ScheduleNamed},
 			DispatchTime, MaybeHashed,
 		},
-		Currency, Get, LockIdentifier, LockableCurrency, OnUnbalanced, OriginTrait, PollStatus,
-		Polling, ReservableCurrency, VoteTally,
+		Currency, Get, LockIdentifier, OnUnbalanced, OriginTrait, PollStatus, Polling,
+		ReservableCurrency, VoteTally,
 	},
 	BoundedVec,
 };
@@ -86,7 +86,7 @@ pub mod weights;
 use branch::{BeginDecidingBranch, OneFewerDecidingBranch, ServiceBranch};
 pub use pallet::*;
 pub use types::{
-	AtOrAfter, BalanceOf, CallOf, Curve, DecidingStatus, DecidingStatusOf, Deposit, InsertSorted,
+	BalanceOf, CallOf, Curve, DecidingStatus, DecidingStatusOf, Deposit, InsertSorted,
 	NegativeImbalanceOf, PalletsOriginOf, ReferendumIndex, ReferendumInfo, ReferendumInfoOf,
 	ReferendumStatus, ReferendumStatusOf, ScheduleAddressOf, TallyOf, TrackIdOf, TrackInfo,
 	TrackInfoOf, TracksInfo, VotesOf,
@@ -126,9 +126,7 @@ pub mod pallet {
 		type Scheduler: ScheduleAnon<Self::BlockNumber, CallOf<Self>, PalletsOriginOf<Self>, Hash = Self::Hash>
 			+ ScheduleNamed<Self::BlockNumber, CallOf<Self>, PalletsOriginOf<Self>, Hash = Self::Hash>;
 		/// Currency type for this pallet.
-		type Currency: ReservableCurrency<Self::AccountId>
-			+ LockableCurrency<Self::AccountId, Moment = Self::BlockNumber>;
-
+		type Currency: ReservableCurrency<Self::AccountId>;
 		// Origins and unbalances.
 		/// Origin from which any vote may be cancelled.
 		type CancelOrigin: EnsureOrigin<Self::Origin>;
@@ -175,8 +173,6 @@ pub mod pallet {
 	pub type ReferendumCount<T> = StorageValue<_, ReferendumIndex, ValueQuery>;
 
 	/// Information concerning any given referendum.
-	///
-	/// TWOX-NOTE: SAFE as indexes are not under an attacker’s control.
 	#[pallet::storage]
 	pub type ReferendumInfoFor<T: Config> =
 		StorageMap<_, Blake2_128Concat, ReferendumIndex, ReferendumInfoOf<T>>;
@@ -301,7 +297,7 @@ pub mod pallet {
 		/// Referendum is not ongoing.
 		NotOngoing,
 		/// Referendum's decision deposit is already paid.
-		HaveDeposit,
+		HasDeposit,
 		/// The track identifier given was invalid.
 		BadTrack,
 		/// There are already a full complement of referendums in progress for this track.
@@ -338,7 +334,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			proposal_origin: PalletsOriginOf<T>,
 			proposal_hash: T::Hash,
-			enactment_moment: AtOrAfter<T::BlockNumber>,
+			enactment_moment: DispatchTime<T::BlockNumber>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
@@ -385,7 +381,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			let mut status = Self::ensure_ongoing(index)?;
-			ensure!(status.decision_deposit.is_none(), Error::<T>::HaveDeposit);
+			ensure!(status.decision_deposit.is_none(), Error::<T>::HasDeposit);
 			let track = Self::track(status.track).ok_or(Error::<T>::NoTrack)?;
 			status.decision_deposit =
 				Some(Self::take_deposit(who.clone(), track.decision_deposit)?);
@@ -598,7 +594,7 @@ impl<T: Config> Polling<T::Tally> for Pallet<T> {
 			track: class,
 			origin: frame_support::dispatch::RawOrigin::Root.into(),
 			proposal_hash: <T::Hashing as sp_runtime::traits::Hash>::hash_of(&index),
-			enactment: AtOrAfter::After(Zero::zero()),
+			enactment: DispatchTime::After(Zero::zero()),
 			submitted: now,
 			submission_deposit: Deposit { who: dummy_account_id, amount: Zero::zero() },
 			decision_deposit: None,
@@ -651,7 +647,7 @@ impl<T: Config> Pallet<T> {
 	fn schedule_enactment(
 		index: ReferendumIndex,
 		track: &TrackInfoOf<T>,
-		desired: AtOrAfter<T::BlockNumber>,
+		desired: DispatchTime<T::BlockNumber>,
 		origin: PalletsOriginOf<T>,
 		call_hash: T::Hash,
 	) {

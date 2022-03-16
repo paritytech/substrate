@@ -27,19 +27,21 @@ pub type AccountId = u32;
 pub type Balance = u32;
 
 parameter_types! {
-	// Set the vote weight for any id who's weight has _not_ been set with `set_vote_weight_of`.
+	// Set the vote weight for any id who's weight has _not_ been set with `set_score_of`.
 	pub static NextVoteWeight: VoteWeight = 0;
 	pub static NextVoteWeightMap: HashMap<AccountId, VoteWeight> = Default::default();
 }
 
 pub struct StakingMock;
-impl frame_election_provider_support::VoteWeightProvider<AccountId> for StakingMock {
-	fn vote_weight(id: &AccountId) -> VoteWeight {
+impl frame_election_provider_support::ScoreProvider<AccountId> for StakingMock {
+	type Score = VoteWeight;
+
+	fn score(id: &AccountId) -> Self::Score {
 		*NextVoteWeightMap::get().get(id).unwrap_or(&NextVoteWeight::get())
 	}
 
 	#[cfg(any(feature = "runtime-benchmarks", test))]
-	fn set_vote_weight_of(id: &AccountId, weight: VoteWeight) {
+	fn set_score_of(id: &AccountId, weight: Self::Score) {
 		NEXT_VOTE_WEIGHT_MAP.with(|m| m.borrow_mut().insert(id.clone(), weight));
 	}
 }
@@ -79,7 +81,8 @@ impl bags_list::Config for Runtime {
 	type Event = Event;
 	type WeightInfo = ();
 	type BagThresholds = BagThresholds;
-	type VoteWeightProvider = StakingMock;
+	type ScoreProvider = StakingMock;
+	type Score = VoteWeight;
 }
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Runtime>;
@@ -134,7 +137,7 @@ impl ExtBuilder {
 		ext.execute_with(|| {
 			for (id, weight) in ids_with_weight {
 				frame_support::assert_ok!(List::<Runtime>::insert(*id, *weight));
-				StakingMock::set_vote_weight_of(id, *weight);
+				StakingMock::set_score_of(id, *weight);
 			}
 		});
 

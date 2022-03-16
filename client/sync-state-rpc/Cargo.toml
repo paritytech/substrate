@@ -25,5 +25,5 @@ sc-finality-grandpa = { version = "0.10.0-dev", path = "../finality-grandpa" }
 serde_json = "1.0.74"
 serde = { version = "1.0.136", features = ["derive"] }
 sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
-sp-runtime = { version = "5.0.0", path = "../../primitives/runtime" }
+sp-runtime = { version = "6.0.0", path = "../../primitives/runtime" }
 codec = { package = "parity-scale-codec", version = "3.0.0" }
