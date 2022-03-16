@@ -1041,6 +1041,8 @@ pub mod pallet {
 		DoesNotHavePermission,
 		/// Metadata exceeds [`T::MaxMetadataLen`]
 		MetadataExceedsMaxLen,
+		/// Some error occurred that should never happen. This should be reported to the maintainers.
+		DefensiveError,
 	}
 
 	#[pallet::call]
@@ -1182,15 +1184,16 @@ pub mod pallet {
 			if !sub_pools.with_era.contains_key(&unbond_era) {
 				sub_pools
 					.with_era
-                     // This should never fail because the above call to `maybe_merge_pools` should
-                     // ensure there is always enough space to insert. But since this call is transactional
-                     // we defensively return an error
-					.try_insert(unbond_era, UnbondPool::default())?;
+					.try_insert(unbond_era, UnbondPool::default())
+					// The above call to `maybe_merge_pools` should ensure there is
+					// always enough space to insert.
+					.defensive_map_err(|_| Error::<T>::DefensiveError)?;
 			}
 			sub_pools
 				.with_era
 				.get_mut(&unbond_era)
-				.expect("entry inserted on the line above. qed.")
+				// The above check ensures the pool exists.
+				.defensive_ok_or_else(|| Error::<T>::DefensiveError)?
 				.issue(balance_to_unbond);
 
 			delegator.unbonding_era = Some(unbond_era);
