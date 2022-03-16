@@ -51,8 +51,8 @@ pub type VoterOf<T> = frame_election_provider_support::VoterOf<<T as Config>::Da
 pub type Assignment<T> =
 	sp_npos_elections::Assignment<<T as frame_system::Config>::AccountId, SolutionAccuracyOf<T>>;
 
-/// The [`IndexAssignment`][sp_npos_elections::IndexAssignment] type specialized for a particular
-/// runtime `T`.
+/// The [`IndexAssignment`][frame_election_provider_support::IndexAssignment] type specialized for a
+/// particular runtime `T`.
 pub type IndexAssignmentOf<T> = frame_election_provider_support::IndexAssignmentOf<SolutionOf<T>>;
 
 /// Error type of the pallet's [`crate::Config::Solver`].
