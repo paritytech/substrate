@@ -119,11 +119,6 @@ pub mod pallet {
 		pub deposit: Balance,
 	}
 
-	#[derive(Encode, Decode, MaxEncodedLen, TypeInfo)]
-	pub enum Resolver<AccountId> {
-		Default(AccountId),
-	}
-
 	/* Placeholder for defining custom storage items. */
 
 	/// Name Commitments
@@ -149,8 +144,7 @@ pub mod pallet {
 	/// This resolver maps name hashes to an account
 	#[pallet::storage]
 	#[pallet::getter(fn resolve)]
-	pub(super) type Resolvers<T: Config> =
-		StorageMap<_, Blake2_128Concat, NameHash, Resolver<T::AccountId>>;
+	pub(super) type Resolvers<T: Config> = StorageMap<_, Blake2_128Concat, NameHash, T::AccountId>;
 
 	// Your Pallet's events.
 	#[pallet::event]
@@ -329,7 +323,7 @@ pub mod pallet {
 				Error::<T>::RegistrationExpired
 			);
 
-			Resolvers::<T>::insert(name_hash, Resolver::Default(address.clone()));
+			Resolvers::<T>::insert(name_hash, address.clone());
 
 			Self::deposit_event(Event::<T>::AddressSet { name_hash, address });
 
