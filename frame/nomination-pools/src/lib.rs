@@ -1182,8 +1182,10 @@ pub mod pallet {
 			if !sub_pools.with_era.contains_key(&unbond_era) {
 				sub_pools
 					.with_era
-					.try_insert(unbond_era, UnbondPool::default())
-					.expect("caller has checked pre-conditions. qed."); // TODO: i do NOT see any proof for this.
+                     // This should never fail because the above call to `maybe_merge_pools` should
+                     // ensure there is always enough space to insert. But since this call is transactional
+                     // we defensively return an error
+					.try_insert(unbond_era, UnbondPool::default())?;
 			}
 			sub_pools
 				.with_era
