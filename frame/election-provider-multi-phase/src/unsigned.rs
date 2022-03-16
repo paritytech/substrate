@@ -54,7 +54,7 @@ pub type Assignment<T> =
 /// The [`IndexAssignment`][sp_npos_elections::IndexAssignment] type specialized for a particular
 /// runtime `T`.
 pub type IndexAssignmentOf<T> =
-	frame_election_provider_support::traits::IndexAssignmentOf<SolutionOf<T>>;
+	frame_election_provider_support::IndexAssignmentOf<SolutionOf<T>>;
 
 /// Error type of the pallet's [`crate::Config::Solver`].
 pub type SolverErrorOf<T> = <<T as Config>::Solver as NposSolver>::Error;
@@ -745,12 +745,13 @@ mod tests {
 	use frame_support::{
 		assert_noop, assert_ok, bounded_vec, dispatch::Dispatchable, traits::OffchainWorker,
 	};
-	use sp_npos_elections::{ElectionScore, IndexAssignment};
+	use sp_npos_elections::{ElectionScore};
 	use sp_runtime::{
 		offchain::storage_lock::{BlockAndTime, StorageLock},
 		traits::ValidateUnsigned,
 		ModuleError, PerU16, Perbill,
 	};
+	use frame_election_provider_support::IndexAssignment;
 
 	type Assignment = crate::unsigned::Assignment<Runtime>;
 
