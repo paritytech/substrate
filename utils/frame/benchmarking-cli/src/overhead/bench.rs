@@ -122,7 +122,7 @@ where
 		info!("Building block, this takes some time...");
 		let mut num_ext = 0;
 		for nonce in 0..self.max_ext_per_block() {
-			let ext = self.ext_builder.remark(nonce).ok_or("Could not build extrinsic")?;
+			let ext = self.ext_builder.remark(nonce)?;
 			match builder.push(ext.clone()) {
 				Ok(()) => {},
 				Err(ApplyExtrinsicFailed(Validity(TransactionValidityError::Invalid(

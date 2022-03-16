@@ -68,7 +68,7 @@ pub struct OverheadParams {
 /// who's parent block is the genesis block.
 pub trait ExtrinsicBuilder {
 	/// Build a `System::remark` extrinsic.
-	fn remark(&self, nonce: u32) -> Option<OpaqueExtrinsic>;
+	fn remark(&self, nonce: u32) -> std::result::Result<OpaqueExtrinsic, &'static str>;
 }
 
 impl OverheadCmd {

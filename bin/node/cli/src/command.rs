@@ -16,21 +16,14 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::{
-	chain_spec, service,
-	service::{create_extrinsic, new_partial, FullClient},
-	Cli, Subcommand,
-};
+use crate::{chain_spec, service, service::new_partial, Cli, Subcommand};
 use node_executor::ExecutorDispatch;
 use node_primitives::Block;
-use node_runtime::{RuntimeApi, SystemCall};
+use node_runtime::RuntimeApi;
 use sc_cli::{ChainSpec, Result, RuntimeVersion, SubstrateCli};
 use sc_service::PartialComponents;
-use sp_inherents::{InherentData, InherentDataProvider};
-use sp_keyring::Sr25519Keyring;
-use sp_runtime::OpaqueExtrinsic;
 
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 
 impl SubstrateCli for Cli {
 	fn impl_name() -> String {
@@ -79,39 +72,6 @@ impl SubstrateCli for Cli {
 	}
 }
 
-/// Generates extrinsics for the `overhead` benchmark.
-/// TODO I will move this into a different file once we agreed on the structure.
-struct ExtrinsicBuilder {
-	client: Arc<FullClient>,
-}
-
-impl frame_benchmarking_cli::ExtrinsicBuilder for ExtrinsicBuilder {
-	fn remark(&self, nonce: u32) -> Option<OpaqueExtrinsic> {
-		let acc = Sr25519Keyring::Bob.pair();
-		let extrinsic: OpaqueExtrinsic = create_extrinsic(
-			self.client.as_ref(),
-			acc,
-			SystemCall::remark { remark: vec![] },
-			Some(nonce),
-		)
-		.into();
-
-		Some(extrinsic)
-	}
-}
-
-/// Create the inherent data needed to build a block.
-fn inherent_data() -> Result<InherentData> {
-	let mut inherent_data = InherentData::new();
-	let d = Duration::from_millis(0);
-	let timestamp = sp_timestamp::InherentDataProvider::new(d.into());
-
-	timestamp
-		.provide_inherent_data(&mut inherent_data)
-		.map_err(|e| format!("creating inherent data: {:?}", e))?;
-	Ok(inherent_data)
-}
-
 /// Parse command line arguments into service configuration.
 pub fn run() -> Result<()> {
 	let cli = Cli::from_args();
@@ -141,23 +101,18 @@ pub fn run() -> Result<()> {
 		Some(Subcommand::BenchmarkOverhead(cmd)) => {
 			let runner = cli.create_runner(cmd)?;
 			runner.async_run(|mut config| {
-				// TODO 1. is this needed?
-				//      2. should other stuff be disabled as well?
+				use super::command_helper::{inherent_data, ExtrinsicBuilder};
+				// We don't use the authority role since that would start producing blocks
+				// in the background which would mess with our benchmark.
 				config.role = sc_service::Role::Full;
 
 				let PartialComponents { client, task_manager, .. } = new_partial(&config)?;
-				let ext_builder = ExtrinsicBuilder { client: client.clone() };
+				let ext_builder = ExtrinsicBuilder::new(client.clone());
 
 				Ok((cmd.run(config, client, inherent_data()?, Arc::new(ext_builder)), task_manager))
 			})
 		},
 		Some(Subcommand::BenchmarkStorage(cmd)) => {
-			if !cfg!(feature = "runtime-benchmarks") {
-				return Err("Benchmarking wasn't enabled when building the node. \
-				You can enable it with `--features runtime-benchmarks`."
-					.into())
-			}
-
 			let runner = cli.create_runner(cmd)?;
 			runner.async_run(|config| {
 				let PartialComponents { client, task_manager, backend, .. } = new_partial(&config)?;
