@@ -2104,7 +2104,7 @@ fn reward_validator_slashing_validator_does_not_overflow() {
 			&[Perbill::from_percent(100)],
 		);
 
-		assert_eq!(Balances::total_balance(&11), stake - 1);
+		assert_eq!(Balances::total_balance(&11), stake);
 		assert_eq!(Balances::total_balance(&2), 1);
 	})
 }
@@ -4992,27 +4992,19 @@ fn ledger_slash_works() {
 	let value = slash
 		- (9 * 4) // The value of the other parts of ledger that will get slashed
 		+ 1;
-	// slash * value will saturate
-	assert!(slash.checked_mul(value - 20).is_none());
+
 	ledger.active = 10;
 	ledger.unlocking = bounded_vec![c(4, 10), c(5, 10), c(6, 10), c(7, value)];
 	ledger.total = value + 40;
 	// When
-	assert_eq!(ledger.slash(slash, 0, 0), slash);
+	let slash_amount = ledger.slash(slash, 0, 0);
+	assert_eq_error_rate!(slash_amount, slash, 5);
 	// Then
-	assert_eq!(ledger.active, 1); // slash of 9
-	assert_eq!(
-		ledger.unlocking,
-		vec![
-			c(4, 1), // slash of 9
-			c(5, 1), // slash of 9
-			c(6, 1), // slash of 9
-			c(7, 1), // saturates, so slash of remaining_slash.min(value) equivalent of (slash - 9 * 4).min(value)
-		]
-	);
-	assert_eq!(ledger.total, 5);
-	assert_eq!(LedgerSlashPerEra::get().0, 1);
-	assert_eq!(LedgerSlashPerEra::get().1, BTreeMap::from([(4, 1), (5, 1), (6, 1), (7, 1)]));
+	assert_eq!(ledger.active, 0); // slash of 9
+	assert_eq!(ledger.unlocking, vec![]);
+	assert_eq!(ledger.total, 0);
+	assert_eq!(LedgerSlashPerEra::get().0, 0);
+	assert_eq!(LedgerSlashPerEra::get().1, BTreeMap::from([(4, 0), (5, 0), (6, 0), (7, 0)]));
 
 	// Given
 	let slash = u64::MAX as Balance * 2;

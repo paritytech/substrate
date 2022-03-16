@@ -310,7 +310,7 @@ use scale_info::TypeInfo;
 use sp_runtime::{
 	curve::PiecewiseLinear,
 	traits::{AtLeast32BitUnsigned, Convert, Saturating, Zero},
-	Perbill, RuntimeDebug,
+	Perbill, Perquintill, RuntimeDebug,
 };
 use sp_staking::{
 	offence::{Offence, OffenceError, ReportOffence},
@@ -338,8 +338,7 @@ macro_rules! log {
 pub type RewardPoint = u32;
 
 /// The balance type of this pallet.
-pub type BalanceOf<T> =
-	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
+pub type BalanceOf<T> = <T as Config>::CurrencyBalance;
 
 type PositiveImbalanceOf<T> = <<T as Config>::Currency as Currency<
 	<T as frame_system::Config>::AccountId,
@@ -560,9 +559,7 @@ impl<T: Config> StakingLedger<T> {
 		minimum_balance: BalanceOf<T>,
 		slash_era: EraIndex,
 	) -> BalanceOf<T> {
-		use sp_runtime::traits::CheckedMul as _;
 		use sp_staking::OnStakerSlash as _;
-		use sp_std::ops::Div as _;
 
 		if slash_amount.is_zero() {
 			return Zero::zero()
@@ -601,21 +598,18 @@ impl<T: Config> StakingLedger<T> {
 			}
 		};
 
-		let is_proportional_slash = slash_amount < affected_balance;
 		// Helper to update `target` and the ledgers total after accounting for slashing `target`.
 		// TODO: use PerThing
 		let mut slash_out_of = |target: &mut BalanceOf<T>, slash_remaining: &mut BalanceOf<T>| {
-			let maybe_numerator = slash_amount.checked_mul(target);
-			let mut slash_from_target = match (maybe_numerator, is_proportional_slash) {
-				// Equivalent to `(slash_amount / affected_balance) * target`.
-				(Some(numerator), true) => numerator.div(affected_balance),
-				// If the slash amount is gt than the affected balance OR the arithmetic to
-				// calculate the proportion saturated, we just try to slash as much as possible.
-				(None, _) | (_, false) => *slash_remaining,
+			let mut slash_from_target = if slash_amount < affected_balance {
+				let ratio = Perquintill::from_rational(slash_amount, affected_balance);
+				ratio * (*target)
+			} else {
+				*slash_remaining
 			}
 			.min(*target);
 
-			// finally, slash out from *target exactly `slash_from_target`.
+			// slash out from *target exactly `slash_from_target`.
 			*target = *target - slash_from_target;
 			if *target <= minimum_balance {
 				// Slash the rest of the target if its dust
