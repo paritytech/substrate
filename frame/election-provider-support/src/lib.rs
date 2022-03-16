@@ -196,7 +196,8 @@ pub trait ElectionDataProvider {
 	/// Maximum number of votes per voter that this data provider is providing.
 	type MaxVotesPerVoter: Get<u32>;
 
-	/// All possible targets for the election, i.e. the targets that could become elected, thus "electable".
+	/// All possible targets for the election, i.e. the targets that could become elected, thus
+	/// "electable".
 	///
 	/// If `maybe_max_len` is `Some(v)` then the resulting vector MUST NOT be longer than `v` items
 	/// long.
