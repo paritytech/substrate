@@ -1889,7 +1889,7 @@ where
 		// branch or we reach a direct child of the rollback point.
 		while weight_keys.insert(aux_schema::block_weight_key(hash)) {
 			let meta = client.header_metadata(hash)?;
-			if meta.number == number + One::one() {
+			if meta.number <= number + One::one() {
 				// We've reached a child of the revert point, stop here.
 				break
 			}
