@@ -460,7 +460,7 @@ frame_benchmarking::benchmarks! {
 			T::BenchmarkingConfig::DESIRED_TARGETS[1];
 		// Subtract this percentage from the actual encoded size
 		let f in 0 .. 95;
-		use frame_election_provider_support::{IndexAssignment};
+		use frame_election_provider_support::IndexAssignment;
 
 		// Compute a random solution, then work backwards to get the lists of voters, targets, and
 		// assignments
