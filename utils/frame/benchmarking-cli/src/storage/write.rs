@@ -66,6 +66,9 @@ impl StorageCmd {
 		for (k, original_v) in kvs.iter_mut() {
 			'retry: loop {
 				let mut new_v = vec![0; original_v.len()];
+				// Create a random value to overwrite with.
+				// NOTE: We use a possibly higher entropy than the original value,
+				// could be improved but acts as an over-estimation which is fine for now.
 				rng.fill_bytes(&mut new_v[..]);
 				let new_kv = vec![(k.as_ref(), Some(new_v.as_ref()))];
 				let (_, mut stx) = trie.storage_root(new_kv.iter().cloned(), self.state_version());
