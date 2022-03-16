@@ -77,7 +77,9 @@
 use scale_info::TypeInfo;
 use sp_arithmetic::{traits::Zero, Normalizable, PerThing, Rational128, ThresholdOrd};
 use sp_core::RuntimeDebug;
-use sp_std::{cell::RefCell, cmp::Ordering, collections::btree_map::BTreeMap, prelude::*, rc::Rc};
+use sp_std::{
+	cell::RefCell, cmp::Ordering, collections::btree_map::BTreeMap, prelude::*, rc::Rc, vec,
+};
 
 use codec::{Decode, Encode, MaxEncodedLen};
 #[cfg(feature = "std")]
@@ -116,9 +118,6 @@ pub use scale_info;
 pub use sp_arithmetic;
 #[doc(hidden)]
 pub use sp_std;
-
-// re-export the solution type macro.
-pub use sp_npos_elections_solution_type::generate_solution_type;
 
 /// The errors that might occur in the this crate and solution-type.
 #[derive(Eq, PartialEq, RuntimeDebug)]

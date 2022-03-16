@@ -185,26 +185,6 @@ pub trait TracksInfo<Balance, Moment> {
 	}
 }
 
-/// Indication of either a specific moment or a delay from a implicitly defined moment.
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
-pub enum AtOrAfter<Moment: Parameter> {
-	/// Indiciates that the event should occur at the moment given.
-	At(Moment),
-	/// Indiciates that the event should occur some period of time (defined by the parameter) after
-	/// a prior event. The prior event is defined by the context, but for the purposes of
-	/// referendum proposals, the "prior event" is the passing of the referendum.
-	After(Moment),
-}
-
-impl<Moment: AtLeast32BitUnsigned + Copy + Parameter> AtOrAfter<Moment> {
-	pub fn evaluate(&self, since: Moment) -> Moment {
-		match &self {
-			Self::At(m) => *m,
-			Self::After(m) => m.saturating_add(since),
-		}
-	}
-}
-
 /// Info regarding an ongoing referendum.
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct ReferendumStatus<
@@ -224,7 +204,7 @@ pub struct ReferendumStatus<
 	/// The hash of the proposal up for referendum.
 	pub(crate) proposal_hash: Hash,
 	/// The time the proposal should be scheduled for enactment.
-	pub(crate) enactment: AtOrAfter<Moment>,
+	pub(crate) enactment: DispatchTime<Moment>,
 	/// The time of submission. Once `UndecidingTimeout` passes, it may be closed by anyone if it
 	/// `deciding` is `None`.
 	pub(crate) submitted: Moment,
