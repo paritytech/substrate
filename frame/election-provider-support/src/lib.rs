@@ -168,18 +168,18 @@
 
 pub mod onchain;
 pub mod traits;
+use codec::{Decode, Encode};
 use frame_support::{traits::Get, BoundedVec, RuntimeDebug};
 use sp_runtime::traits::Bounded;
 use sp_std::{fmt::Debug, prelude::*};
-use codec::{Encode, Decode};
 
 /// Re-export the solution generation macro.
 pub use frame_election_provider_solution_type::generate_solution_type;
 /// Re-export some type as they are used in the interface.
 pub use sp_arithmetic::PerThing;
 pub use sp_npos_elections::{
-	Assignment, ElectionResult, Error, ExtendedBalance, IdentifierT, PerThing128,
-	Support, Supports, VoteWeight,
+	Assignment, ElectionResult, Error, ExtendedBalance, IdentifierT, PerThing128, Support,
+	Supports, VoteWeight,
 };
 pub use traits::NposSolution;
 
@@ -247,7 +247,6 @@ pub type IndexAssignmentOf<C> = IndexAssignment<
 	<C as NposSolution>::TargetIndex,
 	<C as NposSolution>::Accuracy,
 >;
-
 
 /// Types that are used by the data provider trait.
 pub mod data_provider {

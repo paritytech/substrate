@@ -17,7 +17,7 @@
 
 //! Traits for the npos-election operations.
 
-use crate::{ExtendedBalance};
+use crate::ExtendedBalance;
 use sp_arithmetic::PerThing;
 use sp_std::{fmt::Debug, ops::Mul, prelude::*};
 
