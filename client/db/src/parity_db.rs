@@ -113,7 +113,7 @@ impl<H: Clone + AsRef<[u8]>> Database<H> for DbAdapter {
 				if ref_counted_column(col) {
 					(col as u8, key.as_ref().to_vec(), None)
 				} else {
-					unimplemented!()
+					panic!("Change::Release is only used for ref counted columns")
 				},
 		})));
 
