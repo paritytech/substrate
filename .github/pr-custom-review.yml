@@ -1,0 +1,18 @@
+rules:
+  - name: Changed runtime files
+    condition: .*/runtime/.*lib.rs
+    check_type: changed_files
+    min_approvals: 2
+    teams:
+      - substrateteamleads
+
+  - name: Substrate developers
+    check_type: changed_files
+    condition: .*
+    any:
+      - min_approvals: 2
+        teams:
+          - core-devs
+      - min_approvals: 1
+        teams:
+          - substrateteamleads

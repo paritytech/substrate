@@ -18,7 +18,7 @@
 use codec::{Decode, Encode};
 use hash_db::{HashDB, Hasher};
 use scale_info::TypeInfo;
-use sp_std::vec::Vec;
+use sp_std::{collections::btree_set::BTreeSet, iter::IntoIterator, vec::Vec};
 // Note that `LayoutV1` usage here (proof compaction) is compatible
 // with `LayoutV0`.
 use crate::LayoutV1 as Layout;
@@ -32,13 +32,13 @@ use crate::LayoutV1 as Layout;
 /// the serialized nodes and performing the key lookups.
 #[derive(Debug, PartialEq, Eq, Clone, Encode, Decode, TypeInfo)]
 pub struct StorageProof {
-	trie_nodes: Vec<Vec<u8>>,
+	trie_nodes: BTreeSet<Vec<u8>>,
 }
 
 impl StorageProof {
 	/// Constructs a storage proof from a subset of encoded trie nodes in a storage backend.
-	pub fn new(trie_nodes: Vec<Vec<u8>>) -> Self {
-		StorageProof { trie_nodes }
+	pub fn new(trie_nodes: impl IntoIterator<Item = Vec<u8>>) -> Self {
+		StorageProof { trie_nodes: BTreeSet::from_iter(trie_nodes) }
 	}
 
 	/// Returns a new empty proof.
@@ -46,7 +46,7 @@ impl StorageProof {
 	/// An empty proof is capable of only proving trivial statements (ie. that an empty set of
 	/// key-value pairs exist in storage).
 	pub fn empty() -> Self {
-		StorageProof { trie_nodes: Vec::new() }
+		StorageProof { trie_nodes: BTreeSet::new() }
 	}
 
 	/// Returns whether this is an empty proof.
@@ -54,14 +54,14 @@ impl StorageProof {
 		self.trie_nodes.is_empty()
 	}
 
-	/// Create an iterator over trie nodes constructed from the proof. The nodes are not guaranteed
-	/// to be traversed in any particular order.
+	/// Create an iterator over encoded trie nodes in lexicographical order constructed
+	/// from the proof.
 	pub fn iter_nodes(self) -> StorageProofNodeIterator {
 		StorageProofNodeIterator::new(self)
 	}
 
 	/// Convert into plain node vector.
-	pub fn into_nodes(self) -> Vec<Vec<u8>> {
+	pub fn into_nodes(self) -> BTreeSet<Vec<u8>> {
 		self.trie_nodes
 	}
 
@@ -138,12 +138,13 @@ impl CompactProof {
 			expected_root,
 		)?;
 		Ok((
-			StorageProof::new(
-				db.drain()
-					.into_iter()
-					.filter_map(|kv| if (kv.1).1 > 0 { Some((kv.1).0) } else { None })
-					.collect(),
-			),
+			StorageProof::new(db.drain().into_iter().filter_map(|kv| {
+				if (kv.1).1 > 0 {
+					Some((kv.1).0)
+				} else {
+					None
+				}
+			})),
 			root,
 		))
 	}
@@ -171,7 +172,7 @@ impl CompactProof {
 /// An iterator over trie nodes constructed from a storage proof. The nodes are not guaranteed to
 /// be traversed in any particular order.
 pub struct StorageProofNodeIterator {
-	inner: <Vec<Vec<u8>> as IntoIterator>::IntoIter,
+	inner: <BTreeSet<Vec<u8>> as IntoIterator>::IntoIter,
 }
 
 impl StorageProofNodeIterator {

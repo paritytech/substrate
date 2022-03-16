@@ -38,18 +38,18 @@ macro_rules! defensive {
 		frame_support::log::error!(
 			target: "runtime",
 			"{}",
-			$crate::traits::misc::DEFENSIVE_OP_PUBLIC_ERROR
+			$crate::traits::DEFENSIVE_OP_PUBLIC_ERROR
 		);
-		debug_assert!(false, "{}", $crate::traits::misc::DEFENSIVE_OP_INTERNAL_ERROR);
+		debug_assert!(false, "{}", $crate::traits::DEFENSIVE_OP_INTERNAL_ERROR);
 	};
 	($error:tt) => {
 		frame_support::log::error!(
 			target: "runtime",
 			"{}: {:?}",
-			$crate::traits::misc::DEFENSIVE_OP_PUBLIC_ERROR,
+			$crate::traits::DEFENSIVE_OP_PUBLIC_ERROR,
 			$error
 		);
-		debug_assert!(false, "{}: {:?}", $crate::traits::misc::DEFENSIVE_OP_INTERNAL_ERROR, $error);
+		debug_assert!(false, "{}: {:?}", $crate::traits::DEFENSIVE_OP_INTERNAL_ERROR, $error);
 	}
 }
 
