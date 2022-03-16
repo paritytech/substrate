@@ -86,61 +86,63 @@ pub fn open<H: Clone + AsRef<[u8]>>(
 	Ok(std::sync::Arc::new(DbAdapter(db)))
 }
 
+fn ref_counted_column(col: u32) -> bool {
+	col == columns::TRANSACTION || col == columns::STATE
+}
+
 impl<H: Clone + AsRef<[u8]>> Database<H> for DbAdapter {
 	fn commit(&self, transaction: Transaction<H>) -> Result<(), DatabaseError> {
-		handle_err(self.0.commit(transaction.0.into_iter().map(|change| match change {
-			Change::Set(col, key, value) => (col as u8, key, Some(value)),
-			Change::Remove(col, key) => (col as u8, key, None),
-			Change::Reference(col, key) => {
-				if let (counter_key, Some(mut counter)) = self.read_counter(col, key.as_ref())? {
-					counter += 1;
-					tx.put(col, &counter_key, &counter.to_le_bytes());
-				}
-			},
-			Change::Release(col, key) => {
-				if let (counter_key, Some(mut counter)) = self.read_counter(col, key.as_ref())? {
-					counter -= 1;
-					if counter == 0 {
-						tx.delete(col, &counter_key);
-						tx.delete(col, key.as_ref());
+		handle_err(self.0.commit(transaction.0.into_iter().filter_map(|change| {
+			Some(match change {
+				Change::Set(col, key, value) => (col as u8, key, Some(value)),
+				Change::Remove(col, key) => (col as u8, key, None),
+				Change::Store(col, key, value) =>
+					if ref_counted_column(col) {
+						(col as u8, key, Some(value))
 					} else {
-						tx.put(col, &counter_key, &counter.to_le_bytes());
-					}
-				}
-			},
-			Change::Store(col, key, value) =>
-				match sp_database::read_external_counter::<H, _>(&*self, col, key.as_ref())? {
-					(counter_key, Some(mut counter)) => {
+						match sp_database::read_external_counter::<H, _>(&*self, col, key.as_ref())?
+						{
+							(counter_key, Some(mut counter)) => {
+								counter += 1;
+								(col, &counter_key, &counter.to_le_bytes());
+							},
+							(counter_key, None) => {
+								let d = 1u32.to_le_bytes();
+								(col, &counter_key, Some(&d))(col, key.as_ref(), Some(value))
+							},
+						}
+					},
+				Change::Reference(col, key) =>
+					if ref_counted_column(col) {
+						// FIXME this need to be optimize in parity-db.
+						if let Some(value) = self.get(col, key) {
+							(col as u8, key, Some(&value))
+						} else {
+							return None
+						}
+					} else if let (counter_key, Some(mut counter)) =
+						sp_database::read_external_counter::<H, _>(&*self, col, key.as_ref())?
+					{
 						counter += 1;
-						tx.put(col, &counter_key, &counter.to_le_bytes());
-					},
-					(counter_key, None) => {
-						let d = 1u32.to_le_bytes();
-						tx.put(col, &counter_key, &d);
-						tx.put_vec(col, key.as_ref(), value);
-					},
-				},
-			Change::Reference(col, key) => {
-				if let (counter_key, Some(mut counter)) =
-					sp_database::read_external_counter::<H, _>(&*self, col, key.as_ref())?
-				{
-					counter += 1;
-					tx.put(col, &counter_key, &counter.to_le_bytes());
-				}
-			},
-			Change::Release(col, key) => {
-				if let (counter_key, Some(mut counter)) =
-					sp_database::read_external_counter::<H, _>(&*self, col, key.as_ref())?
-				{
-					counter -= 1;
-					if counter == 0 {
-						tx.delete(col, &counter_key);
-						tx.delete(col, key.as_ref());
+						(col, &counter_key, Some(&counter.to_le_bytes()));
 					} else {
-						tx.put(col, &counter_key, &counter.to_le_bytes());
-					}
-				}
-			},
+						return None
+					},
+				Change::Release(col, key) =>
+					if ref_counted_column(col) {
+						(col as u8, key, None)
+					} else if let (counter_key, Some(mut counter)) =
+						sp_database::read_external_counter::<H, _>(&*self, col, key.as_ref())?
+					{
+						counter -= 1;
+						if counter == 0 {
+// TODO rem key							(col, &counter_key, None)
+							(col, key.as_ref(), None)
+						} else {
+							(col, &counter_key, Some(&counter.to_le_bytes()))
+						}
+					},
+			})
 		})));
 
 		Ok(())
