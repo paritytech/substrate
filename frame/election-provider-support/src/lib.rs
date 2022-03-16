@@ -264,38 +264,6 @@ pub trait ElectionDataProvider {
 	fn clear() {}
 }
 
-<<<<<<< HEAD
-// TODO: [now] this isn't practically useful, we require the dataprovider for staking's election
-// provider to be the staking pallet
-/// An election data provider that should only be used for testing.
-#[cfg(feature = "std")]
-pub struct TestDataProvider<X>(sp_std::marker::PhantomData<X>);
-
-#[cfg(feature = "std")]
-impl<AccountId, BlockNumber> ElectionDataProvider for TestDataProvider<(AccountId, BlockNumber)> {
-	type AccountId = AccountId;
-	type BlockNumber = BlockNumber;
-	type MaxVotesPerVoter = ();
-
-	fn targets(_maybe_max_len: Option<usize>) -> data_provider::Result<Vec<AccountId>> {
-		Ok(Default::default())
-	}
-
-	fn voters(_maybe_max_len: Option<usize>) -> data_provider::Result<Vec<VoterOf<Self>>> {
-		Ok(Default::default())
-	}
-
-	fn desired_targets() -> data_provider::Result<u32> {
-		Ok(Default::default())
-	}
-
-	fn next_election_prediction(now: BlockNumber) -> BlockNumber {
-		now
-	}
-}
-
-=======
->>>>>>> 499acc0e31e06dee9110a9cc169cd7c52f500b10
 /// Something that can compute the result of an election and pass it back to the caller.
 ///
 /// This trait only provides an interface to _request_ an election, i.e.
