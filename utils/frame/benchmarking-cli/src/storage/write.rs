@@ -96,12 +96,12 @@ impl StorageCmd {
 			let replace = vec![(k.as_ref(), Some(new_v.as_ref()))];
 			let (_, stx) = trie.storage_root(replace.iter().cloned(), self.state_version());
 			// Only the keep the insertions, since we do not want to benchmark pruning.
-			let tx = convert_tx::<Block>(db.clone(), stx.clone(), true, state_col);
+			let tx = convert_tx::<Block>(db.clone(), stx.clone(), false, state_col);
 			db.commit(tx).map_err(|e| format!("Writing to the Database: {}", e))?;
 			record.append(new_v.len(), start.elapsed())?;
 
 			// Now undo the changes by removing what was added.
-			let tx = convert_tx::<Block>(db.clone(), stx.clone(), false, state_col);
+			let tx = convert_tx::<Block>(db.clone(), stx.clone(), true, state_col);
 			db.commit(tx).map_err(|e| format!("Writing to the Database: {}", e))?;
 		}
 		Ok(record)
@@ -123,9 +123,9 @@ fn convert_tx<B: BlockT>(
 		if rc > 0 {
 			db.sanitize_key(&mut k);
 			if invert_inserts {
-				ret.set(col, &k, &v);
-			} else {
 				ret.remove(col, &k);
+			} else {
+				ret.set(col, &k, &v);
 			}
 		}
 		// < 0 means removal - ignored.
