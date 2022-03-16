@@ -1868,15 +1868,26 @@ mod tests {
 
 	#[test]
 	fn origin_returns_proper_values() {
-		let code_bob = MockLoader::insert(Call, |ctx, _| {
+		let code_charlie = MockLoader::insert(Call, |ctx, _| {
+			// BOB is caller but not the origin of the stack call
+			assert_ne!(ctx.ext.origin(), &BOB);
+			// ALICE is the origin of the call stack
 			assert_eq!(ctx.ext.origin(), &ALICE);
 			exec_success()
+		});
+
+		let code_bob = MockLoader::insert(Call, |ctx, _| {
+			// ALICE is the origin of the call stack
+			assert_eq!(ctx.ext.origin(), &ALICE);
+			// BOB calls CHARLIE
+			ctx.ext.call(0, CHARLIE, 0, vec![], true)
 		});
 		ExtBuilder::default().build().execute_with(|| {
 			let schedule = <Test as Config>::Schedule::get();
 			place_contract(&BOB, code_bob);
+			place_contract(&CHARLIE, code_charlie);
 			let mut storage_meter = storage::meter::Meter::new(&ALICE, Some(0), 0).unwrap();
-			// ALICE -> BOB: (origin is ALICE)
+			// ALICE -> BOB: (origin is ALICE) -> CHARLIE (origin is still ALICE)
 			let result = MockStack::run_call(
 				ALICE,
 				BOB,
