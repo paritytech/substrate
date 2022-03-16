@@ -262,7 +262,7 @@ mod tests {
 		},
 		gas::GasMeter,
 		storage::WriteOutcome,
-		tests::{Call, Test, ALICE, BOB},
+		tests::{Call, Test, ALICE, BOB, HASH},
 		BalanceOf, CodeHash, Error, Pallet as Contracts,
 	};
 	use assert_matches::assert_matches;
@@ -442,7 +442,7 @@ mod tests {
 			Some(H256::from_slice(&[0x11; 32]))
 		}
 		fn own_code_hash(&mut self) -> &CodeHash<Self::T> {
-			H256::repeat_byte(0x10);
+			&HASH
 		}
 		fn caller_is_origin(&self) -> bool {
 			false
