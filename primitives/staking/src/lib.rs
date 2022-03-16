@@ -37,12 +37,12 @@ pub trait OnStakerSlash<AccountId, Balance> {
 	/// # Arguments
 	///
 	/// * `stash` - The stash of the staker whom the slash was applied to.
-	/// * `slashed_bonded` - The new bonded balance of the staker after the slash was applied.
-	/// * `slashed_unlocking` - A map from eras that the staker is unbonding in to the new balance
-	///   after the slash was applied.
+	/// * `slashed_active` - The new bonded balance of the staker after the slash was applied.
+	/// * `slashed_unlocking` - a map of slashed eras, and the balance of that unlocking chunk after
+	///   the slash is applied. Any era not present in the map is not affected at all.
 	fn on_slash(
 		stash: &AccountId,
-		slashed_bonded: Balance,
+		slashed_active: Balance,
 		slashed_unlocking: &BTreeMap<EraIndex, Balance>,
 	);
 }

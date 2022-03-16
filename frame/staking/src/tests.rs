@@ -1257,7 +1257,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 				stash: 11,
 				total: 1000 + 100,
 				active: 100,
-				unlocking: bounded_vec![UnlockChunk { value: 1000, era: 2 + 3 }],
+				unlocking: bounded_vec![UnlockChunk { value: 1000, unlock_era: 2 + 3 }],
 				claimed_rewards: vec![]
 			}),
 		);
@@ -1270,7 +1270,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 				stash: 11,
 				total: 1000 + 100,
 				active: 100,
-				unlocking: bounded_vec![UnlockChunk { value: 1000, era: 2 + 3 }],
+				unlocking: bounded_vec![UnlockChunk { value: 1000, unlock_era: 2 + 3 }],
 				claimed_rewards: vec![]
 			}),
 		);
@@ -1286,7 +1286,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 				stash: 11,
 				total: 1000 + 100,
 				active: 100,
-				unlocking: bounded_vec![UnlockChunk { value: 1000, era: 2 + 3 }],
+				unlocking: bounded_vec![UnlockChunk { value: 1000, unlock_era: 2 + 3 }],
 				claimed_rewards: vec![]
 			}),
 		);
@@ -1391,7 +1391,7 @@ fn rebond_works() {
 				stash: 11,
 				total: 1000,
 				active: 100,
-				unlocking: bounded_vec![UnlockChunk { value: 900, era: 2 + 3 }],
+				unlocking: bounded_vec![UnlockChunk { value: 900, unlock_era: 2 + 3 }],
 				claimed_rewards: vec![],
 			})
 		);
@@ -1417,7 +1417,7 @@ fn rebond_works() {
 				stash: 11,
 				total: 1000,
 				active: 100,
-				unlocking: bounded_vec![UnlockChunk { value: 900, era: 5 }],
+				unlocking: bounded_vec![UnlockChunk { value: 900, unlock_era: 5 }],
 				claimed_rewards: vec![],
 			})
 		);
@@ -1430,7 +1430,7 @@ fn rebond_works() {
 				stash: 11,
 				total: 1000,
 				active: 600,
-				unlocking: bounded_vec![UnlockChunk { value: 400, era: 5 }],
+				unlocking: bounded_vec![UnlockChunk { value: 400, unlock_era: 5 }],
 				claimed_rewards: vec![],
 			})
 		);
@@ -1458,7 +1458,7 @@ fn rebond_works() {
 				stash: 11,
 				total: 1000,
 				active: 100,
-				unlocking: bounded_vec![UnlockChunk { value: 900, era: 5 }],
+				unlocking: bounded_vec![UnlockChunk { value: 900, unlock_era: 5 }],
 				claimed_rewards: vec![],
 			})
 		);
@@ -1471,7 +1471,7 @@ fn rebond_works() {
 				stash: 11,
 				total: 1000,
 				active: 600,
-				unlocking: bounded_vec![UnlockChunk { value: 400, era: 5 }],
+				unlocking: bounded_vec![UnlockChunk { value: 400, unlock_era: 5 }],
 				claimed_rewards: vec![],
 			})
 		);
@@ -1513,7 +1513,7 @@ fn rebond_is_fifo() {
 				stash: 11,
 				total: 1000,
 				active: 600,
-				unlocking: bounded_vec![UnlockChunk { value: 400, era: 2 + 3 }],
+				unlocking: bounded_vec![UnlockChunk { value: 400, unlock_era: 2 + 3 }],
 				claimed_rewards: vec![],
 			})
 		);
@@ -1529,8 +1529,8 @@ fn rebond_is_fifo() {
 				total: 1000,
 				active: 300,
 				unlocking: bounded_vec![
-					UnlockChunk { value: 400, era: 2 + 3 },
-					UnlockChunk { value: 300, era: 3 + 3 },
+					UnlockChunk { value: 400, unlock_era: 2 + 3 },
+					UnlockChunk { value: 300, unlock_era: 3 + 3 },
 				],
 				claimed_rewards: vec![],
 			})
@@ -1547,9 +1547,9 @@ fn rebond_is_fifo() {
 				total: 1000,
 				active: 100,
 				unlocking: bounded_vec![
-					UnlockChunk { value: 400, era: 2 + 3 },
-					UnlockChunk { value: 300, era: 3 + 3 },
-					UnlockChunk { value: 200, era: 4 + 3 },
+					UnlockChunk { value: 400, unlock_era: 2 + 3 },
+					UnlockChunk { value: 300, unlock_era: 3 + 3 },
+					UnlockChunk { value: 200, unlock_era: 4 + 3 },
 				],
 				claimed_rewards: vec![],
 			})
@@ -1564,8 +1564,8 @@ fn rebond_is_fifo() {
 				total: 1000,
 				active: 500,
 				unlocking: bounded_vec![
-					UnlockChunk { value: 400, era: 2 + 3 },
-					UnlockChunk { value: 100, era: 3 + 3 },
+					UnlockChunk { value: 400, unlock_era: 2 + 3 },
+					UnlockChunk { value: 100, unlock_era: 3 + 3 },
 				],
 				claimed_rewards: vec![],
 			})
@@ -1595,7 +1595,7 @@ fn rebond_emits_right_value_in_event() {
 				stash: 11,
 				total: 1000,
 				active: 100,
-				unlocking: bounded_vec![UnlockChunk { value: 900, era: 1 + 3 }],
+				unlocking: bounded_vec![UnlockChunk { value: 900, unlock_era: 1 + 3 }],
 				claimed_rewards: vec![],
 			})
 		);
@@ -1608,7 +1608,7 @@ fn rebond_emits_right_value_in_event() {
 				stash: 11,
 				total: 1000,
 				active: 200,
-				unlocking: bounded_vec![UnlockChunk { value: 800, era: 1 + 3 }],
+				unlocking: bounded_vec![UnlockChunk { value: 800, unlock_era: 1 + 3 }],
 				claimed_rewards: vec![],
 			})
 		);
@@ -1839,7 +1839,7 @@ fn bond_with_no_staked_value() {
 					stash: 1,
 					active: 0,
 					total: 5,
-					unlocking: bounded_vec![UnlockChunk { value: 5, era: 3 }],
+					unlocking: bounded_vec![UnlockChunk { value: 5, unlock_era: 3 }],
 					claimed_rewards: vec![],
 				})
 			);
@@ -3919,7 +3919,7 @@ fn cannot_rebond_to_lower_than_ed() {
 					stash: 21,
 					total: 10 * 1000,
 					active: 0,
-					unlocking: bounded_vec![UnlockChunk { value: 10 * 1000, era: 3 }],
+					unlocking: bounded_vec![UnlockChunk { value: 10 * 1000, unlock_era: 3 }],
 					claimed_rewards: vec![]
 				}
 			);
@@ -3956,7 +3956,7 @@ fn cannot_bond_extra_to_lower_than_ed() {
 					stash: 21,
 					total: 10 * 1000,
 					active: 0,
-					unlocking: bounded_vec![UnlockChunk { value: 10 * 1000, era: 3 }],
+					unlocking: bounded_vec![UnlockChunk { value: 10 * 1000, unlock_era: 3 }],
 					claimed_rewards: vec![]
 				}
 			);
@@ -4804,7 +4804,7 @@ fn force_apply_min_commission_works() {
 
 #[test]
 fn ledger_slash_works() {
-	let c = |era, value| UnlockChunk::<Balance> { era, value };
+	let c = |unlock_era, value| UnlockChunk::<Balance> { unlock_era, value };
 	// Given
 	let mut ledger = StakingLedger::<Test> {
 		stash: 123,
@@ -4840,7 +4840,7 @@ fn ledger_slash_works() {
 	// When all the chunks overlap with the slash eras
 	assert_eq!(ledger.slash(20, 0, 0), 20);
 	// Then
-	assert_eq!(ledger.unlocking, vec![c(4, 0), c(5, 0)]);
+	assert_eq!(ledger.unlocking, vec![]);
 	assert_eq!(ledger.total, 0);
 	assert_eq!(LedgerSlashPerEra::get().0, 0);
 	assert_eq!(LedgerSlashPerEra::get().1, BTreeMap::from([(4, 0), (5, 0)]));
@@ -4848,8 +4848,9 @@ fn ledger_slash_works() {
 	// Given
 	ledger.unlocking = bounded_vec![c(4, 40), c(5, 100), c(6, 10), c(7, 250)];
 	ledger.active = 500;
-	ledger.total = 40 + 10 + 100 + 250 + 500; // 900
-										  // When we have a partial slash that touches all chunks
+	// 900
+	ledger.total = 40 + 10 + 100 + 250 + 500;
+	// When we have a partial slash that touches all chunks
 	assert_eq!(ledger.slash(900 / 2, 0, 0), 450);
 	// Then
 	assert_eq!(ledger.active, 500 / 2);
@@ -4860,6 +4861,35 @@ fn ledger_slash_works() {
 		LedgerSlashPerEra::get().1,
 		BTreeMap::from([(4, 40 / 2), (5, 100 / 2), (6, 10 / 2), (7, 250 / 2)])
 	);
+
+	// slash 1/4th with not chunk.
+	ledger.unlocking = bounded_vec![];
+	ledger.active = 500;
+	ledger.total = 500;
+	// When we have a partial slash that touches all chunks
+	assert_eq!(ledger.slash(500 / 4, 0, 0), 500 / 4);
+	// Then
+	assert_eq!(ledger.active, 3 * 500 / 4);
+	assert_eq!(ledger.unlocking, vec![]);
+	assert_eq!(ledger.total, ledger.active);
+	assert_eq!(LedgerSlashPerEra::get().0, 3 * 500 / 4);
+	assert_eq!(LedgerSlashPerEra::get().1, Default::default());
+
+	// // slash 1/4th with chunks
+	// ledger.unlocking = bounded_vec![c(4, 40), c(5, 120), c(6, 80)];
+	// ledger.active = 120;
+	// ledger.total = 40 + 120 + 80 + 120; // 240
+	// // When we have a partial slash that touches all chunks
+	// assert_eq!(ledger.slash(240 / 4, 0, 0), 2 / 4 - 1);
+	// // Then
+	// assert_eq!(ledger.unlocking, vec![c(4, 3 * 40 / 4), c(5, 3 * 120 / 4), c(6, 3 * 80 / 4)]);
+	// assert_eq!(ledger.active, 3 * 120 / 4);
+	// assert_eq!(ledger.total, 3 * 240 / 4 + 1);
+	// assert_eq!(LedgerSlashPerEra::get().0, 3 * 240 / 4);
+	// assert_eq!(
+	// 	LedgerSlashPerEra::get().1,
+	// 	BTreeMap::from([(4, 3 * 40 / 4), (5, 3 * 80 / 4), (6, 3 * 120 / 4)])
+	// );
 
 	// Given we have the same as above,
 	ledger.unlocking = bounded_vec![c(4, 40), c(5, 100), c(6, 10), c(7, 250)];
@@ -4876,10 +4906,10 @@ fn ledger_slash_works() {
 		),
 		475
 	);
-	// Then
+	let dust = (10 / 2) + (40 / 2);
 	assert_eq!(ledger.active, 500 / 2);
-	assert_eq!(ledger.unlocking, vec![c(4, 0), c(5, 100 / 2), c(6, 0), c(7, 250 / 2)]);
-	assert_eq!(ledger.total, 425);
+	assert_eq!(ledger.unlocking, vec![c(5, 100 / 2), c(7, 250 / 2)]);
+	assert_eq!(ledger.total, 900 / 2 - dust);
 	assert_eq!(LedgerSlashPerEra::get().0, 500 / 2);
 	assert_eq!(
 		LedgerSlashPerEra::get().1,
@@ -4890,7 +4920,6 @@ fn ledger_slash_works() {
 	ledger.unlocking = bounded_vec![c(4, 40), c(5, 100), c(6, 10), c(7, 250)];
 	ledger.active = 500;
 	ledger.total = 40 + 10 + 100 + 250 + 500; // 900
-										  // When
 	assert_eq!(
 		ledger.slash(
 			900 / 2,
@@ -4902,7 +4931,7 @@ fn ledger_slash_works() {
 	);
 	// Then
 	assert_eq!(ledger.active, 500 / 2);
-	assert_eq!(ledger.unlocking, vec![c(4, 0), c(5, 100 / 2), c(6, 0), c(7, 250 / 2)]);
+	assert_eq!(ledger.unlocking, vec![c(5, 100 / 2), c(7, 250 / 2)]);
 	assert_eq!(ledger.total, 425);
 	assert_eq!(LedgerSlashPerEra::get().0, 500 / 2);
 	assert_eq!(
@@ -4911,10 +4940,10 @@ fn ledger_slash_works() {
 	);
 
 	// Given
+	// slash order --------------------NA--------2----------0----------1----
 	ledger.unlocking = bounded_vec![c(4, 40), c(5, 100), c(6, 10), c(7, 250)];
 	ledger.active = 500;
 	ledger.total = 40 + 10 + 100 + 250 + 500; // 900
-										  // When
 	assert_eq!(
 		ledger.slash(
 			500 + 10 + 250 + 100 / 2, // active + era 6 + era 7 + era 5 / 2
@@ -4927,13 +4956,13 @@ fn ledger_slash_works() {
 	);
 	// Then
 	assert_eq!(ledger.active, 0);
-	// iteration order ------------------NA----------2-------------0--------1----
-	assert_eq!(ledger.unlocking, vec![c(4, 40), c(5, 100 / 2), c(6, 0), c(7, 0)]);
+	assert_eq!(ledger.unlocking, vec![c(4, 40), c(5, 100 / 2)]);
 	assert_eq!(ledger.total, 90);
 	assert_eq!(LedgerSlashPerEra::get().0, 0);
 	assert_eq!(LedgerSlashPerEra::get().1, BTreeMap::from([(5, 100 / 2), (6, 0), (7, 0)]));
 
 	// Given
+	// iteration order------------------NA---------2----------0----------1----
 	ledger.unlocking = bounded_vec![c(4, 100), c(5, 100), c(6, 100), c(7, 100)];
 	ledger.active = 100;
 	ledger.total = 5 * 100;
@@ -4950,8 +4979,7 @@ fn ledger_slash_works() {
 	);
 	// Then
 	assert_eq!(ledger.active, 0);
-	// iteration order ------------------NA---------2--------0--------1----
-	assert_eq!(ledger.unlocking, vec![c(4, 100), c(5, 0), c(6, 0), c(7, 0)]);
+	assert_eq!(ledger.unlocking, vec![c(4, 100)]);
 	//------goes to min balance and then gets dusted^^^
 	assert_eq!(ledger.total, 100);
 	assert_eq!(LedgerSlashPerEra::get().0, 0);

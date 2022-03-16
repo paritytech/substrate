@@ -302,7 +302,7 @@ mod pallet;
 use codec::{Decode, Encode, HasCompact};
 use frame_support::{
 	parameter_types,
-	traits::{Currency, Get},
+	traits::{Currency, Defensive, Get},
 	weights::Weight,
 	BoundedVec, EqNoBound, PartialEqNoBound, RuntimeDebugNoBound,
 };
@@ -435,7 +435,7 @@ pub struct UnlockChunk<Balance: HasCompact> {
 	value: Balance,
 	/// Era number at which point it'll be unlocked.
 	#[codec(compact)]
-	era: EraIndex,
+	unlock_era: EraIndex,
 }
 
 /// The ledger of a (bonded) stash.
@@ -481,7 +481,7 @@ impl<T: Config> StakingLedger<T> {
 			.unlocking
 			.into_iter()
 			.filter(|chunk| {
-				if chunk.era > current_era {
+				if chunk.unlock_era > current_era {
 					true
 				} else {
 					total = total.saturating_sub(chunk.value);
@@ -530,31 +530,30 @@ impl<T: Config> StakingLedger<T> {
 		(self, unlocking_balance)
 	}
 
-	/// Slash the staker for a given amount of balance. This can grow the value
-	/// of the slash in the case that either the active bonded or some unlocking chunks become dust
-	/// after slashing. Returns the amount of funds actually slashed.
+	/// Slash the staker for a given amount of balance. This can grow the value of the slash in the
+	/// case that either the active bonded or some unlocking chunks become dust after slashing.
+	/// Returns the amount of funds actually slashed.
 	///
 	/// Note that this calls `Config::OnStakerSlash::on_slash` with information as to how the slash
 	/// was applied.
-	///
-	/// Generally slashes are computed by:
-	///
-	/// 1) Balances of the unlocking chunks in range `slash_era + 1..=apply_era` are summed and
-	/// stored in `total_balance_affected`.
-	///
-	/// 2) `slash_ratio` is computed as `slash_amount / total_balance_affected`.
-	///
-	/// 3) `Ledger::active` is set to `(1- slash_ratio) * Ledger::active`.
-	///
-	/// 4) For all unlocking chunks created in range `slash_era + 1..=apply_era` set their balance
-	/// to `(1 - slash_ratio) * unbonding_pool_balance`. We start with slash_era + 1, because that
-	/// is the earliest the active sake while slash could be unbonded.
-	///
-	/// 5) Slash any remaining slash amount from the remaining chunks, starting with the `slash_era`
-	/// and going backwards.
-	///
-	/// There are some edge cases due to saturating arithmetic - see logic below and tests for
-	/// details.
+	// Generally slashes are computed by:
+	//
+	// 1) Balances of the unlocking chunks in range `slash_era + 1..=apply_era` are summed and
+	// stored in `total_balance_affected`.
+	//
+	// 2) `slash_ratio` is computed as `slash_amount / total_balance_affected`.
+	//
+	// 3) `Ledger::active` is set to `(1- slash_ratio) * Ledger::active`.
+	//
+	// 4) For all unlocking chunks created in range `slash_era + 1..=apply_era` set their balance
+	// to `(1 - slash_ratio) * unbonding_pool_balance`. We start with slash_era + 1, because that
+	// is the earliest the active sake while slash could be unbonded.
+	//
+	// 5) Slash any remaining slash amount from the remaining chunks, starting with the `slash_era`
+	// and going backwards.
+	//
+	// There are some edge cases due to saturating arithmetic - see logic below and tests for
+	// details.
 	fn slash(
 		&mut self,
 		slash_amount: BalanceOf<T>,
@@ -564,6 +563,7 @@ impl<T: Config> StakingLedger<T> {
 		use sp_runtime::traits::CheckedMul as _;
 		use sp_staking::OnStakerSlash as _;
 		use sp_std::ops::Div as _;
+
 		if slash_amount.is_zero() {
 			return Zero::zero()
 		}
@@ -572,77 +572,80 @@ impl<T: Config> StakingLedger<T> {
 		let pre_slash_total = self.total;
 
 		let era_after_slash = slash_era + 1;
-		// When a user unbonds, the chunk is given the era `current_era + BondingDuration`. See
-		// logic in [`Self::unbond`].
-		let era_of_chunks_created_after_slash = era_after_slash + T::BondingDuration::get();
-		let start_index =
-			self.unlocking.partition_point(|c| c.era < era_of_chunks_created_after_slash);
-		// The indices of the first chunk after the slash up through the most recent chunk.
-		// (The most recent chunk is at greatest from this era)
-		let affected_indices = start_index..self.unlocking.len();
+		// TODO: test to make sure chunks before the slash are never slashed.
+		// at this era onwards, the funds can be slashed.
+		let chunk_unlock_era_after_slash = era_after_slash + T::BondingDuration::get();
 
 		// Calculate the total balance of active funds and unlocking funds in the affected range.
-		let affected_balance = {
-			let unbonding_affected_balance =
-				affected_indices.clone().fold(BalanceOf::<T>::zero(), |sum, i| {
-					if let Some(chunk) = self.unlocking.get_mut(i) {
-						sum.saturating_add(chunk.value)
-					} else {
-						sum
-					}
-				});
-			self.active.saturating_add(unbonding_affected_balance)
+		let (affected_balance, slash_chunks_priority): (_, Box<dyn Iterator<Item = usize>>) = {
+			if let Some(start_index) =
+				self.unlocking.iter().position(|c| c.unlock_era >= chunk_unlock_era_after_slash)
+			{
+				// The indices of the first chunk after the slash up through the most recent chunk.
+				// (The most recent chunk is at greatest from this era)
+				let affected_indices = start_index..self.unlocking.len();
+				let unbonding_affected_balance =
+					affected_indices.clone().fold(BalanceOf::<T>::zero(), |sum, i| {
+						if let Some(chunk) = self.unlocking.get_mut(i).defensive() {
+							sum.saturating_add(chunk.value)
+						} else {
+							sum
+						}
+					});
+				(
+					self.active.saturating_add(unbonding_affected_balance),
+					Box::new(affected_indices.chain((0..start_index).rev())),
+				)
+			} else {
+				(self.active, Box::new((0..self.unlocking.len()).rev()))
+			}
 		};
 
 		let is_proportional_slash = slash_amount < affected_balance;
 		// Helper to update `target` and the ledgers total after accounting for slashing `target`.
+		// TODO: use PerThing
 		let mut slash_out_of = |target: &mut BalanceOf<T>, slash_remaining: &mut BalanceOf<T>| {
 			let maybe_numerator = slash_amount.checked_mul(target);
-			let slash_from_target = match (maybe_numerator, is_proportional_slash) {
+			let mut slash_from_target = match (maybe_numerator, is_proportional_slash) {
 				// Equivalent to `(slash_amount / affected_balance) * target`.
 				(Some(numerator), true) => numerator.div(affected_balance),
 				// If the slash amount is gt than the affected balance OR the arithmetic to
 				// calculate the proportion saturated, we just try to slash as much as possible.
-				(None, _) | (_, false) => (*target).min(*slash_remaining),
-			};
+				(None, _) | (_, false) => *slash_remaining,
+			}
+			.min(*target);
 
-			*target = *target - slash_from_target; // slash_from_target cannot be gt target.
-
-			let actual_slashed = if *target <= minimum_balance {
+			// finally, slash out from *target exactly `slash_from_target`.
+			*target = *target - slash_from_target;
+			if *target <= minimum_balance {
 				// Slash the rest of the target if its dust
-				sp_std::mem::replace(target, Zero::zero()).saturating_add(slash_from_target)
-			} else {
-				slash_from_target
-			};
+				slash_from_target =
+					sp_std::mem::replace(target, Zero::zero()).saturating_add(slash_from_target)
+			}
 
-			self.total = self.total.saturating_sub(actual_slashed);
-			*slash_remaining = slash_remaining.saturating_sub(actual_slashed);
+			// TODO: maybe move this outside of the closure to keep it a bit more pure.
+			self.total = self.total.saturating_sub(slash_from_target);
+			*slash_remaining = slash_remaining.saturating_sub(slash_from_target);
 		};
 
 		// If this is *not* a proportional slash, the active will always wiped to 0.
 		slash_out_of(&mut self.active, &mut remaining_slash);
 
 		let mut slashed_unlocking = BTreeMap::<_, _>::new();
-		let indices_to_slash
-		// First slash unbonding chunks from after the slash
-			= affected_indices
-					// Then start slashing older chunks, start from the era of the slash
-					.chain((0..start_index).rev());
-		for i in indices_to_slash {
-			if let Some(chunk) = self.unlocking.get_mut(i) {
+		for i in slash_chunks_priority {
+			if let Some(chunk) = self.unlocking.get_mut(i).defensive() {
 				slash_out_of(&mut chunk.value, &mut remaining_slash);
-				slashed_unlocking.insert(chunk.era, chunk.value);
-
+				// write the new slashed value of this chunk to the map.
+				slashed_unlocking.insert(chunk.unlock_era, chunk.value);
 				if remaining_slash.is_zero() {
 					break
 				}
 			} else {
-				break // defensive, indices should always be in bounds.
+				break
 			}
 		}
-
+		self.unlocking.retain(|c| !c.value.is_zero());
 		T::OnStakerSlash::on_slash(&self.stash, self.active, &slashed_unlocking);
-
 		pre_slash_total.saturating_sub(self.total)
 	}
 }
