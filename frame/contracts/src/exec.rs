@@ -18,7 +18,7 @@
 use crate::{
 	gas::GasMeter,
 	storage::{self, Storage, WriteOutcome},
-	AccountCounter, BalanceOf, CodeHash, Config, ContractInfo, ContractInfoOf, Error, Event,
+	BalanceOf, CodeHash, Config, ContractInfo, ContractInfoOf, Error, Event, Nonce,
 	Pallet as Contracts, Schedule,
 };
 use frame_support::{
@@ -326,9 +326,10 @@ pub struct Stack<'a, T: Config, E> {
 	timestamp: MomentOf<T>,
 	/// The block number at the time of call stack instantiation.
 	block_number: T::BlockNumber,
-	/// The account counter is cached here when accessed. It is written back when the call stack
-	/// finishes executing.
-	account_counter: Option<u64>,
+	/// The nonce is cached here when accessed. It is written back when the call stack
+	/// finishes executing. Please refer to [`Nonce`] to a description of
+	/// the nonce itself.
+	nonce: Option<u64>,
 	/// The actual call stack. One entry per nested contract called/instantiated.
 	/// This does **not** include the [`Self::first_frame`].
 	frames: SmallVec<T::CallStack>,
@@ -396,8 +397,8 @@ enum FrameArgs<'a, T: Config, E> {
 	Instantiate {
 		/// The contract or signed origin which instantiates the new contract.
 		sender: T::AccountId,
-		/// The seed that should be used to derive a new trie id for the contract.
-		trie_seed: u64,
+		/// The nonce that should be used to derive a new trie id for the contract.
+		nonce: u64,
 		/// The executable whose `deploy` function is run.
 		executable: E,
 		/// A salt used in the contract address deriviation of the new contract.
@@ -582,7 +583,7 @@ where
 		let (mut stack, executable) = Self::new(
 			FrameArgs::Instantiate {
 				sender: origin.clone(),
-				trie_seed: Self::initial_trie_seed(),
+				nonce: Self::initial_nonce(),
 				executable,
 				salt,
 			},
@@ -607,7 +608,7 @@ where
 		value: BalanceOf<T>,
 		debug_message: Option<&'a mut Vec<u8>>,
 	) -> Result<(Self, E), ExecError> {
-		let (first_frame, executable, account_counter) =
+		let (first_frame, executable, nonce) =
 			Self::new_frame(args, value, gas_meter, storage_meter, 0, &schedule)?;
 		let stack = Self {
 			origin,
@@ -616,7 +617,7 @@ where
 			storage_meter,
 			timestamp: T::Time::now(),
 			block_number: <frame_system::Pallet<T>>::block_number(),
-			account_counter,
+			nonce,
 			first_frame,
 			frames: Default::default(),
 			debug_message,
@@ -638,7 +639,7 @@ where
 		gas_limit: Weight,
 		schedule: &Schedule<T>,
 	) -> Result<(Frame<T>, E, Option<u64>), ExecError> {
-		let (account_id, contract_info, executable, delegate_caller, entry_point, account_counter) =
+		let (account_id, contract_info, executable, delegate_caller, entry_point, nonce) =
 			match frame_args {
 				FrameArgs::Call { dest, cached_info, delegated_call } => {
 					let contract = if let Some(contract) = cached_info {
@@ -656,10 +657,10 @@ where
 
 					(dest, contract, executable, delegate_caller, ExportedFunction::Call, None)
 				},
-				FrameArgs::Instantiate { sender, trie_seed, executable, salt } => {
+				FrameArgs::Instantiate { sender, nonce, executable, salt } => {
 					let account_id =
 						<Contracts<T>>::contract_address(&sender, executable.code_hash(), &salt);
-					let trie_id = Storage::<T>::generate_trie_id(&account_id, trie_seed);
+					let trie_id = Storage::<T>::generate_trie_id(&account_id, nonce);
 					let contract = Storage::<T>::new_contract(
 						&account_id,
 						trie_id,
@@ -671,7 +672,7 @@ where
 						executable,
 						None,
 						ExportedFunction::Constructor,
-						Some(trie_seed),
+						Some(nonce),
 					)
 				},
 			};
@@ -687,7 +688,7 @@ where
 			allows_reentry: true,
 		};
 
-		Ok((frame, executable, account_counter))
+		Ok((frame, executable, nonce))
 	}
 
 	/// Create a subsequent nested frame.
@@ -793,9 +794,9 @@ where
 	/// This is called after running the current frame. It commits cached values to storage
 	/// and invalidates all stale references to it that might exist further down the call stack.
 	fn pop_frame(&mut self, persist: bool) {
-		// Revert the account counter in case of a failed instantiation.
+		// Revert changes to the nonce in case of a failed instantiation.
 		if !persist && self.top_frame().entry_point == ExportedFunction::Constructor {
-			self.account_counter.as_mut().map(|c| *c = c.wrapping_sub(1));
+			self.nonce.as_mut().map(|c| *c = c.wrapping_sub(1));
 		}
 
 		// Pop the current frame from the stack and return it in case it needs to interact
@@ -872,8 +873,8 @@ where
 			if let Some(contract) = contract {
 				<ContractInfoOf<T>>::insert(&self.first_frame.account_id, contract);
 			}
-			if let Some(counter) = self.account_counter {
-				<AccountCounter<T>>::set(counter);
+			if let Some(nonce) = self.nonce {
+				<Nonce<T>>::set(nonce);
 			}
 		}
 	}
@@ -931,20 +932,20 @@ where
 		!self.frames().any(|f| &f.account_id == id && !f.allows_reentry)
 	}
 
-	/// Increments the cached account id and returns the value to be used for the trie_id.
-	fn next_trie_seed(&mut self) -> u64 {
-		let next = if let Some(current) = self.account_counter {
+	/// Increments and returns the next nonce. Pulls it from storage if it isn't in cache.
+	fn next_nonce(&mut self) -> u64 {
+		let next = if let Some(current) = self.nonce {
 			current.wrapping_add(1)
 		} else {
-			Self::initial_trie_seed()
+			Self::initial_nonce()
 		};
-		self.account_counter = Some(next);
+		self.nonce = Some(next);
 		next
 	}
 
-	/// The account seed to be used to instantiate the account counter cache.
-	fn initial_trie_seed() -> u64 {
-		<AccountCounter<T>>::get().wrapping_add(1)
+	/// Pull the current nonce from storage.
+	fn initial_nonce() -> u64 {
+		<Nonce<T>>::get().wrapping_add(1)
 	}
 }
 
@@ -1031,11 +1032,11 @@ where
 		salt: &[u8],
 	) -> Result<(AccountIdOf<T>, ExecReturnValue), ExecError> {
 		let executable = E::from_storage(code_hash, &self.schedule, self.gas_meter())?;
-		let trie_seed = self.next_trie_seed();
+		let nonce = self.next_nonce();
 		let executable = self.push_frame(
 			FrameArgs::Instantiate {
 				sender: self.top_frame().account_id.clone(),
-				trie_seed,
+				nonce,
 				executable,
 				salt,
 			},
@@ -2560,7 +2561,7 @@ mod tests {
 	}
 
 	#[test]
-	fn account_counter() {
+	fn nonce() {
 		let fail_code = MockLoader::insert(Constructor, |_, _| exec_trapped());
 		let success_code = MockLoader::insert(Constructor, |_, _| exec_success());
 		let succ_fail_code = MockLoader::insert(Constructor, move |ctx, _| {
@@ -2610,7 +2611,7 @@ mod tests {
 				None,
 			)
 			.ok();
-			assert_eq!(<AccountCounter<Test>>::get(), 0);
+			assert_eq!(<Nonce<Test>>::get(), 0);
 
 			assert_ok!(MockStack::run_instantiate(
 				ALICE,
@@ -2623,7 +2624,7 @@ mod tests {
 				&[],
 				None,
 			));
-			assert_eq!(<AccountCounter<Test>>::get(), 1);
+			assert_eq!(<Nonce<Test>>::get(), 1);
 
 			assert_ok!(MockStack::run_instantiate(
 				ALICE,
@@ -2636,7 +2637,7 @@ mod tests {
 				&[],
 				None,
 			));
-			assert_eq!(<AccountCounter<Test>>::get(), 2);
+			assert_eq!(<Nonce<Test>>::get(), 2);
 
 			assert_ok!(MockStack::run_instantiate(
 				ALICE,
@@ -2649,7 +2650,7 @@ mod tests {
 				&[],
 				None,
 			));
-			assert_eq!(<AccountCounter<Test>>::get(), 4);
+			assert_eq!(<Nonce<Test>>::get(), 4);
 		});
 	}
 

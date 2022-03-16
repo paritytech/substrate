@@ -204,7 +204,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
 	// Storage: Contracts CodeStorage (r:1 w:1)
-	// Storage: Contracts AccountCounter (r:1 w:1)
+	// Storage: Contracts Nonce (r:1 w:1)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
 	// Storage: Timestamp Now (r:1 w:0)
 	// Storage: System Account (r:1 w:1)
@@ -220,7 +220,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().writes(6 as Weight))
 	}
 	// Storage: Contracts CodeStorage (r:1 w:1)
-	// Storage: Contracts AccountCounter (r:1 w:1)
+	// Storage: Contracts Nonce (r:1 w:1)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
 	// Storage: Timestamp Now (r:1 w:0)
 	// Storage: System Account (r:1 w:1)
@@ -689,7 +689,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
-	// Storage: Contracts AccountCounter (r:1 w:1)
+	// Storage: Contracts Nonce (r:1 w:1)
 	// Storage: Contracts OwnerInfoOf (r:100 w:100)
 	fn seal_instantiate(r: u32, ) -> Weight {
 		(0 as Weight)
@@ -704,7 +704,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Contracts ContractInfoOf (r:101 w:101)
 	// Storage: Contracts CodeStorage (r:2 w:1)
 	// Storage: Timestamp Now (r:1 w:0)
-	// Storage: Contracts AccountCounter (r:1 w:1)
+	// Storage: Contracts Nonce (r:1 w:1)
 	// Storage: Contracts OwnerInfoOf (r:1 w:1)
 	fn seal_instantiate_per_transfer_salt_kb(t: u32, s: u32, ) -> Weight {
 		(14_790_752_000 as Weight)
@@ -1130,7 +1130,7 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
 	}
 	// Storage: Contracts CodeStorage (r:1 w:1)
-	// Storage: Contracts AccountCounter (r:1 w:1)
+	// Storage: Contracts Nonce (r:1 w:1)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
 	// Storage: Timestamp Now (r:1 w:0)
 	// Storage: System Account (r:1 w:1)
@@ -1146,7 +1146,7 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().writes(6 as Weight))
 	}
 	// Storage: Contracts CodeStorage (r:1 w:1)
-	// Storage: Contracts AccountCounter (r:1 w:1)
+	// Storage: Contracts Nonce (r:1 w:1)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
 	// Storage: Timestamp Now (r:1 w:0)
 	// Storage: System Account (r:1 w:1)
@@ -1615,7 +1615,7 @@ impl WeightInfo for () {
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
-	// Storage: Contracts AccountCounter (r:1 w:1)
+	// Storage: Contracts Nonce (r:1 w:1)
 	// Storage: Contracts OwnerInfoOf (r:100 w:100)
 	fn seal_instantiate(r: u32, ) -> Weight {
 		(0 as Weight)
@@ -1630,7 +1630,7 @@ impl WeightInfo for () {
 	// Storage: Contracts ContractInfoOf (r:101 w:101)
 	// Storage: Contracts CodeStorage (r:2 w:1)
 	// Storage: Timestamp Now (r:1 w:0)
-	// Storage: Contracts AccountCounter (r:1 w:1)
+	// Storage: Contracts Nonce (r:1 w:1)
 	// Storage: Contracts OwnerInfoOf (r:1 w:1)
 	fn seal_instantiate_per_transfer_salt_kb(t: u32, s: u32, ) -> Weight {
 		(14_790_752_000 as Weight)
