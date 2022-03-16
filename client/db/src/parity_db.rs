@@ -99,7 +99,7 @@ impl<H: Clone + AsRef<[u8]>> Database<H> for DbAdapter {
 				if ref_counted_column(col) {
 					(col as u8, key.as_ref().to_vec(), Some(value))
 				} else {
-					unimplemented!()
+					panic!("Change::Store is only used for ref counted columns")
 				},
 			Change::Reference(col, key) =>
 				if ref_counted_column(col) {
