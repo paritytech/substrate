@@ -475,7 +475,6 @@ mod join {
 	#[test]
 	#[should_panic = "Defensive failure has been triggered!"]
 	fn join_panics_when_reward_pool_not_found() {
-		// TODO: but we should fail defensively..
 		ExtBuilder::default().build_and_execute(|| {
 			StakingMock::set_bonded_balance(Pools::create_bonded_account(123), 100);
 			BondedPool::<Runtime> {
@@ -1658,8 +1657,6 @@ mod withdraw_unbonded_other {
 				assert_ok!(Pools::unbond_other(Origin::signed(10), 10));
 
 				let mut sub_pools = SubPoolsStorage::<Runtime>::get(1).unwrap();
-				// TODO: [now] in the future we could use StakingMock::unbond_era_for(current_era)
-				// instead of current_era + 3.
 				let unbond_pool = sub_pools.with_era.get_mut(&(current_era + 3)).unwrap();
 				// Sanity check
 				assert_eq!(*unbond_pool, UnbondPool { points: 10, balance: 10 });

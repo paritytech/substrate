@@ -553,22 +553,17 @@ impl<T: Config> BondedPool<T> {
 			// We checked for zero above
 			.div(bonded_balance);
 
-		// TODO make sure these checks make sense. Taken from staking design chat with Al
-
 		// Pool points can inflate relative to balance, but only if the pool is slashed.
 		// If we cap the ratio of points:balance so one cannot join a pool that has been slashed
 		// 90%,
-
 		ensure!(points_to_balance_ratio_floor < 10u32.into(), Error::<T>::OverflowRisk);
 		// while restricting the balance to 1/10th of max total issuance,
-		// TODO instead of this, where we multiply and it could saturate, watch out for being close
-		// to the point of saturation.
 		ensure!(
 			bonded_balance < BalanceOf::<T>::max_value().div(10u32.into()),
 			Error::<T>::OverflowRisk
 		);
 		// then we can be decently confident the bonding pool points will not overflow
-		// `BalanceOf<T>`.
+		// `BalanceOf<T>`. Note that these are just heuristics.
 
 		Ok(())
 	}
@@ -834,7 +829,7 @@ impl<T: Config> SubPools<T> {
 pub struct TotalUnbondingPools<T: Config>(PhantomData<T>);
 impl<T: Config> Get<u32> for TotalUnbondingPools<T> {
 	fn get() -> u32 {
-		// TODO: This may be too dangerous in the scenario bonding_duration gets decreased because
+		// NOTE: this may be dangerous in the scenario bonding_duration gets decreased because
 		// we would no longer be able to decode `SubPoolsWithEra`, which uses `TotalUnbondingPools`
 		// as the bound
 		T::StakingInterface::bonding_duration() + T::PostUnbondingPoolsWindow::get()
@@ -1332,8 +1327,6 @@ pub mod pallet {
 				// Kill accounts from storage by making their balance go below ED. We assume that
 				// the accounts have no references that would prevent destruction once we get to
 				// this point.
-				// TODO: in correct scenario, these two accounts should be zero when we reach there
-				// anyway.
 				debug_assert_eq!(
 					T::Currency::free_balance(&bonded_pool.reward_account()),
 					Zero::zero()
