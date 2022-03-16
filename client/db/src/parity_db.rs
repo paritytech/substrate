@@ -107,7 +107,7 @@ impl<H: Clone + AsRef<[u8]>> Database<H> for DbAdapter {
 					let value = <Self as Database<H>>::get(self, col, key.as_ref());
 					(col as u8, key.as_ref().to_vec(), value)
 				} else {
-					unimplemented!()
+					panic!("Change::Reference is only used for ref counted columns")
 				},
 			Change::Release(col, key) =>
 				if ref_counted_column(col) {
