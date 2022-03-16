@@ -443,6 +443,10 @@ benchmarks! {
 			.collect::<Vec<_>>();
 		let account_len = accounts.get(0).map(|i| i.encode().len()).unwrap_or(0);
 		let accounts_bytes = accounts.iter().map(|a| a.encode()).flatten().collect::<Vec<_>>();
+		let accounts_len = accounts_bytes.len();
+		let pages = code::max_pages::<T>();
+		let length_bytes = (pages * 64 * 1024 - (accounts_len as u32) - 4).to_le_bytes().to_vec();
+		let hash_bytes = [0u8; 32].encode();
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
@@ -451,14 +455,24 @@ benchmarks! {
 				params: vec![ValueType::I32, ValueType::I32, ValueType::I32],
 				return_type: Some(ValueType::I32),
 			}],
-			data_segments: vec![DataSegment {
-				offset: 0,
-				value: accounts_bytes,
-			}],
+			data_segments: vec![
+				DataSegment {
+					offset: 0,
+					value: length_bytes, // output length
+				},
+				DataSegment {
+					offset: 4,
+					value: hash_bytes,
+				},
+				DataSegment {
+					offset: 36,
+					value: accounts_bytes,
+				},
+			],
 			call_body: Some(body::repeated_dyn(r * API_BENCHMARK_BATCH_SIZE, vec![
-				Counter(0, account_len as u32), // address_ptr
-				Regular(Instruction::I32Const(4)), // ptr where to store output
-				Regular(Instruction::I32Const(0)), // ptr to length
+				Counter(36, account_len as u32), // address_ptr
+				Regular(Instruction::I32Const(4)), // ptr to output data
+				Regular(Instruction::I32Const(0)), // ptr to output length
 				Regular(Instruction::Call(0)),
 				Regular(Instruction::Drop),
 			])),
@@ -2447,7 +2461,7 @@ benchmarks! {
 	}
 
 	// w_memory_grow = w_bench - 2 * w_param
-	// We can only allow allocate as much memory as it is allowed in a a contract.
+	// We can only allow allocate as much memory as it is allowed in a contract.
 	// Therefore the repeat count is limited by the maximum memory any contract can have.
 	// Using a contract with more memory will skew the benchmark because the runtime of grow
 	// depends on how much memory is already allocated.
