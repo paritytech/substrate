@@ -793,10 +793,7 @@ impl<T: Config> Pallet<T> {
 		};
 		ChildBounties::<T>::insert(parent_bounty_id, child_bounty_id, &child_bounty);
 		ChildBountyDescriptions::<T>::insert(child_bounty_id, description);
-		Self::deposit_event(Event::Added {
-			index: parent_bounty_id,
-			child_index: child_bounty_id,
-		});
+		Self::deposit_event(Event::Added { index: parent_bounty_id, child_index: child_bounty_id });
 	}
 
 	fn ensure_bounty_active(
