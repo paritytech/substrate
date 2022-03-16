@@ -91,7 +91,56 @@ impl<H: Clone + AsRef<[u8]>> Database<H> for DbAdapter {
 		handle_err(self.0.commit(transaction.0.into_iter().map(|change| match change {
 			Change::Set(col, key, value) => (col as u8, key, Some(value)),
 			Change::Remove(col, key) => (col as u8, key, None),
-			_ => unimplemented!(),
+			Change::Reference(col, key) => {
+				if let (counter_key, Some(mut counter)) = self.read_counter(col, key.as_ref())? {
+					counter += 1;
+					tx.put(col, &counter_key, &counter.to_le_bytes());
+				}
+			},
+			Change::Release(col, key) => {
+				if let (counter_key, Some(mut counter)) = self.read_counter(col, key.as_ref())? {
+					counter -= 1;
+					if counter == 0 {
+						tx.delete(col, &counter_key);
+						tx.delete(col, key.as_ref());
+					} else {
+						tx.put(col, &counter_key, &counter.to_le_bytes());
+					}
+				}
+			},
+			Change::Store(col, key, value) =>
+				match sp_database::read_external_counter::<H, _>(&*self, col, key.as_ref())? {
+					(counter_key, Some(mut counter)) => {
+						counter += 1;
+						tx.put(col, &counter_key, &counter.to_le_bytes());
+					},
+					(counter_key, None) => {
+						let d = 1u32.to_le_bytes();
+						tx.put(col, &counter_key, &d);
+						tx.put_vec(col, key.as_ref(), value);
+					},
+				},
+			Change::Reference(col, key) => {
+				if let (counter_key, Some(mut counter)) =
+					sp_database::read_external_counter::<H, _>(&*self, col, key.as_ref())?
+				{
+					counter += 1;
+					tx.put(col, &counter_key, &counter.to_le_bytes());
+				}
+			},
+			Change::Release(col, key) => {
+				if let (counter_key, Some(mut counter)) =
+					sp_database::read_external_counter::<H, _>(&*self, col, key.as_ref())?
+				{
+					counter -= 1;
+					if counter == 0 {
+						tx.delete(col, &counter_key);
+						tx.delete(col, key.as_ref());
+					} else {
+						tx.put(col, &counter_key, &counter.to_le_bytes());
+					}
+				}
+			},
 		})));
 
 		Ok(())

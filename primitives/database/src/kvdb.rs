@@ -40,30 +40,6 @@ where
 	std::sync::Arc::new(DbAdapter(db))
 }
 
-impl<D: KeyValueDB> DbAdapter<D> {
-	// Returns counter key and counter value if it exists.
-	fn read_counter(&self, col: ColumnId, key: &[u8]) -> error::Result<(Vec<u8>, Option<u32>)> {
-		// Add a key suffix for the counter
-		let mut counter_key = key.to_vec();
-		counter_key.push(0);
-		Ok(match self.0.get(col, &counter_key).map_err(|e| error::DatabaseError(Box::new(e)))? {
-			Some(data) => {
-				let mut counter_data = [0; 4];
-				if data.len() != 4 {
-					return Err(error::DatabaseError(Box::new(std::io::Error::new(
-						std::io::ErrorKind::Other,
-						format!("Unexpected counter len {}", data.len()),
-					))))
-				}
-				counter_data.copy_from_slice(&data);
-				let counter = u32::from_le_bytes(counter_data);
-				(counter_key, Some(counter))
-			},
-			None => (counter_key, None),
-		})
-	}
-}
-
 impl<D: KeyValueDB, H: Clone + AsRef<[u8]>> Database<H> for DbAdapter<D> {
 	fn commit(&self, transaction: Transaction<H>) -> error::Result<()> {
 		let mut tx = DBTransaction::new();
@@ -71,20 +47,21 @@ impl<D: KeyValueDB, H: Clone + AsRef<[u8]>> Database<H> for DbAdapter<D> {
 			match change {
 				Change::Set(col, key, value) => tx.put_vec(col, &key, value),
 				Change::Remove(col, key) => tx.delete(col, &key),
-				Change::Store(col, key, value) => match self.read_counter(col, key.as_ref())? {
-					(counter_key, Some(mut counter)) => {
-						counter += 1;
-						tx.put(col, &counter_key, &counter.to_le_bytes());
+				Change::Store(col, key, value) =>
+					match crate::read_external_counter::<H, _>(&*self, col, key.as_ref())? {
+						(counter_key, Some(mut counter)) => {
+							counter += 1;
+							tx.put(col, &counter_key, &counter.to_le_bytes());
+						},
+						(counter_key, None) => {
+							let d = 1u32.to_le_bytes();
+							tx.put(col, &counter_key, &d);
+							tx.put_vec(col, key.as_ref(), value);
+						},
 					},
-					(counter_key, None) => {
-						let d = 1u32.to_le_bytes();
-						tx.put(col, &counter_key, &d);
-						tx.put_vec(col, key.as_ref(), value);
-					},
-				},
 				Change::Reference(col, key) => {
 					if let (counter_key, Some(mut counter)) =
-						self.read_counter(col, key.as_ref())?
+						crate::read_external_counter::<H, _>(&*self, col, key.as_ref())?
 					{
 						counter += 1;
 						tx.put(col, &counter_key, &counter.to_le_bytes());
@@ -92,7 +69,7 @@ impl<D: KeyValueDB, H: Clone + AsRef<[u8]>> Database<H> for DbAdapter<D> {
 				},
 				Change::Release(col, key) => {
 					if let (counter_key, Some(mut counter)) =
-						self.read_counter(col, key.as_ref())?
+						crate::read_external_counter::<H, _>(&*self, col, key.as_ref())?
 					{
 						counter -= 1;
 						if counter == 0 {
