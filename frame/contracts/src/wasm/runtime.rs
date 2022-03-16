@@ -1394,11 +1394,11 @@ define_env!(Env, <E: Ext>,
 		Ok(ctx.ext.is_contract(&address) as u32)
 	},
 
-	// Retrieve a code hash for a specified address
+	// Retrieve the code hash for a specified contract address.
 	//
 	// # Parameters
 	//
-	// - account_ptr: a pointer to the address in question.
+	// - `account_ptr`: a pointer to the address in question.
 	//   Should be decodable as an `T::AccountId`. Traps otherwise.
 	// - `out_ptr`: pointer to the linear memory where the returning value is written to.
 	// - `out_len_ptr`: in-out pointer into linear memory where the buffer length
@@ -1419,7 +1419,7 @@ define_env!(Env, <E: Ext>,
 		}
 	},
 
-	// Retrieve own code hash for current contract
+	// Retrieve the code hash of the currently executing contract.
 	//
 	// # Parameters
 	//
