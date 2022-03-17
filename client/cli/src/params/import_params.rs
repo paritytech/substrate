@@ -21,18 +21,13 @@ use crate::{
 		ExecutionStrategy, WasmExecutionMethod, DEFAULT_EXECUTION_BLOCK_CONSTRUCTION,
 		DEFAULT_EXECUTION_IMPORT_BLOCK, DEFAULT_EXECUTION_IMPORT_BLOCK_VALIDATOR,
 		DEFAULT_EXECUTION_OFFCHAIN_WORKER, DEFAULT_EXECUTION_OTHER, DEFAULT_EXECUTION_SYNCING,
+		DEFAULT_WASM_EXECUTION_METHOD,
 	},
 	params::{DatabaseParams, PruningParams},
 };
 use clap::Args;
 use sc_client_api::execution_extensions::ExecutionStrategies;
 use std::path::PathBuf;
-
-#[cfg(feature = "wasmtime")]
-const WASM_METHOD_DEFAULT: &str = "Compiled";
-
-#[cfg(not(feature = "wasmtime"))]
-const WASM_METHOD_DEFAULT: &str = "interpreted-i-know-what-i-do";
 
 /// Parameters for block import.
 #[derive(Debug, Clone, Args)]
@@ -59,7 +54,7 @@ pub struct ImportParams {
 		value_name = "METHOD",
 		possible_values = WasmExecutionMethod::variants(),
 		ignore_case = true,
-		default_value = WASM_METHOD_DEFAULT
+		default_value = DEFAULT_WASM_EXECUTION_METHOD,
 	)]
 	pub wasm_method: WasmExecutionMethod,
 
