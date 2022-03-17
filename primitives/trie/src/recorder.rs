@@ -20,7 +20,7 @@ use codec::Encode;
 use hash_db::{HashDBRef, Hasher};
 use parking_lot::Mutex;
 use std::{collections::HashMap, mem, ops::DerefMut, sync::Arc};
-use trie_db::{DBValue, TrieAccess, TrieLayout};
+use trie_db::{DBValue, KeyTrieAccessValue, TrieAccess, TrieLayout};
 
 /// Combines information about an accessed key.
 struct AccessedKey {
@@ -142,15 +142,24 @@ impl<H: Hasher, I: DerefMut<Target = RecorderInner<H::Out>>> trie_db::TrieRecord
 					// that we traverse the trie when building the proof to record this
 					// data.
 					.or_insert_with(|| {
-						// We don't know the number of nodes we need to reach this
-						// value and we also don't know if we may already have recorded
-						// some of these nodes. So, we only take into account the encoded
-						// size of the value + length of a hash in the trie
-						// (ignoring that the value may is inlined).
-						encoded_size_update +=
-							value.as_ref().map_or(0, |v| v.encoded_size()) + H::LENGTH;
+						match value {
+							KeyTrieAccessValue::HashOnly => {
+								// We don't know the number of nodes we need to reach this hash.
+								// So, we only track the size of the hash..
+								encoded_size_update += H::LENGTH;
+							},
+							KeyTrieAccessValue::NonExisting => {},
+							KeyTrieAccessValue::Existing(ref value) => {
+								// We don't know the number of nodes we need to reach this
+								// value and we also don't know if we may already have recorded
+								// some of these nodes. So, we only take into account the encoded
+								// size of the value + length of a hash in the trie
+								// (ignoring that the value may is inlined).
+								encoded_size_update += value.encoded_size() + H::LENGTH;
+							},
+						}
 
-						AccessedKey { trie_nodes_recorded: false, exists: value.is_some() }
+						AccessedKey { trie_nodes_recorded: false, exists: value.exists() }
 					});
 			},
 			TrieAccess::NodeOwned { hash, node_owned } => {

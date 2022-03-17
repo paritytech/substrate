@@ -24,11 +24,11 @@ use std::{
 	collections::{hash_map::Entry, HashMap},
 	sync::Arc,
 };
-use trie_db::{node::NodeOwned, Bytes};
+use trie_db::{node::NodeOwned, CachedValue};
 
 pub struct SharedTrieNodeCache<H: Hasher> {
 	node_cache: Arc<RwLock<HashMap<H::Out, NodeOwned<H::Out>>>>,
-	data_cache: Option<Arc<RwLock<HashMap<H::Out, HashMap<Vec<u8>, Option<Bytes>>>>>>,
+	data_cache: Option<Arc<RwLock<HashMap<H::Out, HashMap<Vec<u8>, CachedValue<H::Out>>>>>>,
 }
 
 impl<H: Hasher> Clone for SharedTrieNodeCache<H> {
@@ -67,17 +67,17 @@ impl<H: Hasher> LocalTrieNodeCache<H> {
 	/// The given `storage_root` needs to be the storage root of the trie this cache is used for.
 	pub fn as_trie_db_cache<'a>(&'a self, storage_root: H::Out) -> TrieNodeCache<'a, H> {
 		let data_cache = if let Some(ref cache) = self.shared.data_cache {
-			DataCache::ForStorageRoot(RwLockWriteGuard::map(cache.write(), |cache| {
+			ValueCache::ForStorageRoot(RwLockWriteGuard::map(cache.write(), |cache| {
 				cache.entry(storage_root).or_default()
 			}))
 		} else {
-			DataCache::Disabled
+			ValueCache::Disabled
 		};
 
 		TrieNodeCache {
 			shared_cache: self.shared.node_cache.read(),
 			local_cache: self.local.lock(),
-			data_cache,
+			value_cache: data_cache,
 		}
 	}
 
@@ -92,7 +92,7 @@ impl<H: Hasher> LocalTrieNodeCache<H> {
 		TrieNodeCache {
 			shared_cache: self.shared.node_cache.read(),
 			local_cache: self.local.lock(),
-			data_cache: DataCache::Fresh(Default::default()),
+			value_cache: ValueCache::Fresh(Default::default()),
 		}
 	}
 }
@@ -104,22 +104,22 @@ impl<H: Hasher> Drop for LocalTrieNodeCache<H> {
 	}
 }
 
-/// The abstraction of the data cache for the [`TrieNodeCache`].
-enum DataCache<'a> {
-	/// The data cache is disabled.
+/// The abstraction of the value cache for the [`TrieNodeCache`].
+enum ValueCache<'a, H> {
+	/// The value cache is disabled.
 	Disabled,
-	/// The data cache is fresh, aka not yet associated to any storage root.
-	/// This is used for example when a new trie is being build, to cache new data.
-	Fresh(HashMap<Vec<u8>, Option<Bytes>>),
-	/// The data cache is already bound to a specific storage root.
+	/// The value cache is fresh, aka not yet associated to any storage root.
+	/// This is used for example when a new trie is being build, to cache new values.
+	Fresh(HashMap<Vec<u8>, CachedValue<H>>),
+	/// The value cache is already bound to a specific storage root.
 	///
 	/// The actual storage root is not stored here.
-	ForStorageRoot(MappedRwLockWriteGuard<'a, HashMap<Vec<u8>, Option<Bytes>>>),
+	ForStorageRoot(MappedRwLockWriteGuard<'a, HashMap<Vec<u8>, CachedValue<H>>>),
 }
 
-impl DataCache<'_> {
-	/// Get the data for the given `key`.
-	fn get(&self, key: &[u8]) -> Option<&Option<Bytes>> {
+impl<H> ValueCache<'_, H> {
+	/// Get the value for the given `key`.
+	fn get(&self, key: &[u8]) -> Option<&CachedValue<H>> {
 		match self {
 			Self::Disabled => None,
 			Self::Fresh(map) => map.get(key),
@@ -127,15 +127,15 @@ impl DataCache<'_> {
 		}
 	}
 
-	/// Insert some new `data` under the given `key`.
-	fn insert(&mut self, key: &[u8], data: Option<Bytes>) {
+	/// Insert some new `value` under the given `key`.
+	fn insert(&mut self, key: &[u8], value: CachedValue<H>) {
 		match self {
 			Self::Disabled => {},
 			Self::Fresh(map) => {
-				map.insert(key.into(), data);
+				map.insert(key.into(), value);
 			},
 			Self::ForStorageRoot(map) => {
-				map.insert(key.into(), data);
+				map.insert(key.into(), value);
 			},
 		}
 	}
@@ -144,7 +144,7 @@ impl DataCache<'_> {
 pub struct TrieNodeCache<'a, H: Hasher> {
 	shared_cache: RwLockReadGuard<'a, HashMap<H::Out, NodeOwned<H::Out>>>,
 	local_cache: MutexGuard<'a, HashMap<H::Out, NodeOwned<H::Out>>>,
-	data_cache: DataCache<'a>,
+	value_cache: ValueCache<'a, H::Out>,
 }
 
 impl<'a, H: Hasher> TrieNodeCache<'a, H> {
@@ -155,7 +155,7 @@ impl<'a, H: Hasher> TrieNodeCache<'a, H> {
 	/// `storage_root` is the new storage root that was obtained after finishing all operations
 	/// using the [`TrieDBMut`](trie_db::TrieDBMut).
 	pub fn merge_into(self, local: &LocalTrieNodeCache<H>, storage_root: H::Out) {
-		let cache = if let DataCache::Fresh(cache) = self.data_cache { cache } else { return };
+		let cache = if let ValueCache::Fresh(cache) = self.value_cache { cache } else { return };
 
 		if let Some(ref data_cache) = local.shared.data_cache {
 			data_cache.write().entry(storage_root).or_default().extend(cache);
@@ -194,19 +194,18 @@ impl<'a, H: Hasher> trie_db::TrieCache<NodeCodec<H>> for TrieNodeCache<'a, H> {
 		self.local_cache.get(hash)
 	}
 
-	fn lookup_data_for_key(&self, key: &[u8]) -> Option<&Option<Bytes>> {
-		self.data_cache.get(key)
+	fn lookup_value_for_key(&self, key: &[u8]) -> Option<&CachedValue<H::Out>> {
+		self.value_cache.get(key)
 	}
 
-	fn cache_data_for_key(&mut self, key: &[u8], data: Option<Bytes>) {
-		self.data_cache.insert(key.into(), data);
+	fn cache_value_for_key(&mut self, key: &[u8], data: CachedValue<H::Out>) {
+		self.value_cache.insert(key.into(), data);
 	}
 }
 
 #[cfg(test)]
 mod tests {
-	use super::*;
-	use trie_db::{Trie, TrieDBBuilder, TrieDBMutBuilder, TrieHash, TrieMut};
+	use trie_db::{Bytes, Trie, TrieDBBuilder, TrieDBMutBuilder, TrieHash, TrieMut};
 
 	type MemoryDB = crate::MemoryDB<sp_core::Blake2Hasher>;
 	type Layout = crate::LayoutV1<sp_core::Blake2Hasher>;
@@ -255,13 +254,15 @@ mod tests {
 			.get(TEST_DATA[0].0)
 			.unwrap()
 			.clone();
-		assert_eq!(Bytes::from(TEST_DATA[0].1.to_vec()), cached_data.unwrap());
+		assert_eq!(Bytes::from(TEST_DATA[0].1.to_vec()), cached_data.data().unwrap());
 		// Local cache wasn't dropped yet, so there should not be any node cached.
 		assert!(shared_cache.node_cache.read().is_empty());
 
 		drop(local_cache);
 		// Now we should have a value cached.
 		assert!(shared_cache.node_cache.read().len() >= 1);
+
+		let fake_data = Bytes::from(&b"fake_data"[..]);
 
 		let local_cache = shared_cache.local_cache();
 		shared_cache
@@ -271,7 +272,7 @@ mod tests {
 			.write()
 			.entry(root)
 			.or_default()
-			.insert(TEST_DATA[1].0.to_vec(), Some(b"fake_data".to_vec().into()));
+			.insert(TEST_DATA[1].0.to_vec(), (fake_data.clone(), Default::default()).into());
 
 		{
 			let mut cache = local_cache.as_trie_db_cache(root);
@@ -319,7 +320,7 @@ mod tests {
 			.get(&new_key)
 			.unwrap()
 			.clone();
-		assert_eq!(Bytes::from(new_value), cached_data.unwrap());
+		assert_eq!(Bytes::from(new_value), cached_data.data().unwrap());
 	}
 
 	#[test]
