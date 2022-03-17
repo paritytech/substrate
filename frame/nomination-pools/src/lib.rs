@@ -1369,17 +1369,6 @@ pub mod pallet {
 		/// * `root` - The account to set as [`BondedPool::root`].
 		/// * `nominator` - The account to set as the [`BondedPool::nominator`].
 		/// * `state_toggler` - The account to set as the [`BondedPool::state_toggler`].
-		///
-		/// # Notes
-		///
-		/// The caller will transfer `amount` to the bonded account and existential deposit to the
-		/// reward account. While the former is returned when the caller withdraws unbonded funds,
-		/// the latter is not guaranteed to be returned.
-		// TODO: The creator needs to transfer ED to the pool account and then have their delegators
-		// `reward_pool_total_earnings` ever set to the balance of the reward pool. This will make
-		// an invariant that the reward pool account will always have ED until destroyed.
-		// The reward pool balance and total earnings ever will also need to be updated to reflect
-		// that it has ED so the payout calculations work
 		#[pallet::weight(T::WeightInfo::create())]
 		#[frame_support::transactional]
 		pub fn create(
