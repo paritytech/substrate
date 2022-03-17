@@ -43,7 +43,7 @@ pub mod weights;
 
 use codec::{Decode, Encode};
 use frame_support::traits::{
-	BalanceStatus::Reserved, Currency, EnsureOriginWithArg, ReservableCurrency, Locker,
+	BalanceStatus::Reserved, Currency, EnsureOriginWithArg, Locker, ReservableCurrency,
 };
 use frame_system::Config as SystemConfig;
 use sp_runtime::{
