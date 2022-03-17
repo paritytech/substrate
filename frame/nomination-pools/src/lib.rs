@@ -1430,14 +1430,15 @@ pub mod pallet {
 				&bonded_pool.reward_account(),
 				T::Currency::minimum_balance(),
 				ExistenceRequirement::AllowDeath,
-			)?;
+			)
+			.defensive_map_err(|e| e)?;
 			let mut reward_pool = RewardPool::<T> {
 				balance: Zero::zero(),
 				points: U256::zero(),
 				total_earnings: Zero::zero(),
 			};
 			// Make sure the reward pool has correct balance and earnings so the first payout claim
-			// does not wipe the ED. This must be done after the transfer
+			// does not wipe the ED. This must be done after transferring to the reward account.
 			reward_pool.update_total_earnings_and_balance(bonded_pool.id);
 
 			Delegators::<T>::insert(
@@ -1445,7 +1446,7 @@ pub mod pallet {
 				Delegator::<T> {
 					pool_id,
 					points,
-					reward_pool_total_earnings: Zero::zero(),
+					reward_pool_total_earnings: reward_pool.total_earnings,
 					unbonding_era: None,
 				},
 			);
@@ -1795,6 +1796,7 @@ impl<T: Config> Pallet<T> {
 		let mut all_delegators = 0u32;
 		Delegators::<T>::iter().for_each(|(_, d)| {
 			assert!(BondedPools::<T>::contains_key(d.pool_id));
+			assert!(d.reward_pool_total_earnings >= T::Currency::minimum_balance());
 			*pools_delegators.entry(d.pool_id).or_default() += 1;
 			all_delegators += 1;
 		});
@@ -1835,6 +1837,9 @@ impl<T: Config> Pallet<T> {
 				bonded_balance,
 				sum_unbonding_balance
 			);
+
+			let reward_account = Pallet::<T>::create_reward_account(pool_id);
+			assert!(T::Currency::free_balance(&reward_account) >= T::Currency::minimum_balance());
 		}
 
 		Ok(())
