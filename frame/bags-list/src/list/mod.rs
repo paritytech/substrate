@@ -38,7 +38,7 @@ use sp_std::{
 };
 
 #[derive(Debug, PartialEq, Eq)]
-pub enum BagError {
+pub enum ListError {
 	/// A duplicate id has been detected.
 	Duplicate,
 }
@@ -261,9 +261,9 @@ impl<T: Config> List<T> {
 	/// Insert a new id into the appropriate bag in the list.
 	///
 	/// Returns an error if the list already contains `id`.
-	pub(crate) fn insert(id: T::AccountId, weight: VoteWeight) -> Result<(), BagError> {
+	pub(crate) fn insert(id: T::AccountId, weight: VoteWeight) -> Result<(), ListError> {
 		if Self::contains(&id) {
-			return Err(BagError::Duplicate)
+			return Err(ListError::Duplicate)
 		}
 
 		let bag_weight = notional_bag_for::<T>(weight);
