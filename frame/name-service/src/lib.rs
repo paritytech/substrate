@@ -223,7 +223,7 @@ pub mod pallet {
 			periods: u32,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
-			let commitment_hash = sp_io::hashing::blake2_256(&(name.clone(), secret).encode());
+			let commitment_hash = Self::generate_commitment_hash(name.clone(), secret);
 
 			let commitment =
 				Commitments::<T>::get(commitment_hash).ok_or(Error::<T>::CommitmentNotFound)?;
@@ -360,6 +360,13 @@ pub mod pallet {
 
 	// Pallet internal functions
 	impl<T: Config> Pallet<T> {
+		pub fn generate_commitment_hash(name: Vec<u8>, secret:u64 ) -> [u8; 32] {
+			let mut name_bytes = name;	
+			let secret_bytes = secret.to_be_bytes().to_vec();
+			name_bytes.extend(secret_bytes);
+			sp_io::hashing::blake2_256(&name_bytes)
+		}
+
 		pub fn registration_fee(name: Vec<u8>, periods: u32) -> BalanceOf<T> {
 			let name_length = name.len();
 			let fee_reg = if name_length < 3 {
