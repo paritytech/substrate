@@ -23,7 +23,7 @@
 #![recursion_limit = "256"]
 
 use codec::{Decode, Encode, MaxEncodedLen};
-use frame_election_provider_support::onchain;
+use frame_election_provider_support::{onchain, SequentialPhragmen};
 use frame_support::{
 	construct_runtime, parameter_types,
 	traits::{
@@ -667,18 +667,11 @@ impl pallet_election_provider_multi_phase::Config for Runtime {
 	type RewardHandler = (); // nothing to do upon rewards
 	type DataProvider = Staking;
 	type Solution = NposSolution16;
-	type Fallback = frame_election_provider_support::onchain::BoundedOnChainSequentialPhragmen<
-		Self,
-		ConstU32<20_000>,
-		ConstU32<2_000>,
-	>;
+	type Fallback =
+		onchain::BoundedOnChainSequentialPhragmen<Self, ConstU32<20_000>, ConstU32<2_000>>;
 	type GovernanceFallback =
-		frame_election_provider_support::onchain::BoundedOnChainSequentialPhragmen<
-			Self,
-			ConstU32<20_000>,
-			ConstU32<2_000>,
-		>;
-	type Solver = frame_election_provider_support::SequentialPhragmen<
+		onchain::BoundedOnChainSequentialPhragmen<Self, ConstU32<20_000>, ConstU32<2_000>>;
+	type Solver = SequentialPhragmen<
 		AccountId,
 		pallet_election_provider_multi_phase::SolutionAccuracyOf<Self>,
 		OffchainRandomBalancing,
