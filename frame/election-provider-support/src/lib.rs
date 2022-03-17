@@ -167,17 +167,86 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 pub mod onchain;
-use frame_support::{traits::Get, BoundedVec};
+pub mod traits;
+use codec::{Decode, Encode};
+use frame_support::{traits::Get, BoundedVec, RuntimeDebug};
 use sp_runtime::traits::Bounded;
 use sp_std::{fmt::Debug, prelude::*};
 
-/// Re-export some type as they are used in the interface.
+/// Re-export the solution generation macro.
 pub use frame_election_provider_solution_type::generate_solution_type;
+/// Re-export some type as they are used in the interface.
 pub use sp_arithmetic::PerThing;
 pub use sp_npos_elections::{
-	Assignment, ElectionResult, ExtendedBalance, IdentifierT, PerThing128, Support, Supports,
-	VoteWeight,
+	Assignment, ElectionResult, Error, ExtendedBalance, IdentifierT, PerThing128, Support,
+	Supports, VoteWeight,
 };
+pub use traits::NposSolution;
+
+// re-export for the solution macro, with the dependencies of the macro.
+#[doc(hidden)]
+pub use codec;
+#[doc(hidden)]
+pub use scale_info;
+#[doc(hidden)]
+pub use sp_arithmetic;
+#[doc(hidden)]
+pub use sp_std;
+// Simple Extension trait to easily convert `None` from index closures to `Err`.
+//
+// This is only generated and re-exported for the solution code to use.
+#[doc(hidden)]
+pub trait __OrInvalidIndex<T> {
+	fn or_invalid_index(self) -> Result<T, Error>;
+}
+
+impl<T> __OrInvalidIndex<T> for Option<T> {
+	fn or_invalid_index(self) -> Result<T, Error> {
+		self.ok_or(Error::SolutionInvalidIndex)
+	}
+}
+
+/// The [`IndexAssignment`] type is an intermediate between the assignments list
+/// ([`&[Assignment<T>]`][Assignment]) and `SolutionOf<T>`.
+///
+/// The voter and target identifiers have already been replaced with appropriate indices,
+/// making it fast to repeatedly encode into a `SolutionOf<T>`. This property turns out
+/// to be important when trimming for solution length.
+#[derive(RuntimeDebug, Clone, Default)]
+#[cfg_attr(feature = "std", derive(PartialEq, Eq, Encode, Decode))]
+pub struct IndexAssignment<VoterIndex, TargetIndex, P: PerThing> {
+	/// Index of the voter among the voters list.
+	pub who: VoterIndex,
+	/// The distribution of the voter's stake among winning targets.
+	///
+	/// Targets are identified by their index in the canonical list.
+	pub distribution: Vec<(TargetIndex, P)>,
+}
+
+impl<VoterIndex, TargetIndex, P: PerThing> IndexAssignment<VoterIndex, TargetIndex, P> {
+	pub fn new<AccountId: IdentifierT>(
+		assignment: &Assignment<AccountId, P>,
+		voter_index: impl Fn(&AccountId) -> Option<VoterIndex>,
+		target_index: impl Fn(&AccountId) -> Option<TargetIndex>,
+	) -> Result<Self, Error> {
+		Ok(Self {
+			who: voter_index(&assignment.who).or_invalid_index()?,
+			distribution: assignment
+				.distribution
+				.iter()
+				.map(|(target, proportion)| Some((target_index(target)?, proportion.clone())))
+				.collect::<Option<Vec<_>>>()
+				.or_invalid_index()?,
+		})
+	}
+}
+
+/// A type alias for [`IndexAssignment`] made from [`NposSolution`].
+pub type IndexAssignmentOf<C> = IndexAssignment<
+	<C as NposSolution>::VoterIndex,
+	<C as NposSolution>::TargetIndex,
+	<C as NposSolution>::Accuracy,
+>;
 
 /// Types that are used by the data provider trait.
 pub mod data_provider {

@@ -88,7 +88,7 @@ pub(crate) fn syn_err(message: &'static str) -> syn::Error {
 /// ```
 ///
 /// The given struct provides function to convert from/to `Assignment` as part of
-/// `sp_npos_elections::Solution` trait:
+/// `frame_election_provider_support::NposSolution` trait:
 ///
 /// - `fn from_assignment<..>(..)`
 /// - `fn into_assignment<..>(..)`
@@ -101,7 +101,7 @@ pub(crate) fn syn_err(message: &'static str) -> syn::Error {
 ///
 /// ```
 /// # use frame_election_provider_solution_type::generate_solution_type;
-/// # use sp_npos_elections::NposSolution;
+/// # use frame_election_provider_support::NposSolution;
 /// # use sp_arithmetic::per_things::Perbill;
 /// generate_solution_type!(
 ///     #[compact]
@@ -226,11 +226,11 @@ where
 }
 
 fn imports() -> Result<TokenStream2> {
-	match crate_name("sp-npos-elections") {
-		Ok(FoundCrate::Itself) => Ok(quote! { use crate as _npos; }),
-		Ok(FoundCrate::Name(sp_npos_elections)) => {
-			let ident = syn::Ident::new(&sp_npos_elections, Span::call_site());
-			Ok(quote!( extern crate #ident as _npos; ))
+	match crate_name("frame-election-provider-support") {
+		Ok(FoundCrate::Itself) => Ok(quote! { use crate as _feps; }),
+		Ok(FoundCrate::Name(frame_election_provider_support)) => {
+			let ident = syn::Ident::new(&frame_election_provider_support, Span::call_site());
+			Ok(quote!( extern crate #ident as _feps; ))
 		},
 		Err(e) => Err(syn::Error::new(Span::call_site(), e)),
 	}

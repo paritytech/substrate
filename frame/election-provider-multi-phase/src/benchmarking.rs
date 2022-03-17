@@ -28,7 +28,6 @@ use frame_support::{
 use frame_system::RawOrigin;
 use rand::{prelude::SliceRandom, rngs::SmallRng, SeedableRng};
 use sp_arithmetic::{per_things::Percent, traits::One};
-use sp_npos_elections::IndexAssignment;
 use sp_runtime::InnerOf;
 
 const SEED: u32 = 999;
@@ -461,6 +460,7 @@ frame_benchmarking::benchmarks! {
 			T::BenchmarkingConfig::DESIRED_TARGETS[1];
 		// Subtract this percentage from the actual encoded size
 		let f in 0 .. 95;
+		use frame_election_provider_support::IndexAssignment;
 
 		// Compute a random solution, then work backwards to get the lists of voters, targets, and
 		// assignments
