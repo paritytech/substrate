@@ -445,7 +445,6 @@ benchmarks! {
 		let accounts_bytes = accounts.iter().map(|a| a.encode()).flatten().collect::<Vec<_>>();
 		let accounts_len = accounts_bytes.len();
 		let pages = code::max_pages::<T>();
-		let hash_bytes = [0u8; 32].encode();
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
@@ -457,11 +456,7 @@ benchmarks! {
 			data_segments: vec![
 				DataSegment {
 					offset: 0,
-					value: 32, // output length
-				},
-				DataSegment {
-					offset: 4,
-					value: hash_bytes,
+					value: 32u32.to_le_bytes().to_vec(), // output length
 				},
 				DataSegment {
 					offset: 36,
@@ -516,35 +511,9 @@ benchmarks! {
 
 	seal_origin {
 		let r in 0 .. API_BENCHMARK_BATCHES;
-		let repeat = r * API_BENCHMARK_BATCH_SIZE;
-		let pages = code::max_pages::<T>();
-		let code = WasmModule::<T>::from(ModuleDefinition {
-			memory: Some(ImportedMemory::max::<T>()),
-			imported_functions: vec![ImportedFunction {
-				module: "__unstable__",
-				name: "seal_origin",
-				params: vec![ValueType::I32, ValueType::I32],
-				return_type: None,
-			}],
-			// Write the output buffer size. The output size will be overwritten by the
-			// supervisor with the real size when calling this getter. Since this size does not
-			// change between calls it suffices to start with an initial value and then just
-			// leave as whatever value was written there.
-			data_segments: vec![DataSegment {
-				offset: 0,
-				value: (pages * 64 * 1024 - 4).to_le_bytes().to_vec(),
-			}],
-			call_body: Some(body::repeated(
-				repeat,
-				&[
-					Instruction::I32Const(4), // ptr where to store output
-					Instruction::I32Const(0), // ptr to length
-					Instruction::Call(0),     // call the imported function
-				],
-			)),
-			..Default::default()
-		});
-		let instance = Contract::<T>::new(code, vec![])?;
+		let instance = Contract::<T>::new(WasmModule::getter(
+			"__unstable__", "seal_origin", r * API_BENCHMARK_BATCH_SIZE
+		), vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
