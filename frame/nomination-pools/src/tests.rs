@@ -37,14 +37,18 @@ fn test_setup_works() {
 		);
 		assert_eq!(
 			RewardPools::<Runtime>::get(last_pool).unwrap(),
-			RewardPool::<Runtime> { balance: 0, points: 0.into(), total_earnings: 0 }
+			RewardPool::<Runtime> {
+				balance: Balances::minimum_balance(),
+				points: 0.into(),
+				total_earnings: Balances::minimum_balance()
+			}
 		);
 		assert_eq!(
 			Delegators::<Runtime>::get(10).unwrap(),
 			Delegator::<Runtime> {
 				pool_id: last_pool,
 				points: 10,
-				reward_pool_total_earnings: 0,
+				reward_pool_total_earnings: Balances::minimum_balance(),
 				unbonding_era: None
 			}
 		)
@@ -374,7 +378,7 @@ mod join {
 				Delegator::<Runtime> {
 					pool_id: 1,
 					points: 2,
-					reward_pool_total_earnings: 0,
+					reward_pool_total_earnings: Balances::minimum_balance(),
 					unbonding_era: None
 				}
 			);
@@ -397,7 +401,7 @@ mod join {
 				Delegator::<Runtime> {
 					pool_id: 1,
 					points: 24,
-					reward_pool_total_earnings: 0,
+					reward_pool_total_earnings: Balances::minimum_balance(),
 					unbonding_era: None
 				}
 			);
@@ -1742,6 +1746,7 @@ mod withdraw_unbonded_other {
 				assert_ok!(Pools::unbond_other(Origin::signed(550), 550));
 				unsafe_set_state(1, PoolState::Destroying).unwrap();
 				assert_ok!(Pools::unbond_other(Origin::signed(10), 10));
+				assert_eq!(Balances::free_balance(&10), 10);
 
 				SubPoolsStorage::<Runtime>::insert(
 					1,
@@ -2206,6 +2211,15 @@ mod create {
 			assert_eq!(Delegators::<Runtime>::count(), 1);
 			MaxPools::<Runtime>::put(3);
 			MaxDelegators::<Runtime>::put(1);
+
+			// Then
+			assert_noop!(
+				Pools::create(Origin::signed(11), 20, 11, 11, 11),
+				Error::<Runtime>::InsufficientFundsToCreate
+			);
+
+			// Given
+			Balances::make_free_balance_be(&11, Balances::minimum_balance() + 20);
 
 			// Then
 			assert_noop!(

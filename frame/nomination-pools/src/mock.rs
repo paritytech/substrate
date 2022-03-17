@@ -221,7 +221,7 @@ impl ExtBuilder {
 		ext.execute_with(|| {
 			// make a pool
 			let amount_to_bond = <Runtime as pools::Config>::StakingInterface::minimum_bond();
-			Balances::make_free_balance_be(&10, amount_to_bond * 2);
+			Balances::make_free_balance_be(&10, amount_to_bond * 2 + Balances::minimum_balance());
 			assert_ok!(Pools::create(RawOrigin::Signed(10).into(), amount_to_bond, 900, 901, 902));
 
 			let last_pool = LastPoolId::<Runtime>::get();
