@@ -2098,8 +2098,7 @@ mod create {
 			assert!(!Delegators::<Runtime>::contains_key(11));
 			assert_eq!(StakingMock::active_stake(&next_pool_stash), None);
 
-			let min_create_free = StakingMock::minimum_bond() + Balances::minimum_balance();
-			Balances::make_free_balance_be(&11, min_create_free);
+			Balances::make_free_balance_be(&11, StakingMock::minimum_bond());
 			assert_ok!(Pools::create(
 				Origin::signed(11),
 				StakingMock::minimum_bond(),
@@ -2114,13 +2113,12 @@ mod create {
 				Delegator {
 					pool_id: 2,
 					points: StakingMock::minimum_bond(),
-					reward_pool_total_earnings: Balances::minimum_balance(),
+					reward_pool_total_earnings: Zero::zero(),
 					unbonding_era: None
 				}
 			);
-			let bonded_pool = BondedPool::<Runtime>::get(2).unwrap();
 			assert_eq!(
-				bonded_pool,
+				BondedPool::<Runtime>::get(2).unwrap(),
 				BondedPool {
 					id: 2,
 					inner: BondedPoolInner {
@@ -2143,14 +2141,10 @@ mod create {
 			assert_eq!(
 				RewardPools::<Runtime>::get(2).unwrap(),
 				RewardPool {
-					balance: Balances::minimum_balance(),
+					balance: Zero::zero(),
 					points: U256::zero(),
-					total_earnings: Balances::minimum_balance(),
+					total_earnings: Zero::zero(),
 				}
-			);
-			assert_eq!(
-				Balances::free_balance(bonded_pool.reward_account()),
-				Balances::minimum_balance()
 			);
 		});
 	}
