@@ -195,6 +195,18 @@ impl NetworkBehaviour for PeerInfoBehaviour {
 	) {
 		self.ping.inject_address_change(peer_id, conn, old, new);
 		self.identify.inject_address_change(peer_id, conn, old, new);
+
+		if let Some(entry) = self.nodes_info.get_mut(peer_id) {
+			if let Some(endpoint) = entry.endpoints.iter_mut().find(|e| e == &old) {
+				*endpoint = new.clone();
+			} else {
+				error!(target: "sub-libp2p",
+					"Unknown address change for peer {:?} from {:?} to {:?}", peer_id, old, new);
+			}
+		} else {
+			error!(target: "sub-libp2p",
+				"Unknown peer {:?} to change address from {:?} to {:?}", peer_id, old, new);
+		}
 	}
 
 	fn inject_connection_established(
@@ -260,7 +272,9 @@ impl NetworkBehaviour for PeerInfoBehaviour {
 		);
 
 		if let Some(entry) = self.nodes_info.get_mut(peer_id) {
-			entry.info_expire = Some(Instant::now() + CACHE_EXPIRE);
+			if remaining_established == 0 {
+				entry.info_expire = Some(Instant::now() + CACHE_EXPIRE);
+			}
 			entry.endpoints.retain(|ep| ep != endpoint)
 		} else {
 			error!(target: "sub-libp2p",
