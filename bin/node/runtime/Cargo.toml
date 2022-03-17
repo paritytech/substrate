@@ -38,7 +38,6 @@ sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../..
 sp-session = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/session" }
 sp-transaction-pool = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/transaction-pool" }
 sp-version = { version = "5.0.0", default-features = false, path = "../../../primitives/version" }
-sp-npos-elections = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/npos-elections" }
 sp-io = { version = "6.0.0", default-features = false, path = "../../../primitives/io" }
 sp-sandbox = { version = "0.10.0-dev", default-features = false, path = "../../../primitives/sandbox" }
 
@@ -178,7 +177,6 @@ std = [
 	"pallet-vesting/std",
 	"log/std",
 	"frame-try-runtime/std",
-	"sp-npos-elections/std",
 	"sp-io/std",
 	"pallet-child-bounties/std",
 ]
