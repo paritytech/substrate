@@ -361,10 +361,10 @@ pub mod pallet {
 	// Pallet internal functions
 	impl<T: Config> Pallet<T> {
 		pub fn generate_commitment_hash(name: Vec<u8>, secret:u64 ) -> [u8; 32] {
-			let mut name_bytes = name;	
+			let mut commitment_bytes = name;	
 			let secret_bytes = secret.to_be_bytes().to_vec();
-			name_bytes.extend(secret_bytes);
-			sp_io::hashing::blake2_256(&name_bytes)
+			commitment_bytes.extend(secret_bytes);
+			sp_io::hashing::blake2_256(&commitment_bytes)
 		}
 
 		pub fn registration_fee(name: Vec<u8>, periods: u32) -> BalanceOf<T> {
