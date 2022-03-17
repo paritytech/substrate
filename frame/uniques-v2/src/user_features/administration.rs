@@ -22,7 +22,7 @@ use frame_support::pallet_prelude::*;
 impl<T: Config> Pallet<T> {
 	pub fn do_set_admin(
 		id: CollectionIdOf<T>,
-		config: TokenConfig,
+		config: CollectionConfig,
 		maybe_caller: Option<T::AccountId>,
 		new_admin: T::AccountId,
 	) -> DispatchResult {

@@ -50,7 +50,7 @@ pub mod pallet {
 
 		type Currency: ReservableCurrency<Self::AccountId>;
 
-		type TokenId: Member + Parameter + Default + Copy + MaxEncodedLen;
+		type CollectionId: Member + Parameter + Default + Copy + MaxEncodedLen;
 
 		/// This is the limit for metadata
 		type MetadataBound: Get<u32>; // = up to 10 kb;
@@ -63,12 +63,12 @@ pub mod pallet {
 	pub type BalanceOf<T> =
 		<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
-	/// Maps a unique token id to it's config.
+	/// Maps a unique collection id to it's config.
 	#[pallet::storage]
-	pub(super) type TokenConfigs<T: Config> =
-		StorageMap<_, Blake2_128Concat, CollectionIdOf<T>, TokenConfig>;
+	pub(super) type CollectionConfigs<T: Config> =
+		StorageMap<_, Blake2_128Concat, CollectionIdOf<T>, CollectionConfig>;
 
-	/// Maps a unique token id to it's administrator.
+	/// Maps a unique collection id to it's administrator.
 	#[pallet::storage]
 	pub(super) type Admins<T: Config> =
 		StorageMap<_, Blake2_128Concat, CollectionIdOf<T>, T::AccountId, OptionQuery>;
@@ -83,15 +83,15 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
-	/// Maps a collection id to it's assets.
+	/// Maps a collection id to it's items.
 	#[pallet::storage]
 	pub(super) type CollectionMap<T: Config> = StorageDoubleMap<
 		_,
 		Blake2_128Concat,
 		CollectionIdOf<T>,
 		Blake2_128Concat,
-		T::TokenId,
-		Asset<T::TokenId, T::AccountId, BalanceOf<T>, MetadataOf<T>>,
+		T::CollectionId,
+		Item<T::CollectionId, T::AccountId, BalanceOf<T>, MetadataOf<T>>,
 		OptionQuery,
 	>;
 
@@ -105,12 +105,12 @@ pub mod pallet {
 	// Your Pallet's error messages.
 	#[pallet::error]
 	pub enum Error<T> {
-		/// The token is not configured to do this operation.
+		/// The collection is not configured to do this operation.
 		NotConfigured,
-		/// A token with this ID is already taken.
-		TokenIdTaken,
-		/// A token with this ID does not exist.
-		TokenNotFound,
+		/// A collection with this ID is already taken.
+		CollectionIdTaken,
+		/// A collection with this ID does not exist.
+		CollectionNotFound,
 		/// The calling user is not authorized to make this call.
 		NotAuthorized,
 		/// The hint provided by the user was incorrect.
@@ -137,12 +137,12 @@ pub mod pallet {
 				T::Hashing::hash(&bytes)
 			};
 
-			ensure!(!TokenConfigs::<T>::contains_key(id), Error::<T>::TokenIdTaken);
+			ensure!(!CollectionConfigs::<T>::contains_key(id), Error::<T>::CollectionIdTaken);
 
 			let default_system_config = T::DefaultSystemConfig::get();
 			let config =
-				TokenConfig { system_features: default_system_config, user_features: config };
-			TokenConfigs::<T>::insert(id, config);
+				CollectionConfig { system_features: default_system_config, user_features: config };
+			CollectionConfigs::<T>::insert(id, config);
 			Self::deposit_event(Event::<T>::CollectionCreated { id });
 			Ok(())
 		}
@@ -154,7 +154,7 @@ pub mod pallet {
 			new_admin: T::AccountId,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
-			let config = TokenConfigs::<T>::get(id).ok_or(Error::<T>::TokenNotFound)?;
+			let config = CollectionConfigs::<T>::get(id).ok_or(Error::<T>::CollectionNotFound)?;
 			Self::do_set_admin(id, config, Some(sender), new_admin)?;
 			Ok(())
 		}
@@ -168,10 +168,10 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			id: CollectionIdOf<T>,
 			receiver: T::AccountId,
-			config_hint: TokenConfig,
+			config_hint: CollectionConfig,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
-			let config = TokenConfigs::<T>::get(id).ok_or(Error::<T>::TokenNotFound)?;
+			let config = CollectionConfigs::<T>::get(id).ok_or(Error::<T>::CollectionNotFound)?;
 			ensure!(config == config_hint, Error::<T>::BadHint);
 			Self::do_transfer(id, config, sender, receiver, None)?;
 			Ok(())

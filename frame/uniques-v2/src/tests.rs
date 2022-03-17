@@ -43,10 +43,10 @@ fn sanity_test() {
 		assert_ok!(Uniques::create(Origin::signed(1), None, user_features));
 
 		let id = get_id_from_event().unwrap();
-		let token_config = TokenConfigs::<Test>::get(id);
+		let collection_config = CollectionConfigs::<Test>::get(id);
 
 		let expected_config =
-			TokenConfig { system_features: SystemFeatures::NoDeposit, user_features };
-		assert_eq!(Some(expected_config), token_config)
+			CollectionConfig { system_features: SystemFeatures::NoDeposit, user_features };
+		assert_eq!(Some(expected_config), collection_config)
 	});
 }

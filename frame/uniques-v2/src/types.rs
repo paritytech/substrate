@@ -20,7 +20,7 @@ use enumflags2::{bitflags, BitFlag, BitFlags};
 use frame_support::RuntimeDebug;
 use scale_info::TypeInfo;
 
-// Support for up to 64 user-enabled features on a token.
+// Support for up to 64 user-enabled features on a collection.
 #[bitflags]
 #[repr(u64)]
 #[derive(Copy, Clone, RuntimeDebug, PartialEq, Encode, Decode, MaxEncodedLen, TypeInfo)]
@@ -30,7 +30,7 @@ pub enum UserFeatures {
 	Limited,
 }
 
-// Support for up to 64 system-enabled features on a token.
+// Support for up to 64 system-enabled features on a collection.
 #[bitflags]
 #[repr(u64)]
 #[derive(Copy, Clone, RuntimeDebug, PartialEq, Encode, Decode, MaxEncodedLen, TypeInfo)]
@@ -41,7 +41,7 @@ pub enum SystemFeatures {
 // TODO: Implement Default
 
 #[derive(Encode, Decode, PartialEq, Debug, Clone, Copy, MaxEncodedLen, TypeInfo)]
-pub struct TokenConfig {
+pub struct CollectionConfig {
 	pub system_features: SystemFeatures,
 	pub user_features: UserFeatures,
 }
@@ -55,8 +55,8 @@ pub struct Collection<CollectionId, Account, Balance, Metadata> {
 }
 
 #[derive(Encode, Decode, PartialEq, Default, MaxEncodedLen, TypeInfo)]
-pub struct Asset<AssetId, Account, Balance, Metadata> {
-	pub id: AssetId,
+pub struct Item<ItemId, Account, Balance, Metadata> {
+	pub id: ItemId,
 	pub owner: Account,
 	pub deposit: Balance,
 	pub metadata: Metadata,

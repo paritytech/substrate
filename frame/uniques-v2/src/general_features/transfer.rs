@@ -22,7 +22,7 @@ use frame_support::pallet_prelude::*;
 impl<T: Config> Pallet<T> {
 	pub fn do_transfer(
 		id: CollectionIdOf<T>,
-		config: TokenConfig,
+		config: CollectionConfig,
 		sender: T::AccountId,
 		receiver: T::AccountId,
 		amount: Option<BalanceOf<T>>,
