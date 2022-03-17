@@ -289,6 +289,12 @@ pub trait ElectionDataProvider {
 	///
 	/// This should be implemented as a self-weighing function. The implementor should register its
 	/// appropriate weight at the end of execution with the system pallet directly.
+	///
+	/// A sensible implementation should use the minimum between this value and
+	/// [`Self::targets().len()`], since desiring a winner set larger than candidates is not
+	/// feasible.
+	///
+	/// This is documented further in issue: <https://github.com/paritytech/substrate/issues/9478>
 	fn desired_targets() -> data_provider::Result<u32>;
 
 	/// Provide a best effort prediction about when the next election is about to happen.

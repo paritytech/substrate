@@ -1044,8 +1044,13 @@ mod tests {
 			roll_to(25);
 			assert!(MultiPhase::current_phase().is_unsigned());
 
+			// Force the number of winners to be bigger to fail
+			let (mut solution, _) =
+				MultiPhase::mine_solution::<<Runtime as Config>::Solver>().unwrap();
+			solution.solution.votes1[0].1 = 4;
+
 			assert_eq!(
-				MultiPhase::mine_check_save_submit().unwrap_err(),
+				MultiPhase::basic_checks(&solution, "mined").unwrap_err(),
 				MinerError::PreDispatchChecksFailed(DispatchError::Module(ModuleError {
 					index: 2,
 					error: 1,
