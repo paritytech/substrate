@@ -103,8 +103,11 @@ const CACHE_HEADERS: usize = 8;
 const DEFAULT_CHILD_RATIO: (usize, usize) = (1, 10);
 
 /// DB-backed patricia trie state, transaction type is an overlay of changes to commit.
-pub type DbState<B> = sp_state_machine::TrieBackend<
-	'static,
+pub type DbState<B> =
+	sp_state_machine::TrieBackend<Arc<dyn sp_state_machine::Storage<HashFor<B>>>, HashFor<B>>;
+
+/// Builder for [`DbState`].
+type DbStateBuilder<B> = sp_state_machine::TrieBackendBuilder<
 	Arc<dyn sp_state_machine::Storage<HashFor<B>>>,
 	HashFor<B>,
 >;
@@ -1771,11 +1774,9 @@ impl<Block: BlockT> Backend<Block> {
 
 	fn empty_state(&self) -> ClientResult<SyncingCachingState<RefTrackingState<Block>, Block>> {
 		let root = EmptyStorage::<Block>::new().0; // Empty trie
-		let db_state = if let Some(ref cache) = self.trie_node_cache {
-			DbState::<Block>::new_with_cache(self.storage.clone(), root, cache.local_cache())
-		} else {
-			DbState::<Block>::new(self.storage.clone(), root)
-		};
+		let db_state = DbStateBuilder::<Block>::new(self.storage.clone(), root)
+			.with_optional_cache(self.trie_node_cache.as_ref().map(|c| c.local_cache()))
+			.build();
 		let state = RefTrackingState::new(db_state, self.storage.clone(), None);
 		let caching_state = CachingState::new(state, self.shared_cache.clone(), None);
 		Ok(SyncingCachingState::new(
@@ -2227,15 +2228,10 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		if is_genesis {
 			if let Some(genesis_state) = &*self.genesis_state.read() {
 				let root = genesis_state.root.clone();
-				let db_state = if let Some(ref cache) = self.trie_node_cache {
-					DbState::<Block>::new_with_cache(
-						genesis_state.clone(),
-						root,
-						cache.local_cache(),
-					)
-				} else {
-					DbState::<Block>::new(genesis_state.clone(), root)
-				};
+				let db_state = DbStateBuilder::<Block>::new(genesis_state.clone(), root)
+					.with_optional_cache(self.trie_node_cache.as_ref().map(|c| c.local_cache()))
+					.build();
+
 				let state = RefTrackingState::new(db_state, self.storage.clone(), None);
 				let caching_state = CachingState::new(state, self.shared_cache.clone(), None);
 				let mut state = SyncingCachingState::new(
@@ -2266,15 +2262,9 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 				}
 				if let Ok(()) = self.storage.state_db.pin(&hash) {
 					let root = hdr.state_root;
-					let db_state = if let Some(ref cache) = self.trie_node_cache {
-						DbState::<Block>::new_with_cache(
-							self.storage.clone(),
-							root,
-							cache.local_cache(),
-						)
-					} else {
-						DbState::<Block>::new(self.storage.clone(), root)
-					};
+					let db_state = DbStateBuilder::<Block>::new(self.storage.clone(), root)
+						.with_optional_cache(self.trie_node_cache.as_ref().map(|c| c.local_cache()))
+						.build();
 					let state =
 						RefTrackingState::new(db_state, self.storage.clone(), Some(hash.clone()));
 					let caching_state =

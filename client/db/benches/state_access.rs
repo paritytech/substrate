@@ -108,7 +108,7 @@ fn insert_blocks(db: &Backend<Block>, storage: Vec<(Vec<u8>, Vec<u8>)>) -> H256 
 enum BenchmarkConfig {
 	NoCache,
 	TrieNodeCache,
-	TrieNodeCacheWithoutFastCache,
+	TrieNodeCacheWithoutDataCache,
 	StateCache,
 }
 
@@ -120,7 +120,7 @@ fn create_backend(config: BenchmarkConfig, temp_dir: &TempDir) -> Backend<Block>
 		BenchmarkConfig::NoCache => (0, TrieNodeCacheSettings { enable: false, fast_cache: false }),
 		BenchmarkConfig::TrieNodeCache =>
 			(0, TrieNodeCacheSettings { enable: true, fast_cache: true }),
-		BenchmarkConfig::TrieNodeCacheWithoutFastCache =>
+		BenchmarkConfig::TrieNodeCacheWithoutDataCache =>
 			(0, TrieNodeCacheSettings { enable: true, fast_cache: false }),
 		BenchmarkConfig::StateCache =>
 			(2048 * 1024 * 1024, TrieNodeCacheSettings { enable: false, fast_cache: false }),
@@ -205,8 +205,8 @@ fn state_access_benchmarks(c: &mut Criterion) {
 		1,
 	);
 	bench_multiple_values(
-		BenchmarkConfig::TrieNodeCacheWithoutFastCache,
-		"with trie node cache (without fast cache) and reading each key once",
+		BenchmarkConfig::TrieNodeCacheWithoutDataCache,
+		"with trie node cache (without value cache) and reading each key once",
 		1,
 	);
 	bench_multiple_values(BenchmarkConfig::NoCache, "no cache and reading each key once", 1);
@@ -222,8 +222,8 @@ fn state_access_benchmarks(c: &mut Criterion) {
 		4,
 	);
 	bench_multiple_values(
-		BenchmarkConfig::TrieNodeCacheWithoutFastCache,
-		"with trie node cache (without fast cache) and reading 4 times each key",
+		BenchmarkConfig::TrieNodeCacheWithoutDataCache,
+		"with trie node cache (without value cache) and reading 4 times each key",
 		4,
 	);
 	bench_multiple_values(BenchmarkConfig::NoCache, "no cache and reading 4 times each key", 4);
@@ -256,8 +256,8 @@ fn state_access_benchmarks(c: &mut Criterion) {
 		1,
 	);
 	bench_single_value(
-		BenchmarkConfig::TrieNodeCacheWithoutFastCache,
-		"with trie node cache (without fast cache) and reading the key once",
+		BenchmarkConfig::TrieNodeCacheWithoutDataCache,
+		"with trie node cache (without value cache) and reading the key once",
 		1,
 	);
 	bench_single_value(BenchmarkConfig::NoCache, "no cache and reading the key once", 1);
@@ -273,11 +273,62 @@ fn state_access_benchmarks(c: &mut Criterion) {
 		4,
 	);
 	bench_single_value(
-		BenchmarkConfig::TrieNodeCacheWithoutFastCache,
-		"with trie node cache (without fast cache) and reading 4 times the key",
+		BenchmarkConfig::TrieNodeCacheWithoutDataCache,
+		"with trie node cache (without value cache) and reading 4 times the key",
 		4,
 	);
 	bench_single_value(BenchmarkConfig::NoCache, "no cache and reading 4 times the key", 4);
+
+	group.finish();
+
+	let mut group = c.benchmark_group("State value hash");
+
+	let mut bench_single_value = |config, desc, multiplier| {
+		let backend = create_backend(config, &path);
+		let block_hash = insert_blocks(&backend, storage.clone());
+
+		group.bench_function(desc, |b| {
+			b.iter_batched(
+				|| backend.state_at(BlockId::Hash(block_hash)).expect("Creates state"),
+				|state| {
+					for key in keys.iter().take(1).cycle().take(multiplier) {
+						let _ = state.storage_hash(&key).expect("Doesn't fail").unwrap();
+					}
+				},
+				BatchSize::SmallInput,
+			)
+		});
+	};
+
+	bench_single_value(BenchmarkConfig::StateCache, "with state cache and hashing the key once", 1);
+	bench_single_value(
+		BenchmarkConfig::TrieNodeCache,
+		"with trie node cache and hashing the key once",
+		1,
+	);
+	bench_single_value(
+		BenchmarkConfig::TrieNodeCacheWithoutDataCache,
+		"with trie node cache (without value cache) and hashing the key once",
+		1,
+	);
+	bench_single_value(BenchmarkConfig::NoCache, "no cache and hashing the key once", 1);
+
+	bench_single_value(
+		BenchmarkConfig::StateCache,
+		"with state cache and hashing 4 times the key",
+		4,
+	);
+	bench_single_value(
+		BenchmarkConfig::TrieNodeCache,
+		"with trie node cache and hashing 4 times the key",
+		4,
+	);
+	bench_single_value(
+		BenchmarkConfig::TrieNodeCacheWithoutDataCache,
+		"with trie node cache (without value cache) and hashing 4 times the key",
+		4,
+	);
+	bench_single_value(BenchmarkConfig::NoCache, "no cache and hashing 4 times the key", 4);
 
 	group.finish();
 }

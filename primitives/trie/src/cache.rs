@@ -28,25 +28,25 @@ use trie_db::{node::NodeOwned, CachedValue};
 
 pub struct SharedTrieNodeCache<H: Hasher> {
 	node_cache: Arc<RwLock<HashMap<H::Out, NodeOwned<H::Out>>>>,
-	data_cache: Option<Arc<RwLock<HashMap<H::Out, HashMap<Vec<u8>, CachedValue<H::Out>>>>>>,
+	value_cache: Option<Arc<RwLock<HashMap<H::Out, HashMap<Vec<u8>, CachedValue<H::Out>>>>>>,
 }
 
 impl<H: Hasher> Clone for SharedTrieNodeCache<H> {
 	fn clone(&self) -> Self {
-		Self { node_cache: self.node_cache.clone(), data_cache: self.data_cache.clone() }
+		Self { node_cache: self.node_cache.clone(), value_cache: self.value_cache.clone() }
 	}
 }
 
 impl<H: Hasher> SharedTrieNodeCache<H> {
 	/// Create a new [`SharedTrieNodeCache`].
 	///
-	/// If `enable_data_cache` is `true`, the special data cache will be enabled. The data cache
-	/// caches `key => data` per storage root. So, when trying to access some data in the trie using
-	/// a key, we can directly look up the data instead of traversing the trie.
-	pub fn new(enable_data_cache: bool) -> Self {
+	/// If `enable_value_cache` is `true`, the special value cache will be enabled. The value cache
+	/// caches `key => value` per storage root. So, when trying to access some value in the trie
+	/// using a key, we can directly look up the value instead of traversing the trie.
+	pub fn new(enable_value_cache: bool) -> Self {
 		Self {
 			node_cache: Default::default(),
-			data_cache: enable_data_cache.then(|| Default::default()),
+			value_cache: enable_value_cache.then(|| Default::default()),
 		}
 	}
 
@@ -66,7 +66,7 @@ impl<H: Hasher> LocalTrieNodeCache<H> {
 	///
 	/// The given `storage_root` needs to be the storage root of the trie this cache is used for.
 	pub fn as_trie_db_cache<'a>(&'a self, storage_root: H::Out) -> TrieNodeCache<'a, H> {
-		let data_cache = if let Some(ref cache) = self.shared.data_cache {
+		let data_cache = if let Some(ref cache) = self.shared.value_cache {
 			ValueCache::ForStorageRoot(RwLockWriteGuard::map(cache.write(), |cache| {
 				cache.entry(storage_root).or_default()
 			}))
@@ -157,7 +157,7 @@ impl<'a, H: Hasher> TrieNodeCache<'a, H> {
 	pub fn merge_into(self, local: &LocalTrieNodeCache<H>, storage_root: H::Out) {
 		let cache = if let ValueCache::Fresh(cache) = self.value_cache { cache } else { return };
 
-		if let Some(ref data_cache) = local.shared.data_cache {
+		if let Some(ref data_cache) = local.shared.value_cache {
 			data_cache.write().entry(storage_root).or_default().extend(cache);
 		}
 	}
@@ -245,7 +245,7 @@ mod tests {
 		}
 
 		let cached_data = shared_cache
-			.data_cache
+			.value_cache
 			.as_ref()
 			.unwrap()
 			.read()
@@ -266,7 +266,7 @@ mod tests {
 
 		let local_cache = shared_cache.local_cache();
 		shared_cache
-			.data_cache
+			.value_cache
 			.as_ref()
 			.unwrap()
 			.write()
@@ -311,7 +311,7 @@ mod tests {
 		cache.merge_into(&local_cache, new_root);
 
 		let cached_data = shared_cache
-			.data_cache
+			.value_cache
 			.as_ref()
 			.unwrap()
 			.read()
