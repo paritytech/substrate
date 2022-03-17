@@ -1871,7 +1871,7 @@ mod tests {
 	fn origin_returns_proper_values() {
 		let code_charlie = MockLoader::insert(Call, |ctx, _| {
 			// BOB is caller but not the origin of the stack call
-			assert_ne!(ctx.ext.origin(), &BOB);
+			assert_eq!(ctx.ext.caller(), &BOB);
 			// ALICE is the origin of the call stack
 			assert_eq!(ctx.ext.origin(), &ALICE);
 			exec_success()
@@ -1880,6 +1880,7 @@ mod tests {
 		let code_bob = MockLoader::insert(Call, |ctx, _| {
 			// ALICE is the origin of the call stack
 			assert_eq!(ctx.ext.origin(), &ALICE);
+			assert_eq!(ctx.ext.caller(), &ALICE);
 			// BOB calls CHARLIE
 			ctx.ext.call(0, CHARLIE, 0, vec![], true)
 		});

@@ -445,7 +445,6 @@ benchmarks! {
 		let accounts_bytes = accounts.iter().map(|a| a.encode()).flatten().collect::<Vec<_>>();
 		let accounts_len = accounts_bytes.len();
 		let pages = code::max_pages::<T>();
-		let length_bytes = (pages * 64 * 1024 - (accounts_len as u32) - 4).to_le_bytes().to_vec();
 		let hash_bytes = [0u8; 32].encode();
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
@@ -458,7 +457,7 @@ benchmarks! {
 			data_segments: vec![
 				DataSegment {
 					offset: 0,
-					value: length_bytes, // output length
+					value: 32, // output length
 				},
 				DataSegment {
 					offset: 4,
