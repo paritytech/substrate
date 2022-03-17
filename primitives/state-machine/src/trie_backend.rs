@@ -164,6 +164,10 @@ where
 	type Transaction = S::Overlay;
 	type TrieBackendStorage = S;
 
+	fn storage_hash(&self, key: &[u8]) -> Result<Option<H::Out>, Self::Error> {
+		self.essence.storage_hash(key)
+	}
+
 	fn storage(&self, key: &[u8]) -> Result<Option<StorageValue>, Self::Error> {
 		self.essence.storage(key)
 	}

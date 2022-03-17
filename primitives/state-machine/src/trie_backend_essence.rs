@@ -338,6 +338,21 @@ where
 		})
 	}
 
+	/// Returns the hash value
+	pub fn storage_hash(&self, key: &[u8]) -> Result<Option<H::Out>> {
+		let map_e = |e| format!("Trie lookup error: {}", e);
+
+		self.with_recorder_and_cache(None, |recorder, cache| {
+			TrieDBBuilder::new(self, &self.root)
+				.map_err(map_e)?
+				.with_optional_cache(cache)
+				.with_optional_recorder(recorder)
+				.build()
+				.get_hash(key)
+				.map_err(map_e)
+		})
+	}
+
 	/// Get the value of storage at given key.
 	pub fn storage(&self, key: &[u8]) -> Result<Option<StorageValue>> {
 		let map_e = |e| format!("Trie lookup error: {}", e);
