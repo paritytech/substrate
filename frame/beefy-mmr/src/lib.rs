@@ -72,19 +72,9 @@ where
 pub struct BeefyEcdsaToEthereum;
 impl Convert<beefy_primitives::crypto::AuthorityId, Vec<u8>> for BeefyEcdsaToEthereum {
 	fn convert(a: beefy_primitives::crypto::AuthorityId) -> Vec<u8> {
-		use k256::{elliptic_curve::sec1::ToEncodedPoint, PublicKey};
-		use sp_core::crypto::ByteArray;
-
-		PublicKey::from_sec1_bytes(a.as_slice())
-			.map(|pub_key| {
-				// uncompress the key
-				let uncompressed = pub_key.to_encoded_point(false);
-				// convert to ETH address
-				sp_io::hashing::keccak_256(&uncompressed.as_bytes()[1..])[12..].to_vec()
-			})
-			.map_err(|_| {
-				log::error!(target: "runtime::beefy", "Invalid BEEFY PublicKey format!");
-			})
+		sp_core::ecdsa::Public::from(a)
+			.to_eth_address()
+			.map(|v| v.to_vec())
 			.unwrap_or_default()
 	}
 }
