@@ -1036,8 +1036,7 @@ pub mod pallet {
 		DoesNotHavePermission,
 		/// Metadata exceeds [`T::MaxMetadataLen`]
 		MetadataExceedsMaxLen,
-		/// Some error occurred that should never happen. This should be reported to the
-		/// maintainers.
+		/// Some error occurred that should never happen. This should be reported to the maintainers.
 		DefensiveError,
 	}
 
@@ -1328,9 +1327,9 @@ pub mod pallet {
 				// Kill accounts from storage by making their balance go below ED. We assume that
 				// the accounts have no references that would prevent destruction once we get to
 				// this point.
-				debug_assert!(
-					T::Currency::free_balance(&bonded_pool.reward_account()) >=
-						T::Currency::minimum_balance()
+				debug_assert_eq!(
+					T::Currency::free_balance(&bonded_pool.reward_account()),
+					Zero::zero()
 				);
 				debug_assert_eq!(
 					T::Currency::free_balance(&bonded_pool.bonded_account()),
@@ -1367,12 +1366,6 @@ pub mod pallet {
 		/// * `root` - The account to set as [`BondedPool::root`].
 		/// * `nominator` - The account to set as the [`BondedPool::nominator`].
 		/// * `state_toggler` - The account to set as the [`BondedPool::state_toggler`].
-		///
-		/// # Notes
-		///
-		/// The caller will transfer `amount` to the bonded account and existential deposit to the
-		/// reward account. While the former is returned when the caller withdraws unbonded funds,
-		/// the latter is not guaranteed to be returned.
 		// TODO: The creator needs to transfer ED to the pool account and then have their delegators
 		// `reward_pool_total_earnings` ever set to the balance of the reward pool. This will make
 		// an invariant that the reward pool account will always have ED until destroyed.
@@ -1402,12 +1395,8 @@ pub mod pallet {
 				Error::<T>::MaxPools
 			);
 			ensure!(!Delegators::<T>::contains_key(&who), Error::<T>::AccountBelongsToOtherPool);
-			ensure!(
-				T::Currency::free_balance(&who) >=
-					amount.saturating_add(T::Currency::minimum_balance()),
-				Error::<T>::MinimumBondNotMet
-			);
 
+			// TODO: transfer ED to reward pool and update reward pool total earnings and balance.
 			let pool_id = LastPoolId::<T>::mutate(|id| {
 				*id += 1;
 				*id
@@ -1419,25 +1408,6 @@ pub mod pallet {
 
 			let points = bonded_pool.try_bond_delegator(&who, amount, PoolBond::Create)?;
 
-			// The depositor transfers ED to the pool account and then have their delegator
-			// `reward_pool_total_earnings` ever set to the balance of the reward pool. This will
-			// ensure the invariant that the reward pool account will not be dusted until the pool
-			// is destroyed.
-			T::Currency::transfer(
-				&who,
-				&bonded_pool.reward_account(),
-				T::Currency::minimum_balance(),
-				ExistenceRequirement::AllowDeath,
-			)?;
-			let mut reward_pool = RewardPool::<T> {
-				balance: Zero::zero(),
-				points: U256::zero(),
-				total_earnings: Zero::zero(),
-			};
-			// Make sure the reward pool has correct balance and earnings so the first payout claim
-			// does not wipe the ED. This must be done after the transfer
-			reward_pool.update_total_earnings_and_balance(bonded_pool.id);
-
 			Delegators::<T>::insert(
 				who.clone(),
 				Delegator::<T> {
@@ -1447,7 +1417,14 @@ pub mod pallet {
 					unbonding_era: None,
 				},
 			);
-			RewardPools::<T>::insert(pool_id, reward_pool);
+			RewardPools::<T>::insert(
+				pool_id,
+				RewardPool::<T> {
+					balance: Zero::zero(),
+					points: U256::zero(),
+					total_earnings: Zero::zero(),
+				},
+			);
 			ReversePoolIdLookup::<T>::insert(bonded_pool.bonded_account(), pool_id);
 			Self::deposit_event(Event::<T>::Created { depositor: who, pool_id });
 			bonded_pool.put();
