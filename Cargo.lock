@@ -2164,13 +2164,13 @@ dependencies = [
 name = "frame-election-provider-solution-type"
 version = "4.0.0-dev"
 dependencies = [
+ "frame-election-provider-support",
  "parity-scale-codec",
  "proc-macro-crate 1.1.0",
  "proc-macro2",
  "quote",
  "scale-info",
  "sp-arithmetic",
- "sp-npos-elections",
  "syn",
  "trybuild",
 ]
@@ -2198,6 +2198,7 @@ version = "2.0.0-alpha.5"
 dependencies = [
  "clap 3.1.6",
  "frame-election-provider-solution-type",
+ "frame-election-provider-support",
  "honggfuzz",
  "parity-scale-codec",
  "rand 0.8.4",
@@ -5065,7 +5066,6 @@ dependencies = [
  "sp-core",
  "sp-inherents",
  "sp-io",
- "sp-npos-elections",
  "sp-offchain",
  "sp-runtime",
  "sp-sandbox",
