@@ -1004,8 +1004,6 @@ pub mod pallet {
 		AccountBelongsToOtherPool,
 		/// The pool has insufficient balance to bond as a nominator.
 		InsufficientBond,
-		/// The caller does not have enough funds to create pool.
-		InsufficientFundsToCreate,
 		/// The delegator is already unbonding.
 		AlreadyUnbonding,
 		/// The delegator is not unbonding and thus cannot withdraw funds.
@@ -1407,7 +1405,7 @@ pub mod pallet {
 			ensure!(
 				T::Currency::free_balance(&who) >=
 					amount.saturating_add(T::Currency::minimum_balance()),
-				Error::<T>::InsufficientFundsToCreate
+				Error::<T>::MinimumBondNotMet
 			);
 
 			let pool_id = LastPoolId::<T>::mutate(|id| {
