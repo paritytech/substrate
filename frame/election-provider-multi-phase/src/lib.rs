@@ -852,6 +852,11 @@ pub mod pallet {
 				<T::DataProvider as ElectionDataProvider>::MaxVotesPerVoter::get(),
 				<SolutionOf<T> as NposSolution>::LIMIT as u32,
 			);
+
+			// While it won't cause any failures, setting `SignedMaxRefunds` gt
+			// `SignedMaxSubmissions` is a red flag that the developer does not understand how to
+			// configure this pallet.
+			assert!(T::SignedMaxSubmissions::get() >= T::SignedMaxRefunds::get());
 		}
 	}
 
