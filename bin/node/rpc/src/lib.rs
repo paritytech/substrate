@@ -98,6 +98,7 @@ pub struct FullDeps<C, P, SC, B> {
 /// Instantiate all Full RPC extensions.
 pub fn create_full<C, P, SC, B>(
 	deps: FullDeps<C, P, SC, B>,
+	backend: Arc<B>,
 ) -> Result<RpcModule<()>, Box<dyn std::error::Error + Send + Sync>>
 where
 	C: ProvideRuntimeApi<Block>
@@ -125,6 +126,7 @@ where
 	use sc_finality_grandpa_rpc::GrandpaApiServer;
 	use sc_sync_state_rpc::{SyncStateRpc, SyncStateRpcApiServer};
 	use substrate_frame_rpc_system::{SystemApiServer, SystemRpc};
+	use substrate_state_trie_migration_rpc::StateMigrationApiServer;
 
 	let mut io = RpcModule::new(());
 	let FullDeps { client, pool, select_chain, chain_spec, deny_unsafe, babe, grandpa } = deps;
@@ -168,9 +170,18 @@ where
 	)?;
 
 	io.merge(
-		SyncStateRpc::new(chain_spec, client, shared_authority_set, shared_epoch_changes)?
+		SyncStateRpc::new(chain_spec, client.clone(), shared_authority_set, shared_epoch_changes)?
 			.into_rpc(),
 	)?;
+
+	io.merge(
+		substrate_state_trie_migration_rpc::MigrationRpc::new(client, backend, deny_unsafe)
+			.into_rpc(),
+	)?;
+	// TODO: (dp) Port to jsonrpsee
+	// io.extend_with(substrate_state_trie_migration_rpc::StateMigrationApi::to_delegate(
+	// 	substrate_state_trie_migration_rpc::MigrationRpc::new(client.clone(), backend, deny_unsafe),
+	// ));
 
 	Ok(io)
 }

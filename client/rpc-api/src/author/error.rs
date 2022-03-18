@@ -42,15 +42,9 @@ pub enum Error {
 	/// Incorrect extrinsic format.
 	#[error("Invalid extrinsic format: {}", .0)]
 	BadFormat(#[from] codec::Error),
-	/// Incorrect seed phrase.
-	#[error("Invalid seed phrase/SURI")]
-	BadSeedPhrase,
 	/// Key type ID has an unknown format.
 	#[error("Invalid key type ID format (should be of length four)")]
 	BadKeyType,
-	/// Key type ID has some unsupported crypto.
-	#[error("The crypto of key type ID is unknown")]
-	UnsupportedKeyType,
 	/// Some random issue with the key store. Shouldn't happen.
 	#[error("The key store is unavailable")]
 	KeyStoreUnavailable,
@@ -83,8 +77,6 @@ const POOL_TOO_LOW_PRIORITY: i32 = POOL_INVALID_TX + 4;
 const POOL_CYCLE_DETECTED: i32 = POOL_INVALID_TX + 5;
 /// The transaction was not included to the pool because of the limits.
 const POOL_IMMEDIATELY_DROPPED: i32 = POOL_INVALID_TX + 6;
-/// The key type crypto is not known.
-const UNSUPPORTED_KEY_TYPE: i32 = POOL_INVALID_TX + 7;
 /// The transaction was not included to the pool since it is unactionable,
 /// it is not propagable and the local node does not author blocks.
 const POOL_UNACTIONABLE: i32 = POOL_INVALID_TX + 8;
@@ -177,17 +169,10 @@ impl From<Error> for JsonRpseeError {
 				message: "The pool is not accepting future transactions".into(),
 				data: None,
 			},
-			Error::UnsupportedKeyType => CallError::Custom {
-				code: UNSUPPORTED_KEY_TYPE,
-				message: "Unknown key type crypto".into(),
-				data: to_json_raw_value(
-					&"The crypto for the given key type is unknown, please add the public key to the \
-					request to insert the key successfully."
-				).ok(),
-			},
 			Error::UnsafeRpcCalled(e) => e.into(),
 			Error::Client(e) => CallError::Failed(anyhow::anyhow!(e)),
-			Error::BadSeedPhrase | Error::BadKeyType => CallError::InvalidParams(e.into()),
+			// Error::BadSeedPhrase |
+			Error::BadKeyType => CallError::InvalidParams(e.into()),
 			Error::InvalidSessionKeys | Error::KeyStoreUnavailable => CallError::Failed(e.into()),
 		}.into()
 	}

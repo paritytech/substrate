@@ -20,7 +20,7 @@ futures = "0.3.19"
 hex = "0.4.2"
 libp2p = "0.40.0"
 log = "0.4.11"
-names = { version = "0.12.0", default-features = false }
+names = { version = "0.13.0", default-features = false }
 rand = "0.7.3"
 regex = "1.5.4"
 rpassword = "5.0.0"
