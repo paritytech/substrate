@@ -3242,4 +3242,9 @@ mod test {
 		sync.on_block_data(&peer_id1, Some(request), response).unwrap();
 		assert_eq!(sync.best_queued_number, 4);
 	}
+	#[test]
+	fn ancestor_search_repeat() {
+		let state = AncestorSearchState::<Block>::BinarySearch(1, 3);
+		assert!(handle_ancestor_search_state(&state, 2, true).is_none());
+	}
 }
