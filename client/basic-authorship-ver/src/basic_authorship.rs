@@ -409,16 +409,22 @@ where
 		let now = (self.now)();
 		let left = deadline.saturating_duration_since(now);
 		let left_micros: u64 = left.as_micros().saturated_into();
+		// NOTE reduce deadline by half as we want to avoid situation where
+		// fully filled previous block does not allow for any extrinsic to be included in following
+		// one
 		let soft_deadline =
-			now + time::Duration::from_micros(self.soft_deadline_percent.mul_floor(left_micros));
+			now + time::Duration::from_micros(self.soft_deadline_percent.mul_floor(left_micros) / 2);
 		let block_timer = time::Instant::now();
 		let mut skipped = 0;
 		let mut unqueue_invalid = Vec::new();
 		block_builder.apply_previous_block_extrinsics(seed.clone());
 
 		let mut t1 = self.transaction_pool.ready_at(self.parent_number).fuse();
+		// NOTE reduce deadline by half ('/16' instead of '/8') as we want to avoid situation where
+		// fully filled previous block does not allow for any extrinsic to be included in following
+		// one
 		let mut t2 =
-			futures_timer::Delay::new(deadline.saturating_duration_since((self.now)()) / 8).fuse();
+			futures_timer::Delay::new(deadline.saturating_duration_since((self.now)()) / 16 ).fuse();
 
 		let mut pending_iterator = select! {
 			res = t1 => res,
@@ -432,7 +438,8 @@ where
 			},
 		};
 
-		let block_size_limit = block_size_limit.unwrap_or(self.default_block_size_limit);
+		let block_size_limit = block_size_limit.unwrap_or(self.default_block_size_limit) / 2;
+
 
 		debug!("Attempting to push transactions from the pool.");
 		debug!("Pool status: {:?}", self.transaction_pool.status());
