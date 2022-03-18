@@ -72,6 +72,14 @@ pub mod pallet {
 		#[pallet::constant]
 		type CommitmentDeposit: Get<BalanceOf<Self>>;
 
+		/// The amount of blocks a user needs to wait after a Commitment before revealing.
+		#[pallet::constant]
+		type MinimumCommitementPeriod: Get<Self::BlockNumber>;
+
+		/// The amount of blocks after a commitment is created for before it expires.
+		#[pallet::constant]
+		type CommitmentAlivePeriod: Get<Self::BlockNumber>;
+
 		/// The deposit a user needs to place in order to keep their name registration in storage.
 		#[pallet::constant]
 		type NameDeposit: Get<BalanceOf<Self>>;
@@ -170,6 +178,12 @@ pub mod pallet {
 	pub enum Error<T> {
 		/// This commitment hash already exists in storage.
 		AlreadyCommitted,
+		/// It has not passed the minimum waiting period to reveal a commitement.
+		TooEarlyToReveal,
+		/// The commitment cannot yet be removed. Has not expired.
+		CommitmentNotExpired,
+		/// The commitment has expired.
+		CommitmentExpired,
 		/// This commitment does not exist.
 		CommitmentNotFound,
 		/// This name is already registered.
@@ -228,8 +242,14 @@ pub mod pallet {
 			let commitment =
 				Commitments::<T>::get(commitment_hash).ok_or(Error::<T>::CommitmentNotFound)?;
 			let name_hash = sp_io::hashing::blake2_256(&name);
+			let block_number = frame_system::Pallet::<T>::block_number();
 
-			if Self::is_available(name_hash, frame_system::Pallet::<T>::block_number()) {
+			ensure!(
+				block_number > commitment.when.saturating_add(T::MinimumCommitementPeriod::get()),
+				Error::<T>::TooEarlyToReveal
+			);
+
+			if Self::is_available(name_hash, block_number) {
 				let fee = Self::registration_fee(name.clone(), periods);
 
 				let imbalance = T::Currency::withdraw(
@@ -356,6 +376,27 @@ pub mod pallet {
 			Self::do_deregister(name_hash, None)?;
 			Ok(())
 		}
+
+		#[pallet::weight(0)]
+		pub fn remove_commitment(
+			origin: OriginFor<T>,
+			commitment_hash: CommitmentHash,
+		) -> DispatchResult {
+			ensure_signed_or_root(origin)?;
+			let commitment =
+				Commitments::<T>::get(commitment_hash).ok_or(Error::<T>::CommitmentNotFound)?;
+
+			ensure!(
+				commitment.when.saturating_add(T::CommitmentAlivePeriod::get()) >
+					frame_system::Pallet::<T>::block_number(),
+				Error::<T>::CommitmentNotExpired
+			);
+
+			// TODO: account for deposit
+
+			Commitments::<T>::remove(commitment_hash);
+			Ok(())
+		}
 	}
 
 	// Pallet internal functions
@@ -434,7 +475,6 @@ pub mod pallet {
 			}
 
 			Registrations::<T>::remove(name_hash);
-
 			Self::deposit_event(Event::<T>::AddressDeregistered { name_hash });
 
 			Ok(())

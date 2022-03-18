@@ -103,6 +103,8 @@ impl Config for Test {
 	type NameDeposit = ConstU64<5>;
 	type TierThreeLetters = ConstU64<7>;
 	type TierFourLetters = ConstU64<3>;
+	type MinimumCommitementPeriod = ConstU64<10>;
+	type CommitmentAlivePeriod = ConstU64<10>;
 	type BlocksPerRegistrationPeriod = ConstU64<5256000>;
 	type NotificationPeriod = ConstU64<432000>;
 	type FeePerRegistrationPeriod = ConstU64<1>;

@@ -76,17 +76,51 @@ fn commit_handles_errors() {
 		assert_eq!(Balances::free_balance(&1), 100);
 
 		assert_ok!(NameService::commit(Origin::signed(sender), registrant, commitment_hash));
-		// The same commitment cant be put twice
+
+		// The same commitment cant be put twice.
 		assert_noop!(
 			NameService::commit(Origin::signed(sender), registrant, commitment_hash),
 			Error::<Test>::AlreadyCommitted
 		);
 
 		let commitment_hash = ("new", secret).using_encoded(blake2_256);
-		// 1337 should have no balance
+		// 1337 should have no balance.
 		assert_noop!(
 			NameService::commit(Origin::signed(1337), registrant, commitment_hash),
 			BalancesError::InsufficientBalance,
+		);
+	});
+}
+
+#[test]
+fn reveal_handles_errors() {
+	new_test_ext().execute_with(|| {
+		let sender = 1;
+		let registrant = 2;
+		let secret = 3u64;
+		let name = "alice".as_bytes().to_vec();
+		let encoded_bytes = (&name, secret).encode();
+		let commitment_hash = blake2_256(&encoded_bytes);
+		let periods = 10;
+
+		assert_eq!(Balances::free_balance(&1), 100);
+
+		assert_ok!(NameService::commit(Origin::signed(sender), registrant, commitment_hash));
+
+		run_to_block(2);
+
+		// reveal is too early.
+		assert_noop!(
+			NameService::reveal(Origin::signed(sender), name.clone(), secret, periods),
+			Error::<Test>::TooEarlyToReveal
+		);
+
+		run_to_block(20);
+
+		// commitment should have expired.
+		assert_noop!(
+			NameService::reveal(Origin::signed(sender), name, secret, periods),
+			Error::<Test>::CommitmentExpired
 		);
 	});
 }
