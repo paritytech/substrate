@@ -70,7 +70,6 @@ impl frame_system::Config for Test {
 
 impl pallet_remark::Config for Test {
 	type Event = Event;
-	type Call = Call;
 	type WeightInfo = ();
 }
 

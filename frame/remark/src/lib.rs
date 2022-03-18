@@ -28,7 +28,6 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-use frame_support::dispatch::{Dispatchable, GetDispatchInfo};
 use sp_std::prelude::*;
 
 // Re-export pallet items so that they can be accessed from the crate namespace.
