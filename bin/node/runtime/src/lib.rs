@@ -775,7 +775,6 @@ impl pallet_referenda::Config for Runtime {
 
 impl pallet_remark::Config for Runtime {
 	type WeightInfo = pallet_remark::weights::SubstrateWeight<Self>;
-	type Call = Call;
 	type Event = Event;
 }
 
