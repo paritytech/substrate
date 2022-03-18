@@ -168,6 +168,7 @@
 
 pub mod onchain;
 pub mod traits;
+#[cfg(feature = "std")]
 use codec::{Decode, Encode};
 use frame_support::{traits::Get, BoundedVec, RuntimeDebug};
 use sp_runtime::traits::Bounded;

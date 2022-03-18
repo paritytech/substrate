@@ -556,7 +556,7 @@ impl pallet_staking::Config for Runtime {
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
 	type OffendingValidatorsThreshold = OffendingValidatorsThreshold;
 	type ElectionProvider = ElectionProviderMultiPhase;
-	type GenesisElectionProvider = onchain::UnboundedSequentialPhragmen<Self>;
+	type GenesisElectionProvider = onchain::UnboundedOnchainExecution<Self>;
 	// Alternatively, use pallet_staking::UseNominatorsMap<Runtime> to just use the nominators map.
 	// Note that the aforementioned does not scale to a very large number of nominators.
 	type SortedListProvider = BagsList;
@@ -642,7 +642,11 @@ impl Get<Option<(usize, ExtendedBalance)>> for OffchainRandomBalancing {
 }
 
 impl onchain::Config for Runtime {
-	type Accuracy = Perbill;
+	type Solver = SequentialPhragmen<
+		AccountId,
+		pallet_election_provider_multi_phase::SolutionAccuracyOf<Self>,
+		OffchainRandomBalancing,
+	>;
 	type DataProvider = <Self as pallet_election_provider_multi_phase::Config>::DataProvider;
 }
 
@@ -667,10 +671,9 @@ impl pallet_election_provider_multi_phase::Config for Runtime {
 	type RewardHandler = (); // nothing to do upon rewards
 	type DataProvider = Staking;
 	type Solution = NposSolution16;
-	type Fallback =
-		onchain::BoundedOnChainSequentialPhragmen<Self, ConstU32<20_000>, ConstU32<2_000>>;
+	type Fallback = onchain::BoundedOnchainExecution<Self, ConstU32<20_000>, ConstU32<2_000>>;
 	type GovernanceFallback =
-		onchain::BoundedOnChainSequentialPhragmen<Self, ConstU32<20_000>, ConstU32<2_000>>;
+		onchain::BoundedOnchainExecution<Self, ConstU32<20_000>, ConstU32<2_000>>;
 	type Solver = SequentialPhragmen<
 		AccountId,
 		pallet_election_provider_multi_phase::SolutionAccuracyOf<Self>,
@@ -1897,6 +1900,7 @@ impl_runtime_apis! {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use frame_election_provider_support::NposSolver;
 	use frame_system::offchain::CreateSignedTransaction;
 	use sp_runtime::UpperOf;
 
@@ -1913,7 +1917,7 @@ mod tests {
 
 	#[test]
 	fn perbill_as_onchain_accuracy() {
-		type OnChainAccuracy = <Runtime as onchain::Config>::Accuracy;
+		type OnChainAccuracy = <<Runtime as onchain::Config>::Solver as NposSolver>::Accuracy;
 		let maximum_chain_accuracy: Vec<UpperOf<OnChainAccuracy>> = (0..MaxNominations::get())
 			.map(|_| <UpperOf<OnChainAccuracy>>::from(OnChainAccuracy::one().deconstruct()))
 			.collect();

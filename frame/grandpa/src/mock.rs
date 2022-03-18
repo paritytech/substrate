@@ -22,7 +22,7 @@
 use crate::{self as pallet_grandpa, AuthorityId, AuthorityList, Config, ConsensusLog};
 use ::grandpa as finality_grandpa;
 use codec::Encode;
-use frame_election_provider_support::onchain;
+use frame_election_provider_support::{onchain, SequentialPhragmen};
 use frame_support::{
 	parameter_types,
 	traits::{
@@ -181,7 +181,7 @@ parameter_types! {
 }
 
 impl onchain::Config for Test {
-	type Accuracy = Perbill;
+	type Solver = SequentialPhragmen<Self::AccountId, Perbill>;
 	type DataProvider = Staking;
 }
 
@@ -203,7 +203,7 @@ impl pallet_staking::Config for Test {
 	type MaxNominatorRewardedPerValidator = ConstU32<64>;
 	type OffendingValidatorsThreshold = OffendingValidatorsThreshold;
 	type NextNewSession = Session;
-	type ElectionProvider = onchain::UnboundedSequentialPhragmen<Self>;
+	type ElectionProvider = onchain::UnboundedOnchainExecution<Self>;
 	type GenesisElectionProvider = Self::ElectionProvider;
 	type SortedListProvider = pallet_staking::UseNominatorsMap<Self>;
 	type MaxUnlockingChunks = ConstU32<32>;

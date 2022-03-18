@@ -270,7 +270,7 @@ parameter_types! {
 }
 
 impl onchain::Config for Runtime {
-	type Accuracy = sp_runtime::Perbill;
+	type Solver = SequentialPhragmen<AccountId, SolutionAccuracyOf<Runtime>, Balancing>;
 	type DataProvider = StakingMock;
 }
 
@@ -292,11 +292,11 @@ impl InstantElectionProvider for MockFallback {
 		maybe_max_targets: Option<usize>,
 	) -> Result<Supports<Self::AccountId>, Self::Error> {
 		if OnChainFallback::get() {
-			onchain::UnboundedSequentialPhragmen::<Runtime>::instant_elect(
+			onchain::UnboundedOnchainExecution::<Runtime>::instant_elect(
 				maybe_max_voters,
 				maybe_max_targets,
 			)
-			.map_err(|_| "UnboundedSequentialPhragmen failed")
+			.map_err(|_| "UnboundedOnchainExecution failed")
 		} else {
 			super::NoFallback::<Runtime>::instant_elect(maybe_max_voters, maybe_max_targets)
 		}

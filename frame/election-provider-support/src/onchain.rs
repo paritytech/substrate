@@ -15,9 +15,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! An implementation of [`ElectionProvider`] that does an on-chain sequential phragmen.
+//! An implementation of [`ElectionProvider`] that uses an `NposSolver` to do the election.
 
-use crate::{ElectionDataProvider, ElectionProvider, InstantElectionProvider};
+use crate::{ElectionDataProvider, ElectionProvider, InstantElectionProvider, NposSolver};
 use frame_support::{traits::Get, weights::DispatchClass};
 use sp_npos_elections::*;
 use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData, prelude::*};
@@ -56,37 +56,27 @@ impl From<sp_npos_elections::Error> for Error {
 /// the latter [`InstantElectionProvider::instant_elect`] for onchain operations, with thoughtful
 /// bounds.
 ///
-/// Please use `BoundedOnChainSequentialPhragmen` at all times except at genesis or for testing,
+/// Please use `BoundedOnchainExecution` at all times except at genesis or for testing,
 /// with thoughtful bounds in order to bound the potential execution time.
-/// Only use `UnboundedSequentialPhragmen` at genesis or for testing, as it does not
+/// Only use `UnboundedOnchainExecution` at genesis or for testing, as it does not
 /// bound the inputs.
 ///
 /// `VotersBound` bounds the number of voters.
 /// `TargetsBound` bounds the number of targets.
-pub struct BoundedOnChainSequentialPhragmen<
-	T: Config,
-	VotersBound: Get<u32>,
-	TargetsBound: Get<u32>,
->(PhantomData<(T, VotersBound, TargetsBound)>);
-#[cfg_attr(
-	not(feature = "std"),
-	deprecated(note = "use `BoundedOnChainSequentialPhragmen` instead")
-)]
-pub struct UnboundedSequentialPhragmen<T: Config>(PhantomData<T>);
-#[deprecated(note = "use `BoundedOnChainSequentialPhragmen` instead")]
-pub type OnChainSequentialPhragmen<T> = UnboundedSequentialPhragmen<T>;
+pub struct BoundedOnchainExecution<T: Config, VotersBound: Get<u32>, TargetsBound: Get<u32>>(
+	PhantomData<(T, VotersBound, TargetsBound)>,
+);
 
-/// Configuration trait of [`UnboundedSequentialPhragmen`] and [`BoundedOnChainSequentialPhragmen`].
+#[cfg_attr(not(feature = "std"), deprecated(note = "use `BoundedOnchainExecution` instead"))]
+pub struct UnboundedOnchainExecution<T: Config>(PhantomData<T>);
+
+/// Configuration trait of [`UnboundedOnchainExecution`] and [`BoundedOnchainExecution`].
 ///
-/// Note that this is similar to a pallet traits, but [`UnboundedSequentialPhragmen`] and
-/// [`BoundedOnChainSequentialPhragmen`] are not pallets.
-///
-/// WARNING: the user of this pallet must ensure that the `Accuracy` type will work nicely with the
-/// normalization operation done inside `seq_phragmen`. See
-/// [`sp_npos_elections::Assignment::try_normalize`] for more info.
+/// Note that this is similar to a pallet traits, but [`UnboundedOnchainExecution`] and
+/// [`BoundedOnchainExecution`] are not pallets.
 pub trait Config: frame_system::Config {
-	/// The accuracy used to compute the election:
-	type Accuracy: PerThing128;
+	/// `NposSolver` that should be used, an example would be `PhragMMS`.
+	type Solver: NposSolver<AccountId = Self::AccountId, Error = sp_npos_elections::Error>;
 	/// Something that provides the data for election.
 	type DataProvider: ElectionDataProvider<
 		AccountId = Self::AccountId,
@@ -110,8 +100,8 @@ fn elect_with<T: Config>(
 	let stake_of =
 		|w: &T::AccountId| -> VoteWeight { stake_map.get(w).cloned().unwrap_or_default() };
 
-	let ElectionResult::<_, T::Accuracy> { winners: _, assignments } =
-		seq_phragmen(desired_targets as usize, targets, voters, None).map_err(Error::from)?;
+	let ElectionResult { winners: _, assignments } =
+		T::Solver::solve(desired_targets as usize, targets, voters).map_err(Error::from)?;
 
 	let staked = assignment_ratio_to_staked_normalized(assignments, &stake_of)?;
 
@@ -121,7 +111,7 @@ fn elect_with<T: Config>(
 	Ok(to_supports(&staked))
 }
 
-impl<T: Config> ElectionProvider for UnboundedSequentialPhragmen<T> {
+impl<T: Config> ElectionProvider for UnboundedOnchainExecution<T> {
 	type AccountId = T::AccountId;
 	type BlockNumber = T::BlockNumber;
 	type Error = Error;
@@ -132,7 +122,7 @@ impl<T: Config> ElectionProvider for UnboundedSequentialPhragmen<T> {
 	}
 }
 
-impl<T: Config> InstantElectionProvider for UnboundedSequentialPhragmen<T> {
+impl<T: Config> InstantElectionProvider for UnboundedOnchainExecution<T> {
 	fn instant_elect(
 		maybe_max_voters: Option<usize>,
 		maybe_max_targets: Option<usize>,
@@ -142,7 +132,7 @@ impl<T: Config> InstantElectionProvider for UnboundedSequentialPhragmen<T> {
 }
 
 impl<T: Config, VotersBound: Get<u32>, TargetsBound: Get<u32>> ElectionProvider
-	for BoundedOnChainSequentialPhragmen<T, VotersBound, TargetsBound>
+	for BoundedOnchainExecution<T, VotersBound, TargetsBound>
 {
 	type AccountId = T::AccountId;
 	type BlockNumber = T::BlockNumber;
@@ -158,7 +148,7 @@ impl<T: Config, VotersBound: Get<u32>, TargetsBound: Get<u32>> ElectionProvider
 }
 
 impl<T: Config, VotersBound: Get<u32>, TargetsBound: Get<u32>> InstantElectionProvider
-	for BoundedOnChainSequentialPhragmen<T, VotersBound, TargetsBound>
+	for BoundedOnchainExecution<T, VotersBound, TargetsBound>
 {
 	fn instant_elect(
 		maybe_max_voters: Option<usize>,
@@ -176,7 +166,6 @@ mod tests {
 	use super::*;
 	use sp_npos_elections::Support;
 	use sp_runtime::Perbill;
-
 	type AccountId = u64;
 	type BlockNumber = u64;
 
@@ -193,6 +182,10 @@ mod tests {
 			System: frame_system::{Pallet, Call, Event<T>},
 		}
 	);
+
+	frame_support::parameter_types! {
+		pub static Balancing: Option<(usize, ExtendedBalance)> = Some((0, 0));
+	}
 
 	impl frame_system::Config for Runtime {
 		type SS58Prefix = ();
@@ -222,11 +215,11 @@ mod tests {
 	}
 
 	impl Config for Runtime {
-		type Accuracy = Perbill;
+		type Solver = crate::SequentialPhragmen<AccountId, Perbill, Balancing>;
 		type DataProvider = mock_data_provider::DataProvider;
 	}
 
-	type OnChainPhragmen = UnboundedSequentialPhragmen<Runtime>;
+	type OnChainPhragmen = UnboundedOnchainExecution<Runtime>;
 
 	mod mock_data_provider {
 		use frame_support::{bounded_vec, traits::ConstU32};

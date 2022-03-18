@@ -18,7 +18,9 @@
 //! Test utilities
 
 use crate::{self as pallet_staking, *};
-use frame_election_provider_support::{onchain, SortedListProvider, VoteWeight};
+use frame_election_provider_support::{
+	onchain, SequentialPhragmen, SortedListProvider, VoteWeight,
+};
 use frame_support::{
 	assert_ok, parameter_types,
 	traits::{
@@ -246,7 +248,7 @@ impl pallet_bags_list::Config for Test {
 }
 
 impl onchain::Config for Test {
-	type Accuracy = Perbill;
+	type Solver = SequentialPhragmen<Self::AccountId, Perbill>;
 	type DataProvider = Staking;
 }
 
@@ -268,7 +270,7 @@ impl crate::pallet::pallet::Config for Test {
 	type NextNewSession = Session;
 	type MaxNominatorRewardedPerValidator = ConstU32<64>;
 	type OffendingValidatorsThreshold = OffendingValidatorsThreshold;
-	type ElectionProvider = onchain::UnboundedSequentialPhragmen<Self>;
+	type ElectionProvider = onchain::UnboundedOnchainExecution<Self>;
 	type GenesisElectionProvider = Self::ElectionProvider;
 	// NOTE: consider a macro and use `UseNominatorsMap<Self>` as well.
 	type SortedListProvider = BagsList;
