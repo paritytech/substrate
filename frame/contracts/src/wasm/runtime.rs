@@ -191,7 +191,6 @@ pub enum RuntimeCosts {
 	/// Base weight of calling `seal_call`.
 	CallBase,
 	/// Weight of calling `seal_delegate_call` for the given input size.
-	#[cfg(feature = "unstable-interface")]
 	DelegateCallBase,
 	/// Weight of the transfer performed during a call.
 	CallSurchargeTransfer,
@@ -272,7 +271,6 @@ impl RuntimeCosts {
 				.saturating_add(s.take_storage_per_byte.saturating_mul(len.into())),
 			Transfer => s.transfer,
 			CallBase => s.call,
-			#[cfg(feature = "unstable-interface")]
 			DelegateCallBase => s.delegate_call,
 			CallSurchargeTransfer => s.call_transfer_surcharge,
 			CallInputCloned(len) => s.call_per_cloned_byte.saturating_mul(len.into()),
@@ -389,7 +387,6 @@ bitflags! {
 enum CallType {
 	/// Execute another instantiated contract
 	Call { callee_ptr: u32, value_ptr: u32, gas: u64 },
-	#[cfg(feature = "unstable-interface")]
 	/// Execute deployed code in the context (storage, account ID, value) of the caller contract
 	DelegateCall { code_hash_ptr: u32 },
 }
@@ -398,7 +395,6 @@ impl CallType {
 	fn cost(&self) -> RuntimeCosts {
 		match self {
 			CallType::Call { .. } => RuntimeCosts::CallBase,
-			#[cfg(feature = "unstable-interface")]
 			CallType::DelegateCall { .. } => RuntimeCosts::DelegateCallBase,
 		}
 	}
@@ -763,7 +759,6 @@ where
 					flags.contains(CallFlags::ALLOW_REENTRY),
 				)
 			},
-			#[cfg(feature = "unstable-interface")]
 			CallType::DelegateCall { code_hash_ptr } => {
 				if flags.contains(CallFlags::ALLOW_REENTRY) {
 					return Err(Error::<E::T>::InvalidCallFlags.into())
@@ -1129,7 +1124,7 @@ define_env!(Env, <E: Ext>,
 	// `ReturnCode::CalleeReverted`: Output buffer is returned.
 	// `ReturnCode::CalleeTrapped`
 	// `ReturnCode::CodeNotFound`
-	[__unstable__] seal_delegate_call(
+	[seal0] seal_delegate_call(
 		ctx,
 		flags: u32,
 		code_hash_ptr: u32,

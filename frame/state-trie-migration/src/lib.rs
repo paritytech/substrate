@@ -123,6 +123,13 @@ pub mod pallet {
 		}
 	}
 
+	#[derive(Clone, Encode, Decode, scale_info::TypeInfo, PartialEq, Eq)]
+	pub(crate) enum Progress {
+		ToStart,
+		LastKey(Vec<u8>),
+		Complete,
+	}
+
 	/// A migration task stored in state.
 	///
 	/// It tracks the last top and child keys read.
@@ -130,20 +137,13 @@ pub mod pallet {
 	#[codec(mel_bound(T: Config))]
 	#[scale_info(skip_type_params(T))]
 	pub struct MigrationTask<T: Config> {
-		/// The last top key that we migrated.
+		/// The current top trie migration progress.
+		pub(crate) progress_top: Progress,
+		/// The current child trie migration progress.
 		///
-		/// If it does not exist, it means that the migration is done and no further keys exist.
-		pub(crate) last_top: Option<Vec<u8>>,
-		/// The last child key that we have processed.
-		///
-		/// This is a child key under the current `self.last_top`.
-		///
-		/// If this is set, no further top keys are processed until the child key migration is
-		/// complete.
-		pub(crate) last_child: Option<Vec<u8>>,
-
-		/// A marker to indicate if the previous tick was a child tree migration or not.
-		pub(crate) prev_tick_child: bool,
+		/// If `ToStart`, no further top keys are processed until the child key migration is
+		/// `Complete`.
+		pub(crate) progress_child: Progress,
 
 		/// Dynamic counter for the number of items that we have processed in this execution from
 		/// the top trie.
@@ -182,18 +182,22 @@ pub mod pallet {
 		pub(crate) _ph: sp_std::marker::PhantomData<T>,
 	}
 
+	impl sp_std::fmt::Debug for Progress {
+		fn fmt(&self, f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
+			match self {
+				Progress::ToStart => f.write_str("To start"),
+				Progress::LastKey(key) =>
+					write!(f, "Last: {:?}", sp_core::hexdisplay::HexDisplay::from(key)),
+				Progress::Complete => f.write_str("Complete"),
+			}
+		}
+	}
+
 	impl<T: Config> sp_std::fmt::Debug for MigrationTask<T> {
 		fn fmt(&self, f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
 			f.debug_struct("MigrationTask")
-				.field(
-					"top",
-					&self.last_top.as_ref().map(|d| sp_core::hexdisplay::HexDisplay::from(d)),
-				)
-				.field(
-					"child",
-					&self.last_child.as_ref().map(|d| sp_core::hexdisplay::HexDisplay::from(d)),
-				)
-				.field("prev_tick_child", &self.prev_tick_child)
+				.field("top", &self.progress_top)
+				.field("child", &self.progress_child)
 				.field("dyn_top_items", &self.dyn_top_items)
 				.field("dyn_child_items", &self.dyn_child_items)
 				.field("dyn_size", &self.dyn_size)
@@ -207,12 +211,11 @@ pub mod pallet {
 	impl<T: Config> Default for MigrationTask<T> {
 		fn default() -> Self {
 			Self {
-				last_top: Some(Default::default()),
-				last_child: Default::default(),
+				progress_top: Progress::ToStart,
+				progress_child: Progress::ToStart,
 				dyn_child_items: Default::default(),
 				dyn_top_items: Default::default(),
 				dyn_size: Default::default(),
-				prev_tick_child: Default::default(),
 				_ph: Default::default(),
 				size: Default::default(),
 				top_items: Default::default(),
@@ -224,7 +227,7 @@ pub mod pallet {
 	impl<T: Config> MigrationTask<T> {
 		/// Return true if the task is finished.
 		pub(crate) fn finished(&self) -> bool {
-			self.last_top.is_none() && self.last_child.is_none()
+			matches!(self.progress_top, Progress::Complete)
 		}
 
 		/// Check if there's any work left, or if we have exhausted the limits already.
@@ -269,51 +272,36 @@ pub mod pallet {
 		///
 		/// This function is *the* core of this entire pallet.
 		fn migrate_tick(&mut self) {
-			match (self.last_top.as_ref(), self.last_child.as_ref()) {
-				(Some(_), Some(_)) => {
+			match (&self.progress_top, &self.progress_child) {
+				(Progress::ToStart, _) => {
+					self.migrate_top();
+				},
+				(Progress::LastKey(_), Progress::LastKey(_)) => {
 					// we're in the middle of doing work on a child tree.
 					self.migrate_child();
 				},
-				(Some(ref top_key), None) => {
-					// we have a top key and no child key. 3 possibilities exist:
-					// 1. we continue the top key migrations.
-					// 2. this is the root of a child key, and we start processing child keys (and
-					// should call `migrate_child`).
+				(Progress::LastKey(top_key), Progress::ToStart) => {
 					// 3. this is the root of a child key, and we are finishing all child-keys (and
 					// should call `migrate_top`).
 
 					// NOTE: this block is written intentionally to verbosely for easy of
 					// verification.
-					match (
-						top_key.starts_with(DEFAULT_CHILD_STORAGE_KEY_PREFIX),
-						self.prev_tick_child,
-					) {
-						(false, false) => {
-							// continue the top key migration
-							self.migrate_top();
-						},
-						(true, false) => {
-							self.last_child = Some(Default::default());
-							self.migrate_child();
-							self.prev_tick_child = true;
-						},
-						(true, true) => {
-							// we're done with migrating a child-root.
-							self.prev_tick_child = false;
-							self.migrate_top();
-						},
-						(false, true) => {
-							// should never happen.
-							log!(error, "LOGIC ERROR: unreachable code [0].");
-							Pallet::<T>::halt();
-						},
-					};
+					if !top_key.starts_with(DEFAULT_CHILD_STORAGE_KEY_PREFIX) {
+						// we continue the top key migrations.
+						// continue the top key migration
+						self.migrate_top();
+					} else {
+						// this is the root of a child key, and we start processing child keys (and
+						// should call `migrate_child`).
+						self.migrate_child();
+					}
 				},
-				(None, Some(_)) => {
-					log!(error, "LOGIC ERROR: unreachable code [1].");
-					Pallet::<T>::halt()
+				(Progress::LastKey(_), Progress::Complete) => {
+					// we're done with migrating a child-root.
+					self.migrate_top();
+					self.progress_child = Progress::ToStart;
 				},
-				(None, None) => {
+				(Progress::Complete, _) => {
 					// nada
 				},
 			}
@@ -324,19 +312,26 @@ pub mod pallet {
 		/// It updates the dynamic counters.
 		fn migrate_child(&mut self) {
 			use sp_io::default_child_storage as child_io;
-			let (last_child, last_top) = match (&self.last_child, &self.last_top) {
-				(Some(last_child), Some(last_top)) => (last_child, last_top),
+			let (maybe_current_child, child_root) = match (&self.progress_child, &self.progress_top)
+			{
+				(Progress::LastKey(last_child), Progress::LastKey(last_top)) => {
+					let child_root = Pallet::<T>::transform_child_key_or_halt(&last_top);
+					let maybe_current_child = child_io::next_key(child_root, &last_child);
+					(maybe_current_child, child_root)
+				},
+				(Progress::ToStart, Progress::LastKey(last_top)) => {
+					let child_root = Pallet::<T>::transform_child_key_or_halt(&last_top);
+					// Start with the empty key as first key.
+					(Some(Vec::new()), child_root)
+				},
 				_ => {
-					// defensive: this function is only called when both of these values exist.
-					// much that we can do otherwise..
+					// defensive: there must be an ongoing top migration.
 					frame_support::defensive!("cannot migrate child key.");
 					return
 				},
 			};
 
-			let child_root = Pallet::<T>::transform_child_key_or_halt(&last_top);
-			let maybe_current_child = child_io::next_key(child_root, &last_child);
-			if let Some(ref current_child) = maybe_current_child {
+			if let Some(current_child) = maybe_current_child.as_ref() {
 				let added_size = if let Some(data) = child_io::get(child_root, &current_child) {
 					child_io::set(child_root, current_child, &data);
 					data.len() as u32
@@ -348,25 +343,28 @@ pub mod pallet {
 			}
 
 			log!(trace, "migrated a child key, next_child_key: {:?}", maybe_current_child);
-			self.last_child = maybe_current_child;
+			self.progress_child = match maybe_current_child {
+				Some(last_child) => Progress::LastKey(last_child),
+				None => Progress::Complete,
+			}
 		}
 
 		/// Migrate the current top key, setting it to its new value, if one exists.
 		///
 		/// It updates the dynamic counters.
 		fn migrate_top(&mut self) {
-			let last_top = match &self.last_top {
-				Some(last_top) => last_top,
-				None => {
-					// defensive: this function is only called when this value exist.
-					// much that we can do otherwise..
+			let maybe_current_top = match &self.progress_top {
+				Progress::LastKey(last_top) => sp_io::storage::next_key(last_top),
+				// Start with the empty key as first key.
+				Progress::ToStart => Some(Vec::new()),
+				Progress::Complete => {
+					// defensive: there must be an ongoing top migration.
 					frame_support::defensive!("cannot migrate top key.");
 					return
 				},
 			};
 
-			let maybe_current_top = sp_io::storage::next_key(last_top);
-			if let Some(ref current_top) = maybe_current_top {
+			if let Some(current_top) = maybe_current_top.as_ref() {
 				let added_size = if let Some(data) = sp_io::storage::get(&current_top) {
 					sp_io::storage::set(&current_top, &data);
 					data.len() as u32
@@ -378,7 +376,10 @@ pub mod pallet {
 			}
 
 			log!(trace, "migrated a top key, next_top_key = {:?}", maybe_current_top);
-			self.last_top = maybe_current_top;
+			self.progress_top = match maybe_current_top {
+				Some(last_top) => Progress::LastKey(last_top),
+				None => Progress::Complete,
+			}
 		}
 	}
 
@@ -811,7 +812,7 @@ mod benchmarks {
 		continue_migrate_wrong_witness {
 			let null = MigrationLimits::default();
 			let caller = frame_benchmarking::whitelisted_caller();
-			let bad_witness = MigrationTask { last_top: Some(vec![1u8]), ..Default::default() };
+			let bad_witness = MigrationTask { progress_top: Progress::LastKey(vec![1u8]), ..Default::default() };
 		}: {
 			assert!(
 				StateTrieMigration::<T>::continue_migrate(
@@ -1141,15 +1142,12 @@ mod test {
 	}
 
 	#[test]
-	#[ignore]
 	fn detects_value_in_empty_top_key() {
 		let limit = MigrationLimits { item: 1, size: 1000 };
 		let initial_keys = Some(vec![(vec![], vec![66u8; 77])]);
 		let mut ext = new_test_ext(StateVersion::V0, false, initial_keys.clone(), None);
 
 		let root_upgraded = ext.execute_with(|| {
-			sp_io::storage::set(&[], &vec![66u8; 77]);
-
 			AutoLimits::<Test>::put(Some(limit));
 			let root = run_to_block(30).0;
 
@@ -1168,9 +1166,7 @@ mod test {
 	}
 
 	#[test]
-	#[ignore]
 	fn detects_value_in_first_child_key() {
-		use frame_support::storage::child;
 		let limit = MigrationLimits { item: 1, size: 1000 };
 		let initial_child = Some(vec![(b"chk1".to_vec(), vec![], vec![66u8; 77])]);
 		let mut ext = new_test_ext(StateVersion::V0, false, None, initial_child.clone());
@@ -1186,7 +1182,6 @@ mod test {
 
 		let mut ext2 = new_test_ext(StateVersion::V1, false, None, initial_child);
 		let root = ext2.execute_with(|| {
-			child::put(&child::ChildInfo::new_default(b"chk1"), &[], &vec![66u8; 77]);
 			AutoLimits::<Test>::put(Some(limit));
 			run_to_block(30).0
 		});
@@ -1214,7 +1209,7 @@ mod test {
 				// eventually everything is over.
 				assert!(matches!(
 					StateTrieMigration::migration_process(),
-					MigrationTask { last_child: None, last_top: None, .. }
+					MigrationTask { progress_top: Progress::Complete, .. }
 				));
 				root
 			});
@@ -1276,7 +1271,10 @@ mod test {
 					Origin::signed(1),
 					MigrationLimits { item: 5, size: 100 },
 					100,
-					MigrationTask { last_top: Some(vec![1u8]), ..Default::default() }
+					MigrationTask {
+						progress_top: Progress::LastKey(vec![1u8]),
+						..Default::default()
+					}
 				),
 				Error::<Test>::BadWitness
 			);
@@ -1451,7 +1449,8 @@ pub(crate) mod remote_tests {
 		// set the version to 1, as if the upgrade happened.
 		ext.state_version = sp_core::storage::StateVersion::V1;
 
-		let (top_left, child_left) = ext.as_backend().essence().check_migration_state().unwrap();
+		let (top_left, child_left) =
+			substrate_state_trie_migration_rpc::migration_status(&ext.as_backend()).unwrap();
 		assert!(
 			top_left > 0,
 			"no node needs migrating, this probably means that state was initialized with `StateVersion::V1`",
@@ -1509,7 +1508,8 @@ pub(crate) mod remote_tests {
 			)
 		});
 
-		let (top_left, child_left) = ext.as_backend().essence().check_migration_state().unwrap();
+		let (top_left, child_left) =
+			substrate_state_trie_migration_rpc::migration_status(&ext.as_backend()).unwrap();
 		assert_eq!(top_left, 0);
 		assert_eq!(child_left, 0);
 	}

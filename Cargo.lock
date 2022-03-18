@@ -931,7 +931,7 @@ name = "chain-spec-builder"
 version = "2.0.0"
 dependencies = [
  "ansi_term",
- "clap 3.0.7",
+ "clap 3.1.6",
  "node-cli",
  "rand 0.8.4",
  "sc-chain-spec",
@@ -1006,9 +1006,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "3.0.7"
+version = "3.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "12e8611f9ae4e068fa3e56931fded356ff745e70987ff76924a6e0ab1c8ef2e3"
+checksum = "d8c93436c21e4698bacadf42917db28b23017027a4deccb35dbe47a7e7840123"
 dependencies = [
  "atty",
  "bitflags",
@@ -1018,7 +1018,7 @@ dependencies = [
  "os_str_bytes",
  "strsim",
  "termcolor",
- "textwrap 0.14.2",
+ "textwrap 0.15.0",
 ]
 
 [[package]]
@@ -1027,14 +1027,14 @@ version = "3.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a394f7ec0715b42a4e52b294984c27c9a61f77c8d82f7774c5198350be143f19"
 dependencies = [
- "clap 3.0.7",
+ "clap 3.1.6",
 ]
 
 [[package]]
 name = "clap_derive"
-version = "3.0.5"
+version = "3.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "41a0645a430ec9136d2d701e54a95d557de12649a9dd7109ced3187e648ac824"
+checksum = "da95d038ede1a964ce99f49cbe27a7fb538d1da595e4b4f70b8c8f338d17bf16"
 dependencies = [
  "heck 0.4.0",
  "proc-macro-error",
@@ -2126,7 +2126,7 @@ version = "4.0.0-dev"
 dependencies = [
  "Inflector",
  "chrono",
- "clap 3.0.7",
+ "clap 3.1.6",
  "frame-benchmarking",
  "frame-support",
  "handlebars",
@@ -2139,6 +2139,7 @@ dependencies = [
  "memory-db",
  "parity-scale-codec",
  "rand 0.8.4",
+ "sc-block-builder",
  "sc-cli",
  "sc-client-api",
  "sc-client-db",
@@ -2152,6 +2153,7 @@ dependencies = [
  "sp-core",
  "sp-database",
  "sp-externalities",
+ "sp-inherents",
  "sp-keystore",
  "sp-runtime",
  "sp-state-machine",
@@ -2161,9 +2163,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "frame-election-provider-solution-type"
+version = "4.0.0-dev"
+dependencies = [
+ "frame-election-provider-support",
+ "parity-scale-codec",
+ "proc-macro-crate 1.1.3",
+ "proc-macro2",
+ "quote",
+ "scale-info",
+ "sp-arithmetic",
+ "syn",
+ "trybuild",
+]
+
+[[package]]
 name = "frame-election-provider-support"
 version = "4.0.0-dev"
 dependencies = [
+ "frame-election-provider-solution-type",
  "frame-support",
  "frame-system",
  "parity-scale-codec",
@@ -2174,6 +2192,22 @@ dependencies = [
  "sp-npos-elections",
  "sp-runtime",
  "sp-std",
+]
+
+[[package]]
+name = "frame-election-solution-type-fuzzer"
+version = "2.0.0-alpha.5"
+dependencies = [
+ "clap 3.1.6",
+ "frame-election-provider-solution-type",
+ "frame-election-provider-support",
+ "honggfuzz",
+ "parity-scale-codec",
+ "rand 0.8.4",
+ "scale-info",
+ "sp-arithmetic",
+ "sp-npos-elections",
+ "sp-runtime",
 ]
 
 [[package]]
@@ -2256,7 +2290,7 @@ name = "frame-support-procedural-tools"
 version = "4.0.0-dev"
 dependencies = [
  "frame-support-procedural-tools-derive",
- "proc-macro-crate 1.1.0",
+ "proc-macro-crate 1.1.3",
  "proc-macro2",
  "quote",
  "syn",
@@ -3414,7 +3448,7 @@ version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4299ebf790ea9de1cb72e73ff2ae44c723ef264299e5e2d5ef46a371eb3ac3d8"
 dependencies = [
- "proc-macro-crate 1.1.0",
+ "proc-macro-crate 1.1.3",
  "proc-macro2",
  "quote",
  "syn",
@@ -4629,7 +4663,7 @@ version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "424f6e86263cd5294cbd7f1e95746b95aca0e0d66bff31e5a40d6baa87b4aa99"
 dependencies = [
- "proc-macro-crate 1.1.0",
+ "proc-macro-crate 1.1.3",
  "proc-macro-error",
  "proc-macro2",
  "quote",
@@ -4688,9 +4722,9 @@ dependencies = [
 
 [[package]]
 name = "names"
-version = "0.12.0"
+version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "10a8690bf09abf659851e58cd666c3d37ac6af07c2bd7a9e332cfba471715775"
+checksum = "e7d66043b25d4a6cccb23619d10c19c25304b355a7dccd4a8e11423dd2382146"
 dependencies = [
  "rand 0.8.4",
 ]
@@ -4751,7 +4785,7 @@ dependencies = [
 name = "node-bench"
 version = "0.9.0-dev"
 dependencies = [
- "clap 3.0.7",
+ "clap 3.1.6",
  "derive_more",
  "fs_extra",
  "futures 0.3.19",
@@ -4790,7 +4824,7 @@ version = "3.0.0-dev"
 dependencies = [
  "assert_cmd",
  "async-std",
- "clap 3.0.7",
+ "clap 3.1.6",
  "clap_complete",
  "criterion",
  "frame-benchmarking-cli",
@@ -4904,7 +4938,7 @@ dependencies = [
 name = "node-inspect"
 version = "0.9.0-dev"
 dependencies = [
- "clap 3.0.7",
+ "clap 3.1.6",
  "parity-scale-codec",
  "sc-cli",
  "sc-client-api",
@@ -4956,6 +4990,7 @@ dependencies = [
  "sp-keystore",
  "sp-runtime",
  "substrate-frame-rpc-system",
+ "substrate-state-trie-migration-rpc",
 ]
 
 [[package]]
@@ -5034,7 +5069,6 @@ dependencies = [
  "sp-core",
  "sp-inherents",
  "sp-io",
- "sp-npos-elections",
  "sp-offchain",
  "sp-runtime",
  "sp-sandbox",
@@ -5051,7 +5085,7 @@ dependencies = [
 name = "node-runtime-generate-bags"
 version = "3.0.0"
 dependencies = [
- "clap 3.0.7",
+ "clap 3.1.6",
  "generate-bags",
  "node-runtime",
 ]
@@ -5060,7 +5094,7 @@ dependencies = [
 name = "node-template"
 version = "4.0.0-dev"
 dependencies = [
- "clap 3.0.7",
+ "clap 3.1.6",
  "frame-benchmarking",
  "frame-benchmarking-cli",
  "jsonrpc-core",
@@ -6424,7 +6458,7 @@ dependencies = [
 name = "pallet-staking-reward-curve"
 version = "4.0.0-dev"
 dependencies = [
- "proc-macro-crate 1.1.0",
+ "proc-macro-crate 1.1.3",
  "proc-macro2",
  "quote",
  "sp-runtime",
@@ -6458,6 +6492,7 @@ dependencies = [
  "sp-runtime",
  "sp-std",
  "sp-tracing",
+ "substrate-state-trie-migration-rpc",
  "thousands",
  "tokio",
  "zstd",
@@ -6718,7 +6753,7 @@ version = "3.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2c6e626dc84025ff56bf1476ed0e30d10c84d7f89a475ef46ebabee1095a8fba"
 dependencies = [
- "proc-macro-crate 1.1.0",
+ "proc-macro-crate 1.1.3",
  "proc-macro2",
  "quote",
  "syn",
@@ -7212,9 +7247,9 @@ dependencies = [
 
 [[package]]
 name = "proc-macro-crate"
-version = "1.1.0"
+version = "1.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1ebace6889caf889b4d3f76becee12e90353f2b8c7d875534a71e5742f8f6f83"
+checksum = "e17d47ce914bf4de440332250b0edd23ce48c005f59fab39d3335866b114f11a"
 dependencies = [
  "thiserror",
  "toml",
@@ -8089,7 +8124,7 @@ dependencies = [
 name = "sc-chain-spec-derive"
 version = "4.0.0-dev"
 dependencies = [
- "proc-macro-crate 1.1.0",
+ "proc-macro-crate 1.1.3",
  "proc-macro2",
  "quote",
  "syn",
@@ -8100,7 +8135,7 @@ name = "sc-cli"
 version = "0.10.0-dev"
 dependencies = [
  "chrono",
- "clap 3.0.7",
+ "clap 3.1.6",
  "fdlimit",
  "futures 0.3.19",
  "hex",
@@ -9074,7 +9109,7 @@ dependencies = [
 name = "sc-tracing-proc-macro"
 version = "4.0.0-dev"
 dependencies = [
- "proc-macro-crate 1.1.0",
+ "proc-macro-crate 1.1.3",
  "proc-macro2",
  "quote",
  "syn",
@@ -9159,7 +9194,7 @@ version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b7805950c36512db9e3251c970bb7ac425f326716941862205d612ab3b5e46e2"
 dependencies = [
- "proc-macro-crate 1.1.0",
+ "proc-macro-crate 1.1.3",
  "proc-macro2",
  "quote",
  "syn",
@@ -9381,9 +9416,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.74"
+version = "1.0.79"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ee2bb9cd061c5865d345bb02ca49fcef1391741b672b54a0bf7b679badec3142"
+checksum = "8e8d9fa5c3b304765ce1fd9c4c8a3de2c8db365a5b91be52f186efc675681d95"
 dependencies = [
  "itoa 1.0.1",
  "ryu",
@@ -9652,7 +9687,7 @@ name = "sp-api-proc-macro"
 version = "4.0.0-dev"
 dependencies = [
  "blake2 0.10.2",
- "proc-macro-crate 1.1.0",
+ "proc-macro-crate 1.1.3",
  "proc-macro2",
  "quote",
  "syn",
@@ -10075,7 +10110,6 @@ dependencies = [
  "serde",
  "sp-arithmetic",
  "sp-core",
- "sp-npos-elections-solution-type",
  "sp-runtime",
  "sp-std",
  "substrate-test-utils",
@@ -10085,28 +10119,13 @@ dependencies = [
 name = "sp-npos-elections-fuzzer"
 version = "2.0.0-alpha.5"
 dependencies = [
- "clap 3.0.7",
+ "clap 3.1.6",
  "honggfuzz",
  "parity-scale-codec",
  "rand 0.8.4",
  "scale-info",
  "sp-npos-elections",
  "sp-runtime",
-]
-
-[[package]]
-name = "sp-npos-elections-solution-type"
-version = "4.0.0-dev"
-dependencies = [
- "parity-scale-codec",
- "proc-macro-crate 1.1.0",
- "proc-macro2",
- "quote",
- "scale-info",
- "sp-arithmetic",
- "sp-npos-elections",
- "syn",
- "trybuild",
 ]
 
 [[package]]
@@ -10191,7 +10210,7 @@ name = "sp-runtime-interface-proc-macro"
 version = "5.0.0"
 dependencies = [
  "Inflector",
- "proc-macro-crate 1.1.0",
+ "proc-macro-crate 1.1.3",
  "proc-macro2",
  "quote",
  "syn",
@@ -10302,7 +10321,6 @@ dependencies = [
  "sp-trie",
  "thiserror",
  "tracing",
- "trie-db",
  "trie-root",
 ]
 
@@ -10542,7 +10560,7 @@ dependencies = [
 name = "subkey"
 version = "2.0.1"
 dependencies = [
- "clap 3.0.7",
+ "clap 3.1.6",
  "sc-cli",
 ]
 
@@ -10570,7 +10588,7 @@ dependencies = [
 name = "substrate-frame-cli"
 version = "4.0.0-dev"
 dependencies = [
- "clap 3.0.7",
+ "clap 3.1.6",
  "frame-support",
  "frame-system",
  "sc-cli",
@@ -10628,6 +10646,29 @@ dependencies = [
  "prometheus",
  "thiserror",
  "tokio",
+]
+
+[[package]]
+name = "substrate-state-trie-migration-rpc"
+version = "4.0.0-dev"
+dependencies = [
+ "jsonrpc-core",
+ "jsonrpc-core-client",
+ "jsonrpc-derive",
+ "log 0.4.14",
+ "parity-scale-codec",
+ "sc-client-api",
+ "sc-rpc-api",
+ "scale-info",
+ "serde",
+ "serde_json",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-state-machine",
+ "sp-std",
+ "sp-trie",
+ "trie-db",
 ]
 
 [[package]]
@@ -10749,7 +10790,7 @@ dependencies = [
 name = "substrate-test-utils-derive"
 version = "0.10.0-dev"
 dependencies = [
- "proc-macro-crate 1.1.0",
+ "proc-macro-crate 1.1.3",
  "proc-macro2",
  "quote",
  "syn",
@@ -10860,9 +10901,9 @@ dependencies = [
 
 [[package]]
 name = "textwrap"
-version = "0.14.2"
+version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0066c8d12af8b5acd21e00547c3797fde4e8677254a7ee429176ccebbe93dd80"
+checksum = "b1141d4d61095b28419e22cb0bbf02755f5e54e0526f97f1e3d1d160e60885fb"
 
 [[package]]
 name = "thiserror"
@@ -11384,7 +11425,7 @@ checksum = "59547bce71d9c38b83d9c0e92b6066c4253371f15005def0c30d9657f50c7642"
 name = "try-runtime-cli"
 version = "0.10.0-dev"
 dependencies = [
- "clap 3.0.7",
+ "clap 3.1.6",
  "jsonrpsee 0.4.1",
  "log 0.4.14",
  "parity-scale-codec",
