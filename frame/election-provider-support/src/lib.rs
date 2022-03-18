@@ -167,15 +167,86 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 pub mod onchain;
-use frame_support::{traits::Get, BoundedVec};
+pub mod traits;
+use codec::{Decode, Encode};
+use frame_support::{traits::Get, BoundedVec, RuntimeDebug};
+use sp_runtime::traits::Bounded;
 use sp_std::{fmt::Debug, prelude::*};
 
+/// Re-export the solution generation macro.
+pub use frame_election_provider_solution_type::generate_solution_type;
 /// Re-export some type as they are used in the interface.
 pub use sp_arithmetic::PerThing;
 pub use sp_npos_elections::{
-	Assignment, ElectionResult, ExtendedBalance, IdentifierT, PerThing128, Support, Supports,
-	VoteWeight,
+	Assignment, ElectionResult, Error, ExtendedBalance, IdentifierT, PerThing128, Support,
+	Supports, VoteWeight,
 };
+pub use traits::NposSolution;
+
+// re-export for the solution macro, with the dependencies of the macro.
+#[doc(hidden)]
+pub use codec;
+#[doc(hidden)]
+pub use scale_info;
+#[doc(hidden)]
+pub use sp_arithmetic;
+#[doc(hidden)]
+pub use sp_std;
+// Simple Extension trait to easily convert `None` from index closures to `Err`.
+//
+// This is only generated and re-exported for the solution code to use.
+#[doc(hidden)]
+pub trait __OrInvalidIndex<T> {
+	fn or_invalid_index(self) -> Result<T, Error>;
+}
+
+impl<T> __OrInvalidIndex<T> for Option<T> {
+	fn or_invalid_index(self) -> Result<T, Error> {
+		self.ok_or(Error::SolutionInvalidIndex)
+	}
+}
+
+/// The [`IndexAssignment`] type is an intermediate between the assignments list
+/// ([`&[Assignment<T>]`][Assignment]) and `SolutionOf<T>`.
+///
+/// The voter and target identifiers have already been replaced with appropriate indices,
+/// making it fast to repeatedly encode into a `SolutionOf<T>`. This property turns out
+/// to be important when trimming for solution length.
+#[derive(RuntimeDebug, Clone, Default)]
+#[cfg_attr(feature = "std", derive(PartialEq, Eq, Encode, Decode))]
+pub struct IndexAssignment<VoterIndex, TargetIndex, P: PerThing> {
+	/// Index of the voter among the voters list.
+	pub who: VoterIndex,
+	/// The distribution of the voter's stake among winning targets.
+	///
+	/// Targets are identified by their index in the canonical list.
+	pub distribution: Vec<(TargetIndex, P)>,
+}
+
+impl<VoterIndex, TargetIndex, P: PerThing> IndexAssignment<VoterIndex, TargetIndex, P> {
+	pub fn new<AccountId: IdentifierT>(
+		assignment: &Assignment<AccountId, P>,
+		voter_index: impl Fn(&AccountId) -> Option<VoterIndex>,
+		target_index: impl Fn(&AccountId) -> Option<TargetIndex>,
+	) -> Result<Self, Error> {
+		Ok(Self {
+			who: voter_index(&assignment.who).or_invalid_index()?,
+			distribution: assignment
+				.distribution
+				.iter()
+				.map(|(target, proportion)| Some((target_index(target)?, proportion.clone())))
+				.collect::<Option<Vec<_>>>()
+				.or_invalid_index()?,
+		})
+	}
+}
+
+/// A type alias for [`IndexAssignment`] made from [`NposSolution`].
+pub type IndexAssignmentOf<C> = IndexAssignment<
+	<C as NposSolution>::VoterIndex,
+	<C as NposSolution>::TargetIndex,
+	<C as NposSolution>::Accuracy,
+>;
 
 /// Types that are used by the data provider trait.
 pub mod data_provider {
@@ -218,6 +289,12 @@ pub trait ElectionDataProvider {
 	///
 	/// This should be implemented as a self-weighing function. The implementor should register its
 	/// appropriate weight at the end of execution with the system pallet directly.
+	///
+	/// A sensible implementation should use the minimum between this value and
+	/// [`Self::targets().len()`], since desiring a winner set larger than candidates is not
+	/// feasible.
+	///
+	/// This is documented further in issue: <https://github.com/paritytech/substrate/issues/9478>
 	fn desired_targets() -> data_provider::Result<u32>;
 
 	/// Provide a best effort prediction about when the next election is about to happen.
@@ -260,33 +337,6 @@ pub trait ElectionDataProvider {
 	/// Clear all voters and targets.
 	#[cfg(any(feature = "runtime-benchmarks", test))]
 	fn clear() {}
-}
-
-/// An election data provider that should only be used for testing.
-#[cfg(feature = "std")]
-pub struct TestDataProvider<X>(sp_std::marker::PhantomData<X>);
-
-#[cfg(feature = "std")]
-impl<AccountId, BlockNumber> ElectionDataProvider for TestDataProvider<(AccountId, BlockNumber)> {
-	type AccountId = AccountId;
-	type BlockNumber = BlockNumber;
-	type MaxVotesPerVoter = ();
-
-	fn targets(_maybe_max_len: Option<usize>) -> data_provider::Result<Vec<AccountId>> {
-		Ok(Default::default())
-	}
-
-	fn voters(_maybe_max_len: Option<usize>) -> data_provider::Result<Vec<VoterOf<Self>>> {
-		Ok(Default::default())
-	}
-
-	fn desired_targets() -> data_provider::Result<u32> {
-		Ok(Default::default())
-	}
-
-	fn next_election_prediction(now: BlockNumber) -> BlockNumber {
-		now
-	}
 }
 
 /// Something that can compute the result of an election and pass it back to the caller.
@@ -340,11 +390,15 @@ pub trait InstantElectionProvider: ElectionProvider {
 pub struct NoElection<X>(sp_std::marker::PhantomData<X>);
 
 #[cfg(feature = "std")]
-impl<AccountId, BlockNumber> ElectionProvider for NoElection<(AccountId, BlockNumber)> {
+impl<AccountId, BlockNumber, DataProvider> ElectionProvider
+	for NoElection<(AccountId, BlockNumber, DataProvider)>
+where
+	DataProvider: ElectionDataProvider<AccountId = AccountId, BlockNumber = BlockNumber>,
+{
 	type AccountId = AccountId;
 	type BlockNumber = BlockNumber;
 	type Error = &'static str;
-	type DataProvider = TestDataProvider<(AccountId, BlockNumber)>;
+	type DataProvider = DataProvider;
 
 	fn elect() -> Result<Supports<AccountId>, Self::Error> {
 		Err("<NoElection as ElectionProvider> cannot do anything.")
@@ -356,15 +410,16 @@ impl<AccountId, BlockNumber> ElectionProvider for NoElection<(AccountId, BlockNu
 /// This is generic over `AccountId` and it can represent a validator, a nominator, or any other
 /// entity.
 ///
-/// To simplify the trait, the `VoteWeight` is hardcoded as the weight of each entity. The weights
-/// are ascending, the higher, the better. In the long term, if this trait ends up having use cases
-/// outside of the election context, it is easy enough to make it generic over the `VoteWeight`.
+/// The scores (see [`Self::Score`]) are ascending, the higher, the better.
 ///
 /// Something that implements this trait will do a best-effort sort over ids, and thus can be
 /// used on the implementing side of [`ElectionDataProvider`].
 pub trait SortedListProvider<AccountId> {
 	/// The list's error type.
 	type Error: sp_std::fmt::Debug;
+
+	/// The type used by the list to compare nodes for ordering.
+	type Score: Bounded;
 
 	/// An iterator over the list, which can have `take` called on it.
 	fn iter() -> Box<dyn Iterator<Item = AccountId>>;
@@ -376,10 +431,10 @@ pub trait SortedListProvider<AccountId> {
 	fn contains(id: &AccountId) -> bool;
 
 	/// Hook for inserting a new id.
-	fn on_insert(id: AccountId, weight: VoteWeight) -> Result<(), Self::Error>;
+	fn on_insert(id: AccountId, score: Self::Score) -> Result<(), Self::Error>;
 
 	/// Hook for updating a single id.
-	fn on_update(id: &AccountId, weight: VoteWeight);
+	fn on_update(id: &AccountId, score: Self::Score);
 
 	/// Hook for removing am id from the list.
 	fn on_remove(id: &AccountId);
@@ -394,7 +449,7 @@ pub trait SortedListProvider<AccountId> {
 	/// new list, which can lead to too many storage accesses, exhausting the block weight.
 	fn unsafe_regenerate(
 		all: impl IntoIterator<Item = AccountId>,
-		weight_of: Box<dyn Fn(&AccountId) -> VoteWeight>,
+		score_of: Box<dyn Fn(&AccountId) -> Self::Score>,
 	) -> u32;
 
 	/// Remove all items from the list.
@@ -411,21 +466,23 @@ pub trait SortedListProvider<AccountId> {
 	/// If `who` changes by the returned amount they are guaranteed to have a worst case change
 	/// in their list position.
 	#[cfg(feature = "runtime-benchmarks")]
-	fn weight_update_worst_case(_who: &AccountId, _is_increase: bool) -> VoteWeight {
-		VoteWeight::MAX
+	fn score_update_worst_case(_who: &AccountId, _is_increase: bool) -> Self::Score {
+		Self::Score::max_value()
 	}
 }
 
 /// Something that can provide the `VoteWeight` of an account. Similar to [`ElectionProvider`] and
 /// [`ElectionDataProvider`], this should typically be implementing by whoever is supposed to *use*
 /// `SortedListProvider`.
-pub trait VoteWeightProvider<AccountId> {
-	/// Get the current `VoteWeight` of `who`.
-	fn vote_weight(who: &AccountId) -> VoteWeight;
+pub trait ScoreProvider<AccountId> {
+	type Score;
+
+	/// Get the current `Score` of `who`.
+	fn score(who: &AccountId) -> Self::Score;
 
 	/// For tests and benchmarks, set the `VoteWeight`.
 	#[cfg(any(feature = "runtime-benchmarks", test))]
-	fn set_vote_weight_of(_: &AccountId, _: VoteWeight) {}
+	fn set_score_of(_: &AccountId, _: Self::Score) {}
 }
 
 /// Something that can compute the result to an NPoS solution.

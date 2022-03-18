@@ -34,11 +34,11 @@ use std::{borrow::Cow, path::PathBuf};
 #[derive(Debug, Clone, Args)]
 pub struct NetworkParams {
 	/// Specify a list of bootnodes.
-	#[clap(long, value_name = "ADDR")]
+	#[clap(long, value_name = "ADDR", multiple_values(true))]
 	pub bootnodes: Vec<MultiaddrWithPeerId>,
 
 	/// Specify a list of reserved node addresses.
-	#[clap(long, value_name = "ADDR")]
+	#[clap(long, value_name = "ADDR", multiple_values(true))]
 	pub reserved_nodes: Vec<MultiaddrWithPeerId>,
 
 	/// Whether to only synchronize the chain with reserved nodes.
@@ -54,7 +54,7 @@ pub struct NetworkParams {
 
 	/// The public address that other nodes will use to connect to it.
 	/// This can be used if there's a proxy in front of this node.
-	#[clap(long, value_name = "PUBLIC_ADDR")]
+	#[clap(long, value_name = "PUBLIC_ADDR", multiple_values(true))]
 	pub public_addr: Vec<Multiaddr>,
 
 	/// Listen on this multiaddress.
@@ -62,7 +62,7 @@ pub struct NetworkParams {
 	/// By default:
 	/// If `--validator` is passed: `/ip4/0.0.0.0/tcp/<port>` and `/ip6/[::]/tcp/<port>`.
 	/// Otherwise: `/ip4/0.0.0.0/tcp/<port>/ws` and `/ip6/[::]/tcp/<port>/ws`.
-	#[clap(long, value_name = "LISTEN_ADDR")]
+	#[clap(long, value_name = "LISTEN_ADDR", multiple_values(true))]
 	pub listen_addr: Vec<Multiaddr>,
 
 	/// Specify p2p protocol TCP port.
@@ -137,7 +137,7 @@ pub struct NetworkParams {
 	/// - `Fast`: Download blocks and the latest state only.
 	///
 	/// - `FastUnsafe`: Same as `Fast`, but skip downloading state proofs.
-	#[clap(long, arg_enum, value_name = "SYNC_MODE", default_value = "Full")]
+	#[clap(long, arg_enum, value_name = "SYNC_MODE", default_value = "Full", ignore_case(true))]
 	pub sync: SyncMode,
 }
 
@@ -235,5 +235,57 @@ impl NetworkParams {
 			ipfs_server: self.ipfs_server,
 			sync_mode: self.sync.into(),
 		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use clap::Parser;
+
+	#[derive(Parser)]
+	struct Cli {
+		#[clap(flatten)]
+		network_params: NetworkParams,
+	}
+
+	#[test]
+	fn reserved_nodes_multiple_values_and_occurrences() {
+		let params = Cli::try_parse_from([
+			"",
+			"--reserved-nodes",
+			"/ip4/0.0.0.0/tcp/501/p2p/12D3KooWEBo1HUPQJwiBmM5kSeg4XgiVxEArArQdDarYEsGxMfbS",
+			"/ip4/0.0.0.0/tcp/502/p2p/12D3KooWEBo1HUPQJwiBmM5kSeg4XgiVxEArArQdDarYEsGxMfbS",
+			"--reserved-nodes",
+			"/ip4/0.0.0.0/tcp/503/p2p/12D3KooWEBo1HUPQJwiBmM5kSeg4XgiVxEArArQdDarYEsGxMfbS",
+		])
+		.expect("Parses network params");
+
+		let expected = vec![
+			MultiaddrWithPeerId::try_from(
+				"/ip4/0.0.0.0/tcp/501/p2p/12D3KooWEBo1HUPQJwiBmM5kSeg4XgiVxEArArQdDarYEsGxMfbS"
+					.to_string(),
+			)
+			.unwrap(),
+			MultiaddrWithPeerId::try_from(
+				"/ip4/0.0.0.0/tcp/502/p2p/12D3KooWEBo1HUPQJwiBmM5kSeg4XgiVxEArArQdDarYEsGxMfbS"
+					.to_string(),
+			)
+			.unwrap(),
+			MultiaddrWithPeerId::try_from(
+				"/ip4/0.0.0.0/tcp/503/p2p/12D3KooWEBo1HUPQJwiBmM5kSeg4XgiVxEArArQdDarYEsGxMfbS"
+					.to_string(),
+			)
+			.unwrap(),
+		];
+
+		assert_eq!(expected, params.network_params.reserved_nodes);
+	}
+
+	#[test]
+	fn sync_ingores_case() {
+		let params = Cli::try_parse_from(["", "--sync", "wArP"]).expect("Parses network params");
+
+		assert_eq!(SyncMode::Warp, params.network_params.sync);
 	}
 }

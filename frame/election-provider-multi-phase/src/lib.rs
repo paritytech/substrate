@@ -103,7 +103,7 @@
 //!
 //! Validators will only submit solutions if the one that they have computed is sufficiently better
 //! than the best queued one (see [`pallet::Config::SolutionImprovementThreshold`]) and will limit
-//! the weigh of the solution to [`pallet::Config::MinerMaxWeight`].
+//! the weight of the solution to [`pallet::Config::MinerMaxWeight`].
 //!
 //! The unsigned phase can be made passive depending on how the previous signed phase went, by
 //! setting the first inner value of [`Phase`] to `false`. For now, the signed phase is always
@@ -147,13 +147,13 @@
 //! which is capable of connecting to a live network, and generating appropriate `supports` using a
 //! standard algorithm, and outputting the `supports` in hex format, ready for submission. Note that
 //! while this binary lives in the Polkadot repository, this particular subcommand of it can work
-//! against any substrate based-chain.
+//! against any substrate-based chain.
 //!
 //! See the `staking-miner` documentation in the Polkadot repository for more information.
 //!
 //! ## Feasible Solution (correct solution)
 //!
-//! All submissions must undergo a feasibility check. Signed solutions are checked on by one at the
+//! All submissions must undergo a feasibility check. Signed solutions are checked one by one at the
 //! end of the signed phase, and the unsigned solutions are checked on the spot. A feasible solution
 //! is as follows:
 //!
@@ -231,7 +231,7 @@
 
 use codec::{Decode, Encode};
 use frame_election_provider_support::{
-	ElectionDataProvider, ElectionProvider, InstantElectionProvider,
+	ElectionDataProvider, ElectionProvider, InstantElectionProvider, NposSolution,
 };
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
@@ -246,8 +246,7 @@ use sp_arithmetic::{
 	UpperOf,
 };
 use sp_npos_elections::{
-	assignment_ratio_to_staked_normalized, ElectionScore, EvaluateSupport, NposSolution, Supports,
-	VoteWeight,
+	assignment_ratio_to_staked_normalized, ElectionScore, EvaluateSupport, Supports, VoteWeight,
 };
 use sp_runtime::{
 	traits::Bounded,
@@ -963,24 +962,12 @@ pub mod pallet {
 		///
 		/// A deposit is reserved and recorded for the solution. Based on the outcome, the solution
 		/// might be rewarded, slashed, or get all or a part of the deposit back.
-		///
-		/// # <weight>
-		/// Queue size must be provided as witness data.
-		/// # </weight>
-		#[pallet::weight(T::WeightInfo::submit(*num_signed_submissions))]
+		#[pallet::weight(T::WeightInfo::submit())]
 		pub fn submit(
 			origin: OriginFor<T>,
 			raw_solution: Box<RawSolution<SolutionOf<T>>>,
-			num_signed_submissions: u32,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-
-			// ensure witness data is correct.
-			ensure!(
-				num_signed_submissions >=
-					<SignedSubmissions<T>>::decode_len().unwrap_or_default() as u32,
-				Error::<T>::SignedInvalidWitness,
-			);
 
 			// ensure solution is timely.
 			ensure!(Self::current_phase().is_signed(), Error::<T>::PreDispatchEarlySubmission);
@@ -1000,8 +987,7 @@ pub mod pallet {
 			// create the submission
 			let deposit = Self::deposit_for(&raw_solution, size);
 			let reward = {
-				let call =
-					Call::submit { raw_solution: raw_solution.clone(), num_signed_submissions };
+				let call = Call::submit { raw_solution: raw_solution.clone() };
 				let call_fee = T::EstimateCallFee::estimate_call_fee(&call, None.into());
 				T::SignedRewardBase::get().saturating_add(call_fee)
 			};
@@ -1360,13 +1346,29 @@ impl<T: Config> Pallet<T> {
 			T::DataProvider::targets(Some(target_limit)).map_err(ElectionError::DataProvider)?;
 		let voters =
 			T::DataProvider::voters(Some(voter_limit)).map_err(ElectionError::DataProvider)?;
-		let desired_targets =
+		let mut desired_targets =
 			T::DataProvider::desired_targets().map_err(ElectionError::DataProvider)?;
 
 		// Defensive-only.
 		if targets.len() > target_limit || voters.len() > voter_limit {
 			debug_assert!(false, "Snapshot limit has not been respected.");
 			return Err(ElectionError::DataProvider("Snapshot too big for submission."))
+		}
+
+		// If `desired_targets` > `targets.len()`, cap `desired_targets` to that level and emit a
+		// warning
+		let max_len = targets
+			.len()
+			.try_into()
+			.map_err(|_| ElectionError::DataProvider("Failed to convert usize"))?;
+		if desired_targets > max_len {
+			log!(
+				warn,
+				"desired_targets: {} > targets.len(): {}, capping desired_targets",
+				desired_targets,
+				max_len
+			);
+			desired_targets = max_len;
 		}
 
 		Ok((targets, voters, desired_targets))
@@ -1427,9 +1429,6 @@ impl<T: Config> Pallet<T> {
 		let desired_targets =
 			Self::desired_targets().ok_or(FeasibilityError::SnapshotUnavailable)?;
 
-		// NOTE: this is a bit of duplicate, but we keep it around for veracity. The unsigned path
-		// already checked this in `unsigned_per_dispatch_checks`. The signed path *could* check it
-		// upon arrival, thus we would then remove it here. Given overlay it is cheap anyhow
 		ensure!(winners.len() as u32 == desired_targets, FeasibilityError::WrongWinnerCount);
 
 		// Ensure that the solution's score can pass absolute min-score.
@@ -1602,7 +1601,7 @@ mod feasibility_check {
 		raw_solution, roll_to, EpochLength, ExtBuilder, MultiPhase, Runtime, SignedPhase,
 		TargetIndex, UnsignedPhase, VoterIndex,
 	};
-	use frame_support::assert_noop;
+	use frame_support::{assert_noop, assert_ok};
 
 	const COMPUTE: ElectionCompute = ElectionCompute::OnChain;
 
@@ -1639,7 +1638,7 @@ mod feasibility_check {
 	}
 
 	#[test]
-	fn desired_targets() {
+	fn desired_targets_gets_capped() {
 		ExtBuilder::default().desired_targets(8).build_and_execute(|| {
 			roll_to(<EpochLength>::get() - <SignedPhase>::get() - <UnsignedPhase>::get());
 			assert!(MultiPhase::current_phase().is_signed());
@@ -1647,8 +1646,30 @@ mod feasibility_check {
 			let raw = raw_solution();
 
 			assert_eq!(raw.solution.unique_targets().len(), 4);
-			assert_eq!(MultiPhase::desired_targets().unwrap(), 8);
+			// desired_targets is capped to the number of targets which is 4
+			assert_eq!(MultiPhase::desired_targets().unwrap(), 4);
 
+			// It should succeed
+			assert_ok!(MultiPhase::feasibility_check(raw, COMPUTE));
+		})
+	}
+
+	#[test]
+	fn less_than_desired_targets_fails() {
+		ExtBuilder::default().desired_targets(8).build_and_execute(|| {
+			roll_to(<EpochLength>::get() - <SignedPhase>::get() - <UnsignedPhase>::get());
+			assert!(MultiPhase::current_phase().is_signed());
+
+			let mut raw = raw_solution();
+
+			assert_eq!(raw.solution.unique_targets().len(), 4);
+			// desired_targets is capped to the number of targets which is 4
+			assert_eq!(MultiPhase::desired_targets().unwrap(), 4);
+
+			// Force the number of winners to be bigger to fail
+			raw.solution.votes1[0].1 = 4;
+
+			// It should succeed
 			assert_noop!(
 				MultiPhase::feasibility_check(raw, COMPUTE),
 				FeasibilityError::WrongWinnerCount,
@@ -1970,11 +1991,7 @@ mod tests {
 					score: ElectionScore { minimal_stake: (5 + s).into(), ..Default::default() },
 					..Default::default()
 				};
-				assert_ok!(MultiPhase::submit(
-					crate::mock::Origin::signed(99),
-					Box::new(solution),
-					MultiPhase::signed_submissions().len() as u32
-				));
+				assert_ok!(MultiPhase::submit(crate::mock::Origin::signed(99), Box::new(solution)));
 			}
 
 			// an unexpected call to elect.

@@ -13,7 +13,7 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-futures = "0.3.16"
+futures = "0.3.19"
 jsonrpc-core = "18.0.0"
 pubsub = { package = "jsonrpc-pubsub", version = "18.0.0" }
 log = "0.4.8"

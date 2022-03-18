@@ -17,9 +17,9 @@ targets = ["x86_64-unknown-linux-gnu"]
 wasm-instrument = "0.1"
 codec = { package = "parity-scale-codec", version = "3.0.0" }
 wasmi = "0.9.1"
-sp-core = { version = "5.0.0", path = "../../../primitives/core" }
+sp-core = { version = "6.0.0", path = "../../../primitives/core" }
 sc-allocator = { version = "4.1.0-dev", path = "../../allocator" }
-sp-wasm-interface = { version = "5.0.0", path = "../../../primitives/wasm-interface" }
+sp-wasm-interface = { version = "6.0.0", path = "../../../primitives/wasm-interface" }
 sp-maybe-compressed-blob = { version = "4.1.0-dev", path = "../../../primitives/maybe-compressed-blob" }
 sp-serializer = { version = "4.0.0-dev", path = "../../../primitives/serializer" }
 thiserror = "1.0.30"
