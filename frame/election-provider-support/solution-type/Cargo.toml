@@ -25,5 +25,5 @@ parity-scale-codec = "3.0.0"
 scale-info = "2.0.1"
 sp-arithmetic = { version = "5.0.0", path = "../../../primitives/arithmetic" }
 # used by generate_solution_type:
-sp-npos-elections = { version = "4.0.0-dev", path = "../../../primitives/npos-elections" }
+frame-election-provider-support = { version = "4.0.0-dev", path = ".." }
 trybuild = "1.0.53"
