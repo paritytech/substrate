@@ -628,8 +628,7 @@ pub mod pallet {
 		#[pallet::constant]
 		type SignedMaxWeight: Get<Weight>;
 
-		/// The maximum amount of unchecked solutions to refund the call fee for. If `None`, all
-		/// solutions, including ejected solutions, will get a refund.
+		/// The maximum amount of unchecked solutions to refund the call fee for.
 		#[pallet::constant]
 		type SignedMaxRefunds: Get<u32>;
 
