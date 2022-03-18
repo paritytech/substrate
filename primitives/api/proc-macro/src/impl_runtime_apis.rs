@@ -303,7 +303,7 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 			}
 
 			fn overlay(&self) -> #crate_::OverlayedChanges {
-				std::clone::Clone::clone(&std::cell::RefCell::borrow(&self.changes))
+				::std::clone::Clone::clone(&::std::cell::RefCell::borrow(&self.changes))
 			}
 		}
 
