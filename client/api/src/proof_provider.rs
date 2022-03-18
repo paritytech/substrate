@@ -49,7 +49,6 @@ pub trait ProofProvider<Block: BlockT> {
 		id: &BlockId<Block>,
 		method: &str,
 		call_data: &[u8],
-		overlay: Option<sp_api::OverlayedChanges>,
 	) -> sp_blockchain::Result<(Vec<u8>, StorageProof)>;
 
 	/// Given a `BlockId` iterate over all storage values starting at `start_keys`.

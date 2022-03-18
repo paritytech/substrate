@@ -163,7 +163,6 @@ impl<B: Block> LightClientRequestHandler<B> {
 			&BlockId::Hash(block),
 			&request.method,
 			&request.data,
-			None,
 		) {
 			Ok((_, proof)) => proof,
 			Err(e) => {

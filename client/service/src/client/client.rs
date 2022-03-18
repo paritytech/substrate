@@ -1189,9 +1189,8 @@ where
 		id: &BlockId<Block>,
 		method: &str,
 		call_data: &[u8],
-		overlay: Option<sp_api::OverlayedChanges>,
 	) -> sp_blockchain::Result<(Vec<u8>, StorageProof)> {
-		self.executor.prove_execution(id, method, call_data, overlay)
+		self.executor.prove_execution(id, method, call_data)
 	}
 
 	fn read_proof_collection(

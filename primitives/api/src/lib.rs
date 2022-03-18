@@ -520,7 +520,9 @@ pub trait ApiExt<Block: BlockT> {
 	where
 		Self: Sized;
 
-	/// TODO
+	/// Returns the overlayed changes.
+	///
+	/// Useful when you want to construct an intermediate state during the entire block execution.
 	fn overlay(&self) -> RefCell<OverlayedChanges>;
 }
 
