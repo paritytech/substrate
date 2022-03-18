@@ -49,7 +49,8 @@ fn commit_works() {
 		let sender = 1;
 		let registrant = 2;
 		let secret = 3u64;
-		let commitment_hash = ("alice", secret).using_encoded(blake2_256);
+		let name = "alice".as_bytes().to_vec();
+		let commitment_hash = (name, secret).using_encoded(blake2_256);
 
 		assert_eq!(Balances::free_balance(&1), 100);
 
@@ -71,7 +72,8 @@ fn commit_handles_errors() {
 		let sender = 1;
 		let registrant = 2;
 		let secret = 3u64;
-		let commitment_hash = ("alice", secret).using_encoded(blake2_256);
+		let name = "alice".as_bytes().to_vec();
+		let commitment_hash = (name, secret).using_encoded(blake2_256);
 
 		assert_eq!(Balances::free_balance(&1), 100);
 
@@ -88,5 +90,28 @@ fn commit_handles_errors() {
 			NameService::commit(Origin::signed(1337), registrant, commitment_hash),
 			BalancesError::InsufficientBalance,
 		);
+	});
+}
+
+#[test]
+fn reveal_works() {
+	new_test_ext().execute_with(|| {
+		let sender = 1;
+		let registrant = 2;
+		let secret = 3u64;
+		let name = "alice".as_bytes().to_vec();
+		let encoded_bytes = (&name, secret).encode();
+		let commitment_hash = blake2_256(&encoded_bytes);
+		let periods = 10;
+
+		assert_eq!(Balances::free_balance(&1), 100);
+
+		assert_ok!(NameService::commit(Origin::signed(sender), registrant, commitment_hash));
+		assert_ok!(NameService::reveal(Origin::signed(sender), name, secret, periods));
+
+		println!("{:?}", sp_core::hexdisplay::HexDisplay::from(&encoded_bytes));
+		println!("{:?}", sp_core::hexdisplay::HexDisplay::from(&commitment_hash));
+
+		// TODO finish test
 	});
 }
