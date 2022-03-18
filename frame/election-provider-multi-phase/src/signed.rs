@@ -401,7 +401,8 @@ impl<T: Config> Pallet<T> {
 		for SignedSubmission { who, deposit, call_fee, .. } in all_submissions.drain() {
 			if refund_count < max_refunds {
 				// Refund fee
-				let _ = T::Currency::deposit_creating(&who, call_fee);
+				let positive_imbalance = T::Currency::deposit_creating(&who, call_fee);
+				T::RewardHandler::on_unbalanced(positive_imbalance);
 				refund_count += 1;
 			}
 
