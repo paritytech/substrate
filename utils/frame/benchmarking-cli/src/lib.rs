@@ -16,12 +16,15 @@
 // limitations under the License.
 
 mod command;
+pub mod overhead;
+mod post_processing;
 mod storage;
 mod writer;
 
 use sc_cli::{ExecutionStrategy, WasmExecutionMethod, DEFAULT_WASM_EXECUTION_METHOD};
 use std::{fmt::Debug, path::PathBuf};
 
+pub use overhead::{ExtrinsicBuilder, OverheadCmd};
 pub use storage::StorageCmd;
 
 // Add a more relaxed parsing for pallet names by allowing pallet directory names with `-` to be
