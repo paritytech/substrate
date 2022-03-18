@@ -523,7 +523,7 @@ pub trait ApiExt<Block: BlockT> {
 	/// Returns the overlayed changes.
 	///
 	/// Useful when you want to construct an intermediate state during the entire block execution.
-	fn overlay(&self) -> RefCell<OverlayedChanges>;
+	fn overlay(&self) -> OverlayedChanges;
 }
 
 /// Parameters for [`CallApiAt::call_api_at`].
