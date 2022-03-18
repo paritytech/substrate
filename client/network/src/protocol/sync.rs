@@ -2320,7 +2320,11 @@ fn handle_ancestor_search_state<B: BlockT>(
 			}
 			assert!(right >= left);
 			let middle = left + (right - left) / two;
-			Some((AncestorSearchState::BinarySearch(left, right), middle))
+			if middle == curr_block_num {
+				None
+			} else {
+				Some((AncestorSearchState::BinarySearch(left, right), middle))
+			}
 		},
 	}
 }
