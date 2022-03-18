@@ -309,7 +309,6 @@ frame_benchmarking::benchmarks! {
 	}
 
 	submit {
-
 		// the solution will be worse than all of them meaning the score need to be checked against
 		// ~ log2(c)
 		let solution = RawSolution {
@@ -341,7 +340,11 @@ frame_benchmarking::benchmarks! {
 		signed_submissions.put();
 
 		let caller = frame_benchmarking::whitelisted_caller();
-		T::Currency::make_free_balance_be(&caller,  T::Currency::minimum_balance() * 10u32.into());
+		let deposit = MultiPhase::<T>::deposit_for(
+			&solution,
+			MultiPhase::<T>::snapshot_metadata().unwrap_or_default(),
+		);
+		T::Currency::make_free_balance_be(&caller,  T::Currency::minimum_balance() * 1000u32.into() + deposit);
 
 	}: _(RawOrigin::Signed(caller), Box::new(solution))
 	verify {
