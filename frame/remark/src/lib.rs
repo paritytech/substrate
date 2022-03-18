@@ -45,11 +45,6 @@ pub mod pallet {
 	pub trait Config: frame_system::Config {
 		/// The overarching event type.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
-		/// A dispatchable call.
-		type Call: Parameter
-			+ Dispatchable<Origin = Self::Origin>
-			+ GetDispatchInfo
-			+ From<frame_system::Call<Self>>;
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
 	}
