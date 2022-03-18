@@ -101,6 +101,54 @@ pub struct ConnectionMessage {
 	pub startup_time: String,
 	/// Node's network ID.
 	pub network_id: String,
+
+	/// Node's OS.
+	pub target_os: String,
+
+	/// Node's ISA.
+	pub target_arch: String,
+
+	/// Node's target platform ABI or libc.
+	pub target_env: String,
+
+	/// Node's software and hardware information.
+	pub sysinfo: Option<SysInfo>,
+
+	/// Node's hardware benchmark results.
+	pub hwbench: Option<HwBench>,
+}
+
+/// Hardware and software information for the node.
+///
+/// Gathering most of this information is highly OS-specific,
+/// so most of the fields here are optional.
+#[derive(Debug, Serialize)]
+pub struct SysInfo {
+	/// The exact CPU model.
+	pub cpu: Option<String>,
+	/// The total amount of memory, in bytes.
+	pub memory: Option<u64>,
+	/// The number of physical CPU cores.
+	pub core_count: Option<u32>,
+	/// The Linux kernel version.
+	pub linux_kernel: Option<String>,
+	/// The exact Linux distribution used.
+	pub linux_distro: Option<String>,
+	/// Whether the node's running under a virtual machine.
+	pub is_virtual_machine: Option<bool>,
+}
+
+/// Hardware benchmark results for the node.
+#[derive(Debug, Serialize)]
+pub struct HwBench {
+	/// The CPU speed, as measured in how many MB/s it can hash using the BLAKE2b-256 hash.
+	pub cpu_score: u64,
+	/// Memory bandwidth in MB/s, calculated by measuring the throughput of `memcpy`.
+	pub memory_score: u64,
+	/// Sequential disk write speed in MB/s.
+	pub disk_sequential_write_score: Option<u64>,
+	/// Random disk write speed in MB/s.
+	pub disk_random_write_score: Option<u64>,
 }
 
 /// Telemetry worker.

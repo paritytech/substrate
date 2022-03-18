@@ -34,6 +34,10 @@ mod client;
 mod metrics;
 mod task_manager;
 
+mod sysinfo;
+#[cfg(target_os = "linux")]
+mod sysinfo_linux;
+
 use std::{collections::HashMap, io, net::SocketAddr, pin::Pin};
 
 use codec::{Decode, Encode};

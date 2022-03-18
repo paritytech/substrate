@@ -62,6 +62,10 @@ use sp_runtime::{
 };
 use std::{str::FromStr, sync::Arc, time::SystemTime};
 
+const TARGET_OS: &str = include_str!(concat!(env!("OUT_DIR"), "/target_os.txt"));
+const TARGET_ARCH: &str = include_str!(concat!(env!("OUT_DIR"), "/target_arch.txt"));
+const TARGET_ENV: &str = include_str!(concat!(env!("OUT_DIR"), "/target_env.txt"));
+
 /// A utility trait for building an RPC extension given a `DenyUnsafe` instance.
 /// This is useful since at service definition time we don't know whether the
 /// specific interface where the RPC extension will be exposed is safe or not.
@@ -487,8 +491,66 @@ where
 	)
 	.map_err(|e| Error::Application(Box::new(e)))?;
 
+	let database_path = match config.database {
+		sc_client_db::DatabaseSource::Auto { ref paritydb_path, ref rocksdb_path, .. } =>
+			if rocksdb_path.exists() {
+				Some(rocksdb_path.as_path())
+			} else {
+				Some(paritydb_path.as_path())
+			},
+		sc_client_db::DatabaseSource::RocksDb { ref path, .. } |
+		sc_client_db::DatabaseSource::ParityDb { ref path, .. } => Some(path.as_path()),
+		sc_client_db::DatabaseSource::Custom { .. } => None,
+	};
+
+	let sysinfo = crate::sysinfo::gather_sysinfo();
+	let hwbench = crate::sysinfo::gather_hwbench(database_path);
+
+	info!("💻 Operating system: {}", TARGET_OS);
+	info!("💻 CPU architecture: {}", TARGET_ARCH);
+	if !TARGET_ENV.is_empty() {
+		info!("💻 Target environment: {}", TARGET_ENV);
+	}
+	if let Some(ref cpu) = sysinfo.cpu {
+		info!("💻 CPU: {}", cpu);
+	}
+	if let Some(core_count) = sysinfo.core_count {
+		info!("💻 CPU cores: {}", core_count);
+	}
+	if let Some(memory) = sysinfo.memory {
+		info!("💻 Memory: {}MB", memory / (1024 * 1024));
+	}
+	if let Some(ref linux_kernel) = sysinfo.linux_kernel {
+		info!("💻 Kernel: {}", linux_kernel);
+	}
+	if let Some(ref linux_distro) = sysinfo.linux_distro {
+		info!("💻 Linux distribution: {}", linux_distro);
+	}
+	if let Some(is_virtual_machine) = sysinfo.is_virtual_machine {
+		info!("💻 Virtual machine: {}", if is_virtual_machine { "yes" } else { "no" });
+	}
+
+	info!("🏁 CPU score: {}MB/s", hwbench.cpu_score);
+	info!("🏁 Memory score: {}MB/s", hwbench.memory_score);
+
+	if let Some(score) = hwbench.disk_sequential_write_score {
+		info!("🏁 Disk score (seq. writes): {}MB/s", score);
+	}
+	if let Some(score) = hwbench.disk_random_write_score {
+		info!("🏁 Disk score (rand. writes): {}MB/s", score);
+	}
+
 	let telemetry = telemetry
-		.map(|telemetry| init_telemetry(&mut config, network.clone(), client.clone(), telemetry))
+		.map(|telemetry| {
+			init_telemetry(
+				&mut config,
+				network.clone(),
+				client.clone(),
+				telemetry,
+				Some(sysinfo),
+				Some(hwbench),
+			)
+		})
 		.transpose()?;
 
 	info!("📦 Highest known block at #{}", chain_info.best_number);
@@ -609,12 +671,17 @@ fn init_telemetry<TBl: BlockT, TCl: BlockBackend<TBl>>(
 	network: Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>,
 	client: Arc<TCl>,
 	telemetry: &mut Telemetry,
+	sysinfo: Option<sc_telemetry::SysInfo>,
+	hwbench: Option<sc_telemetry::HwBench>,
 ) -> sc_telemetry::Result<TelemetryHandle> {
 	let genesis_hash = client.block_hash(Zero::zero()).ok().flatten().unwrap_or_default();
 	let connection_message = ConnectionMessage {
 		name: config.network.node_name.to_owned(),
 		implementation: config.impl_name.to_owned(),
 		version: config.impl_version.to_owned(),
+		target_os: TARGET_OS.into(),
+		target_arch: TARGET_ARCH.into(),
+		target_env: TARGET_ENV.into(),
 		config: String::new(),
 		chain: config.chain_spec.name().to_owned(),
 		genesis_hash: format!("{:?}", genesis_hash),
@@ -625,6 +692,8 @@ fn init_telemetry<TBl: BlockT, TCl: BlockBackend<TBl>>(
 			.unwrap_or(0)
 			.to_string(),
 		network_id: network.local_peer_id().to_base58(),
+		sysinfo,
+		hwbench,
 	};
 
 	telemetry.start_telemetry(connection_message)?;

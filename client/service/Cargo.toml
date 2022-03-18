@@ -27,6 +27,7 @@ futures = "0.3.19"
 jsonrpc-pubsub = "18.0"
 jsonrpc-core = "18.0"
 rand = "0.7.3"
+rand_pcg = "0.2.1"
 parking_lot = "0.12.0"
 log = "0.4.11"
 futures-timer = "3.0.1"
@@ -81,6 +82,9 @@ async-trait = "0.1.50"
 tokio = { version = "1.15", features = ["time", "rt-multi-thread", "parking_lot"] }
 tempfile = "3.1.0"
 directories = "4.0.1"
+regex = "1"
+libc = "0.2"
+nix = "0.23"
 
 [dev-dependencies]
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
