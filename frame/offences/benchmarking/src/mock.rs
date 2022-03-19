@@ -181,6 +181,7 @@ impl pallet_staking::Config for Test {
 	type ElectionProviderLookahead = (); // TODO: this might not be a good idea, since it is quite irrelevant in such cases.
 	type GenesisElectionProvider = Self::ElectionProvider;
 	type SortedListProvider = pallet_staking::UseNominatorsMap<Self>;
+	type MaxUnlockingChunks = ConstU32<32>;
 	type BenchmarkingConfig = pallet_staking::TestBenchmarkingConfig;
 	type WeightInfo = ();
 }

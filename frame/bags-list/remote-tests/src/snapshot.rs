@@ -35,7 +35,7 @@ pub async fn execute<Runtime: crate::RuntimeT, Block: BlockT + DeserializeOwned>
 			// is bags-list.
 			pallets: vec![pallet_bags_list::Pallet::<Runtime>::name().to_string()],
 			at: None,
-			state_snapshot: None,
+			..Default::default()
 		}))
 		.inject_hashed_prefix(&<pallet_staking::Bonded<Runtime>>::prefix_hash())
 		.inject_hashed_prefix(&<pallet_staking::Ledger<Runtime>>::prefix_hash())
@@ -56,9 +56,11 @@ pub async fn execute<Runtime: crate::RuntimeT, Block: BlockT + DeserializeOwned>
 		);
 
 		// TODO: we want a multi-page snapshot test here as well.
-		let voters =
-			<pallet_staking::Pallet<Runtime> as ElectionDataProvider>::voters(voter_limit, 0)
-				.unwrap();
+		let voters = <pallet_staking::Pallet<Runtime> as ElectionDataProvider>::electing_voters(
+			voter_limit,
+			0,
+		)
+		.unwrap();
 
 		let mut voters_nominator_only = voters
 			.iter()

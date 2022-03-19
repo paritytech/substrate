@@ -33,6 +33,7 @@ use crate::{
 	verifier::{self as verifier_pallet, AsynchronousVerifier, Status},
 };
 use codec::{Decode, Encode, MaxEncodedLen};
+use frame_election_provider_support::NposSolution;
 pub use frame_support::{assert_noop, assert_ok};
 use frame_support::{bounded_vec, parameter_types, traits::Hooks, weights::Weight};
 use parking_lot::RwLock;
@@ -43,7 +44,7 @@ use sp_core::{
 	},
 	H256,
 };
-use sp_npos_elections::{EvaluateSupport, NposSolution};
+use sp_npos_elections::EvaluateSupport;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
@@ -76,7 +77,7 @@ frame_support::construct_runtime!(
 	}
 );
 
-sp_npos_elections::generate_solution_type!(
+frame_election_provider_support::generate_solution_type!(
 	pub struct TestNposSolution::<VoterIndex = VoterIndex, TargetIndex = TargetIndex, Accuracy = PerU16>(16)
 );
 

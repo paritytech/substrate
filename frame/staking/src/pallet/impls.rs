@@ -19,7 +19,7 @@
 
 use frame_election_provider_support::{
 	data_provider, BoundedSupportsOf, ElectionDataProvider, ElectionProvider, ExtendedBalance,
-	PageIndex, SortedListProvider, VoteWeight, VoteWeightProvider, VoterOf,
+	PageIndex, ScoreProvider, SortedListProvider, VoteWeight, VoterOf,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -1063,17 +1063,10 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 		Ok(Self::validator_count())
 	}
 
-	fn voters(
+	fn electing_voters(
 		maybe_max_len: Option<usize>,
 		remaining: PageIndex,
 	) -> data_provider::Result<Vec<VoterOf<Self>>> {
-		// check a few counters one last time...
-		debug_assert_eq!(
-			Nominators::<T>::count(),
-			T::SortedListProvider::count(),
-			"voter_count must be accurate",
-		);
-
 		let slashing_spans = <SlashingSpans<T>>::iter().collect::<BTreeMap<_, _>>();
 		if let Some(last) = LastIteratedNominator::<T>::get() {
 			Ok(Self::get_npos_voters_continue(maybe_max_len, remaining, last, &slashing_spans))
@@ -1082,7 +1075,7 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 		}
 	}
 
-	fn targets(
+	fn electable_targets(
 		maybe_max_len: Option<usize>,
 		remaining: PageIndex,
 	) -> data_provider::Result<Vec<T::AccountId>> {
@@ -1151,7 +1144,7 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 				stash: voter.clone(),
 				active: stake,
 				total: stake,
-				unlocking: vec![],
+				unlocking: Default::default(),
 				claimed_rewards: vec![],
 			},
 		);
@@ -1169,7 +1162,7 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 				stash: target.clone(),
 				active: stake,
 				total: stake,
-				unlocking: vec![],
+				unlocking: Default::default(),
 				claimed_rewards: vec![],
 			},
 		);
@@ -1206,7 +1199,7 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 					stash: v.clone(),
 					active: stake,
 					total: stake,
-					unlocking: vec![],
+					unlocking: Default::default(),
 					claimed_rewards: vec![],
 				},
 			);
@@ -1227,7 +1220,7 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 					stash: v.clone(),
 					active: stake,
 					total: stake,
-					unlocking: vec![],
+					unlocking: Default::default(),
 					claimed_rewards: vec![],
 				},
 			);
@@ -1461,13 +1454,15 @@ where
 	}
 }
 
-impl<T: Config> VoteWeightProvider<T::AccountId> for Pallet<T> {
-	fn vote_weight(who: &T::AccountId) -> VoteWeight {
+impl<T: Config> ScoreProvider<T::AccountId> for Pallet<T> {
+	type Score = VoteWeight;
+
+	fn score(who: &T::AccountId) -> Self::Score {
 		Self::weight_of(who)
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn set_vote_weight_of(who: &T::AccountId, weight: VoteWeight) {
+	fn set_score_of(who: &T::AccountId, weight: Self::Score) {
 		// this will clearly results in an inconsistent state, but it should not matter for a
 		// benchmark.
 		let active: BalanceOf<T> = weight.try_into().map_err(|_| ()).unwrap();
@@ -1496,6 +1491,7 @@ impl<T: Config> VoteWeightProvider<T::AccountId> for Pallet<T> {
 pub struct UseNominatorsMap<T>(sp_std::marker::PhantomData<T>);
 impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsMap<T> {
 	type Error = ();
+	type Score = VoteWeight;
 
 	/// Returns iterator over voter list, which can have `take` called on it.
 	fn iter() -> Box<dyn Iterator<Item = T::AccountId>> {
@@ -1520,13 +1516,11 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsMap<T> {
 	fn contains(id: &T::AccountId) -> bool {
 		Nominators::<T>::contains_key(id)
 	}
-
-	fn on_insert(_: T::AccountId, _weight: VoteWeight) -> Result<(), Self::Error> {
+	fn on_insert(_: T::AccountId, _: Self::Score) -> Result<(), Self::Error> {
 		// nothing to do on insert.
 		Ok(())
 	}
-
-	fn on_update(_: &T::AccountId, _weight: VoteWeight) {
+	fn on_update(_: &T::AccountId, _: Self::Score) {
 		// nothing to do on update.
 	}
 
@@ -1536,7 +1530,7 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsMap<T> {
 
 	fn unsafe_regenerate(
 		_: impl IntoIterator<Item = T::AccountId>,
-		_: Box<dyn Fn(&T::AccountId) -> VoteWeight>,
+		_: Box<dyn Fn(&T::AccountId) -> Self::Score>,
 	) -> u32 {
 		// nothing to do upon regenerate.
 		0

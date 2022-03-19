@@ -22,10 +22,10 @@ use sp_std::{collections::btree_set::BTreeSet, fmt::Debug, prelude::*};
 
 use crate::Verifier;
 use codec::{Decode, Encode, MaxEncodedLen};
-pub use frame_election_provider_support::PageIndex;
 use frame_election_provider_support::{BoundedSupports, ElectionProvider};
+pub use frame_election_provider_support::{NposSolution, PageIndex};
 use scale_info::TypeInfo;
-pub use sp_npos_elections::{ElectionResult, ElectionScore, NposSolution};
+pub use sp_npos_elections::{ElectionResult, ElectionScore};
 use sp_runtime::{
 	traits::{One, Saturating, Zero},
 	SaturatedConversion,

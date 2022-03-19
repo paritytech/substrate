@@ -21,12 +21,12 @@ scale-info = { version = "2.0.1", default-features = false, features = ["derive"
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 
-sp-io = { version = "5.0.0", default-features = false, path = "../../primitives/io" }
-sp-std = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
-sp-core = { version = "5.0.0", default-features = false, path = "../../primitives/core" }
-sp-runtime = { version = "5.0.0", default-features = false, path = "../../primitives/runtime" }
-sp-npos-elections = { version = "4.0.0-dev", default-features = false, path = "../../primitives/npos-elections" }
-sp-arithmetic = { version = "4.0.0-dev", default-features = false, path = "../../primitives/arithmetic" }
+sp-io = { default-features = false, path = "../../primitives/io" }
+sp-std = { default-features = false, path = "../../primitives/std" }
+sp-core = { default-features = false, path = "../../primitives/core" }
+sp-runtime = { default-features = false, path = "../../primitives/runtime" }
+sp-npos-elections = { default-features = false, path = "../../primitives/npos-elections" }
+sp-arithmetic = { default-features = false, path = "../../primitives/arithmetic" }
 frame-election-provider-support = { version = "4.0.0-dev", default-features = false, path = "../election-provider-support" }
 
 # Optional imports for benchmarking
@@ -38,11 +38,11 @@ paste = "1.0.3"
 parking_lot = "0.12.0"
 rand = { version = "0.8.5" }
 hex-literal = "0.3.1"
-substrate-test-utils = { version = "4.0.0-dev", path = "../../test-utils" }
-sp-tracing = { version = "4.0.0-dev", path = "../../primitives/tracing" }
-frame-election-provider-support = { version = "4.0.0-dev", features = ["runtime-benchmarks"], path = "../election-provider-support" }
-pallet-balances = { version = "4.0.0-dev", path = "../balances" }
-frame-benchmarking = { version = "4.0.0-dev", path = "../benchmarking" }
+substrate-test-utils = { path = "../../test-utils" }
+sp-tracing = { path = "../../primitives/tracing" }
+frame-election-provider-support = { features = ["runtime-benchmarks"], path = "../election-provider-support" }
+pallet-balances = { path = "../balances" }
+frame-benchmarking = { path = "../benchmarking" }
 
 [features]
 default = ["std"]

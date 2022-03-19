@@ -1031,9 +1031,10 @@ impl<T: Config> Pallet<T> {
 		);
 
 		let limit = Some(T::TargetSnapshotPerBlock::get().saturated_into::<usize>());
-		let targets: BoundedVec<_, T::TargetSnapshotPerBlock> = T::DataProvider::targets(limit, 0)
-			.and_then(|v| v.try_into().map_err(|_| "try-into failed"))
-			.map_err(ElectionError::DataProvider)?;
+		let targets: BoundedVec<_, T::TargetSnapshotPerBlock> =
+			T::DataProvider::electable_targets(limit, 0)
+				.and_then(|v| v.try_into().map_err(|_| "try-into failed"))
+				.map_err(ElectionError::DataProvider)?;
 
 		let count = targets.len() as u32;
 		log!(debug, "created target snapshot with {} targets.", count);
@@ -1048,7 +1049,7 @@ impl<T: Config> Pallet<T> {
 	pub fn create_voters_snapshot_paged(remaining: PageIndex) -> Result<u32, ElectionError<T>> {
 		let limit = Some(T::VoterSnapshotPerBlock::get().saturated_into::<usize>());
 		let voters: BoundedVec<_, T::VoterSnapshotPerBlock> =
-			T::DataProvider::voters(limit, remaining)
+			T::DataProvider::electing_voters(limit, remaining)
 				.and_then(|v| v.try_into().map_err(|_| "try-into failed"))
 				.map_err(ElectionError::DataProvider)?;
 

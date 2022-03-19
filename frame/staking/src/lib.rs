@@ -302,7 +302,8 @@ mod pallet;
 use codec::{Decode, Encode, HasCompact};
 use frame_election_provider_support::ElectionProvider;
 use frame_support::{
-	traits::{ConstU32, Currency, Get},
+	parameter_types,
+	traits::{Currency, Get},
 	weights::Weight,
 	BoundedVec, CloneNoBound, EqNoBound, PartialEqNoBound, RuntimeDebugNoBound,
 };
@@ -350,6 +351,10 @@ type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<
 
 /// The number of pages that the election provider of staking is expected to provide.
 pub(crate) type PagesOf<T> = <<T as Config>::ElectionProvider as ElectionProvider>::Pages;
+
+parameter_types! {
+	pub MaxUnlockingChunks: u32 = 32;
+}
 
 /// Information regarding the active era (era in used in session).
 #[derive(Encode, Decode, RuntimeDebug, TypeInfo)]
@@ -450,9 +455,10 @@ pub struct StakingLedger<AccountId, Balance: HasCompact> {
 	/// rounds.
 	#[codec(compact)]
 	pub active: Balance,
-	/// Any balance that is becoming free, which may eventually be transferred out
-	/// of the stash (assuming it doesn't get slashed first).
-	pub unlocking: Vec<UnlockChunk<Balance>>,
+	/// Any balance that is becoming free, which may eventually be transferred out of the stash
+	/// (assuming it doesn't get slashed first). It is assumed that this will be treated as a first
+	/// in, first out queue where the new (higher value) eras get pushed on the back.
+	pub unlocking: BoundedVec<UnlockChunk<Balance>, MaxUnlockingChunks>,
 	/// List of eras for which the stakers behind a validator have claimed rewards. Only updated
 	/// for validators.
 	pub claimed_rewards: Vec<EraIndex>,
@@ -467,7 +473,7 @@ impl<AccountId, Balance: HasCompact + Copy + Saturating + AtLeast32BitUnsigned +
 			stash,
 			total: Zero::zero(),
 			active: Zero::zero(),
-			unlocking: vec![],
+			unlocking: Default::default(),
 			claimed_rewards: vec![],
 		}
 	}
@@ -476,7 +482,7 @@ impl<AccountId, Balance: HasCompact + Copy + Saturating + AtLeast32BitUnsigned +
 	/// total by the sum of their balances.
 	fn consolidate_unlocked(self, current_era: EraIndex) -> Self {
 		let mut total = self.total;
-		let unlocking = self
+		let unlocking: BoundedVec<_, _> = self
 			.unlocking
 			.into_iter()
 			.filter(|chunk| {
@@ -487,7 +493,11 @@ impl<AccountId, Balance: HasCompact + Copy + Saturating + AtLeast32BitUnsigned +
 					false
 				}
 			})
-			.collect();
+			.collect::<Vec<_>>()
+			.try_into()
+			.expect(
+				"filtering items from a bounded vec always leaves length less than bounds. qed",
+			);
 
 		Self {
 			stash: self.stash,
@@ -894,6 +904,6 @@ pub struct TestBenchmarkingConfig;
 
 #[cfg(feature = "std")]
 impl BenchmarkingConfig for TestBenchmarkingConfig {
-	type MaxValidators = ConstU32<100>;
-	type MaxNominators = ConstU32<100>;
+	type MaxValidators = frame_support::traits::ConstU32<100>;
+	type MaxNominators = frame_support::traits::ConstU32<100>;
 }

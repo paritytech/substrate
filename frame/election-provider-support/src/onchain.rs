@@ -114,11 +114,14 @@ impl<T: Config> OnChainSequentialPhragmen<T> {
 		maybe_max_targets: Option<usize>,
 		remaining: PageIndex,
 	) -> Result<BoundedSupportsOf<Self>, Error> {
-		let voters = <Self as ElectionProvider>::DataProvider::voters(maybe_max_voters, remaining)
-			.map_err(Error::DataProvider)?;
-		let targets =
-			<Self as ElectionProvider>::DataProvider::targets(maybe_max_targets, remaining)
+		let voters =
+			<Self as ElectionProvider>::DataProvider::electing_voters(maybe_max_voters, remaining)
 				.map_err(Error::DataProvider)?;
+		let targets = <Self as ElectionProvider>::DataProvider::electable_targets(
+			maybe_max_targets,
+			remaining,
+		)
+		.map_err(Error::DataProvider)?;
 		let desired_targets = <Self as ElectionProvider>::DataProvider::desired_targets()
 			.map_err(Error::DataProvider)?;
 
@@ -251,7 +254,10 @@ mod tests {
 			type AccountId = AccountId;
 			type BlockNumber = BlockNumber;
 			type MaxVotesPerVoter = ConstU32<2>;
-			fn voters(_: Option<usize>, _: PageIndex) -> data_provider::Result<Vec<VoterOf<Self>>> {
+			fn electing_voters(
+				_: Option<usize>,
+				_: PageIndex,
+			) -> data_provider::Result<Vec<VoterOf<Self>>> {
 				Ok(vec![
 					(1, 10, bounded_vec![10, 20]),
 					(2, 20, bounded_vec![30, 20]),
@@ -259,7 +265,10 @@ mod tests {
 				])
 			}
 
-			fn targets(_: Option<usize>, _: PageIndex) -> data_provider::Result<Vec<AccountId>> {
+			fn electable_targets(
+				_: Option<usize>,
+				_: PageIndex,
+			) -> data_provider::Result<Vec<AccountId>> {
 				Ok(vec![10, 20, 30])
 			}
 

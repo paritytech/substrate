@@ -25,7 +25,7 @@ use crate::{
 };
 use codec::{Decode, Encode, EncodeLike, MaxEncodedLen};
 use core::{
-	ops::{Deref, Index, IndexMut},
+	ops::{Deref, Index, IndexMut, RangeBounds},
 	slice::SliceIndex,
 };
 use sp_std::{marker::PhantomData, prelude::*};
@@ -177,6 +177,19 @@ impl<T, S> BoundedVec<T, S> {
 	/// Exactly the same semantics as [`slice::iter_mut`].
 	pub fn iter_mut(&mut self) -> core::slice::IterMut<'_, T> {
 		self.0.iter_mut()
+	}
+
+	/// Exactly the same semantics as [`slice::last_mut`].
+	pub fn last_mut(&mut self) -> Option<&mut T> {
+		self.0.last_mut()
+	}
+
+	/// Exact same semantics as [`Vec::drain`].
+	pub fn drain<R>(&mut self, range: R) -> sp_std::vec::Drain<'_, T>
+	where
+		R: RangeBounds<usize>,
+	{
+		self.0.drain(range)
 	}
 }
 

@@ -53,7 +53,7 @@ impl ElectionDataProvider for MockStaking {
 	type BlockNumber = u64;
 	type MaxVotesPerVoter = MaxVotesPerVoter;
 
-	fn targets(
+	fn electable_targets(
 		maybe_max_len: Option<usize>,
 		remaining: PageIndex,
 	) -> data_provider::Result<Vec<AccountId>> {
@@ -69,7 +69,7 @@ impl ElectionDataProvider for MockStaking {
 		Ok(targets)
 	}
 
-	fn voters(
+	fn electing_voters(
 		maybe_max_len: Option<usize>,
 		remaining: PageIndex,
 	) -> data_provider::Result<
@@ -165,29 +165,29 @@ mod tests {
 			assert_eq!(Targets::get().len(), 4);
 
 			// any non-zero page is error
-			assert!(MockStaking::targets(None, 1).is_err());
-			assert!(MockStaking::targets(None, 2).is_err());
+			assert!(MockStaking::electable_targets(None, 1).is_err());
+			assert!(MockStaking::electable_targets(None, 2).is_err());
 
 			// but 0 is fine.
-			assert_eq!(MockStaking::targets(None, 0).unwrap().len(), 4);
+			assert_eq!(MockStaking::electable_targets(None, 0).unwrap().len(), 4);
 
 			// fetch less targets is error.
-			assert!(MockStaking::targets(Some(2), 0).is_err());
+			assert!(MockStaking::electable_targets(Some(2), 0).is_err());
 
 			// more targets is fine.
-			assert!(MockStaking::targets(Some(4), 0).is_ok());
-			assert!(MockStaking::targets(Some(5), 0).is_ok());
+			assert!(MockStaking::electable_targets(Some(4), 0).is_ok());
+			assert!(MockStaking::electable_targets(Some(5), 0).is_ok());
 		});
 	}
 
 	#[test]
 	fn multi_page_votes() {
 		ExtBuilder::full().build_and_execute(|| {
-			assert_eq!(MockStaking::voters(None, 0).unwrap().len(), 12);
+			assert_eq!(MockStaking::electing_voters(None, 0).unwrap().len(), 12);
 			assert!(LastIteratedVoterIndex::get().is_none());
 
 			assert_eq!(
-				MockStaking::voters(Some(4), 0)
+				MockStaking::electing_voters(Some(4), 0)
 					.unwrap()
 					.into_iter()
 					.map(|(x, _, _)| x)
@@ -197,7 +197,7 @@ mod tests {
 			assert!(LastIteratedVoterIndex::get().is_none());
 
 			assert_eq!(
-				MockStaking::voters(Some(4), 2)
+				MockStaking::electing_voters(Some(4), 2)
 					.unwrap()
 					.into_iter()
 					.map(|(x, _, _)| x)
@@ -207,7 +207,7 @@ mod tests {
 			assert_eq!(LastIteratedVoterIndex::get().unwrap(), 4);
 
 			assert_eq!(
-				MockStaking::voters(Some(4), 1)
+				MockStaking::electing_voters(Some(4), 1)
 					.unwrap()
 					.into_iter()
 					.map(|(x, _, _)| x)
@@ -217,7 +217,7 @@ mod tests {
 			assert_eq!(LastIteratedVoterIndex::get().unwrap(), 8);
 
 			assert_eq!(
-				MockStaking::voters(Some(4), 0)
+				MockStaking::electing_voters(Some(4), 0)
 					.unwrap()
 					.into_iter()
 					.map(|(x, _, _)| x)

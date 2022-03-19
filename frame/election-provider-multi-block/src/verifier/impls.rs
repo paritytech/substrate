@@ -19,8 +19,10 @@
 
 use crate::{helpers, SolutionOf, SupportsOf};
 use codec::{Decode, Encode, MaxEncodedLen};
-use frame_election_provider_support::{ExtendedBalance, PageIndex, TryIntoBoundedSupports};
-use sp_npos_elections::{ElectionScore, EvaluateSupport, NposSolution};
+use frame_election_provider_support::{
+	ExtendedBalance, NposSolution, PageIndex, TryIntoBoundedSupports,
+};
+use sp_npos_elections::{ElectionScore, EvaluateSupport};
 use sp_runtime::Perbill;
 use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 
@@ -200,7 +202,7 @@ pub(crate) mod pallet {
 		fn mutate_checked<R>(mutate: impl FnOnce() -> R) -> R {
 			let r = mutate();
 			#[cfg(debug_assertions)]
-			Self::sanity_check().is_ok();
+			assert!(Self::sanity_check().is_ok());
 			r
 		}
 
