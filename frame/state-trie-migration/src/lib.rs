@@ -472,7 +472,7 @@ pub mod pallet {
 
 	/// The maximum limits that the signed migration could use.
 	///
-	/// If not set, not signed submission is allowed.
+	/// If not set, no signed submission is allowed.
 	#[pallet::storage]
 	#[pallet::getter(fn signed_migration_max_limits)]
 	pub type SignedMigrationMaxLimits<T> = StorageValue<_, MigrationLimits, OptionQuery>;
