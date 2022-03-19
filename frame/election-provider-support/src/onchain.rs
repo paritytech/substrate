@@ -93,8 +93,9 @@ fn elect_with<T: ExecutionConfig>(
 	maybe_max_voters: Option<usize>,
 	maybe_max_targets: Option<usize>,
 ) -> Result<Supports<<T::System as frame_system::Config>::AccountId>, Error> {
-	let voters = T::DataProvider::voters(maybe_max_voters).map_err(Error::DataProvider)?;
-	let targets = T::DataProvider::targets(maybe_max_targets).map_err(Error::DataProvider)?;
+	let voters = T::DataProvider::electing_voters(maybe_max_voters).map_err(Error::DataProvider)?;
+	let targets =
+		T::DataProvider::electable_targets(maybe_max_targets).map_err(Error::DataProvider)?;
 	let desired_targets = T::DataProvider::desired_targets().map_err(Error::DataProvider)?;
 
 	let stake_map: BTreeMap<_, _> = voters
