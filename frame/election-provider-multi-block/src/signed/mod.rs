@@ -590,6 +590,7 @@ pub mod pallet {
 
 			let deposit = T::DepositBase::get();
 			let reward = T::RewardBase::get();
+			// TODO: we should also accumulate the fee for submit calls, maybe?
 			let fee = T::EstimateCallFee::estimate_call_fee(
 				&Call::register { claimed_score },
 				None.into(),

@@ -1274,7 +1274,8 @@ impl<T: Config> Pallet<T> {
 	pub fn finalize() -> T::Header {
 		log::debug!(
 			target: "runtime::system",
-			"[{:?}] length: {} (normal {:?}, op: {:?}, mandatory {:?}) / normal weight: {} ({:?}) / op weight {} ({:?}) / mandatory weight {} ({:?})",
+			"[{:?}] length: {} (normal {:?}, op: {:?}, mandatory {:?}) / normal weight: {} ({:?}) \
+			/ op weight {} ({:?}) / mandatory weight {} ({:?})",
 			Self::block_number(),
 			Self::all_extrinsics_len(),
 			sp_runtime::Percent::from_rational(
