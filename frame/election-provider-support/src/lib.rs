@@ -107,12 +107,12 @@
 //!         fn desired_targets() -> data_provider::Result<u32> {
 //!             Ok(1)
 //!         }
-//!         fn voters(maybe_max_len: Option<usize>)
+//!         fn electing_voters(maybe_max_len: Option<usize>)
 //!           -> data_provider::Result<Vec<VoterOf<Self>>>
 //!         {
 //!             Ok(Default::default())
 //!         }
-//!         fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<AccountId>> {
+//!         fn electable_targets(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<AccountId>> {
 //!             Ok(vec![10, 20, 30])
 //!         }
 //!         fn next_election_prediction(now: BlockNumber) -> BlockNumber {
