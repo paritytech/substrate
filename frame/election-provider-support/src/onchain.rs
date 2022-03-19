@@ -238,7 +238,7 @@ mod tests {
 			type AccountId = AccountId;
 			type BlockNumber = BlockNumber;
 			type MaxVotesPerVoter = ConstU32<2>;
-			fn voters(_: Option<usize>) -> data_provider::Result<Vec<VoterOf<Self>>> {
+			fn electing_voters(_: Option<usize>) -> data_provider::Result<Vec<VoterOf<Self>>> {
 				Ok(vec![
 					(1, 10, bounded_vec![10, 20]),
 					(2, 20, bounded_vec![30, 20]),
@@ -246,7 +246,7 @@ mod tests {
 				])
 			}
 
-			fn targets(_: Option<usize>) -> data_provider::Result<Vec<AccountId>> {
+			fn electable_targets(_: Option<usize>) -> data_provider::Result<Vec<AccountId>> {
 				Ok(vec![10, 20, 30])
 			}
 

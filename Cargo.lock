@@ -8464,6 +8464,8 @@ dependencies = [
 name = "sc-executor"
 version = "0.10.0-dev"
 dependencies = [
+ "criterion",
+ "env_logger 0.9.0",
  "hex-literal",
  "lazy_static",
  "lru 0.6.6",
