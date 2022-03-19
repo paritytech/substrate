@@ -645,7 +645,6 @@ impl onchain::Config for Runtime {
 	type Solver = SequentialPhragmen<
 		AccountId,
 		pallet_election_provider_multi_phase::SolutionAccuracyOf<Self>,
-		OffchainRandomBalancing,
 	>;
 	type DataProvider = <Self as pallet_election_provider_multi_phase::Config>::DataProvider;
 }
