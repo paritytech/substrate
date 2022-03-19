@@ -46,11 +46,12 @@ use frame_system::{
 pub use node_primitives::{AccountId, Signature};
 use node_primitives::{AccountIndex, Balance, BlockNumber, Hash, Index, Moment};
 use pallet_contracts::weights::WeightInfo;
+use pallet_election_provider_multi_phase::SolutionAccuracyOf;
 use pallet_grandpa::{
 	fg_primitives, AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList,
 };
 use pallet_im_online::sr25519::AuthorityId as ImOnlineId;
-use pallet_session::historical as pallet_session_historical;
+use pallet_session::historical::{self as pallet_session_historical};
 pub use pallet_transaction_payment::{CurrencyAdapter, Multiplier, TargetedFeeAdjustment};
 use pallet_transaction_payment::{FeeDetails, RuntimeDispatchInfo};
 use sp_api::impl_runtime_apis;
@@ -668,20 +669,17 @@ impl pallet_election_provider_multi_phase::Config for Runtime {
 	type DataProvider = Staking;
 	type Solution = NposSolution16;
 	type Fallback = pallet_election_provider_multi_phase::NoFallback<Self>;
-	type GovernanceFallback =
-		frame_election_provider_support::onchain::OnChainSequentialPhragmen<Self>;
+	type GovernanceFallback = onchain::OnChainSequentialPhragmen<Self>;
 	type Solver = frame_election_provider_support::SequentialPhragmen<
 		AccountId,
-		pallet_election_provider_multi_phase::SolutionAccuracyOf<Self>,
+		SolutionAccuracyOf<Self>,
 		OffchainRandomBalancing,
 	>;
-	type WeightInfo = pallet_election_provider_multi_phase::weights::SubstrateWeight<Self>;
 	type ForceOrigin = EnsureRootOrHalfCouncil;
+	type MaxElectableTargets = ConstU16<{ u16::MAX }>;
+	type MaxElectingVoters = ConstU32<10_000>;
 	type BenchmarkingConfig = ElectionProviderBenchmarkConfig;
-	// BagsList allows a practically unbounded count of nominators to participate in NPoS elections.
-	// To ensure we respect memory limits when using the BagsList this must be set to a number of
-	// voters we know can fit into a single vec allocation.
-	type VoterSnapshotPerBlock = ConstU32<10_000>;
+	type WeightInfo = pallet_election_provider_multi_phase::weights::SubstrateWeight<Self>;
 }
 
 parameter_types! {
