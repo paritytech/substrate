@@ -77,11 +77,11 @@ impl TemplateData {
 		write: Option<(Stats, Stats)>,
 	) -> Result<()> {
 		if let Some(read) = read {
-			self.read_weight = calc_weight(&read.0, &self.params)?;
+			self.read_weight = self.params.weight_params.calc_weight(&read.0)?;
 			self.read = Some(read);
 		}
 		if let Some(write) = write {
-			self.write_weight = calc_weight(&write.0, &self.params)?;
+			self.write_weight = self.params.weight_params.calc_weight(&write.0)?;
 			self.write = Some(write);
 		}
 		Ok(())
@@ -129,16 +129,4 @@ impl TemplateData {
 		}
 		path
 	}
-}
-
-/// Calculates the final weight by multiplying the selected metric with
-/// `mul` and adding `add`.
-/// Does not use safe casts and can overflow.
-fn calc_weight(stat: &Stats, params: &StorageParams) -> Result<u64> {
-	if params.weight_mul.is_sign_negative() || !params.weight_mul.is_normal() {
-		return Err("invalid floating number for `weight_mul`".into())
-	}
-	let s = stat.select(params.weight_metric) as f64;
-	let w = s.mul_add(params.weight_mul, params.weight_add as f64).ceil();
-	Ok(w as u64) // No safe cast here since there is no `From<f64>` for `u64`.
 }
