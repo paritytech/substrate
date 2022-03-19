@@ -247,8 +247,10 @@ impl pallet_bags_list::Config for Test {
 	type Score = VoteWeight;
 }
 
-impl onchain::Config for Test {
-	type Solver = SequentialPhragmen<Self::AccountId, Perbill>;
+pub struct OnChainSequentialPhragmen;
+impl onchain::ExecutionConfig for OnChainSequentialPhragmen {
+	type System = Test;
+	type Solver = SequentialPhragmen<AccountId, Perbill>;
 	type DataProvider = Staking;
 }
 
@@ -270,7 +272,7 @@ impl crate::pallet::pallet::Config for Test {
 	type NextNewSession = Session;
 	type MaxNominatorRewardedPerValidator = ConstU32<64>;
 	type OffendingValidatorsThreshold = OffendingValidatorsThreshold;
-	type ElectionProvider = onchain::UnboundedOnchainExecution<Self>;
+	type ElectionProvider = onchain::UnboundedOnchainExecution<OnChainSequentialPhragmen>;
 	type GenesisElectionProvider = Self::ElectionProvider;
 	// NOTE: consider a macro and use `UseNominatorsMap<Self>` as well.
 	type SortedListProvider = BagsList;
