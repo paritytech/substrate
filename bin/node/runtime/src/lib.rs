@@ -680,11 +680,7 @@ impl pallet_election_provider_multi_phase::Config for Runtime {
 	type Solution = NposSolution16;
 	type Fallback = onchain::BoundedOnchainExecution<OnChainSequentialPhragmen>;
 	type GovernanceFallback = onchain::BoundedOnchainExecution<OnChainSequentialPhragmen>;
-	type Solver = SequentialPhragmen<
-		AccountId,
-		SolutionAccuracyOf<Self>,
-		OffchainRandomBalancing,
-	>;
+	type Solver = SequentialPhragmen<AccountId, SolutionAccuracyOf<Self>, OffchainRandomBalancing>;
 	type ForceOrigin = EnsureRootOrHalfCouncil;
 	type MaxElectableTargets = ConstU16<{ u16::MAX }>;
 	type MaxElectingVoters = ConstU32<10_000>;
