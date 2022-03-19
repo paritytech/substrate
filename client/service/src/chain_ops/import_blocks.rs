@@ -119,7 +119,7 @@ where
 
 impl<R, B> Iterator for BlockIter<R, B>
 where
-	R: Read +  'static,
+	R: Read + 'static,
 	B: BlockT + MaybeSerializeDeserialize,
 {
 	type Item = Result<SignedBlock<B>, String>;
