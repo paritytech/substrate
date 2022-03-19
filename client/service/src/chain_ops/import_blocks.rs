@@ -36,7 +36,7 @@ use sp_runtime::{
 };
 use std::{
 	convert::{TryFrom, TryInto},
-	io::{Read, Seek},
+	io::Read,
 	pin::Pin,
 	task::Poll,
 	time::{Duration, Instant},
