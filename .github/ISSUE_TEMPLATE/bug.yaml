@@ -27,7 +27,7 @@ body:
   - type: textarea
     id: steps
     attributes:
-      label: Steps to Reproduce
+      label: Steps to reproduce
       description: Provide the steps that led to the discovery of the issue.
       # placeholder: Describe what you were doing so we can reproduce the problem.
     validations:
