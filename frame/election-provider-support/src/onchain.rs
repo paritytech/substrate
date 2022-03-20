@@ -17,7 +17,7 @@
 
 //! An implementation of [`ElectionProvider`] that uses an `NposSolver` to do the election.
 
-use crate::{ElectionDataProvider, ElectionProvider, InstantElectionProvider, NposSolver};
+use crate::{Bounded, ElectionDataProvider, ElectionProvider, InstantElectionProvider, NposSolver};
 use frame_support::{traits::Get, weights::DispatchClass};
 use sp_npos_elections::*;
 use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData, prelude::*};
@@ -49,20 +49,26 @@ impl From<sp_npos_elections::Error> for Error {
 ///
 /// Finally, the [`ElectionProvider`] implementation of this type does not impose any limits on the
 /// number of voters and targets that are fetched. This could potentially make this unsuitable for
-/// execution onchain. On the other hand, the [`InstantElectionProvider`] implementation does limit
-/// these inputs.
+/// execution onchain. One could, however, impose bounds on it by using for example
+/// `BoundedOnchainExecution` which will the bounds provided in the configuration.
+///
+/// On the other hand, the [`InstantElectionProvider`] implementation does limit
+/// these inputs, either via using `BoundedOnchainExecution` and imposing the bounds there, or
+/// dynamically via calling `elect_with_bounds` providing these bounds. If you use
+/// `elect_with_bounds` along with `InstantElectionProvider`, the bound that would be used is the
+/// minimum of the 2 bounds.
 ///
 /// It is advisable to use the former ([`ElectionProvider::elect`]) only at genesis, or for testing,
-/// the latter [`InstantElectionProvider::instant_elect`] for onchain operations, with thoughtful
-/// bounds.
+/// the latter [`InstantElectionProvider::elect_with_bounds`] for onchain operations, with
+/// thoughtful bounds.
 ///
 /// Please use `BoundedOnchainExecution` at all times except at genesis or for testing,
 /// with thoughtful bounds in order to bound the potential execution time.
-/// Only use `UnboundedOnchainExecution` at genesis or for testing, as it does not
-/// bound the inputs.
+/// Limit the use `UnboundedOnchainExecution` at genesis or for testing, as it does not
+/// bound the inputs. However, this can be used with `[InstantElectionProvider::elect_with_bounds`]
+/// that dynamically imposes limits.
 pub struct BoundedOnchainExecution<T: BoundedExecutionConfig>(PhantomData<T>);
 
-#[cfg_attr(not(feature = "std"), deprecated(note = "use `BoundedOnchainExecution` instead"))]
 pub struct UnboundedOnchainExecution<T: ExecutionConfig>(PhantomData<T>);
 
 /// Configuration trait of [`UnboundedOnchainExecution`]Ì.
@@ -128,16 +134,25 @@ impl<T: ExecutionConfig> ElectionProvider for UnboundedOnchainExecution<T> {
 	type DataProvider = T::DataProvider;
 
 	fn elect() -> Result<Supports<<T::System as frame_system::Config>::AccountId>, Self::Error> {
+		// This should not be called if not in `std` mode (and therefore neither in genesis nor in
+		// testing)
+		if cfg!(not(feature = "std")) {
+			frame_support::log::error!(
+				"Please use `InstantElectionProvider` instead to provide bounds on election if not in \
+				genesis or testing mode"
+			);
+		}
+
 		elect_with::<T>(None, None)
 	}
 }
 
 impl<T: ExecutionConfig> InstantElectionProvider for UnboundedOnchainExecution<T> {
-	fn instant_elect(
-		maybe_max_voters: Option<usize>,
-		maybe_max_targets: Option<usize>,
+	fn elect_with_bounds(
+		max_voters: usize,
+		max_targets: usize,
 	) -> Result<Supports<Self::AccountId>, Self::Error> {
-		elect_with::<T>(maybe_max_voters, maybe_max_targets)
+		elect_with::<T>(Some(max_voters), Some(max_targets))
 	}
 }
 
@@ -156,16 +171,14 @@ impl<T: BoundedExecutionConfig> ElectionProvider for BoundedOnchainExecution<T> 
 }
 
 impl<T: BoundedExecutionConfig> InstantElectionProvider for BoundedOnchainExecution<T> {
-	fn instant_elect(
-		maybe_max_voters: Option<usize>,
-		maybe_max_targets: Option<usize>,
+	fn elect_with_bounds(
+		max_voters: usize,
+		max_targets: usize,
 	) -> Result<Supports<Self::AccountId>, Self::Error> {
 		elect_with::<T>(
-			Some(maybe_max_voters.unwrap_or(0).max(T::VotersBound::get().try_into().unwrap_or(0))),
+			Some(max_voters.min(T::VotersBound::get().try_into().unwrap_or(Bounded::max_value()))),
 			Some(
-				maybe_max_targets
-					.unwrap_or(0)
-					.max(T::TargetsBound::get().try_into().unwrap_or(0)),
+				max_targets.min(T::TargetsBound::get().try_into().unwrap_or(Bounded::max_value())),
 			),
 		)
 	}

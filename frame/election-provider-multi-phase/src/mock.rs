@@ -285,23 +285,23 @@ impl ElectionProvider for MockFallback {
 	type DataProvider = StakingMock;
 
 	fn elect() -> Result<Supports<AccountId>, Self::Error> {
-		Self::instant_elect(None, None)
+		Self::elect_with_bounds(Bounded::max_value(), Bounded::max_value())
 	}
 }
 
 impl InstantElectionProvider for MockFallback {
-	fn instant_elect(
-		maybe_max_voters: Option<usize>,
-		maybe_max_targets: Option<usize>,
+	fn elect_with_bounds(
+		max_voters: usize,
+		max_targets: usize,
 	) -> Result<Supports<Self::AccountId>, Self::Error> {
 		if OnChainFallback::get() {
-			onchain::UnboundedOnchainExecution::<OnChainSeqPhragmen>::instant_elect(
-				maybe_max_voters,
-				maybe_max_targets,
+			onchain::UnboundedOnchainExecution::<OnChainSeqPhragmen>::elect_with_bounds(
+				max_voters,
+				max_targets,
 			)
 			.map_err(|_| "UnboundedOnchainExecution failed")
 		} else {
-			super::NoFallback::<Runtime>::instant_elect(maybe_max_voters, maybe_max_targets)
+			super::NoFallback::<Runtime>::elect_with_bounds(max_voters, max_targets)
 		}
 	}
 }

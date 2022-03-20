@@ -242,7 +242,7 @@ use frame_support::{
 use frame_system::{ensure_none, offchain::SendTransactionTypes};
 use scale_info::TypeInfo;
 use sp_arithmetic::{
-	traits::{CheckedAdd, Saturating, Zero},
+	traits::{Bounded, CheckedAdd, Saturating, Zero},
 	UpperOf,
 };
 use sp_npos_elections::{
@@ -323,10 +323,7 @@ impl<T: Config> ElectionProvider for NoFallback<T> {
 }
 
 impl<T: Config> InstantElectionProvider for NoFallback<T> {
-	fn instant_elect(
-		_: Option<usize>,
-		_: Option<usize>,
-	) -> Result<Supports<T::AccountId>, Self::Error> {
+	fn elect_with_bounds(_: usize, _: usize) -> Result<Supports<T::AccountId>, Self::Error> {
 		Err("NoFallback.")
 	}
 }
@@ -692,7 +689,7 @@ pub mod pallet {
 		/// Configuration of the governance-only fallback.
 		///
 		/// As a side-note, it is recommend for test-nets to use `type ElectionProvider =
-		/// UnboundedOnchainExecution<_>` if the test-net is not expected to have thousands of
+		/// BoundedOnchainExecution<_>` if the test-net is not expected to have thousands of
 		/// nominators.
 		type GovernanceFallback: InstantElectionProvider<
 			AccountId = Self::AccountId,
@@ -1041,13 +1038,14 @@ pub mod pallet {
 			let maybe_max_voters = maybe_max_voters.map(|x| x as usize);
 			let maybe_max_targets = maybe_max_targets.map(|x| x as usize);
 
-			let supports =
-				T::GovernanceFallback::instant_elect(maybe_max_voters, maybe_max_targets).map_err(
-					|e| {
-						log!(error, "GovernanceFallback failed: {:?}", e);
-						Error::<T>::FallbackFailed
-					},
-				)?;
+			let supports = T::GovernanceFallback::elect_with_bounds(
+				maybe_max_voters.unwrap_or(Bounded::max_value()),
+				maybe_max_targets.unwrap_or(Bounded::max_value()),
+			)
+			.map_err(|e| {
+				log!(error, "GovernanceFallback failed: {:?}", e);
+				Error::<T>::FallbackFailed
+			})?;
 
 			let solution = ReadySolution {
 				supports,
@@ -1524,7 +1522,7 @@ impl<T: Config> Pallet<T> {
 		<QueuedSolution<T>>::take()
 			.map_or_else(
 				|| {
-					T::Fallback::instant_elect(None, None)
+					T::Fallback::elect()
 						.map_err(|fe| ElectionError::Fallback(fe))
 						.map(|supports| (supports, ElectionCompute::Fallback))
 				},
