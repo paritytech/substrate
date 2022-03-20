@@ -26,10 +26,6 @@ pub fn derive_pallet_error(input: proc_macro::TokenStream) -> proc_macro::TokenS
 		Err(e) => return e.to_compile_error().into(),
 	};
 
-	let codec = match generate_crate_access_2018("parity-scale-codec") {
-		Ok(c) => c,
-		Err(e) => return e.into_compile_error().into(),
-	};
 	let frame_support = match generate_crate_access_2018("frame-support") {
 		Ok(c) => c,
 		Err(e) => return e.into_compile_error().into(),
@@ -43,7 +39,7 @@ pub fn derive_pallet_error(input: proc_macro::TokenStream) -> proc_macro::TokenS
 			syn::Fields::Unnamed(syn::FieldsUnnamed { unnamed: fields, .. }) => {
 				let maybe_field_tys = fields
 					.iter()
-					.map(|f| generate_field_types(f, &codec))
+					.map(|f| generate_field_types(f, &frame_support))
 					.collect::<syn::Result<Vec<_>>>();
 				let field_tys = match maybe_field_tys {
 					Ok(tys) => tys.into_iter().flatten(),
@@ -63,7 +59,7 @@ pub fn derive_pallet_error(input: proc_macro::TokenStream) -> proc_macro::TokenS
 		syn::Data::Enum(syn::DataEnum { variants, .. }) => {
 			let field_tys = variants
 				.iter()
-				.map(|variant| generate_variant_field_types(variant, &codec))
+				.map(|variant| generate_variant_field_types(variant, &frame_support))
 				.collect::<Result<Vec<Option<Vec<proc_macro2::TokenStream>>>, syn::Error>>();
 
 			let field_tys = match field_tys {
@@ -116,7 +112,7 @@ pub fn derive_pallet_error(input: proc_macro::TokenStream) -> proc_macro::TokenS
 
 fn generate_field_types(
 	field: &syn::Field,
-	ccrate: &syn::Ident,
+	scrate: &syn::Ident,
 ) -> syn::Result<Option<proc_macro2::TokenStream>> {
 	let attrs = &field.attrs;
 
@@ -137,7 +133,7 @@ fn generate_field_types(
 							if path.get_ident().map_or(false, |i| i == "compact") =>
 						{
 							let field_ty = &field.ty;
-							return Ok(Some(quote::quote!(#ccrate::Compact<#field_ty>)))
+							return Ok(Some(quote::quote!(#scrate::codec::Compact<#field_ty>)))
 						},
 
 						syn::NestedMeta::Meta(syn::Meta::NameValue(syn::MetaNameValue {
@@ -162,7 +158,7 @@ fn generate_field_types(
 
 fn generate_variant_field_types(
 	variant: &syn::Variant,
-	ccrate: &syn::Ident,
+	scrate: &syn::Ident,
 ) -> syn::Result<Option<Vec<proc_macro2::TokenStream>>> {
 	let attrs = &variant.attrs;
 
@@ -192,7 +188,7 @@ fn generate_variant_field_types(
 		syn::Fields::Unnamed(syn::FieldsUnnamed { unnamed: fields, .. }) => {
 			let field_tys = fields
 				.iter()
-				.map(|field| generate_field_types(field, ccrate))
+				.map(|field| generate_field_types(field, scrate))
 				.collect::<syn::Result<Vec<_>>>()?;
 			Ok(Some(field_tys.into_iter().flatten().collect()))
 		},
