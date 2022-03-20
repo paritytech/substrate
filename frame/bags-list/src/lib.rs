@@ -70,7 +70,7 @@ pub mod mock;
 mod tests;
 pub mod weights;
 
-pub use list::{notional_bag_for, Bag, ListError, List, Node};
+pub use list::{notional_bag_for, Bag, List, ListError, Node};
 pub use pallet::*;
 pub use weights::WeightInfo;
 
