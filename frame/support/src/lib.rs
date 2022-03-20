@@ -1676,13 +1676,13 @@ pub mod pallet_prelude {
 /// I.e. a regular rust enum named `Error`, with generic `T` and fieldless or multiple-field
 /// variants.
 ///
-/// Any field type in the enum variants must implement `scale_info::TypeInfo` in order to be
+/// Any field type in the enum variants must implement [`scale_info::TypeInfo`] in order to be
 /// properly used in the metadata, and its encoded size should be as small as possible,
 /// preferably 1 byte in size in order to reduce storage size. The error enum itself has an
 /// absolute maximum encoded size specified by [`MAX_MODULE_ERROR_ENCODED_SIZE`].
 ///
-/// Field types in enum variants must also implement `PalletError`, otherwise the pallet will
-/// fail to compile. Rust primitive types have already implemented the `PalletError` trait
+/// Field types in enum variants must also implement [`PalletError`](traits::PalletError), otherwise the pallet will
+/// fail to compile. Rust primitive types have already implemented the [`PalletError`](traits::PalletError) trait
 /// along with some commonly used stdlib types such as `Option` and `PhantomData`, and hence in
 /// most use cases, a manual implementation is not necessary and is discouraged.
 ///

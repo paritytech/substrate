@@ -98,7 +98,7 @@ pub use sp_arithmetic::{
 
 pub use either::Either;
 
-/// The number of bytes of the module-specific `error` field defined in `ModuleError`.
+/// The number of bytes of the module-specific `error` field defined in [`ModuleError`].
 /// In FRAME, this is the maximum encoded size of a pallet error type.
 pub const MAX_MODULE_ERROR_ENCODED_SIZE: usize = 4;
 
