@@ -1681,10 +1681,11 @@ pub mod pallet_prelude {
 /// preferably 1 byte in size in order to reduce storage size. The error enum itself has an
 /// absolute maximum encoded size specified by [`MAX_MODULE_ERROR_ENCODED_SIZE`].
 ///
-/// Field types in enum variants must also implement [`PalletError`](traits::PalletError), otherwise the pallet will
-/// fail to compile. Rust primitive types have already implemented the [`PalletError`](traits::PalletError) trait
-/// along with some commonly used stdlib types such as `Option` and `PhantomData`, and hence in
-/// most use cases, a manual implementation is not necessary and is discouraged.
+/// Field types in enum variants must also implement [`PalletError`](traits::PalletError),
+/// otherwise the pallet will fail to compile. Rust primitive types have already implemented
+/// the [`PalletError`](traits::PalletError) trait along with some commonly used stdlib types
+/// such as `Option` and `PhantomData`, and hence in most use cases, a manual implementation is
+/// not necessary and is discouraged.
 ///
 /// The generic `T` mustn't bound anything and where clause is not allowed. But bounds and
 /// where clause shouldn't be needed for any usecase.
