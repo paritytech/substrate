@@ -74,7 +74,7 @@ frame_election_provider_support::generate_solution_type!(
 		VoterIndex = VoterIndex,
 		TargetIndex = TargetIndex,
 		Accuracy = PerU16,
-		MaxVoters = ConstU32::<10_000> //TODO bound size?
+		MaxVoters = ConstU32::<20>
 	>(16)
 );
 
