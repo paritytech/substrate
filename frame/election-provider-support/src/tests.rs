@@ -20,6 +20,7 @@
 #![cfg(test)]
 
 use crate::{mock::*, IndexAssignment, NposSolution};
+use frame_support::traits::ConstU32;
 use rand::SeedableRng;
 use std::convert::TryInto;
 
@@ -37,7 +38,12 @@ mod solution_type {
 		use crate::generate_solution_type;
 		generate_solution_type!(
 			#[compact]
-			struct InnerTestSolutionIsolated::<VoterIndex = u32, TargetIndex = u8, Accuracy = sp_runtime::Percent>(12)
+			struct InnerTestSolutionIsolated::<
+				VoterIndex = u32,
+				TargetIndex = u8,
+				Accuracy = sp_runtime::Percent,
+				MaxVoters = crate::tests::ConstU32::<20>,
+			>(12)
 		);
 	}
 
@@ -50,6 +56,7 @@ mod solution_type {
 					VoterIndex = u32,
 					TargetIndex = u32,
 					Accuracy = TestAccuracy,
+					MaxVoters = ConstU32::<20>,
 				>(16)
 			);
 			let solution = InnerTestSolution {
@@ -68,6 +75,7 @@ mod solution_type {
 					VoterIndex = u32,
 					TargetIndex = u32,
 					Accuracy = TestAccuracy,
+					MaxVoters = ConstU32::<20>,
 				>(16)
 			);
 			let compact = InnerTestSolutionCompact {
