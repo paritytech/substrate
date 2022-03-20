@@ -689,8 +689,7 @@ pub mod pallet {
 		/// Configuration of the governance-only fallback.
 		///
 		/// As a side-note, it is recommend for test-nets to use `type ElectionProvider =
-		/// BoundedOnchainExecution<_>` if the test-net is not expected to have thousands of
-		/// nominators.
+		/// BoundedExecution<_>` if the test-net is not expected to have thousands of nominators.
 		type GovernanceFallback: InstantElectionProvider<
 			AccountId = Self::AccountId,
 			BlockNumber = Self::BlockNumber,

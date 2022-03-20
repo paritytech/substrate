@@ -295,11 +295,11 @@ impl InstantElectionProvider for MockFallback {
 		max_targets: usize,
 	) -> Result<Supports<Self::AccountId>, Self::Error> {
 		if OnChainFallback::get() {
-			onchain::UnboundedOnchainExecution::<OnChainSeqPhragmen>::elect_with_bounds(
+			onchain::UnboundedExecution::<OnChainSeqPhragmen>::elect_with_bounds(
 				max_voters,
 				max_targets,
 			)
-			.map_err(|_| "UnboundedOnchainExecution failed")
+			.map_err(|_| "UnboundedExecution failed")
 		} else {
 			super::NoFallback::<Runtime>::elect_with_bounds(max_voters, max_targets)
 		}

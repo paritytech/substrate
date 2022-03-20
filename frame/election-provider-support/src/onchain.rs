@@ -50,10 +50,10 @@ impl From<sp_npos_elections::Error> for Error {
 /// Finally, the [`ElectionProvider`] implementation of this type does not impose any limits on the
 /// number of voters and targets that are fetched. This could potentially make this unsuitable for
 /// execution onchain. One could, however, impose bounds on it by using for example
-/// `BoundedOnchainExecution` which will the bounds provided in the configuration.
+/// `BoundedExecution` which will the bounds provided in the configuration.
 ///
 /// On the other hand, the [`InstantElectionProvider`] implementation does limit
-/// these inputs, either via using `BoundedOnchainExecution` and imposing the bounds there, or
+/// these inputs, either via using `BoundedExecution` and imposing the bounds there, or
 /// dynamically via calling `elect_with_bounds` providing these bounds. If you use
 /// `elect_with_bounds` along with `InstantElectionProvider`, the bound that would be used is the
 /// minimum of the 2 bounds.
@@ -62,16 +62,16 @@ impl From<sp_npos_elections::Error> for Error {
 /// the latter [`InstantElectionProvider::elect_with_bounds`] for onchain operations, with
 /// thoughtful bounds.
 ///
-/// Please use `BoundedOnchainExecution` at all times except at genesis or for testing,
+/// Please use `BoundedExecution` at all times except at genesis or for testing,
 /// with thoughtful bounds in order to bound the potential execution time.
-/// Limit the use `UnboundedOnchainExecution` at genesis or for testing, as it does not
+/// Limit the use `UnboundedExecution` at genesis or for testing, as it does not
 /// bound the inputs. However, this can be used with `[InstantElectionProvider::elect_with_bounds`]
 /// that dynamically imposes limits.
-pub struct BoundedOnchainExecution<T: BoundedExecutionConfig>(PhantomData<T>);
+pub struct BoundedExecution<T: BoundedExecutionConfig>(PhantomData<T>);
 
-pub struct UnboundedOnchainExecution<T: ExecutionConfig>(PhantomData<T>);
+pub struct UnboundedExecution<T: ExecutionConfig>(PhantomData<T>);
 
-/// Configuration trait of [`UnboundedOnchainExecution`]Ì.
+/// Configuration trait of [`UnboundedExecution`]Ì.
 pub trait ExecutionConfig {
 	/// This is to enable to register extra weight
 	type System: frame_system::Config;
@@ -87,7 +87,7 @@ pub trait ExecutionConfig {
 	>;
 }
 
-/// Configuration trait of [`BoundedOnchainExecution`].
+/// Configuration trait of [`BoundedExecution`].
 pub trait BoundedExecutionConfig: ExecutionConfig {
 	/// Bounds the number of voters.
 	type VotersBound: Get<u32>;
@@ -127,7 +127,7 @@ fn elect_with<T: ExecutionConfig>(
 	Ok(to_supports(&staked))
 }
 
-impl<T: ExecutionConfig> ElectionProvider for UnboundedOnchainExecution<T> {
+impl<T: ExecutionConfig> ElectionProvider for UnboundedExecution<T> {
 	type AccountId = <T::System as frame_system::Config>::AccountId;
 	type BlockNumber = <T::System as frame_system::Config>::BlockNumber;
 	type Error = Error;
@@ -147,7 +147,7 @@ impl<T: ExecutionConfig> ElectionProvider for UnboundedOnchainExecution<T> {
 	}
 }
 
-impl<T: ExecutionConfig> InstantElectionProvider for UnboundedOnchainExecution<T> {
+impl<T: ExecutionConfig> InstantElectionProvider for UnboundedExecution<T> {
 	fn elect_with_bounds(
 		max_voters: usize,
 		max_targets: usize,
@@ -156,7 +156,7 @@ impl<T: ExecutionConfig> InstantElectionProvider for UnboundedOnchainExecution<T
 	}
 }
 
-impl<T: BoundedExecutionConfig> ElectionProvider for BoundedOnchainExecution<T> {
+impl<T: BoundedExecutionConfig> ElectionProvider for BoundedExecution<T> {
 	type AccountId = <T::System as frame_system::Config>::AccountId;
 	type BlockNumber = <T::System as frame_system::Config>::BlockNumber;
 	type Error = Error;
@@ -170,7 +170,7 @@ impl<T: BoundedExecutionConfig> ElectionProvider for BoundedOnchainExecution<T> 
 	}
 }
 
-impl<T: BoundedExecutionConfig> InstantElectionProvider for BoundedOnchainExecution<T> {
+impl<T: BoundedExecutionConfig> InstantElectionProvider for BoundedExecution<T> {
 	fn elect_with_bounds(
 		max_voters: usize,
 		max_targets: usize,
@@ -239,7 +239,7 @@ mod tests {
 		type DataProvider = mock_data_provider::DataProvider;
 	}
 
-	type OnChainPhragmen = UnboundedOnchainExecution<Runtime>;
+	type OnChainPhragmen = UnboundedExecution<Runtime>;
 
 	mod mock_data_provider {
 		use frame_support::{bounded_vec, traits::ConstU32};
