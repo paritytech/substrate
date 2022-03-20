@@ -1897,6 +1897,7 @@ impl_runtime_apis! {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use frame_election_provider_support::NposSolution;
 	use frame_system::offchain::CreateSignedTransaction;
 	use sp_runtime::UpperOf;
 
@@ -1913,7 +1914,8 @@ mod tests {
 
 	#[test]
 	fn perbill_as_onchain_accuracy() {
-		type OnChainAccuracy = <<Runtime as pallet_election_provider_multi_phase::Config>::Solution as frame_election_provider_support::NposSolution>::Accuracy;
+		type OnChainAccuracy =
+			<<Runtime as pallet_election_provider_multi_phase::Config>::Solution as NposSolution>::Accuracy;
 		let maximum_chain_accuracy: Vec<UpperOf<OnChainAccuracy>> = (0..MaxNominations::get())
 			.map(|_| <UpperOf<OnChainAccuracy>>::from(OnChainAccuracy::one().deconstruct()))
 			.collect();
