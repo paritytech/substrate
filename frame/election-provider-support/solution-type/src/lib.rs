@@ -139,7 +139,7 @@ struct SolutionDef {
 	voter_type: syn::Type,
 	target_type: syn::Type,
 	weight_type: syn::Type,
-	size_bound: syn::Type,
+	max_voters: syn::Type,
 	count: usize,
 	compact_encoding: bool,
 }
@@ -208,7 +208,7 @@ impl Parse for SolutionDef {
 			})
 			.collect::<Result<_>>()?;
 
-		let size_bound = types.pop().expect("Vector of length 4 can be popped; qed");
+		let max_voters = types.pop().expect("Vector of length 4 can be popped; qed");
 		let weight_type = types.pop().expect("Vector of length 3 can be popped; qed");
 		let target_type = types.pop().expect("Vector of length 2 can be popped; qed");
 		let voter_type = types.pop().expect("Vector of length 1 can be popped; qed");
@@ -223,7 +223,7 @@ impl Parse for SolutionDef {
 			voter_type,
 			target_type,
 			weight_type,
-			size_bound,
+			max_voters,
 			count,
 			compact_encoding,
 		})

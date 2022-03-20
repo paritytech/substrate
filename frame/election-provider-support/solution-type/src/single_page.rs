@@ -28,7 +28,7 @@ pub(crate) fn generate(def: crate::SolutionDef) -> Result<TokenStream2> {
 		voter_type,
 		target_type,
 		weight_type,
-		size_bound,
+		max_voters,
 		compact_encoding,
 	} = def;
 
@@ -183,7 +183,7 @@ pub(crate) fn generate(def: crate::SolutionDef) -> Result<TokenStream2> {
 			fn max_encoded_len() -> usize {
 				use frame_support::traits::Get;
 				use _feps::codec::Encode;
-				let s: u32 = #size_bound::get();
+				let s: u32 = #max_voters::get();
 				// The last element of the struct is a vec with 1 voter
 				// then #count-1 tuple of target with an accuracy
 				// and then lastly the final target
