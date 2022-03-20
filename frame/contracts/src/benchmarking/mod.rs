@@ -409,7 +409,7 @@ benchmarks! {
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
-				module: "__unstable__",
+				module: "seal0",
 				name: "seal_is_contract",
 				params: vec![ValueType::I32],
 				return_type: Some(ValueType::I32),
@@ -441,7 +441,7 @@ benchmarks! {
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
-				module: "__unstable__",
+				module: "seal0",
 				name: "seal_caller_is_origin",
 				params: vec![],
 				return_type: Some(ValueType::I32),
@@ -1492,7 +1492,7 @@ benchmarks! {
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
-				module: "__unstable__",
+				module: "seal0",
 				name: "seal_delegate_call",
 				params: vec![
 					ValueType::I32,
@@ -1866,20 +1866,14 @@ benchmarks! {
 	// It generates different private keys and signatures for the message "Hello world".
 	seal_ecdsa_recover {
 		let r in 0 .. API_BENCHMARK_BATCHES;
-		use rand::SeedableRng;
-		let mut rng = rand_pcg::Pcg32::seed_from_u64(123456);
 
 		let message_hash = sp_io::hashing::blake2_256("Hello world".as_bytes());
+		let key_type = sp_core::crypto::KeyTypeId(*b"code");
 		let signatures = (0..r * API_BENCHMARK_BATCH_SIZE)
 			.map(|i| {
-				use libsecp256k1::{SecretKey, Message, sign};
-
-				let private_key = SecretKey::random(&mut rng);
-				let (signature, recovery_id) = sign(&Message::parse(&message_hash), &private_key);
-				let mut full_signature = [0; 65];
-				full_signature[..64].copy_from_slice(&signature.serialize());
-				full_signature[64] = recovery_id.serialize();
-				full_signature
+				let pub_key = sp_io::crypto::ecdsa_generate(key_type, None);
+				let sig = sp_io::crypto::ecdsa_sign_prehashed(key_type, &pub_key, &message_hash).expect("Generates signature");
+				AsRef::<[u8; 65]>::as_ref(&sig).to_vec()
 			})
 			.collect::<Vec<_>>();
 		let signatures = signatures.iter().flatten().cloned().collect::<Vec<_>>();
@@ -2250,7 +2244,7 @@ benchmarks! {
 	// w_local_get = w_bench - 1 * w_param
 	instr_local_get {
 		let r in 0 .. INSTR_BENCHMARK_BATCHES;
-		let max_locals = T::Schedule::get().limits.stack_height;
+		let max_locals = T::Schedule::get().limits.stack_height.unwrap_or(512);
 		let mut call_body = body::repeated_dyn(r * INSTR_BENCHMARK_BATCH_SIZE, vec![
 			RandomGetLocal(0, max_locals),
 			Regular(Instruction::Drop),
@@ -2267,7 +2261,7 @@ benchmarks! {
 	// w_local_set = w_bench - 1 * w_param
 	instr_local_set {
 		let r in 0 .. INSTR_BENCHMARK_BATCHES;
-		let max_locals = T::Schedule::get().limits.stack_height;
+		let max_locals = T::Schedule::get().limits.stack_height.unwrap_or(512);
 		let mut call_body = body::repeated_dyn(r * INSTR_BENCHMARK_BATCH_SIZE, vec![
 			RandomI64Repeated(1),
 			RandomSetLocal(0, max_locals),
@@ -2284,7 +2278,7 @@ benchmarks! {
 	// w_local_tee = w_bench - 2 * w_param
 	instr_local_tee {
 		let r in 0 .. INSTR_BENCHMARK_BATCHES;
-		let max_locals = T::Schedule::get().limits.stack_height;
+		let max_locals = T::Schedule::get().limits.stack_height.unwrap_or(512);
 		let mut call_body = body::repeated_dyn(r * INSTR_BENCHMARK_BATCH_SIZE, vec![
 			RandomI64Repeated(1),
 			RandomTeeLocal(0, max_locals),

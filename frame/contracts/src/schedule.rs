@@ -104,7 +104,13 @@ pub struct Limits {
 	/// See <https://wiki.parity.io/WebAssembly-StackHeight> to find out
 	/// how the stack frame cost is calculated. Each element can be of one of the
 	/// wasm value types. This means the maximum size per element is 64bit.
-	pub stack_height: u32,
+	///
+	/// # Note
+	///
+	/// It is safe to disable (pass `None`) the `stack_height` when the execution engine
+	/// is part of the runtime and hence there can be no indeterminism between different
+	/// client resident execution engines.
+	pub stack_height: Option<u32>,
 
 	/// Maximum number of globals a module is allowed to declare.
 	///
@@ -496,8 +502,8 @@ impl Default for Limits {
 	fn default() -> Self {
 		Self {
 			event_topics: 4,
-			// 512 * sizeof(i64) will give us a 4k stack.
-			stack_height: 512,
+			// No stack limit required because we use a runtime resident execution engine.
+			stack_height: None,
 			globals: 256,
 			parameters: 128,
 			memory_pages: 16,
