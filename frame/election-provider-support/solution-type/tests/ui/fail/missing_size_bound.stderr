@@ -1,4 +1,4 @@
-error: Expected binding: `SizeBound = ...`
+error: Expected binding: `MaxVoters = ...`
  --> tests/ui/fail/missing_size_bound.rs:7:2
   |
 7 |     frame_support::traits::ConstU32::<10>,

@@ -66,7 +66,7 @@ pub(crate) fn syn_err(message: &'static str) -> syn::Error {
 ///     VoterIndex = u16,
 ///     TargetIndex = u8,
 ///     Accuracy = Perbill,
-///     SizeBound = ConstU32::<10>,
+///     MaxVoters = ConstU32::<10>,
 /// >(4));
 /// ```
 ///
@@ -114,7 +114,7 @@ pub(crate) fn syn_err(message: &'static str) -> syn::Error {
 ///          VoterIndex = u16,
 ///          TargetIndex = u8,
 ///          Accuracy = Perbill,
-///          SizeBound = ConstU32::<10>,
+///          MaxVoters = ConstU32::<10>,
 ///     >(8)
 /// );
 /// ```
@@ -182,7 +182,7 @@ impl Parse for SolutionDef {
 			return Err(syn_err("Must provide 4 generic args."))
 		}
 
-		let expected_types = ["VoterIndex", "TargetIndex", "Accuracy", "SizeBound"];
+		let expected_types = ["VoterIndex", "TargetIndex", "Accuracy", "MaxVoters"];
 
 		let mut types: Vec<syn::Type> = generics
 			.args
