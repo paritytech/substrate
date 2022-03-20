@@ -22,7 +22,7 @@ use sc_service::Configuration;
 
 use log::info;
 use serde::Serialize;
-use std::{fmt, fs, result, str::FromStr, time::Duration};
+use std::{fmt, fs, path::PathBuf, result, str::FromStr, time::Duration};
 
 /// Raw output of a Storage benchmark.
 #[derive(Debug, Default, Clone, Serialize)]
@@ -36,25 +36,25 @@ pub(crate) struct BenchRecord {
 #[derive(Serialize, Default, Clone)]
 pub(crate) struct Stats {
 	/// Sum of all values.
-	sum: u64,
+	pub(crate) sum: u64,
 	/// Minimal observed value.
-	min: u64,
+	pub(crate) min: u64,
 	/// Maximal observed value.
-	max: u64,
+	pub(crate) max: u64,
 
 	/// Average of all values.
-	avg: u64,
+	pub(crate) avg: u64,
 	/// Median of all values.
-	median: u64,
+	pub(crate) median: u64,
 	/// Standard derivation of all values.
-	stddev: f64,
+	pub(crate) stddev: f64,
 
 	/// 99th percentile. At least 99% of all values are below this threshold.
-	p99: u64,
+	pub(crate) p99: u64,
 	/// 95th percentile. At least 95% of all values are below this threshold.
-	p95: u64,
+	pub(crate) p95: u64,
 	/// 75th percentile. At least 75% of all values are below this threshold.
-	p75: u64,
+	pub(crate) p75: u64,
 }
 
 /// Selects a specific field from a [`Stats`] object.
@@ -95,12 +95,18 @@ impl BenchRecord {
 		Ok((time, size)) // The swap of time/size here is intentional.
 	}
 
-	/// Saves the raw results in a json file in the current directory.
+	/// Unless a path is specified, saves the raw results in a json file in the current directory.
 	/// Prefixes it with the DB name and suffixed with `path_suffix`.
-	pub fn save_json(&self, cfg: &Configuration, path_suffix: &str) -> Result<()> {
-		let path = format!("{}_{}.json", cfg.database, path_suffix).to_lowercase();
+	pub fn save_json(&self, cfg: &Configuration, out_path: &PathBuf, suffix: &str) -> Result<()> {
+		let mut path = PathBuf::from(out_path);
+		if path.is_dir() || path.as_os_str().is_empty() {
+			path.push(&format!("{}_{}", cfg.database, suffix).to_lowercase());
+			path.set_extension("json");
+		}
+
 		let json = serde_json::to_string_pretty(&self)
 			.map_err(|e| format!("Serializing as JSON: {:?}", e))?;
+
 		fs::write(&path, json)?;
 		info!("Raw data written to {:?}", fs::canonicalize(&path)?);
 		Ok(())
@@ -153,8 +159,8 @@ impl Stats {
 	/// This is best effort since it ignores the interpolation case.
 	fn percentile(mut xs: Vec<u64>, p: f64) -> u64 {
 		xs.sort();
-		let index = (xs.len() as f64 * p).ceil() as usize;
-		xs[index]
+		let index = (xs.len() as f64 * p).ceil() as usize - 1;
+		xs[index.clamp(0, xs.len() - 1)]
 	}
 }
 
@@ -186,6 +192,43 @@ impl FromStr for StatSelect {
 			"p95" => Ok(Self::P95Percentile),
 			"p75" => Ok(Self::P75Percentile),
 			_ => Err("String was not a StatSelect"),
+		}
+	}
+}
+
+#[cfg(test)]
+mod test_stats {
+	use super::Stats;
+	use rand::{seq::SliceRandom, thread_rng};
+
+	#[test]
+	fn stats_correct() {
+		let mut data: Vec<u64> = (1..=100).collect();
+		data.shuffle(&mut thread_rng());
+		let stats = Stats::new(&data).unwrap();
+
+		assert_eq!(stats.sum, 5050);
+		assert_eq!(stats.min, 1);
+		assert_eq!(stats.max, 100);
+
+		assert_eq!(stats.avg, 50);
+		assert_eq!(stats.median, 50); // 50.5 to be exact.
+		assert_eq!(stats.stddev, 28.87); // Rounded with 1/100 precision.
+
+		assert_eq!(stats.p99, 99);
+		assert_eq!(stats.p95, 95);
+		assert_eq!(stats.p75, 75);
+	}
+
+	#[test]
+	fn no_panic_short_lengths() {
+		// Empty input does error.
+		assert!(Stats::new(&vec![]).is_err());
+
+		// Different small input lengths are fine.
+		for l in 1..10 {
+			let data = (0..=l).collect();
+			assert!(Stats::new(&data).is_ok());
 		}
 	}
 }

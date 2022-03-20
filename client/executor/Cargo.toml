@@ -47,6 +47,12 @@ sc-tracing = { version = "4.0.0-dev", path = "../tracing" }
 tracing-subscriber = "0.2.19"
 paste = "1.0"
 regex = "1"
+criterion = "0.3"
+env_logger = "0.9"
+
+[[bench]]
+name = "bench"
+harness = false
 
 [features]
 default = ["std"]

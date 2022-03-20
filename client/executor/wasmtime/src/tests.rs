@@ -24,7 +24,7 @@ use std::sync::Arc;
 type HostFunctions = sp_io::SubstrateHostFunctions;
 
 struct RuntimeBuilder {
-	code: Option<&'static str>,
+	code: Option<String>,
 	fast_instance_reuse: bool,
 	canonicalize_nans: bool,
 	deterministic_stack: bool,
@@ -46,7 +46,7 @@ impl RuntimeBuilder {
 		}
 	}
 
-	fn use_wat(&mut self, code: &'static str) {
+	fn use_wat(&mut self, code: String) {
 		self.code = Some(code);
 	}
 
@@ -152,7 +152,7 @@ fn test_stack_depth_reaching() {
 
 	let runtime = {
 		let mut builder = RuntimeBuilder::new_on_demand();
-		builder.use_wat(TEST_GUARD_PAGE_SKIP);
+		builder.use_wat(TEST_GUARD_PAGE_SKIP.to_string());
 		builder.deterministic_stack(true);
 		builder.build()
 	};
@@ -168,10 +168,19 @@ fn test_stack_depth_reaching() {
 }
 
 #[test]
-fn test_max_memory_pages() {
+fn test_max_memory_pages_imported_memory() {
+	test_max_memory_pages(true);
+}
+
+#[test]
+fn test_max_memory_pages_exported_memory() {
+	test_max_memory_pages(false);
+}
+
+fn test_max_memory_pages(import_memory: bool) {
 	fn try_instantiate(
 		max_memory_size: Option<usize>,
-		wat: &'static str,
+		wat: String,
 	) -> Result<(), Box<dyn std::error::Error>> {
 		let runtime = {
 			let mut builder = RuntimeBuilder::new_on_demand();
@@ -184,31 +193,48 @@ fn test_max_memory_pages() {
 		Ok(())
 	}
 
+	fn memory(initial: u32, maximum: Option<u32>, import: bool) -> String {
+		let memory = if let Some(maximum) = maximum {
+			format!("(memory $0 {} {})", initial, maximum)
+		} else {
+			format!("(memory $0 {})", initial)
+		};
+
+		if import {
+			format!("(import \"env\" \"memory\" {})", memory)
+		} else {
+			format!("{}\n(export \"memory\" (memory $0))", memory)
+		}
+	}
+
 	const WASM_PAGE_SIZE: usize = 65536;
 
 	// check the old behavior if preserved. That is, if no limit is set we allow 4 GiB of memory.
 	try_instantiate(
 		None,
-		r#"
-		(module
-			;; we want to allocate the maximum number of pages supported in wasm for this test.
-			;;
-			;; However, due to a bug in wasmtime (I think wasmi is also affected) it is only possible
-			;; to allocate 65536 - 1 pages.
-			;;
-			;; Then, during creation of the Substrate Runtime instance, 1024 (heap_pages) pages are
-			;; mounted.
-			;;
-			;; Thus 65535 = 64511 + 1024
-			(import "env" "memory" (memory 64511))
-
-			(global (export "__heap_base") i32 (i32.const 0))
-			(func (export "main")
-				(param i32 i32) (result i64)
-				(i64.const 0)
+		format!(
+			r#"
+			(module
+				{}
+				(global (export "__heap_base") i32 (i32.const 0))
+				(func (export "main")
+					(param i32 i32) (result i64)
+					(i64.const 0)
+				)
 			)
-		)
-		"#,
+			"#,
+			/*
+				We want to allocate the maximum number of pages supported in wasm for this test.
+				However, due to a bug in wasmtime (I think wasmi is also affected) it is only possible
+				to allocate 65536 - 1 pages.
+
+				Then, during creation of the Substrate Runtime instance, 1024 (heap_pages) pages are
+				mounted.
+
+				Thus 65535 = 64511 + 1024
+			*/
+			memory(64511, None, import_memory)
+		),
 	)
 	.unwrap();
 
@@ -217,94 +243,104 @@ fn test_max_memory_pages() {
 	// max_memory_size = (1 (initial) + 1024 (heap_pages)) * WASM_PAGE_SIZE
 	try_instantiate(
 		Some((1 + 1024) * WASM_PAGE_SIZE),
-		r#"
-		(module
-
-			(import "env" "memory" (memory 1)) ;; <- 1 initial, max is not specified
-
-			(global (export "__heap_base") i32 (i32.const 0))
-			(func (export "main")
-				(param i32 i32) (result i64)
-				(i64.const 0)
+		format!(
+			r#"
+			(module
+				{}
+				(global (export "__heap_base") i32 (i32.const 0))
+				(func (export "main")
+					(param i32 i32) (result i64)
+					(i64.const 0)
+				)
 			)
-		)
-		"#,
+			"#,
+			// 1 initial, max is not specified.
+			memory(1, None, import_memory)
+		),
 	)
 	.unwrap();
 
 	// max is specified explicitly to 2048 pages.
 	try_instantiate(
 		Some((1 + 1024) * WASM_PAGE_SIZE),
-		r#"
-		(module
-
-			(import "env" "memory" (memory 1 2048)) ;; <- max is 2048
-
-			(global (export "__heap_base") i32 (i32.const 0))
-			(func (export "main")
-				(param i32 i32) (result i64)
-				(i64.const 0)
+		format!(
+			r#"
+			(module
+				{}
+				(global (export "__heap_base") i32 (i32.const 0))
+				(func (export "main")
+					(param i32 i32) (result i64)
+					(i64.const 0)
+				)
 			)
-		)
-		"#,
+			"#,
+			// Max is 2048.
+			memory(1, Some(2048), import_memory)
+		),
 	)
 	.unwrap();
 
 	// memory grow should work as long as it doesn't exceed 1025 pages in total.
 	try_instantiate(
 		Some((0 + 1024 + 25) * WASM_PAGE_SIZE),
-		r#"
-		(module
-			(import "env" "memory" (memory 0)) ;; <- zero starting pages.
+		format!(
+			r#"
+			(module
+				{}
+				(global (export "__heap_base") i32 (i32.const 0))
+				(func (export "main")
+					(param i32 i32) (result i64)
 
-			(global (export "__heap_base") i32 (i32.const 0))
-			(func (export "main")
-				(param i32 i32) (result i64)
-
-				;; assert(memory.grow returns != -1)
-				(if
-					(i32.eq
-						(memory.grow
-							(i32.const 25)
+					;; assert(memory.grow returns != -1)
+					(if
+						(i32.eq
+							(memory.grow
+								(i32.const 25)
+							)
+							(i32.const -1)
 						)
-						(i32.const -1)
+						(unreachable)
 					)
-					(unreachable)
-				)
 
-				(i64.const 0)
+					(i64.const 0)
+				)
 			)
-		)
-		"#,
+			"#,
+			// Zero starting pages.
+			memory(0, None, import_memory)
+		),
 	)
 	.unwrap();
 
 	// We start with 1025 pages and try to grow at least one.
 	try_instantiate(
 		Some((1 + 1024) * WASM_PAGE_SIZE),
-		r#"
-		(module
-			(import "env" "memory" (memory 1))  ;; <- initial=1, meaning after heap pages mount the
-												;; total will be already 1025
-			(global (export "__heap_base") i32 (i32.const 0))
-			(func (export "main")
-				(param i32 i32) (result i64)
+		format!(
+			r#"
+			(module
+				{}
+				(global (export "__heap_base") i32 (i32.const 0))
+				(func (export "main")
+					(param i32 i32) (result i64)
 
-				;; assert(memory.grow returns == -1)
-				(if
-					(i32.ne
-						(memory.grow
-							(i32.const 1)
+					;; assert(memory.grow returns == -1)
+					(if
+						(i32.ne
+							(memory.grow
+								(i32.const 1)
+							)
+							(i32.const -1)
 						)
-						(i32.const -1)
+						(unreachable)
 					)
-					(unreachable)
-				)
 
-				(i64.const 0)
+					(i64.const 0)
+				)
 			)
-		)
-		"#,
+			"#,
+			// Initial=1, meaning after heap pages mount the total will be already 1025.
+			memory(1, None, import_memory)
+		),
 	)
 	.unwrap();
 }
