@@ -156,8 +156,8 @@ where
 	type Extrinsic = Extrinsic;
 }
 
-pub struct OnChainSequentialPhragmen;
-impl onchain::ExecutionConfig for OnChainSequentialPhragmen {
+pub struct OnChainSeqPhragmen;
+impl onchain::ExecutionConfig for OnChainSeqPhragmen {
 	type System = Test;
 	type Solver = SequentialPhragmen<AccountId, sp_runtime::Perbill>;
 	type DataProvider = Staking;
@@ -181,7 +181,7 @@ impl pallet_staking::Config for Test {
 	type NextNewSession = Session;
 	type MaxNominatorRewardedPerValidator = ConstU32<64>;
 	type OffendingValidatorsThreshold = ();
-	type ElectionProvider = onchain::UnboundedOnchainExecution<OnChainSequentialPhragmen>;
+	type ElectionProvider = onchain::UnboundedOnchainExecution<OnChainSeqPhragmen>;
 	type GenesisElectionProvider = Self::ElectionProvider;
 	type MaxUnlockingChunks = ConstU32<32>;
 	type SortedListProvider = pallet_staking::UseNominatorsMap<Self>;

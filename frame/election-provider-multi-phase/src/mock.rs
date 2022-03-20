@@ -270,8 +270,8 @@ parameter_types! {
 	pub static OnChainFallback: bool = true;
 }
 
-pub struct OnChainSequentialPhragmen;
-impl onchain::ExecutionConfig for OnChainSequentialPhragmen {
+pub struct OnChainSeqPhragmen;
+impl onchain::ExecutionConfig for OnChainSeqPhragmen {
 	type System = Runtime;
 	type Solver = SequentialPhragmen<AccountId, SolutionAccuracyOf<Runtime>, Balancing>;
 	type DataProvider = StakingMock;
@@ -295,7 +295,7 @@ impl InstantElectionProvider for MockFallback {
 		maybe_max_targets: Option<usize>,
 	) -> Result<Supports<Self::AccountId>, Self::Error> {
 		if OnChainFallback::get() {
-			onchain::UnboundedOnchainExecution::<OnChainSequentialPhragmen>::instant_elect(
+			onchain::UnboundedOnchainExecution::<OnChainSeqPhragmen>::instant_elect(
 				maybe_max_voters,
 				maybe_max_targets,
 			)

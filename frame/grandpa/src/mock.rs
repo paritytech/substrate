@@ -180,8 +180,8 @@ parameter_types! {
 	pub const OffendingValidatorsThreshold: Perbill = Perbill::from_percent(17);
 }
 
-pub struct OnChainSequentialPhragmen;
-impl onchain::ExecutionConfig for OnChainSequentialPhragmen {
+pub struct OnChainSeqPhragmen;
+impl onchain::ExecutionConfig for OnChainSeqPhragmen {
 	type System = Test;
 	type Solver = SequentialPhragmen<<Test as frame_system::Config>::AccountId, Perbill>;
 	type DataProvider = Staking;
@@ -205,7 +205,7 @@ impl pallet_staking::Config for Test {
 	type MaxNominatorRewardedPerValidator = ConstU32<64>;
 	type OffendingValidatorsThreshold = OffendingValidatorsThreshold;
 	type NextNewSession = Session;
-	type ElectionProvider = onchain::UnboundedOnchainExecution<OnChainSequentialPhragmen>;
+	type ElectionProvider = onchain::UnboundedOnchainExecution<OnChainSeqPhragmen>;
 	type GenesisElectionProvider = Self::ElectionProvider;
 	type SortedListProvider = pallet_staking::UseNominatorsMap<Self>;
 	type MaxUnlockingChunks = ConstU32<32>;

@@ -557,7 +557,7 @@ impl pallet_staking::Config for Runtime {
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
 	type OffendingValidatorsThreshold = OffendingValidatorsThreshold;
 	type ElectionProvider = ElectionProviderMultiPhase;
-	type GenesisElectionProvider = onchain::UnboundedOnchainExecution<OnChainSequentialPhragmen>;
+	type GenesisElectionProvider = onchain::UnboundedOnchainExecution<OnChainSeqPhragmen>;
 	// Alternatively, use pallet_staking::UseNominatorsMap<Runtime> to just use the nominators map.
 	// Note that the aforementioned does not scale to a very large number of nominators.
 	type SortedListProvider = BagsList;
@@ -642,8 +642,8 @@ impl Get<Option<(usize, ExtendedBalance)>> for OffchainRandomBalancing {
 	}
 }
 
-pub struct OnChainSequentialPhragmen;
-impl onchain::ExecutionConfig for OnChainSequentialPhragmen {
+pub struct OnChainSeqPhragmen;
+impl onchain::ExecutionConfig for OnChainSeqPhragmen {
 	type System = Runtime;
 	type Solver = SequentialPhragmen<
 		AccountId,
@@ -652,7 +652,7 @@ impl onchain::ExecutionConfig for OnChainSequentialPhragmen {
 	type DataProvider = <Runtime as pallet_election_provider_multi_phase::Config>::DataProvider;
 }
 
-impl onchain::BoundedExecutionConfig for OnChainSequentialPhragmen {
+impl onchain::BoundedExecutionConfig for OnChainSeqPhragmen {
 	type VotersBound = ConstU32<20_000>;
 	type TargetsBound = ConstU32<2_000>;
 }
@@ -678,8 +678,8 @@ impl pallet_election_provider_multi_phase::Config for Runtime {
 	type RewardHandler = (); // nothing to do upon rewards
 	type DataProvider = Staking;
 	type Solution = NposSolution16;
-	type Fallback = onchain::BoundedOnchainExecution<OnChainSequentialPhragmen>;
-	type GovernanceFallback = onchain::BoundedOnchainExecution<OnChainSequentialPhragmen>;
+	type Fallback = onchain::BoundedOnchainExecution<OnChainSeqPhragmen>;
+	type GovernanceFallback = onchain::BoundedOnchainExecution<OnChainSeqPhragmen>;
 	type Solver = SequentialPhragmen<AccountId, SolutionAccuracyOf<Self>, OffchainRandomBalancing>;
 	type ForceOrigin = EnsureRootOrHalfCouncil;
 	type MaxElectableTargets = ConstU16<{ u16::MAX }>;
@@ -1913,7 +1913,7 @@ mod tests {
 
 	#[test]
 	fn perbill_as_onchain_accuracy() {
-		type OnChainAccuracy = pallet_election_provider_multi_phase::SolutionAccuracyOf<Runtime>;
+		type OnChainAccuracy = <<Runtime as pallet_election_provider_multi_phase::Config>::Solution as frame_election_provider_support::NposSolution>::Accuracy;
 		let maximum_chain_accuracy: Vec<UpperOf<OnChainAccuracy>> = (0..MaxNominations::get())
 			.map(|_| <UpperOf<OnChainAccuracy>>::from(OnChainAccuracy::one().deconstruct()))
 			.collect();
