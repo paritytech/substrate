@@ -853,7 +853,7 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		/// Submit a solution for the unsigned phase.
 		///
-		/// The dispatch origin fo this call must be __none__.
+		/// The dispatch origin for this call must be __none__.
 		///
 		/// This submission is checked on the fly. Moreover, this unsigned solution is only
 		/// validated when submitted to the pool from the **local** node. Effectively, this means
@@ -1055,6 +1055,21 @@ pub mod pallet {
 			};
 
 			<QueuedSolution<T>>::put(solution);
+			Ok(())
+		}
+
+		#[pallet::weight(100)]
+		pub fn challenge_submission(
+			origin: OriginFor<T>,
+			index: u32,
+		)-> DispatchResult {
+			let _who = ensure_signed(origin)?;
+			// assert!(Staking::slashable_balance_of(who) >= T::Currency::minimum_balance());
+			let signed_submissions = Self::signed_submissions();
+			if let Some(_submission) = signed_submissions.get_submission(index) {
+
+			}
+			
 			Ok(())
 		}
 	}
