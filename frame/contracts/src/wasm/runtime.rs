@@ -2025,9 +2025,7 @@ define_env!(Env, <E: Ext>,
 		ctx.charge_gas(RuntimeCosts::EcdsaToEthAddress)?;
 		let compressed_key: [u8; 33] =
 			ctx.read_sandbox_memory_as(key_ptr)?;
-
-		Ok(ctx.write_sandbox_output(
-			out_ptr, out_len_ptr, &ctx.ext.ecdsa_to_eth_address(&compressed_key).encode(), false, already_charged
-		)?)
+		let result = ctx.ext.ecdsa_to_eth_address(&compressed_key).unwrap();
+		Ok(ctx.write_sandbox_output(out_ptr, out_len_ptr, &result, false, already_charged)?)
 	},
 );
