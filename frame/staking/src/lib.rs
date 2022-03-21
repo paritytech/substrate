@@ -599,10 +599,9 @@ impl<T: Config> StakingLedger<T> {
 		};
 
 		// Helper to update `target` and the ledgers total after accounting for slashing `target`.
-		// TODO: use PerThing
+		let ratio = Perquintill::from_rational(slash_amount, affected_balance);
 		let mut slash_out_of = |target: &mut BalanceOf<T>, slash_remaining: &mut BalanceOf<T>| {
 			let mut slash_from_target = if slash_amount < affected_balance {
-				let ratio = Perquintill::from_rational(slash_amount, affected_balance);
 				ratio * (*target)
 			} else {
 				*slash_remaining
@@ -617,7 +616,6 @@ impl<T: Config> StakingLedger<T> {
 					sp_std::mem::replace(target, Zero::zero()).saturating_add(slash_from_target)
 			}
 
-			// TODO: maybe move this outside of the closure to keep it a bit more pure.
 			self.total = self.total.saturating_sub(slash_from_target);
 			*slash_remaining = slash_remaining.saturating_sub(slash_from_target);
 		};

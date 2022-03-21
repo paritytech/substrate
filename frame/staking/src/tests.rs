@@ -4875,22 +4875,6 @@ fn ledger_slash_works() {
 	assert_eq!(LedgerSlashPerEra::get().0, 3 * 500 / 4);
 	assert_eq!(LedgerSlashPerEra::get().1, Default::default());
 
-	// // slash 1/4th with chunks
-	// ledger.unlocking = bounded_vec![c(4, 40), c(5, 120), c(6, 80)];
-	// ledger.active = 120;
-	// ledger.total = 40 + 120 + 80 + 120; // 240
-	// // When we have a partial slash that touches all chunks
-	// assert_eq!(ledger.slash(240 / 4, 0, 0), 2 / 4 - 1);
-	// // Then
-	// assert_eq!(ledger.unlocking, vec![c(4, 3 * 40 / 4), c(5, 3 * 120 / 4), c(6, 3 * 80 / 4)]);
-	// assert_eq!(ledger.active, 3 * 120 / 4);
-	// assert_eq!(ledger.total, 3 * 240 / 4 + 1);
-	// assert_eq!(LedgerSlashPerEra::get().0, 3 * 240 / 4);
-	// assert_eq!(
-	// 	LedgerSlashPerEra::get().1,
-	// 	BTreeMap::from([(4, 3 * 40 / 4), (5, 3 * 80 / 4), (6, 3 * 120 / 4)])
-	// );
-
 	// Given we have the same as above,
 	ledger.unlocking = bounded_vec![c(4, 40), c(5, 100), c(6, 10), c(7, 250)];
 	ledger.active = 500;
@@ -5019,36 +5003,26 @@ fn ledger_slash_works() {
 	ledger.active = unit;
 	ledger.total = unit * 4 + value;
 	// When
-	assert_eq!(ledger.slash(slash, 0, 0), slash);
+	assert_eq!(ledger.slash(slash, 0, 0), slash - 43);
 	// Then
 	// The amount slashed out of `unit`
-	let unit_slash = {
-		let affected_balance = value + unit * 4;
-		slash * unit / affected_balance
-	};
+	let affected_balance = value + unit * 4;
+	let ratio = Perquintill::from_rational(slash, affected_balance);
 	// `unit` after the slash is applied
-	let unit_slashed = unit - unit_slash;
-	// `value` after the slash is applied
+	let unit_slashed = {
+		let unit_slash = ratio * unit;
+		unit - unit_slash
+	};
 	let value_slashed = {
-		// We slash active and era 4 before we slash era 5
-		let previous_slashed_amount = unit_slash * 2;
-		let remaining_slash = slash - previous_slashed_amount;
-		value - remaining_slash
+		let value_slash = ratio * value;
+		value - value_slash
 	};
 	assert_eq!(ledger.active, unit_slashed);
+	assert_eq!(ledger.unlocking, vec![c(5, value_slashed)]);
+	assert_eq!(ledger.total, value_slashed);
+	assert_eq!(LedgerSlashPerEra::get().0, 0);
 	assert_eq!(
-		ledger.unlocking,
-		vec![
-			c(4, unit_slashed),
-			// We reached the full slash amount here because we slashed value.min(remaining_slash),
-			// which was remaining_slash
-			c(5, value_slashed),
-			c(6, unit), /* The rest are untouched even though they where in the slashing range.
-			             * This is problematic for pools, but should be rare enough that its ok. */
-			c(7, unit)
-		]
+		LedgerSlashPerEra::get().1,
+		BTreeMap::from([(4, 0), (5, value_slashed), (6, 0), (7, 0)])
 	);
-	assert_eq!(ledger.total, unit_slashed + unit_slashed + value_slashed + unit + unit);
-	assert_eq!(LedgerSlashPerEra::get().0, unit_slashed);
-	assert_eq!(LedgerSlashPerEra::get().1, BTreeMap::from([(4, unit_slashed), (5, value_slashed)]));
 }
