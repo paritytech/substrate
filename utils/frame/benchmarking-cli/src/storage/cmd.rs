@@ -33,8 +33,8 @@ use serde::Serialize;
 use sp_runtime::generic::BlockId;
 use std::{fmt::Debug, path::PathBuf, sync::Arc};
 
-use super::{record::StatSelect, template::TemplateData};
-
+use super::template::TemplateData;
+use crate::post_processing::WeightParams;
 /// Benchmark the storage of a Substrate node with a live chain snapshot.
 #[derive(Debug, Parser)]
 pub struct StorageCmd {
@@ -58,24 +58,9 @@ pub struct StorageCmd {
 /// Parameters for modifying the benchmark behaviour and the post processing of the results.
 #[derive(Debug, Default, Serialize, Clone, PartialEq, Args)]
 pub struct StorageParams {
-	/// Path to write the *weight* file to. Can be a file or directory.
-	/// For substrate this should be `frame/support/src/weights`.
-	#[clap(long)]
-	pub weight_path: Option<PathBuf>,
-
-	/// Select a specific metric to calculate the final weight output.
-	#[clap(long = "metric", default_value = "average")]
-	pub weight_metric: StatSelect,
-
-	/// Multiply the resulting weight with the given factor. Must be positive.
-	/// Is calculated before `weight_add`.
-	#[clap(long = "mul", default_value = "1")]
-	pub weight_mul: f64,
-
-	/// Add the given offset to the resulting weight.
-	/// Is calculated after `weight_mul`.
-	#[clap(long = "add", default_value = "0")]
-	pub weight_add: u64,
+	#[allow(missing_docs)]
+	#[clap(flatten)]
+	pub weight_params: WeightParams,
 
 	/// Skip the `read` benchmark.
 	#[clap(long)]
@@ -153,7 +138,7 @@ impl StorageCmd {
 			template.set_stats(None, Some(stats))?;
 		}
 
-		template.write(&self.params.weight_path, &self.params.template_path)
+		template.write(&self.params.weight_params.weight_path, &self.params.template_path)
 	}
 
 	/// Returns the specified state version.

@@ -406,6 +406,7 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 
 			quote::quote_spanned!(storage_def.attr_span =>
 				#(#cfg_attrs)*
+				#[doc(hidden)]
 				#prefix_struct_vis struct #counter_prefix_struct_ident<#type_use_gen>(
 					core::marker::PhantomData<(#type_use_gen,)>
 				);
@@ -439,6 +440,7 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 			#maybe_counter
 
 			#(#cfg_attrs)*
+			#[doc(hidden)]
 			#prefix_struct_vis struct #prefix_struct_ident<#type_use_gen>(
 				core::marker::PhantomData<(#type_use_gen,)>
 			);
