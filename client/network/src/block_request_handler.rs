@@ -204,8 +204,9 @@ impl<B: BlockT> BlockRequestHandler<B> {
 			Some(SeenRequestsValue::Fulfilled(ref mut requests)) => {
 				*requests = requests.saturating_add(1);
 
-				let small_request =
-					attributes == BlockAttributes::HEADER | BlockAttributes::JUSTIFICATION;
+				let small_request = attributes
+					.difference(BlockAttributes::HEADER | BlockAttributes::JUSTIFICATION)
+					.is_empty();
 
 				if *requests > MAX_NUMBER_OF_SAME_REQUESTS_PER_PEER {
 					reputation_change = Some(if small_request {
