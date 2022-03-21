@@ -89,7 +89,7 @@ where
 			let parent_hash = *block.header().parent_hash();
 			let parent_header = self
 				.client
-				.block(BlockId::Hash(parent_hash))
+				.header(BlockId::Hash(parent_hash))
 				.map_err(|e| Error::BlockQueryError(Box::new(e)))?;
 			if let Some(header) = parent_header {
 				header
@@ -109,7 +109,7 @@ where
 			.extract_proof()
 			.expect("We enabled proof recording. A proof must be available; qed");
 		let witness_len = witness.encoded_size() as u64;
-		let witness_compact = witness
+		let witness_compact_len = witness
 			.into_compact_proof::<HasherOf<Block>>(pre_root)
 			.map_err(|_| Error::WitnessCompactionFailed)?
 			.encoded_size() as u64;
