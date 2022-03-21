@@ -343,8 +343,7 @@ where
 		let map_e = |e| format!("Trie lookup error: {}", e);
 
 		self.with_recorder_and_cache(None, |recorder, cache| {
-			TrieDBBuilder::new(self, &self.root)
-				.map_err(map_e)?
+			TrieDBBuilder::new_unchecked(self, &self.root)
 				.with_optional_cache(cache)
 				.with_optional_recorder(recorder)
 				.build()
