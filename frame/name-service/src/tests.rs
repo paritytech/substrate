@@ -213,7 +213,7 @@ fn reveal_ensure_active_registration_not_registered_again() {
 }
 
 #[test]
-fn reveal_handle_errors() {
+fn reveal_handles_errors() {
 	new_test_ext().execute_with(|| {
 		let sender = 1;
 		let registrant = 2;
@@ -321,6 +321,78 @@ fn transfer_handles_errors() {
 		assert_noop!(
 			NameService::transfer(Origin::signed(registrant), 4, name_hash),
 			Error::<Test>::RegistrationExpired
+		);
+	});
+}
+
+#[test]
+fn renew_works() {
+	new_test_ext().execute_with(|| {
+		let sender = 1;
+		let registrant = 2;
+		let secret = 3_u64;
+		let name = "alice".as_bytes().to_vec();
+		let commitment_hash = (name.clone(), secret).using_encoded(blake2_256);
+		let periods = 10;
+		let name_hash = sp_io::hashing::blake2_256(&name);
+
+		assert_eq!(Balances::free_balance(&1), 100);
+		assert_eq!(Balances::free_balance(&2), 200);
+
+		assert_ok!(NameService::commit(Origin::signed(sender), registrant, commitment_hash));
+
+		run_to_block(12);
+		assert_ok!(NameService::reveal(Origin::signed(sender), name.clone(), secret, periods));
+
+		run_to_block(13);
+		assert_eq!(Balances::free_balance(&1), 79);
+
+		// extend for another period
+		assert_ok!(NameService::renew(Origin::signed(sender), name_hash, 1));
+		// ensure length fee was taken
+		assert_eq!(Balances::free_balance(&sender), 78);
+
+		// registrant renews further
+		assert_ok!(NameService::renew(Origin::signed(registrant), name_hash, 5));
+		// ensure length fee was taken
+		assert_eq!(Balances::free_balance(&registrant), 195);
+	});
+}
+
+#[test]
+fn renew_handles_errors() {
+	new_test_ext().execute_with(|| {
+		let sender = 1;
+		let registrant = 2;
+		let secret = 3_u64;
+		let name = "alice".as_bytes().to_vec();
+		let commitment_hash = (name.clone(), secret).using_encoded(blake2_256);
+		let periods = 10;
+		let name_hash = sp_io::hashing::blake2_256(&name);
+
+		// Registration not found
+		assert_noop!(
+			NameService::transfer(Origin::signed(sender), 2, name_hash),
+			Error::<Test>::RegistrationNotFound
+		);
+
+		// set up registration
+		assert_eq!(Balances::free_balance(&1), 100);
+		assert_eq!(Balances::free_balance(&2), 200);
+
+		assert_ok!(NameService::commit(Origin::signed(sender), registrant, commitment_hash));
+
+		run_to_block(12);
+		assert_ok!(NameService::reveal(Origin::signed(sender), name.clone(), secret, periods));
+		assert_eq!(Balances::free_balance(&1), 79);
+
+		// insufficient balance to renew
+		assert_ok!(Balances::transfer(Origin::signed(sender), 0, 78));
+		assert_eq!(Balances::free_balance(sender), 1);
+
+		assert_noop!(
+			NameService::renew(Origin::signed(sender), name_hash, 10),
+			BalancesError::InsufficientBalance,
 		);
 	});
 }
