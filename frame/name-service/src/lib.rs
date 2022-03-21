@@ -241,6 +241,7 @@ pub mod pallet {
 
 			let commitment =
 				Commitments::<T>::get(commitment_hash).ok_or(Error::<T>::CommitmentNotFound)?;
+
 			let name_hash = sp_io::hashing::blake2_256(&name);
 			let block_number = frame_system::Pallet::<T>::block_number();
 
@@ -248,6 +249,9 @@ pub mod pallet {
 				block_number > commitment.when.saturating_add(T::MinimumCommitementPeriod::get()),
 				Error::<T>::TooEarlyToReveal
 			);
+
+			if Self::is_available(name_hash, block_number) {
+				let fee = Self::registration_fee(name.clone(), periods);
 
 				let imbalance = T::Currency::withdraw(
 					&sender,
@@ -398,7 +402,7 @@ pub mod pallet {
 
 	// Pallet internal functions
 	impl<T: Config> Pallet<T> {
-		pub fn registration_fee(name: &[u8], periods: u32) -> BalanceOf<T> {
+		pub fn registration_fee(name: Vec<u8>, periods: u32) -> BalanceOf<T> {
 			let name_length = name.len();
 			let fee_reg = if name_length < 3 {
 				// names with under 3 characters should not be registered, so we
