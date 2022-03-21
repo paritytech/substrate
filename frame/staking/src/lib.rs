@@ -601,12 +601,9 @@ impl<T: Config> StakingLedger<T> {
 		// Helper to update `target` and the ledgers total after accounting for slashing `target`.
 		let ratio = Perquintill::from_rational(slash_amount, affected_balance);
 		let mut slash_out_of = |target: &mut BalanceOf<T>, slash_remaining: &mut BalanceOf<T>| {
-			let mut slash_from_target = if slash_amount < affected_balance {
-				ratio * (*target)
-			} else {
-				*slash_remaining
-			}
-			.min(*target);
+			let mut slash_from_target =
+				if slash_amount < affected_balance { ratio * (*target) } else { *slash_remaining }
+					.min(*target);
 
 			// slash out from *target exactly `slash_from_target`.
 			*target = *target - slash_from_target;
