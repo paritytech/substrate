@@ -256,3 +256,71 @@ fn reveal_handle_errors() {
 		);
 	});
 }
+
+#[test]
+fn transfer_works() {
+	new_test_ext().execute_with(|| {
+		let sender = 1;
+		let registrant = 2;
+		let secret = 3_u64;
+		let name = "alice".as_bytes().to_vec();
+		let commitment_hash = (name.clone(), secret).using_encoded(blake2_256);
+		let periods = 10;
+		let name_hash = sp_io::hashing::blake2_256(&name);
+
+		assert_eq!(Balances::free_balance(&1), 100);
+		assert_ok!(NameService::commit(Origin::signed(sender), registrant, commitment_hash));
+
+		run_to_block(12);
+		assert_ok!(NameService::reveal(Origin::signed(sender), name.clone(), secret, periods));
+
+		// check current owner
+		assert_eq!(Registrations::<Test>::get(name_hash).unwrap().owner, registrant);
+
+		// transfer to new owner
+		let new_owner = 4;
+		assert_ok!(NameService::transfer(Origin::signed(registrant), 4, name_hash));
+
+		// check new owner
+		assert_eq!(Registrations::<Test>::get(name_hash).unwrap().owner, new_owner);
+	});
+}
+
+#[test]
+fn transfer_handles_errors() {
+	new_test_ext().execute_with(|| {
+		let sender = 1;
+		let registrant = 2;
+		let secret = 3_u64;
+		let name = "alice".as_bytes().to_vec();
+		let commitment_hash = (name.clone(), secret).using_encoded(blake2_256);
+		let periods = 1;
+		let name_hash = sp_io::hashing::blake2_256(&name);
+
+		// Registration not found
+		assert_noop!(
+			NameService::transfer(Origin::signed(sender), 2, name_hash),
+			Error::<Test>::RegistrationNotFound
+		);
+
+		// Not registration owner
+		assert_eq!(Balances::free_balance(&1), 100);
+		assert_ok!(NameService::commit(Origin::signed(sender), registrant, commitment_hash));
+
+		run_to_block(12);
+		assert_ok!(NameService::reveal(Origin::signed(sender), name, secret, periods));
+
+		assert_noop!(
+			NameService::transfer(Origin::signed(3), 4, name_hash),
+			Error::<Test>::NotRegistrationOwner
+		);
+
+		// Registration expired
+		run_to_block(2000);
+
+		assert_noop!(
+			NameService::transfer(Origin::signed(registrant), 4, name_hash),
+			Error::<Test>::RegistrationExpired
+		);
+	});
+}
