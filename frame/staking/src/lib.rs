@@ -569,8 +569,6 @@ impl<T: Config> StakingLedger<T> {
 		let pre_slash_total = self.total;
 
 		let era_after_slash = slash_era + 1;
-		// TODO: test to make sure chunks before the slash are never slashed.
-		// at this era onwards, the funds can be slashed.
 		let chunk_unlock_era_after_slash = era_after_slash + T::BondingDuration::get();
 
 		// Calculate the total balance of active funds and unlocking funds in the affected range.
