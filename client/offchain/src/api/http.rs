@@ -157,12 +157,12 @@ impl HttpApi {
 		self.requests
 			.insert(new_id, HttpApiRequest::NotDispatched(request, body_sender));
 
-		tracing::error!(
+		tracing::trace!(
 			target: LOG_TARGET,
 			id = %new_id.0,
 			%method,
 			%uri,
-			"Requested started",
+			"Request started",
 		);
 
 		Ok(new_id)
