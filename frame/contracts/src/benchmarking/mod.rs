@@ -1910,6 +1910,44 @@ benchmarks! {
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
+	// Only calling the function itself for the list of
+	// generated different ECDSA keys.
+	seal_ecdsa_to_eth_address {
+		let r in 0 .. API_BENCHMARK_BATCHES;
+		let key_type = sp_core::crypto::KeyTypeId(*b"code");
+		let pub_keys = (0..r * API_BENCHMARK_BATCH_SIZE)
+			.map(|_| {
+				sp_io::crypto::ecdsa_generate(key_type, None).encode()
+			})
+			.collect::<Vec<_>>();
+		let pub_keys_bytes = pub_keys.iter().map(|a| a.encode()).flatten().collect::<Vec<_>>();
+		let code = WasmModule::<T>::from(ModuleDefinition {
+			memory: Some(ImportedMemory::max::<T>()),
+			imported_functions: vec![ImportedFunction {
+				module: "__unstable__",
+				name: "seal_ecdsa_to_eth_address",
+				params: vec![ValueType::I32, ValueType::I32, ValueType::I32],
+				return_type: None,
+			}],
+			data_segments: vec![
+				DataSegment {
+					offset: 24,
+					value: pub_keys_bytes,
+				},
+			],
+			call_body: Some(body::repeated_dyn(r * API_BENCHMARK_BATCH_SIZE, vec![
+				Counter(20, 33), // pub_key_ptr
+				Regular(Instruction::I32Const(0)), // out_ptr
+				Regular(Instruction::I32Const(4)), // out_len_ptr
+				Regular(Instruction::Call(0)),
+				Regular(Instruction::Drop),
+			])),
+			.. Default::default()
+		});
+		let instance = Contract::<T>::new(code, vec![])?;
+		let origin = RawOrigin::Signed(instance.caller.clone());
+	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
+
 	seal_set_code_hash {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let code_hashes = (0..r * API_BENCHMARK_BATCH_SIZE)
