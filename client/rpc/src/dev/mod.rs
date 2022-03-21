@@ -59,7 +59,12 @@ impl<Block: BlockT, Client> Dev<Block, Client> {
 impl<Block, Client> DevApi<Block::Hash, BlockStats> for Dev<Block, Client>
 where
 	Block: BlockT + 'static,
-	Client: BlockBackend<Block> + HeaderBackend<Block> + ProvideRuntimeApi<Block> + Send + Sync + 'static,
+	Client: BlockBackend<Block>
+		+ HeaderBackend<Block>
+		+ ProvideRuntimeApi<Block>
+		+ Send
+		+ Sync
+		+ 'static,
 	Client::Api: Core<Block>,
 {
 	fn block_stats(&self, hash: Block::Hash) -> Result<Option<BlockStats>> {
@@ -72,7 +77,8 @@ where
 				.map_err(|e| Error::BlockQueryError(Box::new(e)))?;
 			if let Some(block) = block {
 				let (mut header, body) = block.block.deconstruct();
-				// Remove the `Seal` to ensure we have the number of digests as expected by the runtime.
+				// Remove the `Seal` to ensure we have the number of digests as expected by the
+				// runtime.
 				header.digest_mut().logs.retain(|item| !matches!(item, DigestItem::Seal(_, _)));
 				Block::new(header, body)
 			} else {
@@ -107,11 +113,6 @@ where
 			.into_compact_proof::<HasherOf<Block>>(pre_root)
 			.map_err(|_| Error::WitnessCompactionFailed)?
 			.encoded_size() as u64;
-		Ok(Some(BlockStats {
-			witness_len,
-			witness_compact_len,
-			block_len,
-			num_extrinsics,
-		}))
+		Ok(Some(BlockStats { witness_len, witness_compact_len, block_len, num_extrinsics }))
 	}
 }

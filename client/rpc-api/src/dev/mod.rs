@@ -32,7 +32,7 @@ pub trait DevApi<Hash, BlockStats> {
 	/// Reexecute the specified `block_hash` and gather statistics while doing so.
 	///
 	/// This function will require the specified block and its parent to be available
-	/// at the queried node. If either the specified block or the parent are not available, 
+	/// at the queried node. If either the specified block or the parent are not available,
 	/// this function will return `None`.
 	#[rpc(name = "dev_getBlockStats")]
 	fn block_stats(&self, block_hash: Hash) -> Result<Option<BlockStats>>;
