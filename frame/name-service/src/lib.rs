@@ -280,6 +280,8 @@ pub mod pallet {
 
 				r.owner = to.clone();
 
+				// TODO: transfer deposit over?
+
 				Self::deposit_event(Event::<T>::Transfer { from: sender, to });
 				Ok(())
 			})
