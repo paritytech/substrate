@@ -15,6 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use sp_std::{boxed::Box, vec::Vec};
+
 /// Error type used for trie related errors.
 #[derive(Debug, PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(thiserror::Error))]

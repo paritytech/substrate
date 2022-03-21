@@ -227,13 +227,13 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> {
 	#[cfg(not(feature = "std"))]
 	fn with_recorder_and_cache_for_storage_root<R>(
 		&self,
-		_: Option<H::Out>,
+		_: H::Out,
 		callback: impl FnOnce(
 			Option<&mut dyn TrieRecorder<H::Out>>,
 			Option<&mut dyn TrieCache<NodeCodec<H>>>,
-		) -> R,
+		) -> (Option<H::Out>, R),
 	) -> R {
-		callback(None, None)
+		callback(None, None).1
 	}
 }
 

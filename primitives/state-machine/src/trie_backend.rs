@@ -97,6 +97,7 @@ where
 	}
 
 	/// Build the configured [`TrieBackend`].
+	#[cfg(feature = "std")]
 	pub fn build(self) -> TrieBackend<S, H> {
 		TrieBackend {
 			essence: TrieBackendEssence::new_with_cache_and_recorder(
@@ -106,6 +107,12 @@ where
 				self.recorder,
 			),
 		}
+	}
+
+	/// Build the configured [`TrieBackend`].
+	#[cfg(not(feature = "std"))]
+	pub fn build(self) -> TrieBackend<S, H> {
+		TrieBackend { essence: TrieBackendEssence::new(self.storage, self.root) }
 	}
 }
 
@@ -138,6 +145,7 @@ where
 		self.essence.into_storage()
 	}
 
+	#[cfg(feature = "std")]
 	pub fn extract_proof(mut self) -> Result<Option<StorageProof>, crate::DefaultError> {
 		let recorder = self.essence.recorder.take();
 		let root = self.root();
@@ -279,6 +287,7 @@ where
 /// Create a backend used for checking the proof., using `H` as hasher.
 ///
 /// `proof` and `root` must match, i.e. `root` must be the correct root of `proof` nodes.
+#[cfg(feature = "std")]
 pub fn create_proof_check_backend<H>(
 	root: H::Out,
 	proof: StorageProof,
