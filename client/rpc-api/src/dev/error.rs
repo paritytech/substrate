@@ -52,17 +52,17 @@ impl From<Error> for rpc::Error {
 		match e {
 			Error::BlockQueryError(_) => rpc::Error {
 				code: rpc::ErrorCode::ServerError(BASE_ERROR + 1),
-				message: format!("{}", e),
+				message: e.to_string(),
 				data: None,
 			},
 			Error::BlockExecutionFailed => rpc::Error {
 				code: rpc::ErrorCode::ServerError(BASE_ERROR + 3),
-				message: format!("{}", e),
+				message: e.to_string(),
 				data: None,
 			},
 			Error::WitnessCompactionFailed => rpc::Error {
 				code: rpc::ErrorCode::ServerError(BASE_ERROR + 4),
-				message: format!("{}", e),
+				message: e.to_string(),
 				data: None,
 			},
 			e => errors::internal(e),
