@@ -8226,6 +8226,7 @@ dependencies = [
  "kvdb-rocksdb",
  "linked-hash-map",
  "log 0.4.14",
+ "node-runtime",
  "parity-db",
  "parity-scale-codec",
  "parking_lot 0.12.0",

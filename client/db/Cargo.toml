@@ -44,6 +44,7 @@ tempfile = "3.1.0"
 criterion = "0.3.3"
 rand = "0.8.4"
 pprof = { version = "0.6.1", features = ["flamegraph", "criterion"] }
+node-runtime = { path = "../../bin/node/runtime" }
 
 [features]
 default = ["with-parity-db"]

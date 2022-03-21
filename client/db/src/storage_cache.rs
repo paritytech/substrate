@@ -179,7 +179,7 @@ impl<B: BlockT> Cache<B> {
 	/// externally when chain reorg happens without importing a new block.
 	pub fn sync(&mut self, enacted: &[B::Hash], retracted: &[B::Hash]) {
 		if !self.active {
-			return;
+			return
 		}
 		trace!("Syncing shared cache, enacted = {:?}, retracted = {:?}", enacted, retracted);
 
@@ -252,9 +252,7 @@ pub fn new_shared_cache<B: BlockT>(
 		active: shared_cache_size != 0,
 		lru_storage: LRUMap::new(shared_cache_size * top / child_ratio.1),
 		lru_hashes: LRUMap::new(FIX_LRU_HASH_SIZE),
-		lru_child_storage: LRUMap::new(
-			shared_cache_size * child_ratio.0 / child_ratio.1
-		),
+		lru_child_storage: LRUMap::new(shared_cache_size * child_ratio.0 / child_ratio.1),
 		modifications: VecDeque::new(),
 	}))
 }
@@ -577,7 +575,9 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Cachin
 	}
 
 	fn storage_hash(&self, key: &[u8]) -> Result<Option<B::Hash>, Self::Error> {
-		// keep storage hash it is relevant skip for runtime. TODO
+		if !self.active {
+			return self.state.storage_hash(key)
+		}
 
 		let local_cache = self.cache.local_cache.upgradable_read();
 		if let Some(entry) = local_cache.hashes.get(key).cloned() {
@@ -608,7 +608,7 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Cachin
 		key: &[u8],
 	) -> Result<Option<Vec<u8>>, Self::Error> {
 		if !self.active {
-			return self.state.child_storage(child_info, key);
+			return self.state.child_storage(child_info, key)
 		}
 
 		let key = (child_info.storage_key().to_vec(), key.to_vec());
@@ -757,7 +757,7 @@ pub struct SyncingCachingState<S, Block: BlockT> {
 	state_usage: Arc<StateUsageStats>,
 	/// Reference to the meta db.
 	meta: Arc<RwLock<Meta<NumberFor<Block>, Block::Hash>>>,
-	/// Mutex to lock get exlusive access to the backend.
+	/// Mutex to lock get exclusive access to the backend.
 	lock: Arc<RwLock<()>>,
 	/// The wrapped caching state.
 	///
