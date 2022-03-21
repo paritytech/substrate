@@ -182,8 +182,6 @@ pub mod pallet {
 		TooEarlyToReveal,
 		/// The commitment cannot yet be removed. Has not expired.
 		CommitmentNotExpired,
-		/// The commitment has expired.
-		CommitmentExpired,
 		/// This commitment does not exist.
 		CommitmentNotFound,
 		/// This name is already registered.

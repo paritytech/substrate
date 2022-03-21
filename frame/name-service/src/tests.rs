@@ -108,10 +108,40 @@ fn reveal_works() {
 		assert_eq!(Balances::free_balance(&1), 100);
 
 		assert_ok!(NameService::commit(Origin::signed(sender), registrant, commitment_hash));
+
+		run_to_block(20);
+
 		assert_ok!(NameService::reveal(Origin::signed(sender), name, secret, periods));
 
-		println!("{:?}", sp_core::hexdisplay::HexDisplay::from(&encoded_bytes));
-		println!("{:?}", sp_core::hexdisplay::HexDisplay::from(&commitment_hash));
+		// println!("{:?}", sp_core::hexdisplay::HexDisplay::from(&encoded_bytes));
+		// println!("{:?}", sp_core::hexdisplay::HexDisplay::from(&commitment_hash));
+
+		// TODO finish test
+	});
+}
+
+#[test]
+fn reveal_handle_errors() {
+	new_test_ext().execute_with(|| {
+		let sender = 1;
+		let registrant = 2;
+		let secret = 3u64;
+		let name = "alice".as_bytes().to_vec();
+		let encoded_bytes = (&name, secret).encode();
+		let commitment_hash = blake2_256(&encoded_bytes);
+		let periods = 10;
+
+		assert_eq!(Balances::free_balance(&1), 100);
+
+		assert_ok!(NameService::commit(Origin::signed(sender), registrant, commitment_hash));
+
+		run_to_block(2);
+
+		// reveal is too early.
+		assert_noop!(
+			NameService::reveal(Origin::signed(sender), name.clone(), secret, periods),
+			Error::<Test>::TooEarlyToReveal
+		);
 
 		// TODO finish test
 	});
