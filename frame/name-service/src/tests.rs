@@ -35,6 +35,31 @@ fn run_to_block(n: u64) {
 	}
 }
 
+/* Basic registration setup scenario.
+ * Used for tests where an existing registration is required.
+ * Logic in this scenario are tested within `commit` and `reveal` tests.
+ * Alice: 1
+ * Bob: 2
+ * Secret: 3_u64
+ * Name: alice
+ * Periods: 1
+ */
+fn alice_register_bob_senario_setup() -> (Vec<u8>, [u8; 32]) {
+	let sender = 1;
+	let registrant = 2;
+	let secret = 3_u64;
+	let name = "alice".as_bytes().to_vec();
+	let commitment_hash = (name.clone(), secret).using_encoded(blake2_256);
+	let periods = 1;
+	let name_hash = sp_io::hashing::blake2_256(&name);
+
+	NameService::commit(Origin::signed(sender), registrant, commitment_hash);
+	run_to_block(12);
+	NameService::reveal(Origin::signed(sender), name.clone(), secret, periods);
+
+	(name, name_hash)
+}
+
 #[test]
 fn basic_setup_works() {
 	new_test_ext().execute_with(|| {
@@ -132,87 +157,6 @@ fn reveal_works() {
 }
 
 #[test]
-fn reveal_existing_registration_deposit_returned() {
-	new_test_ext().execute_with(|| {
-		let name = "alice".as_bytes().to_vec();
-		let periods = 1;
-
-		// inital registrant
-		let sender_1 = 1;
-		let registrant_1 = 1;
-		let secret_1 = 3_u64;
-		let commitment_hash_1 = blake2_256(&(&name, secret_1).encode());
-
-		// second registrant
-		let sender_2 = 2;
-		let registrant_2 = 2;
-		let secret_2 = 6_u64;
-		let commitment_hash_2 = blake2_256(&(&name, secret_2).encode());
-
-		// initial registration
-		assert_eq!(Balances::free_balance(&1), 100);
-		assert_eq!(Balances::free_balance(&2), 200);
-
-		assert_ok!(NameService::commit(Origin::signed(sender_1), registrant_1, commitment_hash_1));
-		run_to_block(12);
-		assert_ok!(NameService::reveal(Origin::signed(sender_1), name.clone(), secret_1, periods));
-
-		assert_eq!(Balances::free_balance(&1), 97);
-		// run until expiry
-		run_to_block(10013);
-
-		// second registration
-		assert_ok!(NameService::commit(Origin::signed(sender_2), registrant_2, commitment_hash_2));
-		run_to_block(10024);
-		assert_ok!(NameService::reveal(Origin::signed(sender_2), name.clone(), secret_2, periods));
-
-		// deposit returned to initial registrant
-		// Note registration + length fee permanently lost. commit and name deposit returned.
-		assert_eq!(Balances::free_balance(&1), 98);
-	});
-}
-
-#[test]
-fn reveal_ensure_active_registration_not_registered_again() {
-	new_test_ext().execute_with(|| {
-		let name = "alice".as_bytes().to_vec();
-		let name_hash = sp_io::hashing::blake2_256(&name);
-		let periods = 1;
-
-		// inital registrant
-		let sender_1 = 1;
-		let registrant_1 = 1;
-		let secret_1 = 3_u64;
-		let commitment_hash_1 = blake2_256(&(&name, secret_1).encode());
-
-		// second registrant
-		let sender_2 = 2;
-		let registrant_2 = 2;
-		let secret_2 = 6_u64;
-		let commitment_hash_2 = blake2_256(&(&name, secret_2).encode());
-
-		// initial registration
-		assert_eq!(Balances::free_balance(&1), 100);
-		assert_eq!(Balances::free_balance(&2), 200);
-
-		assert_ok!(NameService::commit(Origin::signed(sender_1), registrant_1, commitment_hash_1));
-		run_to_block(12);
-		assert_ok!(NameService::reveal(Origin::signed(sender_1), name.clone(), secret_1, periods));
-
-		run_to_block(50);
-
-		assert_ok!(NameService::commit(Origin::signed(sender_2), registrant_2, commitment_hash_2));
-		run_to_block(61);
-
-		// TODO: currently returns OK(()) even if not available. Change this?
-		assert_ok!(NameService::reveal(Origin::signed(sender_2), name.clone(), secret_2, periods));
-
-		// initial registrant should still be registrant of `Registration`.
-		assert_eq!(Registrations::<Test>::get(name_hash).unwrap().registrant, sender_1);
-	});
-}
-
-#[test]
 fn reveal_handles_errors() {
 	new_test_ext().execute_with(|| {
 		let sender = 1;
@@ -230,6 +174,7 @@ fn reveal_handles_errors() {
 			NameService::reveal(Origin::signed(sender), name.clone(), secret, periods),
 			Error::<Test>::CommitmentNotFound
 		);
+
 		assert_ok!(NameService::commit(Origin::signed(sender), registrant, commitment_hash));
 
 		run_to_block(2);
@@ -258,30 +203,85 @@ fn reveal_handles_errors() {
 }
 
 #[test]
+fn reveal_existing_registration_deposit_returned() {
+	new_test_ext().execute_with(|| {
+		assert_eq!(Balances::free_balance(&1), 100);
+		assert_eq!(Balances::free_balance(&2), 200);
+
+		// initial registration
+		let (name, name_hash) = alice_register_bob_senario_setup();
+		assert_eq!(Balances::free_balance(&1), 88);
+		run_to_block(50);
+
+		// second registrant
+		let sender = 2;
+		let registrant = 2;
+		let secret = 6_u64;
+		let commitment_hash = blake2_256(&(&name, secret).encode());
+
+		// run until expiry
+		run_to_block(10013);
+
+		// second registration
+		assert_ok!(NameService::commit(Origin::signed(sender), registrant, commitment_hash));
+		run_to_block(10024);
+		assert_ok!(NameService::reveal(Origin::signed(sender), name.clone(), secret, 1));
+
+		// deposit returned to initial registrant
+		// Note registration + length fee permanently lost. commit and name deposit returned.
+		assert_eq!(Balances::free_balance(&1), 88);
+	});
+}
+
+#[test]
+fn reveal_ensure_active_registration_not_registered_again() {
+	new_test_ext().execute_with(|| {
+		assert_eq!(Balances::free_balance(&1), 100);
+		assert_eq!(Balances::free_balance(&2), 200);
+		assert_eq!(Balances::free_balance(&3), 300);
+		assert_eq!(Balances::free_balance(&4), 400);
+
+		// initial registration
+		let (name, name_hash) = alice_register_bob_senario_setup();
+		assert_eq!(Balances::free_balance(&1), 88);
+		run_to_block(50);
+
+		// second registrant
+		let sender = 3;
+		let registrant = 4;
+		let secret = 6_u64;
+		let commitment_hash = blake2_256(&(&name, secret).encode());
+
+		assert_ok!(NameService::commit(Origin::signed(sender), registrant, commitment_hash));
+		run_to_block(61);
+
+		// TODO: currently returns OK(()) even if not available. Change this?
+		assert_ok!(NameService::reveal(Origin::signed(sender), name.clone(), secret, 1));
+
+		// initial registrant (1) should still be registrant of `Registration`.
+		assert_eq!(Registrations::<Test>::get(name_hash).unwrap().registrant, 2);
+	});
+}
+
+#[test]
 fn transfer_works() {
 	new_test_ext().execute_with(|| {
-		let sender = 1;
-		let registrant = 2;
-		let secret = 3_u64;
-		let name = "alice".as_bytes().to_vec();
-		let commitment_hash = (name.clone(), secret).using_encoded(blake2_256);
-		let periods = 10;
-		let name_hash = sp_io::hashing::blake2_256(&name);
-
 		assert_eq!(Balances::free_balance(&1), 100);
-		assert_ok!(NameService::commit(Origin::signed(sender), registrant, commitment_hash));
+		assert_eq!(Balances::free_balance(&2), 200);
 
-		run_to_block(12);
-		assert_ok!(NameService::reveal(Origin::signed(sender), name.clone(), secret, periods));
+		// initial registration
+		let (name, name_hash) = alice_register_bob_senario_setup();
+		assert_eq!(Balances::free_balance(&1), 88);
+		run_to_block(50);
 
-		// check current owner
-		assert_eq!(Registrations::<Test>::get(name_hash).unwrap().owner, registrant);
+		// check current owner (2)
+		assert_eq!(Registrations::<Test>::get(name_hash).unwrap().owner, 2);
 
-		// transfer to new owner
+		// transfer to new owner (4)
 		let new_owner = 4;
-		assert_ok!(NameService::transfer(Origin::signed(registrant), 4, name_hash));
+		assert_ok!(NameService::transfer(Origin::signed(2), 4, name_hash));
 
-		// check new owner
+		// check new owner (4)
 		assert_eq!(Registrations::<Test>::get(name_hash).unwrap().owner, new_owner);
 	});
 }
@@ -328,70 +328,41 @@ fn transfer_handles_errors() {
 #[test]
 fn renew_works() {
 	new_test_ext().execute_with(|| {
-		let sender = 1;
-		let registrant = 2;
-		let secret = 3_u64;
-		let name = "alice".as_bytes().to_vec();
-		let commitment_hash = (name.clone(), secret).using_encoded(blake2_256);
-		let periods = 10;
-		let name_hash = sp_io::hashing::blake2_256(&name);
-
 		assert_eq!(Balances::free_balance(&1), 100);
 		assert_eq!(Balances::free_balance(&2), 200);
 
-		assert_ok!(NameService::commit(Origin::signed(sender), registrant, commitment_hash));
+		// initial registration
+		let (name, name_hash) = alice_register_bob_senario_setup();
+		assert_eq!(Balances::free_balance(&1), 88);
+		run_to_block(50);
 
-		run_to_block(12);
-		assert_ok!(NameService::reveal(Origin::signed(sender), name.clone(), secret, periods));
+		// `1` extends for 1 period
+		assert_ok!(NameService::renew(Origin::signed(1), name_hash, 1));
+		assert_eq!(Balances::free_balance(&1), 87);
 
-		run_to_block(13);
-		assert_eq!(Balances::free_balance(&1), 79);
-
-		// extend for another period
-		assert_ok!(NameService::renew(Origin::signed(sender), name_hash, 1));
-		// ensure length fee was taken
-		assert_eq!(Balances::free_balance(&sender), 78);
-
-		// registrant renews further
-		assert_ok!(NameService::renew(Origin::signed(registrant), name_hash, 5));
-		// ensure length fee was taken
-		assert_eq!(Balances::free_balance(&registrant), 195);
+		// '2' extends for 5 periods
+		assert_ok!(NameService::renew(Origin::signed(2), name_hash, 5));
+		assert_eq!(Balances::free_balance(&2), 195);
 	});
 }
 
 #[test]
 fn renew_handles_errors() {
 	new_test_ext().execute_with(|| {
-		let sender = 1;
-		let registrant = 2;
-		let secret = 3_u64;
-		let name = "alice".as_bytes().to_vec();
-		let commitment_hash = (name.clone(), secret).using_encoded(blake2_256);
-		let periods = 10;
-		let name_hash = sp_io::hashing::blake2_256(&name);
-
-		// Registration not found
-		assert_noop!(
-			NameService::transfer(Origin::signed(sender), 2, name_hash),
-			Error::<Test>::RegistrationNotFound
-		);
-
-		// set up registration
 		assert_eq!(Balances::free_balance(&1), 100);
 		assert_eq!(Balances::free_balance(&2), 200);
 
-		assert_ok!(NameService::commit(Origin::signed(sender), registrant, commitment_hash));
-
-		run_to_block(12);
-		assert_ok!(NameService::reveal(Origin::signed(sender), name.clone(), secret, periods));
-		assert_eq!(Balances::free_balance(&1), 79);
+		// initial registration
+		let (name, name_hash) = alice_register_bob_senario_setup();
+		assert_eq!(Balances::free_balance(&1), 88);
+		run_to_block(50);
 
 		// insufficient balance to renew
-		assert_ok!(Balances::transfer(Origin::signed(sender), 0, 78));
-		assert_eq!(Balances::free_balance(sender), 1);
+		assert_ok!(Balances::transfer(Origin::signed(1), 0, 87));
+		assert_eq!(Balances::free_balance(1), 1);
 
 		assert_noop!(
-			NameService::renew(Origin::signed(sender), name_hash, 10),
+			NameService::renew(Origin::signed(1), name_hash, 10),
 			BalancesError::InsufficientBalance,
 		);
 	});
