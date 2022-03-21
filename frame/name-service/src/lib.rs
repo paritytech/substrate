@@ -74,7 +74,7 @@ pub mod pallet {
 
 		/// The amount of blocks a user needs to wait after a Commitment before revealing.
 		#[pallet::constant]
-		type MinimumCommitementPeriod: Get<Self::BlockNumber>;
+		type MinimumCommitmentPeriod: Get<Self::BlockNumber>;
 
 		/// The amount of blocks after a commitment is created for before it expires.
 		#[pallet::constant]
@@ -184,20 +184,14 @@ pub mod pallet {
 		CommitmentNotExpired,
 		/// This commitment does not exist.
 		CommitmentNotFound,
-		/// This name is already registered.
-		AlreadyRegistered,
 		/// This registration does not exist.
 		RegistrationNotFound,
 		/// The sender is not the registration owner.
 		NotRegistrationOwner,
-		/// This resolver does not exist.
-		ResolverNotFound,
 		/// This registration has expired.
 		RegistrationExpired,
 		/// This registration has not yet expired.
 		RegistrationNotExpired,
-		/// Conversion error
-		ConversionError,
 	}
 
 	// Your Pallet's callable functions.
@@ -244,7 +238,7 @@ pub mod pallet {
 			let block_number = frame_system::Pallet::<T>::block_number();
 
 			ensure!(
-				block_number > commitment.when.saturating_add(T::MinimumCommitementPeriod::get()),
+				block_number > commitment.when.saturating_add(T::MinimumCommitmentPeriod::get()),
 				Error::<T>::TooEarlyToReveal
 			);
 
@@ -260,12 +254,11 @@ pub mod pallet {
 
 				T::RegistrationFeeHandler::on_unbalanced(imbalance);
 
-				// TODO: handle deposits maybe in the future
-				let deposit: BalanceOf<T> = Default::default();
-
-				Self::do_register(name_hash, commitment.who, deposit, periods)?;
+				let deposit = T::NameDeposit::get();
+				Self::do_register(name_hash, commitment.who.clone(), deposit, periods)?;
 			}
 
+			T::Currency::unreserve(&commitment.who, commitment.deposit);
 			Commitments::<T>::remove(commitment_hash);
 
 			Ok(())
@@ -391,8 +384,7 @@ pub mod pallet {
 				Error::<T>::CommitmentNotExpired
 			);
 
-			// TODO: account for deposit
-
+			T::Currency::unreserve(&commitment.who, commitment.deposit);
 			Commitments::<T>::remove(commitment_hash);
 			Ok(())
 		}
@@ -444,6 +436,15 @@ pub mod pallet {
 			let block_number = frame_system::Pallet::<T>::block_number();
 			let expiry = block_number.saturating_add(Self::length(periods));
 
+			// if registration already exists, and unreserve deposit
+			let maybe_existing_registration = Registrations::<T>::get(name_hash);
+			if let Some(r) = maybe_existing_registration {
+				T::Currency::unreserve(&r.registrant, r.deposit);
+			}
+
+			// reserve deposit (currently zero)
+			T::Currency::reserve(&owner, deposit)?;
+
 			let registration =
 				Registration { owner: owner.clone(), registrant: owner.clone(), expiry, deposit };
 
@@ -472,6 +473,8 @@ pub mod pallet {
 					Error::<T>::RegistrationNotExpired
 				);
 			}
+
+			T::Currency::unreserve(&registration.registrant, registration.deposit);
 
 			Registrations::<T>::remove(name_hash);
 			Self::deposit_event(Event::<T>::AddressDeregistered { name_hash });
