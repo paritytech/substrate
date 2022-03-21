@@ -21,14 +21,37 @@
 pub mod error;
 
 use self::error::Result;
+use codec::{Decode, Encode};
 use jsonrpc_derive::rpc;
+use scale_info::TypeInfo;
+use serde::{Deserialize, Serialize};
+
+/// Statistics of a block returned by the `dev_getBlockStats` RPC.
+#[derive(Eq, PartialEq, Clone, Copy, Encode, Decode, Debug, TypeInfo, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BlockStats {
+	/// The length in bytes of the storage proof produced by executing the block.
+	pub witness_len: u64,
+	/// The length in bytes of the storage proof after it was compacted.
+	pub witness_compact_len: u64,
+	/// Length of the block in bytes.
+	///
+	/// This information could also be acquired by downloading the whole block. This is merely
+	/// a convenience to save some complexity on the client side.
+	pub block_len: u64,
+	/// Number of extrinsics in the block.
+	///
+	/// This information could also be acquired by downloading the whole block. This is merely
+	/// a convenience to save some complexity on the client side.
+	pub num_extrinsics: u64,
+}
 
 /// Substrate dev API.
 ///
 /// This API contains unstable and unsafe methods only meant for development nodes. They
 /// are all flagged as unsafe for this reason.
 #[rpc]
-pub trait DevApi<Hash, BlockStats> {
+pub trait DevApi<Hash> {
 	/// Reexecute the specified `block_hash` and gather statistics while doing so.
 	///
 	/// This function will require the specified block and its parent to be available

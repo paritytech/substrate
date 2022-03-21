@@ -21,7 +21,7 @@
 #[cfg(test)]
 mod tests;
 
-pub use sc_rpc_api::dev::DevApi;
+pub use sc_rpc_api::dev::{BlockStats, DevApi};
 
 use sc_client_api::{BlockBackend, HeaderBackend};
 use sc_rpc_api::{
@@ -33,7 +33,6 @@ use sp_core::Encode;
 use sp_runtime::{
 	generic::{BlockId, DigestItem},
 	traits::{Block as BlockT, Header},
-	BlockStats,
 };
 use std::{
 	marker::{PhantomData, Send, Sync},
@@ -56,7 +55,7 @@ impl<Block: BlockT, Client> Dev<Block, Client> {
 	}
 }
 
-impl<Block, Client> DevApi<Block::Hash, BlockStats> for Dev<Block, Client>
+impl<Block, Client> DevApi<Block::Hash> for Dev<Block, Client>
 where
 	Block: BlockT + 'static,
 	Client: BlockBackend<Block>
