@@ -191,6 +191,7 @@ impl pallet_staking::Config for Test {
 	type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
 	type Event = Event;
 	type Currency = Balances;
+	type CurrencyBalance = <Self as pallet_balances::Config>::Balance;
 	type Slash = ();
 	type Reward = ();
 	type SessionsPerEra = SessionsPerEra;
