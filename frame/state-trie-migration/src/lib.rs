@@ -123,10 +123,14 @@ pub mod pallet {
 		}
 	}
 
+	/// The progress of either the top or child keys.
 	#[derive(Clone, Encode, Decode, scale_info::TypeInfo, PartialEq, Eq)]
-	pub(crate) enum Progress {
+	pub enum Progress {
+		/// Yet to begin.
 		ToStart,
+		/// Ongoing, with the last key given.
 		LastKey(Vec<u8>),
+		/// All done.
 		Complete,
 	}
 
@@ -447,10 +451,6 @@ pub mod pallet {
 		/// Final deposit is `items * SignedDepositPerItem + SignedDepositBase`.
 		type SignedDepositBase: Get<BalanceOf<Self>>;
 
-		/// The maximum limits that the signed migration could use.
-		#[pallet::constant]
-		type SignedMigrationMaxLimits: Get<MigrationLimits>;
-
 		/// The weight information of this pallet.
 		type WeightInfo: WeightInfo;
 	}
@@ -470,6 +470,13 @@ pub mod pallet {
 	#[pallet::getter(fn auto_limits)]
 	pub type AutoLimits<T> = StorageValue<_, Option<MigrationLimits>, ValueQuery>;
 
+	/// The maximum limits that the signed migration could use.
+	///
+	/// If not set, no signed submission is allowed.
+	#[pallet::storage]
+	#[pallet::getter(fn signed_migration_max_limits)]
+	pub type SignedMigrationMaxLimits<T> = StorageValue<_, MigrationLimits, OptionQuery>;
+
 	#[pallet::error]
 	pub enum Error<T> {
 		/// max signed limits not respected.
@@ -480,6 +487,8 @@ pub mod pallet {
 		BadWitness,
 		/// upper bound of size is exceeded,
 		SizeUpperBoundExceeded,
+		/// Signed migration is not allowed because the maximum limit is not set yet.
+		SignedMigrationNotAllowed,
 	}
 
 	#[pallet::call]
@@ -491,7 +500,7 @@ pub mod pallet {
 		pub fn control_auto_migration(
 			origin: OriginFor<T>,
 			maybe_config: Option<MigrationLimits>,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			T::ControlOrigin::ensure_origin(origin)?;
 			AutoLimits::<T>::put(maybe_config);
 			Ok(().into())
@@ -532,7 +541,8 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let who = T::SignedFilter::ensure_origin(origin)?;
 
-			let max_limits = T::SignedMigrationMaxLimits::get();
+			let max_limits =
+				Self::signed_migration_max_limits().ok_or(Error::<T>::SignedMigrationNotAllowed)?;
 			ensure!(
 				limits.size <= max_limits.size && limits.item <= max_limits.item,
 				Error::<T>::MaxSignedLimits,
@@ -700,6 +710,40 @@ pub mod pallet {
 					pays_fee: Pays::Yes,
 				})
 			}
+		}
+
+		/// Set the maximum limit of the signed migration.
+		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
+		pub fn set_signed_max_limits(
+			origin: OriginFor<T>,
+			limits: MigrationLimits,
+		) -> DispatchResult {
+			let _ = T::ControlOrigin::ensure_origin(origin)?;
+			SignedMigrationMaxLimits::<T>::put(limits);
+			Ok(())
+		}
+
+		/// Forcefully set the progress the running migration.
+		///
+		/// This is only useful in one case: the next key to migrate is too big to be migrated with
+		/// a signed account, in a parachain context, and we simply want to skip it. A reasonable
+		/// example of this would be `:code:`, which is both very expensive to migrate, and commonly
+		/// used, so probably it is already migrated.
+		///
+		/// In case you mess things up, you can also, in principle, use this to reset the migration
+		/// process.
+		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
+		pub fn force_set_progress(
+			origin: OriginFor<T>,
+			progress_top: Progress,
+			progress_child: Progress,
+		) -> DispatchResult {
+			let _ = T::ControlOrigin::ensure_origin(origin)?;
+			MigrationProcess::<T>::mutate(|task| {
+				task.progress_top = progress_top;
+				task.progress_child = progress_child;
+			});
+			Ok(())
 		}
 	}
 
@@ -1000,7 +1044,6 @@ mod mock {
 		pub const OffchainRepeat: u32 = 1;
 		pub const SignedDepositPerItem: u64 = 1;
 		pub const SignedDepositBase: u64 = 5;
-		pub const SignedMigrationMaxLimits: MigrationLimits = MigrationLimits { size: 1024, item: 5 };
 	}
 
 	impl pallet_balances::Config for Test {
@@ -1021,7 +1064,6 @@ mod mock {
 		type Currency = Balances;
 		type SignedDepositPerItem = SignedDepositPerItem;
 		type SignedDepositBase = SignedDepositBase;
-		type SignedMigrationMaxLimits = SignedMigrationMaxLimits;
 		type SignedFilter = EnsureSigned<Self::AccountId>;
 		type WeightInfo = ();
 	}
@@ -1104,7 +1146,14 @@ mod mock {
 		}
 
 		sp_tracing::try_init_simple();
-		(custom_storage, version).into()
+		let mut ext: sp_io::TestExternalities = (custom_storage, version).into();
+
+		// set some genesis values for this pallet as well.
+		ext.execute_with(|| {
+			SignedMigrationMaxLimits::<Test>::put(MigrationLimits { size: 1024, item: 5 });
+		});
+
+		ext
 	}
 
 	pub(crate) fn run_to_block(n: u32) -> (H256, u64) {
@@ -1283,11 +1332,13 @@ mod test {
 			while !MigrationProcess::<Test>::get().finished() {
 				// first we compute the task to get the accurate consumption.
 				let mut task = StateTrieMigration::migration_process();
-				task.migrate_until_exhaustion(SignedMigrationMaxLimits::get());
+				task.migrate_until_exhaustion(
+					StateTrieMigration::signed_migration_max_limits().unwrap(),
+				);
 
 				frame_support::assert_ok!(StateTrieMigration::continue_migrate(
 					Origin::signed(1),
-					SignedMigrationMaxLimits::get(),
+					StateTrieMigration::signed_migration_max_limits().unwrap(),
 					task.dyn_size,
 					MigrationProcess::<Test>::get()
 				));
