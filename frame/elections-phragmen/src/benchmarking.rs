@@ -56,7 +56,7 @@ fn as_lookup<T: Config>(account: T::AccountId) -> Lookup<T> {
 /// Get a reasonable amount of stake based on the execution trait's configuration
 fn default_stake<T: Config>(factor: u32) -> BalanceOf<T> {
 	let factor = BalanceOf::<T>::from(factor);
-	T::Currency::minimum_balance() * factor
+	T::CandidacyBond::get().max(BalanceOf::<T>::from(1u32)) * factor
 }
 
 /// Get the current number of candidates.
