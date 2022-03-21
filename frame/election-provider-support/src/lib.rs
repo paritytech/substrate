@@ -367,7 +367,7 @@ pub trait ElectionProvider {
 	/// Elect a new set of winners, without specifying any bounds on the amount of data fetched from
 	/// [`Self::DataProvider`]. An implementation could nonetheless impose its own custom limits.
 	///
-	/// The result is returned in a target major format, namely as vector of supports.
+	/// The result is returned in a target major format, namely as *vector of supports*.
 	///
 	/// This should be implemented as a self-weighing function. The implementor should register its
 	/// appropriate weight at the end of execution with the system pallet directly.
@@ -385,8 +385,11 @@ pub trait InstantElectionProvider: ElectionProvider {
 	/// Elect a new set of winners, but unlike [`ElectionProvider::elect`] which cannot enforce
 	/// bounds, this trait method can enforce bounds on the amount of data provided by the
 	/// `DataProvider`.
+	///
 	/// An implementing type, if itself bounded, should choose the minimum of the two bounds to
-	/// choose the final value of `max_voters` and `max_targets`.
+	/// choose the final value of `max_voters` and `max_targets`. In other words, an implementation
+	/// should guarantee that `max_voter` and `max_targets` provided to this method are absolutely
+	/// respected.
 	fn elect_with_bounds(
 		max_voters: usize,
 		max_targets: usize,
