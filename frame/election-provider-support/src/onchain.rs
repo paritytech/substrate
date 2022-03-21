@@ -17,7 +17,7 @@
 
 //! An implementation of [`ElectionProvider`] that uses an `NposSolver` to do the election.
 
-use crate::{Bounded, ElectionDataProvider, ElectionProvider, InstantElectionProvider, NposSolver};
+use crate::{ElectionDataProvider, ElectionProvider, InstantElectionProvider, NposSolver};
 use frame_support::{traits::Get, weights::DispatchClass};
 use sp_npos_elections::*;
 use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData, prelude::*};
@@ -60,7 +60,6 @@ impl From<sp_npos_elections::Error> for Error {
 /// genesis or for testing, as it does not bound the inputs. However, this can be used with
 /// `[InstantElectionProvider::elect_with_bounds`] that dynamically imposes limits.
 pub struct BoundedExecution<T: BoundedExecutionConfig>(PhantomData<T>);
-
 
 /// An unbounded variant of [`BoundedExecution`].
 ///
@@ -164,10 +163,7 @@ impl<T: BoundedExecutionConfig> ElectionProvider for BoundedExecution<T> {
 	type DataProvider = T::DataProvider;
 
 	fn elect() -> Result<Supports<<T::System as frame_system::Config>::AccountId>, Self::Error> {
-		elect_with::<T>(
-			Some(T::VotersBound::get() as usize),
-			Some(T::TargetsBound::get() as usize),
-		)
+		elect_with::<T>(Some(T::VotersBound::get() as usize), Some(T::TargetsBound::get() as usize))
 	}
 }
 
@@ -177,12 +173,8 @@ impl<T: BoundedExecutionConfig> InstantElectionProvider for BoundedExecution<T> 
 		max_targets: usize,
 	) -> Result<Supports<Self::AccountId>, Self::Error> {
 		elect_with::<T>(
-			Some(
-				max_voters.min(T::VotersBound::get() as usize)
-			),
-			Some(
-				max_targets.min(T::TargetsBound::get() as usize),
-			),
+			Some(max_voters.min(T::VotersBound::get() as usize)),
+			Some(max_targets.min(T::TargetsBound::get() as usize)),
 		)
 	}
 }
