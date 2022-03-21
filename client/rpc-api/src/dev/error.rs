@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) 2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -16,18 +16,18 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! Error helpers for Chain RPC module.
+//! Error helpers for Dev RPC module.
 
 use crate::errors;
 use jsonrpc_core as rpc;
 
-/// Chain RPC Result type.
+/// Dev RPC Result type.
 pub type Result<T> = std::result::Result<T, Error>;
 
-/// Chain RPC future Result type.
+/// Dev RPC future Result type.
 pub type FutureResult<T> = jsonrpc_core::BoxFuture<Result<T>>;
 
-/// Chain RPC errors.
+/// Dev RPC errors.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
 	/// Failed to query specified block or its parent: Probably an invalid hash.

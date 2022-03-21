@@ -23,7 +23,7 @@ mod tests;
 
 pub use sc_rpc_api::dev::DevApi;
 
-use sc_client_api::BlockBackend;
+use sc_client_api::{BlockBackend, HeaderBackend};
 use sc_rpc_api::{
 	dev::error::{Error, Result},
 	DenyUnsafe,
@@ -59,7 +59,7 @@ impl<Block: BlockT, Client> Dev<Block, Client> {
 impl<Block, Client> DevApi<Block::Hash, BlockStats> for Dev<Block, Client>
 where
 	Block: BlockT + 'static,
-	Client: BlockBackend<Block> + ProvideRuntimeApi<Block> + Send + Sync + 'static,
+	Client: BlockBackend<Block> + HeaderBackend<Block> + ProvideRuntimeApi<Block> + Send + Sync + 'static,
 	Client::Api: Core<Block>,
 {
 	fn block_stats(&self, hash: Block::Hash) -> Result<Option<BlockStats>> {
@@ -72,31 +72,32 @@ where
 				.map_err(|e| Error::BlockQueryError(Box::new(e)))?;
 			if let Some(block) = block {
 				let (mut header, body) = block.block.deconstruct();
+				// Remove the `Seal` to ensure we have the number of digests as expected by the runtime.
 				header.digest_mut().logs.retain(|item| !matches!(item, DigestItem::Seal(_, _)));
 				Block::new(header, body)
 			} else {
 				return Ok(None)
 			}
 		};
-		let parent_block = {
+		let parent_header = {
 			let parent_hash = *block.header().parent_hash();
-			let parent_block = self
+			let parent_header = self
 				.client
-				.block(&BlockId::Hash(parent_hash))
+				.block(BlockId::Hash(parent_hash))
 				.map_err(|e| Error::BlockQueryError(Box::new(e)))?;
-			if let Some(parent_block) = parent_block {
-				parent_block.block
+			if let Some(header) = parent_header {
+				header
 			} else {
 				return Ok(None)
 			}
 		};
 		let block_len = block.encoded_size() as u64;
 		let num_extrinsics = block.extrinsics().len() as u64;
-		let pre_root = *parent_block.header().state_root();
+		let pre_root = *parent_header.state_root();
 		let mut runtime_api = self.client.runtime_api();
 		runtime_api.record_proof();
 		runtime_api
-			.execute_block(&BlockId::Hash(parent_block.hash()), block)
+			.execute_block(&BlockId::Hash(parent_header.hash()), block)
 			.map_err(|_| Error::BlockExecutionFailed)?;
 		let witness = runtime_api
 			.extract_proof()
@@ -105,10 +106,10 @@ where
 		let witness_compact = witness
 			.into_compact_proof::<HasherOf<Block>>(pre_root)
 			.map_err(|_| Error::WitnessCompactionFailed)?
-			.encode();
+			.encoded_size() as u64;
 		Ok(Some(BlockStats {
 			witness_len,
-			witness_compact_len: witness_compact.len() as u64,
+			witness_compact_len,
 			block_len,
 			num_extrinsics,
 		}))

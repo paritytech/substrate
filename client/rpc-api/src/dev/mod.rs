@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) 2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -32,8 +32,8 @@ pub trait DevApi<Hash, BlockStats> {
 	/// Reexecute the specified `block_hash` and gather statistics while doing so.
 	///
 	/// This function will require the specified block and its parent to be available
-	/// at the queried node. The latter is needed to generate the compact proof.
-	/// For more information see [`sp_runtime::BlockStats`].
+	/// at the queried node. If either the specified block or the parent are not available, 
+	/// this function will return `None`.
 	#[rpc(name = "dev_getBlockStats")]
 	fn block_stats(&self, block_hash: Hash) -> Result<Option<BlockStats>>;
 }
