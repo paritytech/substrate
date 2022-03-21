@@ -219,6 +219,9 @@ pub enum RuntimeCosts {
 	/// Weight of calling `seal_set_code_hash`
 	#[cfg(feature = "unstable-interface")]
 	SetCodeHash,
+	/// Weight of calling `ecdsa_to_eth_address`
+	#[cfg(feature = "unstable-interface")]
+	EcdsaToEthAddress,
 }
 
 impl RuntimeCosts {
@@ -299,6 +302,8 @@ impl RuntimeCosts {
 			CallRuntime(weight) => weight,
 			#[cfg(feature = "unstable-interface")]
 			SetCodeHash => s.set_code_hash,
+			#[cfg(feature = "unstable-interface")]
+			EcdsaToEthAddress => s.ecdsa_to_eth_address,
 		};
 		RuntimeToken {
 			#[cfg(test)]
@@ -2003,5 +2008,26 @@ define_env!(Env, <E: Ext>,
 			},
 			Ok(()) => Ok(ReturnCode::Success)
 		}
+	},
+
+	// Calculates Ethereum address from the ECDSA compressed public key and stores
+	// it into the supplied buffer
+	//
+	// # Parameters
+	//
+	// - key_ptr: a pointer to the ECDSA compressed public key
+	//
+	// The value is stored to linear memory at the address pointed to by `out_ptr`.
+	// `out_len_ptr` must point to a u32 value that describes the available space at
+	// `out_ptr`. This call overwrites it with the size of the value. If the available
+	// space at `out_ptr` is less than the size of the value a trap is triggered.
+	[__unstable__] seal_ecdsa_to_eth_address(ctx, key_ptr: u32, out_ptr: u32, out_len_ptr: u32) => {
+		ctx.charge_gas(RuntimeCosts::EcdsaToEthAddress)?;
+		let compressed_key: [u8; 33] =
+			ctx.read_sandbox_memory_as(key_ptr)?;
+
+		Ok(ctx.write_sandbox_output(
+			out_ptr, out_len_ptr, &ctx.ext.ecdsa_to_eth_address(&compressed_key).encode(), false, already_charged
+		)?)
 	},
 );

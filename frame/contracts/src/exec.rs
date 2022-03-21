@@ -1245,6 +1245,7 @@ mod tests {
 	use codec::{Decode, Encode};
 	use frame_support::{assert_err, assert_ok};
 	use frame_system::{EventRecord, Phase};
+	use hex_literal::hex;
 	use pallet_contracts_primitives::ReturnFlags;
 	use pretty_assertions::assert_eq;
 	use sp_core::Bytes;
@@ -2638,6 +2639,38 @@ mod tests {
 				vec![],
 				None,
 			));
+		});
+	}
+	#[test]
+	fn ecdsa_to_eth_address_returns_proper_value() {
+		let bob_ch = MockLoader::insert(Call, |ctx, _| {
+			let pubkey_compressed: [u8; 33] =
+				hex!("028db55b05db86c0b1786ca49f095d76344c9e6056b2f02701a7e7f3c20aabfd91")[..]
+					.try_into()
+					.unwrap();
+			assert_eq!(
+				ctx.ext.ecdsa_to_eth_address(&pubkey_compressed).unwrap(),
+				hex!("09231da7b19A016f9e576d23B16277062F4d46A8")[..]
+			);
+			exec_success()
+		});
+
+		ExtBuilder::default().build().execute_with(|| {
+			let schedule = <Test as Config>::Schedule::get();
+			place_contract(&BOB, bob_ch);
+
+			let mut storage_meter = storage::meter::Meter::new(&ALICE, Some(0), 0).unwrap();
+			let result = MockStack::run_call(
+				ALICE,
+				BOB,
+				&mut GasMeter::<Test>::new(GAS_LIMIT),
+				&mut storage_meter,
+				&schedule,
+				0,
+				vec![],
+				None,
+			);
+			assert_matches!(result, Ok(_));
 		});
 	}
 }

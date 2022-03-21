@@ -101,6 +101,7 @@ pub trait WeightInfo {
 	fn seal_hash_blake2_128(r: u32, ) -> Weight;
 	fn seal_hash_blake2_128_per_kb(n: u32, ) -> Weight;
 	fn seal_ecdsa_recover(r: u32, ) -> Weight;
+	fn seal_ecdsa_to_eth_address(r: u32, ) -> Weight;
 	fn seal_set_code_hash(r: u32, ) -> Weight;
 	fn instr_i64const(r: u32, ) -> Weight;
 	fn instr_i64load(r: u32, ) -> Weight;
@@ -772,6 +773,17 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	fn seal_ecdsa_recover(r: u32, ) -> Weight {
+		(272_893_000 as Weight)
+			// Standard Error: 1_438_000
+			.saturating_add((15_412_877_000 as Weight).saturating_mul(r as Weight))
+			.saturating_add(T::DbWeight::get().reads(4 as Weight))
+			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+	}
+	// Storage: System Account (r:1 w:0)
+	// Storage: Contracts ContractInfoOf (r:1 w:1)
+	// Storage: Contracts CodeStorage (r:1 w:0)
+	// Storage: Timestamp Now (r:1 w:0)
+	fn seal_ecdsa_to_eth_address(r: u32, ) -> Weight {
 		(272_893_000 as Weight)
 			// Standard Error: 1_438_000
 			.saturating_add((15_412_877_000 as Weight).saturating_mul(r as Weight))
@@ -1663,6 +1675,17 @@ impl WeightInfo for () {
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	fn seal_ecdsa_recover(r: u32, ) -> Weight {
+		(272_893_000 as Weight)
+			// Standard Error: 1_438_000
+			.saturating_add((15_412_877_000 as Weight).saturating_mul(r as Weight))
+			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
+			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+	}
+	// Storage: System Account (r:1 w:0)
+	// Storage: Contracts ContractInfoOf (r:1 w:1)
+	// Storage: Contracts CodeStorage (r:1 w:0)
+	// Storage: Timestamp Now (r:1 w:0)
+	fn seal_ecdsa_to_eth_address(r: u32, ) -> Weight {
 		(272_893_000 as Weight)
 			// Standard Error: 1_438_000
 			.saturating_add((15_412_877_000 as Weight).saturating_mul(r as Weight))
