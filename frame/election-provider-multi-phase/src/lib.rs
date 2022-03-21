@@ -69,7 +69,7 @@
 //! Upon the end of the signed phase, the solutions are examined from best to worse (i.e. `pop()`ed
 //! until drained). Each solution undergoes an expensive `Pallet::feasibility_check`, which ensures
 //! the score claimed by this score was correct, and it is valid based on the election data (i.e.
-//! votes and candidates). At each step, if the current best solution passes the feasibility check,
+//! votes and targets). At each step, if the current best solution passes the feasibility check,
 //! it is considered to be the best one. The sender of the origin is rewarded, and the rest of the
 //! queued solutions get their deposit back and are discarded, without being checked.
 //!
@@ -249,7 +249,6 @@ use sp_npos_elections::{
 	assignment_ratio_to_staked_normalized, ElectionScore, EvaluateSupport, Supports, VoteWeight,
 };
 use sp_runtime::{
-	traits::Bounded,
 	transaction_validity::{
 		InvalidTransaction, TransactionPriority, TransactionSource, TransactionValidity,
 		TransactionValidityError, ValidTransaction,
@@ -643,14 +642,15 @@ pub mod pallet {
 		#[pallet::constant]
 		type SignedDepositWeight: Get<BalanceOf<Self>>;
 
-		/// The maximum number of voters to put in the snapshot. At the moment, snapshots are only
-		/// over a single block, but once multi-block elections are introduced they will take place
-		/// over multiple blocks.
-		///
-		/// Also, note the data type: If the voters are represented by a `u32` in `type
-		/// CompactSolution`, the same `u32` is used here to ensure bounds are respected.
+		/// The maximum number of electing voters to put in the snapshot. At the moment, snapshots
+		/// are only over a single block, but once multi-block elections are introduced they will
+		/// take place over multiple blocks.
 		#[pallet::constant]
-		type VoterSnapshotPerBlock: Get<SolutionVoterIndexOf<Self>>;
+		type MaxElectingVoters: Get<SolutionVoterIndexOf<Self>>;
+
+		/// The maximum number of electable targets to put in the snapshot.
+		#[pallet::constant]
+		type MaxElectableTargets: Get<SolutionTargetIndexOf<Self>>;
 
 		/// Handler for the slashed deposits.
 		type SlashHandler: OnUnbalanced<NegativeImbalanceOf<Self>>;
@@ -817,7 +817,7 @@ pub mod pallet {
 		fn integrity_test() {
 			use sp_std::mem::size_of;
 			// The index type of both voters and targets need to be smaller than that of usize (very
-			// unlikely to be the case, but anyhow).
+			// unlikely to be the case, but anyhow)..
 			assert!(size_of::<SolutionVoterIndexOf<T>>() <= size_of::<usize>());
 			assert!(size_of::<SolutionTargetIndexOf<T>>() <= size_of::<usize>());
 
@@ -1338,14 +1338,13 @@ impl<T: Config> Pallet<T> {
 	/// Extracted for easier weight calculation.
 	fn create_snapshot_external(
 	) -> Result<(Vec<T::AccountId>, Vec<VoterOf<T>>, u32), ElectionError<T>> {
-		let target_limit = <SolutionTargetIndexOf<T>>::max_value().saturated_into::<usize>();
-		// for now we have just a single block snapshot.
-		let voter_limit = T::VoterSnapshotPerBlock::get().saturated_into::<usize>();
+		let target_limit = T::MaxElectableTargets::get().saturated_into::<usize>();
+		let voter_limit = T::MaxElectingVoters::get().saturated_into::<usize>();
 
-		let targets =
-			T::DataProvider::targets(Some(target_limit)).map_err(ElectionError::DataProvider)?;
-		let voters =
-			T::DataProvider::voters(Some(voter_limit)).map_err(ElectionError::DataProvider)?;
+		let targets = T::DataProvider::electable_targets(Some(target_limit))
+			.map_err(ElectionError::DataProvider)?;
+		let voters = T::DataProvider::electing_voters(Some(voter_limit))
+			.map_err(ElectionError::DataProvider)?;
 		let mut desired_targets =
 			T::DataProvider::desired_targets().map_err(ElectionError::DataProvider)?;
 
@@ -2090,7 +2089,7 @@ mod tests {
 			// we have 8 voters in total.
 			assert_eq!(crate::mock::Voters::get().len(), 8);
 			// but we want to take 2.
-			crate::mock::VoterSnapshotPerBlock::set(2);
+			crate::mock::MaxElectingVoters::set(2);
 
 			// Signed phase opens just fine.
 			roll_to(15);
