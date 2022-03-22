@@ -384,7 +384,6 @@ pub mod pallet {
 			Ok(())
 		}
 
-
 		#[pallet::weight(0)]
 		pub fn force_deregister(origin: OriginFor<T>, name_hash: NameHash) -> DispatchResult {
 			T::RegistrationManager::ensure_origin(origin)?;
@@ -461,15 +460,14 @@ pub mod pallet {
 			periods: Option<u32>,
 		) -> DispatchResult {
 			let block_number = frame_system::Pallet::<T>::block_number();
-			
-			let expiry = if let Some(p) = periods { 
+
+			let expiry = if let Some(p) = periods {
 				Some(block_number.saturating_add(Self::length(p)))
-			} else { 
-				None 
+			} else {
+				None
 			};
-		
-			let registration =
-				Registration { owner: owner.clone(), expiry, deposit: None };
+
+			let registration = Registration { owner: owner.clone(), expiry, deposit: None };
 
 			Registrations::<T>::insert(name_hash, registration);
 
