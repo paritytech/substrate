@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -24,7 +24,7 @@ use sp_runtime::{
 	traits::{Saturating, Zero},
 	RuntimeDebug,
 };
-use sp_std::{convert::TryFrom, prelude::*, result::Result};
+use sp_std::prelude::*;
 
 /// A number of lock periods, plus a vote, one way or the other.
 #[derive(Copy, Clone, Eq, PartialEq, Default, RuntimeDebug)]
@@ -183,7 +183,7 @@ impl<Balance: Saturating + Ord + Zero + Copy, BlockNumber: Ord + Copy + Zero, Ac
 		match self {
 			Voting::Direct { votes, prior, .. } =>
 				votes.iter().map(|i| i.1.balance()).fold(prior.locked(), |a, i| a.max(i)),
-			Voting::Delegating { balance, .. } => *balance,
+			Voting::Delegating { balance, prior, .. } => *balance.max(&prior.locked()),
 		}
 	}
 
@@ -198,5 +198,12 @@ impl<Balance: Saturating + Ord + Zero + Copy, BlockNumber: Ord + Copy + Zero, Ac
 		};
 		*d = delegations;
 		*p = prior;
+	}
+
+	pub fn prior(&self) -> &PriorLock<BlockNumber, Balance> {
+		match self {
+			Voting::Direct { prior, .. } => prior,
+			Voting::Delegating { prior, .. } => prior,
+		}
 	}
 }

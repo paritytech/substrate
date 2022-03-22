@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,17 +17,22 @@
 
 //! Traits for dealing with dispatching calls and the origin from which they are dispatched.
 
-use crate::dispatch::DispatchResultWithPostInfo;
-use sp_runtime::traits::BadOrigin;
+use crate::dispatch::{DispatchResultWithPostInfo, Parameter, RawOrigin};
+use sp_runtime::{
+	traits::{BadOrigin, Member},
+	Either,
+};
 
 /// Some sort of check on the origin is performed by this object.
 pub trait EnsureOrigin<OuterOrigin> {
 	/// A return type.
 	type Success;
+
 	/// Perform the origin check.
 	fn ensure_origin(o: OuterOrigin) -> Result<Self::Success, BadOrigin> {
 		Self::try_origin(o).map_err(|_| BadOrigin)
 	}
+
 	/// Perform the origin check.
 	fn try_origin(o: OuterOrigin) -> Result<Self::Success, OuterOrigin>;
 
@@ -36,6 +41,52 @@ pub trait EnsureOrigin<OuterOrigin> {
 	/// ** Should be used for benchmarking only!!! **
 	#[cfg(feature = "runtime-benchmarks")]
 	fn successful_origin() -> OuterOrigin;
+}
+
+/// Some sort of check on the origin is performed by this object.
+pub trait EnsureOriginWithArg<OuterOrigin, Argument> {
+	/// A return type.
+	type Success;
+
+	/// Perform the origin check.
+	fn ensure_origin(o: OuterOrigin, a: &Argument) -> Result<Self::Success, BadOrigin> {
+		Self::try_origin(o, a).map_err(|_| BadOrigin)
+	}
+
+	/// Perform the origin check, returning the origin value if unsuccessful. This allows chaining.
+	fn try_origin(o: OuterOrigin, a: &Argument) -> Result<Self::Success, OuterOrigin>;
+
+	/// Returns an outer origin capable of passing `try_origin` check.
+	///
+	/// ** Should be used for benchmarking only!!! **
+	#[cfg(feature = "runtime-benchmarks")]
+	fn successful_origin(a: &Argument) -> OuterOrigin;
+}
+
+pub struct AsEnsureOriginWithArg<EO>(sp_std::marker::PhantomData<EO>);
+impl<OuterOrigin, Argument, EO: EnsureOrigin<OuterOrigin>>
+	EnsureOriginWithArg<OuterOrigin, Argument> for AsEnsureOriginWithArg<EO>
+{
+	/// A return type.
+	type Success = EO::Success;
+
+	/// Perform the origin check.
+	fn ensure_origin(o: OuterOrigin, _: &Argument) -> Result<Self::Success, BadOrigin> {
+		EO::ensure_origin(o)
+	}
+
+	/// Perform the origin check, returning the origin value if unsuccessful. This allows chaining.
+	fn try_origin(o: OuterOrigin, _: &Argument) -> Result<Self::Success, OuterOrigin> {
+		EO::try_origin(o)
+	}
+
+	/// Returns an outer origin capable of passing `try_origin` check.
+	///
+	/// ** Should be used for benchmarking only!!! **
+	#[cfg(feature = "runtime-benchmarks")]
+	fn successful_origin(_: &Argument) -> OuterOrigin {
+		EO::successful_origin()
+	}
 }
 
 /// Type that can be dispatched with an origin but without checking the origin filter.
@@ -56,7 +107,7 @@ pub trait OriginTrait: Sized {
 	type Call;
 
 	/// The caller origin, overarching type of all pallets origins.
-	type PalletsOrigin;
+	type PalletsOrigin: Parameter + Member + Into<Self> + From<RawOrigin<Self::AccountId>>;
 
 	/// The AccountId used across the system.
 	type AccountId;
@@ -93,4 +144,62 @@ pub trait OriginTrait: Sized {
 
 	/// Create with system signed origin and `frame_system::Config::BaseCallFilter`.
 	fn signed(by: Self::AccountId) -> Self;
+}
+
+/// The "OR gate" implementation of `EnsureOrigin`.
+///
+/// Origin check will pass if `L` or `R` origin check passes. `L` is tested first.
+pub struct EnsureOneOf<L, R>(sp_std::marker::PhantomData<(L, R)>);
+
+impl<OuterOrigin, L: EnsureOrigin<OuterOrigin>, R: EnsureOrigin<OuterOrigin>>
+	EnsureOrigin<OuterOrigin> for EnsureOneOf<L, R>
+{
+	type Success = Either<L::Success, R::Success>;
+	fn try_origin(o: OuterOrigin) -> Result<Self::Success, OuterOrigin> {
+		L::try_origin(o)
+			.map_or_else(|o| R::try_origin(o).map(|o| Either::Right(o)), |o| Ok(Either::Left(o)))
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn successful_origin() -> OuterOrigin {
+		L::successful_origin()
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	struct EnsureSuccess;
+	struct EnsureFail;
+
+	impl EnsureOrigin<()> for EnsureSuccess {
+		type Success = ();
+		fn try_origin(_: ()) -> Result<Self::Success, ()> {
+			Ok(())
+		}
+		#[cfg(feature = "runtime-benchmarks")]
+		fn successful_origin() -> () {
+			()
+		}
+	}
+
+	impl EnsureOrigin<()> for EnsureFail {
+		type Success = ();
+		fn try_origin(_: ()) -> Result<Self::Success, ()> {
+			Err(())
+		}
+		#[cfg(feature = "runtime-benchmarks")]
+		fn successful_origin() -> () {
+			()
+		}
+	}
+
+	#[test]
+	fn ensure_one_of_test() {
+		assert!(<EnsureOneOf<EnsureSuccess, EnsureSuccess>>::try_origin(()).is_ok());
+		assert!(<EnsureOneOf<EnsureSuccess, EnsureFail>>::try_origin(()).is_ok());
+		assert!(<EnsureOneOf<EnsureFail, EnsureSuccess>>::try_origin(()).is_ok());
+		assert!(<EnsureOneOf<EnsureFail, EnsureFail>>::try_origin(()).is_err());
+	}
 }

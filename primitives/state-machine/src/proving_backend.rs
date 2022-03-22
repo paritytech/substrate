@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -26,14 +26,11 @@ use codec::{Codec, Decode, Encode};
 use hash_db::{HashDB, Hasher, Prefix, EMPTY_PREFIX};
 use log::debug;
 use parking_lot::RwLock;
-use sp_core::storage::ChildInfo;
+use sp_core::storage::{ChildInfo, StateVersion};
+pub use sp_trie::trie_types::TrieError;
 use sp_trie::{
 	empty_child_trie_root, read_child_trie_value_with, read_trie_value_with, record_all_keys,
-	MemoryDB, StorageProof,
-};
-pub use sp_trie::{
-	trie_types::{Layout, TrieError},
-	Recorder,
+	LayoutV1, MemoryDB, Recorder, StorageProof,
 };
 use std::{
 	collections::{hash_map::Entry, HashMap},
@@ -59,7 +56,8 @@ where
 
 		let map_e = |e| format!("Trie lookup error: {}", e);
 
-		read_trie_value_with::<Layout<H>, _, Ephemeral<S, H>>(
+		// V1 is equivalent to V0 on read.
+		read_trie_value_with::<LayoutV1<H>, _, Ephemeral<S, H>>(
 			&eph,
 			self.backend.root(),
 			key,
@@ -78,14 +76,16 @@ where
 		let root = self
 			.storage(storage_key)?
 			.and_then(|r| Decode::decode(&mut &r[..]).ok())
-			.unwrap_or_else(|| empty_child_trie_root::<Layout<H>>());
+			// V1 is equivalent to V0 on empty trie
+			.unwrap_or_else(|| empty_child_trie_root::<LayoutV1<H>>());
 
 		let mut read_overlay = S::Overlay::default();
 		let eph = Ephemeral::new(self.backend.backend_storage(), &mut read_overlay);
 
 		let map_e = |e| format!("Trie lookup error: {}", e);
 
-		read_child_trie_value_with::<Layout<H>, _, _>(
+		// V1 is equivalent to V0 on read
+		read_child_trie_value_with::<LayoutV1<H>, _, _>(
 			child_info.keyspace(),
 			&eph,
 			&root.as_ref(),
@@ -102,7 +102,8 @@ where
 
 		let mut iter = move || -> Result<(), Box<TrieError<H::Out>>> {
 			let root = self.backend.root();
-			record_all_keys::<Layout<H>, _>(&eph, root, &mut *self.proof_recorder)
+			// V1 and V is equivalent to V0 on read and recorder is key read.
+			record_all_keys::<LayoutV1<H>, _>(&eph, root, &mut *self.proof_recorder)
 		};
 
 		if let Err(e) = iter() {
@@ -157,15 +158,13 @@ impl<Hash: std::hash::Hash + Eq> ProofRecorder<Hash> {
 
 	/// Convert into a [`StorageProof`].
 	pub fn to_storage_proof(&self) -> StorageProof {
-		let trie_nodes = self
-			.inner
-			.read()
-			.records
-			.iter()
-			.filter_map(|(_k, v)| v.as_ref().map(|v| v.to_vec()))
-			.collect();
-
-		StorageProof::new(trie_nodes)
+		StorageProof::new(
+			self.inner
+				.read()
+				.records
+				.iter()
+				.filter_map(|(_k, v)| v.as_ref().map(|v| v.to_vec())),
+		)
 	}
 
 	/// Reset the internal state.
@@ -220,6 +219,11 @@ where
 	/// encoded proof.
 	pub fn estimate_encoded_size(&self) -> usize {
 		self.0.essence().backend_storage().proof_recorder.estimate_encoded_size()
+	}
+
+	/// Clear the proof recorded data.
+	pub fn clear_recorder(&self) {
+		self.0.essence().backend_storage().proof_recorder.reset()
 	}
 }
 
@@ -333,22 +337,24 @@ where
 	fn storage_root<'b>(
 		&self,
 		delta: impl Iterator<Item = (&'b [u8], Option<&'b [u8]>)>,
+		state_version: StateVersion,
 	) -> (H::Out, Self::Transaction)
 	where
 		H::Out: Ord,
 	{
-		self.0.storage_root(delta)
+		self.0.storage_root(delta, state_version)
 	}
 
 	fn child_storage_root<'b>(
 		&self,
 		child_info: &ChildInfo,
 		delta: impl Iterator<Item = (&'b [u8], Option<&'b [u8]>)>,
+		state_version: StateVersion,
 	) -> (H::Out, bool, Self::Transaction)
 	where
 		H::Out: Ord,
 	{
-		self.0.child_storage_root(child_info, delta)
+		self.0.child_storage_root(child_info, delta, state_version)
 	}
 
 	fn register_overlay_stats(&self, _stats: &crate::stats::StateMachineStats) {}
@@ -358,7 +364,9 @@ where
 	}
 }
 
-/// Create proof check backend.
+/// Create a backend used for checking the proof., using `H` as hasher.
+///
+/// `proof` and `root` must match, i.e. `root` must be the correct root of `proof` nodes.
 pub fn create_proof_check_backend<H>(
 	root: H::Out,
 	proof: StorageProof,
@@ -383,6 +391,7 @@ mod tests {
 		proving_backend::create_proof_check_backend, trie_backend::tests::test_trie,
 		InMemoryBackend,
 	};
+	use sp_core::H256;
 	use sp_runtime::traits::BlakeTwo256;
 	use sp_trie::PrefixedMemoryDB;
 
@@ -394,13 +403,21 @@ mod tests {
 
 	#[test]
 	fn proof_is_empty_until_value_is_read() {
-		let trie_backend = test_trie();
+		proof_is_empty_until_value_is_read_inner(StateVersion::V0);
+		proof_is_empty_until_value_is_read_inner(StateVersion::V1);
+	}
+	fn proof_is_empty_until_value_is_read_inner(test_hash: StateVersion) {
+		let trie_backend = test_trie(test_hash);
 		assert!(test_proving(&trie_backend).extract_proof().is_empty());
 	}
 
 	#[test]
 	fn proof_is_non_empty_after_value_is_read() {
-		let trie_backend = test_trie();
+		proof_is_non_empty_after_value_is_read_inner(StateVersion::V0);
+		proof_is_non_empty_after_value_is_read_inner(StateVersion::V1);
+	}
+	fn proof_is_non_empty_after_value_is_read_inner(test_hash: StateVersion) {
+		let trie_backend = test_trie(test_hash);
 		let backend = test_proving(&trie_backend);
 		assert_eq!(backend.storage(b"key").unwrap(), Some(b"value".to_vec()));
 		assert!(!backend.extract_proof().is_empty());
@@ -408,7 +425,6 @@ mod tests {
 
 	#[test]
 	fn proof_is_invalid_when_does_not_contains_root() {
-		use sp_core::H256;
 		let result = create_proof_check_backend::<BlakeTwo256>(
 			H256::from_low_u64_be(1),
 			StorageProof::empty(),
@@ -418,58 +434,82 @@ mod tests {
 
 	#[test]
 	fn passes_through_backend_calls() {
-		let trie_backend = test_trie();
+		passes_through_backend_calls_inner(StateVersion::V0);
+		passes_through_backend_calls_inner(StateVersion::V1);
+	}
+	fn passes_through_backend_calls_inner(state_version: StateVersion) {
+		let trie_backend = test_trie(state_version);
 		let proving_backend = test_proving(&trie_backend);
 		assert_eq!(trie_backend.storage(b"key").unwrap(), proving_backend.storage(b"key").unwrap());
 		assert_eq!(trie_backend.pairs(), proving_backend.pairs());
 
-		let (trie_root, mut trie_mdb) = trie_backend.storage_root(std::iter::empty());
-		let (proving_root, mut proving_mdb) = proving_backend.storage_root(std::iter::empty());
+		let (trie_root, mut trie_mdb) =
+			trie_backend.storage_root(std::iter::empty(), state_version);
+		let (proving_root, mut proving_mdb) =
+			proving_backend.storage_root(std::iter::empty(), state_version);
 		assert_eq!(trie_root, proving_root);
 		assert_eq!(trie_mdb.drain(), proving_mdb.drain());
 	}
 
 	#[test]
-	fn proof_recorded_and_checked() {
-		let contents = (0..64).map(|i| (vec![i], Some(vec![i]))).collect::<Vec<_>>();
+	fn proof_recorded_and_checked_top() {
+		proof_recorded_and_checked_inner(StateVersion::V0);
+		proof_recorded_and_checked_inner(StateVersion::V1);
+	}
+	fn proof_recorded_and_checked_inner(state_version: StateVersion) {
+		let size_content = 34; // above hashable value treshold.
+		let value_range = 0..64;
+		let contents = value_range
+			.clone()
+			.map(|i| (vec![i], Some(vec![i; size_content])))
+			.collect::<Vec<_>>();
 		let in_memory = InMemoryBackend::<BlakeTwo256>::default();
-		let in_memory = in_memory.update(vec![(None, contents)]);
-		let in_memory_root = in_memory.storage_root(::std::iter::empty()).0;
-		(0..64).for_each(|i| assert_eq!(in_memory.storage(&[i]).unwrap().unwrap(), vec![i]));
+		let in_memory = in_memory.update(vec![(None, contents)], state_version);
+		let in_memory_root = in_memory.storage_root(std::iter::empty(), state_version).0;
+		value_range.clone().for_each(|i| {
+			assert_eq!(in_memory.storage(&[i]).unwrap().unwrap(), vec![i; size_content])
+		});
 
 		let trie = in_memory.as_trie_backend().unwrap();
-		let trie_root = trie.storage_root(::std::iter::empty()).0;
+		let trie_root = trie.storage_root(std::iter::empty(), state_version).0;
 		assert_eq!(in_memory_root, trie_root);
-		(0..64).for_each(|i| assert_eq!(trie.storage(&[i]).unwrap().unwrap(), vec![i]));
+		value_range
+			.clone()
+			.for_each(|i| assert_eq!(trie.storage(&[i]).unwrap().unwrap(), vec![i; size_content]));
 
 		let proving = ProvingBackend::new(trie);
-		assert_eq!(proving.storage(&[42]).unwrap().unwrap(), vec![42]);
+		assert_eq!(proving.storage(&[42]).unwrap().unwrap(), vec![42; size_content]);
 
 		let proof = proving.extract_proof();
 
 		let proof_check =
 			create_proof_check_backend::<BlakeTwo256>(in_memory_root.into(), proof).unwrap();
-		assert_eq!(proof_check.storage(&[42]).unwrap().unwrap(), vec![42]);
+		assert_eq!(proof_check.storage(&[42]).unwrap().unwrap(), vec![42; size_content]);
 	}
 
 	#[test]
 	fn proof_recorded_and_checked_with_child() {
+		proof_recorded_and_checked_with_child_inner(StateVersion::V0);
+		proof_recorded_and_checked_with_child_inner(StateVersion::V1);
+	}
+	fn proof_recorded_and_checked_with_child_inner(state_version: StateVersion) {
 		let child_info_1 = ChildInfo::new_default(b"sub1");
 		let child_info_2 = ChildInfo::new_default(b"sub2");
 		let child_info_1 = &child_info_1;
 		let child_info_2 = &child_info_2;
 		let contents = vec![
-			(None, (0..64).map(|i| (vec![i], Some(vec![i]))).collect()),
+			(None, (0..64).map(|i| (vec![i], Some(vec![i]))).collect::<Vec<_>>()),
 			(Some(child_info_1.clone()), (28..65).map(|i| (vec![i], Some(vec![i]))).collect()),
 			(Some(child_info_2.clone()), (10..15).map(|i| (vec![i], Some(vec![i]))).collect()),
 		];
 		let in_memory = InMemoryBackend::<BlakeTwo256>::default();
-		let in_memory = in_memory.update(contents);
+		let in_memory = in_memory.update(contents, state_version);
 		let child_storage_keys = vec![child_info_1.to_owned(), child_info_2.to_owned()];
 		let in_memory_root = in_memory
 			.full_storage_root(
 				std::iter::empty(),
 				child_storage_keys.iter().map(|k| (k, std::iter::empty())),
+				state_version,
 			)
 			.0;
 		(0..64).for_each(|i| assert_eq!(in_memory.storage(&[i]).unwrap().unwrap(), vec![i]));
@@ -481,7 +521,7 @@ mod tests {
 		});
 
 		let trie = in_memory.as_trie_backend().unwrap();
-		let trie_root = trie.storage_root(std::iter::empty()).0;
+		let trie_root = trie.storage_root(std::iter::empty(), state_version).0;
 		assert_eq!(in_memory_root, trie_root);
 		(0..64).for_each(|i| assert_eq!(trie.storage(&[i]).unwrap().unwrap(), vec![i]));
 
@@ -509,7 +549,11 @@ mod tests {
 
 	#[test]
 	fn storage_proof_encoded_size_estimation_works() {
-		let trie_backend = test_trie();
+		storage_proof_encoded_size_estimation_works_inner(StateVersion::V0);
+		storage_proof_encoded_size_estimation_works_inner(StateVersion::V1);
+	}
+	fn storage_proof_encoded_size_estimation_works_inner(state_version: StateVersion) {
+		let trie_backend = test_trie(state_version);
 		let backend = test_proving(&trie_backend);
 
 		let check_estimation =
@@ -535,5 +579,36 @@ mod tests {
 
 		assert!(backend.storage(b"doesnotexist2").unwrap().is_none());
 		check_estimation(&backend);
+	}
+
+	#[test]
+	fn proof_recorded_for_same_execution_should_be_deterministic() {
+		let storage_changes = vec![
+			(H256::random(), Some(b"value1".to_vec())),
+			(H256::random(), Some(b"value2".to_vec())),
+			(H256::random(), Some(b"value3".to_vec())),
+			(H256::random(), Some(b"value4".to_vec())),
+			(H256::random(), Some(b"value5".to_vec())),
+			(H256::random(), Some(b"value6".to_vec())),
+			(H256::random(), Some(b"value7".to_vec())),
+			(H256::random(), Some(b"value8".to_vec())),
+		];
+
+		let proof_recorder =
+			ProofRecorder::<H256> { inner: Arc::new(RwLock::new(ProofRecorderInner::default())) };
+		storage_changes
+			.clone()
+			.into_iter()
+			.for_each(|(key, val)| proof_recorder.record(key, val));
+		let proof1 = proof_recorder.to_storage_proof();
+
+		let proof_recorder =
+			ProofRecorder::<H256> { inner: Arc::new(RwLock::new(ProofRecorderInner::default())) };
+		storage_changes
+			.into_iter()
+			.for_each(|(key, val)| proof_recorder.record(key, val));
+		let proof2 = proof_recorder.to_storage_proof();
+
+		assert_eq!(proof1, proof2);
 	}
 }

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -17,23 +17,22 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use self::error::Error;
-use super::{state_full::split_range, *};
+use super::*;
 use crate::testing::TaskExecutor;
 use assert_matches::assert_matches;
 use futures::{executor, StreamExt};
 use sc_block_builder::BlockBuilderProvider;
 use sc_rpc_api::DenyUnsafe;
 use sp_consensus::BlockOrigin;
-use sp_core::{hash::H256, storage::ChildInfo, ChangesTrieConfiguration};
+use sp_core::{hash::H256, storage::ChildInfo};
 use sp_io::hashing::blake2_256;
-use sp_runtime::generic::BlockId;
 use std::sync::Arc;
 use substrate_test_runtime_client::{prelude::*, runtime};
 
 const STORAGE_KEY: &[u8] = b"child";
 
 fn prefixed_storage_key() -> PrefixedStorageKey {
-	let child_info = ChildInfo::new_default(&STORAGE_KEY[..]);
+	let child_info = ChildInfo::new_default(STORAGE_KEY);
 	child_info.prefixed_storage_key()
 }
 
@@ -336,7 +335,7 @@ fn should_send_initial_storage_changes_and_notifications() {
 
 #[test]
 fn should_query_storage() {
-	fn run_tests(mut client: Arc<TestClient>, has_changes_trie_config: bool) {
+	fn run_tests(mut client: Arc<TestClient>) {
 		let (api, _child) = new_full(
 			client.clone(),
 			SubscriptionManager::new(Arc::new(TaskExecutor)),
@@ -368,13 +367,6 @@ fn should_query_storage() {
 		let block1_hash = add_block(0);
 		let block2_hash = add_block(1);
 		let genesis_hash = client.genesis_hash();
-
-		if has_changes_trie_config {
-			assert_eq!(
-				client.max_key_changes_range(1, BlockId::Hash(block1_hash)).unwrap(),
-				Some((0, BlockId::Hash(block1_hash))),
-			);
-		}
 
 		let mut expected = vec![
 			StorageChangeSet {
@@ -519,24 +511,8 @@ fn should_query_storage() {
 		);
 	}
 
-	run_tests(Arc::new(substrate_test_runtime_client::new()), false);
-	run_tests(
-		Arc::new(
-			TestClientBuilder::new()
-				.changes_trie_config(Some(ChangesTrieConfiguration::new(4, 2)))
-				.build(),
-		),
-		true,
-	);
-}
-
-#[test]
-fn should_split_ranges() {
-	assert_eq!(split_range(1, None), (0..1, None));
-	assert_eq!(split_range(100, None), (0..100, None));
-	assert_eq!(split_range(1, Some(0)), (0..1, None));
-	assert_eq!(split_range(100, Some(50)), (0..50, Some(50..100)));
-	assert_eq!(split_range(100, Some(99)), (0..99, Some(99..100)));
+	run_tests(Arc::new(substrate_test_runtime_client::new()));
+	run_tests(Arc::new(TestClientBuilder::new().build()));
 }
 
 #[test]
@@ -550,11 +526,11 @@ fn should_return_runtime_version() {
 	);
 
 	let result = "{\"specName\":\"test\",\"implName\":\"parity-test\",\"authoringVersion\":1,\
-		\"specVersion\":2,\"implVersion\":2,\"apis\":[[\"0xdf6acb689907609b\",3],\
+		\"specVersion\":2,\"implVersion\":2,\"apis\":[[\"0xdf6acb689907609b\",4],\
 		[\"0x37e397fc7c91f5e4\",1],[\"0xd2bc9897eed08f15\",3],[\"0x40fe3ad401f8959a\",5],\
 		[\"0xc6e9a76309f39b09\",1],[\"0xdd718d5cc53262d4\",1],[\"0xcbca25e39f142387\",2],\
 		[\"0xf78b278be53f454c\",2],[\"0xab3c0572291feb8b\",1],[\"0xbc9d89904f5b923f\",1]],\
-		\"transactionVersion\":1}";
+		\"transactionVersion\":1,\"stateVersion\":1}";
 
 	let runtime_version = executor::block_on(api.runtime_version(None.into())).unwrap();
 	let serialized = serde_json::to_string(&runtime_version).unwrap();

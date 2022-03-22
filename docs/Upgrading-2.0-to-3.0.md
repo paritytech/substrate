@@ -199,6 +199,7 @@ As mentioned above, Bounties, Tips and Lottery have been extracted out of treasu
  	type OnSlash = ();
  	type ProposalBond = ProposalBond;
  	type ProposalBondMinimum = ProposalBondMinimum;
+	type ProposalBondMaximum = ();
  	type SpendPeriod = SpendPeriod;
  	type Burn = Burn;
 +	type BurnDestination = ();

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -24,7 +24,7 @@ mod mock;
 use sp_std::{prelude::*, vec};
 
 use frame_benchmarking::{account, benchmarks};
-use frame_support::traits::{Currency, ValidatorSet, ValidatorSetWithIdentification};
+use frame_support::traits::{Currency, Get, ValidatorSet, ValidatorSetWithIdentification};
 use frame_system::{Config as SystemConfig, Pallet as System, RawOrigin};
 
 use sp_runtime::{
@@ -275,7 +275,7 @@ benchmarks! {
 		let r in 1 .. MAX_REPORTERS;
 		// we skip 1 offender, because in such case there is no slashing
 		let o in 2 .. MAX_OFFENDERS;
-		let n in 0 .. MAX_NOMINATORS.min(<T as pallet_staking::Config>::MAX_NOMINATIONS);
+		let n in 0 .. MAX_NOMINATORS.min(<T as pallet_staking::Config>::MaxNominations::get());
 
 		// Make r reporters
 		let mut reporters = vec![];
@@ -315,13 +315,13 @@ benchmarks! {
 			<T as StakingConfig>::Event::from(StakingEvent::<T>::Slashed(id, BalanceOf::<T>::from(slash_amount)))
 		);
 		let balance_slash = |id| core::iter::once(
-			<T as BalancesConfig>::Event::from(pallet_balances::Event::<T>::Slashed(id, slash_amount.into()))
+			<T as BalancesConfig>::Event::from(pallet_balances::Event::<T>::Slashed{who: id, amount: slash_amount.into()})
 		);
 		let chill = |id| core::iter::once(
 			<T as StakingConfig>::Event::from(StakingEvent::<T>::Chilled(id))
 		);
 		let balance_deposit = |id, amount: u32|
-			<T as BalancesConfig>::Event::from(pallet_balances::Event::<T>::Deposit(id, amount.into()));
+			<T as BalancesConfig>::Event::from(pallet_balances::Event::<T>::Deposit{who: id, amount: amount.into()});
 		let mut first = true;
 		let slash_events = raw_offenders.into_iter()
 			.flat_map(|offender| {
@@ -342,9 +342,9 @@ benchmarks! {
 					let mut reward_events = reporters.clone().into_iter()
 						.flat_map(|reporter| vec![
 							balance_deposit(reporter.clone(), reward.into()).into(),
-							frame_system::Event::<T>::NewAccount(reporter.clone()).into(),
+							frame_system::Event::<T>::NewAccount { account: reporter.clone() }.into(),
 							<T as BalancesConfig>::Event::from(
-								pallet_balances::Event::<T>::Endowed(reporter.clone(), reward.into())
+								pallet_balances::Event::<T>::Endowed{account: reporter.clone(), free_balance: reward.into()}
 							).into(),
 						])
 						.collect::<Vec<_>>();
@@ -371,17 +371,17 @@ benchmarks! {
 				std::iter::empty()
 					.chain(slash_events.into_iter().map(Into::into))
 					.chain(std::iter::once(<T as OffencesConfig>::Event::from(
-						pallet_offences::Event::Offence(
-							UnresponsivenessOffence::<T>::ID,
-							0_u32.to_le_bytes().to_vec(),
-						)
+						pallet_offences::Event::Offence{
+							kind: UnresponsivenessOffence::<T>::ID,
+							timeslot: 0_u32.to_le_bytes().to_vec(),
+						}
 					).into()))
 			);
 		}
 	}
 
 	report_offence_grandpa {
-		let n in 0 .. MAX_NOMINATORS.min(<T as pallet_staking::Config>::MAX_NOMINATIONS);
+		let n in 0 .. MAX_NOMINATORS.min(<T as pallet_staking::Config>::MaxNominations::get());
 
 		// for grandpa equivocation reports the number of reporters
 		// and offenders is always 1
@@ -405,6 +405,7 @@ benchmarks! {
 	}
 	verify {
 		// make sure that all slashes have been applied
+		#[cfg(test)]
 		assert_eq!(
 			System::<T>::event_count(), 0
 			+ 1 // offence
@@ -416,7 +417,7 @@ benchmarks! {
 	}
 
 	report_offence_babe {
-		let n in 0 .. MAX_NOMINATORS.min(<T as pallet_staking::Config>::MAX_NOMINATIONS);
+		let n in 0 .. MAX_NOMINATORS.min(<T as pallet_staking::Config>::MaxNominations::get());
 
 		// for babe equivocation reports the number of reporters
 		// and offenders is always 1
@@ -440,6 +441,7 @@ benchmarks! {
 	}
 	verify {
 		// make sure that all slashes have been applied
+		#[cfg(test)]
 		assert_eq!(
 			System::<T>::event_count(), 0
 			+ 1 // offence

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,9 +15,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! # Randomness Module
+//! # Randomness Pallet
 //!
-//! The Randomness Collective Flip module provides a [`random`](./struct.Module.html#method.random)
+//! The Randomness Collective Flip pallet provides a [`random`](./struct.Module.html#method.random)
 //! function that generates low-influence random values based on the block hashes from the previous
 //! `81` blocks. Low-influence randomness can be useful when defending against relatively weak
 //! adversaries. Using this pallet as a randomness source is advisable primarily in low-security
@@ -31,7 +31,7 @@
 //!
 //! ### Prerequisites
 //!
-//! Import the Randomness Collective Flip module and derive your module's configuration trait from
+//! Import the Randomness Collective Flip pallet and derive your pallet's configuration trait from
 //! the system trait.
 //!
 //! ### Example - Get random seed for the current block
@@ -41,9 +41,9 @@
 //!
 //! #[frame_support::pallet]
 //! pub mod pallet {
+//!     use super::*;
 //!     use frame_support::pallet_prelude::*;
 //!     use frame_system::pallet_prelude::*;
-//!     use super::*;
 //!
 //!     #[pallet::pallet]
 //!     #[pallet::generate_store(pub(super) trait Store)]
@@ -71,7 +71,7 @@ use safe_mix::TripletMix;
 use codec::Encode;
 use frame_support::traits::Randomness;
 use sp_runtime::traits::{Hash, Saturating};
-use sp_std::{convert::TryInto, prelude::*};
+use sp_std::prelude::*;
 
 const RANDOM_MATERIAL_LEN: u32 = 81;
 
@@ -102,9 +102,7 @@ pub mod pallet {
 			let parent_hash = <frame_system::Pallet<T>>::parent_hash();
 
 			<RandomMaterial<T>>::mutate(|ref mut values| {
-				if values.len() < RANDOM_MATERIAL_LEN as usize {
-					values.push(parent_hash)
-				} else {
+				if values.try_push(parent_hash).is_err() {
 					let index = block_number_to_index::<T>(block_number);
 					values[index] = parent_hash;
 				}
@@ -119,7 +117,8 @@ pub mod pallet {
 	/// the oldest hash.
 	#[pallet::storage]
 	#[pallet::getter(fn random_material)]
-	pub(super) type RandomMaterial<T: Config> = StorageValue<_, Vec<T::Hash>, ValueQuery>;
+	pub(super) type RandomMaterial<T: Config> =
+		StorageValue<_, BoundedVec<T::Hash, ConstU32<RANDOM_MATERIAL_LEN>>, ValueQuery>;
 }
 
 impl<T: Config> Randomness<T::Hash, T::BlockNumber> for Pallet<T> {
@@ -169,7 +168,7 @@ mod tests {
 
 	use frame_support::{
 		parameter_types,
-		traits::{OnInitialize, Randomness},
+		traits::{ConstU32, ConstU64, OnInitialize, Randomness},
 	};
 	use frame_system::limits;
 
@@ -188,7 +187,6 @@ mod tests {
 	);
 
 	parameter_types! {
-		pub const BlockHashCount: u64 = 250;
 		pub BlockWeights: limits::BlockWeights = limits::BlockWeights
 			::simple_max(1024);
 		pub BlockLength: limits::BlockLength = limits::BlockLength
@@ -210,7 +208,7 @@ mod tests {
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
 		type Event = Event;
-		type BlockHashCount = BlockHashCount;
+		type BlockHashCount = ConstU64<250>;
 		type Version = ();
 		type PalletInfo = PalletInfo;
 		type AccountData = ();
@@ -219,6 +217,7 @@ mod tests {
 		type SystemWeightInfo = ();
 		type SS58Prefix = ();
 		type OnSetCode = ();
+		type MaxConsumers = ConstU32<16>;
 	}
 
 	impl pallet_randomness_collective_flip::Config for Test {}
@@ -239,7 +238,8 @@ mod tests {
 		let mut parent_hash = System::parent_hash();
 
 		for i in 1..(blocks + 1) {
-			System::initialize(&i, &parent_hash, &Default::default(), frame_system::InitKind::Full);
+			System::reset_events();
+			System::initialize(&i, &parent_hash, &Default::default());
 			CollectiveFlip::on_initialize(i);
 
 			let header = System::finalize();

@@ -1,10 +1,10 @@
 [package]
-name = 'pallet-template'
-version = "3.0.0"
+name = "pallet-template"
+version = "4.0.0-dev"
 description = "FRAME pallet template for defining custom runtime logic."
-authors = ['Substrate DevHub <https://github.com/substrate-developer-hub>']
+authors = ["Substrate DevHub <https://github.com/substrate-developer-hub>"]
 homepage = "https://substrate.io/"
-edition = '2018'
+edition = "2021"
 license = "Unlicense"
 publish = false
 repository = "https://github.com/substrate-developer-hub/substrate-node-template/"
@@ -13,28 +13,28 @@ repository = "https://github.com/substrate-developer-hub/substrate-node-template
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = [
+codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = [
 	"derive",
 ] }
-scale-info = { version = "1.0", default-features = false, features = ["derive"] }
+scale-info = { version = "2.0.1", default-features = false, features = ["derive"] }
 frame-support = { default-features = false, version = "4.0.0-dev", path = "../../../../frame/support" }
 frame-system = { default-features = false, version = "4.0.0-dev", path = "../../../../frame/system" }
 frame-benchmarking = { default-features = false, version = "4.0.0-dev", path = "../../../../frame/benchmarking", optional = true }
 
 [dev-dependencies]
-sp-core = { default-features = false, version = "4.0.0-dev", path = "../../../../primitives/core" }
-sp-io = { default-features = false, version = "4.0.0-dev", path = "../../../../primitives/io" }
-sp-runtime = { default-features = false, version = "4.0.0-dev", path = "../../../../primitives/runtime" }
+sp-core = { default-features = false, version = "6.0.0", path = "../../../../primitives/core" }
+sp-io = { default-features = false, version = "6.0.0", path = "../../../../primitives/io" }
+sp-runtime = { default-features = false, version = "6.0.0", path = "../../../../primitives/runtime" }
 
 [features]
-default = ['std']
+default = ["std"]
 std = [
-	'codec/std',
-	'scale-info/std',
-	'frame-support/std',
-	'frame-system/std',
-	'frame-benchmarking/std',
+	"codec/std",
+	"scale-info/std",
+	"frame-support/std",
+	"frame-system/std",
+	"frame-benchmarking/std",
 ]
 
-runtime-benchmarks = ["frame-benchmarking"]
+runtime-benchmarks = ["frame-benchmarking/runtime-benchmarks"]
 try-runtime = ["frame-support/try-runtime"]

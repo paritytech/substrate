@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -43,6 +43,7 @@ use sp_finality_grandpa::{
 use sp_keyring::Ed25519Keyring;
 use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 use sp_runtime::{
+	codec::Encode,
 	generic::{BlockId, DigestItem},
 	traits::{Block as BlockT, Header as HeaderT},
 	Justifications,
@@ -55,6 +56,7 @@ use substrate_test_runtime_client::runtime::BlockNumber;
 use tokio::runtime::{Handle, Runtime};
 
 use authorities::AuthoritySet;
+use communication::grandpa_protocol_name;
 use sc_block_builder::BlockBuilderProvider;
 use sc_consensus::LongestChain;
 use sc_keystore::LocalKeystore;
@@ -96,7 +98,7 @@ impl GrandpaTestNet {
 impl GrandpaTestNet {
 	fn add_authority_peer(&mut self) {
 		self.add_full_peer_with_config(FullPeerConfig {
-			notifications_protocols: vec![communication::GRANDPA_PROTOCOL_NAME.into()],
+			notifications_protocols: vec![grandpa_protocol_name::NAME.into()],
 			is_authority: true,
 			..Default::default()
 		})
@@ -120,7 +122,7 @@ impl TestNetFactory for GrandpaTestNet {
 
 	fn add_full_peer(&mut self) {
 		self.add_full_peer_with_config(FullPeerConfig {
-			notifications_protocols: vec![communication::GRANDPA_PROTOCOL_NAME.into()],
+			notifications_protocols: vec![grandpa_protocol_name::NAME.into()],
 			is_authority: false,
 			..Default::default()
 		})
@@ -139,26 +141,16 @@ impl TestNetFactory for GrandpaTestNet {
 		&self,
 		client: PeersClient,
 	) -> (BlockImportAdapter<Self::BlockImport>, Option<BoxJustificationImport<Block>>, PeerData) {
-		match client {
-			PeersClient::Full(ref client, ref backend) => {
-				let (import, link) = block_import(
-					client.clone(),
-					&self.test_config,
-					LongestChain::new(backend.clone()),
-					None,
-				)
-				.expect("Could not create block import for fresh peer.");
-				let justification_import = Box::new(import.clone());
-				(
-					BlockImportAdapter::new(import),
-					Some(justification_import),
-					Mutex::new(Some(link)),
-				)
-			},
-			PeersClient::Light(..) => {
-				panic!("Light client is not used in tests.");
-			},
-		}
+		let (client, backend) = (client.as_client(), client.as_backend());
+		let (import, link) = block_import(
+			client.clone(),
+			&self.test_config,
+			LongestChain::new(backend.clone()),
+			None,
+		)
+		.expect("Could not create block import for fresh peer.");
+		let justification_import = Box::new(import.clone());
+		(BlockImportAdapter::new(import), Some(justification_import), Mutex::new(Some(link)))
 	}
 
 	fn peer(&mut self, i: usize) -> &mut GrandpaPeer {
@@ -283,6 +275,7 @@ fn initialize_grandpa(
 				local_role: Role::Authority,
 				observer_enabled: true,
 				telemetry: None,
+				protocol_name: grandpa_protocol_name::NAME.into(),
 			},
 			link,
 			network: net_service,
@@ -432,6 +425,7 @@ fn finalize_3_voters_1_full_observer() {
 				local_role: Role::Authority,
 				observer_enabled: true,
 				telemetry: None,
+				protocol_name: grandpa_protocol_name::NAME.into(),
 			},
 			link,
 			network: net_service,
@@ -466,7 +460,7 @@ fn finalize_3_voters_1_full_observer() {
 
 	// all peers should have stored the justification for the best finalized block #20
 	for peer_id in 0..4 {
-		let client = net.lock().peers[peer_id].client().as_full().unwrap();
+		let client = net.lock().peers[peer_id].client().as_client();
 		let justification =
 			crate::aux_schema::best_justification::<_, Block>(&*client).unwrap().unwrap();
 
@@ -522,6 +516,7 @@ fn transition_3_voters_twice_1_full_observer() {
 				local_role: Role::Authority,
 				observer_enabled: true,
 				telemetry: None,
+				protocol_name: grandpa_protocol_name::NAME.into(),
 			},
 			link,
 			network: net_service,
@@ -539,7 +534,7 @@ fn transition_3_voters_twice_1_full_observer() {
 	net.lock().block_until_sync();
 
 	for (i, peer) in net.lock().peers().iter().enumerate() {
-		let full_client = peer.client().as_full().expect("only full clients are used in test");
+		let full_client = peer.client().as_client();
 		assert_eq!(full_client.chain_info().best_number, 1, "Peer #{} failed to sync", i);
 
 		let set: AuthoritySet<Hash, BlockNumber> =
@@ -614,7 +609,7 @@ fn transition_3_voters_twice_1_full_observer() {
 				.take_while(|n| future::ready(n.header.number() < &30))
 				.for_each(move |_| future::ready(()))
 				.map(move |()| {
-					let full_client = client.as_full().expect("only full clients are used in test");
+					let full_client = client.as_client();
 					let set: AuthoritySet<Hash, BlockNumber> =
 						crate::aux_schema::load_authorities(&*full_client).unwrap();
 
@@ -835,7 +830,7 @@ fn force_change_to_new_set() {
 	for (i, peer) in net.lock().peers().iter().enumerate() {
 		assert_eq!(peer.client().info().best_number, 26, "Peer #{} failed to sync", i);
 
-		let full_client = peer.client().as_full().expect("only full clients are used in test");
+		let full_client = peer.client().as_client();
 		let set: AuthoritySet<Hash, BlockNumber> =
 			crate::aux_schema::load_authorities(&*full_client).unwrap();
 
@@ -861,7 +856,7 @@ fn allows_reimporting_change_blocks() {
 	let client = net.peer(0).client().clone();
 	let (mut block_import, ..) = net.make_block_import(client.clone());
 
-	let full_client = client.as_full().unwrap();
+	let full_client = client.as_client();
 	let builder = full_client
 		.new_block_at(&BlockId::Number(0), Default::default(), false)
 		.unwrap();
@@ -908,7 +903,7 @@ fn test_bad_justification() {
 	let client = net.peer(0).client().clone();
 	let (mut block_import, ..) = net.make_block_import(client.clone());
 
-	let full_client = client.as_full().expect("only full clients are used in test");
+	let full_client = client.as_client();
 	let builder = full_client
 		.new_block_at(&BlockId::Number(0), Default::default(), false)
 		.unwrap();
@@ -980,6 +975,7 @@ fn voter_persists_its_votes() {
 			local_role: Role::Authority,
 			observer_enabled: true,
 			telemetry: None,
+			protocol_name: grandpa_protocol_name::NAME.into(),
 		};
 
 		let set_state = {
@@ -1019,6 +1015,7 @@ fn voter_persists_its_votes() {
 				local_role: Role::Authority,
 				observer_enabled: true,
 				telemetry: None,
+				protocol_name: grandpa_protocol_name::NAME.into(),
 			},
 			link,
 			network: net_service,
@@ -1059,6 +1056,7 @@ fn voter_persists_its_votes() {
 				local_role: Role::Authority,
 				observer_enabled: true,
 				telemetry: None,
+				protocol_name: grandpa_protocol_name::NAME.into(),
 			},
 			link,
 			network: net_service,
@@ -1148,7 +1146,7 @@ fn voter_persists_its_votes() {
 						.await;
 
 					let block_30_hash =
-						net.lock().peer(0).client().as_full().unwrap().hash(30).unwrap().unwrap();
+						net.lock().peer(0).client().as_client().hash(30).unwrap().unwrap();
 
 					// we restart alice's voter
 					abort.abort();
@@ -1222,6 +1220,7 @@ fn finalize_3_voters_1_light_observer() {
 			local_role: Role::Full,
 			observer_enabled: true,
 			telemetry: None,
+			protocol_name: grandpa_protocol_name::NAME.into(),
 		},
 		net.peers[3].data.lock().take().expect("link initialized at startup; qed"),
 		net.peers[3].network_service().clone(),
@@ -1268,6 +1267,7 @@ fn voter_catches_up_to_latest_round_when_behind() {
 				local_role: Role::Authority,
 				observer_enabled: true,
 				telemetry: None,
+				protocol_name: grandpa_protocol_name::NAME.into(),
 			},
 			link,
 			network: net.lock().peer(peer_id).network_service().clone(),
@@ -1385,6 +1385,7 @@ where
 		local_role: Role::Authority,
 		observer_enabled: true,
 		telemetry: None,
+		protocol_name: grandpa_protocol_name::NAME.into(),
 	};
 
 	let network =
@@ -1581,7 +1582,7 @@ fn imports_justification_for_regular_blocks_on_import() {
 	let client = net.peer(0).client().clone();
 	let (mut block_import, ..) = net.make_block_import(client.clone());
 
-	let full_client = client.as_full().expect("only full clients are used in test");
+	let full_client = client.as_client();
 	let builder = full_client
 		.new_block_at(&BlockId::Number(0), Default::default(), false)
 		.unwrap();
@@ -1680,7 +1681,7 @@ fn grandpa_environment_doesnt_send_equivocation_reports_for_itself() {
 
 	// if we set the equivocation offender to another id for which we don't have
 	// keys it should work
-	equivocation.identity = Default::default();
+	equivocation.identity = TryFrom::try_from(&[1; 32][..]).unwrap();
 	let equivocation_proof = sp_finality_grandpa::Equivocation::Prevote(equivocation);
 	assert!(environment.report_equivocation(equivocation_proof).is_ok());
 }

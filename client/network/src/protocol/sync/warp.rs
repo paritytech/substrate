@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -88,7 +88,7 @@ impl<B: BlockT> WarpSync<B> {
 			Phase::WarpProof { set_id, authorities, last_hash } => {
 				match self.warp_sync_provider.verify(&response, *set_id, authorities.clone()) {
 					Err(e) => {
-						log::debug!(target: "sync", "Bad warp proof response: {:?}", e);
+						log::debug!(target: "sync", "Bad warp proof response: {}", e);
 						return WarpProofImportResult::BadResponse
 					},
 					Ok(VerificationResult::Partial(new_set_id, new_authorities, new_last_hash)) => {

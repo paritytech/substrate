@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -27,9 +27,9 @@
 //! started via the [`start_mining_worker`] function. It returns a worker
 //! handle together with a future. The future must be pulled. Through
 //! the worker handle, you can pull the metadata needed to start the
-//! mining process via [`MiningWorker::metadata`], and then do the actual
+//! mining process via [`MiningHandle::metadata`], and then do the actual
 //! mining on a standalone thread. Finally, when a seal is found, call
-//! [`MiningWorker::submit`] to build the block.
+//! [`MiningHandle::submit`] to build the block.
 //!
 //! The auxiliary storage for PoW engine only stores the total difficulty.
 //! For other storage requirements for particular PoW algorithm (such as
@@ -55,7 +55,7 @@ use sc_consensus::{
 };
 use sp_api::ProvideRuntimeApi;
 use sp_block_builder::BlockBuilder as BlockBuilderApi;
-use sp_blockchain::{well_known_cache_keys::Id as CacheKeyId, HeaderBackend, ProvideCache};
+use sp_blockchain::{well_known_cache_keys::Id as CacheKeyId, HeaderBackend};
 use sp_consensus::{
 	CanAuthorWith, Environment, Error as ConsensusError, Proposer, SelectChain, SyncOracle,
 };
@@ -72,45 +72,50 @@ use std::{
 	time::Duration,
 };
 
-#[derive(derive_more::Display, Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum Error<B: BlockT> {
-	#[display(fmt = "Header uses the wrong engine {:?}", _0)]
+	#[error("Header uses the wrong engine {0:?}")]
 	WrongEngine([u8; 4]),
-	#[display(fmt = "Header {:?} is unsealed", _0)]
+	#[error("Header {0:?} is unsealed")]
 	HeaderUnsealed(B::Hash),
-	#[display(fmt = "PoW validation error: invalid seal")]
+	#[error("PoW validation error: invalid seal")]
 	InvalidSeal,
-	#[display(fmt = "PoW validation error: preliminary verification failed")]
+	#[error("PoW validation error: preliminary verification failed")]
 	FailedPreliminaryVerify,
-	#[display(fmt = "Rejecting block too far in future")]
+	#[error("Rejecting block too far in future")]
 	TooFarInFuture,
-	#[display(fmt = "Fetching best header failed using select chain: {:?}", _0)]
+	#[error("Fetching best header failed using select chain: {0}")]
 	BestHeaderSelectChain(ConsensusError),
-	#[display(fmt = "Fetching best header failed: {:?}", _0)]
+	#[error("Fetching best header failed: {0}")]
 	BestHeader(sp_blockchain::Error),
-	#[display(fmt = "Best header does not exist")]
+	#[error("Best header does not exist")]
 	NoBestHeader,
-	#[display(fmt = "Block proposing error: {:?}", _0)]
+	#[error("Block proposing error: {0}")]
 	BlockProposingError(String),
-	#[display(fmt = "Fetch best hash failed via select chain: {:?}", _0)]
+	#[error("Fetch best hash failed via select chain: {0}")]
 	BestHashSelectChain(ConsensusError),
-	#[display(fmt = "Error with block built on {:?}: {:?}", _0, _1)]
+	#[error("Error with block built on {0:?}: {1}")]
 	BlockBuiltError(B::Hash, ConsensusError),
-	#[display(fmt = "Creating inherents failed: {}", _0)]
+	#[error("Creating inherents failed: {0}")]
 	CreateInherents(sp_inherents::Error),
-	#[display(fmt = "Checking inherents failed: {}", _0)]
+	#[error("Checking inherents failed: {0}")]
 	CheckInherents(sp_inherents::Error),
-	#[display(
-		fmt = "Checking inherents unknown error for identifier: {:?}",
-		"String::from_utf8_lossy(_0)"
+	#[error(
+		"Checking inherents unknown error for identifier: {}",
+		String::from_utf8_lossy(.0)
 	)]
 	CheckInherentsUnknownError(sp_inherents::InherentIdentifier),
-	#[display(fmt = "Multiple pre-runtime digests")]
+	#[error("Multiple pre-runtime digests")]
 	MultiplePreRuntimeDigests,
+	#[error(transparent)]
 	Client(sp_blockchain::Error),
+	#[error(transparent)]
 	Codec(codec::Error),
+	#[error("{0}")]
 	Environment(String),
+	#[error("{0}")]
 	Runtime(RuntimeString),
+	#[error("{0}")]
 	Other(String),
 }
 
@@ -240,7 +245,7 @@ where
 	B: BlockT,
 	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync,
 	I::Error: Into<ConsensusError>,
-	C: ProvideRuntimeApi<B> + Send + Sync + HeaderBackend<B> + AuxStore + ProvideCache<B> + BlockOf,
+	C: ProvideRuntimeApi<B> + Send + Sync + HeaderBackend<B> + AuxStore + BlockOf,
 	C::Api: BlockBuilderApi<B>,
 	Algorithm: PowAlgorithm<B>,
 	CAW: CanAuthorWith<B>,
@@ -319,7 +324,7 @@ where
 	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync,
 	I::Error: Into<ConsensusError>,
 	S: SelectChain<B>,
-	C: ProvideRuntimeApi<B> + Send + Sync + HeaderBackend<B> + AuxStore + ProvideCache<B> + BlockOf,
+	C: ProvideRuntimeApi<B> + Send + Sync + HeaderBackend<B> + AuxStore + BlockOf,
 	C::Api: BlockBuilderApi<B>,
 	Algorithm: PowAlgorithm<B> + Send + Sync,
 	Algorithm::Difficulty: 'static + Send,
@@ -345,7 +350,7 @@ where
 			.select_chain
 			.best_chain()
 			.await
-			.map_err(|e| format!("Fetch best chain failed via select chain: {:?}", e))?;
+			.map_err(|e| format!("Fetch best chain failed via select chain: {}", e))?;
 		let best_hash = best_header.hash();
 
 		let parent_hash = *block.header.parent_hash();
@@ -425,10 +430,7 @@ impl<B: BlockT, Algorithm> PowVerifier<B, Algorithm> {
 		Self { algorithm, _marker: PhantomData }
 	}
 
-	fn check_header(
-		&self,
-		mut header: B::Header,
-	) -> Result<(B::Header, DigestItem<B::Hash>), Error<B>>
+	fn check_header(&self, mut header: B::Header) -> Result<(B::Header, DigestItem), Error<B>>
 	where
 		Algorithm: PowAlgorithm<B>,
 	{
@@ -563,7 +565,7 @@ where
 					warn!(
 						target: "pow",
 						"Unable to pull new block for authoring. \
-						 Select best chain error: {:?}",
+						 Select best chain error: {}",
 						err
 					);
 					continue
@@ -594,7 +596,7 @@ where
 					warn!(
 						target: "pow",
 						"Unable to propose new block for authoring. \
-						 Fetch difficulty failed: {:?}",
+						 Fetch difficulty failed: {}",
 						err,
 					);
 					continue
@@ -610,7 +612,7 @@ where
 					warn!(
 						target: "pow",
 						"Unable to propose new block for authoring. \
-						 Creating inherent data providers failed: {:?}",
+						 Creating inherent data providers failed: {}",
 						err,
 					);
 					continue
@@ -623,14 +625,14 @@ where
 					warn!(
 						target: "pow",
 						"Unable to propose new block for authoring. \
-						 Creating inherent data failed: {:?}",
+						 Creating inherent data failed: {}",
 						e,
 					);
 					continue
 				},
 			};
 
-			let mut inherent_digest = Digest::<Block::Hash>::default();
+			let mut inherent_digest = Digest::default();
 			if let Some(pre_runtime) = &pre_runtime {
 				inherent_digest.push(DigestItem::PreRuntime(POW_ENGINE_ID, pre_runtime.to_vec()));
 			}
@@ -659,7 +661,7 @@ where
 					warn!(
 						target: "pow",
 						"Unable to propose new block for authoring. \
-						 Creating proposal failed: {:?}",
+						 Creating proposal failed: {}",
 						err,
 					);
 					continue
@@ -702,10 +704,7 @@ fn find_pre_digest<B: BlockT>(header: &B::Header) -> Result<Option<Vec<u8>>, Err
 }
 
 /// Fetch PoW seal.
-fn fetch_seal<B: BlockT>(
-	digest: Option<&DigestItem<B::Hash>>,
-	hash: B::Hash,
-) -> Result<Vec<u8>, Error<B>> {
+fn fetch_seal<B: BlockT>(digest: Option<&DigestItem>, hash: B::Hash) -> Result<Vec<u8>, Error<B>> {
 	match digest {
 		Some(DigestItem::Seal(id, seal)) =>
 			if id == &POW_ENGINE_ID {

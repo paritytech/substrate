@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -26,11 +26,11 @@ use sp_core::{
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, HashFor, Header as HeaderT, NumberFor, Zero},
-	Justification, Justifications, Storage,
+	Justification, Justifications, StateVersion, Storage,
 };
 use sp_state_machine::{
-	Backend as StateBackend, ChangesTrieTransaction, ChildStorageCollection, InMemoryBackend,
-	IndexOperation, StorageCollection,
+	Backend as StateBackend, ChildStorageCollection, InMemoryBackend, IndexOperation,
+	StorageCollection,
 };
 use std::{
 	collections::{HashMap, HashSet},
@@ -39,10 +39,10 @@ use std::{
 };
 
 use crate::{
-	backend::{self, NewBlockState, ProvideChtRoots},
+	backend::{self, NewBlockState},
 	blockchain::{self, well_known_cache_keys::Id as CacheKeyId, BlockStatus, HeaderBackend},
 	leaves::LeafSet,
-	light, UsageInfo,
+	UsageInfo,
 };
 
 struct PendingBlock<B: BlockT> {
@@ -109,7 +109,6 @@ struct BlockchainStorage<Block: BlockT> {
 	finalized_number: NumberFor<Block>,
 	genesis_hash: Block::Hash,
 	header_cht_roots: HashMap<NumberFor<Block>, Block::Hash>,
-	changes_trie_cht_roots: HashMap<NumberFor<Block>, Block::Hash>,
 	leaves: LeafSet<Block::Hash, NumberFor<Block>>,
 	aux: HashMap<Vec<u8>, Vec<u8>>,
 }
@@ -152,7 +151,6 @@ impl<Block: BlockT> Blockchain<Block> {
 			finalized_number: Zero::zero(),
 			genesis_hash: Default::default(),
 			header_cht_roots: HashMap::new(),
-			changes_trie_cht_roots: HashMap::new(),
 			leaves: LeafSet::new(),
 			aux: HashMap::new(),
 		}));
@@ -442,10 +440,6 @@ impl<Block: BlockT> blockchain::Backend<Block> for Blockchain<Block> {
 		Ok(self.storage.read().finalized_hash.clone())
 	}
 
-	fn cache(&self) -> Option<Arc<dyn blockchain::Cache<Block>>> {
-		None
-	}
-
 	fn leaves(&self) -> sp_blockchain::Result<Vec<Block::Hash>> {
 		Ok(self.storage.read().leaves.hashes())
 	}
@@ -463,12 +457,6 @@ impl<Block: BlockT> blockchain::Backend<Block> for Blockchain<Block> {
 		_id: BlockId<Block>,
 	) -> sp_blockchain::Result<Option<Vec<Vec<u8>>>> {
 		unimplemented!("Not supported by the in-mem backend.")
-	}
-}
-
-impl<Block: BlockT> blockchain::ProvideCache<Block> for Blockchain<Block> {
-	fn cache(&self) -> Option<Arc<dyn blockchain::Cache<Block>>> {
-		None
 	}
 }
 
@@ -499,82 +487,6 @@ impl<Block: BlockT> backend::AuxStore for Blockchain<Block> {
 	}
 }
 
-impl<Block: BlockT> light::Storage<Block> for Blockchain<Block>
-where
-	Block::Hash: From<[u8; 32]>,
-{
-	fn import_header(
-		&self,
-		header: Block::Header,
-		_cache: HashMap<CacheKeyId, Vec<u8>>,
-		state: NewBlockState,
-		aux_ops: Vec<(Vec<u8>, Option<Vec<u8>>)>,
-	) -> sp_blockchain::Result<()> {
-		let hash = header.hash();
-		self.insert(hash, header, None, None, state)?;
-
-		self.write_aux(aux_ops);
-		Ok(())
-	}
-
-	fn set_head(&self, id: BlockId<Block>) -> sp_blockchain::Result<()> {
-		Blockchain::set_head(self, id)
-	}
-
-	fn last_finalized(&self) -> sp_blockchain::Result<Block::Hash> {
-		Ok(self.storage.read().finalized_hash.clone())
-	}
-
-	fn finalize_header(&self, id: BlockId<Block>) -> sp_blockchain::Result<()> {
-		Blockchain::finalize_header(self, id, None)
-	}
-
-	fn cache(&self) -> Option<Arc<dyn blockchain::Cache<Block>>> {
-		None
-	}
-
-	fn usage_info(&self) -> Option<UsageInfo> {
-		None
-	}
-}
-
-impl<Block: BlockT> ProvideChtRoots<Block> for Blockchain<Block> {
-	fn header_cht_root(
-		&self,
-		_cht_size: NumberFor<Block>,
-		block: NumberFor<Block>,
-	) -> sp_blockchain::Result<Option<Block::Hash>> {
-		self.storage
-			.read()
-			.header_cht_roots
-			.get(&block)
-			.cloned()
-			.ok_or_else(|| {
-				sp_blockchain::Error::Backend(format!("Header CHT for block {} not exists", block))
-			})
-			.map(Some)
-	}
-
-	fn changes_trie_cht_root(
-		&self,
-		_cht_size: NumberFor<Block>,
-		block: NumberFor<Block>,
-	) -> sp_blockchain::Result<Option<Block::Hash>> {
-		self.storage
-			.read()
-			.changes_trie_cht_roots
-			.get(&block)
-			.cloned()
-			.ok_or_else(|| {
-				sp_blockchain::Error::Backend(format!(
-					"Changes trie CHT for block {} not exists",
-					block
-				))
-			})
-			.map(Some)
-	}
-}
-
 /// In-memory operation.
 pub struct BlockImportOperation<Block: BlockT> {
 	pending_block: Option<PendingBlock<Block>>,
@@ -594,6 +506,7 @@ where
 		&mut self,
 		storage: Storage,
 		commit: bool,
+		state_version: StateVersion,
 	) -> sp_blockchain::Result<Block::Hash> {
 		check_genesis_storage(&storage)?;
 
@@ -607,6 +520,7 @@ where
 		let (root, transaction) = self.old_state.full_storage_root(
 			storage.top.iter().map(|(k, v)| (k.as_ref(), Some(v.as_ref()))),
 			child_delta,
+			state_version,
 		);
 
 		if commit {
@@ -650,23 +564,21 @@ where
 		Ok(())
 	}
 
-	fn update_changes_trie(
-		&mut self,
-		_update: ChangesTrieTransaction<HashFor<Block>, NumberFor<Block>>,
-	) -> sp_blockchain::Result<()> {
-		Ok(())
-	}
-
 	fn set_genesis_state(
 		&mut self,
 		storage: Storage,
 		commit: bool,
+		state_version: StateVersion,
 	) -> sp_blockchain::Result<Block::Hash> {
-		self.apply_storage(storage, commit)
+		self.apply_storage(storage, commit, state_version)
 	}
 
-	fn reset_storage(&mut self, storage: Storage) -> sp_blockchain::Result<Block::Hash> {
-		self.apply_storage(storage, true)
+	fn reset_storage(
+		&mut self,
+		storage: Storage,
+		state_version: StateVersion,
+	) -> sp_blockchain::Result<Block::Hash> {
+		self.apply_storage(storage, true, state_version)
 	}
 
 	fn insert_aux<I>(&mut self, ops: I) -> sp_blockchain::Result<()>
@@ -846,10 +758,6 @@ where
 		None
 	}
 
-	fn changes_trie_storage(&self) -> Option<&dyn backend::PrunableStateChangesTrieStorage<Block>> {
-		None
-	}
-
 	fn offchain_storage(&self) -> Option<Self::OffchainStorage> {
 		None
 	}
@@ -884,22 +792,6 @@ where
 }
 
 impl<Block: BlockT> backend::LocalBackend<Block> for Backend<Block> where Block::Hash: Ord {}
-
-impl<Block: BlockT> backend::RemoteBackend<Block> for Backend<Block>
-where
-	Block::Hash: Ord,
-{
-	fn is_local_state_available(&self, block: &BlockId<Block>) -> bool {
-		self.blockchain
-			.expect_block_number_from_id(block)
-			.map(|num| num.is_zero())
-			.unwrap_or(false)
-	}
-
-	fn remote_blockchain(&self) -> Arc<dyn light::RemoteBlockchain<Block>> {
-		unimplemented!()
-	}
-}
 
 /// Check that genesis storage is valid.
 pub fn check_genesis_storage(storage: &Storage) -> sp_blockchain::Result<()> {

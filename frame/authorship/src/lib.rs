@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -156,6 +156,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
+	#[pallet::without_storage_info]
 	pub struct Pallet<T>(_);
 
 	#[pallet::hooks]
@@ -170,7 +171,9 @@ pub mod pallet {
 
 			<DidSetUncles<T>>::put(false);
 
-			T::EventHandler::note_author(Self::author());
+			if let Some(author) = Self::author() {
+				T::EventHandler::note_author(author);
+			}
 
 			0
 		}
@@ -300,20 +303,18 @@ impl<T: Config> Pallet<T> {
 	///
 	/// This is safe to invoke in `on_initialize` implementations, as well
 	/// as afterwards.
-	pub fn author() -> T::AccountId {
+	pub fn author() -> Option<T::AccountId> {
 		// Check the memoized storage value.
 		if let Some(author) = <Author<T>>::get() {
-			return author
+			return Some(author)
 		}
 
 		let digest = <frame_system::Pallet<T>>::digest();
 		let pre_runtime_digests = digest.logs.iter().filter_map(|d| d.as_pre_runtime());
-		if let Some(author) = T::FindAuthor::find_author(pre_runtime_digests) {
-			<Author<T>>::put(&author);
-			author
-		} else {
-			Default::default()
-		}
+		T::FindAuthor::find_author(pre_runtime_digests).map(|a| {
+			<Author<T>>::put(&a);
+			a
+		})
 	}
 
 	fn verify_and_import_uncles(new_uncles: Vec<T::Header>) -> dispatch::DispatchResult {
@@ -329,14 +330,13 @@ impl<T: Config> Pallet<T> {
 				UncleEntryItem::InclusionHeight(_) => None,
 				UncleEntryItem::Uncle(h, _) => Some(h),
 			});
-			let author = Self::verify_uncle(&uncle, prev_uncles, &mut acc)?;
+			let maybe_author = Self::verify_uncle(&uncle, prev_uncles, &mut acc)?;
 			let hash = uncle.hash();
 
-			T::EventHandler::note_uncle(
-				author.clone().unwrap_or_default(),
-				now - uncle.number().clone(),
-			);
-			uncles.push(UncleEntryItem::Uncle(hash, author));
+			if let Some(author) = maybe_author.clone() {
+				T::EventHandler::note_uncle(author, now - uncle.number().clone());
+			}
+			uncles.push(UncleEntryItem::Uncle(hash, maybe_author));
 		}
 
 		<Uncles<T>>::put(&uncles);
@@ -406,7 +406,11 @@ impl<T: Config> Pallet<T> {
 mod tests {
 	use super::*;
 	use crate as pallet_authorship;
-	use frame_support::{parameter_types, ConsensusEngineId};
+	use frame_support::{
+		parameter_types,
+		traits::{ConstU32, ConstU64},
+		ConsensusEngineId,
+	};
 	use sp_core::H256;
 	use sp_runtime::{
 		generic::DigestItem,
@@ -429,7 +433,6 @@ mod tests {
 	);
 
 	parameter_types! {
-		pub const BlockHashCount: u64 = 250;
 		pub BlockWeights: frame_system::limits::BlockWeights =
 			frame_system::limits::BlockWeights::simple_max(1024);
 	}
@@ -449,7 +452,7 @@ mod tests {
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
 		type Event = Event;
-		type BlockHashCount = BlockHashCount;
+		type BlockHashCount = ConstU64<250>;
 		type Version = ();
 		type PalletInfo = PalletInfo;
 		type AccountData = ();
@@ -458,15 +461,12 @@ mod tests {
 		type SystemWeightInfo = ();
 		type SS58Prefix = ();
 		type OnSetCode = ();
-	}
-
-	parameter_types! {
-		pub const UncleGenerations: u64 = 5;
+		type MaxConsumers = ConstU32<16>;
 	}
 
 	impl pallet::Config for Test {
 		type FindAuthor = AuthorGiven;
-		type UncleGenerations = UncleGenerations;
+		type UncleGenerations = ConstU64<5>;
 		type FilterUncle = SealVerify<VerifyBlock>;
 		type EventHandler = ();
 	}
@@ -480,9 +480,9 @@ mod tests {
 		where
 			I: 'a + IntoIterator<Item = (ConsensusEngineId, &'a [u8])>,
 		{
-			for (id, data) in digests {
+			for (id, mut data) in digests {
 				if id == TEST_ID {
-					return u64::decode(&mut &data[..]).ok()
+					return u64::decode(&mut data).ok()
 				}
 			}
 
@@ -500,9 +500,9 @@ mod tests {
 			let author =
 				AuthorGiven::find_author(pre_runtime_digests).ok_or_else(|| "no author")?;
 
-			for (id, seal) in seals {
+			for (id, mut seal) in seals {
 				if id == TEST_ID {
-					match u64::decode(&mut &seal[..]) {
+					match u64::decode(&mut seal) {
 						Err(_) => return Err("wrong seal"),
 						Ok(a) => {
 							if a != author {
@@ -597,7 +597,8 @@ mod tests {
 			};
 
 			let initialize_block = |number, hash: H256| {
-				System::initialize(&number, &hash, &Default::default(), Default::default())
+				System::reset_events();
+				System::initialize(&number, &hash, &Default::default())
 			};
 
 			for number in 1..8 {
@@ -690,9 +691,10 @@ mod tests {
 				seal_header(create_header(1, Default::default(), [1; 32].into()), author);
 
 			header.digest_mut().pop(); // pop the seal off.
-			System::initialize(&1, &Default::default(), header.digest(), Default::default());
+			System::reset_events();
+			System::initialize(&1, &Default::default(), header.digest());
 
-			assert_eq!(Authorship::author(), author);
+			assert_eq!(Authorship::author(), Some(author));
 		});
 	}
 

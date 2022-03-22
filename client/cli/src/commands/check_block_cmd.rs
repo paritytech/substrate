@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -21,30 +21,30 @@ use crate::{
 	params::{BlockNumberOrHash, ImportParams, SharedParams},
 	CliConfiguration,
 };
+use clap::Parser;
 use sc_client_api::{BlockBackend, HeaderBackend};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use std::{fmt::Debug, str::FromStr, sync::Arc};
-use structopt::StructOpt;
 
 /// The `check-block` command used to validate blocks.
-#[derive(Debug, StructOpt, Clone)]
+#[derive(Debug, Clone, Parser)]
 pub struct CheckBlockCmd {
 	/// Block hash or number
-	#[structopt(value_name = "HASH or NUMBER")]
+	#[clap(value_name = "HASH or NUMBER")]
 	pub input: BlockNumberOrHash,
 
 	/// The default number of 64KB pages to ever allocate for Wasm execution.
 	///
 	/// Don't alter this unless you know what you're doing.
-	#[structopt(long = "default-heap-pages", value_name = "COUNT")]
+	#[clap(long, value_name = "COUNT")]
 	pub default_heap_pages: Option<u32>,
 
 	#[allow(missing_docs)]
-	#[structopt(flatten)]
+	#[clap(flatten)]
 	pub shared_params: SharedParams,
 
 	#[allow(missing_docs)]
-	#[structopt(flatten)]
+	#[clap(flatten)]
 	pub import_params: ImportParams,
 }
 

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -64,18 +64,26 @@
 //! ### Get current timestamp
 //!
 //! ```
-//! use frame_support::{decl_module, dispatch};
-//! # use pallet_timestamp as timestamp;
-//! use frame_system::ensure_signed;
+//! use pallet_timestamp::{self as timestamp};
 //!
-//! pub trait Config: timestamp::Config {}
+//! #[frame_support::pallet]
+//! pub mod pallet {
+//! 	use super::*;
+//! 	use frame_support::pallet_prelude::*;
+//! 	use frame_system::pallet_prelude::*;
 //!
-//! decl_module! {
-//! 	pub struct Module<T: Config> for enum Call where origin: T::Origin {
-//! 		#[weight = 0]
-//! 		pub fn get_time(origin) -> dispatch::DispatchResult {
+//! 	#[pallet::pallet]
+//! 	pub struct Pallet<T>(_);
+//!
+//! 	#[pallet::config]
+//! 	pub trait Config: frame_system::Config + timestamp::Config {}
+//!
+//! 	#[pallet::call]
+//! 	impl<T: Config> Pallet<T> {
+//! 		#[pallet::weight(0)]
+//! 		pub fn get_time(origin: OriginFor<T>) -> DispatchResult {
 //! 			let _sender = ensure_signed(origin)?;
-//! 			let _now = <timestamp::Module<T>>::get();
+//! 			let _now = <timestamp::Pallet<T>>::get();
 //! 			Ok(())
 //! 		}
 //! 	}
@@ -140,7 +148,6 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
-	#[pallet::generate_storage_info]
 	pub struct Pallet<T>(PhantomData<T>);
 
 	/// Current time for the current block.
@@ -308,7 +315,10 @@ mod tests {
 	use super::*;
 	use crate as pallet_timestamp;
 
-	use frame_support::{assert_ok, parameter_types};
+	use frame_support::{
+		assert_ok, parameter_types,
+		traits::{ConstU32, ConstU64},
+	};
 	use sp_core::H256;
 	use sp_io::TestExternalities;
 	use sp_runtime::{
@@ -336,7 +346,6 @@ mod tests {
 	);
 
 	parameter_types! {
-		pub const BlockHashCount: u64 = 250;
 		pub BlockWeights: frame_system::limits::BlockWeights =
 			frame_system::limits::BlockWeights::simple_max(1024);
 	}
@@ -355,7 +364,7 @@ mod tests {
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
 		type Event = Event;
-		type BlockHashCount = BlockHashCount;
+		type BlockHashCount = ConstU64<250>;
 		type Version = ();
 		type PalletInfo = PalletInfo;
 		type AccountData = ();
@@ -364,14 +373,13 @@ mod tests {
 		type SystemWeightInfo = ();
 		type SS58Prefix = ();
 		type OnSetCode = ();
+		type MaxConsumers = ConstU32<16>;
 	}
-	parameter_types! {
-		pub const MinimumPeriod: u64 = 5;
-	}
+
 	impl Config for Test {
 		type Moment = u64;
 		type OnTimestampSet = ();
-		type MinimumPeriod = MinimumPeriod;
+		type MinimumPeriod = ConstU64<5>;
 		type WeightInfo = ();
 	}
 

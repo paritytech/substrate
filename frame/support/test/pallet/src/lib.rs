@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,6 +14,12 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
+//! Testing pallet macro
+
+// Ensure docs are propagated properly by the macros.
+#![warn(missing_docs)]
+
 pub use pallet::*;
 
 #[frame_support::pallet]
@@ -29,18 +35,22 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {}
 
-	#[pallet::genesis_config]
-	pub struct GenesisConfig {}
+	/// I'm the documentation
+	#[pallet::storage]
+	pub type Value<T> = StorageValue<Value = u32>;
 
-	#[cfg(feature = "std")]
-	impl Default for GenesisConfig {
-		fn default() -> Self {
-			Self {}
-		}
-	}
+	#[pallet::genesis_config]
+	#[cfg_attr(feature = "std", derive(Default))]
+	pub struct GenesisConfig {}
 
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig {
 		fn build(&self) {}
+	}
+
+	#[pallet::error]
+	pub enum Error<T> {
+		/// Something failed
+		Test,
 	}
 }

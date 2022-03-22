@@ -9,7 +9,7 @@
 	))
 	(import "env" "memory" (memory 1 1))
 
-	;; [0, 8) Endowment to send when creating contract.
+	;; [0, 8) value to send when creating contract.
 	(data (i32.const 0) "\00\00\01")
 
 	;; [8, 16) Value to send when calling contract.

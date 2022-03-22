@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,7 +21,7 @@ use crate::{
 		utils::NodesUtils,
 		Hasher, Node, NodeOf,
 	},
-	primitives::{self, Error},
+	primitives::{self, Error, NodeIndex},
 	Config, HashingOf,
 };
 #[cfg(not(feature = "std"))]
@@ -60,7 +60,7 @@ where
 	Storage<StorageType, T, I, L>: mmr_lib::MMRStore<NodeOf<T, I, L>>,
 {
 	mmr: mmr_lib::MMR<NodeOf<T, I, L>, Hasher<HashingOf<T, I>, L>, Storage<StorageType, T, I, L>>,
-	leaves: u64,
+	leaves: NodeIndex,
 }
 
 impl<StorageType, T, I, L> Mmr<StorageType, T, I, L>
@@ -71,7 +71,7 @@ where
 	Storage<StorageType, T, I, L>: mmr_lib::MMRStore<NodeOf<T, I, L>>,
 {
 	/// Create a pointer to an existing MMR with given number of leaves.
-	pub fn new(leaves: u64) -> Self {
+	pub fn new(leaves: NodeIndex) -> Self {
 		let size = NodesUtils::new(leaves).size();
 		Self { mmr: mmr_lib::MMR::new(size, Default::default()), leaves }
 	}
@@ -94,7 +94,7 @@ where
 
 	/// Return the internal size of the MMR (number of nodes).
 	#[cfg(test)]
-	pub fn size(&self) -> u64 {
+	pub fn size(&self) -> NodeIndex {
 		self.mmr.mmr_size()
 	}
 }
@@ -109,7 +109,7 @@ where
 	/// Push another item to the MMR.
 	///
 	/// Returns element position (index) in the MMR.
-	pub fn push(&mut self, leaf: L) -> Option<u64> {
+	pub fn push(&mut self, leaf: L) -> Option<NodeIndex> {
 		let position =
 			self.mmr.push(Node::Data(leaf)).map_err(|e| Error::Push.log_error(e)).ok()?;
 
@@ -120,7 +120,7 @@ where
 
 	/// Commit the changes to underlying storage, return current number of leaves and
 	/// calculate the new MMR's root hash.
-	pub fn finalize(self) -> Result<(u64, <T as Config<I>>::Hash), Error> {
+	pub fn finalize(self) -> Result<(NodeIndex, <T as Config<I>>::Hash), Error> {
 		let root = self.mmr.get_root().map_err(|e| Error::GetRoot.log_error(e))?;
 		self.mmr.commit().map_err(|e| Error::Commit.log_error(e))?;
 		Ok((self.leaves, root.hash()))
@@ -140,7 +140,7 @@ where
 	/// (i.e. you can't run the function in the pruned storage).
 	pub fn generate_proof(
 		&self,
-		leaf_index: u64,
+		leaf_index: NodeIndex,
 	) -> Result<(L, primitives::Proof<<T as Config<I>>::Hash>), Error> {
 		let position = mmr_lib::leaf_index_to_pos(leaf_index);
 		let store = <Storage<OffchainStorage, T, I, L>>::default();

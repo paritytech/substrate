@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -56,9 +56,6 @@ pub use hashing::{blake2_128, blake2_256, keccak_256, twox_128, twox_256, twox_6
 pub mod crypto;
 pub mod hexdisplay;
 
-pub mod u32_trait;
-
-mod changes_trie;
 pub mod ecdsa;
 pub mod ed25519;
 pub mod hash;
@@ -76,9 +73,8 @@ pub use self::{
 	hash::{convert_hash, H160, H256, H512},
 	uint::{U256, U512},
 };
-pub use changes_trie::{ChangesTrieConfiguration, ChangesTrieConfigurationRange};
 #[cfg(feature = "full_crypto")]
-pub use crypto::{DeriveJunction, Pair, Public};
+pub use crypto::{ByteArray, DeriveJunction, Pair, Public};
 
 #[cfg(feature = "std")]
 pub use self::hasher::blake2::Blake2Hasher;
@@ -100,7 +96,7 @@ pub enum ExecutionContext {
 	/// We distinguish between major sync and import so that validators who are running
 	/// their initial sync (or catching up after some time offline) can use the faster
 	/// native runtime (since we can reasonably assume the network as a whole has already
-	/// come to a broad conensus on the block and it probably hasn't been crafted
+	/// come to a broad consensus on the block and it probably hasn't been crafted
 	/// specifically to attack this node), but when importing blocks at the head of the
 	/// chain in normal operation they can use the safer Wasm version.
 	Syncing,

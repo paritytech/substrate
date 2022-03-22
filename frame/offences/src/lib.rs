@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -22,7 +22,7 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-mod migration;
+pub mod migration;
 mod mock;
 mod tests;
 
@@ -47,10 +47,10 @@ type ReportIdOf<T> = <T as frame_system::Config>::Hash;
 pub mod pallet {
 	use super::*;
 	use frame_support::pallet_prelude::*;
-	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
+	#[pallet::without_storage_info]
 	pub struct Pallet<T>(_);
 
 	/// The pallet's config trait.
@@ -108,14 +108,7 @@ pub mod pallet {
 		/// There is an offence reported of the given `kind` happened at the `session_index` and
 		/// (kind-specific) time slot. This event is not deposited for duplicate slashes.
 		/// \[kind, timeslot\].
-		Offence(Kind, OpaqueTimeSlot),
-	}
-
-	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		fn on_runtime_upgrade() -> Weight {
-			migration::remove_deferred_storage::<T>()
-		}
+		Offence { kind: Kind, timeslot: OpaqueTimeSlot },
 	}
 }
 
@@ -150,10 +143,11 @@ where
 			&concurrent_offenders,
 			&slash_perbill,
 			offence.session_index(),
+			offence.disable_strategy(),
 		);
 
 		// Deposit the event.
-		Self::deposit_event(Event::Offence(O::ID, time_slot.encode()));
+		Self::deposit_event(Event::Offence { kind: O::ID, timeslot: time_slot.encode() });
 
 		Ok(())
 	}

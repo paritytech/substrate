@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -88,6 +88,18 @@ impl AsRef<[u8]> for RuntimeString {
 		match self {
 			Self::Borrowed(val) => val.as_ref(),
 			Self::Owned(val) => val.as_ref(),
+		}
+	}
+}
+
+#[cfg(feature = "std")]
+impl std::ops::Deref for RuntimeString {
+	type Target = str;
+
+	fn deref(&self) -> &str {
+		match self {
+			Self::Borrowed(val) => &val,
+			Self::Owned(val) => &val,
 		}
 	}
 }

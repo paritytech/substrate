@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -84,12 +84,9 @@ fn setup_pot_account<T: Config>() {
 	let _ = T::Currency::make_free_balance_be(&pot_account, value);
 }
 
-const MAX_BYTES: u32 = 16384;
-const MAX_TIPPERS: u32 = 100;
-
 benchmarks! {
 	report_awesome {
-		let r in 0 .. MAX_BYTES;
+		let r in 0 .. T::MaximumReasonLength::get();
 		let (caller, reason, awesome_person) = setup_awesome::<T>(r);
 		// Whitelist caller account from further DB operations.
 		let caller_key = frame_system::Account::<T>::hashed_key_for(&caller);
@@ -97,7 +94,7 @@ benchmarks! {
 	}: _(RawOrigin::Signed(caller), reason, awesome_person)
 
 	retract_tip {
-		let r = MAX_BYTES;
+		let r = T::MaximumReasonLength::get();
 		let (caller, reason, awesome_person) = setup_awesome::<T>(r);
 		TipsMod::<T>::report_awesome(
 			RawOrigin::Signed(caller.clone()).into(),
@@ -112,8 +109,8 @@ benchmarks! {
 	}: _(RawOrigin::Signed(caller), hash)
 
 	tip_new {
-		let r in 0 .. MAX_BYTES;
-		let t in 1 .. MAX_TIPPERS;
+		let r in 0 .. T::MaximumReasonLength::get();
+		let t in 1 .. T::Tippers::max_len() as u32;
 
 		let (caller, reason, beneficiary, value) = setup_tip::<T>(r, t)?;
 		// Whitelist caller account from further DB operations.
@@ -122,7 +119,7 @@ benchmarks! {
 	}: _(RawOrigin::Signed(caller), reason, beneficiary, value)
 
 	tip {
-		let t in 1 .. MAX_TIPPERS;
+		let t in 1 .. T::Tippers::max_len() as u32;
 		let (member, reason, beneficiary, value) = setup_tip::<T>(0, t)?;
 		let value = T::Currency::minimum_balance().saturating_mul(100u32.into());
 		TipsMod::<T>::tip_new(
@@ -142,7 +139,7 @@ benchmarks! {
 	}: _(RawOrigin::Signed(caller), hash, value)
 
 	close_tip {
-		let t in 1 .. MAX_TIPPERS;
+		let t in 1 .. T::Tippers::max_len() as u32;
 
 		// Make sure pot is funded
 		setup_pot_account::<T>();
@@ -171,7 +168,7 @@ benchmarks! {
 	}: _(RawOrigin::Signed(caller), hash)
 
 	slash_tip {
-		let t in 1 .. MAX_TIPPERS;
+		let t in 1 .. T::Tippers::max_len() as u32;
 
 		// Make sure pot is funded
 		setup_pot_account::<T>();

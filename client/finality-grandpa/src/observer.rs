@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -203,7 +203,7 @@ where
 	);
 
 	let observer_work = observer_work.map_ok(|_| ()).map_err(|e| {
-		warn!("GRANDPA Observer failed: {:?}", e);
+		warn!("GRANDPA Observer failed: {}", e);
 	});
 
 	Ok(observer_work.map(drop))

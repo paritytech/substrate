@@ -2,7 +2,7 @@
 name = "pallet-bags-list"
 version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2018"
+edition = "2021"
 license = "Apache-2.0"
 homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
@@ -14,12 +14,12 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 # parity
-codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
-scale-info = { version = "1.0", default-features = false, features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive"] }
+scale-info = { version = "2.0.1", default-features = false, features = ["derive"] }
 
 # primitives
-sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
-sp-std = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
+sp-runtime = { version = "6.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
 
 # FRAME
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
@@ -32,14 +32,14 @@ log = { version = "0.4.14", default-features = false }
 # Optional imports for benchmarking
 frame-benchmarking = { version = "4.0.0-dev", path = "../benchmarking", optional = true, default-features = false }
 pallet-balances = { version = "4.0.0-dev", path = "../balances", optional = true, default-features = false }
-sp-core = { version = "4.0.0-dev", path = "../../primitives/core", optional = true, default-features = false }
-sp-io = { version = "4.0.0-dev", path = "../../primitives/io", optional = true, default-features = false }
-sp-tracing = { version = "4.0.0-dev", path = "../../primitives/tracing", optional = true, default-features = false }
+sp-core = { version = "6.0.0", path = "../../primitives/core", optional = true, default-features = false }
+sp-io = { version = "6.0.0", path = "../../primitives/io", optional = true, default-features = false }
+sp-tracing = { version = "5.0.0", path = "../../primitives/tracing", optional = true, default-features = false }
 
 [dev-dependencies]
-sp-core = { version = "4.0.0-dev", path = "../../primitives/core"}
-sp-io = { version = "4.0.0-dev", path = "../../primitives/io"}
-sp-tracing = { version = "4.0.0-dev", path = "../../primitives/tracing" }
+sp-core = { version = "6.0.0", path = "../../primitives/core"}
+sp-io = { version = "6.0.0", path = "../../primitives/io"}
+sp-tracing = { version = "5.0.0", path = "../../primitives/tracing" }
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 frame-election-provider-support = { version = "4.0.0-dev", path = "../election-provider-support", features = ["runtime-benchmarks"] }
 frame-benchmarking = { version = "4.0.0-dev", path = "../benchmarking" }
@@ -56,7 +56,7 @@ std = [
 	"log/std",
 ]
 runtime-benchmarks = [
-	"frame-benchmarking",
+	"frame-benchmarking/runtime-benchmarks",
 	"sp-core",
 	"sp-io",
 	"pallet-balances",

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -33,15 +33,18 @@ mod benchmarking;
 pub mod mock;
 #[cfg(test)]
 mod tests;
-pub mod weights;
 
 mod functions;
 mod impl_nonfungibles;
 mod types;
-pub use types::*;
 
-use codec::{Decode, Encode, HasCompact};
-use frame_support::traits::{BalanceStatus::Reserved, Currency, ReservableCurrency};
+pub mod migration;
+pub mod weights;
+
+use codec::{Decode, Encode};
+use frame_support::traits::{
+	BalanceStatus::Reserved, Currency, EnsureOriginWithArg, ReservableCurrency,
+};
 use frame_system::Config as SystemConfig;
 use sp_runtime::{
 	traits::{Saturating, StaticLookup, Zero},
@@ -50,6 +53,7 @@ use sp_runtime::{
 use sp_std::prelude::*;
 
 pub use pallet::*;
+pub use types::*;
 pub use weights::WeightInfo;
 
 #[frame_support::pallet]
@@ -62,6 +66,21 @@ pub mod pallet {
 	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T, I = ()>(_);
 
+	#[cfg(feature = "runtime-benchmarks")]
+	pub trait BenchmarkHelper<ClassId, InstanceId> {
+		fn class(i: u16) -> ClassId;
+		fn instance(i: u16) -> InstanceId;
+	}
+	#[cfg(feature = "runtime-benchmarks")]
+	impl<ClassId: From<u16>, InstanceId: From<u16>> BenchmarkHelper<ClassId, InstanceId> for () {
+		fn class(i: u16) -> ClassId {
+			i.into()
+		}
+		fn instance(i: u16) -> InstanceId {
+			i.into()
+		}
+	}
+
 	#[pallet::config]
 	/// The module configuration trait.
 	pub trait Config<I: 'static = ()>: frame_system::Config {
@@ -69,10 +88,10 @@ pub mod pallet {
 		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
 
 		/// Identifier for the class of asset.
-		type ClassId: Member + Parameter + Default + Copy + HasCompact;
+		type ClassId: Member + Parameter + MaxEncodedLen + Copy;
 
 		/// The type used to identify a unique asset within an asset class.
-		type InstanceId: Member + Parameter + Default + Copy + HasCompact + From<u16>;
+		type InstanceId: Member + Parameter + MaxEncodedLen + Copy;
 
 		/// The currency mechanism, used for paying for reserves.
 		type Currency: ReservableCurrency<Self::AccountId>;
@@ -80,6 +99,14 @@ pub mod pallet {
 		/// The origin which may forcibly create or destroy an asset or otherwise alter privileged
 		/// attributes.
 		type ForceOrigin: EnsureOrigin<Self::Origin>;
+
+		/// Standard class creation is only allowed if the origin attempting it and the class are
+		/// in this set.
+		type CreateOrigin: EnsureOriginWithArg<
+			Success = Self::AccountId,
+			Self::Origin,
+			Self::ClassId,
+		>;
 
 		/// The basic amount of funds that must be reserved for an asset class.
 		#[pallet::constant]
@@ -114,6 +141,10 @@ pub mod pallet {
 		#[pallet::constant]
 		type ValueLimit: Get<u32>;
 
+		#[cfg(feature = "runtime-benchmarks")]
+		/// A set of helper functions for benchmarking.
+		type Helper: BenchmarkHelper<Self::ClassId, Self::InstanceId>;
+
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
 	}
@@ -128,6 +159,11 @@ pub mod pallet {
 	>;
 
 	#[pallet::storage]
+	/// The class, if any, of which an account is willing to take ownership.
+	pub(super) type OwnershipAcceptance<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Blake2_128Concat, T::AccountId, T::ClassId>;
+
+	#[pallet::storage]
 	/// The assets held by any given account; set out this way so that assets owned by a single
 	/// account can be enumerated.
 	pub(super) type Account<T: Config<I>, I: 'static = ()> = StorageNMap<
@@ -137,6 +173,19 @@ pub mod pallet {
 			NMapKey<Blake2_128Concat, T::ClassId>,
 			NMapKey<Blake2_128Concat, T::InstanceId>,
 		),
+		(),
+		OptionQuery,
+	>;
+
+	#[pallet::storage]
+	/// The classes owned by any given account; set out this way so that classes owned by a single
+	/// account can be enumerated.
+	pub(super) type ClassAccount<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
+		_,
+		Blake2_128Concat,
+		T::AccountId,
+		Blake2_128Concat,
+		T::ClassId,
 		(),
 		OptionQuery,
 	>;
@@ -191,63 +240,92 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
-		/// An asset class was created. \[ class, creator, owner \]
-		Created(T::ClassId, T::AccountId, T::AccountId),
-		/// An asset class was force-created. \[ class, owner \]
-		ForceCreated(T::ClassId, T::AccountId),
-		/// An asset `class` was destroyed. \[ class \]
-		Destroyed(T::ClassId),
-		/// An asset `instance` was issued. \[ class, instance, owner \]
-		Issued(T::ClassId, T::InstanceId, T::AccountId),
-		/// An asset `instance` was transferred. \[ class, instance, from, to \]
-		Transferred(T::ClassId, T::InstanceId, T::AccountId, T::AccountId),
-		/// An asset `instance` was destroyed. \[ class, instance, owner \]
-		Burned(T::ClassId, T::InstanceId, T::AccountId),
-		/// Some asset `instance` was frozen. \[ class, instance \]
-		Frozen(T::ClassId, T::InstanceId),
-		/// Some asset `instance` was thawed. \[ class, instance \]
-		Thawed(T::ClassId, T::InstanceId),
-		/// Some asset `class` was frozen. \[ class \]
-		ClassFrozen(T::ClassId),
-		/// Some asset `class` was thawed. \[ class \]
-		ClassThawed(T::ClassId),
-		/// The owner changed \[ class, new_owner \]
-		OwnerChanged(T::ClassId, T::AccountId),
-		/// The management team changed \[ class, issuer, admin, freezer \]
-		TeamChanged(T::ClassId, T::AccountId, T::AccountId, T::AccountId),
+		/// An asset class was created.
+		Created { class: T::ClassId, creator: T::AccountId, owner: T::AccountId },
+		/// An asset class was force-created.
+		ForceCreated { class: T::ClassId, owner: T::AccountId },
+		/// An asset `class` was destroyed.
+		Destroyed { class: T::ClassId },
+		/// An asset `instance` was issued.
+		Issued { class: T::ClassId, instance: T::InstanceId, owner: T::AccountId },
+		/// An asset `instance` was transferred.
+		Transferred {
+			class: T::ClassId,
+			instance: T::InstanceId,
+			from: T::AccountId,
+			to: T::AccountId,
+		},
+		/// An asset `instance` was destroyed.
+		Burned { class: T::ClassId, instance: T::InstanceId, owner: T::AccountId },
+		/// Some asset `instance` was frozen.
+		Frozen { class: T::ClassId, instance: T::InstanceId },
+		/// Some asset `instance` was thawed.
+		Thawed { class: T::ClassId, instance: T::InstanceId },
+		/// Some asset `class` was frozen.
+		ClassFrozen { class: T::ClassId },
+		/// Some asset `class` was thawed.
+		ClassThawed { class: T::ClassId },
+		/// The owner changed.
+		OwnerChanged { class: T::ClassId, new_owner: T::AccountId },
+		/// The management team changed.
+		TeamChanged {
+			class: T::ClassId,
+			issuer: T::AccountId,
+			admin: T::AccountId,
+			freezer: T::AccountId,
+		},
 		/// An `instance` of an asset `class` has been approved by the `owner` for transfer by a
 		/// `delegate`.
-		/// \[ class, instance, owner, delegate \]
-		ApprovedTransfer(T::ClassId, T::InstanceId, T::AccountId, T::AccountId),
+		ApprovedTransfer {
+			class: T::ClassId,
+			instance: T::InstanceId,
+			owner: T::AccountId,
+			delegate: T::AccountId,
+		},
 		/// An approval for a `delegate` account to transfer the `instance` of an asset `class` was
 		/// cancelled by its `owner`.
-		/// \[ class, instance, owner, delegate \]
-		ApprovalCancelled(T::ClassId, T::InstanceId, T::AccountId, T::AccountId),
+		ApprovalCancelled {
+			class: T::ClassId,
+			instance: T::InstanceId,
+			owner: T::AccountId,
+			delegate: T::AccountId,
+		},
 		/// An asset `class` has had its attributes changed by the `Force` origin.
-		/// \[ class \]
-		AssetStatusChanged(T::ClassId),
-		/// New metadata has been set for an asset class. \[ class, data, is_frozen \]
-		ClassMetadataSet(T::ClassId, BoundedVec<u8, T::StringLimit>, bool),
-		/// Metadata has been cleared for an asset class. \[ class \]
-		ClassMetadataCleared(T::ClassId),
+		AssetStatusChanged { class: T::ClassId },
+		/// New metadata has been set for an asset class.
+		ClassMetadataSet {
+			class: T::ClassId,
+			data: BoundedVec<u8, T::StringLimit>,
+			is_frozen: bool,
+		},
+		/// Metadata has been cleared for an asset class.
+		ClassMetadataCleared { class: T::ClassId },
 		/// New metadata has been set for an asset instance.
-		/// \[ class, instance, data, is_frozen \]
-		MetadataSet(T::ClassId, T::InstanceId, BoundedVec<u8, T::StringLimit>, bool),
-		/// Metadata has been cleared for an asset instance. \[ class, instance \]
-		MetadataCleared(T::ClassId, T::InstanceId),
-		/// Metadata has been cleared for an asset instance. \[ class, successful_instances \]
-		Redeposited(T::ClassId, Vec<T::InstanceId>),
+		MetadataSet {
+			class: T::ClassId,
+			instance: T::InstanceId,
+			data: BoundedVec<u8, T::StringLimit>,
+			is_frozen: bool,
+		},
+		/// Metadata has been cleared for an asset instance.
+		MetadataCleared { class: T::ClassId, instance: T::InstanceId },
+		/// Metadata has been cleared for an asset instance.
+		Redeposited { class: T::ClassId, successful_instances: Vec<T::InstanceId> },
 		/// New attribute metadata has been set for an asset class or instance.
-		/// \[ class, maybe_instance, key, value \]
-		AttributeSet(
-			T::ClassId,
-			Option<T::InstanceId>,
-			BoundedVec<u8, T::KeyLimit>,
-			BoundedVec<u8, T::ValueLimit>,
-		),
+		AttributeSet {
+			class: T::ClassId,
+			maybe_instance: Option<T::InstanceId>,
+			key: BoundedVec<u8, T::KeyLimit>,
+			value: BoundedVec<u8, T::ValueLimit>,
+		},
 		/// Attribute metadata has been cleared for an asset class or instance.
-		/// \[ class, maybe_instance, key, maybe_value \]
-		AttributeCleared(T::ClassId, Option<T::InstanceId>, BoundedVec<u8, T::KeyLimit>),
+		AttributeCleared {
+			class: T::ClassId,
+			maybe_instance: Option<T::InstanceId>,
+			key: BoundedVec<u8, T::KeyLimit>,
+		},
+		/// Ownership acceptance has changed for an account.
+		OwnershipAcceptanceChanged { who: T::AccountId, maybe_class: Option<T::ClassId> },
 	}
 
 	#[pallet::error]
@@ -255,7 +333,7 @@ pub mod pallet {
 		/// The signing account has no permission to do the operation.
 		NoPermission,
 		/// The given asset ID is unknown.
-		Unknown,
+		UnknownClass,
 		/// The asset instance ID has already been used for an asset.
 		AlreadyExists,
 		/// The owner turned out to be different to what was expected.
@@ -272,15 +350,19 @@ pub mod pallet {
 		NoDelegate,
 		/// No approval exists that would allow the transfer.
 		Unapproved,
+		/// The named owner has not signed ownership of the class is acceptable.
+		Unaccepted,
 	}
-
-	#[pallet::hooks]
-	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {}
 
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		/// Get the owner of the asset instance, if the asset exists.
 		pub fn owner(class: T::ClassId, instance: T::InstanceId) -> Option<T::AccountId> {
 			Asset::<T, I>::get(class, instance).map(|i| i.owner)
+		}
+
+		/// Get the owner of the asset instance, if the asset exists.
+		pub fn class_owner(class: T::ClassId) -> Option<T::AccountId> {
+			Class::<T, I>::get(class).map(|i| i.owner)
 		}
 	}
 
@@ -305,10 +387,10 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::create())]
 		pub fn create(
 			origin: OriginFor<T>,
-			#[pallet::compact] class: T::ClassId,
+			class: T::ClassId,
 			admin: <T::Lookup as StaticLookup>::Source,
 		) -> DispatchResult {
-			let owner = ensure_signed(origin)?;
+			let owner = T::CreateOrigin::ensure_origin(origin, &class)?;
 			let admin = T::Lookup::lookup(admin)?;
 
 			Self::do_create_class(
@@ -317,7 +399,7 @@ pub mod pallet {
 				admin.clone(),
 				T::ClassDeposit::get(),
 				false,
-				Event::Created(class, owner, admin),
+				Event::Created { class, creator: owner, owner: admin },
 			)
 		}
 
@@ -340,7 +422,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::force_create())]
 		pub fn force_create(
 			origin: OriginFor<T>,
-			#[pallet::compact] class: T::ClassId,
+			class: T::ClassId,
 			owner: <T::Lookup as StaticLookup>::Source,
 			free_holding: bool,
 		) -> DispatchResult {
@@ -353,7 +435,7 @@ pub mod pallet {
 				owner.clone(),
 				Zero::zero(),
 				free_holding,
-				Event::ForceCreated(class, owner),
+				Event::ForceCreated { class, owner },
 			)
 		}
 
@@ -379,7 +461,7 @@ pub mod pallet {
  		))]
 		pub fn destroy(
 			origin: OriginFor<T>,
-			#[pallet::compact] class: T::ClassId,
+			class: T::ClassId,
 			witness: DestroyWitness,
 		) -> DispatchResultWithPostInfo {
 			let maybe_check_owner = match T::ForceOrigin::try_origin(origin) {
@@ -410,8 +492,8 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::mint())]
 		pub fn mint(
 			origin: OriginFor<T>,
-			#[pallet::compact] class: T::ClassId,
-			#[pallet::compact] instance: T::InstanceId,
+			class: T::ClassId,
+			instance: T::InstanceId,
 			owner: <T::Lookup as StaticLookup>::Source,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
@@ -439,8 +521,8 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::burn())]
 		pub fn burn(
 			origin: OriginFor<T>,
-			#[pallet::compact] class: T::ClassId,
-			#[pallet::compact] instance: T::InstanceId,
+			class: T::ClassId,
+			instance: T::InstanceId,
 			check_owner: Option<<T::Lookup as StaticLookup>::Source>,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
@@ -475,8 +557,8 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::transfer())]
 		pub fn transfer(
 			origin: OriginFor<T>,
-			#[pallet::compact] class: T::ClassId,
-			#[pallet::compact] instance: T::InstanceId,
+			class: T::ClassId,
+			instance: T::InstanceId,
 			dest: <T::Lookup as StaticLookup>::Source,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
@@ -511,12 +593,13 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::redeposit(instances.len() as u32))]
 		pub fn redeposit(
 			origin: OriginFor<T>,
-			#[pallet::compact] class: T::ClassId,
+			class: T::ClassId,
 			instances: Vec<T::InstanceId>,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 
-			let mut class_details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::Unknown)?;
+			let mut class_details =
+				Class::<T, I>::get(&class).ok_or(Error::<T, I>::UnknownClass)?;
 			ensure!(class_details.owner == origin, Error::<T, I>::NoPermission);
 			let deposit = match class_details.free_holding {
 				true => Zero::zero(),
@@ -549,7 +632,10 @@ pub mod pallet {
 			}
 			Class::<T, I>::insert(&class, &class_details);
 
-			Self::deposit_event(Event::<T, I>::Redeposited(class, successful));
+			Self::deposit_event(Event::<T, I>::Redeposited {
+				class,
+				successful_instances: successful,
+			});
 
 			Ok(())
 		}
@@ -567,20 +653,20 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::freeze())]
 		pub fn freeze(
 			origin: OriginFor<T>,
-			#[pallet::compact] class: T::ClassId,
-			#[pallet::compact] instance: T::InstanceId,
+			class: T::ClassId,
+			instance: T::InstanceId,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 
 			let mut details =
-				Asset::<T, I>::get(&class, &instance).ok_or(Error::<T, I>::Unknown)?;
-			let class_details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::Unknown)?;
+				Asset::<T, I>::get(&class, &instance).ok_or(Error::<T, I>::UnknownClass)?;
+			let class_details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::UnknownClass)?;
 			ensure!(class_details.freezer == origin, Error::<T, I>::NoPermission);
 
 			details.is_frozen = true;
 			Asset::<T, I>::insert(&class, &instance, &details);
 
-			Self::deposit_event(Event::<T, I>::Frozen(class, instance));
+			Self::deposit_event(Event::<T, I>::Frozen { class, instance });
 			Ok(())
 		}
 
@@ -597,20 +683,20 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::thaw())]
 		pub fn thaw(
 			origin: OriginFor<T>,
-			#[pallet::compact] class: T::ClassId,
-			#[pallet::compact] instance: T::InstanceId,
+			class: T::ClassId,
+			instance: T::InstanceId,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 
 			let mut details =
-				Asset::<T, I>::get(&class, &instance).ok_or(Error::<T, I>::Unknown)?;
-			let class_details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::Unknown)?;
+				Asset::<T, I>::get(&class, &instance).ok_or(Error::<T, I>::UnknownClass)?;
+			let class_details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::UnknownClass)?;
 			ensure!(class_details.admin == origin, Error::<T, I>::NoPermission);
 
 			details.is_frozen = false;
 			Asset::<T, I>::insert(&class, &instance, &details);
 
-			Self::deposit_event(Event::<T, I>::Thawed(class, instance));
+			Self::deposit_event(Event::<T, I>::Thawed { class, instance });
 			Ok(())
 		}
 
@@ -624,19 +710,16 @@ pub mod pallet {
 		///
 		/// Weight: `O(1)`
 		#[pallet::weight(T::WeightInfo::freeze_class())]
-		pub fn freeze_class(
-			origin: OriginFor<T>,
-			#[pallet::compact] class: T::ClassId,
-		) -> DispatchResult {
+		pub fn freeze_class(origin: OriginFor<T>, class: T::ClassId) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 
 			Class::<T, I>::try_mutate(class, |maybe_details| {
-				let details = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
+				let details = maybe_details.as_mut().ok_or(Error::<T, I>::UnknownClass)?;
 				ensure!(&origin == &details.freezer, Error::<T, I>::NoPermission);
 
 				details.is_frozen = true;
 
-				Self::deposit_event(Event::<T, I>::ClassFrozen(class));
+				Self::deposit_event(Event::<T, I>::ClassFrozen { class });
 				Ok(())
 			})
 		}
@@ -651,19 +734,16 @@ pub mod pallet {
 		///
 		/// Weight: `O(1)`
 		#[pallet::weight(T::WeightInfo::thaw_class())]
-		pub fn thaw_class(
-			origin: OriginFor<T>,
-			#[pallet::compact] class: T::ClassId,
-		) -> DispatchResult {
+		pub fn thaw_class(origin: OriginFor<T>, class: T::ClassId) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 
 			Class::<T, I>::try_mutate(class, |maybe_details| {
-				let details = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
+				let details = maybe_details.as_mut().ok_or(Error::<T, I>::UnknownClass)?;
 				ensure!(&origin == &details.admin, Error::<T, I>::NoPermission);
 
 				details.is_frozen = false;
 
-				Self::deposit_event(Event::<T, I>::ClassThawed(class));
+				Self::deposit_event(Event::<T, I>::ClassThawed { class });
 				Ok(())
 			})
 		}
@@ -673,7 +753,8 @@ pub mod pallet {
 		/// Origin must be Signed and the sender should be the Owner of the asset `class`.
 		///
 		/// - `class`: The asset class whose owner should be changed.
-		/// - `owner`: The new Owner of this asset class.
+		/// - `owner`: The new Owner of this asset class. They must have called
+		///   `set_accept_ownership` with `class` in order for this operation to succeed.
 		///
 		/// Emits `OwnerChanged`.
 		///
@@ -681,14 +762,17 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::transfer_ownership())]
 		pub fn transfer_ownership(
 			origin: OriginFor<T>,
-			#[pallet::compact] class: T::ClassId,
+			class: T::ClassId,
 			owner: <T::Lookup as StaticLookup>::Source,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 			let owner = T::Lookup::lookup(owner)?;
 
+			let acceptable_class = OwnershipAcceptance::<T, I>::get(&owner);
+			ensure!(acceptable_class.as_ref() == Some(&class), Error::<T, I>::Unaccepted);
+
 			Class::<T, I>::try_mutate(class, |maybe_details| {
-				let details = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
+				let details = maybe_details.as_mut().ok_or(Error::<T, I>::UnknownClass)?;
 				ensure!(&origin == &details.owner, Error::<T, I>::NoPermission);
 				if details.owner == owner {
 					return Ok(())
@@ -701,9 +785,12 @@ pub mod pallet {
 					details.total_deposit,
 					Reserved,
 				)?;
+				ClassAccount::<T, I>::remove(&details.owner, &class);
+				ClassAccount::<T, I>::insert(&owner, &class, ());
 				details.owner = owner.clone();
+				OwnershipAcceptance::<T, I>::remove(&owner);
 
-				Self::deposit_event(Event::OwnerChanged(class, owner));
+				Self::deposit_event(Event::OwnerChanged { class, new_owner: owner });
 				Ok(())
 			})
 		}
@@ -723,7 +810,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::set_team())]
 		pub fn set_team(
 			origin: OriginFor<T>,
-			#[pallet::compact] class: T::ClassId,
+			class: T::ClassId,
 			issuer: <T::Lookup as StaticLookup>::Source,
 			admin: <T::Lookup as StaticLookup>::Source,
 			freezer: <T::Lookup as StaticLookup>::Source,
@@ -734,14 +821,14 @@ pub mod pallet {
 			let freezer = T::Lookup::lookup(freezer)?;
 
 			Class::<T, I>::try_mutate(class, |maybe_details| {
-				let details = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
+				let details = maybe_details.as_mut().ok_or(Error::<T, I>::UnknownClass)?;
 				ensure!(&origin == &details.owner, Error::<T, I>::NoPermission);
 
 				details.issuer = issuer.clone();
 				details.admin = admin.clone();
 				details.freezer = freezer.clone();
 
-				Self::deposit_event(Event::TeamChanged(class, issuer, admin, freezer));
+				Self::deposit_event(Event::TeamChanged { class, issuer, admin, freezer });
 				Ok(())
 			})
 		}
@@ -760,8 +847,8 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::approve_transfer())]
 		pub fn approve_transfer(
 			origin: OriginFor<T>,
-			#[pallet::compact] class: T::ClassId,
-			#[pallet::compact] instance: T::InstanceId,
+			class: T::ClassId,
+			instance: T::InstanceId,
 			delegate: <T::Lookup as StaticLookup>::Source,
 		) -> DispatchResult {
 			let maybe_check: Option<T::AccountId> = T::ForceOrigin::try_origin(origin)
@@ -770,9 +857,9 @@ pub mod pallet {
 
 			let delegate = T::Lookup::lookup(delegate)?;
 
-			let class_details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::Unknown)?;
+			let class_details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::UnknownClass)?;
 			let mut details =
-				Asset::<T, I>::get(&class, &instance).ok_or(Error::<T, I>::Unknown)?;
+				Asset::<T, I>::get(&class, &instance).ok_or(Error::<T, I>::UnknownClass)?;
 
 			if let Some(check) = maybe_check {
 				let permitted = &check == &class_details.admin || &check == &details.owner;
@@ -783,7 +870,12 @@ pub mod pallet {
 			Asset::<T, I>::insert(&class, &instance, &details);
 
 			let delegate = details.approved.expect("set as Some above; qed");
-			Self::deposit_event(Event::ApprovedTransfer(class, instance, details.owner, delegate));
+			Self::deposit_event(Event::ApprovedTransfer {
+				class,
+				instance,
+				owner: details.owner,
+				delegate,
+			});
 
 			Ok(())
 		}
@@ -807,17 +899,17 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::cancel_approval())]
 		pub fn cancel_approval(
 			origin: OriginFor<T>,
-			#[pallet::compact] class: T::ClassId,
-			#[pallet::compact] instance: T::InstanceId,
+			class: T::ClassId,
+			instance: T::InstanceId,
 			maybe_check_delegate: Option<<T::Lookup as StaticLookup>::Source>,
 		) -> DispatchResult {
 			let maybe_check: Option<T::AccountId> = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some).map_err(DispatchError::from))?;
 
-			let class_details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::Unknown)?;
+			let class_details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::UnknownClass)?;
 			let mut details =
-				Asset::<T, I>::get(&class, &instance).ok_or(Error::<T, I>::Unknown)?;
+				Asset::<T, I>::get(&class, &instance).ok_or(Error::<T, I>::UnknownClass)?;
 			if let Some(check) = maybe_check {
 				let permitted = &check == &class_details.admin || &check == &details.owner;
 				ensure!(permitted, Error::<T, I>::NoPermission);
@@ -829,7 +921,12 @@ pub mod pallet {
 			}
 
 			Asset::<T, I>::insert(&class, &instance, &details);
-			Self::deposit_event(Event::ApprovalCancelled(class, instance, details.owner, old));
+			Self::deposit_event(Event::ApprovalCancelled {
+				class,
+				instance,
+				owner: details.owner,
+				delegate: old,
+			});
 
 			Ok(())
 		}
@@ -854,7 +951,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::force_asset_status())]
 		pub fn force_asset_status(
 			origin: OriginFor<T>,
-			#[pallet::compact] class: T::ClassId,
+			class: T::ClassId,
 			owner: <T::Lookup as StaticLookup>::Source,
 			issuer: <T::Lookup as StaticLookup>::Source,
 			admin: <T::Lookup as StaticLookup>::Source,
@@ -865,16 +962,20 @@ pub mod pallet {
 			T::ForceOrigin::ensure_origin(origin)?;
 
 			Class::<T, I>::try_mutate(class, |maybe_asset| {
-				let mut asset = maybe_asset.take().ok_or(Error::<T, I>::Unknown)?;
-				asset.owner = T::Lookup::lookup(owner)?;
+				let mut asset = maybe_asset.take().ok_or(Error::<T, I>::UnknownClass)?;
+				let old_owner = asset.owner;
+				let new_owner = T::Lookup::lookup(owner)?;
+				asset.owner = new_owner.clone();
 				asset.issuer = T::Lookup::lookup(issuer)?;
 				asset.admin = T::Lookup::lookup(admin)?;
 				asset.freezer = T::Lookup::lookup(freezer)?;
 				asset.free_holding = free_holding;
 				asset.is_frozen = is_frozen;
 				*maybe_asset = Some(asset);
+				ClassAccount::<T, I>::remove(&old_owner, &class);
+				ClassAccount::<T, I>::insert(&new_owner, &class, ());
 
-				Self::deposit_event(Event::AssetStatusChanged(class));
+				Self::deposit_event(Event::AssetStatusChanged { class });
 				Ok(())
 			})
 		}
@@ -899,7 +1000,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::set_attribute())]
 		pub fn set_attribute(
 			origin: OriginFor<T>,
-			#[pallet::compact] class: T::ClassId,
+			class: T::ClassId,
 			maybe_instance: Option<T::InstanceId>,
 			key: BoundedVec<u8, T::KeyLimit>,
 			value: BoundedVec<u8, T::ValueLimit>,
@@ -908,7 +1009,8 @@ pub mod pallet {
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some))?;
 
-			let mut class_details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::Unknown)?;
+			let mut class_details =
+				Class::<T, I>::get(&class).ok_or(Error::<T, I>::UnknownClass)?;
 			if let Some(check_owner) = &maybe_check_owner {
 				ensure!(check_owner == &class_details.owner, Error::<T, I>::NoPermission);
 			}
@@ -940,31 +1042,28 @@ pub mod pallet {
 
 			Attribute::<T, I>::insert((&class, maybe_instance, &key), (&value, deposit));
 			Class::<T, I>::insert(class, &class_details);
-			Self::deposit_event(Event::AttributeSet(class, maybe_instance, key, value));
+			Self::deposit_event(Event::AttributeSet { class, maybe_instance, key, value });
 			Ok(())
 		}
 
-		/// Set an attribute for an asset class or instance.
+		/// Clear an attribute for an asset class or instance.
 		///
 		/// Origin must be either `ForceOrigin` or Signed and the sender should be the Owner of the
 		/// asset `class`.
 		///
-		/// If the origin is Signed, then funds of signer are reserved according to the formula:
-		/// `MetadataDepositBase + DepositPerByte * (key.len + value.len)` taking into
-		/// account any already reserved funds.
+		/// Any deposit is freed for the asset class owner.
 		///
-		/// - `class`: The identifier of the asset class whose instance's metadata to set.
-		/// - `instance`: The identifier of the asset instance whose metadata to set.
+		/// - `class`: The identifier of the asset class whose instance's metadata to clear.
+		/// - `maybe_instance`: The identifier of the asset instance whose metadata to clear.
 		/// - `key`: The key of the attribute.
-		/// - `value`: The value to which to set the attribute.
 		///
-		/// Emits `AttributeSet`.
+		/// Emits `AttributeCleared`.
 		///
 		/// Weight: `O(1)`
 		#[pallet::weight(T::WeightInfo::clear_attribute())]
 		pub fn clear_attribute(
 			origin: OriginFor<T>,
-			#[pallet::compact] class: T::ClassId,
+			class: T::ClassId,
 			maybe_instance: Option<T::InstanceId>,
 			key: BoundedVec<u8, T::KeyLimit>,
 		) -> DispatchResult {
@@ -972,7 +1071,8 @@ pub mod pallet {
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some))?;
 
-			let mut class_details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::Unknown)?;
+			let mut class_details =
+				Class::<T, I>::get(&class).ok_or(Error::<T, I>::UnknownClass)?;
 			if let Some(check_owner) = &maybe_check_owner {
 				ensure!(check_owner == &class_details.owner, Error::<T, I>::NoPermission);
 			}
@@ -988,7 +1088,7 @@ pub mod pallet {
 				class_details.total_deposit.saturating_reduce(deposit);
 				T::Currency::unreserve(&class_details.owner, deposit);
 				Class::<T, I>::insert(class, &class_details);
-				Self::deposit_event(Event::AttributeCleared(class, maybe_instance, key));
+				Self::deposit_event(Event::AttributeCleared { class, maybe_instance, key });
 			}
 			Ok(())
 		}
@@ -1013,8 +1113,8 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::set_metadata())]
 		pub fn set_metadata(
 			origin: OriginFor<T>,
-			#[pallet::compact] class: T::ClassId,
-			#[pallet::compact] instance: T::InstanceId,
+			class: T::ClassId,
+			instance: T::InstanceId,
 			data: BoundedVec<u8, T::StringLimit>,
 			is_frozen: bool,
 		) -> DispatchResult {
@@ -1022,7 +1122,8 @@ pub mod pallet {
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some))?;
 
-			let mut class_details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::Unknown)?;
+			let mut class_details =
+				Class::<T, I>::get(&class).ok_or(Error::<T, I>::UnknownClass)?;
 
 			if let Some(check_owner) = &maybe_check_owner {
 				ensure!(check_owner == &class_details.owner, Error::<T, I>::NoPermission);
@@ -1053,7 +1154,7 @@ pub mod pallet {
 				*metadata = Some(InstanceMetadata { deposit, data: data.clone(), is_frozen });
 
 				Class::<T, I>::insert(&class, &class_details);
-				Self::deposit_event(Event::MetadataSet(class, instance, data, is_frozen));
+				Self::deposit_event(Event::MetadataSet { class, instance, data, is_frozen });
 				Ok(())
 			})
 		}
@@ -1074,14 +1175,15 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::clear_metadata())]
 		pub fn clear_metadata(
 			origin: OriginFor<T>,
-			#[pallet::compact] class: T::ClassId,
-			#[pallet::compact] instance: T::InstanceId,
+			class: T::ClassId,
+			instance: T::InstanceId,
 		) -> DispatchResult {
 			let maybe_check_owner = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some))?;
 
-			let mut class_details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::Unknown)?;
+			let mut class_details =
+				Class::<T, I>::get(&class).ok_or(Error::<T, I>::UnknownClass)?;
 			if let Some(check_owner) = &maybe_check_owner {
 				ensure!(check_owner == &class_details.owner, Error::<T, I>::NoPermission);
 			}
@@ -1093,12 +1195,12 @@ pub mod pallet {
 				if metadata.is_some() {
 					class_details.instance_metadatas.saturating_dec();
 				}
-				let deposit = metadata.take().ok_or(Error::<T, I>::Unknown)?.deposit;
+				let deposit = metadata.take().ok_or(Error::<T, I>::UnknownClass)?.deposit;
 				T::Currency::unreserve(&class_details.owner, deposit);
 				class_details.total_deposit.saturating_reduce(deposit);
 
 				Class::<T, I>::insert(&class, &class_details);
-				Self::deposit_event(Event::MetadataCleared(class, instance));
+				Self::deposit_event(Event::MetadataCleared { class, instance });
 				Ok(())
 			})
 		}
@@ -1122,7 +1224,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::set_class_metadata())]
 		pub fn set_class_metadata(
 			origin: OriginFor<T>,
-			#[pallet::compact] class: T::ClassId,
+			class: T::ClassId,
 			data: BoundedVec<u8, T::StringLimit>,
 			is_frozen: bool,
 		) -> DispatchResult {
@@ -1130,7 +1232,7 @@ pub mod pallet {
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some))?;
 
-			let mut details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::Unknown)?;
+			let mut details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::UnknownClass)?;
 			if let Some(check_owner) = &maybe_check_owner {
 				ensure!(check_owner == &details.owner, Error::<T, I>::NoPermission);
 			}
@@ -1158,7 +1260,7 @@ pub mod pallet {
 
 				*metadata = Some(ClassMetadata { deposit, data: data.clone(), is_frozen });
 
-				Self::deposit_event(Event::ClassMetadataSet(class, data, is_frozen));
+				Self::deposit_event(Event::ClassMetadataSet { class, data, is_frozen });
 				Ok(())
 			})
 		}
@@ -1176,15 +1278,12 @@ pub mod pallet {
 		///
 		/// Weight: `O(1)`
 		#[pallet::weight(T::WeightInfo::clear_class_metadata())]
-		pub fn clear_class_metadata(
-			origin: OriginFor<T>,
-			#[pallet::compact] class: T::ClassId,
-		) -> DispatchResult {
+		pub fn clear_class_metadata(origin: OriginFor<T>, class: T::ClassId) -> DispatchResult {
 			let maybe_check_owner = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some))?;
 
-			let details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::Unknown)?;
+			let details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::UnknownClass)?;
 			if let Some(check_owner) = &maybe_check_owner {
 				ensure!(check_owner == &details.owner, Error::<T, I>::NoPermission);
 			}
@@ -1193,11 +1292,46 @@ pub mod pallet {
 				let was_frozen = metadata.as_ref().map_or(false, |m| m.is_frozen);
 				ensure!(maybe_check_owner.is_none() || !was_frozen, Error::<T, I>::Frozen);
 
-				let deposit = metadata.take().ok_or(Error::<T, I>::Unknown)?.deposit;
+				let deposit = metadata.take().ok_or(Error::<T, I>::UnknownClass)?.deposit;
 				T::Currency::unreserve(&details.owner, deposit);
-				Self::deposit_event(Event::ClassMetadataCleared(class));
+				Self::deposit_event(Event::ClassMetadataCleared { class });
 				Ok(())
 			})
+		}
+
+		/// Set (or reset) the acceptance of ownership for a particular account.
+		///
+		/// Origin must be `Signed` and if `maybe_class` is `Some`, then the signer must have a
+		/// provider reference.
+		///
+		/// - `maybe_class`: The identifier of the asset class whose ownership the signer is willing
+		///   to accept, or if `None`, an indication that the signer is willing to accept no
+		///   ownership transferal.
+		///
+		/// Emits `OwnershipAcceptanceChanged`.
+		#[pallet::weight(T::WeightInfo::set_accept_ownership())]
+		pub fn set_accept_ownership(
+			origin: OriginFor<T>,
+			maybe_class: Option<T::ClassId>,
+		) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+			let old = OwnershipAcceptance::<T, I>::get(&who);
+			match (old.is_some(), maybe_class.is_some()) {
+				(false, true) => {
+					frame_system::Pallet::<T>::inc_consumers(&who)?;
+				},
+				(true, false) => {
+					frame_system::Pallet::<T>::dec_consumers(&who);
+				},
+				_ => {},
+			}
+			if let Some(class) = maybe_class.as_ref() {
+				OwnershipAcceptance::<T, I>::insert(&who, class);
+			} else {
+				OwnershipAcceptance::<T, I>::remove(&who);
+			}
+			Self::deposit_event(Event::OwnershipAcceptanceChanged { who, maybe_class });
+			Ok(())
 		}
 	}
 }

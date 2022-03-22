@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -80,6 +80,7 @@
 //! ```rust
 //! # use frame_election_provider_support::{*, data_provider};
 //! # use sp_npos_elections::{Support, Assignment};
+//! # use frame_support::traits::ConstU32;
 //!
 //! type AccountId = u64;
 //! type Balance = u64;
@@ -90,25 +91,28 @@
 //!
 //!     pub trait Config: Sized {
 //!         type ElectionProvider: ElectionProvider<
-//!             AccountId,
-//!             BlockNumber,
-//!             DataProvider = Module<Self>,
+//!             AccountId = AccountId,
+//!             BlockNumber = BlockNumber,
+//!             DataProvider = Pallet<Self>,
 //!         >;
 //!     }
 //!
-//!     pub struct Module<T: Config>(std::marker::PhantomData<T>);
+//!     pub struct Pallet<T: Config>(std::marker::PhantomData<T>);
 //!
-//!     impl<T: Config> ElectionDataProvider<AccountId, BlockNumber> for Module<T> {
-//!         const MAXIMUM_VOTES_PER_VOTER: u32 = 1;
+//!     impl<T: Config> ElectionDataProvider for Pallet<T> {
+//!         type AccountId = AccountId;
+//!         type BlockNumber = BlockNumber;
+//!         type MaxVotesPerVoter = ConstU32<1>;
+//!
 //!         fn desired_targets() -> data_provider::Result<u32> {
 //!             Ok(1)
 //!         }
-//!         fn voters(maybe_max_len: Option<usize>)
-//!         -> data_provider::Result<Vec<(AccountId, VoteWeight, Vec<AccountId>)>>
+//!         fn electing_voters(maybe_max_len: Option<usize>)
+//!           -> data_provider::Result<Vec<VoterOf<Self>>>
 //!         {
 //!             Ok(Default::default())
 //!         }
-//!         fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<AccountId>> {
+//!         fn electable_targets(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<AccountId>> {
 //!             Ok(vec![10, 20, 30])
 //!         }
 //!         fn next_election_prediction(now: BlockNumber) -> BlockNumber {
@@ -124,15 +128,17 @@
 //!     pub struct GenericElectionProvider<T: Config>(std::marker::PhantomData<T>);
 //!
 //!     pub trait Config {
-//!         type DataProvider: ElectionDataProvider<AccountId, BlockNumber>;
+//!         type DataProvider: ElectionDataProvider<AccountId=AccountId, BlockNumber = BlockNumber>;
 //!     }
 //!
-//!     impl<T: Config> ElectionProvider<AccountId, BlockNumber> for GenericElectionProvider<T> {
+//!     impl<T: Config> ElectionProvider for GenericElectionProvider<T> {
+//!         type AccountId = AccountId;
+//!         type BlockNumber = BlockNumber;
 //!         type Error = &'static str;
 //!         type DataProvider = T::DataProvider;
 //!
 //!         fn elect() -> Result<Supports<AccountId>, Self::Error> {
-//!             Self::DataProvider::targets(None)
+//!             Self::DataProvider::electable_targets(None)
 //!                 .map_err(|_| "failed to elect")
 //!                 .map(|t| vec![(t[0], Support::default())])
 //!         }
@@ -146,7 +152,7 @@
 //!
 //!     struct Runtime;
 //!     impl generic_election_provider::Config for Runtime {
-//!         type DataProvider = data_provider_mod::Module<Runtime>;
+//!         type DataProvider = data_provider_mod::Pallet<Runtime>;
 //!     }
 //!
 //!     impl data_provider_mod::Config for Runtime {
@@ -161,15 +167,86 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 pub mod onchain;
-use frame_support::traits::Get;
+pub mod traits;
+use codec::{Decode, Encode};
+use frame_support::{traits::Get, BoundedVec, RuntimeDebug};
+use sp_runtime::traits::Bounded;
 use sp_std::{fmt::Debug, prelude::*};
 
+/// Re-export the solution generation macro.
+pub use frame_election_provider_solution_type::generate_solution_type;
 /// Re-export some type as they are used in the interface.
 pub use sp_arithmetic::PerThing;
 pub use sp_npos_elections::{
-	Assignment, ElectionResult, ExtendedBalance, IdentifierT, PerThing128, Support, Supports,
-	VoteWeight,
+	Assignment, ElectionResult, Error, ExtendedBalance, IdentifierT, PerThing128, Support,
+	Supports, VoteWeight,
 };
+pub use traits::NposSolution;
+
+// re-export for the solution macro, with the dependencies of the macro.
+#[doc(hidden)]
+pub use codec;
+#[doc(hidden)]
+pub use scale_info;
+#[doc(hidden)]
+pub use sp_arithmetic;
+#[doc(hidden)]
+pub use sp_std;
+// Simple Extension trait to easily convert `None` from index closures to `Err`.
+//
+// This is only generated and re-exported for the solution code to use.
+#[doc(hidden)]
+pub trait __OrInvalidIndex<T> {
+	fn or_invalid_index(self) -> Result<T, Error>;
+}
+
+impl<T> __OrInvalidIndex<T> for Option<T> {
+	fn or_invalid_index(self) -> Result<T, Error> {
+		self.ok_or(Error::SolutionInvalidIndex)
+	}
+}
+
+/// The [`IndexAssignment`] type is an intermediate between the assignments list
+/// ([`&[Assignment<T>]`][Assignment]) and `SolutionOf<T>`.
+///
+/// The voter and target identifiers have already been replaced with appropriate indices,
+/// making it fast to repeatedly encode into a `SolutionOf<T>`. This property turns out
+/// to be important when trimming for solution length.
+#[derive(RuntimeDebug, Clone, Default)]
+#[cfg_attr(feature = "std", derive(PartialEq, Eq, Encode, Decode))]
+pub struct IndexAssignment<VoterIndex, TargetIndex, P: PerThing> {
+	/// Index of the voter among the voters list.
+	pub who: VoterIndex,
+	/// The distribution of the voter's stake among winning targets.
+	///
+	/// Targets are identified by their index in the canonical list.
+	pub distribution: Vec<(TargetIndex, P)>,
+}
+
+impl<VoterIndex, TargetIndex, P: PerThing> IndexAssignment<VoterIndex, TargetIndex, P> {
+	pub fn new<AccountId: IdentifierT>(
+		assignment: &Assignment<AccountId, P>,
+		voter_index: impl Fn(&AccountId) -> Option<VoterIndex>,
+		target_index: impl Fn(&AccountId) -> Option<TargetIndex>,
+	) -> Result<Self, Error> {
+		Ok(Self {
+			who: voter_index(&assignment.who).or_invalid_index()?,
+			distribution: assignment
+				.distribution
+				.iter()
+				.map(|(target, proportion)| Some((target_index(target)?, proportion.clone())))
+				.collect::<Option<Vec<_>>>()
+				.or_invalid_index()?,
+		})
+	}
+}
+
+/// A type alias for [`IndexAssignment`] made from [`NposSolution`].
+pub type IndexAssignmentOf<C> = IndexAssignment<
+	<C as NposSolution>::VoterIndex,
+	<C as NposSolution>::TargetIndex,
+	<C as NposSolution>::Accuracy,
+>;
 
 /// Types that are used by the data provider trait.
 pub mod data_provider {
@@ -178,20 +255,29 @@ pub mod data_provider {
 }
 
 /// Something that can provide the data to an [`ElectionProvider`].
-pub trait ElectionDataProvider<AccountId, BlockNumber> {
-	/// Maximum number of votes per voter that this data provider is providing.
-	const MAXIMUM_VOTES_PER_VOTER: u32;
+pub trait ElectionDataProvider {
+	/// The account identifier type.
+	type AccountId;
 
-	/// All possible targets for the election, i.e. the candidates.
+	/// The block number type.
+	type BlockNumber;
+
+	/// Maximum number of votes per voter that this data provider is providing.
+	type MaxVotesPerVoter: Get<u32>;
+
+	/// All possible targets for the election, i.e. the targets that could become elected, thus
+	/// "electable".
 	///
 	/// If `maybe_max_len` is `Some(v)` then the resulting vector MUST NOT be longer than `v` items
 	/// long.
 	///
 	/// This should be implemented as a self-weighing function. The implementor should register its
 	/// appropriate weight at the end of execution with the system pallet directly.
-	fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<AccountId>>;
+	fn electable_targets(
+		maybe_max_len: Option<usize>,
+	) -> data_provider::Result<Vec<Self::AccountId>>;
 
-	/// All possible voters for the election.
+	/// All the voters that participate in the election, thus "electing".
 	///
 	/// Note that if a notion of self-vote exists, it should be represented here.
 	///
@@ -200,14 +286,18 @@ pub trait ElectionDataProvider<AccountId, BlockNumber> {
 	///
 	/// This should be implemented as a self-weighing function. The implementor should register its
 	/// appropriate weight at the end of execution with the system pallet directly.
-	fn voters(
-		maybe_max_len: Option<usize>,
-	) -> data_provider::Result<Vec<(AccountId, VoteWeight, Vec<AccountId>)>>;
+	fn electing_voters(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<VoterOf<Self>>>;
 
 	/// The number of targets to elect.
 	///
 	/// This should be implemented as a self-weighing function. The implementor should register its
 	/// appropriate weight at the end of execution with the system pallet directly.
+	///
+	/// A sensible implementation should use the minimum between this value and
+	/// [`Self::targets().len()`], since desiring a winner set larger than candidates is not
+	/// feasible.
+	///
+	/// This is documented further in issue: <https://github.com/paritytech/substrate/issues/9478>
 	fn desired_targets() -> data_provider::Result<u32>;
 
 	/// Provide a best effort prediction about when the next election is about to happen.
@@ -216,14 +306,14 @@ pub trait ElectionDataProvider<AccountId, BlockNumber> {
 	/// [`ElectionProvider::elect`].
 	///
 	/// This is only useful for stateful election providers.
-	fn next_election_prediction(now: BlockNumber) -> BlockNumber;
+	fn next_election_prediction(now: Self::BlockNumber) -> Self::BlockNumber;
 
 	/// Utility function only to be used in benchmarking scenarios, to be implemented optionally,
 	/// else a noop.
 	#[cfg(any(feature = "runtime-benchmarks", test))]
 	fn put_snapshot(
-		_voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
-		_targets: Vec<AccountId>,
+		_voters: Vec<VoterOf<Self>>,
+		_targets: Vec<Self::AccountId>,
 		_target_stake: Option<VoteWeight>,
 	) {
 	}
@@ -233,37 +323,23 @@ pub trait ElectionDataProvider<AccountId, BlockNumber> {
 	///
 	/// Same as `put_snapshot`, but can add a single voter one by one.
 	#[cfg(any(feature = "runtime-benchmarks", test))]
-	fn add_voter(_voter: AccountId, _weight: VoteWeight, _targets: Vec<AccountId>) {}
+	fn add_voter(
+		_voter: Self::AccountId,
+		_weight: VoteWeight,
+		_targets: BoundedVec<Self::AccountId, Self::MaxVotesPerVoter>,
+	) {
+	}
 
 	/// Utility function only to be used in benchmarking scenarios, to be implemented optionally,
 	/// else a noop.
 	///
 	/// Same as `put_snapshot`, but can add a single voter one by one.
 	#[cfg(any(feature = "runtime-benchmarks", test))]
-	fn add_target(_target: AccountId) {}
+	fn add_target(_target: Self::AccountId) {}
 
 	/// Clear all voters and targets.
 	#[cfg(any(feature = "runtime-benchmarks", test))]
 	fn clear() {}
-}
-
-#[cfg(feature = "std")]
-impl<AccountId, BlockNumber> ElectionDataProvider<AccountId, BlockNumber> for () {
-	const MAXIMUM_VOTES_PER_VOTER: u32 = 0;
-	fn targets(_maybe_max_len: Option<usize>) -> data_provider::Result<Vec<AccountId>> {
-		Ok(Default::default())
-	}
-	fn voters(
-		_maybe_max_len: Option<usize>,
-	) -> data_provider::Result<Vec<(AccountId, VoteWeight, Vec<AccountId>)>> {
-		Ok(Default::default())
-	}
-	fn desired_targets() -> data_provider::Result<u32> {
-		Ok(Default::default())
-	}
-	fn next_election_prediction(now: BlockNumber) -> BlockNumber {
-		now
-	}
 }
 
 /// Something that can compute the result of an election and pass it back to the caller.
@@ -271,12 +347,21 @@ impl<AccountId, BlockNumber> ElectionDataProvider<AccountId, BlockNumber> for ()
 /// This trait only provides an interface to _request_ an election, i.e.
 /// [`ElectionProvider::elect`]. That data required for the election need to be passed to the
 /// implemented of this trait through [`ElectionProvider::DataProvider`].
-pub trait ElectionProvider<AccountId, BlockNumber> {
+pub trait ElectionProvider {
+	/// The account identifier type.
+	type AccountId;
+
+	/// The block number type.
+	type BlockNumber;
+
 	/// The error type that is returned by the provider.
 	type Error: Debug;
 
 	/// The data provider of the election.
-	type DataProvider: ElectionDataProvider<AccountId, BlockNumber>;
+	type DataProvider: ElectionDataProvider<
+		AccountId = Self::AccountId,
+		BlockNumber = Self::BlockNumber,
+	>;
 
 	/// Elect a new set of winners.
 	///
@@ -284,16 +369,42 @@ pub trait ElectionProvider<AccountId, BlockNumber> {
 	///
 	/// This should be implemented as a self-weighing function. The implementor should register its
 	/// appropriate weight at the end of execution with the system pallet directly.
-	fn elect() -> Result<Supports<AccountId>, Self::Error>;
+	fn elect() -> Result<Supports<Self::AccountId>, Self::Error>;
 }
 
+/// A sub-trait of the [`ElectionProvider`] for cases where we need to be sure an election needs to
+/// happen instantly, not asynchronously.
+///
+/// The same `DataProvider` is assumed to be used.
+///
+/// Consequently, allows for control over the amount of data that is being fetched from the
+/// [`ElectionProvider::DataProvider`].
+pub trait InstantElectionProvider: ElectionProvider {
+	/// Elect a new set of winners, instantly, with the given given limits set on the
+	/// `DataProvider`.
+	fn instant_elect(
+		maybe_max_voters: Option<usize>,
+		maybe_max_targets: Option<usize>,
+	) -> Result<Supports<Self::AccountId>, Self::Error>;
+}
+
+/// An election provider to be used only for testing.
 #[cfg(feature = "std")]
-impl<AccountId, BlockNumber> ElectionProvider<AccountId, BlockNumber> for () {
+pub struct NoElection<X>(sp_std::marker::PhantomData<X>);
+
+#[cfg(feature = "std")]
+impl<AccountId, BlockNumber, DataProvider> ElectionProvider
+	for NoElection<(AccountId, BlockNumber, DataProvider)>
+where
+	DataProvider: ElectionDataProvider<AccountId = AccountId, BlockNumber = BlockNumber>,
+{
+	type AccountId = AccountId;
+	type BlockNumber = BlockNumber;
 	type Error = &'static str;
-	type DataProvider = ();
+	type DataProvider = DataProvider;
 
 	fn elect() -> Result<Supports<AccountId>, Self::Error> {
-		Err("<() as ElectionProvider> cannot do anything.")
+		Err("<NoElection as ElectionProvider> cannot do anything.")
 	}
 }
 
@@ -302,15 +413,16 @@ impl<AccountId, BlockNumber> ElectionProvider<AccountId, BlockNumber> for () {
 /// This is generic over `AccountId` and it can represent a validator, a nominator, or any other
 /// entity.
 ///
-/// To simplify the trait, the `VoteWeight` is hardcoded as the weight of each entity. The weights
-/// are ascending, the higher, the better. In the long term, if this trait ends up having use cases
-/// outside of the election context, it is easy enough to make it generic over the `VoteWeight`.
+/// The scores (see [`Self::Score`]) are ascending, the higher, the better.
 ///
 /// Something that implements this trait will do a best-effort sort over ids, and thus can be
 /// used on the implementing side of [`ElectionDataProvider`].
 pub trait SortedListProvider<AccountId> {
 	/// The list's error type.
-	type Error;
+	type Error: sp_std::fmt::Debug;
+
+	/// The type used by the list to compare nodes for ordering.
+	type Score: Bounded;
 
 	/// An iterator over the list, which can have `take` called on it.
 	fn iter() -> Box<dyn Iterator<Item = AccountId>>;
@@ -322,10 +434,10 @@ pub trait SortedListProvider<AccountId> {
 	fn contains(id: &AccountId) -> bool;
 
 	/// Hook for inserting a new id.
-	fn on_insert(id: AccountId, weight: VoteWeight) -> Result<(), Self::Error>;
+	fn on_insert(id: AccountId, score: Self::Score) -> Result<(), Self::Error>;
 
 	/// Hook for updating a single id.
-	fn on_update(id: &AccountId, weight: VoteWeight);
+	fn on_update(id: &AccountId, score: Self::Score);
 
 	/// Hook for removing am id from the list.
 	fn on_remove(id: &AccountId);
@@ -333,15 +445,23 @@ pub trait SortedListProvider<AccountId> {
 	/// Regenerate this list from scratch. Returns the count of items inserted.
 	///
 	/// This should typically only be used at a runtime upgrade.
-	fn regenerate(
+	///
+	/// ## WARNING
+	///
+	/// This function should be called with care, regenerate will remove the current list write the
+	/// new list, which can lead to too many storage accesses, exhausting the block weight.
+	fn unsafe_regenerate(
 		all: impl IntoIterator<Item = AccountId>,
-		weight_of: Box<dyn Fn(&AccountId) -> VoteWeight>,
+		score_of: Box<dyn Fn(&AccountId) -> Self::Score>,
 	) -> u32;
 
-	/// Remove `maybe_count` number of items from the list. Returns the number of items actually
-	/// removed. WARNING: removes all items if `maybe_count` is `None`, which should never be done
-	/// in production settings because it can lead to an unbounded amount of storage accesses.
-	fn clear(maybe_count: Option<u32>) -> u32;
+	/// Remove all items from the list.
+	///
+	/// ## WARNING
+	///
+	/// This function should never be called in production settings because it can lead to an
+	/// unbounded amount of storage accesses.
+	fn unsafe_clear();
 
 	/// Sanity check internal state of list. Only meant for debug compilation.
 	fn sanity_check() -> Result<(), &'static str>;
@@ -349,21 +469,23 @@ pub trait SortedListProvider<AccountId> {
 	/// If `who` changes by the returned amount they are guaranteed to have a worst case change
 	/// in their list position.
 	#[cfg(feature = "runtime-benchmarks")]
-	fn weight_update_worst_case(_who: &AccountId, _is_increase: bool) -> VoteWeight {
-		VoteWeight::MAX
+	fn score_update_worst_case(_who: &AccountId, _is_increase: bool) -> Self::Score {
+		Self::Score::max_value()
 	}
 }
 
 /// Something that can provide the `VoteWeight` of an account. Similar to [`ElectionProvider`] and
 /// [`ElectionDataProvider`], this should typically be implementing by whoever is supposed to *use*
 /// `SortedListProvider`.
-pub trait VoteWeightProvider<AccountId> {
-	/// Get the current `VoteWeight` of `who`.
-	fn vote_weight(who: &AccountId) -> VoteWeight;
+pub trait ScoreProvider<AccountId> {
+	type Score;
+
+	/// Get the current `Score` of `who`.
+	fn score(who: &AccountId) -> Self::Score;
 
 	/// For tests and benchmarks, set the `VoteWeight`.
 	#[cfg(any(feature = "runtime-benchmarks", test))]
-	fn set_vote_weight_of(_: &AccountId, _: VoteWeight) {}
+	fn set_score_of(_: &AccountId, _: Self::Score) {}
 }
 
 /// Something that can compute the result to an NPoS solution.
@@ -380,11 +502,11 @@ pub trait NposSolver {
 	fn solve(
 		to_elect: usize,
 		targets: Vec<Self::AccountId>,
-		voters: Vec<(Self::AccountId, VoteWeight, Vec<Self::AccountId>)>,
+		voters: Vec<(Self::AccountId, VoteWeight, impl IntoIterator<Item = Self::AccountId>)>,
 	) -> Result<ElectionResult<Self::AccountId, Self::Accuracy>, Self::Error>;
 }
 
-/// A wrapper for [`sp_npos_elections::seq_phragmen`] that implements [`super::NposSolver`]. See the
+/// A wrapper for [`sp_npos_elections::seq_phragmen`] that implements [`NposSolver`]. See the
 /// documentation of [`sp_npos_elections::seq_phragmen`] for more info.
 pub struct SequentialPhragmen<AccountId, Accuracy, Balancing = ()>(
 	sp_std::marker::PhantomData<(AccountId, Accuracy, Balancing)>,
@@ -402,14 +524,14 @@ impl<
 	fn solve(
 		winners: usize,
 		targets: Vec<Self::AccountId>,
-		voters: Vec<(Self::AccountId, VoteWeight, Vec<Self::AccountId>)>,
+		voters: Vec<(Self::AccountId, VoteWeight, impl IntoIterator<Item = Self::AccountId>)>,
 	) -> Result<ElectionResult<Self::AccountId, Self::Accuracy>, Self::Error> {
 		sp_npos_elections::seq_phragmen(winners, targets, voters, Balancing::get())
 	}
 }
 
-/// A wrapper for [`sp_npos_elections::phragmms`] that implements [`NposSolver`]. See the
-/// documentation of [`sp_npos_elections::phragmms`] for more info.
+/// A wrapper for [`sp_npos_elections::phragmms()`] that implements [`NposSolver`]. See the
+/// documentation of [`sp_npos_elections::phragmms()`] for more info.
 pub struct PhragMMS<AccountId, Accuracy, Balancing = ()>(
 	sp_std::marker::PhantomData<(AccountId, Accuracy, Balancing)>,
 );
@@ -426,8 +548,15 @@ impl<
 	fn solve(
 		winners: usize,
 		targets: Vec<Self::AccountId>,
-		voters: Vec<(Self::AccountId, VoteWeight, Vec<Self::AccountId>)>,
+		voters: Vec<(Self::AccountId, VoteWeight, impl IntoIterator<Item = Self::AccountId>)>,
 	) -> Result<ElectionResult<Self::AccountId, Self::Accuracy>, Self::Error> {
 		sp_npos_elections::phragmms(winners, targets, voters, Balancing::get())
 	}
 }
+
+/// A voter, at the level of abstraction of this crate.
+pub type Voter<AccountId, Bound> = (AccountId, VoteWeight, BoundedVec<AccountId, Bound>);
+
+/// Same as [`Voter`], but parameterized by an [`ElectionDataProvider`].
+pub type VoterOf<D> =
+	Voter<<D as ElectionDataProvider>::AccountId, <D as ElectionDataProvider>::MaxVotesPerVoter>;

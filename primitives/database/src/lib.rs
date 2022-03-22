@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -110,6 +110,11 @@ pub trait Database<H: Clone + AsRef<[u8]>>: Send + Sync {
 	fn supports_ref_counting(&self) -> bool {
 		false
 	}
+
+	/// Remove a possible path-prefix from the key.
+	///
+	/// Not all database implementations use a prefix for keys, so this function may be a noop.
+	fn sanitize_key(&self, _key: &mut Vec<u8>) {}
 }
 
 impl<H> std::fmt::Debug for dyn Database<H> {

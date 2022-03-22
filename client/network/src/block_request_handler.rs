@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Helper for handling (i.e. answering) block requests from a remote peer via the
-//! [`crate::request_responses::RequestResponsesBehaviour`].
+//! `crate::request_responses::RequestResponsesBehaviour`.
 
 use crate::{
 	chain::Client,
@@ -54,6 +54,10 @@ mod rep {
 
 	/// Reputation change when a peer sent us the same request multiple times.
 	pub const SAME_REQUEST: Rep = Rep::new_fatal("Same block request multiple times");
+
+	/// Reputation change when a peer sent us the same "small" request multiple times.
+	pub const SAME_SMALL_REQUEST: Rep =
+		Rep::new(-(1 << 10), "same small block request multiple times");
 }
 
 /// Generates a [`ProtocolConfig`] for the block request protocol, refusing incoming requests.
@@ -200,8 +204,16 @@ impl<B: BlockT> BlockRequestHandler<B> {
 			Some(SeenRequestsValue::Fulfilled(ref mut requests)) => {
 				*requests = requests.saturating_add(1);
 
+				let small_request = attributes
+					.difference(BlockAttributes::HEADER | BlockAttributes::JUSTIFICATION)
+					.is_empty();
+
 				if *requests > MAX_NUMBER_OF_SAME_REQUESTS_PER_PEER {
-					reputation_change = Some(rep::SAME_REQUEST);
+					reputation_change = Some(if small_request {
+						rep::SAME_SMALL_REQUEST
+					} else {
+						rep::SAME_REQUEST
+					});
 				}
 			},
 			None => {
@@ -379,19 +391,20 @@ impl<B: BlockT> BlockRequestHandler<B> {
 	}
 }
 
-#[derive(derive_more::Display, derive_more::From)]
+#[derive(Debug, thiserror::Error)]
 enum HandleRequestError {
-	#[display(fmt = "Failed to decode request: {}.", _0)]
-	DecodeProto(prost::DecodeError),
-	#[display(fmt = "Failed to encode response: {}.", _0)]
-	EncodeProto(prost::EncodeError),
-	#[display(fmt = "Failed to decode block hash: {}.", _0)]
-	DecodeScale(codec::Error),
-	#[display(fmt = "Missing `BlockRequest::from_block` field.")]
+	#[error("Failed to decode request: {0}.")]
+	DecodeProto(#[from] prost::DecodeError),
+	#[error("Failed to encode response: {0}.")]
+	EncodeProto(#[from] prost::EncodeError),
+	#[error("Failed to decode block hash: {0}.")]
+	DecodeScale(#[from] codec::Error),
+	#[error("Missing `BlockRequest::from_block` field.")]
 	MissingFromField,
-	#[display(fmt = "Failed to parse BlockRequest::direction.")]
+	#[error("Failed to parse BlockRequest::direction.")]
 	ParseDirection,
-	Client(sp_blockchain::Error),
-	#[display(fmt = "Failed to send response.")]
+	#[error(transparent)]
+	Client(#[from] sp_blockchain::Error),
+	#[error("Failed to send response.")]
 	SendResponse,
 }

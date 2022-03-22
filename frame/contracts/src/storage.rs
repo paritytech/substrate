@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,10 +17,12 @@
 
 //! This module contains routines for accessing and altering a contract related state.
 
+pub mod meter;
+
 use crate::{
 	exec::{AccountIdOf, StorageKey},
 	weights::WeightInfo,
-	CodeHash, Config, ContractInfoOf, DeletionQueue, Error, TrieId,
+	BalanceOf, CodeHash, Config, ContractInfoOf, DeletionQueue, Error, TrieId, SENTINEL,
 };
 use codec::{Decode, Encode};
 use frame_support::{
@@ -32,24 +34,27 @@ use frame_support::{
 use scale_info::TypeInfo;
 use sp_core::crypto::UncheckedFrom;
 use sp_io::hashing::blake2_256;
-use sp_runtime::{traits::Hash, RuntimeDebug};
+use sp_runtime::{
+	traits::{Hash, Zero},
+	RuntimeDebug,
+};
 use sp_std::{marker::PhantomData, prelude::*};
 
-pub type ContractInfo<T> = RawContractInfo<CodeHash<T>>;
+pub type ContractInfo<T> = RawContractInfo<CodeHash<T>, BalanceOf<T>>;
 
 /// Information for managing an account and its sub trie abstraction.
 /// This is the required info to cache for an account.
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
-pub struct RawContractInfo<CodeHash> {
+pub struct RawContractInfo<CodeHash, Balance> {
 	/// Unique ID for the subtree encoded as a bytes vector.
 	pub trie_id: TrieId,
 	/// The code associated with a given account.
 	pub code_hash: CodeHash,
-	/// This field is reserved for future evolution of format.
-	pub _reserved: Option<()>,
+	/// The amount of balance that is currently deposited to pay for consumed storage.
+	pub storage_deposit: Balance,
 }
 
-impl<CodeHash> RawContractInfo<CodeHash> {
+impl<CodeHash, Balance> RawContractInfo<CodeHash, Balance> {
 	/// Associated child trie unique id is built from the hash part of the trie id.
 	#[cfg(test)]
 	pub fn child_trie_info(&self) -> ChildInfo {
@@ -67,6 +72,48 @@ pub struct DeletedContract {
 	pub(crate) trie_id: TrieId,
 }
 
+/// Information about what happended to the pre-existing value when calling [`Storage::write`].
+#[cfg_attr(test, derive(Debug, PartialEq))]
+pub enum WriteOutcome {
+	/// No value existed at the specified key.
+	New,
+	/// A value of the returned length was overwritten.
+	Overwritten(u32),
+	/// The returned value was taken out of storage before being overwritten.
+	///
+	/// This is only returned when specifically requested because it causes additional work
+	/// depending on the size of the pre-existing value. When not requested [`Self::Overwritten`]
+	/// is returned instead.
+	Taken(Vec<u8>),
+}
+
+impl WriteOutcome {
+	/// Extracts the size of the overwritten value or `0` if there
+	/// was no value in storage.
+	pub fn old_len(&self) -> u32 {
+		match self {
+			Self::New => 0,
+			Self::Overwritten(len) => *len,
+			Self::Taken(value) => value.len() as u32,
+		}
+	}
+
+	/// Extracts the size of the overwritten value or `SENTINEL` if there
+	/// was no value in storage.
+	///
+	/// # Note
+	///
+	/// We cannot use `0` as sentinel value because there could be a zero sized
+	/// storage entry which is different from a non existing one.
+	pub fn old_len_with_sentinel(&self) -> u32 {
+		match self {
+			Self::New => SENTINEL,
+			Self::Overwritten(len) => *len,
+			Self::Taken(value) => value.len() as u32,
+		}
+	}
+}
+
 pub struct Storage<T>(PhantomData<T>);
 
 impl<T> Storage<T>
@@ -79,30 +126,72 @@ where
 	/// The read is performed from the `trie_id` only. The `address` is not necessary. If the
 	/// contract doesn't store under the given `key` `None` is returned.
 	pub fn read(trie_id: &TrieId, key: &StorageKey) -> Option<Vec<u8>> {
-		child::get_raw(&child_trie_info(&trie_id), &blake2_256(key))
+		child::get_raw(&child_trie_info(trie_id), &blake2_256(key))
+	}
+
+	/// Returns `Some(len)` (in bytes) if a storage item exists at `key`.
+	///
+	/// Returns `None` if the `key` wasn't previously set by `set_storage` or
+	/// was deleted.
+	pub fn size(trie_id: &TrieId, key: &StorageKey) -> Option<u32> {
+		child::len(&child_trie_info(trie_id), &blake2_256(key))
 	}
 
 	/// Update a storage entry into a contract's kv storage.
 	///
-	/// If the `opt_new_value` is `None` then the kv pair is removed.
+	/// If the `new_value` is `None` then the kv pair is removed. If `take` is true
+	/// a [`WriteOutcome::Taken`] is returned instead of a [`WriteOutcome::Overwritten`].
 	///
-	/// This function also updates the bookkeeping info such as: number of total non-empty pairs a
-	/// contract owns, the last block the storage was written to, etc. That's why, in contrast to
-	/// `read`, this function also requires the `account` ID.
+	/// This function also records how much storage was created or removed if a `storage_meter`
+	/// is supplied. It should only be absent for testing or benchmarking code.
 	pub fn write(
-		new_info: &mut ContractInfo<T>,
+		trie_id: &TrieId,
 		key: &StorageKey,
-		opt_new_value: Option<Vec<u8>>,
-	) -> DispatchResult {
+		new_value: Option<Vec<u8>>,
+		storage_meter: Option<&mut meter::NestedMeter<T>>,
+		take: bool,
+	) -> Result<WriteOutcome, DispatchError> {
 		let hashed_key = blake2_256(key);
-		let child_trie_info = &child_trie_info(&new_info.trie_id);
+		let child_trie_info = &child_trie_info(trie_id);
+		let (old_len, old_value) = if take {
+			let val = child::get_raw(&child_trie_info, &hashed_key);
+			(val.as_ref().map(|v| v.len() as u32), val)
+		} else {
+			(child::len(&child_trie_info, &hashed_key), None)
+		};
 
-		match opt_new_value {
-			Some(new_value) => child::put_raw(&child_trie_info, &hashed_key, &new_value[..]),
+		if let Some(storage_meter) = storage_meter {
+			let mut diff = meter::Diff::default();
+			match (old_len, new_value.as_ref().map(|v| v.len() as u32)) {
+				(Some(old_len), Some(new_len)) =>
+					if new_len > old_len {
+						diff.bytes_added = new_len - old_len;
+					} else {
+						diff.bytes_removed = old_len - new_len;
+					},
+				(None, Some(new_len)) => {
+					diff.bytes_added = new_len;
+					diff.items_added = 1;
+				},
+				(Some(old_len), None) => {
+					diff.bytes_removed = old_len;
+					diff.items_removed = 1;
+				},
+				(None, None) => (),
+			}
+			storage_meter.charge(&diff)?;
+		}
+
+		match &new_value {
+			Some(new_value) => child::put_raw(&child_trie_info, &hashed_key, new_value),
 			None => child::kill(&child_trie_info, &hashed_key),
 		}
 
-		Ok(())
+		Ok(match (old_len, old_value) {
+			(None, _) => WriteOutcome::New,
+			(Some(old_len), None) => WriteOutcome::Overwritten(old_len),
+			(Some(_), Some(old_value)) => WriteOutcome::Taken(old_value),
+		})
 	}
 
 	/// Creates a new contract descriptor in the storage with the given code hash at the given
@@ -118,7 +207,8 @@ where
 			return Err(Error::<T>::DuplicateContract.into())
 		}
 
-		let contract = ContractInfo::<T> { code_hash: ch, trie_id, _reserved: None };
+		let contract =
+			ContractInfo::<T> { code_hash: ch, trie_id, storage_deposit: <BalanceOf<T>>::zero() };
 
 		Ok(contract)
 	}
@@ -178,15 +268,17 @@ where
 
 		let mut queue = <DeletionQueue<T>>::get();
 
-		if let (Some(trie), true) = (queue.get(0), remaining_key_budget > 0) {
+		while !queue.is_empty() && remaining_key_budget > 0 {
+			// Cannot panic due to loop condition
+			let trie = &mut queue[0];
 			let outcome =
 				child::kill_storage(&child_trie_info(&trie.trie_id), Some(remaining_key_budget));
 			let keys_removed = match outcome {
-				// This should not happen as our budget was large enough to remove all keys.
+				// This happens when our budget wasn't large enough to remove all keys.
 				KillStorageResult::SomeRemaining(count) => count,
 				KillStorageResult::AllRemoved(count) => {
 					// We do not care to preserve order. The contract is deleted already and
-					// noone waits for the trie to be deleted.
+					// no one waits for the trie to be deleted.
 					queue.swap_remove(0);
 					count
 				},
@@ -198,10 +290,9 @@ where
 		weight_limit.saturating_sub(weight_per_key.saturating_mul(remaining_key_budget as Weight))
 	}
 
-	/// This generator uses inner counter for account id and applies the hash over `AccountId +
-	/// accountid_counter`.
-	pub fn generate_trie_id(account_id: &AccountIdOf<T>, seed: u64) -> TrieId {
-		let buf: Vec<_> = account_id.as_ref().iter().chain(&seed.to_le_bytes()).cloned().collect();
+	/// Generates a unique trie id by returning  `hash(account_id ++ nonce)`.
+	pub fn generate_trie_id(account_id: &AccountIdOf<T>, nonce: u64) -> TrieId {
+		let buf: Vec<_> = account_id.as_ref().iter().chain(&nonce.to_le_bytes()).cloned().collect();
 		T::Hashing::hash(&buf).as_ref().into()
 	}
 

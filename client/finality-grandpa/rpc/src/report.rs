@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -87,8 +87,6 @@ impl RoundState {
 		round_state: &report::RoundState<AuthorityId>,
 		voters: &HashSet<AuthorityId>,
 	) -> Result<Self, Error> {
-		use std::convert::TryInto;
-
 		let prevotes = &round_state.prevote_ids;
 		let missing_prevotes = voters.difference(&prevotes).cloned().collect();
 
@@ -130,8 +128,6 @@ impl ReportedRoundStates {
 		AuthoritySet: ReportAuthoritySet,
 		VoterState: ReportVoterState,
 	{
-		use std::convert::TryFrom;
-
 		let voter_state = voter_state.get().ok_or(Error::EndpointNotReady)?;
 
 		let (set_id, current_voters) = authority_set.get();

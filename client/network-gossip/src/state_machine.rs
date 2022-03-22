@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -18,19 +18,13 @@
 
 use crate::{MessageIntent, Network, ValidationResult, Validator, ValidatorContext};
 
+use ahash::AHashSet;
 use libp2p::PeerId;
 use lru::LruCache;
 use prometheus_endpoint::{register, Counter, PrometheusError, Registry, U64};
 use sc_network::ObservedRole;
 use sp_runtime::traits::{Block as BlockT, Hash, HashFor};
-use std::{
-	borrow::Cow,
-	collections::{HashMap, HashSet},
-	iter,
-	sync::Arc,
-	time,
-	time::Instant,
-};
+use std::{borrow::Cow, collections::HashMap, iter, sync::Arc, time, time::Instant};
 
 // FIXME: Add additional spam/DoS attack protection: https://github.com/paritytech/substrate/issues/1115
 // NOTE: The current value is adjusted based on largest production network deployment (Kusama) and
@@ -56,7 +50,7 @@ mod rep {
 }
 
 struct PeerConsensus<H> {
-	known_messages: HashSet<H>,
+	known_messages: AHashSet<H>,
 }
 
 /// Topic stream message with sender.
@@ -204,7 +198,8 @@ impl<B: BlockT> ConsensusGossip<B> {
 			?role,
 			"Registering peer",
 		);
-		self.peers.insert(who.clone(), PeerConsensus { known_messages: HashSet::new() });
+		self.peers
+			.insert(who.clone(), PeerConsensus { known_messages: Default::default() });
 
 		let validator = self.validator.clone();
 		let mut context = NetworkContext { gossip: self, network };
@@ -508,14 +503,14 @@ impl Metrics {
 		Ok(Self {
 			registered_messages: register(
 				Counter::new(
-					"network_gossip_registered_messages_total",
+					"substrate_network_gossip_registered_messages_total",
 					"Number of registered messages by the gossip service.",
 				)?,
 				registry,
 			)?,
 			expired_messages: register(
 				Counter::new(
-					"network_gossip_expired_messages_total",
+					"substrate_network_gossip_expired_messages_total",
 					"Number of expired messages by the gossip service.",
 				)?,
 				registry,

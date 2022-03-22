@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -58,12 +58,15 @@ pub fn expand_error(def: &mut Def) -> proc_macro2::TokenStream {
 	};
 
 	error_item.variants.insert(0, phantom_variant);
+
+	let capture_docs = if cfg!(feature = "no-metadata-docs") { "never" } else { "always" };
+
 	// derive TypeInfo for error metadata
 	error_item
 		.attrs
 		.push(syn::parse_quote!( #[derive(#frame_support::scale_info::TypeInfo)] ));
 	error_item.attrs.push(syn::parse_quote!(
-		#[scale_info(skip_type_params(#type_use_gen), capture_docs = "always")]
+		#[scale_info(skip_type_params(#type_use_gen), capture_docs = #capture_docs)]
 	));
 
 	if get_doc_literals(&error_item.attrs).is_empty() {
@@ -87,6 +90,7 @@ pub fn expand_error(def: &mut Def) -> proc_macro2::TokenStream {
 		}
 
 		impl<#type_impl_gen> #error_ident<#type_use_gen> #config_where_clause {
+			#[doc(hidden)]
 			pub fn as_u8(&self) -> u8 {
 				match &self {
 					Self::__Ignore(_, _) => unreachable!("`__Ignore` can never be constructed"),
@@ -94,6 +98,7 @@ pub fn expand_error(def: &mut Def) -> proc_macro2::TokenStream {
 				}
 			}
 
+			#[doc(hidden)]
 			pub fn as_str(&self) -> &'static str {
 				match &self {
 					Self::__Ignore(_, _) => unreachable!("`__Ignore` can never be constructed"),
@@ -121,11 +126,11 @@ pub fn expand_error(def: &mut Def) -> proc_macro2::TokenStream {
 				>::index::<Pallet<#type_use_gen>>()
 					.expect("Every active module has an index in the runtime; qed") as u8;
 
-				#frame_support::sp_runtime::DispatchError::Module {
+				#frame_support::sp_runtime::DispatchError::Module(#frame_support::sp_runtime::ModuleError {
 					index,
 					error: err.as_u8(),
 					message: Some(err.as_str()),
-				}
+				})
 			}
 		}
 	)

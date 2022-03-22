@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -126,7 +126,7 @@ impl<V: FullCodec> StorageQuery<V> {
 		block_index: Option<Hash>,
 	) -> Result<Option<V>, RpcError> {
 		let opt: Option<StorageData> = state_client.storage(self.key, block_index).await?;
-		opt.map(|encoded| V::decode_all(&encoded.0))
+		opt.map(|encoded| V::decode_all(&mut &encoded.0[..]))
 			.transpose()
 			.map_err(|decode_err| RpcError::Other(Box::new(decode_err)))
 	}

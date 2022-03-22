@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -95,6 +95,7 @@ fn prepare_subscriber<N, E, F, W>(
 	directives: &str,
 	profiling_targets: Option<&str>,
 	force_colors: Option<bool>,
+	detailed_output: bool,
 	builder_hook: impl Fn(
 		SubscriberBuilder<format::DefaultFields, EventFormat, EnvFilter, DefaultLogger>,
 	) -> SubscriberBuilder<N, E, F, W>,
@@ -157,19 +158,19 @@ where
 	tracing_log::LogTracer::builder().with_max_level(max_level).init()?;
 
 	// If we're only logging `INFO` entries then we'll use a simplified logging format.
-	let simple = match max_level_hint {
-		Some(level) if level <= tracing_subscriber::filter::LevelFilter::INFO => true,
-		_ => false,
-	};
+	let detailed_output = match max_level_hint {
+		Some(level) if level <= tracing_subscriber::filter::LevelFilter::INFO => false,
+		_ => true,
+	} || detailed_output;
 
 	let enable_color = force_colors.unwrap_or_else(|| atty::is(atty::Stream::Stderr));
-	let timer = fast_local_time::FastLocalTime { with_fractional: !simple };
+	let timer = fast_local_time::FastLocalTime { with_fractional: detailed_output };
 
 	let event_format = EventFormat {
 		timer,
-		display_target: !simple,
-		display_level: !simple,
-		display_thread_name: !simple,
+		display_target: detailed_output,
+		display_level: detailed_output,
+		display_thread_name: detailed_output,
 		enable_color,
 		dup_to_stdout: !atty::is(atty::Stream::Stderr) && atty::is(atty::Stream::Stdout),
 	};
@@ -192,8 +193,10 @@ where
 pub struct LoggerBuilder {
 	directives: String,
 	profiling: Option<(crate::TracingReceiver, String)>,
+	custom_profiler: Option<Box<dyn crate::TraceHandler>>,
 	log_reloading: bool,
 	force_colors: Option<bool>,
+	detailed_output: bool,
 }
 
 impl LoggerBuilder {
@@ -202,8 +205,10 @@ impl LoggerBuilder {
 		Self {
 			directives: directives.into(),
 			profiling: None,
+			custom_profiler: None,
 			log_reloading: false,
 			force_colors: None,
+			detailed_output: false,
 		}
 	}
 
@@ -217,9 +222,29 @@ impl LoggerBuilder {
 		self
 	}
 
+	/// Add a custom profiler.
+	pub fn with_custom_profiling(
+		&mut self,
+		custom_profiler: Box<dyn crate::TraceHandler>,
+	) -> &mut Self {
+		self.custom_profiler = Some(custom_profiler);
+		self
+	}
+
 	/// Wether or not to disable log reloading.
 	pub fn with_log_reloading(&mut self, enabled: bool) -> &mut Self {
 		self.log_reloading = enabled;
+		self
+	}
+
+	/// Whether detailed log output should be enabled.
+	///
+	/// This includes showing the log target, log level and thread name.
+	///
+	/// This will be automatically enabled when there is a log level enabled that is higher than
+	/// `info`.
+	pub fn with_detailed_output(&mut self, detailed: bool) -> &mut Self {
+		self.detailed_output = detailed;
 		self
 	}
 
@@ -239,9 +264,15 @@ impl LoggerBuilder {
 					&self.directives,
 					Some(&profiling_targets),
 					self.force_colors,
+					self.detailed_output,
 					|builder| enable_log_reloading!(builder),
 				)?;
-				let profiling = crate::ProfilingLayer::new(tracing_receiver, &profiling_targets);
+				let mut profiling =
+					crate::ProfilingLayer::new(tracing_receiver, &profiling_targets);
+
+				self.custom_profiler
+					.into_iter()
+					.for_each(|profiler| profiling.add_handler(profiler));
 
 				tracing::subscriber::set_global_default(subscriber.with(profiling))?;
 
@@ -251,9 +282,15 @@ impl LoggerBuilder {
 					&self.directives,
 					Some(&profiling_targets),
 					self.force_colors,
+					self.detailed_output,
 					|builder| builder,
 				)?;
-				let profiling = crate::ProfilingLayer::new(tracing_receiver, &profiling_targets);
+				let mut profiling =
+					crate::ProfilingLayer::new(tracing_receiver, &profiling_targets);
+
+				self.custom_profiler
+					.into_iter()
+					.for_each(|profiler| profiling.add_handler(profiler));
 
 				tracing::subscriber::set_global_default(subscriber.with(profiling))?;
 
@@ -261,19 +298,25 @@ impl LoggerBuilder {
 			}
 		} else {
 			if self.log_reloading {
-				let subscriber =
-					prepare_subscriber(&self.directives, None, self.force_colors, |builder| {
-						enable_log_reloading!(builder)
-					})?;
+				let subscriber = prepare_subscriber(
+					&self.directives,
+					None,
+					self.force_colors,
+					self.detailed_output,
+					|builder| enable_log_reloading!(builder),
+				)?;
 
 				tracing::subscriber::set_global_default(subscriber)?;
 
 				Ok(())
 			} else {
-				let subscriber =
-					prepare_subscriber(&self.directives, None, self.force_colors, |builder| {
-						builder
-					})?;
+				let subscriber = prepare_subscriber(
+					&self.directives,
+					None,
+					self.force_colors,
+					self.detailed_output,
+					|builder| builder,
+				)?;
 
 				tracing::subscriber::set_global_default(subscriber)?;
 

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -24,32 +24,56 @@ use sp_core::crypto::CryptoTypePublicPair;
 pub type Result<T> = std::result::Result<T, Error>;
 
 /// Error type for the authority discovery module.
-#[derive(Debug, derive_more::Display, derive_more::From)]
+#[derive(Debug, thiserror::Error)]
 pub enum Error {
-	/// Received dht value found event with records with different keys.
+	#[error("Received dht value found event with records with different keys.")]
 	ReceivingDhtValueFoundEventWithDifferentKeys,
-	/// Received dht value found event with no records.
+
+	#[error("Received dht value found event with no records.")]
 	ReceivingDhtValueFoundEventWithNoRecords,
-	/// Failed to verify a dht payload with the given signature.
+
+	#[error("Failed to verify a dht payload with the given signature.")]
 	VerifyingDhtPayload,
-	/// Failed to hash the authority id to be used as a dht key.
-	HashingAuthorityId(libp2p::core::multiaddr::multihash::Error),
-	/// Failed calling into the Substrate runtime.
-	CallingRuntime(sp_blockchain::Error),
-	/// Received a dht record with a key that does not match any in-flight awaited keys.
+
+	#[error("Failed to hash the authority id to be used as a dht key.")]
+	HashingAuthorityId(#[from] libp2p::core::multiaddr::multihash::Error),
+
+	#[error("Failed calling into the Substrate runtime: {0}")]
+	CallingRuntime(#[from] sp_blockchain::Error),
+
+	#[error("Received a dht record with a key that does not match any in-flight awaited keys.")]
 	ReceivingUnexpectedRecord,
-	/// Failed to encode a protobuf payload.
-	EncodingProto(prost::EncodeError),
-	/// Failed to decode a protobuf payload.
-	DecodingProto(prost::DecodeError),
-	/// Failed to encode or decode scale payload.
-	EncodingDecodingScale(codec::Error),
-	/// Failed to parse a libp2p multi address.
-	ParsingMultiaddress(libp2p::core::multiaddr::Error),
-	/// Failed to sign using a specific public key.
+
+	#[error("Failed to encode a protobuf payload.")]
+	EncodingProto(#[from] prost::EncodeError),
+
+	#[error("Failed to decode a protobuf payload.")]
+	DecodingProto(#[from] prost::DecodeError),
+
+	#[error("Failed to encode or decode scale payload.")]
+	EncodingDecodingScale(#[from] codec::Error),
+
+	#[error("Failed to parse a libp2p multi address.")]
+	ParsingMultiaddress(#[from] libp2p::core::multiaddr::Error),
+
+	#[error("Failed to parse a libp2p key.")]
+	ParsingLibp2pIdentity(#[from] sc_network::DecodingError),
+
+	#[error("Failed to sign using a specific public key.")]
 	MissingSignature(CryptoTypePublicPair),
-	/// Failed to sign using all public keys.
+
+	#[error("Failed to sign using all public keys.")]
 	Signing,
-	/// Failed to register Prometheus metric.
-	Prometheus(prometheus_endpoint::PrometheusError),
+
+	#[error("Failed to register Prometheus metric.")]
+	Prometheus(#[from] prometheus_endpoint::PrometheusError),
+
+	#[error("Received authority record that contains addresses with multiple peer ids")]
+	ReceivingDhtValueFoundEventWithDifferentPeerIds,
+
+	#[error("Received authority record without any addresses having a peer id")]
+	ReceivingDhtValueFoundEventWithNoPeerIds,
+
+	#[error("Received authority record without a valid signature for the remote peer id.")]
+	MissingPeerIdSignature,
 }

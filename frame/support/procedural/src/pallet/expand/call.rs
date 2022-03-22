@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -137,6 +137,8 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 	let count = COUNTER.with(|counter| counter.borrow_mut().inc());
 	let macro_ident = syn::Ident::new(&format!("__is_call_part_defined_{}", count), span);
 
+	let capture_docs = if cfg!(feature = "no-metadata-docs") { "never" } else { "always" };
+
 	quote::quote_spanned!(span =>
 		#[doc(hidden)]
 		pub mod __substrate_call_check {
@@ -164,7 +166,7 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 		)]
 		#[codec(encode_bound())]
 		#[codec(decode_bound())]
-		#[scale_info(skip_type_params(#type_use_gen), capture_docs = "always")]
+		#[scale_info(skip_type_params(#type_use_gen), capture_docs = #capture_docs)]
 		#[allow(non_camel_case_types)]
 		pub enum #call_ident<#type_decl_bounded_gen> #where_clause {
 			#[doc(hidden)]
@@ -176,7 +178,10 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 			#(
 				#( #[doc = #fn_doc] )*
 				#fn_name {
-					#( #args_compact_attr #args_name_stripped: #args_type ),*
+					#(
+						#[allow(missing_docs)]
+						#args_compact_attr #args_name_stripped: #args_type
+					),*
 				},
 			)*
 		}

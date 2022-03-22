@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,28 +21,28 @@ use super::*;
 use crate::{self as bags_list};
 use frame_election_provider_support::VoteWeight;
 use frame_support::parameter_types;
+use std::collections::HashMap;
 
 pub type AccountId = u32;
 pub type Balance = u32;
 
 parameter_types! {
+	// Set the vote weight for any id who's weight has _not_ been set with `set_score_of`.
 	pub static NextVoteWeight: VoteWeight = 0;
+	pub static NextVoteWeightMap: HashMap<AccountId, VoteWeight> = Default::default();
 }
 
 pub struct StakingMock;
-impl frame_election_provider_support::VoteWeightProvider<AccountId> for StakingMock {
-	fn vote_weight(id: &AccountId) -> VoteWeight {
-		match id {
-			710 => 15,
-			711 => 16,
-			712 => 2_000, // special cases used for migrate test
-			_ => NextVoteWeight::get(),
-		}
+impl frame_election_provider_support::ScoreProvider<AccountId> for StakingMock {
+	type Score = VoteWeight;
+
+	fn score(id: &AccountId) -> Self::Score {
+		*NextVoteWeightMap::get().get(id).unwrap_or(&NextVoteWeight::get())
 	}
+
 	#[cfg(any(feature = "runtime-benchmarks", test))]
-	fn set_vote_weight_of(_: &AccountId, weight: VoteWeight) {
-		// we don't really keep a mapping, just set weight for everyone.
-		NextVoteWeight::set(weight)
+	fn set_score_of(id: &AccountId, weight: Self::Score) {
+		NEXT_VOTE_WEIGHT_MAP.with(|m| m.borrow_mut().insert(id.clone(), weight));
 	}
 }
 
@@ -70,6 +70,7 @@ impl frame_system::Config for Runtime {
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
 	type OnSetCode = ();
+	type MaxConsumers = frame_support::traits::ConstU32<16>;
 }
 
 parameter_types! {
@@ -80,7 +81,8 @@ impl bags_list::Config for Runtime {
 	type Event = Event;
 	type WeightInfo = ();
 	type BagThresholds = BagThresholds;
-	type VoteWeightProvider = StakingMock;
+	type ScoreProvider = StakingMock;
+	type Score = VoteWeight;
 }
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Runtime>;
@@ -103,9 +105,17 @@ pub(crate) const GENESIS_IDS: [(AccountId, VoteWeight); 4] =
 #[derive(Default)]
 pub struct ExtBuilder {
 	ids: Vec<(AccountId, VoteWeight)>,
+	skip_genesis_ids: bool,
 }
 
 impl ExtBuilder {
+	/// Skip adding the default genesis ids to the list.
+	#[cfg(test)]
+	pub(crate) fn skip_genesis_ids(mut self) -> Self {
+		self.skip_genesis_ids = true;
+		self
+	}
+
 	/// Add some AccountIds to insert into `List`.
 	#[cfg(test)]
 	pub(crate) fn add_ids(mut self, ids: Vec<(AccountId, VoteWeight)>) -> Self {
@@ -117,10 +127,17 @@ impl ExtBuilder {
 		sp_tracing::try_init_simple();
 		let storage = frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
 
+		let ids_with_weight: Vec<_> = if self.skip_genesis_ids {
+			self.ids.iter().collect()
+		} else {
+			GENESIS_IDS.iter().chain(self.ids.iter()).collect()
+		};
+
 		let mut ext = sp_io::TestExternalities::from(storage);
 		ext.execute_with(|| {
-			for (id, weight) in GENESIS_IDS.iter().chain(self.ids.iter()) {
+			for (id, weight) in ids_with_weight {
 				frame_support::assert_ok!(List::<Runtime>::insert(*id, *weight));
+				StakingMock::set_score_of(id, *weight);
 			}
 		});
 

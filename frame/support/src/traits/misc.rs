@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,8 +20,315 @@
 use crate::dispatch::Parameter;
 use codec::{CompactLen, Decode, DecodeAll, Encode, EncodeLike, Input, MaxEncodedLen};
 use scale_info::{build::Fields, meta_type, Path, Type, TypeInfo, TypeParameter};
+use sp_arithmetic::traits::{CheckedAdd, CheckedMul, CheckedSub, Saturating};
 use sp_runtime::{traits::Block as BlockT, DispatchError};
 use sp_std::{cmp::Ordering, prelude::*};
+
+#[doc(hidden)]
+pub const DEFENSIVE_OP_PUBLIC_ERROR: &'static str = "a defensive failure has been triggered; please report the block number at https://github.com/paritytech/substrate/issues";
+#[doc(hidden)]
+pub const DEFENSIVE_OP_INTERNAL_ERROR: &'static str = "Defensive failure has been triggered!";
+
+/// Generic function to mark an execution path as ONLY defensive.
+///
+/// Similar to mark a match arm or `if/else` branch as `unreachable!`.
+#[macro_export]
+macro_rules! defensive {
+	() => {
+		frame_support::log::error!(
+			target: "runtime",
+			"{}",
+			$crate::traits::DEFENSIVE_OP_PUBLIC_ERROR
+		);
+		debug_assert!(false, "{}", $crate::traits::DEFENSIVE_OP_INTERNAL_ERROR);
+	};
+	($error:tt) => {
+		frame_support::log::error!(
+			target: "runtime",
+			"{}: {:?}",
+			$crate::traits::DEFENSIVE_OP_PUBLIC_ERROR,
+			$error
+		);
+		debug_assert!(false, "{}: {:?}", $crate::traits::DEFENSIVE_OP_INTERNAL_ERROR, $error);
+	}
+}
+
+/// Prelude module for all defensive traits to be imported at once.
+pub mod defensive_prelude {
+	pub use super::{Defensive, DefensiveOption, DefensiveResult};
+}
+
+/// A trait to handle errors and options when you are really sure that a condition must hold, but
+/// not brave enough to `expect` on it, or a default fallback value makes more sense.
+///
+/// This trait mostly focuses on methods that eventually unwrap the inner value. See
+/// [`DefensiveResult`] and [`DefensiveOption`] for methods that specifically apply to the
+/// respective types.
+///
+/// Each function in this trait will have two side effects, aside from behaving exactly as the name
+/// would suggest:
+///
+/// 1. It panics on `#[debug_assertions]`, so if the infallible code is reached in any of the tests,
+///    you realize.
+/// 2. It will log an error using the runtime logging system. This might help you detect such bugs
+///    in production as well. Note that the log message, as of now, are not super expressive. Your
+///    best shot of fully diagnosing the error would be to infer the block number of which the log
+///    message was emitted, then re-execute that block using `check-block` or `try-runtime`
+///    subcommands in substrate client.
+pub trait Defensive<T> {
+	/// Exactly the same as `unwrap_or`, but it does the defensive warnings explained in the trait
+	/// docs.
+	fn defensive_unwrap_or(self, other: T) -> T;
+
+	/// Exactly the same as `unwrap_or_else`, but it does the defensive warnings explained in the
+	/// trait docs.
+	fn defensive_unwrap_or_else<F: FnOnce() -> T>(self, f: F) -> T;
+
+	/// Exactly the same as `unwrap_or_default`, but it does the defensive warnings explained in the
+	/// trait docs.
+	fn defensive_unwrap_or_default(self) -> T
+	where
+		T: Default;
+
+	/// Does not alter the inner value at all, but it will log warnings if the inner value is `None`
+	/// or `Err`.
+	///
+	/// In some ways, this is like  `.defensive_map(|x| x)`.
+	///
+	/// This is useful as:
+	/// ```nocompile
+	/// if let Some(inner) = maybe_value().defensive() {
+	/// 	 	..
+	/// }
+	/// ```
+	fn defensive(self) -> Self;
+}
+
+/// Subset of methods similar to [`Defensive`] that can only work for a `Result`.
+pub trait DefensiveResult<T, E> {
+	/// Defensively map the error into another return type, but you are really sure that this
+	/// conversion should never be needed.
+	fn defensive_map_err<F, O: FnOnce(E) -> F>(self, o: O) -> Result<T, F>;
+
+	/// Defensively map and unpack the value to something else (`U`), or call the default callback
+	/// if `Err`, which should never happen.
+	fn defensive_map_or_else<U, D: FnOnce(E) -> U, F: FnOnce(T) -> U>(self, default: D, f: F) -> U;
+
+	/// Defensively transform this result into an option, discarding the `Err` variant if it
+	/// happens, which should never happen.
+	fn defensive_ok(self) -> Option<T>;
+
+	/// Exactly the same as `map`, but it prints the appropriate warnings if the value being mapped
+	/// is `Err`.
+	fn defensive_map<U, F: FnOnce(T) -> U>(self, f: F) -> Result<U, E>;
+}
+
+/// Subset of methods similar to [`Defensive`] that can only work for a `Option`.
+pub trait DefensiveOption<T> {
+	/// Potentially map and unpack the value to something else (`U`), or call the default callback
+	/// if `None`, which should never happen.
+	fn defensive_map_or_else<U, D: FnOnce() -> U, F: FnOnce(T) -> U>(self, default: D, f: F) -> U;
+
+	/// Defensively transform this option to a result.
+	fn defensive_ok_or_else<E, F: FnOnce() -> E>(self, err: F) -> Result<T, E>;
+
+	/// Exactly the same as `map`, but it prints the appropriate warnings if the value being mapped
+	/// is `None`.
+	fn defensive_map<U, F: FnOnce(T) -> U>(self, f: F) -> Option<U>;
+}
+
+impl<T> Defensive<T> for Option<T> {
+	fn defensive_unwrap_or(self, or: T) -> T {
+		match self {
+			Some(inner) => inner,
+			None => {
+				defensive!();
+				or
+			},
+		}
+	}
+
+	fn defensive_unwrap_or_else<F: FnOnce() -> T>(self, f: F) -> T {
+		match self {
+			Some(inner) => inner,
+			None => {
+				defensive!();
+				f()
+			},
+		}
+	}
+
+	fn defensive_unwrap_or_default(self) -> T
+	where
+		T: Default,
+	{
+		match self {
+			Some(inner) => inner,
+			None => {
+				defensive!();
+				Default::default()
+			},
+		}
+	}
+
+	fn defensive(self) -> Self {
+		match self {
+			Some(inner) => Some(inner),
+			None => {
+				defensive!();
+				None
+			},
+		}
+	}
+}
+
+impl<T, E: sp_std::fmt::Debug> Defensive<T> for Result<T, E> {
+	fn defensive_unwrap_or(self, or: T) -> T {
+		match self {
+			Ok(inner) => inner,
+			Err(e) => {
+				defensive!(e);
+				or
+			},
+		}
+	}
+
+	fn defensive_unwrap_or_else<F: FnOnce() -> T>(self, f: F) -> T {
+		match self {
+			Ok(inner) => inner,
+			Err(e) => {
+				defensive!(e);
+				f()
+			},
+		}
+	}
+
+	fn defensive_unwrap_or_default(self) -> T
+	where
+		T: Default,
+	{
+		match self {
+			Ok(inner) => inner,
+			Err(e) => {
+				defensive!(e);
+				Default::default()
+			},
+		}
+	}
+
+	fn defensive(self) -> Self {
+		match self {
+			Ok(inner) => Ok(inner),
+			Err(e) => {
+				defensive!(e);
+				Err(e)
+			},
+		}
+	}
+}
+
+impl<T, E: sp_std::fmt::Debug> DefensiveResult<T, E> for Result<T, E> {
+	fn defensive_map_err<F, O: FnOnce(E) -> F>(self, o: O) -> Result<T, F> {
+		self.map_err(|e| {
+			defensive!(e);
+			o(e)
+		})
+	}
+
+	fn defensive_map_or_else<U, D: FnOnce(E) -> U, F: FnOnce(T) -> U>(self, default: D, f: F) -> U {
+		self.map_or_else(
+			|e| {
+				defensive!(e);
+				default(e)
+			},
+			f,
+		)
+	}
+
+	fn defensive_ok(self) -> Option<T> {
+		match self {
+			Ok(inner) => Some(inner),
+			Err(e) => {
+				defensive!(e);
+				None
+			},
+		}
+	}
+
+	fn defensive_map<U, F: FnOnce(T) -> U>(self, f: F) -> Result<U, E> {
+		match self {
+			Ok(inner) => Ok(f(inner)),
+			Err(e) => {
+				defensive!(e);
+				Err(e)
+			},
+		}
+	}
+}
+
+impl<T> DefensiveOption<T> for Option<T> {
+	fn defensive_map_or_else<U, D: FnOnce() -> U, F: FnOnce(T) -> U>(self, default: D, f: F) -> U {
+		self.map_or_else(
+			|| {
+				defensive!();
+				default()
+			},
+			f,
+		)
+	}
+
+	fn defensive_ok_or_else<E, F: FnOnce() -> E>(self, err: F) -> Result<T, E> {
+		self.ok_or_else(|| {
+			defensive!();
+			err()
+		})
+	}
+
+	fn defensive_map<U, F: FnOnce(T) -> U>(self, f: F) -> Option<U> {
+		match self {
+			Some(inner) => Some(f(inner)),
+			None => {
+				defensive!();
+				None
+			},
+		}
+	}
+}
+
+/// A variant of [`Defensive`] with the same rationale, for the arithmetic operations where in
+/// case an infallible operation fails, it saturates.
+pub trait DefensiveSaturating {
+	/// Add `self` and `other` defensively.
+	fn defensive_saturating_add(self, other: Self) -> Self;
+	/// Subtract `other` from `self` defensively.
+	fn defensive_saturating_sub(self, other: Self) -> Self;
+	/// Multiply `self` and `other` defensively.
+	fn defensive_saturating_mul(self, other: Self) -> Self;
+}
+
+// NOTE: A bit unfortunate, since T has to be bound by all the traits needed. Could make it
+// `DefensiveSaturating<T>` to mitigate.
+impl<T: Saturating + CheckedAdd + CheckedMul + CheckedSub> DefensiveSaturating for T {
+	fn defensive_saturating_add(self, other: Self) -> Self {
+		self.checked_add(&other).defensive_unwrap_or_else(|| self.saturating_add(other))
+	}
+	fn defensive_saturating_sub(self, other: Self) -> Self {
+		self.checked_sub(&other).defensive_unwrap_or_else(|| self.saturating_sub(other))
+	}
+	fn defensive_saturating_mul(self, other: Self) -> Self {
+		self.checked_mul(&other).defensive_unwrap_or_else(|| self.saturating_mul(other))
+	}
+}
+
+/// Try and collect into a collection `C`.
+pub trait TryCollect<C> {
+	type Error;
+	/// Consume self and try to collect the results into `C`.
+	///
+	/// This is useful in preventing the undesirable `.collect().try_into()` call chain on
+	/// collections that need to be converted into a bounded type (e.g. `BoundedVec`).
+	fn try_collect(self) -> Result<C, Self::Error>;
+}
 
 /// Anything that can have a `::len()` method.
 pub trait Len {
@@ -60,25 +367,45 @@ impl<T: Default> Get<T> for GetDefault {
 	}
 }
 
-/// Implement `Get<u32>` and `Get<Option<u32>>` using the given const.
-pub struct ConstU32<const T: u32>;
-
-impl<const T: u32> Get<u32> for ConstU32<T> {
-	fn get() -> u32 {
-		T
-	}
+macro_rules! impl_const_get {
+	($name:ident, $t:ty) => {
+		#[derive($crate::RuntimeDebug)]
+		pub struct $name<const T: $t>;
+		impl<const T: $t> Get<$t> for $name<T> {
+			fn get() -> $t {
+				T
+			}
+		}
+		impl<const T: $t> Get<Option<$t>> for $name<T> {
+			fn get() -> Option<$t> {
+				Some(T)
+			}
+		}
+	};
 }
 
-impl<const T: u32> Get<Option<u32>> for ConstU32<T> {
-	fn get() -> Option<u32> {
-		Some(T)
-	}
-}
+impl_const_get!(ConstBool, bool);
+impl_const_get!(ConstU8, u8);
+impl_const_get!(ConstU16, u16);
+impl_const_get!(ConstU32, u32);
+impl_const_get!(ConstU64, u64);
+impl_const_get!(ConstU128, u128);
+impl_const_get!(ConstI8, i8);
+impl_const_get!(ConstI16, i16);
+impl_const_get!(ConstI32, i32);
+impl_const_get!(ConstI64, i64);
+impl_const_get!(ConstI128, i128);
 
 /// A type for which some values make sense to be able to drop without further consideration.
 pub trait TryDrop: Sized {
 	/// Drop an instance cleanly. Only works if its value represents "no-operation".
 	fn try_drop(self) -> Result<(), Self>;
+}
+
+impl TryDrop for () {
+	fn try_drop(self) -> Result<(), Self> {
+		Ok(())
+	}
 }
 
 /// Return type used when we need to return one of two items, each of the opposite direction or
@@ -183,7 +510,7 @@ pub trait HandleLifetime<T> {
 impl<T> HandleLifetime<T> for () {}
 
 pub trait Time {
-	type Moment: sp_arithmetic::traits::AtLeast32Bit + Parameter + Default + Copy;
+	type Moment: sp_arithmetic::traits::AtLeast32Bit + Parameter + Default + Copy + MaxEncodedLen;
 
 	fn now() -> Self::Moment;
 }
@@ -301,7 +628,7 @@ pub trait PrivilegeCmp<Origin> {
 
 /// Implementation of [`PrivilegeCmp`] that only checks for equal origins.
 ///
-/// This means it will either return [`Origin::Equal`] or `None`.
+/// This means it will either return [`Ordering::Equal`] or `None`.
 pub struct EqualPrivilegeOnly;
 impl<Origin: PartialEq> PrivilegeCmp<Origin> for EqualPrivilegeOnly {
 	fn cmp_privilege(left: &Origin, right: &Origin) -> Option<Ordering> {
@@ -562,6 +889,65 @@ impl<T: TypeInfo + 'static> TypeInfo for WrapperKeepOpaque<T> {
 					.field(|f| f.ty::<T>().type_name("T")),
 			)
 	}
+}
+
+/// A interface for looking up preimages from their hash on chain.
+pub trait PreimageProvider<Hash> {
+	/// Returns whether a preimage exists for a given hash.
+	///
+	/// A value of `true` implies that `get_preimage` is `Some`.
+	fn have_preimage(hash: &Hash) -> bool;
+
+	/// Returns the preimage for a given hash.
+	fn get_preimage(hash: &Hash) -> Option<Vec<u8>>;
+
+	/// Returns whether a preimage request exists for a given hash.
+	fn preimage_requested(hash: &Hash) -> bool;
+
+	/// Request that someone report a preimage. Providers use this to optimise the economics for
+	/// preimage reporting.
+	fn request_preimage(hash: &Hash);
+
+	/// Cancel a previous preimage request.
+	fn unrequest_preimage(hash: &Hash);
+}
+
+impl<Hash> PreimageProvider<Hash> for () {
+	fn have_preimage(_: &Hash) -> bool {
+		false
+	}
+	fn get_preimage(_: &Hash) -> Option<Vec<u8>> {
+		None
+	}
+	fn preimage_requested(_: &Hash) -> bool {
+		false
+	}
+	fn request_preimage(_: &Hash) {}
+	fn unrequest_preimage(_: &Hash) {}
+}
+
+/// A interface for managing preimages to hashes on chain.
+///
+/// Note that this API does not assume any underlying user is calling, and thus
+/// does not handle any preimage ownership or fees. Other system level logic that
+/// uses this API should implement that on their own side.
+pub trait PreimageRecipient<Hash>: PreimageProvider<Hash> {
+	/// Maximum size of a preimage.
+	type MaxSize: Get<u32>;
+
+	/// Store the bytes of a preimage on chain.
+	fn note_preimage(bytes: crate::BoundedVec<u8, Self::MaxSize>);
+
+	/// Clear a previously noted preimage. This is infallible and should be treated more like a
+	/// hint - if it was not previously noted or if it is now requested, then this will not do
+	/// anything.
+	fn unnote_preimage(hash: &Hash);
+}
+
+impl<Hash> PreimageRecipient<Hash> for () {
+	type MaxSize = ();
+	fn note_preimage(_: crate::BoundedVec<u8, Self::MaxSize>) {}
+	fn unnote_preimage(_: &Hash) {}
 }
 
 #[cfg(test)]

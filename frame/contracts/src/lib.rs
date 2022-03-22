@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -87,12 +87,12 @@
 mod gas;
 mod benchmarking;
 mod exec;
-mod migration;
 mod schedule;
 mod storage;
 mod wasm;
 
 pub mod chain_extension;
+pub mod migration;
 pub mod weights;
 
 #[cfg(test)]
@@ -106,24 +106,27 @@ pub use crate::{
 use crate::{
 	exec::{AccountIdOf, ExecError, Executable, Stack as ExecStack},
 	gas::GasMeter,
-	storage::{ContractInfo, DeletedContract, Storage},
-	wasm::PrefabWasmModule,
+	storage::{meter::Meter as StorageMeter, ContractInfo, DeletedContract, Storage},
+	wasm::{OwnerInfo, PrefabWasmModule},
 	weights::WeightInfo,
 };
+use codec::{Encode, HasCompact};
 use frame_support::{
 	dispatch::Dispatchable,
 	ensure,
-	traits::{Contains, Currency, Get, Randomness, StorageVersion, Time},
-	weights::{GetDispatchInfo, PostDispatchInfo, Weight},
+	traits::{Contains, Currency, Get, Randomness, ReservableCurrency, StorageVersion, Time},
+	weights::{GetDispatchInfo, Pays, PostDispatchInfo, Weight},
 };
 use frame_system::Pallet as System;
 use pallet_contracts_primitives::{
-	Code, ContractAccessError, ContractExecResult, ContractInstantiateResult, ExecReturnValue,
-	GetStorageResult, InstantiateReturnValue,
+	Code, CodeUploadResult, CodeUploadReturnValue, ContractAccessError, ContractExecResult,
+	ContractInstantiateResult, ExecReturnValue, GetStorageResult, InstantiateReturnValue,
+	StorageDeposit,
 };
+use scale_info::TypeInfo;
 use sp_core::{crypto::UncheckedFrom, Bytes};
 use sp_runtime::traits::{Convert, Hash, Saturating, StaticLookup};
-use sp_std::prelude::*;
+use sp_std::{fmt::Debug, prelude::*};
 
 type CodeHash<T> = <T as frame_system::Config>::Hash;
 type TrieId = Vec<u8>;
@@ -131,7 +134,64 @@ type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
 /// The current storage version.
-const STORAGE_VERSION: StorageVersion = StorageVersion::new(5);
+const STORAGE_VERSION: StorageVersion = StorageVersion::new(7);
+
+/// Used as a sentinel value when reading and writing contract memory.
+///
+/// It is usually used to signal `None` to a contract when only a primitive is allowed
+/// and we don't want to go through encoding a full Rust type. Using `u32::Max` is a safe
+/// sentinel because contracts are never allowed to use such a large amount of resources
+/// that this value makes sense for a memory location or length.
+const SENTINEL: u32 = u32::MAX;
+
+/// Provides the contract address generation method.
+///
+/// See [`DefaultAddressGenerator`] for the default implementation.
+pub trait AddressGenerator<T: frame_system::Config> {
+	/// Generate the address of a contract based on the given instantiate parameters.
+	///
+	/// # Note for implementors
+	/// 1. Make sure that there are no collisions, different inputs never lead to the same output.
+	/// 2. Make sure that the same inputs lead to the same output.
+	/// 3. Changing the implementation through a runtime upgrade without a proper storage migration
+	/// would lead to catastrophic misbehavior.
+	fn generate_address(
+		deploying_address: &T::AccountId,
+		code_hash: &CodeHash<T>,
+		salt: &[u8],
+	) -> T::AccountId;
+}
+
+/// Default address generator.
+///
+/// This is the default address generator used by contract instantiation. Its result
+/// is only dependend on its inputs. It can therefore be used to reliably predict the
+/// address of a contract. This is akin to the formular of eth's CREATE2 opcode. There
+/// is no CREATE equivalent because CREATE2 is strictly more powerful.
+///
+/// Formula: `hash(deploying_address ++ code_hash ++ salt)`
+pub struct DefaultAddressGenerator;
+
+impl<T> AddressGenerator<T> for DefaultAddressGenerator
+where
+	T: frame_system::Config,
+	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
+{
+	fn generate_address(
+		deploying_address: &T::AccountId,
+		code_hash: &CodeHash<T>,
+		salt: &[u8],
+	) -> T::AccountId {
+		let buf: Vec<_> = deploying_address
+			.as_ref()
+			.iter()
+			.chain(code_hash.as_ref())
+			.chain(salt)
+			.cloned()
+			.collect();
+		UncheckedFrom::unchecked_from(T::Hashing::hash(&buf))
+	}
+}
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -148,7 +208,7 @@ pub mod pallet {
 		type Randomness: Randomness<Self::Hash, Self::BlockNumber>;
 
 		/// The currency in which fees are paid and contract balances are held.
-		type Currency: Currency<Self::AccountId>;
+		type Currency: ReservableCurrency<Self::AccountId>;
 
 		/// The overarching event type.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
@@ -164,12 +224,6 @@ pub mod pallet {
 		/// Use this filter to control which dispatchables are callable by contracts.
 		/// This is applied in **addition** to [`frame_system::Config::BaseCallFilter`].
 		/// It is recommended to treat this as a whitelist.
-		///
-		/// # Subsistence Threshold
-		///
-		/// The runtime **must** make sure that any allowed dispatchable makes sure that the
-		/// `total_balance` of the contract stays above [`Pallet::subsistence_threshold()`].
-		/// Otherwise users could clutter the storage with contracts.
 		///
 		/// # Stability
 		///
@@ -201,13 +255,6 @@ pub mod pallet {
 		#[pallet::constant]
 		type Schedule: Get<Schedule<Self>>;
 
-		/// The deposit that must be placed into the contract's account to instantiate it.
-		/// This is in **addition** to the [`pallet_balances::Pallet::ExistenialDeposit`].
-		/// The minimum balance for a contract's account can be queried using
-		/// [`Pallet::subsistence_threshold`].
-		#[pallet::constant]
-		type ContractDeposit: Get<BalanceOf<Self>>;
-
 		/// The type of the call stack determines the maximum nesting depth of contract calls.
 		///
 		/// The allowed depth is `CallStack::size() + 1`.
@@ -215,17 +262,56 @@ pub mod pallet {
 		/// In other words only the origin called "root contract" is allowed to execute then.
 		type CallStack: smallvec::Array<Item = Frame<Self>>;
 
-		/// The maximum number of tries that can be queued for deletion.
+		/// The maximum number of contracts that can be pending for deletion.
+		///
+		/// When a contract is deleted by calling `seal_terminate` it becomes inaccessible
+		/// immediately, but the deletion of the storage items it has accumulated is performed
+		/// later. The contract is put into the deletion queue. This defines how many
+		/// contracts can be queued up at the same time. If that limit is reached `seal_terminate`
+		/// will fail. The action must be retried in a later block in that case.
+		///
+		/// The reasons for limiting the queue depth are:
+		///
+		/// 1. The queue is in storage in order to be persistent between blocks. We want to limit
+		/// 	the amount of storage that can be consumed.
+		/// 2. The queue is stored in a vector and needs to be decoded as a whole when reading
+		///		it at the end of each block. Longer queues take more weight to decode and hence
+		///		limit the amount of items that can be deleted per block.
 		#[pallet::constant]
 		type DeletionQueueDepth: Get<u32>;
 
 		/// The maximum amount of weight that can be consumed per block for lazy trie removal.
+		///
+		/// The amount of weight that is dedicated per block to work on the deletion queue. Larger
+		/// values allow more trie keys to be deleted in each block but reduce the amount of
+		/// weight that is left for transactions. See [`Self::DeletionQueueDepth`] for more
+		/// information about the deletion queue.
 		#[pallet::constant]
 		type DeletionWeightLimit: Get<Weight>;
+
+		/// The amount of balance a caller has to pay for each byte of storage.
+		///
+		/// # Note
+		///
+		/// Changing this value for an existing chain might need a storage migration.
+		#[pallet::constant]
+		type DepositPerByte: Get<BalanceOf<Self>>;
+
+		/// The amount of balance a caller has to pay for each storage item.
+		///
+		/// # Note
+		///
+		/// Changing this value for an existing chain might need a storage migration.
+		#[pallet::constant]
+		type DepositPerItem: Get<BalanceOf<Self>>;
+
+		/// The address generator used to generate the addresses of contracts.
+		type AddressGenerator: AddressGenerator<Self>;
 	}
 
 	#[pallet::pallet]
 	#[pallet::storage_version(STORAGE_VERSION)]
+	#[pallet::without_storage_info]
 	pub struct Pallet<T>(PhantomData<T>);
 
 	#[pallet::hooks]
@@ -244,10 +330,6 @@ pub mod pallet {
 			Storage::<T>::process_deletion_queue_batch(weight_limit)
 				.saturating_add(T::WeightInfo::on_initialize())
 		}
-
-		fn on_runtime_upgrade() -> Weight {
-			migration::migrate::<T>()
-		}
 	}
 
 	#[pallet::call]
@@ -255,8 +337,18 @@ pub mod pallet {
 	where
 		T::AccountId: UncheckedFrom<T::Hash>,
 		T::AccountId: AsRef<[u8]>,
+		<BalanceOf<T> as HasCompact>::Type: Clone + Eq + PartialEq + Debug + TypeInfo + Encode,
 	{
 		/// Makes a call to an account, optionally transferring some balance.
+		///
+		/// # Parameters
+		///
+		/// * `dest`: Address of the contract to call.
+		/// * `value`: The balance to transfer from the `origin` to `dest`.
+		/// * `gas_limit`: The gas limit enforced when executing the constructor.
+		/// * `storage_deposit_limit`: The maximum amount of balance that can be charged from the
+		///   caller to pay for the storage consumed.
+		/// * `data`: The input data to pass to the contract.
 		///
 		/// * If the account is a smart-contract account, the associated code will be
 		/// executed and any value will be transferred.
@@ -269,23 +361,41 @@ pub mod pallet {
 			dest: <T::Lookup as StaticLookup>::Source,
 			#[pallet::compact] value: BalanceOf<T>,
 			#[pallet::compact] gas_limit: Weight,
+			storage_deposit_limit: Option<<BalanceOf<T> as codec::HasCompact>::Type>,
 			data: Vec<u8>,
 		) -> DispatchResultWithPostInfo {
 			let origin = ensure_signed(origin)?;
 			let dest = T::Lookup::lookup(dest)?;
-			let output = Self::internal_call(origin, dest, value, gas_limit, data, None);
+			let mut output = Self::internal_call(
+				origin,
+				dest,
+				value,
+				gas_limit,
+				storage_deposit_limit.map(Into::into),
+				data,
+				None,
+			);
+			if let Ok(retval) = &output.result {
+				if retval.did_revert() {
+					output.result = Err(<Error<T>>::ContractReverted.into());
+				}
+			}
 			output.gas_meter.into_dispatch_result(output.result, T::WeightInfo::call())
 		}
 
 		/// Instantiates a new contract from the supplied `code` optionally transferring
 		/// some balance.
 		///
-		/// This is the only function that can deploy new code to the chain.
+		/// This dispatchable has the same effect as calling [`Self::upload_code`] +
+		/// [`Self::instantiate`]. Bundling them together provides efficiency gains. Please
+		/// also check the documentation of [`Self::upload_code`].
 		///
 		/// # Parameters
 		///
-		/// * `endowment`: The balance to transfer from the `origin` to the newly created contract.
+		/// * `value`: The balance to transfer from the `origin` to the newly created contract.
 		/// * `gas_limit`: The gas limit enforced when executing the constructor.
+		/// * `storage_deposit_limit`: The maximum amount of balance that can be charged/reserved
+		///   from the caller to pay for the storage consumed.
 		/// * `code`: The contract code to deploy in raw bytes.
 		/// * `data`: The input data to pass to the contract constructor.
 		/// * `salt`: Used for the address derivation. See [`Pallet::contract_address`].
@@ -297,19 +407,17 @@ pub mod pallet {
 		/// - If the `code_hash` already exists on the chain the underlying `code` will be shared.
 		/// - The destination address is computed based on the sender, code_hash and the salt.
 		/// - The smart-contract account is created at the computed address.
-		/// - The `endowment` is transferred to the new account.
+		/// - The `value` is transferred to the new account.
 		/// - The `deploy` function is executed in the context of the newly-created account.
 		#[pallet::weight(
-			T::WeightInfo::instantiate_with_code(
-				code.len() as u32 / 1024,
-				salt.len() as u32 / 1024,
-			)
+			T::WeightInfo::instantiate_with_code(code.len() as u32, salt.len() as u32)
 			.saturating_add(*gas_limit)
 		)]
 		pub fn instantiate_with_code(
 			origin: OriginFor<T>,
-			#[pallet::compact] endowment: BalanceOf<T>,
+			#[pallet::compact] value: BalanceOf<T>,
 			#[pallet::compact] gas_limit: Weight,
+			storage_deposit_limit: Option<<BalanceOf<T> as codec::HasCompact>::Type>,
 			code: Vec<u8>,
 			data: Vec<u8>,
 			salt: Vec<u8>,
@@ -317,18 +425,24 @@ pub mod pallet {
 			let origin = ensure_signed(origin)?;
 			let code_len = code.len() as u32;
 			let salt_len = salt.len() as u32;
-			let output = Self::internal_instantiate(
+			let mut output = Self::internal_instantiate(
 				origin,
-				endowment,
+				value,
 				gas_limit,
+				storage_deposit_limit.map(Into::into),
 				Code::Upload(Bytes(code)),
 				data,
 				salt,
 				None,
 			);
+			if let Ok(retval) = &output.result {
+				if retval.1.did_revert() {
+					output.result = Err(<Error<T>>::ContractReverted.into());
+				}
+			}
 			output.gas_meter.into_dispatch_result(
 				output.result.map(|(_address, result)| result),
-				T::WeightInfo::instantiate_with_code(code_len / 1024, salt_len / 1024),
+				T::WeightInfo::instantiate_with_code(code_len, salt_len),
 			)
 		}
 
@@ -338,31 +452,79 @@ pub mod pallet {
 		/// code deployment step. Instead, the `code_hash` of an on-chain deployed wasm binary
 		/// must be supplied.
 		#[pallet::weight(
-			T::WeightInfo::instantiate(salt.len() as u32 / 1024).saturating_add(*gas_limit)
+			T::WeightInfo::instantiate(salt.len() as u32).saturating_add(*gas_limit)
 		)]
 		pub fn instantiate(
 			origin: OriginFor<T>,
-			#[pallet::compact] endowment: BalanceOf<T>,
+			#[pallet::compact] value: BalanceOf<T>,
 			#[pallet::compact] gas_limit: Weight,
+			storage_deposit_limit: Option<<BalanceOf<T> as codec::HasCompact>::Type>,
 			code_hash: CodeHash<T>,
 			data: Vec<u8>,
 			salt: Vec<u8>,
 		) -> DispatchResultWithPostInfo {
 			let origin = ensure_signed(origin)?;
 			let salt_len = salt.len() as u32;
-			let output = Self::internal_instantiate(
+			let mut output = Self::internal_instantiate(
 				origin,
-				endowment,
+				value,
 				gas_limit,
+				storage_deposit_limit.map(Into::into),
 				Code::Existing(code_hash),
 				data,
 				salt,
 				None,
 			);
+			if let Ok(retval) = &output.result {
+				if retval.1.did_revert() {
+					output.result = Err(<Error<T>>::ContractReverted.into());
+				}
+			}
 			output.gas_meter.into_dispatch_result(
 				output.result.map(|(_address, output)| output),
-				T::WeightInfo::instantiate(salt_len / 1024),
+				T::WeightInfo::instantiate(salt_len),
 			)
+		}
+
+		/// Upload new `code` without instantiating a contract from it.
+		///
+		/// If the code does not already exist a deposit is reserved from the caller
+		/// and unreserved only when [`Self::remove_code`] is called. The size of the reserve
+		/// depends on the instrumented size of the the supplied `code`.
+		///
+		/// If the code already exists in storage it will still return `Ok` and upgrades
+		/// the in storage version to the current
+		/// [`InstructionWeights::version`](InstructionWeights).
+		///
+		/// # Note
+		///
+		/// Anyone can instantiate a contract from any uploaded code and thus prevent its removal.
+		/// To avoid this situation a constructor could employ access control so that it can
+		/// only be instantiated by permissioned entities. The same is true when uploading
+		/// through [`Self::instantiate_with_code`].
+		#[pallet::weight(T::WeightInfo::upload_code(code.len() as u32))]
+		pub fn upload_code(
+			origin: OriginFor<T>,
+			code: Vec<u8>,
+			storage_deposit_limit: Option<<BalanceOf<T> as codec::HasCompact>::Type>,
+		) -> DispatchResult {
+			let origin = ensure_signed(origin)?;
+			Self::bare_upload_code(origin, code, storage_deposit_limit.map(Into::into)).map(|_| ())
+		}
+
+		/// Remove the code stored under `code_hash` and refund the deposit to its owner.
+		///
+		/// A code can only be removed by its original uploader (its owner) and only if it is
+		/// not used by any contract.
+		#[pallet::weight(T::WeightInfo::remove_code())]
+		pub fn remove_code(
+			origin: OriginFor<T>,
+			code_hash: CodeHash<T>,
+		) -> DispatchResultWithPostInfo {
+			let origin = ensure_signed(origin)?;
+			<PrefabWasmModule<T>>::remove(&origin, code_hash)?;
+			// we waive the fee because removing unused code is beneficial
+			Ok(Pays::No.into())
 		}
 	}
 
@@ -388,12 +550,6 @@ pub mod pallet {
 		/// Code with the specified hash has been stored.
 		CodeStored { code_hash: T::Hash },
 
-		/// Triggered when the current schedule is updated.
-		ScheduleUpdated {
-			/// The version of the newly set schedule.
-			version: u32,
-		},
-
 		/// A custom event emitted by the contract.
 		ContractEmitted {
 			/// The contract that emitted the event.
@@ -404,29 +560,31 @@ pub mod pallet {
 		},
 
 		/// A code with the specified hash was removed.
-		///
-		/// This happens when the last contract that uses this code hash was removed.
 		CodeRemoved { code_hash: T::Hash },
+
+		/// A contract's code was updated.
+		ContractCodeUpdated {
+			/// The contract that has been updated.
+			contract: T::AccountId,
+			/// New code hash that was set for the contract.
+			new_code_hash: T::Hash,
+			/// Previous code hash of the contract.
+			old_code_hash: T::Hash,
+		},
 	}
 
 	#[pallet::error]
 	pub enum Error<T> {
 		/// A new schedule must have a greater version than the current one.
 		InvalidScheduleVersion,
+		/// Invalid combination of flags supplied to `seal_call` or `seal_delegate_call`.
+		InvalidCallFlags,
 		/// The executed contract exhausted its gas limit.
 		OutOfGas,
 		/// The output buffer supplied to a contract API call was too small.
 		OutputBufferTooSmall,
-		/// Performing the requested transfer would have brought the contract below
-		/// the subsistence threshold. No transfer is allowed to do this. Use `seal_terminate`
-		/// to recover a deposit.
-		BelowSubsistenceThreshold,
-		/// The newly created contract is below the subsistence threshold after executing
-		/// its contructor. No contracts are allowed to exist below that threshold.
-		NewContractNotFunded,
-		/// Performing the requested transfer failed for a reason originating in the
-		/// chosen currency implementation of the runtime. Most probably the balance is
-		/// too low or locks are placed on it.
+		/// Performing the requested transfer failed. Probably because there isn't enough
+		/// free balance in the sender's account.
 		TransferFailed,
 		/// Performing a call was denied because the calling depth reached the limit
 		/// of what is specified in the schedule.
@@ -467,11 +625,6 @@ pub mod pallet {
 		/// The queue is filled by deleting contracts and emptied by a fixed amount each block.
 		/// Trying again during another block is the only way to resolve this issue.
 		DeletionQueueFull,
-		/// A storage modification exhausted the 32bit type that holds the storage size.
-		///
-		/// This can either happen when the accumulated storage in bytes is too large or
-		/// when number of storage items is too large.
-		StorageExhausted,
 		/// A contract with the same AccountId already exists.
 		DuplicateContract,
 		/// A contract self destructed in its constructor.
@@ -482,6 +635,21 @@ pub mod pallet {
 		DebugMessageInvalidUTF8,
 		/// A call tried to invoke a contract that is flagged as non-reentrant.
 		ReentranceDenied,
+		/// Origin doesn't have enough balance to pay the required storage deposits.
+		StorageDepositNotEnoughFunds,
+		/// More storage was created than allowed by the storage deposit limit.
+		StorageDepositLimitExhausted,
+		/// Code removal was denied because the code is still in use by at least one contract.
+		CodeInUse,
+		/// The contract ran to completion but decided to revert its storage changes.
+		/// Please note that this error is only returned from extrinsics. When called directly
+		/// or via RPC an `Ok` will be returned. In this case the caller needs to inspect the flags
+		/// to determine whether a reversion has taken place.
+		ContractReverted,
+		/// The contract's code was found to be invalid during validation or instrumentation.
+		/// A more detailed error can be found on the node console if debug messages are enabled
+		/// or in the debug buffer which is returned to RPC clients.
+		CodeRejected,
 	}
 
 	/// A mapping from an original code hash to the original code, untouched by instrumentation.
@@ -493,9 +661,34 @@ pub mod pallet {
 	pub(crate) type CodeStorage<T: Config> =
 		StorageMap<_, Identity, CodeHash<T>, PrefabWasmModule<T>>;
 
-	/// The subtrie counter.
+	/// A mapping between an original code hash and its owner information.
 	#[pallet::storage]
-	pub(crate) type AccountCounter<T: Config> = StorageValue<_, u64, ValueQuery>;
+	pub(crate) type OwnerInfoOf<T: Config> = StorageMap<_, Identity, CodeHash<T>, OwnerInfo<T>>;
+
+	/// This is a **monotonic** counter incremented on contract instantiation.
+	///
+	/// This is used in order to generate unique trie ids for contracts.
+	/// The trie id of a new contract is calculated from hash(account_id, nonce).
+	/// The nonce is required because otherwise the following sequence would lead to
+	/// a possible collision of storage:
+	///
+	/// 1. Create a new contract.
+	/// 2. Terminate the contract.
+	/// 3. Immediately recreate the contract with the same account_id.
+	///
+	/// This is bad because the contents of a trie are deleted lazily and there might be
+	/// storage of the old instantiation still in it when the new contract is created. Please
+	/// note that we can't replace the counter by the block number because the sequence above
+	/// can happen in the same block. We also can't keep the account counter in memory only
+	/// because storage is the only way to communicate across different extrinsics in the
+	/// same block.
+	///
+	/// # Note
+	///
+	/// Do not use it to determine the number of contracts. It won't be decremented if
+	/// a contract is destroyed.
+	#[pallet::storage]
+	pub(crate) type Nonce<T: Config> = StorageValue<_, u64, ValueQuery>;
 
 	/// The code associated with a given account.
 	///
@@ -522,6 +715,8 @@ type InternalInstantiateOutput<T> = InternalOutput<T, (AccountIdOf<T>, ExecRetur
 struct InternalOutput<T: Config, O> {
 	/// The gas meter that was used to execute the call.
 	gas_meter: GasMeter<T>,
+	/// The storage deposit used by the call.
+	storage_deposit: StorageDeposit<BalanceOf<T>>,
 	/// The result of the call.
 	result: Result<O, ExecError>,
 }
@@ -547,16 +742,25 @@ where
 		dest: T::AccountId,
 		value: BalanceOf<T>,
 		gas_limit: Weight,
+		storage_deposit_limit: Option<BalanceOf<T>>,
 		data: Vec<u8>,
 		debug: bool,
-	) -> ContractExecResult {
+	) -> ContractExecResult<BalanceOf<T>> {
 		let mut debug_message = if debug { Some(Vec::new()) } else { None };
-		let output =
-			Self::internal_call(origin, dest, value, gas_limit, data, debug_message.as_mut());
+		let output = Self::internal_call(
+			origin,
+			dest,
+			value,
+			gas_limit,
+			storage_deposit_limit,
+			data,
+			debug_message.as_mut(),
+		);
 		ContractExecResult {
 			result: output.result.map_err(|r| r.error),
 			gas_consumed: output.gas_meter.gas_consumed(),
 			gas_required: output.gas_meter.gas_required(),
+			storage_deposit: output.storage_deposit,
 			debug_message: debug_message.unwrap_or_default(),
 		}
 	}
@@ -568,7 +772,6 @@ where
 	///
 	/// It returns the execution result, account id and the amount of used weight.
 	///
-	///
 	/// # Note
 	///
 	/// `debug` should only ever be set to `true` when executing as an RPC because
@@ -576,18 +779,20 @@ where
 	/// If set to `true` it returns additional human readable debugging information.
 	pub fn bare_instantiate(
 		origin: T::AccountId,
-		endowment: BalanceOf<T>,
+		value: BalanceOf<T>,
 		gas_limit: Weight,
+		storage_deposit_limit: Option<BalanceOf<T>>,
 		code: Code<CodeHash<T>>,
 		data: Vec<u8>,
 		salt: Vec<u8>,
 		debug: bool,
-	) -> ContractInstantiateResult<T::AccountId> {
+	) -> ContractInstantiateResult<T::AccountId, BalanceOf<T>> {
 		let mut debug_message = if debug { Some(Vec::new()) } else { None };
 		let output = Self::internal_instantiate(
 			origin,
-			endowment,
+			value,
 			gas_limit,
+			storage_deposit_limit,
 			code,
 			data,
 			salt,
@@ -600,8 +805,30 @@ where
 				.map_err(|e| e.error),
 			gas_consumed: output.gas_meter.gas_consumed(),
 			gas_required: output.gas_meter.gas_required(),
+			storage_deposit: output.storage_deposit,
 			debug_message: debug_message.unwrap_or_default(),
 		}
+	}
+
+	/// Upload new code without instantiating a contract from it.
+	///
+	/// This function is similar to [`Self::upload_code`], but doesn't perform any address lookups
+	/// and better suitable for calling directly from Rust.
+	pub fn bare_upload_code(
+		origin: T::AccountId,
+		code: Vec<u8>,
+		storage_deposit_limit: Option<BalanceOf<T>>,
+	) -> CodeUploadResult<CodeHash<T>, BalanceOf<T>> {
+		let schedule = T::Schedule::get();
+		let module = PrefabWasmModule::from_code(code, &schedule, origin)
+			.map_err(|_| <Error<T>>::CodeRejected)?;
+		let deposit = module.open_deposit();
+		if let Some(storage_deposit_limit) = storage_deposit_limit {
+			ensure!(storage_deposit_limit >= deposit, <Error<T>>::StorageDepositLimitExhausted);
+		}
+		let result = CodeUploadReturnValue { code_hash: *module.code_hash(), deposit };
+		module.store()?;
+		Ok(result)
 	}
 
 	/// Query storage of a specified contract under a specified key.
@@ -613,58 +840,26 @@ where
 		Ok(maybe_value)
 	}
 
-	/// Determine the address of a contract,
+	/// Determine the address of a contract.
 	///
-	/// This is the address generation function used by contract instantiation. Its result
-	/// is only dependend on its inputs. It can therefore be used to reliably predict the
-	/// address of a contract. This is akin to the formular of eth's CREATE2 opcode. There
-	/// is no CREATE equivalent because CREATE2 is strictly more powerful.
-	///
-	/// Formula: `hash(deploying_address ++ code_hash ++ salt)`
+	/// This is the address generation function used by contract instantiation. See
+	/// [`DefaultAddressGenerator`] for the default implementation.
 	pub fn contract_address(
 		deploying_address: &T::AccountId,
 		code_hash: &CodeHash<T>,
 		salt: &[u8],
 	) -> T::AccountId {
-		let buf: Vec<_> = deploying_address
-			.as_ref()
-			.iter()
-			.chain(code_hash.as_ref())
-			.chain(salt)
-			.cloned()
-			.collect();
-		UncheckedFrom::unchecked_from(T::Hashing::hash(&buf))
-	}
-
-	/// Subsistence threshold is the extension of the minimum balance (aka existential deposit)
-	/// by the contract deposit. It is the minimum balance any contract must hold.
-	///
-	/// Any contract initiated balance transfer mechanism cannot make the balance lower
-	/// than the subsistence threshold. The only way to recover the balance is to remove
-	/// contract using `seal_terminate`.
-	pub fn subsistence_threshold() -> BalanceOf<T> {
-		T::Currency::minimum_balance().saturating_add(T::ContractDeposit::get())
-	}
-
-	/// The in-memory size in bytes of the data structure associated with each contract.
-	///
-	/// The data structure is also put into storage for each contract. The in-storage size
-	/// is never larger than the in-memory representation and usually smaller due to compact
-	/// encoding and lack of padding.
-	///
-	/// # Note
-	///
-	/// This returns the in-memory size because the in-storage size (SCALE encoded) cannot
-	/// be efficiently determined. Treat this as an upper bound of the in-storage size.
-	pub fn contract_info_size() -> u32 {
-		sp_std::mem::size_of::<ContractInfo<T>>() as u32
+		T::AddressGenerator::generate_address(deploying_address, code_hash, salt)
 	}
 
 	/// Store code for benchmarks which does not check nor instrument the code.
 	#[cfg(feature = "runtime-benchmarks")]
-	fn store_code_raw(code: Vec<u8>) -> frame_support::dispatch::DispatchResult {
+	fn store_code_raw(
+		code: Vec<u8>,
+		owner: T::AccountId,
+	) -> frame_support::dispatch::DispatchResult {
 		let schedule = T::Schedule::get();
-		PrefabWasmModule::store_code_unchecked(code, &schedule)?;
+		PrefabWasmModule::store_code_unchecked(code, &schedule, owner)?;
 		Ok(())
 	}
 
@@ -674,7 +869,7 @@ where
 		module: &mut PrefabWasmModule<T>,
 		schedule: &Schedule<T>,
 	) -> frame_support::dispatch::DispatchResult {
-		self::wasm::reinstrument(module, schedule)
+		self::wasm::reinstrument(module, schedule).map(|_| ())
 	}
 
 	/// Internal function that does the actual call.
@@ -685,21 +880,32 @@ where
 		dest: T::AccountId,
 		value: BalanceOf<T>,
 		gas_limit: Weight,
+		storage_deposit_limit: Option<BalanceOf<T>>,
 		data: Vec<u8>,
 		debug_message: Option<&mut Vec<u8>>,
 	) -> InternalCallOutput<T> {
 		let mut gas_meter = GasMeter::new(gas_limit);
+		let mut storage_meter = match StorageMeter::new(&origin, storage_deposit_limit, value) {
+			Ok(meter) => meter,
+			Err(err) =>
+				return InternalCallOutput {
+					result: Err(err.into()),
+					gas_meter,
+					storage_deposit: Default::default(),
+				},
+		};
 		let schedule = T::Schedule::get();
 		let result = ExecStack::<T, PrefabWasmModule<T>>::run_call(
 			origin,
 			dest,
 			&mut gas_meter,
+			&mut storage_meter,
 			&schedule,
 			value,
 			data,
 			debug_message,
 		);
-		InternalCallOutput { gas_meter, result }
+		InternalCallOutput { result, gas_meter, storage_deposit: storage_meter.into_deposit() }
 	}
 
 	/// Internal function that does the actual instantiation.
@@ -707,43 +913,65 @@ where
 	/// Called by dispatchables and public functions.
 	fn internal_instantiate(
 		origin: T::AccountId,
-		endowment: BalanceOf<T>,
+		value: BalanceOf<T>,
 		gas_limit: Weight,
+		storage_deposit_limit: Option<BalanceOf<T>>,
 		code: Code<CodeHash<T>>,
 		data: Vec<u8>,
 		salt: Vec<u8>,
-		debug_message: Option<&mut Vec<u8>>,
+		mut debug_message: Option<&mut Vec<u8>>,
 	) -> InternalInstantiateOutput<T> {
+		let mut storage_deposit = Default::default();
 		let mut gas_meter = GasMeter::new(gas_limit);
-		let schedule = T::Schedule::get();
 		let try_exec = || {
-			let executable = match code {
+			let schedule = T::Schedule::get();
+			let (extra_deposit, executable) = match code {
 				Code::Upload(Bytes(binary)) => {
 					ensure!(
 						binary.len() as u32 <= schedule.limits.code_len,
 						<Error<T>>::CodeTooLarge
 					);
-					let executable = PrefabWasmModule::from_code(binary, &schedule)?;
+					let executable = PrefabWasmModule::from_code(binary, &schedule, origin.clone())
+						.map_err(|msg| {
+							debug_message.as_mut().map(|buffer| buffer.extend(msg.as_bytes()));
+							<Error<T>>::CodeRejected
+						})?;
 					ensure!(
 						executable.code_len() <= schedule.limits.code_len,
 						<Error<T>>::CodeTooLarge
 					);
-					executable
+					// The open deposit will be charged during execution when the
+					// uploaded module does not already exist. This deposit is not part of the
+					// storage meter because it is not transfered to the contract but
+					// reserved on the uploading account.
+					(executable.open_deposit(), executable)
 				},
-				Code::Existing(hash) =>
+				Code::Existing(hash) => (
+					Default::default(),
 					PrefabWasmModule::from_storage(hash, &schedule, &mut gas_meter)?,
+				),
 			};
-			ExecStack::<T, PrefabWasmModule<T>>::run_instantiate(
+			let mut storage_meter = StorageMeter::new(
+				&origin,
+				storage_deposit_limit,
+				value.saturating_add(extra_deposit),
+			)?;
+			let result = ExecStack::<T, PrefabWasmModule<T>>::run_instantiate(
 				origin,
 				executable,
 				&mut gas_meter,
+				&mut storage_meter,
 				&schedule,
-				endowment,
+				value,
 				data,
 				&salt,
 				debug_message,
-			)
+			);
+			storage_deposit = storage_meter
+				.into_deposit()
+				.saturating_add(&StorageDeposit::Charge(extra_deposit));
+			result
 		};
-		InternalInstantiateOutput { result: try_exec(), gas_meter }
+		InternalInstantiateOutput { result: try_exec(), gas_meter, storage_deposit }
 	}
 }

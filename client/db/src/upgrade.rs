@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -33,11 +33,12 @@ use sp_runtime::traits::Block as BlockT;
 const VERSION_FILE_NAME: &'static str = "db_version";
 
 /// Current db version.
-const CURRENT_VERSION: u32 = 3;
+const CURRENT_VERSION: u32 = 4;
 
 /// Number of columns in v1.
 const V1_NUM_COLUMNS: u32 = 11;
 const V2_NUM_COLUMNS: u32 = 12;
+const V3_NUM_COLUMNS: u32 = 12;
 
 /// Database upgrade errors.
 #[derive(Debug)]
@@ -68,7 +69,7 @@ impl fmt::Display for UpgradeError {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		match self {
 			UpgradeError::UnknownDatabaseVersion => {
-				write!(f, "Database version cannot be read from exisiting db_version file")
+				write!(f, "Database version cannot be read from existing db_version file")
 			},
 			UpgradeError::MissingDatabaseVersionFile => write!(f, "Missing database version file"),
 			UpgradeError::UnsupportedVersion(version) => {
@@ -92,9 +93,16 @@ pub fn upgrade_db<Block: BlockT>(db_path: &Path, db_type: DatabaseType) -> Upgra
 		0 => return Err(UpgradeError::UnsupportedVersion(db_version)),
 		1 => {
 			migrate_1_to_2::<Block>(db_path, db_type)?;
-			migrate_2_to_3::<Block>(db_path, db_type)?
+			migrate_2_to_3::<Block>(db_path, db_type)?;
+			migrate_3_to_4::<Block>(db_path, db_type)?;
 		},
-		2 => migrate_2_to_3::<Block>(db_path, db_type)?,
+		2 => {
+			migrate_2_to_3::<Block>(db_path, db_type)?;
+			migrate_3_to_4::<Block>(db_path, db_type)?;
+		},
+		3 => {
+			migrate_3_to_4::<Block>(db_path, db_type)?;
+		},
 		CURRENT_VERSION => (),
 		_ => return Err(UpgradeError::FutureDatabaseVersion(db_version)),
 	}
@@ -139,6 +147,15 @@ fn migrate_2_to_3<Block: BlockT>(db_path: &Path, _db_type: DatabaseType) -> Upgr
 	Ok(())
 }
 
+/// Migration from version3 to version4:
+/// 1) the number of columns has changed from 12 to 13;
+/// 2) BODY_INDEX column is added;
+fn migrate_3_to_4<Block: BlockT>(db_path: &Path, _db_type: DatabaseType) -> UpgradeResult<()> {
+	let db_cfg = DatabaseConfig::with_columns(V3_NUM_COLUMNS);
+	let db = Database::open(&db_cfg, db_path)?;
+	db.add_column().map_err(Into::into)
+}
+
 /// Reads current database version from the file at given path.
 /// If the file does not exist returns 0.
 fn current_version(path: &Path) -> UpgradeResult<u32> {
@@ -173,9 +190,7 @@ fn version_file_path(path: &Path) -> PathBuf {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{
-		tests::Block, DatabaseSettings, DatabaseSource, KeepBlocks, TransactionStorageMode,
-	};
+	use crate::{tests::Block, DatabaseSettings, DatabaseSource, KeepBlocks};
 	use sc_state_db::PruningMode;
 
 	fn create_db(db_path: &Path, version: Option<u32>) {
@@ -194,7 +209,6 @@ mod tests {
 				state_pruning: PruningMode::ArchiveAll,
 				source: DatabaseSource::RocksDb { path: db_path.to_owned(), cache_size: 128 },
 				keep_blocks: KeepBlocks::All,
-				transaction_storage: TransactionStorageMode::BlockBody,
 			},
 			db_type,
 		)
@@ -222,6 +236,18 @@ mod tests {
 	fn upgrade_to_3_works() {
 		let db_type = DatabaseType::Full;
 		for version_from_file in &[None, Some(1), Some(2)] {
+			let db_dir = tempfile::TempDir::new().unwrap();
+			let db_path = db_dir.path().join(db_type.as_str());
+			create_db(&db_path, *version_from_file);
+			open_database(&db_path, db_type).unwrap();
+			assert_eq!(current_version(&db_path).unwrap(), CURRENT_VERSION);
+		}
+	}
+
+	#[test]
+	fn upgrade_to_4_works() {
+		let db_type = DatabaseType::Full;
+		for version_from_file in &[None, Some(1), Some(2), Some(3)] {
 			let db_dir = tempfile::TempDir::new().unwrap();
 			let db_path = db_dir.path().join(db_type.as_str());
 			create_db(&db_path, *version_from_file);

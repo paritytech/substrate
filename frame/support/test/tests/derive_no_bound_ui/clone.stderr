@@ -1,11 +1,11 @@
 error[E0277]: the trait bound `<T as Config>::C: Clone` is not satisfied
-   --> $DIR/clone.rs:7:2
+   --> tests/derive_no_bound_ui/clone.rs:7:2
     |
 7   |     c: T::C,
     |     ^ the trait `Clone` is not implemented for `<T as Config>::C`
     |
 note: required by `clone`
-   --> $DIR/clone.rs:121:5
+   --> $RUST/core/src/clone.rs
     |
-121 |     fn clone(&self) -> Self;
+    |     fn clone(&self) -> Self;
     |     ^^^^^^^^^^^^^^^^^^^^^^^^

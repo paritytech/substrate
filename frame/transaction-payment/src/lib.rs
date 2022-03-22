@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -47,13 +47,13 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 
 use sp_runtime::{
 	traits::{
-		Convert, DispatchInfoOf, Dispatchable, PostDispatchInfoOf, SaturatedConversion, Saturating,
-		SignedExtension, Zero,
+		Convert, DispatchInfoOf, Dispatchable, One, PostDispatchInfoOf, SaturatedConversion,
+		Saturating, SignedExtension, Zero,
 	},
 	transaction_validity::{
 		TransactionPriority, TransactionValidity, TransactionValidityError, ValidTransaction,
@@ -127,7 +127,7 @@ type BalanceOf<T> = <<T as Config>::OnChargeTransaction as OnChargeTransaction<T
 /// Meaning that fees can change by around ~23% per day, given extreme congestion.
 ///
 /// More info can be found at:
-/// <https://w3f-research.readthedocs.io/en/latest/polkadot/Token%20Economics.html>
+/// <https://research.web3.foundation/en/latest/polkadot/overview/2-token-economics.html>
 pub struct TargetedFeeAdjustment<T, S, V, M>(sp_std::marker::PhantomData<(T, S, V, M)>);
 
 /// Something that can convert the current multiplier to the next one.
@@ -226,7 +226,7 @@ where
 }
 
 /// Storage releases of the pallet.
-#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug, TypeInfo)]
+#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 enum Releases {
 	/// Original version of the pallet.
 	V1Ancient,
@@ -297,10 +297,9 @@ pub mod pallet {
 
 	#[pallet::extra_constants]
 	impl<T: Config> Pallet<T> {
-		// TODO: rename to snake case after https://github.com/paritytech/substrate/issues/8826 fixed.
-		#[allow(non_snake_case)]
+		#[pallet::constant_name(WeightToFee)]
 		/// The polynomial that is applied in order to derive fee from weight.
-		fn WeightToFee() -> Vec<WeightToFeeCoefficient<BalanceOf<T>>> {
+		fn weight_to_fee_polynomial() -> Vec<WeightToFeeCoefficient<BalanceOf<T>>> {
 			T::WeightToFee::polynomial().to_vec()
 		}
 	}
@@ -347,7 +346,6 @@ pub mod pallet {
 			// given weight == u64, we build multipliers from `diff` of two weight values, which can
 			// at most be maximum block weight. Make sure that this can fit in a multiplier without
 			// loss.
-			use sp_std::convert::TryInto;
 			assert!(
 				<Multiplier as sp_runtime::traits::Bounded>::max_value() >=
 					Multiplier::checked_from_integer(
@@ -650,9 +648,9 @@ where
 			.saturated_into::<BalanceOf<T>>();
 		let max_reward = |val: BalanceOf<T>| val.saturating_mul(max_tx_per_block);
 
-		// To distribute no-tip transactions a little bit, we set the minimal tip as `1`.
+		// To distribute no-tip transactions a little bit, we increase the tip value by one.
 		// This means that given two transactions without a tip, smaller one will be preferred.
-		let tip = tip.max(1.saturated_into());
+		let tip = tip.saturating_add(One::one());
 		let scaled_tip = max_reward(tip);
 
 		match info.class {
@@ -705,7 +703,7 @@ where
 	type Pre = (
 		// tip
 		BalanceOf<T>,
-		// who paid the fee
+		// who paid the fee - this is an option to allow for a Default impl.
 		Self::AccountId,
 		// imbalance resulting from withdrawing the fee
 		<<T as Config>::OnChargeTransaction as OnChargeTransaction<T>>::LiquidityInfo,
@@ -741,17 +739,18 @@ where
 	}
 
 	fn post_dispatch(
-		pre: Self::Pre,
+		maybe_pre: Option<Self::Pre>,
 		info: &DispatchInfoOf<Self::Call>,
 		post_info: &PostDispatchInfoOf<Self::Call>,
 		len: usize,
 		_result: &DispatchResult,
 	) -> Result<(), TransactionValidityError> {
-		let (tip, who, imbalance) = pre;
-		let actual_fee = Pallet::<T>::compute_actual_fee(len as u32, info, post_info, tip);
-		T::OnChargeTransaction::correct_and_deposit_fee(
-			&who, info, post_info, actual_fee, tip, imbalance,
-		)?;
+		if let Some((tip, who, imbalance)) = maybe_pre {
+			let actual_fee = Pallet::<T>::compute_actual_fee(len as u32, info, post_info, tip);
+			T::OnChargeTransaction::correct_and_deposit_fee(
+				&who, info, post_info, actual_fee, tip, imbalance,
+			)?;
+		}
 		Ok(())
 	}
 }
@@ -789,7 +788,7 @@ mod tests {
 
 	use frame_support::{
 		assert_noop, assert_ok, parameter_types,
-		traits::{Currency, Imbalance, OnUnbalanced},
+		traits::{ConstU32, ConstU64, Currency, Imbalance, OnUnbalanced},
 		weights::{
 			DispatchClass, DispatchInfo, GetDispatchInfo, PostDispatchInfo, Weight,
 			WeightToFeeCoefficient, WeightToFeeCoefficients, WeightToFeePolynomial,
@@ -836,7 +835,6 @@ mod tests {
 	}
 
 	parameter_types! {
-		pub const BlockHashCount: u64 = 250;
 		pub static TransactionByteFee: u64 = 1;
 		pub static WeightToFee: u64 = 1;
 		pub static OperationalFeeMultiplier: u8 = 5;
@@ -857,7 +855,7 @@ mod tests {
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
 		type Event = Event;
-		type BlockHashCount = BlockHashCount;
+		type BlockHashCount = ConstU64<250>;
 		type Version = ();
 		type PalletInfo = PalletInfo;
 		type AccountData = pallet_balances::AccountData<u64>;
@@ -866,17 +864,14 @@ mod tests {
 		type SystemWeightInfo = ();
 		type SS58Prefix = ();
 		type OnSetCode = ();
-	}
-
-	parameter_types! {
-		pub const ExistentialDeposit: u64 = 1;
+		type MaxConsumers = ConstU32<16>;
 	}
 
 	impl pallet_balances::Config for Runtime {
 		type Balance = u64;
 		type Event = Event;
 		type DustRemoval = ();
-		type ExistentialDeposit = ExistentialDeposit;
+		type ExistentialDeposit = ConstU64<1>;
 		type AccountStore = System;
 		type MaxLocks = ();
 		type MaxReserves = ();
@@ -1014,7 +1009,7 @@ mod tests {
 				assert_eq!(Balances::free_balance(1), 100 - 5 - 5 - 10);
 
 				assert_ok!(ChargeTransactionPayment::<Runtime>::post_dispatch(
-					pre,
+					Some(pre),
 					&info_from_weight(5),
 					&default_post_info(),
 					len,
@@ -1032,7 +1027,7 @@ mod tests {
 				assert_eq!(Balances::free_balance(2), 200 - 5 - 10 - 100 - 5);
 
 				assert_ok!(ChargeTransactionPayment::<Runtime>::post_dispatch(
-					pre,
+					Some(pre),
 					&info_from_weight(100),
 					&post_info_from_weight(50),
 					len,
@@ -1061,7 +1056,7 @@ mod tests {
 				assert_eq!(Balances::free_balance(2), 200 - 5 - 10 - 150 - 5);
 
 				assert_ok!(ChargeTransactionPayment::<Runtime>::post_dispatch(
-					pre,
+					Some(pre),
 					&info_from_weight(100),
 					&post_info_from_weight(50),
 					len,
@@ -1356,7 +1351,7 @@ mod tests {
 				assert_eq!(Balances::free_balance(2), 0);
 
 				assert_ok!(ChargeTransactionPayment::<Runtime>::post_dispatch(
-					pre,
+					Some(pre),
 					&info_from_weight(100),
 					&post_info_from_weight(50),
 					len,
@@ -1364,11 +1359,15 @@ mod tests {
 				));
 				assert_eq!(Balances::free_balance(2), 0);
 				// Transfer Event
-				System::assert_has_event(Event::Balances(pallet_balances::Event::Transfer(
-					2, 3, 80,
-				)));
+				System::assert_has_event(Event::Balances(pallet_balances::Event::Transfer {
+					from: 2,
+					to: 3,
+					amount: 80,
+				}));
 				// Killed Event
-				System::assert_has_event(Event::System(system::Event::KilledAccount(2)));
+				System::assert_has_event(Event::System(system::Event::KilledAccount {
+					account: 2,
+				}));
 			});
 	}
 
@@ -1386,7 +1385,7 @@ mod tests {
 				assert_eq!(Balances::free_balance(2), 200 - 5 - 10 - 100 - 5);
 
 				assert_ok!(ChargeTransactionPayment::<Runtime>::post_dispatch(
-					pre,
+					Some(pre),
 					&info_from_weight(100),
 					&post_info_from_weight(101),
 					len,
@@ -1414,7 +1413,7 @@ mod tests {
 					.unwrap();
 				assert_eq!(Balances::total_balance(&user), 0);
 				assert_ok!(ChargeTransactionPayment::<Runtime>::post_dispatch(
-					pre,
+					Some(pre),
 					&dispatch_info,
 					&default_post_info(),
 					len,
@@ -1446,7 +1445,7 @@ mod tests {
 					.unwrap();
 
 				ChargeTransactionPayment::<Runtime>::post_dispatch(
-					pre,
+					Some(pre),
 					&info,
 					&post_info,
 					len,
@@ -1477,14 +1476,14 @@ mod tests {
 				.unwrap()
 				.priority;
 
-			assert_eq!(priority, 50);
+			assert_eq!(priority, 60);
 
 			let priority = ChargeTransactionPayment::<Runtime>(2 * tip)
 				.validate(&2, CALL, &normal, len)
 				.unwrap()
 				.priority;
 
-			assert_eq!(priority, 100);
+			assert_eq!(priority, 110);
 		});
 
 		ExtBuilder::default().balance_factor(100).build().execute_with(|| {
@@ -1497,13 +1496,13 @@ mod tests {
 				.validate(&2, CALL, &op, len)
 				.unwrap()
 				.priority;
-			assert_eq!(priority, 5800);
+			assert_eq!(priority, 5810);
 
 			let priority = ChargeTransactionPayment::<Runtime>(2 * tip)
 				.validate(&2, CALL, &op, len)
 				.unwrap()
 				.priority;
-			assert_eq!(priority, 6100);
+			assert_eq!(priority, 6110);
 		});
 	}
 
@@ -1538,6 +1537,46 @@ mod tests {
 	}
 
 	#[test]
+	fn higher_tip_have_higher_priority() {
+		let get_priorities = |tip: u64| {
+			let mut priority1 = 0;
+			let mut priority2 = 0;
+			let len = 10;
+			ExtBuilder::default().balance_factor(100).build().execute_with(|| {
+				let normal =
+					DispatchInfo { weight: 100, class: DispatchClass::Normal, pays_fee: Pays::Yes };
+				priority1 = ChargeTransactionPayment::<Runtime>(tip)
+					.validate(&2, CALL, &normal, len)
+					.unwrap()
+					.priority;
+			});
+
+			ExtBuilder::default().balance_factor(100).build().execute_with(|| {
+				let op = DispatchInfo {
+					weight: 100,
+					class: DispatchClass::Operational,
+					pays_fee: Pays::Yes,
+				};
+				priority2 = ChargeTransactionPayment::<Runtime>(tip)
+					.validate(&2, CALL, &op, len)
+					.unwrap()
+					.priority;
+			});
+
+			(priority1, priority2)
+		};
+
+		let mut prev_priorities = get_priorities(0);
+
+		for tip in 1..3 {
+			let priorities = get_priorities(tip);
+			assert!(prev_priorities.0 < priorities.0);
+			assert!(prev_priorities.1 < priorities.1);
+			prev_priorities = priorities;
+		}
+	}
+
+	#[test]
 	fn post_info_can_change_pays_fee() {
 		ExtBuilder::default()
 			.balance_factor(10)
@@ -1557,7 +1596,7 @@ mod tests {
 					.unwrap();
 
 				ChargeTransactionPayment::<Runtime>::post_dispatch(
-					pre,
+					Some(pre),
 					&info,
 					&post_info,
 					len,

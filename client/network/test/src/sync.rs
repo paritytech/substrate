@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -20,7 +20,6 @@ use super::*;
 use futures::{executor::block_on, Future};
 use sp_consensus::{block_validation::Validation, BlockOrigin};
 use sp_runtime::Justifications;
-use std::time::Duration;
 use substrate_test_runtime::Header;
 
 fn test_ancestor_search_when_common_is(n: usize) {
@@ -392,35 +391,6 @@ fn own_blocks_are_announced() {
 }
 
 #[test]
-fn blocks_are_not_announced_by_light_nodes() {
-	sp_tracing::try_init_simple();
-	let mut net = TestNet::new(0);
-
-	// full peer0 is connected to light peer
-	// light peer1 is connected to full peer2
-	net.add_full_peer();
-	net.add_light_peer();
-
-	// Sync between 0 and 1.
-	net.peer(0).push_blocks(1, false);
-	assert_eq!(net.peer(0).client.info().best_number, 1);
-	net.block_until_sync();
-	assert_eq!(net.peer(1).client.info().best_number, 1);
-
-	// Add another node and remove node 0.
-	net.add_full_peer();
-	net.peers.remove(0);
-
-	// Poll for a few seconds and make sure 1 and 2 (now 0 and 1) don't sync together.
-	let mut delay = futures_timer::Delay::new(Duration::from_secs(5));
-	block_on(futures::future::poll_fn::<(), _>(|cx| {
-		net.poll(cx);
-		Pin::new(&mut delay).poll(cx)
-	}));
-	assert_eq!(net.peer(1).client.info().best_number, 0);
-}
-
-#[test]
 fn can_sync_small_non_best_forks() {
 	sp_tracing::try_init_simple();
 	let mut net = TestNet::new(2);
@@ -484,69 +454,35 @@ fn can_sync_small_non_best_forks() {
 }
 
 #[test]
-fn can_not_sync_from_light_peer() {
+fn can_sync_forks_ahead_of_the_best_chain() {
 	sp_tracing::try_init_simple();
-
-	// given the network with 1 full nodes (#0) and 1 light node (#1)
-	let mut net = TestNet::new(1);
-	net.add_light_peer();
-
-	// generate some blocks on #0
+	let mut net = TestNet::new(2);
 	net.peer(0).push_blocks(1, false);
+	net.peer(1).push_blocks(1, false);
 
-	// and let the light client sync from this node
-	net.block_until_sync();
+	net.block_until_connected();
+	// Peer 0 is on 2-block fork which is announced with is_best=false
+	let fork_hash = net.peer(0).generate_blocks_with_fork_choice(
+		2,
+		BlockOrigin::Own,
+		|builder| builder.build().unwrap().block,
+		ForkChoiceStrategy::Custom(false),
+	);
+	// Peer 1 is on 1-block fork
+	net.peer(1).push_blocks(1, false);
+	assert!(net.peer(0).client().header(&BlockId::Hash(fork_hash)).unwrap().is_some());
+	assert_eq!(net.peer(0).client().info().best_number, 1);
+	assert_eq!(net.peer(1).client().info().best_number, 2);
 
-	// ensure #0 && #1 have the same best block
-	let full0_info = net.peer(0).client.info();
-	let light_info = net.peer(1).client.info();
-	assert_eq!(full0_info.best_number, 1);
-	assert_eq!(light_info.best_number, 1);
-	assert_eq!(light_info.best_hash, full0_info.best_hash);
-
-	// add new full client (#2) && remove #0
-	net.add_full_peer();
-	net.peers.remove(0);
-
-	// ensure that the #2 (now #1) fails to sync block #1 even after 5 seconds
-	let mut test_finished = futures_timer::Delay::new(Duration::from_secs(5));
+	// after announcing, peer 1 downloads the block.
 	block_on(futures::future::poll_fn::<(), _>(|cx| {
 		net.poll(cx);
-		Pin::new(&mut test_finished).poll(cx)
+
+		if net.peer(1).client().header(&BlockId::Hash(fork_hash)).unwrap().is_none() {
+			return Poll::Pending
+		}
+		Poll::Ready(())
 	}));
-}
-
-#[test]
-fn light_peer_imports_header_from_announce() {
-	sp_tracing::try_init_simple();
-
-	fn import_with_announce(net: &mut TestNet, hash: H256) {
-		net.peer(0).announce_block(hash, None);
-
-		block_on(futures::future::poll_fn::<(), _>(|cx| {
-			net.poll(cx);
-			if net.peer(1).client().header(&BlockId::Hash(hash)).unwrap().is_some() {
-				Poll::Ready(())
-			} else {
-				Poll::Pending
-			}
-		}));
-	}
-
-	// given the network with 1 full nodes (#0) and 1 light node (#1)
-	let mut net = TestNet::new(1);
-	net.add_light_peer();
-
-	// let them connect to each other
-	net.block_until_sync();
-
-	// check that NEW block is imported from announce message
-	let new_hash = net.peer(0).push_blocks(1, false);
-	import_with_announce(&mut net, new_hash);
-
-	// check that KNOWN STALE block is imported from announce message
-	let known_stale_hash = net.peer(0).push_blocks_at(BlockId::Number(0), 1, true);
-	import_with_announce(&mut net, known_stale_hash);
 }
 
 #[test]
@@ -774,7 +710,7 @@ impl BlockAnnounceValidator<Block> for FailingBlockAnnounceValidator {
 #[test]
 fn sync_blocks_when_block_announce_validator_says_it_is_new_best() {
 	sp_tracing::try_init_simple();
-	let mut net = TestNet::with_fork_choice(ForkChoiceStrategy::Custom(false));
+	let mut net = TestNet::new(0);
 	net.add_full_peer_with_config(Default::default());
 	net.add_full_peer_with_config(Default::default());
 	net.add_full_peer_with_config(FullPeerConfig {
@@ -784,16 +720,17 @@ fn sync_blocks_when_block_announce_validator_says_it_is_new_best() {
 
 	net.block_until_connected();
 
-	let block_hash = net.peer(0).push_blocks(1, false);
+	// Add blocks but don't set them as best
+	let block_hash = net.peer(0).generate_blocks_with_fork_choice(
+		1,
+		BlockOrigin::Own,
+		|builder| builder.build().unwrap().block,
+		ForkChoiceStrategy::Custom(false),
+	);
 
 	while !net.peer(2).has_block(&block_hash) {
 		net.block_until_idle();
 	}
-
-	// Peer1 should not have the block, because peer 0 did not reported the block
-	// as new best. However, peer2 has a special block announcement validator
-	// that flags all blocks as `is_new_best` and thus, it should have synced the blocks.
-	assert!(!net.peer(1).has_block(&block_hash));
 }
 
 /// Waits for some time until the validation is successfull.
@@ -817,7 +754,7 @@ impl BlockAnnounceValidator<Block> for DeferredBlockAnnounceValidator {
 #[test]
 fn wait_until_deferred_block_announce_validation_is_ready() {
 	sp_tracing::try_init_simple();
-	let mut net = TestNet::with_fork_choice(ForkChoiceStrategy::Custom(false));
+	let mut net = TestNet::new(0);
 	net.add_full_peer_with_config(Default::default());
 	net.add_full_peer_with_config(FullPeerConfig {
 		block_announce_validator: Some(Box::new(NewBestBlockAnnounceValidator)),
@@ -826,7 +763,13 @@ fn wait_until_deferred_block_announce_validation_is_ready() {
 
 	net.block_until_connected();
 
-	let block_hash = net.peer(0).push_blocks(1, true);
+	// Add blocks but don't set them as best
+	let block_hash = net.peer(0).generate_blocks_with_fork_choice(
+		1,
+		BlockOrigin::Own,
+		|builder| builder.build().unwrap().block,
+		ForkChoiceStrategy::Custom(false),
+	);
 
 	while !net.peer(1).has_block(&block_hash) {
 		net.block_until_idle();
@@ -943,7 +886,10 @@ fn block_announce_data_is_propagated() {
 	// Wait until peer 1 is connected to both nodes.
 	block_on(futures::future::poll_fn::<(), _>(|cx| {
 		net.poll(cx);
-		if net.peer(1).num_peers() == 2 {
+		if net.peer(1).num_peers() == 2 &&
+			net.peer(0).num_peers() == 1 &&
+			net.peer(2).num_peers() == 1
+		{
 			Poll::Ready(())
 		} else {
 			Poll::Pending
@@ -1110,11 +1056,44 @@ fn syncs_state() {
 	sp_tracing::try_init_simple();
 	for skip_proofs in &[false, true] {
 		let mut net = TestNet::new(0);
-		net.add_full_peer_with_config(Default::default());
-		net.add_full_peer_with_config(FullPeerConfig {
-			sync_mode: SyncMode::Fast { skip_proofs: *skip_proofs, storage_chain_mode: false },
-			..Default::default()
-		});
+		let mut genesis_storage: sp_core::storage::Storage = Default::default();
+		genesis_storage.top.insert(b"additional_key".to_vec(), vec![1]);
+		let mut child_data: std::collections::BTreeMap<Vec<u8>, Vec<u8>> = Default::default();
+		for i in 0u8..16 {
+			child_data.insert(vec![i; 5], vec![i; 33]);
+		}
+		let child1 = sp_core::storage::StorageChild {
+			data: child_data.clone(),
+			child_info: sp_core::storage::ChildInfo::new_default(b"child1"),
+		};
+		let child3 = sp_core::storage::StorageChild {
+			data: child_data.clone(),
+			child_info: sp_core::storage::ChildInfo::new_default(b"child3"),
+		};
+		for i in 22u8..33 {
+			child_data.insert(vec![i; 5], vec![i; 33]);
+		}
+		let child2 = sp_core::storage::StorageChild {
+			data: child_data.clone(),
+			child_info: sp_core::storage::ChildInfo::new_default(b"child2"),
+		};
+		genesis_storage
+			.children_default
+			.insert(child1.child_info.storage_key().to_vec(), child1);
+		genesis_storage
+			.children_default
+			.insert(child2.child_info.storage_key().to_vec(), child2);
+		genesis_storage
+			.children_default
+			.insert(child3.child_info.storage_key().to_vec(), child3);
+		let mut config_one = FullPeerConfig::default();
+		config_one.extra_storage = Some(genesis_storage.clone());
+		net.add_full_peer_with_config(config_one);
+		let mut config_two = FullPeerConfig::default();
+		config_two.extra_storage = Some(genesis_storage);
+		config_two.sync_mode =
+			SyncMode::Fast { skip_proofs: *skip_proofs, storage_chain_mode: false };
+		net.add_full_peer_with_config(config_two);
 		net.peer(0).push_blocks(64, false);
 		// Wait for peer 1 to sync header chain.
 		net.block_until_sync();
@@ -1172,21 +1151,20 @@ fn syncs_indexed_blocks() {
 		false,
 		true,
 		true,
+		ForkChoiceStrategy::LongestChain,
 	);
 	let indexed_key = sp_runtime::traits::BlakeTwo256::hash(&42u64.to_le_bytes());
 	assert!(net
 		.peer(0)
 		.client()
-		.as_full()
-		.unwrap()
+		.as_client()
 		.indexed_transaction(&indexed_key)
 		.unwrap()
 		.is_some());
 	assert!(net
 		.peer(1)
 		.client()
-		.as_full()
-		.unwrap()
+		.as_client()
 		.indexed_transaction(&indexed_key)
 		.unwrap()
 		.is_none());
@@ -1195,8 +1173,7 @@ fn syncs_indexed_blocks() {
 	assert!(net
 		.peer(1)
 		.client()
-		.as_full()
-		.unwrap()
+		.as_client()
 		.indexed_transaction(&indexed_key)
 		.unwrap()
 		.is_some());

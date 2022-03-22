@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -32,7 +32,7 @@ use sp_blockchain::HeaderBackend;
 use sp_core::Bytes;
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 
-pub use pallet_mmr_primitives::MmrApi as MmrRuntimeApi;
+pub use pallet_mmr_primitives::{LeafIndex, MmrApi as MmrRuntimeApi};
 
 /// Retrieved MMR leaf and its proof.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
@@ -71,7 +71,7 @@ pub trait MmrApi<BlockHash> {
 	#[rpc(name = "mmr_generateProof")]
 	fn generate_proof(
 		&self,
-		leaf_index: u64,
+		leaf_index: LeafIndex,
 		at: Option<BlockHash>,
 	) -> Result<LeafProof<BlockHash>>;
 }
@@ -98,7 +98,7 @@ where
 {
 	fn generate_proof(
 		&self,
-		leaf_index: u64,
+		leaf_index: LeafIndex,
 		at: Option<<Block as BlockT>::Hash>,
 	) -> Result<LeafProof<<Block as BlockT>::Hash>> {
 		let api = self.client.runtime_api();
@@ -144,11 +144,11 @@ fn mmr_error_into_rpc_error(err: MmrError) -> Error {
 }
 
 /// Converts a runtime trap into an RPC error.
-fn runtime_error_into_rpc_error(err: impl std::fmt::Debug) -> Error {
+fn runtime_error_into_rpc_error(err: impl std::fmt::Display) -> Error {
 	Error {
 		code: ErrorCode::ServerError(RUNTIME_ERROR),
 		message: "Runtime trapped".into(),
-		data: Some(format!("{:?}", err).into()),
+		data: Some(err.to_string().into()),
 	}
 }
 

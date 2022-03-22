@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,7 +17,6 @@
 
 // Outputs benchmark results to Rust files that can be ingested by the runtime.
 
-use core::convert::TryInto;
 use std::{
 	collections::{HashMap, HashSet},
 	fs,
@@ -437,7 +436,7 @@ where
 // A Handlebars helper to add an underscore after every 3rd character,
 // i.e. a separator for large numbers.
 #[derive(Clone, Copy)]
-struct UnderscoreHelper;
+pub(crate) struct UnderscoreHelper;
 impl handlebars::HelperDef for UnderscoreHelper {
 	fn call<'reg: 'rc, 'rc>(
 		&self,

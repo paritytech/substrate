@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,7 +18,6 @@
 //! Tools for analyzing the benchmark results.
 
 use crate::BenchmarkResult;
-use core::convert::TryFrom;
 use linregress::{FormulaRegressionBuilder, RegressionDataBuilder};
 use std::collections::BTreeMap;
 
@@ -200,7 +199,7 @@ impl Analysis {
 	}
 
 	pub fn min_squares_iqr(r: &Vec<BenchmarkResult>, selector: BenchmarkSelector) -> Option<Self> {
-		if r[0].components.is_empty() {
+		if r[0].components.is_empty() || r.len() <= 2 {
 			return Self::median_value(r, selector)
 		}
 
