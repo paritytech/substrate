@@ -59,6 +59,7 @@ pub const CRYPTO_ID: CryptoTypeId = CryptoTypeId(*b"ecds");
 type Seed = [u8; 32];
 
 /// The ECDSA compressed public key.
+#[cfg_attr(feature = "full_crypto", derive(Hash))]
 #[derive(
 	Clone,
 	Copy,
@@ -71,7 +72,6 @@ type Seed = [u8; 32];
 	PartialEq,
 	PartialOrd,
 	Ord,
-	Hash,
 )]
 pub struct Public(pub [u8; 33]);
 
@@ -103,8 +103,7 @@ impl Public {
 
 	/// Converts self into Ethereum address
 	pub fn to_eth_address(&self) -> Result<[u8; 20], ()> {
-		use crate::hashing::keccak_256;
-		use k256::{elliptic_curve::sec1::ToEncodedPoint, PublicKey};
+	    use k256::{elliptic_curve::sec1::ToEncodedPoint, PublicKey};
 
 		PublicKey::from_sec1_bytes(self.as_slice())
 			.map(|pub_key| {
@@ -112,7 +111,7 @@ impl Public {
 				let uncompressed = pub_key.to_encoded_point(false);
 				// convert to ETH address
 				let res: [u8; 20] =
-					keccak_256(&uncompressed.as_bytes()[1..])[12..].try_into().unwrap();
+					sp_io::hashing::keccak_256(&uncompressed.as_bytes()[1..])[12..].try_into().unwrap();
 				res
 			})
 			.map_err(|_| ())

@@ -48,11 +48,11 @@ pub use sp_debug_derive::RuntimeDebug;
 #[cfg(feature = "std")]
 pub use impl_serde::serialize as bytes;
 
+#[cfg(feature = "full_crypto")]
 pub mod hashing;
-pub use hashing::keccak_256;
 
 #[cfg(feature = "full_crypto")]
-pub use hashing::{blake2_128, blake2_256, twox_128, twox_256, twox_64};
+pub use hashing::{blake2_128, blake2_256, keccak_256, twox_128, twox_256, twox_64};
 pub mod crypto;
 pub mod hexdisplay;
 
