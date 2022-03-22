@@ -468,26 +468,12 @@ pub mod pallet {
 			let registration =
 				Registrations::<T>::get(name_hash).ok_or(Error::<T>::RegistrationNotFound)?;
 
-			let is_owner =
-				if let Some(sender) = maybe_sender { registration.owner == sender } else { false };
+			let block_number = frame_system::Pallet::<T>::block_number();
 
-			// If the sender is not the owner, we need to verify that the registration has expired.
-			// Otherwise, we can skip this check since owner can do whatever they want.
-			if !is_owner {
-				match registration.expiry {
-					// if expiry has been set, verify the registration has expired.
-					Some(e) =>
-						if e <= frame_system::Pallet::<T>::block_number() {
-							Ok(())
-						} else {
-							Err(Error::<T>::RegistrationNotExpired)
-						},
-					// no expiry set, non-owner cannot deregister.
-					None => Err(Error::<T>::RegistrationNotExpired),
-				}?;
-			}
+			// check if deregistration can go ahead
+			Self::can_deregister(maybe_sender, &registration, block_number)?;
 
-			// for subnodes that require a deposit, make sure to unreserve here
+			// for subnodes that hold a deposit, unreserve it.
 			if let Some(deposit) = registration.deposit {
 				let _ = T::Currency::unreserve(&registration.owner, deposit);
 			}
@@ -496,6 +482,33 @@ pub mod pallet {
 			Self::deposit_event(Event::<T>::AddressDeregistered { name_hash });
 
 			Ok(())
+		}
+
+		// If the sender is not the owner, and not root from force_deregister, we
+		// need to verify that the registration has expired before anyone else can
+		// go ahead and deregister.
+		pub fn can_deregister(
+			maybe_sender: Option<T::AccountId>,
+			registration: &Registration<T::AccountId, Option<BalanceOf<T>>, Option<T::BlockNumber>>,
+			block_number: T::BlockNumber,
+		) -> DispatchResult {
+			if let Some(sender) = maybe_sender {
+				// sender is owner, can deregister
+				if registration.owner == sender {
+					return Ok(())
+
+				// sender is non-owner
+				} else {
+					// if no expiry set, non-owner cannot deregister
+					let expiry = registration.expiry.ok_or(Error::<T>::RegistrationNotExpired)?;
+					// verify the registration has expired.
+					ensure!(expiry <= block_number, Error::<T>::RegistrationNotExpired);
+					return Ok(())
+				}
+			} else {
+				// sender must be from force_deregister - ok to deregister
+				return Ok(())
+			}
 		}
 	}
 }
