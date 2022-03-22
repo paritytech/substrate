@@ -2208,6 +2208,15 @@ mod create {
 			// Then
 			assert_noop!(
 				Pools::create(Origin::signed(11), 20, 11, 11, 11),
+				Error::<Runtime>::InsufficientBalanceToCreate
+			);
+
+			// Given
+			Balances::make_free_balance_be(&11, 5 + 20);
+
+			// Then
+			assert_noop!(
+				Pools::create(Origin::signed(11), 20, 11, 11, 11),
 				Error::<Runtime>::MaxDelegators
 			);
 		});
