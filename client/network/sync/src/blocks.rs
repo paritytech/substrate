@@ -365,4 +365,32 @@ mod test {
 			Some(100 + 128..100 + 128 + 128)
 		);
 	}
+
+	#[test]
+	fn no_duplicate_requests_on_fork() {
+		let mut bc = BlockCollection::new();
+		assert!(is_empty(&bc));
+		let peer = PeerId::random();
+
+		let blocks = generate_blocks(10);
+
+		// count = 5, peer_best = 50, common = 39, max_parallel = 0, max_ahead = 200
+		assert_eq!(bc.needed_blocks(peer.clone(), 5, 50, 39, 0, 200), Some(40..45));
+
+		// got a response on the request for `40..45`
+		bc.clear_peer_download(&peer);
+		bc.insert(40, blocks[..5].to_vec(), peer.clone());
+
+		// our "node" started on a fork, with its current best = 47, which is > common
+		let ready = bc.ready_blocks(48);
+		assert_eq!(
+			ready,
+			blocks[..5]
+				.iter()
+				.map(|b| BlockData { block: b.clone(), origin: Some(peer.clone()) })
+				.collect::<Vec<_>>()
+		);
+
+		assert_eq!(bc.needed_blocks(peer.clone(), 5, 50, 39, 0, 200), Some(45..50));
+	}
 }

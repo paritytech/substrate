@@ -3179,6 +3179,148 @@ mod test {
 	}
 
 	#[test]
+	fn syncs_fork_without_duplicate_requests() {
+		sp_tracing::try_init_simple();
+
+		let mut client = Arc::new(TestClientBuilder::new().build());
+		let blocks = (0..MAX_BLOCKS_TO_LOOK_BACKWARDS * 4)
+			.map(|_| build_block(&mut client, None, false))
+			.collect::<Vec<_>>();
+
+		let fork_blocks = {
+			let mut client = Arc::new(TestClientBuilder::new().build());
+			let fork_blocks = blocks[..MAX_BLOCKS_TO_LOOK_BACKWARDS as usize * 2]
+				.into_iter()
+				.inspect(|b| block_on(client.import(BlockOrigin::Own, (*b).clone())).unwrap())
+				.cloned()
+				.collect::<Vec<_>>();
+
+			fork_blocks
+				.into_iter()
+				.chain(
+					(0..MAX_BLOCKS_TO_LOOK_BACKWARDS * 2 + 1)
+						.map(|_| build_block(&mut client, None, true)),
+				)
+				.collect::<Vec<_>>()
+		};
+
+		let info = client.info();
+
+		let mut sync = ChainSync::new(
+			SyncMode::Full,
+			client.clone(),
+			Box::new(DefaultBlockAnnounceValidator),
+			5,
+			None,
+		)
+		.unwrap();
+
+		let finalized_block = blocks[MAX_BLOCKS_TO_LOOK_BACKWARDS as usize * 2 - 1].clone();
+		let just = (*b"TEST", Vec::new());
+		client
+			.finalize_block(BlockId::Hash(finalized_block.hash()), Some(just))
+			.unwrap();
+		sync.update_chain_info(&info.best_hash, info.best_number);
+
+		let peer_id1 = PeerId::random();
+
+		let common_block = blocks[MAX_BLOCKS_TO_LOOK_BACKWARDS as usize / 2].clone();
+		// Connect the node we will sync from
+		sync.new_peer(peer_id1.clone(), common_block.hash(), *common_block.header().number())
+			.unwrap();
+
+		send_block_announce(fork_blocks.last().unwrap().header().clone(), &peer_id1, &mut sync);
+
+		let mut request =
+			get_block_request(&mut sync, FromBlock::Number(info.best_number), 1, &peer_id1);
+
+		// Do the ancestor search
+		loop {
+			let block = &fork_blocks[unwrap_from_block_number(request.from.clone()) as usize - 1];
+			let response = create_block_response(vec![block.clone()]);
+
+			let on_block_data = sync.on_block_data(&peer_id1, Some(request), response).unwrap();
+			request = match on_block_data.into_request() {
+				Some(req) => req.1,
+				// We found the ancenstor
+				None => break,
+			};
+
+			log::trace!(target: "sync", "Request: {:?}", request);
+		}
+
+		// Now request and import the fork.
+		let mut best_block_num = finalized_block.header().number().clone() as u32;
+		let mut request = get_block_request(
+			&mut sync,
+			FromBlock::Number(MAX_BLOCKS_TO_REQUEST as u64 + best_block_num as u64),
+			MAX_BLOCKS_TO_REQUEST as u32,
+			&peer_id1,
+		);
+		let last_block_num = *fork_blocks.last().unwrap().header().number() as u32 - 1;
+		while best_block_num < last_block_num {
+			let from = unwrap_from_block_number(request.from.clone());
+
+			let mut resp_blocks = fork_blocks[best_block_num as usize..from as usize].to_vec();
+			resp_blocks.reverse();
+
+			let response = create_block_response(resp_blocks.clone());
+
+			let res = sync.on_block_data(&peer_id1, Some(request.clone()), response).unwrap();
+			assert!(matches!(
+				res,
+				OnBlockData::Import(_, blocks) if blocks.len() == MAX_BLOCKS_TO_REQUEST
+			),);
+
+			best_block_num += MAX_BLOCKS_TO_REQUEST as u32;
+			log::info!("best block = {best_block_num}");
+
+			if best_block_num < last_block_num {
+				// make sure we're not getting a duplicate request in the time before the blocks are
+				// processed
+				request = get_block_request(
+					&mut sync,
+					FromBlock::Number(MAX_BLOCKS_TO_REQUEST as u64 + best_block_num as u64),
+					MAX_BLOCKS_TO_REQUEST as u32,
+					&peer_id1,
+				);
+			}
+
+			let _ = sync.on_blocks_processed(
+				MAX_BLOCKS_TO_REQUEST as usize,
+				MAX_BLOCKS_TO_REQUEST as usize,
+				resp_blocks
+					.iter()
+					.rev()
+					.map(|b| {
+						(
+							Ok(BlockImportStatus::ImportedUnknown(
+								b.header().number().clone(),
+								Default::default(),
+								Some(peer_id1.clone()),
+							)),
+							b.hash(),
+						)
+					})
+					.collect(),
+			);
+
+			resp_blocks
+				.into_iter()
+				.rev()
+				.for_each(|b| block_on(client.import(BlockOrigin::Own, b)).unwrap());
+		}
+
+		// Request the tip
+		get_block_request(
+			&mut sync,
+			FromBlock::Hash(fork_blocks.last().unwrap().hash()),
+			1,
+			&peer_id1,
+		);
+	}
+
+	#[test]
 	fn removes_target_fork_on_disconnect() {
 		sp_tracing::try_init_simple();
 		let mut client = Arc::new(TestClientBuilder::new().build());
