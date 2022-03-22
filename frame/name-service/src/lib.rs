@@ -582,6 +582,7 @@ pub mod pallet {
 					let _ = T::Currency::unreserve(&registration.owner, deposit);
 				}
 
+				Resolvers::<T>::remove(subnode_hash);
 				Registrations::<T>::remove(subnode_hash);
 				Self::deposit_event(Event::<T>::AddressDeregistered { name_hash: subnode_hash });
 				return Ok(())
@@ -604,6 +605,7 @@ pub mod pallet {
 					}
 				}
 
+				Resolvers::<T>::remove(name_hash);
 				Registrations::<T>::remove(name_hash);
 				Self::deposit_event(Event::<T>::AddressDeregistered { name_hash });
 				return Ok(())
