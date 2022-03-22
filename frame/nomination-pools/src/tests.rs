@@ -576,9 +576,9 @@ mod claim_payout {
 				Balances::make_free_balance_be(&10, 0);
 				Balances::make_free_balance_be(&40, 0);
 				Balances::make_free_balance_be(&50, 0);
-				let reward_account = Pools::create_reward_account(1);
+				let ed = Balances::minimum_balance();
 				// and the reward pool has earned 100 in rewards
-				Balances::make_free_balance_be(&reward_account, 100);
+				Balances::make_free_balance_be(&default_reward_account(), ed + 100);
 
 				// When
 				assert_ok!(Pools::claim_payout(Origin::signed(10)));
@@ -592,7 +592,7 @@ mod claim_payout {
 					rew(90, 100 * 100 - 100 * 10, 100)
 				);
 				assert_eq!(Balances::free_balance(&10), 10);
-				assert_eq!(Balances::free_balance(&reward_account), 90);
+				assert_eq!(Balances::free_balance(&default_reward_account()), ed + 90);
 
 				// When
 				assert_ok!(Pools::claim_payout(Origin::signed(40)));
@@ -605,7 +605,7 @@ mod claim_payout {
 					rew(50, 9_000 - 100 * 40, 100)
 				);
 				assert_eq!(Balances::free_balance(&40), 40);
-				assert_eq!(Balances::free_balance(&reward_account), 50);
+				assert_eq!(Balances::free_balance(&default_reward_account()), ed + 50);
 
 				// When
 				assert_ok!(Pools::claim_payout(Origin::signed(50)));
@@ -615,10 +615,10 @@ mod claim_payout {
 				assert_eq!(Delegators::<Runtime>::get(50).unwrap(), del(50, 100));
 				assert_eq!(RewardPools::<Runtime>::get(&1).unwrap(), rew(0, 0, 100));
 				assert_eq!(Balances::free_balance(&50), 50);
-				assert_eq!(Balances::free_balance(&reward_account), 0);
+				assert_eq!(Balances::free_balance(&default_reward_account()), ed + 0);
 
 				// Given the reward pool has some new rewards
-				Balances::make_free_balance_be(&reward_account, 50);
+				Balances::make_free_balance_be(&default_reward_account(), ed + 50);
 
 				// When
 				assert_ok!(Pools::claim_payout(Origin::signed(10)));
@@ -628,7 +628,7 @@ mod claim_payout {
 				assert_eq!(Delegators::<Runtime>::get(10).unwrap(), del(10, 150));
 				assert_eq!(RewardPools::<Runtime>::get(&1).unwrap(), rew(45, 5_000 - 50 * 10, 150));
 				assert_eq!(Balances::free_balance(&10), 10 + 5);
-				assert_eq!(Balances::free_balance(&reward_account), 45);
+				assert_eq!(Balances::free_balance(&default_reward_account()), ed + 45);
 
 				// When
 				assert_ok!(Pools::claim_payout(Origin::signed(40)));
@@ -639,11 +639,11 @@ mod claim_payout {
 				assert_eq!(Delegators::<Runtime>::get(40).unwrap(), del(40, 150));
 				assert_eq!(RewardPools::<Runtime>::get(&1).unwrap(), rew(25, 4_500 - 50 * 40, 150));
 				assert_eq!(Balances::free_balance(&40), 40 + 20);
-				assert_eq!(Balances::free_balance(&reward_account), 25);
+				assert_eq!(Balances::free_balance(&default_reward_account()), ed + 25);
 
 				// Given del 50 hasn't claimed and the reward pools has just earned 50
-				assert_ok!(Balances::mutate_account(&reward_account, |a| a.free += 50));
-				assert_eq!(Balances::free_balance(&reward_account), 75);
+				assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free += 50));
+				assert_eq!(Balances::free_balance(&default_reward_account()), ed + 75);
 
 				// When
 				assert_ok!(Pools::claim_payout(Origin::signed(50)));
@@ -665,7 +665,7 @@ mod claim_payout {
 					)
 				);
 				assert_eq!(Balances::free_balance(&50), 50 + 50);
-				assert_eq!(Balances::free_balance(&reward_account), 25);
+				assert_eq!(Balances::free_balance(&default_reward_account()), ed + 25);
 
 				// When
 				assert_ok!(Pools::claim_payout(Origin::signed(10)));
@@ -675,11 +675,11 @@ mod claim_payout {
 				assert_eq!(Delegators::<Runtime>::get(10).unwrap(), del(10, 200));
 				assert_eq!(RewardPools::<Runtime>::get(&1).unwrap(), rew(20, 2_500 - 10 * 50, 200));
 				assert_eq!(Balances::free_balance(&10), 15 + 5);
-				assert_eq!(Balances::free_balance(&reward_account), 20);
+				assert_eq!(Balances::free_balance(&default_reward_account()), ed + 20);
 
 				// Given del 40 hasn't claimed and the reward pool has just earned 400
-				assert_ok!(Balances::mutate_account(&reward_account, |a| a.free += 400));
-				assert_eq!(Balances::free_balance(&reward_account), 420);
+				assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free += 400));
+				assert_eq!(Balances::free_balance(&default_reward_account()), ed + 420);
 
 				// When
 				assert_ok!(Pools::claim_payout(Origin::signed(10)));
@@ -700,11 +700,11 @@ mod claim_payout {
 					)
 				);
 				assert_eq!(Balances::free_balance(&10), 20 + 40);
-				assert_eq!(Balances::free_balance(&reward_account), 380);
+				assert_eq!(Balances::free_balance(&default_reward_account()), ed + 380);
 
 				// Given del 40 + del 50 haven't claimed and the reward pool has earned 20
-				assert_ok!(Balances::mutate_account(&reward_account, |a| a.free += 20));
-				assert_eq!(Balances::free_balance(&reward_account), 400);
+				assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free += 20));
+				assert_eq!(Balances::free_balance(&default_reward_account()), ed + 400);
 
 				// When
 				assert_ok!(Pools::claim_payout(Origin::signed(10)));
@@ -718,7 +718,7 @@ mod claim_payout {
 					rew(398, (38_000 + 20 * 100) - 10 * 20, 620)
 				);
 				assert_eq!(Balances::free_balance(&10), 60 + 2);
-				assert_eq!(Balances::free_balance(&reward_account), 398);
+				assert_eq!(Balances::free_balance(&default_reward_account()), ed + 398);
 
 				// When
 				assert_ok!(Pools::claim_payout(Origin::signed(40)));
@@ -732,7 +732,7 @@ mod claim_payout {
 					rew(210, 39_800 - 40 * 470, 620)
 				);
 				assert_eq!(Balances::free_balance(&40), 60 + 188);
-				assert_eq!(Balances::free_balance(&reward_account), 210);
+				assert_eq!(Balances::free_balance(&default_reward_account()), ed + 210);
 
 				// When
 				assert_ok!(Pools::claim_payout(Origin::signed(50)));
@@ -745,7 +745,7 @@ mod claim_payout {
 					rew(0, 21_000 - 50 * 420, 620)
 				);
 				assert_eq!(Balances::free_balance(&50), 100 + 210);
-				assert_eq!(Balances::free_balance(&reward_account), 0);
+				assert_eq!(Balances::free_balance(&default_reward_account()), ed + 0);
 			});
 	}
 
@@ -956,7 +956,7 @@ mod claim_payout {
 				assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free -= 50));
 
 				// Given the reward pool has some new rewards
-				Balances::make_free_balance_be(&default_reward_account(), 50);
+				Balances::make_free_balance_be(&default_reward_account(), ed + 50);
 
 				// When
 				let payout = Pools::calculate_delegator_payout(
@@ -989,7 +989,7 @@ mod claim_payout {
 
 				// Given del_50 hasn't claimed and the reward pools has just earned 50
 				assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free += 50));
-				assert_eq!(Balances::free_balance(&default_reward_account()), 75);
+				assert_eq!(Balances::free_balance(&default_reward_account()), ed + 75);
 
 				// When
 				let payout = Pools::calculate_delegator_payout(
@@ -1034,7 +1034,7 @@ mod claim_payout {
 
 				// Given del_40 hasn't claimed and the reward pool has just earned 400
 				assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free += 400));
-				assert_eq!(Balances::free_balance(&default_reward_account()), 420);
+				assert_eq!(Balances::free_balance(&default_reward_account()), ed + 420);
 
 				// When
 				let payout = Pools::calculate_delegator_payout(
@@ -1064,7 +1064,7 @@ mod claim_payout {
 
 				// Given del_40 + del_50 haven't claimed and the reward pool has earned 20
 				assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free += 20));
-				assert_eq!(Balances::free_balance(&default_reward_account()), 400);
+				assert_eq!(Balances::free_balance(&default_reward_account()), ed + 400);
 
 				// When
 				let payout = Pools::calculate_delegator_payout(
