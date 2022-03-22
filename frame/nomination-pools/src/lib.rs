@@ -73,7 +73,7 @@
 //!
 //! A pool has 3 administrative positions (see [`BondedPool`]):
 //!
-//! * Depositor: creates the pool and is the initial delegator. The can only leave pool once all
+//! * Depositor: creates the pool and is the initial delegator. They can only leave pool once all
 //!   other delegators have left. Once they fully leave the pool is destroyed.
 //! * Nominator: can select which validators the pool nominates.
 //! * State-Toggler: can change the pools state and kick delegators if the pool is blocked.
@@ -265,7 +265,8 @@
 //! slashes gives them an incentive to do that if validators get repeatedly slashed.
 //!
 //! To be fair to joiners, this implementation also need joining pools, which are actively staking,
-//! in addition to the unbonding pools. For maintenance simplicity these are not implemented. Related: https://github.com/paritytech/substrate/issues/10860
+//! in addition to the unbonding pools. For maintenance simplicity these are not implemented.
+//! Related: https://github.com/paritytech/substrate/issues/10860
 //!
 //! **Relevant methods:**
 //!
@@ -381,9 +382,15 @@ pub enum PoolState {
 
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Debug, PartialEq, Clone)]
 pub struct PoolRoles<AccountId> {
+	/// Creates the pool and is the initial delegator. They can only leave the pool once all
+	/// other delegators have left. Once they fully leave, the pool is destroyed.
 	pub depositor: AccountId,
+	/// Can change the nominator, state-toggler, or itself and can perform any of the actions
+	/// the nominator or state-toggler can.
 	pub root: AccountId,
+	/// Can select which validators the pool nominates.
 	pub nominator: AccountId,
+	/// can change the pools state and kick delegators if the pool is blocked.
 	pub state_toggler: AccountId,
 }
 
@@ -398,7 +405,7 @@ pub struct BondedPoolInner<T: Config> {
 	pub state: PoolState,
 	/// See [`BondedPool::delegator_counter`]
 	pub delegator_counter: u32,
-	/// See [`BondedPool::depositor`].
+	/// See [`PoolRoles`].
 	pub roles: PoolRoles<T::AccountId>,
 }
 
@@ -1363,14 +1370,9 @@ pub mod pallet {
 		///   destroyed.
 		/// * `index` - A disambiguation index for creating the account. Likely only useful when
 		///   creating multiple pools in the same extrinsic.
-		/// * `root` - The account to set as [`BondedPool::root`].
-		/// * `nominator` - The account to set as the [`BondedPool::nominator`].
-		/// * `state_toggler` - The account to set as the [`BondedPool::state_toggler`].
-		// TODO: The creator needs to transfer ED to the pool account and then have their delegators
-		// `reward_pool_total_earnings` ever set to the balance of the reward pool. This will make
-		// an invariant that the reward pool account will always have ED until destroyed.
-		// The reward pool balance and total earnings ever will also need to be updated to reflect
-		// that it has ED so the payout calculations work
+		/// * `root` - The account to set as [`PoolRoles::root`].
+		/// * `nominator` - The account to set as the [`PoolRoles::nominator`].
+		/// * `state_toggler` - The account to set as the [`PoolRoles::state_toggler`].
 		#[pallet::weight(T::WeightInfo::create())]
 		#[frame_support::transactional]
 		pub fn create(
