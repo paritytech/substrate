@@ -167,7 +167,7 @@ pub mod pallet {
 		/// A new `Registration` has taken added.
 		NameRegistered { name_hash: NameHash, owner: T::AccountId, expiry: T::BlockNumber },
 		/// A `Registration` has been transferred to a new owner.
-		Transfer { from: T::AccountId, to: T::AccountId },
+		NewOwner { from: T::AccountId, to: T::AccountId },
 		/// A `Registration` has been renewed.
 		NameRenewed { name_hash: NameHash, expires: T::BlockNumber },
 		/// An address has been set for a name hash to resolve to.
@@ -287,7 +287,7 @@ pub mod pallet {
 
 				r.owner = to.clone();
 
-				Self::deposit_event(Event::<T>::Transfer { from: sender, to });
+				Self::deposit_event(Event::<T>::NewOwner { from: sender, to });
 				Ok(())
 			})
 		}
