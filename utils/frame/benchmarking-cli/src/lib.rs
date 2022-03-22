@@ -16,12 +16,15 @@
 // limitations under the License.
 
 mod command;
+pub mod overhead;
+mod post_processing;
 mod storage;
 mod writer;
 
-use sc_cli::{ExecutionStrategy, WasmExecutionMethod};
+use sc_cli::{ExecutionStrategy, WasmExecutionMethod, DEFAULT_WASM_EXECUTION_METHOD};
 use std::{fmt::Debug, path::PathBuf};
 
+pub use overhead::{ExtrinsicBuilder, OverheadCmd};
 pub use storage::StorageCmd;
 
 // Add a more relaxed parsing for pallet names by allowing pallet directory names with `-` to be
@@ -46,11 +49,11 @@ pub struct BenchmarkCmd {
 	pub steps: u32,
 
 	/// Indicates lowest values for each of the component ranges.
-	#[clap(long = "low", use_delimiter = true)]
+	#[clap(long = "low", use_value_delimiter = true)]
 	pub lowest_range_values: Vec<u32>,
 
 	/// Indicates highest values for each of the component ranges.
-	#[clap(long = "high", use_delimiter = true)]
+	#[clap(long = "high", use_value_delimiter = true)]
 	pub highest_range_values: Vec<u32>,
 
 	/// Select how many repetitions of this benchmark should run from within the wasm.
@@ -67,7 +70,7 @@ pub struct BenchmarkCmd {
 	#[clap(long = "json")]
 	pub json_output: bool,
 
-	/// Write the raw results in JSON format into the give file.
+	/// Write the raw results in JSON format into the given file.
 	#[clap(long, conflicts_with = "json-output")]
 	pub json_file: Option<PathBuf>,
 
@@ -130,7 +133,7 @@ pub struct BenchmarkCmd {
 		value_name = "METHOD",
 		possible_values = WasmExecutionMethod::variants(),
 		ignore_case = true,
-		default_value = "compiled"
+		default_value = DEFAULT_WASM_EXECUTION_METHOD,
 	)]
 	pub wasm_method: WasmExecutionMethod,
 

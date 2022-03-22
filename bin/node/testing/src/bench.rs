@@ -393,7 +393,6 @@ impl BenchDb {
 			state_pruning: PruningMode::ArchiveAll,
 			source: database_type.into_settings(dir.into()),
 			keep_blocks: sc_client_db::KeepBlocks::All,
-			transaction_storage: sc_client_db::TransactionStorageMode::BlockBody,
 			trie_node_cache_settings: Default::default(),
 		};
 		let task_executor = TaskExecutor::new();

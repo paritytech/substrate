@@ -46,16 +46,13 @@ pub use storage_proof::{CompactProof, StorageProof};
 /// for trie compact proof.
 pub use trie_codec::{decode_compact, encode_compact, Error as CompactProofError};
 pub use trie_db::proof::VerifyError;
+use trie_db::proof::{generate_proof, verify_proof};
 /// Various re-exports from the `trie-db` crate.
 pub use trie_db::{
 	nibble_ops,
 	node::{NodePlan, ValuePlan},
-	CError, DBValue, Query, Recorder, Trie, TrieConfiguration, TrieDBIterator, TrieDBKeyIterator,
-	TrieLayout, TrieMut,
-};
-use trie_db::{
-	proof::{generate_proof, verify_proof},
-	TrieCache, TrieRecorder,
+	CError, DBValue, Query, Recorder, Trie, TrieCache, TrieConfiguration, TrieDBIterator,
+	TrieDBKeyIterator, TrieLayout, TrieMut, TrieRecorder,
 };
 /// The Substrate format implementation of `TrieStream`.
 pub use trie_stream::TrieStream;

@@ -106,7 +106,7 @@ impl<H: Hasher> Recorder<H> {
 			})
 		})?;
 
-		Ok(StorageProof::new(recorder.accessed_nodes.drain().map(|(_, v)| v).collect()))
+		Ok(StorageProof::new(recorder.accessed_nodes.drain().map(|(_, v)| v)))
 	}
 
 	/// Returns the estimated encoded size of the proof.

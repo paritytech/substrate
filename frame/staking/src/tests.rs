@@ -17,10 +17,10 @@
 
 //! Tests for the module.
 
-use super::{Event, MaxUnlockingChunks, *};
+use super::{ConfigOp, Event, MaxUnlockingChunks, *};
 use frame_election_provider_support::{ElectionProvider, SortedListProvider, Support};
 use frame_support::{
-	assert_noop, assert_ok, bounded_vec,
+	assert_noop, assert_ok, assert_storage_noop, bounded_vec,
 	dispatch::WithPostDispatchInfo,
 	pallet_prelude::*,
 	traits::{Currency, Get, ReservableCurrency},
@@ -39,6 +39,56 @@ use sp_staking::{
 };
 use sp_std::prelude::*;
 use substrate_test_utils::assert_eq_uvec;
+
+#[test]
+fn set_staking_configs_works() {
+	ExtBuilder::default().build_and_execute(|| {
+		// setting works
+		assert_ok!(Staking::set_staking_configs(
+			Origin::root(),
+			ConfigOp::Set(1_500),
+			ConfigOp::Set(2_000),
+			ConfigOp::Set(10),
+			ConfigOp::Set(20),
+			ConfigOp::Set(Percent::from_percent(75)),
+			ConfigOp::Set(Zero::zero())
+		));
+		assert_eq!(MinNominatorBond::<Test>::get(), 1_500);
+		assert_eq!(MinValidatorBond::<Test>::get(), 2_000);
+		assert_eq!(MaxNominatorsCount::<Test>::get(), Some(10));
+		assert_eq!(MaxValidatorsCount::<Test>::get(), Some(20));
+		assert_eq!(ChillThreshold::<Test>::get(), Some(Percent::from_percent(75)));
+		assert_eq!(MinCommission::<Test>::get(), Perbill::from_percent(0));
+
+		// noop does nothing
+		assert_storage_noop!(assert_ok!(Staking::set_staking_configs(
+			Origin::root(),
+			ConfigOp::Noop,
+			ConfigOp::Noop,
+			ConfigOp::Noop,
+			ConfigOp::Noop,
+			ConfigOp::Noop,
+			ConfigOp::Noop
+		)));
+
+		// removing works
+		assert_ok!(Staking::set_staking_configs(
+			Origin::root(),
+			ConfigOp::Remove,
+			ConfigOp::Remove,
+			ConfigOp::Remove,
+			ConfigOp::Remove,
+			ConfigOp::Remove,
+			ConfigOp::Remove
+		));
+		assert_eq!(MinNominatorBond::<Test>::get(), 0);
+		assert_eq!(MinValidatorBond::<Test>::get(), 0);
+		assert_eq!(MaxNominatorsCount::<Test>::get(), None);
+		assert_eq!(MaxValidatorsCount::<Test>::get(), None);
+		assert_eq!(ChillThreshold::<Test>::get(), None);
+		assert_eq!(MinCommission::<Test>::get(), Perbill::from_percent(0));
+	});
+}
 
 #[test]
 fn force_unstake_works() {
@@ -4005,10 +4055,12 @@ mod election_data_provider {
 	#[test]
 	fn voters_include_self_vote() {
 		ExtBuilder::default().nominate(false).build_and_execute(|| {
-			assert!(<Validators<Test>>::iter().map(|(x, _)| x).all(|v| Staking::voters(None)
-				.unwrap()
-				.into_iter()
-				.any(|(w, _, t)| { v == w && t[0] == w })))
+			assert!(<Validators<Test>>::iter().map(|(x, _)| x).all(|v| Staking::electing_voters(
+				None
+			)
+			.unwrap()
+			.into_iter()
+			.any(|(w, _, t)| { v == w && t[0] == w })))
 		})
 	}
 
@@ -4017,7 +4069,7 @@ mod election_data_provider {
 		ExtBuilder::default().build_and_execute(|| {
 			assert_eq!(Staking::nominators(101).unwrap().targets, vec![11, 21]);
 			assert_eq!(
-				<Staking as ElectionDataProvider>::voters(None)
+				<Staking as ElectionDataProvider>::electing_voters(None)
 					.unwrap()
 					.iter()
 					.find(|x| x.0 == 101)
@@ -4032,7 +4084,7 @@ mod election_data_provider {
 			// 11 is gone.
 			start_active_era(2);
 			assert_eq!(
-				<Staking as ElectionDataProvider>::voters(None)
+				<Staking as ElectionDataProvider>::electing_voters(None)
 					.unwrap()
 					.iter()
 					.find(|x| x.0 == 101)
@@ -4044,7 +4096,7 @@ mod election_data_provider {
 			// resubmit and it is back
 			assert_ok!(Staking::nominate(Origin::signed(100), vec![11, 21]));
 			assert_eq!(
-				<Staking as ElectionDataProvider>::voters(None)
+				<Staking as ElectionDataProvider>::electing_voters(None)
 					.unwrap()
 					.iter()
 					.find(|x| x.0 == 101)
@@ -4068,20 +4120,23 @@ mod election_data_provider {
 				);
 
 				// if limits is less..
-				assert_eq!(Staking::voters(Some(1)).unwrap().len(), 1);
+				assert_eq!(Staking::electing_voters(Some(1)).unwrap().len(), 1);
 
 				// if limit is equal..
-				assert_eq!(Staking::voters(Some(5)).unwrap().len(), 5);
+				assert_eq!(Staking::electing_voters(Some(5)).unwrap().len(), 5);
 
 				// if limit is more.
-				assert_eq!(Staking::voters(Some(55)).unwrap().len(), 5);
+				assert_eq!(Staking::electing_voters(Some(55)).unwrap().len(), 5);
 
 				// if target limit is more..
-				assert_eq!(Staking::targets(Some(6)).unwrap().len(), 4);
-				assert_eq!(Staking::targets(Some(4)).unwrap().len(), 4);
+				assert_eq!(Staking::electable_targets(Some(6)).unwrap().len(), 4);
+				assert_eq!(Staking::electable_targets(Some(4)).unwrap().len(), 4);
 
 				// if target limit is less, then we return an error.
-				assert_eq!(Staking::targets(Some(1)).unwrap_err(), "Target snapshot too big");
+				assert_eq!(
+					Staking::electable_targets(Some(1)).unwrap_err(),
+					"Target snapshot too big"
+				);
 			});
 	}
 
@@ -4115,7 +4170,7 @@ mod election_data_provider {
 
 				// we take 4 voters: 2 validators and 2 nominators (so nominators quota = 2)
 				assert_eq!(
-					Staking::voters(Some(3))
+					Staking::electing_voters(Some(3))
 						.unwrap()
 						.iter()
 						.map(|(stash, _, _)| stash)
@@ -4154,7 +4209,7 @@ mod election_data_provider {
 
 				// we take 5 voters
 				assert_eq!(
-					Staking::voters(Some(5))
+					Staking::electing_voters(Some(5))
 						.unwrap()
 						.iter()
 						.map(|(stash, _, _)| stash)
@@ -4175,7 +4230,7 @@ mod election_data_provider {
 
 				// we take 4 voters
 				assert_eq!(
-					Staking::voters(Some(4))
+					Staking::electing_voters(Some(4))
 						.unwrap()
 						.iter()
 						.map(|(stash, _, _)| stash)
@@ -4368,12 +4423,12 @@ fn chill_other_works() {
 			// Change the minimum bond... but no limits.
 			assert_ok!(Staking::set_staking_configs(
 				Origin::root(),
-				1_500,
-				2_000,
-				None,
-				None,
-				None,
-				Zero::zero()
+				ConfigOp::Set(1_500),
+				ConfigOp::Set(2_000),
+				ConfigOp::Remove,
+				ConfigOp::Remove,
+				ConfigOp::Remove,
+				ConfigOp::Remove
 			));
 
 			// Still can't chill these users
@@ -4389,12 +4444,12 @@ fn chill_other_works() {
 			// Add limits, but no threshold
 			assert_ok!(Staking::set_staking_configs(
 				Origin::root(),
-				1_500,
-				2_000,
-				Some(10),
-				Some(10),
-				None,
-				Zero::zero()
+				ConfigOp::Noop,
+				ConfigOp::Noop,
+				ConfigOp::Set(10),
+				ConfigOp::Set(10),
+				ConfigOp::Noop,
+				ConfigOp::Noop
 			));
 
 			// Still can't chill these users
@@ -4410,12 +4465,12 @@ fn chill_other_works() {
 			// Add threshold, but no limits
 			assert_ok!(Staking::set_staking_configs(
 				Origin::root(),
-				1_500,
-				2_000,
-				None,
-				None,
-				Some(Percent::from_percent(0)),
-				Zero::zero()
+				ConfigOp::Noop,
+				ConfigOp::Noop,
+				ConfigOp::Remove,
+				ConfigOp::Remove,
+				ConfigOp::Noop,
+				ConfigOp::Noop
 			));
 
 			// Still can't chill these users
@@ -4431,12 +4486,12 @@ fn chill_other_works() {
 			// Add threshold and limits
 			assert_ok!(Staking::set_staking_configs(
 				Origin::root(),
-				1_500,
-				2_000,
-				Some(10),
-				Some(10),
-				Some(Percent::from_percent(75)),
-				Zero::zero()
+				ConfigOp::Noop,
+				ConfigOp::Noop,
+				ConfigOp::Set(10),
+				ConfigOp::Set(10),
+				ConfigOp::Set(Percent::from_percent(75)),
+				ConfigOp::Noop
 			));
 
 			// 16 people total because tests start with 2 active one
@@ -4476,12 +4531,12 @@ fn capped_stakers_works() {
 		let max = 10;
 		assert_ok!(Staking::set_staking_configs(
 			Origin::root(),
-			10,
-			10,
-			Some(max),
-			Some(max),
-			Some(Percent::from_percent(0)),
-			Zero::zero(),
+			ConfigOp::Set(10),
+			ConfigOp::Set(10),
+			ConfigOp::Set(max),
+			ConfigOp::Set(max),
+			ConfigOp::Remove,
+			ConfigOp::Remove,
 		));
 
 		// can create `max - validator_count` validators
@@ -4546,12 +4601,12 @@ fn capped_stakers_works() {
 		// No problem when we set to `None` again
 		assert_ok!(Staking::set_staking_configs(
 			Origin::root(),
-			10,
-			10,
-			None,
-			None,
-			None,
-			Zero::zero(),
+			ConfigOp::Noop,
+			ConfigOp::Noop,
+			ConfigOp::Remove,
+			ConfigOp::Remove,
+			ConfigOp::Noop,
+			ConfigOp::Noop,
 		));
 		assert_ok!(Staking::nominate(Origin::signed(last_nominator), vec![1]));
 		assert_ok!(Staking::validate(Origin::signed(last_validator), ValidatorPrefs::default()));
@@ -4568,12 +4623,12 @@ fn min_commission_works() {
 
 		assert_ok!(Staking::set_staking_configs(
 			Origin::root(),
-			0,
-			0,
-			None,
-			None,
-			None,
-			Perbill::from_percent(10),
+			ConfigOp::Remove,
+			ConfigOp::Remove,
+			ConfigOp::Remove,
+			ConfigOp::Remove,
+			ConfigOp::Remove,
+			ConfigOp::Set(Perbill::from_percent(10)),
 		));
 
 		// can't make it less than 10 now
@@ -4616,7 +4671,7 @@ fn change_of_max_nominations() {
 				vec![(70, 3), (101, 2), (60, 1)]
 			);
 			// 3 validators and 3 nominators
-			assert_eq!(Staking::voters(None).unwrap().len(), 3 + 3);
+			assert_eq!(Staking::electing_voters(None).unwrap().len(), 3 + 3);
 
 			// abrupt change from 16 to 4, everyone should be fine.
 			MaxNominations::set(4);
@@ -4627,7 +4682,7 @@ fn change_of_max_nominations() {
 					.collect::<Vec<_>>(),
 				vec![(70, 3), (101, 2), (60, 1)]
 			);
-			assert_eq!(Staking::voters(None).unwrap().len(), 3 + 3);
+			assert_eq!(Staking::electing_voters(None).unwrap().len(), 3 + 3);
 
 			// abrupt change from 4 to 3, everyone should be fine.
 			MaxNominations::set(3);
@@ -4638,7 +4693,7 @@ fn change_of_max_nominations() {
 					.collect::<Vec<_>>(),
 				vec![(70, 3), (101, 2), (60, 1)]
 			);
-			assert_eq!(Staking::voters(None).unwrap().len(), 3 + 3);
+			assert_eq!(Staking::electing_voters(None).unwrap().len(), 3 + 3);
 
 			// abrupt change from 3 to 2, this should cause some nominators to be non-decodable, and
 			// thus non-existent unless if they update.
@@ -4655,7 +4710,7 @@ fn change_of_max_nominations() {
 			// but its value cannot be decoded and default is returned.
 			assert!(Nominators::<Test>::get(70).is_none());
 
-			assert_eq!(Staking::voters(None).unwrap().len(), 3 + 2);
+			assert_eq!(Staking::electing_voters(None).unwrap().len(), 3 + 2);
 			assert!(Nominators::<Test>::contains_key(101));
 
 			// abrupt change from 2 to 1, this should cause some nominators to be non-decodable, and
@@ -4672,7 +4727,7 @@ fn change_of_max_nominations() {
 			assert!(Nominators::<Test>::contains_key(60));
 			assert!(Nominators::<Test>::get(70).is_none());
 			assert!(Nominators::<Test>::get(60).is_some());
-			assert_eq!(Staking::voters(None).unwrap().len(), 3 + 1);
+			assert_eq!(Staking::electing_voters(None).unwrap().len(), 3 + 1);
 
 			// now one of them can revive themselves by re-nominating to a proper value.
 			assert_ok!(Staking::nominate(Origin::signed(71), vec![1]));

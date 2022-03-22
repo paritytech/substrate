@@ -31,11 +31,11 @@ use sp_trie::{
 	child_delta_trie_root, delta_trie_root, empty_child_trie_root, read_child_trie_value,
 	read_trie_value,
 	trie_types::{TrieDBBuilder, TrieError},
-	DBValue, KeySpacedDB, NodeCodec, PrefixedMemoryDB, Trie, TrieDBIterator, TrieDBKeyIterator,
+	DBValue, KeySpacedDB, NodeCodec, PrefixedMemoryDB, Trie, TrieCache, TrieDBIterator,
+	TrieDBKeyIterator, TrieRecorder,
 };
 #[cfg(feature = "std")]
 use std::{collections::HashMap, sync::Arc};
-use trie_db::{TrieCache, TrieRecorder};
 
 // In this module, we only use layout for read operation and empty root,
 // where V1 and V0 are equivalent.

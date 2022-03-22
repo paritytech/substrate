@@ -19,7 +19,7 @@ codec = { package = "parity-scale-codec", version = "3.0.0", default-features = 
 	"derive",
 	"max-encoded-len",
 ] }
-scale-info = { version = "2.0.0", default-features = false, features = ["derive"] }
+scale-info = { version = "2.0.1", default-features = false, features = ["derive"] }
 integer-sqrt = "0.1.2"
 static_assertions = "1.1.0"
 num-traits = { version = "0.2.8", default-features = false }

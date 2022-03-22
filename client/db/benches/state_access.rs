@@ -21,8 +21,7 @@ use pprof::criterion::{Output, PProfProfiler};
 use rand::{distributions::Uniform, rngs::StdRng, Rng, SeedableRng};
 use sc_client_api::{Backend as _, BlockImportOperation, NewBlockState, StateBackend};
 use sc_client_db::{
-	Backend, DatabaseSettings, DatabaseSource, KeepBlocks, PruningMode, TransactionStorageMode,
-	TrieNodeCacheSettings,
+	Backend, DatabaseSettings, DatabaseSource, KeepBlocks, PruningMode, TrieNodeCacheSettings,
 };
 use sp_core::H256;
 use sp_runtime::{
@@ -136,7 +135,6 @@ fn create_backend(config: BenchmarkConfig, temp_dir: &TempDir) -> Backend<Block>
 		state_pruning: PruningMode::ArchiveAll,
 		source: DatabaseSource::ParityDb { path },
 		keep_blocks: KeepBlocks::All,
-		transaction_storage: TransactionStorageMode::BlockBody,
 	};
 
 	Backend::new(settings, 100).expect("Creates backend")
