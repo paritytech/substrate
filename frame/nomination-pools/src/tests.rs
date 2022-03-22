@@ -755,12 +755,11 @@ mod claim_payout {
 			let mut bonded_pool = BondedPool::<Runtime>::get(1).unwrap();
 			let mut reward_pool = RewardPools::<Runtime>::get(1).unwrap();
 			let mut delegator = Delegators::<Runtime>::get(10).unwrap();
-			let reward_account = Pools::create_reward_account(1);
 
-			// --- reward_pool.total_earnings saturates
+			// -- reward_pool.total_earnings saturates
 
 			// Given
-			Balances::make_free_balance_be(&reward_account, Balance::MAX);
+			Balances::make_free_balance_be(&default_reward_account(), Balance::MAX);
 
 			// When
 			assert_ok!(Pools::do_reward_payout(10, &mut delegator, &mut bonded_pool));
@@ -774,7 +773,7 @@ mod claim_payout {
 			let mut bonded_pool = BondedPool::<Runtime>::get(1).unwrap();
 			let mut delegator = Delegators::<Runtime>::get(10).unwrap();
 			// Force new_earnings * bonded_pool.points == 100
-			Balances::make_free_balance_be(&reward_account, 10);
+			Balances::make_free_balance_be(&default_reward_account(), 5 + 10);
 			assert_eq!(bonded_pool.points, 10);
 			// Force reward_pool.points == U256::MAX - new_earnings * bonded_pool.points
 			reward_pool.points = U256::MAX - U256::from(100u32);

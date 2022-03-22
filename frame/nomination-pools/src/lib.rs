@@ -1050,7 +1050,8 @@ pub mod pallet {
 		DoesNotHavePermission,
 		/// Metadata exceeds [`T::MaxMetadataLen`]
 		MetadataExceedsMaxLen,
-		/// Some error occurred that should never happen. This should be reported to the maintainers.
+		/// Some error occurred that should never happen. This should be reported to the
+		/// maintainers.
 		DefensiveError,
 		/// The caller has insufficient balance to create the pool.
 		InsufficientBalanceToCreate,
@@ -1408,7 +1409,7 @@ pub mod pallet {
 			ensure!(!Delegators::<T>::contains_key(&who), Error::<T>::AccountBelongsToOtherPool);
 			ensure!(
 				T::Currency::free_balance(&who) >=
-				amount.saturating_add(T::Currency::minimum_balance()),
+					amount.saturating_add(T::Currency::minimum_balance()),
 				Error::<T>::InsufficientBalanceToCreate
 			);
 
@@ -1635,9 +1636,9 @@ impl<T: Config> Pallet<T> {
 		// Presentation Notes:
 		// Reward pool points
 		// Essentially we make it so each plank is inflated by the number of points in bonded pool.
-		// So if we have earned 10 plank and 100 bonded pool points, we get 1,000 reward pool points.
-		// The delegator scales up their points as well (say 10 for this example) and we get the
-		// delegator has virtual points of 10points * 10rewards (100reward-points).
+		// So if we have earned 10 plank and 100 bonded pool points, we get 1,000 reward pool
+		// points. The delegator scales up their points as well (say 10 for this example) and we get
+		// the delegator has virtual points of 10points * 10rewards (100reward-points).
 		// So the payout calc is 100 / 1,000 * 100 = 10
 		//
 		// Keep in mind we subtract the delegators virtual points from the pool points to account
