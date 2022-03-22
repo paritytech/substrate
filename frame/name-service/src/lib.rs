@@ -355,7 +355,58 @@ pub mod pallet {
 			Resolvers::<T>::insert(name_hash, address.clone());
 
 			Self::deposit_event(Event::<T>::AddressSet { name_hash, address });
+			Ok(())
+		}
 
+		#[pallet::weight(0)]
+		pub fn deregister(origin: OriginFor<T>, name_hash: NameHash) -> DispatchResult {
+			let sender = ensure_signed(origin)?;
+			Self::do_deregister(None, name_hash, Some(sender))?;
+			Ok(())
+		}
+
+		#[pallet::weight(0)]
+		pub fn force_register(
+			origin: OriginFor<T>,
+			name_hash: NameHash,
+			who: T::AccountId,
+			periods: u32,
+		) -> DispatchResult {
+			T::RegistrationManager::ensure_origin(origin)?;
+			if periods == 0 {
+				// permanent register: no expiry
+				Self::do_register(name_hash, who, None, None)?;
+			} else {
+				// register with some periods
+				Self::do_register(name_hash, who, Some(periods), None)?;
+			}
+			Ok(())
+		}
+
+		#[pallet::weight(0)]
+		pub fn force_deregister(origin: OriginFor<T>, name_hash: NameHash) -> DispatchResult {
+			T::RegistrationManager::ensure_origin(origin)?;
+			Self::do_deregister(None, name_hash, None)?;
+			Ok(())
+		}
+
+		#[pallet::weight(0)]
+		pub fn remove_commitment(
+			origin: OriginFor<T>,
+			commitment_hash: CommitmentHash,
+		) -> DispatchResult {
+			ensure_signed_or_root(origin)?;
+			let commitment =
+				Commitments::<T>::get(commitment_hash).ok_or(Error::<T>::CommitmentNotFound)?;
+
+			ensure!(
+				commitment.when.saturating_add(T::CommitmentAlivePeriod::get()) >
+					frame_system::Pallet::<T>::block_number(),
+				Error::<T>::CommitmentNotExpired
+			);
+
+			let _ = T::Currency::unreserve(&commitment.who, commitment.deposit);
+			Commitments::<T>::remove(commitment_hash);
 			Ok(())
 		}
 
@@ -402,8 +453,6 @@ pub mod pallet {
 				let r = maybe_registration.as_mut().ok_or(Error::<T>::RegistrationNotFound)?;
 				ensure!(r.owner == sender, Error::<T>::NotRegistrationOwner);
 
-				// TODO: check if node has expired
-
 				T::Currency::repatriate_reserved(
 					&sender,
 					&owner,
@@ -418,59 +467,24 @@ pub mod pallet {
 		}
 
 		#[pallet::weight(0)]
-		pub fn deregister(origin: OriginFor<T>, name_hash: NameHash) -> DispatchResult {
+		pub fn deregister_subnode(
+			origin: OriginFor<T>,
+			parent_hash: NameHash,
+			label_hash: NameHash,
+		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
-			Self::do_deregister(name_hash, Some(sender))?;
+			Self::do_deregister(Some(label_hash), parent_hash, Some(sender))?;
 			Ok(())
 		}
 
 		#[pallet::weight(0)]
-		pub fn force_register(
+		pub fn force_deregister_subnode(
 			origin: OriginFor<T>,
-			name_hash: NameHash,
-			who: T::AccountId,
-			periods: u32,
+			parent_hash: NameHash,
+			label_hash: NameHash,
 		) -> DispatchResult {
 			T::RegistrationManager::ensure_origin(origin)?;
-			Self::do_register(name_hash, who, Some(periods), None)?;
-			Ok(())
-		}
-
-		#[pallet::weight(0)]
-		pub fn force_permanent_register(
-			origin: OriginFor<T>,
-			name_hash: NameHash,
-			who: T::AccountId,
-		) -> DispatchResult {
-			T::RegistrationManager::ensure_origin(origin)?;
-			Self::do_register(name_hash, who, None, None)?;
-			Ok(())
-		}
-
-		#[pallet::weight(0)]
-		pub fn force_deregister(origin: OriginFor<T>, name_hash: NameHash) -> DispatchResult {
-			T::RegistrationManager::ensure_origin(origin)?;
-			Self::do_deregister(name_hash, None)?;
-			Ok(())
-		}
-
-		#[pallet::weight(0)]
-		pub fn remove_commitment(
-			origin: OriginFor<T>,
-			commitment_hash: CommitmentHash,
-		) -> DispatchResult {
-			ensure_signed_or_root(origin)?;
-			let commitment =
-				Commitments::<T>::get(commitment_hash).ok_or(Error::<T>::CommitmentNotFound)?;
-
-			ensure!(
-				commitment.when.saturating_add(T::CommitmentAlivePeriod::get()) >
-					frame_system::Pallet::<T>::block_number(),
-				Error::<T>::CommitmentNotExpired
-			);
-
-			let _ = T::Currency::unreserve(&commitment.who, commitment.deposit);
-			Commitments::<T>::remove(commitment_hash);
+			Self::do_deregister(Some(label_hash), parent_hash, None)?;
 			Ok(())
 		}
 	}
@@ -538,51 +552,60 @@ pub mod pallet {
 		}
 
 		pub fn do_deregister(
+			maybe_label_hash: Option<NameHash>,
 			name_hash: NameHash,
 			maybe_sender: Option<T::AccountId>,
 		) -> DispatchResult {
-			let registration =
-				Registrations::<T>::get(name_hash).ok_or(Error::<T>::RegistrationNotFound)?;
+			// if label hash has been provided, we are trying to deregister a subnode.
+			if let Some(label_hash) = maybe_label_hash {
+				let parent_hash = name_hash;
 
-			let block_number = frame_system::Pallet::<T>::block_number();
+				// generate the subnode we wish to deregister.
+				let subnode_hash = Self::generate_subnode_hash(parent_hash, label_hash);
 
-			// check if deregistration can go ahead
-			Self::can_deregister(maybe_sender, &registration, block_number)?;
+				// ensure this subnode exists
+				let registration = Registrations::<T>::get(subnode_hash)
+					.ok_or(Error::<T>::RegistrationNotFound)?;
 
-			// for subnodes that hold a deposit, unreserve it.
-			if let Some(deposit) = registration.deposit {
-				let _ = T::Currency::unreserve(&registration.owner, deposit);
-			}
-
-			Registrations::<T>::remove(name_hash);
-			Self::deposit_event(Event::<T>::AddressDeregistered { name_hash });
-
-			Ok(())
-		}
-
-		// If the sender is not the owner, and not root from force_deregister, we
-		// need to verify that the registration has expired before anyone else can
-		// go ahead and deregister.
-		pub fn can_deregister(
-			maybe_sender: Option<T::AccountId>,
-			registration: &Registration<T::AccountId, Option<BalanceOf<T>>, Option<T::BlockNumber>>,
-			block_number: T::BlockNumber,
-		) -> DispatchResult {
-			if let Some(sender) = maybe_sender {
-				// sender is owner, can deregister
-				if registration.owner == sender {
-					return Ok(())
-
-				// sender is non-owner
-				} else {
-					// if no expiry set, non-owner cannot deregister
-					let expiry = registration.expiry.ok_or(Error::<T>::RegistrationNotExpired)?;
-					// verify the registration has expired.
-					ensure!(expiry <= block_number, Error::<T>::RegistrationNotExpired);
-					return Ok(())
+				// if not root origin nor owner, check parent node has been deregistered.
+				if let Some(sender) = maybe_sender {
+					if registration.owner != sender {
+						ensure!(
+							!Registrations::<T>::contains_key(parent_hash),
+							Error::<T>::RegistrationNotExpired
+						);
+					}
 				}
+
+				// defensive handling subnode unreserve - should always exist.
+				if let Some(deposit) = registration.deposit {
+					let _ = T::Currency::unreserve(&registration.owner, deposit);
+				}
+
+				Registrations::<T>::remove(subnode_hash);
+				Self::deposit_event(Event::<T>::AddressDeregistered { name_hash: subnode_hash });
+				return Ok(())
+
+			// no label hash provided; we are trying to deregister a top level node.
 			} else {
-				// sender must be from force_deregister - ok to deregister
+				let registration =
+					Registrations::<T>::get(name_hash).ok_or(Error::<T>::RegistrationNotFound)?;
+
+				// if not root origin nor owner, check node has expired.
+				if let Some(sender) = maybe_sender {
+					if registration.owner != sender {
+						let expiry =
+							registration.expiry.ok_or(Error::<T>::RegistrationHasNoExpiry)?;
+						// and that it is not still active.
+						ensure!(
+							expiry <= frame_system::Pallet::<T>::block_number(),
+							Error::<T>::RegistrationNotExpired
+						);
+					}
+				}
+
+				Registrations::<T>::remove(name_hash);
+				Self::deposit_event(Event::<T>::AddressDeregistered { name_hash });
 				return Ok(())
 			}
 		}
