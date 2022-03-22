@@ -171,27 +171,7 @@ pub mod pallet {
 			config: UserFeatures,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
-			let id = CountForCollections::<T>::get();
-
-			ensure!(!CollectionConfigs::<T>::contains_key(id), Error::<T>::CollectionIdTaken);
-
-			let default_system_config = T::DefaultSystemConfig::get();
-			let config = CollectionConfig {
-				system_features: default_system_config,
-				user_features: config,
-			};
-			CollectionConfigs::<T>::insert(id, config);
-
-			let collection = Collection { id, owner: sender.clone(), deposit: None };
-			ensure!(!Collections::<T>::contains_key(id), Error::<T>::CollectionIdTaken);
-
-			Collections::<T>::insert(id, collection);
-
-			Self::deposit_event(Event::<T>::CollectionCreated { id });
-
-			let next_id = id.checked_add(&One::one()).ok_or(Error::<T>::Overflow)?;
-			CountForCollections::<T>::put(next_id);
-
+			Self::do_create_collection(sender, config)?;
 			Ok(())
 		}
 

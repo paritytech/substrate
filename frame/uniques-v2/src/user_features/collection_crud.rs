@@ -18,8 +18,43 @@
 use crate::*;
 use enumflags2::BitFlags;
 use frame_support::pallet_prelude::*;
+use sp_runtime::traits::{CheckedAdd, One};
 
 impl<T: Config> Pallet<T> {
+	pub fn do_create_collection(
+		caller: T::AccountId,
+		config: UserFeatures,
+	) -> DispatchResult {
+		let id = CountForCollections::<T>::get();
+
+		ensure!(!CollectionConfigs::<T>::contains_key(id), Error::<T>::CollectionIdTaken);
+
+		let default_system_config = T::DefaultSystemConfig::get();
+		let collection_config = CollectionConfig {
+			system_features: default_system_config,
+			user_features: config,
+		};
+		CollectionConfigs::<T>::insert(id, collection_config);
+
+		let collection = Collection { id, owner: caller.clone(), deposit: None };
+		ensure!(!Collections::<T>::contains_key(id), Error::<T>::CollectionIdTaken);
+
+		Collections::<T>::insert(id, collection);
+
+		// emit events
+		Self::deposit_event(Event::<T>::CollectionCreated { id });
+
+		if config == UserFeatures::IsLocked {
+			Self::deposit_event(Event::<T>::CollectionLocked { id });
+		}
+
+		// update the next id value
+		let next_id = id.checked_add(&One::one()).ok_or(Error::<T>::Overflow)?;
+		CountForCollections::<T>::put(next_id);
+
+		Ok(())
+	}
+
 	pub fn do_lock_collection(
 		id: T::CollectionId,
 		caller: T::AccountId,
