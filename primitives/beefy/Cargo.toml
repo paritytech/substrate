@@ -25,7 +25,7 @@ sp-std = { version = "4.0.0", path = "../std", default-features = false }
 [dev-dependencies]
 hex = "0.4.3"
 hex-literal = "0.3"
-sp-keystore = { version = "0.12.0", path = "../keystore", default-features = false }
+sp-keystore = { version = "0.12.0", path = "../keystore" }
 
 [features]
 default = ["std"]

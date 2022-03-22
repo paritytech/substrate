@@ -10,11 +10,11 @@ description = "BEEFY Client gadget for substrate"
 [dependencies]
 fnv = "1.0.6"
 futures = "0.3"
+futures-timer = "3.0.1"
 hex = "0.4.2"
 log = "0.4"
 parking_lot = "0.12.0"
 thiserror = "1.0"
-tokio = { version = "1.15", features = ["time"] }
 wasm-timer = "0.2.5"
 
 codec = { version = "3.0.0", package = "parity-scale-codec", features = ["derive"] }

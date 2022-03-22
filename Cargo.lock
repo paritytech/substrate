@@ -484,6 +484,7 @@ dependencies = [
  "beefy-primitives",
  "fnv",
  "futures 0.3.19",
+ "futures-timer",
  "hex",
  "log 0.4.14",
  "parity-scale-codec",

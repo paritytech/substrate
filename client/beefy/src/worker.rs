@@ -16,13 +16,12 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use std::{collections::BTreeSet, fmt::Debug, marker::PhantomData, sync::Arc};
+use std::{collections::BTreeSet, fmt::Debug, marker::PhantomData, sync::Arc, time::Duration};
 
 use codec::{Codec, Decode, Encode};
 use futures::{future, FutureExt, StreamExt};
 use log::{debug, error, info, log_enabled, trace, warn};
 use parking_lot::Mutex;
-use tokio::time::{sleep, Duration};
 
 use sc_client_api::{Backend, FinalityNotification, FinalityNotifications};
 use sc_network_gossip::GossipEngine;
@@ -207,8 +206,9 @@ where
 
 	/// Verify `active` validator set for `block` against the key store
 	///
-	/// The critical case is, if we do have a public key in the key store which is not
-	/// part of the active validator set.
+	/// We want to make sure that we have _at least one_ key in our keystore that
+	/// is part of the validator set, that's because if there are no local keys
+	/// then we can't perform our job as a validator.
 	///
 	/// Note that for a non-authority node there will be no keystore, and we will
 	/// return an error and don't check. The error can usually be ignored.
@@ -222,14 +222,12 @@ where
 		let public_keys = self.key_store.public_keys()?;
 		let store: BTreeSet<&AuthorityId> = public_keys.iter().collect();
 
-		let missing: Vec<_> = store.difference(&active).cloned().collect();
-
-		if missing.is_empty() {
-			Ok(())
-		} else {
-			let msg = format!("public key missing in validator set: {:?}", missing);
+		if store.intersection(&active).count() == 0 {
+			let msg = format!("no authority public key found in store");
 			debug!(target: "beefy", "🥩 for block {:?} {}", block, msg);
 			Err(error::Error::Keystore(msg))
+		} else {
+			Ok(())
 		}
 	}
 
@@ -286,7 +284,7 @@ where
 		info!(target: "beefy", "🥩 New Rounds for validator set id: {:?} with session_start {:?}", id, session_start);
 	}
 
-	fn handle_finality_notification(&mut self, notification: FinalityNotification<B>) {
+	fn handle_finality_notification(&mut self, notification: &FinalityNotification<B>) {
 		trace!(target: "beefy", "🥩 Finality notification: {:?}", notification);
 		let number = *notification.header.number();
 
@@ -462,24 +460,32 @@ where
 	/// Wait for BEEFY runtime pallet to be available.
 	#[cfg(not(test))]
 	async fn wait_for_runtime_pallet(&mut self) {
-		loop {
-			let at = BlockId::hash(self.best_grandpa_block_header.hash());
-			if let Some(active) = self.client.runtime_api().validator_set(&at).ok().flatten() {
-				if active.id() == GENESIS_AUTHORITY_SET_ID {
-					// When starting from genesis, there is no session boundary digest.
-					// Just initialize `rounds` to Block #1 as BEEFY mandatory block.
-					self.init_session_at(active, 1u32.into());
+		self.client
+			.finality_notification_stream()
+			.take_while(|notif| {
+				let at = BlockId::hash(notif.header.hash());
+				if let Some(active) = self.client.runtime_api().validator_set(&at).ok().flatten() {
+					if active.id() == GENESIS_AUTHORITY_SET_ID {
+						// When starting from genesis, there is no session boundary digest.
+						// Just initialize `rounds` to Block #1 as BEEFY mandatory block.
+						self.init_session_at(active, 1u32.into());
+					}
+					// In all other cases, we just go without `rounds` initialized, meaning the
+					// worker won't vote until it witnesses a session change.
+					// Once we'll implement 'initial sync' (catch-up), the worker will be able to
+					// start voting right away.
+					self.handle_finality_notification(notif);
+					future::ready(false)
+				} else {
+					trace!(target: "beefy", "🥩 Finality notification: {:?}", notif);
+					trace!(target: "beefy", "🥩 Waiting for BEEFY pallet to become available...");
+					future::ready(true)
 				}
-				// In all other cases, we just go without `rounds` initialized, meaning the worker
-				// won't vote until it witnesses a session change.
-				// Once we'll implement 'initial sync' (catch-up), the worker will be able to start
-				// voting right away.
-				break
-			} else {
-				info!(target: "beefy", "Waiting BEEFY pallet to become available...");
-				sleep(Duration::from_secs(5)).await;
-			}
-		}
+			})
+			.for_each(|_| future::ready(()))
+			.await;
+		// get a new stream that provides _new_ notifications (from here on out)
+		self.finality_notifications = self.client.finality_notification_stream();
 	}
 
 	/// For tests don't use runtime pallet. Start rounds from block #1.
@@ -511,7 +517,7 @@ where
 		loop {
 			while self.sync_oracle.is_major_syncing() {
 				debug!(target: "beefy", "Waiting for major sync to complete...");
-				sleep(Duration::from_secs(5)).await;
+				futures_timer::Delay::new(Duration::from_secs(5)).await;
 			}
 
 			let engine = self.gossip_engine.clone();
@@ -520,7 +526,7 @@ where
 			futures::select! {
 				notification = self.finality_notifications.next().fuse() => {
 					if let Some(notification) = notification {
-						self.handle_finality_notification(notification);
+						self.handle_finality_notification(&notification);
 					} else {
 						return;
 					}
@@ -891,9 +897,8 @@ pub(crate) mod tests {
 
 		// unknown `Bob` key
 		let keys = &[Keyring::Bob];
-		let missing = make_beefy_ids(&[Keyring::Alice]);
 		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
-		let err_msg = format!("public key missing in validator set: {:?}", missing.as_slice());
+		let err_msg = format!("no authority public key found in store");
 		let expected = Err(error::Error::Keystore(err_msg));
 		assert_eq!(worker.verify_validator_set(&1, &validator_set), expected);
 

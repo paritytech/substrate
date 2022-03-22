@@ -197,12 +197,8 @@ where
 	fn message_allowed<'a>(
 		&'a self,
 	) -> Box<dyn FnMut(&PeerId, MessageIntent, &B::Hash, &[u8]) -> bool + 'a> {
-		let do_rebroadcast = || {
+		let do_rebroadcast = {
 			let now = Instant::now();
-			// TODO: right now we're using an object-level rebroadcast gate that will only
-			// allow **a single message** being rebroadcast every `REBROADCAST_AFTER` minutes.
-			//
-			// Should we instead have a per-message/hash rebroadcast cooldown?
 			let mut next_rebroadcast = self.next_rebroadcast.lock();
 			if now >= *next_rebroadcast {
 				*next_rebroadcast = now + REBROADCAST_AFTER;
@@ -215,7 +211,7 @@ where
 		let known_votes = self.known_votes.read();
 		Box::new(move |_who, intent, _topic, mut data| {
 			if let MessageIntent::PeriodicRebroadcast = intent {
-				return do_rebroadcast()
+				return do_rebroadcast
 			}
 
 			let msg = match VoteMessage::<NumberFor<B>, Public, Signature>::decode(&mut data) {
@@ -457,6 +453,11 @@ mod tests {
 		// hack the inner deadline to be `now`
 		*gv.next_rebroadcast.lock() = Instant::now();
 
+		// still not allowed on old `allowed` closure result
+		assert!(!allowed(&sender, intent, &topic, &mut encoded_vote));
+
+		// renew closure result
+		let mut allowed = gv.message_allowed();
 		// rebroadcast should be allowed now
 		assert!(allowed(&sender, intent, &topic, &mut encoded_vote));
 	}
