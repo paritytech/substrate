@@ -184,17 +184,19 @@ pub(crate) fn generate(def: crate::SolutionDef) -> Result<TokenStream2> {
 				use frame_support::traits::Get;
 				use _feps::codec::Encode;
 				let s: u32 = #max_voters::get();
-				// The last element of the struct is a vec with 1 voter
-				// then #count-1 tuple of target with an accuracy
-				// and then lastly the final target
-				let max_element_size = #voter_type::max_encoded_len()
-					.saturating_add((#count - 1)
-						.saturating_mul(#target_type::max_encoded_len()
-							.saturating_add(#weight_type::max_encoded_len())))
+				let max_element_size =
+					// the first voter..
+					#voter_type::max_encoded_len()
+					// #count - 1 tuples..
+					.saturating_add(
+						(#count - 1).saturating_mul(
+							#target_type::max_encoded_len().saturating_add(#weight_type::max_encoded_len())))
+					// and the last target.
 					.saturating_add(#target_type::max_encoded_len());
 				// The assumption is that it contains #count-1 empty elements
 				// and then last element with full size
-				#count.saturating_mul(_feps::codec::Compact(0u32).encoded_size())
+				#count
+					.saturating_mul(_feps::codec::Compact(0u32).encoded_size())
 					.saturating_add((s as usize).saturating_mul(max_element_size))
 			}
 		}

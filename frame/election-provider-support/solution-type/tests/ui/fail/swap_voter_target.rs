@@ -4,7 +4,7 @@ generate_solution_type!(pub struct TestSolution::<
 	TargetIndex = u16,
 	VoterIndex = u8,
 	Accuracy = Perbill,
-	MaxVoters = frame_support::traits::ConstU32::<10>,
+	MaxVoters = ConstU32::<10>,
 >(8));
 
 fn main() {}
