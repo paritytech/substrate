@@ -41,4 +41,24 @@ impl<T: Config> Pallet<T> {
 
 		Ok(())
 	}
+
+	pub fn do_transfer_ownership(
+		id: T::CollectionId,
+		caller: T::AccountId,
+		new_owner: T::AccountId,
+	) -> DispatchResult {
+		Collections::<T>::try_mutate(id, |maybe_collection| {
+			let collection = maybe_collection.as_mut().ok_or(Error::<T>::CollectionNotFound)?;
+			ensure!(&caller == &collection.owner, Error::<T>::NotAuthorized);
+
+			if collection.owner == new_owner {
+				return Ok(())
+			}
+
+			collection.owner = new_owner.clone();
+
+			Self::deposit_event(Event::CollectionOwnerChanged { id, new_owner });
+			Ok(())
+		})
+	}
 }

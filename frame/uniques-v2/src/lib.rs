@@ -29,6 +29,7 @@ mod mock;
 
 pub use pallet::*;
 pub use types::*;
+use sp_runtime::traits::{StaticLookup};
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -139,6 +140,7 @@ pub mod pallet {
 		CollectionMetadataSet { id: T::CollectionId, data: MetadataOf<T> },
 		CollectionLocked { id: T::CollectionId },
 		CollectionDestroyed { id: T::CollectionId },
+		CollectionOwnerChanged { id: T::CollectionId, new_owner: T::AccountId },
 	}
 
 	// Your Pallet's error messages.
@@ -215,13 +217,24 @@ pub mod pallet {
 			Ok(())
 		}
 
+		#[pallet::weight(0)]
+		pub fn transfer_ownership(
+			origin: OriginFor<T>,
+			id: T::CollectionId,
+			new_owner: <T::Lookup as StaticLookup>::Source,
+		) -> DispatchResult {
+			let sender = ensure_signed(origin)?;
+			let new_owner = T::Lookup::lookup(new_owner)?;
+			Self::do_transfer_ownership(id, sender, new_owner);
+			Ok(())
+		}
 
 		// BASIC METHODS:
 		// +store collection's owner
 		// +lock a collection (add isLocked flag) => applies to the initial metadata change and burn method
 		//   +|- is_frozen vs. is_locked
 		// +destroy collection => if is not locked
-		// transfer ownership
+		// +transfer ownership
 
 		// PART 2:
 		// collection metadata + attributes
