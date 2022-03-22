@@ -102,7 +102,6 @@ impl Public {
 	}
 
 	/// Converts self into Ethereum address
-	#[cfg_attr(not(feature = "std"), no_std)]
 	pub fn to_eth_address(&self) -> Result<[u8; 20], ()> {
 		use crate::hashing::keccak_256;
 		use k256::{elliptic_curve::sec1::ToEncodedPoint, PublicKey};
