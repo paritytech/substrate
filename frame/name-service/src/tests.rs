@@ -54,9 +54,9 @@ fn alice_register_bob_senario_setup() -> (Vec<u8>, [u8; 32]) {
 	let periods = 1;
 	let name_hash = sp_io::hashing::blake2_256(&name);
 
-	NameService::commit(Origin::signed(sender), owner, commitment_hash);
+	assert_ok!(NameService::commit(Origin::signed(sender), owner, commitment_hash));
 	run_to_block(12);
-	NameService::reveal(Origin::signed(sender), name.clone(), secret, periods);
+	assert_ok!(NameService::reveal(Origin::signed(sender), name.clone(), secret, periods));
 
 	(name, name_hash)
 }
@@ -142,7 +142,9 @@ fn reveal_works() {
 
 		// expiry = current block number + (periods * blocks_per_registration_period)
 		// 12 + (10 * 1000)
-		assert_eq!(registration.expiry, 10012_u64);
+
+		let expiry = registration.expiry.unwrap();
+		assert_eq!(expiry, 10012_u64);
 
 		// ensure correct balance is deducated from sender
 		// commit deposit + registration fee + length fee
@@ -211,7 +213,7 @@ fn reveal_existing_registration_deposit_returned() {
 		assert_eq!(Balances::free_balance(&2), 200);
 
 		// initial registration
-		let (name, name_hash) = alice_register_bob_senario_setup();
+		let (name, _) = alice_register_bob_senario_setup();
 		assert_eq!(Balances::free_balance(&1), 98);
 
 		// second registration
@@ -270,7 +272,7 @@ fn transfer_works() {
 		assert_eq!(Balances::free_balance(&2), 200);
 
 		// initial registration
-		let (name, name_hash) = alice_register_bob_senario_setup();
+		let (_, name_hash) = alice_register_bob_senario_setup();
 		assert_eq!(Balances::free_balance(&1), 98);
 
 		// check current owner (2)
@@ -331,7 +333,7 @@ fn renew_works() {
 		assert_eq!(Balances::free_balance(&2), 200);
 
 		// initial registration
-		let (name, name_hash) = alice_register_bob_senario_setup();
+		let (_, name_hash) = alice_register_bob_senario_setup();
 		assert_eq!(Balances::free_balance(&1), 98);
 
 		// `1` extends for 1 period
@@ -351,7 +353,7 @@ fn renew_handles_errors() {
 		assert_eq!(Balances::free_balance(&2), 200);
 
 		// initial registration
-		let (name, name_hash) = alice_register_bob_senario_setup();
+		let (_, name_hash) = alice_register_bob_senario_setup();
 		assert_eq!(Balances::free_balance(&1), 98);
 
 		// insufficient balance to renew
@@ -372,7 +374,7 @@ fn set_address_works() {
 		assert_eq!(Balances::free_balance(&2), 200);
 
 		// initial registration
-		let (name, name_hash) = alice_register_bob_senario_setup();
+		let (_, name_hash) = alice_register_bob_senario_setup();
 		assert_eq!(Balances::free_balance(&1), 98);
 
 		let addr_to_set = 1;
@@ -395,7 +397,6 @@ fn set_address_handles_errors() {
 		assert_eq!(Balances::free_balance(&2), 200);
 
 		let sender = 1;
-		let addr_to_set = 1;
 		let some_name_hash = sp_io::hashing::blake2_256(&("alice".as_bytes().to_vec()));
 
 		// Registration not found
@@ -405,7 +406,7 @@ fn set_address_handles_errors() {
 		);
 
 		// initial registration
-		let (name, name_hash) = alice_register_bob_senario_setup();
+		let (_, name_hash) = alice_register_bob_senario_setup();
 		assert_eq!(Balances::free_balance(&1), 98);
 
 		// Not registration owner
@@ -431,7 +432,7 @@ fn set_deregister_works() {
 		assert_eq!(Balances::free_balance(&2), 200);
 
 		// initial registration
-		let (name, name_hash) = alice_register_bob_senario_setup();
+		let (_, _) = alice_register_bob_senario_setup();
 		assert_eq!(Balances::free_balance(&1), 98);
 
 		// TODO: finish test
