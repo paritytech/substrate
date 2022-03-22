@@ -196,7 +196,34 @@ mod bonded_pool {
 	}
 }
 
-mod reward_pool {}
+mod reward_pool {
+	#[test]
+	fn current_balance_only_counts_balance_over_existential_deposit() {
+		use super::*;
+
+		ExtBuilder::default().build_and_execute(|| {
+			let reward_account = Pools::create_reward_account(1);
+
+			// Given
+			assert_eq!(Balances::free_balance(&reward_account), 0);
+
+			// Then
+			assert_eq!(RewardPool::<Runtime>::current_balance(1), 0);
+
+			// Given
+			Balances::make_free_balance_be(&reward_account, Balances::minimum_balance());
+
+			// Then
+			assert_eq!(RewardPool::<Runtime>::current_balance(1), 0);
+
+			// Given
+			Balances::make_free_balance_be(&reward_account, Balances::minimum_balance() + 1);
+
+			// Then
+			assert_eq!(RewardPool::<Runtime>::current_balance(1), 1);
+		});
+	}
+}
 
 mod unbond_pool {
 	use super::*;
@@ -788,7 +815,7 @@ mod claim_payout {
 			let mut bonded_pool = BondedPool::<Runtime>::get(1).unwrap();
 			let mut reward_pool = RewardPools::<Runtime>::get(1).unwrap();
 			let mut delegator = Delegators::<Runtime>::get(10).unwrap();
-			let reward_account = Pools::create_reward_account(1);
+			let ed = Balances::minimum_balance();
 
 			// Given no rewards have been earned
 			// When
@@ -805,7 +832,7 @@ mod claim_payout {
 			assert_eq!(reward_pool, rew(0, 0, 0));
 
 			// Given the pool has earned some rewards for the first time
-			Balances::make_free_balance_be(&reward_account, 5);
+			Balances::make_free_balance_be(&default_reward_account(), ed + 5);
 
 			// When
 			let payout = Pools::calculate_delegator_payout(
@@ -821,7 +848,7 @@ mod claim_payout {
 			assert_eq!(delegator, del(5));
 
 			// Given the pool has earned rewards again
-			Balances::make_free_balance_be(&reward_account, 10);
+			Balances::make_free_balance_be(&default_reward_account(), ed + 10);
 
 			// When
 			let payout = Pools::calculate_delegator_payout(
@@ -837,7 +864,7 @@ mod claim_payout {
 			assert_eq!(delegator, del(15));
 
 			// Given the pool has earned no new rewards
-			Balances::make_free_balance_be(&reward_account, 0);
+			Balances::make_free_balance_be(&default_reward_account(), ed + 0);
 
 			// When
 			let payout = Pools::calculate_delegator_payout(
@@ -861,6 +888,7 @@ mod claim_payout {
 			.build_and_execute(|| {
 				let mut bonded_pool = BondedPool::<Runtime>::get(1).unwrap();
 				let mut reward_pool = RewardPools::<Runtime>::get(1).unwrap();
+				let ed = Balances::minimum_balance();
 				// Delegator with 10 points
 				let mut del_10 = Delegators::<Runtime>::get(10).unwrap();
 				// Delegator with 40 points
@@ -872,7 +900,7 @@ mod claim_payout {
 				assert_eq!(del_50.points + del_40.points + del_10.points, 100);
 				assert_eq!(bonded_pool.points, 100);
 				// and the reward pool has earned 100 in rewards
-				Balances::make_free_balance_be(&default_reward_account(), 100);
+				Balances::make_free_balance_be(&default_reward_account(), ed + 100);
 
 				// When
 				let payout = Pools::calculate_delegator_payout(

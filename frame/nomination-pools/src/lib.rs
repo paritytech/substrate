@@ -747,7 +747,7 @@ pub struct RewardPool<T: Config> {
 impl<T: Config> RewardPool<T> {
 	/// Mutate the reward pool by updating the total earnings and current free balance.
 	fn update_total_earnings_and_balance(&mut self, id: PoolId) {
-		let current_balance = T::Currency::free_balance(&Pallet::<T>::create_reward_account(id));
+		let current_balance = Self::current_balance(id);
 		// The earnings since the last time it was updated
 		let new_earnings = current_balance.saturating_sub(self.balance);
 		// The lifetime earnings of the of the reward pool
@@ -761,6 +761,13 @@ impl<T: Config> RewardPool<T> {
 			r.update_total_earnings_and_balance(id);
 			r
 		})
+	}
+
+	/// The current balance of the reward pool. Never access the reward pools free balance directly.
+	/// The existential deposit was not received as a reward, so the reward pool can not use it.
+	fn current_balance(id: PoolId) -> BalanceOf<T> {
+		T::Currency::free_balance(&Pallet::<T>::create_reward_account(id))
+			.saturating_sub(T::Currency::minimum_balance())
 	}
 }
 
@@ -1045,6 +1052,8 @@ pub mod pallet {
 		MetadataExceedsMaxLen,
 		/// Some error occurred that should never happen. This should be reported to the maintainers.
 		DefensiveError,
+		/// The caller has insufficient balance to create the pool.
+		InsufficientBalanceToCreate,
 	}
 
 	#[pallet::call]
@@ -1397,8 +1406,12 @@ pub mod pallet {
 				Error::<T>::MaxPools
 			);
 			ensure!(!Delegators::<T>::contains_key(&who), Error::<T>::AccountBelongsToOtherPool);
+			ensure!(
+				T::Currency::free_balance(&who) >=
+				amount.saturating_add(T::Currency::minimum_balance()),
+				Error::<T>::InsufficientBalanceToCreate
+			);
 
-			// TODO: transfer ED to reward pool and update reward pool total earnings and balance.
 			let pool_id = LastPoolId::<T>::mutate(|id| {
 				*id += 1;
 				*id
@@ -1619,7 +1632,17 @@ impl<T: Config> Pallet<T> {
 		reward_pool: &mut RewardPool<T>,
 		delegator: &mut Delegator<T>,
 	) -> Result<BalanceOf<T>, DispatchError> {
-		debug_assert_eq!(delegator.pool_id, bonded_pool.id);
+		// Presentation Notes:
+		// Reward pool points
+		// Essentially we make it so each plank is inflated by the number of points in bonded pool.
+		// So if we have earned 10 plank and 100 bonded pool points, we get 1,000 reward pool points.
+		// The delegator scales up their points as well (say 10 for this example) and we get the
+		// delegator has virtual points of 10points * 10rewards (100reward-points).
+		// So the payout calc is 100 / 1,000 * 100 = 10
+		//
+		// Keep in mind we subtract the delegators virtual points from the pool points to account
+		// for the fact that we transferred their portion of rewards out of the pool account.
+
 		let u256 = |x| T::BalanceToU256::convert(x);
 		let balance = |x| T::U256ToBalance::convert(x);
 		// If the delegator is unbonding they cannot claim rewards. Note that when the delegator
@@ -1649,7 +1672,10 @@ impl<T: Config> Pallet<T> {
 
 		// The points of the reward pool that belong to the delegator.
 		let delegator_virtual_points =
-			u256(delegator.points).saturating_mul(u256(new_earnings_since_last_claim));
+			// The delegators portion of the reward pool
+			u256(delegator.points)
+			// times the amount the pool has earned since the delegator last claimed.
+			.saturating_mul(u256(new_earnings_since_last_claim));
 
 		let delegator_payout = if delegator_virtual_points.is_zero() ||
 			current_points.is_zero() ||
