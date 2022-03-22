@@ -38,12 +38,12 @@ impl<T: Config> Pallet<T> {
 
 		// do the logic
 
-		// TODO: look at mutate syntax
 		let mut metadata = CollectionMetadataOf::<T>::get(id).ok_or(Error::<T>::CollectionNotFound)?;
 
-		metadata.data = data;
+		metadata.data = data.clone();
 
 		CollectionMetadataOf::<T>::insert(id, metadata);
+		Self::deposit_event(Event::<T>::CollectionMetadataSet { id, data });
 
 		Ok(())
 	}
