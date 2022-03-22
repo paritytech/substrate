@@ -102,6 +102,7 @@ pub fn create_full<C, P, SC, B>(
 ) -> Result<RpcModule<()>, Box<dyn std::error::Error + Send + Sync>>
 where
 	C: ProvideRuntimeApi<Block>
+		+ sc_client_api::BlockBackend<Block>
 		+ HeaderBackend<Block>
 		+ AuxStore
 		+ HeaderMetadata<Block, Error = BlockChainError>
@@ -122,6 +123,8 @@ where
 	use pallet_contracts_rpc::{ContractsApiServer, ContractsRpc};
 	use pallet_mmr_rpc::{MmrApiServer, MmrRpc};
 	use pallet_transaction_payment_rpc::{TransactionPaymentApiServer, TransactionPaymentRpc};
+	// TODO: (dp) need porting
+	// use sc_rpc::dev::{Dev, DevApi};
 	use sc_consensus_babe_rpc::BabeApiServer;
 	use sc_finality_grandpa_rpc::GrandpaApiServer;
 	use sc_sync_state_rpc::{SyncStateRpc, SyncStateRpcApiServer};
@@ -179,9 +182,7 @@ where
 			.into_rpc(),
 	)?;
 	// TODO: (dp) Port to jsonrpsee
-	// io.extend_with(substrate_state_trie_migration_rpc::StateMigrationApi::to_delegate(
-	// 	substrate_state_trie_migration_rpc::MigrationRpc::new(client.clone(), backend, deny_unsafe),
-	// ));
+	// io.extend_with(DevApi::to_delegate(Dev::new(client, deny_unsafe)));
 
 	Ok(io)
 }

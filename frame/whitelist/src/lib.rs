@@ -39,21 +39,15 @@ mod mock;
 mod tests;
 pub mod weights;
 
-use sp_runtime::traits::Dispatchable;
-use sp_std::prelude::*;
-
 use codec::{Decode, DecodeLimit, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{
 	ensure,
 	traits::{PreimageProvider, PreimageRecipient},
-	weights::{GetDispatchInfo, PostDispatchInfo},
+	weights::{GetDispatchInfo, PostDispatchInfo, Weight},
 };
 use scale_info::TypeInfo;
-use sp_api::HashT;
-use weights::WeightInfo;
-
-use frame_support::pallet_prelude::*;
-use frame_system::pallet_prelude::*;
+use sp_runtime::traits::{Dispatchable, Hash};
+use sp_std::prelude::*;
 
 pub use pallet::*;
 
@@ -66,6 +60,9 @@ pub struct Preimage<BoundedVec, Balance, AccountId> {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
+	use crate::weights::WeightInfo;
+	use frame_support::pallet_prelude::*;
+	use frame_system::pallet_prelude::*;
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
@@ -92,7 +89,7 @@ pub mod pallet {
 		type PreimageProvider: PreimageProvider<Self::Hash> + PreimageRecipient<Self::Hash>;
 
 		/// The weight information for this pallet.
-		type WeightInfo: weights::WeightInfo;
+		type WeightInfo: WeightInfo;
 	}
 
 	#[pallet::pallet]
