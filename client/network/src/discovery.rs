@@ -585,14 +585,24 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 
 	fn inject_connection_closed(
 		&mut self,
-		_peer_id: &PeerId,
-		_conn: &ConnectionId,
-		_endpoint: &ConnectedPoint,
-		_handler: <Self::ConnectionHandler as IntoConnectionHandler>::Handler,
-		_remaining_established: usize,
+		peer_id: &PeerId,
+		conn: &ConnectionId,
+		endpoint: &ConnectedPoint,
+		handler: <Self::ConnectionHandler as IntoConnectionHandler>::Handler,
+		remaining_established: usize,
 	) {
 		self.num_connections -= 1;
-		// NetworkBehaviour::inject_connection_closed on Kademlia<MemoryStore> does nothing.
+		for (pid, event) in handler.into_iter() {
+			if let Some(kad) = self.kademlias.get_mut(&pid) {
+				kad.inject_connection_closed(peer_id, conn, endpoint, event, remaining_established)
+			} else {
+				error!(
+					target: "sub-libp2p",
+					"inject_connection_closed: no kademlia instance registered for protocol {:?}",
+					pid,
+				)
+			}
+		}
 	}
 
 	fn inject_dial_failure(

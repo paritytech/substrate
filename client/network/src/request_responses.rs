@@ -448,19 +448,19 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 		peer_id: &PeerId,
 		conn: &ConnectionId,
 		endpoint: &ConnectedPoint,
-		_handler: <Self::ConnectionHandler as IntoConnectionHandler>::Handler,
+		handler: <Self::ConnectionHandler as IntoConnectionHandler>::Handler,
 		remaining_established: usize,
 	) {
-		for (p, _) in self.protocols.values_mut() {
-			let handler = p.new_handler();
-			NetworkBehaviour::inject_connection_closed(
-				p,
-				peer_id,
-				conn,
-				endpoint,
-				handler,
-				remaining_established,
-			);
+		for (p_name, event) in handler.into_iter() {
+			if let Some((proto, _)) = self.protocols.get_mut(p_name.as_str()) {
+				proto.inject_connection_closed(peer_id, conn, endpoint, event, remaining_established)
+			} else {
+				log::error!(
+					target: "sub-libp2p",
+					"inject_connection_closed: no request-response instance registered for protocol {:?}",
+					p_name,
+				)
+			}
 		}
 	}
 
