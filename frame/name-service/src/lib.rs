@@ -80,9 +80,13 @@ pub mod pallet {
 		#[pallet::constant]
 		type CommitmentAlivePeriod: Get<Self::BlockNumber>;
 
-		/// The deposit a user needs to place in order to keep their name registration in storage.
+		/// The deposit a user needs to place to keep their subnodes in storage.
 		#[pallet::constant]
-		type NameDeposit: Get<BalanceOf<Self>>;
+		type SubNodeDeposit: Get<BalanceOf<Self>>;
+
+		/// The deposit a user needs to place to keep their reverse-lookups in storage.
+		#[pallet::constant]
+		type ReverseLookupDeposit: Get<BalanceOf<Self>>;
 
 		/// Registration fee for registering a 3-letter name.
 		#[pallet::constant]
@@ -122,7 +126,6 @@ pub mod pallet {
 	#[derive(Encode, Decode, Default, MaxEncodedLen, TypeInfo)]
 	pub struct Registration<AccountId, Balance, BlockNumber> {
 		pub owner: AccountId,
-		pub registrant: AccountId,
 		pub expiry: BlockNumber,
 		pub deposit: Balance,
 	}
@@ -257,7 +260,7 @@ pub mod pallet {
 				Self::do_register(name_hash, commitment.who.clone(), periods)?;
 			}
 
-			T::Currency::unreserve(&commitment.who, commitment.deposit);
+			T::Currency::unreserve(&sender, commitment.deposit);
 			Commitments::<T>::remove(commitment_hash);
 
 			Ok(())
@@ -433,12 +436,7 @@ pub mod pallet {
 			let block_number = frame_system::Pallet::<T>::block_number();
 			let expiry = block_number.saturating_add(Self::length(periods));
 
-			let registration = Registration {
-				owner: owner.clone(),
-				registrant: owner.clone(),
-				expiry,
-				deposit: None,
-			};
+			let registration = Registration { owner: owner.clone(), expiry, deposit: None };
 
 			Registrations::<T>::insert(name_hash, registration);
 
@@ -468,7 +466,7 @@ pub mod pallet {
 
 			// for subnodes that require a deposit, make sure to unreserve here
 			if let Some(deposit) = registration.deposit {
-				let _ = T::Currency::unreserve(&registration.registrant, deposit);
+				let _ = T::Currency::unreserve(&registration.owner, deposit);
 			}
 
 			Registrations::<T>::remove(name_hash);

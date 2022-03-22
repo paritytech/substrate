@@ -100,7 +100,8 @@ impl Config for Test {
 	// TODO: make a custom handler and test behavior
 	type RegistrationFeeHandler = ();
 	type CommitmentDeposit = ConstU64<10>;
-	type NameDeposit = ConstU64<1>;
+	type SubNodeDeposit = ConstU64<1>;
+	type ReverseLookupDeposit = ConstU64<1>;
 	type TierThreeLetters = ConstU64<7>;
 	type TierFourLetters = ConstU64<3>;
 	type MinimumCommitmentPeriod = ConstU64<10>;

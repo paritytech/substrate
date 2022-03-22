@@ -57,6 +57,7 @@ fn alice_register_bob_senario_setup() -> (Vec<u8>, [u8; 32]) {
 	NameService::commit(Origin::signed(sender), registrant, commitment_hash);
 	run_to_block(12);
 	NameService::reveal(Origin::signed(sender), name.clone(), secret, periods);
+
 	(name, name_hash)
 }
 
@@ -135,6 +136,7 @@ fn reveal_works() {
 
 		assert_ok!(NameService::reveal(Origin::signed(sender), name, secret, periods));
 		assert!(Registrations::<Test>::contains_key(name_hash));
+		assert!(!Commitments::<Test>::contains_key(commitment_hash));
 
 		let registration = Registrations::<Test>::get(name_hash).unwrap();
 
@@ -143,13 +145,13 @@ fn reveal_works() {
 		assert_eq!(registration.expiry, 10012_u64);
 
 		// ensure correct balance is deducated from sender
-		// commit deposit + registration fee + length fee + name deposit
-		// 10 + 1 + 10 + 1 = 22
+		// commit deposit + registration fee + length fee
+		// 10 + 1 + 10  = 21
 		// commitment deposit returned
-		// 22 - 1 = 21
+		// 21 - 10 = 11
 		// deduct from initial deposit
-		// 100 - 21 = 79
-		assert_eq!(Balances::free_balance(&1), 79);
+		// 100 - 11 = 89
+		assert_eq!(Balances::free_balance(&1), 89);
 
 		// println!("{:?}", sp_core::hexdisplay::HexDisplay::from(&encoded_bytes));
 		// println!("{:?}", sp_core::hexdisplay::HexDisplay::from(&commitment_hash));
@@ -210,7 +212,7 @@ fn reveal_existing_registration_deposit_returned() {
 
 		// initial registration
 		let (name, name_hash) = alice_register_bob_senario_setup();
-		assert_eq!(Balances::free_balance(&1), 88);
+		assert_eq!(Balances::free_balance(&1), 98);
 
 		// second registrant
 		let sender = 2;
@@ -228,7 +230,7 @@ fn reveal_existing_registration_deposit_returned() {
 
 		// deposit returned to initial registrant
 		// Note registration + length fee permanently lost. commit and name deposit returned.
-		assert_eq!(Balances::free_balance(&1), 88);
+		assert_eq!(Balances::free_balance(&1), 98);
 	});
 }
 
@@ -242,7 +244,7 @@ fn reveal_ensure_active_registration_not_registered_again() {
 
 		// initial registration
 		let (name, name_hash) = alice_register_bob_senario_setup();
-		assert_eq!(Balances::free_balance(&1), 88);
+		assert_eq!(Balances::free_balance(&1), 98);
 
 		// second registrant
 		let sender = 3;
@@ -257,7 +259,7 @@ fn reveal_ensure_active_registration_not_registered_again() {
 		assert_ok!(NameService::reveal(Origin::signed(sender), name.clone(), secret, 1));
 
 		// initial registrant (1) should still be registrant of `Registration`.
-		assert_eq!(Registrations::<Test>::get(name_hash).unwrap().registrant, 2);
+		assert_eq!(Registrations::<Test>::get(name_hash).unwrap().owner, 2);
 	});
 }
 
@@ -269,7 +271,7 @@ fn transfer_works() {
 
 		// initial registration
 		let (name, name_hash) = alice_register_bob_senario_setup();
-		assert_eq!(Balances::free_balance(&1), 88);
+		assert_eq!(Balances::free_balance(&1), 98);
 
 		// check current owner (2)
 		assert_eq!(Registrations::<Test>::get(name_hash).unwrap().owner, 2);
@@ -330,11 +332,11 @@ fn renew_works() {
 
 		// initial registration
 		let (name, name_hash) = alice_register_bob_senario_setup();
-		assert_eq!(Balances::free_balance(&1), 88);
+		assert_eq!(Balances::free_balance(&1), 98);
 
 		// `1` extends for 1 period
 		assert_ok!(NameService::renew(Origin::signed(1), name_hash, 1));
-		assert_eq!(Balances::free_balance(&1), 87);
+		assert_eq!(Balances::free_balance(&1), 97);
 
 		// `2` extends for 5 periods
 		assert_ok!(NameService::renew(Origin::signed(2), name_hash, 5));
@@ -350,10 +352,10 @@ fn renew_handles_errors() {
 
 		// initial registration
 		let (name, name_hash) = alice_register_bob_senario_setup();
-		assert_eq!(Balances::free_balance(&1), 88);
+		assert_eq!(Balances::free_balance(&1), 98);
 
 		// insufficient balance to renew
-		assert_ok!(Balances::transfer(Origin::signed(1), 0, 87));
+		assert_ok!(Balances::transfer(Origin::signed(1), 0, 97));
 		assert_eq!(Balances::free_balance(1), 1);
 
 		assert_noop!(
@@ -371,7 +373,7 @@ fn set_address_works() {
 
 		// initial registration
 		let (name, name_hash) = alice_register_bob_senario_setup();
-		assert_eq!(Balances::free_balance(&1), 88);
+		assert_eq!(Balances::free_balance(&1), 98);
 
 		let addr_to_set = 1;
 
@@ -404,7 +406,7 @@ fn set_address_handles_errors() {
 
 		// initial registration
 		let (name, name_hash) = alice_register_bob_senario_setup();
-		assert_eq!(Balances::free_balance(&1), 88);
+		assert_eq!(Balances::free_balance(&1), 98);
 
 		// Not registration owner
 		let not_owner_addr = 3;
@@ -430,7 +432,7 @@ fn set_deregister_works() {
 
 		// initial registration
 		let (name, name_hash) = alice_register_bob_senario_setup();
-		assert_eq!(Balances::free_balance(&1), 88);
+		assert_eq!(Balances::free_balance(&1), 98);
 
 		// TODO: finish test
 	});
