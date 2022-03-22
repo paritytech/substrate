@@ -39,7 +39,7 @@ use sc_executor::RuntimeVersionOf;
 use sc_keystore::LocalKeystore;
 use sc_network::{
 	block_request_handler::{self, BlockRequestHandler},
-	config::Role,
+	config::{Role, SyncMode},
 	light_client_requests::{self, handler::LightClientRequestHandler},
 	state_request_handler::{self, StateRequestHandler},
 	warp_request_handler::{self, RequestHandler as WarpSyncRequestHandler, WarpSyncProvider},
@@ -767,6 +767,18 @@ where
 		warp_sync,
 	} = params;
 
+	if warp_sync.is_none() && config.network.sync_mode.is_warp() {
+		return Err("Warp sync enabled, but no warp sync provider configured.".into())
+	}
+
+	if config.state_pruning.is_archive() {
+		match config.network.sync_mode {
+			SyncMode::Fast { .. } => return Err("Fast sync doesn't work for archive nodes".into()),
+			SyncMode::Warp => return Err("Warp sync doesn't work for archive nodes".into()),
+			SyncMode::Full => {},
+		};
+	}
+
 	let transaction_pool_adapter = Arc::new(TransactionPoolAdapter {
 		imports_external_transactions: !matches!(config.role, Role::Light),
 		pool: transaction_pool,
@@ -816,10 +828,6 @@ where
 
 	let warp_sync_params = warp_sync
 		.map(|provider| {
-			if config.state_pruning.is_archive() {
-				return Err("Warp sync doesn't work for archive nodes")
-			}
-
 			let protocol_config = if matches!(config.role, Role::Light) {
 				// Allow outgoing requests but deny incoming requests.
 				warp_request_handler::generate_request_response_config(protocol_id.clone())
