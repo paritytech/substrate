@@ -35,7 +35,8 @@ pub mod pallet {
 	use sp_std::{convert::TryInto, vec::Vec};
 
 	use frame_support::traits::{
-		Currency, ExistenceRequirement, OnUnbalanced, ReservableCurrency, WithdrawReasons,
+		BalanceStatus, Currency, ExistenceRequirement, OnUnbalanced, ReservableCurrency,
+		WithdrawReasons,
 	};
 
 	// The struct on which we build all of our Pallet logic.
@@ -187,8 +188,12 @@ pub mod pallet {
 		CommitmentNotExpired,
 		/// This commitment does not exist.
 		CommitmentNotFound,
+		/// A `Registration` of this name already exists.
+		RegistrationExists,
 		/// This registration does not exist.
 		RegistrationNotFound,
+		/// Parent registration does not exist.
+		ParentRegistrationNotFound,
 		/// The sender is not the registration owner.
 		NotRegistrationOwner,
 		/// This registration has expired.
@@ -259,7 +264,7 @@ pub mod pallet {
 
 				T::RegistrationFeeHandler::on_unbalanced(imbalance);
 
-				Self::do_register(name_hash, commitment.who.clone(), Some(periods))?;
+				Self::do_register(name_hash, commitment.who.clone(), Some(periods), None)?;
 			}
 
 			T::Currency::unreserve(&sender, commitment.deposit);
@@ -355,6 +360,64 @@ pub mod pallet {
 		}
 
 		#[pallet::weight(0)]
+		pub fn set_subnode_record(
+			origin: OriginFor<T>,
+			parent_hash: NameHash,
+			label_hash: NameHash,
+			owner: T::AccountId,
+		) -> DispatchResult {
+			let sender = ensure_signed(origin)?;
+			let parent = Registrations::<T>::get(parent_hash)
+				.ok_or(Error::<T>::ParentRegistrationNotFound)?;
+
+			ensure!(sender == parent.owner, Error::<T>::NotRegistrationOwner);
+
+			let node = Self::generate_subnode_hash(parent_hash, label_hash);
+			ensure!(Registrations::<T>::contains_key(node), Error::<T>::RegistrationExists);
+
+			let deposit = T::SubNodeDeposit::get();
+			T::Currency::reserve(&sender, deposit)?;
+
+			Self::do_register(node, owner, None, Some(deposit))?;
+			Ok(())
+		}
+
+		#[pallet::weight(0)]
+		pub fn set_subnode_owner(
+			origin: OriginFor<T>,
+			parent_hash: NameHash,
+			label_hash: NameHash,
+			owner: T::AccountId,
+		) -> DispatchResult {
+			let sender = ensure_signed(origin)?;
+
+			ensure!(
+				Registrations::<T>::contains_key(parent_hash),
+				Error::<T>::ParentRegistrationNotFound
+			);
+
+			let name_hash = Self::generate_subnode_hash(parent_hash, label_hash);
+
+			Registrations::<T>::try_mutate(name_hash, |maybe_registration| {
+				let r = maybe_registration.as_mut().ok_or(Error::<T>::RegistrationNotFound)?;
+				ensure!(r.owner == sender, Error::<T>::NotRegistrationOwner);
+
+				// TODO: check if node has expired
+
+				T::Currency::repatriate_reserved(
+					&sender,
+					&owner,
+					T::SubNodeDeposit::get(),
+					BalanceStatus::Reserved,
+				)?;
+
+				r.owner = owner.clone();
+				Self::deposit_event(Event::<T>::NewOwner { from: sender, to: owner });
+				Ok(())
+			})
+		}
+
+		#[pallet::weight(0)]
 		pub fn deregister(origin: OriginFor<T>, name_hash: NameHash) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 			Self::do_deregister(name_hash, Some(sender))?;
@@ -369,7 +432,7 @@ pub mod pallet {
 			periods: u32,
 		) -> DispatchResult {
 			T::RegistrationManager::ensure_origin(origin)?;
-			Self::do_register(name_hash, who, Some(periods))?;
+			Self::do_register(name_hash, who, Some(periods), None)?;
 			Ok(())
 		}
 
@@ -380,7 +443,7 @@ pub mod pallet {
 			who: T::AccountId,
 		) -> DispatchResult {
 			T::RegistrationManager::ensure_origin(origin)?;
-			Self::do_register(name_hash, who, None)?;
+			Self::do_register(name_hash, who, None, None)?;
 			Ok(())
 		}
 
@@ -457,22 +520,20 @@ pub mod pallet {
 		pub fn do_register(
 			name_hash: NameHash,
 			owner: T::AccountId,
-			periods: Option<u32>,
+			maybe_periods: Option<u32>,
+			maybe_deposit: Option<BalanceOf<T>>,
 		) -> DispatchResult {
-			let block_number = frame_system::Pallet::<T>::block_number();
-
-			let expiry = if let Some(p) = periods {
-				Some(block_number.saturating_add(Self::length(p)))
+			let expiry = if let Some(p) = maybe_periods {
+				Some(frame_system::Pallet::<T>::block_number().saturating_add(Self::length(p)))
 			} else {
 				None
 			};
 
-			let registration = Registration { owner: owner.clone(), expiry, deposit: None };
+			let registration =
+				Registration { owner: owner.clone(), expiry, deposit: maybe_deposit };
 
 			Registrations::<T>::insert(name_hash, registration);
-
 			Self::deposit_event(Event::<T>::NameRegistered { name_hash, owner });
-
 			Ok(())
 		}
 
@@ -524,6 +585,10 @@ pub mod pallet {
 				// sender must be from force_deregister - ok to deregister
 				return Ok(())
 			}
+		}
+
+		pub fn generate_subnode_hash(name_hash: NameHash, label_hash: NameHash) -> NameHash {
+			return sp_io::hashing::blake2_256(&(&name_hash, label_hash).encode())
 		}
 	}
 }

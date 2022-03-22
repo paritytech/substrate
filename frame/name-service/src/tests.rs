@@ -83,6 +83,12 @@ fn commit_works() {
 		assert_eq!(Balances::free_balance(&1), 90);
 		assert!(Commitments::<Test>::contains_key(commitment_hash));
 
+		let commitment = Commitments::<Test>::get(commitment_hash).unwrap();
+
+		assert_eq!(commitment.who, owner);
+		assert_eq!(commitment.when, 1);
+		assert_eq!(commitment.deposit, 10);
+
 		System::assert_last_event(
 			NameServiceEvent::Committed { sender, who: owner, hash: commitment_hash }.into(),
 		);
@@ -140,11 +146,12 @@ fn reveal_works() {
 
 		let registration = Registrations::<Test>::get(name_hash).unwrap();
 
+		assert_eq!(registration.owner, owner);
+		assert!(registration.deposit.is_none());
+
 		// expiry = current block number + (periods * blocks_per_registration_period)
 		// 12 + (10 * 1000)
-
-		let expiry = registration.expiry.unwrap();
-		assert_eq!(expiry, 10012_u64);
+		assert_eq!(registration.expiry.unwrap(), 10012_u64);
 
 		// ensure correct balance is deducated from sender
 		// commit deposit + registration fee + length fee
@@ -335,14 +342,17 @@ fn renew_works() {
 		// initial registration
 		let (_, name_hash) = alice_register_bob_senario_setup();
 		assert_eq!(Balances::free_balance(&1), 98);
+		assert_eq!(Registrations::<Test>::get(name_hash).unwrap().expiry.unwrap(), 1012);
 
 		// `1` extends for 1 period
 		assert_ok!(NameService::renew(Origin::signed(1), name_hash, 1));
 		assert_eq!(Balances::free_balance(&1), 97);
+		assert_eq!(Registrations::<Test>::get(name_hash).unwrap().expiry.unwrap(), 2012);
 
 		// `2` extends for 5 periods
 		assert_ok!(NameService::renew(Origin::signed(2), name_hash, 5));
 		assert_eq!(Balances::free_balance(&2), 195);
+		assert_eq!(Registrations::<Test>::get(name_hash).unwrap().expiry.unwrap(), 7012);
 	});
 }
 
@@ -364,6 +374,8 @@ fn renew_handles_errors() {
 			NameService::renew(Origin::signed(1), name_hash, 10),
 			BalancesError::InsufficientBalance,
 		);
+
+		// TODO:: check RegistrationHasNoExpiry
 	});
 }
 
