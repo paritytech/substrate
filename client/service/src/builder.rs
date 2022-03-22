@@ -838,9 +838,8 @@ where
 				spawn_handle.spawn("warp-sync-request-handler", Some("networking"), handler.run());
 				protocol_config
 			};
-			Ok((provider, protocol_config))
-		})
-		.transpose()?;
+			(provider, protocol_config)
+		});
 
 	let light_client_request_protocol_config = {
 		if matches!(config.role, Role::Light) {
