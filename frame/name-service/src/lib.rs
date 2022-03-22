@@ -165,7 +165,7 @@ pub mod pallet {
 		/// A new `Commitment` has taken place.
 		Committed { sender: T::AccountId, who: T::AccountId, hash: CommitmentHash },
 		/// A new `Registration` has taken added.
-		NameRegistered { name_hash: NameHash, owner: T::AccountId, expiry: T::BlockNumber },
+		NameRegistered { name_hash: NameHash, owner: T::AccountId },
 		/// A `Registration` has been transferred to a new owner.
 		NewOwner { from: T::AccountId, to: T::AccountId },
 		/// A `Registration` has been renewed.
@@ -259,7 +259,7 @@ pub mod pallet {
 
 				T::RegistrationFeeHandler::on_unbalanced(imbalance);
 
-				Self::do_register(name_hash, commitment.who.clone(), periods)?;
+				Self::do_register(name_hash, commitment.who.clone(), Some(periods))?;
 			}
 
 			T::Currency::unreserve(&sender, commitment.deposit);
@@ -369,9 +369,21 @@ pub mod pallet {
 			periods: u32,
 		) -> DispatchResult {
 			T::RegistrationManager::ensure_origin(origin)?;
-			Self::do_register(name_hash, who, periods)?;
+			Self::do_register(name_hash, who, Some(periods))?;
 			Ok(())
 		}
+
+		#[pallet::weight(0)]
+		pub fn force_permanent_register(
+			origin: OriginFor<T>,
+			name_hash: NameHash,
+			who: T::AccountId,
+		) -> DispatchResult {
+			T::RegistrationManager::ensure_origin(origin)?;
+			Self::do_register(name_hash, who, None)?;
+			Ok(())
+		}
+
 
 		#[pallet::weight(0)]
 		pub fn force_deregister(origin: OriginFor<T>, name_hash: NameHash) -> DispatchResult {
@@ -446,17 +458,22 @@ pub mod pallet {
 		pub fn do_register(
 			name_hash: NameHash,
 			owner: T::AccountId,
-			periods: u32,
+			periods: Option<u32>,
 		) -> DispatchResult {
 			let block_number = frame_system::Pallet::<T>::block_number();
-			let expiry = block_number.saturating_add(Self::length(periods));
-
+			
+			let expiry = if let Some(p) = periods { 
+				Some(block_number.saturating_add(Self::length(p)))
+			} else { 
+				None 
+			};
+		
 			let registration =
-				Registration { owner: owner.clone(), expiry: Some(expiry), deposit: None };
+				Registration { owner: owner.clone(), expiry, deposit: None };
 
 			Registrations::<T>::insert(name_hash, registration);
 
-			Self::deposit_event(Event::<T>::NameRegistered { name_hash, owner, expiry });
+			Self::deposit_event(Event::<T>::NameRegistered { name_hash, owner });
 
 			Ok(())
 		}
