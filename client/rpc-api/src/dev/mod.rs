@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! Substrate dev API.
+//! Substrate dev API containing RPCs that are mainly meant for debugging and stats collection for developers. The endpoints in this RPC module are not meant to be available to non-local users and are all marked `unsafe`.
 
 pub mod error;
 
@@ -32,17 +32,17 @@ use serde::{Deserialize, Serialize};
 pub struct BlockStats {
 	/// The length in bytes of the storage proof produced by executing the block.
 	pub witness_len: u64,
-	/// The length in bytes of the storage proof after it was compacted.
+	/// The length in bytes of the storage proof after compaction.
 	pub witness_compact_len: u64,
 	/// Length of the block in bytes.
 	///
-	/// This information could also be acquired by downloading the whole block. This is merely
-	/// a convenience to save some complexity on the client side.
+	/// This information can also be acquired by downloading the whole block. This merely
+	/// saves some complexity on the client side.
 	pub block_len: u64,
 	/// Number of extrinsics in the block.
 	///
-	/// This information could also be acquired by downloading the whole block. This is merely
-	/// a convenience to save some complexity on the client side.
+	/// This information can also be acquired by downloading the whole block. This merely
+	/// saves some complexity on the client side.
 	pub num_extrinsics: u64,
 }
 
@@ -54,8 +54,8 @@ pub struct BlockStats {
 pub trait DevApi<Hash> {
 	/// Reexecute the specified `block_hash` and gather statistics while doing so.
 	///
-	/// This function will require the specified block and its parent to be available
-	/// at the queried node. If either the specified block or the parent are not available,
+	/// This function requires the specified block and its parent to be available
+	/// at the queried node. If either the specified block or the parent is pruned,
 	/// this function will return `None`.
 	#[rpc(name = "dev_getBlockStats")]
 	fn block_stats(&self, block_hash: Hash) -> Result<Option<BlockStats>>;
