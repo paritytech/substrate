@@ -40,9 +40,9 @@ mod impls;
 pub use impls::*;
 
 use crate::{
-	log, slashing, weights::WeightInfo, ActiveEraInfo, BalanceOf, EraPayout, EraRewardPoints,
-	Exposure, Forcing, MaxUnlockingChunks, NegativeImbalanceOf, Nominations, PositiveImbalanceOf,
-	Releases, RewardDestination, SessionInterface, StakingLedger, UnappliedSlash, UnlockChunk,
+	slashing, weights::WeightInfo, ActiveEraInfo, BalanceOf, EraPayout, EraRewardPoints, Exposure,
+	Forcing, MaxUnlockingChunks, NegativeImbalanceOf, Nominations, PositiveImbalanceOf, Releases,
+	RewardDestination, SessionInterface, StakingLedger, UnappliedSlash, UnlockChunk,
 	ValidatorPrefs,
 };
 
@@ -554,7 +554,7 @@ pub mod pallet {
 			}
 
 			for &(ref stash, ref controller, balance, ref status) in &self.stakers {
-				log!(
+				crate::log!(
 					trace,
 					"inserting genesis staker: {:?} => {:?} => {:?}",
 					stash,

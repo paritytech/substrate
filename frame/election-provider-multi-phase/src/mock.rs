@@ -18,7 +18,7 @@
 use super::*;
 use crate as multi_phase;
 use frame_election_provider_support::{
-	data_provider, onchain, ElectionDataProvider, SequentialPhragmen,
+	data_provider, onchain, ElectionDataProvider, NposSolution, SequentialPhragmen,
 };
 pub use frame_support::{assert_noop, assert_ok};
 use frame_support::{
@@ -38,7 +38,7 @@ use sp_core::{
 };
 use sp_npos_elections::{
 	assignment_ratio_to_staked_normalized, seq_phragmen, to_supports, ElectionResult,
-	EvaluateSupport, ExtendedBalance, NposSolution,
+	EvaluateSupport, ExtendedBalance,
 };
 use sp_runtime::{
 	testing::Header,
@@ -263,7 +263,8 @@ parameter_types! {
 	pub static MinerMaxWeight: Weight = BlockWeights::get().max_block;
 	pub static MinerMaxLength: u32 = 256;
 	pub static MockWeightInfo: bool = false;
-	pub static VoterSnapshotPerBlock: VoterIndex = u32::max_value();
+	pub static MaxElectingVoters: VoterIndex = u32::max_value();
+	pub static MaxElectableTargets: TargetIndex = TargetIndex::max_value();
 
 	pub static EpochLength: u64 = 30;
 	pub static OnChianFallback: bool = true;
@@ -413,7 +414,8 @@ impl crate::Config for Runtime {
 	type GovernanceFallback = NoFallback<Self>;
 	type ForceOrigin = frame_system::EnsureRoot<AccountId>;
 	type Solution = TestNposSolution;
-	type VoterSnapshotPerBlock = VoterSnapshotPerBlock;
+	type MaxElectingVoters = MaxElectingVoters;
+	type MaxElectableTargets = MaxElectableTargets;
 	type Solver = SequentialPhragmen<AccountId, SolutionAccuracyOf<Runtime>, Balancing>;
 }
 
@@ -439,7 +441,8 @@ impl ElectionDataProvider for StakingMock {
 	type AccountId = AccountId;
 	type BlockNumber = u64;
 	type MaxVotesPerVoter = MaxNominations;
-	fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<AccountId>> {
+
+	fn electable_targets(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<AccountId>> {
 		let targets = Targets::get();
 
 		if maybe_max_len.map_or(false, |max_len| targets.len() > max_len) {
@@ -449,7 +452,9 @@ impl ElectionDataProvider for StakingMock {
 		Ok(targets)
 	}
 
-	fn voters(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<VoterOf<Runtime>>> {
+	fn electing_voters(
+		maybe_max_len: Option<usize>,
+	) -> data_provider::Result<Vec<VoterOf<Runtime>>> {
 		let mut voters = Voters::get();
 		if let Some(max_len) = maybe_max_len {
 			voters.truncate(max_len)
