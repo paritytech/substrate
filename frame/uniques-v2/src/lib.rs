@@ -211,7 +211,7 @@ pub mod pallet {
 		// BASIC METHODS:
 		// +store collection's owner
 		// +lock a collection (add isLocked flag) => applies to the initial metadata change and burn method
-		//   |- is_frozen vs. is_locked
+		//   +|- is_frozen vs. is_locked
 		// burn collection => if is not locked
 		// transfer ownership
 
@@ -253,16 +253,16 @@ pub mod pallet {
 			Ok(())
 		}
 
-		// set collection initial metadata
+		// set collection metadata
 		#[pallet::weight(0)]
-		pub fn set_collection_initial_metadata(
+		pub fn set_collection_metadata(
 			origin: OriginFor<T>,
 			id: T::CollectionId,
 			data: MetadataOf<T>,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 			let config = CollectionConfigs::<T>::get(id).ok_or(Error::<T>::CollectionNotFound)?;
-			Self::do_set_collection_initial_metadata(id, config, sender, data)?;
+			Self::do_set_collection_metadata(id, config, sender, data)?;
 			Ok(())
 		}
 	}

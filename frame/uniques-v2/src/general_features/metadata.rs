@@ -20,7 +20,7 @@ use enumflags2::BitFlags;
 use frame_support::pallet_prelude::*;
 
 impl<T: Config> Pallet<T> {
-	pub fn do_set_collection_initial_metadata(
+	pub fn do_set_collection_metadata(
 		id: T::CollectionId,
 		config: CollectionConfig,
 		sender: T::AccountId,
@@ -41,7 +41,7 @@ impl<T: Config> Pallet<T> {
 		// TODO: look at mutate syntax
 		let mut metadata = CollectionMetadataOf::<T>::get(id).ok_or(Error::<T>::CollectionNotFound)?;
 
-		metadata.initial_metadata = data;
+		metadata.data = data;
 
 		CollectionMetadataOf::<T>::insert(id, metadata);
 

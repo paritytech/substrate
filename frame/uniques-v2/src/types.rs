@@ -67,11 +67,7 @@ pub struct CollectionMetadata<Metadata> {
 	/// General information concerning this asset. Limited in length by `StringLimit`. This will
 	/// generally be either a JSON dump or the hash of some JSON which can be found on a
 	/// hash-addressable global publication system such as IPFS.
-	pub(super) initial_metadata: Metadata,
-
-	pub(super) mutable_metadata: Metadata,
-	/// Whether the asset metadata may be changed by a non Force origin.
-	pub(super) is_frozen: bool,
+	pub(super) data: Metadata,
 }
 
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, Default, TypeInfo, MaxEncodedLen)]
@@ -80,9 +76,5 @@ pub struct ItemMetadata<Metadata> {
 	/// General information concerning this asset. Limited in length by `StringLimit`. This will
 	/// generally be either a JSON dump or the hash of some JSON which can be found on a
 	/// hash-addressable global publication system such as IPFS.
-	pub(super) initial_metadata: Metadata,
-
-	pub(super) mutable_metadata: Metadata,
-	/// Whether the asset metadata may be changed by a non Force origin.
-	pub(super) is_frozen: bool,
+	pub(super) data: Metadata,
 }
