@@ -223,7 +223,7 @@ where
 		let store: BTreeSet<&AuthorityId> = public_keys.iter().collect();
 
 		if store.intersection(&active).count() == 0 {
-			let msg = format!("no authority public key found in store");
+			let msg = "no authority public key found in store".to_string();
 			debug!(target: "beefy", "🥩 for block {:?} {}", block, msg);
 			Err(error::Error::Keystore(msg))
 		} else {
@@ -898,7 +898,7 @@ pub(crate) mod tests {
 		// unknown `Bob` key
 		let keys = &[Keyring::Bob];
 		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
-		let err_msg = format!("no authority public key found in store");
+		let err_msg = "no authority public key found in store".to_string();
 		let expected = Err(error::Error::Keystore(err_msg));
 		assert_eq!(worker.verify_validator_set(&1, &validator_set), expected);
 
