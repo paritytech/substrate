@@ -2129,6 +2129,7 @@ dependencies = [
  "clap 3.1.6",
  "frame-benchmarking",
  "frame-support",
+ "frame-system",
  "handlebars",
  "hash-db",
  "hex",
@@ -2160,6 +2161,7 @@ dependencies = [
  "sp-std",
  "sp-storage",
  "sp-trie",
+ "thousands",
 ]
 
 [[package]]

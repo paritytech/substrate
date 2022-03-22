@@ -98,6 +98,13 @@ pub fn run() -> Result<()> {
 				You can enable it with `--features runtime-benchmarks`."
 					.into())
 			},
+		Some(Subcommand::BenchmarkBlock(cmd)) => {
+			let runner = cli.create_runner(cmd)?;
+			runner.async_run(|config| {
+				let PartialComponents { client, task_manager, .. } = new_partial(&config)?;
+				Ok((cmd.run(client), task_manager))
+			})
+		},
 		Some(Subcommand::BenchmarkOverhead(cmd)) => {
 			let runner = cli.create_runner(cmd)?;
 			runner.async_run(|mut config| {
