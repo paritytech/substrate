@@ -20,7 +20,7 @@
 
 use crate::{
 	storage_cache::{new_shared_cache, CachingState, SharedCache},
-	DbState,
+	DbState, DbStateBuilder
 };
 use hash_db::{Hasher, Prefix};
 use kvdb::{DBTransaction, KeyValueDB};
@@ -165,7 +165,7 @@ impl<B: BlockT> BenchmarkingState<B> {
 			_block: Default::default(),
 		});
 		*self.state.borrow_mut() = Some(State::new(
-			DbState::<B>::new(storage_db, self.root.get()),
+			DbStateBuilder::<B>::new(storage_db, self.root.get()).build(),
 			self.shared_cache.clone(),
 			None,
 		));

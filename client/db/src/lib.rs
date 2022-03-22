@@ -107,7 +107,7 @@ pub type DbState<B> =
 	sp_state_machine::TrieBackend<Arc<dyn sp_state_machine::Storage<HashFor<B>>>, HashFor<B>>;
 
 /// Builder for [`DbState`].
-type DbStateBuilder<B> = sp_state_machine::TrieBackendBuilder<
+pub type DbStateBuilder<B> = sp_state_machine::TrieBackendBuilder<
 	Arc<dyn sp_state_machine::Storage<HashFor<B>>>,
 	HashFor<B>,
 >;
