@@ -146,7 +146,7 @@ pub mod pallet {
 		_,
 		Blake2_128Concat,
 		NameHash,
-		Registration<T::AccountId, BalanceOf<T>, T::BlockNumber>,
+		Registration<T::AccountId, Option<BalanceOf<T>>, T::BlockNumber>,
 	>;
 
 	/// This resolver maps name hashes to an account
@@ -254,8 +254,7 @@ pub mod pallet {
 
 				T::RegistrationFeeHandler::on_unbalanced(imbalance);
 
-				let deposit = T::NameDeposit::get();
-				Self::do_register(name_hash, commitment.who.clone(), deposit, periods)?;
+				Self::do_register(name_hash, commitment.who.clone(), periods)?;
 			}
 
 			T::Currency::unreserve(&commitment.who, commitment.deposit);
@@ -279,8 +278,6 @@ pub mod pallet {
 				ensure!(r.expiry > block_number, Error::<T>::RegistrationExpired);
 
 				r.owner = to.clone();
-
-				// TODO: transfer deposit over?
 
 				Self::deposit_event(Event::<T>::Transfer { from: sender, to });
 				Ok(())
@@ -359,8 +356,7 @@ pub mod pallet {
 			periods: u32,
 		) -> DispatchResult {
 			T::RegistrationManager::ensure_origin(origin)?;
-			let deposit: BalanceOf<T> = Zero::zero();
-			Self::do_register(name_hash, who, deposit, periods)?;
+			Self::do_register(name_hash, who, periods)?;
 			Ok(())
 		}
 
@@ -432,23 +428,17 @@ pub mod pallet {
 		pub fn do_register(
 			name_hash: NameHash,
 			owner: T::AccountId,
-			deposit: BalanceOf<T>,
 			periods: u32,
 		) -> DispatchResult {
 			let block_number = frame_system::Pallet::<T>::block_number();
 			let expiry = block_number.saturating_add(Self::length(periods));
 
-			// if registration already exists, unreserve deposit
-			let maybe_existing_registration = Registrations::<T>::get(name_hash);
-			if let Some(r) = maybe_existing_registration {
-				let _ = T::Currency::unreserve(&r.registrant, r.deposit);
-			}
-			
-			// reserve deposit
-			T::Currency::reserve(&owner, deposit)?;
-
-			let registration =
-				Registration { owner: owner.clone(), registrant: owner.clone(), expiry, deposit };
+			let registration = Registration {
+				owner: owner.clone(),
+				registrant: owner.clone(),
+				expiry,
+				deposit: None,
+			};
 
 			Registrations::<T>::insert(name_hash, registration);
 
@@ -476,7 +466,10 @@ pub mod pallet {
 				);
 			}
 
-			let _ = T::Currency::unreserve(&registration.registrant, registration.deposit);
+			// for subnodes that require a deposit, make sure to unreserve here
+			if let Some(deposit) = registration.deposit {
+				let _ = T::Currency::unreserve(&registration.registrant, deposit);
+			}
 
 			Registrations::<T>::remove(name_hash);
 			Self::deposit_event(Event::<T>::AddressDeregistered { name_hash });
