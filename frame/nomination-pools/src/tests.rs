@@ -2096,13 +2096,14 @@ mod create {
 		ExtBuilder::default().build_and_execute(|| {
 			// next pool id is 2.
 			let next_pool_stash = Pools::create_bonded_account(2);
+			let ed = Balances::minimum_balance();
 
 			assert!(!BondedPools::<Runtime>::contains_key(2));
 			assert!(!RewardPools::<Runtime>::contains_key(2));
 			assert!(!Delegators::<Runtime>::contains_key(11));
 			assert_eq!(StakingMock::active_stake(&next_pool_stash), None);
 
-			Balances::make_free_balance_be(&11, StakingMock::minimum_bond());
+			Balances::make_free_balance_be(&11, StakingMock::minimum_bond() + ed);
 			assert_ok!(Pools::create(
 				Origin::signed(11),
 				StakingMock::minimum_bond(),
@@ -2111,7 +2112,7 @@ mod create {
 				789
 			));
 
-			assert_eq!(Balances::free_balance(&11), 0);
+			assert_eq!(Balances::free_balance(&11), ed + 0);
 			assert_eq!(
 				Delegators::<Runtime>::get(11).unwrap(),
 				Delegator {
