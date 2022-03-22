@@ -3273,7 +3273,6 @@ mod test {
 			),);
 
 			best_block_num += MAX_BLOCKS_TO_REQUEST as u32;
-			log::info!("best block = {best_block_num}");
 
 			if best_block_num < last_block_num {
 				// make sure we're not getting a duplicate request in the time before the blocks are
