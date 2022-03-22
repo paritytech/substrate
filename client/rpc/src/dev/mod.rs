@@ -16,7 +16,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! Implementation of the [`DevApi`] trait providing debug utilities for Substrate based blockchains.
+//! Implementation of the [`DevApi`] trait providing debug utilities for Substrate based
+//! blockchains.
 
 #[cfg(test)]
 mod tests;

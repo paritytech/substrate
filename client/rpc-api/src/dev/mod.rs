@@ -16,7 +16,9 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! Substrate dev API containing RPCs that are mainly meant for debugging and stats collection for developers. The endpoints in this RPC module are not meant to be available to non-local users and are all marked `unsafe`.
+//! Substrate dev API containing RPCs that are mainly meant for debugging and stats collection for
+//! developers. The endpoints in this RPC module are not meant to be available to non-local users
+//! and are all marked `unsafe`.
 
 pub mod error;
 
