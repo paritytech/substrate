@@ -90,6 +90,7 @@ pub fn expand_error(def: &mut Def) -> proc_macro2::TokenStream {
 		}
 
 		impl<#type_impl_gen> #error_ident<#type_use_gen> #config_where_clause {
+			#[doc(hidden)]
 			pub fn as_u8(&self) -> u8 {
 				match &self {
 					Self::__Ignore(_, _) => unreachable!("`__Ignore` can never be constructed"),
@@ -97,6 +98,7 @@ pub fn expand_error(def: &mut Def) -> proc_macro2::TokenStream {
 				}
 			}
 
+			#[doc(hidden)]
 			pub fn as_str(&self) -> &'static str {
 				match &self {
 					Self::__Ignore(_, _) => unreachable!("`__Ignore` can never be constructed"),

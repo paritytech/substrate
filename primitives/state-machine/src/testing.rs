@@ -179,7 +179,6 @@ where
 	pub fn commit_all(&mut self) -> Result<(), String> {
 		let changes = self.overlay.drain_storage_changes::<_, _>(
 			&self.backend,
-			Default::default(),
 			&mut Default::default(),
 			self.state_version,
 		)?;

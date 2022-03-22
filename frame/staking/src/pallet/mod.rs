@@ -40,9 +40,9 @@ mod impls;
 pub use impls::*;
 
 use crate::{
-	log, slashing, weights::WeightInfo, ActiveEraInfo, BalanceOf, EraPayout, EraRewardPoints,
-	Exposure, Forcing, MaxUnlockingChunks, NegativeImbalanceOf, Nominations, PositiveImbalanceOf,
-	Releases, RewardDestination, SessionInterface, StakingLedger, UnappliedSlash, UnlockChunk,
+	slashing, weights::WeightInfo, ActiveEraInfo, BalanceOf, EraPayout, EraRewardPoints, Exposure,
+	Forcing, MaxUnlockingChunks, NegativeImbalanceOf, Nominations, PositiveImbalanceOf, Releases,
+	RewardDestination, SessionInterface, StakingLedger, UnappliedSlash, UnlockChunk,
 	ValidatorPrefs,
 };
 
@@ -166,7 +166,10 @@ pub mod pallet {
 		/// Something that can provide a sorted list of voters in a somewhat sorted way. The
 		/// original use case for this was designed with `pallet_bags_list::Pallet` in mind. If
 		/// the bags-list is not desired, [`impls::UseNominatorsMap`] is likely the desired option.
-		type SortedListProvider: SortedListProvider<Self::AccountId>;
+		type SortedListProvider: SortedListProvider<
+			Self::AccountId,
+			Score = frame_election_provider_support::VoteWeight,
+		>;
 
 		/// The maximum number of `unlocking` chunks a [`StakingLedger`] can have. Effectively
 		/// determines how many unique eras a staker may be unbonding in.
@@ -551,7 +554,7 @@ pub mod pallet {
 			}
 
 			for &(ref stash, ref controller, balance, ref status) in &self.stakers {
-				log!(
+				crate::log!(
 					trace,
 					"inserting genesis staker: {:?} => {:?} => {:?}",
 					stash,

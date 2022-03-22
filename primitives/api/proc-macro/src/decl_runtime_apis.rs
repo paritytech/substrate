@@ -378,21 +378,21 @@ fn generate_call_api_at_calls(decl: &ItemTrait) -> Result<TokenStream> {
 			#[cfg(any(feature = "std", test))]
 			#[allow(clippy::too_many_arguments)]
 			pub fn #fn_name<
-				R: #crate_::Encode + #crate_::Decode + PartialEq,
+				R: #crate_::Encode + #crate_::Decode + std::cmp::PartialEq,
 				NC: FnOnce() -> std::result::Result<R, #crate_::ApiError> + std::panic::UnwindSafe,
 				Block: #crate_::BlockT,
 				T: #crate_::CallApiAt<Block>,
 			>(
 				call_runtime_at: &T,
 				at: &#crate_::BlockId<Block>,
-				args: Vec<u8>,
+				args: std::vec::Vec<u8>,
 				changes: &std::cell::RefCell<#crate_::OverlayedChanges>,
 				storage_transaction_cache: &std::cell::RefCell<
 					#crate_::StorageTransactionCache<Block, T::StateBackend>
 				>,
-				native_call: Option<NC>,
+				native_call: std::option::Option<NC>,
 				context: #crate_::ExecutionContext,
-				recorder: &Option<#crate_::ProofRecorder<Block>>,
+				recorder: &std::option::Option<#crate_::ProofRecorder<Block>>,
 			) -> std::result::Result<#crate_::NativeOrEncoded<R>, #crate_::ApiError> {
 				let version = call_runtime_at.runtime_version_at(at)?;
 
@@ -412,7 +412,7 @@ fn generate_call_api_at_calls(decl: &ItemTrait) -> Result<TokenStream> {
 							recorder,
 						};
 
-						let ret = call_runtime_at.call_api_at(params)?;
+						let ret = #crate_::CallApiAt::<Block>::call_api_at(call_runtime_at, params)?;
 
 						return Ok(ret)
 					}
@@ -429,7 +429,7 @@ fn generate_call_api_at_calls(decl: &ItemTrait) -> Result<TokenStream> {
 					recorder,
 				};
 
-				call_runtime_at.call_api_at(params)
+				#crate_::CallApiAt::<Block>::call_api_at(call_runtime_at, params)
 			}
 		));
 	}
@@ -677,13 +677,13 @@ impl<'a> ToClientSideDecl<'a> {
 							#native_handling
 						},
 						#crate_::NativeOrEncoded::Encoded(r) => {
-							<#ret_type as #crate_::Decode>::decode(&mut &r[..])
-								.map_err(|err|
-									#crate_::ApiError::FailedToDecodeReturnValue {
-										function: #function_name,
-										error: err,
-									}
-								)
+							std::result::Result::map_err(
+								<#ret_type as #crate_::Decode>::decode(&mut &r[..]),
+								|err| #crate_::ApiError::FailedToDecodeReturnValue {
+									function: #function_name,
+									error: err,
+								}
+							)
 						}
 					}
 				)
