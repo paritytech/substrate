@@ -453,7 +453,13 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 	) {
 		for (p_name, event) in handler.into_iter() {
 			if let Some((proto, _)) = self.protocols.get_mut(p_name.as_str()) {
-				proto.inject_connection_closed(peer_id, conn, endpoint, event, remaining_established)
+				proto.inject_connection_closed(
+					peer_id,
+					conn,
+					endpoint,
+					event,
+					remaining_established,
+				)
 			} else {
 				log::error!(
 					target: "sub-libp2p",
