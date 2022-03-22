@@ -138,6 +138,7 @@ pub mod pallet {
 		CollectionCreated { id: T::CollectionId },
 		CollectionMetadataSet { id: T::CollectionId, data: MetadataOf<T> },
 		CollectionLocked { id: T::CollectionId },
+		CollectionDestroyed { id: T::CollectionId },
 	}
 
 	// Your Pallet's error messages.
@@ -199,21 +200,27 @@ pub mod pallet {
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 			let config = CollectionConfigs::<T>::get(id).ok_or(Error::<T>::CollectionNotFound)?;
-			let collection = Collections::<T>::get(id).ok_or(Error::<T>::CollectionNotFound)?;
-
-			ensure!(collection.owner == sender, Error::<T>::NotAuthorized);
-
-			Self::do_lock_collection(config)?;
-			Self::deposit_event(Event::<T>::CollectionLocked { id });
-
+			Self::do_lock_collection(id, sender, config)?;
 			Ok(())
 		}
+
+		#[pallet::weight(0)]
+		pub fn destroy_collection(
+			origin: OriginFor<T>,
+			id: T::CollectionId,
+		) -> DispatchResult {
+			let sender = ensure_signed(origin)?;
+			let config = CollectionConfigs::<T>::get(id).ok_or(Error::<T>::CollectionNotFound)?;
+			Self::do_destroy_collection(id, sender, config)?;
+			Ok(())
+		}
+
 
 		// BASIC METHODS:
 		// +store collection's owner
 		// +lock a collection (add isLocked flag) => applies to the initial metadata change and burn method
 		//   +|- is_frozen vs. is_locked
-		// burn collection => if is not locked
+		// +destroy collection => if is not locked
 		// transfer ownership
 
 		// PART 2:
@@ -223,7 +230,7 @@ pub mod pallet {
 		// mint items
 		// max supply => applies to mint
 		// max items per user => applies to mint and transfer
-		// isTransferrable => applies to transfer
+		// isTransferable => applies to transfer
 		// transfer items
 		// items metadata + attributes. Metadata could be changed by the collection's owner only
 

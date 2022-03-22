@@ -20,7 +20,14 @@ use enumflags2::BitFlags;
 use frame_support::pallet_prelude::*;
 
 impl<T: Config> Pallet<T> {
-	pub fn do_lock_collection(config: CollectionConfig) -> DispatchResult {
+	pub fn do_lock_collection(
+		id: T::CollectionId,
+		caller: T::AccountId,
+		config: CollectionConfig,
+	) -> DispatchResult {
+		let collection = Collections::<T>::get(id).ok_or(Error::<T>::CollectionNotFound)?;
+		ensure!(collection.owner == caller, Error::<T>::NotAuthorized);
+
 		let mut user_features: BitFlags<UserFeatures> = config.user_features.into();
 
 		if user_features.contains(UserFeatures::IsLocked) {
@@ -29,6 +36,32 @@ impl<T: Config> Pallet<T> {
 
 		// update the flag
 		user_features.insert(UserFeatures::IsLocked);
+
+		Self::deposit_event(Event::<T>::CollectionLocked { id });
+
+		Ok(())
+	}
+
+	pub fn do_destroy_collection(
+		id: T::CollectionId,
+		caller: T::AccountId,
+		config: CollectionConfig,
+	) -> DispatchResult {
+		let collection = Collections::<T>::get(id).ok_or(Error::<T>::CollectionNotFound)?;
+		ensure!(collection.owner == caller, Error::<T>::NotAuthorized);
+
+		let user_features: BitFlags<UserFeatures> = config.user_features.into();
+
+		if user_features.contains(UserFeatures::IsLocked) {
+			return Err(Error::<T>::CollectionIsLocked.into());
+		}
+
+		// destroy the collection
+		CollectionConfigs::<T>::remove(&id);
+		Collections::<T>::remove(&id);
+		CollectionMetadataOf::<T>::remove(&id);
+
+		Self::deposit_event(Event::<T>::CollectionDestroyed { id });
 
 		Ok(())
 	}
