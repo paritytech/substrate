@@ -826,20 +826,19 @@ where
 		}
 	};
 
-	let warp_sync_params = warp_sync
-		.map(|provider| {
-			let protocol_config = if matches!(config.role, Role::Light) {
-				// Allow outgoing requests but deny incoming requests.
-				warp_request_handler::generate_request_response_config(protocol_id.clone())
-			} else {
-				// Allow both outgoing and incoming requests.
-				let (handler, protocol_config) =
-					WarpSyncRequestHandler::new(protocol_id.clone(), provider.clone());
-				spawn_handle.spawn("warp-sync-request-handler", Some("networking"), handler.run());
-				protocol_config
-			};
-			(provider, protocol_config)
-		});
+	let warp_sync_params = warp_sync.map(|provider| {
+		let protocol_config = if matches!(config.role, Role::Light) {
+			// Allow outgoing requests but deny incoming requests.
+			warp_request_handler::generate_request_response_config(protocol_id.clone())
+		} else {
+			// Allow both outgoing and incoming requests.
+			let (handler, protocol_config) =
+				WarpSyncRequestHandler::new(protocol_id.clone(), provider.clone());
+			spawn_handle.spawn("warp-sync-request-handler", Some("networking"), handler.run());
+			protocol_config
+		};
+		(provider, protocol_config)
+	});
 
 	let light_client_request_protocol_config = {
 		if matches!(config.role, Role::Light) {
