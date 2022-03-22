@@ -19,7 +19,7 @@ use crate::{mock::*, *};
 
 use frame_support::assert_ok;
 
-fn get_id_from_event() -> Result<CollectionIdOf<Test>, &'static str> {
+fn get_id_from_event() -> Result<<Test as Config>::CollectionId, &'static str> {
 	let last_event = System::events().pop();
 	if let Some(e) = last_event.clone() {
 		match e.event {
@@ -40,7 +40,7 @@ fn get_id_from_event() -> Result<CollectionIdOf<Test>, &'static str> {
 fn sanity_test() {
 	new_test_ext().execute_with(|| {
 		let user_features = UserFeatures::Administration;
-		assert_ok!(Uniques::create(Origin::signed(1), None, user_features));
+		assert_ok!(Uniques::create(Origin::signed(1), user_features));
 
 		let id = get_id_from_event().unwrap();
 		let collection_config = CollectionConfigs::<Test>::get(id);

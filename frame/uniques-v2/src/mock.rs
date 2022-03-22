@@ -93,6 +93,7 @@ impl Config for Test {
 
 	type Currency = Balances;
 	type CollectionId = u32;
+	type ItemId = u32;
 	type MetadataBound = ConstU32<10_000>;
 	type DefaultSystemConfig = NoDeposit;
 }

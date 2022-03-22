@@ -16,3 +16,4 @@
 // limitations under the License.
 
 pub mod transfer;
+pub mod metadata;

@@ -20,24 +20,30 @@ use enumflags2::BitFlags;
 use frame_support::pallet_prelude::*;
 
 impl<T: Config> Pallet<T> {
-	pub fn do_transfer(
+	pub fn do_set_collection_initial_metadata(
 		id: T::CollectionId,
 		config: CollectionConfig,
 		sender: T::AccountId,
-		receiver: T::AccountId,
-		amount: Option<BalanceOf<T>>,
+		data: MetadataOf<T>,
 	) -> DispatchResult {
 		let user_features: BitFlags<UserFeatures> = config.user_features.into();
 
-		if user_features.contains(UserFeatures::Royalty) {
-			// take a part of the transfer amount
+		if user_features.contains(UserFeatures::IsLocked) {
+			return Err(Error::<T>::CollectionIsLocked.into());
 		}
 
-		if user_features.contains(UserFeatures::Limited) {
-			//crate::limited::limited_check(receiver)?;
-		}
+		let collection = Collections::<T>::get(id).ok_or(Error::<T>::CollectionNotFound)?;
 
-		// do the transfer logic
+		ensure!(collection.owner == sender, Error::<T>::NotAuthorized);
+
+		// do the logic
+
+		// TODO: look at mutate syntax
+		let mut metadata = CollectionMetadataOf::<T>::get(id).ok_or(Error::<T>::CollectionNotFound)?;
+
+		metadata.initial_metadata = data;
+
+		CollectionMetadataOf::<T>::insert(id, metadata);
 
 		Ok(())
 	}

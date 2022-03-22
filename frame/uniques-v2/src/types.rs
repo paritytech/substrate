@@ -28,6 +28,7 @@ pub enum UserFeatures {
 	Administration,
 	Royalty,
 	Limited,
+	IsLocked,
 }
 
 // Support for up to 64 system-enabled features on a collection.
@@ -47,17 +48,41 @@ pub struct CollectionConfig {
 }
 
 #[derive(Encode, Decode, PartialEq, Default, MaxEncodedLen, TypeInfo)]
-pub struct Collection<CollectionId, Account, Balance, Metadata> {
+pub struct Collection<CollectionId, Account, Balance> {
 	pub id: CollectionId,
 	pub owner: Account,
-	pub deposit: Balance,
-	pub metadata: Metadata,
+	pub deposit: Option<Balance>,
 }
 
 #[derive(Encode, Decode, PartialEq, Default, MaxEncodedLen, TypeInfo)]
-pub struct Item<ItemId, Account, Balance, Metadata> {
+pub struct Item<ItemId, Account, Balance> {
 	pub id: ItemId,
 	pub owner: Account,
-	pub deposit: Balance,
-	pub metadata: Metadata,
+	pub deposit: Option<Balance>,
+}
+
+#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, Default, TypeInfo, MaxEncodedLen)]
+#[codec(mel_bound(Metadata: MaxEncodedLen))]
+pub struct CollectionMetadata<Metadata> {
+	/// General information concerning this asset. Limited in length by `StringLimit`. This will
+	/// generally be either a JSON dump or the hash of some JSON which can be found on a
+	/// hash-addressable global publication system such as IPFS.
+	pub(super) initial_metadata: Metadata,
+
+	pub(super) mutable_metadata: Metadata,
+	/// Whether the asset metadata may be changed by a non Force origin.
+	pub(super) is_frozen: bool,
+}
+
+#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, Default, TypeInfo, MaxEncodedLen)]
+#[codec(mel_bound(Metadata: MaxEncodedLen))]
+pub struct ItemMetadata<Metadata> {
+	/// General information concerning this asset. Limited in length by `StringLimit`. This will
+	/// generally be either a JSON dump or the hash of some JSON which can be found on a
+	/// hash-addressable global publication system such as IPFS.
+	pub(super) initial_metadata: Metadata,
+
+	pub(super) mutable_metadata: Metadata,
+	/// Whether the asset metadata may be changed by a non Force origin.
+	pub(super) is_frozen: bool,
 }

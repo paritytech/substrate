@@ -38,7 +38,7 @@ pub mod pallet {
 	use frame_system::pallet_prelude::*;
 
 	use frame_support::traits::{Currency, ReservableCurrency};
-	use sp_runtime::traits::Hash;
+	use sp_runtime::traits::{CheckedAdd, One};
 
 	// The struct on which we build all of our Pallet logic.
 	#[pallet::pallet]
@@ -50,7 +50,9 @@ pub mod pallet {
 
 		type Currency: ReservableCurrency<Self::AccountId>;
 
-		type CollectionId: Member + Parameter + Default + Copy + MaxEncodedLen;
+		type CollectionId: Member + Parameter + Default + Copy + MaxEncodedLen + CheckedAdd + One;
+
+		type ItemId: Member + Parameter + Default + Copy + MaxEncodedLen + CheckedAdd + One;
 
 		/// This is the limit for metadata
 		type MetadataBound: Get<u32>; // = up to 10 kb;
@@ -58,48 +60,83 @@ pub mod pallet {
 		type DefaultSystemConfig: Get<SystemFeatures>;
 	}
 
-	pub type CollectionIdOf<T> = <T as frame_system::Config>::Hash;
 	pub type MetadataOf<T> = BoundedVec<u8, <T as Config>::MetadataBound>;
 	pub type BalanceOf<T> =
 		<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
 	/// Maps a unique collection id to it's config.
 	#[pallet::storage]
-	pub(super) type CollectionConfigs<T: Config> =
-		StorageMap<_, Blake2_128Concat, CollectionIdOf<T>, CollectionConfig>;
+	pub(super) type CollectionConfigs<T: Config> = StorageMap<
+		_,
+		Blake2_128Concat,
+		T::CollectionId,
+		CollectionConfig,
+	>;
 
 	/// Maps a unique collection id to it's administrator.
 	#[pallet::storage]
-	pub(super) type Admins<T: Config> =
-		StorageMap<_, Blake2_128Concat, CollectionIdOf<T>, T::AccountId, OptionQuery>;
+	pub(super) type Admins<T: Config> = StorageMap<
+		_,
+		Blake2_128Concat,
+		T::CollectionId,
+		T::AccountId,
+		OptionQuery
+	>;
 
 	/// Maps a collection id to it's metadata.
 	#[pallet::storage]
 	pub(super) type Collections<T: Config> = StorageMap<
 		_,
 		Blake2_128Concat,
-		CollectionIdOf<T>,
-		Collection<CollectionIdOf<T>, T::AccountId, BalanceOf<T>, MetadataOf<T>>,
+		T::CollectionId,
+		Collection<T::CollectionId, T::AccountId, BalanceOf<T>>,
 		OptionQuery,
 	>;
+
+	/// Keeps track of the number of collections in existence.
+	#[pallet::storage]
+	pub(super) type CountForCollections<T: Config> = StorageValue<_, T::CollectionId, ValueQuery>;
 
 	/// Maps a collection id to it's items.
 	#[pallet::storage]
 	pub(super) type CollectionMap<T: Config> = StorageDoubleMap<
 		_,
 		Blake2_128Concat,
-		CollectionIdOf<T>,
+		T::CollectionId,
 		Blake2_128Concat,
 		T::CollectionId,
-		Item<T::CollectionId, T::AccountId, BalanceOf<T>, MetadataOf<T>>,
+		Item<T::CollectionId, T::AccountId, BalanceOf<T>>,
 		OptionQuery,
 	>;
 
-	// Your Pallet's events.
+	#[pallet::storage]
+	/// Metadata of an collection.
+	pub(super) type CollectionMetadataOf<T: Config> = StorageMap<
+		_,
+		Blake2_128Concat,
+		T::CollectionId,
+		CollectionMetadata<MetadataOf<T>>,
+		OptionQuery,
+	>;
+
+	#[pallet::storage]
+	/// Metadata of an asset instance.
+	pub(super) type ItemMetadataOf<T: Config> = StorageDoubleMap<
+		_,
+		Blake2_128Concat,
+		T::CollectionId,
+		Blake2_128Concat,
+		T::ItemId,
+		ItemMetadata<MetadataOf<T>>,
+		OptionQuery,
+	>;
+
+	// Pallet's events.
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		CollectionCreated { id: CollectionIdOf<T> },
+		CollectionCreated { id: T::CollectionId },
+		CollectionLocked { id: T::CollectionId },
 	}
 
 	// Your Pallet's error messages.
@@ -111,46 +148,88 @@ pub mod pallet {
 		CollectionIdTaken,
 		/// A collection with this ID does not exist.
 		CollectionNotFound,
+		/// The collection is locked.
+		CollectionIsLocked,
 		/// The calling user is not authorized to make this call.
 		NotAuthorized,
 		/// The hint provided by the user was incorrect.
 		BadHint,
+		/// An overflow has occurred.
+		Overflow,
 	}
 
-	// Your Pallet's callable functions.
+	// Pallet's callable functions.
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		#[pallet::weight(0)]
 		pub fn create(
 			origin: OriginFor<T>,
-			maybe_salt: Option<u64>,
 			config: UserFeatures,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
-
-			let id = if let Some(salt) = maybe_salt {
-				let bytes = (sender, salt).encode();
-				T::Hashing::hash(&bytes)
-			} else {
-				// TODO update logic
-				let bytes = sender.encode();
-				T::Hashing::hash(&bytes)
-			};
+			let id = CountForCollections::<T>::get();
 
 			ensure!(!CollectionConfigs::<T>::contains_key(id), Error::<T>::CollectionIdTaken);
 
 			let default_system_config = T::DefaultSystemConfig::get();
-			let config =
-				CollectionConfig { system_features: default_system_config, user_features: config };
+			let config = CollectionConfig {
+				system_features: default_system_config,
+				user_features: config,
+			};
 			CollectionConfigs::<T>::insert(id, config);
+
+			let collection = Collection { id, owner: sender.clone(), deposit: None };
+			ensure!(!Collections::<T>::contains_key(id), Error::<T>::CollectionIdTaken);
+
+			Collections::<T>::insert(id, collection);
+
 			Self::deposit_event(Event::<T>::CollectionCreated { id });
+
+			let next_id = id.checked_add(&One::one()).ok_or(Error::<T>::Overflow)?;
+			CountForCollections::<T>::put(next_id);
+
 			Ok(())
 		}
 
 		#[pallet::weight(0)]
+		pub fn lock_collection(
+			origin: OriginFor<T>,
+			id: T::CollectionId,
+		) -> DispatchResult {
+			let sender = ensure_signed(origin)?;
+			let config = CollectionConfigs::<T>::get(id).ok_or(Error::<T>::CollectionNotFound)?;
+			let collection = Collections::<T>::get(id).ok_or(Error::<T>::CollectionNotFound)?;
+
+			ensure!(collection.owner == sender, Error::<T>::NotAuthorized);
+
+			Self::do_lock_collection(config)?;
+			Self::deposit_event(Event::<T>::CollectionLocked { id });
+
+			Ok(())
+		}
+
+		// BASIC METHODS:
+		// +store collection's owner
+		// +lock a collection (add isLocked flag) => applies to the initial metadata change and burn method
+		//   |- is_frozen vs. is_locked
+		// burn collection => if is not locked
+		// transfer ownership
+
+		// PART 2:
+		// collection metadata + attributes
+
+		// PART 3:
+		// mint items
+		// max supply => applies to mint
+		// max items per user => applies to mint and transfer
+		// isTransferrable => applies to transfer
+		// transfer items
+		// items metadata + attributes. Metadata could be changed by the collection's owner only
+
+		#[pallet::weight(0)]
 		pub fn set_admin(
 			origin: OriginFor<T>,
-			id: CollectionIdOf<T>,
+			id: T::CollectionId,
 			new_admin: T::AccountId,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
@@ -159,14 +238,11 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::weight(
-			0
-			// todo
-			//Self::config_to_weight(config_hint)
-		)]
+		// TODO: #[pallet::weight( Self::config_to_weight(config_hint) )]
+		#[pallet::weight(0)]
 		pub fn transfer(
 			origin: OriginFor<T>,
-			id: CollectionIdOf<T>,
+			id: T::CollectionId,
 			receiver: T::AccountId,
 			config_hint: CollectionConfig,
 		) -> DispatchResult {
@@ -174,6 +250,19 @@ pub mod pallet {
 			let config = CollectionConfigs::<T>::get(id).ok_or(Error::<T>::CollectionNotFound)?;
 			ensure!(config == config_hint, Error::<T>::BadHint);
 			Self::do_transfer(id, config, sender, receiver, None)?;
+			Ok(())
+		}
+
+		// set collection initial metadata
+		#[pallet::weight(0)]
+		pub fn set_collection_initial_metadata(
+			origin: OriginFor<T>,
+			id: T::CollectionId,
+			data: MetadataOf<T>,
+		) -> DispatchResult {
+			let sender = ensure_signed(origin)?;
+			let config = CollectionConfigs::<T>::get(id).ok_or(Error::<T>::CollectionNotFound)?;
+			Self::do_set_collection_initial_metadata(id, config, sender, data)?;
 			Ok(())
 		}
 	}

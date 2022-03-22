@@ -20,24 +20,15 @@ use enumflags2::BitFlags;
 use frame_support::pallet_prelude::*;
 
 impl<T: Config> Pallet<T> {
-	pub fn do_transfer(
-		id: T::CollectionId,
-		config: CollectionConfig,
-		sender: T::AccountId,
-		receiver: T::AccountId,
-		amount: Option<BalanceOf<T>>,
-	) -> DispatchResult {
-		let user_features: BitFlags<UserFeatures> = config.user_features.into();
+	pub fn do_lock_collection(config: CollectionConfig) -> DispatchResult {
+		let mut user_features: BitFlags<UserFeatures> = config.user_features.into();
 
-		if user_features.contains(UserFeatures::Royalty) {
-			// take a part of the transfer amount
+		if user_features.contains(UserFeatures::IsLocked) {
+			return Err(Error::<T>::CollectionIsLocked.into());
 		}
 
-		if user_features.contains(UserFeatures::Limited) {
-			//crate::limited::limited_check(receiver)?;
-		}
-
-		// do the transfer logic
+		// update the flag
+		user_features.insert(UserFeatures::IsLocked);
 
 		Ok(())
 	}
