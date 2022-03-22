@@ -533,26 +533,10 @@ impl<T: Config> StakingLedger<T> {
 	/// case that either the active bonded or some unlocking chunks become dust after slashing.
 	/// Returns the amount of funds actually slashed.
 	///
-	/// Note that this calls `Config::OnStakerSlash::on_slash` with information as to how the slash
+	/// # Note
+	///
+	/// This calls `Config::OnStakerSlash::on_slash` with information as to how the slash
 	/// was applied.
-	// Generally slashes are computed by:
-	//
-	// 1) Balances of the unlocking chunks in range `slash_era + 1..=apply_era` are summed and
-	// stored in `total_balance_affected`.
-	//
-	// 2) `slash_ratio` is computed as `slash_amount / total_balance_affected`.
-	//
-	// 3) `Ledger::active` is set to `(1- slash_ratio) * Ledger::active`.
-	//
-	// 4) For all unlocking chunks created in range `slash_era + 1..=apply_era` set their balance
-	// to `(1 - slash_ratio) * unbonding_pool_balance`. We start with slash_era + 1, because that
-	// is the earliest the active sake while slash could be unbonded.
-	//
-	// 5) Slash any remaining slash amount from the remaining chunks, starting with the `slash_era`
-	// and going backwards.
-	//
-	// There are some edge cases due to saturating arithmetic - see logic below and tests for
-	// details.
 	fn slash(
 		&mut self,
 		slash_amount: BalanceOf<T>,
