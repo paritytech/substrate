@@ -8864,6 +8864,7 @@ dependencies = [
  "parking_lot 0.12.0",
  "sc-chain-spec",
  "sc-transaction-pool-api",
+ "scale-info",
  "serde",
  "serde_json",
  "sp-core",
