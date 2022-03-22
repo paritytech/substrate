@@ -31,7 +31,7 @@ pub use pallet::*;
 pub mod pallet {
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
-	use sp_runtime::traits::{Bounded, Convert, Saturating, Zero};
+	use sp_runtime::traits::{Bounded, Convert, Saturating};
 	use sp_std::{convert::TryInto, vec::Vec};
 
 	use frame_support::traits::{
@@ -149,7 +149,7 @@ pub mod pallet {
 		_,
 		Blake2_128Concat,
 		NameHash,
-		Registration<T::AccountId, Option<BalanceOf<T>>, T::BlockNumber>,
+		Registration<T::AccountId, Option<BalanceOf<T>>, Option<T::BlockNumber>>,
 	>;
 
 	/// This resolver maps name hashes to an account
@@ -195,6 +195,8 @@ pub mod pallet {
 		RegistrationExpired,
 		/// This registration has not yet expired.
 		RegistrationNotExpired,
+		/// Cannot renew this registration.
+		RegistrationHasNoExpiry,
 	}
 
 	// Your Pallet's callable functions.
@@ -241,7 +243,7 @@ pub mod pallet {
 			let block_number = frame_system::Pallet::<T>::block_number();
 
 			ensure!(
-				block_number > commitment.when.saturating_add(T::MinimumCommitmentPeriod::get()),
+				commitment.when.saturating_add(T::MinimumCommitmentPeriod::get()) <= block_number,
 				Error::<T>::TooEarlyToReveal
 			);
 
@@ -278,7 +280,10 @@ pub mod pallet {
 			Registrations::<T>::try_mutate(name_hash, |maybe_registration| {
 				let r = maybe_registration.as_mut().ok_or(Error::<T>::RegistrationNotFound)?;
 				ensure!(r.owner == sender, Error::<T>::NotRegistrationOwner);
-				ensure!(r.expiry > block_number, Error::<T>::RegistrationExpired);
+
+				if let Some(e) = r.expiry {
+					ensure!(block_number <= e, Error::<T>::RegistrationExpired);
+				}
 
 				r.owner = to.clone();
 
@@ -294,6 +299,9 @@ pub mod pallet {
 			Registrations::<T>::try_mutate(name_hash, |maybe_registration| {
 				let r = maybe_registration.as_mut().ok_or(Error::<T>::RegistrationNotFound)?;
 
+				// cannot renew a domain that has no expiry
+				let expiry = r.expiry.ok_or(Error::<T>::RegistrationHasNoExpiry)?;
+
 				let fee = Self::length_fee(periods);
 
 				// withdraw fees from account
@@ -306,12 +314,12 @@ pub mod pallet {
 
 				let block_number = frame_system::Pallet::<T>::block_number();
 
-				let expiry_new = match r.expiry > block_number {
-					true => r.expiry.saturating_add(Self::length(periods)),
+				let expiry_new = match block_number <= expiry {
+					true => expiry.saturating_add(Self::length(periods)),
 					false => block_number.saturating_add(Self::length(periods)),
 				};
 
-				r.expiry = expiry_new;
+				r.expiry = Some(expiry_new);
 
 				T::RegistrationFeeHandler::on_unbalanced(imbalance);
 
@@ -332,10 +340,12 @@ pub mod pallet {
 				Registrations::<T>::get(name_hash).ok_or(Error::<T>::RegistrationNotFound)?;
 			ensure!(registration.owner == sender, Error::<T>::NotRegistrationOwner);
 
-			ensure!(
-				registration.expiry > frame_system::Pallet::<T>::block_number(),
-				Error::<T>::RegistrationExpired
-			);
+			if let Some(e) = registration.expiry {
+				ensure!(
+					frame_system::Pallet::<T>::block_number() <= e,
+					Error::<T>::RegistrationExpired
+				);
+			}
 
 			Resolvers::<T>::insert(name_hash, address.clone());
 
@@ -423,7 +433,12 @@ pub mod pallet {
 
 		pub fn is_available(name_hash: NameHash, current_block_number: T::BlockNumber) -> bool {
 			match Registrations::<T>::get(name_hash) {
-				Some(r) => r.expiry <= current_block_number,
+				Some(r) =>
+					if let Some(e) = r.expiry {
+						e <= current_block_number
+					} else {
+						false
+					},
 				None => true,
 			}
 		}
@@ -436,7 +451,8 @@ pub mod pallet {
 			let block_number = frame_system::Pallet::<T>::block_number();
 			let expiry = block_number.saturating_add(Self::length(periods));
 
-			let registration = Registration { owner: owner.clone(), expiry, deposit: None };
+			let registration =
+				Registration { owner: owner.clone(), expiry: Some(expiry), deposit: None };
 
 			Registrations::<T>::insert(name_hash, registration);
 
@@ -458,10 +474,17 @@ pub mod pallet {
 			// If the sender is not the owner, we need to verify that the registration has expired.
 			// Otherwise, we can skip this check since owner can do whatever they want.
 			if !is_owner {
-				ensure!(
-					registration.expiry <= frame_system::Pallet::<T>::block_number(),
-					Error::<T>::RegistrationNotExpired
-				);
+				match registration.expiry {
+					// if expiry has been set, verify the registration has expired.
+					Some(e) =>
+						if e <= frame_system::Pallet::<T>::block_number() {
+							Ok(())
+						} else {
+							Err(Error::<T>::RegistrationNotExpired)
+						},
+					// no expiry set, non-owner cannot deregister.
+					None => Err(Error::<T>::RegistrationNotExpired),
+				}?;
 			}
 
 			// for subnodes that require a deposit, make sure to unreserve here
