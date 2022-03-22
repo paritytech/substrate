@@ -39,6 +39,7 @@ pub struct BlockData<B: BlockT> {
 enum BlockRangeState<B: BlockT> {
 	Downloading { len: NumberFor<B>, downloading: u32 },
 	Complete(Vec<BlockData<B>>),
+	Queued { len: NumberFor<B> },
 }
 
 impl<B: BlockT> BlockRangeState<B> {
@@ -46,6 +47,7 @@ impl<B: BlockT> BlockRangeState<B> {
 		match *self {
 			Self::Downloading { len, .. } => len,
 			Self::Complete(ref blocks) => (blocks.len() as u32).into(),
+			Self::Queued { len } => len,
 		}
 	}
 }
@@ -170,29 +172,48 @@ impl<B: BlockT> BlockCollection<B> {
 	}
 
 	/// Get a valid chain of blocks ordered in descending order and ready for importing into
-	/// blockchain.
-	pub fn drain(&mut self, from: NumberFor<B>) -> Vec<BlockData<B>> {
-		let mut drained = Vec::new();
-		let mut ranges = Vec::new();
+	/// the blockchain.
+	pub fn ready_blocks(&mut self, from: NumberFor<B>) -> Vec<BlockData<B>> {
+		let mut ready = Vec::new();
 
 		let mut prev = from;
 		for (start, range_data) in &mut self.blocks {
-			match range_data {
+			let len = match range_data {
 				BlockRangeState::Complete(blocks) if *start <= prev => {
-					prev = *start + (blocks.len() as u32).into();
+					let len = (blocks.len() as u32).into();
+					prev = *start + len;
 					// Remove all elements from `blocks` and add them to `drained`
-					drained.append(blocks);
+					ready.append(blocks);
+					len
+				},
+				BlockRangeState::Queued { .. } if *start <= prev => continue,
+				_ => break,
+			};
+			*range_data = BlockRangeState::Queued { len };
+		}
+
+		trace!(target: "sync", "{} blocks ready for import", ready.len());
+		ready
+	}
+
+	pub fn clear_queued(&mut self, from: NumberFor<B>) {
+		let mut ranges = Vec::new();
+
+		let mut prev = from;
+		for (start, range_data) in &self.blocks {
+			match range_data {
+				BlockRangeState::Queued { len } if *start <= prev => {
+					prev = *start + *len;
 					ranges.push(*start);
 				},
 				_ => break,
 			}
 		}
 
-		for r in ranges {
-			self.blocks.remove(&r);
+		for r in &ranges {
+			self.blocks.remove(r);
 		}
-		trace!(target: "sync", "Drained {} blocks from {:?}", drained.len(), from);
-		drained
+		trace!(target: "sync", "Cleared {} block ranges from {:?}", ranges.len(), from);
 	}
 
 	pub fn clear_peer_download(&mut self, who: &PeerId) {
@@ -268,14 +289,14 @@ mod test {
 
 		bc.clear_peer_download(&peer1);
 		bc.insert(41, blocks[41..81].to_vec(), peer1.clone());
-		assert_eq!(bc.drain(1), vec![]);
+		assert_eq!(bc.ready_blocks(1), vec![]);
 		assert_eq!(bc.needed_blocks(peer1.clone(), 40, 150, 0, 1, 200), Some(121..151));
 		bc.clear_peer_download(&peer0);
 		bc.insert(1, blocks[1..11].to_vec(), peer0.clone());
 
 		assert_eq!(bc.needed_blocks(peer0.clone(), 40, 150, 0, 1, 200), Some(11..41));
 		assert_eq!(
-			bc.drain(1),
+			bc.ready_blocks(1),
 			blocks[1..11]
 				.iter()
 				.map(|b| BlockData { block: b.clone(), origin: Some(peer0.clone()) })
@@ -285,16 +306,16 @@ mod test {
 		bc.clear_peer_download(&peer0);
 		bc.insert(11, blocks[11..41].to_vec(), peer0.clone());
 
-		let drained = bc.drain(12);
+		let ready = bc.ready_blocks(12);
 		assert_eq!(
-			drained[..30],
+			ready[..30],
 			blocks[11..41]
 				.iter()
 				.map(|b| BlockData { block: b.clone(), origin: Some(peer0.clone()) })
 				.collect::<Vec<_>>()[..]
 		);
 		assert_eq!(
-			drained[30..],
+			ready[30..],
 			blocks[41..81]
 				.iter()
 				.map(|b| BlockData { block: b.clone(), origin: Some(peer1.clone()) })
@@ -308,17 +329,17 @@ mod test {
 		bc.clear_peer_download(&peer1);
 		bc.insert(121, blocks[121..150].to_vec(), peer1.clone());
 
-		assert_eq!(bc.drain(80), vec![]);
-		let drained = bc.drain(81);
+		assert_eq!(bc.ready_blocks(80), vec![]);
+		let ready = bc.ready_blocks(81);
 		assert_eq!(
-			drained[..40],
+			ready[..40],
 			blocks[81..121]
 				.iter()
 				.map(|b| BlockData { block: b.clone(), origin: Some(peer2.clone()) })
 				.collect::<Vec<_>>()[..]
 		);
 		assert_eq!(
-			drained[40..],
+			ready[40..],
 			blocks[121..150]
 				.iter()
 				.map(|b| BlockData { block: b.clone(), origin: Some(peer1.clone()) })

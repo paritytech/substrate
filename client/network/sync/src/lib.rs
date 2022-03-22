@@ -1084,7 +1084,7 @@ where
 						{
 							self.blocks.insert(start_block, blocks, *who);
 						}
-						self.drain_blocks()
+						self.ready_blocks()
 					},
 					PeerSyncState::DownloadingGap(_) => {
 						peer.state = PeerSyncState::Available;
@@ -1098,7 +1098,7 @@ where
 							gap = true;
 							let blocks: Vec<_> = gap_sync
 								.blocks
-								.drain(gap_sync.best_queued_number + One::one())
+								.ready_blocks(gap_sync.best_queued_number + One::one())
 								.into_iter()
 								.map(|block_data| {
 									let justifications =
@@ -1420,6 +1420,15 @@ where
 		OnBlockData::Import(origin, new_blocks)
 	}
 
+	fn update_peer_common_number(&mut self, peer_id: &PeerId, new_common: NumberFor<B>) {
+		if let Some(peer) = self.peers.get_mut(peer_id) {
+			peer.update_common_number(new_common);
+			// now that our common number is updated it is safe to clear queued blocks
+			// from the block collection without causing duplicate block requests.
+			self.blocks.clear_queued(new_common);
+		}
+	}
+
 	/// Handle a response from the remote to a justification request that we made.
 	///
 	/// `request` must be the original request that triggered `response`.
@@ -1511,11 +1520,10 @@ where
 			}
 
 			match result {
-				Ok(BlockImportStatus::ImportedKnown(number, who)) => {
-					if let Some(peer) = who.and_then(|p| self.peers.get_mut(&p)) {
-						peer.update_common_number(number);
-					}
-				},
+				Ok(BlockImportStatus::ImportedKnown(number, who)) =>
+					if let Some(peer) = who {
+						self.update_peer_common_number(&peer, number);
+					},
 				Ok(BlockImportStatus::ImportedUnknown(number, aux, who)) => {
 					if aux.clear_justification_requests {
 						trace!(
@@ -1544,8 +1552,8 @@ where
 						}
 					}
 
-					if let Some(peer) = who.and_then(|p| self.peers.get_mut(&p)) {
-						peer.update_common_number(number);
+					if let Some(peer) = who {
+						self.update_peer_common_number(&peer, number);
 					}
 					let state_sync_complete =
 						self.state_sync.as_ref().map_or(false, |s| s.target() == hash);
@@ -1979,11 +1987,11 @@ where
 		// is either one further ahead or it's the one they just announced, if we know about it.
 		if is_best {
 			if known && self.best_queued_number >= number {
-				peer.update_common_number(number);
+				self.update_peer_common_number(&who, number);
 			} else if announce.header.parent_hash() == &self.best_queued_hash ||
 				known_parent && self.best_queued_number >= number
 			{
-				peer.update_common_number(number - One::one());
+				self.update_peer_common_number(&who, number - One::one());
 			}
 		}
 		self.allowed_requests.add(&who);
@@ -2057,7 +2065,7 @@ where
 			target.peers.remove(who);
 			!target.peers.is_empty()
 		});
-		let blocks = self.drain_blocks();
+		let blocks = self.ready_blocks();
 		if !blocks.is_empty() {
 			Some(self.validate_and_queue_blocks(blocks, false))
 		} else {
@@ -2177,10 +2185,10 @@ where
 		}
 	}
 
-	/// Drain the downloaded block set up to the first gap.
-	fn drain_blocks(&mut self) -> Vec<IncomingBlock<B>> {
+	/// Get the set of downloaded blocks that are ready to be queued for import.
+	fn ready_blocks(&mut self) -> Vec<IncomingBlock<B>> {
 		self.blocks
-			.drain(self.best_queued_number + One::one())
+			.ready_blocks(self.best_queued_number + One::one())
 			.into_iter()
 			.map(|block_data| {
 				let justifications = block_data
@@ -2966,6 +2974,25 @@ mod test {
 			),);
 
 			best_block_num += MAX_BLOCKS_TO_REQUEST as u32;
+
+			let _ = sync.on_blocks_processed(
+				MAX_BLOCKS_TO_REQUEST as usize,
+				MAX_BLOCKS_TO_REQUEST as usize,
+				resp_blocks
+					.iter()
+					.rev()
+					.map(|b| {
+						(
+							Ok(BlockImportStatus::ImportedUnknown(
+								b.header().number().clone(),
+								Default::default(),
+								Some(peer_id1.clone()),
+							)),
+							b.hash(),
+						)
+					})
+					.collect(),
+			);
 
 			resp_blocks
 				.into_iter()
