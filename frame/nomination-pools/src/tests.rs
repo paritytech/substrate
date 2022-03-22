@@ -1295,30 +1295,6 @@ mod claim_payout {
 				assert_eq!(Balances::free_balance(&default_reward_account()), 0);
 			});
 	}
-
-	#[test]
-	fn do_reward_payout_errors_correctly() {
-		ExtBuilder::default().build_and_execute(|| {
-			let mut bonded_pool = BondedPool::<Runtime>::get(1).unwrap();
-			let mut delegator = Delegators::<Runtime>::get(10).unwrap();
-
-			// The only place this can return an error is with the balance transfer from the
-			// reward  account to the delegator, and as far as this comment author can tell this
-			// can only if storage is in a bad state prior to `do_reward_payout` being called.
-
-			// Given
-			delegator.points = 15;
-			assert_eq!(bonded_pool.points, 10);
-			Balances::make_free_balance_be(&default_reward_account(), 10);
-
-			// Then
-			// Expect attempt payout of 15/10 * 10 when free balance is actually 10
-			assert_noop!(
-				Pools::do_reward_payout(10, &mut delegator, &mut bonded_pool),
-				pallet_balances::Error::<Runtime>::InsufficientBalance
-			);
-		});
-	}
 }
 
 mod unbond {
