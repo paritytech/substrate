@@ -1334,10 +1334,11 @@ mod unbond {
 		ExtBuilder::default()
 			.add_delegators(vec![(40, 40), (550, 550)])
 			.build_and_execute(|| {
+				let ed = Balances::minimum_balance();
 				// Given a slash from 600 -> 100
 				StakingMock::set_bonded_balance(default_bonded_account(), 100);
 				// and unclaimed rewards of 600.
-				Balances::make_free_balance_be(&default_reward_account(), 600);
+				Balances::make_free_balance_be(&default_reward_account(), ed + 600);
 
 				// When
 				assert_ok!(Pools::unbond_other(Origin::signed(40), 40));
