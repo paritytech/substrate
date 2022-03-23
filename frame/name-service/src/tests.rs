@@ -777,17 +777,119 @@ fn set_subnode_address_handles_errors() {
 }
 
 #[test]
-fn deregister_subnode_works() {
+fn deregister_subnode_owner_works() {
 	new_test_ext().execute_with(|| {
+		let owner = 2;
+		let label = "my".as_bytes().to_vec();
+		let label_hash = sp_io::hashing::blake2_256(&label);
+		let address = 2;
 
-		// TODO: finish test
+		// initial registration, subnode registration and address set for further testing
+		let (_, parent_hash) = alice_register_bob_senario_setup();
+		assert_ok!(NameService::set_subnode_record(Origin::signed(owner), parent_hash, label));
+		let name_hash = NameService::subnode_hash(parent_hash, label_hash);
+		assert!(Registrations::<Test>::contains_key(name_hash));
+		assert_ok!(NameService::set_subnode_address(
+			Origin::signed(owner),
+			parent_hash,
+			label_hash,
+			address
+		));
+		assert!(Resolvers::<Test>::contains_key(name_hash));
+		assert_eq!(Balances::free_balance(owner), 198);
+
+		// perform deregistration of subnode by owner
+		assert_ok!(NameService::deregister_subnode(Origin::signed(owner), parent_hash, label_hash));
+
+		// registration no longer present
+		assert!(!Registrations::<Test>::contains_key(name_hash));
+		// resolver address no longer present
+		assert!(!Resolvers::<Test>::contains_key(name_hash));
+		// deposit should have been returned to subnode owner
+		assert_eq!(Balances::free_balance(owner), 200);
+	});
+}
+
+#[test]
+fn deregister_subnode_non_owner_works() {
+	new_test_ext().execute_with(|| {
+		let owner = 2;
+		let non_owner = 3;
+		let label = "my".as_bytes().to_vec();
+		let label_hash = sp_io::hashing::blake2_256(&label);
+		let address = 2;
+
+		// initial registration, subnode registration and address set for further testing
+		let (_, parent_hash) = alice_register_bob_senario_setup();
+		assert_ok!(NameService::set_subnode_record(Origin::signed(owner), parent_hash, label));
+		let name_hash = NameService::subnode_hash(parent_hash, label_hash);
+		assert!(Registrations::<Test>::contains_key(name_hash));
+		assert_ok!(NameService::set_subnode_address(
+			Origin::signed(owner),
+			parent_hash,
+			label_hash,
+			address
+		));
+		assert!(Resolvers::<Test>::contains_key(name_hash));
+		assert_eq!(Balances::free_balance(owner), 198);
+
+		// run to TLD expiry
+		run_to_block(1012);
+
+		// deregister TLD by non-owner
+		assert_ok!(NameService::deregister(Origin::signed(non_owner), parent_hash));
+
+		// perform deregistration of subnode by non-owner
+		assert_ok!(NameService::deregister_subnode(
+			Origin::signed(non_owner),
+			parent_hash,
+			label_hash
+		));
+
+		// registration no longer present
+		assert!(!Registrations::<Test>::contains_key(name_hash));
+		// resolver address no longer present
+		assert!(!Resolvers::<Test>::contains_key(name_hash));
+		// deposit should have been returned to subnode owner
+		assert_eq!(Balances::free_balance(owner), 200);
 	});
 }
 
 #[test]
 fn deregister_subnode_handles_errors() {
 	new_test_ext().execute_with(|| {
+		let owner = 2;
+		let not_owner = 1;
+		let label = "my".as_bytes().to_vec();
+		let label_hash = sp_io::hashing::blake2_256(&label);
+		let address = 2;
 
-		// TODO: finish test
+		// initial registration, subnode registration and address set for further testing
+		let (_, parent_hash) = alice_register_bob_senario_setup();
+
+		// subnode does not exist, should fail
+		assert_noop!(
+			NameService::deregister_subnode(Origin::signed(owner), parent_hash, label_hash),
+			Error::<Test>::RegistrationNotFound
+		);
+
+		// subnode registration and address set for further testing
+		assert_ok!(NameService::set_subnode_record(Origin::signed(owner), parent_hash, label));
+		let name_hash = NameService::subnode_hash(parent_hash, label_hash);
+		assert!(Registrations::<Test>::contains_key(name_hash));
+		assert_ok!(NameService::set_subnode_address(
+			Origin::signed(owner),
+			parent_hash,
+			label_hash,
+			address
+		));
+		assert!(Resolvers::<Test>::contains_key(name_hash));
+		assert_eq!(Balances::free_balance(owner), 198);
+
+		// non-owner cannot de-register if parent has not been deregistered
+		assert_noop!(
+			NameService::deregister_subnode(Origin::signed(not_owner), parent_hash, label_hash),
+			Error::<Test>::RegistrationNotExpired
+		);
 	});
 }
