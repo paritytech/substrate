@@ -1853,7 +1853,7 @@ where
 	let finalized = client.info().finalized_number;
 	let revertible = blocks.min(best_number - finalized);
 
-	let number = best_number.saturating_sub(revertible);
+	let number = best_number - revertible;
 	let hash = client
 		.block_hash_from_id(&BlockId::Number(number))?
 		.ok_or(ClientError::Backend(format!(
