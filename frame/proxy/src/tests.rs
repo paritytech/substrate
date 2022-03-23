@@ -436,13 +436,49 @@ fn add_remove_proxies_works() {
 			Error::<Test>::NotFound
 		);
 		assert_ok!(Proxy::remove_proxy(Origin::signed(1), 4, ProxyType::JustUtility, 0));
+		System::assert_last_event(
+			ProxyEvent::ProxyRemoved {
+				delegator: 1,
+				delegatee: 4,
+				proxy_type: ProxyType::JustUtility,
+				delay: 0,
+			}
+			.into(),
+		);
 		assert_eq!(Balances::reserved_balance(1), 4);
 		assert_ok!(Proxy::remove_proxy(Origin::signed(1), 3, ProxyType::Any, 0));
 		assert_eq!(Balances::reserved_balance(1), 3);
+		System::assert_last_event(
+			ProxyEvent::ProxyRemoved {
+				delegator: 1,
+				delegatee: 3,
+				proxy_type: ProxyType::Any,
+				delay: 0,
+			}
+			.into(),
+		);
 		assert_ok!(Proxy::remove_proxy(Origin::signed(1), 2, ProxyType::Any, 0));
 		assert_eq!(Balances::reserved_balance(1), 2);
+		System::assert_last_event(
+			ProxyEvent::ProxyRemoved {
+				delegator: 1,
+				delegatee: 2,
+				proxy_type: ProxyType::Any,
+				delay: 0,
+			}
+			.into(),
+		);
 		assert_ok!(Proxy::remove_proxy(Origin::signed(1), 2, ProxyType::JustTransfer, 0));
 		assert_eq!(Balances::reserved_balance(1), 0);
+		System::assert_last_event(
+			ProxyEvent::ProxyRemoved {
+				delegator: 1,
+				delegatee: 2,
+				proxy_type: ProxyType::JustTransfer,
+				delay: 0,
+			}
+			.into(),
+		);
 		assert_noop!(
 			Proxy::add_proxy(Origin::signed(1), 1, ProxyType::Any, 0),
 			Error::<Test>::NoSelfProxy
