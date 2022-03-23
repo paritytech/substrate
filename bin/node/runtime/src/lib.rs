@@ -574,6 +574,7 @@ parameter_types! {
 	pub const SignedRewardBase: Balance = 1 * DOLLARS;
 	pub const SignedDepositBase: Balance = 1 * DOLLARS;
 	pub const SignedDepositByte: Balance = 1 * CENTS;
+	pub const MinimumSlashableAmount: Balance = 1 * DOLLARS;
 
 	pub SolutionImprovementThreshold: Perbill = Perbill::from_rational(1u32, 10_000);
 
@@ -682,6 +683,7 @@ impl pallet_election_provider_multi_phase::Config for Runtime {
 	// To ensure we respect memory limits when using the BagsList this must be set to a number of
 	// voters we know can fit into a single vec allocation.
 	type VoterSnapshotPerBlock = ConstU32<10_000>;
+	type MinimumSlashableAmount = MinimumSlashableAmount;
 }
 
 parameter_types! {

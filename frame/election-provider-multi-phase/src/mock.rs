@@ -267,6 +267,8 @@ parameter_types! {
 
 	pub static EpochLength: u64 = 30;
 	pub static OnChianFallback: bool = true;
+
+	pub static MinimumSlashableAmount: u32 = 10_000;
 }
 
 impl onchain::Config for Runtime {
@@ -415,6 +417,7 @@ impl crate::Config for Runtime {
 	type Solution = TestNposSolution;
 	type VoterSnapshotPerBlock = VoterSnapshotPerBlock;
 	type Solver = SequentialPhragmen<AccountId, SolutionAccuracyOf<Runtime>, Balancing>;
+	type MinimumSlashableAmount = MinimumSlashableAmount;
 }
 
 impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Runtime

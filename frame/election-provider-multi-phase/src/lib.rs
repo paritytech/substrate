@@ -711,6 +711,11 @@ pub mod pallet {
 
 		/// The weight of the pallet.
 		type WeightInfo: WeightInfo;
+
+		/// The minimum amount a solution challenger must have to execute
+		/// `challange_submission`
+		#[pallet::constant]
+		type MinimumSlashableAmount: Get<BalanceOf<Self>>;
 	}
 
 	#[pallet::hooks]
@@ -1058,20 +1063,31 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/*
 		#[pallet::weight(100)]
-		pub fn challenge_submission(
-			origin: OriginFor<T>,
-			index: u32,
-		)-> DispatchResult {
-			let _who = ensure_signed(origin)?;
-			// assert!(Staking::slashable_balance_of(who) >= T::Currency::minimum_balance());
+		pub fn challenge_submission(origin: OriginFor<T>, index: u32) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+			ensure!(
+				T::Currency::can_slash(&who, T::MinimumSlashableAmount::get()),
+				<Error<T>>::CallNotAllowed
+			);
+			// let uj = T::Currency::minimum_balance(); // /*Staking::slashable_balance_of(who) >= */
 			let signed_submissions = Self::signed_submissions();
-			if let Some(_submission) = signed_submissions.get_submission(index) {
+			if let Some(submission) = signed_submissions.get_submission(index) {
+				match Self::feasibility_check(submission.raw_solution.clone(), ElectionCompute::Signed) {
+					Ok(solution) => {
+						let _ = T::Currency::slash(&who, T::MinimumSlashableAmount::get());
 
+					},
+					Err(_) => { _
+
+					},
+				}
 			}
-			
+
 			Ok(())
 		}
+		*/
 	}
 
 	#[pallet::event]
@@ -1367,7 +1383,7 @@ impl<T: Config> Pallet<T> {
 		// Defensive-only.
 		if targets.len() > target_limit || voters.len() > voter_limit {
 			debug_assert!(false, "Snapshot limit has not been respected.");
-			return Err(ElectionError::DataProvider("Snapshot too big for submission."))
+			return Err(ElectionError::DataProvider("Snapshot too big for submission."));
 		}
 
 		// If `desired_targets` > `targets.len()`, cap `desired_targets` to that level and emit a
@@ -1490,7 +1506,7 @@ impl<T: Config> Pallet<T> {
 
 				// Check that all of the targets are valid based on the snapshot.
 				if assignment.distribution.iter().any(|(d, _)| !targets.contains(d)) {
-					return Err(FeasibilityError::InvalidVote)
+					return Err(FeasibilityError::InvalidVote);
 				}
 				Ok(())
 			})
@@ -2166,9 +2182,9 @@ mod tests {
 		};
 
 		let mut active = 1;
-		while weight_with(active) <=
-			<Runtime as frame_system::Config>::BlockWeights::get().max_block ||
-			active == all_voters
+		while weight_with(active)
+			<= <Runtime as frame_system::Config>::BlockWeights::get().max_block
+			|| active == all_voters
 		{
 			active += 1;
 		}
