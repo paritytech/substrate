@@ -132,10 +132,15 @@ impl SpawnTaskHandle {
 			if let Some(metrics) = metrics {
 				// Add some wrappers around `task`.
 				let task = {
+					let idle_duration = metrics.idle_duration.with_label_values(&[name, group]);
 					let poll_duration = metrics.poll_duration.with_label_values(&[name, group]);
 					let poll_start = metrics.poll_start.with_label_values(&[name, group]);
-					let inner =
-						prometheus_future::with_poll_durations(poll_duration, poll_start, task);
+					let inner = prometheus_future::with_poll_durations(
+						idle_duration,
+						poll_duration,
+						poll_start,
+						task,
+					);
 					// The logic of `AssertUnwindSafe` here is ok considering that we throw
 					// away the `Future` after it has panicked.
 					panic::AssertUnwindSafe(inner).catch_unwind()
@@ -389,6 +394,7 @@ impl TaskManager {
 #[derive(Clone)]
 struct Metrics {
 	// This list is ordered alphabetically
+	idle_duration: HistogramVec,
 	poll_duration: HistogramVec,
 	poll_start: CounterVec<U64>,
 	tasks_spawned: CounterVec<U64>,
@@ -398,6 +404,17 @@ struct Metrics {
 impl Metrics {
 	fn register(registry: &Registry) -> Result<Self, PrometheusError> {
 		Ok(Self {
+			idle_duration: register(HistogramVec::new(
+				HistogramOpts {
+					common_opts: Opts::new(
+						"substrate_tasks_idle_duration",
+						"The amount of time a task was idle waiting for external events (IO, other subsystems)"
+					),
+					buckets: exponential_buckets(0.001, 4.0, 9)
+						.expect("function parameters are constant and always valid; qed"),
+				},
+				&["task_name", "task_group"]
+			)?, registry)?,
 			poll_duration: register(HistogramVec::new(
 				HistogramOpts {
 					common_opts: Opts::new(

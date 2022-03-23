@@ -19,7 +19,7 @@
 //! Wrapper around a `Future` that reports statistics about when the `Future` is polled.
 
 use futures::prelude::*;
-use prometheus_endpoint::{Counter, Histogram, U64};
+use prometheus_endpoint::{prometheus::HistogramTimer, Counter, Histogram, U64};
 use std::{
 	fmt,
 	pin::Pin,
@@ -29,22 +29,25 @@ use std::{
 /// Wraps around a `Future`. Report the polling duration to the `Histogram` and when the polling
 /// starts to the `Counter`.
 pub fn with_poll_durations<T>(
+	idle_duration: Histogram,
 	poll_duration: Histogram,
 	poll_start: Counter<U64>,
 	inner: T,
 ) -> PrometheusFuture<T> {
-	PrometheusFuture { inner, poll_duration, poll_start }
+	PrometheusFuture { inner, idle_duration, poll_duration, poll_start, maybe_idle_timer: None }
 }
 
 /// Wraps around `Future` and adds diagnostics to it.
 #[pin_project::pin_project]
-#[derive(Clone)]
+// #[derive(Clone)]
 pub struct PrometheusFuture<T> {
 	/// The inner future doing the actual work.
 	#[pin]
 	inner: T,
+	idle_duration: Histogram,
 	poll_duration: Histogram,
 	poll_start: Counter<U64>,
+	maybe_idle_timer: Option<HistogramTimer>,
 }
 
 impl<T> Future for PrometheusFuture<T>
@@ -56,11 +59,27 @@ where
 	fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
 		let this = self.project();
 
+		if let Some(idle_timer) = this.maybe_idle_timer.take() {
+			// We're about to poll the task - no longer idle, stop timer.
+			drop(idle_timer);
+		}
+
 		this.poll_start.inc();
 		let _timer = this.poll_duration.start_timer();
-		Future::poll(this.inner, cx)
+		let poll_result = Future::poll(this.inner, cx);
 
-		// `_timer` is dropped here and will observe the duration
+		match poll_result {
+			Poll::Ready(_) => {
+				// We don't start the idle timer because task has just finished.
+			},
+			Poll::Pending => {
+				// The future is now idle, start the idle time measurement.
+				*this.maybe_idle_timer = Some(this.idle_duration.start_timer());
+			},
+		}
+
+		poll_result
+		// `_timer` is dropped here and will observe the `poll()` duration
 	}
 }
 
