@@ -52,6 +52,7 @@ pub struct Collection<CollectionId, Account, Balance> {
 	pub id: CollectionId,
 	pub owner: Account,
 	pub deposit: Option<Balance>,
+	pub attributes: u32,
 }
 
 #[derive(Encode, Decode, PartialEq, Default, MaxEncodedLen, TypeInfo)]
@@ -77,4 +78,21 @@ pub struct ItemMetadata<Metadata> {
 	/// generally be either a JSON dump or the hash of some JSON which can be found on a
 	/// hash-addressable global publication system such as IPFS.
 	pub(super) data: Metadata,
+}
+
+
+/// Witness data for the destroy transactions.
+#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, Default, TypeInfo, MaxEncodedLen)]
+pub struct DestroyWitness {
+	/// The total number of attributes for this asset class.
+	#[codec(compact)]
+	pub attributes: u32,
+}
+
+impl<ItemId, Account, Balance> Collection<ItemId, Account, Balance> {
+	pub fn destroy_witness(&self) -> DestroyWitness {
+		DestroyWitness {
+			attributes: self.attributes,
+		}
+	}
 }

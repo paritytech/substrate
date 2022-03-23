@@ -56,14 +56,24 @@ pub mod pallet {
 		type ItemId: Member + Parameter + Default + Copy + MaxEncodedLen + CheckedAdd + One;
 
 		/// This is the limit for metadata
-		type MetadataBound: Get<u32>; // = up to 10 kb;
+		type MetadataLimit: Get<u32>; // = up to 10 kb;
 
 		type DefaultSystemConfig: Get<SystemFeatures>;
+
+		/// The maximum length of an attribute key.
+		#[pallet::constant]
+		type AttributeKeyLimit: Get<u32>;
+
+		/// The maximum length of an attribute value.
+		#[pallet::constant]
+		type AttributeValueLimit: Get<u32>;
 	}
 
-	pub type MetadataOf<T> = BoundedVec<u8, <T as Config>::MetadataBound>;
+	pub type MetadataOf<T> = BoundedVec<u8, <T as Config>::MetadataLimit>;
 	pub type BalanceOf<T> =
 		<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
+	pub type AttributeKeyOf<T> = BoundedVec<u8, <T as Config>::AttributeKeyLimit>;
+	pub type AttributeValueOf<T> = BoundedVec<u8, <T as Config>::AttributeValueLimit>;
 
 	/// Maps a unique collection id to it's config.
 	#[pallet::storage]
@@ -132,6 +142,19 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
+	#[pallet::storage]
+	/// Collection and items attributes.
+	pub(super) type Attributes<T: Config> = StorageNMap<
+		_,
+		(
+			NMapKey<Blake2_128Concat, T::CollectionId>,
+			NMapKey<Blake2_128Concat, Option<T::ItemId>>,
+			NMapKey<Blake2_128Concat, AttributeKeyOf<T>>,
+		),
+		AttributeValueOf<T>,
+		OptionQuery,
+	>;
+
 	// Pallet's events.
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -141,6 +164,17 @@ pub mod pallet {
 		CollectionLocked { id: T::CollectionId },
 		CollectionDestroyed { id: T::CollectionId },
 		CollectionOwnerChanged { id: T::CollectionId, new_owner: T::AccountId },
+		AttributeSet {
+			id: T::CollectionId,
+			maybe_item: Option<T::ItemId>,
+			key: AttributeKeyOf<T>,
+			value: AttributeValueOf<T>,
+		},
+		AttributeCleared {
+			id: T::CollectionId,
+			maybe_item: Option<T::ItemId>,
+			key: AttributeKeyOf<T>,
+		},
 	}
 
 	// Your Pallet's error messages.
@@ -160,6 +194,8 @@ pub mod pallet {
 		BadHint,
 		/// An overflow has occurred.
 		Overflow,
+		/// Invalid witness data given.
+		BadWitness,
 	}
 
 	// Pallet's callable functions.
@@ -190,10 +226,11 @@ pub mod pallet {
 		pub fn destroy_collection(
 			origin: OriginFor<T>,
 			id: T::CollectionId,
+			witness: DestroyWitness,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 			let config = CollectionConfigs::<T>::get(id).ok_or(Error::<T>::CollectionNotFound)?;
-			Self::do_destroy_collection(id, sender, config)?;
+			Self::do_destroy_collection(id, sender, config, witness)?;
 			Ok(())
 		}
 
@@ -209,6 +246,31 @@ pub mod pallet {
 			Ok(())
 		}
 
+		#[pallet::weight(0)]
+		pub fn set_attribute(
+			origin: OriginFor<T>,
+			collection_id: T::CollectionId,
+			maybe_item: Option<T::ItemId>,
+			key: AttributeKeyOf<T>,
+			value: AttributeValueOf<T>,
+		) -> DispatchResult {
+			let sender = ensure_signed(origin)?;
+			Self::do_set_attributes(sender, collection_id, maybe_item, key, value);
+			Ok(())
+		}
+
+		#[pallet::weight(0)]
+		pub fn clear_attribute(
+			origin: OriginFor<T>,
+			collection_id: T::CollectionId,
+			maybe_item: Option<T::ItemId>,
+			key: AttributeKeyOf<T>,
+		) -> DispatchResult {
+			let sender = ensure_signed(origin)?;
+			Self::do_clear_attribute(sender, collection_id, maybe_item, key);
+			Ok(())
+		}
+
 		// BASIC METHODS:
 		// +store collection's owner
 		// +lock a collection (add isLocked flag) => applies to the initial metadata change and burn method
@@ -217,7 +279,7 @@ pub mod pallet {
 		// +transfer ownership
 
 		// PART 2:
-		// collection metadata + attributes
+		// +collection metadata + attributes
 
 		// PART 3:
 		// mint items

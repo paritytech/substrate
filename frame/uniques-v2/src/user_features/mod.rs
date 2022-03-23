@@ -16,4 +16,5 @@
 // limitations under the License.
 
 pub mod administration;
+pub mod attributes;
 pub mod collection_crud;

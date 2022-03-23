@@ -36,7 +36,7 @@ impl<T: Config> Pallet<T> {
 		};
 		CollectionConfigs::<T>::insert(id, collection_config);
 
-		let collection = Collection { id, owner: caller.clone(), deposit: None };
+		let collection = Collection { id, owner: caller.clone(), deposit: None, attributes: 0 };
 		ensure!(!Collections::<T>::contains_key(id), Error::<T>::CollectionIdTaken);
 
 		Collections::<T>::insert(id, collection);
@@ -81,9 +81,11 @@ impl<T: Config> Pallet<T> {
 		id: T::CollectionId,
 		caller: T::AccountId,
 		config: CollectionConfig,
+		witness: DestroyWitness,
 	) -> DispatchResult {
 		let collection = Collections::<T>::get(id).ok_or(Error::<T>::CollectionNotFound)?;
 		ensure!(collection.owner == caller, Error::<T>::NotAuthorized);
+		ensure!(collection.attributes == witness.attributes, Error::<T>::BadWitness);
 
 		let user_features: BitFlags<UserFeatures> = config.user_features.into();
 
@@ -95,6 +97,7 @@ impl<T: Config> Pallet<T> {
 		CollectionConfigs::<T>::remove(&id);
 		Collections::<T>::remove(&id);
 		CollectionMetadataOf::<T>::remove(&id);
+		Attributes::<T>::remove_prefix((&id,), None);
 
 		Self::deposit_event(Event::<T>::CollectionDestroyed { id });
 
