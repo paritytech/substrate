@@ -196,7 +196,7 @@ impl Drop for TemporaryFile {
 		// Remove the file.
 		//
 		// This has to be done *after* the benchmark,
-		// otherwise it changes the results as the date
+		// otherwise it changes the results as the data
 		// doesn't actually get properly flushed to the disk,
 		// since the file's not there anymore.
 		if let Err(error) = std::fs::remove_file(&self.path) {
