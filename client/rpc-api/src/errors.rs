@@ -16,6 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+// TODO: (dp) remove this file!
 use log::warn;
 
 pub fn internal<E: std::fmt::Display>(e: E) -> jsonrpc_core::Error {

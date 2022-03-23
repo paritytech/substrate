@@ -17,11 +17,11 @@
 
 //! Rpc for state migration.
 
+use anyhow::anyhow;
 use jsonrpsee::{
 	core::{Error as JsonRpseeError, RpcResult},
 	proc_macros::rpc,
 };
-use anyhow::anyhow;
 use sc_rpc_api::DenyUnsafe;
 use serde::{Deserialize, Serialize};
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};
@@ -146,8 +146,10 @@ where
 		self.deny_unsafe.check_if_safe()?;
 
 		let block_id = BlockId::hash(at.unwrap_or_else(|| self.client.info().best_hash));
-		let state = self.backend.state_at(block_id).map_err(|e| JsonRpseeError::to_call_error(e))?;
-		let (top, child) = migration_status(&state).map_err(|e| JsonRpseeError::from(anyhow!(e)))?;
+		let state =
+			self.backend.state_at(block_id).map_err(|e| JsonRpseeError::to_call_error(e))?;
+		let (top, child) =
+			migration_status(&state).map_err(|e| JsonRpseeError::from(anyhow!(e)))?;
 
 		Ok(MigrationStatusResult {
 			top_remaining_to_migrate: top,
