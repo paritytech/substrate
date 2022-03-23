@@ -353,7 +353,6 @@ pub mod pallet {
 			}
 
 			Resolvers::<T>::insert(name_hash, address.clone());
-
 			Self::deposit_event(Event::<T>::AddressSet { name_hash, address });
 			Ok(())
 		}
@@ -464,6 +463,29 @@ pub mod pallet {
 				Self::deposit_event(Event::<T>::NewOwner { from: sender, to: owner });
 				Ok(())
 			})
+		}
+
+		#[pallet::weight(0)]
+		pub fn set_subnode_address(
+			origin: OriginFor<T>,
+			parent_hash: NameHash,
+			label_hash: NameHash,
+			address: T::AccountId,
+		) -> DispatchResult {
+			let sender = ensure_signed(origin)?;
+
+			ensure!(
+				Registrations::<T>::contains_key(parent_hash),
+				Error::<T>::ParentRegistrationNotFound
+			);
+			let name_hash = Self::generate_subnode_hash(parent_hash, label_hash);
+			let registration =
+				Registrations::<T>::get(name_hash).ok_or(Error::<T>::RegistrationNotFound)?;
+			ensure!(registration.owner == sender, Error::<T>::NotRegistrationOwner);
+
+			Resolvers::<T>::insert(name_hash, address.clone());
+			Self::deposit_event(Event::<T>::AddressSet { name_hash, address });
+			Ok(())
 		}
 
 		#[pallet::weight(0)]
