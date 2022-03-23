@@ -268,7 +268,7 @@ parameter_types! {
 	pub static EpochLength: u64 = 30;
 	pub static OnChianFallback: bool = true;
 
-	pub static MinimumSlashableAmount: u32 = 10_000;
+	pub static MinimumSlashableAmount: Balance = 3;
 }
 
 impl onchain::Config for Runtime {
