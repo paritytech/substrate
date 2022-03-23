@@ -278,6 +278,13 @@ impl<T: Config<I>, I: 'static> SortedListProvider<T::AccountId> for Pallet<T, I>
 		Box::new(List::<T, I>::iter().map(|n| n.id().clone()))
 	}
 
+	fn iter_from(
+		start: &T::AccountId,
+	) -> Result<Box<dyn Iterator<Item = T::AccountId>>, Self::Error> {
+		let iter = List::<T, I>::iter_from(start)?;
+		Ok(Box::new(iter.map(|n| n.id().clone())))
+	}
+
 	fn count() -> u32 {
 		ListNodes::<T, I>::count()
 	}
