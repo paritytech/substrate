@@ -553,12 +553,7 @@ fn set_subnode_record_works() {
 		let label = "my".as_bytes().to_vec();
 		let label_hash = sp_io::hashing::blake2_256(&label);
 
-		assert_ok!(NameService::set_subnode_record(
-			Origin::signed(owner),
-			parent_hash,
-			label,
-			owner
-		));
+		assert_ok!(NameService::set_subnode_record(Origin::signed(owner), parent_hash, label));
 
 		let name_hash = NameService::subnode_hash(parent_hash, label_hash);
 		assert!(Registrations::<Test>::contains_key(name_hash));
@@ -576,12 +571,7 @@ fn set_subnode_record_handles_errors() {
 
 		// parent hash has not yet been registered
 		assert_noop!(
-			NameService::set_subnode_record(
-				Origin::signed(owner),
-				parent_hash,
-				label.clone(),
-				owner
-			),
+			NameService::set_subnode_record(Origin::signed(owner), parent_hash, label.clone()),
 			Error::<Test>::ParentRegistrationNotFound
 		);
 		let (_, parent_hash) = alice_register_bob_senario_setup();
@@ -590,31 +580,24 @@ fn set_subnode_record_handles_errors() {
 			NameService::set_subnode_record(
 				Origin::signed(owner),
 				parent_hash,
-				"".as_bytes().to_vec(),
-				owner
+				"".as_bytes().to_vec()
 			),
 			Error::<Test>::LabelTooShort
 		);
 		// not the owner of parent hash
 		assert_noop!(
-			NameService::set_subnode_record(
-				Origin::signed(not_owner),
-				parent_hash,
-				label.clone(),
-				1
-			),
+			NameService::set_subnode_record(Origin::signed(not_owner), parent_hash, label.clone()),
 			Error::<Test>::NotRegistrationOwner
 		);
 		// register subnode for further testing
 		assert_ok!(NameService::set_subnode_record(
 			Origin::signed(owner),
 			parent_hash,
-			label.clone(),
-			2
+			label.clone()
 		));
 		// cannot register the same subnode again
 		assert_noop!(
-			NameService::set_subnode_record(Origin::signed(owner), parent_hash, label, 2),
+			NameService::set_subnode_record(Origin::signed(owner), parent_hash, label),
 			Error::<Test>::RegistrationExists
 		);
 
@@ -625,7 +608,7 @@ fn set_subnode_record_handles_errors() {
 		// not enough balance to register another subnode
 		let label_2 = "second".as_bytes().to_vec();
 		assert_noop!(
-			NameService::set_subnode_record(Origin::signed(owner), parent_hash, label_2, 2),
+			NameService::set_subnode_record(Origin::signed(owner), parent_hash, label_2),
 			BalancesError::InsufficientBalance
 		);
 	});
@@ -641,7 +624,7 @@ fn set_subnode_owner_works() {
 
 		// initial registration and subnode registration for further testing
 		let (_, parent_hash) = alice_register_bob_senario_setup();
-		assert_ok!(NameService::set_subnode_record(Origin::signed(owner), parent_hash, label, 2));
+		assert_ok!(NameService::set_subnode_record(Origin::signed(owner), parent_hash, label));
 		let name_hash = NameService::subnode_hash(parent_hash, label_hash);
 
 		assert!(Registrations::<Test>::contains_key(name_hash));
@@ -688,7 +671,7 @@ fn set_subnode_owner_handles_errors() {
 
 		// initial registration and subnode registration for further testing
 		let (_, _) = alice_register_bob_senario_setup();
-		assert_ok!(NameService::set_subnode_record(Origin::signed(owner), parent_hash, label, 2));
+		assert_ok!(NameService::set_subnode_record(Origin::signed(owner), parent_hash, label));
 
 		// cannot change owner of unregistered subnode of parent node
 		let other_subnode_label = "imnothere".as_bytes().to_vec();
@@ -728,7 +711,7 @@ fn set_subnode_address_works() {
 
 		// initial registration and subnode registration for further testing
 		let (_, parent_hash) = alice_register_bob_senario_setup();
-		assert_ok!(NameService::set_subnode_record(Origin::signed(owner), parent_hash, label, 2));
+		assert_ok!(NameService::set_subnode_record(Origin::signed(owner), parent_hash, label));
 		let name_hash = NameService::subnode_hash(parent_hash, label_hash);
 
 		assert_ok!(NameService::set_subnode_address(
@@ -778,12 +761,7 @@ fn set_subnode_address_handles_errors() {
 		);
 
 		// set the record for further testing, setting owner to sender
-		assert_ok!(NameService::set_subnode_record(
-			Origin::signed(owner),
-			parent_hash,
-			label,
-			owner
-		));
+		assert_ok!(NameService::set_subnode_record(Origin::signed(owner), parent_hash, label));
 
 		// not the current owner of subnode
 		assert_noop!(
@@ -795,5 +773,21 @@ fn set_subnode_address_handles_errors() {
 			),
 			Error::<Test>::NotRegistrationOwner
 		);
+	});
+}
+
+#[test]
+fn deregister_subnode_works() {
+	new_test_ext().execute_with(|| {
+
+		// TODO: finish test
+	});
+}
+
+#[test]
+fn deregister_subnode_handles_errors() {
+	new_test_ext().execute_with(|| {
+
+		// TODO: finish test
 	});
 }

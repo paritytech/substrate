@@ -403,7 +403,6 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			parent_hash: NameHash,
 			label: Vec<u8>,
-			owner: T::AccountId,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 			let parent = Registrations::<T>::get(parent_hash)
@@ -419,7 +418,7 @@ pub mod pallet {
 			let deposit = T::SubNodeDeposit::get();
 			T::Currency::reserve(&sender, deposit)?;
 
-			Self::do_register(name_hash, owner, None, Some(deposit))?;
+			Self::do_register(name_hash, sender, None, Some(deposit))?;
 			Ok(())
 		}
 
