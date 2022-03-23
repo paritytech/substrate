@@ -65,6 +65,8 @@ parameter_types! {
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
 
+type Balance = u64;
+
 impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
@@ -96,7 +98,7 @@ impl pallet_balances::Config for Test {
 	type MaxLocks = ();
 	type MaxReserves = ();
 	type ReserveIdentifier = [u8; 8];
-	type Balance = u64;
+	type Balance = Balance;
 	type Event = Event;
 	type DustRemoval = ();
 	type ExistentialDeposit = ConstU64<1>;
@@ -130,16 +132,20 @@ impl pallet_treasury::Config for Test {
 	type MaxApprovals = ConstU32<100>;
 }
 parameter_types! {
-	pub const CuratorDepositMultiplierWithFee: Permill = Permill::from_percent(50);
-	pub const CuratorDepositMultiplierWithNoFee: Permill = Permill::from_percent(1);
+	// This will be 50% of the bounty fee.
+	pub const CuratorDepositMultiplier: Permill = Permill::from_percent(50);
+	pub const CuratorDepositMax: Balance = 1_000;
+	pub const CuratorDepositMin: Balance = 3;
+
 }
 impl pallet_bounties::Config for Test {
 	type Event = Event;
 	type BountyDepositBase = ConstU64<80>;
 	type BountyDepositPayoutDelay = ConstU64<3>;
 	type BountyUpdatePeriod = ConstU64<10>;
-	type CuratorDepositMultiplierWithFee = CuratorDepositMultiplierWithFee;
-	type CuratorDepositMultiplierWithNoFee = CuratorDepositMultiplierWithNoFee;
+	type CuratorDepositMultiplier = CuratorDepositMultiplier;
+	type CuratorDepositMax = CuratorDepositMax;
+	type CuratorDepositMin = CuratorDepositMin;
 	type BountyValueMinimum = ConstU64<5>;
 	type DataDepositPerByte = ConstU64<1>;
 	type MaximumReasonLength = ConstU32<300>;
@@ -231,7 +237,7 @@ fn add_child_bounty() {
 		assert_ok!(Bounties::accept_curator(Origin::signed(4), 0));
 
 		// This verifies that the accept curator logic took a deposit.
-		let expected_deposit = CuratorDepositMultiplierWithFee::get() * fee;
+		let expected_deposit = CuratorDepositMultiplier::get() * fee;
 		assert_eq!(Balances::reserved_balance(&4), expected_deposit);
 		assert_eq!(Balances::free_balance(&4), 10 - expected_deposit);
 
@@ -311,8 +317,8 @@ fn child_bounty_assign_curator() {
 		System::set_block_number(2);
 		<Treasury as OnInitialize<u64>>::on_initialize(2);
 
-		assert_ok!(Bounties::propose_curator(Origin::root(), 0, 4, 4));
-
+		let fee = 4;
+		assert_ok!(Bounties::propose_curator(Origin::root(), 0, 4, fee));
 		assert_ok!(Bounties::accept_curator(Origin::signed(4), 0));
 
 		// Bounty account status before adding child-bounty.
@@ -321,8 +327,9 @@ fn child_bounty_assign_curator() {
 
 		// Check the balance of parent curator.
 		// Curator deposit is reserved for parent curator on parent bounty.
-		assert_eq!(Balances::free_balance(4), 99);
-		assert_eq!(Balances::reserved_balance(4), 2);
+		let expected_deposit = Bounties::calculate_curator_deposit(fee);
+		assert_eq!(Balances::free_balance(4), 101 - expected_deposit);
+		assert_eq!(Balances::reserved_balance(4), expected_deposit);
 
 		// Add child-bounty.
 		// Acc-4 is the parent curator & make sure enough deposit.
@@ -352,8 +359,6 @@ fn child_bounty_assign_curator() {
 			}
 		);
 
-		let expected_deposit = ChildCuratorDepositMultiplierWithFee::get() * fee;
-
 		// Check the balance of parent curator.
 		assert_eq!(Balances::free_balance(4), 101 - expected_deposit);
 		assert_eq!(Balances::reserved_balance(4), expected_deposit);
@@ -365,20 +370,22 @@ fn child_bounty_assign_curator() {
 
 		assert_ok!(ChildBounties::accept_curator(Origin::signed(8), 0, 0));
 
+		let expected_child_deposit = ChildCuratorDepositMultiplierWithFee::get() * fee;
+
 		assert_eq!(
 			ChildBounties::child_bounties(0, 0).unwrap(),
 			ChildBounty {
 				parent_bounty: 0,
 				value: 10,
 				fee,
-				curator_deposit: expected_deposit,
+				curator_deposit: expected_child_deposit,
 				status: ChildBountyStatus::Active { curator: 8 },
 			}
 		);
 
 		// Deposit for child-bounty curator deposit is reserved.
-		assert_eq!(Balances::free_balance(8), 101 - expected_deposit);
-		assert_eq!(Balances::reserved_balance(8), expected_deposit);
+		assert_eq!(Balances::free_balance(8), 101 - expected_child_deposit);
+		assert_eq!(Balances::reserved_balance(8), expected_child_deposit);
 
 		// Bounty account status at exit.
 		assert_eq!(Balances::free_balance(Bounties::bounty_account_id(0)), 40);

@@ -772,7 +772,7 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
-	fn calculate_curator_deposit(fee: BalanceOf<T>) -> BalanceOf<T> {
+	pub fn calculate_curator_deposit(fee: BalanceOf<T>) -> BalanceOf<T> {
 		let mut deposit = T::CuratorDepositMultiplier::get() * fee;
 
 		if let Some(max_deposit) = T::CuratorDepositMax::get() {
