@@ -23,11 +23,19 @@ use super::{mock::*, *};
 use codec::Encode;
 use frame_support::{
 	assert_noop, assert_ok,
-	traits::{OnFinalize, OnInitialize},
+	traits::{Get, OnFinalize, OnInitialize},
 };
+// use sp_runtime::traits::One;
 use sp_core::blake2_256;
 
+fn add_blocks(n: u64) {
+	let current_block = System::block_number();
+	run_to_block(n + current_block);
+}
+
 fn run_to_block(n: u64) {
+	let current_block = System::block_number();
+	assert!(n > current_block);
 	while System::block_number() < n {
 		NameService::on_finalize(System::block_number());
 		System::set_block_number(System::block_number() + 1);
@@ -59,10 +67,12 @@ fn alice_register_bob_senario_setup() -> (Vec<u8>, [u8; 32]) {
 	let commitment_hash = (name.clone(), secret).using_encoded(blake2_256);
 	let periods = 1;
 
+	let min_commitment: u64 = <Test as crate::Config>::MinimumCommitmentPeriod::get();
+
 	assert_eq!(Balances::free_balance(&1), 100);
 	assert_eq!(Balances::free_balance(&2), 200);
 	assert_ok!(NameService::commit(Origin::signed(sender), owner, commitment_hash));
-	run_to_block(12);
+	add_blocks(min_commitment + 1);
 	assert_ok!(NameService::reveal(Origin::signed(sender), name.clone(), secret, periods));
 	assert_eq!(Balances::free_balance(&1), 98);
 	assert_eq!(Balances::free_balance(&2), 200);
@@ -113,7 +123,6 @@ fn commit_handles_errors() {
 		let commitment_hash = (name, secret).using_encoded(blake2_256);
 
 		assert_eq!(Balances::free_balance(&1), 100);
-
 		assert_ok!(NameService::commit(Origin::signed(sender), owner, commitment_hash));
 
 		// The same commitment cant be put twice.
@@ -142,11 +151,12 @@ fn reveal_works() {
 		let commitment_hash = blake2_256(&encoded_bytes);
 		let periods = 10;
 		let name_hash = sp_io::hashing::blake2_256(&name);
+		let min_commitment: u64 = <Test as crate::Config>::MinimumCommitmentPeriod::get();
 
 		assert_eq!(Balances::free_balance(&1), 100);
 		assert_ok!(NameService::commit(Origin::signed(sender), owner, commitment_hash));
 
-		run_to_block(12);
+		add_blocks(min_commitment + 1);
 
 		assert_ok!(NameService::reveal(Origin::signed(sender), name, secret, periods));
 		assert!(Registrations::<Test>::contains_key(name_hash));
@@ -184,6 +194,7 @@ fn reveal_handles_errors() {
 		let periods = 10;
 		let name = "alice".as_bytes().to_vec();
 		let commitment_hash = blake2_256(&(&name, secret).encode());
+		let min_commitment: u64 = <Test as crate::Config>::MinimumCommitmentPeriod::get();
 
 		assert_eq!(Balances::free_balance(&1), 100);
 
@@ -196,8 +207,7 @@ fn reveal_handles_errors() {
 		assert_ok!(NameService::commit(Origin::signed(sender), owner, commitment_hash));
 		let commitment = Commitments::<Test>::get(commitment_hash).unwrap();
 		assert_eq!(commitment.when, 1);
-
-		run_to_block(11);
+		add_blocks(min_commitment);
 
 		// Reveal is too early
 		assert_noop!(
@@ -205,16 +215,12 @@ fn reveal_handles_errors() {
 			Error::<Test>::TooEarlyToReveal
 		);
 
-		// Cannot reveal if balance is too low.
-		let name = "bob".as_bytes().to_vec();
+		// Cannot reveal if balance is too low. try one-character domain.
+		let name = "i".as_bytes().to_vec();
 		let commitment_hash = blake2_256(&(&name, secret).encode());
 		assert_ok!(NameService::commit(Origin::signed(sender), owner, commitment_hash));
 
-		// drain 2's balance to existential
-		assert_ok!(Balances::transfer(Origin::signed(2), 0, 199));
-		assert_eq!(Balances::free_balance(2), 1);
-
-		run_to_block(22);
+		add_blocks(min_commitment + 1);
 
 		assert_noop!(
 			NameService::reveal(Origin::signed(2), name.clone(), secret, periods),
@@ -233,13 +239,16 @@ fn reveal_existing_registration_deposit_returned() {
 		let owner = 2;
 		let secret = 6_u64;
 		let commitment_hash = blake2_256(&(&name, secret).encode());
+		let min_commitment: u64 = <Test as crate::Config>::MinimumCommitmentPeriod::get();
+		let blocks_per_registration_period: u64 =
+			<Test as crate::Config>::BlocksPerRegistrationPeriod::get();
 
 		// run until expiry
-		run_to_block(10013);
+		add_blocks(blocks_per_registration_period + 1);
 
 		// second registration
 		assert_ok!(NameService::commit(Origin::signed(sender), owner, commitment_hash));
-		run_to_block(10024);
+		add_blocks(min_commitment + 1);
 		assert_ok!(NameService::reveal(Origin::signed(sender), name.clone(), secret, 1));
 
 		// deposit returned from initial registration
@@ -253,7 +262,7 @@ fn reveal_ensure_active_registration_not_registered_again() {
 	new_test_ext().execute_with(|| {
 		assert_eq!(Balances::free_balance(&3), 300);
 		assert_eq!(Balances::free_balance(&4), 400);
-
+		let min_commitment: u64 = <Test as crate::Config>::MinimumCommitmentPeriod::get();
 		let (name, name_hash) = alice_register_bob_senario_setup();
 
 		// second registration
@@ -263,9 +272,9 @@ fn reveal_ensure_active_registration_not_registered_again() {
 		let commitment_hash = blake2_256(&(&name, secret).encode());
 
 		assert_ok!(NameService::commit(Origin::signed(sender), owner, commitment_hash));
-		run_to_block(61);
+		add_blocks(min_commitment + 1);
 
-		// TODO: currently returns OK(()) even if not available. Change this?
+		// currently returns OK(()) even if not available.
 		assert_ok!(NameService::reveal(Origin::signed(sender), name.clone(), secret, 1));
 
 		// initial registration (1) should still be owner of `Registration`.
@@ -300,6 +309,7 @@ fn transfer_handles_errors() {
 		let commitment_hash = (name.clone(), secret).using_encoded(blake2_256);
 		let periods = 1;
 		let name_hash = sp_io::hashing::blake2_256(&name);
+		let min_commitment: u64 = <Test as crate::Config>::MinimumCommitmentPeriod::get();
 
 		// Registration not found
 		assert_noop!(
@@ -311,7 +321,7 @@ fn transfer_handles_errors() {
 		assert_eq!(Balances::free_balance(&1), 100);
 		assert_ok!(NameService::commit(Origin::signed(sender), owner, commitment_hash));
 
-		run_to_block(12);
+		add_blocks(min_commitment + 1);
 		assert_ok!(NameService::reveal(Origin::signed(sender), name, secret, periods));
 
 		assert_noop!(
@@ -319,8 +329,8 @@ fn transfer_handles_errors() {
 			Error::<Test>::NotRegistrationOwner
 		);
 
-		// Registration expired
-		run_to_block(2000);
+		// Registration expired some time in the future
+		add_blocks(2000);
 
 		assert_noop!(
 			NameService::transfer(Origin::signed(owner), 4, name_hash),
@@ -362,8 +372,6 @@ fn renew_handles_errors() {
 			NameService::renew(Origin::signed(1), name_hash, 10),
 			BalancesError::InsufficientBalance,
 		);
-
-		// TODO:: check RegistrationHasNoExpiry
 	});
 }
 
@@ -371,15 +379,12 @@ fn renew_handles_errors() {
 fn set_address_works() {
 	new_test_ext().execute_with(|| {
 		let (_, name_hash) = alice_register_bob_senario_setup();
-
 		let addr_to_set = 1;
 
 		// set address to `1`
 		assert_ok!(NameService::set_address(Origin::signed(2), name_hash, addr_to_set));
-
 		// record was saved
 		assert!(Resolvers::<Test>::contains_key(name_hash));
-
 		// address is correct
 		assert_eq!(Resolvers::<Test>::get(name_hash).unwrap(), addr_to_set);
 	});
@@ -390,6 +395,8 @@ fn set_address_handles_errors() {
 	new_test_ext().execute_with(|| {
 		let sender = 1;
 		let some_name_hash = sp_io::hashing::blake2_256(&("alice".as_bytes().to_vec()));
+		let blocks_per_registration_period: u64 =
+			<Test as crate::Config>::BlocksPerRegistrationPeriod::get();
 
 		// Registration not found
 		assert_noop!(
@@ -408,7 +415,7 @@ fn set_address_handles_errors() {
 		);
 
 		// Registration has expired
-		run_to_block(2000);
+		add_blocks(blocks_per_registration_period + 1);
 		assert_noop!(
 			NameService::set_address(Origin::signed(2), name_hash, 2),
 			Error::<Test>::RegistrationExpired
@@ -420,6 +427,8 @@ fn set_address_handles_errors() {
 fn deregister_works_owner() {
 	new_test_ext().execute_with(|| {
 		let owner = 2;
+		let blocks_per_registration_period: u64 =
+			<Test as crate::Config>::BlocksPerRegistrationPeriod::get();
 		let (_, name_hash) = alice_register_bob_senario_setup();
 
 		let registration = Registrations::<Test>::get(name_hash).unwrap();
@@ -431,7 +440,7 @@ fn deregister_works_owner() {
 		assert_ok!(NameService::set_address(Origin::signed(owner), name_hash, owner));
 
 		// deregister before expiry
-		run_to_block(800);
+		add_blocks(blocks_per_registration_period);
 		assert_ok!(NameService::deregister(Origin::signed(owner), name_hash));
 
 		// name has been removed
@@ -446,6 +455,8 @@ fn deregister_works_owner() {
 #[test]
 fn deregister_works_non_owner() {
 	new_test_ext().execute_with(|| {
+		let blocks_per_registration_period: u64 =
+			<Test as crate::Config>::BlocksPerRegistrationPeriod::get();
 		let (_, name_hash) = alice_register_bob_senario_setup();
 
 		let registration = Registrations::<Test>::get(name_hash).unwrap();
@@ -454,7 +465,7 @@ fn deregister_works_non_owner() {
 		assert_eq!(registration.deposit, None);
 
 		// go to expiry - 1
-		run_to_block(1011);
+		add_blocks(blocks_per_registration_period);
 
 		// too early to expire for non_owner
 		let non_owner = 1;
@@ -464,7 +475,7 @@ fn deregister_works_non_owner() {
 		);
 
 		// now expired, ok to deregister
-		run_to_block(1012);
+		add_blocks(1);
 		assert_ok!(NameService::deregister(Origin::signed(non_owner), name_hash));
 
 		// ensure name has been removed
@@ -487,7 +498,6 @@ fn deregister_handles_errors_non_owner() {
 		let (_, _) = alice_register_bob_senario_setup();
 
 		// not owner - registration has not expired
-		run_to_block(50);
 		assert_noop!(
 			NameService::deregister(Origin::signed(non_owner), name_hash),
 			Error::<Test>::RegistrationNotExpired
@@ -702,81 +712,6 @@ fn set_subnode_owner_handles_errors() {
 }
 
 #[test]
-fn set_subnode_address_works() {
-	new_test_ext().execute_with(|| {
-		let owner = 2;
-		let label = "my".as_bytes().to_vec();
-		let label_hash = sp_io::hashing::blake2_256(&label);
-		let address = 2;
-
-		// initial registration and subnode registration for further testing
-		let (_, parent_hash) = alice_register_bob_senario_setup();
-		assert_ok!(NameService::set_subnode_record(Origin::signed(owner), parent_hash, label));
-		let name_hash = NameService::subnode_hash(parent_hash, label_hash);
-
-		assert_ok!(NameService::set_subnode_address(
-			Origin::signed(owner),
-			parent_hash,
-			label_hash,
-			address
-		));
-		assert!(Resolvers::<Test>::contains_key(name_hash));
-		assert_eq!(Resolvers::<Test>::get(name_hash).unwrap(), address);
-	});
-}
-
-#[test]
-fn set_subnode_address_handles_errors() {
-	new_test_ext().execute_with(|| {
-		let owner = 2;
-		let not_owner = 4;
-		let label = "my".as_bytes().to_vec();
-		let label_hash = sp_io::hashing::blake2_256(&label);
-		let address = 2;
-		let (parent_hash, _) = alice_register_bob_scenario_name_and_hash();
-
-		// parent node does not yet exist
-		assert_noop!(
-			NameService::set_subnode_address(
-				Origin::signed(owner),
-				parent_hash,
-				label_hash,
-				address
-			),
-			Error::<Test>::ParentRegistrationNotFound
-		);
-
-		// initial parent node registration
-		let (_, _) = alice_register_bob_senario_setup();
-
-		// subnode not yet registered
-		assert_noop!(
-			NameService::set_subnode_address(
-				Origin::signed(owner),
-				parent_hash,
-				label_hash,
-				address
-			),
-			Error::<Test>::RegistrationNotFound
-		);
-
-		// set the record for further testing, setting owner to sender
-		assert_ok!(NameService::set_subnode_record(Origin::signed(owner), parent_hash, label));
-
-		// not the current owner of subnode
-		assert_noop!(
-			NameService::set_subnode_address(
-				Origin::signed(not_owner),
-				parent_hash,
-				label_hash,
-				address
-			),
-			Error::<Test>::NotRegistrationOwner
-		);
-	});
-}
-
-#[test]
 fn deregister_subnode_owner_works() {
 	new_test_ext().execute_with(|| {
 		let owner = 2;
@@ -789,12 +724,7 @@ fn deregister_subnode_owner_works() {
 		assert_ok!(NameService::set_subnode_record(Origin::signed(owner), parent_hash, label));
 		let name_hash = NameService::subnode_hash(parent_hash, label_hash);
 		assert!(Registrations::<Test>::contains_key(name_hash));
-		assert_ok!(NameService::set_subnode_address(
-			Origin::signed(owner),
-			parent_hash,
-			label_hash,
-			address
-		));
+		assert_ok!(NameService::set_address(Origin::signed(owner), name_hash, address));
 		assert!(Resolvers::<Test>::contains_key(name_hash));
 		assert_eq!(Balances::free_balance(owner), 198);
 
@@ -818,23 +748,20 @@ fn deregister_subnode_non_owner_works() {
 		let label = "my".as_bytes().to_vec();
 		let label_hash = sp_io::hashing::blake2_256(&label);
 		let address = 2;
+		let blocks_per_registration_period: u64 =
+			<Test as crate::Config>::BlocksPerRegistrationPeriod::get();
 
 		// initial registration, subnode registration and address set for further testing
 		let (_, parent_hash) = alice_register_bob_senario_setup();
 		assert_ok!(NameService::set_subnode_record(Origin::signed(owner), parent_hash, label));
 		let name_hash = NameService::subnode_hash(parent_hash, label_hash);
 		assert!(Registrations::<Test>::contains_key(name_hash));
-		assert_ok!(NameService::set_subnode_address(
-			Origin::signed(owner),
-			parent_hash,
-			label_hash,
-			address
-		));
+		assert_ok!(NameService::set_address(Origin::signed(owner), name_hash, address));
 		assert!(Resolvers::<Test>::contains_key(name_hash));
 		assert_eq!(Balances::free_balance(owner), 198);
 
 		// run to TLD expiry
-		run_to_block(1012);
+		add_blocks(blocks_per_registration_period + 1);
 
 		// deregister TLD by non-owner
 		assert_ok!(NameService::deregister(Origin::signed(non_owner), parent_hash));
@@ -877,12 +804,7 @@ fn deregister_subnode_handles_errors() {
 		assert_ok!(NameService::set_subnode_record(Origin::signed(owner), parent_hash, label));
 		let name_hash = NameService::subnode_hash(parent_hash, label_hash);
 		assert!(Registrations::<Test>::contains_key(name_hash));
-		assert_ok!(NameService::set_subnode_address(
-			Origin::signed(owner),
-			parent_hash,
-			label_hash,
-			address
-		));
+		assert_ok!(NameService::set_address(Origin::signed(owner), name_hash, address));
 		assert!(Resolvers::<Test>::contains_key(name_hash));
 		assert_eq!(Balances::free_balance(owner), 198);
 

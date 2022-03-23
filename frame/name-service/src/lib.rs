@@ -31,7 +31,7 @@ pub use pallet::*;
 pub mod pallet {
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
-	use sp_runtime::traits::{Bounded, Convert, Saturating};
+	use sp_runtime::traits::{Bounded, Convert, Saturating, Zero};
 	use sp_std::{convert::TryInto, vec::Vec};
 
 	use frame_support::traits::{
@@ -229,7 +229,6 @@ pub mod pallet {
 
 			Commitments::<T>::insert(commitment_hash, commitment);
 			Self::deposit_event(Event::<T>::Committed { sender, who, hash: commitment_hash });
-
 			Ok(())
 		}
 
@@ -266,12 +265,14 @@ pub mod pallet {
 
 				T::RegistrationFeeHandler::on_unbalanced(imbalance);
 
+				// Note that no deposit is passed in for TLDs, as registration + length fees could
+				// be enough to deter attacks. Although this could present an opportunity to use
+				// reference counter deposits also.
 				Self::do_register(name_hash, commitment.who.clone(), Some(periods), None)?;
 			}
 
 			T::Currency::unreserve(&sender, commitment.deposit);
 			Commitments::<T>::remove(commitment_hash);
-
 			Ok(())
 		}
 
@@ -293,7 +294,6 @@ pub mod pallet {
 				}
 
 				r.owner = to.clone();
-
 				Self::deposit_event(Event::<T>::NewOwner { from: sender, to });
 				Ok(())
 			})
@@ -327,9 +327,7 @@ pub mod pallet {
 				};
 
 				r.expiry = Some(expiry_new);
-
 				T::RegistrationFeeHandler::on_unbalanced(imbalance);
-
 				Self::deposit_event(Event::<T>::NameRenewed { name_hash, expires: expiry_new });
 				Ok(())
 			})
@@ -350,31 +348,6 @@ pub mod pallet {
 		pub fn deregister(origin: OriginFor<T>, name_hash: NameHash) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 			Self::do_deregister(None, name_hash, Some(sender))?;
-			Ok(())
-		}
-
-		#[pallet::weight(0)]
-		pub fn force_register(
-			origin: OriginFor<T>,
-			name_hash: NameHash,
-			who: T::AccountId,
-			periods: u32,
-		) -> DispatchResult {
-			T::RegistrationManager::ensure_origin(origin)?;
-			if periods == 0 {
-				// permanent register: no expiry
-				Self::do_register(name_hash, who, None, None)?;
-			} else {
-				// register with some periods
-				Self::do_register(name_hash, who, Some(periods), None)?;
-			}
-			Ok(())
-		}
-
-		#[pallet::weight(0)]
-		pub fn force_deregister(origin: OriginFor<T>, name_hash: NameHash) -> DispatchResult {
-			T::RegistrationManager::ensure_origin(origin)?;
-			Self::do_deregister(None, name_hash, None)?;
 			Ok(())
 		}
 
@@ -408,7 +381,7 @@ pub mod pallet {
 			let parent = Registrations::<T>::get(parent_hash)
 				.ok_or(Error::<T>::ParentRegistrationNotFound)?;
 
-			ensure!(1 <= label.len(), Error::<T>::LabelTooShort);
+			ensure!(!label.len().is_zero(), Error::<T>::LabelTooShort);
 			let label_hash = sp_io::hashing::blake2_256(&label);
 			ensure!(sender == parent.owner, Error::<T>::NotRegistrationOwner);
 
@@ -456,24 +429,6 @@ pub mod pallet {
 		}
 
 		#[pallet::weight(0)]
-		pub fn set_subnode_address(
-			origin: OriginFor<T>,
-			parent_hash: NameHash,
-			label_hash: NameHash,
-			address: T::AccountId,
-		) -> DispatchResult {
-			let sender = ensure_signed(origin)?;
-
-			ensure!(
-				Registrations::<T>::contains_key(parent_hash),
-				Error::<T>::ParentRegistrationNotFound
-			);
-			let name_hash = Self::subnode_hash(parent_hash, label_hash);
-			Self::do_set_address(name_hash, sender, address)?;
-			Ok(())
-		}
-
-		#[pallet::weight(0)]
 		pub fn deregister_subnode(
 			origin: OriginFor<T>,
 			parent_hash: NameHash,
@@ -484,18 +439,30 @@ pub mod pallet {
 			Ok(())
 		}
 
-		// is this needed? once the TLD has been force deregistered, then any subnode
-		// will be expired and anyone can remove thereafter.
-		// #[pallet::weight(0)]
-		// pub fn force_deregister_subnode(
-		// 	origin: OriginFor<T>,
-		// 	parent_hash: NameHash,
-		// 	label_hash: NameHash,
-		// ) -> DispatchResult {
-		// 	T::RegistrationManager::ensure_origin(origin)?;
-		// 	Self::do_deregister(Some(label_hash), parent_hash, None)?;
-		// 	Ok(())
-		// }
+		#[pallet::weight(0)]
+		pub fn force_register(
+			origin: OriginFor<T>,
+			name_hash: NameHash,
+			who: T::AccountId,
+			periods: u32,
+		) -> DispatchResult {
+			T::RegistrationManager::ensure_origin(origin)?;
+			if periods.is_zero() {
+				// permanent register: no expiry
+				Self::do_register(name_hash, who, None, None)?;
+			} else {
+				// register with some periods
+				Self::do_register(name_hash, who, Some(periods), None)?;
+			}
+			Ok(())
+		}
+
+		#[pallet::weight(0)]
+		pub fn force_deregister(origin: OriginFor<T>, name_hash: NameHash) -> DispatchResult {
+			T::RegistrationManager::ensure_origin(origin)?;
+			Self::do_deregister(None, name_hash, None)?;
+			Ok(())
+		}
 	}
 
 	// Pallet internal functions
@@ -587,7 +554,7 @@ pub mod pallet {
 			maybe_sender: Option<T::AccountId>,
 		) -> DispatchResult {
 			// if label hash has been provided, we are trying to deregister a subnode.
-			if let Some(label_hash) = maybe_label_hash {
+			let name_hash = if let Some(label_hash) = maybe_label_hash {
 				let parent_hash = name_hash;
 
 				// generate the subnode we wish to deregister.
@@ -597,7 +564,7 @@ pub mod pallet {
 				let registration = Registrations::<T>::get(subnode_hash)
 					.ok_or(Error::<T>::RegistrationNotFound)?;
 
-				// if not root origin nor owner, check parent node has been deregistered.
+				// not owner - check parent node has been deregistered.
 				if let Some(sender) = maybe_sender {
 					if registration.owner != sender {
 						ensure!(
@@ -609,13 +576,11 @@ pub mod pallet {
 
 				// defensive handling subnode unreserve - should always exist.
 				if let Some(deposit) = registration.deposit {
-					let _ = T::Currency::unreserve(&registration.owner, deposit);
+					let res = T::Currency::unreserve(&registration.owner, deposit);
+					debug_assert!(res.is_zero());
 				}
 
-				Resolvers::<T>::remove(subnode_hash);
-				Registrations::<T>::remove(subnode_hash);
-				Self::deposit_event(Event::<T>::AddressDeregistered { name_hash: subnode_hash });
-				return Ok(())
+				subnode_hash
 
 			// no label hash provided; we are trying to deregister a top level node.
 			} else {
@@ -628,17 +593,19 @@ pub mod pallet {
 						let expiry =
 							registration.expiry.ok_or(Error::<T>::RegistrationHasNoExpiry)?;
 						ensure!(
-							expiry <= frame_system::Pallet::<T>::block_number(),
+							expiry < frame_system::Pallet::<T>::block_number(),
 							Error::<T>::RegistrationNotExpired
 						);
 					}
 				}
 
-				Resolvers::<T>::remove(name_hash);
-				Registrations::<T>::remove(name_hash);
-				Self::deposit_event(Event::<T>::AddressDeregistered { name_hash });
-				return Ok(())
-			}
+				name_hash
+			};
+
+			Resolvers::<T>::remove(name_hash);
+			Registrations::<T>::remove(name_hash);
+			Self::deposit_event(Event::<T>::AddressDeregistered { name_hash });
+			return Ok(())
 		}
 
 		pub fn subnode_hash(name_hash: NameHash, label_hash: NameHash) -> NameHash {
