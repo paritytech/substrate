@@ -207,7 +207,7 @@ pub mod pallet {
 		#[pallet::constant]
 		type CuratorDepositMax: Get<Option<BalanceOf<Self>>>;
 
-		/// Maximum amount of funds that should be placed in a deposit for making a proposal.
+		/// Minimum amount of funds that should be placed in a deposit for making a proposal.
 		#[pallet::constant]
 		type CuratorDepositMin: Get<Option<BalanceOf<Self>>>;
 
