@@ -1063,30 +1063,6 @@ pub mod pallet {
 			Ok(())
 		}
 		
-		/*
-		#[pallet::weight(100)]
-		pub fn challenge_solution(origin: OriginFor<T>, index: u32) -> DispatchResult {
-			let who = ensure_signed(origin)?;
-			ensure!(
-				T::Currency::can_slash(&who, T::MinimumSlashableAmount::get()),
-				<Error<T>>::CallNotAllowed
-			);
-			let signed_submissions = Self::signed_submissions();
-			if let Some(submission) = signed_submissions.get_submission(index) {
-				match Self::feasibility_check(submission.raw_solution.clone(), ElectionCompute::Signed) {
-					Ok(solution) => {
-						let _ = T::Currency::slash(&who, T::MinimumSlashableAmount::get());
-
-					},
-					Err(_) => { _
-
-					},
-				}
-			}
-
-			Ok(())
-		}
-		*/
 		#[pallet::weight(100)]
 		pub fn challenge_solution(origin: OriginFor<T>, index: u32) -> DispatchResult {
 			let who = ensure_signed(origin)?;
