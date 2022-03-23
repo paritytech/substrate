@@ -134,6 +134,12 @@ pub(crate) fn generate(def: crate::SolutionDef) -> Result<TokenStream2> {
 						}
 					}
 				};
+
+				// Make sure that the voter bound is binding.
+				use frame_support::traits::Get;
+				if #struct_name.voter_count() as u32 > #max_voters::get() {
+					return Err(_feps::Error::SolutionVotersOverflow);
+				}
 				Ok(#struct_name)
 			}
 
