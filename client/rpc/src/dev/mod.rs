@@ -24,7 +24,7 @@ mod tests;
 
 pub use sc_rpc_api::dev::{BlockStats, DevApiServer};
 
-use jsonrpsee::core::{async_trait, RpcResult};
+use jsonrpsee::core::RpcResult;
 use sc_client_api::{BlockBackend, HeaderBackend};
 use sc_rpc_api::{dev::error::Error, DenyUnsafe};
 use sp_api::{ApiExt, Core, ProvideRuntimeApi};
@@ -54,7 +54,6 @@ impl<Block: BlockT, Client> Dev<Block, Client> {
 	}
 }
 
-#[async_trait]
 impl<Block, Client> DevApiServer<Block::Hash> for Dev<Block, Client>
 where
 	Block: BlockT + 'static,
