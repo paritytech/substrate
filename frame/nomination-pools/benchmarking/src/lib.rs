@@ -1,8 +1,5 @@
 //! Benchmarks for the nomination pools coupled with the staking and bags list pallets.
 
-// Ensure we're `no_std` when compiling for Wasm.
-#![cfg_attr(not(feature = "std"), no_std)]
-
 #[cfg(test)]
 mod mock;
 
@@ -150,8 +147,8 @@ impl<T: Config> ListScenario<T> {
 	fn add_joiner(mut self, amount: BalanceOf<T>) -> Self {
 		let amount = MinJoinBond::<T>::get()
 			.max(CurrencyOf::<T>::minimum_balance())
-			// Max the `given` amount with minimum thresholds for account balance and joining a pool
-			// to ensure 1. the user can be created and 2. can join the pool
+			// Max `amount` with minimum thresholds for account balance and joining a pool
+			// to ensure 1) the user can be created and 2) can join the pool
 			.max(amount);
 
 		let joiner: T::AccountId = account("joiner", USER_SEED, 0);
@@ -243,7 +240,7 @@ frame_benchmarking::benchmarks! {
 	}
 
 	unbond_other {
-		// the weight the nominator will start at. The value used here is expected to be
+		// The weight the nominator will start at. The value used here is expected to be
 		// significantly higher than the first position in a list (e.g. the first bag threshold).
 		let origin_weight = BalanceOf::<T>::try_from(952_994_955_240_703u128)
 			.map_err(|_| "balance expected to be a u128")
@@ -258,7 +255,7 @@ frame_benchmarking::benchmarks! {
 	}: _(Origin::Signed(delegator_id.clone()), delegator_id.clone())
 	verify {
 		let bonded_after = T::StakingInterface::active_stake(&scenario.origin1).unwrap();
-		// We at least went down to the destination bag, (if not an even lower bag)
+		// We at least went down to the destination bag
 		assert!(bonded_after <= scenario.dest_weight.clone());
 		let delegator = Delegators::<T>::get(
 			&delegator_id
@@ -561,8 +558,6 @@ frame_benchmarking::benchmarks! {
 		assert_eq!(MaxDelegatorsPerPool::<T>::get(), Some(u32::MAX));
 	}
 }
-
-// TODO: consider benchmarking slashing logic with pools
 
 frame_benchmarking::impl_benchmark_test_suite!(
 	Pallet,

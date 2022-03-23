@@ -1,9 +1,7 @@
 //! # Nomination Pools for Staking Delegation
 //!
-//! A pallet that allows delegators to delegate their stake to nominating pools, each of which acts
-//! as a nominator and nominates validators on the delegators behalf.
-//!
-//! # Index
+//! A pallet that allows delegators to delegate their stake to nominating pools. A nomination pool
+//! acts as nominator and nominates validators on the delegators behalf. # Index
 //!
 //! * [Key terms](#key-terms)
 //! * [Usage](#usage)
@@ -19,7 +17,7 @@
 //!   [`SubPools`] and [`SubPoolsStorage`]. Sub pools are identified via the pools bonded account.
 //! * delegators: Accounts that are members of pools. See [`Delegator`] and [`Delegators`].
 //!   Delegators are identified via their account.
-//! * point: A measure of a delegators portion of a pools funds.
+//! * point: A unit of measure for a delegators portion of a pool's funds.
 //!
 //! ## Usage
 //!
@@ -71,7 +69,7 @@
 //!   [`Call::unbond_other`] and [`Call::withdraw_unbonded_other`]. Once a pool is destroying state,
 //!   it cannot be reverted to another state.
 //!
-//! A pool has 3 administrative positions (see [`BondedPool`]):
+//! A pool has 3 administrative roles (see [`PoolRoles`]):
 //!
 //! * Depositor: creates the pool and is the initial delegator. They can only leave pool once all
 //!   other delegators have left. Once they fully leave the pool is destroyed.
@@ -373,13 +371,14 @@ pub enum PoolState {
 	Open,
 	/// The pool is blocked. No one else can join.
 	Blocked,
-	/// The pool has been scheduled to destroyed.
+	/// The pool is in the process of being destroyed.
 	///
 	/// All delegators can now be permissionlessly unbonded, and the pool can never go back to any
 	/// other state other than being dissolved.
 	Destroying,
 }
 
+/// Pool adminstration roles.
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Debug, PartialEq, Clone)]
 pub struct PoolRoles<AccountId> {
 	/// Creates the pool and is the initial delegator. They can only leave the pool once all
@@ -1803,6 +1802,11 @@ impl<T: Config> Pallet<T> {
 		assert!(SubPoolsStorage::<T>::iter_keys().all(|k| bonded_pools.contains(&k)));
 
 		assert!(MaxPools::<T>::get().map_or(true, |max| bonded_pools.len() <= (max as usize)));
+
+		for id in reward_pools {
+			let account = Self::create_reward_account(id);
+			assert!(T::Currency::free_balance(&account) >= T::Currency::minimum_balance());
+		}
 
 		let mut pools_delegators = BTreeMap::<PoolId, u32>::new();
 		let mut all_delegators = 0u32;
