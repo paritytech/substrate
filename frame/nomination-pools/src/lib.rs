@@ -1800,7 +1800,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// If the delegator has some rewards, transfer a payout from the reward pool to the delegator.
-	// Emits events and potentially triggers the pool state if the math becomes corrupt, but does
+	// Emits events and potentially modifies pool state if any arithmetic saturates, but does
 	// not persist any of the mutable inputs to storage.
 	fn do_reward_payout(
 		delegator_account: &T::AccountId,
