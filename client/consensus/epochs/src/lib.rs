@@ -21,7 +21,7 @@
 pub mod migration;
 
 use codec::{Decode, Encode};
-use fork_tree::ForkTree;
+use fork_tree::{FilterAction, ForkTree};
 use sc_client_api::utils::is_descendent_of;
 use sp_blockchain::{Error as ClientError, HeaderBackend, HeaderMetadata};
 use sp_runtime::traits::{Block as BlockT, NumberFor, One, Zero};
@@ -810,27 +810,22 @@ where
 	) {
 		let is_descendent_of = descendent_of_builder.build_is_descendent_of(None);
 
-		let mut some_removed = false;
-		let mut predicate = |node_hash: &Hash, node_num: &Number, _: &PersistedEpochHeader<E>| {
+		let filter = |node_hash: &Hash, node_num: &Number, _: &PersistedEpochHeader<E>| {
 			if number >= *node_num &&
 				(is_descendent_of(node_hash, &hash).unwrap_or_default() || *node_hash == hash)
 			{
 				// Continue the search in this subtree.
-				(false, None)
-			} else if is_descendent_of(&hash, node_hash).unwrap_or_default() {
+				FilterAction::KeepNode
+			} else if number < *node_num && is_descendent_of(&hash, node_hash).unwrap_or_default() {
 				// Found a node to be removed.
-				some_removed = true;
-				(true, None)
-			} else if some_removed && *node_num < number {
-				// Backtrack detected, we can early stop the overall filtering operation.
-				(false, Some(true))
+				FilterAction::Remove
 			} else {
 				// Not a parent or child of the one we're looking for, stop processing this branch.
-				(false, Some(false))
+				FilterAction::KeepTree
 			}
 		};
 
-		self.inner.filter(&mut predicate).for_each(|(h, n, _)| {
+		self.inner.drain_filter(filter).for_each(|(h, n, _)| {
 			self.epochs.remove(&(h, n));
 		});
 	}

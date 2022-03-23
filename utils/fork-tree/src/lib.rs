@@ -69,6 +69,17 @@ pub enum FinalizationResult<V> {
 	Unchanged,
 }
 
+/// Filtering action.
+#[derive(Debug, PartialEq)]
+pub enum FilterAction {
+	/// Remove the node and its subtree.
+	Remove,
+	/// Maintain the node.
+	KeepNode,
+	/// Maintain the node and its subtree.
+	KeepTree,
+}
+
 /// A tree data structure that stores several nodes across multiple branches.
 /// Top-level branches are called roots. The tree has functionality for
 /// finalizing nodes, which means that that node is traversed, and all competing
@@ -625,29 +636,23 @@ where
 		}
 	}
 
-	/// Remove from the tree some nodes (and their subtrees) using a `predicate`.
-	/// The `predicate` should return a tuple where the first `bool` indicates
-	/// if a node and its subtree should be removed, the second `Option<bool>`
-	/// indicates if the filtering operation should be stopped.
-	/// If `Some(false)` stop is requested only for the current node subtree,
-	/// if `Some(true)` stop is requested for the full filtering operation.
-	/// Tree traversal is performed using an pre-order depth-first search.
+	/// Remove from the tree some nodes (and their subtrees) using a `filter` predicate.
+	/// The `filter` is called over tree nodes and returns a filter action:
+	/// - `Remove` if the node and its subtree should be removed;
+	/// - `KeepNode` if we should maintain the node and keep processing the tree.
+	/// - `KeepTree` if we should maintain the node and its entire subtree.
 	/// An iterator over all the pruned nodes is returned.
-	pub fn filter<F>(&mut self, predicate: &mut F) -> impl Iterator<Item = (H, N, V)>
+	pub fn drain_filter<F>(&mut self, mut filter: F) -> impl Iterator<Item = (H, N, V)>
 	where
-		F: FnMut(&H, &N, &V) -> (bool, Option<bool>),
+		F: FnMut(&H, &N, &V) -> FilterAction,
 	{
 		let mut removed = Vec::new();
 		let mut i = 0;
 		while i < self.roots.len() {
-			let (remove, stop) = self.roots[i].filter(predicate, &mut removed);
-			if remove {
+			if self.roots[i].drain_filter(&mut filter, &mut removed) {
 				removed.push(self.roots.remove(i));
 			} else {
 				i += 1;
-			}
-			if stop {
-				break
 			}
 		}
 		self.rebalance();
@@ -879,43 +884,32 @@ mod node_implementation {
 			}
 		}
 
-		/// Calls a `predicate` for the given node.
-		/// The `predicate` should return a tuple where the first `bool` indicates
-		/// if the node and its subtree should be removed, the second `Option<bool>`
-		/// indicates if the filtering operation should be stopped.
-		/// If `Some(false)` stop is requested only for the node subtree,
-		/// if `Some(true)` stop is requested for the full filtering operation.
+		/// Calls a `filter` predicate for the given node.
+		/// The `filter` is called over tree nodes and returns a filter action:
+		/// - `Remove` if the node and its subtree should be removed;
+		/// - `KeepNode` if we should maintain the node and keep processing the tree;
+		/// - `KeepTree` if we should maintain the node and its entire subtree.
 		/// Pruned subtrees are added to the `removed` list.
-		/// Removal of this node optionally enacted by the caller.
-		/// Returns a couple of booleans where the fist indicates if a node
-		/// (and its subtree) should be removed, the second indicates if the
-		/// overall filtering operation stopped.
-		pub fn filter<F>(
-			&mut self,
-			predicate: &mut F,
-			removed: &mut Vec<Node<H, N, V>>,
-		) -> (bool, bool)
+		/// Returns a booleans indicateing if this node (and its subtree) should be removed.
+		pub fn drain_filter<F>(&mut self, filter: &mut F, removed: &mut Vec<Node<H, N, V>>) -> bool
 		where
-			F: FnMut(&H, &N, &V) -> (bool, Option<bool>),
+			F: FnMut(&H, &N, &V) -> FilterAction,
 		{
-			let (remove, pred_stop) = predicate(&self.hash, &self.number, &self.data);
-			let mut stop = pred_stop == Some(true);
-			if !remove && pred_stop.is_none() {
-				let mut i = 0;
-				while i < self.children.len() {
-					let (child_remove, child_stop) = self.children[i].filter(predicate, removed);
-					if child_remove {
-						removed.push(self.children.remove(i));
-					} else {
-						i += 1;
+			match filter(&self.hash, &self.number, &self.data) {
+				FilterAction::KeepNode => {
+					let mut i = 0;
+					while i < self.children.len() {
+						if self.children[i].drain_filter(filter, removed) {
+							removed.push(self.children.remove(i));
+						} else {
+							i += 1;
+						}
 					}
-					if child_stop {
-						stop = child_stop;
-						break
-					}
-				}
+					false
+				},
+				FilterAction::KeepTree => false,
+				FilterAction::Remove => true,
 			}
-			(remove, stop)
 		}
 	}
 }
@@ -963,6 +957,8 @@ impl<H, N, V> Iterator for RemovedIterator<H, N, V> {
 
 #[cfg(test)]
 mod test {
+	use crate::FilterAction;
+
 	use super::{Error, FinalizationResult, ForkTree};
 
 	#[derive(Debug, PartialEq)]
@@ -1528,31 +1524,26 @@ mod test {
 	}
 
 	#[test]
-	fn tree_filter() {
+	fn tree_drain_filter() {
 		let (mut tree, _) = test_fork_tree();
 
-		let mut predicate = |h: &&str, _: &u64, _: &()| {
-			match *h {
-				// Don't remove and continue filtering.
-				"A" | "B" | "F" => (false, None),
-				// Don't remove and don't filter the node subtree.
-				"C" => (false, Some(false)),
-				// Don't remove and stop the overall filtering operation.
-				"G" => (false, Some(true)),
-				// Remove and continue filtering.
-				"H" => (true, None),
-				// Should never happen because of the stop and pruning conditions.
-				_ => panic!("Unexpected filtering for node: {}", *h),
-			}
+		let filter = |h: &&str, _: &u64, _: &()| match *h {
+			"A" | "B" | "F" | "G" => FilterAction::KeepNode,
+			"C" => FilterAction::KeepTree,
+			"H" | "J" => FilterAction::Remove,
+			_ => panic!("Unexpected filtering for node: {}", *h),
 		};
 
-		let removed = tree.filter(&mut predicate);
+		let removed = tree.drain_filter(filter);
 
 		assert_eq!(
 			tree.iter().map(|(h, _, _)| *h).collect::<Vec<_>>(),
-			["A", "B", "C", "D", "E", "F", "G", "J", "K"]
+			["A", "B", "C", "D", "E", "F", "G"]
 		);
 
-		assert_eq!(removed.map(|(h, _, _)| h).collect::<Vec<_>>(), vec!["H", "L", "M", "O", "I"]);
+		assert_eq!(
+			removed.map(|(h, _, _)| h).collect::<Vec<_>>(),
+			["J", "K", "H", "L", "M", "O", "I"]
+		);
 	}
 }
