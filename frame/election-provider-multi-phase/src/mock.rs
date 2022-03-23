@@ -70,7 +70,12 @@ pub(crate) type TargetIndex = u16;
 
 frame_election_provider_support::generate_solution_type!(
 	#[compact]
-	pub struct TestNposSolution::<VoterIndex = VoterIndex, TargetIndex = TargetIndex, Accuracy = PerU16>(16)
+	pub struct TestNposSolution::<
+		VoterIndex = VoterIndex,
+		TargetIndex = TargetIndex,
+		Accuracy = PerU16,
+		MaxVoters = ConstU32::<20>
+	>(16)
 );
 
 /// All events of this pallet.

@@ -198,6 +198,8 @@ mod tests {
 			type AccountId = AccountId;
 			type BlockNumber = BlockNumber;
 			type MaxVotesPerVoter = ConstU32<2>;
+			type Pages = ConstU32<1>;
+
 			fn electing_voters_paged(
 				_: Option<usize>,
 				remaining: PageIndex,
@@ -210,7 +212,10 @@ mod tests {
 				])
 			}
 
-			fn electable_targets_paged(_: Option<usize>, remaining: PageIndex) -> data_provider::Result<Vec<AccountId>> {
+			fn electable_targets_paged(
+				_: Option<usize>,
+				remaining: PageIndex,
+			) -> data_provider::Result<Vec<AccountId>> {
 				assert_eq!(remaining, 0);
 				Ok(vec![10, 20, 30])
 			}

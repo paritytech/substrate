@@ -691,7 +691,7 @@ impl<T: Config> Pallet<T> {
 			// part of of the voter list. If otherwise, we start from the beginning and return
 			// duplicates, hopefully our beloved `ElectionProvider` can handle duplicate voters
 			// (substrate implementations do). This is guaranteed by making sure while
-			// `LastIteratedNominator` is set, no nominator can chill.
+			// `LastIteratedNominator` is set, this voter cannot chill themselves.
 			T::VoterList::iter_from(&last).defensive_unwrap_or_else(T::VoterList::iter)
 		} else {
 			T::VoterList::iter()

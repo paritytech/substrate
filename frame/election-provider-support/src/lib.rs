@@ -108,7 +108,7 @@
 //!         fn desired_targets() -> data_provider::Result<u32> {
 //!             Ok(1)
 //!         }
-//!         fn electing_voters(maybe_max_len: Option<usize>)
+//!         fn electing_voters_paged(maybe_max_len: Option<usize>, _: PageIndex)
 //!           -> data_provider::Result<Vec<VoterOf<Self>>>
 //!         {
 //!             Ok(Default::default())
@@ -203,6 +203,11 @@ pub use scale_info;
 pub use sp_arithmetic;
 #[doc(hidden)]
 pub use sp_std;
+
+#[cfg(test)]
+mod mock;
+#[cfg(test)]
+mod tests;
 // Simple Extension trait to easily convert `None` from index closures to `Err`.
 //
 // This is only generated and re-exported for the solution code to use.
