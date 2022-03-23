@@ -401,10 +401,7 @@ pub mod pallet {
 					{
 						ensure!(signer == *curator, BountiesError::<T>::RequireCurator);
 
-						// Reserve child-bounty curator deposit. Curator deposit
-						// is reserved based on a percentage of child-bounty
-						// value instead of fee, to avoid no deposit in case the
-						// fee is set as zero.
+						// Reserve child-bounty curator deposit.
 						let deposit = Self::calculate_curator_deposit(
 							&parent_curator,
 							curator,
