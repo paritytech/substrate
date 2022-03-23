@@ -369,34 +369,39 @@ pub fn gather_hwbench(scratch_directory: Option<&Path>) -> HwBench {
 	hwbench
 }
 
-#[cfg(target_os = "linux")]
-#[test]
-fn test_gather_sysinfo_linux() {
-	let sysinfo = gather_sysinfo();
-	assert!(sysinfo.cpu.unwrap().len() > 0);
-	assert!(sysinfo.core_count.unwrap() > 0);
-	assert!(sysinfo.memory.unwrap() > 0);
-	assert_ne!(sysinfo.is_virtual_machine, None);
-	assert_ne!(sysinfo.linux_kernel, None);
-	assert_ne!(sysinfo.linux_distro, None);
-}
+#[cfg(test)]
+mod tests {
+	use super::*;
 
-#[test]
-fn test_benchmark_cpu() {
-	assert_ne!(benchmark_cpu(), 0);
-}
+	#[cfg(target_os = "linux")]
+	#[test]
+	fn test_gather_sysinfo_linux() {
+		let sysinfo = gather_sysinfo();
+		assert!(sysinfo.cpu.unwrap().len() > 0);
+		assert!(sysinfo.core_count.unwrap() > 0);
+		assert!(sysinfo.memory.unwrap() > 0);
+		assert_ne!(sysinfo.is_virtual_machine, None);
+		assert_ne!(sysinfo.linux_kernel, None);
+		assert_ne!(sysinfo.linux_distro, None);
+	}
 
-#[test]
-fn test_benchmark_memory() {
-	assert_ne!(benchmark_memory(), 0);
-}
+	#[test]
+	fn test_benchmark_cpu() {
+		assert_ne!(benchmark_cpu(), 0);
+	}
 
-#[test]
-fn test_benchmark_disk_sequential_writes() {
-	assert!(benchmark_disk_sequential_writes("./".as_ref()).unwrap() > 0);
-}
+	#[test]
+	fn test_benchmark_memory() {
+		assert_ne!(benchmark_memory(), 0);
+	}
 
-#[test]
-fn test_benchmark_disk_random_writes() {
-	assert!(benchmark_disk_random_writes("./".as_ref()).unwrap() > 0);
+	#[test]
+	fn test_benchmark_disk_sequential_writes() {
+		assert!(benchmark_disk_sequential_writes("./".as_ref()).unwrap() > 0);
+	}
+
+	#[test]
+	fn test_benchmark_disk_random_writes() {
+		assert!(benchmark_disk_random_writes("./".as_ref()).unwrap() > 0);
+	}
 }
