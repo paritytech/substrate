@@ -84,7 +84,6 @@ tempfile = "3.1.0"
 directories = "4.0.1"
 regex = "1"
 libc = "0.2"
-nix = "0.23"
 
 [dev-dependencies]
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
