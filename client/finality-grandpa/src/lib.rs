@@ -62,6 +62,7 @@ use parity_scale_codec::Decode;
 use parking_lot::RwLock;
 use prometheus_endpoint::{PrometheusError, Registry};
 use sc_client_api::{
+	utils::is_descendent_of,
 	backend::{AuxStore, Backend},
 	BlockchainEvents, CallExecutor, ExecutionStrategy, ExecutorProvider, Finalizer, LockImportRun,
 	StorageProvider, TransactionFor,
@@ -71,13 +72,13 @@ use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG, CONSENSUS_INFO};
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver};
 use sp_api::ProvideRuntimeApi;
 use sp_application_crypto::AppKey;
-use sp_blockchain::{Error as ClientError, HeaderBackend, HeaderMetadata};
+use sp_blockchain::{Error as ClientError, Result as ClientResult, HeaderBackend, HeaderMetadata};
 use sp_consensus::SelectChain;
 use sp_core::crypto::ByteArray;
 use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 use sp_runtime::{
 	generic::BlockId,
-	traits::{Block as BlockT, NumberFor, Zero},
+	traits::{Block as BlockT, NumberFor, Zero, Saturating},
 };
 
 pub use finality_grandpa::BlockNumberOps;
@@ -1161,4 +1162,45 @@ fn local_authority_id(
 			})
 			.map(|(p, _)| p.clone())
 	})
+}
+
+/// TODO
+pub fn revert<Block, Client, Backend>(
+	client: Arc<Client>,
+	backend: Arc<Backend>,
+	blocks: NumberFor<Block>,
+) -> ClientResult<()>
+where
+	Block: BlockT,
+	//<<Block as sp_api::BlockT>::Header as sp_api::HeaderT>::Hashing: WrapperTypeDecode,
+	Client: AuxStore
+		+ HeaderMetadata<Block, Error = sp_blockchain::Error>
+		+ HeaderBackend<Block>
+		+ ProvideRuntimeApi<Block>
+		//+ UsageProvider<Block>,
+	//Client::Api: BabeApi<Block>,
+	//Backend: BackendT<Block>,
+{
+	let best_number = client.info().best_number;
+	let finalized = client.info().finalized_number;
+	let revertible = blocks.min(best_number - finalized);
+
+	let number = best_number.saturating_sub(revertible);
+	let hash = client
+		.block_hash_from_id(&BlockId::Number(number))?
+		.ok_or(ClientError::Backend(format!(
+			"Unexpected hash lookup failure for block number: {}",
+			number
+		)))?;
+	
+	let info = client.info();
+	let persistent_data: PersistentData<Block> = aux_schema::load_persistent(&*client, info.genesis_hash, Zero::zero(), || unreachable!()).unwrap();
+
+	let shared_authority_set = persistent_data.authority_set;
+	let mut authority_set = shared_authority_set.inner();
+	
+	let is_descendent_of = is_descendent_of(&*client, None);
+	authority_set.revert(hash, number, &is_descendent_of);
+
+	Ok(())
 }

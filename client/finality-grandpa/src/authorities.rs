@@ -175,6 +175,33 @@ where
 	H: PartialEq,
 	N: Ord + Clone,
 {
+	pub(crate) fn revert<F, E>(&mut self, hash: H, number: N, is_descendent_of: &F)
+	where
+		F: Fn(&H, &H) -> Result<bool, E>,
+	{
+		let mut some_removed = false;
+		let mut predicate = |node_hash: &H, node_num: &N, _: &PendingChange<H, N>| {
+			if number >= *node_num &&
+				(is_descendent_of(node_hash, &hash).unwrap_or_default() || *node_hash == hash)
+			{
+				// Continue the search in this subtree.
+				(false, None)
+			} else if is_descendent_of(&hash, node_hash).unwrap_or_default() {
+				// Found a node to be removed.
+				some_removed = true;
+				(true, None)
+			} else if some_removed && *node_num < number {
+				// Backtrack detected, we can early stop the overall filtering operation.
+				(false, Some(true))
+			} else {
+				// Not a parent or child of the one we're looking for, stop processing this branch.
+				(false, Some(false))
+			}
+		};
+
+		self.pending_standard_changes.filter(&mut predicate);
+	}
+
 	// authority sets must be non-empty and all weights must be greater than 0
 	fn invalid_authority_list(authorities: &AuthorityList) -> bool {
 		authorities.is_empty() || authorities.iter().any(|(_, w)| *w == 0)

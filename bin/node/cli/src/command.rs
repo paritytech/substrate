@@ -157,9 +157,11 @@ pub fn run() -> Result<()> {
 			let runner = cli.create_runner(cmd)?;
 			runner.async_run(|config| {
 				let PartialComponents { client, task_manager, backend, .. } = new_partial(&config)?;
-				let revert_aux = Box::new(|client, backend, blocks| {
-					sc_consensus_babe::revert(client, backend, blocks)?;
-					// TODO: grandpa revert
+				let client_clone = client.clone();
+				let backend_clone = backend.clone();
+				let revert_aux = Box::new(move |_client, _backend, blocks| {
+					sc_consensus_babe::revert(client_clone.clone(), backend_clone.clone(), blocks)?;
+					grandpa::revert(client_clone, backend_clone, blocks)?;
 					Ok(())
 				});
 
