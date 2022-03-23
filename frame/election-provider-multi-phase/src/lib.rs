@@ -1062,16 +1062,15 @@ pub mod pallet {
 			<QueuedSolution<T>>::put(solution);
 			Ok(())
 		}
-
+		
 		/*
 		#[pallet::weight(100)]
-		pub fn challenge_submission(origin: OriginFor<T>, index: u32) -> DispatchResult {
+		pub fn challenge_solution(origin: OriginFor<T>, index: u32) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			ensure!(
 				T::Currency::can_slash(&who, T::MinimumSlashableAmount::get()),
 				<Error<T>>::CallNotAllowed
 			);
-			// let uj = T::Currency::minimum_balance(); // /*Staking::slashable_balance_of(who) >= */
 			let signed_submissions = Self::signed_submissions();
 			if let Some(submission) = signed_submissions.get_submission(index) {
 				match Self::feasibility_check(submission.raw_solution.clone(), ElectionCompute::Signed) {
@@ -1088,6 +1087,28 @@ pub mod pallet {
 			Ok(())
 		}
 		*/
+		#[pallet::weight(100)]
+		pub fn challenge_solution(origin: OriginFor<T>, index: u32) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+			ensure!(
+				T::Currency::can_slash(&who, T::MinimumSlashableAmount::get()),
+				<Error<T>>::CallNotAllowed
+			);
+			// TODO: Add error message for a None 
+			if let Some(submission) = SignedSubmissionsMap::<T>::get(index) {
+				match Self::feasibility_check(submission.raw_solution.clone(), ElectionCompute::Signed) {
+					Ok(_solution) => {
+						let _ = T::Currency::slash(&who, T::MinimumSlashableAmount::get());
+
+					},
+					Err(_) => {
+
+					},
+				}
+			}
+
+			Ok(())
+		}
 	}
 
 	#[pallet::event]
