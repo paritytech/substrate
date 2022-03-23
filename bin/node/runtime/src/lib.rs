@@ -929,15 +929,8 @@ parameter_types! {
 	pub const TipFindersFee: Percent = Percent::from_percent(20);
 	pub const TipReportDepositBase: Balance = 1 * DOLLARS;
 	pub const DataDepositPerByte: Balance = 1 * CENTS;
-	pub const BountyDepositBase: Balance = 1 * DOLLARS;
-	pub const CuratorDepositMultiplierWithFee: Permill = Permill::from_percent(50);
-	pub const CuratorDepositMultiplierWithNoFee: Permill = Permill::from_percent(1);
-	pub const BountyDepositPayoutDelay: BlockNumber = 1 * DAYS;
 	pub const TreasuryPalletId: PalletId = PalletId(*b"py/trsry");
-	pub const BountyUpdatePeriod: BlockNumber = 14 * DAYS;
 	pub const MaximumReasonLength: u32 = 300;
-	pub const BountyCuratorDeposit: Permill = Permill::from_percent(50);
-	pub const BountyValueMinimum: Balance = 5 * DOLLARS;
 	pub const MaxApprovals: u32 = 100;
 }
 
@@ -965,13 +958,25 @@ impl pallet_treasury::Config for Runtime {
 	type MaxApprovals = MaxApprovals;
 }
 
+parameter_types! {
+	pub const BountyCuratorDeposit: Permill = Permill::from_percent(50);
+	pub const BountyValueMinimum: Balance = 5 * DOLLARS;
+	pub const BountyDepositBase: Balance = 1 * DOLLARS;
+	pub const CuratorDepositMultiplier: Permill = Permill::from_percent(50);
+	pub const CuratorDepositMin: Balance = 1 * DOLLARS;
+	pub const CuratorDepositMax: Balance = 100 * DOLLARS;
+	pub const BountyDepositPayoutDelay: BlockNumber = 1 * DAYS;
+	pub const BountyUpdatePeriod: BlockNumber = 14 * DAYS;
+}
+
 impl pallet_bounties::Config for Runtime {
 	type Event = Event;
 	type BountyDepositBase = BountyDepositBase;
 	type BountyDepositPayoutDelay = BountyDepositPayoutDelay;
 	type BountyUpdatePeriod = BountyUpdatePeriod;
-	type CuratorDepositMultiplierWithFee = CuratorDepositMultiplierWithFee;
-	type CuratorDepositMultiplierWithNoFee = CuratorDepositMultiplierWithNoFee;
+	type CuratorDepositMultiplier = CuratorDepositMultiplier;
+	type CuratorDepositMin = CuratorDepositMin;
+	type CuratorDepositMax = CuratorDepositMax;
 	type BountyValueMinimum = BountyValueMinimum;
 	type DataDepositPerByte = DataDepositPerByte;
 	type MaximumReasonLength = MaximumReasonLength;
@@ -981,16 +986,12 @@ impl pallet_bounties::Config for Runtime {
 
 parameter_types! {
 	pub const ChildBountyValueMinimum: Balance = 1 * DOLLARS;
-	pub const ChildCuratorDepositMultiplierWithFee: Permill = Permill::from_percent(50);
-	pub const ChildCuratorDepositMultiplierWithNoFee: Permill = Permill::from_percent(1);
 }
 
 impl pallet_child_bounties::Config for Runtime {
 	type Event = Event;
 	type MaxActiveChildBountyCount = ConstU32<5>;
 	type ChildBountyValueMinimum = ChildBountyValueMinimum;
-	type ChildCuratorDepositMultiplierWithFee = ChildCuratorDepositMultiplierWithFee;
-	type ChildCuratorDepositMultiplierWithNoFee = ChildCuratorDepositMultiplierWithNoFee;
 	type WeightInfo = pallet_child_bounties::weights::SubstrateWeight<Runtime>;
 }
 
