@@ -20,13 +20,15 @@
 #![cfg(test)]
 
 use crate::{mock::*, IndexAssignment, NposSolution};
+use frame_support::traits::ConstU32;
 use rand::SeedableRng;
 use std::convert::TryInto;
 
 mod solution_type {
 	use super::*;
-	use codec::{Decode, Encode};
-	// these need to come from the same dev-dependency `sp-npos-elections`, not from the crate.
+	use codec::{Decode, Encode, MaxEncodedLen};
+	// these need to come from the same dev-dependency `frame-election-provider-support`, not from
+	// the crate.
 	use crate::{generate_solution_type, Assignment, Error as NposError, NposSolution};
 	use sp_std::{convert::TryInto, fmt::Debug};
 
@@ -37,7 +39,12 @@ mod solution_type {
 		use crate::generate_solution_type;
 		generate_solution_type!(
 			#[compact]
-			struct InnerTestSolutionIsolated::<VoterIndex = u32, TargetIndex = u8, Accuracy = sp_runtime::Percent>(12)
+			struct InnerTestSolutionIsolated::<
+				VoterIndex = u32,
+				TargetIndex = u8,
+				Accuracy = sp_runtime::Percent,
+				MaxVoters = crate::tests::ConstU32::<20>,
+			>(12)
 		);
 	}
 
@@ -50,6 +57,7 @@ mod solution_type {
 					VoterIndex = u32,
 					TargetIndex = u32,
 					Accuracy = TestAccuracy,
+					MaxVoters = ConstU32::<20>,
 				>(16)
 			);
 			let solution = InnerTestSolution {
@@ -68,6 +76,7 @@ mod solution_type {
 					VoterIndex = u32,
 					TargetIndex = u32,
 					Accuracy = TestAccuracy,
+					MaxVoters = ConstU32::<20>,
 				>(16)
 			);
 			let compact = InnerTestSolutionCompact {
@@ -80,6 +89,75 @@ mod solution_type {
 		};
 
 		assert!(with_compact < without_compact);
+	}
+
+	#[test]
+	fn max_encoded_len_too_small() {
+		generate_solution_type!(
+			pub struct InnerTestSolution::<
+				VoterIndex = u32,
+				TargetIndex = u32,
+				Accuracy = TestAccuracy,
+				MaxVoters = ConstU32::<1>,
+			>(3)
+		);
+		let solution = InnerTestSolution {
+			votes1: vec![(2, 20), (4, 40)],
+			votes2: vec![(1, [(10, p(80))], 11), (5, [(50, p(85))], 51)],
+			..Default::default()
+		};
+
+		// We actually have 4 voters, but the bound is 1 voter, so the implemented bound is too
+		// small.
+		assert!(solution.encode().len() > InnerTestSolution::max_encoded_len());
+	}
+
+	#[test]
+	fn max_encoded_len_upper_bound() {
+		generate_solution_type!(
+			pub struct InnerTestSolution::<
+				VoterIndex = u32,
+				TargetIndex = u32,
+				Accuracy = TestAccuracy,
+				MaxVoters = ConstU32::<4>,
+			>(3)
+		);
+		let solution = InnerTestSolution {
+			votes1: vec![(2, 20), (4, 40)],
+			votes2: vec![(1, [(10, p(80))], 11), (5, [(50, p(85))], 51)],
+			..Default::default()
+		};
+
+		// We actually have 4 voters, and the bound is 4 voters, so the implemented bound should be
+		// larger than the encoded len.
+		assert!(solution.encode().len() < InnerTestSolution::max_encoded_len());
+	}
+
+	#[test]
+	fn max_encoded_len_exact() {
+		generate_solution_type!(
+			pub struct InnerTestSolution::<
+				VoterIndex = u32,
+				TargetIndex = u32,
+				Accuracy = TestAccuracy,
+				MaxVoters = ConstU32::<4>,
+			>(3)
+		);
+		let solution = InnerTestSolution {
+			votes1: vec![],
+			votes2: vec![],
+			votes3: vec![
+				(1, [(10, p(50)), (11, p(20))], 12),
+				(2, [(20, p(50)), (21, p(20))], 22),
+				(3, [(30, p(50)), (31, p(20))], 32),
+				(4, [(40, p(50)), (41, p(20))], 42),
+			],
+		};
+
+		// We have 4 voters, the bound is 4 voters, and all the voters voted for 3 targets, which is
+		// the max number of targets. This should represent the upper bound that `max_encoded_len`
+		// represents.
+		assert_eq!(solution.encode().len(), InnerTestSolution::max_encoded_len());
 	}
 
 	#[test]

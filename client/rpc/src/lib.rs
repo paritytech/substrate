@@ -34,6 +34,7 @@ pub use sc_rpc_api::{DenyUnsafe, Metadata};
 
 pub mod author;
 pub mod chain;
+pub mod dev;
 pub mod offchain;
 pub mod state;
 pub mod system;
