@@ -440,31 +440,30 @@ pub struct UnlockChunk<Balance: HasCompact> {
 
 /// The ledger of a (bonded) stash.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
-pub struct StakingLedger<AccountId, Balance: HasCompact> {
+#[scale_info(skip_type_params(T))]
+pub struct StakingLedger<T: Config> {
 	/// The stash account whose balance is actually locked and at stake.
-	pub stash: AccountId,
+	pub stash: T::AccountId,
 	/// The total amount of the stash's balance that we are currently accounting for.
 	/// It's just `active` plus all the `unlocking` balances.
 	#[codec(compact)]
-	pub total: Balance,
+	pub total: BalanceOf<T>,
 	/// The total amount of the stash's balance that will be at stake in any forthcoming
 	/// rounds.
 	#[codec(compact)]
-	pub active: Balance,
+	pub active: BalanceOf<T>,
 	/// Any balance that is becoming free, which may eventually be transferred out of the stash
 	/// (assuming it doesn't get slashed first). It is assumed that this will be treated as a first
 	/// in, first out queue where the new (higher value) eras get pushed on the back.
-	pub unlocking: BoundedVec<UnlockChunk<Balance>, MaxUnlockingChunks>,
+	pub unlocking: BoundedVec<UnlockChunk<BalanceOf<T>>, MaxUnlockingChunks>,
 	/// List of eras for which the stakers behind a validator have claimed rewards. Only updated
 	/// for validators.
 	pub claimed_rewards: Vec<EraIndex>,
 }
 
-impl<AccountId, Balance: HasCompact + Copy + Saturating + AtLeast32BitUnsigned + Zero>
-	StakingLedger<AccountId, Balance>
-{
+impl<T: Config> StakingLedger<T> {
 	/// Initializes the default object using the given `validator`.
-	pub fn default_from(stash: AccountId) -> Self {
+	pub fn default_from(stash: T::AccountId) -> Self {
 		Self {
 			stash,
 			total: Zero::zero(),
@@ -507,8 +506,8 @@ impl<AccountId, Balance: HasCompact + Copy + Saturating + AtLeast32BitUnsigned +
 	/// Re-bond funds that were scheduled for unlocking.
 	///
 	/// Returns the updated ledger, and the amount actually rebonded.
-	fn rebond(mut self, value: Balance) -> (Self, Balance) {
-		let mut unlocking_balance: Balance = Zero::zero();
+	fn rebond(mut self, value: BalanceOf<T>) -> (Self, BalanceOf<T>) {
+		let mut unlocking_balance = BalanceOf::<T>::zero();
 
 		while let Some(last) = self.unlocking.last_mut() {
 			if unlocking_balance + last.value <= value {
@@ -530,57 +529,108 @@ impl<AccountId, Balance: HasCompact + Copy + Saturating + AtLeast32BitUnsigned +
 
 		(self, unlocking_balance)
 	}
-}
 
-impl<AccountId, Balance> StakingLedger<AccountId, Balance>
-where
-	Balance: AtLeast32BitUnsigned + Saturating + Copy,
-{
-	/// Slash the validator for a given amount of balance. This can grow the value
-	/// of the slash in the case that the validator has less than `minimum_balance`
-	/// active funds. Returns the amount of funds actually slashed.
+	/// Slash the staker for a given amount of balance. This can grow the value
+	/// of the slash in the case that either the active bonded or some unlocking chunks become dust
+	/// after slashing. Returns the amount of funds actually slashed.
 	///
-	/// Slashes from `active` funds first, and then `unlocking`, starting with the
-	/// chunks that are closest to unlocking.
-	fn slash(&mut self, mut value: Balance, minimum_balance: Balance) -> Balance {
-		let pre_total = self.total;
-		let total = &mut self.total;
-		let active = &mut self.active;
+	/// Note that this calls `Config::OnStakerSlash::on_slash` with information as to how the slash
+	/// was applied.
+	///
+	/// Slashes are computed by:
+	///
+	/// 1) Balances of the unlocking chunks in range `slash_era + 1..=apply_era` are summed and
+	/// stored in `total_balance_affected`.
+	/// 2) `slash_ratio` is computed as `slash_amount / total_balance_affected`. 3) `Ledger::active`
+	/// is set to `(1- slash_ratio) * Ledger::active`. 4) For all unlocking chunks in range
+	/// `slash_era + 1..=apply_era` set their balance to `(1 - slash_ratio) *
+	/// unbonding_pool_balance`. 5) Slash any remaining slash amount from the remaining chunks,
+	/// starting with the `slash_era` and going backwards.
+	fn slash(
+		&mut self,
+		slash_amount: BalanceOf<T>,
+		minimum_balance: BalanceOf<T>,
+		slash_era: EraIndex,
+	) -> BalanceOf<T> {
+		use sp_runtime::traits::CheckedMul as _;
+		use sp_staking::OnStakerSlash as _;
+		use sp_std::ops::Div as _;
+		if slash_amount.is_zero() {
+			return Zero::zero()
+		}
 
-		let slash_out_of =
-			|total_remaining: &mut Balance, target: &mut Balance, value: &mut Balance| {
-				let mut slash_from_target = (*value).min(*target);
+		let mut remaining_slash = slash_amount;
+		let pre_slash_total = self.total;
 
-				if !slash_from_target.is_zero() {
-					*target -= slash_from_target;
+		// The index of the first chunk after the slash era
+		// TODO: we want slash_era + 1? Double check why though
+		let start_index = self.unlocking.partition_point(|c| c.era < slash_era);
+		// The indices of from the first chunk after the slash up through the most recent chunk.
+		// (The most recent chunk is at greatest from this era)
+		let affected_indices = start_index..self.unlocking.len();
 
-					// Don't leave a dust balance in the staking system.
-					if *target <= minimum_balance {
-						slash_from_target += *target;
-						*value += sp_std::mem::replace(target, Zero::zero());
+		// Calculate the total balance of active funds and unlocking funds in the affected range.
+		let affected_balance = {
+			let unbonding_affected_balance =
+				affected_indices.clone().fold(BalanceOf::<T>::zero(), |sum, i| {
+					if let Some(chunk) = self.unlocking.get_mut(i) {
+						sum.saturating_add(chunk.value)
+					} else {
+						sum
 					}
+				});
+			self.active.saturating_add(unbonding_affected_balance)
+		};
 
-					*total_remaining = total_remaining.saturating_sub(slash_from_target);
-					*value -= slash_from_target;
-				}
+		let is_proportional_slash = slash_amount < affected_balance;
+		// Helper to update `target` and the ledgers total after accounting for slashing `target`.
+		let mut slash_out_of = |target: &mut BalanceOf<T>, slash_remaining: &mut BalanceOf<T>| {
+			let maybe_numerator = slash_amount.checked_mul(target);
+			// // Calculate the amount to slash from the target
+			let slash_from_target = match (maybe_numerator, is_proportional_slash) {
+				// Equivalent to `(slash_amount / affected_balance) * target`.
+				(Some(numerator), true) => numerator.div(affected_balance),
+				(None, _) | (_, false) => (*slash_remaining).min(*target),
 			};
 
-		slash_out_of(total, active, &mut value);
+			*target = target.saturating_sub(slash_from_target);
 
-		let i = self
-			.unlocking
-			.iter_mut()
-			.map(|chunk| {
-				slash_out_of(total, &mut chunk.value, &mut value);
-				chunk.value
-			})
-			.take_while(|value| value.is_zero()) // Take all fully-consumed chunks out.
-			.count();
+			let actual_slashed = if *target <= minimum_balance {
+				// Slash the rest of the target if its dust
+				sp_std::mem::replace(target, Zero::zero()).saturating_add(slash_from_target)
+			} else {
+				slash_from_target
+			};
 
-		// Kill all drained chunks.
-		let _ = self.unlocking.drain(..i);
+			self.total = self.total.saturating_sub(actual_slashed);
+			*slash_remaining = slash_remaining.saturating_sub(actual_slashed);
+		};
 
-		pre_total.saturating_sub(*total)
+		// If this is *not* a proportional slash, the active will always wiped to 0.
+		slash_out_of(&mut self.active, &mut remaining_slash);
+
+		let mut slashed_unlocking = BTreeMap::<_, _>::new();
+		let indices_to_slash
+		// First slash unbonding chunks from after the slash
+			= affected_indices
+					// Then start slashing older chunks, start from the era before the slash
+					.chain((0..start_index).rev());
+		for i in indices_to_slash {
+			if let Some(chunk) = self.unlocking.get_mut(i) {
+				slash_out_of(&mut chunk.value, &mut remaining_slash);
+				slashed_unlocking.insert(chunk.era, chunk.value);
+
+				if remaining_slash.is_zero() {
+					break
+				}
+			} else {
+				break // defensive, indices should always be in bounds.
+			}
+		}
+
+		T::OnStakerSlash::on_slash(&self.stash, self.active, &slashed_unlocking);
+
+		pre_slash_total.saturating_sub(self.total)
 	}
 }
 
@@ -697,6 +747,18 @@ where
 
 	fn prune_historical_up_to(up_to: SessionIndex) {
 		<pallet_session::historical::Pallet<T>>::prune_up_to(up_to);
+	}
+}
+
+impl<AccountId> SessionInterface<AccountId> for () {
+	fn disable_validator(_: u32) -> bool {
+		true
+	}
+	fn validators() -> Vec<AccountId> {
+		Vec::new()
+	}
+	fn prune_historical_up_to(_: SessionIndex) {
+		()
 	}
 }
 

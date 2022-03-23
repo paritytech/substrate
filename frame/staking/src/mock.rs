@@ -235,6 +235,7 @@ const THRESHOLDS: [sp_npos_elections::VoteWeight; 9] =
 parameter_types! {
 	pub static BagThresholds: &'static [sp_npos_elections::VoteWeight] = &THRESHOLDS;
 	pub static MaxNominations: u32 = 16;
+	pub static LedgerSlashPerEra: (BalanceOf<Test>, BTreeMap<EraIndex, BalanceOf<Test>>) = (Zero::zero(), BTreeMap::new());
 }
 
 impl pallet_bags_list::Config for Test {
@@ -248,6 +249,17 @@ impl pallet_bags_list::Config for Test {
 impl onchain::Config for Test {
 	type Accuracy = Perbill;
 	type DataProvider = Staking;
+}
+
+struct OnStakerSlashMock<T: Config>(core::marker::PhantomData<T>);
+impl<T: Config> sp_staking::OnStakerSlash<AccountId, Balance> for OnStakerSlashMock<T> {
+	fn on_slash(
+		_pool_account: &AccountId,
+		slashed_bonded: Balance,
+		slashed_chunks: &BTreeMap<EraIndex, Balance>,
+	) {
+		LedgerSlashPerEra::set((slashed_bonded, slashed_chunks.clone()));
+	}
 }
 
 impl crate::pallet::pallet::Config for Test {
@@ -274,6 +286,7 @@ impl crate::pallet::pallet::Config for Test {
 	type SortedListProvider = BagsList;
 	type MaxUnlockingChunks = ConstU32<32>;
 	type BenchmarkingConfig = TestBenchmarkingConfig;
+	type OnStakerSlash = ();
 	type WeightInfo = ();
 }
 
@@ -296,7 +309,7 @@ pub struct ExtBuilder {
 	invulnerables: Vec<AccountId>,
 	has_stakers: bool,
 	initialize_first_session: bool,
-	min_nominator_bond: Balance,
+	pub min_nominator_bond: Balance,
 	min_validator_bond: Balance,
 	balance_factor: Balance,
 	status: BTreeMap<AccountId, StakerStatus<AccountId>>,
@@ -860,3 +873,25 @@ pub(crate) fn staking_events() -> Vec<crate::Event<Test>> {
 pub(crate) fn balances(who: &AccountId) -> (Balance, Balance) {
 	(Balances::free_balance(who), Balances::reserved_balance(who))
 }
+
+// fn do_nominate_bench_setup() -> Vec<> {
+// 	// clean up any existing state.
+// 	clear_validators_and_nominators::<T>();
+
+// 	let origin_weight = MinNominatorBond::<T>::get().max(T::Currency::minimum_balance());
+
+// 	// setup a worst case list scenario. Note we don't care about the destination position, because
+// 	// we are just doing an insert into the origin position.
+// 	let scenario = ListScenario::<T>::new(origin_weight, true)?;
+// 	let (stash, controller) = create_stash_controller_with_balance::<T>(
+// 		SEED + T::MaxNominations::get() + 1, // make sure the account does not conflict with others
+// 		origin_weight,
+// 		Default::default(),
+// 	).unwrap();
+
+// 	assert!(!Nominators::<T>::contains_key(&stash));
+// 	assert!(!T::SortedListProvider::contains(&stash));
+
+// 	let validators = create_validators::<T>(T::MaxNominations::get(), 100).unwrap();
+// 	return validators
+// }

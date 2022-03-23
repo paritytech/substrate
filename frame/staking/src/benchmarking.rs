@@ -49,7 +49,7 @@ type MaxNominators<T> = <<T as Config>::BenchmarkingConfig as BenchmarkingConfig
 
 // Add slashing spans to a user account. Not relevant for actual use, only to benchmark
 // read and write operations.
-fn add_slashing_spans<T: Config>(who: &T::AccountId, spans: u32) {
+pub fn add_slashing_spans<T: Config>(who: &T::AccountId, spans: u32) {
 	if spans == 0 {
 		return
 	}
@@ -806,7 +806,8 @@ benchmarks! {
 			&stash,
 			slash_amount,
 			&mut BalanceOf::<T>::zero(),
-			&mut NegativeImbalanceOf::<T>::zero()
+			&mut NegativeImbalanceOf::<T>::zero(),
+			0,
 		);
 	} verify {
 		let balance_after = T::Currency::free_balance(&stash);
