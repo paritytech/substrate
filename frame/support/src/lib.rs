@@ -154,8 +154,8 @@ macro_rules! bounded_vec {
 /// // to `Vec<u8>`
 /// generate_storage_alias!(
 /// 	OtherPrefix, OtherStorageName => DoubleMap<
-/// 		(u32, Twox64Concat),
-/// 		(u32, Twox64Concat),
+/// 		(Twox64Concat, u32),
+/// 		(Twox64Concat, u32),
 /// 		Vec<u8>
 /// 	>
 /// );
@@ -165,8 +165,8 @@ macro_rules! bounded_vec {
 /// generate_storage_alias!(Prefix, ValueName => Value<u32, OptionQuery>);
 /// generate_storage_alias!(
 /// 	Prefix, SomeStorageName => DoubleMap<
-/// 		(u32, Twox64Concat),
-/// 		(u32, Twox64Concat),
+/// 		(Twox64Concat, u32),
+/// 		(Twox64Concat, u32),
 /// 		Vec<u8>,
 /// 		ValueQuery
 /// 	>
@@ -175,14 +175,14 @@ macro_rules! bounded_vec {
 /// // generate a map from `Config::AccountId` (with hasher `Twox64Concat`) to `Vec<u8>`
 /// trait Config { type AccountId: codec::FullCodec; }
 /// generate_storage_alias!(
-/// 	Prefix, GenericStorage<T: Config> => Map<(T::AccountId, Twox64Concat), Vec<u8>>
+/// 	Prefix, GenericStorage<T: Config> => Map<(Twox64Concat, T::AccountId), Vec<u8>>
 /// );
 /// # fn main() {}
 /// ```
 #[macro_export]
 macro_rules! generate_storage_alias {
 	// without generic for $name.
-	($pallet:ident, $name:ident => Map<($key:ty, $hasher:ty), $value:ty $(, $querytype:ty)?>) => {
+	($pallet:ident, $name:ident => Map<($hasher:ty, $key:ty), $value:ty $(, $querytype:ty)?>) => {
 		$crate::paste::paste! {
 			$crate::generate_storage_alias!(@GENERATE_INSTANCE_STRUCT $pallet, $name);
 			type $name = $crate::storage::types::StorageMap<
@@ -197,7 +197,7 @@ macro_rules! generate_storage_alias {
 	(
 		$pallet:ident,
 		$name:ident
-		=> DoubleMap<($key1:ty, $hasher1:ty), ($key2:ty, $hasher2:ty), $value:ty $(, $querytype:ty)?>
+		=> DoubleMap<($hasher1:ty, $key1:ty), ($hasher2:ty, $key2:ty), $value:ty $(, $querytype:ty)?>
 	) => {
 		$crate::paste::paste! {
 			$crate::generate_storage_alias!(@GENERATE_INSTANCE_STRUCT $pallet, $name);
@@ -215,7 +215,7 @@ macro_rules! generate_storage_alias {
 	(
 		$pallet:ident,
 		$name:ident
-		=> NMap<Key<$(($key:ty, $hasher:ty)),+>, $value:ty $(, $querytype:ty)?>
+		=> NMap<Key<$(($hasher:ty, $key:ty)),+>, $value:ty $(, $querytype:ty)?>
 	) => {
 		$crate::paste::paste! {
 			$crate::generate_storage_alias!(@GENERATE_INSTANCE_STRUCT $pallet, $name);
@@ -243,15 +243,15 @@ macro_rules! generate_storage_alias {
 	(
 		$pallet:ident,
 		$name:ident<$t:ident : $bounds:tt>
-		=> Map<($key:ty, $hasher:ty), $value:ty $(, $querytype:ty)?>
+		=> Map<($hasher:ty, $key:ty), $value:ty $(, $querytype:ty)?>
 	) => {
 		$crate::paste::paste! {
 			$crate::generate_storage_alias!(@GENERATE_INSTANCE_STRUCT $pallet, $name);
 			#[allow(type_alias_bounds)]
 			type $name<$t : $bounds> = $crate::storage::types::StorageMap<
 				[<$name Instance>],
-				$key,
 				$hasher,
+				$key,
 				$value,
 				$( $querytype )?
 			>;
@@ -260,17 +260,17 @@ macro_rules! generate_storage_alias {
 	(
 		$pallet:ident,
 		$name:ident<$t:ident : $bounds:tt>
-		=> DoubleMap<($key1:ty, $hasher1:ty), ($key2:ty, $hasher2:ty), $value:ty $(, $querytype:ty)?>
+		=> DoubleMap<($hasher1:ty, $key1:ty), ($hasher2:ty, $key2:ty), $value:ty $(, $querytype:ty)?>
 	) => {
 		$crate::paste::paste! {
 			$crate::generate_storage_alias!(@GENERATE_INSTANCE_STRUCT $pallet, $name);
 			#[allow(type_alias_bounds)]
 			type $name<$t : $bounds> = $crate::storage::types::StorageDoubleMap<
 				[<$name Instance>],
-				$key1,
 				$hasher1,
-				$key2,
+				$key1,
 				$hasher2,
+				$key2,
 				$value,
 				$( $querytype )?
 			>;
@@ -279,7 +279,7 @@ macro_rules! generate_storage_alias {
 	(
 		$pallet:ident,
 		$name:ident<$t:ident : $bounds:tt>
-		=> NMap<$(($key:ty, $hasher:ty),)+ $value:ty $(, $querytype:ty)?>
+		=> NMap<$(($hasher:ty, $key:ty),)+ $value:ty $(, $querytype:ty)?>
 	) => {
 		$crate::paste::paste! {
 			$crate::generate_storage_alias!(@GENERATE_INSTANCE_STRUCT $pallet, $name);
@@ -943,6 +943,20 @@ pub mod tests {
 			self.sort();
 			self
 		}
+	}
+
+	#[test]
+	fn generate_storage_alias_works() {
+		new_test_ext().execute_with(|| {
+			generate_storage_alias!(
+				Test,
+				GenericData2<T: Config> => Map<(Blake2_128Concat, T::BlockNumber), T::BlockNumber>
+			);
+
+			assert_eq!(Module::<Test>::generic_data2(5), None);
+			GenericData2::<Test>::insert(5, 5);
+			assert_eq!(Module::<Test>::generic_data2(5), Some(5));
+		});
 	}
 
 	#[test]
