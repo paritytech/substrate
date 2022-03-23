@@ -946,6 +946,20 @@ pub mod tests {
 	}
 
 	#[test]
+	fn generate_storage_alias_works() {
+		new_test_ext().execute_with(|| {
+			generate_storage_alias!(
+				Test,
+				GenericData2<T: Config> => Map<(Blake2_128Concat, T::BlockNumber), T::BlockNumber>
+			);
+
+			assert_eq!(Module::<Test>::generic_data2(5), None);
+			GenericData2::<Test>::insert(5, 5);
+			assert_eq!(Module::<Test>::generic_data2(5), Some(5));
+		});
+	}
+
+	#[test]
 	fn map_issue_3318() {
 		new_test_ext().execute_with(|| {
 			OptionLinkedMap::insert(1, 1);
