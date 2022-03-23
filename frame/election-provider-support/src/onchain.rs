@@ -191,14 +191,18 @@ mod tests {
 		use frame_support::{bounded_vec, traits::ConstU32};
 
 		use super::*;
-		use crate::{data_provider, VoterOf};
+		use crate::{data_provider, PageIndex, VoterOf};
 
 		pub struct DataProvider;
 		impl ElectionDataProvider for DataProvider {
 			type AccountId = AccountId;
 			type BlockNumber = BlockNumber;
 			type MaxVotesPerVoter = ConstU32<2>;
-			fn electing_voters(_: Option<usize>) -> data_provider::Result<Vec<VoterOf<Self>>> {
+			fn electing_voters_paged(
+				_: Option<usize>,
+				remaining: PageIndex,
+			) -> data_provider::Result<Vec<VoterOf<Self>>> {
+				assert_eq!(remaining, 0);
 				Ok(vec![
 					(1, 10, bounded_vec![10, 20]),
 					(2, 20, bounded_vec![30, 20]),
@@ -206,7 +210,8 @@ mod tests {
 				])
 			}
 
-			fn electable_targets(_: Option<usize>) -> data_provider::Result<Vec<AccountId>> {
+			fn electable_targets_paged(_: Option<usize>, remaining: PageIndex) -> data_provider::Result<Vec<AccountId>> {
+				assert_eq!(remaining, 0);
 				Ok(vec![10, 20, 30])
 			}
 

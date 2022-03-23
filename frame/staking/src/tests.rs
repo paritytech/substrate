@@ -4018,6 +4018,7 @@ fn on_finalize_weight_is_nonzero() {
 mod election_data_provider {
 	use super::*;
 	use frame_election_provider_support::ElectionDataProvider;
+	use frame_support::bounded_vec;
 
 	#[test]
 	fn targets_2sec_block() {
@@ -4108,6 +4109,75 @@ mod election_data_provider {
 	}
 
 	#[test]
+	fn can_paginate() {
+		ExtBuilder::default()
+			.add_staker(61, 60, 500, StakerStatus::Nominator(vec![11]))
+			.add_staker(71, 70, 500, StakerStatus::Nominator(vec![11]))
+			.add_staker(81, 80, 500, StakerStatus::Nominator(vec![11]))
+			.add_staker(91, 90, 500, StakerStatus::Nominator(vec![11]))
+			.set_status(31, StakerStatus::Idle)
+			.set_status(41, StakerStatus::Idle)
+			.build_and_execute(|| {
+				// we shall have 2 validators and 5 nominators.
+				assert_eq!(Nominators::<Test>::count(), 5);
+				assert_eq!(Validators::<Test>::count(), 2);
+
+				// a correct, 2 page snapshot.
+				Pages::set(2);
+				// we have 6 voters in total, get them over two pages, each 4 max.
+				assert_eq!(
+					Staking::electing_voters_paged(Some(4), 1).unwrap(),
+					vec![
+						// everything sorted based on stake.
+						(11, 1000, bounded_vec![11]),
+						(21, 1000, bounded_vec![21]),
+						(101, 500, bounded_vec![11, 21]),
+						(61, 500, bounded_vec![11]),
+					]
+				);
+
+				assert_eq!(LastIteratedNominator::<Test>::get(), Some(61));
+
+				// tandem: node 61 cannot be chilled in any humanly possible way now.
+				frame_support::storage::with_transaction(|| {
+					// normal chilling
+					assert_noop!(
+						Staking::chill(Origin::signed(60)),
+						Error::<Test>::TemporarilyNotAllowed
+					);
+					// chill-other with the virtue of being less than min-bond
+					MinNominatorBond::<Test>::put(501);
+					ChillThreshold::<Test>::put(Percent::default());
+					MaxNominatorsCount::<Test>::put(1);
+					assert_noop!(
+						Staking::chill_other(Origin::signed(100), 60),
+						Error::<Test>::TemporarilyNotAllowed
+					);
+					storage::TransactionOutcome::Rollback(())
+				});
+				// and making this nominator un-decodable.
+				MaxNominations::set(0);
+				assert_noop!(
+					Staking::chill_other(Origin::signed(100), 60),
+					Error::<Test>::TemporarilyNotAllowed
+				);
+				// this needs to reverted, despite being transactional scope, because it is
+				// thread-local, not storage.
+				MaxNominations::set(16);
+
+				assert_eq!(
+					Staking::electing_voters_paged(Some(4), 0).unwrap(),
+					vec![
+						(71, 500, bounded_vec![11]),
+						(81, 500, bounded_vec![11]),
+						(91, 500, bounded_vec![11])
+					]
+				);
+				assert_eq!(LastIteratedNominator::<Test>::get(), None);
+			});
+	}
+
+	#[test]
 	fn respects_snapshot_len_limits() {
 		ExtBuilder::default()
 			.set_status(41, StakerStatus::Validator)
@@ -4123,8 +4193,10 @@ mod election_data_provider {
 
 				// if limit is more.
 				assert_eq!(Staking::electing_voters(Some(55)).unwrap().len(), 5);
+				assert_eq!(Staking::electing_voters(None).unwrap().len(), 5);
 
 				// if target limit is more..
+				assert_eq!(Staking::electable_targets(None).unwrap().len(), 4);
 				assert_eq!(Staking::electable_targets(Some(6)).unwrap().len(), 4);
 				assert_eq!(Staking::electable_targets(Some(4)).unwrap().len(), 4);
 
@@ -4133,150 +4205,54 @@ mod election_data_provider {
 					Staking::electable_targets(Some(1)).unwrap_err(),
 					"Target snapshot too big"
 				);
-			});
+			})
 	}
 
-	// Tests the criteria that in `ElectionDataProvider::voters` function, we try to get at most
-	// `maybe_max_len` voters, and if some of them end up being skipped, we iterate at most `2 *
-	// maybe_max_len`.
 	#[test]
 	fn only_iterates_max_2_times_max_allowed_len() {
 		ExtBuilder::default()
-			.nominate(false)
+			.nominate(true) // add nominator 101, who nominates [11, 21]
 			// the other nominators only nominate 21
 			.add_staker(61, 60, 2_000, StakerStatus::<AccountId>::Nominator(vec![21]))
 			.add_staker(71, 70, 2_000, StakerStatus::<AccountId>::Nominator(vec![21]))
 			.add_staker(81, 80, 2_000, StakerStatus::<AccountId>::Nominator(vec![21]))
+			.add_staker(91, 90, 2_000, StakerStatus::<AccountId>::Nominator(vec![21]))
 			.build_and_execute(|| {
-				// all voters ordered by stake,
+				// given our nominators and validators, ordered by stake,
 				assert_eq!(
 					<Test as Config>::VoterList::iter().collect::<Vec<_>>(),
-					vec![61, 71, 81, 11, 21, 31]
-				);
-
-				run_to_block(25);
-
-				// slash 21, the only validator nominated by our first 3 nominators
-				add_slash(&21);
-
-				// we want 2 voters now, and in maximum we allow 4 iterations. This is what happens:
-				// 61 is pruned;
-				// 71 is pruned;
-				// 81 is pruned;
-				// 11 is taken;
-				// we finish since the 2x limit is reached.
-				assert_eq!(
-					Staking::electing_voters(Some(2))
-						.unwrap()
-						.iter()
-						.map(|(stash, _, _)| stash)
-						.copied()
-						.collect::<Vec<_>>(),
-					vec![11],
-				);
-			});
-	}
-
-	// Even if some of the higher staked nominators are slashed, we still get up to max len voters
-	// by adding more lower staked nominators. In other words, we assert that we keep on adding
-	// valid nominators until we reach max len voters; which is opposed to simply stopping after we
-	// have iterated max len voters, but not adding all of them to voters due to some nominators not
-	// having valid targets.
-	#[test]
-	fn get_max_len_voters_even_if_some_nominators_are_slashed() {
-		ExtBuilder::default()
-			.nominate(false)
-			.add_staker(61, 60, 20, StakerStatus::<AccountId>::Nominator(vec![21]))
-			.add_staker(71, 70, 10, StakerStatus::<AccountId>::Nominator(vec![11, 21]))
-			.add_staker(81, 80, 10, StakerStatus::<AccountId>::Nominator(vec![11, 21]))
-			.build_and_execute(|| {
-				// given our voters ordered by stake,
-				assert_eq!(
-					<Test as Config>::VoterList::iter().collect::<Vec<_>>(),
-					vec![11, 21, 31, 61, 71, 81]
-				);
-
-				// we take 4 voters
-				assert_eq!(
-					Staking::electing_voters(Some(4))
-						.unwrap()
-						.iter()
-						.map(|(stash, _, _)| stash)
-						.copied()
-						.collect::<Vec<_>>(),
-					vec![11, 21, 31, 61],
+					vec![61, 71, 81, 91, 11, 21, 31, 101]
 				);
 
 				// roll to session 5
 				run_to_block(25);
 
-				// slash 21, the only validator nominated by 61.
+				// slash 21, the only validator nominated by our first 3 nominators
 				add_slash(&21);
 
-				// we take 4 voters; 71 and 81 are replacing the ejected ones.
-				assert_eq!(
+				assert_eq_uvec!(
+					Staking::electing_voters(Some(3))
+						.unwrap()
+						.iter()
+						.map(|(stash, _, _)| stash)
+						.copied()
+						.collect::<Vec<_>>(),
+					// 61, 71, 81, 91 21 are all trimmed out, and since we are allowed to see only
+					// 3 * 2, we don't reach 101, and we return less than ideal.
+					vec![11, 31],
+				);
+
+				// now, if we ask for 4, we have 8 items to iterate, and will fetch 101 as well.
+				assert_eq_uvec!(
 					Staking::electing_voters(Some(4))
 						.unwrap()
 						.iter()
 						.map(|(stash, _, _)| stash)
 						.copied()
 						.collect::<Vec<_>>(),
-					vec![11, 31, 71, 81],
+					vec![11, 31, 101],
 				);
 			});
-	}
-
-	#[test]
-	fn estimate_next_election_works() {
-		ExtBuilder::default().session_per_era(5).period(5).build_and_execute(|| {
-			// first session is always length 0.
-			for b in 1..20 {
-				run_to_block(b);
-				assert_eq!(Staking::next_election_prediction(System::block_number()), 20);
-			}
-
-			// election
-			run_to_block(20);
-			assert_eq!(Staking::next_election_prediction(System::block_number()), 45);
-			assert_eq!(staking_events().len(), 1);
-			assert_eq!(*staking_events().last().unwrap(), Event::StakersElected);
-
-			for b in 21..45 {
-				run_to_block(b);
-				assert_eq!(Staking::next_election_prediction(System::block_number()), 45);
-			}
-
-			// election
-			run_to_block(45);
-			assert_eq!(Staking::next_election_prediction(System::block_number()), 70);
-			assert_eq!(staking_events().len(), 3);
-			assert_eq!(*staking_events().last().unwrap(), Event::StakersElected);
-
-			Staking::force_no_eras(Origin::root()).unwrap();
-			assert_eq!(Staking::next_election_prediction(System::block_number()), u64::MAX);
-
-			Staking::force_new_era_always(Origin::root()).unwrap();
-			assert_eq!(Staking::next_election_prediction(System::block_number()), 45 + 5);
-
-			Staking::force_new_era(Origin::root()).unwrap();
-			assert_eq!(Staking::next_election_prediction(System::block_number()), 45 + 5);
-
-			// Do a fail election
-			MinimumValidatorCount::<Test>::put(1000);
-			run_to_block(50);
-			// Election: failed, next session is a new election
-			assert_eq!(Staking::next_election_prediction(System::block_number()), 50 + 5);
-			// The new era is still forced until a new era is planned.
-			assert_eq!(ForceEra::<Test>::get(), Forcing::ForceNew);
-
-			MinimumValidatorCount::<Test>::put(2);
-			run_to_block(55);
-			assert_eq!(Staking::next_election_prediction(System::block_number()), 55 + 25);
-			assert_eq!(staking_events().len(), 6);
-			assert_eq!(*staking_events().last().unwrap(), Event::StakersElected);
-			// The new era has been planned, forcing is changed from `ForceNew` to `NotForcing`.
-			assert_eq!(ForceEra::<Test>::get(), Forcing::NotForcing);
-		})
 	}
 }
 

@@ -235,6 +235,7 @@ const THRESHOLDS: [sp_npos_elections::VoteWeight; 9] =
 parameter_types! {
 	pub static BagThresholds: &'static [sp_npos_elections::VoteWeight] = &THRESHOLDS;
 	pub static MaxNominations: u32 = 16;
+	pub static Pages: u32 = 1;
 }
 
 impl pallet_bags_list::Config for Test {
@@ -272,6 +273,7 @@ impl crate::pallet::pallet::Config for Test {
 	type GenesisElectionProvider = Self::ElectionProvider;
 	// NOTE: consider a macro and use `UseNominatorsAndValidatorsMap<Self>` as well.
 	type VoterList = BagsList;
+	type Pages = Pages;
 	type MaxUnlockingChunks = ConstU32<32>;
 	type BenchmarkingConfig = TestBenchmarkingConfig;
 	type WeightInfo = ();
@@ -430,6 +432,8 @@ impl ExtBuilder {
 				(71, self.balance_factor * 2000),
 				(80, self.balance_factor),
 				(81, self.balance_factor * 2000),
+				(90, self.balance_factor),
+				(91, self.balance_factor * 2000),
 				// This allows us to have a total_payout different from 0.
 				(999, 1_000_000_000_000),
 			],
