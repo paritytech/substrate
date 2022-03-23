@@ -130,7 +130,7 @@ pub(crate) fn generate(def: crate::SolutionDef) -> Result<TokenStream2> {
 						0 => continue,
 						#from_impl
 						_ => {
-							return Err(_feps::Error::TooManyVoters);
+							return Err(_feps::Error::SolutionTargetOverflow);
 						}
 					}
 				};
