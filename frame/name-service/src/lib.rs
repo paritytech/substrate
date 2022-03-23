@@ -202,6 +202,8 @@ pub mod pallet {
 		RegistrationNotExpired,
 		/// Cannot renew this registration.
 		RegistrationHasNoExpiry,
+		/// Subnode label is too short.
+		LabelTooShort,
 	}
 
 	// Your Pallet's callable functions.
@@ -340,20 +342,7 @@ pub mod pallet {
 			address: T::AccountId,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
-
-			let registration =
-				Registrations::<T>::get(name_hash).ok_or(Error::<T>::RegistrationNotFound)?;
-			ensure!(registration.owner == sender, Error::<T>::NotRegistrationOwner);
-
-			if let Some(e) = registration.expiry {
-				ensure!(
-					frame_system::Pallet::<T>::block_number() <= e,
-					Error::<T>::RegistrationExpired
-				);
-			}
-
-			Resolvers::<T>::insert(name_hash, address.clone());
-			Self::deposit_event(Event::<T>::AddressSet { name_hash, address });
+			Self::do_set_address(name_hash, sender, address)?;
 			Ok(())
 		}
 
@@ -413,22 +402,24 @@ pub mod pallet {
 		pub fn set_subnode_record(
 			origin: OriginFor<T>,
 			parent_hash: NameHash,
-			label_hash: NameHash,
+			label: Vec<u8>,
 			owner: T::AccountId,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 			let parent = Registrations::<T>::get(parent_hash)
 				.ok_or(Error::<T>::ParentRegistrationNotFound)?;
 
+			ensure!(1 <= label.len(), Error::<T>::LabelTooShort);
+			let label_hash = sp_io::hashing::blake2_256(&label);
 			ensure!(sender == parent.owner, Error::<T>::NotRegistrationOwner);
 
-			let node = Self::generate_subnode_hash(parent_hash, label_hash);
-			ensure!(Registrations::<T>::contains_key(node), Error::<T>::RegistrationExists);
+			let name_hash = Self::subnode_hash(parent_hash, label_hash);
+			ensure!(!Registrations::<T>::contains_key(name_hash), Error::<T>::RegistrationExists);
 
 			let deposit = T::SubNodeDeposit::get();
 			T::Currency::reserve(&sender, deposit)?;
 
-			Self::do_register(node, owner, None, Some(deposit))?;
+			Self::do_register(name_hash, owner, None, Some(deposit))?;
 			Ok(())
 		}
 
@@ -446,7 +437,7 @@ pub mod pallet {
 				Error::<T>::ParentRegistrationNotFound
 			);
 
-			let name_hash = Self::generate_subnode_hash(parent_hash, label_hash);
+			let name_hash = Self::subnode_hash(parent_hash, label_hash);
 
 			Registrations::<T>::try_mutate(name_hash, |maybe_registration| {
 				let r = maybe_registration.as_mut().ok_or(Error::<T>::RegistrationNotFound)?;
@@ -478,13 +469,8 @@ pub mod pallet {
 				Registrations::<T>::contains_key(parent_hash),
 				Error::<T>::ParentRegistrationNotFound
 			);
-			let name_hash = Self::generate_subnode_hash(parent_hash, label_hash);
-			let registration =
-				Registrations::<T>::get(name_hash).ok_or(Error::<T>::RegistrationNotFound)?;
-			ensure!(registration.owner == sender, Error::<T>::NotRegistrationOwner);
-
-			Resolvers::<T>::insert(name_hash, address.clone());
-			Self::deposit_event(Event::<T>::AddressSet { name_hash, address });
+			let name_hash = Self::subnode_hash(parent_hash, label_hash);
+			Self::do_set_address(name_hash, sender, address)?;
 			Ok(())
 		}
 
@@ -499,16 +485,18 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::weight(0)]
-		pub fn force_deregister_subnode(
-			origin: OriginFor<T>,
-			parent_hash: NameHash,
-			label_hash: NameHash,
-		) -> DispatchResult {
-			T::RegistrationManager::ensure_origin(origin)?;
-			Self::do_deregister(Some(label_hash), parent_hash, None)?;
-			Ok(())
-		}
+		// is this needed? once the TLD has been force deregistered, then any subnode
+		// will be expired and anyone can remove thereafter.
+		// #[pallet::weight(0)]
+		// pub fn force_deregister_subnode(
+		// 	origin: OriginFor<T>,
+		// 	parent_hash: NameHash,
+		// 	label_hash: NameHash,
+		// ) -> DispatchResult {
+		// 	T::RegistrationManager::ensure_origin(origin)?;
+		// 	Self::do_deregister(Some(label_hash), parent_hash, None)?;
+		// 	Ok(())
+		// }
 	}
 
 	// Pallet internal functions
@@ -573,6 +561,27 @@ pub mod pallet {
 			Ok(())
 		}
 
+		pub fn do_set_address(
+			name_hash: NameHash,
+			owner: T::AccountId,
+			address: T::AccountId,
+		) -> DispatchResult {
+			let registration =
+				Registrations::<T>::get(name_hash).ok_or(Error::<T>::RegistrationNotFound)?;
+			ensure!(registration.owner == owner, Error::<T>::NotRegistrationOwner);
+
+			if let Some(e) = registration.expiry {
+				ensure!(
+					frame_system::Pallet::<T>::block_number() <= e,
+					Error::<T>::RegistrationExpired
+				);
+			}
+
+			Resolvers::<T>::insert(name_hash, address.clone());
+			Self::deposit_event(Event::<T>::AddressSet { name_hash, address });
+			Ok(())
+		}
+
 		pub fn do_deregister(
 			maybe_label_hash: Option<NameHash>,
 			name_hash: NameHash,
@@ -583,7 +592,7 @@ pub mod pallet {
 				let parent_hash = name_hash;
 
 				// generate the subnode we wish to deregister.
-				let subnode_hash = Self::generate_subnode_hash(parent_hash, label_hash);
+				let subnode_hash = Self::subnode_hash(parent_hash, label_hash);
 
 				// ensure this subnode exists
 				let registration = Registrations::<T>::get(subnode_hash)
@@ -619,7 +628,6 @@ pub mod pallet {
 					if registration.owner != sender {
 						let expiry =
 							registration.expiry.ok_or(Error::<T>::RegistrationHasNoExpiry)?;
-						// and that it is not still active.
 						ensure!(
 							expiry <= frame_system::Pallet::<T>::block_number(),
 							Error::<T>::RegistrationNotExpired
@@ -634,7 +642,7 @@ pub mod pallet {
 			}
 		}
 
-		pub fn generate_subnode_hash(name_hash: NameHash, label_hash: NameHash) -> NameHash {
+		pub fn subnode_hash(name_hash: NameHash, label_hash: NameHash) -> NameHash {
 			return sp_io::hashing::blake2_256(&(&name_hash, label_hash).encode())
 		}
 	}
