@@ -721,7 +721,6 @@ fn set_subnode_owner_handles_errors() {
 #[test]
 fn set_subnode_address_works() {
 	new_test_ext().execute_with(|| {
-
 		let owner = 2;
 		let label = "my".as_bytes().to_vec();
 		let label_hash = sp_io::hashing::blake2_256(&label);
@@ -732,9 +731,14 @@ fn set_subnode_address_works() {
 		assert_ok!(NameService::set_subnode_record(Origin::signed(owner), parent_hash, label, 2));
 		let name_hash = NameService::subnode_hash(parent_hash, label_hash);
 
-		assert_ok!(NameService::set_subnode_address(Origin::signed(owner), parent_hash, label_hash, address));
+		assert_ok!(NameService::set_subnode_address(
+			Origin::signed(owner),
+			parent_hash,
+			label_hash,
+			address
+		));
 		assert!(Resolvers::<Test>::contains_key(name_hash));
-		assert_eq!(Resolvers::<Test>::get(name_hash).unwrap(),address);
+		assert_eq!(Resolvers::<Test>::get(name_hash).unwrap(), address);
 	});
 }
 
@@ -774,7 +778,12 @@ fn set_subnode_address_handles_errors() {
 		);
 
 		// set the record for further testing, setting owner to sender
-		assert_ok!(NameService::set_subnode_record(Origin::signed(owner), parent_hash, label, owner));
+		assert_ok!(NameService::set_subnode_record(
+			Origin::signed(owner),
+			parent_hash,
+			label,
+			owner
+		));
 
 		// not the current owner of subnode
 		assert_noop!(
