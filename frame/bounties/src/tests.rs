@@ -60,6 +60,8 @@ parameter_types! {
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
 
+type Balance = u64;
+
 impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
@@ -91,7 +93,7 @@ impl pallet_balances::Config for Test {
 	type MaxLocks = ();
 	type MaxReserves = ();
 	type ReserveIdentifier = [u8; 8];
-	type Balance = u64;
+	type Balance = Balance;
 	type Event = Event;
 	type DustRemoval = ();
 	type ExistentialDeposit = ConstU64<1>;
@@ -128,9 +130,10 @@ impl pallet_treasury::Config for Test {
 
 parameter_types! {
 	// This will be 50% of the bounty fee.
-	pub const CuratorDepositMultiplierWithFee: Permill = Permill::from_percent(50);
-	// This will be 1% of the bounty value.
-	pub const CuratorDepositMultiplierWithNoFee: Permill = Permill::from_percent(1);
+	pub const CuratorDepositMultiplier: Permill = Permill::from_percent(50);
+	pub const CuratorDepositMax: Balance = 1_000;
+	pub const CuratorDepositMin: Balance = 3;
+
 }
 
 impl Config for Test {
@@ -138,8 +141,9 @@ impl Config for Test {
 	type BountyDepositBase = ConstU64<80>;
 	type BountyDepositPayoutDelay = ConstU64<3>;
 	type BountyUpdatePeriod = ConstU64<20>;
-	type CuratorDepositMultiplierWithFee = CuratorDepositMultiplierWithFee;
-	type CuratorDepositMultiplierWithNoFee = CuratorDepositMultiplierWithNoFee;
+	type CuratorDepositMultiplier = CuratorDepositMultiplier;
+	type CuratorDepositMax = CuratorDepositMax;
+	type CuratorDepositMin = CuratorDepositMin;
 	type BountyValueMinimum = ConstU64<1>;
 	type DataDepositPerByte = ConstU64<1>;
 	type MaximumReasonLength = ConstU32<16384>;
@@ -549,13 +553,14 @@ fn assign_curator_works() {
 			Error::<Test>::InvalidFee
 		);
 
-		assert_ok!(Bounties::propose_curator(Origin::root(), 0, 4, 4));
+		let fee = 4;
+		assert_ok!(Bounties::propose_curator(Origin::root(), 0, 4, fee));
 
 		assert_eq!(
 			Bounties::bounties(0).unwrap(),
 			Bounty {
 				proposer: 0,
-				fee: 4,
+				fee,
 				curator_deposit: 0,
 				value: 50,
 				bond: 85,
@@ -573,20 +578,22 @@ fn assign_curator_works() {
 
 		assert_ok!(Bounties::accept_curator(Origin::signed(4), 0));
 
+		let expected_deposit = Bounties::calculate_curator_deposit(fee);
+
 		assert_eq!(
 			Bounties::bounties(0).unwrap(),
 			Bounty {
 				proposer: 0,
-				fee: 4,
-				curator_deposit: 2,
+				fee,
+				curator_deposit: expected_deposit,
 				value: 50,
 				bond: 85,
 				status: BountyStatus::Active { curator: 4, update_due: 22 },
 			}
 		);
 
-		assert_eq!(Balances::free_balance(&4), 8);
-		assert_eq!(Balances::reserved_balance(&4), 2);
+		assert_eq!(Balances::free_balance(&4), 10 - expected_deposit);
+		assert_eq!(Balances::reserved_balance(&4), expected_deposit);
 	});
 }
 
@@ -602,17 +609,17 @@ fn unassign_curator_works() {
 		System::set_block_number(2);
 		<Treasury as OnInitialize<u64>>::on_initialize(2);
 
-		assert_ok!(Bounties::propose_curator(Origin::root(), 0, 4, 4));
+		let fee = 4;
 
+		assert_ok!(Bounties::propose_curator(Origin::root(), 0, 4, fee));
 		assert_noop!(Bounties::unassign_curator(Origin::signed(1), 0), BadOrigin);
-
 		assert_ok!(Bounties::unassign_curator(Origin::signed(4), 0));
 
 		assert_eq!(
 			Bounties::bounties(0).unwrap(),
 			Bounty {
 				proposer: 0,
-				fee: 4,
+				fee,
 				curator_deposit: 0,
 				value: 50,
 				bond: 85,
@@ -620,19 +627,17 @@ fn unassign_curator_works() {
 			}
 		);
 
-		assert_ok!(Bounties::propose_curator(Origin::root(), 0, 4, 4));
-
+		assert_ok!(Bounties::propose_curator(Origin::root(), 0, 4, fee));
 		Balances::make_free_balance_be(&4, 10);
-
 		assert_ok!(Bounties::accept_curator(Origin::signed(4), 0));
-
+		let expected_deposit = Bounties::calculate_curator_deposit(fee);
 		assert_ok!(Bounties::unassign_curator(Origin::root(), 0));
 
 		assert_eq!(
 			Bounties::bounties(0).unwrap(),
 			Bounty {
 				proposer: 0,
-				fee: 4,
+				fee,
 				curator_deposit: 0,
 				value: 50,
 				bond: 85,
@@ -640,8 +645,8 @@ fn unassign_curator_works() {
 			}
 		);
 
-		assert_eq!(Balances::free_balance(&4), 8);
-		assert_eq!(Balances::reserved_balance(&4), 0); // slashed 2
+		assert_eq!(Balances::free_balance(&4), 10 - expected_deposit);
+		assert_eq!(Balances::reserved_balance(&4), 0); // slashed curator deposit
 	});
 }
 
@@ -658,10 +663,12 @@ fn award_and_claim_bounty_works() {
 		System::set_block_number(2);
 		<Treasury as OnInitialize<u64>>::on_initialize(2);
 
-		assert_ok!(Bounties::propose_curator(Origin::root(), 0, 4, 4));
+		let fee = 4;
+		assert_ok!(Bounties::propose_curator(Origin::root(), 0, 4, fee));
 		assert_ok!(Bounties::accept_curator(Origin::signed(4), 0));
 
-		assert_eq!(Balances::free_balance(4), 8); // inital 10 - 2 deposit
+		let expected_deposit = Bounties::calculate_curator_deposit(fee);
+		assert_eq!(Balances::free_balance(4), 10 - expected_deposit);
 
 		assert_noop!(
 			Bounties::award_bounty(Origin::signed(1), 0, 3),
@@ -674,8 +681,8 @@ fn award_and_claim_bounty_works() {
 			Bounties::bounties(0).unwrap(),
 			Bounty {
 				proposer: 0,
-				fee: 4,
-				curator_deposit: 2,
+				fee,
+				curator_deposit: expected_deposit,
 				value: 50,
 				bond: 85,
 				status: BountyStatus::PendingPayout { curator: 4, beneficiary: 3, unlock_at: 5 },
@@ -1064,7 +1071,7 @@ fn accept_curator_handles_different_deposit_calculations() {
 		assert_ok!(Bounties::propose_curator(Origin::root(), bounty_index, user, fee));
 		assert_ok!(Bounties::accept_curator(Origin::signed(user), bounty_index));
 
-		let expected_deposit = CuratorDepositMultiplierWithFee::get() * fee;
+		let expected_deposit = CuratorDepositMultiplier::get() * fee;
 		assert_eq!(Balances::free_balance(&user), 100 - expected_deposit);
 		assert_eq!(Balances::reserved_balance(&user), expected_deposit);
 
@@ -1086,7 +1093,7 @@ fn accept_curator_handles_different_deposit_calculations() {
 		assert_ok!(Bounties::propose_curator(Origin::root(), bounty_index, user, fee));
 		assert_ok!(Bounties::accept_curator(Origin::signed(user), bounty_index));
 
-		let expected_deposit = CuratorDepositMultiplierWithNoFee::get() * value;
+		let expected_deposit = CuratorDepositMin::get();
 		assert_eq!(Balances::free_balance(&user), 100 - expected_deposit);
 		assert_eq!(Balances::reserved_balance(&user), expected_deposit);
 	});

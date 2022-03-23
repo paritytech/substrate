@@ -196,19 +196,20 @@ pub mod pallet {
 		#[pallet::constant]
 		type BountyUpdatePeriod: Get<Self::BlockNumber>;
 
-		/// If the bounty has a fee, the curator deposit is a percentage of that fee. Otherwise, we
-		/// use the `CuratorDepositMultiplierWithNoFee` multiplied by the value of the bounty to
-		/// determine the deposit.
-		#[pallet::constant]
-		type CuratorDepositMultiplierWithFee: Get<Permill>;
-
-		/// If the bounty has no fee, we still want to make sure the curator has some non-zero
-		/// deposit, so then we use this multiplier along side the value (which should be non-zero)
-		/// to determine the curator deposit.
+		/// The curator deposit is calculated as a percentage of the curator fee.
 		///
-		/// If the bounty has a fee, see `CuratorDepositMultiplierWithFee` above.
+		/// This deposit has optional upper and lower bounds with `CuratorDepositMax` and
+		/// `CuratorDepositMin`.
 		#[pallet::constant]
-		type CuratorDepositMultiplierWithNoFee: Get<Permill>;
+		type CuratorDepositMultiplier: Get<Permill>;
+
+		/// Maximum amount of funds that should be placed in a deposit for making a proposal.
+		#[pallet::constant]
+		type CuratorDepositMax: Get<Option<BalanceOf<Self>>>;
+
+		/// Maximum amount of funds that should be placed in a deposit for making a proposal.
+		#[pallet::constant]
+		type CuratorDepositMin: Get<Option<BalanceOf<Self>>>;
 
 		/// Minimum value for a bounty.
 		#[pallet::constant]
@@ -511,7 +512,7 @@ pub mod pallet {
 					BountyStatus::CuratorProposed { ref curator } => {
 						ensure!(signer == *curator, Error::<T>::RequireCurator);
 
-						let deposit = Self::calculate_curator_deposit(bounty.value, bounty.fee);
+						let deposit = Self::calculate_curator_deposit(bounty.fee);
 						T::Currency::reserve(curator, deposit)?;
 						bounty.curator_deposit = deposit;
 
@@ -771,12 +772,16 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
-	fn calculate_curator_deposit(value: BalanceOf<T>, fee: BalanceOf<T>) -> BalanceOf<T> {
-		let deposit = if fee.is_zero() {
-			T::CuratorDepositMultiplierWithNoFee::get() * value
-		} else {
-			T::CuratorDepositMultiplierWithFee::get() * fee
-		};
+	fn calculate_curator_deposit(fee: BalanceOf<T>) -> BalanceOf<T> {
+		let mut deposit = T::CuratorDepositMultiplier::get() * fee;
+
+		if let Some(max_deposit) = T::CuratorDepositMax::get() {
+			deposit = deposit.min(max_deposit)
+		}
+
+		if let Some(min_deposit) = T::CuratorDepositMin::get() {
+			deposit = deposit.max(min_deposit)
+		}
 
 		deposit
 	}
