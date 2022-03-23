@@ -346,7 +346,7 @@ enum BondType {
 pub enum BondExtra<Balance> {
 	/// Take from the free balance.
 	FreeBalance(Balance),
-	/// Take the entire from the accumulated rewards.
+	/// Take the entire amount from the accumulated rewards.
 	Rewards,
 }
 
