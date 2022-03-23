@@ -1129,7 +1129,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// bond up to `extra` more funds from `origin` into the pool to which they already
+		/// Bond up to `extra` more funds from `origin` into the pool to which they already
 		/// belong.
 		///
 		/// Additional funds can come from either the free balance of the account, of from the
