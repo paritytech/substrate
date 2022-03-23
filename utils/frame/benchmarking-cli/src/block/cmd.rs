@@ -34,13 +34,13 @@ use super::bench::{Benchmark, BenchmarkParams};
 /// This can be used to verify that blocks do not use more weight than they consumed
 /// in their `WeightInfo`. Example:
 ///
-/// Let's say you are on a Substrate chain and want to verify that the last 3 blocks
+/// Let's say you are on a Substrate chain and want to verify that the first 3 blocks
 /// did not use more weight than declared which would otherwise be an issue.
 /// To test this with a dev node, first create one with a temp directory:
 ///
 /// $ substrate --dev -d /tmp/my-dev --execution wasm --wasm-execution compiled
 ///
-/// And wait some time to let it 3 blocks. Then benchmark them with:
+/// And wait some time to let it produce 3 blocks. Then benchmark them with:
 ///
 /// $ substrate benchmark-block --from 1 --to 3 --dev -d /tmp/my-dev
 ///   --execution wasm --wasm-execution compiled --pruning archive
