@@ -264,7 +264,7 @@ frame_benchmarking::benchmarks! {
 			&delegator_id
 		)
 		.unwrap();
-		assert_eq!(delegator.unbonding_era, Some(0));
+		assert_eq!(delegator.unbonding_era, Some(0 + T::StakingInterface::bonding_duration()));
 	}
 
 	pool_withdraw_unbonded {
@@ -382,10 +382,8 @@ frame_benchmarking::benchmarks! {
 		// should never exist by time the depositor withdraws so we test that it gets cleaned
 		// up when unbonding.
 		let reward_account = Pools::<T>::create_reward_account(1);
-		CurrencyOf::<T>::make_free_balance_be(&reward_account, CurrencyOf::<T>::minimum_balance());
 		assert!(frame_system::Account::<T>::contains_key(&reward_account));
 		Pools::<T>::unbond_other(Origin::Signed(depositor.clone()).into(), depositor.clone()).unwrap();
-		assert!(!frame_system::Account::<T>::contains_key(&reward_account));
 
 		// Sanity check that unbond worked
 		assert_eq!(
@@ -407,6 +405,7 @@ frame_benchmarking::benchmarks! {
 		assert!(SubPoolsStorage::<T>::contains_key(&1));
 		assert!(RewardPools::<T>::contains_key(&1));
 		assert!(Delegators::<T>::contains_key(&depositor));
+		assert!(frame_system::Account::<T>::contains_key(&reward_account));
 
 		whitelist_account!(depositor);
 	}: withdraw_unbonded_other(Origin::Signed(depositor.clone()), depositor.clone(), s)
@@ -418,12 +417,13 @@ frame_benchmarking::benchmarks! {
 		assert!(!RewardPools::<T>::contains_key(&1));
 		assert!(!Delegators::<T>::contains_key(&depositor));
 		assert!(!frame_system::Account::<T>::contains_key(&pool_account));
+		assert!(!frame_system::Account::<T>::contains_key(&reward_account));
 
 		// Funds where transferred back correctly
 		assert_eq!(
 			CurrencyOf::<T>::free_balance(&depositor),
 			// gets bond back + rewards collecting when unbonding
-			min_create_bond * 2u32.into() + CurrencyOf::<T>::minimum_balance()
+			min_create_bond * 2u32.into()
 		);
 	}
 
