@@ -48,8 +48,9 @@ fn create_pool_account<T: pallet_nomination_pools::Config>(
 	n: u32,
 	balance: BalanceOf<T>,
 ) -> (T::AccountId, T::AccountId) {
+	let ed = CurrencyOf::<T>::minimum_balance();
 	let pool_creator: T::AccountId =
-		create_funded_user_with_balance::<T>("pool_creator", n, balance * 2u32.into());
+		create_funded_user_with_balance::<T>("pool_creator", n, ed + balance * 2u32.into());
 
 	Pools::<T>::create(
 		Origin::Signed(pool_creator.clone()).into(),
@@ -92,10 +93,6 @@ impl<T: Config> ListScenario<T> {
 	///   of storage reads and writes.
 	///
 	/// - the destination bag has at least one node, which will need its next pointer updated.
-	///
-	/// NOTE: while this scenario specifically targets a worst case for the bags-list, it should
-	/// also elicit a worst case for other known `SortedListProvider` implementations; although
-	/// this may not be true against unknown `SortedListProvider` implementations.
 	pub(crate) fn new(
 		origin_weight: BalanceOf<T>,
 		is_increase: bool,
@@ -219,12 +216,12 @@ frame_benchmarking::benchmarks! {
 
 	claim_payout {
 		let origin_weight = pallet_nomination_pools::MinCreateBond::<T>::get().max(CurrencyOf::<T>::minimum_balance()) * 2u32.into();
+		let ed = CurrencyOf::<T>::minimum_balance();
 		let (depositor, pool_account) = create_pool_account::<T>(0, origin_weight);
-
 		let reward_account = Pools::<T>::create_reward_account(1);
 
 		// Send funds to the reward account of the pool
-		CurrencyOf::<T>::make_free_balance_be(&reward_account, origin_weight);
+		CurrencyOf::<T>::make_free_balance_be(&reward_account, ed + origin_weight);
 
 		// Sanity check
 		assert_eq!(
@@ -241,7 +238,7 @@ frame_benchmarking::benchmarks! {
 		);
 		assert_eq!(
 			CurrencyOf::<T>::free_balance(&reward_account),
-			Zero::zero()
+			ed + Zero::zero()
 		);
 	}
 

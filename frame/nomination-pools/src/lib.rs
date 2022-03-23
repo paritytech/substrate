@@ -1345,10 +1345,6 @@ pub mod pallet {
 				// the accounts have no references that would prevent destruction once we get to
 				// this point.
 				debug_assert_eq!(
-					T::Currency::free_balance(&bonded_pool.reward_account()),
-					Zero::zero()
-				);
-				debug_assert_eq!(
 					T::Currency::free_balance(&bonded_pool.bonded_account()),
 					Zero::zero()
 				);
@@ -1383,6 +1379,11 @@ pub mod pallet {
 		/// * `root` - The account to set as [`PoolRoles::root`].
 		/// * `nominator` - The account to set as the [`PoolRoles::nominator`].
 		/// * `state_toggler` - The account to set as the [`PoolRoles::state_toggler`].
+		///
+		/// # Note
+		///
+		/// In addition to `amount`, the caller will transfer the existential deposit; so the caller
+		/// needs at have at least `amount + existential_deposit` transferrable.
 		#[pallet::weight(T::WeightInfo::create())]
 		#[frame_support::transactional]
 		pub fn create(
@@ -1423,6 +1424,14 @@ pub mod pallet {
 			);
 
 			let points = bonded_pool.try_bond_delegator(&who, amount, PoolBond::Create)?;
+
+			T::Currency::transfer(
+				&who,
+				&bonded_pool.reward_account(),
+				T::Currency::minimum_balance(),
+				ExistenceRequirement::AllowDeath,
+			)
+			.defensive()?;
 
 			Delegators::<T>::insert(
 				who.clone(),

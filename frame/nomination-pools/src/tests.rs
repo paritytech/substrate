@@ -202,25 +202,25 @@ mod reward_pool {
 		use super::*;
 
 		ExtBuilder::default().build_and_execute(|| {
-			let reward_account = Pools::create_reward_account(1);
+			let reward_account = Pools::create_reward_account(2);
 
 			// Given
 			assert_eq!(Balances::free_balance(&reward_account), 0);
 
 			// Then
-			assert_eq!(RewardPool::<Runtime>::current_balance(1), 0);
+			assert_eq!(RewardPool::<Runtime>::current_balance(2), 0);
 
 			// Given
 			Balances::make_free_balance_be(&reward_account, Balances::minimum_balance());
 
 			// Then
-			assert_eq!(RewardPool::<Runtime>::current_balance(1), 0);
+			assert_eq!(RewardPool::<Runtime>::current_balance(2), 0);
 
 			// Given
 			Balances::make_free_balance_be(&reward_account, Balances::minimum_balance() + 1);
 
 			// Then
-			assert_eq!(RewardPool::<Runtime>::current_balance(1), 1);
+			assert_eq!(RewardPool::<Runtime>::current_balance(2), 1);
 		});
 	}
 }
@@ -1721,7 +1721,7 @@ mod withdraw_unbonded_other {
 				assert_ok!(Pools::withdraw_unbonded_other(Origin::signed(10), 10, 0));
 
 				// Then
-				assert_eq!(Balances::free_balance(&10), 10 + 10);
+				assert_eq!(Balances::free_balance(&10), 5 + 10);
 				assert_eq!(Balances::free_balance(&default_bonded_account()), 0);
 				assert!(!Delegators::<Runtime>::contains_key(10));
 				// Pools are removed from storage because the depositor left
@@ -1786,7 +1786,7 @@ mod withdraw_unbonded_other {
 				assert_ok!(Pools::withdraw_unbonded_other(Origin::signed(10), 10, 0));
 
 				// Then
-				assert_eq!(Balances::free_balance(&10), 10 + 0);
+				assert_eq!(Balances::free_balance(&10), 5 + 0);
 				assert_eq!(Balances::free_balance(&default_bonded_account()), 0);
 				assert!(!Delegators::<Runtime>::contains_key(10));
 				// Pools are removed from storage because the depositor left
@@ -1801,7 +1801,7 @@ mod withdraw_unbonded_other {
 		ExtBuilder::default().build_and_execute(|| {
 			// Given
 			assert_eq!(Balances::minimum_balance(), 5);
-			assert_eq!(Balances::free_balance(&10), 10);
+			assert_eq!(Balances::free_balance(&10), 5);
 			assert_eq!(Balances::free_balance(&default_bonded_account()), 10);
 			unsafe_set_state(1, PoolState::Destroying).unwrap();
 			assert_ok!(Pools::unbond_other(Origin::signed(10), 10));
@@ -1820,7 +1820,7 @@ mod withdraw_unbonded_other {
 			assert_ok!(Pools::withdraw_unbonded_other(Origin::signed(10), 10, 0));
 
 			// Then
-			assert_eq!(Balances::free_balance(10), 10 + 5);
+			assert_eq!(Balances::free_balance(10), 5 + 5);
 			assert_eq!(Balances::free_balance(&default_bonded_account()), 0);
 		});
 	}
@@ -2029,7 +2029,7 @@ mod withdraw_unbonded_other {
 				// The depositor can withdraw
 				assert_ok!(Pools::withdraw_unbonded_other(Origin::signed(420), 10, 0));
 				assert!(!Delegators::<Runtime>::contains_key(10));
-				assert_eq!(Balances::free_balance(10), 10 + 10);
+				assert_eq!(Balances::free_balance(10), 10 + 10 - Balances::minimum_balance());
 				// Pools are removed from storage because the depositor left
 				assert!(!SubPoolsStorage::<Runtime>::contains_key(1));
 				assert!(!RewardPools::<Runtime>::contains_key(1));
@@ -2080,7 +2080,7 @@ mod withdraw_unbonded_other {
 			// The depositor can withdraw
 			assert_ok!(Pools::withdraw_unbonded_other(Origin::signed(420), 10, 0));
 			assert!(!Delegators::<Runtime>::contains_key(10));
-			assert_eq!(Balances::free_balance(10), 10 + 10);
+			assert_eq!(Balances::free_balance(10), 5 + 10);
 			// Pools are removed from storage because the depositor left
 			assert!(!SubPoolsStorage::<Runtime>::contains_key(1));
 			assert!(!RewardPools::<Runtime>::contains_key(1));
@@ -2113,7 +2113,7 @@ mod create {
 				789
 			));
 
-			assert_eq!(Balances::free_balance(&11), ed + 0);
+			assert_eq!(Balances::free_balance(&11), 0);
 			assert_eq!(
 				Delegators::<Runtime>::get(11).unwrap(),
 				Delegator {
