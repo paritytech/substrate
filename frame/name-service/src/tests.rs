@@ -417,7 +417,7 @@ fn set_address_handles_errors() {
 }
 
 #[test]
-fn set_deregister_works_owner() {
+fn deregister_works_owner() {
 	new_test_ext().execute_with(|| {
 		let owner = 2;
 		let (_, name_hash) = alice_register_bob_senario_setup();
@@ -444,7 +444,7 @@ fn set_deregister_works_owner() {
 }
 
 #[test]
-fn set_deregister_works_non_owner() {
+fn deregister_works_non_owner() {
 	new_test_ext().execute_with(|| {
 		let (_, name_hash) = alice_register_bob_senario_setup();
 
@@ -473,7 +473,7 @@ fn set_deregister_works_non_owner() {
 }
 
 #[test]
-fn set_deregister_handles_errors_non_owner() {
+fn deregister_handles_errors_non_owner() {
 	new_test_ext().execute_with(|| {
 		let owner = 2;
 		let non_owner = 3;
@@ -501,5 +501,45 @@ fn set_deregister_handles_errors_non_owner() {
 			NameService::deregister(Origin::signed(owner), name_hash),
 			Error::<Test>::RegistrationNotFound
 		);
+	});
+}
+
+#[test]
+fn force_register_no_expiry_works() {
+	new_test_ext().execute_with(|| {
+		let (name_hash, _) = alice_register_bob_scenario_name_and_hash();
+		let who = 1;
+		// 0 periods - permanent register
+		let periods = 0;
+
+		// make permanent registry
+		assert_ok!(NameService::force_register(Origin::root(), name_hash, who, periods));
+		assert!(Registrations::<Test>::contains_key(name_hash));
+
+		// check no expiry
+		let registration = Registrations::<Test>::get(name_hash).unwrap();
+		assert_eq!(registration.expiry, None);
+
+		// owner cannot renew with no expiry
+		assert_noop!(
+			NameService::renew(Origin::signed(1), name_hash, 10),
+			Error::<Test>::RegistrationHasNoExpiry
+		);
+	});
+}
+
+#[test]
+fn force_deregister_works() {
+	new_test_ext().execute_with(|| {
+		let (_, name_hash) = alice_register_bob_senario_setup();
+		// set some address to deregister
+		assert_ok!(NameService::set_address(Origin::signed(2), name_hash, 4));
+		assert!(Resolvers::<Test>::contains_key(name_hash));
+
+		// force the deregistration of `name_hash`
+		assert!(Registrations::<Test>::contains_key(name_hash));
+		assert_ok!(NameService::force_deregister(Origin::root(), name_hash));
+		assert!(!Registrations::<Test>::contains_key(name_hash));
+		assert!(!Resolvers::<Test>::contains_key(name_hash));
 	});
 }
