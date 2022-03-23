@@ -671,7 +671,7 @@ impl<T: Config> BondedPool<T> {
 
 	/// Bond exactly `amount` from `who`'s funds into this pool.
 	///
-	/// If the bond is being added upon pool creation, `StakingInterface::bond` is called, and `who`
+	/// If the bond type is `Create`, `StakingInterface::bond` is called, and `who`
 	/// is allowed to be killed. Otherwise, `StakingInterface::bond_extra` is called and `who`
 	/// cannot be killed.
 	///
