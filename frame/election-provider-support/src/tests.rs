@@ -114,7 +114,7 @@ mod solution_type {
 		assert_eq!(
 			InnerTestSolution::from_assignment(&assignments, &voter_index, &target_index)
 				.unwrap_err(),
-			NposError::SolutionVotersOverflow,
+			NposError::TooManyVoters,
 		);
 	}
 

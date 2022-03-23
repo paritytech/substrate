@@ -126,7 +126,7 @@ pub enum Error {
 	/// The data provided to create support map was invalid.
 	InvalidSupportEdge,
 	/// The number of voters is bigger than the `MaxVoters` bound.
-	SolutionVotersOverflow,
+	TooManyVoters,
 }
 
 /// A type which is used in the API of this crate as a numeric weight of a vote, most often the
