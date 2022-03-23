@@ -578,7 +578,7 @@ fn assign_curator_works() {
 
 		assert_ok!(Bounties::accept_curator(Origin::signed(4), 0));
 
-		let expected_deposit = Bounties::calculate_curator_deposit(fee);
+		let expected_deposit = Bounties::calculate_curator_deposit(&fee);
 
 		assert_eq!(
 			Bounties::bounties(0).unwrap(),
@@ -630,7 +630,7 @@ fn unassign_curator_works() {
 		assert_ok!(Bounties::propose_curator(Origin::root(), 0, 4, fee));
 		Balances::make_free_balance_be(&4, 10);
 		assert_ok!(Bounties::accept_curator(Origin::signed(4), 0));
-		let expected_deposit = Bounties::calculate_curator_deposit(fee);
+		let expected_deposit = Bounties::calculate_curator_deposit(&fee);
 		assert_ok!(Bounties::unassign_curator(Origin::root(), 0));
 
 		assert_eq!(
@@ -667,7 +667,7 @@ fn award_and_claim_bounty_works() {
 		assert_ok!(Bounties::propose_curator(Origin::root(), 0, 4, fee));
 		assert_ok!(Bounties::accept_curator(Origin::signed(4), 0));
 
-		let expected_deposit = Bounties::calculate_curator_deposit(fee);
+		let expected_deposit = Bounties::calculate_curator_deposit(&fee);
 		assert_eq!(Balances::free_balance(4), 10 - expected_deposit);
 
 		assert_noop!(
@@ -1075,7 +1075,7 @@ fn accept_curator_handles_different_deposit_calculations() {
 		assert_eq!(Balances::free_balance(&user), 100 - expected_deposit);
 		assert_eq!(Balances::reserved_balance(&user), expected_deposit);
 
-		// Case 2: Without a fee
+		// Case 2: Lower bound
 		let user = 2;
 		let bounty_index = 1;
 		let value = 35;
@@ -1095,6 +1095,30 @@ fn accept_curator_handles_different_deposit_calculations() {
 
 		let expected_deposit = CuratorDepositMin::get();
 		assert_eq!(Balances::free_balance(&user), 100 - expected_deposit);
+		assert_eq!(Balances::reserved_balance(&user), expected_deposit);
+
+		// Case 3: Upper bound
+		let user = 3;
+		let bounty_index = 2;
+		let value = 1_000_000;
+		let fee = 50_000;
+		let starting_balance = fee * 2;
+
+		Balances::make_free_balance_be(&Treasury::account_id(), value * 2);
+		Balances::make_free_balance_be(&user, starting_balance);
+		Balances::make_free_balance_be(&0, starting_balance);
+
+		assert_ok!(Bounties::propose_bounty(Origin::signed(0), value, b"12345".to_vec()));
+		assert_ok!(Bounties::approve_bounty(Origin::root(), bounty_index));
+
+		System::set_block_number(3);
+		<Treasury as OnInitialize<u64>>::on_initialize(3);
+
+		assert_ok!(Bounties::propose_curator(Origin::root(), bounty_index, user, fee));
+		assert_ok!(Bounties::accept_curator(Origin::signed(user), bounty_index));
+
+		let expected_deposit = CuratorDepositMax::get();
+		assert_eq!(Balances::free_balance(&user), starting_balance - expected_deposit);
 		assert_eq!(Balances::reserved_balance(&user), expected_deposit);
 	});
 }

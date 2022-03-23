@@ -512,7 +512,7 @@ pub mod pallet {
 					BountyStatus::CuratorProposed { ref curator } => {
 						ensure!(signer == *curator, Error::<T>::RequireCurator);
 
-						let deposit = Self::calculate_curator_deposit(bounty.fee);
+						let deposit = Self::calculate_curator_deposit(&bounty.fee);
 						T::Currency::reserve(curator, deposit)?;
 						bounty.curator_deposit = deposit;
 
@@ -772,8 +772,8 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
-	pub fn calculate_curator_deposit(fee: BalanceOf<T>) -> BalanceOf<T> {
-		let mut deposit = T::CuratorDepositMultiplier::get() * fee;
+	pub fn calculate_curator_deposit(fee: &BalanceOf<T>) -> BalanceOf<T> {
+		let mut deposit = T::CuratorDepositMultiplier::get() * *fee;
 
 		if let Some(max_deposit) = T::CuratorDepositMax::get() {
 			deposit = deposit.min(max_deposit)
