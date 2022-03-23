@@ -248,7 +248,7 @@ pub mod pallet {
 			let block_number = frame_system::Pallet::<T>::block_number();
 
 			ensure!(
-				commitment.when.saturating_add(T::MinimumCommitmentPeriod::get()) <= block_number,
+				commitment.when.saturating_add(T::MinimumCommitmentPeriod::get()) < block_number,
 				Error::<T>::TooEarlyToReveal
 			);
 
