@@ -1268,7 +1268,7 @@ fn accept_curator_handles_different_deposit_calculations() {
 		assert_ok!(Bounties::accept_curator(Origin::signed(parent_curator), parent_index));
 
 		// Now we can start creating some child bounties.
-		// Case 1: There is a fee, parent and child curator are not the same.
+		// Case 1: Parent and child curator are not the same.
 
 		let child_index = 0;
 		let child_curator = 1;
@@ -1367,6 +1367,42 @@ fn accept_curator_handles_different_deposit_calculations() {
 		));
 
 		let expected_deposit = CuratorDepositMax::get();
+		assert_eq!(Balances::free_balance(child_curator), starting_balance - expected_deposit);
+		assert_eq!(Balances::reserved_balance(child_curator), expected_deposit);
+
+		// There is a max number of child bounties at a time.
+		assert_ok!(ChildBounties::impl_close_child_bounty(parent_index, child_index));
+
+		// Case 4: Lower Limit
+
+		let child_index = 3;
+		let child_curator = 3;
+		let child_value = 10_000;
+		let child_fee = 0;
+
+		Balances::make_free_balance_be(&child_curator, starting_balance);
+		assert_ok!(ChildBounties::add_child_bounty(
+			Origin::signed(parent_curator),
+			parent_index,
+			child_value,
+			b"12345-p1".to_vec()
+		));
+		System::set_block_number(5);
+		<Treasury as OnInitialize<u64>>::on_initialize(5);
+		assert_ok!(ChildBounties::propose_curator(
+			Origin::signed(parent_curator),
+			parent_index,
+			child_index,
+			child_curator,
+			child_fee
+		));
+		assert_ok!(ChildBounties::accept_curator(
+			Origin::signed(child_curator),
+			parent_index,
+			child_index
+		));
+
+		let expected_deposit = CuratorDepositMin::get();
 		assert_eq!(Balances::free_balance(child_curator), starting_balance - expected_deposit);
 		assert_eq!(Balances::reserved_balance(child_curator), expected_deposit);
 	});
