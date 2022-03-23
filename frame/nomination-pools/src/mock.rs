@@ -219,6 +219,9 @@ impl ExtBuilder {
 		let mut ext = sp_io::TestExternalities::from(storage);
 
 		ext.execute_with(|| {
+			// for events to be deposited.
+			frame_system::Pallet::<Runtime>::set_block_number(1);
+
 			// make a pool
 			let amount_to_bond = <Runtime as pools::Config>::StakingInterface::minimum_bond();
 			Balances::make_free_balance_be(&10, amount_to_bond * 2);
@@ -248,6 +251,22 @@ pub(crate) fn unsafe_set_state(pool_id: PoolId, state: PoolState) -> Result<(), 
 			bonded_pool.state = state;
 		})
 	})
+}
+
+parameter_types! {
+	static ObservedEvents: usize = 0;
+}
+
+/// All events of this pallet.
+pub(crate) fn pool_events_since_last_call() -> Vec<super::Event<Runtime>> {
+	let events = System::events()
+		.into_iter()
+		.map(|r| r.event)
+		.filter_map(|e| if let Event::Pools(inner) = e { Some(inner) } else { None })
+		.collect::<Vec<_>>();
+	let already_seen = ObservedEvents::get();
+	ObservedEvents::set(events.len());
+	events.into_iter().skip(already_seen).collect()
 }
 
 #[cfg(test)]
