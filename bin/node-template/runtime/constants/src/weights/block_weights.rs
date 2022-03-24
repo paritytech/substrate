@@ -16,10 +16,8 @@
 // limitations under the License.
 
 pub mod constants {
-	use frame_support::{
-		parameter_types,
-	};
 	use super::super::{constants, Weight};
+	use frame_support::parameter_types;
 
 	parameter_types! {
 		/// Importing a block with 0 Extrinsics.
