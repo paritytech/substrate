@@ -275,6 +275,7 @@ pub mod pallet {
 			+ Debug
 			+ MaybeDisplay
 			+ Ord
+			+ AsRef<[u8]>
 			+ MaxEncodedLen;
 
 		/// Converting trait to take a source type and convert to `AccountId`.
@@ -1193,7 +1194,7 @@ impl<T: Config> Pallet<T> {
 		let block_number = Self::block_number();
 		// Don't populate events on genesis.
 		if block_number.is_zero() {
-			return
+			return;
 		}
 
 		let phase = ExecutionPhase::<T>::get().unwrap_or_default();
@@ -1615,7 +1616,7 @@ impl<T: Config> StoredMap<T::AccountId, T::AccountData> for Pallet<T> {
 				},
 			}
 		} else if !was_providing && !is_providing {
-			return Ok(result)
+			return Ok(result);
 		}
 		Account::<T>::mutate(k, |a| a.data = some_data.unwrap_or_default());
 		Ok(result)
