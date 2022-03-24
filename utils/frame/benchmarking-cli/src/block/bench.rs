@@ -97,7 +97,7 @@ where
 			let block = self.unsealed(block.block);
 			let took = self.measure_block(&block, &parent_num)?;
 
-			self.log_weight(block_num, block.extrinsics().len(), consumed, took);
+			self.log_weight(i, block.extrinsics().len(), consumed, took);
 		}
 
 		Ok(())
@@ -127,7 +127,7 @@ where
 	/// Returns the total nanoseconds of a [`frame_system::ConsumedWeight`] for a block number.
 	///
 	/// This is the post-dispatch corrected weight and is only available
-	// after executing the block.
+	/// after executing the block.
 	fn consumed_weight(&self, block: &BlockId<Block>) -> Result<NanoSeconds> {
 		// Hard-coded key for System::BlockWeight. It could also be passed in as argument
 		// for the benchmark, but I think this should work as well.
@@ -146,21 +146,10 @@ where
 	}
 
 	/// Prints the weight info of a block to the console.
-	fn log_weight(
-		&self,
-		num: BlockId<Block>,
-		num_ext: usize,
-		consumed: NanoSeconds,
-		took: NanoSeconds,
-	) {
-		// The ratio of weight that the block used vs the number that it consumed.
+	fn log_weight(&self, num: u32, num_ext: usize, consumed: NanoSeconds, took: NanoSeconds) {
+		// The ratio of weight that the block used vs what it consumed.
 		// This should in general not exceed 100% (minus outliers).
 		let percent = (took as f64 / consumed as f64) * 100.0;
-		let num = if let BlockId::Number(num) = num {
-			num
-		} else {
-			unreachable!("Only put numbers in; qed")
-		};
 
 		let msg = format!(
 			"Block {} with {: >5} tx used {: >6.2}% of its weight ({: >14} of {: >14} ns)",
