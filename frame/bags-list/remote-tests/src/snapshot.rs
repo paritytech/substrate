@@ -16,6 +16,7 @@
 
 //! Test to execute the snapshot using the voter bag.
 
+use frame_election_provider_support::SortedListProvider;
 use frame_support::traits::PalletInfoAccess;
 use remote_externalities::{Builder, Mode, OnlineConfig};
 use sp_runtime::{traits::Block as BlockT, DeserializeOwned};
@@ -48,11 +49,11 @@ pub async fn execute<Runtime: crate::RuntimeT, Block: BlockT + DeserializeOwned>
 		.unwrap();
 
 	ext.execute_with(|| {
-		use frame_election_provider_support::{ElectionDataProvider, SortedListProvider};
+		use frame_election_provider_support::ElectionDataProvider;
 		log::info!(
 			target: crate::LOG_TARGET,
 			"{} nodes in bags list.",
-			<Runtime as pallet_staking::Config>::SortedListProvider::count(),
+			<Runtime as pallet_staking::Config>::VoterList::count(),
 		);
 
 		let voters =

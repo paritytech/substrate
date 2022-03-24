@@ -248,7 +248,7 @@ mod list {
 			// then
 			assert_storage_noop!(assert_eq!(
 				List::<Runtime>::insert(3, 20).unwrap_err(),
-				Error::Duplicate
+				ListError::Duplicate
 			));
 		});
 	}
