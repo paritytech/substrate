@@ -504,7 +504,11 @@ where
 	};
 
 	let sysinfo = crate::sysinfo::gather_sysinfo();
-	let hwbench = crate::sysinfo::gather_hwbench(database_path);
+	let hwbench = if config.disable_hardware_benchmarks {
+		None
+	} else {
+		Some(crate::sysinfo::gather_hwbench(database_path))
+	};
 
 	info!("💻 Operating system: {}", TARGET_OS);
 	info!("💻 CPU architecture: {}", TARGET_ARCH);
@@ -530,14 +534,16 @@ where
 		info!("💻 Virtual machine: {}", if is_virtual_machine { "yes" } else { "no" });
 	}
 
-	info!("🏁 CPU score: {}MB/s", hwbench.cpu_score);
-	info!("🏁 Memory score: {}MB/s", hwbench.memory_score);
+	if let Some(ref hwbench) = hwbench {
+		info!("🏁 CPU score: {}MB/s", hwbench.cpu_score);
+		info!("🏁 Memory score: {}MB/s", hwbench.memory_score);
 
-	if let Some(score) = hwbench.disk_sequential_write_score {
-		info!("🏁 Disk score (seq. writes): {}MB/s", score);
-	}
-	if let Some(score) = hwbench.disk_random_write_score {
-		info!("🏁 Disk score (rand. writes): {}MB/s", score);
+		if let Some(score) = hwbench.disk_sequential_write_score {
+			info!("🏁 Disk score (seq. writes): {}MB/s", score);
+		}
+		if let Some(score) = hwbench.disk_random_write_score {
+			info!("🏁 Disk score (rand. writes): {}MB/s", score);
+		}
 	}
 
 	let telemetry = telemetry
@@ -548,7 +554,7 @@ where
 				client.clone(),
 				telemetry,
 				Some(sysinfo),
-				Some(hwbench),
+				hwbench,
 			)
 		})
 		.transpose()?;
