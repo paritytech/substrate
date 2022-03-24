@@ -103,6 +103,7 @@ pub fn create_full<C, P, SC, B>(
 ) -> Result<jsonrpc_core::IoHandler<sc_rpc_api::Metadata>, Box<dyn std::error::Error + Send + Sync>>
 where
 	C: ProvideRuntimeApi<Block>
+		+ sc_client_api::BlockBackend<Block>
 		+ HeaderBackend<Block>
 		+ AuxStore
 		+ HeaderMetadata<Block, Error = BlockChainError>
@@ -123,6 +124,7 @@ where
 	use pallet_contracts_rpc::{Contracts, ContractsApi};
 	use pallet_mmr_rpc::{Mmr, MmrApi};
 	use pallet_transaction_payment_rpc::{TransactionPayment, TransactionPaymentApi};
+	use sc_rpc::dev::{Dev, DevApi};
 	use substrate_frame_rpc_system::{FullSystem, SystemApi};
 
 	let mut io = jsonrpc_core::IoHandler::default();
@@ -159,19 +161,18 @@ where
 		subscription_executor,
 		finality_provider,
 	)));
-
 	io.extend_with(substrate_state_trie_migration_rpc::StateMigrationApi::to_delegate(
 		substrate_state_trie_migration_rpc::MigrationRpc::new(client.clone(), backend, deny_unsafe),
 	));
-
 	io.extend_with(sc_sync_state_rpc::SyncStateRpcApi::to_delegate(
 		sc_sync_state_rpc::SyncStateRpcHandler::new(
 			chain_spec,
-			client,
+			client.clone(),
 			shared_authority_set,
 			shared_epoch_changes,
 		)?,
 	));
+	io.extend_with(DevApi::to_delegate(Dev::new(client, deny_unsafe)));
 
 	Ok(io)
 }

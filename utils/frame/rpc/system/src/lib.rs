@@ -25,10 +25,11 @@ use jsonrpc_core::{Error as RpcError, ErrorCode};
 use jsonrpc_derive::rpc;
 use sc_rpc_api::DenyUnsafe;
 use sc_transaction_pool_api::{InPoolTransaction, TransactionPool};
+use sp_api::ApiExt;
 use sp_block_builder::BlockBuilder;
 use sp_blockchain::HeaderBackend;
 use sp_core::{hexdisplay::HexDisplay, Bytes};
-use sp_runtime::{generic::BlockId, traits};
+use sp_runtime::{generic::BlockId, legacy, traits};
 
 pub use self::gen_client::Client as SystemClient;
 pub use frame_system_rpc_runtime_api::AccountNonceApi;
@@ -135,14 +136,40 @@ where
 				.map_err(|e| RpcError {
 					code: ErrorCode::ServerError(Error::DecodeError.into()),
 					message: "Unable to dry run extrinsic.".into(),
-					data: Some(format!("{:?}", e).into()),
+					data: Some(e.to_string().into()),
 				})?;
 
-			let result = api.apply_extrinsic(&at, uxt).map_err(|e| RpcError {
-				code: ErrorCode::ServerError(Error::RuntimeError.into()),
-				message: "Unable to dry run extrinsic.".into(),
-				data: Some(e.to_string().into()),
-			})?;
+			let api_version = api
+				.api_version::<dyn BlockBuilder<Block>>(&at)
+				.map_err(|e| RpcError {
+					code: ErrorCode::ServerError(Error::RuntimeError.into()),
+					message: "Unable to dry run extrinsic.".into(),
+					data: Some(e.to_string().into()),
+				})?
+				.ok_or_else(|| RpcError {
+					code: ErrorCode::ServerError(Error::RuntimeError.into()),
+					message: "Unable to dry run extrinsic.".into(),
+					data: Some(
+						format!("Could not find `BlockBuilder` api for block `{:?}`.", at).into(),
+					),
+				})?;
+
+			let result = if api_version < 6 {
+				#[allow(deprecated)]
+				api.apply_extrinsic_before_version_6(&at, uxt)
+					.map(legacy::byte_sized_error::convert_to_latest)
+					.map_err(|e| RpcError {
+						code: ErrorCode::ServerError(Error::RuntimeError.into()),
+						message: "Unable to dry run extrinsic.".into(),
+						data: Some(e.to_string().into()),
+					})?
+			} else {
+				api.apply_extrinsic(&at, uxt).map_err(|e| RpcError {
+					code: ErrorCode::ServerError(Error::RuntimeError.into()),
+					message: "Unable to dry run extrinsic.".into(),
+					data: Some(e.to_string().into()),
+				})?
+			};
 
 			Ok(Encode::encode(&result).into())
 		};

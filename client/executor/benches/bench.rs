@@ -55,11 +55,11 @@ fn initialize(runtime: &[u8], method: Method) -> Arc<dyn WasmModule> {
 			sc_executor_wasmtime::create_runtime::<sp_io::SubstrateHostFunctions>(
 				blob,
 				sc_executor_wasmtime::Config {
-					heap_pages,
 					max_memory_size: None,
 					allow_missing_func_imports,
 					cache_path: None,
 					semantics: sc_executor_wasmtime::Semantics {
+						extra_heap_pages: heap_pages,
 						fast_instance_reuse,
 						deterministic_stack_limit: None,
 						canonicalize_nans: false,
