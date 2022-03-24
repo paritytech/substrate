@@ -152,9 +152,6 @@ pub enum RuntimeCosts {
 	OwnCodeHash,
 	/// Weight of calling `seal_caller_is_origin`.
 	CallerIsOrigin,
-	/// Weight of calling `seal_origin`.
-	#[cfg(feature = "unstable-interface")]
-	Origin,
 	/// Weight of calling `seal_address`.
 	Address,
 	/// Weight of calling `seal_gas_left`.
@@ -248,8 +245,6 @@ impl RuntimeCosts {
 			#[cfg(feature = "unstable-interface")]
 			OwnCodeHash => s.own_code_hash,
 			CallerIsOrigin => s.caller_is_origin,
-			#[cfg(feature = "unstable-interface")]
-			Origin => s.origin,
 			Address => s.address,
 			GasLeft => s.gas_left,
 			Balance => s.balance,
@@ -1437,19 +1432,6 @@ define_env!(Env, <E: Ext>,
 	[seal0] seal_caller_is_origin(ctx) -> u32 => {
 		ctx.charge_gas(RuntimeCosts::CallerIsOrigin)?;
 		Ok(ctx.ext.caller_is_origin() as u32)
-	},
-
-	// Stores the address of the origin of the whole call stack into the supplied buffer.
-	//
-	// The value is stored to linear memory at the address pointed to by `out_ptr`.
-	// `out_len_ptr` must point to a u32 value that describes the available space at
-	// `out_ptr`. This call overwrites it with the size of the value. If the available
-	// space at `out_ptr` is less than the size of the value a trap is triggered.
-	[__unstable__] seal_origin(ctx, out_ptr: u32, out_len_ptr: u32) => {
-		ctx.charge_gas(RuntimeCosts::Origin)?;
-		Ok(ctx.write_sandbox_output(
-			out_ptr, out_len_ptr, &ctx.ext.origin().encode(), false, already_charged
-		)?)
 	},
 
 	// Stores the address of the current contract into the supplied buffer.
