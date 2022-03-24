@@ -1,0 +1,38 @@
+[package]
+name = "substrate-state-trie-migration-rpc"
+version = "4.0.0-dev"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2021"
+license = "Apache-2.0"
+homepage = "https://substrate.io"
+repository = "https://github.com/paritytech/substrate/"
+description = "Node-specific RPC methods for interaction with state trie migration."
+readme = "README.md"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[dependencies]
+scale-info = { version = "2.0.1", default-features = false, features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false }
+serde = { version = "1", features = ["derive"] }
+log = { version = "0.4.14", default-features = false }
+
+sp-std = { path = "../../../../primitives/std" }
+sp-io = { path = "../../../../primitives/io" }
+sp-core = { path = "../../../../primitives/core" }
+sp-state-machine = { path = "../../../../primitives/state-machine" }
+sp-trie = { path = "../../../../primitives/trie" }
+trie-db = { version = "0.23.1" }
+
+jsonrpc-core = "18.0.0"
+jsonrpc-core-client = "18.0.0"
+jsonrpc-derive = "18.0.0"
+
+# Substrate Dependencies
+sc-client-api = { version = "4.0.0-dev", path = "../../../../client/api" }
+sc-rpc-api = { version = "0.10.0-dev", path = "../../../../client/rpc-api" }
+sp-runtime = { version = "6.0.0", path = "../../../../primitives/runtime" }
+
+[dev-dependencies]
+serde_json = "1"
