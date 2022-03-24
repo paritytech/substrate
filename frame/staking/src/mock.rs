@@ -270,8 +270,8 @@ impl crate::pallet::pallet::Config for Test {
 	type OffendingValidatorsThreshold = OffendingValidatorsThreshold;
 	type ElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
 	type GenesisElectionProvider = Self::ElectionProvider;
-	// NOTE: consider a macro and use `UseNominatorsMap<Self>` as well.
-	type SortedListProvider = BagsList;
+	// NOTE: consider a macro and use `UseNominatorsAndValidatorsMap<Self>` as well.
+	type VoterList = BagsList;
 	type MaxUnlockingChunks = ConstU32<32>;
 	type BenchmarkingConfig = TestBenchmarkingConfig;
 	type WeightInfo = ();
@@ -541,9 +541,9 @@ fn check_count() {
 	assert_eq!(nominator_count, Nominators::<Test>::count());
 	assert_eq!(validator_count, Validators::<Test>::count());
 
-	// the voters that the `SortedListProvider` list is storing for us.
-	let external_voters = <Test as Config>::SortedListProvider::count();
-	assert_eq!(external_voters, nominator_count);
+	// the voters that the `VoterList` list is storing for us.
+	let external_voters = <Test as Config>::VoterList::count();
+	assert_eq!(external_voters, nominator_count + validator_count);
 }
 
 fn check_ledgers() {

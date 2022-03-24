@@ -8,6 +8,7 @@ fn main() {
 		VoterIndex = u32,
 		TargetIndex = u32,
 		Accuracy = Percent,
+		MaxVoters = frame_support::traits::ConstU32::<100_000>,
 	>(16));
 	loop {
 		fuzz!(|fuzzer_data: &[u8]| {
