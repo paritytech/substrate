@@ -54,8 +54,8 @@ pub trait WeightInfo {
 	fn add_proxy(p: u32, ) -> Weight;
 	fn remove_proxy(p: u32, ) -> Weight;
 	fn remove_proxies(p: u32, ) -> Weight;
-	fn anonymous(p: u32, ) -> Weight;
-	fn kill_anonymous(p: u32, ) -> Weight;
+	fn proxied_keyless(p: u32, ) -> Weight;
+	fn kill_keyless(p: u32, ) -> Weight;
 }
 
 /// Weights for pallet_proxy using the Substrate node and recommended hardware.
@@ -140,7 +140,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	}
 	// Storage: unknown [0x3a65787472696e7369635f696e646578] (r:1 w:0)
 	// Storage: Proxy Proxies (r:1 w:1)
-	fn anonymous(p: u32, ) -> Weight {
+	fn proxied_keyless(p: u32, ) -> Weight {
 		(25_743_000 as Weight)
 			// Standard Error: 2_000
 			.saturating_add((25_000 as Weight).saturating_mul(p as Weight))
@@ -148,7 +148,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 	// Storage: Proxy Proxies (r:1 w:1)
-	fn kill_anonymous(p: u32, ) -> Weight {
+	fn kill_keyless(p: u32, ) -> Weight {
 		(20_484_000 as Weight)
 			// Standard Error: 2_000
 			.saturating_add((105_000 as Weight).saturating_mul(p as Weight))
@@ -238,7 +238,7 @@ impl WeightInfo for () {
 	}
 	// Storage: unknown [0x3a65787472696e7369635f696e646578] (r:1 w:0)
 	// Storage: Proxy Proxies (r:1 w:1)
-	fn anonymous(p: u32, ) -> Weight {
+	fn proxied_keyless(p: u32, ) -> Weight {
 		(25_743_000 as Weight)
 			// Standard Error: 2_000
 			.saturating_add((25_000 as Weight).saturating_mul(p as Weight))
@@ -246,7 +246,7 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
 	// Storage: Proxy Proxies (r:1 w:1)
-	fn kill_anonymous(p: u32, ) -> Weight {
+	fn kill_keyless(p: u32, ) -> Weight {
 		(20_484_000 as Weight)
 			// Standard Error: 2_000
 			.saturating_add((105_000 as Weight).saturating_mul(p as Weight))

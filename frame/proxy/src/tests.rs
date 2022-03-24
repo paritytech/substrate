@@ -537,13 +537,13 @@ fn proxying_works() {
 }
 
 #[test]
-fn anonymous_works() {
+fn keyless_works() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Proxy::anonymous(Origin::signed(1), ProxyType::Any, 0, 0));
-		let anon = Proxy::anonymous_account(&1, &ProxyType::Any, 0, None);
+		assert_ok!(Proxy::proxied_keyless(Origin::signed(1), ProxyType::Any, 0, 0));
+		let anon = Proxy::keyless_account(&1, &ProxyType::Any, 0, None);
 		System::assert_last_event(
-			ProxyEvent::AnonymousCreated {
-				anonymous: anon.clone(),
+			ProxyEvent::KeylessCreated {
+				keyless: anon.clone(),
 				who: 1,
 				proxy_type: ProxyType::Any,
 				disambiguation_index: 0,
@@ -551,20 +551,20 @@ fn anonymous_works() {
 			.into(),
 		);
 
-		// other calls to anonymous allowed as long as they're not exactly the same.
-		assert_ok!(Proxy::anonymous(Origin::signed(1), ProxyType::JustTransfer, 0, 0));
-		assert_ok!(Proxy::anonymous(Origin::signed(1), ProxyType::Any, 0, 1));
-		let anon2 = Proxy::anonymous_account(&2, &ProxyType::Any, 0, None);
-		assert_ok!(Proxy::anonymous(Origin::signed(2), ProxyType::Any, 0, 0));
+		// other calls to keyless allowed as long as they're not exactly the same.
+		assert_ok!(Proxy::proxied_keyless(Origin::signed(1), ProxyType::JustTransfer, 0, 0));
+		assert_ok!(Proxy::proxied_keyless(Origin::signed(1), ProxyType::Any, 0, 1));
+		let anon2 = Proxy::keyless_account(&2, &ProxyType::Any, 0, None);
+		assert_ok!(Proxy::proxied_keyless(Origin::signed(2), ProxyType::Any, 0, 0));
 		assert_noop!(
-			Proxy::anonymous(Origin::signed(1), ProxyType::Any, 0, 0),
+			Proxy::proxied_keyless(Origin::signed(1), ProxyType::Any, 0, 0),
 			Error::<Test>::Duplicate
 		);
 		System::set_extrinsic_index(1);
-		assert_ok!(Proxy::anonymous(Origin::signed(1), ProxyType::Any, 0, 0));
+		assert_ok!(Proxy::proxied_keyless(Origin::signed(1), ProxyType::Any, 0, 0));
 		System::set_extrinsic_index(0);
 		System::set_block_number(2);
-		assert_ok!(Proxy::anonymous(Origin::signed(1), ProxyType::Any, 0, 0));
+		assert_ok!(Proxy::proxied_keyless(Origin::signed(1), ProxyType::Any, 0, 0));
 
 		let call = Box::new(call_transfer(6, 1));
 		assert_ok!(Balances::transfer(Origin::signed(3), anon, 5));
@@ -572,7 +572,7 @@ fn anonymous_works() {
 		System::assert_last_event(ProxyEvent::ProxyExecuted { result: Ok(()) }.into());
 		assert_eq!(Balances::free_balance(6), 1);
 
-		let call = Box::new(Call::Proxy(ProxyCall::new_call_variant_kill_anonymous(
+		let call = Box::new(Call::Proxy(ProxyCall::new_call_variant_kill_keyless(
 			1,
 			ProxyType::Any,
 			0,
@@ -583,7 +583,7 @@ fn anonymous_works() {
 		let de = DispatchError::from(Error::<Test>::NoPermission).stripped();
 		System::assert_last_event(ProxyEvent::ProxyExecuted { result: Err(de) }.into());
 		assert_noop!(
-			Proxy::kill_anonymous(Origin::signed(1), 1, ProxyType::Any, 0, 1, 0),
+			Proxy::kill_keyless(Origin::signed(1), 1, ProxyType::Any, 0, 1, 0),
 			Error::<Test>::NoPermission
 		);
 		assert_eq!(Balances::free_balance(1), 0);

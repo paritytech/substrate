@@ -267,7 +267,7 @@ pub mod pallet {
 		///
 		/// The dispatch origin for this call must be _Signed_.
 		///
-		/// WARNING: This may be called on accounts created by `anonymous`, however if done, then
+		/// WARNING: This may be called on accounts created by `proxied_keyless`, however if done, then
 		/// the unreserved fees will be inaccessible. **All access to this account will be lost.**
 		///
 		/// # <weight>
@@ -305,8 +305,8 @@ pub mod pallet {
 		/// Weight is a function of the number of proxies the user has (P).
 		/// # </weight>
 		/// TODO: Might be over counting 1 read
-		#[pallet::weight(T::WeightInfo::anonymous(T::MaxProxies::get().into()))]
-		pub fn anonymous(
+		#[pallet::weight(T::WeightInfo::proxied_keyless(T::MaxProxies::get().into()))]
+		pub fn proxied_keyless(
 			origin: OriginFor<T>,
 			proxy_type: T::ProxyType,
 			delay: T::BlockNumber,
@@ -314,8 +314,8 @@ pub mod pallet {
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
-			let anonymous = Self::anonymous_account(&who, &proxy_type, index, None);
-			ensure!(!Proxies::<T>::contains_key(&anonymous), Error::<T>::Duplicate);
+			let keyless = Self::keyless_account(&who, &proxy_type, index, None);
+			ensure!(!Proxies::<T>::contains_key(&keyless), Error::<T>::Duplicate);
 
 			let proxy_def =
 				ProxyDefinition { delegate: who.clone(), proxy_type: proxy_type.clone(), delay };
@@ -325,9 +325,9 @@ pub mod pallet {
 			let deposit = T::ProxyDepositBase::get() + T::ProxyDepositFactor::get();
 			T::Currency::reserve(&who, deposit)?;
 
-			Proxies::<T>::insert(&anonymous, (bounded_proxies, deposit));
-			Self::deposit_event(Event::AnonymousCreated {
-				anonymous,
+			Proxies::<T>::insert(&keyless, (bounded_proxies, deposit));
+			Self::deposit_event(Event::KeylessCreated {
+				keyless,
 				who,
 				proxy_type,
 				disambiguation_index: index,
@@ -336,28 +336,28 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Removes a previously spawned anonymous proxy.
+		/// Removes a previously spawned keyless account.
 		///
 		/// WARNING: **All access to this account will be lost.** Any funds held in it will be
 		/// inaccessible.
 		///
 		/// Requires a `Signed` origin, and the sender account must have been created by a call to
-		/// `anonymous` with corresponding parameters.
+		/// `proxied_keyless` with corresponding parameters.
 		///
-		/// - `spawner`: The account that originally called `anonymous` to create this account.
-		/// - `index`: The disambiguation index originally passed to `anonymous`. Probably `0`.
-		/// - `proxy_type`: The proxy type originally passed to `anonymous`.
-		/// - `height`: The height of the chain when the call to `anonymous` was processed.
-		/// - `ext_index`: The extrinsic index in which the call to `anonymous` was processed.
+		/// - `spawner`: The account that originally called `proxied_keyless` to create this account.
+		/// - `index`: The disambiguation index originally passed to `proxied_keyless`. Probably `0`.
+		/// - `proxy_type`: The proxy type originally passed to `proxied_keyless`.
+		/// - `height`: The height of the chain when the call to `proxied_keyless` was processed.
+		/// - `ext_index`: The extrinsic index in which the call to `proxied_keyless` was processed.
 		///
-		/// Fails with `NoPermission` in case the caller is not a previously created anonymous
-		/// account whose `anonymous` call has corresponding parameters.
+		/// Fails with `NoPermission` in case the caller is not a previously created keyless
+		/// account whose `proxied_keyless` call has corresponding parameters.
 		///
 		/// # <weight>
 		/// Weight is a function of the number of proxies the user has (P).
 		/// # </weight>
-		#[pallet::weight(T::WeightInfo::kill_anonymous(T::MaxProxies::get().into()))]
-		pub fn kill_anonymous(
+		#[pallet::weight(T::WeightInfo::kill_keyless(T::MaxProxies::get().into()))]
+		pub fn kill_keyless(
 			origin: OriginFor<T>,
 			spawner: T::AccountId,
 			proxy_type: T::ProxyType,
@@ -368,7 +368,7 @@ pub mod pallet {
 			let who = ensure_signed(origin)?;
 
 			let when = (height, ext_index);
-			let proxy = Self::anonymous_account(&spawner, &proxy_type, index, Some(when));
+			let proxy = Self::keyless_account(&spawner, &proxy_type, index, Some(when));
 			ensure!(proxy == who, Error::<T>::NoPermission);
 
 			let (_, deposit) = Proxies::<T>::take(&who);
@@ -555,8 +555,8 @@ pub mod pallet {
 		ProxyExecuted { result: DispatchResult },
 		/// Anonymous account has been created by new proxy with given
 		/// disambiguation index and proxy type.
-		AnonymousCreated {
-			anonymous: T::AccountId,
+		KeylessCreated {
+			keyless: T::AccountId,
 			who: T::AccountId,
 			proxy_type: T::ProxyType,
 			disambiguation_index: u16,
@@ -634,7 +634,7 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
-	/// Calculate the address of an anonymous account.
+	/// Calculate the address of a keyless account.
 	///
 	/// - `who`: The spawner account.
 	/// - `proxy_type`: The type of the proxy that the sender will be registered as over the
@@ -643,9 +643,9 @@ impl<T: Config> Pallet<T> {
 	/// - `index`: A disambiguation index, in case this is called multiple times in the same
 	/// transaction (e.g. with `utility::batch`). Unless you're using `batch` you probably just
 	/// want to use `0`.
-	/// - `maybe_when`: The block height and extrinsic index of when the anonymous account was
+	/// - `maybe_when`: The block height and extrinsic index of when the keyless account was
 	/// created. None to use current block height and extrinsic index.
-	pub fn anonymous_account(
+	pub fn keyless_account(
 		who: &T::AccountId,
 		proxy_type: &T::ProxyType,
 		index: u16,
@@ -824,9 +824,9 @@ impl<T: Config> Pallet<T> {
 				{
 					false
 				},
-				// Proxy call cannot remove all proxies or kill anonymous proxies unless it has full
+				// Proxy call cannot remove all proxies or kill keyless accounts unless it has full
 				// permissions.
-				Some(Call::remove_proxies { .. }) | Some(Call::kill_anonymous { .. })
+				Some(Call::remove_proxies { .. }) | Some(Call::kill_keyless { .. })
 					if def.proxy_type != T::ProxyType::default() =>
 				{
 					false
