@@ -48,33 +48,38 @@ impl RuntimeBuilder {
 		}
 	}
 
-	fn use_wat(&mut self, code: String) {
+	fn use_wat(&mut self, code: String) -> &mut Self {
 		self.code = Some(code);
+		self
 	}
 
-	fn canonicalize_nans(&mut self, canonicalize_nans: bool) {
+	fn canonicalize_nans(&mut self, canonicalize_nans: bool) -> &mut Self {
 		self.canonicalize_nans = canonicalize_nans;
+		self
 	}
 
-	fn deterministic_stack(&mut self, deterministic_stack: bool) {
+	fn deterministic_stack(&mut self, deterministic_stack: bool) -> &mut Self {
 		self.deterministic_stack = deterministic_stack;
+		self
 	}
 
-	fn precompile_runtime(&mut self, precompile_runtime: bool) {
+	fn precompile_runtime(&mut self, precompile_runtime: bool) -> &mut Self {
 		self.precompile_runtime = precompile_runtime;
+		self
 	}
 
-	fn max_memory_size(&mut self, max_memory_size: Option<usize>) {
+	fn max_memory_size(&mut self, max_memory_size: Option<usize>) -> &mut Self {
 		self.max_memory_size = max_memory_size;
+		self
 	}
 
-	fn build(self) -> Arc<dyn WasmModule> {
+	fn build(&mut self) -> Arc<dyn WasmModule> {
 		let blob = {
 			let wasm: Vec<u8>;
 
 			let wasm = match self.code {
 				None => wasm_binary_unwrap(),
-				Some(wat) => {
+				Some(ref wat) => {
 					wasm = wat::parse_str(wat).expect("wat parsing failed");
 					&wasm
 				},
@@ -117,11 +122,7 @@ impl RuntimeBuilder {
 
 #[test]
 fn test_nan_canonicalization() {
-	let runtime = {
-		let mut builder = RuntimeBuilder::new_on_demand();
-		builder.canonicalize_nans(true);
-		builder.build()
-	};
+	let runtime = RuntimeBuilder::new_on_demand().canonicalize_nans(true).build();
 
 	let mut instance = runtime.new_instance().expect("failed to instantiate a runtime");
 
@@ -160,12 +161,10 @@ fn test_nan_canonicalization() {
 fn test_stack_depth_reaching() {
 	const TEST_GUARD_PAGE_SKIP: &str = include_str!("test-guard-page-skip.wat");
 
-	let runtime = {
-		let mut builder = RuntimeBuilder::new_on_demand();
-		builder.use_wat(TEST_GUARD_PAGE_SKIP.to_string());
-		builder.deterministic_stack(true);
-		builder.build()
-	};
+	let runtime = RuntimeBuilder::new_on_demand()
+		.use_wat(TEST_GUARD_PAGE_SKIP.to_string())
+		.deterministic_stack(true)
+		.build();
 	let mut instance = runtime.new_instance().expect("failed to instantiate a runtime");
 
 	match instance.call_export("test-many-locals", &[]).unwrap_err() {
@@ -203,13 +202,11 @@ fn test_max_memory_pages(import_memory: bool, precompile_runtime: bool) {
 		wat: String,
 		precompile_runtime: bool,
 	) -> Result<(), Box<dyn std::error::Error>> {
-		let runtime = {
-			let mut builder = RuntimeBuilder::new_on_demand();
-			builder.use_wat(wat);
-			builder.max_memory_size(max_memory_size);
-			builder.precompile_runtime(precompile_runtime);
-			builder.build()
-		};
+		let runtime = RuntimeBuilder::new_on_demand()
+			.use_wat(wat)
+			.max_memory_size(max_memory_size)
+			.precompile_runtime(precompile_runtime)
+			.build();
 		let mut instance = runtime.new_instance()?;
 		let _ = instance.call_export("main", &[])?;
 		Ok(())
