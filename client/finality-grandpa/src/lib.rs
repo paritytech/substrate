@@ -1203,5 +1203,25 @@ where
 	let is_descendent_of = is_descendent_of(&*client, None);
 	authority_set.revert(hash, number, &is_descendent_of);
 
-	Ok(())
+	// Revert the 
+	let shared_set_state = persistent_data.set_state;
+	let set_state = shared_set_state.read();
+	let completed_rounds = set_state.completed_rounds();
+	let round = completed_rounds.iter().next().unwrap(); // TODO: FIXME
+	let (canon_hash, canon_number) = round.base;
+
+	let (set_id, set_ref) = authority_set.current();
+	let new_set = Some(NewAuthoritySet {
+		canon_hash,
+		canon_number,
+		set_id,
+		authorities: set_ref.to_vec(),
+	});
+	aux_schema::update_authority_set::<Block, _, _>(
+		&authority_set,
+		new_set.as_ref(),
+		|values| {
+			client.insert_aux(values, None)
+		},
+	)
 }
