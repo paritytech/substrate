@@ -88,9 +88,9 @@ pub use sp_runtime::BuildStorage;
 
 /// Implementations of some helper traits passed into runtime modules as associated types.
 pub mod impls;
-use impls::{AllianceProposalProvider, Author, CreditToBlockAuthor};
 #[cfg(not(feature = "runtime-benchmarks"))]
 use impls::AllianceIdentityVerifier;
+use impls::{AllianceProposalProvider, Author, CreditToBlockAuthor};
 
 /// Constant values used within the runtime.
 pub mod constants;
