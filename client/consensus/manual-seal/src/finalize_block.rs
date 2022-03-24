@@ -48,7 +48,7 @@ where
 
 	match finalizer.finalize_block(BlockId::Hash(hash), justification, true) {
 		Err(e) => {
-			log::warn!("Failed to finalize block {:?}", e);
+			log::warn!("Failed to finalize block {}", e);
 			rpc::send_result(&mut sender, Err(e.into()))
 		},
 		Ok(()) => {

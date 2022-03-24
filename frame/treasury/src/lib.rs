@@ -193,6 +193,8 @@ pub mod pallet {
 		type SpendFunds: SpendFunds<Self, I>;
 
 		/// The maximum number of approvals that can wait in the spending queue.
+		///
+		/// NOTE: This parameter is also used within the Bounties Pallet extension if enabled.
 		#[pallet::constant]
 		type MaxApprovals: Get<u32>;
 	}

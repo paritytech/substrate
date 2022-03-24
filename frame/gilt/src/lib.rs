@@ -112,7 +112,8 @@ pub mod pallet {
 			+ sp_std::fmt::Debug
 			+ Default
 			+ From<u64>
-			+ TypeInfo;
+			+ TypeInfo
+			+ MaxEncodedLen;
 
 		/// Origin required for setting the target proportion to be under gilt.
 		type AdminOrigin: EnsureOrigin<Self::Origin>;
@@ -178,11 +179,12 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
-	#[pallet::without_storage_info]
 	pub struct Pallet<T>(_);
 
 	/// A single bid on a gilt, an item of a *queue* in `Queues`.
-	#[derive(Clone, Eq, PartialEq, Default, Encode, Decode, RuntimeDebug, TypeInfo)]
+	#[derive(
+		Clone, Eq, PartialEq, Default, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen,
+	)]
 	pub struct GiltBid<Balance, AccountId> {
 		/// The amount bid.
 		pub amount: Balance,
@@ -191,7 +193,9 @@ pub mod pallet {
 	}
 
 	/// Information representing an active gilt.
-	#[derive(Clone, Eq, PartialEq, Default, Encode, Decode, RuntimeDebug, TypeInfo)]
+	#[derive(
+		Clone, Eq, PartialEq, Default, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen,
+	)]
 	pub struct ActiveGilt<Balance, AccountId, BlockNumber> {
 		/// The proportion of the effective total issuance (i.e. accounting for any eventual gilt
 		/// expansion or contraction that may eventually be claimed).
@@ -215,7 +219,9 @@ pub mod pallet {
 	/// `issuance - frozen + proportion * issuance`
 	///
 	/// where `issuance = total_issuance - IgnoredIssuance`
-	#[derive(Clone, Eq, PartialEq, Default, Encode, Decode, RuntimeDebug, TypeInfo)]
+	#[derive(
+		Clone, Eq, PartialEq, Default, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen,
+	)]
 	pub struct ActiveGiltsTotal<Balance> {
 		/// The total amount of funds held in reserve for all active gilts.
 		pub frozen: Balance,
@@ -233,12 +239,18 @@ pub mod pallet {
 	/// The vector is indexed by duration in `Period`s, offset by one, so information on the queue
 	/// whose duration is one `Period` would be storage `0`.
 	#[pallet::storage]
-	pub type QueueTotals<T> = StorageValue<_, Vec<(u32, BalanceOf<T>)>, ValueQuery>;
+	pub type QueueTotals<T: Config> =
+		StorageValue<_, BoundedVec<(u32, BalanceOf<T>), T::QueueCount>, ValueQuery>;
 
 	/// The queues of bids ready to become gilts. Indexed by duration (in `Period`s).
 	#[pallet::storage]
-	pub type Queues<T: Config> =
-		StorageMap<_, Blake2_128Concat, u32, Vec<GiltBid<BalanceOf<T>, T::AccountId>>, ValueQuery>;
+	pub type Queues<T: Config> = StorageMap<
+		_,
+		Blake2_128Concat,
+		u32,
+		BoundedVec<GiltBid<BalanceOf<T>, T::AccountId>, T::MaxQueueLen>,
+		ValueQuery,
+	>;
 
 	/// Information relating to the gilts currently active.
 	#[pallet::storage]
@@ -265,7 +277,11 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig {
 		fn build(&self) {
-			QueueTotals::<T>::put(vec![(0, BalanceOf::<T>::zero()); T::QueueCount::get() as usize]);
+			let unbounded = vec![(0, BalanceOf::<T>::zero()); T::QueueCount::get() as usize];
+			let bounded: BoundedVec<_, _> = unbounded
+				.try_into()
+				.expect("QueueTotals should support up to QueueCount items. qed");
+			QueueTotals::<T>::put(bounded);
 		}
 	}
 
@@ -366,7 +382,7 @@ pub mod pallet {
 						T::Currency::unreserve(&bid.who, bid.amount);
 						(0, amount - bid.amount)
 					} else {
-						q.insert(0, bid);
+						q.try_insert(0, bid).expect("verified queue was not full above. qed.");
 						(1, amount)
 					};
 
@@ -379,7 +395,7 @@ pub mod pallet {
 				},
 			)?;
 			QueueTotals::<T>::mutate(|qs| {
-				qs.resize(queue_count, (0, Zero::zero()));
+				qs.bounded_resize(queue_count, (0, Zero::zero()));
 				qs[queue_index].0 += net.0;
 				qs[queue_index].1 = qs[queue_index].1.saturating_add(net.1);
 			});
@@ -415,7 +431,7 @@ pub mod pallet {
 			})?;
 
 			QueueTotals::<T>::mutate(|qs| {
-				qs.resize(queue_count, (0, Zero::zero()));
+				qs.bounded_resize(queue_count, (0, Zero::zero()));
 				qs[queue_index].0 = new_len;
 				qs[queue_index].1 = qs[queue_index].1.saturating_sub(bid.amount);
 			});
@@ -592,7 +608,8 @@ pub mod pallet {
 								if remaining < bid.amount {
 									let overflow = bid.amount - remaining;
 									bid.amount = remaining;
-									q.push(GiltBid { amount: overflow, who: bid.who.clone() });
+									q.try_push(GiltBid { amount: overflow, who: bid.who.clone() })
+										.expect("just popped, so there must be space. qed");
 								}
 								let amount = bid.amount;
 								// Can never overflow due to block above.

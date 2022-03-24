@@ -167,18 +167,14 @@ where
 		&self,
 		at: &BlockId<Self::Block>,
 	) -> error::Result<Option<graph::NumberFor<Self>>> {
-		self.client
-			.to_number(at)
-			.map_err(|e| Error::BlockIdConversion(format!("{:?}", e)))
+		self.client.to_number(at).map_err(|e| Error::BlockIdConversion(e.to_string()))
 	}
 
 	fn block_id_to_hash(
 		&self,
 		at: &BlockId<Self::Block>,
 	) -> error::Result<Option<graph::BlockHash<Self>>> {
-		self.client
-			.to_hash(at)
-			.map_err(|e| Error::BlockIdConversion(format!("{:?}", e)))
+		self.client.to_hash(at).map_err(|e| Error::BlockIdConversion(e.to_string()))
 	}
 
 	fn hash_and_length(
@@ -224,7 +220,7 @@ where
 		}?;
 
 		let block_hash = client.to_hash(at)
-			.map_err(|e| Error::RuntimeApi(format!("{:?}", e)))?
+			.map_err(|e| Error::RuntimeApi(e.to_string()))?
 			.ok_or_else(|| Error::RuntimeApi(format!("Could not get hash for block `{:?}`.", at)))?;
 
 		use sp_api::Core;
@@ -237,7 +233,7 @@ where
 					.map_err(|e| Error::RuntimeApi(e.to_string()))
 			} else {
 				let block_number = client.to_number(at)
-					.map_err(|e| Error::RuntimeApi(format!("{:?}", e)))?
+					.map_err(|e| Error::RuntimeApi(e.to_string()))?
 					.ok_or_else(||
 						Error::RuntimeApi(format!("Could not get number for block `{:?}`.", at))
 					)?;

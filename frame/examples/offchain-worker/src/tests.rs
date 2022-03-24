@@ -123,6 +123,7 @@ impl Config for Test {
 	type GracePeriod = ConstU64<5>;
 	type UnsignedInterval = ConstU64<128>;
 	type UnsignedPriority = UnsignedPriority;
+	type MaxPrices = ConstU32<64>;
 }
 
 fn test_pub() -> sp_core::sr25519::Public {
