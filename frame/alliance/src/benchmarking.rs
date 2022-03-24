@@ -589,7 +589,11 @@ benchmarks_instance_pallet! {
 		founders.sort();
 		fellows.sort();
 		allies.sort();
-		assert_last_event::<T, I>(Event::MembersInitialized(founders.clone(), fellows.clone(), allies.clone()).into());
+		assert_last_event::<T, I>(Event::MembersInitialized {
+			founders: founders.clone(),
+			fellows: fellows.clone(),
+			allies: allies.clone(),
+		}.into());
 		assert_eq!(Alliance::<T, I>::members(MemberRole::Founder), founders);
 		assert_eq!(Alliance::<T, I>::members(MemberRole::Fellow), fellows);
 		assert_eq!(Alliance::<T, I>::members(MemberRole::Ally), allies);
@@ -605,7 +609,7 @@ benchmarks_instance_pallet! {
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
 		assert_eq!(Alliance::<T, I>::rule(), Some(rule.clone()));
-		assert_last_event::<T, I>(Event::NewRule(rule).into());
+		assert_last_event::<T, I>(Event::NewRule { rule }.into());
 	}
 
 	announce {
@@ -618,7 +622,7 @@ benchmarks_instance_pallet! {
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
 		assert!(Alliance::<T, I>::announcements().contains(&announcement));
-		assert_last_event::<T, I>(Event::NewAnnouncement(announcement).into());
+		assert_last_event::<T, I>(Event::NewAnnouncement { announcement }.into());
 	}
 
 	remove_announcement {
@@ -632,7 +636,7 @@ benchmarks_instance_pallet! {
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
 		assert!(Alliance::<T, I>::announcements().is_empty());
-		assert_last_event::<T, I>(Event::AnnouncementRemoved(announcement).into());
+		assert_last_event::<T, I>(Event::AnnouncementRemoved { announcement }.into());
 	}
 
 	submit_candidacy {
@@ -647,7 +651,11 @@ benchmarks_instance_pallet! {
 		assert!(!Alliance::<T, I>::is_member(&outsider));
 		assert!(Alliance::<T, I>::is_candidate(&outsider));
 		assert_eq!(DepositOf::<T, I>::get(&outsider), Some(T::CandidateDeposit::get()));
-		assert_last_event::<T, I>(Event::CandidateAdded(outsider, None, Some(T::CandidateDeposit::get())).into());
+		assert_last_event::<T, I>(Event::CandidateAdded {
+			candidate: outsider,
+			nominator: None,
+			reserved: Some(T::CandidateDeposit::get())
+		}.into());
 	}
 
 	nominate_candidacy {
@@ -667,7 +675,11 @@ benchmarks_instance_pallet! {
 		assert!(!Alliance::<T, I>::is_member(&outsider));
 		assert!(Alliance::<T, I>::is_candidate(&outsider));
 		assert_eq!(DepositOf::<T, I>::get(&outsider), None);
-		assert_last_event::<T, I>(Event::CandidateAdded(outsider, Some(founder1), None).into());
+		assert_last_event::<T, I>(Event::CandidateAdded {
+			candidate: outsider,
+			nominator: Some(founder1),
+			reserved: None
+		}.into());
 	}
 
 	approve_candidate {
@@ -687,7 +699,7 @@ benchmarks_instance_pallet! {
 		assert!(!Alliance::<T, I>::is_candidate(&candidate1));
 		assert!(Alliance::<T, I>::is_ally(&candidate1));
 		assert_eq!(DepositOf::<T, I>::get(&candidate1), Some(T::CandidateDeposit::get()));
-		assert_last_event::<T, I>(Event::CandidateApproved(candidate1).into());
+		assert_last_event::<T, I>(Event::CandidateApproved { candidate: candidate1 }.into());
 	}
 
 	reject_candidate {
@@ -707,7 +719,7 @@ benchmarks_instance_pallet! {
 		assert!(!Alliance::<T, I>::is_candidate(&candidate1));
 		assert!(!Alliance::<T, I>::is_member(&candidate1));
 		assert_eq!(DepositOf::<T, I>::get(&candidate1), None);
-		assert_last_event::<T, I>(Event::CandidateRejected(candidate1).into());
+		assert_last_event::<T, I>(Event::CandidateRejected { candidate: candidate1 }.into());
 	}
 
 	elevate_ally {
@@ -723,7 +735,7 @@ benchmarks_instance_pallet! {
 	verify {
 		assert!(!Alliance::<T, I>::is_ally(&ally1));
 		assert!(Alliance::<T, I>::is_fellow(&ally1));
-		assert_last_event::<T, I>(Event::AllyElevated(ally1).into());
+		assert_last_event::<T, I>(Event::AllyElevated { ally: ally1 }.into());
 	}
 
 	retire {
@@ -738,7 +750,10 @@ benchmarks_instance_pallet! {
 	verify {
 		assert!(!Alliance::<T, I>::is_member(&fellow2));
 		assert_eq!(DepositOf::<T, I>::get(&fellow2), None);
-		assert_last_event::<T, I>(Event::MemberRetired(fellow2, Some(T::CandidateDeposit::get())).into());
+		assert_last_event::<T, I>(Event::MemberRetired {
+			member: fellow2,
+			unreserved: Some(T::CandidateDeposit::get())
+		}.into());
 	}
 
 	kick_member {
@@ -759,7 +774,10 @@ benchmarks_instance_pallet! {
 	verify {
 		assert!(!Alliance::<T, I>::is_member(&fellow2));
 		assert_eq!(DepositOf::<T, I>::get(&fellow2), None);
-		assert_last_event::<T, I>(Event::MemberKicked(fellow2, Some(T::CandidateDeposit::get())).into());
+		assert_last_event::<T, I>(Event::MemberKicked {
+			member: fellow2,
+			slashed: Some(T::CandidateDeposit::get())
+		}.into());
 	}
 
 	add_blacklist {
@@ -779,7 +797,7 @@ benchmarks_instance_pallet! {
 		let origin = T::SuperMajorityOrigin::successful_origin();
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
-		assert_last_event::<T, I>(Event::BlacklistAdded(blacklist).into());
+		assert_last_event::<T, I>(Event::BlacklistAdded { items: blacklist }.into());
 	}
 
 	remove_blacklist {
@@ -804,7 +822,7 @@ benchmarks_instance_pallet! {
 		let origin = T::SuperMajorityOrigin::successful_origin();
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
-		assert_last_event::<T, I>(Event::BlacklistRemoved(blacklist).into());
+		assert_last_event::<T, I>(Event::BlacklistRemoved { items: blacklist }.into());
 	}
 
 	impl_benchmark_test_suite!(Alliance, crate::mock::new_bench_ext(), crate::mock::Test);
