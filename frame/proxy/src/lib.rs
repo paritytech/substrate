@@ -159,6 +159,10 @@ pub mod pallet {
 		#[pallet::constant]
 		type MaxPending: Get<u32>;
 
+		/// The maximum amount of characters a keyless vanity address can have.
+		#[pallet::constant]
+		type MaxVanity: Get<u8>;
+
 		/// The type of hash used for hashing the call.
 		type CallHasher: Hash;
 
@@ -295,6 +299,8 @@ pub mod pallet {
 		/// want to use `0`.
 		/// - `delay`: The announcement period required of the initial proxy. Will generally be
 		/// zero.
+		/// - `maybe_keyless`: An account to be used as the keyless proxied account instead of the
+		/// generated one, it will be evaluated to determine if it's indeed a keyless account.
 		///
 		/// Fails with `Duplicate` if this has already been called in this transaction, from the
 		/// same sender, with the same parameters.
@@ -311,10 +317,16 @@ pub mod pallet {
 			proxy_type: T::ProxyType,
 			delay: T::BlockNumber,
 			index: u16,
+			maybe_keyless: Option<T::AccountId>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
-			let keyless = Self::keyless_account(&who, &proxy_type, index, None);
+			let keyless = if let Some(account) = maybe_keyless {
+				ensure!(Self::is_vain_enough(&account), Error::<T>::NotKeyless);
+				account
+			} else {
+				Self::keyless_account(&who, &proxy_type, index, None)
+			};
 			ensure!(!Proxies::<T>::contains_key(&keyless), Error::<T>::Duplicate);
 
 			let proxy_def =
@@ -601,6 +613,8 @@ pub mod pallet {
 		Unannounced,
 		/// Cannot add self as proxy.
 		NoSelfProxy,
+		/// The provided keyless account is not vain enough.
+		NotKeyless,
 	}
 
 	/// The set of account proxies. Maps the account which has delegated to the accounts
@@ -661,6 +675,16 @@ impl<T: Config> Pallet<T> {
 			.using_encoded(blake2_256);
 		Decode::decode(&mut TrailingZeroInput::new(entropy.as_ref()))
 			.expect("infinite length input; no invalid inputs for type; qed")
+	}
+
+	fn is_vain_enough(account: &T::AccountId) -> bool {
+		let vanity_len = T::MaxVanity::get() as usize;
+		account
+			.as_ref()
+			.get(vanity_len..)
+			.expect("MaxVanity shorter than account")
+			.iter()
+			.all(|b| b == &0)
 	}
 
 	/// Register a proxy account for the delegator that is able to make calls on its behalf.
@@ -838,3 +862,4 @@ impl<T: Config> Pallet<T> {
 		Self::deposit_event(Event::ProxyExecuted { result: e.map(|_| ()).map_err(|e| e.error) });
 	}
 }
+use_vanitywith_vanity: use_vanitywith_vanity:

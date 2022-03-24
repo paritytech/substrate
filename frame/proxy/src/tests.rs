@@ -27,7 +27,7 @@ use frame_support::{
 	assert_noop, assert_ok,
 	dispatch::DispatchError,
 	parameter_types,
-	traits::{ConstU32, ConstU64, Contains},
+	traits::{ConstU32, ConstU64, ConstU8, Contains},
 	RuntimeDebug,
 };
 use sp_core::H256;
@@ -160,6 +160,7 @@ impl Config for Test {
 	type WeightInfo = ();
 	type CallHasher = BlakeTwo256;
 	type MaxPending = ConstU32<2>;
+	type MaxVanity = ConstU8<10>;
 	type AnnouncementDepositBase = ConstU64<1>;
 	type AnnouncementDepositFactor = ConstU64<1>;
 }
