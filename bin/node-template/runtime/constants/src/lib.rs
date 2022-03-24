@@ -15,7 +15,5 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod block_weights;
-pub mod extrinsic_weights;
-pub mod paritydb_weights;
-pub mod rocksdb_weights;
+
+pub mod weights;

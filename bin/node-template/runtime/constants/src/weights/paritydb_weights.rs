@@ -18,8 +18,8 @@
 pub mod constants {
 	use frame_support::{
 		parameter_types,
-		weights::{constants, RuntimeDbWeight},
 	};
+	use super::super::{constants, RuntimeDbWeight};
 
 	parameter_types! {
 		/// ParityDB can be enabled with a feature flag, but is still experimental. These weights

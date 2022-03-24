@@ -5163,7 +5163,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "node-template-weights"
+name = "node-template-runtime-constants"
 version = "4.0.0-dev"
 dependencies = [
  "assert_matches",

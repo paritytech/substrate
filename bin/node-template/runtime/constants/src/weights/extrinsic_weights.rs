@@ -18,8 +18,8 @@
 pub mod constants {
 	use frame_support::{
 		parameter_types,
-		weights::{constants, Weight},
 	};
+	use super::super::{constants, Weight};
 
 	parameter_types! {
 		/// Executing a NO-OP `System::remarks` Extrinsic.
