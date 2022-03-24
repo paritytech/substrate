@@ -767,13 +767,15 @@ where
 		// All changes performed by the contract are executed under a storage transaction.
 		// This allows for roll back on error. Changes to the cached contract_info are
 		// comitted or rolled back when popping the frame.
-		let (success, output) = with_transaction(|| -> TransactionOutcome<Result<_, DispatchError>> {
-			let output = do_transaction();
-			match &output {
-				Ok(result) if !result.did_revert() => TransactionOutcome::Commit(Ok((true, output))),
-				_ => TransactionOutcome::Rollback(Ok((false, output))),
-			}
-		})?;
+		let (success, output) =
+			with_transaction(|| -> TransactionOutcome<Result<_, DispatchError>> {
+				let output = do_transaction();
+				match &output {
+					Ok(result) if !result.did_revert() =>
+						TransactionOutcome::Commit(Ok((true, output))),
+					_ => TransactionOutcome::Rollback(Ok((false, output))),
+				}
+			})?;
 		self.pop_frame(success);
 		output
 	}
