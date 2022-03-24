@@ -125,8 +125,9 @@ pub mod pallet {
 	}
 
 	#[derive(Encode, Decode, Default, MaxEncodedLen, TypeInfo)]
-	pub struct Registration<AccountId, Balance, BlockNumber> {
-		pub owner: AccountId,
+	pub struct Registration<RegistrantAccountId, OwnerAccountId, Balance, BlockNumber> {
+		pub registrant: RegistrantAccountId,
+		pub owner: OwnerAccountId,
 		pub expiry: BlockNumber,
 		pub deposit: Balance,
 	}
@@ -150,7 +151,12 @@ pub mod pallet {
 		_,
 		Blake2_128Concat,
 		NameHash,
-		Registration<T::AccountId, Option<BalanceOf<T>>, Option<T::BlockNumber>>,
+		Registration<
+			Option<T::AccountId>,
+			T::AccountId,
+			Option<BalanceOf<T>>,
+			Option<T::BlockNumber>,
+		>,
 	>;
 
 	/// This resolver maps name hashes to an account
@@ -194,8 +200,14 @@ pub mod pallet {
 		RegistrationNotFound,
 		/// Parent registration does not exist.
 		ParentRegistrationNotFound,
-		/// The sender is not the registration owner.
+		/// Registration registratn does not exist.
+		RegistrationRegistrantNotFound,
+		/// The account is not the registration registrant.
+		NotRegistrationRegistrant,
+		/// The account is not the registration owner.
 		NotRegistrationOwner,
+		/// The account is not the registration registrant or the owner.
+		NotRegistrationRegistrantOrOwner,
 		/// This registration has expired.
 		RegistrationExpired,
 		/// This registration has not yet expired.
@@ -268,12 +280,45 @@ pub mod pallet {
 				// Note that no deposit is passed in for TLDs, as registration + length fees could
 				// be enough to deter attacks. Although this could present an opportunity to use
 				// reference counter deposits also.
-				Self::do_register(name_hash, commitment.who.clone(), Some(periods), None)?;
+				Self::do_register(
+					name_hash,
+					Some(commitment.who.clone()),
+					commitment.who,
+					Some(periods),
+					None,
+				)?;
 			}
 
 			T::Currency::unreserve(&sender, commitment.deposit);
 			Commitments::<T>::remove(commitment_hash);
 			Ok(())
+		}
+
+		#[pallet::weight(0)]
+		pub fn set_owner(
+			origin: OriginFor<T>,
+			name_hash: NameHash,
+			to: T::AccountId,
+		) -> DispatchResult {
+			let sender = ensure_signed(origin)?;
+
+			Registrations::<T>::try_mutate(name_hash, |maybe_registration| {
+				let r = maybe_registration.as_mut().ok_or(Error::<T>::RegistrationNotFound)?;
+
+				let maybe_registrant = r.registrant.clone();
+				let is_registrant =
+					if let Some(reg) = maybe_registrant { reg == sender } else { false };
+
+				let is_owner = r.owner == sender;
+				ensure!(
+					!(!is_registrant && !is_owner),
+					Error::<T>::NotRegistrationRegistrantOrOwner
+				);
+
+				r.owner = to.clone();
+				Self::deposit_event(Event::<T>::NewOwner { from: sender, to });
+				Ok(())
+			})
 		}
 
 		#[pallet::weight(0)]
@@ -287,13 +332,16 @@ pub mod pallet {
 
 			Registrations::<T>::try_mutate(name_hash, |maybe_registration| {
 				let r = maybe_registration.as_mut().ok_or(Error::<T>::RegistrationNotFound)?;
-				ensure!(r.owner == sender, Error::<T>::NotRegistrationOwner);
+				// fails for subnodes. subnodes cannot be transferred.
+				let registrant =
+					r.registrant.clone().ok_or(Error::<T>::RegistrationRegistrantNotFound)?;
+				ensure!(registrant == sender, Error::<T>::NotRegistrationRegistrant);
 
 				if let Some(e) = r.expiry {
 					ensure!(block_number <= e, Error::<T>::RegistrationExpired);
 				}
 
-				r.owner = to.clone();
+				r.registrant = Some(to.clone());
 				Self::deposit_event(Event::<T>::NewOwner { from: sender, to });
 				Ok(())
 			})
@@ -391,7 +439,7 @@ pub mod pallet {
 			let deposit = T::SubNodeDeposit::get();
 			T::Currency::reserve(&sender, deposit)?;
 
-			Self::do_register(name_hash, sender, None, Some(deposit))?;
+			Self::do_register(name_hash, None, sender, None, Some(deposit))?;
 			Ok(())
 		}
 
@@ -449,10 +497,10 @@ pub mod pallet {
 			T::RegistrationManager::ensure_origin(origin)?;
 			if periods.is_zero() {
 				// permanent register: no expiry
-				Self::do_register(name_hash, who, None, None)?;
+				Self::do_register(name_hash, Some(who.clone()), who, None, None)?;
 			} else {
 				// register with some periods
-				Self::do_register(name_hash, who, Some(periods), None)?;
+				Self::do_register(name_hash, Some(who.clone()), who, Some(periods), None)?;
 			}
 			Ok(())
 		}
@@ -509,6 +557,7 @@ pub mod pallet {
 
 		pub fn do_register(
 			name_hash: NameHash,
+			maybe_registrant: Option<T::AccountId>,
 			owner: T::AccountId,
 			maybe_periods: Option<u32>,
 			maybe_deposit: Option<BalanceOf<T>>,
@@ -519,8 +568,12 @@ pub mod pallet {
 				None
 			};
 
-			let registration =
-				Registration { owner: owner.clone(), expiry, deposit: maybe_deposit };
+			let registration = Registration {
+				registrant: maybe_registrant,
+				owner: owner.clone(),
+				expiry,
+				deposit: maybe_deposit,
+			};
 
 			Registrations::<T>::insert(name_hash, registration);
 			Self::deposit_event(Event::<T>::NameRegistered { name_hash, owner });

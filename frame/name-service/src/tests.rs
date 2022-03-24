@@ -283,19 +283,59 @@ fn reveal_ensure_active_registration_not_registered_again() {
 }
 
 #[test]
+fn set_owner_works() {
+	new_test_ext().execute_with(|| {
+		let (_, name_hash) = alice_register_bob_senario_setup();
+
+		// check current registrant (2)
+		assert_eq!(Registrations::<Test>::get(name_hash).unwrap().registrant, Some(2));
+
+		// transfer to new owner (4)
+		let new_owner = 4;
+		assert_ok!(NameService::set_owner(Origin::signed(2), name_hash, new_owner));
+
+		// check new owner
+		assert_eq!(Registrations::<Test>::get(name_hash).unwrap().owner, new_owner);
+	});
+}
+
+#[test]
+fn set_owner_handles_errors() {
+	new_test_ext().execute_with(|| {
+		let registrant = 2;
+		let other = 3;
+		let (name_hash, _) = alice_register_bob_scenario_name_and_hash();
+
+		// Registration not found
+		assert_noop!(
+			NameService::set_owner(Origin::signed(registrant), name_hash, other),
+			Error::<Test>::RegistrationNotFound
+		);
+
+		let (_, _) = alice_register_bob_senario_setup();
+
+		// Not registrant or owner of registration
+		assert_noop!(
+			NameService::set_owner(Origin::signed(other), name_hash, other),
+			Error::<Test>::NotRegistrationRegistrantOrOwner
+		);
+	});
+}
+
+#[test]
 fn transfer_works() {
 	new_test_ext().execute_with(|| {
 		let (_, name_hash) = alice_register_bob_senario_setup();
 
-		// check current owner (2)
-		assert_eq!(Registrations::<Test>::get(name_hash).unwrap().owner, 2);
+		// check current registrant (2)
+		assert_eq!(Registrations::<Test>::get(name_hash).unwrap().registrant, Some(2));
 
-		// transfer to new owner (4)
+		// transfer to new registrant (4)
 		let new_owner = 4;
 		assert_ok!(NameService::transfer(Origin::signed(2), 4, name_hash));
 
-		// check new owner (4)
-		assert_eq!(Registrations::<Test>::get(name_hash).unwrap().owner, new_owner);
+		// check new registrant (4)
+		assert_eq!(Registrations::<Test>::get(name_hash).unwrap().registrant, Some(new_owner));
 	});
 }
 
@@ -317,7 +357,7 @@ fn transfer_handles_errors() {
 			Error::<Test>::RegistrationNotFound
 		);
 
-		// Not registration owner
+		// Not registration registrant
 		assert_eq!(Balances::free_balance(&1), 100);
 		assert_ok!(NameService::commit(Origin::signed(sender), owner, commitment_hash));
 
@@ -326,7 +366,7 @@ fn transfer_handles_errors() {
 
 		assert_noop!(
 			NameService::transfer(Origin::signed(3), 4, name_hash),
-			Error::<Test>::NotRegistrationOwner
+			Error::<Test>::NotRegistrationRegistrant
 		);
 
 		// Registration expired some time in the future
