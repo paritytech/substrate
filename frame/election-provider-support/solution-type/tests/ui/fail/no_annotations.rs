@@ -4,6 +4,7 @@ generate_solution_type!(pub struct TestSolution::<
 	u16,
 	u8,
 	Perbill,
+	MaxVoters = ConstU32::<10>,
 >(8));
 
 fn main() {}

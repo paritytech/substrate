@@ -168,7 +168,13 @@ pub fn run() -> Result<()> {
 			let runner = cli.create_runner(cmd)?;
 			runner.async_run(|config| {
 				let PartialComponents { client, task_manager, backend, .. } = new_partial(&config)?;
-				Ok((cmd.run(client, backend), task_manager))
+				let revert_aux = Box::new(|client, backend, blocks| {
+					sc_consensus_babe::revert(client, backend, blocks)?;
+					// TODO: grandpa revert
+					Ok(())
+				});
+
+				Ok((cmd.run(client, backend, Some(revert_aux)), task_manager))
 			})
 		},
 		#[cfg(feature = "try-runtime")]
