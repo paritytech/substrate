@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! Implementation of the [`DevApi`] trait providing debug utilities for Substrate based
+//! Implementation of the [`DevApiServer`] trait providing debug utilities for Substrate based
 //! blockchains.
 
 #[cfg(test)]
@@ -26,6 +26,7 @@ use jsonrpsee::core::RpcResult;
 
 pub use sc_rpc_api::dev::{BlockStats, DevApiServer};
 
+use jsonrpsee::core::RpcResult;
 use sc_client_api::{BlockBackend, HeaderBackend};
 use sc_rpc_api::{dev::error::Error, DenyUnsafe};
 use sp_api::{ApiExt, Core, ProvideRuntimeApi};
