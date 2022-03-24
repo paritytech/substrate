@@ -105,6 +105,33 @@ fn first_block_epoch_zero_start() {
 	})
 }
 
+#[test]
+fn current_slot_is_processed_on_initialization() {
+	let (pairs, mut ext) = new_test_ext_with_pairs(1);
+
+	ext.execute_with(|| {
+		let genesis_slot = Slot::from(10);
+		let (vrf_output, vrf_proof, vrf_randomness) = make_vrf_output(genesis_slot, &pairs[0]);
+		let pre_digest = make_primary_pre_digest(0, genesis_slot, vrf_output, vrf_proof);
+
+		System::reset_events();
+		System::initialize(&1, &Default::default(), &pre_digest);
+		assert_eq!(Babe::current_slot(), Slot::from(0));
+		assert!(Babe::initialized().is_none());
+
+		// current slot is updated on initialization
+		Babe::initialize(1);
+		assert_eq!(Babe::current_slot(), genesis_slot);
+		assert!(Babe::initialized().is_some());
+		// but author vrf randomness isn't
+		assert_eq!(Babe::author_vrf_randomness(), None);
+
+		// instead it is updated on block finalization
+		Babe::on_finalize(1);
+		assert_eq!(Babe::author_vrf_randomness(), Some(vrf_randomness));
+	})
+}
+
 fn test_author_vrf_output<F>(make_pre_digest: F)
 where
 	F: Fn(sp_consensus_babe::AuthorityIndex, Slot, VRFOutput, VRFProof) -> sp_runtime::Digest,
