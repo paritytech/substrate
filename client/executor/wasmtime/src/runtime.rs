@@ -414,12 +414,13 @@ pub struct Semantics {
 
 	/// Configures wasmtime to use multiple threads for compiling.
 	pub parallel_compilation: bool,
+
+	/// The number of extra WASM pages which will be allocated
+	/// on top of what is requested by the WASM blob itself.
+	pub extra_heap_pages: u64,
 }
 
 pub struct Config {
-	/// The number of wasm pages to be mounted after instantiation.
-	pub heap_pages: u64,
-
 	/// The total amount of memory in bytes an instance can request.
 	///
 	/// If specified, the runtime will be able to allocate only that much of wasm memory.
@@ -534,21 +535,7 @@ where
 
 	let (module, snapshot_data) = match code_supply_mode {
 		CodeSupplyMode::Verbatim { blob } => {
-			let mut blob = instrument(blob, &config.semantics)?;
-
-			// We don't actually need the memory to be imported so we can just convert any memory
-			// import into an export with impunity. This simplifies our code since `wasmtime` will
-			// now automatically take care of creating the memory for us, and it also allows us
-			// to potentially enable `wasmtime`'s instance pooling at a later date. (Imported
-			// memories are ineligible for pooling.)
-			blob.convert_memory_import_into_export()?;
-			blob.add_extra_heap_pages_to_memory_section(
-				config
-					.heap_pages
-					.try_into()
-					.map_err(|e| WasmError::Other(format!("invalid `heap_pages`: {}", e)))?,
-			)?;
-
+			let blob = prepare_blob_for_compilation(blob, &config.semantics)?;
 			let serialized_blob = blob.clone().serialize();
 
 			let module = wasmtime::Module::new(&engine, &serialized_blob)
@@ -587,7 +574,7 @@ where
 	Ok(WasmtimeRuntime { engine, instance_pre: Arc::new(instance_pre), snapshot_data, config })
 }
 
-fn instrument(
+fn prepare_blob_for_compilation(
 	mut blob: RuntimeBlob,
 	semantics: &Semantics,
 ) -> std::result::Result<RuntimeBlob, WasmError> {
@@ -600,6 +587,19 @@ fn instrument(
 		blob.expose_mutable_globals();
 	}
 
+	// We don't actually need the memory to be imported so we can just convert any memory
+	// import into an export with impunity. This simplifies our code since `wasmtime` will
+	// now automatically take care of creating the memory for us, and it also allows us
+	// to potentially enable `wasmtime`'s instance pooling at a later date. (Imported
+	// memories are ineligible for pooling.)
+	blob.convert_memory_import_into_export()?;
+	blob.add_extra_heap_pages_to_memory_section(
+		semantics
+			.extra_heap_pages
+			.try_into()
+			.map_err(|e| WasmError::Other(format!("invalid `extra_heap_pages`: {}", e)))?,
+	)?;
+
 	Ok(blob)
 }
 
@@ -609,7 +609,7 @@ pub fn prepare_runtime_artifact(
 	blob: RuntimeBlob,
 	semantics: &Semantics,
 ) -> std::result::Result<Vec<u8>, WasmError> {
-	let blob = instrument(blob, semantics)?;
+	let blob = prepare_blob_for_compilation(blob, semantics)?;
 
 	let engine = Engine::new(&common_config(semantics)?)
 		.map_err(|e| WasmError::Other(format!("cannot create the engine: {}", e)))?;

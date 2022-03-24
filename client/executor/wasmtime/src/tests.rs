@@ -28,8 +28,9 @@ struct RuntimeBuilder {
 	fast_instance_reuse: bool,
 	canonicalize_nans: bool,
 	deterministic_stack: bool,
-	heap_pages: u64,
+	extra_heap_pages: u64,
 	max_memory_size: Option<usize>,
+	precompile_runtime: bool,
 }
 
 impl RuntimeBuilder {
@@ -41,8 +42,9 @@ impl RuntimeBuilder {
 			fast_instance_reuse: false,
 			canonicalize_nans: false,
 			deterministic_stack: false,
-			heap_pages: 1024,
+			extra_heap_pages: 1024,
 			max_memory_size: None,
+			precompile_runtime: false,
 		}
 	}
 
@@ -56,6 +58,10 @@ impl RuntimeBuilder {
 
 	fn deterministic_stack(&mut self, deterministic_stack: bool) {
 		self.deterministic_stack = deterministic_stack;
+	}
+
+	fn precompile_runtime(&mut self, precompile_runtime: bool) {
+		self.precompile_runtime = precompile_runtime;
 	}
 
 	fn max_memory_size(&mut self, max_memory_size: Option<usize>) {
@@ -78,27 +84,31 @@ impl RuntimeBuilder {
 				.expect("failed to create a runtime blob out of test runtime")
 		};
 
-		let rt = crate::create_runtime::<HostFunctions>(
-			blob,
-			crate::Config {
-				heap_pages: self.heap_pages,
-				max_memory_size: self.max_memory_size,
-				allow_missing_func_imports: true,
-				cache_path: None,
-				semantics: crate::Semantics {
-					fast_instance_reuse: self.fast_instance_reuse,
-					deterministic_stack_limit: match self.deterministic_stack {
-						true => Some(crate::DeterministicStackLimit {
-							logical_max: 65536,
-							native_stack_max: 256 * 1024 * 1024,
-						}),
-						false => None,
-					},
-					canonicalize_nans: self.canonicalize_nans,
-					parallel_compilation: true,
+		let config = crate::Config {
+			max_memory_size: self.max_memory_size,
+			allow_missing_func_imports: true,
+			cache_path: None,
+			semantics: crate::Semantics {
+				fast_instance_reuse: self.fast_instance_reuse,
+				deterministic_stack_limit: match self.deterministic_stack {
+					true => Some(crate::DeterministicStackLimit {
+						logical_max: 65536,
+						native_stack_max: 256 * 1024 * 1024,
+					}),
+					false => None,
 				},
+				canonicalize_nans: self.canonicalize_nans,
+				parallel_compilation: true,
+				extra_heap_pages: self.extra_heap_pages,
 			},
-		)
+		};
+
+		let rt = if self.precompile_runtime {
+			let artifact = crate::prepare_runtime_artifact(blob, &config.semantics).unwrap();
+			unsafe { crate::create_runtime_from_artifact::<HostFunctions>(&artifact, config) }
+		} else {
+			crate::create_runtime::<HostFunctions>(blob, config)
+		}
 		.expect("cannot create runtime");
 
 		Arc::new(rt) as Arc<dyn WasmModule>
@@ -168,24 +178,36 @@ fn test_stack_depth_reaching() {
 }
 
 #[test]
-fn test_max_memory_pages_imported_memory() {
-	test_max_memory_pages(true);
+fn test_max_memory_pages_imported_memory_without_precompilation() {
+	test_max_memory_pages(true, false);
 }
 
 #[test]
-fn test_max_memory_pages_exported_memory() {
-	test_max_memory_pages(false);
+fn test_max_memory_pages_exported_memory_without_precompilation() {
+	test_max_memory_pages(false, false);
 }
 
-fn test_max_memory_pages(import_memory: bool) {
+#[test]
+fn test_max_memory_pages_imported_memory_with_precompilation() {
+	test_max_memory_pages(true, true);
+}
+
+#[test]
+fn test_max_memory_pages_exported_memory_with_precompilation() {
+	test_max_memory_pages(false, true);
+}
+
+fn test_max_memory_pages(import_memory: bool, precompile_runtime: bool) {
 	fn try_instantiate(
 		max_memory_size: Option<usize>,
 		wat: String,
+		precompile_runtime: bool,
 	) -> Result<(), Box<dyn std::error::Error>> {
 		let runtime = {
 			let mut builder = RuntimeBuilder::new_on_demand();
 			builder.use_wat(wat);
 			builder.max_memory_size(max_memory_size);
+			builder.precompile_runtime(precompile_runtime);
 			builder.build()
 		};
 		let mut instance = runtime.new_instance()?;
@@ -235,6 +257,7 @@ fn test_max_memory_pages(import_memory: bool) {
 			*/
 			memory(64511, None, import_memory)
 		),
+		precompile_runtime,
 	)
 	.unwrap();
 
@@ -257,6 +280,7 @@ fn test_max_memory_pages(import_memory: bool) {
 			// 1 initial, max is not specified.
 			memory(1, None, import_memory)
 		),
+		precompile_runtime,
 	)
 	.unwrap();
 
@@ -277,6 +301,7 @@ fn test_max_memory_pages(import_memory: bool) {
 			// Max is 2048.
 			memory(1, Some(2048), import_memory)
 		),
+		precompile_runtime,
 	)
 	.unwrap();
 
@@ -309,6 +334,7 @@ fn test_max_memory_pages(import_memory: bool) {
 			// Zero starting pages.
 			memory(0, None, import_memory)
 		),
+		precompile_runtime,
 	)
 	.unwrap();
 
@@ -341,6 +367,7 @@ fn test_max_memory_pages(import_memory: bool) {
 			// Initial=1, meaning after heap pages mount the total will be already 1025.
 			memory(1, None, import_memory)
 		),
+		precompile_runtime,
 	)
 	.unwrap();
 }
@@ -353,7 +380,6 @@ fn test_instances_without_reuse_are_not_leaked() {
 	let runtime = crate::create_runtime::<HostFunctions>(
 		RuntimeBlob::uncompress_if_needed(wasm_binary_unwrap()).unwrap(),
 		crate::Config {
-			heap_pages: 2048,
 			max_memory_size: None,
 			allow_missing_func_imports: true,
 			cache_path: None,
@@ -362,6 +388,7 @@ fn test_instances_without_reuse_are_not_leaked() {
 				deterministic_stack_limit: None,
 				canonicalize_nans: false,
 				parallel_compilation: true,
+				extra_heap_pages: 2048,
 			},
 		},
 	)
