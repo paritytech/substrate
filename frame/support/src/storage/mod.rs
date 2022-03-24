@@ -27,8 +27,11 @@ use crate::{
 };
 use codec::{Decode, Encode, EncodeLike, FullCodec, FullEncode};
 use sp_core::storage::ChildInfo;
-use sp_runtime::{DispatchError, generic::{Digest, DigestItem}};
 pub use sp_runtime::TransactionOutcome;
+use sp_runtime::{
+	generic::{Digest, DigestItem},
+	DispatchError,
+};
 use sp_std::prelude::*;
 pub use types::Key;
 
@@ -46,7 +49,7 @@ pub mod weak_bounded_vec;
 
 mod transaction_level_tracker {
 	const TRANSACTION_LEVEL_KEY: &'static [u8] = b":transaction_level:";
-	const TRANSACTIONAL_LIMIT: u32 = 10;
+	const TRANSACTIONAL_LIMIT: u32 = 255;
 	type Layer = u32;
 
 	pub fn get_transaction_level() -> Layer {
@@ -122,9 +125,8 @@ where
 	use sp_io::storage::{commit_transaction, rollback_transaction, start_transaction};
 	use TransactionOutcome::*;
 
-	let _guard = transaction_level_tracker::inc_transaction_level().map_err(|()|
-		DispatchError::TransactionalLimit.into()
-	)?;
+	let _guard = transaction_level_tracker::inc_transaction_level()
+		.map_err(|()| DispatchError::TransactionalLimit.into())?;
 
 	start_transaction();
 
@@ -1439,14 +1441,14 @@ pub fn storage_prefix(pallet_name: &[u8], storage_name: &[u8]) -> [u8; 32] {
 #[cfg(test)]
 mod test {
 	use super::*;
-	use crate::{assert_ok, assert_noop, hash::Identity, Twox128};
+	use crate::{assert_noop, assert_ok, hash::Identity, Twox128};
 	use bounded_vec::BoundedVec;
 	use frame_support::traits::ConstU32;
 	use generator::StorageValue as _;
 	use sp_core::hashing::twox_128;
 	use sp_io::TestExternalities;
-	use weak_bounded_vec::WeakBoundedVec;
 	use sp_runtime::DispatchResult;
+	use weak_bounded_vec::WeakBoundedVec;
 
 	#[test]
 	fn prefixed_map_works() {
@@ -1557,24 +1559,67 @@ mod test {
 	}
 
 	#[test]
-	fn is_transaction_should_return_false() {
+	fn is_transactional_should_return_false() {
 		TestExternalities::default().execute_with(|| {
-			assert!(!is_transactional())
+			assert!(!is_transactional());
 		});
 	}
 
 	#[test]
-	fn require_transaction_should_not_panic_in_with_transaction() {
+	fn is_transactional_should_not_error_in_with_transaction() {
 		TestExternalities::default().execute_with(|| {
 			assert_ok!(with_transaction(|| -> TransactionOutcome<DispatchResult> {
 				assert!(is_transactional());
 				TransactionOutcome::Commit(Ok(()))
 			}));
 
-			assert_noop!(with_transaction(|| -> TransactionOutcome<DispatchResult> {
-				assert!(is_transactional());
-				TransactionOutcome::Rollback(Err("revert".into()))
-			}), "revert");
+			assert_noop!(
+				with_transaction(|| -> TransactionOutcome<DispatchResult> {
+					assert!(is_transactional());
+					TransactionOutcome::Rollback(Err("revert".into()))
+				}),
+				"revert"
+			);
+		});
+	}
+
+	fn recursive_transactional(num: u32) -> DispatchResult {
+		if num == 0 {
+			return Ok(())
+		}
+
+		with_transaction(|| -> TransactionOutcome<DispatchResult> {
+			let res = recursive_transactional(num - 1);
+			TransactionOutcome::Commit(res)
+		})
+	}
+
+	#[test]
+	fn transaction_limit_should_work() {
+		TestExternalities::default().execute_with(|| {
+			assert_eq!(transaction_level_tracker::get_transaction_level(), 0);
+
+			assert_ok!(with_transaction(|| -> TransactionOutcome<DispatchResult> {
+				assert_eq!(transaction_level_tracker::get_transaction_level(), 1);
+				TransactionOutcome::Commit(Ok(()))
+			}));
+
+			assert_ok!(with_transaction(|| -> TransactionOutcome<DispatchResult> {
+				assert_eq!(transaction_level_tracker::get_transaction_level(), 1);
+				let res = with_transaction(|| -> TransactionOutcome<DispatchResult> {
+					assert_eq!(transaction_level_tracker::get_transaction_level(), 2);
+					TransactionOutcome::Commit(Ok(()))
+				});
+				TransactionOutcome::Commit(res)
+			}));
+
+			assert_ok!(recursive_transactional(255));
+			assert_noop!(
+				recursive_transactional(256),
+				sp_runtime::DispatchError::TransactionalLimit
+			);
+
+			assert_eq!(transaction_level_tracker::get_transaction_level(), 0);
 		});
 	}
 

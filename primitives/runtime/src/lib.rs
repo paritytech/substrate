@@ -512,7 +512,8 @@ pub enum DispatchError {
 	Token(TokenError),
 	/// An arithmetic error.
 	Arithmetic(ArithmeticError),
-	/// The number of transactional layers has been reached, or we are not in a transactional layer.
+	/// The number of transactional layers has been reached, or we are not in a transactional
+	/// layer.
 	TransactionalLimit,
 }
 
