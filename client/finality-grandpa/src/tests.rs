@@ -1685,3 +1685,82 @@ fn grandpa_environment_doesnt_send_equivocation_reports_for_itself() {
 	let equivocation_proof = sp_finality_grandpa::Equivocation::Prevote(equivocation);
 	assert!(environment.report_equivocation(equivocation_proof).is_ok());
 }
+
+// TODO: draft
+#[test]
+fn revert_prunes_authority_changes_and_resets_voter_state() {
+	sp_tracing::try_init_simple();
+	let mut runtime = Runtime::new().unwrap();
+
+	let peers_a = &[Ed25519Keyring::Alice, Ed25519Keyring::Bob, Ed25519Keyring::Charlie];
+	let peers_b = &[Ed25519Keyring::Dave, Ed25519Keyring::Eve, Ed25519Keyring::Ferdie];
+	let peers_c = &[Ed25519Keyring::Dave, Ed25519Keyring::Alice, Ed25519Keyring::Bob];
+
+	let all_peers = &[
+		Ed25519Keyring::Alice,
+		Ed25519Keyring::Bob,
+		Ed25519Keyring::Charlie,
+		Ed25519Keyring::Dave,
+		Ed25519Keyring::Eve,
+		Ed25519Keyring::Ferdie,
+	];
+	let genesis_voters = make_ids(peers_a);
+
+	// 6 peers, 3 of them are authorities and participate in grandpa from genesis
+	// but all of them will be part of the voter set eventually so they should be
+	// all added to the network as authorities
+	let api = TestApi::new(genesis_voters);
+	let mut net = GrandpaTestNet::new(api, 6, 0);
+	runtime.spawn(initialize_grandpa(&mut net, all_peers));
+
+	// add 20 blocks
+	net.peer(0).push_blocks(20, false);
+
+	// at block 21 we do add a transition which is instant
+	net.peer(0).generate_blocks(1, BlockOrigin::File, |builder| {
+		let mut block = builder.build().unwrap().block;
+		add_scheduled_change(
+			&mut block,
+			ScheduledChange { next_authorities: make_ids(peers_b), delay: 0 },
+		);
+		block
+	});
+
+	// add more blocks on top of it (until we have 25)
+	net.peer(0).push_blocks(4, false);
+
+	// at block 26 we add another which is enacted at block 30
+	net.peer(0).generate_blocks(1, BlockOrigin::File, |builder| {
+		let mut block = builder.build().unwrap().block;
+		add_scheduled_change(
+			&mut block,
+			ScheduledChange { next_authorities: make_ids(peers_c), delay: 4 },
+		);
+		block
+	});
+
+	// add more blocks on top of it (until we have 30)
+	net.peer(0).push_blocks(4, false);
+
+	// Fork before revert point
+	// TODO: missing method to generate a scheduled change over an arbitrary branch?
+	net.peer(0).push_blocks_at(BlockId::Number(23), 3, false);
+
+	// Fork after revert point
+	// TODO: missing method to generate a scheduled change over an arbitrary branch?
+	net.peer(0).push_blocks_at(BlockId::Number(25), 3, false);
+
+	let client = net.peer(0).client().as_client();
+
+	revert(client, 6).unwrap();
+
+	net.block_until_sync();
+
+	// all peers imported both change blocks
+	for i in 0..6 {
+		assert_eq!(net.peer(i).client().info().best_number, 28, "Peer #{} failed to sync", i);
+	}
+
+	let net = Arc::new(Mutex::new(net));
+	run_to_completion(&mut runtime, 21, net.clone(), all_peers);
+}

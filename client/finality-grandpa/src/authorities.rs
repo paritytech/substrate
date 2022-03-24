@@ -21,7 +21,7 @@
 use std::{cmp::Ord, fmt::Debug, ops::Add};
 
 use finality_grandpa::voter_set::VoterSet;
-use fork_tree::ForkTree;
+use fork_tree::{FilterAction, ForkTree};
 use log::debug;
 use parity_scale_codec::{Decode, Encode};
 use parking_lot::MappedMutexGuard;
@@ -175,6 +175,36 @@ where
 	H: PartialEq,
 	N: Ord + Clone,
 {
+	/// Revert to a specified block given its `hash` and `number`.
+	/// This removes all the authority set changes information that has been
+	/// announced after the given block descendents.
+	pub(crate) fn revert<F, E>(&mut self, hash: H, number: N, is_descendent_of: &F)
+	where
+		F: Fn(&H, &H) -> Result<bool, E>,
+	{
+		let mut filter = |node_hash: &H, node_num: &N, _: &PendingChange<H, N>| {
+			if number >= *node_num &&
+				(is_descendent_of(node_hash, &hash).unwrap_or_default() || *node_hash == hash)
+			{
+				// Continue the search in this subtree.
+				FilterAction::KeepNode
+			} else if number < *node_num && is_descendent_of(&hash, node_hash).unwrap_or_default() {
+				// Found a node to be removed.
+				FilterAction::Remove
+			} else {
+				// Not a parent or child of the one we're looking for, stop processing this branch.
+				FilterAction::KeepTree
+			}
+		};
+
+		// Removed standard changes. Just ignore the removed set changes.
+		let _ = self.pending_standard_changes.drain_filter(&mut filter);
+
+		// Remove forced changes.
+		self.pending_forced_changes
+			.retain(|change| !is_descendent_of(&hash, &change.canon_hash).unwrap_or_default());
+	}
+
 	// authority sets must be non-empty and all weights must be greater than 0
 	fn invalid_authority_list(authorities: &AuthorityList) -> bool {
 		authorities.is_empty() || authorities.iter().any(|(_, w)| *w == 0)
