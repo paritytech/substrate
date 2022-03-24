@@ -18,16 +18,16 @@
 
 //! A set of APIs supported by the client along with their primitives.
 
+use crate::{blockchain::Info, notifications::StorageEventStream, FinalizeSummary, ImportSummary};
+use futures::Stream;
 use sp_consensus::BlockOrigin;
 use sp_core::storage::StorageKey;
 use sp_runtime::{
-	generic::{BlockId, SignedBlock},
+	generic::{Block, BlockId, SignedBlock},
 	traits::{Block as BlockT, NumberFor},
 	Justifications,
 };
-use std::{collections::HashSet, convert::TryFrom, fmt, sync::Arc};
-
-use crate::{blockchain::Info, notifications::StorageEventStream, FinalizeSummary, ImportSummary};
+use std::{collections::HashSet, convert::TryFrom, fmt, pin::Pin, sync::Arc};
 
 use sc_transaction_pool_api::ChainEvent;
 use sc_utils::mpsc::TracingUnboundedReceiver;
@@ -57,6 +57,13 @@ pub trait BlockOf {
 	type Type: BlockT;
 }
 
+pub trait BlockchainRPCEvents<Block: BlockT> {
+	fn finality_notification_stream(&self) -> Pin<Box<dyn Stream<Item = Block::Header> + Send>>;
+
+	fn import_notification_stream(&self) -> Pin<Box<dyn Stream<Item = Block::Header> + Send>>;
+
+	fn best_head_stream(&self) -> Pin<Box<dyn Stream<Item = Block::Header> + Send>>;
+}
 /// A source of blockchain events.
 pub trait BlockchainEvents<Block: BlockT> {
 	/// Get block import event stream. Not guaranteed to be fired for every

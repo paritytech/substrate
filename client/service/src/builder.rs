@@ -17,7 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::{
-	build_network_future,
+	build_network_collator_future, build_network_future,
 	client::{Client, ClientConfig},
 	config::{Configuration, KeystoreConfig, PrometheusConfig, TransactionStorageMode},
 	error::Error,
@@ -31,7 +31,8 @@ use prometheus_endpoint::Registry;
 use sc_chain_spec::get_extension;
 use sc_client_api::{
 	execution_extensions::ExecutionExtensions, proof_provider::ProofProvider, BadBlocks,
-	BlockBackend, BlockchainEvents, ExecutorProvider, ForkBlocks, StorageProvider, UsageProvider,
+	BlockBackend, BlockchainEvents, BlockchainRPCEvents, ExecutorProvider, ForkBlocks,
+	StorageProvider, UsageProvider,
 };
 use sc_client_db::{Backend, DatabaseSettings};
 use sc_consensus::import_queue::ImportQueue;
@@ -745,7 +746,7 @@ pub struct BuildCollatorNetworkParams<'a, TImpQu, TCl> {
 }
 
 /// Build the network service, the network status sinks and an RPC sender.
-pub fn build_collator_network<TBl, TExPool, TImpQu, TCl>(
+pub fn build_collator_network<TBl, TImpQu, TCl>(
 	params: BuildCollatorNetworkParams<TImpQu, TCl>,
 ) -> Result<
 	(
@@ -763,9 +764,8 @@ where
 		+ BlockIdTo<TBl, Error = sp_blockchain::Error>
 		+ ProofProvider<TBl>
 		+ HeaderBackend<TBl>
-		+ BlockchainEvents<TBl>
+		+ BlockchainRPCEvents<TBl>
 		+ 'static,
-	TExPool: MaintainedTransactionPool<Block = TBl, Hash = <TBl as BlockT>::Hash> + 'static,
 	TImpQu: ImportQueue<TBl> + 'static,
 {
 	let BuildCollatorNetworkParams { config, client, spawn_handle, import_queue } = params;
@@ -873,7 +873,7 @@ where
 
 	let (system_rpc_tx, system_rpc_rx) = tracing_unbounded("mpsc_system_rpc");
 
-	let future = build_network_future(
+	let future = build_network_collator_future(
 		config.role.clone(),
 		network_mut,
 		client,
