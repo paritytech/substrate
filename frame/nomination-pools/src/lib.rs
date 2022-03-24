@@ -1132,8 +1132,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Bond up to `extra` more funds from `origin` into the pool to which they already
-		/// belong.
+		/// Bond `extra` more funds from `origin` into the pool to which they already belong.
 		///
 		/// Additional funds can come from either the free balance of the account, of from the
 		/// accumulated rewards, see [`BondExtra`].
@@ -1148,10 +1147,8 @@ pub mod pallet {
 				Self::get_delegator_with_pools(&who)?;
 
 			let (points_issued, bonded) = match extra {
-				BondExtra::FreeBalance(amount) => {
-					let amount = amount.min(T::Currency::free_balance(&who));
-					(bonded_pool.try_bond_funds(&who, amount, BondType::Later)?, amount)
-				},
+				BondExtra::FreeBalance(amount) =>
+					(bonded_pool.try_bond_funds(&who, amount, BondType::Later)?, amount),
 				BondExtra::Rewards => {
 					let claimed = Self::do_reward_payout(
 						&who,
