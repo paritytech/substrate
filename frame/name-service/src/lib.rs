@@ -305,13 +305,12 @@ pub mod pallet {
 			Registrations::<T>::try_mutate(name_hash, |maybe_registration| {
 				let r = maybe_registration.as_mut().ok_or(Error::<T>::RegistrationNotFound)?;
 
-				let maybe_registrant = r.registrant.clone();
-				let is_registrant =
-					if let Some(reg) = maybe_registrant { reg == sender } else { false };
+				// registrant has to exist. Subnodes use `set_subnode_owner` instead.
+				let registrant =
+					r.registrant.clone().ok_or(Error::<T>::RegistrationRegistrantNotFound)?;
 
-				let is_owner = r.owner == sender;
 				ensure!(
-					!(!is_registrant && !is_owner),
+					!(!(registrant == sender) && !(r.owner == sender)),
 					Error::<T>::NotRegistrationRegistrantOrOwner
 				);
 
@@ -651,7 +650,6 @@ pub mod pallet {
 						);
 					}
 				}
-
 				name_hash
 			};
 
