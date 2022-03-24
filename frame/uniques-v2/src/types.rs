@@ -53,6 +53,8 @@ pub struct Collection<CollectionId, Account, Balance> {
 	pub owner: Account,
 	pub deposit: Option<Balance>,
 	pub attributes: u32,
+	pub items: u32,
+	pub item_metadatas: u32,
 }
 
 #[derive(Encode, Decode, PartialEq, Default, MaxEncodedLen, TypeInfo)]
@@ -84,6 +86,12 @@ pub struct ItemMetadata<Metadata> {
 /// Witness data for the destroy transactions.
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, Default, TypeInfo, MaxEncodedLen)]
 pub struct DestroyWitness {
+	/// The total number of outstanding instances of this asset class.
+	#[codec(compact)]
+	pub items: u32,
+	/// The total number of outstanding instance metadata of this asset class.
+	#[codec(compact)]
+	pub item_metadatas: u32,
 	/// The total number of attributes for this asset class.
 	#[codec(compact)]
 	pub attributes: u32,
@@ -92,6 +100,8 @@ pub struct DestroyWitness {
 impl<ItemId, Account, Balance> Collection<ItemId, Account, Balance> {
 	pub fn destroy_witness(&self) -> DestroyWitness {
 		DestroyWitness {
+			items: self.items,
+			item_metadatas: self.item_metadatas,
 			attributes: self.attributes,
 		}
 	}

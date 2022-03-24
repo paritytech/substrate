@@ -108,18 +108,6 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(super) type CountForCollections<T: Config> = StorageValue<_, T::CollectionId, ValueQuery>;
 
-	/// Maps a collection id to it's items.
-	#[pallet::storage]
-	pub(super) type CollectionMap<T: Config> = StorageDoubleMap<
-		_,
-		Blake2_128Concat,
-		T::CollectionId,
-		Blake2_128Concat,
-		T::CollectionId,
-		Item<T::CollectionId, T::AccountId, BalanceOf<T>>,
-		OptionQuery,
-	>;
-
 	#[pallet::storage]
 	/// Metadata of an collection.
 	pub(super) type CollectionMetadataOf<T: Config> = StorageMap<
@@ -127,6 +115,18 @@ pub mod pallet {
 		Blake2_128Concat,
 		T::CollectionId,
 		CollectionMetadata<MetadataOf<T>>,
+		OptionQuery,
+	>;
+
+	/// Maps a collection id to it's items.
+	#[pallet::storage]
+	pub(super) type Items<T: Config> = StorageDoubleMap<
+		_,
+		Blake2_128Concat,
+		T::CollectionId,
+		Blake2_128Concat,
+		T::ItemId,
+		Item<T::ItemId, T::AccountId, BalanceOf<T>>,
 		OptionQuery,
 	>;
 
@@ -282,12 +282,14 @@ pub mod pallet {
 		// +collection metadata + attributes
 
 		// PART 3:
+		// +structure => will affect collection destruction
 		// mint items
 		// max supply => applies to mint
 		// max items per user => applies to mint and transfer
 		// isTransferable => applies to transfer
 		// transfer items
 		// items metadata + attributes. Metadata could be changed by the collection's owner only
+		// burn item
 
 		#[pallet::weight(0)]
 		pub fn set_admin(
