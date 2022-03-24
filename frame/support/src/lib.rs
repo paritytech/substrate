@@ -93,7 +93,9 @@ pub use self::{
 		StorageMap, StorageNMap, StoragePrefixedMap, StorageValue,
 	},
 };
-pub use sp_runtime::{self, print, traits::Printable, ConsensusEngineId};
+pub use sp_runtime::{
+	self, print, traits::Printable, ConsensusEngineId, MAX_MODULE_ERROR_ENCODED_SIZE,
+};
 
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
@@ -103,7 +105,7 @@ use sp_runtime::TypeId;
 pub const LOG_TARGET: &'static str = "runtime::frame-support";
 
 /// A type that cannot be instantiated.
-#[derive(Debug, PartialEq, Eq, Clone, TypeInfo)]
+#[derive(Encode, Decode, Debug, PartialEq, Eq, Clone, TypeInfo)]
 pub enum Never {}
 
 /// A pallet identifier. These are per pallet and should be stored in a registry somewhere.
@@ -598,11 +600,12 @@ pub fn debug(data: &impl sp_std::fmt::Debug) {
 
 #[doc(inline)]
 pub use frame_support_procedural::{
-	construct_runtime, decl_storage, match_and_insert, transactional, RuntimeDebugNoBound,
+	construct_runtime, decl_storage, match_and_insert, transactional, PalletError,
+	RuntimeDebugNoBound,
 };
 
 #[doc(hidden)]
-pub use frame_support_procedural::__generate_dummy_part_checker;
+pub use frame_support_procedural::{__create_tt_macro, __generate_dummy_part_checker};
 
 /// Derive [`Clone`] but do not bound any generic.
 ///
@@ -845,6 +848,32 @@ macro_rules! assert_ok {
 	( $x:expr, $y:expr $(,)? ) => {
 		assert_eq!($x, Ok($y));
 	};
+}
+
+/// Assert that the maximum encoding size does not exceed the value defined in
+/// [`MAX_MODULE_ERROR_ENCODED_SIZE`] during compilation.
+///
+/// This macro is intended to be used in conjunction with `tt_call!`.
+#[macro_export]
+macro_rules! assert_error_encoded_size {
+	{
+		path = [{ $($path:ident)::+ }]
+		runtime = [{ $runtime:ident }]
+		assert_message = [{ $assert_message:literal }]
+		error = [{ $error:ident }]
+	} => {
+		const _: () = assert!(
+			<
+				$($path::)+$error<$runtime> as $crate::traits::PalletError
+			>::MAX_ENCODED_SIZE <= $crate::MAX_MODULE_ERROR_ENCODED_SIZE,
+			$assert_message
+		);
+	};
+	{
+		path = [{ $($path:ident)::+ }]
+		runtime = [{ $runtime:ident }]
+		assert_message = [{ $assert_message:literal }]
+	} => {};
 }
 
 #[cfg(feature = "std")]
@@ -1375,6 +1404,7 @@ pub mod pallet_prelude {
 			TransactionTag, TransactionValidity, TransactionValidityError, UnknownTransaction,
 			ValidTransaction,
 		},
+		MAX_MODULE_ERROR_ENCODED_SIZE,
 	};
 	pub use sp_std::marker::PhantomData;
 }
@@ -1652,10 +1682,25 @@ pub mod pallet_prelude {
 /// pub enum Error<T> {
 /// 	/// $some_optional_doc
 /// 	$SomeFieldLessVariant,
+/// 	/// $some_more_optional_doc
+/// 	$SomeVariantWithOneField(FieldType),
 /// 	...
 /// }
 /// ```
-/// I.e. a regular rust enum named `Error`, with generic `T` and fieldless variants.
+/// I.e. a regular rust enum named `Error`, with generic `T` and fieldless or multiple-field
+/// variants.
+///
+/// Any field type in the enum variants must implement [`scale_info::TypeInfo`] in order to be
+/// properly used in the metadata, and its encoded size should be as small as possible,
+/// preferably 1 byte in size in order to reduce storage size. The error enum itself has an
+/// absolute maximum encoded size specified by [`MAX_MODULE_ERROR_ENCODED_SIZE`].
+///
+/// Field types in enum variants must also implement [`PalletError`](traits::PalletError),
+/// otherwise the pallet will fail to compile. Rust primitive types have already implemented
+/// the [`PalletError`](traits::PalletError) trait along with some commonly used stdlib types
+/// such as `Option` and `PhantomData`, and hence in most use cases, a manual implementation is
+/// not necessary and is discouraged.
+///
 /// The generic `T` mustn't bound anything and where clause is not allowed. But bounds and
 /// where clause shouldn't be needed for any usecase.
 ///
