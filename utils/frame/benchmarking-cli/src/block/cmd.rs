@@ -47,11 +47,11 @@ use super::bench::{Benchmark, BenchmarkParams};
 ///
 /// The output will be similar to this:
 ///
-/// Block 1 with 1 tx consumed      6,989,645 ns and took      5,556,708 ns to execute ( 79.50%)
-/// Block 2 with 1 tx consumed      6,989,645 ns and took      5,493,558 ns to execute ( 78.60%)
-/// Block 3 with 1 tx consumed      6,989,645 ns and took      5,515,320 ns to execute ( 78.91%)    
+/// Block 1 with 1 tx used 77.34% of its weight ( 5,308,964 of 6,864,645 ns)
+/// Block 2 with 1 tx used 77.99% of its weight ( 5,353,992 of 6,864,645 ns)
+/// Block 3 with 1 tx used 75.91% of its weight ( 5,305,938 of 6,989,645 ns)
 ///
-/// The percent number at the end is important and indicates how much weight
+/// The percent number is important and indicates how much weight
 /// was used as compared to the consumed weight.
 /// This number should be below 100% for reference hardware.
 #[derive(Debug, Parser)]
