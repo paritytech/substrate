@@ -156,7 +156,9 @@ where
 		trace!(target: "beefy", "🥩 Round #{} done: {}", round.1, done);
 
 		if done {
+			// remove this and older (now stale) rounds
 			let signatures = self.rounds.remove(round)?.votes;
+			self.rounds.retain(|&(_, number), _| number > round.1);
 			self.best_done = self.best_done.clone().max(Some(round.1.clone()));
 			trace!(target: "beefy", "🥩 Concluded round #{}", round.1);
 
@@ -402,7 +404,7 @@ mod tests {
 
 		// conclude round 2
 		let signatures = rounds.try_conclude(&(H256::from_low_u64_le(2), 2)).unwrap();
-		assert_eq!(2, rounds.rounds.len());
+		assert_eq!(1, rounds.rounds.len());
 
 		assert_eq!(
 			signatures,

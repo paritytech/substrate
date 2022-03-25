@@ -60,25 +60,25 @@ impl<B: Block> KnownVotes<B> {
 	}
 
 	/// Create new round votes set if not already present.
-	pub fn insert(&mut self, round: NumberFor<B>) {
+	fn insert(&mut self, round: NumberFor<B>) {
 		self.live.entry(round).or_default();
 	}
 
-	/// Remove round from live set, update `last_done` accordingly.
-	pub fn remove(&mut self, round: NumberFor<B>) {
-		self.live.remove(&round);
+	/// Remove `round` and older from live set, update `last_done` accordingly.
+	fn conclude(&mut self, round: NumberFor<B>) {
+		self.live.retain(|&number, _| number > round);
 		self.last_done = self.last_done.max(Some(round));
 	}
 
 	/// Return true if `round` is newer than previously concluded rounds.
 	///
 	/// Latest concluded round is still considered alive to allow proper gossiping for it.
-	pub fn is_live(&self, round: &NumberFor<B>) -> bool {
+	fn is_live(&self, round: &NumberFor<B>) -> bool {
 		Some(*round) >= self.last_done
 	}
 
 	/// Add new _known_ `hash` to the round's known votes.
-	pub fn add_known(&mut self, round: &NumberFor<B>, hash: MessageHash) {
+	fn add_known(&mut self, round: &NumberFor<B>, hash: MessageHash) {
 		self.live.get_mut(round).map(|known| known.insert(hash));
 	}
 
@@ -130,7 +130,7 @@ where
 	/// This can be called once round is complete so we stop gossiping for it.
 	pub(crate) fn conclude_round(&self, round: NumberFor<B>) {
 		debug!(target: "beefy", "🥩 About to drop gossip round #{}", round);
-		self.known_votes.write().remove(round);
+		self.known_votes.write().conclude(round);
 	}
 }
 
@@ -256,15 +256,15 @@ mod tests {
 		kv.insert(3);
 
 		assert!(kv.last_done.is_none());
-		kv.remove(2);
-		assert_eq!(kv.live.len(), 2);
+		kv.conclude(2);
+		assert_eq!(kv.live.len(), 1);
 		assert!(!kv.live.contains_key(&2));
 		assert_eq!(kv.last_done, Some(2));
 
-		kv.remove(1);
+		kv.conclude(1);
 		assert_eq!(kv.last_done, Some(2));
 
-		kv.remove(3);
+		kv.conclude(3);
 		assert_eq!(kv.last_done, Some(3));
 		assert!(kv.live.is_empty());
 	}
