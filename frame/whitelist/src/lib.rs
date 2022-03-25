@@ -39,7 +39,7 @@ mod mock;
 mod tests;
 pub mod weights;
 
-use codec::{Decode, DecodeLimit, Encode, FullCodec, MaxEncodedLen};
+use codec::{DecodeLimit, Encode, FullCodec};
 use frame_support::{
 	ensure,
 	traits::{PreimageProvider, PreimageRecipient},
