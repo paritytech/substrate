@@ -260,8 +260,8 @@ frame_benchmarking::benchmarks! {
 
 		// we don't directly need the data-provider to be populated, but it is just easy to use it.
 		set_up_data_provider::<T>(v, t);
-		let targets = T::DataProvider::targets(None)?;
-		let voters = T::DataProvider::voters(None)?;
+		let targets = T::DataProvider::electable_targets(None)?;
+		let voters = T::DataProvider::electing_voters(None)?;
 		let desired_targets = T::DataProvider::desired_targets()?;
 		assert!(<MultiPhase<T>>::snapshot().is_none());
 	}: {

@@ -23,7 +23,7 @@ log = "0.4.8"
 sp-core = { version = "6.0.0", path = "../../primitives/core" }
 rpc = { package = "jsonrpc-core", version = "18.0.0" }
 sp-version = { version = "5.0.0", path = "../../primitives/version" }
-serde_json = "1.0.74"
+serde_json = "1.0.79"
 sp-session = { version = "4.0.0-dev", path = "../../primitives/session" }
 sp-offchain = { version = "4.0.0-dev", path = "../../primitives/offchain" }
 sp-runtime = { version = "6.0.0", path = "../../primitives/runtime" }
