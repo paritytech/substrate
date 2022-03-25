@@ -37,7 +37,7 @@ pub mod common;
 async fn temp_base_path_works() {
 	let mut cmd = Command::new(cargo_bin("substrate"));
 	let mut child = common::KillChildOnDrop(
-		cmd.args(&["--dev", "--tmp"])
+		cmd.args(&["--dev", "--tmp", "--disable-hardware-benchmarks"])
 			.stdout(Stdio::piped())
 			.stderr(Stdio::piped())
 			.spawn()
