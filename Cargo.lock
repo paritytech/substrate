@@ -484,12 +484,15 @@ dependencies = [
  "beefy-primitives",
  "fnv",
  "futures 0.3.19",
+ "futures-timer",
  "hex",
  "log 0.4.14",
  "parity-scale-codec",
  "parking_lot 0.12.0",
  "sc-chain-spec",
  "sc-client-api",
+ "sc-consensus",
+ "sc-finality-grandpa",
  "sc-keystore",
  "sc-network",
  "sc-network-gossip",
@@ -500,13 +503,19 @@ dependencies = [
  "sp-application-crypto",
  "sp-arithmetic",
  "sp-blockchain",
+ "sp-consensus",
  "sp-core",
+ "sp-finality-grandpa",
+ "sp-keyring",
  "sp-keystore",
  "sp-runtime",
  "sp-tracing",
  "strum",
  "substrate-prometheus-endpoint",
+ "substrate-test-runtime-client",
+ "tempfile",
  "thiserror",
+ "tokio",
  "wasm-timer",
 ]
 
@@ -10688,6 +10697,7 @@ dependencies = [
 name = "substrate-test-runtime"
 version = "2.0.0"
 dependencies = [
+ "beefy-primitives",
  "cfg-if 1.0.0",
  "frame-support",
  "frame-system",
