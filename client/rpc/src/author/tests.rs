@@ -73,15 +73,11 @@ impl Default for TestSetup {
 
 impl TestSetup {
 	fn author(&self) -> Author<FullTransactionPool, Client<Backend>> {
-		let (tx, rx) = tracing_unbounded("rpc_author_tests");
+		let (tx, rx) = tracing_unbounded("mixnet_tests");
 		std::thread::spawn(move || {
 			futures::executor::block_on(rx.for_each(move |request| {
-				match request {
-					Request::SendToMixnet(_, sender) => {
-						let _ = sender.send(Ok(()));
-					},
-					_ => panic!("Not expected"),
-				};
+				let SendToMixnet(_, sender) = request;
+				let _ = sender.send(Ok(()));
 				futures::future::ready(())
 			}))
 		});
@@ -90,7 +86,7 @@ impl TestSetup {
 			pool: self.pool.clone(),
 			subscriptions: SubscriptionManager::new(Arc::new(crate::testing::TaskExecutor)),
 			keystore: self.keystore.clone(),
-			network: tx,
+			mixnet: tx,
 			deny_unsafe: DenyUnsafe::No,
 		}
 	}

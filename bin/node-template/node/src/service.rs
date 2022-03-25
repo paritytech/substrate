@@ -194,7 +194,7 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 		Vec::default(),
 	));
 
-	let (network, system_rpc_tx, network_starter) =
+	let (network, system_rpc_tx, mixnet_tx, network_starter) =
 		sc_service::build_network(sc_service::BuildNetworkParams {
 			config: &config,
 			client: client.clone(),
@@ -242,6 +242,7 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 		rpc_extensions_builder,
 		backend,
 		system_rpc_tx,
+		mixnet_tx,
 		config,
 		telemetry: telemetry.as_mut(),
 	})?;

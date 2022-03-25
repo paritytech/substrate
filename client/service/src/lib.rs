@@ -142,6 +142,7 @@ async fn build_network_future<
 	mut network: sc_network::NetworkWorker<B, H>,
 	client: Arc<C>,
 	mut rpc_rx: TracingUnboundedReceiver<sc_rpc::system::Request<B>>,
+	mut mixnet_rx: TracingUnboundedReceiver<sc_rpc::author::SendToMixnet>,
 	should_have_peers: bool,
 	announce_imported_blocks: bool,
 ) {
@@ -261,17 +262,16 @@ async fn build_network_future<
 							highest_block: network.best_seen_block(),
 						});
 					}
-					// TODO ok having a system requiset make easy access to network here.
-					// should move network to rpc instanciation rather.
-					sc_rpc::system::Request::SendToMixnet(tx, sender) => {
-						let _ = match network.send_transaction_to_mixnet(tx) {
-							Ok(()) => sender.send(Ok(())),
-							Err(e) => sender.send(Err(sc_rpc::system::error::Error::MalformattedPeerArg(
-								e.to_string(),
-							))),
-						};
-					}
 				}
+			}
+
+			// Answer mixnet message to send.
+			request = mixnet_rx.select_next_some() => {
+				let sc_rpc::author::SendToMixnet(tx, sender) = request;
+				let _ = match network.send_transaction_to_mixnet(tx) {
+					Ok(()) => sender.send(Ok(())),
+					Err(e) => sender.send(Err(sc_rpc::author::error::Error::Mixnet(e))),
+				};
 			}
 
 			// The network worker has done something. Nothing special to do, but could be

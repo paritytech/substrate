@@ -396,6 +396,8 @@ pub struct SpawnTasksParams<'a, TBl: BlockT, TCl, TExPool, TRpc, Backend> {
 	pub network: Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>,
 	/// A Sender for RPC requests.
 	pub system_rpc_tx: TracingUnboundedSender<sc_rpc::system::Request<TBl>>,
+	/// A Sender for mixnet message. TODO remove rpc from namea and move type somewhere else.
+	pub mixnet_tx: TracingUnboundedSender<sc_rpc::author::SendToMixnet>,
 	/// Telemetry instance for this node.
 	pub telemetry: Option<&'a mut Telemetry>,
 }
@@ -475,6 +477,7 @@ where
 		rpc_extensions_builder,
 		network,
 		system_rpc_tx,
+		mixnet_tx,
 		telemetry,
 	} = params;
 
@@ -545,6 +548,7 @@ where
 			&*rpc_extensions_builder,
 			backend.offchain_storage(),
 			system_rpc_tx.clone(),
+			mixnet_tx.clone(),
 		)
 	};
 	let rpc_metrics = sc_rpc_server::RpcMetrics::new(config.prometheus_registry())?;
@@ -643,6 +647,7 @@ fn gen_handler<TBl, TBackend, TExPool, TRpc, TCl>(
 	rpc_extensions_builder: &(dyn RpcExtensionBuilder<Output = TRpc> + Send),
 	offchain_storage: Option<<TBackend as sc_client_api::backend::Backend<TBl>>::OffchainStorage>,
 	system_rpc_tx: TracingUnboundedSender<sc_rpc::system::Request<TBl>>,
+	mixnet_tx: TracingUnboundedSender<sc_rpc::author::SendToMixnet>,
 ) -> Result<sc_rpc_server::RpcHandler<sc_rpc::Metadata>, Error>
 where
 	TBl: BlockT,
@@ -695,7 +700,7 @@ where
 		transaction_pool,
 		subscriptions,
 		keystore,
-		system_rpc_tx.clone(),
+		mixnet_tx,
 		deny_unsafe,
 	);
 	let system = system::System::new(system_info, system_rpc_tx, deny_unsafe);
@@ -745,6 +750,7 @@ pub fn build_network<TBl, TExPool, TImpQu, TCl>(
 	(
 		Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>,
 		TracingUnboundedSender<sc_rpc::system::Request<TBl>>,
+		TracingUnboundedSender<sc_rpc::author::SendToMixnet>,
 		NetworkStarter,
 	),
 	Error,
@@ -891,12 +897,14 @@ where
 	let network = network_mut.service().clone();
 
 	let (system_rpc_tx, system_rpc_rx) = tracing_unbounded("mpsc_system_rpc");
+	let (mixnet_tx, mixnet_rx) = tracing_unbounded("mpsc_mixnet");
 
 	let future = build_network_future(
 		config.role.clone(),
 		network_mut,
 		client,
 		system_rpc_rx,
+		mixnet_rx,
 		has_bootnodes,
 		config.announce_block,
 	);
@@ -937,7 +945,7 @@ where
 		future.await
 	});
 
-	Ok((network, system_rpc_tx, NetworkStarter(network_start_tx)))
+	Ok((network, system_rpc_tx, mixnet_tx, NetworkStarter(network_start_tx)))
 }
 
 /// Object used to start the network.

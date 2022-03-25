@@ -48,7 +48,9 @@ use self::error::{Error, FutureResult, Result};
 /// Re-export the API for backward compatibility.
 pub use sc_rpc_api::author::*;
 
-use crate::system::Request;
+/// Submit transaction to the mix network. TODO these request are query request, probably
+/// somewhere else for SendToMixnet
+pub struct SendToMixnet(pub Vec<u8>, pub oneshot::Sender<Result<()>>);
 
 /// Authoring API
 pub struct Author<P: TransactionPool + Sync + Send + 'static, Client> {
@@ -66,7 +68,7 @@ pub struct Author<P: TransactionPool + Sync + Send + 'static, Client> {
 	/// simply have
 	/// direct access to mixnet.
 	/// Ok this may be generic to send multiple info.
-	network: TracingUnboundedSender<Request<P::Block>>,
+	mixnet: TracingUnboundedSender<SendToMixnet>,
 }
 
 impl<P, Client> Author<P, Client>
@@ -79,10 +81,10 @@ where
 		pool: Arc<P>,
 		subscriptions: SubscriptionManager,
 		keystore: SyncCryptoStorePtr,
-		network: TracingUnboundedSender<Request<P::Block>>,
+		mixnet: TracingUnboundedSender<SendToMixnet>,
 		deny_unsafe: DenyUnsafe,
 	) -> Self {
-		Author { client, pool, subscriptions, keystore, network, deny_unsafe }
+		Author { client, pool, subscriptions, keystore, mixnet, deny_unsafe }
 	}
 }
 
@@ -163,7 +165,7 @@ where
 
 	fn mix_extrinsic(&self, ext: Bytes) -> FutureResult<()> {
 		let (tx, rx) = oneshot::channel();
-		let _ = self.network.unbounded_send(Request::SendToMixnet(ext.to_vec(), tx));
+		let _ = self.mixnet.unbounded_send(SendToMixnet(ext.to_vec(), tx));
 		async move {
 			match rx.await {
 				Ok(Ok(())) => Ok(()),

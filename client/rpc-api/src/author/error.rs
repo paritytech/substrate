@@ -55,10 +55,15 @@ pub enum Error {
 	/// Call to an unsafe RPC was denied.
 	#[error(transparent)]
 	UnsafeRpcCalled(#[from] crate::policy::UnsafeRpcError),
+	/// Mixnet subsystem error.
+	#[error("Mixnet error: {}", .0)]
+	Mixnet(String),
 	/// Network subsystem error.
 	#[error("Network error: {}", .0)]
 	Network(Box<dyn std::error::Error + Send>),
 }
+
+//TODO consider removing network error in favor of mixnet one.
 
 /// Base code for all authorship errors.
 const BASE_ERROR: i64 = 1000;
@@ -86,6 +91,8 @@ const POOL_IMMEDIATELY_DROPPED: i64 = POOL_INVALID_TX + 6;
 const POOL_UNACTIONABLE: i64 = POOL_INVALID_TX + 8;
 /// The transaction was not submitted because of the network error.
 const NETWORK_ERROR: i64 = POOL_INVALID_TX + 9;
+/// The transaction was not submitted because of misnet error.
+const MIXNET_ERROR: i64 = POOL_INVALID_TX + 10;
 
 impl From<Error> for rpc::Error {
 	fn from(e: Error) -> Self {
@@ -159,6 +166,12 @@ impl From<Error> for rpc::Error {
 				message: "Unknown key type crypto" .into(),
 				data: Some(format!("Error submitting transaction to the network: {}", e).into()),
 			},
+			Error::Mixnet(e) => rpc::Error {
+				code: rpc::ErrorCode::ServerError(MIXNET_ERROR),
+				message: "Error from mixnet" .into(),
+				data: Some(format!("Error submitting transaction to the network: {}", e).into()),
+			},
+
 			e => errors::internal(e),
 		}
 	}

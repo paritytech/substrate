@@ -120,10 +120,6 @@ fn api<T: Into<Option<Status>>>(sync: T) -> System<Block> {
 						highest_block: Some(3),
 					});
 				},
-				Request::SendToMixnet(_, _) => {
-					// TODO having this in system looks ko, others request are request not action.
-					panic!("Not expected");
-				},
 			};
 
 			future::ready(())
