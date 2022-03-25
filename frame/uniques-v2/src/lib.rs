@@ -242,7 +242,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 			let new_owner = T::Lookup::lookup(new_owner)?;
-			Self::do_transfer_ownership(id, sender, new_owner);
+			Self::do_transfer_ownership(id, sender, new_owner)?;
 			Ok(())
 		}
 
@@ -255,7 +255,7 @@ pub mod pallet {
 			value: AttributeValueOf<T>,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
-			Self::do_set_attributes(sender, collection_id, maybe_item, key, value);
+			Self::do_set_attributes(sender, collection_id, maybe_item, key, value)?;
 			Ok(())
 		}
 
@@ -267,7 +267,7 @@ pub mod pallet {
 			key: AttributeKeyOf<T>,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
-			Self::do_clear_attribute(sender, collection_id, maybe_item, key);
+			Self::do_clear_attribute(sender, collection_id, maybe_item, key)?;
 			Ok(())
 		}
 

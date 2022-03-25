@@ -16,7 +16,7 @@
 // limitations under the License.
 
 use codec::{Decode, Encode, MaxEncodedLen};
-use enumflags2::{bitflags, BitFlag, BitFlags};
+use enumflags2::{bitflags};
 use frame_support::RuntimeDebug;
 use scale_info::TypeInfo;
 
