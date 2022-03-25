@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -104,7 +104,7 @@ pub struct OverlayedChanges {
 	stats: StateMachineStats,
 }
 
-/// Transcation index operation.
+/// Transaction index operation.
 #[derive(Debug, Clone)]
 pub enum IndexOperation {
 	/// Insert transaction into index.
@@ -500,21 +500,19 @@ impl OverlayedChanges {
 	pub fn into_storage_changes<B: Backend<H>, H: Hasher>(
 		mut self,
 		backend: &B,
-		parent_hash: H::Out,
 		mut cache: StorageTransactionCache<B::Transaction, H>,
 		state_version: StateVersion,
 	) -> Result<StorageChanges<B::Transaction, H>, DefaultError>
 	where
 		H::Out: Ord + Encode + 'static,
 	{
-		self.drain_storage_changes(backend, parent_hash, &mut cache, state_version)
+		self.drain_storage_changes(backend, &mut cache, state_version)
 	}
 
 	/// Drain all changes into a [`StorageChanges`] instance. Leave empty overlay in place.
 	pub fn drain_storage_changes<B: Backend<H>, H: Hasher>(
 		&mut self,
 		backend: &B,
-		_parent_hash: H::Out,
 		mut cache: &mut StorageTransactionCache<B::Transaction, H>,
 		state_version: StateVersion,
 	) -> Result<StorageChanges<B::Transaction, H>, DefaultError>

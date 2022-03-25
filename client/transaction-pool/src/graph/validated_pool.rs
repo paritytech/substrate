@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -203,7 +203,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 				let imported = self.pool.write().import(tx)?;
 
 				if let base::Imported::Ready { ref hash, .. } = imported {
-					self.import_notification_sinks.lock().retain_mut(|sink| {
+					RetainMut::retain_mut(&mut *self.import_notification_sinks.lock(), |sink| {
 						match sink.try_send(*hash) {
 							Ok(()) => true,
 							Err(e) =>
@@ -567,12 +567,6 @@ impl<B: ChainApi> ValidatedPool<B> {
 		self.rotator.clear_timeouts(&now);
 
 		Ok(())
-	}
-
-	/// Get rotator reference.
-	#[cfg(feature = "test-helpers")]
-	pub fn rotator(&self) -> &PoolRotator<ExtrinsicHash<B>> {
-		&self.rotator
 	}
 
 	/// Get api reference.

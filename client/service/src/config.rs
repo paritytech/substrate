@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -19,7 +19,7 @@
 //! Service configuration.
 
 pub use sc_client_api::execution_extensions::{ExecutionStrategies, ExecutionStrategy};
-pub use sc_client_db::{Database, DatabaseSource, KeepBlocks, PruningMode, TransactionStorageMode};
+pub use sc_client_db::{Database, DatabaseSource, KeepBlocks, PruningMode};
 pub use sc_executor::WasmExecutionMethod;
 pub use sc_network::{
 	config::{
@@ -71,8 +71,6 @@ pub struct Configuration {
 	pub state_pruning: PruningMode,
 	/// Number of blocks to keep in the db.
 	pub keep_blocks: KeepBlocks,
-	/// Transaction storage scheme.
-	pub transaction_storage: TransactionStorageMode,
 	/// Chain configuration.
 	pub chain_spec: Box<dyn ChainSpec>,
 	/// Wasm execution method.

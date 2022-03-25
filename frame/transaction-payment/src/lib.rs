@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -47,7 +47,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 
 use sp_runtime::{
@@ -226,7 +226,7 @@ where
 }
 
 /// Storage releases of the pallet.
-#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug, TypeInfo)]
+#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 enum Releases {
 	/// Original version of the pallet.
 	V1Ancient,
@@ -297,10 +297,9 @@ pub mod pallet {
 
 	#[pallet::extra_constants]
 	impl<T: Config> Pallet<T> {
-		// TODO: rename to snake case after https://github.com/paritytech/substrate/issues/8826 fixed.
-		#[allow(non_snake_case)]
+		#[pallet::constant_name(WeightToFee)]
 		/// The polynomial that is applied in order to derive fee from weight.
-		fn WeightToFee() -> Vec<WeightToFeeCoefficient<BalanceOf<T>>> {
+		fn weight_to_fee_polynomial() -> Vec<WeightToFeeCoefficient<BalanceOf<T>>> {
 			T::WeightToFee::polynomial().to_vec()
 		}
 	}

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -167,18 +167,14 @@ where
 		&self,
 		at: &BlockId<Self::Block>,
 	) -> error::Result<Option<graph::NumberFor<Self>>> {
-		self.client
-			.to_number(at)
-			.map_err(|e| Error::BlockIdConversion(format!("{:?}", e)))
+		self.client.to_number(at).map_err(|e| Error::BlockIdConversion(e.to_string()))
 	}
 
 	fn block_id_to_hash(
 		&self,
 		at: &BlockId<Self::Block>,
 	) -> error::Result<Option<graph::BlockHash<Self>>> {
-		self.client
-			.to_hash(at)
-			.map_err(|e| Error::BlockIdConversion(format!("{:?}", e)))
+		self.client.to_hash(at).map_err(|e| Error::BlockIdConversion(e.to_string()))
 	}
 
 	fn hash_and_length(
@@ -224,7 +220,7 @@ where
 		}?;
 
 		let block_hash = client.to_hash(at)
-			.map_err(|e| Error::RuntimeApi(format!("{:?}", e)))?
+			.map_err(|e| Error::RuntimeApi(e.to_string()))?
 			.ok_or_else(|| Error::RuntimeApi(format!("Could not get hash for block `{:?}`.", at)))?;
 
 		use sp_api::Core;
@@ -237,7 +233,7 @@ where
 					.map_err(|e| Error::RuntimeApi(e.to_string()))
 			} else {
 				let block_number = client.to_number(at)
-					.map_err(|e| Error::RuntimeApi(format!("{:?}", e)))?
+					.map_err(|e| Error::RuntimeApi(e.to_string()))?
 					.ok_or_else(||
 						Error::RuntimeApi(format!("Could not get number for block `{:?}`.", at))
 					)?;

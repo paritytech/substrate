@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -265,7 +265,7 @@ impl<B: BlockT> Behaviour<B> {
 		if let Some(mixnet) = self.mixnet.as_mut() {
 			if let Ok(decoded) = <B::Extrinsic as Decode>::decode(&mut encoded_tx.as_ref()) {
 				let message = crate::protocol::message::Message::<B>::Transactions(vec![decoded]);
-				mixnet.send_to_random_recipient(message.encode()).map_err(|e| e.to_string())
+				mixnet.send_to_random_recipient(message.encode(), false).map_err(|e| e.to_string())
 			} else {
 				Err("Invalid transaction".into())
 			}

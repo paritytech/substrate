@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -124,6 +124,7 @@ pub use extensions::{
 };
 // Backward compatible re-export.
 pub use extensions::check_mortality::CheckMortality as CheckEra;
+pub use frame_support::dispatch::RawOrigin;
 pub use weights::WeightInfo;
 
 /// Compute the trie root of a list of extrinsics.
@@ -351,6 +352,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]
+	#[pallet::without_storage_info]
 	pub struct Pallet<T>(_);
 
 	#[pallet::hooks]
@@ -478,11 +480,6 @@ pub mod pallet {
 		}
 
 		/// Make some on-chain remark and emit event.
-		///
-		/// # <weight>
-		/// - `O(b)` where b is the length of the remark.
-		/// - 1 event.
-		/// # </weight>
 		#[pallet::weight(T::SystemWeightInfo::remark_with_event(remark.len() as u32))]
 		pub fn remark_with_event(
 			origin: OriginFor<T>,
@@ -637,17 +634,11 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(super) type ExecutionPhase<T: Config> = StorageValue<_, Phase>;
 
+	#[cfg_attr(feature = "std", derive(Default))]
 	#[pallet::genesis_config]
 	pub struct GenesisConfig {
 		#[serde(with = "sp_core::bytes")]
 		pub code: Vec<u8>,
-	}
-
-	#[cfg(feature = "std")]
-	impl Default for GenesisConfig {
-		fn default() -> Self {
-			Self { code: Default::default() }
-		}
 	}
 
 	#[pallet::genesis_build]
@@ -716,28 +707,6 @@ pub struct EventRecord<E: Parameter + Member, T> {
 	pub event: E,
 	/// The list of the topics this event has.
 	pub topics: Vec<T>,
-}
-
-/// Origin for the System pallet.
-#[derive(PartialEq, Eq, Clone, RuntimeDebug, Encode, Decode, TypeInfo)]
-pub enum RawOrigin<AccountId> {
-	/// The system itself ordained this dispatch to happen: this is the highest privilege level.
-	Root,
-	/// It is signed by some public key and we provide the `AccountId`.
-	Signed(AccountId),
-	/// It is signed by nobody, can be either:
-	/// * included and agreed upon by the validators anyway,
-	/// * or unsigned transaction validated by a pallet.
-	None,
-}
-
-impl<AccountId> From<Option<AccountId>> for RawOrigin<AccountId> {
-	fn from(s: Option<AccountId>) -> RawOrigin<AccountId> {
-		match s {
-			Some(who) => RawOrigin::Signed(who),
-			None => RawOrigin::None,
-		}
-	}
 }
 
 // Create a Hash with 69 for each byte,
@@ -947,27 +916,6 @@ where
 	match o.into() {
 		Ok(RawOrigin::None) => Ok(()),
 		_ => Err(BadOrigin),
-	}
-}
-
-/// A type of block initialization to perform.
-pub enum InitKind {
-	/// Leave inspectable storage entries in state.
-	///
-	/// i.e. `Events` are not being reset.
-	/// Should only be used for off-chain calls,
-	/// regular block execution should clear those.
-	Inspection,
-
-	/// Reset also inspectable storage entries.
-	///
-	/// This should be used for regular block execution.
-	Full,
-}
-
-impl Default for InitKind {
-	fn default() -> Self {
-		InitKind::Full
 	}
 }
 
@@ -1308,12 +1256,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Start the execution of a particular block.
-	pub fn initialize(
-		number: &T::BlockNumber,
-		parent_hash: &T::Hash,
-		digest: &generic::Digest,
-		kind: InitKind,
-	) {
+	pub fn initialize(number: &T::BlockNumber, parent_hash: &T::Hash, digest: &generic::Digest) {
 		// populate environment
 		ExecutionPhase::<T>::put(Phase::Initialization);
 		storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &0u32);
@@ -1324,18 +1267,45 @@ impl<T: Config> Pallet<T> {
 
 		// Remove previous block data from storage
 		BlockWeight::<T>::kill();
-
-		// Kill inspectable storage entries in state when `InitKind::Full`.
-		if let InitKind::Full = kind {
-			<Events<T>>::kill();
-			EventCount::<T>::kill();
-			<EventTopics<T>>::remove_all(None);
-		}
 	}
 
 	/// Remove temporary "environment" entries in storage, compute the storage root and return the
 	/// resulting header for this block.
 	pub fn finalize() -> T::Header {
+		log::debug!(
+			target: "runtime::system",
+			"[{:?}] length: {} (normal {}%, op: {}%, mandatory {}%) / normal weight: {} ({}%) \
+			/ op weight {} ({}%) / mandatory weight {} ({}%)",
+			Self::block_number(),
+			Self::all_extrinsics_len(),
+			sp_runtime::Percent::from_rational(
+				Self::all_extrinsics_len(),
+				*T::BlockLength::get().max.get(DispatchClass::Normal)
+			).deconstruct(),
+			sp_runtime::Percent::from_rational(
+				Self::all_extrinsics_len(),
+				*T::BlockLength::get().max.get(DispatchClass::Operational)
+			).deconstruct(),
+			sp_runtime::Percent::from_rational(
+				Self::all_extrinsics_len(),
+				*T::BlockLength::get().max.get(DispatchClass::Mandatory)
+			).deconstruct(),
+			Self::block_weight().get(DispatchClass::Normal),
+			sp_runtime::Percent::from_rational(
+				*Self::block_weight().get(DispatchClass::Normal),
+				T::BlockWeights::get().get(DispatchClass::Normal).max_total.unwrap_or(Bounded::max_value())
+			).deconstruct(),
+			Self::block_weight().get(DispatchClass::Operational),
+			sp_runtime::Percent::from_rational(
+				*Self::block_weight().get(DispatchClass::Operational),
+				T::BlockWeights::get().get(DispatchClass::Operational).max_total.unwrap_or(Bounded::max_value())
+			).deconstruct(),
+			Self::block_weight().get(DispatchClass::Mandatory),
+			sp_runtime::Percent::from_rational(
+				*Self::block_weight().get(DispatchClass::Mandatory),
+				T::BlockWeights::get().get(DispatchClass::Mandatory).max_total.unwrap_or(Bounded::max_value())
+			).deconstruct(),
+		);
 		ExecutionPhase::<T>::kill();
 		AllExtrinsicsLen::<T>::kill();
 
@@ -1450,9 +1420,10 @@ impl<T: Config> Pallet<T> {
 		AllExtrinsicsLen::<T>::put(len as u32);
 	}
 
-	/// Reset events. Can be used as an alternative to
-	/// `initialize` for tests that don't need to bother with the other environment entries.
-	#[cfg(any(feature = "std", feature = "runtime-benchmarks", test))]
+	/// Reset events.
+	///
+	/// This needs to be used in prior calling [`initialize`](Self::initialize) for each new block
+	/// to clear events from previous block.
 	pub fn reset_events() {
 		<Events<T>>::kill();
 		EventCount::<T>::kill();
@@ -1683,7 +1654,7 @@ impl<T: Config> Lookup for ChainContext<T> {
 
 /// Prelude to be used alongside pallet macro, for ease of use.
 pub mod pallet_prelude {
-	pub use crate::{ensure_none, ensure_root, ensure_signed};
+	pub use crate::{ensure_none, ensure_root, ensure_signed, ensure_signed_or_root};
 
 	/// Type alias for the `Origin` associated type of system config.
 	pub type OriginFor<T> = <T as crate::Config>::Origin;

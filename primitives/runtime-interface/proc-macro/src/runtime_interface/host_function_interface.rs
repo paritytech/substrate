@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -26,7 +26,7 @@ use crate::utils::{
 	create_host_function_ident, generate_crate_access, get_function_argument_names,
 	get_function_argument_names_and_types_without_ref, get_function_argument_types,
 	get_function_argument_types_ref_and_mut, get_function_argument_types_without_ref,
-	get_function_arguments, get_runtime_interface,
+	get_function_arguments, get_runtime_interface, RuntimeInterfaceFunction,
 };
 
 use syn::{
@@ -45,19 +45,18 @@ use std::iter::Iterator;
 /// implementations for the host functions on the host.
 pub fn generate(trait_def: &ItemTrait, is_wasm_only: bool) -> Result<TokenStream> {
 	let trait_name = &trait_def.ident;
-	let extern_host_function_impls = get_runtime_interface(trait_def)?.latest_versions().try_fold(
-		TokenStream::new(),
-		|mut t, (version, method)| {
+	let extern_host_function_impls = get_runtime_interface(trait_def)?
+		.latest_versions_to_call()
+		.try_fold(TokenStream::new(), |mut t, (version, method)| {
 			t.extend(generate_extern_host_function(method, version, trait_name)?);
 			Ok::<_, Error>(t)
-		},
-	)?;
-	let exchangeable_host_functions = get_runtime_interface(trait_def)?
-		.latest_versions()
-		.try_fold(TokenStream::new(), |mut t, (_, m)| {
-			t.extend(generate_exchangeable_host_function(m)?);
-			Ok::<_, Error>(t)
 		})?;
+	let exchangeable_host_functions = get_runtime_interface(trait_def)?
+		.latest_versions_to_call()
+		.try_fold(TokenStream::new(), |mut t, (_, m)| {
+		t.extend(generate_exchangeable_host_function(m)?);
+		Ok::<_, Error>(t)
+	})?;
 	let host_functions_struct = generate_host_functions_struct(trait_def, is_wasm_only)?;
 
 	Ok(quote! {
@@ -206,7 +205,7 @@ fn generate_host_functions_struct(
 /// implementation of the function.
 fn generate_host_function_implementation(
 	trait_name: &Ident,
-	method: &TraitItemMethod,
+	method: &RuntimeInterfaceFunction,
 	version: u32,
 	is_wasm_only: bool,
 ) -> Result<(TokenStream, Ident, TokenStream)> {

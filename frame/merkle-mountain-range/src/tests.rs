@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -40,12 +40,8 @@ fn new_block() -> u64 {
 	let hash = H256::repeat_byte(number as u8);
 	LEAF_DATA.with(|r| r.borrow_mut().a = number);
 
-	frame_system::Pallet::<Test>::initialize(
-		&number,
-		&hash,
-		&Default::default(),
-		frame_system::InitKind::Full,
-	);
+	frame_system::Pallet::<Test>::reset_events();
+	frame_system::Pallet::<Test>::initialize(&number, &hash, &Default::default());
 	MMR::on_initialize(number)
 }
 

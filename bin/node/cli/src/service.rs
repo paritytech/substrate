@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -212,7 +212,7 @@ pub fn new_partial(
 			let timestamp = sp_timestamp::InherentDataProvider::from_system_time();
 
 			let slot =
-				sp_consensus_babe::inherents::InherentDataProvider::from_timestamp_and_duration(
+				sp_consensus_babe::inherents::InherentDataProvider::from_timestamp_and_slot_duration(
 					*timestamp,
 					slot_duration,
 				);
@@ -252,6 +252,7 @@ pub fn new_partial(
 		let keystore = keystore_container.sync_keystore();
 		let chain_spec = config.chain_spec.cloned_box();
 
+		let rpc_backend = backend.clone();
 		let rpc_extensions_builder = move |deny_unsafe, subscription_executor| {
 			let deps = node_rpc::FullDeps {
 				client: client.clone(),
@@ -273,7 +274,7 @@ pub fn new_partial(
 				},
 			};
 
-			node_rpc::create_full(deps).map_err(Into::into)
+			node_rpc::create_full(deps, rpc_backend.clone()).map_err(Into::into)
 		};
 
 		(rpc_extensions_builder, rpc_setup)
@@ -326,8 +327,15 @@ pub fn new_full_base(
 
 	let shared_voter_state = rpc_setup;
 	let auth_disc_publish_non_global_ips = config.network.allow_non_globals_in_dht;
+	let grandpa_protocol_name = grandpa::protocol_standard_name(
+		&client.block_hash(0).ok().flatten().expect("Genesis block exists; qed"),
+		&config.chain_spec,
+	);
 
-	config.network.extra_sets.push(grandpa::grandpa_peers_set_config());
+	config
+		.network
+		.extra_sets
+		.push(grandpa::grandpa_peers_set_config(grandpa_protocol_name.clone()));
 	let warp_sync = Arc::new(grandpa::warp_proof::NetworkProvider::new(
 		backend.clone(),
 		import_setup.1.shared_authority_set().clone(),
@@ -412,7 +420,7 @@ pub fn new_full_base(
 					let timestamp = sp_timestamp::InherentDataProvider::from_system_time();
 
 					let slot =
-						sp_consensus_babe::inherents::InherentDataProvider::from_timestamp_and_duration(
+						sp_consensus_babe::inherents::InherentDataProvider::from_timestamp_and_slot_duration(
 							*timestamp,
 							slot_duration,
 						);
@@ -488,6 +496,7 @@ pub fn new_full_base(
 		keystore,
 		local_role: role,
 		telemetry: telemetry.as_ref().map(|x| x.handle()),
+		protocol_name: grandpa_protocol_name,
 	};
 
 	if enable_grandpa {
@@ -642,7 +651,10 @@ mod tests {
 						.epoch_changes()
 						.shared_data()
 						.epoch_data(&epoch_descriptor, |slot| {
-							sc_consensus_babe::Epoch::genesis(&babe_link.config(), slot)
+							sc_consensus_babe::Epoch::genesis(
+								babe_link.config().genesis_config(),
+								slot,
+							)
 						})
 						.unwrap();
 

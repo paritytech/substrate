@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -107,7 +107,7 @@ type PositiveImbalanceOf<T> = pallet_treasury::PositiveImbalanceOf<T>;
 pub type BountyIndex = u32;
 
 /// A bounty proposal.
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct Bounty<AccountId, Balance, BlockNumber> {
 	/// The account proposing it.
 	proposer: AccountId,
@@ -133,7 +133,7 @@ impl<AccountId: PartialEq + Clone + Ord, Balance, BlockNumber: Clone>
 }
 
 /// The status of a bounty proposal.
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub enum BountyStatus<AccountId, BlockNumber> {
 	/// The bounty is proposed and waiting for approval.
 	Proposed,
@@ -248,6 +248,8 @@ pub mod pallet {
 		Premature,
 		/// The bounty cannot be closed because it has active child-bounties.
 		HasActiveChildBounty,
+		/// Too many approvals are already queued.
+		TooManyQueued,
 	}
 
 	#[pallet::event]
@@ -287,12 +289,14 @@ pub mod pallet {
 	/// The description of each bounty.
 	#[pallet::storage]
 	#[pallet::getter(fn bounty_descriptions)]
-	pub type BountyDescriptions<T: Config> = StorageMap<_, Twox64Concat, BountyIndex, Vec<u8>>;
+	pub type BountyDescriptions<T: Config> =
+		StorageMap<_, Twox64Concat, BountyIndex, BoundedVec<u8, T::MaximumReasonLength>>;
 
 	/// Bounty indices that have been approved but not yet funded.
 	#[pallet::storage]
 	#[pallet::getter(fn bounty_approvals)]
-	pub type BountyApprovals<T: Config> = StorageValue<_, Vec<BountyIndex>, ValueQuery>;
+	pub type BountyApprovals<T: Config> =
+		StorageValue<_, BoundedVec<BountyIndex, T::MaxApprovals>, ValueQuery>;
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
@@ -340,7 +344,8 @@ pub mod pallet {
 
 				bounty.status = BountyStatus::Approved;
 
-				BountyApprovals::<T>::append(bounty_id);
+				BountyApprovals::<T>::try_append(bounty_id)
+					.map_err(|()| Error::<T>::TooManyQueued)?;
 
 				Ok(())
 			})?;
@@ -779,17 +784,15 @@ impl<T: Config> Pallet<T> {
 		description: Vec<u8>,
 		value: BalanceOf<T>,
 	) -> DispatchResult {
-		ensure!(
-			description.len() <= T::MaximumReasonLength::get() as usize,
-			Error::<T>::ReasonTooBig
-		);
+		let bounded_description: BoundedVec<_, _> =
+			description.try_into().map_err(|()| Error::<T>::ReasonTooBig)?;
 		ensure!(value >= T::BountyValueMinimum::get(), Error::<T>::InvalidValue);
 
 		let index = Self::bounty_count();
 
 		// reserve deposit for new bounty
 		let bond = T::BountyDepositBase::get() +
-			T::DataDepositPerByte::get() * (description.len() as u32).into();
+			T::DataDepositPerByte::get() * (bounded_description.len() as u32).into();
 		T::Currency::reserve(&proposer, bond)
 			.map_err(|_| Error::<T>::InsufficientProposersBalance)?;
 
@@ -805,7 +808,7 @@ impl<T: Config> Pallet<T> {
 		};
 
 		Bounties::<T>::insert(index, &bounty);
-		BountyDescriptions::<T>::insert(index, description);
+		BountyDescriptions::<T>::insert(index, bounded_description);
 
 		Self::deposit_event(Event::<T>::BountyProposed { index });
 

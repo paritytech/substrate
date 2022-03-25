@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -21,46 +21,46 @@ use crate::{
 	params::{DatabaseParams, GenericNumber, PruningParams, SharedParams},
 	CliConfiguration,
 };
+use clap::Parser;
 use log::info;
 use sc_client_api::{BlockBackend, UsageProvider};
 use sc_service::{chain_ops::export_blocks, config::DatabaseSource};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use std::{fmt::Debug, fs, io, path::PathBuf, str::FromStr, sync::Arc};
-use structopt::StructOpt;
 
 /// The `export-blocks` command used to export blocks.
-#[derive(Debug, StructOpt, Clone)]
+#[derive(Debug, Clone, Parser)]
 pub struct ExportBlocksCmd {
 	/// Output file name or stdout if unspecified.
-	#[structopt(parse(from_os_str))]
+	#[clap(parse(from_os_str))]
 	pub output: Option<PathBuf>,
 
 	/// Specify starting block number.
 	///
 	/// Default is 1.
-	#[structopt(long = "from", value_name = "BLOCK")]
+	#[clap(long, value_name = "BLOCK")]
 	pub from: Option<GenericNumber>,
 
 	/// Specify last block number.
 	///
 	/// Default is best block.
-	#[structopt(long = "to", value_name = "BLOCK")]
+	#[clap(long, value_name = "BLOCK")]
 	pub to: Option<GenericNumber>,
 
 	/// Use binary output rather than JSON.
-	#[structopt(long)]
+	#[clap(long)]
 	pub binary: bool,
 
 	#[allow(missing_docs)]
-	#[structopt(flatten)]
+	#[clap(flatten)]
 	pub shared_params: SharedParams,
 
 	#[allow(missing_docs)]
-	#[structopt(flatten)]
+	#[clap(flatten)]
 	pub pruning_params: PruningParams,
 
 	#[allow(missing_docs)]
-	#[structopt(flatten)]
+	#[clap(flatten)]
 	pub database_params: DatabaseParams,
 }
 
@@ -76,7 +76,7 @@ impl ExportBlocksCmd {
 		C: BlockBackend<B> + UsageProvider<B> + 'static,
 		<<B::Header as HeaderT>::Number as FromStr>::Err: Debug,
 	{
-		if let DatabaseSource::RocksDb { ref path, .. } = database_config {
+		if let Some(path) = database_config.path() {
 			info!("DB path: {}", path.display());
 		}
 

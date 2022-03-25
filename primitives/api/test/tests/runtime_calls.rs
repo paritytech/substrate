@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -59,7 +59,7 @@ fn calling_native_runtime_function_with_non_decodable_parameter() {
 		.build();
 	let runtime_api = client.runtime_api();
 	let block_id = BlockId::Number(client.chain_info().best_number);
-	runtime_api.fail_convert_parameter(&block_id, DecodeFails::new()).unwrap();
+	runtime_api.fail_convert_parameter(&block_id, DecodeFails::default()).unwrap();
 }
 
 #[test]

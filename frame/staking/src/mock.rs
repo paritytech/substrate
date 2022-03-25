@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,7 +18,7 @@
 //! Test utilities
 
 use crate::{self as pallet_staking, *};
-use frame_election_provider_support::{onchain, SortedListProvider};
+use frame_election_provider_support::{onchain, SortedListProvider, VoteWeight};
 use frame_support::{
 	assert_ok, parameter_types,
 	traits::{
@@ -234,13 +234,15 @@ const THRESHOLDS: [sp_npos_elections::VoteWeight; 9] =
 
 parameter_types! {
 	pub static BagThresholds: &'static [sp_npos_elections::VoteWeight] = &THRESHOLDS;
+	pub static MaxNominations: u32 = 16;
 }
 
 impl pallet_bags_list::Config for Test {
 	type Event = Event;
 	type WeightInfo = ();
-	type VoteWeightProvider = Staking;
+	type ScoreProvider = Staking;
 	type BagThresholds = BagThresholds;
+	type Score = VoteWeight;
 }
 
 impl onchain::Config for Test {
@@ -249,7 +251,7 @@ impl onchain::Config for Test {
 }
 
 impl crate::pallet::pallet::Config for Test {
-	const MAX_NOMINATIONS: u32 = 16;
+	type MaxNominations = MaxNominations;
 	type Currency = Balances;
 	type UnixTime = Timestamp;
 	type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
@@ -268,8 +270,9 @@ impl crate::pallet::pallet::Config for Test {
 	type OffendingValidatorsThreshold = OffendingValidatorsThreshold;
 	type ElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
 	type GenesisElectionProvider = Self::ElectionProvider;
-	// NOTE: consider a macro and use `UseNominatorsMap<Self>` as well.
-	type SortedListProvider = BagsList;
+	// NOTE: consider a macro and use `UseNominatorsAndValidatorsMap<Self>` as well.
+	type VoterList = BagsList;
+	type MaxUnlockingChunks = ConstU32<32>;
 	type BenchmarkingConfig = TestBenchmarkingConfig;
 	type WeightInfo = ();
 }
@@ -533,14 +536,14 @@ fn post_conditions() {
 }
 
 fn check_count() {
-	let nominator_count = Nominators::<Test>::iter().count() as u32;
+	let nominator_count = Nominators::<Test>::iter_keys().count() as u32;
 	let validator_count = Validators::<Test>::iter().count() as u32;
 	assert_eq!(nominator_count, Nominators::<Test>::count());
 	assert_eq!(validator_count, Validators::<Test>::count());
 
-	// the voters that the `SortedListProvider` list is storing for us.
-	let external_voters = <Test as Config>::SortedListProvider::count();
-	assert_eq!(external_voters, nominator_count);
+	// the voters that the `VoterList` list is storing for us.
+	let external_voters = <Test as Config>::VoterList::count();
+	assert_eq!(external_voters, nominator_count + validator_count);
 }
 
 fn check_ledgers() {

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -108,7 +108,7 @@ impl<B: BlockT> ExtraRequests<B> {
 				// ignore the `Revert` error.
 			},
 			Err(err) => {
-				debug!(target: "sync", "Failed to insert request {:?} into tree: {:?}", request, err);
+				debug!(target: "sync", "Failed to insert request {:?} into tree: {}", request, err);
 			},
 			_ => (),
 		}
@@ -173,9 +173,7 @@ impl<B: BlockT> ExtraRequests<B> {
 		}
 
 		if best_finalized_number > self.best_seen_finalized_number {
-			// normally we'll receive finality notifications for every block => finalize would be
-			// enough but if many blocks are finalized at once, some notifications may be omitted
-			// => let's use finalize_with_ancestors here
+			// we receive finality notification only for the finalized branch head.
 			match self.tree.finalize_with_ancestors(
 				best_finalized_hash,
 				best_finalized_number,

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 //
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 //
 // This program is free software: you can redistribute it and/or modify
@@ -78,24 +78,17 @@ impl<TBlock: Block> PrettyPrinter<TBlock> for DebugPrinter {
 }
 
 /// Aggregated error for `Inspector` operations.
-#[derive(Debug, derive_more::From, derive_more::Display)]
+#[derive(Debug, thiserror::Error)]
 pub enum Error {
 	/// Could not decode Block or Extrinsic.
-	Codec(codec::Error),
+	#[error(transparent)]
+	Codec(#[from] codec::Error),
 	/// Error accessing blockchain DB.
-	Blockchain(sp_blockchain::Error),
+	#[error(transparent)]
+	Blockchain(#[from] sp_blockchain::Error),
 	/// Given block has not been found.
+	#[error("{0}")]
 	NotFound(String),
-}
-
-impl std::error::Error for Error {
-	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-		match *self {
-			Self::Codec(ref e) => Some(e),
-			Self::Blockchain(ref e) => Some(e),
-			Self::NotFound(_) => None,
-		}
-	}
 }
 
 /// A helper trait to access block headers and bodies.
@@ -261,7 +254,7 @@ impl<Hash: FromStr + Debug, Number: FromStr + Debug> FromStr for ExtrinsicAddres
 
 		let index = it
 			.next()
-			.ok_or_else(|| format!("Extrinsic index missing: example \"5:0\""))?
+			.ok_or("Extrinsic index missing: example \"5:0\"")?
 			.parse()
 			.map_err(|e| format!("Invalid index format: {}", e))?;
 

@@ -7,7 +7,6 @@ members = [
 	"bin/node-template/runtime",
 	"bin/node/bench",
 	"bin/node/cli",
-	"bin/node/test-runner-example",
 	"bin/node/executor",
 	"bin/node/primitives",
 	"bin/node/rpc",
@@ -68,6 +67,9 @@ members = [
 	"frame/authority-discovery",
 	"frame/authorship",
 	"frame/babe",
+	"frame/bags-list",
+	"frame/bags-list/fuzzer",
+	"frame/bags-list/remote-tests",
 	"frame/balances",
 	"frame/beefy",
 	"frame/beefy-mmr",
@@ -79,10 +81,13 @@ members = [
 	"frame/contracts",
 	"frame/contracts/rpc",
 	"frame/contracts/rpc/runtime-api",
+	"frame/conviction-voting",
 	"frame/democracy",
 	"frame/try-runtime",
 	"frame/election-provider-multi-phase",
 	"frame/election-provider-support",
+	"frame/election-provider-support/solution-type",
+	"frame/election-provider-support/solution-type/fuzzer",
 	"frame/examples/basic",
 	"frame/examples/offchain-worker",
 	"frame/examples/parallel",
@@ -105,6 +110,7 @@ members = [
 	"frame/proxy",
 	"frame/randomness-collective-flip",
 	"frame/recovery",
+	"frame/referenda",
 	"frame/scheduler",
 	"frame/scored-pool",
 	"frame/session",
@@ -113,6 +119,7 @@ members = [
 	"frame/staking",
 	"frame/staking/reward-curve",
 	"frame/staking/reward-fn",
+	"frame/state-trie-migration",
 	"frame/sudo",
 	"frame/support",
 	"frame/support/procedural",
@@ -134,9 +141,7 @@ members = [
 	"frame/uniques",
 	"frame/utility",
 	"frame/vesting",
-	"frame/bags-list",
-	"frame/bags-list/remote-tests",
-	"frame/bags-list/fuzzer",
+	"frame/whitelist",
 	"primitives/api",
 	"primitives/api/proc-macro",
 	"primitives/api/test",
@@ -167,7 +172,6 @@ members = [
 	"primitives/keystore",
 	"primitives/maybe-compressed-blob",
 	"primitives/npos-elections",
-	"primitives/npos-elections/solution-type",
 	"primitives/npos-elections/fuzzer",
 	"primitives/offchain",
 	"primitives/panic-handler",
@@ -200,7 +204,6 @@ members = [
 	"test-utils/runtime",
 	"test-utils/runtime/client",
 	"test-utils/runtime/transaction-pool",
-	"test-utils/test-runner",
 	"test-utils/test-crate",
 	"utils/build-script-utils",
 	"utils/fork-tree",
@@ -208,6 +211,7 @@ members = [
 	"utils/frame/remote-externalities",
 	"utils/frame/frame-utilities-cli",
 	"utils/frame/try-runtime/cli",
+	"utils/frame/rpc/state-trie-migration-rpc",
 	"utils/frame/rpc/support",
 	"utils/frame/rpc/system",
 	"utils/frame/generate-bags",
@@ -250,6 +254,7 @@ hash-db = { opt-level = 3 }
 hmac = { opt-level = 3 }
 httparse = { opt-level = 3 }
 integer-sqrt = { opt-level = 3 }
+k256 = { opt-level = 3 }
 keccak = { opt-level = 3 }
 libm = { opt-level = 3 }
 librocksdb-sys = { opt-level = 3 }
@@ -264,6 +269,7 @@ percent-encoding = { opt-level = 3 }
 primitive-types = { opt-level = 3 }
 ring = { opt-level = 3 }
 rustls = { opt-level = 3 }
+secp256k1 = { opt-level = 3 }
 sha2 = { opt-level = 3 }
 sha3 = { opt-level = 3 }
 smallvec = { opt-level = 3 }
@@ -274,6 +280,20 @@ wasmi = { opt-level = 3 }
 x25519-dalek = { opt-level = 3 }
 yamux = { opt-level = 3 }
 zeroize = { opt-level = 3 }
+
 [profile.release]
 # Substrate runtime requires unwinding.
 panic = "unwind"
+
+[profile.production]
+inherits = "release"
+
+# Sacrifice compile speed for execution speed by using optimization flags:
+
+# https://doc.rust-lang.org/rustc/linker-plugin-lto.html
+lto = "fat"
+# https://doc.rust-lang.org/rustc/codegen-options/index.html#codegen-units
+codegen-units = 1
+
+[patch."https://github.com/paritytech/mixnet"]
+mixnet = { git = "https://github.com/cheme/mixnet", branch = "surbs"}

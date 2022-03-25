@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -38,7 +38,6 @@ use sp_runtime::{
 // example module to test behaviors.
 #[frame_support::pallet]
 pub mod example {
-	use super::*;
 	use frame_support::{dispatch::WithPostDispatchInfo, pallet_prelude::*};
 	use frame_system::pallet_prelude::*;
 

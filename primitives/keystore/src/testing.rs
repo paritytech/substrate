@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -482,9 +482,7 @@ mod tests {
 		assert!(res.is_none());
 
 		// insert key, sign again
-		let res =
-			SyncCryptoStore::insert_unknown(&store, ECDSA, suri, pair.public().as_ref()).unwrap();
-		assert_eq!((), res);
+		SyncCryptoStore::insert_unknown(&store, ECDSA, suri, pair.public().as_ref()).unwrap();
 
 		let res =
 			SyncCryptoStore::ecdsa_sign_prehashed(&store, ECDSA, &pair.public(), &msg).unwrap();

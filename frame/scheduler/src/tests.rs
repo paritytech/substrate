@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,7 +21,7 @@ use super::*;
 use crate::mock::{logger, new_test_ext, root, run_to_block, Call, LoggerCall, Scheduler, Test, *};
 use frame_support::{
 	assert_err, assert_noop, assert_ok,
-	traits::{Contains, OnInitialize, PreimageProvider},
+	traits::{Contains, GetStorageVersion, OnInitialize, PreimageProvider},
 	Hashable,
 };
 use sp_runtime::traits::Hash;
@@ -707,9 +707,7 @@ fn migration_to_v3_works() {
 			frame_support::migration::put_storage_value(b"Scheduler", b"Agenda", &k, old);
 		}
 
-		assert_eq!(StorageVersion::<Test>::get(), Releases::V1);
-
-		assert!(Scheduler::migrate_v1_to_v3());
+		Scheduler::migrate_v1_to_v3();
 
 		assert_eq_uvec!(
 			Agenda::<Test>::iter().collect::<Vec<_>>(),
@@ -783,7 +781,7 @@ fn migration_to_v3_works() {
 			]
 		);
 
-		assert_eq!(StorageVersion::<Test>::get(), Releases::V3);
+		assert_eq!(Scheduler::current_storage_version(), 3);
 	});
 }
 

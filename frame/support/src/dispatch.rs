@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,6 +20,7 @@
 
 pub use crate::{
 	codec::{Codec, Decode, Encode, EncodeAsRef, EncodeLike, HasCompact, Input, Output},
+	scale_info::TypeInfo,
 	sp_std::{
 		fmt, marker,
 		prelude::{Clone, Eq, PartialEq, Vec},
@@ -33,7 +34,7 @@ pub use crate::{
 		TransactionPriority, WeighData, Weight, WithPostDispatchInfo,
 	},
 };
-pub use sp_runtime::{traits::Dispatchable, DispatchError};
+pub use sp_runtime::{traits::Dispatchable, DispatchError, RuntimeDebug};
 
 /// The return type of a `Dispatchable` in frame. When returned explicitly from
 /// a dispatchable function it allows overriding the default `PostDispatchInfo`
@@ -59,6 +60,28 @@ pub trait Callable<T> {
 // dirty hack to work around serde_derive issue
 // https://github.com/rust-lang/rust/issues/51331
 pub type CallableCallFor<A, R> = <A as Callable<R>>::Call;
+
+/// Origin for the System pallet.
+#[derive(PartialEq, Eq, Clone, RuntimeDebug, Encode, Decode, TypeInfo)]
+pub enum RawOrigin<AccountId> {
+	/// The system itself ordained this dispatch to happen: this is the highest privilege level.
+	Root,
+	/// It is signed by some public key and we provide the `AccountId`.
+	Signed(AccountId),
+	/// It is signed by nobody, can be either:
+	/// * included and agreed upon by the validators anyway,
+	/// * or unsigned transaction validated by a pallet.
+	None,
+}
+
+impl<AccountId> From<Option<AccountId>> for RawOrigin<AccountId> {
+	fn from(s: Option<AccountId>) -> RawOrigin<AccountId> {
+		match s {
+			Some(who) => RawOrigin::Signed(who),
+			None => RawOrigin::None,
+		}
+	}
+}
 
 /// A type that can be used as a parameter in a dispatchable function.
 ///
@@ -1546,7 +1569,7 @@ macro_rules! decl_module {
 					<Self as $crate::traits::GetStorageVersion>::current_storage_version(),
 				);
 
-				(|| { $( $impl )* })()
+				{ $( $impl )* }
 			}
 
 			#[cfg(feature = "try-runtime")]
@@ -1979,6 +2002,10 @@ macro_rules! decl_module {
 		#[allow(dead_code)]
 		pub type Pallet<$trait_instance $(, $instance $( = $module_default_instance)?)?>
 			= $mod_type<$trait_instance $(, $instance)?>;
+
+		$crate::__create_tt_macro! {
+			tt_error_token,
+		}
 
 		$crate::decl_module! {
 			@impl_on_initialize
@@ -2582,21 +2609,7 @@ mod tests {
 			type DbWeight: Get<RuntimeDbWeight>;
 		}
 
-		#[derive(Clone, PartialEq, Eq, Debug, Encode, Decode, scale_info::TypeInfo)]
-		pub enum RawOrigin<AccountId> {
-			Root,
-			Signed(AccountId),
-			None,
-		}
-
-		impl<AccountId> From<Option<AccountId>> for RawOrigin<AccountId> {
-			fn from(s: Option<AccountId>) -> RawOrigin<AccountId> {
-				match s {
-					Some(who) => RawOrigin::Signed(who),
-					None => RawOrigin::None,
-				}
-			}
-		}
+		pub use super::super::RawOrigin;
 
 		pub type Origin<T> = RawOrigin<<T as Config>::AccountId>;
 	}
@@ -2638,7 +2651,7 @@ mod tests {
 		}
 	}
 
-	#[derive(scale_info::TypeInfo)]
+	#[derive(Eq, PartialEq, Clone, crate::RuntimeDebug, scale_info::TypeInfo)]
 	pub struct TraitImpl {}
 	impl Config for TraitImpl {}
 
@@ -2679,7 +2692,14 @@ mod tests {
 		}
 	}
 
+	#[derive(TypeInfo, crate::RuntimeDebug, Eq, PartialEq, Clone, Encode, Decode)]
 	pub struct OuterOrigin;
+
+	impl From<RawOrigin<<TraitImpl as system::Config>::AccountId>> for OuterOrigin {
+		fn from(_: RawOrigin<<TraitImpl as system::Config>::AccountId>) -> Self {
+			unimplemented!("Not required in tests!")
+		}
+	}
 
 	impl crate::traits::OriginTrait for OuterOrigin {
 		type Call = <TraitImpl as system::Config>::Call;

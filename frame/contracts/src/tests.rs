@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -43,12 +43,13 @@ use frame_system::{self as system, EventRecord, Phase};
 use pretty_assertions::assert_eq;
 use sp_core::Bytes;
 use sp_io::hashing::blake2_256;
+use sp_keystore::{testing::KeyStore, KeystoreExt};
 use sp_runtime::{
 	testing::{Header, H256},
 	traits::{BlakeTwo256, Convert, Hash, IdentityLookup},
 	AccountId32,
 };
-use std::cell::RefCell;
+use std::{cell::RefCell, sync::Arc};
 
 use crate as pallet_contracts;
 
@@ -73,17 +74,15 @@ frame_support::construct_runtime!(
 #[macro_use]
 pub mod test_utils {
 	use super::{Balances, Test};
-	use crate::{
-		exec::AccountIdOf, storage::Storage, AccountCounter, CodeHash, Config, ContractInfoOf,
-	};
+	use crate::{exec::AccountIdOf, storage::Storage, CodeHash, Config, ContractInfoOf, Nonce};
 	use frame_support::traits::Currency;
 
 	pub fn place_contract(address: &AccountIdOf<Test>, code_hash: CodeHash<Test>) {
-		let seed = <AccountCounter<Test>>::mutate(|counter| {
+		let nonce = <Nonce<Test>>::mutate(|counter| {
 			*counter += 1;
 			*counter
 		});
-		let trie_id = Storage::<Test>::generate_trie_id(address, seed);
+		let trie_id = Storage::<Test>::generate_trie_id(address, nonce);
 		set_balance(address, <Test as Config>::Currency::minimum_balance() * 10);
 		let contract = Storage::<Test>::new_contract(&address, trie_id, code_hash).unwrap();
 		<ContractInfoOf<Test>>::insert(address, contract);
@@ -239,7 +238,13 @@ parameter_types! {
 	pub const MaxValueSize: u32 = 16_384;
 	pub const DeletionWeightLimit: Weight = 500_000_000_000;
 	pub const MaxCodeSize: u32 = 2 * 1024;
-	pub MySchedule: Schedule<Test> = <Schedule<Test>>::default();
+	pub MySchedule: Schedule<Test> = {
+		let mut schedule = <Schedule<Test>>::default();
+		// We want stack height to be always enabled for tests so that this
+		// instrumentation path is always tested implicitly.
+		schedule.limits.stack_height = Some(512);
+		schedule
+	};
 	pub const TransactionByteFee: u64 = 0;
 	pub static DepositPerByte: BalanceOf<Test> = 1;
 	pub const DepositPerItem: BalanceOf<Test> = 2;
@@ -294,7 +299,7 @@ pub const BOB: AccountId32 = AccountId32::new([2u8; 32]);
 pub const CHARLIE: AccountId32 = AccountId32::new([3u8; 32]);
 pub const DJANGO: AccountId32 = AccountId32::new([4u8; 32]);
 
-pub const GAS_LIMIT: Weight = 10_000_000_000;
+pub const GAS_LIMIT: Weight = 100_000_000_000;
 
 pub struct ExtBuilder {
 	existential_deposit: u64,
@@ -322,6 +327,7 @@ impl ExtBuilder {
 			.assimilate_storage(&mut t)
 			.unwrap();
 		let mut ext = sp_io::TestExternalities::new(t);
+		ext.register_extension(KeystoreExt(Arc::new(KeyStore::new())));
 		ext.execute_with(|| System::set_block_number(1));
 		ext
 	}
@@ -339,6 +345,11 @@ where
 	let wasm_binary = wat::parse_file(fixture_path)?;
 	let code_hash = T::Hashing::hash(&wasm_binary);
 	Ok((wasm_binary, code_hash))
+}
+
+fn initialize_block(number: u64) {
+	System::reset_events();
+	System::initialize(&number, &[0u8; 32].into(), &Default::default());
 }
 
 // Perform a call to a plain account.
@@ -532,8 +543,67 @@ fn run_out_of_gas() {
 	});
 }
 
-fn initialize_block(number: u64) {
-	System::initialize(&number, &[0u8; 32].into(), &Default::default(), Default::default());
+/// Check that contracts with the same account id have different trie ids.
+/// Check the `Nonce` storage item for more information.
+#[test]
+fn instantiate_unique_trie_id() {
+	let (wasm, code_hash) = compile_module::<Test>("self_destruct").unwrap();
+
+	ExtBuilder::default().existential_deposit(500).build().execute_with(|| {
+		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+		Contracts::upload_code(Origin::signed(ALICE), wasm, None).unwrap();
+		let addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
+
+		// Instantiate the contract and store its trie id for later comparison.
+		assert_ok!(Contracts::instantiate(
+			Origin::signed(ALICE),
+			0,
+			GAS_LIMIT,
+			None,
+			code_hash,
+			vec![],
+			vec![],
+		));
+		let trie_id = ContractInfoOf::<Test>::get(&addr).unwrap().trie_id;
+
+		// Try to instantiate it again without termination should yield an error.
+		assert_err_ignore_postinfo!(
+			Contracts::instantiate(
+				Origin::signed(ALICE),
+				0,
+				GAS_LIMIT,
+				None,
+				code_hash,
+				vec![],
+				vec![],
+			),
+			<Error<Test>>::DuplicateContract,
+		);
+
+		// Terminate the contract.
+		assert_ok!(Contracts::call(
+			Origin::signed(ALICE),
+			addr.clone(),
+			0,
+			GAS_LIMIT,
+			None,
+			vec![]
+		));
+
+		// Re-Instantiate after termination.
+		assert_ok!(Contracts::instantiate(
+			Origin::signed(ALICE),
+			0,
+			GAS_LIMIT,
+			None,
+			code_hash,
+			vec![],
+			vec![],
+		));
+
+		// Trie ids shouldn't match or we might have a collision
+		assert_ne!(trie_id, ContractInfoOf::<Test>::get(&addr).unwrap().trie_id);
+	});
 }
 
 #[test]
@@ -688,6 +758,43 @@ fn deploy_and_call_other_contract() {
 				},
 			]
 		);
+	});
+}
+
+#[test]
+fn delegate_call() {
+	let (caller_wasm, caller_code_hash) = compile_module::<Test>("delegate_call").unwrap();
+	let (callee_wasm, callee_code_hash) = compile_module::<Test>("delegate_call_lib").unwrap();
+	let caller_addr = Contracts::contract_address(&ALICE, &caller_code_hash, &[]);
+
+	ExtBuilder::default().existential_deposit(500).build().execute_with(|| {
+		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+
+		// Instantiate the 'caller'
+		assert_ok!(Contracts::instantiate_with_code(
+			Origin::signed(ALICE),
+			300_000,
+			GAS_LIMIT,
+			None,
+			caller_wasm,
+			vec![],
+			vec![],
+		));
+		// Only upload 'callee' code
+		assert_ok!(Contracts::upload_code(
+			Origin::signed(ALICE),
+			callee_wasm,
+			Some(codec::Compact(100_000)),
+		));
+
+		assert_ok!(Contracts::call(
+			Origin::signed(ALICE),
+			caller_addr.clone(),
+			1337,
+			GAS_LIMIT,
+			None,
+			callee_code_hash.as_ref().to_vec(),
+		));
 	});
 }
 
@@ -1385,7 +1492,7 @@ fn disabled_chain_extension_wont_deploy() {
 				vec![],
 				vec![],
 			),
-			"module uses chain extensions but chain extensions are disabled",
+			<Error<Test>>::CodeRejected,
 		);
 	});
 }
@@ -1513,6 +1620,59 @@ fn lazy_removal_works() {
 }
 
 #[test]
+fn lazy_batch_removal_works() {
+	let (code, hash) = compile_module::<Test>("self_destruct").unwrap();
+	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
+		let min_balance = <Test as Config>::Currency::minimum_balance();
+		let _ = Balances::deposit_creating(&ALICE, 1000 * min_balance);
+		let mut tries: Vec<child::ChildInfo> = vec![];
+
+		for i in 0..3u8 {
+			assert_ok!(Contracts::instantiate_with_code(
+				Origin::signed(ALICE),
+				min_balance * 100,
+				GAS_LIMIT,
+				None,
+				code.clone(),
+				vec![],
+				vec![i],
+			),);
+
+			let addr = Contracts::contract_address(&ALICE, &hash, &[i]);
+			let info = <ContractInfoOf<Test>>::get(&addr).unwrap();
+			let trie = &info.child_trie_info();
+
+			// Put value into the contracts child trie
+			child::put(trie, &[99], &42);
+
+			// Terminate the contract. Contract info should be gone, but value should be still there
+			// as the lazy removal did not run, yet.
+			assert_ok!(Contracts::call(
+				Origin::signed(ALICE),
+				addr.clone(),
+				0,
+				GAS_LIMIT,
+				None,
+				vec![]
+			));
+
+			assert!(!<ContractInfoOf::<Test>>::contains_key(&addr));
+			assert_matches!(child::get(trie, &[99]), Some(42));
+
+			tries.push(trie.clone())
+		}
+
+		// Run single lazy removal
+		Contracts::on_initialize(Weight::max_value());
+
+		// The single lazy removal should have removed all queued tries
+		for trie in tries.iter() {
+			assert_matches!(child::get::<i32>(trie, &[99]), None);
+		}
+	});
+}
+
+#[test]
 fn lazy_removal_partial_remove_works() {
 	let (code, hash) = compile_module::<Test>("self_destruct").unwrap();
 
@@ -1545,7 +1705,8 @@ fn lazy_removal_partial_remove_works() {
 
 		// Put value into the contracts child trie
 		for val in &vals {
-			Storage::<Test>::write(&info.trie_id, &val.0, Some(val.2.clone()), None).unwrap();
+			Storage::<Test>::write(&info.trie_id, &val.0, Some(val.2.clone()), None, false)
+				.unwrap();
 		}
 		<ContractInfoOf<Test>>::insert(&addr, info.clone());
 
@@ -1629,7 +1790,8 @@ fn lazy_removal_does_no_run_on_full_block() {
 
 		// Put value into the contracts child trie
 		for val in &vals {
-			Storage::<Test>::write(&info.trie_id, &val.0, Some(val.2.clone()), None).unwrap();
+			Storage::<Test>::write(&info.trie_id, &val.0, Some(val.2.clone()), None, false)
+				.unwrap();
 		}
 		<ContractInfoOf<Test>>::insert(&addr, info.clone());
 
@@ -1712,7 +1874,8 @@ fn lazy_removal_does_not_use_all_weight() {
 
 		// Put value into the contracts child trie
 		for val in &vals {
-			Storage::<Test>::write(&info.trie_id, &val.0, Some(val.2.clone()), None).unwrap();
+			Storage::<Test>::write(&info.trie_id, &val.0, Some(val.2.clone()), None, false)
+				.unwrap();
 		}
 		<ContractInfoOf<Test>>::insert(&addr, info.clone());
 
@@ -1903,7 +2066,7 @@ fn reinstrument_does_charge() {
 		assert!(result2.gas_consumed > result1.gas_consumed);
 		assert_eq!(
 			result2.gas_consumed,
-			result1.gas_consumed + <Test as Config>::WeightInfo::reinstrument(code_len / 1024),
+			result1.gas_consumed + <Test as Config>::WeightInfo::reinstrument(code_len),
 		);
 	});
 }
@@ -2192,7 +2355,7 @@ fn upload_code_works() {
 					phase: Phase::Initialization,
 					event: Event::Balances(pallet_balances::Event::Reserved {
 						who: ALICE,
-						amount: 180,
+						amount: 240,
 					}),
 					topics: vec![],
 				},
@@ -2271,7 +2434,7 @@ fn remove_code_works() {
 					phase: Phase::Initialization,
 					event: Event::Balances(pallet_balances::Event::Reserved {
 						who: ALICE,
-						amount: 180,
+						amount: 240,
 					}),
 					topics: vec![],
 				},
@@ -2284,7 +2447,7 @@ fn remove_code_works() {
 					phase: Phase::Initialization,
 					event: Event::Balances(pallet_balances::Event::Unreserved {
 						who: ALICE,
-						amount: 180,
+						amount: 240,
 					}),
 					topics: vec![],
 				},
@@ -2326,7 +2489,7 @@ fn remove_code_wrong_origin() {
 					phase: Phase::Initialization,
 					event: Event::Balances(pallet_balances::Event::Reserved {
 						who: ALICE,
-						amount: 180,
+						amount: 240,
 					}),
 					topics: vec![],
 				},
@@ -2457,7 +2620,7 @@ fn instantiate_with_zero_balance_works() {
 					phase: Phase::Initialization,
 					event: Event::Balances(pallet_balances::Event::Reserved {
 						who: ALICE,
-						amount: 180,
+						amount: 240,
 					}),
 					topics: vec![],
 				},
@@ -2557,7 +2720,7 @@ fn instantiate_with_below_existential_deposit_works() {
 					phase: Phase::Initialization,
 					event: Event::Balances(pallet_balances::Event::Reserved {
 						who: ALICE,
-						amount: 180,
+						amount: 240,
 					}),
 					topics: vec![],
 				},
@@ -2897,5 +3060,95 @@ fn contract_reverted() {
 			.unwrap();
 		assert_eq!(result.flags, flags);
 		assert_eq!(result.data.0, buffer);
+	});
+}
+
+#[test]
+fn code_rejected_error_works() {
+	let (wasm, _) = compile_module::<Test>("invalid_import").unwrap();
+	ExtBuilder::default().existential_deposit(200).build().execute_with(|| {
+		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+
+		assert_noop!(
+			Contracts::upload_code(Origin::signed(ALICE), wasm.clone(), None),
+			<Error<Test>>::CodeRejected,
+		);
+
+		let result = Contracts::bare_instantiate(
+			ALICE,
+			0,
+			GAS_LIMIT,
+			None,
+			Code::Upload(Bytes(wasm)),
+			vec![],
+			vec![],
+			true,
+		);
+		assert_err!(result.result, <Error<Test>>::CodeRejected);
+		assert_eq!(
+			std::str::from_utf8(&result.debug_message).unwrap(),
+			"module imports a non-existent function"
+		);
+	});
+}
+
+#[test]
+#[cfg(feature = "unstable-interface")]
+fn set_code_hash() {
+	let (wasm, code_hash) = compile_module::<Test>("set_code_hash").unwrap();
+	let (new_wasm, new_code_hash) = compile_module::<Test>("new_set_code_hash_contract").unwrap();
+
+	let contract_addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
+
+	ExtBuilder::default().existential_deposit(100).build().execute_with(|| {
+		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+
+		// Instantiate the 'caller'
+		assert_ok!(Contracts::instantiate_with_code(
+			Origin::signed(ALICE),
+			300_000,
+			GAS_LIMIT,
+			None,
+			wasm,
+			vec![],
+			vec![],
+		));
+		// upload new code
+		assert_ok!(Contracts::upload_code(Origin::signed(ALICE), new_wasm.clone(), None));
+
+		// First call sets new code_hash and returns 1
+		let result = Contracts::bare_call(
+			ALICE,
+			contract_addr.clone(),
+			0,
+			GAS_LIMIT,
+			None,
+			new_code_hash.as_ref().to_vec(),
+			true,
+		)
+		.result
+		.unwrap();
+		assert_return_code!(result, 1);
+
+		// Second calls new contract code that returns 2
+		let result =
+			Contracts::bare_call(ALICE, contract_addr.clone(), 0, GAS_LIMIT, None, vec![], true)
+				.result
+				.unwrap();
+		assert_return_code!(result, 2);
+
+		// Checking for the last event only
+		assert_eq!(
+			System::events().pop().unwrap(),
+			EventRecord {
+				phase: Phase::Initialization,
+				event: Event::Contracts(crate::Event::ContractCodeUpdated {
+					contract: contract_addr.clone(),
+					new_code_hash: new_code_hash.clone(),
+					old_code_hash: code_hash.clone(),
+				}),
+				topics: vec![],
+			},
+		);
 	});
 }

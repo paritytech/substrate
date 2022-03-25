@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -581,7 +581,7 @@ where
 					target: "state",
 					method = "ChildStorageRoot",
 					ext_id = %HexDisplay::from(&self.id.to_le_bytes()),
-					child_info = %HexDisplay::from(&storage_key.as_ref()),
+					child_info = %HexDisplay::from(&storage_key),
 					storage_root = %HexDisplay::from(&root.as_ref()),
 					cached = false,
 				);
@@ -599,7 +599,7 @@ where
 					target: "state",
 					method = "ChildStorageRoot",
 					ext_id = %HexDisplay::from(&self.id.to_le_bytes()),
-					child_info = %HexDisplay::from(&storage_key.as_ref()),
+					child_info = %HexDisplay::from(&storage_key),
 					storage_root = %HexDisplay::from(&root.as_ref()),
 					cached = false,
 				);
@@ -660,7 +660,6 @@ where
 		self.overlay
 			.drain_storage_changes(
 				self.backend,
-				Default::default(),
 				self.storage_transaction_cache,
 				Default::default(), // using any state
 			)
@@ -680,12 +679,7 @@ where
 		}
 		let changes = self
 			.overlay
-			.drain_storage_changes(
-				self.backend,
-				Default::default(),
-				self.storage_transaction_cache,
-				state_version,
-			)
+			.drain_storage_changes(self.backend, self.storage_transaction_cache, state_version)
 			.expect(EXT_NOT_ALLOWED_TO_FAIL);
 		self.backend
 			.commit(

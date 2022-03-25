@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -30,7 +30,6 @@ use frame_support::{
 	},
 };
 use pallet_session::historical as pallet_session_historical;
-use pallet_staking::EraIndex;
 use sp_core::{crypto::KeyTypeId, H256};
 use sp_finality_grandpa::{RoundNumber, SetId, GRANDPA_ENGINE_ID};
 use sp_keyring::Ed25519Keyring;
@@ -41,7 +40,7 @@ use sp_runtime::{
 	traits::{IdentityLookup, OpaqueKeys},
 	DigestItem, Perbill,
 };
-use sp_staking::SessionIndex;
+use sp_staking::{EraIndex, SessionIndex};
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -187,7 +186,7 @@ impl onchain::Config for Test {
 }
 
 impl pallet_staking::Config for Test {
-	const MAX_NOMINATIONS: u32 = 16;
+	type MaxNominations = ConstU32<16>;
 	type RewardRemainder = ();
 	type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
 	type Event = Event;
@@ -206,7 +205,8 @@ impl pallet_staking::Config for Test {
 	type NextNewSession = Session;
 	type ElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
 	type GenesisElectionProvider = Self::ElectionProvider;
-	type SortedListProvider = pallet_staking::UseNominatorsMap<Self>;
+	type VoterList = pallet_staking::UseNominatorsAndValidatorsMap<Self>;
+	type MaxUnlockingChunks = ConstU32<32>;
 	type BenchmarkingConfig = pallet_staking::TestBenchmarkingConfig;
 	type WeightInfo = ();
 }
@@ -326,7 +326,8 @@ pub fn start_session(session_index: SessionIndex) {
 			System::parent_hash()
 		};
 
-		System::initialize(&(i as u64 + 1), &parent_hash, &Default::default(), Default::default());
+		System::reset_events();
+		System::initialize(&(i as u64 + 1), &parent_hash, &Default::default());
 		System::set_block_number((i + 1).into());
 		Timestamp::set_timestamp(System::block_number() * 6000);
 
@@ -345,7 +346,8 @@ pub fn start_era(era_index: EraIndex) {
 }
 
 pub fn initialize_block(number: u64, parent_hash: H256) {
-	System::initialize(&number, &parent_hash, &Default::default(), Default::default());
+	System::reset_events();
+	System::initialize(&number, &parent_hash, &Default::default());
 }
 
 pub fn generate_equivocation_proof(

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -238,8 +238,7 @@ where
 /// `MultiAddrEncodingLimit` represents the size limit of the encoding of `MultiAddr`
 /// `AddressesLimit` represents the size limit of the vector of peers connected
 #[derive(Clone, Eq, PartialEq, Encode, Decode, MaxEncodedLen, TypeInfo)]
-#[codec(mel_bound(PeerIdEncodingLimit: Get<u32>,
-  	MultiAddrEncodingLimit: Get<u32>, AddressesLimit: Get<u32>))]
+#[codec(mel_bound())]
 #[scale_info(skip_type_params(PeerIdEncodingLimit, MultiAddrEncodingLimit, AddressesLimit))]
 pub struct BoundedOpaqueNetworkState<PeerIdEncodingLimit, MultiAddrEncodingLimit, AddressesLimit>
 where
@@ -315,7 +314,6 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
-	#[pallet::generate_storage_info]
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]

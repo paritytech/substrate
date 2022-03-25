@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -29,7 +29,7 @@ use sc_consensus::{
 use sc_service::{
 	config::{
 		DatabaseSource, KeepBlocks, KeystoreConfig, NetworkConfiguration, OffchainWorkerConfig,
-		PruningMode, TransactionStorageMode, WasmExecutionMethod,
+		PruningMode, WasmExecutionMethod,
 	},
 	BasePath, Configuration, Role,
 };
@@ -76,7 +76,6 @@ fn new_node(tokio_handle: Handle) -> node_cli::service::NewFullBase {
 		state_cache_child_ratio: None,
 		state_pruning: PruningMode::ArchiveAll,
 		keep_blocks: KeepBlocks::All,
-		transaction_storage: TransactionStorageMode::BlockBody,
 		chain_spec: spec,
 		wasm_method: WasmExecutionMethod::Compiled,
 		execution_strategies: ExecutionStrategies {

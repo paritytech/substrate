@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -23,9 +23,9 @@
 use codec::{Decode, Encode};
 
 use jsonrpsee::{
+	core::{client::ClientT, Error as RpcError},
 	proc_macros::rpc,
 	rpc_params,
-	types::{traits::Client, Error as RpcError},
 	ws_client::{WsClient, WsClientBuilder},
 };
 
@@ -40,10 +40,11 @@ use sp_core::{
 	},
 };
 pub use sp_io::TestExternalities;
-use sp_runtime::traits::Block as BlockT;
+use sp_runtime::{traits::Block as BlockT, StateVersion};
 use std::{
 	fs,
 	path::{Path, PathBuf},
+	sync::Arc,
 };
 
 pub mod rpc_api;
@@ -55,6 +56,7 @@ type ChildKeyValues = Vec<(ChildInfo, Vec<KeyValue>)>;
 const LOG_TARGET: &str = "remote-ext";
 const DEFAULT_TARGET: &str = "wss://rpc.polkadot.io:443";
 const BATCH_SIZE: usize = 1000;
+const PAGE: u32 = 512;
 
 #[rpc(client)]
 pub trait RpcApi<Hash> {
@@ -116,28 +118,53 @@ pub struct OfflineConfig {
 	pub state_snapshot: SnapshotConfig,
 }
 
-impl<P: Into<PathBuf>> From<P> for SnapshotConfig {
-	fn from(p: P) -> Self {
-		Self { path: p.into() }
-	}
-}
-
 /// Description of the transport protocol (for online execution).
-#[derive(Debug)]
-pub struct Transport {
-	uri: String,
-	client: Option<WsClient>,
+#[derive(Debug, Clone)]
+pub enum Transport {
+	/// Use the `URI` to open a new WebSocket connection.
+	Uri(String),
+	/// Use existing WebSocket connection.
+	RemoteClient(Arc<WsClient>),
 }
 
-impl Clone for Transport {
-	fn clone(&self) -> Self {
-		Self { uri: self.uri.clone(), client: None }
+impl Transport {
+	fn as_client(&self) -> Option<&WsClient> {
+		match self {
+			Self::RemoteClient(client) => Some(&*client),
+			_ => None,
+		}
+	}
+
+	// Open a new WebSocket connection if it's not connected.
+	async fn map_uri(&mut self) -> Result<(), &'static str> {
+		if let Self::Uri(uri) = self {
+			log::debug!(target: LOG_TARGET, "initializing remote client to {:?}", uri);
+
+			let ws_client = WsClientBuilder::default()
+				.max_request_body_size(u32::MAX)
+				.build(&uri)
+				.await
+				.map_err(|e| {
+					log::error!(target: LOG_TARGET, "error: {:?}", e);
+					"failed to build ws client"
+				})?;
+
+			*self = Self::RemoteClient(Arc::new(ws_client))
+		}
+
+		Ok(())
 	}
 }
 
 impl From<String> for Transport {
-	fn from(t: String) -> Self {
-		Self { uri: t, client: None }
+	fn from(uri: String) -> Self {
+		Transport::Uri(uri)
+	}
+}
+
+impl From<Arc<WsClient>> for Transport {
+	fn from(client: Arc<WsClient>) -> Self {
+		Transport::RemoteClient(client)
 	}
 }
 
@@ -155,14 +182,15 @@ pub struct OnlineConfig<B: BlockT> {
 	pub pallets: Vec<String>,
 	/// Transport config.
 	pub transport: Transport,
+	/// Lookout for child-keys, and scrape them as well if set to true.
+	pub scrape_children: bool,
 }
 
 impl<B: BlockT> OnlineConfig<B> {
 	/// Return rpc (ws) client.
 	fn rpc_client(&self) -> &WsClient {
 		self.transport
-			.client
-			.as_ref()
+			.as_client()
 			.expect("ws client must have been initialized by now; qed.")
 	}
 }
@@ -170,11 +198,18 @@ impl<B: BlockT> OnlineConfig<B> {
 impl<B: BlockT> Default for OnlineConfig<B> {
 	fn default() -> Self {
 		Self {
-			transport: Transport { uri: DEFAULT_TARGET.to_owned(), client: None },
+			transport: Transport::Uri(DEFAULT_TARGET.to_owned()),
 			at: None,
 			state_snapshot: None,
 			pallets: vec![],
+			scrape_children: true,
 		}
+	}
+}
+
+impl<B: BlockT> From<String> for OnlineConfig<B> {
+	fn from(s: String) -> Self {
+		Self { transport: s.into(), ..Default::default() }
 	}
 }
 
@@ -188,6 +223,12 @@ pub struct SnapshotConfig {
 impl SnapshotConfig {
 	pub fn new<P: Into<PathBuf>>(path: P) -> Self {
 		Self { path: path.into() }
+	}
+}
+
+impl From<String> for SnapshotConfig {
+	fn from(s: String) -> Self {
+		Self::new(s)
 	}
 }
 
@@ -211,6 +252,8 @@ pub struct Builder<B: BlockT> {
 	hashed_blacklist: Vec<Vec<u8>>,
 	/// connectivity mode, online or offline.
 	mode: Mode<B>,
+	/// The state version being used.
+	state_version: StateVersion,
 }
 
 // NOTE: ideally we would use `DefaultNoBound` here, but not worth bringing in frame-support for
@@ -223,6 +266,7 @@ impl<B: BlockT + DeserializeOwned> Default for Builder<B> {
 			hashed_prefixes: Default::default(),
 			hashed_keys: Default::default(),
 			hashed_blacklist: Default::default(),
+			state_version: StateVersion::V1,
 		}
 	}
 }
@@ -275,7 +319,6 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 		prefix: StorageKey,
 		at: B::Hash,
 	) -> Result<Vec<StorageKey>, &'static str> {
-		const PAGE: u32 = 512;
 		let mut last_key: Option<StorageKey> = None;
 		let mut all_keys: Vec<StorageKey> = vec![];
 		let keys = loop {
@@ -289,6 +332,7 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 					"rpc get_keys failed"
 				})?;
 			let page_len = page.len();
+
 			all_keys.extend(page);
 
 			if page_len < PAGE as usize {
@@ -331,11 +375,12 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 				.cloned()
 				.map(|key| ("state_getStorage", rpc_params![key, at]))
 				.collect::<Vec<_>>();
+
 			let values = client.batch_request::<Option<StorageData>>(batch).await.map_err(|e| {
 				log::error!(
 					target: LOG_TARGET,
 					"failed to execute batch: {:?}. Error: {:?}",
-					chunk_keys,
+					chunk_keys.iter().map(|k| HexDisplay::from(k)).collect::<Vec<_>>(),
 					e
 				);
 				"batch failed."
@@ -629,19 +674,8 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 	}
 
 	pub(crate) async fn init_remote_client(&mut self) -> Result<(), &'static str> {
-		let mut online = self.as_online_mut();
-		log::debug!(target: LOG_TARGET, "initializing remote client to {:?}", online.transport.uri);
-
 		// First, initialize the ws client.
-		let ws_client = WsClientBuilder::default()
-			.max_request_body_size(u32::MAX)
-			.build(&online.transport.uri)
-			.await
-			.map_err(|e| {
-				log::error!(target: LOG_TARGET, "error: {:?}", e);
-				"failed to build ws client"
-			})?;
-		online.transport.client = Some(ws_client);
+		self.as_online_mut().transport.map_uri().await?;
 
 		// Then, if `at` is not set, set it.
 		if self.as_online().at.is_none() {
@@ -673,7 +707,7 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 
 		// inject manual key values.
 		if !self.hashed_key_values.is_empty() {
-			log::debug!(
+			log::info!(
 				target: LOG_TARGET,
 				"extending externalities with {} manually injected key-values",
 				self.hashed_key_values.len()
@@ -683,7 +717,7 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 
 		// exclude manual key values.
 		if !self.hashed_blacklist.is_empty() {
-			log::debug!(
+			log::info!(
 				target: LOG_TARGET,
 				"excluding externalities from {} keys",
 				self.hashed_blacklist.len()
@@ -775,6 +809,12 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 		self
 	}
 
+	/// The state version to use.
+	pub fn state_version(mut self, version: StateVersion) -> Self {
+		self.state_version = version;
+		self
+	}
+
 	/// overwrite the `at` value, if `mode` is set to [`Mode::Online`].
 	///
 	/// noop if `mode` is [`Mode::Offline`]
@@ -788,8 +828,13 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 
 	/// Build the test externalities.
 	pub async fn build(self) -> Result<TestExternalities, &'static str> {
+		let state_version = self.state_version;
 		let (top_kv, child_kv) = self.pre_build().await?;
-		let mut ext = TestExternalities::new_with_code(Default::default(), Default::default());
+		let mut ext = TestExternalities::new_with_code_and_state(
+			Default::default(),
+			Default::default(),
+			state_version,
+		);
 
 		info!(target: LOG_TARGET, "injecting a total of {} top keys", top_kv.len());
 		for (k, v) in top_kv {
@@ -1144,5 +1189,22 @@ mod remote_tests {
 			}
 			std::fs::remove_file(d.path()).unwrap();
 		}
+	}
+
+	#[tokio::test]
+	async fn can_build_child_tree() {
+		init_logger();
+		Builder::<Block>::new()
+			.mode(Mode::Online(OnlineConfig {
+				// transport: "wss://kusama-rpc.polkadot.io".to_owned().into(),
+				transport: "ws://kianenigma-archive:9924".to_owned().into(),
+				// transport: "ws://localhost:9999".to_owned().into(),
+				pallets: vec!["Crowdloan".to_owned()],
+				..Default::default()
+			}))
+			.build()
+			.await
+			.expect(REMOTE_INACCESSIBLE)
+			.execute_with(|| {});
 	}
 }

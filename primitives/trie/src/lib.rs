@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2015-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2015-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -281,7 +281,7 @@ where
 	L: TrieConfiguration,
 	DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue>,
 {
-	Ok(TrieDB::<L>::new(&*db, root)?.get(key).map(|x| x.map(|val| val.to_vec()))?)
+	TrieDB::<L>::new(&*db, root)?.get(key).map(|x| x.map(|val| val.to_vec()))
 }
 
 /// Read a value from the trie with given Query.
@@ -296,9 +296,9 @@ where
 	Q: Query<L::Hash, Item = DBValue>,
 	DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue>,
 {
-	Ok(TrieDB::<L>::new(&*db, root)?
+	TrieDB::<L>::new(&*db, root)?
 		.get_with(key, query)
-		.map(|x| x.map(|val| val.to_vec()))?)
+		.map(|x| x.map(|val| val.to_vec()))
 }
 
 /// Determine the empty trie root.
@@ -374,18 +374,14 @@ where
 pub fn read_child_trie_value<L: TrieConfiguration, DB>(
 	keyspace: &[u8],
 	db: &DB,
-	root_slice: &[u8],
+	root: &TrieHash<L>,
 	key: &[u8],
 ) -> Result<Option<Vec<u8>>, Box<TrieError<L>>>
 where
 	DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue>,
 {
-	let mut root = TrieHash::<L>::default();
-	// root is fetched from DB, not writable by runtime, so it's always valid.
-	root.as_mut().copy_from_slice(root_slice);
-
 	let db = KeySpacedDB::new(&*db, keyspace);
-	TrieDB::<L>::new(&db, &root)?.get(key).map(|x| x.map(|val| val.to_vec()))
+	TrieDB::<L>::new(&db, root)?.get(key).map(|x| x.map(|val| val.to_vec()))
 }
 
 /// Read a value from the child trie with given query.

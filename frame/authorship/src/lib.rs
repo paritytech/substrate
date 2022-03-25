@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -156,6 +156,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
+	#[pallet::without_storage_info]
 	pub struct Pallet<T>(_);
 
 	#[pallet::hooks]
@@ -479,9 +480,9 @@ mod tests {
 		where
 			I: 'a + IntoIterator<Item = (ConsensusEngineId, &'a [u8])>,
 		{
-			for (id, data) in digests {
+			for (id, mut data) in digests {
 				if id == TEST_ID {
-					return u64::decode(&mut &data[..]).ok()
+					return u64::decode(&mut data).ok()
 				}
 			}
 
@@ -499,9 +500,9 @@ mod tests {
 			let author =
 				AuthorGiven::find_author(pre_runtime_digests).ok_or_else(|| "no author")?;
 
-			for (id, seal) in seals {
+			for (id, mut seal) in seals {
 				if id == TEST_ID {
-					match u64::decode(&mut &seal[..]) {
+					match u64::decode(&mut seal) {
 						Err(_) => return Err("wrong seal"),
 						Ok(a) => {
 							if a != author {
@@ -596,7 +597,8 @@ mod tests {
 			};
 
 			let initialize_block = |number, hash: H256| {
-				System::initialize(&number, &hash, &Default::default(), Default::default())
+				System::reset_events();
+				System::initialize(&number, &hash, &Default::default())
 			};
 
 			for number in 1..8 {
@@ -689,7 +691,8 @@ mod tests {
 				seal_header(create_header(1, Default::default(), [1; 32].into()), author);
 
 			header.digest_mut().pop(); // pop the seal off.
-			System::initialize(&1, &Default::default(), header.digest(), Default::default());
+			System::reset_events();
+			System::initialize(&1, &Default::default(), header.digest());
 
 			assert_eq!(Authorship::author(), Some(author));
 		});

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -469,7 +469,7 @@ mod tests {
 
 		// Notify with a header and justification
 		let justification = create_justification();
-		justification_sender.notify(|| Ok(justification.clone())).unwrap();
+		justification_sender.notify(|| Ok::<_, ()>(justification.clone())).unwrap();
 
 		// Inspect what we received
 		let recv = futures::executor::block_on(receiver.take(1).collect::<Vec<_>>());

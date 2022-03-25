@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -69,6 +69,6 @@ impl<T: Config + Send + Sync> SignedExtension for CheckTxVersion<T> {
 		info: &DispatchInfoOf<Self::Call>,
 		len: usize,
 	) -> Result<Self::Pre, TransactionValidityError> {
-		Ok(self.validate(who, call, info, len).map(|_| ())?)
+		self.validate(who, call, info, len).map(|_| ())
 	}
 }

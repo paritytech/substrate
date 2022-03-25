@@ -253,7 +253,7 @@ where
 				self.client.runtime_api().execute_block(&parent_id, block)
 			}) {
 				return Err(Error::Dispatch(
-					format!("Failed to collect traces and execute block: {:?}", e).to_string(),
+					format!("Failed to collect traces and execute block: {}", e).to_string(),
 				))
 			}
 		}
@@ -267,7 +267,7 @@ where
 			.lock()
 			.drain()
 			// Patch wasm identifiers
-			.filter_map(|(_, s)| patch_and_filter(SpanDatum::from(s), targets))
+			.filter_map(|(_, s)| patch_and_filter(s, targets))
 			.collect();
 		let events: Vec<_> = block_subscriber
 			.events
@@ -315,7 +315,7 @@ fn event_values_filter(event: &TraceEvent, filter_kind: &str, values: &str) -> b
 		.values
 		.string_values
 		.get(filter_kind)
-		.and_then(|value| Some(check_target(values, value, &event.level)))
+		.map(|value| check_target(values, value, &event.level))
 		.unwrap_or(false)
 }
 

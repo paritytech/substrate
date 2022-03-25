@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -384,7 +384,7 @@ mod test_iterators {
 	fn map_iter_from() {
 		sp_io::TestExternalities::default().execute_with(|| {
 			use crate::hash::Identity;
-			crate::generate_storage_alias!(MyModule, MyMap => Map<(u64, Identity), u64>);
+			crate::generate_storage_alias!(MyModule, MyMap => Map<(Identity, u64), u64>);
 
 			MyMap::insert(1, 10);
 			MyMap::insert(2, 20);

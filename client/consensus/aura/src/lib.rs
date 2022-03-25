@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -77,13 +77,10 @@ pub use sp_consensus::SyncOracle;
 pub use sp_consensus_aura::{
 	digests::CompatibleDigestItem,
 	inherents::{InherentDataProvider, InherentType as AuraInherent, INHERENT_IDENTIFIER},
-	AuraApi, ConsensusLog, AURA_ENGINE_ID,
+	AuraApi, ConsensusLog, SlotDuration, AURA_ENGINE_ID,
 };
 
 type AuthorityId<P> = <P as Pair>::Public;
-
-/// Slot duration type for Aura.
-pub type SlotDuration = sc_consensus_slots::SlotDuration<sp_consensus_aura::SlotDuration>;
 
 /// Get the slot duration for Aura.
 pub fn slot_duration<A, B, C>(client: &C) -> CResult<SlotDuration>
@@ -94,9 +91,7 @@ where
 	C::Api: AuraApi<B, A>,
 {
 	let best_block_id = BlockId::Hash(client.usage_info().chain.best_hash);
-	let slot_duration = client.runtime_api().slot_duration(&best_block_id)?;
-
-	Ok(SlotDuration::new(slot_duration))
+	client.runtime_api().slot_duration(&best_block_id).map_err(|err| err.into())
 }
 
 /// Get slot author for given block along with authorities.
@@ -284,7 +279,7 @@ where
 	L: sc_consensus::JustificationSyncLink<B>,
 	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + Sync + 'static,
 {
-	AuraWorker {
+	sc_consensus_slots::SimpleSlotWorkerToSlotWorker(AuraWorker {
 		client,
 		block_import,
 		env: proposer_factory,
@@ -297,7 +292,7 @@ where
 		block_proposal_slot_portion,
 		max_block_proposal_slot_portion,
 		_key_type: PhantomData::<P>,
-	}
+	})
 }
 
 struct AuraWorker<C, E, I, P, SO, L, BS> {
@@ -490,24 +485,35 @@ fn aura_err<B: BlockT>(error: Error<B>) -> Error<B> {
 	error
 }
 
-#[derive(derive_more::Display, Debug)]
-enum Error<B: BlockT> {
-	#[display(fmt = "Multiple Aura pre-runtime headers")]
+/// Aura Errors
+#[derive(Debug, thiserror::Error)]
+pub enum Error<B: BlockT> {
+	/// Multiple Aura pre-runtime headers
+	#[error("Multiple Aura pre-runtime headers")]
 	MultipleHeaders,
-	#[display(fmt = "No Aura pre-runtime digest found")]
+	/// No Aura pre-runtime digest found
+	#[error("No Aura pre-runtime digest found")]
 	NoDigestFound,
-	#[display(fmt = "Header {:?} is unsealed", _0)]
+	/// Header is unsealed
+	#[error("Header {0:?} is unsealed")]
 	HeaderUnsealed(B::Hash),
-	#[display(fmt = "Header {:?} has a bad seal", _0)]
+	/// Header has a bad seal
+	#[error("Header {0:?} has a bad seal")]
 	HeaderBadSeal(B::Hash),
-	#[display(fmt = "Slot Author not found")]
+	/// Slot Author not found
+	#[error("Slot Author not found")]
 	SlotAuthorNotFound,
-	#[display(fmt = "Bad signature on {:?}", _0)]
+	/// Bad signature
+	#[error("Bad signature on {0:?}")]
 	BadSignature(B::Hash),
+	/// Client Error
+	#[error(transparent)]
 	Client(sp_blockchain::Error),
-	#[display(fmt = "Unknown inherent error for identifier: {}", "String::from_utf8_lossy(_0)")]
+	/// Unknown inherent error for identifier
+	#[error("Unknown inherent error for identifier: {}", String::from_utf8_lossy(.0))]
 	UnknownInherentError(sp_inherents::InherentIdentifier),
-	#[display(fmt = "Inherent error: {}", _0)]
+	/// Inherents Error
+	#[error("Inherent error: {0}")]
 	Inherent(sp_inherents::Error),
 }
 
@@ -517,7 +523,8 @@ impl<B: BlockT> std::convert::From<Error<B>> for String {
 	}
 }
 
-fn find_pre_digest<B: BlockT, Signature: Codec>(header: &B::Header) -> Result<Slot, Error<B>> {
+/// Get pre-digests from the header
+pub fn find_pre_digest<B: BlockT, Signature: Codec>(header: &B::Header) -> Result<Slot, Error<B>> {
 	if header.number().is_zero() {
 		return Ok(0.into())
 	}
@@ -562,7 +569,7 @@ mod tests {
 	use sc_network_test::{Block as TestBlock, *};
 	use sp_application_crypto::key_types::AURA;
 	use sp_consensus::{
-		AlwaysCanAuthor, DisableProofRecording, NoNetwork as DummyOracle, Proposal, SlotData,
+		AlwaysCanAuthor, DisableProofRecording, NoNetwork as DummyOracle, Proposal,
 	};
 	use sp_consensus_aura::sr25519::AuthorityPair;
 	use sp_inherents::InherentData;
@@ -660,14 +667,14 @@ mod tests {
 			let client = client.as_client();
 			let slot_duration = slot_duration(&*client).expect("slot duration available");
 
-			assert_eq!(slot_duration.slot_duration().as_millis() as u64, SLOT_DURATION);
+			assert_eq!(slot_duration.as_millis() as u64, SLOT_DURATION);
 			import_queue::AuraVerifier::new(
 				client,
 				Box::new(|_, _| async {
 					let timestamp = TimestampInherentDataProvider::from_system_time();
-					let slot = InherentDataProvider::from_timestamp_and_duration(
+					let slot = InherentDataProvider::from_timestamp_and_slot_duration(
 						*timestamp,
-						Duration::from_secs(6),
+						SlotDuration::from_millis(6000),
 					);
 
 					Ok((timestamp, slot))
@@ -750,9 +757,9 @@ mod tests {
 					justification_sync_link: (),
 					create_inherent_data_providers: |_, _| async {
 						let timestamp = TimestampInherentDataProvider::from_system_time();
-						let slot = InherentDataProvider::from_timestamp_and_duration(
+						let slot = InherentDataProvider::from_timestamp_and_slot_duration(
 							*timestamp,
-							Duration::from_secs(6),
+							SlotDuration::from_millis(6000),
 						);
 
 						Ok((timestamp, slot))

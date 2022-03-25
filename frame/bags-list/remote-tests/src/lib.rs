@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,6 +17,7 @@
 
 //! Utilities for remote-testing pallet-bags-list.
 
+use frame_election_provider_support::ScoreProvider;
 use sp_std::prelude::*;
 
 /// A common log target to use.
@@ -47,7 +48,7 @@ pub fn display_and_check_bags<Runtime: RuntimeT>(currency_unit: u64, currency_na
 	let min_nominator_bond = <pallet_staking::MinNominatorBond<Runtime>>::get();
 	log::info!(target: LOG_TARGET, "min nominator bond is {:?}", min_nominator_bond);
 
-	let voter_list_count = <Runtime as pallet_staking::Config>::SortedListProvider::count();
+	let voter_list_count = <Runtime as pallet_staking::Config>::VoterList::count();
 
 	// go through every bag to track the total number of voters within bags and log some info about
 	// how voters are distributed within the bags.
@@ -55,8 +56,12 @@ pub fn display_and_check_bags<Runtime: RuntimeT>(currency_unit: u64, currency_na
 	let mut rebaggable = 0;
 	let mut active_bags = 0;
 	for vote_weight_thresh in <Runtime as pallet_bags_list::Config>::BagThresholds::get() {
+		let vote_weight_thresh_u64: u64 = (*vote_weight_thresh)
+			.try_into()
+			.map_err(|_| "runtime must configure score to at most u64 to use this test")
+			.unwrap();
 		// threshold in terms of UNITS (e.g. KSM, DOT etc)
-		let vote_weight_thresh_as_unit = *vote_weight_thresh as f64 / currency_unit as f64;
+		let vote_weight_thresh_as_unit = vote_weight_thresh_u64 as f64 / currency_unit as f64;
 		let pretty_thresh = format!("Threshold: {}. {}", vote_weight_thresh_as_unit, currency_name);
 
 		let bag = match pallet_bags_list::Pallet::<Runtime>::list_bags_get(*vote_weight_thresh) {
@@ -70,9 +75,13 @@ pub fn display_and_check_bags<Runtime: RuntimeT>(currency_unit: u64, currency_na
 		active_bags += 1;
 
 		for id in bag.std_iter().map(|node| node.std_id().clone()) {
-			let vote_weight = pallet_staking::Pallet::<Runtime>::weight_of(&id);
+			let vote_weight = <Runtime as pallet_bags_list::Config>::ScoreProvider::score(&id);
+			let vote_weight_thresh_u64: u64 = (*vote_weight_thresh)
+				.try_into()
+				.map_err(|_| "runtime must configure score to at most u64 to use this test")
+				.unwrap();
 			let vote_weight_as_balance: pallet_staking::BalanceOf<Runtime> =
-				vote_weight.try_into().map_err(|_| "can't convert").unwrap();
+				vote_weight_thresh_u64.try_into().map_err(|_| "can't convert").unwrap();
 
 			if vote_weight_as_balance < min_nominator_bond {
 				log::trace!(
@@ -87,13 +96,17 @@ pub fn display_and_check_bags<Runtime: RuntimeT>(currency_unit: u64, currency_na
 				pallet_bags_list::Node::<Runtime>::get(&id).expect("node in bag must exist.");
 			if node.is_misplaced(vote_weight) {
 				rebaggable += 1;
+				let notional_bag = pallet_bags_list::notional_bag_for::<Runtime, _>(vote_weight);
+				let notional_bag_as_u64: u64 = notional_bag
+					.try_into()
+					.map_err(|_| "runtime must configure score to at most u64 to use this test")
+					.unwrap();
 				log::trace!(
 					target: LOG_TARGET,
 					"Account {:?} can be rebagged from {:?} to {:?}",
 					id,
 					vote_weight_thresh_as_unit,
-					pallet_bags_list::notional_bag_for::<Runtime>(vote_weight) as f64 /
-						currency_unit as f64
+					notional_bag_as_u64 as f64 / currency_unit as f64
 				);
 			}
 		}

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -478,9 +478,7 @@ pub trait Public: ByteArray + Derive + CryptoType + PartialEq + Eq + Clone + Sen
 }
 
 /// An opaque 32-byte cryptographic identifier.
-#[derive(
-	Clone, Eq, PartialEq, Ord, PartialOrd, Default, Encode, Decode, MaxEncodedLen, TypeInfo,
-)]
+#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Encode, Decode, MaxEncodedLen, TypeInfo)]
 #[cfg_attr(feature = "std", derive(Hash))]
 pub struct AccountId32([u8; 32]);
 
@@ -541,9 +539,9 @@ impl<'a> sp_std::convert::TryFrom<&'a [u8]> for AccountId32 {
 	type Error = ();
 	fn try_from(x: &'a [u8]) -> Result<AccountId32, ()> {
 		if x.len() == 32 {
-			let mut r = AccountId32::default();
-			r.0.copy_from_slice(x);
-			Ok(r)
+			let mut data = [0; 32];
+			data.copy_from_slice(x);
+			Ok(AccountId32(data))
 		} else {
 			Err(())
 		}
@@ -1121,8 +1119,6 @@ pub mod key_types {
 	pub const AUTHORITY_DISCOVERY: KeyTypeId = KeyTypeId(*b"audi");
 	/// Key type for staking, built-in. Identified as `stak`.
 	pub const STAKING: KeyTypeId = KeyTypeId(*b"stak");
-	/// Key type for equivocation reporting, built-in. Identified as `fish`.
-	pub const REPORTING: KeyTypeId = KeyTypeId(*b"fish");
 	/// A key type ID useful for tests.
 	pub const DUMMY: KeyTypeId = KeyTypeId(*b"dumy");
 }

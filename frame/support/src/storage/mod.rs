@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -266,6 +266,8 @@ pub trait StorageMap<K: FullEncode, V: FullCodec> {
 	) -> R;
 
 	/// Mutate the item, only if an `Ok` value is returned. Deletes the item if mutated to a `None`.
+	/// `f` will always be called with an option representing if the storage item exists (`Some<V>`)
+	/// or if the storage item does not exist (`None`), independent of the `QueryType`.
 	fn try_mutate_exists<KeyArg: EncodeLike<K>, R, E, F: FnOnce(&mut Option<V>) -> Result<R, E>>(
 		key: KeyArg,
 		f: F,
@@ -608,6 +610,8 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 		F: FnOnce(&mut Option<V>) -> R;
 
 	/// Mutate the item, only if an `Ok` value is returned. Deletes the item if mutated to a `None`.
+	/// `f` will always be called with an option representing if the storage item exists (`Some<V>`)
+	/// or if the storage item does not exist (`None`), independent of the `QueryType`.
 	fn try_mutate_exists<KArg1, KArg2, R, E, F>(k1: KArg1, k2: KArg2, f: F) -> Result<R, E>
 	where
 		KArg1: EncodeLike<K1>,
@@ -735,6 +739,8 @@ pub trait StorageNMap<K: KeyGenerator, V: FullCodec> {
 		F: FnOnce(&mut Option<V>) -> R;
 
 	/// Mutate the item, only if an `Ok` value is returned. Deletes the item if mutated to a `None`.
+	/// `f` will always be called with an option representing if the storage item exists (`Some<V>`)
+	/// or if the storage item does not exist (`None`), independent of the `QueryType`.
 	fn try_mutate_exists<KArg, R, E, F>(key: KArg, f: F) -> Result<R, E>
 	where
 		KArg: EncodeLikeTuple<K::KArg> + TupleToEncodedIter,
@@ -800,6 +806,19 @@ pub struct PrefixIterator<T, OnRemoval = ()> {
 	/// `raw_key_without_prefix` is the raw storage key without the prefix iterated on.
 	closure: fn(&[u8], &[u8]) -> Result<T, codec::Error>,
 	phantom: core::marker::PhantomData<OnRemoval>,
+}
+
+impl<T, OnRemoval1> PrefixIterator<T, OnRemoval1> {
+	/// Converts to the same iterator but with the different 'OnRemoval' type
+	pub fn convert_on_removal<OnRemoval2>(self) -> PrefixIterator<T, OnRemoval2> {
+		PrefixIterator::<T, OnRemoval2> {
+			prefix: self.prefix,
+			previous_key: self.previous_key,
+			drain: self.drain,
+			closure: self.closure,
+			phantom: Default::default(),
+		}
+	}
 }
 
 /// Trait for specialising on removal logic of [`PrefixIterator`].
@@ -1018,8 +1037,8 @@ impl<T: Decode + Sized> ChildTriePrefixIterator<(Vec<u8>, T)> {
 	pub fn with_prefix(child_info: &ChildInfo, prefix: &[u8]) -> Self {
 		let prefix = prefix.to_vec();
 		let previous_key = prefix.clone();
-		let closure = |raw_key_without_prefix: &[u8], raw_value: &[u8]| {
-			let value = T::decode(&mut &raw_value[..])?;
+		let closure = |raw_key_without_prefix: &[u8], mut raw_value: &[u8]| {
+			let value = T::decode(&mut raw_value)?;
 			Ok((raw_key_without_prefix.to_vec(), value))
 		};
 
@@ -1045,10 +1064,10 @@ impl<K: Decode + Sized, T: Decode + Sized> ChildTriePrefixIterator<(K, T)> {
 	) -> Self {
 		let prefix = prefix.to_vec();
 		let previous_key = prefix.clone();
-		let closure = |raw_key_without_prefix: &[u8], raw_value: &[u8]| {
+		let closure = |raw_key_without_prefix: &[u8], mut raw_value: &[u8]| {
 			let mut key_material = H::reverse(raw_key_without_prefix);
 			let key = K::decode(&mut key_material)?;
-			let value = T::decode(&mut &raw_value[..])?;
+			let value = T::decode(&mut raw_value)?;
 			Ok((key, value))
 		};
 
@@ -1599,7 +1618,7 @@ mod test {
 			use crate::{hash::Identity, storage::generator::map::StorageMap};
 			crate::generate_storage_alias! {
 				MyModule,
-				MyStorageMap => Map<(u64, Identity), u64>
+				MyStorageMap => Map<(Identity, u64), u64>
 			}
 
 			MyStorageMap::insert(1, 10);
@@ -1716,10 +1735,10 @@ mod test {
 	}
 
 	crate::generate_storage_alias! { Prefix, Foo => Value<WeakBoundedVec<u32, ConstU32<7>>> }
-	crate::generate_storage_alias! { Prefix, FooMap => Map<(u32, Twox128), BoundedVec<u32, ConstU32<7>>> }
+	crate::generate_storage_alias! { Prefix, FooMap => Map<(Twox128, u32), BoundedVec<u32, ConstU32<7>>> }
 	crate::generate_storage_alias! {
 		Prefix,
-		FooDoubleMap => DoubleMap<(u32, Twox128), (u32, Twox128), BoundedVec<u32, ConstU32<7>>>
+		FooDoubleMap => DoubleMap<(Twox128, u32), (Twox128, u32), BoundedVec<u32, ConstU32<7>>>
 	}
 
 	#[test]

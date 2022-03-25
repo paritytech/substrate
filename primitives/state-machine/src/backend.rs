@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -40,7 +40,7 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 	type Transaction: Consolidate + Default + Send;
 
 	/// Type of trie backend storage.
-	type TrieBackendStorage: TrieBackendStorage<H>;
+	type TrieBackendStorage: TrieBackendStorage<H, Overlay = Self::Transaction>;
 
 	/// Get keyed storage or None if there is nothing associated.
 	fn storage(&self, key: &[u8]) -> Result<Option<StorageValue>, Self::Error>;
@@ -208,7 +208,7 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 		}
 		let (root, parent_txs) = self.storage_root(
 			delta
-				.map(|(k, v)| (&k[..], v.as_ref().map(|v| &v[..])))
+				.map(|(k, v)| (k, v.as_ref().map(|v| &v[..])))
 				.chain(child_roots.iter().map(|(k, v)| (&k[..], v.as_ref().map(|v| &v[..])))),
 			state_version,
 		);

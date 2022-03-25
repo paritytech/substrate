@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -212,7 +212,7 @@ impl<'de> Deserialize<'de> for Public {
 ///
 /// Instead of importing it for the local module, alias it to be available as a public type
 #[cfg_attr(feature = "full_crypto", derive(Hash))]
-#[derive(Encode, Decode, PassByInner, TypeInfo, PartialEq, Eq)]
+#[derive(Encode, Decode, MaxEncodedLen, PassByInner, TypeInfo, PartialEq, Eq)]
 pub struct Signature(pub [u8; 64]);
 
 impl sp_std::convert::TryFrom<&[u8]> for Signature {
@@ -341,10 +341,13 @@ impl Signature {
 	///
 	/// NOTE: No checking goes on to ensure this is a real signature. Only use it if
 	/// you are certain that the array actually is a signature. GIGO!
-	pub fn from_slice(data: &[u8]) -> Self {
+	pub fn from_slice(data: &[u8]) -> Option<Self> {
+		if data.len() != 64 {
+			return None
+		}
 		let mut r = [0u8; 64];
 		r.copy_from_slice(data);
-		Signature(r)
+		Some(Signature(r))
 	}
 
 	/// A new instance from an H512.

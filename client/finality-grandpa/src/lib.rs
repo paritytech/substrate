@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -123,6 +123,7 @@ pub mod warp_proof;
 
 pub use authorities::{AuthoritySet, AuthoritySetChanges, SharedAuthoritySet};
 pub use aux_schema::best_justification;
+pub use communication::grandpa_protocol_name::standard_name as protocol_standard_name;
 pub use finality_grandpa::voter::report;
 pub use finality_proof::{FinalityProof, FinalityProofError, FinalityProofProvider};
 pub use import::{find_forced_change, find_scheduled_change, GrandpaBlockImport};
@@ -263,45 +264,50 @@ pub struct Config {
 	pub keystore: Option<SyncCryptoStorePtr>,
 	/// TelemetryHandle instance.
 	pub telemetry: Option<TelemetryHandle>,
+	/// Chain specific GRANDPA protocol name. See [`crate::protocol_standard_name`].
+	pub protocol_name: std::borrow::Cow<'static, str>,
 }
 
 impl Config {
 	fn name(&self) -> &str {
-		self.name.as_ref().map(|s| s.as_str()).unwrap_or("<unknown>")
+		self.name.as_deref().unwrap_or("<unknown>")
 	}
 }
 
 /// Errors that can occur while voting in GRANDPA.
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum Error {
 	/// An error within grandpa.
-	Grandpa(GrandpaError),
+	#[error("grandpa error: {0}")]
+	Grandpa(#[from] GrandpaError),
+
 	/// A network error.
+	#[error("network error: {0}")]
 	Network(String),
+
 	/// A blockchain error.
+	#[error("blockchain error: {0}")]
 	Blockchain(String),
+
 	/// Could not complete a round on disk.
-	Client(ClientError),
+	#[error("could not complete a round on disk: {0}")]
+	Client(#[from] ClientError),
+
 	/// Could not sign outgoing message
+	#[error("could not sign outgoing message: {0}")]
 	Signing(String),
+
 	/// An invariant has been violated (e.g. not finalizing pending change blocks in-order)
+	#[error("safety invariant has been violated: {0}")]
 	Safety(String),
+
 	/// A timer failed to fire.
+	#[error("a timer failed to fire: {0}")]
 	Timer(io::Error),
+
 	/// A runtime api request failed.
+	#[error("runtime API request failed: {0}")]
 	RuntimeApi(sp_api::ApiError),
-}
-
-impl From<GrandpaError> for Error {
-	fn from(e: GrandpaError) -> Self {
-		Error::Grandpa(e)
-	}
-}
-
-impl From<ClientError> for Error {
-	fn from(e: ClientError) -> Self {
-		Error::Client(e)
-	}
 }
 
 /// Something which can determine if a block is known.
@@ -319,7 +325,7 @@ where
 {
 	fn block_number(&self, hash: Block::Hash) -> Result<Option<NumberFor<Block>>, Error> {
 		self.block_number_from_id(&BlockId::Hash(hash))
-			.map_err(|e| Error::Blockchain(format!("{:?}", e)))
+			.map_err(|e| Error::Blockchain(e.to_string()))
 	}
 }
 
@@ -456,7 +462,7 @@ impl<H: fmt::Debug, N: fmt::Debug> ::std::error::Error for CommandOrError<H, N> 
 impl<H, N> fmt::Display for CommandOrError<H, N> {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		match *self {
-			CommandOrError::Error(ref e) => write!(f, "{:?}", e),
+			CommandOrError::Error(ref e) => write!(f, "{}", e),
 			CommandOrError::VoterCommand(ref cmd) => write!(f, "{}", cmd),
 		}
 	}
@@ -714,10 +720,14 @@ pub struct GrandpaParams<Block: BlockT, C, N, SC, VR> {
 
 /// Returns the configuration value to put in
 /// [`sc_network::config::NetworkConfiguration::extra_sets`].
-pub fn grandpa_peers_set_config() -> sc_network::config::NonDefaultSetConfig {
+/// For standard protocol name see [`crate::protocol_standard_name`].
+pub fn grandpa_peers_set_config(
+	protocol_name: std::borrow::Cow<'static, str>,
+) -> sc_network::config::NonDefaultSetConfig {
+	use communication::grandpa_protocol_name;
 	sc_network::config::NonDefaultSetConfig {
-		notifications_protocol: communication::GRANDPA_PROTOCOL_NAME.into(),
-		fallback_names: Vec::new(),
+		notifications_protocol: protocol_name,
+		fallback_names: grandpa_protocol_name::LEGACY_NAMES.iter().map(|&n| n.into()).collect(),
 		// Notifications reach ~256kiB in size at the time of writing on Kusama and Polkadot.
 		max_notification_size: 1024 * 1024,
 		set_config: sc_network::config::SetConfig {
@@ -831,7 +841,7 @@ where
 		Ok(()) => error!(target: "afg",
 			"GRANDPA voter future has concluded naturally, this should be unreachable."
 		),
-		Err(e) => error!(target: "afg", "GRANDPA voter error: {:?}", e),
+		Err(e) => error!(target: "afg", "GRANDPA voter error: {}", e),
 	});
 
 	// Make sure that `telemetry_task` doesn't accidentally finish and kill grandpa.

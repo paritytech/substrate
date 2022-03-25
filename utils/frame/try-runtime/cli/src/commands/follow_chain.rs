@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -35,14 +35,10 @@ const SUB: &'static str = "chain_subscribeFinalizedHeads";
 const UN_SUB: &'static str = "chain_unsubscribeFinalizedHeads";
 
 /// Configurations of the [`Command::FollowChain`].
-#[derive(Debug, Clone, structopt::StructOpt)]
+#[derive(Debug, Clone, clap::Parser)]
 pub struct FollowChainCmd {
 	/// The url to connect to.
-	#[structopt(
-			short,
-			long,
-			parse(try_from_str = parse::url),
-		)]
+	#[clap(short, long, parse(try_from_str = parse::url))]
 	uri: String,
 }
 
@@ -154,7 +150,6 @@ where
 		let storage_changes = changes
 			.drain_storage_changes(
 				&state_ext.backend,
-				Default::default(),
 				&mut Default::default(),
 				// Note that in case a block contains a runtime upgrade,
 				// state version could potentially be incorrect here,

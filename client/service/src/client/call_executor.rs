@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -246,8 +246,8 @@ where
 					&runtime_code,
 					self.spawn_handle.clone(),
 				)
+				.with_storage_transaction_cache(storage_transaction_cache.as_deref_mut())
 				.set_parent_hash(at_hash);
-				// TODO: https://github.com/paritytech/substrate/issues/4455
 				state_machine.execute_using_consensus_failure_handler(
 					execution_manager,
 					native_call.map(|n| || (n)().map_err(|e| Box::new(e) as Box<_>)),
@@ -264,9 +264,7 @@ where
 					&runtime_code,
 					self.spawn_handle.clone(),
 				)
-				.with_storage_transaction_cache(
-					storage_transaction_cache.as_mut().map(|c| &mut **c),
-				)
+				.with_storage_transaction_cache(storage_transaction_cache.as_deref_mut())
 				.set_parent_hash(at_hash);
 				state_machine.execute_using_consensus_failure_handler(
 					execution_manager,
@@ -287,7 +285,7 @@ where
 			state_runtime_code.runtime_code().map_err(sp_blockchain::Error::RuntimeCode)?;
 		self.executor
 			.runtime_version(&mut ext, &runtime_code)
-			.map_err(|e| sp_blockchain::Error::VersionInvalid(format!("{:?}", e)).into())
+			.map_err(|e| sp_blockchain::Error::VersionInvalid(e.to_string()).into())
 	}
 
 	fn prove_execution(
@@ -342,7 +340,7 @@ where
 	Block: BlockT,
 {
 	fn runtime_version(&self, at: &BlockId<Block>) -> Result<sp_version::RuntimeVersion, String> {
-		CallExecutor::runtime_version(self, at).map_err(|e| format!("{:?}", e))
+		CallExecutor::runtime_version(self, at).map_err(|e| e.to_string())
 	}
 }
 

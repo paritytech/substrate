@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -102,9 +102,7 @@ pub mod pallet {
 			let parent_hash = <frame_system::Pallet<T>>::parent_hash();
 
 			<RandomMaterial<T>>::mutate(|ref mut values| {
-				if values.len() < RANDOM_MATERIAL_LEN as usize {
-					values.push(parent_hash)
-				} else {
+				if values.try_push(parent_hash).is_err() {
 					let index = block_number_to_index::<T>(block_number);
 					values[index] = parent_hash;
 				}
@@ -119,7 +117,8 @@ pub mod pallet {
 	/// the oldest hash.
 	#[pallet::storage]
 	#[pallet::getter(fn random_material)]
-	pub(super) type RandomMaterial<T: Config> = StorageValue<_, Vec<T::Hash>, ValueQuery>;
+	pub(super) type RandomMaterial<T: Config> =
+		StorageValue<_, BoundedVec<T::Hash, ConstU32<RANDOM_MATERIAL_LEN>>, ValueQuery>;
 }
 
 impl<T: Config> Randomness<T::Hash, T::BlockNumber> for Pallet<T> {
@@ -239,7 +238,8 @@ mod tests {
 		let mut parent_hash = System::parent_hash();
 
 		for i in 1..(blocks + 1) {
-			System::initialize(&i, &parent_hash, &Default::default(), frame_system::InitKind::Full);
+			System::reset_events();
+			System::initialize(&i, &parent_hash, &Default::default());
 			CollectiveFlip::on_initialize(i);
 
 			let header = System::finalize();

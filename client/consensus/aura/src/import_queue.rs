@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -205,7 +205,7 @@ where
 		let hash = block.header.hash();
 		let parent_hash = *block.header.parent_hash();
 		let authorities = authorities(self.client.as_ref(), &BlockId::Hash(parent_hash))
-			.map_err(|e| format!("Could not fetch authorities at {:?}: {:?}", parent_hash, e))?;
+			.map_err(|e| format!("Could not fetch authorities at {:?}: {}", parent_hash, e))?;
 
 		let create_inherent_data_providers = self
 			.create_inherent_data_providers
@@ -249,7 +249,7 @@ where
 							&BlockId::Hash(parent_hash),
 							|v| v >= 2,
 						)
-						.map_err(|e| format!("{:?}", e))?
+						.map_err(|e| e.to_string())?
 					{
 						self.check_inherents(
 							new_block.clone(),

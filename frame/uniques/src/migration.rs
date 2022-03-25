@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -22,6 +22,7 @@ use frame_support::{
 	weights::Weight,
 };
 
+/// Migrate the pallet storage to v1.
 pub fn migrate_to_v1<T: Config<I>, I: 'static, P: GetStorageVersion + PalletInfoAccess>(
 ) -> frame_support::weights::Weight {
 	let on_chain_storage_version = <P as GetStorageVersion>::on_chain_storage_version();

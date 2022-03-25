@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -77,7 +77,7 @@ struct VersionedRuntime {
 
 impl VersionedRuntime {
 	/// Run the given closure `f` with an instance of this runtime.
-	fn with_instance<'c, R, F>(&self, ext: &mut dyn Externalities, f: F) -> Result<R, Error>
+	fn with_instance<R, F>(&self, ext: &mut dyn Externalities, f: F) -> Result<R, Error>
 	where
 		F: FnOnce(
 			&Arc<dyn WasmModule>,
@@ -103,23 +103,23 @@ impl VersionedRuntime {
 				let result = f(&self.module, &mut *instance, self.version.as_ref(), ext);
 				if let Err(e) = &result {
 					if new_inst {
-						log::warn!(
+						tracing::warn!(
 							target: "wasm-runtime",
-							"Fresh runtime instance failed with {:?}",
-							e,
+							error = %e,
+							"Fresh runtime instance failed",
 						)
 					} else {
-						log::warn!(
+						tracing::warn!(
 							target: "wasm-runtime",
-							"Evicting failed runtime instance: {:?}",
-							e,
+							error = %e,
+							"Evicting failed runtime instance",
 						);
 					}
 				} else {
 					*locked = Some(instance);
 
 					if new_inst {
-						log::debug!(
+						tracing::debug!(
 							target: "wasm-runtime",
 							"Allocated WASM instance {}/{}",
 							index + 1,
@@ -131,7 +131,7 @@ impl VersionedRuntime {
 				result
 			},
 			None => {
-				log::warn!(target: "wasm-runtime", "Ran out of free WASM instances");
+				tracing::warn!(target: "wasm-runtime", "Ran out of free WASM instances");
 
 				// Allocate a new instance
 				let mut instance = self.module.new_instance()?;
@@ -259,7 +259,7 @@ impl RuntimeCache {
 
 			match result {
 				Ok(ref result) => {
-					log::debug!(
+					tracing::debug!(
 						target: "wasm-runtime",
 						"Prepared new runtime version {:?} in {} ms.",
 						result.version,
@@ -267,7 +267,7 @@ impl RuntimeCache {
 					);
 				},
 				Err(ref err) => {
-					log::warn!(target: "wasm-runtime", "Cannot create a runtime: {:?}", err);
+					tracing::warn!(target: "wasm-runtime", error = ?err, "Cannot create a runtime");
 				},
 			}
 
@@ -317,11 +317,11 @@ where
 		WasmExecutionMethod::Compiled => sc_executor_wasmtime::create_runtime::<H>(
 			blob,
 			sc_executor_wasmtime::Config {
-				heap_pages,
 				max_memory_size: None,
 				allow_missing_func_imports,
 				cache_path: cache_path.map(ToOwned::to_owned),
 				semantics: sc_executor_wasmtime::Semantics {
+					extra_heap_pages: heap_pages,
 					fast_instance_reuse: true,
 					deterministic_stack_limit: None,
 					canonicalize_nans: false,

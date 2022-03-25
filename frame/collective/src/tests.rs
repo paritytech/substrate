@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -24,10 +24,7 @@ use frame_support::{
 	Hashable,
 };
 use frame_system::{EventRecord, Phase};
-use sp_core::{
-	u32_trait::{_3, _4},
-	H256,
-};
+use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
@@ -142,7 +139,7 @@ impl Config<Instance2> for Test {
 }
 impl mock_democracy::Config for Test {
 	type Event = Event;
-	type ExternalMajorityOrigin = EnsureProportionAtLeast<_3, _4, u64, Instance1>;
+	type ExternalMajorityOrigin = EnsureProportionAtLeast<u64, Instance1, 3, 4>;
 }
 impl Config for Test {
 	type Origin = Origin;
@@ -175,7 +172,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 }
 
 fn make_proposal(value: u64) -> Call {
-	Call::System(frame_system::Call::remark { remark: value.encode() })
+	Call::System(frame_system::Call::remark_with_event { remark: value.to_be_bytes().to_vec() })
 }
 
 fn record(event: Event) -> EventRecord<Event, H256> {
