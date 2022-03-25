@@ -52,7 +52,7 @@ fn announcement(input: impl AsRef<[u8]>) -> Cid {
 
 fn funded_account<T: Config<I>, I: 'static>(name: &'static str, index: u32) -> T::AccountId {
 	let account: T::AccountId = account(name, index, SEED);
-	T::Currency::make_free_balance_be(&account, BalanceOf::<T, I>::max_value());
+	T::Currency::make_free_balance_be(&account, BalanceOf::<T, I>::max_value() / 100u8.into());
 	account
 }
 
