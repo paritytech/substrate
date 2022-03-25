@@ -24,6 +24,7 @@ impl<T: Config> Pallet<T> {
 	pub fn do_create_collection(
 		caller: T::AccountId,
 		config: UserFeatures,
+		max_supply: Option<T::MaxSupply>,
 	) -> DispatchResult {
 		let id = CountForCollections::<T>::get();
 
@@ -42,7 +43,8 @@ impl<T: Config> Pallet<T> {
 			deposit: None,
 			attributes: 0,
 			items: 0,
-			item_metadatas: 0
+			item_metadatas: 0,
+			max_supply,
 		};
 		ensure!(!Collections::<T>::contains_key(id), Error::<T>::CollectionIdTaken);
 
@@ -80,6 +82,29 @@ impl<T: Config> Pallet<T> {
 		user_features.insert(UserFeatures::IsLocked);
 
 		Self::deposit_event(Event::<T>::CollectionLocked { id });
+
+		Ok(())
+	}
+
+	pub fn do_update_max_supply(
+		id: T::CollectionId,
+		caller: T::AccountId,
+		config: CollectionConfig,
+		max_supply: Option<T::MaxSupply>,
+	) -> DispatchResult {
+		let mut collection = Collections::<T>::get(&id).ok_or(Error::<T>::CollectionNotFound)?;
+		ensure!(collection.owner == caller, Error::<T>::NotAuthorized);
+
+		let user_features: BitFlags<UserFeatures> = config.user_features.into();
+
+		if user_features.contains(UserFeatures::IsLocked) {
+			return Err(Error::<T>::CollectionIsLocked.into());
+		}
+
+		// update the max supply
+		collection.max_supply = max_supply;
+
+		Self::deposit_event(Event::<T>::CollectionMaxSupplyChanged { id, max_supply });
 
 		Ok(())
 	}

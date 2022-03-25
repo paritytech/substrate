@@ -67,6 +67,10 @@ pub mod pallet {
 		/// The maximum length of an attribute value.
 		#[pallet::constant]
 		type AttributeValueLimit: Get<u32>;
+
+		/// The maximum amount of items per collection.
+		#[pallet::constant]
+		type MaxSupply: Get<u32>;
 	}
 
 	pub type MetadataOf<T> = BoundedVec<u8, <T as Config>::MetadataLimit>;
@@ -100,7 +104,7 @@ pub mod pallet {
 		_,
 		Blake2_128Concat,
 		T::CollectionId,
-		Collection<T::CollectionId, T::AccountId, BalanceOf<T>>,
+		Collection<T::CollectionId, T::AccountId, BalanceOf<T>, T::MaxSupply>,
 		OptionQuery,
 	>;
 
@@ -179,6 +183,10 @@ pub mod pallet {
 			collection_id: T::CollectionId,
 			item_id: T::ItemId,
 		},
+		CollectionMaxSupplyChanged {
+			id: T::CollectionId,
+			max_supply: Option<T::MaxSupply>,
+		},
 	}
 
 	// Your Pallet's error messages.
@@ -194,6 +202,8 @@ pub mod pallet {
 		CollectionIsLocked,
 		/// An item with this ID does not exist.
 		ItemIdTaken,
+		/// An item with this ID is not within the max supply range.
+		ItemIdNotWithinMaxSupply,
 		/// The calling user is not authorized to make this call.
 		NotAuthorized,
 		/// The hint provided by the user was incorrect.
@@ -211,9 +221,10 @@ pub mod pallet {
 		pub fn create(
 			origin: OriginFor<T>,
 			config: UserFeatures,
+			max_supply: Option<T::MaxSupply>,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
-			Self::do_create_collection(sender, config)?;
+			Self::do_create_collection(sender, config, max_supply)?;
 			Ok(())
 		}
 
@@ -225,6 +236,18 @@ pub mod pallet {
 			let sender = ensure_signed(origin)?;
 			let config = CollectionConfigs::<T>::get(id).ok_or(Error::<T>::CollectionNotFound)?;
 			Self::do_lock_collection(id, sender, config)?;
+			Ok(())
+		}
+
+		#[pallet::weight(0)]
+		pub fn update_max_supply(
+			origin: OriginFor<T>,
+			id: T::CollectionId,
+			max_supply: Option<T::MaxSupply>,
+		) -> DispatchResult {
+			let sender = ensure_signed(origin)?;
+			let config = CollectionConfigs::<T>::get(id).ok_or(Error::<T>::CollectionNotFound)?;
+			Self::do_update_max_supply(id, sender, config, max_supply)?;
 			Ok(())
 		}
 
@@ -301,7 +324,7 @@ pub mod pallet {
 		// PART 3:
 		// +structure => will affect collection destruction
 		// +mint items
-		// max supply => applies to mint
+		// +max supply => applies to mint
 		// max items per user => applies to mint and transfer
 		// isTransferable => applies to transfer
 		// transfer items

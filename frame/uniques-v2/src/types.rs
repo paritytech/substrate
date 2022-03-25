@@ -48,13 +48,14 @@ pub struct CollectionConfig {
 }
 
 #[derive(Encode, Decode, PartialEq, Default, MaxEncodedLen, TypeInfo)]
-pub struct Collection<CollectionId, Account, Balance> {
+pub struct Collection<CollectionId, Account, Balance, MaxSupply> {
 	pub id: CollectionId,
 	pub owner: Account,
 	pub deposit: Option<Balance>,
 	pub attributes: u32,
 	pub items: u32,
 	pub item_metadatas: u32,
+	pub max_supply: Option<MaxSupply>,
 }
 
 #[derive(Encode, Decode, PartialEq, Default, MaxEncodedLen, TypeInfo)]
@@ -97,7 +98,7 @@ pub struct DestroyWitness {
 	pub attributes: u32,
 }
 
-impl<ItemId, Account, Balance> Collection<ItemId, Account, Balance> {
+impl<ItemId, Account, Balance, MaxSupply> Collection<ItemId, Account, Balance, MaxSupply> {
 	pub fn destroy_witness(&self) -> DestroyWitness {
 		DestroyWitness {
 			items: self.items,

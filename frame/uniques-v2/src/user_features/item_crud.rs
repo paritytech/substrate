@@ -29,6 +29,10 @@ impl<T: Config> Pallet<T> {
 		ensure!(collection.owner == caller, Error::<T>::NotAuthorized);
 		ensure!(!Items::<T>::contains_key(collection_id, item_id), Error::<T>::ItemIdTaken);
 
+		if collection.max_supply.is_some() {
+			ensure!(item_id < collection.max_supply, Error::<T>::ItemIdNotWithinMaxSupply);
+		}
+
 		let item = Item {
 			id: item_id,
 			owner: caller.clone(),
