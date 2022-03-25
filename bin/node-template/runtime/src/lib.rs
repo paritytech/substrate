@@ -27,10 +27,7 @@ use sp_version::RuntimeVersion;
 pub use frame_support::{
 	construct_runtime, parameter_types,
 	traits::{ConstU128, ConstU32, ConstU8, KeyOwnerProofSystem, Randomness, StorageInfo},
-	weights::{
-		constants::{BlockExecutionWeight, ExtrinsicBaseWeight, RocksDbWeight, WEIGHT_PER_SECOND},
-		IdentityFee, Weight,
-	},
+	weights::{constants::WEIGHT_PER_SECOND, IdentityFee, Weight},
 	StorageValue,
 };
 pub use pallet_balances::Call as BalancesCall;
@@ -42,6 +39,13 @@ pub use sp_runtime::{Perbill, Permill};
 
 /// Import the template pallet.
 pub use pallet_template;
+
+// Use own values for `BlockExecutionWeight`, `ExtrinsicBaseWeight`, `RocksDbWeight`
+// and `ParityDbWeight` instead the defaults from [`frame_support::weights`].
+pub mod weights;
+
+// Re-export the non-default weights.
+pub use weights::*;
 
 /// An index to a block.
 pub type BlockNumber = u32;

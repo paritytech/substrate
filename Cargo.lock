@@ -5168,39 +5168,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "node-template-runtime-constants"
-version = "4.0.0-dev"
-dependencies = [
- "assert_matches",
- "bitflags",
- "frame-metadata",
- "frame-support",
- "frame-support-procedural",
- "frame-system",
- "impl-trait-for-tuples",
- "log 0.4.14",
- "once_cell",
- "parity-scale-codec",
- "parity-util-mem",
- "paste 1.0.6",
- "pretty_assertions",
- "scale-info",
- "serde",
- "smallvec 1.8.0",
- "sp-arithmetic",
- "sp-core",
- "sp-core-hashing-proc-macro",
- "sp-inherents",
- "sp-io",
- "sp-runtime",
- "sp-staking",
- "sp-state-machine",
- "sp-std",
- "sp-tracing",
- "tt-call",
-]
-
-[[package]]
 name = "node-testing"
 version = "3.0.0-dev"
 dependencies = [
