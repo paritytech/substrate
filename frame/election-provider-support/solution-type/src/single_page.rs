@@ -136,8 +136,8 @@ pub(crate) fn generate(def: crate::SolutionDef) -> Result<TokenStream2> {
 				};
 
 				// Make sure that the voter bound is binding.
-				use frame_support::traits::Get;
-				if #struct_name.voter_count() as u32 > #max_voters::get() {
+				// `assignments.len()` actually represents the number of voters
+				if assignments.len() as u32 > <#max_voters as _feps::Get<u32>>::get() {
 					return Err(_feps::Error::TooManyVoters);
 				}
 				Ok(#struct_name)
