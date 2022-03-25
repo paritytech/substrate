@@ -1397,10 +1397,10 @@ impl<T: Config> ScoreProvider<T::AccountId> for Pallet<T> {
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn set_score_of(who: &T::AccountId, weight: Self::Score) {
+	fn set_score_of(who: &T::AccountId, score: Self::Score) {
 		// this will clearly results in an inconsistent state, but it should not matter for a
 		// benchmark.
-		let active: BalanceOf<T> = weight.try_into().map_err(|_| ()).unwrap();
+		let active: BalanceOf<T> = score.try_into().map_err(|_| ()).unwrap();
 		let mut ledger = match Self::ledger(who) {
 			None => StakingLedger::default_from(who.clone()),
 			Some(l) => l,

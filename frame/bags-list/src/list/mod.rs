@@ -39,7 +39,7 @@ use sp_std::{
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
 	iter,
 	marker::PhantomData,
-	vec::Vec,
+	prelude::*,
 };
 
 #[derive(Debug, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo, PalletError)]
@@ -769,11 +769,6 @@ impl<T: Config<I>, I: 'static> Bag<T, I> {
 			"duplicate found in bag"
 		);
 
-		Ok(())
-	}
-
-	#[cfg(not(feature = "std"))]
-	fn sanity_check(&self) -> Result<(), &'static str> {
 		Ok(())
 	}
 

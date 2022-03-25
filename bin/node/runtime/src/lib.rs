@@ -558,8 +558,8 @@ impl pallet_staking::Config for Runtime {
 	type OffendingValidatorsThreshold = OffendingValidatorsThreshold;
 	type ElectionProvider = ElectionProviderMultiPhase;
 	type GenesisElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
-	type VoterList = BagsList;
-	type TargetList = UseValidatorsMap<Self>;
+	type VoterList = VoterBagsList;
+	type TargetList = TargetBagsList;
 	type MaxUnlockingChunks = ConstU32<32>;
 	type WeightInfo = pallet_staking::weights::SubstrateWeight<Runtime>;
 	type BenchmarkingConfig = StakingBenchmarkingConfig;
@@ -685,14 +685,29 @@ impl pallet_election_provider_multi_phase::Config for Runtime {
 
 parameter_types! {
 	pub const BagThresholds: &'static [u64] = &voter_bags::THRESHOLDS;
+	pub BagThresholdsBalance: &'static [Balance] = &voter_bags::THRESHOLDS_BALANCE;
 }
 
-impl pallet_bags_list::Config for Runtime {
+type VoterBagsListInstance = pallet_bags_list::Instance1;
+impl pallet_bags_list::Config<VoterBagsListInstance> for Runtime {
 	type Event = Event;
-	type ScoreProvider = Staking;
-	type WeightInfo = pallet_bags_list::weights::SubstrateWeight<Runtime>;
 	type BagThresholds = BagThresholds;
+	/// The voter bags-list is loosely kept up to date, and the real source of truth for the score
+	/// of each node is the staking pallet.
+	type ScoreProvider = Staking;
 	type Score = VoteWeight;
+	type WeightInfo = pallet_bags_list::weights::SubstrateWeight<Runtime>;
+}
+
+type TargetBagsListInstance = pallet_bags_list::Instance2;
+impl pallet_bags_list::Config<TargetBagsListInstance> for Runtime {
+	type Event = Event;
+	// The bags-list itself will be the source of truth about the approval stakes. This implies that
+	// staking should keep the approval stakes up to date at all times.
+	type ScoreProvider = TargetBagsList;
+	type BagThresholds = BagThresholdsBalance;
+	type Score = Balance;
+	type WeightInfo = pallet_bags_list::weights::SubstrateWeight<Runtime>;
 }
 
 parameter_types! {
@@ -1439,7 +1454,8 @@ construct_runtime!(
 		Gilt: pallet_gilt,
 		Uniques: pallet_uniques,
 		TransactionStorage: pallet_transaction_storage,
-		BagsList: pallet_bags_list,
+		VoterBagsList: pallet_bags_list::<Instance1>,
+		TargetBagsList: pallet_bags_list::<Instance2>,
 		StateTrieMigration: pallet_state_trie_migration,
 		ChildBounties: pallet_child_bounties,
 		Referenda: pallet_referenda,
@@ -1486,7 +1502,7 @@ pub type Executive = frame_executive::Executive<
 	frame_system::ChainContext<Runtime>,
 	Runtime,
 	AllPalletsWithSystem,
-	pallet_bags_list::migrations::CheckCounterPrefix<Runtime>,
+	(),
 >;
 
 /// MMR helper types.

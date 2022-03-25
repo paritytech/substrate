@@ -168,7 +168,6 @@
 
 pub mod onchain;
 pub mod traits;
-use codec::{Decode, Encode};
 use sp_runtime::traits::{Bounded, Saturating, Zero};
 use sp_std::{fmt::Debug, prelude::*};
 
@@ -218,7 +217,7 @@ impl<T> __OrInvalidIndex<T> for Option<T> {
 /// making it fast to repeatedly encode into a `SolutionOf<T>`. This property turns out
 /// to be important when trimming for solution length.
 #[derive(RuntimeDebug, Clone, Default)]
-#[cfg_attr(feature = "std", derive(PartialEq, Eq, Encode, Decode))]
+#[cfg_attr(feature = "std", derive(PartialEq, Eq, codec::Encode, codec::Decode))]
 pub struct IndexAssignment<VoterIndex, TargetIndex, P: PerThing> {
 	/// Index of the voter among the voters list.
 	pub who: VoterIndex,
