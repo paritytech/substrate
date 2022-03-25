@@ -107,12 +107,12 @@
 //!         fn desired_targets() -> data_provider::Result<u32> {
 //!             Ok(1)
 //!         }
-//!         fn voters(maybe_max_len: Option<usize>)
+//!         fn electing_voters(maybe_max_len: Option<usize>)
 //!           -> data_provider::Result<Vec<VoterOf<Self>>>
 //!         {
 //!             Ok(Default::default())
 //!         }
-//!         fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<AccountId>> {
+//!         fn electable_targets(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<AccountId>> {
 //!             Ok(vec![10, 20, 30])
 //!         }
 //!         fn next_election_prediction(now: BlockNumber) -> BlockNumber {
@@ -138,7 +138,7 @@
 //!         type DataProvider = T::DataProvider;
 //!
 //!         fn elect() -> Result<Supports<AccountId>, Self::Error> {
-//!             Self::DataProvider::targets(None)
+//!             Self::DataProvider::electable_targets(None)
 //!                 .map_err(|_| "failed to elect")
 //!                 .map(|t| vec![(t[0], Support::default())])
 //!         }
@@ -167,16 +167,91 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 pub mod onchain;
-use frame_support::{traits::Get, BoundedVec};
+pub mod traits;
+use codec::{Decode, Encode};
+use frame_support::{traits::Get, BoundedVec, RuntimeDebug};
 use sp_runtime::traits::Bounded;
 use sp_std::{fmt::Debug, prelude::*};
 
+/// Re-export the solution generation macro.
+pub use frame_election_provider_solution_type::generate_solution_type;
 /// Re-export some type as they are used in the interface.
 pub use sp_arithmetic::PerThing;
 pub use sp_npos_elections::{
-	Assignment, ElectionResult, ExtendedBalance, IdentifierT, PerThing128, Support, Supports,
-	VoteWeight,
+	Assignment, ElectionResult, Error, ExtendedBalance, IdentifierT, PerThing128, Support,
+	Supports, VoteWeight,
 };
+pub use traits::NposSolution;
+
+// re-export for the solution macro, with the dependencies of the macro.
+#[doc(hidden)]
+pub use codec;
+#[doc(hidden)]
+pub use scale_info;
+#[doc(hidden)]
+pub use sp_arithmetic;
+#[doc(hidden)]
+pub use sp_std;
+
+#[cfg(test)]
+mod mock;
+#[cfg(test)]
+mod tests;
+// Simple Extension trait to easily convert `None` from index closures to `Err`.
+//
+// This is only generated and re-exported for the solution code to use.
+#[doc(hidden)]
+pub trait __OrInvalidIndex<T> {
+	fn or_invalid_index(self) -> Result<T, Error>;
+}
+
+impl<T> __OrInvalidIndex<T> for Option<T> {
+	fn or_invalid_index(self) -> Result<T, Error> {
+		self.ok_or(Error::SolutionInvalidIndex)
+	}
+}
+
+/// The [`IndexAssignment`] type is an intermediate between the assignments list
+/// ([`&[Assignment<T>]`][Assignment]) and `SolutionOf<T>`.
+///
+/// The voter and target identifiers have already been replaced with appropriate indices,
+/// making it fast to repeatedly encode into a `SolutionOf<T>`. This property turns out
+/// to be important when trimming for solution length.
+#[derive(RuntimeDebug, Clone, Default)]
+#[cfg_attr(feature = "std", derive(PartialEq, Eq, Encode, Decode))]
+pub struct IndexAssignment<VoterIndex, TargetIndex, P: PerThing> {
+	/// Index of the voter among the voters list.
+	pub who: VoterIndex,
+	/// The distribution of the voter's stake among winning targets.
+	///
+	/// Targets are identified by their index in the canonical list.
+	pub distribution: Vec<(TargetIndex, P)>,
+}
+
+impl<VoterIndex, TargetIndex, P: PerThing> IndexAssignment<VoterIndex, TargetIndex, P> {
+	pub fn new<AccountId: IdentifierT>(
+		assignment: &Assignment<AccountId, P>,
+		voter_index: impl Fn(&AccountId) -> Option<VoterIndex>,
+		target_index: impl Fn(&AccountId) -> Option<TargetIndex>,
+	) -> Result<Self, Error> {
+		Ok(Self {
+			who: voter_index(&assignment.who).or_invalid_index()?,
+			distribution: assignment
+				.distribution
+				.iter()
+				.map(|(target, proportion)| Some((target_index(target)?, proportion.clone())))
+				.collect::<Option<Vec<_>>>()
+				.or_invalid_index()?,
+		})
+	}
+}
+
+/// A type alias for [`IndexAssignment`] made from [`NposSolution`].
+pub type IndexAssignmentOf<C> = IndexAssignment<
+	<C as NposSolution>::VoterIndex,
+	<C as NposSolution>::TargetIndex,
+	<C as NposSolution>::Accuracy,
+>;
 
 /// Types that are used by the data provider trait.
 pub mod data_provider {
@@ -195,16 +270,19 @@ pub trait ElectionDataProvider {
 	/// Maximum number of votes per voter that this data provider is providing.
 	type MaxVotesPerVoter: Get<u32>;
 
-	/// All possible targets for the election, i.e. the candidates.
+	/// All possible targets for the election, i.e. the targets that could become elected, thus
+	/// "electable".
 	///
 	/// If `maybe_max_len` is `Some(v)` then the resulting vector MUST NOT be longer than `v` items
 	/// long.
 	///
 	/// This should be implemented as a self-weighing function. The implementor should register its
 	/// appropriate weight at the end of execution with the system pallet directly.
-	fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<Self::AccountId>>;
+	fn electable_targets(
+		maybe_max_len: Option<usize>,
+	) -> data_provider::Result<Vec<Self::AccountId>>;
 
-	/// All possible voters for the election.
+	/// All the voters that participate in the election, thus "electing".
 	///
 	/// Note that if a notion of self-vote exists, it should be represented here.
 	///
@@ -213,12 +291,18 @@ pub trait ElectionDataProvider {
 	///
 	/// This should be implemented as a self-weighing function. The implementor should register its
 	/// appropriate weight at the end of execution with the system pallet directly.
-	fn voters(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<VoterOf<Self>>>;
+	fn electing_voters(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<VoterOf<Self>>>;
 
 	/// The number of targets to elect.
 	///
 	/// This should be implemented as a self-weighing function. The implementor should register its
 	/// appropriate weight at the end of execution with the system pallet directly.
+	///
+	/// A sensible implementation should use the minimum between this value and
+	/// [`Self::targets().len()`], since desiring a winner set larger than candidates is not
+	/// feasible.
+	///
+	/// This is documented further in issue: <https://github.com/paritytech/substrate/issues/9478>
 	fn desired_targets() -> data_provider::Result<u32>;
 
 	/// Provide a best effort prediction about when the next election is about to happen.

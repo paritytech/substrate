@@ -40,15 +40,12 @@ sp-wasm-interface = { version = "6.0.0", path = "../../primitives/wasm-interface
 hex-literal = "0.3.4"
 paste = "1.0"
 regex = "1"
-tracing-subscriber = "0.2.19"
-wat = "1.0"
+criterion = "0.3"
+env_logger = "0.9"
 
-sc-runtime-test = { version = "2.0.0", path = "runtime-test" }
-sc-tracing = { version = "4.0.0-dev", path = "../tracing" }
-sp-maybe-compressed-blob = { version = "4.1.0-dev", path = "../../primitives/maybe-compressed-blob" }
-sp-runtime = { version = "6.0.0", path = "../../primitives/runtime" }
-sp-state-machine = { version = "0.12.0", path = "../../primitives/state-machine" }
-substrate-test-runtime = { version = "2.0.0", path = "../../test-utils/runtime" }
+[[bench]]
+name = "bench"
+harness = false
 
 [features]
 default = ["std"]
