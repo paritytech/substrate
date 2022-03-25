@@ -61,9 +61,7 @@ impl<B: Block> KnownVotes<B> {
 
 	/// Create new round votes set if not already present.
 	pub fn insert(&mut self, round: NumberFor<B>) {
-		if !self.live.contains_key(&round) {
-			self.live.insert(round, Default::default());
-		}
+		self.live.entry(round).or_default();
 	}
 
 	/// Remove round from live set, update `last_done` accordingly.
