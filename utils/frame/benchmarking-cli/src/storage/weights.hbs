@@ -32,7 +32,10 @@
 
 /// Storage DB weights for the `{{runtime_name}}` runtime and `{{db_name}}`.
 pub mod constants {
-	use frame_support::{parameter_types, weights::{RuntimeDbWeight, constants}};
+	use frame_support::{
+		parameter_types,
+		weights::{constants, RuntimeDbWeight},
+	};
 
 	parameter_types! {
 		{{#if (eq db_name "ParityDb")}}
