@@ -16,7 +16,10 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use std::{collections::BTreeMap, hash::Hash};
+use std::{
+	collections::{BTreeMap, HashMap},
+	hash::Hash,
+};
 
 use log::{debug, trace};
 
@@ -26,20 +29,24 @@ use beefy_primitives::{
 };
 use sp_runtime::traits::{Block, NumberFor};
 
+/// Tracks for each round which validators have voted/signed and
+/// whether the local `self` validator has voted/signed.
+///
+/// Does not do any validation on votes or signatures, layers above need to handle that (gossip).
 #[derive(Default)]
 struct RoundTracker {
 	self_vote: bool,
-	votes: Vec<(Public, Signature)>,
+	votes: HashMap<Public, Signature>,
 }
 
 impl RoundTracker {
 	fn add_vote(&mut self, vote: (Public, Signature), self_vote: bool) -> bool {
-		if self.votes.contains(&vote) {
+		if self.votes.contains_key(&vote.0) {
 			return false
 		}
 
 		self.self_vote = self.self_vote || self_vote;
-		self.votes.push(vote);
+		self.votes.insert(vote.0, vote.1);
 		true
 	}
 
@@ -57,6 +64,10 @@ fn threshold(authorities: usize) -> usize {
 	authorities - faulty
 }
 
+/// Keeps track of all voting rounds (block numbers) within a session.
+/// Only round numbers > `best_done` are of interest, all others are considered stale.
+///
+/// Does not do any validation on votes or signatures, layers above need to handle that (gossip).
 pub(crate) struct Rounds<Payload, B: Block> {
 	rounds: BTreeMap<(Payload, NumberFor<B>), RoundTracker>,
 	best_done: Option<NumberFor<B>>,
@@ -166,15 +177,7 @@ where
 				self.validator_set
 					.validators()
 					.iter()
-					.map(|authority_id| {
-						signatures.iter().find_map(|(id, sig)| {
-							if id == authority_id {
-								Some(sig.clone())
-							} else {
-								None
-							}
-						})
-					})
+					.map(|authority_id| signatures.get(authority_id).cloned())
 					.collect(),
 			)
 		} else {
