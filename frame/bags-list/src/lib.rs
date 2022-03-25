@@ -70,7 +70,7 @@ pub mod mock;
 mod tests;
 pub mod weights;
 
-pub use list::{notional_bag_for, Bag, Error, List, Node};
+pub use list::{notional_bag_for, Bag, List, ListError, Node};
 pub use pallet::*;
 pub use weights::WeightInfo;
 
@@ -197,12 +197,14 @@ pub mod pallet {
 	#[pallet::error]
 	#[cfg_attr(test, derive(PartialEq))]
 	pub enum Error<T, I = ()> {
-		/// Attempted to place node in front of a node in another bag.
-		NotInSameBag,
-		/// Id not found in list.
-		IdNotFound,
-		/// An Id does not have a greater score than another Id.
-		NotHeavier,
+		/// A error in the list interface implementation.
+		List(ListError),
+	}
+
+	impl<T, I> From<ListError> for Error<T, I> {
+		fn from(t: ListError) -> Self {
+			Error::<T, I>::List(t)
+		}
 	}
 
 	#[pallet::call]
@@ -221,7 +223,8 @@ pub mod pallet {
 			let current_score = T::ScoreProvider::score(&dislocated);
 			// TODO: we might want to reflect the error here. This transaction might NOT rebag, but
 			// DO update the score.
-			let _ = Pallet::<T, I>::do_rebag(&dislocated, current_score);
+			let _ = Pallet::<T, I>::do_rebag(&dislocated, current_score)
+				.map_err::<Error<T, I>, _>(Into::into)?;
 			Ok(())
 		}
 
@@ -236,7 +239,9 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::put_in_front_of())]
 		pub fn put_in_front_of(origin: OriginFor<T>, lighter: T::AccountId) -> DispatchResult {
 			let heavier = ensure_signed(origin)?;
-			List::<T, I>::put_in_front_of(&lighter, &heavier).map_err(Into::into)
+			List::<T, I>::put_in_front_of(&lighter, &heavier)
+				.map_err::<Error<T, I>, _>(Into::into)
+				.map_err::<DispatchError, _>(Into::into)
 		}
 	}
 
@@ -259,9 +264,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub fn do_rebag(
 		account: &T::AccountId,
 		new_score: T::Score,
-	) -> Result<Option<(T::Score, T::Score)>, Error> {
+	) -> Result<Option<(T::Score, T::Score)>, ListError> {
 		// If no voter at that node, don't do anything. the caller just wasted the fee to call this.
-		let node = list::Node::<T, I>::get(&account).ok_or(Error::NonExistent)?;
+		let node = list::Node::<T, I>::get(&account).ok_or(ListError::NonExistent)?;
 		let maybe_movement = List::update_position_for(node, new_score);
 		if let Some((from, to)) = maybe_movement {
 			Self::deposit_event(Event::<T, I>::Rebagged { who: account.clone(), from, to });
@@ -277,8 +282,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 }
 
 impl<T: Config<I>, I: 'static> SortedListProvider<T::AccountId> for Pallet<T, I> {
-	type Error = Error;
-
+	type Error = ListError;
 	type Score = T::Score;
 
 	fn iter() -> Box<dyn Iterator<Item = T::AccountId>> {
@@ -293,19 +297,19 @@ impl<T: Config<I>, I: 'static> SortedListProvider<T::AccountId> for Pallet<T, I>
 		List::<T, I>::contains(id)
 	}
 
-	fn on_insert(id: T::AccountId, score: T::Score) -> Result<(), Error> {
+	fn on_insert(id: T::AccountId, score: T::Score) -> Result<(), ListError> {
 		List::<T, I>::insert(id, score)
 	}
 
-	fn get_score(id: &T::AccountId) -> Result<T::Score, Error> {
+	fn get_score(id: &T::AccountId) -> Result<T::Score, ListError> {
 		List::<T, I>::get_score(id)
 	}
 
-	fn on_update(id: &T::AccountId, new_score: T::Score) -> Result<(), Error> {
+	fn on_update(id: &T::AccountId, new_score: T::Score) -> Result<(), ListError> {
 		Pallet::<T, I>::do_rebag(id, new_score).map(|_| ())
 	}
 
-	fn on_remove(id: &T::AccountId) -> Result<(), Error> {
+	fn on_remove(id: &T::AccountId) -> Result<(), ListError> {
 		List::<T, I>::remove(id)
 	}
 

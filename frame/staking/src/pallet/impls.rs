@@ -1003,7 +1003,7 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 		Ok(Self::validator_count())
 	}
 
-	fn voters(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<VoterOf<Self>>> {
+	fn electing_voters(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<VoterOf<Self>>> {
 		let voters = Self::get_npos_voters(maybe_max_len);
 		if maybe_max_len.map_or(false, |m| voters.len() > m) {
 			defensive!("get_npos_voters is corrupt");
@@ -1011,7 +1011,7 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 		Ok(voters)
 	}
 
-	fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<T::AccountId>> {
+	fn electable_targets(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<T::AccountId>> {
 		let targets = Self::get_npos_targets(maybe_max_len);
 		if maybe_max_len.map_or(false, |m| targets.len() > m) {
 			defensive!("get_npos_targets is corrupt");

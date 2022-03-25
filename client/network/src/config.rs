@@ -377,8 +377,8 @@ impl From<multiaddr::Error> for ParseErr {
 	}
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
 /// Sync operation mode.
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum SyncMode {
 	/// Full block download and verification.
 	Full,
@@ -391,6 +391,18 @@ pub enum SyncMode {
 	},
 	/// Warp sync - verify authority set transitions and the latest state.
 	Warp,
+}
+
+impl SyncMode {
+	/// Returns if `self` is [`Self::Warp`].
+	pub fn is_warp(&self) -> bool {
+		matches!(self, Self::Warp)
+	}
+
+	/// Returns if `self` is [`Self::Fast`].
+	pub fn is_fast(&self) -> bool {
+		matches!(self, Self::Fast { .. })
+	}
 }
 
 impl Default for SyncMode {

@@ -28,8 +28,9 @@ use crate::Config;
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_election_provider_support::ScoreProvider;
 use frame_support::{
+	ensure,
 	traits::{Defensive, Get},
-	DefaultNoBound,
+	DefaultNoBound, PalletError,
 };
 use scale_info::TypeInfo;
 use sp_runtime::traits::{Bounded, Zero};
@@ -41,12 +42,16 @@ use sp_std::{
 	vec::Vec,
 };
 
-#[derive(Debug, PartialEq, Eq)]
-pub enum Error {
+#[derive(Debug, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo, PalletError)]
+pub enum ListError {
 	/// A duplicate id has been detected.
 	Duplicate,
 	/// the given id does not exists.
 	NonExistent,
+	/// An Id does not have a greater score than another Id.
+	NotHeavier,
+	/// Attempted to place node in front of a node in another bag.
+	NotInSameBag,
 }
 
 #[cfg(test)]
@@ -224,8 +229,8 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 	}
 
 	/// Get the score of the given node,
-	pub fn get_score(id: &T::AccountId) -> Result<T::Score, Error> {
-		Node::<T, I>::get(id).map(|node| node.score()).ok_or(Error::NonExistent)
+	pub fn get_score(id: &T::AccountId) -> Result<T::Score, ListError> {
+		Node::<T, I>::get(id).map(|node| node.score()).ok_or(ListError::NonExistent)
 	}
 
 	/// Iterate over all nodes in all bags in the list.
@@ -276,9 +281,9 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 	/// Insert a new id into the appropriate bag in the list.
 	///
 	/// Returns an error if the list already contains `id`.
-	pub(crate) fn insert(id: T::AccountId, score: T::Score) -> Result<(), Error> {
+	pub(crate) fn insert(id: T::AccountId, score: T::Score) -> Result<(), ListError> {
 		if Self::contains(&id) {
-			return Err(Error::Duplicate)
+			return Err(ListError::Duplicate)
 		}
 
 		let bag_score = notional_bag_for::<T, I>(score);
@@ -303,9 +308,9 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 	}
 
 	/// Remove an id from the list.
-	pub(crate) fn remove(id: &T::AccountId) -> Result<(), Error> {
+	pub(crate) fn remove(id: &T::AccountId) -> Result<(), ListError> {
 		if !Self::contains(id) {
-			return Err(Error::NonExistent)
+			return Err(ListError::NonExistent)
 		}
 		let _ = Self::remove_many(sp_std::iter::once(id));
 		Ok(())
@@ -412,19 +417,16 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 	pub(crate) fn put_in_front_of(
 		lighter_id: &T::AccountId,
 		heavier_id: &T::AccountId,
-	) -> Result<(), crate::pallet::Error<T, I>> {
-		use crate::pallet;
-		use frame_support::ensure;
+	) -> Result<(), ListError> {
+		let lighter_node = Node::<T, I>::get(&lighter_id).ok_or(ListError::NonExistent)?;
+		let heavier_node = Node::<T, I>::get(&heavier_id).ok_or(ListError::NonExistent)?;
 
-		let lighter_node = Node::<T, I>::get(&lighter_id).ok_or(pallet::Error::IdNotFound)?;
-		let heavier_node = Node::<T, I>::get(&heavier_id).ok_or(pallet::Error::IdNotFound)?;
-
-		ensure!(lighter_node.bag_upper == heavier_node.bag_upper, pallet::Error::NotInSameBag);
+		ensure!(lighter_node.bag_upper == heavier_node.bag_upper, ListError::NotInSameBag);
 
 		// this is the most expensive check, so we do it last.
 		ensure!(
 			T::ScoreProvider::score(&heavier_id) > T::ScoreProvider::score(&lighter_id),
-			pallet::Error::NotHeavier
+			ListError::NotHeavier
 		);
 
 		// remove the heavier node from this list. Note that this removes the node from storage and
@@ -437,7 +439,7 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 		let lighter_node = Node::<T, I>::get(&lighter_id).ok_or_else(|| {
 			debug_assert!(false, "id that should exist cannot be found");
 			crate::log!(warn, "id that should exist cannot be found");
-			pallet::Error::IdNotFound
+			ListError::NonExistent
 		})?;
 
 		// insert `heavier_node` directly in front of `lighter_node`. This will update both nodes
@@ -496,7 +498,6 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 	/// all bags and nodes are checked per *any* update to `List`.
 	#[cfg(feature = "std")]
 	pub(crate) fn sanity_check() -> Result<(), &'static str> {
-		use frame_support::ensure;
 		let mut seen_in_list = BTreeSet::new();
 		ensure!(
 			Self::iter().map(|node| node.id).all(|id| seen_in_list.insert(id)),

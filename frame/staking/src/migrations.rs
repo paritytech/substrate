@@ -18,10 +18,7 @@
 
 use super::*;
 use frame_election_provider_support::SortedListProvider;
-use frame_support::{
-	ensure,
-	traits::{Defensive, OnRuntimeUpgrade},
-};
+use frame_support::traits::{Defensive, OnRuntimeUpgrade};
 use sp_std::collections::btree_map::BTreeMap;
 
 pub mod v10 {

@@ -23,7 +23,6 @@ use crate::{
 	instance_wrapper::{EntryPoint, InstanceWrapper},
 	util,
 };
-use core::marker::PhantomData;
 
 use sc_allocator::FreeingBumpHeapAllocator;
 use sc_executor_common::{
@@ -80,35 +79,25 @@ impl StoreData {
 
 pub(crate) type Store = wasmtime::Store<StoreData>;
 
-enum Strategy<H> {
+enum Strategy {
 	FastInstanceReuse {
 		instance_wrapper: InstanceWrapper,
 		globals_snapshot: GlobalsSnapshot<wasmtime::Global>,
 		data_segments_snapshot: Arc<DataSegmentsSnapshot>,
 		heap_base: u32,
 	},
-	RecreateInstance(InstanceCreator<H>),
+	RecreateInstance(InstanceCreator),
 }
 
-struct InstanceCreator<H> {
-	module: Arc<wasmtime::Module>,
-	heap_pages: u64,
-	allow_missing_func_imports: bool,
+struct InstanceCreator {
+	engine: wasmtime::Engine,
+	instance_pre: Arc<wasmtime::InstancePre<StoreData>>,
 	max_memory_size: Option<usize>,
-	phantom: PhantomData<H>,
 }
 
-impl<H> InstanceCreator<H>
-where
-	H: HostFunctions,
-{
+impl InstanceCreator {
 	fn instantiate(&mut self) -> Result<InstanceWrapper> {
-		InstanceWrapper::new::<H>(
-			&*self.module,
-			self.heap_pages,
-			self.allow_missing_func_imports,
-			self.max_memory_size,
-		)
+		InstanceWrapper::new(&self.engine, &self.instance_pre, self.max_memory_size)
 	}
 }
 
@@ -144,23 +133,19 @@ struct InstanceSnapshotData {
 
 /// A `WasmModule` implementation using wasmtime to compile the runtime module to machine code
 /// and execute the compiled code.
-pub struct WasmtimeRuntime<H> {
-	module: Arc<wasmtime::Module>,
+pub struct WasmtimeRuntime {
+	engine: wasmtime::Engine,
+	instance_pre: Arc<wasmtime::InstancePre<StoreData>>,
 	snapshot_data: Option<InstanceSnapshotData>,
 	config: Config,
-	phantom: PhantomData<H>,
 }
 
-impl<H> WasmModule for WasmtimeRuntime<H>
-where
-	H: HostFunctions,
-{
+impl WasmModule for WasmtimeRuntime {
 	fn new_instance(&self) -> Result<Box<dyn WasmInstance>> {
 		let strategy = if let Some(ref snapshot_data) = self.snapshot_data {
-			let mut instance_wrapper = InstanceWrapper::new::<H>(
-				&self.module,
-				self.config.heap_pages,
-				self.config.allow_missing_func_imports,
+			let mut instance_wrapper = InstanceWrapper::new(
+				&self.engine,
+				&self.instance_pre,
 				self.config.max_memory_size,
 			)?;
 			let heap_base = instance_wrapper.extract_heap_base()?;
@@ -174,19 +159,17 @@ where
 				&mut InstanceGlobals { instance: &mut instance_wrapper },
 			);
 
-			Strategy::<H>::FastInstanceReuse {
+			Strategy::FastInstanceReuse {
 				instance_wrapper,
 				globals_snapshot,
 				data_segments_snapshot: snapshot_data.data_segments_snapshot.clone(),
 				heap_base,
 			}
 		} else {
-			Strategy::<H>::RecreateInstance(InstanceCreator {
-				module: self.module.clone(),
-				heap_pages: self.config.heap_pages,
-				allow_missing_func_imports: self.config.allow_missing_func_imports,
+			Strategy::RecreateInstance(InstanceCreator {
+				engine: self.engine.clone(),
+				instance_pre: self.instance_pre.clone(),
 				max_memory_size: self.config.max_memory_size,
-				phantom: PhantomData,
 			})
 		};
 
@@ -196,14 +179,11 @@ where
 
 /// A `WasmInstance` implementation that reuses compiled module and spawns instances
 /// to execute the compiled code.
-pub struct WasmtimeInstance<H> {
-	strategy: Strategy<H>,
+pub struct WasmtimeInstance {
+	strategy: Strategy,
 }
 
-impl<H> WasmInstance for WasmtimeInstance<H>
-where
-	H: HostFunctions,
-{
+impl WasmInstance for WasmtimeInstance {
 	fn call(&mut self, method: InvokeMethod, data: &[u8]) -> Result<Vec<u8>> {
 		match &mut self.strategy {
 			Strategy::FastInstanceReuse {
@@ -434,20 +414,22 @@ pub struct Semantics {
 
 	/// Configures wasmtime to use multiple threads for compiling.
 	pub parallel_compilation: bool,
+
+	/// The number of extra WASM pages which will be allocated
+	/// on top of what is requested by the WASM blob itself.
+	pub extra_heap_pages: u64,
 }
 
 pub struct Config {
-	/// The number of wasm pages to be mounted after instantiation.
-	pub heap_pages: u64,
-
 	/// The total amount of memory in bytes an instance can request.
 	///
 	/// If specified, the runtime will be able to allocate only that much of wasm memory.
-	/// This is the total number and therefore the [`Config::heap_pages`] is accounted for.
+	/// This is the total number and therefore the [`Semantics::extra_heap_pages`] is accounted
+	/// for.
 	///
 	/// That means that the initial number of pages of a linear memory plus the
-	/// [`Config::heap_pages`] multiplied by the wasm page size (64KiB) should be less than or
-	/// equal to `max_memory_size`, otherwise the instance won't be created.
+	/// [`Semantics::extra_heap_pages`] multiplied by the wasm page size (64KiB) should be less
+	/// than or equal to `max_memory_size`, otherwise the instance won't be created.
 	///
 	/// Moreover, `memory.grow` will fail (return -1) if the sum of sizes of currently mounted
 	/// and additional pages exceeds `max_memory_size`.
@@ -498,7 +480,7 @@ enum CodeSupplyMode<'a> {
 pub fn create_runtime<H>(
 	blob: RuntimeBlob,
 	config: Config,
-) -> std::result::Result<WasmtimeRuntime<H>, WasmError>
+) -> std::result::Result<WasmtimeRuntime, WasmError>
 where
 	H: HostFunctions,
 {
@@ -520,7 +502,7 @@ where
 pub unsafe fn create_runtime_from_artifact<H>(
 	compiled_artifact: &[u8],
 	config: Config,
-) -> std::result::Result<WasmtimeRuntime<H>, WasmError>
+) -> std::result::Result<WasmtimeRuntime, WasmError>
 where
 	H: HostFunctions,
 {
@@ -534,7 +516,7 @@ where
 unsafe fn do_create_runtime<H>(
 	code_supply_mode: CodeSupplyMode<'_>,
 	config: Config,
-) -> std::result::Result<WasmtimeRuntime<H>, WasmError>
+) -> std::result::Result<WasmtimeRuntime, WasmError>
 where
 	H: HostFunctions,
 {
@@ -550,27 +532,25 @@ where
 	}
 
 	let engine = Engine::new(&wasmtime_config)
-		.map_err(|e| WasmError::Other(format!("cannot create the engine for runtime: {}", e)))?;
+		.map_err(|e| WasmError::Other(format!("cannot create the wasmtime engine: {}", e)))?;
 
 	let (module, snapshot_data) = match code_supply_mode {
 		CodeSupplyMode::Verbatim { blob } => {
-			let blob = instrument(blob, &config.semantics)?;
+			let blob = prepare_blob_for_compilation(blob, &config.semantics)?;
+			let serialized_blob = blob.clone().serialize();
+
+			let module = wasmtime::Module::new(&engine, &serialized_blob)
+				.map_err(|e| WasmError::Other(format!("cannot create module: {}", e)))?;
 
 			if config.semantics.fast_instance_reuse {
 				let data_segments_snapshot = DataSegmentsSnapshot::take(&blob).map_err(|e| {
 					WasmError::Other(format!("cannot take data segments snapshot: {}", e))
 				})?;
 				let data_segments_snapshot = Arc::new(data_segments_snapshot);
-
 				let mutable_globals = ExposedMutableGlobalsSet::collect(&blob);
-
-				let module = wasmtime::Module::new(&engine, &blob.serialize())
-					.map_err(|e| WasmError::Other(format!("cannot create module: {}", e)))?;
 
 				(module, Some(InstanceSnapshotData { data_segments_snapshot, mutable_globals }))
 			} else {
-				let module = wasmtime::Module::new(&engine, &blob.serialize())
-					.map_err(|e| WasmError::Other(format!("cannot create module: {}", e)))?;
 				(module, None)
 			}
 		},
@@ -584,10 +564,18 @@ where
 		},
 	};
 
-	Ok(WasmtimeRuntime { module: Arc::new(module), snapshot_data, config, phantom: PhantomData })
+	let mut linker = wasmtime::Linker::new(&engine);
+	crate::imports::prepare_imports::<H>(&mut linker, &module, config.allow_missing_func_imports)?;
+
+	let mut store = crate::instance_wrapper::create_store(module.engine(), config.max_memory_size);
+	let instance_pre = linker
+		.instantiate_pre(&mut store, &module)
+		.map_err(|e| WasmError::Other(format!("cannot preinstantiate module: {}", e)))?;
+
+	Ok(WasmtimeRuntime { engine, instance_pre: Arc::new(instance_pre), snapshot_data, config })
 }
 
-fn instrument(
+fn prepare_blob_for_compilation(
 	mut blob: RuntimeBlob,
 	semantics: &Semantics,
 ) -> std::result::Result<RuntimeBlob, WasmError> {
@@ -600,6 +588,19 @@ fn instrument(
 		blob.expose_mutable_globals();
 	}
 
+	// We don't actually need the memory to be imported so we can just convert any memory
+	// import into an export with impunity. This simplifies our code since `wasmtime` will
+	// now automatically take care of creating the memory for us, and it also allows us
+	// to potentially enable `wasmtime`'s instance pooling at a later date. (Imported
+	// memories are ineligible for pooling.)
+	blob.convert_memory_import_into_export()?;
+	blob.add_extra_heap_pages_to_memory_section(
+		semantics
+			.extra_heap_pages
+			.try_into()
+			.map_err(|e| WasmError::Other(format!("invalid `extra_heap_pages`: {}", e)))?,
+	)?;
+
 	Ok(blob)
 }
 
@@ -609,7 +610,7 @@ pub fn prepare_runtime_artifact(
 	blob: RuntimeBlob,
 	semantics: &Semantics,
 ) -> std::result::Result<Vec<u8>, WasmError> {
-	let blob = instrument(blob, semantics)?;
+	let blob = prepare_blob_for_compilation(blob, semantics)?;
 
 	let engine = Engine::new(&common_config(semantics)?)
 		.map_err(|e| WasmError::Other(format!("cannot create the engine: {}", e)))?;

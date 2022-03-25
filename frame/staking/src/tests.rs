@@ -3902,10 +3902,12 @@ mod election_data_provider {
 	#[test]
 	fn voters_include_self_vote() {
 		ExtBuilder::default().nominate(false).build_and_execute(|| {
-			assert!(<Validators<Test>>::iter().map(|(x, _)| x).all(|v| Staking::voters(None)
-				.unwrap()
-				.into_iter()
-				.any(|(w, _, t)| { v == w && t[0] == w })))
+			assert!(<Validators<Test>>::iter().map(|(x, _)| x).all(|v| Staking::electing_voters(
+				None
+			)
+			.unwrap()
+			.into_iter()
+			.any(|(w, _, t)| { v == w && t[0] == w })))
 		})
 	}
 
@@ -3914,7 +3916,7 @@ mod election_data_provider {
 		ExtBuilder::default().build_and_execute(|| {
 			assert_eq!(Nominators::<Test>::get(101).unwrap().targets, vec![11, 21]);
 			assert_eq!(
-				<Staking as ElectionDataProvider>::voters(None)
+				<Staking as ElectionDataProvider>::electing_voters(None)
 					.unwrap()
 					.iter()
 					.find(|x| x.0 == 101)
@@ -3929,7 +3931,7 @@ mod election_data_provider {
 			// 11 is gone.
 			start_active_era(2);
 			assert_eq!(
-				<Staking as ElectionDataProvider>::voters(None)
+				<Staking as ElectionDataProvider>::electing_voters(None)
 					.unwrap()
 					.iter()
 					.find(|x| x.0 == 101)
@@ -3944,7 +3946,7 @@ mod election_data_provider {
 			// resubmit and it is back.
 			assert_ok!(Staking::nominate(Origin::signed(100), vec![11, 21]));
 			assert_eq!(
-				<Staking as ElectionDataProvider>::voters(None)
+				<Staking as ElectionDataProvider>::electing_voters(None)
 					.unwrap()
 					.iter()
 					.find(|x| x.0 == 101)
@@ -3964,17 +3966,17 @@ mod election_data_provider {
 				assert_eq!(<Test as Config>::VoterList::count(), 5);
 
 				// if limits is less..
-				assert_eq!(Staking::voters(Some(1)).unwrap().len(), 1);
+				assert_eq!(Staking::electing_voters(Some(1)).unwrap().len(), 1);
 
 				// if limit is equal..
-				assert_eq!(Staking::voters(Some(5)).unwrap().len(), 5);
+				assert_eq!(Staking::electing_voters(Some(5)).unwrap().len(), 5);
 
 				// if limit is more.
-				assert_eq!(Staking::voters(Some(55)).unwrap().len(), 5);
+				assert_eq!(Staking::electing_voters(Some(55)).unwrap().len(), 5);
 
 				// if target limit is more..
-				assert_eq!(Staking::targets(Some(6)).unwrap().len(), 4);
-				assert_eq!(Staking::targets(Some(4)).unwrap().len(), 4);
+				assert_eq!(Staking::electable_targets(Some(6)).unwrap().len(), 4);
+				assert_eq!(Staking::electable_targets(Some(4)).unwrap().len(), 4);
 
 				// if target limit is less, then we still return something based on `TargetList`
 				// implementation. Currently, it should be the validators with the highest approval
@@ -3983,7 +3985,7 @@ mod election_data_provider {
 					<Test as crate::Config>::TargetList::iter().take(1).collect::<Vec<_>>(),
 					vec![31]
 				);
-				assert_eq!(Staking::targets(Some(1)).unwrap(), vec![31]);
+				assert_eq!(Staking::electable_targets(Some(1)).unwrap(), vec![31]);
 			});
 	}
 
@@ -4017,7 +4019,7 @@ mod election_data_provider {
 				// 11 is taken;
 				// we finish since the 2x limit is reached.
 				assert_eq!(
-					Staking::voters(Some(2))
+					Staking::electing_voters(Some(2))
 						.unwrap()
 						.iter()
 						.map(|(stash, _, _)| stash)
@@ -4049,7 +4051,7 @@ mod election_data_provider {
 
 				// we take 4 voters
 				assert_eq!(
-					Staking::voters(Some(4))
+					Staking::electing_voters(Some(4))
 						.unwrap()
 						.iter()
 						.map(|(stash, _, _)| stash)
@@ -4066,7 +4068,7 @@ mod election_data_provider {
 
 				// we take 4 voters; 71 and 81 are replacing the ejected ones.
 				assert_eq!(
-					Staking::voters(Some(4))
+					Staking::electing_voters(Some(4))
 						.unwrap()
 						.iter()
 						.map(|(stash, _, _)| stash)
@@ -4514,7 +4516,7 @@ fn change_of_max_nominations() {
 				vec![(70, 3), (101, 2), (60, 1)]
 			);
 			// 3 validators and 3 nominators
-			assert_eq!(Staking::voters(None).unwrap().len(), 3 + 3 + 3);
+			assert_eq!(Staking::electing_voters(None).unwrap().len(), 3 + 3 + 3);
 
 			// abrupt change from 16 to 4, everyone should be fine.
 			MaxNominations::set(4);
@@ -4525,7 +4527,7 @@ fn change_of_max_nominations() {
 					.collect::<Vec<_>>(),
 				vec![(70, 3), (101, 2), (60, 1)]
 			);
-			assert_eq!(Staking::voters(None).unwrap().len(), 3 + 3 + 3);
+			assert_eq!(Staking::electing_voters(None).unwrap().len(), 3 + 3 + 3);
 
 			// abrupt change from 4 to 3, everyone should be fine.
 			MaxNominations::set(3);
@@ -4536,7 +4538,7 @@ fn change_of_max_nominations() {
 					.collect::<Vec<_>>(),
 				vec![(70, 3), (101, 2), (60, 1)]
 			);
-			assert_eq!(Staking::voters(None).unwrap().len(), 3 + 3 + 3);
+			assert_eq!(Staking::electing_voters(None).unwrap().len(), 3 + 3 + 3);
 
 			// abrupt change from 3 to 2, this should cause some nominators to be non-decodable, and
 			// thus non-existent unless if they update.
@@ -4553,7 +4555,7 @@ fn change_of_max_nominations() {
 			// but its value cannot be decoded and default is returned.
 			assert!(Nominators::<Test>::get(70).is_none());
 
-			assert_eq!(Staking::voters(None).unwrap().len(), 3 + 3 + 2);
+			assert_eq!(Staking::electing_voters(None).unwrap().len(), 3 + 3 + 2);
 
 			// abrupt change from 2 to 1, this should cause some nominators to be non-decodable, and
 			// thus non-existent unless if they update.
@@ -4569,7 +4571,7 @@ fn change_of_max_nominations() {
 			assert!(Nominators::<Test>::contains_key(60));
 			assert!(Nominators::<Test>::get(70).is_none());
 			assert!(Nominators::<Test>::get(60).is_some());
-			assert_eq!(Staking::voters(None).unwrap().len(), 3 + 3 + 1);
+			assert_eq!(Staking::electing_voters(None).unwrap().len(), 3 + 3 + 1);
 
 			// now one of them can revive themselves by re-nominating to a proper value.
 			assert_ok!(Staking::nominate(Origin::signed(71), vec![1]));
@@ -4913,7 +4915,7 @@ mod target_list {
 				assert_eq!(<Test as Config>::TargetList::get_score(&3).unwrap(), 5);
 				assert_eq!(
 					<Test as Config>::TargetList::get_score(&4).unwrap_err(),
-					pallet_bags_list::Error::NonExistent
+					pallet_bags_list::ListError::NonExistent
 				);
 			});
 	}
