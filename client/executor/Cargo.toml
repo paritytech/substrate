@@ -37,7 +37,15 @@ sp-version = { version = "5.0.0", path = "../../primitives/version" }
 sp-wasm-interface = { version = "6.0.0", path = "../../primitives/wasm-interface" }
 
 [dev-dependencies]
+wat = "1.0"
 hex-literal = "0.3.4"
+sc-runtime-test = { version = "2.0.0", path = "runtime-test" }
+substrate-test-runtime = { version = "2.0.0", path = "../../test-utils/runtime" }
+sp-state-machine = { version = "0.12.0", path = "../../primitives/state-machine" }
+sp-runtime = { version = "6.0.0", path = "../../primitives/runtime" }
+sp-maybe-compressed-blob = { version = "4.1.0-dev", path = "../../primitives/maybe-compressed-blob" }
+sc-tracing = { version = "4.0.0-dev", path = "../tracing" }
+tracing-subscriber = "0.2.19"
 paste = "1.0"
 regex = "1"
 criterion = "0.3"
