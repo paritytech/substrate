@@ -1866,9 +1866,12 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 
 					this.event_streams.send(Event::Dht(event));
 				},
-				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::MixnetMessage(sender, message))) => {
+				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::MixnetMessage(
+					sender,
+					message,
+				))) => {
 					this.tx_handler_controller.inject_transaction(sender, message);
-				}
+				},
 				Poll::Ready(SwarmEvent::ConnectionEstablished {
 					peer_id,
 					endpoint,
@@ -1908,14 +1911,14 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 						let reason = match cause {
 							Some(ConnectionError::IO(_)) => "transport-error",
 							Some(ConnectionError::Handler(NodeHandlerWrapperError::Handler(
-								EitherError::A(EitherError::A(EitherError::A(EitherError::A(EitherError::B(
-									EitherError::A(PingFailure::Timeout)),
+								EitherError::A(EitherError::A(EitherError::A(EitherError::A(
+									EitherError::B(EitherError::A(PingFailure::Timeout)),
 								)))),
 							))) => "ping-timeout",
 							Some(ConnectionError::Handler(NodeHandlerWrapperError::Handler(
-								EitherError::A(EitherError::A(EitherError::A(EitherError::A(EitherError::A(
-									NotifsHandlerError::SyncNotificationsClogged,
-								))))),
+								EitherError::A(EitherError::A(EitherError::A(EitherError::A(
+									EitherError::A(NotifsHandlerError::SyncNotificationsClogged),
+								)))),
 							))) => "sync-notifications-clogged",
 							Some(ConnectionError::Handler(NodeHandlerWrapperError::Handler(_))) =>
 								"protocol-error",

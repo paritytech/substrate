@@ -40,6 +40,7 @@ pub trait AuthorApi<Hash, BlockHash> {
 	fn submit_extrinsic(&self, extrinsic: Bytes) -> FutureResult<Hash>;
 
 	/// Submit hex-encoded extrinsic to the mix network.
+	#[rpc(name = "author_mixExtrinsic")]
 	fn mix_extrinsic(&self, ext: Bytes) -> FutureResult<()>;
 
 	/// Insert a key into the keystore.

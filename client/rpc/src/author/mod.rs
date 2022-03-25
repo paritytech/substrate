@@ -27,17 +27,17 @@ use sp_blockchain::HeaderBackend;
 
 use codec::{Decode, Encode};
 use futures::{
+	channel::oneshot,
 	future::{FutureExt, TryFutureExt},
 	SinkExt, StreamExt as _,
-	channel::oneshot,
 };
 use jsonrpc_pubsub::{manager::SubscriptionManager, typed::Subscriber, SubscriptionId};
 use sc_rpc_api::DenyUnsafe;
-use sc_utils::mpsc::TracingUnboundedSender;
 use sc_transaction_pool_api::{
 	error::IntoPoolError, BlockHash, InPoolTransaction, TransactionFor, TransactionPool,
 	TransactionSource, TransactionStatus, TxHash,
 };
+use sc_utils::mpsc::TracingUnboundedSender;
 use sp_api::ProvideRuntimeApi;
 use sp_core::Bytes;
 use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
@@ -62,6 +62,10 @@ pub struct Author<P: TransactionPool + Sync + Send + 'static, Client> {
 	keystore: SyncCryptoStorePtr,
 	/// Whether to deny unsafe calls
 	deny_unsafe: DenyUnsafe,
+	/// TODO should we pass through same calls as submit: here direct access to Pool, we should
+	/// simply have
+	/// direct access to mixnet.
+	/// Ok this may be generic to send multiple info.
 	network: TracingUnboundedSender<Request<P::Block>>,
 }
 

@@ -121,6 +121,7 @@ fn api<T: Into<Option<Status>>>(sync: T) -> System<Block> {
 					});
 				},
 				Request::SendToMixnet(_, _) => {
+					// TODO having this in system looks ko, others request are request not action.
 					panic!("Not expected");
 				},
 			};

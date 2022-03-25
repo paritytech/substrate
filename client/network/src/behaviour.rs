@@ -24,7 +24,6 @@ use crate::{
 	protocol::{message::Roles, CustomMessageOutcome, NotificationsSink, Protocol},
 	request_responses, DhtEvent, ObservedRole,
 };
-use mixnet::Mixnet;
 use bytes::Bytes;
 use codec::{Decode, Encode};
 use futures::channel::oneshot;
@@ -40,6 +39,7 @@ use libp2p::{
 	NetworkBehaviour,
 };
 use log::debug;
+use mixnet::Mixnet;
 use prost::Message;
 use sc_consensus::import_queue::{IncomingBlock, Origin};
 use sc_peerset::PeersetHandle;
@@ -232,8 +232,12 @@ impl<B: BlockT> Behaviour<B> {
 
 		let mut mixnet = None;
 		if enable_mixnet {
+			// TODO here we need to support all keypair, so multikey but cannot dh then...
 			if let libp2p::core::identity::Keypair::Ed25519(kp) = &local_identity {
-				let mixnet_config = mixnet::Config::new_with_ed25519_keypair(kp, local_public_key.clone().into());
+				let mixnet_config =
+					mixnet::Config::new_with_ed25519_keypair(kp, local_public_key.clone().into());
+				// TODO here we do not have connected peer/topology to mixnet. -> TODO implement
+				// Topology trait
 				mixnet = Some(Mixnet::new(mixnet_config));
 			}
 		};
@@ -260,12 +264,15 @@ impl<B: BlockT> Behaviour<B> {
 		self.discovery.known_peers()
 	}
 
+	/// TODO this doc? more like a TODO ?
 	/// Adds a hard-coded address for the given peer, that never expires.
 	pub fn send_transaction_to_mixnet(&mut self, encoded_tx: Vec<u8>) -> Result<(), String> {
 		if let Some(mixnet) = self.mixnet.as_mut() {
 			if let Ok(decoded) = <B::Extrinsic as Decode>::decode(&mut encoded_tx.as_ref()) {
 				let message = crate::protocol::message::Message::<B>::Transactions(vec![decoded]);
-				mixnet.send_to_random_recipient(message.encode(), false).map_err(|e| e.to_string())
+				mixnet
+					.send_to_random_recipient(message.encode(), false)
+					.map_err(|e| e.to_string())
 			} else {
 				Err("Invalid transaction".into())
 			}
@@ -551,8 +558,13 @@ impl<B: BlockT> NetworkBehaviourEventProcess<mixnet::NetworkEvent> for Behaviour
 			mixnet::NetworkEvent::Message(message) => {
 				self.events
 					.push_back(BehaviourOut::MixnetMessage(message.peer, message.message));
-			}
-			_ => {},
+			},
+			mixnet::NetworkEvent::Connected(message) => {
+				unimplemented!("TODO");
+			},
+			mixnet::NetworkEvent::Disconnected(message) => {
+				unimplemented!("TODO");
+			},
 		}
 	}
 }

@@ -232,7 +232,6 @@ impl<H: ExHashT> TransactionsHandlerController<H> {
 	pub fn inject_transaction(&self, sender: PeerId, data: Vec<u8>) {
 		let _ = self.to_handler.unbounded_send(ToHandler::InjectTransaction(sender, data));
 	}
-
 }
 
 enum ToHandler<H: ExHashT> {
@@ -374,9 +373,9 @@ impl<B: BlockT + 'static, H: ExHashT> TransactionsHandler<B, H> {
 	}
 
 	fn inject_transaction(&mut self, who: PeerId, transactions: Vec<u8>) {
-		if let Ok(t) = <message::Transactions<B::Extrinsic> as Decode>::decode(
-			&mut transactions.as_ref(),
-		) {
+		if let Ok(t) =
+			<message::Transactions<B::Extrinsic> as Decode>::decode(&mut transactions.as_ref())
+		{
 			self.on_transactions(who, t);
 		} else {
 			warn!(target: "sub-libp2p", "Failed to decode external transactions list");

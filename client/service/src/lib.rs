@@ -261,6 +261,8 @@ async fn build_network_future<
 							highest_block: network.best_seen_block(),
 						});
 					}
+					// TODO ok having a system requiset make easy access to network here.
+					// should move network to rpc instanciation rather.
 					sc_rpc::system::Request::SendToMixnet(tx, sender) => {
 						let _ = match network.send_transaction_to_mixnet(tx) {
 							Ok(()) => sender.send(Ok(())),
