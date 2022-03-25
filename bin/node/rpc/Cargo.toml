@@ -35,3 +35,4 @@ sp-consensus-babe = { version = "0.10.0-dev", path = "../../../primitives/consen
 sp-runtime = { version = "6.0.0", path = "../../../primitives/runtime" }
 sc-transaction-pool-api = { version = "4.0.0-dev", path = "../../../client/transaction-pool/api" }
 substrate-frame-rpc-system = { version = "4.0.0-dev", path = "../../../utils/frame/rpc/system" }
+substrate-state-trie-migration-rpc = { version = "4.0.0-dev", path = "../../../utils/frame/rpc/state-trie-migration-rpc/" }

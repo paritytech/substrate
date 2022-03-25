@@ -46,8 +46,7 @@ sp-core = { version = "6.0.0", default-features = false, path = "../../primitive
 sp-io = { version = "6.0.0", path = "../../primitives/io" }
 sp-npos-elections = { version = "4.0.0-dev", default-features = false, path = "../../primitives/npos-elections" }
 sp-tracing = { version = "5.0.0", path = "../../primitives/tracing" }
-frame-election-provider-support = { version = "4.0.0-dev", features = [
-], path = "../election-provider-support" }
+frame-election-provider-support = { version = "4.0.0-dev", path = "../election-provider-support" }
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 frame-benchmarking = { version = "4.0.0-dev", path = "../benchmarking" }
 
