@@ -433,14 +433,15 @@ fn set_address_works() {
 #[test]
 fn set_address_handles_errors() {
 	new_test_ext().execute_with(|| {
-		let sender = 1;
+		let non_owner = 1;
+		let owner = 2;
 		let some_name_hash = sp_io::hashing::blake2_256(&("alice".as_bytes().to_vec()));
 		let blocks_per_registration_period: u64 =
 			<Test as crate::Config>::BlocksPerRegistrationPeriod::get();
 
 		// Registration not found
 		assert_noop!(
-			NameService::set_address(Origin::signed(sender), some_name_hash, 2),
+			NameService::set_address(Origin::signed(non_owner), some_name_hash, 2),
 			Error::<Test>::RegistrationNotFound
 		);
 
@@ -448,10 +449,18 @@ fn set_address_handles_errors() {
 		let (_, name_hash) = alice_register_bob_senario_setup();
 
 		// Not registration owner
-		let not_owner_addr = 3;
 		assert_noop!(
-			NameService::set_address(Origin::signed(not_owner_addr), name_hash, 3),
+			NameService::set_address(Origin::signed(non_owner), name_hash, 3),
 			Error::<Test>::NotRegistrationOwner,
+		);
+
+		// set address
+		assert_ok!(NameService::set_address(Origin::signed(owner), name_hash, 3));
+
+		// cannot set same address again
+		assert_noop!(
+			NameService::set_address(Origin::signed(owner), name_hash, 3),
+			Error::<Test>::AlreadySet
 		);
 
 		// Registration has expired

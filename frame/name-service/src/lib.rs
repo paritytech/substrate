@@ -216,6 +216,8 @@ pub mod pallet {
 		RegistrationHasNoExpiry,
 		/// Subnode label is too short.
 		LabelTooShort,
+		/// Address has already been set to this.
+		AlreadySet,
 	}
 
 	// Your Pallet's callable functions.
@@ -327,8 +329,6 @@ pub mod pallet {
 			name_hash: NameHash,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
-			let block_number = frame_system::Pallet::<T>::block_number();
-
 			Registrations::<T>::try_mutate(name_hash, |maybe_registration| {
 				let r = maybe_registration.as_mut().ok_or(Error::<T>::RegistrationNotFound)?;
 				// fails for subnodes. subnodes cannot be transferred.
@@ -337,7 +337,10 @@ pub mod pallet {
 				ensure!(registrant == sender, Error::<T>::NotRegistrationRegistrant);
 
 				if let Some(e) = r.expiry {
-					ensure!(block_number <= e, Error::<T>::RegistrationExpired);
+					ensure!(
+						frame_system::Pallet::<T>::block_number() <= e,
+						Error::<T>::RegistrationExpired
+					);
 				}
 
 				r.registrant = Some(to.clone());
@@ -593,6 +596,11 @@ pub mod pallet {
 					frame_system::Pallet::<T>::block_number() <= e,
 					Error::<T>::RegistrationExpired
 				);
+			}
+
+			let maybe_current_address = Resolvers::<T>::get(name_hash);
+			if let Some(a) = maybe_current_address {
+				ensure!(a != address, Error::<T>::AlreadySet);
 			}
 
 			Resolvers::<T>::insert(name_hash, address.clone());
