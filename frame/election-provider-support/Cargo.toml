@@ -23,6 +23,9 @@ frame-support = { version = "4.0.0-dev", default-features = false, path = "../su
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 frame-election-provider-solution-type = { version = "4.0.0-dev", path = "solution-type" }
 
+[dev-dependencies]
+rand = "0.7.3"
+
 [features]
 default = ["std"]
 std = [
