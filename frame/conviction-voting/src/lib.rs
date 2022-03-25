@@ -28,6 +28,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use frame_support::{
+	dispatch::{DispatchError, DispatchResult},
 	ensure,
 	traits::{
 		fungible, Currency, Get, LockIdentifier, LockableCurrency, PollStatus, Polling,
@@ -36,7 +37,7 @@ use frame_support::{
 };
 use sp_runtime::{
 	traits::{AtLeast32BitUnsigned, Saturating, Zero},
-	ArithmeticError, DispatchError, DispatchResult, Perbill,
+	ArithmeticError, Perbill,
 };
 use sp_std::prelude::*;
 
@@ -44,11 +45,14 @@ mod conviction;
 mod types;
 mod vote;
 pub mod weights;
-pub use conviction::Conviction;
-pub use pallet::*;
-pub use types::{Delegations, Tally, UnvoteScope};
-pub use vote::{AccountVote, Casting, Delegating, Vote, Voting};
-pub use weights::WeightInfo;
+
+pub use self::{
+	conviction::Conviction,
+	pallet::*,
+	types::{Delegations, Tally, UnvoteScope},
+	vote::{AccountVote, Casting, Delegating, Vote, Voting},
+	weights::WeightInfo,
+};
 
 #[cfg(test)]
 mod tests;
@@ -58,44 +62,43 @@ pub mod benchmarking;
 
 const CONVICTION_VOTING_ID: LockIdentifier = *b"pyconvot";
 
-type BalanceOf<T> =
-	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
-type VotingOf<T> = Voting<
-	BalanceOf<T>,
+type BalanceOf<T, I = ()> =
+	<<T as Config<I>>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
+type VotingOf<T, I = ()> = Voting<
+	BalanceOf<T, I>,
 	<T as frame_system::Config>::AccountId,
 	<T as frame_system::Config>::BlockNumber,
-	PollIndexOf<T>,
-	<T as Config>::MaxVotes,
+	PollIndexOf<T, I>,
+	<T as Config<I>>::MaxVotes,
 >;
 #[allow(dead_code)]
-type DelegatingOf<T> = Delegating<
-	BalanceOf<T>,
+type DelegatingOf<T, I = ()> = Delegating<
+	BalanceOf<T, I>,
 	<T as frame_system::Config>::AccountId,
 	<T as frame_system::Config>::BlockNumber,
 >;
-pub type TallyOf<T> = Tally<BalanceOf<T>, <T as Config>::MaxTurnout>;
-pub type VotesOf<T> = BalanceOf<T>;
-type PollIndexOf<T> = <<T as Config>::Polls as Polling<TallyOf<T>>>::Index;
+pub type TallyOf<T, I = ()> = Tally<BalanceOf<T, I>, <T as Config<I>>::MaxTurnout>;
+pub type VotesOf<T, I = ()> = BalanceOf<T, I>;
+type PollIndexOf<T, I = ()> = <<T as Config<I>>::Polls as Polling<TallyOf<T, I>>>::Index;
 #[cfg(feature = "runtime-benchmarks")]
-type IndexOf<T> = <<T as Config>::Polls as Polling<TallyOf<T>>>::Index;
-type ClassOf<T> = <<T as Config>::Polls as Polling<TallyOf<T>>>::Class;
+type IndexOf<T, I = ()> = <<T as Config<I>>::Polls as Polling<TallyOf<T, I>>>::Index;
+type ClassOf<T, I = ()> = <<T as Config<I>>::Polls as Polling<TallyOf<T, I>>>::Class;
 
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
-	use sp_runtime::DispatchResult;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
 	#[pallet::without_storage_info]
-	pub struct Pallet<T>(_);
+	pub struct Pallet<T, I = ()>(_);
 
 	#[pallet::config]
-	pub trait Config: frame_system::Config + Sized {
+	pub trait Config<I: 'static = ()>: frame_system::Config + Sized {
 		// System level stuff.
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
 		/// Currency type with which voting happens.
@@ -104,12 +107,16 @@ pub mod pallet {
 			+ fungible::Inspect<Self::AccountId>;
 
 		/// The implementation of the logic which conducts polls.
-		type Polls: Polling<TallyOf<Self>, Votes = BalanceOf<Self>, Moment = Self::BlockNumber>;
+		type Polls: Polling<
+			TallyOf<Self, I>,
+			Votes = BalanceOf<Self, I>,
+			Moment = Self::BlockNumber,
+		>;
 
 		/// The maximum amount of tokens which may be used for voting. May just be
 		/// `Currency::total_issuance`, but you might want to reduce this in order to account for
 		/// funds in the system which are unable to vote (e.g. parachain auction deposits).
-		type MaxTurnout: Get<BalanceOf<Self>>;
+		type MaxTurnout: Get<BalanceOf<Self, I>>;
 
 		/// The maximum number of concurrent votes an account may have.
 		///
@@ -129,13 +136,13 @@ pub mod pallet {
 	/// All voting for a particular voter in a particular voting class. We store the balance for the
 	/// number of votes that we have recorded.
 	#[pallet::storage]
-	pub type VotingFor<T: Config> = StorageDoubleMap<
+	pub type VotingFor<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
 		_,
 		Twox64Concat,
 		T::AccountId,
 		Twox64Concat,
-		ClassOf<T>,
-		VotingOf<T>,
+		ClassOf<T, I>,
+		VotingOf<T, I>,
 		ValueQuery,
 	>;
 
@@ -143,12 +150,17 @@ pub mod pallet {
 	/// require. The actual amount locked on behalf of this pallet should always be the maximum of
 	/// this list.
 	#[pallet::storage]
-	pub type ClassLocksFor<T: Config> =
-		StorageMap<_, Twox64Concat, T::AccountId, Vec<(ClassOf<T>, BalanceOf<T>)>, ValueQuery>;
+	pub type ClassLocksFor<T: Config<I>, I: 'static = ()> = StorageMap<
+		_,
+		Twox64Concat,
+		T::AccountId,
+		Vec<(ClassOf<T, I>, BalanceOf<T, I>)>,
+		ValueQuery,
+	>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	pub enum Event<T: Config> {
+	pub enum Event<T: Config<I>, I: 'static = ()> {
 		/// An account has delegated their vote to another account. \[who, target\]
 		Delegated(T::AccountId, T::AccountId),
 		/// An \[account\] has cancelled a previous delegation operation.
@@ -156,7 +168,7 @@ pub mod pallet {
 	}
 
 	#[pallet::error]
-	pub enum Error<T> {
+	pub enum Error<T, I = ()> {
 		/// Poll is not ongoing.
 		NotOngoing,
 		/// The given account did not vote on the poll.
@@ -185,7 +197,7 @@ pub mod pallet {
 	}
 
 	#[pallet::call]
-	impl<T: Config> Pallet<T> {
+	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		/// Vote in a poll. If `vote.is_aye()`, the vote is to enact the proposal;
 		/// otherwise it is a vote to keep the status quo.
 		///
@@ -198,8 +210,8 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::vote_new().max(T::WeightInfo::vote_existing()))]
 		pub fn vote(
 			origin: OriginFor<T>,
-			#[pallet::compact] poll_index: PollIndexOf<T>,
-			vote: AccountVote<BalanceOf<T>>,
+			#[pallet::compact] poll_index: PollIndexOf<T, I>,
+			vote: AccountVote<BalanceOf<T, I>>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			Self::try_vote(&who, poll_index, vote)
@@ -233,10 +245,10 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::delegate(T::MaxVotes::get()))]
 		pub fn delegate(
 			origin: OriginFor<T>,
-			class: ClassOf<T>,
+			class: ClassOf<T, I>,
 			to: T::AccountId,
 			conviction: Conviction,
-			balance: BalanceOf<T>,
+			balance: BalanceOf<T, I>,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			let votes = Self::try_delegate(who, class, to, conviction, balance)?;
@@ -261,7 +273,10 @@ pub mod pallet {
 		// NOTE: weight must cover an incorrect voting of origin with max votes, this is ensure
 		// because a valid delegation cover decoding a direct voting with max votes.
 		#[pallet::weight(T::WeightInfo::undelegate(T::MaxVotes::get().into()))]
-		pub fn undelegate(origin: OriginFor<T>, class: ClassOf<T>) -> DispatchResultWithPostInfo {
+		pub fn undelegate(
+			origin: OriginFor<T>,
+			class: ClassOf<T, I>,
+		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			let votes = Self::try_undelegate(who, class)?;
 			Ok(Some(T::WeightInfo::undelegate(votes)).into())
@@ -279,7 +294,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::unlock())]
 		pub fn unlock(
 			origin: OriginFor<T>,
-			class: ClassOf<T>,
+			class: ClassOf<T, I>,
 			target: T::AccountId,
 		) -> DispatchResult {
 			ensure_signed(origin)?;
@@ -319,8 +334,8 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::remove_vote())]
 		pub fn remove_vote(
 			origin: OriginFor<T>,
-			class: Option<ClassOf<T>>,
-			index: PollIndexOf<T>,
+			class: Option<ClassOf<T, I>>,
+			index: PollIndexOf<T, I>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			Self::try_remove_vote(&who, index, class, UnvoteScope::Any)
@@ -346,8 +361,8 @@ pub mod pallet {
 		pub fn remove_other_vote(
 			origin: OriginFor<T>,
 			target: T::AccountId,
-			class: ClassOf<T>,
-			index: PollIndexOf<T>,
+			class: ClassOf<T, I>,
+			index: PollIndexOf<T, I>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let scope = if target == who { UnvoteScope::Any } else { UnvoteScope::OnlyExpired };
@@ -357,17 +372,17 @@ pub mod pallet {
 	}
 }
 
-impl<T: Config> Pallet<T> {
+impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Actually enact a vote, if legit.
 	fn try_vote(
 		who: &T::AccountId,
-		poll_index: PollIndexOf<T>,
-		vote: AccountVote<BalanceOf<T>>,
+		poll_index: PollIndexOf<T, I>,
+		vote: AccountVote<BalanceOf<T, I>>,
 	) -> DispatchResult {
-		ensure!(vote.balance() <= T::Currency::free_balance(who), Error::<T>::InsufficientFunds);
+		ensure!(vote.balance() <= T::Currency::free_balance(who), Error::<T, I>::InsufficientFunds);
 		T::Polls::try_access_poll(poll_index, |poll_status| {
-			let (tally, class) = poll_status.ensure_ongoing().ok_or(Error::<T>::NotOngoing)?;
-			VotingFor::<T>::try_mutate(who, &class, |voting| {
+			let (tally, class) = poll_status.ensure_ongoing().ok_or(Error::<T, I>::NotOngoing)?;
+			VotingFor::<T, I>::try_mutate(who, &class, |voting| {
 				if let Voting::Casting(Casting { ref mut votes, delegations, .. }) = voting {
 					match votes.binary_search_by_key(&poll_index, |i| i.0) {
 						Ok(i) => {
@@ -381,7 +396,7 @@ impl<T: Config> Pallet<T> {
 						Err(i) => {
 							votes
 								.try_insert(i, (poll_index, vote))
-								.map_err(|()| Error::<T>::MaxVotesReached)?;
+								.map_err(|()| Error::<T, I>::MaxVotesReached)?;
 						},
 					}
 					// Shouldn't be possible to fail, but we handle it gracefully.
@@ -390,7 +405,7 @@ impl<T: Config> Pallet<T> {
 						tally.increase(approve, *delegations);
 					}
 				} else {
-					return Err(Error::<T>::AlreadyDelegating.into())
+					return Err(Error::<T, I>::AlreadyDelegating.into())
 				}
 				// Extend the lock to `balance` (rather than setting it) since we don't know what
 				// other votes are in place.
@@ -408,23 +423,23 @@ impl<T: Config> Pallet<T> {
 	/// This will generally be combined with a call to `unlock`.
 	fn try_remove_vote(
 		who: &T::AccountId,
-		poll_index: PollIndexOf<T>,
-		class_hint: Option<ClassOf<T>>,
+		poll_index: PollIndexOf<T, I>,
+		class_hint: Option<ClassOf<T, I>>,
 		scope: UnvoteScope,
 	) -> DispatchResult {
 		let class = class_hint
 			.or_else(|| Some(T::Polls::as_ongoing(poll_index)?.1))
-			.ok_or(Error::<T>::ClassNeeded)?;
-		VotingFor::<T>::try_mutate(who, class, |voting| {
+			.ok_or(Error::<T, I>::ClassNeeded)?;
+		VotingFor::<T, I>::try_mutate(who, class, |voting| {
 			if let Voting::Casting(Casting { ref mut votes, delegations, ref mut prior }) = voting {
 				let i = votes
 					.binary_search_by_key(&poll_index, |i| i.0)
-					.map_err(|_| Error::<T>::NotVoter)?;
+					.map_err(|_| Error::<T, I>::NotVoter)?;
 				let v = votes.remove(i);
 
 				T::Polls::try_access_poll(poll_index, |poll_status| match poll_status {
 					PollStatus::Ongoing(tally, _) => {
-						ensure!(matches!(scope, UnvoteScope::Any), Error::<T>::NoPermission);
+						ensure!(matches!(scope, UnvoteScope::Any), Error::<T, I>::NoPermission);
 						// Shouldn't be possible to fail, but we handle it gracefully.
 						tally.remove(v.1).ok_or(ArithmeticError::Underflow)?;
 						if let Some(approve) = v.1.as_standard() {
@@ -441,7 +456,7 @@ impl<T: Config> Pallet<T> {
 							if now < unlock_at {
 								ensure!(
 									matches!(scope, UnvoteScope::Any),
-									Error::<T>::NoPermissionYet
+									Error::<T, I>::NoPermissionYet
 								);
 								prior.accumulate(unlock_at, balance)
 							}
@@ -459,10 +474,10 @@ impl<T: Config> Pallet<T> {
 	/// Return the number of votes for `who`
 	fn increase_upstream_delegation(
 		who: &T::AccountId,
-		class: &ClassOf<T>,
-		amount: Delegations<BalanceOf<T>>,
+		class: &ClassOf<T, I>,
+		amount: Delegations<BalanceOf<T, I>>,
 	) -> u32 {
-		VotingFor::<T>::mutate(who, class, |voting| match voting {
+		VotingFor::<T, I>::mutate(who, class, |voting| match voting {
 			Voting::Delegating(Delegating { delegations, .. }) => {
 				// We don't support second level delegating, so we don't need to do anything more.
 				*delegations = delegations.saturating_add(amount);
@@ -487,10 +502,10 @@ impl<T: Config> Pallet<T> {
 	/// Return the number of votes for `who`
 	fn reduce_upstream_delegation(
 		who: &T::AccountId,
-		class: &ClassOf<T>,
-		amount: Delegations<BalanceOf<T>>,
+		class: &ClassOf<T, I>,
+		amount: Delegations<BalanceOf<T, I>>,
 	) -> u32 {
-		VotingFor::<T>::mutate(who, class, |voting| match voting {
+		VotingFor::<T, I>::mutate(who, class, |voting| match voting {
 			Voting::Delegating(Delegating { delegations, .. }) => {
 				// We don't support second level delegating, so we don't need to do anything more.
 				*delegations = delegations.saturating_sub(amount);
@@ -517,16 +532,16 @@ impl<T: Config> Pallet<T> {
 	/// Return the upstream number of votes.
 	fn try_delegate(
 		who: T::AccountId,
-		class: ClassOf<T>,
+		class: ClassOf<T, I>,
 		target: T::AccountId,
 		conviction: Conviction,
-		balance: BalanceOf<T>,
+		balance: BalanceOf<T, I>,
 	) -> Result<u32, DispatchError> {
-		ensure!(who != target, Error::<T>::Nonsense);
-		T::Polls::classes().binary_search(&class).map_err(|_| Error::<T>::BadClass)?;
-		ensure!(balance <= T::Currency::free_balance(&who), Error::<T>::InsufficientFunds);
+		ensure!(who != target, Error::<T, I>::Nonsense);
+		T::Polls::classes().binary_search(&class).map_err(|_| Error::<T, I>::BadClass)?;
+		ensure!(balance <= T::Currency::free_balance(&who), Error::<T, I>::InsufficientFunds);
 		let votes =
-			VotingFor::<T>::try_mutate(&who, &class, |voting| -> Result<u32, DispatchError> {
+			VotingFor::<T, I>::try_mutate(&who, &class, |voting| -> Result<u32, DispatchError> {
 				let old = sp_std::mem::replace(
 					voting,
 					Voting::Delegating(Delegating {
@@ -538,10 +553,10 @@ impl<T: Config> Pallet<T> {
 					}),
 				);
 				match old {
-					Voting::Delegating(Delegating { .. }) => Err(Error::<T>::AlreadyDelegating)?,
+					Voting::Delegating(Delegating { .. }) => Err(Error::<T, I>::AlreadyDelegating)?,
 					Voting::Casting(Casting { votes, delegations, prior }) => {
 						// here we just ensure that we're currently idling with no votes recorded.
-						ensure!(votes.is_empty(), Error::<T>::AlreadyVoting);
+						ensure!(votes.is_empty(), Error::<T, I>::AlreadyVoting);
 						voting.set_common(delegations, prior);
 					},
 				}
@@ -553,16 +568,16 @@ impl<T: Config> Pallet<T> {
 				Self::extend_lock(&who, &class, balance);
 				Ok(votes)
 			})?;
-		Self::deposit_event(Event::<T>::Delegated(who, target));
+		Self::deposit_event(Event::<T, I>::Delegated(who, target));
 		Ok(votes)
 	}
 
 	/// Attempt to end the current delegation.
 	///
 	/// Return the number of votes of upstream.
-	fn try_undelegate(who: T::AccountId, class: ClassOf<T>) -> Result<u32, DispatchError> {
+	fn try_undelegate(who: T::AccountId, class: ClassOf<T, I>) -> Result<u32, DispatchError> {
 		let votes =
-			VotingFor::<T>::try_mutate(&who, &class, |voting| -> Result<u32, DispatchError> {
+			VotingFor::<T, I>::try_mutate(&who, &class, |voting| -> Result<u32, DispatchError> {
 				match sp_std::mem::replace(voting, Voting::default()) {
 					Voting::Delegating(Delegating {
 						balance,
@@ -589,29 +604,31 @@ impl<T: Config> Pallet<T> {
 
 						Ok(votes)
 					},
-					Voting::Casting(_) => Err(Error::<T>::NotDelegating.into()),
+					Voting::Casting(_) => Err(Error::<T, I>::NotDelegating.into()),
 				}
 			})?;
-		Self::deposit_event(Event::<T>::Undelegated(who));
+		Self::deposit_event(Event::<T, I>::Undelegated(who));
 		Ok(votes)
 	}
 
-	fn extend_lock(who: &T::AccountId, class: &ClassOf<T>, amount: BalanceOf<T>) {
-		ClassLocksFor::<T>::mutate(who, |locks| match locks.iter().position(|x| &x.0 == class) {
-			Some(i) => locks[i].1 = locks[i].1.max(amount),
-			None => locks.push((class.clone(), amount)),
+	fn extend_lock(who: &T::AccountId, class: &ClassOf<T, I>, amount: BalanceOf<T, I>) {
+		ClassLocksFor::<T, I>::mutate(who, |locks| {
+			match locks.iter().position(|x| &x.0 == class) {
+				Some(i) => locks[i].1 = locks[i].1.max(amount),
+				None => locks.push((class.clone(), amount)),
+			}
 		});
 		T::Currency::extend_lock(CONVICTION_VOTING_ID, who, amount, WithdrawReasons::TRANSFER);
 	}
 
 	/// Rejig the lock on an account. It will never get more stringent (since that would indicate
 	/// a security hole) but may be reduced from what they are currently.
-	fn update_lock(class: &ClassOf<T>, who: &T::AccountId) {
-		let class_lock_needed = VotingFor::<T>::mutate(who, class, |voting| {
+	fn update_lock(class: &ClassOf<T, I>, who: &T::AccountId) {
+		let class_lock_needed = VotingFor::<T, I>::mutate(who, class, |voting| {
 			voting.rejig(frame_system::Pallet::<T>::block_number());
 			voting.locked_balance()
 		});
-		let lock_needed = ClassLocksFor::<T>::mutate(who, |locks| {
+		let lock_needed = ClassLocksFor::<T, I>::mutate(who, |locks| {
 			locks.retain(|x| &x.0 != class);
 			if !class_lock_needed.is_zero() {
 				locks.push((class.clone(), class_lock_needed));

@@ -57,6 +57,7 @@ use scale_info::TypeInfo;
 
 pub mod curve;
 pub mod generic;
+pub mod legacy;
 mod multiaddress;
 pub mod offchain;
 pub mod runtime_logger;
@@ -96,6 +97,10 @@ pub use sp_arithmetic::{
 };
 
 pub use either::Either;
+
+/// The number of bytes of the module-specific `error` field defined in [`ModuleError`].
+/// In FRAME, this is the maximum encoded size of a pallet error type.
+pub const MAX_MODULE_ERROR_ENCODED_SIZE: usize = 4;
 
 /// An abstraction over justification for a block's validity under a consensus algorithm.
 ///
@@ -468,7 +473,7 @@ pub struct ModuleError {
 	/// Module index, matching the metadata module index.
 	pub index: u8,
 	/// Module specific error value.
-	pub error: u8,
+	pub error: [u8; MAX_MODULE_ERROR_ENCODED_SIZE],
 	/// Optional error message.
 	#[codec(skip)]
 	#[cfg_attr(feature = "std", serde(skip_deserializing))]
@@ -922,15 +927,15 @@ mod tests {
 	fn dispatch_error_encoding() {
 		let error = DispatchError::Module(ModuleError {
 			index: 1,
-			error: 2,
+			error: [2, 0, 0, 0],
 			message: Some("error message"),
 		});
 		let encoded = error.encode();
 		let decoded = DispatchError::decode(&mut &encoded[..]).unwrap();
-		assert_eq!(encoded, vec![3, 1, 2]);
+		assert_eq!(encoded, vec![3, 1, 2, 0, 0, 0]);
 		assert_eq!(
 			decoded,
-			DispatchError::Module(ModuleError { index: 1, error: 2, message: None })
+			DispatchError::Module(ModuleError { index: 1, error: [2, 0, 0, 0], message: None })
 		);
 	}
 
@@ -943,9 +948,9 @@ mod tests {
 			Other("bar"),
 			CannotLookup,
 			BadOrigin,
-			Module(ModuleError { index: 1, error: 1, message: None }),
-			Module(ModuleError { index: 1, error: 2, message: None }),
-			Module(ModuleError { index: 2, error: 1, message: None }),
+			Module(ModuleError { index: 1, error: [1, 0, 0, 0], message: None }),
+			Module(ModuleError { index: 1, error: [2, 0, 0, 0], message: None }),
+			Module(ModuleError { index: 2, error: [1, 0, 0, 0], message: None }),
 			ConsumerRemaining,
 			NoProviders,
 			Token(TokenError::NoFunds),
@@ -970,8 +975,8 @@ mod tests {
 
 		// Ignores `message` field in `Module` variant.
 		assert_eq!(
-			Module(ModuleError { index: 1, error: 1, message: Some("foo") }),
-			Module(ModuleError { index: 1, error: 1, message: None }),
+			Module(ModuleError { index: 1, error: [1, 0, 0, 0], message: Some("foo") }),
+			Module(ModuleError { index: 1, error: [1, 0, 0, 0], message: None }),
 		);
 	}
 

@@ -42,6 +42,13 @@ pub enum Subcommand {
 	#[clap(name = "benchmark", about = "Benchmark runtime pallets.")]
 	Benchmark(frame_benchmarking_cli::BenchmarkCmd),
 
+	/// Benchmark the execution time of historic blocks and compare it to their consumed weight.
+	#[clap(
+		name = "benchmark-block",
+		about = "Benchmark the execution time of historic blocks and compare it to their consumed weight."
+	)]
+	BenchmarkBlock(frame_benchmarking_cli::BlockCmd),
+
 	/// Sub command for benchmarking the per-block and per-extrinsic execution overhead.
 	#[clap(
 		name = "benchmark-overhead",

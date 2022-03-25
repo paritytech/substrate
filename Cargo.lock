@@ -484,12 +484,15 @@ dependencies = [
  "beefy-primitives",
  "fnv",
  "futures 0.3.19",
+ "futures-timer",
  "hex",
  "log 0.4.14",
  "parity-scale-codec",
  "parking_lot 0.12.0",
  "sc-chain-spec",
  "sc-client-api",
+ "sc-consensus",
+ "sc-finality-grandpa",
  "sc-keystore",
  "sc-network",
  "sc-network-gossip",
@@ -500,13 +503,19 @@ dependencies = [
  "sp-application-crypto",
  "sp-arithmetic",
  "sp-blockchain",
+ "sp-consensus",
  "sp-core",
+ "sp-finality-grandpa",
+ "sp-keyring",
  "sp-keystore",
  "sp-runtime",
  "sp-tracing",
  "strum",
  "substrate-prometheus-endpoint",
+ "substrate-test-runtime-client",
+ "tempfile",
  "thiserror",
+ "tokio",
  "wasm-timer",
 ]
 
@@ -851,9 +860,9 @@ dependencies = [
 
 [[package]]
 name = "cargo_metadata"
-version = "0.14.1"
+version = "0.14.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ba2ae6de944143141f6155a473a6b02f66c7c3f9f47316f802f80204ebfe6e12"
+checksum = "4acbb09d9ee8e23699b9634375c72795d095bf268439da88562cf9b501f181fa"
 dependencies = [
  "camino",
  "cargo-platform",
@@ -2129,6 +2138,7 @@ dependencies = [
  "clap 3.1.6",
  "frame-benchmarking",
  "frame-support",
+ "frame-system",
  "handlebars",
  "hash-db",
  "hex",
@@ -2160,6 +2170,7 @@ dependencies = [
  "sp-std",
  "sp-storage",
  "sp-trie",
+ "thousands",
 ]
 
 [[package]]
@@ -2167,6 +2178,7 @@ name = "frame-election-provider-solution-type"
 version = "4.0.0-dev"
 dependencies = [
  "frame-election-provider-support",
+ "frame-support",
  "parity-scale-codec",
  "proc-macro-crate 1.1.3",
  "proc-macro2",
@@ -2199,6 +2211,7 @@ dependencies = [
  "clap 3.1.6",
  "frame-election-provider-solution-type",
  "frame-election-provider-support",
+ "frame-support",
  "honggfuzz",
  "parity-scale-codec",
  "rand 0.8.4",
@@ -2644,10 +2657,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7fcd999463524c52659517fe2cea98493cfe485d10565e7b0fb07dbba7ad2753"
 dependencies = [
  "cfg-if 1.0.0",
- "js-sys",
  "libc",
  "wasi 0.10.0+wasi-snapshot-preview1",
- "wasm-bindgen",
 ]
 
 [[package]]
@@ -6713,9 +6724,9 @@ dependencies = [
 
 [[package]]
 name = "parity-db"
-version = "0.3.8"
+version = "0.3.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "865edee5b792f537356d9e55cbc138e7f4718dc881a7ea45a18b37bf61c21e3d"
+checksum = "3d121a9af17a43efd0a38c6afa508b927ba07785bd4709efb2ac03bf77efef8d"
 dependencies = [
  "blake2-rfc",
  "crc32fast",
@@ -8253,7 +8264,6 @@ version = "0.10.0-dev"
 dependencies = [
  "async-trait",
  "futures 0.3.19",
- "getrandom 0.2.3",
  "log 0.4.14",
  "parity-scale-codec",
  "parking_lot 0.12.0",
@@ -8881,6 +8891,7 @@ dependencies = [
  "parking_lot 0.12.0",
  "sc-chain-spec",
  "sc-transaction-pool-api",
+ "scale-info",
  "serde",
  "serde_json",
  "sp-core",
@@ -10699,6 +10710,7 @@ dependencies = [
 name = "substrate-test-runtime"
 version = "2.0.0"
 dependencies = [
+ "beefy-primitives",
  "cfg-if 1.0.0",
  "frame-support",
  "frame-system",

@@ -221,7 +221,7 @@ impl frame_system::Config for Runtime {
 	type SystemWeightInfo = frame_system::weights::SubstrateWeight<Runtime>;
 	type SS58Prefix = ConstU16<42>;
 	type OnSetCode = ();
-	type MaxConsumers = frame_support::traits::ConstU32<16>;
+	type MaxConsumers = ConstU32<16>;
 }
 
 impl pallet_randomness_collective_flip::Config for Runtime {}
@@ -559,9 +559,7 @@ impl pallet_staking::Config for Runtime {
 	type OffendingValidatorsThreshold = OffendingValidatorsThreshold;
 	type ElectionProvider = ElectionProviderMultiPhase;
 	type GenesisElectionProvider = UnboundedExecution<Self>;
-	// Alternatively, use pallet_staking::UseNominatorsMap<Runtime> to just use the nominators map.
-	// Note that the aforementioned does not scale to a very large number of nominators.
-	type SortedListProvider = BagsList;
+	type VoterList = BagsList;
 	type MaxUnlockingChunks = ConstU32<32>;
 	type WeightInfo = pallet_staking::weights::SubstrateWeight<Runtime>;
 	type BenchmarkingConfig = StakingBenchmarkingConfig;
@@ -598,11 +596,13 @@ frame_election_provider_support::generate_solution_type!(
 		VoterIndex = u32,
 		TargetIndex = u16,
 		Accuracy = sp_runtime::PerU16,
+		MaxVoters = MaxElectingVoters,
 	>(16)
 );
 
 parameter_types! {
 	pub MaxNominations: u32 = <NposSolution16 as frame_election_provider_support::NposSolution>::LIMIT as u32;
+	pub MaxElectingVoters: u32 = 10_000;
 }
 
 /// The numbers configured here could always be more than the the maximum limits of staking pallet
@@ -678,7 +678,7 @@ impl pallet_election_provider_multi_phase::Config for Runtime {
 	type Solver = SequentialPhragmen<AccountId, SolutionAccuracyOf<Self>, OffchainRandomBalancing>;
 	type ForceOrigin = EnsureRootOrHalfCouncil;
 	type MaxElectableTargets = ConstU16<{ u16::MAX }>;
-	type MaxElectingVoters = ConstU32<10_000>;
+	type MaxElectingVoters = MaxElectingVoters;
 	type BenchmarkingConfig = ElectionProviderBenchmarkConfig;
 	type WeightInfo = pallet_election_provider_multi_phase::weights::SubstrateWeight<Self>;
 }
@@ -828,7 +828,7 @@ impl pallet_democracy::Config for Runtime {
 	type Slash = Treasury;
 	type Scheduler = Scheduler;
 	type PalletsOrigin = OriginCaller;
-	type MaxVotes = frame_support::traits::ConstU32<100>;
+	type MaxVotes = ConstU32<100>;
 	type WeightInfo = pallet_democracy::weights::SubstrateWeight<Runtime>;
 	type MaxProposals = MaxProposals;
 }
@@ -930,17 +930,9 @@ parameter_types! {
 	pub const TipFindersFee: Percent = Percent::from_percent(20);
 	pub const TipReportDepositBase: Balance = 1 * DOLLARS;
 	pub const DataDepositPerByte: Balance = 1 * CENTS;
-	pub const BountyDepositBase: Balance = 1 * DOLLARS;
-	pub const BountyDepositPayoutDelay: BlockNumber = 1 * DAYS;
 	pub const TreasuryPalletId: PalletId = PalletId(*b"py/trsry");
-	pub const BountyUpdatePeriod: BlockNumber = 14 * DAYS;
 	pub const MaximumReasonLength: u32 = 300;
-	pub const BountyCuratorDeposit: Permill = Permill::from_percent(50);
-	pub const BountyValueMinimum: Balance = 5 * DOLLARS;
 	pub const MaxApprovals: u32 = 100;
-	pub const MaxActiveChildBountyCount: u32 = 5;
-	pub const ChildBountyValueMinimum: Balance = 1 * DOLLARS;
-	pub const ChildBountyCuratorDepositBase: Permill = Permill::from_percent(10);
 }
 
 impl pallet_treasury::Config for Runtime {
@@ -967,12 +959,25 @@ impl pallet_treasury::Config for Runtime {
 	type MaxApprovals = MaxApprovals;
 }
 
+parameter_types! {
+	pub const BountyCuratorDeposit: Permill = Permill::from_percent(50);
+	pub const BountyValueMinimum: Balance = 5 * DOLLARS;
+	pub const BountyDepositBase: Balance = 1 * DOLLARS;
+	pub const CuratorDepositMultiplier: Permill = Permill::from_percent(50);
+	pub const CuratorDepositMin: Balance = 1 * DOLLARS;
+	pub const CuratorDepositMax: Balance = 100 * DOLLARS;
+	pub const BountyDepositPayoutDelay: BlockNumber = 1 * DAYS;
+	pub const BountyUpdatePeriod: BlockNumber = 14 * DAYS;
+}
+
 impl pallet_bounties::Config for Runtime {
 	type Event = Event;
 	type BountyDepositBase = BountyDepositBase;
 	type BountyDepositPayoutDelay = BountyDepositPayoutDelay;
 	type BountyUpdatePeriod = BountyUpdatePeriod;
-	type BountyCuratorDeposit = BountyCuratorDeposit;
+	type CuratorDepositMultiplier = CuratorDepositMultiplier;
+	type CuratorDepositMin = CuratorDepositMin;
+	type CuratorDepositMax = CuratorDepositMax;
 	type BountyValueMinimum = BountyValueMinimum;
 	type DataDepositPerByte = DataDepositPerByte;
 	type MaximumReasonLength = MaximumReasonLength;
@@ -980,11 +985,14 @@ impl pallet_bounties::Config for Runtime {
 	type ChildBountyManager = ChildBounties;
 }
 
+parameter_types! {
+	pub const ChildBountyValueMinimum: Balance = 1 * DOLLARS;
+}
+
 impl pallet_child_bounties::Config for Runtime {
 	type Event = Event;
-	type MaxActiveChildBountyCount = MaxActiveChildBountyCount;
+	type MaxActiveChildBountyCount = ConstU32<5>;
 	type ChildBountyValueMinimum = ChildBountyValueMinimum;
-	type ChildBountyCuratorDepositBase = ChildBountyCuratorDepositBase;
 	type WeightInfo = pallet_child_bounties::weights::SubstrateWeight<Runtime>;
 }
 

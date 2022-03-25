@@ -49,6 +49,12 @@ pub(crate) fn syn_err(message: &'static str) -> syn::Error {
 ///   compact encoding.
 /// - The accuracy of the ratios. This must be one of the `PerThing` types defined in
 ///   `sp-arithmetic`.
+/// - The maximum number of voters. This must be of type `Get<u32>`. Check <https://github.com/paritytech/substrate/issues/10866>
+///   for more details. This is used to bound the struct, by leveraging the fact that `votes1.len()
+///   < votes2.len() < ... < votesn.len()` (the details of the struct is explained further below).
+///   We know that `sum_i votes_i.len() <= MaxVoters`, and we know that the maximum size of the
+///   struct would be achieved if all voters fall in the last bucket. One can also check the tests
+///   and more specifically `max_encoded_len_exact` for a concrete example.
 ///
 /// Moreover, the maximum number of edges per voter (distribution per assignment) also need to be
 /// specified. Attempting to convert from/to an assignment with more distributions will fail.
@@ -59,10 +65,12 @@ pub(crate) fn syn_err(message: &'static str) -> syn::Error {
 /// ```
 /// # use frame_election_provider_solution_type::generate_solution_type;
 /// # use sp_arithmetic::per_things::Perbill;
+/// # use frame_support::traits::ConstU32;
 /// generate_solution_type!(pub struct TestSolution::<
 ///     VoterIndex = u16,
 ///     TargetIndex = u8,
 ///     Accuracy = Perbill,
+///     MaxVoters = ConstU32::<10>,
 /// >(4));
 /// ```
 ///
@@ -103,9 +111,15 @@ pub(crate) fn syn_err(message: &'static str) -> syn::Error {
 /// # use frame_election_provider_solution_type::generate_solution_type;
 /// # use frame_election_provider_support::NposSolution;
 /// # use sp_arithmetic::per_things::Perbill;
+/// # use frame_support::traits::ConstU32;
 /// generate_solution_type!(
 ///     #[compact]
-///     pub struct TestSolutionCompact::<VoterIndex = u16, TargetIndex = u8, Accuracy = Perbill>(8)
+///     pub struct TestSolutionCompact::<
+///          VoterIndex = u16,
+///          TargetIndex = u8,
+///          Accuracy = Perbill,
+///          MaxVoters = ConstU32::<10>,
+///     >(8)
 /// );
 /// ```
 #[proc_macro]
@@ -129,6 +143,7 @@ struct SolutionDef {
 	voter_type: syn::Type,
 	target_type: syn::Type,
 	weight_type: syn::Type,
+	max_voters: syn::Type,
 	count: usize,
 	compact_encoding: bool,
 }
@@ -167,11 +182,11 @@ impl Parse for SolutionDef {
 		let _ = <syn::Token![::]>::parse(input)?;
 		let generics: syn::AngleBracketedGenericArguments = input.parse()?;
 
-		if generics.args.len() != 3 {
-			return Err(syn_err("Must provide 3 generic args."))
+		if generics.args.len() != 4 {
+			return Err(syn_err("Must provide 4 generic args."))
 		}
 
-		let expected_types = ["VoterIndex", "TargetIndex", "Accuracy"];
+		let expected_types = ["VoterIndex", "TargetIndex", "Accuracy", "MaxVoters"];
 
 		let mut types: Vec<syn::Type> = generics
 			.args
@@ -197,6 +212,7 @@ impl Parse for SolutionDef {
 			})
 			.collect::<Result<_>>()?;
 
+		let max_voters = types.pop().expect("Vector of length 4 can be popped; qed");
 		let weight_type = types.pop().expect("Vector of length 3 can be popped; qed");
 		let target_type = types.pop().expect("Vector of length 2 can be popped; qed");
 		let voter_type = types.pop().expect("Vector of length 1 can be popped; qed");
@@ -205,7 +221,16 @@ impl Parse for SolutionDef {
 		let count_expr: syn::ExprParen = input.parse()?;
 		let count = parse_parenthesized_number::<usize>(count_expr)?;
 
-		Ok(Self { vis, ident, voter_type, target_type, weight_type, count, compact_encoding })
+		Ok(Self {
+			vis,
+			ident,
+			voter_type,
+			target_type,
+			weight_type,
+			max_voters,
+			count,
+			compact_encoding,
+		})
 	}
 }
 

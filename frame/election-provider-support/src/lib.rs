@@ -192,6 +192,11 @@ pub use scale_info;
 pub use sp_arithmetic;
 #[doc(hidden)]
 pub use sp_std;
+
+#[cfg(test)]
+mod mock;
+#[cfg(test)]
+mod tests;
 // Simple Extension trait to easily convert `None` from index closures to `Err`.
 //
 // This is only generated and re-exported for the solution code to use.
