@@ -19,9 +19,15 @@
 
 #![cfg(test)]
 
-use std::{collections::HashMap, convert::TryInto, hash::Hash, HashSet};
+use std::{
+	collections::{HashMap, HashSet},
+	convert::TryInto,
+	hash::Hash,
+};
 
 use rand::{seq::SliceRandom, Rng};
+
+pub type AccountId = u64;
 
 /// The candidate mask allows easy disambiguation between voters and candidates: accounts
 /// for which this bit is set are candidates, and without it, are voters.
@@ -34,13 +40,14 @@ pub fn p(p: u8) -> TestAccuracy {
 }
 
 pub type MockAssignment = crate::Assignment<AccountId, TestAccuracy>;
-pub type Voter = (AccountId, VoteWeight, Vec<AccountId>);
+pub type Voter = (AccountId, crate::VoteWeight, Vec<AccountId>);
 
 crate::generate_solution_type! {
 	pub struct TestSolution::<
 		VoterIndex = u32,
 		TargetIndex = u16,
 		Accuracy = TestAccuracy,
+		MaxVoters = frame_support::traits::ConstU32::<20>,
 	>(16)
 }
 

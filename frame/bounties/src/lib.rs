@@ -196,10 +196,20 @@ pub mod pallet {
 		#[pallet::constant]
 		type BountyUpdatePeriod: Get<Self::BlockNumber>;
 
-		/// Percentage of the curator fee that will be reserved upfront as deposit for bounty
-		/// curator.
+		/// The curator deposit is calculated as a percentage of the curator fee.
+		///
+		/// This deposit has optional upper and lower bounds with `CuratorDepositMax` and
+		/// `CuratorDepositMin`.
 		#[pallet::constant]
-		type BountyCuratorDeposit: Get<Permill>;
+		type CuratorDepositMultiplier: Get<Permill>;
+
+		/// Maximum amount of funds that should be placed in a deposit for making a proposal.
+		#[pallet::constant]
+		type CuratorDepositMax: Get<Option<BalanceOf<Self>>>;
+
+		/// Minimum amount of funds that should be placed in a deposit for making a proposal.
+		#[pallet::constant]
+		type CuratorDepositMin: Get<Option<BalanceOf<Self>>>;
 
 		/// Minimum value for a bounty.
 		#[pallet::constant]
@@ -502,7 +512,7 @@ pub mod pallet {
 					BountyStatus::CuratorProposed { ref curator } => {
 						ensure!(signer == *curator, Error::<T>::RequireCurator);
 
-						let deposit = T::BountyCuratorDeposit::get() * bounty.fee;
+						let deposit = Self::calculate_curator_deposit(&bounty.fee);
 						T::Currency::reserve(curator, deposit)?;
 						bounty.curator_deposit = deposit;
 
@@ -762,7 +772,19 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
-	// Add public immutables and private mutables.
+	pub fn calculate_curator_deposit(fee: &BalanceOf<T>) -> BalanceOf<T> {
+		let mut deposit = T::CuratorDepositMultiplier::get() * *fee;
+
+		if let Some(max_deposit) = T::CuratorDepositMax::get() {
+			deposit = deposit.min(max_deposit)
+		}
+
+		if let Some(min_deposit) = T::CuratorDepositMin::get() {
+			deposit = deposit.max(min_deposit)
+		}
+
+		deposit
+	}
 
 	/// The account ID of the treasury pot.
 	///
