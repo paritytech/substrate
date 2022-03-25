@@ -23,7 +23,7 @@
 #![recursion_limit = "256"]
 
 use codec::{Decode, Encode, MaxEncodedLen};
-use frame_election_provider_support::{onchain, ExtendedBalance, SequentialPhragmen, VoteWeight};
+use frame_election_provider_support::{ExtendedBalance, SequentialPhragmen, VoteWeight};
 use frame_support::{
 	construct_runtime,
 	pallet_prelude::Get,
@@ -47,6 +47,7 @@ pub use node_primitives::{AccountId, Signature};
 use node_primitives::{AccountIndex, Balance, BlockNumber, Hash, Index, Moment};
 use pallet_contracts::weights::WeightInfo;
 use pallet_election_provider_multi_phase::SolutionAccuracyOf;
+use pallet_election_provider_support_onchain::{BoundedExecution, UnboundedExecution};
 use pallet_grandpa::{
 	fg_primitives, AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList,
 };
@@ -557,7 +558,7 @@ impl pallet_staking::Config for Runtime {
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
 	type OffendingValidatorsThreshold = OffendingValidatorsThreshold;
 	type ElectionProvider = ElectionProviderMultiPhase;
-	type GenesisElectionProvider = onchain::UnboundedExecution<OnChainSeqPhragmen>;
+	type GenesisElectionProvider = UnboundedExecution<Self>;
 	// Alternatively, use pallet_staking::UseNominatorsMap<Runtime> to just use the nominators map.
 	// Note that the aforementioned does not scale to a very large number of nominators.
 	type SortedListProvider = BagsList;
@@ -642,19 +643,13 @@ impl Get<Option<(usize, ExtendedBalance)>> for OffchainRandomBalancing {
 	}
 }
 
-pub struct OnChainSeqPhragmen;
-impl onchain::ExecutionConfig for OnChainSeqPhragmen {
-	type System = Runtime;
+impl pallet_election_provider_support_onchain::Config for Runtime {
 	type Solver = SequentialPhragmen<
 		AccountId,
 		pallet_election_provider_multi_phase::SolutionAccuracyOf<Runtime>,
 	>;
 	type DataProvider = <Runtime as pallet_election_provider_multi_phase::Config>::DataProvider;
-}
-
-impl onchain::BoundedExecutionConfig for OnChainSeqPhragmen {
-	type VotersBound = ConstU32<20_000>;
-	type TargetsBound = ConstU32<2_000>;
+	type WeightInfo = ();
 }
 
 impl pallet_election_provider_multi_phase::Config for Runtime {
@@ -678,8 +673,8 @@ impl pallet_election_provider_multi_phase::Config for Runtime {
 	type RewardHandler = (); // nothing to do upon rewards
 	type DataProvider = Staking;
 	type Solution = NposSolution16;
-	type Fallback = onchain::BoundedExecution<OnChainSeqPhragmen>;
-	type GovernanceFallback = onchain::BoundedExecution<OnChainSeqPhragmen>;
+	type Fallback = BoundedExecution<Self, ConstU32<20_000>, ConstU32<2_000>>;
+	type GovernanceFallback = BoundedExecution<Self, ConstU32<20_000>, ConstU32<2_000>>;
 	type Solver = SequentialPhragmen<AccountId, SolutionAccuracyOf<Self>, OffchainRandomBalancing>;
 	type ForceOrigin = EnsureRootOrHalfCouncil;
 	type MaxElectableTargets = ConstU16<{ u16::MAX }>;
@@ -1412,6 +1407,7 @@ construct_runtime!(
 		TransactionPayment: pallet_transaction_payment,
 		AssetTxPayment: pallet_asset_tx_payment,
 		ElectionProviderMultiPhase: pallet_election_provider_multi_phase,
+		ElectionProviderSupportOnchain: pallet_election_provider_support_onchain,
 		Staking: pallet_staking,
 		Session: pallet_session,
 		Democracy: pallet_democracy,
@@ -1523,6 +1519,7 @@ mod benches {
 		[pallet_contracts, Contracts]
 		[pallet_democracy, Democracy]
 		[pallet_election_provider_multi_phase, ElectionProviderMultiPhase]
+		[pallet_election_provider_support_onchain, ElectionProviderSupportOnchain]
 		[pallet_elections_phragmen, Elections]
 		[pallet_gilt, Gilt]
 		[pallet_grandpa, Grandpa]

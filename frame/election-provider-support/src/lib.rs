@@ -166,7 +166,6 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-pub mod onchain;
 pub mod traits;
 #[cfg(feature = "std")]
 use codec::{Decode, Encode};

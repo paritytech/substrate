@@ -88,6 +88,7 @@ members = [
 	"frame/election-provider-support",
 	"frame/election-provider-support/solution-type",
 	"frame/election-provider-support/solution-type/fuzzer",
+	"frame/election-provider-support/onchain",
 	"frame/examples/basic",
 	"frame/examples/offchain-worker",
 	"frame/examples/parallel",

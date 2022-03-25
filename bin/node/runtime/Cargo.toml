@@ -65,6 +65,7 @@ pallet-contracts-rpc-runtime-api = { version = "4.0.0-dev", default-features = f
 pallet-conviction-voting = { version = "4.0.0-dev", default-features = false, path = "../../../frame/conviction-voting" }
 pallet-democracy = { version = "4.0.0-dev", default-features = false, path = "../../../frame/democracy" }
 pallet-election-provider-multi-phase = { version = "4.0.0-dev", default-features = false, path = "../../../frame/election-provider-multi-phase" }
+pallet-election-provider-support-onchain = { version = "4.0.0-dev", default-features = false, path = "../../../frame/election-provider-support/onchain" }
 pallet-elections-phragmen = { version = "5.0.0-dev", default-features = false, path = "../../../frame/elections-phragmen" }
 pallet-gilt = { version = "4.0.0-dev", default-features = false, path = "../../../frame/gilt" }
 pallet-grandpa = { version = "4.0.0-dev", default-features = false, path = "../../../frame/grandpa" }
@@ -161,6 +162,7 @@ std = [
 	"frame-system-rpc-runtime-api/std",
 	"frame-system/std",
 	"pallet-election-provider-multi-phase/std",
+	"pallet-election-provider-support-onchain/std",
 	"pallet-timestamp/std",
 	"pallet-tips/std",
 	"pallet-transaction-payment-rpc-runtime-api/std",
