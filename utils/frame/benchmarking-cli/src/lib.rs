@@ -15,6 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod block;
 mod command;
 pub mod overhead;
 mod post_processing;
@@ -24,6 +25,7 @@ mod writer;
 use sc_cli::{ExecutionStrategy, WasmExecutionMethod, DEFAULT_WASM_EXECUTION_METHOD};
 use std::{fmt::Debug, path::PathBuf};
 
+pub use block::BlockCmd;
 pub use overhead::{ExtrinsicBuilder, OverheadCmd};
 pub use storage::StorageCmd;
 

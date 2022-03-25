@@ -2129,6 +2129,7 @@ dependencies = [
  "clap 3.1.6",
  "frame-benchmarking",
  "frame-support",
+ "frame-system",
  "handlebars",
  "hash-db",
  "hex",
@@ -2160,6 +2161,7 @@ dependencies = [
  "sp-std",
  "sp-storage",
  "sp-trie",
+ "thousands",
 ]
 
 [[package]]
@@ -2167,6 +2169,7 @@ name = "frame-election-provider-solution-type"
 version = "4.0.0-dev"
 dependencies = [
  "frame-election-provider-support",
+ "frame-support",
  "parity-scale-codec",
  "proc-macro-crate 1.1.3",
  "proc-macro2",
@@ -2185,6 +2188,7 @@ dependencies = [
  "frame-support",
  "frame-system",
  "parity-scale-codec",
+ "rand 0.7.3",
  "scale-info",
  "sp-arithmetic",
  "sp-core",
@@ -2201,6 +2205,7 @@ dependencies = [
  "clap 3.1.6",
  "frame-election-provider-solution-type",
  "frame-election-provider-support",
+ "frame-support",
  "honggfuzz",
  "parity-scale-codec",
  "rand 0.8.4",
