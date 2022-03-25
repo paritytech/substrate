@@ -175,6 +175,10 @@ pub mod pallet {
 			maybe_item: Option<T::ItemId>,
 			key: AttributeKeyOf<T>,
 		},
+		ItemCreated {
+			collection_id: T::CollectionId,
+			item_id: T::ItemId,
+		},
 	}
 
 	// Your Pallet's error messages.
@@ -188,6 +192,8 @@ pub mod pallet {
 		CollectionNotFound,
 		/// The collection is locked.
 		CollectionIsLocked,
+		/// An item with this ID does not exist.
+		ItemIdTaken,
 		/// The calling user is not authorized to make this call.
 		NotAuthorized,
 		/// The hint provided by the user was incorrect.
@@ -271,6 +277,17 @@ pub mod pallet {
 			Ok(())
 		}
 
+		#[pallet::weight(0)]
+		pub fn mint(
+			origin: OriginFor<T>,
+			collection_id: T::CollectionId,
+			item_id: T::ItemId,
+		) -> DispatchResult {
+			let sender = ensure_signed(origin)?;
+			Self::do_mint_item(sender, collection_id, item_id)?;
+			Ok(())
+		}
+
 		// BASIC METHODS:
 		// +store collection's owner
 		// +lock a collection (add isLocked flag) => applies to the initial metadata change and burn method
@@ -283,13 +300,14 @@ pub mod pallet {
 
 		// PART 3:
 		// +structure => will affect collection destruction
-		// mint items
+		// +mint items
 		// max supply => applies to mint
 		// max items per user => applies to mint and transfer
 		// isTransferable => applies to transfer
 		// transfer items
 		// items metadata + attributes. Metadata could be changed by the collection's owner only
 		// burn item
+		// approvals
 
 		#[pallet::weight(0)]
 		pub fn set_admin(

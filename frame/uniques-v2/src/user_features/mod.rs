@@ -18,3 +18,4 @@
 pub mod administration;
 pub mod attributes;
 pub mod collection_crud;
+pub mod item_crud;
