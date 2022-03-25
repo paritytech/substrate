@@ -54,6 +54,7 @@ pub trait WeightInfo {
 	fn call() -> Weight;
 	fn upload_code(c: u32, ) -> Weight;
 	fn remove_code() -> Weight;
+	fn set_code() -> Weight;
 	fn seal_caller(r: u32, ) -> Weight;
 	fn seal_is_contract(r: u32, ) -> Weight;
 	fn seal_code_hash(r: u32, ) -> Weight;
@@ -255,6 +256,14 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Contracts CodeStorage (r:0 w:1)
 	// Storage: Contracts PristineCode (r:0 w:1)
 	fn remove_code() -> Weight {
+		(24_533_000 as Weight)
+			.saturating_add(T::DbWeight::get().reads(1 as Weight))
+			.saturating_add(T::DbWeight::get().writes(3 as Weight))
+	}
+	// Storage: Contracts OwnerInfoOf (r:1 w:1)
+	// Storage: Contracts CodeStorage (r:0 w:1)
+	// Storage: Contracts PristineCode (r:0 w:1)
+	fn set_code() -> Weight {
 		(24_533_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(3 as Weight))
@@ -1178,6 +1187,14 @@ impl WeightInfo for () {
 	// Storage: Contracts CodeStorage (r:0 w:1)
 	// Storage: Contracts PristineCode (r:0 w:1)
 	fn remove_code() -> Weight {
+		(24_533_000 as Weight)
+			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
+			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
+	}
+	// Storage: Contracts OwnerInfoOf (r:1 w:1)
+	// Storage: Contracts CodeStorage (r:0 w:1)
+	// Storage: Contracts PristineCode (r:0 w:1)
+	fn set_code() -> Weight {
 		(24_533_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
