@@ -17,7 +17,6 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use assert_cmd::cargo::cargo_bin;
-use platforms::*;
 use regex::Regex;
 use std::process::Command;
 
