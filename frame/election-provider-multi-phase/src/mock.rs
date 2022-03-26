@@ -253,6 +253,7 @@ parameter_types! {
 	pub static UnsignedPhase: BlockNumber = 5;
 	pub static SignedMaxSubmissions: u32 = 5;
 	pub static SignedDepositBase: Balance = 5;
+	pub static ChallengeRewardBase: Balance = 6;
 	pub static SignedDepositByte: Balance = 0;
 	pub static SignedDepositWeight: Balance = 0;
 	pub static SignedRewardBase: Balance = 7;
@@ -401,6 +402,7 @@ impl crate::Config for Runtime {
 	type MinerMaxLength = MinerMaxLength;
 	type MinerTxPriority = MinerTxPriority;
 	type SignedRewardBase = SignedRewardBase;
+	type ChallengeRewardBase = ChallengeRewardBase;
 	type SignedDepositBase = SignedDepositBase;
 	type SignedDepositByte = ();
 	type SignedDepositWeight = ();

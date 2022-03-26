@@ -631,6 +631,10 @@ pub mod pallet {
 		#[pallet::constant]
 		type SignedRewardBase: Get<BalanceOf<Self>>;
 
+		// Base reward for a challenger
+		#[pallet::constant]
+		type ChallengeRewardBase: Get<BalanceOf<Self>>;
+
 		/// Base deposit for a signed solution.
 		#[pallet::constant]
 		type SignedDepositBase: Get<BalanceOf<Self>>;
@@ -1062,28 +1066,43 @@ pub mod pallet {
 			<QueuedSolution<T>>::put(solution);
 			Ok(())
 		}
-		
+
 		#[pallet::weight(100)]
 		pub fn challenge_solution(origin: OriginFor<T>, index: u32) -> DispatchResult {
 			let who = ensure_signed(origin)?;
+			// TODO: Create custom error
 			ensure!(
 				T::Currency::can_slash(&who, T::MinimumSlashableAmount::get()),
 				<Error<T>>::CallNotAllowed
 			);
-			// TODO: Add error message for a None 
+			// TODO: Add an `else` for a None result
 			if let Some(submission) = SignedSubmissionsMap::<T>::get(index) {
-				match Self::feasibility_check(submission.raw_solution.clone(), ElectionCompute::Signed) {
-					Ok(_solution) => {
+				match Self::feasibility_check(
+					submission.raw_solution.clone(),
+					ElectionCompute::Signed,
+				) {
+					Ok(solution) => {
 						let _ = T::Currency::slash(&who, T::MinimumSlashableAmount::get());
-
+						CheckedSolutions::<T>::insert(submission, solution);
+						Ok(())
 					},
-					Err(_) => {
-
+					Err(_error) => {
+						T::Currency::slash_reserved(&who, submission.deposit);
+						SignedSubmissionsMap::<T>::remove(index);
+						let reward = {
+							let call = Call::challenge_solution::<T> { index };
+							let call_fee =
+								T::EstimateCallFee::estimate_call_fee(&call, None.into());
+							T::ChallengeRewardBase::get().saturating_add(call_fee)
+						};
+						let positive_imbalance = T::Currency::deposit_creating(&who, reward);
+						T::RewardHandler::on_unbalanced(positive_imbalance);
+						Err(Error::<T>::CallNotAllowed.into())
 					},
 				}
+			} else {
+				return Err(Error::<T>::CallNotAllowed.into())
 			}
-
-			Ok(())
 		}
 	}
 
@@ -1270,6 +1289,10 @@ pub mod pallet {
 	pub type SignedSubmissionsMap<T: Config> =
 		StorageMap<_, Twox64Concat, u32, SignedSubmissionOf<T>, OptionQuery>;
 
+	#[pallet::storage]
+	pub type CheckedSolutions<T: Config> =
+		StorageMap<_, Twox64Concat, SignedSubmissionOf<T>, ReadySolution<T::AccountId>>;
+
 	// `SignedSubmissions` items end here.
 
 	/// The minimum score that each 'untrusted' solution must attain in order to be considered
@@ -1380,7 +1403,7 @@ impl<T: Config> Pallet<T> {
 		// Defensive-only.
 		if targets.len() > target_limit || voters.len() > voter_limit {
 			debug_assert!(false, "Snapshot limit has not been respected.");
-			return Err(ElectionError::DataProvider("Snapshot too big for submission."));
+			return Err(ElectionError::DataProvider("Snapshot too big for submission."))
 		}
 
 		// If `desired_targets` > `targets.len()`, cap `desired_targets` to that level and emit a
@@ -1503,7 +1526,7 @@ impl<T: Config> Pallet<T> {
 
 				// Check that all of the targets are valid based on the snapshot.
 				if assignment.distribution.iter().any(|(d, _)| !targets.contains(d)) {
-					return Err(FeasibilityError::InvalidVote);
+					return Err(FeasibilityError::InvalidVote)
 				}
 				Ok(())
 			})
@@ -2179,9 +2202,9 @@ mod tests {
 		};
 
 		let mut active = 1;
-		while weight_with(active)
-			<= <Runtime as frame_system::Config>::BlockWeights::get().max_block
-			|| active == all_voters
+		while weight_with(active) <=
+			<Runtime as frame_system::Config>::BlockWeights::get().max_block ||
+			active == all_voters
 		{
 			active += 1;
 		}
