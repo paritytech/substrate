@@ -90,6 +90,13 @@ pub trait PerThing:
 		self.deconstruct() == Self::ACCURACY
 	}
 
+	/// Return the next lower value to `self` or an error with the same value if `self` is already
+	/// zero.
+	fn less_epsilon(self) -> Result<Self, Self> {
+		if self.is_zero() { return Err(self) }
+		Ok(Self::from_parts(self.deconstruct() - One::one()))
+	}
+
 	/// Build this type from a percent. Equivalent to `Self::from_parts(x * Self::ACCURACY / 100)`
 	/// but more accurate and can cope with potential type overflows.
 	fn from_percent(x: Self::Inner) -> Self {
@@ -587,6 +594,16 @@ macro_rules! implement_per_thing {
 					$type: Into<N>,
 			{
 				<Self as PerThing>::from_rational(p, q)
+			}
+
+			/// Integer multiplication with another value, saturating at 1.
+			pub fn int_mul(self, b: $type) -> Self {
+				PerThing::from_parts(self.0.saturating_mul(b))
+			}
+
+			/// Integer division with another value, rounding down.
+			pub fn int_div(self, b: Self) -> $type {
+				self.0 / b.0
 			}
 
 			/// See [`PerThing::mul_floor`].

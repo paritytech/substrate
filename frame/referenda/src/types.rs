@@ -21,7 +21,7 @@ use super::*;
 use codec::{Decode, Encode, EncodeLike, MaxEncodedLen};
 use frame_support::{traits::schedule::Anon, Parameter};
 use scale_info::TypeInfo;
-use sp_runtime::RuntimeDebug;
+use sp_runtime::{RuntimeDebug, PerThing};
 use sp_std::fmt::Debug;
 
 pub type BalanceOf<T, I = ()> =
@@ -88,40 +88,6 @@ impl<T: Ord, S: Get<u32>> InsertSorted<T> for BoundedVec<T, S> {
 	) -> bool {
 		let index = self.binary_search_by_key::<K, F>(&f(&t), f).unwrap_or_else(|x| x);
 		self.force_insert_keep_right(index, t).is_ok()
-	}
-}
-
-#[cfg(test)]
-mod tests {
-	use super::*;
-	use frame_support::traits::ConstU32;
-
-	#[test]
-	fn insert_sorted_works() {
-		let mut b: BoundedVec<u32, ConstU32<6>> = vec![20, 30, 40].try_into().unwrap();
-		assert!(b.insert_sorted_by_key(10, |&x| x));
-		assert_eq!(&b[..], &[10, 20, 30, 40][..]);
-
-		assert!(b.insert_sorted_by_key(60, |&x| x));
-		assert_eq!(&b[..], &[10, 20, 30, 40, 60][..]);
-
-		assert!(b.insert_sorted_by_key(50, |&x| x));
-		assert_eq!(&b[..], &[10, 20, 30, 40, 50, 60][..]);
-
-		assert!(!b.insert_sorted_by_key(9, |&x| x));
-		assert_eq!(&b[..], &[10, 20, 30, 40, 50, 60][..]);
-
-		assert!(b.insert_sorted_by_key(11, |&x| x));
-		assert_eq!(&b[..], &[11, 20, 30, 40, 50, 60][..]);
-
-		assert!(b.insert_sorted_by_key(21, |&x| x));
-		assert_eq!(&b[..], &[20, 21, 30, 40, 50, 60][..]);
-
-		assert!(b.insert_sorted_by_key(61, |&x| x));
-		assert_eq!(&b[..], &[21, 30, 40, 50, 60, 61][..]);
-
-		assert!(b.insert_sorted_by_key(51, |&x| x));
-		assert_eq!(&b[..], &[30, 40, 50, 51, 60, 61][..]);
 	}
 }
 
@@ -284,6 +250,11 @@ impl<
 pub enum Curve {
 	/// Linear curve starting at `(0, begin)`, ending at `(period, begin - delta)`.
 	LinearDecreasing { begin: Perbill, delta: Perbill },
+	/// Stepped curve, beginning at `(0, begin)`, then remaining constant for `period`, at which
+	/// point it steps down to `(period, begin - step)`. It then remains constant for another
+	/// `period` before stepping down to `(period * 2, begin - step * 2)`. This pattern continues
+	/// but the `y` component has a lower limit of `end`.
+	SteppedDecreasing { begin: Perbill, end: Perbill, step: Perbill, period: Perbill },
 }
 
 impl Curve {
@@ -291,11 +262,16 @@ impl Curve {
 	pub(crate) fn threshold(&self, x: Perbill) -> Perbill {
 		match self {
 			Self::LinearDecreasing { begin, delta } => *begin - (*delta * x).min(*begin),
+			Self::SteppedDecreasing { begin, end, step, period } =>
+				(*begin - (step.int_mul(x.int_div(*period))).min(*begin)).max(*end),
 		}
 	}
 
 	/// Determine the smallest `x` value such that `passing` returns `true` when passed along with
 	/// the given `y` value.
+	///
+	/// If `passing` never returns `true` for any value of `x` when paired with `y`, then
+	/// `Perbill::one` may be returned.
 	///
 	/// ```nocompile
 	/// let c = Curve::LinearDecreasing { begin: Perbill::one(), delta: Perbill::one() };
@@ -309,9 +285,15 @@ impl Curve {
 		match self {
 			Self::LinearDecreasing { begin, delta } =>
 				if delta.is_zero() {
-					return *delta
+					*delta
 				} else {
-					return (*begin - y.min(*begin)).min(*delta) / *delta
+					(*begin - y.min(*begin)).min(*delta) / *delta
+				},
+			Self::SteppedDecreasing { begin, end, step, period } =>
+				if y < *end {
+					Perbill::one()
+				} else {
+					period.int_mul((*begin - y.min(*begin) + step.less_epsilon().unwrap_or(Zero::zero())).int_div(*step))
 				},
 		}
 	}
@@ -334,6 +316,89 @@ impl Debug for Curve {
 					(*begin - *delta) * 100u32,
 				)
 			},
+			Self::SteppedDecreasing { begin, end, step, period } => {
+				write!(
+					f,
+					"Stepped[(0, {}%) -> (1, {}%) by ({}%, {}%)]",
+					*begin * 100u32,
+					*end * 100u32,
+					*period * 100u32,
+					*step * 100u32,
+				)
+			},
 		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use sp_runtime::PerThing;
+	use frame_support::traits::ConstU32;
+
+	#[test]
+	fn insert_sorted_works() {
+		let mut b: BoundedVec<u32, ConstU32<6>> = vec![20, 30, 40].try_into().unwrap();
+		assert!(b.insert_sorted_by_key(10, |&x| x));
+		assert_eq!(&b[..], &[10, 20, 30, 40][..]);
+
+		assert!(b.insert_sorted_by_key(60, |&x| x));
+		assert_eq!(&b[..], &[10, 20, 30, 40, 60][..]);
+
+		assert!(b.insert_sorted_by_key(50, |&x| x));
+		assert_eq!(&b[..], &[10, 20, 30, 40, 50, 60][..]);
+
+		assert!(!b.insert_sorted_by_key(9, |&x| x));
+		assert_eq!(&b[..], &[10, 20, 30, 40, 50, 60][..]);
+
+		assert!(b.insert_sorted_by_key(11, |&x| x));
+		assert_eq!(&b[..], &[11, 20, 30, 40, 50, 60][..]);
+
+		assert!(b.insert_sorted_by_key(21, |&x| x));
+		assert_eq!(&b[..], &[20, 21, 30, 40, 50, 60][..]);
+
+		assert!(b.insert_sorted_by_key(61, |&x| x));
+		assert_eq!(&b[..], &[21, 30, 40, 50, 60, 61][..]);
+
+		assert!(b.insert_sorted_by_key(51, |&x| x));
+		assert_eq!(&b[..], &[30, 40, 50, 51, 60, 61][..]);
+	}
+
+	#[test]
+	fn stepped_decreasing_works() {
+		let percent = |x| Perbill::from_percent(x);
+		let c = Curve::SteppedDecreasing {
+			begin: percent(80),
+			end: percent(30),
+			step: percent(10),
+			period: percent(15),
+		};
+		assert_eq!(c.threshold(percent(0)), percent(80));
+		assert_eq!(c.threshold(percent(15).less_epsilon().unwrap()), percent(80));
+		assert_eq!(c.threshold(percent(15)), percent(70));
+		assert_eq!(c.threshold(percent(30).less_epsilon().unwrap()), percent(70));
+		assert_eq!(c.threshold(percent(30)), percent(60));
+		assert_eq!(c.threshold(percent(45).less_epsilon().unwrap()), percent(60));
+		assert_eq!(c.threshold(percent(45)), percent(50));
+		assert_eq!(c.threshold(percent(60).less_epsilon().unwrap()), percent(50));
+		assert_eq!(c.threshold(percent(60)), percent(40));
+		assert_eq!(c.threshold(percent(75).less_epsilon().unwrap()), percent(40));
+		assert_eq!(c.threshold(percent(75)), percent(30));
+		assert_eq!(c.threshold(percent(100)), percent(30));
+
+		assert_eq!(c.delay(percent(100)), percent(0));
+		assert_eq!(c.delay(percent(80)), percent(0));
+		assert_eq!(c.delay(percent(80).less_epsilon().unwrap()), percent(15));
+		assert_eq!(c.delay(percent(70)), percent(15));
+		assert_eq!(c.delay(percent(70).less_epsilon().unwrap()), percent(30));
+		assert_eq!(c.delay(percent(60)), percent(30));
+		assert_eq!(c.delay(percent(60).less_epsilon().unwrap()), percent(45));
+		assert_eq!(c.delay(percent(50)), percent(45));
+		assert_eq!(c.delay(percent(50).less_epsilon().unwrap()), percent(60));
+		assert_eq!(c.delay(percent(40)), percent(60));
+		assert_eq!(c.delay(percent(40).less_epsilon().unwrap()), percent(75));
+		assert_eq!(c.delay(percent(30)), percent(75));
+		assert_eq!(c.delay(percent(30).less_epsilon().unwrap()), percent(100));
+		assert_eq!(c.delay(percent(0)), percent(100));
 	}
 }
