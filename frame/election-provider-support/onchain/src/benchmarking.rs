@@ -26,14 +26,20 @@ use frame_support::log;
 
 use crate::Pallet as ElectionProviderSupportOnchain;
 
-// TODO: copied from multi phase
-const SEED: u32 = 999;
-fn set_up_data_provider<T: Config>(v: u32, t: u32) {
-	T::DataProvider::clear();
+// This is also used in `pallet_election_provider_multi_phase` benchmarking.
+pub const SEED: u32 = 999;
+pub fn set_up_data_provider<
+	T: frame_system::Config,
+	DataProvider: ElectionDataProvider<AccountId = T::AccountId, BlockNumber = T::BlockNumber>,
+>(
+	v: u32,
+	t: u32,
+) {
+	DataProvider::clear();
 	log::info!(
 		"setting up with voters = {} [degree = {}], targets = {}",
 		v,
-		<T::DataProvider as ElectionDataProvider>::MaxVotesPerVoter::get(),
+		DataProvider::MaxVotesPerVoter::get(),
 		t
 	);
 
@@ -41,29 +47,30 @@ fn set_up_data_provider<T: Config>(v: u32, t: u32) {
 	let mut targets = (0..t)
 		.map(|i| {
 			let target = frame_benchmarking::account::<T::AccountId>("Target", i, SEED);
-			T::DataProvider::add_target(target.clone());
+			DataProvider::add_target(target.clone());
 			target
 		})
 		.collect::<Vec<_>>();
 	// we should always have enough voters to fill.
-	assert!(
-		targets.len() > <T::DataProvider as ElectionDataProvider>::MaxVotesPerVoter::get() as usize
-	);
-	targets.truncate(<T::DataProvider as ElectionDataProvider>::MaxVotesPerVoter::get() as usize);
+	assert!(targets.len() > DataProvider::MaxVotesPerVoter::get() as usize);
+	targets.truncate(DataProvider::MaxVotesPerVoter::get() as usize);
 
 	// fill voters.
 	(0..v).for_each(|i| {
 		let voter = frame_benchmarking::account::<T::AccountId>("Voter", i, SEED);
 		//let weight = T::Currency::minimum_balance().saturated_into::<u64>() * 1000;
 		let weight = 1_000;
-		T::DataProvider::add_voter(voter, weight, targets.clone().try_into().unwrap());
+		DataProvider::add_voter(voter, weight, targets.clone().try_into().unwrap());
 	});
 }
 
 benchmarks! {
 	elect_with {
 		// we don't directly need the data-provider to be populated, but it is just easy to use it.
-		set_up_data_provider::<T>(T::BenchmarkingConfig::MAX_VOTERS, T::BenchmarkingConfig::MAX_TARGETS);
+		set_up_data_provider::<T, T::DataProvider>(
+			T::BenchmarkingConfig::MAX_VOTERS,
+			T::BenchmarkingConfig::MAX_TARGETS
+		);
 	}: {
 		let solution = <ElectionProviderSupportOnchain<T>>::elect_with(None, None);
 		assert!(solution.is_ok());

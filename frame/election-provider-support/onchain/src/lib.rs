@@ -29,6 +29,7 @@ use sp_npos_elections::{
 };
 
 mod benchmarking;
+pub use benchmarking::{set_up_data_provider, SEED};
 
 pub mod weights;
 pub use weights::WeightInfo;

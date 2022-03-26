@@ -38,6 +38,7 @@ rand = { version = "0.7.3", default-features = false, optional = true, features 
 	"small_rng",
 ] }
 strum = { optional = true, default-features = false, version = "0.23.0", features = ["derive"] }
+pallet-election-provider-support-onchain = { version = "4.0.0-dev", optional = true, default-features = false, path = "../election-provider-support/onchain" }
 
 [dev-dependencies]
 parking_lot = "0.12.0"
@@ -48,7 +49,6 @@ sp-npos-elections = { version = "4.0.0-dev", default-features = false, path = ".
 sp-tracing = { version = "5.0.0", path = "../../primitives/tracing" }
 frame-election-provider-support = { version = "4.0.0-dev", path = "../election-provider-support" }
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
-pallet-election-provider-support-onchain = { version = "4.0.0-dev", default-features = false, path = "../election-provider-support/onchain" }
 frame-benchmarking = { version = "4.0.0-dev", path = "../benchmarking" }
 
 [features]
@@ -78,6 +78,7 @@ std = [
 runtime-benchmarks = [
 	"frame-benchmarking/runtime-benchmarks",
 	"frame-election-provider-support/runtime-benchmarks",
+	"pallet-election-provider-support-onchain/runtime-benchmarks",
 	"rand",
 	"strum",
 ]
