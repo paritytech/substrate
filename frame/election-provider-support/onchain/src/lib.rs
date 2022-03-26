@@ -32,6 +32,8 @@ use sp_npos_elections::{
 	assignment_ratio_to_staked_normalized, to_supports, ElectionResult, Supports, VoteWeight,
 };
 
+mod benchmarking;
+
 /// Errors of the on-chain election.
 #[derive(Eq, PartialEq, Debug)]
 pub enum Error {
