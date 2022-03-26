@@ -619,6 +619,13 @@ impl pallet_election_provider_multi_phase::BenchmarkingConfig for ElectionProvid
 	const MAXIMUM_TARGETS: u32 = 300;
 }
 
+impl pallet_election_provider_support_onchain::BenchmarkingConfig
+	for ElectionProviderBenchmarkConfig
+{
+	const MAX_VOTERS: u32 = 1000;
+	const MAX_TARGETS: u32 = 300;
+}
+
 /// Maximum number of iterations for balancing that will be executed in the embedded OCW
 /// miner of election provider multi phase.
 pub const MINER_MAX_ITERATIONS: u32 = 10;
@@ -649,6 +656,7 @@ impl pallet_election_provider_support_onchain::Config for Runtime {
 		pallet_election_provider_multi_phase::SolutionAccuracyOf<Runtime>,
 	>;
 	type DataProvider = <Runtime as pallet_election_provider_multi_phase::Config>::DataProvider;
+	type BenchmarkingConfig = ElectionProviderBenchmarkConfig;
 	type WeightInfo = ();
 }
 

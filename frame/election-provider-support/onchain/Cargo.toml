@@ -15,13 +15,14 @@ targets = ["x86_64-unknown-linux-gnu"]
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive"] }
 scale-info = { version = "2.0.1", default-features = false, features = ["derive"] }
 sp-npos-elections = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/npos-elections" }
+sp-std = { version = "4.0.0", default-features = false, path = "../../../primitives/std" }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../../system" }
 frame-election-provider-support = { version = "4.0.0-dev", default-features = false, path = ".." }
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../../benchmarking", optional = true }
 
 [dev-dependencies]
-sp-runtime = { version = "6.0.0", default-features = false, path = "../../../primitives/runtime" }
+sp-runtime = { version = "6.0.0", path = "../../../primitives/runtime" }
 sp-core = { version = "6.0.0", path = "../../../primitives/core" }
 sp-io = { version = "6.0.0", path = "../../../primitives/io" }
 
@@ -32,6 +33,7 @@ std = [
 	"codec/std",
 	"scale-info/std",
 	"sp-npos-elections/std",
+	"sp-std/std",
 	"frame-benchmarking/std",
 	"frame-support/std",
 	"frame-system/std",
@@ -40,4 +42,5 @@ runtime-benchmarks = [
 	"frame-benchmarking/runtime-benchmarks",
 	"frame-support/runtime-benchmarks",
 	"frame-system/runtime-benchmarks",
+	"frame-election-provider-support/runtime-benchmarks",
 ]

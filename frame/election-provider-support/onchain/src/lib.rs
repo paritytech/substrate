@@ -23,16 +23,15 @@ use codec::alloc::collections::BTreeMap;
 use frame_election_provider_support::{
 	ElectionDataProvider, ElectionProvider, InstantElectionProvider, NposSolver,
 };
-use frame_support::{
-	pallet_prelude::PhantomData,
-	traits::Get,
-	weights::{DispatchClass, Weight},
-};
+use frame_support::{pallet_prelude::PhantomData, traits::Get, weights::DispatchClass};
 use sp_npos_elections::{
 	assignment_ratio_to_staked_normalized, to_supports, ElectionResult, Supports, VoteWeight,
 };
 
 mod benchmarking;
+
+pub mod weights;
+pub use weights::WeightInfo;
 
 /// Errors of the on-chain election.
 #[derive(Eq, PartialEq, Debug)]
@@ -49,19 +48,12 @@ impl From<sp_npos_elections::Error> for Error {
 	}
 }
 
-pub trait WeightInfo {
-	fn phragmen() -> Weight;
-	fn phragmms() -> Weight;
-}
-
-impl WeightInfo for () {
-	fn phragmen() -> Weight {
-		0
-	}
-
-	fn phragmms() -> Weight {
-		0
-	}
+/// Configurations of the benchmarking of the pallet.
+pub trait BenchmarkingConfig {
+	/// The maximum number of targets to use.
+	const MAX_TARGETS: u32;
+	/// The maximum number of voters to use.
+	const MAX_VOTERS: u32;
 }
 
 pub use pallet::*;
@@ -71,15 +63,20 @@ pub mod pallet {
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
-		/// The weight of the pallet.
-		type WeightInfo: WeightInfo;
 		/// `NposSolver` that should be used, an example would be `PhragMMS`.
 		type Solver: NposSolver<AccountId = Self::AccountId, Error = sp_npos_elections::Error>;
+
 		/// Something that provides the data for election.
 		type DataProvider: ElectionDataProvider<
 			AccountId = Self::AccountId,
 			BlockNumber = Self::BlockNumber,
 		>;
+
+		/// Some parameters of the benchmarking.
+		type BenchmarkingConfig: BenchmarkingConfig;
+
+		/// Weight information for extrinsics in this pallet.
+		type WeightInfo: WeightInfo;
 	}
 
 	#[pallet::pallet]
@@ -266,9 +263,16 @@ mod tests {
 		type MaxConsumers = frame_support::traits::ConstU32<16>;
 	}
 
+	pub struct ElectionProviderBenchmarkConfig;
+	impl BenchmarkingConfig for ElectionProviderBenchmarkConfig {
+		const MAX_VOTERS: u32 = 1000;
+		const MAX_TARGETS: u32 = 300;
+	}
+
 	impl Config for Runtime {
 		type Solver = SequentialPhragmen<AccountId, Perbill>;
 		type DataProvider = mock_data_provider::DataProvider;
+		type BenchmarkingConfig = ElectionProviderBenchmarkConfig;
 		type WeightInfo = ();
 	}
 

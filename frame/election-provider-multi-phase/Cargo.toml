@@ -78,7 +78,6 @@ std = [
 runtime-benchmarks = [
 	"frame-benchmarking/runtime-benchmarks",
 	"frame-election-provider-support/runtime-benchmarks",
-	"pallet-election-provider-support-onchain/runtime-benchmarks",
 	"rand",
 	"strum",
 ]

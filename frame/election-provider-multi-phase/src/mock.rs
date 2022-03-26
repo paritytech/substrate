@@ -280,6 +280,7 @@ impl pallet_election_provider_support_onchain::Config for Runtime {
 	type Solver = SequentialPhragmen<AccountId, SolutionAccuracyOf<Runtime>, Balancing>;
 	type DataProvider = StakingMock;
 	type WeightInfo = ();
+	type BenchmarkingConfig = TestBenchmarkingConfig;
 }
 
 pub struct MockFallback;
@@ -402,6 +403,11 @@ impl BenchmarkingConfig for TestBenchmarkingConfig {
 	const MINER_MAXIMUM_VOTERS: u32 = 1000;
 
 	const MAXIMUM_TARGETS: u32 = 200;
+}
+
+impl pallet_election_provider_support_onchain::BenchmarkingConfig for TestBenchmarkingConfig {
+	const MAX_VOTERS: u32 = 1_000;
+	const MAX_TARGETS: u32 = 200;
 }
 
 impl crate::Config for Runtime {
