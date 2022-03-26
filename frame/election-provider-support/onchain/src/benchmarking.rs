@@ -27,10 +27,10 @@ use crate::Pallet as ElectionProviderSupportOnchain;
 
 benchmarks! {
 	elect_with {
+	}: { 
 		let solution = <ElectionProviderSupportOnchain<T>>::elect_with(None, None);
-	}: {
-	} verify {
 		assert!(solution.is_ok());
+	} verify {
 	}
 
 	impl_benchmark_test_suite!(
