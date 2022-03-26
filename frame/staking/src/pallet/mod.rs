@@ -985,7 +985,7 @@ pub mod pallet {
 
 			Self::do_remove_nominator(stash);
 			Self::do_add_validator(stash, prefs.clone());
-			Self::deposit_event(Event::<T>::ValidatorPrefsUpdated(ledger.stash, prefs));
+			Self::deposit_event(Event::<T>::ValidatorPrefsSet(ledger.stash, prefs));
 
 			Ok(())
 		}
