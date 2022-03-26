@@ -21,7 +21,7 @@
 
 use super::*;
 
-use frame_benchmarking::{benchmarks, impl_benchmark_test_suite};
+use frame_benchmarking::benchmarks;
 
 use crate::Pallet as ElectionProviderSupportOnchain;
 
@@ -29,13 +29,13 @@ benchmarks! {
 	elect_with {
 		let solution = <ElectionProviderSupportOnchain<T>>::elect_with(None, None);
 	}: {
-		assert!(solution.is_ok())
+	} verify {
+		assert!(solution.is_ok());
 	}
-}
 
-impl_benchmark_test_suite!(
-	OnchainElection,
-	crate::tests::ExtBuilder::default().desired_members(13).desired_runners_up(7),
-	crate::tests::Test,
-	exec_name = build_and_execute,
-);
+	impl_benchmark_test_suite!(
+		ElectionProviderSupportOnchain,
+		sp_io::TestExternalities::new_empty(),
+		crate::tests::Runtime,
+	);
+}

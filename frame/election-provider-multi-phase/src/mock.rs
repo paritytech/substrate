@@ -18,7 +18,7 @@
 use super::*;
 use crate as multi_phase;
 use frame_election_provider_support::{
-	data_provider, onchain, ElectionDataProvider, NposSolution, SequentialPhragmen,
+	data_provider, ElectionDataProvider, NposSolution, SequentialPhragmen,
 };
 pub use frame_support::{assert_noop, assert_ok};
 use frame_support::{
@@ -28,6 +28,7 @@ use frame_support::{
 	BoundedVec,
 };
 use multi_phase::unsigned::{IndexAssignmentOf, VoterOf};
+use pallet_election_provider_support_onchain::UnboundedExecution;
 use parking_lot::RwLock;
 use sp_core::{
 	offchain::{
@@ -275,11 +276,10 @@ parameter_types! {
 	pub static OnChainFallback: bool = true;
 }
 
-pub struct OnChainSeqPhragmen;
-impl onchain::ExecutionConfig for OnChainSeqPhragmen {
-	type System = Runtime;
+impl pallet_election_provider_support_onchain::Config for Runtime {
 	type Solver = SequentialPhragmen<AccountId, SolutionAccuracyOf<Runtime>, Balancing>;
 	type DataProvider = StakingMock;
+	type WeightInfo = ();
 }
 
 pub struct MockFallback;
@@ -300,11 +300,8 @@ impl InstantElectionProvider for MockFallback {
 		max_targets: usize,
 	) -> Result<Supports<Self::AccountId>, Self::Error> {
 		if OnChainFallback::get() {
-			onchain::UnboundedExecution::<OnChainSeqPhragmen>::elect_with_bounds(
-				max_voters,
-				max_targets,
-			)
-			.map_err(|_| "UnboundedExecution failed")
+			UnboundedExecution::<Runtime>::elect_with_bounds(max_voters, max_targets)
+				.map_err(|_| "UnboundedExecution failed")
 		} else {
 			super::NoFallback::<Runtime>::elect_with_bounds(max_voters, max_targets)
 		}
