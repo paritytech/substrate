@@ -168,6 +168,9 @@ use frame_support::{
 
 pub use pallet::*;
 
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking;
+
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
@@ -743,6 +746,7 @@ pub mod pallet {
 			// Check `who` is allowed to make a call on behalf of `account`
 			ensure!(Self::proxy(&who) == Some(account), Error::<T>::NotAllowed);
 			Proxy::<T>::remove(&who);
+
 			frame_system::Pallet::<T>::dec_consumers(&who);
 			Ok(())
 		}
