@@ -1554,6 +1554,12 @@ impl Printable for &[u8] {
 	}
 }
 
+impl<const N: usize> Printable for [u8; N] {
+	fn print(&self) {
+		sp_io::misc::print_hex(&self[..]);
+	}
+}
+
 impl Printable for &str {
 	fn print(&self) {
 		sp_io::misc::print_utf8(self.as_bytes());
