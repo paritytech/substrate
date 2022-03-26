@@ -609,8 +609,8 @@ pub mod pallet {
 		Chilled(T::AccountId),
 		/// The stakers' rewards are getting paid. \[era_index, validator_stash\]
 		PayoutStarted(EraIndex, T::AccountId),
-		/// A validator has updated their preferences
-		ValidatorPrefsUpdated(T::AccountId, ValidatorPrefs),
+		/// A validator has set their preferences.
+		ValidatorPrefsSet(T::AccountId, ValidatorPrefs),
 	}
 
 	#[pallet::error]
