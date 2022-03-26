@@ -1081,7 +1081,8 @@ pub mod pallet {
 				) {
 					Ok(solution) => {
 						let _ = T::Currency::slash(&who, T::MinimumSlashableAmount::get());
-						CheckedSolutions::<T>::insert(submission, solution);
+						<QueuedSolution<T>>::put(solution);
+						SignedSubmissionsMap::<T>::remove(index);
 						Ok(())
 					},
 					Err(_error) => {
@@ -1286,10 +1287,6 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type SignedSubmissionsMap<T: Config> =
 		StorageMap<_, Twox64Concat, u32, SignedSubmissionOf<T>, OptionQuery>;
-
-	#[pallet::storage]
-	pub type CheckedSolutions<T: Config> =
-		StorageMap<_, Twox64Concat, SignedSubmissionOf<T>, ReadySolution<T::AccountId>>;
 
 	// `SignedSubmissions` items end here.
 
