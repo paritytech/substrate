@@ -274,7 +274,7 @@ parameter_types! {
 
 	pub static EpochLength: u64 = 30;
 
-	pub static OnChianFallback: bool = true;
+	pub static OnChainFallback: bool = true;
 	pub static MinimumSlashableAmount: Balance = 3;
 }
 
