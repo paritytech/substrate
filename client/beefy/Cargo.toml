@@ -10,6 +10,7 @@ description = "BEEFY Client gadget for substrate"
 [dependencies]
 fnv = "1.0.6"
 futures = "0.3"
+futures-timer = "3.0.1"
 hex = "0.4.2"
 log = "0.4"
 parking_lot = "0.12.0"
@@ -23,22 +24,31 @@ sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
 sp-application-crypto = { version = "6.0.0", path = "../../primitives/application-crypto" }
 sp-arithmetic = { version = "5.0.0", path = "../../primitives/arithmetic" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
+sp-consensus = { version = "0.10.0-dev", path = "../../primitives/consensus/common" }
 sp-core = { version = "6.0.0", path = "../../primitives/core" }
 sp-keystore = { version = "0.12.0", path = "../../primitives/keystore" }
 sp-runtime = { version = "6.0.0", path = "../../primitives/runtime" }
 
 sc-chain-spec = { version = "4.0.0-dev", path = "../../client/chain-spec" }
-sc-utils = { version = "4.0.0-dev", path = "../utils" }
 sc-client-api = { version = "4.0.0-dev", path = "../api" }
+sc-finality-grandpa = { version = "0.10.0-dev", path = "../../client/finality-grandpa" }
 sc-keystore = { version = "4.0.0-dev", path = "../keystore" }
 sc-network = { version = "0.10.0-dev", path = "../network" }
 sc-network-gossip = { version = "0.10.0-dev", path = "../network-gossip" }
+sc-utils = { version = "4.0.0-dev", path = "../utils" }
 
 beefy-primitives = { version = "4.0.0-dev", path = "../../primitives/beefy" }
 
 [dev-dependencies]
-sp-tracing = { version = "5.0.0", path = "../../primitives/tracing" }
+sc-consensus = { version = "0.10.0-dev", path = "../consensus/common" }
 sc-network-test = { version = "0.8.0", path = "../network/test" }
+
+sp-finality-grandpa = { version = "4.0.0-dev", path = "../../primitives/finality-grandpa" }
+sp-keyring = { version = "6.0.0", path = "../../primitives/keyring" }
+sp-tracing = { version = "5.0.0", path = "../../primitives/tracing" }
+substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
 
 serde = "1.0.136"
 strum = { version = "0.23", features = ["derive"] }
+tokio = "1.15"
+tempfile = "3.1.0"

@@ -484,12 +484,15 @@ dependencies = [
  "beefy-primitives",
  "fnv",
  "futures 0.3.19",
+ "futures-timer",
  "hex",
  "log 0.4.14",
  "parity-scale-codec",
  "parking_lot 0.12.0",
  "sc-chain-spec",
  "sc-client-api",
+ "sc-consensus",
+ "sc-finality-grandpa",
  "sc-keystore",
  "sc-network",
  "sc-network-gossip",
@@ -500,13 +503,19 @@ dependencies = [
  "sp-application-crypto",
  "sp-arithmetic",
  "sp-blockchain",
+ "sp-consensus",
  "sp-core",
+ "sp-finality-grandpa",
+ "sp-keyring",
  "sp-keystore",
  "sp-runtime",
  "sp-tracing",
  "strum",
  "substrate-prometheus-endpoint",
+ "substrate-test-runtime-client",
+ "tempfile",
  "thiserror",
+ "tokio",
  "wasm-timer",
 ]
 
@@ -2129,6 +2138,7 @@ dependencies = [
  "clap 3.1.6",
  "frame-benchmarking",
  "frame-support",
+ "frame-system",
  "handlebars",
  "hash-db",
  "hex",
@@ -2160,6 +2170,7 @@ dependencies = [
  "sp-std",
  "sp-storage",
  "sp-trie",
+ "thousands",
 ]
 
 [[package]]
@@ -2768,9 +2779,9 @@ checksum = "62aca2aba2d62b4a7f5b33f3712cb1b0692779a56fb510499d5c0aa594daeaf3"
 
 [[package]]
 name = "handlebars"
-version = "4.1.6"
+version = "4.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "167fa173496c9eadd8749cca6f8339ac88e248f3ad2442791d0b743318a94fc0"
+checksum = "99d6a30320f094710245150395bc763ad23128d6a1ebbad7594dc4164b62c56b"
 dependencies = [
  "log 0.4.14",
  "pest",
@@ -10687,6 +10698,7 @@ dependencies = [
 name = "substrate-test-runtime"
 version = "2.0.0"
 dependencies = [
+ "beefy-primitives",
  "cfg-if 1.0.0",
  "frame-support",
  "frame-system",
