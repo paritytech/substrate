@@ -60,7 +60,7 @@ pub mod pallet {
 	pub trait Config: frame_system::Config {
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
-		/// The Currency handler for the kitties pallet.
+		/// The Currency handler for this pallet.
 		type Currency: ReservableCurrency<Self::AccountId>;
 
 		/// Convert the block number into a balance.
@@ -125,11 +125,11 @@ pub mod pallet {
 	}
 
 	#[derive(Encode, Decode, Default, MaxEncodedLen, TypeInfo)]
-	pub struct Registration<RegistrantAccountId, OwnerAccountId, Balance, BlockNumber> {
-		pub registrant: RegistrantAccountId,
-		pub owner: OwnerAccountId,
-		pub expiry: BlockNumber,
-		pub deposit: Balance,
+	pub struct Registration<AccountId, Balance, BlockNumber> {
+		pub registrant: Option<AccountId>,
+		pub owner: AccountId,
+		pub expiry: Option<BlockNumber>,
+		pub deposit: Option<Balance>,
 	}
 
 	/* Placeholder for defining custom storage items. */
@@ -152,10 +152,9 @@ pub mod pallet {
 		Blake2_128Concat,
 		NameHash,
 		Registration<
-			Option<T::AccountId>,
 			T::AccountId,
-			Option<BalanceOf<T>>,
-			Option<T::BlockNumber>,
+			BalanceOf<T>,
+			T::BlockNumber,
 		>,
 	>;
 
