@@ -126,8 +126,8 @@ pub mod pallet {
 
 	#[derive(Encode, Decode, Default, MaxEncodedLen, TypeInfo)]
 	pub struct Registration<AccountId, Balance, BlockNumber> {
-		pub registrant: Option<AccountId>,
 		pub owner: AccountId,
+		pub registrant: Option<AccountId>,
 		pub expiry: Option<BlockNumber>,
 		pub deposit: Option<Balance>,
 	}
@@ -287,7 +287,7 @@ pub mod pallet {
 					commitment.who,
 					Some(periods),
 					None,
-				)?;
+				);
 			}
 
 			T::Currency::unreserve(&sender, commitment.deposit);
@@ -332,8 +332,8 @@ pub mod pallet {
 				let r = maybe_registration.as_mut().ok_or(Error::<T>::RegistrationNotFound)?;
 				// fails for subnodes. subnodes cannot be transferred.
 				let registrant =
-					r.registrant.clone().ok_or(Error::<T>::RegistrationRegistrantNotFound)?;
-				ensure!(registrant == sender, Error::<T>::NotRegistrationRegistrant);
+					r.registrant.as_ref().ok_or(Error::<T>::RegistrationRegistrantNotFound)?;
+				ensure!(registrant == &sender, Error::<T>::NotRegistrationRegistrant);
 
 				if let Some(e) = r.expiry {
 					ensure!(
@@ -440,7 +440,7 @@ pub mod pallet {
 			let deposit = T::SubNodeDeposit::get();
 			T::Currency::reserve(&sender, deposit)?;
 
-			Self::do_register(name_hash, None, sender, None, Some(deposit))?;
+			Self::do_register(name_hash, None, sender, None, Some(deposit));
 			Ok(())
 		}
 
@@ -493,16 +493,10 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			name_hash: NameHash,
 			who: T::AccountId,
-			periods: u32,
+			periods: Option<u32>,
 		) -> DispatchResult {
 			T::RegistrationManager::ensure_origin(origin)?;
-			if periods.is_zero() {
-				// permanent register: no expiry
-				Self::do_register(name_hash, Some(who.clone()), who, None, None)?;
-			} else {
-				// register with some periods
-				Self::do_register(name_hash, Some(who.clone()), who, Some(periods), None)?;
-			}
+			Self::do_register(name_hash, Some(who.clone()), who, periods, None);
 			Ok(())
 		}
 
@@ -562,12 +556,19 @@ pub mod pallet {
 			owner: T::AccountId,
 			maybe_periods: Option<u32>,
 			maybe_deposit: Option<BalanceOf<T>>,
-		) -> DispatchResult {
+		) {
 			let expiry = if let Some(p) = maybe_periods {
 				Some(frame_system::Pallet::<T>::block_number().saturating_add(Self::length(p)))
 			} else {
 				None
 			};
+
+			if let Some(old_registration) = Registrations::<T>::take(name_hash) {
+				if let Some(deposit) = old_registration.deposit {
+					let res = T::Currency::unreserve(&old_registration.owner, deposit);
+					debug_assert!(res.is_zero());
+				}
+			}
 
 			let registration = Registration {
 				registrant: maybe_registrant,
@@ -578,7 +579,6 @@ pub mod pallet {
 
 			Registrations::<T>::insert(name_hash, registration);
 			Self::deposit_event(Event::<T>::NameRegistered { name_hash, owner });
-			Ok(())
 		}
 
 		pub fn do_set_address(

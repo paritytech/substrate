@@ -568,8 +568,7 @@ fn force_register_no_expiry_works() {
 	new_test_ext().execute_with(|| {
 		let (name_hash, _) = alice_register_bob_scenario_name_and_hash();
 		let who = 1;
-		// 0 periods - permanent register
-		let periods = 0;
+		let periods = None;
 
 		// make permanent registry
 		assert_ok!(NameService::force_register(Origin::root(), name_hash, who, periods));
