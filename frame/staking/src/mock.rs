@@ -18,9 +18,7 @@
 //! Test utilities
 
 use crate::{self as pallet_staking, *};
-use frame_election_provider_support::{
-	onchain, SequentialPhragmen, SortedListProvider, VoteWeight,
-};
+use frame_election_provider_support::{SortedListProvider, VoteWeight};
 use frame_support::{
 	assert_ok, parameter_types,
 	traits::{
@@ -29,6 +27,7 @@ use frame_support::{
 	},
 	weights::constants::RocksDbWeight,
 };
+use pallet_election_provider_support_onchain::OnChainPhragmen;
 use sp_core::H256;
 use sp_io;
 use sp_runtime::{
@@ -247,11 +246,21 @@ impl pallet_bags_list::Config for Test {
 	type Score = VoteWeight;
 }
 
-pub struct OnChainSeqPhragmen;
-impl onchain::ExecutionConfig for OnChainSeqPhragmen {
-	type System = Test;
-	type Solver = SequentialPhragmen<AccountId, Perbill>;
+pub struct ElectionProviderBenchmarkConfig;
+impl pallet_election_provider_support_onchain::BenchmarkingConfig
+	for ElectionProviderBenchmarkConfig
+{
+	const VOTERS: [u32; 2] = [400, 600];
+	const TARGETS: [u32; 2] = [200, 400];
+	const VOTES_PER_VOTER: [u32; 2] = [1, 2];
+}
+
+impl pallet_election_provider_support_onchain::Config for Test {
 	type DataProvider = Staking;
+	type MaxVoters = ConstU32<600>;
+	type MaxTargets = ConstU32<400>;
+	type BenchmarkingConfig = ElectionProviderBenchmarkConfig;
+	type WeightInfo = ();
 }
 
 impl crate::pallet::pallet::Config for Test {
@@ -272,7 +281,7 @@ impl crate::pallet::pallet::Config for Test {
 	type NextNewSession = Session;
 	type MaxNominatorRewardedPerValidator = ConstU32<64>;
 	type OffendingValidatorsThreshold = OffendingValidatorsThreshold;
-	type ElectionProvider = onchain::UnboundedExecution<OnChainSeqPhragmen>;
+	type ElectionProvider = OnChainPhragmen<Self, Perbill>;
 	type GenesisElectionProvider = Self::ElectionProvider;
 	// NOTE: consider a macro and use `UseNominatorsAndValidatorsMap<Self>` as well.
 	type VoterList = BagsList;

@@ -63,12 +63,12 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Staking ValidatorCount (r:1 w:0)
 	fn phragmen(v: u32, t: u32, d: u32, ) -> Weight {
 		(0 as Weight)
-			// Standard Error: 4_551_000
-			.saturating_add((28_316_000 as Weight).saturating_mul(v as Weight))
-			// Standard Error: 9_102_000
-			.saturating_add((33_176_000 as Weight).saturating_mul(t as Weight))
-			// Standard Error: 413_754_000
-			.saturating_add((241_364_000 as Weight).saturating_mul(d as Weight))
+			// Standard Error: 2_448_000
+			.saturating_add((27_728_000 as Weight).saturating_mul(v as Weight))
+			// Standard Error: 4_896_000
+			.saturating_add((31_153_000 as Weight).saturating_mul(t as Weight))
+			// Standard Error: 222_545_000
+			.saturating_add((405_848_000 as Weight).saturating_mul(d as Weight))
 			.saturating_add(T::DbWeight::get().reads(205 as Weight))
 			.saturating_add(T::DbWeight::get().reads((4 as Weight).saturating_mul(v as Weight)))
 			.saturating_add(T::DbWeight::get().reads((5 as Weight).saturating_mul(t as Weight)))
@@ -84,13 +84,13 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Staking CounterForValidators (r:1 w:0)
 	// Storage: Staking ValidatorCount (r:1 w:0)
 	fn phragmms(v: u32, t: u32, d: u32, ) -> Weight {
-		(0 as Weight)
-			// Standard Error: 1_717_000
-			.saturating_add((31_202_000 as Weight).saturating_mul(v as Weight))
-			// Standard Error: 3_434_000
-			.saturating_add((43_895_000 as Weight).saturating_mul(t as Weight))
-			// Standard Error: 156_131_000
-			.saturating_add((781_424_000 as Weight).saturating_mul(d as Weight))
+		(2_275_152_000 as Weight)
+			// Standard Error: 1_211_000
+			.saturating_add((23_576_000 as Weight).saturating_mul(v as Weight))
+			// Standard Error: 2_423_000
+			.saturating_add((26_701_000 as Weight).saturating_mul(t as Weight))
+			// Standard Error: 110_171_000
+			.saturating_add((43_303_000 as Weight).saturating_mul(d as Weight))
 			.saturating_add(T::DbWeight::get().reads(205 as Weight))
 			.saturating_add(T::DbWeight::get().reads((4 as Weight).saturating_mul(v as Weight)))
 			.saturating_add(T::DbWeight::get().reads((5 as Weight).saturating_mul(t as Weight)))
@@ -111,12 +111,12 @@ impl WeightInfo for () {
 	// Storage: Staking ValidatorCount (r:1 w:0)
 	fn phragmen(v: u32, t: u32, d: u32, ) -> Weight {
 		(0 as Weight)
-			// Standard Error: 4_551_000
-			.saturating_add((28_316_000 as Weight).saturating_mul(v as Weight))
-			// Standard Error: 9_102_000
-			.saturating_add((33_176_000 as Weight).saturating_mul(t as Weight))
-			// Standard Error: 413_754_000
-			.saturating_add((241_364_000 as Weight).saturating_mul(d as Weight))
+			// Standard Error: 2_448_000
+			.saturating_add((27_728_000 as Weight).saturating_mul(v as Weight))
+			// Standard Error: 4_896_000
+			.saturating_add((31_153_000 as Weight).saturating_mul(t as Weight))
+			// Standard Error: 222_545_000
+			.saturating_add((405_848_000 as Weight).saturating_mul(d as Weight))
 			.saturating_add(RocksDbWeight::get().reads(205 as Weight))
 			.saturating_add(RocksDbWeight::get().reads((4 as Weight).saturating_mul(v as Weight)))
 			.saturating_add(RocksDbWeight::get().reads((5 as Weight).saturating_mul(t as Weight)))
@@ -132,13 +132,13 @@ impl WeightInfo for () {
 	// Storage: Staking CounterForValidators (r:1 w:0)
 	// Storage: Staking ValidatorCount (r:1 w:0)
 	fn phragmms(v: u32, t: u32, d: u32, ) -> Weight {
-		(0 as Weight)
-			// Standard Error: 1_717_000
-			.saturating_add((31_202_000 as Weight).saturating_mul(v as Weight))
-			// Standard Error: 3_434_000
-			.saturating_add((43_895_000 as Weight).saturating_mul(t as Weight))
-			// Standard Error: 156_131_000
-			.saturating_add((781_424_000 as Weight).saturating_mul(d as Weight))
+		(2_275_152_000 as Weight)
+			// Standard Error: 1_211_000
+			.saturating_add((23_576_000 as Weight).saturating_mul(v as Weight))
+			// Standard Error: 2_423_000
+			.saturating_add((26_701_000 as Weight).saturating_mul(t as Weight))
+			// Standard Error: 110_171_000
+			.saturating_add((43_303_000 as Weight).saturating_mul(d as Weight))
 			.saturating_add(RocksDbWeight::get().reads(205 as Weight))
 			.saturating_add(RocksDbWeight::get().reads((4 as Weight).saturating_mul(v as Weight)))
 			.saturating_add(RocksDbWeight::get().reads((5 as Weight).saturating_mul(t as Weight)))

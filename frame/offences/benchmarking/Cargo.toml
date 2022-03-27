@@ -32,11 +32,11 @@ pallet-staking = { version = "4.0.0-dev", default-features = false, features = [
 sp-runtime = { version = "6.0.0", default-features = false, path = "../../../primitives/runtime" }
 sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/staking" }
 sp-std = { version = "4.0.0", default-features = false, path = "../../../primitives/std" }
-frame-election-provider-support = { version = "4.0.0-dev", default-features = false, path = "../../election-provider-support" }
 
 [dev-dependencies]
 pallet-staking-reward-curve = { version = "4.0.0-dev", path = "../../staking/reward-curve" }
 pallet-timestamp = { version = "4.0.0-dev", path = "../../timestamp" }
+pallet-election-provider-support-onchain = { version = "4.0.0-dev", path = "../../election-provider-support/onchain" }
 sp-core = { version = "6.0.0", path = "../../../primitives/core" }
 sp-io = { version = "6.0.0", path = "../../../primitives/io" }
 
@@ -55,7 +55,6 @@ std = [
 	"pallet-staking/std",
 	"sp-runtime/std",
 	"sp-staking/std",
-	"frame-election-provider-support/std",
 	"sp-std/std",
 	"codec/std",
 	"scale-info/std",

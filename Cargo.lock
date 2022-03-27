@@ -5560,12 +5560,12 @@ name = "pallet-babe"
 version = "4.0.0-dev"
 dependencies = [
  "frame-benchmarking",
- "frame-election-provider-support",
  "frame-support",
  "frame-system",
  "log 0.4.14",
  "pallet-authorship",
  "pallet-balances",
+ "pallet-election-provider-support-onchain",
  "pallet-offences",
  "pallet-session",
  "pallet-staking",
@@ -6007,12 +6007,12 @@ version = "4.0.0-dev"
 dependencies = [
  "finality-grandpa",
  "frame-benchmarking",
- "frame-election-provider-support",
  "frame-support",
  "frame-system",
  "log 0.4.14",
  "pallet-authorship",
  "pallet-balances",
+ "pallet-election-provider-support-onchain",
  "pallet-offences",
  "pallet-session",
  "pallet-staking",
@@ -6239,11 +6239,11 @@ name = "pallet-offences-benchmarking"
 version = "4.0.0-dev"
 dependencies = [
  "frame-benchmarking",
- "frame-election-provider-support",
  "frame-support",
  "frame-system",
  "pallet-babe",
  "pallet-balances",
+ "pallet-election-provider-support-onchain",
  "pallet-grandpa",
  "pallet-im-online",
  "pallet-offences",
@@ -6401,10 +6401,10 @@ name = "pallet-session-benchmarking"
 version = "4.0.0-dev"
 dependencies = [
  "frame-benchmarking",
- "frame-election-provider-support",
  "frame-support",
  "frame-system",
  "pallet-balances",
+ "pallet-election-provider-support-onchain",
  "pallet-session",
  "pallet-staking",
  "pallet-staking-reward-curve",
@@ -6448,6 +6448,7 @@ dependencies = [
  "pallet-authorship",
  "pallet-bags-list",
  "pallet-balances",
+ "pallet-election-provider-support-onchain",
  "pallet-session",
  "pallet-staking-reward-curve",
  "pallet-timestamp",

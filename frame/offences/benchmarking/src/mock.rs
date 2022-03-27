@@ -20,13 +20,13 @@
 #![cfg(test)]
 
 use super::*;
-use frame_election_provider_support::{onchain, SequentialPhragmen};
 use frame_support::{
 	parameter_types,
 	traits::{ConstU32, ConstU64},
 	weights::constants::WEIGHT_PER_SECOND,
 };
 use frame_system as system;
+use pallet_election_provider_support_onchain::OnChainPhragmen;
 use pallet_session::historical as pallet_session_historical;
 use sp_runtime::{
 	testing::{Header, UintAuthorityId},
@@ -150,11 +150,21 @@ parameter_types! {
 
 pub type Extrinsic = sp_runtime::testing::TestXt<Call, ()>;
 
-pub struct OnChainSeqPhragmen;
-impl onchain::ExecutionConfig for OnChainSeqPhragmen {
-	type System = Test;
-	type Solver = SequentialPhragmen<AccountId, Perbill>;
+pub struct ElectionProviderBenchmarkConfig;
+impl pallet_election_provider_support_onchain::BenchmarkingConfig
+	for ElectionProviderBenchmarkConfig
+{
+	const VOTERS: [u32; 2] = [400, 600];
+	const TARGETS: [u32; 2] = [200, 400];
+	const VOTES_PER_VOTER: [u32; 2] = [1, 2];
+}
+
+impl pallet_election_provider_support_onchain::Config for Test {
 	type DataProvider = Staking;
+	type MaxVoters = ConstU32<600>;
+	type MaxTargets = ConstU32<400>;
+	type BenchmarkingConfig = ElectionProviderBenchmarkConfig;
+	type WeightInfo = ();
 }
 
 impl pallet_staking::Config for Test {
@@ -175,7 +185,7 @@ impl pallet_staking::Config for Test {
 	type NextNewSession = Session;
 	type MaxNominatorRewardedPerValidator = ConstU32<64>;
 	type OffendingValidatorsThreshold = ();
-	type ElectionProvider = onchain::UnboundedExecution<OnChainSeqPhragmen>;
+	type ElectionProvider = OnChainPhragmen<Self, Perbill>;
 	type GenesisElectionProvider = Self::ElectionProvider;
 	type VoterList = pallet_staking::UseNominatorsAndValidatorsMap<Self>;
 	type MaxUnlockingChunks = ConstU32<32>;

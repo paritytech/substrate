@@ -19,11 +19,11 @@
 
 use crate::{self as pallet_babe, Config, CurrentSlot};
 use codec::Encode;
-use frame_election_provider_support::{onchain, SequentialPhragmen};
 use frame_support::{
 	parameter_types,
 	traits::{ConstU128, ConstU32, ConstU64, GenesisBuild, KeyOwnerProofSystem, OnInitialize},
 };
+use pallet_election_provider_support_onchain::OnChainPhragmen;
 use pallet_session::historical as pallet_session_historical;
 use sp_consensus_babe::{AuthorityId, AuthorityPair, Slot};
 use sp_consensus_vrf::schnorrkel::{VRFOutput, VRFProof};
@@ -172,11 +172,21 @@ parameter_types! {
 	pub const OffendingValidatorsThreshold: Perbill = Perbill::from_percent(16);
 }
 
-pub struct OnChainSeqPhragmen;
-impl onchain::ExecutionConfig for OnChainSeqPhragmen {
-	type System = Test;
-	type Solver = SequentialPhragmen<DummyValidatorId, Perbill>;
+pub struct ElectionProviderBenchmarkConfig;
+impl pallet_election_provider_support_onchain::BenchmarkingConfig
+	for ElectionProviderBenchmarkConfig
+{
+	const VOTERS: [u32; 2] = [400, 600];
+	const TARGETS: [u32; 2] = [200, 400];
+	const VOTES_PER_VOTER: [u32; 2] = [1, 2];
+}
+
+impl pallet_election_provider_support_onchain::Config for Test {
 	type DataProvider = Staking;
+	type MaxVoters = ConstU32<600>;
+	type MaxTargets = ConstU32<400>;
+	type BenchmarkingConfig = ElectionProviderBenchmarkConfig;
+	type WeightInfo = ();
 }
 
 impl pallet_staking::Config for Test {
@@ -197,7 +207,7 @@ impl pallet_staking::Config for Test {
 	type MaxNominatorRewardedPerValidator = ConstU32<64>;
 	type OffendingValidatorsThreshold = OffendingValidatorsThreshold;
 	type NextNewSession = Session;
-	type ElectionProvider = onchain::UnboundedExecution<OnChainSeqPhragmen>;
+	type ElectionProvider = OnChainPhragmen<Self, sp_runtime::Perbill>;
 	type GenesisElectionProvider = Self::ElectionProvider;
 	type VoterList = pallet_staking::UseNominatorsAndValidatorsMap<Self>;
 	type MaxUnlockingChunks = ConstU32<32>;
