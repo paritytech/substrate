@@ -32,6 +32,10 @@
 //! It is advisable to use the former ([`ElectionProvider::elect`]) only at genesis, or for testing,
 //! the latter [`InstantElectionProvider::elect_with_bounds`] for onchain operations, with
 //! thoughtful bounds.
+//! 
+//! ### Warning
+///
+/// This can be very expensive to run frequently on-chain. Use with care.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
