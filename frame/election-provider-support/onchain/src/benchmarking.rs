@@ -75,10 +75,24 @@ benchmarks! {
 		let d in (T::BenchmarkingConfig::VOTES_PER_VOTER[0]) .. T::BenchmarkingConfig::VOTES_PER_VOTER[1];
 
 		// we don't directly need the data-provider to be populated, but it is just easy to use it.
-		// TODO: create a mock one and then we can remove `DataProvider` from the `Config`
 		set_up_data_provider::<T, T::DataProvider>(v, t, d, 1_000u64);
 	}: {
-		assert!(OnChainPhragmen::<T>::elect().is_ok());
+		assert!(OnChainPhragmen::<T, sp_runtime::Perbill>::elect().is_ok());
+	} verify {
+	}
+
+	phragmms {
+		// number of votes in snapshot.
+		let v in (T::BenchmarkingConfig::VOTERS[0]) .. T::BenchmarkingConfig::VOTERS[1];
+		// number of targets in snapshot.
+		let t in (T::BenchmarkingConfig::TARGETS[0]) .. T::BenchmarkingConfig::TARGETS[1];
+		// number of votes per voter (ie the degree).
+		let d in (T::BenchmarkingConfig::VOTES_PER_VOTER[0]) .. T::BenchmarkingConfig::VOTES_PER_VOTER[1];
+
+		// we don't directly need the data-provider to be populated, but it is just easy to use it.
+		set_up_data_provider::<T, T::DataProvider>(v, t, d, 1_000u64);
+	}: {
+		assert!(OnChainPhragMMS::<T, sp_runtime::Perbill>::elect().is_ok());
 	} verify {
 	}
 

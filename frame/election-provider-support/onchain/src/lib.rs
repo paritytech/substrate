@@ -37,9 +37,14 @@
 
 use codec::alloc::collections::BTreeMap;
 use frame_election_provider_support::{
-	ElectionDataProvider, ElectionProvider, InstantElectionProvider, NposSolver, SequentialPhragmen,
+	ElectionDataProvider, ElectionProvider, InstantElectionProvider, NposSolver, PhragMMS,
+	SequentialPhragmen,
 };
-use frame_support::{pallet_prelude::PhantomData, traits::Get, weights::DispatchClass};
+use frame_support::{
+	pallet_prelude::PhantomData,
+	traits::Get,
+	weights::{DispatchClass, Weight},
+};
 use sp_npos_elections::{
 	assignment_ratio_to_staked_normalized, to_supports, ElectionResult, Supports, VoteWeight,
 };
@@ -50,6 +55,18 @@ pub use benchmarking::{set_up_data_provider, SEED};
 
 pub mod weights;
 pub use weights::WeightInfo;
+
+/// `OnChainPhragmen` is a simple implementation of the `ElectionProvider` and
+/// `InstantElectionProvider` traits, that uses the `SequentialPhragmen` algorithm to solve for the
+/// solution.
+pub type OnChainPhragmen<T, Accuracy, Balancing = ()> = BoundedExecution<
+	T,
+	SequentialPhragmen<<T as frame_system::Config>::AccountId, Accuracy, Balancing>,
+>;
+
+/// Similar to `OnChainPhragmen`, but uses the `PhragMMS` algorithm to solve for the solution.
+pub type OnChainPhragMMS<T, Accuracy, Balancing = ()> =
+	BoundedExecution<T, PhragMMS<<T as frame_system::Config>::AccountId, Accuracy, Balancing>>;
 
 /// Errors of the on-chain election.
 #[derive(Eq, PartialEq, Debug)]
@@ -74,6 +91,25 @@ pub trait BenchmarkingConfig {
 	const TARGETS: [u32; 2];
 	/// Range of number of votes per voter.
 	const VOTES_PER_VOTER: [u32; 2];
+}
+
+/// Configuration for the weight measuring function of the `NposSolver`.
+pub trait WeightConfig {
+	fn weight<T: Config>(v: u32, t: u32, d: u32) -> Weight;
+}
+
+impl<AccountId, Accuracy, Balancing> WeightConfig
+	for SequentialPhragmen<AccountId, Accuracy, Balancing>
+{
+	fn weight<T: Config>(v: u32, t: u32, d: u32) -> Weight {
+		T::WeightInfo::phragmen(v, t, d)
+	}
+}
+
+impl<AccountId, Accuracy, Balancing> WeightConfig for PhragMMS<AccountId, Accuracy, Balancing> {
+	fn weight<T: Config>(v: u32, t: u32, d: u32) -> Weight {
+		T::WeightInfo::phragmms(v, t, d)
+	}
 }
 
 pub use pallet::*;
@@ -106,20 +142,18 @@ pub mod pallet {
 	pub struct Pallet<T>(PhantomData<T>);
 }
 
-pub type OnChainPhragmen<T, Balancing = ()> = BoundedExecution<
-	T,
-	SequentialPhragmen<<T as frame_system::Config>::AccountId, sp_runtime::Perbill, Balancing>,
->;
-
-// TODO: add rustdoc
 /// `NposSolver` that should be used, an example would be `PhragMMS`.
+/// It's advised to use the `OnChainPhragmen` or `OnChainPhragMMS` instead, as they implement the
+/// `WeightConfig` trait.
 pub struct BoundedExecution<
 	T: Config,
 	Solver: NposSolver<AccountId = T::AccountId, Error = sp_npos_elections::Error>,
 >(PhantomData<(T, Solver)>);
 
-impl<T: Config, Solver: NposSolver<AccountId = T::AccountId, Error = sp_npos_elections::Error>>
-	BoundedExecution<T, Solver>
+impl<
+		T: Config,
+		Solver: NposSolver<AccountId = T::AccountId, Error = sp_npos_elections::Error> + WeightConfig,
+	> BoundedExecution<T, Solver>
 {
 	fn elect_with(max_voters: usize, max_targets: usize) -> Result<Supports<T::AccountId>, Error> {
 		let voters =
@@ -144,7 +178,7 @@ impl<T: Config, Solver: NposSolver<AccountId = T::AccountId, Error = sp_npos_ele
 
 		let staked = assignment_ratio_to_staked_normalized(assignments, &stake_of)?;
 
-		let weight = T::WeightInfo::phragmen(
+		let weight = Solver::weight::<T>(
 			voters_len,
 			targets_len,
 			<T::DataProvider as ElectionDataProvider>::MaxVotesPerVoter::get(),
@@ -158,8 +192,10 @@ impl<T: Config, Solver: NposSolver<AccountId = T::AccountId, Error = sp_npos_ele
 	}
 }
 
-impl<T: Config, Solver: NposSolver<AccountId = T::AccountId, Error = sp_npos_elections::Error>>
-	ElectionProvider for BoundedExecution<T, Solver>
+impl<
+		T: Config,
+		Solver: NposSolver<AccountId = T::AccountId, Error = sp_npos_elections::Error> + WeightConfig,
+	> ElectionProvider for BoundedExecution<T, Solver>
 {
 	type AccountId = T::AccountId;
 	type BlockNumber = T::BlockNumber;
@@ -171,8 +207,10 @@ impl<T: Config, Solver: NposSolver<AccountId = T::AccountId, Error = sp_npos_ele
 	}
 }
 
-impl<T: Config, Solver: NposSolver<AccountId = T::AccountId, Error = sp_npos_elections::Error>>
-	InstantElectionProvider for BoundedExecution<T, Solver>
+impl<
+		T: Config,
+		Solver: NposSolver<AccountId = T::AccountId, Error = sp_npos_elections::Error> + WeightConfig,
+	> InstantElectionProvider for BoundedExecution<T, Solver>
 {
 	fn elect_with_bounds(
 		max_voters: usize,
@@ -286,7 +324,20 @@ mod tests {
 	fn onchain_seq_phragmen_works() {
 		sp_io::TestExternalities::new_empty().execute_with(|| {
 			assert_eq!(
-				OnChainPhragmen::<Runtime>::elect().unwrap(),
+				OnChainPhragmen::<Runtime, sp_runtime::Perbill>::elect().unwrap(),
+				vec![
+					(10, Support { total: 25, voters: vec![(1, 10), (3, 15)] }),
+					(30, Support { total: 35, voters: vec![(2, 20), (3, 15)] })
+				]
+			);
+		})
+	}
+
+	#[test]
+	fn onchain_phragmms_works() {
+		sp_io::TestExternalities::new_empty().execute_with(|| {
+			assert_eq!(
+				OnChainPhragMMS::<Runtime, sp_runtime::Perbill>::elect().unwrap(),
 				vec![
 					(10, Support { total: 25, voters: vec![(1, 10), (3, 15)] }),
 					(30, Support { total: 35, voters: vec![(2, 20), (3, 15)] })

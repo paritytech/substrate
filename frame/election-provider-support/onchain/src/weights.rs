@@ -45,6 +45,7 @@ use sp_std::marker::PhantomData;
 /// Weight functions needed for pallet_election_provider_support_onchain.
 pub trait WeightInfo {
 	fn phragmen(v: u32, t: u32, d: u32, ) -> Weight;
+	fn phragmms(v: u32, t: u32, d: u32, ) -> Weight;
 }
 
 /// Weights for pallet_election_provider_support_onchain using the Substrate node and recommended hardware.
@@ -62,12 +63,34 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Staking ValidatorCount (r:1 w:0)
 	fn phragmen(v: u32, t: u32, d: u32, ) -> Weight {
 		(0 as Weight)
-			// Standard Error: 3_169_000
-			.saturating_add((31_483_000 as Weight).saturating_mul(v as Weight))
-			// Standard Error: 6_339_000
-			.saturating_add((29_694_000 as Weight).saturating_mul(t as Weight))
-			// Standard Error: 288_162_000
-			.saturating_add((502_909_000 as Weight).saturating_mul(d as Weight))
+			// Standard Error: 4_551_000
+			.saturating_add((28_316_000 as Weight).saturating_mul(v as Weight))
+			// Standard Error: 9_102_000
+			.saturating_add((33_176_000 as Weight).saturating_mul(t as Weight))
+			// Standard Error: 413_754_000
+			.saturating_add((241_364_000 as Weight).saturating_mul(d as Weight))
+			.saturating_add(T::DbWeight::get().reads(205 as Weight))
+			.saturating_add(T::DbWeight::get().reads((4 as Weight).saturating_mul(v as Weight)))
+			.saturating_add(T::DbWeight::get().reads((5 as Weight).saturating_mul(t as Weight)))
+	}
+	// Storage: BagsList CounterForListNodes (r:1 w:0)
+	// Storage: Staking SlashingSpans (r:1 w:0)
+	// Storage: BagsList ListBags (r:200 w:0)
+	// Storage: BagsList ListNodes (r:2000 w:0)
+	// Storage: Staking Nominators (r:2000 w:0)
+	// Storage: Staking Validators (r:1001 w:0)
+	// Storage: Staking Bonded (r:2000 w:0)
+	// Storage: Staking Ledger (r:2000 w:0)
+	// Storage: Staking CounterForValidators (r:1 w:0)
+	// Storage: Staking ValidatorCount (r:1 w:0)
+	fn phragmms(v: u32, t: u32, d: u32, ) -> Weight {
+		(0 as Weight)
+			// Standard Error: 1_717_000
+			.saturating_add((31_202_000 as Weight).saturating_mul(v as Weight))
+			// Standard Error: 3_434_000
+			.saturating_add((43_895_000 as Weight).saturating_mul(t as Weight))
+			// Standard Error: 156_131_000
+			.saturating_add((781_424_000 as Weight).saturating_mul(d as Weight))
 			.saturating_add(T::DbWeight::get().reads(205 as Weight))
 			.saturating_add(T::DbWeight::get().reads((4 as Weight).saturating_mul(v as Weight)))
 			.saturating_add(T::DbWeight::get().reads((5 as Weight).saturating_mul(t as Weight)))
@@ -88,12 +111,34 @@ impl WeightInfo for () {
 	// Storage: Staking ValidatorCount (r:1 w:0)
 	fn phragmen(v: u32, t: u32, d: u32, ) -> Weight {
 		(0 as Weight)
-			// Standard Error: 3_169_000
-			.saturating_add((31_483_000 as Weight).saturating_mul(v as Weight))
-			// Standard Error: 6_339_000
-			.saturating_add((29_694_000 as Weight).saturating_mul(t as Weight))
-			// Standard Error: 288_162_000
-			.saturating_add((502_909_000 as Weight).saturating_mul(d as Weight))
+			// Standard Error: 4_551_000
+			.saturating_add((28_316_000 as Weight).saturating_mul(v as Weight))
+			// Standard Error: 9_102_000
+			.saturating_add((33_176_000 as Weight).saturating_mul(t as Weight))
+			// Standard Error: 413_754_000
+			.saturating_add((241_364_000 as Weight).saturating_mul(d as Weight))
+			.saturating_add(RocksDbWeight::get().reads(205 as Weight))
+			.saturating_add(RocksDbWeight::get().reads((4 as Weight).saturating_mul(v as Weight)))
+			.saturating_add(RocksDbWeight::get().reads((5 as Weight).saturating_mul(t as Weight)))
+	}
+	// Storage: BagsList CounterForListNodes (r:1 w:0)
+	// Storage: Staking SlashingSpans (r:1 w:0)
+	// Storage: BagsList ListBags (r:200 w:0)
+	// Storage: BagsList ListNodes (r:2000 w:0)
+	// Storage: Staking Nominators (r:2000 w:0)
+	// Storage: Staking Validators (r:1001 w:0)
+	// Storage: Staking Bonded (r:2000 w:0)
+	// Storage: Staking Ledger (r:2000 w:0)
+	// Storage: Staking CounterForValidators (r:1 w:0)
+	// Storage: Staking ValidatorCount (r:1 w:0)
+	fn phragmms(v: u32, t: u32, d: u32, ) -> Weight {
+		(0 as Weight)
+			// Standard Error: 1_717_000
+			.saturating_add((31_202_000 as Weight).saturating_mul(v as Weight))
+			// Standard Error: 3_434_000
+			.saturating_add((43_895_000 as Weight).saturating_mul(t as Weight))
+			// Standard Error: 156_131_000
+			.saturating_add((781_424_000 as Weight).saturating_mul(d as Weight))
 			.saturating_add(RocksDbWeight::get().reads(205 as Weight))
 			.saturating_add(RocksDbWeight::get().reads((4 as Weight).saturating_mul(v as Weight)))
 			.saturating_add(RocksDbWeight::get().reads((5 as Weight).saturating_mul(t as Weight)))
