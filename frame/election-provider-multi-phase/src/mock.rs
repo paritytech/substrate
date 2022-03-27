@@ -28,7 +28,7 @@ use frame_support::{
 	BoundedVec,
 };
 use multi_phase::unsigned::{IndexAssignmentOf, VoterOf};
-use pallet_election_provider_support_onchain::UnboundedExecution;
+use pallet_election_provider_support_onchain::BoundedExecution;
 use parking_lot::RwLock;
 use sp_core::{
 	offchain::{
@@ -277,8 +277,9 @@ parameter_types! {
 }
 
 impl pallet_election_provider_support_onchain::Config for Runtime {
-	type Solver = SequentialPhragmen<AccountId, SolutionAccuracyOf<Runtime>, Balancing>;
 	type DataProvider = StakingMock;
+	type MaxVoters = ConstU32<600>;
+	type MaxTargets = ConstU32<100_000>;
 	type WeightInfo = ();
 	type BenchmarkingConfig = TestBenchmarkingConfig;
 }
@@ -301,8 +302,11 @@ impl InstantElectionProvider for MockFallback {
 		max_targets: usize,
 	) -> Result<Supports<Self::AccountId>, Self::Error> {
 		if OnChainFallback::get() {
-			UnboundedExecution::<Runtime>::elect_with_bounds(max_voters, max_targets)
-				.map_err(|_| "UnboundedExecution failed")
+			BoundedExecution::<
+				Runtime,
+				SequentialPhragmen<Self::AccountId, SolutionAccuracyOf<Runtime>, Balancing>,
+			>::elect_with_bounds(max_voters, max_targets)
+			.map_err(|_| "BoundedExecution failed")
 		} else {
 			super::NoFallback::<Runtime>::elect_with_bounds(max_voters, max_targets)
 		}
@@ -406,8 +410,9 @@ impl BenchmarkingConfig for TestBenchmarkingConfig {
 }
 
 impl pallet_election_provider_support_onchain::BenchmarkingConfig for TestBenchmarkingConfig {
-	const MAX_VOTERS: u32 = 1_000;
-	const MAX_TARGETS: u32 = 200;
+	const VOTES_PER_VOTER: [u32; 2] = [1, 2];
+	const TARGETS: [u32; 2] = [200, 400];
+	const VOTERS: [u32; 2] = [400, 600];
 }
 
 impl crate::Config for Runtime {

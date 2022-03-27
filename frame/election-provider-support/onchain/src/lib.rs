@@ -16,12 +16,28 @@
 // limitations under the License.
 
 //! An implementation of [`ElectionProvider`] that uses an `NposSolver` to do the election.
+//!
+//! A simple on-chain implementation of the election provider trait.
+//!
+//! This will accept voting data on the fly and produce the results immediately.
+//!
+//! Finally, the [`ElectionProvider`] implementation of this type does not impose any dynamic limits
+//! on the number of voters and targets that are fetched. However, one can impose bounds on it by
+//! using the `MaxVotes` and `MaxTargets` bounds in the `Config` trait.
+//!
+//! On the other hand, the [`InstantElectionProvider`] implementation does limit these inputs
+//! dynamically. If you use `elect_with_bounds` along with `InstantElectionProvider`, the bound that
+//! would be used is the minimum of the 2 bounds.
+//!
+//! It is advisable to use the former ([`ElectionProvider::elect`]) only at genesis, or for testing,
+//! the latter [`InstantElectionProvider::elect_with_bounds`] for onchain operations, with
+//! thoughtful bounds.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use codec::alloc::collections::BTreeMap;
 use frame_election_provider_support::{
-	ElectionDataProvider, ElectionProvider, InstantElectionProvider, NposSolver,
+	ElectionDataProvider, ElectionProvider, InstantElectionProvider, NposSolver, SequentialPhragmen,
 };
 use frame_support::{pallet_prelude::PhantomData, traits::Get, weights::DispatchClass};
 use sp_npos_elections::{
@@ -29,6 +45,7 @@ use sp_npos_elections::{
 };
 
 mod benchmarking;
+#[cfg(feature = "runtime-benchmarks")]
 pub use benchmarking::{set_up_data_provider, SEED};
 
 pub mod weights;
@@ -49,12 +66,14 @@ impl From<sp_npos_elections::Error> for Error {
 	}
 }
 
-/// Configurations of the benchmarking of the pallet.
+/// Configuration for the benchmarks of the pallet.
 pub trait BenchmarkingConfig {
-	/// The maximum number of targets to use.
-	const MAX_TARGETS: u32;
-	/// The maximum number of voters to use.
-	const MAX_VOTERS: u32;
+	/// Range of voters.
+	const VOTERS: [u32; 2];
+	/// Range of targets.
+	const TARGETS: [u32; 2];
+	/// Range of number of votes per voter.
+	const VOTES_PER_VOTER: [u32; 2];
 }
 
 pub use pallet::*;
@@ -64,36 +83,53 @@ pub mod pallet {
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
-		/// `NposSolver` that should be used, an example would be `PhragMMS`.
-		type Solver: NposSolver<AccountId = Self::AccountId, Error = sp_npos_elections::Error>;
-
 		/// Something that provides the data for election.
 		type DataProvider: ElectionDataProvider<
 			AccountId = Self::AccountId,
 			BlockNumber = Self::BlockNumber,
 		>;
 
-		/// Some parameters of the benchmarking.
-		type BenchmarkingConfig: BenchmarkingConfig;
-
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
+
+		/// Bounds the number of voters.
+		type MaxVoters: Get<u32>;
+
+		/// Bounds the number of targets.
+		type MaxTargets: Get<u32>;
+
+		/// The configuration of benchmarking.
+		type BenchmarkingConfig: BenchmarkingConfig;
 	}
 
 	#[pallet::pallet]
 	pub struct Pallet<T>(PhantomData<T>);
 }
 
-impl<T: Config> Pallet<T> {
-	fn elect_with(
-		maybe_max_voters: Option<usize>,
-		maybe_max_targets: Option<usize>,
-	) -> Result<Supports<T::AccountId>, Error> {
+pub type OnChainPhragmen<T, Balancing = ()> = BoundedExecution<
+	T,
+	SequentialPhragmen<<T as frame_system::Config>::AccountId, sp_runtime::Perbill, Balancing>,
+>;
+
+// TODO: add rustdoc
+/// `NposSolver` that should be used, an example would be `PhragMMS`.
+pub struct BoundedExecution<
+	T: Config,
+	Solver: NposSolver<AccountId = T::AccountId, Error = sp_npos_elections::Error>,
+>(PhantomData<(T, Solver)>);
+
+impl<T: Config, Solver: NposSolver<AccountId = T::AccountId, Error = sp_npos_elections::Error>>
+	BoundedExecution<T, Solver>
+{
+	fn elect_with(max_voters: usize, max_targets: usize) -> Result<Supports<T::AccountId>, Error> {
 		let voters =
-			T::DataProvider::electing_voters(maybe_max_voters).map_err(Error::DataProvider)?;
+			T::DataProvider::electing_voters(Some(max_voters)).map_err(Error::DataProvider)?;
 		let targets =
-			T::DataProvider::electable_targets(maybe_max_targets).map_err(Error::DataProvider)?;
+			T::DataProvider::electable_targets(Some(max_targets)).map_err(Error::DataProvider)?;
 		let desired_targets = T::DataProvider::desired_targets().map_err(Error::DataProvider)?;
+
+		let voters_len = voters.len() as u32;
+		let targets_len = targets.len() as u32;
 
 		let stake_map: BTreeMap<_, _> = voters
 			.iter()
@@ -104,11 +140,15 @@ impl<T: Config> Pallet<T> {
 			|w: &T::AccountId| -> VoteWeight { stake_map.get(w).cloned().unwrap_or_default() };
 
 		let ElectionResult { winners: _, assignments } =
-			T::Solver::solve(desired_targets as usize, targets, voters).map_err(Error::from)?;
+			Solver::solve(desired_targets as usize, targets, voters).map_err(Error::from)?;
 
 		let staked = assignment_ratio_to_staked_normalized(assignments, &stake_of)?;
 
-		let weight = T::BlockWeights::get().max_block;
+		let weight = T::WeightInfo::phragmen(
+			voters_len,
+			targets_len,
+			<T::DataProvider as ElectionDataProvider>::MaxVotesPerVoter::get(),
+		);
 		frame_system::Pallet::<T>::register_extra_weight_unchecked(
 			weight,
 			DispatchClass::Mandatory,
@@ -118,74 +158,8 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
-/// A simple on-chain implementation of the election provider trait.
-///
-/// This will accept voting data on the fly and produce the results immediately.
-///
-/// Finally, the [`ElectionProvider`] implementation of this type does not impose any limits on the
-/// number of voters and targets that are fetched. This could potentially make this unsuitable for
-/// execution onchain. One could, however, impose bounds on it by using for example
-/// `BoundedExecution` which will the bounds provided in the configuration.
-///
-/// On the other hand, the [`InstantElectionProvider`] implementation does limit these inputs,
-/// either via using `BoundedExecution` and imposing the bounds there, or dynamically via calling
-/// `elect_with_bounds` providing these bounds. If you use `elect_with_bounds` along with
-/// `InstantElectionProvider`, the bound that would be used is the minimum of the 2 bounds.
-///
-/// It is advisable to use the former ([`ElectionProvider::elect`]) only at genesis, or for testing,
-/// the latter [`InstantElectionProvider::elect_with_bounds`] for onchain operations, with
-/// thoughtful bounds.
-///
-/// Please use `BoundedExecution` at all times except at genesis or for testing, with thoughtful
-/// bounds in order to bound the potential execution time. Limit the use `UnboundedExecution` at
-/// genesis or for testing, as it does not bound the inputs. However, this can be used with
-/// `[InstantElectionProvider::elect_with_bounds`] that dynamically imposes limits.
-/// `VotersBound`: Bounds the number of voters.
-/// `TargetsBound`: Bounds the number of targets.
-pub struct BoundedExecution<T: Config, VotersBound: Get<u32>, TargetsBound: Get<u32>>(
-	PhantomData<(T, VotersBound, TargetsBound)>,
-);
-
-/// An unbounded variant of [`BoundedExecution`].
-///
-/// ### Warning
-///
-/// This can be very expensive to run frequently on-chain. Use with care. Moreover, this
-/// implementation ignores the additional data of the election data provider and gives no insight on
-/// how much weight was consumed.
-pub struct UnboundedExecution<T: Config>(PhantomData<T>);
-
-impl<T: Config> ElectionProvider for UnboundedExecution<T> {
-	type AccountId = T::AccountId;
-	type BlockNumber = T::BlockNumber;
-	type Error = Error;
-	type DataProvider = T::DataProvider;
-
-	fn elect() -> Result<Supports<T::AccountId>, Self::Error> {
-		// This should not be called if not in `std` mode (and therefore neither in genesis nor in
-		// testing)
-		if cfg!(not(feature = "std")) {
-			frame_support::log::error!(
-				"Please use `InstantElectionProvider` instead to provide bounds on election if not in \
-				genesis or testing mode"
-			);
-		}
-
-		Pallet::<T>::elect_with(None, None)
-	}
-}
-
-impl<T: Config> InstantElectionProvider for UnboundedExecution<T> {
-	fn elect_with_bounds(
-		max_voters: usize,
-		max_targets: usize,
-	) -> Result<Supports<Self::AccountId>, Self::Error> {
-		Pallet::<T>::elect_with(Some(max_voters), Some(max_targets))
-	}
-}
-
-impl<T: Config, VotersBound: Get<u32>, TargetsBound: Get<u32>> ElectionProvider
-	for BoundedExecution<T, VotersBound, TargetsBound>
+impl<T: Config, Solver: NposSolver<AccountId = T::AccountId, Error = sp_npos_elections::Error>>
+	ElectionProvider for BoundedExecution<T, Solver>
 {
 	type AccountId = T::AccountId;
 	type BlockNumber = T::BlockNumber;
@@ -193,23 +167,20 @@ impl<T: Config, VotersBound: Get<u32>, TargetsBound: Get<u32>> ElectionProvider
 	type DataProvider = T::DataProvider;
 
 	fn elect() -> Result<Supports<T::AccountId>, Self::Error> {
-		Pallet::<T>::elect_with(
-			Some(VotersBound::get() as usize),
-			Some(TargetsBound::get() as usize),
-		)
+		Self::elect_with(T::MaxVoters::get() as usize, T::MaxTargets::get() as usize)
 	}
 }
 
-impl<T: Config, VotersBound: Get<u32>, TargetsBound: Get<u32>> InstantElectionProvider
-	for BoundedExecution<T, VotersBound, TargetsBound>
+impl<T: Config, Solver: NposSolver<AccountId = T::AccountId, Error = sp_npos_elections::Error>>
+	InstantElectionProvider for BoundedExecution<T, Solver>
 {
 	fn elect_with_bounds(
 		max_voters: usize,
 		max_targets: usize,
 	) -> Result<Supports<Self::AccountId>, Self::Error> {
-		Pallet::<T>::elect_with(
-			Some(max_voters.min(VotersBound::get() as usize)),
-			Some(max_targets.min(TargetsBound::get() as usize)),
+		Self::elect_with(
+			max_voters.min(T::MaxVoters::get() as usize),
+			max_targets.min(T::MaxTargets::get() as usize),
 		)
 	}
 }
@@ -217,9 +188,8 @@ impl<T: Config, VotersBound: Get<u32>, TargetsBound: Get<u32>> InstantElectionPr
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use frame_election_provider_support::SequentialPhragmen;
+	use frame_support::traits::ConstU32;
 	use sp_npos_elections::Support;
-	use sp_runtime::Perbill;
 	type AccountId = u64;
 	type BlockNumber = u64;
 
@@ -261,23 +231,23 @@ mod tests {
 		type OnKilledAccount = ();
 		type SystemWeightInfo = ();
 		type OnSetCode = ();
-		type MaxConsumers = frame_support::traits::ConstU32<16>;
+		type MaxConsumers = ConstU32<16>;
 	}
 
 	pub struct ElectionProviderBenchmarkConfig;
 	impl BenchmarkingConfig for ElectionProviderBenchmarkConfig {
-		const MAX_VOTERS: u32 = 1000;
-		const MAX_TARGETS: u32 = 300;
+		const VOTERS: [u32; 2] = [400, 600];
+		const TARGETS: [u32; 2] = [200, 400];
+		const VOTES_PER_VOTER: [u32; 2] = [1, 2];
 	}
 
 	impl Config for Runtime {
-		type Solver = SequentialPhragmen<AccountId, Perbill>;
 		type DataProvider = mock_data_provider::DataProvider;
+		type MaxVoters = ConstU32<600>;
+		type MaxTargets = ConstU32<400>;
 		type BenchmarkingConfig = ElectionProviderBenchmarkConfig;
 		type WeightInfo = ();
 	}
-
-	type OnChainPhragmen = UnboundedExecution<Runtime>;
 
 	mod mock_data_provider {
 		use frame_support::{bounded_vec, traits::ConstU32};
@@ -316,7 +286,7 @@ mod tests {
 	fn onchain_seq_phragmen_works() {
 		sp_io::TestExternalities::new_empty().execute_with(|| {
 			assert_eq!(
-				OnChainPhragmen::elect().unwrap(),
+				OnChainPhragmen::<Runtime>::elect().unwrap(),
 				vec![
 					(10, Support { total: 25, voters: vec![(1, 10), (3, 15)] }),
 					(30, Support { total: 35, voters: vec![(2, 20), (3, 15)] })

@@ -47,7 +47,7 @@ pub use node_primitives::{AccountId, Signature};
 use node_primitives::{AccountIndex, Balance, BlockNumber, Hash, Index, Moment};
 use pallet_contracts::weights::WeightInfo;
 use pallet_election_provider_multi_phase::SolutionAccuracyOf;
-use pallet_election_provider_support_onchain::{BoundedExecution, UnboundedExecution};
+use pallet_election_provider_support_onchain::BoundedExecution;
 use pallet_grandpa::{
 	fg_primitives, AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList,
 };
@@ -558,7 +558,8 @@ impl pallet_staking::Config for Runtime {
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
 	type OffendingValidatorsThreshold = OffendingValidatorsThreshold;
 	type ElectionProvider = ElectionProviderMultiPhase;
-	type GenesisElectionProvider = UnboundedExecution<Self>;
+	type GenesisElectionProvider =
+		BoundedExecution<Self, SequentialPhragmen<AccountId, SolutionAccuracyOf<Runtime>>>;
 	type VoterList = BagsList;
 	type MaxUnlockingChunks = ConstU32<32>;
 	type WeightInfo = pallet_staking::weights::SubstrateWeight<Runtime>;
@@ -622,8 +623,9 @@ impl pallet_election_provider_multi_phase::BenchmarkingConfig for ElectionProvid
 impl pallet_election_provider_support_onchain::BenchmarkingConfig
 	for ElectionProviderBenchmarkConfig
 {
-	const MAX_VOTERS: u32 = 1000;
-	const MAX_TARGETS: u32 = 300;
+	const VOTERS: [u32; 2] = [1000, 2000];
+	const TARGETS: [u32; 2] = [500, 1000];
+	const VOTES_PER_VOTER: [u32; 2] = [5, 16];
 }
 
 /// Maximum number of iterations for balancing that will be executed in the embedded OCW
@@ -651,11 +653,9 @@ impl Get<Option<(usize, ExtendedBalance)>> for OffchainRandomBalancing {
 }
 
 impl pallet_election_provider_support_onchain::Config for Runtime {
-	type Solver = SequentialPhragmen<
-		AccountId,
-		pallet_election_provider_multi_phase::SolutionAccuracyOf<Runtime>,
-	>;
 	type DataProvider = <Runtime as pallet_election_provider_multi_phase::Config>::DataProvider;
+	type MaxVoters = MaxElectingVoters;
+	type MaxTargets = ConstU32<1_000>;
 	type BenchmarkingConfig = ElectionProviderBenchmarkConfig;
 	type WeightInfo = ();
 }
@@ -681,8 +681,10 @@ impl pallet_election_provider_multi_phase::Config for Runtime {
 	type RewardHandler = (); // nothing to do upon rewards
 	type DataProvider = Staking;
 	type Solution = NposSolution16;
-	type Fallback = BoundedExecution<Self, ConstU32<20_000>, ConstU32<2_000>>;
-	type GovernanceFallback = BoundedExecution<Self, ConstU32<20_000>, ConstU32<2_000>>;
+	type Fallback =
+		BoundedExecution<Self, SequentialPhragmen<AccountId, SolutionAccuracyOf<Runtime>>>;
+	type GovernanceFallback =
+		BoundedExecution<Self, SequentialPhragmen<AccountId, SolutionAccuracyOf<Runtime>>>;
 	type Solver = SequentialPhragmen<AccountId, SolutionAccuracyOf<Self>, OffchainRandomBalancing>;
 	type ForceOrigin = EnsureRootOrHalfCouncil;
 	type MaxElectableTargets = ConstU16<{ u16::MAX }>;

@@ -24,6 +24,7 @@ use super::*;
 use frame_benchmarking::{benchmarks, Vec};
 use frame_support::log;
 
+#[cfg(test)]
 use crate::Pallet as ElectionProviderSupportOnchain;
 
 // This is also used in `pallet_election_provider_multi_phase` benchmarking.
@@ -32,19 +33,21 @@ pub fn set_up_data_provider<
 	T: frame_system::Config,
 	DataProvider: ElectionDataProvider<AccountId = T::AccountId, BlockNumber = T::BlockNumber>,
 >(
-	v: u32,
-	t: u32,
+	voters_len: u32,
+	targets_len: u32,
+	degree: u32,
+	weight: u64,
 ) {
 	DataProvider::clear();
 	log::info!(
 		"setting up with voters = {} [degree = {}], targets = {}",
-		v,
-		DataProvider::MaxVotesPerVoter::get(),
-		t
+		voters_len,
+		degree,
+		targets_len
 	);
 
 	// fill targets.
-	let mut targets = (0..t)
+	let mut targets = (0..targets_len)
 		.map(|i| {
 			let target = frame_benchmarking::account::<T::AccountId>("Target", i, SEED);
 			DataProvider::add_target(target.clone());
@@ -52,28 +55,30 @@ pub fn set_up_data_provider<
 		})
 		.collect::<Vec<_>>();
 	// we should always have enough voters to fill.
-	assert!(targets.len() > DataProvider::MaxVotesPerVoter::get() as usize);
-	targets.truncate(DataProvider::MaxVotesPerVoter::get() as usize);
+	assert!(targets.len() > degree as usize);
+	targets.truncate(degree as usize);
 
 	// fill voters.
-	(0..v).for_each(|i| {
+	(0..voters_len).for_each(|i| {
 		let voter = frame_benchmarking::account::<T::AccountId>("Voter", i, SEED);
-		//let weight = T::Currency::minimum_balance().saturated_into::<u64>() * 1000;
-		let weight = 1_000;
 		DataProvider::add_voter(voter, weight, targets.clone().try_into().unwrap());
 	});
 }
 
 benchmarks! {
-	elect_with {
+	phragmen {
+		// number of votes in snapshot.
+		let v in (T::BenchmarkingConfig::VOTERS[0]) .. T::BenchmarkingConfig::VOTERS[1];
+		// number of targets in snapshot.
+		let t in (T::BenchmarkingConfig::TARGETS[0]) .. T::BenchmarkingConfig::TARGETS[1];
+		// number of votes per voter (ie the degree).
+		let d in (T::BenchmarkingConfig::VOTES_PER_VOTER[0]) .. T::BenchmarkingConfig::VOTES_PER_VOTER[1];
+
 		// we don't directly need the data-provider to be populated, but it is just easy to use it.
-		set_up_data_provider::<T, T::DataProvider>(
-			T::BenchmarkingConfig::MAX_VOTERS,
-			T::BenchmarkingConfig::MAX_TARGETS
-		);
+		// TODO: create a mock one and then we can remove `DataProvider` from the `Config`
+		set_up_data_provider::<T, T::DataProvider>(v, t, d, 1_000u64);
 	}: {
-		let solution = <ElectionProviderSupportOnchain<T>>::elect_with(None, None);
-		assert!(solution.is_ok());
+		assert!(OnChainPhragmen::<T>::elect().is_ok());
 	} verify {
 	}
 

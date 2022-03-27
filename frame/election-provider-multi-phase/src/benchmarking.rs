@@ -26,10 +26,19 @@ use frame_support::{
 	BoundedVec,
 };
 use frame_system::RawOrigin;
-use pallet_election_provider_support_onchain::{set_up_data_provider, SEED};
+use pallet_election_provider_support_onchain::SEED;
 use rand::{prelude::SliceRandom, rngs::SmallRng, SeedableRng};
 use sp_arithmetic::{per_things::Percent, traits::One};
 use sp_runtime::InnerOf;
+
+fn set_up_data_provider<T: Config>(voters_len: u32, targets_len: u32) {
+	pallet_election_provider_support_onchain::set_up_data_provider::<T, T::DataProvider>(
+		voters_len,
+		targets_len,
+		<T::DataProvider as ElectionDataProvider>::MaxVotesPerVoter::get(),
+		T::Currency::minimum_balance().saturated_into::<u64>() * 1000,
+	);
+}
 
 /// Creates a **valid** solution with exactly the given size.
 ///
@@ -226,7 +235,7 @@ frame_benchmarking::benchmarks! {
 		let t in (T::BenchmarkingConfig::TARGETS[0]) .. T::BenchmarkingConfig::TARGETS[1];
 
 		// we don't directly need the data-provider to be populated, but it is just easy to use it.
-		set_up_data_provider::<T, T::DataProvider>(v, t);
+		set_up_data_provider::<T>(v, t);
 		let targets = T::DataProvider::electable_targets(None)?;
 		let voters = T::DataProvider::electing_voters(None)?;
 		let desired_targets = T::DataProvider::desired_targets()?;
@@ -382,7 +391,7 @@ frame_benchmarking::benchmarks! {
 		// number of targets in snapshot. Fixed to maximum.
 		let t = T::BenchmarkingConfig::MAXIMUM_TARGETS;
 
-		set_up_data_provider::<T, T::DataProvider>(v, t);
+		set_up_data_provider::<T>(v, t);
 		let now = frame_system::Pallet::<T>::block_number();
 		<CurrentPhase<T>>::put(Phase::Unsigned((true, now)));
 		<MultiPhase::<T>>::create_snapshot().unwrap();
@@ -404,7 +413,7 @@ frame_benchmarking::benchmarks! {
 		// number of targets in snapshot. Fixed to maximum.
 		let t = T::BenchmarkingConfig::MAXIMUM_TARGETS;
 
-		set_up_data_provider::<T, T::DataProvider>(v, t);
+		set_up_data_provider::<T>(v, t);
 		assert!(<MultiPhase<T>>::snapshot().is_none());
 	}: {
 		<MultiPhase::<T>>::create_snapshot().map_err(|_| "could not create snapshot")?;
