@@ -172,20 +172,11 @@ parameter_types! {
 	pub const OffendingValidatorsThreshold: Perbill = Perbill::from_percent(16);
 }
 
-pub struct ElectionProviderBenchmarkConfig;
-impl pallet_election_provider_support_onchain::BenchmarkingConfig
-	for ElectionProviderBenchmarkConfig
-{
-	const VOTERS: [u32; 2] = [400, 600];
-	const TARGETS: [u32; 2] = [200, 400];
-	const VOTES_PER_VOTER: [u32; 2] = [1, 2];
-}
-
 impl pallet_election_provider_support_onchain::Config for Test {
 	type DataProvider = Staking;
 	type MaxVoters = ConstU32<600>;
 	type MaxTargets = ConstU32<400>;
-	type BenchmarkingConfig = ElectionProviderBenchmarkConfig;
+	type BenchmarkingConfig = ();
 	type WeightInfo = ();
 }
 

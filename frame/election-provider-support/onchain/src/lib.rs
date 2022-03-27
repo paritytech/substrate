@@ -93,6 +93,13 @@ pub trait BenchmarkingConfig {
 	const VOTES_PER_VOTER: [u32; 2];
 }
 
+// Default values for ease.
+impl BenchmarkingConfig for () {
+	const VOTERS: [u32; 2] = [400, 600];
+	const TARGETS: [u32; 2] = [200, 400];
+	const VOTES_PER_VOTER: [u32; 2] = [1, 2];
+}
+
 /// Configuration for the weight measuring function of the `NposSolver`.
 pub trait WeightConfig {
 	fn weight<T: Config>(v: u32, t: u32, d: u32) -> Weight;
