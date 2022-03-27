@@ -34,8 +34,8 @@
 //! thoughtful bounds.
 //! 
 //! ### Warning
-///
-/// This can be very expensive to run frequently on-chain. Use with care.
+//!
+//! This can be very expensive to run frequently on-chain. Use with care.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
