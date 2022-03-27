@@ -38,7 +38,7 @@ use sp_runtime::{
 // Logger module to track execution.
 #[frame_support::pallet]
 pub mod logger {
-	use super::*;
+	use super::{OriginCaller, OriginTrait};
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 	use std::cell::RefCell;
@@ -71,7 +71,7 @@ pub mod logger {
 	#[pallet::call]
 	impl<T: Config> Pallet<T>
 	where
-		<T as system::Config>::Origin: OriginTrait<PalletsOrigin = OriginCaller>,
+		<T as frame_system::Config>::Origin: OriginTrait<PalletsOrigin = OriginCaller>,
 	{
 		#[pallet::weight(*weight)]
 		pub fn log(origin: OriginFor<T>, i: u32, weight: Weight) -> DispatchResult {
