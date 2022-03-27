@@ -657,7 +657,7 @@ impl pallet_election_provider_support_onchain::Config for Runtime {
 	type MaxVoters = MaxElectingVoters;
 	type MaxTargets = ConstU32<1_000>;
 	type BenchmarkingConfig = ElectionProviderBenchmarkConfig;
-	type WeightInfo = pallet_election_provider_multi_phase::weights::SubstrateWeight<Self>;
+	type WeightInfo = pallet_election_provider_support_onchain::weights::SubstrateWeight<Self>;
 }
 
 impl pallet_election_provider_multi_phase::Config for Runtime {
