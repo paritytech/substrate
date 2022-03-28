@@ -17,7 +17,10 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use assert_cmd::cargo::cargo_bin;
-use std::{path::Path, process::{ExitStatus, Command}};
+use std::{
+	path::Path,
+	process::{Command, ExitStatus},
+};
 use tempfile::tempdir;
 
 /// Tests that the `benchmark-storage` command works for the dev runtime.
