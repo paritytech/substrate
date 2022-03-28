@@ -48,8 +48,9 @@ pub type CommitmentHash = [u8; 32];
 
 #[derive(Encode, Decode, Default, MaxEncodedLen, TypeInfo, RuntimeDebug)]
 pub struct Commitment<AccountId, Balance, BlockNumber> {
-	pub who: AccountId,
+	pub owner: AccountId,
 	pub when: BlockNumber,
+	pub depositor: AccountId,
 	pub deposit: Balance,
 }
 

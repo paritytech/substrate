@@ -103,12 +103,12 @@ fn commit_works() {
 
 		let commitment = Commitments::<Test>::get(commitment_hash).unwrap();
 
-		assert_eq!(commitment.who, owner);
+		assert_eq!(commitment.owner, owner);
 		assert_eq!(commitment.when, 1);
 		assert_eq!(commitment.deposit, 10);
 
 		System::assert_last_event(
-			NameServiceEvent::Committed { sender, who: owner, hash: commitment_hash }.into(),
+			NameServiceEvent::Committed { depositor: sender, owner, hash: commitment_hash }.into(),
 		);
 	});
 }

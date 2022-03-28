@@ -144,7 +144,7 @@ pub mod pallet {
 	pub enum Event<T: Config> {
 		// TODO: Potentially make events more lightweight
 		/// A new `Commitment` has taken place.
-		Committed { sender: T::AccountId, who: T::AccountId, hash: CommitmentHash },
+		Committed { depositor: T::AccountId, owner: T::AccountId, hash: CommitmentHash },
 		/// A new `Registration` has taken added.
 		NameRegistered { name_hash: NameHash, owner: T::AccountId },
 		/// A `Registration` has been transferred to a new owner.
@@ -214,26 +214,14 @@ pub mod pallet {
 			Ok(())
 		}
 
-		// TODO: Should we allow registration on behalf of?
 		#[pallet::weight(0)]
 		pub fn commit(
 			origin: OriginFor<T>,
-			who: T::AccountId,
+			owner: T::AccountId,
 			commitment_hash: CommitmentHash,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
-
-			ensure!(!Commitments::<T>::contains_key(commitment_hash), Error::<T>::AlreadyCommitted);
-
-			let block_number = frame_system::Pallet::<T>::block_number();
-			let deposit = T::CommitmentDeposit::get();
-
-			T::Currency::reserve(&sender, deposit)?;
-
-			let commitment = Commitment { who: who.clone(), when: block_number, deposit };
-
-			Commitments::<T>::insert(commitment_hash, commitment);
-			Self::deposit_event(Event::<T>::Committed { sender, who, hash: commitment_hash });
+			Self::do_commit(sender, owner, commitment_hash)?;
 			Ok(())
 		}
 
@@ -245,44 +233,7 @@ pub mod pallet {
 			periods: T::BlockNumber,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
-			let commitment_hash = sp_io::hashing::blake2_256(&(&name, secret).encode());
-
-			let commitment = Self::get_commitment(commitment_hash)?;
-
-			let block_number = frame_system::Pallet::<T>::block_number();
-
-			ensure!(
-				commitment.when.saturating_add(T::MinimumCommitmentPeriod::get()) < block_number,
-				Error::<T>::TooEarlyToReveal
-			);
-
-			let name_hash = sp_io::hashing::blake2_256(&name);
-
-			ensure!(Self::get_registration(name_hash).is_err(), Error::<T>::RegistrationExists);
-
-			let fee = Self::registration_fee(name.clone(), periods);
-
-			let imbalance = T::Currency::withdraw(
-				&sender,
-				fee,
-				WithdrawReasons::FEE,
-				ExistenceRequirement::KeepAlive,
-			)?;
-
-			T::RegistrationFeeHandler::on_unbalanced(imbalance);
-
-			let expiry = block_number.saturating_add(Self::length(periods));
-
-			Self::do_register(
-				name_hash,
-				Some(commitment.who.clone()),
-				commitment.who,
-				Some(expiry),
-				None,
-			)?;
-
-			T::Currency::unreserve(&sender, commitment.deposit);
-			Commitments::<T>::remove(commitment_hash);
+			Self::do_reveal(sender, name, secret, periods)?;
 			Ok(())
 		}
 
@@ -292,18 +243,13 @@ pub mod pallet {
 			commitment_hash: CommitmentHash,
 		) -> DispatchResult {
 			ensure_signed_or_root(origin)?;
-			let commitment =
-				Commitments::<T>::get(commitment_hash).ok_or(Error::<T>::CommitmentNotFound)?;
-
+			let commitment = Self::get_commitment(commitment_hash)?;
+			let block_number = frame_system::Pallet::<T>::block_number();
 			ensure!(
-				commitment.when.saturating_add(T::CommitmentAlivePeriod::get()) >
-					frame_system::Pallet::<T>::block_number(),
+				Self::is_commitment_expired(&commitment, &block_number),
 				Error::<T>::CommitmentNotExpired
 			);
-
-			let res = T::Currency::unreserve(&commitment.who, commitment.deposit);
-			debug_assert!(res.is_zero());
-			Commitments::<T>::remove(commitment_hash);
+			Self::do_remove_commitment(&commitment_hash, &commitment);
 			Ok(())
 		}
 
@@ -431,7 +377,7 @@ pub mod pallet {
 			let parent = Self::get_registration(parent_hash)?;
 
 			ensure!(!label.len().is_zero(), Error::<T>::LabelTooShort);
-			let label_hash = sp_io::hashing::blake2_256(&label);
+			let label_hash = sp_core::blake2_256(&label);
 			ensure!(sender == parent.owner, Error::<T>::NotRegistrationOwner);
 
 			let name_hash = Self::subnode_hash(parent_hash, label_hash);

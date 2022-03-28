@@ -22,7 +22,7 @@ use codec::Encode;
 
 impl<T: Config> Pallet<T> {
 	pub fn subnode_hash(parent_hash: NameHash, label_hash: NameHash) -> NameHash {
-		return sp_io::hashing::blake2_256(&(parent_hash, label_hash).encode())
+		return sp_core::blake2_256(&(parent_hash, label_hash).encode())
 	}
 
 	// pub fn get_subnode_registration(parent_hash: NameHash, label_hash: NameHash) ->
