@@ -671,92 +671,92 @@ fn set_subnode_record_handles_errors() {
 	});
 }
 
-#[test]
-fn set_subnode_owner_works() {
-	new_test_ext().execute_with(|| {
-		let owner = 2;
-		let new_subnode_owner = 4;
-		let label = "my".as_bytes().to_vec();
-		let label_hash = sp_io::hashing::blake2_256(&label);
+// #[test]
+// fn set_subnode_owner_works() {
+// 	new_test_ext().execute_with(|| {
+// 		let owner = 2;
+// 		let new_subnode_owner = 4;
+// 		let label = "my".as_bytes().to_vec();
+// 		let label_hash = sp_io::hashing::blake2_256(&label);
 
-		// initial registration and subnode registration for further testing
-		let (_, parent_hash) = alice_register_bob_senario_setup();
-		assert_ok!(NameService::set_subnode_record(Origin::signed(owner), parent_hash, label));
-		let name_hash = NameService::subnode_hash(parent_hash, label_hash);
+// 		// initial registration and subnode registration for further testing
+// 		let (_, parent_hash) = alice_register_bob_senario_setup();
+// 		assert_ok!(NameService::set_subnode_record(Origin::signed(owner), parent_hash, label));
+// 		let name_hash = NameService::subnode_hash(parent_hash, label_hash);
 
-		assert!(Registrations::<Test>::contains_key(name_hash));
-		assert_eq!(Registrations::<Test>::get(name_hash).unwrap().owner, owner);
+// 		assert!(Registrations::<Test>::contains_key(name_hash));
+// 		assert_eq!(Registrations::<Test>::get(name_hash).unwrap().owner, owner);
 
-		// reserved balances prior new owner
-		assert_eq!(Balances::reserved_balance(&owner), 2);
-		assert_eq!(Balances::reserved_balance(&new_subnode_owner), 0);
+// 		// reserved balances prior new owner
+// 		assert_eq!(Balances::reserved_balance(&owner), 2);
+// 		assert_eq!(Balances::reserved_balance(&new_subnode_owner), 0);
 
-		// change owner
-		assert_ok!(NameService::set_subnode_owner(
-			Origin::signed(owner),
-			parent_hash,
-			label_hash,
-			new_subnode_owner
-		));
-		assert_eq!(Registrations::<Test>::get(name_hash).unwrap().owner, new_subnode_owner);
+// 		// change owner
+// 		assert_ok!(NameService::set_subnode_owner(
+// 			Origin::signed(owner),
+// 			parent_hash,
+// 			label_hash,
+// 			new_subnode_owner
+// 		));
+// 		assert_eq!(Registrations::<Test>::get(name_hash).unwrap().owner, new_subnode_owner);
 
-		// updated reserved balances
-		assert_eq!(Balances::reserved_balance(&owner), 0);
-		assert_eq!(Balances::reserved_balance(&new_subnode_owner), 2);
-	});
-}
+// 		// updated reserved balances
+// 		assert_eq!(Balances::reserved_balance(&owner), 0);
+// 		assert_eq!(Balances::reserved_balance(&new_subnode_owner), 2);
+// 	});
+// }
 
-#[test]
-fn set_subnode_owner_handles_errors() {
-	new_test_ext().execute_with(|| {
-		let owner = 2;
-		let new_subnode_owner = 4;
-		let label = "my".as_bytes().to_vec();
-		let label_hash = sp_io::hashing::blake2_256(&label);
-		let (parent_hash, _) = alice_register_bob_scenario_name_and_hash();
+// #[test]
+// fn set_subnode_owner_handles_errors() {
+// 	new_test_ext().execute_with(|| {
+// 		let owner = 2;
+// 		let new_subnode_owner = 4;
+// 		let label = "my".as_bytes().to_vec();
+// 		let label_hash = sp_io::hashing::blake2_256(&label);
+// 		let (parent_hash, _) = alice_register_bob_scenario_name_and_hash();
 
-		// parent node does not yet exist
-		assert_noop!(
-			NameService::set_subnode_owner(
-				Origin::signed(owner),
-				parent_hash,
-				label_hash,
-				new_subnode_owner
-			),
-			Error::<Test>::RegistrationNotFound
-		);
+// 		// parent node does not yet exist
+// 		assert_noop!(
+// 			NameService::set_subnode_owner(
+// 				Origin::signed(owner),
+// 				parent_hash,
+// 				label_hash,
+// 				new_subnode_owner
+// 			),
+// 			Error::<Test>::RegistrationNotFound
+// 		);
 
-		// initial registration and subnode registration for further testing
-		let (_, _) = alice_register_bob_senario_setup();
-		assert_ok!(NameService::set_subnode_record(Origin::signed(owner), parent_hash, label));
+// 		// initial registration and subnode registration for further testing
+// 		let (_, _) = alice_register_bob_senario_setup();
+// 		assert_ok!(NameService::set_subnode_record(Origin::signed(owner), parent_hash, label));
 
-		// cannot change owner of unregistered subnode of parent node
-		let other_subnode_label = "imnothere".as_bytes().to_vec();
-		let other_subnode_label_hash = sp_io::hashing::blake2_256(&other_subnode_label);
+// 		// cannot change owner of unregistered subnode of parent node
+// 		let other_subnode_label = "imnothere".as_bytes().to_vec();
+// 		let other_subnode_label_hash = sp_io::hashing::blake2_256(&other_subnode_label);
 
-		assert_noop!(
-			NameService::set_subnode_owner(
-				Origin::signed(owner),
-				parent_hash,
-				other_subnode_label_hash,
-				new_subnode_owner
-			),
-			Error::<Test>::RegistrationNotFound
-		);
+// 		assert_noop!(
+// 			NameService::set_subnode_owner(
+// 				Origin::signed(owner),
+// 				parent_hash,
+// 				other_subnode_label_hash,
+// 				new_subnode_owner
+// 			),
+// 			Error::<Test>::RegistrationNotFound
+// 		);
 
-		// non-owner cannot change
-		let not_owner = 3;
-		assert_noop!(
-			NameService::set_subnode_owner(
-				Origin::signed(not_owner),
-				parent_hash,
-				label_hash,
-				new_subnode_owner
-			),
-			Error::<Test>::NotRegistrationOwner
-		);
-	});
-}
+// 		// non-owner cannot change
+// 		let not_owner = 3;
+// 		assert_noop!(
+// 			NameService::set_subnode_owner(
+// 				Origin::signed(not_owner),
+// 				parent_hash,
+// 				label_hash,
+// 				new_subnode_owner
+// 			),
+// 			Error::<Test>::NotRegistrationOwner
+// 		);
+// 	});
+// }
 
 #[test]
 fn deregister_subnode_owner_works() {

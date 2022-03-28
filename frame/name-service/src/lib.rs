@@ -28,6 +28,7 @@ mod tests;
 pub use pallet::*;
 
 mod commit_reveal;
+mod misc;
 mod registrar;
 mod subnodes;
 mod types;
@@ -35,12 +36,13 @@ mod types;
 #[frame_support::pallet]
 pub mod pallet {
 	use crate::types::*;
-	use frame_support::pallet_prelude::*;
+	use frame_support::{
+		pallet_prelude::*,
+		traits::{OnUnbalanced, ReservableCurrency},
+	};
 	use frame_system::pallet_prelude::*;
-	use sp_runtime::traits::{Bounded, Convert, Saturating};
+	use sp_runtime::traits::Convert;
 	use sp_std::vec::Vec;
-
-	use frame_support::traits::{BalanceStatus, OnUnbalanced, ReservableCurrency};
 
 	// The struct on which we build all of our Pallet logic.
 	#[pallet::pallet]
@@ -371,41 +373,6 @@ pub mod pallet {
 		}
 
 		#[pallet::weight(0)]
-		pub fn set_subnode_owner(
-			origin: OriginFor<T>,
-			parent_hash: NameHash,
-			label_hash: NameHash,
-			owner: T::AccountId,
-		) -> DispatchResult {
-			let sender = ensure_signed(origin)?;
-
-			ensure!(
-				Registrations::<T>::contains_key(parent_hash),
-				Error::<T>::RegistrationNotFound
-			);
-
-			let name_hash = Self::subnode_hash(parent_hash, label_hash);
-
-			Registrations::<T>::try_mutate(name_hash, |maybe_registration| {
-				let r = maybe_registration.as_mut().ok_or(Error::<T>::RegistrationNotFound)?;
-				ensure!(r.owner == sender, Error::<T>::NotRegistrationOwner);
-
-				if let Some(deposit) = r.deposit {
-					T::Currency::repatriate_reserved(
-						&sender,
-						&owner,
-						deposit,
-						BalanceStatus::Reserved,
-					)?;
-				}
-
-				r.owner = owner.clone();
-				Self::deposit_event(Event::<T>::NewOwner { from: sender, to: owner });
-				Ok(())
-			})
-		}
-
-		#[pallet::weight(0)]
 		pub fn deregister_subnode(
 			origin: OriginFor<T>,
 			parent_hash: NameHash,
@@ -429,33 +396,6 @@ pub mod pallet {
 
 	// Pallet internal functions
 	impl<T: Config> Pallet<T> {
-		pub fn registration_fee(name: Vec<u8>, periods: T::BlockNumber) -> BalanceOf<T> {
-			let name_length = name.len();
-			let fee_reg = if name_length < 3 {
-				// names with under 3 characters should not be registered, so we
-				// put an exorbitant fee.
-				BalanceOf::<T>::max_value()
-			} else if name_length == 3 {
-				T::TierThreeLetters::get()
-			} else if name_length == 4 {
-				T::TierFourLetters::get()
-			} else {
-				T::TierDefault::get()
-			};
-
-			let fee_length = Self::length_fee(periods);
-			fee_reg.saturating_add(fee_length)
-		}
-
-		pub fn length_fee(periods: T::BlockNumber) -> BalanceOf<T> {
-			let periods_as_balance: BalanceOf<T> = T::BlockNumberToBalance::convert(periods);
-			T::FeePerRegistrationPeriod::get().saturating_mul(periods_as_balance)
-		}
-
-		pub fn length(periods: T::BlockNumber) -> T::BlockNumber {
-			periods.saturating_mul(T::BlocksPerRegistrationPeriod::get())
-		}
-
 		pub fn do_set_address(
 			name_hash: NameHash,
 			owner: T::AccountId,
