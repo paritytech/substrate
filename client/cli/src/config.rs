@@ -415,13 +415,6 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		Ok(Default::default())
 	}
 
-	/// Returns `Ok(true)` if the hardware benchmarks should be disabled
-	///
-	/// By default this is `true` unless overriden.
-	fn disable_hardware_benchmarks(&self) -> Result<bool> {
-		Ok(true)
-	}
-
 	/// Get the development key seed from the current object
 	///
 	/// By default this is `None`.
@@ -553,7 +546,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			base_path: Some(base_path),
 			informant_output_format: Default::default(),
 			runtime_cache_size,
-			disable_hardware_benchmarks: self.disable_hardware_benchmarks()?,
+			disable_hardware_benchmarks: true,
 		})
 	}
 

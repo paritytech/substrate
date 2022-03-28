@@ -253,16 +253,6 @@ pub struct RunCmd {
 	/// When `--dev` is given and no explicit `--base-path`, this option is implied.
 	#[clap(long, conflicts_with = "base-path")]
 	pub tmp: bool,
-
-	/// Disable automatic hardware benchmarks.
-	///
-	/// By default these benchmarks are automatically ran at startup and measure
-	/// the CPU speed, the memory bandwidth and the disk speed.
-	///
-	/// The results are then printed out in the logs, and also sent as part of
-	/// telemetry, if telemetry is enabled.
-	#[clap(long)]
-	pub disable_hardware_benchmarks: bool,
 }
 
 impl RunCmd {
@@ -486,10 +476,6 @@ impl CliConfiguration for RunCmd {
 				None => None,
 			}
 		})
-	}
-
-	fn disable_hardware_benchmarks(&self) -> Result<bool> {
-		Ok(self.disable_hardware_benchmarks)
 	}
 }
 
