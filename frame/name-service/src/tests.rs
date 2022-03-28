@@ -26,7 +26,7 @@ use frame_support::{
 	traits::{Get, OnFinalize, OnInitialize},
 };
 // use sp_runtime::traits::One;
-use sp_core::blake2_256;
+use sp_io::hashing::blake2_256;
 
 fn add_blocks(n: u64) {
 	let current_block = System::block_number();

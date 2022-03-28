@@ -20,6 +20,7 @@
 use crate::{types::*, *};
 use frame_support::pallet_prelude::*;
 use sp_runtime::traits::{Bounded, Convert, Saturating};
+use sp_std::prelude::*;
 
 impl<T: Config> Pallet<T> {
 	pub fn registration_fee(name: Vec<u8>, periods: T::BlockNumber) -> BalanceOf<T> {

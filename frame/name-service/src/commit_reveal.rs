@@ -23,16 +23,17 @@ use frame_support::{
 	traits::{Currency, ExistenceRequirement, OnUnbalanced, ReservableCurrency, WithdrawReasons},
 };
 use sp_runtime::traits::{Saturating, Zero};
+use sp_std::prelude::*;
 
 impl<T: Config> Pallet<T> {
 	/// Get the commitment hash from the raw name and secret.
 	pub fn commitment_hash(name: &[u8], secret: u64) -> CommitmentHash {
-		sp_core::blake2_256(&(name, secret).encode())
+		sp_io::hashing::blake2_256(&(name, secret).encode())
 	}
 
 	/// Get the name hash from raw bytes.
 	pub fn name_hash(name: &[u8]) -> NameHash {
-		sp_core::blake2_256(name)
+		sp_io::hashing::blake2_256(name)
 	}
 
 	/// Returns a commitment by hash if it exists.
@@ -98,7 +99,7 @@ impl<T: Config> Pallet<T> {
 			Error::<T>::TooEarlyToReveal
 		);
 
-		let name_hash = sp_core::blake2_256(&name);
+		let name_hash = sp_io::hashing::blake2_256(&name);
 
 		ensure!(Self::get_registration(name_hash).is_err(), Error::<T>::RegistrationExists);
 

@@ -78,10 +78,6 @@ pub mod pallet {
 		#[pallet::constant]
 		type SubNodeDeposit: Get<BalanceOf<Self>>;
 
-		/// The deposit a user needs to place to keep their reverse-lookups in storage.
-		#[pallet::constant]
-		type ReverseLookupDeposit: Get<BalanceOf<Self>>;
-
 		/// Registration fee for registering a 3-letter name.
 		#[pallet::constant]
 		type TierThreeLetters: Get<BalanceOf<Self>>;
@@ -97,10 +93,6 @@ pub mod pallet {
 		/// How long a registration period is in blocks.
 		#[pallet::constant]
 		type BlocksPerRegistrationPeriod: Get<Self::BlockNumber>;
-
-		/// Notification duration before expiry, in blocks.
-		#[pallet::constant]
-		type NotificationPeriod: Get<Self::BlockNumber>;
 
 		/// Registration fee per registration period, defined as a number of blocks.
 		#[pallet::constant]

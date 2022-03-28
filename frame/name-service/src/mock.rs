@@ -101,13 +101,11 @@ impl Config for Test {
 	type RegistrationFeeHandler = ();
 	type CommitmentDeposit = ConstU64<10>;
 	type SubNodeDeposit = ConstU64<2>;
-	type ReverseLookupDeposit = ConstU64<1>;
 	type TierThreeLetters = ConstU64<7>;
 	type TierFourLetters = ConstU64<3>;
 	type MinimumCommitmentPeriod = ConstU64<10>;
 	type CommitmentAlivePeriod = ConstU64<10>;
 	type BlocksPerRegistrationPeriod = ConstU64<1000>;
-	type NotificationPeriod = ConstU64<100>;
 	type FeePerRegistrationPeriod = ConstU64<1>;
 	type TierDefault = ConstU64<1>;
 	type RegistrationManager = EnsureRoot<Self::AccountId>;

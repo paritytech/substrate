@@ -1275,13 +1275,14 @@ parameter_types! {
 
 parameter_types! {
 	pub const CommitmentDeposit: Balance = 1 * DOLLARS;
-	pub const NameDeposit: Balance = 1 * DOLLARS;
+	pub const SubNodeDeposit: Balance = 1 * DOLLARS;
 	pub const TierThreeLetters: Balance = 640 * DOLLARS;
 	pub const TierFourLetters: Balance = 160 * DOLLARS;
 	pub const TierDefault: Balance = 5 * DOLLARS;
-	pub const BlocksPerRegistrationPeriod: BlockNumber = 1 * MINUTES;
-	pub const NotificationPeriod: BlockNumber = 90 * DAYS;
+	pub const MinimumCommitmentPeriod: BlockNumber = 1 * MINUTES;
+	pub const CommitmentAlivePeriod: BlockNumber = 1 * DAYS;
 	pub const FeePerRegistrationPeriod: Balance = 1 * DOLLARS / (365 * DAYS as Balance);
+	pub const BlocksPerRegistrationPeriod: BlockNumber = 1 * DAYS;
 }
 
 impl pallet_name_service::Config for Runtime {
@@ -1290,14 +1291,15 @@ impl pallet_name_service::Config for Runtime {
 	type BlockNumberToBalance = ConvertInto;
 	type RegistrationFeeHandler = ();
 	type CommitmentDeposit = CommitmentDeposit;
-	type NameDeposit = NameDeposit;
+	type SubNodeDeposit = SubNodeDeposit;
 	type TierThreeLetters = TierThreeLetters;
 	type TierFourLetters = TierFourLetters;
 	type TierDefault = TierDefault;
-	type BlocksPerRegistrationPeriod = BlocksPerRegistrationPeriod;
-	type NotificationPeriod = NotificationPeriod;
+	type MinimumCommitmentPeriod = MinimumCommitmentPeriod;
+	type CommitmentAlivePeriod = CommitmentAlivePeriod;
 	type FeePerRegistrationPeriod = FeePerRegistrationPeriod;
 	type RegistrationManager = EnsureRoot<Self::AccountId>;
+	type BlocksPerRegistrationPeriod = BlocksPerRegistrationPeriod;
 }
 
 parameter_types! {

@@ -20,17 +20,18 @@ sp-core = { version = "6.0.0", default-features = false, path = "../../primitive
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 scale-info = { version = "2.0.0", default-features = false, features = ["derive"] }
+sp-io = { version = "6.0.0", default-features = false, path = "../../primitives/io" }
 
 # Benchmarking dependencies
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
 
 [dev-dependencies]
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
-sp-io = { version = "6.0.0", path = "../../primitives/io" }
 
 [features]
 default = ["std"]
 std = [
+	"sp-io/std",
 	"codec/std",
 	"sp-core/std",
 	"sp-std/std",
