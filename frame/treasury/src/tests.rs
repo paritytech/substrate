@@ -106,6 +106,25 @@ parameter_types! {
 	pub const BountyValueMinimum: u64 = 1;
 	pub const MaxApprovals: u32 = 100;
 }
+pub struct TestSpendOrigin;
+impl frame_support::traits::EnsureOrigin<Origin> for TestSpendOrigin {
+	type Success = u64;
+	fn try_origin(o: Origin) -> Result<Self::Success, Origin> {
+		Result::<frame_system::RawOrigin<_>, Origin>::from(o).and_then(|o| match o {
+			frame_system::RawOrigin::Root => Ok(u64::max_value()),
+			frame_system::RawOrigin::Signed(1) => Ok(5),
+			frame_system::RawOrigin::Signed(2) => Ok(10),
+			frame_system::RawOrigin::Signed(3) => Ok(20),
+			frame_system::RawOrigin::Signed(4) => Ok(50),
+			r => Err(Origin::from(r)),
+		})
+	}
+	#[cfg(feature = "runtime-benchmarks")]
+	fn successful_origin() -> Origin {
+		Origin::root()
+	}
+}
+
 impl Config for Test {
 	type PalletId = TreasuryPalletId;
 	type Currency = pallet_balances::Pallet<Test>;
@@ -122,6 +141,7 @@ impl Config for Test {
 	type WeightInfo = ();
 	type SpendFunds = ();
 	type MaxApprovals = MaxApprovals;
+	type SpendOrigin = TestSpendOrigin;
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
