@@ -272,11 +272,13 @@ parameter_types! {
 	pub static MaxElectableTargets: TargetIndex = TargetIndex::max_value();
 
 	pub static EpochLength: u64 = 30;
-	pub static OnChianFallback: bool = true;
+	pub static OnChainFallback: bool = true;
 }
 
-impl onchain::Config for Runtime {
-	type Accuracy = sp_runtime::Perbill;
+pub struct OnChainSeqPhragmen;
+impl onchain::ExecutionConfig for OnChainSeqPhragmen {
+	type System = Runtime;
+	type Solver = SequentialPhragmen<AccountId, SolutionAccuracyOf<Runtime>, Balancing>;
 	type DataProvider = StakingMock;
 }
 
@@ -288,11 +290,23 @@ impl ElectionProvider for MockFallback {
 	type DataProvider = StakingMock;
 
 	fn elect() -> Result<Supports<AccountId>, Self::Error> {
-		if OnChianFallback::get() {
-			onchain::OnChainSequentialPhragmen::<Runtime>::elect()
-				.map_err(|_| "OnChainSequentialPhragmen failed")
+		Self::elect_with_bounds(Bounded::max_value(), Bounded::max_value())
+	}
+}
+
+impl InstantElectionProvider for MockFallback {
+	fn elect_with_bounds(
+		max_voters: usize,
+		max_targets: usize,
+	) -> Result<Supports<Self::AccountId>, Self::Error> {
+		if OnChainFallback::get() {
+			onchain::UnboundedExecution::<OnChainSeqPhragmen>::elect_with_bounds(
+				max_voters,
+				max_targets,
+			)
+			.map_err(|_| "UnboundedExecution failed")
 		} else {
-			super::NoFallback::<Runtime>::elect()
+			super::NoFallback::<Runtime>::elect_with_bounds(max_voters, max_targets)
 		}
 	}
 }
@@ -532,7 +546,7 @@ impl ExtBuilder {
 		self
 	}
 	pub fn onchain_fallback(self, onchain: bool) -> Self {
-		<OnChianFallback>::set(onchain);
+		<OnChainFallback>::set(onchain);
 		self
 	}
 	pub fn miner_weight(self, weight: Weight) -> Self {
