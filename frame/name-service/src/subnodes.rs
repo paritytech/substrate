@@ -19,10 +19,31 @@
 
 use crate::{types::*, *};
 use codec::Encode;
+use frame_support::pallet_prelude::*;
+use sp_runtime::traits::Zero;
 
 impl<T: Config> Pallet<T> {
 	pub fn subnode_hash(parent_hash: NameHash, label_hash: NameHash) -> NameHash {
 		return sp_core::blake2_256(&(parent_hash, label_hash).encode())
+	}
+
+	pub fn do_set_subnode_record(
+		sender: T::AccountId,
+		parent_hash: NameHash,
+		label: &[u8],
+	) -> DispatchResult {
+		ensure!(!label.len().is_zero(), Error::<T>::LabelTooShort);
+
+		let parent = Self::get_registration(parent_hash)?;
+		ensure!(sender == parent.owner, Error::<T>::NotRegistrationOwner);
+
+		let label_hash = sp_core::blake2_256(&label);
+		let name_hash = Self::subnode_hash(parent_hash, label_hash);
+
+		ensure!(!Registrations::<T>::contains_key(name_hash), Error::<T>::RegistrationExists);
+		let deposit = T::SubNodeDeposit::get();
+		Self::do_register(name_hash, None, sender, None, Some(deposit))?;
+		Ok(())
 	}
 
 	// pub fn get_subnode_registration(parent_hash: NameHash, label_hash: NameHash) ->

@@ -37,13 +37,10 @@ pub mod pallet {
 	use crate::types::*;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
-	use sp_runtime::traits::{Bounded, Convert, Saturating, Zero};
+	use sp_runtime::traits::{Bounded, Convert, Saturating};
 	use sp_std::vec::Vec;
 
-	use frame_support::traits::{
-		BalanceStatus, Currency, ExistenceRequirement, OnUnbalanced, ReservableCurrency,
-		WithdrawReasons,
-	};
+	use frame_support::traits::{BalanceStatus, OnUnbalanced, ReservableCurrency};
 
 	// The struct on which we build all of our Pallet logic.
 	#[pallet::pallet]
@@ -195,6 +192,10 @@ pub mod pallet {
 	// Your Pallet's callable functions.
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
+		/// Force the registration of a name hash. It will overwrite any existing name registration,
+		/// returning the deposit to the original owner.
+		///
+		/// Can only be called by the `RegistrationManager` origin.
 		#[pallet::weight(0)]
 		pub fn force_register(
 			origin: OriginFor<T>,
@@ -207,6 +208,10 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// Force the de-registration of a name hash. It will delete any existing name registration,
+		/// returning the deposit to the original owner.
+		///
+		/// Can only be called by the `RegistrationManager` origin.
 		#[pallet::weight(0)]
 		pub fn force_deregister(origin: OriginFor<T>, name_hash: NameHash) -> DispatchResult {
 			T::RegistrationManager::ensure_origin(origin)?;
@@ -214,6 +219,19 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// Allow a sender to commit to a new name registration on behalf of the `owner`. By making
+		/// a commitment, the sender will reserve a deposit until the name is revealed or the
+		/// commitment is removed.
+		///
+		/// The commitment hash should be the `bake2_256(name: Vec<u8>, secret: u64)`, which
+		/// allows the sender to keep name being registered secret until it is revealed.
+		///
+		/// The `name` must be at least 3 characters long.
+		///
+		/// When `MinimumCommitmentPeriod` blocks have passed, any user can submit `reveal` with the
+		/// `name` and `secret` parameters, and the registration will be completed.
+		///
+		/// See `fn reveal`.
 		#[pallet::weight(0)]
 		pub fn commit(
 			origin: OriginFor<T>,
@@ -225,6 +243,12 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// Allow a sender to reveal a previously committed name registration on behalf of the
+		/// committed `owner`. By revealing the name, the sender will pay a non-refundable
+		/// registration fee.
+		///
+		/// The registration fee is calculated using the length of the name and the length of the
+		/// registration.
 		#[pallet::weight(0)]
 		pub fn reveal(
 			origin: OriginFor<T>,
@@ -237,6 +261,9 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// Allows anyone to remove a commitment that has expired the reveal period.
+		///
+		/// By doing so, the commitment deposit is returned to the original depositor.
 		#[pallet::weight(0)]
 		pub fn remove_commitment(
 			origin: OriginFor<T>,
@@ -250,6 +277,22 @@ pub mod pallet {
 				Error::<T>::CommitmentNotExpired
 			);
 			Self::do_remove_commitment(&commitment_hash, &commitment);
+			Ok(())
+		}
+
+		/// Transfers the ownership and deposits of a name registration to a new owner.
+		///
+		/// Can only be called by the existing owner of the name registration.
+		#[pallet::weight(0)]
+		pub fn transfer(
+			origin: OriginFor<T>,
+			new_owner: T::AccountId,
+			name_hash: NameHash,
+		) -> DispatchResult {
+			let sender = ensure_signed(origin)?;
+			let registration = Self::get_registration(name_hash)?;
+			ensure!(Self::is_owner(&registration, &sender), Error::<T>::NotRegistrationOwner);
+			Self::do_transfer_ownership(name_hash, new_owner)?;
 			Ok(())
 		}
 
@@ -279,33 +322,9 @@ pub mod pallet {
 			})
 		}
 
-		#[pallet::weight(0)]
-		pub fn transfer(
-			origin: OriginFor<T>,
-			to: T::AccountId,
-			name_hash: NameHash,
-		) -> DispatchResult {
-			let sender = ensure_signed(origin)?;
-			Registrations::<T>::try_mutate(name_hash, |maybe_registration| {
-				let r = maybe_registration.as_mut().ok_or(Error::<T>::RegistrationNotFound)?;
-				// fails for subnodes. subnodes cannot be transferred.
-				let registrant =
-					r.registrant.as_ref().ok_or(Error::<T>::RegistrationRegistrantNotFound)?;
-				ensure!(registrant == &sender, Error::<T>::NotRegistrationRegistrant);
-
-				if let Some(e) = r.expiry {
-					ensure!(
-						frame_system::Pallet::<T>::block_number() <= e,
-						Error::<T>::RegistrationExpired
-					);
-				}
-
-				r.registrant = Some(to.clone());
-				Self::deposit_event(Event::<T>::NewOwner { from: sender, to });
-				Ok(())
-			})
-		}
-
+		/// Allows any sender to extend the registration of an existing name.
+		///
+		/// By doing so, the sender will pay the non-refundable registration extension fee.
 		#[pallet::weight(0)]
 		pub fn renew(
 			origin: OriginFor<T>,
@@ -313,35 +332,8 @@ pub mod pallet {
 			periods: T::BlockNumber,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
-
-			Registrations::<T>::try_mutate(name_hash, |maybe_registration| {
-				let r = maybe_registration.as_mut().ok_or(Error::<T>::RegistrationNotFound)?;
-
-				// cannot renew a domain that has no expiry
-				let expiry = r.expiry.ok_or(Error::<T>::RegistrationHasNoExpiry)?;
-
-				let fee = Self::length_fee(periods);
-
-				// withdraw fees from account
-				let imbalance = T::Currency::withdraw(
-					&sender,
-					fee,
-					WithdrawReasons::FEE,
-					ExistenceRequirement::KeepAlive,
-				)?;
-
-				let block_number = frame_system::Pallet::<T>::block_number();
-
-				let expiry_new = match block_number <= expiry {
-					true => expiry.saturating_add(Self::length(periods)),
-					false => block_number.saturating_add(Self::length(periods)),
-				};
-
-				r.expiry = Some(expiry_new);
-				T::RegistrationFeeHandler::on_unbalanced(imbalance);
-				Self::deposit_event(Event::<T>::NameRenewed { name_hash, expires: expiry_new });
-				Ok(())
-			})
+			Self::do_renew(sender, name_hash, periods)?;
+			Ok(())
 		}
 
 		#[pallet::weight(0)]
@@ -361,7 +353,7 @@ pub mod pallet {
 			let registration =
 				Registrations::<T>::get(name_hash).ok_or(Error::<T>::RegistrationNotFound)?;
 			if !Self::is_expired(&registration) {
-				ensure!(Self::is_owner(&registration, sender), Error::<T>::NotRegistrationOwner);
+				ensure!(Self::is_owner(&registration, &sender), Error::<T>::NotRegistrationOwner);
 			}
 			Self::do_deregister(name_hash);
 			Ok(())
@@ -374,18 +366,7 @@ pub mod pallet {
 			label: Vec<u8>,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
-			let parent = Self::get_registration(parent_hash)?;
-
-			ensure!(!label.len().is_zero(), Error::<T>::LabelTooShort);
-			let label_hash = sp_core::blake2_256(&label);
-			ensure!(sender == parent.owner, Error::<T>::NotRegistrationOwner);
-
-			let name_hash = Self::subnode_hash(parent_hash, label_hash);
-			ensure!(!Registrations::<T>::contains_key(name_hash), Error::<T>::RegistrationExists);
-
-			let deposit = T::SubNodeDeposit::get();
-
-			Self::do_register(name_hash, None, sender, None, Some(deposit))?;
+			Self::do_set_subnode_record(sender, parent_hash, &label)?;
 			Ok(())
 		}
 
@@ -435,7 +416,7 @@ pub mod pallet {
 			let subnode_registration = Self::get_registration(subnode_hash)?;
 			// The owner isn't calling, we check that the parent registration doesn't exist, which
 			// mean this subnode is still valid.
-			if !Self::is_owner(&subnode_registration, sender) {
+			if !Self::is_owner(&subnode_registration, &sender) {
 				ensure!(
 					Self::get_registration(parent_hash).is_err(),
 					Error::<T>::RegistrationNotExpired

@@ -18,13 +18,16 @@
 //! Handles basic registration and deregistration of names.
 
 use crate::{types::*, *};
-use frame_support::{pallet_prelude::*, traits::ReservableCurrency};
+use frame_support::{
+	pallet_prelude::*,
+	traits::{BalanceStatus, ReservableCurrency},
+};
 use sp_runtime::traits::Zero;
 
 impl<T: Config> Pallet<T> {
 	/// Check if an account is authorized to control a name registration.
-	pub fn is_owner(registration: &RegistrationOf<T>, user: T::AccountId) -> bool {
-		registration.owner == user
+	pub fn is_owner(registration: &RegistrationOf<T>, user: &T::AccountId) -> bool {
+		&registration.owner == user
 	}
 
 	pub fn is_expired(registration: &RegistrationOf<T>) -> bool {
@@ -40,6 +43,9 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// A function that handles registration of a name hash.
+	///
+	/// Does not check for an existing registration before overwriting, but does
+	/// free any existing deposit if one does exist.
 	pub fn do_register(
 		name_hash: NameHash,
 		maybe_registrant: Option<T::AccountId>,
@@ -80,5 +86,28 @@ impl<T: Config> Pallet<T> {
 
 		Resolvers::<T>::remove(name_hash);
 		Self::deposit_event(Event::<T>::AddressDeregistered { name_hash });
+	}
+
+	/// Transfer ownership of a name registration without any checks.
+	///
+	/// Will also transfer any deposited amount to the new owner.
+	pub fn do_transfer_ownership(name_hash: NameHash, new_owner: T::AccountId) -> DispatchResult {
+		Registrations::<T>::try_mutate(name_hash, |maybe_registration| {
+			let r = maybe_registration.as_mut().ok_or(Error::<T>::RegistrationNotFound)?;
+			let old_owner = r.owner.clone();
+
+			if let Some(deposit) = r.deposit {
+				T::Currency::repatriate_reserved(
+					&old_owner,
+					&new_owner,
+					deposit,
+					BalanceStatus::Reserved,
+				)?;
+			}
+
+			r.owner = new_owner.clone();
+			Self::deposit_event(Event::<T>::NewOwner { from: old_owner, to: new_owner });
+			Ok(())
+		})
 	}
 }

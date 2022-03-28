@@ -25,6 +25,16 @@ use frame_support::{
 use sp_runtime::traits::{Saturating, Zero};
 
 impl<T: Config> Pallet<T> {
+	/// Get the commitment hash from the raw name and secret.
+	pub fn commitment_hash(name: &[u8], secret: u64) -> CommitmentHash {
+		sp_core::blake2_256(&(name, secret).encode())
+	}
+
+	/// Get the name hash from raw bytes.
+	pub fn name_hash(name: &[u8]) -> NameHash {
+		sp_core::blake2_256(name)
+	}
+
 	/// Returns a commitment by hash if it exists.
 	pub fn get_commitment(
 		commitment_hash: CommitmentHash,
@@ -117,6 +127,41 @@ impl<T: Config> Pallet<T> {
 		Ok(())
 	}
 
+	pub fn do_renew(
+		fee_payer: T::AccountId,
+		name_hash: NameHash,
+		periods: T::BlockNumber,
+	) -> DispatchResult {
+		Registrations::<T>::try_mutate(name_hash, |maybe_registration| {
+			let r = maybe_registration.as_mut().ok_or(Error::<T>::RegistrationNotFound)?;
+
+			// cannot renew a domain that has no expiry
+			let expiry = r.expiry.ok_or(Error::<T>::RegistrationHasNoExpiry)?;
+
+			let fee = Self::length_fee(periods);
+
+			// withdraw fees from account
+			let imbalance = T::Currency::withdraw(
+				&fee_payer,
+				fee,
+				WithdrawReasons::FEE,
+				ExistenceRequirement::KeepAlive,
+			)?;
+
+			let block_number = frame_system::Pallet::<T>::block_number();
+
+			let expiry_new = match block_number <= expiry {
+				true => expiry.saturating_add(Self::length(periods)),
+				false => block_number.saturating_add(Self::length(periods)),
+			};
+
+			r.expiry = Some(expiry_new);
+			T::RegistrationFeeHandler::on_unbalanced(imbalance);
+			Self::deposit_event(Event::<T>::NameRenewed { name_hash, expires: expiry_new });
+			Ok(())
+		})
+	}
+
 	/// Remove an existing commitment without any checks.
 	///
 	/// Unreserves any deposit held for the commitment.
@@ -124,14 +169,5 @@ impl<T: Config> Pallet<T> {
 		let res = T::Currency::unreserve(&commitment.depositor, commitment.deposit);
 		debug_assert!(res.is_zero());
 		Commitments::<T>::remove(commitment_hash);
-	}
-
-	/// Get the commitment hash from the raw name and secret.
-	pub fn commitment_hash(name: &[u8], secret: u64) -> CommitmentHash {
-		sp_core::blake2_256(&(name, secret).encode())
-	}
-
-	pub fn name_hash(name: &[u8]) -> NameHash {
-		sp_core::blake2_256(name)
 	}
 }

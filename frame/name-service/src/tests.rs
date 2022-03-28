@@ -330,15 +330,15 @@ fn transfer_works() {
 	new_test_ext().execute_with(|| {
 		let (_, name_hash) = alice_register_bob_senario_setup();
 
-		// check current registrant (2)
-		assert_eq!(Registrations::<Test>::get(name_hash).unwrap().registrant, Some(2));
+		// check current owner (2)
+		assert_eq!(Registrations::<Test>::get(name_hash).unwrap().owner, 2);
 
 		// transfer to new registrant (4)
 		let new_owner = 4;
 		assert_ok!(NameService::transfer(Origin::signed(2), 4, name_hash));
 
 		// check new registrant (4)
-		assert_eq!(Registrations::<Test>::get(name_hash).unwrap().registrant, Some(new_owner));
+		assert_eq!(Registrations::<Test>::get(name_hash).unwrap().owner, new_owner);
 	});
 }
 
@@ -369,15 +369,7 @@ fn transfer_handles_errors() {
 
 		assert_noop!(
 			NameService::transfer(Origin::signed(3), 4, name_hash),
-			Error::<Test>::NotRegistrationRegistrant
-		);
-
-		// Registration expired some time in the future
-		add_blocks(2000);
-
-		assert_noop!(
-			NameService::transfer(Origin::signed(owner), 4, name_hash),
-			Error::<Test>::RegistrationExpired
+			Error::<Test>::NotRegistrationOwner
 		);
 	});
 }
@@ -438,7 +430,7 @@ fn set_address_handles_errors() {
 	new_test_ext().execute_with(|| {
 		let non_owner = 1;
 		let owner = 2;
-		let some_name_hash = sp_io::hashing::blake2_256(&("alice".as_bytes().to_vec()));
+		let some_name_hash = NameService::name_hash("alice".as_bytes());
 		let blocks_per_registration_period: u64 =
 			<Test as crate::Config>::BlocksPerRegistrationPeriod::get();
 
@@ -611,10 +603,14 @@ fn set_subnode_record_works() {
 		let (_, parent_hash) = alice_register_bob_senario_setup();
 
 		let owner = 2;
-		let label = "my".as_bytes().to_vec();
-		let label_hash = sp_io::hashing::blake2_256(&label);
+		let label = "my".as_bytes();
+		let label_hash = NameService::name_hash(label);
 
-		assert_ok!(NameService::set_subnode_record(Origin::signed(owner), parent_hash, label));
+		assert_ok!(NameService::set_subnode_record(
+			Origin::signed(owner),
+			parent_hash,
+			label.to_vec()
+		));
 
 		let name_hash = NameService::subnode_hash(parent_hash, label_hash);
 		assert!(Registrations::<Test>::contains_key(name_hash));
