@@ -8921,15 +8921,12 @@ dependencies = [
  "hash-db",
  "jsonrpc-core",
  "jsonrpc-pubsub",
- "libc",
  "log 0.4.14",
  "parity-scale-codec",
  "parity-util-mem",
  "parking_lot 0.12.0",
  "pin-project 1.0.10",
  "rand 0.7.3",
- "rand_pcg 0.2.1",
- "regex",
  "sc-block-builder",
  "sc-chain-spec",
  "sc-client-api",
@@ -8942,6 +8939,7 @@ dependencies = [
  "sc-offchain",
  "sc-rpc",
  "sc-rpc-server",
+ "sc-sysinfo",
  "sc-telemetry",
  "sc-tracing",
  "sc-transaction-pool",
@@ -9044,6 +9042,19 @@ dependencies = [
  "sp-blockchain",
  "sp-runtime",
  "thiserror",
+]
+
+[[package]]
+name = "sc-sysinfo"
+version = "6.0.0-dev"
+dependencies = [
+ "libc",
+ "log 0.4.14",
+ "rand 0.7.3",
+ "rand_pcg 0.2.1",
+ "regex",
+ "sc-telemetry",
+ "sp-core",
 ]
 
 [[package]]

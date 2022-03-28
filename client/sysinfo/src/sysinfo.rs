@@ -16,9 +16,6 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! This module contains the code necessary to gather basic hardware
-//! and software telemetry information about the node on which we're running.
-
 use rand::{seq::SliceRandom, Rng};
 use sc_telemetry::{HwBench, SysInfo};
 use std::{

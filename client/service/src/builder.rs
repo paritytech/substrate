@@ -503,11 +503,11 @@ where
 		sc_client_db::DatabaseSource::Custom { .. } => None,
 	};
 
-	let sysinfo = crate::sysinfo::gather_sysinfo();
+	let sysinfo = sc_sysinfo::gather_sysinfo();
 	let hwbench = if config.disable_hardware_benchmarks {
 		None
 	} else {
-		Some(crate::sysinfo::gather_hwbench(database_path))
+		Some(sc_sysinfo::gather_hwbench(database_path))
 	};
 
 	info!("💻 Operating system: {}", TARGET_OS);
