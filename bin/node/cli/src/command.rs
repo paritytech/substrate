@@ -18,9 +18,12 @@
 
 use crate::{chain_spec, service, service::new_partial, Cli, Subcommand};
 use node_executor::ExecutorDispatch;
-use node_runtime::{Block, RuntimeApi};
+use node_primitives::Block;
+use node_runtime::RuntimeApi;
 use sc_cli::{ChainSpec, Result, RuntimeVersion, SubstrateCli};
 use sc_service::PartialComponents;
+
+use std::sync::Arc;
 
 impl SubstrateCli for Cli {
 	fn impl_name() -> String {
@@ -95,6 +98,37 @@ pub fn run() -> Result<()> {
 				You can enable it with `--features runtime-benchmarks`."
 					.into())
 			},
+		Some(Subcommand::BenchmarkBlock(cmd)) => {
+			let runner = cli.create_runner(cmd)?;
+			runner.async_run(|config| {
+				let PartialComponents { client, task_manager, .. } = new_partial(&config)?;
+				Ok((cmd.run(client), task_manager))
+			})
+		},
+		Some(Subcommand::BenchmarkOverhead(cmd)) => {
+			let runner = cli.create_runner(cmd)?;
+			runner.async_run(|mut config| {
+				use super::command_helper::{inherent_data, ExtrinsicBuilder};
+				// We don't use the authority role since that would start producing blocks
+				// in the background which would mess with our benchmark.
+				config.role = sc_service::Role::Full;
+
+				let PartialComponents { client, task_manager, .. } = new_partial(&config)?;
+				let ext_builder = ExtrinsicBuilder::new(client.clone());
+
+				Ok((cmd.run(config, client, inherent_data()?, Arc::new(ext_builder)), task_manager))
+			})
+		},
+		Some(Subcommand::BenchmarkStorage(cmd)) => {
+			let runner = cli.create_runner(cmd)?;
+			runner.async_run(|config| {
+				let PartialComponents { client, task_manager, backend, .. } = new_partial(&config)?;
+				let db = backend.expose_db();
+				let storage = backend.expose_storage();
+
+				Ok((cmd.run(config, client, db, storage), task_manager))
+			})
+		},
 		Some(Subcommand::Key(cmd)) => cmd.run(&cli),
 		Some(Subcommand::Sign(cmd)) => cmd.run(),
 		Some(Subcommand::Verify(cmd)) => cmd.run(),
@@ -141,7 +175,13 @@ pub fn run() -> Result<()> {
 			let runner = cli.create_runner(cmd)?;
 			runner.async_run(|config| {
 				let PartialComponents { client, task_manager, backend, .. } = new_partial(&config)?;
-				Ok((cmd.run(client, backend), task_manager))
+				let revert_aux = Box::new(|client, backend, blocks| {
+					sc_consensus_babe::revert(client, backend, blocks)?;
+					// TODO: grandpa revert
+					Ok(())
+				});
+
+				Ok((cmd.run(client, backend, Some(revert_aux)), task_manager))
 			})
 		},
 		#[cfg(feature = "try-runtime")]

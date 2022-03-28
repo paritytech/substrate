@@ -24,44 +24,45 @@ use scale_info::TypeInfo;
 use sp_runtime::RuntimeDebug;
 use sp_std::fmt::Debug;
 
-pub type BalanceOf<T> =
-	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
-pub type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<
+pub type BalanceOf<T, I = ()> =
+	<<T as Config<I>>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
+pub type NegativeImbalanceOf<T, I> = <<T as Config<I>>::Currency as Currency<
 	<T as frame_system::Config>::AccountId,
 >>::NegativeImbalance;
-pub type CallOf<T> = <T as Config>::Call;
-pub type VotesOf<T> = <T as Config>::Votes;
-pub type TallyOf<T> = <T as Config>::Tally;
+pub type CallOf<T, I> = <T as Config<I>>::Call;
+pub type VotesOf<T, I> = <T as Config<I>>::Votes;
+pub type TallyOf<T, I> = <T as Config<I>>::Tally;
 pub type PalletsOriginOf<T> = <<T as frame_system::Config>::Origin as OriginTrait>::PalletsOrigin;
-pub type ReferendumInfoOf<T> = ReferendumInfo<
-	TrackIdOf<T>,
+pub type ReferendumInfoOf<T, I> = ReferendumInfo<
+	TrackIdOf<T, I>,
 	PalletsOriginOf<T>,
 	<T as frame_system::Config>::BlockNumber,
 	<T as frame_system::Config>::Hash,
-	BalanceOf<T>,
-	TallyOf<T>,
+	BalanceOf<T, I>,
+	TallyOf<T, I>,
 	<T as frame_system::Config>::AccountId,
-	ScheduleAddressOf<T>,
+	ScheduleAddressOf<T, I>,
 >;
-pub type ReferendumStatusOf<T> = ReferendumStatus<
-	TrackIdOf<T>,
+pub type ReferendumStatusOf<T, I> = ReferendumStatus<
+	TrackIdOf<T, I>,
 	PalletsOriginOf<T>,
 	<T as frame_system::Config>::BlockNumber,
 	<T as frame_system::Config>::Hash,
-	BalanceOf<T>,
-	TallyOf<T>,
+	BalanceOf<T, I>,
+	TallyOf<T, I>,
 	<T as frame_system::Config>::AccountId,
-	ScheduleAddressOf<T>,
+	ScheduleAddressOf<T, I>,
 >;
 pub type DecidingStatusOf<T> = DecidingStatus<<T as frame_system::Config>::BlockNumber>;
-pub type TrackInfoOf<T> = TrackInfo<BalanceOf<T>, <T as frame_system::Config>::BlockNumber>;
-pub type TrackIdOf<T> = <<T as Config>::Tracks as TracksInfo<
-	BalanceOf<T>,
+pub type TrackInfoOf<T, I = ()> =
+	TrackInfo<BalanceOf<T, I>, <T as frame_system::Config>::BlockNumber>;
+pub type TrackIdOf<T, I> = <<T as Config<I>>::Tracks as TracksInfo<
+	BalanceOf<T, I>,
 	<T as frame_system::Config>::BlockNumber,
 >>::Id;
-pub type ScheduleAddressOf<T> = <<T as Config>::Scheduler as Anon<
+pub type ScheduleAddressOf<T, I> = <<T as Config<I>>::Scheduler as Anon<
 	<T as frame_system::Config>::BlockNumber,
-	CallOf<T>,
+	CallOf<T, I>,
 	PalletsOriginOf<T>,
 >>::Address;
 
@@ -86,7 +87,7 @@ impl<T: Ord, S: Get<u32>> InsertSorted<T> for BoundedVec<T, S> {
 		mut f: F,
 	) -> bool {
 		let index = self.binary_search_by_key::<K, F>(&f(&t), f).unwrap_or_else(|x| x);
-		self.force_insert_keep_right(index, t)
+		self.force_insert_keep_right(index, t).is_ok()
 	}
 }
 
@@ -185,26 +186,6 @@ pub trait TracksInfo<Balance, Moment> {
 	}
 }
 
-/// Indication of either a specific moment or a delay from a implicitly defined moment.
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
-pub enum AtOrAfter<Moment: Parameter> {
-	/// Indiciates that the event should occur at the moment given.
-	At(Moment),
-	/// Indiciates that the event should occur some period of time (defined by the parameter) after
-	/// a prior event. The prior event is defined by the context, but for the purposes of
-	/// referendum proposals, the "prior event" is the passing of the referendum.
-	After(Moment),
-}
-
-impl<Moment: AtLeast32BitUnsigned + Copy + Parameter> AtOrAfter<Moment> {
-	pub fn evaluate(&self, since: Moment) -> Moment {
-		match &self {
-			Self::At(m) => *m,
-			Self::After(m) => m.saturating_add(since),
-		}
-	}
-}
-
 /// Info regarding an ongoing referendum.
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct ReferendumStatus<
@@ -224,7 +205,7 @@ pub struct ReferendumStatus<
 	/// The hash of the proposal up for referendum.
 	pub(crate) proposal_hash: Hash,
 	/// The time the proposal should be scheduled for enactment.
-	pub(crate) enactment: AtOrAfter<Moment>,
+	pub(crate) enactment: DispatchTime<Moment>,
 	/// The time of submission. Once `UndecidingTimeout` passes, it may be closed by anyone if it
 	/// `deciding` is `None`.
 	pub(crate) submitted: Moment,

@@ -279,7 +279,7 @@ where
 	L: sc_consensus::JustificationSyncLink<B>,
 	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + Sync + 'static,
 {
-	AuraWorker {
+	sc_consensus_slots::SimpleSlotWorkerToSlotWorker(AuraWorker {
 		client,
 		block_import,
 		env: proposer_factory,
@@ -292,7 +292,7 @@ where
 		block_proposal_slot_portion,
 		max_block_proposal_slot_portion,
 		_key_type: PhantomData::<P>,
-	}
+	})
 }
 
 struct AuraWorker<C, E, I, P, SO, L, BS> {
