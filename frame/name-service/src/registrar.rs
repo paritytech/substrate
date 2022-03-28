@@ -18,8 +18,8 @@
 //! Handles basic registration and deregistration of names.
 
 use crate::{types::*, *};
-use frame_support::{ensure, pallet_prelude::*, traits::ReservableCurrency};
-use sp_runtime::traits::{Saturating, Zero};
+use frame_support::{pallet_prelude::*, traits::ReservableCurrency};
+use sp_runtime::traits::Zero;
 
 impl<T: Config> Pallet<T> {
 	/// Check if an account is authorized to control a name registration.
@@ -44,14 +44,12 @@ impl<T: Config> Pallet<T> {
 		name_hash: NameHash,
 		maybe_registrant: Option<T::AccountId>,
 		owner: T::AccountId,
-		maybe_periods: Option<u32>,
+		maybe_expiration: Option<T::BlockNumber>,
 		maybe_deposit: Option<BalanceOf<T>>,
-	) {
-		let expiry = if let Some(p) = maybe_periods {
-			Some(frame_system::Pallet::<T>::block_number().saturating_add(Self::length(p)))
-		} else {
-			None
-		};
+	) -> DispatchResult {
+		if let Some(deposit) = maybe_deposit {
+			T::Currency::reserve(&owner, deposit)?;
+		}
 
 		if let Some(old_registration) = Registrations::<T>::take(name_hash) {
 			if let Some(deposit) = old_registration.deposit {
@@ -63,12 +61,13 @@ impl<T: Config> Pallet<T> {
 		let registration = Registration {
 			registrant: maybe_registrant,
 			owner: owner.clone(),
-			expiry,
+			expiry: maybe_expiration,
 			deposit: maybe_deposit,
 		};
 
 		Registrations::<T>::insert(name_hash, registration);
 		Self::deposit_event(Event::<T>::NameRegistered { name_hash, owner });
+		Ok(())
 	}
 
 	pub fn do_deregister(name_hash: NameHash) {

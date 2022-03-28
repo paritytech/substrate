@@ -27,6 +27,7 @@ mod tests;
 
 pub use pallet::*;
 
+mod commit_reveal;
 mod registrar;
 mod subnodes;
 mod types;
@@ -37,7 +38,7 @@ pub mod pallet {
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 	use sp_runtime::traits::{Bounded, Convert, Saturating, Zero};
-	use sp_std::{convert::TryInto, vec::Vec};
+	use sp_std::vec::Vec;
 
 	use frame_support::traits::{
 		BalanceStatus, Currency, ExistenceRequirement, OnUnbalanced, ReservableCurrency,
@@ -194,6 +195,25 @@ pub mod pallet {
 	// Your Pallet's callable functions.
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
+		#[pallet::weight(0)]
+		pub fn force_register(
+			origin: OriginFor<T>,
+			name_hash: NameHash,
+			who: T::AccountId,
+			maybe_expiry: Option<T::BlockNumber>,
+		) -> DispatchResult {
+			T::RegistrationManager::ensure_origin(origin)?;
+			Self::do_register(name_hash, Some(who.clone()), who, maybe_expiry, None)?;
+			Ok(())
+		}
+
+		#[pallet::weight(0)]
+		pub fn force_deregister(origin: OriginFor<T>, name_hash: NameHash) -> DispatchResult {
+			T::RegistrationManager::ensure_origin(origin)?;
+			Self::do_deregister(name_hash);
+			Ok(())
+		}
+
 		// TODO: Should we allow registration on behalf of?
 		#[pallet::weight(0)]
 		pub fn commit(
@@ -222,15 +242,13 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			name: Vec<u8>,
 			secret: u64,
-			periods: u32,
+			periods: T::BlockNumber,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 			let commitment_hash = sp_io::hashing::blake2_256(&(&name, secret).encode());
 
-			let commitment =
-				Commitments::<T>::get(commitment_hash).ok_or(Error::<T>::CommitmentNotFound)?;
+			let commitment = Self::get_commitment(commitment_hash)?;
 
-			let name_hash = sp_io::hashing::blake2_256(&name);
 			let block_number = frame_system::Pallet::<T>::block_number();
 
 			ensure!(
@@ -238,31 +256,53 @@ pub mod pallet {
 				Error::<T>::TooEarlyToReveal
 			);
 
-			if Self::is_available(name_hash, block_number) {
-				let fee = Self::registration_fee(name.clone(), periods);
+			let name_hash = sp_io::hashing::blake2_256(&name);
 
-				let imbalance = T::Currency::withdraw(
-					&sender,
-					fee,
-					WithdrawReasons::FEE,
-					ExistenceRequirement::KeepAlive,
-				)?;
+			ensure!(Self::get_registration(name_hash).is_err(), Error::<T>::RegistrationExists);
 
-				T::RegistrationFeeHandler::on_unbalanced(imbalance);
+			let fee = Self::registration_fee(name.clone(), periods);
 
-				// Note that no deposit is passed in for TLDs, as registration + length fees could
-				// be enough to deter attacks. Although this could present an opportunity to use
-				// reference counter deposits also.
-				Self::do_register(
-					name_hash,
-					Some(commitment.who.clone()),
-					commitment.who,
-					Some(periods),
-					None,
-				);
-			}
+			let imbalance = T::Currency::withdraw(
+				&sender,
+				fee,
+				WithdrawReasons::FEE,
+				ExistenceRequirement::KeepAlive,
+			)?;
+
+			T::RegistrationFeeHandler::on_unbalanced(imbalance);
+
+			let expiry = block_number.saturating_add(Self::length(periods));
+
+			Self::do_register(
+				name_hash,
+				Some(commitment.who.clone()),
+				commitment.who,
+				Some(expiry),
+				None,
+			)?;
 
 			T::Currency::unreserve(&sender, commitment.deposit);
+			Commitments::<T>::remove(commitment_hash);
+			Ok(())
+		}
+
+		#[pallet::weight(0)]
+		pub fn remove_commitment(
+			origin: OriginFor<T>,
+			commitment_hash: CommitmentHash,
+		) -> DispatchResult {
+			ensure_signed_or_root(origin)?;
+			let commitment =
+				Commitments::<T>::get(commitment_hash).ok_or(Error::<T>::CommitmentNotFound)?;
+
+			ensure!(
+				commitment.when.saturating_add(T::CommitmentAlivePeriod::get()) >
+					frame_system::Pallet::<T>::block_number(),
+				Error::<T>::CommitmentNotExpired
+			);
+
+			let res = T::Currency::unreserve(&commitment.who, commitment.deposit);
+			debug_assert!(res.is_zero());
 			Commitments::<T>::remove(commitment_hash);
 			Ok(())
 		}
@@ -321,7 +361,11 @@ pub mod pallet {
 		}
 
 		#[pallet::weight(0)]
-		pub fn renew(origin: OriginFor<T>, name_hash: NameHash, periods: u32) -> DispatchResult {
+		pub fn renew(
+			origin: OriginFor<T>,
+			name_hash: NameHash,
+			periods: T::BlockNumber,
+		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 
 			Registrations::<T>::try_mutate(name_hash, |maybe_registration| {
@@ -378,26 +422,6 @@ pub mod pallet {
 		}
 
 		#[pallet::weight(0)]
-		pub fn remove_commitment(
-			origin: OriginFor<T>,
-			commitment_hash: CommitmentHash,
-		) -> DispatchResult {
-			ensure_signed_or_root(origin)?;
-			let commitment =
-				Commitments::<T>::get(commitment_hash).ok_or(Error::<T>::CommitmentNotFound)?;
-
-			ensure!(
-				commitment.when.saturating_add(T::CommitmentAlivePeriod::get()) >
-					frame_system::Pallet::<T>::block_number(),
-				Error::<T>::CommitmentNotExpired
-			);
-
-			let _ = T::Currency::unreserve(&commitment.who, commitment.deposit);
-			Commitments::<T>::remove(commitment_hash);
-			Ok(())
-		}
-
-		#[pallet::weight(0)]
 		pub fn set_subnode_record(
 			origin: OriginFor<T>,
 			parent_hash: NameHash,
@@ -414,9 +438,8 @@ pub mod pallet {
 			ensure!(!Registrations::<T>::contains_key(name_hash), Error::<T>::RegistrationExists);
 
 			let deposit = T::SubNodeDeposit::get();
-			T::Currency::reserve(&sender, deposit)?;
 
-			Self::do_register(name_hash, None, sender, None, Some(deposit));
+			Self::do_register(name_hash, None, sender, None, Some(deposit))?;
 			Ok(())
 		}
 
@@ -440,12 +463,14 @@ pub mod pallet {
 				let r = maybe_registration.as_mut().ok_or(Error::<T>::RegistrationNotFound)?;
 				ensure!(r.owner == sender, Error::<T>::NotRegistrationOwner);
 
-				T::Currency::repatriate_reserved(
-					&sender,
-					&owner,
-					T::SubNodeDeposit::get(),
-					BalanceStatus::Reserved,
-				)?;
+				if let Some(deposit) = r.deposit {
+					T::Currency::repatriate_reserved(
+						&sender,
+						&owner,
+						deposit,
+						BalanceStatus::Reserved,
+					)?;
+				}
 
 				r.owner = owner.clone();
 				Self::deposit_event(Event::<T>::NewOwner { from: sender, to: owner });
@@ -473,30 +498,11 @@ pub mod pallet {
 			Self::do_deregister(subnode_hash);
 			Ok(())
 		}
-
-		#[pallet::weight(0)]
-		pub fn force_register(
-			origin: OriginFor<T>,
-			name_hash: NameHash,
-			who: T::AccountId,
-			periods: Option<u32>,
-		) -> DispatchResult {
-			T::RegistrationManager::ensure_origin(origin)?;
-			Self::do_register(name_hash, Some(who.clone()), who, periods, None);
-			Ok(())
-		}
-
-		#[pallet::weight(0)]
-		pub fn force_deregister(origin: OriginFor<T>, name_hash: NameHash) -> DispatchResult {
-			T::RegistrationManager::ensure_origin(origin)?;
-			Self::do_deregister(name_hash);
-			Ok(())
-		}
 	}
 
 	// Pallet internal functions
 	impl<T: Config> Pallet<T> {
-		pub fn registration_fee(name: Vec<u8>, periods: u32) -> BalanceOf<T> {
+		pub fn registration_fee(name: Vec<u8>, periods: T::BlockNumber) -> BalanceOf<T> {
 			let name_length = name.len();
 			let fee_reg = if name_length < 3 {
 				// names with under 3 characters should not be registered, so we
@@ -514,26 +520,13 @@ pub mod pallet {
 			fee_reg.saturating_add(fee_length)
 		}
 
-		pub fn length_fee(periods: u32) -> BalanceOf<T> {
-			let periods_as_balance: BalanceOf<T> = periods.try_into().ok().unwrap();
+		pub fn length_fee(periods: T::BlockNumber) -> BalanceOf<T> {
+			let periods_as_balance: BalanceOf<T> = T::BlockNumberToBalance::convert(periods);
 			T::FeePerRegistrationPeriod::get().saturating_mul(periods_as_balance)
 		}
 
-		pub fn length(periods: u32) -> T::BlockNumber {
-			let periods_as_block_number: T::BlockNumber = periods.try_into().ok().unwrap();
-			periods_as_block_number.saturating_mul(T::BlocksPerRegistrationPeriod::get())
-		}
-
-		pub fn is_available(name_hash: NameHash, current_block_number: T::BlockNumber) -> bool {
-			match Registrations::<T>::get(name_hash) {
-				Some(r) =>
-					if let Some(e) = r.expiry {
-						e <= current_block_number
-					} else {
-						false
-					},
-				None => true,
-			}
+		pub fn length(periods: T::BlockNumber) -> T::BlockNumber {
+			periods.saturating_mul(T::BlocksPerRegistrationPeriod::get())
 		}
 
 		pub fn do_set_address(

@@ -31,6 +31,12 @@ pub type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<
 	<T as frame_system::Config>::AccountId,
 >>::NegativeImbalance;
 
+pub type CommitmentOf<T> = Commitment<
+	<T as frame_system::Config>::AccountId,
+	BalanceOf<T>,
+	<T as frame_system::Config>::BlockNumber,
+>;
+
 pub type RegistrationOf<T> = Registration<
 	<T as frame_system::Config>::AccountId,
 	BalanceOf<T>,
