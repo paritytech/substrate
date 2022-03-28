@@ -520,7 +520,7 @@ fn deregister_works_non_owner() {
 		let non_owner = 1;
 		assert_noop!(
 			NameService::deregister(Origin::signed(non_owner), name_hash),
-			Error::<Test>::RegistrationNotExpired
+			Error::<Test>::NotRegistrationOwner
 		);
 
 		// now expired, ok to deregister
@@ -546,10 +546,10 @@ fn deregister_handles_errors_non_owner() {
 
 		let (_, _) = alice_register_bob_senario_setup();
 
-		// not owner - registration has not expired
+		// not owner
 		assert_noop!(
 			NameService::deregister(Origin::signed(non_owner), name_hash),
-			Error::<Test>::RegistrationNotExpired
+			Error::<Test>::NotRegistrationOwner
 		);
 
 		// let owner deregister early
@@ -630,7 +630,7 @@ fn set_subnode_record_handles_errors() {
 		// parent hash has not yet been registered
 		assert_noop!(
 			NameService::set_subnode_record(Origin::signed(owner), parent_hash, label.clone()),
-			Error::<Test>::ParentRegistrationNotFound
+			Error::<Test>::RegistrationNotFound
 		);
 		let (_, parent_hash) = alice_register_bob_senario_setup();
 		// label too short
@@ -724,7 +724,7 @@ fn set_subnode_owner_handles_errors() {
 				label_hash,
 				new_subnode_owner
 			),
-			Error::<Test>::ParentRegistrationNotFound
+			Error::<Test>::RegistrationNotFound
 		);
 
 		// initial registration and subnode registration for further testing

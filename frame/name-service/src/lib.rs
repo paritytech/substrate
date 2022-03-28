@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) 2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -27,8 +27,13 @@ mod tests;
 
 pub use pallet::*;
 
+mod registrar;
+mod subnodes;
+mod types;
+
 #[frame_support::pallet]
 pub mod pallet {
+	use crate::types::*;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 	use sp_runtime::traits::{Bounded, Convert, Saturating, Zero};
@@ -42,18 +47,6 @@ pub mod pallet {
 	// The struct on which we build all of our Pallet logic.
 	#[pallet::pallet]
 	pub struct Pallet<T>(_);
-
-	type NameHash = [u8; 32];
-
-	type CommitmentHash = [u8; 32];
-
-	// Allows easy access our Pallet's `Balance` and `NegativeImbalance` type. Comes from `Currency`
-	// interface.
-	type BalanceOf<T> =
-		<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
-	type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<
-		<T as frame_system::Config>::AccountId,
-	>>::NegativeImbalance;
 
 	// Your Pallet's configuration trait, representing custom external types and interfaces.
 	#[pallet::config]
@@ -117,21 +110,6 @@ pub mod pallet {
 		type RegistrationManager: EnsureOrigin<Self::Origin>;
 	}
 
-	#[derive(Encode, Decode, Default, MaxEncodedLen, TypeInfo)]
-	pub struct Commitment<AccountId, Balance, BlockNumber> {
-		pub who: AccountId,
-		pub when: BlockNumber,
-		pub deposit: Balance,
-	}
-
-	#[derive(Encode, Decode, Default, MaxEncodedLen, TypeInfo)]
-	pub struct Registration<AccountId, Balance, BlockNumber> {
-		pub owner: AccountId,
-		pub registrant: Option<AccountId>,
-		pub expiry: Option<BlockNumber>,
-		pub deposit: Option<Balance>,
-	}
-
 	/* Placeholder for defining custom storage items. */
 
 	/// Name Commitments
@@ -151,11 +129,7 @@ pub mod pallet {
 		_,
 		Blake2_128Concat,
 		NameHash,
-		Registration<
-			T::AccountId,
-			BalanceOf<T>,
-			T::BlockNumber,
-		>,
+		Registration<T::AccountId, BalanceOf<T>, T::BlockNumber>,
 	>;
 
 	/// This resolver maps name hashes to an account
@@ -197,8 +171,6 @@ pub mod pallet {
 		RegistrationExists,
 		/// This registration does not exist.
 		RegistrationNotFound,
-		/// Parent registration does not exist.
-		ParentRegistrationNotFound,
 		/// Registration registratn does not exist.
 		RegistrationRegistrantNotFound,
 		/// The account is not the registration registrant.
@@ -396,7 +368,12 @@ pub mod pallet {
 		#[pallet::weight(0)]
 		pub fn deregister(origin: OriginFor<T>, name_hash: NameHash) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
-			Self::do_deregister(None, name_hash, Some(sender))?;
+			let registration =
+				Registrations::<T>::get(name_hash).ok_or(Error::<T>::RegistrationNotFound)?;
+			if !Self::is_expired(&registration) {
+				ensure!(Self::is_owner(&registration, sender), Error::<T>::NotRegistrationOwner);
+			}
+			Self::do_deregister(name_hash);
 			Ok(())
 		}
 
@@ -427,8 +404,7 @@ pub mod pallet {
 			label: Vec<u8>,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
-			let parent = Registrations::<T>::get(parent_hash)
-				.ok_or(Error::<T>::ParentRegistrationNotFound)?;
+			let parent = Self::get_registration(parent_hash)?;
 
 			ensure!(!label.len().is_zero(), Error::<T>::LabelTooShort);
 			let label_hash = sp_io::hashing::blake2_256(&label);
@@ -455,7 +431,7 @@ pub mod pallet {
 
 			ensure!(
 				Registrations::<T>::contains_key(parent_hash),
-				Error::<T>::ParentRegistrationNotFound
+				Error::<T>::RegistrationNotFound
 			);
 
 			let name_hash = Self::subnode_hash(parent_hash, label_hash);
@@ -484,7 +460,17 @@ pub mod pallet {
 			label_hash: NameHash,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
-			Self::do_deregister(Some(label_hash), parent_hash, Some(sender))?;
+			let subnode_hash = Self::subnode_hash(parent_hash, label_hash);
+			let subnode_registration = Self::get_registration(subnode_hash)?;
+			// The owner isn't calling, we check that the parent registration doesn't exist, which
+			// mean this subnode is still valid.
+			if !Self::is_owner(&subnode_registration, sender) {
+				ensure!(
+					Self::get_registration(parent_hash).is_err(),
+					Error::<T>::RegistrationNotExpired
+				);
+			}
+			Self::do_deregister(subnode_hash);
 			Ok(())
 		}
 
@@ -503,7 +489,7 @@ pub mod pallet {
 		#[pallet::weight(0)]
 		pub fn force_deregister(origin: OriginFor<T>, name_hash: NameHash) -> DispatchResult {
 			T::RegistrationManager::ensure_origin(origin)?;
-			Self::do_deregister(None, name_hash, None)?;
+			Self::do_deregister(name_hash);
 			Ok(())
 		}
 	}
@@ -550,37 +536,6 @@ pub mod pallet {
 			}
 		}
 
-		pub fn do_register(
-			name_hash: NameHash,
-			maybe_registrant: Option<T::AccountId>,
-			owner: T::AccountId,
-			maybe_periods: Option<u32>,
-			maybe_deposit: Option<BalanceOf<T>>,
-		) {
-			let expiry = if let Some(p) = maybe_periods {
-				Some(frame_system::Pallet::<T>::block_number().saturating_add(Self::length(p)))
-			} else {
-				None
-			};
-
-			if let Some(old_registration) = Registrations::<T>::take(name_hash) {
-				if let Some(deposit) = old_registration.deposit {
-					let res = T::Currency::unreserve(&old_registration.owner, deposit);
-					debug_assert!(res.is_zero());
-				}
-			}
-
-			let registration = Registration {
-				registrant: maybe_registrant,
-				owner: owner.clone(),
-				expiry,
-				deposit: maybe_deposit,
-			};
-
-			Registrations::<T>::insert(name_hash, registration);
-			Self::deposit_event(Event::<T>::NameRegistered { name_hash, owner });
-		}
-
 		pub fn do_set_address(
 			name_hash: NameHash,
 			owner: T::AccountId,
@@ -605,69 +560,6 @@ pub mod pallet {
 			Resolvers::<T>::insert(name_hash, address.clone());
 			Self::deposit_event(Event::<T>::AddressSet { name_hash, address });
 			Ok(())
-		}
-
-		pub fn do_deregister(
-			maybe_label_hash: Option<NameHash>,
-			name_hash: NameHash,
-			maybe_sender: Option<T::AccountId>,
-		) -> DispatchResult {
-			// if label hash has been provided, we are trying to deregister a subnode.
-			let name_hash = if let Some(label_hash) = maybe_label_hash {
-				let parent_hash = name_hash;
-
-				// generate the subnode we wish to deregister.
-				let subnode_hash = Self::subnode_hash(parent_hash, label_hash);
-
-				// ensure this subnode exists
-				let registration = Registrations::<T>::get(subnode_hash)
-					.ok_or(Error::<T>::RegistrationNotFound)?;
-
-				// not owner - check parent node has been deregistered.
-				if let Some(sender) = maybe_sender {
-					if registration.owner != sender {
-						ensure!(
-							!Registrations::<T>::contains_key(parent_hash),
-							Error::<T>::RegistrationNotExpired
-						);
-					}
-				}
-
-				// defensive handling subnode unreserve - should always exist.
-				if let Some(deposit) = registration.deposit {
-					let res = T::Currency::unreserve(&registration.owner, deposit);
-					debug_assert!(res.is_zero());
-				}
-
-				subnode_hash
-
-			// no label hash provided; we are trying to deregister a top level node.
-			} else {
-				let registration =
-					Registrations::<T>::get(name_hash).ok_or(Error::<T>::RegistrationNotFound)?;
-
-				// if not root origin nor owner, check node has expired.
-				if let Some(sender) = maybe_sender {
-					if registration.owner != sender {
-						let expiry =
-							registration.expiry.ok_or(Error::<T>::RegistrationHasNoExpiry)?;
-						ensure!(
-							expiry < frame_system::Pallet::<T>::block_number(),
-							Error::<T>::RegistrationNotExpired
-						);
-					}
-				}
-				name_hash
-			};
-
-			Resolvers::<T>::remove(name_hash);
-			Registrations::<T>::remove(name_hash);
-			Self::deposit_event(Event::<T>::AddressDeregistered { name_hash });
-			return Ok(())
-		}
-
-		pub fn subnode_hash(name_hash: NameHash, label_hash: NameHash) -> NameHash {
-			return sp_io::hashing::blake2_256(&(&name_hash, label_hash).encode())
 		}
 	}
 }
