@@ -517,9 +517,6 @@ pub trait IterableStorageNMap<K: ReversibleKeyGenerator, V: FullCodec>: StorageN
 
 /// An implementation of a map with a two keys.
 ///
-/// It provides an important ability to efficiently remove all entries
-/// that have a common first key.
-///
 /// Details on implementation can be found at [`generator::StorageDoubleMap`].
 pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 	/// The type that get/take returns.
