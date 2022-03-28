@@ -24,3 +24,16 @@ mod sysinfo;
 mod sysinfo_linux;
 
 pub use sysinfo::{gather_hwbench, gather_sysinfo};
+
+/// Prints out the results of the hardware benchmarks in the logs.
+pub fn print_hwbench(hwbench: &sc_telemetry::HwBench) {
+	log::info!("🏁 CPU score: {}MB/s", hwbench.cpu_score);
+	log::info!("🏁 Memory score: {}MB/s", hwbench.memory_score);
+
+	if let Some(score) = hwbench.disk_sequential_write_score {
+		log::info!("🏁 Disk score (seq. writes): {}MB/s", score);
+	}
+	if let Some(score) = hwbench.disk_random_write_score {
+		log::info!("🏁 Disk score (rand. writes): {}MB/s", score);
+	}
+}

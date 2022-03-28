@@ -535,15 +535,7 @@ where
 	}
 
 	if let Some(ref hwbench) = hwbench {
-		info!("🏁 CPU score: {}MB/s", hwbench.cpu_score);
-		info!("🏁 Memory score: {}MB/s", hwbench.memory_score);
-
-		if let Some(score) = hwbench.disk_sequential_write_score {
-			info!("🏁 Disk score (seq. writes): {}MB/s", score);
-		}
-		if let Some(score) = hwbench.disk_random_write_score {
-			info!("🏁 Disk score (rand. writes): {}MB/s", score);
-		}
+		sc_sysinfo::print_hwbench(hwbench);
 	}
 
 	let telemetry = telemetry
