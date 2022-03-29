@@ -27,7 +27,7 @@ use core::{
 	ops::{Deref, Index, IndexMut},
 	slice::SliceIndex,
 };
-use sp_std::{convert::TryFrom, marker::PhantomData, prelude::*};
+use sp_std::{marker::PhantomData, prelude::*};
 
 /// A weakly bounded vector.
 ///
@@ -320,7 +320,6 @@ pub mod test {
 	use crate::Twox128;
 	use frame_support::traits::ConstU32;
 	use sp_io::TestExternalities;
-	use sp_std::convert::TryInto;
 
 	crate::generate_storage_alias! { Prefix, Foo => Value<WeakBoundedVec<u32, ConstU32<7>>> }
 	crate::generate_storage_alias! { Prefix, FooMap => Map<(Twox128, u32), WeakBoundedVec<u32, ConstU32<7>>> }
