@@ -1284,7 +1284,7 @@ parameter_types! {
 	pub const FeePerRegistrationPeriod: Balance = 1 * DOLLARS / (365 * DAYS as Balance);
 	pub const BlocksPerRegistrationPeriod: BlockNumber = 1 * DAYS;
 	pub const MinCommitmentAge: BlockNumber = 1 * MINUTES;
-	pub const MaxCommitmentAge: BlockNumber = 1 * MINUTES;
+	pub const MaxCommitmentAge: BlockNumber = 10 * MINUTES;
 }
 
 impl pallet_name_service::Config for Runtime {
