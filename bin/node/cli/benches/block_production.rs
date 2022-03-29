@@ -108,10 +108,10 @@ fn new_node(tokio_handle: Handle) -> node_cli::service::NewFullBase {
 		base_path: Some(base_path),
 		informant_output_format: Default::default(),
 		wasm_runtime_overrides: None,
-		disable_hardware_benchmarks: true,
 	};
 
-	node_cli::service::new_full_base(config, |_, _| ()).expect("creating a full node doesn't fail")
+	node_cli::service::new_full_base(config, false, |_, _| ())
+		.expect("creating a full node doesn't fail")
 }
 
 fn extrinsic_set_time(now: u64) -> OpaqueExtrinsic {

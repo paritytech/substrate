@@ -491,24 +491,7 @@ where
 	)
 	.map_err(|e| Error::Application(Box::new(e)))?;
 
-	let database_path = match config.database {
-		sc_client_db::DatabaseSource::Auto { ref paritydb_path, ref rocksdb_path, .. } =>
-			if rocksdb_path.exists() {
-				Some(rocksdb_path.as_path())
-			} else {
-				Some(paritydb_path.as_path())
-			},
-		sc_client_db::DatabaseSource::RocksDb { ref path, .. } |
-		sc_client_db::DatabaseSource::ParityDb { ref path, .. } => Some(path.as_path()),
-		sc_client_db::DatabaseSource::Custom { .. } => None,
-	};
-
 	let sysinfo = sc_sysinfo::gather_sysinfo();
-	let hwbench = if config.disable_hardware_benchmarks {
-		None
-	} else {
-		Some(sc_sysinfo::gather_hwbench(database_path))
-	};
 
 	info!("💻 Operating system: {}", TARGET_OS);
 	info!("💻 CPU architecture: {}", TARGET_ARCH);
@@ -534,20 +517,9 @@ where
 		info!("💻 Virtual machine: {}", if is_virtual_machine { "yes" } else { "no" });
 	}
 
-	if let Some(ref hwbench) = hwbench {
-		sc_sysinfo::print_hwbench(hwbench);
-	}
-
 	let telemetry = telemetry
 		.map(|telemetry| {
-			init_telemetry(
-				&mut config,
-				network.clone(),
-				client.clone(),
-				telemetry,
-				Some(sysinfo),
-				hwbench,
-			)
+			init_telemetry(&mut config, network.clone(), client.clone(), telemetry, Some(sysinfo))
 		})
 		.transpose()?;
 
@@ -670,7 +642,6 @@ fn init_telemetry<TBl: BlockT, TCl: BlockBackend<TBl>>(
 	client: Arc<TCl>,
 	telemetry: &mut Telemetry,
 	sysinfo: Option<sc_telemetry::SysInfo>,
-	hwbench: Option<sc_telemetry::HwBench>,
 ) -> sc_telemetry::Result<TelemetryHandle> {
 	let genesis_hash = client.block_hash(Zero::zero()).ok().flatten().unwrap_or_default();
 	let connection_message = ConnectionMessage {
@@ -691,7 +662,6 @@ fn init_telemetry<TBl: BlockT, TCl: BlockBackend<TBl>>(
 			.to_string(),
 		network_id: network.local_peer_id().to_base58(),
 		sysinfo,
-		hwbench,
 	};
 
 	telemetry.start_telemetry(connection_message)?;
