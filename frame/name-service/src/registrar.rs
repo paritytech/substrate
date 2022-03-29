@@ -32,7 +32,7 @@ impl<T: Config> Pallet<T> {
 
 	/// Check if an account is a controller or owner of this name registration.
 	pub fn is_controller(registration: &RegistrationOf<T>, user: &T::AccountId) -> bool {
-		&registration.owner == user || &registration.controller == user
+		&registration.controller == user || Self::is_owner(registration, user)
 	}
 
 	pub fn is_expired(registration: &RegistrationOf<T>) -> bool {
@@ -63,8 +63,8 @@ impl<T: Config> Pallet<T> {
 		}
 
 		if let Some(old_registration) = Registrations::<T>::take(name_hash) {
-			if let Some(deposit) = old_registration.deposit {
-				let res = T::Currency::unreserve(&old_registration.owner, deposit);
+			if let Some(old_deposit) = old_registration.deposit {
+				let res = T::Currency::unreserve(&old_registration.owner, old_deposit);
 				debug_assert!(res.is_zero());
 			}
 		}
