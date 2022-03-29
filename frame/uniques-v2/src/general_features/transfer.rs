@@ -25,7 +25,6 @@ impl<T: Config> Pallet<T> {
 		config: CollectionConfig,
 		sender: T::AccountId,
 		receiver: T::AccountId,
-		amount: Option<BalanceOf<T>>,
 	) -> DispatchResult {
 		let user_features: BitFlags<UserFeatures> = config.user_features.into();
 
@@ -37,9 +36,20 @@ impl<T: Config> Pallet<T> {
 			//crate::limited::limited_check(receiver)?;
 		}
 
-		// do the transfer logic
+		Collections::<T>::try_mutate(id, |maybe_collection| {
+			let collection = maybe_collection.as_mut().ok_or(Error::<T>::CollectionNotFound)?;
+			ensure!(&sender == &collection.owner, Error::<T>::NotAuthorized);
 
-		Ok(())
+			if collection.owner == receiver {
+				return Ok(())
+			}
+
+			collection.owner = receiver.clone();
+
+			Self::deposit_event(Event::CollectionTransferred { id, sender, receiver });
+
+			Ok(())
+		})
 	}
 
 	pub fn do_transfer_ownership(
@@ -57,7 +67,7 @@ impl<T: Config> Pallet<T> {
 
 			collection.owner = new_owner.clone();
 
-			Self::deposit_event(Event::CollectionOwnerChanged { id, new_owner });
+			Self::deposit_event(Event::CollectionOwnerChanged { id, old_owner: caller, new_owner });
 			Ok(())
 		})
 	}

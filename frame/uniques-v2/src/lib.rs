@@ -163,7 +163,16 @@ pub mod pallet {
 		CollectionMetadataSet { id: T::CollectionId, data: MetadataOf<T> },
 		CollectionLocked { id: T::CollectionId },
 		CollectionDestroyed { id: T::CollectionId },
-		CollectionOwnerChanged { id: T::CollectionId, new_owner: T::AccountId },
+		CollectionOwnerChanged {
+			id: T::CollectionId,
+			old_owner: T::AccountId,
+			new_owner: T::AccountId,
+		},
+		CollectionTransferred {
+			id: T::CollectionId,
+			sender: T::AccountId,
+			receiver: T::AccountId,
+		},
 		AttributeSet {
 			id: T::CollectionId,
 			maybe_item: Option<T::ItemId>,
@@ -321,6 +330,7 @@ pub mod pallet {
 		// +structure => will affect collection destruction
 		// +mint items
 		// +max supply => applies to mint
+		// +transfer
 		// max items per user => applies to mint and transfer
 		// isTransferable => applies to transfer
 		// transfer items
@@ -351,7 +361,7 @@ pub mod pallet {
 			let sender = ensure_signed(origin)?;
 			let config = CollectionConfigs::<T>::get(id).ok_or(Error::<T>::CollectionNotFound)?;
 			ensure!(config == config_hint, Error::<T>::BadHint);
-			Self::do_transfer(id, config, sender, receiver, None)?;
+			Self::do_transfer(id, config, sender, receiver)?;
 			Ok(())
 		}
 
