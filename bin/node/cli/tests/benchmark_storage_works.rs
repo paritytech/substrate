@@ -37,7 +37,7 @@ fn benchmark_storage_works() {
 	assert!(base_path.join("paritydb_weights.rs").exists());
 }
 
-fn benchmark_storage(db: &'static str, base_path: &Path) -> ExitStatus {
+fn benchmark_storage(db: &str, base_path: &Path) -> ExitStatus {
 	Command::new(cargo_bin("substrate"))
 		.args(&["benchmark-storage", "--dev"])
 		.arg("--db")
