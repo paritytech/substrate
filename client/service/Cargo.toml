@@ -23,7 +23,7 @@ test-helpers = []
 
 [dependencies]
 thiserror = "1.0.30"
-futures = "0.3.19"
+futures = "0.3.21"
 jsonrpc-pubsub = "18.0"
 jsonrpc-core = "18.0"
 rand = "0.7.3"
