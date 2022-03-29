@@ -103,8 +103,8 @@ impl Config for Test {
 	type SubNodeDeposit = ConstU64<2>;
 	type TierThreeLetters = ConstU64<7>;
 	type TierFourLetters = ConstU64<3>;
-	type MinimumCommitmentPeriod = ConstU64<10>;
-	type CommitmentAlivePeriod = ConstU64<10>;
+	type MinCommitmentAge = ConstU64<10>;
+	type MaxCommitmentAge = ConstU64<10>;
 	type BlocksPerRegistrationPeriod = ConstU64<1000>;
 	type FeePerRegistrationPeriod = ConstU64<1>;
 	type TierDefault = ConstU64<1>;

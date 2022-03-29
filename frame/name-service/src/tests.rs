@@ -67,7 +67,7 @@ fn alice_register_bob_senario_setup() -> (Vec<u8>, [u8; 32]) {
 	let commitment_hash = (name.clone(), secret).using_encoded(blake2_256);
 	let periods = 1;
 
-	let min_commitment: u64 = <Test as crate::Config>::MinimumCommitmentPeriod::get();
+	let min_commitment: u64 = <Test as crate::Config>::MinCommitmentAge::get();
 
 	assert_eq!(Balances::free_balance(&sender), 100);
 	assert_eq!(Balances::free_balance(&owner), 200);
@@ -151,7 +151,7 @@ fn reveal_works() {
 		let commitment_hash = blake2_256(&encoded_bytes);
 		let periods = 10;
 		let name_hash = sp_io::hashing::blake2_256(&name);
-		let min_commitment: u64 = <Test as crate::Config>::MinimumCommitmentPeriod::get();
+		let min_commitment: u64 = <Test as crate::Config>::MinCommitmentAge::get();
 
 		assert_eq!(Balances::free_balance(&1), 100);
 		assert_ok!(NameService::commit(Origin::signed(sender), owner, commitment_hash));
@@ -194,7 +194,7 @@ fn reveal_handles_errors() {
 		let periods = 10;
 		let name = "alice".as_bytes().to_vec();
 		let commitment_hash = blake2_256(&(&name, secret).encode());
-		let min_commitment: u64 = <Test as crate::Config>::MinimumCommitmentPeriod::get();
+		let min_commitment: u64 = <Test as crate::Config>::MinCommitmentAge::get();
 
 		assert_eq!(Balances::free_balance(&1), 100);
 
@@ -239,7 +239,7 @@ fn reveal_handles_errors() {
 // 		let owner = 2;
 // 		let secret = 6_u64;
 // 		let commitment_hash = blake2_256(&(&name, secret).encode());
-// 		let min_commitment: u64 = <Test as crate::Config>::MinimumCommitmentPeriod::get();
+// 		let min_commitment: u64 = <Test as crate::Config>::MinCommitmentAge::get();
 // 		let blocks_per_registration_period: u64 =
 // 			<Test as crate::Config>::BlocksPerRegistrationPeriod::get();
 
@@ -262,7 +262,7 @@ fn reveal_ensure_active_registration_not_registered_again() {
 	new_test_ext().execute_with(|| {
 		assert_eq!(Balances::free_balance(&3), 300);
 		assert_eq!(Balances::free_balance(&4), 400);
-		let min_commitment: u64 = <Test as crate::Config>::MinimumCommitmentPeriod::get();
+		let min_commitment: u64 = <Test as crate::Config>::MinCommitmentAge::get();
 		let (name, name_hash) = alice_register_bob_senario_setup();
 
 		// second registration
@@ -352,7 +352,7 @@ fn transfer_handles_errors() {
 		let commitment_hash = (name.clone(), secret).using_encoded(blake2_256);
 		let periods = 1;
 		let name_hash = sp_io::hashing::blake2_256(&name);
-		let min_commitment: u64 = <Test as crate::Config>::MinimumCommitmentPeriod::get();
+		let min_commitment: u64 = <Test as crate::Config>::MinCommitmentAge::get();
 
 		// Registration not found
 		assert_noop!(

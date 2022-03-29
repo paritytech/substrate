@@ -48,7 +48,7 @@ impl<T: Config> Pallet<T> {
 		commitment: &CommitmentOf<T>,
 		block_number: &T::BlockNumber,
 	) -> bool {
-		&commitment.when.saturating_add(T::MinimumCommitmentPeriod::get()) < block_number
+		&commitment.when.saturating_add(T::MinCommitmentAge::get()) < block_number
 	}
 
 	/// Checks whether a commitment has passed the commitment expiry time.
@@ -56,7 +56,7 @@ impl<T: Config> Pallet<T> {
 		commitment: &CommitmentOf<T>,
 		block_number: &T::BlockNumber,
 	) -> bool {
-		&commitment.when.saturating_add(T::CommitmentAlivePeriod::get()) < block_number
+		&commitment.when.saturating_add(T::MaxCommitmentAge::get()) < block_number
 	}
 
 	pub fn do_commit(

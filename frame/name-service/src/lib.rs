@@ -68,11 +68,11 @@ pub mod pallet {
 
 		/// The amount of blocks a user needs to wait after a Commitment before revealing.
 		#[pallet::constant]
-		type MinimumCommitmentPeriod: Get<Self::BlockNumber>;
+		type MinCommitmentAge: Get<Self::BlockNumber>;
 
 		/// The amount of blocks after a commitment is created for before it expires.
 		#[pallet::constant]
-		type CommitmentAlivePeriod: Get<Self::BlockNumber>;
+		type MaxCommitmentAge: Get<Self::BlockNumber>;
 
 		/// The deposit a user needs to place to keep their subnodes in storage.
 		#[pallet::constant]
@@ -222,7 +222,7 @@ pub mod pallet {
 		///
 		/// The `name` must be at least 3 characters long.
 		///
-		/// When `MinimumCommitmentPeriod` blocks have passed, any user can submit `reveal` with the
+		/// When `MinCommitmentAge` blocks have passed, any user can submit `reveal` with the
 		/// `name` and `secret` parameters, and the registration will be completed.
 		///
 		/// See `fn reveal`.
