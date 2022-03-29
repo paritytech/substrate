@@ -46,7 +46,7 @@ sp-maybe-compressed-blob = { version = "4.1.0-dev", path = "../../primitives/may
 sc-tracing = { version = "4.0.0-dev", path = "../tracing" }
 tracing-subscriber = "0.2.19"
 paste = "1.0"
-regex = "1"
+regex = "1.5.5"
 criterion = "0.3"
 env_logger = "0.9"
 
