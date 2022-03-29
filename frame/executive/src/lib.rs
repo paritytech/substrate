@@ -118,6 +118,7 @@
 
 use crate::traits::AtLeast32BitUnsigned;
 use codec::{Codec, Encode};
+use frame_support::traits::Get;
 use frame_support::{
 	dispatch::PostDispatchInfo,
 	traits::{
@@ -447,6 +448,14 @@ where
 			let curr_block_txs = extrinsics.iter().take(count);
 			let prev_block_txs = extrinsics.iter().skip(count);
 
+			// verify that all extrinsics can be executed in single block
+			let mut max = System::BlockWeights::get();
+			let mut all: frame_system::ConsumedWeight = Default::default();
+			for tx in curr_block_txs.clone() {
+				let info = tx.clone().check(&Default::default()).unwrap().get_dispatch_info();
+				all = frame_system::calculate_consumed_weight::<CallOf<Block::Extrinsic, Context>>(max.clone(), all, &info)
+					.expect("sum of extrinsics should fit into single block");
+			}
 
 			let curr_block_inherents = curr_block_txs.filter(|e| !e.is_signed().unwrap());
 			let prev_block_extrinsics = prev_block_txs.filter(|e| e.is_signed().unwrap());
