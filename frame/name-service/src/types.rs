@@ -46,14 +46,22 @@ pub type RegistrationOf<T> = Registration<
 pub type NameHash = [u8; 32];
 pub type CommitmentHash = [u8; 32];
 
+/// The commitment
 #[derive(Encode, Decode, Default, MaxEncodedLen, TypeInfo, RuntimeDebug)]
 pub struct Commitment<AccountId, Balance, BlockNumber> {
+	/// Who will retain ownership of the claimed domain.
+	///
+	/// This can be different than the person who made the commitment (depositor).
 	pub owner: AccountId,
+	/// When the commitment was made.
 	pub when: BlockNumber,
+	/// The user placing a deposit to keep the commitment in storage.
 	pub depositor: AccountId,
+	/// The deposit amount.
 	pub deposit: Balance,
 }
 
+/// The name registration information for any parent or subnode.
 #[derive(Encode, Decode, Default, MaxEncodedLen, TypeInfo, RuntimeDebug)]
 pub struct Registration<AccountId, Balance, BlockNumber> {
 	/// The owner of a name registration. This user has full control over the name

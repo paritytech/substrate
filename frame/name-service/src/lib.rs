@@ -30,6 +30,7 @@ pub use pallet::*;
 mod commit_reveal;
 mod misc;
 mod registrar;
+mod resolver;
 mod subnodes;
 mod types;
 
@@ -325,13 +326,16 @@ pub mod pallet {
 		}
 
 		#[pallet::weight(0)]
-		pub fn set_address(
+		pub fn set_record(
 			origin: OriginFor<T>,
 			name_hash: NameHash,
 			address: T::AccountId,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
-			Self::do_set_address(name_hash, sender, address)?;
+			let registration =
+				Registrations::<T>::get(name_hash).ok_or(Error::<T>::RegistrationNotFound)?;
+			ensure!(Self::is_controller(&registration, &sender), Error::<T>::NotRegistrationOwner);
+			Self::do_set_record(name_hash, address)?;
 			Ok(())
 		}
 
@@ -388,35 +392,6 @@ pub mod pallet {
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 			Self::do_set_subnode_owner(sender, parent_hash, label_hash, new_owner)?;
-			Ok(())
-		}
-	}
-
-	// Pallet internal functions
-	impl<T: Config> Pallet<T> {
-		pub fn do_set_address(
-			name_hash: NameHash,
-			owner: T::AccountId,
-			address: T::AccountId,
-		) -> DispatchResult {
-			let registration =
-				Registrations::<T>::get(name_hash).ok_or(Error::<T>::RegistrationNotFound)?;
-			ensure!(registration.owner == owner, Error::<T>::NotRegistrationOwner);
-
-			if let Some(e) = registration.expiry {
-				ensure!(
-					frame_system::Pallet::<T>::block_number() <= e,
-					Error::<T>::RegistrationExpired
-				);
-			}
-
-			let maybe_current_address = Resolvers::<T>::get(name_hash);
-			if let Some(a) = maybe_current_address {
-				ensure!(a != address, Error::<T>::AlreadySet);
-			}
-
-			Resolvers::<T>::insert(name_hash, address.clone());
-			Self::deposit_event(Event::<T>::AddressSet { name_hash, address });
 			Ok(())
 		}
 	}

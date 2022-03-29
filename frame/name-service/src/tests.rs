@@ -411,13 +411,13 @@ fn renew_handles_errors() {
 }
 
 #[test]
-fn set_address_works() {
+fn set_record_works() {
 	new_test_ext().execute_with(|| {
 		let (_, name_hash) = alice_register_bob_senario_setup();
 		let addr_to_set = 1;
 
 		// set address to `1`
-		assert_ok!(NameService::set_address(Origin::signed(2), name_hash, addr_to_set));
+		assert_ok!(NameService::set_record(Origin::signed(2), name_hash, addr_to_set));
 		// record was saved
 		assert!(Resolvers::<Test>::contains_key(name_hash));
 		// address is correct
@@ -426,17 +426,15 @@ fn set_address_works() {
 }
 
 #[test]
-fn set_address_handles_errors() {
+fn set_record_handles_errors() {
 	new_test_ext().execute_with(|| {
 		let non_owner = 1;
 		let owner = 2;
 		let some_name_hash = NameService::name_hash("alice".as_bytes());
-		let blocks_per_registration_period: u64 =
-			<Test as crate::Config>::BlocksPerRegistrationPeriod::get();
 
 		// Registration not found
 		assert_noop!(
-			NameService::set_address(Origin::signed(non_owner), some_name_hash, 2),
+			NameService::set_record(Origin::signed(non_owner), some_name_hash, 2),
 			Error::<Test>::RegistrationNotFound
 		);
 
@@ -445,25 +443,12 @@ fn set_address_handles_errors() {
 
 		// Not registration owner
 		assert_noop!(
-			NameService::set_address(Origin::signed(non_owner), name_hash, 3),
+			NameService::set_record(Origin::signed(non_owner), name_hash, 3),
 			Error::<Test>::NotRegistrationOwner,
 		);
 
 		// set address
-		assert_ok!(NameService::set_address(Origin::signed(owner), name_hash, 3));
-
-		// cannot set same address again
-		assert_noop!(
-			NameService::set_address(Origin::signed(owner), name_hash, 3),
-			Error::<Test>::AlreadySet
-		);
-
-		// Registration has expired
-		add_blocks(blocks_per_registration_period + 1);
-		assert_noop!(
-			NameService::set_address(Origin::signed(2), name_hash, 2),
-			Error::<Test>::RegistrationExpired
-		);
+		assert_ok!(NameService::set_record(Origin::signed(owner), name_hash, 3));
 	});
 }
 
@@ -481,7 +466,7 @@ fn deregister_works_owner() {
 		assert_eq!(registration.deposit, None);
 
 		// set address
-		assert_ok!(NameService::set_address(Origin::signed(owner), name_hash, owner));
+		assert_ok!(NameService::set_record(Origin::signed(owner), name_hash, owner));
 
 		// deregister before expiry
 		add_blocks(blocks_per_registration_period);
@@ -586,7 +571,7 @@ fn force_deregister_works() {
 	new_test_ext().execute_with(|| {
 		let (_, name_hash) = alice_register_bob_senario_setup();
 		// set some address to deregister
-		assert_ok!(NameService::set_address(Origin::signed(2), name_hash, 4));
+		assert_ok!(NameService::set_record(Origin::signed(2), name_hash, 4));
 		assert!(Resolvers::<Test>::contains_key(name_hash));
 
 		// force the deregistration of `name_hash`
@@ -771,7 +756,7 @@ fn deregister_subnode_owner_works() {
 		assert_ok!(NameService::set_subnode_record(Origin::signed(owner), parent_hash, label));
 		let name_hash = NameService::subnode_hash(parent_hash, label_hash);
 		assert!(Registrations::<Test>::contains_key(name_hash));
-		assert_ok!(NameService::set_address(Origin::signed(owner), name_hash, address));
+		assert_ok!(NameService::set_record(Origin::signed(owner), name_hash, address));
 		assert!(Resolvers::<Test>::contains_key(name_hash));
 		assert_eq!(Balances::free_balance(owner), 198);
 
@@ -803,7 +788,7 @@ fn deregister_subnode_non_owner_works() {
 		assert_ok!(NameService::set_subnode_record(Origin::signed(owner), parent_hash, label));
 		let name_hash = NameService::subnode_hash(parent_hash, label_hash);
 		assert!(Registrations::<Test>::contains_key(name_hash));
-		assert_ok!(NameService::set_address(Origin::signed(owner), name_hash, address));
+		assert_ok!(NameService::set_record(Origin::signed(owner), name_hash, address));
 		assert!(Resolvers::<Test>::contains_key(name_hash));
 		assert_eq!(Balances::free_balance(owner), 198);
 
@@ -851,7 +836,7 @@ fn deregister_subnode_handles_errors() {
 		assert_ok!(NameService::set_subnode_record(Origin::signed(owner), parent_hash, label));
 		let name_hash = NameService::subnode_hash(parent_hash, label_hash);
 		assert!(Registrations::<Test>::contains_key(name_hash));
-		assert_ok!(NameService::set_address(Origin::signed(owner), name_hash, address));
+		assert_ok!(NameService::set_record(Origin::signed(owner), name_hash, address));
 		assert!(Resolvers::<Test>::contains_key(name_hash));
 		assert_eq!(Balances::free_balance(owner), 198);
 
