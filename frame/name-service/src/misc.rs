@@ -23,7 +23,7 @@ use sp_runtime::traits::{Bounded, Convert, Saturating};
 use sp_std::prelude::*;
 
 impl<T: Config> Pallet<T> {
-	pub fn registration_fee(name: Vec<u8>, periods: T::BlockNumber) -> BalanceOf<T> {
+	pub fn registration_fee(name: Vec<u8>, length: T::BlockNumber) -> BalanceOf<T> {
 		let name_length = name.len();
 		let fee_reg = if name_length < 3 {
 			// names with under 3 characters should not be registered, so we
@@ -37,16 +37,12 @@ impl<T: Config> Pallet<T> {
 			T::TierDefault::get()
 		};
 
-		let fee_length = Self::length_fee(periods);
+		let fee_length = Self::length_fee(length);
 		fee_reg.saturating_add(fee_length)
 	}
 
-	pub fn length_fee(periods: T::BlockNumber) -> BalanceOf<T> {
-		let periods_as_balance: BalanceOf<T> = T::BlockNumberToBalance::convert(periods);
-		T::FeePerRegistrationPeriod::get().saturating_mul(periods_as_balance)
-	}
-
-	pub fn length(periods: T::BlockNumber) -> T::BlockNumber {
-		periods.saturating_mul(T::BlocksPerRegistrationPeriod::get())
+	pub fn length_fee(length: T::BlockNumber) -> BalanceOf<T> {
+		let length_as_balance: BalanceOf<T> = T::BlockNumberToBalance::convert(length);
+		T::RegistrationFeePerBlock::get().saturating_mul(length_as_balance)
 	}
 }

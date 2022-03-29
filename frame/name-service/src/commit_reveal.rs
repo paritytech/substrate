@@ -87,7 +87,7 @@ impl<T: Config> Pallet<T> {
 		fee_payer: T::AccountId,
 		name: Vec<u8>,
 		secret: u64,
-		periods: T::BlockNumber,
+		length: T::BlockNumber,
 	) -> DispatchResult {
 		let commitment_hash = Self::commitment_hash(&name, secret);
 		let commitment = Self::get_commitment(commitment_hash)?;
@@ -103,7 +103,7 @@ impl<T: Config> Pallet<T> {
 
 		ensure!(Self::get_registration(name_hash).is_err(), Error::<T>::RegistrationExists);
 
-		let fee = Self::registration_fee(name.clone(), periods);
+		let fee = Self::registration_fee(name.clone(), length);
 
 		let imbalance = T::Currency::withdraw(
 			&fee_payer,
@@ -114,7 +114,7 @@ impl<T: Config> Pallet<T> {
 
 		T::RegistrationFeeHandler::on_unbalanced(imbalance);
 
-		let expiry = block_number.saturating_add(Self::length(periods));
+		let expiry = block_number.saturating_add(length);
 
 		Self::do_register(
 			name_hash,
@@ -131,15 +131,38 @@ impl<T: Config> Pallet<T> {
 	pub fn do_renew(
 		fee_payer: T::AccountId,
 		name_hash: NameHash,
-		periods: T::BlockNumber,
+		expiry: T::BlockNumber,
 	) -> DispatchResult {
 		Registrations::<T>::try_mutate(name_hash, |maybe_registration| {
 			let r = maybe_registration.as_mut().ok_or(Error::<T>::RegistrationNotFound)?;
 
 			// cannot renew a domain that has no expiry
-			let expiry = r.expiry.ok_or(Error::<T>::RegistrationHasNoExpiry)?;
+			let current_expiry = r.expiry.ok_or(Error::<T>::RegistrationHasNoExpiry)?;
 
-			let fee = Self::length_fee(periods);
+			let block_number = frame_system::Pallet::<T>::block_number();
+
+			// `expiry` must be at least 1 block in the future
+			ensure!(expiry > block_number, Error::<T>::ExpiryInvalid);
+
+			// `expiry` must be larger than `current_expiry`
+			ensure!(expiry > current_expiry, Error::<T>::ExpiryInvalid);
+
+			// calculate additional length to determine fee to be paid
+			let length = if block_number <= current_expiry {
+				// if we are renewing withn or at the current expiry. Calculate difference from
+				// current expiry. Equivalent to extending the current expiry.
+
+				expiry.saturating_sub(current_expiry)
+			} else {
+				// if we are renewing after current expiry (registration has expired), calculate
+				// difference from current block. Equivalent to extending from the current block to
+				// `expiry`.
+
+				expiry.saturating_sub(block_number)
+			};
+
+			// determine renew fee
+			let fee = Self::length_fee(length);
 
 			// withdraw fees from account
 			let imbalance = T::Currency::withdraw(
@@ -149,16 +172,10 @@ impl<T: Config> Pallet<T> {
 				ExistenceRequirement::KeepAlive,
 			)?;
 
-			let block_number = frame_system::Pallet::<T>::block_number();
+			r.expiry = Some(expiry);
 
-			let expiry_new = match block_number <= expiry {
-				true => expiry.saturating_add(Self::length(periods)),
-				false => block_number.saturating_add(Self::length(periods)),
-			};
-
-			r.expiry = Some(expiry_new);
 			T::RegistrationFeeHandler::on_unbalanced(imbalance);
-			Self::deposit_event(Event::<T>::NameRenewed { name_hash, expires: expiry_new });
+			Self::deposit_event(Event::<T>::NameRenewed { name_hash, expires: expiry });
 			Ok(())
 		})
 	}

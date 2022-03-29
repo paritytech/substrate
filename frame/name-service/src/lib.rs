@@ -94,13 +94,9 @@ pub mod pallet {
 		#[pallet::constant]
 		type TierDefault: Get<BalanceOf<Self>>;
 
-		/// How long a registration period is in blocks.
+		/// Registration fee per block.
 		#[pallet::constant]
-		type BlocksPerRegistrationPeriod: Get<Self::BlockNumber>;
-
-		/// Registration fee per registration period, defined as a number of blocks.
-		#[pallet::constant]
-		type FeePerRegistrationPeriod: Get<BalanceOf<Self>>;
+		type RegistrationFeePerBlock: Get<BalanceOf<Self>>;
 
 		/// The origin that has super-user access to manage all name registrations.
 		type RegistrationManager: EnsureOrigin<Self::Origin>;
@@ -185,6 +181,8 @@ pub mod pallet {
 		LabelTooShort,
 		/// Address has already been set to this.
 		AlreadySet,
+		/// renew expiry time is not in the future
+		ExpiryInvalid,
 	}
 
 	// Your Pallet's callable functions.
@@ -252,10 +250,10 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			name: Vec<u8>,
 			secret: u64,
-			periods: T::BlockNumber,
+			length: T::BlockNumber,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
-			Self::do_reveal(sender, name, secret, periods)?;
+			Self::do_reveal(sender, name, secret, length)?;
 			Ok(())
 		}
 
@@ -321,10 +319,10 @@ pub mod pallet {
 		pub fn renew(
 			origin: OriginFor<T>,
 			name_hash: NameHash,
-			periods: T::BlockNumber,
+			expiry: T::BlockNumber,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
-			Self::do_renew(sender, name_hash, periods)?;
+			Self::do_renew(sender, name_hash, expiry)?;
 			Ok(())
 		}
 
