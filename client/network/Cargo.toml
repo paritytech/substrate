@@ -61,7 +61,7 @@ unsigned-varint = { version = "0.6.0", features = [
     "asynchronous_codec",
 ] }
 void = "1.0.2"
-zeroize = "1.4.3"
+zeroize = "1.5.4"
 libp2p = "0.40.0"
 
 [dev-dependencies]
