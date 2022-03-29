@@ -272,14 +272,14 @@ pub mod pallet {
 		}
 
 		#[pallet::weight(0)]
-		pub fn transfer_ownership(
+		pub fn transfer_collection_ownership(
 			origin: OriginFor<T>,
 			id: T::CollectionId,
 			new_owner: <T::Lookup as StaticLookup>::Source,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 			let new_owner = T::Lookup::lookup(new_owner)?;
-			Self::do_transfer_ownership(id, sender, new_owner)?;
+			Self::do_transfer_collection_ownership(id, sender, new_owner)?;
 			Ok(())
 		}
 

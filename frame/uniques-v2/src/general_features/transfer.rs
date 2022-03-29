@@ -53,7 +53,7 @@ impl<T: Config> Pallet<T> {
 		})
 	}
 
-	pub fn do_transfer_ownership(
+	pub fn do_transfer_collection_ownership(
 		id: T::CollectionId,
 		caller: T::AccountId,
 		new_owner: T::AccountId,
