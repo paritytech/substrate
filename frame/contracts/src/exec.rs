@@ -766,8 +766,11 @@ where
 
 		// All changes performed by the contract are executed under a storage transaction.
 		// This allows for roll back on error. Changes to the cached contract_info are
-		// comitted or rolled back when popping the frame.
-		let (success, output) =
+		// committed or rolled back when popping the frame.
+		//
+		// `with_transactional` may return an error caused by a limit in the
+		// transactional storage depth.
+		let transaction_outcome =
 			with_transaction(|| -> TransactionOutcome<Result<_, DispatchError>> {
 				let output = do_transaction();
 				match &output {
@@ -775,7 +778,15 @@ where
 						TransactionOutcome::Commit(Ok((true, output))),
 					_ => TransactionOutcome::Rollback(Ok((false, output))),
 				}
-			})?;
+			});
+
+		let (success, output) = match transaction_outcome {
+			// `with_transactional` executed successfully, and we have the expected output.
+			Ok((success, output)) => (success, output),
+			// `with_transactional` returned an error, and we propagate that error and note no state
+			// has changed.
+			Err(error) => (false, Err(ExecError { error, origin: ErrorOrigin::Callee })),
+		};
 		self.pop_frame(success);
 		output
 	}
