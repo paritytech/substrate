@@ -19,7 +19,7 @@
 
 #![cfg(test)]
 
-use frame_election_provider_support::{onchain, SequentialPhragmen};
+use frame_election_provider_support::onchain;
 use frame_support::{
 	parameter_types,
 	traits::{ConstU32, ConstU64},
@@ -156,12 +156,8 @@ where
 	type Extrinsic = Extrinsic;
 }
 
-pub struct OnChainSeqPhragmen;
-impl onchain::ExecutionConfig for OnChainSeqPhragmen {
-	type System = Test;
-	type Solver = SequentialPhragmen<AccountId, sp_runtime::Perbill>;
-	type DataProvider = Staking;
-}
+type OnChainPhragmen =
+	onchain::BoundedPhragmen<Test, Staking, ConstU32<600>, ConstU32<400>, sp_runtime::Perbill>;
 
 impl pallet_staking::Config for Test {
 	type MaxNominations = ConstU32<16>;
@@ -181,7 +177,7 @@ impl pallet_staking::Config for Test {
 	type NextNewSession = Session;
 	type MaxNominatorRewardedPerValidator = ConstU32<64>;
 	type OffendingValidatorsThreshold = ();
-	type ElectionProvider = onchain::UnboundedExecution<OnChainSeqPhragmen>;
+	type ElectionProvider = OnChainPhragmen;
 	type GenesisElectionProvider = Self::ElectionProvider;
 	type MaxUnlockingChunks = ConstU32<32>;
 	type VoterList = pallet_staking::UseNominatorsAndValidatorsMap<Self>;

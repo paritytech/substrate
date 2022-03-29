@@ -19,7 +19,7 @@
 
 use crate::{self as pallet_babe, Config, CurrentSlot};
 use codec::Encode;
-use frame_election_provider_support::{onchain, SequentialPhragmen};
+use frame_election_provider_support::onchain;
 use frame_support::{
 	parameter_types,
 	traits::{ConstU128, ConstU32, ConstU64, GenesisBuild, KeyOwnerProofSystem, OnInitialize},
@@ -172,12 +172,8 @@ parameter_types! {
 	pub const OffendingValidatorsThreshold: Perbill = Perbill::from_percent(16);
 }
 
-pub struct OnChainSeqPhragmen;
-impl onchain::ExecutionConfig for OnChainSeqPhragmen {
-	type System = Test;
-	type Solver = SequentialPhragmen<DummyValidatorId, Perbill>;
-	type DataProvider = Staking;
-}
+type OnChainPhragmen =
+	onchain::BoundedPhragmen<Test, Staking, ConstU32<600>, ConstU32<400>, Perbill>;
 
 impl pallet_staking::Config for Test {
 	type MaxNominations = ConstU32<16>;
@@ -197,7 +193,7 @@ impl pallet_staking::Config for Test {
 	type MaxNominatorRewardedPerValidator = ConstU32<64>;
 	type OffendingValidatorsThreshold = OffendingValidatorsThreshold;
 	type NextNewSession = Session;
-	type ElectionProvider = onchain::UnboundedExecution<OnChainSeqPhragmen>;
+	type ElectionProvider = OnChainPhragmen;
 	type GenesisElectionProvider = Self::ElectionProvider;
 	type VoterList = pallet_staking::UseNominatorsAndValidatorsMap<Self>;
 	type MaxUnlockingChunks = ConstU32<32>;

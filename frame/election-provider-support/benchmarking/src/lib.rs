@@ -23,10 +23,13 @@
 use frame_benchmarking::{benchmarks, Vec};
 use frame_support::log;
 
+pub struct Pallet<T: Config>(System<T>);
+pub trait Config: frame_system::Config {}
+
 // This is also used in `pallet_election_provider_multi_phase` benchmarking.
 pub const SEED: u32 = 999;
 pub fn set_up_data_provider<
-	T: frame_system::Config,
+	AccountId,
 	DataProvider: ElectionDataProvider<AccountId = T::AccountId, BlockNumber = T::BlockNumber>,
 >(
 	voters_len: u32,
@@ -45,7 +48,7 @@ pub fn set_up_data_provider<
 	// fill targets.
 	let mut targets = (0..targets_len)
 		.map(|i| {
-			let target = frame_benchmarking::account::<T::AccountId>("Target", i, SEED);
+			let target = frame_benchmarking::account::<AccountId>("Target", i, SEED);
 			DataProvider::add_target(target.clone());
 			target
 		})
@@ -56,7 +59,7 @@ pub fn set_up_data_provider<
 
 	// fill voters.
 	(0..voters_len).for_each(|i| {
-		let voter = frame_benchmarking::account::<T::AccountId>("Voter", i, SEED);
+		let voter = frame_benchmarking::account::<AccountId>("Voter", i, SEED);
 		DataProvider::add_voter(voter, weight, targets.clone().try_into().unwrap());
 	});
 }
@@ -71,7 +74,7 @@ benchmarks! {
 		let d in (T::BenchmarkingConfig::VOTES_PER_VOTER[0]) .. T::BenchmarkingConfig::VOTES_PER_VOTER[1];
 
 		// we don't directly need the data-provider to be populated, but it is just easy to use it.
-		set_up_data_provider::<T, T::DataProvider>(v, t, d, 1_000u64);
+		set_up_data_provider::<T::AccountId, T::DataProvider>(v, t, d, 1_000u64);
 	}: {
 		assert!(OnChainPhragmen::<T, sp_runtime::Perbill>::elect().is_ok());
 	} verify {
