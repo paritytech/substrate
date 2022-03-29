@@ -161,4 +161,6 @@ benchmarks! {
 	) verify {
 		assert_ne!(count_before, count_after);
 	}
+
+	impl_benchmark_test_suite!(Recovery, crate::mock::new_test_ext(), crate::mock::Test);
 }
