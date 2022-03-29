@@ -589,10 +589,10 @@ pub mod test {
 	use sp_io::TestExternalities;
 
 	crate::generate_storage_alias! { Prefix, Foo => Value<BoundedVec<u32, ConstU32<7>>> }
-	crate::generate_storage_alias! { Prefix, FooMap => Map<(u32, Twox128), BoundedVec<u32, ConstU32<7>>> }
+	crate::generate_storage_alias! { Prefix, FooMap => Map<(Twox128, u32), BoundedVec<u32, ConstU32<7>>> }
 	crate::generate_storage_alias! {
 		Prefix,
-		FooDoubleMap => DoubleMap<(u32, Twox128), (u32, Twox128), BoundedVec<u32, ConstU32<7>>>
+		FooDoubleMap => DoubleMap<(Twox128, u32), (Twox128, u32), BoundedVec<u32, ConstU32<7>>>
 	}
 
 	#[test]
