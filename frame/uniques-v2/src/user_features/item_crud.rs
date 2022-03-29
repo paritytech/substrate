@@ -30,7 +30,7 @@ impl<T: Config> Pallet<T> {
 		ensure!(!Items::<T>::contains_key(collection_id, item_id), Error::<T>::ItemIdTaken);
 
 		if collection.max_supply.is_some() {
-			ensure!(item_id < collection.max_supply, Error::<T>::ItemIdNotWithinMaxSupply);
+			ensure!(collection.items < collection.max_supply.unwrap(), Error::<T>::ItemIdNotWithinMaxSupply);
 		}
 
 		let item = Item {

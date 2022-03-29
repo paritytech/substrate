@@ -53,7 +53,7 @@ pub mod pallet {
 
 		type CollectionId: Member + Parameter + Default + Copy + MaxEncodedLen + CheckedAdd + One;
 
-		type ItemId: Member + Parameter + Default + Copy + MaxEncodedLen + CheckedAdd + One;
+		type ItemId: Member + Parameter + Default + Copy + MaxEncodedLen + CheckedAdd + One + PartialOrd;
 
 		/// This is the limit for metadata
 		type MetadataLimit: Get<u32>; // = up to 10 kb;
@@ -67,10 +67,6 @@ pub mod pallet {
 		/// The maximum length of an attribute value.
 		#[pallet::constant]
 		type AttributeValueLimit: Get<u32>;
-
-		/// The maximum amount of items per collection.
-		#[pallet::constant]
-		type MaxSupply: Get<u32>;
 	}
 
 	pub type MetadataOf<T> = BoundedVec<u8, <T as Config>::MetadataLimit>;
@@ -104,7 +100,7 @@ pub mod pallet {
 		_,
 		Blake2_128Concat,
 		T::CollectionId,
-		Collection<T::CollectionId, T::AccountId, BalanceOf<T>, T::MaxSupply>,
+		Collection<T::CollectionId, T::AccountId, BalanceOf<T>>,
 		OptionQuery,
 	>;
 
@@ -185,7 +181,7 @@ pub mod pallet {
 		},
 		CollectionMaxSupplyChanged {
 			id: T::CollectionId,
-			max_supply: Option<T::MaxSupply>,
+			max_supply: Option<u32>,
 		},
 	}
 
@@ -221,7 +217,7 @@ pub mod pallet {
 		pub fn create(
 			origin: OriginFor<T>,
 			config: UserFeatures,
-			max_supply: Option<T::MaxSupply>,
+			max_supply: Option<u32>,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 			Self::do_create_collection(sender, config, max_supply)?;
@@ -243,7 +239,7 @@ pub mod pallet {
 		pub fn update_max_supply(
 			origin: OriginFor<T>,
 			id: T::CollectionId,
-			max_supply: Option<T::MaxSupply>,
+			max_supply: Option<u32>,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 			let config = CollectionConfigs::<T>::get(id).ok_or(Error::<T>::CollectionNotFound)?;

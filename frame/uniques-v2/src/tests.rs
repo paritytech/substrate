@@ -40,7 +40,7 @@ fn get_id_from_event() -> Result<<Test as Config>::CollectionId, &'static str> {
 fn sanity_test() {
 	new_test_ext().execute_with(|| {
 		let user_features = UserFeatures::Administration;
-		assert_ok!(Uniques::create(Origin::signed(1), user_features));
+		assert_ok!(Uniques::create(Origin::signed(1), user_features, None));
 
 		let id = get_id_from_event().unwrap();
 		let collection_config = CollectionConfigs::<Test>::get(id);

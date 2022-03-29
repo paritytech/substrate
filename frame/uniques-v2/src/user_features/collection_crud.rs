@@ -24,7 +24,7 @@ impl<T: Config> Pallet<T> {
 	pub fn do_create_collection(
 		caller: T::AccountId,
 		config: UserFeatures,
-		max_supply: Option<T::MaxSupply>,
+		max_supply: Option<u32>,
 	) -> DispatchResult {
 		let id = CountForCollections::<T>::get();
 
@@ -90,7 +90,7 @@ impl<T: Config> Pallet<T> {
 		id: T::CollectionId,
 		caller: T::AccountId,
 		config: CollectionConfig,
-		max_supply: Option<T::MaxSupply>,
+		max_supply: Option<u32>,
 	) -> DispatchResult {
 		let mut collection = Collections::<T>::get(&id).ok_or(Error::<T>::CollectionNotFound)?;
 		ensure!(collection.owner == caller, Error::<T>::NotAuthorized);
