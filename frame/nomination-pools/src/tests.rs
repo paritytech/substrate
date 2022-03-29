@@ -74,7 +74,8 @@ fn exercise_pool_life_cycle() {
 		// assert_ok!(Pools::join(Origin::signed(12), MinJoinBond::<Runtime>::get(), 2));
 
 		// assert_eq!(Balances::free_balance(&12), ed);
-		// assert_eq!(Balances::free_balance(&bonded_pool_account), min_create_bond + min_join_bond);
+		// assert_eq!(Balances::free_balance(&bonded_pool_account), min_create_bond +
+		// min_join_bond);
 
 		// // The pools gets some rewards
 		// assert_ok!(Balances::mutate_account(&reward_account, |a| a.free += 50));
