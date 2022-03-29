@@ -1283,20 +1283,22 @@ parameter_types! {
 	pub const CommitmentAlivePeriod: BlockNumber = 1 * DAYS;
 	pub const FeePerRegistrationPeriod: Balance = 1 * DOLLARS / (365 * DAYS as Balance);
 	pub const BlocksPerRegistrationPeriod: BlockNumber = 1 * DAYS;
+	pub const MinCommitmentAge: BlockNumber = 1 * MINUTES;
+	pub const MaxCommitmentAge: BlockNumber = 1 * MINUTES;
 }
 
 impl pallet_name_service::Config for Runtime {
 	type Event = Event;
 	type Currency = Balances;
 	type BlockNumberToBalance = ConvertInto;
+	type MinCommitmentAge = MinCommitmentAge;
+	type MaxCommitmentAge = MaxCommitmentAge;
 	type RegistrationFeeHandler = ();
 	type CommitmentDeposit = CommitmentDeposit;
 	type SubNodeDeposit = SubNodeDeposit;
 	type TierThreeLetters = TierThreeLetters;
 	type TierFourLetters = TierFourLetters;
 	type TierDefault = TierDefault;
-	type MinimumCommitmentPeriod = MinimumCommitmentPeriod;
-	type CommitmentAlivePeriod = CommitmentAlivePeriod;
 	type FeePerRegistrationPeriod = FeePerRegistrationPeriod;
 	type RegistrationManager = EnsureRoot<Self::AccountId>;
 	type BlocksPerRegistrationPeriod = BlocksPerRegistrationPeriod;

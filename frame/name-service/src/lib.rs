@@ -27,12 +27,15 @@ mod tests;
 
 pub use pallet::*;
 
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking;
 mod commit_reveal;
 mod misc;
 mod registrar;
 mod resolver;
 mod subnodes;
 mod types;
+mod weights;
 
 #[frame_support::pallet]
 pub mod pallet {
