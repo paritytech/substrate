@@ -30,6 +30,11 @@ impl<T: Config> Pallet<T> {
 		&registration.owner == user
 	}
 
+	/// Check if an account is a controller or owner of this name registration.
+	pub fn is_controller(registration: &RegistrationOf<T>, user: &T::AccountId) -> bool {
+		&registration.owner == user || &registration.controller == user
+	}
+
 	pub fn is_expired(registration: &RegistrationOf<T>) -> bool {
 		if let Some(expiry) = registration.expiry {
 			return expiry < frame_system::Pallet::<T>::block_number()
@@ -48,8 +53,8 @@ impl<T: Config> Pallet<T> {
 	/// free any existing deposit if one does exist.
 	pub fn do_register(
 		name_hash: NameHash,
-		maybe_registrant: Option<T::AccountId>,
 		owner: T::AccountId,
+		controller: T::AccountId,
 		maybe_expiration: Option<T::BlockNumber>,
 		maybe_deposit: Option<BalanceOf<T>>,
 	) -> DispatchResult {
@@ -65,8 +70,8 @@ impl<T: Config> Pallet<T> {
 		}
 
 		let registration = Registration {
-			registrant: maybe_registrant,
 			owner: owner.clone(),
+			controller,
 			expiry: maybe_expiration,
 			deposit: maybe_deposit,
 		};

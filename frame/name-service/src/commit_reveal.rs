@@ -118,7 +118,7 @@ impl<T: Config> Pallet<T> {
 
 		Self::do_register(
 			name_hash,
-			Some(commitment.owner.clone()),
+			commitment.owner.clone(),
 			commitment.owner.clone(),
 			Some(expiry),
 			None,

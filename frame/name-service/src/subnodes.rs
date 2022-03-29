@@ -42,7 +42,7 @@ impl<T: Config> Pallet<T> {
 
 		ensure!(!Registrations::<T>::contains_key(name_hash), Error::<T>::RegistrationExists);
 		let deposit = T::SubNodeDeposit::get();
-		Self::do_register(name_hash, None, sender, None, Some(deposit))?;
+		Self::do_register(name_hash, sender.clone(), sender, None, Some(deposit))?;
 		Ok(())
 	}
 

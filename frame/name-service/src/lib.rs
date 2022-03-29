@@ -198,7 +198,7 @@ pub mod pallet {
 			maybe_expiry: Option<T::BlockNumber>,
 		) -> DispatchResult {
 			T::RegistrationManager::ensure_origin(origin)?;
-			Self::do_register(name_hash, Some(who.clone()), who, maybe_expiry, None)?;
+			Self::do_register(name_hash, who.clone(), who, maybe_expiry, None)?;
 			Ok(())
 		}
 
@@ -290,8 +290,11 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// Set the controller for a name registration.
+		///
+		/// Can only be called by the existing controller or owner.
 		#[pallet::weight(0)]
-		pub fn set_owner(
+		pub fn set_controller(
 			origin: OriginFor<T>,
 			name_hash: NameHash,
 			to: T::AccountId,
@@ -300,17 +303,8 @@ pub mod pallet {
 
 			Registrations::<T>::try_mutate(name_hash, |maybe_registration| {
 				let r = maybe_registration.as_mut().ok_or(Error::<T>::RegistrationNotFound)?;
-
-				// registrant has to exist. Subnodes use `set_subnode_owner` instead.
-				let registrant =
-					r.registrant.clone().ok_or(Error::<T>::RegistrationRegistrantNotFound)?;
-
-				ensure!(
-					!(!(registrant == sender) && !(r.owner == sender)),
-					Error::<T>::NotRegistrationRegistrantOrOwner
-				);
-
-				r.owner = to.clone();
+				ensure!(Self::is_controller(&r, &sender), Error::<T>::NotRegistrationOwner);
+				r.controller = to.clone();
 				Self::deposit_event(Event::<T>::NewOwner { from: sender, to });
 				Ok(())
 			})

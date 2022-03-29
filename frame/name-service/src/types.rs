@@ -57,7 +57,7 @@ pub struct Commitment<AccountId, Balance, BlockNumber> {
 #[derive(Encode, Decode, Default, MaxEncodedLen, TypeInfo, RuntimeDebug)]
 pub struct Registration<AccountId, Balance, BlockNumber> {
 	pub owner: AccountId,
-	pub registrant: Option<AccountId>,
+	pub controller: AccountId,
 	pub expiry: Option<BlockNumber>,
 	pub deposit: Option<Balance>,
 }
