@@ -11,7 +11,7 @@ use frame_election_provider_support::SortedListProvider;
 use frame_support::{ensure, traits::Get};
 use frame_system::RawOrigin as Origin;
 use pallet_nomination_pools::{
-	BalanceOf, BondedPoolInner, BondedPools, ConfigOp, Delegators, MaxDelegators,
+	BalanceOf, BondExtra, BondedPoolInner, BondedPools, ConfigOp, Delegators, MaxDelegators,
 	MaxDelegatorsPerPool, MaxPools, Metadata, MinCreateBond, MinJoinBond, Pallet as Pools,
 	PoolRoles, PoolState, RewardPools, SubPoolsStorage,
 };
@@ -75,9 +75,11 @@ fn vote_to_balance<T: pallet_nomination_pools::Config>(
 	vote.try_into().map_err(|_| "could not convert u64 to Balance")
 }
 
+#[allow(unused)]
 struct ListScenario<T: pallet_nomination_pools::Config> {
 	/// Stash/Controller that is expected to be moved.
 	origin1: T::AccountId,
+	creator1: T::AccountId,
 	dest_weight: BalanceOf<T>,
 	origin1_delegator: Option<T::AccountId>,
 }
@@ -109,7 +111,7 @@ impl<T: Config> ListScenario<T> {
 		sp_std::mem::forget(i);
 
 		// Create accounts with the origin weight
-		let (_, pool_origin1) = create_pool_account::<T>(USER_SEED + 1, origin_weight);
+		let (pool_creator1, pool_origin1) = create_pool_account::<T>(USER_SEED + 1, origin_weight);
 		T::StakingInterface::nominate(
 			pool_origin1.clone(),
 			// NOTE: these don't really need to be validators.
@@ -144,7 +146,12 @@ impl<T: Config> ListScenario<T> {
 		assert_eq!(vote_to_balance::<T>(weight_of(&pool_origin2)).unwrap(), origin_weight);
 		assert_eq!(vote_to_balance::<T>(weight_of(&pool_dest1)).unwrap(), dest_weight);
 
-		Ok(ListScenario { origin1: pool_origin1, dest_weight, origin1_delegator: None })
+		Ok(ListScenario {
+			origin1: pool_origin1,
+			creator1: pool_creator1,
+			dest_weight,
+			origin1_delegator: None,
+		})
 	}
 
 	fn add_joiner(mut self, amount: BalanceOf<T>) -> Self {
@@ -208,6 +215,43 @@ frame_benchmarking::benchmarks! {
 	}: _(Origin::Signed(joiner.clone()), max_additional, 1)
 	verify {
 		assert_eq!(CurrencyOf::<T>::free_balance(&joiner), joiner_free - max_additional);
+		assert_eq!(
+			T::StakingInterface::active_stake(&scenario.origin1).unwrap(),
+			scenario.dest_weight
+		);
+	}
+
+	bond_extra_transfer {
+		let origin_weight = pallet_nomination_pools::MinCreateBond::<T>::get()
+			.max(CurrencyOf::<T>::minimum_balance())
+			* 2u32.into();
+		let scenario = ListScenario::<T>::new(origin_weight, true)?;
+		let extra = scenario.dest_weight.clone() - origin_weight;
+
+		// creator of the src pool will bond-extra, bumping itself to dest bag.
+
+	}: bond_extra(Origin::Signed(scenario.creator1.clone()), BondExtra::FreeBalance(extra))
+	verify {
+		assert_eq!(
+			T::StakingInterface::active_stake(&scenario.origin1).unwrap(),
+			scenario.dest_weight
+		);
+	}
+
+	bond_extra_reward {
+		let origin_weight = pallet_nomination_pools::MinCreateBond::<T>::get()
+			.max(CurrencyOf::<T>::minimum_balance())
+			* 2u32.into();
+		let scenario = ListScenario::<T>::new(origin_weight, true)?;
+		let extra = (scenario.dest_weight.clone() - origin_weight).max(CurrencyOf::<T>::minimum_balance());
+
+		// transfer exactly `extra` to the depositor of the src pool (1),
+		let reward_account1 = Pools::<T>::create_reward_account(1);
+		assert!(extra >= CurrencyOf::<T>::minimum_balance());
+		CurrencyOf::<T>::deposit_creating(&reward_account1, extra);
+
+	}: bond_extra(Origin::Signed(scenario.creator1.clone()), BondExtra::Rewards)
+	verify {
 		assert_eq!(
 			T::StakingInterface::active_stake(&scenario.origin1).unwrap(),
 			scenario.dest_weight
@@ -560,12 +604,10 @@ frame_benchmarking::benchmarks! {
 		assert_eq!(MaxDelegators::<T>::get(), Some(u32::MAX));
 		assert_eq!(MaxDelegatorsPerPool::<T>::get(), Some(u32::MAX));
 	}
+
+	impl_benchmark_test_suite!(
+		Pallet,
+		crate::mock::new_test_ext(),
+		crate::mock::Runtime
+	);
 }
-
-// TODO: consider benchmarking slashing logic with pools
-
-frame_benchmarking::impl_benchmark_test_suite!(
-	Pallet,
-	crate::mock::new_test_ext(),
-	crate::mock::Runtime
-);

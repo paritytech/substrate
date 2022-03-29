@@ -129,8 +129,12 @@ pub trait DefensiveOption<T> {
 	/// if `None`, which should never happen.
 	fn defensive_map_or_else<U, D: FnOnce() -> U, F: FnOnce(T) -> U>(self, default: D, f: F) -> U;
 
-	/// Defensively transform this option to a result.
+	/// Defensively transform this option to a result, mapping `None` to the return value of an
+	/// error closure.
 	fn defensive_ok_or_else<E, F: FnOnce() -> E>(self, err: F) -> Result<T, E>;
+
+	/// Defensively transform this option to a result, mapping `None` to a default value.
+	fn defensive_ok_or<E>(self, err: E) -> Result<T, E>;
 
 	/// Exactly the same as `map`, but it prints the appropriate warnings if the value being mapped
 	/// is `None`.
@@ -281,6 +285,13 @@ impl<T> DefensiveOption<T> for Option<T> {
 		self.ok_or_else(|| {
 			defensive!();
 			err()
+		})
+	}
+
+	fn defensive_ok_or<E>(self, err: E) -> Result<T, E> {
+		self.ok_or_else(|| {
+			defensive!();
+			err
 		})
 	}
 

@@ -333,10 +333,21 @@ pub enum ConfigOp<T: Default + Codec + Debug> {
 	Remove,
 }
 
-/// Extrinsics that bond some funds to the pool.
-enum PoolBond {
+/// The type of binding that can happen to a pool.
+enum BondType {
+	/// Someone is bonding into the pool upon creation.
 	Create,
-	Join,
+	/// Someone is adding more funds later to this pool.
+	Later,
+}
+
+/// How to increase the bond of a delegator.
+#[derive(Encode, Decode, Clone, Copy, Debug, PartialEq, Eq, TypeInfo)]
+pub enum BondExtra<Balance> {
+	/// Take from the free balance.
+	FreeBalance(Balance),
+	/// Take the entire amount from the accumulated rewards.
+	Rewards,
 }
 
 /// The type of account being created.
@@ -658,30 +669,26 @@ impl<T: Config> BondedPool<T> {
 		}
 	}
 
-	/// Try to transfer a delegators funds to the bonded pool account and then try to bond them.
-	/// Additionally, this increments the delegator counter for the pool.
+	/// Bond exactly `amount` from `who`'s funds into this pool.
 	///
-	/// # Warning
+	/// If the bond type is `Create`, `StakingInterface::bond` is called, and `who`
+	/// is allowed to be killed. Otherwise, `StakingInterface::bond_extra` is called and `who`
+	/// cannot be killed.
 	///
-	/// This must only be used inside of transactional extrinsic, as funds are transferred prior to
-	/// attempting a fallible bond.
-	fn try_bond_delegator(
+	/// Returns `Ok(points_issues)`, `Err` otherwise.
+	fn try_bond_funds(
 		&mut self,
 		who: &T::AccountId,
 		amount: BalanceOf<T>,
-		ty: PoolBond,
+		ty: BondType,
 	) -> Result<BalanceOf<T>, DispatchError> {
-		self.try_inc_delegators()?;
-
-		// Transfer the funds to be bonded from `who` to the pools account so the pool can then
-		// go bond them.
 		T::Currency::transfer(
 			&who,
 			&self.bonded_account(),
 			amount,
 			match ty {
-				PoolBond::Create => ExistenceRequirement::AllowDeath,
-				PoolBond::Join => ExistenceRequirement::KeepAlive,
+				BondType::Create => ExistenceRequirement::AllowDeath,
+				BondType::Later => ExistenceRequirement::KeepAlive,
 			},
 		)?;
 		// We must calculate the points issued *before* we bond who's funds, else points:balance
@@ -689,9 +696,8 @@ impl<T: Config> BondedPool<T> {
 		let points_issued = self.issue(amount);
 
 		match ty {
-			PoolBond::Create => T::StakingInterface::bond(
+			BondType::Create => T::StakingInterface::bond(
 				self.bonded_account(),
-				// We make the stash and controller the same for simplicity
 				self.bonded_account(),
 				amount,
 				self.reward_account(),
@@ -699,7 +705,7 @@ impl<T: Config> BondedPool<T> {
 			// The pool should always be created in such a way its in a state to bond extra, but if
 			// the active balance is slashed below the minimum bonded or the account cannot be
 			// found, we exit early.
-			PoolBond::Join => T::StakingInterface::bond_extra(self.bonded_account(), amount)?,
+			BondType::Later => T::StakingInterface::bond_extra(self.bonded_account(), amount)?,
 		}
 
 		Ok(points_issued)
@@ -720,7 +726,10 @@ impl<T: Config> BondedPool<T> {
 	fn set_state(&mut self, state: PoolState) {
 		if self.state != state {
 			self.state = state;
-			Pallet::<T>::deposit_event(Event::<T>::State { pool_id: self.id, new_state: state });
+			Pallet::<T>::deposit_event(Event::<T>::StateChanged {
+				pool_id: self.id,
+				new_state: state,
+			});
 		};
 	}
 }
@@ -853,6 +862,7 @@ impl<T: Config> Get<u32> for TotalUnbondingPools<T> {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
+	use frame_support::transactional;
 	use frame_system::{ensure_signed, pallet_prelude::*};
 
 	#[pallet::pallet]
@@ -990,16 +1000,24 @@ pub mod pallet {
 		}
 	}
 
+	/// Events of this pallet.
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(crate) fn deposit_event)]
 	pub enum Event<T: Config> {
+		/// A pool has been created.
 		Created { depositor: T::AccountId, pool_id: PoolId },
-		Joined { delegator: T::AccountId, pool_id: PoolId, bonded: BalanceOf<T> },
+		/// A delegator has became bonded in a pool.
+		Bonded { delegator: T::AccountId, pool_id: PoolId, bonded: BalanceOf<T>, joined: bool },
+		/// A payout has been made to a delegator.
 		PaidOut { delegator: T::AccountId, pool_id: PoolId, payout: BalanceOf<T> },
+		/// A delegator has unbonded from their pool.
 		Unbonded { delegator: T::AccountId, pool_id: PoolId, amount: BalanceOf<T> },
+		/// A delegator has withdrawn from their pool.
 		Withdrawn { delegator: T::AccountId, pool_id: PoolId, amount: BalanceOf<T> },
+		/// A pool has been destroyed.
 		Destroyed { pool_id: PoolId },
-		State { pool_id: PoolId, new_state: PoolState },
+		/// The state of a pool has changed
+		StateChanged { pool_id: PoolId, new_state: PoolState },
 	}
 
 	#[pallet::error]
@@ -1085,7 +1103,8 @@ pub mod pallet {
 			let reward_pool = RewardPool::<T>::get_and_update(pool_id)
 				.defensive_ok_or_else(|| Error::<T>::RewardPoolNotFound)?;
 
-			let points_issued = bonded_pool.try_bond_delegator(&who, amount, PoolBond::Join)?;
+			bonded_pool.try_inc_delegators()?;
+			let points_issued = bonded_pool.try_bond_funds(&who, amount, BondType::Later)?;
 
 			Delegators::insert(
 				who.clone(),
@@ -1103,7 +1122,52 @@ pub mod pallet {
 				},
 			);
 			bonded_pool.put();
-			Self::deposit_event(Event::<T>::Joined { delegator: who, pool_id, bonded: amount });
+			Self::deposit_event(Event::<T>::Bonded {
+				delegator: who,
+				pool_id,
+				bonded: amount,
+				joined: true,
+			});
+
+			Ok(())
+		}
+
+		/// Bond `extra` more funds from `origin` into the pool to which they already belong.
+		///
+		/// Additional funds can come from either the free balance of the account, of from the
+		/// accumulated rewards, see [`BondExtra`].
+		// NOTE: this transaction is implemented with the sole purpose of readability and
+		// correctness, not optimization. We read/write several storage items multiple times instead
+		// of just once, in the spirit reusing code.
+		#[pallet::weight(0)]
+		#[transactional]
+		pub fn bond_extra(origin: OriginFor<T>, extra: BondExtra<BalanceOf<T>>) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+			let (mut delegator, mut bonded_pool, mut reward_pool) =
+				Self::get_delegator_with_pools(&who)?;
+
+			let (points_issued, bonded) = match extra {
+				BondExtra::FreeBalance(amount) =>
+					(bonded_pool.try_bond_funds(&who, amount, BondType::Later)?, amount),
+				BondExtra::Rewards => {
+					let claimed = Self::do_reward_payout(
+						&who,
+						&mut delegator,
+						&mut bonded_pool,
+						&mut reward_pool,
+					)?;
+					(bonded_pool.try_bond_funds(&who, claimed, BondType::Later)?, claimed)
+				},
+			};
+			delegator.points = delegator.points.saturating_add(points_issued);
+
+			Self::deposit_event(Event::<T>::Bonded {
+				delegator: who.clone(),
+				pool_id: delegator.pool_id,
+				bonded,
+				joined: false,
+			});
+			Self::put_delegator_with_pools(&who, delegator, bonded_pool, reward_pool);
 
 			Ok(())
 		}
@@ -1117,22 +1181,13 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::claim_payout())]
 		pub fn claim_payout(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			let mut delegator = Delegators::<T>::get(&who).ok_or(Error::<T>::DelegatorNotFound)?;
-			let mut bonded_pool = BondedPool::<T>::get(delegator.pool_id)
-				.defensive_ok_or_else(|| Error::<T>::PoolNotFound)?;
-			let was_destroying = bonded_pool.is_destroying();
+			let (mut delegator, mut bonded_pool, mut reward_pool) =
+				Self::get_delegator_with_pools(&who)?;
 
-			Self::do_reward_payout(who.clone(), &mut delegator, &mut bonded_pool)?;
+			let _ =
+				Self::do_reward_payout(&who, &mut delegator, &mut bonded_pool, &mut reward_pool)?;
 
-			if bonded_pool.is_destroying() && !was_destroying {
-				Self::deposit_event(Event::<T>::State {
-					pool_id: delegator.pool_id,
-					new_state: PoolState::Destroying,
-				});
-			}
-			bonded_pool.put();
-			Delegators::insert(who, delegator);
-
+			Self::put_delegator_with_pools(&who, delegator, bonded_pool, reward_pool);
 			Ok(())
 		}
 
@@ -1164,16 +1219,20 @@ pub mod pallet {
 			delegator_account: T::AccountId,
 		) -> DispatchResult {
 			let caller = ensure_signed(origin)?;
-			let mut delegator =
-				Delegators::<T>::get(&delegator_account).ok_or(Error::<T>::DelegatorNotFound)?;
-			let mut bonded_pool = BondedPool::<T>::get(delegator.pool_id)
-				.defensive_ok_or_else(|| Error::<T>::PoolNotFound)?;
+			let (mut delegator, mut bonded_pool, mut reward_pool) =
+				Self::get_delegator_with_pools(&delegator_account)?;
+
 			bonded_pool.ok_to_unbond_other_with(&caller, &delegator_account, &delegator)?;
 
 			// Claim the the payout prior to unbonding. Once the user is unbonding their points
 			// no longer exist in the bonded pool and thus they can no longer claim their payouts.
 			// It is not strictly necessary to claim the rewards, but we do it here for UX.
-			Self::do_reward_payout(delegator_account.clone(), &mut delegator, &mut bonded_pool)?;
+			Self::do_reward_payout(
+				&delegator_account,
+				&mut delegator,
+				&mut bonded_pool,
+				&mut reward_pool,
+			)?;
 
 			let balance_to_unbond = bonded_pool.balance_to_unbond(delegator.points);
 
@@ -1217,9 +1276,8 @@ pub mod pallet {
 			});
 
 			// Now that we know everything has worked write the items to storage.
-			bonded_pool.put();
 			SubPoolsStorage::insert(&delegator.pool_id, sub_pools);
-			Delegators::insert(delegator_account, delegator);
+			Self::put_delegator_with_pools(&delegator_account, delegator, bonded_pool, reward_pool);
 
 			Ok(())
 		}
@@ -1423,7 +1481,8 @@ pub mod pallet {
 				PoolRoles { root, nominator, state_toggler, depositor: who.clone() },
 			);
 
-			let points = bonded_pool.try_bond_delegator(&who, amount, PoolBond::Create)?;
+			bonded_pool.try_inc_delegators()?;
+			let points = bonded_pool.try_bond_funds(&who, amount, BondType::Create)?;
 
 			T::Currency::transfer(
 				&who,
@@ -1577,7 +1636,6 @@ pub mod pallet {
 
 impl<T: Config> Pallet<T> {
 	/// Create the main, bonded account of a pool with the given id.
-
 	pub fn create_bonded_account(id: PoolId) -> T::AccountId {
 		T::PalletId::get().into_sub_account((AccountType::Bonded, id))
 	}
@@ -1587,6 +1645,31 @@ impl<T: Config> Pallet<T> {
 		// NOTE: in order to have a distinction in the test account id type (u128), we put
 		// account_type first so it does not get truncated out.
 		T::PalletId::get().into_sub_account((AccountType::Reward, id))
+	}
+
+	/// Get the delegator with their associated bonded and reward pool.
+	fn get_delegator_with_pools(
+		who: &T::AccountId,
+	) -> Result<(Delegator<T>, BondedPool<T>, RewardPool<T>), Error<T>> {
+		let delegator = Delegators::<T>::get(&who).ok_or(Error::<T>::DelegatorNotFound)?;
+		let bonded_pool =
+			BondedPool::<T>::get(delegator.pool_id).defensive_ok_or(Error::<T>::PoolNotFound)?;
+		let reward_pool =
+			RewardPools::<T>::get(delegator.pool_id).defensive_ok_or(Error::<T>::PoolNotFound)?;
+		Ok((delegator, bonded_pool, reward_pool))
+	}
+
+	/// Persist the delegator with their associated bonded and reward pool into storage, consuming
+	/// all of them.
+	fn put_delegator_with_pools(
+		delegator_account: &T::AccountId,
+		delegator: Delegator<T>,
+		bonded_pool: BondedPool<T>,
+		reward_pool: RewardPool<T>,
+	) {
+		bonded_pool.put();
+		RewardPools::insert(delegator.pool_id, reward_pool);
+		Delegators::<T>::insert(delegator_account, delegator);
 	}
 
 	/// Calculate the number of points to issue from a pool as `(current_points / current_balance) *
@@ -1717,21 +1800,19 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// If the delegator has some rewards, transfer a payout from the reward pool to the delegator.
-	///
-	/// # Note
-	/// This will persist updates for the reward pool to storage. But it will *not* persist updates
-	/// to the `delegator` or `bonded_pool` to storage, that is the responsibility of the caller.
+	// Emits events and potentially modifies pool state if any arithmetic saturates, but does
+	// not persist any of the mutable inputs to storage.
 	fn do_reward_payout(
-		delegator_account: T::AccountId,
+		delegator_account: &T::AccountId,
 		delegator: &mut Delegator<T>,
 		bonded_pool: &mut BondedPool<T>,
-	) -> DispatchResult {
+		reward_pool: &mut RewardPool<T>,
+	) -> Result<BalanceOf<T>, DispatchError> {
 		debug_assert_eq!(delegator.pool_id, bonded_pool.id);
-		let mut reward_pool = RewardPools::<T>::get(delegator.pool_id)
-			.defensive_ok_or_else(|| Error::<T>::RewardPoolNotFound)?;
+		let was_destroying = bonded_pool.is_destroying();
 
 		let delegator_payout =
-			Self::calculate_delegator_payout(bonded_pool, &mut reward_pool, delegator)?;
+			Self::calculate_delegator_payout(bonded_pool, reward_pool, delegator)?;
 
 		// Transfer payout to the delegator.
 		T::Currency::transfer(
@@ -1742,15 +1823,19 @@ impl<T: Config> Pallet<T> {
 		)?;
 
 		Self::deposit_event(Event::<T>::PaidOut {
-			delegator: delegator_account,
+			delegator: delegator_account.clone(),
 			pool_id: delegator.pool_id,
 			payout: delegator_payout,
 		});
 
-		// Write the reward pool to storage
-		RewardPools::insert(&delegator.pool_id, reward_pool);
+		if bonded_pool.is_destroying() && !was_destroying {
+			Self::deposit_event(Event::<T>::StateChanged {
+				pool_id: delegator.pool_id,
+				new_state: PoolState::Destroying,
+			});
+		}
 
-		Ok(())
+		Ok(delegator_payout)
 	}
 
 	/// Ensure the correctness of the state of this pallet.
