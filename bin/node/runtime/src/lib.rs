@@ -1267,6 +1267,44 @@ impl pallet_mmr::Config for Runtime {
 }
 
 parameter_types! {
+	pub const BiddingPeriod: BlockNumber = 1 * DAYS;
+	pub const ClaimPeriod: BlockNumber = 1 * DAYS;
+	pub const OwnershipPeriod: BlockNumber = 365 * DAYS;
+	pub const MinBid: Balance = 10 * DOLLARS;
+}
+
+parameter_types! {
+	pub const CommitmentDeposit: Balance = 1 * DOLLARS;
+	pub const SubNodeDeposit: Balance = 1 * DOLLARS;
+	pub const TierThreeLetters: Balance = 640 * DOLLARS;
+	pub const TierFourLetters: Balance = 160 * DOLLARS;
+	pub const TierDefault: Balance = 5 * DOLLARS;
+	pub const MinimumCommitmentPeriod: BlockNumber = 1 * MINUTES;
+	pub const CommitmentAlivePeriod: BlockNumber = 1 * DAYS;
+	pub const FeePerRegistrationPeriod: Balance = 1 * DOLLARS / (365 * DAYS as Balance);
+	pub const BlocksPerRegistrationPeriod: BlockNumber = 1 * DAYS;
+	pub const MinCommitmentAge: BlockNumber = 1 * MINUTES;
+	pub const MaxCommitmentAge: BlockNumber = 10 * MINUTES;
+}
+
+impl pallet_name_service::Config for Runtime {
+	type Event = Event;
+	type Currency = Balances;
+	type BlockNumberToBalance = ConvertInto;
+	type MinCommitmentAge = MinCommitmentAge;
+	type MaxCommitmentAge = MaxCommitmentAge;
+	type RegistrationFeeHandler = ();
+	type CommitmentDeposit = CommitmentDeposit;
+	type SubNodeDeposit = SubNodeDeposit;
+	type TierThreeLetters = TierThreeLetters;
+	type TierFourLetters = TierFourLetters;
+	type TierDefault = TierDefault;
+	type FeePerRegistrationPeriod = FeePerRegistrationPeriod;
+	type RegistrationManager = EnsureRoot<Self::AccountId>;
+	type BlocksPerRegistrationPeriod = BlocksPerRegistrationPeriod;
+}
+
+parameter_types! {
 	pub const LotteryPalletId: PalletId = PalletId(*b"py/lotto");
 	pub const MaxCalls: u32 = 10;
 	pub const MaxGenerateRandom: u32 = 10;
@@ -1458,6 +1496,7 @@ construct_runtime!(
 		Referenda: pallet_referenda,
 		ConvictionVoting: pallet_conviction_voting,
 		Whitelist: pallet_whitelist,
+		NameService: pallet_name_service,
 	}
 );
 
@@ -1541,6 +1580,7 @@ mod benches {
 		[pallet_membership, TechnicalMembership]
 		[pallet_mmr, Mmr]
 		[pallet_multisig, Multisig]
+		[pallet_name_service, NameService]
 		[pallet_offences, OffencesBench::<Runtime>]
 		[pallet_preimage, Preimage]
 		[pallet_proxy, Proxy]

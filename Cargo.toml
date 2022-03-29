@@ -103,6 +103,7 @@ members = [
 	"frame/merkle-mountain-range/primitives",
 	"frame/merkle-mountain-range/rpc",
 	"frame/multisig",
+	"frame/name-service",
 	"frame/nicks",
 	"frame/node-authorization",
 	"frame/offences",

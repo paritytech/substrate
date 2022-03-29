@@ -75,6 +75,7 @@ pallet-lottery = { version = "4.0.0-dev", default-features = false, path = "../.
 pallet-membership = { version = "4.0.0-dev", default-features = false, path = "../../../frame/membership" }
 pallet-mmr = { version = "4.0.0-dev", default-features = false, path = "../../../frame/merkle-mountain-range" }
 pallet-multisig = { version = "4.0.0-dev", default-features = false, path = "../../../frame/multisig" }
+pallet-name-service = { version = "4.0.0-dev", default-features = false, path = "../../../frame/name-service" }
 pallet-offences = { version = "4.0.0-dev", default-features = false, path = "../../../frame/offences" }
 pallet-offences-benchmarking = { version = "4.0.0-dev", path = "../../../frame/offences/benchmarking", default-features = false, optional = true }
 pallet-preimage = { version = "4.0.0-dev", default-features = false, path = "../../../frame/preimage" }
@@ -138,6 +139,7 @@ std = [
 	"pallet-membership/std",
 	"pallet-mmr/std",
 	"pallet-multisig/std",
+	"pallet-name-service/std",
 	"pallet-identity/std",
 	"pallet-scheduler/std",
 	"node-primitives/std",
@@ -206,6 +208,7 @@ runtime-benchmarks = [
 	"pallet-membership/runtime-benchmarks",
 	"pallet-mmr/runtime-benchmarks",
 	"pallet-multisig/runtime-benchmarks",
+	"pallet-name-service/runtime-benchmarks",
 	"pallet-offences-benchmarking",
 	"pallet-preimage/runtime-benchmarks",
 	"pallet-proxy/runtime-benchmarks",
