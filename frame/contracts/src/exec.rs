@@ -785,7 +785,7 @@ where
 			Ok((success, output)) => (success, output),
 			// `with_transactional` returned an error, and we propagate that error and note no state
 			// has changed.
-			Err(error) => (false, Err(ExecError { error, origin: ErrorOrigin::Callee })),
+			Err(error) => (false, Err(error.into()),
 		};
 		self.pop_frame(success);
 		output
