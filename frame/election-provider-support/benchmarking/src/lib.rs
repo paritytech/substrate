@@ -18,9 +18,7 @@
 //! election provider support onchain pallet benchmarking.
 // This is separated into its own crate to avoid bloating the size of the runtime.
 
-#![cfg(feature = "runtime-benchmarks")]
-
-use super::*;
+#![cfg_attr(not(feature = "std"), no_std)]
 
 use frame_benchmarking::{benchmarks, Vec};
 use frame_support::log;

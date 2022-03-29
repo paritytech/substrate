@@ -48,46 +48,68 @@ impl From<sp_npos_elections::Error> for Error {
 ///
 /// This will accept voting data on the fly and produce the results immediately.
 ///
-/// Finally, the [`ElectionProvider`] implementation of this type does not impose any limits on the
-/// number of voters and targets that are fetched. This could potentially make this unsuitable for
-/// execution onchain. One could, however, impose bounds on it by using for example
-/// `BoundedExecution` which will the bounds provided in the configuration.
+/// The [`ElectionProvider`] implementation of this type does not impose any dynamic limits on the
+/// number of voters and targets that are fetched. One would, however, impose bounds on it by using
+/// `MaxVoters` and `MaxVoters` bounds in the `Config` trait.
 ///
 /// On the other hand, the [`InstantElectionProvider`] implementation does limit these inputs,
-/// either via using `BoundedExecution` and imposing the bounds there, or dynamically via calling
-/// `elect_with_bounds` providing these bounds. If you use `elect_with_bounds` along with
-/// `InstantElectionProvider`, the bound that would be used is the minimum of the 2 bounds.
+/// dynamically. If you use `elect_with_bounds` along with `InstantElectionProvider`, the bound that
+/// would be used is the minimum of the dynamic bounds given as arguments to `elect_with_bounds` and
+/// the trait bounds (`MaxVoters` and `MaxTargets`).
 ///
 /// It is advisable to use the former ([`ElectionProvider::elect`]) only at genesis, or for testing,
 /// the latter [`InstantElectionProvider::elect_with_bounds`] for onchain operations, with
 /// thoughtful bounds.
 ///
-/// Please use `BoundedExecution` at all times except at genesis or for testing, with thoughtful
-/// bounds in order to bound the potential execution time. Limit the use `UnboundedExecution` at
-/// genesis or for testing, as it does not bound the inputs. However, this can be used with
-/// `[InstantElectionProvider::elect_with_bounds`] that dynamically imposes limits.
-/// `System` is used to register the weight used by the election process.
-pub struct BoundedPhragmen<
+/// `Solver` represents the solver to be used for the election, examples are `SequentialPhragmen`
+/// and `PhragMMS`.
+pub struct BoundedExecution<
 	System: frame_system::Config,
 	DataProvider: ElectionDataProvider<AccountId = System::AccountId, BlockNumber = System::BlockNumber>,
+	Solver: NposSolver<AccountId = System::AccountId, Error = sp_npos_elections::Error> + WeightConfig,
 	VotersBound: Get<u32>,
 	TargetsBound: Get<u32>,
 	Accuracy,
 	Balancing = (),
->(PhantomData<(System, DataProvider, VotersBound, TargetsBound, Accuracy, Balancing)>);
-/// `NposSolver` that should be used, an example would be `PhragMMS`.
-/// It's advised to use the `OnChainPhragmen` or `OnChainPhragMMS` instead, as they implement the
-/// `WeightConfig` trait.
-/// `OnChainPhragmen` is a simple implementation of the `ElectionProvider` and
-/// `InstantElectionProvider` traits, that uses the `SequentialPhragmen` algorithm to solve for the
-/// solution.
-/// An unbounded variant of [`BoundedExecution`].
-///
-/// ### Warning
-///
-/// This can be very expensive to run frequently on-chain. Use with care. Moreover, this
-/// implementation ignores the additional data of the election data provider and gives no insight on
-/// how much weight was consumed.
+>(PhantomData<(System, DataProvider, Solver, VotersBound, TargetsBound, Accuracy, Balancing)>);
+
+/// `BoundedPhragmen` uses the `SequentialPhragmen` algorithm to solve for the solution.
+pub type BoundedPhragmen<
+	System,
+	DataProvider,
+	VotersBound,
+	TargetsBound,
+	Accuracy,
+	Balancing = (),
+> = BoundedExecution<
+	System,
+	DataProvider,
+	SequentialPhragmen<<System as frame_system::Config>::AccountId, Accuracy, Balancing>,
+	VotersBound,
+	TargetsBound,
+	Accuracy,
+	Balancing,
+>;
+
+/// `BoundedPhragMMS` is similar to `BoundedPhragmen` but uses the `PhragMMS` algorith to solve for
+/// the solution.
+pub type BoundedPhragMMS<
+	System,
+	DataProvider,
+	VotersBound,
+	TargetsBound,
+	Accuracy,
+	Balancing = (),
+> = BoundedExecution<
+	System,
+	DataProvider,
+	PhragMMS<<System as frame_system::Config>::AccountId, Accuracy, Balancing>,
+	VotersBound,
+	TargetsBound,
+	Accuracy,
+	Balancing,
+>;
+
 /// Configuration for the weight measuring function of the `NposSolver`.
 pub trait WeightConfig {
 	fn weight<T: WeightInfo>(v: u32, t: u32, d: u32) -> Weight;
@@ -127,9 +149,6 @@ pub trait Config {
 	type VotersBound: Get<u32>;
 	/// Bounds the number of targets.
 	type TargetsBound: Get<u32>;
-
-	/// Configuration for the weight measuring function of the `NposSolver`.
-	fn weight(v: u32, t: u32, d: u32) -> Weight;
 }
 
 // `System` is used to register the weight used.
@@ -171,12 +190,14 @@ fn elect_with<T: Config, System: frame_system::Config>(
 	Ok(to_supports(&staked))
 }
 
-impl<System, DataProvider, VotersBound, TargetsBound, Accuracy, Balancing> Config
-	for BoundedPhragmen<System, DataProvider, VotersBound, TargetsBound, Accuracy, Balancing>
+impl<System, DataProvider, Solver, VotersBound, TargetsBound, Accuracy, Balancing> Config
+	for BoundedExecution<System, DataProvider, Solver, VotersBound, TargetsBound, Accuracy, Balancing>
 where
 	System: frame_system::Config,
 	DataProvider:
 		ElectionDataProvider<AccountId = System::AccountId, BlockNumber = System::BlockNumber>,
+	Solver:
+		NposSolver<AccountId = System::AccountId, Error = sp_npos_elections::Error> + WeightConfig,
 	VotersBound: Get<u32>,
 	TargetsBound: Get<u32>,
 	Accuracy: PerThing128,
@@ -185,22 +206,20 @@ where
 	type WeightInfo = crate::weights::SubstrateWeight<System>;
 	type AccountId = System::AccountId;
 	type BlockNumber = System::BlockNumber;
-	type Solver = SequentialPhragmen<Self::AccountId, Accuracy, Balancing>;
+	type Solver = Solver;
 	type DataProvider = DataProvider;
 	type VotersBound = VotersBound;
 	type TargetsBound = TargetsBound;
-
-	fn weight(v: u32, t: u32, d: u32) -> Weight {
-		Self::WeightInfo::phragmen(v, t, d)
-	}
 }
 
-impl<System, DataProvider, VotersBound, TargetsBound, Accuracy, Balancing> ElectionProvider
-	for BoundedPhragmen<System, DataProvider, VotersBound, TargetsBound, Accuracy, Balancing>
+impl<System, DataProvider, Solver, VotersBound, TargetsBound, Accuracy, Balancing> ElectionProvider
+	for BoundedExecution<System, DataProvider, Solver, VotersBound, TargetsBound, Accuracy, Balancing>
 where
 	System: frame_system::Config,
 	DataProvider:
 		ElectionDataProvider<AccountId = System::AccountId, BlockNumber = System::BlockNumber>,
+	Solver:
+		NposSolver<AccountId = System::AccountId, Error = sp_npos_elections::Error> + WeightConfig,
 	VotersBound: Get<u32>,
 	TargetsBound: Get<u32>,
 	Accuracy: PerThing128,
@@ -219,12 +238,15 @@ where
 	}
 }
 
-impl<System, DataProvider, VotersBound, TargetsBound, Accuracy, Balancing> InstantElectionProvider
-	for BoundedPhragmen<System, DataProvider, VotersBound, TargetsBound, Accuracy, Balancing>
+impl<System, DataProvider, Solver, VotersBound, TargetsBound, Accuracy, Balancing>
+	InstantElectionProvider
+	for BoundedExecution<System, DataProvider, Solver, VotersBound, TargetsBound, Accuracy, Balancing>
 where
 	System: frame_system::Config,
 	DataProvider:
 		ElectionDataProvider<AccountId = System::AccountId, BlockNumber = System::BlockNumber>,
+	Solver:
+		NposSolver<AccountId = System::AccountId, Error = sp_npos_elections::Error> + WeightConfig,
 	VotersBound: Get<u32>,
 	TargetsBound: Get<u32>,
 	Accuracy: PerThing128,
@@ -299,6 +321,14 @@ mod tests {
 		Perbill,
 	>;
 
+	type OnChainPhragMMS = BoundedPhragMMS<
+		Runtime,
+		mock_data_provider::DataProvider,
+		ConstU32<600>,
+		ConstU32<400>,
+		Perbill,
+	>;
+
 	mod mock_data_provider {
 		use frame_support::{bounded_vec, traits::ConstU32};
 
@@ -337,6 +367,19 @@ mod tests {
 		sp_io::TestExternalities::new_empty().execute_with(|| {
 			assert_eq!(
 				OnChainPhragmen::elect().unwrap(),
+				vec![
+					(10, Support { total: 25, voters: vec![(1, 10), (3, 15)] }),
+					(30, Support { total: 35, voters: vec![(2, 20), (3, 15)] })
+				]
+			);
+		})
+	}
+
+	#[test]
+	fn onchain_phragmms_works() {
+		sp_io::TestExternalities::new_empty().execute_with(|| {
+			assert_eq!(
+				OnChainPhragMMS::elect().unwrap(),
 				vec![
 					(10, Support { total: 25, voters: vec![(1, 10), (3, 15)] }),
 					(30, Support { total: 35, voters: vec![(2, 20), (3, 15)] })
