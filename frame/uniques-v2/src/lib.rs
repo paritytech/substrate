@@ -168,10 +168,9 @@ pub mod pallet {
 			old_owner: T::AccountId,
 			new_owner: T::AccountId,
 		},
-		CollectionTransferred {
+		CollectionMaxSupplyChanged {
 			id: T::CollectionId,
-			sender: T::AccountId,
-			receiver: T::AccountId,
+			max_supply: Option<u32>,
 		},
 		AttributeSet {
 			id: T::CollectionId,
@@ -188,9 +187,11 @@ pub mod pallet {
 			collection_id: T::CollectionId,
 			item_id: T::ItemId,
 		},
-		CollectionMaxSupplyChanged {
-			id: T::CollectionId,
-			max_supply: Option<u32>,
+		ItemTransferred {
+			collection_id: T::CollectionId,
+			item_id: T::ItemId,
+			sender: T::AccountId,
+			receiver: T::AccountId,
 		},
 	}
 
@@ -205,8 +206,10 @@ pub mod pallet {
 		CollectionNotFound,
 		/// The collection is locked.
 		CollectionIsLocked,
-		/// An item with this ID does not exist.
+		/// An item with this ID is already claimed.
 		ItemIdTaken,
+		/// An item with this ID does not exist.
+		ItemNotFound,
 		/// An item with this ID is not within the max supply range.
 		ItemIdNotWithinMaxSupply,
 		/// The calling user is not authorized to make this call.
@@ -352,16 +355,18 @@ pub mod pallet {
 
 		// TODO: #[pallet::weight( Self::config_to_weight(config_hint) )]
 		#[pallet::weight(0)]
-		pub fn transfer(
+		pub fn transfer_item(
 			origin: OriginFor<T>,
-			id: T::CollectionId,
-			receiver: T::AccountId,
+			collection_id: T::CollectionId,
+			item_id: T::ItemId,
+			receiver: <T::Lookup as StaticLookup>::Source,
 			config_hint: CollectionConfig,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
-			let config = CollectionConfigs::<T>::get(id).ok_or(Error::<T>::CollectionNotFound)?;
+			let receiver = T::Lookup::lookup(receiver)?;
+			let config = CollectionConfigs::<T>::get(collection_id).ok_or(Error::<T>::CollectionNotFound)?;
 			ensure!(config == config_hint, Error::<T>::BadHint);
-			Self::do_transfer(id, config, sender, receiver)?;
+			Self::do_transfer_item(collection_id, item_id, config, sender, receiver)?;
 			Ok(())
 		}
 

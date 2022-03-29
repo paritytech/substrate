@@ -20,33 +20,34 @@ use enumflags2::BitFlags;
 use frame_support::pallet_prelude::*;
 
 impl<T: Config> Pallet<T> {
-	pub fn do_transfer(
-		id: T::CollectionId,
+	pub fn do_transfer_item(
+		collection_id: T::CollectionId,
+		item_id: T::ItemId,
 		config: CollectionConfig,
 		sender: T::AccountId,
 		receiver: T::AccountId,
 	) -> DispatchResult {
-		let user_features: BitFlags<UserFeatures> = config.user_features.into();
+		Items::<T>::try_mutate(collection_id, item_id, |maybe_item| {
+			let user_features: BitFlags<UserFeatures> = config.user_features.into();
 
-		if user_features.contains(UserFeatures::Royalty) {
-			// take a part of the transfer amount
-		}
+			if user_features.contains(UserFeatures::Royalty) {
+				// take a part of the transfer amount
+			}
 
-		if user_features.contains(UserFeatures::Limited) {
-			//crate::limited::limited_check(receiver)?;
-		}
+			if user_features.contains(UserFeatures::Limited) {
+				// crate::limited::limited_check(receiver)?;
+			}
 
-		Collections::<T>::try_mutate(id, |maybe_collection| {
-			let collection = maybe_collection.as_mut().ok_or(Error::<T>::CollectionNotFound)?;
-			ensure!(&sender == &collection.owner, Error::<T>::NotAuthorized);
+			let item = maybe_item.as_mut().ok_or(Error::<T>::ItemNotFound)?;
+			ensure!(&sender == &item.owner, Error::<T>::NotAuthorized);
 
-			if collection.owner == receiver {
+			if item.owner == receiver {
 				return Ok(())
 			}
 
-			collection.owner = receiver.clone();
+			item.owner = receiver.clone();
 
-			Self::deposit_event(Event::CollectionTransferred { id, sender, receiver });
+			Self::deposit_event(Event::ItemTransferred { collection_id, item_id, sender, receiver });
 
 			Ok(())
 		})
