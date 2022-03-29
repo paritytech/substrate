@@ -378,6 +378,18 @@ pub mod pallet {
 			Self::do_deregister(subnode_hash);
 			Ok(())
 		}
+
+		#[pallet::weight(0)]
+		pub fn set_subnode_owner(
+			origin: OriginFor<T>,
+			parent_hash: NameHash,
+			label_hash: NameHash,
+			new_owner: T::AccountId,
+		) -> DispatchResult {
+			let sender = ensure_signed(origin)?;
+			Self::do_set_subnode_owner(sender, parent_hash, label_hash, new_owner)?;
+			Ok(())
+		}
 	}
 
 	// Pallet internal functions

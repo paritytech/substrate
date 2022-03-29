@@ -23,10 +23,14 @@ use frame_support::pallet_prelude::*;
 use sp_runtime::traits::Zero;
 
 impl<T: Config> Pallet<T> {
+	/// Calculates a subnode hash given the parent hash and label hash.
 	pub fn subnode_hash(parent_hash: NameHash, label_hash: NameHash) -> NameHash {
 		return sp_io::hashing::blake2_256(&(parent_hash, label_hash).encode())
 	}
 
+	/// Creates a new subdomain given a raw label.
+	///
+	/// Can only be called by the controller or owner of a parent domain.
 	pub fn do_set_subnode_record(
 		sender: T::AccountId,
 		parent_hash: NameHash,
@@ -34,79 +38,34 @@ impl<T: Config> Pallet<T> {
 	) -> DispatchResult {
 		ensure!(!label.len().is_zero(), Error::<T>::LabelTooShort);
 
-		let parent = Self::get_registration(parent_hash)?;
-		ensure!(sender == parent.owner, Error::<T>::NotRegistrationOwner);
+		let parent_registration = Self::get_registration(parent_hash)?;
+		ensure!(
+			Self::is_controller(&parent_registration, &sender),
+			Error::<T>::NotRegistrationOwner
+		);
 
 		let label_hash = sp_io::hashing::blake2_256(&label);
 		let name_hash = Self::subnode_hash(parent_hash, label_hash);
 
 		ensure!(!Registrations::<T>::contains_key(name_hash), Error::<T>::RegistrationExists);
+		let expiration = None;
 		let deposit = T::SubNodeDeposit::get();
-		Self::do_register(name_hash, sender.clone(), sender, None, Some(deposit))?;
+		Self::do_register(name_hash, sender.clone(), sender, expiration, Some(deposit))?;
 		Ok(())
 	}
 
-	// pub fn get_subnode_registration(parent_hash: NameHash, label_hash: NameHash) ->
-	// Result<RegistrationOf<T>, DispatchError> { 	let subnode_hash = Self::subnode_hash(parent_hash,
-	// label_hash); 	Registrations::<T>::get(subnode_hash).ok_or(Error::<T>::
-	// ParentRegistrationNotFound.into()) }
-
-	// pub fn do_deregister(
-	// 	maybe_label_hash: Option<NameHash>,
-	// 	name_hash: NameHash,
-	// 	maybe_sender: Option<T::AccountId>,
-	// ) -> DispatchResult {
-	// 	// if label hash has been provided, we are trying to deregister a subnode.
-	// 	let name_hash = if let Some(label_hash) = maybe_label_hash {
-	// 		let parent_hash = name_hash;
-
-	// 		// generate the subnode we wish to deregister.
-	// 		let subnode_hash = Self::subnode_hash(parent_hash, label_hash);
-
-	// 		// ensure this subnode exists
-	// 		let registration = Registrations::<T>::get(subnode_hash)
-	// 			.ok_or(Error::<T>::RegistrationNotFound)?;
-
-	// 		// not owner - check parent node has been deregistered.
-	// 		if let Some(sender) = maybe_sender {
-	// 			if registration.owner != sender {
-	// 				ensure!(
-	// 					!Registrations::<T>::contains_key(parent_hash),
-	// 					Error::<T>::RegistrationNotExpired
-	// 				);
-	// 			}
-	// 		}
-
-	// 		// defensive handling subnode unreserve - should always exist.
-	// 		if let Some(deposit) = registration.deposit {
-	// 			let res = T::Currency::unreserve(&registration.owner, deposit);
-	// 			debug_assert!(res.is_zero());
-	// 		}
-
-	// 		subnode_hash
-
-	// 	// no label hash provided; we are trying to deregister a top level node.
-	// 	} else {
-	// 		let registration =
-	// 			Registrations::<T>::get(name_hash).ok_or(Error::<T>::RegistrationNotFound)?;
-
-	// 		// if not root origin nor owner, check node has expired.
-	// 		if let Some(sender) = maybe_sender {
-	// 			if registration.owner != sender {
-	// 				let expiry =
-	// 					registration.expiry.ok_or(Error::<T>::RegistrationHasNoExpiry)?;
-	// 				ensure!(
-	// 					expiry < frame_system::Pallet::<T>::block_number(),
-	// 					Error::<T>::RegistrationNotExpired
-	// 				);
-	// 			}
-	// 		}
-	// 		name_hash
-	// 	};
-
-	// 	Resolvers::<T>::remove(name_hash);
-	// 	Registrations::<T>::remove(name_hash);
-	// 	Self::deposit_event(Event::<T>::AddressDeregistered { name_hash });
-	// 	return Ok(())
-	// }
+	/// Allow the owner of a parent domain to set a new owner for a subdomain.
+	///
+	/// This will transfer the deposit of this subdomain from the old owner to the new one.
+	pub fn do_set_subnode_owner(
+		sender: T::AccountId,
+		parent_hash: NameHash,
+		label_hash: NameHash,
+		new_owner: T::AccountId,
+	) -> DispatchResult {
+		let parent_registration = Self::get_registration(parent_hash)?;
+		ensure!(Self::is_owner(&parent_registration, &sender), Error::<T>::NotRegistrationOwner);
+		let subnode_hash = Self::subnode_hash(parent_hash, label_hash);
+		Self::do_transfer_ownership(subnode_hash, new_owner)
+	}
 }
