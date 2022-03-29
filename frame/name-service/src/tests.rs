@@ -226,6 +226,19 @@ fn reveal_handles_errors() {
 			NameService::reveal(Origin::signed(2), name.clone(), secret, length),
 			BalancesError::InsufficientBalance,
 		);
+
+		// Cannot reveal a name that is too long.
+		let max_len: u32 = <Test as crate::Config>::MaxNameLength::get();
+		let name = vec![0; max_len as usize + 1];
+		let commitment_hash = blake2_256(&(&name, secret).encode());
+		assert_ok!(NameService::commit(Origin::signed(sender), owner, commitment_hash));
+
+		add_blocks(min_commitment + 1);
+
+		assert_noop!(
+			NameService::reveal(Origin::signed(2), name.clone(), secret, length),
+			Error::<Test>::NameTooLong,
+		);
 	});
 }
 

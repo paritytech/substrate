@@ -89,6 +89,8 @@ impl<T: Config> Pallet<T> {
 		secret: u64,
 		length: T::BlockNumber,
 	) -> DispatchResult {
+		ensure!(name.len() <= T::MaxNameLength::get() as usize, Error::<T>::NameTooLong);
+
 		let commitment_hash = Self::commitment_hash(&name, secret);
 		let commitment = Self::get_commitment(commitment_hash)?;
 

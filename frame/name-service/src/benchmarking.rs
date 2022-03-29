@@ -58,7 +58,7 @@ benchmarks! {
 	}: _(RawOrigin::Signed(caller), acc, hash)
 
 	reveal {
-		let l in 3..100_000; // TODO limit
+		let l in 3..T::MaxNameLength::get();
 
 		// Fund the account
 		let mut balance = T::Currency::minimum_balance();

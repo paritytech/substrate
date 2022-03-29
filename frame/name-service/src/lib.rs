@@ -78,6 +78,10 @@ pub mod pallet {
 		#[pallet::constant]
 		type MaxCommitmentAge: Get<Self::BlockNumber>;
 
+		/// Maximum length of a name.
+		#[pallet::constant]
+		type MaxNameLength: Get<u32>;
+
 		/// The deposit a user needs to place to keep their subnodes in storage.
 		#[pallet::constant]
 		type SubNodeDeposit: Get<BalanceOf<Self>>;
@@ -153,7 +157,7 @@ pub mod pallet {
 	pub enum Error<T> {
 		/// This commitment hash already exists in storage.
 		AlreadyCommitted,
-		/// It has not passed the minimum waiting period to reveal a commitement.
+		/// It has not passed the minimum waiting period to reveal a commitment.
 		TooEarlyToReveal,
 		/// The commitment cannot yet be removed. Has not expired.
 		CommitmentNotExpired,
@@ -163,8 +167,10 @@ pub mod pallet {
 		RegistrationExists,
 		/// This registration does not exist.
 		RegistrationNotFound,
-		/// Registration registratn does not exist.
+		/// Registration registrant does not exist.
 		RegistrationRegistrantNotFound,
+		/// The name was longer than the configured limit.
+		NameTooLong,
 		/// The account is not the registration registrant.
 		NotRegistrationRegistrant,
 		/// The account is not the registration owner.

@@ -22,7 +22,7 @@
 use super::*;
 
 use crate as pallet_name_service;
-use frame_support::{parameter_types, traits::ConstU64};
+use frame_support::{parameter_types, traits::{ConstU32, ConstU64}};
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
@@ -78,7 +78,7 @@ impl frame_system::Config for Test {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
-	type MaxConsumers = frame_support::traits::ConstU32<16>;
+	type MaxConsumers = ConstU32<16>;
 }
 
 impl pallet_balances::Config for Test {
@@ -105,6 +105,7 @@ impl Config for Test {
 	type TierFourLetters = ConstU64<3>;
 	type MinCommitmentAge = ConstU64<10>;
 	type MaxCommitmentAge = ConstU64<10>;
+	type MaxNameLength = ConstU32<2048>; // 2048 is the standard URL limit
 	type RegistrationFeePerBlock = ConstU64<1>;
 	type TierDefault = ConstU64<1>;
 	type RegistrationManager = EnsureRoot<Self::AccountId>;
