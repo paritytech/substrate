@@ -175,10 +175,10 @@ frame_benchmarking::benchmarks! {
 			vec![heavier, lighter, heavier_prev, heavier_next]
 		)
 	}
-}
 
-frame_benchmarking::impl_benchmark_test_suite!(
-	Pallet,
-	crate::mock::ExtBuilder::default().skip_genesis_ids().build(),
-	crate::mock::Runtime
-);
+	impl_benchmark_test_suite!(
+		Pallet,
+		crate::mock::ExtBuilder::default().skip_genesis_ids().build(),
+		crate::mock::Runtime
+	);
+}
