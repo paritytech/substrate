@@ -24,7 +24,7 @@ use frame_benchmarking::{account, benchmarks, whitelisted_caller};
 use frame_support::traits::{Currency, Get, OnFinalize, OnInitialize};
 use frame_system::{pallet_prelude::OriginFor, Pallet as System, RawOrigin};
 use sp_io::hashing::blake2_256;
-use sp_runtime::traits::{AtLeast32BitUnsigned, One, Saturating};
+use sp_runtime::traits::{AtLeast32BitUnsigned, Bounded, One, Saturating};
 use sp_std::vec;
 
 use crate::Pallet as NameService;
@@ -44,11 +44,8 @@ fn commit_setup<T: Config>() -> (caller: OriginFor<T>, acc: T::AccountId, hash: 
 }*/
 
 benchmarks! {
-	where_clause { where T::BlockNumber: From<u32> }
-
 	commit {
-		let mut balance = T::Currency::minimum_balance();
-		balance = balance.saturating_mul(balance);	// TODO
+		let balance = BalanceOf::<T>::max_value();
 		let caller = whitelisted_caller();
 		let _ = T::Currency::make_free_balance_be(&caller, balance);
 
@@ -61,9 +58,7 @@ benchmarks! {
 		let l in 3..T::MaxNameLength::get();
 
 		// Fund the account
-		let mut balance = T::Currency::minimum_balance();
-		balance = balance.saturating_mul(balance);	// TODO
-		balance = balance.saturating_mul(balance);	// TODO
+		let balance = BalanceOf::<T>::max_value();
 		let caller = whitelisted_caller();
 		let _ = T::Currency::make_free_balance_be(&caller, balance);
 

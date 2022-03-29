@@ -22,7 +22,10 @@
 use super::*;
 
 use crate as pallet_name_service;
-use frame_support::{parameter_types, traits::{ConstU32, ConstU64}};
+use frame_support::{
+	parameter_types,
+	traits::{ConstU32, ConstU64},
+};
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
