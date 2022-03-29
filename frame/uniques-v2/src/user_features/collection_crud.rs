@@ -53,7 +53,8 @@ impl<T: Config> Pallet<T> {
 		// emit events
 		Self::deposit_event(Event::<T>::CollectionCreated { id });
 
-		if config == UserFeatures::IsLocked {
+		let user_features: BitFlags<UserFeatures> = collection_config.user_features.into();
+		if user_features.contains(UserFeatures::IsLocked) {
 			Self::deposit_event(Event::<T>::CollectionLocked { id });
 		}
 
