@@ -1989,9 +1989,9 @@ benchmarks! {
 				},
 			],
 			call_body: Some(body::repeated_dyn(r * API_BENCHMARK_BATCH_SIZE, vec![
-				Counter(20, 33), // pub_key_ptr
-				Regular(Instruction::I32Const(0)), // out_ptr
-				Regular(Instruction::I32Const(4)), // out_len_ptr
+				Counter(24, 33), // pub_key_ptr
+				Regular(Instruction::I32Const(4)), // out_ptr
+				Regular(Instruction::I32Const(0)), // out_len_ptr
 				Regular(Instruction::Call(0)),
 				Regular(Instruction::Drop),
 			])),
