@@ -15,7 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Simple ECDSA secp256k1 API. Reduced version of such from sp_core to use in contracts.
+//! Simple ECDSA secp256k1 API. This is a reduced version of sp_core::crypto::ecdsa to use in
+//! contracts.
 use sp_core::{crypto::UncheckedFrom, ByteArray};
 
 /// The ECDSA compressed public key.
