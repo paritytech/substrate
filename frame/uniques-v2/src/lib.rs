@@ -172,6 +172,7 @@ pub mod pallet {
 			id: T::CollectionId,
 			max_supply: Option<u32>,
 		},
+		CollectionConfigChanged { id: T::CollectionId },
 		AttributeSet {
 			id: T::CollectionId,
 			maybe_item: Option<T::ItemId>,
@@ -212,6 +213,8 @@ pub mod pallet {
 		ItemNotFound,
 		/// An item with this ID is not within the max supply range.
 		ItemIdNotWithinMaxSupply,
+		/// Items within that collection are non-transferable.
+		ItemsNonTransferable,
 		/// The calling user is not authorized to make this call.
 		NotAuthorized,
 		/// The hint provided by the user was incorrect.
@@ -244,6 +247,18 @@ pub mod pallet {
 			let sender = ensure_signed(origin)?;
 			let config = CollectionConfigs::<T>::get(id).ok_or(Error::<T>::CollectionNotFound)?;
 			Self::do_lock_collection(id, sender, config)?;
+			Ok(())
+		}
+
+		#[pallet::weight(0)]
+		pub fn change_collection_config(
+			origin: OriginFor<T>,
+			id: T::CollectionId,
+			new_config: UserFeatures,
+		) -> DispatchResult {
+			let sender = ensure_signed(origin)?;
+			let current_config = CollectionConfigs::<T>::get(id).ok_or(Error::<T>::CollectionNotFound)?;
+			Self::do_change_collection_config(id, sender, current_config, new_config)?;
 			Ok(())
 		}
 
@@ -333,10 +348,9 @@ pub mod pallet {
 		// +structure => will affect collection destruction
 		// +mint items
 		// +max supply => applies to mint
-		// +transfer
 		// max items per user => applies to mint and transfer
-		// isTransferable => applies to transfer
-		// transfer items
+		// +isTransferable => applies to transfer
+		// +transfer items
 		// items metadata + attributes. Metadata could be changed by the collection's owner only
 		// burn item
 		// approvals

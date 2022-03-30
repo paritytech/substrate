@@ -110,6 +110,32 @@ impl<T: Config> Pallet<T> {
 		Ok(())
 	}
 
+	pub fn do_change_collection_config(
+		id: T::CollectionId,
+		caller: T::AccountId,
+		current_config: CollectionConfig,
+		new_config: UserFeatures,
+	) -> DispatchResult {
+		let collection = Collections::<T>::get(id).ok_or(Error::<T>::CollectionNotFound)?;
+		ensure!(collection.owner == caller, Error::<T>::NotAuthorized);
+
+		let user_features: BitFlags<UserFeatures> = current_config.user_features.into();
+
+		if user_features.contains(UserFeatures::IsLocked) {
+			return Err(Error::<T>::CollectionIsLocked.into());
+		}
+
+		CollectionConfigs::<T>::try_mutate(id, |maybe_config| {
+			let config = maybe_config.as_mut().ok_or(Error::<T>::CollectionNotFound)?;
+
+			config.user_features = new_config;
+
+			Self::deposit_event(Event::<T>::CollectionConfigChanged { id });
+
+			Ok(())
+		})
+	}
+
 	pub fn do_destroy_collection(
 		id: T::CollectionId,
 		caller: T::AccountId,

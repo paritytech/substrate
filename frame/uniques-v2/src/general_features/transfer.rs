@@ -27,13 +27,15 @@ impl<T: Config> Pallet<T> {
 		sender: T::AccountId,
 		receiver: T::AccountId,
 	) -> DispatchResult {
-		Items::<T>::try_mutate(collection_id, item_id, |maybe_item| {
-			let user_features: BitFlags<UserFeatures> = config.user_features.into();
+		let user_features: BitFlags<UserFeatures> = config.user_features.into();
+		ensure!(!user_features.contains(UserFeatures::NonTransferableItems), Error::<T>::ItemsNonTransferable);
 
+		Items::<T>::try_mutate(collection_id, item_id, |maybe_item| {
 			if user_features.contains(UserFeatures::Royalty) {
 				// take a part of the transfer amount
 			}
 
+			// max items per user
 			if user_features.contains(UserFeatures::Limited) {
 				// crate::limited::limited_check(receiver)?;
 			}

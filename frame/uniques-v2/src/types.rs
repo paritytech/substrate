@@ -29,6 +29,7 @@ pub enum UserFeatures {
 	Royalty,
 	Limited,
 	IsLocked,
+	NonTransferableItems,
 }
 
 // Support for up to 64 system-enabled features on a collection.
