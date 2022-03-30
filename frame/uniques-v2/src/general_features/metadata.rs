@@ -33,17 +33,31 @@ impl<T: Config> Pallet<T> {
 		}
 
 		let collection = Collections::<T>::get(id).ok_or(Error::<T>::CollectionNotFound)?;
-
 		ensure!(collection.owner == sender, Error::<T>::NotAuthorized);
 
-		// do the logic
-
 		let mut metadata = CollectionMetadataOf::<T>::get(id).ok_or(Error::<T>::CollectionNotFound)?;
-
 		metadata.data = data.clone();
-
 		CollectionMetadataOf::<T>::insert(id, metadata);
+
 		Self::deposit_event(Event::<T>::CollectionMetadataSet { id, data });
+
+		Ok(())
+	}
+
+	pub fn do_set_item_metadata(
+		collection_id: T::CollectionId,
+		item_id: T::ItemId,
+		caller: T::AccountId,
+		data: MetadataOf<T>,
+	) -> DispatchResult {
+		let collection = Collections::<T>::get(collection_id).ok_or(Error::<T>::CollectionNotFound)?;
+		ensure!(collection.owner == caller, Error::<T>::NotAuthorized);
+
+		let mut metadata = ItemMetadataOf::<T>::get(collection_id, item_id).ok_or(Error::<T>::ItemNotFound)?;
+		metadata.data = data.clone();
+		ItemMetadataOf::<T>::insert(collection_id, item_id, metadata);
+
+		Self::deposit_event(Event::<T>::ItemMetadataSet { collection_id, item_id, data });
 
 		Ok(())
 	}

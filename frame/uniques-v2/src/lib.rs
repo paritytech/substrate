@@ -194,6 +194,11 @@ pub mod pallet {
 			sender: T::AccountId,
 			receiver: T::AccountId,
 		},
+		ItemMetadataSet {
+			collection_id: T::CollectionId,
+			item_id: T::ItemId,
+			data: MetadataOf<T>,
+		},
 	}
 
 	// Your Pallet's error messages.
@@ -384,7 +389,6 @@ pub mod pallet {
 			Ok(())
 		}
 
-		// set collection metadata
 		#[pallet::weight(0)]
 		pub fn set_collection_metadata(
 			origin: OriginFor<T>,
@@ -394,6 +398,18 @@ pub mod pallet {
 			let sender = ensure_signed(origin)?;
 			let config = CollectionConfigs::<T>::get(id).ok_or(Error::<T>::CollectionNotFound)?;
 			Self::do_set_collection_metadata(id, config, sender, data)?;
+			Ok(())
+		}
+
+		#[pallet::weight(0)]
+		pub fn set_item_metadata(
+			origin: OriginFor<T>,
+			collection_id: T::CollectionId,
+			item_id: T::ItemId,
+			data: MetadataOf<T>,
+		) -> DispatchResult {
+			let sender = ensure_signed(origin)?;
+			Self::do_set_item_metadata(collection_id, item_id, sender, data)?;
 			Ok(())
 		}
 	}
