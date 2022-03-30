@@ -40,7 +40,7 @@ use beefy_primitives::mmr::{BeefyNextAuthoritySet, MmrLeaf, MmrLeafVersion};
 use pallet_mmr::primitives::LeafDataProvider;
 
 use codec::Encode;
-use frame_support::traits::Get;
+use frame_support::{crypto::ecdsa, traits::Get};
 
 pub use pallet::*;
 
@@ -72,11 +72,15 @@ where
 pub struct BeefyEcdsaToEthereum;
 impl Convert<beefy_primitives::crypto::AuthorityId, Vec<u8>> for BeefyEcdsaToEthereum {
 	fn convert(a: beefy_primitives::crypto::AuthorityId) -> Vec<u8> {
-		sp_core::ecdsa::Public::from(a)
+		ecdsa::Public::try_from(a.as_ref())
+			.map_err(|_| {
+				log::error!(target: "runtime::beefy", "Invalid BEEFY PublicKey format!");
+			})
+			.unwrap()
 			.to_eth_address()
 			.map(|v| v.to_vec())
-			.map_err(|| {
-				log::error!(target: "runtime::beefy", "Invalid BEEFY PublicKey format!");
+			.map_err(|_| {
+				log::error!(target: "runtime::beefy", "Failed to convert BEEFY PublicKey to ETH address!");
 			})
 			.unwrap_or_default()
 	}
