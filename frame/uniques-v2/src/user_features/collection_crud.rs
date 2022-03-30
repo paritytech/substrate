@@ -49,6 +49,7 @@ impl<T: Config> Pallet<T> {
 		ensure!(!Collections::<T>::contains_key(id), Error::<T>::CollectionIdTaken);
 
 		Collections::<T>::insert(id, collection);
+		CollectionOwner::<T>::insert(&caller, &id, ());
 
 		// emit events
 		Self::deposit_event(Event::<T>::CollectionCreated { id });
@@ -158,8 +159,13 @@ impl<T: Config> Pallet<T> {
 		CollectionConfigs::<T>::remove(&id);
 		Collections::<T>::remove(&id);
 		CollectionMetadataOf::<T>::remove(&id);
+		CollectionOwner::<T>::remove(&collection.owner, &id);
 		Attributes::<T>::remove_prefix((&id,), None);
-		Items::<T>::remove_prefix(&id, None);
+
+		for (item_id, details) in Items::<T>::drain_prefix(&id) {
+			AccountItems::<T>::remove((&details.owner, &id, &item_id));
+		}
+
 		ItemMetadataOf::<T>::remove_prefix(&id, None);
 
 		Self::deposit_event(Event::<T>::CollectionDestroyed { id });

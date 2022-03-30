@@ -44,6 +44,7 @@ impl<T: Config> Pallet<T> {
 		collection.items = instances;
 
 		Items::<T>::insert(collection_id, item_id, item);
+		AccountItems::<T>::insert((&caller, &collection_id, &item_id), ());
 
 		Self::deposit_event(Event::<T>::ItemCreated { collection_id, item_id });
 
@@ -66,6 +67,7 @@ impl<T: Config> Pallet<T> {
 
 		Items::<T>::remove(&collection_id, &item_id);
 		ItemMetadataOf::<T>::remove(&collection_id, &item_id);
+		AccountItems::<T>::remove((&caller, &collection_id, &item_id));
 
 		// TODO: shall we remove attributes as well?
 

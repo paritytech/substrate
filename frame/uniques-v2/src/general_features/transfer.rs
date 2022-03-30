@@ -47,6 +47,9 @@ impl<T: Config> Pallet<T> {
 				return Ok(())
 			}
 
+			AccountItems::<T>::remove((&item.owner, &collection_id, &item_id));
+			AccountItems::<T>::insert((&receiver, &collection_id, &item_id), ());
+
 			item.owner = receiver.clone();
 
 			Self::deposit_event(Event::ItemTransferred { collection_id, item_id, sender, receiver });
@@ -68,6 +71,8 @@ impl<T: Config> Pallet<T> {
 				return Ok(())
 			}
 
+			CollectionOwner::<T>::remove(&collection.owner, &id);
+			CollectionOwner::<T>::insert(&new_owner, &id, ());
 			collection.owner = new_owner.clone();
 
 			Self::deposit_event(Event::CollectionOwnerChanged { id, old_owner: caller, new_owner });

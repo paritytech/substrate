@@ -104,6 +104,19 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
+	/// The collections owned by any given account; set out this way so that classes owned by a single
+	/// account can be enumerated.
+	#[pallet::storage]
+	pub(super) type CollectionOwner<T: Config> = StorageDoubleMap<
+		_,
+		Blake2_128Concat,
+		T::AccountId,
+		Blake2_128Concat,
+		T::CollectionId,
+		(),
+		OptionQuery,
+	>;
+
 	/// Keeps track of the number of collections in existence.
 	#[pallet::storage]
 	pub(super) type CountForCollections<T: Config> = StorageValue<_, T::CollectionId, ValueQuery>;
@@ -127,6 +140,20 @@ pub mod pallet {
 		Blake2_128Concat,
 		T::ItemId,
 		Item<T::ItemId, T::AccountId, BalanceOf<T>>,
+		OptionQuery,
+	>;
+
+	/// The items held by any given account; set out this way so that items owned by a single
+	/// account can be enumerated.
+	#[pallet::storage]
+	pub(super) type AccountItems<T: Config> = StorageNMap<
+		_,
+		(
+			NMapKey<Blake2_128Concat, T::AccountId>, // owner
+			NMapKey<Blake2_128Concat, T::CollectionId>,
+			NMapKey<Blake2_128Concat, T::ItemId>,
+		),
+		(),
 		OptionQuery,
 	>;
 
@@ -368,6 +395,7 @@ pub mod pallet {
 		// +structure => will affect collection destruction
 		// +mint items
 		// +max supply => applies to mint
+		// +track account items
 		// max items per user => applies to mint and transfer
 		// +isTransferable => applies to transfer
 		// +transfer items
