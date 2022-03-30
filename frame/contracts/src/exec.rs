@@ -22,6 +22,7 @@ use crate::{
 	Pallet as Contracts, Schedule,
 };
 use frame_support::{
+	crypto::ecdsa,
 	dispatch::{DispatchError, DispatchResult, DispatchResultWithPostInfo, Dispatchable},
 	storage::{with_transaction, TransactionOutcome},
 	traits::{Contains, Currency, ExistenceRequirement, OriginTrait, Randomness, Time},
@@ -30,7 +31,7 @@ use frame_support::{
 use frame_system::RawOrigin;
 use pallet_contracts_primitives::ExecReturnValue;
 use smallvec::{Array, SmallVec};
-use sp_core::{crypto::UncheckedFrom, ecdsa};
+use sp_core::crypto::UncheckedFrom;
 use sp_io::crypto::secp256k1_ecdsa_recover_compressed;
 use sp_runtime::traits::Convert;
 use sp_std::{marker::PhantomData, mem, prelude::*};

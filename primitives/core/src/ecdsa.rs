@@ -43,7 +43,6 @@ use secp256k1::{
 	ecdsa::{RecoverableSignature, RecoveryId},
 	Message, PublicKey, SecretKey,
 };
-
 #[cfg(feature = "std")]
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 #[cfg(feature = "full_crypto")]
@@ -99,22 +98,6 @@ impl Public {
 			secp256k1::PublicKey::from_slice(full)
 		};
 		pubkey.map(|k| Self(k.serialize())).map_err(|_| ())
-	}
-
-	/// Converts self into Ethereum address
-	pub fn to_eth_address(&self) -> Result<[u8; 20], ()> {
-	    use k256::{elliptic_curve::sec1::ToEncodedPoint, PublicKey};
-
-		PublicKey::from_sec1_bytes(self.as_slice())
-			.map(|pub_key| {
-				// uncompress the key
-				let uncompressed = pub_key.to_encoded_point(false);
-				// convert to ETH address
-				let res: [u8; 20] =
-					sp_io::hashing::keccak_256(&uncompressed.as_bytes()[1..])[12..].try_into().unwrap();
-				res
-			})
-			.map_err(|_| ())
 	}
 }
 
@@ -879,16 +862,5 @@ mod test {
 		let msg = blake2_256(b"this is a different message");
 		let key = sig.recover_prehashed(&msg).unwrap();
 		assert_ne!(pair.public(), key);
-	}
-
-	#[test]
-	fn to_eth_address_works() {
-		let pair = Pair::from_string(
-			"0x9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60",
-			None,
-		)
-		.unwrap();
-		let eth_address = pair.public().to_eth_address();
-		assert_eq!(eth_address.unwrap(), hex!("09231da7b19A016f9e576d23B16277062F4d46A8")[..]);
 	}
 }
