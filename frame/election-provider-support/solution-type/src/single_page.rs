@@ -28,6 +28,7 @@ pub(crate) fn generate(def: crate::SolutionDef) -> Result<TokenStream2> {
 		voter_type,
 		target_type,
 		weight_type,
+		max_voters,
 		compact_encoding,
 	} = def;
 
@@ -178,6 +179,27 @@ pub(crate) fn generate(def: crate::SolutionDef) -> Result<TokenStream2> {
 			<#ident as _feps::NposSolution>::TargetIndex,
 			<#ident as _feps::NposSolution>::Accuracy,
 		>;
+		impl _feps::codec::MaxEncodedLen for #ident {
+			fn max_encoded_len() -> usize {
+				use frame_support::traits::Get;
+				use _feps::codec::Encode;
+				let s: u32 = #max_voters::get();
+				let max_element_size =
+					// the first voter..
+					#voter_type::max_encoded_len()
+					// #count - 1 tuples..
+					.saturating_add(
+						(#count - 1).saturating_mul(
+							#target_type::max_encoded_len().saturating_add(#weight_type::max_encoded_len())))
+					// and the last target.
+					.saturating_add(#target_type::max_encoded_len());
+				// The assumption is that it contains #count-1 empty elements
+				// and then last element with full size
+				#count
+					.saturating_mul(_feps::codec::Compact(0u32).encoded_size())
+					.saturating_add((s as usize).saturating_mul(max_element_size))
+			}
+		}
 		impl<'a> _feps::sp_std::convert::TryFrom<&'a [__IndexAssignment]> for #ident {
 			type Error = _feps::Error;
 			fn try_from(index_assignments: &'a [__IndexAssignment]) -> Result<Self, Self::Error> {

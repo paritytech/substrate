@@ -168,6 +168,7 @@
 
 pub mod onchain;
 pub mod traits;
+#[cfg(feature = "std")]
 use codec::{Decode, Encode};
 use frame_support::{traits::Get, BoundedVec, RuntimeDebug};
 use sp_runtime::traits::Bounded;
@@ -192,6 +193,11 @@ pub use scale_info;
 pub use sp_arithmetic;
 #[doc(hidden)]
 pub use sp_std;
+
+#[cfg(test)]
+mod mock;
+#[cfg(test)]
+mod tests;
 // Simple Extension trait to easily convert `None` from index closures to `Err`.
 //
 // This is only generated and re-exported for the solution code to use.
@@ -363,9 +369,10 @@ pub trait ElectionProvider {
 		BlockNumber = Self::BlockNumber,
 	>;
 
-	/// Elect a new set of winners.
+	/// Elect a new set of winners, without specifying any bounds on the amount of data fetched from
+	/// [`Self::DataProvider`]. An implementation could nonetheless impose its own custom limits.
 	///
-	/// The result is returned in a target major format, namely as vector of supports.
+	/// The result is returned in a target major format, namely as *vector of supports*.
 	///
 	/// This should be implemented as a self-weighing function. The implementor should register its
 	/// appropriate weight at the end of execution with the system pallet directly.
@@ -380,11 +387,17 @@ pub trait ElectionProvider {
 /// Consequently, allows for control over the amount of data that is being fetched from the
 /// [`ElectionProvider::DataProvider`].
 pub trait InstantElectionProvider: ElectionProvider {
-	/// Elect a new set of winners, instantly, with the given given limits set on the
+	/// Elect a new set of winners, but unlike [`ElectionProvider::elect`] which cannot enforce
+	/// bounds, this trait method can enforce bounds on the amount of data provided by the
 	/// `DataProvider`.
-	fn instant_elect(
-		maybe_max_voters: Option<usize>,
-		maybe_max_targets: Option<usize>,
+	///
+	/// An implementing type, if itself bounded, should choose the minimum of the two bounds to
+	/// choose the final value of `max_voters` and `max_targets`. In other words, an implementation
+	/// should guarantee that `max_voter` and `max_targets` provided to this method are absolutely
+	/// respected.
+	fn elect_with_bounds(
+		max_voters: usize,
+		max_targets: usize,
 	) -> Result<Supports<Self::AccountId>, Self::Error>;
 }
 

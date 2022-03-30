@@ -69,6 +69,17 @@ pub enum FinalizationResult<V> {
 	Unchanged,
 }
 
+/// Filtering action.
+#[derive(Debug, PartialEq)]
+pub enum FilterAction {
+	/// Remove the node and its subtree.
+	Remove,
+	/// Maintain the node.
+	KeepNode,
+	/// Maintain the node and its subtree.
+	KeepTree,
+}
+
 /// A tree data structure that stores several nodes across multiple branches.
 /// Top-level branches are called roots. The tree has functionality for
 /// finalizing nodes, which means that that node is traversed, and all competing
@@ -624,6 +635,29 @@ where
 			(None, false) => Ok(FinalizationResult::Unchanged),
 		}
 	}
+
+	/// Remove from the tree some nodes (and their subtrees) using a `filter` predicate.
+	/// The `filter` is called over tree nodes and returns a filter action:
+	/// - `Remove` if the node and its subtree should be removed;
+	/// - `KeepNode` if we should maintain the node and keep processing the tree.
+	/// - `KeepTree` if we should maintain the node and its entire subtree.
+	/// An iterator over all the pruned nodes is returned.
+	pub fn drain_filter<F>(&mut self, mut filter: F) -> impl Iterator<Item = (H, N, V)>
+	where
+		F: FnMut(&H, &N, &V) -> FilterAction,
+	{
+		let mut removed = Vec::new();
+		let mut i = 0;
+		while i < self.roots.len() {
+			if self.roots[i].drain_filter(&mut filter, &mut removed) {
+				removed.push(self.roots.remove(i));
+			} else {
+				i += 1;
+			}
+		}
+		self.rebalance();
+		RemovedIterator { stack: removed }
+	}
 }
 
 // Workaround for: https://github.com/rust-lang/rust/issues/34537
@@ -849,6 +883,34 @@ mod node_implementation {
 				},
 			}
 		}
+
+		/// Calls a `filter` predicate for the given node.
+		/// The `filter` is called over tree nodes and returns a filter action:
+		/// - `Remove` if the node and its subtree should be removed;
+		/// - `KeepNode` if we should maintain the node and keep processing the tree;
+		/// - `KeepTree` if we should maintain the node and its entire subtree.
+		/// Pruned subtrees are added to the `removed` list.
+		/// Returns a booleans indicateing if this node (and its subtree) should be removed.
+		pub fn drain_filter<F>(&mut self, filter: &mut F, removed: &mut Vec<Node<H, N, V>>) -> bool
+		where
+			F: FnMut(&H, &N, &V) -> FilterAction,
+		{
+			match filter(&self.hash, &self.number, &self.data) {
+				FilterAction::KeepNode => {
+					let mut i = 0;
+					while i < self.children.len() {
+						if self.children[i].drain_filter(filter, removed) {
+							removed.push(self.children.remove(i));
+						} else {
+							i += 1;
+						}
+					}
+					false
+				},
+				FilterAction::KeepTree => false,
+				FilterAction::Remove => true,
+			}
+		}
 	}
 }
 
@@ -895,6 +957,8 @@ impl<H, N, V> Iterator for RemovedIterator<H, N, V> {
 
 #[cfg(test)]
 mod test {
+	use crate::FilterAction;
+
 	use super::{Error, FinalizationResult, ForkTree};
 
 	#[derive(Debug, PartialEq)]
@@ -919,11 +983,11 @@ mod test {
 		//   /   - G
 		//  /   /
 		// A - F - H - I
-		//          \
-		//           - L - M \
-		//               - O
-		//  \
-		//   — J - K
+		//  \       \
+		//   \       - L - M
+		//    \          \
+		//     \          - O
+		//      - J - K
 		//
 		// (where N is not a part of fork tree)
 		//
@@ -1456,6 +1520,30 @@ mod test {
 		assert_eq!(
 			tree.iter().map(|(h, _, _)| *h).collect::<Vec<_>>(),
 			["A", "F", "H", "L", "O", "P", "M", "I", "G", "B", "C", "D", "E", "J", "K"]
+		);
+	}
+
+	#[test]
+	fn tree_drain_filter() {
+		let (mut tree, _) = test_fork_tree();
+
+		let filter = |h: &&str, _: &u64, _: &()| match *h {
+			"A" | "B" | "F" | "G" => FilterAction::KeepNode,
+			"C" => FilterAction::KeepTree,
+			"H" | "J" => FilterAction::Remove,
+			_ => panic!("Unexpected filtering for node: {}", *h),
+		};
+
+		let removed = tree.drain_filter(filter);
+
+		assert_eq!(
+			tree.iter().map(|(h, _, _)| *h).collect::<Vec<_>>(),
+			["A", "B", "C", "D", "E", "F", "G"]
+		);
+
+		assert_eq!(
+			removed.map(|(h, _, _)| h).collect::<Vec<_>>(),
+			["J", "K", "H", "L", "M", "O", "I"]
 		);
 	}
 }

@@ -24,6 +24,7 @@ frame-system = { version = "4.0.0-dev", default-features = false, path = "../sys
 frame-election-provider-solution-type = { version = "4.0.0-dev", path = "solution-type" }
 
 [dev-dependencies]
+rand = "0.7.3"
 sp-npos-elections = { version = "4.0.0-dev", path = "../../primitives/npos-elections" }
 sp-core = { version = "6.0.0", path = "../../primitives/core" }
 sp-io = { version = "6.0.0", path = "../../primitives/io" }

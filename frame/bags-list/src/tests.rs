@@ -518,7 +518,7 @@ mod sorted_list_provider {
 			// then
 			assert_storage_noop!(assert_eq!(
 				BagsList::on_insert(3, 20).unwrap_err(),
-				Error::Duplicate
+				ListError::Duplicate
 			));
 		});
 	}
