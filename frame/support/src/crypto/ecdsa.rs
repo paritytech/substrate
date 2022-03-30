@@ -17,7 +17,7 @@
 
 //! Simple ECDSA secp256k1 API. This is a reduced version of sp_core::crypto::ecdsa to use in
 //! contracts.
-use sp_core::{crypto::UncheckedFrom, ByteArray};
+use sp_core::crypto::{ByteArray, UncheckedFrom};
 
 /// The ECDSA compressed public key.
 pub struct Public(pub [u8; 33]);
