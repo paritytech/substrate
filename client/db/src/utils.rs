@@ -201,16 +201,16 @@ fn open_database_at<Block: BlockT>(
 	db_type: DatabaseType,
 ) -> sp_blockchain::Result<Arc<dyn Database<DbHash>>> {
 	let db: Arc<dyn Database<DbHash>> = match &source {
-		DatabaseSource::ParityDb { path } => open_parity_db::<Block>(&path, db_type, true)?,
+		DatabaseSource::ParityDb { path } => open_parity_db::<Block>(path, db_type, true)?,
 		DatabaseSource::RocksDb { path, cache_size } =>
-			open_kvdb_rocksdb::<Block>(&path, db_type, true, *cache_size)?,
+			open_kvdb_rocksdb::<Block>(path, db_type, true, *cache_size)?,
 		DatabaseSource::Custom(db) => db.clone(),
 		DatabaseSource::Auto { paritydb_path, rocksdb_path, cache_size } => {
 			// check if rocksdb exists first, if not, open paritydb
-			match open_kvdb_rocksdb::<Block>(&rocksdb_path, db_type, false, *cache_size) {
+			match open_kvdb_rocksdb::<Block>(rocksdb_path, db_type, false, *cache_size) {
 				Ok(db) => db,
 				Err(OpenDbError::NotEnabled(_)) | Err(OpenDbError::DoesNotExist) =>
-					open_parity_db::<Block>(&paritydb_path, db_type, true)?,
+					open_parity_db::<Block>(paritydb_path, db_type, true)?,
 				Err(_) => return Err(backend_err("cannot open rocksdb. corrupted database")),
 			}
 		},
@@ -234,7 +234,7 @@ type OpenDbResult = Result<Arc<dyn Database<DbHash>>, OpenDbError>;
 impl fmt::Display for OpenDbError {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		match self {
-			OpenDbError::Internal(e) => write!(f, "{}", e.to_string()),
+			OpenDbError::Internal(e) => write!(f, "{}", e),
 			OpenDbError::DoesNotExist => write!(f, "Database does not exist at given location"),
 			OpenDbError::NotEnabled(feat) => {
 				write!(f, "`{}` feature not enabled, database can not be opened", feat)
@@ -300,7 +300,7 @@ fn open_kvdb_rocksdb<Block: BlockT>(
 	cache_size: usize,
 ) -> OpenDbResult {
 	// first upgrade database to required version
-	match crate::upgrade::upgrade_db::<Block>(&path, db_type) {
+	match crate::upgrade::upgrade_db::<Block>(path, db_type) {
 		// in case of missing version file, assume that database simply does not exist at given
 		// location
 		Ok(_) | Err(crate::upgrade::UpgradeError::MissingDatabaseVersionFile) => (),
@@ -363,8 +363,7 @@ pub fn check_database_type(
 				return Err(sp_blockchain::Error::Backend(format!(
 					"Unexpected database type. Expected: {}",
 					db_type.as_str()
-				))
-				.into())
+				)))
 			},
 		None => {
 			let mut transaction = Transaction::new();
@@ -425,9 +424,9 @@ pub fn read_db<Block>(
 where
 	Block: BlockT,
 {
-	block_id_to_lookup_key(db, col_index, id).and_then(|key| match key {
-		Some(key) => Ok(db.get(col, key.as_ref())),
-		None => Ok(None),
+	block_id_to_lookup_key(db, col_index, id).map(|key| match key {
+		Some(key) => db.get(col, key.as_ref()),
+		None => None,
 	})
 }
 
@@ -442,9 +441,10 @@ pub fn remove_from_db<Block>(
 where
 	Block: BlockT,
 {
-	block_id_to_lookup_key(db, col_index, id).and_then(|key| match key {
-		Some(key) => Ok(transaction.remove(col, key.as_ref())),
-		None => Ok(()),
+	block_id_to_lookup_key(db, col_index, id).map(|key| {
+		if let Some(key) = key {
+			transaction.remove(col, key.as_ref());
+		}
 	})
 }
 
@@ -458,7 +458,7 @@ pub fn read_header<Block: BlockT>(
 	match read_db(db, col_index, col, id)? {
 		Some(header) => match Block::Header::decode(&mut &header[..]) {
 			Ok(header) => Ok(Some(header)),
-			Err(_) => return Err(sp_blockchain::Error::Backend("Error decoding header".into())),
+			Err(_) => Err(sp_blockchain::Error::Backend("Error decoding header".into())),
 		},
 		None => Ok(None),
 	}

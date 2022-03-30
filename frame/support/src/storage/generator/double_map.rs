@@ -461,7 +461,7 @@ where
 				},
 			};
 
-			let mut key2_material = G::Hasher2::reverse(&key_material);
+			let mut key2_material = G::Hasher2::reverse(key_material);
 			let key2 = match K2::decode(&mut key2_material) {
 				Ok(key2) => key2,
 				Err(_) => {

@@ -236,7 +236,7 @@ where
 {
 	/// Get this peer ID.
 	pub fn id(&self) -> PeerId {
-		self.network.service().local_peer_id().clone()
+		*self.network.service().local_peer_id()
 	}
 
 	/// Returns true if we're major syncing.
@@ -387,7 +387,7 @@ where
 		if inform_sync_about_new_best_block {
 			self.network.new_best_block_imported(
 				at,
-				full_client.header(&BlockId::Hash(at)).ok().flatten().unwrap().number().clone(),
+				*full_client.header(&BlockId::Hash(at)).ok().flatten().unwrap().number(),
 			);
 		}
 		at
@@ -458,7 +458,7 @@ where
 						nonce,
 					};
 					builder.push(transfer.into_signed_tx()).unwrap();
-					nonce = nonce + 1;
+					nonce += 1;
 					builder.build().unwrap().block
 				},
 				headers_only,
@@ -494,7 +494,7 @@ where
 
 	/// Get a reference to the network service.
 	pub fn network_service(&self) -> &Arc<NetworkService<Block, <Block as BlockT>::Hash>> {
-		&self.network.service()
+		self.network.service()
 	}
 
 	/// Get a reference to the network worker.
@@ -801,7 +801,7 @@ where
 			let addrs = connect_to
 				.iter()
 				.map(|v| {
-					let peer_id = self.peer(*v).network_service().local_peer_id().clone();
+					let peer_id = *self.peer(*v).network_service().local_peer_id();
 					let multiaddr = self.peer(*v).listen_addr.clone();
 					MultiaddrWithPeerId { peer_id, multiaddr }
 				})
@@ -868,10 +868,8 @@ where
 
 		self.mut_peers(move |peers| {
 			for peer in peers.iter_mut() {
-				peer.network.add_known_address(
-					network.service().local_peer_id().clone(),
-					listen_addr.clone(),
-				);
+				peer.network
+					.add_known_address(*network.service().local_peer_id(), listen_addr.clone());
 			}
 
 			let imported_blocks_stream = Box::pin(client.import_notification_stream().fuse());
@@ -986,7 +984,7 @@ where
 	/// Polls the testnet. Processes all the pending actions.
 	fn poll(&mut self, cx: &mut FutureContext) {
 		self.mut_peers(|peers| {
-			for (i, peer) in peers.into_iter().enumerate() {
+			for (i, peer) in peers.iter_mut().enumerate() {
 				trace!(target: "sync", "-- Polling {}: {}", i, peer.id());
 				if let Poll::Ready(()) = peer.network.poll_unpin(cx) {
 					panic!("NetworkWorker has terminated unexpectedly.")
@@ -1076,7 +1074,7 @@ impl JustificationImport<Block> for ForceFinalized {
 	) -> Result<(), Self::Error> {
 		self.0
 			.finalize_block(BlockId::Hash(hash), Some(justification), true)
-			.map_err(|_| ConsensusError::InvalidJustification.into())
+			.map_err(|_| ConsensusError::InvalidJustification)
 	}
 }
 

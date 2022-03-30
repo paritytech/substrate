@@ -99,7 +99,7 @@ pub(super) fn check_header<B: BlockT + Sized>(
 				primary.slot,
 			);
 
-			check_primary_header::<B>(pre_hash, primary, sig, &epoch, epoch.config.c)?;
+			check_primary_header::<B>(pre_hash, primary, sig, epoch, epoch.config.c)?;
 		},
 		PreDigest::SecondaryPlain(secondary)
 			if epoch.config.allowed_slots.is_secondary_plain_slots_allowed() =>
@@ -110,7 +110,7 @@ pub(super) fn check_header<B: BlockT + Sized>(
 				secondary.slot,
 			);
 
-			check_secondary_plain_header::<B>(pre_hash, secondary, sig, &epoch)?;
+			check_secondary_plain_header::<B>(pre_hash, secondary, sig, epoch)?;
 		},
 		PreDigest::SecondaryVRF(secondary)
 			if epoch.config.allowed_slots.is_secondary_vrf_slots_allowed() =>
@@ -121,7 +121,7 @@ pub(super) fn check_header<B: BlockT + Sized>(
 				secondary.slot,
 			);
 
-			check_secondary_vrf_header::<B>(pre_hash, secondary, sig, &epoch)?;
+			check_secondary_vrf_header::<B>(pre_hash, secondary, sig, epoch)?;
 		},
 		_ => return Err(babe_err(Error::SecondarySlotAssignmentsDisabled)),
 	}
@@ -153,7 +153,7 @@ fn check_primary_header<B: BlockT + Sized>(
 ) -> Result<(), Error<B>> {
 	let author = &epoch.authorities[pre_digest.authority_index as usize].0;
 
-	if AuthorityPair::verify(&signature, pre_hash, &author) {
+	if AuthorityPair::verify(&signature, pre_hash, author) {
 		let (inout, _) = {
 			let transcript = make_transcript(&epoch.randomness, pre_digest.slot, epoch.epoch_index);
 
@@ -191,7 +191,7 @@ fn check_secondary_plain_header<B: BlockT>(
 	// chain state.
 	let expected_author =
 		secondary_slot_author(pre_digest.slot, &epoch.authorities, epoch.randomness)
-			.ok_or_else(|| Error::NoSecondaryAuthorExpected)?;
+			.ok_or(Error::NoSecondaryAuthorExpected)?;
 
 	let author = &epoch.authorities[pre_digest.authority_index as usize].0;
 
@@ -217,7 +217,7 @@ fn check_secondary_vrf_header<B: BlockT>(
 	// chain state.
 	let expected_author =
 		secondary_slot_author(pre_digest.slot, &epoch.authorities, epoch.randomness)
-			.ok_or_else(|| Error::NoSecondaryAuthorExpected)?;
+			.ok_or(Error::NoSecondaryAuthorExpected)?;
 
 	let author = &epoch.authorities[pre_digest.authority_index as usize].0;
 

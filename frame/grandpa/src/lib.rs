@@ -77,7 +77,7 @@ const STORAGE_VERSION: StorageVersion = StorageVersion::new(4);
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::pallet_prelude::*;
+	use frame_support::{dispatch::DispatchResult, pallet_prelude::*};
 	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
@@ -244,10 +244,11 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			delay: T::BlockNumber,
 			best_finalized_block_number: T::BlockNumber,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			ensure_root(origin)?;
 
-			Ok(Self::on_stalled(delay, best_finalized_block_number).into())
+			Self::on_stalled(delay, best_finalized_block_number);
+			Ok(())
 		}
 	}
 
@@ -426,7 +427,7 @@ impl<T: Config> Pallet<T> {
 
 			Ok(())
 		} else {
-			Err(Error::<T>::PauseFailed)?
+			Err(Error::<T>::PauseFailed.into())
 		}
 	}
 
@@ -438,7 +439,7 @@ impl<T: Config> Pallet<T> {
 
 			Ok(())
 		} else {
-			Err(Error::<T>::ResumeFailed)?
+			Err(Error::<T>::ResumeFailed.into())
 		}
 	}
 
@@ -464,9 +465,9 @@ impl<T: Config> Pallet<T> {
 		if !<PendingChange<T>>::exists() {
 			let scheduled_at = <frame_system::Pallet<T>>::block_number();
 
-			if let Some(_) = forced {
+			if forced.is_some() {
 				if Self::next_forced().map_or(false, |next| next > scheduled_at) {
-					Err(Error::<T>::TooSoon)?
+					return Err(Error::<T>::TooSoon.into())
 				}
 
 				// only allow the next forced change when twice the window has passed since
@@ -491,14 +492,14 @@ impl<T: Config> Pallet<T> {
 
 			Ok(())
 		} else {
-			Err(Error::<T>::ChangePending)?
+			Err(Error::<T>::ChangePending.into())
 		}
 	}
 
 	/// Deposit one of this module's logs.
 	fn deposit_log(log: ConsensusLog<T::BlockNumber>) {
 		let log = DigestItem::Consensus(GRANDPA_ENGINE_ID, log.encode());
-		<frame_system::Pallet<T>>::deposit_log(log.into());
+		<frame_system::Pallet<T>>::deposit_log(log);
 	}
 
 	// Perform module initialization, abstracted so that it can be called either through genesis
@@ -547,14 +548,14 @@ impl<T: Config> Pallet<T> {
 		let previous_set_id_session_index = if set_id == 0 {
 			None
 		} else {
-			let session_index = Self::session_for_set(set_id - 1)
-				.ok_or_else(|| Error::<T>::InvalidEquivocationProof)?;
+			let session_index =
+				Self::session_for_set(set_id - 1).ok_or(Error::<T>::InvalidEquivocationProof)?;
 
 			Some(session_index)
 		};
 
 		let set_id_session_index =
-			Self::session_for_set(set_id).ok_or_else(|| Error::<T>::InvalidEquivocationProof)?;
+			Self::session_for_set(set_id).ok_or(Error::<T>::InvalidEquivocationProof)?;
 
 		// check that the session id for the membership proof is within the
 		// bounds of the set id reported in the equivocation.

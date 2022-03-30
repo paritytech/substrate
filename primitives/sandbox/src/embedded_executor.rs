@@ -254,7 +254,7 @@ impl<T> super::SandboxInstance<T> for Instance<T> {
 
 		let mut externals =
 			GuestExternals { state, defined_host_functions: &self.defined_host_functions };
-		let result = self.instance.invoke_export(&name, &args, &mut externals);
+		let result = self.instance.invoke_export(name, &args, &mut externals);
 
 		match result {
 			Ok(None) => Ok(ReturnValue::Unit),

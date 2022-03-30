@@ -136,8 +136,8 @@ pub trait Mutate<AccountId>: Inspect<AccountId> {
 		dest: &AccountId,
 		amount: Self::Balance,
 	) -> Result<Self::Balance, DispatchError> {
-		let extra = Self::can_withdraw(asset, &source, amount).into_result()?;
-		Self::can_deposit(asset, &dest, amount.saturating_add(extra)).into_result()?;
+		let extra = Self::can_withdraw(asset, source, amount).into_result()?;
+		Self::can_deposit(asset, dest, amount.saturating_add(extra)).into_result()?;
 		let actual = Self::burn_from(asset, source, amount)?;
 		debug_assert!(
 			actual == amount.saturating_add(extra),

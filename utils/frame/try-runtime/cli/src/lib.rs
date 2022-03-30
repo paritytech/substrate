@@ -296,7 +296,7 @@ use std::{fmt::Debug, path::PathBuf, str::FromStr};
 
 mod commands;
 pub(crate) mod parse;
-pub(crate) const LOG_TARGET: &'static str = "try-runtime::cli";
+pub(crate) const LOG_TARGET: &str = "try-runtime::cli";
 
 /// Possible commands of `try-runtime`.
 #[derive(Debug, Clone, clap::Subcommand)]
@@ -738,7 +738,7 @@ pub(crate) fn state_machine_call_with_proof<Block: BlockT, D: NativeExecutionDis
 	let runtime_code_backend = sp_state_machine::backend::BackendRuntimeCode::new(&proving_backend);
 	let runtime_code = runtime_code_backend.runtime_code()?;
 
-	let pre_root = backend.root().clone();
+	let pre_root = *backend.root();
 
 	let encoded_results = StateMachine::new(
 		&proving_backend,
@@ -801,8 +801,8 @@ pub(crate) fn local_spec<Block: BlockT, D: NativeExecutionDispatch + 'static>(
 	executor: &NativeElseWasmExecutor<D>,
 ) -> (String, u32, sp_core::storage::StateVersion) {
 	let (_, encoded) = state_machine_call::<Block, D>(
-		&ext,
-		&executor,
+		ext,
+		executor,
 		sc_cli::ExecutionStrategy::NativeElseWasm,
 		"Core_version",
 		&[],

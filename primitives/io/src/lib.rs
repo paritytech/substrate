@@ -220,7 +220,7 @@ pub trait Storage {
 
 	/// Get the next key in storage after the given one in lexicographic order.
 	fn next_key(&mut self, key: &[u8]) -> Option<Vec<u8>> {
-		self.next_storage_key(&key)
+		self.next_storage_key(key)
 	}
 
 	/// Start a new nested transaction.
@@ -629,7 +629,7 @@ pub trait Crypto {
 	///
 	/// Returns the public key.
 	fn ed25519_generate(&mut self, id: KeyTypeId, seed: Option<Vec<u8>>) -> ed25519::Public {
-		let seed = seed.as_ref().map(|s| std::str::from_utf8(&s).expect("Seed is valid utf8!"));
+		let seed = seed.as_ref().map(|s| std::str::from_utf8(s).expect("Seed is valid utf8!"));
 		let keystore = &***self
 			.extension::<KeystoreExt>()
 			.expect("No `keystore` associated for the current context!");
@@ -678,7 +678,7 @@ pub trait Crypto {
 		pub_key: &ed25519::Public,
 	) -> bool {
 		self.extension::<VerificationExt>()
-			.map(|extension| extension.push_ed25519(sig.clone(), pub_key.clone(), msg.to_vec()))
+			.map(|extension| extension.push_ed25519(sig.clone(), *pub_key, msg.to_vec()))
 			.unwrap_or_else(|| ed25519_verify(sig, msg, pub_key))
 	}
 
@@ -705,7 +705,7 @@ pub trait Crypto {
 		pub_key: &sr25519::Public,
 	) -> bool {
 		self.extension::<VerificationExt>()
-			.map(|extension| extension.push_sr25519(sig.clone(), pub_key.clone(), msg.to_vec()))
+			.map(|extension| extension.push_sr25519(sig.clone(), *pub_key, msg.to_vec()))
 			.unwrap_or_else(|| sr25519_verify(sig, msg, pub_key))
 	}
 
@@ -753,7 +753,7 @@ pub trait Crypto {
 	///
 	/// Returns the public key.
 	fn sr25519_generate(&mut self, id: KeyTypeId, seed: Option<Vec<u8>>) -> sr25519::Public {
-		let seed = seed.as_ref().map(|s| std::str::from_utf8(&s).expect("Seed is valid utf8!"));
+		let seed = seed.as_ref().map(|s| std::str::from_utf8(s).expect("Seed is valid utf8!"));
 		let keystore = &***self
 			.extension::<KeystoreExt>()
 			.expect("No `keystore` associated for the current context!");
@@ -803,7 +803,7 @@ pub trait Crypto {
 	///
 	/// Returns the public key.
 	fn ecdsa_generate(&mut self, id: KeyTypeId, seed: Option<Vec<u8>>) -> ecdsa::Public {
-		let seed = seed.as_ref().map(|s| std::str::from_utf8(&s).expect("Seed is valid utf8!"));
+		let seed = seed.as_ref().map(|s| std::str::from_utf8(s).expect("Seed is valid utf8!"));
 		let keystore = &***self
 			.extension::<KeystoreExt>()
 			.expect("No `keystore` associated for the current context!");
@@ -888,7 +888,7 @@ pub trait Crypto {
 		pub_key: &ecdsa::Public,
 	) -> bool {
 		self.extension::<VerificationExt>()
-			.map(|extension| extension.push_ecdsa(sig.clone(), pub_key.clone(), msg.to_vec()))
+			.map(|extension| extension.push_ecdsa(sig.clone(), *pub_key, msg.to_vec()))
 			.unwrap_or_else(|| ecdsa_verify(sig, msg, pub_key))
 	}
 
@@ -1504,14 +1504,7 @@ pub trait Sandbox {
 		state_ptr: Pointer<u8>,
 	) -> u32 {
 		self.sandbox()
-			.invoke(
-				instance_idx,
-				&function,
-				&args,
-				return_val_ptr,
-				return_val_len,
-				state_ptr.into(),
-			)
+			.invoke(instance_idx, function, args, return_val_ptr, return_val_len, state_ptr.into())
 			.expect("Failed to invoke function with sandbox")
 	}
 

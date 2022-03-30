@@ -566,7 +566,7 @@ where
 			ViableEpochDescriptor::UnimportedGenesis(slot) =>
 				Some(ViableEpoch::UnimportedGenesis(make_genesis(*slot))),
 			ViableEpochDescriptor::Signaled(identifier, _) =>
-				self.epoch(&identifier).map(ViableEpoch::Signaled),
+				self.epoch(identifier).map(ViableEpoch::Signaled),
 		}
 	}
 
@@ -599,7 +599,7 @@ where
 			ViableEpochDescriptor::UnimportedGenesis(slot) =>
 				Some(ViableEpoch::UnimportedGenesis(make_genesis(*slot))),
 			ViableEpochDescriptor::Signaled(identifier, _) =>
-				self.epoch_mut(&identifier).map(ViableEpoch::Signaled),
+				self.epoch_mut(identifier).map(ViableEpoch::Signaled),
 		}
 	}
 
@@ -618,7 +618,7 @@ where
 	{
 		match descriptor {
 			ViableEpochDescriptor::UnimportedGenesis(slot) => Some(make_genesis(*slot)),
-			ViableEpochDescriptor::Signaled(identifier, _) => self.epoch(&identifier).cloned(),
+			ViableEpochDescriptor::Signaled(identifier, _) => self.epoch(identifier).cloned(),
 		}
 	}
 
@@ -750,7 +750,7 @@ where
 
 		if let Some(gap) = &mut self.gap {
 			if let PersistedEpoch::Regular(e) = epoch {
-				epoch = match gap.import(slot, hash.clone(), number.clone(), e) {
+				epoch = match gap.import(slot, hash, number, e) {
 					Ok(()) => return Ok(()),
 					Err(e) => PersistedEpoch::Regular(e),
 				}

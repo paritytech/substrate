@@ -70,9 +70,8 @@ pub fn phragmms<AccountId: IdentifierT, P: PerThing128>(
 		voters.into_iter().filter_map(|v| v.into_assignment()).collect::<Vec<_>>();
 	let _ = assignments
 		.iter_mut()
-		.map(|a| a.try_normalize())
-		.collect::<Result<(), _>>()
-		.map_err(|e| crate::Error::ArithmeticError(e))?;
+		.try_for_each(|a| a.try_normalize())
+		.map_err(crate::Error::ArithmeticError)?;
 	let winners = winners
 		.into_iter()
 		.map(|w_ptr| (w_ptr.borrow().who.clone(), w_ptr.borrow().backed_stake))
@@ -157,16 +156,14 @@ pub(crate) fn calculate_max_score<AccountId: IdentifierT, P: PerThing>(
 			// `RationalInfinite` as the score type does not introduce significant overhead. Then we
 			// can switch the score type to `RationalInfinite` and ensure compatibility with any
 			// crazy token scale.
-			let score_n = candidate
-				.approval_stake
-				.checked_mul(one)
-				.unwrap_or_else(|| Bounded::max_value());
+			let score_n =
+				candidate.approval_stake.checked_mul(one).unwrap_or_else(Bounded::max_value);
 			candidate.score = Rational128::from(score_n, score_d);
 
 			// check if we have a new winner.
 			if !candidate.elected && candidate.score > best_score {
 				best_score = candidate.score;
-				best_candidate = Some(Rc::clone(&c_ptr));
+				best_candidate = Some(Rc::clone(c_ptr));
 			}
 		} else {
 			candidate.score = Rational128::zero();

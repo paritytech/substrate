@@ -35,7 +35,7 @@ use frame_support::traits::StorageInfo;
 use sp_core::hexdisplay::HexDisplay;
 use sp_runtime::traits::Zero;
 
-const VERSION: &'static str = env!("CARGO_PKG_VERSION");
+const VERSION: &str = env!("CARGO_PKG_VERSION");
 const TEMPLATE: &str = include_str!("./template.hbs");
 
 // This is the final structure we will pass to the Handlebars template.
@@ -280,12 +280,12 @@ pub fn write_results(
 
 	// Which analysis function should be used when outputting benchmarks
 	let analysis_choice: AnalysisChoice =
-		cmd.output_analysis.clone().try_into().map_err(|e| io_error(e))?;
+		cmd.output_analysis.clone().try_into().map_err(io_error)?;
 
 	// Capture individual args
 	let cmd_data = CmdData {
-		steps: cmd.steps.clone(),
-		repeat: cmd.repeat.clone(),
+		steps: cmd.steps,
+		repeat: cmd.repeat,
 		lowest_range_values: cmd.lowest_range_values.clone(),
 		highest_range_values: cmd.highest_range_values.clone(),
 		execution: format!("{:?}", cmd.execution),
@@ -374,7 +374,7 @@ pub(crate) fn add_storage_comments(
 	// This tracks the keys we already identified, so we only generate a single comment.
 	let mut identified = HashSet::<Vec<u8>>::new();
 
-	for result in results.clone() {
+	for result in results {
 		for (key, reads, writes, whitelisted) in &result.keys {
 			// skip keys which are whitelisted
 			if *whitelisted {

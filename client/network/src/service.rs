@@ -187,7 +187,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 		// Private and public keys configuration.
 		let local_identity = params.network_config.node_key.clone().into_keypair()?;
 		let local_public = local_identity.public();
-		let local_peer_id = local_public.clone().to_peer_id();
+		let local_peer_id = local_public.to_peer_id();
 		info!(
 			target: "sub-libp2p",
 			"🏷  Local node identity is: {}",
@@ -240,7 +240,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				Err(Error::DuplicateBootnode {
 					address: addr.clone(),
 					first_id: *peer_id,
-					second_id: other.0.clone(),
+					second_id: other.0,
 				})
 			} else {
 				Ok(())
@@ -632,7 +632,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				.collect()
 		};
 
-		let peer_id = Swarm::<B>::local_peer_id(&swarm).to_base58();
+		let peer_id = Swarm::<B>::local_peer_id(swarm).to_base58();
 		let listened_addresses = swarm.listeners().cloned().collect();
 		let external_addresses = swarm.external_addresses().map(|r| &r.addr).cloned().collect();
 
@@ -652,7 +652,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			.behaviour_mut()
 			.user_protocol_mut()
 			.peers_info()
-			.map(|(id, info)| (id.clone(), info.clone()))
+			.map(|(id, info)| (*id, info.clone()))
 			.collect()
 	}
 
@@ -741,7 +741,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 		// `peers_notifications_sinks` mutex as soon as possible.
 		let sink = {
 			let peers_notifications_sinks = self.peers_notifications_sinks.lock();
-			if let Some(sink) = peers_notifications_sinks.get(&(target.clone(), protocol.clone())) {
+			if let Some(sink) = peers_notifications_sinks.get(&(target, protocol.clone())) {
 				sink.clone()
 			} else {
 				// Notification silently discarded, as documented.
@@ -1081,7 +1081,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 
 		let _ = self
 			.to_worker
-			.unbounded_send(ServiceToWorkerMsg::AddKnownAddress(peer_id.clone(), addr));
+			.unbounded_send(ServiceToWorkerMsg::AddKnownAddress(peer_id, addr));
 		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::AddReserved(peer_id));
 		Ok(())
 	}
@@ -1161,7 +1161,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 			if !addr.is_empty() {
 				let _ = self
 					.to_worker
-					.unbounded_send(ServiceToWorkerMsg::AddKnownAddress(peer_id.clone(), addr));
+					.unbounded_send(ServiceToWorkerMsg::AddKnownAddress(peer_id, addr));
 			}
 			let _ = self
 				.to_worker
@@ -1215,7 +1215,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 			if !addr.is_empty() {
 				let _ = self
 					.to_worker
-					.unbounded_send(ServiceToWorkerMsg::AddKnownAddress(peer_id.clone(), addr));
+					.unbounded_send(ServiceToWorkerMsg::AddKnownAddress(peer_id, addr));
 			}
 			let _ = self
 				.to_worker
@@ -1339,9 +1339,7 @@ pub struct NotificationSender {
 impl NotificationSender {
 	/// Returns a future that resolves when the `NotificationSender` is ready to send a
 	/// notification.
-	pub async fn ready<'a>(
-		&'a self,
-	) -> Result<NotificationSenderReady<'a>, NotificationSenderError> {
+	pub async fn ready(&self) -> Result<NotificationSenderReady<'_>, NotificationSenderError> {
 		Ok(NotificationSenderReady {
 			ready: match self.sink.reserve_notification().await {
 				Ok(r) => r,
@@ -1737,7 +1735,7 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					if let Some(metrics) = this.metrics.as_ref() {
 						metrics
 							.kademlia_random_queries_total
-							.with_label_values(&[&protocol.as_ref()])
+							.with_label_values(&[protocol.as_ref()])
 							.inc();
 					},
 				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::NotificationStreamOpened {
@@ -1756,7 +1754,7 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					{
 						let mut peers_notifications_sinks = this.peers_notifications_sinks.lock();
 						let _previous_value = peers_notifications_sinks
-							.insert((remote.clone(), protocol.clone()), notifications_sink);
+							.insert((remote, protocol.clone()), notifications_sink);
 						debug_assert!(_previous_value.is_none());
 					}
 					this.event_streams.send(Event::NotificationStreamOpened {
@@ -1814,13 +1812,12 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 							.inc();
 					}
 					this.event_streams.send(Event::NotificationStreamClosed {
-						remote: remote.clone(),
+						remote,
 						protocol: protocol.clone(),
 					});
 					{
 						let mut peers_notifications_sinks = this.peers_notifications_sinks.lock();
-						let _previous_value =
-							peers_notifications_sinks.remove(&(remote.clone(), protocol));
+						let _previous_value = peers_notifications_sinks.remove(&(remote, protocol));
 						debug_assert!(_previous_value.is_some());
 					}
 				},
@@ -2082,10 +2079,7 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 				for (lower_ilog2_bucket_bound, num_entries) in buckets {
 					metrics
 						.kbuckets_num_nodes
-						.with_label_values(&[
-							&proto.as_ref(),
-							&lower_ilog2_bucket_bound.to_string(),
-						])
+						.with_label_values(&[proto.as_ref(), &lower_ilog2_bucket_bound.to_string()])
 						.set(num_entries as u64);
 				}
 			}
@@ -2093,7 +2087,7 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 			{
 				metrics
 					.kademlia_records_count
-					.with_label_values(&[&proto.as_ref()])
+					.with_label_values(&[proto.as_ref()])
 					.set(num_entries as u64);
 			}
 			for (proto, num_entries) in
@@ -2101,7 +2095,7 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 			{
 				metrics
 					.kademlia_records_sizes_total
-					.with_label_values(&[&proto.as_ref()])
+					.with_label_values(&[proto.as_ref()])
 					.set(num_entries as u64);
 			}
 			metrics
@@ -2147,12 +2141,10 @@ impl<'a, B: BlockT> Link<B> for NetworkLink<'a, B> {
 		number: NumberFor<B>,
 		success: bool,
 	) {
-		self.protocol.behaviour_mut().user_protocol_mut().justification_import_result(
-			who,
-			hash.clone(),
-			number,
-			success,
-		);
+		self.protocol
+			.behaviour_mut()
+			.user_protocol_mut()
+			.justification_import_result(who, *hash, number, success);
 	}
 	fn request_justification(&mut self, hash: &B::Hash, number: NumberFor<B>) {
 		self.protocol

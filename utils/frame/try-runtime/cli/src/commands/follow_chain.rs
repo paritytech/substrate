@@ -31,8 +31,8 @@ use sp_core::H256;
 use sp_runtime::traits::{Block as BlockT, Header, NumberFor};
 use std::{fmt::Debug, str::FromStr};
 
-const SUB: &'static str = "chain_subscribeFinalizedHeads";
-const UN_SUB: &'static str = "chain_unsubscribeFinalizedHeads";
+const SUB: &str = "chain_subscribeFinalizedHeads";
+const UN_SUB: &str = "chain_unsubscribeFinalizedHeads";
 
 /// Configurations of the [`Command::FollowChain`].
 #[derive(Debug, Clone, clap::Parser)]
@@ -68,7 +68,7 @@ where
 
 	log::info!(target: LOG_TARGET, "subscribing to {:?} / {:?}", SUB, UN_SUB);
 	let mut subscription: Subscription<Block::Header> =
-		client.subscribe(&SUB, None, &UN_SUB).await.unwrap();
+		client.subscribe(SUB, None, UN_SUB).await.unwrap();
 
 	let (code_key, code) = extract_code(&config.chain_spec)?;
 	let executor = build_executor::<ExecDispatch>(&shared, &config);
@@ -104,7 +104,7 @@ where
 		if maybe_state_ext.is_none() {
 			let builder = Builder::<Block>::new().mode(Mode::Online(OnlineConfig {
 				transport: command.uri.clone().into(),
-				at: Some(header.parent_hash().clone()),
+				at: Some(*header.parent_hash()),
 				..Default::default()
 			}));
 
@@ -136,7 +136,7 @@ where
 			maybe_state_ext.as_mut().expect("state_ext either existed or was just created");
 
 		let (mut changes, encoded_result) = state_machine_call_with_proof::<Block, ExecDispatch>(
-			&state_ext,
+			state_ext,
 			&executor,
 			execution,
 			"TryRuntime_execute_block_no_check",

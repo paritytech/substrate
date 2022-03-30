@@ -186,10 +186,8 @@ where
 
 		let weights = T::BlockWeights::get();
 		// the computed ratio is only among the normal class.
-		let normal_max_weight = weights
-			.get(DispatchClass::Normal)
-			.max_total
-			.unwrap_or_else(|| weights.max_block);
+		let normal_max_weight =
+			weights.get(DispatchClass::Normal).max_total.unwrap_or(weights.max_block);
 		let current_block_weight = <frame_system::Pallet<T>>::block_weight();
 		let normal_block_weight =
 			*current_block_weight.get(DispatchClass::Normal).min(&normal_max_weight);

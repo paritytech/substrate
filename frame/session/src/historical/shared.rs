@@ -30,9 +30,9 @@ pub(super) fn derive_key<P: AsRef<[u8]>>(prefix: P, session_index: SessionIndex)
 	let prefix: &[u8] = prefix.as_ref();
 	session_index.using_encoded(|encoded_session_index| {
 		prefix
-			.into_iter()
-			.chain(b"/".into_iter())
-			.chain(encoded_session_index.into_iter())
+			.iter()
+			.chain(b"/".iter())
+			.chain(encoded_session_index.iter())
 			.copied()
 			.collect::<Vec<u8>>()
 	})

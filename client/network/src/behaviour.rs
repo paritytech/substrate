@@ -392,7 +392,6 @@ impl<B: BlockT> NetworkBehaviourEventProcess<CustomMessageOutcome<B>> for Behavi
 							"Trying to send warp sync request when no protocol is configured {:?}",
 							request,
 						);
-						return
 					},
 				},
 			CustomMessageOutcome::NotificationStreamOpened {
@@ -407,7 +406,7 @@ impl<B: BlockT> NetworkBehaviourEventProcess<CustomMessageOutcome<B>> for Behavi
 					protocol,
 					negotiated_fallback,
 					role: reported_roles_to_observed_role(roles),
-					notifications_sink: notifications_sink.clone(),
+					notifications_sink,
 				});
 			},
 			CustomMessageOutcome::NotificationStreamReplaced {

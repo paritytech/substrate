@@ -133,7 +133,7 @@ frame_benchmarking::benchmarks! {
 			List::<T, _>::get_bags(),
 			vec![
 				(origin_bag_thresh, vec![origin_head.clone()]),
-				(dest_bag_thresh, vec![dest_head.clone(), origin_tail.clone()])
+				(dest_bag_thresh, vec![dest_head.clone(), origin_tail])
 			]
 		);
 	}

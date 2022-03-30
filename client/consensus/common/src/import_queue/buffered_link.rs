@@ -105,14 +105,14 @@ impl<B: BlockT> Link<B> for BufferedLinkSender<B> {
 		number: NumberFor<B>,
 		success: bool,
 	) {
-		let msg = BlockImportWorkerMsg::JustificationImported(who, hash.clone(), number, success);
+		let msg = BlockImportWorkerMsg::JustificationImported(who, *hash, number, success);
 		let _ = self.tx.unbounded_send(msg);
 	}
 
 	fn request_justification(&mut self, hash: &B::Hash, number: NumberFor<B>) {
 		let _ = self
 			.tx
-			.unbounded_send(BlockImportWorkerMsg::RequestJustification(hash.clone(), number));
+			.unbounded_send(BlockImportWorkerMsg::RequestJustification(*hash, number));
 	}
 }
 

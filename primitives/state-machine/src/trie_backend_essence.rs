@@ -521,7 +521,7 @@ where
 			Ok(None) => default_root,
 			Err(e) => {
 				warn!(target: "trie", "Failed to read child storage root: {}", e);
-				default_root.clone()
+				default_root
 			},
 		};
 
@@ -583,7 +583,7 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: Hasher> hash_db::HashDB<H, DBValue>
 		if let Some(val) = HashDB::get(self.overlay, key, prefix) {
 			Some(val)
 		} else {
-			match self.storage.get(&key, prefix) {
+			match self.storage.get(key, prefix) {
 				Ok(x) => x,
 				Err(e) => {
 					warn!(target: "trie", "Failed to read from DB: {}", e);
@@ -665,7 +665,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> HashDB<H, DBValue> for TrieBackendEsse
 		if *key == self.empty {
 			return Some([0u8].to_vec())
 		}
-		match self.storage.get(&key, prefix) {
+		match self.storage.get(key, prefix) {
 			Ok(x) => x,
 			Err(e) => {
 				warn!(target: "trie", "Failed to read from DB: {}", e);

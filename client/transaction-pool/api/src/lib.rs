@@ -350,7 +350,7 @@ impl<TPool: LocalTransactionPool> OffchainSubmitTransaction<TPool::Block> for TP
 			extrinsic
 		);
 
-		let result = self.submit_local(&at, extrinsic);
+		let result = self.submit_local(at, extrinsic);
 
 		result.map(|_| ()).map_err(|e| {
 			log::warn!(

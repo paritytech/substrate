@@ -192,7 +192,7 @@ impl<B: BlockT> BlockRequestHandler<B> {
 			peer: *peer,
 			max_blocks,
 			direction,
-			from: from_block_id.clone(),
+			from: from_block_id,
 			attributes,
 			support_multiple_justifications,
 		};

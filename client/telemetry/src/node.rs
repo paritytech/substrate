@@ -227,7 +227,7 @@ where
 					},
 				},
 				NodeSocket::WaitingReconnect(mut s) => {
-					if let Poll::Ready(_) = Future::poll(Pin::new(&mut s), cx) {
+					if Future::poll(Pin::new(&mut s), cx).is_ready() {
 						socket = NodeSocket::ReconnectNow;
 					} else {
 						break NodeSocket::WaitingReconnect(s)

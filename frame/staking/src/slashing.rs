@@ -389,7 +389,7 @@ fn slash_nominators<T: Config>(
 
 			let mut era_slash =
 				<Pallet<T> as Store>::NominatorSlashInEra::get(&params.slash_era, stash)
-					.unwrap_or_else(|| Zero::zero());
+					.unwrap_or_else(Zero::zero);
 
 			era_slash += own_slash_difference;
 
@@ -640,7 +640,7 @@ pub(crate) fn apply_slash<T: Config>(unapplied_slash: UnappliedSlash<T::AccountI
 	);
 
 	for &(ref nominator, nominator_slash) in &unapplied_slash.others {
-		do_slash::<T>(&nominator, nominator_slash, &mut reward_payout, &mut slashed_imbalance);
+		do_slash::<T>(nominator, nominator_slash, &mut reward_payout, &mut slashed_imbalance);
 	}
 
 	pay_reporters::<T>(reward_payout, slashed_imbalance, &unapplied_slash.reporters);

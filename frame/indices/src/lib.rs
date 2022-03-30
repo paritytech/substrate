@@ -142,7 +142,7 @@ pub mod pallet {
 			Accounts::<T>::try_mutate(index, |maybe_value| -> DispatchResult {
 				let (account, amount, perm) = maybe_value.take().ok_or(Error::<T>::NotAssigned)?;
 				ensure!(!perm, Error::<T>::Permanent);
-				ensure!(&account == &who, Error::<T>::NotOwner);
+				ensure!(account == who, Error::<T>::NotOwner);
 				let lost = T::Currency::repatriate_reserved(&who, &new, amount, Reserved)?;
 				*maybe_value = Some((new.clone(), amount.saturating_sub(lost), false));
 				Ok(())
@@ -176,7 +176,7 @@ pub mod pallet {
 			Accounts::<T>::try_mutate(index, |maybe_value| -> DispatchResult {
 				let (account, amount, perm) = maybe_value.take().ok_or(Error::<T>::NotAssigned)?;
 				ensure!(!perm, Error::<T>::Permanent);
-				ensure!(&account == &who, Error::<T>::NotOwner);
+				ensure!(account == who, Error::<T>::NotOwner);
 				T::Currency::unreserve(&who, amount);
 				Ok(())
 			})?;
@@ -249,7 +249,7 @@ pub mod pallet {
 			Accounts::<T>::try_mutate(index, |maybe_value| -> DispatchResult {
 				let (account, amount, perm) = maybe_value.take().ok_or(Error::<T>::NotAssigned)?;
 				ensure!(!perm, Error::<T>::Permanent);
-				ensure!(&account == &who, Error::<T>::NotOwner);
+				ensure!(account == who, Error::<T>::NotOwner);
 				T::Currency::slash_reserved(&who, amount);
 				*maybe_value = Some((account, Zero::zero(), true));
 				Ok(())

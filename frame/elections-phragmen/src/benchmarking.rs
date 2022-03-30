@@ -91,8 +91,7 @@ fn submit_candidates_with_self_vote<T: Config>(
 	let stake = default_stake::<T>(BALANCE_FACTOR);
 	let _ = candidates
 		.iter()
-		.map(|c| submit_voter::<T>(c.clone(), vec![c.clone()], stake).map(|_| ()))
-		.collect::<Result<_, _>>()?;
+		.try_for_each(|c| submit_voter::<T>(c.clone(), vec![c.clone()], stake).map(|_| ()))?;
 	Ok(candidates)
 }
 
@@ -337,9 +336,9 @@ benchmarks! {
 
 	// We use the max block weight for this extrinsic for now. See below.
 	remove_member_without_replacement {}: {
-		Err(BenchmarkError::Override(
+		return Err(BenchmarkError::Override(
 			BenchmarkResult::from_weight(T::BlockWeights::get().max_block)
-		))?;
+		));
 	}
 
 	// -- Root ones

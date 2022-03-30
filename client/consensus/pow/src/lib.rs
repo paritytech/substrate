@@ -234,7 +234,7 @@ impl<B: BlockT, I: Clone, C, S: Clone, Algorithm: Clone, CAW: Clone, CIDP> Clone
 			select_chain: self.select_chain.clone(),
 			client: self.client.clone(),
 			create_inherent_data_providers: self.create_inherent_data_providers.clone(),
-			check_inherents_after: self.check_inherents_after.clone(),
+			check_inherents_after: self.check_inherents_after,
 			can_author_with: self.can_author_with.clone(),
 		}
 	}
@@ -652,21 +652,19 @@ where
 				},
 			};
 
-			let proposal = match proposer
-				.propose(inherent_data, inherent_digest, build_time.clone(), None)
-				.await
-			{
-				Ok(x) => x,
-				Err(err) => {
-					warn!(
-						target: "pow",
-						"Unable to propose new block for authoring. \
-						 Creating proposal failed: {}",
-						err,
-					);
-					continue
-				},
-			};
+			let proposal =
+				match proposer.propose(inherent_data, inherent_digest, build_time, None).await {
+					Ok(x) => x,
+					Err(err) => {
+						warn!(
+							target: "pow",
+							"Unable to propose new block for authoring. \
+							 Creating proposal failed: {}",
+							err,
+						);
+						continue
+					},
+				};
 
 			let build = MiningBuild::<Block, Algorithm, C, _> {
 				metadata: MiningMetadata {
@@ -710,8 +708,8 @@ fn fetch_seal<B: BlockT>(digest: Option<&DigestItem>, hash: B::Hash) -> Result<V
 			if id == &POW_ENGINE_ID {
 				Ok(seal.clone())
 			} else {
-				return Err(Error::<B>::WrongEngine(*id).into())
+				Err(Error::<B>::WrongEngine(*id))
 			},
-		_ => return Err(Error::<B>::HeaderUnsealed(hash).into()),
+		_ => Err(Error::<B>::HeaderUnsealed(hash)),
 	}
 }

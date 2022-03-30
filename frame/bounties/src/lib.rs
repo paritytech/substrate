@@ -456,7 +456,7 @@ pub mod pallet {
 									// Else this is the curator, willingly giving up their role.
 									// Give back their deposit.
 									let err_amount =
-										T::Currency::unreserve(&curator, bounty.curator_deposit);
+										T::Currency::unreserve(curator, bounty.curator_deposit);
 									debug_assert!(err_amount.is_zero());
 									bounty.curator_deposit = Zero::zero();
 									// Continue to change bounty status below...
@@ -688,7 +688,7 @@ pub mod pallet {
 						BountyStatus::Active { curator, .. } => {
 							// Cancelled by council, refund deposit of the working curator.
 							let err_amount =
-								T::Currency::unreserve(&curator, bounty.curator_deposit);
+								T::Currency::unreserve(curator, bounty.curator_deposit);
 							debug_assert!(err_amount.is_zero());
 							// Then execute removal of the bounty below.
 						},

@@ -363,7 +363,7 @@ where
 		let node = self.roots.swap_remove(position);
 		self.roots = node.children;
 		self.best_finalized_number = Some(node.number);
-		return node.data
+		node.data
 	}
 
 	/// Finalize a node in the tree. This method will make sure that the node
@@ -528,16 +528,15 @@ where
 		// tree, if we find a valid node that passes the predicate then we must
 		// ensure that we're not finalizing past any of its child nodes.
 		for node in self.node_iter() {
-			if predicate(&node.data) {
-				if node.hash == *hash || is_descendent_of(&node.hash, hash)? {
-					for node in node.children.iter() {
-						if node.number <= number && is_descendent_of(&node.hash, &hash)? {
-							return Err(Error::UnfinalizedAncestor)
-						}
+			if predicate(&node.data) && (node.hash == *hash || is_descendent_of(&node.hash, hash)?)
+			{
+				for node in node.children.iter() {
+					if node.number <= number && is_descendent_of(&node.hash, hash)? {
+						return Err(Error::UnfinalizedAncestor)
 					}
-
-					return Ok(Some(self.roots.iter().any(|root| root.hash == node.hash)))
 				}
+
+				return Ok(Some(self.roots.iter().any(|root| root.hash == node.hash)))
 			}
 		}
 
@@ -574,17 +573,16 @@ where
 		// we're not finalizing past any children node.
 		let mut position = None;
 		for (i, root) in self.roots.iter().enumerate() {
-			if predicate(&root.data) {
-				if root.hash == *hash || is_descendent_of(&root.hash, hash)? {
-					for node in root.children.iter() {
-						if node.number <= number && is_descendent_of(&node.hash, &hash)? {
-							return Err(Error::UnfinalizedAncestor)
-						}
+			if predicate(&root.data) && (root.hash == *hash || is_descendent_of(&root.hash, hash)?)
+			{
+				for node in root.children.iter() {
+					if node.number <= number && is_descendent_of(&node.hash, hash)? {
+						return Err(Error::UnfinalizedAncestor)
 					}
-
-					position = Some(i);
-					break
 				}
+
+				position = Some(i);
+				break
 			}
 		}
 
@@ -1004,16 +1002,13 @@ mod test {
 		let finalize_a = || {
 			let (mut tree, ..) = test_fork_tree();
 
-			assert_eq!(
-				tree.roots().map(|(h, n, _)| (h.clone(), n.clone())).collect::<Vec<_>>(),
-				vec![("A", 1)],
-			);
+			assert_eq!(tree.roots().map(|(h, n, _)| (*h, *n)).collect::<Vec<_>>(), vec![("A", 1)],);
 
 			// finalizing "A" opens up three possible forks
 			tree.finalize_root(&"A");
 
 			assert_eq!(
-				tree.roots().map(|(h, n, _)| (h.clone(), n.clone())).collect::<Vec<_>>(),
+				tree.roots().map(|(h, n, _)| (*h, *n)).collect::<Vec<_>>(),
 				vec![("B", 2), ("F", 2), ("J", 2)],
 			);
 
@@ -1026,10 +1021,7 @@ mod test {
 			// finalizing "B" will progress on its fork and remove any other competing forks
 			tree.finalize_root(&"B");
 
-			assert_eq!(
-				tree.roots().map(|(h, n, _)| (h.clone(), n.clone())).collect::<Vec<_>>(),
-				vec![("C", 3)],
-			);
+			assert_eq!(tree.roots().map(|(h, n, _)| (*h, *n)).collect::<Vec<_>>(), vec![("C", 3)],);
 
 			// all the other forks have been pruned
 			assert!(tree.roots.len() == 1);
@@ -1041,10 +1033,7 @@ mod test {
 			// finalizing "J" will progress on its fork and remove any other competing forks
 			tree.finalize_root(&"J");
 
-			assert_eq!(
-				tree.roots().map(|(h, n, _)| (h.clone(), n.clone())).collect::<Vec<_>>(),
-				vec![("K", 3)],
-			);
+			assert_eq!(tree.roots().map(|(h, n, _)| (*h, *n)).collect::<Vec<_>>(), vec![("K", 3)],);
 
 			// all the other forks have been pruned
 			assert!(tree.roots.len() == 1);
@@ -1069,7 +1058,7 @@ mod test {
 		);
 
 		assert_eq!(
-			tree.roots().map(|(h, n, _)| (h.clone(), n.clone())).collect::<Vec<_>>(),
+			tree.roots().map(|(h, n, _)| (*h, *n)).collect::<Vec<_>>(),
 			vec![("B", 2), ("F", 2), ("J", 2)],
 		);
 
@@ -1093,7 +1082,7 @@ mod test {
 		);
 
 		assert_eq!(
-			tree.roots().map(|(h, n, _)| (h.clone(), n.clone())).collect::<Vec<_>>(),
+			tree.roots().map(|(h, n, _)| (*h, *n)).collect::<Vec<_>>(),
 			vec![("L", 4), ("I", 4)],
 		);
 
@@ -1127,7 +1116,7 @@ mod test {
 		);
 
 		assert_eq!(
-			tree.roots().map(|(h, n, _)| (h.clone(), n.clone())).collect::<Vec<_>>(),
+			tree.roots().map(|(h, n, _)| (*h, *n)).collect::<Vec<_>>(),
 			vec![("B", 2), ("F", 2), ("J", 2)],
 		);
 
@@ -1141,7 +1130,7 @@ mod test {
 		);
 
 		assert_eq!(
-			tree.roots().map(|(h, n, _)| (h.clone(), n.clone())).collect::<Vec<_>>(),
+			tree.roots().map(|(h, n, _)| (*h, *n)).collect::<Vec<_>>(),
 			vec![("L", 4), ("I", 4)],
 		);
 
@@ -1157,10 +1146,7 @@ mod test {
 			Ok(FinalizationResult::Changed(None)),
 		);
 
-		assert_eq!(
-			tree.roots().map(|(h, n, _)| (h.clone(), n.clone())).collect::<Vec<_>>(),
-			vec![],
-		);
+		assert_eq!(tree.roots().map(|(h, n, _)| (*h, *n)).collect::<Vec<_>>(), vec![],);
 
 		assert_eq!(tree.best_finalized_number, Some(6));
 	}
@@ -1226,10 +1212,7 @@ mod test {
 			Ok(FinalizationResult::Changed(None)),
 		);
 
-		assert_eq!(
-			tree.roots().map(|(h, n, _)| (h.clone(), n.clone())).collect::<Vec<_>>(),
-			vec![("A0", 1)],
-		);
+		assert_eq!(tree.roots().map(|(h, n, _)| (*h, *n)).collect::<Vec<_>>(), vec![("A0", 1)],);
 
 		// finalizing "C" will finalize the node "A0" and prune it out of the tree
 		assert_eq!(
@@ -1247,10 +1230,7 @@ mod test {
 			Ok(FinalizationResult::Changed(Some(Change { effective: 5 }))),
 		);
 
-		assert_eq!(
-			tree.roots().map(|(h, n, _)| (h.clone(), n.clone())).collect::<Vec<_>>(),
-			vec![("D", 10)],
-		);
+		assert_eq!(tree.roots().map(|(h, n, _)| (*h, *n)).collect::<Vec<_>>(), vec![("D", 10)],);
 
 		// finalizing "F" will fail since it would finalize past "E" without finalizing "D" first
 		assert_eq!(
@@ -1279,7 +1259,7 @@ mod test {
 	fn iter_iterates_in_preorder() {
 		let (tree, ..) = test_fork_tree();
 		assert_eq!(
-			tree.iter().map(|(h, n, _)| (h.clone(), n.clone())).collect::<Vec<_>>(),
+			tree.iter().map(|(h, n, _)| (*h, *n)).collect::<Vec<_>>(),
 			vec![
 				("A", 1),
 				("B", 2),

@@ -113,7 +113,7 @@ pub fn instantiate(
 	type Exports = HashMap<String, wasmer::Exports>;
 	let mut exports_map = Exports::new();
 
-	for import in module.imports().into_iter() {
+	for import in module.imports() {
 		match import.ty() {
 			// Nothing to do here
 			wasmer::ExternType::Global(_) | wasmer::ExternType::Table(_) => (),
@@ -121,7 +121,7 @@ pub fn instantiate(
 			wasmer::ExternType::Memory(_) => {
 				let exports = exports_map
 					.entry(import.module().to_string())
-					.or_insert(wasmer::Exports::new());
+					.or_insert_with(wasmer::Exports::new);
 
 				let memory = guest_env
 					.imports
@@ -173,7 +173,7 @@ pub fn instantiate(
 
 				let exports = exports_map
 					.entry(import.module().to_string())
-					.or_insert(wasmer::Exports::new());
+					.or_insert_with(wasmer::Exports::new);
 
 				exports.insert(import.name(), wasmer::Extern::Function(function));
 			},
