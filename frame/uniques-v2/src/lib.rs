@@ -188,6 +188,10 @@ pub mod pallet {
 			collection_id: T::CollectionId,
 			item_id: T::ItemId,
 		},
+		ItemBurned {
+			collection_id: T::CollectionId,
+			item_id: T::ItemId,
+		},
 		ItemTransferred {
 			collection_id: T::CollectionId,
 			item_id: T::ItemId,
@@ -339,6 +343,17 @@ pub mod pallet {
 			Ok(())
 		}
 
+		#[pallet::weight(0)]
+		pub fn burn(
+			origin: OriginFor<T>,
+			collection_id: T::CollectionId,
+			item_id: T::ItemId,
+		) -> DispatchResult {
+			let sender = ensure_signed(origin)?;
+			Self::do_burn_item(sender, collection_id, item_id)?;
+			Ok(())
+		}
+
 		// BASIC METHODS:
 		// +store collection's owner
 		// +lock a collection (add isLocked flag) => applies to the initial metadata change and burn method
@@ -356,8 +371,8 @@ pub mod pallet {
 		// max items per user => applies to mint and transfer
 		// +isTransferable => applies to transfer
 		// +transfer items
-		// items metadata + attributes. Metadata could be changed by the collection's owner only
-		// burn item
+		// +items metadata + attributes. Metadata could be changed by the collection's owner only
+		// +burn item
 		// approvals
 
 		#[pallet::weight(0)]

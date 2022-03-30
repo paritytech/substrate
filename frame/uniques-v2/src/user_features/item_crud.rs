@@ -49,4 +49,28 @@ impl<T: Config> Pallet<T> {
 
 		Ok(())
 	}
+
+	pub fn do_burn_item(
+		caller: T::AccountId,
+		collection_id: T::CollectionId,
+		item_id: T::ItemId,
+	) -> DispatchResult {
+		let mut collection = Collections::<T>::get(&collection_id).ok_or(Error::<T>::CollectionNotFound)?;
+		let item = Items::<T>::get(collection_id, item_id).ok_or(Error::<T>::ItemNotFound)?;
+
+		ensure!(item.owner == caller, Error::<T>::NotAuthorized);
+
+		let instances =
+			collection.items.checked_sub(1).ok_or(ArithmeticError::Overflow)?;
+		collection.items = instances;
+
+		Items::<T>::remove(&collection_id, &item_id);
+		ItemMetadataOf::<T>::remove(&collection_id, &item_id);
+
+		// TODO: shall we remove attributes as well?
+
+		Self::deposit_event(Event::<T>::ItemBurned { collection_id, item_id });
+
+		Ok(())
+	}
 }
