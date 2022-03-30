@@ -188,7 +188,8 @@ impl<
 where
 	Block::Extrinsic: IdentifyAccountWithLookup<Context, AccountId = System::AccountId>
 		+ Checkable<Context>
-		+ Codec,
+		+ Codec
+		+ GetDispatchInfo,
 	CheckedOf<Block::Extrinsic, Context>: Applyable + GetDispatchInfo,
 	CallOf<Block::Extrinsic, Context>:
 		Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
@@ -235,7 +236,8 @@ where
 	<System as frame_system::Config>::BlockNumber: AtLeast32BitUnsigned,
 	Block::Extrinsic: IdentifyAccountWithLookup<Context, AccountId = System::AccountId>
 		+ Checkable<Context>
-		+ Codec,
+		+ Codec
+		+ GetDispatchInfo,
 	CheckedOf<Block::Extrinsic, Context>: Applyable + GetDispatchInfo,
 	CallOf<Block::Extrinsic, Context>:
 		Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
@@ -452,7 +454,7 @@ where
 			let mut max = System::BlockWeights::get();
 			let mut all: frame_system::ConsumedWeight = Default::default();
 			for tx in extrinsics.iter() {
-				let info = tx.clone().check(&Default::default()).unwrap().get_dispatch_info();
+				let info = tx.clone().get_dispatch_info();
 				all = frame_system::calculate_consumed_weight::<CallOf<Block::Extrinsic, Context>>(max.clone(), all, &info)
 					.expect("sum of extrinsics should fit into single block");
 			}
