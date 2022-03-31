@@ -170,12 +170,13 @@ pub mod onchain;
 pub mod traits;
 #[cfg(feature = "std")]
 use codec::{Decode, Encode};
-use frame_support::{traits::Get, BoundedVec, RuntimeDebug};
+use frame_support::{BoundedVec, RuntimeDebug};
 use sp_runtime::traits::Bounded;
 use sp_std::{fmt::Debug, prelude::*};
 
 /// Re-export the solution generation macro.
 pub use frame_election_provider_solution_type::generate_solution_type;
+pub use frame_support::traits::Get;
 /// Re-export some type as they are used in the interface.
 pub use sp_arithmetic::PerThing;
 pub use sp_npos_elections::{
