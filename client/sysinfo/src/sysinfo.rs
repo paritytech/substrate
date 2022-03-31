@@ -338,8 +338,8 @@ pub fn benchmark_disk_random_writes(directory: &Path) -> Result<u64, String> {
 pub fn gather_hwbench(scratch_directory: Option<&Path>) -> HwBench {
 	#[allow(unused_mut)]
 	let mut hwbench = HwBench {
-		cpu_score: benchmark_cpu(),
-		memory_score: benchmark_memory(),
+		cpu_hashrate_score: benchmark_cpu(),
+		memory_memcpy_score: benchmark_memory(),
 		disk_sequential_write_score: None,
 		disk_random_write_score: None,
 	};
