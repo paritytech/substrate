@@ -18,24 +18,53 @@
 //! election provider support onchain pallet benchmarking.
 // This is separated into its own crate to avoid bloating the size of the runtime.
 
+#![cfg(feature = "runtime-benchmarks")]
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use frame_benchmarking::{benchmarks, Vec};
-use frame_support::log;
+use frame_election_provider_support::{onchain, ElectionDataProvider, ElectionProvider};
+use frame_support::{log, pallet_prelude::ConstU32};
+use sp_runtime::SaturatedConversion;
 
-pub struct Pallet<T: Config>(System<T>);
-pub trait Config: frame_system::Config {}
+use pallet_staking::Pallet as Staking;
+
+// TODO: configure this more centrally.
+const MAX_ELECTING_VOTERS: u32 = 20_000;
+const MAX_TARGETS: u32 = 2_000;
+
+const VOTERS: [u32; 2] = [1_000, 2_000];
+const TARGETS: [u32; 2] = [500, 1_000];
+const VOTES_PER_VOTER: [u32; 2] = [5, 16];
+
+type OnChainPhragmen<T> = onchain::BoundedPhragmen<
+	T,
+	Staking<T>,
+	ConstU32<MAX_ELECTING_VOTERS>,
+	ConstU32<MAX_TARGETS>,
+	sp_runtime::Perbill,
+>;
+
+type OnChainPhragMMS<T> = onchain::BoundedPhragMMS<
+	T,
+	Staking<T>,
+	ConstU32<MAX_ELECTING_VOTERS>,
+	ConstU32<MAX_TARGETS>,
+	sp_runtime::Perbill,
+>;
+
+pub struct Pallet<T: Config>(frame_system::Pallet<T>);
+pub trait Config: pallet_staking::Config {}
 
 // This is also used in `pallet_election_provider_multi_phase` benchmarking.
 pub const SEED: u32 = 999;
 pub fn set_up_data_provider<
-	AccountId,
+	T: frame_system::Config,
 	DataProvider: ElectionDataProvider<AccountId = T::AccountId, BlockNumber = T::BlockNumber>,
+	Currency: frame_support::traits::Currency<T::AccountId>,
 >(
 	voters_len: u32,
 	targets_len: u32,
 	degree: u32,
-	weight: u64,
 ) {
 	DataProvider::clear();
 	log::info!(
@@ -48,7 +77,7 @@ pub fn set_up_data_provider<
 	// fill targets.
 	let mut targets = (0..targets_len)
 		.map(|i| {
-			let target = frame_benchmarking::account::<AccountId>("Target", i, SEED);
+			let target = frame_benchmarking::account::<T::AccountId>("Target", i, SEED);
 			DataProvider::add_target(target.clone());
 			target
 		})
@@ -59,38 +88,46 @@ pub fn set_up_data_provider<
 
 	// fill voters.
 	(0..voters_len).for_each(|i| {
-		let voter = frame_benchmarking::account::<AccountId>("Voter", i, SEED);
+		let voter = frame_benchmarking::account::<T::AccountId>("Voter", i, SEED);
+		let weight = Currency::minimum_balance().saturated_into::<u64>() * 1000;
 		DataProvider::add_voter(voter, weight, targets.clone().try_into().unwrap());
 	});
+}
+
+fn set_up_data_provider_internal<T: Config>(voters_len: u32, targets_len: u32, degree: u32) {
+	set_up_data_provider::<T, Staking<T>, <T as pallet_staking::Config>::Currency>(
+		voters_len,
+		targets_len,
+		degree,
+	);
 }
 
 benchmarks! {
 	phragmen {
 		// number of votes in snapshot.
-		let v in (T::BenchmarkingConfig::VOTERS[0]) .. T::BenchmarkingConfig::VOTERS[1];
+		let v in (VOTERS[0]) .. VOTERS[1];
 		// number of targets in snapshot.
-		let t in (T::BenchmarkingConfig::TARGETS[0]) .. T::BenchmarkingConfig::TARGETS[1];
+		let t in (TARGETS[0]) .. TARGETS[1];
 		// number of votes per voter (ie the degree).
-		let d in (T::BenchmarkingConfig::VOTES_PER_VOTER[0]) .. T::BenchmarkingConfig::VOTES_PER_VOTER[1];
+		let d in (VOTES_PER_VOTER[0]) .. VOTES_PER_VOTER[1];
 
 		// we don't directly need the data-provider to be populated, but it is just easy to use it.
-		set_up_data_provider::<T::AccountId, T::DataProvider>(v, t, d, 1_000u64);
+		set_up_data_provider_internal::<T>(v, t, d);
 	}: {
-		assert!(OnChainPhragmen::<T, sp_runtime::Perbill>::elect().is_ok());
-	} verify {
+		assert!(OnChainPhragmen::<T>::elect().is_ok());
 	}
 
 	phragmms {
 		// number of votes in snapshot.
-		let v in (T::BenchmarkingConfig::VOTERS[0]) .. T::BenchmarkingConfig::VOTERS[1];
+		let v in (VOTERS[0]) .. VOTERS[1];
 		// number of targets in snapshot.
-		let t in (T::BenchmarkingConfig::TARGETS[0]) .. T::BenchmarkingConfig::TARGETS[1];
+		let t in (TARGETS[0]) .. TARGETS[1];
 		// number of votes per voter (ie the degree).
-		let d in (T::BenchmarkingConfig::VOTES_PER_VOTER[0]) .. T::BenchmarkingConfig::VOTES_PER_VOTER[1];
+		let d in (VOTES_PER_VOTER[0]) .. VOTES_PER_VOTER[1];
 
 		// we don't directly need the data-provider to be populated, but it is just easy to use it.
-		set_up_data_provider::<T, T::DataProvider>(v, t, d, 1_000u64);
+		set_up_data_provider_internal::<T>(v, t, d);
 	}: {
-		assert!(OnChainPhragMMS::<T, sp_runtime::Perbill>::elect().is_ok());
+		assert!(OnChainPhragMMS::<T>::elect().is_ok());
 	}
 }
