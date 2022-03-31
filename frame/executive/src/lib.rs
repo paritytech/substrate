@@ -460,7 +460,9 @@ where
 		let dispatch_info = xt.get_dispatch_info();
 		let r = Applyable::apply::<UnsignedValidator>(xt, &dispatch_info, encoded_len)?;
 
-		<frame_system::Pallet<System>>::note_applied_extrinsic(&r, dispatch_info);
+		frame_support::storage::with_transaction_tracking(|| {
+			<frame_system::Pallet<System>>::note_applied_extrinsic(&r, dispatch_info)
+		});
 
 		Ok(r.map(|_| ()).map_err(|e| e.error))
 	}

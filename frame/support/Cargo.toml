@@ -61,6 +61,7 @@ std = [
 	"sp-state-machine",
 	"frame-support-procedural/std",
 	"log/std",
+	"environmental/std"
 ]
 runtime-benchmarks = []
 try-runtime = []

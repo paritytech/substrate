@@ -26,7 +26,6 @@ use crate::{
 	},
 };
 use codec::{Decode, Encode, EncodeLike, FullCodec, FullEncode};
-use sp_arithmetic::traits::Zero;
 use sp_core::storage::ChildInfo;
 pub use sp_runtime::TransactionOutcome;
 use sp_runtime::{
@@ -47,34 +46,86 @@ pub mod migration;
 pub mod types;
 pub mod unhashed;
 pub mod weak_bounded_vec;
+pub use transaction_level_tracker::{is_transactional, with_transaction_tracking};
 
-type Layer = u32;
-environmental::environmental!(current_level: Layer);
-const TRANSACTIONAL_LIMIT: Layer = 255;
+mod transaction_level_tracker {
+	type Layer = u32;
+	environmental::environmental!(current_level: Layer);
+	const TRANSACTIONAL_LIMIT: Layer = 255;
 
-/// Increments the transaction level. Returns an error if levels go past the limit.
-pub fn inc_transaction_level(existing_levels: &mut Layer) -> Result<(), ()> {
-	if *existing_levels >= TRANSACTIONAL_LIMIT || *existing_levels == Layer::MAX {
-		return Err(())
+	pub(super) fn get_transaction_level() -> Layer {
+		current_level::with(|v| v.clone()).unwrap_or_default()
 	}
-	// Cannot overflow because of check above.
-	*existing_levels = *existing_levels + 1;
-	Ok(())
-}
 
-fn dec_transaction_level(existing_levels: &mut Layer) {
-	if *existing_levels == 0 {
-		crate::defensive!(
-			"We are underflowing with calculating transactional levels. Not great, but let's not panic..."
-		);
-	} else {
-		*existing_levels = *existing_levels - 1;
+	fn set_transaction_level(level: Layer) {
+		let _ = current_level::with(|v| *v = level);
 	}
-}
 
-/// Check if the current call is within a transactional layer.
-pub fn is_transactional() -> bool {
-	current_level::with(|_| {}).is_some()
+	fn kill_transaction_level() {
+		set_transaction_level(0);
+	}
+
+	/// Increments the transaction level. Returns an error if levels go past the limit.
+	///
+	/// Returns a guard that when dropped decrements the transaction level automatically.
+	pub(super) fn inc_transaction_level() -> Result<StorageLayerGuard, ()> {
+		let existing_levels = get_transaction_level();
+		if existing_levels >= TRANSACTIONAL_LIMIT || existing_levels == Layer::MAX {
+			return Err(())
+		}
+		// Cannot overflow because of check above.
+		set_transaction_level(existing_levels + 1);
+		Ok(StorageLayerGuard)
+	}
+
+	fn dec_transaction_level() {
+		let existing_levels = get_transaction_level();
+		if existing_levels == 0 {
+			log::warn!(
+				"We are underflowing with calculating transactional levels. Not great, but let's not panic...",
+			);
+		} else if existing_levels == 1 {
+			// Don't leave any trace of this storage item.
+			kill_transaction_level();
+		} else {
+			// Cannot underflow because of checks above.
+			set_transaction_level(existing_levels - 1);
+		}
+	}
+
+	pub struct StorageLayerGuard;
+
+	impl Drop for StorageLayerGuard {
+		fn drop(&mut self) {
+			dec_transaction_level()
+		}
+	}
+
+	pub fn with_transaction_tracking<R, F: FnOnce() -> R>(f: F) -> R {
+		let mut default = 0u32;
+		current_level::using(&mut default, f)
+	}
+
+	pub fn is_transactional() -> bool {
+		get_transaction_level() > 0
+	}
+
+	#[cfg(test)]
+	mod tests {
+		use super::*;
+		#[test]
+		fn transaction_tracking_works() {
+			with_transaction_tracking(|| {
+				assert_eq!(get_transaction_level(), 0);
+				set_transaction_level(2);
+				assert_eq!(get_transaction_level(), 2);
+				set_transaction_level(1);
+				assert_eq!(get_transaction_level(), 1);
+				kill_transaction_level();
+				assert_eq!(get_transaction_level(), 0);
+			})
+		}
+	}
 }
 
 /// Execute the supplied function in a new storage transaction.
@@ -85,40 +136,27 @@ pub fn is_transactional() -> bool {
 /// Transactions can be nested up to 10 times; more than that will result in an error.
 ///
 /// Commits happen to the parent transaction.
-pub fn with_transaction<T, E>(
-	f: impl FnOnce() -> TransactionOutcome<Result<T, E>>,
-	existing_levels: &mut Layer,
-) -> Result<T, E>
+pub fn with_transaction<T, E>(f: impl FnOnce() -> TransactionOutcome<Result<T, E>>) -> Result<T, E>
 where
 	E: From<DispatchError>,
 {
 	use sp_io::storage::{commit_transaction, rollback_transaction, start_transaction};
 	use TransactionOutcome::*;
-	let execute_with_transaction_levels = || {
-		current_level::with(|existing_levels| {
-			let _ = inc_transaction_level(existing_levels)
-				.map_err(|()| DispatchError::TransactionalLimit.into())?;
-			start_transaction();
-			let res = match f() {
-				Commit(res) => {
-					commit_transaction();
-					res
-				},
-				Rollback(res) => {
-					rollback_transaction();
-					res
-				},
-			};
-			dec_transaction_level(existing_levels);
+
+	let _guard = transaction_level_tracker::inc_transaction_level()
+		.map_err(|()| DispatchError::TransactionalLimit.into())?;
+
+	start_transaction();
+
+	match f() {
+		Commit(res) => {
+			commit_transaction();
 			res
-		})
-		.unwrap()
-	};
-	if is_transactional() {
-		execute_with_transaction_levels()
-	} else {
-		let mut init = Zero::zero();
-		current_level::using(&mut init, || execute_with_transaction_levels())
+		},
+		Rollback(res) => {
+			rollback_transaction();
+			res
+		},
 	}
 }
 
@@ -1542,25 +1580,28 @@ mod test {
 	fn is_transactional_should_return_false() {
 		TestExternalities::default().execute_with(|| {
 			assert!(!is_transactional());
+			assert_eq!(transaction_level_tracker::get_transaction_level(), 0);
 		});
 	}
 
 	#[test]
 	fn is_transactional_should_not_error_in_with_transaction() {
-		TestExternalities::default().execute_with(|| {
-			assert_ok!(with_transaction(|| -> TransactionOutcome<DispatchResult> {
-				assert!(is_transactional());
-				TransactionOutcome::Commit(Ok(()))
-			}));
-
-			assert_noop!(
-				with_transaction(|| -> TransactionOutcome<DispatchResult> {
+		transaction_level_tracker::with_transaction_tracking(|| {
+			TestExternalities::default().execute_with(|| {
+				assert_ok!(with_transaction(|| -> TransactionOutcome<DispatchResult> {
 					assert!(is_transactional());
-					TransactionOutcome::Rollback(Err("revert".into()))
-				}),
-				"revert"
-			);
-		});
+					TransactionOutcome::Commit(Ok(()))
+				}));
+
+				assert_noop!(
+					with_transaction(|| -> TransactionOutcome<DispatchResult> {
+						assert!(is_transactional());
+						TransactionOutcome::Rollback(Err("revert".into()))
+					}),
+					"revert"
+				);
+			});
+		})
 	}
 
 	fn recursive_transactional(num: u32) -> DispatchResult {
@@ -1574,41 +1615,69 @@ mod test {
 		})
 	}
 
-	fn get_transaction_level_or_default() -> Layer {
-		if is_transactional() {
-			current_level::with(|x| *x).unwrap()
-		} else {
-			0
-		}
-	}
-
 	#[test]
-	fn transaction_limit_should_work() {
+	fn without_transaction_tracking_is_safe() {
 		TestExternalities::default().execute_with(|| {
-			assert_eq!(get_transaction_level_or_default(), 0);
+			// if we forget to wrap the call into `with_transaction_tracking` outside of
+			// `with_transaction`, then:
+			assert!(!is_transactional());
+			assert_eq!(transaction_level_tracker::get_transaction_level(), 0);
 
+			// and we can not really create transactions levels, even if we create one.
 			assert_ok!(with_transaction(|| -> TransactionOutcome<DispatchResult> {
-				assert_eq!(get_transaction_level_or_default(), 1);
+				assert!(!is_transactional());
+				assert_eq!(transaction_level_tracker::get_transaction_level(), 0);
 				TransactionOutcome::Commit(Ok(()))
 			}));
 
+			// also nesting them won't increase the level.
 			assert_ok!(with_transaction(|| -> TransactionOutcome<DispatchResult> {
-				assert_eq!(get_transaction_level_or_default(), 1);
 				let res = with_transaction(|| -> TransactionOutcome<DispatchResult> {
-					assert_eq!(get_transaction_level_or_default(), 2);
+					assert!(!is_transactional());
+					assert_eq!(transaction_level_tracker::get_transaction_level(), 0);
 					TransactionOutcome::Commit(Ok(()))
 				});
 				TransactionOutcome::Commit(res)
 			}));
 
-			assert_ok!(recursive_transactional(255));
-			assert_noop!(
-				recursive_transactional(256),
-				sp_runtime::DispatchError::TransactionalLimit
-			);
+			// nonetheless, all of this code is safe.
+			// TODO: shitty thing about this is that we have to leak the existence of this
+			// environmental tracker to somewhere in executive, or somewhere else outside of the
+			// nested call path of `.dispatch`. This is because `::with`, similar to `RefCell` and
+			// other interior mutability constructs, panics if call in nested fashion at runtime
+			// (preventing double-mut-borrow etc.).
+		})
+	}
 
-			assert_eq!(get_transaction_level_or_default(), 0);
-		});
+	#[test]
+	fn transaction_limit_should_work() {
+		transaction_level_tracker::with_transaction_tracking(|| {
+			TestExternalities::default().execute_with(|| {
+				assert_eq!(transaction_level_tracker::get_transaction_level(), 0);
+
+				assert_ok!(with_transaction(|| -> TransactionOutcome<DispatchResult> {
+					assert_eq!(transaction_level_tracker::get_transaction_level(), 1);
+					TransactionOutcome::Commit(Ok(()))
+				}));
+
+				assert_ok!(with_transaction(|| -> TransactionOutcome<DispatchResult> {
+					assert_eq!(transaction_level_tracker::get_transaction_level(), 1);
+					let res = with_transaction(|| -> TransactionOutcome<DispatchResult> {
+						assert_eq!(transaction_level_tracker::get_transaction_level(), 2);
+						TransactionOutcome::Commit(Ok(()))
+					});
+					TransactionOutcome::Commit(res)
+				}));
+
+				assert_ok!(recursive_transactional(255));
+				assert_noop!(
+					recursive_transactional(256),
+					sp_runtime::DispatchError::TransactionalLimit
+				);
+
+				assert_eq!(transaction_level_tracker::get_transaction_level(), 0);
+			});
+		})
 	}
 
 	#[test]
