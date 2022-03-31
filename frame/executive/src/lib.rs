@@ -118,12 +118,11 @@
 
 use crate::traits::AtLeast32BitUnsigned;
 use codec::{Codec, Encode};
-use frame_support::traits::Get;
 use frame_support::{
 	dispatch::PostDispatchInfo,
 	traits::{
-		EnsureInherentsAreFirst, ExecuteBlock, OffchainWorker, OnFinalize, OnIdle, OnInitialize,
-		OnRuntimeUpgrade,
+		EnsureInherentsAreFirst, ExecuteBlock, Get, OffchainWorker, OnFinalize, OnIdle,
+		OnInitialize, OnRuntimeUpgrade,
 	},
 	weights::{DispatchClass, DispatchInfo, GetDispatchInfo},
 };
@@ -208,7 +207,7 @@ where
 		>::execute_block(block);
 	}
 
-	fn execute_block_ver(block: Block, public: Vec<u8>) {
+	fn execute_block_ver(block: Block, public: Vec<u8>, precedes_new_session: bool) {
 		Executive::<
 			System,
 			Block,
@@ -216,7 +215,7 @@ where
 			UnsignedValidator,
 			AllPalletsWithSystem,
 			COnRuntimeUpgrade,
-		>::execute_block_ver_impl(block, public);
+		>::execute_block_ver_impl(block, public, precedes_new_session);
 	}
 }
 
@@ -427,7 +426,7 @@ where
 	}
 
 	/// Actually execute all transitions for `block`.
-	pub fn execute_block_ver_impl(block: Block, public: Vec<u8>) {
+	pub fn execute_block_ver_impl(block: Block, public: Vec<u8>, precedes_new_session: bool) {
 		sp_io::init_tracing();
 		sp_tracing::within_span! {
 			sp_tracing::info_span!("execute_block", ?block);
@@ -451,7 +450,7 @@ where
 			let prev_block_txs = extrinsics.iter().skip(count);
 
 			// verify that all extrinsics can be executed in single block
-			let mut max = System::BlockWeights::get();
+			let max = System::BlockWeights::get();
 			let mut all: frame_system::ConsumedWeight = Default::default();
 			for tx in extrinsics.iter() {
 				let info = tx.clone().get_dispatch_info();
@@ -459,7 +458,13 @@ where
 					.expect("sum of extrinsics should fit into single block");
 			}
 
-			let curr_block_inherents = curr_block_txs.filter(|e| !e.is_signed().unwrap());
+			let curr_block_inherents = curr_block_txs.clone().filter(|e| !e.is_signed().unwrap());
+
+			let curr_block_txs_count = curr_block_txs.count();
+			let curr_block_inherents_count = curr_block_inherents.clone().count();
+			if precedes_new_session && ( curr_block_txs_count != curr_block_inherents_count ){
+				panic!("only inherents can be included in block that precede new session");
+			}
 			let prev_block_extrinsics = prev_block_txs.filter(|e| e.is_signed().unwrap());
 			let tx_to_be_executed = curr_block_inherents.chain(prev_block_extrinsics).cloned().collect::<Vec<_>>();
 
@@ -502,22 +507,14 @@ where
 
 	#[cfg(not(feature = "disable-execution"))]
 	/// regular impl execute inherents & extrinsics
-	fn execute_extrinsics_impl(
-		extrinsics: Vec<Block::Extrinsic>,
-		block_number: NumberFor<Block>,
-	) {
+	fn execute_extrinsics_impl(extrinsics: Vec<Block::Extrinsic>, block_number: NumberFor<Block>) {
 		Self::execute_extrinsics_with_book_keeping(extrinsics, block_number)
 	}
 
 	#[cfg(feature = "disable-execution")]
 	/// impl for benchmark -  execute inherents only
-	fn execute_extrinsics_impl(
-		extrinsics: Vec<Block::Extrinsic>,
-		block_number: NumberFor<Block>,
-	) {
-		extrinsics.into_iter()
-			.filter(|e| !e.is_signed().unwrap())
-			.for_each(|e| {
+	fn execute_extrinsics_impl(extrinsics: Vec<Block::Extrinsic>, block_number: NumberFor<Block>) {
+		extrinsics.into_iter().filter(|e| !e.is_signed().unwrap()).for_each(|e| {
 			if let Err(e) = Self::apply_extrinsic(e) {
 				let err: &'static str = e.into();
 				panic!("{}", err)
@@ -529,8 +526,6 @@ where
 
 		Self::idle_and_finalize_hook(block_number);
 	}
-
-
 
 	/// Finalize the block - it is up the caller to ensure that all header fields are valid
 	/// except state-root.
