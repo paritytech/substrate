@@ -26,6 +26,7 @@ use crate::{
 	},
 };
 use codec::{Decode, Encode, EncodeLike, FullCodec, FullEncode};
+use sp_arithmetic::traits::Zero;
 use sp_core::storage::ChildInfo;
 pub use sp_runtime::TransactionOutcome;
 use sp_runtime::{
@@ -47,67 +48,33 @@ pub mod types;
 pub mod unhashed;
 pub mod weak_bounded_vec;
 
-mod transaction_level_tracker {
-	const TRANSACTION_LEVEL_KEY: &'static [u8] = b":transaction_level:";
-	const TRANSACTIONAL_LIMIT: u32 = 255;
-	type Layer = u32;
+type Layer = u32;
+environmental::environmental!(current_level: Layer);
+const TRANSACTIONAL_LIMIT: Layer = 255;
 
-	pub fn get_transaction_level() -> Layer {
-		crate::storage::unhashed::get_or_default::<Layer>(TRANSACTION_LEVEL_KEY)
+/// Increments the transaction level. Returns an error if levels go past the limit.
+pub fn inc_transaction_level(existing_levels: &mut Layer) -> Result<(), ()> {
+	if *existing_levels >= TRANSACTIONAL_LIMIT || *existing_levels == Layer::MAX {
+		return Err(())
 	}
+	// Cannot overflow because of check above.
+	*existing_levels = *existing_levels + 1;
+	Ok(())
+}
 
-	fn set_transaction_level(level: &Layer) {
-		crate::storage::unhashed::put::<Layer>(TRANSACTION_LEVEL_KEY, level);
-	}
-
-	fn kill_transaction_level() {
-		crate::storage::unhashed::kill(TRANSACTION_LEVEL_KEY);
-	}
-
-	/// Increments the transaction level. Returns an error if levels go past the limit.
-	///
-	/// Returns a guard that when dropped decrements the transaction level automatically.
-	pub fn inc_transaction_level() -> Result<StorageLayerGuard, ()> {
-		let existing_levels = get_transaction_level();
-		if existing_levels >= TRANSACTIONAL_LIMIT || existing_levels == Layer::MAX {
-			return Err(())
-		}
-		// Cannot overflow because of check above.
-		set_transaction_level(&(existing_levels + 1));
-		Ok(StorageLayerGuard)
-	}
-
-	fn dec_transaction_level() {
-		let existing_levels = get_transaction_level();
-		if existing_levels == 0 {
-			log::warn!(
-				"We are underflowing with calculating transactional levels. Not great, but let's not panic...",
-			);
-		} else if existing_levels == 1 {
-			// Don't leave any trace of this storage item.
-			kill_transaction_level();
-		} else {
-			// Cannot underflow because of checks above.
-			set_transaction_level(&(existing_levels - 1));
-		}
-	}
-
-	pub fn is_transactional() -> bool {
-		get_transaction_level() > 0
-	}
-
-	pub struct StorageLayerGuard;
-
-	impl Drop for StorageLayerGuard {
-		fn drop(&mut self) {
-			dec_transaction_level()
-		}
+fn dec_transaction_level(existing_levels: &mut Layer) {
+	if *existing_levels == 0 {
+		crate::defensive!(
+			"We are underflowing with calculating transactional levels. Not great, but let's not panic..."
+		);
+	} else {
+		*existing_levels = *existing_levels - 1;
 	}
 }
 
 /// Check if the current call is within a transactional layer.
 pub fn is_transactional() -> bool {
-	transaction_level_tracker::is_transactional()
+	current_level::with(|_| {}).is_some()
 }
 
 /// Execute the supplied function in a new storage transaction.
@@ -118,27 +85,40 @@ pub fn is_transactional() -> bool {
 /// Transactions can be nested up to 10 times; more than that will result in an error.
 ///
 /// Commits happen to the parent transaction.
-pub fn with_transaction<T, E>(f: impl FnOnce() -> TransactionOutcome<Result<T, E>>) -> Result<T, E>
+pub fn with_transaction<T, E>(
+	f: impl FnOnce() -> TransactionOutcome<Result<T, E>>,
+	existing_levels: &mut Layer,
+) -> Result<T, E>
 where
 	E: From<DispatchError>,
 {
 	use sp_io::storage::{commit_transaction, rollback_transaction, start_transaction};
 	use TransactionOutcome::*;
-
-	let _guard = transaction_level_tracker::inc_transaction_level()
-		.map_err(|()| DispatchError::TransactionalLimit.into())?;
-
-	start_transaction();
-
-	match f() {
-		Commit(res) => {
-			commit_transaction();
+	let execute_with_transaction_levels = || {
+		current_level::with(|existing_levels| {
+			let _ = inc_transaction_level(existing_levels)
+				.map_err(|()| DispatchError::TransactionalLimit.into())?;
+			start_transaction();
+			let res = match f() {
+				Commit(res) => {
+					commit_transaction();
+					res
+				},
+				Rollback(res) => {
+					rollback_transaction();
+					res
+				},
+			};
+			dec_transaction_level(existing_levels);
 			res
-		},
-		Rollback(res) => {
-			rollback_transaction();
-			res
-		},
+		})
+		.unwrap()
+	};
+	if is_transactional() {
+		execute_with_transaction_levels()
+	} else {
+		let mut init = Zero::zero();
+		current_level::using(&mut init, || execute_with_transaction_levels())
 	}
 }
 
@@ -1594,20 +1574,28 @@ mod test {
 		})
 	}
 
+	fn get_transaction_level_or_default() -> Layer {
+		if is_transactional() {
+			current_level::with(|x| *x).unwrap()
+		} else {
+			0
+		}
+	}
+
 	#[test]
 	fn transaction_limit_should_work() {
 		TestExternalities::default().execute_with(|| {
-			assert_eq!(transaction_level_tracker::get_transaction_level(), 0);
+			assert_eq!(get_transaction_level_or_default(), 0);
 
 			assert_ok!(with_transaction(|| -> TransactionOutcome<DispatchResult> {
-				assert_eq!(transaction_level_tracker::get_transaction_level(), 1);
+				assert_eq!(get_transaction_level_or_default(), 1);
 				TransactionOutcome::Commit(Ok(()))
 			}));
 
 			assert_ok!(with_transaction(|| -> TransactionOutcome<DispatchResult> {
-				assert_eq!(transaction_level_tracker::get_transaction_level(), 1);
+				assert_eq!(get_transaction_level_or_default(), 1);
 				let res = with_transaction(|| -> TransactionOutcome<DispatchResult> {
-					assert_eq!(transaction_level_tracker::get_transaction_level(), 2);
+					assert_eq!(get_transaction_level_or_default(), 2);
 					TransactionOutcome::Commit(Ok(()))
 				});
 				TransactionOutcome::Commit(res)
@@ -1619,7 +1607,7 @@ mod test {
 				sp_runtime::DispatchError::TransactionalLimit
 			);
 
-			assert_eq!(transaction_level_tracker::get_transaction_level(), 0);
+			assert_eq!(get_transaction_level_or_default(), 0);
 		});
 	}
 

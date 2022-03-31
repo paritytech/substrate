@@ -24,12 +24,13 @@ pub fn transactional(_attr: TokenStream, input: TokenStream) -> Result<TokenStre
 	let ItemFn { attrs, vis, sig, block } = syn::parse(input)?;
 
 	let crate_ = generate_crate_access_2018("frame-support")?;
+	let fn_body = quote!(|| { #block });
 	let output = quote! {
 		#(#attrs)*
 		#vis #sig {
 			use #crate_::storage::{with_transaction, TransactionOutcome};
 			with_transaction(|| {
-				let r = (|| { #block })();
+				let r = #fn_body();
 				if r.is_ok() {
 					TransactionOutcome::Commit(r)
 				} else {
