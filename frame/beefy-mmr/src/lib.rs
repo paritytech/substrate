@@ -144,7 +144,7 @@ where
 		<T as frame_system::Config>::BlockNumber,
 		<T as frame_system::Config>::Hash,
 		MerkleRootOf<T>,
-		T::LeafExtra
+		T::LeafExtra,
 	>;
 
 	fn leaf_data() -> Self::LeafData {

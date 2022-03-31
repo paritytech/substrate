@@ -105,7 +105,7 @@ pub type MmrLeaf = beefy_primitives::mmr::MmrLeaf<
 	<Test as frame_system::Config>::BlockNumber,
 	<Test as frame_system::Config>::Hash,
 	<Test as pallet_mmr::Config>::Hash,
-	Vec<u8>
+	Vec<u8>,
 >;
 
 impl pallet_mmr::Config for Test {

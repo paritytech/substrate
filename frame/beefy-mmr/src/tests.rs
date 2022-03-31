@@ -114,7 +114,8 @@ fn should_contain_valid_leaf_data() {
 				root: hex!("176e73f1bf656478b728e28dd1a7733c98621b8acf830bff585949763dca7a96")
 					.into(),
 			},
-			leaf_extra: hex!("55b8e9e1cc9f0db7776fac0ca66318ef8acfb8ec26db11e373120583e07ee648").to_vec(),
+			leaf_extra: hex!("55b8e9e1cc9f0db7776fac0ca66318ef8acfb8ec26db11e373120583e07ee648")
+				.to_vec(),
 		}
 	);
 
@@ -135,7 +136,8 @@ fn should_contain_valid_leaf_data() {
 				root: hex!("9c6b2c1b0d0b25a008e6c882cc7b415f309965c72ad2b944ac0931048ca31cd5")
 					.into(),
 			},
-			leaf_extra: hex!("55b8e9e1cc9f0db7776fac0ca66318ef8acfb8ec26db11e373120583e07ee648").to_vec()
+			leaf_extra: hex!("55b8e9e1cc9f0db7776fac0ca66318ef8acfb8ec26db11e373120583e07ee648")
+				.to_vec()
 		}
 	);
 }

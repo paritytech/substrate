@@ -26,8 +26,8 @@
 //! but we imagine they will be useful for other chains that either want to bridge with Polkadot
 //! or are completely standalone, but heavily inspired by Polkadot.
 
-use codec::{Decode, Encode, MaxEncodedLen};
 use crate::Vec;
+use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 
 /// A provider for extra data that gets added to the Mmr leaf
