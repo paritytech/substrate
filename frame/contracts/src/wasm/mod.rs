@@ -1095,11 +1095,11 @@ mod tests {
 		/// expected one.
 		const CODE_ECDSA_TO_ETH_ADDRESS: &str = r#"
 (module
-	(import "__unstable__" "seal_ecdsa_to_eth_address" (func $seal_ecdsa_to_eth_address (param i32 i32 i32)))
+	(import "__unstable__" "seal_ecdsa_to_eth_address" (func $seal_ecdsa_to_eth_address (param i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
-	;; size of our buffer is 20 bytes
-	(data (i32.const 20) "\20")
+	;; size of our buffer is 33 bytes
+	(data (i32.const 33) "\20")
 
 	(func $assert (param i32)
 		(block $ok
@@ -1112,15 +1112,8 @@ mod tests {
 
 	(func (export "call")
 		;; fill the buffer with the eth address.
-		(call $seal_ecdsa_to_eth_address (i32.const 0) (i32.const 0) (i32.const 20))
+		(call $seal_ecdsa_to_eth_address (i32.const 0) (i32.const 0))
 
-		;; assert out_len == 20
-		(call $assert
-			(i32.eq
-				(i32.load (i32.const 20))
-				(i32.const 20)
-			)
-		)
 		;; assert that the mock returned 20 zero-bytes
 		(call $assert
 			(i64.eq

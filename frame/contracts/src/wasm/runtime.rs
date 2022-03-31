@@ -2041,7 +2041,7 @@ define_env!(Env, <E: Ext>,
 	//
 	// # Parameters
 	//
-	// - code_hash_ptr: A pointer to the buffer that contains the new code hash.
+	// - `code_hash_ptr`: A pointer to the buffer that contains the new code hash.
 	//
 	// # Errors
 	//
@@ -2063,17 +2063,21 @@ define_env!(Env, <E: Ext>,
 	//
 	// # Parameters
 	//
-	// - key_ptr: a pointer to the ECDSA compressed public key
+	// - `key_ptr`: a pointer to the ECDSA compressed public key. Should be decodable as a 33 bytes value.
+	//		Traps otherwise.
+	// - `out_ptr`: the pointer into the linear memory where the output
+	//                 data is placed.
 	//
 	// The value is stored to linear memory at the address pointed to by `out_ptr`.
-	// `out_len_ptr` must point to a u32 value that describes the available space at
-	// `out_ptr`. This call overwrites it with the size of the value. If the available
-	// space at `out_ptr` is less than the size of the value a trap is triggered.
-	[__unstable__] seal_ecdsa_to_eth_address(ctx, key_ptr: u32, out_ptr: u32, out_len_ptr: u32) => {
+	// If the available space at `out_ptr` is less than the size of the value a trap is triggered.
+	[__unstable__] seal_ecdsa_to_eth_address(ctx, key_ptr: u32, out_ptr: u32) => {
 		ctx.charge_gas(RuntimeCosts::EcdsaToEthAddress)?;
-		let compressed_key: [u8; 33] =
-			ctx.read_sandbox_memory_as(key_ptr)?;
-		let result = ctx.ext.ecdsa_to_eth_address(&compressed_key).unwrap();
-		Ok(ctx.write_sandbox_output(out_ptr, out_len_ptr, &result, false, already_charged)?)
+		let mut compressed_key: [u8; 33] = [0;33];
+		ctx.read_sandbox_memory_into_buf(key_ptr, &mut compressed_key)?;
+		let result = ctx.ext.ecdsa_to_eth_address(&compressed_key);
+		match result {
+			Ok(eth_address) => Ok(ctx.write_sandbox_memory(out_ptr, eth_address.as_ref())?),
+			Err(_) => Err(TrapReason::SupervisorError(DispatchError::Other("Failed to convert ECDSA compressed public key into ETH address!")))?
+		}
 	},
 );
