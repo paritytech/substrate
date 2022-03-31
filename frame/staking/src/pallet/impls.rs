@@ -1308,13 +1308,29 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsAndValidatorsM
 	type Error = ();
 	type Score = VoteWeight;
 
-	/// Returns iterator over voter list, which can have `take` called on it.
 	fn iter() -> Box<dyn Iterator<Item = T::AccountId>> {
 		Box::new(
 			Validators::<T>::iter()
 				.map(|(v, _)| v)
 				.chain(Nominators::<T>::iter().map(|(n, _)| n)),
 		)
+	}
+	fn iter_from(
+		start: &T::AccountId,
+	) -> Result<Box<dyn Iterator<Item = T::AccountId>>, Self::Error> {
+		if Validators::<T>::contains_key(start) {
+			let start_key = Validators::<T>::hashed_key_for(start);
+			Ok(Box::new(
+				Validators::<T>::iter_from(start_key)
+					.map(|(n, _)| n)
+					.chain(Nominators::<T>::iter().map(|(x, _)| x)),
+			))
+		} else if Nominators::<T>::contains_key(start) {
+			let start_key = Nominators::<T>::hashed_key_for(start);
+			Ok(Box::new(Nominators::<T>::iter_from(start_key).map(|(n, _)| n)))
+		} else {
+			Err(())
+		}
 	}
 	fn count() -> u32 {
 		Nominators::<T>::count().saturating_add(Validators::<T>::count())

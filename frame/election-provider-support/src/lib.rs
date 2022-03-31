@@ -441,6 +441,11 @@ pub trait SortedListProvider<AccountId> {
 	/// An iterator over the list, which can have `take` called on it.
 	fn iter() -> Box<dyn Iterator<Item = AccountId>>;
 
+	/// Returns an iterator over the list, starting right after from the given voter.
+	///
+	/// May return an error if `start` is invalid.
+	fn iter_from(start: &AccountId) -> Result<Box<dyn Iterator<Item = AccountId>>, Self::Error>;
+
 	/// The current count of ids in the list.
 	fn count() -> u32;
 
