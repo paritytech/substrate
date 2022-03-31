@@ -100,6 +100,8 @@ mod benchmarking;
 mod types;
 pub mod weights;
 
+use frame_support::pallet_prelude::*;
+use frame_system::pallet_prelude::*;
 use sp_runtime::{
 	traits::{StaticLookup, Zero},
 	RuntimeDebug,
@@ -107,7 +109,7 @@ use sp_runtime::{
 use sp_std::prelude::*;
 
 use frame_support::{
-	codec::{Decode, Encode},
+	codec::{Decode, Encode, MaxEncodedLen},
 	dispatch::{
 		DispatchError, DispatchResult, DispatchResultWithPostInfo, Dispatchable, GetDispatchInfo,
 		PostDispatchInfo,
@@ -128,7 +130,7 @@ pub use weights::*;
 /// Simple index type for proposal counting.
 pub type ProposalIndex = u32;
 
-type Url = Vec<u8>;
+type UrlOf<T, I> = BoundedVec<u8, <T as pallet::Config<I>>::MaxWebsiteUrlLength>;
 
 type BalanceOf<T, I = ()> =
 	<<T as Config<I>>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
@@ -157,7 +159,6 @@ impl<AccountId> IdentityVerifier<AccountId> for () {
 		None
 	}
 }
-
 pub trait ProposalProvider<AccountId, Hash, Proposal> {
 	fn propose_proposal(
 		who: AccountId,
@@ -186,7 +187,7 @@ pub trait ProposalProvider<AccountId, Hash, Proposal> {
 }
 
 /// The role of members.
-#[derive(Copy, Clone, PartialEq, Eq, RuntimeDebug, Encode, Decode, TypeInfo)]
+#[derive(Copy, Clone, PartialEq, Eq, RuntimeDebug, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum MemberRole {
 	Founder,
 	Fellow,
@@ -194,21 +195,20 @@ pub enum MemberRole {
 }
 
 /// The item type of blacklist.
-#[derive(Clone, PartialEq, Eq, RuntimeDebug, Encode, Decode, TypeInfo)]
-pub enum BlacklistItem<AccountId> {
+#[derive(Clone, PartialEq, Eq, RuntimeDebug, Encode, Decode, TypeInfo, MaxEncodedLen)]
+pub enum BlacklistItem<AccountId, Url> {
 	AccountId(AccountId),
 	Website(Url),
 }
 
+type BlacklistItemOf<T, I> = BlacklistItem<<T as frame_system::Config>::AccountId, UrlOf<T, I>>;
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::pallet_prelude::*;
-	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]
-	#[pallet::without_storage_info]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
 	#[pallet::config]
@@ -283,6 +283,18 @@ pub mod pallet {
 		#[pallet::constant]
 		type CandidateDeposit: Get<BalanceOf<Self, I>>;
 
+		/// The maximum numbers of announcements.
+		#[pallet::constant]
+		type MaxAnnouncementsCount: Get<u32>;
+
+		/// The maximum numbers of members per member role.
+		#[pallet::constant]
+		type MaxMembersCount: Get<u32>;
+
+		/// The maximum numbers of candidates.
+		#[pallet::constant]
+		type MaxCandidatesCount: Get<u32>;
+
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
 	}
@@ -331,6 +343,12 @@ pub mod pallet {
 		NotVetoableProposal,
 		/// The Announcement is not found.
 		MissingAnnouncement,
+		/// Number of members exceed MaxMembersCount.
+		TooManyMembers,
+		/// Number of candidates exceed MaxCandidatesCount.
+		TooManyCandidates,
+		/// Number of Announcements exceed MaxAnnouncementsCount.
+		TooManyAnnouncements,
 	}
 
 	#[pallet::event]
@@ -365,9 +383,9 @@ pub mod pallet {
 		/// A member has been kicked out to an ordinary account with its deposit slashed.
 		MemberKicked { member: T::AccountId, slashed: Option<BalanceOf<T, I>> },
 		/// Accounts or websites have been added into blacklist.
-		BlacklistAdded { items: Vec<BlacklistItem<T::AccountId>> },
+		BlacklistAdded { items: Vec<BlacklistItemOf<T, I>> },
 		/// Accounts or websites have been removed from blacklist.
-		BlacklistRemoved { items: Vec<BlacklistItem<T::AccountId>> },
+		BlacklistRemoved { items: Vec<BlacklistItemOf<T, I>> },
 	}
 
 	#[pallet::genesis_config]
@@ -408,17 +426,23 @@ pub mod pallet {
 					!Pallet::<T, I>::has_member(MemberRole::Founder),
 					"Founders are already initialized!"
 				);
-				Members::<T, I>::insert(MemberRole::Founder, self.founders.clone());
+				let members: BoundedVec<T::AccountId, T::MaxMembersCount> =
+					self.founders.clone().try_into().expect("Too many genesis founders");
+				Members::<T, I>::insert(MemberRole::Founder, members);
 			}
 			if !self.fellows.is_empty() {
 				assert!(
 					!Pallet::<T, I>::has_member(MemberRole::Fellow),
 					"Fellows are already initialized!"
 				);
-				Members::<T, I>::insert(MemberRole::Fellow, self.fellows.clone());
+				let members: BoundedVec<T::AccountId, T::MaxMembersCount> =
+					self.fellows.clone().try_into().expect("Too many genesis fellows");
+				Members::<T, I>::insert(MemberRole::Fellow, members);
 			}
 			if !self.allies.is_empty() {
-				Members::<T, I>::insert(MemberRole::Ally, self.allies.clone())
+				let members: BoundedVec<T::AccountId, T::MaxMembersCount> =
+					self.allies.clone().try_into().expect("Too many genesis allies");
+				Members::<T, I>::insert(MemberRole::Ally, members);
 			}
 
 			T::InitializeMembers::initialize_members(
@@ -439,7 +463,8 @@ pub mod pallet {
 	/// The current IPFS cids of the announcements.
 	#[pallet::storage]
 	#[pallet::getter(fn announcements)]
-	pub type Announcements<T: Config<I>, I: 'static = ()> = StorageValue<_, Vec<Cid>, ValueQuery>;
+	pub type Announcements<T: Config<I>, I: 'static = ()> =
+		StorageValue<_, BoundedVec<Cid, T::MaxAnnouncementsCount>, ValueQuery>;
 
 	/// Maps member and their candidate deposit.
 	#[pallet::storage]
@@ -452,15 +477,20 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn candidates)]
 	pub type Candidates<T: Config<I>, I: 'static = ()> =
-		StorageValue<_, Vec<T::AccountId>, ValueQuery>;
+		StorageValue<_, BoundedVec<T::AccountId, T::MaxCandidatesCount>, ValueQuery>;
 
 	/// Maps member type to alliance members, including founder, fellow and ally.
 	/// Founders and fellows can propose and vote on alliance motions,
 	/// and ally can only wait to be elevated to fellow.
 	#[pallet::storage]
 	#[pallet::getter(fn members)]
-	pub type Members<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Twox64Concat, MemberRole, Vec<T::AccountId>, ValueQuery>;
+	pub type Members<T: Config<I>, I: 'static = ()> = StorageMap<
+		_,
+		Twox64Concat,
+		MemberRole,
+		BoundedVec<T::AccountId, T::MaxMembersCount>,
+		ValueQuery,
+	>;
 
 	/// The members are being kicked out. They can't retire during the motion.
 	#[pallet::storage]
@@ -472,13 +502,13 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn account_blacklist)]
 	pub type AccountBlacklist<T: Config<I>, I: 'static = ()> =
-		StorageValue<_, Vec<T::AccountId>, ValueQuery>;
+		StorageValue<_, BoundedVec<T::AccountId, T::MaxBlacklistCount>, ValueQuery>;
 
 	/// The current blacklist of websites.
 	#[pallet::storage]
 	#[pallet::getter(fn website_blacklist)]
 	pub type WebsiteBlacklist<T: Config<I>, I: 'static = ()> =
-		StorageValue<_, Vec<Url>, ValueQuery>;
+		StorageValue<_, BoundedVec<UrlOf<T, I>, T::MaxBlacklistCount>, ValueQuery>;
 
 	#[pallet::call]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
@@ -608,11 +638,18 @@ pub mod pallet {
 		))]
 		pub fn init_members(
 			origin: OriginFor<T>,
-			mut founders: Vec<T::AccountId>,
-			mut fellows: Vec<T::AccountId>,
-			mut allies: Vec<T::AccountId>,
+			founders: Vec<T::AccountId>,
+			fellows: Vec<T::AccountId>,
+			allies: Vec<T::AccountId>,
 		) -> DispatchResult {
 			ensure_root(origin)?;
+
+			let mut founders: BoundedVec<T::AccountId, T::MaxMembersCount> =
+				founders.try_into().map_err(|_| Error::<T, I>::TooManyMembers)?;
+			let mut fellows: BoundedVec<T::AccountId, T::MaxMembersCount> =
+				fellows.try_into().map_err(|_| Error::<T, I>::TooManyMembers)?;
+			let mut allies: BoundedVec<T::AccountId, T::MaxMembersCount> =
+				allies.try_into().map_err(|_| Error::<T, I>::TooManyMembers)?;
 
 			ensure!(
 				!Self::has_member(MemberRole::Founder) &&
@@ -644,7 +681,11 @@ pub mod pallet {
 				founders, fellows, allies
 			);
 
-			Self::deposit_event(Event::MembersInitialized { founders, fellows, allies });
+			Self::deposit_event(Event::MembersInitialized {
+				founders: founders.into(),
+				fellows: fellows.into(),
+				allies: allies.into(),
+			});
 			Ok(())
 		}
 
@@ -665,7 +706,7 @@ pub mod pallet {
 			T::SuperMajorityOrigin::ensure_origin(origin)?;
 
 			let mut announcements = <Announcements<T, I>>::get();
-			announcements.push(announcement.clone());
+			announcements.try_push(announcement.clone()).map_err(|_| Error::<T, I>::TooManyAnnouncements)?;
 			<Announcements<T, I>>::put(announcements);
 
 			Self::deposit_event(Event::NewAnnouncement { announcement });
@@ -841,7 +882,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::add_blacklist(infos.len() as u32, T::MaxWebsiteUrlLength::get()))]
 		pub fn add_blacklist(
 			origin: OriginFor<T>,
-			infos: Vec<BlacklistItem<T::AccountId>>,
+			infos: Vec<BlacklistItemOf<T, I>>,
 		) -> DispatchResult {
 			T::SuperMajorityOrigin::ensure_origin(origin)?;
 
@@ -861,17 +902,6 @@ pub mod pallet {
 				}
 			}
 
-			let account_blacklist_len = AccountBlacklist::<T, I>::decode_len().unwrap_or_default();
-			ensure!(
-				(account_blacklist_len + accounts.len()) as u32 <= T::MaxBlacklistCount::get(),
-				Error::<T, I>::TooManyBlacklist
-			);
-			let web_blacklist_len = WebsiteBlacklist::<T, I>::decode_len().unwrap_or_default();
-			ensure!(
-				(web_blacklist_len + webs.len()) as u32 <= T::MaxBlacklistCount::get(),
-				Error::<T, I>::TooManyBlacklist
-			);
-
 			Self::do_add_blacklist(&mut accounts, &mut webs)?;
 			Self::deposit_event(Event::BlacklistAdded { items: infos });
 			Ok(())
@@ -881,7 +911,7 @@ pub mod pallet {
 		#[pallet::weight(<T as Config<I>>::WeightInfo::remove_blacklist(infos.len() as u32, T::MaxWebsiteUrlLength::get()))]
 		pub fn remove_blacklist(
 			origin: OriginFor<T>,
-			infos: Vec<BlacklistItem<T::AccountId>>,
+			infos: Vec<BlacklistItemOf<T, I>>,
 		) -> DispatchResult {
 			T::SuperMajorityOrigin::ensure_origin(origin)?;
 			let mut accounts = vec![];
@@ -910,7 +940,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	fn add_candidate(who: &T::AccountId) -> DispatchResult {
 		<Candidates<T, I>>::try_mutate(|candidates| {
 			let pos = candidates.binary_search(who).err().ok_or(Error::<T, I>::AlreadyCandidate)?;
-			candidates.insert(pos, who.clone());
+			candidates
+				.try_insert(pos, who.clone())
+				.map_err(|_| Error::<T, I>::TooManyCandidates)?;
 			Ok(())
 		})
 	}
@@ -959,11 +991,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	fn votable_member_sorted() -> Vec<T::AccountId> {
-		let mut founders = Members::<T, I>::get(MemberRole::Founder);
-		let mut fellows = Members::<T, I>::get(MemberRole::Fellow);
+		let mut founders = Members::<T, I>::get(MemberRole::Founder).into_inner();
+		let mut fellows = Members::<T, I>::get(MemberRole::Fellow).into_inner();
 		founders.append(&mut fellows);
 		founders.sort();
-		founders
+		founders.into()
 	}
 
 	fn is_kicking(who: &T::AccountId) -> bool {
@@ -974,7 +1006,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	fn add_member(who: &T::AccountId, role: MemberRole) -> DispatchResult {
 		<Members<T, I>>::try_mutate(role, |members| -> DispatchResult {
 			let pos = members.binary_search(who).err().ok_or(Error::<T, I>::AlreadyMember)?;
-			members.insert(pos, who.clone());
+			members
+				.try_insert(pos, who.clone())
+				.map_err(|_| Error::<T, I>::TooManyMembers)?;
 			Ok(())
 		})?;
 
@@ -1001,7 +1035,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	/// Check if a user is in blacklist.
-	fn is_blacklist(info: &BlacklistItem<T::AccountId>) -> bool {
+	fn is_blacklist(info: &BlacklistItemOf<T, I>) -> bool {
 		match info {
 			BlacklistItem::Website(url) => <WebsiteBlacklist<T, I>>::get().contains(url),
 			BlacklistItem::AccountId(who) => <AccountBlacklist<T, I>>::get().contains(who),
@@ -1016,27 +1050,32 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Add a identity info to the blacklist set.
 	fn do_add_blacklist(
 		new_accounts: &mut Vec<T::AccountId>,
-		new_webs: &mut Vec<Url>,
+		new_webs: &mut Vec<UrlOf<T, I>>,
 	) -> DispatchResult {
 		if !new_accounts.is_empty() {
-			<AccountBlacklist<T, I>>::mutate(|accounts| {
-				accounts.append(new_accounts);
+			<AccountBlacklist<T, I>>::try_mutate(|accounts| -> DispatchResult {
+				accounts.try_append(new_accounts).map_err(|_| Error::<T, I>::TooManyBlacklist)?;
 				accounts.sort();
-			});
+
+				Ok(())
+			})?;
 		}
 		if !new_webs.is_empty() {
-			<WebsiteBlacklist<T, I>>::mutate(|webs| {
-				webs.append(new_webs);
+			<WebsiteBlacklist<T, I>>::try_mutate(|webs| -> DispatchResult {
+				webs.try_append(new_webs).map_err(|_| Error::<T, I>::TooManyBlacklist)?;
 				webs.sort();
-			});
+
+				Ok(())
+			})?;
 		}
+
 		Ok(())
 	}
 
 	/// Remove a identity info from the blacklist.
 	fn do_remove_blacklist(
 		out_accounts: &mut Vec<T::AccountId>,
-		out_webs: &mut Vec<Url>,
+		out_webs: &mut Vec<UrlOf<T, I>>,
 	) -> DispatchResult {
 		if !out_accounts.is_empty() {
 			<AccountBlacklist<T, I>>::try_mutate(|accounts| -> DispatchResult {
