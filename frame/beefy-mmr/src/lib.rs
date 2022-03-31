@@ -33,7 +33,7 @@
 //!
 //! and thanks to versioning can be easily updated in the future.
 
-use sp_runtime::traits::{Convert, Hash};
+use sp_runtime::traits::{Convert, Hash, Member};
 use sp_std::prelude::*;
 
 use beefy_primitives::mmr::{BeefyDataProvider, BeefyNextAuthoritySet, MmrLeaf, MmrLeafVersion};
@@ -120,8 +120,11 @@ pub mod pallet {
 		/// efficiency reasons.
 		type BeefyAuthorityToMerkleLeaf: Convert<<Self as pallet_beefy::Config>::BeefyId, Vec<u8>>;
 
+		/// The type of data expected for the leaf extra data
+		type LeafExtra: AsRef<[u8]> + Member + codec::FullCodec;
+
 		/// Retrieve arbitrary data that should be added to the mmr leaf
-		type BeefyDataProvider: BeefyDataProvider;
+		type BeefyDataProvider: BeefyDataProvider<Self::LeafExtra>;
 	}
 
 	/// Details of next BEEFY authority set.
@@ -141,6 +144,7 @@ where
 		<T as frame_system::Config>::BlockNumber,
 		<T as frame_system::Config>::Hash,
 		MerkleRootOf<T>,
+		T::LeafExtra
 	>;
 
 	fn leaf_data() -> Self::LeafData {

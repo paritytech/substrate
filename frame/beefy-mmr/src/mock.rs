@@ -105,6 +105,7 @@ pub type MmrLeaf = beefy_primitives::mmr::MmrLeaf<
 	<Test as frame_system::Config>::BlockNumber,
 	<Test as frame_system::Config>::Hash,
 	<Test as pallet_mmr::Config>::Hash,
+	Vec<u8>
 >;
 
 impl pallet_mmr::Config for Test {
@@ -134,11 +135,13 @@ impl pallet_beefy_mmr::Config for Test {
 
 	type BeefyAuthorityToMerkleLeaf = pallet_beefy_mmr::BeefyEcdsaToEthereum;
 
+	type LeafExtra = Vec<u8>;
+
 	type BeefyDataProvider = DummyParaHeads;
 }
 
 pub struct DummyParaHeads;
-impl BeefyDataProvider for DummyParaHeads {
+impl BeefyDataProvider<Vec<u8>> for DummyParaHeads {
 	fn extra_data() -> Vec<u8> {
 		let mut col = vec![(15, vec![1, 2, 3]), (5, vec![4, 5, 6])];
 		col.sort();
