@@ -706,7 +706,9 @@ pub mod pallet {
 			T::SuperMajorityOrigin::ensure_origin(origin)?;
 
 			let mut announcements = <Announcements<T, I>>::get();
-			announcements.try_push(announcement.clone()).map_err(|_| Error::<T, I>::TooManyAnnouncements)?;
+			announcements
+				.try_push(announcement.clone())
+				.map_err(|_| Error::<T, I>::TooManyAnnouncements)?;
 			<Announcements<T, I>>::put(announcements);
 
 			Self::deposit_event(Event::NewAnnouncement { announcement });

@@ -386,10 +386,7 @@ impl<T, S: Get<u32>> BoundedVec<T, S> {
 
 	/// Exactly the same semantics as [`Vec::append`], but returns an error and does nothing if the
 	/// length of the outcome is larger than the bound.
-	pub fn try_append(
-		&mut self,
-		other: &mut Vec<T>,
-	) -> Result<(), ()> {
+	pub fn try_append(&mut self, other: &mut Vec<T>) -> Result<(), ()> {
 		if other.len().saturating_add(self.len()) <= Self::bound() {
 			self.0.append(other);
 			Ok(())
