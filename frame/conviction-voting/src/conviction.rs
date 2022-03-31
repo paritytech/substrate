@@ -17,14 +17,14 @@
 
 //! The conviction datatype.
 
-use crate::types::Delegations;
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_runtime::{
 	traits::{Bounded, CheckedDiv, CheckedMul, Zero},
 	RuntimeDebug,
 };
-use sp_std::{convert::TryFrom, result::Result};
+
+use crate::types::Delegations;
 
 /// A value denoting the strength of conviction of a vote.
 #[derive(
