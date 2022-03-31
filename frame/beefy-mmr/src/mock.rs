@@ -137,11 +137,11 @@ impl pallet_beefy_mmr::Config for Test {
 
 	type LeafExtra = Vec<u8>;
 
-	type BeefyDataProvider = DummyParaHeads;
+	type BeefyDataProvider = DummyDataProvider;
 }
 
-pub struct DummyParaHeads;
-impl BeefyDataProvider<Vec<u8>> for DummyParaHeads {
+pub struct DummyDataProvider;
+impl BeefyDataProvider<Vec<u8>> for DummyDataProvider {
 	fn extra_data() -> Vec<u8> {
 		let mut col = vec![(15, vec![1, 2, 3]), (5, vec![4, 5, 6])];
 		col.sort();

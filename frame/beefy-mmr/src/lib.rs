@@ -29,7 +29,7 @@
 //! The MMR leaf contains:
 //! 1. Block number and parent block hash.
 //! 2. Merkle Tree Root Hash of next BEEFY validator set.
-//! 3. Merkle Tree Root Hash of current parachain heads state.
+//! 3. Arbitrary extra leaf data to be used by downstream pallets to include custom data.
 //!
 //! and thanks to versioning can be easily updated in the future.
 
