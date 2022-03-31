@@ -31,9 +31,9 @@ use crate::Vec;
 use scale_info::TypeInfo;
 
 /// A provider for extra data that gets added to the Mmr leaf
-pub trait BeefyDataProvider {
+pub trait BeefyDataProvider<ExtraData = Vec<u8>> {
 	/// Return a vector of bytes, ideally should be a merkle root hash
-	fn extra_data() -> Vec<u8>;
+	fn extra_data() -> ExtraData;
 }
 
 /// A default implementation for runtimes.
@@ -45,7 +45,7 @@ impl BeefyDataProvider for () {
 
 /// A standard leaf that gets added every block to the MMR constructed by Substrate's `pallet_mmr`.
 #[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
-pub struct MmrLeaf<BlockNumber, Hash, MerkleRoot> {
+pub struct MmrLeaf<BlockNumber, Hash, MerkleRoot, ExtraData = Vec<u8>> {
 	/// Version of the leaf format.
 	///
 	/// Can be used to enable future format migrations and compatibility.
@@ -57,7 +57,7 @@ pub struct MmrLeaf<BlockNumber, Hash, MerkleRoot> {
 	pub beefy_next_authority_set: BeefyNextAuthoritySet<MerkleRoot>,
 	/// Arbitrary extra leaf data to be used by downstream pallets to include custom data in the
 	/// [`MmrLeaf`]
-	pub leaf_extra: Vec<u8>,
+	pub leaf_extra: ExtraData,
 }
 
 /// A MMR leaf versioning scheme.
