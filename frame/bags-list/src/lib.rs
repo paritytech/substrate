@@ -271,7 +271,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 impl<T: Config<I>, I: 'static> SortedListProvider<T::AccountId> for Pallet<T, I> {
 	type Error = ListError;
-
 	type Score = T::Score;
 
 	fn iter() -> Box<dyn Iterator<Item = T::AccountId>> {

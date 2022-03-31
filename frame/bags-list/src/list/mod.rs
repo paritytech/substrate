@@ -251,12 +251,12 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 	/// All items after this node are returned, excluding `start` itself.
 	pub(crate) fn iter_from(
 		start: &T::AccountId,
-	) -> Result<impl Iterator<Item = Node<T, I>>, Error> {
+	) -> Result<impl Iterator<Item = Node<T, I>>, ListError> {
 		// We chain two iterators:
 		// 1. from the given `start` till the end of the bag
 		// 2. all the bags that come after `start`'s bag.
 
-		let start_node = Node::<T, I>::get(start).ok_or(Error::NodeNotFound)?;
+		let start_node = Node::<T, I>::get(start).ok_or(ListError::NodeNotFound)?;
 		let start_node_upper = start_node.bag_upper;
 		let start_bag = sp_std::iter::successors(start_node.next(), |prev| prev.next());
 
