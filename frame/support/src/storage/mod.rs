@@ -517,9 +517,6 @@ pub trait IterableStorageNMap<K: ReversibleKeyGenerator, V: FullCodec>: StorageN
 
 /// An implementation of a map with a two keys.
 ///
-/// It provides an important ability to efficiently remove all entries
-/// that have a common first key.
-///
 /// Details on implementation can be found at [`generator::StorageDoubleMap`].
 pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 	/// The type that get/take returns.
@@ -1618,7 +1615,7 @@ mod test {
 			use crate::{hash::Identity, storage::generator::map::StorageMap};
 			crate::generate_storage_alias! {
 				MyModule,
-				MyStorageMap => Map<(u64, Identity), u64>
+				MyStorageMap => Map<(Identity, u64), u64>
 			}
 
 			MyStorageMap::insert(1, 10);
@@ -1735,10 +1732,10 @@ mod test {
 	}
 
 	crate::generate_storage_alias! { Prefix, Foo => Value<WeakBoundedVec<u32, ConstU32<7>>> }
-	crate::generate_storage_alias! { Prefix, FooMap => Map<(u32, Twox128), BoundedVec<u32, ConstU32<7>>> }
+	crate::generate_storage_alias! { Prefix, FooMap => Map<(Twox128, u32), BoundedVec<u32, ConstU32<7>>> }
 	crate::generate_storage_alias! {
 		Prefix,
-		FooDoubleMap => DoubleMap<(u32, Twox128), (u32, Twox128), BoundedVec<u32, ConstU32<7>>>
+		FooDoubleMap => DoubleMap<(Twox128, u32), (Twox128, u32), BoundedVec<u32, ConstU32<7>>>
 	}
 
 	#[test]

@@ -92,8 +92,8 @@ use retain_mut::RetainMut;
 use schnorrkel::SignatureError;
 
 use sc_client_api::{
-	backend::AuxStore, AuxDataOperations, BlockchainEvents, FinalityNotification, PreCommitActions,
-	ProvideUncles, UsageProvider,
+	backend::AuxStore, AuxDataOperations, Backend as BackendT, BlockchainEvents,
+	FinalityNotification, PreCommitActions, ProvideUncles, UsageProvider,
 };
 use sc_consensus::{
 	block_import::{
@@ -113,7 +113,9 @@ use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG, CONSENSUS_TRACE}
 use sp_api::{ApiExt, ProvideRuntimeApi};
 use sp_application_crypto::AppKey;
 use sp_block_builder::BlockBuilder as BlockBuilderApi;
-use sp_blockchain::{Error as ClientError, HeaderBackend, HeaderMetadata, Result as ClientResult};
+use sp_blockchain::{
+	Backend as _, Error as ClientError, HeaderBackend, HeaderMetadata, Result as ClientResult,
+};
 use sp_consensus::{
 	BlockOrigin, CacheKeyId, CanAuthorWith, Environment, Error as ConsensusError, Proposer,
 	SelectChain,
@@ -1829,4 +1831,75 @@ where
 	};
 
 	Ok(BasicQueue::new(verifier, Box::new(block_import), justification_import, spawner, registry))
+}
+
+/// Reverts aux data.
+pub fn revert<Block, Client, Backend>(
+	client: Arc<Client>,
+	backend: Arc<Backend>,
+	blocks: NumberFor<Block>,
+) -> ClientResult<()>
+where
+	Block: BlockT,
+	Client: AuxStore
+		+ HeaderMetadata<Block, Error = sp_blockchain::Error>
+		+ HeaderBackend<Block>
+		+ ProvideRuntimeApi<Block>
+		+ UsageProvider<Block>,
+	Client::Api: BabeApi<Block>,
+	Backend: BackendT<Block>,
+{
+	let best_number = client.info().best_number;
+	let finalized = client.info().finalized_number;
+	let revertible = blocks.min(best_number - finalized);
+
+	let number = best_number - revertible;
+	let hash = client
+		.block_hash_from_id(&BlockId::Number(number))?
+		.ok_or(ClientError::Backend(format!(
+			"Unexpected hash lookup failure for block number: {}",
+			number
+		)))?;
+
+	// Revert epoch changes tree.
+
+	let config = Config::get(&*client)?;
+	let epoch_changes =
+		aux_schema::load_epoch_changes::<Block, Client>(&*client, config.genesis_config())?;
+	let mut epoch_changes = epoch_changes.shared_data();
+
+	if number == Zero::zero() {
+		// Special case, no epoch changes data were present on genesis.
+		*epoch_changes = EpochChangesFor::<Block, Epoch>::default();
+	} else {
+		epoch_changes.revert(descendent_query(&*client), hash, number);
+	}
+
+	// Remove block weights added after the revert point.
+
+	let mut weight_keys = HashSet::with_capacity(revertible.saturated_into());
+	let leaves = backend.blockchain().leaves()?.into_iter().filter(|&leaf| {
+		sp_blockchain::tree_route(&*client, hash, leaf)
+			.map(|route| route.retracted().is_empty())
+			.unwrap_or_default()
+	});
+	for leaf in leaves {
+		let mut hash = leaf;
+		// Insert parent after parent until we don't hit an already processed
+		// branch or we reach a direct child of the rollback point.
+		while weight_keys.insert(aux_schema::block_weight_key(hash)) {
+			let meta = client.header_metadata(hash)?;
+			if meta.number <= number + One::one() {
+				// We've reached a child of the revert point, stop here.
+				break
+			}
+			hash = client.header_metadata(hash)?.parent;
+		}
+	}
+	let weight_keys: Vec<_> = weight_keys.iter().map(|val| val.as_slice()).collect();
+
+	// Write epoch changes and remove weights in one shot.
+	aux_schema::write_epoch_changes::<Block, _, _>(&epoch_changes, |values| {
+		client.insert_aux(values, weight_keys.iter())
+	})
 }

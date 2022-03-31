@@ -37,17 +37,17 @@ parameter_types! {
 	{{#if (eq short_name "block")}}
 	/// Time to execute an empty block.
 	{{else}}
-	/// Time to execute a NO-OP extrinsic eg. `System::remark`.
+	/// Time to execute a NO-OP extrinsic, for example `System::remark`.
 	{{/if}}
 	/// Calculated by multiplying the *{{params.weight.weight_metric}}* with `{{params.weight.weight_mul}}` and adding `{{params.weight.weight_add}}`.
 	///
-	/// Stats [ns]:
+	/// Stats [NS]:
 	///   Min, Max: {{underscore stats.min}}, {{underscore stats.max}}
 	///   Average:  {{underscore stats.avg}}
 	///   Median:   {{underscore stats.median}}
-	///   StdDev:   {{stats.stddev}}
+	///   Std-Dev:  {{stats.stddev}}
 	///
-	/// Percentiles [ns]:
+	/// Percentiles [NS]:
 	///   99th: {{underscore stats.p99}}
 	///   95th: {{underscore stats.p95}}
 	///   75th: {{underscore stats.p75}}
@@ -67,26 +67,14 @@ mod test_weights {
 
 		{{#if (eq short_name "block")}}			
 		// At least 100 µs.
-		assert!(
-			w >= 100 * constants::WEIGHT_PER_MICROS,
-			"Weight should be at least 100 µs."
-		);
+		assert!(w >= 100 * constants::WEIGHT_PER_MICROS, "Weight should be at least 100 µs.");
 		// At most 50 ms.
-		assert!(
-			w <= 50 * constants::WEIGHT_PER_MILLIS,
-			"Weight should be at most 50 ms."
-		);
+		assert!(w <= 50 * constants::WEIGHT_PER_MILLIS, "Weight should be at most 50 ms.");
 		{{else}}
 		// At least 10 µs.
-		assert!(
-			w >= 10 * constants::WEIGHT_PER_MICROS,
-			"Weight should be at least 10 µs."
-		);
+		assert!(w >= 10 * constants::WEIGHT_PER_MICROS, "Weight should be at least 10 µs.");
 		// At most 1 ms.
-		assert!(
-			w <= constants::WEIGHT_PER_MILLIS,
-			"Weight should be at most 1 ms."
-		);
+		assert!(w <= constants::WEIGHT_PER_MILLIS, "Weight should be at most 1 ms.");
 		{{/if}}
 	}
 }
