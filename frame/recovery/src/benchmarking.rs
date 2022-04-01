@@ -36,6 +36,62 @@ fn block_number<T: Config>() -> T::BlockNumber {
 	frame_system::Pallet::<T>::current_block_number()
 }
 
+fn generate_friends<T: Config>() -> Vec<<T as frame_system::Config>::AccountId> {
+	// Create friends
+	let mut friends = vec![
+		account("friend_0", 0, SEED),
+		account("friend_1", 1, SEED),
+		account("friend_2", 2, SEED),
+		account("friend_3", 3, SEED),
+		account("friend_4", 4, SEED),
+		account("friend_5", 5, SEED),
+		account("friend_6", 6, SEED),
+		account("friend_7", 7, SEED),
+	];
+	// Sort
+	friends.sort();
+
+	for friend in 0..friends.len() {
+		// Top up accounts of friends
+		T::Currency::make_free_balance_be(
+			&friends.get(friend).unwrap(),
+			BalanceOf::<T>::max_value(),
+		);
+	}
+
+	friends
+}
+
+fn insert_recovery_account<T: Config>(caller: &T::AccountId, account: &T::AccountId) {
+	T::Currency::make_free_balance_be(&account, BalanceOf::<T>::max_value());
+
+	let friends = generate_friends::<T>();
+	let threshold: u16 = 8;
+	let delay_period = block_number::<T>();
+
+	let bounded_friends: FriendsOf<T> = friends.try_into().unwrap();
+
+	// Get deposit for recovery
+	let friend_deposit = T::FriendDepositFactor::get()
+		.checked_mul(&bounded_friends.len().saturated_into())
+		.unwrap();
+	let total_deposit = T::ConfigDepositBase::get()
+		.checked_add(&friend_deposit)
+		.unwrap();
+
+	let recovery_config = RecoveryConfig {
+		delay_period,
+		deposit: total_deposit,
+		friends: bounded_friends,
+		threshold,
+	};
+
+	// Reserve deposit for recovery
+	T::Currency::reserve(&caller, total_deposit).unwrap();
+
+	<Recoverable<T>>::insert(&account, recovery_config);
+}
+
 benchmarks! {
 	set_recovered {
 		let lost: T::AccountId = whitelisted_caller();
@@ -56,34 +112,18 @@ benchmarks! {
 	create_recovery {
 		let caller: T::AccountId = whitelisted_caller();
 
-		let minimum_deposit = T::RecoveryDeposit::get();
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 
 		// Create friends
-		let mut friends = vec![
-			account("friend_0", 0, SEED),
-			account("friend_1", 1, SEED),
-			account("friend_2", 2, SEED),
-			account("friend_3", 3, SEED),
-			account("friend_4", 4, SEED),
-			account("friend_5", 5, SEED),
-			account("friend_6", 6, SEED),
-			account("friend_7", 7, SEED),
-		];
-		// Sort
-		friends.sort();
-
-		for friend in 0 .. friends.len() {
-			// Top up accounts of friends
-			T::Currency::make_free_balance_be(&friends.get(friend).unwrap(), BalanceOf::<T>::max_value());
-		}
+		let friends = generate_friends::<T>();
+		let bounded_friends: FriendsOf<T> = friends.clone().try_into().unwrap();
 
 		let threshold: u16 = 8;
 		let delay_period = block_number::<T>();
 
 		// Get deposit for recovery
 		let friend_deposit = T::FriendDepositFactor::get()
-				.checked_mul(&friends.len().saturated_into())
+				.checked_mul(&bounded_friends.len().saturated_into())
 				.unwrap();
 		let total_deposit = T::ConfigDepositBase::get()
 			.checked_add(&friend_deposit)
@@ -102,7 +142,11 @@ benchmarks! {
 
 	initiate_recovery {
 		let caller: T::AccountId = whitelisted_caller();
+		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
+
 		let lost_account: T::AccountId = account("lost_account", 0, SEED);
+
+		insert_recovery_account::<T>(&caller, &lost_account);
 	}: _(
 		RawOrigin::Signed(caller.clone()),
 		lost_account.clone()
