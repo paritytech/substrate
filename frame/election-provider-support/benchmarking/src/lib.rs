@@ -28,7 +28,6 @@ use sp_runtime::SaturatedConversion;
 
 use pallet_staking::Pallet as Staking;
 
-// TODO: configure this more centrally.
 const MAX_ELECTING_VOTERS: u32 = 20_000;
 const MAX_TARGETS: u32 = 2_000;
 

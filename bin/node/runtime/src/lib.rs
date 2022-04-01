@@ -645,8 +645,8 @@ impl Get<Option<(usize, ExtendedBalance)>> for OffchainRandomBalancing {
 type OnChainSeqPhragmen = onchain::BoundedPhragmen<
 	Runtime,
 	<Runtime as pallet_election_provider_multi_phase::Config>::DataProvider,
-	ConstU32<20_000>,
-	ConstU32<2_000>,
+	ConstU32<20_000>, // MaxVoters
+	ConstU32<2_000>,  // MaxTargets
 	pallet_election_provider_multi_phase::SolutionAccuracyOf<Runtime>,
 >;
 

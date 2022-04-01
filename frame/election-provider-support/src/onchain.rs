@@ -16,6 +16,7 @@
 // limitations under the License.
 
 //! An implementation of [`ElectionProvider`] that uses an `NposSolver` to do the election.
+//! This is being benchmarked in `pallet_election_provider_support_onchain_benchmarking`.
 
 use crate::{
 	Debug, ElectionDataProvider, ElectionProvider, InstantElectionProvider, NposSolver, PhragMMS,
