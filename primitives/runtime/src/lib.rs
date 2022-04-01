@@ -717,7 +717,7 @@ impl traits::Printable for DispatchError {
 			Self::Transactional(e) => {
 				"Transactional error: ".print();
 				<&'static str>::from(*e).print();
-			}
+			},
 		}
 	}
 }
