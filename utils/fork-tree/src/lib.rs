@@ -541,8 +541,10 @@ where
 		for node in self.node_iter() {
 			if predicate(&node.data) {
 				if node.hash == *hash || is_descendent_of(&node.hash, hash)? {
-					for node in node.children.iter() {
-						if node.number <= number && is_descendent_of(&node.hash, &hash)? {
+					for child in node.children.iter() {
+						if child.number <= number &&
+							(child.hash == *hash || is_descendent_of(&child.hash, hash)?)
+						{
 							return Err(Error::UnfinalizedAncestor)
 						}
 					}
@@ -587,8 +589,10 @@ where
 		for (i, root) in self.roots.iter().enumerate() {
 			if predicate(&root.data) {
 				if root.hash == *hash || is_descendent_of(&root.hash, hash)? {
-					for node in root.children.iter() {
-						if node.number <= number && is_descendent_of(&node.hash, &hash)? {
+					for child in root.children.iter() {
+						if child.number <= number &&
+							(child.hash == *hash || is_descendent_of(&child.hash, hash)?)
+						{
 							return Err(Error::UnfinalizedAncestor)
 						}
 					}
@@ -606,12 +610,11 @@ where
 			node.data
 		});
 
-		// if the block being finalized is earlier than a given root, then it
-		// must be its ancestor, otherwise we can prune the root. if there's a
-		// root at the same height then the hashes must match. otherwise the
-		// node being finalized is higher than the root so it must be its
-		// descendent (in this case the node wasn't finalized earlier presumably
-		// because the predicate didn't pass).
+		// Retain only roots that are descendents of the finalized block (this
+		// happens if the node has been properly finalized) or that are
+		// ancestors (or equal) to the finalized block (in this case the node
+		// wasn't finalized earlier presumably because the predicate didn't
+		// pass).
 		let mut changed = false;
 		let roots = std::mem::take(&mut self.roots);
 
