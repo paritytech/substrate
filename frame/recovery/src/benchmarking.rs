@@ -20,8 +20,10 @@
 use super::*;
 
 use frame_benchmarking::{benchmarks, whitelisted_caller, account};
+use frame_support::traits::{Currency, Get};
 use frame_system::RawOrigin;
-use sp_runtime::traits::BlockNumberProvider;
+use sp_runtime::traits::{BlockNumberProvider, Bounded};
+use crate::Pallet;
 
 const SEED: u32 = 0;
 
@@ -53,15 +55,42 @@ benchmarks! {
 
 	create_recovery {
 		let caller: T::AccountId = whitelisted_caller();
-		let friends = vec![
+
+		let minimum_deposit = T::RecoveryDeposit::get();
+		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
+
+		// Create friends
+		let mut friends = vec![
 			account("friend_0", 0, SEED),
 			account("friend_1", 1, SEED),
 			account("friend_2", 2, SEED),
 			account("friend_3", 3, SEED),
-			account("friend_4", 4, SEED)
+			account("friend_4", 4, SEED),
+			account("friend_5", 5, SEED),
+			account("friend_6", 6, SEED),
+			account("friend_7", 7, SEED),
 		];
-		let threshold: u16 = 6;
+		// Sort
+		friends.sort();
+
+		for friend in 0 .. friends.len() {
+			// Top up accounts of friends
+			T::Currency::make_free_balance_be(&friends.get(friend).unwrap(), BalanceOf::<T>::max_value());
+		}
+
+		let threshold: u16 = 8;
 		let delay_period = block_number::<T>();
+
+		// Get deposit for recovery
+		let friend_deposit = T::FriendDepositFactor::get()
+				.checked_mul(&friends.len().saturated_into())
+				.unwrap();
+		let total_deposit = T::ConfigDepositBase::get()
+			.checked_add(&friend_deposit)
+			.unwrap();
+
+		// Reserve deposit for recovery
+		T::Currency::reserve(&caller, total_deposit)?;
 	}: _(
 		RawOrigin::Signed(caller.clone()),
 		friends,
