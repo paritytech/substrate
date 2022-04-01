@@ -92,6 +92,33 @@ mod solution_type {
 	}
 
 	#[test]
+	fn from_assignment_fail_too_many_voters() {
+		let rng = rand::rngs::SmallRng::seed_from_u64(0);
+
+		// This will produce 24 voters..
+		let (voters, assignments, candidates) = generate_random_votes(10, 25, rng);
+		let voter_index = make_voter_fn(&voters);
+		let target_index = make_target_fn(&candidates);
+
+		// Limit the voters to 20..
+		generate_solution_type!(
+			pub struct InnerTestSolution::<
+				VoterIndex = u32,
+				TargetIndex = u16,
+				Accuracy = TestAccuracy,
+				MaxVoters = frame_support::traits::ConstU32::<20>,
+			>(16)
+		);
+
+		// 24 > 20, so this should fail.
+		assert_eq!(
+			InnerTestSolution::from_assignment(&assignments, &voter_index, &target_index)
+				.unwrap_err(),
+			NposError::TooManyVoters,
+		);
+	}
+
+	#[test]
 	fn max_encoded_len_too_small() {
 		generate_solution_type!(
 			pub struct InnerTestSolution::<
