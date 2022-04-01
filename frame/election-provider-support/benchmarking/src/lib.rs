@@ -22,33 +22,20 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use frame_benchmarking::{benchmarks, Vec};
-use frame_election_provider_support::{onchain, ElectionDataProvider, ElectionProvider};
-use frame_support::{log, pallet_prelude::ConstU32};
+use frame_election_provider_support::{
+	onchain, onchain::BenchmarkingConfig, ElectionDataProvider, ElectionProvider,
+};
+use frame_support::log;
 use sp_runtime::SaturatedConversion;
 
 use pallet_staking::Pallet as Staking;
 
-const MAX_ELECTING_VOTERS: u32 = 20_000;
-const MAX_TARGETS: u32 = 2_000;
+type OnChainPhragmen<T> = onchain::BoundedPhragmen<T, Staking<T>, T, sp_runtime::Perbill>;
 
-type OnChainPhragmen<T> = onchain::BoundedPhragmen<
-	T,
-	Staking<T>,
-	ConstU32<MAX_ELECTING_VOTERS>,
-	ConstU32<MAX_TARGETS>,
-	sp_runtime::Perbill,
->;
-
-type OnChainPhragMMS<T> = onchain::BoundedPhragMMS<
-	T,
-	Staking<T>,
-	ConstU32<MAX_ELECTING_VOTERS>,
-	ConstU32<MAX_TARGETS>,
-	sp_runtime::Perbill,
->;
+type OnChainPhragMMS<T> = onchain::BoundedPhragMMS<T, Staking<T>, T, sp_runtime::Perbill>;
 
 pub struct Pallet<T: Config>(frame_system::Pallet<T>);
-pub trait Config: pallet_staking::Config + onchain::BenchmarkingConfig {}
+pub trait Config: pallet_staking::Config + onchain::ConfigParams {}
 
 // This is also used in `pallet_election_provider_multi_phase` benchmarking.
 pub const SEED: u32 = 999;
@@ -100,14 +87,14 @@ fn set_up_data_provider_internal<T: Config>(voters_len: u32, targets_len: u32, d
 benchmarks! {
 	phragmen {
 		// number of votes in snapshot.
-		let v in (<T as onchain::BenchmarkingConfig>::VOTERS[0])
-			.. <T as onchain::BenchmarkingConfig>::VOTERS[1];
+		let v in (<T as onchain::ConfigParams>::BenchmarkingConfig::VOTERS[0])
+			.. <T as onchain::ConfigParams>::BenchmarkingConfig::VOTERS[1];
 		// number of targets in snapshot.
-		let t in (<T as onchain::BenchmarkingConfig>::TARGETS[0])
-			.. <T as onchain::BenchmarkingConfig>::TARGETS[1];
+		let t in (<T as onchain::ConfigParams>::BenchmarkingConfig::TARGETS[0])
+			.. <T as onchain::ConfigParams>::BenchmarkingConfig::TARGETS[1];
 		// number of votes per voter (ie the degree).
-		let d in (<T as onchain::BenchmarkingConfig>::VOTES_PER_VOTER[0])
-			.. <T as onchain::BenchmarkingConfig>::VOTES_PER_VOTER[1];
+		let d in (<T as onchain::ConfigParams>::BenchmarkingConfig::VOTES_PER_VOTER[0])
+			.. <T as onchain::ConfigParams>::BenchmarkingConfig::VOTES_PER_VOTER[1];
 
 		// we don't directly need the data-provider to be populated, but it is just easy to use it.
 		set_up_data_provider_internal::<T>(v, t, d);
@@ -117,14 +104,14 @@ benchmarks! {
 
 	phragmms {
 		// number of votes in snapshot.
-		let v in (<T as onchain::BenchmarkingConfig>::VOTERS[0])
-			.. <T as onchain::BenchmarkingConfig>::VOTERS[1];
+		let v in (<T as onchain::ConfigParams>::BenchmarkingConfig::VOTERS[0])
+			.. <T as onchain::ConfigParams>::BenchmarkingConfig::VOTERS[1];
 		// number of targets in snapshot.
-		let t in (<T as onchain::BenchmarkingConfig>::TARGETS[0])
-			.. <T as onchain::BenchmarkingConfig>::TARGETS[1];
+		let t in (<T as onchain::ConfigParams>::BenchmarkingConfig::TARGETS[0])
+			.. <T as onchain::ConfigParams>::BenchmarkingConfig::TARGETS[1];
 		// number of votes per voter (ie the degree).
-		let d in (<T as onchain::BenchmarkingConfig>::VOTES_PER_VOTER[0])
-			.. <T as onchain::BenchmarkingConfig>::VOTES_PER_VOTER[1];
+		let d in (<T as onchain::ConfigParams>::BenchmarkingConfig::VOTES_PER_VOTER[0])
+			.. <T as onchain::ConfigParams>::BenchmarkingConfig::VOTES_PER_VOTER[1];
 
 		// we don't directly need the data-provider to be populated, but it is just easy to use it.
 		set_up_data_provider_internal::<T>(v, t, d);

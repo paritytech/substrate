@@ -195,8 +195,8 @@ pub use sp_arithmetic;
 #[doc(hidden)]
 pub use sp_std;
 
-mod weights;
-use weights::WeightInfo;
+pub mod weights;
+pub use weights::WeightInfo;
 
 #[cfg(test)]
 mod mock;

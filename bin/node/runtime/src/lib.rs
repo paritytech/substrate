@@ -642,19 +642,26 @@ impl Get<Option<(usize, ExtendedBalance)>> for OffchainRandomBalancing {
 	}
 }
 
-type OnChainSeqPhragmen = onchain::BoundedPhragmen<
-	Runtime,
-	<Runtime as pallet_election_provider_multi_phase::Config>::DataProvider,
-	MaxElectingVoters, // MaxVoters
-	ConstU32<2_000>,   // MaxTargets
-	pallet_election_provider_multi_phase::SolutionAccuracyOf<Runtime>,
->;
-
-impl onchain::BenchmarkingConfig for Runtime {
+pub struct ElectionOnchainBenchmarkingConfig;
+impl onchain::BenchmarkingConfig for ElectionOnchainBenchmarkingConfig {
 	const VOTERS: [u32; 2] = [1_000, 2_000];
 	const TARGETS: [u32; 2] = [500, 1_000];
 	const VOTES_PER_VOTER: [u32; 2] = [5, 16];
 }
+
+impl onchain::ConfigParams for Runtime {
+	type WeightInfo = frame_election_provider_support::weights::SubstrateWeight<Self>;
+	type VotersBound = MaxElectingVoters;
+	type TargetsBound = ConstU32<2_000>;
+	type BenchmarkingConfig = ElectionOnchainBenchmarkingConfig;
+}
+
+type OnChainSeqPhragmen = onchain::BoundedPhragmen<
+	Runtime,
+	<Runtime as pallet_election_provider_multi_phase::Config>::DataProvider,
+	Runtime,
+	pallet_election_provider_multi_phase::SolutionAccuracyOf<Runtime>,
+>;
 
 impl pallet_election_provider_multi_phase::Config for Runtime {
 	type Event = Event;

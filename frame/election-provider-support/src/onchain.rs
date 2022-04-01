@@ -63,50 +63,33 @@ impl From<sp_npos_elections::Error> for Error {
 /// thoughtful bounds.
 ///
 /// `Solver` represents the solver to be used for the election, examples are `SequentialPhragmen`
-/// and `PhragMMS`.
+/// and `PhragMMS`. Don't use this struct directly, use `BoundedPhragmen` or `PhragMMS` instead.
 pub struct BoundedExecution<
 	System: frame_system::Config,
 	DataProvider: ElectionDataProvider<AccountId = System::AccountId, BlockNumber = System::BlockNumber>,
 	Solver: NposSolver<AccountId = System::AccountId, Error = sp_npos_elections::Error> + WeightConfig,
-	VotersBound: Get<u32>,
-	TargetsBound: Get<u32>,
+	Params: ConfigParams,
 	Accuracy,
 	Balancing = (),
->(PhantomData<(System, DataProvider, Solver, VotersBound, TargetsBound, Accuracy, Balancing)>);
+>(PhantomData<(System, DataProvider, Solver, Params, Accuracy, Balancing)>);
 
 /// `BoundedPhragmen` uses the `SequentialPhragmen` algorithm to solve for the solution.
-pub type BoundedPhragmen<
-	System,
-	DataProvider,
-	VotersBound,
-	TargetsBound,
-	Accuracy,
-	Balancing = (),
-> = BoundedExecution<
+pub type BoundedPhragmen<System, DataProvider, Params, Accuracy, Balancing = ()> = BoundedExecution<
 	System,
 	DataProvider,
 	SequentialPhragmen<<System as frame_system::Config>::AccountId, Accuracy, Balancing>,
-	VotersBound,
-	TargetsBound,
+	Params,
 	Accuracy,
 	Balancing,
 >;
 
 /// `BoundedPhragMMS` is similar to `BoundedPhragmen` but uses the `PhragMMS` algorith to solve for
 /// the solution.
-pub type BoundedPhragMMS<
-	System,
-	DataProvider,
-	VotersBound,
-	TargetsBound,
-	Accuracy,
-	Balancing = (),
-> = BoundedExecution<
+pub type BoundedPhragMMS<System, DataProvider, Params, Accuracy, Balancing = ()> = BoundedExecution<
 	System,
 	DataProvider,
 	PhragMMS<<System as frame_system::Config>::AccountId, Accuracy, Balancing>,
-	VotersBound,
-	TargetsBound,
+	Params,
 	Accuracy,
 	Balancing,
 >;
@@ -139,10 +122,27 @@ pub trait BenchmarkingConfig {
 	const VOTES_PER_VOTER: [u32; 2];
 }
 
-/// Configuration trait.
-pub trait Config {
+// For testing
+impl BenchmarkingConfig for () {
+	const VOTERS: [u32; 2] = [1_000, 2_000];
+	const TARGETS: [u32; 2] = [500, 1_000];
+	const VOTES_PER_VOTER: [u32; 2] = [5, 16];
+}
+
+/// Helper trait that contains the main configurable paramters
+pub trait ConfigParams {
 	/// Weight information for extrinsics in this pallet.
 	type WeightInfo: WeightInfo;
+	/// Bounds the number of voters.
+	type VotersBound: Get<u32>;
+	/// Bounds the number of targets.
+	type TargetsBound: Get<u32>;
+	/// Benchmarking configuration.
+	type BenchmarkingConfig: BenchmarkingConfig;
+}
+
+/// Configuration trait.
+pub trait Config: ConfigParams {
 	/// The account identifier type.
 	type AccountId: Parameter + Ord;
 	/// The block number type.
@@ -155,10 +155,6 @@ pub trait Config {
 		AccountId = Self::AccountId,
 		BlockNumber = Self::BlockNumber,
 	>;
-	/// Bounds the number of voters.
-	type VotersBound: Get<u32>;
-	/// Bounds the number of targets.
-	type TargetsBound: Get<u32>;
 }
 
 // `System` is used to register the weight used.
@@ -200,38 +196,51 @@ fn elect_with<T: Config, System: frame_system::Config>(
 	Ok(to_supports(&staked))
 }
 
-impl<System, DataProvider, Solver, VotersBound, TargetsBound, Accuracy, Balancing> Config
-	for BoundedExecution<System, DataProvider, Solver, VotersBound, TargetsBound, Accuracy, Balancing>
+impl<System, DataProvider, Solver, Params, Accuracy, Balancing> ConfigParams
+	for BoundedExecution<System, DataProvider, Solver, Params, Accuracy, Balancing>
 where
 	System: frame_system::Config,
 	DataProvider:
 		ElectionDataProvider<AccountId = System::AccountId, BlockNumber = System::BlockNumber>,
 	Solver:
 		NposSolver<AccountId = System::AccountId, Error = sp_npos_elections::Error> + WeightConfig,
-	VotersBound: Get<u32>,
-	TargetsBound: Get<u32>,
+	Params: ConfigParams,
 	Accuracy: PerThing128,
 	Balancing: Get<Option<(usize, ExtendedBalance)>>,
 {
-	type WeightInfo = crate::weights::SubstrateWeight<System>;
+	type WeightInfo = Params::WeightInfo;
+	type VotersBound = Params::VotersBound;
+	type TargetsBound = Params::TargetsBound;
+	type BenchmarkingConfig = Params::BenchmarkingConfig;
+}
+
+impl<System, DataProvider, Solver, Params, Accuracy, Balancing> Config
+	for BoundedExecution<System, DataProvider, Solver, Params, Accuracy, Balancing>
+where
+	System: frame_system::Config,
+	DataProvider:
+		ElectionDataProvider<AccountId = System::AccountId, BlockNumber = System::BlockNumber>,
+	Solver:
+		NposSolver<AccountId = System::AccountId, Error = sp_npos_elections::Error> + WeightConfig,
+	Params: ConfigParams,
+	Accuracy: PerThing128,
+	Balancing: Get<Option<(usize, ExtendedBalance)>>,
+{
 	type AccountId = System::AccountId;
 	type BlockNumber = System::BlockNumber;
 	type Solver = Solver;
 	type DataProvider = DataProvider;
-	type VotersBound = VotersBound;
-	type TargetsBound = TargetsBound;
 }
 
-impl<System, DataProvider, Solver, VotersBound, TargetsBound, Accuracy, Balancing> ElectionProvider
-	for BoundedExecution<System, DataProvider, Solver, VotersBound, TargetsBound, Accuracy, Balancing>
+impl<System, DataProvider, Solver, Params, Accuracy, Balancing> ElectionProvider
+	for BoundedExecution<System, DataProvider, Solver, Params, Accuracy, Balancing>
 where
 	System: frame_system::Config,
 	DataProvider:
 		ElectionDataProvider<AccountId = System::AccountId, BlockNumber = System::BlockNumber>,
 	Solver:
 		NposSolver<AccountId = System::AccountId, Error = sp_npos_elections::Error> + WeightConfig,
-	VotersBound: Get<u32>,
-	TargetsBound: Get<u32>,
+	Params: ConfigParams,
 	Accuracy: PerThing128,
 	Balancing: Get<Option<(usize, ExtendedBalance)>>,
 {
@@ -242,23 +251,21 @@ where
 
 	fn elect() -> Result<Supports<Self::AccountId>, Self::Error> {
 		elect_with::<Self, System>(
-			<Self as Config>::VotersBound::get() as usize,
-			<Self as Config>::TargetsBound::get() as usize,
+			<Self as ConfigParams>::VotersBound::get() as usize,
+			<Self as ConfigParams>::TargetsBound::get() as usize,
 		)
 	}
 }
 
-impl<System, DataProvider, Solver, VotersBound, TargetsBound, Accuracy, Balancing>
-	InstantElectionProvider
-	for BoundedExecution<System, DataProvider, Solver, VotersBound, TargetsBound, Accuracy, Balancing>
+impl<System, DataProvider, Solver, Params, Accuracy, Balancing> InstantElectionProvider
+	for BoundedExecution<System, DataProvider, Solver, Params, Accuracy, Balancing>
 where
 	System: frame_system::Config,
 	DataProvider:
 		ElectionDataProvider<AccountId = System::AccountId, BlockNumber = System::BlockNumber>,
 	Solver:
 		NposSolver<AccountId = System::AccountId, Error = sp_npos_elections::Error> + WeightConfig,
-	VotersBound: Get<u32>,
-	TargetsBound: Get<u32>,
+	Params: ConfigParams,
 	Accuracy: PerThing128,
 	Balancing: Get<Option<(usize, ExtendedBalance)>>,
 {
@@ -267,8 +274,8 @@ where
 		max_targets: usize,
 	) -> Result<Supports<Self::AccountId>, Self::Error> {
 		elect_with::<Self, System>(
-			max_voters.min(<Self as Config>::VotersBound::get() as usize),
-			max_targets.min(<Self as Config>::TargetsBound::get() as usize),
+			max_voters.min(<Self as ConfigParams>::VotersBound::get() as usize),
+			max_targets.min(<Self as ConfigParams>::TargetsBound::get() as usize),
 		)
 	}
 }
@@ -323,21 +330,19 @@ mod tests {
 		type MaxConsumers = frame_support::traits::ConstU32<16>;
 	}
 
-	type OnChainPhragmen = BoundedPhragmen<
-		Runtime,
-		mock_data_provider::DataProvider,
-		ConstU32<600>,
-		ConstU32<400>,
-		Perbill,
-	>;
+	struct Params;
+	impl ConfigParams for Params {
+		type VotersBound = ConstU32<600>;
+		type TargetsBound = ConstU32<400>;
+		type WeightInfo = ();
+		type BenchmarkingConfig = ();
+	}
 
-	type OnChainPhragMMS = BoundedPhragMMS<
-		Runtime,
-		mock_data_provider::DataProvider,
-		ConstU32<600>,
-		ConstU32<400>,
-		Perbill,
-	>;
+	type OnChainPhragmen =
+		BoundedPhragmen<Runtime, mock_data_provider::DataProvider, Params, Perbill>;
+
+	type OnChainPhragMMS =
+		BoundedPhragMMS<Runtime, mock_data_provider::DataProvider, Params, Perbill>;
 
 	mod mock_data_provider {
 		use frame_support::{bounded_vec, traits::ConstU32};
