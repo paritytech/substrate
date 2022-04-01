@@ -30,7 +30,7 @@ use sp_core::storage::ChildInfo;
 pub use sp_runtime::TransactionOutcome;
 use sp_runtime::{
 	generic::{Digest, DigestItem},
-	DispatchError,
+	DispatchError, TransactionalError,
 };
 use sp_std::prelude::*;
 pub use types::Key;
@@ -48,9 +48,9 @@ pub mod unhashed;
 pub mod weak_bounded_vec;
 
 mod transaction_level_tracker {
-	const TRANSACTION_LEVEL_KEY: &'static [u8] = b":transaction_level:";
-	const TRANSACTIONAL_LIMIT: u32 = 255;
 	type Layer = u32;
+	const TRANSACTION_LEVEL_KEY: &'static [u8] = b":transaction_level:";
+	const TRANSACTIONAL_LIMIT: Layer = 255;
 
 	pub fn get_transaction_level() -> Layer {
 		crate::storage::unhashed::get_or_default::<Layer>(TRANSACTION_LEVEL_KEY)
@@ -69,7 +69,7 @@ mod transaction_level_tracker {
 	/// Returns a guard that when dropped decrements the transaction level automatically.
 	pub fn inc_transaction_level() -> Result<StorageLayerGuard, ()> {
 		let existing_levels = get_transaction_level();
-		if existing_levels >= TRANSACTIONAL_LIMIT || existing_levels == Layer::MAX {
+		if existing_levels >= TRANSACTIONAL_LIMIT {
 			return Err(())
 		}
 		// Cannot overflow because of check above.
@@ -115,7 +115,8 @@ pub fn is_transactional() -> bool {
 /// All changes to storage performed by the supplied function are discarded if the returned
 /// outcome is `TransactionOutcome::Rollback`.
 ///
-/// Transactions can be nested up to 10 times; more than that will result in an error.
+/// Transactions can be nested up to `TRANSACTIONAL_LIMIT` times; more than that will result in an
+/// error.
 ///
 /// Commits happen to the parent transaction.
 pub fn with_transaction<T, E>(f: impl FnOnce() -> TransactionOutcome<Result<T, E>>) -> Result<T, E>
@@ -126,7 +127,41 @@ where
 	use TransactionOutcome::*;
 
 	let _guard = transaction_level_tracker::inc_transaction_level()
-		.map_err(|()| DispatchError::TransactionalLimit.into())?;
+		.map_err(|()| TransactionalError::LimitReached.into())?;
+
+	start_transaction();
+
+	match f() {
+		Commit(res) => {
+			commit_transaction();
+			res
+		},
+		Rollback(res) => {
+			rollback_transaction();
+			res
+		},
+	}
+}
+
+/// Same as `with_transaction` but without a limit check on nested transactional layers.
+///
+/// This is mostly for backwards compatibility before there was a transactional layer limit.
+/// It is recommended to only use `with_transaction` to avoid users from generating too many
+/// transactional layers.
+pub fn with_transaction_unchecked<R>(f: impl FnOnce() -> TransactionOutcome<R>) -> R {
+	use sp_io::storage::{commit_transaction, rollback_transaction, start_transaction};
+	use TransactionOutcome::*;
+
+	let maybe_guard = transaction_level_tracker::inc_transaction_level();
+
+	if maybe_guard.is_err() {
+		log::warn!(
+			"The transactional layer limit has been reached, and new transactional layers are being
+			spawned with `with_transaction_unchecked`. This could be caused by someone trying to
+			attack your chain, and you should investigate usage of `with_transaction_unchecked` and
+			potentially migrate to `with_transaction`, which enforces a transactional limit.",
+		);
+	}
 
 	start_transaction();
 
@@ -1616,7 +1651,7 @@ mod test {
 			assert_ok!(recursive_transactional(255));
 			assert_noop!(
 				recursive_transactional(256),
-				sp_runtime::DispatchError::TransactionalLimit
+				sp_runtime::TransactionalError::LimitReached
 			);
 
 			assert_eq!(transaction_level_tracker::get_transaction_level(), 0);
