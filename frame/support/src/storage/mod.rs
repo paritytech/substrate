@@ -143,10 +143,10 @@ where
 	}
 }
 
-/// Same as `with_transaction` but without a limit check on nested transactional layers.
+/// Same as [`with_transaction`] but without a limit check on nested transactional layers.
 ///
 /// This is mostly for backwards compatibility before there was a transactional layer limit.
-/// It is recommended to only use `with_transaction` to avoid users from generating too many
+/// It is recommended to only use [`with_transaction`] to avoid users from generating too many
 /// transactional layers.
 pub fn with_transaction_unchecked<R>(f: impl FnOnce() -> TransactionOutcome<R>) -> R {
 	use sp_io::storage::{commit_transaction, rollback_transaction, start_transaction};
