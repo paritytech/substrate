@@ -130,6 +130,15 @@ impl<AccountId, Accuracy, Balancing> WeightConfig for PhragMMS<AccountId, Accura
 	}
 }
 
+pub trait BenchmarkingConfig {
+	/// The minimum and maximum amount of voters.
+	const VOTERS: [u32; 2];
+	/// The minimum and maximum amount of targets.
+	const TARGETS: [u32; 2];
+	/// The minimum and maximum amount of votes given per voter.
+	const VOTES_PER_VOTER: [u32; 2];
+}
+
 /// Configuration trait.
 pub trait Config {
 	/// Weight information for extrinsics in this pallet.

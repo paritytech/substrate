@@ -31,10 +31,6 @@ use pallet_staking::Pallet as Staking;
 const MAX_ELECTING_VOTERS: u32 = 20_000;
 const MAX_TARGETS: u32 = 2_000;
 
-const VOTERS: [u32; 2] = [1_000, 2_000];
-const TARGETS: [u32; 2] = [500, 1_000];
-const VOTES_PER_VOTER: [u32; 2] = [5, 16];
-
 type OnChainPhragmen<T> = onchain::BoundedPhragmen<
 	T,
 	Staking<T>,
@@ -52,7 +48,7 @@ type OnChainPhragMMS<T> = onchain::BoundedPhragMMS<
 >;
 
 pub struct Pallet<T: Config>(frame_system::Pallet<T>);
-pub trait Config: pallet_staking::Config {}
+pub trait Config: pallet_staking::Config + onchain::BenchmarkingConfig {}
 
 // This is also used in `pallet_election_provider_multi_phase` benchmarking.
 pub const SEED: u32 = 999;
@@ -104,11 +100,14 @@ fn set_up_data_provider_internal<T: Config>(voters_len: u32, targets_len: u32, d
 benchmarks! {
 	phragmen {
 		// number of votes in snapshot.
-		let v in (VOTERS[0]) .. VOTERS[1];
+		let v in (<T as onchain::BenchmarkingConfig>::VOTERS[0])
+			.. <T as onchain::BenchmarkingConfig>::VOTERS[1];
 		// number of targets in snapshot.
-		let t in (TARGETS[0]) .. TARGETS[1];
+		let t in (<T as onchain::BenchmarkingConfig>::TARGETS[0])
+			.. <T as onchain::BenchmarkingConfig>::TARGETS[1];
 		// number of votes per voter (ie the degree).
-		let d in (VOTES_PER_VOTER[0]) .. VOTES_PER_VOTER[1];
+		let d in (<T as onchain::BenchmarkingConfig>::VOTES_PER_VOTER[0])
+			.. <T as onchain::BenchmarkingConfig>::VOTES_PER_VOTER[1];
 
 		// we don't directly need the data-provider to be populated, but it is just easy to use it.
 		set_up_data_provider_internal::<T>(v, t, d);
@@ -118,11 +117,14 @@ benchmarks! {
 
 	phragmms {
 		// number of votes in snapshot.
-		let v in (VOTERS[0]) .. VOTERS[1];
+		let v in (<T as onchain::BenchmarkingConfig>::VOTERS[0])
+			.. <T as onchain::BenchmarkingConfig>::VOTERS[1];
 		// number of targets in snapshot.
-		let t in (TARGETS[0]) .. TARGETS[1];
+		let t in (<T as onchain::BenchmarkingConfig>::TARGETS[0])
+			.. <T as onchain::BenchmarkingConfig>::TARGETS[1];
 		// number of votes per voter (ie the degree).
-		let d in (VOTES_PER_VOTER[0]) .. VOTES_PER_VOTER[1];
+		let d in (<T as onchain::BenchmarkingConfig>::VOTES_PER_VOTER[0])
+			.. <T as onchain::BenchmarkingConfig>::VOTES_PER_VOTER[1];
 
 		// we don't directly need the data-provider to be populated, but it is just easy to use it.
 		set_up_data_provider_internal::<T>(v, t, d);
