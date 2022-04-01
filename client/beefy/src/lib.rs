@@ -18,14 +18,14 @@
 
 use std::sync::Arc;
 
-use log::debug;
 use prometheus::Registry;
 
 use sc_client_api::{Backend, BlockchainEvents, Finalizer};
-use sc_network_gossip::{GossipEngine, Network as GossipNetwork};
+use sc_network_gossip::Network as GossipNetwork;
 
 use sp_api::ProvideRuntimeApi;
 use sp_blockchain::HeaderBackend;
+use sp_consensus::SyncOracle;
 use sp_keystore::SyncCryptoStorePtr;
 use sp_runtime::traits::Block;
 
@@ -41,6 +41,10 @@ mod round;
 mod worker;
 
 pub mod notification;
+
+#[cfg(test)]
+mod tests;
+
 pub use beefy_protocol_name::standard_name as protocol_standard_name;
 
 pub(crate) mod beefy_protocol_name {
@@ -112,7 +116,7 @@ where
 	BE: Backend<B>,
 	C: Client<B, BE>,
 	C::Api: BeefyApi<B>,
-	N: GossipNetwork<B> + Clone + Send + 'static,
+	N: GossipNetwork<B> + Clone + SyncOracle + Send + Sync + 'static,
 {
 	/// BEEFY client
 	pub client: Arc<C>,
@@ -134,6 +138,7 @@ where
 	pub protocol_name: std::borrow::Cow<'static, str>,
 }
 
+#[cfg(not(test))]
 /// Start the BEEFY gadget.
 ///
 /// This is a thin shim around running and awaiting a BEEFY worker.
@@ -143,7 +148,7 @@ where
 	BE: Backend<B>,
 	C: Client<B, BE>,
 	C::Api: BeefyApi<B>,
-	N: GossipNetwork<B> + Clone + Send + 'static,
+	N: GossipNetwork<B> + Clone + SyncOracle + Send + Sync + 'static,
 {
 	let BeefyParams {
 		client,
@@ -157,18 +162,24 @@ where
 		protocol_name,
 	} = beefy_params;
 
+	let sync_oracle = network.clone();
 	let gossip_validator = Arc::new(gossip::GossipValidator::new());
-	let gossip_engine = GossipEngine::new(network, protocol_name, gossip_validator.clone(), None);
+	let gossip_engine = sc_network_gossip::GossipEngine::new(
+		network,
+		protocol_name,
+		gossip_validator.clone(),
+		None,
+	);
 
 	let metrics =
 		prometheus_registry.as_ref().map(metrics::Metrics::register).and_then(
 			|result| match result {
 				Ok(metrics) => {
-					debug!(target: "beefy", "🥩 Registered metrics");
+					log::debug!(target: "beefy", "🥩 Registered metrics");
 					Some(metrics)
 				},
 				Err(err) => {
-					debug!(target: "beefy", "🥩 Failed to register metrics: {:?}", err);
+					log::debug!(target: "beefy", "🥩 Failed to register metrics: {:?}", err);
 					None
 				},
 			},
@@ -184,54 +195,10 @@ where
 		gossip_validator,
 		min_block_delta,
 		metrics,
+		sync_oracle,
 	};
 
-	let worker = worker::BeefyWorker::<_, _, _>::new(worker_params);
+	let worker = worker::BeefyWorker::<_, _, _, _>::new(worker_params);
 
 	worker.run().await
-}
-
-#[cfg(test)]
-mod tests {
-	use super::*;
-	use sc_chain_spec::{ChainSpec, GenericChainSpec};
-	use serde::{Deserialize, Serialize};
-	use sp_core::H256;
-	use sp_runtime::{BuildStorage, Storage};
-
-	#[derive(Debug, Serialize, Deserialize)]
-	struct Genesis(std::collections::BTreeMap<String, String>);
-	impl BuildStorage for Genesis {
-		fn assimilate_storage(&self, storage: &mut Storage) -> Result<(), String> {
-			storage.top.extend(
-				self.0.iter().map(|(a, b)| (a.clone().into_bytes(), b.clone().into_bytes())),
-			);
-			Ok(())
-		}
-	}
-
-	#[test]
-	fn beefy_protocol_name() {
-		let chain_spec = GenericChainSpec::<Genesis>::from_json_file(std::path::PathBuf::from(
-			"../chain-spec/res/chain_spec.json",
-		))
-		.unwrap()
-		.cloned_box();
-
-		// Create protocol name using random genesis hash.
-		let genesis_hash = H256::random();
-		let expected = format!("/{}/beefy/1", hex::encode(genesis_hash));
-		let proto_name = beefy_protocol_name::standard_name(&genesis_hash, &chain_spec);
-		assert_eq!(proto_name.to_string(), expected);
-
-		// Create protocol name using hardcoded genesis hash. Verify exact representation.
-		let genesis_hash = [
-			50, 4, 60, 123, 58, 106, 216, 246, 194, 188, 139, 193, 33, 212, 202, 171, 9, 55, 123,
-			94, 8, 43, 12, 251, 187, 57, 173, 19, 188, 74, 205, 147,
-		];
-		let expected =
-			"/32043c7b3a6ad8f6c2bc8bc121d4caab09377b5e082b0cfbbb39ad13bc4acd93/beefy/1".to_string();
-		let proto_name = beefy_protocol_name::standard_name(&genesis_hash, &chain_spec);
-		assert_eq!(proto_name.to_string(), expected);
-	}
 }
