@@ -150,8 +150,13 @@ parameter_types! {
 
 pub type Extrinsic = sp_runtime::testing::TestXt<Call, ()>;
 
-type OnChainPhragmen =
-	onchain::BoundedPhragmen<Test, Staking, ConstU32<600>, ConstU32<400>, Perbill>;
+impl onchain::ConfigParams for Test {
+	type VotersBound = ConstU32<600>;
+	type TargetsBound = ConstU32<400>;
+	type WeightInfo = ();
+	type BenchmarkingConfig = ();
+}
+type OnChainPhragmen = onchain::BoundedPhragmen<Test, Staking, Test, Perbill>;
 
 impl pallet_staking::Config for Test {
 	type MaxNominations = ConstU32<16>;

@@ -245,8 +245,13 @@ impl pallet_bags_list::Config for Test {
 	type Score = VoteWeight;
 }
 
-type OnChainPhragmen =
-	onchain::BoundedPhragmen<Test, Staking, ConstU32<600>, ConstU32<400>, Perbill>;
+impl onchain::ConfigParams for Test {
+	type VotersBound = ConstU32<600>;
+	type TargetsBound = ConstU32<400>;
+	type WeightInfo = ();
+	type BenchmarkingConfig = ();
+}
+type OnChainPhragmen = onchain::BoundedPhragmen<Test, Staking, Test, Perbill>;
 
 impl crate::pallet::pallet::Config for Test {
 	type MaxNominations = MaxNominations;

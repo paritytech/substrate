@@ -129,7 +129,8 @@ impl BenchmarkingConfig for () {
 	const VOTES_PER_VOTER: [u32; 2] = [5, 16];
 }
 
-/// Helper trait that contains the main configurable paramters
+/// Helper trait that contains the main configurable parameters. `Runtime` would typically implement
+/// this trait but not `Config`.
 pub trait ConfigParams {
 	/// Weight information for extrinsics in this pallet.
 	type WeightInfo: WeightInfo;
