@@ -446,18 +446,13 @@ pub mod pallet {
 				weight = weight.saturating_add(extract_actual_weight(&result, &info));
 				if let Err(e) = result {
 					error_indexes.push(index as u32);
-					Self::deposit_event(Event::ItemFailed {
-						index: index as u32,
-						error: e.error,
-					});
+					Self::deposit_event(Event::ItemFailed { index: index as u32, error: e.error });
 				} else {
 					Self::deposit_event(Event::ItemCompleted);
 				}
 			}
 			if error_indexes.len() > 0 {
-				Self::deposit_event(Event::BatchCompletedWithErrors {
-					indexes: error_indexes
-				});
+				Self::deposit_event(Event::BatchCompletedWithErrors { indexes: error_indexes });
 			} else {
 				Self::deposit_event(Event::BatchCompleted);
 			}

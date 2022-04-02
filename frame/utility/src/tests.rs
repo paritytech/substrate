@@ -632,21 +632,11 @@ fn batch_try_works() {
 
 		assert_ok!(Utility::batch_try(
 			Origin::signed(2),
-			vec![
-				call_transfer(1, 5),
-				call_transfer(1, 5),
-			]
+			vec![call_transfer(1, 5), call_transfer(1, 5),]
 		),);
-		System::assert_last_event(
-			utility::Event::BatchCompleted.into(),
-		);
+		System::assert_last_event(utility::Event::BatchCompleted.into());
 
-		assert_ok!(Utility::batch_try(
-			Origin::signed(1),
-			vec![
-				call_transfer(2, 50),
-			]
-		),);
+		assert_ok!(Utility::batch_try(Origin::signed(1), vec![call_transfer(2, 50),]),);
 		System::assert_last_event(
 			utility::Event::BatchCompletedWithErrors { indexes: vec![0] }.into(),
 		);
