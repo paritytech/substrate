@@ -65,7 +65,7 @@ impl GenerateCmd {
 
 		with_crypto_scheme!(
 			self.crypto_scheme.scheme,
-			print_from_uri(mnemonic.phrase(), password, self.network_scheme.network, output,)
+			print_from_uri(mnemonic.phrase(), password, self.network_scheme.network, output)
 		);
 		Ok(())
 	}
