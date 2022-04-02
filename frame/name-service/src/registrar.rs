@@ -89,7 +89,17 @@ impl<T: Config> Pallet<T> {
 			}
 		}
 
+		// Clean up all resolvers.
 		AddressResolver::<T>::remove(name_hash);
+		if let Some(name) = NameResolver::<T>::take(name_hash) {
+			let res = T::Currency::unreserve(&name.depositor, name.deposit);
+			debug_assert!(res.is_zero())
+		}
+		if let Some(text) = TextResolver::<T>::take(name_hash) {
+			let res = T::Currency::unreserve(&text.depositor, text.deposit);
+			debug_assert!(res.is_zero())
+		}
+
 		Self::deposit_event(Event::<T>::AddressDeregistered { name_hash });
 	}
 

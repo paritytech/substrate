@@ -331,7 +331,7 @@ fn set_controller_handles_errors() {
 		// Not controller or owner of registration
 		assert_noop!(
 			NameService::set_controller(Origin::signed(other), name_hash, other),
-			Error::<Test>::NotOwner
+			Error::<Test>::NotController
 		);
 	});
 }
@@ -479,7 +479,7 @@ fn set_address_handles_errors() {
 		// Not registration owner
 		assert_noop!(
 			NameService::set_address(Origin::signed(non_owner), name_hash, 3),
-			Error::<Test>::NotOwner,
+			Error::<Test>::NotController,
 		);
 
 		// set address

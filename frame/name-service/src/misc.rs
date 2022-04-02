@@ -45,4 +45,8 @@ impl<T: Config> Pallet<T> {
 		let length_as_balance: BalanceOf<T> = T::BlockNumberToBalance::convert(length);
 		T::RegistrationFeePerBlock::get().saturating_mul(length_as_balance)
 	}
+
+	pub fn bytes_to_fee(bytes: &[u8]) -> BalanceOf<T> {
+		T::PerByteFee::get().saturating_mul((bytes.len() as u32).into())
+	}
 }

@@ -80,3 +80,11 @@ pub struct Registration<AccountId, Balance, BlockNumber> {
 	/// by the owner.
 	pub deposit: Option<Balance>,
 }
+
+/// The an object used to store arbitrary bytes, and a corresponding deposit.
+#[derive(Encode, Decode, Default, MaxEncodedLen, TypeInfo, RuntimeDebug)]
+pub struct BytesStorage<AccountId, Balance, BoundedBytes> {
+	pub bytes: BoundedBytes,
+	pub depositor: AccountId,
+	pub deposit: Balance,
+}

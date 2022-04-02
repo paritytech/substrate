@@ -113,6 +113,9 @@ pub mod pallet {
 
 		/// An interface to access the name service resolver.
 		type NameServiceResolver: NameServiceResolver<Self>;
+
+		/// The deposit taken per byte of storage used.
+		type PerByteFee: Get<BalanceOf<Self>>;
 	}
 
 	/* Placeholder for defining custom storage items. */
@@ -142,13 +145,21 @@ pub mod pallet {
 
 	/// This resolver maps name hashes to an account
 	#[pallet::storage]
-	pub(super) type NameResolver<T: Config> =
-		StorageMap<_, Blake2_128Concat, NameHash, BoundedNameOf<T>>;
+	pub(super) type NameResolver<T: Config> = StorageMap<
+		_,
+		Blake2_128Concat,
+		NameHash,
+		BytesStorage<T::AccountId, BalanceOf<T>, BoundedNameOf<T>>,
+	>;
 
 	/// This resolver maps name hashes to an account
 	#[pallet::storage]
-	pub(super) type TextResolver<T: Config> =
-		StorageMap<_, Blake2_128Concat, NameHash, BoundedTextOf<T>>;
+	pub(super) type TextResolver<T: Config> = StorageMap<
+		_,
+		Blake2_128Concat,
+		NameHash,
+		BytesStorage<T::AccountId, BalanceOf<T>, BoundedTextOf<T>>,
+	>;
 
 	// Your Pallet's events.
 	#[pallet::event]
@@ -164,6 +175,12 @@ pub mod pallet {
 		NameRenewed { name_hash: NameHash, expires: T::BlockNumber },
 		/// An address has been set for a name hash to resolve to.
 		AddressSet { name_hash: NameHash, address: T::AccountId },
+		/// An name has been set as a reverse lookup for a name hash. You can query storage to see
+		/// what the name is.
+		NameSet { name_hash: NameHash },
+		/// An address has been set for a name hash to resolve to. You can query storage to see
+		/// what text was set.
+		TextSet { name_hash: NameHash },
 		/// An address was deregistered.
 		AddressDeregistered { name_hash: NameHash },
 	}
@@ -195,8 +212,10 @@ pub mod pallet {
 		NotOwner,
 		/// Cannot renew this registration.
 		RegistrationHasNoExpiry,
-		/// renew expiry time is not in the future
+		/// Renew expiry time is not in the future
 		ExpiryInvalid,
+		/// The name provided does not match the expected hash.
+		BadName,
 	}
 
 	// Your Pallet's callable functions.
@@ -319,7 +338,7 @@ pub mod pallet {
 
 			Registrations::<T>::try_mutate(name_hash, |maybe_registration| {
 				let r = maybe_registration.as_mut().ok_or(Error::<T>::RegistrationNotFound)?;
-				ensure!(Self::is_controller(&r, &sender), Error::<T>::NotOwner);
+				ensure!(Self::is_controller(&r, &sender), Error::<T>::NotController);
 				r.controller = to.clone();
 				Self::deposit_event(Event::<T>::NewOwner { from: sender, to });
 				Ok(())
@@ -337,20 +356,6 @@ pub mod pallet {
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 			Self::do_renew(sender, name_hash, expiry)?;
-			Ok(())
-		}
-
-		#[pallet::weight(0)]
-		pub fn set_address(
-			origin: OriginFor<T>,
-			name_hash: NameHash,
-			address: T::AccountId,
-		) -> DispatchResult {
-			let sender = ensure_signed(origin)?;
-			let registration =
-				Registrations::<T>::get(name_hash).ok_or(Error::<T>::RegistrationNotFound)?;
-			ensure!(Self::is_controller(&registration, &sender), Error::<T>::NotOwner);
-			T::NameServiceResolver::set_address(name_hash, address)?;
 			Ok(())
 		}
 
@@ -407,6 +412,53 @@ pub mod pallet {
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 			Self::do_set_subnode_owner(sender, parent_hash, label_hash, new_owner)?;
+			Ok(())
+		}
+
+		#[pallet::weight(0)]
+		pub fn set_address(
+			origin: OriginFor<T>,
+			name_hash: NameHash,
+			address: T::AccountId,
+		) -> DispatchResult {
+			let sender = ensure_signed(origin)?;
+			let registration =
+				Registrations::<T>::get(name_hash).ok_or(Error::<T>::RegistrationNotFound)?;
+			ensure!(Self::is_controller(&registration, &sender), Error::<T>::NotController);
+			T::NameServiceResolver::set_address(name_hash, address, sender)?;
+			Ok(())
+		}
+
+		/// Register the raw name for a given name hash. This can be used as a reverse lookup for
+		/// front-ends.
+		///
+		/// This is a permissionless function that anyone can call who is willing to place a deposit
+		/// to store this data on chain.
+		#[pallet::weight(0)]
+		pub fn set_name(
+			origin: OriginFor<T>,
+			name_hash: NameHash,
+			name: Vec<u8>,
+		) -> DispatchResult {
+			let sender = ensure_signed(origin)?;
+			ensure!(Registrations::<T>::contains_key(name_hash), Error::<T>::RegistrationNotFound);
+			let bounded_name = name.try_into().map_err(|()| Error::<T>::NameTooLong)?;
+			T::NameServiceResolver::set_name(name_hash, bounded_name, sender)?;
+			Ok(())
+		}
+
+		#[pallet::weight(0)]
+		pub fn set_text(
+			origin: OriginFor<T>,
+			name_hash: NameHash,
+			text: Vec<u8>,
+		) -> DispatchResult {
+			let sender = ensure_signed(origin)?;
+			let registration =
+				Registrations::<T>::get(name_hash).ok_or(Error::<T>::RegistrationNotFound)?;
+			ensure!(Self::is_controller(&registration, &sender), Error::<T>::NotController);
+			let bounded_text = text.try_into().map_err(|()| Error::<T>::NameTooLong)?;
+			T::NameServiceResolver::set_text(name_hash, bounded_text, sender)?;
 			Ok(())
 		}
 	}
