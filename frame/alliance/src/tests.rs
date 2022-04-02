@@ -481,10 +481,13 @@ fn add_blacklist_works() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Alliance::add_blacklist(
 			Origin::signed(1),
-			vec![BlacklistItem::AccountId(3), BlacklistItem::Website("abc".as_bytes().to_vec())]
+			vec![
+				BlacklistItem::AccountId(3),
+				BlacklistItem::Website("abc".as_bytes().to_vec().try_into().unwrap())
+			]
 		));
-		assert_eq!(Alliance::account_blacklist(), vec![3]);
-		assert_eq!(Alliance::website_blacklist(), vec!["abc".as_bytes().to_vec()]);
+		assert_eq!(Alliance::account_blacklist().into_inner(), vec![3]);
+		assert_eq!(Alliance::website_blacklist().into_inner(), vec!["abc".as_bytes().to_vec()]);
 
 		assert_noop!(
 			Alliance::add_blacklist(Origin::signed(1), vec![BlacklistItem::AccountId(3)]),

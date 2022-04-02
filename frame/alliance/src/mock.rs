@@ -221,7 +221,7 @@ impl Config for Test {
 	type MaxBlacklistCount = ConstU32<100>;
 	type MaxWebsiteUrlLength = ConstU32<255>;
 	type MaxAnnouncementsCount = ConstU32<100>;
-	type MaxMembersCount = AllianceMaxMembers;
+	type MaxMembersCount = MaxMembers;
 	type MaxCandidatesCount = ConstU32<100>;
 	type CandidateDeposit = CandidateDeposit;
 	type WeightInfo = ();

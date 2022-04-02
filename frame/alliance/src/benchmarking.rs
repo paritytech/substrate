@@ -21,7 +21,10 @@ use sp_runtime::traits::{Bounded, Hash, StaticLookup};
 use sp_std::{mem::size_of, prelude::*};
 
 use frame_benchmarking::{account, benchmarks_instance_pallet};
-use frame_support::traits::{EnsureOrigin, Get, UnfilteredDispatchable};
+use frame_support::{
+	bounded_vec,
+	traits::{EnsureOrigin, Get, UnfilteredDispatchable},
+};
 use frame_system::{Pallet as System, RawOrigin as SystemOrigin};
 
 use super::{Call as AllianceCall, Pallet as Alliance, *};
@@ -81,17 +84,19 @@ fn blacklist<T: Config<I>, I: 'static>(index: u32) -> T::AccountId {
 }
 
 fn set_members<T: Config<I>, I: 'static>() {
-	let founders = vec![founder::<T, I>(1), founder::<T, I>(2)];
+	let founders: BoundedVec<_, T::MaxMembersCount> =
+		bounded_vec![founder::<T, I>(1), founder::<T, I>(2)];
 	Members::<T, I>::insert(MemberRole::Founder, founders.clone());
 
-	let fellows = vec![fellow::<T, I>(1), fellow::<T, I>(2)];
+	let fellows: BoundedVec<_, T::MaxMembersCount> =
+		bounded_vec![fellow::<T, I>(1), fellow::<T, I>(2)];
 	fellows.iter().for_each(|who| {
 		T::Currency::reserve(&who, T::CandidateDeposit::get()).unwrap();
 		<DepositOf<T, I>>::insert(&who, T::CandidateDeposit::get());
 	});
 	Members::<T, I>::insert(MemberRole::Fellow, fellows.clone());
 
-	let allies = vec![ally::<T, I>(1)];
+	let allies: BoundedVec<_, T::MaxMembersCount> = bounded_vec![ally::<T, I>(1)];
 	allies.iter().for_each(|who| {
 		T::Currency::reserve(&who, T::CandidateDeposit::get()).unwrap();
 		<DepositOf<T, I>>::insert(&who, T::CandidateDeposit::get());
@@ -107,6 +112,7 @@ fn set_candidates<T: Config<I>, I: 'static>(indexes: Vec<u32>) {
 		T::Currency::reserve(&who, T::CandidateDeposit::get()).unwrap();
 		<DepositOf<T, I>>::insert(&who, T::CandidateDeposit::get());
 	});
+	let candidates: BoundedVec<_, T::MaxCandidatesCount> = candidates.try_into().unwrap();
 	Candidates::<T, I>::put(candidates);
 }
 
@@ -629,7 +635,8 @@ benchmarks_instance_pallet! {
 		set_members::<T, I>();
 
 		let announcement = announcement(b"hello world");
-		Announcements::<T, I>::put(vec![announcement.clone()]);
+		let announcements: BoundedVec<_, T::MaxAnnouncementsCount> = bounded_vec![announcement.clone()];
+		Announcements::<T, I>::put(announcements);
 
 		let call = Call::<T, I>::remove_announcement { announcement: announcement.clone() };
 		let origin = T::SuperMajorityOrigin::successful_origin();
@@ -787,7 +794,9 @@ benchmarks_instance_pallet! {
 		set_members::<T, I>();
 
 		let accounts = (0 .. n).map(|i| blacklist::<T, I>(i)).collect::<Vec<_>>();
-		let websites = (0 .. n).map(|i| vec![i as u8; l as usize]).collect::<Vec<_>>();
+		let websites = (0 .. n).map(|i| -> BoundedVec<u8, T::MaxWebsiteUrlLength> {
+			bounded_vec![i as u8; l as usize]
+		}).collect::<Vec<_>>();
 
 		let mut blacklist = Vec::with_capacity(accounts.len() + websites.len());
 		blacklist.extend(accounts.into_iter().map(BlacklistItem::AccountId));
@@ -808,10 +817,13 @@ benchmarks_instance_pallet! {
 
 		let mut accounts = (0 .. n).map(|i| blacklist::<T, I>(i)).collect::<Vec<_>>();
 		accounts.sort();
+		let accounts: BoundedVec<_, T::MaxBlacklistCount> = accounts.try_into().unwrap();
 		AccountBlacklist::<T, I>::put(accounts.clone());
 
-		let mut websites = (0 .. n).map(|i| vec![i as u8; l as usize]).collect::<Vec<_>>();
+		let mut websites = (0 .. n).map(|i| -> BoundedVec<_, T::MaxWebsiteUrlLength>
+			{ bounded_vec![i as u8; l as usize] }).collect::<Vec<_>>();
 		websites.sort();
+		let websites: BoundedVec<_, T::MaxBlacklistCount> = websites.try_into().unwrap();
 		WebsiteBlacklist::<T, I>::put(websites.clone());
 
 		let mut blacklist = Vec::with_capacity(accounts.len() + websites.len());
