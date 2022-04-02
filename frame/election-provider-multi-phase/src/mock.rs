@@ -469,7 +469,7 @@ impl ElectionDataProvider for StakingMock {
 		let targets = Targets::get();
 
 		if maybe_max_len.map_or(false, |max_len| targets.len() > max_len) {
-			return Err("Targets too big");
+			return Err("Targets too big")
 		}
 
 		Ok(targets)
