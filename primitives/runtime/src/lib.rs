@@ -486,6 +486,31 @@ impl PartialEq for ModuleError {
 	}
 }
 
+/// Errors related to transactional storage layers.
+#[derive(Eq, PartialEq, Clone, Copy, Encode, Decode, Debug, TypeInfo)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub enum TransactionalError {
+	/// Too many transactional layers have been spawned.
+	LimitReached,
+	/// A transactional layer was expected, but does not exist.
+	NoLayer,
+}
+
+impl From<TransactionalError> for &'static str {
+	fn from(e: TransactionalError) -> &'static str {
+		match e {
+			TransactionalError::LimitReached => "Too many transactional layers have been spawned",
+			TransactionalError::NoLayer => "A transactional layer was expected, but does not exist",
+		}
+	}
+}
+
+impl From<TransactionalError> for DispatchError {
+	fn from(e: TransactionalError) -> DispatchError {
+		Self::Transactional(e)
+	}
+}
+
 /// Reason why a dispatch call failed.
 #[derive(Eq, Clone, Copy, Encode, Decode, Debug, TypeInfo, PartialEq)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
@@ -512,6 +537,9 @@ pub enum DispatchError {
 	Token(TokenError),
 	/// An arithmetic error.
 	Arithmetic(ArithmeticError),
+	/// The number of transactional layers has been reached, or we are not in a transactional
+	/// layer.
+	Transactional(TransactionalError),
 }
 
 /// Result of a `Dispatchable` which contains the `DispatchResult` and additional information about
@@ -647,6 +675,7 @@ impl From<DispatchError> for &'static str {
 			DispatchError::TooManyConsumers => "Too many consumers",
 			DispatchError::Token(e) => e.into(),
 			DispatchError::Arithmetic(e) => e.into(),
+			DispatchError::Transactional(e) => e.into(),
 		}
 	}
 }
@@ -683,6 +712,10 @@ impl traits::Printable for DispatchError {
 			},
 			Self::Arithmetic(e) => {
 				"Arithmetic error: ".print();
+				<&'static str>::from(*e).print();
+			},
+			Self::Transactional(e) => {
+				"Transactional error: ".print();
 				<&'static str>::from(*e).print();
 			},
 		}
