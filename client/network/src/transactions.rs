@@ -133,7 +133,7 @@ pub struct TransactionsHandlerPrototype {
 impl TransactionsHandlerPrototype {
 	/// Create a new instance.
 	pub fn new(protocol_id: ProtocolId) -> Self {
-		Self { protocol_name: Cow::from(format!("/{}/transactions/1", protocol_id.as_ref())) }
+		Self { protocol_name: format!("/{}/transactions/1", protocol_id.as_ref()).into() }
 	}
 
 	/// Returns the configuration of the set to put in the network configuration.
