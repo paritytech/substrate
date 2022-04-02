@@ -37,9 +37,11 @@ mod subnodes;
 mod types;
 mod weights;
 
+pub use resolver::NameServiceResolver;
+
 #[frame_support::pallet]
 pub mod pallet {
-	use crate::types::*;
+	use crate::{resolver::NameServiceResolver, types::*};
 	use frame_support::{
 		pallet_prelude::*,
 		traits::{OnUnbalanced, ReservableCurrency},
@@ -82,6 +84,10 @@ pub mod pallet {
 		#[pallet::constant]
 		type MaxNameLength: Get<u32>;
 
+		/// Maximum length for metadata text.
+		#[pallet::constant]
+		type MaxTextLength: Get<u32>;
+
 		/// The deposit a user needs to place to keep their subnodes in storage.
 		#[pallet::constant]
 		type SubNodeDeposit: Get<BalanceOf<Self>>;
@@ -110,7 +116,6 @@ pub mod pallet {
 
 	/// Name Commitments
 	#[pallet::storage]
-	#[pallet::getter(fn commitment)]
 	pub(super) type Commitments<T: Config> = StorageMap<
 		_,
 		Blake2_128Concat,
@@ -120,7 +125,6 @@ pub mod pallet {
 
 	/// Name Registrations
 	#[pallet::storage]
-	#[pallet::getter(fn registration)]
 	pub(super) type Registrations<T: Config> = StorageMap<
 		_,
 		Blake2_128Concat,
@@ -130,8 +134,8 @@ pub mod pallet {
 
 	/// This resolver maps name hashes to an account
 	#[pallet::storage]
-	#[pallet::getter(fn resolve)]
-	pub(super) type Resolvers<T: Config> = StorageMap<_, Blake2_128Concat, NameHash, T::AccountId>;
+	pub(super) type AddressResolver<T: Config> =
+		StorageMap<_, Blake2_128Concat, NameHash, T::AccountId>;
 
 	// Your Pallet's events.
 	#[pallet::event]
@@ -333,7 +337,7 @@ pub mod pallet {
 		}
 
 		#[pallet::weight(0)]
-		pub fn set_record(
+		pub fn set_address(
 			origin: OriginFor<T>,
 			name_hash: NameHash,
 			address: T::AccountId,
@@ -342,7 +346,7 @@ pub mod pallet {
 			let registration =
 				Registrations::<T>::get(name_hash).ok_or(Error::<T>::RegistrationNotFound)?;
 			ensure!(Self::is_controller(&registration, &sender), Error::<T>::NotRegistrationOwner);
-			Self::do_set_record(name_hash, address)?;
+			<Self as NameServiceResolver>::set_address(name_hash, address)?;
 			Ok(())
 		}
 

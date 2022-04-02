@@ -20,10 +20,70 @@
 use crate::{types::*, *};
 use frame_support::pallet_prelude::*;
 
-impl<T: Config> Pallet<T> {
-	pub fn do_set_record(name_hash: NameHash, address: T::AccountId) -> DispatchResult {
-		Resolvers::<T>::insert(name_hash, address.clone());
+pub trait NameServiceResolver {
+	type AccountId;
+	type NameHash;
+	type NameBound: Get<u32>;
+	type TextBound: Get<u32>;
+
+	/// Get the native address associated with this name hash.
+	fn get_address(name_hash: Self::NameHash) -> Option<Self::AccountId>;
+	/// Set the native address associated with this name hash.
+	fn set_address(name_hash: Self::NameHash, address: Self::AccountId) -> DispatchResult;
+
+	/// Get the unhashed name associated with this name hash.
+	fn get_name(name_hash: Self::NameHash) -> Option<BoundedVec<u8, Self::NameBound>>;
+	/// Set the unhashed name associated with this name hash.
+	fn set_name(name_hash: Self::NameHash, name: BoundedVec<u8, Self::NameBound>)
+		-> DispatchResult;
+
+	/// Get the arbitrary text associated with this name hash.
+	fn get_text(name_hash: Self::NameHash) -> Option<BoundedVec<u8, Self::TextBound>>;
+	/// Set the arbitrary text associated with this name hash.
+	fn set_text(
+		name_hash: Self::NameHash,
+		bytes: BoundedVec<u8, Self::TextBound>,
+	) -> DispatchResult;
+}
+
+impl<T: Config> NameServiceResolver for Pallet<T> {
+	type AccountId = T::AccountId;
+	type NameHash = NameHash;
+	type NameBound = T::MaxNameLength;
+	type TextBound = T::MaxTextLength;
+
+	/// Get the native address associated with this name hash.
+	fn get_address(name_hash: Self::NameHash) -> Option<Self::AccountId> {
+		AddressResolver::<T>::get(name_hash)
+	}
+	/// Set the native address associated with this name hash.
+	fn set_address(name_hash: Self::NameHash, address: Self::AccountId) -> DispatchResult {
+		AddressResolver::<T>::insert(name_hash, address.clone());
 		Self::deposit_event(Event::<T>::AddressSet { name_hash, address });
 		Ok(())
+	}
+
+	/// Get the unhashed name associated with this name hash.
+	fn get_name(name_hash: Self::NameHash) -> Option<BoundedVec<u8, Self::NameBound>> {
+		None
+	}
+	/// Set the unhashed name associated with this name hash.
+	fn set_name(
+		name_hash: Self::NameHash,
+		name: BoundedVec<u8, Self::NameBound>,
+	) -> DispatchResult {
+		Err("not supported".into())
+	}
+
+	/// Get the arbitrary text associated with this name hash.
+	fn get_text(name_hash: Self::NameHash) -> Option<BoundedVec<u8, Self::TextBound>> {
+		None
+	}
+	/// Set the arbitrary text associated with this name hash.
+	fn set_text(
+		name_hash: Self::NameHash,
+		bytes: BoundedVec<u8, Self::TextBound>,
+	) -> DispatchResult {
+		Err("not supported".into())
 	}
 }

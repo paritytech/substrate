@@ -89,7 +89,7 @@ impl<T: Config> Pallet<T> {
 			}
 		}
 
-		Resolvers::<T>::remove(name_hash);
+		AddressResolver::<T>::remove(name_hash);
 		Self::deposit_event(Event::<T>::AddressDeregistered { name_hash });
 	}
 

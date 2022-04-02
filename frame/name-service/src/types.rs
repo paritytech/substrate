@@ -46,7 +46,7 @@ pub type RegistrationOf<T> = Registration<
 pub type NameHash = [u8; 32];
 pub type CommitmentHash = [u8; 32];
 
-/// The commitment
+/// The commitment a user makes before registering the name.
 #[derive(Encode, Decode, Default, MaxEncodedLen, TypeInfo, RuntimeDebug)]
 pub struct Commitment<AccountId, Balance, BlockNumber> {
 	/// Who will retain ownership of the claimed domain.

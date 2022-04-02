@@ -108,7 +108,9 @@ impl Config for Test {
 	type TierFourLetters = ConstU64<3>;
 	type MinCommitmentAge = ConstU64<10>;
 	type MaxCommitmentAge = ConstU64<10>;
-	type MaxNameLength = ConstU32<2048>; // 2048 is the standard URL limit
+	// 2048 is the standard URL limit
+	type MaxNameLength = ConstU32<2048>;
+	type MaxTextLength = ConstU32<2048>;
 	type RegistrationFeePerBlock = ConstU64<1>;
 	type TierDefault = ConstU64<1>;
 	type RegistrationManager = EnsureRoot<Self::AccountId>;
