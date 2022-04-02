@@ -131,6 +131,10 @@ impl BenchmarkingConfig for () {
 
 /// Helper trait that contains the main configurable parameters. `Runtime` would typically implement
 /// this trait but not `Config`.
+///
+/// ## Note
+/// `VotersBound` and `TargetsBound` should ideally be part of the `ElectionDataProvider` trait as
+/// they are really a property of the data provider. However, for ease, we do it this way for now.
 pub trait ConfigParams {
 	/// Weight information for extrinsics in this pallet.
 	type WeightInfo: WeightInfo;
