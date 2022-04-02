@@ -201,7 +201,7 @@ impl<B: BlockT> BenchmarkingState<B> {
 		let mut main_key_tracker = self.main_key_tracker.borrow_mut();
 
 		let key_tracker = if let Some(childtrie) = childtrie {
-			child_key_tracker.entry(childtrie.to_vec()).or_insert_with(LinkedHashMap::new)
+			child_key_tracker.entry(childtrie.to_vec()).or_default()
 		} else {
 			&mut main_key_tracker
 		};
