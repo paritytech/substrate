@@ -359,11 +359,18 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// Deregister a registered name.
+		///
+		/// If the registration is still valid, only the owner of the name can make this call.
+		///
+		/// If the registration is expired, then anyone can call this function to make the name
+		/// available.
 		#[pallet::weight(0)]
 		pub fn deregister(origin: OriginFor<T>, name_hash: NameHash) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 			let registration =
 				Registrations::<T>::get(name_hash).ok_or(Error::<T>::RegistrationNotFound)?;
+			// If the registration is expired, anyone can trigger deregister.
 			if !Self::is_expired(&registration) {
 				ensure!(Self::is_owner(&registration, &sender), Error::<T>::NotOwner);
 			}

@@ -118,6 +118,8 @@ impl<T: Config> Pallet<T> {
 
 		let expiry = block_number.saturating_add(length);
 
+		// TODO AUDIT WARNING: Can return an error after `withdraw` happens. Needs to be
+		// transactional or refactored.
 		Self::do_register(
 			name_hash,
 			commitment.owner.clone(),
@@ -139,29 +141,17 @@ impl<T: Config> Pallet<T> {
 			let r = maybe_registration.as_mut().ok_or(Error::<T>::RegistrationNotFound)?;
 
 			// cannot renew a domain that has no expiry
-			let current_expiry = r.expiry.ok_or(Error::<T>::RegistrationHasNoExpiry)?;
-
+			let registered_expiry = r.expiry.ok_or(Error::<T>::RegistrationHasNoExpiry)?;
 			let block_number = frame_system::Pallet::<T>::block_number();
+			// The current expiry is the larger of the registered expiry and the current block
+			// number.
+			let current_expiry = registered_expiry.max(block_number);
 
-			// `expiry` must be at least 1 block in the future
-			ensure!(expiry > block_number, Error::<T>::ExpiryInvalid);
-
-			// `expiry` must be larger than `current_expiry`
+			// The new `expiry` must be larger than `current_expiry`
 			ensure!(expiry > current_expiry, Error::<T>::ExpiryInvalid);
 
 			// calculate additional length to determine fee to be paid
-			let length = if block_number <= current_expiry {
-				// if we are renewing withn or at the current expiry. Calculate difference from
-				// current expiry. Equivalent to extending the current expiry.
-
-				expiry.saturating_sub(current_expiry)
-			} else {
-				// if we are renewing after current expiry (registration has expired), calculate
-				// difference from current block. Equivalent to extending from the current block to
-				// `expiry`.
-
-				expiry.saturating_sub(block_number)
-			};
+			let length = expiry.saturating_sub(current_expiry);
 
 			// determine renew fee
 			let fee = Self::length_fee(length);
