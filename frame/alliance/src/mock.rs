@@ -200,8 +200,6 @@ parameter_types! {
 	pub const MaxFellows: u32 = MaxMembers::get() - MaxFounders::get();
 	pub const MaxAllies: u32 = 100;
 	pub const CandidateDeposit: u64 = 25;
-	pub const MaxBlacklistCount: u32 = 100;
-	pub const MaxWebsiteUrlLength: u32 = 255;
 }
 impl Config for Test {
 	type Event = Event;
@@ -220,8 +218,11 @@ impl Config for Test {
 	type MaxFounders = MaxFounders;
 	type MaxFellows = MaxFellows;
 	type MaxAllies = MaxAllies;
-	type MaxBlacklistCount = MaxBlacklistCount;
-	type MaxWebsiteUrlLength = MaxWebsiteUrlLength;
+	type MaxBlacklistCount = ConstU32<100>;
+	type MaxWebsiteUrlLength = ConstU32<255>;
+	type MaxAnnouncementsCount = ConstU32<100>;
+	type MaxMembersCount = AllianceMaxMembers;
+	type MaxCandidatesCount = ConstU32<100>;
 	type CandidateDeposit = CandidateDeposit;
 	type WeightInfo = ();
 }
