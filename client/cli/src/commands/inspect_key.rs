@@ -95,7 +95,7 @@ impl InspectKeyCmd {
 			if let Some(ref expect_public) = self.expect_public {
 				with_crypto_scheme!(
 					self.crypto_scheme.scheme,
-					expect_public_from_phrase(expect_public, &uri, password.as_ref(),)
+					expect_public_from_phrase(expect_public, &uri, password.as_ref())
 				)?;
 			}
 
