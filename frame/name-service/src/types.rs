@@ -19,7 +19,7 @@
 
 use crate::*;
 use codec::{Decode, Encode, MaxEncodedLen};
-use frame_support::{traits::Currency, RuntimeDebug};
+use frame_support::{traits::Currency, BoundedVec, RuntimeDebug};
 use scale_info::TypeInfo;
 
 // Allows easy access our Pallet's `Balance` and `NegativeImbalance` type.
@@ -45,6 +45,9 @@ pub type RegistrationOf<T> = Registration<
 
 pub type NameHash = [u8; 32];
 pub type CommitmentHash = [u8; 32];
+
+pub type BoundedNameOf<T> = BoundedVec<u8, <T as Config>::MaxNameLength>;
+pub type BoundedTextOf<T> = BoundedVec<u8, <T as Config>::MaxTextLength>;
 
 /// The commitment a user makes before registering the name.
 #[derive(Encode, Decode, Default, MaxEncodedLen, TypeInfo, RuntimeDebug)]

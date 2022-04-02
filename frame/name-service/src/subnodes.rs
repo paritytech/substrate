@@ -36,13 +36,10 @@ impl<T: Config> Pallet<T> {
 		parent_hash: NameHash,
 		label: &[u8],
 	) -> DispatchResult {
-		ensure!(!label.len().is_zero(), Error::<T>::LabelTooShort);
+		ensure!(!label.len().is_zero(), Error::<T>::NameTooShort);
 
 		let parent_registration = Self::get_registration(parent_hash)?;
-		ensure!(
-			Self::is_controller(&parent_registration, &sender),
-			Error::<T>::NotRegistrationOwner
-		);
+		ensure!(Self::is_controller(&parent_registration, &sender), Error::<T>::NotController);
 
 		let label_hash = sp_io::hashing::blake2_256(&label);
 		let name_hash = Self::subnode_hash(parent_hash, label_hash);
@@ -64,7 +61,7 @@ impl<T: Config> Pallet<T> {
 		new_owner: T::AccountId,
 	) -> DispatchResult {
 		let parent_registration = Self::get_registration(parent_hash)?;
-		ensure!(Self::is_owner(&parent_registration, &sender), Error::<T>::NotRegistrationOwner);
+		ensure!(Self::is_owner(&parent_registration, &sender), Error::<T>::NotOwner);
 		let subnode_hash = Self::subnode_hash(parent_hash, label_hash);
 		Self::do_transfer_ownership(subnode_hash, new_owner)
 	}

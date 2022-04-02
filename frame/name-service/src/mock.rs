@@ -114,6 +114,7 @@ impl Config for Test {
 	type RegistrationFeePerBlock = ConstU64<1>;
 	type TierDefault = ConstU64<1>;
 	type RegistrationManager = EnsureRoot<Self::AccountId>;
+	type NameServiceResolver = NameService;
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {

@@ -110,6 +110,9 @@ pub mod pallet {
 
 		/// The origin that has super-user access to manage all name registrations.
 		type RegistrationManager: EnsureOrigin<Self::Origin>;
+
+		/// An interface to access the name service resolver.
+		type NameServiceResolver: NameServiceResolver<Self>;
 	}
 
 	/* Placeholder for defining custom storage items. */
@@ -137,11 +140,20 @@ pub mod pallet {
 	pub(super) type AddressResolver<T: Config> =
 		StorageMap<_, Blake2_128Concat, NameHash, T::AccountId>;
 
+	/// This resolver maps name hashes to an account
+	#[pallet::storage]
+	pub(super) type NameResolver<T: Config> =
+		StorageMap<_, Blake2_128Concat, NameHash, BoundedNameOf<T>>;
+
+	/// This resolver maps name hashes to an account
+	#[pallet::storage]
+	pub(super) type TextResolver<T: Config> =
+		StorageMap<_, Blake2_128Concat, NameHash, BoundedTextOf<T>>;
+
 	// Your Pallet's events.
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		// TODO: Potentially make events more lightweight
 		/// A new `Commitment` has taken place.
 		Committed { depositor: T::AccountId, owner: T::AccountId, hash: CommitmentHash },
 		/// A new `Registration` has taken added.
@@ -159,38 +171,30 @@ pub mod pallet {
 	// Your Pallet's error messages.
 	#[pallet::error]
 	pub enum Error<T> {
-		/// This commitment hash already exists in storage.
-		AlreadyCommitted,
 		/// It has not passed the minimum waiting period to reveal a commitment.
 		TooEarlyToReveal,
+		/// This commitment hash already exists in storage.
+		CommitmentExists,
 		/// The commitment cannot yet be removed. Has not expired.
 		CommitmentNotExpired,
 		/// This commitment does not exist.
 		CommitmentNotFound,
 		/// A `Registration` of this name already exists.
 		RegistrationExists,
-		/// This registration does not exist.
-		RegistrationNotFound,
-		/// Registration registrant does not exist.
-		RegistrationRegistrantNotFound,
-		/// The name was longer than the configured limit.
-		NameTooLong,
-		/// The account is not the registration registrant.
-		NotRegistrationRegistrant,
-		/// The account is not the registration owner.
-		NotRegistrationOwner,
-		/// The account is not the registration registrant or the owner.
-		NotRegistrationRegistrantOrOwner,
-		/// This registration has expired.
-		RegistrationExpired,
 		/// This registration has not yet expired.
 		RegistrationNotExpired,
+		/// This registration does not exist.
+		RegistrationNotFound,
+		/// Name is too short to be registered.
+		NameTooShort,
+		/// The name was longer than the configured limit.
+		NameTooLong,
+		/// The account is not the name controller.
+		NotController,
+		/// The account is not the name owner.
+		NotOwner,
 		/// Cannot renew this registration.
 		RegistrationHasNoExpiry,
-		/// Subnode label is too short.
-		LabelTooShort,
-		/// Address has already been set to this.
-		AlreadySet,
 		/// renew expiry time is not in the future
 		ExpiryInvalid,
 	}
@@ -297,7 +301,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 			let registration = Self::get_registration(name_hash)?;
-			ensure!(Self::is_owner(&registration, &sender), Error::<T>::NotRegistrationOwner);
+			ensure!(Self::is_owner(&registration, &sender), Error::<T>::NotOwner);
 			Self::do_transfer_ownership(name_hash, new_owner)?;
 			Ok(())
 		}
@@ -315,7 +319,7 @@ pub mod pallet {
 
 			Registrations::<T>::try_mutate(name_hash, |maybe_registration| {
 				let r = maybe_registration.as_mut().ok_or(Error::<T>::RegistrationNotFound)?;
-				ensure!(Self::is_controller(&r, &sender), Error::<T>::NotRegistrationOwner);
+				ensure!(Self::is_controller(&r, &sender), Error::<T>::NotOwner);
 				r.controller = to.clone();
 				Self::deposit_event(Event::<T>::NewOwner { from: sender, to });
 				Ok(())
@@ -345,8 +349,8 @@ pub mod pallet {
 			let sender = ensure_signed(origin)?;
 			let registration =
 				Registrations::<T>::get(name_hash).ok_or(Error::<T>::RegistrationNotFound)?;
-			ensure!(Self::is_controller(&registration, &sender), Error::<T>::NotRegistrationOwner);
-			<Self as NameServiceResolver>::set_address(name_hash, address)?;
+			ensure!(Self::is_controller(&registration, &sender), Error::<T>::NotOwner);
+			T::NameServiceResolver::set_address(name_hash, address)?;
 			Ok(())
 		}
 
@@ -356,7 +360,7 @@ pub mod pallet {
 			let registration =
 				Registrations::<T>::get(name_hash).ok_or(Error::<T>::RegistrationNotFound)?;
 			if !Self::is_expired(&registration) {
-				ensure!(Self::is_owner(&registration, &sender), Error::<T>::NotRegistrationOwner);
+				ensure!(Self::is_owner(&registration, &sender), Error::<T>::NotOwner);
 			}
 			Self::do_deregister(name_hash);
 			Ok(())

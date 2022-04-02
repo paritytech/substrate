@@ -64,7 +64,7 @@ impl<T: Config> Pallet<T> {
 		owner: T::AccountId,
 		commitment_hash: CommitmentHash,
 	) -> DispatchResult {
-		ensure!(!Commitments::<T>::contains_key(commitment_hash), Error::<T>::AlreadyCommitted);
+		ensure!(!Commitments::<T>::contains_key(commitment_hash), Error::<T>::CommitmentExists);
 
 		let block_number = frame_system::Pallet::<T>::block_number();
 		let deposit = T::CommitmentDeposit::get();

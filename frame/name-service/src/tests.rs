@@ -128,7 +128,7 @@ fn commit_handles_errors() {
 		// The same commitment cant be put twice.
 		assert_noop!(
 			NameService::commit(Origin::signed(sender), owner, commitment_hash),
-			Error::<Test>::AlreadyCommitted
+			Error::<Test>::CommitmentExists
 		);
 
 		let commitment_hash = ("new", secret).using_encoded(blake2_256);
@@ -331,7 +331,7 @@ fn set_controller_handles_errors() {
 		// Not controller or owner of registration
 		assert_noop!(
 			NameService::set_controller(Origin::signed(other), name_hash, other),
-			Error::<Test>::NotRegistrationOwner
+			Error::<Test>::NotOwner
 		);
 	});
 }
@@ -380,7 +380,7 @@ fn transfer_handles_errors() {
 
 		assert_noop!(
 			NameService::transfer(Origin::signed(3), 4, name_hash),
-			Error::<Test>::NotRegistrationOwner
+			Error::<Test>::NotOwner
 		);
 	});
 }
@@ -479,7 +479,7 @@ fn set_address_handles_errors() {
 		// Not registration owner
 		assert_noop!(
 			NameService::set_address(Origin::signed(non_owner), name_hash, 3),
-			Error::<Test>::NotRegistrationOwner,
+			Error::<Test>::NotOwner,
 		);
 
 		// set address
@@ -531,7 +531,7 @@ fn deregister_works_non_owner() {
 		let non_owner = 1;
 		assert_noop!(
 			NameService::deregister(Origin::signed(non_owner), name_hash),
-			Error::<Test>::NotRegistrationOwner
+			Error::<Test>::NotOwner
 		);
 
 		// now expired, ok to deregister
@@ -560,7 +560,7 @@ fn deregister_handles_errors_non_owner() {
 		// not owner
 		assert_noop!(
 			NameService::deregister(Origin::signed(non_owner), name_hash),
-			Error::<Test>::NotRegistrationOwner
+			Error::<Test>::NotOwner
 		);
 
 		// let owner deregister early
@@ -655,12 +655,12 @@ fn set_subnode_record_handles_errors() {
 				parent_hash,
 				"".as_bytes().to_vec()
 			),
-			Error::<Test>::LabelTooShort
+			Error::<Test>::NameTooShort
 		);
 		// not the owner of parent hash
 		assert_noop!(
 			NameService::set_subnode_record(Origin::signed(not_owner), parent_hash, label.clone()),
-			Error::<Test>::NotRegistrationOwner
+			Error::<Test>::NotController
 		);
 		// register subnode for further testing
 		assert_ok!(NameService::set_subnode_record(
@@ -769,7 +769,7 @@ fn set_subnode_record_handles_errors() {
 // 				label_hash,
 // 				new_subnode_owner
 // 			),
-// 			Error::<Test>::NotRegistrationOwner
+// 			Error::<Test>::NotOwner
 // 		);
 // 	});
 // }
