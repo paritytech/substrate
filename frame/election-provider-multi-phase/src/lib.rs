@@ -236,7 +236,7 @@ use frame_election_provider_support::{
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
 	ensure,
-	traits::{Currency, Get, OnUnbalanced, ReservableCurrency},
+	traits::{BalanceStatus::Free, Currency, Get, OnUnbalanced, ReservableCurrency},
 	weights::{DispatchClass, Weight},
 };
 use frame_system::{ensure_none, offchain::SendTransactionTypes};
@@ -627,10 +627,6 @@ pub mod pallet {
 		#[pallet::constant]
 		type SignedRewardBase: Get<BalanceOf<Self>>;
 
-		// Base reward for a challenger
-		#[pallet::constant]
-		type ChallengeRewardBase: Get<BalanceOf<Self>>;
-
 		/// Base deposit for a signed solution.
 		#[pallet::constant]
 		type SignedDepositBase: Get<BalanceOf<Self>>;
@@ -713,10 +709,8 @@ pub mod pallet {
 		/// The weight of the pallet.
 		type WeightInfo: WeightInfo;
 
-		/// The minimum amount a solution challenger must have to execute
-		/// `challange_submission`
 		#[pallet::constant]
-		type MinimumSlashableAmount: Get<BalanceOf<Self>>;
+		type ChallengeDepositDiff: Get<BalanceOf<Self>>;
 	}
 
 	#[pallet::hooks]
@@ -1065,42 +1059,48 @@ pub mod pallet {
 			Ok(())
 		}
 
+		// TODO: Add Proper Benchmarks
 		#[pallet::weight(100)]
 		pub fn challenge_solution(origin: OriginFor<T>, index: u32) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			// TODO: Create custom error
-			ensure!(
-				T::Currency::can_slash(&who, T::MinimumSlashableAmount::get()),
-				<Error<T>>::CallNotAllowed
-			);
-			// TODO: Add an `else` for a None result
+
 			if let Some(submission) = SignedSubmissionsMap::<T>::get(index) {
+				ensure!(
+					T::Currency::can_slash(&who, submission.deposit),
+					<Error<T>>::NotEnoughChallengerDeposit
+				);
 				match Self::feasibility_check(
 					submission.raw_solution.clone(),
 					ElectionCompute::Signed,
 				) {
 					Ok(solution) => {
-						let _ = T::Currency::slash(&who, T::MinimumSlashableAmount::get());
+						let _ = T::Currency::slash(&who, submission.deposit);
 						<QueuedSolution<T>>::put(solution);
 						SignedSubmissionsMap::<T>::remove(index);
+
+						Self::deposit_event(Event::ChallengerSlashed { account: who });
+
 						Ok(())
 					},
 					Err(_error) => {
 						T::Currency::slash_reserved(&who, submission.deposit);
+
+						T::Currency::repatriate_reserved(
+							&submission.who,
+							&who,
+							submission.deposit - T::ChallengeDepositDiff::get(),
+							Free,
+						)?;
+
 						SignedSubmissionsMap::<T>::remove(index);
-						let reward = {
-							let call = Call::challenge_solution::<T> { index };
-							let call_fee =
-								T::EstimateCallFee::estimate_call_fee(&call, None.into());
-							T::ChallengeRewardBase::get().saturating_add(call_fee)
-						};
-						let positive_imbalance = T::Currency::deposit_creating(&who, reward);
-						T::RewardHandler::on_unbalanced(positive_imbalance);
-						Err(Error::<T>::CallNotAllowed.into())
+
+						Self::deposit_event(Event::ChallengerRewarded { account: who });
+
+						Ok(())
 					},
 				}
 			} else {
-				return Err(Error::<T>::CallNotAllowed.into())
+				return Err(Error::<T>::CallNotAllowed.into());
 			}
 		}
 	}
@@ -1126,6 +1126,12 @@ pub mod pallet {
 		SignedPhaseStarted { round: u32 },
 		/// The unsigned phase of the given round has started.
 		UnsignedPhaseStarted { round: u32 },
+
+		/// The Challenger gets slashed for challenging a correct solution
+		ChallengerSlashed { account: <T as frame_system::Config>::AccountId },
+
+		/// The Challenger gets rewarded for challenging a bogus solution
+		ChallengerRewarded { account: <T as frame_system::Config>::AccountId },
 	}
 
 	/// Error of the pallet that can be returned in response to dispatches.
@@ -1155,6 +1161,8 @@ pub mod pallet {
 		CallNotAllowed,
 		/// The fallback failed
 		FallbackFailed,
+		/// Challenger does not have enough deposit
+		NotEnoughChallengerDeposit,
 	}
 
 	#[pallet::validate_unsigned]
@@ -1397,7 +1405,7 @@ impl<T: Config> Pallet<T> {
 		// Defensive-only.
 		if targets.len() > target_limit || voters.len() > voter_limit {
 			debug_assert!(false, "Snapshot limit has not been respected.");
-			return Err(ElectionError::DataProvider("Snapshot too big for submission."))
+			return Err(ElectionError::DataProvider("Snapshot too big for submission."));
 		}
 
 		// If `desired_targets` > `targets.len()`, cap `desired_targets` to that level and emit a
@@ -1520,7 +1528,7 @@ impl<T: Config> Pallet<T> {
 
 				// Check that all of the targets are valid based on the snapshot.
 				if assignment.distribution.iter().any(|(d, _)| !targets.contains(d)) {
-					return Err(FeasibilityError::InvalidVote)
+					return Err(FeasibilityError::InvalidVote);
 				}
 				Ok(())
 			})
@@ -1837,8 +1845,8 @@ mod tests {
 	use super::*;
 	use crate::{
 		mock::{
-			multi_phase_events, roll_to, AccountId, ExtBuilder, MockWeightInfo, MultiPhase,
-			Runtime, SignedMaxSubmissions, System, TargetIndex, Targets,
+			multi_phase_events, raw_solution, roll_to, AccountId, ExtBuilder, MockWeightInfo,
+			MultiPhase, Runtime, SignedMaxSubmissions, System, TargetIndex, Targets,
 		},
 		Phase,
 	};
@@ -2054,6 +2062,33 @@ mod tests {
 	}
 
 	#[test]
+	fn challenge_solution_works() {
+		ExtBuilder::default().build_and_execute(|| {
+			crate::mock::SignedMaxSubmissions::set(50);
+			roll_to(14);
+			assert_eq!(MultiPhase::current_phase(), Phase::Off);
+
+			roll_to(15);
+			assert_eq!(multi_phase_events(), vec![Event::SignedPhaseStarted { round: 1 }]);
+			assert_eq!(MultiPhase::current_phase(), Phase::Signed);
+
+			let mut solution = raw_solution();
+
+			solution.score.minimal_stake += 1;
+
+			assert!(mock::Balances::usable_balance(&99) == 100);
+
+			assert_ok!(MultiPhase::submit(crate::mock::Origin::signed(99), Box::new(solution),));
+
+			assert_eq!(crate::mock::Balances::usable_balance(&9999), 100);
+
+			assert_ok!(MultiPhase::challenge_solution(crate::mock::Origin::signed(9999), 0));
+
+			assert!(crate::mock::Balances::free_balance(&9999) > 100);
+		})
+	}
+
+	#[test]
 	fn fallback_strategy_works() {
 		ExtBuilder::default().onchain_fallback(true).build_and_execute(|| {
 			roll_to(25);
@@ -2196,9 +2231,9 @@ mod tests {
 		};
 
 		let mut active = 1;
-		while weight_with(active) <=
-			<Runtime as frame_system::Config>::BlockWeights::get().max_block ||
-			active == all_voters
+		while weight_with(active)
+			<= <Runtime as frame_system::Config>::BlockWeights::get().max_block
+			|| active == all_voters
 		{
 			active += 1;
 		}

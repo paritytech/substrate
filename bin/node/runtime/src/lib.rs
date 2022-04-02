@@ -571,10 +571,9 @@ parameter_types! {
 
 	// signed config
 	pub const SignedRewardBase: Balance = 1 * DOLLARS;
-	pub const ChallengeRewardBase: Balance = 1 * CENTS;
 	pub const SignedDepositBase: Balance = 1 * DOLLARS;
 	pub const SignedDepositByte: Balance = 1 * CENTS;
-	pub const MinimumSlashableAmount: Balance = 1 * DOLLARS;
+	pub const ChallengeDepositDiff: Balance = 1 * DOLLARS;
 
 	pub SolutionImprovementThreshold: Perbill = Perbill::from_rational(1u32, 10_000);
 
@@ -672,7 +671,6 @@ impl pallet_election_provider_multi_phase::Config for Runtime {
 	type MinerTxPriority = MultiPhaseUnsignedPriority;
 	type SignedMaxSubmissions = ConstU32<10>;
 	type SignedRewardBase = SignedRewardBase;
-	type ChallengeRewardBase = ChallengeRewardBase;
 	type SignedDepositBase = SignedDepositBase;
 	type SignedDepositByte = SignedDepositByte;
 	type SignedDepositWeight = ();
@@ -688,8 +686,8 @@ impl pallet_election_provider_multi_phase::Config for Runtime {
 	type MaxElectableTargets = ConstU16<{ u16::MAX }>;
 	type MaxElectingVoters = MaxElectingVoters;
 	type BenchmarkingConfig = ElectionProviderBenchmarkConfig;
-	type MinimumSlashableAmount = MinimumSlashableAmount;
 	type WeightInfo = pallet_election_provider_multi_phase::weights::SubstrateWeight<Self>;
+	type ChallengeDepositDiff = ChallengeDepositDiff;
 }
 
 parameter_types! {

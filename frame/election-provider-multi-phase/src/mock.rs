@@ -258,7 +258,6 @@ parameter_types! {
 	pub static UnsignedPhase: BlockNumber = 5;
 	pub static SignedMaxSubmissions: u32 = 5;
 	pub static SignedDepositBase: Balance = 5;
-	pub static ChallengeRewardBase: Balance = 6;
 	pub static SignedDepositByte: Balance = 0;
 	pub static SignedDepositWeight: Balance = 0;
 	pub static SignedRewardBase: Balance = 7;
@@ -275,7 +274,8 @@ parameter_types! {
 	pub static EpochLength: u64 = 30;
 
 	pub static OnChainFallback: bool = true;
-	pub static MinimumSlashableAmount: Balance = 3;
+
+	pub static ChallengeDepositDiff: Balance = 2;
 }
 
 pub struct OnChainSeqPhragmen;
@@ -422,7 +422,6 @@ impl crate::Config for Runtime {
 	type MinerMaxLength = MinerMaxLength;
 	type MinerTxPriority = MinerTxPriority;
 	type SignedRewardBase = SignedRewardBase;
-	type ChallengeRewardBase = ChallengeRewardBase;
 	type SignedDepositBase = SignedDepositBase;
 	type SignedDepositByte = ();
 	type SignedDepositWeight = ();
@@ -440,7 +439,7 @@ impl crate::Config for Runtime {
 	type MaxElectingVoters = MaxElectingVoters;
 	type MaxElectableTargets = MaxElectableTargets;
 	type Solver = SequentialPhragmen<AccountId, SolutionAccuracyOf<Runtime>, Balancing>;
-	type MinimumSlashableAmount = MinimumSlashableAmount;
+	type ChallengeDepositDiff = ChallengeDepositDiff;
 }
 
 impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Runtime
@@ -470,7 +469,7 @@ impl ElectionDataProvider for StakingMock {
 		let targets = Targets::get();
 
 		if maybe_max_len.map_or(false, |max_len| targets.len() > max_len) {
-			return Err("Targets too big")
+			return Err("Targets too big");
 		}
 
 		Ok(targets)

@@ -519,6 +519,33 @@ frame_benchmarking::benchmarks! {
 		assert!(encoding.len() <= desired_size);
 	}
 
+	/*
+	challenge_solution{
+		let submitter = account("submitters", 0, SEED);
+		let challenger = frame_benchmarking::whitelisted_caller();
+		T::Currency::make_free_balance_be(&submitter,  T::Currency::minimum_balance() * 10_000_000_000u32.into());
+		T::Currency::make_free_balance_be(&challenger, T::Currency::minimum_balance() * 10_000_000_000u32.into());
+
+		let solution = RawSolution {
+			score: ElectionScore { minimal_stake: 10_000_000u128 - 1, ..Default::default() },
+			..Default::default()
+		};
+
+		solution.score.minimal_stake += 1;
+
+		<MultiPhase<T>>::create_snapshot().map_err(<&str>::from)?;
+		MultiPhase::<T>::on_initialize_open_signed();
+		<Round<T>>::put(1);
+
+		MultiPhase::<T>::submit(RawOrigin::Signed(submitter).into(), Box::new(solution));
+
+	}: _(RawOrigin::Signed(&challenger), 1)
+
+	verify {
+		assert!(T::Currency::free_balance(&challenger) > 10_000_000_000u32.into());
+	}
+	*/
+
 	impl_benchmark_test_suite!(
 		MultiPhase,
 		crate::mock::ExtBuilder::default().build_offchainify(10).0,
