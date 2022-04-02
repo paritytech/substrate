@@ -27,8 +27,11 @@ use crate::{
 };
 use codec::{Decode, Encode, EncodeLike, FullCodec, FullEncode};
 use sp_core::storage::ChildInfo;
-use sp_runtime::generic::{Digest, DigestItem};
 pub use sp_runtime::TransactionOutcome;
+use sp_runtime::{
+	generic::{Digest, DigestItem},
+	DispatchError, TransactionalError,
+};
 use sp_std::prelude::*;
 pub use types::Key;
 
@@ -44,55 +47,65 @@ pub mod types;
 pub mod unhashed;
 pub mod weak_bounded_vec;
 
-#[cfg(all(feature = "std", any(test, debug_assertions)))]
-mod debug_helper {
-	use std::cell::RefCell;
+mod transaction_level_tracker {
+	use core::sync::atomic::{AtomicU32, Ordering};
 
-	thread_local! {
-		static TRANSACTION_LEVEL: RefCell<u32> = RefCell::new(0);
+	type Layer = u32;
+	static NUM_LEVELS: AtomicU32 = AtomicU32::new(0);
+	const TRANSACTIONAL_LIMIT: Layer = 255;
+
+	pub fn get_transaction_level() -> Layer {
+		NUM_LEVELS.load(Ordering::SeqCst)
 	}
 
-	pub fn require_transaction() {
-		let level = TRANSACTION_LEVEL.with(|v| *v.borrow());
-		if level == 0 {
-			panic!("Require transaction not called within with_transaction");
-		}
-	}
-
-	pub struct TransactionLevelGuard;
-
-	impl Drop for TransactionLevelGuard {
-		fn drop(&mut self) {
-			TRANSACTION_LEVEL.with(|v| *v.borrow_mut() -= 1);
-		}
-	}
-
-	/// Increments the transaction level.
+	/// Increments the transaction level. Returns an error if levels go past the limit.
 	///
 	/// Returns a guard that when dropped decrements the transaction level automatically.
-	pub fn inc_transaction_level() -> TransactionLevelGuard {
-		TRANSACTION_LEVEL.with(|v| {
-			let mut val = v.borrow_mut();
-			*val += 1;
-			if *val > 10 {
-				log::warn!(
-					"Detected with_transaction with nest level {}. Nested usage of with_transaction is not recommended.",
-					*val
-				);
-			}
-		});
+	pub fn inc_transaction_level() -> Result<StorageLayerGuard, ()> {
+		NUM_LEVELS
+			.fetch_update(Ordering::SeqCst, Ordering::SeqCst, |existing_levels| {
+				if existing_levels >= TRANSACTIONAL_LIMIT {
+					return None
+				}
+				// Cannot overflow because of check above.
+				Some(existing_levels + 1)
+			})
+			.map_err(|_| ())?;
+		Ok(StorageLayerGuard)
+	}
 
-		TransactionLevelGuard
+	fn dec_transaction_level() {
+		NUM_LEVELS
+			.fetch_update(Ordering::SeqCst, Ordering::SeqCst, |existing_levels| {
+				if existing_levels == 0 {
+					log::warn!(
+					"We are underflowing with calculating transactional levels. Not great, but let's not panic...",
+				);
+					None
+				} else {
+					// Cannot underflow because of checks above.
+					Some(existing_levels - 1)
+				}
+			})
+			.ok();
+	}
+
+	pub fn is_transactional() -> bool {
+		get_transaction_level() > 0
+	}
+
+	pub struct StorageLayerGuard;
+
+	impl Drop for StorageLayerGuard {
+		fn drop(&mut self) {
+			dec_transaction_level()
+		}
 	}
 }
 
-/// Assert this method is called within a storage transaction.
-/// This will **panic** if is not called within a storage transaction.
-///
-/// This assertion is enabled for native execution and when `debug_assertions` are enabled.
-pub fn require_transaction() {
-	#[cfg(all(feature = "std", any(test, debug_assertions)))]
-	debug_helper::require_transaction();
+/// Check if the current call is within a transactional layer.
+pub fn is_transactional() -> bool {
+	transaction_level_tracker::is_transactional()
 }
 
 /// Execute the supplied function in a new storage transaction.
@@ -100,15 +113,55 @@ pub fn require_transaction() {
 /// All changes to storage performed by the supplied function are discarded if the returned
 /// outcome is `TransactionOutcome::Rollback`.
 ///
-/// Transactions can be nested to any depth. Commits happen to the parent transaction.
-pub fn with_transaction<R>(f: impl FnOnce() -> TransactionOutcome<R>) -> R {
+/// Transactions can be nested up to `TRANSACTIONAL_LIMIT` times; more than that will result in an
+/// error.
+///
+/// Commits happen to the parent transaction.
+pub fn with_transaction<T, E>(f: impl FnOnce() -> TransactionOutcome<Result<T, E>>) -> Result<T, E>
+where
+	E: From<DispatchError>,
+{
 	use sp_io::storage::{commit_transaction, rollback_transaction, start_transaction};
 	use TransactionOutcome::*;
 
+	let _guard = transaction_level_tracker::inc_transaction_level()
+		.map_err(|()| TransactionalError::LimitReached.into())?;
+
 	start_transaction();
 
-	#[cfg(all(feature = "std", any(test, debug_assertions)))]
-	let _guard = debug_helper::inc_transaction_level();
+	match f() {
+		Commit(res) => {
+			commit_transaction();
+			res
+		},
+		Rollback(res) => {
+			rollback_transaction();
+			res
+		},
+	}
+}
+
+/// Same as [`with_transaction`] but without a limit check on nested transactional layers.
+///
+/// This is mostly for backwards compatibility before there was a transactional layer limit.
+/// It is recommended to only use [`with_transaction`] to avoid users from generating too many
+/// transactional layers.
+pub fn with_transaction_unchecked<R>(f: impl FnOnce() -> TransactionOutcome<R>) -> R {
+	use sp_io::storage::{commit_transaction, rollback_transaction, start_transaction};
+	use TransactionOutcome::*;
+
+	let maybe_guard = transaction_level_tracker::inc_transaction_level();
+
+	if maybe_guard.is_err() {
+		log::warn!(
+			"The transactional layer limit has been reached, and new transactional layers are being
+			spawned with `with_transaction_unchecked`. This could be caused by someone trying to
+			attack your chain, and you should investigate usage of `with_transaction_unchecked` and
+			potentially migrate to `with_transaction`, which enforces a transactional limit.",
+		);
+	}
+
+	start_transaction();
 
 	match f() {
 		Commit(res) => {
@@ -1418,12 +1471,13 @@ pub fn storage_prefix(pallet_name: &[u8], storage_name: &[u8]) -> [u8; 32] {
 #[cfg(test)]
 mod test {
 	use super::*;
-	use crate::{assert_ok, hash::Identity, Twox128};
+	use crate::{assert_noop, assert_ok, hash::Identity, Twox128};
 	use bounded_vec::BoundedVec;
 	use frame_support::traits::ConstU32;
 	use generator::StorageValue as _;
 	use sp_core::hashing::twox_128;
 	use sp_io::TestExternalities;
+	use sp_runtime::DispatchResult;
 	use weak_bounded_vec::WeakBoundedVec;
 
 	#[test]
@@ -1535,25 +1589,67 @@ mod test {
 	}
 
 	#[test]
-	#[should_panic(expected = "Require transaction not called within with_transaction")]
-	fn require_transaction_should_panic() {
+	fn is_transactional_should_return_false() {
 		TestExternalities::default().execute_with(|| {
-			require_transaction();
+			assert!(!is_transactional());
 		});
 	}
 
 	#[test]
-	fn require_transaction_should_not_panic_in_with_transaction() {
+	fn is_transactional_should_not_error_in_with_transaction() {
 		TestExternalities::default().execute_with(|| {
-			with_transaction(|| {
-				require_transaction();
-				TransactionOutcome::Commit(())
-			});
+			assert_ok!(with_transaction(|| -> TransactionOutcome<DispatchResult> {
+				assert!(is_transactional());
+				TransactionOutcome::Commit(Ok(()))
+			}));
 
-			with_transaction(|| {
-				require_transaction();
-				TransactionOutcome::Rollback(())
-			});
+			assert_noop!(
+				with_transaction(|| -> TransactionOutcome<DispatchResult> {
+					assert!(is_transactional());
+					TransactionOutcome::Rollback(Err("revert".into()))
+				}),
+				"revert"
+			);
+		});
+	}
+
+	fn recursive_transactional(num: u32) -> DispatchResult {
+		if num == 0 {
+			return Ok(())
+		}
+
+		with_transaction(|| -> TransactionOutcome<DispatchResult> {
+			let res = recursive_transactional(num - 1);
+			TransactionOutcome::Commit(res)
+		})
+	}
+
+	#[test]
+	fn transaction_limit_should_work() {
+		TestExternalities::default().execute_with(|| {
+			assert_eq!(transaction_level_tracker::get_transaction_level(), 0);
+
+			assert_ok!(with_transaction(|| -> TransactionOutcome<DispatchResult> {
+				assert_eq!(transaction_level_tracker::get_transaction_level(), 1);
+				TransactionOutcome::Commit(Ok(()))
+			}));
+
+			assert_ok!(with_transaction(|| -> TransactionOutcome<DispatchResult> {
+				assert_eq!(transaction_level_tracker::get_transaction_level(), 1);
+				let res = with_transaction(|| -> TransactionOutcome<DispatchResult> {
+					assert_eq!(transaction_level_tracker::get_transaction_level(), 2);
+					TransactionOutcome::Commit(Ok(()))
+				});
+				TransactionOutcome::Commit(res)
+			}));
+
+			assert_ok!(recursive_transactional(255));
+			assert_noop!(
+				recursive_transactional(256),
+				sp_runtime::TransactionalError::LimitReached
+			);
+
+			assert_eq!(transaction_level_tracker::get_transaction_level(), 0);
 		});
 	}
 
