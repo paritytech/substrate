@@ -382,7 +382,7 @@ impl<B: BlockT> Protocol<B> {
 		};
 
 		let block_announces_protocol: Cow<'static, str> =
-			Cow::from(format!("/{}/block-announces/1", protocol_id.as_ref()));
+			format!("/{}/block-announces/1", protocol_id.as_ref()).into();
 
 		let behaviour = {
 			let best_number = info.best_number;
