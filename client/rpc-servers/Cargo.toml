@@ -19,7 +19,7 @@ pubsub = { package = "jsonrpc-pubsub", version = "18.0.0" }
 log = "0.4.8"
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../utils/prometheus", version = "0.10.0-dev"}
 serde_json = "1.0.79"
-tokio = { version = "1.15", features = ["parking_lot"] }
+tokio = { version = "1.17.0", features = ["parking_lot"] }
 http = { package = "jsonrpc-http-server", version = "18.0.0" }
 ipc = { package = "jsonrpc-ipc-server", version = "18.0.0" }
 ws = { package = "jsonrpc-ws-server", version = "18.0.0" }

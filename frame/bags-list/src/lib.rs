@@ -70,7 +70,7 @@ pub mod mock;
 mod tests;
 pub mod weights;
 
-pub use list::{notional_bag_for, Bag, Error, List, Node};
+pub use list::{notional_bag_for, Bag, List, ListError, Node};
 pub use pallet::*;
 pub use weights::WeightInfo;
 
@@ -270,12 +270,18 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 }
 
 impl<T: Config<I>, I: 'static> SortedListProvider<T::AccountId> for Pallet<T, I> {
-	type Error = Error;
-
+	type Error = ListError;
 	type Score = T::Score;
 
 	fn iter() -> Box<dyn Iterator<Item = T::AccountId>> {
 		Box::new(List::<T, I>::iter().map(|n| n.id().clone()))
+	}
+
+	fn iter_from(
+		start: &T::AccountId,
+	) -> Result<Box<dyn Iterator<Item = T::AccountId>>, Self::Error> {
+		let iter = List::<T, I>::iter_from(start)?;
+		Ok(Box::new(iter.map(|n| n.id().clone())))
 	}
 
 	fn count() -> u32 {
@@ -286,7 +292,7 @@ impl<T: Config<I>, I: 'static> SortedListProvider<T::AccountId> for Pallet<T, I>
 		List::<T, I>::contains(id)
 	}
 
-	fn on_insert(id: T::AccountId, score: T::Score) -> Result<(), Error> {
+	fn on_insert(id: T::AccountId, score: T::Score) -> Result<(), ListError> {
 		List::<T, I>::insert(id, score)
 	}
 

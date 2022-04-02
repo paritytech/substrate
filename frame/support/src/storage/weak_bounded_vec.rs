@@ -323,14 +323,14 @@ pub mod test {
 	use sp_std::convert::TryInto;
 
 	crate::generate_storage_alias! { Prefix, Foo => Value<WeakBoundedVec<u32, ConstU32<7>>> }
-	crate::generate_storage_alias! { Prefix, FooMap => Map<(u32, Twox128), WeakBoundedVec<u32, ConstU32<7>>> }
+	crate::generate_storage_alias! { Prefix, FooMap => Map<(Twox128, u32), WeakBoundedVec<u32, ConstU32<7>>> }
 	crate::generate_storage_alias! {
 		Prefix,
-		FooDoubleMap => DoubleMap<(u32, Twox128), (u32, Twox128), WeakBoundedVec<u32, ConstU32<7>>>
+		FooDoubleMap => DoubleMap<(Twox128, u32), (Twox128, u32), WeakBoundedVec<u32, ConstU32<7>>>
 	}
 
 	#[test]
-	fn try_append_is_correct() {
+	fn bound_returns_correct_value() {
 		assert_eq!(WeakBoundedVec::<u32, ConstU32<7>>::bound(), 7);
 	}
 

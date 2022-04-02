@@ -124,6 +124,11 @@ pub(crate) fn generate(def: crate::SolutionDef) -> Result<TokenStream2> {
 					for<'r> FV: Fn(&'r A) -> Option<Self::VoterIndex>,
 					for<'r> FT: Fn(&'r A) -> Option<Self::TargetIndex>,
 			{
+				// Make sure that the voter bound is binding.
+				// `assignments.len()` actually represents the number of voters
+				if assignments.len() as u32 > <#max_voters as _feps::Get<u32>>::get() {
+					return Err(_feps::Error::TooManyVoters);
+				}
 				let mut #struct_name: #ident = Default::default();
 				for _feps::Assignment { who, distribution } in assignments {
 					match distribution.len() {
@@ -134,6 +139,7 @@ pub(crate) fn generate(def: crate::SolutionDef) -> Result<TokenStream2> {
 						}
 					}
 				};
+
 				Ok(#struct_name)
 			}
 
