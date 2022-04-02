@@ -48,7 +48,7 @@ impl<B: BlockT> BlockRules<B> {
 	pub fn new(fork_blocks: ForkBlocks<B>, bad_blocks: BadBlocks<B>) -> Self {
 		Self {
 			bad: bad_blocks.unwrap_or_default(),
-			forks: fork_blocks.unwrap_or_else(Vec::new).into_iter().collect(),
+			forks: fork_blocks.unwrap_or_default().into_iter().collect(),
 		}
 	}
 
