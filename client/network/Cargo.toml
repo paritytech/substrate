@@ -27,7 +27,7 @@ codec = { package = "parity-scale-codec", version = "3.0.0", features = [
 either = "1.5.3"
 fnv = "1.0.6"
 fork-tree = { version = "3.0.0", path = "../../utils/fork-tree" }
-futures = "0.3.19"
+futures = "0.3.21"
 futures-timer = "3.0.2"
 asynchronous-codec = "0.5"
 hex = "0.4.0"
