@@ -48,46 +48,39 @@ pub mod unhashed;
 pub mod weak_bounded_vec;
 
 mod transaction_level_tracker {
-	use core::sync::atomic::{AtomicU32, Ordering};
+	use crate::sync::RuntimeCell;
 
 	type Layer = u32;
-	static NUM_LEVELS: AtomicU32 = AtomicU32::new(0);
+	static NUM_LEVELS: RuntimeCell<u32> = RuntimeCell::new(0);
 	const TRANSACTIONAL_LIMIT: Layer = 255;
 
 	pub fn get_transaction_level() -> Layer {
-		NUM_LEVELS.load(Ordering::SeqCst)
+		NUM_LEVELS.get()
 	}
 
 	/// Increments the transaction level. Returns an error if levels go past the limit.
 	///
 	/// Returns a guard that when dropped decrements the transaction level automatically.
 	pub fn inc_transaction_level() -> Result<StorageLayerGuard, ()> {
-		NUM_LEVELS
-			.fetch_update(Ordering::SeqCst, Ordering::SeqCst, |existing_levels| {
-				if existing_levels >= TRANSACTIONAL_LIMIT {
-					return None
-				}
-				// Cannot overflow because of check above.
-				Some(existing_levels + 1)
-			})
-			.map_err(|_| ())?;
+		let existing_levels = get_transaction_level();
+		if existing_levels >= TRANSACTIONAL_LIMIT {
+			return Err(())
+		}
+		// Cannot overflow because of check above.
+		NUM_LEVELS.set(existing_levels + 1);
 		Ok(StorageLayerGuard)
 	}
 
 	fn dec_transaction_level() {
-		NUM_LEVELS
-			.fetch_update(Ordering::SeqCst, Ordering::SeqCst, |existing_levels| {
-				if existing_levels == 0 {
-					log::warn!(
-					"We are underflowing with calculating transactional levels. Not great, but let's not panic...",
-				);
-					None
-				} else {
-					// Cannot underflow because of checks above.
-					Some(existing_levels - 1)
-				}
-			})
-			.ok();
+		let existing_levels = get_transaction_level();
+		if existing_levels == 0 {
+			log::warn!(
+				"We are underflowing with calculating transactional levels. Not great, but let's not panic...",
+			);
+		} else {
+			// Cannot underflow because of checks above.
+			NUM_LEVELS.set(existing_levels - 1);
+		}
 	}
 
 	pub fn is_transactional() -> bool {
