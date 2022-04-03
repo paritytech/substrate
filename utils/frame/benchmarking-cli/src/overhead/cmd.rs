@@ -19,7 +19,7 @@
 //! the *overhead* benchmarks.
 
 use sc_block_builder::{BlockBuilderApi, BlockBuilderProvider};
-use sc_cli::{CliConfiguration, Result, SharedParams};
+use sc_cli::{CliConfiguration, ImportParams, Result, SharedParams};
 use sc_client_api::Backend as ClientBackend;
 use sc_service::Configuration;
 use sp_api::{ApiExt, ProvideRuntimeApi};
@@ -44,6 +44,10 @@ pub struct OverheadCmd {
 	#[allow(missing_docs)]
 	#[clap(flatten)]
 	pub shared_params: SharedParams,
+
+	#[allow(missing_docs)]
+	#[clap(flatten)]
+	pub import_params: ImportParams,
 
 	#[allow(missing_docs)]
 	#[clap(flatten)]
@@ -114,5 +118,9 @@ impl OverheadCmd {
 impl CliConfiguration for OverheadCmd {
 	fn shared_params(&self) -> &SharedParams {
 		&self.shared_params
+	}
+
+	fn import_params(&self) -> Option<&ImportParams> {
+		Some(&self.import_params)
 	}
 }

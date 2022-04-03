@@ -15,20 +15,48 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::pallet::Def;
+use crate::{
+	pallet::{parse::error::VariantField, Def},
+	COUNTER,
+};
 use frame_support_procedural_tools::get_doc_literals;
+use syn::spanned::Spanned;
 
 ///
 /// * impl various trait on Error
 pub fn expand_error(def: &mut Def) -> proc_macro2::TokenStream {
-	let error = if let Some(error) = &def.error { error } else { return Default::default() };
+	let count = COUNTER.with(|counter| counter.borrow_mut().inc());
+	let error_token_unique_id =
+		syn::Ident::new(&format!("__tt_error_token_{}", count), def.item.span());
 
-	let error_ident = &error.error;
 	let frame_support = &def.frame_support;
 	let frame_system = &def.frame_system;
+	let config_where_clause = &def.config.where_clause;
+
+	let error = if let Some(error) = &def.error {
+		error
+	} else {
+		return quote::quote! {
+			#[macro_export]
+			#[doc(hidden)]
+			macro_rules! #error_token_unique_id {
+				{
+					$caller:tt
+					frame_support = [{ $($frame_support:ident)::* }]
+				} => {
+					$($frame_support::)*tt_return! {
+						$caller
+					}
+				};
+			}
+
+			pub use #error_token_unique_id as tt_error_token;
+		}
+	};
+
+	let error_ident = &error.error;
 	let type_impl_gen = &def.type_impl_generics(error.attr_span);
 	let type_use_gen = &def.type_use_generics(error.attr_span);
-	let config_where_clause = &def.config.where_clause;
 
 	let phantom_variant: syn::Variant = syn::parse_quote!(
 		#[doc(hidden)]
@@ -39,13 +67,19 @@ pub fn expand_error(def: &mut Def) -> proc_macro2::TokenStream {
 		)
 	);
 
-	let as_u8_matches = error.variants.iter().enumerate().map(
-		|(i, (variant, _))| quote::quote_spanned!(error.attr_span => Self::#variant => #i as u8,),
-	);
-
-	let as_str_matches = error.variants.iter().map(|(variant, _)| {
-		let variant_str = format!("{}", variant);
-		quote::quote_spanned!(error.attr_span => Self::#variant => #variant_str,)
+	let as_str_matches = error.variants.iter().map(|(variant, field_ty, _)| {
+		let variant_str = variant.to_string();
+		match field_ty {
+			Some(VariantField { is_named: true }) => {
+				quote::quote_spanned!(error.attr_span => Self::#variant { .. } => #variant_str,)
+			},
+			Some(VariantField { is_named: false }) => {
+				quote::quote_spanned!(error.attr_span => Self::#variant(..) => #variant_str,)
+			},
+			None => {
+				quote::quote_spanned!(error.attr_span => Self::#variant => #variant_str,)
+			},
+		}
 	});
 
 	let error_item = {
@@ -62,9 +96,14 @@ pub fn expand_error(def: &mut Def) -> proc_macro2::TokenStream {
 	let capture_docs = if cfg!(feature = "no-metadata-docs") { "never" } else { "always" };
 
 	// derive TypeInfo for error metadata
-	error_item
-		.attrs
-		.push(syn::parse_quote!( #[derive(#frame_support::scale_info::TypeInfo)] ));
+	error_item.attrs.push(syn::parse_quote! {
+		#[derive(
+			#frame_support::codec::Encode,
+			#frame_support::codec::Decode,
+			#frame_support::scale_info::TypeInfo,
+			#frame_support::PalletError,
+		)]
+	});
 	error_item.attrs.push(syn::parse_quote!(
 		#[scale_info(skip_type_params(#type_use_gen), capture_docs = #capture_docs)]
 	));
@@ -91,14 +130,6 @@ pub fn expand_error(def: &mut Def) -> proc_macro2::TokenStream {
 
 		impl<#type_impl_gen> #error_ident<#type_use_gen> #config_where_clause {
 			#[doc(hidden)]
-			pub fn as_u8(&self) -> u8 {
-				match &self {
-					Self::__Ignore(_, _) => unreachable!("`__Ignore` can never be constructed"),
-					#( #as_u8_matches )*
-				}
-			}
-
-			#[doc(hidden)]
 			pub fn as_str(&self) -> &'static str {
 				match &self {
 					Self::__Ignore(_, _) => unreachable!("`__Ignore` can never be constructed"),
@@ -120,18 +151,37 @@ pub fn expand_error(def: &mut Def) -> proc_macro2::TokenStream {
 			#config_where_clause
 		{
 			fn from(err: #error_ident<#type_use_gen>) -> Self {
+				use #frame_support::codec::Encode;
 				let index = <
 					<T as #frame_system::Config>::PalletInfo
 					as #frame_support::traits::PalletInfo
 				>::index::<Pallet<#type_use_gen>>()
 					.expect("Every active module has an index in the runtime; qed") as u8;
+				let mut encoded = err.encode();
+				encoded.resize(#frame_support::MAX_MODULE_ERROR_ENCODED_SIZE, 0);
 
 				#frame_support::sp_runtime::DispatchError::Module(#frame_support::sp_runtime::ModuleError {
 					index,
-					error: err.as_u8(),
+					error: core::convert::TryInto::try_into(encoded).expect("encoded error is resized to be equal to the maximum encoded error size; qed"),
 					message: Some(err.as_str()),
 				})
 			}
 		}
+
+		#[macro_export]
+		#[doc(hidden)]
+		macro_rules! #error_token_unique_id {
+			{
+				$caller:tt
+				frame_support = [{ $($frame_support:ident)::* }]
+			} => {
+				$($frame_support::)*tt_return! {
+					$caller
+					error = [{ #error_ident }]
+				}
+			};
+		}
+
+		pub use #error_token_unique_id as tt_error_token;
 	)
 }

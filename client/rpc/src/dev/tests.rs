@@ -18,12 +18,7 @@
 
 use super::*;
 use assert_matches::assert_matches;
-<<<<<<< HEAD
-use futures::executor;
-use jsonrpsee::{core::Error as JsonRpseeError, types::error::CallError};
-=======
 use jsonrpsee::core::Error as JsonRpseeError;
->>>>>>> 2d8b4eff6a165f4f1e9e0d4309958b32aa317f38
 use sc_block_builder::BlockBuilderProvider;
 use sp_blockchain::HeaderBackend;
 use sp_consensus::BlockOrigin;

@@ -327,10 +327,10 @@ pub mod test {
 	use sp_std::convert::TryInto;
 
 	crate::generate_storage_alias! { Prefix, Foo => Value<BoundedBTreeSet<u32, ConstU32<7>>> }
-	crate::generate_storage_alias! { Prefix, FooMap => Map<(u32, Twox128), BoundedBTreeSet<u32, ConstU32<7>>> }
+	crate::generate_storage_alias! { Prefix, FooMap => Map<(Twox128, u32), BoundedBTreeSet<u32, ConstU32<7>>> }
 	crate::generate_storage_alias! {
 		Prefix,
-		FooDoubleMap => DoubleMap<(u32, Twox128), (u32, Twox128), BoundedBTreeSet<u32, ConstU32<7>>>
+		FooDoubleMap => DoubleMap<(Twox128, u32), (Twox128, u32), BoundedBTreeSet<u32, ConstU32<7>>>
 	}
 
 	fn set_from_keys<T>(keys: &[T]) -> BTreeSet<T>

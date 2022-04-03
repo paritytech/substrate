@@ -39,7 +39,7 @@ mod mock;
 mod tests;
 pub mod weights;
 
-use codec::{Decode, DecodeLimit, Encode, FullCodec, MaxEncodedLen};
+use codec::{DecodeLimit, Encode, FullCodec};
 use frame_support::{
 	ensure,
 	traits::{PreimageProvider, PreimageRecipient},
@@ -50,12 +50,6 @@ use sp_runtime::traits::{Dispatchable, Hash};
 use sp_std::prelude::*;
 
 pub use pallet::*;
-
-#[derive(Clone, Encode, Decode, TypeInfo, MaxEncodedLen)]
-pub struct Preimage<BoundedVec, Balance, AccountId> {
-	preimage: BoundedVec,
-	deposit: Option<(AccountId, Balance)>,
-}
 
 #[frame_support::pallet]
 pub mod pallet {

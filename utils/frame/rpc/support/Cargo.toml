@@ -27,4 +27,4 @@ sc-rpc-api = { version = "0.10.0-dev", path = "../../../../client/rpc-api" }
 frame-system = { version = "4.0.0-dev", path = "../../../../frame/system" }
 scale-info = "2.0.1"
 jsonrpsee = { version = "0.9", features = ["ws-client", "jsonrpsee-types"] }
-tokio = { version = "1.15.0", features = ["macros"] }
+tokio = "1.17.0"

@@ -23,10 +23,6 @@
 mod tests;
 
 use jsonrpsee::core::RpcResult;
-
-pub use sc_rpc_api::dev::{BlockStats, DevApiServer};
-
-use jsonrpsee::core::RpcResult;
 use sc_client_api::{BlockBackend, HeaderBackend};
 use sc_rpc_api::{dev::error::Error, DenyUnsafe};
 use sp_api::{ApiExt, Core, ProvideRuntimeApi};
@@ -39,6 +35,8 @@ use std::{
 	marker::{PhantomData, Send, Sync},
 	sync::Arc,
 };
+
+pub use sc_rpc_api::dev::{BlockStats, DevApiServer};
 
 type HasherOf<Block> = <<Block as BlockT>::Header as Header>::Hashing;
 

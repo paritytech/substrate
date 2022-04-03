@@ -21,17 +21,18 @@ use std::{fmt::Display, sync::Arc};
 
 use codec::{self, Codec, Decode, Encode};
 use jsonrpsee::{
-	core::{async_trait, Error as JsonRpseeError, RpcResult},
+	core::{async_trait, RpcResult},
 	proc_macros::rpc,
 	types::error::CallError,
 };
 
 use sc_rpc_api::DenyUnsafe;
 use sc_transaction_pool_api::{InPoolTransaction, TransactionPool};
+use sp_api::ApiExt;
 use sp_block_builder::BlockBuilder;
 use sp_blockchain::HeaderBackend;
 use sp_core::{hexdisplay::HexDisplay, Bytes};
-use sp_runtime::{generic::BlockId, traits};
+use sp_runtime::{generic::BlockId, legacy, traits};
 
 pub use frame_system_rpc_runtime_api::AccountNonceApi;
 
@@ -97,7 +98,7 @@ where
 	AccountId: Clone + Display + Codec + Send + 'static,
 	Index: Clone + Display + Codec + Send + traits::AtLeast32Bit + 'static,
 {
-	async fn nonce(&self, account: AccountId) -> Result<Index, JsonRpseeError> {
+	async fn nonce(&self, account: AccountId) -> RpcResult<Index> {
 		let api = self.client.runtime_api();
 		let best = self.client.info().best_hash;
 		let at = BlockId::hash(best);
@@ -111,21 +112,54 @@ where
 		&self,
 		extrinsic: Bytes,
 		at: Option<<Block as traits::Block>::Hash>,
-	) -> Result<Bytes, JsonRpseeError> {
+	) -> RpcResult<Bytes> {
 		self.deny_unsafe.check_if_safe()?;
 		let api = self.client.runtime_api();
-		let at = BlockId::<Block>::hash(at.unwrap_or_else(|| self.client.info().best_hash));
+		let at = BlockId::<Block>::hash(at.unwrap_or_else(||
+			// If the block hash is not supplied assume the best block.
+			self.client.info().best_hash));
+
 		let uxt: <Block as traits::Block>::Extrinsic =
 			Decode::decode(&mut &*extrinsic).map_err(|e| CallError::Custom {
 				code: Error::DecodeError.into(),
 				message: "Unable to dry run extrinsic.".into(),
 				data: serde_json::value::to_raw_value(&e.to_string()).ok(),
 			})?;
-		let result = api.apply_extrinsic(&at, uxt).map_err(|e| CallError::Custom {
-			code: Error::RuntimeError.into(),
-			message: "Unable to dry run extrinsic".into(),
-			data: serde_json::value::to_raw_value(&e.to_string()).ok(),
-		})?;
+
+		let api_version = api
+			.api_version::<dyn BlockBuilder<Block>>(&at)
+			.map_err(|e| CallError::Custom {
+				code: Error::RuntimeError.into(),
+				message: "Unable to dry run extrinsic.".into(),
+				data: serde_json::value::to_raw_value(&e.to_string()).ok(),
+			})?
+			.ok_or_else(|| CallError::Custom {
+				code: Error::RuntimeError.into(),
+				message: "Unable to dry run extrinsic.".into(),
+				data: serde_json::value::to_raw_value(&format!(
+					"Could not find `BlockBuilder` api for block `{:?}`.",
+					at
+				))
+				.ok(),
+			})?;
+
+		let result = if api_version < 6 {
+			#[allow(deprecated)]
+			api.apply_extrinsic_before_version_6(&at, uxt)
+				.map(legacy::byte_sized_error::convert_to_latest)
+				.map_err(|e| CallError::Custom {
+					code: Error::RuntimeError.into(),
+					message: "Unable to dry run extrinsic.".into(),
+					data: serde_json::value::to_raw_value(&e.to_string()).ok(),
+				})?
+		} else {
+			api.apply_extrinsic(&at, uxt).map_err(|e| CallError::Custom {
+				code: Error::RuntimeError.into(),
+				message: "Unable to dry run extrinsic.".into(),
+				data: serde_json::value::to_raw_value(&e.to_string()).ok(),
+			})?
+		};
+
 		Ok(Encode::encode(&result).into())
 	}
 }
@@ -172,6 +206,7 @@ mod tests {
 
 	use assert_matches::assert_matches;
 	use futures::executor::block_on;
+	use jsonrpsee::{core::Error as JsonRpseeError, types::error::CallError};
 	use sc_transaction_pool::BasicPool;
 	use sp_runtime::{
 		transaction_validity::{InvalidTransaction, TransactionValidityError},

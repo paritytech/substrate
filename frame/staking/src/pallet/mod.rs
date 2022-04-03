@@ -17,7 +17,7 @@
 
 //! Staking FRAME Pallet.
 
-use frame_election_provider_support::SortedListProvider;
+use frame_election_provider_support::{SortedListProvider, VoteWeight};
 use frame_support::{
 	dispatch::Codec,
 	pallet_prelude::*,
@@ -163,13 +163,12 @@ pub mod pallet {
 		/// After the threshold is reached a new era will be forced.
 		type OffendingValidatorsThreshold: Get<Perbill>;
 
-		/// Something that can provide a sorted list of voters in a somewhat sorted way. The
-		/// original use case for this was designed with `pallet_bags_list::Pallet` in mind. If
-		/// the bags-list is not desired, [`impls::UseNominatorsMap`] is likely the desired option.
-		type SortedListProvider: SortedListProvider<
-			Self::AccountId,
-			Score = frame_election_provider_support::VoteWeight,
-		>;
+		/// Something that provides a best-effort sorted list of voters aka electing nominators,
+		/// used for NPoS election.
+		///
+		/// The changes to nominators are reported to this. Moreover, each validator's self-vote is
+		/// also reported as one independent vote.
+		type VoterList: SortedListProvider<Self::AccountId, Score = VoteWeight>;
 
 		/// The maximum number of `unlocking` chunks a [`StakingLedger`] can have. Effectively
 		/// determines how many unique eras a staker may be unbonding in.
@@ -584,10 +583,10 @@ pub mod pallet {
 				});
 			}
 
-			// all voters are reported to the `SortedListProvider`.
+			// all voters are reported to the `VoterList`.
 			assert_eq!(
-				T::SortedListProvider::count(),
-				Nominators::<T>::count(),
+				T::VoterList::count(),
+				Nominators::<T>::count() + Validators::<T>::count(),
 				"not all genesis stakers were inserted into sorted list provider, something is wrong."
 			);
 		}
@@ -837,9 +836,9 @@ pub mod pallet {
 				// NOTE: ledger must be updated prior to calling `Self::weight_of`.
 				Self::update_ledger(&controller, &ledger);
 				// update this staker in the sorted list, if they exist in it.
-				if T::SortedListProvider::contains(&stash) {
-					T::SortedListProvider::on_update(&stash, Self::weight_of(&ledger.stash));
-					debug_assert_eq!(T::SortedListProvider::sanity_check(), Ok(()));
+				if T::VoterList::contains(&stash) {
+					T::VoterList::on_update(&stash, Self::weight_of(&ledger.stash));
+					debug_assert_eq!(T::VoterList::sanity_check(), Ok(()));
 				}
 
 				Self::deposit_event(Event::<T>::Bonded(stash.clone(), extra));
@@ -920,8 +919,8 @@ pub mod pallet {
 				Self::update_ledger(&controller, &ledger);
 
 				// update this staker in the sorted list, if they exist in it.
-				if T::SortedListProvider::contains(&ledger.stash) {
-					T::SortedListProvider::on_update(&ledger.stash, Self::weight_of(&ledger.stash));
+				if T::VoterList::contains(&ledger.stash) {
+					T::VoterList::on_update(&ledger.stash, Self::weight_of(&ledger.stash));
 				}
 
 				Self::deposit_event(Event::<T>::Unbonded(ledger.stash, value));
@@ -1403,8 +1402,8 @@ pub mod pallet {
 
 			// NOTE: ledger must be updated prior to calling `Self::weight_of`.
 			Self::update_ledger(&controller, &ledger);
-			if T::SortedListProvider::contains(&ledger.stash) {
-				T::SortedListProvider::on_update(&ledger.stash, Self::weight_of(&ledger.stash));
+			if T::VoterList::contains(&ledger.stash) {
+				T::VoterList::on_update(&ledger.stash, Self::weight_of(&ledger.stash));
 			}
 
 			let removed_chunks = 1u32 // for the case where the last iterated chunk is not removed
