@@ -21,9 +21,7 @@ use sp_runtime::traits::{Bounded, Hash, StaticLookup};
 use sp_std::{mem::size_of, prelude::*};
 
 use frame_benchmarking::{account, benchmarks_instance_pallet};
-use frame_support::{
-	traits::{EnsureOrigin, Get, UnfilteredDispatchable},
-};
+use frame_support::traits::{EnsureOrigin, Get, UnfilteredDispatchable};
 use frame_system::{Pallet as System, RawOrigin as SystemOrigin};
 
 use super::{Call as AllianceCall, Pallet as Alliance, *};
@@ -95,7 +93,8 @@ fn set_members<T: Config<I>, I: 'static>() {
 	});
 	Members::<T, I>::insert(MemberRole::Fellow, fellows.clone());
 
-	let allies: BoundedVec<_, T::MaxMembersCount> = BoundedVec::try_from(vec![ally::<T, I>(1)]).unwrap();
+	let allies: BoundedVec<_, T::MaxMembersCount> =
+		BoundedVec::try_from(vec![ally::<T, I>(1)]).unwrap();
 	allies.iter().for_each(|who| {
 		T::Currency::reserve(&who, T::CandidateDeposit::get()).unwrap();
 		<DepositOf<T, I>>::insert(&who, T::CandidateDeposit::get());
