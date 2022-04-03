@@ -84,6 +84,8 @@ fn new_node(tokio_handle: Handle) -> node_cli::service::NewFullBase {
 		rpc_cors: None,
 		rpc_methods: Default::default(),
 		rpc_max_payload: None,
+		rpc_max_request_size: None,
+		rpc_max_response_size: None,
 		rpc_id_provider: None,
 		ws_max_out_buffer_capacity: None,
 		prometheus_config: None,

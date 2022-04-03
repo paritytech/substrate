@@ -95,6 +95,10 @@ pub struct Configuration {
 	pub rpc_methods: RpcMethods,
 	/// Maximum payload of rpc request/responses.
 	pub rpc_max_payload: Option<usize>,
+	/// Maximum payload of a rpc request
+	pub rpc_max_request_size: Option<usize>,
+	/// Maximum payload of a rpc request
+	pub rpc_max_response_size: Option<usize>,
 	/// Custom JSON-RPC subscription ID provider.
 	///
 	/// Default: [`crate::RandomStringSubscriptionId`].
