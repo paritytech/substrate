@@ -51,13 +51,6 @@ impl From<sp_npos_elections::Error> for Error {
 /// dynamically. If you use `elect_with_bounds` along with `InstantElectionProvider`, the bound that
 /// would be used is the minimum of the dynamic bounds given as arguments to `elect_with_bounds` and
 /// the trait bounds (`MaxVoters` and `MaxTargets`).
-///
-/// It is advisable to use the former ([`ElectionProvider::elect`]) only at genesis, or for testing,
-/// the latter [`InstantElectionProvider::elect_with_bounds`] for onchain operations, with
-/// thoughtful bounds.
-///
-/// `Solver` represents the solver to be used for the election, examples are `SequentialPhragmen`
-/// and `PhragMMS`.
 pub struct BoundedExecution<T: Config>(PhantomData<T>);
 
 /// Configuration trait.
