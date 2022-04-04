@@ -108,7 +108,7 @@ pub mod pallet {
 			Self::ClassId,
 		>;
 
-		/// Locker trait to enable Locking mechanism downstream
+		/// Locker trait to enable Locking mechanism downstream.
 		type Locker: Locker<Self::ClassId, Self::InstanceId>;
 
 		/// The basic amount of funds that must be reserved for an asset class.
