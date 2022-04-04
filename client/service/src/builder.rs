@@ -498,24 +498,8 @@ where
 	if !TARGET_ENV.is_empty() {
 		info!("💻 Target environment: {}", TARGET_ENV);
 	}
-	if let Some(ref cpu) = sysinfo.cpu {
-		info!("💻 CPU: {}", cpu);
-	}
-	if let Some(core_count) = sysinfo.core_count {
-		info!("💻 CPU cores: {}", core_count);
-	}
-	if let Some(memory) = sysinfo.memory {
-		info!("💻 Memory: {}MB", memory / (1024 * 1024));
-	}
-	if let Some(ref linux_kernel) = sysinfo.linux_kernel {
-		info!("💻 Kernel: {}", linux_kernel);
-	}
-	if let Some(ref linux_distro) = sysinfo.linux_distro {
-		info!("💻 Linux distribution: {}", linux_distro);
-	}
-	if let Some(is_virtual_machine) = sysinfo.is_virtual_machine {
-		info!("💻 Virtual machine: {}", if is_virtual_machine { "yes" } else { "no" });
-	}
+
+	sc_sysinfo::print_sysinfo(&sysinfo);
 
 	let telemetry = telemetry
 		.map(|telemetry| {

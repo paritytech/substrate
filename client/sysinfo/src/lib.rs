@@ -27,6 +27,28 @@ mod sysinfo_linux;
 
 pub use sysinfo::{gather_hwbench, gather_sysinfo};
 
+/// Prints out the system software/hardware information in the logs.
+pub fn print_sysinfo(sysinfo: &sc_telemetry::SysInfo) {
+	if let Some(ref cpu) = sysinfo.cpu {
+		log::info!("💻 CPU: {}", cpu);
+	}
+	if let Some(core_count) = sysinfo.core_count {
+		log::info!("💻 CPU cores: {}", core_count);
+	}
+	if let Some(memory) = sysinfo.memory {
+		log::info!("💻 Memory: {}MB", memory / (1024 * 1024));
+	}
+	if let Some(ref linux_kernel) = sysinfo.linux_kernel {
+		log::info!("💻 Kernel: {}", linux_kernel);
+	}
+	if let Some(ref linux_distro) = sysinfo.linux_distro {
+		log::info!("💻 Linux distribution: {}", linux_distro);
+	}
+	if let Some(is_virtual_machine) = sysinfo.is_virtual_machine {
+		log::info!("💻 Virtual machine: {}", if is_virtual_machine { "yes" } else { "no" });
+	}
+}
+
 /// Prints out the results of the hardware benchmarks in the logs.
 pub fn print_hwbench(hwbench: &sc_telemetry::HwBench) {
 	log::info!("🏁 CPU score: {}MB/s", hwbench.cpu_hashrate_score);
