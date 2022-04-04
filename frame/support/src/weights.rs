@@ -712,10 +712,18 @@ where
 	}
 }
 
-/// Implementor of [`WeightToFeePolynomial`] that uses a constant modifier.
-pub struct ConstantModifierFee<T, M>(sp_std::marker::PhantomData<(T, M)>);
+/// Implementor of [`WeightToFeePolynomial`] that uses a constant multiplier.
+/// # Example
+///
+/// ```
+/// // Results in a multiplier of 10 for each unit of weight (or length)
+/// ConstantMultiplier::<u128, ConstU128<10u128>>
+///
+/// ```
+///
+pub struct ConstantMultiplier<T, M>(sp_std::marker::PhantomData<(T, M)>);
 
-impl<T, M> WeightToFeePolynomial for ConstantModifierFee<T, M>
+impl<T, M> WeightToFeePolynomial for ConstantMultiplier<T, M>
 where
 	T: BaseArithmetic + From<u32> + Copy + Unsigned,
 	M: Get<T>,
@@ -1010,9 +1018,9 @@ mod tests {
 	#[test]
 	fn constant_fee_works() {
 		use crate::traits::ConstU128;
-		assert_eq!(ConstantModifierFee::<u128, ConstU128<100u128>>::calc(&0), 0);
-		assert_eq!(ConstantModifierFee::<u128, ConstU128<10u128>>::calc(&50), 500);
-		assert_eq!(ConstantModifierFee::<u128, ConstU128<1024u128>>::calc(&16), 16384);
-		assert_eq!(ConstantModifierFee::<u128, ConstU128<{ u128::MAX }>>::calc(&2), u128::MAX);
+		assert_eq!(ConstantMultiplier::<u128, ConstU128<100u128>>::calc(&0), 0);
+		assert_eq!(ConstantMultiplier::<u128, ConstU128<10u128>>::calc(&50), 500);
+		assert_eq!(ConstantMultiplier::<u128, ConstU128<1024u128>>::calc(&16), 16384);
+		assert_eq!(ConstantMultiplier::<u128, ConstU128<{ u128::MAX }>>::calc(&2), u128::MAX);
 	}
 }
