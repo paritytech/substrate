@@ -432,6 +432,33 @@ pub fn transactional(attr: TokenStream, input: TokenStream) -> TokenStream {
 	transactional::add_transactional(attr, input).unwrap_or_else(|e| e.to_compile_error().into())
 }
 
+/// Execute the annotated function in a storage transaction. If a transactional layer does not
+/// exist, a new one is created. Otherwise, we execute the logic in the existing transactional
+/// layer.
+///
+/// The return type of the annotated function must be `Result`. All changes to storage performed
+/// by the annotated function are discarded if it returns `Err`, or committed if `Ok`.
+///
+/// # Example
+///
+/// ```nocompile
+/// #[with_transactional]
+/// fn value_commits(v: u32) -> result::Result<u32, &'static str> {
+/// 	Value::set(v);
+/// 	Ok(v)
+/// }
+///
+/// #[with_transactional]
+/// fn value_rollbacks(v: u32) -> result::Result<u32, &'static str> {
+/// 	Value::set(v);
+/// 	Err("nah")
+/// }
+/// ```
+#[proc_macro_attribute]
+pub fn with_transactional(attr: TokenStream, input: TokenStream) -> TokenStream {
+	transactional::with_transactional(attr, input).unwrap_or_else(|e| e.to_compile_error().into())
+}
+
 /// Derive [`Clone`] but do not bound any generic. Docs are at `frame_support::CloneNoBound`.
 #[proc_macro_derive(CloneNoBound)]
 pub fn derive_clone_no_bound(input: TokenStream) -> TokenStream {
@@ -507,12 +534,6 @@ pub fn derive_eq_no_bound(input: TokenStream) -> TokenStream {
 #[proc_macro_derive(DefaultNoBound)]
 pub fn derive_default_no_bound(input: TokenStream) -> TokenStream {
 	default_no_bound::derive_default_no_bound(input)
-}
-
-#[proc_macro_attribute]
-pub fn with_transactional(attr: TokenStream, input: TokenStream) -> TokenStream {
-	transactional::with_transactional(attr, input)
-		.unwrap_or_else(|e| e.to_compile_error().into())
 }
 
 #[proc_macro]
