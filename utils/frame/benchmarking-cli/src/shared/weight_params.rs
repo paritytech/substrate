@@ -68,7 +68,7 @@ impl WeightParams {
 #[cfg(test)]
 mod test_weight_params {
 	use super::WeightParams;
-	use crate::storage::record::{StatSelect, Stats};
+	use crate::shared::{StatSelect, Stats};
 
 	#[test]
 	fn calc_weight_works() {
