@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -159,6 +159,7 @@ impl<AccountId> IdentityVerifier<AccountId> for () {
 		None
 	}
 }
+
 pub trait ProposalProvider<AccountId, Hash, Proposal> {
 	fn propose_proposal(
 		who: AccountId,
@@ -522,7 +523,7 @@ pub mod pallet {
 				T::MaxFellows::get(), // Y
 				T::MaxProposals::get(), // P2
 			),
-			DispatchClass::Operational
+			DispatchClass::Normal
 		))]
 		pub fn propose(
 			origin: OriginFor<T>,
