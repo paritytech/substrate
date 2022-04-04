@@ -1687,7 +1687,7 @@ fn grandpa_environment_doesnt_send_equivocation_reports_for_itself() {
 }
 
 #[test]
-fn revert_prunes_authority_changes_and_resets_voter_state() {
+fn revert_prunes_authority_changes() {
 	sp_tracing::try_init_simple();
 	let runtime = Runtime::new().unwrap();
 
