@@ -559,11 +559,11 @@ where
 
 	/// Finalize a root in the tree by either finalizing the node itself or a
 	/// child node that's not in the tree, guaranteeing that the node being
-	/// finalized isn't a descendent of any of the root's children. The given
-	/// `predicate` is checked on the prospective finalized root and must pass for
-	/// finalization to occur. The given function `is_descendent_of` should
-	/// return `true` if the second hash (target) is a descendent of the first
-	/// hash (base).
+	/// finalized isn't a descendent of (or t equal to) any of the root's
+	/// children. The given `predicate` is checked on the prospective finalized
+	/// root and must pass for finalization to occur. The given function
+	/// `is_descendent_of` should return `true` if the second hash (target) is a
+	/// descendent of the first hash (base).
 	pub fn finalize_with_descendent_if<F, P, E>(
 		&mut self,
 		hash: &H,
@@ -1278,12 +1278,24 @@ mod test {
 			Ok(None),
 		);
 
+		// finalizing "D" is not allowed since it is not a root.
+		assert_eq!(
+			tree.finalize_with_descendent_if(&"D", 10, &is_descendent_of, |_| true),
+			Err(Error::UnfinalizedAncestor)
+		);
+
 		// finalizing "D" will finalize a block from the tree, but it can't be applied yet
-		// since it is not a root change
+		// since it is not a root change.
 		assert_eq!(
 			tree.finalizes_any_with_descendent_if(&"D", 10, &is_descendent_of, |c| c.effective ==
-				10,),
+				10),
 			Ok(Some(false)),
+		);
+
+		assert_eq!(
+			tree.finalizes_any_with_descendent_if(&"E", 15, &is_descendent_of, |c| c.effective ==
+				10),
+			Err(Error::UnfinalizedAncestor)
 		);
 
 		// finalizing "B" doesn't finalize "A0" since the predicate doesn't pass,
