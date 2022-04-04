@@ -339,9 +339,9 @@ benchmarks! {
 
 	// We use the max block weight for this extrinsic for now. See below.
 	remove_member_without_replacement {}: {
-		return Err(BenchmarkError::Override(
+		Err(BenchmarkError::Override(
 			BenchmarkResult::from_weight(T::BlockWeights::get().max_block)
-		));
+		))?;
 	}
 
 	// -- Root ones

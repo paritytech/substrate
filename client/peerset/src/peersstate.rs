@@ -169,9 +169,7 @@ impl PeersState {
 
 	/// Returns an object that grants access to the reputation value of a peer.
 	pub fn peer_reputation(&mut self, peer_id: PeerId) -> Reputation {
-		if let Entry::Vacant(e) = self.nodes.entry(peer_id) {
-			e.insert(Node::new(self.sets.len()));
-		}
+		self.nodes.entry(peer_id).or_insert_with(|| Node::new(self.sets.len()));
 
 		let entry = match self.nodes.entry(peer_id) {
 			Entry::Vacant(_) => unreachable!("guaranteed to be inserted above; qed"),
