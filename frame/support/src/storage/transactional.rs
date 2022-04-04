@@ -105,6 +105,9 @@ pub fn with_transaction<T, E>(f: impl FnOnce() -> TransactionOutcome<Result<T, E
 where
 	E: From<DispatchError>,
 {
+	// This needs to happen before `start_transaction` below.
+	// Otherwise we may rollback the increase, then decrease as the guard goes out of scope
+	// and then end in some bad state.
 	let _guard = inc_transaction_level().map_err(|()| TransactionalError::LimitReached.into())?;
 
 	start_transaction();
@@ -127,6 +130,9 @@ where
 /// It is recommended to only use [`with_transaction`] to avoid users from generating too many
 /// transactional layers.
 pub fn with_transaction_unchecked<R>(f: impl FnOnce() -> TransactionOutcome<R>) -> R {
+	// This needs to happen before `start_transaction` below.
+	// Otherwise we may rollback the increase, then decrease as the guard goes out of scope
+	// and then end in some bad state.
 	let maybe_guard = inc_transaction_level();
 
 	if maybe_guard.is_err() {
