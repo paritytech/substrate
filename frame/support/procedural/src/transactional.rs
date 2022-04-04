@@ -20,7 +20,8 @@ use proc_macro::TokenStream;
 use quote::quote;
 use syn::{ItemFn, Result};
 
-pub fn transactional(_attr: TokenStream, input: TokenStream) -> Result<TokenStream> {
+/// Execute a block of code within a new transactional layer.
+pub fn add_transactional(_attr: TokenStream, input: TokenStream) -> Result<TokenStream> {
 	let ItemFn { attrs, vis, sig, block } = syn::parse(input)?;
 
 	let crate_ = generate_crate_access_2018("frame-support")?;
@@ -42,17 +43,26 @@ pub fn transactional(_attr: TokenStream, input: TokenStream) -> Result<TokenStre
 	Ok(output.into())
 }
 
-pub fn require_transactional(_attr: TokenStream, input: TokenStream) -> Result<TokenStream> {
+pub fn with_transactional(_attr: TokenStream, input: TokenStream) -> Result<TokenStream> {
 	let ItemFn { attrs, vis, sig, block } = syn::parse(input)?;
 
 	let crate_ = generate_crate_access_2018("frame-support")?;
 	let output = quote! {
 		#(#attrs)*
 		#vis #sig {
+			use #crate_::storage::{with_transaction, TransactionOutcome};
 			if !#crate_::storage::is_transactional() {
-				return Err(#crate_::sp_runtime::TransactionalError::NoLayer.into());
+				with_transaction(|| {
+					let r = (|| { #block })();
+					if r.is_ok() {
+						TransactionOutcome::Commit(r)
+					} else {
+						TransactionOutcome::Rollback(r)
+					}
+				})
+			} else {
+				#block
 			}
-			#block
 		}
 	};
 

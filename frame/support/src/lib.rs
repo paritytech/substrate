@@ -707,10 +707,10 @@ pub use frame_support_procedural::DefaultNoBound;
 ///
 /// ```
 /// # use frame_support::{
-/// # 	require_transactional, transactional, dispatch::DispatchResult
+/// # 	with_transactional, transactional, dispatch::DispatchResult
 /// # };
 ///
-/// #[require_transactional]
+/// #[with_transactional]
 /// fn update_all(value: u32) -> DispatchResult {
 /// 	// Update multiple storages.
 /// 	// Return `Err` to indicate should revert.
@@ -728,7 +728,7 @@ pub use frame_support_procedural::DefaultNoBound;
 /// 	update_all(value)
 /// }
 /// ```
-pub use frame_support_procedural::require_transactional;
+pub use frame_support_procedural::with_transactional;
 
 /// Convert the current crate version into a [`CrateVersion`](crate::traits::CrateVersion).
 ///
