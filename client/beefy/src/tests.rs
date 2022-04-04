@@ -37,9 +37,10 @@ use sc_network_test::{
 use sc_utils::notification::NotificationReceiver;
 
 use beefy_primitives::{
-	crypto::AuthorityId, ConsensusLog, MmrRootHash, ValidatorSet, BEEFY_ENGINE_ID,
+	crypto::AuthorityId, BeefyApi, ConsensusLog, MmrRootHash, ValidatorSet, BEEFY_ENGINE_ID,
 	KEY_TYPE as BeefyKeyType,
 };
+use sp_api::{ApiRef, ProvideRuntimeApi};
 use sp_consensus::BlockOrigin;
 use sp_core::H256;
 use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
@@ -248,11 +249,36 @@ pub(crate) fn create_beefy_keystore(authority: BeefyKeyring) -> SyncCryptoStoreP
 	keystore
 }
 
+#[derive(Clone)]
+pub(crate) struct TestApi {}
+
+// compiler gets confused and warns us about unused inner
+#[allow(dead_code)]
+pub(crate) struct RuntimeApi {
+	inner: TestApi,
+}
+
+impl ProvideRuntimeApi<Block> for TestApi {
+	type Api = RuntimeApi;
+
+	fn runtime_api<'a>(&'a self) -> ApiRef<'a, Self::Api> {
+		RuntimeApi { inner: self.clone() }.into()
+	}
+}
+
+sp_api::mock_impl_runtime_apis! {
+	impl BeefyApi<Block> for RuntimeApi {
+		fn validator_set() -> Option<BeefyValidatorSet> {
+			BeefyValidatorSet::new(make_beefy_ids(&[BeefyKeyring::Alice, BeefyKeyring::Bob, BeefyKeyring::Charlie]), 0)
+		}
+	}
+}
+
 pub(crate) fn create_beefy_worker(
 	peer: &BeefyPeer,
 	key: &BeefyKeyring,
 	min_block_delta: u32,
-) -> BeefyWorker<Block, PeersFullClient, Backend, Arc<NetworkService<Block, H256>>> {
+) -> BeefyWorker<Block, Backend, PeersFullClient, TestApi, Arc<NetworkService<Block, H256>>> {
 	let keystore = create_beefy_keystore(*key);
 
 	let (signed_commitment_sender, signed_commitment_stream) =
@@ -263,6 +289,7 @@ pub(crate) fn create_beefy_worker(
 	let beefy_link_half = BeefyLinkHalf { signed_commitment_stream, beefy_best_block_stream };
 	*peer.data.beefy_link_half.lock() = Some(beefy_link_half);
 	let test_modifiers = peer.data.test_modifiers.clone().unwrap();
+	let api = Arc::new(TestApi {});
 
 	let network = peer.network_service().clone();
 	let sync_oracle = network.clone();
@@ -272,6 +299,7 @@ pub(crate) fn create_beefy_worker(
 	let worker_params = crate::worker::WorkerParams {
 		client: peer.client().as_client(),
 		backend: peer.client().as_backend(),
+		runtime: api,
 		key_store: Some(keystore).into(),
 		signed_commitment_sender,
 		beefy_best_block_sender,
@@ -282,7 +310,7 @@ pub(crate) fn create_beefy_worker(
 		sync_oracle,
 	};
 
-	BeefyWorker::<_, _, _, _>::new(worker_params, test_modifiers)
+	BeefyWorker::<_, _, _, _, _>::new(worker_params, test_modifiers)
 }
 
 // Spawns beefy voters. Returns a future to spawn on the runtime.

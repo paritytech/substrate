@@ -26,7 +26,7 @@ use parking_lot::Mutex;
 use sc_client_api::{Backend, FinalityNotification, FinalityNotifications};
 use sc_network_gossip::GossipEngine;
 
-use sp_api::BlockId;
+use sp_api::{BlockId, ProvideRuntimeApi};
 use sp_arithmetic::traits::AtLeast32Bit;
 use sp_consensus::SyncOracle;
 use sp_runtime::{
@@ -52,12 +52,10 @@ use crate::{
 	Client,
 };
 
-pub(crate) struct WorkerParams<B, BE, C, SO>
-where
-	B: Block,
-{
+pub(crate) struct WorkerParams<B: Block, BE, C, R, SO> {
 	pub client: Arc<C>,
 	pub backend: Arc<BE>,
+	pub runtime: Arc<R>,
 	pub key_store: BeefyKeystore,
 	pub signed_commitment_sender: BeefySignedCommitmentSender<B>,
 	pub beefy_best_block_sender: BeefyBestBlockSender<B>,
@@ -69,15 +67,10 @@ where
 }
 
 /// A BEEFY worker plays the BEEFY protocol
-pub(crate) struct BeefyWorker<B, C, BE, SO>
-where
-	B: Block,
-	BE: Backend<B>,
-	C: Client<B, BE>,
-	SO: SyncOracle + Send + Sync + Clone + 'static,
-{
+pub(crate) struct BeefyWorker<B: Block, BE, C, R, SO> {
 	client: Arc<C>,
 	backend: Arc<BE>,
+	runtime: Arc<R>,
 	key_store: BeefyKeystore,
 	signed_commitment_sender: BeefySignedCommitmentSender<B>,
 	gossip_engine: Arc<Mutex<GossipEngine<B>>>,
@@ -104,12 +97,13 @@ where
 	test_res: tests::TestModifiers,
 }
 
-impl<B, C, BE, SO> BeefyWorker<B, C, BE, SO>
+impl<B, BE, C, R, SO> BeefyWorker<B, BE, C, R, SO>
 where
 	B: Block + Codec,
 	BE: Backend<B>,
 	C: Client<B, BE>,
-	C::Api: BeefyApi<B>,
+	R: ProvideRuntimeApi<B>,
+	R::Api: BeefyApi<B>,
 	SO: SyncOracle + Send + Sync + Clone + 'static,
 {
 	/// Return a new BEEFY worker instance.
@@ -119,7 +113,7 @@ where
 	///
 	/// The BEEFY pallet is needed in order to keep track of the BEEFY authority set.
 	pub(crate) fn new(
-		worker_params: WorkerParams<B, BE, C, SO>,
+		worker_params: WorkerParams<B, BE, C, R, SO>,
 		#[cfg(test)]
 		// behavior modifiers used in tests
 		test_res: tests::TestModifiers,
@@ -127,6 +121,7 @@ where
 		let WorkerParams {
 			client,
 			backend,
+			runtime,
 			key_store,
 			signed_commitment_sender,
 			beefy_best_block_sender,
@@ -144,6 +139,7 @@ where
 		BeefyWorker {
 			client: client.clone(),
 			backend,
+			runtime,
 			key_store,
 			signed_commitment_sender,
 			gossip_engine: Arc::new(Mutex::new(gossip_engine)),
@@ -163,16 +159,7 @@ where
 			test_res,
 		}
 	}
-}
 
-impl<B, C, BE, SO> BeefyWorker<B, C, BE, SO>
-where
-	B: Block,
-	BE: Backend<B>,
-	C: Client<B, BE>,
-	C::Api: BeefyApi<B>,
-	SO: SyncOracle + Send + Sync + Clone + 'static,
-{
 	/// Return `Some(number)` if we should be voting on block `number` now,
 	/// return `None` if there is no block we should vote on now.
 	fn current_vote_target(&self) -> Option<NumberFor<B>> {
@@ -464,7 +451,7 @@ where
 			.finality_notification_stream()
 			.take_while(|notif| {
 				let at = BlockId::hash(notif.header.hash());
-				if let Some(active) = self.client.runtime_api().validator_set(&at).ok().flatten() {
+				if let Some(active) = self.runtime.runtime_api().validator_set(&at).ok().flatten() {
 					if active.id() == GENESIS_AUTHORITY_SET_ID {
 						// When starting from genesis, there is no session boundary digest.
 						// Just initialize `rounds` to Block #1 as BEEFY mandatory block.
@@ -658,7 +645,7 @@ pub(crate) mod tests {
 	use super::*;
 	use crate::{
 		keystore::tests::Keyring,
-		tests::{create_beefy_worker, get_beefy_streams, make_beefy_ids, BeefyTestNet},
+		tests::{create_beefy_worker, get_beefy_streams, make_beefy_ids, BeefyTestNet, TestApi},
 	};
 
 	use futures::{executor::block_on, future::poll_fn, task::Poll};
@@ -833,8 +820,9 @@ pub(crate) mod tests {
 
 		let set_up = |worker: &mut BeefyWorker<
 			Block,
-			PeersFullClient,
 			Backend,
+			PeersFullClient,
+			TestApi,
 			Arc<NetworkService<Block, H256>>,
 		>,
 		              best_grandpa: u64,

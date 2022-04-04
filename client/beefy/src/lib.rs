@@ -87,7 +87,7 @@ pub fn beefy_peers_set_config(
 /// of today, Rust does not allow a type alias to be used as a trait bound. Tracking
 /// issue is <https://github.com/rust-lang/rust/issues/41517>.
 pub trait Client<B, BE>:
-	BlockchainEvents<B> + HeaderBackend<B> + Finalizer<B, BE> + ProvideRuntimeApi<B> + Send + Sync
+	BlockchainEvents<B> + HeaderBackend<B> + Finalizer<B, BE> + Send + Sync
 where
 	B: Block,
 	BE: Backend<B>,
@@ -110,18 +110,21 @@ where
 }
 
 /// BEEFY gadget initialization parameters.
-pub struct BeefyParams<B, BE, C, N>
+pub struct BeefyParams<B, BE, C, N, R>
 where
 	B: Block,
 	BE: Backend<B>,
 	C: Client<B, BE>,
-	C::Api: BeefyApi<B>,
+	R: ProvideRuntimeApi<B>,
+	R::Api: BeefyApi<B>,
 	N: GossipNetwork<B> + Clone + SyncOracle + Send + Sync + 'static,
 {
 	/// BEEFY client
 	pub client: Arc<C>,
 	/// Client Backend
 	pub backend: Arc<BE>,
+	/// Runtime Api Provider
+	pub runtime: Arc<R>,
 	/// Local key store
 	pub key_store: Option<SyncCryptoStorePtr>,
 	/// Gossip network
@@ -142,17 +145,19 @@ where
 /// Start the BEEFY gadget.
 ///
 /// This is a thin shim around running and awaiting a BEEFY worker.
-pub async fn start_beefy_gadget<B, BE, C, N>(beefy_params: BeefyParams<B, BE, C, N>)
+pub async fn start_beefy_gadget<B, BE, C, N, R>(beefy_params: BeefyParams<B, BE, C, N, R>)
 where
 	B: Block,
 	BE: Backend<B>,
 	C: Client<B, BE>,
-	C::Api: BeefyApi<B>,
+	R: ProvideRuntimeApi<B>,
+	R::Api: BeefyApi<B>,
 	N: GossipNetwork<B> + Clone + SyncOracle + Send + Sync + 'static,
 {
 	let BeefyParams {
 		client,
 		backend,
+		runtime,
 		key_store,
 		network,
 		signed_commitment_sender,
@@ -188,6 +193,7 @@ where
 	let worker_params = worker::WorkerParams {
 		client,
 		backend,
+		runtime,
 		key_store: key_store.into(),
 		signed_commitment_sender,
 		beefy_best_block_sender,
@@ -198,7 +204,7 @@ where
 		sync_oracle,
 	};
 
-	let worker = worker::BeefyWorker::<_, _, _, _>::new(worker_params);
+	let worker = worker::BeefyWorker::<_, _, _, _, _>::new(worker_params);
 
 	worker.run().await
 }
