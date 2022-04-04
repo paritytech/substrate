@@ -30,4 +30,4 @@ serde_json = "1.0.79"
 sc-transaction-pool-api = { version = "4.0.0-dev", path = "../transaction-pool/api" }
 sp-rpc = { version = "6.0.0", path = "../../primitives/rpc" }
 sp-tracing = { version = "5.0.0", path = "../../primitives/tracing" }
-jsonrpsee = { version = "0.9", features = ["server", "macros"] }
+jsonrpsee = { version = "0.10", features = ["server", "macros"] }
