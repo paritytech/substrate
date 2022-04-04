@@ -57,7 +57,7 @@ impl frame_benchmarking_cli::ExtrinsicBuilder for ExtrinsicBuilder {
 }
 
 /// Generates inherent data for the `benchmark-overhead` command.
-pub fn inherent_data() -> Result<InherentData> {
+pub fn benchmark_inherent_data() -> Result<InherentData> {
 	let mut inherent_data = InherentData::new();
 	let d = Duration::from_millis(0);
 	let timestamp = sp_timestamp::InherentDataProvider::new(d.into());

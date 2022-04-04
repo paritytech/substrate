@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::BenchmarkCmd;
+use super::{writer, PalletCmd};
 use codec::{Decode, Encode};
 use frame_benchmarking::{
 	Analysis, BenchmarkBatch, BenchmarkBatchSplitResults, BenchmarkList, BenchmarkParameter,
@@ -87,7 +87,7 @@ fn combine_batches(
 		.collect::<Vec<_>>()
 }
 
-impl BenchmarkCmd {
+impl PalletCmd {
 	/// Runs the command and benchmarks the chain.
 	pub fn run<BB, ExecDispatch>(&self, config: Configuration) -> Result<()>
 	where
@@ -359,7 +359,7 @@ impl BenchmarkCmd {
 
 		// Create the weights.rs file.
 		if let Some(output_path) = &self.output {
-			crate::writer::write_results(&batches, &storage_info, output_path, self)?;
+			writer::write_results(&batches, &storage_info, output_path, self)?;
 		}
 
 		// Jsonify the result and write it to a file or stdout if desired.
@@ -414,11 +414,7 @@ impl BenchmarkCmd {
 
 			if !self.no_storage_info {
 				let mut comments: Vec<String> = Default::default();
-				crate::writer::add_storage_comments(
-					&mut comments,
-					&batch.db_results,
-					&storage_info,
-				);
+				writer::add_storage_comments(&mut comments, &batch.db_results, &storage_info);
 				println!("Raw Storage Info\n========");
 				for comment in comments {
 					println!("{}", comment);
@@ -469,7 +465,7 @@ impl BenchmarkCmd {
 	}
 }
 
-impl CliConfiguration for BenchmarkCmd {
+impl CliConfiguration for PalletCmd {
 	fn shared_params(&self) -> &SharedParams {
 		&self.shared_params
 	}

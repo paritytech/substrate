@@ -36,7 +36,8 @@ use log::info;
 use serde::Serialize;
 use std::{marker::PhantomData, sync::Arc, time::Instant};
 
-use crate::{overhead::cmd::ExtrinsicBuilder, storage::record::Stats};
+use super::cmd::ExtrinsicBuilder;
+use crate::shared::Stats;
 
 /// Parameters to configure an *overhead* benchmark.
 #[derive(Debug, Default, Serialize, Clone, PartialEq, Args)]

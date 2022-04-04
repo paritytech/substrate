@@ -3,6 +3,7 @@ use crate::{
 	cli::{Cli, Subcommand},
 	service,
 };
+use frame_benchmarking_cli::BenchmarkCmd;
 use node_template_runtime::Block;
 use sc_cli::{ChainSpec, RuntimeVersion, SubstrateCli};
 use sc_service::PartialComponents;
@@ -102,10 +103,14 @@ pub fn run() -> sc_cli::Result<()> {
 			if cfg!(feature = "runtime-benchmarks") {
 				let runner = cli.create_runner(cmd)?;
 
-				runner.sync_run(|config| cmd.run::<Block, service::ExecutorDispatch>(config))
+				runner.sync_run(|config| match cmd {
+					BenchmarkCmd::Pallet(cmd) =>
+						cmd.run::<Block, service::ExecutorDispatch>(config),
+					_ => Err("Sub-command is not supported".into()),
+				})
 			} else {
-				Err("Benchmarking wasn't enabled when building the node. You can enable it with \
-				     `--features runtime-benchmarks`."
+				Err("Benchmarking wasn't enabled when building the node. \
+					You can enable it with `--features runtime-benchmarks`."
 					.into())
 			},
 		#[cfg(feature = "try-runtime")]
