@@ -625,7 +625,7 @@ fn force_batch_works() {
 			utility::Event::BatchCompletedWithErrors { indexes: vec![1, 2] }.into(),
 		);
 		System::assert_has_event(
-			utility::Event::ItemFailed { index: 1, error: DispatchError::Other("") }.into(),
+			utility::Event::ItemFailed { error: DispatchError::Other("") }.into(),
 		);
 		assert_eq!(Balances::free_balance(1), 0);
 		assert_eq!(Balances::free_balance(2), 20);

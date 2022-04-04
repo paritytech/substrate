@@ -118,7 +118,7 @@ pub mod pallet {
 		/// A single item within a Batch of dispatches has completed with no error.
 		ItemCompleted,
 		/// A single item within a Batch of dispatches has completed with error.
-		ItemFailed { index: u32, error: DispatchError },
+		ItemFailed { error: DispatchError },
 		/// A call was dispatched.
 		DispatchedAs { result: DispatchResult },
 	}
@@ -446,7 +446,7 @@ pub mod pallet {
 				weight = weight.saturating_add(extract_actual_weight(&result, &info));
 				if let Err(e) = result {
 					error_indexes.push(index as u32);
-					Self::deposit_event(Event::ItemFailed { index: index as u32, error: e.error });
+					Self::deposit_event(Event::ItemFailed { error: e.error });
 				} else {
 					Self::deposit_event(Event::ItemCompleted);
 				}
