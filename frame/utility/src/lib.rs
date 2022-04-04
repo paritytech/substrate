@@ -409,7 +409,7 @@ pub mod pallet {
 			let dispatch_weight = dispatch_infos.iter()
 				.map(|di| di.weight)
 				.fold(0, |total: Weight, weight: Weight| total.saturating_add(weight))
-				.saturating_add(T::WeightInfo::batch_try(calls.len() as u32));
+				.saturating_add(T::WeightInfo::force_batch(calls.len() as u32));
 			let dispatch_class = {
 				let all_operational = dispatch_infos.iter()
 					.map(|di| di.class)
@@ -422,7 +422,7 @@ pub mod pallet {
 			};
 			(dispatch_weight, dispatch_class)
 		})]
-		pub fn batch_try(
+		pub fn force_batch(
 			origin: OriginFor<T>,
 			calls: Vec<<T as Config>::Call>,
 		) -> DispatchResultWithPostInfo {

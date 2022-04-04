@@ -608,11 +608,11 @@ fn batch_limit() {
 }
 
 #[test]
-fn batch_try_works() {
+fn force_batch_works() {
 	new_test_ext().execute_with(|| {
 		assert_eq!(Balances::free_balance(1), 10);
 		assert_eq!(Balances::free_balance(2), 10);
-		assert_ok!(Utility::batch_try(
+		assert_ok!(Utility::force_batch(
 			Origin::signed(1),
 			vec![
 				call_transfer(2, 5),
@@ -630,13 +630,13 @@ fn batch_try_works() {
 		assert_eq!(Balances::free_balance(1), 0);
 		assert_eq!(Balances::free_balance(2), 20);
 
-		assert_ok!(Utility::batch_try(
+		assert_ok!(Utility::force_batch(
 			Origin::signed(2),
 			vec![call_transfer(1, 5), call_transfer(1, 5),]
 		),);
 		System::assert_last_event(utility::Event::BatchCompleted.into());
 
-		assert_ok!(Utility::batch_try(Origin::signed(1), vec![call_transfer(2, 50),]),);
+		assert_ok!(Utility::force_batch(Origin::signed(1), vec![call_transfer(2, 50),]),);
 		System::assert_last_event(
 			utility::Event::BatchCompletedWithErrors { indexes: vec![0] }.into(),
 		);

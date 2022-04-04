@@ -73,7 +73,7 @@ benchmarks! {
 		let pallets_origin = Into::<T::PalletsOrigin>::into(pallets_origin.clone());
 	}: _(RawOrigin::Root, Box::new(pallets_origin), call)
 
-	batch_try {
+	force_batch {
 		let c in 0 .. 1000;
 		let mut calls: Vec<<T as Config>::Call> = Vec::new();
 		for i in 0 .. c {
