@@ -170,7 +170,7 @@ pub mod onchain;
 pub mod traits;
 #[cfg(feature = "std")]
 use codec::{Decode, Encode};
-use frame_support::{BoundedVec, RuntimeDebug};
+use frame_support::{weights::Weight, BoundedVec, RuntimeDebug};
 use sp_runtime::traits::Bounded;
 use sp_std::{fmt::Debug, prelude::*};
 
@@ -526,6 +526,11 @@ pub trait NposSolver {
 		targets: Vec<Self::AccountId>,
 		voters: Vec<(Self::AccountId, VoteWeight, impl IntoIterator<Item = Self::AccountId>)>,
 	) -> Result<ElectionResult<Self::AccountId, Self::Accuracy>, Self::Error>;
+
+	/// Measure the weight used in the calculation of the solver.
+	/// `v` is the number of voters, `t` is the number of targets, `d` is the degree ie the maximum
+	/// numbers of votes per voter.
+	fn weight<T: WeightInfo>(v: u32, t: u32, d: u32) -> Weight;
 }
 
 /// A wrapper for [`sp_npos_elections::seq_phragmen`] that implements [`NposSolver`]. See the
@@ -550,6 +555,10 @@ impl<
 	) -> Result<ElectionResult<Self::AccountId, Self::Accuracy>, Self::Error> {
 		sp_npos_elections::seq_phragmen(winners, targets, voters, Balancing::get())
 	}
+
+	fn weight<T: WeightInfo>(v: u32, t: u32, d: u32) -> Weight {
+		T::phragmen(v, t, d)
+	}
 }
 
 /// A wrapper for [`sp_npos_elections::phragmms()`] that implements [`NposSolver`]. See the
@@ -573,6 +582,10 @@ impl<
 		voters: Vec<(Self::AccountId, VoteWeight, impl IntoIterator<Item = Self::AccountId>)>,
 	) -> Result<ElectionResult<Self::AccountId, Self::Accuracy>, Self::Error> {
 		sp_npos_elections::phragmms(winners, targets, voters, Balancing::get())
+	}
+
+	fn weight<T: WeightInfo>(v: u32, t: u32, d: u32) -> Weight {
+		T::phragmms(v, t, d)
 	}
 }
 

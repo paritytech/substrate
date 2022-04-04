@@ -22,7 +22,7 @@
 use crate::{self as pallet_grandpa, AuthorityId, AuthorityList, Config, ConsensusLog};
 use ::grandpa as finality_grandpa;
 use codec::Encode;
-use frame_election_provider_support::onchain;
+use frame_election_provider_support::{onchain, SequentialPhragmen};
 use frame_support::{
 	parameter_types,
 	traits::{
@@ -180,14 +180,17 @@ parameter_types! {
 	pub const OffendingValidatorsThreshold: Perbill = Perbill::from_percent(17);
 }
 
-impl onchain::ConfigParams for Test {
+pub struct OnChainSeqPhragmen;
+impl onchain::Config for OnChainSeqPhragmen {
+	type System = Test;
+	type Solver = SequentialPhragmen<u64, Perbill>;
+	type DataProvider = Staking;
 	type VotersBound = ConstU32<600>;
 	type TargetsBound = ConstU32<400>;
 	type WeightInfo = ();
-	type BenchmarkingConfig = ();
 }
 
-type OnChainPhragmen = onchain::BoundedPhragmen<Test, Staking, Test, Perbill>;
+type OnChainPhragmen = onchain::BoundedExecution<OnChainSeqPhragmen>;
 
 impl pallet_staking::Config for Test {
 	type MaxNominations = ConstU32<16>;

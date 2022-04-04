@@ -275,15 +275,17 @@ parameter_types! {
 	pub static OnChainFallback: bool = true;
 }
 
-impl onchain::ConfigParams for Runtime {
+pub struct OnChainSeqPhragmen;
+impl onchain::Config for OnChainSeqPhragmen {
+	type System = Runtime;
+	type Solver = SequentialPhragmen<AccountId, SolutionAccuracyOf<Runtime>, Balancing>;
+	type DataProvider = StakingMock;
 	type VotersBound = ConstU32<600>;
 	type TargetsBound = ConstU32<100_000>;
 	type WeightInfo = ();
-	type BenchmarkingConfig = ();
 }
 
-type OnChainPhragmen =
-	onchain::BoundedPhragmen<Runtime, StakingMock, Runtime, SolutionAccuracyOf<Runtime>, Balancing>;
+type OnChainPhragmen = onchain::BoundedExecution<OnChainSeqPhragmen>;
 
 pub struct MockFallback;
 impl ElectionProvider for MockFallback {

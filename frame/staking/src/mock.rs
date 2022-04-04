@@ -18,7 +18,9 @@
 //! Test utilities
 
 use crate::{self as pallet_staking, *};
-use frame_election_provider_support::{onchain, SortedListProvider, VoteWeight};
+use frame_election_provider_support::{
+	onchain, SequentialPhragmen, SortedListProvider, VoteWeight,
+};
 use frame_support::{
 	assert_ok, parameter_types,
 	traits::{
@@ -245,13 +247,17 @@ impl pallet_bags_list::Config for Test {
 	type Score = VoteWeight;
 }
 
-impl onchain::ConfigParams for Test {
+pub struct OnChainSeqPhragmen;
+impl onchain::Config for OnChainSeqPhragmen {
+	type System = Test;
+	type Solver = SequentialPhragmen<AccountId, Perbill>;
+	type DataProvider = Staking;
 	type VotersBound = ConstU32<600>;
 	type TargetsBound = ConstU32<400>;
 	type WeightInfo = ();
-	type BenchmarkingConfig = ();
 }
-type OnChainPhragmen = onchain::BoundedPhragmen<Test, Staking, Test, Perbill>;
+
+type OnChainPhragmen = onchain::BoundedExecution<OnChainSeqPhragmen>;
 
 impl crate::pallet::pallet::Config for Test {
 	type MaxNominations = MaxNominations;

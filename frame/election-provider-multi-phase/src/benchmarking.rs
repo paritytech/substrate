@@ -26,18 +26,11 @@ use frame_support::{
 	BoundedVec,
 };
 use frame_system::RawOrigin;
-use pallet_election_provider_support_onchain_benchmarking::SEED;
 use rand::{prelude::SliceRandom, rngs::SmallRng, SeedableRng};
 use sp_arithmetic::{per_things::Percent, traits::One};
 use sp_runtime::InnerOf;
 
-fn set_up_data_provider<T: Config>(voters_len: u32, targets_len: u32) {
-	pallet_election_provider_support_onchain_benchmarking::set_up_data_provider::<
-		T,
-		T::DataProvider,
-		T::Currency,
-	>(voters_len, targets_len, <T::DataProvider as ElectionDataProvider>::MaxVotesPerVoter::get());
-}
+const SEED: u32 = 999;
 
 /// Creates a **valid** solution with exactly the given size.
 ///
@@ -159,6 +152,38 @@ fn solution_with_size<T: Config>(
 		"score is zero, this probably means that the stakes are not set."
 	);
 	Ok(RawSolution { solution, score, round })
+}
+
+fn set_up_data_provider<T: Config>(v: u32, t: u32) {
+	T::DataProvider::clear();
+	log!(
+		info,
+		"setting up with voters = {} [degree = {}], targets = {}",
+		v,
+		<T::DataProvider as ElectionDataProvider>::MaxVotesPerVoter::get(),
+		t
+	);
+
+	// fill targets.
+	let mut targets = (0..t)
+		.map(|i| {
+			let target = frame_benchmarking::account::<T::AccountId>("Target", i, SEED);
+			T::DataProvider::add_target(target.clone());
+			target
+		})
+		.collect::<Vec<_>>();
+	// we should always have enough voters to fill.
+	assert!(
+		targets.len() > <T::DataProvider as ElectionDataProvider>::MaxVotesPerVoter::get() as usize
+	);
+	targets.truncate(<T::DataProvider as ElectionDataProvider>::MaxVotesPerVoter::get() as usize);
+
+	// fill voters.
+	(0..v).for_each(|i| {
+		let voter = frame_benchmarking::account::<T::AccountId>("Voter", i, SEED);
+		let weight = T::Currency::minimum_balance().saturated_into::<u64>() * 1000;
+		T::DataProvider::add_voter(voter, weight, targets.clone().try_into().unwrap());
+	});
 }
 
 frame_benchmarking::benchmarks! {

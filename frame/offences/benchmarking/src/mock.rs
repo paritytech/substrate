@@ -20,7 +20,7 @@
 #![cfg(test)]
 
 use super::*;
-use frame_election_provider_support::onchain;
+use frame_election_provider_support::{onchain, SequentialPhragmen};
 use frame_support::{
 	parameter_types,
 	traits::{ConstU32, ConstU64},
@@ -150,13 +150,17 @@ parameter_types! {
 
 pub type Extrinsic = sp_runtime::testing::TestXt<Call, ()>;
 
-impl onchain::ConfigParams for Test {
+pub struct OnChainSeqPhragmen;
+impl onchain::Config for OnChainSeqPhragmen {
+	type System = Test;
+	type Solver = SequentialPhragmen<AccountId, Perbill>;
+	type DataProvider = Staking;
 	type VotersBound = ConstU32<600>;
 	type TargetsBound = ConstU32<400>;
 	type WeightInfo = ();
-	type BenchmarkingConfig = ();
 }
-type OnChainPhragmen = onchain::BoundedPhragmen<Test, Staking, Test, Perbill>;
+
+type OnChainPhragmen = onchain::BoundedExecution<OnChainSeqPhragmen>;
 
 impl pallet_staking::Config for Test {
 	type MaxNominations = ConstU32<16>;
