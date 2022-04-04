@@ -62,10 +62,6 @@ use sp_runtime::{
 };
 use std::{str::FromStr, sync::Arc, time::SystemTime};
 
-const TARGET_OS: &str = include_str!(concat!(env!("OUT_DIR"), "/target_os.txt"));
-const TARGET_ARCH: &str = include_str!(concat!(env!("OUT_DIR"), "/target_arch.txt"));
-const TARGET_ENV: &str = include_str!(concat!(env!("OUT_DIR"), "/target_env.txt"));
-
 /// A utility trait for building an RPC extension given a `DenyUnsafe` instance.
 /// This is useful since at service definition time we don't know whether the
 /// specific interface where the RPC extension will be exposed is safe or not.
@@ -492,13 +488,6 @@ where
 	.map_err(|e| Error::Application(Box::new(e)))?;
 
 	let sysinfo = sc_sysinfo::gather_sysinfo();
-
-	info!("💻 Operating system: {}", TARGET_OS);
-	info!("💻 CPU architecture: {}", TARGET_ARCH);
-	if !TARGET_ENV.is_empty() {
-		info!("💻 Target environment: {}", TARGET_ENV);
-	}
-
 	sc_sysinfo::print_sysinfo(&sysinfo);
 
 	let telemetry = telemetry
@@ -632,9 +621,9 @@ fn init_telemetry<TBl: BlockT, TCl: BlockBackend<TBl>>(
 		name: config.network.node_name.to_owned(),
 		implementation: config.impl_name.to_owned(),
 		version: config.impl_version.to_owned(),
-		target_os: TARGET_OS.into(),
-		target_arch: TARGET_ARCH.into(),
-		target_env: TARGET_ENV.into(),
+		target_os: sc_sysinfo::TARGET_OS.into(),
+		target_arch: sc_sysinfo::TARGET_ARCH.into(),
+		target_env: sc_sysinfo::TARGET_ENV.into(),
 		config: String::new(),
 		chain: config.chain_spec.name().to_owned(),
 		genesis_hash: format!("{:?}", genesis_hash),

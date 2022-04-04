@@ -27,8 +27,23 @@ mod sysinfo_linux;
 
 pub use sysinfo::{gather_hwbench, gather_sysinfo};
 
+/// The operating system part of the current target triplet.
+pub const TARGET_OS: &str = include_str!(concat!(env!("OUT_DIR"), "/target_os.txt"));
+
+/// The CPU ISA architecture part of the current target triplet.
+pub const TARGET_ARCH: &str = include_str!(concat!(env!("OUT_DIR"), "/target_arch.txt"));
+
+/// The environment part of the current target triplet.
+pub const TARGET_ENV: &str = include_str!(concat!(env!("OUT_DIR"), "/target_env.txt"));
+
 /// Prints out the system software/hardware information in the logs.
 pub fn print_sysinfo(sysinfo: &sc_telemetry::SysInfo) {
+	log::info!("💻 Operating system: {}", TARGET_OS);
+	log::info!("💻 CPU architecture: {}", TARGET_ARCH);
+	if !TARGET_ENV.is_empty() {
+		log::info!("💻 Target environment: {}", TARGET_ENV);
+	}
+
 	if let Some(ref cpu) = sysinfo.cpu {
 		log::info!("💻 CPU: {}", cpu);
 	}
