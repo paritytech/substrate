@@ -521,7 +521,7 @@ where
 			// final adjusted weight fee.
 			let adjusted_weight_fee = multiplier.saturating_mul_int(unadjusted_weight_fee);
 
-			// length fee. this is adjusted via LengthToFee
+			// length fee. this is adjusted via `LengthToFee`.
 			let len_fee = Self::length_to_fee(len);
 
 			let base_fee = Self::weight_to_fee(T::BlockWeights::get().get(class).base_extrinsic);
