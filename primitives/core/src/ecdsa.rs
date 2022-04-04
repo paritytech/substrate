@@ -137,7 +137,7 @@ impl AsMut<[u8]> for Public {
 	}
 }
 
-impl sp_std::convert::TryFrom<&[u8]> for Public {
+impl TryFrom<&[u8]> for Public {
 	type Error = ();
 
 	fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
@@ -209,7 +209,7 @@ impl<'de> Deserialize<'de> for Public {
 #[derive(Encode, Decode, MaxEncodedLen, PassByInner, TypeInfo, PartialEq, Eq)]
 pub struct Signature(pub [u8; 65]);
 
-impl sp_std::convert::TryFrom<&[u8]> for Signature {
+impl TryFrom<&[u8]> for Signature {
 	type Error = ();
 
 	fn try_from(data: &[u8]) -> Result<Self, Self::Error> {

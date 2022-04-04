@@ -69,7 +69,6 @@
 use std::{
 	borrow::Cow,
 	collections::{HashMap, HashSet},
-	convert::TryInto,
 	future::Future,
 	pin::Pin,
 	sync::Arc,
@@ -320,7 +319,7 @@ pub enum Error<B: BlockT> {
 	ForkTree(Box<fork_tree::Error<sp_blockchain::Error>>),
 }
 
-impl<B: BlockT> std::convert::From<Error<B>> for String {
+impl<B: BlockT> From<Error<B>> for String {
 	fn from(error: Error<B>) -> String {
 		error.to_string()
 	}

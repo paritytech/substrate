@@ -71,7 +71,6 @@ use crate::Error;
 pub use sp_core::MAX_POSSIBLE_ALLOCATION;
 use sp_wasm_interface::{Pointer, WordSize};
 use std::{
-	convert::{TryFrom, TryInto},
 	mem,
 	ops::{Index, IndexMut, Range},
 };

@@ -25,7 +25,6 @@
 
 use honggfuzz::fuzz;
 use sp_arithmetic::Normalizable;
-use std::convert::TryInto;
 
 type Ty = u64;
 

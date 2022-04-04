@@ -562,7 +562,7 @@ mod tests {
 		RuntimeAppPublic,
 	};
 	use sp_timestamp;
-	use std::{borrow::Cow, convert::TryInto, sync::Arc};
+	use std::{borrow::Cow, sync::Arc};
 
 	type AccountPublic = <Signature as Verify>::Signer;
 

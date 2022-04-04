@@ -74,7 +74,7 @@ use sp_runtime::{
 	},
 	RuntimeDebug,
 };
-use sp_std::{convert::TryInto, fmt::Debug, prelude::*};
+use sp_std::{fmt::Debug, prelude::*};
 pub use vesting_info::*;
 pub use weights::WeightInfo;
 

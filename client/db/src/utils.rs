@@ -19,7 +19,7 @@
 //! Db-based backend utility structures and functions, used by both
 //! full and light storages.
 
-use std::{convert::TryInto, fmt, fs, io, path::Path, sync::Arc};
+use std::{fmt, fs, io, path::Path, sync::Arc};
 
 use log::{debug, info};
 

@@ -48,7 +48,7 @@ use sp_runtime::{
 	traits::{Dispatchable, Hash, Saturating, TrailingZeroInput, Zero},
 	DispatchResult,
 };
-use sp_std::{convert::TryInto, prelude::*};
+use sp_std::prelude::*;
 pub use weights::WeightInfo;
 
 pub use pallet::*;
