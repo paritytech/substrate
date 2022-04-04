@@ -788,6 +788,31 @@ impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>, Acco
 	}
 }
 
+pub struct EnsureRootWithSuccess<AccountId, SuccessType, Success>(
+	sp_std::marker::PhantomData<(AccountId, SuccessType, Success)>
+);
+impl<
+	O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>,
+	AccountId,
+	SuccessType,
+	Success: Get<SuccessType>,
+>
+	EnsureOrigin<O> for EnsureRootWithSuccess<AccountId, SuccessType, Success>
+{
+	type Success = SuccessType;
+	fn try_origin(o: O) -> Result<Self::Success, O> {
+		o.into().and_then(|o| match o {
+			RawOrigin::Root => Ok(Success::get()),
+			r => Err(O::from(r)),
+		})
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn successful_origin() -> O {
+		O::from(RawOrigin::Root)
+	}
+}
+
 pub struct EnsureSigned<AccountId>(sp_std::marker::PhantomData<AccountId>);
 impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>, AccountId: Decode>
 	EnsureOrigin<O> for EnsureSigned<AccountId>

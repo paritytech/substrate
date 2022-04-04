@@ -24,7 +24,7 @@ use std::cell::RefCell;
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
-	traits::{BlakeTwo256, IdentityLookup},
+	traits::{BlakeTwo256, IdentityLookup, BadOrigin},
 };
 
 use frame_support::{
@@ -112,10 +112,10 @@ impl frame_support::traits::EnsureOrigin<Origin> for TestSpendOrigin {
 	fn try_origin(o: Origin) -> Result<Self::Success, Origin> {
 		Result::<frame_system::RawOrigin<_>, Origin>::from(o).and_then(|o| match o {
 			frame_system::RawOrigin::Root => Ok(u64::max_value()),
-			frame_system::RawOrigin::Signed(1) => Ok(5),
-			frame_system::RawOrigin::Signed(2) => Ok(10),
-			frame_system::RawOrigin::Signed(3) => Ok(20),
-			frame_system::RawOrigin::Signed(4) => Ok(50),
+			frame_system::RawOrigin::Signed(10) => Ok(5),
+			frame_system::RawOrigin::Signed(11) => Ok(10),
+			frame_system::RawOrigin::Signed(12) => Ok(20),
+			frame_system::RawOrigin::Signed(13) => Ok(50),
 			r => Err(Origin::from(r)),
 		})
 	}
@@ -161,6 +161,40 @@ fn genesis_config_works() {
 	new_test_ext().execute_with(|| {
 		assert_eq!(Treasury::pot(), 0);
 		assert_eq!(Treasury::proposal_count(), 0);
+	});
+}
+
+#[test]
+fn spend_origin_permissioning_works() {
+	new_test_ext().execute_with(|| {
+		// Check that accumulate works when we have Some value in Dummy already.
+		assert_noop!(Treasury::spend(Origin::signed(1), 1, 1), BadOrigin);
+		assert_noop!(Treasury::spend(Origin::signed(10), 6, 1), Error::<Test>::InsufficientPermission);
+		assert_noop!(Treasury::spend(Origin::signed(11), 11, 1), Error::<Test>::InsufficientPermission);
+		assert_noop!(Treasury::spend(Origin::signed(12), 21, 1), Error::<Test>::InsufficientPermission);
+		assert_noop!(Treasury::spend(Origin::signed(13), 51, 1), Error::<Test>::InsufficientPermission);
+	});
+}
+
+#[test]
+fn spend_origin_works() {
+	new_test_ext().execute_with(|| {
+		// Check that accumulate works when we have Some value in Dummy already.
+		Balances::make_free_balance_be(&Treasury::account_id(), 101);
+		assert_ok!(Treasury::spend(Origin::signed(10), 5, 6));
+		assert_ok!(Treasury::spend(Origin::signed(10), 5, 6));
+		assert_ok!(Treasury::spend(Origin::signed(10), 5, 6));
+		assert_ok!(Treasury::spend(Origin::signed(10), 5, 6));
+		assert_ok!(Treasury::spend(Origin::signed(11), 10, 6));
+		assert_ok!(Treasury::spend(Origin::signed(12), 20, 6));
+		assert_ok!(Treasury::spend(Origin::signed(13), 50, 6));
+
+		<Treasury as OnInitialize<u64>>::on_initialize(1);
+		assert_eq!(Balances::free_balance(6), 0);
+
+		<Treasury as OnInitialize<u64>>::on_initialize(2);
+		assert_eq!(Balances::free_balance(6), 100);
+		assert_eq!(Treasury::pot(), 0);
 	});
 }
 

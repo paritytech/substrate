@@ -149,6 +149,8 @@ pub trait OriginTrait: Sized {
 /// The "OR gate" implementation of `EnsureOrigin`.
 ///
 /// Origin check will pass if `L` or `R` origin check passes. `L` is tested first.
+///
+/// Successful origin is derived from the left side.
 pub struct EnsureOneOf<L, R>(sp_std::marker::PhantomData<(L, R)>);
 
 impl<OuterOrigin, L: EnsureOrigin<OuterOrigin>, R: EnsureOrigin<OuterOrigin>>
