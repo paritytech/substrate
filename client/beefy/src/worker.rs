@@ -52,6 +52,12 @@ use crate::{
 	Client,
 };
 
+#[cfg(test)]
+#[derive(Clone, Default)]
+pub struct TestModifiers {
+	pub corrupt_mmr_roots: bool,
+}
+
 pub(crate) struct WorkerParams<B: Block, BE, C, R, SO> {
 	pub client: Arc<C>,
 	pub backend: Arc<BE>,
@@ -94,7 +100,7 @@ pub(crate) struct BeefyWorker<B: Block, BE, C, R, SO> {
 	_backend: PhantomData<BE>,
 	#[cfg(test)]
 	// behavior modifiers used in tests
-	test_res: tests::TestModifiers,
+	test_res: TestModifiers,
 }
 
 impl<B, BE, C, R, SO> BeefyWorker<B, BE, C, R, SO>
@@ -115,8 +121,8 @@ where
 	pub(crate) fn new(
 		worker_params: WorkerParams<B, BE, C, R, SO>,
 		#[cfg(test)]
-		// behavior modifiers used in tests
-		test_res: tests::TestModifiers,
+		// TODO: temporary, remove this
+		test_res: TestModifiers,
 	) -> Self {
 		let WorkerParams {
 			client,
@@ -445,7 +451,6 @@ where
 	}
 
 	/// Wait for BEEFY runtime pallet to be available.
-	#[cfg(not(test))]
 	async fn wait_for_runtime_pallet(&mut self) {
 		self.client
 			.finality_notification_stream()
@@ -473,13 +478,6 @@ where
 			.await;
 		// get a new stream that provides _new_ notifications (from here on out)
 		self.finality_notifications = self.client.finality_notification_stream();
-	}
-
-	/// For tests don't use runtime pallet. Start rounds from block #1.
-	#[cfg(test)]
-	async fn wait_for_runtime_pallet(&mut self) {
-		let active = self.test_res.active_validators.clone();
-		self.init_session_at(active, 1u32.into());
 	}
 
 	/// Main loop for BEEFY worker.
@@ -645,11 +643,16 @@ pub(crate) mod tests {
 	use super::*;
 	use crate::{
 		keystore::tests::Keyring,
-		tests::{create_beefy_worker, get_beefy_streams, make_beefy_ids, BeefyTestNet, TestApi},
+		notification::{BeefyBestBlockStream, BeefySignedCommitmentStream},
+		tests::{
+			create_beefy_keystore, get_beefy_streams, make_beefy_ids, two_validators::TestApi,
+			BeefyPeer, BeefyTestNet, BEEFY_PROTOCOL_NAME,
+		},
 	};
 
 	use futures::{executor::block_on, future::poll_fn, task::Poll};
 
+	use crate::tests::BeefyLinkHalf;
 	use sc_client_api::HeaderBackend;
 	use sc_network::NetworkService;
 	use sc_network_test::{PeersFullClient, TestNetFactory};
@@ -659,10 +662,41 @@ pub(crate) mod tests {
 		Backend,
 	};
 
-	#[derive(Clone)]
-	pub struct TestModifiers {
-		pub active_validators: ValidatorSet<AuthorityId>,
-		pub corrupt_mmr_roots: bool,
+	fn create_beefy_worker(
+		peer: &BeefyPeer,
+		key: &Keyring,
+		min_block_delta: u32,
+	) -> BeefyWorker<Block, Backend, PeersFullClient, TestApi, Arc<NetworkService<Block, H256>>> {
+		let keystore = create_beefy_keystore(*key);
+
+		let (signed_commitment_sender, signed_commitment_stream) =
+			BeefySignedCommitmentStream::<Block>::channel();
+		let (beefy_best_block_sender, beefy_best_block_stream) =
+			BeefyBestBlockStream::<Block>::channel();
+		let beefy_link_half = BeefyLinkHalf { signed_commitment_stream, beefy_best_block_stream };
+		*peer.data.beefy_link_half.lock() = Some(beefy_link_half);
+
+		let test_modifiers = peer.data.test_modifiers.clone();
+		let api = Arc::new(TestApi {});
+		let network = peer.network_service().clone();
+		let sync_oracle = network.clone();
+		let gossip_validator = Arc::new(crate::gossip::GossipValidator::new());
+		let gossip_engine =
+			GossipEngine::new(network, BEEFY_PROTOCOL_NAME, gossip_validator.clone(), None);
+		let worker_params = crate::worker::WorkerParams {
+			client: peer.client().as_client(),
+			backend: peer.client().as_backend(),
+			runtime: api,
+			key_store: Some(keystore).into(),
+			signed_commitment_sender,
+			beefy_best_block_sender,
+			gossip_engine,
+			gossip_validator,
+			min_block_delta,
+			metrics: None,
+			sync_oracle,
+		};
+		BeefyWorker::<_, _, _, _, _>::new(worker_params, test_modifiers)
 	}
 
 	#[test]
@@ -812,7 +846,6 @@ pub(crate) mod tests {
 		let keys = &[Keyring::Alice];
 		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
 		let mut net = BeefyTestNet::new(1, 0);
-		net.peer(0).data.use_validator_set(&validator_set);
 		let mut worker = create_beefy_worker(&net.peer(0), &keys[0], 1);
 
 		// rounds not initialized -> should vote: `None`
@@ -877,7 +910,6 @@ pub(crate) mod tests {
 		let keys = &[Keyring::Alice];
 		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
 		let mut net = BeefyTestNet::new(1, 0);
-		net.peer(0).data.use_validator_set(&validator_set);
 		let mut worker = create_beefy_worker(&net.peer(0), &keys[0], 1);
 
 		// keystore doesn't contain other keys than validators'
@@ -901,7 +933,6 @@ pub(crate) mod tests {
 		let keys = &[Keyring::Alice];
 		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
 		let mut net = BeefyTestNet::new(1, 0);
-		net.peer(0).data.use_validator_set(&validator_set);
 		let mut worker = create_beefy_worker(&net.peer(0), &keys[0], 1);
 
 		let (mut best_block_streams, _) = get_beefy_streams(&mut net, keys);
@@ -949,7 +980,6 @@ pub(crate) mod tests {
 		let keys = &[Keyring::Alice];
 		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
 		let mut net = BeefyTestNet::new(1, 0);
-		net.peer(0).data.use_validator_set(&validator_set);
 		let mut worker = create_beefy_worker(&net.peer(0), &keys[0], 1);
 
 		assert!(worker.rounds.is_none());

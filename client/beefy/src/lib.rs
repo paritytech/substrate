@@ -141,12 +141,15 @@ where
 	pub protocol_name: std::borrow::Cow<'static, str>,
 }
 
-#[cfg(not(test))]
 /// Start the BEEFY gadget.
 ///
 /// This is a thin shim around running and awaiting a BEEFY worker.
-pub async fn start_beefy_gadget<B, BE, C, N, R>(beefy_params: BeefyParams<B, BE, C, N, R>)
-where
+pub async fn start_beefy_gadget<B, BE, C, N, R>(
+	beefy_params: BeefyParams<B, BE, C, N, R>,
+	#[cfg(test)]
+	// TODO: temporary, remove this
+	test_res: worker::TestModifiers,
+) where
 	B: Block,
 	BE: Backend<B>,
 	C: Client<B, BE>,
@@ -204,7 +207,11 @@ where
 		sync_oracle,
 	};
 
-	let worker = worker::BeefyWorker::<_, _, _, _, _>::new(worker_params);
+	let worker = worker::BeefyWorker::<_, _, _, _, _>::new(
+		worker_params,
+		#[cfg(test)]
+		test_res,
+	);
 
 	worker.run().await
 }
