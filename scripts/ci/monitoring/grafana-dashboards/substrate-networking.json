@@ -1,12 +1,5 @@
 {
   "__inputs": [
-    {
-      "name": "VAR_METRIC_NAMESPACE",
-      "type": "constant",
-      "label": "Prefix of the metrics",
-      "value": "substrate",
-      "description": ""
-    }
   ],
   "__requires": [
     {
@@ -2655,6 +2648,37 @@
     "list": [
       {
         "allValue": null,
+        "current": {
+          "selected": true,
+          "text": "substrate",
+          "value": "substrate"
+        },
+        "description": null,
+        "error": null,
+        "hide": 0,
+        "includeAll": false,
+        "label": "Chain Metrics",
+        "multi": false,
+        "name": "metric_namespace",
+        "options": [
+          {
+            "selected": true,
+            "text": "substrate",
+            "value": "substrate"
+          },
+          {
+            "selected": false,
+            "text": "polkadot",
+            "value": "polkadot"
+          }
+        ],
+        "query": "substrate, polkadot",
+        "queryValue": "",
+        "skipUrlSync": false,
+        "type": "custom"
+      },
+      {
+        "allValue": null,
         "current": {},
         "datasource": "$data_source",
         "definition": "${metric_namespace}_process_start_time_seconds",
@@ -2741,27 +2765,6 @@
         "regex": "",
         "skipUrlSync": false,
         "type": "datasource"
-      },
-      {
-        "current": {
-          "value": "${VAR_METRIC_NAMESPACE}",
-          "text": "${VAR_METRIC_NAMESPACE}",
-          "selected": false
-        },
-        "error": null,
-        "hide": 2,
-        "label": "Prefix of the metrics",
-        "name": "metric_namespace",
-        "options": [
-          {
-            "value": "${VAR_METRIC_NAMESPACE}",
-            "text": "${VAR_METRIC_NAMESPACE}",
-            "selected": false
-          }
-        ],
-        "query": "${VAR_METRIC_NAMESPACE}",
-        "skipUrlSync": false,
-        "type": "constant"
       },
       {
         "allValue": null,
