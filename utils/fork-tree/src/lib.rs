@@ -509,14 +509,14 @@ where
 	}
 
 	/// Checks if any node in the tree is finalized by either finalizing the
-	/// node itself or a child node that's not in the tree, guaranteeing that
-	/// the node being finalized isn't a descendent of any of the node's
-	/// children. Returns `Some(true)` if the node being finalized is a root,
-	/// `Some(false)` if the node being finalized is not a root, and `None` if
-	/// no node in the tree is finalized. The given `predicate` is checked on
-	/// the prospective finalized root and must pass for finalization to occur.
-	/// The given function `is_descendent_of` should return `true` if the second
-	/// hash (target) is a descendent of the first hash (base).
+	/// node itself or a node's descendent that's not in the tree, guaranteeing
+	/// that the node being finalized isn't a descendent of (or equal to) any of
+	/// the node's children. Returns `Some(true)` if the node being finalized is
+	/// a root, `Some(false)` if the node being finalized is not a root, and
+	/// `None` if no node in the tree is finalized. The given `predicate` is
+	/// checked on the prospective finalized root and must pass for finalization
+	/// to occur.  The given function `is_descendent_of` should return `true` if
+	/// the second hash (target) is a descendent of the first hash (base).
 	pub fn finalizes_any_with_descendent_if<F, P, E>(
 		&self,
 		hash: &H,
@@ -558,8 +558,8 @@ where
 	}
 
 	/// Finalize a root in the tree by either finalizing the node itself or a
-	/// child node that's not in the tree, guaranteeing that the node being
-	/// finalized isn't a descendent of (or t equal to) any of the root's
+	/// node's descendent that's not in the tree, guaranteeing that the node
+	/// being finalized isn't a descendent of (or equal to) any of the root's
 	/// children. The given `predicate` is checked on the prospective finalized
 	/// root and must pass for finalization to occur. The given function
 	/// `is_descendent_of` should return `true` if the second hash (target) is a
