@@ -25,7 +25,7 @@ use sc_keystore::LocalKeystore;
 use sc_service::config::{BasePath, KeystoreConfig};
 use sp_core::crypto::{KeyTypeId, SecretString};
 use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
-use std::{convert::TryFrom, sync::Arc};
+use std::sync::Arc;
 
 /// The `insert` command
 #[derive(Debug, Clone, Parser)]

@@ -17,7 +17,7 @@ sc-rpc-api = { version = "0.10.0-dev", path = "../rpc-api" }
 sc-client-api = { version = "4.0.0-dev", path = "../api" }
 sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
 codec = { package = "parity-scale-codec", version = "3.0.0" }
-futures = "0.3.19"
+futures = "0.3.21"
 jsonrpc-pubsub = "18.0.0"
 log = "0.4.8"
 sp-core = { version = "6.0.0", path = "../../primitives/core" }
