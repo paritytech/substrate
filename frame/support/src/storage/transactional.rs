@@ -157,3 +157,76 @@ pub fn with_transaction_unchecked<R>(f: impl FnOnce() -> TransactionOutcome<R>) 
 		},
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::{assert_noop, assert_ok};
+	use sp_io::TestExternalities;
+	use sp_runtime::DispatchResult;
+
+	#[test]
+	fn is_transactional_should_return_false() {
+		TestExternalities::default().execute_with(|| {
+			assert!(!is_transactional());
+		});
+	}
+
+	#[test]
+	fn is_transactional_should_not_error_in_with_transaction() {
+		TestExternalities::default().execute_with(|| {
+			assert_ok!(with_transaction(|| -> TransactionOutcome<DispatchResult> {
+				assert!(is_transactional());
+				TransactionOutcome::Commit(Ok(()))
+			}));
+
+			assert_noop!(
+				with_transaction(|| -> TransactionOutcome<DispatchResult> {
+					assert!(is_transactional());
+					TransactionOutcome::Rollback(Err("revert".into()))
+				}),
+				"revert"
+			);
+		});
+	}
+
+	fn recursive_transactional(num: u32) -> DispatchResult {
+		if num == 0 {
+			return Ok(())
+		}
+
+		with_transaction(|| -> TransactionOutcome<DispatchResult> {
+			let res = recursive_transactional(num - 1);
+			TransactionOutcome::Commit(res)
+		})
+	}
+
+	#[test]
+	fn transaction_limit_should_work() {
+		TestExternalities::default().execute_with(|| {
+			assert_eq!(get_transaction_level(), 0);
+
+			assert_ok!(with_transaction(|| -> TransactionOutcome<DispatchResult> {
+				assert_eq!(get_transaction_level(), 1);
+				TransactionOutcome::Commit(Ok(()))
+			}));
+
+			assert_ok!(with_transaction(|| -> TransactionOutcome<DispatchResult> {
+				assert_eq!(get_transaction_level(), 1);
+				let res = with_transaction(|| -> TransactionOutcome<DispatchResult> {
+					assert_eq!(get_transaction_level(), 2);
+					TransactionOutcome::Commit(Ok(()))
+				});
+				TransactionOutcome::Commit(res)
+			}));
+
+			assert_ok!(recursive_transactional(255));
+			assert_noop!(
+				recursive_transactional(256),
+				sp_runtime::TransactionalError::LimitReached
+			);
+
+			assert_eq!(get_transaction_level(), 0);
+		});
+	}
+}
