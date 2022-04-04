@@ -29,15 +29,13 @@ use sp_trie::{
 	child_delta_trie_root, delta_trie_root, empty_child_trie_root, read_child_trie_value,
 	read_trie_value,
 	trie_types::{TrieDB, TrieError},
-	DBValue, KeySpacedDB, PrefixedMemoryDB, Trie, TrieDBIterator, TrieDBKeyIterator,
+	DBValue, KeySpacedDB, LayoutV1 as Layout, PrefixedMemoryDB, Trie, TrieDBIterator,
+	TrieDBKeyIterator,
 };
 #[cfg(feature = "std")]
 use std::collections::HashMap;
 #[cfg(feature = "std")]
 use std::sync::Arc;
-// In this module, we only use layout for read operation and empty root,
-// where V1 and V0 are equivalent.
-use sp_trie::LayoutV1 as Layout;
 
 #[cfg(not(feature = "std"))]
 macro_rules! format {

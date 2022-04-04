@@ -25,7 +25,6 @@ use nix::{
 };
 use regex::Regex;
 use std::{
-	convert::TryInto,
 	io::Read,
 	path::PathBuf,
 	process::{Command, Stdio},

@@ -24,7 +24,7 @@ impl-trait-for-tuples = "0.2.0"
 async-trait = { version = "0.1.50", optional = true }
 
 [dev-dependencies]
-futures = "0.3.19"
+futures = "0.3.21"
 
 [features]
 default = [ "std" ]

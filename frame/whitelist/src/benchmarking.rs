@@ -20,10 +20,11 @@
 #![cfg(feature = "runtime-benchmarks")]
 
 use super::*;
-use core::convert::TryInto;
 use frame_benchmarking::benchmarks;
-use frame_support::{ensure, traits::PreimageRecipient};
-use sp_runtime::traits::Hash;
+use frame_support::{
+	ensure,
+	traits::{EnsureOrigin, Get, PreimageRecipient},
+};
 
 #[cfg(test)]
 use crate::Pallet as Whitelist;

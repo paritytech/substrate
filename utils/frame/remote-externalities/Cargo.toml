@@ -28,7 +28,7 @@ sp-runtime = { version = "6.0.0", path = "../../../primitives/runtime" }
 sp-version = { version = "5.0.0", path = "../../../primitives/version" }
 
 [dev-dependencies]
-tokio = { version = "1.15", features = ["macros", "rt-multi-thread"] }
+tokio = { version = "1.17.0", features = ["macros", "rt-multi-thread"] }
 pallet-elections-phragmen = { path = "../../../frame/elections-phragmen", version = "5.0.0-dev" }
 frame-support = { path = "../../../frame/support", version = "4.0.0-dev" }
 
