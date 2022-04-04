@@ -397,7 +397,12 @@ pub fn new_full_base(
 		sc_sysinfo::print_hwbench(&hwbench);
 
 		if let Some(ref mut telemetry) = telemetry {
-			telemetry.handle().send_hwbench(hwbench);
+			let telemetry_handle = telemetry.handle();
+			task_manager.spawn_handle().spawn(
+				"telemetry_hwbench",
+				None,
+				sc_sysinfo::initialize_hwbench_telemetry(telemetry_handle, hwbench),
+			);
 		}
 	}
 

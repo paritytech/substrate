@@ -16,9 +16,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::{ConnectionMessageKind, TelemetryPayload};
+use crate::TelemetryPayload;
 use futures::{channel::mpsc, prelude::*};
-use indexmap::IndexMap;
 use libp2p::{core::transport::Transport, Multiaddr};
 use rand::Rng as _;
 use std::{
@@ -57,7 +56,7 @@ pub(crate) struct Node<TTrans: Transport> {
 	/// Transport used to establish new connections.
 	transport: TTrans,
 	/// Messages that are sent when the connection (re-)establishes.
-	pub(crate) connection_messages: IndexMap<ConnectionMessageKind, TelemetryPayload>,
+	pub(crate) connection_messages: Vec<TelemetryPayload>,
 	/// Notifier for when the connection (re-)establishes.
 	pub(crate) telemetry_connection_notifier: Vec<ConnectionNotifierSender>,
 }
@@ -96,10 +95,7 @@ impl<TTrans: Transport> Node<TTrans> {
 	pub(crate) fn new(
 		transport: TTrans,
 		addr: Multiaddr,
-		connection_messages: IndexMap<
-			ConnectionMessageKind,
-			serde_json::Map<String, serde_json::Value>,
-		>,
+		connection_messages: Vec<serde_json::Map<String, serde_json::Value>>,
 		telemetry_connection_notifier: Vec<ConnectionNotifierSender>,
 	) -> Self {
 		Node {
@@ -127,7 +123,7 @@ where
 		cx: &mut Context<'_>,
 		conn: &mut NodeSocketConnected<TTrans>,
 	) -> Poll<Result<(), TSinkErr>> {
-		for item in conn.buf.drain(..) {
+		while let Some(item) = conn.buf.pop() {
 			if let Err(e) = conn.sink.start_send_unpin(item) {
 				return Poll::Ready(Err(e))
 			}
@@ -189,7 +185,7 @@ where
 
 						let buf = self
 							.connection_messages
-							.values()
+							.iter()
 							.map(|json| {
 								let mut json = json.clone();
 								json.insert(

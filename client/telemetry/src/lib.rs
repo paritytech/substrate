@@ -76,14 +76,9 @@ pub const CONSENSUS_INFO: VerbosityLevel = 1;
 /// Telemetry message verbosity.
 pub type VerbosityLevel = u8;
 
-const MSG_TYPE_SYSTEM_CONNECTED: &'static str = "system.connected";
-const MSG_TYPE_HWBENCH: &'static str = "sysinfo.hwbench";
-
 pub(crate) type Id = u64;
 pub(crate) type TelemetryPayload = serde_json::Map<String, serde_json::Value>;
 pub(crate) type TelemetryMessage = (Id, VerbosityLevel, TelemetryPayload);
-
-pub(crate) type ConnectionMessageKind = String;
 
 /// Message sent when the connection (re-)establishes.
 #[derive(Debug, Serialize)]
@@ -239,7 +234,7 @@ impl TelemetryWorker {
 
 				let connection_message = match serde_json::to_value(&connection_message) {
 					Ok(serde_json::Value::Object(mut value)) => {
-						value.insert("msg".into(), MSG_TYPE_SYSTEM_CONNECTED.into());
+						value.insert("msg".into(), "system.connected".into());
 						let mut obj = serde_json::Map::new();
 						obj.insert("id".to_string(), id.into());
 						obj.insert("payload".to_string(), value.into());
@@ -267,18 +262,10 @@ impl TelemetryWorker {
 					node_map.entry(id.clone()).or_default().push((verbosity, addr.clone()));
 
 					let node = node_pool.entry(addr.clone()).or_insert_with(|| {
-						Node::new(
-							transport.clone(),
-							addr.clone(),
-							Default::default(),
-							Default::default(),
-						)
+						Node::new(transport.clone(), addr.clone(), Vec::new(), Vec::new())
 					});
 
-					if let Some(ref connection_message) = connection_message {
-						node.connection_messages
-							.insert(MSG_TYPE_SYSTEM_CONNECTED.into(), connection_message.clone());
-					}
+					node.connection_messages.extend(connection_message.clone());
 
 					pending_connection_notifications.retain(|(addr_b, connection_message)| {
 						if *addr_b == addr {
@@ -301,53 +288,6 @@ impl TelemetryWorker {
 					} else {
 						pending_connection_notifications.push((addr, connection_notifier.clone()));
 					}
-				}
-			},
-			Register::ConnectionMessage { id, payload } => {
-				let kind = match payload.get("msg") {
-					Some(kind) => kind,
-					None => {
-						log::warn!(
-							target: "telemetry",
-							"Payload for a connection message is missing the 'msg' field"
-						);
-						return
-					},
-				};
-				let kind = match kind.as_str() {
-					Some(kind) => kind.to_owned(),
-					None => {
-						log::warn!(
-							target: "telemetry",
-							"Payload for a connection message has a non-string 'msg' field"
-						);
-						return
-					},
-				};
-
-				let ts = chrono::Local::now().to_rfc3339().to_string();
-				let mut message = serde_json::Map::new();
-				message.insert("id".into(), id.into());
-				message.insert("ts".into(), ts.into());
-				message.insert("payload".into(), payload.into());
-
-				if let Some(nodes) = node_map.get_mut(&id) {
-					for (_, addr) in nodes {
-						if let Some(node) = node_pool.get_mut(&addr) {
-							node.connection_messages.insert(kind.clone(), message.clone());
-							let _ = node.send(message.clone()).await;
-						} else {
-							log::warn!(
-								target: "telemetry",
-								"Tried to register a connection message for unknown node: {}", addr
-							);
-						}
-					}
-				} else {
-					log::warn!(
-						target: "telemetry",
-						"Tried to register a connection message for unknown telemetry ID: {}", id
-					);
 				}
 			},
 		}
@@ -470,7 +410,6 @@ impl Telemetry {
 	pub fn handle(&self) -> TelemetryHandle {
 		TelemetryHandle {
 			message_sender: Arc::new(Mutex::new(self.message_sender.clone())),
-			register_sender: Arc::new(Mutex::new(self.register_sender.clone())),
 			id: self.id,
 			connection_notifier: self.connection_notifier.clone(),
 		}
@@ -483,7 +422,6 @@ impl Telemetry {
 #[derive(Debug, Clone)]
 pub struct TelemetryHandle {
 	message_sender: Arc<Mutex<mpsc::Sender<TelemetryMessage>>>,
-	register_sender: Arc<Mutex<mpsc::UnboundedSender<Register>>>,
 	id: Id,
 	connection_notifier: TelemetryConnectionNotifier,
 }
@@ -501,41 +439,6 @@ impl TelemetryHandle {
 				target: "telemetry",
 				"Telemetry channel closed.",
 			),
-		}
-	}
-
-	/// Sends the hardware benchmark results through the telemetry connection.
-	///
-	/// This will also register the resulting message as a connection message
-	/// which will be automatically resent in case of a disconnection.
-	///
-	/// Can be called multiple times; any subsequent call will resend the data
-	/// and update the previously registered connection message.
-	///
-	/// Must be called *after* the telemetry has been initialized.
-	pub fn send_hwbench(&self, hwbench: HwBench) {
-		let payload = match serde_json::to_value(&hwbench) {
-			Ok(payload) => payload,
-			Err(error) => {
-				log::warn!(target: "telemetry", "Failed to serialize hwbench payload: {}", error);
-				return
-			},
-		};
-		let mut payload = match payload {
-			serde_json::Value::Object(map) => map,
-			_ => unreachable!("the `HwBench` always serializes into a JSON object; qed"),
-		};
-		payload.insert("msg".into(), MSG_TYPE_HWBENCH.into());
-		let result = self
-			.register_sender
-			.lock()
-			.unbounded_send(Register::ConnectionMessage { id: self.id, payload });
-		if let Err(error) = result {
-			log::trace!(
-				target: "telemetry",
-				"Failed to send hardware benchmark telemetry: {}",
-				error
-			);
 		}
 	}
 
@@ -578,7 +481,6 @@ impl TelemetryConnectionNotifier {
 enum Register {
 	Telemetry { id: Id, endpoints: TelemetryEndpoints, connection_message: ConnectionMessage },
 	Notifier { addresses: Vec<Multiaddr>, connection_notifier: ConnectionNotifierSender },
-	ConnectionMessage { id: Id, payload: TelemetryPayload },
 }
 
 /// Report a telemetry.

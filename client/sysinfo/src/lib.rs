@@ -19,6 +19,8 @@
 //! This crate contains the code necessary to gather basic hardware
 //! and software telemetry information about the node on which we're running.
 
+use futures::prelude::*;
+
 mod sysinfo;
 #[cfg(target_os = "linux")]
 mod sysinfo_linux;
@@ -35,5 +37,25 @@ pub fn print_hwbench(hwbench: &sc_telemetry::HwBench) {
 	}
 	if let Some(score) = hwbench.disk_random_write_score {
 		log::info!("🏁 Disk score (rand. writes): {}MB/s", score);
+	}
+}
+
+/// Initializes the hardware benchmarks telemetry.
+pub fn initialize_hwbench_telemetry(
+	telemetry_handle: sc_telemetry::TelemetryHandle,
+	hwbench: sc_telemetry::HwBench,
+) -> impl std::future::Future<Output = ()> {
+	let mut connect_stream = telemetry_handle.on_connect_stream();
+	async move {
+		let payload = sc_telemetry::serde_json::to_value(&hwbench)
+			.expect("the `HwBench` can always be serialized into a JSON object; qed");
+		let mut payload = match payload {
+			sc_telemetry::serde_json::Value::Object(map) => map,
+			_ => unreachable!("the `HwBench` always serializes into a JSON object; qed"),
+		};
+		payload.insert("msg".into(), "sysinfo.hwbench".into());
+		while let Some(_) = connect_stream.next().await {
+			telemetry_handle.send_telemetry(sc_telemetry::SUBSTRATE_INFO, payload.clone());
+		}
 	}
 }
