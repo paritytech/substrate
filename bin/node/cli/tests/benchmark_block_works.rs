@@ -23,7 +23,7 @@ use assert_cmd::cargo::cargo_bin;
 use std::process::Command;
 use tempfile::tempdir;
 
-mod common;
+pub mod common;
 
 /// `benchmark block` works for the dev runtime using the wasm executor.
 #[tokio::test]
