@@ -432,6 +432,13 @@ macro_rules! parameter_types {
 				I::from(Self::get())
 			}
 		}
+
+		impl $crate::traits::TypedGet for $name {
+			type Type = $type;
+			fn get() -> $type {
+				Self::get()
+			}
+		}
 	};
 	(IMPL $name:ident, $type:ty, $value:expr) => {
 		impl $name {
@@ -444,6 +451,13 @@ macro_rules! parameter_types {
 		impl<I: From<$type>> $crate::traits::Get<I> for $name {
 			fn get() -> I {
 				I::from(Self::get())
+			}
+		}
+
+		impl $crate::traits::TypedGet for $name {
+			type Type = $type;
+			fn get() -> $type {
+				Self::get()
 			}
 		}
 	};
@@ -477,6 +491,13 @@ macro_rules! parameter_types {
 		impl<I: From<$type>> $crate::traits::Get<I> for $name {
 			fn get() -> I {
 				I::from(Self::get())
+			}
+		}
+		
+		impl $crate::traits::TypedGet for $name {
+			type Type = $type;
+			fn get() -> $type {
+				Self::get()
 			}
 		}
 	};
@@ -1387,7 +1408,7 @@ pub mod pallet_prelude {
 		},
 		traits::{
 			ConstU32, EnsureOrigin, Get, GetDefault, GetStorageVersion, Hooks, IsType,
-			PalletInfoAccess, StorageInfoTrait,
+			PalletInfoAccess, StorageInfoTrait, TypedGet,
 		},
 		weights::{DispatchClass, Pays, Weight},
 		Blake2_128, Blake2_128Concat, Blake2_256, CloneNoBound, DebugNoBound, EqNoBound, Identity,

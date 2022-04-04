@@ -146,15 +146,16 @@ pub trait OriginTrait: Sized {
 	fn signed(by: Self::AccountId) -> Self;
 }
 
-/// The "OR gate" implementation of `EnsureOrigin`.
+/// "OR gate" implementation of `EnsureOrigin` allowing for different `Success` types for `L`
+/// and `R`, with them combined using an `Either` type.
 ///
 /// Origin check will pass if `L` or `R` origin check passes. `L` is tested first.
 ///
 /// Successful origin is derived from the left side.
-pub struct EnsureOneOf<L, R>(sp_std::marker::PhantomData<(L, R)>);
+pub struct EitherOfDiverse<L, R>(sp_std::marker::PhantomData<(L, R)>);
 
 impl<OuterOrigin, L: EnsureOrigin<OuterOrigin>, R: EnsureOrigin<OuterOrigin>>
-	EnsureOrigin<OuterOrigin> for EnsureOneOf<L, R>
+	EnsureOrigin<OuterOrigin> for EitherOfDiverse<L, R>
 {
 	type Success = Either<L::Success, R::Success>;
 	fn try_origin(o: OuterOrigin) -> Result<Self::Success, OuterOrigin> {
@@ -168,17 +169,51 @@ impl<OuterOrigin, L: EnsureOrigin<OuterOrigin>, R: EnsureOrigin<OuterOrigin>>
 	}
 }
 
+/// "OR gate" implementation of `EnsureOrigin` allowing for different `Success` types for `L`
+/// and `R`, with them combined using an `Either` type.
+///
+/// Origin check will pass if `L` or `R` origin check passes. `L` is tested first.
+///
+/// Successful origin is derived from the left side.
+#[deprecated = "Use `EitherOfDiverse` instead"]
+pub type EnsureOneOf<L, R> = EitherOfDiverse<L, R>;
+
+/// "OR gate" implementation of `EnsureOrigin`, `Success` type for both `L` and `R` must
+/// be equal.
+///
+/// Origin check will pass if `L` or `R` origin check passes. `L` is tested first.
+///
+/// Successful origin is derived from the left side.
+pub struct EitherOf<L, R>(sp_std::marker::PhantomData<(L, R)>);
+
+impl<OuterOrigin, L: EnsureOrigin<OuterOrigin>, R: EnsureOrigin<OuterOrigin, Success=L::Success>>
+	EnsureOrigin<OuterOrigin> for EitherOf<L, R>
+{
+	type Success = L::Success;
+	fn try_origin(o: OuterOrigin) -> Result<Self::Success, OuterOrigin> {
+		L::try_origin(o)
+			.or_else(|o| R::try_origin(o))
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn successful_origin() -> OuterOrigin {
+		L::successful_origin()
+	}
+}
+
 #[cfg(test)]
 mod tests {
+	use std::marker::PhantomData;
+	use crate::traits::{TypedGet, ConstBool, ConstU8};
 	use super::*;
 
-	struct EnsureSuccess;
-	struct EnsureFail;
+	struct EnsureSuccess<V>(PhantomData<V>);
+	struct EnsureFail<T>(PhantomData<T>);
 
-	impl EnsureOrigin<()> for EnsureSuccess {
-		type Success = ();
+	impl<V: TypedGet> EnsureOrigin<()> for EnsureSuccess<V> {
+		type Success = V::Type;
 		fn try_origin(_: ()) -> Result<Self::Success, ()> {
-			Ok(())
+			Ok(V::get())
 		}
 		#[cfg(feature = "runtime-benchmarks")]
 		fn successful_origin() -> () {
@@ -186,8 +221,8 @@ mod tests {
 		}
 	}
 
-	impl EnsureOrigin<()> for EnsureFail {
-		type Success = ();
+	impl<T> EnsureOrigin<()> for EnsureFail<T> {
+		type Success = T;
 		fn try_origin(_: ()) -> Result<Self::Success, ()> {
 			Err(())
 		}
@@ -198,10 +233,54 @@ mod tests {
 	}
 
 	#[test]
-	fn ensure_one_of_test() {
-		assert!(<EnsureOneOf<EnsureSuccess, EnsureSuccess>>::try_origin(()).is_ok());
-		assert!(<EnsureOneOf<EnsureSuccess, EnsureFail>>::try_origin(()).is_ok());
-		assert!(<EnsureOneOf<EnsureFail, EnsureSuccess>>::try_origin(()).is_ok());
-		assert!(<EnsureOneOf<EnsureFail, EnsureFail>>::try_origin(()).is_err());
+	fn either_of_diverse_works() {
+		assert_eq!(
+			EitherOfDiverse::<
+				EnsureSuccess<ConstBool<true>>,
+				EnsureSuccess<ConstU8<0>>,
+			>::try_origin(()).unwrap().left(),
+			Some(true)
+		);
+		assert_eq!(
+			EitherOfDiverse::<
+				EnsureSuccess<ConstBool<true>>,
+				EnsureFail<u8>,
+			>::try_origin(()).unwrap().left(),
+			Some(true)
+		);
+		assert_eq!(
+			EitherOfDiverse::<
+				EnsureFail<bool>,
+				EnsureSuccess<ConstU8<0>>,
+			>::try_origin(()).unwrap().right(),
+			Some(0u8)
+		);
+		assert!(EitherOfDiverse::<EnsureFail<bool>, EnsureFail<u8>>::try_origin(()).is_err());
+	}
+
+	#[test]
+	fn either_of_works() {
+		assert_eq!(
+			EitherOf::<
+				EnsureSuccess<ConstBool<true>>,
+				EnsureSuccess<ConstBool<false>>,
+			>::try_origin(()).unwrap(),
+			true
+		);
+		assert_eq!(
+			EitherOf::<
+				EnsureSuccess<ConstBool<true>>,
+				EnsureFail<bool>,
+			>::try_origin(()).unwrap(),
+			true
+		);
+		assert_eq!(
+			EitherOf::<
+				EnsureFail<bool>,
+				EnsureSuccess<ConstBool<false>>,
+			>::try_origin(()).unwrap(),
+			false
+		);
+		assert!(EitherOf::<EnsureFail<bool>, EnsureFail<bool>>::try_origin(()).is_err());
 	}
 }
