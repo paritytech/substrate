@@ -26,7 +26,7 @@ use crate::{
 use codec::{Decode, Encode};
 use sp_core::sandbox::HostError;
 use sp_wasm_interface::{FunctionContext, Pointer, ReturnValue, Value, WordSize};
-use std::{cell::RefCell, collections::HashMap, convert::TryInto, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 use wasmer::RuntimeError;
 
 use crate::sandbox::{
