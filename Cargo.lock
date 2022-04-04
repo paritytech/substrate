@@ -3616,9 +3616,9 @@ dependencies = [
 
 [[package]]
 name = "kvdb-rocksdb"
-version = "0.15.1"
+version = "0.15.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a1e72a631a32527fafe22d0751c002e67d28173c49dcaecf79d1aaa323c520e9"
+checksum = "ca7fbdfd71cd663dceb0faf3367a99f8cf724514933e9867cec4995b6027cbc1"
 dependencies = [
  "fs-swap",
  "kvdb",
