@@ -110,36 +110,6 @@ pub fn is_transactional() -> bool {
 	transaction_level_tracker::is_transactional()
 }
 
-/// Ensure the supplied function is executed within a storage transaction.
-///
-/// If we are already in an existing transactional layer, then we just execute the function.
-/// Otherwise, we create a new transactional layer and execute the function.
-pub fn with_transaction<T, E>(f: impl FnOnce() -> TransactionOutcome<Result<T, E>>) -> Result<T, E>
-where
-	E: From<DispatchError>,
-{
-	use sp_io::storage::{commit_transaction, rollback_transaction, start_transaction};
-	use TransactionOutcome::*;
-
-	if !is_transactional() {
-		let _guard = transaction_level_tracker::inc_transaction_level()
-			.map_err(|()| TransactionalError::LimitReached.into())?;
-
-		start_transaction();
-	}
-
-	match f() {
-		Commit(res) => {
-			commit_transaction();
-			res
-		},
-		Rollback(res) => {
-			rollback_transaction();
-			res
-		},
-	}
-}
-
 /// Execute the supplied function in a new storage transaction.
 ///
 /// All changes to storage performed by the supplied function are discarded if the returned
@@ -149,7 +119,7 @@ where
 /// error.
 ///
 /// Commits happen to the parent transaction.
-pub fn add_transaction<T, E>(f: impl FnOnce() -> TransactionOutcome<Result<T, E>>) -> Result<T, E>
+pub fn with_transaction<T, E>(f: impl FnOnce() -> TransactionOutcome<Result<T, E>>) -> Result<T, E>
 where
 	E: From<DispatchError>,
 {
@@ -178,7 +148,7 @@ where
 /// This is mostly for backwards compatibility before there was a transactional layer limit.
 /// It is recommended to only use [`with_transaction`] to avoid users from generating too many
 /// transactional layers.
-pub fn add_transaction_unchecked<R>(f: impl FnOnce() -> TransactionOutcome<R>) -> R {
+pub fn with_transaction_unchecked<R>(f: impl FnOnce() -> TransactionOutcome<R>) -> R {
 	use sp_io::storage::{commit_transaction, rollback_transaction, start_transaction};
 	use TransactionOutcome::*;
 
@@ -1650,7 +1620,7 @@ mod test {
 			return Ok(())
 		}
 
-		add_transaction(|| -> TransactionOutcome<DispatchResult> {
+		with_transaction(|| -> TransactionOutcome<DispatchResult> {
 			let res = recursive_transactional(num - 1);
 			TransactionOutcome::Commit(res)
 		})
@@ -1661,14 +1631,14 @@ mod test {
 		TestExternalities::default().execute_with(|| {
 			assert_eq!(transaction_level_tracker::get_transaction_level(), 0);
 
-			assert_ok!(add_transaction(|| -> TransactionOutcome<DispatchResult> {
+			assert_ok!(with_transaction(|| -> TransactionOutcome<DispatchResult> {
 				assert_eq!(transaction_level_tracker::get_transaction_level(), 1);
 				TransactionOutcome::Commit(Ok(()))
 			}));
 
-			assert_ok!(add_transaction(|| -> TransactionOutcome<DispatchResult> {
+			assert_ok!(with_transaction(|| -> TransactionOutcome<DispatchResult> {
 				assert_eq!(transaction_level_tracker::get_transaction_level(), 1);
-				let res = add_transaction(|| -> TransactionOutcome<DispatchResult> {
+				let res = with_transaction(|| -> TransactionOutcome<DispatchResult> {
 					assert_eq!(transaction_level_tracker::get_transaction_level(), 2);
 					TransactionOutcome::Commit(Ok(()))
 				});
@@ -1680,31 +1650,6 @@ mod test {
 				recursive_transactional(256),
 				sp_runtime::TransactionalError::LimitReached
 			);
-
-			assert_eq!(transaction_level_tracker::get_transaction_level(), 0);
-		});
-	}
-
-	#[test]
-	fn with_transaction_works() {
-		TestExternalities::default().execute_with(|| {
-			assert_eq!(transaction_level_tracker::get_transaction_level(), 0);
-
-			// First layer
-			assert_ok!(with_transaction(|| -> TransactionOutcome<DispatchResult> {
-				assert_eq!(transaction_level_tracker::get_transaction_level(), 1);
-				TransactionOutcome::Commit(Ok(()))
-			}));
-
-			assert_ok!(with_transaction(|| -> TransactionOutcome<DispatchResult> {
-				assert_eq!(transaction_level_tracker::get_transaction_level(), 1);
-				let res = with_transaction(|| -> TransactionOutcome<DispatchResult> {
-					// Only one total layer is added
-					assert_eq!(transaction_level_tracker::get_transaction_level(), 1);
-					TransactionOutcome::Commit(Ok(()))
-				});
-				TransactionOutcome::Commit(res)
-			}));
 
 			assert_eq!(transaction_level_tracker::get_transaction_level(), 0);
 		});
