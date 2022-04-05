@@ -87,6 +87,12 @@ fn combine_batches(
 		.collect::<Vec<_>>()
 }
 
+/// Explains possible reasons why the metadata for the benchmarking could not be found.
+const ERROR_METADATA_NOT_FOUND: &'static str = "Did not find the benchmarking metadata. \
+This could mean that you either did not build the node correctly with the \
+`--features runtime-benchmarks` flag, or the chain spec that you are using was \
+not created by a node that was compiled with the flag";
+
 impl PalletCmd {
 	/// Runs the command and benchmarks the chain.
 	pub fn run<BB, ExecDispatch>(&self, config: Configuration) -> Result<()>
@@ -165,7 +171,7 @@ impl PalletCmd {
 			sp_core::testing::TaskExecutor::new(),
 		)
 		.execute(strategy.into())
-		.map_err(|e| format!("Error getting benchmark list: {}", e))?;
+		.map_err(|e| format!("{}: {}", ERROR_METADATA_NOT_FOUND, e))?;
 
 		let (list, storage_info) =
 			<(Vec<BenchmarkList>, Vec<StorageInfo>) as Decode>::decode(&mut &result[..])
