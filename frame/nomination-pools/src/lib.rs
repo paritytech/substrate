@@ -55,7 +55,7 @@
 //!
 //! For design docs see the [slashing](#slashing) section.
 //!
-//! ### Adminstration
+//! ### Administration
 //!
 //! A pool can be created with the [`Call::create`] call. Once created, the pools nominator or root
 //! user must call [`Call::nominate`] to start nominating. [`Call::nominate`] can be called at
