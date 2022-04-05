@@ -15,8 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! election provider support onchain pallet benchmarking.
-// This is separated into its own crate to avoid bloating the size of the runtime.
+//! Election provider support pallet benchmarking.
+//! This is separated into its own crate to avoid bloating the size of the runtime.
 
 #![cfg(feature = "runtime-benchmarks")]
 #![cfg_attr(not(feature = "std"), no_std)]
@@ -33,7 +33,7 @@ const TARGETS: [u32; 2] = [500, 1_000];
 const VOTES_PER_VOTER: [u32; 2] = [5, 16];
 
 const SEED: u32 = 999;
-fn set_up_data_provider<AccountId: Decode + Clone>(
+fn set_up_voters_targets<AccountId: Decode + Clone>(
 	voters_len: u32,
 	targets_len: u32,
 	degree: usize,
@@ -65,7 +65,7 @@ benchmarks! {
 		// number of votes per voter (ie the degree).
 		let d in (VOTES_PER_VOTER[0]) .. VOTES_PER_VOTER[1];
 
-		let (voters, targets) = set_up_data_provider::<T::AccountId>(v, t, d as usize);
+		let (voters, targets) = set_up_voters_targets::<T::AccountId>(v, t, d as usize);
 	}: {
 		assert!(
 			SequentialPhragmen::<T::AccountId, sp_runtime::Perbill>
@@ -81,7 +81,7 @@ benchmarks! {
 		// number of votes per voter (ie the degree).
 		let d in (VOTES_PER_VOTER[0]) .. VOTES_PER_VOTER[1];
 
-		let (voters, targets) = set_up_data_provider::<T::AccountId>(v, t, d as usize);
+		let (voters, targets) = set_up_voters_targets::<T::AccountId>(v, t, d as usize);
 	}: {
 		assert!(
 			PhragMMS::<T::AccountId, sp_runtime::Perbill>

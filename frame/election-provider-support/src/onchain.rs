@@ -15,7 +15,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! An implementation of [`ElectionProvider`] that uses an `NposSolver` to do the election.
+//! An implementation of [`ElectionProvider`] that uses an `NposSolver` to do the election. As the
+//! name suggests, this is meant to be used onchain. Given how heavy the calculations are, please be
+//! careful when using it onchain.
 
 use crate::{
 	Debug, ElectionDataProvider, ElectionProvider, InstantElectionProvider, NposSolver, WeightInfo,
