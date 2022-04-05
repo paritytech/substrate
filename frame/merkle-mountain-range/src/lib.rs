@@ -70,7 +70,7 @@ mod mock;
 mod tests;
 
 pub use pallet::*;
-pub use pallet_mmr_primitives::{self as primitives, NodeIndex};
+pub use pallet_mmr_primitives::{self as primitives, LeafIndex, NodeIndex};
 
 pub trait WeightInfo {
 	fn on_initialize(peaks: NodeIndex) -> Weight;
@@ -161,7 +161,7 @@ pub mod pallet {
 	/// Current size of the MMR (number of leaves).
 	#[pallet::storage]
 	#[pallet::getter(fn mmr_leaves)]
-	pub type NumberOfLeaves<T, I = ()> = StorageValue<_, NodeIndex, ValueQuery>;
+	pub type NumberOfLeaves<T, I = ()> = StorageValue<_, LeafIndex, ValueQuery>;
 
 	/// Hashes of the nodes in the MMR.
 	///
@@ -240,7 +240,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// all the leaves to be present.
 	/// It may return an error or panic if used incorrectly.
 	pub fn generate_proof(
-		leaf_index: NodeIndex,
+		leaf_index: LeafIndex,
 	) -> Result<(LeafOf<T, I>, primitives::Proof<<T as Config<I>>::Hash>), primitives::Error> {
 		let mmr: ModuleMmr<mmr::storage::OffchainStorage, T, I> = mmr::Mmr::new(Self::mmr_leaves());
 		mmr.generate_proof(leaf_index)
@@ -271,5 +271,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		} else {
 			Err(primitives::Error::Verify.log_debug("The proof is incorrect."))
 		}
+	}
+
+	/// Return the on-chain MMR root hash.
+	pub fn mmr_root() -> <T as Config<I>>::Hash {
+		Self::mmr_root_hash()
 	}
 }

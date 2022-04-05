@@ -1804,6 +1804,10 @@ impl_runtime_apis! {
 			let node = mmr::DataOrHash::Data(leaf.into_opaque_leaf());
 			pallet_mmr::verify_leaf_proof::<mmr::Hashing, _>(root, node, proof)
 		}
+
+		fn mmr_root() -> Result<mmr::Hash, mmr::Error> {
+			Ok(Mmr::mmr_root())
+		}
 	}
 
 	impl sp_session::SessionKeys<Block> for Runtime {

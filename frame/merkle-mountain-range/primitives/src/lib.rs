@@ -429,6 +429,9 @@ sp_api::decl_runtime_apis! {
 		/// The leaf data is expected to be encoded in it's compact form.
 		fn verify_proof_stateless(root: Hash, leaf: EncodableOpaqueLeaf, proof: Proof<Hash>)
 			-> Result<(), Error>;
+
+		/// Return the on-chain MMR root hash.
+		fn mmr_root() -> Result<Hash, Error>;
 	}
 }
 
