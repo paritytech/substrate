@@ -62,6 +62,32 @@ fn generate_friends<T: Config>() -> Vec<<T as frame_system::Config>::AccountId> 
 	friends
 }
 
+fn add_caller_and_generate_friends<T: Config>(caller: T::AccountId) -> Vec<<T as frame_system::Config>::AccountId> {
+	// Create friends
+	let mut friends = vec![
+		account("friend_0", 0, SEED),
+		account("friend_1", 1, SEED),
+		account("friend_2", 2, SEED),
+		account("friend_3", 3, SEED),
+		account("friend_4", 4, SEED),
+		account("friend_5", 5, SEED),
+		account("friend_6", 6, SEED),
+		caller,
+	];
+	// Sort
+	friends.sort();
+
+	for friend in 0..friends.len() {
+		// Top up accounts of friends
+		T::Currency::make_free_balance_be(
+			&friends.get(friend).unwrap(),
+			BalanceOf::<T>::max_value(),
+		);
+	}
+
+	friends
+}
+
 fn insert_recovery_account<T: Config>(caller: &T::AccountId, account: &T::AccountId) {
 	T::Currency::make_free_balance_be(&account, BalanceOf::<T>::max_value());
 
@@ -163,6 +189,45 @@ benchmarks! {
 		let caller: T::AccountId = whitelisted_caller();
 		let lost_account: T::AccountId = account("lost_account", 0, SEED);
 		let rescuer_account: T::AccountId = account("rescuer_account", 0, SEED);
+
+		// Create friends
+		let friends = add_caller_and_generate_friends::<T>(caller.clone());
+		let bounded_friends: FriendsOf<T> = friends.try_into().unwrap();
+
+		let threshold: u16 = 8;
+		let delay_period = block_number::<T>();
+
+		// Get deposit for recovery
+		let friend_deposit = T::FriendDepositFactor::get()
+			.checked_mul(&bounded_friends.len().saturated_into())
+			.unwrap();
+		let total_deposit = T::ConfigDepositBase::get()
+			.checked_add(&friend_deposit)
+			.unwrap();
+
+		let recovery_config = RecoveryConfig {
+			delay_period,
+			deposit: total_deposit.clone(),
+			friends: bounded_friends.clone(),
+			threshold,
+		};
+
+		// Create the recovery config storage item
+		<Recoverable<T>>::insert(&lost_account, recovery_config.clone());
+
+		// Reserve deposit for recovery
+		T::Currency::reserve(&caller, total_deposit).unwrap();
+
+		// Create an active recovery status
+		let recovery_status = ActiveRecovery {
+			created: block_number::<T>(),
+			deposit: total_deposit,
+			friends: vec![].try_into().unwrap(),
+		};
+
+		// Create the active recovery storage item
+		<ActiveRecoveries<T>>::insert(&lost_account, &rescuer_account, recovery_status);
+
 	}: _(
 		RawOrigin::Signed(caller.clone()),
 		lost_account.clone(),
