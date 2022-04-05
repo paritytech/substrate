@@ -82,7 +82,6 @@ impl<T: Config> Pallet<T> {
 			return Err(Error::<T>::CollectionIsLocked.into());
 		}
 
-		// update the flag
 		user_features.insert(UserFeatures::IsLocked);
 
 		Self::deposit_event(Event::<T>::CollectionLocked { id });
@@ -105,7 +104,6 @@ impl<T: Config> Pallet<T> {
 			return Err(Error::<T>::CollectionIsLocked.into());
 		}
 
-		// update the max supply
 		collection.max_supply = max_supply;
 
 		Self::deposit_event(Event::<T>::CollectionMaxSupplyChanged { id, max_supply });
@@ -128,7 +126,6 @@ impl<T: Config> Pallet<T> {
 			return Err(Error::<T>::CollectionIsLocked.into());
 		}
 
-		// update the max supply
 		collection.max_items_per_account = max_items_per_account;
 
 		Self::deposit_event(Event::<T>::CollectionMaxItemsPerAccountChanged { id, max_items_per_account });
