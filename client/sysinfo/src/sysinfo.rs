@@ -205,13 +205,13 @@ impl Drop for TemporaryFile {
 impl Deref for TemporaryFile {
 	type Target = File;
 	fn deref(&self) -> &Self::Target {
-		self.fp.as_ref().unwrap()
+		self.fp.as_ref().expect("`fp` is None only during `drop`")
 	}
 }
 
 impl DerefMut for TemporaryFile {
 	fn deref_mut(&mut self) -> &mut Self::Target {
-		self.fp.as_mut().unwrap()
+		self.fp.as_mut().expect("`fp` is None only during `drop`")
 	}
 }
 
@@ -258,13 +258,7 @@ pub fn benchmark_disk_sequential_writes(directory: &Path) -> Result<u64, String>
 		Ok(())
 	};
 
-	crate::sysinfo::benchmark(
-		"disk sequential write score",
-		SIZE,
-		MAX_ITERATIONS,
-		MAX_DURATION,
-		run,
-	)
+	benchmark("disk sequential write score", SIZE, MAX_ITERATIONS, MAX_DURATION, run)
 }
 
 pub fn benchmark_disk_random_writes(directory: &Path) -> Result<u64, String> {
@@ -323,13 +317,7 @@ pub fn benchmark_disk_random_writes(directory: &Path) -> Result<u64, String> {
 	};
 
 	// We only wrote half of the bytes hence `SIZE / 2`.
-	crate::sysinfo::benchmark(
-		"disk random write score",
-		SIZE / 2,
-		MAX_ITERATIONS,
-		MAX_DURATION,
-		run,
-	)
+	benchmark("disk random write score", SIZE / 2, MAX_ITERATIONS, MAX_DURATION, run)
 }
 
 /// Benchmarks the hardware and returns the results of those benchmarks.

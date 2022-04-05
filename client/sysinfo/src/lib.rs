@@ -91,7 +91,7 @@ pub fn initialize_hwbench_telemetry(
 			_ => unreachable!("the `HwBench` always serializes into a JSON object; qed"),
 		};
 		payload.insert("msg".into(), "sysinfo.hwbench".into());
-		while let Some(_) = connect_stream.next().await {
+		while connect_stream.next().await.is_some() {
 			telemetry_handle.send_telemetry(sc_telemetry::SUBSTRATE_INFO, payload.clone());
 		}
 	}
