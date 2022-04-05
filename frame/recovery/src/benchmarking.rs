@@ -245,6 +245,46 @@ benchmarks! {
 	claim_recovery {
 		let caller: T::AccountId = whitelisted_caller();
 		let lost_account: T::AccountId = account("lost_account", 0, SEED);
+
+		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
+
+		// Create friends
+		let friends = generate_friends::<T>();
+		let bounded_friends: FriendsOf<T> = friends.try_into().unwrap();
+
+		let threshold: u16 = 8;
+		let delay_period = block_number::<T>();
+
+		// Get deposit for recovery
+		let friend_deposit = T::FriendDepositFactor::get()
+			.checked_mul(&bounded_friends.len().saturated_into())
+			.unwrap();
+		let total_deposit = T::ConfigDepositBase::get()
+			.checked_add(&friend_deposit)
+			.unwrap();
+
+		let recovery_config = RecoveryConfig {
+			delay_period,
+			deposit: total_deposit.clone(),
+			friends: bounded_friends.clone(),
+			threshold,
+		};
+
+		// Create the recovery config storage item
+		<Recoverable<T>>::insert(&lost_account, recovery_config.clone());
+
+		// Reserve deposit for recovery
+		T::Currency::reserve(&caller, total_deposit).unwrap();
+
+		// Create an active recovery status
+		let recovery_status = ActiveRecovery {
+			created: block_number::<T>(),
+			deposit: total_deposit,
+			friends: bounded_friends.clone(),
+		};
+
+		// Create the active recovery storage item
+		<ActiveRecoveries<T>>::insert(&lost_account, &caller, recovery_status);
 	}: _(
 		RawOrigin::Signed(caller.clone()),
 		lost_account.clone()
