@@ -37,7 +37,7 @@ pub const TARGET_ARCH: &str = include_str!(concat!(env!("OUT_DIR"), "/target_arc
 pub const TARGET_ENV: &str = include_str!(concat!(env!("OUT_DIR"), "/target_env.txt"));
 
 /// Hardware benchmark results for the node.
-#[derive(Debug, serde::Serialize)]
+#[derive(Clone, Debug, serde::Serialize)]
 pub struct HwBench {
 	/// The CPU speed, as measured in how many MB/s it can hash using the BLAKE2b-256 hash.
 	pub cpu_hashrate_score: u64,
