@@ -38,7 +38,6 @@ use parking_lot::Mutex;
 use prometheus_endpoint::{register, CounterVec, GaugeVec, Opts, PrometheusError, Registry, U64};
 use std::{
 	cell::RefCell,
-	convert::TryFrom as _,
 	fmt,
 	pin::Pin,
 	sync::Arc,
