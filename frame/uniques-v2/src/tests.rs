@@ -24,7 +24,7 @@ fn get_id_from_event() -> Result<<Test as Config>::CollectionId, &'static str> {
 	if let Some(e) = last_event.clone() {
 		match e.event {
 			mock::Event::Uniques(inner_event) => match inner_event {
-				Event::CollectionCreated { id } => {
+				Event::CollectionCreated { id, max_supply: _ } => {
 					return Ok(id)
 				},
 				_ => {},
@@ -40,7 +40,7 @@ fn get_id_from_event() -> Result<<Test as Config>::CollectionId, &'static str> {
 fn sanity_test() {
 	new_test_ext().execute_with(|| {
 		let user_features = UserFeatures::Administration;
-		assert_ok!(Uniques::create(Origin::signed(1), user_features, None));
+		assert_ok!(Uniques::create(Origin::signed(1), user_features, None, None));
 
 		let id = get_id_from_event().unwrap();
 		let collection_config = CollectionConfigs::<Test>::get(id);

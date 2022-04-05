@@ -27,7 +27,6 @@ use scale_info::TypeInfo;
 pub enum UserFeatures {
 	Administration,
 	Royalty,
-	Limited,
 	IsLocked,
 	NonTransferableItems,
 }
@@ -57,6 +56,7 @@ pub struct Collection<CollectionId, Account, Balance> {
 	pub items: u32,
 	pub item_metadatas: u32,
 	pub max_supply: Option<u32>,
+	pub max_items_per_account: Option<u32>,
 }
 
 #[derive(Encode, Decode, PartialEq, Default, MaxEncodedLen, TypeInfo)]

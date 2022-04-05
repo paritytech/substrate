@@ -18,6 +18,7 @@
 use crate::*;
 use enumflags2::BitFlags;
 use frame_support::pallet_prelude::*;
+use sp_runtime::{ArithmeticError};
 
 impl<T: Config> Pallet<T> {
 	pub fn do_transfer_item(
@@ -31,24 +32,36 @@ impl<T: Config> Pallet<T> {
 		ensure!(!user_features.contains(UserFeatures::NonTransferableItems), Error::<T>::ItemsNonTransferable);
 
 		Items::<T>::try_mutate(collection_id, item_id, |maybe_item| {
-			if user_features.contains(UserFeatures::Royalty) {
-				// take a part of the transfer amount
-			}
-
-			// max items per user
-			if user_features.contains(UserFeatures::Limited) {
-				// crate::limited::limited_check(receiver)?;
-			}
-
 			let item = maybe_item.as_mut().ok_or(Error::<T>::ItemNotFound)?;
 			ensure!(&sender == &item.owner, Error::<T>::NotAuthorized);
+
+			let collection = Collections::<T>::get(collection_id).ok_or(Error::<T>::CollectionNotFound)?;
 
 			if item.owner == receiver {
 				return Ok(())
 			}
 
+			if user_features.contains(UserFeatures::Royalty) {
+				// take a part of the transfer amount
+			}
+
+			// max items per user
+			let mut maybe_receiver_items_amount = CountForAccountItems::<T>::get(&sender, &collection_id);
+			let receiver_items_amount = maybe_receiver_items_amount.get_or_insert(0);
+
+			let sender_items_amount = CountForAccountItems::<T>::get(&receiver, &collection_id).ok_or(Error::<T>::ItemNotFound)?;
+
+			if collection.max_items_per_account.is_some() {
+				ensure!(receiver_items_amount < &mut collection.max_items_per_account.unwrap(), Error::<T>::CollectionItemsPerAccountLimitReached);
+			}
+
 			AccountItems::<T>::remove((&item.owner, &collection_id, &item_id));
 			AccountItems::<T>::insert((&receiver, &collection_id, &item_id), ());
+
+			let new_sender_items_amount = sender_items_amount.checked_sub(1).ok_or(ArithmeticError::Overflow)?;
+			let new_receiver_items_amount = receiver_items_amount.checked_add(1).ok_or(ArithmeticError::Overflow)?;
+			CountForAccountItems::<T>::insert(&sender, &collection_id, new_sender_items_amount);
+			CountForAccountItems::<T>::insert(&receiver, &collection_id, new_receiver_items_amount);
 
 			item.owner = receiver.clone();
 

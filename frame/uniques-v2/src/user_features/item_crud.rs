@@ -33,6 +33,13 @@ impl<T: Config> Pallet<T> {
 			ensure!(collection.items < collection.max_supply.unwrap(), Error::<T>::ItemIdNotWithinMaxSupply);
 		}
 
+		let mut maybe_items_per_account = CountForAccountItems::<T>::get(&caller, &collection_id);
+		let items_per_account = maybe_items_per_account.get_or_insert(0);
+
+		if collection.max_items_per_account.is_some() {
+			ensure!(items_per_account < collection.max_items_per_account.as_mut().unwrap(), Error::<T>::CollectionItemsPerAccountLimitReached);
+		}
+
 		let item = Item {
 			id: item_id,
 			owner: caller.clone(),
@@ -42,6 +49,9 @@ impl<T: Config> Pallet<T> {
 		let instances =
 			collection.items.checked_add(1).ok_or(ArithmeticError::Overflow)?;
 		collection.items = instances;
+
+		let new_items_amount = items_per_account.checked_add(1).ok_or(ArithmeticError::Overflow)?;
+		CountForAccountItems::<T>::insert(&caller, &collection_id, new_items_amount);
 
 		Items::<T>::insert(collection_id, item_id, item);
 		AccountItems::<T>::insert((&caller, &collection_id, &item_id), ());
@@ -64,6 +74,10 @@ impl<T: Config> Pallet<T> {
 		let instances =
 			collection.items.checked_sub(1).ok_or(ArithmeticError::Overflow)?;
 		collection.items = instances;
+
+		let items_per_account = CountForAccountItems::<T>::get(&caller, &collection_id).ok_or(Error::<T>::ItemNotFound)?;
+		let new_items_amount = items_per_account.checked_sub(1).ok_or(ArithmeticError::Overflow)?;
+		CountForAccountItems::<T>::insert(&caller, &collection_id, new_items_amount);
 
 		Items::<T>::remove(&collection_id, &item_id);
 		ItemMetadataOf::<T>::remove(&collection_id, &item_id);

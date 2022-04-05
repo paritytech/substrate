@@ -25,6 +25,7 @@ impl<T: Config> Pallet<T> {
 		caller: T::AccountId,
 		config: UserFeatures,
 		max_supply: Option<u32>,
+		max_items_per_account: Option<u32>,
 	) -> DispatchResult {
 		let id = CountForCollections::<T>::get();
 
@@ -45,6 +46,7 @@ impl<T: Config> Pallet<T> {
 			items: 0,
 			item_metadatas: 0,
 			max_supply,
+			max_items_per_account,
 		};
 		ensure!(!Collections::<T>::contains_key(id), Error::<T>::CollectionIdTaken);
 
@@ -52,7 +54,7 @@ impl<T: Config> Pallet<T> {
 		CollectionOwner::<T>::insert(&caller, &id, ());
 
 		// emit events
-		Self::deposit_event(Event::<T>::CollectionCreated { id });
+		Self::deposit_event(Event::<T>::CollectionCreated { id, max_supply });
 
 		let user_features: BitFlags<UserFeatures> = collection_config.user_features.into();
 		if user_features.contains(UserFeatures::IsLocked) {
@@ -111,6 +113,29 @@ impl<T: Config> Pallet<T> {
 		Ok(())
 	}
 
+	pub fn do_update_max_items_per_account(
+		id: T::CollectionId,
+		caller: T::AccountId,
+		config: CollectionConfig,
+		max_items_per_account: Option<u32>,
+	) -> DispatchResult {
+		let mut collection = Collections::<T>::get(&id).ok_or(Error::<T>::CollectionNotFound)?;
+		ensure!(collection.owner == caller, Error::<T>::NotAuthorized);
+
+		let user_features: BitFlags<UserFeatures> = config.user_features.into();
+
+		if user_features.contains(UserFeatures::IsLocked) {
+			return Err(Error::<T>::CollectionIsLocked.into());
+		}
+
+		// update the max supply
+		collection.max_items_per_account = max_items_per_account;
+
+		Self::deposit_event(Event::<T>::CollectionMaxItemsPerAccountChanged { id, max_items_per_account });
+
+		Ok(())
+	}
+
 	pub fn do_change_collection_config(
 		id: T::CollectionId,
 		caller: T::AccountId,
@@ -164,6 +189,7 @@ impl<T: Config> Pallet<T> {
 
 		for (item_id, details) in Items::<T>::drain_prefix(&id) {
 			AccountItems::<T>::remove((&details.owner, &id, &item_id));
+			CountForAccountItems::<T>::remove(&details.owner, &id);
 		}
 
 		ItemMetadataOf::<T>::remove_prefix(&id, None);

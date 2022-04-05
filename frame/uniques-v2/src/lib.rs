@@ -104,8 +104,8 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
-	/// The collections owned by any given account; set out this way so that classes owned by a single
-	/// account can be enumerated.
+	/// The collections owned by any given account; set out this way so that classes owned by
+	/// a single account can be enumerated.
 	#[pallet::storage]
 	pub(super) type CollectionOwner<T: Config> = StorageDoubleMap<
 		_,
@@ -157,6 +157,18 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
+	/// Keeps track of the number of items per collection per user.
+	#[pallet::storage]
+	pub(super) type CountForAccountItems<T: Config> = StorageDoubleMap<
+		_,
+		Blake2_128Concat,
+		T::AccountId,
+		Blake2_128Concat,
+		T::CollectionId,
+		u32,
+		OptionQuery,
+	>;
+
 	#[pallet::storage]
 	/// Metadata of an asset instance.
 	pub(super) type ItemMetadataOf<T: Config> = StorageDoubleMap<
@@ -186,7 +198,7 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		CollectionCreated { id: T::CollectionId },
+		CollectionCreated {id: T::CollectionId, max_supply: Option<u32> },
 		CollectionMetadataSet { id: T::CollectionId, data: MetadataOf<T> },
 		CollectionLocked { id: T::CollectionId },
 		CollectionDestroyed { id: T::CollectionId },
@@ -198,6 +210,10 @@ pub mod pallet {
 		CollectionMaxSupplyChanged {
 			id: T::CollectionId,
 			max_supply: Option<u32>,
+		},
+		CollectionMaxItemsPerAccountChanged {
+			id: T::CollectionId,
+			max_items_per_account: Option<u32>,
 		},
 		CollectionConfigChanged { id: T::CollectionId },
 		AttributeSet {
@@ -251,6 +267,8 @@ pub mod pallet {
 		ItemIdNotWithinMaxSupply,
 		/// Items within that collection are non-transferable.
 		ItemsNonTransferable,
+		/// User reached the limit of allowed items per collection per account
+		CollectionItemsPerAccountLimitReached,
 		/// The calling user is not authorized to make this call.
 		NotAuthorized,
 		/// The hint provided by the user was incorrect.
@@ -269,9 +287,10 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			config: UserFeatures,
 			max_supply: Option<u32>,
+			max_items_per_account: Option<u32>,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
-			Self::do_create_collection(sender, config, max_supply)?;
+			Self::do_create_collection(sender, config, max_supply, max_items_per_account)?;
 			Ok(())
 		}
 
@@ -307,6 +326,18 @@ pub mod pallet {
 			let sender = ensure_signed(origin)?;
 			let config = CollectionConfigs::<T>::get(id).ok_or(Error::<T>::CollectionNotFound)?;
 			Self::do_update_max_supply(id, sender, config, max_supply)?;
+			Ok(())
+		}
+
+		#[pallet::weight(0)]
+		pub fn update_max_items_per_account(
+			origin: OriginFor<T>,
+			id: T::CollectionId,
+			max_items_per_account: Option<u32>,
+		) -> DispatchResult {
+			let sender = ensure_signed(origin)?;
+			let config = CollectionConfigs::<T>::get(id).ok_or(Error::<T>::CollectionNotFound)?;
+			Self::do_update_max_items_per_account(id, sender, config, max_items_per_account)?;
 			Ok(())
 		}
 
@@ -396,7 +427,7 @@ pub mod pallet {
 		// +mint items
 		// +max supply => applies to mint
 		// +track account items
-		// max items per user => applies to mint and transfer
+		// +max items per user => applies to mint, burn and transfer
 		// +isTransferable => applies to transfer
 		// +transfer items
 		// +items metadata + attributes. Metadata could be changed by the collection's owner only
