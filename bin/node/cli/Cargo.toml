@@ -37,7 +37,7 @@ crate-type = ["cdylib", "rlib"]
 clap = { version = "3.1.6", features = ["derive"], optional = true }
 codec = { package = "parity-scale-codec", version = "3.0.0" }
 serde = { version = "1.0.136", features = ["derive"] }
-futures = "0.3.19"
+futures = "0.3.21"
 hex-literal = "0.3.4"
 log = "0.4.8"
 rand = "0.8"
@@ -116,7 +116,7 @@ sc-service-test = { version = "2.0.0", path = "../../../client/service/test" }
 sc-block-builder = { version = "0.10.0-dev", path = "../../../client/block-builder" }
 sp-tracing = { version = "5.0.0", path = "../../../primitives/tracing" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
-futures = "0.3.19"
+futures = "0.3.21"
 tempfile = "3.1.0"
 assert_cmd = "2.0.2"
 nix = "0.23"

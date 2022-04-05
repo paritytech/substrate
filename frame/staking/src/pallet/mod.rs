@@ -33,7 +33,7 @@ use sp_runtime::{
 	DispatchError, Perbill, Percent,
 };
 use sp_staking::{EraIndex, SessionIndex};
-use sp_std::{cmp::max, convert::From, prelude::*};
+use sp_std::{cmp::max, prelude::*};
 
 mod impls;
 
