@@ -44,6 +44,8 @@ impl<T: Config> Pallet<T> {
 			id: item_id,
 			owner: caller.clone(),
 			deposit: None,
+			price: None,
+			buyer: None,
 		};
 
 		let instances =
