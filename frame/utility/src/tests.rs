@@ -621,9 +621,7 @@ fn force_batch_works() {
 				call_transfer(2, 5),
 			]
 		),);
-		System::assert_last_event(
-			utility::Event::BatchCompletedWithErrors { indexes: vec![1, 2] }.into(),
-		);
+		System::assert_last_event(utility::Event::BatchCompletedWithErrors.into());
 		System::assert_has_event(
 			utility::Event::ItemFailed { error: DispatchError::Other("") }.into(),
 		);
@@ -637,8 +635,6 @@ fn force_batch_works() {
 		System::assert_last_event(utility::Event::BatchCompleted.into());
 
 		assert_ok!(Utility::force_batch(Origin::signed(1), vec![call_transfer(2, 50),]),);
-		System::assert_last_event(
-			utility::Event::BatchCompletedWithErrors { indexes: vec![0] }.into(),
-		);
+		System::assert_last_event(utility::Event::BatchCompletedWithErrors.into());
 	});
 }

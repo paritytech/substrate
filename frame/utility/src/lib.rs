@@ -114,7 +114,7 @@ pub mod pallet {
 		/// Batch of dispatches completed fully with no error.
 		BatchCompleted,
 		/// Batch of dispatches complete but has errors. Index of failing dispatches.
-		BatchCompletedWithErrors { indexes: Vec<u32> },
+		BatchCompletedWithErrors,
 		/// A single item within a Batch of dispatches has completed with no error.
 		ItemCompleted,
 		/// A single item within a Batch of dispatches has completed with error.
@@ -432,9 +432,9 @@ pub mod pallet {
 
 			// Track the actual weight of each of the batch calls.
 			let mut weight: Weight = 0;
-			// Track failed dispatches' index.
-			let mut error_indexes: Vec<u32> = Vec::new();
-			for (index, call) in calls.into_iter().enumerate() {
+			// Track failed dispatch occur.
+			let mut has_error: bool = false;
+			for call in calls.into_iter() {
 				let info = call.get_dispatch_info();
 				// If origin is root, don't apply any dispatch filters; root can call anything.
 				let result = if is_root {
@@ -445,14 +445,14 @@ pub mod pallet {
 				// Add the weight of this call.
 				weight = weight.saturating_add(extract_actual_weight(&result, &info));
 				if let Err(e) = result {
-					error_indexes.push(index as u32);
+					has_error = true;
 					Self::deposit_event(Event::ItemFailed { error: e.error });
 				} else {
 					Self::deposit_event(Event::ItemCompleted);
 				}
 			}
-			if error_indexes.len() > 0 {
-				Self::deposit_event(Event::BatchCompletedWithErrors { indexes: error_indexes });
+			if has_error {
+				Self::deposit_event(Event::BatchCompletedWithErrors);
 			} else {
 				Self::deposit_event(Event::BatchCompleted);
 			}
