@@ -101,9 +101,11 @@ pub fn run() -> Result<()> {
 				match cmd {
 					BenchmarkCmd::Pallet(cmd) => {
 						if !cfg!(feature = "runtime-benchmarks") {
-							return Err("Benchmarking wasn't enabled when building the node. \
+							return Err(
+								"Runtime benchmarking wasn't enabled when building the node. \
 							You can enable it with `--features runtime-benchmarks`."
-								.into())
+									.into(),
+							)
 						}
 
 						cmd.run::<Block, ExecutorDispatch>(config)

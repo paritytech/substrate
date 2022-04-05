@@ -99,20 +99,21 @@ pub fn run() -> sc_cli::Result<()> {
 				Ok((cmd.run(client, backend, None), task_manager))
 			})
 		},
-		Some(Subcommand::Benchmark(cmd)) =>
-			if cfg!(feature = "runtime-benchmarks") {
-				let runner = cli.create_runner(cmd)?;
+		Some(Subcommand::Benchmark(cmd)) => {
+			let runner = cli.create_runner(cmd)?;
 
-				runner.sync_run(|config| match cmd {
-					BenchmarkCmd::Pallet(cmd) =>
-						cmd.run::<Block, service::ExecutorDispatch>(config),
-					_ => Err("Sub-command is not supported".into()),
-				})
-			} else {
-				Err("Benchmarking wasn't enabled when building the node. \
-					You can enable it with `--features runtime-benchmarks`."
-					.into())
-			},
+			runner.sync_run(|config| match cmd {
+				BenchmarkCmd::Pallet(cmd) =>
+					if cfg!(feature = "runtime-benchmarks") {
+						cmd.run::<Block, service::ExecutorDispatch>(config)
+					} else {
+						Err("Runtime benchmarking wasn't enabled when building the node. \
+							You can enable it with `--features runtime-benchmarks`."
+							.into())
+					},
+				_ => Err("Sub-command is not supported".into()),
+			})
+		},
 		#[cfg(feature = "try-runtime")]
 		Some(Subcommand::TryRuntime(cmd)) => {
 			let runner = cli.create_runner(cmd)?;
