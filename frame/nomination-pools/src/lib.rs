@@ -18,6 +18,7 @@
 //! * delegators: Accounts that are members of pools. See [`Delegator`] and [`Delegators`].
 //!   Delegators are identified via their account.
 //! * point: A unit of measure for a delegators portion of a pool's funds.
+//! * kick: The act of a pool administrator forcibly ejecting a delegator.
 //!
 //! ## Usage
 //!
