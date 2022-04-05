@@ -237,7 +237,7 @@
 //!
 //! This scheme "averages" out the points value in the unbonded pool.
 //!
-//! Once a delgators `unbonding_era` is older than `current_era -
+//! Once a delegators `unbonding_era` is older than `current_era -
 //! [sp_staking::StakingInterface::bonding_duration]`, it can can cash it's points out of the
 //! corresponding unbonding pool. If it's `unbonding_era` is older than `current_era -
 //! TotalUnbondingPools`, it can cash it's points from the unbonded pool.
