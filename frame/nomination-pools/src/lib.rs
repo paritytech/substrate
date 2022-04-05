@@ -312,11 +312,15 @@ pub mod weights;
 pub use pallet::*;
 pub use weights::WeightInfo;
 
+/// The balance type used by the currency system.
 pub type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
-pub type SubPoolsWithEra<T> = BoundedBTreeMap<EraIndex, UnbondPool<T>, TotalUnbondingPools<T>>;
+/// Type used to track the points of a reward pool.
 pub type RewardPoints = U256;
+/// Type used for unique identifier of each pool.
 pub type PoolId = u32;
+
+type SubPoolsWithEra<T> = BoundedBTreeMap<EraIndex, UnbondPool<T>, TotalUnbondingPools<T>>;
 
 const POINTS_TO_BALANCE_INIT_RATIO: u32 = 1;
 
@@ -331,7 +335,7 @@ pub enum ConfigOp<T: Default + Codec + Debug> {
 	Remove,
 }
 
-/// The type of binding that can happen to a pool.
+/// The type of bo``nding that can happen to a pool.
 enum BondType {
 	/// Someone is bonding into the pool upon creation.
 	Create,
@@ -1178,6 +1182,7 @@ pub mod pallet {
 		/// The delegator will earn rewards pro rata based on the delegators stake vs the sum of the
 		/// delegators in the pools stake. Rewards do not "expire".
 		#[pallet::weight(T::WeightInfo::claim_payout())]
+		#[transactional]
 		pub fn claim_payout(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let (mut delegator, mut bonded_pool, mut reward_pool) =
@@ -1212,7 +1217,7 @@ pub mod pallet {
 		/// Note: If there are too many unlocking chunks to unbond with the pool account,
 		/// [`Self::withdraw_unbonded_pool`] can be called to try and minimize unlocking chunks.
 		#[pallet::weight(T::WeightInfo::unbond_other())]
-		#[frame_support::transactional]
+		#[transactional]
 		pub fn unbond_other(
 			origin: OriginFor<T>,
 			delegator_account: T::AccountId,
