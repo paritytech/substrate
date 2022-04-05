@@ -251,7 +251,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 		let is_major_syncing = Arc::new(AtomicBool::new(false));
 
 		// Build the swarm.
-		let client = params.chain.clone();
+		// let client = params.chain.clone();
 		let (mut swarm, bandwidth): (Swarm<B>, _) = {
 			let user_agent = format!(
 				"{} ({})",
@@ -337,7 +337,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			};
 
 			let behaviour = {
-				let bitswap = params.network_config.ipfs_server.then(|| Bitswap::new(client));
+				// let bitswap = params.network_config.ipfs_server.then(|| Bitswap::new(client));
 				let result = Behaviour::new(
 					protocol,
 					user_agent,
@@ -346,7 +346,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 					params.block_request_protocol_config,
 					params.state_request_protocol_config,
 					warp_sync_protocol_config,
-					bitswap,
+					None,
 					params.light_client_request_protocol_config,
 					params.network_config.request_response_protocols,
 					peerset_handle.clone(),
