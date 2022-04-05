@@ -412,27 +412,20 @@ pub mod pallet {
 			Ok(())
 		}
 
-		// BASIC METHODS:
-		// +store collection's owner
-		// +lock a collection (add isLocked flag) => applies to the initial metadata change and burn method
-		//   +|- is_frozen vs. is_locked
-		// +destroy collection => if is not locked
-		// +transfer ownership
+		// PHASE 1:
+		// finished
 
-		// PART 2:
-		// +collection metadata + attributes
+		// PHASE 2:
+		// put an item up for sale
+		// buy an item
+		// royalties
+		// minter's fee
 
-		// PART 3:
-		// +structure => will affect collection destruction
-		// +mint items
-		// +max supply => applies to mint
-		// +track account items
-		// +max items per user => applies to mint, burn and transfer
-		// +isTransferable => applies to transfer
-		// +transfer items
-		// +items metadata + attributes. Metadata could be changed by the collection's owner only
-		// +burn item
+		// PHASE 3:
+		// minting options
+		// nested ownership
 		// approvals
+		// affiliate
 
 		#[pallet::weight(0)]
 		pub fn set_admin(
