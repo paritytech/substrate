@@ -38,6 +38,7 @@ sc-network-gossip = { version = "0.10.0-dev", path = "../network-gossip" }
 sc-utils = { version = "4.0.0-dev", path = "../utils" }
 
 beefy-primitives = { version = "4.0.0-dev", path = "../../primitives/beefy" }
+pallet-mmr-primitives = { version = "4.0.0-dev", path = "../../frame/merkle-mountain-range/primitives" }
 
 [dev-dependencies]
 sc-consensus = { version = "0.10.0-dev", path = "../consensus/common" }

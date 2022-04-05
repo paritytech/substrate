@@ -40,6 +40,7 @@ use beefy_primitives::{
 	known_payload_ids, BeefyApi, Commitment, ConsensusLog, MmrRootHash, Payload, SignedCommitment,
 	ValidatorSet, VersionedFinalityProof, VoteMessage, BEEFY_ENGINE_ID, GENESIS_AUTHORITY_SET_ID,
 };
+use pallet_mmr_primitives::MmrApi;
 
 use crate::{
 	error,
@@ -51,12 +52,6 @@ use crate::{
 	round::Rounds,
 	Client,
 };
-
-#[cfg(test)]
-#[derive(Clone, Default)]
-pub struct TestModifiers {
-	pub corrupt_mmr_roots: bool,
-}
 
 pub(crate) struct WorkerParams<B: Block, BE, C, R, SO> {
 	pub client: Arc<C>,
@@ -98,9 +93,6 @@ pub(crate) struct BeefyWorker<B: Block, BE, C, R, SO> {
 	sync_oracle: SO,
 	// keep rustc happy
 	_backend: PhantomData<BE>,
-	#[cfg(test)]
-	// behavior modifiers used in tests
-	test_res: TestModifiers,
 }
 
 impl<B, BE, C, R, SO> BeefyWorker<B, BE, C, R, SO>
@@ -109,7 +101,7 @@ where
 	BE: Backend<B>,
 	C: Client<B, BE>,
 	R: ProvideRuntimeApi<B>,
-	R::Api: BeefyApi<B>,
+	R::Api: BeefyApi<B> + MmrApi<B, MmrRootHash>,
 	SO: SyncOracle + Send + Sync + Clone + 'static,
 {
 	/// Return a new BEEFY worker instance.
@@ -118,12 +110,7 @@ where
 	/// BEEFY pallet has been deployed on-chain.
 	///
 	/// The BEEFY pallet is needed in order to keep track of the BEEFY authority set.
-	pub(crate) fn new(
-		worker_params: WorkerParams<B, BE, C, R, SO>,
-		#[cfg(test)]
-		// TODO: temporary, remove this
-		test_res: TestModifiers,
-	) -> Self {
+	pub(crate) fn new(worker_params: WorkerParams<B, BE, C, R, SO>) -> Self {
 		let WorkerParams {
 			client,
 			backend,
@@ -161,8 +148,6 @@ where
 			beefy_best_block_sender,
 			sync_oracle,
 			_backend: PhantomData,
-			#[cfg(test)]
-			test_res,
 		}
 	}
 
@@ -535,20 +520,16 @@ where
 		}
 	}
 
-	/// Simple wrapper over mmr root extraction.
-	#[cfg(not(test))]
+	/// Simple wrapper over mmr root extraction. Tries from header digest, then from client state.
 	fn extract_mmr_root_digest(&self, header: &B::Header) -> Option<MmrRootHash> {
-		find_mmr_root_digest::<B>(header)
-	}
-
-	/// For tests, have the option to modify mmr root.
-	#[cfg(test)]
-	fn extract_mmr_root_digest(&self, header: &B::Header) -> Option<MmrRootHash> {
-		let mut mmr_root = find_mmr_root_digest::<B>(header);
-		if self.test_res.corrupt_mmr_roots {
-			mmr_root.as_mut().map(|hash| *hash ^= MmrRootHash::random());
-		}
-		mmr_root
+		find_mmr_root_digest::<B>(header).or_else(|| {
+			self.runtime
+				.runtime_api()
+				.mmr_root(&BlockId::hash(header.hash()))
+				.ok()
+				.map(|r| r.ok())
+				.flatten()
+		})
 	}
 }
 
@@ -676,7 +657,6 @@ pub(crate) mod tests {
 		let beefy_link_half = BeefyLinkHalf { signed_commitment_stream, beefy_best_block_stream };
 		*peer.data.beefy_link_half.lock() = Some(beefy_link_half);
 
-		let test_modifiers = peer.data.test_modifiers.clone();
 		let api = Arc::new(TestApi {});
 		let network = peer.network_service().clone();
 		let sync_oracle = network.clone();
@@ -696,7 +676,7 @@ pub(crate) mod tests {
 			metrics: None,
 			sync_oracle,
 		};
-		BeefyWorker::<_, _, _, _, _>::new(worker_params, test_modifiers)
+		BeefyWorker::<_, _, _, _, _>::new(worker_params)
 	}
 
 	#[test]

@@ -29,7 +29,8 @@ use sp_consensus::SyncOracle;
 use sp_keystore::SyncCryptoStorePtr;
 use sp_runtime::traits::Block;
 
-use beefy_primitives::BeefyApi;
+use beefy_primitives::{BeefyApi, MmrRootHash};
+use pallet_mmr_primitives::MmrApi;
 
 use crate::notification::{BeefyBestBlockSender, BeefySignedCommitmentSender};
 
@@ -116,7 +117,7 @@ where
 	BE: Backend<B>,
 	C: Client<B, BE>,
 	R: ProvideRuntimeApi<B>,
-	R::Api: BeefyApi<B>,
+	R::Api: BeefyApi<B> + MmrApi<B, MmrRootHash>,
 	N: GossipNetwork<B> + Clone + SyncOracle + Send + Sync + 'static,
 {
 	/// BEEFY client
@@ -144,17 +145,13 @@ where
 /// Start the BEEFY gadget.
 ///
 /// This is a thin shim around running and awaiting a BEEFY worker.
-pub async fn start_beefy_gadget<B, BE, C, N, R>(
-	beefy_params: BeefyParams<B, BE, C, N, R>,
-	#[cfg(test)]
-	// TODO: temporary, remove this
-	test_res: worker::TestModifiers,
-) where
+pub async fn start_beefy_gadget<B, BE, C, N, R>(beefy_params: BeefyParams<B, BE, C, N, R>)
+where
 	B: Block,
 	BE: Backend<B>,
 	C: Client<B, BE>,
 	R: ProvideRuntimeApi<B>,
-	R::Api: BeefyApi<B>,
+	R::Api: BeefyApi<B> + MmrApi<B, MmrRootHash>,
 	N: GossipNetwork<B> + Clone + SyncOracle + Send + Sync + 'static,
 {
 	let BeefyParams {
@@ -207,11 +204,7 @@ pub async fn start_beefy_gadget<B, BE, C, N, R>(
 		sync_oracle,
 	};
 
-	let worker = worker::BeefyWorker::<_, _, _, _, _>::new(
-		worker_params,
-		#[cfg(test)]
-		test_res,
-	);
+	let worker = worker::BeefyWorker::<_, _, _, _, _>::new(worker_params);
 
 	worker.run().await
 }

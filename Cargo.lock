@@ -487,6 +487,7 @@ dependencies = [
  "futures-timer",
  "hex",
  "log 0.4.14",
+ "pallet-mmr-primitives",
  "parity-scale-codec",
  "parking_lot 0.12.0",
  "sc-chain-spec",
