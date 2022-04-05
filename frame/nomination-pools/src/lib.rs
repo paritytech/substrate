@@ -620,7 +620,7 @@ impl<T: Config> BondedPool<T> {
 			// they are the delegator in the pool. Note that an invariant is once the pool is
 			// destroying it cannot switch states, so by being in destroying we are guaranteed no
 			// other delegators can possibly join.
-			(false, true) | (true, true) => {
+			(_, true) => {
 				ensure!(target_delegator.points == self.points, Error::<T>::NotOnlyDelegator);
 				ensure!(self.is_destroying(), Error::<T>::NotDestroying);
 			},
