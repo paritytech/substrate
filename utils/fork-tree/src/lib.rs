@@ -122,26 +122,14 @@ where
 		let new_root_index =
 			self.find_node_index_where(hash, number, is_descendent_of, predicate)?;
 
-		let removed = if let Some(mut root_index) = new_root_index {
+		let removed = if let Some(root_index) = new_root_index {
 			let mut old_roots = std::mem::take(&mut self.roots);
 
-			let mut root = None;
-			let mut cur_children = Some(&mut old_roots);
-
-			while let Some(cur_index) = root_index.pop() {
-				if let Some(children) = cur_children.take() {
-					if root_index.is_empty() {
-						root = Some(children.remove(cur_index));
-					} else {
-						cur_children = Some(&mut children[cur_index].children);
-					}
-				}
-			}
-
-			let mut root = root.expect(
-				"find_node_index_where will return array with at least one index; \
-						 this results in at least one item in removed; qed",
-			);
+			let cur_children = root_index
+				.iter()
+				.take(root_index.len() - 1)
+				.fold(&mut old_roots, |curr, idx| &mut curr[*idx].children);
+			let mut root = cur_children.remove(root_index[root_index.len() - 1]);
 
 			let mut removed = old_roots;
 
@@ -198,8 +186,11 @@ where
 	/// longest ones).
 	pub fn rebalance(&mut self) {
 		self.roots.sort_by_key(|n| Reverse(n.max_depth()));
-		for root in &mut self.roots {
-			root.rebalance();
+		let mut stack = Vec::new();
+		self.roots.iter_mut().for_each(|e| stack.push(e));
+		while let Some(node) = stack.pop() {
+			node.children.sort_by_key(|n| Reverse(n.max_depth()));
+			node.children.iter_mut().for_each(|n| stack.push(n));
 		}
 	}
 
@@ -267,6 +258,16 @@ where
 		self.node_iter().map(|node| (&node.hash, &node.number, &node.data))
 	}
 
+	/// Map fork tree into values of new types.
+	pub fn map<VT, F>(self, f: &mut F) -> ForkTree<H, N, VT>
+	where
+		F: FnMut(&H, &N, V) -> VT,
+	{
+		let roots = self.roots.into_iter().map(|root| root.map(f)).collect();
+
+		ForkTree { roots, best_finalized_number: self.best_finalized_number }
+	}
+
 	/// Find a node in the tree that is the deepest ancestor of the given
 	/// block hash and which passes the given predicate. The given function
 	/// `is_descendent_of` should return `true` if the second hash (target)
@@ -294,16 +295,6 @@ where
 		}
 
 		Ok(None)
-	}
-
-	/// Map fork tree into values of new types.
-	pub fn map<VT, F>(self, f: &mut F) -> ForkTree<H, N, VT>
-	where
-		F: FnMut(&H, &N, V) -> VT,
-	{
-		let roots = self.roots.into_iter().map(|root| root.map(f)).collect();
-
-		ForkTree { roots, best_finalized_number: self.best_finalized_number }
 	}
 
 	/// Same as [`find_node_where`](ForkTree::find_node_where), but returns mutable reference.
@@ -346,16 +337,15 @@ where
 		P: Fn(&V) -> bool,
 	{
 		// search for node starting from all roots
-		for (index, root) in self.roots.iter().enumerate() {
-			let node = root.find_node_index_where(hash, number, is_descendent_of, predicate)?;
+		for (idx, root) in self.roots.iter().enumerate() {
+			let path = root.find_node_index_where(hash, number, is_descendent_of, predicate)?;
 
 			// found the node, early exit
-			if let FindOutcome::Found(mut node) = node {
-				node.push(index);
-				return Ok(Some(node))
+			if let FindOutcome::Found(mut path) = path {
+				path.insert(0, idx);
+				return Ok(Some(path))
 			}
 		}
-
 		Ok(None)
 	}
 
@@ -684,23 +674,17 @@ mod node_implementation {
 	}
 
 	impl<H: PartialEq, N: Ord, V> Node<H, N, V> {
-		/// Rebalance the tree, i.e. sort child nodes by max branch depth (decreasing).
-		pub fn rebalance(&mut self) {
-			self.children.sort_by_key(|n| Reverse(n.max_depth()));
-			for child in &mut self.children {
-				child.rebalance();
-			}
-		}
-
 		/// Finds the max depth among all branches descendent from this node.
 		pub fn max_depth(&self) -> usize {
-			let mut max = 0;
-
-			for node in &self.children {
-				max = node.max_depth().max(max)
+			let mut max: usize = 0;
+			let mut stack = vec![(self, 1)];
+			while let Some((n, height)) = stack.pop() {
+				if height > max {
+					max = height;
+				}
+				n.children.iter().for_each(|n| stack.push((n, height + 1)));
 			}
-
-			max + 1
+			max
 		}
 
 		/// Map node data into values of new types.
@@ -753,6 +737,25 @@ mod node_implementation {
 			}
 		}
 
+		// pub fn import_iter<F, E: std::error::Error>(
+		// 	&mut self,
+		// 	mut hash: H,
+		// 	mut number: N,
+		// 	mut data: V,
+		// 	is_descendent_of: &F,
+		// ) -> Result<Option<(H, N, V)>, Error<E>>
+		// where
+		// 	E: fmt::Debug,
+		// 	F: Fn(&H, &H) -> Result<bool, E>,
+		// {
+		// 	let stack = vec![self];
+		// 	while let Some(node) = stack.pop() {
+		// 		if node.hash ==	hash {
+		// 			return Err(Error::Duplicate);
+		// 		}
+		// 	}
+		// }
+
 		/// Find a node in the tree that is the deepest ancestor of the given
 		/// block hash which also passes the given predicate, backtracking
 		/// when the predicate fails.
@@ -762,6 +765,62 @@ mod node_implementation {
 		/// The returned indices are from last to first. The earliest index in the traverse path
 		/// goes last, and the final index in the traverse path goes first. An empty list means
 		/// that the current node is the result.
+		// pub fn find_node_index_where<F, P, E>(
+		// 	&self,
+		// 	hash: &H,
+		// 	number: &N,
+		// 	is_descendent_of: &F,
+		// 	predicate: &P,
+		// ) -> Result<FindOutcome<Vec<usize>>, Error<E>>
+		// where
+		// 	E: std::error::Error,
+		// 	F: Fn(&H, &H) -> Result<bool, E>,
+		// 	P: Fn(&V) -> bool,
+		// {
+		// 	// stop searching this branch
+		// 	if *number < self.number {
+		// 		return Ok(FindOutcome::Failure(false))
+		// 	}
+
+		// 	let mut known_descendent_of = false;
+
+		// 	// continue depth-first search through all children
+		// 	for (i, node) in self.children.iter().enumerate() {
+		// 		// found node, early exit
+		// 		match node.find_node_index_where_iter(hash, number, is_descendent_of, predicate)? {
+		// 			FindOutcome::Abort => return Ok(FindOutcome::Abort),
+		// 			FindOutcome::Found(mut x) => {
+		// 				x.push(i);
+		// 				return Ok(FindOutcome::Found(x))
+		// 			},
+		// 			FindOutcome::Failure(true) => {
+		// 				// if the block was a descendent of this child,
+		// 				// then it cannot be a descendent of any others,
+		// 				// so we don't search them.
+		// 				known_descendent_of = true;
+		// 				break
+		// 			},
+		// 			FindOutcome::Failure(false) => {},
+		// 		}
+		// 	}
+
+		// 	// node not found in any of the descendents, if the node we're
+		// 	// searching for is a descendent of this node then we will stop the
+		// 	// search here, since there aren't any more children and we found
+		// 	// the correct node so we don't want to backtrack.
+		// 	let is_descendent_of = known_descendent_of || is_descendent_of(&self.hash, hash)?;
+		// 	if is_descendent_of {
+		// 		// if the predicate passes we return the node
+		// 		if predicate(&self.data) {
+		// 			return Ok(FindOutcome::Found(Vec::new()))
+		// 		}
+		// 	}
+
+		// 	// otherwise, tell our ancestor that we failed, and whether
+		// 	// the block was a descendent.
+		// 	Ok(FindOutcome::Failure(is_descendent_of))
+		// }
+
 		pub fn find_node_index_where<F, P, E>(
 			&self,
 			hash: &H,
@@ -774,48 +833,32 @@ mod node_implementation {
 			F: Fn(&H, &H) -> Result<bool, E>,
 			P: Fn(&V) -> bool,
 		{
-			// stop searching this branch
-			if *number < self.number {
-				return Ok(FindOutcome::Failure(false))
-			}
-
-			let mut known_descendent_of = false;
-
-			// continue depth-first search through all children
-			for (i, node) in self.children.iter().enumerate() {
-				// found node, early exit
-				match node.find_node_index_where(hash, number, is_descendent_of, predicate)? {
-					FindOutcome::Abort => return Ok(FindOutcome::Abort),
-					FindOutcome::Found(mut x) => {
-						x.push(i);
-						return Ok(FindOutcome::Found(x))
-					},
-					FindOutcome::Failure(true) => {
-						// if the block was a descendent of this child,
-						// then it cannot be a descendent of any others,
-						// so we don't search them.
-						known_descendent_of = true;
+			let mut curr = self;
+			let mut path = vec![];
+			loop {
+				let mut pushed = false;
+				for (idx, child) in curr.children.iter().enumerate() {
+					if child.number < *number && is_descendent_of(&child.hash, hash)? {
+						curr = child;
+						path.push(idx);
+						pushed = true;
 						break
-					},
-					FindOutcome::Failure(false) => {},
+					}
+				}
+				if !pushed {
+					break
 				}
 			}
 
-			// node not found in any of the descendents, if the node we're
-			// searching for is a descendent of this node then we will stop the
-			// search here, since there aren't any more children and we found
-			// the correct node so we don't want to backtrack.
-			let is_descendent_of = known_descendent_of || is_descendent_of(&self.hash, hash)?;
-			if is_descendent_of {
-				// if the predicate passes we return the node
-				if predicate(&self.data) {
-					return Ok(FindOutcome::Found(Vec::new()))
+			if curr.hash == *hash || is_descendent_of(&curr.hash, hash)? {
+				if predicate(&curr.data) {
+					Ok(FindOutcome::Found(path))
+				} else {
+					Ok(FindOutcome::Failure(true))
 				}
+			} else {
+				Ok(FindOutcome::Failure(false))
 			}
-
-			// otherwise, tell our ancestor that we failed, and whether
-			// the block was a descendent.
-			Ok(FindOutcome::Failure(is_descendent_of))
 		}
 
 		/// Find a node in the tree that is the deepest ancestor of the given
@@ -840,13 +883,9 @@ mod node_implementation {
 			match outcome {
 				FindOutcome::Abort => Ok(FindOutcome::Abort),
 				FindOutcome::Failure(f) => Ok(FindOutcome::Failure(f)),
-				FindOutcome::Found(mut indexes) => {
-					let mut cur = self;
-
-					while let Some(i) = indexes.pop() {
-						cur = &cur.children[i];
-					}
-					Ok(FindOutcome::Found(cur))
+				FindOutcome::Found(path) => {
+					let node = path.iter().fold(self, |curr, i| &curr.children[*i]);
+					Ok(FindOutcome::Found(node))
 				},
 			}
 		}
@@ -873,13 +912,9 @@ mod node_implementation {
 			match outcome {
 				FindOutcome::Abort => Ok(FindOutcome::Abort),
 				FindOutcome::Failure(f) => Ok(FindOutcome::Failure(f)),
-				FindOutcome::Found(mut indexes) => {
-					let mut cur = self;
-
-					while let Some(i) = indexes.pop() {
-						cur = &mut cur.children[i];
-					}
-					Ok(FindOutcome::Found(cur))
+				FindOutcome::Found(path) => {
+					let node = path.iter().fold(self, |curr, i| &mut curr.children[*i]);
+					Ok(FindOutcome::Found(node))
 				},
 			}
 		}
@@ -984,7 +1019,7 @@ mod test {
 		//  /   /
 		// A - F - H - I
 		//  \       \
-		//   \       - L - M
+		//   \       - L - M - (N)
 		//    \          \
 		//     \          - O
 		//      - J - K
@@ -995,7 +1030,7 @@ mod test {
 		// diagram above. the children will be ordered by subtree depth and the longest branches
 		// will be on the leftmost side of the tree.
 		let is_descendent_of = |base: &&str, block: &&str| -> Result<bool, TestError> {
-			let letters = vec!["B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "O"];
+			let letters = vec!["B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O"];
 			match (*base, *block) {
 				("A", b) => Ok(letters.into_iter().any(|n| n == b)),
 				("B", b) => Ok(b == "C" || b == "D" || b == "E"),
@@ -1003,14 +1038,14 @@ mod test {
 				("D", b) => Ok(b == "E"),
 				("E", _) => Ok(false),
 				("F", b) =>
-					Ok(b == "G" || b == "H" || b == "I" || b == "L" || b == "M" || b == "O"),
+					Ok(b == "G" || b == "H" || b == "I" || b == "L" || b == "M" || b == "N" || b == "O"),
 				("G", _) => Ok(false),
-				("H", b) => Ok(b == "I" || b == "L" || b == "M" || b == "O"),
+				("H", b) => Ok(b == "I" || b == "L" || b == "M" || b == "N" || b == "O"),
 				("I", _) => Ok(false),
 				("J", b) => Ok(b == "K"),
 				("K", _) => Ok(false),
-				("L", b) => Ok(b == "M" || b == "O"),
-				("M", _) => Ok(false),
+				("L", b) => Ok(b == "M" || b == "O" || b == "N"),
+				("M", b) => Ok(b == "N"),
 				("O", _) => Ok(false),
 				("0", _) => Ok(true),
 				_ => Ok(false),
@@ -1420,16 +1455,6 @@ mod test {
 	}
 
 	#[test]
-	fn find_node_works() {
-		let (tree, is_descendent_of) = test_fork_tree();
-
-		let node = tree.find_node_where(&"D", &4, &is_descendent_of, &|_| true).unwrap().unwrap();
-
-		assert_eq!(node.hash, "C");
-		assert_eq!(node.number, 3);
-	}
-
-	#[test]
 	fn map_works() {
 		let (tree, _is_descendent_of) = test_fork_tree();
 
@@ -1545,5 +1570,36 @@ mod test {
 			removed.map(|(h, _, _)| h).collect::<Vec<_>>(),
 			["J", "K", "H", "L", "M", "O", "I"]
 		);
+	}
+
+	#[test]
+	fn find_node_index_works() {
+		let (tree, is_descendent_of) = test_fork_tree();
+
+		let path = tree
+			.find_node_index_where(&"O", &5, &is_descendent_of, &|_| true)
+			.unwrap()
+			.unwrap();
+		assert_eq!(path, [0, 1, 0, 0]);
+
+		let path = tree
+			.find_node_index_where(&"N", &6, &is_descendent_of, &|_| true)
+			.unwrap()
+			.unwrap();
+		assert_eq!(path, [0, 1, 0, 0, 0]);
+	}
+
+	#[test]
+	fn find_node_works() {
+		let (tree, is_descendent_of) = test_fork_tree();
+
+		let node = tree.find_node_where(&"D", &4, &is_descendent_of, &|_| true).unwrap().unwrap();
+		assert_eq!((node.hash, node.number), ("C", 3));
+
+		let node = tree.find_node_where(&"O", &5, &is_descendent_of, &|_| true).unwrap().unwrap();
+		assert_eq!((node.hash, node.number), ("L", 4));
+
+		let node = tree.find_node_where(&"N", &6, &is_descendent_of, &|_| true).unwrap().unwrap();
+		assert_eq!((node.hash, node.number), ("M", 5));
 	}
 }
