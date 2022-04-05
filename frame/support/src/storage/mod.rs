@@ -17,7 +17,6 @@
 
 //! Stuff to do with the runtime's storage.
 
-pub use self::types::StorageEntryMetadataBuilder;
 use crate::{
 	hash::{ReversibleStorageHasher, StorageHasher},
 	storage::types::{
@@ -28,8 +27,13 @@ use crate::{
 use codec::{Decode, Encode, EncodeLike, FullCodec, FullEncode};
 use sp_core::storage::ChildInfo;
 use sp_runtime::generic::{Digest, DigestItem};
-pub use sp_runtime::TransactionOutcome;
 use sp_std::prelude::*;
+
+pub use self::{
+	transactional::{with_transaction, with_transaction_unchecked},
+	types::StorageEntryMetadataBuilder,
+};
+pub use sp_runtime::TransactionOutcome;
 pub use types::Key;
 
 pub mod bounded_btree_map;
@@ -40,87 +44,10 @@ pub mod child;
 pub mod generator;
 pub mod hashed;
 pub mod migration;
+pub mod transactional;
 pub mod types;
 pub mod unhashed;
 pub mod weak_bounded_vec;
-
-#[cfg(all(feature = "std", any(test, debug_assertions)))]
-mod debug_helper {
-	use std::cell::RefCell;
-
-	thread_local! {
-		static TRANSACTION_LEVEL: RefCell<u32> = RefCell::new(0);
-	}
-
-	pub fn require_transaction() {
-		let level = TRANSACTION_LEVEL.with(|v| *v.borrow());
-		if level == 0 {
-			panic!("Require transaction not called within with_transaction");
-		}
-	}
-
-	pub struct TransactionLevelGuard;
-
-	impl Drop for TransactionLevelGuard {
-		fn drop(&mut self) {
-			TRANSACTION_LEVEL.with(|v| *v.borrow_mut() -= 1);
-		}
-	}
-
-	/// Increments the transaction level.
-	///
-	/// Returns a guard that when dropped decrements the transaction level automatically.
-	pub fn inc_transaction_level() -> TransactionLevelGuard {
-		TRANSACTION_LEVEL.with(|v| {
-			let mut val = v.borrow_mut();
-			*val += 1;
-			if *val > 10 {
-				log::warn!(
-					"Detected with_transaction with nest level {}. Nested usage of with_transaction is not recommended.",
-					*val
-				);
-			}
-		});
-
-		TransactionLevelGuard
-	}
-}
-
-/// Assert this method is called within a storage transaction.
-/// This will **panic** if is not called within a storage transaction.
-///
-/// This assertion is enabled for native execution and when `debug_assertions` are enabled.
-pub fn require_transaction() {
-	#[cfg(all(feature = "std", any(test, debug_assertions)))]
-	debug_helper::require_transaction();
-}
-
-/// Execute the supplied function in a new storage transaction.
-///
-/// All changes to storage performed by the supplied function are discarded if the returned
-/// outcome is `TransactionOutcome::Rollback`.
-///
-/// Transactions can be nested to any depth. Commits happen to the parent transaction.
-pub fn with_transaction<R>(f: impl FnOnce() -> TransactionOutcome<R>) -> R {
-	use sp_io::storage::{commit_transaction, rollback_transaction, start_transaction};
-	use TransactionOutcome::*;
-
-	start_transaction();
-
-	#[cfg(all(feature = "std", any(test, debug_assertions)))]
-	let _guard = debug_helper::inc_transaction_level();
-
-	match f() {
-		Commit(res) => {
-			commit_transaction();
-			res
-		},
-		Rollback(res) => {
-			rollback_transaction();
-			res
-		},
-	}
-}
 
 /// A trait for working with macro-generated storage values under the substrate storage API.
 ///
@@ -516,9 +443,6 @@ pub trait IterableStorageNMap<K: ReversibleKeyGenerator, V: FullCodec>: StorageN
 }
 
 /// An implementation of a map with a two keys.
-///
-/// It provides an important ability to efficiently remove all entries
-/// that have a common first key.
 ///
 /// Details on implementation can be found at [`generator::StorageDoubleMap`].
 pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
@@ -1534,29 +1458,6 @@ mod test {
 
 			let expected = Digest { logs: vec![DigestItem::Other(Vec::new())] };
 			assert_eq!(Digest::decode(&mut &value[..]).unwrap(), expected);
-		});
-	}
-
-	#[test]
-	#[should_panic(expected = "Require transaction not called within with_transaction")]
-	fn require_transaction_should_panic() {
-		TestExternalities::default().execute_with(|| {
-			require_transaction();
-		});
-	}
-
-	#[test]
-	fn require_transaction_should_not_panic_in_with_transaction() {
-		TestExternalities::default().execute_with(|| {
-			with_transaction(|| {
-				require_transaction();
-				TransactionOutcome::Commit(())
-			});
-
-			with_transaction(|| {
-				require_transaction();
-				TransactionOutcome::Rollback(())
-			});
 		});
 	}
 

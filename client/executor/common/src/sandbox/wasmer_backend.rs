@@ -18,7 +18,7 @@
 
 //! Wasmer specific impls for sandbox
 
-use std::{cell::RefCell, collections::HashMap, convert::TryInto, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use wasmer::RuntimeError;
 
