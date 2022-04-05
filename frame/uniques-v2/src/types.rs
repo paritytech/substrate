@@ -64,6 +64,10 @@ pub struct Item<ItemId, Account, Balance> {
 	pub id: ItemId,
 	pub owner: Account,
 	pub deposit: Option<Balance>,
+	// `None` assumes not for sale
+	pub price: Option<Balance>,
+	// `None` assumes anyone can buy
+	pub buyer: Option<Account>,
 }
 
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, Default, TypeInfo, MaxEncodedLen)]

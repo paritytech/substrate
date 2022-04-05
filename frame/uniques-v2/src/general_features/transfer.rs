@@ -29,7 +29,7 @@ impl<T: Config> Pallet<T> {
 		receiver: T::AccountId,
 	) -> DispatchResult {
 		let user_features: BitFlags<UserFeatures> = config.user_features.into();
-		ensure!(!user_features.contains(UserFeatures::NonTransferableItems), Error::<T>::ItemsNonTransferable);
+		ensure!(!user_features.contains(UserFeatures::NonTransferableItems), Error::<T>::ItemsNotTransferable);
 
 		Items::<T>::try_mutate(collection_id, item_id, |maybe_item| {
 			let item = maybe_item.as_mut().ok_or(Error::<T>::ItemNotFound)?;

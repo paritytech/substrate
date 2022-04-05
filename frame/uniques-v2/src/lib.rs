@@ -246,6 +246,12 @@ pub mod pallet {
 			item_id: T::ItemId,
 			data: MetadataOf<T>,
 		},
+		ItemPriceSet {
+			collection_id: T::CollectionId,
+			item_id: T::ItemId,
+			price: Option<BalanceOf<T>>,
+			buyer: Option<T::AccountId>,
+		},
 	}
 
 	// Your Pallet's error messages.
@@ -266,7 +272,9 @@ pub mod pallet {
 		/// An item with this ID is not within the max supply range.
 		ItemIdNotWithinMaxSupply,
 		/// Items within that collection are non-transferable.
-		ItemsNonTransferable,
+		ItemsNotTransferable,
+		/// Item can't be sold.
+		ItemNotForSale,
 		/// User reached the limit of allowed items per collection per account
 		CollectionItemsPerAccountLimitReached,
 		/// The calling user is not authorized to make this call.
@@ -416,7 +424,7 @@ pub mod pallet {
 		// finished
 
 		// PHASE 2:
-		// put an item up for sale
+		// +put an item up for sale
 		// buy an item
 		// royalties
 		// minter's fee
@@ -477,6 +485,20 @@ pub mod pallet {
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 			Self::do_set_item_metadata(collection_id, item_id, sender, data)?;
+			Ok(())
+		}
+
+		#[pallet::weight(0)]
+		pub fn set_price(
+			origin: OriginFor<T>,
+			collection_id: T::CollectionId,
+			item_id: T::ItemId,
+			price: Option<BalanceOf<T>>,
+			buyer: Option<T::AccountId>,
+		) -> DispatchResult {
+			let sender = ensure_signed(origin)?;
+			let config = CollectionConfigs::<T>::get(collection_id).ok_or(Error::<T>::CollectionNotFound)?;
+			Self::do_set_price(collection_id, item_id, config, sender, price, buyer)?;
 			Ok(())
 		}
 	}
