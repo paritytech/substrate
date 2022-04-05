@@ -180,7 +180,9 @@ where
 						log::debug!(target: "telemetry", "✅ Connected to {}", self.addr);
 
 						for sender in self.telemetry_connection_notifier.iter_mut() {
-							let _ = sender.send(());
+							if let Err(error) = sender.try_send(()) {
+								log::warn!(target: "telemetry", "Failed to send a telemetry connection notification: {}", error);
+							}
 						}
 
 						let buf = self
