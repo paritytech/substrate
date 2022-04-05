@@ -1203,7 +1203,7 @@ pub mod pallet {
 		/// * The pool is destroying, the delegator is the depositor and no other delegators are in
 		///   the pool.
 		///
-		/// # Conditions for permissioned dispatch (i.e. the caller is also the target):
+		/// # Conditions for permissioned dispatch (i.e. the caller is also the `delegator_account`):
 		///
 		/// * The caller is not the depositor.
 		/// * The caller is the depositor, the pool is destroying and no other delegators are in the
