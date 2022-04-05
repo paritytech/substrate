@@ -9050,6 +9050,8 @@ dependencies = [
  "rand_pcg 0.2.1",
  "regex",
  "sc-telemetry",
+ "serde",
+ "serde_json",
  "sp-core",
 ]
 

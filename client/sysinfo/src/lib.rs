@@ -36,6 +36,19 @@ pub const TARGET_ARCH: &str = include_str!(concat!(env!("OUT_DIR"), "/target_arc
 /// The environment part of the current target triplet.
 pub const TARGET_ENV: &str = include_str!(concat!(env!("OUT_DIR"), "/target_env.txt"));
 
+/// Hardware benchmark results for the node.
+#[derive(Debug, serde::Serialize)]
+pub struct HwBench {
+	/// The CPU speed, as measured in how many MB/s it can hash using the BLAKE2b-256 hash.
+	pub cpu_hashrate_score: u64,
+	/// Memory bandwidth in MB/s, calculated by measuring the throughput of `memcpy`.
+	pub memory_memcpy_score: u64,
+	/// Sequential disk write speed in MB/s.
+	pub disk_sequential_write_score: Option<u64>,
+	/// Random disk write speed in MB/s.
+	pub disk_random_write_score: Option<u64>,
+}
+
 /// Prints out the system software/hardware information in the logs.
 pub fn print_sysinfo(sysinfo: &sc_telemetry::SysInfo) {
 	log::info!("💻 Operating system: {}", TARGET_OS);
@@ -65,7 +78,7 @@ pub fn print_sysinfo(sysinfo: &sc_telemetry::SysInfo) {
 }
 
 /// Prints out the results of the hardware benchmarks in the logs.
-pub fn print_hwbench(hwbench: &sc_telemetry::HwBench) {
+pub fn print_hwbench(hwbench: &HwBench) {
 	log::info!("🏁 CPU score: {}MB/s", hwbench.cpu_hashrate_score);
 	log::info!("🏁 Memory score: {}MB/s", hwbench.memory_memcpy_score);
 
@@ -80,14 +93,14 @@ pub fn print_hwbench(hwbench: &sc_telemetry::HwBench) {
 /// Initializes the hardware benchmarks telemetry.
 pub fn initialize_hwbench_telemetry(
 	telemetry_handle: sc_telemetry::TelemetryHandle,
-	hwbench: sc_telemetry::HwBench,
+	hwbench: HwBench,
 ) -> impl std::future::Future<Output = ()> {
 	let mut connect_stream = telemetry_handle.on_connect_stream();
 	async move {
-		let payload = sc_telemetry::serde_json::to_value(&hwbench)
+		let payload = serde_json::to_value(&hwbench)
 			.expect("the `HwBench` can always be serialized into a JSON object; qed");
 		let mut payload = match payload {
-			sc_telemetry::serde_json::Value::Object(map) => map,
+			serde_json::Value::Object(map) => map,
 			_ => unreachable!("the `HwBench` always serializes into a JSON object; qed"),
 		};
 		payload.insert("msg".into(), "sysinfo.hwbench".into());

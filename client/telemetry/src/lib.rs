@@ -135,19 +135,6 @@ pub struct SysInfo {
 	pub is_virtual_machine: Option<bool>,
 }
 
-/// Hardware benchmark results for the node.
-#[derive(Debug, Serialize)]
-pub struct HwBench {
-	/// The CPU speed, as measured in how many MB/s it can hash using the BLAKE2b-256 hash.
-	pub cpu_hashrate_score: u64,
-	/// Memory bandwidth in MB/s, calculated by measuring the throughput of `memcpy`.
-	pub memory_memcpy_score: u64,
-	/// Sequential disk write speed in MB/s.
-	pub disk_sequential_write_score: Option<u64>,
-	/// Random disk write speed in MB/s.
-	pub disk_random_write_score: Option<u64>,
-}
-
 /// Telemetry worker.
 ///
 /// It should run as a background task using the [`TelemetryWorker::run`] method. This method

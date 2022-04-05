@@ -16,8 +16,9 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+use crate::HwBench;
 use rand::{seq::SliceRandom, Rng};
-use sc_telemetry::{HwBench, SysInfo};
+use sc_telemetry::SysInfo;
 use std::{
 	fs::File,
 	io::{Seek, SeekFrom, Write},
