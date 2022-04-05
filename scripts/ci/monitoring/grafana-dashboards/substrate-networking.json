@@ -2670,9 +2670,14 @@
             "selected": false,
             "text": "polkadot",
             "value": "polkadot"
+          },
+          {
+            "selected": false,
+            "text": "kusama",
+            "value": "kusama"
           }
         ],
-        "query": "substrate, polkadot",
+        "query": "substrate, polkadot, kusama",
         "queryValue": "",
         "skipUrlSync": false,
         "type": "custom"
