@@ -61,7 +61,7 @@
 //! user must call [`Call::nominate`] to start nominating. [`Call::nominate`] can be called at
 //! anytime to update validator selection.
 //!
-//! To help facilitate pool adminstration the pool has one of three states (see [`PoolState`]):
+//! To help facilitate pool administration the pool has one of three states (see [`PoolState`]):
 //!
 //! * Open: Anyone can join the pool and no delegators can be permissionlessly removed.
 //! * Blocked: No delegators can join and some admin roles can kick delegators.
