@@ -515,7 +515,7 @@ where
 	/// a root, `Some(false)` if the node being finalized is not a root, and
 	/// `None` if no node in the tree is finalized. The given `predicate` is
 	/// checked on the prospective finalized root and must pass for finalization
-	/// to occur.  The given function `is_descendent_of` should return `true` if
+	/// to occur. The given function `is_descendent_of` should return `true` if
 	/// the second hash (target) is a descendent of the first hash (base).
 	pub fn finalizes_any_with_descendent_if<F, P, E>(
 		&self,
@@ -1280,7 +1280,7 @@ mod test {
 
 		// finalizing "D" is not allowed since it is not a root.
 		assert_eq!(
-			tree.finalize_with_descendent_if(&"D", 10, &is_descendent_of, |_| true),
+			tree.finalize_with_descendent_if(&"D", 10, &is_descendent_of, |c| c.effective <= 10),
 			Err(Error::UnfinalizedAncestor)
 		);
 
@@ -1292,6 +1292,7 @@ mod test {
 			Ok(Some(false)),
 		);
 
+		// finalizing "E" is not allowed since there are not finalized anchestors.
 		assert_eq!(
 			tree.finalizes_any_with_descendent_if(&"E", 15, &is_descendent_of, |c| c.effective ==
 				10),
@@ -1301,7 +1302,7 @@ mod test {
 		// finalizing "B" doesn't finalize "A0" since the predicate doesn't pass,
 		// although it will clear out "A1" from the tree
 		assert_eq!(
-			tree.finalize_with_descendent_if(&"B", 2, &is_descendent_of, |c| c.effective <= 2,),
+			tree.finalize_with_descendent_if(&"B", 2, &is_descendent_of, |c| c.effective <= 2),
 			Ok(FinalizationResult::Changed(None)),
 		);
 
@@ -1322,7 +1323,7 @@ mod test {
 		);
 
 		assert_eq!(
-			tree.finalize_with_descendent_if(&"C", 5, &is_descendent_of, |c| c.effective <= 5,),
+			tree.finalize_with_descendent_if(&"C", 5, &is_descendent_of, |c| c.effective <= 5),
 			Ok(FinalizationResult::Changed(Some(Change { effective: 5 }))),
 		);
 
@@ -1341,12 +1342,12 @@ mod test {
 		// it will work with "G" though since it is not in the same branch as "E"
 		assert_eq!(
 			tree.finalizes_any_with_descendent_if(&"G", 100, &is_descendent_of, |c| c.effective <=
-				100,),
+				100),
 			Ok(Some(true)),
 		);
 
 		assert_eq!(
-			tree.finalize_with_descendent_if(&"G", 100, &is_descendent_of, |c| c.effective <= 100,),
+			tree.finalize_with_descendent_if(&"G", 100, &is_descendent_of, |c| c.effective <= 100),
 			Ok(FinalizationResult::Changed(Some(Change { effective: 10 }))),
 		);
 
