@@ -1275,7 +1275,7 @@ impl<T: Config> Pallet<T> {
 		log::debug!(
 			target: "runtime::system",
 			"[{:?}] length: {} (normal {}%, op: {}%, mandatory {}%) / normal weight {} ({}% / {}%) \
-			/ op weight {} ({}% / {}% ) / mandatory weight {} ({}% / {}%)",
+			/ op weight {} ({}% / {}%) / mandatory weight {} ({}% / {}%)",
 			Self::block_number(),
 			Self::all_extrinsics_len(),
 			sp_runtime::Percent::from_rational(

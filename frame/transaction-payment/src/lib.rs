@@ -198,8 +198,8 @@ where
 		let v = V::get();
 
 		// TODO SHAWN: only factors computation weight.
-		let normal_max_weight = normal_max_weight.computation;
-		let normal_block_weight = normal_block_weight.computation;
+		let normal_max_weight = normal_max_weight.todo_to_v1();
+		let normal_block_weight = normal_block_weight.todo_to_v1();
 		let target_weight = (s * normal_max_weight) as u128;
 		let block_weight = normal_block_weight as u128;
 

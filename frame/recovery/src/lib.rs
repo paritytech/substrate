@@ -372,7 +372,7 @@ pub mod pallet {
 		/// # </weight>
 		#[pallet::weight({
 			let mut dispatch_info = call.get_dispatch_info();
-			dispatch_info.weight.computation = dispatch_info.weight.computation
+			dispatch_info.weight.computation = dispatch_info.weight.todo_to_v1()
 				.saturating_add(10_000)
 				// AccountData for inner call origin accountdata.
 				.saturating_add(T::DbWeight::get().reads_writes(1, 1));

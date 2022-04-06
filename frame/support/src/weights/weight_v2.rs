@@ -308,9 +308,8 @@ impl<T> ClassifyDispatch<T> for (WeightV2, DispatchClass, Pays) {
 	}
 }
 
-#[cfg(feature = "std")]
-impl std::fmt::Display for WeightV2 {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for WeightV2 {
+	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
 		write!(f, "WeightV2(computation: {}, bandwidth: {})", self.computation, self.bandwidth)
 	}
 }

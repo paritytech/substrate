@@ -42,12 +42,12 @@ pub mod constants {
 
 			// At least 100 µs.
 			assert!(
-				w.computation >= 100 * constants::WEIGHT_PER_MICROS,
+				w.todo_to_v1() >= 100 * constants::WEIGHT_PER_MICROS,
 				"Weight should be at least 100 µs."
 			);
 			// At most 50 ms.
 			assert!(
-				w.computation <= 50 * constants::WEIGHT_PER_MILLIS,
+				w.todo_to_v1() <= 50 * constants::WEIGHT_PER_MILLIS,
 				"Weight should be at most 50 ms."
 			);
 		}
