@@ -386,7 +386,7 @@ pub struct Semantics {
 	// I.e. if [`CodeSupplyMode::Verbatim`] is used.
 	pub fast_instance_reuse: bool,
 
-	/// Specifiying `Some` will enable deterministic stack height. That is, all executor
+	/// Specifying `Some` will enable deterministic stack height. That is, all executor
 	/// invocations will reach stack overflow at the exactly same point across different wasmtime
 	/// versions and architectures.
 	///

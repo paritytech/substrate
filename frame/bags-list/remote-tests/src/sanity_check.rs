@@ -23,6 +23,7 @@ use frame_support::{
 };
 use remote_externalities::{Builder, Mode, OnlineConfig};
 use sp_runtime::{traits::Block as BlockT, DeserializeOwned};
+
 /// Execute the sanity check of the bags-list.
 pub async fn execute<Runtime: crate::RuntimeT, Block: BlockT + DeserializeOwned>(
 	currency_unit: u64,

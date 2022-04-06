@@ -16,7 +16,11 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::{chain_spec, service, service::new_partial, Cli, Subcommand};
+use crate::{
+	chain_spec, service,
+	service::{new_partial, FullClient},
+	Cli, Subcommand,
+};
 use node_executor::ExecutorDispatch;
 use node_primitives::Block;
 use node_runtime::RuntimeApi;
@@ -175,13 +179,12 @@ pub fn run() -> Result<()> {
 			let runner = cli.create_runner(cmd)?;
 			runner.async_run(|config| {
 				let PartialComponents { client, task_manager, backend, .. } = new_partial(&config)?;
-				let revert_aux = Box::new(|client, backend, blocks| {
-					sc_consensus_babe::revert(client, backend, blocks)?;
-					// TODO: grandpa revert
+				let aux_revert = Box::new(move |client: Arc<FullClient>, backend, blocks| {
+					sc_consensus_babe::revert(client.clone(), backend, blocks)?;
+					grandpa::revert(client, blocks)?;
 					Ok(())
 				});
-
-				Ok((cmd.run(client, backend, Some(revert_aux)), task_manager))
+				Ok((cmd.run(client, backend, Some(aux_revert)), task_manager))
 			})
 		},
 		#[cfg(feature = "try-runtime")]
