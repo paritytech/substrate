@@ -276,8 +276,8 @@ pub mod pallet {
 		ItemIdTaken,
 		/// An item with this ID does not exist.
 		ItemNotFound,
-		/// An item with this ID is not within the max supply range.
-		ItemIdNotWithinMaxSupply,
+		/// Collection reached the maximum amount of items.
+		AllItemsMinted,
 		/// Items within that collection are non-transferable.
 		ItemsNotTransferable,
 		/// Item can't be sold.

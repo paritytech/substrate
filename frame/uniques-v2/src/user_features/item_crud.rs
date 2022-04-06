@@ -25,42 +25,45 @@ impl<T: Config> Pallet<T> {
 		collection_id: T::CollectionId,
 		item_id: T::ItemId,
 	) -> DispatchResult {
-		let mut collection = Collections::<T>::get(&collection_id).ok_or(Error::<T>::CollectionNotFound)?;
-		ensure!(collection.owner == caller, Error::<T>::NotAuthorized);
 		ensure!(!Items::<T>::contains_key(collection_id, item_id), Error::<T>::ItemIdTaken);
 
-		if collection.max_supply.is_some() {
-			ensure!(collection.items < collection.max_supply.unwrap(), Error::<T>::ItemIdNotWithinMaxSupply);
-		}
+		Collections::<T>::try_mutate(&collection_id, |maybe_collection| -> DispatchResult {
+			let collection = maybe_collection.as_mut().ok_or(Error::<T>::CollectionNotFound)?;
+			ensure!(collection.owner == caller, Error::<T>::NotAuthorized);
 
-		let mut maybe_items_per_account = CountForAccountItems::<T>::get(&caller, &collection_id);
-		let items_per_account = maybe_items_per_account.get_or_insert(0);
+			if let Some(max_supply) = collection.max_supply {
+				ensure!(collection.items < max_supply, Error::<T>::AllItemsMinted);
+			}
 
-		if collection.max_items_per_account.is_some() {
-			ensure!(items_per_account < collection.max_items_per_account.as_mut().unwrap(), Error::<T>::CollectionItemsPerAccountLimitReached);
-		}
+			let mut maybe_items_per_account = CountForAccountItems::<T>::get(&caller, &collection_id);
+			let items_per_account = maybe_items_per_account.get_or_insert(0);
 
-		let item = Item {
-			id: item_id,
-			owner: caller.clone(),
-			deposit: None,
-			price: None,
-			buyer: None,
-		};
+			if collection.max_items_per_account.is_some() {
+				ensure!(items_per_account < collection.max_items_per_account.as_mut().unwrap(), Error::<T>::CollectionItemsPerAccountLimitReached);
+			}
 
-		let instances =
-			collection.items.checked_add(1).ok_or(ArithmeticError::Overflow)?;
-		collection.items = instances;
+			let item = Item {
+				id: item_id,
+				owner: caller.clone(),
+				deposit: None,
+				price: None,
+				buyer: None,
+			};
 
-		let new_items_amount = items_per_account.checked_add(1).ok_or(ArithmeticError::Overflow)?;
-		CountForAccountItems::<T>::insert(&caller, &collection_id, new_items_amount);
+			let instances =
+				collection.items.checked_add(1).ok_or(ArithmeticError::Overflow)?;
+			collection.items = instances;
 
-		Items::<T>::insert(collection_id, item_id, item);
-		AccountItems::<T>::insert((&caller, &collection_id, &item_id), ());
+			let new_items_amount = items_per_account.checked_add(1).ok_or(ArithmeticError::Overflow)?;
+			CountForAccountItems::<T>::insert(&caller, &collection_id, new_items_amount);
 
-		Self::deposit_event(Event::<T>::ItemCreated { collection_id, item_id });
+			Items::<T>::insert(collection_id, item_id, item);
+			AccountItems::<T>::insert((&caller, &collection_id, &item_id), ());
 
-		Ok(())
+			Self::deposit_event(Event::<T>::ItemCreated { collection_id, item_id });
+
+			Ok(())
+		})
 	}
 
 	pub fn do_burn_item(
@@ -68,27 +71,31 @@ impl<T: Config> Pallet<T> {
 		collection_id: T::CollectionId,
 		item_id: T::ItemId,
 	) -> DispatchResult {
-		let mut collection = Collections::<T>::get(&collection_id).ok_or(Error::<T>::CollectionNotFound)?;
-		let item = Items::<T>::get(collection_id, item_id).ok_or(Error::<T>::ItemNotFound)?;
+		ensure!(Items::<T>::contains_key(collection_id, item_id), Error::<T>::ItemNotFound);
 
-		ensure!(item.owner == caller, Error::<T>::NotAuthorized);
+		Collections::<T>::try_mutate(&collection_id, |maybe_collection| -> DispatchResult {
+			let collection = maybe_collection.as_mut().ok_or(Error::<T>::CollectionNotFound)?;
+			let item = Items::<T>::get(collection_id, item_id).ok_or(Error::<T>::ItemNotFound)?;
 
-		let instances =
-			collection.items.checked_sub(1).ok_or(ArithmeticError::Overflow)?;
-		collection.items = instances;
+			ensure!(item.owner == caller, Error::<T>::NotAuthorized);
 
-		let items_per_account = CountForAccountItems::<T>::get(&caller, &collection_id).ok_or(Error::<T>::ItemNotFound)?;
-		let new_items_amount = items_per_account.checked_sub(1).ok_or(ArithmeticError::Overflow)?;
-		CountForAccountItems::<T>::insert(&caller, &collection_id, new_items_amount);
+			let instances =
+				collection.items.checked_sub(1).ok_or(ArithmeticError::Overflow)?;
+			collection.items = instances;
 
-		Items::<T>::remove(&collection_id, &item_id);
-		ItemMetadataOf::<T>::remove(&collection_id, &item_id);
-		AccountItems::<T>::remove((&caller, &collection_id, &item_id));
+			let items_per_account = CountForAccountItems::<T>::get(&caller, &collection_id).ok_or(Error::<T>::ItemNotFound)?;
+			let new_items_amount = items_per_account.checked_sub(1).ok_or(ArithmeticError::Overflow)?;
+			CountForAccountItems::<T>::insert(&caller, &collection_id, new_items_amount);
 
-		// TODO: shall we remove attributes as well?
+			Items::<T>::remove(&collection_id, &item_id);
+			ItemMetadataOf::<T>::remove(&collection_id, &item_id);
+			AccountItems::<T>::remove((&caller, &collection_id, &item_id));
 
-		Self::deposit_event(Event::<T>::ItemBurned { collection_id, item_id });
+			// TODO: shall we remove attributes as well?
 
-		Ok(())
+			Self::deposit_event(Event::<T>::ItemBurned { collection_id, item_id });
+
+			Ok(())
+		})
 	}
 }

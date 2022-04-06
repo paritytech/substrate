@@ -32,16 +32,18 @@ impl<T: Config> Pallet<T> {
 		let user_features: BitFlags<UserFeatures> = config.user_features.into();
 		ensure!(!user_features.contains(UserFeatures::NonTransferableItems), Error::<T>::ItemsNotTransferable);
 
-		let mut item = Items::<T>::get(&collection_id, &item_id).ok_or(Error::<T>::ItemNotFound)?;
-		ensure!(item.owner == caller, Error::<T>::NotAuthorized);
+		Items::<T>::try_mutate(collection_id, item_id, |maybe_item| {
+			let item = maybe_item.as_mut().ok_or(Error::<T>::ItemNotFound)?;
+			ensure!(item.owner == caller, Error::<T>::NotAuthorized);
 
-		// Set the price
-		item.price = price;
-		item.buyer = buyer.clone();
+			// Set the price
+			item.price = price;
+			item.buyer = buyer.clone();
 
-		Self::deposit_event(Event::ItemPriceSet { collection_id, item_id, price, buyer });
+			Self::deposit_event(Event::ItemPriceSet { collection_id, item_id, price, buyer });
 
-		Ok(())
+			Ok(())
+		})
 	}
 
 	pub fn do_buy_item(
@@ -77,7 +79,7 @@ impl<T: Config> Pallet<T> {
 			buyer.clone(),
 		)?;
 
-		// reset the price & buyer
+		// reset the price & the buyer
 		Items::<T>::try_mutate(collection_id, item_id, |maybe_item| {
 			let item = maybe_item.as_mut().ok_or(Error::<T>::ItemNotFound)?;
 

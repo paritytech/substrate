@@ -109,6 +109,7 @@ impl<T: Config> Pallet<T> {
 		}
 
 		collection.max_items_per_account = max_items_per_account;
+		Collections::<T>::insert(&id, collection);
 
 		Self::deposit_event(Event::<T>::CollectionMaxItemsPerAccountChanged { id, max_items_per_account });
 
