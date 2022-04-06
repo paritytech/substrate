@@ -80,7 +80,7 @@ pub struct PalletCmd {
 	#[clap(long)]
 	pub output: Option<PathBuf>,
 
-	/// Add a header file to your outputted benchmarks
+	/// Add a header file to your outputted benchmarks.
 	#[clap(long)]
 	pub header: Option<PathBuf>,
 
@@ -117,7 +117,7 @@ pub struct PalletCmd {
 	#[clap(flatten)]
 	pub shared_params: sc_cli::SharedParams,
 
-	/// The execution strategy that should be used for benchmarks
+	/// The execution strategy that should be used for benchmarks.
 	#[clap(long, value_name = "STRATEGY", arg_enum, ignore_case = true)]
 	pub execution: Option<ExecutionStrategy>,
 
