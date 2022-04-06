@@ -23,8 +23,10 @@
 
 use crate::{
 	balance, setup_inputs, CandidatePtr, ElectionResult, ExtendedBalance, IdentifierT, PerThing128,
-	Rc, VoteWeight,
+	Rc, Vec, VoteWeight,
 };
+
+use sp_std::vec;
 
 /// Execute the `MMS` method.
 ///
