@@ -23,7 +23,7 @@ use sp_runtime::traits::{CheckedAdd, One};
 impl<T: Config> Pallet<T> {
 	pub fn do_create_collection(
 		caller: T::AccountId,
-		config: UserFeatures,
+		user_config: UserFeatures,
 		max_supply: Option<u32>,
 		max_items_per_account: Option<u32>,
 	) -> DispatchResult {
@@ -34,7 +34,7 @@ impl<T: Config> Pallet<T> {
 		let default_system_config = T::DefaultSystemConfig::get();
 		let collection_config = CollectionConfig {
 			system_features: default_system_config,
-			user_features: config,
+			user_features: user_config,
 		};
 		CollectionConfigs::<T>::insert(id, collection_config);
 
