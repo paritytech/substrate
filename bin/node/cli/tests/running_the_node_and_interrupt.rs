@@ -41,7 +41,7 @@ async fn running_the_node_works_and_can_be_interrupted() {
 			Command::new(cargo_bin("substrate"))
 				.args(&["--dev", "-d"])
 				.arg(base_path.path())
-				.arg("--disable-hardware-benchmarks")
+				.arg("--no-hardware-benchmarks")
 				.spawn()
 				.unwrap(),
 		);
@@ -65,7 +65,7 @@ async fn running_the_node_works_and_can_be_interrupted() {
 async fn running_two_nodes_with_the_same_ws_port_should_work() {
 	fn start_node() -> Child {
 		Command::new(cargo_bin("substrate"))
-			.args(&["--dev", "--tmp", "--ws-port=45789", "--disable-hardware-benchmarks"])
+			.args(&["--dev", "--tmp", "--ws-port=45789", "--no-hardware-benchmarks"])
 			.spawn()
 			.unwrap()
 	}
