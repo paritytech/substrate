@@ -576,7 +576,9 @@ mod tests {
 			ConstU32, ConstU64, ConstU8, Currency, LockIdentifier, LockableCurrency,
 			WithdrawReasons,
 		},
-		weights::{IdentityFee, ConstantMultiplier, RuntimeDbWeight, Weight, WeightToFeePolynomial},
+		weights::{
+			ConstantMultiplier, IdentityFee, RuntimeDbWeight, Weight, WeightToFeePolynomial,
+		},
 	};
 	use frame_system::{Call as SystemCall, ChainContext, LastRuntimeUpgradeInfo};
 	use pallet_balances::Call as BalancesCall;

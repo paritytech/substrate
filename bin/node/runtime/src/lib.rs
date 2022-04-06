@@ -35,7 +35,7 @@ use frame_support::{
 	},
 	weights::{
 		constants::{BlockExecutionWeight, ExtrinsicBaseWeight, RocksDbWeight, WEIGHT_PER_SECOND},
-		DispatchClass, IdentityFee, ConstantMultiplier, Weight,
+		ConstantMultiplier, DispatchClass, IdentityFee, Weight,
 	},
 	PalletId, RuntimeDebug,
 };

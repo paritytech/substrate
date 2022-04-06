@@ -718,9 +718,7 @@ where
 /// ```
 /// // Results in a multiplier of 10 for each unit of weight (or length)
 /// ConstantMultiplier::<u128, ConstU128<10u128>>
-///
 /// ```
-///
 pub struct ConstantMultiplier<T, M>(sp_std::marker::PhantomData<(T, M)>);
 
 impl<T, M> WeightToFeePolynomial for ConstantMultiplier<T, M>

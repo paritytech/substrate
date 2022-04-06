@@ -526,11 +526,7 @@ where
 
 			let base_fee = Self::weight_to_fee(T::BlockWeights::get().get(class).base_extrinsic);
 			FeeDetails {
-				inclusion_fee: Some(InclusionFee {
-					base_fee,
-					len_fee,
-					adjusted_weight_fee,
-				}),
+				inclusion_fee: Some(InclusionFee { base_fee, len_fee, adjusted_weight_fee }),
 				tip,
 			}
 		} else {
@@ -796,9 +792,8 @@ mod tests {
 		assert_noop, assert_ok, parameter_types,
 		traits::{ConstU32, ConstU64, Currency, Imbalance, OnUnbalanced},
 		weights::{
-			DispatchClass, DispatchInfo, GetDispatchInfo, PostDispatchInfo, Weight,
+			DispatchClass, DispatchInfo, GetDispatchInfo, IdentityFee, PostDispatchInfo, Weight,
 			WeightToFeeCoefficient, WeightToFeeCoefficients, WeightToFeePolynomial,
-			IdentityFee,
 		},
 	};
 	use frame_system as system;
