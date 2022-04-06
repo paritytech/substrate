@@ -95,78 +95,6 @@ pub struct ForkTree<H, N, V> {
 
 impl<H, N, V> ForkTree<H, N, V>
 where
-	H: PartialEq + Clone,
-	N: Ord + Clone,
-	V: Clone,
-{
-	/// Prune the tree, removing all non-canonical nodes. We find the node in the
-	/// tree that is the deepest ancestor of the given hash and that passes the
-	/// given predicate. If such a node exists, we re-root the tree to this
-	/// node. Otherwise the tree remains unchanged. The given function
-	/// `is_descendent_of` should return `true` if the second hash (target) is a
-	/// descendent of the first hash (base).
-	///
-	/// Returns all pruned node data.
-	pub fn prune<F, E, P>(
-		&mut self,
-		hash: &H,
-		number: &N,
-		is_descendent_of: &F,
-		predicate: &P,
-	) -> Result<impl Iterator<Item = (H, N, V)>, Error<E>>
-	where
-		E: std::error::Error,
-		F: Fn(&H, &H) -> Result<bool, E>,
-		P: Fn(&V) -> bool,
-	{
-		let new_root_index =
-			self.find_node_index_where(hash, number, is_descendent_of, predicate)?;
-
-		let removed = if let Some(root_index) = new_root_index {
-			let mut old_roots = std::mem::take(&mut self.roots);
-
-			let cur_children = root_index
-				.iter()
-				.take(root_index.len() - 1)
-				.fold(&mut old_roots, |curr, idx| &mut curr[*idx].children);
-			let mut root = cur_children.remove(root_index[root_index.len() - 1]);
-
-			let mut removed = old_roots;
-
-			// we found the deepest ancestor of the finalized block, so we prune
-			// out any children that don't include the finalized block.
-			let root_children = std::mem::take(&mut root.children);
-			let mut is_first = true;
-
-			for child in root_children {
-				if is_first &&
-					(child.number == *number && child.hash == *hash ||
-						child.number < *number && is_descendent_of(&child.hash, hash)?)
-				{
-					root.children.push(child);
-					// assuming that the tree is well formed only one child should pass this
-					// requirement due to ancestry restrictions (i.e. they must be different forks).
-					is_first = false;
-				} else {
-					removed.push(child);
-				}
-			}
-
-			self.roots = vec![root];
-
-			removed
-		} else {
-			Vec::new()
-		};
-
-		self.rebalance();
-
-		Ok(RemovedIterator { stack: removed })
-	}
-}
-
-impl<H, N, V> ForkTree<H, N, V>
-where
 	H: PartialEq,
 	N: Ord,
 {
@@ -347,6 +275,71 @@ where
 			}
 		}
 		Ok(None)
+	}
+
+	/// Prune the tree, removing all non-canonical nodes. We find the node in the
+	/// tree that is the deepest ancestor of the given hash and that passes the
+	/// given predicate. If such a node exists, we re-root the tree to this
+	/// node. Otherwise the tree remains unchanged. The given function
+	/// `is_descendent_of` should return `true` if the second hash (target) is a
+	/// descendent of the first hash (base).
+	///
+	/// Returns all pruned node data.
+	pub fn prune<F, E, P>(
+		&mut self,
+		hash: &H,
+		number: &N,
+		is_descendent_of: &F,
+		predicate: &P,
+	) -> Result<impl Iterator<Item = (H, N, V)>, Error<E>>
+	where
+		E: std::error::Error,
+		F: Fn(&H, &H) -> Result<bool, E>,
+		P: Fn(&V) -> bool,
+	{
+		let new_root_index =
+			self.find_node_index_where(hash, number, is_descendent_of, predicate)?;
+
+		let removed = if let Some(root_index) = new_root_index {
+			let mut old_roots = std::mem::take(&mut self.roots);
+
+			let curr_children = root_index
+				.iter()
+				.take(root_index.len() - 1)
+				.fold(&mut old_roots, |curr, idx| &mut curr[*idx].children);
+			let mut root = curr_children.remove(root_index[root_index.len() - 1]);
+
+			let mut removed = old_roots;
+
+			// we found the deepest ancestor of the finalized block, so we prune
+			// out any children that don't include the finalized block.
+			let root_children = std::mem::take(&mut root.children);
+			let mut is_first = true;
+
+			for child in root_children {
+				if is_first &&
+					(child.number == *number && child.hash == *hash ||
+						child.number < *number && is_descendent_of(&child.hash, hash)?)
+				{
+					root.children.push(child);
+					// assuming that the tree is well formed only one child should pass this
+					// requirement due to ancestry restrictions (i.e. they must be different forks).
+					is_first = false;
+				} else {
+					removed.push(child);
+				}
+			}
+
+			self.roots = vec![root];
+
+			removed
+		} else {
+			Vec::new()
+		};
+
+		self.rebalance();
+
+		Ok(RemovedIterator { stack: removed })
 	}
 
 	/// Finalize a root in the tree and return it, return `None` in case no root
