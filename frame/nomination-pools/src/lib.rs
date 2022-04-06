@@ -628,7 +628,8 @@ impl<T: Config> BondedPool<T> {
 		Ok(())
 	}
 
-	/// Returns a result indicating if [`Pallet::withdraw_unbonded_other`] can be executed.
+	/// Returns Ok if [`Pallet::withdraw_unbonded_other`] can be executed, otherwise returns a
+	/// dispatch error.
 	fn ok_to_withdraw_unbonded_other_with(
 		&self,
 		caller: &T::AccountId,
@@ -686,9 +687,11 @@ impl<T: Config> BondedPool<T> {
 		amount: BalanceOf<T>,
 		ty: BondType,
 	) -> Result<BalanceOf<T>, DispatchError> {
+		// Cache the value
+		let bonded_account = self.bonded_account();
 		T::Currency::transfer(
 			&who,
-			&self.bonded_account(),
+			&bonded_account,
 			amount,
 			match ty {
 				BondType::Create => ExistenceRequirement::AllowDeath,
@@ -701,15 +704,15 @@ impl<T: Config> BondedPool<T> {
 
 		match ty {
 			BondType::Create => T::StakingInterface::bond(
-				self.bonded_account(),
-				self.bonded_account(),
+				bonded_account.clone(),
+				bonded_account,
 				amount,
 				self.reward_account(),
 			)?,
 			// The pool should always be created in such a way its in a state to bond extra, but if
 			// the active balance is slashed below the minimum bonded or the account cannot be
 			// found, we exit early.
-			BondType::Later => T::StakingInterface::bond_extra(self.bonded_account(), amount)?,
+			BondType::Later => T::StakingInterface::bond_extra(bonded_account, amount)?,
 		}
 
 		Ok(points_issued)
@@ -1091,7 +1094,7 @@ pub mod pallet {
 		///   `existential deposit + amount` in their account.
 		/// * Only a pool with [`PoolState::Open`] can be joined
 		#[pallet::weight(T::WeightInfo::join())]
-		#[frame_support::transactional]
+		#[transactional]
 		pub fn join(origin: OriginFor<T>, amount: BalanceOf<T>, pool_id: PoolId) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
@@ -1292,6 +1295,7 @@ pub mod pallet {
 		/// This is useful if their are too many unlocking chunks to call `unbond_other`, and some
 		/// can be cleared by withdrawing.
 		#[pallet::weight(T::WeightInfo::pool_withdraw_unbonded(*num_slashing_spans))]
+		#[transactional]
 		pub fn pool_withdraw_unbonded(
 			origin: OriginFor<T>,
 			pool_id: PoolId,
@@ -1325,6 +1329,7 @@ pub mod pallet {
 		#[pallet::weight(
 			T::WeightInfo::withdraw_unbonded_other_kill(*num_slashing_spans)
 		)]
+		#[transactional]
 		pub fn withdraw_unbonded_other(
 			origin: OriginFor<T>,
 			delegator_account: T::AccountId,
@@ -1448,7 +1453,7 @@ pub mod pallet {
 		/// In addition to `amount`, the caller will transfer the existential deposit; so the caller
 		/// needs at have at least `amount + existential_deposit` transferrable.
 		#[pallet::weight(T::WeightInfo::create())]
-		#[frame_support::transactional]
+		#[transactional]
 		pub fn create(
 			origin: OriginFor<T>,
 			amount: BalanceOf<T>,
