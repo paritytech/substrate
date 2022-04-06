@@ -355,6 +355,36 @@ benchmarks! {
 
 	remove_recovery {
 		let caller: T::AccountId = whitelisted_caller();
+
+		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
+
+		// Create friends
+		let friends = generate_friends::<T>();
+		let bounded_friends: FriendsOf<T> = friends.try_into().unwrap();
+
+		let threshold: u16 = 8;
+		let delay_period = block_number::<T>();
+
+		// Get deposit for recovery
+		let friend_deposit = T::FriendDepositFactor::get()
+			.checked_mul(&bounded_friends.len().saturated_into())
+			.unwrap();
+		let total_deposit = T::ConfigDepositBase::get()
+			.checked_add(&friend_deposit)
+			.unwrap();
+
+		let recovery_config = RecoveryConfig {
+			delay_period,
+			deposit: total_deposit.clone(),
+			friends: bounded_friends.clone(),
+			threshold,
+		};
+
+		// Create the recovery config storage item
+		<Recoverable<T>>::insert(&caller, recovery_config);
+
+		// Reserve deposit for recovery
+		T::Currency::reserve(&caller, total_deposit).unwrap();
 	}: _(
 		RawOrigin::Signed(caller.clone())
 	) verify {
