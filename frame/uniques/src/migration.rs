@@ -17,10 +17,7 @@
 
 //! Various pieces of common functionality.
 use super::*;
-use frame_support::{
-	traits::{Get, GetStorageVersion, PalletInfoAccess, StorageVersion},
-	weights::Weight,
-};
+use frame_support::traits::{Get, GetStorageVersion, PalletInfoAccess, StorageVersion};
 
 /// Migrate the pallet storage to v1.
 pub fn migrate_to_v1<T: Config<I>, I: 'static, P: GetStorageVersion + PalletInfoAccess>(

@@ -62,10 +62,13 @@ impl Contains<Call> for BaseFilter {
 }
 
 parameter_types! {
-	pub const BlockHashCount: u64 = 250;
 	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(1_000_000);
+		frame_system::limits::BlockWeights::simple_max(frame_support::weights::WeightV2 {
+			computation: 1024,
+			bandwidth: 1024,
+		});
 }
+
 impl frame_system::Config for Test {
 	type BaseCallFilter = BaseFilter;
 	type BlockWeights = ();
@@ -81,7 +84,7 @@ impl frame_system::Config for Test {
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = Event;
-	type BlockHashCount = BlockHashCount;
+	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
 	type AccountData = pallet_balances::AccountData<u64>;
@@ -102,7 +105,10 @@ impl pallet_preimage::Config for Test {
 	type ByteDeposit = ();
 }
 parameter_types! {
-	pub MaximumSchedulerWeight: Weight = 2_000_000_000_000;
+	pub MaximumSchedulerWeight: Weight = Weight{
+		computation: 2_000_000_000_000,
+		bandwidth: 2_000_000_000_000,
+	};
 }
 impl pallet_scheduler::Config for Test {
 	type Event = Event;
