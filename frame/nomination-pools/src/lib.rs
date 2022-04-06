@@ -336,7 +336,7 @@ pub enum ConfigOp<T: Default + Codec + Debug> {
 	Remove,
 }
 
-/// The type of bo``nding that can happen to a pool.
+/// The type of bonding that can happen to a pool.
 enum BondType {
 	/// Someone is bonding into the pool upon creation.
 	Create,
@@ -1222,8 +1222,12 @@ pub mod pallet {
 		/// * The caller is the depositor, the pool is destroying and no other delegators are in the
 		///   pool.
 		///
-		/// Note: If there are too many unlocking chunks to unbond with the pool account,
-		/// [`Self::withdraw_unbonded_pool`] can be called to try and minimize unlocking chunks.
+		/// # Note
+		///
+		/// If there are too many unlocking chunks to unbond with the pool account,
+		/// [`Self::withdraw_unbonded_pool`] can be called to try and minimize unlocking chunks. If
+		/// there are too many unlocking chunks, the result of this call will likely be the
+		/// `NoMoreChunks` error from the staking system.
 		#[pallet::weight(T::WeightInfo::unbond_other())]
 		#[transactional]
 		pub fn unbond_other(
