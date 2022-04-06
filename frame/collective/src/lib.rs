@@ -426,13 +426,17 @@ pub mod pallet {
 		/// - DB: 1 read (codec `O(M)`) + DB access of `proposal`
 		/// - 1 event
 		/// # </weight>
-		#[pallet::weight((
-			T::WeightInfo::execute(
+		#[pallet::weight({
+			let weight_v1 = T::WeightInfo::execute(
 				*length_bound, // B
 				T::MaxMembers::get(), // M
-			).saturating_add(proposal.get_dispatch_info().weight), // P
-			DispatchClass::Operational
-		))]
+			);
+
+			let final_weight = Weight::todo_from_v1(weight_v1)
+				.saturating_add(proposal.get_dispatch_info().weight); // P
+
+			(final_weight, DispatchClass::Operational)
+		})]
 		pub fn execute(
 			origin: OriginFor<T>,
 			proposal: Box<<T as Config<I>>::Proposal>,
@@ -453,11 +457,11 @@ pub mod pallet {
 
 			Ok(get_result_weight(result)
 				.map(|w| {
-					T::WeightInfo::execute(
+					let weight_v1 = T::WeightInfo::execute(
 						proposal_len as u32,  // B
 						members.len() as u32, // M
-					)
-					.saturating_add(w) // P
+					);
+					Weight::todo_from_v1(weight_v1).saturating_add(w) // P
 				})
 				.into())
 		}
@@ -491,16 +495,17 @@ pub mod pallet {
 		/// # </weight>
 		#[pallet::weight((
 			if *threshold < 2 {
-				T::WeightInfo::propose_execute(
+				let weight_v1 = T::WeightInfo::propose_execute(
 					*length_bound, // B
 					T::MaxMembers::get(), // M
-				).saturating_add(proposal.get_dispatch_info().weight) // P1
+				);
+				Weight::todo_from_v1(weight_v1).saturating_add(proposal.get_dispatch_info().weight) // P1
 			} else {
-				T::WeightInfo::propose_proposed(
+				Weight::todo_from_v1(T::WeightInfo::propose_proposed(
 					*length_bound, // B
 					T::MaxMembers::get(), // M
 					T::MaxProposals::get(), // P2
-				)
+				))
 			},
 			DispatchClass::Operational
 		))]
@@ -532,11 +537,11 @@ pub mod pallet {
 
 				Ok(get_result_weight(result)
 					.map(|w| {
-						T::WeightInfo::propose_execute(
+						let weight_v1 = T::WeightInfo::propose_execute(
 							proposal_len as u32,  // B
 							members.len() as u32, // M
-						)
-						.saturating_add(w) // P1
+						);
+						Weight::todo_from_v1(weight_v1).saturating_add(w) // P1
 					})
 					.into())
 			} else {
@@ -682,7 +687,7 @@ pub mod pallet {
 			{
 				let b = *length_bound;
 				let m = T::MaxMembers::get();
-				let p1 = *proposal_weight_bound;
+				let p1 = proposal_weight_bound.todo_to_v1();
 				let p2 = T::MaxProposals::get();
 				T::WeightInfo::close_early_approved(b, m, p2)
 					.max(T::WeightInfo::close_early_disapproved(m, p2))
@@ -696,7 +701,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			proposal_hash: T::Hash,
 			#[pallet::compact] index: ProposalIndex,
-			#[pallet::compact] proposal_weight_bound: Weight,
+			proposal_weight_bound: Weight,
 			#[pallet::compact] length_bound: u32,
 		) -> DispatchResultWithPostInfo {
 			let _ = ensure_signed(origin)?;
@@ -720,10 +725,10 @@ pub mod pallet {
 				let (proposal_weight, proposal_count) =
 					Self::do_approve_proposal(seats, yes_votes, proposal_hash, proposal);
 				return Ok((
-					Some(
-						T::WeightInfo::close_early_approved(len as u32, seats, proposal_count)
-							.saturating_add(proposal_weight),
-					),
+					Some({
+						let weight_v1 = T::WeightInfo::close_early_approved(len as u32, seats, proposal_count);
+						Weight::todo_from_v1(weight_v1).saturating_add(proposal_weight)
+					}),
 					Pays::Yes,
 				)
 					.into())
@@ -765,10 +770,10 @@ pub mod pallet {
 				let (proposal_weight, proposal_count) =
 					Self::do_approve_proposal(seats, yes_votes, proposal_hash, proposal);
 				Ok((
-					Some(
-						T::WeightInfo::close_approved(len as u32, seats, proposal_count)
-							.saturating_add(proposal_weight),
-					),
+					Some({
+						let weight_v1 = T::WeightInfo::close_approved(len as u32, seats, proposal_count);
+						Weight::todo_from_v1(weight_v1).saturating_add(proposal_weight)
+					}),
 					Pays::Yes,
 				)
 					.into())
@@ -839,7 +844,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		ensure!(proposal_len <= length_bound, Error::<T, I>::WrongProposalLength);
 		let proposal = ProposalOf::<T, I>::get(hash).ok_or(Error::<T, I>::ProposalMissing)?;
 		let proposal_weight = proposal.get_dispatch_info().weight;
-		ensure!(proposal_weight <= weight_bound, Error::<T, I>::WrongProposalWeight);
+		ensure!(proposal_weight.is_strictly_less_than_or_equal(&weight_bound), Error::<T, I>::WrongProposalWeight);
 		Ok((proposal, proposal_len as usize))
 	}
 
