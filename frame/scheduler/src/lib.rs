@@ -150,7 +150,7 @@ pub use preimage_provider::PreimageProviderAndMaybeRecipient;
 
 pub(crate) trait MarginalWeightInfo: WeightInfo {
 	fn item(periodic: bool, named: bool, resolved: Option<bool>) -> Weight {
-		match (periodic, named, resolved) {
+		let weight_v1 = match (periodic, named, resolved) {
 			(_, false, None) => Self::on_initialize_aborted(2) - Self::on_initialize_aborted(1),
 			(_, true, None) =>
 				Self::on_initialize_named_aborted(2) - Self::on_initialize_named_aborted(1),
@@ -170,7 +170,9 @@ pub(crate) trait MarginalWeightInfo: WeightInfo {
 			(true, true, Some(true)) =>
 				Self::on_initialize_periodic_named_resolved(2) -
 					Self::on_initialize_periodic_named_resolved(1),
-		}
+		};
+
+		Weight::todo_from_v1(weight_v1)
 	}
 }
 impl<T: WeightInfo> MarginalWeightInfo for T {}
@@ -314,7 +316,7 @@ pub mod pallet {
 
 			let next = now + One::one();
 
-			let mut total_weight: Weight = T::WeightInfo::on_initialize(0);
+			let mut total_weight: Weight = Weight::todo_from_v1(T::WeightInfo::on_initialize(0));
 			for (order, (index, mut s)) in queued.into_iter().enumerate() {
 				let named = if let Some(ref id) = s.maybe_id {
 					Lookup::<T>::remove(id);
@@ -358,7 +360,9 @@ pub mod pallet {
 						.into();
 				if ensure_signed(origin).is_ok() {
 					// Weights of Signed dispatches expect their signing account to be whitelisted.
-					item_weight.saturating_accrue(T::DbWeight::get().reads_writes(1, 1));
+					item_weight.saturating_accrue(Weight::todo_from_v1(
+						T::DbWeight::get().reads_writes(1, 1),
+					));
 				}
 
 				// We allow a scheduled call if any is true:
@@ -368,7 +372,7 @@ pub mod pallet {
 				let hard_deadline = s.priority <= schedule::HARD_DEADLINE;
 				let test_weight =
 					total_weight.saturating_add(call_weight).saturating_add(item_weight);
-				if !hard_deadline && order > 0 && test_weight > limit {
+				if !hard_deadline && order > 0 && test_weight.is_any_greater_than(&limit) {
 					// Cannot be scheduled this block - postpone until next.
 					total_weight.saturating_accrue(T::WeightInfo::item(false, named, None));
 					if let Some(ref id) = s.maybe_id {
@@ -573,7 +577,7 @@ impl<T: Config> Pallet<T> {
 
 		StorageVersion::new(3).put::<Self>();
 
-		weight + T::DbWeight::get().writes(2)
+		Weight::todo_from_v1(weight + T::DbWeight::get().writes(2))
 	}
 
 	/// Migrate storage format from V2 to V3.
@@ -609,7 +613,7 @@ impl<T: Config> Pallet<T> {
 
 		StorageVersion::new(3).put::<Self>();
 
-		weight + T::DbWeight::get().writes(2)
+		Weight::todo_from_v1(weight + T::DbWeight::get().writes(2))
 	}
 
 	#[cfg(feature = "try-runtime")]
