@@ -19,7 +19,6 @@ use crate::{
 	traits::{GetStorageVersion, PalletInfoAccess},
 	weights::{RuntimeDbWeight, Weight},
 };
-use sp_runtime::traits::Saturating;
 
 /// Trait used by [`migrate_from_pallet_version_to_storage_version`] to do the actual migration.
 pub trait PalletVersionToStorageVersionHelper {

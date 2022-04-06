@@ -93,6 +93,10 @@ impl WeightV2 {
 	pub fn is_strictly_greater_than_or_equal(&self, other: &Self) -> bool {
 		self.computation >= other.computation && self.bandwidth >= other.bandwidth
 	}
+
+	pub fn saturating_add(self, rhs: Self) -> Self {
+		<Self as Saturating>::saturating_add(self, rhs)
+	}
 }
 
 impl From<(ComputationWeight, BandwidthWeight)> for WeightV2 {
