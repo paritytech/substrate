@@ -23,7 +23,7 @@ use frame_support::{
 	traits::{fungibles::Mutate, ConstU32, ConstU64, ConstU8, FindAuthor},
 	weights::{
 		DispatchClass, DispatchInfo, PostDispatchInfo, Weight, WeightToFeeCoefficient,
-		WeightToFeeCoefficients, WeightToFeePolynomial,
+		WeightToFeeCoefficients, WeightToFeePolynomial, WeightV1,
 	},
 	ConsensusEngineId,
 };
@@ -71,12 +71,12 @@ pub struct BlockWeights;
 impl Get<frame_system::limits::BlockWeights> for BlockWeights {
 	fn get() -> frame_system::limits::BlockWeights {
 		frame_system::limits::BlockWeights::builder()
-			.base_block(0)
+			.base_block(Weight::zero())
 			.for_class(DispatchClass::all(), |weights| {
 				weights.base_extrinsic = EXTRINSIC_BASE_WEIGHT.with(|v| *v.borrow()).into();
 			})
 			.for_class(DispatchClass::non_mandatory(), |weights| {
-				weights.max_total = 1024.into();
+				weights.max_total = Some(Weight { computation: 1024, bandwidth: 1024 });
 			})
 			.build_or_panic()
 	}
@@ -256,13 +256,13 @@ impl ExtBuilder {
 }
 
 /// create a transaction info struct from weight. Handy to avoid building the whole struct.
-pub fn info_from_weight(w: Weight) -> DispatchInfo {
+pub fn info_from_weight(w: WeightV1) -> DispatchInfo {
 	// pays_fee: Pays::Yes -- class: DispatchClass::Normal
-	DispatchInfo { weight: w, ..Default::default() }
+	DispatchInfo { weight: Weight::todo_from_v1(w), ..Default::default() }
 }
 
-fn post_info_from_weight(w: Weight) -> PostDispatchInfo {
-	PostDispatchInfo { actual_weight: Some(w), pays_fee: Default::default() }
+fn post_info_from_weight(w: WeightV1) -> PostDispatchInfo {
+	PostDispatchInfo { actual_weight: Some(Weight::todo_from_v1(w)), pays_fee: Default::default() }
 }
 
 fn info_from_pays(p: Pays) -> DispatchInfo {
