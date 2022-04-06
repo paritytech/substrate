@@ -86,6 +86,7 @@ impl<T: Config> Pallet<T> {
 		}
 
 		collection.max_supply = max_supply;
+		Collections::<T>::insert(&id, collection);
 
 		Self::deposit_event(Event::<T>::CollectionMaxSupplyChanged { id, max_supply });
 

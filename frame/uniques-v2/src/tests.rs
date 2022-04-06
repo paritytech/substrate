@@ -126,6 +126,32 @@ fn collection_locking_should_fail() {
 }
 
 #[test]
+fn update_max_supply_should_work() {
+	new_test_ext().execute_with(|| {
+		let id = 0;
+		let user_id = 1;
+		let max_supply = Some(10);
+
+		assert_ok!(
+			Uniques::create(Origin::signed(user_id), DEFAULT_USER_FEATURES, max_supply, None)
+		);
+
+		let collection = Collections::<Test>::get(id).unwrap();
+		assert_eq!(collection.max_supply, max_supply);
+
+		let new_max_supply = Some(10);
+		assert_ok!(Uniques::update_max_supply(Origin::signed(user_id), id, new_max_supply));
+
+		let collection = Collections::<Test>::get(id).unwrap();
+		assert_eq!(collection.max_supply, new_max_supply);
+
+		assert!(events().contains(
+			&Event::<Test>::CollectionMaxSupplyChanged { id, max_supply: new_max_supply }
+		));
+	});
+}
+
+#[test]
 fn different_user_flags() {
 	new_test_ext().execute_with(|| {
 		// TODO: try to pass an empty value
