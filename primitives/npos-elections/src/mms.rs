@@ -18,16 +18,15 @@
 //! Implementation of the MMS method.
 //!
 //! This is algorithm 1 from the paper: <https://arxiv.org/pdf/2004.12990.pdf>
-//! This is explained a bit further in issue <https://github.com/paritytech/substrate/issues/6639>
 //!
-//! This is also further explained in [The Maximin Support Method: An Extension of the D'Hondt Method to Approval-Based Multiwinner Elections](https://arxiv.org/abs/1609.05370).
+//! It is also further explained in [The Maximin Support Method: An Extension of the D'Hondt Method to Approval-Based Multiwinner Elections](https://arxiv.org/abs/1609.05370).
 
 use crate::{
 	balance, setup_inputs, CandidatePtr, ElectionResult, ExtendedBalance, IdentifierT, PerThing128,
 	Rc, VoteWeight,
 };
 
-/// Execute the mms method.
+/// Execute the `MMS` method.
 ///
 /// This can be used interchangeably with [`seq-phragmen`] or [`phragmms`] and offers a similar API,
 /// namely:
@@ -70,13 +69,14 @@ pub fn mms<AccountId: IdentifierT + Default, P: PerThing128>(
 			candidate.borrow_mut().elected = true;
 			candidate.borrow_mut().round = round;
 
-			// Calculate the balance weight vector `w_c`
+			// Calculate the balance weight vector `w_c` for `A + c`
 			balance(&mut voters, iterations, tolerance);
 
+			// Find `argmax_{c in C\A} supp_{w_c}(A+c)`
 			let support = candidate.borrow().backed_stake;
 
 			// maximize stake
-			if support > bal {
+			if support >= bal {
 				bal = support;
 				winner = Rc::clone(candidate);
 			}
@@ -85,12 +85,13 @@ pub fn mms<AccountId: IdentifierT + Default, P: PerThing128>(
 			candidate.borrow_mut().round = 0;
 		}
 
-		// winner is initialized in the previous loop.
+		// winner is always initialized in the previous loop. We have a winner!
 		winner.borrow_mut().elected = true;
 		winner.borrow_mut().round = round;
 		winners.push(winner);
 	}
 
+	// Make sure weights are correct and normalized.
 	balance(&mut voters, iterations, tolerance);
 
 	crate::voter_candidate_to_election_result(voters, winners)
@@ -101,7 +102,6 @@ mod tests {
 	use super::*;
 	use crate::{Assignment, ElectionResult};
 	use sp_runtime::Perbill;
-
 	#[test]
 	fn basic_election_works() {
 		let candidates = vec![1, 2, 3];
@@ -109,7 +109,7 @@ mod tests {
 
 		let ElectionResult::<_, Perbill> { winners, assignments } =
 			mms(2, candidates, voters, 2, 0).unwrap();
-		assert_eq!(winners, vec![(3, 30), (1, 30)]);
+		assert_eq!(winners, vec![(3, 30), (2, 30)]);
 		assert_eq!(
 			assignments,
 			vec![
@@ -120,13 +120,19 @@ mod tests {
 						(2, Perbill::from_parts(500000000))
 					]
 				},
-				Assignment { who: 20, distribution: vec![(1, Perbill::one())] },
+				Assignment {
+					who: 20,
+					distribution: vec![
+						(1, Perbill::from_parts(500000000)),
+						(3, Perbill::from_parts(500000000))
+					]
+				},
 				Assignment {
 					who: 30,
 					distribution: vec![
 						(2, Perbill::from_parts(666666666)),
 						(3, Perbill::from_parts(333333334)),
-					],
+					]
 				},
 			]
 		)
@@ -147,7 +153,7 @@ mod tests {
 
 		let ElectionResult::<_, Perbill> { winners, assignments: _ } =
 			mms(4, candidates, voters, 2, 0).unwrap();
-		assert_eq!(winners, vec![(11, 2000), (21, 2000), (41, 2000), (61, 2000),]);
+		assert_eq!(winners, vec![(11, 2000), (61, 2000), (41, 2000), (21, 2000),]);
 	}
 
 	#[test]
@@ -160,8 +166,7 @@ mod tests {
 
 		let ElectionResult::<_, Perbill> { winners, assignments: _ } =
 			mms(2, candidates, voters, 2, 0).unwrap();
-		// TODO: weird why 2 wins and not 3.
-		assert_eq!(winners.into_iter().map(|(w, _)| w).collect::<Vec<_>>(), vec![1u32, 2]);
+		assert_eq!(winners.into_iter().map(|(w, _)| w).collect::<Vec<_>>(), vec![3u32, 1]);
 	}
 
 	#[test]
@@ -180,5 +185,25 @@ mod tests {
 		let ElectionResult::<_, Perbill> { winners, assignments: _ } =
 			mms(3, candidates, voters, 2, 0).unwrap();
 		assert_eq!(winners, vec![(1, 10750), (3, 10750), (4, 9500)]);
+	}
+
+	#[test]
+	fn mms_solution_house_monotonic() {
+		let candidates = vec![1, 2, 3, 4, 5, 6, 7];
+		let voters = vec![
+			(10, 10_000, vec![1, 2]),
+			(20, 6_000, vec![1, 3]),
+			(30, 4_000, vec![2]),
+			(40, 5_500, vec![3]),
+			(50, 9_500, vec![4]),
+			(60, 5_000, vec![5, 6, 7]),
+			(70, 3_000, vec![5]),
+		];
+
+		let ElectionResult::<_, Perbill> { winners, assignments: _ } =
+			mms(2, candidates.clone(), voters.clone(), 2, 0).unwrap();
+		let ElectionResult::<_, Perbill> { winners: winners2, assignments: _ } =
+			mms(2, candidates, voters, 2, 0).unwrap();
+		assert_eq!(winners2[..2], winners);
 	}
 }

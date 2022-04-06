@@ -63,7 +63,7 @@
 //!
 //! The `Assignment` field of the election result is voter-major, i.e. it is from the perspective of
 //! the voter. The struct that represents the opposite is called a `Support`. This struct is usually
-//! accessed in a map-like manner, i.e. keyed by voters, therefor it is stored as a mapping called
+//! accessed in a map-like manner, i.e. keyed by voters, therefore it is stored as a mapping called
 //! `SupportMap`.
 //!
 //! Moreover, the support is built from absolute backing values, not ratios like the example above.
@@ -105,6 +105,7 @@ pub mod traits;
 pub use assignments::{Assignment, StakedAssignment};
 pub use balancing::*;
 pub use helpers::*;
+pub use mms::*;
 pub use phragmen::*;
 pub use phragmms::*;
 pub use pjr::*;

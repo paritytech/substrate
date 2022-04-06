@@ -9,7 +9,7 @@ sub-system. Notable implementation include:
   MMS algorithm.
 - [`mms`]: Implements the MMS algorithm.
 - [`balance_solution`]: Implements the star balancing algorithm. This iterative process can push
-  a solution toward being more `balances`, which in turn can increase its score.
+  a solution toward being more `balanced`, which in turn can increase its score.
 
 ### Terminology
 
@@ -47,7 +47,7 @@ let election_result = ElectionResult { winners, assignments };
 
 The `Assignment` field of the election result is voter-major, i.e. it is from the perspective of
 the voter. The struct that represents the opposite is called a `Support`. This struct is usually
-accessed in a map-like manner, i.e. keyed vy voters, therefor it is stored as a mapping called
+accessed in a map-like manner, i.e. keyed by voters, therefore it is stored as a mapping called
 `SupportMap`.
 
 Moreover, the support is built from absolute backing values, not ratios like the example above.
