@@ -399,17 +399,15 @@ benchmarks! {
 		let caller: T::AccountId = whitelisted_caller();
 		let account: T::AccountId = account("account", 0, SEED);
 
-		let count_before = frame_system::Pallet::<T>::consumers(&caller);
+		frame_system::Pallet::<T>::inc_providers(&caller);
 
-		frame_system::Pallet::<T>::dec_consumers(&caller);
+		frame_system::Pallet::<T>::inc_consumers(&caller)?;
 
-		let count_after = frame_system::Pallet::<T>::consumers(&caller);
+		Proxy::<T>::insert(&caller, &account);
 	}: _(
 		RawOrigin::Signed(caller.clone()),
 		account.clone()
-	) verify {
-		assert_ne!(count_before, count_after);
-	}
+	)
 
 	impl_benchmark_test_suite!(Recovery, crate::mock::new_test_ext(), crate::mock::Test);
 }
