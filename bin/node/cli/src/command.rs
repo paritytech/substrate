@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use super::command_helper::{benchmark_inherent_data, ExtrinsicBuilder};
+use super::command_helper::{inherent_benchmark_data, BenchmarkExtrinsicBuilder};
 use crate::{
 	chain_spec, service,
 	service::{new_partial, FullClient},
@@ -122,9 +122,9 @@ pub fn run() -> Result<()> {
 						cmd.run(config, client, db, storage)
 					},
 					BenchmarkCmd::Overhead(cmd) => {
-						let ext_builder = ExtrinsicBuilder::new(client.clone());
+						let ext_builder = BenchmarkExtrinsicBuilder::new(client.clone());
 
-						cmd.run(config, client, benchmark_inherent_data()?, Arc::new(ext_builder))
+						cmd.run(config, client, inherent_benchmark_data()?, Arc::new(ext_builder))
 					},
 				}
 			})
