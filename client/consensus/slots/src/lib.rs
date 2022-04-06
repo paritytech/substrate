@@ -401,15 +401,22 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	}
 }
 
+/// A type that implements [`SlotWorker`] for a type that implements [`SimpleSlotWorker`].
+///
+/// This is basically a workaround for Rust not supporting specialization. Otherwise we could
+/// implement [`SlotWorker`] for any `T` that implements [`SimpleSlotWorker`], but currently
+/// that would prevent downstream users to implement [`SlotWorker`] for their own types.
+pub struct SimpleSlotWorkerToSlotWorker<T>(pub T);
+
 #[async_trait::async_trait]
-impl<B: BlockT, T: SimpleSlotWorker<B> + Send + Sync>
-	SlotWorker<B, <T::Proposer as Proposer<B>>::Proof> for T
+impl<T: SimpleSlotWorker<B> + Send + Sync, B: BlockT>
+	SlotWorker<B, <T::Proposer as Proposer<B>>::Proof> for SimpleSlotWorkerToSlotWorker<T>
 {
 	async fn on_slot(
 		&mut self,
 		slot_info: SlotInfo<B>,
 	) -> Option<SlotResult<B, <T::Proposer as Proposer<B>>::Proof>> {
-		SimpleSlotWorker::on_slot(self, slot_info).await
+		self.0.on_slot(slot_info).await
 	}
 }
 

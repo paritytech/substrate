@@ -117,6 +117,8 @@
 //! - Ubuntu 19.10 (GNU/Linux 5.3.0-18-generic x86_64)
 //! - rustc 1.42.0 (b8cedc004 2020-03-09)
 
+mod block_weights;
+mod extrinsic_weights;
 mod paritydb_weights;
 mod rocksdb_weights;
 
@@ -157,20 +159,18 @@ pub type BandwidthWeight = u64;
 /// These constants are specific to FRAME, and the current implementation of its various components.
 /// For example: FRAME System, FRAME Executive, our FRAME support libraries, etc...
 pub mod constants {
-	use super::{ComputationWeight, WeightV2};
-	use crate::parameter_types;
+	use super::ComputationWeight;
 
 	pub const WEIGHT_PER_SECOND: ComputationWeight = 1_000_000_000_000;
 	pub const WEIGHT_PER_MILLIS: ComputationWeight = WEIGHT_PER_SECOND / 1000; // 1_000_000_000
 	pub const WEIGHT_PER_MICROS: ComputationWeight = WEIGHT_PER_MILLIS / 1000; // 1_000_000
 	pub const WEIGHT_PER_NANOS: ComputationWeight = WEIGHT_PER_MICROS / 1000; // 1_000
 
-	parameter_types! {
-		/// Importing a block with 0 txs takes ~5 ms
-		pub const BlockExecutionWeight: WeightV2 = WeightV2::todo_from_v1(5 * WEIGHT_PER_MILLIS);
-		/// Executing 10,000 System remarks (no-op) txs takes ~1.26 seconds -> ~125 µs per tx
-		pub const ExtrinsicBaseWeight: WeightV2 = WeightV2::todo_from_v1(125 * WEIGHT_PER_MICROS);
-	}
+	// Expose the Block and Extrinsic base weights.
+	pub use super::{
+		block_weights::constants::BlockExecutionWeight,
+		extrinsic_weights::constants::ExtrinsicBaseWeight,
+	};
 
 	// Expose the DB weights.
 	pub use super::{

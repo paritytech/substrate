@@ -165,7 +165,11 @@ pub trait Mutate<AccountId>: Inspect<AccountId> {
 	/// Burn some asset `instance` of `class`.
 	///
 	/// By default, this is not a supported operation.
-	fn burn_from(_class: &Self::ClassId, _instance: &Self::InstanceId) -> DispatchResult {
+	fn burn(
+		_class: &Self::ClassId,
+		_instance: &Self::InstanceId,
+		_maybe_check_owner: Option<&AccountId>,
+	) -> DispatchResult {
 		Err(TokenError::Unsupported.into())
 	}
 

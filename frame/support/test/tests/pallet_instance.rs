@@ -351,7 +351,7 @@ fn error_expand() {
 		DispatchError::from(pallet::Error::<Runtime>::InsufficientProposersBalance),
 		DispatchError::Module(ModuleError {
 			index: 1,
-			error: 0,
+			error: [0; 4],
 			message: Some("InsufficientProposersBalance")
 		}),
 	);
@@ -372,7 +372,7 @@ fn error_expand() {
 		),
 		DispatchError::Module(ModuleError {
 			index: 2,
-			error: 0,
+			error: [0; 4],
 			message: Some("InsufficientProposersBalance")
 		}),
 	);
