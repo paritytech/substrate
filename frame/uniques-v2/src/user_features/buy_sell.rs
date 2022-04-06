@@ -18,6 +18,7 @@
 use crate::*;
 use enumflags2::BitFlags;
 use frame_support::pallet_prelude::*;
+use frame_support::traits::Currency;
 
 impl<T: Config> Pallet<T> {
 	pub fn do_set_price(
@@ -41,5 +42,57 @@ impl<T: Config> Pallet<T> {
 		Self::deposit_event(Event::ItemPriceSet { collection_id, item_id, price, buyer });
 
 		Ok(())
+	}
+
+	pub fn do_buy_item(
+		collection_id: T::CollectionId,
+		item_id: T::ItemId,
+		config: CollectionConfig,
+		buyer: T::AccountId,
+		bid_price: BalanceOf<T>,
+	) -> DispatchResult {
+		let user_features: BitFlags<UserFeatures> = config.user_features.into();
+		ensure!(!user_features.contains(UserFeatures::NonTransferableItems), Error::<T>::ItemNotForSale);
+
+		let item = Items::<T>::get(collection_id, item_id).ok_or(Error::<T>::ItemNotFound)?;
+		ensure!(item.owner != buyer, Error::<T>::NotAuthorized);
+
+		if let Some(price) = item.price {
+			ensure!(bid_price >= price, Error::<T>::ItemUnderpriced);
+		} else {
+			return Err(Error::<T>::ItemNotForSale.into())
+		}
+
+		if let Some(only_buyer) = item.buyer {
+			ensure!(only_buyer == buyer, Error::<T>::ItemNotForSale);
+		}
+
+		T::Currency::transfer(&buyer, &item.owner, bid_price, frame_support::traits::ExistenceRequirement::KeepAlive)?;
+
+		Self::do_transfer_item(
+			collection_id,
+			item_id,
+			config,
+			item.owner.clone(),
+			buyer.clone(),
+		)?;
+
+		// reset the price & buyer
+		Items::<T>::try_mutate(collection_id, item_id, |maybe_item| {
+			let item = maybe_item.as_mut().ok_or(Error::<T>::ItemNotFound)?;
+
+			item.price = None;
+			item.buyer = None;
+
+			Self::deposit_event(Event::ItemBought {
+				collection_id,
+				item_id,
+				price: bid_price,
+				seller: item.owner.clone(),
+				buyer,
+			});
+
+			Ok(())
+		})
 	}
 }

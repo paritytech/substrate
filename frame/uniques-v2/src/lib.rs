@@ -252,6 +252,13 @@ pub mod pallet {
 			price: Option<BalanceOf<T>>,
 			buyer: Option<T::AccountId>,
 		},
+		ItemBought {
+			collection_id: T::CollectionId,
+			item_id: T::ItemId,
+			price: BalanceOf<T>,
+			seller: T::AccountId,
+			buyer: T::AccountId,
+		},
 	}
 
 	// Your Pallet's error messages.
@@ -275,6 +282,8 @@ pub mod pallet {
 		ItemsNotTransferable,
 		/// Item can't be sold.
 		ItemNotForSale,
+		/// Item underpriced.
+		ItemUnderpriced,
 		/// User reached the limit of allowed items per collection per account
 		CollectionItemsPerAccountLimitReached,
 		/// The calling user is not authorized to make this call.
@@ -285,6 +294,8 @@ pub mod pallet {
 		Overflow,
 		/// Invalid witness data given.
 		BadWitness,
+		/// Trying to transfer or buy an item from oneself.
+		TransferToSelf,
 	}
 
 	// Pallet's callable functions.
@@ -425,7 +436,7 @@ pub mod pallet {
 
 		// PHASE 2:
 		// +put an item up for sale
-		// buy an item
+		// +buy an item
 		// royalties
 		// minter's fee
 
@@ -499,6 +510,19 @@ pub mod pallet {
 			let sender = ensure_signed(origin)?;
 			let config = CollectionConfigs::<T>::get(collection_id).ok_or(Error::<T>::CollectionNotFound)?;
 			Self::do_set_price(collection_id, item_id, config, sender, price, buyer)?;
+			Ok(())
+		}
+
+		#[pallet::weight(0)]
+		pub fn buy_item(
+			origin: OriginFor<T>,
+			collection_id: T::CollectionId,
+			item_id: T::ItemId,
+			bid_price: BalanceOf<T>,
+		) -> DispatchResult {
+			let sender = ensure_signed(origin)?;
+			let config = CollectionConfigs::<T>::get(collection_id).ok_or(Error::<T>::CollectionNotFound)?;
+			Self::do_buy_item(collection_id, item_id, config, sender, bid_price)?;
 			Ok(())
 		}
 	}
