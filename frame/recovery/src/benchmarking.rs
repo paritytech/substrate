@@ -300,6 +300,47 @@ benchmarks! {
 	close_recovery {
 		let caller: T::AccountId = whitelisted_caller();
 		let rescuer_account: T::AccountId = account("rescuer_account", 0, SEED);
+
+		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
+		T::Currency::make_free_balance_be(&rescuer_account, BalanceOf::<T>::max_value());
+
+		// Create friends
+		let friends = generate_friends::<T>();
+		let bounded_friends: FriendsOf<T> = friends.try_into().unwrap();
+
+		let threshold: u16 = 8;
+		let delay_period = block_number::<T>();
+
+		// Get deposit for recovery
+		let friend_deposit = T::FriendDepositFactor::get()
+			.checked_mul(&bounded_friends.len().saturated_into())
+			.unwrap();
+		let total_deposit = T::ConfigDepositBase::get()
+			.checked_add(&friend_deposit)
+			.unwrap();
+
+		let recovery_config = RecoveryConfig {
+			delay_period,
+			deposit: total_deposit.clone(),
+			friends: bounded_friends.clone(),
+			threshold,
+		};
+
+		// Create the recovery config storage item
+		<Recoverable<T>>::insert(&caller, recovery_config.clone());
+
+		// Reserve deposit for recovery
+		T::Currency::reserve(&rescuer_account, total_deposit).unwrap();
+
+		// Create an active recovery status
+		let recovery_status = ActiveRecovery {
+			created: block_number::<T>(),
+			deposit: total_deposit,
+			friends: bounded_friends.clone(),
+		};
+
+		// Create the active recovery storage item
+		<ActiveRecoveries<T>>::insert(&caller, &rescuer_account, recovery_status);
 	}: _(
 		RawOrigin::Signed(caller.clone()),
 		rescuer_account.clone()
