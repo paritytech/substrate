@@ -1,7 +1,7 @@
 use codec::{Decode, Encode, MaxEncodedLen};
 use core::ops::{Add, Div, Mul, Sub};
 use sp_runtime::{
-	traits::{CheckedAdd, One, Zero},
+	traits::{Bounded, CheckedAdd, One, Zero},
 	RuntimeDebug,
 };
 
@@ -286,6 +286,22 @@ impl<T> PaysFee<T> for WeightV2 {
 impl<T> ClassifyDispatch<T> for (WeightV2, DispatchClass, Pays) {
 	fn classify_dispatch(&self, _: T) -> DispatchClass {
 		self.1
+	}
+}
+
+#[cfg(feature = "std")]
+impl std::fmt::Display for WeightV2 {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "WeightV2(computation: {}, bandwidth: {})", self.computation, self.bandwidth)
+	}
+}
+
+impl Bounded for WeightV2 {
+	fn min_value() -> Self {
+		Zero::zero()
+	}
+	fn max_value() -> Self {
+		Self::MAX
 	}
 }
 

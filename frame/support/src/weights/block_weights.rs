@@ -23,7 +23,10 @@ pub mod constants {
 
 	parameter_types! {
 		/// Importing a block with 0 Extrinsics.
-		pub const BlockExecutionWeight: Weight = 5_000_000 * constants::WEIGHT_PER_NANOS;
+		pub const BlockExecutionWeight: Weight = Weight {
+			computation: 5_000_000 * constants::WEIGHT_PER_NANOS,
+			bandwidth: 0,
+		};
 	}
 
 	#[cfg(test)]
@@ -38,9 +41,15 @@ pub mod constants {
 			let w = super::constants::BlockExecutionWeight::get();
 
 			// At least 100 µs.
-			assert!(w >= 100 * constants::WEIGHT_PER_MICROS, "Weight should be at least 100 µs.");
+			assert!(
+				w.computation >= 100 * constants::WEIGHT_PER_MICROS,
+				"Weight should be at least 100 µs."
+			);
 			// At most 50 ms.
-			assert!(w <= 50 * constants::WEIGHT_PER_MILLIS, "Weight should be at most 50 ms.");
+			assert!(
+				w.computation <= 50 * constants::WEIGHT_PER_MILLIS,
+				"Weight should be at most 50 ms."
+			);
 		}
 	}
 }
