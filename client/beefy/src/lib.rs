@@ -18,14 +18,14 @@
 
 use std::sync::Arc;
 
-use log::debug;
 use prometheus::Registry;
 
 use sc_client_api::{Backend, BlockchainEvents, Finalizer};
-use sc_network_gossip::{GossipEngine, Network as GossipNetwork};
+use sc_network_gossip::Network as GossipNetwork;
 
 use sp_api::ProvideRuntimeApi;
 use sp_blockchain::HeaderBackend;
+use sp_consensus::SyncOracle;
 use sp_keystore::SyncCryptoStorePtr;
 use sp_runtime::traits::Block;
 
@@ -41,6 +41,10 @@ mod round;
 mod worker;
 
 pub mod notification;
+
+#[cfg(test)]
+mod tests;
+
 pub use beefy_protocol_name::standard_name as protocol_standard_name;
 
 pub(crate) mod beefy_protocol_name {
@@ -53,13 +57,13 @@ pub(crate) mod beefy_protocol_name {
 	/// Name of the notifications protocol used by BEEFY.
 	///
 	/// Must be registered towards the networking in order for BEEFY to properly function.
-	pub fn standard_name<Hash: std::fmt::Display>(
+	pub fn standard_name<Hash: AsRef<[u8]>>(
 		genesis_hash: &Hash,
 		chain_spec: &Box<dyn ChainSpec>,
 	) -> std::borrow::Cow<'static, str> {
 		let chain_prefix = match chain_spec.fork_id() {
-			Some(fork_id) => format!("/{}/{}", genesis_hash, fork_id),
-			None => format!("/{}", genesis_hash),
+			Some(fork_id) => format!("/{}/{}", hex::encode(genesis_hash), fork_id),
+			None => format!("/{}", hex::encode(genesis_hash)),
 		};
 		format!("{}{}", chain_prefix, NAME).into()
 	}
@@ -112,7 +116,7 @@ where
 	BE: Backend<B>,
 	C: Client<B, BE>,
 	C::Api: BeefyApi<B>,
-	N: GossipNetwork<B> + Clone + Send + 'static,
+	N: GossipNetwork<B> + Clone + SyncOracle + Send + Sync + 'static,
 {
 	/// BEEFY client
 	pub client: Arc<C>,
@@ -134,6 +138,7 @@ where
 	pub protocol_name: std::borrow::Cow<'static, str>,
 }
 
+#[cfg(not(test))]
 /// Start the BEEFY gadget.
 ///
 /// This is a thin shim around running and awaiting a BEEFY worker.
@@ -143,7 +148,7 @@ where
 	BE: Backend<B>,
 	C: Client<B, BE>,
 	C::Api: BeefyApi<B>,
-	N: GossipNetwork<B> + Clone + Send + 'static,
+	N: GossipNetwork<B> + Clone + SyncOracle + Send + Sync + 'static,
 {
 	let BeefyParams {
 		client,
@@ -157,18 +162,24 @@ where
 		protocol_name,
 	} = beefy_params;
 
+	let sync_oracle = network.clone();
 	let gossip_validator = Arc::new(gossip::GossipValidator::new());
-	let gossip_engine = GossipEngine::new(network, protocol_name, gossip_validator.clone(), None);
+	let gossip_engine = sc_network_gossip::GossipEngine::new(
+		network,
+		protocol_name,
+		gossip_validator.clone(),
+		None,
+	);
 
 	let metrics =
 		prometheus_registry.as_ref().map(metrics::Metrics::register).and_then(
 			|result| match result {
 				Ok(metrics) => {
-					debug!(target: "beefy", "🥩 Registered metrics");
+					log::debug!(target: "beefy", "🥩 Registered metrics");
 					Some(metrics)
 				},
 				Err(err) => {
-					debug!(target: "beefy", "🥩 Failed to register metrics: {:?}", err);
+					log::debug!(target: "beefy", "🥩 Failed to register metrics: {:?}", err);
 					None
 				},
 			},
@@ -184,9 +195,10 @@ where
 		gossip_validator,
 		min_block_delta,
 		metrics,
+		sync_oracle,
 	};
 
-	let worker = worker::BeefyWorker::<_, _, _>::new(worker_params);
+	let worker = worker::BeefyWorker::<_, _, _, _>::new(worker_params);
 
 	worker.run().await
 }

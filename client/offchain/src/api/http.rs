@@ -37,7 +37,6 @@ use once_cell::sync::Lazy;
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use sp_core::offchain::{HttpError, HttpRequestId, HttpRequestStatus, Timestamp};
 use std::{
-	convert::TryFrom,
 	fmt,
 	io::Read as _,
 	pin::Pin,
@@ -432,8 +431,9 @@ impl HttpApi {
 							);
 						},
 						None => {}, // can happen if we detected an IO error when sending the body
-						_ =>
-							tracing::error!(target: "offchain-worker::http", "State mismatch between the API and worker"),
+						_ => {
+							tracing::error!(target: "offchain-worker::http", "State mismatch between the API and worker")
+						},
 					}
 				},
 
@@ -443,8 +443,9 @@ impl HttpApi {
 						self.requests.insert(id, HttpApiRequest::Fail(error));
 					},
 					None => {}, // can happen if we detected an IO error when sending the body
-					_ =>
-						tracing::error!(target: "offchain-worker::http", "State mismatch between the API and worker"),
+					_ => {
+						tracing::error!(target: "offchain-worker::http", "State mismatch between the API and worker")
+					},
 				},
 
 				None => {

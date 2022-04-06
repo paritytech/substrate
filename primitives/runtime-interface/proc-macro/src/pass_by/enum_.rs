@@ -51,7 +51,7 @@ pub fn derive_impl(input: DeriveInput) -> Result<TokenStream> {
 				type PassBy = #crate_::pass_by::Enum<#ident>;
 			}
 
-			impl #crate_::sp_std::convert::TryFrom<u8> for #ident {
+			impl TryFrom<u8> for #ident {
 				type Error = ();
 
 				fn try_from(inner: u8) -> #crate_::sp_std::result::Result<Self, ()> {
