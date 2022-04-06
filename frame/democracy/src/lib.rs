@@ -1757,7 +1757,7 @@ impl<T: Config> Pallet<T> {
 	/// - Db reads per R: `DepositOf`, `ReferendumInfoOf`
 	/// # </weight>
 	fn begin_block(now: T::BlockNumber) -> Weight {
-		let max_block_weight = T::BlockWeights::get().max_block;
+		let max_block_weight = T::BlockWeights::get().max_block.todo_to_v1();
 		let mut weight = 0;
 
 		let next = Self::lowest_unbaked();
@@ -1802,7 +1802,7 @@ impl<T: Config> Pallet<T> {
 			}
 		});
 
-		weight
+		Weight::todo_from_v1(weight)
 	}
 
 	/// Reads the length of account in DepositOf without getting the complete value in the runtime.

@@ -54,7 +54,7 @@ pub fn migrate<
 			target: "runtime::bounties",
 			"New pallet name is equal to the old prefix. No migration needs to be done.",
 		);
-		return 0
+		return Weight::zero()
 	}
 
 	let on_chain_storage_version = <P as GetStorageVersion>::on_chain_storage_version();
@@ -105,7 +105,7 @@ pub fn migrate<
 			"Attempted to apply migration to v4 but failed because storage version is {:?}",
 			on_chain_storage_version,
 		);
-		0
+		Weight::zero()
 	}
 }
 

@@ -105,9 +105,9 @@ pub mod pallet {
 				// TODO [#3398] Generate offence report for all authorities that skipped their
 				// slots.
 
-				T::DbWeight::get().reads_writes(2, 1)
+				Weight::todo_from_v1(T::DbWeight::get().reads_writes(2, 1))
 			} else {
-				T::DbWeight::get().reads(1)
+				Weight::todo_from_v1(T::DbWeight::get().reads(1))
 			}
 		}
 	}
