@@ -792,7 +792,7 @@ mod tests {
 		assert_noop, assert_ok, parameter_types,
 		traits::{ConstU32, ConstU64, Currency, Imbalance, OnUnbalanced},
 		weights::{
-			DispatchClass, DispatchInfo, GetDispatchInfo, IdentityFee, PostDispatchInfo, Weight,
+			DispatchClass, DispatchInfo, GetDispatchInfo, PostDispatchInfo, Weight,
 			WeightToFeeCoefficient, WeightToFeeCoefficients, WeightToFeePolynomial,
 		},
 	};
