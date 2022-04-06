@@ -23,7 +23,7 @@ use crate::{self as pallet_balances, Config, Pallet};
 use frame_support::{
 	parameter_types,
 	traits::{ConstU32, ConstU64, ConstU8, StorageMapShim},
-	weights::{IdentityFee, WeightV2},
+	weights::IdentityFee,
 };
 use pallet_transaction_payment::CurrencyAdapter;
 use sp_core::H256;
