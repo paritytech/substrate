@@ -18,7 +18,7 @@
 use crate::{mock::*, *};
 use enumflags2::BitFlags;
 
-use frame_support::assert_ok;
+use frame_support::{assert_noop, assert_ok};
 
 fn get_id_from_event() -> Result<<Test as Config>::CollectionId, &'static str> {
 	let last_event = System::events().pop();
@@ -58,29 +58,85 @@ fn collections() -> Vec<(u64, u32)> {
 	r
 }
 
+pub const DEFAULT_SYSTEM_FEATURES: SystemFeatures = SystemFeatures::NoDeposit;
+pub const DEFAULT_USER_FEATURES: UserFeatures = UserFeatures::Administration;
+
+
 #[test]
-fn sanity_test() {
+fn minting_should_work() {
 	new_test_ext().execute_with(|| {
-		let user_features = UserFeatures::Administration;
-		assert_ok!(Uniques::create(Origin::signed(1), user_features, None, None));
+		assert_ok!(Uniques::create(Origin::signed(1), DEFAULT_USER_FEATURES, None, None));
 
 		let id = get_id_from_event().unwrap();
 		let collection_config = CollectionConfigs::<Test>::get(id);
 
-		let expected_config =
-			CollectionConfig { system_features: SystemFeatures::NoDeposit, user_features };
-		assert_eq!(Some(expected_config), collection_config)
+		let expected_config = CollectionConfig {
+			system_features: DEFAULT_SYSTEM_FEATURES,
+			user_features: DEFAULT_USER_FEATURES,
+		};
+		assert_eq!(Some(expected_config), collection_config);
+
+		assert_eq!(events(), [Event::<Test>::CollectionCreated { id, max_supply: None }]);
+		assert_eq!(CountForCollections::<Test>::get(), 1);
+		assert_eq!(collections(), vec![(1, 0)]);
 	});
 }
 
 #[test]
-fn basic_minting_should_work() {
+fn collection_locking_should_work() {
 	new_test_ext().execute_with(|| {
-		let user_features = UserFeatures::Administration | UserFeatures::IsLocked;
+		let user_id = 1;
+
+		assert_ok!(Uniques::create(Origin::signed(user_id), DEFAULT_USER_FEATURES, None, None));
+
+		let id = get_id_from_event().unwrap();
+		let new_config = UserFeatures::IsLocked;
+
+		assert_ok!(Uniques::change_collection_config(Origin::signed(user_id), id, new_config));
+
+		let collection_config = CollectionConfigs::<Test>::get(id);
+
+		let expected_config = CollectionConfig {
+			system_features: DEFAULT_SYSTEM_FEATURES,
+			user_features: new_config,
+		};
+
+		assert_eq!(Some(expected_config), collection_config);
+	});
+}
+
+#[test]
+fn collection_locking_should_fail() {
+	new_test_ext().execute_with(|| {
+		let user_id = 1;
+		let user_features = UserFeatures::IsLocked;
+
+		assert_ok!(Uniques::create(Origin::signed(user_id), user_features, None, None));
+
+		let id = get_id_from_event().unwrap();
+		let new_config = UserFeatures::Administration;
+
+		assert!(events().contains(&Event::<Test>::CollectionLocked { id }));
+
+		assert_noop!(
+			Uniques::change_collection_config(Origin::signed(user_id), id, new_config),
+			Error::<Test>::CollectionIsLocked,
+		);
+	});
+}
+
+#[test]
+fn different_user_flags() {
+	new_test_ext().execute_with(|| {
 		// TODO: try to pass an empty value
 		// TODO: try to pass combined flags
-		assert_ok!(Uniques::create(Origin::signed(1), BitFlags::EMPTY, None, None));
-		assert!(events().contains(&Event::<Test>::CollectionLocked { id: 0 }));
+
+		// TODO: uncomment
+		// let user_features = UserFeatures::Administration | UserFeatures::IsLocked;
+		// assert_ok!(Uniques::create(Origin::signed(1), BitFlags::EMPTY, None, None));
+
+		let user_features = UserFeatures::IsLocked;
+		assert_ok!(Uniques::create(Origin::signed(1), user_features, None, None));
 	});
 }
 
