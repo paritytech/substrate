@@ -82,7 +82,7 @@ where
 				break
 			},
 			Some(Err(why)) => {
-				log::warn!("subscription returned error: {:?}.", why);
+				log::warn!("subscription returned error: {:?}. Probably decoding has failed.", why);
 				continue
 			},
 		};
