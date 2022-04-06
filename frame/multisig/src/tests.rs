@@ -322,7 +322,14 @@ fn timepoint_checking_works() {
 			Error::<Test>::UnexpectedTimepoint,
 		);
 
-		assert_ok!(Multisig::approve_as_multi(Origin::signed(1), 2, vec![2, 3], None, hash, Zero::zero()));
+		assert_ok!(Multisig::approve_as_multi(
+			Origin::signed(1),
+			2,
+			vec![2, 3],
+			None,
+			hash,
+			Zero::zero()
+		));
 
 		assert_noop!(
 			Multisig::as_multi(
@@ -399,7 +406,14 @@ fn multisig_2_of_3_works() {
 		let call_weight = call.get_dispatch_info().weight;
 		let data = call.encode();
 		let hash = blake2_256(&data);
-		assert_ok!(Multisig::approve_as_multi(Origin::signed(1), 2, vec![2, 3], None, hash, Zero::zero()));
+		assert_ok!(Multisig::approve_as_multi(
+			Origin::signed(1),
+			2,
+			vec![2, 3],
+			None,
+			hash,
+			Zero::zero()
+		));
 		assert_eq!(Balances::free_balance(6), 0);
 
 		assert_ok!(Multisig::as_multi(
@@ -825,7 +839,14 @@ fn multisig_1_of_3_works() {
 		let call = call_transfer(6, 15).encode();
 		let hash = blake2_256(&call);
 		assert_noop!(
-			Multisig::approve_as_multi(Origin::signed(1), 1, vec![2, 3], None, hash.clone(), Zero::zero()),
+			Multisig::approve_as_multi(
+				Origin::signed(1),
+				1,
+				vec![2, 3],
+				None,
+				hash.clone(),
+				Zero::zero()
+			),
 			Error::<Test>::MinimumThreshold,
 		);
 		assert_noop!(

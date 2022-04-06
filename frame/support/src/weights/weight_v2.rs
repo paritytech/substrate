@@ -1,5 +1,5 @@
 use codec::{Decode, Encode, MaxEncodedLen};
-use core::ops::{Add, Div, Mul, Sub, AddAssign, SubAssign};
+use core::ops::{Add, AddAssign, Div, Mul, Sub, SubAssign};
 use sp_runtime::{
 	traits::{Bounded, CheckedAdd, One, Zero},
 	RuntimeDebug,
@@ -324,21 +324,21 @@ impl Bounded for WeightV2 {
 }
 
 impl AddAssign for WeightV2 {
-    fn add_assign(&mut self, other: Self) {
-        *self = Self {
-            computation: self.computation + other.computation,
-            bandwidth: self.bandwidth + other.bandwidth,
-        };
-    }
+	fn add_assign(&mut self, other: Self) {
+		*self = Self {
+			computation: self.computation + other.computation,
+			bandwidth: self.bandwidth + other.bandwidth,
+		};
+	}
 }
 
 impl SubAssign for WeightV2 {
-    fn sub_assign(&mut self, other: Self) {
-        *self = Self {
-            computation: self.computation - other.computation,
-            bandwidth: self.bandwidth - other.bandwidth,
-        };
-    }
+	fn sub_assign(&mut self, other: Self) {
+		*self = Self {
+			computation: self.computation - other.computation,
+			bandwidth: self.bandwidth - other.bandwidth,
+		};
+	}
 }
 
 #[cfg(test)]

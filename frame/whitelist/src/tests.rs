@@ -19,8 +19,13 @@
 
 use crate::mock::*;
 use codec::Encode;
-use frame_support::{assert_noop, assert_ok, dispatch::GetDispatchInfo, traits::PreimageProvider, weights::Weight};
-use sp_runtime::{traits::{Hash, Zero}, DispatchError};
+use frame_support::{
+	assert_noop, assert_ok, dispatch::GetDispatchInfo, traits::PreimageProvider, weights::Weight,
+};
+use sp_runtime::{
+	traits::{Hash, Zero},
+	DispatchError,
+};
 
 #[test]
 fn test_whitelist_call_and_remove() {
@@ -94,7 +99,11 @@ fn test_whitelist_call_and_execute() {
 		assert!(Preimage::preimage_requested(&call_hash));
 
 		assert_noop!(
-			Whitelist::dispatch_whitelisted_call(Origin::root(), call_hash, call_weight - Weight::todo_from_v1(1)),
+			Whitelist::dispatch_whitelisted_call(
+				Origin::root(),
+				call_hash,
+				call_weight - Weight::todo_from_v1(1)
+			),
 			crate::Error::<Test>::InvalidCallWeightWitness,
 		);
 

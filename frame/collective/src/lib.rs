@@ -726,7 +726,8 @@ pub mod pallet {
 					Self::do_approve_proposal(seats, yes_votes, proposal_hash, proposal);
 				return Ok((
 					Some({
-						let weight_v1 = T::WeightInfo::close_early_approved(len as u32, seats, proposal_count);
+						let weight_v1 =
+							T::WeightInfo::close_early_approved(len as u32, seats, proposal_count);
 						Weight::todo_from_v1(weight_v1).saturating_add(proposal_weight)
 					}),
 					Pays::Yes,
@@ -771,7 +772,8 @@ pub mod pallet {
 					Self::do_approve_proposal(seats, yes_votes, proposal_hash, proposal);
 				Ok((
 					Some({
-						let weight_v1 = T::WeightInfo::close_approved(len as u32, seats, proposal_count);
+						let weight_v1 =
+							T::WeightInfo::close_approved(len as u32, seats, proposal_count);
 						Weight::todo_from_v1(weight_v1).saturating_add(proposal_weight)
 					}),
 					Pays::Yes,
@@ -844,7 +846,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		ensure!(proposal_len <= length_bound, Error::<T, I>::WrongProposalLength);
 		let proposal = ProposalOf::<T, I>::get(hash).ok_or(Error::<T, I>::ProposalMissing)?;
 		let proposal_weight = proposal.get_dispatch_info().weight;
-		ensure!(proposal_weight.is_strictly_less_than_or_equal(&weight_bound), Error::<T, I>::WrongProposalWeight);
+		ensure!(
+			proposal_weight.is_strictly_less_than_or_equal(&weight_bound),
+			Error::<T, I>::WrongProposalWeight
+		);
 		Ok((proposal, proposal_len as usize))
 	}
 

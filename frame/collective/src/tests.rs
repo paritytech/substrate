@@ -273,7 +273,13 @@ fn proposal_weight_limit_works_on_approve() {
 		// With 1's prime vote, this should pass
 		System::set_block_number(4);
 		assert_noop!(
-			Collective::close(Origin::signed(4), hash, 0, proposal_weight - Weight::todo_from_v1(100), proposal_len),
+			Collective::close(
+				Origin::signed(4),
+				hash,
+				0,
+				proposal_weight - Weight::todo_from_v1(100),
+				proposal_len
+			),
 			Error::<Test, Instance1>::WrongProposalWeight
 		);
 		assert_ok!(Collective::close(Origin::signed(4), hash, 0, proposal_weight, proposal_len));

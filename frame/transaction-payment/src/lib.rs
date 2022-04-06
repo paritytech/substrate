@@ -209,7 +209,8 @@ where
 
 		// defensive only, a test case assures that the maximum weight diff can fit in Multiplier
 		// without any saturation.
-		let diff = Multiplier::saturating_from_rational(diff_abs, normal_max_weight.max(One::one()));
+		let diff =
+			Multiplier::saturating_from_rational(diff_abs, normal_max_weight.max(One::one()));
 		let diff_squared = diff.saturating_mul(diff);
 
 		let v_squared_2 = v.saturating_mul(v) / Multiplier::saturating_from_integer(2);
@@ -364,8 +365,8 @@ pub mod pallet {
 					.expect(
 						"Setting `max_total` for `Normal` dispatch class is not compatible with \
 					`transaction-payment` pallet.",
-					).todo_to_v1()
-					;
+					)
+					.todo_to_v1();
 			// add 1 percent;
 			let addition = target / 100;
 			if addition == 0 {
@@ -530,8 +531,7 @@ where
 			// final adjusted weight fee.
 			let adjusted_weight_fee = multiplier.saturating_mul_int(unadjusted_weight_fee);
 
-			let base_fee =
-				Self::weight_to_fee(T::BlockWeights::get().get(class).base_extrinsic);
+			let base_fee = Self::weight_to_fee(T::BlockWeights::get().get(class).base_extrinsic);
 			FeeDetails {
 				inclusion_fee: Some(InclusionFee {
 					base_fee,
@@ -1229,8 +1229,10 @@ mod tests {
 					inclusion_fee: Some(InclusionFee {
 						base_fee: 5 * 2,
 						len_fee: len as u64,
-						adjusted_weight_fee: info.weight.min(BlockWeights::get().max_block).todo_to_v1() as u64 *
-							2 * 3 / 2
+						adjusted_weight_fee: info
+							.weight
+							.min(BlockWeights::get().max_block)
+							.todo_to_v1() as u64 * 2 * 3 / 2
 					}),
 					tip: 0,
 				},

@@ -140,7 +140,8 @@ mod tests {
 			partial_fee: 1_000_000_u64,
 		};
 
-		let json_str = r#"{"weight":{"computation":5,"bandwidth":0},"class":"normal","partialFee":"1000000"}"#;
+		let json_str =
+			r#"{"weight":{"computation":5,"bandwidth":0},"class":"normal","partialFee":"1000000"}"#;
 
 		assert_eq!(serde_json::to_string(&info).unwrap(), json_str);
 		assert_eq!(serde_json::from_str::<RuntimeDispatchInfo<u64>>(json_str).unwrap(), info);

@@ -1069,7 +1069,11 @@ impl<T: Config> Pallet<T> {
 			Self::deposit_event(Event::ElectionError);
 		});
 
-		Weight::todo_from_v1(T::WeightInfo::election_phragmen(weight_candidates, weight_voters, weight_edges))
+		Weight::todo_from_v1(T::WeightInfo::election_phragmen(
+			weight_candidates,
+			weight_voters,
+			weight_edges,
+		))
 	}
 }
 

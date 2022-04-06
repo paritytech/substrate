@@ -173,12 +173,15 @@ pub mod pallet {
 			.map_err(|_| Error::<T>::UndecodableCall)?;
 
 			ensure!(
-				call.get_dispatch_info().weight.is_strictly_less_than_or_equal(&call_weight_witness),
+				call.get_dispatch_info()
+					.weight
+					.is_strictly_less_than_or_equal(&call_weight_witness),
 				Error::<T>::InvalidCallWeightWitness
 			);
 
-			let actual_weight = Self::clean_and_dispatch(call_hash, call)
-				.map(|w| w.saturating_add(Weight::todo_from_v1(T::WeightInfo::dispatch_whitelisted_call())));
+			let actual_weight = Self::clean_and_dispatch(call_hash, call).map(|w| {
+				w.saturating_add(Weight::todo_from_v1(T::WeightInfo::dispatch_whitelisted_call()))
+			});
 
 			Ok(actual_weight.into())
 		}
@@ -205,7 +208,9 @@ pub mod pallet {
 
 			let call_len = call.encoded_size() as u32;
 			let actual_weight = Self::clean_and_dispatch(call_hash, *call).map(|w| {
-				w.saturating_add(Weight::todo_from_v1(T::WeightInfo::dispatch_whitelisted_call_with_preimage(call_len)))
+				w.saturating_add(Weight::todo_from_v1(
+					T::WeightInfo::dispatch_whitelisted_call_with_preimage(call_len),
+				))
 			});
 
 			Ok(actual_weight.into())
