@@ -716,8 +716,10 @@ where
 /// # Example
 ///
 /// ```
+/// # use frame_support::traits::ConstU128;
+/// # use frame_support::weights::ConstantMultiplier;
 /// // Results in a multiplier of 10 for each unit of weight (or length)
-/// ConstantMultiplier::<u128, ConstU128<10u128>>
+/// type LengthToFee = ConstantMultiplier::<u128, ConstU128<10u128>>;
 /// ```
 pub struct ConstantMultiplier<T, M>(sp_std::marker::PhantomData<(T, M)>);
 
