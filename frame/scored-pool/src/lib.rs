@@ -280,7 +280,7 @@ pub mod pallet {
 				let pool = <Pool<T, I>>::get();
 				<Pallet<T, I>>::refresh_members(pool, ChangeReceiver::MembershipChanged);
 			}
-			0
+			Zero::zero()
 		}
 	}
 
