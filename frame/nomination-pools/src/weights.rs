@@ -44,6 +44,8 @@ use sp_std::marker::PhantomData;
 /// Weight functions needed for pallet_nomination_pools.
 pub trait WeightInfo {
 	fn join() -> Weight;
+	fn bond_extra_transfer() -> Weight;
+	fn bond_extra_reward() -> Weight;
 	fn claim_payout() -> Weight;
 	fn unbond_other() -> Weight;
 	fn pool_withdraw_unbonded(s: u32, ) -> Weight;
@@ -71,6 +73,16 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: BagsList ListBags (r:2 w:2)
 	// Storage: NominationPools CounterForDelegators (r:1 w:1)
 	fn join() -> Weight {
+		(109_762_000 as Weight)
+			.saturating_add(T::DbWeight::get().reads(15 as Weight))
+			.saturating_add(T::DbWeight::get().writes(11 as Weight))
+	}
+	fn bond_extra_transfer() -> Weight {
+		(109_762_000 as Weight)
+			.saturating_add(T::DbWeight::get().reads(15 as Weight))
+			.saturating_add(T::DbWeight::get().writes(11 as Weight))
+	}
+	fn bond_extra_reward() -> Weight {
 		(109_762_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(15 as Weight))
 			.saturating_add(T::DbWeight::get().writes(11 as Weight))
@@ -206,6 +218,16 @@ impl WeightInfo for () {
 	// Storage: BagsList ListBags (r:2 w:2)
 	// Storage: NominationPools CounterForDelegators (r:1 w:1)
 	fn join() -> Weight {
+		(109_762_000 as Weight)
+			.saturating_add(RocksDbWeight::get().reads(15 as Weight))
+			.saturating_add(RocksDbWeight::get().writes(11 as Weight))
+	}
+	fn bond_extra_reward() -> Weight {
+		(109_762_000 as Weight)
+			.saturating_add(RocksDbWeight::get().reads(15 as Weight))
+			.saturating_add(RocksDbWeight::get().writes(11 as Weight))
+	}
+	fn bond_extra_transfer() -> Weight {
 		(109_762_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(15 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(11 as Weight))

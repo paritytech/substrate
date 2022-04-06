@@ -1105,8 +1105,8 @@ pub mod pallet {
 			let mut bonded_pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
 			bonded_pool.ok_to_join()?;
 
-			// don't actually care about writing the reward pool, we just need its total earnings at
-			// this point in time.
+			// We just need its total earnings at this point in time, but we don't need to write it
+			// because we are not adjusting its points (all other values can calculated virtual).
 			let reward_pool = RewardPool::<T>::get_and_update(pool_id)
 				.defensive_ok_or_else(|| Error::<T>::RewardPoolNotFound)?;
 
@@ -1146,7 +1146,10 @@ pub mod pallet {
 		// NOTE: this transaction is implemented with the sole purpose of readability and
 		// correctness, not optimization. We read/write several storage items multiple times instead
 		// of just once, in the spirit reusing code.
-		#[pallet::weight(0)]
+		#[pallet::weight(
+			T::WeightInfo::bond_extra_transfer()
+			.max(T::WeightInfo::bond_extra_reward())
+		)]
 		#[transactional]
 		pub fn bond_extra(origin: OriginFor<T>, extra: BondExtra<BalanceOf<T>>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
