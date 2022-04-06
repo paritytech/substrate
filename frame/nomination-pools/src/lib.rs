@@ -72,7 +72,7 @@
 //!
 //! A pool has 3 administrative roles (see [`PoolRoles`]):
 //!
-//! * Depositor: creates the pool and is the initial delegator. They can only leave pool once all
+//! * Depositor: creates the pool and is the initial delegator. They can only leave the pool once all
 //!   other delegators have left. Once they fully leave the pool is destroyed.
 //! * Nominator: can select which validators the pool nominates.
 //! * State-Toggler: can change the pools state and kick delegators if the pool is blocked.
