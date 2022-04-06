@@ -185,7 +185,7 @@ where
 								let sender = &mut self.telemetry_connection_notifier[index];
 								if let Err(error) = sender.try_send(()) {
 									if !error.is_disconnected() {
-										log::warn!(target: "telemetry", "Failed to send a telemetry connection notification: {}", error);
+										log::debug!(target: "telemetry", "Failed to send a telemetry connection notification: {}", error);
 									} else {
 										self.telemetry_connection_notifier.swap_remove(index);
 										continue
