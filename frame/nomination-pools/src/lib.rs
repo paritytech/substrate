@@ -1215,7 +1215,8 @@ pub mod pallet {
 		/// * The pool is destroying, the delegator is the depositor and no other delegators are in
 		///   the pool.
 		///
-		/// # Conditions for permissioned dispatch (i.e. the caller is also the `delegator_account`):
+		/// # Conditions for permissioned dispatch (i.e. the caller is also the
+		/// `delegator_account`):
 		///
 		/// * The caller is not the depositor.
 		/// * The caller is the depositor, the pool is destroying and no other delegators are in the
@@ -1296,7 +1297,9 @@ pub mod pallet {
 		/// Call `withdraw_unbonded` for the pools account. This call can be made by any account.
 		///
 		/// This is useful if their are too many unlocking chunks to call `unbond_other`, and some
-		/// can be cleared by withdrawing.
+		/// can be cleared by withdrawing. In the case there are too many unlocking chunks, the user
+		/// would probably see an error like `NoMoreChunks` emitted from the staking system when
+		/// they attempt to unbond.
 		#[pallet::weight(T::WeightInfo::pool_withdraw_unbonded(*num_slashing_spans))]
 		#[transactional]
 		pub fn pool_withdraw_unbonded(
