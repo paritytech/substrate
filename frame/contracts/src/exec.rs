@@ -2536,14 +2536,26 @@ mod tests {
 		let success_code = MockLoader::insert(Constructor, |_, _| exec_success());
 		let succ_fail_code = MockLoader::insert(Constructor, move |ctx, _| {
 			ctx.ext
-				.instantiate(Weight::zero(), fail_code, ctx.ext.minimum_balance() * 100, vec![], &[])
+				.instantiate(
+					Weight::zero(),
+					fail_code,
+					ctx.ext.minimum_balance() * 100,
+					vec![],
+					&[],
+				)
 				.ok();
 			exec_success()
 		});
 		let succ_succ_code = MockLoader::insert(Constructor, move |ctx, _| {
 			let (account_id, _) = ctx
 				.ext
-				.instantiate(Weight::zero(), success_code, ctx.ext.minimum_balance() * 100, vec![], &[])
+				.instantiate(
+					Weight::zero(),
+					success_code,
+					ctx.ext.minimum_balance() * 100,
+					vec![],
+					&[],
+				)
 				.unwrap();
 
 			// a plain call should not influence the account counter

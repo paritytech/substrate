@@ -385,7 +385,9 @@ pub mod pallet {
 					output.result = Err(<Error<T>>::ContractReverted.into());
 				}
 			}
-			output.gas_meter.into_dispatch_result(output.result, Weight::todo_from_v1(T::WeightInfo::call()))
+			output
+				.gas_meter
+				.into_dispatch_result(output.result, Weight::todo_from_v1(T::WeightInfo::call()))
 		}
 
 		/// Instantiates a new contract from the supplied `code` optionally transferring

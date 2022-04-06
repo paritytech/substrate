@@ -821,7 +821,9 @@ where
 		let code_hash: CodeHash<<E as Ext>::T> = self.read_sandbox_memory_as(code_hash_ptr)?;
 		let input_data = self.read_sandbox_memory(input_data_ptr, input_data_len)?;
 		let salt = self.read_sandbox_memory(salt_ptr, salt_len)?;
-		let instantiate_outcome = self.ext.instantiate(Weight::todo_from_v1(gas), code_hash, value, input_data, &salt);
+		let instantiate_outcome =
+			self.ext
+				.instantiate(Weight::todo_from_v1(gas), code_hash, value, input_data, &salt);
 		if let Ok((address, output)) = &instantiate_outcome {
 			if !output.flags.contains(ReturnFlags::REVERT) {
 				self.write_sandbox_output(
