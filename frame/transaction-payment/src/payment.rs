@@ -12,7 +12,7 @@ use sp_runtime::{
 use sp_std::{fmt::Debug, marker::PhantomData};
 
 use frame_support::{
-	traits::{Currency, ExistenceRequirement, Get, Imbalance, OnUnbalanced, WithdrawReasons},
+	traits::{Currency, ExistenceRequirement, Imbalance, OnUnbalanced, WithdrawReasons},
 	unsigned::TransactionValidityError,
 };
 
