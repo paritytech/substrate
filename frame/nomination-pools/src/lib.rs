@@ -256,7 +256,7 @@
 //!
 //! Unbonding pools need to be slashed to ensure all nominators whom where in the bonded pool
 //! while it was backing a validator that equivocated are punished. Without these measures a
-//! nominator could unbond right after a validator equivocated with no consequences.
+//! delegator could unbond right after a validator equivocated with no consequences.
 //!
 //! This strategy is unfair to delegators who joined after the slash, because they get slashed as
 //! well, but spares delegators who unbond. The latter is much more important for security: if a
