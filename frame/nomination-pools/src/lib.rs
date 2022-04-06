@@ -405,7 +405,7 @@ pub struct PoolRoles<AccountId> {
 	pub root: AccountId,
 	/// Can select which validators the pool nominates.
 	pub nominator: AccountId,
-	/// can change the pools state and kick delegators if the pool is blocked.
+	/// Can change the pools state and kick delegators if the pool is blocked.
 	pub state_toggler: AccountId,
 }
 
