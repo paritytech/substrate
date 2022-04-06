@@ -263,7 +263,7 @@ pub mod pallet {
 			if !term_duration.is_zero() && (n % term_duration).is_zero() {
 				Self::do_phragmen()
 			} else {
-				0
+				Zero::zero()
 			}
 		}
 	}
@@ -347,7 +347,7 @@ pub mod pallet {
 			T::Currency::set_lock(T::PalletId::get(), &who, locked_stake, WithdrawReasons::all());
 
 			Voting::<T>::insert(&who, Voter { votes, deposit: new_deposit, stake: locked_stake });
-			Ok(None.into())
+			Ok(None::<Weight>.into())
 		}
 
 		/// Remove `origin` as a voter.
@@ -360,7 +360,7 @@ pub mod pallet {
 			let who = ensure_signed(origin)?;
 			ensure!(Self::is_voter(&who), Error::<T>::MustBeVoter);
 			Self::do_remove_voter(&who);
-			Ok(None.into())
+			Ok(None::<Weight>.into())
 		}
 
 		/// Submit oneself for candidacy. A fixed amount of deposit is recorded.
@@ -397,7 +397,7 @@ pub mod pallet {
 				.map_err(|_| Error::<T>::InsufficientCandidateFunds)?;
 
 			<Candidates<T>>::mutate(|c| c.insert(index, (who, T::CandidacyBond::get())));
-			Ok(None.into())
+			Ok(None::<Weight>.into())
 		}
 
 		/// Renounce one's intention to be a candidate for the next election round. 3 potential
@@ -462,7 +462,7 @@ pub mod pallet {
 					})?;
 				},
 			};
-			Ok(None.into())
+			Ok(None::<Weight>.into())
 		}
 
 		/// Remove a particular member from the set. This is effective immediately and the bond of
@@ -497,7 +497,7 @@ pub mod pallet {
 				// In both cases, we will change more weight than need. Refund and abort.
 				return Err(Error::<T>::InvalidReplacement.with_weight(
 					// refund. The weight value comes from a benchmark which is special to this.
-					T::WeightInfo::remove_member_wrong_refund(),
+					Weight::todo_from_v1(T::WeightInfo::remove_member_wrong_refund()),
 				))
 			}
 
@@ -510,7 +510,7 @@ pub mod pallet {
 			}
 
 			// no refund needed.
-			Ok(None.into())
+			Ok(None::<Weight>.into())
 		}
 
 		/// Clean all voters who are defunct (i.e. they do not serve any purpose at all). The
@@ -534,7 +534,7 @@ pub mod pallet {
 				.filter(|(_, x)| Self::is_defunct_voter(&x.votes))
 				.for_each(|(dv, _)| Self::do_remove_voter(&dv));
 
-			Ok(None.into())
+			Ok(None::<Weight>.into())
 		}
 	}
 
@@ -896,7 +896,7 @@ impl<T: Config> Pallet<T> {
 
 		if candidates_and_deposit.len().is_zero() {
 			Self::deposit_event(Event::EmptyTerm);
-			return T::DbWeight::get().reads(5)
+			return Weight::todo_from_v1(T::DbWeight::get().reads(5))
 		}
 
 		// All of the new winners that come out of phragmen will thus have a deposit recorded.
@@ -1069,7 +1069,7 @@ impl<T: Config> Pallet<T> {
 			Self::deposit_event(Event::ElectionError);
 		});
 
-		T::WeightInfo::election_phragmen(weight_candidates, weight_voters, weight_edges)
+		Weight::todo_from_v1(T::WeightInfo::election_phragmen(weight_candidates, weight_voters, weight_edges))
 	}
 }
 
