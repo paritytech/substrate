@@ -24,6 +24,7 @@ use sp_core::{
 	offchain::{testing::TestOffchainExt, OffchainDbExt, OffchainWorkerExt},
 	H256,
 };
+use sp_runtime::traits::Zero;
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	frame_system::GenesisConfig::default().build_storage::<Test>().unwrap().into()
@@ -35,7 +36,7 @@ fn register_offchain_ext(ext: &mut sp_io::TestExternalities) {
 	ext.register_extension(OffchainWorkerExt::new(offchain));
 }
 
-fn new_block() -> u64 {
+fn new_block() -> Weight {
 	let number = frame_system::Pallet::<Test>::block_number() + 1;
 	let hash = H256::repeat_byte(number as u8);
 	LEAF_DATA.with(|r| r.borrow_mut().a = number);
@@ -107,7 +108,7 @@ fn should_start_empty() {
 			crate::RootHash::<Test>::get(),
 			hex("4320435e8c3318562dba60116bdbcc0b82ffcecb9bb39aae3300cfda3ad0b8b0")
 		);
-		assert!(weight != 0);
+		assert!(!weight.is_zero());
 	});
 }
 

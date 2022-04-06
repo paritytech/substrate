@@ -73,7 +73,7 @@ pub use pallet::*;
 pub use pallet_mmr_primitives::{self as primitives, NodeIndex};
 
 pub trait WeightInfo {
-	fn on_initialize(peaks: NodeIndex) -> Weight;
+	fn on_initialize(peaks: NodeIndex) -> frame_support::weights::WeightV1;
 }
 
 #[frame_support::pallet]
@@ -191,7 +191,7 @@ pub mod pallet {
 			<RootHash<T, I>>::put(root);
 
 			let peaks_after = mmr::utils::NodesUtils::new(leaves).number_of_peaks();
-			T::WeightInfo::on_initialize(peaks_before.max(peaks_after))
+			Weight::todo_from_v1(T::WeightInfo::on_initialize(peaks_before.max(peaks_after)))
 		}
 	}
 }
