@@ -302,6 +302,9 @@ fn start_rpc_servers<R>(
 where
 	R: Fn(sc_rpc::DenyUnsafe) -> Result<RpcModule<()>, Error>,
 {
+	let (max_request_size, ws_max_response_size, http_max_response_size) =
+		legacy_cli_parsing(config);
+
 	fn deny_unsafe(addr: SocketAddr, methods: &RpcMethods) -> sc_rpc::DenyUnsafe {
 		let is_exposed_addr = !addr.ip().is_loopback();
 		match (is_exposed_addr, methods) {
@@ -329,8 +332,8 @@ where
 	let http = sc_rpc_server::start_http(
 		&[http_addr, http_addr2],
 		config.rpc_cors.as_ref(),
-		config.rpc_max_payload,
-		None,
+		max_request_size,
+		http_max_response_size,
 		metrics.clone(),
 		gen_rpc_module(deny_unsafe(ws_addr, &config.rpc_methods))?,
 		config.tokio_handle.clone(),
@@ -341,8 +344,8 @@ where
 		&[ws_addr, ws_addr2],
 		config.rpc_ws_max_connections,
 		config.rpc_cors.as_ref(),
-		config.rpc_max_payload,
-		config.ws_max_out_buffer_capacity,
+		max_request_size,
+		ws_max_response_size,
 		metrics,
 		gen_rpc_module(deny_unsafe(http_addr, &config.rpc_methods))?,
 		config.tokio_handle.clone(),
@@ -399,7 +402,7 @@ where
 	fn import(&self, transaction: B::Extrinsic) -> TransactionImportFuture {
 		if !self.imports_external_transactions {
 			debug!("Transaction rejected");
-			return Box::pin(futures::future::ready(TransactionImport::None))
+			return Box::pin(futures::future::ready(TransactionImport::None));
 		}
 
 		let encoded = transaction.encode();
@@ -407,7 +410,7 @@ where
 			Ok(uxt) => uxt,
 			Err(e) => {
 				debug!("Transaction invalid: {:?}", e);
-				return Box::pin(futures::future::ready(TransactionImport::Bad))
+				return Box::pin(futures::future::ready(TransactionImport::Bad));
 			},
 		};
 
@@ -422,8 +425,9 @@ where
 			match import_future.await {
 				Ok(_) => TransactionImport::NewGood,
 				Err(e) => match e.into_pool_error() {
-					Ok(sc_transaction_pool_api::error::Error::AlreadyImported(_)) =>
-						TransactionImport::KnownGood,
+					Ok(sc_transaction_pool_api::error::Error::AlreadyImported(_)) => {
+						TransactionImport::KnownGood
+					},
 					Ok(e) => {
 						debug!("Error adding transaction to the pool: {:?}", e);
 						TransactionImport::Bad
@@ -449,6 +453,44 @@ where
 			|tx| if tx.is_propagable() { Some(tx.data().clone()) } else { None },
 		)
 	}
+}
+
+fn legacy_cli_parsing(config: &Configuration) -> (Option<usize>, Option<usize>, Option<usize>) {
+	let ws_max_response_size = config.ws_max_out_buffer_capacity.map(|max| {
+		eprintln!("DEPRECATED: `--ws_max_out_buffer_capacity` has been removed use `rpc-max-response-size or rpc-max-request-size` instead");
+		eprintln!("Setting WS `rpc-max-response-size` to `max(ws_max_out_buffer_capacity, rpc_max_response_size)`");
+		std::cmp::max(max, config.rpc_max_response_size.unwrap_or(0))
+	});
+
+	let max_request_size = match (config.rpc_max_payload, config.rpc_max_request_size) {
+		(Some(legacy_max), max) => {
+			eprintln!("DEPRECATED: `--rpc_max_payload` has been removed use `rpc-max-response-size or rpc-max-request-size` instead");
+			eprintln!(
+				"Setting `rpc-max-response-size` to `max(rpc_max_payload, rpc_max_request_size)`"
+			);
+			Some(std::cmp::max(legacy_max, max.unwrap_or(0)))
+		},
+		(None, Some(max)) => Some(max),
+		(None, None) => None,
+	};
+
+	let http_max_response_size = match (config.rpc_max_payload, config.rpc_max_request_size) {
+		(Some(legacy_max), max) => {
+			eprintln!("DEPRECATED: `--rpc_max_payload` has been removed use `rpc-max-response-size or rpc-max-request-size` instead");
+			eprintln!(
+				"Setting HTTP `rpc-max-response-size` to `max(rpc_max_payload, rpc_max_response_size)`"
+			);
+			Some(std::cmp::max(legacy_max, max.unwrap_or(0)))
+		},
+		(None, Some(max)) => Some(max),
+		(None, None) => None,
+	};
+
+	if config.rpc_ipc.is_some() {
+		eprintln!("DEPRECATED: `--ipc-path` has no effect anymore IPC support has been removed");
+	}
+
+	(max_request_size, ws_max_response_size, http_max_response_size)
 }
 
 #[cfg(test)]

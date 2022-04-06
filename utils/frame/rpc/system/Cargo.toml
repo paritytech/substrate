@@ -17,7 +17,7 @@ serde_json = "1"
 sc-client-api = { version = "4.0.0-dev", path = "../../../../client/api" }
 codec = { package = "parity-scale-codec", version = "3.0.0" }
 futures = "0.3.19"
-jsonrpsee = { version = "0.10", features = ["server"] }
+jsonrpsee = { version = "0.10.1", features = ["server"] }
 log = "0.4.8"
 sp-runtime = { version = "6.0.0", path = "../../../../primitives/runtime" }
 sp-api = { version = "4.0.0-dev", path = "../../../../primitives/api" }
