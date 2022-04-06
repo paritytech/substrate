@@ -222,7 +222,7 @@ where
 	}
 
 	/// Revert to a specified block given its `hash` and `number`.
-	/// This removes all the authority set changes that where announced after
+	/// This removes all the authority set changes that were announced after
 	/// the revert point.
 	/// Revert point is identified by `number` and `hash`.
 	pub(crate) fn revert<F, E>(&mut self, hash: H, number: N, is_descendent_of: &F)
