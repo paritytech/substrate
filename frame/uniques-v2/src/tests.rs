@@ -16,6 +16,7 @@
 // limitations under the License.
 
 use crate::{mock::*, *};
+use enumflags2::BitFlags;
 
 use frame_support::assert_ok;
 
@@ -36,6 +37,27 @@ fn get_id_from_event() -> Result<<Test as Config>::CollectionId, &'static str> {
 	Err("bad event")
 }
 
+fn events() -> Vec<Event<Test>> {
+	let result = System::events()
+		.into_iter()
+		.map(|r| r.event)
+		.filter_map(|e| if let mock::Event::Uniques(inner) = e { Some(inner) } else { None })
+		.collect::<Vec<_>>();
+
+	System::reset_events();
+
+	result
+}
+
+fn collections() -> Vec<(u64, u32)> {
+	let mut r: Vec<_> = CollectionOwner::<Test>::iter().map(|x| (x.0, x.1)).collect();
+	r.sort();
+	let mut s: Vec<_> = Collections::<Test>::iter().map(|x| (x.1.owner, x.0)).collect();
+	s.sort();
+	assert_eq!(r, s);
+	r
+}
+
 #[test]
 fn sanity_test() {
 	new_test_ext().execute_with(|| {
@@ -50,3 +72,15 @@ fn sanity_test() {
 		assert_eq!(Some(expected_config), collection_config)
 	});
 }
+
+#[test]
+fn basic_minting_should_work() {
+	new_test_ext().execute_with(|| {
+		let user_features = UserFeatures::Administration | UserFeatures::IsLocked;
+		// TODO: try to pass an empty value
+		// TODO: try to pass combined flags
+		assert_ok!(Uniques::create(Origin::signed(1), BitFlags::EMPTY, None, None));
+		assert!(events().contains(&Event::<Test>::CollectionLocked { id: 0 }));
+	});
+}
+
