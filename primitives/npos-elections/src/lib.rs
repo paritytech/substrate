@@ -322,7 +322,7 @@ impl<AccountId: IdentifierT> Voter<AccountId> {
 	///
 	/// Note that this might create _un-normalized_ assignments, due to accuracy loss of `P`. Call
 	/// site might compensate by calling `normalize()` on the returned `Assignment` as a
-	/// post-precessing.
+	/// post-processing.
 	pub fn into_assignment<P: PerThing>(self) -> Option<Assignment<AccountId, P>> {
 		let who = self.who;
 		let budget = self.budget;
@@ -342,6 +342,33 @@ impl<AccountId: IdentifierT> Voter<AccountId> {
 
 		if distribution.len() > 0 {
 			Some(Assignment { who, distribution })
+		} else {
+			None
+		}
+	}
+
+	/// Returns none if this voter does not have any non-zero distributions.
+	///
+	/// Note that this might create _un-normalized_ assignments, due to accuracy loss of `P`. Call
+	/// site might compensate by calling `normalize()` on the returned `StakedAssignment` as a
+	/// post-processing.
+	pub fn into_staked_assignment(self) -> Option<StakedAssignment<AccountId>> {
+		let who = self.who;
+		let distribution = self
+			.edges
+			.into_iter()
+			.filter_map(|e| {
+				// trim zero edges.
+				if e.weight.is_zero() {
+					None
+				} else {
+					Some((e.who, e.weight))
+				}
+			})
+			.collect::<Vec<_>>();
+
+		if distribution.len() > 0 {
+			Some(StakedAssignment { who, distribution })
 		} else {
 			None
 		}

@@ -66,19 +66,7 @@ pub fn phragmms<AccountId: IdentifierT, P: PerThing128>(
 		}
 	}
 
-	let mut assignments =
-		voters.into_iter().filter_map(|v| v.into_assignment()).collect::<Vec<_>>();
-	let _ = assignments
-		.iter_mut()
-		.map(|a| a.try_normalize())
-		.collect::<Result<(), _>>()
-		.map_err(|e| crate::Error::ArithmeticError(e))?;
-	let winners = winners
-		.into_iter()
-		.map(|w_ptr| (w_ptr.borrow().who.clone(), w_ptr.borrow().backed_stake))
-		.collect();
-
-	Ok(ElectionResult { winners, assignments })
+	crate::voter_candidate_to_election_result(voters, winners)
 }
 
 /// Find the candidate that can yield the maximum score for this round.
