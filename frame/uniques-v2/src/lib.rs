@@ -431,21 +431,6 @@ pub mod pallet {
 			Ok(())
 		}
 
-		// PHASE 1:
-		// finished
-
-		// PHASE 2:
-		// +put an item up for sale
-		// +buy an item
-		// royalties
-		// minter's fee
-
-		// PHASE 3:
-		// minting options
-		// nested ownership
-		// approvals
-		// affiliate
-
 		#[pallet::weight(0)]
 		pub fn set_admin(
 			origin: OriginFor<T>,
