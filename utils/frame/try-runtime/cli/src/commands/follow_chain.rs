@@ -20,7 +20,7 @@ use crate::{
 	state_machine_call_with_proof, SharedParams, LOG_TARGET,
 };
 use jsonrpsee::{
-	core::client::{SubscriptionClientT, Subscription},
+	core::client::{Subscription, SubscriptionClientT},
 	ws_client::WsClientBuilder,
 };
 use parity_scale_codec::Decode;
