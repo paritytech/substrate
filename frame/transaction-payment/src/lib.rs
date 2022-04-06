@@ -209,7 +209,7 @@ where
 
 		// defensive only, a test case assures that the maximum weight diff can fit in Multiplier
 		// without any saturation.
-		let diff = Multiplier::saturating_from_rational(diff_abs, normal_max_weight.max(1));
+		let diff = Multiplier::saturating_from_rational(diff_abs, normal_max_weight.max(One::one()));
 		let diff_squared = diff.saturating_mul(diff);
 
 		let v_squared_2 = v.saturating_mul(v) / Multiplier::saturating_from_integer(2);
@@ -352,7 +352,7 @@ pub mod pallet {
 			assert!(
 				<Multiplier as sp_runtime::traits::Bounded>::max_value() >=
 					Multiplier::checked_from_integer(
-						T::BlockWeights::get().max_block.computation.try_into().unwrap()
+						T::BlockWeights::get().max_block.todo_to_v1().try_into().unwrap()
 					)
 					.unwrap(),
 			);
@@ -364,8 +364,8 @@ pub mod pallet {
 					.expect(
 						"Setting `max_total` for `Normal` dispatch class is not compatible with \
 					`transaction-payment` pallet.",
-					)
-					.computation;
+					).todo_to_v1()
+					;
 			// add 1 percent;
 			let addition = target / 100;
 			if addition == 0 {
@@ -432,7 +432,7 @@ where
 		let DispatchInfo { weight, class, .. } = dispatch_info;
 
 		// TODO SHAWN: Only uses computation weight
-		RuntimeDispatchInfo { weight: weight.computation, class, partial_fee }
+		RuntimeDispatchInfo { weight, class, partial_fee }
 	}
 
 	/// Query the detailed fee of a given `call`.
@@ -472,7 +472,7 @@ where
 	where
 		T::Call: Dispatchable<Info = DispatchInfo>,
 	{
-		Self::compute_fee_raw(len, info.weight.computation, tip, info.pays_fee, info.class)
+		Self::compute_fee_raw(len, info.weight, tip, info.pays_fee, info.class)
 	}
 
 	/// Compute the actual post dispatch fee for a particular transaction.
@@ -503,7 +503,7 @@ where
 	{
 		Self::compute_fee_raw(
 			len,
-			post_info.calc_actual_weight(info).computation,
+			post_info.calc_actual_weight(info),
 			tip,
 			post_info.pays_fee(info),
 			info.class,
@@ -531,7 +531,7 @@ where
 			let adjusted_weight_fee = multiplier.saturating_mul_int(unadjusted_weight_fee);
 
 			let base_fee =
-				Self::weight_to_fee(T::BlockWeights::get().get(class).base_extrinsic.computation);
+				Self::weight_to_fee(T::BlockWeights::get().get(class).base_extrinsic);
 			FeeDetails {
 				inclusion_fee: Some(InclusionFee {
 					base_fee,
@@ -548,8 +548,8 @@ where
 	fn weight_to_fee(weight: Weight) -> BalanceOf<T> {
 		// cap the weight to the maximum defined in runtime, otherwise it will be the
 		// `Bounded` maximum of its data type, which is not desired.
-		let capped_weight = weight.min(T::BlockWeights::get().max_block.computation);
-		T::WeightToFee::calc(&capped_weight)
+		let capped_weight = weight.min(T::BlockWeights::get().max_block);
+		T::WeightToFee::calc(&capped_weight.todo_to_v1())
 	}
 }
 
@@ -640,11 +640,14 @@ where
 	) -> TransactionPriority {
 		// Calculate how many such extrinsics we could fit into an empty block and take
 		// the limitting factor.
-		let max_block_weight = T::BlockWeights::get().max_block.computation;
+		let max_block_weight = T::BlockWeights::get().max_block;
 		let max_block_length = *T::BlockLength::get().max.get(info.class) as u64;
 
-		let bounded_weight = info.weight.computation.max(One::one()).min(max_block_weight);
+		let bounded_weight = info.weight.max(One::one()).min(max_block_weight);
 		let bounded_length = (len as u64).max(One::one()).min(max_block_length);
+
+		let bounded_weight = bounded_weight.todo_to_v1();
+		let max_block_weight = max_block_weight.todo_to_v1();
 
 		let max_tx_per_block_weight = max_block_weight / bounded_weight;
 		let max_tx_per_block_length = max_block_length / bounded_length;
@@ -1105,7 +1108,7 @@ mod tests {
 			assert_eq!(
 				Balances::free_balance(&1),
 				(10000 -
-					<Runtime as frame_system::Config>::BlockWeights::get().max_block.computation)
+					<Runtime as frame_system::Config>::BlockWeights::get().max_block.todo_to_v1())
 					as u64
 			);
 		});
@@ -1203,18 +1206,18 @@ mod tests {
 			assert_eq!(
 				TransactionPayment::query_info(xt.clone(), len),
 				RuntimeDispatchInfo {
-					weight: info.weight.computation,
+					weight: info.weight,
 					class: info.class,
 					partial_fee: 5 * 2 /* base * weight_fee */
 						+ len as u64  /* len * 1 */
-						+ info.weight.computation.min(BlockWeights::get().max_block.computation) as u64 * 2 * 3 / 2 /* weight */
+						+ info.weight.min(BlockWeights::get().max_block).todo_to_v1() as u64 * 2 * 3 / 2 /* weight */
 				},
 			);
 
 			assert_eq!(
 				TransactionPayment::query_info(unsigned_xt.clone(), len),
 				RuntimeDispatchInfo {
-					weight: unsigned_xt_info.weight.computation,
+					weight: unsigned_xt_info.weight,
 					class: unsigned_xt_info.class,
 					partial_fee: 0,
 				},
@@ -1226,7 +1229,7 @@ mod tests {
 					inclusion_fee: Some(InclusionFee {
 						base_fee: 5 * 2,
 						len_fee: len as u64,
-						adjusted_weight_fee: info.weight.computation.min(BlockWeights::get().max_block.computation) as u64 *
+						adjusted_weight_fee: info.weight.min(BlockWeights::get().max_block).todo_to_v1() as u64 *
 							2 * 3 / 2
 					}),
 					tip: 0,

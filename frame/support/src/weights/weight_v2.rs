@@ -10,6 +10,7 @@ use super::*;
 #[derive(
 	Encode, Decode, MaxEncodedLen, TypeInfo, Eq, PartialEq, Copy, Clone, RuntimeDebug, Default,
 )]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct WeightV2 {
 	/// The weight of computational time used.
 	pub computation: ComputationWeight,
@@ -26,6 +27,14 @@ impl WeightV2 {
 		Self {
 			computation: self.computation.min(other.computation),
 			bandwidth: self.bandwidth.min(other.bandwidth),
+		}
+	}
+
+	/// Get the aggressive max of `self` and `other` weight.
+	pub fn max(&self, other: Self) -> Self {
+		Self {
+			computation: self.computation.max(other.computation),
+			bandwidth: self.bandwidth.max(other.bandwidth),
 		}
 	}
 
@@ -47,6 +56,12 @@ impl WeightV2 {
 	/// removed in the future.
 	pub const fn todo_from_v1(computation: WeightV1) -> Self {
 		Self { computation, bandwidth: 0 }
+	}
+
+	/// This is a simple helper function which allows us to be backwards compatible, but will be
+	/// removed in the future.
+	pub const fn todo_to_v1(&self) -> WeightV1 {
+		self.computation
 	}
 
 	/// Checks if any param of `self` is less than `other`.
