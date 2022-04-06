@@ -65,7 +65,7 @@ use frame_support::{
 };
 use sp_core::TypeId;
 use sp_io::hashing::blake2_256;
-use sp_runtime::traits::{Dispatchable, Saturating, TrailingZeroInput, Zero};
+use sp_runtime::traits::{Dispatchable, TrailingZeroInput, Zero};
 use sp_std::prelude::*;
 pub use weights::WeightInfo;
 

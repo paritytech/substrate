@@ -28,7 +28,7 @@ pub fn migrate<T: Config>(to_migrate: Vec<T::AccountId>) -> Weight {
 		}
 	}
 
-	weight
+	Weight::todo_from_v1(weight)
 }
 
 /// Given the list of voters to migrate return a function that does some checks and information

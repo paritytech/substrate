@@ -109,7 +109,7 @@ pub fn apply<T: V2ToV3>(old_voter_bond: T::Balance, old_candidacy_bond: T::Balan
 			"Attempted to apply migration to V3 but failed because storage version is {:?}",
 			storage_version,
 		);
-		0
+		Weight::zero()
 	}
 }
 

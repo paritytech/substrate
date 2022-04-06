@@ -147,9 +147,10 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::weight(
-			T::WeightInfo::dispatch_whitelisted_call().saturating_add(*call_weight_witness)
-		)]
+		#[pallet::weight({
+			let benchmarked_weight = Weight::todo_from_v1(T::WeightInfo::dispatch_whitelisted_call());
+			benchmarked_weight.saturating_add(*call_weight_witness)
+		})]
 		pub fn dispatch_whitelisted_call(
 			origin: OriginFor<T>,
 			call_hash: T::Hash,
@@ -172,12 +173,12 @@ pub mod pallet {
 			.map_err(|_| Error::<T>::UndecodableCall)?;
 
 			ensure!(
-				call.get_dispatch_info().weight <= call_weight_witness,
+				call.get_dispatch_info().weight.is_strictly_less_than_or_equal(&call_weight_witness),
 				Error::<T>::InvalidCallWeightWitness
 			);
 
 			let actual_weight = Self::clean_and_dispatch(call_hash, call)
-				.map(|w| w.saturating_add(T::WeightInfo::dispatch_whitelisted_call()));
+				.map(|w| w.saturating_add(Weight::todo_from_v1(T::WeightInfo::dispatch_whitelisted_call())));
 
 			Ok(actual_weight.into())
 		}
@@ -186,8 +187,8 @@ pub mod pallet {
 			let call_weight = call.get_dispatch_info().weight;
 			let call_len = call.encoded_size() as u32;
 
-			T::WeightInfo::dispatch_whitelisted_call_with_preimage(call_len)
-				.saturating_add(call_weight)
+			let benchmarked_weight = Weight::todo_from_v1(T::WeightInfo::dispatch_whitelisted_call_with_preimage(call_len));
+			benchmarked_weight.saturating_add(call_weight)
 		})]
 		pub fn dispatch_whitelisted_call_with_preimage(
 			origin: OriginFor<T>,
@@ -204,7 +205,7 @@ pub mod pallet {
 
 			let call_len = call.encoded_size() as u32;
 			let actual_weight = Self::clean_and_dispatch(call_hash, *call).map(|w| {
-				w.saturating_add(T::WeightInfo::dispatch_whitelisted_call_with_preimage(call_len))
+				w.saturating_add(Weight::todo_from_v1(T::WeightInfo::dispatch_whitelisted_call_with_preimage(call_len)))
 			});
 
 			Ok(actual_weight.into())
