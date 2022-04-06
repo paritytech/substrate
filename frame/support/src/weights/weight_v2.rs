@@ -1,7 +1,7 @@
 use codec::{Decode, Encode, MaxEncodedLen};
 use core::ops::{Add, AddAssign, Div, Mul, Sub, SubAssign};
 use sp_runtime::{
-	traits::{Bounded, CheckedAdd, One, Zero},
+	traits::{Bounded, CheckedAdd, CheckedSub, One, Zero},
 	RuntimeDebug,
 };
 
@@ -96,6 +96,18 @@ impl WeightV2 {
 
 	pub fn saturating_add(self, rhs: Self) -> Self {
 		<Self as Saturating>::saturating_add(self, rhs)
+	}
+
+	pub fn checked_mul(self, rhs: u64) -> Option<Self> {
+		let computation = self.computation.checked_mul(rhs)?;
+		let bandwidth = self.bandwidth.checked_mul(rhs)?;
+		Some(Self { computation, bandwidth })
+	}
+
+	pub fn checked_div(self, rhs: u64) -> Option<Self> {
+		let computation = self.computation.checked_div(rhs)?;
+		let bandwidth = self.bandwidth.checked_div(rhs)?;
+		Some(Self { computation, bandwidth })
 	}
 }
 
@@ -219,6 +231,14 @@ impl CheckedAdd for WeightV2 {
 	fn checked_add(&self, rhs: &Self) -> Option<Self> {
 		let computation = self.computation.checked_add(rhs.computation)?;
 		let bandwidth = self.bandwidth.checked_add(rhs.bandwidth)?;
+		Some(Self { computation, bandwidth })
+	}
+}
+
+impl CheckedSub for WeightV2 {
+	fn checked_sub(&self, rhs: &Self) -> Option<Self> {
+		let computation = self.computation.checked_sub(rhs.computation)?;
+		let bandwidth = self.bandwidth.checked_sub(rhs.bandwidth)?;
 		Some(Self { computation, bandwidth })
 	}
 }

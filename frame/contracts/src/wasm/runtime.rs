@@ -234,7 +234,7 @@ impl RuntimeCosts {
 		T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
 	{
 		use self::RuntimeCosts::*;
-		let weight = match *self {
+		let weight_v1 = match *self {
 			MeteringBlock(amount) => s.gas.saturating_add(amount.into()),
 			CopyFromContract(len) => s.return_per_byte.saturating_mul(len.into()),
 			CopyToContract(len) => s.input_per_byte.saturating_mul(len.into()),
@@ -306,10 +306,12 @@ impl RuntimeCosts {
 			ChainExtension(amount) => amount,
 
 			#[cfg(feature = "unstable-interface")]
-			CallRuntime(weight) => weight,
+			CallRuntime(weight) => weight.todo_to_v1(),
 			#[cfg(feature = "unstable-interface")]
 			SetCodeHash => s.set_code_hash,
 		};
+
+		let weight = Weight::todo_from_v1(weight_v1);
 		RuntimeToken {
 			#[cfg(test)]
 			_created_from: *self,
@@ -762,7 +764,7 @@ where
 					self.charge_gas(RuntimeCosts::CallSurchargeTransfer)?;
 				}
 				self.ext.call(
-					gas,
+					Weight::todo_from_v1(gas),
 					callee,
 					value,
 					input_data,
@@ -819,7 +821,7 @@ where
 		let code_hash: CodeHash<<E as Ext>::T> = self.read_sandbox_memory_as(code_hash_ptr)?;
 		let input_data = self.read_sandbox_memory(input_data_ptr, input_data_len)?;
 		let salt = self.read_sandbox_memory(salt_ptr, salt_len)?;
-		let instantiate_outcome = self.ext.instantiate(gas, code_hash, value, input_data, &salt);
+		let instantiate_outcome = self.ext.instantiate(Weight::todo_from_v1(gas), code_hash, value, input_data, &salt);
 		if let Ok((address, output)) = &instantiate_outcome {
 			if !output.flags.contains(ReturnFlags::REVERT) {
 				self.write_sandbox_output(
@@ -1462,6 +1464,7 @@ define_env!(Env, <E: Ext>,
 	// gas can be smaller than one.
 	[seal0] seal_weight_to_fee(ctx, gas: u64, out_ptr: u32, out_len_ptr: u32) => {
 		ctx.charge_gas(RuntimeCosts::WeightToFee)?;
+		let gas = Weight::todo_from_v1(gas);
 		Ok(ctx.write_sandbox_output(
 			out_ptr, out_len_ptr, &ctx.ext.get_weight_price(gas).encode(), false, already_charged
 		)?)

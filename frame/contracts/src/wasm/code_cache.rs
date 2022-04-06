@@ -215,10 +215,12 @@ impl<T: Config> Token<T> for CodeToken {
 		// contract code. This is why we substract `T::*::(0)`. We need to do this at this
 		// point because when charging the general weight for calling the contract we not know the
 		// size of the contract.
-		match *self {
+		let weight_v1 = match *self {
 			Reinstrument(len) => T::WeightInfo::reinstrument(len),
 			Load(len) => T::WeightInfo::call_with_code_per_byte(len)
 				.saturating_sub(T::WeightInfo::call_with_code_per_byte(0)),
-		}
+		};
+
+		Weight::todo_from_v1(weight_v1)
 	}
 }

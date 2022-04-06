@@ -327,8 +327,10 @@ pub mod pallet {
 				.max_block
 				.saturating_sub(System::<T>::block_weight().total())
 				.min(T::DeletionWeightLimit::get());
-			Storage::<T>::process_deletion_queue_batch(weight_limit)
-				.saturating_add(T::WeightInfo::on_initialize())
+			let weight_v1 = Storage::<T>::process_deletion_queue_batch(weight_limit.todo_to_v1())
+				.saturating_add(T::WeightInfo::on_initialize());
+
+			Weight::todo_from_v1(weight_v1)
 		}
 	}
 
@@ -355,12 +357,15 @@ pub mod pallet {
 		/// * If the account is a regular account, any value will be transferred.
 		/// * If no account exists and the call value is not less than `existential_deposit`,
 		/// a regular account will be created and any value will be transferred.
-		#[pallet::weight(T::WeightInfo::call().saturating_add(*gas_limit))]
+		#[pallet::weight({
+			let weight_v1 = T::WeightInfo::call();
+			Weight::todo_from_v1(weight_v1).saturating_add(*gas_limit)
+		})]
 		pub fn call(
 			origin: OriginFor<T>,
 			dest: <T::Lookup as StaticLookup>::Source,
 			#[pallet::compact] value: BalanceOf<T>,
-			#[pallet::compact] gas_limit: Weight,
+			gas_limit: Weight,
 			storage_deposit_limit: Option<<BalanceOf<T> as codec::HasCompact>::Type>,
 			data: Vec<u8>,
 		) -> DispatchResultWithPostInfo {
@@ -380,7 +385,7 @@ pub mod pallet {
 					output.result = Err(<Error<T>>::ContractReverted.into());
 				}
 			}
-			output.gas_meter.into_dispatch_result(output.result, T::WeightInfo::call())
+			output.gas_meter.into_dispatch_result(output.result, Weight::todo_from_v1(T::WeightInfo::call()))
 		}
 
 		/// Instantiates a new contract from the supplied `code` optionally transferring
@@ -409,14 +414,14 @@ pub mod pallet {
 		/// - The smart-contract account is created at the computed address.
 		/// - The `value` is transferred to the new account.
 		/// - The `deploy` function is executed in the context of the newly-created account.
-		#[pallet::weight(
-			T::WeightInfo::instantiate_with_code(code.len() as u32, salt.len() as u32)
-			.saturating_add(*gas_limit)
-		)]
+		#[pallet::weight({
+			let weight_v1 = T::WeightInfo::instantiate_with_code(code.len() as u32, salt.len() as u32);
+			Weight::todo_from_v1(weight_v1).saturating_add(*gas_limit)
+		})]
 		pub fn instantiate_with_code(
 			origin: OriginFor<T>,
 			#[pallet::compact] value: BalanceOf<T>,
-			#[pallet::compact] gas_limit: Weight,
+			gas_limit: Weight,
 			storage_deposit_limit: Option<<BalanceOf<T> as codec::HasCompact>::Type>,
 			code: Vec<u8>,
 			data: Vec<u8>,
@@ -442,7 +447,7 @@ pub mod pallet {
 			}
 			output.gas_meter.into_dispatch_result(
 				output.result.map(|(_address, result)| result),
-				T::WeightInfo::instantiate_with_code(code_len, salt_len),
+				Weight::todo_from_v1(T::WeightInfo::instantiate_with_code(code_len, salt_len)),
 			)
 		}
 
@@ -451,13 +456,14 @@ pub mod pallet {
 		/// This function is identical to [`Self::instantiate_with_code`] but without the
 		/// code deployment step. Instead, the `code_hash` of an on-chain deployed wasm binary
 		/// must be supplied.
-		#[pallet::weight(
-			T::WeightInfo::instantiate(salt.len() as u32).saturating_add(*gas_limit)
-		)]
+		#[pallet::weight({
+			let weight_v1 = T::WeightInfo::instantiate(salt.len() as u32);
+			Weight::todo_from_v1(weight_v1).saturating_add(*gas_limit)
+		})]
 		pub fn instantiate(
 			origin: OriginFor<T>,
 			#[pallet::compact] value: BalanceOf<T>,
-			#[pallet::compact] gas_limit: Weight,
+			gas_limit: Weight,
 			storage_deposit_limit: Option<<BalanceOf<T> as codec::HasCompact>::Type>,
 			code_hash: CodeHash<T>,
 			data: Vec<u8>,
@@ -482,7 +488,7 @@ pub mod pallet {
 			}
 			output.gas_meter.into_dispatch_result(
 				output.result.map(|(_address, output)| output),
-				T::WeightInfo::instantiate(salt_len),
+				Weight::todo_from_v1(T::WeightInfo::instantiate(salt_len)),
 			)
 		}
 
@@ -758,8 +764,8 @@ where
 		);
 		ContractExecResult {
 			result: output.result.map_err(|r| r.error),
-			gas_consumed: output.gas_meter.gas_consumed(),
-			gas_required: output.gas_meter.gas_required(),
+			gas_consumed: output.gas_meter.gas_consumed().todo_to_v1(),
+			gas_required: output.gas_meter.gas_required().todo_to_v1(),
 			storage_deposit: output.storage_deposit,
 			debug_message: debug_message.unwrap_or_default(),
 		}
@@ -803,8 +809,8 @@ where
 				.result
 				.map(|(account_id, result)| InstantiateReturnValue { result, account_id })
 				.map_err(|e| e.error),
-			gas_consumed: output.gas_meter.gas_consumed(),
-			gas_required: output.gas_meter.gas_required(),
+			gas_consumed: output.gas_meter.gas_consumed().todo_to_v1(),
+			gas_required: output.gas_meter.gas_required().todo_to_v1(),
 			storage_deposit: output.storage_deposit,
 			debug_message: debug_message.unwrap_or_default(),
 		}

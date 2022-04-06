@@ -60,7 +60,7 @@ use crate::{
 	Error,
 };
 use codec::{Decode, MaxEncodedLen};
-use frame_support::weights::Weight;
+use frame_support::weights::WeightV1 as Weight;
 use sp_runtime::DispatchError;
 use sp_std::{marker::PhantomData, vec::Vec};
 
