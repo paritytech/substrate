@@ -434,17 +434,17 @@ pub trait WithPostDispatchInfo {
 	/// let who = ensure_signed(origin).map_err(|e| e.with_weight(WeightV2 { computation: 100, bandwidth: 100 }))?;
 	/// ensure!(who == me, Error::<T>::NotMe.with_weight(WeightV2 { computation: 200_000, bandwidth: 100 }));
 	/// ```
-	fn with_weight(self, actual_weight: WeightV2) -> DispatchErrorWithPostInfo;
+	fn with_weight(self, actual_weight: impl Into<WeightV2>) -> DispatchErrorWithPostInfo;
 }
 
 impl<T> WithPostDispatchInfo for T
 where
 	T: Into<DispatchError>,
 {
-	fn with_weight(self, actual_weight: WeightV2) -> DispatchErrorWithPostInfo {
+	fn with_weight(self, actual_weight: impl Into<WeightV2>) -> DispatchErrorWithPostInfo {
 		DispatchErrorWithPostInfo {
 			post_info: PostDispatchInfo {
-				actual_weight: Some(actual_weight),
+				actual_weight: Some(actual_weight.into()),
 				pays_fee: Default::default(),
 			},
 			error: self.into(),

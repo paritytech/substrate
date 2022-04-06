@@ -55,7 +55,7 @@ pub mod v9 {
 					"InjectValidatorsIntoVoterList being executed on the wrong storage \
 				version, expected Releases::V8_0_0"
 				);
-				T::DbWeight::get().reads(1)
+				Weight::todo_from_v1(T::DbWeight::get().reads(1))
 			}
 		}
 
@@ -125,7 +125,7 @@ pub mod v8 {
 
 			T::BlockWeights::get().max_block
 		} else {
-			T::DbWeight::get().reads(1)
+			Weight::todo_from_v1(T::DbWeight::get().reads(1))
 		}
 	}
 
@@ -170,7 +170,10 @@ pub mod v7 {
 		StorageVersion::<T>::put(Releases::V7_0_0);
 		log!(info, "Completed staking migration to Releases::V7_0_0");
 
-		T::DbWeight::get().reads_writes(validator_count.saturating_add(nominator_count).into(), 2)
+		Weight::todo_from_v1(
+			T::DbWeight::get()
+				.reads_writes(validator_count.saturating_add(nominator_count).into(), 2),
+		)
 	}
 }
 
@@ -212,6 +215,6 @@ pub mod v6 {
 
 		StorageVersion::<T>::put(Releases::V6_0_0);
 		log!(info, "Done.");
-		T::DbWeight::get().writes(6 + 1)
+		Weight::todo_from_v1(T::DbWeight::get().writes(6 + 1))
 	}
 }

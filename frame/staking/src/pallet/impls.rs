@@ -95,36 +95,34 @@ impl<T: Config> Pallet<T> {
 		validator_stash: T::AccountId,
 		era: EraIndex,
 	) -> DispatchResultWithPostInfo {
+		let payout_stakers_alive_staked_weight =
+			Weight::todo_from_v1(T::WeightInfo::payout_stakers_alive_staked(0));
 		// Validate input data
 		let current_era = CurrentEra::<T>::get().ok_or_else(|| {
-			Error::<T>::InvalidEraToReward
-				.with_weight(T::WeightInfo::payout_stakers_alive_staked(0))
+			Error::<T>::InvalidEraToReward.with_weight(payout_stakers_alive_staked_weight)
 		})?;
 		let history_depth = Self::history_depth();
 		ensure!(
 			era <= current_era && era >= current_era.saturating_sub(history_depth),
-			Error::<T>::InvalidEraToReward
-				.with_weight(T::WeightInfo::payout_stakers_alive_staked(0))
+			Error::<T>::InvalidEraToReward.with_weight(payout_stakers_alive_staked_weight)
 		);
 
 		// Note: if era has no reward to be claimed, era may be future. better not to update
 		// `ledger.claimed_rewards` in this case.
 		let era_payout = <ErasValidatorReward<T>>::get(&era).ok_or_else(|| {
-			Error::<T>::InvalidEraToReward
-				.with_weight(T::WeightInfo::payout_stakers_alive_staked(0))
+			Error::<T>::InvalidEraToReward.with_weight(payout_stakers_alive_staked_weight)
 		})?;
 
-		let controller = Self::bonded(&validator_stash).ok_or_else(|| {
-			Error::<T>::NotStash.with_weight(T::WeightInfo::payout_stakers_alive_staked(0))
-		})?;
+		let controller = Self::bonded(&validator_stash)
+			.ok_or_else(|| Error::<T>::NotStash.with_weight(payout_stakers_alive_staked_weight))?;
 		let mut ledger = <Ledger<T>>::get(&controller).ok_or(Error::<T>::NotController)?;
 
 		ledger
 			.claimed_rewards
 			.retain(|&x| x >= current_era.saturating_sub(history_depth));
 		match ledger.claimed_rewards.binary_search(&era) {
-			Ok(_) => Err(Error::<T>::AlreadyClaimed
-				.with_weight(T::WeightInfo::payout_stakers_alive_staked(0)))?,
+			Ok(_) =>
+				Err(Error::<T>::AlreadyClaimed.with_weight(payout_stakers_alive_staked_weight))?,
 			Err(pos) => ledger.claimed_rewards.insert(pos, era),
 		}
 
@@ -867,9 +865,9 @@ impl<T: Config> Pallet<T> {
 	/// Register some amount of weight directly with the system pallet.
 	///
 	/// This is always mandatory weight.
-	fn register_weight(weight: Weight) {
+	fn register_weight(weight: frame_support::weights::WeightV1) {
 		<frame_system::Pallet<T>>::register_extra_weight_unchecked(
-			weight,
+			Weight::todo_from_v1(weight),
 			DispatchClass::Mandatory,
 		);
 	}
@@ -1162,9 +1160,9 @@ where
 		disable_strategy: DisableStrategy,
 	) -> Weight {
 		let reward_proportion = SlashRewardFraction::<T>::get();
-		let mut consumed_weight: Weight = 0;
+		let mut consumed_weight = Weight::zero();
 		let mut add_db_reads_writes = |reads, writes| {
-			consumed_weight += T::DbWeight::get().reads_writes(reads, writes);
+			consumed_weight += Weight::todo_from_v1(T::DbWeight::get().reads_writes(reads, writes));
 		};
 
 		let active_era = {
