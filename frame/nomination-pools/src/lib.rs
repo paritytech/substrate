@@ -1184,7 +1184,7 @@ pub mod pallet {
 
 		/// A bonded delegator can use this to claim their payout based on the rewards that the pool
 		/// has accumulated since their last claimed payout (OR since joining if this is there first
-		/// time claiming rewards). The payout will be transffered to the delegator's account.
+		/// time claiming rewards). The payout will be transferred to the delegator's account.
 		///
 		/// The delegator will earn rewards pro rata based on the delegators stake vs the sum of the
 		/// delegators in the pools stake. Rewards do not "expire".
