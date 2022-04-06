@@ -595,7 +595,6 @@ build-rustdoc:
 .build-push-docker-image:          &build-push-docker-image
   <<:                              *build-refs
   <<:                              *kubernetes-env
-  <<:                              *vault-secrets
   image:                           quay.io/buildah/stable
   variables:                       &docker-build-vars
     <<:                            *default-vars
@@ -654,7 +653,6 @@ publish-s3-release:
   stage:                           publish
   <<:                              *build-refs
   <<:                              *kubernetes-env
-  <<:                              *vault-secrets
   needs:
     - job:                         build-linux-substrate
       artifacts:                   true
@@ -676,7 +674,6 @@ publish-s3-release:
 publish-rustdoc:
   stage:                           publish
   <<:                              *kubernetes-env
-  <<:                              *vault-secrets
   image:                           node:16
   variables:
     GIT_DEPTH:                     100
@@ -735,7 +732,6 @@ publish-rustdoc:
 
 publish-draft-release:
   stage:                           publish
-  <<:                              *vault-secrets
   image:                           paritytech/tools:latest
   rules:
     - if: $CI_COMMIT_REF_NAME =~ /^ci-release-.*$/
