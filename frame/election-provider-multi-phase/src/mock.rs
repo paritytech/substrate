@@ -24,9 +24,10 @@ pub use frame_support::{assert_noop, assert_ok};
 use frame_support::{
 	bounded_vec, parameter_types,
 	traits::{ConstU32, Hooks},
-	weights::Weight,
+	weights::{Weight, WeightV1},
 	BoundedVec,
 };
+use frame_system::limits::BlockWeights;
 use multi_phase::unsigned::{IndexAssignmentOf, VoterOf};
 use parking_lot::RwLock;
 use sp_core::{
@@ -209,7 +210,7 @@ impl frame_system::Config for Runtime {
 	type BlockHashCount = ();
 	type DbWeight = ();
 	type BlockLength = ();
-	type BlockWeights = BlockWeights;
+	type BlockWeights = SystemBlockWeights;
 	type Version = ();
 	type PalletInfo = PalletInfo;
 	type AccountData = pallet_balances::AccountData<u64>;
@@ -223,8 +224,10 @@ impl frame_system::Config for Runtime {
 const NORMAL_DISPATCH_RATIO: Perbill = Perbill::from_percent(75);
 parameter_types! {
 	pub const ExistentialDeposit: u64 = 1;
-	pub BlockWeights: frame_system::limits::BlockWeights = frame_system::limits::BlockWeights
-		::with_sensible_defaults(2 * frame_support::weights::constants::WEIGHT_PER_SECOND, NORMAL_DISPATCH_RATIO);
+	pub SystemBlockWeights: BlockWeights = BlockWeights::with_sensible_defaults(Weight {
+		computation: 2 * frame_support::weights::constants::WEIGHT_PER_SECOND,
+		bandwidth: 1024,
+	}, NORMAL_DISPATCH_RATIO);
 }
 
 impl pallet_balances::Config for Runtime {
@@ -261,11 +264,11 @@ parameter_types! {
 	pub static SignedDepositByte: Balance = 0;
 	pub static SignedDepositWeight: Balance = 0;
 	pub static SignedRewardBase: Balance = 7;
-	pub static SignedMaxWeight: Weight = BlockWeights::get().max_block;
+	pub static SignedMaxWeight: Weight = SystemBlockWeights::get().max_block;
 	pub static MinerTxPriority: u64 = 100;
 	pub static SolutionImprovementThreshold: Perbill = Perbill::zero();
 	pub static OffchainRepeat: BlockNumber = 5;
-	pub static MinerMaxWeight: Weight = BlockWeights::get().max_block;
+	pub static MinerMaxWeight: Weight = SystemBlockWeights::get().max_block;
 	pub static MinerMaxLength: u32 = 256;
 	pub static MockWeightInfo: bool = false;
 	pub static MaxElectingVoters: VoterIndex = u32::max_value();
@@ -314,76 +317,76 @@ impl InstantElectionProvider for MockFallback {
 // Hopefully this won't be too much of a hassle to maintain.
 pub struct DualMockWeightInfo;
 impl multi_phase::weights::WeightInfo for DualMockWeightInfo {
-	fn on_initialize_nothing() -> Weight {
+	fn on_initialize_nothing() -> WeightV1 {
 		if MockWeightInfo::get() {
 			Zero::zero()
 		} else {
 			<() as multi_phase::weights::WeightInfo>::on_initialize_nothing()
 		}
 	}
-	fn create_snapshot_internal(v: u32, t: u32) -> Weight {
+	fn create_snapshot_internal(v: u32, t: u32) -> WeightV1 {
 		if MockWeightInfo::get() {
 			Zero::zero()
 		} else {
 			<() as multi_phase::weights::WeightInfo>::create_snapshot_internal(v, t)
 		}
 	}
-	fn on_initialize_open_signed() -> Weight {
+	fn on_initialize_open_signed() -> WeightV1 {
 		if MockWeightInfo::get() {
 			Zero::zero()
 		} else {
 			<() as multi_phase::weights::WeightInfo>::on_initialize_open_signed()
 		}
 	}
-	fn on_initialize_open_unsigned() -> Weight {
+	fn on_initialize_open_unsigned() -> WeightV1 {
 		if MockWeightInfo::get() {
 			Zero::zero()
 		} else {
 			<() as multi_phase::weights::WeightInfo>::on_initialize_open_unsigned()
 		}
 	}
-	fn elect_queued(a: u32, d: u32) -> Weight {
+	fn elect_queued(a: u32, d: u32) -> WeightV1 {
 		if MockWeightInfo::get() {
 			Zero::zero()
 		} else {
 			<() as multi_phase::weights::WeightInfo>::elect_queued(a, d)
 		}
 	}
-	fn finalize_signed_phase_accept_solution() -> Weight {
+	fn finalize_signed_phase_accept_solution() -> WeightV1 {
 		if MockWeightInfo::get() {
 			Zero::zero()
 		} else {
 			<() as multi_phase::weights::WeightInfo>::finalize_signed_phase_accept_solution()
 		}
 	}
-	fn finalize_signed_phase_reject_solution() -> Weight {
+	fn finalize_signed_phase_reject_solution() -> WeightV1 {
 		if MockWeightInfo::get() {
 			Zero::zero()
 		} else {
 			<() as multi_phase::weights::WeightInfo>::finalize_signed_phase_reject_solution()
 		}
 	}
-	fn submit() -> Weight {
+	fn submit() -> WeightV1 {
 		if MockWeightInfo::get() {
 			Zero::zero()
 		} else {
 			<() as multi_phase::weights::WeightInfo>::submit()
 		}
 	}
-	fn submit_unsigned(v: u32, t: u32, a: u32, d: u32) -> Weight {
+	fn submit_unsigned(v: u32, t: u32, a: u32, d: u32) -> WeightV1 {
 		if MockWeightInfo::get() {
 			// 10 base
 			// 5 per edge.
-			(10 as Weight).saturating_add((5 as Weight).saturating_mul(a as Weight))
+			(10 as WeightV1).saturating_add((5 as WeightV1).saturating_mul(a as WeightV1))
 		} else {
 			<() as multi_phase::weights::WeightInfo>::submit_unsigned(v, t, a, d)
 		}
 	}
-	fn feasibility_check(v: u32, t: u32, a: u32, d: u32) -> Weight {
+	fn feasibility_check(v: u32, t: u32, a: u32, d: u32) -> WeightV1 {
 		if MockWeightInfo::get() {
 			// 10 base
 			// 5 per edge.
-			(10 as Weight).saturating_add((5 as Weight).saturating_mul(a as Weight))
+			(10 as WeightV1).saturating_add((5 as WeightV1).saturating_mul(a as WeightV1))
 		} else {
 			<() as multi_phase::weights::WeightInfo>::feasibility_check(v, t, a, d)
 		}
@@ -549,8 +552,8 @@ impl ExtBuilder {
 		<OnChainFallback>::set(onchain);
 		self
 	}
-	pub fn miner_weight(self, weight: Weight) -> Self {
-		<MinerMaxWeight>::set(weight);
+	pub fn miner_weight(self, weight: WeightV1) -> Self {
+		<MinerMaxWeight>::set(Weight::todo_from_v1(weight));
 		self
 	}
 	pub fn mock_weight_info(self, mock: bool) -> Self {
@@ -580,8 +583,8 @@ impl ExtBuilder {
 		<SignedDepositWeight>::set(weight);
 		self
 	}
-	pub fn signed_weight(self, weight: Weight) -> Self {
-		<SignedMaxWeight>::set(weight);
+	pub fn signed_weight(self, weight: WeightV1) -> Self {
+		<SignedMaxWeight>::set(Weight::todo_from_v1(weight));
 		self
 	}
 	pub fn build(self) -> sp_io::TestExternalities {

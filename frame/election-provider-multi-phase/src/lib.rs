@@ -237,7 +237,7 @@ use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
 	ensure,
 	traits::{Currency, Get, OnUnbalanced, ReservableCurrency},
-	weights::{DispatchClass, Weight},
+	weights::{DispatchClass, Weight, WeightV1},
 };
 use frame_system::{ensure_none, offchain::SendTransactionTypes};
 use scale_info::TypeInfo;
@@ -728,7 +728,7 @@ pub mod pallet {
 				next_election,
 				Self::snapshot_metadata()
 			);
-			match current_phase {
+			let weight_v1 = match current_phase {
 				Phase::Off if remaining <= signed_deadline && remaining > unsigned_deadline => {
 					// NOTE: if signed-phase length is zero, second part of the if-condition fails.
 					match Self::create_snapshot() {
@@ -786,7 +786,9 @@ pub mod pallet {
 					}
 				},
 				_ => T::WeightInfo::on_initialize_nothing(),
-			}
+			};
+
+			Weight::todo_from_v1(weight_v1)
 		}
 
 		fn offchain_worker(now: T::BlockNumber) {
@@ -903,7 +905,7 @@ pub mod pallet {
 				prev_ejected: ejected_a_solution,
 			});
 
-			Ok(None.into())
+			Ok(None::<Weight>.into())
 		}
 
 		/// Set a new value for `MinimumUntrustedScore`.
@@ -977,7 +979,8 @@ pub mod pallet {
 			let size = Self::snapshot_metadata().ok_or(Error::<T>::MissingSnapshotMetadata)?;
 
 			ensure!(
-				Self::feasibility_weight_of(&raw_solution, size) < T::SignedMaxWeight::get(),
+				Self::feasibility_weight_of(&raw_solution, size) <
+					T::SignedMaxWeight::get().todo_to_v1(),
 				Error::<T>::SignedTooMuchWeight,
 			);
 
@@ -985,7 +988,7 @@ pub mod pallet {
 			let deposit = Self::deposit_for(&raw_solution, size);
 			let reward = {
 				let call = Call::submit { raw_solution: raw_solution.clone() };
-				let call_fee = T::EstimateCallFee::estimate_call_fee(&call, None.into());
+				let call_fee = T::EstimateCallFee::estimate_call_fee(&call, None::<Weight>.into());
 				T::SignedRewardBase::get().saturating_add(call_fee)
 			};
 
@@ -1396,9 +1399,9 @@ impl<T: Config> Pallet<T> {
 	/// Register some amount of weight directly with the system pallet.
 	///
 	/// This is always mandatory weight.
-	fn register_weight(weight: Weight) {
+	fn register_weight(weight: WeightV1) {
 		<frame_system::Pallet<T>>::register_extra_weight_unchecked(
-			weight,
+			Weight::todo_from_v1(weight),
 			DispatchClass::Mandatory,
 		);
 	}
@@ -2149,7 +2152,7 @@ mod tests {
 
 		let mut active = 1;
 		while weight_with(active) <=
-			<Runtime as frame_system::Config>::BlockWeights::get().max_block ||
+			<Runtime as frame_system::Config>::BlockWeights::get().max_block.todo_to_v1() ||
 			active == all_voters
 		{
 			active += 1;
