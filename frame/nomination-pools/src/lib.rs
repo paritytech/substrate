@@ -42,7 +42,7 @@
 //! unbonding process by unbonding all of the delegators funds.
 //!
 //! Second, once [`sp_staking::StakingInterface::bonding_duration`] eras have passed, the delegator
-//! can call [`Call::withdraw_unbonded_other`] to withdraw all there funds.
+//! can call [`Call::withdraw_unbonded_other`] to withdraw all their funds.
 //!
 //! For design docs see the [bonded pool](#bonded-pool) and [unbonding sub
 //! pools](#unbonding-sub-pools) sections.
