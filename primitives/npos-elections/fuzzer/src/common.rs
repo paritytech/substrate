@@ -21,7 +21,7 @@
 #![allow(dead_code)]
 
 use rand::{self, seq::SliceRandom, Rng, RngCore};
-use sp_npos_elections::{phragmms, seq_phragmen, ElectionResult, VoteWeight};
+use sp_npos_elections::{mms, phragmms, seq_phragmen, ElectionResult, VoteWeight};
 use sp_runtime::Perbill;
 use std::collections::{BTreeMap, HashSet};
 
@@ -40,6 +40,7 @@ pub fn to_range(x: usize, a: usize, b: usize) -> usize {
 pub enum ElectionType {
 	Phragmen(Option<(usize, u128)>),
 	Phragmms(Option<(usize, u128)>),
+	Mms(usize, u128),
 }
 
 pub type AccountId = u64;
@@ -162,6 +163,8 @@ pub fn generate_random_npos_result(
 				seq_phragmen(to_elect, candidates.clone(), voters.clone(), conf).unwrap(),
 			ElectionType::Phragmms(conf) =>
 				phragmms(to_elect, candidates.clone(), voters.clone(), conf).unwrap(),
+			ElectionType::Mms(iter, tol) =>
+				mms(to_elect, candidates.clone(), voters.clone(), iter, tol).unwrap(),
 		},
 		candidates,
 		voters,

@@ -37,3 +37,7 @@ path = "src/phragmms_balancing.rs"
 [[bin]]
 name = "phragmen_pjr"
 path = "src/phragmen_pjr.rs"
+
+[[bin]]
+name = "mms_balancing"
+path = "src/mms_balancing.rs"
