@@ -146,7 +146,7 @@ where
 	}
 
 	fn weight(&self) -> Weight {
-		T::DbWeight::get().reads_writes(1, 1)
+		Weight::todo_from_v1(T::DbWeight::get().reads_writes(1, 1))
 	}
 
 	fn cancel(&self, source: &AccountId) {
@@ -285,12 +285,12 @@ pub mod pallet {
 		/// - `proof`: Revealed proof of the claim.
 		/// - `action`: Action defined in the swap, it must match the entry in blockchain. Otherwise
 		///   the operation fails. This is used for weight calculation.
-		#[pallet::weight(
-			T::DbWeight::get().reads_writes(1, 1)
+		#[pallet::weight({
+			let v1_weight = T::DbWeight::get().reads_writes(1, 1)
 				.saturating_add(40_000_000)
-				.saturating_add((proof.len() as Weight).saturating_mul(100))
-				.saturating_add(action.weight())
-		)]
+				.saturating_add((proof.len() as u64).saturating_mul(100));
+			Weight::todo_from_v1(v1_weight).saturating_add(action.weight())
+		})]
 		pub fn claim_swap(
 			origin: OriginFor<T>,
 			proof: Vec<u8>,
