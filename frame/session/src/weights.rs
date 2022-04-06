@@ -41,14 +41,14 @@
 #![allow(unused_parens)]
 #![allow(unused_imports)]
 
-use frame_support::{traits::Get, weights::{WeightV1, constants::RocksDbWeight}};
+use frame_support::{traits::Get, weights::{WeightV1 as Weight, constants::RocksDbWeight}};
 use sp_std::marker::PhantomData;
 use sp_runtime::traits::Saturating;
 
 /// Weight functions needed for pallet_session.
 pub trait WeightInfo {
-	fn set_keys() -> WeightV1;
-	fn purge_keys() -> WeightV1;
+	fn set_keys() -> Weight;
+	fn purge_keys() -> Weight;
 }
 
 /// Weights for pallet_session using the Substrate node and recommended hardware.
@@ -57,18 +57,18 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Staking Ledger (r:1 w:0)
 	// Storage: Session NextKeys (r:1 w:1)
 	// Storage: Session KeyOwner (r:4 w:4)
-	fn set_keys() -> WeightV1 {
-		(42_131_000 as WeightV1)
-			.saturating_add(T::DbWeight::get().reads(6 as WeightV1))
-			.saturating_add(T::DbWeight::get().writes(5 as WeightV1))
+	fn set_keys() -> Weight {
+		(42_131_000 as Weight)
+			.saturating_add(T::DbWeight::get().reads(6 as Weight))
+			.saturating_add(T::DbWeight::get().writes(5 as Weight))
 	}
 	// Storage: Staking Ledger (r:1 w:0)
 	// Storage: Session NextKeys (r:1 w:1)
 	// Storage: Session KeyOwner (r:0 w:4)
-	fn purge_keys() -> WeightV1 {
-		(32_374_000 as WeightV1)
-			.saturating_add(T::DbWeight::get().reads(2 as WeightV1))
-			.saturating_add(T::DbWeight::get().writes(5 as WeightV1))
+	fn purge_keys() -> Weight {
+		(32_374_000 as Weight)
+			.saturating_add(T::DbWeight::get().reads(2 as Weight))
+			.saturating_add(T::DbWeight::get().writes(5 as Weight))
 	}
 }
 
@@ -77,17 +77,17 @@ impl WeightInfo for () {
 	// Storage: Staking Ledger (r:1 w:0)
 	// Storage: Session NextKeys (r:1 w:1)
 	// Storage: Session KeyOwner (r:4 w:4)
-	fn set_keys() -> WeightV1 {
-		(42_131_000 as WeightV1)
-			.saturating_add(RocksDbWeight::get().reads(6 as WeightV1))
-			.saturating_add(RocksDbWeight::get().writes(5 as WeightV1))
+	fn set_keys() -> Weight {
+		(42_131_000 as Weight)
+			.saturating_add(RocksDbWeight::get().reads(6 as Weight))
+			.saturating_add(RocksDbWeight::get().writes(5 as Weight))
 	}
 	// Storage: Staking Ledger (r:1 w:0)
 	// Storage: Session NextKeys (r:1 w:1)
 	// Storage: Session KeyOwner (r:0 w:4)
-	fn purge_keys() -> WeightV1 {
-		(32_374_000 as WeightV1)
-			.saturating_add(RocksDbWeight::get().reads(2 as WeightV1))
-			.saturating_add(RocksDbWeight::get().writes(5 as WeightV1))
+	fn purge_keys() -> Weight {
+		(32_374_000 as Weight)
+			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
+			.saturating_add(RocksDbWeight::get().writes(5 as Weight))
 	}
 }
