@@ -838,6 +838,7 @@ mod tests {
 
 	parameter_types! {
 		pub static WeightToFee: u64 = 1;
+		pub static TransactionByteFee: u64 = 1;
 		pub static OperationalFeeMultiplier: u8 = 5;
 	}
 
@@ -893,6 +894,19 @@ mod tests {
 		}
 	}
 
+	impl WeightToFeePolynomial for TransactionByteFee {
+		type Balance = u64;
+
+		fn polynomial() -> WeightToFeeCoefficients<Self::Balance> {
+			smallvec![WeightToFeeCoefficient {
+				degree: 1,
+				coeff_frac: Perbill::zero(),
+				coeff_integer: TRANSACTION_BYTE_FEE.with(|v| *v.borrow()),
+				negative: false,
+			}]
+		}
+	}
+
 	thread_local! {
 		static TIP_UNBALANCED_AMOUNT: RefCell<u64> = RefCell::new(0);
 		static FEE_UNBALANCED_AMOUNT: RefCell<u64> = RefCell::new(0);
@@ -916,7 +930,7 @@ mod tests {
 		type OnChargeTransaction = CurrencyAdapter<Balances, DealWithFees>;
 		type OperationalFeeMultiplier = OperationalFeeMultiplier;
 		type WeightToFee = WeightToFee;
-		type LengthToFee = IdentityFee<u64>;
+		type LengthToFee = TransactionByteFee;
 		type FeeMultiplierUpdate = ();
 	}
 
@@ -952,6 +966,7 @@ mod tests {
 		}
 		fn set_constants(&self) {
 			EXTRINSIC_BASE_WEIGHT.with(|v| *v.borrow_mut() = self.base_weight);
+			TRANSACTION_BYTE_FEE.with(|v| *v.borrow_mut() = self.byte_fee);
 			WEIGHT_TO_FEE.with(|v| *v.borrow_mut() = self.weight_to_fee);
 		}
 		pub fn build(self) -> sp_io::TestExternalities {
