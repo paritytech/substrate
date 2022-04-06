@@ -24,7 +24,6 @@ use frame_election_provider_support::{onchain, SequentialPhragmen};
 use frame_support::{
 	parameter_types,
 	traits::{ConstU32, ConstU64},
-	weights::constants::WEIGHT_PER_SECOND,
 };
 use frame_system as system;
 use pallet_session::historical as pallet_session_historical;
@@ -40,7 +39,10 @@ type Balance = u64;
 
 parameter_types! {
 	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(2 * WEIGHT_PER_SECOND);
+		frame_system::limits::BlockWeights::simple_max(frame_support::weights::WeightV2 {
+			computation: 1024,
+			bandwidth: 1024,
+		});
 }
 
 impl frame_system::Config for Test {

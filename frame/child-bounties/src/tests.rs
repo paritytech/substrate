@@ -28,7 +28,6 @@ use frame_support::{
 	pallet_prelude::GenesisBuild,
 	parameter_types,
 	traits::{ConstU32, ConstU64, OnInitialize},
-	weights::Weight,
 	PalletId,
 };
 
@@ -60,7 +59,6 @@ frame_support::construct_runtime!(
 );
 
 parameter_types! {
-	pub const MaximumBlockWeight: Weight = 1024;
 	pub const MaximumBlockLength: u32 = 2 * 1024;
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }

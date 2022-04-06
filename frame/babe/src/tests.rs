@@ -799,7 +799,7 @@ fn report_equivocation_has_valid_weight() {
 		.map(<Test as Config>::WeightInfo::report_equivocation)
 		.collect::<Vec<_>>()
 		.windows(2)
-		.all(|w| w[0] < w[1]));
+		.all(|w| w[0].todo_to_v1() < w[1].todo_to_v1()));
 }
 
 #[test]
@@ -828,7 +828,7 @@ fn valid_equivocation_reports_dont_pay_fees() {
 		.get_dispatch_info();
 
 		// it should have non-zero weight and the fee has to be paid.
-		assert!(info.weight > 0);
+		assert!(!info.weight.is_zero());
 		assert_eq!(info.pays_fee, Pays::Yes);
 
 		// report the equivocation.
