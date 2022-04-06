@@ -45,7 +45,7 @@ pub fn migrate_to_v1<T: Config<I>, I: 'static, P: GetStorageVersion + PalletInfo
 			on_chain_storage_version,
 		);
 		// calculate and return migration weights
-		T::DbWeight::get().reads_writes(count as Weight + 1, count as Weight + 1)
+		T::DbWeight::get().reads_writes(count + 1, count + 1)
 	} else {
 		log::warn!(
 			target: "runtime::uniques",

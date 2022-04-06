@@ -335,7 +335,7 @@ pub mod pallet {
 			if (n % T::IntakePeriod::get()).is_zero() {
 				Self::pursue_target(T::MaxIntakeBids::get())
 			} else {
-				0
+				Weight::zero()
 			}
 		}
 	}
@@ -576,9 +576,9 @@ pub mod pallet {
 				let first_from_each_queue = T::WeightInfo::pursue_target_per_queue(queues_hit);
 				let rest_from_each_queue = T::WeightInfo::pursue_target_per_item(bids_taken)
 					.saturating_sub(T::WeightInfo::pursue_target_per_item(queues_hit));
-				first_from_each_queue + rest_from_each_queue
+				Weight::todo_from_v1(first_from_each_queue + rest_from_each_queue)
 			} else {
-				T::WeightInfo::pursue_target_noop()
+				Weight::todo_from_v1(T::WeightInfo::pursue_target_noop())
 			}
 		}
 

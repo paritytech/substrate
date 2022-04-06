@@ -101,25 +101,25 @@ pub mod pallet {
 
 	impl WeightInfo for () {
 		fn process_top_key(_: u32) -> Weight {
-			1000000
+			Weight::todo_from_v1(1000000)
 		}
 		fn continue_migrate() -> Weight {
-			1000000
+			Weight::todo_from_v1(1000000)
 		}
 		fn continue_migrate_wrong_witness() -> Weight {
-			1000000
+			Weight::todo_from_v1(1000000)
 		}
 		fn migrate_custom_top_fail() -> Weight {
-			1000000
+			Weight::todo_from_v1(1000000)
 		}
 		fn migrate_custom_top_success() -> Weight {
-			1000000
+			Weight::todo_from_v1(1000000)
 		}
 		fn migrate_custom_child_fail() -> Weight {
-			1000000
+			Weight::todo_from_v1(1000000)
 		}
 		fn migrate_custom_child_success() -> Weight {
-			1000000
+			Weight::todo_from_v1(1000000)
 		}
 	}
 
@@ -778,7 +778,7 @@ pub mod pallet {
 
 				weight
 			} else {
-				T::DbWeight::get().reads(1)
+				Weight::todo_from_v1(T::DbWeight::get().reads(1))
 			}
 		}
 	}
@@ -786,11 +786,11 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		/// The real weight of a migration of the given number of `items` with total `size`.
 		fn dynamic_weight(items: u32, size: u32) -> frame_support::pallet_prelude::Weight {
-			let items = items as Weight;
-			items
-				.saturating_mul(<T as frame_system::Config>::DbWeight::get().reads_writes(1, 1))
-				// we assume that the read/write per-byte weight is the same for child and top tree.
-				.saturating_add(T::WeightInfo::process_top_key(size))
+			let items = items as u64;
+			let weight_v1 = items
+				.saturating_mul(<T as frame_system::Config>::DbWeight::get().reads_writes(1, 1));
+			// we assume that the read/write per-byte weight is the same for child and top tree.
+			Weight::todo_from_v1(weight_v1).saturating_add(T::WeightInfo::process_top_key(size))
 		}
 
 		/// Put a stop to all ongoing migrations.
@@ -980,7 +980,7 @@ mod benchmarks {
 mod mock {
 	use super::*;
 	use crate as pallet_state_trie_migration;
-	use frame_support::{parameter_types, traits::Hooks};
+	use frame_support::{parameter_types, traits::Hooks, weights::Weight};
 	use frame_system::{EnsureRoot, EnsureSigned};
 	use sp_core::{
 		storage::{ChildInfo, StateVersion},
@@ -1156,9 +1156,9 @@ mod mock {
 		ext
 	}
 
-	pub(crate) fn run_to_block(n: u32) -> (H256, u64) {
+	pub(crate) fn run_to_block(n: u32) -> (H256, Weight) {
 		let mut root = Default::default();
-		let mut weight_sum = 0;
+		let mut weight_sum = Weight::zero();
 		log::trace!(target: LOG_TARGET, "running from {:?} to {:?}", System::block_number(), n);
 		while System::block_number() < n {
 			System::set_block_number(System::block_number() + 1);
