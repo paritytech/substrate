@@ -576,7 +576,7 @@ mod tests {
 			ConstU32, ConstU64, ConstU8, Currency, LockIdentifier, LockableCurrency,
 			WithdrawReasons,
 		},
-		weights::{IdentityFee, RuntimeDbWeight, Weight, WeightToFeePolynomial},
+		weights::{IdentityFee, ConstantMultiplier, RuntimeDbWeight, Weight, WeightToFeePolynomial},
 	};
 	use frame_system::{Call as SystemCall, ChainContext, LastRuntimeUpgradeInfo};
 	use pallet_balances::Call as BalancesCall;
@@ -787,9 +787,9 @@ mod tests {
 	}
 	impl pallet_transaction_payment::Config for Runtime {
 		type OnChargeTransaction = CurrencyAdapter<Balances, ()>;
-		type TransactionByteFee = TransactionByteFee;
 		type OperationalFeeMultiplier = ConstU8<5>;
 		type WeightToFee = IdentityFee<Balance>;
+		type LengthToFee = ConstantMultiplier<Balance, TransactionByteFee>;
 		type FeeMultiplierUpdate = ();
 	}
 	impl custom::Config for Runtime {}

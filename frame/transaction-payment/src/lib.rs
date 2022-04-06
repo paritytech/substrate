@@ -798,6 +798,7 @@ mod tests {
 		weights::{
 			DispatchClass, DispatchInfo, GetDispatchInfo, PostDispatchInfo, Weight,
 			WeightToFeeCoefficient, WeightToFeeCoefficients, WeightToFeePolynomial,
+			IdentityFee,
 		},
 	};
 	use frame_system as system;
@@ -920,6 +921,7 @@ mod tests {
 		type OnChargeTransaction = CurrencyAdapter<Balances, DealWithFees>;
 		type OperationalFeeMultiplier = OperationalFeeMultiplier;
 		type WeightToFee = WeightToFee;
+		type LengthToFee = IdentityFee<u64>;
 		type FeeMultiplierUpdate = ();
 	}
 
@@ -955,7 +957,6 @@ mod tests {
 		}
 		fn set_constants(&self) {
 			EXTRINSIC_BASE_WEIGHT.with(|v| *v.borrow_mut() = self.base_weight);
-			TRANSACTION_BYTE_FEE.with(|v| *v.borrow_mut() = self.byte_fee);
 			WEIGHT_TO_FEE.with(|v| *v.borrow_mut() = self.weight_to_fee);
 		}
 		pub fn build(self) -> sp_io::TestExternalities {
