@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Defines the [`BenchRecord`] and calculates [`super::Stats`] from it.
+//! Defines the [`BenchRecord`] and its facilities for computing [`super::Stats`].
 
 use sc_cli::Result;
 use sc_service::Configuration;
