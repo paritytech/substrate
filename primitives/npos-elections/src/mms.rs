@@ -23,10 +23,9 @@
 //! This is also further explained in [The Maximin Support Method: An Extension of the D'Hondt Method to Approval-Based Multiwinner Elections](https://arxiv.org/abs/1609.05370).
 
 use crate::{
-	balance, setup_inputs, Assignment, ElectionResult, ExtendedBalance, IdentifierT, PerThing128,
-	VoteWeight,
+	balance, setup_inputs, CandidatePtr, ElectionResult, ExtendedBalance, IdentifierT, PerThing128,
+	Rc, VoteWeight,
 };
-use core::ops::Add;
 
 /// Execute the mms method.
 ///
@@ -49,42 +48,137 @@ use core::ops::Add;
 /// assignments, `assignment.distribution.map(|p| p.deconstruct()).sum()` fails to fit inside
 /// `UpperOf<P>`. A user of this crate may statically assert that this can never happen and safely
 /// `expect` this to return `Ok`.
-pub fn mms<AccountId: IdentifierT, P: PerThing128 + Add<Output = P>>(
+pub fn mms<AccountId: IdentifierT + Default, P: PerThing128>(
 	to_elect: usize,
 	candidates: Vec<AccountId>,
 	voters: Vec<(AccountId, VoteWeight, impl IntoIterator<Item = AccountId>)>,
 	iterations: usize,
 	tolerance: ExtendedBalance,
 ) -> Result<ElectionResult<AccountId, P>, crate::Error> {
-	let mut winners = vec![];
-	for _round in 0..to_elect {
-		let mut max_support = P::zero();
-		let mut winner;
+	let mut winners: Vec<CandidatePtr<AccountId>> = vec![]; // `A` in the paper.
+	let (candidates, mut voters) = setup_inputs(candidates, voters);
+
+	for round in 0..to_elect {
+		let mut bal: ExtendedBalance = 0;
+		let mut winner: CandidatePtr<AccountId> = Default::default();
 		for candidate in &candidates {
-			let mut augmented_winners = winners.clone();
-			augmented_winners.push(candidate);
-			let (_, mut used_voters) = setup_inputs(augmented_winners, voters);
-			let mut support = P::zero();
-			balance(&mut used_voters, iterations, tolerance);
-			for Assignment { who, distribution } in
-				used_voters.into_iter().filter_map(|v| v.into_assignment::<P>())
-			{
-				for (c, weight_extended) in distribution.into_iter() {
-					if c == candidate {
-						support = support.add(weight_extended);
-					}
-				}
+			if winners.iter().any(|w| w.borrow().who == candidate.borrow().who) {
+				// `c in C \ A` in the paper.
+				continue
 			}
 
-			if support > max_support {
-				max_support = support;
-				winner = candidate;
+			candidate.borrow_mut().elected = true;
+			candidate.borrow_mut().round = round;
+
+			// Calculate the balance weight vector `w_c`
+			balance(&mut voters, iterations, tolerance);
+
+			let support = candidate.borrow().backed_stake;
+
+			// maximize stake
+			if support > bal {
+				bal = support;
+				winner = Rc::clone(candidate);
 			}
+
+			candidate.borrow_mut().elected = false;
+			candidate.borrow_mut().round = 0;
 		}
 
-		if !max_support.is_zero() {
-			winners.push(winner);
-		}
+		// winner is initialized in the previous loop.
+		winner.borrow_mut().elected = true;
+		winner.borrow_mut().round = round;
+		winners.push(winner);
 	}
-	Err(crate::Error::SolutionWeightOverflow)
+
+	balance(&mut voters, iterations, tolerance);
+
+	crate::voter_candidate_to_election_result(voters, winners)
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::{Assignment, ElectionResult};
+	use sp_runtime::Perbill;
+
+	#[test]
+	fn basic_election_works() {
+		let candidates = vec![1, 2, 3];
+		let voters = vec![(10, 10, vec![1, 2]), (20, 20, vec![1, 3]), (30, 30, vec![2, 3])];
+
+		let ElectionResult::<_, Perbill> { winners, assignments } =
+			mms(2, candidates, voters, 2, 0).unwrap();
+		assert_eq!(winners, vec![(3, 30), (1, 30)]);
+		assert_eq!(
+			assignments,
+			vec![
+				Assignment {
+					who: 10u64,
+					distribution: vec![
+						(1, Perbill::from_parts(500000000)),
+						(2, Perbill::from_parts(500000000))
+					]
+				},
+				Assignment { who: 20, distribution: vec![(1, Perbill::one())] },
+				Assignment {
+					who: 30,
+					distribution: vec![
+						(2, Perbill::from_parts(666666666)),
+						(3, Perbill::from_parts(333333334)),
+					],
+				},
+			]
+		)
+	}
+
+	#[test]
+	fn linear_voting_example_works() {
+		let candidates = vec![11, 21, 31, 41, 51, 61, 71];
+		let voters = vec![
+			(2, 2000, vec![11]),
+			(4, 1000, vec![11, 21]),
+			(6, 1000, vec![21, 31]),
+			(8, 1000, vec![31, 41]),
+			(110, 1000, vec![41, 51]),
+			(120, 1000, vec![51, 61]),
+			(130, 1000, vec![61, 71]),
+		];
+
+		let ElectionResult::<_, Perbill> { winners, assignments: _ } =
+			mms(4, candidates, voters, 2, 0).unwrap();
+		assert_eq!(winners, vec![(11, 2000), (21, 2000), (41, 2000), (61, 2000),]);
+	}
+
+	#[test]
+	fn large_balance_wont_overflow() {
+		let candidates = vec![1u32, 2, 3];
+		let mut voters = (0..1000).map(|i| (10 + i, u64::MAX, vec![1, 2, 3])).collect::<Vec<_>>();
+
+		// give a bit more to 1 and 3.
+		voters.push((2, u64::MAX, vec![1, 3]));
+
+		let ElectionResult::<_, Perbill> { winners, assignments: _ } =
+			mms(2, candidates, voters, 2, 0).unwrap();
+		// TODO: weird why 2 wins and not 3.
+		assert_eq!(winners.into_iter().map(|(w, _)| w).collect::<Vec<_>>(), vec![1u32, 2]);
+	}
+
+	#[test]
+	fn paper_example_works() {
+		let candidates = vec![1, 2, 3, 4, 5, 6, 7];
+		let voters = vec![
+			(10, 10_000, vec![1, 2]),
+			(20, 6_000, vec![1, 3]),
+			(30, 4_000, vec![2]),
+			(40, 5_500, vec![3]),
+			(50, 9_500, vec![4]),
+			(60, 5_000, vec![5, 6, 7]),
+			(70, 3_000, vec![5]),
+		];
+
+		let ElectionResult::<_, Perbill> { winners, assignments: _ } =
+			mms(3, candidates, voters, 2, 0).unwrap();
+		assert_eq!(winners, vec![(1, 10750), (3, 10750), (4, 9500)]);
+	}
 }
