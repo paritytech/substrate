@@ -257,7 +257,7 @@ pub mod pallet {
 			let dispatch_info = call.get_dispatch_info();
 			(
 				T::WeightInfo::as_multi_threshold_1(call.using_encoded(|c| c.len() as u32))
-					.saturating_add(dispatch_info.weight.computation)
+					.saturating_add(dispatch_info.weight.todo_to_v1())
 					// AccountData for inner call origin accountdata.
 					.saturating_add(T::DbWeight::get().reads_writes(1, 1)),
 				dispatch_info.class,
@@ -286,14 +286,14 @@ pub mod pallet {
 						.actual_weight
 						.map(|actual_weight| {
 							T::WeightInfo::as_multi_threshold_1(call_len as u32)
-								.saturating_add(actual_weight.computation)
+								.saturating_add(actual_weight.todo_to_v1())
 						})
 						.into()
 				})
 				.map_err(|err| match err.post_info.actual_weight {
 					Some(actual_weight) => {
 						let weight_used = T::WeightInfo::as_multi_threshold_1(call_len as u32)
-							.saturating_add(actual_weight.computation);
+							.saturating_add(actual_weight.todo_to_v1());
 						let post_info = Some(weight_used).into();
 						let error = err.error.into();
 						DispatchErrorWithPostInfo { post_info, error }
@@ -355,7 +355,7 @@ pub mod pallet {
 			.max(T::WeightInfo::as_multi_create_store(s, z))
 			.max(T::WeightInfo::as_multi_approve(s, z))
 			.max(T::WeightInfo::as_multi_complete(s, z))
-			.saturating_add(*max_weight)
+			.saturating_add(max_weight.todo_to_v1())
 		})]
 		pub fn as_multi(
 			origin: OriginFor<T>,
@@ -418,7 +418,7 @@ pub mod pallet {
 			T::WeightInfo::approve_as_multi_create(s)
 				.max(T::WeightInfo::approve_as_multi_approve(s))
 				.max(T::WeightInfo::approve_as_multi_complete(s))
-				.saturating_add(*max_weight)
+				.saturating_add(max_weight.todo_to_v1())
 		})]
 		pub fn approve_as_multi(
 			origin: OriginFor<T>,
@@ -565,7 +565,7 @@ impl<T: Config> Pallet<T> {
 			if let Some((call, call_len)) = maybe_approved_call {
 				// verify weight
 				ensure!(
-					call.get_dispatch_info().weight.computation <= max_weight,
+					call.get_dispatch_info().weight.is_strictly_less_than_or_equal(&max_weight),
 					Error::<T>::MaxWeightTooLow
 				);
 
@@ -589,7 +589,7 @@ impl<T: Config> Pallet<T> {
 							other_signatories_len as u32,
 							call_len as u32,
 						)
-						.saturating_add(actual_weight.computation)
+						.saturating_add(actual_weight.todo_to_v1())
 					})
 					.into())
 			} else {

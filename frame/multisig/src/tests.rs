@@ -146,7 +146,7 @@ fn multisig_deposit_is_taken_and_returned() {
 		assert_ok!(Balances::transfer(Origin::signed(3), multi, 5));
 
 		let call = call_transfer(6, 15);
-		let call_weight = call.get_dispatch_info().weight.computation;
+		let call_weight = call.get_dispatch_info().weight;
 		let data = call.encode();
 		assert_ok!(Multisig::as_multi(
 			Origin::signed(1),
@@ -155,7 +155,7 @@ fn multisig_deposit_is_taken_and_returned() {
 			None,
 			OpaqueCall::from_encoded(data.clone()),
 			false,
-			0
+			Zero::zero()
 		));
 		assert_eq!(Balances::free_balance(1), 2);
 		assert_eq!(Balances::reserved_balance(1), 3);
@@ -183,7 +183,7 @@ fn multisig_deposit_is_taken_and_returned_with_call_storage() {
 		assert_ok!(Balances::transfer(Origin::signed(3), multi, 5));
 
 		let call = call_transfer(6, 15);
-		let call_weight = call.get_dispatch_info().weight.computation;
+		let call_weight = call.get_dispatch_info().weight;
 		let data = call.encode();
 		let hash = blake2_256(&data);
 		assert_ok!(Multisig::as_multi(
@@ -193,7 +193,7 @@ fn multisig_deposit_is_taken_and_returned_with_call_storage() {
 			None,
 			OpaqueCall::from_encoded(data),
 			true,
-			0
+			Zero::zero()
 		));
 		assert_eq!(Balances::free_balance(1), 0);
 		assert_eq!(Balances::reserved_balance(1), 5);
@@ -220,7 +220,7 @@ fn multisig_deposit_is_taken_and_returned_with_alt_call_storage() {
 		assert_ok!(Balances::transfer(Origin::signed(3), multi, 5));
 
 		let call = call_transfer(6, 15);
-		let call_weight = call.get_dispatch_info().weight.computation;
+		let call_weight = call.get_dispatch_info().weight;
 		let data = call.encode();
 		let hash = blake2_256(&data);
 
@@ -230,7 +230,7 @@ fn multisig_deposit_is_taken_and_returned_with_alt_call_storage() {
 			vec![2, 3],
 			None,
 			hash.clone(),
-			0
+			Zero::zero()
 		));
 		assert_eq!(Balances::free_balance(1), 1);
 		assert_eq!(Balances::reserved_balance(1), 4);
@@ -242,7 +242,7 @@ fn multisig_deposit_is_taken_and_returned_with_alt_call_storage() {
 			Some(now()),
 			OpaqueCall::from_encoded(data),
 			true,
-			0
+			Zero::zero()
 		));
 		assert_eq!(Balances::free_balance(2), 3);
 		assert_eq!(Balances::reserved_balance(2), 2);
@@ -275,7 +275,7 @@ fn cancel_multisig_returns_deposit() {
 			vec![2, 3],
 			None,
 			hash.clone(),
-			0
+			Zero::zero()
 		));
 		assert_ok!(Multisig::approve_as_multi(
 			Origin::signed(2),
@@ -283,7 +283,7 @@ fn cancel_multisig_returns_deposit() {
 			vec![1, 3],
 			Some(now()),
 			hash.clone(),
-			0
+			Zero::zero()
 		));
 		assert_eq!(Balances::free_balance(1), 6);
 		assert_eq!(Balances::reserved_balance(1), 4);
@@ -317,12 +317,12 @@ fn timepoint_checking_works() {
 				vec![1, 3],
 				Some(now()),
 				hash.clone(),
-				0
+				Zero::zero()
 			),
 			Error::<Test>::UnexpectedTimepoint,
 		);
 
-		assert_ok!(Multisig::approve_as_multi(Origin::signed(1), 2, vec![2, 3], None, hash, 0));
+		assert_ok!(Multisig::approve_as_multi(Origin::signed(1), 2, vec![2, 3], None, hash, Zero::zero()));
 
 		assert_noop!(
 			Multisig::as_multi(
@@ -332,7 +332,7 @@ fn timepoint_checking_works() {
 				None,
 				OpaqueCall::from_encoded(call.clone()),
 				false,
-				0
+				Zero::zero()
 			),
 			Error::<Test>::NoTimepoint,
 		);
@@ -345,7 +345,7 @@ fn timepoint_checking_works() {
 				Some(later),
 				OpaqueCall::from_encoded(call),
 				false,
-				0
+				Zero::zero()
 			),
 			Error::<Test>::WrongTimepoint,
 		);
@@ -361,7 +361,7 @@ fn multisig_2_of_3_works_with_call_storing() {
 		assert_ok!(Balances::transfer(Origin::signed(3), multi, 5));
 
 		let call = call_transfer(6, 15);
-		let call_weight = call.get_dispatch_info().weight.computation;
+		let call_weight = call.get_dispatch_info().weight;
 		let data = call.encode();
 		let hash = blake2_256(&data);
 		assert_ok!(Multisig::as_multi(
@@ -371,7 +371,7 @@ fn multisig_2_of_3_works_with_call_storing() {
 			None,
 			OpaqueCall::from_encoded(data),
 			true,
-			0
+			Zero::zero()
 		));
 		assert_eq!(Balances::free_balance(6), 0);
 
@@ -396,10 +396,10 @@ fn multisig_2_of_3_works() {
 		assert_ok!(Balances::transfer(Origin::signed(3), multi, 5));
 
 		let call = call_transfer(6, 15);
-		let call_weight = call.get_dispatch_info().weight.computation;
+		let call_weight = call.get_dispatch_info().weight;
 		let data = call.encode();
 		let hash = blake2_256(&data);
-		assert_ok!(Multisig::approve_as_multi(Origin::signed(1), 2, vec![2, 3], None, hash, 0));
+		assert_ok!(Multisig::approve_as_multi(Origin::signed(1), 2, vec![2, 3], None, hash, Zero::zero()));
 		assert_eq!(Balances::free_balance(6), 0);
 
 		assert_ok!(Multisig::as_multi(
@@ -424,7 +424,7 @@ fn multisig_3_of_3_works() {
 		assert_ok!(Balances::transfer(Origin::signed(3), multi, 5));
 
 		let call = call_transfer(6, 15);
-		let call_weight = call.get_dispatch_info().weight.computation;
+		let call_weight = call.get_dispatch_info().weight;
 		let data = call.encode();
 		let hash = blake2_256(&data);
 		assert_ok!(Multisig::approve_as_multi(
@@ -433,7 +433,7 @@ fn multisig_3_of_3_works() {
 			vec![2, 3],
 			None,
 			hash.clone(),
-			0
+			Zero::zero()
 		));
 		assert_ok!(Multisig::approve_as_multi(
 			Origin::signed(2),
@@ -441,7 +441,7 @@ fn multisig_3_of_3_works() {
 			vec![1, 3],
 			Some(now()),
 			hash.clone(),
-			0
+			Zero::zero()
 		));
 		assert_eq!(Balances::free_balance(6), 0);
 
@@ -469,7 +469,7 @@ fn cancel_multisig_works() {
 			vec![2, 3],
 			None,
 			hash.clone(),
-			0
+			Zero::zero()
 		));
 		assert_ok!(Multisig::approve_as_multi(
 			Origin::signed(2),
@@ -477,7 +477,7 @@ fn cancel_multisig_works() {
 			vec![1, 3],
 			Some(now()),
 			hash.clone(),
-			0
+			Zero::zero()
 		));
 		assert_noop!(
 			Multisig::cancel_as_multi(Origin::signed(2), 3, vec![1, 3], now(), hash.clone()),
@@ -505,7 +505,7 @@ fn cancel_multisig_with_call_storage_works() {
 			None,
 			OpaqueCall::from_encoded(call),
 			true,
-			0
+			Zero::zero()
 		));
 		assert_eq!(Balances::free_balance(1), 4);
 		assert_ok!(Multisig::approve_as_multi(
@@ -514,7 +514,7 @@ fn cancel_multisig_with_call_storage_works() {
 			vec![1, 3],
 			Some(now()),
 			hash.clone(),
-			0
+			Zero::zero()
 		));
 		assert_noop!(
 			Multisig::cancel_as_multi(Origin::signed(2), 3, vec![1, 3], now(), hash.clone()),
@@ -542,7 +542,7 @@ fn cancel_multisig_with_alt_call_storage_works() {
 			vec![2, 3],
 			None,
 			hash.clone(),
-			0
+			Zero::zero()
 		));
 		assert_eq!(Balances::free_balance(1), 6);
 		assert_ok!(Multisig::as_multi(
@@ -552,7 +552,7 @@ fn cancel_multisig_with_alt_call_storage_works() {
 			Some(now()),
 			OpaqueCall::from_encoded(call),
 			true,
-			0
+			Zero::zero()
 		));
 		assert_eq!(Balances::free_balance(2), 8);
 		assert_ok!(Multisig::cancel_as_multi(Origin::signed(1), 3, vec![2, 3], now(), hash));
@@ -570,7 +570,7 @@ fn multisig_2_of_3_as_multi_works() {
 		assert_ok!(Balances::transfer(Origin::signed(3), multi, 5));
 
 		let call = call_transfer(6, 15);
-		let call_weight = call.get_dispatch_info().weight.computation;
+		let call_weight = call.get_dispatch_info().weight;
 		let data = call.encode();
 		assert_ok!(Multisig::as_multi(
 			Origin::signed(1),
@@ -579,7 +579,7 @@ fn multisig_2_of_3_as_multi_works() {
 			None,
 			OpaqueCall::from_encoded(data.clone()),
 			false,
-			0
+			Zero::zero()
 		));
 		assert_eq!(Balances::free_balance(6), 0);
 
@@ -605,10 +605,10 @@ fn multisig_2_of_3_as_multi_with_many_calls_works() {
 		assert_ok!(Balances::transfer(Origin::signed(3), multi, 5));
 
 		let call1 = call_transfer(6, 10);
-		let call1_weight = call1.get_dispatch_info().weight.computation;
+		let call1_weight = call1.get_dispatch_info().weight;
 		let data1 = call1.encode();
 		let call2 = call_transfer(7, 5);
-		let call2_weight = call2.get_dispatch_info().weight.computation;
+		let call2_weight = call2.get_dispatch_info().weight;
 		let data2 = call2.encode();
 
 		assert_ok!(Multisig::as_multi(
@@ -618,7 +618,7 @@ fn multisig_2_of_3_as_multi_with_many_calls_works() {
 			None,
 			OpaqueCall::from_encoded(data1.clone()),
 			false,
-			0
+			Zero::zero()
 		));
 		assert_ok!(Multisig::as_multi(
 			Origin::signed(2),
@@ -627,7 +627,7 @@ fn multisig_2_of_3_as_multi_with_many_calls_works() {
 			None,
 			OpaqueCall::from_encoded(data2.clone()),
 			false,
-			0
+			Zero::zero()
 		));
 		assert_ok!(Multisig::as_multi(
 			Origin::signed(3),
@@ -662,7 +662,7 @@ fn multisig_2_of_3_cannot_reissue_same_call() {
 		assert_ok!(Balances::transfer(Origin::signed(3), multi, 5));
 
 		let call = call_transfer(6, 10);
-		let call_weight = call.get_dispatch_info().weight.computation;
+		let call_weight = call.get_dispatch_info().weight;
 		let data = call.encode();
 		let hash = blake2_256(&data);
 		assert_ok!(Multisig::as_multi(
@@ -672,7 +672,7 @@ fn multisig_2_of_3_cannot_reissue_same_call() {
 			None,
 			OpaqueCall::from_encoded(data.clone()),
 			false,
-			0
+			Zero::zero()
 		));
 		assert_ok!(Multisig::as_multi(
 			Origin::signed(2),
@@ -692,7 +692,7 @@ fn multisig_2_of_3_cannot_reissue_same_call() {
 			None,
 			OpaqueCall::from_encoded(data.clone()),
 			false,
-			0
+			Zero::zero()
 		));
 		assert_ok!(Multisig::as_multi(
 			Origin::signed(3),
@@ -730,7 +730,7 @@ fn minimum_threshold_check_works() {
 				None,
 				OpaqueCall::from_encoded(call.clone()),
 				false,
-				0
+				Zero::zero()
 			),
 			Error::<Test>::MinimumThreshold,
 		);
@@ -742,7 +742,7 @@ fn minimum_threshold_check_works() {
 				None,
 				OpaqueCall::from_encoded(call.clone()),
 				false,
-				0
+				Zero::zero()
 			),
 			Error::<Test>::MinimumThreshold,
 		);
@@ -761,7 +761,7 @@ fn too_many_signatories_fails() {
 				None,
 				OpaqueCall::from_encoded(call),
 				false,
-				0
+				Zero::zero()
 			),
 			Error::<Test>::TooManySignatories,
 		);
@@ -779,7 +779,7 @@ fn duplicate_approvals_are_ignored() {
 			vec![2, 3],
 			None,
 			hash.clone(),
-			0
+			Zero::zero()
 		));
 		assert_noop!(
 			Multisig::approve_as_multi(
@@ -788,7 +788,7 @@ fn duplicate_approvals_are_ignored() {
 				vec![2, 3],
 				Some(now()),
 				hash.clone(),
-				0
+				Zero::zero()
 			),
 			Error::<Test>::AlreadyApproved,
 		);
@@ -798,7 +798,7 @@ fn duplicate_approvals_are_ignored() {
 			vec![1, 3],
 			Some(now()),
 			hash.clone(),
-			0
+			Zero::zero()
 		));
 		assert_noop!(
 			Multisig::approve_as_multi(
@@ -807,7 +807,7 @@ fn duplicate_approvals_are_ignored() {
 				vec![1, 2],
 				Some(now()),
 				hash.clone(),
-				0
+				Zero::zero()
 			),
 			Error::<Test>::AlreadyApproved,
 		);
@@ -825,7 +825,7 @@ fn multisig_1_of_3_works() {
 		let call = call_transfer(6, 15).encode();
 		let hash = blake2_256(&call);
 		assert_noop!(
-			Multisig::approve_as_multi(Origin::signed(1), 1, vec![2, 3], None, hash.clone(), 0),
+			Multisig::approve_as_multi(Origin::signed(1), 1, vec![2, 3], None, hash.clone(), Zero::zero()),
 			Error::<Test>::MinimumThreshold,
 		);
 		assert_noop!(
@@ -836,7 +836,7 @@ fn multisig_1_of_3_works() {
 				None,
 				OpaqueCall::from_encoded(call),
 				false,
-				0
+				Zero::zero()
 			),
 			Error::<Test>::MinimumThreshold,
 		);
@@ -875,7 +875,7 @@ fn weight_check_works() {
 			None,
 			OpaqueCall::from_encoded(data.clone()),
 			false,
-			0
+			Zero::zero()
 		));
 		assert_eq!(Balances::free_balance(6), 0);
 
@@ -887,7 +887,7 @@ fn weight_check_works() {
 				Some(now()),
 				OpaqueCall::from_encoded(data),
 				false,
-				0
+				Zero::zero()
 			),
 			Error::<Test>::MaxWeightTooLow,
 		);
@@ -906,7 +906,7 @@ fn multisig_handles_no_preimage_after_all_approve() {
 		assert_ok!(Balances::transfer(Origin::signed(3), multi, 5));
 
 		let call = call_transfer(6, 15);
-		let call_weight = call.get_dispatch_info().weight.computation;
+		let call_weight = call.get_dispatch_info().weight;
 		let data = call.encode();
 		let hash = blake2_256(&data);
 		assert_ok!(Multisig::approve_as_multi(
@@ -915,7 +915,7 @@ fn multisig_handles_no_preimage_after_all_approve() {
 			vec![2, 3],
 			None,
 			hash.clone(),
-			0
+			Zero::zero()
 		));
 		assert_ok!(Multisig::approve_as_multi(
 			Origin::signed(2),
@@ -923,7 +923,7 @@ fn multisig_handles_no_preimage_after_all_approve() {
 			vec![1, 3],
 			Some(now()),
 			hash.clone(),
-			0
+			Zero::zero()
 		));
 		assert_ok!(Multisig::approve_as_multi(
 			Origin::signed(3),
@@ -931,7 +931,7 @@ fn multisig_handles_no_preimage_after_all_approve() {
 			vec![1, 2],
 			Some(now()),
 			hash.clone(),
-			0
+			Zero::zero()
 		));
 		assert_eq!(Balances::free_balance(6), 0);
 
