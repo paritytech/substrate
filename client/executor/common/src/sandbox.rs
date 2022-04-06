@@ -251,6 +251,8 @@ pub enum InstantiationError {
 	/// Module is well-formed, instantiated and linked, but while executing the start function
 	/// a trap was generated.
 	StartTrapped,
+	/// The code was compiled with a CPU feature not available on the host.
+	CpuFeature,
 }
 
 fn decode_environment_definition(
