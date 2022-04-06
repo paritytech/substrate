@@ -305,7 +305,7 @@ pub mod pallet {
 			if (n % T::SpendPeriod::get()).is_zero() {
 				Self::spend_funds()
 			} else {
-				0
+				Weight::zero()
 			}
 		}
 	}
@@ -459,7 +459,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			proposals_approvals_len
 		});
 
-		total_weight += T::WeightInfo::on_initialize_proposals(proposals_len);
+		total_weight = total_weight.saturating_add(Weight::todo_from_v1(
+			T::WeightInfo::on_initialize_proposals(proposals_len),
+		));
 
 		// Call Runtime hooks to external pallet using treasury to compute spend funds.
 		T::SpendFunds::spend_funds(
