@@ -314,17 +314,6 @@ pub mod pallet {
 		}
 
 		#[pallet::weight(0)]
-		pub fn lock_collection(
-			origin: OriginFor<T>,
-			id: T::CollectionId,
-		) -> DispatchResult {
-			let sender = ensure_signed(origin)?;
-			let config = CollectionConfigs::<T>::get(id).ok_or(Error::<T>::CollectionNotFound)?;
-			Self::do_lock_collection(id, sender, config)?;
-			Ok(())
-		}
-
-		#[pallet::weight(0)]
 		pub fn change_collection_config(
 			origin: OriginFor<T>,
 			id: T::CollectionId,

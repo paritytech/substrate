@@ -54,38 +54,19 @@ impl<T: Config> Pallet<T> {
 		CollectionOwner::<T>::insert(&caller, &id, ());
 
 		// emit events
-		Self::deposit_event(Event::<T>::CollectionCreated { id, max_supply });
 
 		let user_features: BitFlags<UserFeatures> = collection_config.user_features.into();
 		if user_features.contains(UserFeatures::IsLocked) {
 			Self::deposit_event(Event::<T>::CollectionLocked { id });
 		}
 
+		Self::deposit_event(Event::<T>::CollectionCreated { id, max_supply });
+
 		// update the next id value
 		let next_id = id.checked_add(&One::one()).ok_or(Error::<T>::Overflow)?;
 		CountForCollections::<T>::put(next_id);
 
-		Ok(())
-	}
-
-	pub fn do_lock_collection(
-		id: T::CollectionId,
-		caller: T::AccountId,
-		config: CollectionConfig,
-	) -> DispatchResult {
-		let collection = Collections::<T>::get(id).ok_or(Error::<T>::CollectionNotFound)?;
-		ensure!(collection.owner == caller, Error::<T>::NotAuthorized);
-
-		let mut user_features: BitFlags<UserFeatures> = config.user_features.into();
-
-		if user_features.contains(UserFeatures::IsLocked) {
-			return Err(Error::<T>::CollectionIsLocked.into());
-		}
-
-		user_features.insert(UserFeatures::IsLocked);
-
-		Self::deposit_event(Event::<T>::CollectionLocked { id });
-
+		// TODO: maybe we should return the id here?
 		Ok(())
 	}
 
