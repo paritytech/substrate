@@ -27,7 +27,7 @@ use frame_support::{
 	dispatch::{DispatchError, DispatchErrorWithPostInfo, Dispatchable},
 	parameter_types, storage,
 	traits::{ConstU32, ConstU64, Contains},
-	weights::{Pays, Weight},
+	weights::Pays,
 };
 use sp_core::H256;
 use sp_runtime::{
@@ -58,8 +58,8 @@ pub mod example {
 		pub fn foobar(
 			origin: OriginFor<T>,
 			err: bool,
-			_start_weight: WeightV2,
-			end_weight: Option<WeightV2>,
+			_start_weight: Weight,
+			end_weight: Option<Weight>,
 		) -> DispatchResultWithPostInfo {
 			let _ = ensure_signed(origin)?;
 			if err {
@@ -381,7 +381,7 @@ fn batch_handles_weight_refund() {
 		let start_weight = WeightV2 { computation: 100, bandwidth: 100 };
 		let end_weight = WeightV2 { computation: 75, bandwidth: 75 };
 		let diff = start_weight - end_weight;
-		let batch_len: Weight = 4;
+		let batch_len: u64 = 4;
 
 		// Full weight when ok
 		let inner_call = call_foobar(false, start_weight, None);
@@ -420,7 +420,7 @@ fn batch_handles_weight_refund() {
 		let good_call = call_foobar(false, start_weight, Some(end_weight));
 		let bad_call = call_foobar(true, start_weight, Some(end_weight));
 		let batch_calls = vec![good_call, bad_call];
-		let batch_len = batch_calls.len() as Weight;
+		let batch_len = batch_calls.len() as u64;
 		let call = Call::Utility(UtilityCall::batch { calls: batch_calls });
 		let info = call.get_dispatch_info();
 		let result = call.dispatch(Origin::signed(1));
@@ -498,7 +498,7 @@ fn batch_all_handles_weight_refund() {
 		let start_weight = WeightV2 { computation: 100, bandwidth: 100 };
 		let end_weight = WeightV2 { computation: 75, bandwidth: 75 };
 		let diff = start_weight - end_weight;
-		let batch_len: Weight = 4;
+		let batch_len: u64 = 4;
 
 		// Full weight when ok
 		let inner_call = call_foobar(false, start_weight, None);
@@ -534,7 +534,7 @@ fn batch_all_handles_weight_refund() {
 		let good_call = call_foobar(false, start_weight, Some(end_weight));
 		let bad_call = call_foobar(true, start_weight, Some(end_weight));
 		let batch_calls = vec![good_call, bad_call];
-		let batch_len = batch_calls.len() as Weight;
+		let batch_len = batch_calls.len() as u64;
 		let call = Call::Utility(UtilityCall::batch_all { calls: batch_calls });
 		let info = call.get_dispatch_info();
 		let result = call.dispatch(Origin::signed(1));

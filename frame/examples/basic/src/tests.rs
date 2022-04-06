@@ -28,7 +28,7 @@ use sp_core::H256;
 // or public keys. `u64` is used as the `AccountId` and no `Signature`s are required.
 use sp_runtime::{
 	testing::Header,
-	traits::{BlakeTwo256, IdentityLookup},
+	traits::{BlakeTwo256, IdentityLookup, Zero},
 	BuildStorage,
 };
 // Reexport crate as its pallet name for construct_runtime.
@@ -193,11 +193,11 @@ fn weights_work() {
 	let default_call = pallet_example_basic::Call::<Test>::accumulate_dummy { increase_by: 10 };
 	let info1 = default_call.get_dispatch_info();
 	// aka. `let info = <Call<Test> as GetDispatchInfo>::get_dispatch_info(&default_call);`
-	assert!(info1.weight > 0);
+	assert!(!info1.weight.is_zero());
 
 	// `set_dummy` is simpler than `accumulate_dummy`, and the weight
 	//   should be less.
 	let custom_call = pallet_example_basic::Call::<Test>::set_dummy { new_value: 20 };
 	let info2 = custom_call.get_dispatch_info();
-	assert!(info1.weight > info2.weight);
+	assert!(info1.weight.is_any_greater_than(&info2.weight));
 }
