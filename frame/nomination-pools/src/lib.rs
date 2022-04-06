@@ -130,8 +130,8 @@
 //!
 //! ### Reward pool
 //!
-//! When a pool is first bonded it sets up an arbitrary account as its reward destination. To track
-//! staking rewards we track how the balance of this reward account changes.
+//! When a pool is first bonded it sets up an deterministic, inaccessible account as its reward
+//! destination. To track staking rewards we track how the balance of this reward account changes.
 //!
 //! The reward pool needs to store:
 //!
