@@ -90,8 +90,7 @@ pub(crate) fn balance_voter<AccountId: IdentifierT>(
 		.filter(|e| e.candidate.borrow().elected)
 		.collect::<Vec<&mut Edge<AccountId>>>();
 
-	// Either empty, or a self vote. Not much to do in either case.
-	if elected_edges.len() < 1 {
+	if elected_edges.len() == 0 {
 		return Zero::zero()
 	}
 
@@ -156,8 +155,8 @@ pub(crate) fn balance_voter<AccountId: IdentifierT>(
 	let last_stake = elected_edges
 		.get(last_index)
 		.expect(
-			"length of elected_edges is greater than or equal 2; last_index index is at the \
-			 minimum elected_edges.len() - 1; index is within range; qed",
+			"length of elected_edges is greater than or equal to 1; last_index index is \
+			at the minimum 0; index is within range; qed",
 		)
 		.candidate
 		.borrow()
