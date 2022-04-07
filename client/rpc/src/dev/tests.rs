@@ -18,7 +18,7 @@
 
 use super::*;
 use assert_matches::assert_matches;
-use jsonrpsee::core::Error as JsonRpseeError;
+use jsonrpsee::{core::Error as JsonRpseeError, types::error::CallError};
 use sc_block_builder::BlockBuilderProvider;
 use sp_blockchain::HeaderBackend;
 use sp_consensus::BlockOrigin;
@@ -64,6 +64,6 @@ async fn deny_unsafe_works() {
 	assert_matches!(
 		api.call::<_, Option<BlockStats>>("dev_getBlockStats", [client.info().best_hash])
 			.await,
-		Err(JsonRpseeError::Request(e)) if e.to_string().contains("RPC call is unsafe to be called externally")
+		Err(JsonRpseeError::Call(CallError::Custom { message, .. })) if message.as_str() == "RPC call is unsafe to be called externally"
 	);
 }

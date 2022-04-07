@@ -71,7 +71,7 @@ pub trait AuthorApi<Hash, BlockHash> {
 	/// transaction life cycle.
 	#[subscription(
 		name = "author_submitAndWatchExtrinsic" => "author_extrinsicUpdate",
-		unsubscribe_aliases = ["author_unwatchExtrinsic"],
+		unsubscribe = "author_unwatchExtrinsic",
 		item = TransactionStatus<Hash, BlockHash>,
 	)]
 	fn watch_extrinsic(&self, bytes: Bytes) -> RpcResult<()>;

@@ -54,6 +54,7 @@ pub trait GrandpaApi<Notification, Hash, Number> {
 	/// side its justification.
 	#[subscription(
 		name = "grandpa_subscribeJustifications" => "grandpa_justifications",
+		unsubscribe = "grandpa_unsubscribeJustifications",
 		item = Notification
 	)]
 	fn subscribe_justifications(&self) -> RpcResult<()>;

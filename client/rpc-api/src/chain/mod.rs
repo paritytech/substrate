@@ -49,6 +49,7 @@ pub trait ChainApi<Number, Hash, Header, SignedBlock> {
 	/// All head subscription.
 	#[subscription(
 		name = "chain_subscribeAllHeads" => "chain_allHead",
+		unsubscribe = "chain_unsubscribeAllHeads",
 		item = Header
 	)]
 	fn subscribe_all_heads(&self) -> RpcResult<()>;
@@ -57,7 +58,7 @@ pub trait ChainApi<Number, Hash, Header, SignedBlock> {
 	#[subscription(
 		name = "chain_subscribeNewHeads" => "chain_newHead",
 		aliases = ["subscribe_newHead", "chain_subscribeNewHead"],
-		unsubscribe_aliases = ["chain_unsubscribeNewHead"],
+		unsubscribe = "chain_unsubscribeNewHead",
 		item = Header
 	)]
 	fn subscribe_new_heads(&self) -> RpcResult<()>;
@@ -66,7 +67,7 @@ pub trait ChainApi<Number, Hash, Header, SignedBlock> {
 	#[subscription(
 		name = "chain_subscribeFinalizedHeads" => "chain_finalizedHead",
 		aliases = ["chain_subscribeFinalisedHeads"],
-		unsubscribe_aliases = ["chain_unsubscribeFinalisedHeads"],
+		unsubscribe = "chain_unsubscribeFinalisedHeads",
 		item = Header
 	)]
 	fn subscribe_finalized_heads(&self) -> RpcResult<()>;

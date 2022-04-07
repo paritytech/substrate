@@ -52,14 +52,14 @@ pub type WsServer = WsServerHandle;
 pub fn start_http<M: Send + Sync + 'static>(
 	addrs: &[SocketAddr],
 	cors: Option<&Vec<String>>,
-	max_payload_mb: Option<usize>,
+	max_payload_in_mb: Option<usize>,
+	max_payload_out_mb: Option<usize>,
 	metrics: Option<RpcMetrics>,
 	rpc_api: RpcModule<M>,
 	rt: tokio::runtime::Handle,
 ) -> Result<HttpServerHandle, anyhow::Error> {
-	let max_request_body_size = max_payload_mb
-		.map(|mb| mb.saturating_mul(MEGABYTE))
-		.unwrap_or(RPC_MAX_PAYLOAD_DEFAULT);
+	let max_payload_in = payload_size_or_default(max_payload_in_mb);
+	let max_payload_out = payload_size_or_default(max_payload_out_mb);
 
 	let mut acl = AccessControlBuilder::new();
 
@@ -71,7 +71,8 @@ pub fn start_http<M: Send + Sync + 'static>(
 	};
 
 	let builder = HttpServerBuilder::new()
-		.max_request_body_size(max_request_body_size as u32)
+		.max_request_body_size(max_payload_in as u32)
+		.max_response_body_size(max_payload_out as u32)
 		.set_access_control(acl.build())
 		.custom_tokio_runtime(rt.clone());
 
@@ -79,10 +80,10 @@ pub fn start_http<M: Send + Sync + 'static>(
 	let handle = if let Some(metrics) = metrics {
 		let middleware = RpcMiddleware::new(metrics, "http".into());
 		let builder = builder.set_middleware(middleware);
-		let server = tokio::task::block_in_place(|| rt.block_on(async { builder.build(addrs) }))?;
+		let server = tokio::task::block_in_place(|| rt.block_on(builder.build(addrs)))?;
 		server.start(rpc_api)?
 	} else {
-		let server = tokio::task::block_in_place(|| rt.block_on(async { builder.build(addrs) }))?;
+		let server = tokio::task::block_in_place(|| rt.block_on(builder.build(addrs)))?;
 		server.start(rpc_api)?
 	};
 
@@ -95,19 +96,21 @@ pub fn start_ws<M: Send + Sync + 'static>(
 	addrs: &[SocketAddr],
 	max_connections: Option<usize>,
 	cors: Option<&Vec<String>>,
-	max_payload_mb: Option<usize>,
+	max_payload_in_mb: Option<usize>,
+	max_payload_out_mb: Option<usize>,
 	metrics: Option<RpcMetrics>,
 	rpc_api: RpcModule<M>,
 	rt: tokio::runtime::Handle,
 	id_provider: Option<Box<dyn IdProvider>>,
 ) -> Result<WsServerHandle, anyhow::Error> {
-	let max_request_body_size = max_payload_mb
-		.map(|mb| mb.saturating_mul(MEGABYTE))
-		.unwrap_or(RPC_MAX_PAYLOAD_DEFAULT);
+	let max_payload_in = payload_size_or_default(max_payload_in_mb);
+	let max_payload_out = payload_size_or_default(max_payload_out_mb);
+
 	let max_connections = max_connections.unwrap_or(WS_MAX_CONNECTIONS);
 
 	let mut builder = WsServerBuilder::new()
-		.max_request_body_size(max_request_body_size as u32)
+		.max_request_body_size(max_payload_in as u32)
+		.max_response_body_size(max_payload_out as u32)
 		.max_connections(max_connections as u64)
 		.custom_tokio_runtime(rt.clone());
 
@@ -162,4 +165,8 @@ fn build_rpc_api<M: Send + Sync + 'static>(mut rpc_api: RpcModule<M>) -> RpcModu
 		.expect("infallible all other methods have their own address space; qed");
 
 	rpc_api
+}
+
+fn payload_size_or_default(size_mb: Option<usize>) -> usize {
+	size_mb.map_or(RPC_MAX_PAYLOAD_DEFAULT, |mb| mb.saturating_mul(MEGABYTE))
 }

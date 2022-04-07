@@ -58,6 +58,7 @@ pub trait BeefyApi<Notification, Hash> {
 	/// Returns the block most recently finalized by BEEFY, alongside side its justification.
 	#[subscription(
 		name = "beefy_subscribeJustifications" => "beefy_justifications",
+		unsubscribe = "beefy_unsubscribeJustifications",
 		item = Notification,
 	)]
 	fn subscribe_justifications(&self) -> RpcResult<()>;

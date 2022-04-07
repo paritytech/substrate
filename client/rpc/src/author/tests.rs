@@ -26,7 +26,7 @@ use jsonrpsee::{
 		error::{SubscriptionClosed, SubscriptionClosedReason},
 		Error as RpcError,
 	},
-	types::EmptyParams,
+	types::{error::CallError, EmptyParams},
 	RpcModule,
 };
 use sc_transaction_pool::{BasicPool, FullChainApi};
@@ -107,7 +107,7 @@ async fn author_submit_transaction_should_not_cause_error() {
 
 	assert_matches!(
 		api.call::<_, H256>("author_submitExtrinsic", [xt]).await,
-		Err(RpcError::Request(e)) if e.contains("Already imported")
+		Err(RpcError::Call(CallError::Custom { message, ..})) if message.contains("Already imported")
 	);
 }
 
@@ -287,7 +287,7 @@ async fn author_has_session_keys() {
 
 	assert_matches!(
 		api.call::<_, bool>("author_hasSessionKeys", vec![Bytes::from(vec![1, 2, 3])]).await,
-		Err(RpcError::Request(e)) if e.contains("Session keys are not encoded correctly")
+		Err(RpcError::Call(CallError::Custom { message, ..})) if message.as_str() == "Session keys are not encoded correctly"
 	);
 }
 
