@@ -45,8 +45,6 @@
 //!
 //! A account can stake funds with a nomination pool by calling [`Call::join`].
 //!
-//! For design docs see the [joining](#joining) section.
-//!
 //! ### Claim rewards
 //!
 //! After joining a pool, a delegator can claim rewards by calling [`Call::claim_payout`].
