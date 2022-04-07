@@ -19,10 +19,7 @@
 //! Helper methods dedicated to timestamps.
 
 use sp_core::offchain::Timestamp;
-use std::{
-	convert::TryInto,
-	time::{Duration, SystemTime},
-};
+use std::time::{Duration, SystemTime};
 
 /// Returns the current time as a `Timestamp`.
 pub fn now() -> Timestamp {

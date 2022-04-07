@@ -23,12 +23,11 @@ use crate::{
 	WeightInfo,
 };
 use codec::Encode;
-use frame_election_provider_support::{NposSolver, PerThing128};
+use frame_election_provider_support::{NposSolution, NposSolver, PerThing128};
 use frame_support::{dispatch::DispatchResult, ensure, traits::Get};
 use frame_system::offchain::SubmitTransaction;
 use sp_npos_elections::{
 	assignment_ratio_to_staked_normalized, assignment_staked_to_ratio_normalized, ElectionResult,
-	NposSolution,
 };
 use sp_runtime::{
 	offchain::storage::{MutateStorageError, StorageValueRef},
@@ -52,9 +51,9 @@ pub type VoterOf<T> = frame_election_provider_support::VoterOf<<T as Config>::Da
 pub type Assignment<T> =
 	sp_npos_elections::Assignment<<T as frame_system::Config>::AccountId, SolutionAccuracyOf<T>>;
 
-/// The [`IndexAssignment`][sp_npos_elections::IndexAssignment] type specialized for a particular
-/// runtime `T`.
-pub type IndexAssignmentOf<T> = sp_npos_elections::IndexAssignmentOf<SolutionOf<T>>;
+/// The [`IndexAssignment`][frame_election_provider_support::IndexAssignment] type specialized for a
+/// particular runtime `T`.
+pub type IndexAssignmentOf<T> = frame_election_provider_support::IndexAssignmentOf<SolutionOf<T>>;
 
 /// Error type of the pallet's [`crate::Config::Solver`].
 pub type SolverErrorOf<T> = <<T as Config>::Solver as NposSolver>::Error;
@@ -742,10 +741,11 @@ mod tests {
 	};
 	use codec::Decode;
 	use frame_benchmarking::Zero;
+	use frame_election_provider_support::IndexAssignment;
 	use frame_support::{
 		assert_noop, assert_ok, bounded_vec, dispatch::Dispatchable, traits::OffchainWorker,
 	};
-	use sp_npos_elections::{ElectionScore, IndexAssignment};
+	use sp_npos_elections::ElectionScore;
 	use sp_runtime::{
 		offchain::storage_lock::{BlockAndTime, StorageLock},
 		traits::ValidateUnsigned,
@@ -931,7 +931,7 @@ mod tests {
 	#[test]
 	#[should_panic(expected = "Invalid unsigned submission must produce invalid block and \
 	                           deprive validator from their authoring reward.: \
-	                           Module(ModuleError { index: 2, error: 1, message: \
+	                           Module(ModuleError { index: 2, error: [1, 0, 0, 0], message: \
 	                           Some(\"PreDispatchWrongWinnerCount\") })")]
 	fn unfeasible_solution_panics() {
 		ExtBuilder::default().build_and_execute(|| {
@@ -1044,11 +1044,16 @@ mod tests {
 			roll_to(25);
 			assert!(MultiPhase::current_phase().is_unsigned());
 
+			// Force the number of winners to be bigger to fail
+			let (mut solution, _) =
+				MultiPhase::mine_solution::<<Runtime as Config>::Solver>().unwrap();
+			solution.solution.votes1[0].1 = 4;
+
 			assert_eq!(
-				MultiPhase::mine_check_save_submit().unwrap_err(),
+				MultiPhase::basic_checks(&solution, "mined").unwrap_err(),
 				MinerError::PreDispatchChecksFailed(DispatchError::Module(ModuleError {
 					index: 2,
-					error: 1,
+					error: [1, 0, 0, 0],
 					message: Some("PreDispatchWrongWinnerCount"),
 				})),
 			);

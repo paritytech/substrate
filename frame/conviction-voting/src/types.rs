@@ -19,8 +19,6 @@
 
 use sp_std::marker::PhantomData;
 
-use super::*;
-use crate::{AccountVote, Conviction, Vote};
 use codec::{Codec, Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	traits::VoteTally, CloneNoBound, DefaultNoBound, EqNoBound, PartialEqNoBound,
@@ -31,6 +29,9 @@ use sp_runtime::{
 	traits::{Saturating, Zero},
 	RuntimeDebug,
 };
+
+use super::*;
+use crate::{AccountVote, Conviction, Vote};
 
 /// Info regarding an ongoing referendum.
 #[derive(

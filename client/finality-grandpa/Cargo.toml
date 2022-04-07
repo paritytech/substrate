@@ -17,7 +17,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 thiserror = "1.0"
 dyn-clone = "1.0"
 fork-tree = { version = "3.0.0", path = "../../utils/fork-tree" }
-futures = "0.3.19"
+futures = "0.3.21"
 futures-timer = "3.0.1"
 hex = "0.4.2"
 log = "0.4.8"
@@ -37,7 +37,7 @@ sp-keystore = { version = "0.12.0", path = "../../primitives/keystore" }
 sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
 sc-telemetry = { version = "4.0.0-dev", path = "../telemetry" }
 sc-keystore = { version = "4.0.0-dev", path = "../keystore" }
-serde_json = "1.0.74"
+serde_json = "1.0.79"
 sc-client-api = { version = "4.0.0-dev", path = "../api" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
 sc-network = { version = "0.10.0-dev", path = "../network" }
@@ -61,5 +61,5 @@ substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/ru
 sp-tracing = { version = "5.0.0", path = "../../primitives/tracing" }
 
 serde = "1.0.136"
-tokio = "1.15"
+tokio = "1.17.0"
 tempfile = "3.1.0"

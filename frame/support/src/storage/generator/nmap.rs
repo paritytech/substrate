@@ -477,7 +477,7 @@ mod test_iterators {
 			use crate::{hash::Identity, storage::Key as NMapKey};
 			crate::generate_storage_alias!(
 				MyModule,
-				MyNMap => NMap<Key<(u64, Identity), (u64, Identity), (u64, Identity)>, u64>
+				MyNMap => NMap<Key<(Identity, u64), (Identity, u64), (Identity, u64)>, u64>
 			);
 
 			MyNMap::insert((1, 1, 1), 11);
@@ -519,8 +519,8 @@ mod test_iterators {
 
 			{
 				crate::generate_storage_alias!(Test, NMap => DoubleMap<
-					(u16, crate::Blake2_128Concat),
-					(u32, crate::Twox64Concat),
+					(crate::Blake2_128Concat, u16),
+					(crate::Twox64Concat, u32),
 					u64
 				>);
 
