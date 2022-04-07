@@ -13,7 +13,7 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-jsonrpsee = { version = "0.8", features = ["ws-client", "macros"] }
+jsonrpsee = { version = "0.10.1", features = ["ws-client", "macros"] }
 
 env_logger = "0.9"
 frame-support = { path = "../../../frame/support", optional = true, version = "4.0.0-dev" }

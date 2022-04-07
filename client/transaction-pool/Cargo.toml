@@ -15,7 +15,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 codec = { package = "parity-scale-codec", version = "3.0.0" }
 thiserror = "1.0.30"
-futures = "0.3.19"
+futures = "0.3.21"
 futures-timer = "3.0.2"
 log = "0.4.8"
 parity-util-mem = { version = "0.11.0", default-features = false, features = ["primitive-types"] }
