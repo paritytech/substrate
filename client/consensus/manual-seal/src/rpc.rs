@@ -65,10 +65,10 @@ pub enum EngineCommand<Hash> {
 }
 
 /// RPC trait that provides methods for interacting with the manual-seal authorship task over rpc.
-#[rpc(client, server, namespace = "engine")]
+#[rpc(client, server)]
 pub trait ManualSealApi<Hash> {
 	/// Instructs the manual-seal authorship task to create a new block
-	#[method(name = "createBlock")]
+	#[method(name = "engine_createBlock")]
 	async fn create_block(
 		&self,
 		create_empty: bool,
@@ -77,7 +77,7 @@ pub trait ManualSealApi<Hash> {
 	) -> RpcResult<CreatedBlock<Hash>>;
 
 	/// Instructs the manual-seal authorship task to finalize a block
-	#[method(name = "finalizeBlock")]
+	#[method(name = "engine_finalizeBlock")]
 	async fn finalize_block(
 		&self,
 		hash: Hash,

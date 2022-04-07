@@ -37,18 +37,18 @@ use sp_runtime::{generic::BlockId, legacy, traits};
 pub use frame_system_rpc_runtime_api::AccountNonceApi;
 
 /// System RPC methods.
-#[rpc(client, server, namespace = "system")]
+#[rpc(client, server)]
 pub trait SystemApi<BlockHash, AccountId, Index> {
 	/// Returns the next valid index (aka nonce) for given account.
 	///
 	/// This method takes into consideration all pending transactions
 	/// currently in the pool and if no transactions are found in the pool
 	/// it fallbacks to query the index from the runtime (aka. state nonce).
-	#[method(name = "accountNextIndex", aliases = ["system_nextIndex"])]
+	#[method(name = "system_accountNextIndex", aliases = ["account_nextIndex"])]
 	async fn nonce(&self, account: AccountId) -> RpcResult<Index>;
 
 	/// Dry run an extrinsic at a given block. Return SCALE encoded ApplyExtrinsicResult.
-	#[method(name = "dryRun", aliases = ["system_dryRunAt"])]
+	#[method(name = "system_dryRun", aliases = ["system_dryRunAt"])]
 	async fn dry_run(&self, extrinsic: Bytes, at: Option<BlockHash>) -> RpcResult<Bytes>;
 }
 

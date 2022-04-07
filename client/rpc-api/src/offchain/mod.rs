@@ -24,13 +24,13 @@ use sp_core::{offchain::StorageKind, Bytes};
 pub mod error;
 
 /// Substrate offchain RPC API
-#[rpc(client, server, namespace = "offchain")]
+#[rpc(client, server)]
 pub trait OffchainApi {
 	/// Set offchain local storage under given key and prefix.
-	#[method(name = "localStorageSet")]
+	#[method(name = "offchain_localStorageSet")]
 	fn set_local_storage(&self, kind: StorageKind, key: Bytes, value: Bytes) -> RpcResult<()>;
 
 	/// Get offchain local storage under given key and prefix.
-	#[method(name = "localStorageGet")]
+	#[method(name = "offchain_localStorageGet")]
 	fn get_local_storage(&self, kind: StorageKind, key: Bytes) -> RpcResult<Option<Bytes>>;
 }

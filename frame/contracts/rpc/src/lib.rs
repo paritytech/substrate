@@ -117,7 +117,7 @@ pub struct CodeUploadRequest<AccountId> {
 }
 
 /// Contracts RPC methods.
-#[rpc(client, server, namespace = "contracts")]
+#[rpc(client, server)]
 pub trait ContractsApi<BlockHash, BlockNumber, AccountId, Balance, Hash>
 where
 	Balance: Copy + TryFrom<NumberOrHex> + Into<NumberOrHex>,
@@ -129,7 +129,7 @@ where
 	///
 	/// This method is useful for calling getter-like methods on contracts or to dry-run a
 	/// a contract call in order to determine the `gas_limit`.
-	#[method(name = "call")]
+	#[method(name = "contracts_call")]
 	fn call(
 		&self,
 		call_request: CallRequest<AccountId>,
@@ -142,7 +142,7 @@ where
 	/// is not actually created.
 	///
 	/// This method is useful for UIs to dry-run contract instantiations.
-	#[method(name = "instantiate")]
+	#[method(name = "contracts_instantiate")]
 	fn instantiate(
 		&self,
 		instantiate_request: InstantiateRequest<AccountId, Hash>,
@@ -155,7 +155,7 @@ where
 	/// won't change any state.
 	///
 	/// This method is useful for UIs to dry-run code upload.
-	#[method(name = "upload_code")]
+	#[method(name = "contracts_upload_code")]
 	fn upload_code(
 		&self,
 		upload_request: CodeUploadRequest<AccountId>,
@@ -164,7 +164,7 @@ where
 
 	/// Returns the value under a specified storage `key` in a contract given by `address` param,
 	/// or `None` if it is not set.
-	#[method(name = "getStorage")]
+	#[method(name = "contracts_getStorage")]
 	fn get_storage(
 		&self,
 		address: AccountId,

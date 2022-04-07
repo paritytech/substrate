@@ -39,11 +39,11 @@ use sp_runtime::traits::{Block as BlockT, Header as _};
 use std::{collections::HashMap, sync::Arc};
 
 /// Provides rpc methods for interacting with Babe.
-#[rpc(client, server, namespace = "babe")]
+#[rpc(client, server)]
 pub trait BabeApi {
 	/// Returns data about which slots (primary or secondary) can be claimed in the current epoch
 	/// with the keys in the keystore.
-	#[method(name = "epochAuthorship")]
+	#[method(name = "babe_epochAuthorship")]
 	async fn epoch_authorship(&self) -> RpcResult<HashMap<AuthorityId, EpochAuthorship>>;
 }
 

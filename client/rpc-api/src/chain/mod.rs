@@ -23,39 +23,39 @@ use sp_rpc::{list::ListOrValue, number::NumberOrHex};
 
 pub mod error;
 
-#[rpc(client, server, namespace = "chain")]
+#[rpc(client, server)]
 pub trait ChainApi<Number, Hash, Header, SignedBlock> {
 	/// Get header.
-	#[method(name = "getHeader")]
+	#[method(name = "chain_getHeader")]
 	async fn header(&self, hash: Option<Hash>) -> RpcResult<Option<Header>>;
 
 	/// Get header and body of a relay chain block.
-	#[method(name = "getBlock")]
+	#[method(name = "chain_getBlock")]
 	async fn block(&self, hash: Option<Hash>) -> RpcResult<Option<SignedBlock>>;
 
 	/// Get hash of the n-th block in the canon chain.
 	///
 	/// By default returns latest block hash.
-	#[method(name = "getBlockHash", aliases = ["chain_getHead"])]
+	#[method(name = "chain_getBlockHash", aliases = ["chain_getHead"])]
 	fn block_hash(
 		&self,
 		hash: Option<ListOrValue<NumberOrHex>>,
 	) -> RpcResult<ListOrValue<Option<Hash>>>;
 
 	/// Get hash of the last finalized block in the canon chain.
-	#[method(name = "getFinalizedHead", aliases = ["chain_getFinalisedHead"])]
+	#[method(name = "chain_getFinalizedHead", aliases = ["chain_getFinalisedHead"])]
 	fn finalized_head(&self) -> RpcResult<Hash>;
 
 	/// All head subscription.
 	#[subscription(
-		name = "subscribeAllHeads" => "allHead",
+		name = "chain_subscribeAllHeads" => "chain_allHead",
 		item = Header
 	)]
 	fn subscribe_all_heads(&self) -> RpcResult<()>;
 
 	/// New head subscription.
 	#[subscription(
-		name = "subscribeNewHeads" => "newHead",
+		name = "chain_subscribeNewHeads" => "chain_newHead",
 		aliases = ["subscribe_newHead", "chain_subscribeNewHead"],
 		unsubscribe_aliases = ["chain_unsubscribeNewHead"],
 		item = Header
@@ -64,7 +64,7 @@ pub trait ChainApi<Number, Hash, Header, SignedBlock> {
 
 	/// Finalized head subscription.
 	#[subscription(
-		name = "subscribeFinalizedHeads" => "finalizedHead",
+		name = "chain_subscribeFinalizedHeads" => "chain_finalizedHead",
 		aliases = ["chain_subscribeFinalisedHeads"],
 		unsubscribe_aliases = ["chain_unsubscribeFinalisedHeads"],
 		item = Header

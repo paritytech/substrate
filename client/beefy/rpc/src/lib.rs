@@ -53,11 +53,11 @@ pub enum Error {
 }
 
 /// Provides RPC methods for interacting with BEEFY.
-#[rpc(client, server, namespace = "beefy")]
+#[rpc(client, server)]
 pub trait BeefyApi<Notification, Hash> {
 	/// Returns the block most recently finalized by BEEFY, alongside side its justification.
 	#[subscription(
-		name = "subscribeJustifications" => "justifications",
+		name = "beefy_subscribeJustifications" => "beefy_justifications",
 		item = Notification,
 	)]
 	fn subscribe_justifications(&self) -> RpcResult<()>;
@@ -67,7 +67,7 @@ pub trait BeefyApi<Notification, Hash> {
 	/// The latest BEEFY block might not be available if the BEEFY gadget is not running
 	/// in the network or if the client is still initializing or syncing with the network.
 	/// In such case an error would be returned.
-	#[method(name = "getFinalizedHead")]
+	#[method(name = "beefy_getFinalizedHead")]
 	async fn latest_finalized(&self) -> RpcResult<Hash>;
 }
 

@@ -43,24 +43,24 @@ use notification::JustificationNotification;
 use report::{ReportAuthoritySet, ReportVoterState, ReportedRoundStates};
 
 /// Provides RPC methods for interacting with GRANDPA.
-#[rpc(client, server, namespace = "grandpa")]
+#[rpc(client, server)]
 pub trait GrandpaApi<Notification, Hash, Number> {
 	/// Returns the state of the current best round state as well as the
 	/// ongoing background rounds.
-	#[method(name = "roundState")]
+	#[method(name = "grandpa_roundState")]
 	async fn round_state(&self) -> RpcResult<ReportedRoundStates>;
 
 	/// Returns the block most recently finalized by Grandpa, alongside
 	/// side its justification.
 	#[subscription(
-		name = "subscribeJustifications" => "justifications",
+		name = "grandpa_subscribeJustifications" => "grandpa_justifications",
 		item = Notification
 	)]
 	fn subscribe_justifications(&self) -> RpcResult<()>;
 
 	/// Prove finality for the given block number by returning the Justification for the last block
 	/// in the set and all the intermediary headers to link them together.
-	#[method(name = "proveFinality")]
+	#[method(name = "grandpa_proveFinality")]
 	async fn prove_finality(&self, block: Number) -> RpcResult<Option<EncodedFinalityProof>>;
 }
 
