@@ -4113,11 +4113,7 @@ mod election_data_provider {
 			.set_status(41, StakerStatus::Validator)
 			.build_and_execute(|| {
 				// sum of all nominators who'd be voters (1), plus the self-votes (4).
-				assert_eq!(
-					<Test as Config>::SortedListProvider::count() +
-						<Validators<Test>>::iter().count() as u32,
-					5
-				);
+				assert_eq!(<Test as Config>::VoterList::count(), 5);
 
 				// if limits is less..
 				assert_eq!(Staking::electing_voters(Some(1)).unwrap().len(), 1);
@@ -4140,43 +4136,43 @@ mod election_data_provider {
 			});
 	}
 
+	// Tests the criteria that in `ElectionDataProvider::voters` function, we try to get at most
+	// `maybe_max_len` voters, and if some of them end up being skipped, we iterate at most `2 *
+	// maybe_max_len`.
 	#[test]
-	fn only_iterates_max_2_times_nominators_quota() {
+	fn only_iterates_max_2_times_max_allowed_len() {
 		ExtBuilder::default()
-			.nominate(true) // add nominator 101, who nominates [11, 21]
+			.nominate(false)
 			// the other nominators only nominate 21
 			.add_staker(61, 60, 2_000, StakerStatus::<AccountId>::Nominator(vec![21]))
 			.add_staker(71, 70, 2_000, StakerStatus::<AccountId>::Nominator(vec![21]))
 			.add_staker(81, 80, 2_000, StakerStatus::<AccountId>::Nominator(vec![21]))
 			.build_and_execute(|| {
-				// given our nominators ordered by stake,
+				// all voters ordered by stake,
 				assert_eq!(
-					<Test as Config>::SortedListProvider::iter().collect::<Vec<_>>(),
-					vec![61, 71, 81, 101]
+					<Test as Config>::VoterList::iter().collect::<Vec<_>>(),
+					vec![61, 71, 81, 11, 21, 31]
 				);
 
-				// and total voters
-				assert_eq!(
-					<Test as Config>::SortedListProvider::count() +
-						<Validators<Test>>::iter().count() as u32,
-					7
-				);
-
-				// roll to session 5
 				run_to_block(25);
 
 				// slash 21, the only validator nominated by our first 3 nominators
 				add_slash(&21);
 
-				// we take 4 voters: 2 validators and 2 nominators (so nominators quota = 2)
+				// we want 2 voters now, and in maximum we allow 4 iterations. This is what happens:
+				// 61 is pruned;
+				// 71 is pruned;
+				// 81 is pruned;
+				// 11 is taken;
+				// we finish since the 2x limit is reached.
 				assert_eq!(
-					Staking::electing_voters(Some(3))
+					Staking::electing_voters(Some(2))
 						.unwrap()
 						.iter()
 						.map(|(stash, _, _)| stash)
 						.copied()
 						.collect::<Vec<_>>(),
-					vec![31, 11], // 2 validators, but no nominators because we hit the quota
+					vec![11],
 				);
 			});
 	}
@@ -4189,44 +4185,16 @@ mod election_data_provider {
 	#[test]
 	fn get_max_len_voters_even_if_some_nominators_are_slashed() {
 		ExtBuilder::default()
-			.nominate(true) // add nominator 101, who nominates [11, 21]
+			.nominate(false)
 			.add_staker(61, 60, 20, StakerStatus::<AccountId>::Nominator(vec![21]))
-			//                                 61 only nominates validator 21 ^^
 			.add_staker(71, 70, 10, StakerStatus::<AccountId>::Nominator(vec![11, 21]))
+			.add_staker(81, 80, 10, StakerStatus::<AccountId>::Nominator(vec![11, 21]))
 			.build_and_execute(|| {
-				// given our nominators ordered by stake,
+				// given our voters ordered by stake,
 				assert_eq!(
-					<Test as Config>::SortedListProvider::iter().collect::<Vec<_>>(),
-					vec![101, 61, 71]
+					<Test as Config>::VoterList::iter().collect::<Vec<_>>(),
+					vec![11, 21, 31, 61, 71, 81]
 				);
-
-				// and total voters
-				assert_eq!(
-					<Test as Config>::SortedListProvider::count() +
-						<Validators<Test>>::iter().count() as u32,
-					6
-				);
-
-				// we take 5 voters
-				assert_eq!(
-					Staking::electing_voters(Some(5))
-						.unwrap()
-						.iter()
-						.map(|(stash, _, _)| stash)
-						.copied()
-						.collect::<Vec<_>>(),
-					// then
-					vec![
-						31, 21, 11, // 3 nominators
-						101, 61 // 2 validators, and 71 is excluded
-					],
-				);
-
-				// roll to session 5
-				run_to_block(25);
-
-				// slash 21, the only validator nominated by 61
-				add_slash(&21);
 
 				// we take 4 voters
 				assert_eq!(
@@ -4236,10 +4204,24 @@ mod election_data_provider {
 						.map(|(stash, _, _)| stash)
 						.copied()
 						.collect::<Vec<_>>(),
-					vec![
-						31, 11, // 2 validators (21 was slashed)
-						101, 71 // 2 nominators, excluding 61
-					],
+					vec![11, 21, 31, 61],
+				);
+
+				// roll to session 5
+				run_to_block(25);
+
+				// slash 21, the only validator nominated by 61.
+				add_slash(&21);
+
+				// we take 4 voters; 71 and 81 are replacing the ejected ones.
+				assert_eq!(
+					Staking::electing_voters(Some(4))
+						.unwrap()
+						.iter()
+						.map(|(stash, _, _)| stash)
+						.copied()
+						.collect::<Vec<_>>(),
+					vec![11, 31, 71, 81],
 				);
 			});
 	}
@@ -4755,19 +4737,45 @@ mod sorted_list_provider {
 	fn re_nominate_does_not_change_counters_or_list() {
 		ExtBuilder::default().nominate(true).build_and_execute(|| {
 			// given
-			let pre_insert_nominator_count = Nominators::<Test>::iter().count() as u32;
-			assert_eq!(<Test as Config>::SortedListProvider::count(), pre_insert_nominator_count);
-			assert!(Nominators::<Test>::contains_key(101));
-			assert_eq!(<Test as Config>::SortedListProvider::iter().collect::<Vec<_>>(), vec![101]);
+			let pre_insert_voter_count =
+				(Nominators::<Test>::count() + Validators::<Test>::count()) as u32;
+			assert_eq!(<Test as Config>::VoterList::count(), pre_insert_voter_count);
+
+			assert_eq!(
+				<Test as Config>::VoterList::iter().collect::<Vec<_>>(),
+				vec![11, 21, 31, 101]
+			);
 
 			// when account 101 renominates
 			assert_ok!(Staking::nominate(Origin::signed(100), vec![41]));
 
 			// then counts don't change
-			assert_eq!(<Test as Config>::SortedListProvider::count(), pre_insert_nominator_count);
-			assert_eq!(Nominators::<Test>::iter().count() as u32, pre_insert_nominator_count);
+			assert_eq!(<Test as Config>::VoterList::count(), pre_insert_voter_count);
 			// and the list is the same
-			assert_eq!(<Test as Config>::SortedListProvider::iter().collect::<Vec<_>>(), vec![101]);
+			assert_eq!(
+				<Test as Config>::VoterList::iter().collect::<Vec<_>>(),
+				vec![11, 21, 31, 101]
+			);
+		});
+	}
+
+	#[test]
+	fn re_validate_does_not_change_counters_or_list() {
+		ExtBuilder::default().nominate(false).build_and_execute(|| {
+			// given
+			let pre_insert_voter_count =
+				(Nominators::<Test>::count() + Validators::<Test>::count()) as u32;
+			assert_eq!(<Test as Config>::VoterList::count(), pre_insert_voter_count);
+
+			assert_eq!(<Test as Config>::VoterList::iter().collect::<Vec<_>>(), vec![11, 21, 31]);
+
+			// when account 11 re-validates
+			assert_ok!(Staking::validate(Origin::signed(10), Default::default()));
+
+			// then counts don't change
+			assert_eq!(<Test as Config>::VoterList::count(), pre_insert_voter_count);
+			// and the list is the same
+			assert_eq!(<Test as Config>::VoterList::iter().collect::<Vec<_>>(), vec![11, 21, 31]);
 		});
 	}
 }

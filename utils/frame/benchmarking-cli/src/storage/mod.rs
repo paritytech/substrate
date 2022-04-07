@@ -17,7 +17,6 @@
 
 pub mod cmd;
 pub mod read;
-pub mod record;
 pub mod template;
 pub mod write;
 

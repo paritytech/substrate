@@ -217,7 +217,18 @@ where
 		<Self as crate::storage::StorageDoubleMap<Key1, Key2, Value>>::remove(k1, k2)
 	}
 
-	/// Remove all values under the first key.
+	/// Remove all values under `k1` in the overlay and up to `limit` in the
+	/// backend.
+	///
+	/// All values in the client overlay will be deleted, if there is some `limit` then up to
+	/// `limit` values are deleted from the client backend, if `limit` is none then all values in
+	/// the client backend are deleted.
+	///
+	/// # Note
+	///
+	/// Calling this multiple times per block with a `limit` set leads always to the same keys being
+	/// removed and the same result being returned. This happens because the keys to delete in the
+	/// overlay are not taken into account when deleting keys in the backend.
 	pub fn remove_prefix<KArg1>(k1: KArg1, limit: Option<u32>) -> sp_io::KillStorageResult
 	where
 		KArg1: ?Sized + EncodeLike<Key1>,
@@ -337,11 +348,17 @@ where
 		>(key1, key2)
 	}
 
-	/// Remove all values of the storage in the overlay and up to `limit` in the backend.
+	/// Remove all values in the overlay and up to `limit` in the backend.
 	///
 	/// All values in the client overlay will be deleted, if there is some `limit` then up to
 	/// `limit` values are deleted from the client backend, if `limit` is none then all values in
 	/// the client backend are deleted.
+	///
+	/// # Note
+	///
+	/// Calling this multiple times per block with a `limit` set leads always to the same keys being
+	/// removed and the same result being returned. This happens because the keys to delete in the
+	/// overlay are not taken into account when deleting keys in the backend.
 	pub fn remove_all(limit: Option<u32>) -> sp_io::KillStorageResult {
 		<Self as crate::storage::StoragePrefixedMap<Value>>::remove_all(limit)
 	}
