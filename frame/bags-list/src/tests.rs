@@ -459,6 +459,27 @@ mod sorted_list_provider {
 	}
 
 	#[test]
+	fn iter_from_works() {
+		ExtBuilder::default().add_ids(vec![(5, 5), (6, 15)]).build_and_execute(|| {
+			// given
+			assert_eq!(
+				List::<Runtime>::get_bags(),
+				vec![(10, vec![1, 5]), (20, vec![6]), (1000, vec![2, 3, 4])]
+			);
+
+			assert_eq!(BagsList::iter_from(&2).unwrap().collect::<Vec<_>>(), vec![3, 4, 6, 1, 5]);
+			assert_eq!(BagsList::iter_from(&3).unwrap().collect::<Vec<_>>(), vec![4, 6, 1, 5]);
+			assert_eq!(BagsList::iter_from(&4).unwrap().collect::<Vec<_>>(), vec![6, 1, 5]);
+			assert_eq!(BagsList::iter_from(&6).unwrap().collect::<Vec<_>>(), vec![1, 5]);
+			assert_eq!(BagsList::iter_from(&1).unwrap().collect::<Vec<_>>(), vec![5]);
+			assert!(BagsList::iter_from(&5).unwrap().collect::<Vec<_>>().is_empty());
+			assert!(BagsList::iter_from(&7).is_err());
+
+			assert_storage_noop!(assert!(BagsList::iter_from(&8).is_err()));
+		});
+	}
+
+	#[test]
 	fn count_works() {
 		ExtBuilder::default().build_and_execute(|| {
 			// given

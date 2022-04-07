@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use std::{collections::HashSet, convert::TryFrom, str::FromStr, sync::Arc, thread::sleep};
+use std::{collections::HashSet, str::FromStr, sync::Arc, thread::sleep};
 
 use crate::NetworkProvider;
 use codec::{Decode, Encode};
@@ -327,10 +327,7 @@ mod tests {
 	use sc_client_db::offchain::LocalStorage;
 	use sc_network::{NetworkStateInfo, PeerId};
 	use sp_core::offchain::{DbExternalities, Externalities};
-	use std::{
-		convert::{TryFrom, TryInto},
-		time::SystemTime,
-	};
+	use std::time::SystemTime;
 
 	pub(super) struct TestNetwork();
 
