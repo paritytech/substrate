@@ -19,11 +19,11 @@
 
 use super::*;
 
-use frame_benchmarking::{benchmarks, whitelisted_caller, account};
+use crate::Pallet;
+use frame_benchmarking::{account, benchmarks, whitelisted_caller};
 use frame_support::traits::{Currency, Get};
 use frame_system::RawOrigin;
 use sp_runtime::traits::{BlockNumberProvider, Bounded};
-use crate::Pallet;
 
 const SEED: u32 = 0;
 
@@ -34,6 +34,17 @@ fn assert_last_event<T: Config>(generic_event: <T as Config>::Event) {
 
 fn block_number<T: Config>() -> T::BlockNumber {
 	frame_system::Pallet::<T>::current_block_number()
+}
+
+fn get_total_deposit<T: Config>(
+	bounded_friends: &FriendsOf<T>,
+) -> Option<<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance>
+{
+	let friend_deposit = T::FriendDepositFactor::get()
+		.checked_mul(&bounded_friends.len().saturated_into())
+		.unwrap();
+
+	T::ConfigDepositBase::get().checked_add(&friend_deposit)
 }
 
 fn generate_friends<T: Config>() -> Vec<<T as frame_system::Config>::AccountId> {
@@ -62,7 +73,9 @@ fn generate_friends<T: Config>() -> Vec<<T as frame_system::Config>::AccountId> 
 	friends
 }
 
-fn add_caller_and_generate_friends<T: Config>(caller: T::AccountId) -> Vec<<T as frame_system::Config>::AccountId> {
+fn add_caller_and_generate_friends<T: Config>(
+	caller: T::AccountId,
+) -> Vec<<T as frame_system::Config>::AccountId> {
 	// Create friends
 	let mut friends = vec![
 		account("friend_0", 0, SEED),
@@ -98,12 +111,7 @@ fn insert_recovery_account<T: Config>(caller: &T::AccountId, account: &T::Accoun
 	let bounded_friends: FriendsOf<T> = friends.try_into().unwrap();
 
 	// Get deposit for recovery
-	let friend_deposit = T::FriendDepositFactor::get()
-		.checked_mul(&bounded_friends.len().saturated_into())
-		.unwrap();
-	let total_deposit = T::ConfigDepositBase::get()
-		.checked_add(&friend_deposit)
-		.unwrap();
+	let total_deposit = get_total_deposit::<T>(&bounded_friends).unwrap();
 
 	let recovery_config = RecoveryConfig {
 		delay_period,
@@ -160,12 +168,7 @@ benchmarks! {
 		let delay_period = block_number::<T>();
 
 		// Get deposit for recovery
-		let friend_deposit = T::FriendDepositFactor::get()
-				.checked_mul(&bounded_friends.len().saturated_into())
-				.unwrap();
-		let total_deposit = T::ConfigDepositBase::get()
-			.checked_add(&friend_deposit)
-			.unwrap();
+		let total_deposit = get_total_deposit::<T>(&bounded_friends).unwrap();
 
 		// Reserve deposit for recovery
 		T::Currency::reserve(&caller, total_deposit)?;
@@ -210,12 +213,7 @@ benchmarks! {
 		let delay_period = block_number::<T>();
 
 		// Get deposit for recovery
-		let friend_deposit = T::FriendDepositFactor::get()
-			.checked_mul(&bounded_friends.len().saturated_into())
-			.unwrap();
-		let total_deposit = T::ConfigDepositBase::get()
-			.checked_add(&friend_deposit)
-			.unwrap();
+		let total_deposit = get_total_deposit::<T>(&bounded_friends).unwrap();
 
 		let recovery_config = RecoveryConfig {
 			delay_period,
@@ -268,12 +266,7 @@ benchmarks! {
 		let delay_period = block_number::<T>();
 
 		// Get deposit for recovery
-		let friend_deposit = T::FriendDepositFactor::get()
-			.checked_mul(&bounded_friends.len().saturated_into())
-			.unwrap();
-		let total_deposit = T::ConfigDepositBase::get()
-			.checked_add(&friend_deposit)
-			.unwrap();
+		let total_deposit = get_total_deposit::<T>(&bounded_friends).unwrap();
 
 		let recovery_config = RecoveryConfig {
 			delay_period,
@@ -324,12 +317,7 @@ benchmarks! {
 		let delay_period = block_number::<T>();
 
 		// Get deposit for recovery
-		let friend_deposit = T::FriendDepositFactor::get()
-			.checked_mul(&bounded_friends.len().saturated_into())
-			.unwrap();
-		let total_deposit = T::ConfigDepositBase::get()
-			.checked_add(&friend_deposit)
-			.unwrap();
+		let total_deposit = get_total_deposit::<T>(&bounded_friends).unwrap();
 
 		let recovery_config = RecoveryConfig {
 			delay_period,
@@ -378,12 +366,7 @@ benchmarks! {
 		let delay_period = block_number::<T>();
 
 		// Get deposit for recovery
-		let friend_deposit = T::FriendDepositFactor::get()
-			.checked_mul(&bounded_friends.len().saturated_into())
-			.unwrap();
-		let total_deposit = T::ConfigDepositBase::get()
-			.checked_add(&friend_deposit)
-			.unwrap();
+		let total_deposit = get_total_deposit::<T>(&bounded_friends).unwrap();
 
 		let recovery_config = RecoveryConfig {
 			delay_period,
@@ -417,8 +400,8 @@ benchmarks! {
 
 		Proxy::<T>::insert(&caller, &account);
 	}: _(
-		RawOrigin::Signed(caller.clone()),
-		account.clone()
+		RawOrigin::Signed(caller),
+		account
 	)
 
 	impl_benchmark_test_suite!(Recovery, crate::mock::new_test_ext(), crate::mock::Test);
