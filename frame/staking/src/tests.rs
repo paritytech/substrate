@@ -1257,7 +1257,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 				stash: 11,
 				total: 1000 + 100,
 				active: 100,
-				unlocking: bounded_vec![UnlockChunk { value: 1000, unlock_era: 2 + 3 }],
+				unlocking: bounded_vec![UnlockChunk { value: 1000, era: 2 + 3 }],
 				claimed_rewards: vec![]
 			}),
 		);
@@ -1270,7 +1270,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 				stash: 11,
 				total: 1000 + 100,
 				active: 100,
-				unlocking: bounded_vec![UnlockChunk { value: 1000, unlock_era: 2 + 3 }],
+				unlocking: bounded_vec![UnlockChunk { value: 1000, era: 2 + 3 }],
 				claimed_rewards: vec![]
 			}),
 		);
@@ -1286,7 +1286,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 				stash: 11,
 				total: 1000 + 100,
 				active: 100,
-				unlocking: bounded_vec![UnlockChunk { value: 1000, unlock_era: 2 + 3 }],
+				unlocking: bounded_vec![UnlockChunk { value: 1000, era: 2 + 3 }],
 				claimed_rewards: vec![]
 			}),
 		);
@@ -1391,7 +1391,7 @@ fn rebond_works() {
 				stash: 11,
 				total: 1000,
 				active: 100,
-				unlocking: bounded_vec![UnlockChunk { value: 900, unlock_era: 2 + 3 }],
+				unlocking: bounded_vec![UnlockChunk { value: 900, era: 2 + 3 }],
 				claimed_rewards: vec![],
 			})
 		);
@@ -1417,7 +1417,7 @@ fn rebond_works() {
 				stash: 11,
 				total: 1000,
 				active: 100,
-				unlocking: bounded_vec![UnlockChunk { value: 900, unlock_era: 5 }],
+				unlocking: bounded_vec![UnlockChunk { value: 900, era: 5 }],
 				claimed_rewards: vec![],
 			})
 		);
@@ -1430,7 +1430,7 @@ fn rebond_works() {
 				stash: 11,
 				total: 1000,
 				active: 600,
-				unlocking: bounded_vec![UnlockChunk { value: 400, unlock_era: 5 }],
+				unlocking: bounded_vec![UnlockChunk { value: 400, era: 5 }],
 				claimed_rewards: vec![],
 			})
 		);
@@ -1458,7 +1458,7 @@ fn rebond_works() {
 				stash: 11,
 				total: 1000,
 				active: 100,
-				unlocking: bounded_vec![UnlockChunk { value: 900, unlock_era: 5 }],
+				unlocking: bounded_vec![UnlockChunk { value: 900, era: 5 }],
 				claimed_rewards: vec![],
 			})
 		);
@@ -1471,7 +1471,7 @@ fn rebond_works() {
 				stash: 11,
 				total: 1000,
 				active: 600,
-				unlocking: bounded_vec![UnlockChunk { value: 400, unlock_era: 5 }],
+				unlocking: bounded_vec![UnlockChunk { value: 400, era: 5 }],
 				claimed_rewards: vec![],
 			})
 		);
@@ -1513,7 +1513,7 @@ fn rebond_is_fifo() {
 				stash: 11,
 				total: 1000,
 				active: 600,
-				unlocking: bounded_vec![UnlockChunk { value: 400, unlock_era: 2 + 3 }],
+				unlocking: bounded_vec![UnlockChunk { value: 400, era: 2 + 3 }],
 				claimed_rewards: vec![],
 			})
 		);
@@ -1529,8 +1529,8 @@ fn rebond_is_fifo() {
 				total: 1000,
 				active: 300,
 				unlocking: bounded_vec![
-					UnlockChunk { value: 400, unlock_era: 2 + 3 },
-					UnlockChunk { value: 300, unlock_era: 3 + 3 },
+					UnlockChunk { value: 400, era: 2 + 3 },
+					UnlockChunk { value: 300, era: 3 + 3 },
 				],
 				claimed_rewards: vec![],
 			})
@@ -1547,9 +1547,9 @@ fn rebond_is_fifo() {
 				total: 1000,
 				active: 100,
 				unlocking: bounded_vec![
-					UnlockChunk { value: 400, unlock_era: 2 + 3 },
-					UnlockChunk { value: 300, unlock_era: 3 + 3 },
-					UnlockChunk { value: 200, unlock_era: 4 + 3 },
+					UnlockChunk { value: 400, era: 2 + 3 },
+					UnlockChunk { value: 300, era: 3 + 3 },
+					UnlockChunk { value: 200, era: 4 + 3 },
 				],
 				claimed_rewards: vec![],
 			})
@@ -1564,8 +1564,8 @@ fn rebond_is_fifo() {
 				total: 1000,
 				active: 500,
 				unlocking: bounded_vec![
-					UnlockChunk { value: 400, unlock_era: 2 + 3 },
-					UnlockChunk { value: 100, unlock_era: 3 + 3 },
+					UnlockChunk { value: 400, era: 2 + 3 },
+					UnlockChunk { value: 100, era: 3 + 3 },
 				],
 				claimed_rewards: vec![],
 			})
@@ -1595,7 +1595,7 @@ fn rebond_emits_right_value_in_event() {
 				stash: 11,
 				total: 1000,
 				active: 100,
-				unlocking: bounded_vec![UnlockChunk { value: 900, unlock_era: 1 + 3 }],
+				unlocking: bounded_vec![UnlockChunk { value: 900, era: 1 + 3 }],
 				claimed_rewards: vec![],
 			})
 		);
@@ -1608,7 +1608,7 @@ fn rebond_emits_right_value_in_event() {
 				stash: 11,
 				total: 1000,
 				active: 200,
-				unlocking: bounded_vec![UnlockChunk { value: 800, unlock_era: 1 + 3 }],
+				unlocking: bounded_vec![UnlockChunk { value: 800, era: 1 + 3 }],
 				claimed_rewards: vec![],
 			})
 		);
@@ -1839,7 +1839,7 @@ fn bond_with_no_staked_value() {
 					stash: 1,
 					active: 0,
 					total: 5,
-					unlocking: bounded_vec![UnlockChunk { value: 5, unlock_era: 3 }],
+					unlocking: bounded_vec![UnlockChunk { value: 5, era: 3 }],
 					claimed_rewards: vec![],
 				})
 			);
@@ -3919,7 +3919,7 @@ fn cannot_rebond_to_lower_than_ed() {
 					stash: 21,
 					total: 10 * 1000,
 					active: 0,
-					unlocking: bounded_vec![UnlockChunk { value: 10 * 1000, unlock_era: 3 }],
+					unlocking: bounded_vec![UnlockChunk { value: 10 * 1000, era: 3 }],
 					claimed_rewards: vec![]
 				}
 			);
@@ -3956,7 +3956,7 @@ fn cannot_bond_extra_to_lower_than_ed() {
 					stash: 21,
 					total: 10 * 1000,
 					active: 0,
-					unlocking: bounded_vec![UnlockChunk { value: 10 * 1000, unlock_era: 3 }],
+					unlocking: bounded_vec![UnlockChunk { value: 10 * 1000, era: 3 }],
 					claimed_rewards: vec![]
 				}
 			);
@@ -4809,7 +4809,7 @@ fn force_apply_min_commission_works() {
 
 #[test]
 fn ledger_slash_works() {
-	let c = |unlock_era, value| UnlockChunk::<Balance> { unlock_era, value };
+	let c = |era, value| UnlockChunk::<Balance> { era, value };
 	// Given
 	let mut ledger = StakingLedger::<Test> {
 		stash: 123,

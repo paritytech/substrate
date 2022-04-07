@@ -644,7 +644,7 @@ benchmarks! {
 		assert!(value * l.into() + origin_weight <= dest_weight);
 		let unlock_chunk = UnlockChunk::<BalanceOf<T>> {
 			value,
-			unlock_era: EraIndex::zero(),
+			era: EraIndex::zero(),
 		};
 
 		let stash = scenario.origin_stash1.clone();
@@ -793,7 +793,7 @@ benchmarks! {
 		let mut staking_ledger = Ledger::<T>::get(controller.clone()).unwrap();
 		let unlock_chunk = UnlockChunk::<BalanceOf<T>> {
 			value: 1u32.into(),
-			unlock_era: EraIndex::zero(),
+			era: EraIndex::zero(),
 		};
 		for _ in 0 .. l {
 			staking_ledger.unlocking.try_push(unlock_chunk.clone()).unwrap();

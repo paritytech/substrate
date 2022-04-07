@@ -434,7 +434,7 @@ pub struct UnlockChunk<Balance: HasCompact> {
 	value: Balance,
 	/// Era number at which point it'll be unlocked.
 	#[codec(compact)]
-	unlock_era: EraIndex,
+	era: EraIndex,
 }
 
 /// The ledger of a (bonded) stash.
@@ -480,7 +480,7 @@ impl<T: Config> StakingLedger<T> {
 			.unlocking
 			.into_iter()
 			.filter(|chunk| {
-				if chunk.unlock_era > current_era {
+				if chunk.era > current_era {
 					true
 				} else {
 					total = total.saturating_sub(chunk.value);
@@ -558,7 +558,7 @@ impl<T: Config> StakingLedger<T> {
 		// Calculate the total balance of active funds and unlocking funds in the affected range.
 		let (affected_balance, slash_chunks_priority): (_, Box<dyn Iterator<Item = usize>>) = {
 			if let Some(start_index) =
-				self.unlocking.iter().position(|c| c.unlock_era >= chunk_unlock_era_after_slash)
+				self.unlocking.iter().position(|c| c.era >= chunk_unlock_era_after_slash)
 			{
 				// The indices of the first chunk after the slash up through the most recent chunk.
 				// (The most recent chunk is at greatest from this era)
@@ -607,7 +607,7 @@ impl<T: Config> StakingLedger<T> {
 			if let Some(chunk) = self.unlocking.get_mut(i).defensive() {
 				slash_out_of(&mut chunk.value, &mut remaining_slash);
 				// write the new slashed value of this chunk to the map.
-				slashed_unlocking.insert(chunk.unlock_era, chunk.value);
+				slashed_unlocking.insert(chunk.era, chunk.value);
 				if remaining_slash.is_zero() {
 					break
 				}
