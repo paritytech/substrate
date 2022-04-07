@@ -622,8 +622,8 @@ impl<
 	}
 }
 
-/// A wrapper for [`sp_npos_elections::mms`] that implements [`NposSolver`]. See the documentation
-/// of [`sp_npos_elections::mms`] for more info.
+/// A wrapper for [`sp_npos_elections::mms()`] that implements [`NposSolver`]. See the documentation
+/// of [`sp_npos_elections::mms()`] for more info.
 pub struct MMS<AccountId, Accuracy, Balancing>(
 	sp_std::marker::PhantomData<(AccountId, Accuracy, Balancing)>,
 );
