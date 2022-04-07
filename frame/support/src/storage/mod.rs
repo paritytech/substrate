@@ -502,7 +502,18 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 		KArg1: EncodeLike<K1>,
 		KArg2: EncodeLike<K2>;
 
-	/// Remove all values under the first key.
+	/// Remove all values under the first key `k1` in the overlay and up to `limit` in the
+	/// backend.
+	///
+	/// All values in the client overlay will be deleted, if there is some `limit` then up to
+	/// `limit` values are deleted from the client backend, if `limit` is none then all values in
+	/// the client backend are deleted.
+	///
+	/// # Note
+	///
+	/// Calling this multiple times per block with a `limit` set leads always to the same keys being
+	/// removed and the same result being returned. This happens because the keys to delete in the
+	/// overlay are not taken into account when deleting keys in the backend.
 	fn remove_prefix<KArg1>(k1: KArg1, limit: Option<u32>) -> sp_io::KillStorageResult
 	where
 		KArg1: ?Sized + EncodeLike<K1>;
@@ -632,7 +643,18 @@ pub trait StorageNMap<K: KeyGenerator, V: FullCodec> {
 	/// Remove the value under a key.
 	fn remove<KArg: EncodeLikeTuple<K::KArg> + TupleToEncodedIter>(key: KArg);
 
-	/// Remove all values under the partial prefix key.
+	/// Remove all values starting with `partial_key` in the overlay and up to `limit` in the
+	/// backend.
+	///
+	/// All values in the client overlay will be deleted, if there is some `limit` then up to
+	/// `limit` values are deleted from the client backend, if `limit` is none then all values in
+	/// the client backend are deleted.
+	///
+	/// # Note
+	///
+	/// Calling this multiple times per block with a `limit` set leads always to the same keys being
+	/// removed and the same result being returned. This happens because the keys to delete in the
+	/// overlay are not taken into account when deleting keys in the backend.
 	fn remove_prefix<KP>(partial_key: KP, limit: Option<u32>) -> sp_io::KillStorageResult
 	where
 		K: HasKeyPrefix<KP>;
@@ -1076,11 +1098,17 @@ pub trait StoragePrefixedMap<Value: FullCodec> {
 		crate::storage::storage_prefix(Self::module_prefix(), Self::storage_prefix())
 	}
 
-	/// Remove all values of the storage in the overlay and up to `limit` in the backend.
+	/// Remove all values in the overlay and up to `limit` in the backend.
 	///
 	/// All values in the client overlay will be deleted, if there is some `limit` then up to
 	/// `limit` values are deleted from the client backend, if `limit` is none then all values in
 	/// the client backend are deleted.
+	///
+	/// # Note
+	///
+	/// Calling this multiple times per block with a `limit` set leads always to the same keys being
+	/// removed and the same result being returned. This happens because the keys to delete in the
+	/// overlay are not taken into account when deleting keys in the backend.
 	fn remove_all(limit: Option<u32>) -> sp_io::KillStorageResult {
 		sp_io::storage::clear_prefix(&Self::final_prefix(), limit)
 	}
