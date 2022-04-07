@@ -87,51 +87,24 @@ impl From<String> for Error {
 	}
 }
 
+impl Error {
+	fn to_code(&self) -> i32 {
+		use Error::*;
+		match self {
+			BlockImportError(_) => codes::BLOCK_IMPORT_FAILED,
+			BlockNotFound(_) => codes::BLOCK_NOT_FOUND,
+			EmptyTransactionPool => codes::EMPTY_TRANSACTION_POOL,
+			ConsensusError(_) => codes::CONSENSUS_ERROR,
+			InherentError(_) => codes::INHERENTS_ERROR,
+			BlockchainError(_) => codes::BLOCKCHAIN_ERROR,
+			SendError(_) | Canceled(_) => codes::SERVER_SHUTTING_DOWN,
+			_ => codes::UNKNOWN_ERROR,
+		}
+	}
+}
+
 impl From<Error> for JsonRpseeError {
 	fn from(err: Error) -> Self {
-		use Error::*;
-		match err {
-			BlockImportError(e) => CallError::Custom {
-				code: codes::BLOCK_IMPORT_FAILED,
-				message: format!("{:?}", e),
-				data: None,
-			},
-			BlockNotFound(e) => CallError::Custom {
-				code: codes::BLOCK_NOT_FOUND,
-				message: format!("{:?}", e),
-				data: None,
-			},
-			EmptyTransactionPool => CallError::Custom {
-				code: codes::EMPTY_TRANSACTION_POOL,
-				message: "Empty transaction pool".to_string(),
-				data: None,
-			},
-			ConsensusError(e) => CallError::Custom {
-				code: codes::CONSENSUS_ERROR,
-				message: format!("{:?}", e),
-				data: None,
-			},
-			InherentError(e) => CallError::Custom {
-				code: codes::INHERENTS_ERROR,
-				message: format!("{:?}", e),
-				data: None,
-			},
-			BlockchainError(e) => CallError::Custom {
-				code: codes::BLOCKCHAIN_ERROR,
-				message: format!("{:?}", e),
-				data: None,
-			},
-			SendError(_) | Canceled(_) => CallError::Custom {
-				code: codes::SERVER_SHUTTING_DOWN,
-				message: "Server is shutting down".to_string(),
-				data: None,
-			},
-			_ => CallError::Custom {
-				code: codes::UNKNOWN_ERROR,
-				message: "Unknown error".to_string(),
-				data: None,
-			},
-		}
-		.into()
+		CallError::Custom { code: err.to_code(), message: err.to_string(), data: None }.into()
 	}
 }

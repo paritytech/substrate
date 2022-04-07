@@ -22,11 +22,7 @@ use log::info;
 use sc_client_api::ClientInfo;
 use sc_network::{NetworkStatus, SyncState, WarpSyncPhase, WarpSyncProgress};
 use sp_runtime::traits::{Block as BlockT, CheckedDiv, NumberFor, Saturating, Zero};
-use std::{
-	convert::{TryFrom, TryInto},
-	fmt,
-	time::Instant,
-};
+use std::{fmt, time::Instant};
 
 /// State of the informant display system.
 ///

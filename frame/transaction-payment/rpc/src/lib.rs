@@ -38,12 +38,12 @@ use sp_runtime::{
 
 pub use pallet_transaction_payment_rpc_runtime_api::TransactionPaymentApi as TransactionPaymentRuntimeApi;
 
-#[rpc(client, server, namespace = "payment")]
+#[rpc(client, server)]
 pub trait TransactionPaymentApi<BlockHash, ResponseType> {
-	#[method(name = "queryInfo")]
+	#[method(name = "payment_queryInfo")]
 	fn query_info(&self, encoded_xt: Bytes, at: Option<BlockHash>) -> RpcResult<ResponseType>;
 
-	#[method(name = "queryFeeDetails")]
+	#[method(name = "payment_queryFeeDetails")]
 	fn query_fee_details(
 		&self,
 		encoded_xt: Bytes,

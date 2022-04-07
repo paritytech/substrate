@@ -15,8 +15,8 @@ description = "Substrate RPC for FRAME's support"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-futures = "0.3.19"
 jsonrpsee = { version = "0.10.1", features = ["jsonrpsee-types"] }
+futures = "0.3.21"
 codec = { package = "parity-scale-codec", version = "3.0.0" }
 serde = "1"
 frame-support = { version = "4.0.0-dev", path = "../../../../frame/support" }

@@ -77,13 +77,13 @@ where
 	loop {
 		let header = match subscription.next().await {
 			Some(Ok(header)) => header,
-			Some(Err(why)) => {
-				log::warn!("subscription returned error: {:?}.", why);
-				continue
-			},
 			None => {
-				log::warn!("subscription returned `None`. Probably decoding has failed.");
+				log::warn!("subscription closed");
 				break
+			},
+			Some(Err(why)) => {
+				log::warn!("subscription returned error: {:?}. Probably decoding has failed.", why);
+				continue
 			},
 		};
 

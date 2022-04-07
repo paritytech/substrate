@@ -39,9 +39,6 @@ variables:                         &default-vars
   DOCKER_OS:                       "debian:stretch"
   ARCH:                            "x86_64"
   CI_IMAGE:                        "paritytech/ci-linux:production"
-  VAULT_SERVER_URL:                "https://vault.parity-mgmt-vault.parity.io"
-  VAULT_AUTH_PATH:                 "gitlab-parity-io-jwt"
-  VAULT_AUTH_ROLE:                 "cicd_gitlab_parity_${CI_PROJECT_NAME}"
 
 default:
   cache:                           {}
@@ -187,46 +184,6 @@ default:
   - sha256sum ./artifacts/substrate/substrate | tee ./artifacts/substrate/substrate.sha256
   - cp -r ./scripts/ci/docker/substrate.Dockerfile ./artifacts/substrate/
   - sccache -s
-
-#### Vault secrets
-.vault-secrets:                    &vault-secrets
-  secrets:
-    DOCKER_HUB_USER:
-      vault:                       cicd/gitlab/parity/DOCKER_HUB_USER@kv
-      file:                        false
-    DOCKER_HUB_PASS:
-      vault:                       cicd/gitlab/parity/DOCKER_HUB_PASS@kv
-      file:                        false
-    GITHUB_PR_TOKEN:
-      vault:                       cicd/gitlab/parity/GITHUB_PR_TOKEN@kv
-      file:                        false
-    GITHUB_TOKEN:
-      vault:                       cicd/gitlab/parity/GITHUB_TOKEN@kv
-      file:                        false
-    AWS_ACCESS_KEY_ID:
-      vault:                       cicd/gitlab/$CI_PROJECT_PATH/AWS_ACCESS_KEY_ID@kv
-      file:                        false
-    AWS_SECRET_ACCESS_KEY:
-      vault:                       cicd/gitlab/$CI_PROJECT_PATH/AWS_SECRET_ACCESS_KEY@kv
-      file:                        false
-    GITHUB_EMAIL:
-      vault:                       cicd/gitlab/$CI_PROJECT_PATH/GITHUB_EMAIL@kv
-      file:                        false
-    GITHUB_RELEASE_TOKEN:
-      vault:                       cicd/gitlab/$CI_PROJECT_PATH/GITHUB_RELEASE_TOKEN@kv
-      file:                        false
-    GITHUB_SSH_PRIV_KEY:
-      vault:                       cicd/gitlab/$CI_PROJECT_PATH/GITHUB_SSH_PRIV_KEY@kv
-      file:                        false
-    GITHUB_USER:
-      vault:                       cicd/gitlab/$CI_PROJECT_PATH/GITHUB_USER@kv
-      file:                        false
-    MATRIX_ACCESS_TOKEN:
-      vault:                       cicd/gitlab/$CI_PROJECT_PATH/MATRIX_ACCESS_TOKEN@kv
-      file:                        false
-    MATRIX_ROOM_ID:
-      vault:                       cicd/gitlab/$CI_PROJECT_PATH/MATRIX_ROOM_ID@kv
-      file:                        false
 
 
 #### stage:                       .pre
@@ -638,7 +595,6 @@ build-rustdoc:
 .build-push-docker-image:          &build-push-docker-image
   <<:                              *build-refs
   <<:                              *kubernetes-env
-  <<:                              *vault-secrets
   image:                           quay.io/buildah/stable
   variables:                       &docker-build-vars
     <<:                            *default-vars
@@ -697,7 +653,6 @@ publish-s3-release:
   stage:                           publish
   <<:                              *build-refs
   <<:                              *kubernetes-env
-  <<:                              *vault-secrets
   needs:
     - job:                         build-linux-substrate
       artifacts:                   true
@@ -719,7 +674,6 @@ publish-s3-release:
 publish-rustdoc:
   stage:                           publish
   <<:                              *kubernetes-env
-  <<:                              *vault-secrets
   image:                           node:16
   variables:
     GIT_DEPTH:                     100
@@ -778,7 +732,6 @@ publish-rustdoc:
 
 publish-draft-release:
   stage:                           publish
-  <<:                              *vault-secrets
   image:                           paritytech/tools:latest
   rules:
     - if: $CI_COMMIT_REF_NAME =~ /^ci-release-.*$/

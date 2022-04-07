@@ -66,7 +66,7 @@ impl<BlockHash> LeafProof<BlockHash> {
 }
 
 /// MMR RPC methods.
-#[rpc(client, server, namespace = "mmr")]
+#[rpc(client, server)]
 pub trait MmrApi<BlockHash> {
 	/// Generate MMR proof for given leaf index.
 	///
@@ -76,7 +76,7 @@ pub trait MmrApi<BlockHash> {
 	///
 	/// Returns the (full) leaf itself and a proof for this leaf (compact encoding, i.e. hash of
 	/// the leaf). Both parameters are SCALE-encoded.
-	#[method(name = "generateProof")]
+	#[method(name = "mmr_generateProof")]
 	fn generate_proof(
 		&self,
 		leaf_index: LeafIndex,

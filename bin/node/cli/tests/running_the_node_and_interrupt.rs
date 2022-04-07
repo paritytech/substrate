@@ -25,10 +25,7 @@ use nix::{
 	},
 	unistd::Pid,
 };
-use std::{
-	convert::TryInto,
-	process::{Child, Command},
-};
+use std::process::{Child, Command};
 use tempfile::tempdir;
 
 pub mod common;

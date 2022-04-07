@@ -110,10 +110,10 @@ pub struct LightSyncState<Block: BlockT> {
 }
 
 /// An api for sync state RPC calls.
-#[rpc(client, server, namespace = "sync_state")]
+#[rpc(client, server)]
 pub trait SyncStateRpcApi {
 	/// Returns the JSON serialized chainspec running the node, with a sync state.
-	#[method(name = "genSyncSpec")]
+	#[method(name = "sync_state_genSyncSpec")]
 	fn system_gen_sync_spec(&self, raw: bool) -> RpcResult<String>;
 }
 

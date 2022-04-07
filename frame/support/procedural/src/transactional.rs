@@ -49,7 +49,7 @@ pub fn require_transactional(_attr: TokenStream, input: TokenStream) -> Result<T
 	let output = quote! {
 		#(#attrs)*
 		#vis #sig {
-			if !#crate_::storage::is_transactional() {
+			if !#crate_::storage::transactional::is_transactional() {
 				return Err(#crate_::sp_runtime::TransactionalError::NoLayer.into());
 			}
 			#block

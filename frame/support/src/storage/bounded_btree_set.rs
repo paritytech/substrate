@@ -22,10 +22,7 @@ use crate::{
 	traits::{Get, TryCollect},
 };
 use codec::{Decode, Encode, MaxEncodedLen};
-use sp_std::{
-	borrow::Borrow, collections::btree_set::BTreeSet, convert::TryFrom, marker::PhantomData,
-	ops::Deref,
-};
+use sp_std::{borrow::Borrow, collections::btree_set::BTreeSet, marker::PhantomData, ops::Deref};
 
 /// A bounded set based on a B-Tree.
 ///
@@ -324,7 +321,6 @@ pub mod test {
 	use crate::Twox128;
 	use frame_support::traits::ConstU32;
 	use sp_io::TestExternalities;
-	use sp_std::convert::TryInto;
 
 	crate::generate_storage_alias! { Prefix, Foo => Value<BoundedBTreeSet<u32, ConstU32<7>>> }
 	crate::generate_storage_alias! { Prefix, FooMap => Map<(Twox128, u32), BoundedBTreeSet<u32, ConstU32<7>>> }

@@ -24,7 +24,7 @@ test-helpers = []
 [dependencies]
 jsonrpsee = { version = "0.10.1", features = ["server"] }
 thiserror = "1.0.30"
-futures = "0.3.19"
+futures = "0.3.21"
 rand = "0.7.3"
 parking_lot = "0.12.0"
 log = "0.4.11"

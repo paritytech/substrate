@@ -51,13 +51,13 @@ pub struct BlockStats {
 ///
 /// This API contains unstable and unsafe methods only meant for development nodes. They
 /// are all flagged as unsafe for this reason.
-#[rpc(client, server, namespace = "dev")]
+#[rpc(client, server)]
 pub trait DevApi<Hash> {
 	/// Reexecute the specified `block_hash` and gather statistics while doing so.
 	///
 	/// This function requires the specified block and its parent to be available
 	/// at the queried node. If either the specified block or the parent is pruned,
 	/// this function will return `None`.
-	#[method(name = "getBlockStats")]
+	#[method(name = "dev_getBlockStats")]
 	fn block_stats(&self, block_hash: Hash) -> RpcResult<Option<BlockStats>>;
 }
