@@ -132,6 +132,8 @@ pub enum Error {
 	TooManyVoters,
 	/// No candidates passed for the election.
 	NoCandidates,
+	/// Balancing parameters missing for `MMS` which requires them.
+	MissingBalancingParams,
 }
 
 /// A type which is used in the API of this crate as a numeric weight of a vote, most often the
