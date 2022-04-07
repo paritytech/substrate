@@ -181,6 +181,7 @@ where
 			Ok(dxt) => dxt,
 			Err(e) => {
 				log::debug!("[author_watchExtrinsic] failed to decode extrinsic: {:?}", e);
+				let _ = sink.close_with_custom_message(&e.to_string());
 				return Err(JsonRpseeError::to_call_error(e))
 			},
 		};

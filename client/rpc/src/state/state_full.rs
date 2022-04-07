@@ -360,7 +360,7 @@ where
 			.map_err(client_err)
 	}
 
-	fn subscribe_runtime_version(&self, sink: SubscriptionSink) -> std::result::Result<(), Error> {
+	fn subscribe_runtime_version(&self, mut sink: SubscriptionSink) -> std::result::Result<(), Error> {
 		let client = self.client.clone();
 
 		let initial = self
@@ -368,7 +368,11 @@ where
 			.and_then(|block| {
 				self.client.runtime_version_at(&BlockId::Hash(block)).map_err(Into::into)
 			})
-			.map_err(|e| Error::Client(Box::new(e)))?;
+			.map_err(|e| {
+				sink.close_with_custom_message(&e.to_string());
+				Error::Client(Box::new(e))
+			})?;
+
 		let mut previous_version = initial.clone();
 
 		// A stream of new versions
@@ -397,13 +401,16 @@ where
 
 	fn subscribe_storage(
 		&self,
-		sink: SubscriptionSink,
+		mut sink: SubscriptionSink,
 		keys: Option<Vec<StorageKey>>,
 	) -> std::result::Result<(), Error> {
 		let stream = self
 			.client
 			.storage_changes_notification_stream(keys.as_deref(), None)
-			.map_err(|blockchain_err| Error::Client(Box::new(blockchain_err)))?;
+			.map_err(|blockchain_err| {
+				sink.close_with_custom_message(&blockchain_err.to_string());
+				Error::Client(Box::new(blockchain_err))
+			})?;
 
 		// initial values
 		let initial = stream::iter(keys.map(|keys| {
