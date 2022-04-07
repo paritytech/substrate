@@ -17,16 +17,13 @@
 
 use std::vec;
 
-use beefy_primitives::{
-	mmr::{BeefyNextAuthoritySet, MmrLeafVersion},
-	ValidatorSet,
-};
+use beefy_primitives::mmr::{BeefyNextAuthoritySet, MmrLeafVersion};
 use codec::{Decode, Encode};
 use hex_literal::hex;
 
 use sp_core::H256;
 use sp_io::TestExternalities;
-use sp_runtime::{traits::Keccak256, DigestItem};
+use sp_runtime::traits::Keccak256;
 
 use frame_support::traits::OnInitialize;
 
@@ -38,10 +35,6 @@ fn init_block(block: u64) {
 	Mmr::on_initialize(block);
 	Beefy::on_initialize(block);
 	BeefyMmr::on_initialize(block);
-}
-
-pub fn beefy_log(log: ConsensusLog<BeefyId>) -> DigestItem {
-	DigestItem::Consensus(BEEFY_ENGINE_ID, log.encode())
 }
 
 fn offchain_key(pos: usize) -> Vec<u8> {
@@ -60,39 +53,6 @@ fn read_mmr_leaf(ext: &mut TestExternalities, index: usize) -> MmrLeaf {
 			_ => panic!("Unexpected MMR node."),
 		})
 		.unwrap()
-}
-
-#[test]
-fn should_contain_mmr_digest() {
-	let mut ext = new_test_ext(vec![1, 2, 3, 4]);
-	ext.execute_with(|| {
-		init_block(1);
-
-		assert_eq!(
-			System::digest().logs,
-			vec![beefy_log(ConsensusLog::MmrRoot(
-				hex!("fa0275b19b2565089f7e2377ee73b9050e8d53bce108ef722a3251fd9d371d4b").into()
-			))]
-		);
-
-		// unique every time
-		init_block(2);
-
-		assert_eq!(
-			System::digest().logs,
-			vec![
-				beefy_log(ConsensusLog::MmrRoot(
-					hex!("fa0275b19b2565089f7e2377ee73b9050e8d53bce108ef722a3251fd9d371d4b").into()
-				)),
-				beefy_log(ConsensusLog::AuthoritiesChange(
-					ValidatorSet::new(vec![mock_beefy_id(3), mock_beefy_id(4),], 1,).unwrap()
-				)),
-				beefy_log(ConsensusLog::MmrRoot(
-					hex!("85554fa7d4e863cce3cdce668c1ae82c0174ad37f8d1399284018bec9f9971c3").into()
-				)),
-			]
-		);
-	});
 }
 
 #[test]

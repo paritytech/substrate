@@ -48,25 +48,6 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-/// A BEEFY consensus digest item with MMR root hash.
-pub struct DepositBeefyDigest<T>(sp_std::marker::PhantomData<T>);
-
-impl<T> pallet_mmr::primitives::OnNewRoot<beefy_primitives::MmrRootHash> for DepositBeefyDigest<T>
-where
-	T: pallet_mmr::Config<Hash = beefy_primitives::MmrRootHash>,
-	T: pallet_beefy::Config,
-{
-	fn on_new_root(root: &<T as pallet_mmr::Config>::Hash) {
-		let digest = sp_runtime::generic::DigestItem::Consensus(
-			beefy_primitives::BEEFY_ENGINE_ID,
-			codec::Encode::encode(&beefy_primitives::ConsensusLog::<
-				<T as pallet_beefy::Config>::BeefyId,
-			>::MmrRoot(*root)),
-		);
-		<frame_system::Pallet<T>>::deposit_log(digest);
-	}
-}
-
 /// Convert BEEFY secp256k1 public keys into Ethereum addresses
 pub struct BeefyEcdsaToEthereum;
 impl Convert<beefy_primitives::crypto::AuthorityId, Vec<u8>> for BeefyEcdsaToEthereum {

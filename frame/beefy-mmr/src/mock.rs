@@ -117,7 +117,7 @@ impl pallet_mmr::Config for Test {
 
 	type LeafData = BeefyMmr;
 
-	type OnNewRoot = pallet_beefy_mmr::DepositBeefyDigest<Test>;
+	type OnNewRoot = ();
 
 	type WeightInfo = ();
 }

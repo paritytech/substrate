@@ -374,7 +374,7 @@ where
 		};
 		let target_hash = target_header.hash();
 
-		let mmr_root = if let Some(hash) = self.extract_mmr_root_digest(&target_header) {
+		let mmr_root = if let Some(hash) = self.get_mmr_root_digest(&target_header) {
 			hash
 		} else {
 			warn!(target: "beefy", "🥩 No MMR root digest found for: {:?}", target_hash);
@@ -521,30 +521,14 @@ where
 	}
 
 	/// Simple wrapper over mmr root extraction. Tries from header digest, then from client state.
-	fn extract_mmr_root_digest(&self, header: &B::Header) -> Option<MmrRootHash> {
-		find_mmr_root_digest::<B>(header).or_else(|| {
-			self.runtime
-				.runtime_api()
-				.mmr_root(&BlockId::hash(header.hash()))
-				.ok()
-				.map(|r| r.ok())
-				.flatten()
-		})
+	fn get_mmr_root_digest(&self, header: &B::Header) -> Option<MmrRootHash> {
+		self.runtime
+			.runtime_api()
+			.mmr_root(&BlockId::hash(header.hash()))
+			.ok()
+			.map(|r| r.ok())
+			.flatten()
 	}
-}
-
-/// Extract the MMR root hash from a digest in the given header, if it exists.
-fn find_mmr_root_digest<B>(header: &B::Header) -> Option<MmrRootHash>
-where
-	B: Block,
-{
-	let id = OpaqueDigestItemId::Consensus(&BEEFY_ENGINE_ID);
-
-	let filter = |log: ConsensusLog<AuthorityId>| match log {
-		ConsensusLog::MmrRoot(root) => Some(root),
-		_ => None,
-	};
-	header.digest().convert_first(|l| l.try_to(id).and_then(filter))
 }
 
 /// Scan the `header` digest log for a BEEFY validator set change. Return either the new
@@ -795,30 +779,6 @@ pub(crate) mod tests {
 		// verify validator set is correctly extracted from digest
 		let extracted = find_authorities_change::<Block>(&header);
 		assert_eq!(extracted, Some(validator_set));
-	}
-
-	#[test]
-	fn extract_mmr_root_digest() {
-		let mut header = Header::new(
-			1u32.into(),
-			Default::default(),
-			Default::default(),
-			Default::default(),
-			Digest::default(),
-		);
-
-		// verify empty digest shows nothing
-		assert!(find_mmr_root_digest::<Block>(&header).is_none());
-
-		let mmr_root_hash = H256::random();
-		header.digest_mut().push(DigestItem::Consensus(
-			BEEFY_ENGINE_ID,
-			ConsensusLog::<AuthorityId>::MmrRoot(mmr_root_hash.clone()).encode(),
-		));
-
-		// verify validator set is correctly extracted from digest
-		let extracted = find_mmr_root_digest::<Block>(&header);
-		assert_eq!(extracted, Some(mmr_root_hash));
 	}
 
 	#[test]
