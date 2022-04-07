@@ -84,13 +84,13 @@
 //! * Open: Anyone can join the pool and no delegators can be permissionlessly removed.
 //! * Blocked: No delegators can join and some admin roles can kick delegators.
 //! * Destroying: No delegators can join and all delegators can be permissionlessly removed with
-//!   [`Call::unbond_other`] and [`Call::withdraw_unbonded_other`]. Once a pool is in destroying state,
-//!   it cannot be reverted to another state.
+//!   [`Call::unbond_other`] and [`Call::withdraw_unbonded_other`]. Once a pool is in destroying
+//!   state, it cannot be reverted to another state.
 //!
 //! A pool has 3 administrative roles (see [`PoolRoles`]):
 //!
-//! * Depositor: creates the pool and is the initial delegator. They can only leave the pool once all
-//!   other delegators have left. Once they fully leave the pool is destroyed.
+//! * Depositor: creates the pool and is the initial delegator. They can only leave the pool once
+//!   all other delegators have left. Once they fully leave the pool is destroyed.
 //! * Nominator: can select which validators the pool nominates.
 //! * State-Toggler: can change the pools state and kick delegators if the pool is blocked.
 //! * Root: can change the nominator, state-toggler, or itself and can perform any of the actions
