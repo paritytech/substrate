@@ -86,6 +86,14 @@ impl Into<sc_service::config::WasmExecutionMethod> for WasmExecutionMethod {
 	}
 }
 
+/// The default [`WasmExecutionMethod`].
+#[cfg(feature = "wasmtime")]
+pub const DEFAULT_WASM_EXECUTION_METHOD: &str = "Compiled";
+
+/// The default [`WasmExecutionMethod`].
+#[cfg(not(feature = "wasmtime"))]
+pub const DEFAULT_WASM_EXECUTION_METHOD: &str = "interpreted-i-know-what-i-do";
+
 #[allow(missing_docs)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, ArgEnum)]
 #[clap(rename_all = "PascalCase")]
@@ -273,14 +281,14 @@ impl Into<sc_network::config::SyncMode> for SyncMode {
 }
 
 /// Default value for the `--execution-syncing` parameter.
-pub const DEFAULT_EXECUTION_SYNCING: ExecutionStrategy = ExecutionStrategy::NativeElseWasm;
+pub const DEFAULT_EXECUTION_SYNCING: ExecutionStrategy = ExecutionStrategy::Wasm;
 /// Default value for the `--execution-import-block` parameter.
-pub const DEFAULT_EXECUTION_IMPORT_BLOCK: ExecutionStrategy = ExecutionStrategy::NativeElseWasm;
+pub const DEFAULT_EXECUTION_IMPORT_BLOCK: ExecutionStrategy = ExecutionStrategy::Wasm;
 /// Default value for the `--execution-import-block` parameter when the node is a validator.
 pub const DEFAULT_EXECUTION_IMPORT_BLOCK_VALIDATOR: ExecutionStrategy = ExecutionStrategy::Wasm;
 /// Default value for the `--execution-block-construction` parameter.
 pub const DEFAULT_EXECUTION_BLOCK_CONSTRUCTION: ExecutionStrategy = ExecutionStrategy::Wasm;
 /// Default value for the `--execution-offchain-worker` parameter.
-pub const DEFAULT_EXECUTION_OFFCHAIN_WORKER: ExecutionStrategy = ExecutionStrategy::Native;
+pub const DEFAULT_EXECUTION_OFFCHAIN_WORKER: ExecutionStrategy = ExecutionStrategy::Wasm;
 /// Default value for the `--execution-other` parameter.
-pub const DEFAULT_EXECUTION_OTHER: ExecutionStrategy = ExecutionStrategy::Native;
+pub const DEFAULT_EXECUTION_OTHER: ExecutionStrategy = ExecutionStrategy::Wasm;

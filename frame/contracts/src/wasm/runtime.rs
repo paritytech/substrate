@@ -144,6 +144,12 @@ pub enum RuntimeCosts {
 	Caller,
 	/// Weight of calling `seal_is_contract`.
 	IsContract,
+	/// Weight of calling `seal_code_hash`.
+	#[cfg(feature = "unstable-interface")]
+	CodeHash,
+	/// Weight of calling `seal_own_code_hash`.
+	#[cfg(feature = "unstable-interface")]
+	OwnCodeHash,
 	/// Weight of calling `seal_caller_is_origin`.
 	CallerIsOrigin,
 	/// Weight of calling `seal_address`.
@@ -191,7 +197,6 @@ pub enum RuntimeCosts {
 	/// Base weight of calling `seal_call`.
 	CallBase,
 	/// Weight of calling `seal_delegate_call` for the given input size.
-	#[cfg(feature = "unstable-interface")]
 	DelegateCallBase,
 	/// Weight of the transfer performed during a call.
 	CallSurchargeTransfer,
@@ -235,6 +240,10 @@ impl RuntimeCosts {
 			CopyToContract(len) => s.input_per_byte.saturating_mul(len.into()),
 			Caller => s.caller,
 			IsContract => s.is_contract,
+			#[cfg(feature = "unstable-interface")]
+			CodeHash => s.code_hash,
+			#[cfg(feature = "unstable-interface")]
+			OwnCodeHash => s.own_code_hash,
 			CallerIsOrigin => s.caller_is_origin,
 			Address => s.address,
 			GasLeft => s.gas_left,
@@ -272,7 +281,6 @@ impl RuntimeCosts {
 				.saturating_add(s.take_storage_per_byte.saturating_mul(len.into())),
 			Transfer => s.transfer,
 			CallBase => s.call,
-			#[cfg(feature = "unstable-interface")]
 			DelegateCallBase => s.delegate_call,
 			CallSurchargeTransfer => s.call_transfer_surcharge,
 			CallInputCloned(len) => s.call_per_cloned_byte.saturating_mul(len.into()),
@@ -389,7 +397,6 @@ bitflags! {
 enum CallType {
 	/// Execute another instantiated contract
 	Call { callee_ptr: u32, value_ptr: u32, gas: u64 },
-	#[cfg(feature = "unstable-interface")]
 	/// Execute deployed code in the context (storage, account ID, value) of the caller contract
 	DelegateCall { code_hash_ptr: u32 },
 }
@@ -398,7 +405,6 @@ impl CallType {
 	fn cost(&self) -> RuntimeCosts {
 		match self {
 			CallType::Call { .. } => RuntimeCosts::CallBase,
-			#[cfg(feature = "unstable-interface")]
 			CallType::DelegateCall { .. } => RuntimeCosts::DelegateCallBase,
 		}
 	}
@@ -763,7 +769,6 @@ where
 					flags.contains(CallFlags::ALLOW_REENTRY),
 				)
 			},
-			#[cfg(feature = "unstable-interface")]
 			CallType::DelegateCall { code_hash_ptr } => {
 				if flags.contains(CallFlags::ALLOW_REENTRY) {
 					return Err(Error::<E::T>::InvalidCallFlags.into())
@@ -1129,7 +1134,7 @@ define_env!(Env, <E: Ext>,
 	// `ReturnCode::CalleeReverted`: Output buffer is returned.
 	// `ReturnCode::CalleeTrapped`
 	// `ReturnCode::CodeNotFound`
-	[__unstable__] seal_delegate_call(
+	[seal0] seal_delegate_call(
 		ctx,
 		flags: u32,
 		code_hash_ptr: u32,
@@ -1374,6 +1379,44 @@ define_env!(Env, <E: Ext>,
 			ctx.read_sandbox_memory_as(account_ptr)?;
 
 		Ok(ctx.ext.is_contract(&address) as u32)
+	},
+
+	// Retrieve the code hash for a specified contract address.
+	//
+	// # Parameters
+	//
+	// - `account_ptr`: a pointer to the address in question.
+	//   Should be decodable as an `T::AccountId`. Traps otherwise.
+	// - `out_ptr`: pointer to the linear memory where the returning value is written to.
+	// - `out_len_ptr`: in-out pointer into linear memory where the buffer length
+	//   is read from and the value length is written to.
+	//
+	// # Errors
+	//
+	// `ReturnCode::KeyNotFound`
+	[__unstable__] seal_code_hash(ctx, account_ptr: u32, out_ptr: u32, out_len_ptr: u32) -> ReturnCode => {
+		ctx.charge_gas(RuntimeCosts::CodeHash)?;
+		let address: <<E as Ext>::T as frame_system::Config>::AccountId =
+			ctx.read_sandbox_memory_as(account_ptr)?;
+		if let Some(value) = ctx.ext.code_hash(&address) {
+			ctx.write_sandbox_output(out_ptr, out_len_ptr, &value.encode(), false, already_charged)?;
+			Ok(ReturnCode::Success)
+		} else {
+			Ok(ReturnCode::KeyNotFound)
+		}
+	},
+
+	// Retrieve the code hash of the currently executing contract.
+	//
+	// # Parameters
+	//
+	// - `out_ptr`: pointer to the linear memory where the returning value is written to.
+	// - `out_len_ptr`: in-out pointer into linear memory where the buffer length
+	//   is read from and the value length is written to.
+	[__unstable__] seal_own_code_hash(ctx, out_ptr: u32, out_len_ptr: u32) => {
+		ctx.charge_gas(RuntimeCosts::OwnCodeHash)?;
+		let code_hash_encoded = &ctx.ext.own_code_hash().encode();
+		Ok(ctx.write_sandbox_output(out_ptr, out_len_ptr, code_hash_encoded, false, already_charged)?)
 	},
 
 	// Checks whether the caller of the current contract is the origin of the whole call stack.

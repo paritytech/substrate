@@ -104,7 +104,7 @@ use sp_staking::{
 	offence::{Kind, Offence, ReportOffence},
 	SessionIndex,
 };
-use sp_std::{convert::TryInto, prelude::*};
+use sp_std::prelude::*;
 pub use weights::WeightInfo;
 
 pub mod sr25519 {

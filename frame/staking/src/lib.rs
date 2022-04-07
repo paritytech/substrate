@@ -302,7 +302,7 @@ mod pallet;
 use codec::{Decode, Encode, HasCompact};
 use frame_support::{
 	parameter_types,
-	traits::{ConstU32, Currency, Get},
+	traits::{Currency, Get},
 	weights::Weight,
 	BoundedVec, EqNoBound, PartialEqNoBound, RuntimeDebugNoBound,
 };
@@ -316,7 +316,7 @@ use sp_staking::{
 	offence::{Offence, OffenceError, ReportOffence},
 	EraIndex, SessionIndex,
 };
-use sp_std::{collections::btree_map::BTreeMap, convert::From, prelude::*};
+use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 pub use weights::WeightInfo;
 
 pub use pallet::{pallet::*, *};
@@ -780,7 +780,8 @@ enum Releases {
 	V5_0_0, // blockable validators.
 	V6_0_0, // removal of all storage associated with offchain phragmen.
 	V7_0_0, // keep track of number of nominators / validators in map
-	V8_0_0, // populate `SortedListProvider`.
+	V8_0_0, // populate `VoterList`.
+	V9_0_0, // inject validators into `VoterList` as well.
 }
 
 impl Default for Releases {
@@ -861,6 +862,6 @@ pub struct TestBenchmarkingConfig;
 
 #[cfg(feature = "std")]
 impl BenchmarkingConfig for TestBenchmarkingConfig {
-	type MaxValidators = ConstU32<100>;
-	type MaxNominators = ConstU32<100>;
+	type MaxValidators = frame_support::traits::ConstU32<100>;
+	type MaxNominators = frame_support::traits::ConstU32<100>;
 }
