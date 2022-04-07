@@ -30,14 +30,7 @@
 //!
 //! NOTE: Aura itself is designed to be generic over the crypto used.
 #![forbid(missing_docs, unsafe_code)]
-use std::{
-	convert::{TryFrom, TryInto},
-	fmt::Debug,
-	hash::Hash,
-	marker::PhantomData,
-	pin::Pin,
-	sync::Arc,
-};
+use std::{fmt::Debug, hash::Hash, marker::PhantomData, pin::Pin, sync::Arc};
 
 use futures::prelude::*;
 use log::{debug, trace};
@@ -517,7 +510,7 @@ pub enum Error<B: BlockT> {
 	Inherent(sp_inherents::Error),
 }
 
-impl<B: BlockT> std::convert::From<Error<B>> for String {
+impl<B: BlockT> From<Error<B>> for String {
 	fn from(error: Error<B>) -> String {
 		error.to_string()
 	}

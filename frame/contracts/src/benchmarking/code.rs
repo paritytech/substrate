@@ -339,12 +339,12 @@ where
 	/// Creates a wasm module that calls the imported function named `getter_name` `repeat`
 	/// times. The imported function is expected to have the "getter signature" of
 	/// (out_ptr: u32, len_ptr: u32) -> ().
-	pub fn getter(getter_name: &'static str, repeat: u32) -> Self {
+	pub fn getter(module_name: &'static str, getter_name: &'static str, repeat: u32) -> Self {
 		let pages = max_pages::<T>();
 		ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
-				module: "seal0",
+				module: module_name,
 				name: getter_name,
 				params: vec![ValueType::I32, ValueType::I32],
 				return_type: None,

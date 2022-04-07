@@ -69,7 +69,7 @@
 //! Upon the end of the signed phase, the solutions are examined from best to worse (i.e. `pop()`ed
 //! until drained). Each solution undergoes an expensive `Pallet::feasibility_check`, which ensures
 //! the score claimed by this score was correct, and it is valid based on the election data (i.e.
-//! votes and candidates). At each step, if the current best solution passes the feasibility check,
+//! votes and targets). At each step, if the current best solution passes the feasibility check,
 //! it is considered to be the best one. The sender of the origin is rewarded, and the rest of the
 //! queued solutions get their deposit back and are discarded, without being checked.
 //!
@@ -242,14 +242,13 @@ use frame_support::{
 use frame_system::{ensure_none, offchain::SendTransactionTypes};
 use scale_info::TypeInfo;
 use sp_arithmetic::{
-	traits::{CheckedAdd, Zero},
+	traits::{Bounded, CheckedAdd, Saturating, Zero},
 	UpperOf,
 };
 use sp_npos_elections::{
 	assignment_ratio_to_staked_normalized, ElectionScore, EvaluateSupport, Supports, VoteWeight,
 };
 use sp_runtime::{
-	traits::Bounded,
 	transaction_validity::{
 		InvalidTransaction, TransactionPriority, TransactionSource, TransactionValidity,
 		TransactionValidityError, ValidTransaction,
@@ -324,10 +323,7 @@ impl<T: Config> ElectionProvider for NoFallback<T> {
 }
 
 impl<T: Config> InstantElectionProvider for NoFallback<T> {
-	fn instant_elect(
-		_: Option<usize>,
-		_: Option<usize>,
-	) -> Result<Supports<T::AccountId>, Self::Error> {
+	fn elect_with_bounds(_: usize, _: usize) -> Result<Supports<T::AccountId>, Self::Error> {
 		Err("NoFallback.")
 	}
 }
@@ -647,14 +643,15 @@ pub mod pallet {
 		#[pallet::constant]
 		type SignedDepositWeight: Get<BalanceOf<Self>>;
 
-		/// The maximum number of voters to put in the snapshot. At the moment, snapshots are only
-		/// over a single block, but once multi-block elections are introduced they will take place
-		/// over multiple blocks.
-		///
-		/// Also, note the data type: If the voters are represented by a `u32` in `type
-		/// CompactSolution`, the same `u32` is used here to ensure bounds are respected.
+		/// The maximum number of electing voters to put in the snapshot. At the moment, snapshots
+		/// are only over a single block, but once multi-block elections are introduced they will
+		/// take place over multiple blocks.
 		#[pallet::constant]
-		type VoterSnapshotPerBlock: Get<SolutionVoterIndexOf<Self>>;
+		type MaxElectingVoters: Get<SolutionVoterIndexOf<Self>>;
+
+		/// The maximum number of electable targets to put in the snapshot.
+		#[pallet::constant]
+		type MaxElectableTargets: Get<SolutionTargetIndexOf<Self>>;
 
 		/// Handler for the slashed deposits.
 		type SlashHandler: OnUnbalanced<NegativeImbalanceOf<Self>>;
@@ -687,7 +684,7 @@ pub mod pallet {
 			+ TypeInfo;
 
 		/// Configuration for the fallback.
-		type Fallback: ElectionProvider<
+		type Fallback: InstantElectionProvider<
 			AccountId = Self::AccountId,
 			BlockNumber = Self::BlockNumber,
 			DataProvider = Self::DataProvider,
@@ -696,7 +693,7 @@ pub mod pallet {
 		/// Configuration of the governance-only fallback.
 		///
 		/// As a side-note, it is recommend for test-nets to use `type ElectionProvider =
-		/// OnChainSeqPhragmen<_>` if the test-net is not expected to have thousands of nominators.
+		/// BoundedExecution<_>` if the test-net is not expected to have thousands of nominators.
 		type GovernanceFallback: InstantElectionProvider<
 			AccountId = Self::AccountId,
 			BlockNumber = Self::BlockNumber,
@@ -821,7 +818,7 @@ pub mod pallet {
 		fn integrity_test() {
 			use sp_std::mem::size_of;
 			// The index type of both voters and targets need to be smaller than that of usize (very
-			// unlikely to be the case, but anyhow).
+			// unlikely to be the case, but anyhow)..
 			assert!(size_of::<SolutionVoterIndexOf<T>>() <= size_of::<usize>());
 			assert!(size_of::<SolutionTargetIndexOf<T>>() <= size_of::<usize>());
 
@@ -1052,13 +1049,14 @@ pub mod pallet {
 			let maybe_max_voters = maybe_max_voters.map(|x| x as usize);
 			let maybe_max_targets = maybe_max_targets.map(|x| x as usize);
 
-			let supports =
-				T::GovernanceFallback::instant_elect(maybe_max_voters, maybe_max_targets).map_err(
-					|e| {
-						log!(error, "GovernanceFallback failed: {:?}", e);
-						Error::<T>::FallbackFailed
-					},
-				)?;
+			let supports = T::GovernanceFallback::elect_with_bounds(
+				maybe_max_voters.unwrap_or(Bounded::max_value()),
+				maybe_max_targets.unwrap_or(Bounded::max_value()),
+			)
+			.map_err(|e| {
+				log!(error, "GovernanceFallback failed: {:?}", e);
+				Error::<T>::FallbackFailed
+			})?;
 
 			let solution = ReadySolution {
 				supports,
@@ -1350,14 +1348,13 @@ impl<T: Config> Pallet<T> {
 	/// Extracted for easier weight calculation.
 	fn create_snapshot_external(
 	) -> Result<(Vec<T::AccountId>, Vec<VoterOf<T>>, u32), ElectionError<T>> {
-		let target_limit = <SolutionTargetIndexOf<T>>::max_value().saturated_into::<usize>();
-		// for now we have just a single block snapshot.
-		let voter_limit = T::VoterSnapshotPerBlock::get().saturated_into::<usize>();
+		let target_limit = T::MaxElectableTargets::get().saturated_into::<usize>();
+		let voter_limit = T::MaxElectingVoters::get().saturated_into::<usize>();
 
-		let targets =
-			T::DataProvider::targets(Some(target_limit)).map_err(ElectionError::DataProvider)?;
-		let voters =
-			T::DataProvider::voters(Some(voter_limit)).map_err(ElectionError::DataProvider)?;
+		let targets = T::DataProvider::electable_targets(Some(target_limit))
+			.map_err(ElectionError::DataProvider)?;
+		let voters = T::DataProvider::electing_voters(Some(voter_limit))
+			.map_err(ElectionError::DataProvider)?;
 		let mut desired_targets =
 			T::DataProvider::desired_targets().map_err(ElectionError::DataProvider)?;
 
@@ -1596,7 +1593,7 @@ impl<T: Config> ElectionProvider for Pallet<T> {
 /// number.
 pub fn dispatch_error_to_invalid(error: DispatchError) -> InvalidTransaction {
 	let error_number = match error {
-		DispatchError::Module(ModuleError { error, .. }) => error,
+		DispatchError::Module(ModuleError { error, .. }) => error[0],
 		_ => 0,
 	};
 	InvalidTransaction::Custom(error_number)
@@ -2102,7 +2099,7 @@ mod tests {
 			// we have 8 voters in total.
 			assert_eq!(crate::mock::Voters::get().len(), 8);
 			// but we want to take 2.
-			crate::mock::VoterSnapshotPerBlock::set(2);
+			crate::mock::MaxElectingVoters::set(2);
 
 			// Signed phase opens just fine.
 			roll_to(15);

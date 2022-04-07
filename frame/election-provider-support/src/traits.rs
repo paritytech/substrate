@@ -22,16 +22,12 @@ use codec::Encode;
 use scale_info::TypeInfo;
 use sp_arithmetic::traits::{Bounded, UniqueSaturatedInto};
 use sp_npos_elections::{ElectionScore, Error, EvaluateSupport};
-use sp_std::{
-	convert::{TryFrom, TryInto},
-	fmt::Debug,
-	prelude::*,
-};
+use sp_std::{fmt::Debug, prelude::*};
 
 /// An opaque index-based, NPoS solution type.
 pub trait NposSolution
 where
-	Self: Sized + for<'a> sp_std::convert::TryFrom<&'a [IndexAssignmentOf<Self>], Error = Error>,
+	Self: Sized + for<'a> TryFrom<&'a [IndexAssignmentOf<Self>], Error = Error>,
 {
 	/// The maximum number of votes that are allowed.
 	const LIMIT: usize;

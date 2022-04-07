@@ -1,18 +1,16 @@
-rules:
-  - name: Changed runtime files
-    condition: .*/runtime/.*lib.rs
-    check_type: changed_files
-    min_approvals: 2
-    teams:
-      - substrateteamleads
+# 🔒 PROTECTED: Changes to locks-review-team should be approved by the current locks-review-team
+locks-review-team: locks-review
+team-leads-team: polkadot-review
+action-review-team: ci
 
-  - name: Substrate developers
+rules:
+  - name: Core developers
     check_type: changed_files
     condition: .*
-    any:
-      - min_approvals: 2
-        teams:
-          - core-devs
-      - min_approvals: 1
-        teams:
-          - substrateteamleads
+    min_approvals: 2
+    teams:
+      - core-devs
+
+prevent_review_request:
+  teams:
+    - core-devs

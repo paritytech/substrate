@@ -73,7 +73,7 @@ pub fn open<H: Clone + AsRef<[u8]>>(
 	if upgrade {
 		log::info!("Upgrading database metadata.");
 		if let Some(meta) = parity_db::Options::load_metadata(path)? {
-			config.write_metadata(path, &meta.salt)?;
+			config.write_metadata_with_version(path, &meta.salt, Some(meta.version))?;
 		}
 	}
 
