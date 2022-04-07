@@ -16,11 +16,13 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+use super::command_helper::{inherent_benchmark_data, BenchmarkExtrinsicBuilder};
 use crate::{
 	chain_spec, service,
 	service::{new_partial, FullClient},
 	Cli, Subcommand,
 };
+use frame_benchmarking_cli::*;
 use node_executor::ExecutorDispatch;
 use node_primitives::Block;
 use node_runtime::RuntimeApi;
@@ -92,45 +94,39 @@ pub fn run() -> Result<()> {
 
 			runner.sync_run(|config| cmd.run::<Block, RuntimeApi, ExecutorDispatch>(config))
 		},
-		Some(Subcommand::Benchmark(cmd)) =>
-			if cfg!(feature = "runtime-benchmarks") {
-				let runner = cli.create_runner(cmd)?;
-
-				runner.sync_run(|config| cmd.run::<Block, ExecutorDispatch>(config))
-			} else {
-				Err("Benchmarking wasn't enabled when building the node. \
-				You can enable it with `--features runtime-benchmarks`."
-					.into())
-			},
-		Some(Subcommand::BenchmarkBlock(cmd)) => {
+		Some(Subcommand::Benchmark(cmd)) => {
 			let runner = cli.create_runner(cmd)?;
-			runner.async_run(|config| {
-				let PartialComponents { client, task_manager, .. } = new_partial(&config)?;
-				Ok((cmd.run(client), task_manager))
-			})
-		},
-		Some(Subcommand::BenchmarkOverhead(cmd)) => {
-			let runner = cli.create_runner(cmd)?;
-			runner.async_run(|mut config| {
-				use super::command_helper::{inherent_data, ExtrinsicBuilder};
-				// We don't use the authority role since that would start producing blocks
-				// in the background which would mess with our benchmark.
-				config.role = sc_service::Role::Full;
 
-				let PartialComponents { client, task_manager, .. } = new_partial(&config)?;
-				let ext_builder = ExtrinsicBuilder::new(client.clone());
+			runner.sync_run(|config| {
+				let PartialComponents { client, backend, .. } = new_partial(&config)?;
 
-				Ok((cmd.run(config, client, inherent_data()?, Arc::new(ext_builder)), task_manager))
-			})
-		},
-		Some(Subcommand::BenchmarkStorage(cmd)) => {
-			let runner = cli.create_runner(cmd)?;
-			runner.async_run(|config| {
-				let PartialComponents { client, task_manager, backend, .. } = new_partial(&config)?;
-				let db = backend.expose_db();
-				let storage = backend.expose_storage();
+				// This switch needs to be in the client, since the client decides
+				// which sub-commands it wants to support.
+				match cmd {
+					BenchmarkCmd::Pallet(cmd) => {
+						if !cfg!(feature = "runtime-benchmarks") {
+							return Err(
+								"Runtime benchmarking wasn't enabled when building the node. \
+							You can enable it with `--features runtime-benchmarks`."
+									.into(),
+							)
+						}
 
-				Ok((cmd.run(config, client, db, storage), task_manager))
+						cmd.run::<Block, ExecutorDispatch>(config)
+					},
+					BenchmarkCmd::Block(cmd) => cmd.run(client),
+					BenchmarkCmd::Storage(cmd) => {
+						let db = backend.expose_db();
+						let storage = backend.expose_storage();
+
+						cmd.run(config, client, db, storage)
+					},
+					BenchmarkCmd::Overhead(cmd) => {
+						let ext_builder = BenchmarkExtrinsicBuilder::new(client.clone());
+
+						cmd.run(config, client, inherent_benchmark_data()?, Arc::new(ext_builder))
+					},
+				}
 			})
 		},
 		Some(Subcommand::Key(cmd)) => cmd.run(&cli),

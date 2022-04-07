@@ -16,31 +16,33 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+// Unix only since it uses signals from [`common::run_node_for_a_while`].
+#![cfg(unix)]
+
 use assert_cmd::cargo::cargo_bin;
 use std::process::Command;
 use tempfile::tempdir;
 
-/// Tests that the `benchmark overhead` command works for the substrate dev runtime.
-#[test]
-fn benchmark_overhead_works() {
-	let tmp_dir = tempdir().expect("could not create a temp dir");
-	let base_path = tmp_dir.path();
+pub mod common;
 
-	// Only put 10 extrinsics into the block otherwise it takes forever to build it
-	// especially for a non-release build.
+/// `benchmark block` works for the dev runtime using the wasm executor.
+#[tokio::test]
+async fn benchmark_block_works() {
+	let base_dir = tempdir().expect("could not create a temp dir");
+
+	common::run_node_for_a_while(base_dir.path(), &["--dev"]).await;
+
+	// Invoke `benchmark block` with all options to make sure that they are valid.
 	let status = Command::new(cargo_bin("substrate"))
-		.args(&["benchmark", "overhead", "--dev", "-d"])
-		.arg(base_path)
-		.arg("--weight-path")
-		.arg(base_path)
-		.args(["--warmup", "10", "--repeat", "10"])
-		.args(["--add", "100", "--mul", "1.2", "--metric", "p75"])
-		.args(["--max-ext-per-block", "10"])
+		.args(["benchmark", "block", "--dev"])
+		.arg("-d")
+		.arg(base_dir.path())
+		.args(["--pruning", "archive"])
+		.args(["--from", "1", "--to", "1"])
+		.args(["--repeat", "1"])
+		.args(["--execution", "wasm", "--wasm-execution", "compiled"])
 		.status()
 		.unwrap();
-	assert!(status.success());
 
-	// Weight files have been created.
-	assert!(base_path.join("block_weights.rs").exists());
-	assert!(base_path.join("extrinsic_weights.rs").exists());
+	assert!(status.success())
 }
