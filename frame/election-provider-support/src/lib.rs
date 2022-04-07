@@ -552,7 +552,11 @@ pub trait NposSolver {
 	fn solve(
 		to_elect: usize,
 		targets: Vec<Self::AccountId>,
-		voters: Vec<(Self::AccountId, VoteWeight, impl IntoIterator<Item = Self::AccountId>)>,
+		voters: Vec<(
+			Self::AccountId,
+			VoteWeight,
+			impl IntoIterator<Item = Self::AccountId> + Clone,
+		)>,
 	) -> Result<ElectionResult<Self::AccountId, Self::Accuracy>, Self::Error>;
 
 	/// Measure the weight used in the calculation of the solver.
@@ -580,7 +584,11 @@ impl<
 	fn solve(
 		winners: usize,
 		targets: Vec<Self::AccountId>,
-		voters: Vec<(Self::AccountId, VoteWeight, impl IntoIterator<Item = Self::AccountId>)>,
+		voters: Vec<(
+			Self::AccountId,
+			VoteWeight,
+			impl IntoIterator<Item = Self::AccountId> + Clone,
+		)>,
 	) -> Result<ElectionResult<Self::AccountId, Self::Accuracy>, Self::Error> {
 		sp_npos_elections::seq_phragmen(winners, targets, voters, Balancing::get())
 	}
@@ -608,13 +616,49 @@ impl<
 	fn solve(
 		winners: usize,
 		targets: Vec<Self::AccountId>,
-		voters: Vec<(Self::AccountId, VoteWeight, impl IntoIterator<Item = Self::AccountId>)>,
+		voters: Vec<(
+			Self::AccountId,
+			VoteWeight,
+			impl IntoIterator<Item = Self::AccountId> + Clone,
+		)>,
 	) -> Result<ElectionResult<Self::AccountId, Self::Accuracy>, Self::Error> {
 		sp_npos_elections::phragmms(winners, targets, voters, Balancing::get())
 	}
 
 	fn weight<T: WeightInfo>(voters: u32, targets: u32, vote_degree: u32) -> Weight {
 		T::phragmms(voters, targets, vote_degree)
+	}
+}
+
+/// A wrapper for [`sp_npos_elections::mms`] that implements [`NposSolver`]. See the documentation
+/// of [`sp_npos_elections::mms`] for more info.
+pub struct MMS<AccountId, Accuracy, Balancing>(
+	sp_std::marker::PhantomData<(AccountId, Accuracy, Balancing)>,
+);
+
+impl<
+		AccountId: IdentifierT,
+		Accuracy: PerThing128,
+		Balancing: Get<Option<(usize, ExtendedBalance)>>,
+	> NposSolver for MMS<AccountId, Accuracy, Balancing>
+{
+	type AccountId = AccountId;
+	type Accuracy = Accuracy;
+	type Error = sp_npos_elections::Error;
+	fn solve(
+		winners: usize,
+		targets: Vec<Self::AccountId>,
+		voters: Vec<(
+			Self::AccountId,
+			VoteWeight,
+			impl IntoIterator<Item = Self::AccountId> + Clone,
+		)>,
+	) -> Result<ElectionResult<Self::AccountId, Self::Accuracy>, Self::Error> {
+		if Balancing::get().is_none() {
+			return Err(Self::Error::MissingBalancingParams)
+		}
+		let (iterations, tolerance) = Balancing::get().unwrap();
+		sp_npos_elections::mms(winners, targets, voters, iterations, tolerance)
 	}
 }
 
