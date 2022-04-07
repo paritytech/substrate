@@ -23,7 +23,7 @@
 
 use crate::{
 	balance, setup_inputs, CandidatePtr, ElectionResult, ExtendedBalance, IdentifierT, PerThing128,
-	Rc, Vec, VoteWeight,
+	Rc, Vec, VoteWeight, Voter, Zero,
 };
 
 use sp_std::vec;
@@ -45,58 +45,122 @@ use sp_std::vec;
 /// - `iterations` is the number of iterations to perform while balancing.
 /// - `tolerance` is the tolerance of the balancing.
 ///
-/// This can only fail of the normalization fails. This can happen if for any of the resulting
-/// assignments, `assignment.distribution.map(|p| p.deconstruct()).sum()` fails to fit inside
-/// `UpperOf<P>`. A user of this crate may statically assert that this can never happen and safely
-/// `expect` this to return `Ok`.
-pub fn mms<AccountId: IdentifierT + Default, P: PerThing128>(
+/// This can only fail in 2 cases: 1) the `candidates` set is empty, 2) the normalization fails.
+/// The latter can happen if for any of the resulting assignments, `assignment.distribution.map(|p|
+/// p.deconstruct()).sum()` fails to fit inside `UpperOf<P>`. A user of this crate may statically
+/// assert that this can never happen and safely `expect` this to return `Ok`.
+pub fn mms<AccountId: IdentifierT, P: PerThing128>(
 	to_elect: usize,
+	candidates: Vec<AccountId>,
+	voters: Vec<(AccountId, VoteWeight, impl IntoIterator<Item = AccountId> + Clone)>,
+	iterations: usize,
+	tolerance: ExtendedBalance,
+) -> Result<ElectionResult<AccountId, P>, crate::Error> {
+	let mut winners = vec![]; // `A` in the paper.
+
+	if candidates.is_empty() {
+		return Err(crate::Error::NoCandidates)
+	}
+
+	// To be able to amend it below
+	let mut candidates = candidates;
+
+	for _round in 0..to_elect {
+		let mut max_support = Zero::zero();
+		let mut winner_idx = 0; // we tested above that it's not empty
+		for (index, candidate) in candidates.iter().enumerate() {
+			// Find `argmax_{c in C\A} supp_{w_c}(A+c)`
+			let support = calculate_support(
+				winners.clone(),
+				(*candidate).clone(),
+				voters.clone(),
+				iterations,
+				tolerance,
+			);
+
+			// maximize stake
+			if support > max_support {
+				max_support = support;
+				winner_idx = index;
+			}
+		}
+
+		// `c in C \ A` in the paper. so we need to remove the winner from the candidates.
+		winners.push(candidates.swap_remove(winner_idx));
+	}
+
+	// Make sure weights are correct and normalized.
+	let (used_candidates, used_voters) =
+		setup_inputs_with_balance(winners, voters, iterations, tolerance);
+
+	crate::voter_candidate_to_election_result(used_voters, used_candidates)
+}
+
+/// Constructs the `voters` and `candidates` inputs for the `mms` function.
+///
+/// This is an internal part of the [`mms`].
+fn setup_inputs_with_balance<AccountId: IdentifierT>(
 	candidates: Vec<AccountId>,
 	voters: Vec<(AccountId, VoteWeight, impl IntoIterator<Item = AccountId>)>,
 	iterations: usize,
 	tolerance: ExtendedBalance,
-) -> Result<ElectionResult<AccountId, P>, crate::Error> {
-	let mut winners: Vec<CandidatePtr<AccountId>> = vec![]; // `A` in the paper.
-	let (candidates, mut voters) = setup_inputs(candidates, voters);
+) -> (Vec<CandidatePtr<AccountId>>, Vec<Voter<AccountId>>) {
+	let (used_candidates, mut used_voters) = setup_inputs(candidates, voters);
+	for (index, c) in used_candidates.iter().enumerate() {
+		c.borrow_mut().elected = true;
+		c.borrow_mut().round = index;
+		apply_elected(&mut used_voters, Rc::clone(c));
+	}
+	balance(&mut used_voters, iterations, tolerance);
 
-	for round in 0..to_elect {
-		let mut bal: ExtendedBalance = 0;
-		let mut winner: CandidatePtr<AccountId> = Default::default();
-		for candidate in &candidates {
-			if winners.iter().any(|w| w.borrow().who == candidate.borrow().who) {
-				// `c in C \ A` in the paper.
-				continue
-			}
+	(used_candidates, used_voters)
+}
 
-			candidate.borrow_mut().elected = true;
-			candidate.borrow_mut().round = round;
+/// Calculates the balance weight vector `w_c` for `A + c`
+///
+/// This is an internal part of the [`mms`].
+fn calculate_support<AccountId: IdentifierT>(
+	mut candidates: Vec<AccountId>,
+	candidate: AccountId,
+	voters: Vec<(AccountId, VoteWeight, impl IntoIterator<Item = AccountId>)>,
+	iterations: usize,
+	tolerance: ExtendedBalance,
+) -> ExtendedBalance {
+	candidates.push(candidate.clone());
 
-			// Calculate the balance weight vector `w_c` for `A + c`
-			balance(&mut voters, iterations, tolerance);
+	// Calculate the balance weight vector `w_c` for `A + c`
+	let (used_candidates, _) = setup_inputs_with_balance(candidates, voters, iterations, tolerance);
 
-			// Find `argmax_{c in C\A} supp_{w_c}(A+c)`
-			let support = candidate.borrow().backed_stake;
+	let support = used_candidates
+		.iter()
+		.find(|x| x.borrow().who == candidate)
+		.unwrap()
+		.borrow()
+		.backed_stake;
 
-			// maximize stake
-			if support >= bal {
-				bal = support;
-				winner = Rc::clone(candidate);
-			}
+	support
+}
 
-			candidate.borrow_mut().elected = false;
-			candidate.borrow_mut().round = 0;
+/// Update the weights of `voters` given that `elected_ptr` has been elected in the previous round.
+///
+/// Updates `voters` in place.
+///
+/// This is an internal part of the [`mms`] and should be called before calling [`balance`].
+fn apply_elected<AccountId: IdentifierT>(
+	voters: &mut Vec<Voter<AccountId>>,
+	elected_ptr: CandidatePtr<AccountId>,
+) {
+	let elected_who = elected_ptr.borrow().who.clone();
+	let mut elected_backed_stake: ExtendedBalance = Zero::zero();
+
+	for voter in voters {
+		if let Some(new_edge_index) = voter.edges.iter().position(|e| e.who == elected_who) {
+			elected_backed_stake = elected_backed_stake.saturating_add(voter.budget);
+			voter.edges[new_edge_index].weight = voter.budget;
 		}
-
-		// winner is always initialized in the previous loop. We have a winner!
-		winner.borrow_mut().elected = true;
-		winner.borrow_mut().round = round;
-		winners.push(winner);
 	}
 
-	// Make sure weights are correct and normalized.
-	balance(&mut voters, iterations, tolerance);
-
-	crate::voter_candidate_to_election_result(voters, winners)
+	elected_ptr.borrow_mut().backed_stake = elected_backed_stake;
 }
 
 #[cfg(test)]
@@ -111,31 +175,13 @@ mod tests {
 
 		let ElectionResult::<_, Perbill> { winners, assignments } =
 			mms(2, candidates, voters, 2, 0).unwrap();
-		assert_eq!(winners, vec![(3, 30), (2, 30)]);
+		assert_eq!(winners, vec![(3, 30), (1, 30)]);
 		assert_eq!(
 			assignments,
 			vec![
-				Assignment {
-					who: 10u64,
-					distribution: vec![
-						(1, Perbill::from_parts(500000000)),
-						(2, Perbill::from_parts(500000000))
-					]
-				},
-				Assignment {
-					who: 20,
-					distribution: vec![
-						(1, Perbill::from_parts(500000000)),
-						(3, Perbill::from_parts(500000000))
-					]
-				},
-				Assignment {
-					who: 30,
-					distribution: vec![
-						(2, Perbill::from_parts(666666666)),
-						(3, Perbill::from_parts(333333334)),
-					]
-				},
+				Assignment { who: 10u64, distribution: vec![(1, Perbill::one())] },
+				Assignment { who: 20, distribution: vec![(1, Perbill::one())] },
+				Assignment { who: 30, distribution: vec![(3, Perbill::one()),] },
 			]
 		)
 	}
@@ -155,7 +201,7 @@ mod tests {
 
 		let ElectionResult::<_, Perbill> { winners, assignments: _ } =
 			mms(4, candidates, voters, 2, 0).unwrap();
-		assert_eq!(winners, vec![(11, 2000), (61, 2000), (41, 2000), (21, 2000),]);
+		assert_eq!(winners, vec![(11, 2000), (21, 2000), (61, 2000), (41, 2000),]);
 	}
 
 	#[test]
@@ -168,7 +214,7 @@ mod tests {
 
 		let ElectionResult::<_, Perbill> { winners, assignments: _ } =
 			mms(2, candidates, voters, 2, 0).unwrap();
-		assert_eq!(winners.into_iter().map(|(w, _)| w).collect::<Vec<_>>(), vec![3u32, 1]);
+		assert_eq!(winners.into_iter().map(|(w, _)| w).collect::<Vec<_>>(), vec![1u32, 3]);
 	}
 
 	#[test]
@@ -207,5 +253,58 @@ mod tests {
 		let ElectionResult::<_, Perbill> { winners: winners2, assignments: _ } =
 			mms(2, candidates, voters, 2, 0).unwrap();
 		assert_eq!(winners2[..2], winners);
+	}
+
+	#[test]
+	fn mms_not_strong_monotonicity() {
+		let mut candidates = vec![1, 2, 3, 4, 5, 6, 7];
+		let mut voters = (0..13).map(|i| (10 + i, 100, vec![3, 4, 5, 6, 7])).collect::<Vec<_>>();
+		voters.push((30, 100, vec![1, 2]));
+		voters.push((31, 100, vec![1, 2]));
+		voters.push((40, 100, vec![1]));
+		voters.push((41, 100, vec![1]));
+		voters.push((50, 100, vec![2]));
+
+		let ElectionResult::<_, Perbill> { winners, assignments: _ } =
+			mms(6, candidates.clone(), voters.clone(), 2, 0).unwrap();
+		assert_eq!(winners, vec![(3, 260), (7, 260), (6, 260), (1, 400), (4, 260), (5, 260)]);
+
+		voters.push((60, 100, vec![1, 3, 4, 5, 6, 7]));
+
+		let ElectionResult::<_, Perbill> { winners, assignments: _ } =
+			mms(6, candidates.clone(), voters.clone(), 2, 0).unwrap();
+		assert_eq!(winners, vec![(3, 325), (7, 325), (1, 300), (5, 325), (4, 325), (2, 300)]);
+
+		voters.pop();
+		candidates.push(8);
+		voters.push((60, 100, vec![8]));
+
+		let ElectionResult::<_, Perbill> { winners, assignments: _ } =
+			mms(6, candidates.clone(), voters.clone(), 2, 0).unwrap();
+		assert_eq!(winners, vec![(3, 260), (4, 260), (7, 260), (1, 400), (5, 260), (6, 260)]);
+
+		voters.pop();
+		voters.push((60, 100, vec![1, 3, 4, 5, 6, 7, 8]));
+
+		let ElectionResult::<_, Perbill> { winners, assignments: _ } =
+			mms(6, candidates, voters, 2, 0).unwrap();
+		assert_eq!(winners, vec![(3, 325), (4, 325), (1, 300), (6, 325), (5, 325), (2, 300)]);
+	}
+
+	#[test]
+	fn mms_not_pjr() {
+		let candidates = vec![1, 2, 3, 4, 5, 6, 7];
+		let voters = vec![
+			(10, 500, vec![1, 4, 5, 6, 7]),
+			(20, 400, vec![2, 4, 5, 6, 7]),
+			(30, 300, vec![3, 4, 5, 6, 7]),
+			(40, 200, vec![1]),
+			(50, 100, vec![2]),
+			(60, 100, vec![3]),
+		];
+
+		let ElectionResult::<_, Perbill> { winners, assignments: _ } =
+			mms(4, candidates, voters, 20, 0).unwrap();
+		assert_eq!(winners, vec![(4, 400), (1, 400), (2, 400), (3, 400)]);
 	}
 }
