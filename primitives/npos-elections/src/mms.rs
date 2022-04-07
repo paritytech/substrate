@@ -30,8 +30,8 @@ use sp_std::vec;
 
 /// Execute the `MMS` method.
 ///
-/// This can be used interchangeably with [`seq-phragmen`] or [`phragmms`] and offers a similar API,
-/// namely:
+/// This can be used interchangeably with [`seq-phragmen`] or `phragmms` and offers a
+/// similar API, namely:
 ///
 /// - The resulting edge weight distribution is normalized (thus, safe to use for submission).
 /// - The accuracy can be configured via the generic type `P`.

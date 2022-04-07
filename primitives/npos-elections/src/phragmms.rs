@@ -30,7 +30,7 @@ use sp_std::{prelude::*, rc::Rc};
 
 /// Execute the phragmms method.
 ///
-/// This can be used interchangeably with [`seq-phragmen`] or [`mms`] and offers a similar API,
+/// This can be used interchangeably with [`seq-phragmen`] or `mms` and offers a similar API,
 /// namely:
 ///
 /// - The resulting edge weight distribution is normalized (thus, safe to use for submission).
