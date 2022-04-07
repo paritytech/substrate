@@ -162,7 +162,7 @@ pub fn expand_error(def: &mut Def) -> proc_macro2::TokenStream {
 
 				#frame_support::sp_runtime::DispatchError::Module(#frame_support::sp_runtime::ModuleError {
 					index,
-					error: core::convert::TryInto::try_into(encoded).expect("encoded error is resized to be equal to the maximum encoded error size; qed"),
+					error: TryInto::try_into(encoded).expect("encoded error is resized to be equal to the maximum encoded error size; qed"),
 					message: Some(err.as_str()),
 				})
 			}

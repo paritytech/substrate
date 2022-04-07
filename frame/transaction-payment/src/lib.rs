@@ -348,7 +348,7 @@ pub mod pallet {
 			// loss.
 			assert!(
 				<Multiplier as sp_runtime::traits::Bounded>::max_value() >=
-					Multiplier::checked_from_integer(
+					Multiplier::checked_from_integer::<u128>(
 						T::BlockWeights::get().max_block.try_into().unwrap()
 					)
 					.unwrap(),
