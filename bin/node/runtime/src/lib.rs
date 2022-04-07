@@ -600,7 +600,8 @@ frame_election_provider_support::generate_solution_type!(
 );
 
 parameter_types! {
-	pub MaxNominations: u32 = <NposSolution16 as sp_npos_elections::NposSolution>::LIMIT as u32;
+	pub MaxNominations: u32
+		= <NposSolution16 as frame_election_provider_support::NposSolution>::LIMIT as u32;
 	pub SignedMaxRefunds: u32 = 10;
 }
 
