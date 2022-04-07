@@ -228,7 +228,8 @@ pub mod pallet {
 		/// The overarching call type.
 		type Call: Parameter
 			+ Dispatchable<Origin = Self::Origin, PostInfo = PostDispatchInfo>
-			+ GetDispatchInfo;
+			+ GetDispatchInfo
+			+ From<frame_system::Call<Self>>;
 
 		/// The currency mechanism.
 		type Currency: ReservableCurrency<Self::AccountId>;

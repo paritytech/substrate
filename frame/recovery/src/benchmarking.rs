@@ -119,6 +119,18 @@ fn insert_recovery_account<T: Config>(caller: &T::AccountId, account: &T::Accoun
 }
 
 benchmarks! {
+	as_recovered {
+		let caller: T::AccountId = whitelisted_caller();
+		let recovered_account: T::AccountId = account("recovered_account", 0, SEED);
+		let call: <T as Config>::Call = frame_system::Call::<T>::remark { remark: vec![] }.into();
+
+		Proxy::<T>::insert(&caller, &recovered_account);
+	}: _(
+		RawOrigin::Signed(caller),
+		recovered_account,
+		Box::new(call)
+	)
+
 	set_recovered {
 		let lost: T::AccountId = whitelisted_caller();
 		let rescuer: T::AccountId = whitelisted_caller();
