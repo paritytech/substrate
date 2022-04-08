@@ -2059,7 +2059,7 @@ define_env!(Env, <E: Ext>,
 	},
 
 	// Calculates Ethereum address from the ECDSA compressed public key and stores
-	// it into the supplied buffer
+	// it into the supplied buffer.
 	//
 	// # Parameters
 	//
