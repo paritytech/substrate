@@ -31,7 +31,8 @@ use log::{info, trace};
 use rand::prelude::*;
 use std::{fmt::Debug, sync::Arc, time::Instant};
 
-use super::{cmd::StorageCmd, record::BenchRecord};
+use super::cmd::StorageCmd;
+use crate::shared::BenchRecord;
 
 impl StorageCmd {
 	/// Benchmarks the time it takes to write a single Storage item.

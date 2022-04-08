@@ -36,6 +36,10 @@ sp-finality-grandpa = { version = "4.0.0-dev", path = "../../../primitives/final
 sc-client-api = { version = "4.0.0-dev", path = "../../../client/api" }
 sp-runtime = { version = "6.0.0", path = "../../../primitives/runtime" }
 sp-timestamp = { version = "4.0.0-dev", path = "../../../primitives/timestamp" }
+sp-inherents = { version = "4.0.0-dev", path = "../../../primitives/inherents" }
+sp-keyring = { version = "6.0.0", path = "../../../primitives/keyring" }
+frame-system = { version = "4.0.0-dev", path = "../../../frame/system" }
+pallet-transaction-payment = { version = "4.0.0-dev", default-features = false, path = "../../../frame/transaction-payment" }
 
 # These dependencies are used for the node template's RPCs
 jsonrpc-core = "18.0.0"
