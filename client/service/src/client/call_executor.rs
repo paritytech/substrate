@@ -95,8 +95,7 @@ where
 			.wasm_override
 			.as_ref()
 			.as_ref()
-			.map(|o| o.get(&spec.spec_version, onchain_code.heap_pages, &spec.spec_name))
-			.flatten()
+			.and_then(|o| o.get(&spec.spec_version, onchain_code.heap_pages, &spec.spec_name))
 		{
 			log::debug!(target: "wasm_overrides", "using WASM override for block {}", id);
 			d
