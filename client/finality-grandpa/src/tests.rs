@@ -57,7 +57,7 @@ use tokio::runtime::{Handle, Runtime};
 
 use authorities::AuthoritySet;
 use communication::grandpa_protocol_name;
-use sc_block_builder::BlockBuilderProvider;
+use sc_block_builder::{BlockBuilder, BlockBuilderProvider};
 use sc_consensus::LongestChain;
 use sc_keystore::LocalKeystore;
 use sp_application_crypto::key_types::GRANDPA;
@@ -1684,4 +1684,129 @@ fn grandpa_environment_doesnt_send_equivocation_reports_for_itself() {
 	equivocation.identity = TryFrom::try_from(&[1; 32][..]).unwrap();
 	let equivocation_proof = sp_finality_grandpa::Equivocation::Prevote(equivocation);
 	assert!(environment.report_equivocation(equivocation_proof).is_ok());
+}
+
+#[test]
+fn revert_prunes_authority_changes() {
+	sp_tracing::try_init_simple();
+	let runtime = Runtime::new().unwrap();
+
+	let peers = &[Ed25519Keyring::Alice, Ed25519Keyring::Bob, Ed25519Keyring::Charlie];
+
+	type TestBlockBuilder<'a> =
+		BlockBuilder<'a, Block, PeersFullClient, substrate_test_runtime_client::Backend>;
+	let edit_block = |builder: TestBlockBuilder| {
+		let mut block = builder.build().unwrap().block;
+		add_scheduled_change(
+			&mut block,
+			ScheduledChange { next_authorities: make_ids(peers), delay: 0 },
+		);
+		block
+	};
+
+	let api = TestApi::new(make_ids(peers));
+	let mut net = GrandpaTestNet::new(api, 3, 0);
+	runtime.spawn(initialize_grandpa(&mut net, peers));
+
+	let peer = net.peer(0);
+	let client = peer.client().as_client();
+
+	// Test scenario: (X) = auth-change, 24 = revert-point
+	//
+	//              +---------(27)
+	//             /
+	// 0---(21)---23---24---25---(28)---30
+	//                  ^    \
+	//        revert-point    +------(29)
+
+	// Construct canonical chain
+
+	// add 20 blocks
+	peer.push_blocks(20, false);
+	// at block 21 we add an authority transition
+	peer.generate_blocks(1, BlockOrigin::File, edit_block);
+	// add more blocks on top of it (until we have 24)
+	peer.push_blocks(3, false);
+	// add more blocks on top of it (until we have 27)
+	peer.push_blocks(3, false);
+	// at block 28 we add an authority transition
+	peer.generate_blocks(1, BlockOrigin::File, edit_block);
+	// add more blocks on top of it (until we have 30)
+	peer.push_blocks(2, false);
+
+	// Fork before revert point
+
+	// add more blocks on top of block 23 (until we have 26)
+	let hash = peer.generate_blocks_at(
+		BlockId::Number(23),
+		3,
+		BlockOrigin::File,
+		|builder| {
+			let mut block = builder.build().unwrap().block;
+			block.header.digest_mut().push(DigestItem::Other(vec![1]));
+			block
+		},
+		false,
+		false,
+		true,
+		ForkChoiceStrategy::LongestChain,
+	);
+	// at block 27 of the fork add an authority transition
+	peer.generate_blocks_at(
+		BlockId::Hash(hash),
+		1,
+		BlockOrigin::File,
+		edit_block,
+		false,
+		false,
+		true,
+		ForkChoiceStrategy::LongestChain,
+	);
+
+	// Fork after revert point
+
+	// add more block on top of block 25 (until we have 28)
+	let hash = peer.generate_blocks_at(
+		BlockId::Number(25),
+		3,
+		BlockOrigin::File,
+		|builder| {
+			let mut block = builder.build().unwrap().block;
+			block.header.digest_mut().push(DigestItem::Other(vec![2]));
+			block
+		},
+		false,
+		false,
+		true,
+		ForkChoiceStrategy::LongestChain,
+	);
+	// at block 29 of the fork add an authority transition
+	peer.generate_blocks_at(
+		BlockId::Hash(hash),
+		1,
+		BlockOrigin::File,
+		edit_block,
+		false,
+		false,
+		true,
+		ForkChoiceStrategy::LongestChain,
+	);
+
+	revert(client.clone(), 6).unwrap();
+
+	let persistent_data: PersistentData<Block> = aux_schema::load_persistent(
+		&*client,
+		client.info().genesis_hash,
+		Zero::zero(),
+		|| unreachable!(),
+	)
+	.unwrap();
+	let changes_num: Vec<_> = persistent_data
+		.authority_set
+		.inner()
+		.pending_standard_changes
+		.iter()
+		.map(|(_, n, _)| *n)
+		.collect();
+	assert_eq!(changes_num, [21, 27]);
 }

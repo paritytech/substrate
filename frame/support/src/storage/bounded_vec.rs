@@ -693,7 +693,7 @@ pub mod test {
 	}
 
 	#[test]
-	fn try_append_is_correct() {
+	fn bound_returns_correct_value() {
 		assert_eq!(BoundedVec::<u32, ConstU32<7>>::bound(), 7);
 	}
 

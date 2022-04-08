@@ -22,7 +22,6 @@
 use crate::{mock::*, IndexAssignment, NposSolution};
 use frame_support::traits::ConstU32;
 use rand::SeedableRng;
-use std::convert::TryInto;
 
 mod solution_type {
 	use super::*;
@@ -30,7 +29,7 @@ mod solution_type {
 	// these need to come from the same dev-dependency `frame-election-provider-support`, not from
 	// the crate.
 	use crate::{generate_solution_type, Assignment, Error as NposError, NposSolution};
-	use sp_std::{convert::TryInto, fmt::Debug};
+	use sp_std::fmt::Debug;
 
 	#[allow(dead_code)]
 	mod __private {
@@ -89,6 +88,33 @@ mod solution_type {
 		};
 
 		assert!(with_compact < without_compact);
+	}
+
+	#[test]
+	fn from_assignment_fail_too_many_voters() {
+		let rng = rand::rngs::SmallRng::seed_from_u64(0);
+
+		// This will produce 24 voters..
+		let (voters, assignments, candidates) = generate_random_votes(10, 25, rng);
+		let voter_index = make_voter_fn(&voters);
+		let target_index = make_target_fn(&candidates);
+
+		// Limit the voters to 20..
+		generate_solution_type!(
+			pub struct InnerTestSolution::<
+				VoterIndex = u32,
+				TargetIndex = u16,
+				Accuracy = TestAccuracy,
+				MaxVoters = frame_support::traits::ConstU32::<20>,
+			>(16)
+		);
+
+		// 24 > 20, so this should fail.
+		assert_eq!(
+			InnerTestSolution::from_assignment(&assignments, &voter_index, &target_index)
+				.unwrap_err(),
+			NposError::TooManyVoters,
+		);
 	}
 
 	#[test]
