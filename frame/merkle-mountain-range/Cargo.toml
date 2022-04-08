@@ -26,8 +26,6 @@ frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 
-pallet-mmr-primitives = { version = "4.0.0-dev", default-features = false, path = "./primitives" }
-
 [dev-dependencies]
 env_logger = "0.9"
 hex-literal = "0.3"
@@ -46,7 +44,6 @@ std = [
 	"frame-benchmarking/std",
 	"frame-support/std",
 	"frame-system/std",
-	"pallet-mmr-primitives/std",
 ]
 runtime-benchmarks = ["frame-benchmarking/runtime-benchmarks"]
 try-runtime = ["frame-support/try-runtime"]

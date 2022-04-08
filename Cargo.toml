@@ -100,7 +100,6 @@ members = [
 	"frame/lottery",
 	"frame/membership",
 	"frame/merkle-mountain-range",
-	"frame/merkle-mountain-range/primitives",
 	"frame/merkle-mountain-range/rpc",
 	"frame/multisig",
 	"frame/nicks",

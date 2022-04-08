@@ -58,7 +58,7 @@
 
 use codec::Encode;
 use frame_support::weights::Weight;
-use sp_runtime::traits;
+use sp_runtime::traits::{self, One, Saturating};
 
 #[cfg(any(feature = "runtime-benchmarks", test))]
 mod benchmarking;
@@ -70,8 +70,29 @@ mod mock;
 mod tests;
 
 pub use pallet::*;
-pub use pallet_mmr_primitives as runtime_primitives;
-pub use sp_mmr_primitives::{self as primitives, Error, LeafIndex, NodeIndex};
+pub use sp_mmr_primitives::{self as primitives, Error, LeafDataProvider, LeafIndex, NodeIndex};
+
+/// The most common use case for MMRs is to store historical block hashes,
+/// so that any point in time in the future we can receive a proof about some past
+/// blocks without using excessive on-chain storage.
+///
+/// Hence we implement the [LeafDataProvider] for [ParentNumberAndHash] which is a
+/// crate-local wrapper over [frame_system::Pallet]. Since the current block hash
+/// is not available (since the block is not finished yet),
+/// we use the `parent_hash` here along with parent block number.
+pub struct ParentNumberAndHash<T: frame_system::Config> {
+	_phanthom: sp_std::marker::PhantomData<T>,
+}
+impl<T: frame_system::Config> LeafDataProvider for ParentNumberAndHash<T> {
+	type LeafData = (<T as frame_system::Config>::BlockNumber, <T as frame_system::Config>::Hash);
+
+	fn leaf_data() -> Self::LeafData {
+		(
+			frame_system::Pallet::<T>::block_number().saturating_sub(One::one()),
+			frame_system::Pallet::<T>::parent_hash(),
+		)
+	}
+}
 
 pub trait WeightInfo {
 	fn on_initialize(peaks: NodeIndex) -> Weight;
@@ -139,7 +160,7 @@ pub mod pallet {
 		///
 		/// Note that the leaf at each block MUST be unique. You may want to include a block hash or
 		/// block number as an easiest way to ensure that.
-		type LeafData: runtime_primitives::LeafDataProvider;
+		type LeafData: primitives::LeafDataProvider;
 
 		/// A hook to act on the new MMR root.
 		///
@@ -176,7 +197,7 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
 		fn on_initialize(_n: T::BlockNumber) -> Weight {
-			use runtime_primitives::LeafDataProvider;
+			use primitives::LeafDataProvider;
 			let leaves = Self::mmr_leaves();
 			let peaks_before = mmr::utils::NodesUtils::new(leaves).number_of_peaks();
 			let data = T::LeafData::leaf_data();
@@ -201,7 +222,7 @@ pub mod pallet {
 type ModuleMmr<StorageType, T, I> = mmr::Mmr<StorageType, T, I, LeafOf<T, I>>;
 
 /// Leaf data.
-type LeafOf<T, I> = <<T as Config<I>>::LeafData as runtime_primitives::LeafDataProvider>::LeafData;
+type LeafOf<T, I> = <<T as Config<I>>::LeafData as primitives::LeafDataProvider>::LeafData;
 
 /// Hashing used for the pallet.
 pub(crate) type HashingOf<T, I> = <T as Config<I>>::Hashing;

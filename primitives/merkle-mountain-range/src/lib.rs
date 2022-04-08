@@ -21,6 +21,7 @@
 #![warn(missing_docs)]
 
 use sp_debug_derive::RuntimeDebug;
+use sp_runtime::traits;
 use sp_std::fmt;
 #[cfg(not(feature = "std"))]
 use sp_std::prelude::Vec;
@@ -34,6 +35,38 @@ pub type NodeIndex = u64;
 /// both leafs and inner nodes. Leafs will always have consecutive `LeafIndex`,
 /// but might be actually at different positions in the MMR `NodeIndex`.
 pub type LeafIndex = u64;
+
+/// A provider of the MMR's leaf data.
+pub trait LeafDataProvider {
+	/// A type that should end up in the leaf of MMR.
+	type LeafData: FullLeaf + codec::Decode;
+
+	/// The method to return leaf data that should be placed
+	/// in the leaf node appended MMR at this block.
+	///
+	/// This is being called by the `on_initialize` method of
+	/// this pallet at the very beginning of each block.
+	fn leaf_data() -> Self::LeafData;
+}
+
+impl LeafDataProvider for () {
+	type LeafData = ();
+
+	fn leaf_data() -> Self::LeafData {
+		()
+	}
+}
+
+/// New MMR root notification hook.
+pub trait OnNewRoot<Hash> {
+	/// Function called by the pallet in case new MMR root has been computed.
+	fn on_new_root(root: &Hash);
+}
+
+/// No-op implementation of [OnNewRoot].
+impl<Hash> OnNewRoot<Hash> for () {
+	fn on_new_root(_root: &Hash) {}
+}
 
 /// A MMR proof data for one of the leaves.
 #[derive(codec::Encode, codec::Decode, RuntimeDebug, Clone, PartialEq, Eq)]
@@ -134,6 +167,190 @@ impl EncodableOpaqueLeaf {
 	}
 }
 
+/// An element representing either full data or it's hash.
+///
+/// See [Compact] to see how it may be used in practice to reduce the size
+/// of proofs in case multiple [LeafDataProvider]s are composed together.
+/// This is also used internally by the MMR to differentiate leaf nodes (data)
+/// and inner nodes (hashes).
+///
+/// [DataOrHash::hash] method calculates the hash of this element in it's compact form,
+/// so should be used instead of hashing the encoded form (which will always be non-compact).
+#[derive(RuntimeDebug, Clone, PartialEq)]
+pub enum DataOrHash<H: traits::Hash, L> {
+	/// Arbitrary data in it's full form.
+	Data(L),
+	/// A hash of some data.
+	Hash(H::Output),
+}
+
+impl<H: traits::Hash, L> From<L> for DataOrHash<H, L> {
+	fn from(l: L) -> Self {
+		Self::Data(l)
+	}
+}
+
+mod encoding {
+	use super::*;
+
+	/// A helper type to implement [codec::Codec] for [DataOrHash].
+	#[derive(codec::Encode, codec::Decode)]
+	enum Either<A, B> {
+		Left(A),
+		Right(B),
+	}
+
+	impl<H: traits::Hash, L: FullLeaf> codec::Encode for DataOrHash<H, L> {
+		fn encode_to<T: codec::Output + ?Sized>(&self, dest: &mut T) {
+			match self {
+				Self::Data(l) => l.using_encoded(
+					|data| Either::<&[u8], &H::Output>::Left(data).encode_to(dest),
+					false,
+				),
+				Self::Hash(h) => Either::<&[u8], &H::Output>::Right(h).encode_to(dest),
+			}
+		}
+	}
+
+	impl<H: traits::Hash, L: FullLeaf + codec::Decode> codec::Decode for DataOrHash<H, L> {
+		fn decode<I: codec::Input>(value: &mut I) -> Result<Self, codec::Error> {
+			let decoded: Either<Vec<u8>, H::Output> = Either::decode(value)?;
+			Ok(match decoded {
+				Either::Left(l) => DataOrHash::Data(L::decode(&mut &*l)?),
+				Either::Right(r) => DataOrHash::Hash(r),
+			})
+		}
+	}
+}
+
+impl<H: traits::Hash, L: FullLeaf> DataOrHash<H, L> {
+	/// Retrieve a hash of this item.
+	///
+	/// Depending on the node type it's going to either be a contained value for [DataOrHash::Hash]
+	/// node, or a hash of SCALE-encoded [DataOrHash::Data] data.
+	pub fn hash(&self) -> H::Output {
+		match *self {
+			Self::Data(ref leaf) => leaf.using_encoded(<H as traits::Hash>::hash, true),
+			Self::Hash(ref hash) => hash.clone(),
+		}
+	}
+}
+
+/// A composition of multiple leaf elements with compact form representation.
+///
+/// When composing together multiple [LeafDataProvider]s you will end up with
+/// a tuple of `LeafData` that each element provides.
+///
+/// However this will cause the leaves to have significant size, while for some
+/// use cases it will be enough to prove only one element of the tuple.
+/// That's the rationale for [Compact] struct. We wrap each element of the tuple
+/// into [DataOrHash] and each tuple element is hashed first before constructing
+/// the final hash of the entire tuple. This allows you to replace tuple elements
+/// you don't care about with their hashes.
+#[derive(RuntimeDebug, Clone, PartialEq)]
+pub struct Compact<H, T> {
+	/// Internal tuple representation.
+	pub tuple: T,
+	_hash: sp_std::marker::PhantomData<H>,
+}
+
+impl<H, T> sp_std::ops::Deref for Compact<H, T> {
+	type Target = T;
+
+	fn deref(&self) -> &Self::Target {
+		&self.tuple
+	}
+}
+
+impl<H, T> Compact<H, T> {
+	/// Create a new [Compact] wrapper for a tuple.
+	pub fn new(tuple: T) -> Self {
+		Self { tuple, _hash: Default::default() }
+	}
+}
+
+impl<H, T: codec::Decode> codec::Decode for Compact<H, T> {
+	fn decode<I: codec::Input>(value: &mut I) -> Result<Self, codec::Error> {
+		T::decode(value).map(Compact::new)
+	}
+}
+
+macro_rules! impl_leaf_data_for_tuple {
+	( $( $name:ident : $id:tt ),+ ) => {
+		/// [FullLeaf] implementation for `Compact<H, (DataOrHash<H, Tuple>, ...)>`
+		impl<H, $( $name ),+> FullLeaf for Compact<H, ( $( DataOrHash<H, $name>, )+ )> where
+			H: traits::Hash,
+			$( $name: FullLeaf ),+
+		{
+			fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F, compact: bool) -> R {
+				if compact {
+					codec::Encode::using_encoded(&(
+						$( DataOrHash::<H, $name>::Hash(self.tuple.$id.hash()), )+
+					), f)
+				} else {
+					codec::Encode::using_encoded(&self.tuple, f)
+				}
+			}
+		}
+
+		/// [LeafDataProvider] implementation for `Compact<H, (DataOrHash<H, Tuple>, ...)>`
+		///
+		/// This provides a compact-form encoding for tuples wrapped in [Compact].
+		impl<H, $( $name ),+> LeafDataProvider for Compact<H, ( $( $name, )+ )> where
+			H: traits::Hash,
+			$( $name: LeafDataProvider ),+
+		{
+			type LeafData = Compact<
+				H,
+				( $( DataOrHash<H, $name::LeafData>, )+ ),
+			>;
+
+			fn leaf_data() -> Self::LeafData {
+				let tuple = (
+					$( DataOrHash::Data($name::leaf_data()), )+
+				);
+				Compact::new(tuple)
+			}
+		}
+
+		/// [LeafDataProvider] implementation for `(Tuple, ...)`
+		///
+		/// This provides regular (non-compactable) composition of [LeafDataProvider]s.
+		impl<$( $name ),+> LeafDataProvider for ( $( $name, )+ ) where
+			( $( $name::LeafData, )+ ): FullLeaf,
+			$( $name: LeafDataProvider ),+
+		{
+			type LeafData = ( $( $name::LeafData, )+ );
+
+			fn leaf_data() -> Self::LeafData {
+				(
+					$( $name::leaf_data(), )+
+				)
+			}
+		}
+	}
+}
+
+/// Test functions implementation for `Compact<H, (DataOrHash<H, Tuple>, ...)>`
+#[cfg(test)]
+impl<H, A, B> Compact<H, (DataOrHash<H, A>, DataOrHash<H, B>)>
+where
+	H: traits::Hash,
+	A: FullLeaf,
+	B: FullLeaf,
+{
+	/// Retrieve a hash of this item in it's compact form.
+	pub fn hash(&self) -> H::Output {
+		self.using_encoded(<H as traits::Hash>::hash, true)
+	}
+}
+
+impl_leaf_data_for_tuple!(A:0);
+impl_leaf_data_for_tuple!(A:0, B:1);
+impl_leaf_data_for_tuple!(A:0, B:1, C:2);
+impl_leaf_data_for_tuple!(A:0, B:1, C:2, D:3);
+impl_leaf_data_for_tuple!(A:0, B:1, C:2, D:3, E:4);
+
 /// Merkle Mountain Range operation error.
 #[derive(RuntimeDebug, codec::Encode, codec::Decode, PartialEq, Eq)]
 pub enum Error {
@@ -201,17 +418,6 @@ sp_api::decl_runtime_apis! {
 		/// Return the on-chain MMR root hash.
 		fn mmr_root() -> Result<Hash, Error>;
 	}
-}
-
-/// New MMR root notification hook.
-pub trait OnNewRoot<Hash> {
-	/// Function called by the pallet in case new MMR root has been computed.
-	fn on_new_root(root: &Hash);
-}
-
-/// No-op implementation of [OnNewRoot].
-impl<Hash> OnNewRoot<Hash> for () {
-	fn on_new_root(_root: &Hash) {}
 }
 
 #[cfg(test)]

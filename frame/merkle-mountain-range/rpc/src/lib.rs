@@ -43,7 +43,7 @@ pub struct LeafProof<BlockHash> {
 	pub block_hash: BlockHash,
 	/// SCALE-encoded leaf data.
 	pub leaf: Bytes,
-	/// SCALE-encoded proof data. See [pallet_mmr_primitives::Proof].
+	/// SCALE-encoded proof data. See [sp_mmr_primitives::Proof].
 	pub proof: Bytes,
 }
 
