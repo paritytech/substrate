@@ -235,20 +235,34 @@ impl<T: Config> SignedSubmissions<T> {
 	}
 
 	/// Empty the set of signed submissions, returning an iterator of signed submissions in
-	/// arbitrary order.
+	/// order of submission.
 	///
 	/// Note that if the iterator is dropped without consuming all elements, not all may be removed
 	/// from the underlying `SignedSubmissionsMap`, putting the storages into an invalid state.
 	///
 	/// Note that, like `put`, this function consumes `Self` and modifies storage.
-	fn drain(mut self) -> impl Iterator<Item = SignedSubmissionOf<T>> {
+	fn drain_submitted_order(mut self) -> impl Iterator<Item = SignedSubmissionOf<T>> {
+		let mut keys = SignedSubmissionsMap::<T>::iter_keys()
+			.filter(|k| {
+				if self.deletion_overlay.contains(k) {
+					// Remove submissions that should be deleted.
+					SignedSubmissionsMap::<T>::remove(k);
+					false
+				} else {
+					true
+				}
+			})
+			.chain(self.insertion_overlay.keys().map(|n| *n))
+			.collect::<Vec<_>>();
+		keys.sort();
+
 		SignedSubmissionIndices::<T>::kill();
 		SignedSubmissionNextIndex::<T>::kill();
-		let insertion_overlay = sp_std::mem::take(&mut self.insertion_overlay);
-		SignedSubmissionsMap::<T>::drain()
-			.filter(move |(k, _v)| !self.deletion_overlay.contains(k))
-			.map(|(_k, v)| v)
-			.chain(insertion_overlay.into_iter().map(|(_k, v)| v))
+		let _ = sp_std::mem::take(&mut self.deletion_overlay);
+
+		keys.into_iter().filter_map(move |index| {
+			SignedSubmissionsMap::<T>::take(index).or_else(|| self.insertion_overlay.remove(&index))
+		})
 	}
 
 	/// Decode the length of the signed submissions without actually reading the entire struct into
@@ -398,7 +412,10 @@ impl<T: Config> Pallet<T> {
 		let discarded = all_submissions.len();
 		let mut refund_count = 0;
 		let max_refunds = T::SignedMaxRefunds::get();
-		for SignedSubmission { who, deposit, call_fee, .. } in all_submissions.drain() {
+
+		for SignedSubmission { who, deposit, call_fee, .. } in
+			all_submissions.drain_submitted_order()
+		{
 			if refund_count < max_refunds {
 				// Refund fee
 				let positive_imbalance = T::Currency::deposit_creating(&who, call_fee);

@@ -242,7 +242,7 @@ use frame_support::{
 use frame_system::{ensure_none, offchain::SendTransactionTypes};
 use scale_info::TypeInfo;
 use sp_arithmetic::{
-	traits::{Bounded, CheckedAdd, Saturating, Zero},
+	traits::{Bounded, CheckedAdd, Zero},
 	UpperOf,
 };
 use sp_npos_elections::{
