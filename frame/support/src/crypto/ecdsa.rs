@@ -18,14 +18,16 @@
 //! Simple ECDSA secp256k1 API. This is a reduced version of `sp_core::crypto::ecdsa` for use in
 //! cases where the performance penalty of doing in-runtime crypto isn't severe. In case this
 //! becomes a performance bottleneck a new host function should be considered.
-use sp_core::crypto::{ByteArray, UncheckedFrom};
+use sp_core::{crypto::ByteArray, ecdsa::Public};
 
-/// The ECDSA compressed public key.
-pub struct Public(pub [u8; 33]);
+/// Extension trait for `sp_core::ecdsa::Public` to be used from inside runtime.
+pub trait RuntimeECDSA {
+	/// Returns Ethereum address calculated from this ECDSA public key.
+	fn to_eth_address(&self) -> Result<[u8; 20], ()>;
+}
 
-impl Public {
-	/// Converts self into Ethereum address
-	pub fn to_eth_address(&self) -> Result<[u8; 20], ()> {
+impl RuntimeECDSA for Public {
+	fn to_eth_address(&self) -> Result<[u8; 20], ()> {
 		use k256::{elliptic_curve::sec1::ToEncodedPoint, PublicKey};
 
 		PublicKey::from_sec1_bytes(self.as_slice())
@@ -39,40 +41,5 @@ impl Public {
 				res
 			})
 			.map_err(|_| ())
-	}
-}
-
-impl ByteArray for Public {
-	const LEN: usize = 33;
-}
-
-impl AsRef<[u8]> for Public {
-	fn as_ref(&self) -> &[u8] {
-		&self.0[..]
-	}
-}
-
-impl AsMut<[u8]> for Public {
-	fn as_mut(&mut self) -> &mut [u8] {
-		&mut self.0[..]
-	}
-}
-
-impl sp_std::convert::TryFrom<&[u8]> for Public {
-	type Error = ();
-
-	fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
-		if data.len() != Self::LEN {
-			return Err(())
-		}
-		let mut r = [0u8; Self::LEN];
-		r.copy_from_slice(data);
-		Ok(Self::unchecked_from(r))
-	}
-}
-
-impl UncheckedFrom<[u8; 33]> for Public {
-	fn unchecked_from(x: [u8; 33]) -> Self {
-		Public(x)
 	}
 }

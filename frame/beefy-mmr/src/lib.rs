@@ -39,7 +39,7 @@ use sp_std::prelude::*;
 use beefy_primitives::mmr::{BeefyDataProvider, BeefyNextAuthoritySet, MmrLeaf, MmrLeafVersion};
 use pallet_mmr::primitives::LeafDataProvider;
 
-use frame_support::{crypto::ecdsa, traits::Get};
+use frame_support::{crypto::ecdsa::RuntimeECDSA, traits::Get};
 
 pub use pallet::*;
 
@@ -71,7 +71,7 @@ where
 pub struct BeefyEcdsaToEthereum;
 impl Convert<beefy_primitives::crypto::AuthorityId, Vec<u8>> for BeefyEcdsaToEthereum {
 	fn convert(a: beefy_primitives::crypto::AuthorityId) -> Vec<u8> {
-		ecdsa::Public::try_from(a.as_ref())
+		sp_core::ecdsa::Public::try_from(a.as_ref())
 			.map_err(|_| {
 				log::error!(target: "runtime::beefy", "Invalid BEEFY PublicKey format!");
 			})
