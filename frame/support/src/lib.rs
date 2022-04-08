@@ -200,7 +200,7 @@ macro_rules! generate_storage_alias {
 		=> DoubleMap<($hasher1:ty, $key1:ty), ($hasher2:ty, $key2:ty), $value:ty $(, $querytype:ty)?>
 	) => {
 		$crate::paste::paste! {
-			$crate::generate_storage_alias!(@  $pallet, $name);
+			$crate::generate_storage_alias!(@GENERATE_INSTANCE_STRUCT $pallet, $name);
 			type $name = $crate::storage::types::StorageDoubleMap<
 				[<$name Instance>],
 				$hasher1,
