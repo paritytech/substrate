@@ -122,6 +122,7 @@ use frame_support::{
 	},
 	weights::{Pays, Weight},
 };
+use pallet_identity::IdentityField;
 
 pub use pallet::*;
 pub use types::*;

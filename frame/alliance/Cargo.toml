@@ -28,15 +28,14 @@ sp-runtime = { version = "6.0.0", default-features = false, path = "../../primit
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
-pallet-collective = { version = "4.0.0-dev", path = "../collective", default-features = false, optional = true }
-pallet-identity = { version = "4.0.0-dev", path = "../identity", default-features = false, optional = true }
+
+pallet-identity = { version = "4.0.0-dev", path = "../identity", default-features = false }
 
 [dev-dependencies]
 hex-literal = "0.3.1"
 sha2 = "0.10.1"
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 pallet-collective = { version = "4.0.0-dev", path = "../collective" }
-pallet-identity = { version = "4.0.0-dev", path = "../identity" }
 
 [features]
 default = ["std"]
@@ -50,6 +49,7 @@ std = [
 	"sp-runtime/std",
 	"frame-support/std",
 	"frame-system/std",
+	"pallet-identity/std",
 ]
 runtime-benchmarks = [
 	"hex",
