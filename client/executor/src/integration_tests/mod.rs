@@ -466,8 +466,8 @@ fn should_trap_when_heap_exhausted(wasm_method: WasmExecutionMethod) {
 			RuntimeBlob::uncompress_if_needed(wasm_binary_unwrap()).unwrap(),
 			&mut ext.ext(),
 			true,
-			"test_exhaust_heap",
-			&[0],
+			"test_allocate_vec",
+			&16777216_u32.encode(),
 		)
 		.map_err(|e| e.to_string())
 		.unwrap_err();
@@ -804,12 +804,16 @@ fn unreachable_intrinsic(wasm_method: WasmExecutionMethod) {
 	}
 }
 
-test_wasm_execution!(allocate_too_much_memory);
-fn allocate_too_much_memory(wasm_method: WasmExecutionMethod) {
+test_wasm_execution!(panic_in_host_function);
+fn panic_in_host_function(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
 
-	match call_in_wasm("test_allocate_too_much_memory", &[], wasm_method, &mut ext).unwrap_err() {
+	// We call the `test_allocate_vec` here since that's a convenient way of triggering
+	// a panic in a host function.
+	match call_in_wasm("test_allocate_vec", &0x0FFFFFFF_u32.encode(), wasm_method, &mut ext)
+		.unwrap_err()
+	{
 		#[cfg(feature = "wasmtime")]
 		Error::AbortedDueToTrap(error) if wasm_method == WasmExecutionMethod::Compiled => {
 			assert_eq!(
