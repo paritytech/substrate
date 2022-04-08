@@ -610,7 +610,6 @@ fn correct_beefy_payload() {
 
 	// verify consensus is _not_ reached
 	let timeout = Some(Duration::from_millis(500));
-	println!("\n\n-------------------\n");
 	streams_empty_after_timeout(best_blocks, &net, &mut runtime, timeout);
 	streams_empty_after_timeout(signed_commitments, &net, &mut runtime, None);
 

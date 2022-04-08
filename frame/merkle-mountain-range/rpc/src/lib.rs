@@ -32,7 +32,6 @@ use sp_core::Bytes;
 use sp_mmr_primitives::{Error as MmrError, LeafIndex, Proof};
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 
-// pub use pallet_mmr_primitives::{LeafIndex, MmrApi as MmrRuntimeApi};
 pub use sp_mmr_primitives::MmrApi as MmrRuntimeApi;
 
 /// Retrieved MMR leaf and its proof.

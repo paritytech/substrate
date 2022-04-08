@@ -520,7 +520,7 @@ where
 		}
 	}
 
-	/// Simple wrapper over mmr root extraction. Tries from header digest, then from client state.
+	/// Simple wrapper that gets MMR root from client state.
 	fn get_mmr_root_digest(&self, header: &B::Header) -> Option<MmrRootHash> {
 		self.runtime
 			.runtime_api()
