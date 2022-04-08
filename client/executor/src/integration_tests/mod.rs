@@ -469,10 +469,21 @@ fn should_trap_when_heap_exhausted(wasm_method: WasmExecutionMethod) {
 			"test_allocate_vec",
 			&16777216_u32.encode(),
 		)
-		.map_err(|e| e.to_string())
 		.unwrap_err();
 
-	assert!(err.contains("Allocator ran out of space"));
+	match err {
+		#[cfg(feature = "wasmtime")]
+		Error::AbortedDueToTrap(error) if wasm_method == WasmExecutionMethod::Compiled => {
+			assert_eq!(
+				error.message,
+				r#"host code panicked while being called by the runtime: Failed to allocate memory: "Allocator ran out of space""#
+			);
+		},
+		Error::RuntimePanicked(error) if wasm_method == WasmExecutionMethod::Interpreted => {
+			assert_eq!(error, r#"Failed to allocate memory: "Allocator ran out of space""#);
+		},
+		error => panic!("unexpected error: {:?}", error),
+	}
 }
 
 fn mk_test_runtime(wasm_method: WasmExecutionMethod, pages: u64) -> Arc<dyn WasmModule> {
@@ -799,33 +810,6 @@ fn unreachable_intrinsic(wasm_method: WasmExecutionMethod) {
 				WasmExecutionMethod::Compiled => "wasm trap: wasm `unreachable` instruction executed",
 			};
 			assert_eq!(error.message, expected);
-		},
-		error => panic!("unexpected error: {:?}", error),
-	}
-}
-
-test_wasm_execution!(panic_in_host_function);
-fn panic_in_host_function(wasm_method: WasmExecutionMethod) {
-	let mut ext = TestExternalities::default();
-	let mut ext = ext.ext();
-
-	// We call the `test_allocate_vec` here since that's a convenient way of triggering
-	// a panic in a host function.
-	match call_in_wasm("test_allocate_vec", &0x0FFFFFFF_u32.encode(), wasm_method, &mut ext)
-		.unwrap_err()
-	{
-		#[cfg(feature = "wasmtime")]
-		Error::AbortedDueToTrap(error) if wasm_method == WasmExecutionMethod::Compiled => {
-			assert_eq!(
-				error.message,
-				r#"host code panicked while being called by the runtime: Failed to allocate memory: "Requested allocation size is too large""#
-			);
-		},
-		Error::RuntimePanicked(error) if wasm_method == WasmExecutionMethod::Interpreted => {
-			assert_eq!(
-				error,
-				r#"Failed to allocate memory: "Requested allocation size is too large""#
-			);
 		},
 		error => panic!("unexpected error: {:?}", error),
 	}
