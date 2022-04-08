@@ -504,7 +504,7 @@ mod tests {
 			unimplemented!()
 		}
 		fn ecdsa_to_eth_address(&self, _pk: &[u8; 33]) -> Result<[u8; 20], ()> {
-			Ok([0u8; 20])
+			Ok([2u8; 20])
 		}
 	}
 
@@ -1095,38 +1095,36 @@ mod tests {
 		/// expected one.
 		const CODE_ECDSA_TO_ETH_ADDRESS: &str = r#"
 (module
-	(import "__unstable__" "seal_ecdsa_to_eth_address" (func $seal_ecdsa_to_eth_address (param i32 i32)))
+	(import "__unstable__" "seal_ecdsa_to_eth_address" (func $seal_ecdsa_to_eth_address (param i32 i32) (result i32)))
+	(import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	;; size of our buffer is 33 bytes
-	(data (i32.const 33) "\20")
-
-	(func $assert (param i32)
-		(block $ok
-			(br_if $ok
-				(get_local 0)
-			)
-			(unreachable)
-		)
-	)
+	(data (i32.const 0) "\21")
 
 	(func (export "call")
 		;; fill the buffer with the eth address.
 		(call $seal_ecdsa_to_eth_address (i32.const 0) (i32.const 0))
 
-		;; assert that the mock returned 20 zero-bytes
-		(call $assert
-			(i64.eq
-				(i64.load (i32.const 0))
-				(i64.const 0x000000000000000000000000000000000000000)
-			)
+		;; Return the contents of the buffer
+		(call $seal_return
+			(i32.const 0)
+			(i32.const 0)
+			(i32.const 20)
 		)
+
+		;; env:seal_return doesn't return, so this is effectively unreachable.
+		(unreachable)
 	)
 	(func (export "deploy"))
 )
 "#;
 
-		assert_ok!(execute(CODE_ECDSA_TO_ETH_ADDRESS, vec![], MockExt::default()));
+		let output = execute(CODE_ECDSA_TO_ETH_ADDRESS, vec![], MockExt::default()).unwrap();
+		assert_eq!(
+			output,
+			ExecReturnValue { flags: ReturnFlags::empty(), data: Bytes([0x02; 20].to_vec()) }
+		);
 	}
 
 	const CODE_GET_STORAGE: &str = r#"

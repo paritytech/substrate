@@ -2070,14 +2070,17 @@ define_env!(Env, <E: Ext>,
 	//
 	// The value is stored to linear memory at the address pointed to by `out_ptr`.
 	// If the available space at `out_ptr` is less than the size of the value a trap is triggered.
-	[__unstable__] seal_ecdsa_to_eth_address(ctx, key_ptr: u32, out_ptr: u32) => {
+	[__unstable__] seal_ecdsa_to_eth_address(ctx, key_ptr: u32, out_ptr: u32) -> ReturnCode => {
 		ctx.charge_gas(RuntimeCosts::EcdsaToEthAddress)?;
 		let mut compressed_key: [u8; 33] = [0;33];
 		ctx.read_sandbox_memory_into_buf(key_ptr, &mut compressed_key)?;
 		let result = ctx.ext.ecdsa_to_eth_address(&compressed_key);
 		match result {
-			Ok(eth_address) => Ok(ctx.write_sandbox_memory(out_ptr, eth_address.as_ref())?),
-			Err(_) => Err(TrapReason::SupervisorError(DispatchError::Other("Failed to convert ECDSA compressed public key into ETH address!")))?
+			Ok(eth_address) => {
+			ctx.write_sandbox_memory(out_ptr, eth_address.as_ref())?;
+			Ok(ReturnCode::Success)
+			},
+			Err(_) => Ok(ReturnCode::EcdsaRecoverFailed),
 		}
 	},
 );
