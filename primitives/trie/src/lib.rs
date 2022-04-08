@@ -268,7 +268,7 @@ where
 	DB: hash_db::HashDB<L::Hash, trie_db::DBValue>,
 {
 	{
-		let mut trie = TrieDBMutBuilder::<L>::from_existing(db, &mut root)?
+		let mut trie = TrieDBMutBuilder::<L>::from_existing(db, &mut root)
 			.with_optional_cache(cache)
 			.with_optional_recorder(recorder)
 			.build();
@@ -295,7 +295,7 @@ pub fn read_trie_value<L: TrieLayout, DB: hash_db::HashDBRef<L::Hash, trie_db::D
 	recorder: Option<&mut dyn TrieRecorder<TrieHash<L>>>,
 	cache: Option<&mut dyn TrieCache<L::Codec>>,
 ) -> Result<Option<Vec<u8>>, Box<TrieError<L>>> {
-	TrieDBBuilder::<L>::new_unchecked(&*db, root)
+	TrieDBBuilder::<L>::new(&*db, root)
 		.with_optional_cache(cache)
 		.with_optional_recorder(recorder)
 		.build()
@@ -313,7 +313,7 @@ pub fn read_trie_value_with<
 	key: &[u8],
 	query: Q,
 ) -> Result<Option<Vec<u8>>, Box<TrieError<L>>> {
-	TrieDBBuilder::<L>::new(&*db, root)?.build().get_with(key, query)
+	TrieDBBuilder::<L>::new(&*db, root).build().get_with(key, query)
 }
 
 /// Determine the empty trie root.
@@ -376,7 +376,7 @@ where
 	DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue>,
 {
 	let db = KeySpacedDB::new(&*db, keyspace);
-	TrieDBBuilder::<L>::new_unchecked(&db, &root)
+	TrieDBBuilder::<L>::new(&db, &root)
 		.with_optional_recorder(recorder)
 		.with_optional_cache(cache)
 		.build()
@@ -402,7 +402,7 @@ where
 	root.as_mut().copy_from_slice(root_slice);
 
 	let db = KeySpacedDB::new(&*db, keyspace);
-	TrieDBBuilder::<L>::new(&db, &root)?
+	TrieDBBuilder::<L>::new(&db, &root)
 		.build()
 		.get_with(key, query)
 		.map(|x| x.map(|val| val.to_vec()))
@@ -572,7 +572,7 @@ mod tests {
 			}
 		}
 		{
-			let t = TrieDBBuilder::<T>::new(&memdb, &root).unwrap().build();
+			let t = TrieDBBuilder::<T>::new(&memdb, &root).build();
 			assert_eq!(
 				input.iter().map(|(i, j)| (i.to_vec(), j.to_vec())).collect::<Vec<_>>(),
 				t.iter()
@@ -840,7 +840,7 @@ mod tests {
 		let mut root = Default::default();
 		let _ = populate_trie::<Layout>(&mut mdb, &mut root, &pairs);
 
-		let trie = TrieDBBuilder::<Layout>::new(&mdb, &root).unwrap().build();
+		let trie = TrieDBBuilder::<Layout>::new(&mdb, &root).build();
 
 		let iter = trie.iter().unwrap();
 		let mut iter_pairs = Vec::new();

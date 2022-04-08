@@ -90,7 +90,7 @@ impl<H: Hasher> Recorder<H> {
 		let mut trie_recorder = TrieRecorder::<H, _> { inner: &mut recorder, storage_root: *root };
 
 		accessed_keys.into_iter().try_for_each(|(root, keys)| {
-			let trie = TrieDBBuilder::<L>::new(hash_db, &root)?
+			let trie = TrieDBBuilder::<L>::new(hash_db, &root)
 				.with_recorder(&mut trie_recorder)
 				.with_optional_cache(cache.as_mut().map(|c| *c as _))
 				.build();
@@ -239,7 +239,7 @@ mod tests {
 
 		{
 			let mut trie_recorder = recorder.as_trie_recorder(root);
-			let trie = TrieDBBuilder::<Layout>::new_unchecked(&db, &root)
+			let trie = TrieDBBuilder::<Layout>::new(&db, &root)
 				.with_recorder(&mut trie_recorder)
 				.build();
 			assert_eq!(TEST_DATA[0].1.to_vec(), trie.get(TEST_DATA[0].0).unwrap().unwrap());
@@ -249,7 +249,7 @@ mod tests {
 		let memory_db: MemoryDB = storage_proof.into_memory_db();
 
 		// Check that we recorded the required data
-		let trie = TrieDBBuilder::<Layout>::new_unchecked(&memory_db, &root).build();
+		let trie = TrieDBBuilder::<Layout>::new(&memory_db, &root).build();
 		assert_eq!(TEST_DATA[0].1.to_vec(), trie.get(TEST_DATA[0].0).unwrap().unwrap());
 	}
 }

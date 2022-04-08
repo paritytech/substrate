@@ -47,7 +47,7 @@ use log::{debug, trace, warn};
 use parking_lot::{Mutex, RwLock};
 use std::{
 	collections::{HashMap, HashSet},
-	default, io,
+	io,
 	path::{Path, PathBuf},
 	sync::Arc,
 };

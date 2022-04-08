@@ -29,7 +29,10 @@ use sp_core::{
 	Hasher,
 };
 use sp_state_machine::Backend;
-use sp_trie::{trie_types::{TrieDB, TrieDBBuilder}, KeySpacedDB, Trie};
+use sp_trie::{
+	trie_types::{TrieDB, TrieDBBuilder},
+	KeySpacedDB, Trie,
+};
 use trie_db::{
 	node::{NodePlan, ValuePlan},
 	TrieDBNodeIterator,
@@ -40,7 +43,7 @@ fn count_migrate<'a, H: Hasher>(
 	root: &'a H::Out,
 ) -> std::result::Result<(u64, TrieDB<'a, 'a, H>), String> {
 	let mut nb = 0u64;
-	let trie = TrieDBBuilder::new(storage, root).map_err(|e| format!("TrieDB creation error: {}", e))?.build();
+	let trie = TrieDBBuilder::new(storage, root).build();
 	let iter_node =
 		TrieDBNodeIterator::new(&trie).map_err(|e| format!("TrieDB node iterator error: {}", e))?;
 	for node in iter_node {

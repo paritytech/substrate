@@ -238,9 +238,7 @@ mod tests {
 
 		{
 			let mut cache = local_cache.as_trie_db_cache(root);
-			let trie = TrieDBBuilder::<Layout>::new_unchecked(&db, &root)
-				.with_cache(&mut cache)
-				.build();
+			let trie = TrieDBBuilder::<Layout>::new(&db, &root).with_cache(&mut cache).build();
 			assert_eq!(TEST_DATA[0].1.to_vec(), trie.get(TEST_DATA[0].0).unwrap().unwrap());
 		}
 
@@ -276,9 +274,7 @@ mod tests {
 
 		{
 			let mut cache = local_cache.as_trie_db_cache(root);
-			let trie = TrieDBBuilder::<Layout>::new_unchecked(&db, &root)
-				.with_cache(&mut cache)
-				.build();
+			let trie = TrieDBBuilder::<Layout>::new(&db, &root).with_cache(&mut cache).build();
 
 			// We should now get the "fake_data", because we inserted this manually to the cache.
 			assert_eq!(b"fake_data".to_vec(), trie.get(TEST_DATA[1].0).unwrap().unwrap());
@@ -301,7 +297,6 @@ mod tests {
 
 		{
 			let mut trie = TrieDBMutBuilder::<Layout>::from_existing(&mut db, &mut new_root)
-				.unwrap()
 				.with_cache(&mut cache)
 				.build();
 
@@ -337,7 +332,7 @@ mod tests {
 			{
 				let mut cache = local_cache.as_trie_db_cache(root);
 				let mut recorder = recorder.as_trie_recorder(root);
-				let trie = TrieDBBuilder::<Layout>::new_unchecked(&db, &root)
+				let trie = TrieDBBuilder::<Layout>::new(&db, &root)
 					.with_cache(&mut cache)
 					.with_recorder(&mut recorder)
 					.build();
@@ -357,7 +352,7 @@ mod tests {
 			let memory_db: MemoryDB = storage_proof.into_memory_db();
 
 			{
-				let trie = TrieDBBuilder::<Layout>::new(&memory_db, &root).unwrap().build();
+				let trie = TrieDBBuilder::<Layout>::new(&memory_db, &root).build();
 
 				for (key, value) in TEST_DATA {
 					assert_eq!(*value, trie.get(&key).unwrap().unwrap());
@@ -385,7 +380,6 @@ mod tests {
 				let mut cache = local_cache.as_trie_db_cache(root);
 				let mut recorder = recorder.as_trie_recorder(root);
 				let mut trie = TrieDBMutBuilder::<Layout>::from_existing(&mut db, &mut new_root)
-					.unwrap()
 					.with_cache(&mut cache)
 					.with_recorder(&mut recorder)
 					.build();
@@ -408,7 +402,6 @@ mod tests {
 			{
 				let mut trie =
 					TrieDBMutBuilder::<Layout>::from_existing(&mut memory_db, &mut proof_root)
-						.unwrap()
 						.build();
 
 				for (key, value) in DATA_TO_ADD {

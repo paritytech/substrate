@@ -281,7 +281,6 @@ impl<T: Config> ProvingTrie<T> {
 		let mut recorder = Recorder::<LayoutV1<_>>::new();
 		{
 			let trie = TrieDBBuilder::new(&self.db, &self.root)
-				.ok()?
 				.with_recorder(&mut recorder)
 				.build();
 			let val_idx = (key_id, key_data).using_encoded(|s| {
@@ -309,7 +308,7 @@ impl<T: Config> ProvingTrie<T> {
 	// Check a proof contained within the current memory-db. Returns `None` if the
 	// nodes within the current `MemoryDB` are insufficient to query the item.
 	fn query(&self, key_id: KeyTypeId, key_data: &[u8]) -> Option<IdentificationTuple<T>> {
-		let trie = TrieDBBuilder::new(&self.db, &self.root).ok()?.build();
+		let trie = TrieDBBuilder::new(&self.db, &self.root).build();
 		let val_idx = (key_id, key_data)
 			.using_encoded(|s| trie.get(s))
 			.ok()?

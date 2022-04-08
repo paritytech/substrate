@@ -306,7 +306,6 @@ where
 
 		self.with_recorder_and_cache(Some(*root), |recorder, cache| {
 			let trie = TrieDBBuilder::<H>::new(dyn_eph, root)
-				.map_err(|e| format!("TrieDB creation error: {}", e))?
 				.with_optional_recorder(recorder)
 				.with_optional_cache(cache)
 				.build();
@@ -343,7 +342,7 @@ where
 		let map_e = |e| format!("Trie lookup error: {}", e);
 
 		self.with_recorder_and_cache(None, |recorder, cache| {
-			TrieDBBuilder::new_unchecked(self, &self.root)
+			TrieDBBuilder::new(self, &self.root)
 				.with_optional_cache(cache)
 				.with_optional_recorder(recorder)
 				.build()
@@ -486,7 +485,7 @@ where
 	) {
 		let mut iter = move |db| -> sp_std::result::Result<(), Box<TrieError<H::Out>>> {
 			self.with_recorder_and_cache(Some(*root), |recorder, cache| {
-				let trie = TrieDBBuilder::<H>::new(db, root)?
+				let trie = TrieDBBuilder::<H>::new(db, root)
 					.with_optional_recorder(recorder)
 					.with_optional_cache(cache)
 					.build();
@@ -536,7 +535,7 @@ where
 	) -> Result<bool> {
 		let mut iter = move |db| -> sp_std::result::Result<bool, Box<TrieError<H::Out>>> {
 			self.with_recorder_and_cache(Some(*root), |recorder, cache| {
-				let trie = TrieDBBuilder::<H>::new(db, root)?
+				let trie = TrieDBBuilder::<H>::new(db, root)
 					.with_optional_recorder(recorder)
 					.with_optional_cache(cache)
 					.build();
@@ -594,7 +593,7 @@ where
 	pub fn pairs(&self) -> Vec<(StorageKey, StorageValue)> {
 		let collect_all = || -> sp_std::result::Result<_, Box<TrieError<H::Out>>> {
 			self.with_recorder_and_cache(None, |recorder, cache| {
-				let trie = TrieDBBuilder::<H>::new(self, self.root())?
+				let trie = TrieDBBuilder::<H>::new(self, self.root())
 					.with_optional_cache(cache)
 					.with_optional_recorder(recorder)
 					.build();
@@ -622,7 +621,7 @@ where
 	pub fn keys(&self, prefix: &[u8]) -> Vec<StorageKey> {
 		let collect_all = || -> sp_std::result::Result<_, Box<TrieError<H::Out>>> {
 			self.with_recorder_and_cache(None, |recorder, cache| {
-				let trie = TrieDBBuilder::<H>::new(self, self.root())?
+				let trie = TrieDBBuilder::<H>::new(self, self.root())
 					.with_optional_cache(cache)
 					.with_optional_recorder(recorder)
 					.build();

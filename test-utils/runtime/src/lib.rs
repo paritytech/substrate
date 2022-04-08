@@ -30,7 +30,7 @@ use sp_std::{marker::PhantomData, prelude::*};
 use sp_application_crypto::{ecdsa, ed25519, sr25519, RuntimeAppPublic};
 use sp_core::{offchain::KeyTypeId, OpaqueMetadata, RuntimeDebug};
 use sp_trie::{
-	trie_types::{TrieDB, TrieDBBuilder, TrieDBMutBuilderV1, TrieDBMutV1},
+	trie_types::{TrieDBBuilder, TrieDBMutBuilderV1},
 	PrefixedMemoryDB, StorageProof,
 };
 use trie_db::{Trie, TrieMut};
@@ -649,25 +649,19 @@ fn code_using_trie() -> u64 {
 
 	let mut mdb = PrefixedMemoryDB::default();
 	let mut root = sp_std::default::Default::default();
-	let _ = {
+	{
 		let mut t = TrieDBMutBuilderV1::<Hashing>::new(&mut mdb, &mut root).build();
 		for (key, value) in &pairs {
 			if t.insert(key, value).is_err() {
 				return 101
 			}
 		}
-		t
-	};
-
-	if let Ok(trie) = TrieDBBuilder::<Hashing>::new(&mdb, &root).map(|t| t.build()) {
-		if let Ok(iter) = trie.iter() {
-			iter.flatten().count() as u64
-		} else {
-			102
-		}
-	} else {
-		103
 	}
+
+	let trie = TrieDBBuilder::<Hashing>::new(&mdb, &root).build();
+	let res = if let Ok(iter) = trie.iter() { iter.flatten().count() as u64 } else { 102 };
+
+	res
 }
 
 impl_opaque_keys! {
@@ -1335,7 +1329,8 @@ mod tests {
 	#[test]
 	fn witness_backend_works() {
 		let (db, root) = witness_backend();
-		let backend = sp_state_machine::TrieBackendBuilder::<_, crate::Hashing>::new(db, root).build();
+		let backend =
+			sp_state_machine::TrieBackendBuilder::<_, crate::Hashing>::new(db, root).build();
 		let proof = sp_state_machine::prove_read(backend, vec![b"value3"]).unwrap();
 		let client =
 			TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::Both).build();

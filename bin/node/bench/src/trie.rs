@@ -286,9 +286,7 @@ impl core::Benchmark for TrieWriteBenchmark {
 
 		let mut overlay = HashMap::new();
 		let mut trie = SimpleTrie { db: kvdb.clone(), overlay: &mut overlay };
-		let mut trie_db_mut = TrieDBMutBuilderV1::from_existing(&mut trie, &mut new_root)
-			.expect("Failed to create TrieDBMut")
-			.build();
+		let mut trie_db_mut = TrieDBMutBuilderV1::from_existing(&mut trie, &mut new_root).build();
 
 		for (warmup_key, warmup_value) in self.warmup_keys.iter() {
 			let value = trie_db_mut
