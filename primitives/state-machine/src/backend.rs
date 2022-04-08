@@ -302,14 +302,17 @@ where
 
 /// Wrapper to create a [`RuntimeCode`] from a type that implements [`Backend`].
 #[cfg(feature = "std")]
-pub struct BackendRuntimeCode<'a, B, H> {
-	backend: &'a B,
+pub struct BackendRuntimeCode<B, H> {
+	backend: B,
 	_marker: std::marker::PhantomData<H>,
 }
 
 #[cfg(feature = "std")]
-impl<'a, B: Backend<H>, H: Hasher> sp_core::traits::FetchRuntimeCode
-	for BackendRuntimeCode<'a, B, H>
+impl<B, H> sp_core::traits::FetchRuntimeCode
+	for BackendRuntimeCode<B, H>
+where
+	B: std::ops::Deref, B::Target: Backend<H>,
+	H: Hasher,
 {
 	fn fetch_runtime_code<'b>(&'b self) -> Option<std::borrow::Cow<'b, [u8]>> {
 		self.backend
@@ -321,15 +324,22 @@ impl<'a, B: Backend<H>, H: Hasher> sp_core::traits::FetchRuntimeCode
 }
 
 #[cfg(feature = "std")]
-impl<'a, B: Backend<H>, H: Hasher> BackendRuntimeCode<'a, B, H>
+impl<B, H: Hasher> BackendRuntimeCode<B, H>
 where
 	H::Out: Encode,
 {
 	/// Create a new instance.
-	pub fn new(backend: &'a B) -> Self {
+	pub fn new(backend: B) -> Self {
 		Self { backend, _marker: std::marker::PhantomData }
 	}
+}
 
+#[cfg(feature = "std")]
+impl<B, H> BackendRuntimeCode<B, H>
+where
+	B: std::ops::Deref, B::Target: Backend<H>,
+	H: Hasher, H::Out: Encode,
+{
 	/// Return the [`RuntimeCode`] build from the wrapped `backend`.
 	pub fn runtime_code(&self) -> Result<RuntimeCode, &'static str> {
 		let hash = self

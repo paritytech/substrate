@@ -116,6 +116,23 @@ where
 
 		Ok(code)
 	}
+
+	fn state_with_runtime_code(&self, block_id: BlockId<Block>) -> sp_blockchain::Result<<B as backend::Backend<Block>>::State> {
+		use sp_runtime::traits::{One, Zero};
+
+		let block_num = 
+			self.backend.blockchain().block_number_from_id(&block_id)?
+			.ok_or_else(|| 
+				sp_blockchain::Error::UnknownBlock(block_id.to_string())
+			)?;
+		
+		let block_num_code = if block_num.is_zero() { block_num } else { block_num - One::one() };
+		let block_id_code = BlockId::<Block>::Number(block_num_code);
+
+		let state_code = self.backend.state_at(block_id_code)?;
+		
+		Ok(state_code)
+	}
 }
 
 impl<Block: BlockT, B, E> Clone for LocalCallExecutor<Block, B, E>
@@ -153,11 +170,12 @@ where
 		extensions: Option<Extensions>,
 	) -> sp_blockchain::Result<Vec<u8>> {
 		let mut changes = OverlayedChanges::default();
-		let state = self.backend.state_at(*at)?;
-		let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&state);
+		let state_data = self.backend.state_at(*at)?;
+		let state_code = self.state_with_runtime_code(*at)?;
+		
+		let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&state_code);
 		let runtime_code =
 			state_runtime_code.runtime_code().map_err(sp_blockchain::Error::RuntimeCode)?;
-
 		let runtime_code = self.check_override(runtime_code, at)?;
 
 		let at_hash = self.backend.blockchain().block_hash_from_id(at)?.ok_or_else(|| {
@@ -165,7 +183,7 @@ where
 		})?;
 
 		let return_data = StateMachine::new(
-			&state,
+			&state_data,
 			&mut changes,
 			&self.executor,
 			method,
@@ -207,7 +225,8 @@ where
 	{
 		let mut storage_transaction_cache = storage_transaction_cache.map(|c| c.borrow_mut());
 
-		let state = self.backend.state_at(*at)?;
+		let state_data = self.backend.state_at(*at)?;
+		let state_code = self.state_with_runtime_code(*at)?;
 
 		let changes = &mut *changes.borrow_mut();
 
@@ -218,7 +237,7 @@ where
 		// It is important to extract the runtime code here before we create the proof
 		// recorder to not record it. We also need to fetch the runtime code from `state` to
 		// make sure we use the caching layers.
-		let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&state);
+		let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&state_code);
 
 		let runtime_code =
 			state_runtime_code.runtime_code().map_err(sp_blockchain::Error::RuntimeCode)?;
@@ -226,7 +245,7 @@ where
 
 		match recorder {
 			Some(recorder) => {
-				let trie_state = state.as_trie_backend().ok_or_else(|| {
+				let trie_state = state_data.as_trie_backend().ok_or_else(|| {
 					Box::new(sp_state_machine::ExecutionError::UnableToGenerateProof)
 						as Box<dyn sp_state_machine::Error>
 				})?;
@@ -255,7 +274,7 @@ where
 			},
 			None => {
 				let mut state_machine = StateMachine::new(
-					&state,
+					&state_data,
 					changes,
 					&self.executor,
 					method,
@@ -277,10 +296,11 @@ where
 
 	fn runtime_version(&self, id: &BlockId<Block>) -> sp_blockchain::Result<RuntimeVersion> {
 		let mut overlay = OverlayedChanges::default();
-		let state = self.backend.state_at(*id)?;
+		let state_data = self.backend.state_at(*id)?;
+		let state_code = self.state_with_runtime_code(*id)?;
 		let mut cache = StorageTransactionCache::<Block, B::State>::default();
-		let mut ext = Ext::new(&mut overlay, &mut cache, &state, None);
-		let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&state);
+		let mut ext = Ext::new(&mut overlay, &mut cache, &state_data, None);
+		let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&state_code);
 		let runtime_code =
 			state_runtime_code.runtime_code().map_err(sp_blockchain::Error::RuntimeCode)?;
 		self.executor
@@ -294,14 +314,15 @@ where
 		method: &str,
 		call_data: &[u8],
 	) -> sp_blockchain::Result<(Vec<u8>, StorageProof)> {
-		let state = self.backend.state_at(*at)?;
+		let state_data = self.backend.state_at(*at)?;
+		let state_code = self.state_with_runtime_code(*at)?;
 
-		let trie_backend = state.as_trie_backend().ok_or_else(|| {
+		let trie_backend = state_data.as_trie_backend().ok_or_else(|| {
 			Box::new(sp_state_machine::ExecutionError::UnableToGenerateProof)
 				as Box<dyn sp_state_machine::Error>
 		})?;
 
-		let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(trie_backend);
+		let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&state_code);
 		let runtime_code =
 			state_runtime_code.runtime_code().map_err(sp_blockchain::Error::RuntimeCode)?;
 		let runtime_code = self.check_override(runtime_code, at)?;
