@@ -96,7 +96,6 @@ pub mod test_utils {
 	}
 	macro_rules! assert_return_code {
 		( $x:expr , $y:expr $(,)? ) => {{
-			use sp_std::convert::TryInto;
 			assert_eq!(u32::from_le_bytes($x.data[..].try_into().unwrap()), $y as u32);
 		}};
 	}

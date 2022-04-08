@@ -40,7 +40,6 @@ pub use graph::{base_pool::Limit as PoolLimit, ChainApi, Options, Pool, Transact
 use parking_lot::Mutex;
 use std::{
 	collections::{HashMap, HashSet},
-	convert::TryInto,
 	pin::Pin,
 	sync::Arc,
 };
