@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: pr-custom-review
-        uses: paritytech/pr-custom-review@v1
+        uses: paritytech/pr-custom-review@v2
         with:
           token: ${{ secrets.PRCR_TOKEN }}
           # 🔒 PROTECTED: Changes to locks-review-team should be approved by the current locks-review-team
