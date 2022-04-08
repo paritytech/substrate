@@ -11,6 +11,6 @@ rules:
     teams:
       - core-devs
 
-prevent_review_request:
+prevent-review-request:
   teams:
     - core-devs
