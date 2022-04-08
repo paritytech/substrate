@@ -214,7 +214,7 @@
 //! rewards for the active era despite not contributing to the pool's vote weight. If it joins
 //! after the election snapshot is taken it will benefit from the rewards of the next _2_ eras
 //! because it's vote weight will not be counted until the election snapshot in active era + 1.
-//! Related: https://github.com/paritytech/substrate/issues/10861
+//! Related: <https://github.com/paritytech/substrate/issues/10861>
 //!
 //! **Relevant extrinsics:**
 //!
@@ -268,7 +268,7 @@
 //! ### Slashing
 //!
 //! This section assumes that the slash computation is executed by
-//! [`pallet_staking::StakingLedger::slash`], which passes the information to this pallet via
+//! `pallet_staking::StakingLedger::slash`, which passes the information to this pallet via
 //! [`sp_staking::OnStakerSlash::on_slash`].
 //!
 //! Unbonding pools need to be slashed to ensure all nominators whom where in the bonded pool
@@ -282,11 +282,11 @@
 //!
 //! To be fair to joiners, this implementation also need joining pools, which are actively staking,
 //! in addition to the unbonding pools. For maintenance simplicity these are not implemented.
-//! Related: https://github.com/paritytech/substrate/issues/10860
+//! Related: <https://github.com/paritytech/substrate/issues/10860>
 //!
 //! **Relevant methods:**
 //!
-//! * [`Pallet::do_slash`]
+//! * [`Pallet::on_slash`]
 //!
 //! ### Limitations
 //!
@@ -340,7 +340,7 @@ pub type PoolId = u32;
 
 type SubPoolsWithEra<T> = BoundedBTreeMap<EraIndex, UnbondPool<T>, TotalUnbondingPools<T>>;
 
-const POINTS_TO_BALANCE_INIT_RATIO: u32 = 1;
+pub const POINTS_TO_BALANCE_INIT_RATIO: u32 = 1;
 
 /// Possible operations on the configuration values of this pallet.
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, RuntimeDebugNoBound, PartialEq, Clone)]
@@ -431,11 +431,11 @@ pub struct PoolRoles<AccountId> {
 #[codec(mel_bound(T: Config))]
 #[scale_info(skip_type_params(T))]
 pub struct BondedPoolInner<T: Config> {
-	/// See [`BondedPool::points`].
+	/// Total points of all the delegators in the pool who are actively bonded.
 	pub points: BalanceOf<T>,
-	/// See [`BondedPool::state_toggler`].
+	/// The current state of the pool.
 	pub state: PoolState,
-	/// See [`BondedPool::delegator_counter`]
+	/// Count of delegators that belong to the pool.
 	pub delegator_counter: u32,
 	/// See [`PoolRoles`].
 	pub roles: PoolRoles<T::AccountId>,
@@ -958,7 +958,8 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type Delegators<T: Config> = CountedStorageMap<_, Twox64Concat, T::AccountId, Delegator<T>>;
 
-	/// To get or insert a pool see [`BondedPool::get`] and [`BondedPool::put`]
+	/// Storage for bonded pools.
+	// To get or insert a pool see [`BondedPool::get`] and [`BondedPool::put`]
 	#[pallet::storage]
 	pub type BondedPools<T: Config> =
 		CountedStorageMap<_, Twox64Concat, PoolId, BondedPoolInner<T>>;
@@ -1090,7 +1091,7 @@ pub mod pallet {
 		CanNotChangeState,
 		/// The caller does not have adequate permissions.
 		DoesNotHavePermission,
-		/// Metadata exceeds [`T::MaxMetadataLen`]
+		/// Metadata exceeds [`Config::MaxMetadataLen`]
 		MetadataExceedsMaxLen,
 		/// Some error occurred that should never happen. This should be reported to the
 		/// maintainers.
@@ -1242,7 +1243,7 @@ pub mod pallet {
 		/// # Note
 		///
 		/// If there are too many unlocking chunks to unbond with the pool account,
-		/// [`Self::withdraw_unbonded_pool`] can be called to try and minimize unlocking chunks. If
+		/// [`Call::pool_withdraw_unbonded`] can be called to try and minimize unlocking chunks. If
 		/// there are too many unlocking chunks, the result of this call will likely be the
 		/// `NoMoreChunks` error from the staking system.
 		#[pallet::weight(T::WeightInfo::unbond_other())]
@@ -1616,11 +1617,11 @@ pub mod pallet {
 		///
 		/// # Arguments
 		///
-		/// * `min_join_bond` - Set [`Self::MinJoinBond`].
-		/// * `min_create_bond` - Set [`Self::MinCreateBond`].
-		/// * `max_pools` - Set [`Self::MaxPools`].
-		/// * `max_delegators` - Set [`Self::MaxDelegators`].
-		/// * `max_delegators_per_pool` - Set [`Self::MaxDelegatorsPerPool`].
+		/// * `min_join_bond` - Set [`MinJoinBond`].
+		/// * `min_create_bond` - Set [`MinCreateBond`].
+		/// * `max_pools` - Set [`MaxPools`].
+		/// * `max_delegators` - Set [`MaxDelegators`].
+		/// * `max_delegators_per_pool` - Set [`MaxDelegatorsPerPool`].
 		#[pallet::weight(T::WeightInfo::set_configs())]
 		pub fn set_configs(
 			origin: OriginFor<T>,
