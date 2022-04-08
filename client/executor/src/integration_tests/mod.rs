@@ -803,3 +803,26 @@ fn unreachable_intrinsic(wasm_method: WasmExecutionMethod) {
 		error => panic!("unexpected error: {:?}", error),
 	}
 }
+
+test_wasm_execution!(allocate_too_much_memory);
+fn allocate_too_much_memory(wasm_method: WasmExecutionMethod) {
+	let mut ext = TestExternalities::default();
+	let mut ext = ext.ext();
+
+	match call_in_wasm("test_allocate_too_much_memory", &[], wasm_method, &mut ext).unwrap_err() {
+		#[cfg(feature = "wasmtime")]
+		Error::AbortedDueToTrap(error) if wasm_method == WasmExecutionMethod::Compiled => {
+			assert_eq!(
+				error.message,
+				r#"host code panicked while being called by the runtime: Failed to allocate memory: "Requested allocation size is too large""#
+			);
+		},
+		Error::RuntimePanicked(error) if wasm_method == WasmExecutionMethod::Interpreted => {
+			assert_eq!(
+				error,
+				r#"Failed to allocate memory: "Requested allocation size is too large""#
+			);
+		},
+		error => panic!("unexpected error: {:?}", error),
+	}
+}

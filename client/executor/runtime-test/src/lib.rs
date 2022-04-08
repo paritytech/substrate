@@ -349,6 +349,10 @@ sp_core::wasm_export_functions! {
 	fn test_unreachable_intrinsic() {
 		core::arch::wasm32::unreachable()
 	}
+
+	fn test_allocate_too_much_memory() {
+		sp_io::allocator::malloc(1024 * 1024 * 1024);
+	}
 }
 
 #[cfg(not(feature = "std"))]
