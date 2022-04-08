@@ -132,9 +132,9 @@ pub type ProposalIndex = u32;
 
 type UrlOf<T, I> = BoundedVec<u8, <T as pallet::Config<I>>::MaxWebsiteUrlLength>;
 
-type BalanceOf<T, I = ()> =
+type BalanceOf<T, I> =
 	<<T as Config<I>>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
-type NegativeImbalanceOf<T, I = ()> = <<T as Config<I>>::Currency as Currency<
+type NegativeImbalanceOf<T, I> = <<T as Config<I>>::Currency as Currency<
 	<T as frame_system::Config>::AccountId,
 >>::NegativeImbalance;
 
@@ -412,14 +412,8 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig<T, I> {
 		fn build(&self) {
-			#[cfg(not(test))]
-			{
-				for m in self.founders.iter().chain(self.fellows.iter()).chain(self.allies.iter()) {
-					assert!(
-						Pallet::<T, I>::has_identity(m).is_ok(),
-						"Member does not set identity!"
-					);
-				}
+			for m in self.founders.iter().chain(self.fellows.iter()).chain(self.allies.iter()) {
+				assert!(Pallet::<T, I>::has_identity(m).is_ok(), "Member does not set identity!");
 			}
 
 			if !self.founders.is_empty() {
@@ -1103,10 +1097,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	fn has_identity(who: &T::AccountId) -> DispatchResult {
-		const IDENTITY_FIELD_DISPLAY: u64 =
-			0b0000000000000000000000000000000000000000000000000000000000000001;
-		const IDENTITY_FIELD_WEB: u64 =
-			0b0000000000000000000000000000000000000000000000000000000000000100;
+		const IDENTITY_FIELD_DISPLAY: u64 = IdentityField::Display as u64;
+		const IDENTITY_FIELD_WEB: u64 = IdentityField::Web as u64;
 
 		let judgement = |who: &T::AccountId| -> DispatchResult {
 			ensure!(
