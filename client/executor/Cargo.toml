@@ -32,7 +32,7 @@ sc-executor-wasmi = { version = "0.10.0-dev", path = "wasmi" }
 sc-executor-wasmtime = { version = "0.10.0-dev", path = "wasmtime", optional = true }
 parking_lot = "0.12.0"
 sp-core-hashing-proc-macro = { version = "5.0.0", path = "../../primitives/core/hashing/proc-macro" }
-lru = "0.7.3"
+lru = "0.7.5"
 tracing = "0.1.29"
 
 [dev-dependencies]
