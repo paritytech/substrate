@@ -21,7 +21,3 @@ jobs:
         uses: paritytech/pr-custom-review@v2
         with:
           token: ${{ secrets.PRCR_TOKEN }}
-          # 🔒 PROTECTED: Changes to locks-review-team should be approved by the current locks-review-team
-          locks-review-team: locks-review
-          team-leads-team: polkadotleads
-          action-review-team: ci
