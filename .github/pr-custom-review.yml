@@ -1,0 +1,16 @@
+# 🔒 PROTECTED: Changes to locks-review-team should be approved by the current locks-review-team
+locks-review-team: locks-review
+team-leads-team: polkadot-review
+action-review-team: ci
+
+rules:
+  - name: Core developers
+    check_type: changed_files
+    condition: .*
+    min_approvals: 2
+    teams:
+      - core-devs
+
+prevent-review-request:
+  teams:
+    - core-devs

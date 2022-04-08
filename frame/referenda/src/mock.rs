@@ -306,7 +306,7 @@ pub fn propose_set_balance(who: u64, value: u64, delay: u64) -> DispatchResult {
 		Origin::signed(who),
 		frame_system::RawOrigin::Root.into(),
 		set_balance_proposal_hash(value),
-		AtOrAfter::After(delay),
+		DispatchTime::After(delay),
 	)
 }
 
@@ -434,7 +434,7 @@ impl RefState {
 			Origin::signed(1),
 			frame_support::dispatch::RawOrigin::Root.into(),
 			set_balance_proposal_hash(1),
-			AtOrAfter::At(10),
+			DispatchTime::At(10),
 		));
 		assert_ok!(Referenda::place_decision_deposit(Origin::signed(2), 0));
 		if matches!(self, RefState::Confirming { immediate: true }) {

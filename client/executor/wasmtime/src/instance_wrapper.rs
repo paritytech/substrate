@@ -21,12 +21,13 @@
 
 use crate::runtime::{Store, StoreData};
 use sc_executor_common::{
-	error::{Backtrace, Error, MessageWithBacktrace, Result},
+	error::{Backtrace, Error, MessageWithBacktrace, Result, WasmError},
 	wasm_runtime::InvokeMethod,
 };
-use sp_wasm_interface::{HostFunctions, Pointer, Value, WordSize};
+use sp_wasm_interface::{Pointer, Value, WordSize};
 use wasmtime::{
-	AsContext, AsContextMut, Extern, Func, Global, Instance, Memory, Module, Table, Val,
+	AsContext, AsContextMut, Engine, Extern, Func, Global, Instance, InstancePre, Memory, Table,
+	Val,
 };
 
 /// Invoked entrypoint format.
@@ -162,62 +163,41 @@ fn extern_func(extern_: &Extern) -> Option<&Func> {
 	}
 }
 
+pub(crate) fn create_store(engine: &wasmtime::Engine, max_memory_size: Option<usize>) -> Store {
+	let limits = if let Some(max_memory_size) = max_memory_size {
+		wasmtime::StoreLimitsBuilder::new().memory_size(max_memory_size).build()
+	} else {
+		Default::default()
+	};
+
+	let mut store =
+		Store::new(engine, StoreData { limits, host_state: None, memory: None, table: None });
+	if max_memory_size.is_some() {
+		store.limiter(|s| &mut s.limits);
+	}
+	store
+}
+
 impl InstanceWrapper {
-	/// Create a new instance wrapper from the given wasm module.
-	pub fn new<H>(
-		module: &Module,
-		heap_pages: u64,
-		allow_missing_func_imports: bool,
+	pub(crate) fn new(
+		engine: &Engine,
+		instance_pre: &InstancePre<StoreData>,
 		max_memory_size: Option<usize>,
-	) -> Result<Self>
-	where
-		H: HostFunctions,
-	{
-		let limits = if let Some(max_memory_size) = max_memory_size {
-			wasmtime::StoreLimitsBuilder::new().memory_size(max_memory_size).build()
-		} else {
-			Default::default()
-		};
+	) -> Result<Self> {
+		let mut store = create_store(engine, max_memory_size);
+		let instance = instance_pre.instantiate(&mut store).map_err(|error| {
+			WasmError::Other(
+				format!("failed to instantiate a new WASM module instance: {}", error,),
+			)
+		})?;
 
-		let mut store = Store::new(
-			module.engine(),
-			StoreData { limits, host_state: None, memory: None, table: None },
-		);
-		if max_memory_size.is_some() {
-			store.limiter(|s| &mut s.limits);
-		}
-
-		// Scan all imports, find the matching host functions, and create stubs that adapt arguments
-		// and results.
-		let imports = crate::imports::resolve_imports::<H>(
-			&mut store,
-			module,
-			heap_pages,
-			allow_missing_func_imports,
-		)?;
-
-		let instance = Instance::new(&mut store, module, &imports.externs)
-			.map_err(|e| Error::from(format!("cannot instantiate: {}", e)))?;
-
-		let memory = match imports.memory_import_index {
-			Some(memory_idx) => extern_memory(&imports.externs[memory_idx])
-				.expect("only memory can be at the `memory_idx`; qed")
-				.clone(),
-			None => {
-				let memory = get_linear_memory(&instance, &mut store)?;
-				if !memory.grow(&mut store, heap_pages).is_ok() {
-					return Err("failed top increase the linear memory size".into())
-				}
-				memory
-			},
-		};
-
+		let memory = get_linear_memory(&instance, &mut store)?;
 		let table = get_table(&instance, &mut store);
 
 		store.data_mut().memory = Some(memory);
 		store.data_mut().table = table;
 
-		Ok(Self { instance, memory, store })
+		Ok(InstanceWrapper { instance, memory, store })
 	}
 
 	/// Resolves a substrate entrypoint by the given name.
@@ -435,8 +415,11 @@ impl InstanceWrapper {
 fn decommit_works() {
 	let engine = wasmtime::Engine::default();
 	let code = wat::parse_str("(module (memory (export \"memory\") 1 4))").unwrap();
-	let module = Module::new(&engine, code).unwrap();
-	let mut wrapper = InstanceWrapper::new::<()>(&module, 2, true, None).unwrap();
+	let module = wasmtime::Module::new(&engine, code).unwrap();
+	let linker = wasmtime::Linker::new(&engine);
+	let mut store = create_store(&engine, None);
+	let instance_pre = linker.instantiate_pre(&mut store, &module).unwrap();
+	let mut wrapper = InstanceWrapper::new(&engine, &instance_pre, None).unwrap();
 	unsafe { *wrapper.memory.data_ptr(&wrapper.store) = 42 };
 	assert_eq!(unsafe { *wrapper.memory.data_ptr(&wrapper.store) }, 42);
 	wrapper.decommit();

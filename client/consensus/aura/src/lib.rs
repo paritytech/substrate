@@ -30,14 +30,7 @@
 //!
 //! NOTE: Aura itself is designed to be generic over the crypto used.
 #![forbid(missing_docs, unsafe_code)]
-use std::{
-	convert::{TryFrom, TryInto},
-	fmt::Debug,
-	hash::Hash,
-	marker::PhantomData,
-	pin::Pin,
-	sync::Arc,
-};
+use std::{fmt::Debug, hash::Hash, marker::PhantomData, pin::Pin, sync::Arc};
 
 use futures::prelude::*;
 use log::{debug, trace};
@@ -279,7 +272,7 @@ where
 	L: sc_consensus::JustificationSyncLink<B>,
 	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + Sync + 'static,
 {
-	AuraWorker {
+	sc_consensus_slots::SimpleSlotWorkerToSlotWorker(AuraWorker {
 		client,
 		block_import,
 		env: proposer_factory,
@@ -292,7 +285,7 @@ where
 		block_proposal_slot_portion,
 		max_block_proposal_slot_portion,
 		_key_type: PhantomData::<P>,
-	}
+	})
 }
 
 struct AuraWorker<C, E, I, P, SO, L, BS> {
@@ -517,7 +510,7 @@ pub enum Error<B: BlockT> {
 	Inherent(sp_inherents::Error),
 }
 
-impl<B: BlockT> std::convert::From<Error<B>> for String {
+impl<B: BlockT> From<Error<B>> for String {
 	fn from(error: Error<B>) -> String {
 		error.to_string()
 	}

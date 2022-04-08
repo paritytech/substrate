@@ -77,7 +77,9 @@
 use scale_info::TypeInfo;
 use sp_arithmetic::{traits::Zero, Normalizable, PerThing, Rational128, ThresholdOrd};
 use sp_core::RuntimeDebug;
-use sp_std::{cell::RefCell, cmp::Ordering, collections::btree_map::BTreeMap, prelude::*, rc::Rc};
+use sp_std::{
+	cell::RefCell, cmp::Ordering, collections::btree_map::BTreeMap, prelude::*, rc::Rc, vec,
+};
 
 use codec::{Decode, Encode, MaxEncodedLen};
 #[cfg(feature = "std")]
@@ -98,29 +100,16 @@ pub mod pjr;
 pub mod reduce;
 pub mod traits;
 
-pub use assignments::{Assignment, IndexAssignment, IndexAssignmentOf, StakedAssignment};
+pub use assignments::{Assignment, StakedAssignment};
 pub use balancing::*;
 pub use helpers::*;
 pub use phragmen::*;
 pub use phragmms::*;
 pub use pjr::*;
 pub use reduce::reduce;
-pub use traits::{IdentifierT, NposSolution, PerThing128, __OrInvalidIndex};
+pub use traits::{IdentifierT, PerThing128};
 
-// re-export for the solution macro, with the dependencies of the macro.
-#[doc(hidden)]
-pub use codec;
-#[doc(hidden)]
-pub use scale_info;
-#[doc(hidden)]
-pub use sp_arithmetic;
-#[doc(hidden)]
-pub use sp_std;
-
-// re-export the solution type macro.
-pub use sp_npos_elections_solution_type::generate_solution_type;
-
-/// The errors that might occur in the this crate and solution-type.
+/// The errors that might occur in this crate and `frame-election-provider-solution-type`.
 #[derive(Eq, PartialEq, RuntimeDebug)]
 pub enum Error {
 	/// While going from solution indices to ratio, the weight of all the edges has gone above the
@@ -130,12 +119,14 @@ pub enum Error {
 	SolutionTargetOverflow,
 	/// One of the index functions returned none.
 	SolutionInvalidIndex,
-	/// One of the page indices was invalid
+	/// One of the page indices was invalid.
 	SolutionInvalidPageIndex,
 	/// An error occurred in some arithmetic operation.
 	ArithmeticError(&'static str),
 	/// The data provided to create support map was invalid.
 	InvalidSupportEdge,
+	/// The number of voters is bigger than the `MaxVoters` bound.
+	TooManyVoters,
 }
 
 /// A type which is used in the API of this crate as a numeric weight of a vote, most often the
