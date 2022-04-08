@@ -113,7 +113,7 @@ impl SlotTimestampProvider {
 				.ok_or_else(|| "best header not found in the db!".to_string())?;
 			let slot = func(header)?;
 			// add the slot duration so there's no collision of slots
-			(slot * slot_duration.as_millis() as u64) + slot_duration.as_millis() as u64
+			(slot * slot_duration.as_millis() as u64) + (slot_duration.as_millis() as u64 * 10)
 		} else {
 			// this is the first block, use the correct time.
 			let now = SystemTime::now();
