@@ -487,7 +487,6 @@ dependencies = [
  "futures-timer",
  "hex",
  "log 0.4.14",
- "pallet-mmr-primitives",
  "parity-scale-codec",
  "parking_lot 0.12.0",
  "sc-chain-spec",
@@ -509,6 +508,7 @@ dependencies = [
  "sp-finality-grandpa",
  "sp-keyring",
  "sp-keystore",
+ "sp-mmr-primitives",
  "sp-runtime",
  "sp-tracing",
  "strum",
@@ -6100,6 +6100,7 @@ dependencies = [
  "scale-info",
  "sp-core",
  "sp-io",
+ "sp-mmr-primitives",
  "sp-runtime",
  "sp-std",
 ]
@@ -6108,7 +6109,6 @@ dependencies = [
 name = "pallet-mmr-primitives"
 version = "4.0.0-dev"
 dependencies = [
- "frame-support",
  "frame-system",
  "hex-literal",
  "log 0.4.14",
@@ -6116,6 +6116,8 @@ dependencies = [
  "serde",
  "sp-api",
  "sp-core",
+ "sp-debug-derive",
+ "sp-mmr-primitives",
  "sp-runtime",
  "sp-std",
 ]
@@ -6134,6 +6136,7 @@ dependencies = [
  "sp-api",
  "sp-blockchain",
  "sp-core",
+ "sp-mmr-primitives",
  "sp-runtime",
 ]
 
@@ -10150,6 +10153,20 @@ version = "4.1.0-dev"
 dependencies = [
  "thiserror",
  "zstd",
+]
+
+[[package]]
+name = "sp-mmr-primitives"
+version = "4.0.0-dev"
+dependencies = [
+ "hex-literal",
+ "log 0.4.14",
+ "parity-scale-codec",
+ "serde",
+ "sp-api",
+ "sp-core",
+ "sp-debug-derive",
+ "sp-std",
 ]
 
 [[package]]

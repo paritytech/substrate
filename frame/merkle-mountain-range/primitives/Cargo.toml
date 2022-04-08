@@ -18,10 +18,11 @@ serde = { version = "1.0.136", optional = true, features = ["derive"] }
 
 sp-api = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/api" }
 sp-core = { version = "6.0.0", default-features = false, path = "../../../primitives/core" }
+sp-debug-derive = { version = "4.0.0", default-features = false, path = "../../../primitives/debug-derive" }
+sp-mmr-primitives = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/merkle-mountain-range" }
 sp-runtime = { version = "6.0.0", default-features = false, path = "../../../primitives/runtime" }
 sp-std = { version = "4.0.0", default-features = false, path = "../../../primitives/std" }
 
-frame-support = { version = "4.0.0-dev", default-features = false, path = "../../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../../system" }
 
 [dev-dependencies]
@@ -35,8 +36,9 @@ std = [
 	"serde",
 	"sp-api/std",
 	"sp-core/std",
+	"sp-debug-derive/std",
+	"sp-mmr-primitives/std",
 	"sp-runtime/std",
 	"sp-std/std",
-	"frame-support/std",
 	"frame-system/std",
 ]

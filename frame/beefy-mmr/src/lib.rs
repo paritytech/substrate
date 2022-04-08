@@ -37,7 +37,7 @@ use sp_runtime::traits::{Convert, Hash, Member};
 use sp_std::prelude::*;
 
 use beefy_primitives::mmr::{BeefyDataProvider, BeefyNextAuthoritySet, MmrLeaf, MmrLeafVersion};
-use pallet_mmr::primitives::LeafDataProvider;
+use pallet_mmr_primitives::LeafDataProvider;
 
 use frame_support::traits::Get;
 

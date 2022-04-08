@@ -30,7 +30,7 @@ use sp_keystore::SyncCryptoStorePtr;
 use sp_runtime::traits::Block;
 
 use beefy_primitives::{BeefyApi, MmrRootHash};
-use pallet_mmr_primitives::MmrApi;
+use sp_mmr_primitives::MmrApi;
 
 use crate::notification::{BeefyBestBlockSender, BeefySignedCommitmentSender};
 

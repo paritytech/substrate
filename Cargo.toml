@@ -171,6 +171,7 @@ members = [
 	"primitives/keyring",
 	"primitives/keystore",
 	"primitives/maybe-compressed-blob",
+	"primitives/merkle-mountain-range",
 	"primitives/npos-elections",
 	"primitives/npos-elections/fuzzer",
 	"primitives/offchain",

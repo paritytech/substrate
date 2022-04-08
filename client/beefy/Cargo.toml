@@ -27,6 +27,7 @@ sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
 sp-consensus = { version = "0.10.0-dev", path = "../../primitives/consensus/common" }
 sp-core = { version = "6.0.0", path = "../../primitives/core" }
 sp-keystore = { version = "0.12.0", path = "../../primitives/keystore" }
+sp-mmr-primitives = { version = "4.0.0-dev", default-features = false, path = "../../primitives/merkle-mountain-range" }
 sp-runtime = { version = "6.0.0", path = "../../primitives/runtime" }
 
 sc-chain-spec = { version = "4.0.0-dev", path = "../../client/chain-spec" }
@@ -38,7 +39,6 @@ sc-network-gossip = { version = "0.10.0-dev", path = "../network-gossip" }
 sc-utils = { version = "4.0.0-dev", path = "../utils" }
 
 beefy-primitives = { version = "4.0.0-dev", path = "../../primitives/beefy" }
-pallet-mmr-primitives = { version = "4.0.0-dev", path = "../../frame/merkle-mountain-range/primitives" }
 
 [dev-dependencies]
 sc-consensus = { version = "0.10.0-dev", path = "../consensus/common" }

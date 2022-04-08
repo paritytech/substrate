@@ -70,7 +70,8 @@ mod mock;
 mod tests;
 
 pub use pallet::*;
-pub use pallet_mmr_primitives::{self as primitives, LeafIndex, NodeIndex};
+pub use pallet_mmr_primitives as runtime_primitives;
+pub use sp_mmr_primitives::{self as primitives, Error, LeafIndex, NodeIndex};
 
 pub trait WeightInfo {
 	fn on_initialize(peaks: NodeIndex) -> Weight;
@@ -138,7 +139,7 @@ pub mod pallet {
 		///
 		/// Note that the leaf at each block MUST be unique. You may want to include a block hash or
 		/// block number as an easiest way to ensure that.
-		type LeafData: primitives::LeafDataProvider;
+		type LeafData: runtime_primitives::LeafDataProvider;
 
 		/// A hook to act on the new MMR root.
 		///
@@ -175,7 +176,7 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
 		fn on_initialize(_n: T::BlockNumber) -> Weight {
-			use primitives::LeafDataProvider;
+			use runtime_primitives::LeafDataProvider;
 			let leaves = Self::mmr_leaves();
 			let peaks_before = mmr::utils::NodesUtils::new(leaves).number_of_peaks();
 			let data = T::LeafData::leaf_data();
@@ -200,7 +201,7 @@ pub mod pallet {
 type ModuleMmr<StorageType, T, I> = mmr::Mmr<StorageType, T, I, LeafOf<T, I>>;
 
 /// Leaf data.
-type LeafOf<T, I> = <<T as Config<I>>::LeafData as primitives::LeafDataProvider>::LeafData;
+type LeafOf<T, I> = <<T as Config<I>>::LeafData as runtime_primitives::LeafDataProvider>::LeafData;
 
 /// Hashing used for the pallet.
 pub(crate) type HashingOf<T, I> = <T as Config<I>>::Hashing;

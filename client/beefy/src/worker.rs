@@ -29,6 +29,7 @@ use sc_network_gossip::GossipEngine;
 use sp_api::{BlockId, ProvideRuntimeApi};
 use sp_arithmetic::traits::AtLeast32Bit;
 use sp_consensus::SyncOracle;
+use sp_mmr_primitives::MmrApi;
 use sp_runtime::{
 	generic::OpaqueDigestItemId,
 	traits::{Block, Header, NumberFor},
@@ -40,7 +41,6 @@ use beefy_primitives::{
 	known_payload_ids, BeefyApi, Commitment, ConsensusLog, MmrRootHash, Payload, SignedCommitment,
 	ValidatorSet, VersionedFinalityProof, VoteMessage, BEEFY_ENGINE_ID, GENESIS_AUTHORITY_SET_ID,
 };
-use pallet_mmr_primitives::MmrApi;
 
 use crate::{
 	error,
