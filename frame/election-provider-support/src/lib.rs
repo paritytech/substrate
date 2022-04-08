@@ -584,11 +584,7 @@ impl<
 	fn solve(
 		winners: usize,
 		targets: Vec<Self::AccountId>,
-		voters: Vec<(
-			Self::AccountId,
-			VoteWeight,
-			impl IntoIterator<Item = Self::AccountId> + Clone,
-		)>,
+		voters: Vec<(Self::AccountId, VoteWeight, impl IntoIterator<Item = Self::AccountId>)>,
 	) -> Result<ElectionResult<Self::AccountId, Self::Accuracy>, Self::Error> {
 		sp_npos_elections::seq_phragmen(winners, targets, voters, Balancing::get())
 	}
@@ -616,11 +612,7 @@ impl<
 	fn solve(
 		winners: usize,
 		targets: Vec<Self::AccountId>,
-		voters: Vec<(
-			Self::AccountId,
-			VoteWeight,
-			impl IntoIterator<Item = Self::AccountId> + Clone,
-		)>,
+		voters: Vec<(Self::AccountId, VoteWeight, impl IntoIterator<Item = Self::AccountId>)>,
 	) -> Result<ElectionResult<Self::AccountId, Self::Accuracy>, Self::Error> {
 		sp_npos_elections::phragmms(winners, targets, voters, Balancing::get())
 	}
@@ -657,7 +649,8 @@ impl<
 		if Balancing::get().is_none() {
 			return Err(Self::Error::MissingBalancingParams)
 		}
-		let (iterations, tolerance) = Balancing::get().unwrap();
+		let (iterations, tolerance) =
+			Balancing::get().expect("checked above that `Balancing` is not `None`");
 		sp_npos_elections::mms(winners, targets, voters, iterations, tolerance)
 	}
 }
