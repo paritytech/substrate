@@ -320,6 +320,10 @@ impl<T: Config> SignedSubmissions<T> {
 		let score = *score;
 		self.swap_out_submission(score, None)
 	}
+	
+	pub fn pop(&mut self, remove_score: ElectionScore) -> Option<SignedSubmissionOf<T>> {
+		self.swap_out_submission(remove_score, None)
+	}
 }
 
 impl<T: Config> Deref for SignedSubmissions<T> {
