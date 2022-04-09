@@ -33,7 +33,7 @@ use futures::{
 use jsonrpsee::{
 	core::{async_trait, Error as JsonRpseeError, RpcResult},
 	proc_macros::rpc,
-	SubscriptionSink,
+	PendingSubscription,
 };
 use log::warn;
 
@@ -61,7 +61,7 @@ pub trait BeefyApi<Notification, Hash> {
 		unsubscribe = "beefy_unsubscribeJustifications",
 		item = Notification,
 	)]
-	fn subscribe_justifications(&self) -> RpcResult<()>;
+	fn subscribe_justifications(&self);
 
 	/// Returns hash of the latest BEEFY finalized block as seen by this client.
 	///
@@ -109,17 +109,20 @@ impl<Block> BeefyApiServer<notification::EncodedSignedCommitment, Block::Hash>
 where
 	Block: BlockT,
 {
-	fn subscribe_justifications(&self, sink: SubscriptionSink) -> RpcResult<()> {
+	fn subscribe_justifications(&self, pending: PendingSubscription) {
 		let stream = self
 			.signed_commitment_stream
 			.subscribe()
 			.map(|sc| notification::EncodedSignedCommitment::new::<Block>(sc));
 
-		let fut = sink.pipe_from_stream(stream).map(|_| ()).boxed();
+		let fut = async move {
+			if let Some(mut sink) = pending.accept() {
+				sink.pipe_from_stream(stream).await;
+			}
+		}
+		.boxed();
 
-		self.executor
-			.spawn_obj(fut.into())
-			.map_err(|e| JsonRpseeError::to_call_error(e))
+		let _ = self.executor.spawn_obj(fut.into());
 	}
 
 	async fn latest_finalized(&self) -> RpcResult<Block::Hash> {
@@ -207,7 +210,7 @@ mod tests {
 			if response != not_ready {
 				assert_eq!(response, expected);
 				// Success
-				return
+				return;
 			}
 			std::thread::sleep(std::time::Duration::from_millis(50))
 		}
@@ -236,14 +239,11 @@ mod tests {
 		);
 		let (response, _) = rpc.raw_json_request(&unsub_req).await.unwrap();
 
-		assert_eq!(response, r#"{"jsonrpc":"2.0","result":"Unsubscribed","id":1}"#);
+		assert_eq!(response, r#"{"jsonrpc":"2.0","result":true,"id":1}"#);
 
 		// Unsubscribe again and fail
 		let (response, _) = rpc.raw_json_request(&unsub_req).await.unwrap();
-		let expected = format!(
-			r#"{{"jsonrpc":"2.0","error":{{"code":-32002,"message":"Server error","data":"Invalid subscription ID={}"}},"id":1}}"#,
-			ser_id
-		);
+		let expected = r#"{"jsonrpc":"2.0","result":false,"id":1}"#;
 
 		assert_eq!(response, expected);
 	}
@@ -264,7 +264,7 @@ mod tests {
 			)
 			.await
 			.unwrap();
-		let expected = r#"{"jsonrpc":"2.0","error":{"code":-32002,"message":"Server error","data":"Invalid subscription ID=\"FOO\""},"id":1}"#;
+		let expected = r#"{"jsonrpc":"2.0","result":false,"id":1}"#;
 
 		assert_eq!(response, expected);
 	}

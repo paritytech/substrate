@@ -19,7 +19,7 @@
 //! System RPC module errors.
 
 use crate::system::helpers::Health;
-use jsonrpsee::{core::to_json_raw_value, types::error::CallError};
+use jsonrpsee::types::error::{CallError, ErrorObject};
 
 /// System RPC Result type.
 pub type Result<T> = std::result::Result<T, Error>;
@@ -45,13 +45,12 @@ const MALFORMATTED_PEER_ARG_ERROR: i32 = BASE_ERROR + 2;
 impl From<Error> for CallError {
 	fn from(e: Error) -> Self {
 		match e {
-			Error::NotHealthy(ref h) => Self::Custom {
-				code: NOT_HEALTHY_ERROR,
-				message: e.to_string(),
-				data: to_json_raw_value(&h).ok(),
+			Error::NotHealthy(ref h) => {
+				Self::Custom(ErrorObject::owned(NOT_HEALTHY_ERROR, e.to_string(), Some(h)))
 			},
-			Error::MalformattedPeerArg(e) =>
-				Self::Custom { code: MALFORMATTED_PEER_ARG_ERROR + 2, message: e, data: None },
+			Error::MalformattedPeerArg(e) => {
+				Self::Custom(ErrorObject::owned(MALFORMATTED_PEER_ARG_ERROR + 2, e, None::<()>))
+			},
 		}
 	}
 }

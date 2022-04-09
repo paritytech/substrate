@@ -23,7 +23,7 @@ use codec::{self, Codec, Decode, Encode};
 use jsonrpsee::{
 	core::{async_trait, RpcResult},
 	proc_macros::rpc,
-	types::error::CallError,
+	types::error::{CallError, ErrorObject},
 };
 
 use sc_rpc_api::DenyUnsafe;
@@ -120,43 +120,49 @@ where
 			self.client.info().best_hash));
 
 		let uxt: <Block as traits::Block>::Extrinsic =
-			Decode::decode(&mut &*extrinsic).map_err(|e| CallError::Custom {
-				code: Error::DecodeError.into(),
-				message: "Unable to dry run extrinsic.".into(),
-				data: serde_json::value::to_raw_value(&e.to_string()).ok(),
+			Decode::decode(&mut &*extrinsic).map_err(|e| {
+				CallError::Custom(ErrorObject::owned(
+					Error::DecodeError.into(),
+					"Unable to dry run extrinsic",
+					Some(e.to_string()),
+				))
 			})?;
 
 		let api_version = api
 			.api_version::<dyn BlockBuilder<Block>>(&at)
-			.map_err(|e| CallError::Custom {
-				code: Error::RuntimeError.into(),
-				message: "Unable to dry run extrinsic.".into(),
-				data: serde_json::value::to_raw_value(&e.to_string()).ok(),
-			})?
-			.ok_or_else(|| CallError::Custom {
-				code: Error::RuntimeError.into(),
-				message: "Unable to dry run extrinsic.".into(),
-				data: serde_json::value::to_raw_value(&format!(
-					"Could not find `BlockBuilder` api for block `{:?}`.",
-					at
+			.map_err(|e| {
+				CallError::Custom(ErrorObject::owned(
+					Error::RuntimeError.into(),
+					"Unable to dry run extrinsic.",
+					Some(e.to_string()),
 				))
-				.ok(),
+			})?
+			.ok_or_else(|| {
+				CallError::Custom(ErrorObject::owned(
+					Error::RuntimeError.into(),
+					"Unable to dry run extrinsic.",
+					Some(format!("Could not find `BlockBuilder` api for block `{:?}`.", at)),
+				))
 			})?;
 
 		let result = if api_version < 6 {
 			#[allow(deprecated)]
 			api.apply_extrinsic_before_version_6(&at, uxt)
 				.map(legacy::byte_sized_error::convert_to_latest)
-				.map_err(|e| CallError::Custom {
-					code: Error::RuntimeError.into(),
-					message: "Unable to dry run extrinsic.".into(),
-					data: serde_json::value::to_raw_value(&e.to_string()).ok(),
+				.map_err(|e| {
+					CallError::Custom(ErrorObject::owned(
+						Error::RuntimeError.into(),
+						"Unable to dry run extrinsic.",
+						Some(e.to_string()),
+					))
 				})?
 		} else {
-			api.apply_extrinsic(&at, uxt).map_err(|e| CallError::Custom {
-				code: Error::RuntimeError.into(),
-				message: "Unable to dry run extrinsic.".into(),
-				data: serde_json::value::to_raw_value(&e.to_string()).ok(),
+			api.apply_extrinsic(&at, uxt).map_err(|e| {
+				CallError::Custom(ErrorObject::owned(
+					Error::RuntimeError.into(),
+					"Unable to dry run extrinsic.",
+					Some(e.to_string()),
+				))
 			})?
 		};
 

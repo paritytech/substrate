@@ -27,7 +27,7 @@ use futures::{
 	stream::{self, Stream, StreamExt},
 	task::Spawn,
 };
-use jsonrpsee::ws_server::SubscriptionSink;
+use jsonrpsee::PendingSubscription;
 use sc_client_api::{BlockBackend, BlockchainEvents};
 use sp_blockchain::HeaderBackend;
 use sp_runtime::{
@@ -71,7 +71,7 @@ where
 		self.client.block(&BlockId::Hash(self.unwrap_or_best(hash))).map_err(client_err)
 	}
 
-	fn subscribe_all_heads(&self, sink: SubscriptionSink) -> Result<(), Error> {
+	fn subscribe_all_heads(&self, sink: PendingSubscription) {
 		subscribe_headers(
 			&self.client,
 			&self.executor,
@@ -85,7 +85,7 @@ where
 		)
 	}
 
-	fn subscribe_new_heads(&self, sink: SubscriptionSink) -> Result<(), Error> {
+	fn subscribe_new_heads(&self, sink: PendingSubscription) {
 		subscribe_headers(
 			&self.client,
 			&self.executor,
@@ -100,7 +100,7 @@ where
 		)
 	}
 
-	fn subscribe_finalized_heads(&self, sink: SubscriptionSink) -> Result<(), Error> {
+	fn subscribe_finalized_heads(&self, sink: PendingSubscription) {
 		subscribe_headers(
 			&self.client,
 			&self.executor,
@@ -119,11 +119,10 @@ where
 fn subscribe_headers<Block, Client, F, G, S>(
 	client: &Arc<Client>,
 	executor: &SubscriptionTaskExecutor,
-	sink: SubscriptionSink,
+	pending: PendingSubscription,
 	best_block_hash: G,
 	stream: F,
-) -> Result<(), Error>
-where
+) where
 	Block: BlockT + 'static,
 	Block::Header: Unpin,
 	Client: HeaderBackend<Block> + 'static,
@@ -147,7 +146,12 @@ where
 	// we set up the stream and chain it to the stream. Consuming code would need to handle
 	// duplicates at the beginning of the stream though.
 	let stream = stream::iter(maybe_header).chain(stream());
-	let fut = sink.pipe_from_stream(stream).map(|_| ()).boxed();
 
-	executor.spawn_obj(fut.into()).map_err(|e| Error::Client(Box::new(e)))
+	let fut = async move {
+		if let Some(mut sink) = pending.accept() {
+			sink.pipe_from_stream(stream).await;
+		}
+	}
+	.boxed();
+	let _ = executor.spawn_obj(fut.into());
 }

@@ -18,7 +18,10 @@
 
 //! State RPC errors.
 
-use jsonrpsee::{core::Error as JsonRpseeError, types::error::CallError};
+use jsonrpsee::{
+	core::Error as JsonRpseeError,
+	types::error::{CallError, ErrorObject},
+};
 /// State RPC Result type.
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -57,12 +60,14 @@ const BASE_ERROR: i32 = 4000;
 impl From<Error> for JsonRpseeError {
 	fn from(e: Error) -> Self {
 		match e {
-			Error::InvalidBlockRange { .. } =>
-				CallError::Custom { code: BASE_ERROR + 1, message: e.to_string(), data: None }
-					.into(),
-			Error::InvalidCount { .. } =>
-				CallError::Custom { code: BASE_ERROR + 2, message: e.to_string(), data: None }
-					.into(),
+			Error::InvalidBlockRange { .. } => {
+				CallError::Custom(ErrorObject::owned(BASE_ERROR + 1, e.to_string(), None::<()>))
+					.into()
+			},
+			Error::InvalidCount { .. } => {
+				CallError::Custom(ErrorObject::owned(BASE_ERROR + 2, e.to_string(), None::<()>))
+					.into()
+			},
 			e => e.into(),
 		}
 	}

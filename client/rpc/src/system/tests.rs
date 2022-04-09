@@ -101,15 +101,17 @@ fn api<T: Into<Option<Status>>>(sync: T) -> RpcModule<System<Block>> {
 				Request::NetworkAddReservedPeer(peer, sender) => {
 					let _ = match sc_network::config::parse_str_addr(&peer) {
 						Ok(_) => sender.send(Ok(())),
-						Err(s) =>
-							sender.send(Err(error::Error::MalformattedPeerArg(s.to_string()))),
+						Err(s) => {
+							sender.send(Err(error::Error::MalformattedPeerArg(s.to_string())))
+						},
 					};
 				},
 				Request::NetworkRemoveReservedPeer(peer, sender) => {
 					let _ = match peer.parse::<PeerId>() {
 						Ok(_) => sender.send(Ok(())),
-						Err(s) =>
-							sender.send(Err(error::Error::MalformattedPeerArg(s.to_string()))),
+						Err(s) => {
+							sender.send(Err(error::Error::MalformattedPeerArg(s.to_string())))
+						},
 					};
 				},
 				Request::NetworkReservedPeers(sender) => {
@@ -315,7 +317,7 @@ async fn system_network_add_reserved() {
 	let bad_peer_id = ["/ip4/198.51.100.19/tcp/30333"];
 	assert_matches!(
 		api(None).call::<_, ()>("system_addReservedPeer", bad_peer_id).await,
-		Err(RpcError::Call(CallError::Custom { message, .. })) if message.as_str() == "Peer id is missing from the address"
+		Err(RpcError::Call(CallError::Custom(err))) if err.message().contains("Peer id is missing from the address")
 	);
 }
 
@@ -331,7 +333,7 @@ async fn system_network_remove_reserved() {
 
 	assert_matches!(
 		api(None).call::<_, String>("system_removeReservedPeer", bad_peer_id).await,
-		Err(RpcError::Call(CallError::Custom { message, .. })) if message.as_str() == "base-58 decode error: provided string contained invalid character '/' at byte 0"
+		Err(RpcError::Call(CallError::Custom(err))) if err.message().contains("base-58 decode error: provided string contained invalid character '/' at byte 0")
 	);
 }
 #[tokio::test]
@@ -371,7 +373,7 @@ fn test_add_reset_log_filter() {
 				};
 				futures::executor::block_on(fut).expect("`system_resetLogFilter` failed");
 			} else if line.contains("exit") {
-				return
+				return;
 			}
 			log::trace!(target: "test_before_add", "{}", EXPECTED_WITH_TRACE);
 			log::debug!(target: "test_before_add", "{}", EXPECTED_BEFORE_ADD);

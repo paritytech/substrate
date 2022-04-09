@@ -28,7 +28,7 @@ use super::{
 use crate::SubscriptionTaskExecutor;
 
 use futures::{future, stream, task::Spawn, FutureExt, StreamExt};
-use jsonrpsee::SubscriptionSink;
+use jsonrpsee::{core::Error as JsonRpseeError, PendingSubscription};
 use sc_client_api::{
 	Backend, BlockBackend, BlockchainEvents, CallExecutor, ExecutorProvider, ProofProvider,
 	StorageProvider,
@@ -105,7 +105,7 @@ where
 				&from_meta,
 				&to_meta,
 				"from number > to number".to_owned(),
-			))
+			));
 		}
 
 		// check if we can get from `to` to `from` by going through parent_hashes.
@@ -126,7 +126,7 @@ where
 					&from_meta,
 					&to_meta,
 					"from and to are on different forks".to_owned(),
-				))
+				));
 			}
 			hashes.reverse();
 			hashes
@@ -360,18 +360,21 @@ where
 			.map_err(client_err)
 	}
 
-	fn subscribe_runtime_version(&self, mut sink: SubscriptionSink) -> std::result::Result<(), Error> {
+	fn subscribe_runtime_version(&self, pending: PendingSubscription) {
 		let client = self.client.clone();
 
-		let initial = self
-			.block_or_best(None)
-			.and_then(|block| {
+		let res: std::result::Result<RuntimeVersion, sp_blockchain::Error> =
+			self.block_or_best(None).and_then(|block| {
 				self.client.runtime_version_at(&BlockId::Hash(block)).map_err(Into::into)
-			})
-			.map_err(|e| {
-				sink.close_with_custom_message(&e.to_string());
-				Error::Client(Box::new(e))
-			})?;
+			});
+
+		let initial = match res {
+			Ok(i) => i,
+			Err(e) => {
+				let _ = pending.reject(JsonRpseeError::to_call_error(e));
+				return;
+			},
+		};
 
 		let mut previous_version = initial.clone();
 
@@ -394,23 +397,25 @@ where
 			});
 
 		let stream = futures::stream::once(future::ready(initial)).chain(version_stream);
-		let fut = sink.pipe_from_stream(stream).map(|_| ()).boxed();
 
-		self.executor.spawn_obj(fut.into()).map_err(|e| Error::Client(Box::new(e)))
+		let fut = async move {
+			if let Some(mut sink) = pending.accept() {
+				sink.pipe_from_stream(stream).await;
+			}
+		}
+		.boxed();
+
+		let _ = self.executor.spawn_obj(fut.into());
 	}
 
-	fn subscribe_storage(
-		&self,
-		mut sink: SubscriptionSink,
-		keys: Option<Vec<StorageKey>>,
-	) -> std::result::Result<(), Error> {
-		let stream = self
-			.client
-			.storage_changes_notification_stream(keys.as_deref(), None)
-			.map_err(|blockchain_err| {
-				sink.close_with_custom_message(&blockchain_err.to_string());
-				Error::Client(Box::new(blockchain_err))
-			})?;
+	fn subscribe_storage(&self, pending: PendingSubscription, keys: Option<Vec<StorageKey>>) {
+		let stream = match self.client.storage_changes_notification_stream(keys.as_deref(), None) {
+			Ok(stream) => stream,
+			Err(blockchain_err) => {
+				let _ = pending.reject(JsonRpseeError::to_call_error(blockchain_err));
+				return;
+			},
+		};
 
 		// initial values
 		let initial = stream::iter(keys.map(|keys| {
@@ -439,8 +444,13 @@ where
 			.chain(storage_stream)
 			.filter(|storage| future::ready(!storage.changes.is_empty()));
 
-		let fut = sink.pipe_from_stream(stream).map(|_| ()).boxed();
-		self.executor.spawn_obj(fut.into()).map_err(|e| Error::Client(Box::new(e)))
+		let fut = async move {
+			if let Some(mut sink) = pending.accept() {
+				sink.pipe_from_stream(stream).await;
+			}
+		}
+		.boxed();
+		let _ = self.executor.spawn_obj(fut.into());
 	}
 
 	async fn trace_block(
@@ -491,8 +501,9 @@ where
 		self.block_or_best(block)
 			.and_then(|block| {
 				let child_info = match ChildType::from_prefixed_key(&storage_key) {
-					Some((ChildType::ParentKeyId, storage_key)) =>
-						ChildInfo::new_default(storage_key),
+					Some((ChildType::ParentKeyId, storage_key)) => {
+						ChildInfo::new_default(storage_key)
+					},
 					None => return Err(sp_blockchain::Error::InvalidChildStorageKey),
 				};
 				self.client
@@ -516,8 +527,9 @@ where
 		self.block_or_best(block)
 			.and_then(|block| {
 				let child_info = match ChildType::from_prefixed_key(&storage_key) {
-					Some((ChildType::ParentKeyId, storage_key)) =>
-						ChildInfo::new_default(storage_key),
+					Some((ChildType::ParentKeyId, storage_key)) => {
+						ChildInfo::new_default(storage_key)
+					},
 					None => return Err(sp_blockchain::Error::InvalidChildStorageKey),
 				};
 				self.client.child_storage_keys(&BlockId::Hash(block), &child_info, &prefix)
@@ -536,8 +548,9 @@ where
 		self.block_or_best(block)
 			.and_then(|block| {
 				let child_info = match ChildType::from_prefixed_key(&storage_key) {
-					Some((ChildType::ParentKeyId, storage_key)) =>
-						ChildInfo::new_default(storage_key),
+					Some((ChildType::ParentKeyId, storage_key)) => {
+						ChildInfo::new_default(storage_key)
+					},
 					None => return Err(sp_blockchain::Error::InvalidChildStorageKey),
 				};
 				self.client.child_storage_keys_iter(
@@ -560,8 +573,9 @@ where
 		self.block_or_best(block)
 			.and_then(|block| {
 				let child_info = match ChildType::from_prefixed_key(&storage_key) {
-					Some((ChildType::ParentKeyId, storage_key)) =>
-						ChildInfo::new_default(storage_key),
+					Some((ChildType::ParentKeyId, storage_key)) => {
+						ChildInfo::new_default(storage_key)
+					},
 					None => return Err(sp_blockchain::Error::InvalidChildStorageKey),
 				};
 				self.client.child_storage(&BlockId::Hash(block), &child_info, &key)
@@ -580,7 +594,7 @@ where
 		{
 			Arc::new(ChildInfo::new_default(storage_key))
 		} else {
-			return Err(client_err(sp_blockchain::Error::InvalidChildStorageKey))
+			return Err(client_err(sp_blockchain::Error::InvalidChildStorageKey));
 		};
 		let block = self.block_or_best(block).map_err(client_err)?;
 		let client = self.client.clone();
@@ -604,8 +618,9 @@ where
 		self.block_or_best(block)
 			.and_then(|block| {
 				let child_info = match ChildType::from_prefixed_key(&storage_key) {
-					Some((ChildType::ParentKeyId, storage_key)) =>
-						ChildInfo::new_default(storage_key),
+					Some((ChildType::ParentKeyId, storage_key)) => {
+						ChildInfo::new_default(storage_key)
+					},
 					None => return Err(sp_blockchain::Error::InvalidChildStorageKey),
 				};
 				self.client.child_storage_hash(&BlockId::Hash(block), &child_info, &key)

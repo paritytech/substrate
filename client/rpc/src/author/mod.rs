@@ -29,7 +29,7 @@ use codec::{Decode, Encode};
 use futures::{task::Spawn, FutureExt};
 use jsonrpsee::{
 	core::{async_trait, Error as JsonRpseeError, RpcResult},
-	SubscriptionSink,
+	PendingSubscription,
 };
 use sc_rpc_api::DenyUnsafe;
 use sc_transaction_pool_api::{
@@ -175,14 +175,15 @@ where
 			.collect())
 	}
 
-	fn watch_extrinsic(&self, mut sink: SubscriptionSink, xt: Bytes) -> RpcResult<()> {
+	fn watch_extrinsic(&self, pending: PendingSubscription, xt: Bytes) {
 		let best_block_hash = self.client.info().best_hash;
 		let dxt = match TransactionFor::<P>::decode(&mut &xt[..]) {
 			Ok(dxt) => dxt,
 			Err(e) => {
 				log::debug!("[author_watchExtrinsic] failed to decode extrinsic: {:?}", e);
-				let _ = sink.close_with_custom_message(&e.to_string());
-				return Err(JsonRpseeError::to_call_error(e))
+				let err = JsonRpseeError::to_call_error(e);
+				let _ = pending.reject(err);
+				return;
 			},
 		};
 
@@ -194,8 +195,15 @@ where
 			{
 				Ok(stream) => stream,
 				Err(err) => {
-					let _ = sink.close_with_custom_message(&err.to_string());
-					return
+					let _ = pending.reject(JsonRpseeError::to_call_error(err));
+					return;
+				},
+			};
+
+			let mut sink = match pending.accept() {
+				Some(sink) => sink,
+				_ => {
+					return;
 				},
 			};
 
@@ -203,8 +211,6 @@ where
 		}
 		.boxed();
 
-		self.executor
-			.spawn_obj(fut.into())
-			.map_err(|e| JsonRpseeError::to_call_error(e))
+		let _ = self.executor.spawn_obj(fut.into());
 	}
 }
