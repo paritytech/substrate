@@ -1067,7 +1067,7 @@ pub mod pallet {
 			if let Some(submission) = SignedSubmissionsMap::<T>::get(index) {
 				ensure!(
 					T::Currency::can_slash(&who, submission.deposit),
-					<Error<T>>::NotEnoughChallengerDeposit
+					<Error<T>>::SignedCannotPayDeposit
 				);
 				match Self::feasibility_check(
 					submission.raw_solution.clone(),
@@ -1163,8 +1163,6 @@ pub mod pallet {
 		CallNotAllowed,
 		/// The fallback failed
 		FallbackFailed,
-		/// Challenger does not have enough deposit
-		NotEnoughChallengerDeposit,
 	}
 
 	#[pallet::validate_unsigned]
