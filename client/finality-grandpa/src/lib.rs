@@ -1173,7 +1173,6 @@ where
 	Client: AuxStore
 		+ HeaderMetadata<Block, Error = sp_blockchain::Error>
 		+ HeaderBackend<Block>
-		+ ProvideRuntimeApi<Block>,
 {
 	let best_number = client.info().best_number;
 	let finalized = client.info().finalized_number;
