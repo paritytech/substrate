@@ -457,7 +457,7 @@ fn kick_member_works() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
 			Alliance::kick_member(Origin::signed(1), 2),
-			Error::<Test, ()>::NotKickingMember
+			Error::<Test, ()>::NotUpForKicking
 		);
 
 		let proposal = make_kick_member_proposal(2);
@@ -468,7 +468,7 @@ fn kick_member_works() {
 			Box::new(proposal.clone()),
 			proposal_len
 		));
-		assert_eq!(Alliance::kicking_member(2), true);
+		assert_eq!(Alliance::up_for_kicking(2), true);
 		assert_eq!(Alliance::members(MemberRole::Founder), vec![1, 2]);
 
 		assert_ok!(Alliance::kick_member(Origin::signed(1), 2));

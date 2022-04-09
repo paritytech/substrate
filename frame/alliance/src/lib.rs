@@ -320,8 +320,10 @@ pub mod pallet {
 		NotAlly,
 		/// Account is not a founder.
 		NotFounder,
+		/// This member is up for being kicked from the Alliance and cannot perform this operation.
+		UpForKicking,
 		/// Member is not up for consideration of being kicked.
-		NotKickingMember,
+		NotUpForKicking,
 		/// Account does not have voting rights.
 		NoVotingRights,
 		/// Account is already an elevated (fellow) member.
@@ -334,8 +336,6 @@ pub mod pallet {
 		TooManyBlacklist,
 		/// Length of website URL exceeds `MaxWebsiteUrlLength`.
 		TooLongWebsiteUrl,
-		/// This member is up for being kicked from the Alliance and cannot perform this operation.
-		MemberBeingKicked,
 		/// Balance is insufficient to be a candidate.
 		InsufficientCandidateFunds,
 		/// The account's identity does not have display field and website field.
@@ -491,8 +491,8 @@ pub mod pallet {
 	/// A set of members that are (potentially) being kicked out. They cannot retire until the
 	/// motion is settled.
 	#[pallet::storage]
-	#[pallet::getter(fn kicking_member)]
-	pub type KickingMembers<T: Config<I>, I: 'static = ()> =
+	#[pallet::getter(fn up_for_kicking)]
+	pub type UpForKicking<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Blake2_128Concat, T::AccountId, bool, ValueQuery>;
 
 	/// The current blacklist of accounts. These accounts cannot submit candidacy.
@@ -532,7 +532,7 @@ pub mod pallet {
 
 			if let Some(Call::kick_member { who }) = proposal.is_sub_type() {
 				let strike = T::Lookup::lookup(who.clone())?;
-				<KickingMembers<T, I>>::insert(strike, true);
+				<UpForKicking<T, I>>::insert(strike, true);
 			}
 
 			T::ProposalProvider::propose_proposal(proposor, threshold, proposal, length_bound)?;
@@ -619,7 +619,7 @@ pub mod pallet {
 			if Pays::No == info.pays_fee {
 				if let Some(Call::kick_member { who }) = proposal.is_sub_type() {
 					let strike = T::Lookup::lookup(who.clone())?;
-					<KickingMembers<T, I>>::remove(strike);
+					<UpForKicking<T, I>>::remove(strike);
 				}
 			}
 			Ok(info.into())
@@ -845,7 +845,7 @@ pub mod pallet {
 		pub fn retire(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			// A member up for kicking cannot retire.
-			ensure!(!Self::is_being_kicked(&who), Error::<T, I>::MemberBeingKicked);
+			ensure!(!Self::is_up_for_kicking(&who), Error::<T, I>::UpForKicking);
 
 			let role = Self::member_role_of(&who).ok_or(Error::<T, I>::NotMember)?;
 			Self::remove_member(&who, role)?;
@@ -866,7 +866,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			T::MembershipManager::ensure_origin(origin)?;
 			let member = T::Lookup::lookup(who)?;
-			ensure!(Self::is_being_kicked(&member), Error::<T, I>::NotKickingMember);
+			ensure!(Self::is_up_for_kicking(&member), Error::<T, I>::NotUpForKicking);
 
 			let role = Self::member_role_of(&member).ok_or(Error::<T, I>::NotMember)?;
 			Self::remove_member(&member, role)?;
@@ -1007,8 +1007,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	/// Check if an account's forced removal is up for consideration.
-	fn is_being_kicked(who: &T::AccountId) -> bool {
-		<KickingMembers<T, I>>::contains_key(&who)
+	fn is_up_for_kicking(who: &T::AccountId) -> bool {
+		<UpForKicking<T, I>>::contains_key(&who)
 	}
 
 	/// Add a user to the sorted alliance member set.
