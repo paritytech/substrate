@@ -137,6 +137,7 @@ pub fn run() -> sc_cli::Result<()> {
 
 						cmd.run(config, client, inherent_benchmark_data()?, Arc::new(ext_builder))
 					},
+					BenchmarkCmd::Machine(cmd) => cmd.run(),
 				}
 			})
 		},
