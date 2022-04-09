@@ -1076,7 +1076,9 @@ pub mod pallet {
 					Ok(solution) => {
 						let _ = T::Currency::slash(&who, submission.deposit);
 						<QueuedSolution<T>>::put(solution);
-						SignedSubmissionsMap::<T>::remove(index);
+						let mut signed_submissions = Self::signed_submissions();
+						let _ = signed_submissions.pop(submission.raw_solution.score);
+						// SignedSubmissionsMap::<T>::remove(index);
 
 						Self::deposit_event(Event::ChallengerSlashed { account: who });
 
@@ -2085,6 +2087,41 @@ mod tests {
 			assert_ok!(MultiPhase::challenge_solution(crate::mock::Origin::signed(9999), 0));
 
 			assert!(crate::mock::Balances::free_balance(&9999) > 100);
+		})
+	}
+	
+	#[test]
+	fn unsuccessful_challenge_works() {
+		ExtBuilder::default().build_and_execute(|| {
+			crate::mock::SignedMaxSubmissions::set(50);
+			roll_to(14);
+			assert_eq!(MultiPhase::current_phase(), Phase::Off);
+
+			roll_to(15);
+			assert_eq!(multi_phase_events(), vec![Event::SignedPhaseStarted { round: 1 }]);
+			assert_eq!(MultiPhase::current_phase(), Phase::Signed);
+
+			let solution = raw_solution();
+
+			assert!(mock::Balances::usable_balance(&99) == 100);
+
+			assert_ok!(MultiPhase::submit(crate::mock::Origin::signed(99), Box::new(solution),));
+
+			assert_eq!(crate::mock::Balances::usable_balance(&9999), 100);
+
+			assert_ok!(MultiPhase::challenge_solution(crate::mock::Origin::signed(9999), 0));
+
+			assert_eq!(
+				MultiPhase::signed_submissions().iter().map(|s| s.deposit).collect::<Vec<_>>(),
+				vec![5]
+			);
+
+			assert_eq!(crate::mock::Balances::usable_balance(&9999), 95);
+
+			assert_eq!(
+				MultiPhase::signed_submissions().iter().map(|s| s.reward).collect::<Vec<_>>(),
+				vec![15]
+			);
 		})
 	}
 
