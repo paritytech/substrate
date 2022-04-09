@@ -57,14 +57,14 @@ pub trait WeightInfo {
 	fn announce() -> Weight;
 	fn remove_announcement() -> Weight;
 	fn submit_candidacy() -> Weight;
-	fn nominate_candidacy() -> Weight;
+	fn nominate_candidate() -> Weight;
 	fn approve_candidate() -> Weight;
 	fn reject_candidate() -> Weight;
 	fn elevate_ally() -> Weight;
 	fn retire() -> Weight;
 	fn kick_member() -> Weight;
-	fn add_blacklist(n: u32, l: u32, ) -> Weight;
-	fn remove_blacklist(n: u32, l: u32, ) -> Weight;
+	fn add_blacklist_items(n: u32, l: u32, ) -> Weight;
+	fn remove_blacklist_items(n: u32, l: u32, ) -> Weight;
 }
 
 /// Weights for pallet_alliance using the Substrate node and recommended hardware.
@@ -217,7 +217,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Alliance Members (r:4 w:0)
 	// Storage: Alliance AccountBlacklist (r:1 w:0)
 	// Storage: Alliance Candidates (r:1 w:1)
-	fn nominate_candidacy() -> Weight {
+	fn nominate_candidate() -> Weight {
 		(44_764_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(6 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
@@ -273,7 +273,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	}
 	// Storage: Alliance AccountBlacklist (r:1 w:1)
 	// Storage: Alliance WebsiteBlacklist (r:1 w:1)
-	fn add_blacklist(n: u32, l: u32, ) -> Weight {
+	fn add_blacklist_items(n: u32, l: u32, ) -> Weight {
 		(0 as Weight)
 			// Standard Error: 16_000
 			.saturating_add((2_673_000 as Weight).saturating_mul(n as Weight))
@@ -284,7 +284,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	}
 	// Storage: Alliance AccountBlacklist (r:1 w:1)
 	// Storage: Alliance WebsiteBlacklist (r:1 w:1)
-	fn remove_blacklist(n: u32, l: u32, ) -> Weight {
+	fn remove_blacklist_items(n: u32, l: u32, ) -> Weight {
 		(0 as Weight)
 			// Standard Error: 343_000
 			.saturating_add((59_025_000 as Weight).saturating_mul(n as Weight))
@@ -444,7 +444,7 @@ impl WeightInfo for () {
 	// Storage: Alliance Members (r:4 w:0)
 	// Storage: Alliance AccountBlacklist (r:1 w:0)
 	// Storage: Alliance Candidates (r:1 w:1)
-	fn nominate_candidacy() -> Weight {
+	fn nominate_candidate() -> Weight {
 		(44_764_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(6 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
@@ -500,7 +500,7 @@ impl WeightInfo for () {
 	}
 	// Storage: Alliance AccountBlacklist (r:1 w:1)
 	// Storage: Alliance WebsiteBlacklist (r:1 w:1)
-	fn add_blacklist(n: u32, l: u32, ) -> Weight {
+	fn add_blacklist_items(n: u32, l: u32, ) -> Weight {
 		(0 as Weight)
 			// Standard Error: 16_000
 			.saturating_add((2_673_000 as Weight).saturating_mul(n as Weight))
@@ -511,7 +511,7 @@ impl WeightInfo for () {
 	}
 	// Storage: Alliance AccountBlacklist (r:1 w:1)
 	// Storage: Alliance WebsiteBlacklist (r:1 w:1)
-	fn remove_blacklist(n: u32, l: u32, ) -> Weight {
+	fn remove_blacklist_items(n: u32, l: u32, ) -> Weight {
 		(0 as Weight)
 			// Standard Error: 343_000
 			.saturating_add((59_025_000 as Weight).saturating_mul(n as Weight))

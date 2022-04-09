@@ -663,7 +663,7 @@ benchmarks_instance_pallet! {
 		}.into());
 	}
 
-	nominate_candidacy {
+	nominate_candidate {
 		set_members::<T, I>();
 
 		let founder1 = founder::<T, I>(1);
@@ -785,7 +785,7 @@ benchmarks_instance_pallet! {
 		}.into());
 	}
 
-	add_blacklist {
+	add_blacklist_items {
 		let n in 1 .. T::MaxBlacklistCount::get();
 		let l in 1 .. T::MaxWebsiteUrlLength::get();
 
@@ -800,14 +800,14 @@ benchmarks_instance_pallet! {
 		blacklist.extend(accounts.into_iter().map(BlacklistItem::AccountId));
 		blacklist.extend(websites.into_iter().map(BlacklistItem::Website));
 
-		let call = Call::<T, I>::add_blacklist { infos: blacklist.clone() };
+		let call = Call::<T, I>::add_blacklist_items { infos: blacklist.clone() };
 		let origin = T::SuperMajorityOrigin::successful_origin();
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
 		assert_last_event::<T, I>(Event::BlacklistAdded { items: blacklist }.into());
 	}
 
-	remove_blacklist {
+	remove_blacklist_items {
 		let n in 1 .. T::MaxBlacklistCount::get();
 		let l in 1 .. T::MaxWebsiteUrlLength::get();
 
@@ -828,7 +828,7 @@ benchmarks_instance_pallet! {
 		blacklist.extend(accounts.into_iter().map(BlacklistItem::AccountId));
 		blacklist.extend(websites.into_iter().map(BlacklistItem::Website));
 
-		let call = Call::<T, I>::remove_blacklist { infos: blacklist.clone() };
+		let call = Call::<T, I>::remove_blacklist_items { infos: blacklist.clone() };
 		let origin = T::SuperMajorityOrigin::successful_origin();
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
