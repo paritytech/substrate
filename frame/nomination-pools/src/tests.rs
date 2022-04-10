@@ -762,7 +762,7 @@ mod claim_payout {
 	#[test]
 	fn do_reward_payout_correctly_sets_pool_state_to_destroying() {
 		ExtBuilder::default().build_and_execute(|| {
-			with_transaction(|| -> TransactionOutcome<DispatchResult> {
+			let _ = with_transaction(|| -> TransactionOutcome<DispatchResult> {
 				let mut bonded_pool = BondedPool::<Runtime>::get(1).unwrap();
 				let mut reward_pool = RewardPools::<Runtime>::get(1).unwrap();
 				let mut delegator = Delegators::<Runtime>::get(10).unwrap();
@@ -787,7 +787,7 @@ mod claim_payout {
 			});
 
 			// -- current_points saturates (reward_pool.points + new_earnings * bonded_pool.points)
-			with_transaction(|| -> TransactionOutcome<DispatchResult> {
+			let _ = with_transaction(|| -> TransactionOutcome<DispatchResult> {
 				// Given
 				let mut bonded_pool = BondedPool::<Runtime>::get(1).unwrap();
 				let mut reward_pool = RewardPools::<Runtime>::get(1).unwrap();
