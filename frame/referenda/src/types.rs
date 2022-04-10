@@ -255,6 +255,8 @@ pub enum Curve {
 	/// `period` before stepping down to `(period * 2, begin - step * 2)`. This pattern continues
 	/// but the `y` component has a lower limit of `end`.
 	SteppedDecreasing { begin: Perbill, end: Perbill, step: Perbill, period: Perbill },
+	/// A simple recipocal (`K/x + O`) curve: `factor` is `K` and `offset` is `O`.
+	Reciprocal { factor: Perbill, offset: Perbill },
 }
 
 impl Curve {
@@ -264,6 +266,12 @@ impl Curve {
 			Self::LinearDecreasing { begin, delta } => *begin - (*delta * x).min(*begin),
 			Self::SteppedDecreasing { begin, end, step, period } =>
 				(*begin - (step.int_mul(x.int_div(*period))).min(*begin)).max(*end),
+			Self::Reciprocal { factor, offset } => {
+				let x_offset = factor.saturating_div(offset.left_from_one());
+				// Actual curve is y = factor / (x + x_offset) + offset
+				// we want to avoid saturating prior to the division.
+				Perbill::from_rational(factor.deconstruct(), x.deconstruct() + x_offset.deconstruct()).saturating_add(*offset)
+			}
 		}
 	}
 
@@ -295,6 +303,22 @@ impl Curve {
 				} else {
 					period.int_mul((*begin - y.min(*begin) + step.less_epsilon().unwrap_or(Zero::zero())).int_div(*step))
 				},
+			Self::Reciprocal { factor, offset } => {
+				let x_offset = factor.saturating_div(offset.left_from_one());
+				// Actual curve is y = factor / (x + x_offset) + offset
+				// Ergo curve is x = factor / (y - offset) - x_offset
+				// To avoid pre-saturation problems, we move the x_offset term to happen prior to
+				// the division.
+				// So:
+				// yo := y - offset
+				// x = (factor - x_offset * yo) / yo
+				if y < *offset {
+					Perbill::one()
+				} else {
+					let yo = y - *offset;
+					factor.saturating_sub(x_offset * yo).saturating_div(yo)
+				}
+			}
 		}
 	}
 
@@ -326,6 +350,14 @@ impl Debug for Curve {
 					*step * 100u32,
 				)
 			},
+			Self::Reciprocal { factor, offset } => {
+				write!(
+					f,
+					"Reciprocal[factor of {}%, offset of {}%]",
+					*factor * 100u32,
+					*offset * 100u32,
+				)
+			}
 		}
 	}
 }
@@ -335,6 +367,10 @@ mod tests {
 	use super::*;
 	use sp_runtime::PerThing;
 	use frame_support::traits::ConstU32;
+
+	fn percent(x: u32) -> Perbill {
+		Perbill::from_percent(x)
+	}
 
 	#[test]
 	fn insert_sorted_works() {
@@ -365,8 +401,131 @@ mod tests {
 	}
 
 	#[test]
+	fn basic_reciprocal_works() {
+		let c: Curve = Curve::Reciprocal {
+			factor: percent(5),
+			offset: percent(0),
+		};
+
+		for i in 0..1000u32 {
+			let x = Perbill::from_rational(i, 1000u32);
+
+			let threshold_at_x = c.threshold(x);
+			let min_delay_for_threshold = c.delay(threshold_at_x);
+			assert!(min_delay_for_threshold >= x);
+
+			let delay_for_x = c.delay(x);
+			let min_threshold_for_delay = c.threshold(delay_for_x);
+			assert!(min_threshold_for_delay >= x);
+		}
+
+		assert_eq!(c.threshold(percent(0)) * 100u32, 100);
+		assert_eq!(c.threshold(percent(1)) * 100u32, 83);
+		assert_eq!(c.threshold(percent(2)) * 100u32, 71);
+		assert_eq!(c.threshold(percent(3)) * 100u32, 62);
+		assert_eq!(c.threshold(percent(4)) * 100u32, 56);
+		assert_eq!(c.threshold(percent(5)) * 100u32, 50);
+		assert_eq!(c.threshold(percent(6)) * 100u32, 45);
+		assert_eq!(c.threshold(percent(7)) * 100u32, 42);
+		assert_eq!(c.threshold(percent(8)) * 100u32, 38);
+		assert_eq!(c.threshold(percent(9)) * 100u32, 36);
+		assert_eq!(c.threshold(percent(10)) * 100u32, 33);
+		assert_eq!(c.threshold(percent(15)) * 100u32, 25);
+		assert_eq!(c.threshold(percent(20)) * 100u32, 20);
+		assert_eq!(c.threshold(percent(25)) * 100u32, 17);
+		assert_eq!(c.threshold(percent(30)) * 100u32, 14);
+		assert_eq!(c.threshold(percent(35)) * 100u32, 12);
+		assert_eq!(c.threshold(percent(40)) * 100u32, 11);
+		assert_eq!(c.threshold(percent(45)) * 100u32, 10);
+		assert_eq!(c.threshold(percent(50)) * 100u32, 9);
+		assert_eq!(c.threshold(percent(55)) * 100u32, 8);
+		assert_eq!(c.threshold(percent(60)) * 100u32, 8);
+		assert_eq!(c.threshold(percent(65)) * 100u32, 7);
+		assert_eq!(c.threshold(percent(70)) * 100u32, 7);
+		assert_eq!(c.threshold(percent(75)) * 100u32, 6);
+		assert_eq!(c.threshold(percent(80)) * 100u32, 6);
+		assert_eq!(c.threshold(percent(85)) * 100u32, 6);
+		assert_eq!(c.threshold(percent(90)) * 100u32, 5);
+		assert_eq!(c.threshold(percent(95)) * 100u32, 5);
+		assert_eq!(c.threshold(percent(100)) * 100u32, 5);
+
+		assert_eq!(c.delay(percent(0)) * 100u32, 100);
+		assert_eq!(c.delay(percent(1)) * 100u32, 100);
+		assert_eq!(c.delay(percent(2)) * 100u32, 100);
+		assert_eq!(c.delay(percent(3)) * 100u32, 100);
+		assert_eq!(c.delay(percent(4)) * 100u32, 100);
+		assert_eq!(c.delay(percent(5)) * 100u32, 95);
+		assert_eq!(c.delay(percent(6)) * 100u32, 78);
+		assert_eq!(c.delay(percent(7)) * 100u32, 66);
+		assert_eq!(c.delay(percent(8)) * 100u32, 57);
+		assert_eq!(c.delay(percent(9)) * 100u32, 51);
+		assert_eq!(c.delay(percent(10)) * 100u32, 45);
+		assert_eq!(c.delay(percent(15)) * 100u32, 28);
+		assert_eq!(c.delay(percent(20)) * 100u32, 20);
+		assert_eq!(c.delay(percent(25)) * 100u32, 15);
+		assert_eq!(c.delay(percent(30)) * 100u32, 12);
+		assert_eq!(c.delay(percent(35)) * 100u32, 9);
+		assert_eq!(c.delay(percent(40)) * 100u32, 7);
+		assert_eq!(c.delay(percent(45)) * 100u32, 6);
+		assert_eq!(c.delay(percent(50)) * 100u32, 5);
+		assert_eq!(c.delay(percent(55)) * 100u32, 4);
+		assert_eq!(c.delay(percent(60)) * 100u32, 3);
+		assert_eq!(c.delay(percent(65)) * 100u32, 3);
+		assert_eq!(c.delay(percent(70)) * 100u32, 2);
+		assert_eq!(c.delay(percent(75)) * 100u32, 2);
+		assert_eq!(c.delay(percent(80)) * 100u32, 1);
+		assert_eq!(c.delay(percent(85)) * 100u32, 1);
+		assert_eq!(c.delay(percent(90)) * 100u32, 1);
+		assert_eq!(c.delay(percent(95)) * 100u32, 0);
+		assert_eq!(c.delay(percent(100)) * 100u32, 0);
+	}
+
+	#[test]
+	fn offset_reciprocal_works() {
+		let c: Curve = Curve::Reciprocal {
+			factor: percent(10),
+			offset: percent(50),
+		};
+
+		for i in 0..1000u32 {
+			let x = Perbill::from_rational(i, 1000u32);
+
+			let threshold_at_x = c.threshold(x);
+			let min_delay_for_threshold = c.delay(threshold_at_x);
+			assert!(min_delay_for_threshold >= x);
+
+			let delay_for_x = c.delay(x);
+			let min_threshold_for_delay = c.threshold(delay_for_x);
+			assert!(min_threshold_for_delay >= x);
+		}
+
+		assert_eq!(c.threshold(percent(0)) * 100u32, 100);
+		assert_eq!(c.threshold(percent(10)) * 100u32, 83);
+		assert_eq!(c.threshold(percent(20)) * 100u32, 75);
+		assert_eq!(c.threshold(percent(30)) * 100u32, 70);
+		assert_eq!(c.threshold(percent(40)) * 100u32, 67);
+		assert_eq!(c.threshold(percent(50)) * 100u32, 64);
+		assert_eq!(c.threshold(percent(60)) * 100u32, 62);
+		assert_eq!(c.threshold(percent(70)) * 100u32, 61);
+		assert_eq!(c.threshold(percent(80)) * 100u32, 60);
+		assert_eq!(c.threshold(percent(90)) * 100u32, 59);
+		assert_eq!(c.threshold(percent(100)) * 100u32, 58);
+
+		assert_eq!(c.delay(percent(0)) * 100u32, 100);
+		assert_eq!(c.delay(percent(10)) * 100u32, 100);
+		assert_eq!(c.delay(percent(20)) * 100u32, 100);
+		assert_eq!(c.delay(percent(30)) * 100u32, 100);
+		assert_eq!(c.delay(percent(40)) * 100u32, 100);
+		assert_eq!(c.delay(percent(50)) * 100u32, 100);
+		assert_eq!(c.delay(percent(60)) * 100u32, 80);
+		assert_eq!(c.delay(percent(70)) * 100u32, 30);
+		assert_eq!(c.delay(percent(80)) * 100u32, 13);
+		assert_eq!(c.delay(percent(90)) * 100u32, 5);
+		assert_eq!(c.delay(percent(100)) * 100u32, 0);
+	}
+
+	#[test]
 	fn stepped_decreasing_works() {
-		let percent = |x| Perbill::from_percent(x);
 		let c = Curve::SteppedDecreasing {
 			begin: percent(80),
 			end: percent(30),

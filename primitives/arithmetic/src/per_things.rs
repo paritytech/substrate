@@ -660,6 +660,17 @@ macro_rules! implement_per_thing {
 			{
 				PerThing::saturating_reciprocal_mul_ceil(self, b)
 			}
+
+			/// Saturating division. Compute `self / rhs`, saturating at one if `rhs < self`.
+			pub fn saturating_div(self, rhs: Self) -> Self {
+				let p = self.0;
+				let q = rhs.0;
+				if p < q {
+					Self::from_rational(p, q)
+				} else {
+					Self::one()
+				}
+			}
 		}
 
 		impl Saturating for $name {
