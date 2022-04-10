@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use super::*;
 use crate::{self as pools};
 use frame_support::{assert_ok, parameter_types, PalletId};
@@ -18,10 +20,13 @@ pub fn default_reward_account() -> AccountId {
 
 parameter_types! {
 	pub static CurrentEra: EraIndex = 0;
-	static BondedBalanceMap: std::collections::HashMap<AccountId, Balance> = Default::default();
-	static UnbondingBalanceMap: std::collections::HashMap<AccountId, Balance> = Default::default();
+	static BondedBalanceMap: HashMap<AccountId, Balance> = Default::default();
+	static UnbondingBalanceMap: HashMap<AccountId, Balance> = Default::default();
 	pub static BondingDuration: EraIndex = 3;
+	#[derive(Clone, PartialEq)]
+	pub const MaxUnbonding: u32 = 8;
 	pub static Nominations: Vec<AccountId> = vec![];
+
 }
 
 pub struct StakingMock;
@@ -170,6 +175,7 @@ impl pools::Config for Runtime {
 	type PostUnbondingPoolsWindow = PostUnbondingPoolsWindow;
 	type PalletId = PoolsPalletId;
 	type MaxMetadataLen = MaxMetadataLen;
+	type MaxUnbonding = MaxUnbonding;
 }
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Runtime>;
@@ -267,6 +273,15 @@ pub(crate) fn pool_events_since_last_call() -> Vec<super::Event<Runtime>> {
 	let already_seen = ObservedEvents::get();
 	ObservedEvents::set(events.len());
 	events.into_iter().skip(already_seen).collect()
+}
+
+/// Fully unbond the shares of `delegator`, when executed from `origin`.
+///
+/// This is useful for backwards compatibility with the majority of tests that only deal with full
+/// unbonding, not partial unbonding.
+pub fn fully_unbond_other(origin: Origin, delegator: AccountId) -> DispatchResult {
+	let points = Delegators::<Runtime>::get(&delegator).map(|d| d.points).unwrap_or_default();
+	Pools::unbond_other(origin, delegator, points)
 }
 
 #[cfg(test)]

@@ -305,7 +305,7 @@
 
 use codec::Codec;
 use frame_support::{
-	ensure,
+	defensive, ensure,
 	pallet_prelude::{MaxEncodedLen, *},
 	storage::bounded_btree_map::BoundedBTreeMap,
 	traits::{
@@ -316,7 +316,7 @@ use frame_support::{
 };
 use scale_info::TypeInfo;
 use sp_core::U256;
-use sp_runtime::traits::{AccountIdConversion, Bounded, Convert, Saturating, Zero};
+use sp_runtime::traits::{AccountIdConversion, Bounded, CheckedSub, Convert, Saturating, Zero};
 use sp_staking::{EraIndex, OnStakerSlash, StakingInterface};
 use sp_std::{collections::btree_map::BTreeMap, fmt::Debug, ops::Div, vec::Vec};
 
@@ -393,8 +393,90 @@ pub struct Delegator<T: Config> {
 	/// This value lines up with the [`RewardPool::total_earnings`] after a delegator claims a
 	/// payout.
 	pub reward_pool_total_earnings: BalanceOf<T>,
-	/// The era this delegator started unbonding at.
-	pub unbonding_era: Option<EraIndex>,
+	/// The eras as which this delegator is unbonding.
+	///
+	/// `None` means to funds are unbonding. `Some(_)` means a set of eras at which the user's
+	/// funds will be unlocked (not the era at which the unbonding was initiated!), mapped to the
+	/// amount of points being unbonded.
+	pub unbonding_eras: Option<BoundedBTreeMap<EraIndex, BalanceOf<T>, T::MaxUnbonding>>,
+}
+
+impl<T: Config> Delegator<T> {
+	/// Total points of the delegator, both active and unbonding.
+	pub(crate) fn total_points(&self) -> BalanceOf<T> {
+		self.unbonding_points().saturating_add(self.active_points())
+	}
+
+	pub(crate) fn active_points(&self) -> BalanceOf<T> {
+		self.points
+	}
+
+	pub(crate) fn unbonding_points(&self) -> BalanceOf<T> {
+		self.unbonding_eras
+			.as_ref()
+			.map(|inner| {
+				inner.iter().fold(BalanceOf::<T>::zero(), |acc, (_, v)| acc.saturating_add(*v))
+			})
+			.unwrap_or_default()
+	}
+
+	/// Try and unbond `points` from self, with the given target unbonding era.
+	///
+	/// Returns `Ok(())` and updates `unbonding_eras` and `points` if success, `Err(_)` otherwise.
+	fn try_unbond(
+		&mut self,
+		points: BalanceOf<T>,
+		unbonding_era: EraIndex,
+	) -> Result<(), Error<T>> {
+		let mut current_unbonding_eras = self.unbonding_eras.clone().unwrap_or_default();
+		if let Some(new_points) = self.points.checked_sub(&points) {
+			ensure!(
+				!current_unbonding_eras.contains_key(&unbonding_era),
+				Error::<T>::AlreadyUnbonding
+			);
+			current_unbonding_eras.try_insert(unbonding_era, points).map_or(
+				Err(Error::<T>::MaxUnbonding),
+				|maybe_old| {
+					if maybe_old.is_some() {
+						defensive!("map is checked to not contain this kye.");
+					}
+					self.points = new_points;
+					self.unbonding_eras = Some(current_unbonding_eras);
+					Ok(())
+				},
+			)
+		} else {
+			Err(Error::<T>::NotEnoughPointsToUnbond)
+		}
+	}
+
+	/// Withdraw any funds in [`Self::unbonding_eras`] who's deadline in reached and is fully
+	/// unlocked.
+	///
+	/// Returns a a subset of [`Self::unbonding_eras`] that got withdrawn.
+	///
+	/// Infallible, noop if no unbonding eras exist.
+	fn withdraw_unlocked(
+		&mut self,
+		current_era: EraIndex,
+	) -> BoundedBTreeMap<EraIndex, BalanceOf<T>, T::MaxUnbonding> {
+		// NOTE: if only drain-filter was stable..
+		let mut removed_points =
+			BoundedBTreeMap::<EraIndex, BalanceOf<T>, T::MaxUnbonding>::default();
+		if let Some(unbonding_eras) = self.unbonding_eras.as_mut() {
+			unbonding_eras.retain(|e, p| {
+				if *e > current_era {
+					true
+				} else {
+					removed_points
+						.try_insert(*e, p.clone())
+						.expect("source map is bounded, this is a subset, will be bounded; qed");
+					false
+				}
+			})
+		}
+		removed_points
+	}
 }
 
 /// A pool's possible states.
@@ -528,6 +610,20 @@ impl<T: Config> BondedPool<T> {
 		points_to_issue
 	}
 
+	/// Dissolve i.e. unbond the given amount of points from this pool. This is the opposite of
+	/// issuing some funds into the pool.
+	///
+	/// Mutates self in place, but does not write anything to storage.
+	///
+	/// Returns the equivalent balance amount that actually needs to get unbonded.
+	fn dissolve(&mut self, points: BalanceOf<T>) -> BalanceOf<T> {
+		// NOTE: do not optimize by removing `balance`. it must be computed before mutating
+		// `self.point`.
+		let balance = self.balance_to_unbond(points);
+		self.points = self.points.saturating_sub(points);
+		balance
+	}
+
 	/// Increment the delegator counter. Ensures that the pool and system delegator limits are
 	/// respected.
 	fn try_inc_delegators(&mut self) -> Result<(), DispatchError> {
@@ -638,7 +734,10 @@ impl<T: Config> BondedPool<T> {
 			// destroying it cannot switch states, so by being in destroying we are guaranteed no
 			// other delegators can possibly join.
 			(_, true) => {
-				ensure!(target_delegator.points == self.points, Error::<T>::NotOnlyDelegator);
+				ensure!(
+					target_delegator.active_points() == self.points,
+					Error::<T>::NotOnlyDelegator
+				);
 				ensure!(self.is_destroying(), Error::<T>::NotDestroying);
 			},
 		};
@@ -661,7 +760,7 @@ impl<T: Config> BondedPool<T> {
 				// here. Since the depositor is the last to unbond, this should never be possible.
 				ensure!(sub_pools.with_era.len().is_zero(), Error::<T>::NotOnlyDelegator);
 				ensure!(
-					sub_pools.no_era.points == target_delegator.points,
+					sub_pools.no_era.points == target_delegator.unbonding_points(),
 					Error::<T>::NotOnlyDelegator
 				);
 			} else {
@@ -675,7 +774,7 @@ impl<T: Config> BondedPool<T> {
 					.values()
 					.next()
 					.filter(|only_unbonding_pool| {
-						only_unbonding_pool.points == target_delegator.points
+						only_unbonding_pool.points == target_delegator.unbonding_points()
 					})
 					.ok_or(Error::<T>::NotOnlyDelegator)?;
 			}
@@ -804,12 +903,15 @@ impl<T: Config> RewardPool<T> {
 	}
 }
 
+/// An unbonding pool. This is always mapped with an era.
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, DefaultNoBound, RuntimeDebugNoBound)]
 #[cfg_attr(feature = "std", derive(Clone, PartialEq))]
 #[codec(mel_bound(T: Config))]
 #[scale_info(skip_type_params(T))]
 pub struct UnbondPool<T: Config> {
+	/// The points in this pool.
 	points: BalanceOf<T>,
+	/// The funds in the pool.
 	balance: BalanceOf<T>,
 }
 
@@ -826,6 +928,20 @@ impl<T: Config> UnbondPool<T> {
 	fn issue(&mut self, new_funds: BalanceOf<T>) {
 		self.points = self.points.saturating_add(self.points_to_issue(new_funds));
 		self.balance = self.balance.saturating_add(new_funds);
+	}
+
+	/// Dissolve some points from the unbonding pool, reducing the balance of the pool
+	/// proportionally.
+	///
+	/// This is the opposite of `issue`.
+	///
+	/// Returns the actual amount of `Balance` that was removed from the pool.
+	fn dissolve(&mut self, points: BalanceOf<T>) -> BalanceOf<T> {
+		let balance_to_unbond = self.balance_to_unbond(points);
+		self.points = self.points.saturating_sub(points);
+		self.balance = self.balance.saturating_sub(balance_to_unbond);
+
+		balance_to_unbond
 	}
 }
 
@@ -929,6 +1045,9 @@ pub mod pallet {
 
 		/// The maximum length, in bytes, that a pools metadata maybe.
 		type MaxMetadataLen: Get<u32>;
+
+		/// The maximum number of simultaneous unbonding chunks that can exist per delegator.
+		type MaxUnbonding: Get<u32>;
 	}
 
 	/// Minimum amount to bond to join a pool.
@@ -1061,8 +1180,13 @@ pub mod pallet {
 		AccountBelongsToOtherPool,
 		/// The pool has insufficient balance to bond as a nominator.
 		InsufficientBond,
-		/// The delegator is already unbonding.
+		/// The delegator is already unbonding in this era.
 		AlreadyUnbonding,
+		/// The delegator is fully unbonded (and thus cannot access the bonded and reward pool
+		/// anymore to, for example, collect rewards).
+		FullyUnbonding,
+		/// The delegator cannot unbond further chunks due to reaching the limit.
+		MaxUnbonding,
 		/// The delegator is not unbonding and thus cannot withdraw funds.
 		NotUnbonding,
 		/// Unbonded funds cannot be withdrawn yet because the bonding duration has not passed.
@@ -1098,6 +1222,8 @@ pub mod pallet {
 		DefensiveError,
 		/// The caller has insufficient balance to create the pool.
 		InsufficientBalanceToCreate,
+		/// Not enough points. Ty unbonding less.
+		NotEnoughPointsToUnbond,
 	}
 
 	#[pallet::call]
@@ -1143,7 +1269,7 @@ pub mod pallet {
 					// next 2 eras because their vote weight will not be counted until the
 					// snapshot in active era + 1.
 					reward_pool_total_earnings: reward_pool.total_earnings,
-					unbonding_era: None,
+					unbonding_eras: None,
 				},
 			);
 			bonded_pool.put();
@@ -1220,12 +1346,14 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Unbond _all_ of the `delegator_account`'s funds from the pool.
+		/// Unbond up to `unbonding_points` of the `delegator_account`'s funds from the pool. It
+		/// implicitly collects the rewards one last time, since not doing so would mean some
+		/// rewards would go forfeited.
 		///
 		/// Under certain conditions, this call can be dispatched permissionlessly (i.e. by any
 		/// account).
 		///
-		/// # Conditions for a permissionless dispatch
+		/// ## Conditions for a permissionless dispatch.
 		///
 		/// * The pool is blocked and the caller is either the root or state-toggler. This is
 		///   refereed to as a kick.
@@ -1233,7 +1361,7 @@ pub mod pallet {
 		/// * The pool is destroying, the delegator is the depositor and no other delegators are in
 		///   the pool.
 		///
-		/// # Conditions for permissioned dispatch (i.e. the caller is also the
+		/// ## Conditions for permissioned dispatch (i.e. the caller is also the
 		/// `delegator_account`):
 		///
 		/// * The caller is not the depositor.
@@ -1251,16 +1379,15 @@ pub mod pallet {
 		pub fn unbond_other(
 			origin: OriginFor<T>,
 			delegator_account: T::AccountId,
+			mut unbonding_points: BalanceOf<T>,
 		) -> DispatchResult {
 			let caller = ensure_signed(origin)?;
 			let (mut delegator, mut bonded_pool, mut reward_pool) =
 				Self::get_delegator_with_pools(&delegator_account)?;
-
 			bonded_pool.ok_to_unbond_other_with(&caller, &delegator_account, &delegator)?;
 
-			// Claim the the payout prior to unbonding. Once the user is unbonding their points
-			// no longer exist in the bonded pool and thus they can no longer claim their payouts.
-			// It is not strictly necessary to claim the rewards, but we do it here for UX.
+			unbonding_points = unbonding_points.min(delegator.active_points());
+			// This is only for UX.
 			Self::do_reward_payout(
 				&delegator_account,
 				&mut delegator,
@@ -1268,17 +1395,16 @@ pub mod pallet {
 				&mut reward_pool,
 			)?;
 
-			let balance_to_unbond = bonded_pool.balance_to_unbond(delegator.points);
-
-			// Update the bonded pool. Note that we must do this *after* calculating the balance
-			// to unbond so we have the correct points for the balance:share ratio.
-			bonded_pool.points = bonded_pool.points.saturating_sub(delegator.points);
-
-			// Unbond in the actual underlying pool
-			T::StakingInterface::unbond(bonded_pool.bonded_account(), balance_to_unbond)?;
-
 			let current_era = T::StakingInterface::current_era();
 			let unbond_era = T::StakingInterface::bonding_duration().saturating_add(current_era);
+
+			// Try and unbond in the delegator map.
+			delegator.try_unbond(unbonding_points, unbond_era)?;
+
+			// Unbond in the actual underlying nominator.
+			let unbonding_balance = bonded_pool.dissolve(unbonding_points);
+			T::StakingInterface::unbond(bonded_pool.bonded_account(), unbonding_balance)?;
+
 			// Note that we lazily create the unbonding pools here if they don't already exist
 			let mut sub_pools = SubPoolsStorage::<T>::get(delegator.pool_id)
 				.unwrap_or_default()
@@ -1294,19 +1420,18 @@ pub mod pallet {
 					// always enough space to insert.
 					.defensive_map_err(|_| Error::<T>::DefensiveError)?;
 			}
+
 			sub_pools
 				.with_era
 				.get_mut(&unbond_era)
 				// The above check ensures the pool exists.
 				.defensive_ok_or_else(|| Error::<T>::DefensiveError)?
-				.issue(balance_to_unbond);
-
-			delegator.unbonding_era = Some(unbond_era);
+				.issue(unbonding_balance);
 
 			Self::deposit_event(Event::<T>::Unbonded {
 				delegator: delegator_account.clone(),
 				pool_id: delegator.pool_id,
-				amount: balance_to_unbond,
+				amount: unbonding_balance,
 			});
 
 			// Now that we know everything has worked write the items to storage.
@@ -1338,8 +1463,11 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Withdraw unbonded funds for the `target` delegator. Under certain conditions,
-		/// this call can be dispatched permissionlessly (i.e. by any account).
+		/// Withdraw unbonded funds who's unbonding period has passed for the `target` delegator. If
+		/// no bond can be unbonded, this is a successful no-op.
+		///
+		/// Under certain conditions, this call can be dispatched permissionlessly (i.e. by any
+		/// account).
 		///
 		///  # Conditions for a permissionless dispatch
 		///
@@ -1364,22 +1492,24 @@ pub mod pallet {
 			num_slashing_spans: u32,
 		) -> DispatchResultWithPostInfo {
 			let caller = ensure_signed(origin)?;
-			let delegator =
+			let mut delegator =
 				Delegators::<T>::get(&delegator_account).ok_or(Error::<T>::DelegatorNotFound)?;
-			let unbonding_era = delegator.unbonding_era.ok_or(Error::<T>::NotUnbonding)?;
 			let current_era = T::StakingInterface::current_era();
-			ensure!(current_era >= unbonding_era, Error::<T>::NotUnbondedYet);
 
-			let mut sub_pools = SubPoolsStorage::<T>::get(delegator.pool_id)
-				.defensive_ok_or_else(|| Error::<T>::SubPoolsNotFound)?;
 			let bonded_pool = BondedPool::<T>::get(delegator.pool_id)
 				.defensive_ok_or_else(|| Error::<T>::PoolNotFound)?;
+			let mut sub_pools = SubPoolsStorage::<T>::get(delegator.pool_id)
+				.defensive_ok_or_else(|| Error::<T>::SubPoolsNotFound)?;
+
 			let should_remove_pool = bonded_pool.ok_to_withdraw_unbonded_other_with(
 				&caller,
 				&delegator_account,
 				&delegator,
 				&sub_pools,
 			)?;
+
+			// NOTE: must do this after we have done the `ok_to_withdraw_unbonded_other_with` check.
+			let withdrawn_points = delegator.withdraw_unlocked(current_era);
 
 			// Before calculate the `balance_to_unbond`, with call withdraw unbonded to ensure the
 			// `non_locked_balance` is correct.
@@ -1388,35 +1518,28 @@ pub mod pallet {
 				num_slashing_spans,
 			)?;
 
-			let balance_to_unbond =
-				if let Some(pool) = sub_pools.with_era.get_mut(&unbonding_era) {
-					let balance_to_unbond = pool.balance_to_unbond(delegator.points);
-					pool.points = pool.points.saturating_sub(delegator.points);
-					pool.balance = pool.balance.saturating_sub(balance_to_unbond);
-					if pool.points.is_zero() {
-						// Clean up pool that is no longer used
-						sub_pools.with_era.remove(&unbonding_era);
+			let balance_to_unbond = withdrawn_points
+				.iter()
+				.fold(BalanceOf::<T>::zero(), |accumulator, (era, unlocked_points)| {
+					if let Some(era_pool) = sub_pools.with_era.get_mut(&era) {
+						let balance_to_unbond = era_pool.dissolve(*unlocked_points);
+						if era_pool.points.is_zero() {
+							sub_pools.with_era.remove(&era);
+						}
+						accumulator.saturating_add(balance_to_unbond)
+					} else {
+						// A pool does not belong to this era, so it must have been merged to the
+						// era-less pool.
+						accumulator.saturating_add(sub_pools.no_era.dissolve(*unlocked_points))
 					}
-
-					balance_to_unbond
-				} else {
-					// A pool does not belong to this era, so it must have been merged to the
-					// era-less pool.
-					let balance_to_unbond = sub_pools.no_era.balance_to_unbond(delegator.points);
-					sub_pools.no_era.points =
-						sub_pools.no_era.points.saturating_sub(delegator.points);
-					sub_pools.no_era.balance =
-						sub_pools.no_era.balance.saturating_sub(balance_to_unbond);
-
-					balance_to_unbond
-				}
+				})
 				// A call to this function may cause the pool's stash to get dusted. If this happens
 				// before the last delegator has withdrawn, then all subsequent withdraws will be 0.
 				// However the unbond pools do no get updated to reflect this. In the aforementioned
 				// scenario, this check ensures we don't try to withdraw funds that don't exist.
 				// This check is also defensive in cases where the unbond pool does not update its
-				// balance (e.g. a bug in the slashing hook.) We gracefully proceed in
-				// order to ensure delegators can leave the pool and it can be destroyed.
+				// balance (e.g. a bug in the slashing hook.) We gracefully proceed in order to
+				// ensure delegators can leave the pool and it can be destroyed.
 				.min(bonded_pool.transferrable_balance());
 
 			T::Currency::transfer(
@@ -1425,40 +1548,49 @@ pub mod pallet {
 				balance_to_unbond,
 				ExistenceRequirement::AllowDeath,
 			)
-			.defensive_map_err(|e| e)?;
+			.defensive()?;
+
 			Self::deposit_event(Event::<T>::Withdrawn {
 				delegator: delegator_account.clone(),
 				pool_id: delegator.pool_id,
 				amount: balance_to_unbond,
 			});
 
-			let post_info_weight = if should_remove_pool {
-				ReversePoolIdLookup::<T>::remove(bonded_pool.bonded_account());
-				RewardPools::<T>::remove(delegator.pool_id);
-				Self::deposit_event(Event::<T>::Destroyed { pool_id: delegator.pool_id });
-				SubPoolsStorage::<T>::remove(delegator.pool_id);
-				// Kill accounts from storage by making their balance go below ED. We assume that
-				// the accounts have no references that would prevent destruction once we get to
-				// this point.
-				debug_assert_eq!(
-					T::Currency::free_balance(&bonded_pool.bonded_account()),
-					Zero::zero()
-				);
-				debug_assert_eq!(
-					T::StakingInterface::total_stake(&bonded_pool.bonded_account())
-						.unwrap_or_default(),
-					Zero::zero()
-				);
-				T::Currency::make_free_balance_be(&bonded_pool.reward_account(), Zero::zero());
-				T::Currency::make_free_balance_be(&bonded_pool.bonded_account(), Zero::zero());
-				bonded_pool.remove();
-				None
+			let post_info_weight = if delegator.active_points().is_zero() {
+				// delegator being reaped.
+				Delegators::<T>::remove(&delegator_account);
+				if should_remove_pool {
+					ReversePoolIdLookup::<T>::remove(bonded_pool.bonded_account());
+					RewardPools::<T>::remove(delegator.pool_id);
+					Self::deposit_event(Event::<T>::Destroyed { pool_id: delegator.pool_id });
+					SubPoolsStorage::<T>::remove(delegator.pool_id);
+					// Kill accounts from storage by making their balance go below ED. We assume
+					// that the accounts have no references that would prevent destruction once we
+					// get to this point.
+					debug_assert_eq!(
+						T::Currency::free_balance(&bonded_pool.bonded_account()),
+						Zero::zero()
+					);
+					debug_assert_eq!(
+						T::StakingInterface::total_stake(&bonded_pool.bonded_account())
+							.unwrap_or_default(),
+						Zero::zero()
+					);
+					T::Currency::make_free_balance_be(&bonded_pool.reward_account(), Zero::zero());
+					T::Currency::make_free_balance_be(&bonded_pool.bonded_account(), Zero::zero());
+					bonded_pool.remove();
+					None
+				} else {
+					bonded_pool.dec_delegators().put();
+					SubPoolsStorage::<T>::insert(&delegator.pool_id, sub_pools);
+					Some(T::WeightInfo::withdraw_unbonded_other_update(num_slashing_spans))
+				}
 			} else {
-				bonded_pool.dec_delegators().put();
+				// we certainly don't need to delete any pools, because no one is being removed.
 				SubPoolsStorage::<T>::insert(&delegator.pool_id, sub_pools);
-				Some(T::WeightInfo::withdraw_unbonded_other_update(num_slashing_spans))
+				Delegators::<T>::insert(&delegator_account, delegator);
+				None
 			};
-			Delegators::<T>::remove(&delegator_account);
 
 			Ok(post_info_weight.into())
 		}
@@ -1536,7 +1668,7 @@ pub mod pallet {
 					pool_id,
 					points,
 					reward_pool_total_earnings: Zero::zero(),
-					unbonding_era: None,
+					unbonding_eras: None,
 				},
 			);
 			RewardPools::<T>::insert(
@@ -1759,9 +1891,9 @@ impl<T: Config> Pallet<T> {
 	/// Returns the payout amount, and whether the pool state has been switched to destroying during
 	/// this call.
 	fn calculate_delegator_payout(
+		delegator: &mut Delegator<T>,
 		bonded_pool: &mut BondedPool<T>,
 		reward_pool: &mut RewardPool<T>,
-		delegator: &mut Delegator<T>,
 	) -> Result<BalanceOf<T>, DispatchError> {
 		// Presentation Notes:
 		// Reward pool points
@@ -1776,9 +1908,6 @@ impl<T: Config> Pallet<T> {
 
 		let u256 = |x| T::BalanceToU256::convert(x);
 		let balance = |x| T::U256ToBalance::convert(x);
-		// If the delegator is unbonding they cannot claim rewards. Note that when the delegator
-		// goes to unbond, the unbond function should claim rewards for the final time.
-		ensure!(delegator.unbonding_era.is_none(), Error::<T>::AlreadyUnbonding);
 
 		let last_total_earnings = reward_pool.total_earnings;
 		reward_pool.update_total_earnings_and_balance(bonded_pool.id);
@@ -1804,7 +1933,7 @@ impl<T: Config> Pallet<T> {
 		// The points of the reward pool that belong to the delegator.
 		let delegator_virtual_points =
 			// The delegators portion of the reward pool
-			u256(delegator.points)
+			u256(delegator.active_points())
 			// times the amount the pool has earned since the delegator last claimed.
 			.saturating_mul(u256(new_earnings_since_last_claim));
 
@@ -1840,17 +1969,19 @@ impl<T: Config> Pallet<T> {
 	/// If the delegator has some rewards, transfer a payout from the reward pool to the delegator.
 	// Emits events and potentially modifies pool state if any arithmetic saturates, but does
 	// not persist any of the mutable inputs to storage.
-	fn do_reward_payout(
+	pub(crate) fn do_reward_payout(
 		delegator_account: &T::AccountId,
 		delegator: &mut Delegator<T>,
 		bonded_pool: &mut BondedPool<T>,
 		reward_pool: &mut RewardPool<T>,
 	) -> Result<BalanceOf<T>, DispatchError> {
 		debug_assert_eq!(delegator.pool_id, bonded_pool.id);
+		// a delegator who has no skin in the game anymore cannot claim any rewards.
+		ensure!(!delegator.active_points().is_zero(), Error::<T>::FullyUnbonding);
 		let was_destroying = bonded_pool.is_destroying();
 
 		let delegator_payout =
-			Self::calculate_delegator_payout(bonded_pool, reward_pool, delegator)?;
+			Self::calculate_delegator_payout(delegator, bonded_pool, reward_pool)?;
 
 		// Transfer payout to the delegator.
 		T::Currency::transfer(
