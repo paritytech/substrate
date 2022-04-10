@@ -159,7 +159,7 @@ pub mod pallet {
 	/// TWOX-NOTE: OK ― `AccountId` is a secure hash.
 	#[pallet::storage]
 	#[pallet::getter(fn identity)]
-	pub type IdentityOf<T: Config> = StorageMap<
+	pub(super) type IdentityOf<T: Config> = StorageMap<
 		_,
 		Twox64Concat,
 		T::AccountId,
@@ -171,7 +171,7 @@ pub mod pallet {
 	/// context. If the account is not some other account's sub-identity, then just `None`.
 	#[pallet::storage]
 	#[pallet::getter(fn super_of)]
-	pub type SuperOf<T: Config> =
+	pub(super) type SuperOf<T: Config> =
 		StorageMap<_, Blake2_128Concat, T::AccountId, (T::AccountId, Data), OptionQuery>;
 
 	/// Alternative "sub" identities of this account.
@@ -181,7 +181,7 @@ pub mod pallet {
 	/// TWOX-NOTE: OK ― `AccountId` is a secure hash.
 	#[pallet::storage]
 	#[pallet::getter(fn subs_of)]
-	pub type SubsOf<T: Config> = StorageMap<
+	pub(super) type SubsOf<T: Config> = StorageMap<
 		_,
 		Twox64Concat,
 		T::AccountId,
@@ -195,7 +195,7 @@ pub mod pallet {
 	/// The index into this can be cast to `RegistrarIndex` to get a valid value.
 	#[pallet::storage]
 	#[pallet::getter(fn registrars)]
-	pub type Registrars<T: Config> = StorageValue<
+	pub(super) type Registrars<T: Config> = StorageValue<
 		_,
 		BoundedVec<Option<RegistrarInfo<BalanceOf<T>, T::AccountId>>, T::MaxRegistrars>,
 		ValueQuery,
