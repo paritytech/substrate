@@ -204,7 +204,9 @@ parameter_types! {
 impl Config for Test {
 	type Event = Event;
 	type Proposal = Call;
-	type SuperMajorityOrigin = EnsureSignedBy<One, u64>;
+	type AdminOrigin = EnsureSignedBy<One, u64>;
+	type MembershipManager = EnsureSignedBy<Two, u64>;
+	type AnnouncementOrigin = EnsureSignedBy<Three, u64>;
 	type Currency = Balances;
 	type Slashed = ();
 	type InitializeMembers = AllianceMotion;

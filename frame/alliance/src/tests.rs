@@ -37,7 +37,7 @@ fn propose_works() {
 		// only votable member can propose proposal, 4 is ally not have vote rights
 		assert_noop!(
 			Alliance::propose(Origin::signed(4), 3, Box::new(proposal.clone()), proposal_len),
-			Error::<Test, ()>::NotVotableMember
+			Error::<Test, ()>::NoVotingRights
 		);
 
 		assert_ok!(Alliance::propose(
@@ -239,7 +239,7 @@ fn set_rule_works() {
 		assert_ok!(Alliance::set_rule(Origin::signed(1), cid.clone()));
 		assert_eq!(Alliance::rule(), Some(cid.clone()));
 
-		System::assert_last_event(mock::Event::Alliance(crate::Event::NewRule { rule: cid }));
+		System::assert_last_event(mock::Event::Alliance(crate::Event::NewRuleSet { rule: cid }));
 	});
 }
 
@@ -250,7 +250,7 @@ fn announce_works() {
 		assert_ok!(Alliance::announce(Origin::signed(1), cid.clone()));
 		assert_eq!(Alliance::announcements(), vec![cid.clone()]);
 
-		System::assert_last_event(mock::Event::Alliance(crate::Event::NewAnnouncement {
+		System::assert_last_event(mock::Event::Alliance(crate::Event::Announced {
 			announcement: cid,
 		}));
 	});
@@ -262,7 +262,7 @@ fn remove_announcement_works() {
 		let cid = test_cid();
 		assert_ok!(Alliance::announce(Origin::signed(1), cid.clone()));
 		assert_eq!(Alliance::announcements(), vec![cid.clone()]);
-		System::assert_last_event(mock::Event::Alliance(crate::Event::NewAnnouncement {
+		System::assert_last_event(mock::Event::Alliance(crate::Event::Announced {
 			announcement: cid.clone(),
 		}));
 
@@ -343,7 +343,7 @@ fn nominate_candidate_works() {
 		// only votable member(founder/fellow) have nominate right
 		assert_noop!(
 			Alliance::nominate_candidate(Origin::signed(5), 4),
-			Error::<Test, ()>::NotVotableMember
+			Error::<Test, ()>::NoVotingRights
 		);
 
 		// check already in blacklist
@@ -448,7 +448,7 @@ fn retire_works() {
 			Box::new(proposal.clone()),
 			proposal_len
 		));
-		assert_noop!(Alliance::retire(Origin::signed(2)), Error::<Test, ()>::KickingMember);
+		assert_noop!(Alliance::retire(Origin::signed(2)), Error::<Test, ()>::UpForKicking);
 
 		assert_noop!(Alliance::retire(Origin::signed(4)), Error::<Test, ()>::NotMember);
 
@@ -461,11 +461,6 @@ fn retire_works() {
 #[test]
 fn kick_member_works() {
 	new_test_ext().execute_with(|| {
-		assert_noop!(
-			Alliance::kick_member(Origin::signed(1), 2),
-			Error::<Test, ()>::NotUpForKicking
-		);
-
 		let proposal = make_kick_member_proposal(2);
 		let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
 		assert_ok!(Alliance::propose(
