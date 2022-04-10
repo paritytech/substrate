@@ -379,7 +379,14 @@ enum AccountType {
 
 /// A delegator in a pool.
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, RuntimeDebugNoBound)]
-#[cfg_attr(feature = "std", derive(Clone, PartialEq))]
+#[cfg_attr(
+	feature = "std",
+	derive(
+		frame_support::CloneNoBound,
+		frame_support::PartialEqNoBound,
+		frame_support::DefaultNoBound
+	)
+)]
 #[codec(mel_bound(T: Config))]
 #[scale_info(skip_type_params(T))]
 pub struct Delegator<T: Config> {
@@ -393,31 +400,23 @@ pub struct Delegator<T: Config> {
 	/// This value lines up with the [`RewardPool::total_earnings`] after a delegator claims a
 	/// payout.
 	pub reward_pool_total_earnings: BalanceOf<T>,
-	/// The eras as which this delegator is unbonding.
-	///
-	/// `None` means to funds are unbonding. `Some(_)` means a set of eras at which the user's
-	/// funds will be unlocked (not the era at which the unbonding was initiated!), mapped to the
-	/// amount of points being unbonded.
-	pub unbonding_eras: Option<BoundedBTreeMap<EraIndex, BalanceOf<T>, T::MaxUnbonding>>,
+	/// The eras as which this delegator is unbonding, mapped from era index to the number of
+	/// points scheduled to unbond in the given era.
+	pub unbonding_eras: BoundedBTreeMap<EraIndex, BalanceOf<T>, T::MaxUnbonding>,
 }
 
 impl<T: Config> Delegator<T> {
-	/// Total points of the delegator, both active and unbonding.
-	pub(crate) fn total_points(&self) -> BalanceOf<T> {
-		self.unbonding_points().saturating_add(self.active_points())
-	}
-
+	/// Active points of the delegator.
 	pub(crate) fn active_points(&self) -> BalanceOf<T> {
 		self.points
 	}
 
+	/// Inactive points of the delegator, waiting to be withdrawn.
 	pub(crate) fn unbonding_points(&self) -> BalanceOf<T> {
 		self.unbonding_eras
 			.as_ref()
-			.map(|inner| {
-				inner.iter().fold(BalanceOf::<T>::zero(), |acc, (_, v)| acc.saturating_add(*v))
-			})
-			.unwrap_or_default()
+			.iter()
+			.fold(BalanceOf::<T>::zero(), |acc, (_, v)| acc.saturating_add(*v))
 	}
 
 	/// Try and unbond `points` from self, with the given target unbonding era.
@@ -428,20 +427,18 @@ impl<T: Config> Delegator<T> {
 		points: BalanceOf<T>,
 		unbonding_era: EraIndex,
 	) -> Result<(), Error<T>> {
-		let mut current_unbonding_eras = self.unbonding_eras.clone().unwrap_or_default();
 		if let Some(new_points) = self.points.checked_sub(&points) {
 			ensure!(
-				!current_unbonding_eras.contains_key(&unbonding_era),
+				!self.unbonding_eras.contains_key(&unbonding_era),
 				Error::<T>::AlreadyUnbonding
 			);
-			current_unbonding_eras.try_insert(unbonding_era, points).map_or(
+			self.unbonding_eras.try_insert(unbonding_era, points).map_or(
 				Err(Error::<T>::MaxUnbonding),
 				|maybe_old| {
 					if maybe_old.is_some() {
 						defensive!("map is checked to not contain this kye.");
 					}
 					self.points = new_points;
-					self.unbonding_eras = Some(current_unbonding_eras);
 					Ok(())
 				},
 			)
@@ -463,18 +460,16 @@ impl<T: Config> Delegator<T> {
 		// NOTE: if only drain-filter was stable..
 		let mut removed_points =
 			BoundedBTreeMap::<EraIndex, BalanceOf<T>, T::MaxUnbonding>::default();
-		if let Some(unbonding_eras) = self.unbonding_eras.as_mut() {
-			unbonding_eras.retain(|e, p| {
-				if *e > current_era {
-					true
-				} else {
-					removed_points
-						.try_insert(*e, p.clone())
-						.expect("source map is bounded, this is a subset, will be bounded; qed");
-					false
-				}
-			})
-		}
+		self.unbonding_eras.retain(|e, p| {
+			if *e > current_era {
+				true
+			} else {
+				removed_points
+					.try_insert(*e, p.clone())
+					.expect("source map is bounded, this is a subset, will be bounded; qed");
+				false
+			}
+		});
 		removed_points
 	}
 }
@@ -1269,7 +1264,7 @@ pub mod pallet {
 					// next 2 eras because their vote weight will not be counted until the
 					// snapshot in active era + 1.
 					reward_pool_total_earnings: reward_pool.total_earnings,
-					unbonding_eras: None,
+					unbonding_eras: Default::default(),
 				},
 			);
 			bonded_pool.put();
@@ -1668,7 +1663,7 @@ pub mod pallet {
 					pool_id,
 					points,
 					reward_pool_total_earnings: Zero::zero(),
-					unbonding_eras: None,
+					unbonding_eras: Default::default(),
 				},
 			);
 			RewardPools::<T>::insert(

@@ -18,7 +18,7 @@
 use super::*;
 use crate::mock::*;
 use frame_support::{
-	assert_noop, assert_ok, assert_storage_noop,
+	assert_noop, assert_ok, assert_storage_noop, bounded_btree_map,
 	storage::{with_transaction, TransactionOutcome},
 };
 
@@ -28,6 +28,13 @@ macro_rules! sub_pools_with_era {
 		use sp_std::iter::{Iterator, IntoIterator};
 		let not_bounded: BTreeMap<_, _> = Iterator::collect(IntoIterator::into_iter([$(($k, $v),)*]));
 		SubPoolsWithEra::try_from(not_bounded).unwrap()
+	}};
+}
+
+macro_rules! typed_bounded_btree_map {
+	($( $any:tt )*) => {{
+		let x: BoundedBTreeMap<EraIndex, Balance, MaxUnbonding> = bounded_btree_map!($( $any )*);
+		x
 	}};
 }
 
@@ -62,12 +69,7 @@ fn test_setup_works() {
 		);
 		assert_eq!(
 			Delegators::<Runtime>::get(10).unwrap(),
-			Delegator::<Runtime> {
-				pool_id: last_pool,
-				points: 10,
-				reward_pool_total_earnings: 0,
-				unbonding_eras: None
-			}
+			Delegator::<Runtime> { pool_id: last_pool, points: 10, ..Default::default() }
 		)
 	})
 }
@@ -409,12 +411,7 @@ mod join {
 			// then
 			assert_eq!(
 				Delegators::<Runtime>::get(&11).unwrap(),
-				Delegator::<Runtime> {
-					pool_id: 1,
-					points: 2,
-					reward_pool_total_earnings: 0,
-					unbonding_eras: None
-				}
+				Delegator::<Runtime> { pool_id: 1, points: 2, ..Default::default() }
 			);
 			assert_eq!(BondedPool::<Runtime>::get(1).unwrap(), bonded(12, 2));
 
@@ -432,12 +429,7 @@ mod join {
 			// Then
 			assert_eq!(
 				Delegators::<Runtime>::get(&12).unwrap(),
-				Delegator::<Runtime> {
-					pool_id: 1,
-					points: 24,
-					reward_pool_total_earnings: 0,
-					unbonding_eras: None
-				}
+				Delegator::<Runtime> { pool_id: 1, points: 24, ..Default::default() }
 			);
 			assert_eq!(BondedPool::<Runtime>::get(1).unwrap(), bonded(12 + 24, 3));
 		});
@@ -571,7 +563,12 @@ mod claim_payout {
 	use super::*;
 
 	fn del(points: Balance, reward_pool_total_earnings: Balance) -> Delegator<Runtime> {
-		Delegator { pool_id: 1, points, reward_pool_total_earnings, unbonding_eras: None }
+		Delegator {
+			pool_id: 1,
+			points,
+			reward_pool_total_earnings,
+			unbonding_eras: Default::default(),
+		}
 	}
 
 	fn rew(balance: Balance, points: u32, total_earnings: Balance) -> RewardPool<Runtime> {
@@ -1371,7 +1368,6 @@ mod claim_payout {
 
 mod unbond {
 	use super::*;
-	use frame_support::bounded_btree_map;
 
 	#[test]
 	fn unbond_other_of_1_works() {
@@ -1436,7 +1432,7 @@ mod unbond {
 				assert_eq!(StakingMock::active_stake(&default_bonded_account()).unwrap(), 94);
 				assert_eq!(
 					Delegators::<Runtime>::get(40).unwrap().unbonding_eras,
-					Some(bounded_btree_map!(0 + 3 => 40))
+					typed_bounded_btree_map!(0 + 3 => 40)
 				);
 				assert_eq!(Balances::free_balance(&40), 40 + 40); // We claim rewards when unbonding
 
@@ -1464,7 +1460,7 @@ mod unbond {
 				assert_eq!(StakingMock::active_stake(&default_bonded_account()).unwrap(), 2);
 				assert_eq!(
 					Delegators::<Runtime>::get(550).unwrap().unbonding_eras,
-					Some(bounded_btree_map!(0 + 3 => 550))
+					typed_bounded_btree_map!(0 + 3 => 550)
 				);
 				assert_eq!(Balances::free_balance(&550), 550 + 550);
 
@@ -1491,7 +1487,7 @@ mod unbond {
 				assert_eq!(StakingMock::active_stake(&default_bonded_account()).unwrap(), 0);
 				assert_eq!(
 					Delegators::<Runtime>::get(550).unwrap().unbonding_eras,
-					Some(bounded_btree_map!(0 + 3 => 550))
+					typed_bounded_btree_map!(0 + 3 => 550)
 				);
 				assert_eq!(Balances::free_balance(&550), 550 + 550);
 			});
@@ -1659,12 +1655,7 @@ mod unbond {
 			);
 
 			// Add the delegator
-			let delegator = Delegator {
-				pool_id: 2,
-				points: 10,
-				reward_pool_total_earnings: 0,
-				unbonding_eras: None,
-			};
+			let delegator = Delegator { pool_id: 2, points: 10, ..Default::default() };
 			Delegators::<Runtime>::insert(11, delegator);
 
 			let _ = fully_unbond_other(Origin::signed(11), 11);
@@ -1675,12 +1666,7 @@ mod unbond {
 	#[should_panic = "Defensive failure has been triggered!"]
 	fn unbond_panics_when_reward_pool_not_found() {
 		ExtBuilder::default().build_and_execute(|| {
-			let delegator = Delegator {
-				pool_id: 2,
-				points: 10,
-				reward_pool_total_earnings: 0,
-				unbonding_eras: None,
-			};
+			let delegator = Delegator { pool_id: 2, points: 10, ..Default::default() };
 			Delegators::<Runtime>::insert(11, delegator);
 			BondedPool::<Runtime> {
 				id: 1,
@@ -1923,12 +1909,7 @@ mod withdraw_unbonded_other {
 				Error::<Runtime>::DelegatorNotFound
 			);
 
-			let mut delegator = Delegator {
-				pool_id: 1,
-				points: 10,
-				reward_pool_total_earnings: 0,
-				unbonding_eras: None,
-			};
+			let mut delegator = Delegator { pool_id: 1, points: 10, ..Default::default() };
 			Delegators::<Runtime>::insert(11, delegator.clone());
 
 			// TODO: this correctly triggers the defensive `SubPoolsNotFound` because a
@@ -1941,7 +1922,7 @@ mod withdraw_unbonded_other {
 			);
 
 			// Simulate calling `unbond`
-			delegator.unbonding_eras = Some(bounded_btree_map!(3 + 0 => 10));
+			delegator.unbonding_eras = typed_bounded_btree_map!(3 + 0 => 10);
 			Delegators::<Runtime>::insert(11, delegator.clone());
 
 			// We are still in the bonding duration
@@ -2203,12 +2184,7 @@ mod create {
 			assert_eq!(Balances::free_balance(&11), 0);
 			assert_eq!(
 				Delegators::<Runtime>::get(11).unwrap(),
-				Delegator {
-					pool_id: 2,
-					points: StakingMock::minimum_bond(),
-					reward_pool_total_earnings: Zero::zero(),
-					unbonding_eras: None
-				}
+				Delegator { pool_id: 2, points: StakingMock::minimum_bond(), ..Default::default() }
 			);
 			assert_eq!(
 				BondedPool::<Runtime>::get(2).unwrap(),
