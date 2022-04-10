@@ -30,6 +30,7 @@ frame-support = { version = "4.0.0-dev", default-features = false, path = "../su
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 
 pallet-identity = { version = "4.0.0-dev", path = "../identity", default-features = false }
+pallet-collective = { version = "4.0.0-dev", path = "../collective", default-features = false, optional = true }
 
 [dev-dependencies]
 hex-literal = "0.3.1"
