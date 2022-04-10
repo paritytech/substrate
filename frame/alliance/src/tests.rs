@@ -286,7 +286,10 @@ fn submit_candidacy_works() {
 		);
 
 		// check already in blacklist
-		assert_ok!(Alliance::add_blacklist_items(Origin::signed(1), vec![BlacklistItem::AccountId(4)]));
+		assert_ok!(Alliance::add_blacklist_items(
+			Origin::signed(1),
+			vec![BlacklistItem::AccountId(4)]
+		));
 		assert_noop!(
 			Alliance::submit_candidacy(Origin::signed(4)),
 			Error::<Test, ()>::AlreadyInBlacklist
@@ -344,7 +347,10 @@ fn nominate_candidate_works() {
 		);
 
 		// check already in blacklist
-		assert_ok!(Alliance::add_blacklist_items(Origin::signed(1), vec![BlacklistItem::AccountId(4)]));
+		assert_ok!(Alliance::add_blacklist_items(
+			Origin::signed(1),
+			vec![BlacklistItem::AccountId(4)]
+		));
 		assert_noop!(
 			Alliance::nominate_candidate(Origin::signed(1), 4),
 			Error::<Test, ()>::AlreadyInBlacklist
@@ -504,7 +510,10 @@ fn remove_blacklist_items_works() {
 			Error::<Test, ()>::NotInBlacklist
 		);
 
-		assert_ok!(Alliance::add_blacklist_items(Origin::signed(1), vec![BlacklistItem::AccountId(3)]));
+		assert_ok!(Alliance::add_blacklist_items(
+			Origin::signed(1),
+			vec![BlacklistItem::AccountId(3)]
+		));
 		assert_eq!(Alliance::account_blacklist(), vec![3]);
 		assert_ok!(Alliance::remove_blacklist_items(
 			Origin::signed(1),

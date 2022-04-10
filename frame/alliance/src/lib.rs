@@ -48,8 +48,8 @@
 //! - Candidate: An account who is trying to become a member. The applicant should already have an
 //!   approved identity with website. The application should be submitted by the account itself with
 //!   some deposit, or be nominated by an existing Founder or Fellow for free.
-//! - Blacklist: A list of bad websites and addresses, items can be added or removed by Founders
-//!   and Fellows.
+//! - Blacklist: A list of bad websites and addresses, items can be added or removed by Founders and
+//!   Fellows.
 //!
 //! ## Interface
 //!
@@ -118,7 +118,7 @@ use frame_support::{
 		ChangeMembers, Currency, Get, InitializeMembers, IsSubType, OnUnbalanced,
 		ReservableCurrency,
 	},
-	weights::{Pays, Weight},
+	weights::Weight,
 };
 use pallet_identity::IdentityField;
 
@@ -322,8 +322,6 @@ pub mod pallet {
 		NotFounder,
 		/// This member is up for being kicked from the Alliance and cannot perform this operation.
 		UpForKicking,
-		/// Member is not up for consideration of being kicked.
-		NotUpForKicking,
 		/// Account does not have voting rights.
 		NoVotingRights,
 		/// Account is already an elevated (fellow) member.
@@ -388,9 +386,9 @@ pub mod pallet {
 		/// A member has been kicked out to an ordinary account with its deposit slashed.
 		MemberKicked { member: T::AccountId, slashed: Option<BalanceOf<T, I>> },
 		/// Accounts or websites have been added into the blacklist.
-		BlacklistItemAdded { items: Vec<BlacklistItemOf<T, I>> },
+		BlacklistItemsAdded { items: Vec<BlacklistItemOf<T, I>> },
 		/// Accounts or websites have been removed from the blacklist.
-		BlacklistItemRemoved { items: Vec<BlacklistItemOf<T, I>> },
+		BlacklistItemsRemoved { items: Vec<BlacklistItemOf<T, I>> },
 	}
 
 	#[pallet::genesis_config]
@@ -607,21 +605,12 @@ pub mod pallet {
 			let who = ensure_signed(origin)?;
 			ensure!(Self::has_voting_rights(&who), Error::<T, I>::NoVotingRights);
 
-			let proposal = T::ProposalProvider::proposal_of(proposal_hash)
-				.ok_or(Error::<T, I>::MissingProposalHash)?;
-
 			let info = T::ProposalProvider::close_proposal(
 				proposal_hash,
 				index,
 				proposal_weight_bound,
 				length_bound,
 			)?;
-			if Pays::No == info.pays_fee {
-				if let Some(Call::kick_member { who }) = proposal.is_sub_type() {
-					let strike = T::Lookup::lookup(who.clone())?;
-					<UpForKicking<T, I>>::remove(strike);
-				}
-			}
 			Ok(info.into())
 		}
 
@@ -866,7 +855,6 @@ pub mod pallet {
 		) -> DispatchResult {
 			T::MembershipManager::ensure_origin(origin)?;
 			let member = T::Lookup::lookup(who)?;
-			ensure!(Self::is_up_for_kicking(&member), Error::<T, I>::NotUpForKicking);
 
 			let role = Self::member_role_of(&member).ok_or(Error::<T, I>::NotMember)?;
 			Self::remove_member(&member, role)?;
@@ -874,6 +862,9 @@ pub mod pallet {
 			if let Some(deposit) = deposit {
 				T::Slashed::on_unbalanced(T::Currency::slash_reserved(&member, deposit).0);
 			}
+
+			<UpForKicking<T, I>>::remove(&member);
+
 			Self::deposit_event(Event::MemberKicked { member, slashed: deposit });
 			Ok(())
 		}
