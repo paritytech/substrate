@@ -17,44 +17,38 @@
 
 //! # Alliance Pallet
 //!
-//! The Alliance Pallet provides a DAO to form an industry group that does two main things:
+//! The Alliance Pallet provides a collective that curates a blacklist of accounts and URLs,
+//! presumably agreed by the voting members to be bad actors. The alliance
 //!
-//! - provide a set of ethics against bad behaviors.
-//! - provide recognition and influence for those teams that contribute something back to the
+//! - provides a set of ethics against bad behavior, and
+//! - provides recognition and influence for those teams that contribute something back to the
 //!   ecosystem.
 //!
 //! ## Overview
 //!
-//! The Alliance first needs to initialize the Founders with sudo permissions.
-//! After that, anyone with an approved identity and website can apply to become a Candidate.
-//! Members will initiate a motion to determine whether a Candidate can join the Alliance or not.
-//! The motion requires the approval of over 2/3 majority.
-//! The Alliance can also maintain a blacklist list about accounts and websites.
-//! Members can also vote to update the alliance's rule and make announcements.
+//! The network initializes the Alliance via a Root call. After that, anyone with an approved
+//! identity and website can apply to become a Candidate. Members will initiate a motion to
+//! determine whether a Candidate can join the Alliance or not. The motion requires the approval of
+//! the `MembershipManager` origin. The Alliance can also maintain a blacklist of accounts and
+//! websites. Members can also vote to update the Alliance's rule and make announcements.
 //!
 //! ### Terminology
 //!
-//! - Rule: The IPFS Hash of the Alliance Rule for the community to read and the alliance members to
-//!   enforce for the management.
-//!
-//! - Announcement: An IPFS hash of some content that the Alliance want to announce.
-//!
-//! - Member: An account which is already in the group of the Alliance, including three types:
-//!   Founder, Fellow, Ally. Member can also be kicked by super majority motion or retire by itself.
-//!
-//! - Founder: An account who is initiated by sudo with normal voting rights for basic motions and
+//! - Rule: The IPFS CID (hash) of the Alliance rules for the community to read and the Alliance
+//!   members to enforce. Similar to a Code of Conduct.
+//! - Announcement: An IPFS CID of some content that the Alliance want to announce.
+//! - Member: An account that is already in the group of the Alliance, including three types:
+//!   Founder, Fellow, or Ally. A member can also be kicked by the `MembershipManager` origin or
+//!   retire by itself.
+//! - Founder: An account who is initiated by Root with normal voting rights for basic motions and
 //!   special veto rights for rule change and ally elevation motions.
-//!
-//! - Fellow: An account who is elevated from Ally by Founders and other Fellows from Ally.
-//!
+//! - Fellow: An account who is elevated from Ally by Founders and other Fellows.
 //! - Ally: An account who is approved by Founders and Fellows from Candidate. An Ally doesn't have
 //!   voting rights.
-//!
 //! - Candidate: An account who is trying to become a member. The applicant should already have an
 //!   approved identity with website. The application should be submitted by the account itself with
-//!   some token as deposit, or be nominated by an existing Founder or Fellow for free.
-//!
-//! - Blacklist: A list of bad websites and addresses, and can be added or removed items by Founders
+//!   some deposit, or be nominated by an existing Founder or Fellow for free.
+//! - Blacklist: A list of bad websites and addresses, items can be added or removed by Founders
 //!   and Fellows.
 //!
 //! ## Interface
@@ -62,30 +56,34 @@
 //! ### Dispatchable Functions
 //!
 //! #### For General Users
+//!
 //! - `submit_candidacy` - Submit the application to become a candidate with deposit.
 //!
 //! #### For Members (All)
-//! - `retire` - Member retire to out of the Alliance and release its deposit.
+//!
+//! - `retire` - Retire from the Alliance and release the caller's deposit.
 //!
 //! #### For Members (Founders/Fellows)
 //!
 //! - `propose` - Propose a motion.
 //! - `vote` - Vote on a motion.
-//! - `close` - Close a motion with enough votes or expired.
-//! - `set_rule` - Initialize or update the alliance's rule by IPFS hash.
-//! - `announce` - Make announcement by IPFS hash.
-//! - `nominate_candidacy` - Nominate a non-member to become a Candidate for free.
+//! - `close` - Close a motion with enough votes or that has expired.
+//! - `set_rule` - Initialize or update the Alliance's rule by IPFS CID.
+//! - `announce` - Make announcement by IPFS CID.
+//! - `nominate_candidate` - Nominate a non-member to become a Candidate for free.
 //! - `approve_candidate` - Approve a candidate to become an Ally.
 //! - `reject_candidate` - Reject a candidate and slash its deposit.
 //! - `elevate_ally` - Approve an ally to become a Fellow.
 //! - `kick_member` - Kick a member and slash its deposit.
-//! - `add_blacklist` - Add some items of account and website in the blacklist.
-//! - `remove_blacklist` - Remove some items of account and website from the blacklist.
+//! - `add_blacklist_items` - Add some items, either accounts or websites, to the blacklist.
+//! - `remove_blacklist_items` - Remove some items from the blacklist.
 //!
 //! #### For Members (Only Founders)
+//!
 //! - `veto` - Veto on a motion about `set_rule` and `elevate_ally`.
 //!
-//! #### For Super Users
+//! #### Root Calls
+//!
 //! - `init_founders` - Initialize the founding members.
 
 #![cfg_attr(not(feature = "std"), no_std)]
@@ -188,7 +186,7 @@ pub trait ProposalProvider<AccountId, Hash, Proposal> {
 	fn proposal_of(proposal_hash: Hash) -> Option<Proposal>;
 }
 
-/// The role of members.
+/// The various roles that a member can hold.
 #[derive(Copy, Clone, PartialEq, Eq, RuntimeDebug, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum MemberRole {
 	Founder,
@@ -196,7 +194,7 @@ pub enum MemberRole {
 	Ally,
 }
 
-/// The item type of blacklist.
+/// The type of item within the blacklist.
 #[derive(Clone, PartialEq, Eq, RuntimeDebug, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum BlacklistItem<AccountId, Url> {
 	AccountId(AccountId),
@@ -227,9 +225,14 @@ pub mod pallet {
 			+ IsSubType<Call<Self, I>>
 			+ IsType<<Self as frame_system::Config>::Call>;
 
-		/// Origin from which the next tabled referendum may be forced; this allows for the tabling
-		/// of a majority-carries referendum.
-		type SuperMajorityOrigin: EnsureOrigin<Self::Origin>;
+		/// Origin for admin-level operations, like setting the Alliance's rules.
+		type AdminOrigin: EnsureOrigin<Self::Origin>;
+
+		/// Origin that manages entry and forcible discharge from the Alliance.
+		type MembershipManager: EnsureOrigin<Self::Origin>;
+
+		/// Origin for making announcements and adding/removing items from the blacklist.
+		type AnnouncementOrigin: EnsureOrigin<Self::Origin>;
 
 		/// The currency used for deposits.
 		type Currency: ReservableCurrency<Self::AccountId>;
@@ -237,13 +240,13 @@ pub mod pallet {
 		/// What to do with slashed funds.
 		type Slashed: OnUnbalanced<NegativeImbalanceOf<Self, I>>;
 
-		/// What to do with genesis voteable members
+		/// What to do with initial voting members of the Alliance.
 		type InitializeMembers: InitializeMembers<Self::AccountId>;
 
-		/// The receiver of the signal for when the voteable members have changed.
+		/// What to do when a member has been added or removed.
 		type MembershipChanged: ChangeMembers<Self::AccountId>;
 
-		/// The identity verifier of alliance member.
+		/// The identity verifier of an Alliance member.
 		type IdentityVerifier: IdentityVerifier<Self::AccountId>;
 
 		/// The provider of the proposal operation.
@@ -256,44 +259,44 @@ pub mod pallet {
 		///
 		/// NOTE:
 		/// + Benchmarks will need to be re-run and weights adjusted if this changes.
-		/// + This pallet assumes that dependents keep to the limit without enforcing it.
+		/// + This pallet assumes that dependencies keep to the limit without enforcing it.
 		type MaxFounders: Get<u32>;
 
 		/// The maximum number of fellows supported by the pallet. Used for weight estimation.
 		///
 		/// NOTE:
 		/// + Benchmarks will need to be re-run and weights adjusted if this changes.
-		/// + This pallet assumes that dependents keep to the limit without enforcing it.
+		/// + This pallet assumes that dependencies keep to the limit without enforcing it.
 		type MaxFellows: Get<u32>;
 
 		/// The maximum number of allies supported by the pallet. Used for weight estimation.
 		///
 		/// NOTE:
 		/// + Benchmarks will need to be re-run and weights adjusted if this changes.
-		/// + This pallet assumes that dependents keep to the limit without enforcing it.
+		/// + This pallet assumes that dependencies keep to the limit without enforcing it.
 		type MaxAllies: Get<u32>;
 
-		/// The maximum number of blacklist supported by the pallet.
+		/// The maximum length of the blacklist supported by the pallet.
 		#[pallet::constant]
 		type MaxBlacklistCount: Get<u32>;
 
-		/// The maximum length of website url.
+		/// The maximum length of a website URL.
 		#[pallet::constant]
 		type MaxWebsiteUrlLength: Get<u32>;
 
-		/// The amount of a deposit required for submitting candidacy.
+		/// The deposit required for submitting candidacy.
 		#[pallet::constant]
 		type CandidateDeposit: Get<BalanceOf<Self, I>>;
 
-		/// The maximum numbers of announcements.
+		/// The maximum number of announcements.
 		#[pallet::constant]
 		type MaxAnnouncementsCount: Get<u32>;
 
-		/// The maximum numbers of members per member role.
+		/// The maximum number of members per member role.
 		#[pallet::constant]
 		type MaxMembersCount: Get<u32>;
 
-		/// The maximum numbers of candidates.
+		/// The maximum number of candidates.
 		#[pallet::constant]
 		type MaxCandidatesCount: Get<u32>;
 
@@ -305,37 +308,37 @@ pub mod pallet {
 	pub enum Error<T, I = ()> {
 		/// The founders/fellows/allies have already been initialized.
 		MembersAlreadyInitialized,
-		/// Already be a candidate.
+		/// Account is already a candidate.
 		AlreadyCandidate,
-		/// Not be a candidate.
+		/// Account is not a candidate.
 		NotCandidate,
-		/// Already be a member.
+		/// Account is already a member.
 		AlreadyMember,
-		/// Not be a member.
+		/// Account is not a member.
 		NotMember,
-		/// Not be an ally member.
+		/// Account is not an ally.
 		NotAlly,
-		/// Not be a founder member.
+		/// Account is not a founder.
 		NotFounder,
-		/// Not be a kicking member.
-		NotKickingMember,
-		/// Not be a votable (founder or fellow) member.
-		NotVotableMember,
-		/// Already be an elevated (fellow) member.
+		/// This member is up for being kicked from the Alliance and cannot perform this operation.
+		UpForKicking,
+		/// Member is not up for consideration of being kicked.
+		NotUpForKicking,
+		/// Account does not have voting rights.
+		NoVotingRights,
+		/// Account is already an elevated (fellow) member.
 		AlreadyElevated,
-		/// Already be a blacklist item.
+		/// Item is already in the blacklist.
 		AlreadyInBlacklist,
-		/// Not be a blacklist item.
+		/// Item is not blacklisted.
 		NotInBlacklist,
-		/// Number of blacklist exceed MaxBlacklist.
+		/// Length of blacklist exceeds `MaxBlacklist`.
 		TooManyBlacklist,
-		/// Length of website url exceed MaxWebsiteUrlLength.
+		/// Length of website URL exceeds `MaxWebsiteUrlLength`.
 		TooLongWebsiteUrl,
-		/// The member is kicking.
-		KickingMember,
 		/// Balance is insufficient to be a candidate.
 		InsufficientCandidateFunds,
-		/// The account's identity has not display field and website field.
+		/// The account's identity does not have display field and website field.
 		WithoutIdentityDisplayAndWebsite,
 		/// The account's identity has no good judgement.
 		WithoutGoodIdentityJudgement,
@@ -343,13 +346,13 @@ pub mod pallet {
 		MissingProposalHash,
 		/// The proposal is not vetoable.
 		NotVetoableProposal,
-		/// The Announcement is not found.
+		/// The announcement is not found.
 		MissingAnnouncement,
-		/// Number of members exceed MaxMembersCount.
+		/// Number of members exceeds `MaxMembersCount`.
 		TooManyMembers,
-		/// Number of candidates exceed MaxCandidatesCount.
+		/// Number of candidates exceeds `MaxCandidatesCount`.
 		TooManyCandidates,
-		/// Number of Announcements exceed MaxAnnouncementsCount.
+		/// Number of announcements exceeds `MaxAnnouncementsCount`.
 		TooManyAnnouncements,
 	}
 
@@ -357,37 +360,37 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
 		/// A new rule has been set.
-		NewRule { rule: Cid },
+		NewRuleSet { rule: Cid },
 		/// A new announcement has been proposed.
-		NewAnnouncement { announcement: Cid },
-		/// A on-chain announcement has been removed.
+		Announced { announcement: Cid },
+		/// An on-chain announcement has been removed.
 		AnnouncementRemoved { announcement: Cid },
-		/// Some accounts have been initialized to members (founders/fellows/allies).
+		/// Some accounts have been initialized as members (founders/fellows/allies).
 		MembersInitialized {
 			founders: Vec<T::AccountId>,
 			fellows: Vec<T::AccountId>,
 			allies: Vec<T::AccountId>,
 		},
-		/// An account has been added as a candidate and lock its deposit.
+		/// An account has been added as a candidate and reserved its deposit.
 		CandidateAdded {
 			candidate: T::AccountId,
 			nominator: Option<T::AccountId>,
 			reserved: Option<BalanceOf<T, I>>,
 		},
-		/// A proposal has been proposed to approve the candidate.
+		/// A candidate has been approved as an ally.
 		CandidateApproved { candidate: T::AccountId },
-		/// A proposal has been proposed to reject the candidate.
+		/// A candidate has been rejected and its deposit slashed.
 		CandidateRejected { candidate: T::AccountId },
-		/// As an active member, an ally has been elevated to fellow.
+		/// An ally has been elevated to fellow.
 		AllyElevated { ally: T::AccountId },
 		/// A member has retired to an ordinary account with its deposit unreserved.
 		MemberRetired { member: T::AccountId, unreserved: Option<BalanceOf<T, I>> },
 		/// A member has been kicked out to an ordinary account with its deposit slashed.
 		MemberKicked { member: T::AccountId, slashed: Option<BalanceOf<T, I>> },
-		/// Accounts or websites have been added into blacklist.
-		BlacklistAdded { items: Vec<BlacklistItemOf<T, I>> },
-		/// Accounts or websites have been removed from blacklist.
-		BlacklistRemoved { items: Vec<BlacklistItemOf<T, I>> },
+		/// Accounts or websites have been added into the blacklist.
+		BlacklistItemAdded { items: Vec<BlacklistItemOf<T, I>> },
+		/// Accounts or websites have been removed from the blacklist.
+		BlacklistItemRemoved { items: Vec<BlacklistItemOf<T, I>> },
 	}
 
 	#[pallet::genesis_config]
@@ -447,37 +450,34 @@ pub mod pallet {
 		}
 	}
 
-	/// The IPFS cid of the alliance rule.
-	/// Founders and fellows can propose a new rule, other founders and fellows make a traditional
-	/// super-majority votes, vote to determine if the rules take effect.
+	/// The IPFS CID of the alliance rule.
+	/// Founders and fellows can propose a new rule with a super-majority.
 	///
 	/// Any founder has a special one-vote veto right to the rule setting.
 	#[pallet::storage]
 	#[pallet::getter(fn rule)]
 	pub type Rule<T: Config<I>, I: 'static = ()> = StorageValue<_, Cid, OptionQuery>;
 
-	/// The current IPFS cids of the announcements.
+	/// The current IPFS CIDs of any announcements.
 	#[pallet::storage]
 	#[pallet::getter(fn announcements)]
 	pub type Announcements<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, BoundedVec<Cid, T::MaxAnnouncementsCount>, ValueQuery>;
 
-	/// Maps member and their candidate deposit.
+	/// Maps members to their candidacy deposit.
 	#[pallet::storage]
 	#[pallet::getter(fn deposit_of)]
 	pub type DepositOf<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Blake2_128Concat, T::AccountId, BalanceOf<T, I>, OptionQuery>;
 
 	/// The current set of candidates.
-	/// If the candidacy is approved by a motion, then it will become an ally member.
+	/// If a candidate is approved by a motion, then it will become an ally.
 	#[pallet::storage]
 	#[pallet::getter(fn candidates)]
 	pub type Candidates<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, BoundedVec<T::AccountId, T::MaxCandidatesCount>, ValueQuery>;
 
-	/// Maps member type to alliance members, including founder, fellow and ally.
-	/// Founders and fellows can propose and vote on alliance motions,
-	/// and ally can only wait to be elevated to fellow.
+	/// Maps member type to members of each type.
 	#[pallet::storage]
 	#[pallet::getter(fn members)]
 	pub type Members<T: Config<I>, I: 'static = ()> = StorageMap<
@@ -488,13 +488,14 @@ pub mod pallet {
 		ValueQuery,
 	>;
 
-	/// The members are being kicked out. They can't retire during the motion.
+	/// A set of members that are (potentially) being kicked out. They cannot retire until the
+	/// motion is settled.
 	#[pallet::storage]
-	#[pallet::getter(fn kicking_member)]
-	pub type KickingMembers<T: Config<I>, I: 'static = ()> =
+	#[pallet::getter(fn up_for_kicking)]
+	pub type UpForKicking<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Blake2_128Concat, T::AccountId, bool, ValueQuery>;
 
-	/// The current blacklist of accounts. The accounts can't submit candidacy.
+	/// The current blacklist of accounts. These accounts cannot submit candidacy.
 	#[pallet::storage]
 	#[pallet::getter(fn account_blacklist)]
 	pub type AccountBlacklist<T: Config<I>, I: 'static = ()> =
@@ -510,7 +511,7 @@ pub mod pallet {
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		/// Add a new proposal to be voted on.
 		///
-		/// Requires the sender to be founder or fellow.
+		/// Requires the sender to be a founder or fellow.
 		#[pallet::weight((
 			T::WeightInfo::propose_proposed(
 				*length_bound, // B
@@ -527,11 +528,11 @@ pub mod pallet {
 			#[pallet::compact] length_bound: u32,
 		) -> DispatchResult {
 			let proposor = ensure_signed(origin)?;
-			ensure!(Self::is_votable_member(&proposor), Error::<T, I>::NotVotableMember);
+			ensure!(Self::has_voting_rights(&proposor), Error::<T, I>::NoVotingRights);
 
 			if let Some(Call::kick_member { who }) = proposal.is_sub_type() {
 				let strike = T::Lookup::lookup(who.clone())?;
-				<KickingMembers<T, I>>::insert(strike, true);
+				<UpForKicking<T, I>>::insert(strike, true);
 			}
 
 			T::ProposalProvider::propose_proposal(proposor, threshold, proposal, length_bound)?;
@@ -540,7 +541,7 @@ pub mod pallet {
 
 		/// Add an aye or nay vote for the sender to the given proposal.
 		///
-		/// Requires the sender to be founder or fellow.
+		/// Requires the sender to be a founder or fellow.
 		#[pallet::weight((
 			T::WeightInfo::vote(T::MaxFounders::get(), T::MaxFellows::get()),
 			DispatchClass::Operational
@@ -552,14 +553,14 @@ pub mod pallet {
 			approve: bool,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			ensure!(Self::is_votable_member(&who), Error::<T, I>::NotVotableMember);
+			ensure!(Self::has_voting_rights(&who), Error::<T, I>::NoVotingRights);
 
 			T::ProposalProvider::vote_proposal(who, proposal, index, approve)?;
 			Ok(())
 		}
 
-		/// Disapprove a proposal about set_rule and elevate_ally, close, and remove it from
-		/// the system, regardless of its current state.
+		/// Veto a proposal about `set_rule` and `elevate_ally`, close, and remove it from the
+		/// system, regardless of its current state.
 		///
 		/// Must be called by a founder.
 		#[pallet::weight(T::WeightInfo::veto(T::MaxProposals::get()))]
@@ -578,9 +579,9 @@ pub mod pallet {
 			}
 		}
 
-		/// Close a vote that is either approved, disapproved or whose voting period has ended.
+		/// Close a vote that is either approved, disapproved, or whose voting period has ended.
 		///
-		/// Requires the sender to be founder or fellow.
+		/// Requires the sender to be a founder or fellow.
 		#[pallet::weight((
 			{
 				let b = *length_bound;
@@ -604,7 +605,7 @@ pub mod pallet {
 			#[pallet::compact] length_bound: u32,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
-			ensure!(Self::is_votable_member(&who), Error::<T, I>::NotVotableMember);
+			ensure!(Self::has_voting_rights(&who), Error::<T, I>::NoVotingRights);
 
 			let proposal = T::ProposalProvider::proposal_of(proposal_hash)
 				.ok_or(Error::<T, I>::MissingProposalHash)?;
@@ -618,15 +619,15 @@ pub mod pallet {
 			if Pays::No == info.pays_fee {
 				if let Some(Call::kick_member { who }) = proposal.is_sub_type() {
 					let strike = T::Lookup::lookup(who.clone())?;
-					<KickingMembers<T, I>>::remove(strike);
+					<UpForKicking<T, I>>::remove(strike);
 				}
 			}
 			Ok(info.into())
 		}
 
-		/// Initialize the founders/fellows/allies.
+		/// Initialize the founders, fellows, and allies.
 		///
-		/// This should only be called once.
+		/// This should only be called once, and must be called by the Root origin.
 		#[pallet::weight(T::WeightInfo::init_members(
 			T::MaxFounders::get(),
 			T::MaxFellows::get(),
@@ -685,21 +686,21 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Set a new IPFS cid to the alliance rule.
+		/// Set a new IPFS CID to the alliance rule.
 		#[pallet::weight(T::WeightInfo::set_rule())]
 		pub fn set_rule(origin: OriginFor<T>, rule: Cid) -> DispatchResult {
-			T::SuperMajorityOrigin::ensure_origin(origin)?;
+			T::AdminOrigin::ensure_origin(origin)?;
 
 			Rule::<T, I>::put(&rule);
 
-			Self::deposit_event(Event::NewRule { rule });
+			Self::deposit_event(Event::NewRuleSet { rule });
 			Ok(())
 		}
 
-		/// Make a new announcement by a new IPFS cid about the alliance issues.
+		/// Make an announcement of a new IPFS CID about alliance issues.
 		#[pallet::weight(T::WeightInfo::announce())]
 		pub fn announce(origin: OriginFor<T>, announcement: Cid) -> DispatchResult {
-			T::SuperMajorityOrigin::ensure_origin(origin)?;
+			T::AnnouncementOrigin::ensure_origin(origin)?;
 
 			let mut announcements = <Announcements<T, I>>::get();
 			announcements
@@ -707,14 +708,14 @@ pub mod pallet {
 				.map_err(|_| Error::<T, I>::TooManyAnnouncements)?;
 			<Announcements<T, I>>::put(announcements);
 
-			Self::deposit_event(Event::NewAnnouncement { announcement });
+			Self::deposit_event(Event::Announced { announcement });
 			Ok(())
 		}
 
-		/// Remove the announcement.
+		/// Remove an announcement.
 		#[pallet::weight(T::WeightInfo::remove_announcement())]
 		pub fn remove_announcement(origin: OriginFor<T>, announcement: Cid) -> DispatchResult {
-			T::SuperMajorityOrigin::ensure_origin(origin)?;
+			T::AnnouncementOrigin::ensure_origin(origin)?;
 
 			let mut announcements = <Announcements<T, I>>::get();
 			let pos = announcements
@@ -728,11 +729,11 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Submit oneself for candidacy. A fixed amount of deposit is recorded.
+		/// Submit oneself for candidacy. A fixed deposit is reserved.
 		#[pallet::weight(T::WeightInfo::submit_candidacy())]
 		pub fn submit_candidacy(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			ensure!(!Self::is_account_blacklist(&who), Error::<T, I>::AlreadyInBlacklist);
+			ensure!(!Self::account_blacklisted(&who), Error::<T, I>::AlreadyInBlacklist);
 			ensure!(!Self::is_candidate(&who), Error::<T, I>::AlreadyCandidate);
 			ensure!(!Self::is_member(&who), Error::<T, I>::AlreadyMember);
 			// check user self or parent should has verified identity to reuse display name and
@@ -755,17 +756,17 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Founder or fellow can nominate someone to join the alliance and become a candidate.
+		/// A founder or fellow can nominate someone to join the alliance and become a candidate.
 		/// There is no deposit required to the nominator or nominee.
-		#[pallet::weight(T::WeightInfo::nominate_candidacy())]
-		pub fn nominate_candidacy(
+		#[pallet::weight(T::WeightInfo::nominate_candidate())]
+		pub fn nominate_candidate(
 			origin: OriginFor<T>,
 			who: <T::Lookup as StaticLookup>::Source,
 		) -> DispatchResult {
 			let nominator = ensure_signed(origin)?;
-			ensure!(Self::is_votable_member(&nominator), Error::<T, I>::NotVotableMember);
+			ensure!(Self::has_voting_rights(&nominator), Error::<T, I>::NoVotingRights);
 			let who = T::Lookup::lookup(who)?;
-			ensure!(!Self::is_account_blacklist(&who), Error::<T, I>::AlreadyInBlacklist);
+			ensure!(!Self::account_blacklisted(&who), Error::<T, I>::AlreadyInBlacklist);
 			ensure!(!Self::is_candidate(&who), Error::<T, I>::AlreadyCandidate);
 			ensure!(!Self::is_member(&who), Error::<T, I>::AlreadyMember);
 			// check user self or parent should has verified identity to reuse display name and
@@ -789,7 +790,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			candidate: <T::Lookup as StaticLookup>::Source,
 		) -> DispatchResult {
-			T::SuperMajorityOrigin::ensure_origin(origin)?;
+			T::MembershipManager::ensure_origin(origin)?;
 			let candidate = T::Lookup::lookup(candidate)?;
 			ensure!(Self::is_candidate(&candidate), Error::<T, I>::NotCandidate);
 			ensure!(!Self::is_member(&candidate), Error::<T, I>::AlreadyMember);
@@ -801,13 +802,13 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Reject a `Candidate` back to an ordinary account.
+		/// Reject a `Candidate`. This results in a slash of the candidate's deposit.
 		#[pallet::weight(T::WeightInfo::reject_candidate())]
 		pub fn reject_candidate(
 			origin: OriginFor<T>,
 			candidate: <T::Lookup as StaticLookup>::Source,
 		) -> DispatchResult {
-			T::SuperMajorityOrigin::ensure_origin(origin)?;
+			T::MembershipManager::ensure_origin(origin)?;
 			let candidate = T::Lookup::lookup(candidate)?;
 			ensure!(Self::is_candidate(&candidate), Error::<T, I>::NotCandidate);
 			ensure!(!Self::is_member(&candidate), Error::<T, I>::AlreadyMember);
@@ -827,10 +828,10 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			ally: <T::Lookup as StaticLookup>::Source,
 		) -> DispatchResult {
-			T::SuperMajorityOrigin::ensure_origin(origin)?;
+			T::MembershipManager::ensure_origin(origin)?;
 			let ally = T::Lookup::lookup(ally)?;
 			ensure!(Self::is_ally(&ally), Error::<T, I>::NotAlly);
-			ensure!(!Self::is_votable_member(&ally), Error::<T, I>::AlreadyElevated);
+			ensure!(!Self::has_voting_rights(&ally), Error::<T, I>::AlreadyElevated);
 
 			Self::remove_member(&ally, MemberRole::Ally)?;
 			Self::add_member(&ally, MemberRole::Fellow)?;
@@ -839,11 +840,12 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// As a member, retire and back to an ordinary account and unlock its deposit.
+		/// As a member, retire from the alliance and unreserve the deposit.
 		#[pallet::weight(T::WeightInfo::retire())]
 		pub fn retire(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			ensure!(!Self::is_kicking(&who), Error::<T, I>::KickingMember);
+			// A member up for kicking cannot retire.
+			ensure!(!Self::is_up_for_kicking(&who), Error::<T, I>::UpForKicking);
 
 			let role = Self::member_role_of(&who).ok_or(Error::<T, I>::NotMember)?;
 			Self::remove_member(&who, role)?;
@@ -856,15 +858,15 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Kick a member to ordinary account with its deposit slashed.
+		/// Kick a member from the alliance and slash its deposit.
 		#[pallet::weight(T::WeightInfo::kick_member())]
 		pub fn kick_member(
 			origin: OriginFor<T>,
 			who: <T::Lookup as StaticLookup>::Source,
 		) -> DispatchResult {
-			T::SuperMajorityOrigin::ensure_origin(origin)?;
+			T::MembershipManager::ensure_origin(origin)?;
 			let member = T::Lookup::lookup(who)?;
-			ensure!(Self::is_kicking(&member), Error::<T, I>::NotKickingMember);
+			ensure!(Self::is_up_for_kicking(&member), Error::<T, I>::NotUpForKicking);
 
 			let role = Self::member_role_of(&member).ok_or(Error::<T, I>::NotMember)?;
 			Self::remove_member(&member, role)?;
@@ -876,18 +878,18 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Add accounts or websites into blacklist.
-		#[pallet::weight(T::WeightInfo::add_blacklist(infos.len() as u32, T::MaxWebsiteUrlLength::get()))]
-		pub fn add_blacklist(
+		/// Add accounts or websites to the blacklist.
+		#[pallet::weight(T::WeightInfo::add_blacklist_items(items.len() as u32, T::MaxWebsiteUrlLength::get()))]
+		pub fn add_blacklist_items(
 			origin: OriginFor<T>,
-			infos: Vec<BlacklistItemOf<T, I>>,
+			items: Vec<BlacklistItemOf<T, I>>,
 		) -> DispatchResult {
-			T::SuperMajorityOrigin::ensure_origin(origin)?;
+			T::AnnouncementOrigin::ensure_origin(origin)?;
 
 			let mut accounts = vec![];
 			let mut webs = vec![];
-			for info in infos.iter() {
-				ensure!(!Self::is_blacklist(info), Error::<T, I>::AlreadyInBlacklist);
+			for info in items.iter() {
+				ensure!(!Self::is_in_blacklist(info), Error::<T, I>::AlreadyInBlacklist);
 				match info {
 					BlacklistItem::AccountId(who) => accounts.push(who.clone()),
 					BlacklistItem::Website(url) => {
@@ -900,29 +902,29 @@ pub mod pallet {
 				}
 			}
 
-			Self::do_add_blacklist(&mut accounts, &mut webs)?;
-			Self::deposit_event(Event::BlacklistAdded { items: infos });
+			Self::do_add_blacklist_items(&mut accounts, &mut webs)?;
+			Self::deposit_event(Event::BlacklistItemsAdded { items });
 			Ok(())
 		}
 
-		/// Remove accounts or websites from blacklist.
-		#[pallet::weight(<T as Config<I>>::WeightInfo::remove_blacklist(infos.len() as u32, T::MaxWebsiteUrlLength::get()))]
-		pub fn remove_blacklist(
+		/// Remove accounts or websites from the blacklist.
+		#[pallet::weight(<T as Config<I>>::WeightInfo::remove_blacklist_items(items.len() as u32, T::MaxWebsiteUrlLength::get()))]
+		pub fn remove_blacklist_items(
 			origin: OriginFor<T>,
-			infos: Vec<BlacklistItemOf<T, I>>,
+			items: Vec<BlacklistItemOf<T, I>>,
 		) -> DispatchResult {
-			T::SuperMajorityOrigin::ensure_origin(origin)?;
+			T::AnnouncementOrigin::ensure_origin(origin)?;
 			let mut accounts = vec![];
 			let mut webs = vec![];
-			for info in infos.iter() {
-				ensure!(Self::is_blacklist(info), Error::<T, I>::NotInBlacklist);
+			for info in items.iter() {
+				ensure!(Self::is_in_blacklist(info), Error::<T, I>::NotInBlacklist);
 				match info {
 					BlacklistItem::AccountId(who) => accounts.push(who.clone()),
 					BlacklistItem::Website(url) => webs.push(url.clone()),
 				}
 			}
-			Self::do_remove_blacklist(&mut accounts, &mut webs)?;
-			Self::deposit_event(Event::BlacklistRemoved { items: infos });
+			Self::do_remove_blacklist_items(&mut accounts, &mut webs)?;
+			Self::deposit_event(Event::BlacklistItemsRemoved { items });
 			Ok(())
 		}
 	}
@@ -954,10 +956,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		})
 	}
 
+	/// Check if a given role has any members.
 	fn has_member(role: MemberRole) -> bool {
 		Members::<T, I>::decode_len(role).unwrap_or_default() > 0
 	}
 
+	/// Look up the role, if any, of an account.
 	fn member_role_of(who: &T::AccountId) -> Option<MemberRole> {
 		Members::<T, I>::iter()
 			.find_map(|(r, members)| if members.contains(who) { Some(r) } else { None })
@@ -968,27 +972,33 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Self::member_role_of(who).is_some()
 	}
 
+	/// Check if an account has a given role.
 	pub fn is_member_of(who: &T::AccountId, role: MemberRole) -> bool {
 		Members::<T, I>::get(role).contains(&who)
 	}
 
+	/// Check if an account is a founder.
 	fn is_founder(who: &T::AccountId) -> bool {
 		Self::is_member_of(who, MemberRole::Founder)
 	}
 
+	/// Check if an account is a fellow.
 	fn is_fellow(who: &T::AccountId) -> bool {
 		Self::is_member_of(who, MemberRole::Fellow)
 	}
 
+	/// Check if an account is an ally.
 	fn is_ally(who: &T::AccountId) -> bool {
 		Self::is_member_of(who, MemberRole::Ally)
 	}
 
-	fn is_votable_member(who: &T::AccountId) -> bool {
+	/// Check if a member has voting rights.
+	fn has_voting_rights(who: &T::AccountId) -> bool {
 		Self::is_founder(who) || Self::is_fellow(who)
 	}
 
-	fn votable_member_sorted() -> Vec<T::AccountId> {
+	/// Collect all members who have voting rights into one list.
+	fn votable_members_sorted() -> Vec<T::AccountId> {
 		let mut founders = Members::<T, I>::get(MemberRole::Founder).into_inner();
 		let mut fellows = Members::<T, I>::get(MemberRole::Fellow).into_inner();
 		founders.append(&mut fellows);
@@ -996,8 +1006,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		founders.into()
 	}
 
-	fn is_kicking(who: &T::AccountId) -> bool {
-		<KickingMembers<T, I>>::contains_key(&who)
+	/// Check if an account's forced removal is up for consideration.
+	fn is_up_for_kicking(who: &T::AccountId) -> bool {
+		<UpForKicking<T, I>>::contains_key(&who)
 	}
 
 	/// Add a user to the sorted alliance member set.
@@ -1011,7 +1022,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		})?;
 
 		if role == MemberRole::Founder || role == MemberRole::Fellow {
-			let members = Self::votable_member_sorted();
+			let members = Self::votable_members_sorted();
 			T::MembershipChanged::change_members_sorted(&[who.clone()], &[], &members[..]);
 		}
 		Ok(())
@@ -1026,27 +1037,27 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		})?;
 
 		if role == MemberRole::Founder || role == MemberRole::Fellow {
-			let members = Self::votable_member_sorted();
+			let members = Self::votable_members_sorted();
 			T::MembershipChanged::change_members_sorted(&[], &[who.clone()], &members[..]);
 		}
 		Ok(())
 	}
 
-	/// Check if a user is in blacklist.
-	fn is_blacklist(info: &BlacklistItemOf<T, I>) -> bool {
+	/// Check if an item is blacklisted.
+	fn is_in_blacklist(info: &BlacklistItemOf<T, I>) -> bool {
 		match info {
 			BlacklistItem::Website(url) => <WebsiteBlacklist<T, I>>::get().contains(url),
 			BlacklistItem::AccountId(who) => <AccountBlacklist<T, I>>::get().contains(who),
 		}
 	}
 
-	/// Check if a user is in account blacklist.
-	fn is_account_blacklist(who: &T::AccountId) -> bool {
+	/// Check if a user is blacklisted.
+	fn account_blacklisted(who: &T::AccountId) -> bool {
 		<AccountBlacklist<T, I>>::get().contains(who)
 	}
 
-	/// Add a identity info to the blacklist set.
-	fn do_add_blacklist(
+	/// Add identity info to the blacklist set.
+	fn do_add_blacklist_items(
 		new_accounts: &mut Vec<T::AccountId>,
 		new_webs: &mut Vec<UrlOf<T, I>>,
 	) -> DispatchResult {
@@ -1070,8 +1081,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(())
 	}
 
-	/// Remove a identity info from the blacklist.
-	fn do_remove_blacklist(
+	/// Remove identity info from the blacklist.
+	fn do_remove_blacklist_items(
 		out_accounts: &mut Vec<T::AccountId>,
 		out_webs: &mut Vec<UrlOf<T, I>>,
 	) -> DispatchResult {
