@@ -1431,7 +1431,15 @@ parameter_types! {
 impl pallet_alliance::Config for Runtime {
 	type Event = Event;
 	type Proposal = Call;
-	type SuperMajorityOrigin = EnsureOneOf<
+	type AdminOrigin = EnsureOneOf<
+		EnsureRoot<AccountId>,
+		pallet_collective::EnsureProportionMoreThan<AccountId, AllianceCollective, 2, 3>,
+	>;
+	type MembershipManager = EnsureOneOf<
+		EnsureRoot<AccountId>,
+		pallet_collective::EnsureProportionMoreThan<AccountId, AllianceCollective, 2, 3>,
+	>;
+	type AnnouncementOrigin = EnsureOneOf<
 		EnsureRoot<AccountId>,
 		pallet_collective::EnsureProportionMoreThan<AccountId, AllianceCollective, 2, 3>,
 	>;
