@@ -883,6 +883,15 @@ impl traits::Extrinsic for OpaqueExtrinsic {
 	type SignaturePayload = ();
 }
 
+impl<XT> From<&XT> for OpaqueExtrinsic
+where
+	XT: traits::Extrinsic + Encode,
+{
+	fn from(xt: &XT) -> Self {
+		Self(xt.encode())
+	}
+}
+
 /// Print something that implements `Printable` from the runtime.
 pub fn print(print: impl traits::Printable) {
 	print.print();
