@@ -333,6 +333,37 @@ pub struct IdentityInfo<FieldLimit: Get<u32>> {
 	pub twitter: Data,
 }
 
+impl<FieldLimit: Get<u32>> IdentityInfo<FieldLimit> {
+	pub(crate) fn fields(&self) -> IdentityFields {
+		let mut res = <BitFlags<IdentityField>>::empty();
+		if self.display != Data::None {
+			res.insert(IdentityField::Display);
+		}
+		if self.legal != Data::None {
+			res.insert(IdentityField::Legal);
+		}
+		if self.web != Data::None {
+			res.insert(IdentityField::Web);
+		}
+		if self.riot != Data::None {
+			res.insert(IdentityField::Riot);
+		}
+		if self.email != Data::None {
+			res.insert(IdentityField::Email);
+		}
+		if self.pgp_fingerprint.is_some() {
+			res.insert(IdentityField::PgpFingerprint);
+		}
+		if self.image != Data::None {
+			res.insert(IdentityField::Image);
+		}
+		if self.twitter != Data::None {
+			res.insert(IdentityField::Twitter);
+		}
+		IdentityFields(res)
+	}
+}
+
 /// Information concerning the identity of the controller of an account.
 ///
 /// NOTE: This is stored separately primarily to facilitate the addition of extra fields in a
