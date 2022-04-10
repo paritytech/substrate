@@ -609,11 +609,11 @@ benchmarks_instance_pallet! {
 		let rule = rule(b"hello world");
 
 		let call = Call::<T, I>::set_rule { rule: rule.clone() };
-		let origin = T::SuperMajorityOrigin::successful_origin();
+		let origin = T::AdminOrigin::successful_origin();
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
 		assert_eq!(Alliance::<T, I>::rule(), Some(rule.clone()));
-		assert_last_event::<T, I>(Event::NewRule { rule }.into());
+		assert_last_event::<T, I>(Event::NewRuleSet { rule }.into());
 	}
 
 	announce {
@@ -622,11 +622,11 @@ benchmarks_instance_pallet! {
 		let announcement = announcement(b"hello world");
 
 		let call = Call::<T, I>::announce { announcement: announcement.clone() };
-		let origin = T::SuperMajorityOrigin::successful_origin();
+		let origin = T::AnnouncementOrigin::successful_origin();
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
 		assert!(Alliance::<T, I>::announcements().contains(&announcement));
-		assert_last_event::<T, I>(Event::NewAnnouncement { announcement }.into());
+		assert_last_event::<T, I>(Event::Announced { announcement }.into());
 	}
 
 	remove_announcement {
@@ -637,7 +637,7 @@ benchmarks_instance_pallet! {
 		Announcements::<T, I>::put(announcements);
 
 		let call = Call::<T, I>::remove_announcement { announcement: announcement.clone() };
-		let origin = T::SuperMajorityOrigin::successful_origin();
+		let origin = T::AnnouncementOrigin::successful_origin();
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
 		assert!(Alliance::<T, I>::announcements().is_empty());
@@ -698,7 +698,7 @@ benchmarks_instance_pallet! {
 
 		let candidate1_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(candidate1.clone());
 		let call = Call::<T, I>::approve_candidate { candidate: candidate1_lookup };
-		let origin = T::SuperMajorityOrigin::successful_origin();
+		let origin = T::MembershipManager::successful_origin();
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
 		assert!(!Alliance::<T, I>::is_candidate(&candidate1));
@@ -718,7 +718,7 @@ benchmarks_instance_pallet! {
 
 		let candidate1_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(candidate1.clone());
 		let call = Call::<T, I>::reject_candidate { candidate: candidate1_lookup };
-		let origin = T::SuperMajorityOrigin::successful_origin();
+		let origin = T::MembershipManager::successful_origin();
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
 		assert!(!Alliance::<T, I>::is_candidate(&candidate1));
@@ -735,7 +735,7 @@ benchmarks_instance_pallet! {
 
 		let ally1_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(ally1.clone());
 		let call = Call::<T, I>::elevate_ally { ally: ally1_lookup };
-		let origin = T::SuperMajorityOrigin::successful_origin();
+		let origin = T::MembershipManager::successful_origin();
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
 		assert!(!Alliance::<T, I>::is_ally(&ally1));
@@ -748,7 +748,7 @@ benchmarks_instance_pallet! {
 
 		let fellow2 = fellow::<T, I>(2);
 		assert!(Alliance::<T, I>::is_fellow(&fellow2));
-		assert!(!Alliance::<T, I>::is_kicking(&fellow2));
+		assert!(!Alliance::<T, I>::is_up_for_kicking(&fellow2));
 
 		assert_eq!(DepositOf::<T, I>::get(&fellow2), Some(T::CandidateDeposit::get()));
 	}: _(SystemOrigin::Signed(fellow2.clone()))
@@ -765,16 +765,16 @@ benchmarks_instance_pallet! {
 		set_members::<T, I>();
 
 		let fellow2 = fellow::<T, I>(2);
-		KickingMembers::<T, I>::insert(&fellow2, true);
+		UpForKicking::<T, I>::insert(&fellow2, true);
 
 		assert!(Alliance::<T, I>::is_member_of(&fellow2, MemberRole::Fellow));
-		assert!(Alliance::<T, I>::is_kicking(&fellow2));
+		assert!(Alliance::<T, I>::is_up_for_kicking(&fellow2));
 
 		assert_eq!(DepositOf::<T, I>::get(&fellow2), Some(T::CandidateDeposit::get()));
 
 		let fellow2_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(fellow2.clone());
 		let call = Call::<T, I>::kick_member { who: fellow2_lookup };
-		let origin = T::SuperMajorityOrigin::successful_origin();
+		let origin = T::MembershipManager::successful_origin();
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
 		assert!(!Alliance::<T, I>::is_member(&fellow2));
@@ -800,11 +800,11 @@ benchmarks_instance_pallet! {
 		blacklist.extend(accounts.into_iter().map(BlacklistItem::AccountId));
 		blacklist.extend(websites.into_iter().map(BlacklistItem::Website));
 
-		let call = Call::<T, I>::add_blacklist_items { infos: blacklist.clone() };
-		let origin = T::SuperMajorityOrigin::successful_origin();
+		let call = Call::<T, I>::add_blacklist_items { items: blacklist.clone() };
+		let origin = T::AnnouncementOrigin::successful_origin();
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
-		assert_last_event::<T, I>(Event::BlacklistAdded { items: blacklist }.into());
+		assert_last_event::<T, I>(Event::BlacklistItemsAdded { items: blacklist }.into());
 	}
 
 	remove_blacklist_items {
@@ -828,11 +828,11 @@ benchmarks_instance_pallet! {
 		blacklist.extend(accounts.into_iter().map(BlacklistItem::AccountId));
 		blacklist.extend(websites.into_iter().map(BlacklistItem::Website));
 
-		let call = Call::<T, I>::remove_blacklist_items { infos: blacklist.clone() };
-		let origin = T::SuperMajorityOrigin::successful_origin();
+		let call = Call::<T, I>::remove_blacklist_items { items: blacklist.clone() };
+		let origin = T::AnnouncementOrigin::successful_origin();
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
-		assert_last_event::<T, I>(Event::BlacklistRemoved { items: blacklist }.into());
+		assert_last_event::<T, I>(Event::BlacklistItemsRemoved { items: blacklist }.into());
 	}
 
 	impl_benchmark_test_suite!(Alliance, crate::mock::new_bench_ext(), crate::mock::Test);
