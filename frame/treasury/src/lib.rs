@@ -459,7 +459,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			proposals_approvals_len
 		});
 
-		total_weight = total_weight.saturating_add(Weight::todo_from_v1(
+		total_weight = total_weight.saturating_add(Weight::computation_only(
 			T::WeightInfo::on_initialize_proposals(proposals_len),
 		));
 

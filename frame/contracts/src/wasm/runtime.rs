@@ -306,12 +306,12 @@ impl RuntimeCosts {
 			ChainExtension(amount) => amount,
 
 			#[cfg(feature = "unstable-interface")]
-			CallRuntime(weight) => weight.todo_to_v1(),
+			CallRuntime(weight) => weight.computation,
 			#[cfg(feature = "unstable-interface")]
 			SetCodeHash => s.set_code_hash,
 		};
 
-		let weight = Weight::todo_from_v1(weight_v1);
+		let weight = Weight::computation_only(weight_v1);
 		RuntimeToken {
 			#[cfg(test)]
 			_created_from: *self,
@@ -764,7 +764,7 @@ where
 					self.charge_gas(RuntimeCosts::CallSurchargeTransfer)?;
 				}
 				self.ext.call(
-					Weight::todo_from_v1(gas),
+					Weight::computation_only(gas),
 					callee,
 					value,
 					input_data,
@@ -821,9 +821,13 @@ where
 		let code_hash: CodeHash<<E as Ext>::T> = self.read_sandbox_memory_as(code_hash_ptr)?;
 		let input_data = self.read_sandbox_memory(input_data_ptr, input_data_len)?;
 		let salt = self.read_sandbox_memory(salt_ptr, salt_len)?;
-		let instantiate_outcome =
-			self.ext
-				.instantiate(Weight::todo_from_v1(gas), code_hash, value, input_data, &salt);
+		let instantiate_outcome = self.ext.instantiate(
+			Weight::computation_only(gas),
+			code_hash,
+			value,
+			input_data,
+			&salt,
+		);
 		if let Ok((address, output)) = &instantiate_outcome {
 			if !output.flags.contains(ReturnFlags::REVERT) {
 				self.write_sandbox_output(
@@ -1466,7 +1470,7 @@ define_env!(Env, <E: Ext>,
 	// gas can be smaller than one.
 	[seal0] seal_weight_to_fee(ctx, gas: u64, out_ptr: u32, out_len_ptr: u32) => {
 		ctx.charge_gas(RuntimeCosts::WeightToFee)?;
-		let gas = Weight::todo_from_v1(gas);
+		let gas = Weight::computation_only(gas);
 		Ok(ctx.write_sandbox_output(
 			out_ptr, out_len_ptr, &ctx.ext.get_weight_price(gas).encode(), false, already_charged
 		)?)

@@ -356,7 +356,7 @@ impl<T: Config> Pallet<T> {
 		Self::trim_assignments_weight(
 			desired_targets,
 			size,
-			T::MinerMaxWeight::get().todo_to_v1(),
+			T::MinerMaxWeight::get().computation,
 			&mut index_assignments,
 		);
 		Self::trim_assignments_length(
@@ -1023,7 +1023,7 @@ mod tests {
 				assert_eq!(raw.solution.voter_count(), 5);
 
 				// now reduce the max weight
-				<MinerMaxWeight>::set(Weight::todo_from_v1(25));
+				<MinerMaxWeight>::set(Weight::computation_only(25));
 
 				let (raw, witness) =
 					MultiPhase::mine_solution::<<Runtime as Config>::Solver>().unwrap();

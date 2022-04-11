@@ -197,18 +197,18 @@ fn transaction_fee_is_correct() {
 		let mut balance_alice = (100 - 69) * DOLLARS;
 
 		let base_weight = ExtrinsicBaseWeight::get();
-		let base_fee = IdentityFee::<Balance>::calc(&base_weight.todo_to_v1());
+		let base_fee = IdentityFee::<Balance>::calc(&base_weight.computation);
 
 		let length_fee = TransactionByteFee::get() * (xt.clone().encode().len() as Balance);
 		balance_alice -= length_fee;
 
 		let weight = default_transfer_call().get_dispatch_info().weight;
-		let weight_fee = IdentityFee::<Balance>::calc(&weight.todo_to_v1());
+		let weight_fee = IdentityFee::<Balance>::calc(&weight.computation);
 
 		// we know that weight to fee multiplier is effect-less in block 1.
 		// current weight of transfer = 200_000_000
 		// Linear weight to fee is 1:1 right now (1 weight = 1 unit of balance)
-		assert_eq!(weight_fee, weight.todo_to_v1() as Balance);
+		assert_eq!(weight_fee, weight.computation as Balance);
 		balance_alice -= base_fee;
 		balance_alice -= weight_fee;
 		balance_alice -= tip;

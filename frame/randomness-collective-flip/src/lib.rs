@@ -107,7 +107,7 @@ pub mod pallet {
 				}
 			});
 
-			Weight::todo_from_v1(T::DbWeight::get().reads_writes(1, 1))
+			Weight::computation_only(T::DbWeight::get().reads_writes(1, 1))
 		}
 	}
 

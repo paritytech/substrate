@@ -238,7 +238,7 @@ impl pallet_utility::Config for Test {
 }
 parameter_types! {
 	pub const MaxValueSize: u32 = 16_384;
-	pub const DeletionWeightLimit: Weight = Weight::todo_from_v1(500_000_000_000);
+	pub const DeletionWeightLimit: Weight = Weight::computation_only(500_000_000_000);
 	pub const MaxCodeSize: u32 = 2 * 1024;
 	pub MySchedule: Schedule<Test> = {
 		let mut schedule = <Schedule<Test>>::default();
@@ -254,7 +254,7 @@ parameter_types! {
 
 impl Convert<Weight, BalanceOf<Self>> for Test {
 	fn convert(w: Weight) -> BalanceOf<Self> {
-		w.todo_to_v1()
+		w.computation
 	}
 }
 
@@ -301,7 +301,7 @@ pub const BOB: AccountId32 = AccountId32::new([2u8; 32]);
 pub const CHARLIE: AccountId32 = AccountId32::new([3u8; 32]);
 pub const DJANGO: AccountId32 = AccountId32::new([4u8; 32]);
 
-pub const GAS_LIMIT: Weight = Weight::todo_from_v1(100_000_000_000);
+pub const GAS_LIMIT: Weight = Weight::computation_only(100_000_000_000);
 
 pub struct ExtBuilder {
 	existential_deposit: u64,
@@ -368,7 +368,7 @@ fn calling_plain_account_fails() {
 			Err(DispatchErrorWithPostInfo {
 				error: Error::<Test>::ContractNotFound.into(),
 				post_info: PostDispatchInfo {
-					actual_weight: Some(Weight::todo_from_v1(base_cost)),
+					actual_weight: Some(Weight::computation_only(base_cost)),
 					pays_fee: Default::default(),
 				},
 			})
@@ -536,7 +536,7 @@ fn run_out_of_gas() {
 				Origin::signed(ALICE),
 				addr, // newly created account
 				0,
-				Weight::todo_from_v1(1_000_000_000_000),
+				Weight::computation_only(1_000_000_000_000),
 				None,
 				vec![],
 			),
@@ -1614,7 +1614,7 @@ fn lazy_removal_works() {
 		assert_matches!(child::get(trie, &[99]), Some(42));
 
 		// Run the lazy removal
-		Contracts::on_initialize(Weight::MAX.todo_to_v1());
+		Contracts::on_initialize(Weight::MAX.computation);
 
 		// Value should be gone now
 		assert_matches!(child::get::<i32>(trie, &[99]), None);
@@ -1665,7 +1665,7 @@ fn lazy_batch_removal_works() {
 		}
 
 		// Run single lazy removal
-		Contracts::on_initialize(Weight::MAX.todo_to_v1());
+		Contracts::on_initialize(Weight::MAX.computation);
 
 		// The single lazy removal should have removed all queued tries
 		for trie in tries.iter() {
@@ -1825,9 +1825,9 @@ fn lazy_removal_does_no_run_on_full_block() {
 
 		// Run the lazy removal without any limit so that all keys would be removed if there
 		// had been some weight left in the block.
-		let weight_used = Contracts::on_initialize(Weight::MAX.todo_to_v1());
+		let weight_used = Contracts::on_initialize(Weight::MAX.computation);
 		let base = <<Test as Config>::WeightInfo as WeightInfo>::on_initialize();
-		assert_eq!(weight_used.todo_to_v1(), base);
+		assert_eq!(weight_used.computation, base);
 
 		// All the keys are still in place
 		for val in &vals {
@@ -1835,7 +1835,7 @@ fn lazy_removal_does_no_run_on_full_block() {
 		}
 
 		// Run the lazy removal directly which disregards the block limits
-		Storage::<Test>::process_deletion_queue_batch(Weight::MAX.todo_to_v1());
+		Storage::<Test>::process_deletion_queue_batch(Weight::MAX.computation);
 
 		// Now the keys should be gone
 		for val in &vals {
@@ -2176,7 +2176,7 @@ fn gas_estimation_nested_call_fixed_limit() {
 		let input: Vec<u8> = AsRef::<[u8]>::as_ref(&addr_callee)
 			.iter()
 			.cloned()
-			.chain((GAS_LIMIT.todo_to_v1() / 5).to_le_bytes())
+			.chain((GAS_LIMIT.computation / 5).to_le_bytes())
 			.collect();
 
 		// Call in order to determine the gas that is required for this call
@@ -2200,7 +2200,7 @@ fn gas_estimation_nested_call_fixed_limit() {
 				ALICE,
 				addr_caller,
 				0,
-				Weight::todo_from_v1(result.gas_required),
+				Weight::computation_only(result.gas_required),
 				Some(result.storage_deposit.charge_or_zero()),
 				input,
 				false,
@@ -2270,7 +2270,7 @@ fn gas_estimation_call_runtime() {
 				ALICE,
 				addr_caller,
 				0,
-				Weight::todo_from_v1(result.gas_required),
+				Weight::computation_only(result.gas_required),
 				None,
 				call.encode(),
 				false,

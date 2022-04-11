@@ -48,16 +48,9 @@ impl Weight {
 		}
 	}
 
-	/// This is a simple helper function which allows us to be backwards compatible, but will be
-	/// removed in the future.
-	pub const fn todo_from_v1(computation: WeightV1) -> Self {
+	/// Construct with computation weight only (zero `bandwith`).
+	pub const fn computation_only(computation: ComputationWeight) -> Self {
 		Self { computation, bandwidth: 0 }
-	}
-
-	/// This is a simple helper function which allows us to be backwards compatible, but will be
-	/// removed in the future.
-	pub const fn todo_to_v1(&self) -> WeightV1 {
-		self.computation
 	}
 
 	/// Checks if any param of `self` is less than `other`.

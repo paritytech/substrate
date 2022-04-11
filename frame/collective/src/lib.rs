@@ -432,7 +432,7 @@ pub mod pallet {
 				T::MaxMembers::get(), // M
 			);
 
-			let final_weight = Weight::todo_from_v1(weight_v1)
+			let final_weight = Weight::computation_only(weight_v1)
 				.saturating_add(proposal.get_dispatch_info().weight); // P
 
 			(final_weight, DispatchClass::Operational)
@@ -461,7 +461,7 @@ pub mod pallet {
 						proposal_len as u32,  // B
 						members.len() as u32, // M
 					);
-					Weight::todo_from_v1(weight_v1).saturating_add(w) // P
+					Weight::computation_only(weight_v1).saturating_add(w) // P
 				})
 				.into())
 		}
@@ -499,9 +499,9 @@ pub mod pallet {
 					*length_bound, // B
 					T::MaxMembers::get(), // M
 				);
-				Weight::todo_from_v1(weight_v1).saturating_add(proposal.get_dispatch_info().weight) // P1
+				Weight::computation_only(weight_v1).saturating_add(proposal.get_dispatch_info().weight) // P1
 			} else {
-				Weight::todo_from_v1(T::WeightInfo::propose_proposed(
+				Weight::computation_only(T::WeightInfo::propose_proposed(
 					*length_bound, // B
 					T::MaxMembers::get(), // M
 					T::MaxProposals::get(), // P2
@@ -541,7 +541,7 @@ pub mod pallet {
 							proposal_len as u32,  // B
 							members.len() as u32, // M
 						);
-						Weight::todo_from_v1(weight_v1).saturating_add(w) // P1
+						Weight::computation_only(weight_v1).saturating_add(w) // P1
 					})
 					.into())
 			} else {
@@ -687,7 +687,7 @@ pub mod pallet {
 			{
 				let b = *length_bound;
 				let m = T::MaxMembers::get();
-				let p1 = proposal_weight_bound.todo_to_v1();
+				let p1 = proposal_weight_bound.computation;
 				let p2 = T::MaxProposals::get();
 				T::WeightInfo::close_early_approved(b, m, p2)
 					.max(T::WeightInfo::close_early_disapproved(m, p2))
@@ -728,7 +728,7 @@ pub mod pallet {
 					Some({
 						let weight_v1 =
 							T::WeightInfo::close_early_approved(len as u32, seats, proposal_count);
-						Weight::todo_from_v1(weight_v1).saturating_add(proposal_weight)
+						Weight::computation_only(weight_v1).saturating_add(proposal_weight)
 					}),
 					Pays::Yes,
 				)
@@ -774,7 +774,7 @@ pub mod pallet {
 					Some({
 						let weight_v1 =
 							T::WeightInfo::close_approved(len as u32, seats, proposal_count);
-						Weight::todo_from_v1(weight_v1).saturating_add(proposal_weight)
+						Weight::computation_only(weight_v1).saturating_add(proposal_weight)
 					}),
 					Pays::Yes,
 				)

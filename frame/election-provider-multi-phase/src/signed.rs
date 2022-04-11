@@ -349,7 +349,7 @@ impl<T: Config> Pallet<T> {
 	/// being called.
 	pub fn finalize_signed_phase() -> bool {
 		let (weight, found_solution) = Self::finalize_signed_phase_internal();
-		Self::register_weight(weight.todo_to_v1());
+		Self::register_weight(weight.computation);
 		found_solution
 	}
 
@@ -414,7 +414,7 @@ impl<T: Config> Pallet<T> {
 			discarded
 		);
 
-		(Weight::todo_from_v1(weight), found_solution)
+		(Weight::computation_only(weight), found_solution)
 	}
 	/// Helper function for the case where a solution is accepted in the signed phase.
 	///
@@ -851,11 +851,11 @@ mod tests {
 				// default solution will have 5 edges (5 * 5 + 10)
 				assert_eq!(solution_weight, 35);
 				assert_eq!(raw.solution.voter_count(), 5);
-				assert_eq!(<Runtime as Config>::SignedMaxWeight::get().todo_to_v1(), 40);
+				assert_eq!(<Runtime as Config>::SignedMaxWeight::get().computation, 40);
 
 				assert_ok!(MultiPhase::submit(Origin::signed(99), Box::new(raw.clone())));
 
-				<SignedMaxWeight>::set(Weight::todo_from_v1(30));
+				<SignedMaxWeight>::set(Weight::computation_only(30));
 
 				// note: resubmitting the same solution is technically okay as long as the queue has
 				// space.

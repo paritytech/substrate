@@ -267,18 +267,18 @@ pub mod pallet {
 							LotteryIndex::<T>::mutate(|index| *index = index.saturating_add(1));
 							// Set a new start with the current block.
 							config.start = n;
-							return Weight::todo_from_v1(T::WeightInfo::on_initialize_repeat())
+							return Weight::computation_only(T::WeightInfo::on_initialize_repeat())
 						} else {
 							// Else, kill the lottery storage.
 							*lottery = None;
-							return Weight::todo_from_v1(T::WeightInfo::on_initialize_end())
+							return Weight::computation_only(T::WeightInfo::on_initialize_end())
 						}
 						// We choose not need to kill Participants and Tickets to avoid a large
 						// number of writes at one time. Instead, data persists between lotteries,
 						// but is not used if it is not relevant.
 					}
 				}
-				return Weight::todo_from_v1(T::DbWeight::get().reads(1))
+				return Weight::computation_only(T::DbWeight::get().reads(1))
 			})
 		}
 	}
@@ -297,7 +297,7 @@ pub mod pallet {
 		///
 		/// This extrinsic must be called by a signed origin.
 		#[pallet::weight({
-			let benchmarked_weight = Weight::todo_from_v1(T::WeightInfo::buy_ticket());
+			let benchmarked_weight = Weight::computation_only(T::WeightInfo::buy_ticket());
 			benchmarked_weight
 				.saturating_add(call.get_dispatch_info().weight)
 		})]

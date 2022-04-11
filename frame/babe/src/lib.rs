@@ -860,7 +860,7 @@ impl<T: Config> frame_support::traits::EstimateNextSessionRotation<T::BlockNumbe
 		(
 			Some(Permill::from_rational(*elapsed, T::EpochDuration::get())),
 			// Read: Current Slot, Epoch Index, Genesis Slot
-			Weight::todo_from_v1(T::DbWeight::get().reads(3)),
+			Weight::computation_only(T::DbWeight::get().reads(3)),
 		)
 	}
 
@@ -868,7 +868,7 @@ impl<T: Config> frame_support::traits::EstimateNextSessionRotation<T::BlockNumbe
 		(
 			Self::next_expected_epoch_change(now),
 			// Read: Current Slot, Epoch Index, Genesis Slot
-			Weight::todo_from_v1(T::DbWeight::get().reads(3)),
+			Weight::computation_only(T::DbWeight::get().reads(3)),
 		)
 	}
 }
@@ -990,6 +990,6 @@ pub mod migrations {
 
 		let weight = T::DbWeight::get().writes(writes) + T::DbWeight::get().reads(reads);
 
-		Weight::todo_from_v1(weight)
+		Weight::computation_only(weight)
 	}
 }

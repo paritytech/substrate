@@ -102,7 +102,7 @@ fn test_whitelist_call_and_execute() {
 			Whitelist::dispatch_whitelisted_call(
 				Origin::root(),
 				call_hash,
-				call_weight - Weight::todo_from_v1(1)
+				call_weight - Weight::computation_only(1)
 			),
 			crate::Error::<Test>::InvalidCallWeightWitness,
 		);

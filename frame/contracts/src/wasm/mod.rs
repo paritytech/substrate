@@ -347,7 +347,7 @@ mod tests {
 				events: Default::default(),
 				runtime_calls: Default::default(),
 				schedule: Default::default(),
-				gas_meter: GasMeter::new(Weight::todo_from_v1(10_000_000_000)),
+				gas_meter: GasMeter::new(Weight::computation_only(10_000_000_000)),
 				debug_buffer: Default::default(),
 				ecdsa_recover: Default::default(),
 			}
@@ -388,7 +388,7 @@ mod tests {
 				code_hash: code_hash.clone(),
 				value,
 				data: data.to_vec(),
-				gas_left: gas_limit.todo_to_v1(),
+				gas_left: gas_limit.computation,
 				salt: salt.to_vec(),
 			});
 			Ok((
@@ -476,7 +476,7 @@ mod tests {
 			16_384
 		}
 		fn get_weight_price(&self, weight: Weight) -> BalanceOf<Self::T> {
-			BalanceOf::<Self::T>::from(1312_u32).saturating_mul(weight.todo_to_v1().into())
+			BalanceOf::<Self::T>::from(1312_u32).saturating_mul(weight.computation.into())
 		}
 		fn schedule(&self) -> &Schedule<Self::T> {
 			&self.schedule
@@ -1754,7 +1754,7 @@ mod tests {
 			)]
 		);
 
-		assert!(mock_ext.gas_meter.gas_left().todo_to_v1() > 0);
+		assert!(mock_ext.gas_meter.gas_left().computation > 0);
 	}
 
 	const CODE_DEPOSIT_EVENT_MAX_TOPICS: &str = r#"

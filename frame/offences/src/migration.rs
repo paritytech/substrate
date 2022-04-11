@@ -47,10 +47,10 @@ pub fn remove_deferred_storage<T: Config>() -> Weight {
 			*session,
 			DisableStrategy::WhenSlashed,
 		);
-		weight = weight.saturating_add(consumed.todo_to_v1());
+		weight = weight.saturating_add(consumed.computation);
 	}
 
-	Weight::todo_from_v1(weight)
+	Weight::computation_only(weight)
 }
 
 #[cfg(test)]
@@ -86,7 +86,7 @@ mod test {
 
 			// when
 			assert_eq!(
-				remove_deferred_storage::<T>().todo_to_v1(),
+				remove_deferred_storage::<T>().computation,
 				<T as frame_system::Config>::DbWeight::get().reads_writes(1, 1),
 			);
 

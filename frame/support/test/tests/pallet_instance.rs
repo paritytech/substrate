@@ -52,10 +52,10 @@ pub mod pallet {
 		fn on_initialize(_: BlockNumberFor<T>) -> Weight {
 			if TypeId::of::<I>() == TypeId::of::<()>() {
 				Self::deposit_event(Event::Something(10));
-				Weight::todo_from_v1(10)
+				Weight::computation_only(10)
 			} else {
 				Self::deposit_event(Event::Something(11));
-				Weight::todo_from_v1(11)
+				Weight::computation_only(11)
 			}
 		}
 		fn on_finalize(_: BlockNumberFor<T>) {
@@ -68,10 +68,10 @@ pub mod pallet {
 		fn on_runtime_upgrade() -> Weight {
 			if TypeId::of::<I>() == TypeId::of::<()>() {
 				Self::deposit_event(Event::Something(30));
-				Weight::todo_from_v1(30)
+				Weight::computation_only(30)
 			} else {
 				Self::deposit_event(Event::Something(31));
-				Weight::todo_from_v1(31)
+				Weight::computation_only(31)
 			}
 		}
 		fn integrity_test() {}
@@ -80,7 +80,7 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		/// Doc comment put in metadata
-		#[pallet::weight(Weight::todo_from_v1(*_foo as u64))]
+		#[pallet::weight(Weight::computation_only(*_foo as u64))]
 		pub fn foo(
 			origin: OriginFor<T>,
 			#[pallet::compact] _foo: u32,
@@ -313,7 +313,7 @@ fn call_expand() {
 	assert_eq!(
 		call_foo.get_dispatch_info(),
 		DispatchInfo {
-			weight: Weight::todo_from_v1(3),
+			weight: Weight::computation_only(3),
 			class: DispatchClass::Normal,
 			pays_fee: Pays::Yes
 		}
@@ -325,7 +325,7 @@ fn call_expand() {
 	assert_eq!(
 		call_foo.get_dispatch_info(),
 		DispatchInfo {
-			weight: Weight::todo_from_v1(3),
+			weight: Weight::computation_only(3),
 			class: DispatchClass::Normal,
 			pays_fee: Pays::Yes
 		}
@@ -563,10 +563,10 @@ fn pallet_hooks_expand() {
 	TestExternalities::default().execute_with(|| {
 		frame_system::Pallet::<Runtime>::set_block_number(1);
 
-		assert_eq!(AllPalletsWithoutSystem::on_initialize(1), Weight::todo_from_v1(21));
+		assert_eq!(AllPalletsWithoutSystem::on_initialize(1), Weight::computation_only(21));
 		AllPalletsWithoutSystem::on_finalize(1);
 
-		assert_eq!(AllPalletsWithoutSystem::on_runtime_upgrade(), Weight::todo_from_v1(61));
+		assert_eq!(AllPalletsWithoutSystem::on_runtime_upgrade(), Weight::computation_only(61));
 
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[0].event,

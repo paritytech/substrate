@@ -444,7 +444,7 @@ fn batch_handles_weight_refund() {
 		assert_eq!(
 			extract_actual_weight(&result, &info),
 			// Real weight is 2 calls at end_weight
-			Weight::todo_from_v1(<Test as Config>::WeightInfo::batch(2)) + end_weight * 2,
+			Weight::computation_only(<Test as Config>::WeightInfo::batch(2)) + end_weight * 2,
 		);
 	});
 }
@@ -479,7 +479,7 @@ fn batch_all_revert() {
 			DispatchErrorWithPostInfo {
 				post_info: PostDispatchInfo {
 					actual_weight: Some(
-						Weight::todo_from_v1(<Test as Config>::WeightInfo::batch_all(2)) +
+						Weight::computation_only(<Test as Config>::WeightInfo::batch_all(2)) +
 							info.weight * 2
 					),
 					pays_fee: Pays::Yes
@@ -552,7 +552,7 @@ fn batch_all_handles_weight_refund() {
 		assert_eq!(
 			extract_actual_weight(&result, &info),
 			// Real weight is 2 calls at end_weight
-			Weight::todo_from_v1(<Test as Config>::WeightInfo::batch_all(2)) + end_weight * 2,
+			Weight::computation_only(<Test as Config>::WeightInfo::batch_all(2)) + end_weight * 2,
 		);
 	});
 }
@@ -574,7 +574,7 @@ fn batch_all_does_not_nest() {
 			DispatchErrorWithPostInfo {
 				post_info: PostDispatchInfo {
 					actual_weight: Some(
-						Weight::todo_from_v1(<Test as Config>::WeightInfo::batch_all(1)) +
+						Weight::computation_only(<Test as Config>::WeightInfo::batch_all(1)) +
 							info.weight
 					),
 					pays_fee: Pays::Yes

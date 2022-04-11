@@ -2642,13 +2642,13 @@ mod tests {
 			#[weight = (5, DispatchClass::Operational)]
 			fn operational(_origin) { unreachable!() }
 
-			fn on_initialize(n: T::BlockNumber,) -> Weight { if n.into() == 42 { panic!("on_initialize") } Weight::todo_from_v1(7) }
+			fn on_initialize(n: T::BlockNumber,) -> Weight { if n.into() == 42 { panic!("on_initialize") } Weight::computation_only(7) }
 			fn on_idle(n: T::BlockNumber, remaining_weight: Weight,) -> Weight {
-				if n.into() == 42 || remaining_weight == Weight::todo_from_v1(42) { panic!("on_idle") }
-				Weight::todo_from_v1(7)
+				if n.into() == 42 || remaining_weight == Weight::computation_only(42) { panic!("on_idle") }
+				Weight::computation_only(7)
 			}
 			fn on_finalize(n: T::BlockNumber,) { if n.into() == 42 { panic!("on_finalize") } }
-			fn on_runtime_upgrade() -> Weight { Weight::todo_from_v1(10) }
+			fn on_runtime_upgrade() -> Weight { Weight::computation_only(10) }
 			fn offchain_worker() {}
 			/// Some doc
 			fn integrity_test() { panic!("integrity_test") }
@@ -2804,27 +2804,27 @@ mod tests {
 	fn on_initialize_should_work_2() {
 		assert_eq!(
 			<Module<TraitImpl> as OnInitialize<u32>>::on_initialize(10),
-			Weight::todo_from_v1(7)
+			Weight::computation_only(7)
 		);
 	}
 
 	#[test]
 	#[should_panic(expected = "on_idle")]
 	fn on_idle_should_work_1() {
-		<Module<TraitImpl> as OnIdle<u32>>::on_idle(42, Weight::todo_from_v1(9));
+		<Module<TraitImpl> as OnIdle<u32>>::on_idle(42, Weight::computation_only(9));
 	}
 
 	#[test]
 	#[should_panic(expected = "on_idle")]
 	fn on_idle_should_work_2() {
-		<Module<TraitImpl> as OnIdle<u32>>::on_idle(9, Weight::todo_from_v1(42));
+		<Module<TraitImpl> as OnIdle<u32>>::on_idle(9, Weight::computation_only(42));
 	}
 
 	#[test]
 	fn on_idle_should_work_3() {
 		assert_eq!(
-			<Module<TraitImpl> as OnIdle<u32>>::on_idle(10, Weight::todo_from_v1(11)),
-			Weight::todo_from_v1(7)
+			<Module<TraitImpl> as OnIdle<u32>>::on_idle(10, Weight::computation_only(11)),
+			Weight::computation_only(7)
 		);
 	}
 
@@ -2839,7 +2839,7 @@ mod tests {
 		sp_io::TestExternalities::default().execute_with(|| {
 			assert_eq!(
 				<Module<TraitImpl> as OnRuntimeUpgrade>::on_runtime_upgrade(),
-				Weight::todo_from_v1(10)
+				Weight::computation_only(10)
 			)
 		});
 	}
@@ -2850,7 +2850,7 @@ mod tests {
 		assert_eq!(
 			Call::<TraitImpl>::operational {}.get_dispatch_info(),
 			DispatchInfo {
-				weight: Weight::todo_from_v1(5),
+				weight: Weight::computation_only(5),
 				class: DispatchClass::Operational,
 				pays_fee: Pays::Yes
 			},
@@ -2859,7 +2859,7 @@ mod tests {
 		assert_eq!(
 			Call::<TraitImpl>::aux_3 {}.get_dispatch_info(),
 			DispatchInfo {
-				weight: Weight::todo_from_v1(3),
+				weight: Weight::computation_only(3),
 				class: DispatchClass::Normal,
 				pays_fee: Pays::Yes
 			},

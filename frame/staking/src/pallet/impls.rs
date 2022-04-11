@@ -96,7 +96,7 @@ impl<T: Config> Pallet<T> {
 		era: EraIndex,
 	) -> DispatchResultWithPostInfo {
 		let payout_stakers_alive_staked_weight =
-			Weight::todo_from_v1(T::WeightInfo::payout_stakers_alive_staked(0));
+			Weight::computation_only(T::WeightInfo::payout_stakers_alive_staked(0));
 		// Validate input data
 		let current_era = CurrentEra::<T>::get().ok_or_else(|| {
 			Error::<T>::InvalidEraToReward.with_weight(payout_stakers_alive_staked_weight)
@@ -867,7 +867,7 @@ impl<T: Config> Pallet<T> {
 	/// This is always mandatory weight.
 	fn register_weight(weight: frame_support::weights::WeightV1) {
 		<frame_system::Pallet<T>>::register_extra_weight_unchecked(
-			Weight::todo_from_v1(weight),
+			Weight::computation_only(weight),
 			DispatchClass::Mandatory,
 		);
 	}
@@ -1162,7 +1162,8 @@ where
 		let reward_proportion = SlashRewardFraction::<T>::get();
 		let mut consumed_weight = Weight::zero();
 		let mut add_db_reads_writes = |reads, writes| {
-			consumed_weight += Weight::todo_from_v1(T::DbWeight::get().reads_writes(reads, writes));
+			consumed_weight +=
+				Weight::computation_only(T::DbWeight::get().reads_writes(reads, writes));
 		};
 
 		let active_era = {

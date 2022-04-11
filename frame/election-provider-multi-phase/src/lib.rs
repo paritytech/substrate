@@ -788,7 +788,7 @@ pub mod pallet {
 				_ => T::WeightInfo::on_initialize_nothing(),
 			};
 
-			Weight::todo_from_v1(weight_v1)
+			Weight::computation_only(weight_v1)
 		}
 
 		fn offchain_worker(now: T::BlockNumber) {
@@ -980,7 +980,7 @@ pub mod pallet {
 
 			ensure!(
 				Self::feasibility_weight_of(&raw_solution, size) <
-					T::SignedMaxWeight::get().todo_to_v1(),
+					T::SignedMaxWeight::get().computation,
 				Error::<T>::SignedTooMuchWeight,
 			);
 
@@ -1401,7 +1401,7 @@ impl<T: Config> Pallet<T> {
 	/// This is always mandatory weight.
 	fn register_weight(weight: WeightV1) {
 		<frame_system::Pallet<T>>::register_extra_weight_unchecked(
-			Weight::todo_from_v1(weight),
+			Weight::computation_only(weight),
 			DispatchClass::Mandatory,
 		);
 	}
@@ -2152,7 +2152,7 @@ mod tests {
 
 		let mut active = 1;
 		while weight_with(active) <=
-			<Runtime as frame_system::Config>::BlockWeights::get().max_block.todo_to_v1() ||
+			<Runtime as frame_system::Config>::BlockWeights::get().max_block.computation ||
 			active == all_voters
 		{
 			active += 1;

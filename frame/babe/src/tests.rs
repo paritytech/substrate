@@ -799,7 +799,7 @@ fn report_equivocation_has_valid_weight() {
 		.map(<Test as Config>::WeightInfo::report_equivocation)
 		.collect::<Vec<_>>()
 		.windows(2)
-		.all(|w| w[0].todo_to_v1() < w[1].todo_to_v1()));
+		.all(|w| w[0].computation < w[1].computation));
 }
 
 #[test]

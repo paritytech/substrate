@@ -101,25 +101,25 @@ pub mod pallet {
 
 	impl WeightInfo for () {
 		fn process_top_key(_: u32) -> Weight {
-			Weight::todo_from_v1(1000000)
+			Weight::computation_only(1000000)
 		}
 		fn continue_migrate() -> Weight {
-			Weight::todo_from_v1(1000000)
+			Weight::computation_only(1000000)
 		}
 		fn continue_migrate_wrong_witness() -> Weight {
-			Weight::todo_from_v1(1000000)
+			Weight::computation_only(1000000)
 		}
 		fn migrate_custom_top_fail() -> Weight {
-			Weight::todo_from_v1(1000000)
+			Weight::computation_only(1000000)
 		}
 		fn migrate_custom_top_success() -> Weight {
-			Weight::todo_from_v1(1000000)
+			Weight::computation_only(1000000)
 		}
 		fn migrate_custom_child_fail() -> Weight {
-			Weight::todo_from_v1(1000000)
+			Weight::computation_only(1000000)
 		}
 		fn migrate_custom_child_success() -> Weight {
-			Weight::todo_from_v1(1000000)
+			Weight::computation_only(1000000)
 		}
 	}
 
@@ -778,7 +778,7 @@ pub mod pallet {
 
 				weight
 			} else {
-				Weight::todo_from_v1(T::DbWeight::get().reads(1))
+				Weight::computation_only(T::DbWeight::get().reads(1))
 			}
 		}
 	}
@@ -790,7 +790,7 @@ pub mod pallet {
 			let weight_v1 = items
 				.saturating_mul(<T as frame_system::Config>::DbWeight::get().reads_writes(1, 1));
 			// we assume that the read/write per-byte weight is the same for child and top tree.
-			Weight::todo_from_v1(weight_v1).saturating_add(T::WeightInfo::process_top_key(size))
+			Weight::computation_only(weight_v1).saturating_add(T::WeightInfo::process_top_key(size))
 		}
 
 		/// Put a stop to all ongoing migrations.

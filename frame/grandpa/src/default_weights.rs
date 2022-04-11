@@ -47,10 +47,10 @@ impl crate::WeightInfo for () {
 			// fetching set id -> session index mappings
 			.saturating_add(DbWeight::get().reads(2));
 
-		Weight::todo_from_v1(weight_v1)
+		Weight::computation_only(weight_v1)
 	}
 
 	fn note_stalled() -> Weight {
-		Weight::todo_from_v1((3 * WEIGHT_PER_MICROS).saturating_add(DbWeight::get().writes(1)))
+		Weight::computation_only((3 * WEIGHT_PER_MICROS).saturating_add(DbWeight::get().writes(1)))
 	}
 }

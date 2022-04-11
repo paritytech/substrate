@@ -45,13 +45,13 @@ pub fn migrate_to_v1<T: Config<I>, I: 'static, P: GetStorageVersion + PalletInfo
 			on_chain_storage_version,
 		);
 		// calculate and return migration weights
-		Weight::todo_from_v1(T::DbWeight::get().reads_writes(count + 1, count + 1))
+		Weight::computation_only(T::DbWeight::get().reads_writes(count + 1, count + 1))
 	} else {
 		log::warn!(
 			target: "runtime::uniques",
 			"Attempted to apply migration to v1 but failed because storage version is {:?}",
 			on_chain_storage_version,
 		);
-		Weight::todo_from_v1(T::DbWeight::get().reads(1))
+		Weight::computation_only(T::DbWeight::get().reads(1))
 	}
 }

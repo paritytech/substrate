@@ -3586,7 +3586,7 @@ fn payout_stakers_handles_weight_refund() {
 		let info = call.get_dispatch_info();
 		let result = call.dispatch(Origin::signed(20));
 		assert_ok!(result);
-		assert_eq!(extract_actual_weight(&result, &info).todo_to_v1(), zero_nom_payouts_weight);
+		assert_eq!(extract_actual_weight(&result, &info).computation, zero_nom_payouts_weight);
 
 		// The validator is not rewarded in this era; so there will be zero payouts to claim for
 		// this era.
@@ -3600,7 +3600,7 @@ fn payout_stakers_handles_weight_refund() {
 		let info = call.get_dispatch_info();
 		let result = call.dispatch(Origin::signed(20));
 		assert_ok!(result);
-		assert_eq!(extract_actual_weight(&result, &info).todo_to_v1(), zero_nom_payouts_weight);
+		assert_eq!(extract_actual_weight(&result, &info).computation, zero_nom_payouts_weight);
 
 		// Reward the validator and its nominators.
 		Staking::reward_by_ids(vec![(11, 1)]);
@@ -3614,10 +3614,7 @@ fn payout_stakers_handles_weight_refund() {
 		let info = call.get_dispatch_info();
 		let result = call.dispatch(Origin::signed(20));
 		assert_ok!(result);
-		assert_eq!(
-			extract_actual_weight(&result, &info).todo_to_v1(),
-			half_max_nom_rewarded_weight
-		);
+		assert_eq!(extract_actual_weight(&result, &info).computation, half_max_nom_rewarded_weight);
 
 		// Add enough nominators so that we are at the limit. They will be active nominators
 		// in the next era.
@@ -3641,7 +3638,7 @@ fn payout_stakers_handles_weight_refund() {
 		let info = call.get_dispatch_info();
 		let result = call.dispatch(Origin::signed(20));
 		assert_ok!(result);
-		assert_eq!(extract_actual_weight(&result, &info).todo_to_v1(), max_nom_rewarded_weight);
+		assert_eq!(extract_actual_weight(&result, &info).computation, max_nom_rewarded_weight);
 
 		// Try and collect payouts for an era that has already been collected.
 		let call =
@@ -3650,7 +3647,7 @@ fn payout_stakers_handles_weight_refund() {
 		let result = call.dispatch(Origin::signed(20));
 		assert!(result.is_err());
 		// When there is an error the consumed weight == weight when there are 0 nominator payouts.
-		assert_eq!(extract_actual_weight(&result, &info).todo_to_v1(), zero_nom_payouts_weight);
+		assert_eq!(extract_actual_weight(&result, &info).computation, zero_nom_payouts_weight);
 	});
 }
 
@@ -3700,11 +3697,11 @@ fn bond_during_era_correctly_populates_claimed_rewards() {
 fn offences_weight_calculated_correctly() {
 	ExtBuilder::default().nominate(true).build_and_execute(|| {
 		// On offence with zero offenders: 4 Reads, 1 Write
-		let zero_offence_weight = Weight::todo_from_v1(<Test as frame_system::Config>::DbWeight::get().reads_writes(4, 1));
+		let zero_offence_weight = Weight::computation_only(<Test as frame_system::Config>::DbWeight::get().reads_writes(4, 1));
 		assert_eq!(Staking::on_offence(&[], &[Perbill::from_percent(50)], 0, DisableStrategy::WhenSlashed), zero_offence_weight);
 
 		// On Offence with N offenders, Unapplied: 4 Reads, 1 Write + 4 Reads, 5 Writes
-		let n_offence_unapplied_weight = Weight::todo_from_v1(<Test as frame_system::Config>::DbWeight::get().reads_writes(4, 1)
+		let n_offence_unapplied_weight = Weight::computation_only(<Test as frame_system::Config>::DbWeight::get().reads_writes(4, 1)
 			+ <Test as frame_system::Config>::DbWeight::get().reads_writes(4, 5));
 
 		let offenders: Vec<OffenceDetails<<Test as frame_system::Config>::AccountId, pallet_session::historical::IdentificationTuple<Test>>>
@@ -3735,7 +3732,7 @@ fn offences_weight_calculated_correctly() {
 			// `reward_cost` * reporters (1)
 			+ <Test as frame_system::Config>::DbWeight::get().reads_writes(2, 2);
 
-		assert_eq!(Staking::on_offence(&one_offender, &[Perbill::from_percent(50)], 0, DisableStrategy::WhenSlashed), Weight::todo_from_v1(one_offence_unapplied_weight));
+		assert_eq!(Staking::on_offence(&one_offender, &[Perbill::from_percent(50)], 0, DisableStrategy::WhenSlashed), Weight::computation_only(one_offence_unapplied_weight));
 	});
 }
 
@@ -4014,7 +4011,7 @@ fn do_not_die_when_active_is_ed() {
 fn on_finalize_weight_is_nonzero() {
 	ExtBuilder::default().build_and_execute(|| {
 		let on_finalize_weight = <Test as frame_system::Config>::DbWeight::get().reads(1);
-		assert!(<Staking as Hooks<u64>>::on_initialize(1).todo_to_v1() >= on_finalize_weight);
+		assert!(<Staking as Hooks<u64>>::on_initialize(1).computation >= on_finalize_weight);
 	})
 }
 

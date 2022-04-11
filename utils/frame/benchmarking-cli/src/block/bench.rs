@@ -142,7 +142,7 @@ where
 
 		let weight = ConsumedWeight::decode_all(&mut raw_weight)?;
 		// Should be divisible, but still use floats in case we ever change that.
-		Ok((weight.total().todo_to_v1() as f64 / WEIGHT_PER_NANOS as f64).floor() as NanoSeconds)
+		Ok((weight.total().computation as f64 / WEIGHT_PER_NANOS as f64).floor() as NanoSeconds)
 	}
 
 	/// Prints the weight info of a block to the console.

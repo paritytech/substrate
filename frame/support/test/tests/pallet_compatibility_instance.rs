@@ -72,7 +72,7 @@ mod pallet_old {
 
 			fn on_initialize(_n: T::BlockNumber) -> Weight {
 				<Dummy<T, I>>::put(T::Balance::from(10));
-				Weight::todo_from_v1(10)
+				Weight::computation_only(10)
 			}
 
 			fn on_finalize(_n: T::BlockNumber) {
@@ -116,7 +116,7 @@ pub mod pallet {
 	impl<T: Config<I>, I: 'static> Hooks<T::BlockNumber> for Pallet<T, I> {
 		fn on_initialize(_n: T::BlockNumber) -> Weight {
 			<Dummy<T, I>>::put(T::Balance::from(10));
-			Weight::todo_from_v1(10)
+			Weight::computation_only(10)
 		}
 
 		fn on_finalize(_n: T::BlockNumber) {

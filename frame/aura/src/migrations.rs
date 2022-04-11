@@ -41,5 +41,5 @@ pub trait RemoveLastTimestamp: super::Config {
 /// This migration requires a type `T` that implements [`RemoveLastTimestamp`].
 pub fn remove_last_timestamp<T: RemoveLastTimestamp>() -> Weight {
 	LastTimestamp::<T>::kill();
-	Weight::todo_from_v1(T::DbWeight::get().writes(1))
+	Weight::computation_only(T::DbWeight::get().writes(1))
 }

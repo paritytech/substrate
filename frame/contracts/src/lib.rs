@@ -327,10 +327,10 @@ pub mod pallet {
 				.max_block
 				.saturating_sub(System::<T>::block_weight().total())
 				.min(T::DeletionWeightLimit::get());
-			let weight_v1 = Storage::<T>::process_deletion_queue_batch(weight_limit.todo_to_v1())
+			let weight_v1 = Storage::<T>::process_deletion_queue_batch(weight_limit.computation)
 				.saturating_add(T::WeightInfo::on_initialize());
 
-			Weight::todo_from_v1(weight_v1)
+			Weight::computation_only(weight_v1)
 		}
 	}
 
@@ -359,7 +359,7 @@ pub mod pallet {
 		/// a regular account will be created and any value will be transferred.
 		#[pallet::weight({
 			let weight_v1 = T::WeightInfo::call();
-			Weight::todo_from_v1(weight_v1).saturating_add(*gas_limit)
+			Weight::computation_only(weight_v1).saturating_add(*gas_limit)
 		})]
 		pub fn call(
 			origin: OriginFor<T>,
@@ -385,9 +385,10 @@ pub mod pallet {
 					output.result = Err(<Error<T>>::ContractReverted.into());
 				}
 			}
-			output
-				.gas_meter
-				.into_dispatch_result(output.result, Weight::todo_from_v1(T::WeightInfo::call()))
+			output.gas_meter.into_dispatch_result(
+				output.result,
+				Weight::computation_only(T::WeightInfo::call()),
+			)
 		}
 
 		/// Instantiates a new contract from the supplied `code` optionally transferring
@@ -418,7 +419,7 @@ pub mod pallet {
 		/// - The `deploy` function is executed in the context of the newly-created account.
 		#[pallet::weight({
 			let weight_v1 = T::WeightInfo::instantiate_with_code(code.len() as u32, salt.len() as u32);
-			Weight::todo_from_v1(weight_v1).saturating_add(*gas_limit)
+			Weight::computation_only(weight_v1).saturating_add(*gas_limit)
 		})]
 		pub fn instantiate_with_code(
 			origin: OriginFor<T>,
@@ -449,7 +450,7 @@ pub mod pallet {
 			}
 			output.gas_meter.into_dispatch_result(
 				output.result.map(|(_address, result)| result),
-				Weight::todo_from_v1(T::WeightInfo::instantiate_with_code(code_len, salt_len)),
+				Weight::computation_only(T::WeightInfo::instantiate_with_code(code_len, salt_len)),
 			)
 		}
 
@@ -460,7 +461,7 @@ pub mod pallet {
 		/// must be supplied.
 		#[pallet::weight({
 			let weight_v1 = T::WeightInfo::instantiate(salt.len() as u32);
-			Weight::todo_from_v1(weight_v1).saturating_add(*gas_limit)
+			Weight::computation_only(weight_v1).saturating_add(*gas_limit)
 		})]
 		pub fn instantiate(
 			origin: OriginFor<T>,
@@ -490,7 +491,7 @@ pub mod pallet {
 			}
 			output.gas_meter.into_dispatch_result(
 				output.result.map(|(_address, output)| output),
-				Weight::todo_from_v1(T::WeightInfo::instantiate(salt_len)),
+				Weight::computation_only(T::WeightInfo::instantiate(salt_len)),
 			)
 		}
 
@@ -766,8 +767,8 @@ where
 		);
 		ContractExecResult {
 			result: output.result.map_err(|r| r.error),
-			gas_consumed: output.gas_meter.gas_consumed().todo_to_v1(),
-			gas_required: output.gas_meter.gas_required().todo_to_v1(),
+			gas_consumed: output.gas_meter.gas_consumed().computation,
+			gas_required: output.gas_meter.gas_required().computation,
 			storage_deposit: output.storage_deposit,
 			debug_message: debug_message.unwrap_or_default(),
 		}
@@ -811,8 +812,8 @@ where
 				.result
 				.map(|(account_id, result)| InstantiateReturnValue { result, account_id })
 				.map_err(|e| e.error),
-			gas_consumed: output.gas_meter.gas_consumed().todo_to_v1(),
-			gas_required: output.gas_meter.gas_required().todo_to_v1(),
+			gas_consumed: output.gas_meter.gas_consumed().computation,
+			gas_required: output.gas_meter.gas_required().computation,
 			storage_deposit: output.storage_deposit,
 			debug_message: debug_message.unwrap_or_default(),
 		}

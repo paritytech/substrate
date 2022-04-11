@@ -515,9 +515,9 @@ mod tests {
 				}
 			};
 
-			reset_check_weight(&normal, (normal_limit.todo_to_v1() - 1) as usize, false);
-			reset_check_weight(&normal, normal_limit.todo_to_v1() as usize, false);
-			reset_check_weight(&normal, (normal_limit.todo_to_v1() + 1) as usize, true);
+			reset_check_weight(&normal, (normal_limit.computation - 1) as usize, false);
+			reset_check_weight(&normal, normal_limit.computation as usize, false);
+			reset_check_weight(&normal, (normal_limit.computation + 1) as usize, true);
 
 			// Operational ones don't have this limit.
 			let op = DispatchInfo {
@@ -525,8 +525,8 @@ mod tests {
 				class: DispatchClass::Operational,
 				pays_fee: Pays::Yes,
 			};
-			reset_check_weight(&op, normal_limit.todo_to_v1() as usize, false);
-			reset_check_weight(&op, normal_limit.todo_to_v1() as usize, false);
+			reset_check_weight(&op, normal_limit.computation as usize, false);
+			reset_check_weight(&op, normal_limit.computation as usize, false);
 			reset_check_weight(&op, 1024, false);
 			reset_check_weight(&op, 1025, true);
 		})

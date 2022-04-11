@@ -700,7 +700,7 @@ fn deploying_wasm_contract_should_work() {
 				function: Call::Contracts(
 					pallet_contracts::Call::instantiate_with_code::<Runtime> {
 						value: 0,
-						gas_limit: Weight::todo_from_v1(500_000_000),
+						gas_limit: Weight::computation_only(500_000_000),
 						storage_deposit_limit: None,
 						code: transfer_code,
 						data: Vec::new(),
@@ -713,7 +713,7 @@ fn deploying_wasm_contract_should_work() {
 				function: Call::Contracts(pallet_contracts::Call::call::<Runtime> {
 					dest: sp_runtime::MultiAddress::Id(addr.clone()),
 					value: 10,
-					gas_limit: Weight::todo_from_v1(500_000_000),
+					gas_limit: Weight::computation_only(500_000_000),
 					storage_deposit_limit: None,
 					data: vec![0x00, 0x01, 0x02, 0x03],
 				}),

@@ -204,7 +204,7 @@ benchmarks! {
 
 	// The base weight without any actual work performed apart from the setup costs.
 	on_initialize {}: {
-		Storage::<T>::process_deletion_queue_batch(Weight::MAX.todo_to_v1())
+		Storage::<T>::process_deletion_queue_batch(Weight::MAX.computation)
 	}
 
 	#[skip_meta]
@@ -213,7 +213,7 @@ benchmarks! {
 		let instance = Contract::<T>::with_storage(WasmModule::dummy(), k, T::Schedule::get().limits.payload_len)?;
 		Storage::<T>::queue_trie_for_deletion(&instance.info()?)?;
 	}: {
-		Storage::<T>::process_deletion_queue_batch(Weight::MAX.todo_to_v1())
+		Storage::<T>::process_deletion_queue_batch(Weight::MAX.computation)
 	}
 
 	on_initialize_per_queue_item {
@@ -224,7 +224,7 @@ benchmarks! {
 			ContractInfoOf::<T>::remove(instance.account_id);
 		}
 	}: {
-		Storage::<T>::process_deletion_queue_batch(Weight::MAX.todo_to_v1())
+		Storage::<T>::process_deletion_queue_batch(Weight::MAX.computation)
 	}
 
 	// This benchmarks the additional weight that is charged when a contract is executed the
@@ -2763,7 +2763,7 @@ benchmarks! {
 		{
 			let weight_per_key = T::WeightInfo::on_initialize_per_trie_key(1) -
 				T::WeightInfo::on_initialize_per_trie_key(0);
-			let weight_per_queue_item = Weight::todo_from_v1(T::WeightInfo::on_initialize_per_queue_item(1) -
+			let weight_per_queue_item = Weight::computation_only(T::WeightInfo::on_initialize_per_queue_item(1) -
 				T::WeightInfo::on_initialize_per_queue_item(0));
 			let weight_limit = T::DeletionWeightLimit::get();
 			let queue_depth: u64 = T::DeletionQueueDepth::get().into();

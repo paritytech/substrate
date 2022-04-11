@@ -553,7 +553,7 @@ impl ExtBuilder {
 		self
 	}
 	pub fn miner_weight(self, weight: WeightV1) -> Self {
-		<MinerMaxWeight>::set(Weight::todo_from_v1(weight));
+		<MinerMaxWeight>::set(Weight::computation_only(weight));
 		self
 	}
 	pub fn mock_weight_info(self, mock: bool) -> Self {
@@ -584,7 +584,7 @@ impl ExtBuilder {
 		self
 	}
 	pub fn signed_weight(self, weight: WeightV1) -> Self {
-		<SignedMaxWeight>::set(Weight::todo_from_v1(weight));
+		<SignedMaxWeight>::set(Weight::computation_only(weight));
 		self
 	}
 	pub fn build(self) -> sp_io::TestExternalities {

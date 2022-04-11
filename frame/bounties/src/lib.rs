@@ -880,7 +880,8 @@ impl<T: Config> pallet_treasury::SpendFunds<T> for Pallet<T> {
 			bounties_approval_len
 		});
 
-		*total_weight += Weight::todo_from_v1(<T as Config>::WeightInfo::spend_funds(bounties_len));
+		*total_weight +=
+			Weight::computation_only(<T as Config>::WeightInfo::spend_funds(bounties_len));
 	}
 }
 

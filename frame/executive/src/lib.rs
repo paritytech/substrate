@@ -604,12 +604,12 @@ mod tests {
 			// one with block number arg and one without
 			fn on_initialize(n: T::BlockNumber) -> Weight {
 				println!("on_initialize({})", n);
-				Weight::todo_from_v1(175)
+				Weight::computation_only(175)
 			}
 
 			fn on_idle(n: T::BlockNumber, remaining_weight: Weight) -> Weight {
 				println!("on_idle{}, {})", n, remaining_weight);
-				Weight::todo_from_v1(175)
+				Weight::computation_only(175)
 			}
 
 			fn on_finalize(n: T::BlockNumber) {
@@ -618,7 +618,7 @@ mod tests {
 
 			fn on_runtime_upgrade() -> Weight {
 				sp_io::storage::set(super::TEST_KEY, "module".as_bytes());
-				Weight::todo_from_v1(200)
+				Weight::computation_only(200)
 			}
 
 			fn offchain_worker(n: T::BlockNumber) {
@@ -732,9 +732,9 @@ mod tests {
 	parameter_types! {
 		pub BlockWeights: frame_system::limits::BlockWeights =
 			frame_system::limits::BlockWeights::builder()
-				.base_block(Weight::todo_from_v1(10))
-				.for_class(DispatchClass::all(), |weights| weights.base_extrinsic = Weight::todo_from_v1(5))
-				.for_class(DispatchClass::non_mandatory(), |weights| weights.max_total = Some(Weight::todo_from_v1(1024)))
+				.base_block(Weight::computation_only(10))
+				.for_class(DispatchClass::all(), |weights| weights.base_extrinsic = Weight::computation_only(5))
+				.for_class(DispatchClass::non_mandatory(), |weights| weights.max_total = Some(Weight::computation_only(1024)))
 				.build_or_panic();
 		pub const DbWeight: RuntimeDbWeight = RuntimeDbWeight {
 			read: 10,
@@ -827,7 +827,7 @@ mod tests {
 			sp_io::storage::set(TEST_KEY, "custom_upgrade".as_bytes());
 			sp_io::storage::set(CUSTOM_ON_RUNTIME_KEY, &true.encode());
 			System::deposit_event(frame_system::Event::CodeUpdated);
-			Weight::todo_from_v1(100)
+			Weight::computation_only(100)
 		}
 	}
 
@@ -868,9 +868,8 @@ mod tests {
 			<Runtime as frame_system::Config>::BlockWeights::get()
 				.get(DispatchClass::Normal)
 				.base_extrinsic;
-		let fee: Balance = <Runtime as pallet_transaction_payment::Config>::WeightToFee::calc(
-			&weight.todo_to_v1(),
-		);
+		let fee: Balance =
+			<Runtime as pallet_transaction_payment::Config>::WeightToFee::calc(&weight.computation);
 		let mut t = sp_io::TestExternalities::new(t);
 		t.execute_with(|| {
 			Executive::initialize_block(&Header::new(
@@ -1007,7 +1006,7 @@ mod tests {
 	// 	let encoded_len = encoded.len() as u64;
 	// 	// on_initialize weight + base block execution weight
 	// 	let block_weights = <Runtime as frame_system::Config>::BlockWeights::get();
-	// 	let base_block_weight = Weight::todo_from_v1(175) + block_weights.base_block;
+	// 	let base_block_weight = Weight::computation_only(175) + block_weights.base_block;
 	// 	let limit = block_weights.get(DispatchClass::Normal).max_total.unwrap() - base_block_weight;
 	// 	let num_to_exhaust_block = limit / (encoded_len + 5);
 	// 	t.execute_with(|| {
@@ -1064,7 +1063,7 @@ mod tests {
 	// 	t.execute_with(|| {
 	// 		// Block execution weight + on_initialize weight from custom module
 	// 		let base_block_weight =
-	// 			Weight::todo_from_v1(175) + <Runtime as
+	// 			Weight::computation_only(175) + <Runtime as
 	// frame_system::Config>::BlockWeights::get().base_block;
 
 	// 		Executive::initialize_block(&Header::new(
@@ -1161,7 +1160,7 @@ mod tests {
 						.base_extrinsic;
 				let fee: Balance =
 					<Runtime as pallet_transaction_payment::Config>::WeightToFee::calc(
-						&weight.todo_to_v1(),
+						&weight.computation,
 					);
 				Executive::initialize_block(&Header::new(
 					1,
@@ -1199,7 +1198,7 @@ mod tests {
 			// the `on_initialize` weight defined in the custom test module.
 			assert_eq!(
 				<frame_system::Pallet<Runtime>>::block_weight().total(),
-				Weight::todo_from_v1(175 + 175 + 10)
+				Weight::computation_only(175 + 175 + 10)
 			);
 		})
 	}

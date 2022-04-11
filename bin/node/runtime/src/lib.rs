@@ -1027,7 +1027,7 @@ parameter_types! {
 	pub DeletionQueueDepth: u32 = ((DeletionWeightLimit::get() / (
 			<Runtime as pallet_contracts::Config>::WeightInfo::on_initialize_per_queue_item(1) -
 			<Runtime as pallet_contracts::Config>::WeightInfo::on_initialize_per_queue_item(0)
-		)).todo_to_v1() / 5) as u32;
+		)).computation / 5) as u32;
 	pub Schedule: pallet_contracts::Schedule<Runtime> = Default::default();
 }
 
@@ -1733,7 +1733,7 @@ impl_runtime_apis! {
 			storage_deposit_limit: Option<Balance>,
 			input_data: Vec<u8>,
 		) -> pallet_contracts_primitives::ContractExecResult<Balance> {
-			let gas_limit = Weight::todo_from_v1(gas_limit);
+			let gas_limit = Weight::computation_only(gas_limit);
 			Contracts::bare_call(origin, dest, value, gas_limit, storage_deposit_limit, input_data, true)
 		}
 
@@ -1747,7 +1747,7 @@ impl_runtime_apis! {
 			salt: Vec<u8>,
 		) -> pallet_contracts_primitives::ContractInstantiateResult<AccountId, Balance>
 		{
-			let gas_limit = Weight::todo_from_v1(gas_limit);
+			let gas_limit = Weight::computation_only(gas_limit);
 			Contracts::bare_instantiate(origin, value, gas_limit, storage_deposit_limit, code, data, salt, true)
 		}
 

@@ -146,7 +146,7 @@ where
 	}
 
 	fn weight(&self) -> Weight {
-		Weight::todo_from_v1(T::DbWeight::get().reads_writes(1, 1))
+		Weight::computation_only(T::DbWeight::get().reads_writes(1, 1))
 	}
 
 	fn cancel(&self, source: &AccountId) {
@@ -289,7 +289,7 @@ pub mod pallet {
 			let v1_weight = T::DbWeight::get().reads_writes(1, 1)
 				.saturating_add(40_000_000)
 				.saturating_add((proof.len() as u64).saturating_mul(100));
-			Weight::todo_from_v1(v1_weight).saturating_add(action.weight())
+			Weight::computation_only(v1_weight).saturating_add(action.weight())
 		})]
 		pub fn claim_swap(
 			origin: OriginFor<T>,

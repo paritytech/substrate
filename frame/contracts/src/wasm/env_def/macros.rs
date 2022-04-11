@@ -326,7 +326,7 @@ mod tests {
 	#[test]
 	fn macro_define_func() {
 		define_func!( Ext seal_gas (_ctx, amount: u32) => {
-			let amount = Weight::todo_from_v1(amount.into());
+			let amount = Weight::computation_only(amount.into());
 			if !amount.is_zero() {
 				Ok(())
 			} else {
@@ -377,7 +377,7 @@ mod tests {
 
 		define_env!(Env, <E: Ext>,
 			[seal0] seal_gas( _ctx, amount: u32 ) => {
-				let amount = Weight::todo_from_v1(amount.into());
+				let amount = Weight::computation_only(amount.into());
 				if !amount.is_zero() {
 					Ok(())
 				} else {

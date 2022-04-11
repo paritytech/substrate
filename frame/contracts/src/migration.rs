@@ -63,7 +63,7 @@ mod v4 {
 
 	pub fn migrate<T: Config>() -> Weight {
 		migration::remove_storage_prefix(<Pallet<T>>::name().as_bytes(), b"CurrentSchedule", b"");
-		Weight::todo_from_v1(T::DbWeight::get().writes(1))
+		Weight::computation_only(T::DbWeight::get().writes(1))
 	}
 }
 
@@ -134,8 +134,8 @@ mod v5 {
 		let mut weight = Weight::zero();
 
 		<ContractInfoOf<T>>::translate(|_key, old: OldContractInfo<T>| {
-			weight =
-				weight.saturating_add(Weight::todo_from_v1(T::DbWeight::get().reads_writes(1, 1)));
+			weight = weight
+				.saturating_add(Weight::computation_only(T::DbWeight::get().reads_writes(1, 1)));
 			match old {
 				OldContractInfo::Alive(old) => Some(ContractInfo::<T> {
 					trie_id: old.trie_id,
@@ -147,8 +147,8 @@ mod v5 {
 		});
 
 		DeletionQueue::translate(|old: Option<Vec<OldDeletedContract>>| {
-			weight =
-				weight.saturating_add(Weight::todo_from_v1(T::DbWeight::get().reads_writes(1, 1)));
+			weight = weight
+				.saturating_add(Weight::computation_only(T::DbWeight::get().reads_writes(1, 1)));
 			old.map(|old| old.into_iter().map(|o| DeletedContract { trie_id: o.trie_id }).collect())
 		})
 		.ok();
@@ -226,8 +226,8 @@ mod v6 {
 		let mut weight = Weight::zero();
 
 		<ContractInfoOf<T>>::translate(|_key, old: OldContractInfo<T>| {
-			weight =
-				weight.saturating_add(Weight::todo_from_v1(T::DbWeight::get().reads_writes(1, 1)));
+			weight = weight
+				.saturating_add(Weight::computation_only(T::DbWeight::get().reads_writes(1, 1)));
 			Some(ContractInfo::<T> {
 				trie_id: old.trie_id,
 				code_hash: old.code_hash,
@@ -239,8 +239,8 @@ mod v6 {
 			.expect("Infinite input; no dead input space; qed");
 
 		<CodeStorage<T>>::translate(|key, old: OldPrefabWasmModule| {
-			weight =
-				weight.saturating_add(Weight::todo_from_v1(T::DbWeight::get().reads_writes(1, 2)));
+			weight = weight
+				.saturating_add(Weight::computation_only(T::DbWeight::get().reads_writes(1, 2)));
 			<OwnerInfoOf<T>>::insert(
 				key,
 				OwnerInfo {
@@ -275,6 +275,6 @@ mod v7 {
 			Nonce => Value<u64, ValueQuery>
 		);
 		Nonce::set(AccountCounter::take());
-		Weight::todo_from_v1(T::DbWeight::get().reads_writes(1, 2))
+		Weight::computation_only(T::DbWeight::get().reads_writes(1, 2))
 	}
 }

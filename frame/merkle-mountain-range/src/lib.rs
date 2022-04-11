@@ -191,7 +191,7 @@ pub mod pallet {
 			<RootHash<T, I>>::put(root);
 
 			let peaks_after = mmr::utils::NodesUtils::new(leaves).number_of_peaks();
-			Weight::todo_from_v1(T::WeightInfo::on_initialize(peaks_before.max(peaks_after)))
+			Weight::computation_only(T::WeightInfo::on_initialize(peaks_before.max(peaks_after)))
 		}
 	}
 }
