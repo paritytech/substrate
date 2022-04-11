@@ -373,8 +373,92 @@ fn burn_should_work() {
 	});
 }
 
+#[test]
+fn transfer_should_work() {
+	new_test_ext().execute_with(|| {
+		let user_1 = 1;
+		let user_2 = 2;
+		let user_3 = 3;
+		let collection_id = 0;
+		let item_id = 1;
+
+		assert_ok!(
+			Uniques::create(
+				Origin::signed(user_1),
+				user_1,
+				DEFAULT_USER_FEATURES,
+				None,
+				None,
+			)
+		);
+
+		assert_ok!(Uniques::mint(Origin::signed(user_1), user_2, collection_id, item_id));
+		let config = CollectionConfigs::<Test>::get(collection_id).unwrap();
+
+		assert_ok!(
+			Uniques::transfer_item(
+				Origin::signed(user_2),
+				collection_id,
+				item_id,
+				user_3,
+				config
+			)
+		);
+
+		assert_eq!(items(), vec![(user_3, collection_id, item_id)]);
+
+		assert!(events().contains(
+			&Event::<Test>::ItemTransferred {
+				collection_id,
+				item_id,
+				sender: user_2,
+				receiver: user_3,
+			}
+		));
+
+		assert_eq!(CountForAccountItems::<Test>::get(user_1, collection_id).unwrap_or_default(), 0);
+		assert_eq!(CountForAccountItems::<Test>::get(user_2, collection_id).unwrap_or_default(), 0);
+		assert_eq!(CountForAccountItems::<Test>::get(user_3, collection_id).unwrap(), 1);
+
+		assert_noop!(
+			Uniques::transfer_item(
+				Origin::signed(user_2),
+				collection_id,
+				item_id,
+				user_3,
+				config
+			),
+			Error::<Test>::NotAuthorized
+		);
+
+		// validate we can't transfer non-transferable items
+		let collection_id = 1;
+		assert_ok!(
+			Uniques::create(
+				Origin::signed(user_1),
+				user_1,
+				UserFeatures::NonTransferableItems,
+				None,
+				None,
+			)
+		);
+
+		assert_ok!(Uniques::mint(Origin::signed(user_1), user_1, collection_id, item_id));
+
+		assert_noop!(
+			Uniques::transfer_item(
+				Origin::signed(user_1),
+				collection_id,
+				item_id,
+				user_3,
+				CollectionConfigs::<Test>::get(collection_id).unwrap()
+			),
+			Error::<Test>::ItemsNotTransferable
+		);
+	});
+}
+
 // attributes
-// transfer_item
 // set_collection_metadata
 // set_item_metadata
 // set_price
