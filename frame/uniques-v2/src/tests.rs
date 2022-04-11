@@ -262,8 +262,38 @@ fn destroy_collection_should_work() {
 	});
 }
 
+#[test]
+fn transfer_owner_should_work() {
+	new_test_ext().execute_with(|| {
+		let user_1 = 1;
+		let user_2 = 2;
+		let collection_id = 0;
+
+		assert_ok!(
+			Uniques::create(
+				Origin::signed(user_1),
+				user_1,
+				DEFAULT_USER_FEATURES,
+				None,
+				None,
+			)
+		);
+
+		assert_eq!(collections(), vec![(user_1, collection_id)]);
+		assert_ok!(
+			Uniques::transfer_collection_ownership(Origin::signed(user_1), collection_id, user_2)
+		);
+		assert_eq!(collections(), vec![(user_1, collection_id)]);
+
+		assert_noop!(
+			Uniques::transfer_collection_ownership(Origin::signed(user_1), collection_id, user_1),
+			Error::<Test>::NotAuthorized
+		);
+	});
+}
+
 // +destroy_collection
-// transfer_collection_ownership
+// +transfer_collection_ownership
 // attributes
 // mint
 // burn
