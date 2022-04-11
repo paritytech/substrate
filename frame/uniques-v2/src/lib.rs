@@ -130,9 +130,9 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
-	/// Keeps track of the number of collections in existence.
+	/// Stores the collection's next id.
 	#[pallet::storage]
-	pub(super) type CountForCollections<T: Config> = StorageValue<_, T::CollectionId, ValueQuery>;
+	pub(super) type CollectionNextId<T: Config> = StorageValue<_, T::CollectionId, ValueQuery>;
 
 	#[pallet::storage]
 	/// Metadata of an collection.

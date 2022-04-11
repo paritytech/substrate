@@ -28,7 +28,7 @@ impl<T: Config> Pallet<T> {
 		max_supply: Option<u32>,
 		max_items_per_account: Option<u32>,
 	) -> DispatchResult {
-		let id = CountForCollections::<T>::get();
+		let id = CollectionNextId::<T>::get();
 
 		ensure!(!CollectionConfigs::<T>::contains_key(id), Error::<T>::CollectionIdTaken);
 
@@ -67,7 +67,7 @@ impl<T: Config> Pallet<T> {
 
 		// update the next id value
 		let next_id = id.checked_add(&One::one()).ok_or(Error::<T>::Overflow)?;
-		CountForCollections::<T>::put(next_id);
+		CollectionNextId::<T>::put(next_id);
 
 		// TODO: maybe we should return the id here?
 		Ok(())
