@@ -1855,13 +1855,13 @@ fn lazy_removal_does_no_run_on_full_queue_and_full_block() {
 			assert_eq!(child::get::<u32>(&trie, &blake2_256(&val.0)), Some(val.1));
 		}
 
-		// Run the lazy removal directly which disregards the block limits
-		Storage::<Test>::process_deletion_queue_batch(Weight::max_value());
+		// // Run the lazy removal directly which disregards the block limits
+		// Storage::<Test>::process_deletion_queue_batch(Weight::max_value());
 
-		// Now the keys should be gone
-		for val in &vals {
-			assert_eq!(child::get::<u32>(&trie, &blake2_256(&val.0)), None);
-		}
+		// // Now the keys should be gone
+		// for val in &vals {
+		// 	assert_eq!(child::get::<u32>(&trie, &blake2_256(&val.0)), None);
+		// }
 	});
 }
 
