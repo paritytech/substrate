@@ -71,7 +71,9 @@ pub enum ReturnCode {
 	/// The call dispatched by `seal_call_runtime` was executed but returned an error.
 	#[cfg(feature = "unstable-interface")]
 	CallRuntimeReturnedError = 10,
-	/// ECDSA pubkey recovery failed. Most probably wrong recovery id or signature.
+	/// ECDSA pubkey recovery failed (most probably wrong recovery id or signature), or
+	/// ECDSA compressed pubkey conversion into Ethereum address failed (most probably
+	/// wrong pubkey provided).
 	#[cfg(feature = "unstable-interface")]
 	EcdsaRecoverFailed = 11,
 }
