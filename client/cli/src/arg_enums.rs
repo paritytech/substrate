@@ -88,7 +88,7 @@ impl Into<sc_service::config::WasmExecutionMethod> for WasmExecutionMethod {
 
 /// The default [`WasmExecutionMethod`].
 #[cfg(feature = "wasmtime")]
-pub const DEFAULT_WASM_EXECUTION_METHOD: &str = "Compiled";
+pub const DEFAULT_WASM_EXECUTION_METHOD: &str = "compiled";
 
 /// The default [`WasmExecutionMethod`].
 #[cfg(not(feature = "wasmtime"))]
@@ -96,7 +96,7 @@ pub const DEFAULT_WASM_EXECUTION_METHOD: &str = "interpreted-i-know-what-i-do";
 
 #[allow(missing_docs)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, ArgEnum)]
-#[clap(rename_all = "PascalCase")]
+#[clap(rename_all = "kebab-case")]
 pub enum TracingReceiver {
 	/// Output the tracing records using the log.
 	Log,
@@ -112,7 +112,7 @@ impl Into<sc_tracing::TracingReceiver> for TracingReceiver {
 
 /// The type of the node key.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, ArgEnum)]
-#[clap(rename_all = "PascalCase")]
+#[clap(rename_all = "kebab-case")]
 pub enum NodeKeyType {
 	/// Use ed25519.
 	Ed25519,
@@ -120,7 +120,7 @@ pub enum NodeKeyType {
 
 /// The crypto scheme to use.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, ArgEnum)]
-#[clap(rename_all = "PascalCase")]
+#[clap(rename_all = "kebab-case")]
 pub enum CryptoScheme {
 	/// Use ed25519.
 	Ed25519,
@@ -132,7 +132,7 @@ pub enum CryptoScheme {
 
 /// The type of the output format.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, ArgEnum)]
-#[clap(rename_all = "PascalCase")]
+#[clap(rename_all = "kebab-case")]
 pub enum OutputType {
 	/// Output as json.
 	Json,
@@ -142,7 +142,7 @@ pub enum OutputType {
 
 /// How to execute blocks
 #[derive(Debug, Copy, Clone, PartialEq, Eq, ArgEnum)]
-#[clap(rename_all = "PascalCase")]
+#[clap(rename_all = "kebab-case")]
 pub enum ExecutionStrategy {
 	/// Execute with native build (if available, WebAssembly otherwise).
 	Native,
@@ -165,22 +165,10 @@ impl Into<sc_client_api::ExecutionStrategy> for ExecutionStrategy {
 	}
 }
 
-impl ExecutionStrategy {
-	/// Returns the variant as `'&static str`.
-	pub fn as_str(&self) -> &'static str {
-		match self {
-			Self::Native => "Native",
-			Self::Wasm => "Wasm",
-			Self::Both => "Both",
-			Self::NativeElseWasm => "NativeElseWasm",
-		}
-	}
-}
-
 /// Available RPC methods.
 #[allow(missing_docs)]
 #[derive(Debug, Copy, Clone, PartialEq, ArgEnum)]
-#[clap(rename_all = "PascalCase")]
+#[clap(rename_all = "kebab-case")]
 pub enum RpcMethods {
 	/// Expose every RPC method only when RPC is listening on `localhost`,
 	/// otherwise serve only safe RPC methods.
@@ -243,7 +231,7 @@ impl Database {
 /// Whether off-chain workers are enabled.
 #[allow(missing_docs)]
 #[derive(Debug, Clone, ArgEnum)]
-#[clap(rename_all = "PascalCase")]
+#[clap(rename_all = "kebab-case")]
 pub enum OffchainWorkerEnabled {
 	/// Always have offchain worker enabled.
 	Always,
@@ -255,7 +243,7 @@ pub enum OffchainWorkerEnabled {
 
 /// Syncing mode.
 #[derive(Debug, Clone, Copy, ArgEnum, PartialEq)]
-#[clap(rename_all = "PascalCase")]
+#[clap(rename_all = "kebab-case")]
 pub enum SyncMode {
 	/// Full sync. Download end verify all blocks.
 	Full,
