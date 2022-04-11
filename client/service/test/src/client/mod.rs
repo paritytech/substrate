@@ -1114,16 +1114,8 @@ fn finality_notifications_content() {
 	// Import and finalize D4
 	block_on(client.import_as_final(BlockOrigin::Own, d4.clone())).unwrap();
 
-	finality_notification_check(
-		&mut finality_notifications,
-		&[a1.hash(), a2.hash()],
-		&[c1.hash()],
-	);
-	finality_notification_check(
-		&mut finality_notifications,
-		&[d3.hash(), d4.hash()],
-		&[b2.hash()],
-	);
+	finality_notification_check(&mut finality_notifications, &[a1.hash(), a2.hash()], &[c1.hash()]);
+	finality_notification_check(&mut finality_notifications, &[d3.hash(), d4.hash()], &[b2.hash()]);
 	assert!(finality_notifications.try_next().is_err());
 }
 
