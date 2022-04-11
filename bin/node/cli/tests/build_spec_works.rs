@@ -25,8 +25,8 @@ fn build_spec_works() {
 	let base_path = tempdir().expect("could not create a temp dir");
 
 	let output = Command::new(cargo_bin("substrate"))
-		.args(&["build-spec", "--dev", "--no-hardware-benchmarks"])
-		.args(["-d", base_path.path()])
+		.args(&["build-spec", "--dev", "--no-hardware-benchmarks", "-d"])
+		.args(base_path.path())
 		.output()
 		.unwrap();
 	assert!(output.status.success());

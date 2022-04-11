@@ -31,9 +31,9 @@ async fn check_block_works() {
 	common::run_node_for_a_while(base_path.path(), &["--dev", "--no-hardware-benchmarks"]).await;
 
 	let status = Command::new(cargo_bin("substrate"))
-		.args(&["check-block", "--dev", "--no-hardware-benchmarks"])
+		.args(&["check-block", "--dev", "--no-hardware-benchmarks", "-d"])
+		.args(base_path.path())
 		.args(["--pruning", "archive"])
-		.args(["-d", base_path.path()])
 		.arg("1")
 		.status()
 		.unwrap();
