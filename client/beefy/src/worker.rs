@@ -527,8 +527,7 @@ where
 				.runtime_api()
 				.mmr_root(&BlockId::hash(header.hash()))
 				.ok()
-				.map(|r| r.ok())
-				.flatten()
+				.and_then(|r| r.ok())
 		})
 	}
 }
