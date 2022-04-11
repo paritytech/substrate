@@ -165,18 +165,6 @@ impl Into<sc_client_api::ExecutionStrategy> for ExecutionStrategy {
 	}
 }
 
-impl ExecutionStrategy {
-	/// Returns the variant as `'&static str`.
-	pub fn as_str(&self) -> &'static str {
-		match self {
-			Self::Native => "Native",
-			Self::Wasm => "Wasm",
-			Self::Both => "Both",
-			Self::NativeElseWasm => "NativeElseWasm",
-		}
-	}
-}
-
 /// Available RPC methods.
 #[allow(missing_docs)]
 #[derive(Debug, Copy, Clone, PartialEq, ArgEnum)]
