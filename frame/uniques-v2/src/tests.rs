@@ -292,11 +292,87 @@ fn transfer_owner_should_work() {
 	});
 }
 
-// +destroy_collection
-// +transfer_collection_ownership
+#[test]
+fn mint_should_work() {
+	new_test_ext().execute_with(|| {
+		let user_id = 1;
+		let collection_id = 0;
+		let item_id = 1;
+
+		assert_ok!(
+			Uniques::create(
+				Origin::signed(user_id),
+				user_id,
+				DEFAULT_USER_FEATURES,
+				None,
+				None,
+			)
+		);
+
+		assert_ok!(Uniques::mint(Origin::signed(user_id), collection_id, item_id));
+		assert_eq!(collections(), vec![(user_id, collection_id)]);
+		assert_eq!(items(), vec![(user_id, collection_id, item_id)]);
+
+		assert_eq!(Collections::<Test>::get(collection_id).unwrap().items, 1);
+		assert_eq!(Collections::<Test>::get(collection_id).unwrap().item_metadatas, 0);
+
+		assert!(Items::<Test>::contains_key(collection_id, item_id));
+		assert_eq!(CountForAccountItems::<Test>::get(user_id, collection_id).unwrap(), 1);
+
+		assert!(events().contains(&Event::<Test>::ItemCreated { collection_id, item_id }));
+
+		// validate max supply
+		assert_ok!(
+			Uniques::create(
+				Origin::signed(user_id),
+				user_id,
+				DEFAULT_USER_FEATURES,
+				Some(1),
+				None,
+			)
+		);
+		assert_ok!(Uniques::mint(Origin::signed(user_id), 1, 1));
+		assert_noop!(
+			Uniques::mint(Origin::signed(user_id), 1, 2),
+			Error::<Test>::AllItemsMinted
+		);
+	});
+}
+
+#[test]
+fn burn_should_work() {
+	new_test_ext().execute_with(|| {
+		let user_id = 1;
+		let collection_id = 0;
+		let item_id = 1;
+
+		assert_ok!(
+			Uniques::create(
+				Origin::signed(user_id),
+				user_id,
+				DEFAULT_USER_FEATURES,
+				None,
+				None,
+			)
+		);
+
+		assert_ok!(Uniques::mint(Origin::signed(user_id), collection_id, item_id));
+		assert_ok!(Uniques::burn(Origin::signed(user_id), collection_id, item_id));
+
+		assert_eq!(collections(), vec![(user_id, collection_id)]);
+		assert_eq!(items(), vec![]);
+
+		assert_eq!(Collections::<Test>::get(collection_id).unwrap().items, 0);
+		assert_eq!(Collections::<Test>::get(collection_id).unwrap().item_metadatas, 0);
+
+		assert!(!Items::<Test>::contains_key(collection_id, item_id));
+		assert_eq!(CountForAccountItems::<Test>::get(user_id, collection_id).unwrap(), 0);
+
+		assert!(events().contains(&Event::<Test>::ItemBurned { collection_id, item_id }));
+	});
+}
+
 // attributes
-// mint
-// burn
 // transfer_item
 // set_collection_metadata
 // set_item_metadata
