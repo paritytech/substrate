@@ -1113,7 +1113,7 @@ mod tests {
 			(i32.const 20)
 		)
 
-		;; env:seal_return doesn't return, so this is effectively unreachable.
+		;; seal_return doesn't return, so this is effectively unreachable.
 		(unreachable)
 	)
 	(func (export "deploy"))
