@@ -56,7 +56,7 @@ pub trait SubstrateCli: Sized {
 	///
 	/// By default this will look like this:
 	///
-	/// `2.0.0-b950f731c-x86_64-linux-gnu`
+	/// `2.0.0-b950f731c`
 	///
 	/// Where the hash is the short commit hash of the commit of in the Git repository.
 	fn impl_version() -> String;
