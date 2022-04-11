@@ -1981,7 +1981,7 @@ benchmarks! {
 				module: "__unstable__",
 				name: "seal_ecdsa_to_eth_address",
 				params: vec![ValueType::I32, ValueType::I32],
-				return_type: None,
+				return_type: Some(ValueType::I32),
 			}],
 			data_segments: vec![
 				DataSegment {
@@ -1993,6 +1993,7 @@ benchmarks! {
 				Counter(0, 33), // pub_key_ptr
 				Regular(Instruction::I32Const(pub_keys_bytes_len)), // out_ptr
 				Regular(Instruction::Call(0)),
+				Regular(Instruction::Drop),
 			])),
 			.. Default::default()
 		});

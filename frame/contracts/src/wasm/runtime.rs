@@ -2071,6 +2071,10 @@ define_env!(Env, <E: Ext>,
 	//
 	// The value is stored to linear memory at the address pointed to by `out_ptr`.
 	// If the available space at `out_ptr` is less than the size of the value a trap is triggered.
+	//
+	// # Errors
+	//
+	// `ReturnCode::EcdsaRecoverFailed`
 	[__unstable__] seal_ecdsa_to_eth_address(ctx, key_ptr: u32, out_ptr: u32) -> ReturnCode => {
 		ctx.charge_gas(RuntimeCosts::EcdsaToEthAddress)?;
 		let mut compressed_key: [u8; 33] = [0;33];
