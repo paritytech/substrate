@@ -35,7 +35,7 @@ use frame_support::{
 	parameter_types,
 	storage::child,
 	traits::{
-		BalanceStatus, ConstU32, ConstU64, Contains, Currency, OnInitialize, ReservableCurrency,
+		BalanceStatus, ConstU32, ConstU64, Contains, Currency, OnInitialize, OnIdle, ReservableCurrency,
 	},
 	weights::{constants::WEIGHT_PER_SECOND, DispatchClass, PostDispatchInfo, Weight},
 };
@@ -1611,7 +1611,7 @@ fn lazy_removal_works() {
 		assert_matches!(child::get(trie, &[99]), Some(42));
 
 		// Run the lazy removal
-		Contracts::on_initialize(Weight::max_value());
+		Contracts::on_idle(Weight::max_value(), Weight::max_value());
 
 		// Value should be gone now
 		assert_matches!(child::get::<i32>(trie, &[99]), None);
@@ -1662,7 +1662,7 @@ fn lazy_batch_removal_works() {
 		}
 
 		// Run single lazy removal
-		Contracts::on_initialize(Weight::max_value());
+		Contracts::on_idle(Weight::max_value(),Weight::max_value());
 
 		// The single lazy removal should have removed all queued tries
 		for trie in tries.iter() {
@@ -1822,7 +1822,7 @@ fn lazy_removal_does_no_run_on_full_block() {
 
 		// Run the lazy removal without any limit so that all keys would be removed if there
 		// had been some weight left in the block.
-		let weight_used = Contracts::on_initialize(Weight::max_value());
+		let weight_used = Contracts::on_idle(Weight::max_value(), Weight::max_value());
 		let base = <<Test as Config>::WeightInfo as WeightInfo>::on_initialize();
 		assert_eq!(weight_used, base);
 
