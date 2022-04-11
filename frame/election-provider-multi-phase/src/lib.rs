@@ -1085,7 +1085,7 @@ pub mod pallet {
 						Ok(())
 					},
 					Err(_error) => {
-						T::Currency::slash_reserved(&who, submission.deposit);
+						// T::Currency::slash_reserved(&who, submission.deposit);
 
 						T::Currency::repatriate_reserved(
 							&submission.who,
