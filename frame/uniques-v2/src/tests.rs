@@ -295,22 +295,23 @@ fn transfer_owner_should_work() {
 #[test]
 fn mint_should_work() {
 	new_test_ext().execute_with(|| {
+		let sender = 0;
 		let user_id = 1;
 		let collection_id = 0;
 		let item_id = 1;
 
 		assert_ok!(
 			Uniques::create(
-				Origin::signed(user_id),
-				user_id,
+				Origin::signed(sender),
+				sender,
 				DEFAULT_USER_FEATURES,
 				None,
 				None,
 			)
 		);
 
-		assert_ok!(Uniques::mint(Origin::signed(user_id), user_id, collection_id, item_id));
-		assert_eq!(collections(), vec![(user_id, collection_id)]);
+		assert_ok!(Uniques::mint(Origin::signed(sender), user_id, collection_id, item_id));
+		assert_eq!(collections(), vec![(sender, collection_id)]);
 		assert_eq!(items(), vec![(user_id, collection_id, item_id)]);
 
 		assert_eq!(Collections::<Test>::get(collection_id).unwrap().items, 1);
