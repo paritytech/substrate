@@ -646,8 +646,11 @@ impl<T: Config> BondedPool<T> {
 		Ok(())
 	}
 
-	/// Returns Ok if [`Pallet::withdraw_unbonded_other`] can be executed, otherwise returns a
-	/// dispatch error.
+	/// # Returns
+	///
+	/// * Ok(true) if [`Call::withdraw_unbonded_other`] can be called and the target account is the depositor.
+	/// * Ok(false) if [`Call::withdraw_unbonded_other`] can be called and target account is *not* the depositor.
+	/// * Err(DispatchError) if [`Call::withdraw_unbonded_other`] *cannot* be called.
 	fn ok_to_withdraw_unbonded_other_with(
 		&self,
 		caller: &T::AccountId,
