@@ -20,7 +20,12 @@
 //! becomes a performance bottleneck a new host function should be considered.
 use sp_core::{crypto::ByteArray, ecdsa::Public};
 
-/// Extension trait for `sp_core::ecdsa::Public` to be used from inside runtime.
+/// Extension trait for [`Public`] to be used from inside the runtime.
+///
+/// # Note
+///
+/// This is needed because host functions cannot be called from within
+/// `sp_core` due to cyclic dependencies  on `sp_io`.
 pub trait RuntimeECDSA {
 	/// Returns Ethereum address calculated from this ECDSA public key.
 	fn to_eth_address(&self) -> Result<[u8; 20], ()>;
