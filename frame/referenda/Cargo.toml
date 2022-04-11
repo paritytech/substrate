@@ -21,6 +21,7 @@ scale-info = { version = "2.0.1", default-features = false, features = ["derive"
 sp-std = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
 sp-io = { version = "6.0.0", default-features = false, path = "../../primitives/io" }
 sp-runtime = { version = "6.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-arithmetic = { version = "5.0.0", default-features = false, path = "../../primitives/arithmetic" }
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
@@ -44,6 +45,7 @@ std = [
 	"frame-benchmarking/std",
 	"frame-support/std",
 	"sp-runtime/std",
+	"sp-arithmetic/std",
 	"frame-system/std",
 ]
 runtime-benchmarks = [

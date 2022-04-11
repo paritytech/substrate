@@ -89,11 +89,30 @@ pub trait PerThing:
 		self.deconstruct() == Self::ACCURACY
 	}
 
+	/// Return the next lower value to `self` or `self` if it is already zero.
+	fn less_epsilon(self) -> Self {
+		if self.is_zero() { return self }
+		Self::from_parts(self.deconstruct() - One::one())
+	}
+
 	/// Return the next lower value to `self` or an error with the same value if `self` is already
 	/// zero.
-	fn less_epsilon(self) -> Result<Self, Self> {
+	fn try_less_epsilon(self) -> Result<Self, Self> {
 		if self.is_zero() { return Err(self) }
 		Ok(Self::from_parts(self.deconstruct() - One::one()))
+	}
+
+	/// Return the next higher value to `self` or `self` if it is already one.
+	fn plus_epsilon(self) -> Self {
+		if self.is_one() { return self }
+		Self::from_parts(self.deconstruct() + One::one())
+	}
+
+	/// Return the next higher value to `self` or an error with the same value if `self` is already
+	/// one.
+	fn try_plus_epsilon(self) -> Result<Self, Self> {
+		if self.is_one() { return Err(self) }
+		Ok(Self::from_parts(self.deconstruct() + One::one()))
 	}
 
 	/// Build this type from a percent. Equivalent to `Self::from_parts(x * Self::ACCURACY / 100)`
@@ -282,9 +301,9 @@ pub trait PerThing:
 	/// # fn main () {
 	/// // 989/100 is technically closer to 99%.
 	/// assert_eq!(
-	/// 		Percent::from_rational(989u64, 1000),
-	/// 		Percent::from_parts(98),
-	/// 	);
+	/// 	Percent::from_rational(989u64, 1000),
+	/// 	Percent::from_parts(98),
+	/// );
 	/// # }
 	/// ```
 	fn from_rational<N>(p: N, q: N) -> Self
@@ -296,8 +315,76 @@ pub trait PerThing:
 			+ ops::Div<N, Output = N>
 			+ ops::Rem<N, Output = N>
 			+ ops::Add<N, Output = N>
-			+ Unsigned,
+			+ ops::AddAssign<N>
+			+ Unsigned
+			+ Zero
+			+ One,
+		Self::Inner: Into<N>
+	{
+		Self::from_rational_with_rounding(p, q, Rounding::Down).unwrap_or_else(|_| Self::one())
+	}
+
+	/// Approximate the fraction `p/q` into a per-thing fraction.
+	///
+	/// The computation of this approximation is performed in the generic type `N`. Given
+	/// `M` as the data type that can hold the maximum value of this per-thing (e.g. `u32` for
+	/// `Perbill`), this can only work if `N == M` or `N: From<M> + TryInto<M>`.
+	///
+	/// In the case of an overflow (or divide by zero), an `Err` is returned.
+	///
+	/// Rounding is determined by the parameter `rounding`, i.e.
+	///
+	/// ```rust
+	/// # use sp_arithmetic::{Percent, PerThing, Rounding::*};
+	/// # fn main () {
+	/// // 989/100 is technically closer to 99%.
+	/// assert_eq!(
+	/// 	Percent::from_rational_with_rounding(989u64, 1000, Down).unwrap(),
+	/// 	Percent::from_parts(98),
+	/// );
+	/// assert_eq!(
+	/// 	Percent::from_rational_with_rounding(984u64, 1000, Nearest).unwrap(),
+	/// 	Percent::from_parts(98),
+	/// );
+	/// assert_eq!(
+	/// 	Percent::from_rational_with_rounding(985u64, 1000, Nearest).unwrap(),
+	/// 	Percent::from_parts(99),
+	/// );
+	/// assert_eq!(
+	/// 	Percent::from_rational_with_rounding(981u64, 1000, Up).unwrap(),
+	/// 	Percent::from_parts(99),
+	/// );
+	/// assert_eq!(
+	/// 	Percent::from_rational_with_rounding(1001u64, 1000, Up),
+	/// 	Err(()),
+	/// );
+	/// # }
+	/// ```
+	///
+	/// ```rust
+	/// # use sp_arithmetic::{Percent, PerThing, Rounding::*};
+	/// # fn main () {
+	/// assert_eq!(
+	/// 	Percent::from_rational_with_rounding(981u64, 1000, Up).unwrap(),
+	/// 	Percent::from_parts(99),
+	/// );
+	/// # }
+	/// ```
+	fn from_rational_with_rounding<N>(p: N, q: N, rounding: Rounding) -> Result<Self, ()>
+	where
+		N: Clone
+			+ Ord
+			+ TryInto<Self::Inner>
+			+ TryInto<Self::Upper>
+			+ ops::Div<N, Output = N>
+			+ ops::Rem<N, Output = N>
+			+ ops::Add<N, Output = N>
+			+ ops::AddAssign<N>
+			+ Unsigned
+			+ Zero
+			+ One,
 		Self::Inner: Into<N>;
+
 
 	/// Same as `Self::from_rational`.
 	#[deprecated = "Use from_rational instead"]
@@ -310,6 +397,7 @@ pub trait PerThing:
 			+ ops::Div<N, Output = N>
 			+ ops::Rem<N, Output = N>
 			+ ops::Add<N, Output = N>
+			+ ops::AddAssign<N>
 			+ Unsigned
 			+ Zero
 			+ One,
@@ -323,7 +411,8 @@ pub trait PerThing:
 ///
 /// `PerThing`s are unsigned so `Up` means towards infinity and `Down` means towards zero.
 /// `Nearest` will round an exact half down.
-enum Rounding {
+#[derive(sp_std::fmt::Debug)]
+pub enum Rounding {
 	Up,
 	Down,
 	Nearest,
@@ -430,7 +519,7 @@ macro_rules! implement_per_thing {
 		///
 		#[doc = $title]
 		#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-		#[derive(Encode, Copy, Clone, PartialEq, Eq, codec::MaxEncodedLen, PartialOrd, Ord, sp_std::fmt::Debug, scale_info::TypeInfo)]
+		#[derive(Encode, Copy, Clone, PartialEq, Eq, codec::MaxEncodedLen, PartialOrd, Ord, scale_info::TypeInfo)]
 		pub struct $name($type);
 
 		/// Implementation makes any compact encoding of `PerThing::Inner` valid,
@@ -452,6 +541,55 @@ macro_rules! implement_per_thing {
 			}
 		}
 
+		#[cfg(feature = "std")]
+		impl sp_std::fmt::Debug for $name {
+			fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
+				if $max == <$type>::max_value() {
+					// Not a power of ten: show as N/D and approx %
+					let pc = (self.0 as f64) / (self.0 as f64) * 100f64;
+					write!(fmt, "{:.2}% ({}/{})", pc, self.0, $max)
+				} else {
+					// A power of ten: calculate exact percent
+					let units = self.0 / ($max / 100);
+					let rest = self.0 % ($max / 100);
+					write!(fmt, "{}", units)?;
+					if rest > 0 {
+						write!(fmt, ".")?;
+						let mut m = $max / 100;
+						while rest % m > 0 {
+							m /= 10;
+							write!(fmt, "{:01}", rest / m % 10)?;
+						}
+					}
+					write!(fmt, "%")
+				}
+			}
+		}
+
+		#[cfg(not(feature = "std"))]
+		impl sp_std::fmt::Debug for $name {
+			fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
+				if $max == <$type>::max_value() {
+					// Not a power of ten: show as N/D and approx %
+					write!(fmt, "{}/{}", self.0, $max)
+				} else {
+					// A power of ten: calculate exact percent
+					let units = n / ($max / 100);
+					let rest = n % ($max / 100);
+					write!(fmt, "{}", units)?;
+					if rest > 0 {
+						write!(fmt, ".", units)?;
+						let mut m = $max;
+						while rest % m > 0 {
+							m /= 10;
+							write!(fmt, "{:01}", rest / m % 10)?;
+						}
+					}
+					write!(fmt, "%")
+				}
+			}
+		}
+
 		impl PerThing for $name {
 			type Inner = $type;
 			type Upper = $upper_type;
@@ -470,53 +608,78 @@ macro_rules! implement_per_thing {
 				Self::from_parts((x.max(0.).min(1.) * $max as f64) as Self::Inner)
 			}
 
-			fn from_rational<N>(p: N, q: N) -> Self
+			fn from_rational_with_rounding<N>(p: N, q: N, r: Rounding) -> Result<Self, ()>
 			where
-				N: Clone + Ord + TryInto<Self::Inner> + TryInto<Self::Upper>
-				 + ops::Div<N, Output=N> + ops::Rem<N, Output=N> + ops::Add<N, Output=N> + Unsigned
-				 + Zero + One,
-				Self::Inner: Into<N>,
+				N: Clone
+					+ Ord
+					+ TryInto<Self::Inner>
+					+ TryInto<Self::Upper>
+					+ ops::Div<N, Output = N>
+					+ ops::Rem<N, Output = N>
+					+ ops::Add<N, Output = N>
+					+ ops::AddAssign<N>
+					+ Unsigned
+					+ Zero
+					+ One,
+				Self::Inner: Into<N>
 			{
 				let div_ceil = |x: N, f: N| -> N {
 					let mut o = x.clone() / f.clone();
-					let r = x.rem(f.clone());
-					if r > N::zero() {
-						o = o + N::one();
+					let r = x % f;
+					if !r.is_zero() {
+						o += N::one();
+					}
+					o
+				};
+				let div_rounded = |n: N, d: N| -> N {
+					let mut o = n.clone() / d.clone();
+					if match r {
+						Rounding::Up => { !((n % d).is_zero()) },
+						Rounding::Nearest => { let rem = n % d.clone(); rem.clone() + rem >= d },
+						Rounding::Down => false,
+					} {
+						o += N::one()
 					}
 					o
 				};
 
 				// q cannot be zero.
-				let q: N = q.max((1 as Self::Inner).into());
+				if q.is_zero() { return Err(()) }
 				// p should not be bigger than q.
-				let p: N = p.min(q.clone());
+				if p > q { return Err(()) }
 
-				let factor: N = div_ceil(q.clone(), $max.into()).max((1 as Self::Inner).into());
+				let factor: N = div_ceil(q.clone(), $max.into()).max(One::one());
 
 				// q cannot overflow: (q / (q/$max)) < $max. p < q hence p also cannot overflow.
-				let q_reduce: $type = (q.clone() / factor.clone())
+				let q_reduce: $type = div_rounded(q, factor.clone())
 					.try_into()
 					.map_err(|_| "Failed to convert")
 					.expect(
-						"q / ceil(q/$max) < $max. Macro prevents any type being created that \
+						"`q / ceil(q/$max) < $max`; macro prevents any type being created that \
 						does not satisfy this; qed"
 					);
-				let p_reduce: $type = (p / factor)
+				let p_reduce: $type = div_rounded(p, factor)
 					.try_into()
 					.map_err(|_| "Failed to convert")
 					.expect(
-						"q / ceil(q/$max) < $max. Macro prevents any type being created that \
+						"`p / ceil(p/$max) < $max`; macro prevents any type being created that \
 						does not satisfy this; qed"
 					);
 
-				// `p_reduced` and `q_reduced` are withing Self::Inner. Mul by another $max will
-				// always fit in $upper_type. This is guaranteed by the macro tests.
-				let part =
-					p_reduce as $upper_type
-					* <$upper_type>::from($max)
-					/ q_reduce as $upper_type;
+				// `p_reduced` and `q_reduced` are within `Self::Inner`. Multiplication by another
+				// `$max` will always fit in `$upper_type`. This is guaranteed by the macro tests.
+				let n = p_reduce as $upper_type * <$upper_type>::from($max);
+				let d = q_reduce as $upper_type;
+				let mut part = n / d;
+				if match r {
+					Rounding::Up => { !((n % d).is_zero()) },
+					Rounding::Nearest => { let r = n % d; r + r >= d },
+					Rounding::Down => false,
+				} {
+					part += 1 as $upper_type
+				}
 
-				$name(part as Self::Inner)
+				Ok($name(part as Self::Inner))
 			}
 		}
 
@@ -577,20 +740,38 @@ macro_rules! implement_per_thing {
 			/// See [`PerThing::from_rational`].
 			#[deprecated = "Use `PerThing::from_rational` instead"]
 			pub fn from_rational_approximation<N>(p: N, q: N) -> Self
-				where N: Clone + Ord + TryInto<$type> +
-					TryInto<$upper_type> + ops::Div<N, Output=N> + ops::Rem<N, Output=N> +
-					ops::Add<N, Output=N> + Unsigned,
-					$type: Into<N>,
+			where
+				N: Clone
+					+ Ord
+					+ TryInto<$type>
+					+ TryInto<$upper_type>
+					+ ops::Div<N, Output = N>
+					+ ops::Rem<N, Output = N>
+					+ ops::Add<N, Output = N>
+					+ ops::AddAssign<N>
+					+ Unsigned
+					+ Zero
+					+ One,
+				$type: Into<N>
 			{
 				<Self as PerThing>::from_rational(p, q)
 			}
 
 			/// See [`PerThing::from_rational`].
 			pub fn from_rational<N>(p: N, q: N) -> Self
-				where N: Clone + Ord + TryInto<$type> +
-					TryInto<$upper_type> + ops::Div<N, Output=N> + ops::Rem<N, Output=N> +
-					ops::Add<N, Output=N> + Unsigned,
-					$type: Into<N>,
+			where
+				N: Clone
+					+ Ord
+					+ TryInto<$type>
+					+ TryInto<$upper_type>
+					+ ops::Div<N, Output = N>
+					+ ops::Rem<N, Output = N>
+					+ ops::Add<N, Output = N>
+					+ ops::AddAssign<N>
+					+ Unsigned
+					+ Zero
+					+ One,
+				$type: Into<N>
 			{
 				<Self as PerThing>::from_rational(p, q)
 			}
@@ -662,14 +843,35 @@ macro_rules! implement_per_thing {
 			}
 
 			/// Saturating division. Compute `self / rhs`, saturating at one if `rhs < self`.
-			pub fn saturating_div(self, rhs: Self) -> Self {
+			///
+			/// The `rounding` method must be specified. e.g.:
+			///
+			/// ```rust
+			/// # use sp_arithmetic::{Percent, PerThing, Rounding::*};
+			/// # fn main () {
+			/// let pc = |x| Percent::from_percent(x);
+			/// assert_eq!(
+			/// 	pc(2).saturating_div(pc(3), Down),
+			/// 	pc(66),
+			/// );
+			/// assert_eq!(
+			/// 	pc(1).saturating_div(pc(3), Nearest),
+			/// 	pc(33),
+			/// );
+			/// assert_eq!(
+			/// 	pc(2).saturating_div(pc(3), Nearest),
+			/// 	pc(67),
+			/// );
+			/// assert_eq!(
+			/// 	pc(1).saturating_div(pc(3), Up),
+			/// 	pc(34),
+			/// );
+			/// # }
+			/// ```
+			pub fn saturating_div(self, rhs: Self, r: Rounding) -> Self {
 				let p = self.0;
 				let q = rhs.0;
-				if p < q {
-					Self::from_rational(p, q)
-				} else {
-					Self::one()
-				}
+				Self::from_rational_with_rounding(p, q, r).unwrap_or_else(|_| Self::one())
 			}
 		}
 

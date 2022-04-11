@@ -22,6 +22,7 @@ use codec::{Decode, Encode, EncodeLike, MaxEncodedLen};
 use frame_support::{traits::schedule::Anon, Parameter};
 use scale_info::TypeInfo;
 use sp_runtime::{RuntimeDebug, PerThing};
+use sp_arithmetic::Rounding::*;
 use sp_std::fmt::Debug;
 
 pub type BalanceOf<T, I = ()> =
@@ -267,10 +268,10 @@ impl Curve {
 			Self::SteppedDecreasing { begin, end, step, period } =>
 				(*begin - (step.int_mul(x.int_div(*period))).min(*begin)).max(*end),
 			Self::Reciprocal { factor, offset } => {
-				let x_offset = factor.saturating_div(offset.left_from_one());
+				let x_offset = factor.saturating_div(offset.left_from_one(), Down);
 				// Actual curve is y = factor / (x + x_offset) + offset
 				// we want to avoid saturating prior to the division.
-				Perbill::from_rational(factor.deconstruct(), x.deconstruct() + x_offset.deconstruct()).saturating_add(*offset)
+				Perbill::from_rational_with_rounding(factor.deconstruct(), x.deconstruct() + x_offset.deconstruct(), Down).unwrap_or_else(|_| Perbill::one()).saturating_add(*offset)
 			}
 		}
 	}
@@ -301,10 +302,10 @@ impl Curve {
 				if y < *end {
 					Perbill::one()
 				} else {
-					period.int_mul((*begin - y.min(*begin) + step.less_epsilon().unwrap_or(Zero::zero())).int_div(*step))
+					period.int_mul((*begin - y.min(*begin) + step.less_epsilon()).int_div(*step))
 				},
 			Self::Reciprocal { factor, offset } => {
-				let x_offset = factor.saturating_div(offset.left_from_one());
+				let x_offset = factor.saturating_div(offset.left_from_one(), Down);
 				// Actual curve is y = factor / (x + x_offset) + offset
 				// Ergo curve is x = factor / (y - offset) - x_offset
 				// To avoid pre-saturation problems, we move the x_offset term to happen prior to
@@ -316,7 +317,10 @@ impl Curve {
 					Perbill::one()
 				} else {
 					let yo = y - *offset;
-					factor.saturating_sub(x_offset * yo).saturating_div(yo)
+					if *factor < x_offset * yo {
+						println!("SATURATING in delay");
+					}
+					factor.saturating_sub(x_offset * yo).saturating_div(yo, Up)
 				}
 			}
 		}
@@ -407,16 +411,12 @@ mod tests {
 			offset: percent(0),
 		};
 
-		for i in 0..1000u32 {
-			let x = Perbill::from_rational(i, 1000u32);
-
-			let threshold_at_x = c.threshold(x);
-			let min_delay_for_threshold = c.delay(threshold_at_x);
-			assert!(min_delay_for_threshold >= x);
-
-			let delay_for_x = c.delay(x);
-			let min_threshold_for_delay = c.threshold(delay_for_x);
-			assert!(min_threshold_for_delay >= x);
+		for i in 0..9_696_969u32 {
+			let query = Perbill::from_rational(i, 9_696_969);
+			// Determine the nearest point in time when the query will be above threshold.
+			let delay_needed = c.delay(query);
+			// Ensure that it actually does pass at that time, or that it will never pass.
+			assert!(delay_needed.is_one() || c.passing(delay_needed, query));
 		}
 
 		assert_eq!(c.threshold(percent(0)) * 100u32, 100);
@@ -487,16 +487,12 @@ mod tests {
 			offset: percent(50),
 		};
 
-		for i in 0..1000u32 {
-			let x = Perbill::from_rational(i, 1000u32);
-
-			let threshold_at_x = c.threshold(x);
-			let min_delay_for_threshold = c.delay(threshold_at_x);
-			assert!(min_delay_for_threshold >= x);
-
-			let delay_for_x = c.delay(x);
-			let min_threshold_for_delay = c.threshold(delay_for_x);
-			assert!(min_threshold_for_delay >= x);
+		for i in 0..9_696_969u32 {
+			let query = Perbill::from_rational(i, 9_696_969);
+			// Determine the nearest point in time when the query will be above threshold.
+			let delay_needed = c.delay(query);
+			// Ensure that it actually does pass at that time, or that it will never pass.
+			assert!(delay_needed.is_one() || c.passing(delay_needed, query));
 		}
 
 		assert_eq!(c.threshold(percent(0)) * 100u32, 100);
@@ -525,6 +521,22 @@ mod tests {
 	}
 
 	#[test]
+	fn realistic_offset_reciprocal_works() {
+		let c: Curve = Curve::Reciprocal {
+			factor: Perbill::from_rational(35u32, 10_000u32),
+			offset: percent(10),
+		};
+
+		for i in 0..9_696_969u32 {
+			let query = Perbill::from_rational(i, 9_696_969);
+			// Determine the nearest point in time when the query will be above threshold.
+			let delay_needed = c.delay(query);
+			// Ensure that it actually does pass at that time, or that it will never pass.
+			assert!(delay_needed.is_one() || c.passing(delay_needed, query));
+		}
+	}
+
+	#[test]
 	fn stepped_decreasing_works() {
 		let c = Curve::SteppedDecreasing {
 			begin: percent(80),
@@ -532,32 +544,41 @@ mod tests {
 			step: percent(10),
 			period: percent(15),
 		};
+
+		for i in 0..9_696_969u32 {
+			let query = Perbill::from_rational(i, 9_696_969);
+			// Determine the nearest point in time when the query will be above threshold.
+			let delay_needed = c.delay(query);
+			// Ensure that it actually does pass at that time, or that it will never pass.
+			assert!(delay_needed.is_one() || c.passing(delay_needed, query));
+		}
+
 		assert_eq!(c.threshold(percent(0)), percent(80));
-		assert_eq!(c.threshold(percent(15).less_epsilon().unwrap()), percent(80));
+		assert_eq!(c.threshold(percent(15).less_epsilon()), percent(80));
 		assert_eq!(c.threshold(percent(15)), percent(70));
-		assert_eq!(c.threshold(percent(30).less_epsilon().unwrap()), percent(70));
+		assert_eq!(c.threshold(percent(30).less_epsilon()), percent(70));
 		assert_eq!(c.threshold(percent(30)), percent(60));
-		assert_eq!(c.threshold(percent(45).less_epsilon().unwrap()), percent(60));
+		assert_eq!(c.threshold(percent(45).less_epsilon()), percent(60));
 		assert_eq!(c.threshold(percent(45)), percent(50));
-		assert_eq!(c.threshold(percent(60).less_epsilon().unwrap()), percent(50));
+		assert_eq!(c.threshold(percent(60).less_epsilon()), percent(50));
 		assert_eq!(c.threshold(percent(60)), percent(40));
-		assert_eq!(c.threshold(percent(75).less_epsilon().unwrap()), percent(40));
+		assert_eq!(c.threshold(percent(75).less_epsilon()), percent(40));
 		assert_eq!(c.threshold(percent(75)), percent(30));
 		assert_eq!(c.threshold(percent(100)), percent(30));
 
 		assert_eq!(c.delay(percent(100)), percent(0));
 		assert_eq!(c.delay(percent(80)), percent(0));
-		assert_eq!(c.delay(percent(80).less_epsilon().unwrap()), percent(15));
+		assert_eq!(c.delay(percent(80).less_epsilon()), percent(15));
 		assert_eq!(c.delay(percent(70)), percent(15));
-		assert_eq!(c.delay(percent(70).less_epsilon().unwrap()), percent(30));
+		assert_eq!(c.delay(percent(70).less_epsilon()), percent(30));
 		assert_eq!(c.delay(percent(60)), percent(30));
-		assert_eq!(c.delay(percent(60).less_epsilon().unwrap()), percent(45));
+		assert_eq!(c.delay(percent(60).less_epsilon()), percent(45));
 		assert_eq!(c.delay(percent(50)), percent(45));
-		assert_eq!(c.delay(percent(50).less_epsilon().unwrap()), percent(60));
+		assert_eq!(c.delay(percent(50).less_epsilon()), percent(60));
 		assert_eq!(c.delay(percent(40)), percent(60));
-		assert_eq!(c.delay(percent(40).less_epsilon().unwrap()), percent(75));
+		assert_eq!(c.delay(percent(40).less_epsilon()), percent(75));
 		assert_eq!(c.delay(percent(30)), percent(75));
-		assert_eq!(c.delay(percent(30).less_epsilon().unwrap()), percent(100));
+		assert_eq!(c.delay(percent(30).less_epsilon()), percent(100));
 		assert_eq!(c.delay(percent(0)), percent(100));
 	}
 }
