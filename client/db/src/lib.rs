@@ -106,6 +106,7 @@ const DEFAULT_CHILD_RATIO: (usize, usize) = (1, 10);
 pub type DbState<B> =
 	sp_state_machine::TrieBackend<Arc<dyn sp_state_machine::Storage<HashFor<B>>>, HashFor<B>>;
 
+#[cfg(feature = "with-parity-db")]
 /// Length of a [`DbHash`].
 const DB_HASH_LEN: usize = 32;
 

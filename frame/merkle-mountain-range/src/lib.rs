@@ -83,6 +83,7 @@ pub use sp_mmr_primitives::{self as primitives, Error, LeafDataProvider, LeafInd
 pub struct ParentNumberAndHash<T: frame_system::Config> {
 	_phanthom: sp_std::marker::PhantomData<T>,
 }
+
 impl<T: frame_system::Config> LeafDataProvider for ParentNumberAndHash<T> {
 	type LeafData = (<T as frame_system::Config>::BlockNumber, <T as frame_system::Config>::Hash);
 
