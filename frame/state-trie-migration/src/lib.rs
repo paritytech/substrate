@@ -1448,7 +1448,10 @@ pub(crate) mod remote_tests {
 	use crate::{AutoLimits, MigrationLimits, Pallet as StateTrieMigration, LOG_TARGET};
 	use codec::Encode;
 	use frame_benchmarking::Zero;
-	use frame_support::traits::{Get, Hooks};
+	use frame_support::{
+		traits::{Get, Hooks},
+		weights::Weight,
+	};
 	use frame_system::Pallet as System;
 	use remote_externalities::Mode;
 	use sp_core::H256;
@@ -1457,9 +1460,9 @@ pub(crate) mod remote_tests {
 
 	fn run_to_block<Runtime: crate::Config<Hash = H256>>(
 		n: <Runtime as frame_system::Config>::BlockNumber,
-	) -> (H256, u64) {
+	) -> (H256, Weight) {
 		let mut root = Default::default();
-		let mut weight_sum = 0;
+		let mut weight_sum = Weight::zero();
 		while System::<Runtime>::block_number() < n {
 			System::<Runtime>::set_block_number(System::<Runtime>::block_number() + One::one());
 			System::<Runtime>::on_initialize(System::<Runtime>::block_number());
