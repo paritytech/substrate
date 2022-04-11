@@ -104,10 +104,23 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
-	/// The collections owned by any given account; set out this way so that classes owned by
+	/// The collections owned by any given account; set out this way so that collections owned by
 	/// a single account can be enumerated.
 	#[pallet::storage]
 	pub(super) type CollectionOwner<T: Config> = StorageDoubleMap<
+		_,
+		Blake2_128Concat,
+		T::AccountId,
+		Blake2_128Concat,
+		T::CollectionId,
+		(),
+		OptionQuery,
+	>;
+
+	/// The collections created by any given account; set out this way so that collections
+	/// created by a single account can be enumerated.
+	#[pallet::storage]
+	pub(super) type CollectionCreator<T: Config> = StorageDoubleMap<
 		_,
 		Blake2_128Concat,
 		T::AccountId,
@@ -198,7 +211,12 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		CollectionCreated {id: T::CollectionId, max_supply: Option<u32> },
+		CollectionCreated {
+			id: T::CollectionId,
+			max_supply: Option<u32>,
+			creator: T::AccountId,
+			owner: T::AccountId,
+		},
 		CollectionMetadataSet { id: T::CollectionId, data: MetadataOf<T> },
 		CollectionLocked { id: T::CollectionId },
 		CollectionDestroyed { id: T::CollectionId },
@@ -304,12 +322,20 @@ pub mod pallet {
 		#[pallet::weight(0)]
 		pub fn create(
 			origin: OriginFor<T>,
+			owner: <T::Lookup as StaticLookup>::Source,
 			config: UserFeatures,
 			max_supply: Option<u32>,
 			max_items_per_account: Option<u32>,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
-			Self::do_create_collection(sender, config, max_supply, max_items_per_account)?;
+			let owner = T::Lookup::lookup(owner)?;
+			Self::do_create_collection(
+				sender,
+				owner,
+				config,
+				max_supply,
+				max_items_per_account,
+			)?;
 			Ok(())
 		}
 

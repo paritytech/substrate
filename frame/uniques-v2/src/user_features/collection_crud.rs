@@ -22,7 +22,8 @@ use sp_runtime::traits::{CheckedAdd, One};
 
 impl<T: Config> Pallet<T> {
 	pub fn do_create_collection(
-		caller: T::AccountId,
+		creator: T::AccountId,
+		owner: T::AccountId,
 		user_config: UserFeatures,
 		max_supply: Option<u32>,
 		max_items_per_account: Option<u32>,
@@ -40,7 +41,8 @@ impl<T: Config> Pallet<T> {
 
 		let collection = Collection {
 			id,
-			owner: caller.clone(),
+			creator: creator.clone(),
+			owner: owner.clone(),
 			deposit: None,
 			attributes: 0,
 			items: 0,
@@ -51,7 +53,8 @@ impl<T: Config> Pallet<T> {
 		ensure!(!Collections::<T>::contains_key(id), Error::<T>::CollectionIdTaken);
 
 		Collections::<T>::insert(id, collection);
-		CollectionOwner::<T>::insert(&caller, &id, ());
+		CollectionOwner::<T>::insert(&owner, &id, ());
+		CollectionCreator::<T>::insert(&creator, &id, ());
 
 		// emit events
 
@@ -60,7 +63,7 @@ impl<T: Config> Pallet<T> {
 			Self::deposit_event(Event::<T>::CollectionLocked { id });
 		}
 
-		Self::deposit_event(Event::<T>::CollectionCreated { id, max_supply });
+		Self::deposit_event(Event::<T>::CollectionCreated { id, max_supply, creator, owner });
 
 		// update the next id value
 		let next_id = id.checked_add(&One::one()).ok_or(Error::<T>::Overflow)?;
@@ -165,6 +168,7 @@ impl<T: Config> Pallet<T> {
 		Collections::<T>::remove(&id);
 		CollectionMetadataOf::<T>::remove(&id);
 		CollectionOwner::<T>::remove(&collection.owner, &id);
+		CollectionCreator::<T>::remove(&collection.creator, &id);
 		Attributes::<T>::remove_prefix((&id,), None);
 
 		for (item_id, details) in Items::<T>::drain_prefix(&id) {

@@ -25,7 +25,12 @@ fn get_id_from_event() -> Result<<Test as Config>::CollectionId, &'static str> {
 	if let Some(e) = last_event.clone() {
 		match e.event {
 			mock::Event::Uniques(inner_event) => match inner_event {
-				Event::CollectionCreated { id, max_supply: _ } => {
+				Event::CollectionCreated {
+					id,
+					max_supply: _,
+					creator: _,
+					owner: _,
+				} => {
 					return Ok(id)
 				},
 				_ => {},
@@ -65,7 +70,17 @@ pub const DEFAULT_USER_FEATURES: UserFeatures = UserFeatures::Administration;
 #[test]
 fn minting_should_work() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Uniques::create(Origin::signed(1), DEFAULT_USER_FEATURES, None, None));
+		let owner = 1;
+		let creator = 1;
+		assert_ok!(
+			Uniques::create(
+				Origin::signed(creator),
+				owner,
+				DEFAULT_USER_FEATURES,
+				None,
+				None,
+			)
+		);
 
 		let id = get_id_from_event().unwrap();
 		let collection_config = CollectionConfigs::<Test>::get(id);
@@ -76,9 +91,17 @@ fn minting_should_work() {
 		};
 		assert_eq!(Some(expected_config), collection_config);
 
-		assert_eq!(events(), [Event::<Test>::CollectionCreated { id, max_supply: None }]);
+		assert_eq!(events(), [
+			Event::<Test>::CollectionCreated {
+				id,
+				max_supply: None,
+				owner,
+				creator,
+			}
+		]);
 		assert_eq!(CountForCollections::<Test>::get(), 1);
-		assert_eq!(collections(), vec![(1, 0)]);
+		assert!(CollectionCreator::<Test>::contains_key(creator, id));
+		assert_eq!(collections(), vec![(owner, id)]);
 	});
 }
 
@@ -87,7 +110,15 @@ fn collection_locking_should_work() {
 	new_test_ext().execute_with(|| {
 		let user_id = 1;
 
-		assert_ok!(Uniques::create(Origin::signed(user_id), DEFAULT_USER_FEATURES, None, None));
+		assert_ok!(
+			Uniques::create(
+				Origin::signed(user_id),
+				user_id,
+				DEFAULT_USER_FEATURES,
+				None,
+				None,
+			)
+		);
 
 		let id = get_id_from_event().unwrap();
 		let new_config = UserFeatures::IsLocked;
@@ -111,7 +142,7 @@ fn collection_locking_should_fail() {
 		let user_id = 1;
 		let user_features = UserFeatures::IsLocked;
 
-		assert_ok!(Uniques::create(Origin::signed(user_id), user_features, None, None));
+		assert_ok!(Uniques::create(Origin::signed(user_id), user_id, user_features, None, None));
 
 		let id = get_id_from_event().unwrap();
 		let new_config = UserFeatures::Administration;
@@ -133,7 +164,13 @@ fn update_max_supply_should_work() {
 		let max_supply = Some(10);
 
 		assert_ok!(
-			Uniques::create(Origin::signed(user_id), DEFAULT_USER_FEATURES, max_supply, None)
+			Uniques::create(
+				Origin::signed(user_id),
+				user_id,
+				DEFAULT_USER_FEATURES,
+				max_supply,
+				None,
+			)
 		);
 
 		let collection = Collections::<Test>::get(id).unwrap();
@@ -159,10 +196,10 @@ fn different_user_flags() {
 
 		// TODO: uncomment
 		// let user_features = UserFeatures::Administration | UserFeatures::IsLocked;
-		// assert_ok!(Uniques::create(Origin::signed(1), BitFlags::EMPTY, None, None));
+		// assert_ok!(Uniques::create(Origin::signed(1), 1, BitFlags::EMPTY, None, None));
 
 		let user_features = UserFeatures::IsLocked;
-		assert_ok!(Uniques::create(Origin::signed(1), user_features, None, None));
+		assert_ok!(Uniques::create(Origin::signed(1), 1, user_features, None, None));
 	});
 }
 

@@ -50,6 +50,7 @@ pub struct CollectionConfig {
 #[derive(Encode, Decode, PartialEq, Default, MaxEncodedLen, TypeInfo)]
 pub struct Collection<CollectionId, Account, Balance> {
 	pub id: CollectionId,
+	pub creator: Account,
 	pub owner: Account,
 	pub deposit: Option<Balance>,
 	pub attributes: u32,
