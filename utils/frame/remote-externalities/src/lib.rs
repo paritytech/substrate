@@ -848,7 +848,7 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 		info!(
 			target: LOG_TARGET,
 			"injecting a total of {} child keys",
-			child_kv.iter().map(|(_, kv)| kv).flatten().count()
+			child_kv.iter().flat_map(|(_, kv)| kv).count(),
 		);
 
 		for (info, key_values) in child_kv {

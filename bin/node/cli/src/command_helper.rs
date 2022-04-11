@@ -29,19 +29,19 @@ use sp_runtime::OpaqueExtrinsic;
 
 use std::{sync::Arc, time::Duration};
 
-/// Generates extrinsics for the `benchmark-overhead` command.
-pub struct ExtrinsicBuilder {
+/// Generates extrinsics for the `benchmark overhead` command.
+pub struct BenchmarkExtrinsicBuilder {
 	client: Arc<FullClient>,
 }
 
-impl ExtrinsicBuilder {
+impl BenchmarkExtrinsicBuilder {
 	/// Creates a new [`Self`] from the given client.
 	pub fn new(client: Arc<FullClient>) -> Self {
 		Self { client }
 	}
 }
 
-impl frame_benchmarking_cli::ExtrinsicBuilder for ExtrinsicBuilder {
+impl frame_benchmarking_cli::ExtrinsicBuilder for BenchmarkExtrinsicBuilder {
 	fn remark(&self, nonce: u32) -> std::result::Result<OpaqueExtrinsic, &'static str> {
 		let acc = Sr25519Keyring::Bob.pair();
 		let extrinsic: OpaqueExtrinsic = create_extrinsic(
@@ -56,8 +56,8 @@ impl frame_benchmarking_cli::ExtrinsicBuilder for ExtrinsicBuilder {
 	}
 }
 
-/// Generates inherent data for the `benchmark-overhead` command.
-pub fn inherent_data() -> Result<InherentData> {
+/// Generates inherent data for the `benchmark overhead` command.
+pub fn inherent_benchmark_data() -> Result<InherentData> {
 	let mut inherent_data = InherentData::new();
 	let d = Duration::from_millis(0);
 	let timestamp = sp_timestamp::InherentDataProvider::new(d.into());
