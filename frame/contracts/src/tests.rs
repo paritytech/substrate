@@ -1822,7 +1822,7 @@ fn lazy_removal_does_no_run_on_full_block() {
 
 		// Run the lazy removal without any limit so that all keys would be removed if there
 		// had been some weight left in the block.
-		let weight_used = Contracts::on_idle(Weight::max_value(), Weight::max_value());
+		let weight_used = Contracts::on_idle(Weight::max_value(), 0 as Weight);
 		let base = <<Test as Config>::WeightInfo as WeightInfo>::on_initialize();
 		assert_eq!(weight_used, base);
 
