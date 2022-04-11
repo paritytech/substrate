@@ -919,8 +919,7 @@ where
 				.header(BlockId::Hash(block))?
 				.expect("Block to finalize expected to be onchain; qed");
 
-			operation.notify_finalized =
-				Some(FinalizeSummary { header, finalized, stale_heads });
+			operation.notify_finalized = Some(FinalizeSummary { header, finalized, stale_heads });
 		}
 
 		Ok(())
