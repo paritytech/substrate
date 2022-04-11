@@ -1718,7 +1718,7 @@ impl<T: Config> Pallet<T> {
 		new_funds: BalanceOf<T>,
 	) -> BalanceOf<T> {
 		match (current_balance.is_zero(), current_points.is_zero()) {
-			(true, true) | (false, true) =>
+			(_, true) =>
 				new_funds.saturating_mul(POINTS_TO_BALANCE_INIT_RATIO.into()),
 			(true, false) => {
 				// The pool was totally slashed.
