@@ -67,8 +67,6 @@ impl<H, N: Ord> FinalizationDisplaced<H, N> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LeafSet<H, N> {
 	storage: BTreeMap<Reverse<N>, Vec<H>>,
-	pending_added: Vec<(H, N)>,
-	pending_removed: Vec<H>,
 }
 
 impl<H, N> LeafSet<H, N>
@@ -78,7 +76,7 @@ where
 {
 	/// Construct a new, blank leaf set.
 	pub fn new() -> Self {
-		Self { storage: BTreeMap::new(), pending_added: Vec::new(), pending_removed: Vec::new() }
+		Self { storage: BTreeMap::new() }
 	}
 
 	/// Read the leaf list from the DB, using given prefix for keys.
@@ -97,7 +95,7 @@ where
 			},
 			None => {},
 		}
-		Ok(Self { storage, pending_added: Vec::new(), pending_removed: Vec::new() })
+		Ok(Self { storage })
 	}
 
 	/// update the leaf list on import. returns a displaced leaf if there was one.
@@ -108,7 +106,6 @@ where
 			let was_displaced = self.remove_leaf(&new_number, &parent_hash);
 
 			if was_displaced {
-				self.pending_removed.push(parent_hash.clone());
 				Some(ImportDisplaced {
 					new_hash: hash.clone(),
 					displaced: LeafSetItem { hash: parent_hash, number: new_number },
@@ -121,7 +118,6 @@ where
 		};
 
 		self.insert_leaf(Reverse(number.clone()), hash.clone());
-		self.pending_added.push((hash, number));
 		displaced
 	}
 
@@ -140,19 +136,7 @@ where
 		};
 
 		let below_boundary = self.storage.split_off(&Reverse(boundary));
-		self.pending_removed
-			.extend(below_boundary.values().flat_map(|h| h.iter()).cloned());
 		FinalizationDisplaced { leaves: below_boundary }
-	}
-
-	/// Undo all pending operations.
-	///
-	/// This returns an `Undo` struct, where any
-	/// `Displaced` objects that have returned by previous method calls
-	/// should be passed to via the appropriate methods. Otherwise,
-	/// the on-disk state may get out of sync with in-memory state.
-	pub fn undo(&mut self) -> Undo<H, N> {
-		Undo { inner: self }
 	}
 
 	/// Revert to the given block height by dropping all leaves in the leaf set
@@ -170,8 +154,6 @@ where
 					self.remove_leaf(number, hash),
 					"item comes from an iterator over storage; qed",
 				);
-
-				self.pending_removed.push(hash.clone());
 			}
 		}
 
@@ -185,7 +167,6 @@ where
 		// this is an invariant of regular block import.
 		if !leaves_contains_best {
 			self.insert_leaf(best_number.clone(), best_hash.clone());
-			self.pending_added.push((best_hash, best_number.0));
 		}
 	}
 
@@ -209,8 +190,6 @@ where
 	) {
 		let leaves: Vec<_> = self.storage.iter().map(|(n, h)| (n.0.clone(), h.clone())).collect();
 		tx.set_from_vec(column, prefix, leaves.encode());
-		self.pending_added.clear();
-		self.pending_removed.clear();
 	}
 
 	/// Check if given block is a leaf.
@@ -250,36 +229,6 @@ where
 		}
 
 		removed
-	}
-}
-
-/// Helper for undoing operations.
-pub struct Undo<'a, H: 'a, N: 'a> {
-	inner: &'a mut LeafSet<H, N>,
-}
-
-impl<'a, H: 'a, N: 'a> Undo<'a, H, N>
-where
-	H: Clone + PartialEq + Decode + Encode,
-	N: std::fmt::Debug + Clone + AtLeast32Bit + Decode + Encode,
-{
-	/// Undo an imported block by providing the displaced leaf.
-	pub fn undo_import(&mut self, displaced: ImportDisplaced<H, N>) {
-		let new_number = Reverse(displaced.displaced.number.0.clone() + N::one());
-		self.inner.remove_leaf(&new_number, &displaced.new_hash);
-		self.inner.insert_leaf(new_number, displaced.displaced.hash);
-	}
-
-	/// Undo a finalization operation by providing the displaced leaves.
-	pub fn undo_finalization(&mut self, mut displaced: FinalizationDisplaced<H, N>) {
-		self.inner.storage.append(&mut displaced.leaves);
-	}
-}
-
-impl<'a, H: 'a, N: 'a> Drop for Undo<'a, H, N> {
-	fn drop(&mut self) {
-		self.inner.pending_added.clear();
-		self.inner.pending_removed.clear();
 	}
 }
 
@@ -371,20 +320,5 @@ mod tests {
 
 		let set2 = LeafSet::read_from_db(&*db, 0, PREFIX).unwrap();
 		assert_eq!(set, set2);
-	}
-
-	#[test]
-	fn undo_finalization() {
-		let mut set = LeafSet::new();
-		set.import(10_1u32, 10u32, 0u32);
-		set.import(11_1, 11, 10_2);
-		set.import(11_2, 11, 10_2);
-		set.import(12_1, 12, 11_123);
-
-		let displaced = set.finalize_height(11);
-		assert!(!set.contains(10, 10_1));
-
-		set.undo().undo_finalization(displaced);
-		assert!(set.contains(10, 10_1));
 	}
 }
