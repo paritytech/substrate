@@ -177,12 +177,10 @@ impl onchain::Config for OnChainSeqPhragmen {
 	type System = Test;
 	type Solver = SequentialPhragmen<DummyValidatorId, Perbill>;
 	type DataProvider = Staking;
-	type VotersBound = ConstU32<600>;
-	type TargetsBound = ConstU32<400>;
+	type VotersBound = ConstU32<u32::MAX>;
+	type TargetsBound = ConstU32<u32::MAX>;
 	type WeightInfo = ();
 }
-
-type OnChainPhragmen = onchain::BoundedExecution<OnChainSeqPhragmen>;
 
 impl pallet_staking::Config for Test {
 	type MaxNominations = ConstU32<16>;
@@ -202,7 +200,7 @@ impl pallet_staking::Config for Test {
 	type MaxNominatorRewardedPerValidator = ConstU32<64>;
 	type OffendingValidatorsThreshold = OffendingValidatorsThreshold;
 	type NextNewSession = Session;
-	type ElectionProvider = OnChainPhragmen;
+	type ElectionProvider = onchain::BoundedExecution<OnChainSeqPhragmen>;
 	type GenesisElectionProvider = Self::ElectionProvider;
 	type VoterList = pallet_staking::UseNominatorsAndValidatorsMap<Self>;
 	type MaxUnlockingChunks = ConstU32<32>;

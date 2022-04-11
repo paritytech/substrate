@@ -530,7 +530,7 @@ pub trait NposSolver {
 	/// Measure the weight used in the calculation of the solver.
 	/// `v` is the number of voters, `t` is the number of targets, `d` is the degree ie the maximum
 	/// numbers of votes per voter.
-	fn weight<T: WeightInfo>(v: u32, t: u32, d: u32) -> Weight;
+	fn weight<T: WeightInfo>(voters: u32, targets: u32, vote_degree: u32) -> Weight;
 }
 
 /// A wrapper for [`sp_npos_elections::seq_phragmen`] that implements [`NposSolver`]. See the
@@ -556,8 +556,8 @@ impl<
 		sp_npos_elections::seq_phragmen(winners, targets, voters, Balancing::get())
 	}
 
-	fn weight<T: WeightInfo>(v: u32, t: u32, d: u32) -> Weight {
-		T::phragmen(v, t, d)
+	fn weight<T: WeightInfo>(voters: u32, targets: u32, vote_degree: u32) -> Weight {
+		T::phragmen(voters, targets, vote_degree)
 	}
 }
 
@@ -584,8 +584,8 @@ impl<
 		sp_npos_elections::phragmms(winners, targets, voters, Balancing::get())
 	}
 
-	fn weight<T: WeightInfo>(v: u32, t: u32, d: u32) -> Weight {
-		T::phragmms(v, t, d)
+	fn weight<T: WeightInfo>(voters: u32, targets: u32, vote_degree: u32) -> Weight {
+		T::phragmms(voters, targets, vote_degree)
 	}
 }
 

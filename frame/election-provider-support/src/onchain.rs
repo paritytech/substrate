@@ -55,7 +55,7 @@ impl From<sp_npos_elections::Error> for Error {
 /// the trait bounds (`MaxVoters` and `MaxTargets`).
 pub struct BoundedExecution<T: Config>(PhantomData<T>);
 
-/// Configuration trait.
+/// Configuration trait for an onchain election execution.
 pub trait Config {
 	/// Needed for weight registration.
 	type System: frame_system::Config;
@@ -214,9 +214,6 @@ mod tests {
 		type WeightInfo = ();
 	}
 
-	type OnChainPhragmen = BoundedExecution<PhragmenParams>;
-	type OnChainPhragMMS = BoundedExecution<PhragMMSParams>;
-
 	mod mock_data_provider {
 		use frame_support::{bounded_vec, traits::ConstU32};
 
@@ -254,7 +251,7 @@ mod tests {
 	fn onchain_seq_phragmen_works() {
 		sp_io::TestExternalities::new_empty().execute_with(|| {
 			assert_eq!(
-				OnChainPhragmen::elect().unwrap(),
+				BoundedExecution::<PhragmenParams>::elect().unwrap(),
 				vec![
 					(10, Support { total: 25, voters: vec![(1, 10), (3, 15)] }),
 					(30, Support { total: 35, voters: vec![(2, 20), (3, 15)] })
@@ -267,7 +264,7 @@ mod tests {
 	fn onchain_phragmms_works() {
 		sp_io::TestExternalities::new_empty().execute_with(|| {
 			assert_eq!(
-				OnChainPhragMMS::elect().unwrap(),
+				BoundedExecution::<PhragMMSParams>::elect().unwrap(),
 				vec![
 					(10, Support { total: 25, voters: vec![(1, 10), (3, 15)] }),
 					(30, Support { total: 35, voters: vec![(2, 20), (3, 15)] })
