@@ -1112,6 +1112,7 @@ pub mod pallet {
 		/// # Note
 		///
 		/// * An account can only be a member of a single pool.
+		/// * An account cannot join the same pool multiple times.		
 		/// * This call will *not* dust the delegator account, so the delegator must have at least
 		///   `existential deposit + amount` in their account.
 		/// * Only a pool with [`PoolState::Open`] can be joined
