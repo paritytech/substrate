@@ -258,7 +258,6 @@ impl<T: Config> SignedSubmissions<T> {
 
 		SignedSubmissionIndices::<T>::kill();
 		SignedSubmissionNextIndex::<T>::kill();
-		let _ = sp_std::mem::take(&mut self.deletion_overlay);
 
 		keys.into_iter().filter_map(move |index| {
 			SignedSubmissionsMap::<T>::take(index).or_else(|| self.insertion_overlay.remove(&index))
