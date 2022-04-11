@@ -896,9 +896,8 @@ where
 		operation.op.mark_finalized(BlockId::Hash(block), justification)?;
 
 		if notify {
-			let finalized = std::iter::once(last_finalized)
-				.chain(route_from_finalized.enacted().iter().map(|elem| elem.hash))
-				.collect::<Vec<_>>();
+			let finalized =
+				route_from_finalized.enacted().iter().map(|elem| elem.hash).collect::<Vec<_>>();
 
 			let block_number = route_from_finalized
 				.last()

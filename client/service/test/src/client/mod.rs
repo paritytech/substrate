@@ -846,8 +846,6 @@ fn import_with_justification() {
 
 	let mut finality_notifications = client.finality_notification_stream();
 
-	let genesis = client.block_hash(0).unwrap().unwrap();
-
 	// G -> A1
 	let a1 = client.new_block(Default::default()).unwrap().build().unwrap().block;
 	block_on(client.import(BlockOrigin::Own, a1.clone())).unwrap();
@@ -880,7 +878,7 @@ fn import_with_justification() {
 
 	assert_eq!(client.justifications(&BlockId::Hash(a2.hash())).unwrap(), None);
 
-	finality_notification_check(&mut finality_notifications, &[genesis, a1.hash(), a2.hash()], &[]);
+	finality_notification_check(&mut finality_notifications, &[a1.hash(), a2.hash()], &[]);
 	finality_notification_check(&mut finality_notifications, &[a3.hash()], &[]);
 	assert!(finality_notifications.try_next().is_err());
 }
@@ -947,8 +945,6 @@ fn finalizing_diverged_block_should_trigger_reorg() {
 	//    -> B1 -> B2
 
 	let mut finality_notifications = client.finality_notification_stream();
-
-	let genesis = client.block_hash(0).unwrap().unwrap();
 
 	let a1 = client
 		.new_block_at(&BlockId::Number(0), Default::default(), false)
@@ -1017,12 +1013,8 @@ fn finalizing_diverged_block_should_trigger_reorg() {
 
 	ClientExt::finalize_block(&client, BlockId::Hash(b3.hash()), None).unwrap();
 
-	finality_notification_check(&mut finality_notifications, &[genesis, b1.hash()], &[]);
-	finality_notification_check(
-		&mut finality_notifications,
-		&[b1.hash(), b2.hash(), b3.hash()],
-		&[a2.hash()],
-	);
+	finality_notification_check(&mut finality_notifications, &[b1.hash()], &[]);
+	finality_notification_check(&mut finality_notifications, &[b2.hash(), b3.hash()], &[a2.hash()]);
 	assert!(finality_notifications.try_next().is_err());
 }
 
@@ -1037,8 +1029,6 @@ fn finality_notifications_content() {
 	//   -> C1
 
 	let mut finality_notifications = client.finality_notification_stream();
-
-	let genesis = client.block_hash(0).unwrap().unwrap();
 
 	let a1 = client
 		.new_block_at(&BlockId::Number(0), Default::default(), false)
@@ -1126,12 +1116,12 @@ fn finality_notifications_content() {
 
 	finality_notification_check(
 		&mut finality_notifications,
-		&[genesis, a1.hash(), a2.hash()],
+		&[a1.hash(), a2.hash()],
 		&[c1.hash()],
 	);
 	finality_notification_check(
 		&mut finality_notifications,
-		&[a2.hash(), d3.hash(), d4.hash()],
+		&[d3.hash(), d4.hash()],
 		&[b2.hash()],
 	);
 	assert!(finality_notifications.try_next().is_err());
@@ -1230,8 +1220,6 @@ fn doesnt_import_blocks_that_revert_finality() {
 
 	let mut finality_notifications = client.finality_notification_stream();
 
-	let genesis = client.block_hash(0).unwrap().unwrap();
-
 	//    -> C1
 	//   /
 	// G -> A1 -> A2 -> A3
@@ -1323,9 +1311,9 @@ fn doesnt_import_blocks_that_revert_finality() {
 	block_on(client.import(BlockOrigin::Own, a3.clone())).unwrap();
 	ClientExt::finalize_block(&client, BlockId::Hash(a3.hash()), None).unwrap();
 
-	finality_notification_check(&mut finality_notifications, &[genesis, a1.hash(), a2.hash()], &[]);
+	finality_notification_check(&mut finality_notifications, &[a1.hash(), a2.hash()], &[]);
 
-	finality_notification_check(&mut finality_notifications, &[a2.hash(), a3.hash()], &[b2.hash()]);
+	finality_notification_check(&mut finality_notifications, &[a3.hash()], &[b2.hash()]);
 
 	assert!(finality_notifications.try_next().is_err());
 }
