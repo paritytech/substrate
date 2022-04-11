@@ -24,7 +24,7 @@ use crate::{
 	storage::Storage,
 	wasm::{PrefabWasmModule, ReturnCode as RuntimeReturnCode},
 	weights::WeightInfo,
-	BalanceOf, Code, CodeStorage, Config, ContractInfoOf, DefaultAddressGenerator, Error, Pallet,
+	BalanceOf, Code, CodeStorage, Config, ContractInfoOf, DefaultAddressGenerator, DeletionQueue, Error, Pallet,
 	Schedule,
 };
 use assert_matches::assert_matches;
@@ -1619,6 +1619,26 @@ fn lazy_removal_works() {
 }
 
 #[test]
+fn lazy_removal_on_full_queue_works_on_initialize() {
+	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
+		// Fill the deletion queue with dummy values, so that on_initialize attempts
+		// to clear the queue
+		Storage::<Test>::fill_queue_with_dummies();
+
+		// let queue_depth = <Test as Config>::DeletionQueueDepth;
+		let queue_len = <DeletionQueue<Test>>::decode_len().unwrap_or(0);
+
+		// Run the lazy removal
+		Contracts::on_initialize(Weight::max_value());
+
+		let queue_len_after_on_initialize = <DeletionQueue<Test>>::decode_len().unwrap_or(0);
+
+		// Queue length should be decreased after call of on_initialize()
+		assert!(queue_len - queue_len_after_on_initialize > 0);
+	});
+}
+
+#[test]
 fn lazy_batch_removal_works() {
 	let (code, hash) = compile_module::<Test>("self_destruct").unwrap();
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
@@ -1762,7 +1782,7 @@ fn lazy_removal_partial_remove_works() {
 }
 
 #[test]
-fn lazy_removal_does_no_run_on_full_block() {
+fn lazy_removal_does_no_run_on_full_queue_and_full_block() {
 	let (code, hash) = compile_module::<Test>("self_destruct").unwrap();
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		let min_balance = <Test as Config>::Currency::minimum_balance();
@@ -1820,9 +1840,13 @@ fn lazy_removal_does_no_run_on_full_block() {
 			DispatchClass::Mandatory,
 		);
 
+		// Fill the deletion queue with dummy values, so that on_initialize attempts
+		// to clear the queue
+		Storage::<Test>::fill_queue_with_dummies();
+
 		// Run the lazy removal without any limit so that all keys would be removed if there
 		// had been some weight left in the block.
-		let weight_used = Contracts::on_idle(Weight::max_value(), 0 as Weight);
+		let weight_used = Contracts::on_initialize(Weight::max_value());
 		let base = <<Test as Config>::WeightInfo as WeightInfo>::on_initialize();
 		assert_eq!(weight_used, base);
 
