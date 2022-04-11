@@ -376,7 +376,7 @@ pub mod pallet {
 		}
 
 		#[pallet::weight(0)]
-		pub fn destroy_collection(
+		pub fn destroy(
 			origin: OriginFor<T>,
 			id: T::CollectionId,
 			witness: DestroyWitness,

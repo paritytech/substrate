@@ -20,6 +20,12 @@ use enumflags2::BitFlags;
 
 use frame_support::{assert_noop, assert_ok};
 
+macro_rules! bvec {
+	($( $x:tt )*) => {
+		vec![$( $x )*].try_into().unwrap()
+	}
+}
+
 fn get_id_from_event() -> Result<<Test as Config>::CollectionId, &'static str> {
 	let last_event = System::events().pop();
 	if let Some(e) = last_event.clone() {
@@ -63,6 +69,31 @@ fn collections() -> Vec<(u64, u32)> {
 	r
 }
 
+fn items() -> Vec<(u64, u32, u32)> {
+	let mut r: Vec<_> = AccountItems::<Test>::iter().map(|x| x.0).collect();
+	r.sort();
+	let mut s: Vec<_> = Items::<Test>::iter().map(|x| (x.2.owner, x.0, x.1)).collect();
+	s.sort();
+	assert_eq!(r, s);
+	for collection in Items::<Test>::iter()
+		.map(|x| x.0)
+		.scan(None, |s, collection_id| {
+			if s.map_or(false, |last| last == collection_id) {
+				*s = Some(collection_id);
+				Some(None)
+			} else {
+				Some(Some(collection_id))
+			}
+		})
+		.flatten()
+	{
+		let details = Collections::<Test>::get(collection).unwrap();
+		let items = Items::<Test>::iter_prefix(collection).count() as u32;
+		assert_eq!(details.items, items);
+	}
+	r
+}
+
 pub const DEFAULT_SYSTEM_FEATURES: SystemFeatures = SystemFeatures::NoDeposit;
 pub const DEFAULT_USER_FEATURES: UserFeatures = UserFeatures::Administration;
 
@@ -99,8 +130,9 @@ fn minting_should_work() {
 				creator,
 			}
 		]);
-		assert_eq!(CountForCollections::<Test>::get(), 1);
+		assert_eq!(CollectionNextId::<Test>::get(), 1);
 		assert!(CollectionCreator::<Test>::contains_key(creator, id));
+		assert!(CollectionOwner::<Test>::contains_key(owner, id));
 		assert_eq!(collections(), vec![(owner, id)]);
 	});
 }
@@ -187,6 +219,59 @@ fn update_max_supply_should_work() {
 		));
 	});
 }
+
+#[test]
+fn destroy_collection_should_work() {
+	new_test_ext().execute_with(|| {
+		let id = 0;
+		let user_id = 1;
+
+		assert_ok!(
+			Uniques::create(
+				Origin::signed(user_id),
+				user_id,
+				DEFAULT_USER_FEATURES,
+				None,
+				None,
+			)
+		);
+
+		assert_ok!(Uniques::set_collection_metadata(Origin::signed(user_id), id, bvec![0u8; 20]));
+
+		assert_ok!(Uniques::mint(Origin::signed(user_id), id, 1));
+		assert_ok!(Uniques::mint(Origin::signed(user_id), id, 2));
+
+		assert_ok!(Uniques::set_item_metadata(Origin::signed(user_id), id, 1, bvec![0u8; 20]));
+		assert_ok!(Uniques::set_item_metadata(Origin::signed(user_id), id, 2, bvec![0u8; 20]));
+
+		let w = Collections::<Test>::get(id).unwrap().destroy_witness();
+		assert_eq!(w.items, 2);
+		assert_eq!(w.item_metadatas, 2);
+		assert_ok!(Uniques::destroy(Origin::signed(user_id), id, w));
+
+		assert!(!CollectionConfigs::<Test>::contains_key(id));
+		assert!(!Collections::<Test>::contains_key(id));
+		assert!(!CollectionOwner::<Test>::contains_key(user_id, id));
+		assert!(!CollectionCreator::<Test>::contains_key(user_id, id));
+		assert!(!Items::<Test>::contains_key(id, 1));
+		assert!(!Items::<Test>::contains_key(id, 2));
+		assert!(!CountForAccountItems::<Test>::contains_key(user_id, id));
+
+		assert_eq!(collections(), vec![]);
+		assert_eq!(items(), vec![]);
+	});
+}
+
+// +destroy_collection
+// transfer_collection_ownership
+// attributes
+// mint
+// burn
+// transfer_item
+// set_collection_metadata
+// set_item_metadata
+// set_price
+// buy_item
 
 #[test]
 fn different_user_flags() {
