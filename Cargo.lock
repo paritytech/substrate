@@ -9106,7 +9106,7 @@ dependencies = [
 name = "sc-sysinfo"
 version = "6.0.0-dev"
 dependencies = [
- "futures 0.3.19",
+ "futures 0.3.21",
  "libc",
  "log 0.4.14",
  "rand 0.7.3",
