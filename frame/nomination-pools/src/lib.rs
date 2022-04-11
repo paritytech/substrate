@@ -338,7 +338,7 @@ pub type RewardPoints = U256;
 /// Type used for unique identifier of each pool.
 pub type PoolId = u32;
 
-type SubPoolsWithEra<T> = BoundedBTreeMap<EraIndex, UnbondPool<T>, TotalUnbondingPools<T>>;
+type UnbondingPoolsWithEra<T> = BoundedBTreeMap<EraIndex, UnbondPool<T>, TotalUnbondingPools<T>>;
 
 pub const POINTS_TO_BALANCE_INIT_RATIO: u32 = 1;
 
@@ -843,7 +843,7 @@ pub struct SubPools<T: Config> {
 	/// older then `current_era - TotalUnbondingPools`.
 	no_era: UnbondPool<T>,
 	/// Map of era in which a pool becomes unbonded in => unbond pools.
-	with_era: SubPoolsWithEra<T>,
+	with_era: UnbondingPoolsWithEra<T>,
 }
 
 impl<T: Config> SubPools<T> {
@@ -881,7 +881,7 @@ pub struct TotalUnbondingPools<T: Config>(PhantomData<T>);
 impl<T: Config> Get<u32> for TotalUnbondingPools<T> {
 	fn get() -> u32 {
 		// NOTE: this may be dangerous in the scenario bonding_duration gets decreased because
-		// we would no longer be able to decode `SubPoolsWithEra`, which uses `TotalUnbondingPools`
+		// we would no longer be able to decode `UnbondingPoolsWithEra`, which uses `TotalUnbondingPools`
 		// as the bound
 		T::StakingInterface::bonding_duration() + T::PostUnbondingPoolsWindow::get()
 	}

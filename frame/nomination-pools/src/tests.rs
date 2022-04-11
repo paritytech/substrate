@@ -22,11 +22,11 @@ use frame_support::{
 	storage::{with_transaction, TransactionOutcome},
 };
 
-macro_rules! sub_pools_with_era {
+macro_rules! unbonding_pools_with_era {
 	($($k:expr => $v:expr),* $(,)?) => {{
 		use sp_std::iter::{Iterator, IntoIterator};
 		let not_bounded: BTreeMap<_, _> = Iterator::collect(IntoIterator::into_iter([$(($k, $v),)*]));
-		SubPoolsWithEra::try_from(not_bounded).unwrap()
+		UnbondingPoolsWithEra::try_from(not_bounded).unwrap()
 	}};
 }
 
@@ -322,7 +322,7 @@ mod sub_pools {
 			// Given
 			let mut sub_pool_0 = SubPools::<Runtime> {
 				no_era: UnbondPool::<Runtime>::default(),
-				with_era: sub_pools_with_era! {
+				with_era: unbonding_pools_with_era! {
 					0 => UnbondPool::<Runtime> { points: 10, balance: 10 },
 					1 => UnbondPool::<Runtime> { points: 10, balance: 10 },
 					2 => UnbondPool::<Runtime> { points: 20, balance: 20 },
@@ -1381,7 +1381,7 @@ mod unbond {
 
 			assert_eq!(
 				SubPoolsStorage::<Runtime>::get(1).unwrap().with_era,
-				sub_pools_with_era! { 0 + 3 => UnbondPool::<Runtime> { points: 10, balance: 10 }}
+				unbonding_pools_with_era! { 0 + 3 => UnbondPool::<Runtime> { points: 10, balance: 10 }}
 			);
 
 			assert_eq!(
@@ -1418,7 +1418,7 @@ mod unbond {
 				// Then
 				assert_eq!(
 					SubPoolsStorage::<Runtime>::get(1).unwrap().with_era,
-					sub_pools_with_era! { 0 + 3 => UnbondPool { points: 6, balance: 6 }}
+					unbonding_pools_with_era! { 0 + 3 => UnbondPool { points: 6, balance: 6 }}
 				);
 				assert_eq!(
 					BondedPool::<Runtime>::get(1).unwrap(),
@@ -1444,7 +1444,7 @@ mod unbond {
 				// Then
 				assert_eq!(
 					SubPoolsStorage::<Runtime>::get(&1).unwrap().with_era,
-					sub_pools_with_era! { 0 + 3 => UnbondPool { points: 98, balance: 98 }}
+					unbonding_pools_with_era! { 0 + 3 => UnbondPool { points: 98, balance: 98 }}
 				);
 				assert_eq!(
 					BondedPool::<Runtime>::get(1).unwrap(),
@@ -1468,7 +1468,7 @@ mod unbond {
 				// Then
 				assert_eq!(
 					SubPoolsStorage::<Runtime>::get(1).unwrap().with_era,
-					sub_pools_with_era! { 0 + 3 => UnbondPool { points: 100, balance: 100 }}
+					unbonding_pools_with_era! { 0 + 3 => UnbondPool { points: 100, balance: 100 }}
 				);
 				assert_eq!(
 					BondedPool::<Runtime>::get(1).unwrap(),
@@ -1497,7 +1497,7 @@ mod unbond {
 				1,
 				SubPools {
 					no_era: Default::default(),
-					with_era: sub_pools_with_era! {
+					with_era: unbonding_pools_with_era! {
 						0 + 3 => UnbondPool { balance: 10, points: 100 },
 						1 + 3 => UnbondPool { balance: 20, points: 20 },
 						2 + 3 => UnbondPool { balance: 101, points: 101}
@@ -1517,7 +1517,7 @@ mod unbond {
 				SubPoolsStorage::<Runtime>::get(1).unwrap(),
 				SubPools {
 					no_era: UnbondPool { balance: 10 + 20, points: 100 + 20 },
-					with_era: sub_pools_with_era! {
+					with_era: unbonding_pools_with_era! {
 						2 + 3 => UnbondPool { balance: 101, points: 101},
 						current_era + 3 => UnbondPool { balance: 10, points: 10 },
 					},
@@ -1568,7 +1568,7 @@ mod unbond {
 					SubPoolsStorage::<Runtime>::get(1).unwrap(),
 					SubPools {
 						no_era: Default::default(),
-						with_era: sub_pools_with_era! {
+						with_era: unbonding_pools_with_era! {
 							0 + 3 => UnbondPool { points: 100 + 200, balance: 100 + 200 }
 						},
 					}
@@ -1626,7 +1626,7 @@ mod unbond {
 				SubPoolsStorage::<Runtime>::get(1).unwrap(),
 				SubPools {
 					no_era: Default::default(),
-					with_era: sub_pools_with_era! {
+					with_era: unbonding_pools_with_era! {
 						0 + 3 => UnbondPool { points: 110, balance: 110 }
 					}
 				}
@@ -1824,7 +1824,7 @@ mod withdraw_unbonded_other {
 					1,
 					SubPools {
 						no_era: Default::default(),
-						with_era: sub_pools_with_era! { 0 + 3 => UnbondPool { points: 600, balance: 100 }},
+						with_era: unbonding_pools_with_era! { 0 + 3 => UnbondPool { points: 600, balance: 100 }},
 					},
 				);
 				CurrentEra::set(StakingMock::bonding_duration());
@@ -1835,7 +1835,7 @@ mod withdraw_unbonded_other {
 				// Then
 				assert_eq!(
 					SubPoolsStorage::<Runtime>::get(&1).unwrap().with_era,
-					sub_pools_with_era! { 0 + 3 => UnbondPool { points: 560, balance: 94 }}
+					unbonding_pools_with_era! { 0 + 3 => UnbondPool { points: 560, balance: 94 }}
 				);
 				assert_eq!(Balances::free_balance(&40), 40 + 6);
 				assert_eq!(Balances::free_balance(&default_bonded_account()), 94);
@@ -1847,7 +1847,7 @@ mod withdraw_unbonded_other {
 				// Then
 				assert_eq!(
 					SubPoolsStorage::<Runtime>::get(&1).unwrap().with_era,
-					sub_pools_with_era! { 0 + 3 => UnbondPool { points: 10, balance: 2 }}
+					unbonding_pools_with_era! { 0 + 3 => UnbondPool { points: 10, balance: 2 }}
 				);
 				assert_eq!(Balances::free_balance(&550), 550 + 92);
 				// The account was dusted because it went below ED(5)
@@ -1883,7 +1883,7 @@ mod withdraw_unbonded_other {
 			assert_eq!(
 				SubPoolsStorage::<Runtime>::get(1).unwrap().with_era,
 				//------------------------------balance decrease is not account for
-				sub_pools_with_era! { 0 + 3 => UnbondPool { points: 10, balance: 10 } }
+				unbonding_pools_with_era! { 0 + 3 => UnbondPool { points: 10, balance: 10 } }
 			);
 
 			CurrentEra::set(0 + 3);
@@ -1903,7 +1903,7 @@ mod withdraw_unbonded_other {
 			// Insert the sub-pool
 			let sub_pools = SubPools {
 				no_era: Default::default(),
-				with_era: sub_pools_with_era! { 0 + 3 => UnbondPool { points: 10, balance: 10  }},
+				with_era: unbonding_pools_with_era! { 0 + 3 => UnbondPool { points: 10, balance: 10  }},
 			};
 			SubPoolsStorage::<Runtime>::insert(123, sub_pools.clone());
 
@@ -2051,7 +2051,7 @@ mod withdraw_unbonded_other {
 					SubPoolsStorage::<Runtime>::get(1).unwrap(),
 					SubPools {
 						no_era: Default::default(),
-						with_era: sub_pools_with_era! {
+						with_era: unbonding_pools_with_era! {
 							0 + 3 => UnbondPool { points: 100, balance: 100},
 							1 + 3 => UnbondPool { points: 200 + 10, balance: 200 + 10 }
 						}
@@ -2073,7 +2073,7 @@ mod withdraw_unbonded_other {
 					SubPoolsStorage::<Runtime>::get(1).unwrap(),
 					SubPools {
 						no_era: Default::default(),
-						with_era: sub_pools_with_era! {
+						with_era: unbonding_pools_with_era! {
 							// Note that era 0+3 unbond pool is destroyed because points went to 0
 							1 + 3 => UnbondPool { points: 200 + 10, balance: 200 + 10 }
 						}
@@ -2092,7 +2092,7 @@ mod withdraw_unbonded_other {
 					SubPoolsStorage::<Runtime>::get(1).unwrap(),
 					SubPools {
 						no_era: Default::default(),
-						with_era: sub_pools_with_era! {
+						with_era: unbonding_pools_with_era! {
 							1 + 3 => UnbondPool { points: 10, balance: 10 }
 						}
 					}
