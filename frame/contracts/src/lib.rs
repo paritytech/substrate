@@ -320,7 +320,7 @@ pub mod pallet {
 		T::AccountId: UncheckedFrom<T::Hash>,
 		T::AccountId: AsRef<[u8]>,
 	{
-		fn on_initialize(_block: T::BlockNumber) -> Weight {
+		fn on_idle(_block: T::BlockNumber,_remaining_weight: Weight) -> Weight {
 			// We do not want to go above the block limit and rather avoid lazy deletion
 			// in that case. This should only happen on runtime upgrades.
 			let weight_limit = T::BlockWeights::get()
