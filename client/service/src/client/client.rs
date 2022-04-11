@@ -908,7 +908,7 @@ where
 				)
 				.number;
 
-			// The stale heads are the leaves that will be displaced leaves after the
+			// The stale heads are the leaves that will be displaced after the
 			// block is finalized.
 			let stale_heads =
 				self.backend.blockchain().displaced_leaves_after_finalizing(block_number)?;
