@@ -99,7 +99,6 @@ impl<'a> ExportImportRevertExecutor<'a> {
 		let output = Command::new(cargo_bin("substrate"))
 			.args(&arguments)
 			.arg(&base_path)
-			.arg("--no-hardware-benchmarks")
 			.arg(&self.exported_blocks_file)
 			.output()
 			.unwrap();
@@ -162,7 +161,7 @@ impl<'a> ExportImportRevertExecutor<'a> {
 	/// Runs the `revert` command.
 	fn run_revert(&self) {
 		let output = Command::new(cargo_bin("substrate"))
-			.args(&["revert", "--dev", "--no-hardware-benchmarks", "--pruning", "archive", "-d"])
+			.args(&["revert", "--dev", "--pruning", "archive", "-d"])
 			.arg(&self.base_path.path())
 			.output()
 			.unwrap();

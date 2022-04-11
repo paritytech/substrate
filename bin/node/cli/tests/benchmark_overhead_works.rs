@@ -29,8 +29,8 @@ fn benchmark_overhead_works() {
 	// Only put 10 extrinsics into the block otherwise it takes forever to build it
 	// especially for a non-release build.
 	let status = Command::new(cargo_bin("substrate"))
-		.args(&["benchmark", "overhead", "--dev", "--no-hardware-benchmarks", "-d"])
-		.args(base_path)
+		.args(&["benchmark", "overhead", "--dev", "-d"])
+		.arg(base_path)
 		.arg("--weight-path")
 		.arg(base_path)
 		.args(["--warmup", "10", "--repeat", "10"])

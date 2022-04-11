@@ -39,7 +39,7 @@ fn benchmark_storage_works() {
 
 fn benchmark_storage(db: &str, base_path: &Path) -> ExitStatus {
 	Command::new(cargo_bin("substrate"))
-		.args(&["benchmark", "storage", "--dev", "--no-hardware-benchmarks"])
+		.args(&["benchmark", "storage", "--dev"])
 		.arg("--db")
 		.arg(db)
 		.arg("--weight-path")

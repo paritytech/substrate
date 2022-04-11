@@ -34,7 +34,7 @@ async fn benchmark_block_works() {
 
 	// Invoke `benchmark block` with all options to make sure that they are valid.
 	let status = Command::new(cargo_bin("substrate"))
-		.args(["benchmark", "block", "--dev", "--no-hardware-benchmarks"])
+		.args(["benchmark", "block", "--dev"])
 		.arg("-d")
 		.arg(base_dir.path())
 		.args(["--pruning", "archive"])
