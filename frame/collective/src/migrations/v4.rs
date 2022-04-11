@@ -24,6 +24,7 @@ use frame_support::{
 	},
 	weights::Weight,
 };
+use sp_runtime::traits::Zero;
 
 /// Migrate the entire storage of this pallet to a new prefix.
 ///

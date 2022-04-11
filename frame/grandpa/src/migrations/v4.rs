@@ -19,6 +19,7 @@ use frame_support::{
 	traits::{Get, StorageVersion},
 	weights::Weight,
 };
+use sp_runtime::traits::Zero;
 use sp_io::hashing::twox_128;
 
 /// The old prefix.

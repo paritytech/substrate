@@ -27,7 +27,7 @@ use frame_support::{
 	traits::{FindAuthor, Get, VerifySeal},
 };
 use sp_authorship::{InherentError, UnclesInherentData, INHERENT_IDENTIFIER};
-use sp_runtime::traits::{Header as HeaderT, One, Saturating};
+use sp_runtime::traits::{Header as HeaderT, One, Saturating, Zero};
 use sp_std::{collections::btree_set::BTreeSet, prelude::*, result};
 
 const MAX_UNCLES: usize = 10;

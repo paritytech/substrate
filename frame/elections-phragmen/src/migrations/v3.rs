@@ -24,6 +24,7 @@ use frame_support::{
 	weights::Weight,
 	RuntimeDebug, Twox64Concat,
 };
+use frame_support::dispatch::Zero;
 use sp_std::prelude::*;
 
 #[derive(Encode, Decode, Clone, Default, RuntimeDebug, PartialEq)]

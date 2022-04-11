@@ -20,7 +20,7 @@
 use crate::weights::Weight;
 use impl_trait_for_tuples::impl_for_tuples;
 use sp_arithmetic::traits::Saturating;
-use sp_runtime::traits::AtLeast32BitUnsigned;
+use sp_runtime::traits::{AtLeast32BitUnsigned, Zero};
 
 /// The block initialization trait.
 ///

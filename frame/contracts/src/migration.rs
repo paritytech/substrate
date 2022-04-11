@@ -24,6 +24,7 @@ use frame_support::{
 	traits::{Get, PalletInfoAccess},
 	Identity, Twox64Concat,
 };
+use sp_runtime::traits::Zero;
 use sp_std::{marker::PhantomData, prelude::*};
 
 /// Wrapper for all migrations of this pallet, based on `StorageVersion`.

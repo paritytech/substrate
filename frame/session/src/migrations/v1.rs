@@ -16,6 +16,7 @@
 // limitations under the License.
 
 use sp_io::hashing::twox_128;
+use sp_runtime::traits::Zero;
 use sp_std::str;
 
 use frame_support::{
