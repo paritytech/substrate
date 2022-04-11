@@ -47,18 +47,12 @@ fn get_total_deposit<T: Config>(
 	T::ConfigDepositBase::get().checked_add(&friend_deposit)
 }
 
-fn generate_friends<T: Config>() -> Vec<<T as frame_system::Config>::AccountId> {
+fn generate_friends<T: Config>(num: u32) -> Vec<<T as frame_system::Config>::AccountId> {
 	// Create friends
-	let mut friends = vec![
-		account("friend_0", 0, SEED),
-		account("friend_1", 1, SEED),
-		account("friend_2", 2, SEED),
-		account("friend_3", 3, SEED),
-		account("friend_4", 4, SEED),
-		account("friend_5", 5, SEED),
-		account("friend_6", 6, SEED),
-		account("friend_7", 7, SEED),
-	];
+	let mut friends = vec![];
+	for i in 0..num {
+		friends.push(account("friend", i, SEED));
+	}
 	// Sort
 	friends.sort();
 
@@ -104,7 +98,7 @@ fn add_caller_and_generate_friends<T: Config>(
 fn insert_recovery_account<T: Config>(caller: &T::AccountId, account: &T::AccountId) {
 	T::Currency::make_free_balance_be(&account, BalanceOf::<T>::max_value());
 
-	let friends = generate_friends::<T>();
+	let friends = generate_friends::<T>(10);
 	let threshold: u16 = 8;
 	let delay_period = block_number::<T>();
 
@@ -156,27 +150,18 @@ benchmarks! {
 	}
 
 	create_recovery {
-		let caller: T::AccountId = whitelisted_caller();
+		let n in 1 .. T::MaxFriends::get();
 
+		let caller: T::AccountId = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 
 		// Create friends
-		let friends = generate_friends::<T>();
-		let bounded_friends: FriendsOf<T> = friends.clone().try_into().unwrap();
-
-		let threshold: u16 = 8;
-		let delay_period = block_number::<T>();
-
-		// Get deposit for recovery
-		let total_deposit = get_total_deposit::<T>(&bounded_friends).unwrap();
-
-		// Reserve deposit for recovery
-		T::Currency::reserve(&caller, total_deposit)?;
+		let friends = generate_friends::<T>(n);
 	}: _(
 		RawOrigin::Signed(caller.clone()),
 		friends,
-		threshold,
-		delay_period
+		n as u16,
+		42u32.into()
 	) verify {
 		assert_last_event::<T>(Event::RecoveryCreated { account: caller }.into());
 	}
@@ -259,7 +244,7 @@ benchmarks! {
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 
 		// Create friends
-		let friends = generate_friends::<T>();
+		let friends = generate_friends::<T>(10);
 		let bounded_friends: FriendsOf<T> = friends.try_into().unwrap();
 
 		let threshold: u16 = 8;
@@ -310,7 +295,7 @@ benchmarks! {
 		T::Currency::make_free_balance_be(&rescuer_account, BalanceOf::<T>::max_value());
 
 		// Create friends
-		let friends = generate_friends::<T>();
+		let friends = generate_friends::<T>(10);
 		let bounded_friends: FriendsOf<T> = friends.try_into().unwrap();
 
 		let threshold: u16 = 8;
@@ -359,7 +344,7 @@ benchmarks! {
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 
 		// Create friends
-		let friends = generate_friends::<T>();
+		let friends = generate_friends::<T>(10);
 		let bounded_friends: FriendsOf<T> = friends.try_into().unwrap();
 
 		let threshold: u16 = 8;
