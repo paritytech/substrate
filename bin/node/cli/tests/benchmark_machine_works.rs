@@ -20,11 +20,14 @@ use assert_cmd::cargo::cargo_bin;
 use std::process::Command;
 
 /// Tests that the `benchmark machine` command works for the substrate dev runtime.
+///
+/// Additionally run the hardware benchmarks on startup since
+/// `"--no-hardware-benchmarks"` is not passed,
 #[test]
 fn benchmark_machine_works() {
 	let status = Command::new(cargo_bin("substrate"))
 		.args(["benchmark", "machine", "--dev"])
-		.args(["--hash-reps", "1", "--verify-reps", "1"])
+		.args(["--verify-reps", "1"])
 		.status()
 		.unwrap();
 

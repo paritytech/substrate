@@ -36,7 +36,7 @@ async fn running_the_node_works_and_can_be_interrupted() {
 		let base_path = tempdir().expect("could not create a temp dir");
 		let mut cmd = common::KillChildOnDrop(
 			Command::new(cargo_bin("substrate"))
-				.args(&["--dev", "-d"])
+				.args(&["--dev", "--no-hardware-benchmarks", "-d"])
 				.arg(base_path.path())
 				.arg("--no-hardware-benchmarks")
 				.spawn()

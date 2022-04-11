@@ -30,7 +30,7 @@ async fn purge_chain_works() {
 	common::run_node_for_a_while(base_path.path(), &["--dev", "--no-hardware-benchmarks"]).await;
 
 	let status = Command::new(cargo_bin("substrate"))
-		.args(&["purge-chain", "--dev", "-d"])
+		.args(&["purge-chain", "--dev", "--no-hardware-benchmarks", "-d"])
 		.arg(base_path.path())
 		.arg("-y")
 		.status()
