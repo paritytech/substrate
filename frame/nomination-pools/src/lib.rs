@@ -1761,8 +1761,7 @@ impl<T: Config> Pallet<T> {
 
 	/// Calculate the rewards for `delegator`.
 	///
-	/// Returns the payout amount, and whether the pool state has been switched to destroying during
-	/// this call.
+	/// Returns the payout amount.
 	fn calculate_delegator_payout(
 		bonded_pool: &mut BondedPool<T>,
 		reward_pool: &mut RewardPool<T>,
