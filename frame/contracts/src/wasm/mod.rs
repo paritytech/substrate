@@ -1099,9 +1099,6 @@ mod tests {
 	(import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
-	;; size of our buffer is 33 bytes
-	(data (i32.const 0) "\21")
-
 	(func (export "call")
 		;; fill the buffer with the eth address.
 		(call $seal_ecdsa_to_eth_address (i32.const 0) (i32.const 0))

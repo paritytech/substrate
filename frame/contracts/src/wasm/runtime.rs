@@ -1989,12 +1989,12 @@ define_env!(Env, <E: Ext>,
 	// # Parameters
 	//
 	// - `signature_ptr`: the pointer into the linear memory where the signature
-	//					  is placed. Should be decodable as a 65 bytes. Traps otherwise.
+	//					 is placed. Should be decodable as a 65 bytes. Traps otherwise.
 	// - `message_hash_ptr`: the pointer into the linear memory where the message
 	// 						 hash is placed. Should be decodable as a 32 bytes. Traps otherwise.
 	// - `output_ptr`: the pointer into the linear memory where the output
-	//                 data is placed. The buffer should be 33 bytes. Traps otherwise.
-	// 				   The function will write the result directly into this buffer.
+	//                 data is placed. The buffer should be 33 bytes. The function
+	// 					will write the result directly into this buffer.
 	//
 	// # Errors
 	//
@@ -2066,7 +2066,8 @@ define_env!(Env, <E: Ext>,
 	// - `key_ptr`: a pointer to the ECDSA compressed public key. Should be decodable as a 33 bytes value.
 	//		Traps otherwise.
 	// - `out_ptr`: the pointer into the linear memory where the output
-	//                 data is placed.
+	//                 data is placed. The function will write the result
+	//                 directly into this buffer.
 	//
 	// The value is stored to linear memory at the address pointed to by `out_ptr`.
 	// If the available space at `out_ptr` is less than the size of the value a trap is triggered.
@@ -2077,8 +2078,8 @@ define_env!(Env, <E: Ext>,
 		let result = ctx.ext.ecdsa_to_eth_address(&compressed_key);
 		match result {
 			Ok(eth_address) => {
-			ctx.write_sandbox_memory(out_ptr, eth_address.as_ref())?;
-			Ok(ReturnCode::Success)
+				ctx.write_sandbox_memory(out_ptr, eth_address.as_ref())?;
+				Ok(ReturnCode::Success)
 			},
 			Err(_) => Ok(ReturnCode::EcdsaRecoverFailed),
 		}
