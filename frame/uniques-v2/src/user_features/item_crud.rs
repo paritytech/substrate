@@ -22,6 +22,7 @@ use sp_runtime::{ArithmeticError};
 impl<T: Config> Pallet<T> {
 	pub fn do_mint_item(
 		caller: T::AccountId,
+		owner: T::AccountId,
 		collection_id: T::CollectionId,
 		item_id: T::ItemId,
 	) -> DispatchResult {
@@ -35,7 +36,7 @@ impl<T: Config> Pallet<T> {
 				ensure!(collection.items < max_supply, Error::<T>::AllItemsMinted);
 			}
 
-			let mut maybe_items_per_account = CountForAccountItems::<T>::get(&caller, &collection_id);
+			let mut maybe_items_per_account = CountForAccountItems::<T>::get(&owner, &collection_id);
 			let items_per_account = maybe_items_per_account.get_or_insert(0);
 
 			if collection.max_items_per_account.is_some() {
@@ -44,7 +45,7 @@ impl<T: Config> Pallet<T> {
 
 			let item = Item {
 				id: item_id,
-				owner: caller.clone(),
+				owner: owner.clone(),
 				deposit: None,
 				price: None,
 				buyer: None,
@@ -55,10 +56,10 @@ impl<T: Config> Pallet<T> {
 			collection.items = instances;
 
 			let new_items_amount = items_per_account.checked_add(1).ok_or(ArithmeticError::Overflow)?;
-			CountForAccountItems::<T>::insert(&caller, &collection_id, new_items_amount);
+			CountForAccountItems::<T>::insert(&owner, &collection_id, new_items_amount);
 
 			Items::<T>::insert(collection_id, item_id, item);
-			AccountItems::<T>::insert((&caller, &collection_id, &item_id), ());
+			AccountItems::<T>::insert((&owner, &collection_id, &item_id), ());
 
 			Self::deposit_event(Event::<T>::ItemCreated { collection_id, item_id });
 

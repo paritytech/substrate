@@ -238,8 +238,8 @@ fn destroy_collection_should_work() {
 
 		assert_ok!(Uniques::set_collection_metadata(Origin::signed(user_id), id, bvec![0u8; 20]));
 
-		assert_ok!(Uniques::mint(Origin::signed(user_id), id, 1));
-		assert_ok!(Uniques::mint(Origin::signed(user_id), id, 2));
+		assert_ok!(Uniques::mint(Origin::signed(user_id), user_id, id, 1));
+		assert_ok!(Uniques::mint(Origin::signed(user_id), user_id, id, 2));
 
 		assert_ok!(Uniques::set_item_metadata(Origin::signed(user_id), id, 1, bvec![0u8; 20]));
 		assert_ok!(Uniques::set_item_metadata(Origin::signed(user_id), id, 2, bvec![0u8; 20]));
@@ -309,7 +309,7 @@ fn mint_should_work() {
 			)
 		);
 
-		assert_ok!(Uniques::mint(Origin::signed(user_id), collection_id, item_id));
+		assert_ok!(Uniques::mint(Origin::signed(user_id), user_id, collection_id, item_id));
 		assert_eq!(collections(), vec![(user_id, collection_id)]);
 		assert_eq!(items(), vec![(user_id, collection_id, item_id)]);
 
@@ -331,9 +331,9 @@ fn mint_should_work() {
 				None,
 			)
 		);
-		assert_ok!(Uniques::mint(Origin::signed(user_id), 1, 1));
+		assert_ok!(Uniques::mint(Origin::signed(user_id), user_id, 1, 1));
 		assert_noop!(
-			Uniques::mint(Origin::signed(user_id), 1, 2),
+			Uniques::mint(Origin::signed(user_id), user_id, 1, 2),
 			Error::<Test>::AllItemsMinted
 		);
 	});
@@ -356,7 +356,7 @@ fn burn_should_work() {
 			)
 		);
 
-		assert_ok!(Uniques::mint(Origin::signed(user_id), collection_id, item_id));
+		assert_ok!(Uniques::mint(Origin::signed(user_id), user_id, collection_id, item_id));
 		assert_ok!(Uniques::burn(Origin::signed(user_id), collection_id, item_id));
 
 		assert_eq!(collections(), vec![(user_id, collection_id)]);

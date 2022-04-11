@@ -427,11 +427,13 @@ pub mod pallet {
 		#[pallet::weight(0)]
 		pub fn mint(
 			origin: OriginFor<T>,
+			owner: <T::Lookup as StaticLookup>::Source,
 			collection_id: T::CollectionId,
 			item_id: T::ItemId,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
-			Self::do_mint_item(sender, collection_id, item_id)?;
+			let owner = T::Lookup::lookup(owner)?;
+			Self::do_mint_item(sender, owner, collection_id, item_id)?;
 			Ok(())
 		}
 
