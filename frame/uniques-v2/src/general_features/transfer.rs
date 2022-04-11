@@ -46,10 +46,10 @@ impl<T: Config> Pallet<T> {
 			}
 
 			// max items per user
-			let mut maybe_receiver_items_amount = CountForAccountItems::<T>::get(&sender, &collection_id);
+			let mut maybe_receiver_items_amount = CountForAccountItems::<T>::get(&receiver, &collection_id);
 			let receiver_items_amount = maybe_receiver_items_amount.get_or_insert(0);
 
-			let sender_items_amount = CountForAccountItems::<T>::get(&receiver, &collection_id).ok_or(Error::<T>::ItemNotFound)?;
+			let sender_items_amount = CountForAccountItems::<T>::get(&sender, &collection_id).ok_or(Error::<T>::ItemNotFound)?;
 
 			if collection.max_items_per_account.is_some() {
 				ensure!(receiver_items_amount < &mut collection.max_items_per_account.unwrap(), Error::<T>::CollectionItemsPerAccountLimitReached);
