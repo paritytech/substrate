@@ -452,7 +452,7 @@ impl<Block: BlockT> blockchain::Backend<Block> for Blockchain<Block> {
 			.storage
 			.read()
 			.leaves
-			.simulate_finalize_height(block_number)
+			.displaced_by_finalize_height(block_number)
 			.leaves()
 			.cloned()
 			.collect::<Vec<_>>())

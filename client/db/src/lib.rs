@@ -634,7 +634,7 @@ impl<Block: BlockT> sc_client_api::blockchain::Backend<Block> for BlockchainDb<B
 		Ok(self
 			.leaves
 			.read()
-			.simulate_finalize_height(block_number)
+			.displaced_by_finalize_height(block_number)
 			.leaves()
 			.cloned()
 			.collect::<Vec<_>>())

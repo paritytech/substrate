@@ -149,8 +149,8 @@ where
 	///
 	/// This means that no changes are done.
 	///
-	/// Returns the leaves that would be displaced.
-	pub fn simulate_finalize_height(&self, number: N) -> FinalizationDisplaced<H, N> {
+	/// Returns the leaves that would be displaced by finalizing the given block.
+	pub fn displaced_by_finalize_height(&self, number: N) -> FinalizationDisplaced<H, N> {
 		let boundary = if number == N::zero() {
 			return FinalizationDisplaced { leaves: BTreeMap::new() }
 		} else {
