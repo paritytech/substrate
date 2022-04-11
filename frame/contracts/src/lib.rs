@@ -323,12 +323,12 @@ pub mod pallet {
 		fn on_idle(_block: T::BlockNumber, remaining_weight: Weight) -> Weight {
 			// We do not want to go above the block limit and rather avoid lazy deletion
 			// in that case. This should only happen on runtime upgrades.
-			let weight_limit = T::BlockWeights::get()
-				.max_block
-				.saturating_sub(System::<T>::block_weight().total())
-				.min(T::DeletionWeightLimit::get());
+			// let weight_limit = T::BlockWeights::get()
+			// 	.max_block
+			// 	.saturating_sub(System::<T>::block_weight().total())
+			// 	.min(T::DeletionWeightLimit::get());
 			Storage::<T>::process_deletion_queue_batch(remaining_weight)
-				.saturating_add(T::WeightInfo::on_idle())
+				// .saturating_add(T::WeightInfo::on_idle())
 		}
 	}
 
