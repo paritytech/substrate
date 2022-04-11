@@ -18,6 +18,7 @@
 use crate::*;
 use enumflags2::BitFlags;
 use frame_support::pallet_prelude::*;
+use sp_runtime::traits::Saturating;
 
 impl<T: Config> Pallet<T> {
 	pub fn do_set_collection_metadata(
@@ -35,13 +36,11 @@ impl<T: Config> Pallet<T> {
 		let collection = Collections::<T>::get(id).ok_or(Error::<T>::CollectionNotFound)?;
 		ensure!(collection.owner == sender, Error::<T>::NotAuthorized);
 
-		let mut metadata = CollectionMetadataOf::<T>::get(id).ok_or(Error::<T>::CollectionNotFound)?;
-		metadata.data = data.clone();
-		CollectionMetadataOf::<T>::insert(id, metadata);
-
-		Self::deposit_event(Event::<T>::CollectionMetadataSet { id, data });
-
-		Ok(())
+		CollectionMetadataOf::<T>::try_mutate_exists(id, |metadata| {
+			*metadata = Some(CollectionMetadata { data: data.clone() });
+			Self::deposit_event(Event::<T>::CollectionMetadataSet { id, data });
+			Ok(())
+		})
 	}
 
 	pub fn do_set_item_metadata(
@@ -50,15 +49,20 @@ impl<T: Config> Pallet<T> {
 		caller: T::AccountId,
 		data: MetadataOf<T>,
 	) -> DispatchResult {
-		let collection = Collections::<T>::get(collection_id).ok_or(Error::<T>::CollectionNotFound)?;
+		let mut collection = Collections::<T>::get(&collection_id).ok_or(Error::<T>::CollectionNotFound)?;
 		ensure!(collection.owner == caller, Error::<T>::NotAuthorized);
 
-		let mut metadata = ItemMetadataOf::<T>::get(collection_id, item_id).ok_or(Error::<T>::ItemNotFound)?;
-		metadata.data = data.clone();
-		ItemMetadataOf::<T>::insert(collection_id, item_id, metadata);
+		ItemMetadataOf::<T>::try_mutate_exists(collection_id, item_id, |metadata| {
+			if metadata.is_none() {
+				collection.item_metadatas.saturating_inc();
+			}
 
-		Self::deposit_event(Event::<T>::ItemMetadataSet { collection_id, item_id, data });
+			*metadata = Some(ItemMetadata { data: data.clone() });
 
-		Ok(())
+			Collections::<T>::insert(&collection_id, &collection);
+
+			Self::deposit_event(Event::<T>::ItemMetadataSet { collection_id, item_id, data });
+			Ok(())
+		})
 	}
 }
