@@ -38,7 +38,7 @@ use frame_support::{
 	dispatch::DispatchError,
 	ensure,
 	traits::{Currency, Get, InstanceFilter, IsSubType, IsType, OriginTrait, ReservableCurrency},
-	weights::{GetDispatchInfo, WeightV2},
+	weights::{GetDispatchInfo, Weight},
 	RuntimeDebug,
 };
 use frame_system::{self as system};
@@ -196,10 +196,10 @@ pub mod pallet {
 		/// # </weight>
 		#[pallet::weight({
 			let di = call.get_dispatch_info();
-			(WeightV2::todo_from_v1(T::WeightInfo::proxy(T::MaxProxies::get().into()))
+			(Weight::todo_from_v1(T::WeightInfo::proxy(T::MaxProxies::get().into()))
 				.saturating_add(di.weight)
 				 // AccountData for inner call origin accountdata.
-				.saturating_add(WeightV2::todo_from_v1(T::DbWeight::get().reads_writes(1, 1))),
+				.saturating_add(Weight::todo_from_v1(T::DbWeight::get().reads_writes(1, 1))),
 			di.class)
 		})]
 		pub fn proxy(
@@ -517,10 +517,10 @@ pub mod pallet {
 		/// # </weight>
 		#[pallet::weight({
 			let di = call.get_dispatch_info();
-			(WeightV2::todo_from_v1(T::WeightInfo::proxy_announced(T::MaxPending::get(), T::MaxProxies::get().into()))
+			(Weight::todo_from_v1(T::WeightInfo::proxy_announced(T::MaxPending::get(), T::MaxProxies::get().into()))
 				.saturating_add(di.weight)
 				 // AccountData for inner call origin accountdata.
-				.saturating_add(WeightV2::todo_from_v1(T::DbWeight::get().reads_writes(1, 1))),
+				.saturating_add(Weight::todo_from_v1(T::DbWeight::get().reads_writes(1, 1))),
 			di.class)
 		})]
 		pub fn proxy_announced(

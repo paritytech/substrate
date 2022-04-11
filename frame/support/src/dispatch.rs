@@ -177,18 +177,18 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug + 
 /// ```
 /// # #[macro_use]
 /// # extern crate frame_support;
-/// # use frame_support::{dispatch::{DispatchResultWithPostInfo, WithPostDispatchInfo}, weights::WeightV2};
+/// # use frame_support::{dispatch::{DispatchResultWithPostInfo, WithPostDispatchInfo}, weights::Weight};
 /// # use frame_system::{Config, ensure_signed};
 /// decl_module! {
 /// 	pub struct Module<T: Config> for enum Call where origin: T::Origin {
 /// 		#[weight = 1_000_000]
 /// 		fn my_long_function(origin, do_expensive_calc: bool) -> DispatchResultWithPostInfo {
-/// 			ensure_signed(origin).map_err(|e| e.with_weight(WeightV2 { computation: 100_000, bandwidth: 100_000 }))?;
+/// 			ensure_signed(origin).map_err(|e| e.with_weight(Weight { computation: 100_000, bandwidth: 100_000 }))?;
 /// 			if do_expensive_calc {
 /// 				// do the expensive calculation
 /// 				// ...
 /// 				// return None to indicate that we are using all weight (the default)
-/// 				let none: Option<WeightV2> = None;
+/// 				let none: Option<Weight> = None;
 /// 				return Ok(none.into());
 /// 			}
 /// 			// expensive calculation not executed: use only a portion of the weight
@@ -2591,7 +2591,7 @@ mod tests {
 			CrateVersion, Get, GetCallName, IntegrityTest, OnFinalize, OnIdle, OnInitialize,
 			OnRuntimeUpgrade, PalletInfo,
 		},
-		weights::{DispatchClass, DispatchInfo, Pays, RuntimeDbWeight, WeightV2},
+		weights::{DispatchClass, DispatchInfo, Pays, RuntimeDbWeight, Weight},
 	};
 
 	pub trait Config: system::Config + Sized
@@ -2850,7 +2850,7 @@ mod tests {
 		assert_eq!(
 			Call::<TraitImpl>::operational {}.get_dispatch_info(),
 			DispatchInfo {
-				weight: WeightV2::todo_from_v1(5),
+				weight: Weight::todo_from_v1(5),
 				class: DispatchClass::Operational,
 				pays_fee: Pays::Yes
 			},
@@ -2859,7 +2859,7 @@ mod tests {
 		assert_eq!(
 			Call::<TraitImpl>::aux_3 {}.get_dispatch_info(),
 			DispatchInfo {
-				weight: WeightV2::todo_from_v1(3),
+				weight: Weight::todo_from_v1(3),
 				class: DispatchClass::Normal,
 				pays_fee: Pays::Yes
 			},

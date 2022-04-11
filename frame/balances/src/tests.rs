@@ -42,7 +42,7 @@ macro_rules! decl_tests {
 			&Call::Balances(pallet_balances::Call::transfer { dest: 0, value: 0 });
 
 		/// create a transaction info struct from weight. Handy to avoid building the whole struct.
-		pub fn info_from_weight(w: WeightV2) -> DispatchInfo {
+		pub fn info_from_weight(w: Weight) -> DispatchInfo {
 			DispatchInfo { weight: w, ..Default::default() }
 		}
 

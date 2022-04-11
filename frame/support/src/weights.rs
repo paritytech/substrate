@@ -121,9 +121,7 @@ mod block_weights;
 mod extrinsic_weights;
 mod paritydb_weights;
 mod rocksdb_weights;
-
 mod weight_v2;
-pub use weight_v2::*;
 
 use crate::{
 	dispatch::{DispatchError, DispatchErrorWithPostInfo, DispatchResultWithPostInfo},
@@ -148,7 +146,7 @@ use sp_runtime::{
 pub use sp_runtime::transaction_validity::TransactionPriority;
 
 /// The current canonical version of Weight.
-pub type Weight = WeightV2;
+pub type Weight = weight_v2::Weight;
 
 /// The first version of Weight introduced into FRAME.
 pub type WeightV1 = ComputationWeight;
@@ -185,7 +183,7 @@ pub mod constants {
 pub trait WeighData<T> {
 	/// Weigh the data `T` given by `target`. When implementing this for a dispatchable, `T` will be
 	/// a tuple of all arguments given to the function (except origin).
-	fn weigh_data(&self, target: T) -> WeightV2;
+	fn weigh_data(&self, target: T) -> Weight;
 }
 
 /// Means of classifying a dispatchable function.
@@ -292,7 +290,7 @@ impl<'a> OneOrMany<DispatchClass> for &'a [DispatchClass] {
 #[derive(Clone, Copy, Eq, PartialEq, Default, RuntimeDebug, Encode, Decode, TypeInfo)]
 pub struct DispatchInfo {
 	/// Weight of this transaction.
-	pub weight: WeightV2,
+	pub weight: Weight,
 	/// Class of this transaction.
 	pub class: DispatchClass,
 	/// Does this transaction pay fees.
@@ -319,19 +317,19 @@ impl GetDispatchInfo for () {
 #[derive(Clone, Copy, Eq, PartialEq, Default, RuntimeDebug, Encode, Decode, TypeInfo)]
 pub struct PostDispatchInfo {
 	/// Actual weight consumed by a call or `None` which stands for the worst case static weight.
-	pub actual_weight: Option<WeightV2>,
+	pub actual_weight: Option<Weight>,
 	/// Whether this transaction should pay fees when all is said and done.
 	pub pays_fee: Pays,
 }
 
 impl PostDispatchInfo {
 	/// Calculate how much (if any) weight was not used by the `Dispatchable`.
-	pub fn calc_unspent(&self, info: &DispatchInfo) -> WeightV2 {
+	pub fn calc_unspent(&self, info: &DispatchInfo) -> Weight {
 		info.weight - self.calc_actual_weight(info)
 	}
 
 	/// Calculate how much weight was actually spent by the `Dispatchable`.
-	pub fn calc_actual_weight(&self, info: &DispatchInfo) -> WeightV2 {
+	pub fn calc_actual_weight(&self, info: &DispatchInfo) -> Weight {
 		if let Some(actual_weight) = self.actual_weight {
 			actual_weight.min(info.weight)
 		} else {
@@ -355,7 +353,7 @@ impl PostDispatchInfo {
 }
 
 /// Extract the actual weight from a dispatch result if any or fall back to the default weight.
-pub fn extract_actual_weight(result: &DispatchResultWithPostInfo, info: &DispatchInfo) -> WeightV2 {
+pub fn extract_actual_weight(result: &DispatchResultWithPostInfo, info: &DispatchInfo) -> Weight {
 	match result {
 		Ok(post_info) => &post_info,
 		Err(err) => &err.post_info,
@@ -367,7 +365,7 @@ impl From<(Option<WeightV1>, Pays)> for PostDispatchInfo {
 	fn from(post_weight_info: (Option<WeightV1>, Pays)) -> Self {
 		let (maybe_actual_time, pays_fee) = post_weight_info;
 		let actual_weight = match maybe_actual_time {
-			Some(actual_time) => Some(WeightV2 {
+			Some(actual_time) => Some(Weight {
 				computation: actual_time,
 				// NOTE: This enables backwards compat for `WeightV1` syntax.
 				bandwidth: Zero::zero(),
@@ -387,7 +385,7 @@ impl From<Pays> for PostDispatchInfo {
 impl From<Option<WeightV1>> for PostDispatchInfo {
 	fn from(maybe_actual_computation: Option<WeightV1>) -> Self {
 		let actual_weight = match maybe_actual_computation {
-			Some(actual_computation) => Some(WeightV2 {
+			Some(actual_computation) => Some(Weight {
 				computation: actual_computation,
 				// NOTE: This enables backwards compat for `WeightV1` syntax.
 				bandwidth: Zero::zero(),
@@ -434,17 +432,17 @@ pub trait WithPostDispatchInfo {
 	/// # Example
 	///
 	/// ```ignore
-	/// let who = ensure_signed(origin).map_err(|e| e.with_weight(WeightV2 { computation: 100, bandwidth: 100 }))?;
-	/// ensure!(who == me, Error::<T>::NotMe.with_weight(WeightV2 { computation: 200_000, bandwidth: 100 }));
+	/// let who = ensure_signed(origin).map_err(|e| e.with_weight(Weight { computation: 100, bandwidth: 100 }))?;
+	/// ensure!(who == me, Error::<T>::NotMe.with_weight(Weight { computation: 200_000, bandwidth: 100 }));
 	/// ```
-	fn with_weight(self, actual_weight: impl Into<WeightV2>) -> DispatchErrorWithPostInfo;
+	fn with_weight(self, actual_weight: impl Into<Weight>) -> DispatchErrorWithPostInfo;
 }
 
 impl<T> WithPostDispatchInfo for T
 where
 	T: Into<DispatchError>,
 {
-	fn with_weight(self, actual_weight: impl Into<WeightV2>) -> DispatchErrorWithPostInfo {
+	fn with_weight(self, actual_weight: impl Into<Weight>) -> DispatchErrorWithPostInfo {
 		DispatchErrorWithPostInfo {
 			post_info: PostDispatchInfo {
 				actual_weight: Some(actual_weight.into()),
@@ -456,8 +454,8 @@ where
 }
 
 impl<T> WeighData<T> for WeightV1 {
-	fn weigh_data(&self, _: T) -> WeightV2 {
-		return WeightV2 { computation: *self, bandwidth: Zero::zero() }
+	fn weigh_data(&self, _: T) -> Weight {
+		return Weight { computation: *self, bandwidth: Zero::zero() }
 	}
 }
 
@@ -474,7 +472,7 @@ impl<T> PaysFee<T> for WeightV1 {
 }
 
 impl<T> WeighData<T> for (WeightV1, DispatchClass, Pays) {
-	fn weigh_data(&self, args: T) -> WeightV2 {
+	fn weigh_data(&self, args: T) -> Weight {
 		return self.0.weigh_data(args)
 	}
 }
@@ -492,7 +490,7 @@ impl<T> PaysFee<T> for (WeightV1, DispatchClass, Pays) {
 }
 
 impl<T> WeighData<T> for (WeightV1, DispatchClass) {
-	fn weigh_data(&self, args: T) -> WeightV2 {
+	fn weigh_data(&self, args: T) -> Weight {
 		return self.0.weigh_data(args)
 	}
 }
@@ -510,7 +508,7 @@ impl<T> PaysFee<T> for (WeightV1, DispatchClass) {
 }
 
 impl<T> WeighData<T> for (WeightV1, Pays) {
-	fn weigh_data(&self, args: T) -> WeightV2 {
+	fn weigh_data(&self, args: T) -> Weight {
 		return self.0.weigh_data(args)
 	}
 }
@@ -555,7 +553,7 @@ impl<Call: Encode, Extra: Encode> GetDispatchInfo for sp_runtime::testing::TestX
 	fn get_dispatch_info(&self) -> DispatchInfo {
 		// for testing: weight == size.
 		DispatchInfo {
-			weight: WeightV2 {
+			weight: Weight {
 				computation: self.encode().len() as _,
 				bandwidth: self.encode().len() as _,
 			},
@@ -752,10 +750,10 @@ impl<T: Clone> PerDispatchClass<T> {
 	}
 }
 
-impl PerDispatchClass<WeightV2> {
+impl PerDispatchClass<Weight> {
 	/// Returns the total weight consumed by all extrinsics in the block.
-	pub fn total(&self) -> WeightV2 {
-		let mut sum = WeightV2::zero();
+	pub fn total(&self) -> Weight {
+		let mut sum = Weight::zero();
 		for class in DispatchClass::all() {
 			sum = sum.saturating_add(*self.get(*class));
 		}
@@ -763,14 +761,14 @@ impl PerDispatchClass<WeightV2> {
 	}
 
 	/// Add some weight of a specific dispatch class, saturating at the numeric bounds of `Weight`.
-	pub fn add(&mut self, weight: WeightV2, class: DispatchClass) {
+	pub fn add(&mut self, weight: Weight, class: DispatchClass) {
 		let value = self.get_mut(class);
 		*value = value.saturating_add(weight);
 	}
 
 	/// Try to add some weight of a specific dispatch class, returning Err(()) if overflow would
 	/// occur.
-	pub fn checked_add(&mut self, weight: WeightV2, class: DispatchClass) -> Result<(), ()> {
+	pub fn checked_add(&mut self, weight: Weight, class: DispatchClass) -> Result<(), ()> {
 		let value = self.get_mut(class);
 		*value = value.checked_add(&weight).ok_or(())?;
 		Ok(())
@@ -778,7 +776,7 @@ impl PerDispatchClass<WeightV2> {
 
 	/// Subtract some weight of a specific dispatch class, saturating at the numeric bounds of
 	/// `Weight`.
-	pub fn sub(&mut self, weight: WeightV2, class: DispatchClass) {
+	pub fn sub(&mut self, weight: Weight, class: DispatchClass) {
 		let value = self.get_mut(class);
 		*value = value.saturating_sub(weight);
 	}
@@ -788,7 +786,7 @@ impl PerDispatchClass<WeightV2> {
 #[allow(dead_code)]
 mod tests {
 	use super::*;
-	use crate::{decl_module, parameter_types, traits::Get, weights::WeightV2};
+	use crate::{decl_module, parameter_types, traits::Get, weights::Weight};
 
 	pub trait Config: 'static {
 		type Origin;
@@ -850,49 +848,49 @@ mod tests {
 	fn weights_are_correct() {
 		// #[weight = 1000]
 		let info = Call::<TraitImpl>::f00 {}.get_dispatch_info();
-		assert_eq!(info.weight, WeightV2::todo_from_v1(1000));
+		assert_eq!(info.weight, Weight::todo_from_v1(1000));
 		assert_eq!(info.class, DispatchClass::Normal);
 		assert_eq!(info.pays_fee, Pays::Yes);
 
 		// #[weight = (1000, DispatchClass::Mandatory)]
 		let info = Call::<TraitImpl>::f01 {}.get_dispatch_info();
-		assert_eq!(info.weight, WeightV2::todo_from_v1(1000));
+		assert_eq!(info.weight, Weight::todo_from_v1(1000));
 		assert_eq!(info.class, DispatchClass::Mandatory);
 		assert_eq!(info.pays_fee, Pays::Yes);
 
 		// #[weight = (1000, Pays::No)]
 		let info = Call::<TraitImpl>::f02 {}.get_dispatch_info();
-		assert_eq!(info.weight, WeightV2::todo_from_v1(1000));
+		assert_eq!(info.weight, Weight::todo_from_v1(1000));
 		assert_eq!(info.class, DispatchClass::Normal);
 		assert_eq!(info.pays_fee, Pays::No);
 
 		// #[weight = (1000, DispatchClass::Operational, Pays::No)]
 		let info = Call::<TraitImpl>::f03 {}.get_dispatch_info();
-		assert_eq!(info.weight, WeightV2::todo_from_v1(1000));
+		assert_eq!(info.weight, Weight::todo_from_v1(1000));
 		assert_eq!(info.class, DispatchClass::Operational);
 		assert_eq!(info.pays_fee, Pays::No);
 
 		// #[weight = ((_a * 10 + _eb * 1) as Weight, DispatchClass::Normal, Pays::Yes)]
 		let info = Call::<TraitImpl>::f11 { _a: 13, _eb: 20 }.get_dispatch_info();
-		assert_eq!(info.weight, WeightV2::todo_from_v1(150)); // 13*10 + 20
+		assert_eq!(info.weight, Weight::todo_from_v1(150)); // 13*10 + 20
 		assert_eq!(info.class, DispatchClass::Normal);
 		assert_eq!(info.pays_fee, Pays::Yes);
 
 		// #[weight = (0, DispatchClass::Operational, Pays::Yes)]
 		let info = Call::<TraitImpl>::f12 { _a: 10, _eb: 20 }.get_dispatch_info();
-		assert_eq!(info.weight, WeightV2::todo_from_v1(0));
+		assert_eq!(info.weight, Weight::todo_from_v1(0));
 		assert_eq!(info.class, DispatchClass::Operational);
 		assert_eq!(info.pays_fee, Pays::Yes);
 
 		// #[weight = T::DbWeight::get().reads(3) + T::DbWeight::get().writes(2) + 10_000]
 		let info = Call::<TraitImpl>::f20 {}.get_dispatch_info();
-		assert_eq!(info.weight, WeightV2::todo_from_v1(12300)); // 100*3 + 1000*2 + 10_1000
+		assert_eq!(info.weight, Weight::todo_from_v1(12300)); // 100*3 + 1000*2 + 10_1000
 		assert_eq!(info.class, DispatchClass::Normal);
 		assert_eq!(info.pays_fee, Pays::Yes);
 
 		// #[weight = T::DbWeight::get().reads_writes(6, 5) + 40_000]
 		let info = Call::<TraitImpl>::f21 {}.get_dispatch_info();
-		assert_eq!(info.weight, WeightV2::todo_from_v1(45600)); // 100*6 + 1000*5 + 40_1000
+		assert_eq!(info.weight, Weight::todo_from_v1(45600)); // 100*6 + 1000*5 + 40_1000
 		assert_eq!(info.class, DispatchClass::Normal);
 		assert_eq!(info.pays_fee, Pays::Yes);
 	}
@@ -900,41 +898,41 @@ mod tests {
 	#[test]
 	fn extract_actual_weight_works() {
 		let pre = DispatchInfo {
-			weight: WeightV2 { computation: 1000, bandwidth: 123 },
+			weight: Weight { computation: 1000, bandwidth: 123 },
 			..Default::default()
 		};
-		assert_eq!(extract_actual_weight(&Ok(Some(7).into()), &pre), WeightV2::todo_from_v1(7));
+		assert_eq!(extract_actual_weight(&Ok(Some(7).into()), &pre), Weight::todo_from_v1(7));
 		assert_eq!(
 			extract_actual_weight(&Ok(Some(1000).into()), &pre),
-			WeightV2::todo_from_v1(1000)
+			Weight::todo_from_v1(1000)
 		);
 		assert_eq!(
 			extract_actual_weight(
 				&Err(DispatchError::BadOrigin
-					.with_weight(WeightV2 { computation: 9, bandwidth: 99 })),
+					.with_weight(Weight { computation: 9, bandwidth: 99 })),
 				&pre
 			),
-			WeightV2 { computation: 9, bandwidth: 99 }
+			Weight { computation: 9, bandwidth: 99 }
 		);
 	}
 
 	#[test]
 	fn extract_actual_weight_caps_at_pre_weight() {
 		let pre = DispatchInfo {
-			weight: WeightV2 { computation: 1000, bandwidth: 120 },
+			weight: Weight { computation: 1000, bandwidth: 120 },
 			..Default::default()
 		};
 		assert_eq!(
 			extract_actual_weight(&Ok(Some(1250).into()), &pre),
-			WeightV2::todo_from_v1(1000)
+			Weight::todo_from_v1(1000)
 		);
 		assert_eq!(
 			extract_actual_weight(
 				&Err(DispatchError::BadOrigin
-					.with_weight(WeightV2 { computation: 1300, bandwidth: 130 })),
+					.with_weight(Weight { computation: 1300, bandwidth: 130 })),
 				&pre
 			),
-			WeightV2 { computation: 1000, bandwidth: 120 }
+			Weight { computation: 1000, bandwidth: 120 }
 		);
 	}
 

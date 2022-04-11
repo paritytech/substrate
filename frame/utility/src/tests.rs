@@ -99,7 +99,7 @@ frame_support::construct_runtime!(
 
 parameter_types! {
 	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(WeightV2::MAX);
+		frame_system::limits::BlockWeights::simple_max(Weight::MAX);
 }
 impl frame_system::Config for Test {
 	type BaseCallFilter = TestBaseCallFilter;
@@ -191,7 +191,7 @@ fn call_transfer(dest: u64, value: u64) -> Call {
 	Call::Balances(BalancesCall::transfer { dest, value })
 }
 
-fn call_foobar(err: bool, start_weight: WeightV2, end_weight: Option<WeightV2>) -> Call {
+fn call_foobar(err: bool, start_weight: Weight, end_weight: Option<Weight>) -> Call {
 	Call::Example(ExampleCall::foobar { err, start_weight, end_weight })
 }
 
@@ -213,8 +213,8 @@ fn as_derivative_works() {
 #[test]
 fn as_derivative_handles_weight_refund() {
 	new_test_ext().execute_with(|| {
-		let start_weight = WeightV2 { computation: 100, bandwidth: 100 };
-		let end_weight = WeightV2 { computation: 75, bandwidth: 75 };
+		let start_weight = Weight { computation: 100, bandwidth: 100 };
+		let end_weight = Weight { computation: 75, bandwidth: 75 };
 		let diff = start_weight - end_weight;
 
 		// Full weight when ok
@@ -364,22 +364,22 @@ fn batch_weight_calculation_doesnt_overflow() {
 	use sp_runtime::Perbill;
 	new_test_ext().execute_with(|| {
 		let big_call = Call::System(SystemCall::fill_block { ratio: Perbill::from_percent(50) });
-		assert_eq!(big_call.get_dispatch_info().weight, WeightV2::MAX / 2);
+		assert_eq!(big_call.get_dispatch_info().weight, Weight::MAX / 2);
 
 		// 3 * 50% saturates to 100%
 		let batch_call = Call::Utility(crate::Call::batch {
 			calls: vec![big_call.clone(), big_call.clone(), big_call.clone()],
 		});
 
-		assert_eq!(batch_call.get_dispatch_info().weight, WeightV2::MAX);
+		assert_eq!(batch_call.get_dispatch_info().weight, Weight::MAX);
 	});
 }
 
 #[test]
 fn batch_handles_weight_refund() {
 	new_test_ext().execute_with(|| {
-		let start_weight = WeightV2 { computation: 100, bandwidth: 100 };
-		let end_weight = WeightV2 { computation: 75, bandwidth: 75 };
+		let start_weight = Weight { computation: 100, bandwidth: 100 };
+		let end_weight = Weight { computation: 75, bandwidth: 75 };
 		let diff = start_weight - end_weight;
 		let batch_len: u64 = 4;
 
@@ -444,7 +444,7 @@ fn batch_handles_weight_refund() {
 		assert_eq!(
 			extract_actual_weight(&result, &info),
 			// Real weight is 2 calls at end_weight
-			WeightV2::todo_from_v1(<Test as Config>::WeightInfo::batch(2)) + end_weight * 2,
+			Weight::todo_from_v1(<Test as Config>::WeightInfo::batch(2)) + end_weight * 2,
 		);
 	});
 }
@@ -479,7 +479,7 @@ fn batch_all_revert() {
 			DispatchErrorWithPostInfo {
 				post_info: PostDispatchInfo {
 					actual_weight: Some(
-						WeightV2::todo_from_v1(<Test as Config>::WeightInfo::batch_all(2)) +
+						Weight::todo_from_v1(<Test as Config>::WeightInfo::batch_all(2)) +
 							info.weight * 2
 					),
 					pays_fee: Pays::Yes
@@ -495,8 +495,8 @@ fn batch_all_revert() {
 #[test]
 fn batch_all_handles_weight_refund() {
 	new_test_ext().execute_with(|| {
-		let start_weight = WeightV2 { computation: 100, bandwidth: 100 };
-		let end_weight = WeightV2 { computation: 75, bandwidth: 75 };
+		let start_weight = Weight { computation: 100, bandwidth: 100 };
+		let end_weight = Weight { computation: 75, bandwidth: 75 };
 		let diff = start_weight - end_weight;
 		let batch_len: u64 = 4;
 
@@ -552,7 +552,7 @@ fn batch_all_handles_weight_refund() {
 		assert_eq!(
 			extract_actual_weight(&result, &info),
 			// Real weight is 2 calls at end_weight
-			WeightV2::todo_from_v1(<Test as Config>::WeightInfo::batch_all(2)) + end_weight * 2,
+			Weight::todo_from_v1(<Test as Config>::WeightInfo::batch_all(2)) + end_weight * 2,
 		);
 	});
 }
@@ -574,7 +574,7 @@ fn batch_all_does_not_nest() {
 			DispatchErrorWithPostInfo {
 				post_info: PostDispatchInfo {
 					actual_weight: Some(
-						WeightV2::todo_from_v1(<Test as Config>::WeightInfo::batch_all(1)) +
+						Weight::todo_from_v1(<Test as Config>::WeightInfo::batch_all(1)) +
 							info.weight
 					),
 					pays_fee: Pays::Yes

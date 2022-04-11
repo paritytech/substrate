@@ -57,7 +57,7 @@ use frame_support::{
 	},
 	ensure,
 	traits::{Currency, Get, ReservableCurrency, WrapperKeepOpaque},
-	weights::{GetDispatchInfo, Weight, WeightV2},
+	weights::{GetDispatchInfo, Weight},
 	RuntimeDebug,
 };
 use frame_system::{self as system, RawOrigin};
@@ -750,7 +750,7 @@ impl<T: Config> Pallet<T> {
 /// Return the weight of a dispatch call result as an `Option`.
 ///
 /// Will return the weight regardless of what the state of the result is.
-fn get_result_weight(result: DispatchResultWithPostInfo) -> Option<WeightV2> {
+fn get_result_weight(result: DispatchResultWithPostInfo) -> Option<Weight> {
 	match result {
 		Ok(post_info) => post_info.actual_weight,
 		Err(err) => err.post_info.actual_weight,

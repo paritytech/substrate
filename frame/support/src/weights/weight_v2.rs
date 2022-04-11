@@ -11,14 +11,14 @@ use super::*;
 	Encode, Decode, MaxEncodedLen, TypeInfo, Eq, PartialEq, Copy, Clone, RuntimeDebug, Default,
 )]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-pub struct WeightV2 {
+pub struct Weight {
 	/// The weight of computational time used.
 	pub computation: ComputationWeight,
 	/// The weight of the storage bandwidth used.
 	pub bandwidth: BandwidthWeight,
 }
 
-impl WeightV2 {
+impl Weight {
 	pub const MAX: Self =
 		Self { computation: ComputationWeight::MAX, bandwidth: BandwidthWeight::MAX };
 
@@ -107,13 +107,13 @@ impl WeightV2 {
 	}
 }
 
-impl From<(ComputationWeight, BandwidthWeight)> for WeightV2 {
+impl From<(ComputationWeight, BandwidthWeight)> for Weight {
 	fn from(a: (ComputationWeight, BandwidthWeight)) -> Self {
 		Self { computation: a.0, bandwidth: a.1 }
 	}
 }
 
-impl Zero for WeightV2 {
+impl Zero for Weight {
 	fn zero() -> Self {
 		Self { computation: 0, bandwidth: 0 }
 	}
@@ -123,13 +123,13 @@ impl Zero for WeightV2 {
 	}
 }
 
-impl One for WeightV2 {
+impl One for Weight {
 	fn one() -> Self {
 		Self { computation: 1, bandwidth: 1 }
 	}
 }
 
-impl Add for WeightV2 {
+impl Add for Weight {
 	type Output = Self;
 	fn add(self, rhs: Self) -> Self {
 		Self {
@@ -139,7 +139,7 @@ impl Add for WeightV2 {
 	}
 }
 
-impl Sub for WeightV2 {
+impl Sub for Weight {
 	type Output = Self;
 	fn sub(self, rhs: Self) -> Self {
 		Self {
@@ -149,13 +149,13 @@ impl Sub for WeightV2 {
 	}
 }
 
-impl From<ComputationWeight> for WeightV2 {
+impl From<ComputationWeight> for Weight {
 	fn from(t: ComputationWeight) -> Self {
 		Self { computation: t, bandwidth: 0 }
 	}
 }
 
-impl Mul for WeightV2 {
+impl Mul for Weight {
 	type Output = Self;
 	fn mul(self, b: Self) -> Self {
 		Self {
@@ -165,7 +165,7 @@ impl Mul for WeightV2 {
 	}
 }
 
-impl<T> Mul<T> for WeightV2
+impl<T> Mul<T> for Weight
 where
 	T: Mul<u64, Output = u64> + Copy,
 {
@@ -175,7 +175,7 @@ where
 	}
 }
 
-impl<T> Div<T> for WeightV2
+impl<T> Div<T> for Weight
 where
 	u64: Div<T, Output = u64>,
 	T: Copy,
@@ -186,14 +186,14 @@ where
 	}
 }
 
-impl Mul<WeightV2> for Perbill {
-	type Output = WeightV2;
-	fn mul(self, b: WeightV2) -> WeightV2 {
-		WeightV2 { computation: self * b.computation, bandwidth: self * b.bandwidth }
+impl Mul<Weight> for Perbill {
+	type Output = Weight;
+	fn mul(self, b: Weight) -> Weight {
+		Weight { computation: self * b.computation, bandwidth: self * b.bandwidth }
 	}
 }
 
-impl Saturating for WeightV2 {
+impl Saturating for Weight {
 	fn saturating_add(self, rhs: Self) -> Self {
 		Self {
 			computation: self.computation.saturating_add(rhs.computation),
@@ -223,7 +223,7 @@ impl Saturating for WeightV2 {
 	}
 }
 
-impl CheckedAdd for WeightV2 {
+impl CheckedAdd for Weight {
 	fn checked_add(&self, rhs: &Self) -> Option<Self> {
 		let computation = self.computation.checked_add(rhs.computation)?;
 		let bandwidth = self.bandwidth.checked_add(rhs.bandwidth)?;
@@ -231,7 +231,7 @@ impl CheckedAdd for WeightV2 {
 	}
 }
 
-impl CheckedSub for WeightV2 {
+impl CheckedSub for Weight {
 	fn checked_sub(&self, rhs: &Self) -> Option<Self> {
 		let computation = self.computation.checked_sub(rhs.computation)?;
 		let bandwidth = self.bandwidth.checked_sub(rhs.bandwidth)?;
@@ -239,98 +239,98 @@ impl CheckedSub for WeightV2 {
 	}
 }
 
-impl<T> PaysFee<T> for (WeightV2, DispatchClass, Pays) {
+impl<T> PaysFee<T> for (Weight, DispatchClass, Pays) {
 	fn pays_fee(&self, _: T) -> Pays {
 		self.2
 	}
 }
 
-impl<T> WeighData<T> for (WeightV2, DispatchClass) {
-	fn weigh_data(&self, args: T) -> WeightV2 {
+impl<T> WeighData<T> for (Weight, DispatchClass) {
+	fn weigh_data(&self, args: T) -> Weight {
 		return self.0.weigh_data(args)
 	}
 }
 
-impl<T> WeighData<T> for (WeightV2, DispatchClass, Pays) {
-	fn weigh_data(&self, args: T) -> WeightV2 {
+impl<T> WeighData<T> for (Weight, DispatchClass, Pays) {
+	fn weigh_data(&self, args: T) -> Weight {
 		return self.0.weigh_data(args)
 	}
 }
 
-impl<T> ClassifyDispatch<T> for (WeightV2, DispatchClass) {
+impl<T> ClassifyDispatch<T> for (Weight, DispatchClass) {
 	fn classify_dispatch(&self, _: T) -> DispatchClass {
 		self.1
 	}
 }
 
-impl<T> PaysFee<T> for (WeightV2, DispatchClass) {
+impl<T> PaysFee<T> for (Weight, DispatchClass) {
 	fn pays_fee(&self, _: T) -> Pays {
 		Pays::Yes
 	}
 }
 
-impl<T> WeighData<T> for (WeightV2, Pays) {
-	fn weigh_data(&self, args: T) -> WeightV2 {
+impl<T> WeighData<T> for (Weight, Pays) {
+	fn weigh_data(&self, args: T) -> Weight {
 		return self.0.weigh_data(args)
 	}
 }
 
-impl<T> ClassifyDispatch<T> for (WeightV2, Pays) {
+impl<T> ClassifyDispatch<T> for (Weight, Pays) {
 	fn classify_dispatch(&self, _: T) -> DispatchClass {
 		DispatchClass::Normal
 	}
 }
 
-impl<T> PaysFee<T> for (WeightV2, Pays) {
+impl<T> PaysFee<T> for (Weight, Pays) {
 	fn pays_fee(&self, _: T) -> Pays {
 		self.1
 	}
 }
 
-impl From<(Option<WeightV2>, Pays)> for PostDispatchInfo {
-	fn from(post_weight_info: (Option<WeightV2>, Pays)) -> Self {
+impl From<(Option<Weight>, Pays)> for PostDispatchInfo {
+	fn from(post_weight_info: (Option<Weight>, Pays)) -> Self {
 		let (actual_weight, pays_fee) = post_weight_info;
 		Self { actual_weight, pays_fee }
 	}
 }
 
-impl From<Option<WeightV2>> for PostDispatchInfo {
-	fn from(actual_weight: Option<WeightV2>) -> Self {
+impl From<Option<Weight>> for PostDispatchInfo {
+	fn from(actual_weight: Option<Weight>) -> Self {
 		Self { actual_weight, pays_fee: Default::default() }
 	}
 }
 
-impl<T> WeighData<T> for WeightV2 {
-	fn weigh_data(&self, _: T) -> WeightV2 {
+impl<T> WeighData<T> for Weight {
+	fn weigh_data(&self, _: T) -> Weight {
 		return *self
 	}
 }
 
-impl<T> ClassifyDispatch<T> for WeightV2 {
+impl<T> ClassifyDispatch<T> for Weight {
 	fn classify_dispatch(&self, _: T) -> DispatchClass {
 		DispatchClass::Normal
 	}
 }
 
-impl<T> PaysFee<T> for WeightV2 {
+impl<T> PaysFee<T> for Weight {
 	fn pays_fee(&self, _: T) -> Pays {
 		Pays::Yes
 	}
 }
 
-impl<T> ClassifyDispatch<T> for (WeightV2, DispatchClass, Pays) {
+impl<T> ClassifyDispatch<T> for (Weight, DispatchClass, Pays) {
 	fn classify_dispatch(&self, _: T) -> DispatchClass {
 		self.1
 	}
 }
 
-impl core::fmt::Display for WeightV2 {
+impl core::fmt::Display for Weight {
 	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-		write!(f, "WeightV2(computation: {}, bandwidth: {})", self.computation, self.bandwidth)
+		write!(f, "Weight(computation: {}, bandwidth: {})", self.computation, self.bandwidth)
 	}
 }
 
-impl Bounded for WeightV2 {
+impl Bounded for Weight {
 	fn min_value() -> Self {
 		Zero::zero()
 	}
@@ -339,7 +339,7 @@ impl Bounded for WeightV2 {
 	}
 }
 
-impl AddAssign for WeightV2 {
+impl AddAssign for Weight {
 	fn add_assign(&mut self, other: Self) {
 		*self = Self {
 			computation: self.computation + other.computation,
@@ -348,7 +348,7 @@ impl AddAssign for WeightV2 {
 	}
 }
 
-impl SubAssign for WeightV2 {
+impl SubAssign for Weight {
 	fn sub_assign(&mut self, other: Self) {
 		*self = Self {
 			computation: self.computation - other.computation,
@@ -363,10 +363,10 @@ mod tests {
 
 	#[test]
 	fn comparison_functions_work_as_expected() {
-		let weight_99_1 = WeightV2 { computation: 99, bandwidth: 1 };
-		let weight_1_99 = WeightV2 { computation: 1, bandwidth: 99 };
-		let weight_50_50 = WeightV2 { computation: 50, bandwidth: 50 };
-		let weight_1_1 = WeightV2 { computation: 1, bandwidth: 1 };
+		let weight_99_1 = Weight { computation: 99, bandwidth: 1 };
+		let weight_1_99 = Weight { computation: 1, bandwidth: 99 };
+		let weight_50_50 = Weight { computation: 50, bandwidth: 50 };
+		let weight_1_1 = Weight { computation: 1, bandwidth: 1 };
 
 		assert!(!weight_1_1.is_any_greater_than(&weight_50_50));
 		assert!(weight_99_1.is_any_greater_than(&weight_1_99));
@@ -391,11 +391,11 @@ mod tests {
 
 	#[test]
 	fn try_add_works_as_expected() {
-		let limit = WeightV2 { computation: 100, bandwidth: 100 };
+		let limit = Weight { computation: 100, bandwidth: 100 };
 
-		let weight_99_1 = WeightV2 { computation: 99, bandwidth: 1 };
-		let weight_1_99 = WeightV2 { computation: 1, bandwidth: 99 };
-		let weight_50_50 = WeightV2 { computation: 50, bandwidth: 50 };
+		let weight_99_1 = Weight { computation: 99, bandwidth: 1 };
+		let weight_1_99 = Weight { computation: 1, bandwidth: 99 };
+		let weight_50_50 = Weight { computation: 50, bandwidth: 50 };
 
 		let total1 = weight_99_1.try_add(&weight_1_99, &limit);
 		let total2 = weight_99_1.try_add(&weight_50_50, &limit);

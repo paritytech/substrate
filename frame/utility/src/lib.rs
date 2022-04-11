@@ -61,7 +61,7 @@ use frame_support::{
 	dispatch::PostDispatchInfo,
 	traits::{IsSubType, OriginTrait, UnfilteredDispatchable},
 	transactional,
-	weights::{extract_actual_weight, GetDispatchInfo, WeightV2},
+	weights::{extract_actual_weight, GetDispatchInfo, Weight},
 };
 use sp_core::TypeId;
 use sp_io::hashing::blake2_256;
@@ -182,8 +182,8 @@ pub mod pallet {
 			let dispatch_infos = calls.iter().map(|call| call.get_dispatch_info()).collect::<Vec<_>>();
 			let dispatch_weight = dispatch_infos.iter()
 				.map(|di| di.weight)
-				.fold(Zero::zero(), |total: WeightV2, weight: WeightV2| total.saturating_add(weight))
-				.saturating_add(WeightV2::todo_from_v1(T::WeightInfo::batch(calls.len() as u32)));
+				.fold(Zero::zero(), |total: Weight, weight: Weight| total.saturating_add(weight))
+				.saturating_add(Weight::todo_from_v1(T::WeightInfo::batch(calls.len() as u32)));
 			let dispatch_class = {
 				let all_operational = dispatch_infos.iter()
 					.map(|di| di.class)
@@ -205,7 +205,7 @@ pub mod pallet {
 			ensure!(calls_len <= Self::batched_calls_limit() as usize, Error::<T>::TooManyCalls);
 
 			// Track the actual weight of each of the batch calls.
-			let mut weight: WeightV2 = Zero::zero();
+			let mut weight: Weight = Zero::zero();
 			for (index, call) in calls.into_iter().enumerate() {
 				let info = call.get_dispatch_info();
 				// If origin is root, don't apply any dispatch filters; root can call anything.
@@ -222,7 +222,7 @@ pub mod pallet {
 						error: e.error,
 					});
 					// Take the weight of this function itself into account.
-					let base_weight = WeightV2::todo_from_v1(T::WeightInfo::batch(
+					let base_weight = Weight::todo_from_v1(T::WeightInfo::batch(
 						index.saturating_add(1) as u32,
 					));
 					// Return the actual used weight + base_weight of this call.
@@ -231,7 +231,7 @@ pub mod pallet {
 				Self::deposit_event(Event::ItemCompleted);
 			}
 			Self::deposit_event(Event::BatchCompleted);
-			let base_weight = WeightV2::todo_from_v1(T::WeightInfo::batch(calls_len as u32));
+			let base_weight = Weight::todo_from_v1(T::WeightInfo::batch(calls_len as u32));
 			Ok(Some(base_weight + weight).into())
 		}
 
@@ -251,10 +251,10 @@ pub mod pallet {
 		#[pallet::weight({
 			let dispatch_info = call.get_dispatch_info();
 			(
-				WeightV2::todo_from_v1(T::WeightInfo::as_derivative())
+				Weight::todo_from_v1(T::WeightInfo::as_derivative())
 					.saturating_add(dispatch_info.weight)
 					// AccountData for inner call origin accountdata.
-					.saturating_add(WeightV2::todo_from_v1(T::DbWeight::get().reads_writes(1, 1))),
+					.saturating_add(Weight::todo_from_v1(T::DbWeight::get().reads_writes(1, 1))),
 				dispatch_info.class,
 			)
 		})]
@@ -270,9 +270,9 @@ pub mod pallet {
 			let info = call.get_dispatch_info();
 			let result = call.dispatch(origin);
 			// Always take into account the base weight of this call.
-			let mut weight = WeightV2::zero();
+			let mut weight = Weight::zero();
 
-			weight = weight.saturating_add(WeightV2::todo_from_v1(
+			weight = weight.saturating_add(Weight::todo_from_v1(
 				T::WeightInfo::as_derivative()
 					.saturating_add(T::DbWeight::get().reads_writes(1, 1)),
 			));
@@ -304,8 +304,8 @@ pub mod pallet {
 			let dispatch_infos = calls.iter().map(|call| call.get_dispatch_info()).collect::<Vec<_>>();
 			let dispatch_weight = dispatch_infos.iter()
 				.map(|di| di.weight)
-				.fold(Zero::zero(), |total: WeightV2, weight: WeightV2| total.saturating_add(weight))
-				.saturating_add(WeightV2::todo_from_v1(T::WeightInfo::batch_all(calls.len() as u32)));
+				.fold(Zero::zero(), |total: Weight, weight: Weight| total.saturating_add(weight))
+				.saturating_add(Weight::todo_from_v1(T::WeightInfo::batch_all(calls.len() as u32)));
 			let dispatch_class = {
 				let all_operational = dispatch_infos.iter()
 					.map(|di| di.class)
@@ -328,7 +328,7 @@ pub mod pallet {
 			ensure!(calls_len <= Self::batched_calls_limit() as usize, Error::<T>::TooManyCalls);
 
 			// Track the actual weight of each of the batch calls.
-			let mut weight = WeightV2::zero();
+			let mut weight = Weight::zero();
 			for (index, call) in calls.into_iter().enumerate() {
 				let info = call.get_dispatch_info();
 				// If origin is root, bypass any dispatch filter; root can call anything.
@@ -347,7 +347,7 @@ pub mod pallet {
 				weight = weight.saturating_add(extract_actual_weight(&result, &info));
 				result.map_err(|mut err| {
 					// Take the weight of this function itself into account.
-					let base_weight = WeightV2::todo_from_v1(T::WeightInfo::batch_all(
+					let base_weight = Weight::todo_from_v1(T::WeightInfo::batch_all(
 						index.saturating_add(1) as u32,
 					));
 					// Return the actual used weight + base_weight of this call.
@@ -357,7 +357,7 @@ pub mod pallet {
 				Self::deposit_event(Event::ItemCompleted);
 			}
 			Self::deposit_event(Event::BatchCompleted);
-			let base_weight = WeightV2::todo_from_v1(T::WeightInfo::batch_all(calls_len as u32));
+			let base_weight = Weight::todo_from_v1(T::WeightInfo::batch_all(calls_len as u32));
 			Ok(Some(base_weight + weight).into())
 		}
 
@@ -374,7 +374,7 @@ pub mod pallet {
 		#[pallet::weight({
 			let dispatch_info = call.get_dispatch_info();
 			(
-				WeightV2::todo_from_v1(T::WeightInfo::dispatch_as())
+				Weight::todo_from_v1(T::WeightInfo::dispatch_as())
 					.saturating_add(dispatch_info.weight),
 				dispatch_info.class,
 			)

@@ -101,7 +101,7 @@ impl<T: Config + Send + Sync> SignedExtension for CheckMortality<T> {
 mod tests {
 	use super::*;
 	use crate::mock::{new_test_ext, System, Test, CALL};
-	use frame_support::weights::{DispatchClass, DispatchInfo, Pays, WeightV2};
+	use frame_support::weights::{DispatchClass, DispatchInfo, Pays, Weight};
 	use sp_core::H256;
 
 	#[test]
@@ -127,7 +127,7 @@ mod tests {
 	fn signed_ext_check_era_should_change_longevity() {
 		new_test_ext().execute_with(|| {
 			let normal = DispatchInfo {
-				weight: WeightV2 { computation: 100, bandwidth: 50 },
+				weight: Weight { computation: 100, bandwidth: 50 },
 				class: DispatchClass::Normal,
 				pays_fee: Pays::Yes,
 			};

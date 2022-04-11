@@ -55,7 +55,7 @@ frame_support::construct_runtime!(
 
 parameter_types! {
 	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(frame_support::weights::WeightV2 {
+		frame_system::limits::BlockWeights::simple_max(frame_support::weights::Weight {
 			computation: 1024,
 			bandwidth: 1024,
 		});

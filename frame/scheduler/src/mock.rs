@@ -119,7 +119,7 @@ impl Contains<Call> for BaseFilter {
 
 parameter_types! {
 	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(frame_support::weights::WeightV2 {
+		frame_system::limits::BlockWeights::simple_max(frame_support::weights::Weight {
 			computation: 2_000_000_000_000,
 			bandwidth: 2_000_000_000_000,
 		});

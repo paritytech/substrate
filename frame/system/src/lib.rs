@@ -90,7 +90,7 @@ use frame_support::{
 	},
 	weights::{
 		extract_actual_weight, DispatchClass, DispatchInfo, PerDispatchClass, RuntimeDbWeight,
-		WeightV2,
+		Weight,
 	},
 	Parameter,
 };
@@ -144,7 +144,7 @@ pub fn extrinsics_data_root<H: Hash>(xts: Vec<Vec<u8>>) -> H::Output {
 }
 
 /// An object to track the currently used extrinsic weight in a block.
-pub type ConsumedWeight = PerDispatchClass<WeightV2>;
+pub type ConsumedWeight = PerDispatchClass<Weight>;
 
 pub use pallet::*;
 
@@ -1249,7 +1249,7 @@ impl<T: Config> Pallet<T> {
 	/// of block weight is more than the block weight limit. This is what the _unchecked_.
 	///
 	/// Another potential use-case could be for the `on_initialize` and `on_finalize` hooks.
-	pub fn register_extra_weight_unchecked(weight: WeightV2, class: DispatchClass) {
+	pub fn register_extra_weight_unchecked(weight: Weight, class: DispatchClass) {
 		BlockWeight::<T>::mutate(|current_weight| {
 			current_weight.add(weight, class);
 		});
@@ -1431,7 +1431,7 @@ impl<T: Config> Pallet<T> {
 		maybe_len: Option<usize>,
 	) {
 		BlockWeight::<T>::mutate(|current_weight| {
-			let mut new_weight: WeightV2 = *current_weight.get(DispatchClass::Normal);
+			let mut new_weight: Weight = *current_weight.get(DispatchClass::Normal);
 			if let Some(computation) = maybe_computation {
 				new_weight.computation = computation;
 			}

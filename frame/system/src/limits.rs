@@ -25,7 +25,7 @@
 //! `DispatchClass`. This module contains configuration object for both resources,
 //! which should be passed to `frame_system` configuration when runtime is being set up.
 
-use frame_support::weights::{constants, DispatchClass, OneOrMany, PerDispatchClass, WeightV2};
+use frame_support::weights::{constants, DispatchClass, OneOrMany, PerDispatchClass, Weight};
 use scale_info::TypeInfo;
 use sp_runtime::{
 	traits::{Saturating, Zero},
@@ -98,11 +98,11 @@ const DEFAULT_NORMAL_RATIO: Perbill = Perbill::from_percent(75);
 #[derive(RuntimeDebug, Clone, codec::Encode, codec::Decode, TypeInfo)]
 pub struct WeightsPerClass {
 	/// Base weight of single extrinsic of given class.
-	pub base_extrinsic: WeightV2,
+	pub base_extrinsic: Weight,
 	/// Maximal weight of single extrinsic. Should NOT include `base_extrinsic` cost.
 	///
 	/// `None` indicates that this class of extrinsics doesn't have a limit.
-	pub max_extrinsic: Option<WeightV2>,
+	pub max_extrinsic: Option<Weight>,
 	/// Block maximal total weight for all extrinsics of given class.
 	///
 	/// `None` indicates that weight sum of this class of extrinsics is not
@@ -111,14 +111,14 @@ pub struct WeightsPerClass {
 	///
 	/// In the worst case, the total weight consumed by the class is going to be:
 	/// `MAX(max_total) + MAX(reserved)`.
-	pub max_total: Option<WeightV2>,
+	pub max_total: Option<Weight>,
 	/// Block reserved allowance for all extrinsics of a particular class.
 	///
 	/// Setting to `None` indicates that extrinsics of that class are allowed
 	/// to go over total block weight (but at most `max_total` for that class).
 	/// Setting to `Some(x)` guarantees that at least `x` weight of particular class
 	/// is processed in every block.
-	pub reserved: Option<WeightV2>,
+	pub reserved: Option<Weight>,
 }
 
 /// Block weight limits & base values configuration.
@@ -198,9 +198,9 @@ pub struct WeightsPerClass {
 #[derive(RuntimeDebug, Clone, codec::Encode, codec::Decode, TypeInfo)]
 pub struct BlockWeights {
 	/// Base weight of block execution.
-	pub base_block: WeightV2,
+	pub base_block: Weight,
 	/// Maximal total weight consumed by all kinds of extrinsics (without `reserved` space).
-	pub max_block: WeightV2,
+	pub max_block: Weight,
 	/// Weight limits for extrinsics of given dispatch class.
 	pub per_class: PerDispatchClass<WeightsPerClass>,
 }
@@ -208,7 +208,7 @@ pub struct BlockWeights {
 impl Default for BlockWeights {
 	fn default() -> Self {
 		Self::with_sensible_defaults(
-			WeightV2 {
+			Weight {
 				computation: 1 * constants::WEIGHT_PER_SECOND,
 				bandwidth: 5 * 1024 * 1024, // 5 MB
 			},
@@ -225,8 +225,8 @@ impl BlockWeights {
 
 	/// Verifies correctness of this `BlockWeights` object.
 	pub fn validate(self) -> ValidationResult {
-		fn or_max(w: Option<WeightV2>) -> WeightV2 {
-			w.unwrap_or_else(|| WeightV2::MAX)
+		fn or_max(w: Option<Weight>) -> Weight {
+			w.unwrap_or_else(|| Weight::MAX)
 		}
 		let mut error = ValidationErrors::default();
 
@@ -261,7 +261,7 @@ impl BlockWeights {
 			);
 			// Max extrinsic should not be 0
 			error_assert!(
-				weights.max_extrinsic.unwrap_or_else(|| WeightV2::MAX) != Zero::zero(),
+				weights.max_extrinsic.unwrap_or_else(|| Weight::MAX) != Zero::zero(),
 				&mut error,
 				"[{:?}] {:?} (max_extrinsic) must not be 0. Check base cost and average initialization cost.",
 				class, weights.max_extrinsic,
@@ -308,7 +308,7 @@ impl BlockWeights {
 	///
 	/// Note there is no reservation for `Operational` class, so this constructor
 	/// is not suitable for production deployments.
-	pub fn simple_max(block_weight: WeightV2) -> Self {
+	pub fn simple_max(block_weight: Weight) -> Self {
 		Self::builder()
 			.base_block(Zero::zero())
 			.for_class(DispatchClass::all(), |weights| {
@@ -327,7 +327,7 @@ impl BlockWeights {
 	/// Assumptions:
 	///  - Average block initialization is assumed to be `10%`.
 	///  - `Operational` transactions have reserved allowance (`1.0 - normal_ratio`)
-	pub fn with_sensible_defaults(expected_block_weight: WeightV2, normal_ratio: Perbill) -> Self {
+	pub fn with_sensible_defaults(expected_block_weight: Weight, normal_ratio: Perbill) -> Self {
 		let normal_weight = normal_ratio * expected_block_weight;
 		Self::builder()
 			.for_class(DispatchClass::Normal, |weights| {
@@ -374,7 +374,7 @@ pub struct BlockWeightsBuilder {
 
 impl BlockWeightsBuilder {
 	/// Set base block weight.
-	pub fn base_block(mut self, base_block: WeightV2) -> Self {
+	pub fn base_block(mut self, base_block: Weight) -> Self {
 		self.weights.base_block = base_block;
 		self
 	}
