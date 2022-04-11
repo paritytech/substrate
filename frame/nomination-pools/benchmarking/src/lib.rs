@@ -123,7 +123,7 @@ impl<T: Config> ListScenario<T> {
 
 		// Find a destination weight that will trigger the worst case scenario
 		let dest_weight_as_vote =
-			<T as pallet_staking::Config>::SortedListProvider::score_update_worst_case(
+			<T as pallet_staking::Config>::VoterList::score_update_worst_case(
 				&pool_origin1,
 				is_increase,
 			);
@@ -514,6 +514,8 @@ frame_benchmarking::benchmarks! {
 	}
 
 	nominate {
+		let n in 1 .. T::MaxNominations::get();
+
 		// Create a pool
 		let min_create_bond = MinCreateBond::<T>::get()
 			.max(T::StakingInterface::minimum_bond())
@@ -522,7 +524,7 @@ frame_benchmarking::benchmarks! {
 
 		// Create some accounts to nominate. For the sake of benchmarking they don't need to be
 		// actual validators
-		 let validators: Vec<_> = (0..T::MaxNominations::get())
+		 let validators: Vec<_> = (0..n)
 			.map(|i| account("stash", USER_SEED, i))
 			.collect();
 
