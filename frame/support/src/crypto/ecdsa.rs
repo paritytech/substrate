@@ -15,8 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Simple ECDSA secp256k1 API. This is an extension trait for `sp_core::ecdsa::Public` to be used in
-//! cases where the performance penalty of doing in-runtime crypto isn't severe. In case this
+//! Simple ECDSA secp256k1 API. This is an extension trait for `sp_core::ecdsa::Public` to be used
+//! in cases where the performance penalty of doing in-runtime crypto isn't severe. In case this
 //! becomes a performance bottleneck a new host function should be considered.
 use sp_core::{crypto::ByteArray, ecdsa::Public};
 
