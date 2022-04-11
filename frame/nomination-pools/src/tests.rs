@@ -186,22 +186,22 @@ mod bonded_pool {
 
 			// Simulate a 100% slashed pool
 			StakingMock::set_bonded_balance(pool.bonded_account(), 0);
-			assert_noop!(pool.ok_to_join(), Error::<Runtime>::OverflowRisk);
+			assert_noop!(pool.ok_to_join(0), Error::<Runtime>::OverflowRisk);
 
 			// Simulate a 89%
 			StakingMock::set_bonded_balance(pool.bonded_account(), 11);
-			assert_ok!(pool.ok_to_join());
+			assert_ok!(pool.ok_to_join(0));
 
 			// Simulate a 90% slashed pool
 			StakingMock::set_bonded_balance(pool.bonded_account(), 10);
-			assert_noop!(pool.ok_to_join(), Error::<Runtime>::OverflowRisk);
+			assert_noop!(pool.ok_to_join(0), Error::<Runtime>::OverflowRisk);
 
 			StakingMock::set_bonded_balance(pool.bonded_account(), Balance::MAX / 10);
 			// New bonded balance would be over 1/10th of Balance type
-			assert_noop!(pool.ok_to_join(), Error::<Runtime>::OverflowRisk);
+			assert_noop!(pool.ok_to_join(0), Error::<Runtime>::OverflowRisk);
 			// and a sanity check
 			StakingMock::set_bonded_balance(pool.bonded_account(), Balance::MAX / 10 - 1);
-			assert_ok!(pool.ok_to_join());
+			assert_ok!(pool.ok_to_join(0));
 		});
 	}
 }
@@ -2339,7 +2339,7 @@ mod set_state_other {
 	fn set_state_other_works() {
 		ExtBuilder::default().build_and_execute(|| {
 			// Given
-			assert_ok!(BondedPool::<Runtime>::get(1).unwrap().ok_to_be_open());
+			assert_ok!(BondedPool::<Runtime>::get(1).unwrap().ok_to_be_open(0));
 
 			// Only the root and state toggler can change the state when the pool is ok to be open.
 			assert_noop!(

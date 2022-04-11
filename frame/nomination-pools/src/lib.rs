@@ -580,7 +580,7 @@ impl<T: Config> BondedPool<T> {
 
 	/// Whether or not the pool is ok to be in `PoolSate::Open`. If this returns an `Err`, then the
 	/// pool is unrecoverable and should be in the destroying state.
-	fn ok_to_be_open(&self) -> Result<(), DispatchError> {
+	fn ok_to_be_open(&self, new_funds: BalanceOf<T>) -> Result<(), DispatchError> {
 		ensure!(!self.is_destroying(), Error::<T>::CanNotChangeState);
 
 		let bonded_balance =
@@ -588,17 +588,18 @@ impl<T: Config> BondedPool<T> {
 		ensure!(!bonded_balance.is_zero(), Error::<T>::OverflowRisk);
 
 		let points_to_balance_ratio_floor = self
-			.points
-			// We checked for zero above
-			.div(bonded_balance);
+		.points
+		// We checked for zero above
+		.div(bonded_balance);
 
 		// Pool points can inflate relative to balance, but only if the pool is slashed.
 		// If we cap the ratio of points:balance so one cannot join a pool that has been slashed
 		// 90%,
 		ensure!(points_to_balance_ratio_floor < 10u32.into(), Error::<T>::OverflowRisk);
 		// while restricting the balance to 1/10th of max total issuance,
+		let next_bonded_balance = bonded_balance.saturating_add(new_funds);
 		ensure!(
-			bonded_balance < BalanceOf::<T>::max_value().div(10u32.into()),
+			next_bonded_balance < BalanceOf::<T>::max_value().div(10u32.into()),
 			Error::<T>::OverflowRisk
 		);
 		// then we can be decently confident the bonding pool points will not overflow
@@ -608,9 +609,9 @@ impl<T: Config> BondedPool<T> {
 	}
 
 	/// Check that the pool can accept a member with `new_funds`.
-	fn ok_to_join(&self) -> Result<(), DispatchError> {
+	fn ok_to_join(&self, new_funds: BalanceOf<T>) -> Result<(), DispatchError> {
 		ensure!(self.state == PoolState::Open, Error::<T>::NotOpen);
-		self.ok_to_be_open()?;
+		self.ok_to_be_open(new_funds)?;
 		Ok(())
 	}
 
@@ -1121,7 +1122,7 @@ pub mod pallet {
 			ensure!(!Delegators::<T>::contains_key(&who), Error::<T>::AccountBelongsToOtherPool);
 
 			let mut bonded_pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
-			bonded_pool.ok_to_join()?;
+			bonded_pool.ok_to_join(amount)?;
 
 			// We just need its total earnings at this point in time, but we don't need to write it
 			// because we are not adjusting its points (all other values can calculated virtual).
@@ -1579,7 +1580,7 @@ pub mod pallet {
 
 			if bonded_pool.can_toggle_state(&who) {
 				bonded_pool.set_state(state);
-			} else if bonded_pool.ok_to_be_open().is_err() && state == PoolState::Destroying {
+			} else if bonded_pool.ok_to_be_open(Zero::zero()).is_err() && state == PoolState::Destroying {
 				// If the pool has bad properties, then anyone can set it as destroying
 				bonded_pool.set_state(PoolState::Destroying);
 			} else {
