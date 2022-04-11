@@ -69,18 +69,17 @@ fn generate_friends<T: Config>(num: u32) -> Vec<<T as frame_system::Config>::Acc
 
 fn add_caller_and_generate_friends<T: Config>(
 	caller: T::AccountId,
+	num: u32,
 ) -> Vec<<T as frame_system::Config>::AccountId> {
 	// Create friends
-	let mut friends = vec![
-		account("friend_0", 0, SEED),
-		account("friend_1", 1, SEED),
-		account("friend_2", 2, SEED),
-		account("friend_3", 3, SEED),
-		account("friend_4", 4, SEED),
-		account("friend_5", 5, SEED),
-		account("friend_6", 6, SEED),
-		caller,
-	];
+	let mut friends = vec![];
+
+	for i in 0..num - 1 {
+		friends.push(account("friend", i, SEED));
+	}
+
+	friends.push(caller);
+
 	// Sort
 	friends.sort();
 
@@ -98,8 +97,9 @@ fn add_caller_and_generate_friends<T: Config>(
 fn insert_recovery_account<T: Config>(caller: &T::AccountId, account: &T::AccountId) {
 	T::Currency::make_free_balance_be(&account, BalanceOf::<T>::max_value());
 
-	let friends = generate_friends::<T>(10);
-	let threshold: u16 = 8;
+	let n = T::MaxFriends::get();
+
+	let friends = generate_friends::<T>(n);
 	let delay_period = block_number::<T>();
 
 	let bounded_friends: FriendsOf<T> = friends.try_into().unwrap();
@@ -111,7 +111,7 @@ fn insert_recovery_account<T: Config>(caller: &T::AccountId, account: &T::Accoun
 		delay_period,
 		deposit: total_deposit,
 		friends: bounded_friends,
-		threshold,
+		threshold: n as u16,
 	};
 
 	// Reserve deposit for recovery
@@ -186,15 +186,16 @@ benchmarks! {
 	}
 
 	vouch_recovery {
+		let n in 1 .. T::MaxFriends::get();
+
 		let caller: T::AccountId = whitelisted_caller();
 		let lost_account: T::AccountId = account("lost_account", 0, SEED);
 		let rescuer_account: T::AccountId = account("rescuer_account", 0, SEED);
 
 		// Create friends
-		let friends = add_caller_and_generate_friends::<T>(caller.clone());
+		let friends = add_caller_and_generate_friends::<T>(caller.clone(), n);
 		let bounded_friends: FriendsOf<T> = friends.try_into().unwrap();
 
-		let threshold: u16 = 8;
 		let delay_period = block_number::<T>();
 
 		// Get deposit for recovery
@@ -204,7 +205,7 @@ benchmarks! {
 			delay_period,
 			deposit: total_deposit.clone(),
 			friends: bounded_friends.clone(),
-			threshold,
+			threshold: n as u16,
 		};
 
 		// Create the recovery config storage item
@@ -238,16 +239,17 @@ benchmarks! {
 	}
 
 	claim_recovery {
+		let n in 1 .. T::MaxFriends::get();
+
 		let caller: T::AccountId = whitelisted_caller();
 		let lost_account: T::AccountId = account("lost_account", 0, SEED);
 
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 
 		// Create friends
-		let friends = generate_friends::<T>(10);
+		let friends = generate_friends::<T>(n);
 		let bounded_friends: FriendsOf<T> = friends.try_into().unwrap();
 
-		let threshold: u16 = 8;
 		let delay_period = block_number::<T>();
 
 		// Get deposit for recovery
@@ -257,7 +259,7 @@ benchmarks! {
 			delay_period,
 			deposit: total_deposit.clone(),
 			friends: bounded_friends.clone(),
-			threshold,
+			threshold: n as u16,
 		};
 
 		// Create the recovery config storage item
@@ -300,9 +302,6 @@ benchmarks! {
 		let friends = generate_friends::<T>(n);
 		let bounded_friends: FriendsOf<T> = friends.try_into().unwrap();
 
-		let threshold: u16 = 8;
-		let delay_period = block_number::<T>();
-
 		// Get deposit for recovery
 		let total_deposit = get_total_deposit::<T>(&bounded_friends).unwrap();
 
@@ -341,15 +340,16 @@ benchmarks! {
 	}
 
 	remove_recovery {
+		let n in 1 .. T::MaxFriends::get();
+
 		let caller: T::AccountId = whitelisted_caller();
 
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 
 		// Create friends
-		let friends = generate_friends::<T>(10);
+		let friends = generate_friends::<T>(n);
 		let bounded_friends: FriendsOf<T> = friends.try_into().unwrap();
 
-		let threshold: u16 = 8;
 		let delay_period = block_number::<T>();
 
 		// Get deposit for recovery
@@ -359,7 +359,7 @@ benchmarks! {
 			delay_period,
 			deposit: total_deposit.clone(),
 			friends: bounded_friends.clone(),
-			threshold,
+			threshold: n as u16,
 		};
 
 		// Create the recovery config storage item

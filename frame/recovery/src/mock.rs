@@ -106,7 +106,7 @@ impl Config for Test {
 	type ConfigDepositBase = ConfigDepositBase;
 	type FriendDepositFactor = FriendDepositFactor;
 	// Large number of friends for benchmarking.
-	type MaxFriends = ConstU32<128>;
+	type MaxFriends = ConstU32<9>;
 	type RecoveryDeposit = RecoveryDeposit;
 }
 
