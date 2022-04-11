@@ -230,6 +230,7 @@ mod tests {
 	use super::{GasMeter, Token};
 	use crate::tests::Test;
 	use frame_support::weights::Weight;
+	use sp_runtime::traits::Zero;
 
 	/// A simple utility macro that helps to match against a
 	/// list of tokens.

@@ -987,7 +987,7 @@ mod mock {
 		H256,
 	};
 	use sp_runtime::{
-		traits::{BlakeTwo256, Header as _, IdentityLookup},
+		traits::{BlakeTwo256, Header as _, IdentityLookup, Zero},
 		StorageChild,
 	};
 
