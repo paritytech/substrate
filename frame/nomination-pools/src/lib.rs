@@ -1448,10 +1448,6 @@ pub mod pallet {
 				// the accounts have no references that would prevent destruction once we get to
 				// this point.
 				debug_assert_eq!(
-					T::Currency::free_balance(&bonded_pool.bonded_account()),
-					Zero::zero()
-				);
-				debug_assert_eq!(
 					T::StakingInterface::total_stake(&bonded_pool.bonded_account())
 						.unwrap_or_default(),
 					Zero::zero()
