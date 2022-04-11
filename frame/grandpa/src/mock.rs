@@ -185,8 +185,8 @@ impl onchain::Config for OnChainSeqPhragmen {
 	type System = Test;
 	type Solver = SequentialPhragmen<u64, Perbill>;
 	type DataProvider = Staking;
-	type VotersBound = ConstU32<u32::MAX>;
-	type TargetsBound = ConstU32<u32::MAX>;
+	type VotersBound = ConstU32<{ u32::MAX }>;
+	type TargetsBound = ConstU32<{ u32::MAX }>;
 	type WeightInfo = ();
 }
 
