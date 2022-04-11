@@ -29,7 +29,7 @@
 //! functionality. It can be used with other modules that implement accounts based on [`Currency`].
 //! These "smart-contract accounts" have the ability to instantiate smart-contracts and make calls
 //! to other contract and non-contract accounts.
-//!
+
 //! The smart-contract code is stored once in a code cache, and later retrievable via its hash.
 //! This means that multiple smart-contracts can be instantiated from the same hash, without
 //! replicating the code each time.
@@ -320,15 +320,15 @@ pub mod pallet {
 		T::AccountId: UncheckedFrom<T::Hash>,
 		T::AccountId: AsRef<[u8]>,
 	{
-		fn on_idle(_block: T::BlockNumber,_remaining_weight: Weight) -> Weight {
+		fn on_idle(_block: T::BlockNumber, remaining_weight: Weight) -> Weight {
 			// We do not want to go above the block limit and rather avoid lazy deletion
 			// in that case. This should only happen on runtime upgrades.
 			let weight_limit = T::BlockWeights::get()
 				.max_block
 				.saturating_sub(System::<T>::block_weight().total())
 				.min(T::DeletionWeightLimit::get());
-			Storage::<T>::process_deletion_queue_batch(weight_limit)
-				.saturating_add(T::WeightInfo::on_initialize())
+			Storage::<T>::process_deletion_queue_batch(remaining_weight)
+				.saturating_add(T::WeightInfo::on_idle())
 		}
 	}
 
