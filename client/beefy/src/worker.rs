@@ -520,15 +520,31 @@ where
 		}
 	}
 
-	/// Simple wrapper that gets MMR root from client state.
+	/// Simple wrapper that gets MMR root from header digests or from client state.
 	fn get_mmr_root_digest(&self, header: &B::Header) -> Option<MmrRootHash> {
-		self.runtime
-			.runtime_api()
-			.mmr_root(&BlockId::hash(header.hash()))
-			.ok()
-			.map(|r| r.ok())
-			.flatten()
+		find_mmr_root_digest::<B>(header).or_else(|| {
+			self.runtime
+				.runtime_api()
+				.mmr_root(&BlockId::hash(header.hash()))
+				.ok()
+				.map(|r| r.ok())
+				.flatten()
+		})
 	}
+}
+
+/// Extract the MMR root hash from a digest in the given header, if it exists.
+fn find_mmr_root_digest<B>(header: &B::Header) -> Option<MmrRootHash>
+where
+	B: Block,
+{
+	let id = OpaqueDigestItemId::Consensus(&BEEFY_ENGINE_ID);
+
+	let filter = |log: ConsensusLog<AuthorityId>| match log {
+		ConsensusLog::MmrRoot(root) => Some(root),
+		_ => None,
+	};
+	header.digest().convert_first(|l| l.try_to(id).and_then(filter))
 }
 
 /// Scan the `header` digest log for a BEEFY validator set change. Return either the new
@@ -782,6 +798,30 @@ pub(crate) mod tests {
 	}
 
 	#[test]
+	fn extract_mmr_root_digest() {
+		let mut header = Header::new(
+			1u32.into(),
+			Default::default(),
+			Default::default(),
+			Default::default(),
+			Digest::default(),
+		);
+
+		// verify empty digest shows nothing
+		assert!(find_mmr_root_digest::<Block>(&header).is_none());
+
+		let mmr_root_hash = H256::random();
+		header.digest_mut().push(DigestItem::Consensus(
+			BEEFY_ENGINE_ID,
+			ConsensusLog::<AuthorityId>::MmrRoot(mmr_root_hash.clone()).encode(),
+		));
+
+		// verify validator set is correctly extracted from digest
+		let extracted = find_mmr_root_digest::<Block>(&header);
+		assert_eq!(extracted, Some(mmr_root_hash));
+	}
+
+	#[test]
 	fn should_vote_target() {
 		let keys = &[Keyring::Alice];
 		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
@@ -898,7 +938,7 @@ pub(crate) mod tests {
 		// generate 2 blocks, try again expect success
 		let (mut best_block_streams, _) = get_beefy_streams(&mut net, keys);
 		let mut best_block_stream = best_block_streams.drain(..).next().unwrap();
-		net.generate_blocks(2, 10, &validator_set);
+		net.generate_blocks(2, 10, &validator_set, false);
 
 		worker.set_best_beefy_block(2);
 		assert_eq!(worker.best_beefy_block, Some(2));

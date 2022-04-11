@@ -138,9 +138,17 @@ impl BeefyTestNet {
 		count: usize,
 		session_length: u64,
 		validator_set: &BeefyValidatorSet,
+		include_mmr_digest: bool,
 	) {
 		self.peer(0).generate_blocks(count, BlockOrigin::File, |builder| {
 			let mut block = builder.build().unwrap().block;
+
+			if include_mmr_digest {
+				let block_num = *block.header.number();
+				let num_byte = block_num.to_le_bytes().into_iter().next().unwrap();
+				let mmr_root = MmrRootHash::repeat_byte(num_byte);
+				add_mmr_digest(&mut block.header, mmr_root);
+			}
 
 			if *block.header.number() % session_length == 0 {
 				add_auth_change_digest(&mut block.header, validator_set.clone());
@@ -274,6 +282,13 @@ create_test_api!(
 	BeefyKeyring::Charlie,
 	BeefyKeyring::Dave
 );
+
+fn add_mmr_digest(header: &mut Header, mmr_hash: MmrRootHash) {
+	header.digest_mut().push(DigestItem::Consensus(
+		BEEFY_ENGINE_ID,
+		ConsensusLog::<AuthorityId>::MmrRoot(mmr_hash).encode(),
+	));
+}
 
 fn add_auth_change_digest(header: &mut Header, new_auth_set: BeefyValidatorSet) {
 	header.digest_mut().push(DigestItem::Consensus(
@@ -482,7 +497,7 @@ fn beefy_finalizing_blocks() {
 	runtime.spawn(initialize_beefy(&mut net, beefy_peers, min_block_delta));
 
 	// push 42 blocks including `AuthorityChange` digests every 10 blocks.
-	net.generate_blocks(42, session_len, &validator_set);
+	net.generate_blocks(42, session_len, &validator_set, true);
 	net.block_until_sync();
 
 	let net = Arc::new(Mutex::new(net));
@@ -521,7 +536,7 @@ fn lagging_validators() {
 	runtime.spawn(initialize_beefy(&mut net, beefy_peers, min_block_delta));
 
 	// push 42 blocks including `AuthorityChange` digests every 30 blocks.
-	net.generate_blocks(42, session_len, &validator_set);
+	net.generate_blocks(42, session_len, &validator_set, true);
 	net.block_until_sync();
 
 	let net = Arc::new(Mutex::new(net));
@@ -578,7 +593,7 @@ fn correct_beefy_payload() {
 	runtime.spawn(initialize_beefy(&mut net, bad_peers, min_block_delta));
 
 	// push 10 blocks
-	net.generate_blocks(12, session_len, &validator_set);
+	net.generate_blocks(12, session_len, &validator_set, false);
 	net.block_until_sync();
 
 	let net = Arc::new(Mutex::new(net));
