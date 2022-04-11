@@ -588,9 +588,9 @@ impl<T: Config> BondedPool<T> {
 		ensure!(!bonded_balance.is_zero(), Error::<T>::OverflowRisk);
 
 		let points_to_balance_ratio_floor = self
-		.points
-		// We checked for zero above
-		.div(bonded_balance);
+			.points
+			// We checked for zero above
+			.div(bonded_balance);
 
 		// Pool points can inflate relative to balance, but only if the pool is slashed.
 		// If we cap the ratio of points:balance so one cannot join a pool that has been slashed
@@ -648,8 +648,10 @@ impl<T: Config> BondedPool<T> {
 
 	/// # Returns
 	///
-	/// * Ok(true) if [`Call::withdraw_unbonded_other`] can be called and the target account is the depositor.
-	/// * Ok(false) if [`Call::withdraw_unbonded_other`] can be called and target account is *not* the depositor.
+	/// * Ok(true) if [`Call::withdraw_unbonded_other`] can be called and the target account is the
+	///   depositor.
+	/// * Ok(false) if [`Call::withdraw_unbonded_other`] can be called and target account is *not*
+	///   the depositor.
 	/// * Err(DispatchError) if [`Call::withdraw_unbonded_other`] *cannot* be called.
 	fn ok_to_withdraw_unbonded_other_with(
 		&self,
@@ -881,8 +883,8 @@ pub struct TotalUnbondingPools<T: Config>(PhantomData<T>);
 impl<T: Config> Get<u32> for TotalUnbondingPools<T> {
 	fn get() -> u32 {
 		// NOTE: this may be dangerous in the scenario bonding_duration gets decreased because
-		// we would no longer be able to decode `UnbondingPoolsWithEra`, which uses `TotalUnbondingPools`
-		// as the bound
+		// we would no longer be able to decode `UnbondingPoolsWithEra`, which uses
+		// `TotalUnbondingPools` as the bound
 		T::StakingInterface::bonding_duration() + T::PostUnbondingPoolsWindow::get()
 	}
 }
@@ -1112,7 +1114,7 @@ pub mod pallet {
 		/// # Note
 		///
 		/// * An account can only be a member of a single pool.
-		/// * An account cannot join the same pool multiple times.		
+		/// * An account cannot join the same pool multiple times.
 		/// * This call will *not* dust the delegator account, so the delegator must have at least
 		///   `existential deposit + amount` in their account.
 		/// * Only a pool with [`PoolState::Open`] can be joined
@@ -1584,7 +1586,9 @@ pub mod pallet {
 
 			if bonded_pool.can_toggle_state(&who) {
 				bonded_pool.set_state(state);
-			} else if bonded_pool.ok_to_be_open(Zero::zero()).is_err() && state == PoolState::Destroying {
+			} else if bonded_pool.ok_to_be_open(Zero::zero()).is_err() &&
+				state == PoolState::Destroying
+			{
 				// If the pool has bad properties, then anyone can set it as destroying
 				bonded_pool.set_state(PoolState::Destroying);
 			} else {
@@ -1596,7 +1600,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::weight(T::WeightInfo::set_metadata())]
+		#[pallet::weight(T::WeightInfo::set_metadata(metadata.len() as u32))]
 		pub fn set_metadata(
 			origin: OriginFor<T>,
 			pool_id: PoolId,
@@ -1723,8 +1727,7 @@ impl<T: Config> Pallet<T> {
 		new_funds: BalanceOf<T>,
 	) -> BalanceOf<T> {
 		match (current_balance.is_zero(), current_points.is_zero()) {
-			(_, true) =>
-				new_funds.saturating_mul(POINTS_TO_BALANCE_INIT_RATIO.into()),
+			(_, true) => new_funds.saturating_mul(POINTS_TO_BALANCE_INIT_RATIO.into()),
 			(true, false) => {
 				// The pool was totally slashed.
 				// This is the equivalent of `(current_points / 1) * new_funds`.
