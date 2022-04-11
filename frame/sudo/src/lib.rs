@@ -136,9 +136,8 @@ pub mod pallet {
 		/// - Weight of derivative `call` execution + 10,000.
 		/// # </weight>
 		#[pallet::weight({
-			let mut dispatch_info = call.get_dispatch_info();
-			dispatch_info.weight = dispatch_info.weight;
-			(dispatch_info.weight, dispatch_info.class)
+			let dispatch_info = call.get_dispatch_info();
+			(dispatch_info.weight.saturating_add(Weight::todo_from_v1(10_000)), dispatch_info.class)
 		})]
 		pub fn sudo(
 			origin: OriginFor<T>,
