@@ -567,7 +567,7 @@ impl<T: Config> BondedPool<T> {
 	}
 
 	fn can_toggle_state(&self, who: &T::AccountId) -> bool {
-		*who == self.roles.root || *who == self.roles.state_toggler && !self.is_destroying()
+		(*who == self.roles.root || *who == self.roles.state_toggler) && !self.is_destroying()
 	}
 
 	fn can_set_metadata(&self, who: &T::AccountId) -> bool {
