@@ -83,10 +83,6 @@ impl Weight {
 		self.computation >= other.computation && self.bandwidth >= other.bandwidth
 	}
 
-	pub fn saturating_add(self, rhs: Self) -> Self {
-		<Self as Saturating>::saturating_add(self, rhs)
-	}
-
 	pub fn checked_mul(self, rhs: u64) -> Option<Self> {
 		let computation = self.computation.checked_mul(rhs)?;
 		let bandwidth = self.bandwidth.checked_mul(rhs)?;

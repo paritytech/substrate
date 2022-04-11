@@ -23,7 +23,7 @@ use frame_support::{
 };
 use scale_info::TypeInfo;
 use sp_runtime::{
-	traits::{DispatchInfoOf, Dispatchable, PostDispatchInfoOf, SignedExtension, Zero},
+	traits::{DispatchInfoOf, Dispatchable, PostDispatchInfoOf, Saturating, SignedExtension, Zero},
 	transaction_validity::{InvalidTransaction, TransactionValidity, TransactionValidityError},
 	DispatchResult,
 };

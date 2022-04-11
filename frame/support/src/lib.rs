@@ -1396,7 +1396,7 @@ pub mod pallet_prelude {
 	pub use codec::{Decode, Encode, MaxEncodedLen};
 	pub use scale_info::TypeInfo;
 	pub use sp_runtime::{
-		traits::{MaybeSerializeDeserialize, Member, ValidateUnsigned},
+		traits::{MaybeSerializeDeserialize, Member, Saturating, ValidateUnsigned},
 		transaction_validity::{
 			InvalidTransaction, TransactionLongevity, TransactionPriority, TransactionSource,
 			TransactionTag, TransactionValidity, TransactionValidityError, UnknownTransaction,

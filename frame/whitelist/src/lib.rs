@@ -46,7 +46,7 @@ use frame_support::{
 	weights::{GetDispatchInfo, PostDispatchInfo, Weight},
 };
 use scale_info::TypeInfo;
-use sp_runtime::traits::{Dispatchable, Hash};
+use sp_runtime::traits::{Dispatchable, Hash, Saturating};
 use sp_std::prelude::*;
 
 pub use pallet::*;
