@@ -234,9 +234,7 @@ fn deposit_event_uses_actual_weight() {
 			pre_info,
 		);
 		System::note_applied_extrinsic(
-			&Err(
-				DispatchError::BadOrigin.with_weight(Weight { computation: 999, bandwidth: 999 })
-			),
+			&Err(DispatchError::BadOrigin.with_weight(Weight { computation: 999, bandwidth: 999 })),
 			pre_info,
 		);
 

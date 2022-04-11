@@ -19,12 +19,12 @@
 
 use codec::{Decode, Encode, FullCodec};
 use frame_support::{
+	dispatch::Zero,
 	pallet_prelude::ValueQuery,
 	traits::{PalletInfoAccess, StorageVersion},
 	weights::Weight,
 	RuntimeDebug, Twox64Concat,
 };
-use frame_support::dispatch::Zero;
 use sp_std::prelude::*;
 
 #[derive(Encode, Decode, Clone, Default, RuntimeDebug, PartialEq)]

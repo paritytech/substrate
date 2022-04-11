@@ -18,10 +18,10 @@
 //! Migrations to version [`4.0.0`], as denoted by the changelog.
 
 use frame_support::{
+	dispatch::Zero,
 	traits::{Get, StorageVersion},
 	weights::Weight,
 };
-use frame_support::dispatch::Zero;
 
 /// The old prefix.
 pub const OLD_PREFIX: &[u8] = b"PhragmenElection";

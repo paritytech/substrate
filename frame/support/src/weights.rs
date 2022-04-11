@@ -902,14 +902,10 @@ mod tests {
 			..Default::default()
 		};
 		assert_eq!(extract_actual_weight(&Ok(Some(7).into()), &pre), Weight::todo_from_v1(7));
-		assert_eq!(
-			extract_actual_weight(&Ok(Some(1000).into()), &pre),
-			Weight::todo_from_v1(1000)
-		);
+		assert_eq!(extract_actual_weight(&Ok(Some(1000).into()), &pre), Weight::todo_from_v1(1000));
 		assert_eq!(
 			extract_actual_weight(
-				&Err(DispatchError::BadOrigin
-					.with_weight(Weight { computation: 9, bandwidth: 99 })),
+				&Err(DispatchError::BadOrigin.with_weight(Weight { computation: 9, bandwidth: 99 })),
 				&pre
 			),
 			Weight { computation: 9, bandwidth: 99 }
@@ -922,10 +918,7 @@ mod tests {
 			weight: Weight { computation: 1000, bandwidth: 120 },
 			..Default::default()
 		};
-		assert_eq!(
-			extract_actual_weight(&Ok(Some(1250).into()), &pre),
-			Weight::todo_from_v1(1000)
-		);
+		assert_eq!(extract_actual_weight(&Ok(Some(1250).into()), &pre), Weight::todo_from_v1(1000));
 		assert_eq!(
 			extract_actual_weight(
 				&Err(DispatchError::BadOrigin

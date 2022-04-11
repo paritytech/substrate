@@ -394,10 +394,7 @@ mod tests {
 			let len = 0_usize;
 
 			assert_ok!(CheckWeight::<Test>::do_pre_dispatch(&max_normal, len));
-			assert_eq!(
-				System::block_weight().total(),
-				Weight { computation: 768, bandwidth: 768 }
-			);
+			assert_eq!(System::block_weight().total(), Weight { computation: 768, bandwidth: 768 });
 			assert_ok!(CheckWeight::<Test>::do_pre_dispatch(&rest_operational, len));
 			assert_eq!(block_weight_limit(), Weight { computation: 1024, bandwidth: 1024 });
 			assert_eq!(System::block_weight().total(), block_weight_limit());
@@ -424,10 +421,7 @@ mod tests {
 
 			assert_ok!(CheckWeight::<Test>::do_pre_dispatch(&rest_operational, len));
 			// Extra 15 here from block execution + base extrinsic weight
-			assert_eq!(
-				System::block_weight().total(),
-				Weight { computation: 266, bandwidth: 266 }
-			);
+			assert_eq!(System::block_weight().total(), Weight { computation: 266, bandwidth: 266 });
 			assert_ok!(CheckWeight::<Test>::do_pre_dispatch(&max_normal, len));
 			assert_eq!(block_weight_limit(), Weight { computation: 1024, bandwidth: 1024 });
 			assert_eq!(System::block_weight().total(), block_weight_limit());
@@ -696,10 +690,7 @@ mod tests {
 			let len = 0_usize;
 
 			assert_ok!(CheckWeight::<Test>::do_pre_dispatch(&max_normal, len));
-			assert_eq!(
-				System::block_weight().total(),
-				Weight { computation: 768, bandwidth: 768 }
-			);
+			assert_eq!(System::block_weight().total(), Weight { computation: 768, bandwidth: 768 });
 			assert_ok!(CheckWeight::<Test>::do_pre_dispatch(&mandatory, len));
 			assert_eq!(block_weight_limit(), Weight { computation: 1024, bandwidth: 1024 });
 			assert_eq!(
