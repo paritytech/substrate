@@ -117,20 +117,23 @@ where
 		Ok(code)
 	}
 
-	fn state_with_runtime_code(&self, block_id: BlockId<Block>) -> sp_blockchain::Result<<B as backend::Backend<Block>>::State> {
+	fn state_with_runtime_code(
+		&self,
+		block_id: BlockId<Block>,
+	) -> sp_blockchain::Result<<B as backend::Backend<Block>>::State> {
 		use sp_runtime::traits::{One, Zero};
 
-		let block_num = 
-			self.backend.blockchain().block_number_from_id(&block_id)?
-			.ok_or_else(|| 
-				sp_blockchain::Error::UnknownBlock(block_id.to_string())
-			)?;
-		
+		let block_num = self
+			.backend
+			.blockchain()
+			.block_number_from_id(&block_id)?
+			.ok_or_else(|| sp_blockchain::Error::UnknownBlock(block_id.to_string()))?;
+
 		let block_num_code = if block_num.is_zero() { block_num } else { block_num - One::one() };
 		let block_id_code = BlockId::<Block>::Number(block_num_code);
 
 		let state_code = self.backend.state_at(block_id_code)?;
-		
+
 		Ok(state_code)
 	}
 }
@@ -172,7 +175,7 @@ where
 		let mut changes = OverlayedChanges::default();
 		let state_data = self.backend.state_at(*at)?;
 		let state_code = self.state_with_runtime_code(*at)?;
-		
+
 		let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&state_code);
 		let runtime_code =
 			state_runtime_code.runtime_code().map_err(sp_blockchain::Error::RuntimeCode)?;

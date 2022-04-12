@@ -308,10 +308,10 @@ pub struct BackendRuntimeCode<B, H> {
 }
 
 #[cfg(feature = "std")]
-impl<B, H> sp_core::traits::FetchRuntimeCode
-	for BackendRuntimeCode<B, H>
+impl<B, H> sp_core::traits::FetchRuntimeCode for BackendRuntimeCode<B, H>
 where
-	B: std::ops::Deref, B::Target: Backend<H>,
+	B: std::ops::Deref,
+	B::Target: Backend<H>,
 	H: Hasher,
 {
 	fn fetch_runtime_code<'b>(&'b self) -> Option<std::borrow::Cow<'b, [u8]>> {
@@ -337,8 +337,10 @@ where
 #[cfg(feature = "std")]
 impl<B, H> BackendRuntimeCode<B, H>
 where
-	B: std::ops::Deref, B::Target: Backend<H>,
-	H: Hasher, H::Out: Encode,
+	B: std::ops::Deref,
+	B::Target: Backend<H>,
+	H: Hasher,
+	H::Out: Encode,
 {
 	/// Return the [`RuntimeCode`] build from the wrapped `backend`.
 	pub fn runtime_code(&self) -> Result<RuntimeCode, &'static str> {
