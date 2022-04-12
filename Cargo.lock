@@ -452,12 +452,6 @@ dependencies = [
 
 [[package]]
 name = "base64"
-version = "0.12.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3441f0f7b02788e948e47f457ca01f1d7e6d92c693bc132c22b087d3141c03ff"
-
-[[package]]
-name = "base64"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "904dfeac50f3cdaba28fc6f57fdcddb75f49ed61346676a78c4ffe55877802fd"
@@ -831,12 +825,6 @@ dependencies = [
  "byteorder",
  "iovec",
 ]
-
-[[package]]
-name = "bytes"
-version = "0.5.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0e4cec68f03f32e44924783795810fa50a7035d8c8ebe78580ad7e6c703fba38"
 
 [[package]]
 name = "bytes"
@@ -3441,7 +3429,7 @@ dependencies = [
  "jsonrpsee-types",
  "pin-project 1.0.10",
  "rustls-native-certs 0.6.1",
- "soketto 0.7.1",
+ "soketto",
  "thiserror",
  "tokio",
  "tokio-rustls 0.23.2",
@@ -3467,7 +3455,7 @@ dependencies = [
  "rustc-hash",
  "serde",
  "serde_json",
- "soketto 0.7.1",
+ "soketto",
  "thiserror",
  "tokio",
  "tracing",
@@ -4119,7 +4107,7 @@ dependencies = [
  "log 0.4.14",
  "quicksink",
  "rw-stream-sink",
- "soketto 0.7.1",
+ "soketto",
  "url 2.2.1",
  "webpki-roots 0.21.0",
 ]
@@ -4863,7 +4851,7 @@ dependencies = [
  "sc-transaction-pool-api",
  "serde",
  "serde_json",
- "soketto 0.4.2",
+ "soketto",
  "sp-api",
  "sp-authority-discovery",
  "sp-authorship",
@@ -9699,21 +9687,6 @@ checksum = "66d72b759436ae32898a2af0a14218dbf55efde3feeb170eb623637db85ee1e0"
 dependencies = [
  "libc",
  "winapi 0.3.9",
-]
-
-[[package]]
-name = "soketto"
-version = "0.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b5c71ed3d54db0a699f4948e1bb3e45b450fa31fe602621dee6680361d569c88"
-dependencies = [
- "base64 0.12.3",
- "bytes 0.5.6",
- "futures 0.3.21",
- "httparse",
- "log 0.4.14",
- "rand 0.7.3",
- "sha-1 0.9.4",
 ]
 
 [[package]]
