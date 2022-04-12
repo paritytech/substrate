@@ -87,7 +87,7 @@ impl MachineCmd {
 			["Disk", "Seq Write", write, "MB/s"],
 			["Disk", "Rnd Write", read, "MB/s"]
 		);
-		
+
 		info!("\n{}", table);
 		Ok(())
 	}
