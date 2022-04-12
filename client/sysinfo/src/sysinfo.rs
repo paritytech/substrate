@@ -319,6 +319,41 @@ pub fn benchmark_disk_random_writes(directory: &Path) -> Result<u64, String> {
 
 	// We only wrote half of the bytes hence `SIZE / 2`.
 	benchmark("disk random write score", SIZE / 2, MAX_ITERATIONS, MAX_DURATION, run)
+/// Verify signatures of different random data `reps` many times.
+pub fn benchmark_sr25519_verify(
+	reps: usize,
+	duration: Duration,
+	input_len: usize,
+) -> Result<f64, String> {
+	let pair = sr25519::Pair::from_string("//Alice", None).unwrap();
+
+	let mut rng = rng();
+	let mut msgs = Vec::new();
+	let mut sigs = Vec::new();
+
+	for _ in 0..reps {
+		let mut msg = vec![0u8; input_len];
+		rng.fill_bytes(&mut msg[..]);
+
+		sigs.push(pair.sign(&msg));
+		msgs.push(msg);
+	}
+
+	let run = || {
+		for (sig, msg) in sigs.iter().zip(msgs.iter()) {
+			let mut ok = sr25519_verify(&sig, &msg[..], &pair.public());
+			// Clobber the result.
+			unsafe {
+				let mut raw = std::slice::from_raw_parts_mut(
+					&mut ok as *mut bool as *mut u8,
+					core::mem::size_of::<bool>(),
+				);
+				clobber(&mut raw);
+			}
+		}
+		Ok(())
+	};
+	benchmark("sr25519 verification score", reps * input_len, 1, duration, run)
 }
 
 /// Benchmarks the hardware and returns the results of those benchmarks.
