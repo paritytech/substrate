@@ -249,8 +249,9 @@ impl<
 #[derive(Clone, Eq, PartialEq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 #[cfg_attr(not(feature = "std"), derive(RuntimeDebug))]
 pub enum Curve {
-	/// Linear curve starting at `(0, begin)`, ending at `(period, begin - delta)`.
-	LinearDecreasing { begin: Perbill, delta: Perbill },
+	/// Linear curve starting at `(0, 0)`, proceeding linearly to `(length, floor)`, then
+	/// remaining at `floor` until the end of the period.
+	LinearDecreasing { length: Perbill, floor: Perbill },
 	/// Stepped curve, beginning at `(0, begin)`, then remaining constant for `period`, at which
 	/// point it steps down to `(period, begin - step)`. It then remains constant for another
 	/// `period` before stepping down to `(period * 2, begin - step * 2)`. This pattern continues
@@ -267,6 +268,15 @@ const fn pos_quad_solution(a: FixedI64, b: FixedI64, c: FixedI64) -> FixedI64 {
 }
 
 impl Curve {
+	pub const fn make_linear(
+		length: u128,
+		period: u128,
+		floor: FixedI64,
+	) -> Curve {
+		let length = FixedI64::from_rational(length, period).into_perbill();
+		let floor = floor.into_perbill();
+		Curve::LinearDecreasing { length, floor }
+	}
 	pub const fn make_reciprocal(
 		delay: u128,
 		period: u128,
@@ -365,7 +375,8 @@ impl Curve {
 	/// Determine the `y` value for the given `x` value.
 	pub(crate) fn threshold(&self, x: Perbill) -> Perbill {
 		match self {
-			Self::LinearDecreasing { begin, delta } => *begin - (*delta * x).min(*begin),
+			Self::LinearDecreasing { length, floor } =>
+				(x.min(*length).saturating_div(*length, Down) * *floor).left_from_one(),
 			Self::SteppedDecreasing { begin, end, step, period } =>
 				(*begin - (step.int_mul(x.int_div(*period))).min(*begin)).max(*end),
 			Self::Reciprocal { factor, x_offset, y_offset } => {
@@ -408,11 +419,11 @@ impl Curve {
 	/// ```
 	pub fn delay(&self, y: Perbill) -> Perbill {
 		match self {
-			Self::LinearDecreasing { begin, delta } =>
-				if delta.is_zero() {
-					*delta
+			Self::LinearDecreasing { length, floor } =>
+				if y < *floor {
+					Perbill::one()
 				} else {
-					(*begin - y.min(*begin)).min(*delta) / *delta
+					y.left_from_one().saturating_div(*floor, Up) * *length
 				},
 			Self::SteppedDecreasing { begin, end, step, period } =>
 				if y < *end {
@@ -439,12 +450,13 @@ impl Curve {
 impl Debug for Curve {
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
 		match self {
-			Self::LinearDecreasing { begin, delta } => {
+			Self::LinearDecreasing { length, floor } => {
 				write!(
 					f,
-					"Linear[(0%, {:?}) -> (100%, {:?})]",
-					begin,
-					*begin - *delta,
+					"Linear[(0%, 100%) -> ({:?}, {:?}) -> (100%, {:?})]",
+					length,
+					floor,
+					floor,
 				)
 			},
 			Self::SteppedDecreasing { begin, end, step, period } => {
@@ -480,12 +492,14 @@ mod tests {
 		FixedI64::from_rational(x, 100)
 	}
 
-	const TIP_CURVE: Curve = Curve::make_reciprocal(1, 28, percent(65), percent(50));
+	const TIP_QUO: Curve = Curve::make_reciprocal(1, 28, percent(4), percent(0));
+	const TIP_APP: Curve = Curve::make_linear(10, 28, percent(50));
 
 	#[test]
 	#[should_panic]
 	fn check_curves() {
-		TIP_CURVE.info(28u32, "Tip");
+		TIP_QUO.info(28u32, "Tip Quorum");
+		TIP_APP.info(28u32, "Tip Approval");
 		assert!(false);
 	}
 

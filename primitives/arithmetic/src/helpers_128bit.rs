@@ -1,7 +1,7 @@
 // This file is part of Substrate.
 
 // Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
-// Some code is modified from Derek Dreery's IntegerSquareRoot impl.
+// Some code is based upon Derek Dreery's IntegerSquareRoot impl, used under license.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");

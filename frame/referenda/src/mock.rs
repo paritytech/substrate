@@ -172,12 +172,12 @@ impl TracksInfo<u64, u64> for TestTracksInfo {
 					confirm_period: 2,
 					min_enactment_period: 4,
 					min_approval: Curve::LinearDecreasing {
-						begin: Perbill::from_percent(100),
-						delta: Perbill::from_percent(50),
+						length: Perbill::from_percent(100),
+						floor: Perbill::from_percent(50),
 					},
 					min_turnout: Curve::LinearDecreasing {
-						begin: Perbill::from_percent(100),
-						delta: Perbill::from_percent(100),
+						length: Perbill::from_percent(100),
+						floor: Perbill::from_percent(100),
 					},
 				},
 			),
@@ -192,12 +192,12 @@ impl TracksInfo<u64, u64> for TestTracksInfo {
 					confirm_period: 1,
 					min_enactment_period: 2,
 					min_approval: Curve::LinearDecreasing {
-						begin: Perbill::from_percent(55),
-						delta: Perbill::from_percent(5),
+						length: Perbill::from_percent(55),
+						floor: Perbill::from_percent(5),
 					},
 					min_turnout: Curve::LinearDecreasing {
-						begin: Perbill::from_percent(10),
-						delta: Perbill::from_percent(10),
+						length: Perbill::from_percent(10),
+						floor: Perbill::from_percent(10),
 					},
 				},
 			),
