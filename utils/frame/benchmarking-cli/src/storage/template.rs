@@ -22,7 +22,8 @@ use log::info;
 use serde::Serialize;
 use std::{env, fs, path::PathBuf};
 
-use super::{cmd::StorageParams, record::Stats};
+use super::cmd::StorageParams;
+use crate::shared::{Stats, UnderscoreHelper};
 
 static VERSION: &'static str = env!("CARGO_PKG_VERSION");
 static TEMPLATE: &str = include_str!("./weights.hbs");
@@ -97,7 +98,7 @@ impl TemplateData {
 	pub fn write(&self, path: &Option<PathBuf>, hbs_template: &Option<PathBuf>) -> Result<()> {
 		let mut handlebars = handlebars::Handlebars::new();
 		// Format large integers with underscore.
-		handlebars.register_helper("underscore", Box::new(crate::writer::UnderscoreHelper));
+		handlebars.register_helper("underscore", Box::new(UnderscoreHelper));
 		// Don't HTML escape any characters.
 		handlebars.register_escape_fn(|s| -> String { s.to_string() });
 		// Use custom template if provided.

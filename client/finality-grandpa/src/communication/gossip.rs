@@ -799,7 +799,7 @@ impl<Block: BlockT> Inner<Block> {
 				Some(ref mut v) =>
 					if v.set_id == set_id {
 						let diff_authorities = self.authorities.iter().collect::<HashSet<_>>() !=
-							authorities.iter().collect();
+							authorities.iter().collect::<HashSet<_>>();
 
 						if diff_authorities {
 							debug!(target: "afg",
