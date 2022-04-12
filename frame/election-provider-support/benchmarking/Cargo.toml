@@ -12,13 +12,14 @@ description = "Benchmarking for election provider support onchain config trait"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = [
+	"derive",
+] }
 sp-npos-elections = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/npos-elections" }
 sp-runtime = { version = "6.0.0", default-features = false, path = "../../../primitives/runtime" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../../system" }
 frame-election-provider-support = { version = "4.0.0-dev", default-features = false, path = ".." }
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../../benchmarking", optional = true }
-
 
 
 [features]
@@ -33,5 +34,5 @@ std = [
 
 runtime-benchmarks = [
 	"frame-benchmarking/runtime-benchmarks",
-    "frame-election-provider-support/runtime-benchmarks",
+	"frame-election-provider-support/runtime-benchmarks",
 ]
