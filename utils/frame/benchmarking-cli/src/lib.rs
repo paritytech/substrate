@@ -41,6 +41,7 @@ pub enum BenchmarkCmd {
 	Storage(StorageCmd),
 	Overhead(OverheadCmd),
 	Block(BlockCmd),
+	#[clap(hide = true)] // Hidden until fully completed.
 	Machine(MachineCmd),
 }
 
