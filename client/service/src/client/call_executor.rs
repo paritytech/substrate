@@ -91,28 +91,26 @@ where
 		B: backend::Backend<Block>,
 	{
 		let spec = CallExecutor::runtime_version(self, id)?;
-		let code = if let Some(d) = self
-			.wasm_override
-			.as_ref()
-			.as_ref()
-			.map(|o| o.get(&spec.spec_version, onchain_code.heap_pages, &spec.spec_name))
-			.flatten()
-		{
-			log::debug!(target: "wasm_overrides", "using WASM override for block {}", id);
-			d
-		} else if let Some(s) =
-			self.wasm_substitutes.get(spec.spec_version, onchain_code.heap_pages, id)
-		{
-			log::debug!(target: "wasm_substitutes", "Using WASM substitute for block {:?}", id);
-			s
-		} else {
-			log::debug!(
-				target: "wasm_overrides",
-				"No WASM override available for block {}, using onchain code",
-				id
-			);
-			onchain_code
-		};
+		let code =
+			if let Some(d) =
+				self.wasm_override.as_ref().as_ref().and_then(|o| {
+					o.get(&spec.spec_version, onchain_code.heap_pages, &spec.spec_name)
+				}) {
+				log::debug!(target: "wasm_overrides", "using WASM override for block {}", id);
+				d
+			} else if let Some(s) =
+				self.wasm_substitutes.get(spec.spec_version, onchain_code.heap_pages, id)
+			{
+				log::debug!(target: "wasm_substitutes", "Using WASM substitute for block {:?}", id);
+				s
+			} else {
+				log::debug!(
+					target: "wasm_overrides",
+					"No WASM override available for block {}, using onchain code",
+					id
+				);
+				onchain_code
+			};
 
 		Ok(code)
 	}

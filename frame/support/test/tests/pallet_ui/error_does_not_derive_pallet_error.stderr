@@ -1,12 +1,7 @@
 error[E0277]: the trait bound `MyError: PalletError` is not satisfied
-  --> tests/pallet_ui/error_does_not_derive_pallet_error.rs:1:1
-   |
-1  | #[frame_support::pallet]
-   | ^^^^^^^^^^^^^^^^^^^^^^^^ the trait `PalletError` is not implemented for `MyError`
-   |
-note: required by `MAX_ENCODED_SIZE`
-  --> $WORKSPACE/frame/support/src/traits/error.rs
-   |
-   |     const MAX_ENCODED_SIZE: usize;
-   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-   = note: this error originates in the derive macro `frame_support::PalletError` (in Nightly builds, run with -Z macro-backtrace for more info)
+ --> tests/pallet_ui/error_does_not_derive_pallet_error.rs:1:1
+  |
+1 | #[frame_support::pallet]
+  | ^^^^^^^^^^^^^^^^^^^^^^^^ the trait `PalletError` is not implemented for `MyError`
+  |
+  = note: this error originates in the derive macro `frame_support::PalletError` (in Nightly builds, run with -Z macro-backtrace for more info)
