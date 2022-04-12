@@ -100,16 +100,16 @@ fn expand_event_variant(
 
 	match instance {
 		Some(inst) if part_is_generic => {
-			quote!(#[codec(index = #index)] #variant_name(Box<#path::Event<#runtime, #path::#inst>>),)
+			quote!(#[codec(index = #index)] #variant_name(#path::Event<#runtime, #path::#inst>),)
 		},
 		Some(inst) => {
-			quote!(#[codec(index = #index)] #variant_name(Box<#path::Event<#path::#inst>>),)
+			quote!(#[codec(index = #index)] #variant_name(#path::Event<#path::#inst>),)
 		},
 		None if part_is_generic => {
-			quote!(#[codec(index = #index)] #variant_name(Box<#path::Event<#runtime>>),)
+			quote!(#[codec(index = #index)] #variant_name(#path::Event<#runtime>),)
 		},
 		None => {
-			quote!(#[codec(index = #index)] #variant_name(Box<#path::Event>),)
+			quote!(#[codec(index = #index)] #variant_name(#path::Event),)
 		},
 	}
 }
@@ -124,7 +124,7 @@ fn expand_event_conversion(
 	quote! {
 		impl From<#pallet_event> for Event {
 			fn from(x: #pallet_event) -> Self {
-				Event::#variant_name(Box::new(x))
+				Event::#variant_name(x)
 			}
 		}
 		impl TryInto<#pallet_event> for Event {
@@ -132,7 +132,7 @@ fn expand_event_conversion(
 
 			fn try_into(self) -> #scrate::sp_std::result::Result<#pallet_event, Self::Error> {
 				match self {
-					Self::#variant_name(evt) => Ok(*evt),
+					Self::#variant_name(evt) => Ok(evt),
 					_ => Err(()),
 				}
 			}
