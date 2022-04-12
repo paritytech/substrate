@@ -1018,7 +1018,7 @@ fn obsolete_blocks_aux_data_cleanup() {
 
 	// Create the following test scenario:
 	//
-	//               /-----B3 --- B4           ( < fork2 )
+	//  /--- --B3 --- B4                       ( < fork2 )
 	// G --- A1 --- A2 --- A3 --- A4           ( < fork1 )
 	//                      \-----C4 --- C5    ( < fork3 )
 
