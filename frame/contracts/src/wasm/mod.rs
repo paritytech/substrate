@@ -438,6 +438,13 @@ mod tests {
 		fn is_contract(&self, _address: &AccountIdOf<Self::T>) -> bool {
 			true
 		}
+		fn code_hash(&self, _address: &AccountIdOf<Self::T>) -> Option<CodeHash<Self::T>> {
+			Some(H256::from_slice(&[0x11; 32]))
+		}
+		fn own_code_hash(&mut self) -> &CodeHash<Self::T> {
+			const HASH: H256 = H256::repeat_byte(0x10);
+			&HASH
+		}
 		fn caller_is_origin(&self) -> bool {
 			false
 		}
@@ -1155,7 +1162,7 @@ mod tests {
 		);
 	}
 
-	/// calls `seal_caller` and compares the result with the constant 42.
+	/// calls `seal_caller` and compares the result with the constant (ALICE's address part).
 	const CODE_CALLER: &str = r#"
 (module
 	(import "seal0" "seal_caller" (func $seal_caller (param i32 i32)))
@@ -1185,7 +1192,7 @@ mod tests {
 			)
 		)
 
-		;; assert that the first 64 byte are the beginning of "ALICE"
+		;; assert that the first 8 bytes are the beginning of "ALICE"
 		(call $assert
 			(i64.eq
 				(i64.load (i32.const 0))
@@ -1203,7 +1210,7 @@ mod tests {
 		assert_ok!(execute(CODE_CALLER, vec![], MockExt::default()));
 	}
 
-	/// calls `seal_address` and compares the result with the constant 69.
+	/// calls `seal_address` and compares the result with the constant (BOB's address part).
 	const CODE_ADDRESS: &str = r#"
 (module
 	(import "seal0" "seal_address" (func $seal_address (param i32 i32)))
@@ -1233,7 +1240,7 @@ mod tests {
 			)
 		)
 
-		;; assert that the first 64 byte are the beginning of "BOB"
+		;; assert that the first 8 bytes are the beginning of "BOB"
 		(call $assert
 			(i64.eq
 				(i64.load (i32.const 0))
@@ -2361,6 +2368,111 @@ mod tests {
 	}
 
 	#[test]
+	#[cfg(feature = "unstable-interface")]
+	fn code_hash_works() {
+		/// calls `seal_code_hash` and compares the result with the constant.
+		const CODE_CODE_HASH: &str = r#"
+(module
+	(import "__unstable__" "seal_code_hash" (func $seal_code_hash (param i32 i32 i32) (result i32)))
+	(import "env" "memory" (memory 1 1))
+
+	;; size of our buffer is 32 bytes
+	(data (i32.const 32) "\20")
+
+	(func $assert (param i32)
+		(block $ok
+			(br_if $ok
+				(get_local 0)
+			)
+			(unreachable)
+		)
+	)
+
+	(func (export "call")
+		;; fill the buffer with the code hash.
+		(call $seal_code_hash
+			(i32.const 0) ;; input: address_ptr (before call)
+			(i32.const 0) ;; output: code_hash_ptr (after call)
+			(i32.const 32) ;; same 32 bytes length for input and output
+		)
+
+		;; assert size == 32
+		(call $assert
+			(i32.eq
+				(i32.load (i32.const 32))
+				(i32.const 32)
+			)
+		)
+
+		;; assert that the first 8 bytes are "1111111111111111"
+		(call $assert
+			(i64.eq
+				(i64.load (i32.const 0))
+				(i64.const 0x1111111111111111)
+			)
+		)
+		drop
+	)
+
+	(func (export "deploy"))
+)
+"#;
+		assert_ok!(execute(CODE_CODE_HASH, vec![], MockExt::default()));
+	}
+
+	#[test]
+	#[cfg(feature = "unstable-interface")]
+	fn own_code_hash_works() {
+		/// calls `seal_own_code_hash` and compares the result with the constant.
+		const CODE_OWN_CODE_HASH: &str = r#"
+(module
+	(import "__unstable__" "seal_own_code_hash" (func $seal_own_code_hash (param i32 i32)))
+	(import "env" "memory" (memory 1 1))
+
+	;; size of our buffer is 32 bytes
+	(data (i32.const 32) "\20")
+
+	(func $assert (param i32)
+		(block $ok
+			(br_if $ok
+				(get_local 0)
+			)
+			(unreachable)
+		)
+	)
+
+	(func (export "call")
+		;; fill the buffer with the code hash
+		(call $seal_own_code_hash
+			(i32.const 0)  ;; output: code_hash_ptr
+			(i32.const 32) ;; 32 bytes length of code_hash output
+		)
+
+		;; assert size == 32
+		(call $assert
+			(i32.eq
+				(i32.load (i32.const 32))
+				(i32.const 32)
+			)
+		)
+
+		;; assert that the first 8 bytes are "1010101010101010"
+		(call $assert
+			(i64.eq
+				(i64.load (i32.const 0))
+				(i64.const 0x1010101010101010)
+			)
+		)
+	)
+
+	(func (export "deploy"))
+)
+"#;
+		assert_ok!(execute(CODE_OWN_CODE_HASH, vec![], MockExt::default()));
+	}
+
+	#[test]
+	#[cfg(feature = "unstable-interface")]
 	fn caller_is_origin_works() {
 		const CODE_CALLER_IS_ORIGIN: &str = r#"
 ;; This runs `caller_is_origin` check on zero account address

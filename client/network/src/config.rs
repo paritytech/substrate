@@ -50,7 +50,6 @@ use sp_runtime::traits::Block as BlockT;
 use std::{
 	borrow::Cow,
 	collections::HashMap,
-	convert::TryFrom,
 	error::Error,
 	fs,
 	future::Future,
@@ -583,7 +582,7 @@ pub struct NonDefaultSetConfig {
 	/// considered established once this protocol is open.
 	///
 	/// > **Note**: This field isn't present for the default set, as this is handled internally
-	/// >           by the networking code.
+	/// > by the networking code.
 	pub notifications_protocol: Cow<'static, str>,
 	/// If the remote reports that it doesn't support the protocol indicated in the
 	/// `notifications_protocol` field, then each of these fallback names will be tried one by

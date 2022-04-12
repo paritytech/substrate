@@ -292,7 +292,7 @@ pub fn testnet_genesis(
 
 	let num_endowed_accounts = endowed_accounts.len();
 
-	const ENDOWMENT: Balance = 10_000_000 * DOLLARS;
+	const ENDOWMENT: Balance = 9_000_000 * DOLLARS;
 	const STASH: Balance = ENDOWMENT / 1000;
 
 	GenesisConfig {
@@ -471,7 +471,7 @@ pub(crate) mod tests {
 
 		sc_service_test::connectivity(integration_test_config_with_two_authorities(), |config| {
 			let NewFullBase { task_manager, client, network, transaction_pool, .. } =
-				new_full_base(config, |_, _| ())?;
+				new_full_base(config, false, |_, _| ())?;
 			Ok(sc_service_test::TestNetComponents::new(
 				task_manager,
 				client,

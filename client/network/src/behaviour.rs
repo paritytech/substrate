@@ -208,7 +208,7 @@ impl<B: BlockT> Behaviour<B> {
 		state_request_protocol_config: request_responses::ProtocolConfig,
 		warp_sync_protocol_config: Option<request_responses::ProtocolConfig>,
 		bitswap: Option<Bitswap<B>>,
-		enable_mixnet: bool,
+		mixnet: Option<Mixnet>,
 		light_client_request_protocol_config: request_responses::ProtocolConfig,
 		// All remaining request protocol configs.
 		mut request_response_protocols: Vec<request_responses::ProtocolConfig>,
@@ -229,18 +229,6 @@ impl<B: BlockT> Behaviour<B> {
 		request_response_protocols.push(block_request_protocol_config);
 		request_response_protocols.push(state_request_protocol_config);
 		request_response_protocols.push(light_client_request_protocol_config);
-
-		let mut mixnet = None;
-		if enable_mixnet {
-			// TODO here we need to support all keypair, so multikey but cannot dh then...
-			if let libp2p::core::identity::Keypair::Ed25519(kp) = &local_identity {
-				let mixnet_config =
-					mixnet::Config::new_with_ed25519_keypair(kp, local_public_key.clone().into());
-				// TODO here we do not have connected peer/topology to mixnet. -> TODO implement
-				// Topology trait
-				mixnet = Some(Mixnet::new(mixnet_config));
-			}
-		};
 
 		Ok(Self {
 			substrate,
@@ -559,11 +547,11 @@ impl<B: BlockT> NetworkBehaviourEventProcess<mixnet::NetworkEvent> for Behaviour
 				self.events
 					.push_back(BehaviourOut::MixnetMessage(message.peer, message.message));
 			},
-			mixnet::NetworkEvent::Connected(message) => {
-				unimplemented!("TODO");
+			mixnet::NetworkEvent::Connected(peer_id) => {
+				eprintln!("peer con {:?}", peer_id);
 			},
-			mixnet::NetworkEvent::Disconnected(message) => {
-				unimplemented!("TODO");
+			mixnet::NetworkEvent::Disconnected(peer_id) => {
+				eprintln!("peer disco {:?}", peer_id);
 			},
 		}
 	}

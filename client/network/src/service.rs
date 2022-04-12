@@ -46,6 +46,7 @@ use crate::{
 	transactions, transport, DhtEvent, ExHashT, NetworkStateInfo, NetworkStatus, ReputationChange,
 };
 
+use mixnet::Mixnet;
 use codec::Encode as _;
 use futures::{channel::oneshot, prelude::*};
 use libp2p::{
@@ -73,7 +74,6 @@ use std::{
 	borrow::Cow,
 	cmp,
 	collections::{HashMap, HashSet},
-	convert::TryFrom as _,
 	fs, iter,
 	marker::PhantomData,
 	num::NonZeroUsize,
@@ -336,8 +336,29 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				)
 			};
 
+
 			let behaviour = {
 				let bitswap = params.network_config.ipfs_server.then(|| Bitswap::new(client));
+
+				// TODO move mixnet building to MixnetHandlePrototype?? + add metrics
+				// through call backs in crate and same as transaction handler to register
+				let mut mixnet = None;
+				if params.network_config.mixnet {
+					// TODO here we need to support all keypair, so multikey but cannot dh then...
+					if let libp2p::core::identity::Keypair::Ed25519(kp) = &local_identity {
+						let local_public_key = local_identity.public();
+						let mut mixnet_config =
+							mixnet::Config::new_with_ed25519_keypair(kp, local_public_key.clone().into());
+						// Using a simple star topology on a set of trusted (validators) nodes.
+						// TODO consider notification protocol : event_stream ...
+/*						let topology = ;
+						mixnet_confix.topology = topology;*/
+						mixnet = Some(Mixnet::new(mixnet_config));
+					} else {
+						log::error!(target: "sync", "Ignoring mixnet, non Ed25519 identity");
+					}
+				};
+
 				let result = Behaviour::new(
 					protocol,
 					user_agent,
@@ -347,7 +368,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 					params.state_request_protocol_config,
 					warp_sync_protocol_config,
 					bitswap,
-					params.network_config.mixnet,
+					mixnet,
 					params.light_client_request_protocol_config,
 					params.network_config.request_response_protocols,
 					peerset_handle.clone(),
@@ -574,7 +595,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 							.collect();
 
 					let endpoint = if let Some(e) =
-						swarm.behaviour_mut().node(peer_id).map(|i| i.endpoint()).flatten()
+						swarm.behaviour_mut().node(peer_id).and_then(|i| i.endpoint())
 					{
 						e.clone().into()
 					} else {
@@ -1870,6 +1891,7 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					sender,
 					message,
 				))) => {
+					debug!(target: "mixnet", "Inject transaction from mixnet from {:?}) tx: {:?}", sender, message);
 					this.tx_handler_controller.inject_transaction(sender, message);
 				},
 				Poll::Ready(SwarmEvent::ConnectionEstablished {

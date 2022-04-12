@@ -21,7 +21,7 @@
 #[cfg(test)]
 mod tests;
 
-use std::{convert::TryInto, sync::Arc};
+use std::sync::Arc;
 
 use sp_blockchain::HeaderBackend;
 
@@ -164,6 +164,7 @@ where
 	}
 
 	fn mix_extrinsic(&self, ext: Bytes) -> FutureResult<()> {
+		log::debug!(target: "mixnet", "Extrinsic for mixnet of len {}", ext.len());
 		let (tx, rx) = oneshot::channel();
 		let _ = self.mixnet.unbounded_send(SendToMixnet(ext.to_vec(), tx));
 		async move {

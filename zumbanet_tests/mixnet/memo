@@ -1,0 +1,4 @@
+export PATH=../substrate/target/release/:$PATH;
+node dist/cli.js --provider native spawn ../substrate/zumbanet_tests/mixnet/0001-simple.toml
+
+curl -H "Content-Type: application/json" -d '{"id":1, "jsonrpc":"2.0", "method": "author_mixExtrinsic", "params": ["0x5c0d1176a568c1f92944340dbfed9e9c530ebca703c85910e7164cb7d1c9e47b"]}' http://127.0.0.1:39281/

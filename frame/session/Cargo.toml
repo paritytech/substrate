@@ -14,7 +14,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 log = { version = "0.4.0", default-features = false }
-impl-trait-for-tuples = "0.2.1"
+impl-trait-for-tuples = "0.2.2"
 
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive"] }
 scale-info = { version = "2.0.1", default-features = false, features = ["derive"] }

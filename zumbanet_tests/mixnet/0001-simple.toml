@@ -1,0 +1,47 @@
+[settings]
+timeout = 1000
+
+[relaychain]
+default_image = "{{ZOMBIENET_INTEGRATION_TEST_IMAGE}}"
+chain = "local"
+chain_spec_command = "substrate build-spec --chain local --disable-default-bootnode"
+default_command = "substrate"
+
+  [[relaychain.nodes]]
+  name = "alice"
+  args = [ "--alice", "--mixnet", "-lmixnet=trace", "--database=paritydb" ]
+
+  [[relaychain.nodes]]
+  name = "bob"
+  args = [ "--bob", "--mixnet", "-lmixnet=trace", "--database=paritydb" ]
+  
+  [[relaychain.nodes]]
+  name = "charlie"
+  args = [ "--charlie", "--mixnet", "-lmixnet=trace", "--database=paritydb" ]
+
+  [[relaychain.nodes]]
+  name = "dave"
+  args = [ "--dave", "--mixnet", "-lmixnet=trace", "--database=paritydb" ]
+
+  [[relaychain.nodes]]
+  name = "eve"
+  args = [ "--eve", "--mixnet", "-lmixnet=trace", "--database=paritydb" ]
+
+  [[relaychain.nodes]]
+  name = "ferdie"
+  args = [ "--ferdie", "--mixnet", "-lmixnet=trace", "--database=paritydb" ]
+
+  [[relaychain.nodes]]
+  name = "one"
+  args = [ "-lmixnet=trace", "--mixnet", "--database=paritydb" ]
+	validator = "false"
+
+  [[relaychain.nodes]]
+  name = "two"
+  args = [ "-lmixnet=trace", "--mixnet", "--database=paritydb" ]
+	validator = "false"
+
+[types.Header]
+number = "u64"
+parent_hash = "Hash"
+post_state = "Hash"
