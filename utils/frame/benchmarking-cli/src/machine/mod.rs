@@ -19,10 +19,16 @@
 //! and the core benchmarking logic.
 
 use sc_cli::{CliConfiguration, Result, SharedParams};
+use sc_service::Configuration;
+use sc_sysinfo::{
+	benchmark_cpu, benchmark_disk_random_writes, benchmark_disk_sequential_writes,
+	benchmark_memory, benchmark_sr25519_verify,
+};
 
 use clap::Parser;
 use log::info;
 use prettytable::{cell, row, table};
+use std::{fmt::Debug, fs, time::Duration};
 
 /// Command to benchmark the hardware.
 ///
@@ -31,20 +37,21 @@ use prettytable::{cell, row, table};
 /// This command must be integrated by the client since the client can set compiler flags
 /// which influence the results.
 ///
-/// The output or `benchmark machine --dev` looks like this:
+/// You can use the `--base-path` flag to set a location for the disk benchmarks.
+/// The output of `benchmark machine --dev` looks like this:
 /// ```text
 /// +----------+----------------+-------+------+
 /// | Category | Function       | Score | Unit |
 /// +----------+----------------+-------+------+
-/// | Memory   | Copy           | 19983 | MB/s |
+/// | CPU      | BLAKE2-256     | 1056  | MB/s |
 /// +----------+----------------+-------+------+
-/// | Disk     | Seq Write      | 2699  | MB/s |
+/// | CPU      | SR25519 Verify | 666.0 | KB/s |
 /// +----------+----------------+-------+------+
-/// | Disk     | Rnd Write      | 295   | MB/s |
+/// | Memory   | Copy           | 21205 | MB/s |
 /// +----------+----------------+-------+------+
-/// | CPU      | BLAKE2-256     | 841   | MB/s |
+/// | Disk     | Seq Write      | 2500  | MB/s |
 /// +----------+----------------+-------+------+
-/// | CPU      | SR25519 Verify | 21.10 | K/s  |
+/// | Disk     | Rnd Write      | 311   | MB/s |
 /// +----------+----------------+-------+------+
 /// ```
 #[derive(Debug, Parser)]
@@ -55,31 +62,32 @@ pub struct MachineCmd {
 
 	/// Iterations of the verification function.
 	#[clap(long, default_value = "20000")]
-	pub verify_reps: u64,
+	pub verify_reps: usize,
 }
 
 impl MachineCmd {
 	/// Execute the benchmark and print the results.
-	pub fn run(&self) -> Result<()> {
+	pub fn run(&self, cfg: &Configuration) -> Result<()> {
+		// Ensure that the dir exists since the node is not started to take care of it.
+		let dir = cfg.database.path().ok_or("No DB directory provided")?;
+		fs::create_dir_all(dir)?;
+
 		info!("Running machine benchmarks...");
-		let tmp_dir = tempdir()?;
-		let info = gather_hwbench(Some(tmp_dir.path()));
+		let write = benchmark_disk_sequential_writes(dir)?;
+		let read = benchmark_disk_random_writes(dir)?;
+		let verify =
+			benchmark_sr25519_verify(self.verify_reps, Duration::from_secs(2), 32)? * 1024.0;
 
 		// Use a table for nicer console output.
-		let mut table = table!(
+		let table = table!(
 			["Category", "Function", "Score", "Unit"],
-			["Memory", "Copy", info.memory_memcpy_score, "MB/s"],
-			["Disk", "Seq Write", info.disk_sequential_write_score.unwrap_or_default(), "MB/s"],
-			["Disk", "Rnd Write", info.disk_random_write_score.unwrap_or_default(), "MB/s"],
-			["CPU", "BLAKE2-256", info.cpu_hashrate_score, "MB/s"]
+			["CPU", "BLAKE2-256", benchmark_cpu(), "MB/s"],
+			["CPU", "SR25519 Verify", format!("{:.1}", verify), "KB/s"],
+			["Memory", "Copy", benchmark_memory(), "MB/s"],
+			["Disk", "Seq Write", write, "MB/s"],
+			["Disk", "Rnd Write", read, "MB/s"]
 		);
-
-		// Additionally measure the speed of SR25519::Verify for 32 byte input.
-		let input_len = 32;
-		let took = Self::sr_verify_speed(self.verify_reps, input_len as usize);
-		let speed = (self.verify_reps as f64 / took.as_secs_f64()) / 1000.0;
-		table.add_row(row!["CPU", "SR25519 Verify", format!("{:.2}", speed), "K/s"]);
-
+		
 		info!("\n{}", table);
 		Ok(())
 	}
