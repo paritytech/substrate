@@ -1071,7 +1071,7 @@ pub mod pallet {
 		pub fn challenge_solution(origin: OriginFor<T>, index: u32) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
-			if let Some(submission) = SignedSubmissionsMap::<T>::get(index) {
+			if let Some(submission) = Self::signed_submissions().get_submission(index) {
 				ensure!(
 					T::Currency::can_slash(&who, submission.deposit),
 					<Error<T>>::SignedCannotPayDeposit
@@ -1086,7 +1086,7 @@ pub mod pallet {
 						let mut signed_submissions = Self::signed_submissions();
 						let _ = signed_submissions.pop(submission.raw_solution.score);
 
-						Self::deposit_event(Event::ChallengerSlashed { account: who });
+						Self::deposit_event(Event::Challenged { account: who, outcome: false });
 
 						Ok(())
 					},
@@ -1097,10 +1097,10 @@ pub mod pallet {
 							submission.deposit.saturating_sub(T::ChallengeDepositDiff::get()),
 							Free,
 						)?;
+						let mut signed_submissions = Self::signed_submissions();
+						let _ = signed_submissions.pop(submission.raw_solution.score);
 
-						SignedSubmissionsMap::<T>::remove(index);
-
-						Self::deposit_event(Event::ChallengerRewarded { account: who });
+						Self::deposit_event(Event::Challenged { account: who, outcome: true });
 
 						Ok(())
 					},
@@ -1133,11 +1133,8 @@ pub mod pallet {
 		/// The unsigned phase of the given round has started.
 		UnsignedPhaseStarted { round: u32 },
 
-		/// The Challenger gets slashed for challenging a correct solution
-		ChallengerSlashed { account: <T as frame_system::Config>::AccountId },
-
-		/// The Challenger gets rewarded for challenging a bogus solution
-		ChallengerRewarded { account: <T as frame_system::Config>::AccountId },
+		/// A solution from `account` was challenged, with the given `outcome`.
+		Challenged { account: <T as frame_system::Config>::AccountId, outcome: bool },
 	}
 
 	/// Error of the pallet that can be returned in response to dispatches.
@@ -2081,13 +2078,9 @@ mod tests {
 			solution.score.minimal_stake += 1;
 
 			assert!(mock::Balances::usable_balance(&99) == 100);
-
 			assert_ok!(MultiPhase::submit(crate::mock::Origin::signed(99), Box::new(solution),));
-
 			assert_eq!(crate::mock::Balances::usable_balance(&9999), 100);
-
 			assert_ok!(MultiPhase::challenge_solution(crate::mock::Origin::signed(9999), 0));
-
 			assert!(crate::mock::Balances::free_balance(&9999) > 100);
 		})
 	}
