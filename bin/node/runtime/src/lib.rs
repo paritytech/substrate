@@ -26,7 +26,7 @@ use codec::{Decode, Encode, MaxEncodedLen};
 use frame_election_provider_support::{onchain, ExtendedBalance, SequentialPhragmen, VoteWeight};
 use frame_support::{
 	construct_runtime,
-	pallet_prelude::Get,
+	pallet_prelude::{Get, GetDefault},
 	parameter_types,
 	traits::{
 		AsEnsureOriginWithArg, ConstU128, ConstU16, ConstU32, Currency, EnsureOneOf,
@@ -663,7 +663,8 @@ impl pallet_election_provider_multi_phase::Config for Runtime {
 	type EstimateCallFee = TransactionPayment;
 	type SignedPhase = SignedPhase;
 	type UnsignedPhase = UnsignedPhase;
-	type SolutionImprovementThreshold = SolutionImprovementThreshold;
+	type SolutionImprovementThresholdUnsigned = SolutionImprovementThreshold;
+	type SolutionImprovementThresholdSigned = GetDefault;
 	type OffchainRepeat = OffchainRepeat;
 	type MinerMaxWeight = MinerMaxWeight;
 	type MinerMaxLength = MinerMaxLength;

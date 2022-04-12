@@ -20,7 +20,7 @@ use crate as multi_phase;
 use frame_election_provider_support::{
 	data_provider, onchain, ElectionDataProvider, NposSolution, SequentialPhragmen,
 };
-pub use frame_support::{assert_noop, assert_ok};
+pub use frame_support::{assert_noop, assert_ok, pallet_prelude::GetDefault};
 use frame_support::{
 	bounded_vec, parameter_types,
 	traits::{ConstU32, Hooks},
@@ -413,7 +413,8 @@ impl crate::Config for Runtime {
 	type EstimateCallFee = frame_support::traits::ConstU32<8>;
 	type SignedPhase = SignedPhase;
 	type UnsignedPhase = UnsignedPhase;
-	type SolutionImprovementThreshold = SolutionImprovementThreshold;
+	type SolutionImprovementThresholdUnsigned = SolutionImprovementThreshold;
+	type SolutionImprovementThresholdSigned = GetDefault;
 	type OffchainRepeat = OffchainRepeat;
 	type MinerMaxWeight = MinerMaxWeight;
 	type MinerMaxLength = MinerMaxLength;
