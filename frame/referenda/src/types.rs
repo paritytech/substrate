@@ -21,7 +21,7 @@ use super::*;
 use codec::{Decode, Encode, EncodeLike, MaxEncodedLen};
 use frame_support::{traits::schedule::Anon, Parameter};
 use scale_info::TypeInfo;
-use sp_runtime::{RuntimeDebug, PerThing, FixedI64, FixedPointNumber};
+use sp_runtime::{RuntimeDebug, PerThing, FixedI64};
 use sp_arithmetic::Rounding::*;
 use sp_std::fmt::Debug;
 
@@ -256,95 +256,67 @@ pub enum Curve {
 	/// `period` before stepping down to `(period * 2, begin - step * 2)`. This pattern continues
 	/// but the `y` component has a lower limit of `end`.
 	SteppedDecreasing { begin: Perbill, end: Perbill, step: Perbill, period: Perbill },
-	/// A simple reciprocal (`K/x + O`) curve: `factor` is `K` and `offset` is `O`.
-	SimpleReciprocal { factor: Perbill, offset: Perbill },
-	/// A reciprocal (`K/(x + K/(1-O)) + O`) curve: `factor` is `K` and `offset` is `O`. This
-	/// guarantees the point (0, 1) without resorting to truncation.
-	Reciprocal { factor: Perbill, offset: Perbill },
 	/// A recipocal (`K/(x+S)-T`) curve: `factor` is `K` and `x_offset` is `S`, `y_offset` is `T`.
-	TranslatedReciprocal { factor: FixedI64, x_offset: FixedI64, y_offset: FixedI64 },
+	Reciprocal { factor: FixedI64, x_offset: FixedI64, y_offset: FixedI64 },
 }
 
-fn pos_quad_solution(a: FixedI64, b: FixedI64, c: FixedI64) -> FixedI64 {
-	let two = FixedI64::saturating_from_integer(2);
-	let four = FixedI64::saturating_from_integer(4);
-	(-b + (b*b - four*a*c).sqrt().unwrap_or(two)) / (two*a)
+const fn pos_quad_solution(a: FixedI64, b: FixedI64, c: FixedI64) -> FixedI64 {
+	const TWO: FixedI64 = FixedI64::from_u32(2);
+	const FOUR: FixedI64 = FixedI64::from_u32(4);
+	b.neg().add(b.mul(b).sub(FOUR.mul(a).mul(c)).sqrt()).div(TWO.mul(a))
 }
 
 impl Curve {
-	#[cfg(feature = "std")]
-	pub fn basic_reciprocal_from_point<N: AtLeast32BitUnsigned>(
-		delay: N,
-		period: N,
-		level: Perbill,
+	pub const fn reciprocal_from_point(
+		delay: u128,
+		period: u128,
+		level: FixedI64,
 	) -> Curve {
-		Self::basic_reciprocal_from_point_and_floor(delay, period, level, Perbill::zero())
+		Self::reciprocal_from_point_and_floor(delay, period, level, FixedI64::from_u32(0))
 	}
 
-	#[cfg(feature = "std")]
-	pub fn basic_reciprocal_from_point_and_floor<N: AtLeast32BitUnsigned>(
-		delay: N,
-		period: N,
-		level: Perbill,
-		floor: Perbill,
+	pub const fn reciprocal_from_point_and_floor(
+		delay: u128,
+		period: u128,
+		level: FixedI64,
+		floor: FixedI64,
 	) -> Curve {
-		let delay = Perbill::from_rational(delay, period);
-		let offset = floor;
-		let ymo = level.saturating_sub(offset);
-		let bottom = ymo.saturating_div(offset.left_from_one(), Down).left_from_one();
-		let factor = (delay * ymo).saturating_div(bottom, Down);
-		Curve::Reciprocal { factor, offset }
-	}
-	#[cfg(feature = "std")]
-	pub fn reciprocal_from_point<N: AtLeast32BitUnsigned>(
-		delay: N,
-		period: N,
-		level: Perbill,
-	) -> Curve {
-		Self::reciprocal_from_point_and_floor(delay, period, level, Perbill::zero())
-	}
-
-	#[cfg(feature = "std")]
-	pub fn reciprocal_from_point_and_floor<N: AtLeast32BitUnsigned>(
-		delay: N,
-		period: N,
-		level: Perbill,
-		floor: Perbill,
-	) -> Curve {
-		let delay = Perbill::from_rational(delay, period);
-		let floor_fixed = FixedI64::from(floor);
-		let mut bounds = (FixedI64::zero(), FixedI64::one());
-		let two = FixedI64::saturating_from_integer(2);
-		let epsilon = FixedI64::from_inner(1);
-		while bounds.1 - bounds.0 > epsilon {
-			let factor = (bounds.0 + bounds.1) / two;
-			let c = Self::reciprocal_from_factor_and_floor(factor, floor_fixed);
-			if c.threshold(delay) > level {
-				bounds = (bounds.0, factor)
+		let delay = FixedI64::from_rational(delay, period).into_perbill();
+		let mut bounds = ((
+			FixedI64::from_u32(0),
+			Self::reciprocal_from_factor_and_floor(FixedI64::from_u32(0), floor),
+			FixedI64::from_inner(i64::max_value()),
+		), (
+			FixedI64::from_u32(1),
+			Self::reciprocal_from_factor_and_floor(FixedI64::from_u32(1), floor),
+			FixedI64::from_inner(i64::max_value()),
+		));
+		const TWO: FixedI64 = FixedI64::from_u32(2);
+		while (bounds.1).0.sub((bounds.0).0).into_inner() > 1 {
+			let factor = (bounds.0).0.add((bounds.1).0).div(TWO);
+			let curve = Self::reciprocal_from_factor_and_floor(factor, floor);
+			let curve_level = FixedI64::from_perbill(curve.const_threshold(delay));
+			if curve_level.into_inner() > level.into_inner() {
+				bounds = (bounds.0, (factor, curve, curve_level.sub(level)));
 			} else {
-				bounds = (factor, bounds.1)
+				bounds = ((factor, curve, level.sub(curve_level)), bounds.1);
 			}
 		}
-		let c0 = Self::reciprocal_from_factor_and_floor(bounds.0, floor_fixed);
-		let c1 = Self::reciprocal_from_factor_and_floor(bounds.1, floor_fixed);
-		let c0_level = c0.threshold(delay);
-		let c1_level = c1.threshold(delay);
-		if c0_level.max(level) - c0_level.min(level) < c1_level.max(level) - c1_level.min(level) {
-			c0
+		if (bounds.0).2.into_inner() < (bounds.1).2.into_inner() {
+			(bounds.0).1
 		} else {
-			c1
+			(bounds.1).1
 		}
 	}
 
-	#[cfg(feature = "std")]
-	fn reciprocal_from_factor_and_floor(factor: FixedI64, floor: FixedI64) -> Self {
-		let x_offset = pos_quad_solution(FixedI64::one() - floor, FixedI64::one() - floor, -factor);
-		let y_offset = floor - factor / (FixedI64::one() + x_offset);
-		Curve::TranslatedReciprocal { factor, x_offset, y_offset }
+	const fn reciprocal_from_factor_and_floor(factor: FixedI64, floor: FixedI64) -> Self {
+		let one_minus_floor = FixedI64::from_u32(1).sub(floor);
+		let x_offset = pos_quad_solution(one_minus_floor, one_minus_floor, factor.neg());
+		let y_offset = floor.sub(factor.div(FixedI64::from_u32(1).add(x_offset)));
+		Curve::Reciprocal { factor, x_offset, y_offset }
 	}
 
 	/// Print some info on the curve.
-	#[cfg(feature = "std")]
 	pub fn info(&self, days: u32, name: impl std::fmt::Display) {
 		let hours = days * 24;
 		println!("Curve {name} := {:?}:", self);
@@ -404,23 +376,27 @@ impl Curve {
 			Self::LinearDecreasing { begin, delta } => *begin - (*delta * x).min(*begin),
 			Self::SteppedDecreasing { begin, end, step, period } =>
 				(*begin - (step.int_mul(x.int_div(*period))).min(*begin)).max(*end),
-			Self::SimpleReciprocal { factor, offset } => {
-				// Actual curve is y = factor / (x + x_offset) + offset
-				// we want to avoid saturating prior to the division.
-				Perbill::from_rational(factor.deconstruct(), x.deconstruct()).saturating_add(*offset)
-			}
-			Self::Reciprocal { factor, offset } => {
-				let x_offset = factor.saturating_div(offset.left_from_one(), Down);
-				// Actual curve is y = factor / (x + x_offset) + offset
-				// we want to avoid saturating prior to the division.
-				Perbill::from_rational(factor.deconstruct(), x.deconstruct() + x_offset.deconstruct())
-					.saturating_add(*offset)
-			}
-			Self::TranslatedReciprocal { factor, x_offset, y_offset } => {
+			Self::Reciprocal { factor, x_offset, y_offset } => {
 				factor.checked_rounding_div(FixedI64::from(x) + *x_offset, Down)
 					.map(|yp| (yp + *y_offset).into_clamped_perthing())
 					.unwrap_or_else(Perbill::one)
 			}
+		}
+	}
+
+	/// Determine the `y` value for the given `x` value.
+	///
+	/// This is a partial implementation designed only for use in const functions.
+	#[cfg(feature = "std")]
+	const fn const_threshold(&self, x: Perbill) -> Perbill {
+		match self {
+			Self::Reciprocal { factor, x_offset, y_offset } => {
+				match factor.checked_rounding_div(FixedI64::from_perbill(x).add(*x_offset), Down) {
+					Some(yp) => (yp.add(*y_offset)).into_perbill(),
+					None => Perbill::one(),
+				}
+			}
+			_ => panic!("const_threshold cannot be used on this curve"),
 		}
 	}
 
@@ -452,32 +428,7 @@ impl Curve {
 				} else {
 					period.int_mul((*begin - y.min(*begin) + step.less_epsilon()).int_div(*step))
 				},
-			Self::SimpleReciprocal { factor, offset } => {
-				// Actual curve is y = factor / x + offset
-				// Ergo curve is x = factor / (y - offset)
-				if y < *offset {
-					Perbill::one()
-				} else {
-					factor.saturating_div(y - *offset, Up)
-				}
-			},
-			Self::Reciprocal { factor, offset } => {
-				let x_offset = factor.saturating_div(offset.left_from_one(), Down);
-				// Actual curve is y = factor / (x + x_offset) + y_offset
-				// Ergo curve is x = factor / (y - offset) - x_offset
-				// To avoid pre-saturation problems, we move the `x_offset` term to happen prior to
-				// the division.
-				// So:
-				// yo := y - offset
-				// x = (factor - x_offset * yo) / yo
-				if y < *offset {
-					Perbill::one()
-				} else {
-					let yo = y - *offset;
-					factor.saturating_sub(x_offset * yo).saturating_div(yo, Up)
-				}
-			},
-			Self::TranslatedReciprocal { factor, x_offset, y_offset } => {
+			Self::Reciprocal { factor, x_offset, y_offset } => {
 				let y = FixedI64::from(y);
 				let maybe_term = factor.checked_rounding_div(y - *y_offset, Up);
 				maybe_term.and_then(|term| (term - *x_offset).try_into_perthing().ok())
@@ -514,26 +465,10 @@ impl Debug for Curve {
 					step,
 				)
 			},
-			Self::SimpleReciprocal { factor, offset } => {
+			Self::Reciprocal { factor, x_offset, y_offset } => {
 				write!(
 					f,
-					"SimpleReciprocal[factor of {:?}, offset of {:?}]",
-					factor,
-					offset,
-				)
-			},
-			Self::Reciprocal { factor, offset } => {
-				write!(
-					f,
-					"Reciprocal[factor of {:?}, offset of {:?}]",
-					factor,
-					offset,
-				)
-			},
-			Self::TranslatedReciprocal { factor, x_offset, y_offset } => {
-				write!(
-					f,
-					"TranslatedReciprocal[factor of {:?}, x_offset of {:?}, y_offset of {:?}]",
+					"Reciprocal[factor of {:?}, x_offset of {:?}, y_offset of {:?}]",
 					factor,
 					x_offset,
 					y_offset,
@@ -549,15 +484,16 @@ mod tests {
 	use sp_runtime::PerThing;
 	use frame_support::traits::ConstU32;
 
-	fn percent(x: u32) -> Perbill {
-		Perbill::from_percent(x)
+	const fn percent(x: u128) -> FixedI64 {
+		FixedI64::from_rational(x, 100)
 	}
+
+	const TIP_CURVE: Curve = Curve::reciprocal_from_point_and_floor(1, 28, percent(65), percent(50));
 
 	#[test]
 	#[should_panic]
 	fn check_curves() {
-//		Curve::reciprocal_from_point(7, 28u32, 0.1).info(28u32, "Tip");
-		Curve::reciprocal_from_point_and_floor(1u32, 28, percent(65), percent(50)).info(28u32, "Tip");
+		TIP_CURVE.info(28u32, "Tip");
 		assert!(false);
 	}
 
@@ -591,7 +527,7 @@ mod tests {
 
 	#[test]
 	fn translated_reciprocal_works() {
-		let c: Curve = Curve::TranslatedReciprocal {
+		let c: Curve = Curve::Reciprocal {
 			factor: FixedI64::from_float(0.03125),
 			x_offset: FixedI64::from_float(0.0363306838226),
 			y_offset: FixedI64::from_float(0.139845532427),
@@ -608,144 +544,16 @@ mod tests {
 	}
 
 	#[test]
-	fn basic_reciprocal_works() {
-		let c: Curve = Curve::Reciprocal {
-			factor: percent(5),
-			offset: percent(0),
-		};
-
-		for i in 0..9_696_969u32 {
-			let query = Perbill::from_rational(i, 9_696_969);
-			// Determine the nearest point in time when the query will be above threshold.
-			let delay_needed = c.delay(query);
-			// Ensure that it actually does pass at that time, or that it will never pass.
-			assert!(delay_needed.is_one() || c.passing(delay_needed, query));
-		}
-
-		assert_eq!(c.threshold(percent(0)) * 100u32, 100);
-		assert_eq!(c.threshold(percent(1)) * 100u32, 83);
-		assert_eq!(c.threshold(percent(2)) * 100u32, 71);
-		assert_eq!(c.threshold(percent(3)) * 100u32, 62);
-		assert_eq!(c.threshold(percent(4)) * 100u32, 56);
-		assert_eq!(c.threshold(percent(5)) * 100u32, 50);
-		assert_eq!(c.threshold(percent(6)) * 100u32, 45);
-		assert_eq!(c.threshold(percent(7)) * 100u32, 42);
-		assert_eq!(c.threshold(percent(8)) * 100u32, 38);
-		assert_eq!(c.threshold(percent(9)) * 100u32, 36);
-		assert_eq!(c.threshold(percent(10)) * 100u32, 33);
-		assert_eq!(c.threshold(percent(15)) * 100u32, 25);
-		assert_eq!(c.threshold(percent(20)) * 100u32, 20);
-		assert_eq!(c.threshold(percent(25)) * 100u32, 17);
-		assert_eq!(c.threshold(percent(30)) * 100u32, 14);
-		assert_eq!(c.threshold(percent(35)) * 100u32, 12);
-		assert_eq!(c.threshold(percent(40)) * 100u32, 11);
-		assert_eq!(c.threshold(percent(45)) * 100u32, 10);
-		assert_eq!(c.threshold(percent(50)) * 100u32, 9);
-		assert_eq!(c.threshold(percent(55)) * 100u32, 8);
-		assert_eq!(c.threshold(percent(60)) * 100u32, 8);
-		assert_eq!(c.threshold(percent(65)) * 100u32, 7);
-		assert_eq!(c.threshold(percent(70)) * 100u32, 7);
-		assert_eq!(c.threshold(percent(75)) * 100u32, 6);
-		assert_eq!(c.threshold(percent(80)) * 100u32, 6);
-		assert_eq!(c.threshold(percent(85)) * 100u32, 6);
-		assert_eq!(c.threshold(percent(90)) * 100u32, 5);
-		assert_eq!(c.threshold(percent(95)) * 100u32, 5);
-		assert_eq!(c.threshold(percent(100)) * 100u32, 5);
-
-		assert_eq!(c.delay(percent(0)) * 100u32, 100);
-		assert_eq!(c.delay(percent(1)) * 100u32, 100);
-		assert_eq!(c.delay(percent(2)) * 100u32, 100);
-		assert_eq!(c.delay(percent(3)) * 100u32, 100);
-		assert_eq!(c.delay(percent(4)) * 100u32, 100);
-		assert_eq!(c.delay(percent(5)) * 100u32, 95);
-		assert_eq!(c.delay(percent(6)) * 100u32, 78);
-		assert_eq!(c.delay(percent(7)) * 100u32, 66);
-		assert_eq!(c.delay(percent(8)) * 100u32, 57);
-		assert_eq!(c.delay(percent(9)) * 100u32, 51);
-		assert_eq!(c.delay(percent(10)) * 100u32, 45);
-		assert_eq!(c.delay(percent(15)) * 100u32, 28);
-		assert_eq!(c.delay(percent(20)) * 100u32, 20);
-		assert_eq!(c.delay(percent(25)) * 100u32, 15);
-		assert_eq!(c.delay(percent(30)) * 100u32, 12);
-		assert_eq!(c.delay(percent(35)) * 100u32, 9);
-		assert_eq!(c.delay(percent(40)) * 100u32, 7);
-		assert_eq!(c.delay(percent(45)) * 100u32, 6);
-		assert_eq!(c.delay(percent(50)) * 100u32, 5);
-		assert_eq!(c.delay(percent(55)) * 100u32, 4);
-		assert_eq!(c.delay(percent(60)) * 100u32, 3);
-		assert_eq!(c.delay(percent(65)) * 100u32, 3);
-		assert_eq!(c.delay(percent(70)) * 100u32, 2);
-		assert_eq!(c.delay(percent(75)) * 100u32, 2);
-		assert_eq!(c.delay(percent(80)) * 100u32, 1);
-		assert_eq!(c.delay(percent(85)) * 100u32, 1);
-		assert_eq!(c.delay(percent(90)) * 100u32, 1);
-		assert_eq!(c.delay(percent(95)) * 100u32, 0);
-		assert_eq!(c.delay(percent(100)) * 100u32, 0);
-	}
-
-	#[test]
-	fn offset_reciprocal_works() {
-		let c: Curve = Curve::Reciprocal {
-			factor: percent(10),
-			offset: percent(50),
-		};
-
-		for i in 0..9_696_969u32 {
-			let query = Perbill::from_rational(i, 9_696_969);
-			// Determine the nearest point in time when the query will be above threshold.
-			let delay_needed = c.delay(query);
-			// Ensure that it actually does pass at that time, or that it will never pass.
-			assert!(delay_needed.is_one() || c.passing(delay_needed, query));
-		}
-
-		assert_eq!(c.threshold(percent(0)) * 100u32, 100);
-		assert_eq!(c.threshold(percent(10)) * 100u32, 83);
-		assert_eq!(c.threshold(percent(20)) * 100u32, 75);
-		assert_eq!(c.threshold(percent(30)) * 100u32, 70);
-		assert_eq!(c.threshold(percent(40)) * 100u32, 67);
-		assert_eq!(c.threshold(percent(50)) * 100u32, 64);
-		assert_eq!(c.threshold(percent(60)) * 100u32, 62);
-		assert_eq!(c.threshold(percent(70)) * 100u32, 61);
-		assert_eq!(c.threshold(percent(80)) * 100u32, 60);
-		assert_eq!(c.threshold(percent(90)) * 100u32, 59);
-		assert_eq!(c.threshold(percent(100)) * 100u32, 58);
-
-		assert_eq!(c.delay(percent(0)) * 100u32, 100);
-		assert_eq!(c.delay(percent(10)) * 100u32, 100);
-		assert_eq!(c.delay(percent(20)) * 100u32, 100);
-		assert_eq!(c.delay(percent(30)) * 100u32, 100);
-		assert_eq!(c.delay(percent(40)) * 100u32, 100);
-		assert_eq!(c.delay(percent(50)) * 100u32, 100);
-		assert_eq!(c.delay(percent(60)) * 100u32, 80);
-		assert_eq!(c.delay(percent(70)) * 100u32, 30);
-		assert_eq!(c.delay(percent(80)) * 100u32, 13);
-		assert_eq!(c.delay(percent(90)) * 100u32, 5);
-		assert_eq!(c.delay(percent(100)) * 100u32, 0);
-	}
-
-	#[test]
-	fn realistic_offset_reciprocal_works() {
-		let c: Curve = Curve::Reciprocal {
-			factor: Perbill::from_rational(35u32, 10_000u32),
-			offset: percent(10),
-		};
-
-		for i in 0..9_696_969u32 {
-			let query = Perbill::from_rational(i, 9_696_969);
-			// Determine the nearest point in time when the query will be above threshold.
-			let delay_needed = c.delay(query);
-			// Ensure that it actually does pass at that time, or that it will never pass.
-			assert!(delay_needed.is_one() || c.passing(delay_needed, query));
-		}
-	}
-
-	#[test]
 	fn stepped_decreasing_works() {
+		fn pc(x: u32) -> Perbill {
+			Perbill::from_percent(x)
+		}
+
 		let c = Curve::SteppedDecreasing {
-			begin: percent(80),
-			end: percent(30),
-			step: percent(10),
-			period: percent(15),
+			begin: pc(80),
+			end: pc(30),
+			step: pc(10),
+			period: pc(15),
 		};
 
 		for i in 0..9_696_969u32 {
@@ -756,32 +564,32 @@ mod tests {
 			assert!(delay_needed.is_one() || c.passing(delay_needed, query));
 		}
 
-		assert_eq!(c.threshold(percent(0)), percent(80));
-		assert_eq!(c.threshold(percent(15).less_epsilon()), percent(80));
-		assert_eq!(c.threshold(percent(15)), percent(70));
-		assert_eq!(c.threshold(percent(30).less_epsilon()), percent(70));
-		assert_eq!(c.threshold(percent(30)), percent(60));
-		assert_eq!(c.threshold(percent(45).less_epsilon()), percent(60));
-		assert_eq!(c.threshold(percent(45)), percent(50));
-		assert_eq!(c.threshold(percent(60).less_epsilon()), percent(50));
-		assert_eq!(c.threshold(percent(60)), percent(40));
-		assert_eq!(c.threshold(percent(75).less_epsilon()), percent(40));
-		assert_eq!(c.threshold(percent(75)), percent(30));
-		assert_eq!(c.threshold(percent(100)), percent(30));
+		assert_eq!(c.threshold(pc(0)), pc(80));
+		assert_eq!(c.threshold(pc(15).less_epsilon()), pc(80));
+		assert_eq!(c.threshold(pc(15)), pc(70));
+		assert_eq!(c.threshold(pc(30).less_epsilon()), pc(70));
+		assert_eq!(c.threshold(pc(30)), pc(60));
+		assert_eq!(c.threshold(pc(45).less_epsilon()), pc(60));
+		assert_eq!(c.threshold(pc(45)), pc(50));
+		assert_eq!(c.threshold(pc(60).less_epsilon()), pc(50));
+		assert_eq!(c.threshold(pc(60)), pc(40));
+		assert_eq!(c.threshold(pc(75).less_epsilon()), pc(40));
+		assert_eq!(c.threshold(pc(75)), pc(30));
+		assert_eq!(c.threshold(pc(100)), pc(30));
 
-		assert_eq!(c.delay(percent(100)), percent(0));
-		assert_eq!(c.delay(percent(80)), percent(0));
-		assert_eq!(c.delay(percent(80).less_epsilon()), percent(15));
-		assert_eq!(c.delay(percent(70)), percent(15));
-		assert_eq!(c.delay(percent(70).less_epsilon()), percent(30));
-		assert_eq!(c.delay(percent(60)), percent(30));
-		assert_eq!(c.delay(percent(60).less_epsilon()), percent(45));
-		assert_eq!(c.delay(percent(50)), percent(45));
-		assert_eq!(c.delay(percent(50).less_epsilon()), percent(60));
-		assert_eq!(c.delay(percent(40)), percent(60));
-		assert_eq!(c.delay(percent(40).less_epsilon()), percent(75));
-		assert_eq!(c.delay(percent(30)), percent(75));
-		assert_eq!(c.delay(percent(30).less_epsilon()), percent(100));
-		assert_eq!(c.delay(percent(0)), percent(100));
+		assert_eq!(c.delay(pc(100)), pc(0));
+		assert_eq!(c.delay(pc(80)), pc(0));
+		assert_eq!(c.delay(pc(80).less_epsilon()), pc(15));
+		assert_eq!(c.delay(pc(70)), pc(15));
+		assert_eq!(c.delay(pc(70).less_epsilon()), pc(30));
+		assert_eq!(c.delay(pc(60)), pc(30));
+		assert_eq!(c.delay(pc(60).less_epsilon()), pc(45));
+		assert_eq!(c.delay(pc(50)), pc(45));
+		assert_eq!(c.delay(pc(50).less_epsilon()), pc(60));
+		assert_eq!(c.delay(pc(40)), pc(60));
+		assert_eq!(c.delay(pc(40).less_epsilon()), pc(75));
+		assert_eq!(c.delay(pc(30)), pc(75));
+		assert_eq!(c.delay(pc(30).less_epsilon()), pc(100));
+		assert_eq!(c.delay(pc(0)), pc(100));
 	}
 }

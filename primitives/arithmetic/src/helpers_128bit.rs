@@ -1,6 +1,7 @@
 // This file is part of Substrate.
 
 // Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Some code is modified from Derek Dreery's IntegerSquareRoot impl.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -125,27 +126,27 @@ mod double128 {
 	use sp_std::convert::TryFrom;
 
 	/// Returns the least significant 64 bits of a
-	fn low_64(a: u128) -> u128 {
+	const fn low_64(a: u128) -> u128 {
 		a & ((1<<64)-1)
 	}
 
 	/// Returns the most significant 64 bits of a
-	fn high_64(a: u128) -> u128 {
+	const fn high_64(a: u128) -> u128 {
 		a >> 64
 	}
 
 	/// Returns 2^128 - a (two's complement)
-	fn neg128(a: u128) -> u128 {
+	const fn neg128(a: u128) -> u128 {
 		(!a).wrapping_add(1)
 	}
 
 	/// Returns 2^128 / a
-	fn div128(a: u128) -> u128 {
+	const fn div128(a: u128) -> u128 {
 		(neg128(a)/a).wrapping_add(1)
 	}
 
 	/// Returns 2^128 % a
-	fn mod128(a: u128) -> u128 {
+	const fn mod128(a: u128) -> u128 {
 		neg128(a) % a
 	}
 
@@ -158,78 +159,64 @@ mod double128 {
 	impl TryFrom<Double128> for u128 {
 		type Error = ();
 		fn try_from(x: Double128) -> Result<Self, ()> {
-			match x.high {
-				0 => Ok(x.low),
-				_ => Err(()),
-			}
+			x.try_into_u128()
 		}
 	}
 
 	impl Zero for Double128 {
 		fn zero() -> Self {
-			Self {
-				high: 0,
-				low: 0,
-			}
+			Double128::zero()
 		}
 		fn is_zero(&self) -> bool {
-			self.high == 0 && self.low == 0
+			Double128::is_zero(&self)
 		}
 	}
 
 	impl sp_std::ops::Add<Self> for Double128 {
 		type Output = Self;
-		fn add(self, b: Self) -> Self {
-			let (low, overflow) = self.low.overflowing_add(b.low);
-			let carry = overflow as u128;		// 1 if true, 0 if false.
-			let high = self.high.wrapping_add(b.high).wrapping_add(carry as u128);
-			Double128 { high, low }
+		fn add(self, rhs: Self) -> Self {
+			Double128::add(self, rhs)
 		}
 	}
 
 	impl sp_std::ops::AddAssign<Self> for Double128 {
-		fn add_assign(&mut self, b: Self) {
-			*self = *self + b;
+		fn add_assign(&mut self, rhs: Self) {
+			*self = self.add(rhs);
 		}
 	}
 
 	impl sp_std::ops::Div<u128> for Double128 {
 		type Output = (Self, u128);
-		fn div(mut self, rhs: u128) -> (Self, u128) {
-			if rhs == 1 {
-				return (self, 0);
-			}
-
-			// (self === a; rhs === b)
-			// Calculate a / b
-			// = (a_high << 128 + a_low) / b
-			//   let (q, r) = (div128(b), mod128(b));
-			// = (a_low * (q * b + r)) + a_high) / b
-			// = (a_low * q * b + a_low * r + a_high)/b
-			// = (a_low * r + a_high) / b + a_low * q
-			let (q, r) = (div128(rhs), mod128(rhs));
-
-			// x = current result
-			// a = next number
-			let mut x = Double128::zero();
-			while self.high != 0 {
-				// x += a.low * q
-				x += Double128::product_of(self.high, q);
-				// a = a.low * r + a.high
-				self = Double128::product_of(self.high, r) + self.low_part();
-			}
-
-			(x + Double128::from_low(self.low / rhs), self.low % rhs)
+		fn div(self, rhs: u128) -> (Self, u128) {
+			Double128::div(self, rhs)
 		}
 	}
 
 	impl Double128 {
+		pub const fn try_into_u128(self) -> Result<u128, ()> {
+			match self.high {
+				0 => Ok(self.low),
+				_ => Err(()),
+			}
+		}
+
+		pub const fn zero() -> Self {
+			Self {
+				high: 0,
+				low: 0,
+			}
+		}
+
+		pub const fn is_zero(&self) -> bool {
+			self.high == 0 && self.low == 0
+		}
+
 		/// Return a `Double128` value representing the `scaled_value << 64`.
 		///
 		/// This means the lower half of the `high` component will be equal to the upper 64-bits of
 		/// `scaled_value` (in the lower positions) and the upper half of the `low` component will
 		/// be equal to the lower 64-bits of `scaled_value`.
-		pub fn left_shift_64(scaled_value: u128) -> Self {
+		pub const fn left_shift_64(scaled_value: u128) -> Self {
 			Self {
 				high: scaled_value >> 64,
 				low: scaled_value << 64,
@@ -237,17 +224,17 @@ mod double128 {
 		}
 
 		/// Construct a value from the upper 128 bits only, with the lower being zeroed.
-		pub fn from_low(low: u128) -> Self {
+		pub const fn from_low(low: u128) -> Self {
 			Self { high: 0, low }
 		}
 
 		/// Returns the same value ignoring anything in the high 128-bits.
-		pub fn low_part(self) -> Self {
+		pub const fn low_part(self) -> Self {
 			Self { high: 0, .. self }
 		}
 
 		/// Returns a*b (in 256 bits)
-		pub fn product_of(a: u128, b: u128) -> Self {
+		pub const fn product_of(a: u128, b: u128) -> Self {
 			// Split a and b into hi and lo 64-bit parts
 			let (a_low, a_high) = (low_64(a), high_64(a));
 			let (b_low, b_high) = (low_64(b), high_64(b));
@@ -268,26 +255,97 @@ mod double128 {
 			let fl = Self { high: l, low: f };
 			let i = Self::left_shift_64(i);
 			let o = Self::left_shift_64(o);
-			fl + i + o
+			fl.add(i).add(o)
+		}
+
+		pub const fn add(self, b: Self) -> Self {
+			let (low, overflow) = self.low.overflowing_add(b.low);
+			let carry = overflow as u128;		// 1 if true, 0 if false.
+			let high = self.high.wrapping_add(b.high).wrapping_add(carry as u128);
+			Double128 { high, low }
+		}
+
+		pub const fn div(mut self, rhs: u128) -> (Self, u128) {
+			if rhs == 1 {
+				return (self, 0);
+			}
+
+			// (self === a; rhs === b)
+			// Calculate a / b
+			// = (a_high << 128 + a_low) / b
+			//   let (q, r) = (div128(b), mod128(b));
+			// = (a_low * (q * b + r)) + a_high) / b
+			// = (a_low * q * b + a_low * r + a_high)/b
+			// = (a_low * r + a_high) / b + a_low * q
+			let (q, r) = (div128(rhs), mod128(rhs));
+
+			// x = current result
+			// a = next number
+			let mut x = Self::zero();
+			while self.high != 0 {
+				// x += a.low * q
+				x = x.add(Self::product_of(self.high, q));
+				// a = a.low * r + a.high
+				self = Self::product_of(self.high, r).add(self.low_part());
+			}
+
+			(x.add(Self::from_low(self.low / rhs)), self.low % rhs)
 		}
 	}
 }
 
+pub const fn checked_mul(a: u128, b: u128) -> Option<u128> {
+	a.checked_mul(b)
+}
+
+pub const fn checked_neg(a: u128) -> Option<u128> {
+	a.checked_neg()
+}
+
+pub const fn saturating_add(a: u128, b: u128) -> u128 {
+	a.saturating_add(b)
+}
+
+pub const fn sqrt(mut n: u128) -> u128 {
+	// Modified from https://github.com/derekdreery/integer-sqrt-rs (Apache/MIT).
+	if n == 0 { return 0 }
+
+	// Compute bit, the largest power of 4 <= n
+	let max_shift: u32 = 0u128.leading_zeros() - 1;
+	let shift: u32 = (max_shift - n.leading_zeros()) & !1;
+	let mut bit = 1u128 << shift;
+
+	// Algorithm based on the implementation in:
+	// https://en.wikipedia.org/wiki/Methods_of_computing_square_roots#Binary_numeral_system_(base_2)
+	// Note that result/bit are logically unsigned (even if T is signed).
+	let mut result = 0u128;
+	while bit != 0 {
+		if n >= result + bit {
+			n -= result + bit;
+			result = (result >> 1) + bit;
+		} else {
+			result = result >> 1;
+		}
+		bit = bit >> 2;
+	}
+	result
+}
+
 /// Returns `a * b / c` and `(a * b) % c` (wrapping to 128 bits) or `None` in the case of
 /// overflow.
-pub fn multiply_by_rational_with_rounding(a: u128, b: u128, c: u128, r: Rounding) -> Option<u128> {
+pub const fn multiply_by_rational_with_rounding(a: u128, b: u128, c: u128, r: Rounding) -> Option<u128> {
 	use double128::Double128;
 	if c == 0 {
 		panic!("attempt to divide by zero")
 	}
-	let (result, remainder) = Double128::product_of(a, b) / c;
-	let mut result: u128 = result.try_into().ok()?;
+	let (result, remainder) = Double128::product_of(a, b).div(c);
+	let mut result: u128 = match result.try_into_u128() { Ok(v) => v, Err(_) => return None };
 	if match r {
 		Rounding::Up => remainder > 0,
 		Rounding::Nearest => remainder >= c / 2 + c % 2,
 		Rounding::Down => false,
 	} {
-		result = result.checked_add(1)?;
+		result = match result.checked_add(1) { Some(v) => v, None => return None };
 	}
 	Some(result)
 }

@@ -18,12 +18,15 @@
 //! Decimal Fixed Point implementations for Substrate runtime.
 
 use crate::{
-	helpers_128bit::{multiply_by_rational, multiply_by_rational_with_rounding},
+	helpers_128bit::{
+		multiply_by_rational, multiply_by_rational_with_rounding, sqrt, checked_mul,
+		saturating_add,
+	},
 	traits::{
 		Bounded, CheckedAdd, CheckedDiv, CheckedMul, CheckedNeg, CheckedSub, One,
 		SaturatedConversion, Saturating, UniqueSaturatedInto, Zero,
 	},
-	PerThing, Rounding,
+	PerThing, Perbill, Rounding,
 };
 use codec::{CompactAs, Decode, Encode};
 use sp_std::{
@@ -410,9 +413,48 @@ macro_rules! implement_fixed {
 				Self(inner)
 			}
 
+			/// const version of `FixedPointNumber::into_inner`.
+			pub const fn into_inner(self) -> $inner_type {
+				self.0
+			}
+
+			/// Creates self from a `u32`.
+			pub const fn from_u32(n: u32) -> Self {
+				Self::from_inner((n as $inner_type) * $div)
+			}
+
 			#[cfg(any(feature = "std", test))]
 			pub fn from_float(x: f64) -> Self {
 				Self((x * (<Self as FixedPointNumber>::DIV as f64)) as $inner_type)
+			}
+
+			pub const fn from_perbill(n: Perbill) -> Self {
+				Self::from_rational(n.deconstruct() as u128, 1_000_000_000)
+			}
+
+			pub const fn into_perbill(self) -> Perbill {
+				if self.0 <= 0 {
+					Perbill::zero()
+				} else if self.0 >= $div {
+					Perbill::one()
+				} else {
+					match multiply_by_rational_with_rounding(
+						self.0 as u128,
+						1_000_000_000,
+						Self::DIV as u128,
+						Rounding::Nearest,
+					) {
+						Some(value) => {
+							if value > (u32::max_value() as u128) {
+								panic!("prior logic ensures 0<self.0<DIV; \
+									multiply ensures 0<self.0<1000000000; \
+									qed");
+							}
+							Perbill::from_parts(value as u32)
+						},
+						None => Perbill::zero(),
+					}
+				}
 			}
 
 			#[cfg(any(feature = "std", test))]
@@ -445,29 +487,48 @@ macro_rules! implement_fixed {
 				}
 			}
 
+			pub const fn neg(self) -> Self {
+				Self(0 - self.0)
+			}
+
 			/// A version of div with customisable rounding.
-			pub fn checked_rounding_div(self, other: Self, rounding: Rounding) -> Option<Self> {
+			pub const fn checked_rounding_div(self, other: Self, rounding: Rounding) -> Option<Self> {
 				if other.0 == 0 {
 					return None
 				}
 
-				let lhs: I129 = self.0.into();
-				let rhs: I129 = other.0.into();
+				let lhs = self.into_i129();
+				let rhs = other.into_i129();
 				let negative = lhs.negative != rhs.negative;
 
-				multiply_by_rational_with_rounding(lhs.value, Self::DIV as u128, rhs.value, rounding)
-					.and_then(|value| from_i129(I129 { value, negative }))
-					.map(Self)
+				match multiply_by_rational_with_rounding(
+					lhs.value,
+					Self::DIV as u128,
+					rhs.value,
+					rounding,
+				) {
+					Some(value) => Self::from_i129(I129 { value, negative }),
+					None => None,
+				}
+			}
+
+			pub const fn sqrt(self) -> Self {
+				match self.try_sqrt() {
+					Some(v) => v,
+					None => panic!("sqrt overflow or negative input"),
+				}
 			}
 
 			/// Compute the square root, rounding as desired. If it overflows or is negative, then
 			/// `None` is returned.
-			pub fn sqrt(self) -> Option<Self> {
-				use integer_sqrt::IntegerSquareRoot;
-				let v: u128 = self.0.try_into().ok()?;
-				if v == 0 {
+			pub const fn try_sqrt(self) -> Option<Self> {
+				if self.0 == 0 {
 					return Some(Self(0))
 				}
+				if self.0 < 1 {
+					return None
+				}
+				let v = self.0 as u128;
 
 				// Want x' = sqrt(x) where x = n/D and x' = n'/D (D is fixed)
 				// Our prefered way is:
@@ -478,12 +539,127 @@ macro_rules! implement_fixed {
 				//   sqrt(nD) = sqrt(n)*sqrt(D)
 				// computing them individually and taking the product at the end. we will lose some
 				// precision though.
-				let r = if let Some(vd) = v.checked_mul($div) {
-					vd.integer_sqrt()
+				let maybe_vd = checked_mul(v, $div);
+				let r = if let Some(vd) = maybe_vd {
+					sqrt(vd)
 				} else {
-					v.integer_sqrt().checked_mul($div.integer_sqrt())?
+					sqrt(v) * sqrt($div)
 				};
-				Some(Self(r.try_into().ok()?))
+				Some(Self(r as $inner_type))
+			}
+
+			pub const fn add(self, rhs: Self) -> Self {
+				Self(self.0 + rhs.0)
+			}
+
+			pub const fn sub(self, rhs: Self) -> Self {
+				Self(self.0 - rhs.0)
+			}
+
+			pub const fn mul(self, rhs: Self) -> Self {
+				match $name::const_checked_mul(self, rhs) {
+					Some(v) => v,
+					None => panic!("attempt to multiply with overflow"),
+				}
+			}
+
+			pub const fn div(self, rhs: Self) -> Self {
+				match $name::const_checked_div(self, rhs) {
+					Some(v) => v,
+					None => panic!("attempt to divide with overflow or NaN"),
+				}
+			}
+
+			const fn into_i129(self) -> I129 {
+				#[allow(unused_comparisons)]
+				if self.0 < 0 {
+					let value = match self.0.checked_neg() {
+						Some(n) => n as u128,
+						None => saturating_add(<$inner_type>::max_value() as u128, 1),
+					};
+					I129 { value, negative: true }
+				} else {
+					I129 { value: self.0 as u128, negative: false }
+				}
+			}
+
+			const fn from_i129(n: I129) -> Option<Self> {
+				let max_plus_one = saturating_add(<$inner_type>::max_value() as u128, 1);
+				#[allow(unused_comparisons)]
+				let inner = if n.negative && <$inner_type>::min_value() < 0 && n.value == max_plus_one {
+					<$inner_type>::min_value()
+				} else {
+					let unsigned_inner = n.value as $inner_type;
+					if unsigned_inner as u128 != n.value {
+						return None
+					};
+					if n.negative {
+						match unsigned_inner.checked_neg() {
+							Some(v) => v,
+							None => return None,
+						}
+					} else {
+						unsigned_inner
+					}
+				};
+				Some(Self(inner))
+			}
+
+			/// Const function for getting an (approximate) value from a rational.
+			///
+			/// It is designed to be used in const expressions. This will panic if the input is bad.
+			pub const fn from_rational(a: u128, b: u128) -> Self {
+				if b == 0 {
+					panic!("attempt to divide by zero in from_rational")
+				}
+				match multiply_by_rational_with_rounding(
+					Self::DIV as u128,
+					a,
+					b,
+					Rounding::Nearest,
+				) {
+					Some(value) => match Self::from_i129(I129 { value, negative: false }) {
+						Some(x) => x,
+						None => panic!("overflow in from_rational"),
+					},
+					None => panic!("overflow in from_rational"),
+				}
+			}
+
+			pub const fn const_checked_mul(self, other: Self) -> Option<Self> {
+				let lhs = self.into_i129();
+				let rhs = other.into_i129();
+				let negative = lhs.negative != rhs.negative;
+
+				match multiply_by_rational_with_rounding(
+					lhs.value,
+					rhs.value,
+					Self::DIV as u128,
+					Rounding::Nearest,
+				) {
+					Some(value) => Self::from_i129(I129 { value, negative }),
+					None => None,
+				}
+			}
+
+			pub const fn const_checked_div(self, other: Self) -> Option<Self> {
+				if other.0 == 0 {
+					return None
+				}
+
+				let lhs = self.into_i129();
+				let rhs = other.into_i129();
+				let negative = lhs.negative != rhs.negative;
+
+				match multiply_by_rational_with_rounding(
+					lhs.value,
+					Self::DIV as u128,
+					rhs.value,
+					Rounding::Nearest,
+				) {
+					Some(value) => Self::from_i129(I129 { value, negative }),
+					None => None,
+				}
 			}
 		}
 
