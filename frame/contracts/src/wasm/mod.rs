@@ -1396,10 +1396,10 @@ mod tests {
 
 		let output = execute(CODE_GAS_LEFT, vec![], &mut ext).unwrap();
 
-		let gas_left = Weight::decode(&mut &*output.data).unwrap();
+		let gas_left = u64::decode(&mut &*output.data).unwrap();
 		let actual_left = ext.gas_meter.gas_left();
-		assert!(gas_left.is_any_less_than(&gas_limit), "gas_left must be less than initial");
-		assert!(gas_left.is_any_greater_than(&actual_left), "gas_left must be greater than final");
+		assert!(gas_left < gas_limit.computation, "gas_left must be less than initial");
+		assert!(gas_left > actual_left.computation, "gas_left must be greater than final");
 	}
 
 	const CODE_VALUE_TRANSFERRED: &str = r#"

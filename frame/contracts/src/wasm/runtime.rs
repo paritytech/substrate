@@ -1486,7 +1486,7 @@ define_env!(Env, <E: Ext>,
 	// The data is encoded as Gas.
 	[seal0] seal_gas_left(ctx, out_ptr: u32, out_len_ptr: u32) => {
 		ctx.charge_gas(RuntimeCosts::GasLeft)?;
-		let gas_left = &ctx.ext.gas_meter().gas_left().encode();
+		let gas_left = &ctx.ext.gas_meter().gas_left().computation.encode();
 		Ok(ctx.write_sandbox_output(
 			out_ptr, out_len_ptr, &gas_left, false, already_charged,
 		)?)
