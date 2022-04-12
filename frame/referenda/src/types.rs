@@ -376,7 +376,7 @@ impl Curve {
 	pub(crate) fn threshold(&self, x: Perbill) -> Perbill {
 		match self {
 			Self::LinearDecreasing { length, floor } =>
-				(x.min(*length).saturating_div(*length, Down) * *floor).left_from_one(),
+				(x.min(*length).saturating_div(*length, Down) * floor.left_from_one()).left_from_one(),
 			Self::SteppedDecreasing { begin, end, step, period } =>
 				(*begin - (step.int_mul(x.int_div(*period))).min(*begin)).max(*end),
 			Self::Reciprocal { factor, x_offset, y_offset } => {
@@ -423,7 +423,7 @@ impl Curve {
 				if y < *floor {
 					Perbill::one()
 				} else {
-					y.left_from_one().saturating_div(*floor, Up) * *length
+					y.left_from_one().saturating_div(floor.left_from_one(), Up) * *length
 				},
 			Self::SteppedDecreasing { begin, end, step, period } =>
 				if y < *end {
@@ -494,12 +494,16 @@ mod tests {
 
 	const TIP_QUO: Curve = Curve::make_reciprocal(1, 28, percent(4), percent(0));
 	const TIP_APP: Curve = Curve::make_linear(10, 28, percent(50));
+	const ROOT_QUO: Curve = Curve::make_linear(28, 28, percent(0));
+	const ROOT_APP: Curve = Curve::make_reciprocal(4, 28, percent(80), percent(50));
 
 	#[test]
 	#[should_panic]
 	fn check_curves() {
 		TIP_QUO.info(28u32, "Tip Quorum");
 		TIP_APP.info(28u32, "Tip Approval");
+		ROOT_QUO.info(28u32, "Root Quorum");
+		ROOT_APP.info(28u32, "Root Approval");
 		assert!(false);
 	}
 
