@@ -95,7 +95,7 @@
 //! # use sp_runtime::transaction_validity::{
 //! #    TransactionValidity, UnknownTransaction, TransactionSource,
 //! # };
-//! # use sp_runtime::traits::ValidateUnsigned;
+//! # use sp_runtime::traits::{ValidateUnsigned, Zero};
 //! # impl ValidateUnsigned for Runtime {
 //! #     type Call = ();
 //! #
@@ -107,7 +107,7 @@
 //! impl frame_support::traits::OnRuntimeUpgrade for CustomOnRuntimeUpgrade {
 //!     fn on_runtime_upgrade() -> frame_support::weights::Weight {
 //!         // Do whatever you want.
-//!         0
+//!         Zero::zero()
 //!     }
 //! }
 //!
@@ -734,7 +734,9 @@ mod tests {
 			frame_system::limits::BlockWeights::builder()
 				.base_block(Weight::computation_only(10))
 				.for_class(DispatchClass::all(), |weights| weights.base_extrinsic = Weight::computation_only(5))
-				.for_class(DispatchClass::non_mandatory(), |weights| weights.max_total = Some(Weight::computation_only(1024)))
+				.for_class(DispatchClass::non_mandatory(), |weights|
+					weights.max_total = Some(Weight { computation: 1024, bandwidth: 512 })
+				)
 				.build_or_panic();
 		pub const DbWeight: RuntimeDbWeight = RuntimeDbWeight {
 			read: 10,
@@ -906,11 +908,11 @@ mod tests {
 	fn block_import_works() {
 		block_import_works_inner(
 			new_test_ext_v0(1),
-			hex!("1039e1a4bd0cf5deefe65f313577e70169c41c7773d6acf31ca8d671397559f5").into(),
+			hex!("5883ac48292e6055c049a25365ff5497838811a8333bf665d596826d2ad6e445").into(),
 		);
 		block_import_works_inner(
 			new_test_ext(1),
-			hex!("75e7d8f360d375bbe91bcf8019c01ab6362448b4a89e3b329717eb9d910340e5").into(),
+			hex!("1fbc38c2151bd200b463efc913f669222db9837883dab39320414eb271fa0734").into(),
 		);
 	}
 	fn block_import_works_inner(mut ext: sp_io::TestExternalities, state_root: H256) {
