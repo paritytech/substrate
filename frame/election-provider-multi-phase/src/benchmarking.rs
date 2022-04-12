@@ -519,32 +519,36 @@ frame_benchmarking::benchmarks! {
 		assert!(encoding.len() <= desired_size);
 	}
 
-	/*
-	challenge_solution{
-		let submitter = account("submitters", 0, SEED);
+	challenge_solution {
+
+		let mut signed_submissions = SignedSubmissions::<T>::get();
+
+		// Insert `max - 1` submissions because the call to `submit` will insert another
+		// submission and the score is worse then the previous scores.
+		for i in 0..(T::SignedMaxSubmissions::get() - 1) {
+			let raw_solution = RawSolution {
+				score: ElectionScore { minimal_stake: 10_000_000u128 + (i as u128), ..Default::default() },
+				..Default::default()
+			};
+			let signed_submission = SignedSubmission {
+				raw_solution,
+				who: account("submitters", i, SEED),
+				deposit: Default::default(),
+				reward: Default::default(),
+			};
+			signed_submissions.insert(signed_submission);
+		}
+		signed_submissions.put();
+
 		let challenger = frame_benchmarking::whitelisted_caller();
-		T::Currency::make_free_balance_be(&submitter,  T::Currency::minimum_balance() * 10_000_000_000u32.into());
-		T::Currency::make_free_balance_be(&challenger, T::Currency::minimum_balance() * 10_000_000_000u32.into());
 
-		let solution = RawSolution {
-			score: ElectionScore { minimal_stake: 10_000_000u128 - 1, ..Default::default() },
-			..Default::default()
-		};
+		T::Currency::make_free_balance_be(&challenger,  T::Currency::minimum_balance() * 1000u32.into());
 
-		solution.score.minimal_stake += 1;
-
-		<MultiPhase<T>>::create_snapshot().map_err(<&str>::from)?;
-		MultiPhase::<T>::on_initialize_open_signed();
-		<Round<T>>::put(1);
-
-		MultiPhase::<T>::submit(RawOrigin::Signed(submitter).into(), Box::new(solution));
-
-	}: _(RawOrigin::Signed(&challenger), 1)
+	}: _(RawOrigin::Signed(challenger), 3)
 
 	verify {
-		assert!(T::Currency::free_balance(&challenger) > 10_000_000_000u32.into());
+		assert!(<MultiPhase<T>>::signed_submissions().len() as u32 == T::SignedMaxSubmissions::get() - 1);
 	}
-	*/
 
 	impl_benchmark_test_suite!(
 		MultiPhase,

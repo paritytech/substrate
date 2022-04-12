@@ -1059,6 +1059,13 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// Challenge a solution in the signed phase
+		///
+		/// If the claimed score is correct, the challenger would be slashed.
+		///
+		/// If the claimed score is not correct, the malicious submitter will lose the deposit,
+		/// the solution will be ejected and the challenger will receive some reward
+		/// less than the solution's deposit.
 		// TODO: Add Proper Benchmarks
 		#[pallet::weight(100)]
 		pub fn challenge_solution(origin: OriginFor<T>, index: u32) -> DispatchResult {
@@ -1078,19 +1085,16 @@ pub mod pallet {
 						<QueuedSolution<T>>::put(solution);
 						let mut signed_submissions = Self::signed_submissions();
 						let _ = signed_submissions.pop(submission.raw_solution.score);
-						// SignedSubmissionsMap::<T>::remove(index);
 
 						Self::deposit_event(Event::ChallengerSlashed { account: who });
 
 						Ok(())
 					},
 					Err(_error) => {
-						// T::Currency::slash_reserved(&who, submission.deposit);
-
 						T::Currency::repatriate_reserved(
 							&submission.who,
 							&who,
-							submission.deposit - T::ChallengeDepositDiff::get(),
+							submission.deposit.saturating_sub(T::ChallengeDepositDiff::get()),
 							Free,
 						)?;
 
@@ -2087,7 +2091,7 @@ mod tests {
 			assert!(crate::mock::Balances::free_balance(&9999) > 100);
 		})
 	}
-	
+
 	#[test]
 	fn unsuccessful_challenge_works() {
 		ExtBuilder::default().build_and_execute(|| {

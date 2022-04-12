@@ -320,7 +320,8 @@ impl<T: Config> SignedSubmissions<T> {
 		let score = *score;
 		self.swap_out_submission(score, None)
 	}
-	
+
+	// Remove a signed submission by score from the set
 	pub fn pop(&mut self, remove_score: ElectionScore) -> Option<SignedSubmissionOf<T>> {
 		self.swap_out_submission(remove_score, None)
 	}
