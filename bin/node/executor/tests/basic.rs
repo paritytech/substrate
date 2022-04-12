@@ -378,66 +378,50 @@ fn full_native_block_import_works() {
 		let events = vec![
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
-				event: Event::System(
-					frame_system::Event::ExtrinsicSuccess {
-						dispatch_info: DispatchInfo {
-							weight: timestamp_weight,
-							class: DispatchClass::Mandatory,
-							..Default::default()
-						},
-					}
-					.into(),
-				),
+				event: Event::System(frame_system::Event::ExtrinsicSuccess {
+					dispatch_info: DispatchInfo {
+						weight: timestamp_weight,
+						class: DispatchClass::Mandatory,
+						..Default::default()
+					},
+				}),
 				topics: vec![],
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(1),
-				event: Event::Balances(
-					pallet_balances::Event::Withdraw { who: alice().into(), amount: fees }.into(),
-				),
+				event: Event::Balances(pallet_balances::Event::Withdraw {
+					who: alice().into(),
+					amount: fees,
+				}),
 				topics: vec![],
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(1),
-				event: Event::Balances(
-					pallet_balances::Event::Transfer {
-						from: alice().into(),
-						to: bob().into(),
-						amount: 69 * DOLLARS,
-					}
-					.into(),
-				),
+				event: Event::Balances(pallet_balances::Event::Transfer {
+					from: alice().into(),
+					to: bob().into(),
+					amount: 69 * DOLLARS,
+				}),
 				topics: vec![],
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(1),
-				event: Event::Balances(
-					pallet_balances::Event::Deposit {
-						who: pallet_treasury::Pallet::<Runtime>::account_id(),
-						amount: fees * 8 / 10,
-					}
-					.into(),
-				),
+				event: Event::Balances(pallet_balances::Event::Deposit {
+					who: pallet_treasury::Pallet::<Runtime>::account_id(),
+					amount: fees * 8 / 10,
+				}),
 				topics: vec![],
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(1),
-				event: Event::Treasury(
-					pallet_treasury::Event::Deposit { value: fees * 8 / 10 }.into(),
-				),
+				event: Event::Treasury(pallet_treasury::Event::Deposit { value: fees * 8 / 10 }),
 				topics: vec![],
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(1),
-				event: Event::System(
-					frame_system::Event::ExtrinsicSuccess {
-						dispatch_info: DispatchInfo {
-							weight: transfer_weight,
-							..Default::default()
-						},
-					}
-					.into(),
-				),
+				event: Event::System(frame_system::Event::ExtrinsicSuccess {
+					dispatch_info: DispatchInfo { weight: transfer_weight, ..Default::default() },
+				}),
 				topics: vec![],
 			},
 		];
@@ -465,116 +449,87 @@ fn full_native_block_import_works() {
 		let events = vec![
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
-				event: Event::System(
-					frame_system::Event::ExtrinsicSuccess {
-						dispatch_info: DispatchInfo {
-							weight: timestamp_weight,
-							class: DispatchClass::Mandatory,
-							..Default::default()
-						},
-					}
-					.into(),
-				),
+				event: Event::System(frame_system::Event::ExtrinsicSuccess {
+					dispatch_info: DispatchInfo {
+						weight: timestamp_weight,
+						class: DispatchClass::Mandatory,
+						..Default::default()
+					},
+				}),
 				topics: vec![],
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(1),
-				event: Event::Balances(
-					pallet_balances::Event::Withdraw { who: bob().into(), amount: fees }.into(),
-				),
+				event: Event::Balances(pallet_balances::Event::Withdraw {
+					who: bob().into(),
+					amount: fees,
+				}),
 				topics: vec![],
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(1),
-				event: Event::Balances(
-					pallet_balances::Event::Transfer {
-						from: bob().into(),
-						to: alice().into(),
-						amount: 5 * DOLLARS,
-					}
-					.into(),
-				),
+				event: Event::Balances(pallet_balances::Event::Transfer {
+					from: bob().into(),
+					to: alice().into(),
+					amount: 5 * DOLLARS,
+				}),
 				topics: vec![],
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(1),
-				event: Event::Balances(
-					pallet_balances::Event::Deposit {
-						who: pallet_treasury::Pallet::<Runtime>::account_id(),
-						amount: fees * 8 / 10,
-					}
-					.into(),
-				),
+				event: Event::Balances(pallet_balances::Event::Deposit {
+					who: pallet_treasury::Pallet::<Runtime>::account_id(),
+					amount: fees * 8 / 10,
+				}),
 				topics: vec![],
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(1),
-				event: Event::Treasury(
-					pallet_treasury::Event::Deposit { value: fees * 8 / 10 }.into(),
-				),
+				event: Event::Treasury(pallet_treasury::Event::Deposit { value: fees * 8 / 10 }),
 				topics: vec![],
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(1),
-				event: Event::System(
-					frame_system::Event::ExtrinsicSuccess {
-						dispatch_info: DispatchInfo {
-							weight: transfer_weight,
-							..Default::default()
-						},
-					}
-					.into(),
-				),
+				event: Event::System(frame_system::Event::ExtrinsicSuccess {
+					dispatch_info: DispatchInfo { weight: transfer_weight, ..Default::default() },
+				}),
 				topics: vec![],
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(2),
-				event: Event::Balances(
-					pallet_balances::Event::Withdraw { who: alice().into(), amount: fees }.into(),
-				),
+				event: Event::Balances(pallet_balances::Event::Withdraw {
+					who: alice().into(),
+					amount: fees,
+				}),
 				topics: vec![],
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(2),
-				event: Event::Balances(
-					pallet_balances::Event::Transfer {
-						from: alice().into(),
-						to: bob().into(),
-						amount: 15 * DOLLARS,
-					}
-					.into(),
-				),
+				event: Event::Balances(pallet_balances::Event::Transfer {
+					from: alice().into(),
+					to: bob().into(),
+					amount: 15 * DOLLARS,
+				}),
 				topics: vec![],
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(2),
-				event: Event::Balances(
-					pallet_balances::Event::Deposit {
-						who: pallet_treasury::Pallet::<Runtime>::account_id(),
-						amount: fees * 8 / 10,
-					}
-					.into(),
-				),
+				event: Event::Balances(pallet_balances::Event::Deposit {
+					who: pallet_treasury::Pallet::<Runtime>::account_id(),
+					amount: fees * 8 / 10,
+				}),
 				topics: vec![],
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(2),
-				event: Event::Treasury(
-					pallet_treasury::Event::Deposit { value: fees * 8 / 10 }.into(),
-				),
+				event: Event::Treasury(pallet_treasury::Event::Deposit { value: fees * 8 / 10 }),
 				topics: vec![],
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(2),
-				event: Event::System(
-					frame_system::Event::ExtrinsicSuccess {
-						dispatch_info: DispatchInfo {
-							weight: transfer_weight,
-							..Default::default()
-						},
-					}
-					.into(),
-				),
+				event: Event::System(frame_system::Event::ExtrinsicSuccess {
+					dispatch_info: DispatchInfo { weight: transfer_weight, ..Default::default() },
+				}),
 				topics: vec![],
 			},
 		];

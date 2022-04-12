@@ -167,9 +167,16 @@ fn transfer_dust_removal_tst1_should_work() {
 		// Verify the events
 		assert_eq!(System::events().len(), 12);
 
-		System::assert_has_event(crate::Event::Transfer { from: 2, to: 3, amount: 450 }.into());
-		System::assert_has_event(crate::Event::DustLost { account: 2, amount: 50 }.into());
-		System::assert_has_event(crate::Event::Deposit { who: 1, amount: 50 }.into());
+		System::assert_has_event(Event::Balances(crate::Event::Transfer {
+			from: 2,
+			to: 3,
+			amount: 450,
+		}));
+		System::assert_has_event(Event::Balances(crate::Event::DustLost {
+			account: 2,
+			amount: 50,
+		}));
+		System::assert_has_event(Event::Balances(crate::Event::Deposit { who: 1, amount: 50 }));
 	});
 }
 
@@ -195,9 +202,16 @@ fn transfer_dust_removal_tst2_should_work() {
 		// Verify the events
 		assert_eq!(System::events().len(), 10);
 
-		System::assert_has_event(crate::Event::Transfer { from: 2, to: 1, amount: 450 }.into());
-		System::assert_has_event(crate::Event::DustLost { account: 2, amount: 50 }.into());
-		System::assert_has_event(crate::Event::Deposit { who: 1, amount: 50 }.into());
+		System::assert_has_event(Event::Balances(crate::Event::Transfer {
+			from: 2,
+			to: 1,
+			amount: 450,
+		}));
+		System::assert_has_event(Event::Balances(crate::Event::DustLost {
+			account: 2,
+			amount: 50,
+		}));
+		System::assert_has_event(Event::Balances(crate::Event::Deposit { who: 1, amount: 50 }));
 	});
 }
 
@@ -232,18 +246,18 @@ fn repatriating_reserved_balance_dust_removal_should_work() {
 		// Verify the events
 		assert_eq!(System::events().len(), 11);
 
-		System::assert_has_event(
-			crate::Event::ReserveRepatriated {
-				from: 2,
-				to: 1,
-				amount: 450,
-				destination_status: Status::Free,
-			}
-			.into(),
-		);
+		System::assert_has_event(Event::Balances(crate::Event::ReserveRepatriated {
+			from: 2,
+			to: 1,
+			amount: 450,
+			destination_status: Status::Free,
+		}));
 
-		System::assert_has_event(crate::Event::DustLost { account: 2, amount: 50 }.into());
+		System::assert_has_event(Event::Balances(crate::Event::DustLost {
+			account: 2,
+			amount: 50,
+		}));
 
-		System::assert_last_event(crate::Event::Deposit { who: 1, amount: 50 }.into());
+		System::assert_last_event(Event::Balances(crate::Event::Deposit { who: 1, amount: 50 }));
 	});
 }

@@ -857,7 +857,7 @@ pub(crate) fn staking_events() -> Vec<crate::Event<Test>> {
 	System::events()
 		.into_iter()
 		.map(|r| r.event)
-		.filter_map(|e| if let Event::Staking(inner) = e { Some(*inner) } else { None })
+		.filter_map(|e| if let Event::Staking(inner) = e { Some(inner) } else { None })
 		.collect()
 }
 

@@ -2163,7 +2163,7 @@ mod tests {
 			System::set_block_number(5);
 			Elections::on_initialize(System::block_number());
 
-			System::assert_last_event(super::Event::EmptyTerm.into());
+			System::assert_last_event(Event::Elections(super::Event::EmptyTerm));
 		})
 	}
 
@@ -2179,9 +2179,9 @@ mod tests {
 			System::set_block_number(5);
 			Elections::on_initialize(System::block_number());
 
-			System::assert_last_event(
-				super::Event::NewTerm { new_members: vec![(4, 35), (5, 45)] }.into(),
-			);
+			System::assert_last_event(Event::Elections(super::Event::NewTerm {
+				new_members: vec![(4, 35), (5, 45)],
+			}));
 
 			assert_eq!(members_and_stake(), vec![(4, 35), (5, 45)]);
 			assert_eq!(runners_up_and_stake(), vec![]);
@@ -2192,7 +2192,9 @@ mod tests {
 			System::set_block_number(10);
 			Elections::on_initialize(System::block_number());
 
-			System::assert_last_event(super::Event::NewTerm { new_members: vec![] }.into());
+			System::assert_last_event(Event::Elections(super::Event::NewTerm {
+				new_members: vec![],
+			}));
 
 			// outgoing have lost their bond.
 			assert_eq!(balances(&4), (37, 0));
@@ -2262,7 +2264,9 @@ mod tests {
 			assert_eq!(Elections::election_rounds(), 1);
 			assert!(members_ids().is_empty());
 
-			System::assert_last_event(super::Event::NewTerm { new_members: vec![] }.into());
+			System::assert_last_event(Event::Elections(super::Event::NewTerm {
+				new_members: vec![],
+			}));
 		});
 	}
 
@@ -2614,9 +2618,9 @@ mod tests {
 			// 5 is an outgoing loser. will also get slashed.
 			assert_eq!(balances(&5), (45, 2));
 
-			System::assert_has_event(
-				super::Event::NewTerm { new_members: vec![(4, 35), (5, 45)] }.into(),
-			);
+			System::assert_has_event(Event::Elections(super::Event::NewTerm {
+				new_members: vec![(4, 35), (5, 45)],
+			}));
 		})
 	}
 

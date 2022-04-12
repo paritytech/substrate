@@ -1289,7 +1289,7 @@ mod tests {
 		System::events()
 			.into_iter()
 			.filter_map(|meta| match meta.event {
-				MetaEvent::Contracts(contract_event) => Some(*contract_event),
+				MetaEvent::Contracts(contract_event) => Some(contract_event),
 				_ => None,
 			})
 			.collect()
@@ -2434,9 +2434,10 @@ mod tests {
 				System::events(),
 				vec![EventRecord {
 					phase: Phase::Initialization,
-					event: MetaEvent::System(
-						frame_system::Event::Remarked { sender: BOB, hash: remark_hash }.into()
-					),
+					event: MetaEvent::System(frame_system::Event::Remarked {
+						sender: BOB,
+						hash: remark_hash
+					}),
 					topics: vec![],
 				},]
 			);
@@ -2505,25 +2506,23 @@ mod tests {
 				vec![
 					EventRecord {
 						phase: Phase::Initialization,
-						event: MetaEvent::System(
-							frame_system::Event::Remarked { sender: BOB, hash: remark_hash }.into()
-						),
+						event: MetaEvent::System(frame_system::Event::Remarked {
+							sender: BOB,
+							hash: remark_hash
+						}),
 						topics: vec![],
 					},
 					EventRecord {
 						phase: Phase::Initialization,
-						event: MetaEvent::Utility(pallet_utility::Event::ItemCompleted.into()),
+						event: MetaEvent::Utility(pallet_utility::Event::ItemCompleted),
 						topics: vec![],
 					},
 					EventRecord {
 						phase: Phase::Initialization,
-						event: MetaEvent::Utility(
-							pallet_utility::Event::BatchInterrupted {
-								index: 1,
-								error: frame_system::Error::<Test>::CallFiltered.into()
-							}
-							.into(),
-						),
+						event: MetaEvent::Utility(pallet_utility::Event::BatchInterrupted {
+							index: 1,
+							error: frame_system::Error::<Test>::CallFiltered.into()
+						},),
 						topics: vec![],
 					},
 				]

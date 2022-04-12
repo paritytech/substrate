@@ -1374,11 +1374,15 @@ mod tests {
 				));
 				assert_eq!(Balances::free_balance(2), 0);
 				// Transfer Event
-				System::assert_has_event(
-					pallet_balances::Event::Transfer { from: 2, to: 3, amount: 80 }.into(),
-				);
+				System::assert_has_event(Event::Balances(pallet_balances::Event::Transfer {
+					from: 2,
+					to: 3,
+					amount: 80,
+				}));
 				// Killed Event
-				System::assert_has_event(system::Event::KilledAccount { account: 2 }.into());
+				System::assert_has_event(Event::System(system::Event::KilledAccount {
+					account: 2,
+				}));
 			});
 	}
 

@@ -385,7 +385,7 @@ fn pallet_expand_deposit_event() {
 			.unwrap();
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[0].event,
-			Event::Example(pallet::Event::Something(3).into()),
+			Event::Example(pallet::Event::Something(3)),
 		);
 	});
 
@@ -396,7 +396,7 @@ fn pallet_expand_deposit_event() {
 			.unwrap();
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[0].event,
-			Event::Instance1Example(pallet::Event::Something(3).into()),
+			Event::Instance1Example(pallet::Event::Something(3)),
 		);
 	});
 }
@@ -562,27 +562,27 @@ fn pallet_hooks_expand() {
 
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[0].event,
-			Event::Example(pallet::Event::Something(10).into()),
+			Event::Example(pallet::Event::Something(10)),
 		);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[1].event,
-			Event::Instance1Example(pallet::Event::Something(11).into()),
+			Event::Instance1Example(pallet::Event::Something(11)),
 		);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[2].event,
-			Event::Example(pallet::Event::Something(20).into()),
+			Event::Example(pallet::Event::Something(20)),
 		);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[3].event,
-			Event::Instance1Example(pallet::Event::Something(21).into()),
+			Event::Instance1Example(pallet::Event::Something(21)),
 		);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[4].event,
-			Event::Example(pallet::Event::Something(30).into()),
+			Event::Example(pallet::Event::Something(30)),
 		);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[5].event,
-			Event::Instance1Example(pallet::Event::Something(31).into()),
+			Event::Instance1Example(pallet::Event::Something(31)),
 		);
 	})
 }
