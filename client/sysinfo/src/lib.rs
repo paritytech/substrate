@@ -25,7 +25,10 @@ mod sysinfo;
 #[cfg(target_os = "linux")]
 mod sysinfo_linux;
 
-pub use sysinfo::{gather_hwbench, gather_sysinfo};
+pub use sysinfo::{
+	benchmark_cpu, benchmark_disk_random_writes, benchmark_disk_sequential_writes,
+	benchmark_memory, benchmark_sr25519_verify, gather_hwbench, gather_sysinfo,
+};
 
 /// The operating system part of the current target triplet.
 pub const TARGET_OS: &str = include_str!(concat!(env!("OUT_DIR"), "/target_os.txt"));

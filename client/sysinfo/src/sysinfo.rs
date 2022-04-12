@@ -39,7 +39,7 @@ pub(crate) fn benchmark<E>(
 	max_iterations: usize,
 	max_duration: Duration,
 	mut run: impl FnMut() -> Result<(), E>,
-) -> Result<u64, E> {
+) -> Result<f64, E> {
 	// Run the benchmark once as a warmup to get the code into the L1 cache.
 	run()?;
 
@@ -58,11 +58,11 @@ pub(crate) fn benchmark<E>(
 		}
 	}
 
-	let score = (((size * count) as f64 / elapsed.as_secs_f64()) / (1024.0 * 1024.0)) as u64;
+	let score = ((size * count) as f64 / elapsed.as_secs_f64()) / (1024.0 * 1024.0);
 	log::trace!(
 		"Calculated {} of {}MB/s in {} iterations in {}ms",
 		name,
-		score,
+		score as u64,
 		count,
 		elapsed.as_millis()
 	);
@@ -108,7 +108,7 @@ fn clobber(slice: &mut [u8]) {
 }
 
 // This benchmarks the CPU speed as measured by calculating BLAKE2b-256 hashes, in MB/s.
-fn benchmark_cpu() -> u64 {
+pub fn benchmark_cpu() -> u64 {
 	// In general the results of this benchmark are somewhat sensitive to how much
 	// data we hash at the time. The smaller this is the *less* MB/s we can hash,
 	// the bigger this is the *more* MB/s we can hash, up until a certain point
@@ -138,7 +138,7 @@ fn benchmark_cpu() -> u64 {
 	};
 
 	benchmark("CPU score", SIZE, MAX_ITERATIONS, MAX_DURATION, run)
-		.expect("benchmark cannot fail; qed")
+		.expect("benchmark cannot fail; qed") as u64
 }
 
 // This benchmarks the effective `memcpy` memory bandwidth available in MB/s.
@@ -146,7 +146,7 @@ fn benchmark_cpu() -> u64 {
 // It doesn't technically measure the absolute maximum memory bandwidth available,
 // but that's fine, because real code most of the time isn't optimized to take
 // advantage of the full memory bandwidth either.
-fn benchmark_memory() -> u64 {
+pub fn benchmark_memory() -> u64 {
 	// Ideally this should be at least as big as the CPU's L3 cache,
 	// and it should be big enough so that the `memcpy` takes enough
 	// time to be actually measurable.
@@ -184,7 +184,7 @@ fn benchmark_memory() -> u64 {
 	};
 
 	benchmark("memory score", SIZE, MAX_ITERATIONS, MAX_DURATION, run)
-		.expect("benchmark cannot fail; qed")
+		.expect("benchmark cannot fail; qed") as u64
 }
 
 struct TemporaryFile {
@@ -265,6 +265,7 @@ pub fn benchmark_disk_sequential_writes(directory: &Path) -> Result<u64, String>
 	};
 
 	benchmark("disk sequential write score", SIZE, MAX_ITERATIONS, MAX_DURATION, run)
+		.map(|s| s as u64)
 }
 
 pub fn benchmark_disk_random_writes(directory: &Path) -> Result<u64, String> {
@@ -324,6 +325,9 @@ pub fn benchmark_disk_random_writes(directory: &Path) -> Result<u64, String> {
 
 	// We only wrote half of the bytes hence `SIZE / 2`.
 	benchmark("disk random write score", SIZE / 2, MAX_ITERATIONS, MAX_DURATION, run)
+		.map(|s| s as u64)
+}
+
 /// Verify signatures of different random data `reps` many times.
 pub fn benchmark_sr25519_verify(
 	reps: usize,
