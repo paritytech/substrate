@@ -595,7 +595,7 @@ pub mod pallet {
 	/// from within the runtime.
 	#[pallet::storage]
 	pub(super) type Events<T: Config> =
-		StorageValue<_, Vec<EventRecord<T::Event, T::Hash>>, ValueQuery>;
+		StorageValue<_, Vec<Box<EventRecord<T::Event, T::Hash>>>, ValueQuery>;
 
 	/// The number of events in the `Events<T>` list.
 	#[pallet::storage]
@@ -1213,7 +1213,7 @@ impl<T: Config> Pallet<T> {
 			old_event_count
 		};
 
-		Events::<T>::append(&event);
+		Events::<T>::append(Box::new(event));
 
 		for topic in topics {
 			<EventTopics<T>>::append(topic, &(block_number, event_idx));
@@ -1380,14 +1380,14 @@ impl<T: Config> Pallet<T> {
 	/// items for any behavior like this.
 	#[cfg(any(feature = "std", feature = "runtime-benchmarks", test))]
 	pub fn events() -> Vec<EventRecord<T::Event, T::Hash>> {
-		Self::read_events_no_consensus()
+		Self::read_events_no_consensus().into_iter().map(|e| *e).collect()
 	}
 
 	/// Get the current events deposited by the runtime.
 	///
 	/// Should only be called if you know what you are doing and outside of the runtime block
 	/// execution else it can have a large impact on the PoV size of a block.
-	pub fn read_events_no_consensus() -> Vec<EventRecord<T::Event, T::Hash>> {
+	pub fn read_events_no_consensus() -> Vec<Box<EventRecord<T::Event, T::Hash>>> {
 		Events::<T>::get()
 	}
 
