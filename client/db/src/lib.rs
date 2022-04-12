@@ -627,6 +627,19 @@ impl<Block: BlockT> sc_client_api::blockchain::Backend<Block> for BlockchainDb<B
 		Ok(self.leaves.read().hashes())
 	}
 
+	fn displaced_leaves_after_finalizing(
+		&self,
+		block_number: NumberFor<Block>,
+	) -> ClientResult<Vec<Block::Hash>> {
+		Ok(self
+			.leaves
+			.read()
+			.displaced_by_finalize_height(block_number)
+			.leaves()
+			.cloned()
+			.collect::<Vec<_>>())
+	}
+
 	fn children(&self, parent_hash: Block::Hash) -> ClientResult<Vec<Block::Hash>> {
 		children::read_children(&*self.db, columns::META, meta_keys::CHILDREN_PREFIX, parent_hash)
 	}

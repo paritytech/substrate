@@ -1018,12 +1018,12 @@ fn obsolete_blocks_aux_data_cleanup() {
 
 	// Create the following test scenario:
 	//
-	//               /-----B3 --- B4           ( < fork2 )
+	//  /--- --B3 --- B4                       ( < fork2 )
 	// G --- A1 --- A2 --- A3 --- A4           ( < fork1 )
 	//                      \-----C4 --- C5    ( < fork3 )
 
 	let fork1_hashes = propose_and_import_blocks_wrap(BlockId::Number(0), 4);
-	let fork2_hashes = propose_and_import_blocks_wrap(BlockId::Number(2), 2);
+	let fork2_hashes = propose_and_import_blocks_wrap(BlockId::Number(0), 2);
 	let fork3_hashes = propose_and_import_blocks_wrap(BlockId::Number(3), 2);
 
 	// Check that aux data is present for all but the genesis block.
