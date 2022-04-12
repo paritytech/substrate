@@ -20,7 +20,8 @@
 //! assumptions of a bigger type (u128) being available, or simply create a per-thing and use the
 //! multiplication implementation provided there.
 
-use crate::biguint;
+use crate::{biguint, Rounding};
+use sp_std::convert::TryInto;
 use num_traits::Zero;
 use sp_std::{
 	cmp::{max, min},
@@ -115,5 +116,230 @@ pub fn multiply_by_rational(mut a: u128, mut b: u128, mut c: u128) -> Result<u12
 		};
 		q.lstrip();
 		q.try_into().map_err(|_| "result cannot fit in u128")
+	}
+}
+
+mod double128 {
+	// Inspired by: https://medium.com/wicketh/mathemagic-512-bit-division-in-solidity-afa55870a65
+	use num_traits::Zero;
+	use sp_std::convert::TryFrom;
+
+	/// Returns the least significant 64 bits of a
+	fn low_64(a: u128) -> u128 {
+		a & ((1<<64)-1)
+	}
+
+	/// Returns the most significant 64 bits of a
+	fn high_64(a: u128) -> u128 {
+		a >> 64
+	}
+
+	/// Returns 2^128 - a (two's complement)
+	fn neg128(a: u128) -> u128 {
+		(!a).wrapping_add(1)
+	}
+
+	/// Returns 2^128 / a
+	fn div128(a: u128) -> u128 {
+		(neg128(a)/a).wrapping_add(1)
+	}
+
+	/// Returns 2^128 % a
+	fn mod128(a: u128) -> u128 {
+		neg128(a) % a
+	}
+
+	#[derive(Copy, Clone, Eq, PartialEq)]
+	pub struct Double128 {
+		high: u128,
+		low: u128,
+	}
+
+	impl TryFrom<Double128> for u128 {
+		type Error = ();
+		fn try_from(x: Double128) -> Result<Self, ()> {
+			match x.high {
+				0 => Ok(x.low),
+				_ => Err(()),
+			}
+		}
+	}
+
+	impl Zero for Double128 {
+		fn zero() -> Self {
+			Self {
+				high: 0,
+				low: 0,
+			}
+		}
+		fn is_zero(&self) -> bool {
+			self.high == 0 && self.low == 0
+		}
+	}
+
+	impl sp_std::ops::Add<Self> for Double128 {
+		type Output = Self;
+		fn add(self, b: Self) -> Self {
+			let (low, overflow) = self.low.overflowing_add(b.low);
+			let carry = overflow as u128;		// 1 if true, 0 if false.
+			let high = self.high.wrapping_add(b.high).wrapping_add(carry as u128);
+			Double128 { high, low }
+		}
+	}
+
+	impl sp_std::ops::AddAssign<Self> for Double128 {
+		fn add_assign(&mut self, b: Self) {
+			*self = *self + b;
+		}
+	}
+
+	impl sp_std::ops::Div<u128> for Double128 {
+		type Output = (Self, u128);
+		fn div(mut self, rhs: u128) -> (Self, u128) {
+			if rhs == 1 {
+				return (self, 0);
+			}
+
+			// (self === a; rhs === b)
+			// Calculate a / b
+			// = (a_high << 128 + a_low) / b
+			//   let (q, r) = (div128(b), mod128(b));
+			// = (a_low * (q * b + r)) + a_high) / b
+			// = (a_low * q * b + a_low * r + a_high)/b
+			// = (a_low * r + a_high) / b + a_low * q
+			let (q, r) = (div128(rhs), mod128(rhs));
+
+			// x = current result
+			// a = next number
+			let mut x = Double128::zero();
+			while self.high != 0 {
+				// x += a.low * q
+				x += Double128::product_of(self.high, q);
+				// a = a.low * r + a.high
+				self = Double128::product_of(self.high, r) + self.low_part();
+			}
+
+			(x + Double128::from_low(self.low / rhs), self.low % rhs)
+		}
+	}
+
+	impl Double128 {
+		/// Return a `Double128` value representing the `scaled_value << 64`.
+		///
+		/// This means the lower half of the `high` component will be equal to the upper 64-bits of
+		/// `scaled_value` (in the lower positions) and the upper half of the `low` component will
+		/// be equal to the lower 64-bits of `scaled_value`.
+		pub fn left_shift_64(scaled_value: u128) -> Self {
+			Self {
+				high: scaled_value >> 64,
+				low: scaled_value << 64,
+			}
+		}
+
+		/// Construct a value from the upper 128 bits only, with the lower being zeroed.
+		pub fn from_low(low: u128) -> Self {
+			Self { high: 0, low }
+		}
+
+		/// Returns the same value ignoring anything in the high 128-bits.
+		pub fn low_part(self) -> Self {
+			Self { high: 0, .. self }
+		}
+
+		/// Returns a*b (in 256 bits)
+		pub fn product_of(a: u128, b: u128) -> Self {
+			// Split a and b into hi and lo 64-bit parts
+			let (a_low, a_high) = (low_64(a), high_64(a));
+			let (b_low, b_high) = (low_64(b), high_64(b));
+			// a = (a_low + a_high << 64); b = (b_low + b_high << 64);
+			// ergo a*b = (a_low + a_high << 64)(b_low + b_high << 64)
+			//          = a_low * b_low
+			//          + a_low * b_high << 64
+			//          + a_high << 64 * b_low
+			//          + a_high << 64 * b_high << 64
+			// assuming:
+			//        f = a_low * b_low
+			//        o = a_low * b_high
+			//        i = a_high * b_low
+			//        l = a_high * b_high
+			// then:
+			//      a*b = (o+i) << 64 + f + l << 128
+			let (f, o, i, l) = (a_low * b_low, a_low * b_high, a_high * b_low, a_high * b_high);
+			let fl = Self { high: l, low: f };
+			let i = Self::left_shift_64(i);
+			let o = Self::left_shift_64(o);
+			fl + i + o
+		}
+	}
+}
+
+/// Returns `a * b / c` and `(a * b) % c` (wrapping to 128 bits) or `None` in the case of
+/// overflow.
+pub fn multiply_by_rational_with_rounding(a: u128, b: u128, c: u128, r: Rounding) -> Option<u128> {
+	use double128::Double128;
+	if c == 0 {
+		panic!("attempt to divide by zero")
+	}
+	let (result, remainder) = Double128::product_of(a, b) / c;
+	let mut result: u128 = result.try_into().ok()?;
+	if match r {
+		Rounding::Up => remainder > 0,
+		Rounding::Nearest => remainder >= c / 2 + c % 2,
+		Rounding::Down => false,
+	} {
+		result = result.checked_add(1)?;
+	}
+	Some(result)
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use Rounding::*;
+	use multiply_by_rational_with_rounding as mulrat;
+	use codec::{Encode, Decode};
+
+	const MAX: u128 = u128::max_value();
+
+	#[test]
+	fn rational_multiply_basic_rounding_works() {
+		assert_eq!(mulrat(1, 1, 1, Up), Some(1));
+		assert_eq!(mulrat(3, 1, 3, Up), Some(1));
+		assert_eq!(mulrat(1, 2, 3, Down), Some(0));
+		assert_eq!(mulrat(1, 1, 3, Up), Some(1));
+		assert_eq!(mulrat(1, 2, 3, Nearest), Some(1));
+		assert_eq!(mulrat(1, 1, 3, Nearest), Some(0));
+	}
+
+	#[test]
+	fn rational_multiply_big_number_works() {
+		assert_eq!(mulrat(MAX, MAX-1, MAX, Down), Some(MAX-1));
+		assert_eq!(mulrat(MAX, 1, MAX, Down), Some(1));
+		assert_eq!(mulrat(MAX, MAX-1, MAX, Up), Some(MAX-1));
+		assert_eq!(mulrat(MAX, 1, MAX, Up), Some(1));
+		assert_eq!(mulrat(1, MAX-1, MAX, Down), Some(0));
+		assert_eq!(mulrat(1, 1, MAX, Up), Some(1));
+		assert_eq!(mulrat(1, MAX/2, MAX, Nearest), Some(0));
+		assert_eq!(mulrat(1, MAX/2+1, MAX, Nearest), Some(1));
+	}
+
+	fn random_u128(seed: u32) -> u128 {
+		u128::decode(&mut &seed.using_encoded(sp_core::hashing::twox_128)[..]).unwrap_or(0)
+	}
+
+	#[test]
+	fn op_checked_rounded_div_works() {
+		for i in 0..100_000u32 {
+			let a = random_u128(i);
+			let b = random_u128(i + 1 << 30);
+			let c = random_u128(i + 1 << 31);
+			let x = mulrat(a, b, c, Nearest);
+			let y = multiply_by_rational(a, b, c).ok();
+			assert_eq!(x.is_some(), y.is_some());
+			let x = x.unwrap_or(0);
+			let y = y.unwrap_or(0);
+			let d = x.max(y) - x.min(y);
+			assert_eq!(d, 0);
+		}
 	}
 }

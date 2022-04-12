@@ -18,12 +18,12 @@
 //! Decimal Fixed Point implementations for Substrate runtime.
 
 use crate::{
-	helpers_128bit::multiply_by_rational,
+	helpers_128bit::{multiply_by_rational, multiply_by_rational_with_rounding},
 	traits::{
 		Bounded, CheckedAdd, CheckedDiv, CheckedMul, CheckedNeg, CheckedSub, One,
 		SaturatedConversion, Saturating, UniqueSaturatedInto, Zero,
 	},
-	PerThing,
+	PerThing, Rounding,
 };
 use codec::{CompactAs, Decode, Encode};
 use sp_std::{
@@ -418,6 +418,72 @@ macro_rules! implement_fixed {
 			#[cfg(any(feature = "std", test))]
 			pub fn to_float(self) -> f64 {
 				self.0 as f64 / <Self as FixedPointNumber>::DIV as f64
+			}
+
+			/// Attempt to convert into a `PerThing`. This will succeed iff `self` is at least zero
+			/// and at most one. If it is out of bounds, it will result in an error returning the
+			/// clamped value.
+			pub fn try_into_perthing<P: PerThing>(self) -> Result<P, P> {
+				if self < Self::zero() {
+					Err(P::zero())
+				} else if self > Self::one() {
+					Err(P::one())
+				} else {
+					Ok(P::from_rational(self.0 as u128, $div))
+				}
+			}
+
+			/// Attempt to convert into a `PerThing`. This will always succeed resulting in a
+			/// clamped value if `self` is less than zero or greater than one.
+			pub fn into_clamped_perthing<P: PerThing>(self) -> P {
+				if self < Self::zero() {
+					P::zero()
+				} else if self > Self::one() {
+					P::one()
+				} else {
+					P::from_rational(self.0 as u128, $div)
+				}
+			}
+
+			/// A version of div with customisable rounding.
+			pub fn checked_rounding_div(self, other: Self, rounding: Rounding) -> Option<Self> {
+				if other.0 == 0 {
+					return None
+				}
+
+				let lhs: I129 = self.0.into();
+				let rhs: I129 = other.0.into();
+				let negative = lhs.negative != rhs.negative;
+
+				multiply_by_rational_with_rounding(lhs.value, Self::DIV as u128, rhs.value, rounding)
+					.and_then(|value| from_i129(I129 { value, negative }))
+					.map(Self)
+			}
+
+			/// Compute the square root, rounding as desired. If it overflows or is negative, then
+			/// `None` is returned.
+			pub fn sqrt(self) -> Option<Self> {
+				use integer_sqrt::IntegerSquareRoot;
+				let v: u128 = self.0.try_into().ok()?;
+				if v == 0 {
+					return Some(Self(0))
+				}
+
+				// Want x' = sqrt(x) where x = n/D and x' = n'/D (D is fixed)
+				// Our prefered way is:
+				//   sqrt(n/D) = sqrt(nD / D^2) = sqrt(nD)/sqrt(D^2) = sqrt(nD)/D
+				//   ergo n' = sqrt(nD)
+				// but this requires nD to fit into our type.
+				// if nD doesn't fit then we can fall back on:
+				//   sqrt(nD) = sqrt(n)*sqrt(D)
+				// computing them individually and taking the product at the end. we will lose some
+				// precision though.
+				let r = if let Some(vd) = v.checked_mul($div) {
+					vd.integer_sqrt()
+				} else {
+					v.integer_sqrt().checked_mul($div.integer_sqrt())?
+				};
+				Some(Self(r.try_into().ok()?))
 			}
 		}
 
@@ -847,6 +913,18 @@ macro_rules! implement_fixed {
 					let a = $name::min_value();
 					let b = $name::zero().saturating_sub($name::one());
 					assert!(a.checked_div(&b).is_none());
+				}
+			}
+
+			#[test]
+			fn op_sqrt_works() {
+				for i in 1..1_000i64 {
+					let x = $name::saturating_from_rational(i, 1_000i64);
+					dbg!(i, x, x * x, (x * x).sqrt());
+					assert_eq!((x * x).sqrt(), Some(x));
+					let x = $name::saturating_from_rational(i, 1i64);
+					dbg!(i, x, x * x, (x * x).sqrt());
+					assert_eq!((x * x).sqrt(), Some(x));
 				}
 			}
 

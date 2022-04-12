@@ -21,7 +21,7 @@ use super::*;
 use codec::{Decode, Encode, EncodeLike, MaxEncodedLen};
 use frame_support::{traits::schedule::Anon, Parameter};
 use scale_info::TypeInfo;
-use sp_runtime::{RuntimeDebug, PerThing};
+use sp_runtime::{RuntimeDebug, PerThing, FixedI64, FixedPointNumber};
 use sp_arithmetic::Rounding::*;
 use sp_std::fmt::Debug;
 
@@ -256,22 +256,170 @@ pub enum Curve {
 	/// `period` before stepping down to `(period * 2, begin - step * 2)`. This pattern continues
 	/// but the `y` component has a lower limit of `end`.
 	SteppedDecreasing { begin: Perbill, end: Perbill, step: Perbill, period: Perbill },
-	/// A simple recipocal (`K/x + O`) curve: `factor` is `K` and `offset` is `O`.
+	/// A simple reciprocal (`K/x + O`) curve: `factor` is `K` and `offset` is `O`.
+	SimpleReciprocal { factor: Perbill, offset: Perbill },
+	/// A reciprocal (`K/(x + K/(1-O)) + O`) curve: `factor` is `K` and `offset` is `O`. This
+	/// guarantees the point (0, 1) without resorting to truncation.
 	Reciprocal { factor: Perbill, offset: Perbill },
+	/// A recipocal (`K/(x+S)-T`) curve: `factor` is `K` and `x_offset` is `S`, `y_offset` is `T`.
+	TranslatedReciprocal { factor: FixedI64, x_offset: FixedI64, y_offset: FixedI64 },
+}
+
+fn pos_quad_solution(a: FixedI64, b: FixedI64, c: FixedI64) -> FixedI64 {
+	let two = FixedI64::saturating_from_integer(2);
+	let four = FixedI64::saturating_from_integer(4);
+	(-b + (b*b - four*a*c).sqrt().unwrap_or(two)) / (two*a)
 }
 
 impl Curve {
+	#[cfg(feature = "std")]
+	pub fn basic_reciprocal_from_point<N: AtLeast32BitUnsigned>(
+		delay: N,
+		period: N,
+		level: Perbill,
+	) -> Curve {
+		Self::basic_reciprocal_from_point_and_floor(delay, period, level, Perbill::zero())
+	}
+
+	#[cfg(feature = "std")]
+	pub fn basic_reciprocal_from_point_and_floor<N: AtLeast32BitUnsigned>(
+		delay: N,
+		period: N,
+		level: Perbill,
+		floor: Perbill,
+	) -> Curve {
+		let delay = Perbill::from_rational(delay, period);
+		let offset = floor;
+		let ymo = level.saturating_sub(offset);
+		let bottom = ymo.saturating_div(offset.left_from_one(), Down).left_from_one();
+		let factor = (delay * ymo).saturating_div(bottom, Down);
+		Curve::Reciprocal { factor, offset }
+	}
+	#[cfg(feature = "std")]
+	pub fn reciprocal_from_point<N: AtLeast32BitUnsigned>(
+		delay: N,
+		period: N,
+		level: Perbill,
+	) -> Curve {
+		Self::reciprocal_from_point_and_floor(delay, period, level, Perbill::zero())
+	}
+
+	#[cfg(feature = "std")]
+	pub fn reciprocal_from_point_and_floor<N: AtLeast32BitUnsigned>(
+		delay: N,
+		period: N,
+		level: Perbill,
+		floor: Perbill,
+	) -> Curve {
+		let delay = Perbill::from_rational(delay, period);
+		let floor_fixed = FixedI64::from(floor);
+		let mut bounds = (FixedI64::zero(), FixedI64::one());
+		let two = FixedI64::saturating_from_integer(2);
+		let epsilon = FixedI64::from_inner(1);
+		while bounds.1 - bounds.0 > epsilon {
+			let factor = (bounds.0 + bounds.1) / two;
+			let c = Self::reciprocal_from_factor_and_floor(factor, floor_fixed);
+			if c.threshold(delay) > level {
+				bounds = (bounds.0, factor)
+			} else {
+				bounds = (factor, bounds.1)
+			}
+		}
+		let c0 = Self::reciprocal_from_factor_and_floor(bounds.0, floor_fixed);
+		let c1 = Self::reciprocal_from_factor_and_floor(bounds.1, floor_fixed);
+		let c0_level = c0.threshold(delay);
+		let c1_level = c1.threshold(delay);
+		if c0_level.max(level) - c0_level.min(level) < c1_level.max(level) - c1_level.min(level) {
+			c0
+		} else {
+			c1
+		}
+	}
+
+	#[cfg(feature = "std")]
+	fn reciprocal_from_factor_and_floor(factor: FixedI64, floor: FixedI64) -> Self {
+		let x_offset = pos_quad_solution(FixedI64::one() - floor, FixedI64::one() - floor, -factor);
+		let y_offset = floor - factor / (FixedI64::one() + x_offset);
+		Curve::TranslatedReciprocal { factor, x_offset, y_offset }
+	}
+
+	/// Print some info on the curve.
+	#[cfg(feature = "std")]
+	pub fn info(&self, days: u32, name: impl std::fmt::Display) {
+		let hours = days * 24;
+		println!("Curve {name} := {:?}:", self);
+		println!("   t + 0h:   {:?}", self.threshold(Perbill::zero()));
+		println!("   t + 1h:   {:?}", self.threshold(Perbill::from_rational(1, hours)));
+		println!("   t + 2h:   {:?}", self.threshold(Perbill::from_rational(2, hours)));
+		println!("   t + 3h:   {:?}", self.threshold(Perbill::from_rational(3, hours)));
+		println!("   t + 6h:   {:?}", self.threshold(Perbill::from_rational(6, hours)));
+		println!("   t + 12h:  {:?}", self.threshold(Perbill::from_rational(12, hours)));
+		println!("   t + 24h:  {:?}", self.threshold(Perbill::from_rational(24, hours)));
+		let mut l = 0;
+		for &(n, d) in [(1, 12), (1, 8), (1, 4), (1, 2), (3, 4), (1, 1)].iter() {
+			let t = days * n / d;
+			if t != l {
+				println!("   t + {t}d:   {:?}", self.threshold(Perbill::from_rational(t, days)));
+				l = t;
+			}
+		}
+		let t = |p: Perbill| -> std::string::String {
+			if p.is_one() {
+				"never".into()
+			} else {
+				let minutes = p * (hours * 60);
+				if minutes < 60 {
+					format!("{} minutes", minutes)
+				} else if minutes < 8 * 60 && minutes % 60 != 0 {
+					format!("{} hours {} minutes", minutes / 60, minutes % 60)
+				} else if minutes < 72 * 60 {
+					format!("{} hours", minutes / 60)
+				} else if minutes / 60 % 24 == 0 {
+					format!("{} days", minutes / 60 / 24)
+				} else {
+					format!("{} days {} hours", minutes / 60 / 24, minutes / 60 % 24)
+				}
+			}
+		};
+		if self.delay(Perbill::from_percent(49)) < Perbill::one() {
+			println!("   30% threshold:   {}", t(self.delay(Perbill::from_percent(30))));
+			println!("   10% threshold:   {}", t(self.delay(Perbill::from_percent(10))));
+			println!("   3% threshold:    {}", t(self.delay(Perbill::from_percent(3))));
+			println!("   1% threshold:    {}", t(self.delay(Perbill::from_percent(1))));
+			println!("   0.1% threshold:  {}", t(self.delay(Perbill::from_rational(1u32, 1_000))));
+			println!("   0.01% threshold: {}", t(self.delay(Perbill::from_rational(1u32, 10_000))));
+		} else {
+			println!("   99.9% threshold: {}", t(self.delay(Perbill::from_rational(999u32, 1_000))));
+			println!("   99% threshold:   {}", t(self.delay(Perbill::from_percent(99))));
+			println!("   95% threshold:   {}", t(self.delay(Perbill::from_percent(95))));
+			println!("   90% threshold:   {}", t(self.delay(Perbill::from_percent(90))));
+			println!("   75% threshold:   {}", t(self.delay(Perbill::from_percent(75))));
+			println!("   60% threshold:   {}", t(self.delay(Perbill::from_percent(60))));
+		}
+	}
+
 	/// Determine the `y` value for the given `x` value.
 	pub(crate) fn threshold(&self, x: Perbill) -> Perbill {
 		match self {
 			Self::LinearDecreasing { begin, delta } => *begin - (*delta * x).min(*begin),
 			Self::SteppedDecreasing { begin, end, step, period } =>
 				(*begin - (step.int_mul(x.int_div(*period))).min(*begin)).max(*end),
+			Self::SimpleReciprocal { factor, offset } => {
+				// Actual curve is y = factor / (x + x_offset) + offset
+				// we want to avoid saturating prior to the division.
+				Perbill::from_rational(factor.deconstruct(), x.deconstruct()).saturating_add(*offset)
+			}
 			Self::Reciprocal { factor, offset } => {
 				let x_offset = factor.saturating_div(offset.left_from_one(), Down);
 				// Actual curve is y = factor / (x + x_offset) + offset
 				// we want to avoid saturating prior to the division.
-				Perbill::from_rational_with_rounding(factor.deconstruct(), x.deconstruct() + x_offset.deconstruct(), Down).unwrap_or_else(|_| Perbill::one()).saturating_add(*offset)
+				Perbill::from_rational(factor.deconstruct(), x.deconstruct() + x_offset.deconstruct())
+					.saturating_add(*offset)
+			}
+			Self::TranslatedReciprocal { factor, x_offset, y_offset } => {
+				factor.checked_rounding_div(FixedI64::from(x) + *x_offset, Down)
+					.map(|yp| (yp + *y_offset).into_clamped_perthing())
+					.unwrap_or_else(Perbill::one)
 			}
 		}
 	}
@@ -304,11 +452,20 @@ impl Curve {
 				} else {
 					period.int_mul((*begin - y.min(*begin) + step.less_epsilon()).int_div(*step))
 				},
+			Self::SimpleReciprocal { factor, offset } => {
+				// Actual curve is y = factor / x + offset
+				// Ergo curve is x = factor / (y - offset)
+				if y < *offset {
+					Perbill::one()
+				} else {
+					factor.saturating_div(y - *offset, Up)
+				}
+			},
 			Self::Reciprocal { factor, offset } => {
 				let x_offset = factor.saturating_div(offset.left_from_one(), Down);
-				// Actual curve is y = factor / (x + x_offset) + offset
+				// Actual curve is y = factor / (x + x_offset) + y_offset
 				// Ergo curve is x = factor / (y - offset) - x_offset
-				// To avoid pre-saturation problems, we move the x_offset term to happen prior to
+				// To avoid pre-saturation problems, we move the `x_offset` term to happen prior to
 				// the division.
 				// So:
 				// yo := y - offset
@@ -317,12 +474,15 @@ impl Curve {
 					Perbill::one()
 				} else {
 					let yo = y - *offset;
-					if *factor < x_offset * yo {
-						println!("SATURATING in delay");
-					}
 					factor.saturating_sub(x_offset * yo).saturating_div(yo, Up)
 				}
-			}
+			},
+			Self::TranslatedReciprocal { factor, x_offset, y_offset } => {
+				let y = FixedI64::from(y);
+				let maybe_term = factor.checked_rounding_div(y - *y_offset, Up);
+				maybe_term.and_then(|term| (term - *x_offset).try_into_perthing().ok())
+					.unwrap_or_else(Perbill::one)
+			},
 		}
 	}
 
@@ -339,27 +499,44 @@ impl Debug for Curve {
 			Self::LinearDecreasing { begin, delta } => {
 				write!(
 					f,
-					"Linear[(0%, {}%) -> (100%, {}%)]",
-					*begin * 100u32,
-					(*begin - *delta) * 100u32,
+					"Linear[(0%, {:?}) -> (100%, {:?})]",
+					begin,
+					*begin - *delta,
 				)
 			},
 			Self::SteppedDecreasing { begin, end, step, period } => {
 				write!(
 					f,
-					"Stepped[(0, {}%) -> (1, {}%) by ({}%, {}%)]",
-					*begin * 100u32,
-					*end * 100u32,
-					*period * 100u32,
-					*step * 100u32,
+					"Stepped[(0%, {:?}) -> (100%, {:?}) by ({:?}, {:?})]",
+					begin,
+					end,
+					period,
+					step,
+				)
+			},
+			Self::SimpleReciprocal { factor, offset } => {
+				write!(
+					f,
+					"SimpleReciprocal[factor of {:?}, offset of {:?}]",
+					factor,
+					offset,
 				)
 			},
 			Self::Reciprocal { factor, offset } => {
 				write!(
 					f,
-					"Reciprocal[factor of {}%, offset of {}%]",
-					*factor * 100u32,
-					*offset * 100u32,
+					"Reciprocal[factor of {:?}, offset of {:?}]",
+					factor,
+					offset,
+				)
+			},
+			Self::TranslatedReciprocal { factor, x_offset, y_offset } => {
+				write!(
+					f,
+					"TranslatedReciprocal[factor of {:?}, x_offset of {:?}, y_offset of {:?}]",
+					factor,
+					x_offset,
+					y_offset,
 				)
 			}
 		}
@@ -374,6 +551,14 @@ mod tests {
 
 	fn percent(x: u32) -> Perbill {
 		Perbill::from_percent(x)
+	}
+
+	#[test]
+	#[should_panic]
+	fn check_curves() {
+//		Curve::reciprocal_from_point(7, 28u32, 0.1).info(28u32, "Tip");
+		Curve::reciprocal_from_point_and_floor(1u32, 28, percent(65), percent(50)).info(28u32, "Tip");
+		assert!(false);
 	}
 
 	#[test]
@@ -402,6 +587,24 @@ mod tests {
 
 		assert!(b.insert_sorted_by_key(51, |&x| x));
 		assert_eq!(&b[..], &[30, 40, 50, 51, 60, 61][..]);
+	}
+
+	#[test]
+	fn translated_reciprocal_works() {
+		let c: Curve = Curve::TranslatedReciprocal {
+			factor: FixedI64::from_float(0.03125),
+			x_offset: FixedI64::from_float(0.0363306838226),
+			y_offset: FixedI64::from_float(0.139845532427),
+		};
+		c.info(28u32, "Test");
+
+		for i in 0..9_696_969u32 {
+			let query = Perbill::from_rational(i, 9_696_969);
+			// Determine the nearest point in time when the query will be above threshold.
+			let delay_needed = c.delay(query);
+			// Ensure that it actually does pass at that time, or that it will never pass.
+			assert!(delay_needed.is_one() || c.passing(delay_needed, query));
+		}
 	}
 
 	#[test]
