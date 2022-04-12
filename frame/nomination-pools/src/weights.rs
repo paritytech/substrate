@@ -52,9 +52,9 @@ pub trait WeightInfo {
 	fn withdraw_unbonded_other_update(s: u32, ) -> Weight;
 	fn withdraw_unbonded_other_kill(s: u32, ) -> Weight;
 	fn create() -> Weight;
-	fn nominate() -> Weight;
+	fn nominate(n: u32) -> Weight;
 	fn set_state_other() -> Weight;
-	fn set_metadata() -> Weight;
+	fn set_metadata(_n: u32) -> Weight;
 	fn set_configs() -> Weight;
 }
 
@@ -182,7 +182,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: BagsList ListBags (r:1 w:1)
 	// Storage: BagsList CounterForListNodes (r:1 w:1)
 	// Storage: Staking CounterForNominators (r:1 w:1)
-	fn nominate() -> Weight {
+	fn nominate(_n: u32) -> Weight {
 		(79_587_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(28 as Weight))
 			.saturating_add(T::DbWeight::get().writes(5 as Weight))
@@ -192,7 +192,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(28 as Weight))
 			.saturating_add(T::DbWeight::get().writes(5 as Weight))
 	}
-	fn set_metadata() -> Weight {
+	fn set_metadata(_n: u32) -> Weight {
 		(79_587_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(28 as Weight))
 			.saturating_add(T::DbWeight::get().writes(5 as Weight))
@@ -328,7 +328,7 @@ impl WeightInfo for () {
 	// Storage: BagsList ListBags (r:1 w:1)
 	// Storage: BagsList CounterForListNodes (r:1 w:1)
 	// Storage: Staking CounterForNominators (r:1 w:1)
-	fn nominate() -> Weight {
+	fn nominate(_n: u32) -> Weight {
 		(79_587_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(28 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(5 as Weight))
@@ -338,7 +338,7 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads(28 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(5 as Weight))
 	}
-	fn set_metadata() -> Weight {
+	fn set_metadata(_n: u32) -> Weight {
 		(79_587_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(28 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(5 as Weight))

@@ -122,11 +122,10 @@ impl<T: Config> ListScenario<T> {
 		)?;
 
 		// Find a destination weight that will trigger the worst case scenario
-		let dest_weight_as_vote =
-			<T as pallet_staking::Config>::SortedListProvider::score_update_worst_case(
-				&pool_origin1,
-				is_increase,
-			);
+		let dest_weight_as_vote = <T as pallet_staking::Config>::VoterList::score_update_worst_case(
+			&pool_origin1,
+			is_increase,
+		);
 
 		let dest_weight: BalanceOf<T> =
 			dest_weight_as_vote.try_into().map_err(|_| "could not convert u64 to Balance")?;
@@ -514,6 +513,8 @@ frame_benchmarking::benchmarks! {
 	}
 
 	nominate {
+		let n in 1 .. T::MaxNominations::get();
+
 		// Create a pool
 		let min_create_bond = MinCreateBond::<T>::get()
 			.max(T::StakingInterface::minimum_bond())
@@ -522,7 +523,7 @@ frame_benchmarking::benchmarks! {
 
 		// Create some accounts to nominate. For the sake of benchmarking they don't need to be
 		// actual validators
-		 let validators: Vec<_> = (0..T::MaxNominations::get())
+		 let validators: Vec<_> = (0..n)
 			.map(|i| account("stash", USER_SEED, i))
 			.collect();
 
@@ -571,6 +572,8 @@ frame_benchmarking::benchmarks! {
 	}
 
 	set_metadata {
+		let n in 1 .. <T as pallet_nomination_pools::Config>::MaxMetadataLen::get();
+
 		// Create a pool
 		let min_create_bond = MinCreateBond::<T>::get()
 			.max(T::StakingInterface::minimum_bond())
@@ -578,7 +581,7 @@ frame_benchmarking::benchmarks! {
 		let (depositor, pool_account) = create_pool_account::<T>(0, min_create_bond);
 
 		// Create metadata of the max possible size
-		let metadata: Vec<u8> = (0..<T as pallet_nomination_pools::Config>::MaxMetadataLen::get()).map(|_| 42).collect();
+		let metadata: Vec<u8> = (0..n).map(|_| 42).collect();
 
 		whitelist_account!(depositor);
 	}:_(Origin::Signed(depositor), 1, metadata.clone())

@@ -83,7 +83,8 @@ pub trait StakingInterface {
 	fn active_stake(controller: &Self::AccountId) -> Option<Self::Balance>;
 
 	/// The total stake that `controller` has in the staking system. This includes the
-	/// [`Self::active_stake`], and any funds currently in the process of unbonding via [`Self::unbond`].
+	/// [`Self::active_stake`], and any funds currently in the process of unbonding via
+	/// [`Self::unbond`].
 	///
 	/// # Note
 	///

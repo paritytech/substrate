@@ -54,6 +54,7 @@ members = [
 	"client/service",
 	"client/service/test",
 	"client/state-db",
+	"client/sysinfo",
 	"client/sync-state-rpc",
 	"client/telemetry",
 	"client/tracing",

@@ -338,7 +338,7 @@ pub type RewardPoints = U256;
 /// Type used for unique identifier of each pool.
 pub type PoolId = u32;
 
-type SubPoolsWithEra<T> = BoundedBTreeMap<EraIndex, UnbondPool<T>, TotalUnbondingPools<T>>;
+type UnbondingPoolsWithEra<T> = BoundedBTreeMap<EraIndex, UnbondPool<T>, TotalUnbondingPools<T>>;
 
 pub const POINTS_TO_BALANCE_INIT_RATIO: u32 = 1;
 
@@ -658,7 +658,7 @@ impl<T: Config> BondedPool<T> {
 	}
 
 	fn can_toggle_state(&self, who: &T::AccountId) -> bool {
-		*who == self.roles.root || *who == self.roles.state_toggler && !self.is_destroying()
+		(*who == self.roles.root || *who == self.roles.state_toggler) && !self.is_destroying()
 	}
 
 	fn can_set_metadata(&self, who: &T::AccountId) -> bool {
@@ -671,7 +671,7 @@ impl<T: Config> BondedPool<T> {
 
 	/// Whether or not the pool is ok to be in `PoolSate::Open`. If this returns an `Err`, then the
 	/// pool is unrecoverable and should be in the destroying state.
-	fn ok_to_be_open(&self) -> Result<(), DispatchError> {
+	fn ok_to_be_open(&self, new_funds: BalanceOf<T>) -> Result<(), DispatchError> {
 		ensure!(!self.is_destroying(), Error::<T>::CanNotChangeState);
 
 		let bonded_balance =
@@ -688,8 +688,9 @@ impl<T: Config> BondedPool<T> {
 		// 90%,
 		ensure!(points_to_balance_ratio_floor < 10u32.into(), Error::<T>::OverflowRisk);
 		// while restricting the balance to 1/10th of max total issuance,
+		let next_bonded_balance = bonded_balance.saturating_add(new_funds);
 		ensure!(
-			bonded_balance < BalanceOf::<T>::max_value().div(10u32.into()),
+			next_bonded_balance < BalanceOf::<T>::max_value().div(10u32.into()),
 			Error::<T>::OverflowRisk
 		);
 		// then we can be decently confident the bonding pool points will not overflow
@@ -699,9 +700,9 @@ impl<T: Config> BondedPool<T> {
 	}
 
 	/// Check that the pool can accept a member with `new_funds`.
-	fn ok_to_join(&self) -> Result<(), DispatchError> {
+	fn ok_to_join(&self, new_funds: BalanceOf<T>) -> Result<(), DispatchError> {
 		ensure!(self.state == PoolState::Open, Error::<T>::NotOpen);
-		self.ok_to_be_open()?;
+		self.ok_to_be_open(new_funds)?;
 		Ok(())
 	}
 
@@ -739,8 +740,13 @@ impl<T: Config> BondedPool<T> {
 		Ok(())
 	}
 
-	/// Returns Ok if [`Pallet::withdraw_unbonded_other`] can be executed, otherwise returns a
-	/// dispatch error.
+	/// # Returns
+	///
+	/// * Ok(true) if [`Call::withdraw_unbonded_other`] can be called and the target account is the
+	///   depositor.
+	/// * Ok(false) if [`Call::withdraw_unbonded_other`] can be called and target account is *not*
+	///   the depositor.
+	/// * Err(DispatchError) if [`Call::withdraw_unbonded_other`] *cannot* be called.
 	fn ok_to_withdraw_unbonded_other_with(
 		&self,
 		caller: &T::AccountId,
@@ -950,7 +956,7 @@ pub struct SubPools<T: Config> {
 	/// older then `current_era - TotalUnbondingPools`.
 	no_era: UnbondPool<T>,
 	/// Map of era in which a pool becomes unbonded in => unbond pools.
-	with_era: SubPoolsWithEra<T>,
+	with_era: UnbondingPoolsWithEra<T>,
 }
 
 impl<T: Config> SubPools<T> {
@@ -988,8 +994,8 @@ pub struct TotalUnbondingPools<T: Config>(PhantomData<T>);
 impl<T: Config> Get<u32> for TotalUnbondingPools<T> {
 	fn get() -> u32 {
 		// NOTE: this may be dangerous in the scenario bonding_duration gets decreased because
-		// we would no longer be able to decode `SubPoolsWithEra`, which uses `TotalUnbondingPools`
-		// as the bound
+		// we would no longer be able to decode `UnbondingPoolsWithEra`, which uses
+		// `TotalUnbondingPools` as the bound
 		T::StakingInterface::bonding_duration() + T::PostUnbondingPoolsWindow::get()
 	}
 }
@@ -1229,6 +1235,7 @@ pub mod pallet {
 		/// # Note
 		///
 		/// * An account can only be a member of a single pool.
+		/// * An account cannot join the same pool multiple times.
 		/// * This call will *not* dust the delegator account, so the delegator must have at least
 		///   `existential deposit + amount` in their account.
 		/// * Only a pool with [`PoolState::Open`] can be joined
@@ -1242,7 +1249,7 @@ pub mod pallet {
 			ensure!(!Delegators::<T>::contains_key(&who), Error::<T>::AccountBelongsToOtherPool);
 
 			let mut bonded_pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
-			bonded_pool.ok_to_join()?;
+			bonded_pool.ok_to_join(amount)?;
 
 			// We just need its total earnings at this point in time, but we don't need to write it
 			// because we are not adjusting its points (all other values can calculated virtual).
@@ -1464,13 +1471,13 @@ pub mod pallet {
 		/// Under certain conditions, this call can be dispatched permissionlessly (i.e. by any
 		/// account).
 		///
-		///  # Conditions for a permissionless dispatch
+		/// # Conditions for a permissionless dispatch
 		///
 		/// * The pool is in destroy mode and the target is not the depositor.
 		/// * The target is the depositor and they are the only delegator in the sub pools.
 		/// * The pool is blocked and the caller is either the root or state-toggler.
 		///
-		///  # Conditions for permissioned dispatch
+		/// # Conditions for permissioned dispatch
 		///
 		/// * The caller is the target and they are not the depositor.
 		///
@@ -1562,10 +1569,6 @@ pub mod pallet {
 					// Kill accounts from storage by making their balance go below ED. We assume
 					// that the accounts have no references that would prevent destruction once we
 					// get to this point.
-					debug_assert_eq!(
-						T::Currency::free_balance(&bonded_pool.bonded_account()),
-						Zero::zero()
-					);
 					debug_assert_eq!(
 						T::StakingInterface::total_stake(&bonded_pool.bonded_account())
 							.unwrap_or_default(),
@@ -1681,7 +1684,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::weight(T::WeightInfo::nominate())]
+		#[pallet::weight(T::WeightInfo::nominate(validators.len() as u32))]
 		pub fn nominate(
 			origin: OriginFor<T>,
 			pool_id: PoolId,
@@ -1706,7 +1709,9 @@ pub mod pallet {
 
 			if bonded_pool.can_toggle_state(&who) {
 				bonded_pool.set_state(state);
-			} else if bonded_pool.ok_to_be_open().is_err() && state == PoolState::Destroying {
+			} else if bonded_pool.ok_to_be_open(Zero::zero()).is_err() &&
+				state == PoolState::Destroying
+			{
 				// If the pool has bad properties, then anyone can set it as destroying
 				bonded_pool.set_state(PoolState::Destroying);
 			} else {
@@ -1718,7 +1723,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::weight(T::WeightInfo::set_metadata())]
+		#[pallet::weight(T::WeightInfo::set_metadata(metadata.len() as u32))]
 		pub fn set_metadata(
 			origin: OriginFor<T>,
 			pool_id: PoolId,
@@ -1845,8 +1850,7 @@ impl<T: Config> Pallet<T> {
 		new_funds: BalanceOf<T>,
 	) -> BalanceOf<T> {
 		match (current_balance.is_zero(), current_points.is_zero()) {
-			(true, true) | (false, true) =>
-				new_funds.saturating_mul(POINTS_TO_BALANCE_INIT_RATIO.into()),
+			(_, true) => new_funds.saturating_mul(POINTS_TO_BALANCE_INIT_RATIO.into()),
 			(true, false) => {
 				// The pool was totally slashed.
 				// This is the equivalent of `(current_points / 1) * new_funds`.
@@ -1883,24 +1887,12 @@ impl<T: Config> Pallet<T> {
 
 	/// Calculate the rewards for `delegator`.
 	///
-	/// Returns the payout amount, and whether the pool state has been switched to destroying during
-	/// this call.
+	/// Returns the payout amount.
 	fn calculate_delegator_payout(
 		delegator: &mut Delegator<T>,
 		bonded_pool: &mut BondedPool<T>,
 		reward_pool: &mut RewardPool<T>,
 	) -> Result<BalanceOf<T>, DispatchError> {
-		// Presentation Notes:
-		// Reward pool points
-		// Essentially we make it so each plank is inflated by the number of points in bonded pool.
-		// So if we have earned 10 plank and 100 bonded pool points, we get 1,000 reward pool
-		// points. The delegator scales up their points as well (say 10 for this example) and we get
-		// the delegator has virtual points of 10points * 10rewards (100reward-points).
-		// So the payout calc is 100 / 1,000 * 100 = 10
-		//
-		// Keep in mind we subtract the delegators virtual points from the pool points to account
-		// for the fact that we transferred their portion of rewards out of the pool account.
-
 		let u256 = |x| T::BalanceToU256::convert(x);
 		let balance = |x| T::U256ToBalance::convert(x);
 

@@ -132,12 +132,18 @@ pub struct NetworkParams {
 
 	/// Blockchain syncing mode.
 	///
-	/// - `Full`: Download and validate full blockchain history.
-	///
-	/// - `Fast`: Download blocks and the latest state only.
-	///
-	/// - `FastUnsafe`: Same as `Fast`, but skip downloading state proofs.
-	#[clap(long, arg_enum, value_name = "SYNC_MODE", default_value = "Full", ignore_case(true))]
+	/// - `full`: Download and validate full blockchain history.
+	/// - `fast`: Download blocks and the latest state only.
+	/// - `fast-unsafe`: Same as `fast`, but skip downloading state proofs.
+	/// - `warp`: Download the latest state and proof.
+	#[clap(
+		long,
+		arg_enum,
+		value_name = "SYNC_MODE",
+		default_value = "full",
+		ignore_case = true,
+		verbatim_doc_comment
+	)]
 	pub sync: SyncMode,
 }
 
