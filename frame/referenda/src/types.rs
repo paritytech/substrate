@@ -492,18 +492,46 @@ mod tests {
 		FixedI64::from_rational(x, 100)
 	}
 
-	const TIP_QUO: Curve = Curve::make_reciprocal(1, 28, percent(4), percent(0));
 	const TIP_APP: Curve = Curve::make_linear(10, 28, percent(50));
-	const ROOT_QUO: Curve = Curve::make_linear(28, 28, percent(0));
+	const TIP_QUO: Curve = Curve::make_reciprocal(1, 28, percent(4), percent(0));
 	const ROOT_APP: Curve = Curve::make_reciprocal(4, 28, percent(80), percent(50));
+	const ROOT_QUO: Curve = Curve::make_linear(28, 28, percent(0));
+	const WHITE_APP: Curve = Curve::make_reciprocal(16, 28 * 24, percent(96), percent(50));
+	const WHITE_QUO: Curve = Curve::make_reciprocal(1, 28, percent(20), percent(10));
+	const SMALL_APP: Curve = Curve::make_linear(10, 28, percent(50));
+	const SMALL_QUO: Curve = Curve::make_reciprocal(8, 28, percent(1), percent(0));
+	const MID_APP: Curve = Curve::make_linear(17, 28, percent(50));
+	const MID_QUO: Curve = Curve::make_reciprocal(12, 28, percent(1), percent(0));
+	const BIG_APP: Curve = Curve::make_linear(23, 28, percent(50));
+	const BIG_QUO: Curve = Curve::make_reciprocal(16, 28, percent(1), percent(0));
+	const HUGE_APP: Curve = Curve::make_linear(28, 28, percent(50));
+	const HUGE_QUO: Curve = Curve::make_reciprocal(20, 28, percent(1), percent(0));
+	const PARAM_APP: Curve = Curve::make_reciprocal(4, 28, percent(80), percent(50));
+	const PARAM_QUO: Curve = Curve::make_reciprocal(7, 28, percent(10), percent(0));
+	const ADMIN_APP: Curve = Curve::make_linear(17, 28, percent(50));
+	const ADMIN_QUO: Curve = Curve::make_reciprocal(12, 28, percent(1), percent(0));
 
 	#[test]
 	#[should_panic]
 	fn check_curves() {
-		TIP_QUO.info(28u32, "Tip Quorum");
 		TIP_APP.info(28u32, "Tip Approval");
-		ROOT_QUO.info(28u32, "Root Quorum");
+		TIP_QUO.info(28u32, "Tip Quorum");
 		ROOT_APP.info(28u32, "Root Approval");
+		ROOT_QUO.info(28u32, "Root Quorum");
+		WHITE_APP.info(28u32, "Whitelist Approval");
+		WHITE_QUO.info(28u32, "Whitelist Quorum");
+		SMALL_APP.info(28u32, "Small Spend Approval");
+		SMALL_QUO.info(28u32, "Small Spend Quorum");
+		MID_APP.info(28u32, "Mid Spend Approval");
+		MID_QUO.info(28u32, "Mid Spend Quorum");
+		BIG_APP.info(28u32, "Big Spend Approval");
+		BIG_QUO.info(28u32, "Big Spend Quorum");
+		HUGE_APP.info(28u32, "Huge Spend Approval");
+		HUGE_QUO.info(28u32, "Huge Spend Quorum");
+		PARAM_APP.info(28u32, "Mid-tier Parameter Change Approval");
+		PARAM_QUO.info(28u32, "Mid-tier Parameter Change Quorum");
+		ADMIN_APP.info(28u32, "Admin (e.g. Cancel Slash) Approval");
+		ADMIN_QUO.info(28u32, "Admin (e.g. Cancel Slash) Quorum");
 		assert!(false);
 	}
 
