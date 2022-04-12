@@ -2219,11 +2219,9 @@ dependencies = [
  "sp-database",
  "sp-externalities",
  "sp-inherents",
- "sp-io",
  "sp-keystore",
  "sp-runtime",
  "sp-state-machine",
- "sp-std",
  "sp-storage",
  "sp-trie",
  "tempfile",
@@ -9174,6 +9172,8 @@ dependencies = [
  "serde",
  "serde_json",
  "sp-core",
+ "sp-io",
+ "sp-std",
 ]
 
 [[package]]

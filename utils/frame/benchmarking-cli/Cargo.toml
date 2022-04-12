@@ -30,11 +30,9 @@ sp-externalities = { version = "0.12.0", path = "../../../primitives/externaliti
 sp-database = { version = "4.0.0-dev", path = "../../../primitives/database" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
 sp-inherents = { version = "4.0.0-dev", path = "../../../primitives/inherents" }
-sp-io = { version = "6.0.0", path = "../../../primitives/io" }
 sp-keystore = { version = "0.12.0", path = "../../../primitives/keystore" }
 sp-storage = { version = "6.0.0", path = "../../../primitives/storage" }
 sp-runtime = { version = "6.0.0", path = "../../../primitives/runtime" }
-sp-std = { version = "4.0.0", default-features = false, path = "../../../primitives/std" }
 sp-state-machine = { version = "0.12.0", path = "../../../primitives/state-machine" }
 sp-trie = { version = "6.0.0", path = "../../../primitives/trie" }
 codec = { version = "3.0.0", package = "parity-scale-codec" }
