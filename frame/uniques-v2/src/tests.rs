@@ -89,6 +89,21 @@ fn items() -> Vec<(u64, u32, u32)> {
 	r
 }
 
+fn attributes(collection: u32) -> Vec<(Option<u32>, Vec<u8>, Vec<u8>)> {
+	let mut s: Vec<_> = Attributes::<Test>::iter_prefix((collection,))
+		.map(|(k, v)| (k.0, k.1.into(), v.into()))
+		.collect();
+	s.sort();
+
+	let collection = Collections::<Test>::get(collection);
+	let expect_attributes = match collection {
+		Some(collection) => collection.attributes,
+		_ => 0,
+	};
+	assert_eq!(expect_attributes as usize, s.len());
+	s
+}
+
 pub const DEFAULT_SYSTEM_FEATURES: SystemFeatures = SystemFeatures::NoDeposit;
 pub const DEFAULT_USER_FEATURES: UserFeatures = UserFeatures::Administration;
 
@@ -490,7 +505,74 @@ fn set_metadata_should_work() {
 		);
 	});
 }
-// attributes
+
+#[test]
+fn set_attribute_should_work() {
+	new_test_ext().execute_with(|| {
+		let user_id = 1;
+		let id = 0;
+
+		assert_ok!(Uniques::create(
+			Origin::signed(user_id),
+			user_id,
+			DEFAULT_USER_FEATURES,
+			None,
+			None,
+		));
+
+		assert_ok!(Uniques::set_attribute(Origin::signed(user_id), id, None, bvec![0], bvec![0]));
+		assert_ok!(Uniques::set_attribute(
+			Origin::signed(user_id),
+			id,
+			Some(0),
+			bvec![0],
+			bvec![0]
+		));
+		assert_ok!(Uniques::set_attribute(
+			Origin::signed(user_id),
+			id,
+			Some(0),
+			bvec![1],
+			bvec![0]
+		));
+
+		assert_eq!(
+			attributes(id),
+			vec![
+				(None, bvec![0], bvec![0]),
+				(Some(0), bvec![0], bvec![0]),
+				(Some(0), bvec![1], bvec![0]),
+			]
+		);
+
+		assert_ok!(Uniques::set_attribute(
+			Origin::signed(user_id),
+			id,
+			None,
+			bvec![0],
+			bvec![0; 10]
+		));
+		assert_eq!(
+			attributes(id),
+			vec![
+				(None, bvec![0], bvec![0; 10]),
+				(Some(0), bvec![0], bvec![0]),
+				(Some(0), bvec![1], bvec![0]),
+			]
+		);
+
+		assert_ok!(Uniques::clear_attribute(Origin::signed(user_id), id, Some(0), bvec![1]));
+		assert_eq!(
+			attributes(id),
+			vec![(None, bvec![0], bvec![0; 10]), (Some(0), bvec![0], bvec![0]),]
+		);
+
+		let w = Collections::<Test>::get(id).unwrap().destroy_witness();
+		assert_ok!(Uniques::destroy(Origin::signed(user_id), id, w));
+		assert_eq!(attributes(id), vec![]);
+	});
+}
+
 // set_price
 // buy_item
 
