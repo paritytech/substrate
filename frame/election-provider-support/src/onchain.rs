@@ -94,11 +94,12 @@ pub trait BoundedConfig: Config {
 }
 
 fn elect_with<T: Config>(
-	max_voters: Option<usize>,
-	max_targets: Option<usize>,
+	maybe_max_voters: Option<usize>,
+	maybe_max_targets: Option<usize>,
 ) -> Result<Supports<<T::System as frame_system::Config>::AccountId>, Error> {
-	let voters = T::DataProvider::electing_voters(max_voters).map_err(Error::DataProvider)?;
-	let targets = T::DataProvider::electable_targets(max_targets).map_err(Error::DataProvider)?;
+	let voters = T::DataProvider::electing_voters(maybe_max_voters).map_err(Error::DataProvider)?;
+	let targets =
+		T::DataProvider::electable_targets(maybe_max_targets).map_err(Error::DataProvider)?;
 	let desired_targets = T::DataProvider::desired_targets().map_err(Error::DataProvider)?;
 
 	let voters_len = voters.len() as u32;

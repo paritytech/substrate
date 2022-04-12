@@ -528,8 +528,9 @@ pub trait NposSolver {
 	) -> Result<ElectionResult<Self::AccountId, Self::Accuracy>, Self::Error>;
 
 	/// Measure the weight used in the calculation of the solver.
-	/// `v` is the number of voters, `t` is the number of targets, `d` is the degree ie the maximum
-	/// numbers of votes per voter.
+	/// - `voters` is the number of voters.
+	/// - `targets` is the number of targets.
+	/// - `vote_degree` is the degree ie the maximum numbers of votes per voter.
 	fn weight<T: WeightInfo>(voters: u32, targets: u32, vote_degree: u32) -> Weight;
 }
 
