@@ -161,8 +161,6 @@ impl onchain::Config for OnChainSeqPhragmen {
 	type System = Test;
 	type Solver = SequentialPhragmen<AccountId, sp_runtime::Perbill>;
 	type DataProvider = Staking;
-	type VotersBound = ConstU32<{ u32::MAX }>;
-	type TargetsBound = ConstU32<{ u32::MAX }>;
 	type WeightInfo = ();
 }
 
@@ -184,7 +182,7 @@ impl pallet_staking::Config for Test {
 	type NextNewSession = Session;
 	type MaxNominatorRewardedPerValidator = ConstU32<64>;
 	type OffendingValidatorsThreshold = ();
-	type ElectionProvider = onchain::BoundedExecution<OnChainSeqPhragmen>;
+	type ElectionProvider = onchain::UnboundedExecution<OnChainSeqPhragmen>;
 	type GenesisElectionProvider = Self::ElectionProvider;
 	type MaxUnlockingChunks = ConstU32<32>;
 	type VoterList = pallet_staking::UseNominatorsAndValidatorsMap<Self>;

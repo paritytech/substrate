@@ -280,8 +280,6 @@ impl onchain::Config for OnChainSeqPhragmen {
 	type System = Runtime;
 	type Solver = SequentialPhragmen<AccountId, SolutionAccuracyOf<Runtime>, Balancing>;
 	type DataProvider = StakingMock;
-	type VotersBound = MaxElectingVoters;
-	type TargetsBound = MaxElectingVoters;
 	type WeightInfo = ();
 }
 
@@ -303,11 +301,11 @@ impl InstantElectionProvider for MockFallback {
 		max_targets: usize,
 	) -> Result<Supports<Self::AccountId>, Self::Error> {
 		if OnChainFallback::get() {
-			onchain::BoundedExecution::<OnChainSeqPhragmen>::elect_with_bounds(
+			onchain::UnboundedExecution::<OnChainSeqPhragmen>::elect_with_bounds(
 				max_voters,
 				max_targets,
 			)
-			.map_err(|_| "onchain::BoundedExecution failed.")
+			.map_err(|_| "onchain::UnboundedExecution failed.")
 		} else {
 			super::NoFallback::<Runtime>::elect_with_bounds(max_voters, max_targets)
 		}
