@@ -421,9 +421,76 @@ fn transfer_should_work() {
 	});
 }
 
+#[test]
+fn set_metadata_should_work() {
+	new_test_ext().execute_with(|| {
+		let user_1 = 1;
+		let user_2 = 2;
+		let collection_id = 0;
+		let item_1 = 1;
+		let item_2 = 2;
+
+		assert_ok!(Uniques::create(
+			Origin::signed(user_1),
+			user_1,
+			DEFAULT_USER_FEATURES,
+			None,
+			None,
+		));
+
+		assert_ok!(Uniques::set_collection_metadata(
+			Origin::signed(user_1),
+			collection_id,
+			bvec![0u8; 20]
+		));
+
+		assert_ok!(Uniques::mint(Origin::signed(user_1), user_1, collection_id, item_1));
+		assert_ok!(Uniques::mint(Origin::signed(user_1), user_1, collection_id, item_2));
+
+		assert_ok!(Uniques::set_item_metadata(
+			Origin::signed(user_1),
+			collection_id,
+			item_2,
+			bvec![0u8; 20]
+		));
+
+		assert_eq!(Collections::<Test>::get(collection_id).unwrap().items, 2);
+		assert_eq!(Collections::<Test>::get(collection_id).unwrap().item_metadatas, 1);
+
+		assert!(CollectionMetadataOf::<Test>::contains_key(collection_id));
+		assert!(ItemMetadataOf::<Test>::contains_key(collection_id, item_2));
+
+		// only collection's owner can change items metadata
+		assert_ok!(Uniques::transfer_item(
+			Origin::signed(user_1),
+			collection_id,
+			item_2,
+			user_2,
+			CollectionConfigs::<Test>::get(collection_id).unwrap()
+		));
+		assert_noop!(
+			Uniques::set_item_metadata(
+				Origin::signed(user_2),
+				collection_id,
+				item_2,
+				bvec![0u8; 20]
+			),
+			Error::<Test>::NotAuthorized
+		);
+
+		// collection's metadata can't be changed after the collection gets locked
+		assert_ok!(Uniques::change_collection_config(
+			Origin::signed(user_1),
+			collection_id,
+			UserFeatures::IsLocked
+		));
+		assert_noop!(
+			Uniques::set_collection_metadata(Origin::signed(user_1), collection_id, bvec![0u8; 20]),
+			Error::<Test>::CollectionIsLocked
+		);
+	});
+}
 // attributes
-// set_collection_metadata
-// set_item_metadata
 // set_price
 // buy_item
 
