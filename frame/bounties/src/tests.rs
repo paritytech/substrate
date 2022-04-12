@@ -169,7 +169,7 @@ fn last_event() -> BountiesEvent<Test> {
 	System::events()
 		.into_iter()
 		.map(|r| r.event)
-		.filter_map(|e| if let Event::Bounties(inner) = e { Some(inner) } else { None })
+		.filter_map(|e| if let Event::Bounties(inner) = e { Some(*inner) } else { None })
 		.last()
 		.unwrap()
 }

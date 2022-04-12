@@ -19,10 +19,7 @@
 
 use super::*;
 use frame_support::{assert_noop, assert_ok};
-use mock::{
-	new_test_ext, Call, Event as TestEvent, Logger, LoggerCall, Origin, Sudo, SudoCall, System,
-	Test,
-};
+use mock::{new_test_ext, Call, Logger, LoggerCall, Origin, Sudo, SudoCall, System, Test};
 
 #[test]
 fn test_setup_works() {
@@ -58,7 +55,7 @@ fn sudo_emits_events_correctly() {
 		// Should emit event to indicate success when called with the root `key` and `call` is `Ok`.
 		let call = Box::new(Call::Logger(LoggerCall::privileged_i32_log { i: 42, weight: 1 }));
 		assert_ok!(Sudo::sudo(Origin::signed(1), call));
-		System::assert_has_event(TestEvent::Sudo(Event::Sudid { sudo_result: Ok(()) }));
+		System::assert_has_event(Event::Sudid { sudo_result: Ok(()) }.into());
 	})
 }
 
@@ -96,7 +93,7 @@ fn sudo_unchecked_weight_emits_events_correctly() {
 		// Should emit event to indicate success when called with the root `key` and `call` is `Ok`.
 		let call = Box::new(Call::Logger(LoggerCall::privileged_i32_log { i: 42, weight: 1 }));
 		assert_ok!(Sudo::sudo_unchecked_weight(Origin::signed(1), call, 1_000));
-		System::assert_has_event(TestEvent::Sudo(Event::Sudid { sudo_result: Ok(()) }));
+		System::assert_has_event(Event::Sudid { sudo_result: Ok(()) }.into());
 	})
 }
 
@@ -123,10 +120,10 @@ fn set_key_emits_events_correctly() {
 
 		// A root `key` can change the root `key`.
 		assert_ok!(Sudo::set_key(Origin::signed(1), 2));
-		System::assert_has_event(TestEvent::Sudo(Event::KeyChanged { old_sudoer: Some(1) }));
+		System::assert_has_event(Event::KeyChanged { old_sudoer: Some(1) }.into());
 		// Double check.
 		assert_ok!(Sudo::set_key(Origin::signed(2), 4));
-		System::assert_has_event(TestEvent::Sudo(Event::KeyChanged { old_sudoer: Some(2) }));
+		System::assert_has_event(Event::KeyChanged { old_sudoer: Some(2) }.into());
 	});
 }
 
@@ -161,6 +158,6 @@ fn sudo_as_emits_events_correctly() {
 		// A non-privileged function will work when passed to `sudo_as` with the root `key`.
 		let call = Box::new(Call::Logger(LoggerCall::non_privileged_log { i: 42, weight: 1 }));
 		assert_ok!(Sudo::sudo_as(Origin::signed(1), 2, call));
-		System::assert_has_event(TestEvent::Sudo(Event::SudoAsDone { sudo_result: Ok(()) }));
+		System::assert_has_event(Event::SudoAsDone { sudo_result: Ok(()) }.into());
 	});
 }

@@ -175,7 +175,7 @@ fn last_event() -> TipEvent<Test> {
 	System::events()
 		.into_iter()
 		.map(|r| r.event)
-		.filter_map(|e| if let Event::Tips(inner) = e { Some(inner) } else { None })
+		.filter_map(|e| if let Event::Tips(inner) = e { Some(*inner) } else { None })
 		.last()
 		.unwrap()
 }
