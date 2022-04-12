@@ -122,8 +122,6 @@ pub fn multiply_by_rational(mut a: u128, mut b: u128, mut c: u128) -> Result<u12
 
 mod double128 {
 	// Inspired by: https://medium.com/wicketh/mathemagic-512-bit-division-in-solidity-afa55870a65
-	use num_traits::Zero;
-	use sp_std::convert::TryFrom;
 
 	/// Returns the least significant 64 bits of a
 	const fn low_64(a: u128) -> u128 {
@@ -156,42 +154,6 @@ mod double128 {
 		low: u128,
 	}
 
-	impl TryFrom<Double128> for u128 {
-		type Error = ();
-		fn try_from(x: Double128) -> Result<Self, ()> {
-			x.try_into_u128()
-		}
-	}
-
-	impl Zero for Double128 {
-		fn zero() -> Self {
-			Double128::zero()
-		}
-		fn is_zero(&self) -> bool {
-			Double128::is_zero(&self)
-		}
-	}
-
-	impl sp_std::ops::Add<Self> for Double128 {
-		type Output = Self;
-		fn add(self, rhs: Self) -> Self {
-			Double128::add(self, rhs)
-		}
-	}
-
-	impl sp_std::ops::AddAssign<Self> for Double128 {
-		fn add_assign(&mut self, rhs: Self) {
-			*self = self.add(rhs);
-		}
-	}
-
-	impl sp_std::ops::Div<u128> for Double128 {
-		type Output = (Self, u128);
-		fn div(self, rhs: u128) -> (Self, u128) {
-			Double128::div(self, rhs)
-		}
-	}
-
 	impl Double128 {
 		pub const fn try_into_u128(self) -> Result<u128, ()> {
 			match self.high {
@@ -205,10 +167,6 @@ mod double128 {
 				high: 0,
 				low: 0,
 			}
-		}
-
-		pub const fn is_zero(&self) -> bool {
-			self.high == 0 && self.low == 0
 		}
 
 		/// Return a `Double128` value representing the `scaled_value << 64`.
@@ -294,16 +252,23 @@ mod double128 {
 	}
 }
 
-pub const fn checked_mul(a: u128, b: u128) -> Option<u128> {
-	a.checked_mul(b)
-}
-
-pub const fn checked_neg(a: u128) -> Option<u128> {
-	a.checked_neg()
-}
-
-pub const fn saturating_add(a: u128, b: u128) -> u128 {
-	a.saturating_add(b)
+/// Returns `a * b / c` and `(a * b) % c` (wrapping to 128 bits) or `None` in the case of
+/// overflow.
+pub const fn multiply_by_rational_with_rounding(a: u128, b: u128, c: u128, r: Rounding) -> Option<u128> {
+	use double128::Double128;
+	if c == 0 {
+		panic!("attempt to divide by zero")
+	}
+	let (result, remainder) = Double128::product_of(a, b).div(c);
+	let mut result: u128 = match result.try_into_u128() { Ok(v) => v, Err(_) => return None };
+	if match r {
+		Rounding::Up => remainder > 0,
+		Rounding::Nearest => remainder >= c / 2 + c % 2,
+		Rounding::Down => false,
+	} {
+		result = match result.checked_add(1) { Some(v) => v, None => return None };
+	}
+	Some(result)
 }
 
 pub const fn sqrt(mut n: u128) -> u128 {
@@ -329,25 +294,6 @@ pub const fn sqrt(mut n: u128) -> u128 {
 		bit = bit >> 2;
 	}
 	result
-}
-
-/// Returns `a * b / c` and `(a * b) % c` (wrapping to 128 bits) or `None` in the case of
-/// overflow.
-pub const fn multiply_by_rational_with_rounding(a: u128, b: u128, c: u128, r: Rounding) -> Option<u128> {
-	use double128::Double128;
-	if c == 0 {
-		panic!("attempt to divide by zero")
-	}
-	let (result, remainder) = Double128::product_of(a, b).div(c);
-	let mut result: u128 = match result.try_into_u128() { Ok(v) => v, Err(_) => return None };
-	if match r {
-		Rounding::Up => remainder > 0,
-		Rounding::Nearest => remainder >= c / 2 + c % 2,
-		Rounding::Down => false,
-	} {
-		result = match result.checked_add(1) { Some(v) => v, None => return None };
-	}
-	Some(result)
 }
 
 #[cfg(test)]

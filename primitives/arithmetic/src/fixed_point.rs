@@ -18,10 +18,7 @@
 //! Decimal Fixed Point implementations for Substrate runtime.
 
 use crate::{
-	helpers_128bit::{
-		multiply_by_rational, multiply_by_rational_with_rounding, sqrt, checked_mul,
-		saturating_add,
-	},
+	helpers_128bit::{multiply_by_rational, multiply_by_rational_with_rounding, sqrt},
 	traits::{
 		Bounded, CheckedAdd, CheckedDiv, CheckedMul, CheckedNeg, CheckedSub, One,
 		SaturatedConversion, Saturating, UniqueSaturatedInto, Zero,
@@ -539,7 +536,7 @@ macro_rules! implement_fixed {
 				//   sqrt(nD) = sqrt(n)*sqrt(D)
 				// computing them individually and taking the product at the end. we will lose some
 				// precision though.
-				let maybe_vd = checked_mul(v, $div);
+				let maybe_vd = u128::checked_mul(v, $div);
 				let r = if let Some(vd) = maybe_vd {
 					sqrt(vd)
 				} else {
@@ -575,7 +572,7 @@ macro_rules! implement_fixed {
 				if self.0 < 0 {
 					let value = match self.0.checked_neg() {
 						Some(n) => n as u128,
-						None => saturating_add(<$inner_type>::max_value() as u128, 1),
+						None => u128::saturating_add(<$inner_type>::max_value() as u128, 1),
 					};
 					I129 { value, negative: true }
 				} else {
@@ -584,7 +581,7 @@ macro_rules! implement_fixed {
 			}
 
 			const fn from_i129(n: I129) -> Option<Self> {
-				let max_plus_one = saturating_add(<$inner_type>::max_value() as u128, 1);
+				let max_plus_one = u128::saturating_add(<$inner_type>::max_value() as u128, 1);
 				#[allow(unused_comparisons)]
 				let inner = if n.negative && <$inner_type>::min_value() < 0 && n.value == max_plus_one {
 					<$inner_type>::min_value()

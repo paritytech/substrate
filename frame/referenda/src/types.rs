@@ -267,15 +267,7 @@ const fn pos_quad_solution(a: FixedI64, b: FixedI64, c: FixedI64) -> FixedI64 {
 }
 
 impl Curve {
-	pub const fn reciprocal_from_point(
-		delay: u128,
-		period: u128,
-		level: FixedI64,
-	) -> Curve {
-		Self::reciprocal_from_point_and_floor(delay, period, level, FixedI64::from_u32(0))
-	}
-
-	pub const fn reciprocal_from_point_and_floor(
+	pub const fn make_reciprocal(
 		delay: u128,
 		period: u128,
 		level: FixedI64,
@@ -284,17 +276,17 @@ impl Curve {
 		let delay = FixedI64::from_rational(delay, period).into_perbill();
 		let mut bounds = ((
 			FixedI64::from_u32(0),
-			Self::reciprocal_from_factor_and_floor(FixedI64::from_u32(0), floor),
+			Self::reciprocal_from_parts(FixedI64::from_u32(0), floor),
 			FixedI64::from_inner(i64::max_value()),
 		), (
 			FixedI64::from_u32(1),
-			Self::reciprocal_from_factor_and_floor(FixedI64::from_u32(1), floor),
+			Self::reciprocal_from_parts(FixedI64::from_u32(1), floor),
 			FixedI64::from_inner(i64::max_value()),
 		));
 		const TWO: FixedI64 = FixedI64::from_u32(2);
 		while (bounds.1).0.sub((bounds.0).0).into_inner() > 1 {
 			let factor = (bounds.0).0.add((bounds.1).0).div(TWO);
-			let curve = Self::reciprocal_from_factor_and_floor(factor, floor);
+			let curve = Self::reciprocal_from_parts(factor, floor);
 			let curve_level = FixedI64::from_perbill(curve.const_threshold(delay));
 			if curve_level.into_inner() > level.into_inner() {
 				bounds = (bounds.0, (factor, curve, curve_level.sub(level)));
@@ -309,7 +301,7 @@ impl Curve {
 		}
 	}
 
-	const fn reciprocal_from_factor_and_floor(factor: FixedI64, floor: FixedI64) -> Self {
+	const fn reciprocal_from_parts(factor: FixedI64, floor: FixedI64) -> Self {
 		let one_minus_floor = FixedI64::from_u32(1).sub(floor);
 		let x_offset = pos_quad_solution(one_minus_floor, one_minus_floor, factor.neg());
 		let y_offset = floor.sub(factor.div(FixedI64::from_u32(1).add(x_offset)));
@@ -488,7 +480,7 @@ mod tests {
 		FixedI64::from_rational(x, 100)
 	}
 
-	const TIP_CURVE: Curve = Curve::reciprocal_from_point_and_floor(1, 28, percent(65), percent(50));
+	const TIP_CURVE: Curve = Curve::make_reciprocal(1, 28, percent(65), percent(50));
 
 	#[test]
 	#[should_panic]
