@@ -49,7 +49,8 @@ impl<T: Config> Pallet<T> {
 		caller: T::AccountId,
 		data: MetadataOf<T>,
 	) -> DispatchResult {
-		let mut collection = Collections::<T>::get(&collection_id).ok_or(Error::<T>::CollectionNotFound)?;
+		let mut collection =
+			Collections::<T>::get(&collection_id).ok_or(Error::<T>::CollectionNotFound)?;
 		ensure!(collection.owner == caller, Error::<T>::NotAuthorized);
 
 		ItemMetadataOf::<T>::try_mutate_exists(collection_id, item_id, |metadata| {

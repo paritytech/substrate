@@ -28,8 +28,8 @@ mod tests;
 mod mock;
 
 pub use pallet::*;
+use sp_runtime::traits::StaticLookup;
 pub use types::*;
-use sp_runtime::traits::{StaticLookup};
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -53,7 +53,14 @@ pub mod pallet {
 
 		type CollectionId: Member + Parameter + Default + Copy + MaxEncodedLen + CheckedAdd + One;
 
-		type ItemId: Member + Parameter + Default + Copy + MaxEncodedLen + CheckedAdd + One + PartialOrd;
+		type ItemId: Member
+			+ Parameter
+			+ Default
+			+ Copy
+			+ MaxEncodedLen
+			+ CheckedAdd
+			+ One
+			+ PartialOrd;
 
 		/// This is the limit for metadata
 		type MetadataLimit: Get<u32>; // = up to 10 kb;
@@ -77,22 +84,13 @@ pub mod pallet {
 
 	/// Maps a unique collection id to it's config.
 	#[pallet::storage]
-	pub(super) type CollectionConfigs<T: Config> = StorageMap<
-		_,
-		Blake2_128Concat,
-		T::CollectionId,
-		CollectionConfig,
-	>;
+	pub(super) type CollectionConfigs<T: Config> =
+		StorageMap<_, Blake2_128Concat, T::CollectionId, CollectionConfig>;
 
 	/// Maps a unique collection id to it's administrator.
 	#[pallet::storage]
-	pub(super) type Admins<T: Config> = StorageMap<
-		_,
-		Blake2_128Concat,
-		T::CollectionId,
-		T::AccountId,
-		OptionQuery
-	>;
+	pub(super) type Admins<T: Config> =
+		StorageMap<_, Blake2_128Concat, T::CollectionId, T::AccountId, OptionQuery>;
 
 	/// Maps a collection id to it's metadata.
 	#[pallet::storage]
@@ -217,9 +215,16 @@ pub mod pallet {
 			creator: T::AccountId,
 			owner: T::AccountId,
 		},
-		CollectionMetadataSet { id: T::CollectionId, data: MetadataOf<T> },
-		CollectionLocked { id: T::CollectionId },
-		CollectionDestroyed { id: T::CollectionId },
+		CollectionMetadataSet {
+			id: T::CollectionId,
+			data: MetadataOf<T>,
+		},
+		CollectionLocked {
+			id: T::CollectionId,
+		},
+		CollectionDestroyed {
+			id: T::CollectionId,
+		},
 		CollectionOwnerChanged {
 			id: T::CollectionId,
 			old_owner: T::AccountId,
@@ -233,7 +238,9 @@ pub mod pallet {
 			id: T::CollectionId,
 			max_items_per_account: Option<u32>,
 		},
-		CollectionConfigChanged { id: T::CollectionId },
+		CollectionConfigChanged {
+			id: T::CollectionId,
+		},
 		AttributeSet {
 			id: T::CollectionId,
 			maybe_item: Option<T::ItemId>,
@@ -329,13 +336,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 			let owner = T::Lookup::lookup(owner)?;
-			Self::do_create_collection(
-				sender,
-				owner,
-				config,
-				max_supply,
-				max_items_per_account,
-			)?;
+			Self::do_create_collection(sender, owner, config, max_supply, max_items_per_account)?;
 			Ok(())
 		}
 
@@ -346,7 +347,8 @@ pub mod pallet {
 			new_config: UserFeatures,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
-			let current_config = CollectionConfigs::<T>::get(id).ok_or(Error::<T>::CollectionNotFound)?;
+			let current_config =
+				CollectionConfigs::<T>::get(id).ok_or(Error::<T>::CollectionNotFound)?;
 			Self::do_change_collection_config(id, sender, current_config, new_config)?;
 			Ok(())
 		}
@@ -471,7 +473,8 @@ pub mod pallet {
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 			let receiver = T::Lookup::lookup(receiver)?;
-			let config = CollectionConfigs::<T>::get(collection_id).ok_or(Error::<T>::CollectionNotFound)?;
+			let config =
+				CollectionConfigs::<T>::get(collection_id).ok_or(Error::<T>::CollectionNotFound)?;
 			ensure!(config == config_hint, Error::<T>::BadHint);
 			Self::do_transfer_item(collection_id, item_id, config, sender, receiver)?;
 			Ok(())
@@ -510,7 +513,8 @@ pub mod pallet {
 			buyer: Option<T::AccountId>,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
-			let config = CollectionConfigs::<T>::get(collection_id).ok_or(Error::<T>::CollectionNotFound)?;
+			let config =
+				CollectionConfigs::<T>::get(collection_id).ok_or(Error::<T>::CollectionNotFound)?;
 			Self::do_set_price(collection_id, item_id, config, sender, price, buyer)?;
 			Ok(())
 		}
@@ -523,7 +527,8 @@ pub mod pallet {
 			bid_price: BalanceOf<T>,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
-			let config = CollectionConfigs::<T>::get(collection_id).ok_or(Error::<T>::CollectionNotFound)?;
+			let config =
+				CollectionConfigs::<T>::get(collection_id).ok_or(Error::<T>::CollectionNotFound)?;
 			Self::do_buy_item(collection_id, item_id, config, sender, bid_price)?;
 			Ok(())
 		}

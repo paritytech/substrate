@@ -16,7 +16,7 @@
 // limitations under the License.
 
 use codec::{Decode, Encode, MaxEncodedLen};
-use enumflags2::{bitflags};
+use enumflags2::bitflags;
 use frame_support::RuntimeDebug;
 use scale_info::TypeInfo;
 
@@ -88,7 +88,6 @@ pub struct ItemMetadata<Metadata> {
 	/// hash-addressable global publication system such as IPFS.
 	pub(super) data: Metadata,
 }
-
 
 /// Witness data for the destroy transactions.
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, Default, TypeInfo, MaxEncodedLen)]

@@ -30,7 +30,10 @@ impl<T: Config> Pallet<T> {
 		buyer: Option<T::AccountId>,
 	) -> DispatchResult {
 		let user_features: BitFlags<UserFeatures> = config.user_features.into();
-		ensure!(!user_features.contains(UserFeatures::NonTransferableItems), Error::<T>::ItemsNotTransferable);
+		ensure!(
+			!user_features.contains(UserFeatures::NonTransferableItems),
+			Error::<T>::ItemsNotTransferable
+		);
 
 		Items::<T>::try_mutate(collection_id, item_id, |maybe_item| {
 			let item = maybe_item.as_mut().ok_or(Error::<T>::ItemNotFound)?;
@@ -54,7 +57,10 @@ impl<T: Config> Pallet<T> {
 		bid_price: BalanceOf<T>,
 	) -> DispatchResult {
 		let user_features: BitFlags<UserFeatures> = config.user_features.into();
-		ensure!(!user_features.contains(UserFeatures::NonTransferableItems), Error::<T>::ItemNotForSale);
+		ensure!(
+			!user_features.contains(UserFeatures::NonTransferableItems),
+			Error::<T>::ItemNotForSale
+		);
 
 		let item = Items::<T>::get(collection_id, item_id).ok_or(Error::<T>::ItemNotFound)?;
 		ensure!(item.owner != buyer, Error::<T>::NotAuthorized);
@@ -62,22 +68,21 @@ impl<T: Config> Pallet<T> {
 		if let Some(price) = item.price {
 			ensure!(bid_price >= price, Error::<T>::ItemUnderpriced);
 		} else {
-			return Err(Error::<T>::ItemNotForSale.into())
+			return Err(Error::<T>::ItemNotForSale.into());
 		}
 
 		if let Some(only_buyer) = item.buyer {
 			ensure!(only_buyer == buyer, Error::<T>::ItemNotForSale);
 		}
 
-		T::Currency::transfer(&buyer, &item.owner, bid_price, frame_support::traits::ExistenceRequirement::KeepAlive)?;
-
-		Self::do_transfer_item(
-			collection_id,
-			item_id,
-			config,
-			item.owner.clone(),
-			buyer.clone(),
+		T::Currency::transfer(
+			&buyer,
+			&item.owner,
+			bid_price,
+			frame_support::traits::ExistenceRequirement::KeepAlive,
 		)?;
+
+		Self::do_transfer_item(collection_id, item_id, config, item.owner.clone(), buyer.clone())?;
 
 		// reset the price & the buyer
 		Items::<T>::try_mutate(collection_id, item_id, |maybe_item| {

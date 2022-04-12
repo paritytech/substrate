@@ -33,10 +33,8 @@ impl<T: Config> Pallet<T> {
 		ensure!(!CollectionConfigs::<T>::contains_key(id), Error::<T>::CollectionIdTaken);
 
 		let default_system_config = T::DefaultSystemConfig::get();
-		let collection_config = CollectionConfig {
-			system_features: default_system_config,
-			user_features: user_config,
-		};
+		let collection_config =
+			CollectionConfig { system_features: default_system_config, user_features: user_config };
 		CollectionConfigs::<T>::insert(id, collection_config);
 
 		let collection = Collection {
@@ -114,7 +112,10 @@ impl<T: Config> Pallet<T> {
 		collection.max_items_per_account = max_items_per_account;
 		Collections::<T>::insert(&id, collection);
 
-		Self::deposit_event(Event::<T>::CollectionMaxItemsPerAccountChanged { id, max_items_per_account });
+		Self::deposit_event(Event::<T>::CollectionMaxItemsPerAccountChanged {
+			id,
+			max_items_per_account,
+		});
 
 		Ok(())
 	}

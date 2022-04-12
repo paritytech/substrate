@@ -17,7 +17,7 @@
 
 use crate::*;
 use frame_support::pallet_prelude::*;
-use sp_runtime::{ArithmeticError};
+use sp_runtime::ArithmeticError;
 
 impl<T: Config> Pallet<T> {
 	pub fn do_mint_item(
@@ -36,26 +36,25 @@ impl<T: Config> Pallet<T> {
 				ensure!(collection.items < max_supply, Error::<T>::AllItemsMinted);
 			}
 
-			let mut maybe_items_per_account = CountForAccountItems::<T>::get(&owner, &collection_id);
+			let mut maybe_items_per_account =
+				CountForAccountItems::<T>::get(&owner, &collection_id);
 			let items_per_account = maybe_items_per_account.get_or_insert(0);
 
 			if collection.max_items_per_account.is_some() {
-				ensure!(items_per_account < collection.max_items_per_account.as_mut().unwrap(), Error::<T>::CollectionItemsPerAccountLimitReached);
+				ensure!(
+					items_per_account < collection.max_items_per_account.as_mut().unwrap(),
+					Error::<T>::CollectionItemsPerAccountLimitReached
+				);
 			}
 
-			let item = Item {
-				id: item_id,
-				owner: owner.clone(),
-				deposit: None,
-				price: None,
-				buyer: None,
-			};
+			let item =
+				Item { id: item_id, owner: owner.clone(), deposit: None, price: None, buyer: None };
 
-			let instances =
-				collection.items.checked_add(1).ok_or(ArithmeticError::Overflow)?;
+			let instances = collection.items.checked_add(1).ok_or(ArithmeticError::Overflow)?;
 			collection.items = instances;
 
-			let new_items_amount = items_per_account.checked_add(1).ok_or(ArithmeticError::Overflow)?;
+			let new_items_amount =
+				items_per_account.checked_add(1).ok_or(ArithmeticError::Overflow)?;
 			CountForAccountItems::<T>::insert(&owner, &collection_id, new_items_amount);
 
 			Items::<T>::insert(collection_id, item_id, item);
@@ -80,12 +79,13 @@ impl<T: Config> Pallet<T> {
 
 			ensure!(item.owner == caller, Error::<T>::NotAuthorized);
 
-			let instances =
-				collection.items.checked_sub(1).ok_or(ArithmeticError::Overflow)?;
+			let instances = collection.items.checked_sub(1).ok_or(ArithmeticError::Overflow)?;
 			collection.items = instances;
 
-			let items_per_account = CountForAccountItems::<T>::get(&caller, &collection_id).ok_or(Error::<T>::ItemNotFound)?;
-			let new_items_amount = items_per_account.checked_sub(1).ok_or(ArithmeticError::Overflow)?;
+			let items_per_account = CountForAccountItems::<T>::get(&caller, &collection_id)
+				.ok_or(Error::<T>::ItemNotFound)?;
+			let new_items_amount =
+				items_per_account.checked_sub(1).ok_or(ArithmeticError::Overflow)?;
 			CountForAccountItems::<T>::insert(&caller, &collection_id, new_items_amount);
 
 			Items::<T>::remove(&collection_id, &item_id);

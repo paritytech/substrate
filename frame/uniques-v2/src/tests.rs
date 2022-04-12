@@ -31,12 +31,7 @@ fn get_id_from_event() -> Result<<Test as Config>::CollectionId, &'static str> {
 	if let Some(e) = last_event.clone() {
 		match e.event {
 			mock::Event::Uniques(inner_event) => match inner_event {
-				Event::CollectionCreated {
-					id,
-					max_supply: _,
-					creator: _,
-					owner: _,
-				} => {
+				Event::CollectionCreated { id, max_supply: _, creator: _, owner: _ } => {
 					return Ok(id)
 				},
 				_ => {},
@@ -97,21 +92,18 @@ fn items() -> Vec<(u64, u32, u32)> {
 pub const DEFAULT_SYSTEM_FEATURES: SystemFeatures = SystemFeatures::NoDeposit;
 pub const DEFAULT_USER_FEATURES: UserFeatures = UserFeatures::Administration;
 
-
 #[test]
 fn minting_should_work() {
 	new_test_ext().execute_with(|| {
 		let owner = 1;
 		let creator = 1;
-		assert_ok!(
-			Uniques::create(
-				Origin::signed(creator),
-				owner,
-				DEFAULT_USER_FEATURES,
-				None,
-				None,
-			)
-		);
+		assert_ok!(Uniques::create(
+			Origin::signed(creator),
+			owner,
+			DEFAULT_USER_FEATURES,
+			None,
+			None,
+		));
 
 		let id = get_id_from_event().unwrap();
 		let collection_config = CollectionConfigs::<Test>::get(id);
@@ -122,14 +114,10 @@ fn minting_should_work() {
 		};
 		assert_eq!(Some(expected_config), collection_config);
 
-		assert_eq!(events(), [
-			Event::<Test>::CollectionCreated {
-				id,
-				max_supply: None,
-				owner,
-				creator,
-			}
-		]);
+		assert_eq!(
+			events(),
+			[Event::<Test>::CollectionCreated { id, max_supply: None, owner, creator }]
+		);
 		assert_eq!(CollectionNextId::<Test>::get(), 1);
 		assert!(CollectionCreator::<Test>::contains_key(creator, id));
 		assert!(CollectionOwner::<Test>::contains_key(owner, id));
@@ -142,15 +130,13 @@ fn collection_locking_should_work() {
 	new_test_ext().execute_with(|| {
 		let user_id = 1;
 
-		assert_ok!(
-			Uniques::create(
-				Origin::signed(user_id),
-				user_id,
-				DEFAULT_USER_FEATURES,
-				None,
-				None,
-			)
-		);
+		assert_ok!(Uniques::create(
+			Origin::signed(user_id),
+			user_id,
+			DEFAULT_USER_FEATURES,
+			None,
+			None,
+		));
 
 		let id = get_id_from_event().unwrap();
 		let new_config = UserFeatures::IsLocked;
@@ -195,15 +181,13 @@ fn update_max_supply_should_work() {
 		let user_id = 1;
 		let max_supply = Some(10);
 
-		assert_ok!(
-			Uniques::create(
-				Origin::signed(user_id),
-				user_id,
-				DEFAULT_USER_FEATURES,
-				max_supply,
-				None,
-			)
-		);
+		assert_ok!(Uniques::create(
+			Origin::signed(user_id),
+			user_id,
+			DEFAULT_USER_FEATURES,
+			max_supply,
+			None,
+		));
 
 		let collection = Collections::<Test>::get(id).unwrap();
 		assert_eq!(collection.max_supply, max_supply);
@@ -214,9 +198,10 @@ fn update_max_supply_should_work() {
 		let collection = Collections::<Test>::get(id).unwrap();
 		assert_eq!(collection.max_supply, new_max_supply);
 
-		assert!(events().contains(
-			&Event::<Test>::CollectionMaxSupplyChanged { id, max_supply: new_max_supply }
-		));
+		assert!(events().contains(&Event::<Test>::CollectionMaxSupplyChanged {
+			id,
+			max_supply: new_max_supply
+		}));
 	});
 }
 
@@ -226,15 +211,13 @@ fn destroy_collection_should_work() {
 		let id = 0;
 		let user_id = 1;
 
-		assert_ok!(
-			Uniques::create(
-				Origin::signed(user_id),
-				user_id,
-				DEFAULT_USER_FEATURES,
-				None,
-				None,
-			)
-		);
+		assert_ok!(Uniques::create(
+			Origin::signed(user_id),
+			user_id,
+			DEFAULT_USER_FEATURES,
+			None,
+			None,
+		));
 
 		assert_ok!(Uniques::set_collection_metadata(Origin::signed(user_id), id, bvec![0u8; 20]));
 
@@ -269,20 +252,20 @@ fn transfer_owner_should_work() {
 		let user_2 = 2;
 		let collection_id = 0;
 
-		assert_ok!(
-			Uniques::create(
-				Origin::signed(user_1),
-				user_1,
-				DEFAULT_USER_FEATURES,
-				None,
-				None,
-			)
-		);
+		assert_ok!(Uniques::create(
+			Origin::signed(user_1),
+			user_1,
+			DEFAULT_USER_FEATURES,
+			None,
+			None,
+		));
 
 		assert_eq!(collections(), vec![(user_1, collection_id)]);
-		assert_ok!(
-			Uniques::transfer_collection_ownership(Origin::signed(user_1), collection_id, user_2)
-		);
+		assert_ok!(Uniques::transfer_collection_ownership(
+			Origin::signed(user_1),
+			collection_id,
+			user_2
+		));
 		assert_eq!(collections(), vec![(user_1, collection_id)]);
 
 		assert_noop!(
@@ -300,15 +283,13 @@ fn mint_should_work() {
 		let collection_id = 0;
 		let item_id = 1;
 
-		assert_ok!(
-			Uniques::create(
-				Origin::signed(sender),
-				sender,
-				DEFAULT_USER_FEATURES,
-				None,
-				None,
-			)
-		);
+		assert_ok!(Uniques::create(
+			Origin::signed(sender),
+			sender,
+			DEFAULT_USER_FEATURES,
+			None,
+			None,
+		));
 
 		assert_ok!(Uniques::mint(Origin::signed(sender), user_id, collection_id, item_id));
 		assert_eq!(collections(), vec![(sender, collection_id)]);
@@ -323,15 +304,13 @@ fn mint_should_work() {
 		assert!(events().contains(&Event::<Test>::ItemCreated { collection_id, item_id }));
 
 		// validate max supply
-		assert_ok!(
-			Uniques::create(
-				Origin::signed(user_id),
-				user_id,
-				DEFAULT_USER_FEATURES,
-				Some(1),
-				None,
-			)
-		);
+		assert_ok!(Uniques::create(
+			Origin::signed(user_id),
+			user_id,
+			DEFAULT_USER_FEATURES,
+			Some(1),
+			None,
+		));
 		assert_ok!(Uniques::mint(Origin::signed(user_id), user_id, 1, 1));
 		assert_noop!(
 			Uniques::mint(Origin::signed(user_id), user_id, 1, 2),
@@ -347,15 +326,13 @@ fn burn_should_work() {
 		let collection_id = 0;
 		let item_id = 1;
 
-		assert_ok!(
-			Uniques::create(
-				Origin::signed(user_id),
-				user_id,
-				DEFAULT_USER_FEATURES,
-				None,
-				None,
-			)
-		);
+		assert_ok!(Uniques::create(
+			Origin::signed(user_id),
+			user_id,
+			DEFAULT_USER_FEATURES,
+			None,
+			None,
+		));
 
 		assert_ok!(Uniques::mint(Origin::signed(user_id), user_id, collection_id, item_id));
 		assert_ok!(Uniques::burn(Origin::signed(user_id), collection_id, item_id));
@@ -382,66 +359,52 @@ fn transfer_should_work() {
 		let collection_id = 0;
 		let item_id = 1;
 
-		assert_ok!(
-			Uniques::create(
-				Origin::signed(user_1),
-				user_1,
-				DEFAULT_USER_FEATURES,
-				None,
-				None,
-			)
-		);
+		assert_ok!(Uniques::create(
+			Origin::signed(user_1),
+			user_1,
+			DEFAULT_USER_FEATURES,
+			None,
+			None,
+		));
 
 		assert_ok!(Uniques::mint(Origin::signed(user_1), user_2, collection_id, item_id));
 		let config = CollectionConfigs::<Test>::get(collection_id).unwrap();
 
-		assert_ok!(
-			Uniques::transfer_item(
-				Origin::signed(user_2),
-				collection_id,
-				item_id,
-				user_3,
-				config
-			)
-		);
+		assert_ok!(Uniques::transfer_item(
+			Origin::signed(user_2),
+			collection_id,
+			item_id,
+			user_3,
+			config
+		));
 
 		assert_eq!(items(), vec![(user_3, collection_id, item_id)]);
 
-		assert!(events().contains(
-			&Event::<Test>::ItemTransferred {
-				collection_id,
-				item_id,
-				sender: user_2,
-				receiver: user_3,
-			}
-		));
+		assert!(events().contains(&Event::<Test>::ItemTransferred {
+			collection_id,
+			item_id,
+			sender: user_2,
+			receiver: user_3,
+		}));
 
 		assert_eq!(CountForAccountItems::<Test>::get(user_1, collection_id).unwrap_or_default(), 0);
 		assert_eq!(CountForAccountItems::<Test>::get(user_2, collection_id).unwrap_or_default(), 0);
 		assert_eq!(CountForAccountItems::<Test>::get(user_3, collection_id).unwrap(), 1);
 
 		assert_noop!(
-			Uniques::transfer_item(
-				Origin::signed(user_2),
-				collection_id,
-				item_id,
-				user_3,
-				config
-			),
+			Uniques::transfer_item(Origin::signed(user_2), collection_id, item_id, user_3, config),
 			Error::<Test>::NotAuthorized
 		);
 
 		// validate we can't transfer non-transferable items
 		let collection_id = 1;
-		assert_ok!(
-			Uniques::create(
-				Origin::signed(user_1),
-				user_1,
-				UserFeatures::NonTransferableItems,
-				None,
-				None,
-			)
-		);
+		assert_ok!(Uniques::create(
+			Origin::signed(user_1),
+			user_1,
+			UserFeatures::NonTransferableItems,
+			None,
+			None,
+		));
 
 		assert_ok!(Uniques::mint(Origin::signed(user_1), user_1, collection_id, item_id));
 
@@ -478,4 +441,3 @@ fn different_user_flags() {
 		assert_ok!(Uniques::create(Origin::signed(1), 1, user_features, None, None));
 	});
 }
-

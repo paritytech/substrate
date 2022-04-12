@@ -27,7 +27,8 @@ impl<T: Config> Pallet<T> {
 		key: AttributeKeyOf<T>,
 		value: AttributeValueOf<T>,
 	) -> DispatchResult {
-		let mut collection = Collections::<T>::get(&collection_id).ok_or(Error::<T>::CollectionNotFound)?;
+		let mut collection =
+			Collections::<T>::get(&collection_id).ok_or(Error::<T>::CollectionNotFound)?;
 		ensure!(collection.owner == caller, Error::<T>::NotAuthorized);
 
 		let attribute = Attributes::<T>::get((collection_id, maybe_item, &key));
@@ -47,7 +48,8 @@ impl<T: Config> Pallet<T> {
 		maybe_item: Option<T::ItemId>,
 		key: AttributeKeyOf<T>,
 	) -> DispatchResult {
-		let mut collection = Collections::<T>::get(&collection_id).ok_or(Error::<T>::CollectionNotFound)?;
+		let mut collection =
+			Collections::<T>::get(&collection_id).ok_or(Error::<T>::CollectionNotFound)?;
 		ensure!(collection.owner == caller, Error::<T>::NotAuthorized);
 
 		if let Some(_) = Attributes::<T>::take((collection_id, maybe_item, &key)) {
