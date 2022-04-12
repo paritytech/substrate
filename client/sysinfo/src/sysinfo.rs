@@ -17,8 +17,13 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::HwBench;
-use rand::{seq::SliceRandom, Rng};
+
 use sc_telemetry::SysInfo;
+use sp_core::{sr25519, Pair};
+use sp_io::crypto::sr25519_verify;
+use sp_std::prelude::*;
+
+use rand::{seq::SliceRandom, Rng, RngCore};
 use std::{
 	fs::File,
 	io::{Seek, SeekFrom, Write},

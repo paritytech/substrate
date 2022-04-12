@@ -19,22 +19,10 @@
 //! and the core benchmarking logic.
 
 use sc_cli::{CliConfiguration, Result, SharedParams};
-use sc_sysinfo::gather_hwbench;
-use sp_core::{sr25519, Pair};
-use sp_io::crypto::sr25519_verify;
-use sp_std::prelude::*;
 
 use clap::Parser;
 use log::info;
 use prettytable::{cell, row, table};
-use rand::RngCore;
-use std::{
-	fmt::Debug,
-	time::{Duration, Instant},
-};
-use tempfile::tempdir;
-
-use crate::shared::new_rng;
 
 /// Command to benchmark the hardware.
 ///
@@ -94,31 +82,6 @@ impl MachineCmd {
 
 		info!("\n{}", table);
 		Ok(())
-	}
-
-	/// Verify signatures of different random data `reps` many times.
-	fn sr_verify_speed(reps: u64, input_len: usize) -> Duration {
-		let pair = sr25519::Pair::from_string("//Alice", None).unwrap();
-
-		let (mut rng, _) = new_rng(None);
-		let mut msgs = Vec::new();
-		let mut sigs = Vec::new();
-
-		for _ in 0..reps {
-			let mut msg = vec![0u8; input_len];
-			rng.fill_bytes(&mut msg[..]);
-
-			sigs.push(pair.sign(&msg));
-			msgs.push(msg);
-		}
-
-		// Measure the time to verify all.
-		let start = Instant::now();
-		for (sig, msg) in sigs.into_iter().zip(msgs.iter()) {
-			sr25519_verify(&sig, &msg[..], &pair.public());
-		}
-
-		start.elapsed()
 	}
 }
 
