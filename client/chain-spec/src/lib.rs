@@ -135,7 +135,7 @@
 //! ],
 //! // Optional networking protocol id that identifies the chain.
 //! "protocolId": "fir9",
-//! // Optional fork id.
+//! // Optional fork id. Should most likely be left empty.
 //! // Can be used to signal a fork on the network level when two chains are having the
 //! // same genesis hash.
 //! "forkId": "random_fork",
