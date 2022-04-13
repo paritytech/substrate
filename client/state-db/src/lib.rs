@@ -352,7 +352,7 @@ impl<BlockHash: Hash + MallocSizeOf, Key: Hash + MallocSizeOf> StateDbSync<Block
 			(&mut self.pruning, &self.mode)
 		{
 			loop {
-				// `constraitns.max_blocks` is Some(N) — only the last N states should be available,
+				// `constraints.max_blocks` is Some(N) — only the last N states should be available,
 				// the rest gets pruned.
 				//
 				// `constraints.max_mem` is Some(N) — the last states using no more that N bytes are
