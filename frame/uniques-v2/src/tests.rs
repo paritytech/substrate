@@ -18,7 +18,7 @@
 use crate::{mock::*, *};
 use enumflags2::BitFlags;
 
-use frame_support::{assert_noop, assert_ok};
+use frame_support::{assert_noop, assert_ok, traits::Currency};
 
 macro_rules! bvec {
 	($( $x:tt )*) => {
@@ -573,8 +573,183 @@ fn set_attribute_should_work() {
 	});
 }
 
-// set_price
-// buy_item
+#[test]
+fn set_price_should_work() {
+	new_test_ext().execute_with(|| {
+		let user_id = 1;
+		let collection_id = 0;
+		let item_1 = 1;
+		let item_2 = 2;
+
+		assert_ok!(Uniques::create(
+			Origin::signed(user_id),
+			user_id,
+			DEFAULT_USER_FEATURES,
+			None,
+			None,
+		));
+
+		assert_ok!(Uniques::mint(Origin::signed(user_id), user_id, collection_id, item_1));
+		assert_ok!(Uniques::mint(Origin::signed(user_id), user_id, collection_id, item_2));
+
+		assert_ok!(Uniques::set_price(
+			Origin::signed(user_id),
+			collection_id,
+			item_1,
+			Some(1),
+			None,
+		));
+
+		assert_ok!(Uniques::set_price(
+			Origin::signed(user_id),
+			collection_id,
+			item_2,
+			Some(2),
+			Some(3),
+		));
+
+		let item = Items::<Test>::get(collection_id, item_1).unwrap();
+		assert_eq!(item.price, Some(1));
+		assert_eq!(item.buyer, None);
+
+		let item = Items::<Test>::get(collection_id, item_2).unwrap();
+		assert_eq!(item.price, Some(2));
+		assert_eq!(item.buyer, Some(3));
+
+		assert!(events().contains(&Event::<Test>::ItemPriceSet {
+			collection_id,
+			item_id: item_1,
+			price: Some(1),
+			buyer: None,
+		}));
+
+		// ensure we can't set price when the items are non-transferable
+		let collection_id = 1;
+		assert_ok!(Uniques::create(
+			Origin::signed(user_id),
+			user_id,
+			UserFeatures::NonTransferableItems,
+			None,
+			None,
+		));
+
+		assert_ok!(Uniques::mint(Origin::signed(user_id), user_id, collection_id, item_1));
+
+		assert_noop!(
+			Uniques::set_price(Origin::signed(user_id), collection_id, item_1, Some(1), None),
+			Error::<Test>::ItemsNotTransferable
+		);
+	});
+}
+
+#[test]
+fn buy_item_should_work() {
+	new_test_ext().execute_with(|| {
+		let user_1 = 1;
+		let user_2 = 2;
+		let user_3 = 3;
+		let collection_id = 0;
+		let item_1 = 1;
+		let item_2 = 2;
+		let item_3 = 3;
+		let price_1 = 2;
+		let price_2 = 3;
+		let initial_balance = 100;
+
+		Balances::make_free_balance_be(&user_1, initial_balance);
+		Balances::make_free_balance_be(&user_2, initial_balance);
+		Balances::make_free_balance_be(&user_3, initial_balance);
+
+		assert_ok!(Uniques::create(
+			Origin::signed(user_1),
+			user_1,
+			DEFAULT_USER_FEATURES,
+			None,
+			None,
+		));
+
+		assert_ok!(Uniques::mint(Origin::signed(user_1), user_1, collection_id, item_1));
+		assert_ok!(Uniques::mint(Origin::signed(user_1), user_1, collection_id, item_2));
+		assert_ok!(Uniques::mint(Origin::signed(user_1), user_1, collection_id, item_3));
+
+		assert_ok!(Uniques::set_price(
+			Origin::signed(user_1),
+			collection_id,
+			item_1,
+			Some(price_1),
+			None,
+		));
+
+		assert_ok!(Uniques::set_price(
+			Origin::signed(user_1),
+			collection_id,
+			item_2,
+			Some(price_2),
+			Some(user_3),
+		));
+
+		// can't buy for less
+		assert_noop!(
+			Uniques::buy_item(Origin::signed(user_2), collection_id, item_1, 1),
+			Error::<Test>::ItemUnderpriced
+		);
+
+		assert_ok!(Uniques::buy_item(Origin::signed(user_2), collection_id, item_1, price_1));
+
+		// validate the new owner & balances
+		let item = Items::<Test>::get(collection_id, item_1).unwrap();
+		assert_eq!(item.owner, user_2);
+		assert_eq!(Balances::total_balance(&user_1), initial_balance + price_1);
+		assert_eq!(Balances::total_balance(&user_2), initial_balance - price_1);
+
+		// can't buy from yourself
+		assert_noop!(
+			Uniques::buy_item(Origin::signed(user_1), collection_id, item_2, price_2),
+			Error::<Test>::NotAuthorized
+		);
+
+		// can't buy when the item is listed for specified buyer
+		assert_noop!(
+			Uniques::buy_item(Origin::signed(user_2), collection_id, item_2, price_2),
+			Error::<Test>::ItemNotForSale
+		);
+
+		// can buy when I'm a whitelisted buyer
+		assert_ok!(Uniques::buy_item(Origin::signed(user_3), collection_id, item_2, price_2));
+
+		assert!(events().contains(&Event::<Test>::ItemBought {
+			collection_id,
+			item_id: item_2,
+			price: price_2,
+			seller: user_1,
+			buyer: user_3,
+		}));
+
+		// ensure we reset the buyer field
+		assert_eq!(Items::<Test>::get(collection_id, item_2).unwrap().buyer, None);
+
+		// can't buy when item is not for sale
+		assert_noop!(
+			Uniques::buy_item(Origin::signed(user_2), collection_id, item_3, price_2),
+			Error::<Test>::ItemNotForSale
+		);
+
+		// ensure we can't buy an item when the collection has a NonTransferableItems flag
+		let collection_id = 1;
+		assert_ok!(Uniques::create(
+			Origin::signed(user_1),
+			user_1,
+			UserFeatures::NonTransferableItems,
+			None,
+			None,
+		));
+
+		assert_noop!(
+			Uniques::buy_item(Origin::signed(user_1), collection_id, item_1, price_1),
+			Error::<Test>::ItemNotForSale
+		);
+	});
+}
 
 #[test]
 fn different_user_flags() {
