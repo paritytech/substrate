@@ -86,7 +86,7 @@ use frame_support::{
 	storage,
 	traits::{
 		ConstU32, Contains, EnsureOrigin, Get, HandleLifetime, OnKilledAccount, OnNewAccount,
-		OriginTrait, PalletInfo, SortedMembers, StoredMap,
+		OriginTrait, PalletInfo, SortedMembers, StoredMap, TypedGet,
 	},
 	weights::{
 		extract_actual_weight, DispatchClass, DispatchInfo, PerDispatchClass, RuntimeDbWeight,
@@ -791,18 +791,17 @@ impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>, Acco
 	}
 }
 
-pub struct EnsureRootWithSuccess<AccountId, SuccessType, Success>(
-	sp_std::marker::PhantomData<(AccountId, SuccessType, Success)>
+pub struct EnsureRootWithSuccess<AccountId, Success>(
+	sp_std::marker::PhantomData<(AccountId, Success)>
 );
 impl<
 	O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>,
 	AccountId,
-	SuccessType,
-	Success: Get<SuccessType>,
+	Success: TypedGet,
 >
-	EnsureOrigin<O> for EnsureRootWithSuccess<AccountId, SuccessType, Success>
+	EnsureOrigin<O> for EnsureRootWithSuccess<AccountId, Success>
 {
-	type Success = SuccessType;
+	type Success = Success::Type;
 	fn try_origin(o: O) -> Result<Self::Success, O> {
 		o.into().and_then(|o| match o {
 			RawOrigin::Root => Ok(Success::get()),
