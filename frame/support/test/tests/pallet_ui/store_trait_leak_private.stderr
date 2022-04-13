@@ -1,8 +1,22 @@
 error[E0446]: private type `_GeneratedPrefixForStorageFoo<T>` in public interface
-  --> $DIR/store_trait_leak_private.rs:11:37
+  --> tests/pallet_ui/store_trait_leak_private.rs:11:37
    |
 11 |     #[pallet::generate_store(pub trait Store)]
    |                                        ^^^^^ can't leak private type
 ...
 20 |     #[pallet::storage]
    |               ------- `_GeneratedPrefixForStorageFoo<T>` declared as private
+
+warning: associated function is never used: `error_metadata`
+  --> tests/pallet_ui/store_trait_leak_private.rs:10:12
+   |
+10 |     #[pallet::pallet]
+   |               ^^^^^^
+   |
+   = note: `#[warn(dead_code)]` on by default
+
+warning: associated function is never used: `call_functions`
+  --> tests/pallet_ui/store_trait_leak_private.rs:17:12
+   |
+17 |     #[pallet::call]
+   |               ^^^^
