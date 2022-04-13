@@ -136,15 +136,15 @@
 //! // Optional networking protocol id that identifies the chain.
 //! "protocolId": "fir9",
 //! // Optional fork id. Should most likely be left empty.
-//! // Can be used to signal a fork on the network level when two chains are having the
+//! // Can be used to signal a fork on the network level when two chains have the
 //! // same genesis hash.
 //! "forkId": "random_fork",
-//! // Custom properties
+//! // Custom properties.
 //! "properties": {
 //!   "tokenDecimals": 15,
 //!   "tokenSymbol": "FIR"
 //! },
-//! // Old deprecated field. Should be ignored.
+//! // Deprecated field. Should be ignored.
 //! "consensusEngine": null,
 //! // The genesis declaration of the chain.
 //! //
@@ -152,7 +152,7 @@
 //! //
 //! // These declarations are in the following formats:
 //! // - `runtime` is a `json` object that can be parsed by a compatible `GenesisConfig`. This
-//! //  `GenesisConfig` declared by a runtime and opaque to the node.
+//! //  `GenesisConfig` is declared by a runtime and opaque to the node.
 //! // - `raw` is a `json` object with two fields `top` and `children_default`. Each of these
 //! //   fields is a map of `key => value`. These key/value pairs represent the genesis storage.
 //! // - `stateRootHash` is a single hex encoded hash that represents the genesis hash. The hash
@@ -164,7 +164,7 @@
 //! /// The given `wasm_code` will be used to substitute the on-chain wasm code starting with the
 //! /// given block number until the `spec_version` on chain changes. The given `wasm_code` should
 //! /// be as close as possible to the on-chain wasm code. A substitute should be used to fix a bug
-//! /// that can not be fixed with a runtime upgrade, because the runtime is for example constantly
+//! /// that can not be fixed with a runtime upgrade, if for example the runtime is constantly
 //! /// panicking. Introducing new runtime apis isn't supported, because the node
 //! /// will read the runtime version from the on-chain wasm code. Use this functionality only when
 //! /// there is no other way around it and only patch the problematic bug, the rest should be done
