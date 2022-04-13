@@ -18,7 +18,9 @@
 //! Test utilities
 
 use crate::{self as pallet_staking, *};
-use frame_election_provider_support::{onchain, SortedListProvider, VoteWeight};
+use frame_election_provider_support::{
+	onchain, SequentialPhragmen, SortedListProvider, VoteWeight,
+};
 use frame_support::{
 	assert_ok, parameter_types,
 	traits::{
@@ -258,8 +260,10 @@ impl pallet_bags_list::Config<TargetBagsListInstance> for Test {
 	type Score = Balance;
 }
 
-impl onchain::Config for Test {
-	type Accuracy = Perbill;
+pub struct OnChainSeqPhragmen;
+impl onchain::ExecutionConfig for OnChainSeqPhragmen {
+	type System = Test;
+	type Solver = SequentialPhragmen<AccountId, Perbill>;
 	type DataProvider = Staking;
 }
 
@@ -277,6 +281,9 @@ impl SortedListProvider<AccountId> for TargetBagListCompat {
 			x @ _ => x,
 		});
 		Box::new(all.into_iter().map(|(x, _)| x))
+	}
+	fn iter_from(start: &AccountId) -> Result<Box<dyn Iterator<Item = AccountId>>, Self::Error> {
+		TargetBagsList::iter_from(start)
 	}
 	fn count() -> u32 {
 		TargetBagsList::count()
@@ -332,7 +339,7 @@ impl crate::pallet::pallet::Config for Test {
 	type NextNewSession = Session;
 	type MaxNominatorRewardedPerValidator = ConstU32<64>;
 	type OffendingValidatorsThreshold = OffendingValidatorsThreshold;
-	type ElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
+	type ElectionProvider = onchain::UnboundedExecution<OnChainSeqPhragmen>;
 	type GenesisElectionProvider = Self::ElectionProvider;
 	// NOTE: consider a macro and use `UseNominatorsAndValidatorsMap<Self>` as well.
 	type VoterList = VoterBagsList;

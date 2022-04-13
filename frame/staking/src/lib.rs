@@ -316,7 +316,7 @@ use sp_staking::{
 	offence::{Offence, OffenceError, ReportOffence},
 	EraIndex, SessionIndex,
 };
-use sp_std::{collections::btree_map::BTreeMap, convert::From, prelude::*};
+use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 pub use weights::WeightInfo;
 
 pub use pallet::{pallet::*, *};

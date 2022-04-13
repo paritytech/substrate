@@ -4593,6 +4593,7 @@ fn change_of_max_nominations() {
 
 mod target_list {
 	use frame_support::storage::with_transaction;
+	use sp_runtime::TransactionOutcome;
 
 	use super::*;
 
@@ -4664,7 +4665,7 @@ mod target_list {
 			assert_eq_uvec!(nominator_targets(101), vec![21, 11]);
 
 			// chilling should decrease the target list items.
-			with_transaction(|| {
+			let _ = with_transaction(|| -> TransactionOutcome<DispatchResult> {
 				assert_ok!(Staking::chill(Origin::signed(100)));
 				assert_eq_uvec!(
 					<Test as Config>::TargetList::iter()
@@ -4673,11 +4674,11 @@ mod target_list {
 					vec![(11, 1000), (21, 1000), (31, 500)]
 				);
 
-				sp_runtime::TransactionOutcome::Rollback(())
+				TransactionOutcome::Rollback(Ok(()))
 			});
 
 			// validating should be same is chilling.
-			with_transaction(|| {
+			let _ = with_transaction(|| -> TransactionOutcome<DispatchResult> {
 				assert_ok!(Staking::validate(Origin::signed(100), Default::default()));
 				assert_eq_uvec!(
 					<Test as Config>::TargetList::iter()
@@ -4686,11 +4687,11 @@ mod target_list {
 					vec![(11, 1000), (21, 1000), (31, 500), (101, 500)]
 				);
 
-				sp_runtime::TransactionOutcome::Rollback(())
+				TransactionOutcome::Rollback(Ok(()))
 			});
 
 			// re-nominating to different targets should increase and decrease.
-			with_transaction(|| {
+			let _ = with_transaction(|| -> TransactionOutcome<DispatchResult> {
 				assert_ok!(Staking::nominate(Origin::signed(100), vec![21, 31]));
 				assert_eq_uvec!(
 					<Test as Config>::TargetList::iter()
@@ -4699,11 +4700,11 @@ mod target_list {
 					vec![(11, 1000), (21, 1500), (31, 1000)]
 				);
 
-				sp_runtime::TransactionOutcome::Rollback(())
+				TransactionOutcome::Rollback(Ok(()))
 			});
 
 			// bonding more should increase.
-			with_transaction(|| {
+			let _ = with_transaction(|| -> TransactionOutcome<DispatchResult> {
 				assert_ok!(Staking::bond_extra(Origin::signed(101), 100));
 				assert_eq_uvec!(
 					<Test as Config>::TargetList::iter()
@@ -4712,11 +4713,11 @@ mod target_list {
 					vec![(11, 1600), (21, 1600), (31, 500)]
 				);
 
-				sp_runtime::TransactionOutcome::Rollback(())
+				TransactionOutcome::Rollback(Ok(()))
 			});
 
 			// unbonding should decrease.
-			with_transaction(|| {
+			let _ = with_transaction(|| -> TransactionOutcome<DispatchResult> {
 				assert_ok!(Staking::unbond(Origin::signed(100), 100));
 				assert_eq_uvec!(
 					<Test as Config>::TargetList::iter()
@@ -4733,7 +4734,7 @@ mod target_list {
 						.collect::<Vec<_>>(),
 					vec![(11, 1500), (21, 1500), (31, 500)]
 				);
-				sp_runtime::TransactionOutcome::Rollback(())
+				TransactionOutcome::Rollback(Ok(()))
 			});
 		});
 	}
@@ -4751,7 +4752,7 @@ mod target_list {
 			assert_eq_uvec!(validator_ids(), vec![11, 21, 31]);
 
 			// chilling does not remove, but rather decrease the validator's approval stake.
-			with_transaction(|| {
+			let _ = with_transaction(|| -> TransactionOutcome<DispatchResult> {
 				assert_ok!(Staking::chill(Origin::signed(20)));
 				assert_eq_uvec!(
 					<Test as Config>::TargetList::iter()
@@ -4760,11 +4761,11 @@ mod target_list {
 					vec![(11, 1500), (21, 500), (31, 500)]
 				);
 
-				sp_runtime::TransactionOutcome::Rollback(())
+				TransactionOutcome::Rollback(Ok(()))
 			});
 
 			// re-validating takes us back to the initial state.
-			with_transaction(|| {
+			let _ = with_transaction(|| -> TransactionOutcome<DispatchResult> {
 				assert_ok!(Staking::validate(Origin::signed(20), Default::default()));
 				assert_eq_uvec!(
 					<Test as Config>::TargetList::iter()
@@ -4773,11 +4774,11 @@ mod target_list {
 					vec![(11, 1500), (21, 1500), (31, 500)]
 				);
 
-				sp_runtime::TransactionOutcome::Rollback(())
+				TransactionOutcome::Rollback(Ok(()))
 			});
 
 			// nominating is similar to chilling, and we contribute to 31.
-			with_transaction(|| {
+			let _ = with_transaction(|| -> TransactionOutcome<DispatchResult> {
 				assert_ok!(Staking::nominate(Origin::signed(20), vec![31]));
 				assert_eq_uvec!(
 					<Test as Config>::TargetList::iter()
@@ -4786,11 +4787,11 @@ mod target_list {
 					vec![(11, 1500), (21, 500), (31, 1500)]
 				);
 
-				sp_runtime::TransactionOutcome::Rollback(())
+				TransactionOutcome::Rollback(Ok(()))
 			});
 
 			// bonding more should increase.
-			with_transaction(|| {
+			let _ = with_transaction(|| -> TransactionOutcome<DispatchResult> {
 				assert_ok!(Staking::bond_extra(Origin::signed(21), 100));
 				assert_eq_uvec!(
 					<Test as Config>::TargetList::iter()
@@ -4799,11 +4800,11 @@ mod target_list {
 					vec![(11, 1500), (21, 1600), (31, 500)]
 				);
 
-				sp_runtime::TransactionOutcome::Rollback(())
+				TransactionOutcome::Rollback(Ok(()))
 			});
 
 			// unbonding should decrease.
-			with_transaction(|| {
+			let _ = with_transaction(|| -> TransactionOutcome<DispatchResult> {
 				assert_ok!(Staking::unbond(Origin::signed(20), 100));
 				assert_eq_uvec!(
 					<Test as Config>::TargetList::iter()
@@ -4820,7 +4821,7 @@ mod target_list {
 						.collect::<Vec<_>>(),
 					vec![(11, 1500), (21, 1500), (31, 500)]
 				);
-				sp_runtime::TransactionOutcome::Rollback(())
+				TransactionOutcome::Rollback(Ok(()))
 			});
 		});
 	}
@@ -4844,7 +4845,7 @@ mod target_list {
 			assert_eq_uvec!(validator_ids(), vec![11, 21, 31]);
 
 			// validating adds us.
-			with_transaction(|| {
+			let _ = with_transaction(|| -> TransactionOutcome<DispatchResult> {
 				assert_ok!(Staking::validate(Origin::signed(ctrl), Default::default()));
 				assert_eq_uvec!(
 					<Test as Config>::TargetList::iter()
@@ -4853,11 +4854,11 @@ mod target_list {
 					vec![(11, 1500), (21, 1500), (31, 500), (41, 1000)]
 				);
 
-				sp_runtime::TransactionOutcome::Rollback(())
+				TransactionOutcome::Rollback(Ok(()))
 			});
 
 			// nominating, and we contribute to 31.
-			with_transaction(|| {
+			let _ = with_transaction(|| -> TransactionOutcome<DispatchResult> {
 				assert_ok!(Staking::nominate(Origin::signed(ctrl), vec![31]));
 				assert_eq_uvec!(
 					<Test as Config>::TargetList::iter()
@@ -4866,11 +4867,11 @@ mod target_list {
 					vec![(11, 1500), (21, 1500), (31, 1500)]
 				);
 
-				sp_runtime::TransactionOutcome::Rollback(())
+				TransactionOutcome::Rollback(Ok(()))
 			});
 
 			// rest of the operations is a
-			with_transaction(|| {
+			let _ = with_transaction(|| -> TransactionOutcome<DispatchResult> {
 				assert_ok!(Staking::bond_extra(Origin::signed(stash), 100));
 				initial_approvals();
 				assert_ok!(Staking::unbond(Origin::signed(ctrl), 100));
@@ -4878,7 +4879,7 @@ mod target_list {
 				assert_ok!(Staking::rebond(Origin::signed(ctrl), 100));
 				initial_approvals();
 
-				sp_runtime::TransactionOutcome::Rollback(())
+				TransactionOutcome::Rollback(Ok(()))
 			});
 		});
 	}

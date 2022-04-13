@@ -162,6 +162,14 @@ pub trait Ext: sealing::Sealed {
 	/// Check if a contract lives at the specified `address`.
 	fn is_contract(&self, address: &AccountIdOf<Self::T>) -> bool;
 
+	/// Returns the code hash of the contract for the given `address`.
+	///
+	/// Returns `None` if the `address` does not belong to a contract.
+	fn code_hash(&self, address: &AccountIdOf<Self::T>) -> Option<CodeHash<Self::T>>;
+
+	/// Returns the code hash of the contract being executed.
+	fn own_code_hash(&mut self) -> &CodeHash<Self::T>;
+
 	/// Check if the caller of the current contract is the origin of the whole call stack.
 	///
 	/// This can be checked with `is_contract(self.caller())` as well.
@@ -766,14 +774,27 @@ where
 
 		// All changes performed by the contract are executed under a storage transaction.
 		// This allows for roll back on error. Changes to the cached contract_info are
-		// comitted or rolled back when popping the frame.
-		let (success, output) = with_transaction(|| {
-			let output = do_transaction();
-			match &output {
-				Ok(result) if !result.did_revert() => TransactionOutcome::Commit((true, output)),
-				_ => TransactionOutcome::Rollback((false, output)),
-			}
-		});
+		// committed or rolled back when popping the frame.
+		//
+		// `with_transactional` may return an error caused by a limit in the
+		// transactional storage depth.
+		let transaction_outcome =
+			with_transaction(|| -> TransactionOutcome<Result<_, DispatchError>> {
+				let output = do_transaction();
+				match &output {
+					Ok(result) if !result.did_revert() =>
+						TransactionOutcome::Commit(Ok((true, output))),
+					_ => TransactionOutcome::Rollback(Ok((false, output))),
+				}
+			});
+
+		let (success, output) = match transaction_outcome {
+			// `with_transactional` executed successfully, and we have the expected output.
+			Ok((success, output)) => (success, output),
+			// `with_transactional` returned an error, and we propagate that error and note no state
+			// has changed.
+			Err(error) => (false, Err(error.into())),
+		};
 		self.pop_frame(success);
 		output
 	}
@@ -1101,6 +1122,14 @@ where
 
 	fn is_contract(&self, address: &T::AccountId) -> bool {
 		ContractInfoOf::<T>::contains_key(&address)
+	}
+
+	fn code_hash(&self, address: &T::AccountId) -> Option<CodeHash<Self::T>> {
+		<ContractInfoOf<T>>::get(&address).map(|contract| contract.code_hash)
+	}
+
+	fn own_code_hash(&mut self) -> &CodeHash<Self::T> {
+		&self.top_frame_mut().contract_info().code_hash
 	}
 
 	fn caller_is_origin(&self) -> bool {
@@ -1747,6 +1776,62 @@ mod tests {
 				&schedule,
 				0,
 				vec![],
+				None,
+			);
+			assert_matches!(result, Ok(_));
+		});
+	}
+
+	#[test]
+	fn code_hash_returns_proper_values() {
+		let code_bob = MockLoader::insert(Call, |ctx, _| {
+			// ALICE is not a contract and hence she does not have a code_hash
+			assert!(ctx.ext.code_hash(&ALICE).is_none());
+			// BOB is a contract and hence he has a code_hash
+			assert!(ctx.ext.code_hash(&BOB).is_some());
+			exec_success()
+		});
+
+		ExtBuilder::default().build().execute_with(|| {
+			let schedule = <Test as Config>::Schedule::get();
+			place_contract(&BOB, code_bob);
+			let mut storage_meter = storage::meter::Meter::new(&ALICE, Some(0), 0).unwrap();
+			// ALICE (not contract) -> BOB (contract)
+			let result = MockStack::run_call(
+				ALICE,
+				BOB,
+				&mut GasMeter::<Test>::new(GAS_LIMIT),
+				&mut storage_meter,
+				&schedule,
+				0,
+				vec![0],
+				None,
+			);
+			assert_matches!(result, Ok(_));
+		});
+	}
+
+	#[test]
+	fn own_code_hash_returns_proper_values() {
+		let bob_ch = MockLoader::insert(Call, |ctx, _| {
+			let code_hash = ctx.ext.code_hash(&BOB).unwrap();
+			assert_eq!(*ctx.ext.own_code_hash(), code_hash);
+			exec_success()
+		});
+
+		ExtBuilder::default().build().execute_with(|| {
+			let schedule = <Test as Config>::Schedule::get();
+			place_contract(&BOB, bob_ch);
+			let mut storage_meter = storage::meter::Meter::new(&ALICE, Some(0), 0).unwrap();
+			// ALICE (not contract) -> BOB (contract)
+			let result = MockStack::run_call(
+				ALICE,
+				BOB,
+				&mut GasMeter::<Test>::new(GAS_LIMIT),
+				&mut storage_meter,
+				&schedule,
+				0,
+				vec![0],
 				None,
 			);
 			assert_matches!(result, Ok(_));
