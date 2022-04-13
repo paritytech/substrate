@@ -591,7 +591,7 @@ pub mod pallet {
 
 	/// Events deposited for the current block.
 	///
-	/// NOTE: The item is unbound and should therefore never be read from storage.
+	/// NOTE: The item is unbound and should therefore never be read on chain.
 	/// It could otherwise inflate the PoV size of a block.
 	///
 	/// Events have a large in-memory size. Box the events to not go out-of-memory
