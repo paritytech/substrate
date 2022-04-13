@@ -1611,7 +1611,7 @@ macro_rules! decl_module {
 					pallet_name,
 				);
 
-				<$crate::weights::Weight as sp_runtime::traits::Zero>::zero()
+				<$crate::weights::Weight as $crate::dispatch::Zero>::zero()
 			}
 
 			#[cfg(feature = "try-runtime")]
