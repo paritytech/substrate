@@ -38,6 +38,7 @@ use sp_std::{
 	cmp::Ordering,
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
 	ops::Deref,
+	vec::Vec,
 };
 
 /// A raw, unchecked signed submission.
