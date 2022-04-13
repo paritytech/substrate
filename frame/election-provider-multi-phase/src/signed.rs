@@ -499,7 +499,7 @@ mod tests {
 			balances, raw_solution, roll_to, ExtBuilder, MultiPhase, Origin, Runtime,
 			SignedMaxSubmissions, SignedMaxWeight,
 		},
-		Error, Phase,
+		Error, Perbill, Phase,
 	};
 	use frame_support::{assert_noop, assert_ok, assert_storage_noop};
 
@@ -630,6 +630,77 @@ mod tests {
 				Error::<Runtime>::SignedQueueFull,
 			);
 		})
+	}
+
+	#[test]
+	fn cannot_submit_worse_with_full_queue_threshold_100() {
+		ExtBuilder::default()
+			.signed_max_submission(1)
+			.solution_improvement_threshold_signed(Perbill::from_percent(100))
+			.build_and_execute(|| {
+				roll_to(15);
+				assert!(MultiPhase::current_phase().is_signed());
+
+				let mut solution = RawSolution {
+					score: ElectionScore {
+						minimal_stake: 5u128,
+						sum_stake: 0u128,
+						sum_stake_squared: 10u128,
+					},
+					..Default::default()
+				};
+				assert_ok!(MultiPhase::submit(Origin::signed(99), Box::new(solution)));
+
+				// With threshold at 100%, the below is not considered a better solution, and is
+				// therefore rejected.
+				solution = RawSolution {
+					score: ElectionScore {
+						minimal_stake: 5u128,
+						sum_stake: 0u128,
+						sum_stake_squared: 9u128,
+					},
+					..Default::default()
+				};
+
+				assert_noop!(
+					MultiPhase::submit(Origin::signed(99), Box::new(solution)),
+					Error::<Runtime>::SignedQueueFull,
+				);
+			})
+	}
+
+	#[test]
+	fn can_submit_better_with_full_queue_threshold_0() {
+		ExtBuilder::default()
+			.signed_max_submission(1)
+			.solution_improvement_threshold_signed(Perbill::from_percent(0))
+			.build_and_execute(|| {
+				roll_to(15);
+				assert!(MultiPhase::current_phase().is_signed());
+
+				let mut solution = RawSolution {
+					score: ElectionScore {
+						minimal_stake: 5u128,
+						sum_stake: 0u128,
+						sum_stake_squared: 10u128,
+					},
+					..Default::default()
+				};
+				assert_ok!(MultiPhase::submit(Origin::signed(99), Box::new(solution)));
+
+				// With threshold at 0% the below is a better solution because of the lower
+				// `sum_stake_squared`.
+				solution = RawSolution {
+					score: ElectionScore {
+						minimal_stake: 5u128,
+						sum_stake: 0u128,
+						sum_stake_squared: 9u128,
+					},
+					..Default::default()
+				};
+
+				assert_ok!(MultiPhase::submit(Origin::signed(99), Box::new(solution)),);
+			})
 	}
 
 	#[test]

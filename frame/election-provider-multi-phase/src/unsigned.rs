@@ -1066,7 +1066,7 @@ mod tests {
 			.desired_targets(1)
 			.add_voter(7, 2, bounded_vec![10])
 			.add_voter(8, 5, bounded_vec![10])
-			.solution_improvement_threshold(Perbill::from_percent(50))
+			.solution_improvement_threshold_unsigned(Perbill::from_percent(50))
 			.build_and_execute(|| {
 				roll_to(25);
 				assert!(MultiPhase::current_phase().is_unsigned());
