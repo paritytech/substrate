@@ -2099,20 +2099,14 @@ mod tests {
 			let solution = raw_solution();
 
 			assert!(mock::Balances::usable_balance(&99) == 100);
-
 			assert_ok!(MultiPhase::submit(crate::mock::Origin::signed(99), Box::new(solution),));
-
 			assert_eq!(crate::mock::Balances::usable_balance(&9999), 100);
-
 			assert_ok!(MultiPhase::challenge_solution(crate::mock::Origin::signed(9999), 0));
-
 			assert_eq!(
 				MultiPhase::signed_submissions().iter().map(|s| s.deposit).collect::<Vec<_>>(),
 				vec![5]
 			);
-
 			assert_eq!(crate::mock::Balances::usable_balance(&9999), 95);
-
 			assert_eq!(
 				MultiPhase::signed_submissions().iter().map(|s| s.reward).collect::<Vec<_>>(),
 				vec![15]
