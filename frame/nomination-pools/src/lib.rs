@@ -1273,14 +1273,8 @@ pub mod pallet {
 					unbonding_eras: Default::default(),
 				},
 			);
-			bonded_pool.put();
-			Self::deposit_event(Event::<T>::Bonded {
-				delegator: who,
-				pool_id,
-				bonded: amount,
-				joined: true,
-			});
 
+			bonded_pool.put();
 			Ok(())
 		}
 
@@ -1678,7 +1672,7 @@ pub mod pallet {
 				},
 			);
 			ReversePoolIdLookup::<T>::insert(bonded_pool.bonded_account(), pool_id);
-			Self::deposit_event(Event::<T>::Created { depositor: who, pool_id });
+			Self::deposit_event(Event::<T>::Created { depositor: who.clone(), pool_id });
 			bonded_pool.put();
 
 			Ok(())
@@ -2083,7 +2077,7 @@ impl<T: Config> Pallet<T> {
 
 			assert!(
 				total_balance >= bonded_balance + sum_unbonding_balance,
-				"fault pool: {:?} / {:?}, total_balance {:?} >= bonded_balance {:?} + sum_unbonding_balance {:?}",
+				"faulty pool: {:?} / {:?}, total_balance {:?} >= bonded_balance {:?} + sum_unbonding_balance {:?}",
 				pool_id,
 				_pool,
 				total_balance,

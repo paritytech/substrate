@@ -204,6 +204,11 @@ impl ExtBuilder {
 		self
 	}
 
+	pub(crate) fn ed(self, ed: Balance) -> Self {
+		ExistentialDeposit::set(ed);
+		self
+	}
+
 	pub(crate) fn with_check(self, level: u8) -> Self {
 		CheckLevel::set(level);
 		self
